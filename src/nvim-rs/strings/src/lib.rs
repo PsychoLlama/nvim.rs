@@ -202,6 +202,29 @@ pub unsafe extern "C" fn rs_has_non_ascii(s: *const c_char) -> c_int {
     0
 }
 
+/// Check if string contains non-ASCII characters (with length limit).
+///
+/// Returns true if any byte has the high bit set within the first `len` bytes.
+///
+/// # Safety
+///
+/// `s` must be a valid pointer to at least `len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_has_non_ascii_len(s: *const c_char, len: usize) -> c_int {
+    if s.is_null() || len == 0 {
+        return 0;
+    }
+
+    let bytes = unsafe { std::slice::from_raw_parts(s as *const u8, len) };
+    for &b in bytes {
+        if b >= 128 {
+            return 1;
+        }
+    }
+
+    0
+}
+
 /// Concatenate two strings into a newly allocated buffer.
 ///
 /// Returns a pointer to a newly allocated string containing s1 + s2.
@@ -515,6 +538,29 @@ mod tests {
             assert_eq!(rs_has_non_ascii(non_ascii.as_ptr()), 1);
             assert_eq!(rs_has_non_ascii(empty.as_ptr()), 0);
             assert_eq!(rs_has_non_ascii(std::ptr::null()), 0);
+        }
+    }
+
+    #[test]
+    fn test_has_non_ascii_len() {
+        // "Hello" + UTF-8 for 世界 + "!"
+        let data: &[u8] = b"Hello\xe4\xb8\x96\xe7\x95\x8c!";
+
+        unsafe {
+            // First 5 bytes are ASCII only
+            assert_eq!(rs_has_non_ascii_len(data.as_ptr().cast(), 5), 0);
+
+            // First 6 bytes include non-ASCII
+            assert_eq!(rs_has_non_ascii_len(data.as_ptr().cast(), 6), 1);
+
+            // Full string has non-ASCII
+            assert_eq!(rs_has_non_ascii_len(data.as_ptr().cast(), data.len()), 1);
+
+            // Zero length returns 0
+            assert_eq!(rs_has_non_ascii_len(data.as_ptr().cast(), 0), 0);
+
+            // NULL returns 0
+            assert_eq!(rs_has_non_ascii_len(std::ptr::null(), 10), 0);
         }
     }
 

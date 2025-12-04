@@ -43,6 +43,7 @@ extern int rs_vim_stricmp(const char *s1, const char *s2);
 extern int rs_vim_strnicmp(const char *s1, const char *s2, size_t len);
 extern int rs_striequal(const char *s1, const char *s2);
 extern int rs_has_non_ascii(const char *s);
+extern int rs_has_non_ascii_len(const char *s, size_t len);
 extern void rs_sort_strings(char **files, int count);
 #endif
 
@@ -574,6 +575,9 @@ bool has_non_ascii(const char *s)
 bool has_non_ascii_len(const char *const s, const size_t len)
   FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_STRINGS
+  return rs_has_non_ascii_len(s, len);
+#else
   if (s != NULL) {
     for (size_t i = 0; i < len; i++) {
       if ((uint8_t)s[i] >= 128) {
@@ -582,6 +586,7 @@ bool has_non_ascii_len(const char *const s, const size_t len)
     }
   }
   return false;
+#endif
 }
 
 /// Concatenate two strings and return the result in allocated memory.
