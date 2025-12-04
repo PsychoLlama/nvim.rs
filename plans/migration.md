@@ -215,6 +215,12 @@ Key code mapping - pure lookup/switch, no allocation:
 - [x] `name_to_mod_mask` - Map modifier char to mask bit (pure) - swapped to Rust
 - [x] `handle_x_keys` - Map X-terminal keys to standard keys (pure) - swapped to Rust
 
+#### 1.14 Command History Utilities (`src/nvim/cmdhist.c` → `nvim-rs/cmdhist`)
+
+History type conversion - pure lookup/switch, no allocation:
+
+- [x] `hist_char2type` - Map history prefix char to type (pure) - swapped to Rust
+
 #### 1.9 Memory Utilities (`src/nvim/memory.c` → `nvim-rs/memutil`)
 
 Pure string/memory utility functions, no allocation:
