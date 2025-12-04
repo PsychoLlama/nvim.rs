@@ -7,3 +7,8 @@
 - Run tests and static analysis before committing.
 - Use `just` to run builds, tests, and static analysis.
 - Keep the `justfile` up to date.
+
+## Migration Plan
+
+- The migration plan is stored in `plans/migration.md`.
+- If you encounter fundamental issues, research alternatives and create a new plan for following phases.
