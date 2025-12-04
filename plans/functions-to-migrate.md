@@ -5,7 +5,7 @@ Candidates for Rust migration, organized by priority.
 ## TIER 1 - Migrate First (Trivial, self-contained)
 
 ### ex_docmd.c
-- [ ] `ends_excmd` (line 4622) - Returns true if character is command terminator (NUL, '|', '"', '\n')
+- [x] `ends_excmd` (line 4622) - Returns true if character is command terminator (NUL, '|', '"', '\n') - MIGRATED Phase 1.22
 
 ### fileio.c
 - [ ] `time_differs` (line 2164) - Compares file modification times with FAT tolerance

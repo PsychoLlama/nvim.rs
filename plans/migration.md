@@ -252,6 +252,12 @@ Help system heuristic scoring - pure function with no external dependencies:
 
 - [x] `help_heuristic` - Calculate match quality score for help tags (pure) - swapped to Rust
 
+#### 1.22 Ex Command Utilities (`src/nvim/ex_docmd.c` → `nvim-rs/ex_docmd`)
+
+Pure utility functions for Ex command parsing:
+
+- [x] `ends_excmd` - Check if character ends an Ex command (pure) - swapped to Rust
+
 #### 1.9 Memory Utilities (`src/nvim/memory.c` → `nvim-rs/memutil`)
 
 Pure string/memory utility functions, no allocation:
