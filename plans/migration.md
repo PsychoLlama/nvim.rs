@@ -113,9 +113,12 @@ make test                        # Nvim still works
 
 ---
 
-### Phase 1: Pure Utility Functions (Low Risk)
+### Phase 1: Pure Utility Functions (Low Risk) ✅ COMPLETE
 
 **Goal:** Migrate isolated utility functions with no state dependencies
+
+**Status (2025-12-04):** Phase 1 is complete. All trivial pure functions have been migrated.
+Remaining FUNC_ATTR_PURE/CONST functions require struct access or global state.
 
 > **Note:** Many "utility" functions in nvim actually use `xmalloc`/`xfree` and are
 > NOT pure. Phase 0.5 must be completed first. Start with truly pure functions.
