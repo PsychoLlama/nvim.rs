@@ -111,6 +111,11 @@
 #include "nvim/window.h"
 #include "nvim/winfloat.h"
 
+#ifdef USE_RUST_EX_DOCMD
+// Rust implementations - declarations
+extern int rs_ends_excmd(int c);
+#endif
+
 static const char e_ambiguous_use_of_user_defined_command[]
   = N_("E464: Ambiguous use of user-defined command");
 static const char e_no_call_stack_to_substitute_for_stack[]
@@ -4621,7 +4626,11 @@ static void ex_blast(exarg_T *eap)
 
 int ends_excmd(int c) FUNC_ATTR_CONST
 {
+#ifdef USE_RUST_EX_DOCMD
+  return rs_ends_excmd(c);
+#else
   return c == NUL || c == '|' || c == '"' || c == '\n';
+#endif
 }
 
 /// @return  the next command, after the first '|' or '\n' or,

@@ -796,15 +796,24 @@ mod tests {
             // Single byte value (0x00 - 0xFF) -> "<XX>"
             let len = rs_transchar_hex(buf.as_mut_ptr(), 0x00);
             assert_eq!(len, 4);
-            assert_eq!(&buf[..5], [b'<' as i8, b'0' as i8, b'0' as i8, b'>' as i8, 0]);
+            assert_eq!(
+                &buf[..5],
+                [b'<' as i8, b'0' as i8, b'0' as i8, b'>' as i8, 0]
+            );
 
             let len = rs_transchar_hex(buf.as_mut_ptr(), 0x1A);
             assert_eq!(len, 4);
-            assert_eq!(&buf[..5], [b'<' as i8, b'1' as i8, b'a' as i8, b'>' as i8, 0]);
+            assert_eq!(
+                &buf[..5],
+                [b'<' as i8, b'1' as i8, b'a' as i8, b'>' as i8, 0]
+            );
 
             let len = rs_transchar_hex(buf.as_mut_ptr(), 0xFF);
             assert_eq!(len, 4);
-            assert_eq!(&buf[..5], [b'<' as i8, b'f' as i8, b'f' as i8, b'>' as i8, 0]);
+            assert_eq!(
+                &buf[..5],
+                [b'<' as i8, b'f' as i8, b'f' as i8, b'>' as i8, 0]
+            );
 
             // Two byte value (0x100 - 0xFFFF) -> "<XXXX>"
             let len = rs_transchar_hex(buf.as_mut_ptr(), 0x100);
