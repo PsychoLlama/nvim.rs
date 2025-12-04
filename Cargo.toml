@@ -2,14 +2,15 @@
 resolver = "2"
 members = [
     "src/nvim-rs",
+    "src/nvim-rs/charset",
     "src/nvim-rs/collections",
     "src/nvim-rs/encoding",
     "src/nvim-rs/math",
+    "src/nvim-rs/mbyte",
     "src/nvim-rs/memory",
     "src/nvim-rs/os",
     "src/nvim-rs/path",
     "src/nvim-rs/strings",
-    "src/nvim-rs/mbyte",
 ]
 
 [workspace.package]

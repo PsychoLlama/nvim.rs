@@ -33,6 +33,20 @@
 
 #include "charset.c.generated.h"
 
+#ifdef USE_RUST_CHARSET
+extern const char *rs_skipwhite(const char *p);
+extern const char *rs_skipwhite_len(const char *p, size_t len);
+extern const char *rs_skipdigits(const char *q);
+extern const char *rs_skipbin(const char *q);
+extern const char *rs_skiphex(const char *q);
+extern const char *rs_skiptodigit(const char *q);
+extern const char *rs_skiptobin(const char *q);
+extern const char *rs_skiptohex(const char *q);
+extern const char *rs_skiptowhite(const char *p);
+extern int rs_hex2nr(int c);
+extern int rs_hexhex2nr(const char *p);
+#endif
+
 static bool chartab_initialized = false;
 
 // b_chartab[] is an array with 256 bits, each bit representing one of the
@@ -906,10 +920,14 @@ char *skipwhite(const char *p)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
   FUNC_ATTR_NONNULL_RET
 {
+#ifdef USE_RUST_CHARSET
+  return (char *)rs_skipwhite(p);
+#else
   while (ascii_iswhite(*p)) {
     p++;
   }
   return (char *)p;
+#endif
 }
 
 /// Like `skipwhite`, but skip up to `len` characters.
@@ -924,10 +942,14 @@ char *skipwhite_len(const char *p, size_t len)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
   FUNC_ATTR_NONNULL_RET
 {
+#ifdef USE_RUST_CHARSET
+  return (char *)rs_skipwhite_len(p, len);
+#else
   for (; len > 0 && ascii_iswhite(*p); len--) {
     p++;
   }
   return (char *)p;
+#endif
 }
 
 // getwhitecols: return the number of whitespace
@@ -952,12 +974,16 @@ char *skipdigits(const char *q)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
   FUNC_ATTR_NONNULL_RET
 {
+#ifdef USE_RUST_CHARSET
+  return (char *)rs_skipdigits(q);
+#else
   const char *p = q;
   while (ascii_isdigit(*p)) {
     // skip to next non-digit
     p++;
   }
   return (char *)p;
+#endif
 }
 
 /// skip over binary digits
@@ -970,12 +996,16 @@ const char *skipbin(const char *q)
   FUNC_ATTR_NONNULL_ALL
   FUNC_ATTR_NONNULL_RET
 {
+#ifdef USE_RUST_CHARSET
+  return rs_skipbin(q);
+#else
   const char *p = q;
   while (ascii_isbdigit(*p)) {
     // skip to next non-digit
     p++;
   }
   return p;
+#endif
 }
 
 /// skip over digits and hex characters
@@ -987,12 +1017,16 @@ const char *skipbin(const char *q)
 char *skiphex(char *q)
   FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_CHARSET
+  return (char *)rs_skiphex(q);
+#else
   char *p = q;
   while (ascii_isxdigit(*p)) {
     // skip to next non-digit
     p++;
   }
   return p;
+#endif
 }
 
 /// skip to digit (or NUL after the string)
@@ -1003,12 +1037,16 @@ char *skiphex(char *q)
 char *skiptodigit(char *q)
   FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_CHARSET
+  return (char *)rs_skiptodigit(q);
+#else
   char *p = q;
   while (*p != NUL && !ascii_isdigit(*p)) {
     // skip to next digit
     p++;
   }
   return p;
+#endif
 }
 
 /// skip to binary character (or NUL after the string)
@@ -1021,12 +1059,16 @@ const char *skiptobin(const char *q)
   FUNC_ATTR_NONNULL_ALL
   FUNC_ATTR_NONNULL_RET
 {
+#ifdef USE_RUST_CHARSET
+  return rs_skiptobin(q);
+#else
   const char *p = q;
   while (*p != NUL && !ascii_isbdigit(*p)) {
     // skip to next digit
     p++;
   }
   return p;
+#endif
 }
 
 /// skip to hex character (or NUL after the string)
@@ -1037,12 +1079,16 @@ const char *skiptobin(const char *q)
 char *skiptohex(char *q)
   FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_CHARSET
+  return (char *)rs_skiptohex(q);
+#else
   char *p = q;
   while (*p != NUL && !ascii_isxdigit(*p)) {
     // skip to next digit
     p++;
   }
   return p;
+#endif
 }
 
 /// Skip over text until ' ' or '\t' or NUL
@@ -1053,10 +1099,14 @@ char *skiptohex(char *q)
 char *skiptowhite(const char *p)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_CHARSET
+  return (char *)rs_skiptowhite(p);
+#else
   while (*p != ' ' && *p != '\t' && *p != NUL) {
     p++;
   }
   return (char *)p;
+#endif
 }
 
 /// skiptowhite_esc: Like skiptowhite(), but also skip escaped chars
@@ -1414,6 +1464,9 @@ vim_str2nr_proceed:
 int hex2nr(int c)
   FUNC_ATTR_CONST
 {
+#ifdef USE_RUST_CHARSET
+  return rs_hex2nr(c);
+#else
   if ((c >= 'a') && (c <= 'f')) {
     return c - 'a' + 10;
   }
@@ -1422,6 +1475,7 @@ int hex2nr(int c)
     return c - 'A' + 10;
   }
   return c - '0';
+#endif
 }
 
 /// Convert two hex characters to a byte.
@@ -1430,10 +1484,14 @@ int hex2nr(int c)
 int hexhex2nr(const char *p)
   FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_CHARSET
+  return rs_hexhex2nr(p);
+#else
   if (!ascii_isxdigit(p[0]) || !ascii_isxdigit(p[1])) {
     return -1;
   }
   return (hex2nr(p[0]) << 4) + hex2nr(p[1]);
+#endif
 }
 
 /// Check that "str" starts with a backslash that should be removed.

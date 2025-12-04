@@ -173,6 +173,25 @@ These use `xmalloc` - migrate AFTER memory bridge is ready:
 - [x] `vim_isAbsName` - Check if path is absolute or URL (pure) - swapped to Rust
 - [ ] Path normalization functions (may use allocation)
 
+#### 1.5 Character Set Utilities (`src/nvim/charset.c` → `nvim-rs/charset`)
+
+Skip functions and hex conversion - all pure, no allocation:
+
+- [x] `skipwhite` - Skip over ' ' and '\t' (pure) - swapped to Rust
+- [x] `skipwhite_len` - Skip whitespace up to N bytes (pure) - swapped to Rust
+- [x] `skipdigits` - Skip over digit characters (pure) - swapped to Rust
+- [x] `skipbin` - Skip over binary digits (pure) - swapped to Rust
+- [x] `skiphex` - Skip over hex digits (pure) - swapped to Rust
+- [x] `skiptodigit` - Skip to next digit (pure) - swapped to Rust
+- [x] `skiptobin` - Skip to next binary digit (pure) - swapped to Rust
+- [x] `skiptohex` - Skip to next hex digit (pure) - swapped to Rust
+- [x] `skiptowhite` - Skip to next whitespace (pure) - swapped to Rust
+- [x] `hex2nr` - Convert hex char to value (pure) - swapped to Rust
+- [x] `hexhex2nr` - Convert two hex chars to byte (pure) - swapped to Rust
+- [ ] `skiptowhite_esc` - Skip to whitespace respecting escapes (uses Ctrl_V constant)
+- [ ] `skip_to_newline` - Uses xstrchrnul
+- [ ] Character classification functions (use global state g_chartab)
+
 **Validation:**
 
 ```bash
