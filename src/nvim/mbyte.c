@@ -98,6 +98,7 @@ extern int rs_utf_valid_string(const char *s, const char *end);
 extern int rs_utf_eat_space(int cc);
 extern int rs_utf_allow_break_before(int cc);
 extern int rs_utf_allow_break_after(int cc);
+extern int rs_utf_allow_break(int cc, int ncc);
 extern int rs_utf_printable(int c);
 #endif
 
@@ -2065,6 +2066,9 @@ bool utf_allow_break_after(int cc)
 bool utf_allow_break(int cc, int ncc)
   FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_allow_break(cc, ncc);
+#else
   // don't break between two-letter punctuations
   if (cc == ncc
       && (cc == 0x2014         // em dash
@@ -2072,6 +2076,7 @@ bool utf_allow_break(int cc, int ncc)
     return false;
   }
   return utf_allow_break_after(cc) && utf_allow_break_before(ncc);
+#endif
 }
 
 /// Copy a character, advancing the pointers

@@ -576,6 +576,27 @@ pub extern "C" fn rs_utf_allow_break_after(cc: c_int) -> c_int {
     c_int::from(utf_allow_break_after(cc))
 }
 
+/// Whether line break is allowed between "cc" and "ncc".
+///
+/// Returns false for pairs that should not be broken:
+/// - Don't break between two identical punctuations (em dash, horizontal ellipsis)
+/// - Don't break if break not allowed after cc or before ncc
+#[inline]
+pub fn utf_allow_break(cc: i32, ncc: i32) -> bool {
+    // Don't break between two-letter punctuations
+    if cc == ncc && (cc == 0x2014 || cc == 0x2026) {
+        // em dash or horizontal ellipsis
+        return false;
+    }
+    utf_allow_break_after(cc) && utf_allow_break_before(ncc)
+}
+
+/// Whether line break is allowed between "cc" and "ncc".
+#[no_mangle]
+pub extern "C" fn rs_utf_allow_break(cc: c_int, ncc: c_int) -> c_int {
+    c_int::from(utf_allow_break(cc, ncc))
+}
+
 // Character printability
 
 /// Sorted list of non-printable character ranges for utf_printable.
@@ -901,5 +922,35 @@ mod tests {
         assert_eq!(rs_utf_printable(0x100), 1);
         assert_eq!(rs_utf_printable(0x200b), 0); // Zero width space
         assert_eq!(rs_utf_printable(0xd800), 0); // Surrogate
+    }
+
+    #[test]
+    fn test_utf_allow_break() {
+        // Normal characters - break is allowed
+        assert!(utf_allow_break(b'a' as i32, b'b' as i32));
+
+        // Don't break between two em dashes (U+2014)
+        assert!(!utf_allow_break(0x2014, 0x2014));
+
+        // Don't break between two horizontal ellipses (U+2026)
+        assert!(!utf_allow_break(0x2026, 0x2026));
+
+        // But can break between different punctuation when allowed
+        // Note: 0x2026 is in BOL prohibition list, so can't break before it
+        // Use a character that allows breaking
+        assert!(utf_allow_break(0x2014, b'a' as i32));
+
+        // Don't break before closing bracket
+        assert!(!utf_allow_break(b'a' as i32, b')' as i32));
+
+        // Don't break after opening bracket
+        assert!(!utf_allow_break(b'(' as i32, b'a' as i32));
+    }
+
+    #[test]
+    fn test_ffi_utf_allow_break() {
+        assert_eq!(rs_utf_allow_break(b'a' as c_int, b'b' as c_int), 1);
+        assert_eq!(rs_utf_allow_break(0x2014, 0x2014), 0); // Two em dashes
+        assert_eq!(rs_utf_allow_break(0x2026, 0x2026), 0); // Two horizontal ellipses
     }
 }
