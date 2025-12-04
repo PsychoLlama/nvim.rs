@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "src/nvim-rs",
     "src/nvim-rs/math",
+    "src/nvim-rs/memory",
 ]
 
 [workspace.package]
