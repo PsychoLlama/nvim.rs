@@ -170,6 +170,7 @@ These use `xmalloc` - migrate AFTER memory bridge is ready:
 - [x] `path_with_url` - Check if path starts with URL scheme (pure) - swapped to Rust
 - [x] `is_path_head` - Check if path starts with path head (pure) - swapped to Rust
 - [x] `get_past_head` - Get pointer past path head (pure) - swapped to Rust
+- [x] `vim_isAbsName` - Check if path is absolute or URL (pure) - swapped to Rust
 - [ ] Path normalization functions (may use allocation)
 
 **Validation:**
