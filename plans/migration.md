@@ -9,7 +9,7 @@ This document outlines an incremental strategy to migrate Neovim's ~257,000 line
 1. **Always Working**: Every milestone produces a buildable, testable Neovim
 2. **Incremental Validation**: Each phase has clear acceptance criteria
 3. **FFI-First**: Use `unsafe` Rust interop with C during transition
-4. **Test Continuity**: Existing 500+ functional tests must pass throughout
+4. **Test Continuity**: Existing ~460 functional tests must pass throughout
 
 ---
 
@@ -61,7 +61,7 @@ This document outlines an incremental strategy to migrate Neovim's ~257,000 line
 
 ```bash
 make                    # Builds nvim with Rust crate (no-op initially)
-make test               # All 500+ functional tests pass
+make test               # All ~460 functional tests pass
 cargo test              # Rust unit tests pass (empty initially)
 ```
 
@@ -69,51 +69,124 @@ cargo test              # Rust unit tests pass (empty initially)
 
 ---
 
+### Phase 0.5: Memory Allocation Bridge (Critical Foundation)
+
+**Goal:** Establish FFI bridge for memory allocation before migrating any code that allocates
+
+Most nvim code uses `xmalloc`/`xfree` from `nvim/memory.h`. Rust code must interoperate with this allocation system.
+
+#### 0.5.1 Create Memory FFI Module
+
+- [ ] Create `nvim-rs/memory/` crate
+- [ ] Define FFI bindings to nvim's allocator:
+
+```rust
+// src/nvim-rs/memory/src/lib.rs
+use std::ffi::c_void;
+use std::os::raw::c_size_t;
+
+extern "C" {
+    pub fn xmalloc(size: c_size_t) -> *mut c_void;
+    pub fn xcalloc(count: c_size_t, size: c_size_t) -> *mut c_void;
+    pub fn xrealloc(ptr: *mut c_void, size: c_size_t) -> *mut c_void;
+    pub fn xmallocz(size: c_size_t) -> *mut c_void;
+    pub fn xfree(ptr: *mut c_void);
+}
+```
+
+- [ ] Create safe wrapper types (`NvimBox<T>`, `NvimVec<T>`) that use nvim's allocator
+- [ ] Implement `Drop` for automatic cleanup
+
+#### 0.5.2 String Interop Types
+
+- [ ] Create `NvimString` type for C-compatible strings allocated with `xmalloc`
+- [ ] Implement conversions: `&str` ↔ `NvimString` ↔ `*const c_char`
+
+**Validation:**
+
+```bash
+cargo test -p nvim-memory        # Memory wrapper tests
+make test                        # Nvim still works
+```
+
+**Deliverable:** Safe Rust wrappers for nvim's memory allocation
+
+---
+
 ### Phase 1: Pure Utility Functions (Low Risk)
 
 **Goal:** Migrate isolated utility functions with no state dependencies
 
-These functions have clear inputs/outputs and minimal dependencies:
+> **Note:** Many "utility" functions in nvim actually use `xmalloc`/`xfree` and are
+> NOT pure. Phase 0.5 must be completed first. Start with truly pure functions.
 
-#### 1.1 String Utilities (`src/nvim/strings.c` → `nvim-rs/strings`)
+#### 1.1 Math Utilities (`src/nvim/math.c` → `nvim-rs/math`) ✓ TRULY PURE
 
-- [ ] `vim_strsave` - String duplication
-- [ ] `vim_strnsave` - Bounded string copy
-- [ ] `vim_strchr` - Character search
-- [ ] `concat_str` - String concatenation
-- [ ] `vim_stricmp` / `vim_strnicmp` - Case-insensitive comparison
+`math.c` has minimal dependencies (only `vim_defs.h` for macros). Start here.
+
+- [ ] `xfpclassify` - Float classification
+- [ ] `xisinf` - Infinity check
+- [ ] `xisnan` - NaN check
+- [ ] `xctz` - Count trailing zeroes
+- [ ] `xpopcount` - Population count (set bits)
+- [ ] `vim_append_digit_int` - Safe digit append with overflow check
+- [ ] `trim_to_int` - Clamp int64 to int range
 - [ ] Create C-compatible wrapper functions using `#[no_mangle]`
 - [ ] Replace C implementations with calls to Rust
 
-#### 1.2 Math/Encoding Utilities
+#### 1.2 Encoding Utilities (REQUIRES Phase 0.5)
 
-- [ ] `src/nvim/base64.c` → `nvim-rs/base64`
-- [ ] `src/nvim/sha256.c` → `nvim-rs/sha256`
-- [ ] `src/nvim/math.c` → `nvim-rs/math`
-- [ ] Pure algorithms, no global state
+These use `xmalloc` - migrate AFTER memory bridge is ready:
 
-#### 1.3 Path Utilities (`src/nvim/path.c` partial)
+- [ ] `src/nvim/base64.c` → `nvim-rs/base64` (uses xmalloc)
+- [ ] `src/nvim/sha256.c` → `nvim-rs/sha256` (uses nvim/memory.h)
 
-- [ ] `path_tail` - Get filename from path
-- [ ] `path_head_length` - Directory prefix length
-- [ ] `vim_ispathsep` - Path separator check
-- [ ] Path normalization functions
+#### 1.3 String Utilities (REQUIRES Phase 0.5 + mbyte)
+
+`strings.c` has heavy dependencies (~20 nvim headers). Defer until:
+- Phase 0.5 (memory) complete
+- Phase 3.3 (mbyte) complete for `utfc_ptr2len` etc.
+
+- [ ] `vim_strsave` - String duplication (uses xmallocz)
+- [ ] `vim_strnsave` - Bounded string copy (uses xmallocz)
+- [ ] `vim_strchr` - Character search
+- [ ] `concat_str` - String concatenation
+- [ ] `vim_stricmp` / `vim_strnicmp` - Case-insensitive comparison
+
+#### 1.4 Path Utilities (PARTIAL - some pure, some not)
+
+- [ ] `vim_ispathsep` - Path separator check (pure)
+- [ ] `path_tail` - Get filename from path (pure)
+- [ ] `path_head_length` - Directory prefix length (pure)
+- [ ] Path normalization functions (may use allocation)
 
 **Validation:**
 
 ```bash
 make test                              # All tests pass
-TEST_FILE=test/unit/path_spec.lua make unittest  # Path unit tests
-cargo test                             # Rust unit tests for migrated code
+cargo test -p nvim-math                # Rust unit tests for math module
 ```
 
 **FFI Pattern:**
 
 ```rust
-// src/nvim-rs/strings/lib.rs
+// src/nvim-rs/math/src/lib.rs
+use std::os::raw::{c_int, c_uint};
+
+/// Count trailing zeroes in a 64-bit value
 #[no_mangle]
-pub extern "C" fn vim_strsave(s: *const c_char) -> *mut c_char {
-    // Safe Rust implementation with unsafe FFI boundary
+pub extern "C" fn xctz(x: u64) -> c_int {
+    if x == 0 {
+        64
+    } else {
+        x.trailing_zeros() as c_int
+    }
+}
+
+/// Count set bits (population count)
+#[no_mangle]
+pub extern "C" fn xpopcount(x: u64) -> c_uint {
+    x.count_ones()
 }
 ```
 
@@ -629,7 +702,7 @@ VALGRIND=1 make test   # Memory safety
 
 | Category         | Count | Purpose                |
 | ---------------- | ----- | ---------------------- |
-| Functional tests | ~500  | End-to-end behavior    |
+| Functional tests | ~460  | End-to-end behavior    |
 | Unit tests       | ~50   | Component isolation    |
 | Old tests        | ~100  | Vim compatibility      |
 | Benchmarks       | ~20   | Performance regression |
@@ -719,7 +792,7 @@ This migration is a multi-year effort. Rough ordering by complexity:
 - [ ] 100% Rust (except LuaJIT FFI)
 - [ ] Memory safety without runtime cost
 - [ ] Maintainable, idiomatic Rust code
-- [ ] All 500+ functional tests passing
+- [ ] All ~460 functional tests passing
 - [ ] Vim compatibility preserved
 - [ ] External UI compatibility preserved
 
