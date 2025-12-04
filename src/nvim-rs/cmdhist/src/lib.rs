@@ -38,6 +38,29 @@ pub extern "C" fn rs_hist_char2type(c: c_int) -> c_int {
     }
 }
 
+/// Translate a history type number to the associated character.
+///
+/// Maps history types to their corresponding prefix characters:
+/// - HIST_CMD -> ':'
+/// - HIST_SEARCH -> '/'
+/// - HIST_EXPR -> '='
+/// - HIST_INPUT -> '@'
+/// - HIST_DEBUG -> '>'
+///
+/// # Panics
+/// Panics if an invalid history type is passed.
+#[no_mangle]
+pub extern "C" fn rs_hist_type2char(hist_type: c_int) -> c_int {
+    match hist_type {
+        HIST_CMD => b':' as c_int,
+        HIST_SEARCH => b'/' as c_int,
+        HIST_EXPR => b'=' as c_int,
+        HIST_INPUT => b'@' as c_int,
+        HIST_DEBUG => b'>' as c_int,
+        _ => panic!("Invalid history type: {hist_type}"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -65,5 +88,32 @@ mod tests {
         assert_eq!(rs_hist_char2type('a' as c_int), HIST_INVALID);
         assert_eq!(rs_hist_char2type('!' as c_int), HIST_INVALID);
         assert_eq!(rs_hist_char2type(' ' as c_int), HIST_INVALID);
+    }
+
+    #[test]
+    fn test_hist_type2char() {
+        // Command history
+        assert_eq!(rs_hist_type2char(HIST_CMD), b':' as c_int);
+
+        // Search history
+        assert_eq!(rs_hist_type2char(HIST_SEARCH), b'/' as c_int);
+
+        // Expression history
+        assert_eq!(rs_hist_type2char(HIST_EXPR), b'=' as c_int);
+
+        // Input history
+        assert_eq!(rs_hist_type2char(HIST_INPUT), b'@' as c_int);
+
+        // Debug history
+        assert_eq!(rs_hist_type2char(HIST_DEBUG), b'>' as c_int);
+    }
+
+    #[test]
+    fn test_roundtrip() {
+        // Test that char2type and type2char are inverses for valid types
+        for hist_type in [HIST_CMD, HIST_SEARCH, HIST_EXPR, HIST_INPUT, HIST_DEBUG] {
+            let c = rs_hist_type2char(hist_type);
+            assert_eq!(rs_hist_char2type(c), hist_type);
+        }
     }
 }

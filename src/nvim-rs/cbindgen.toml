@@ -43,7 +43,7 @@ include = ["rs_xfpclassify", "rs_xisinf", "rs_xisnan", "rs_xctz", "rs_xpopcount"
            "rs_xstrnlen", "rs_xstrchrnul", "rs_xmemscan", "rs_strcnt", "rs_memcnt",
            "rs_xmemrchr", "rs_strequal", "rs_strnequal",
            "rs_hash_hash", "rs_hash_hash_len",
-           "rs_hist_char2type",
+           "rs_hist_char2type", "rs_hist_type2char",
            "rs_profile_zero", "rs_profile_divide", "rs_profile_add", "rs_profile_sub",
            "rs_profile_self", "rs_profile_equal", "rs_profile_signed", "rs_profile_cmp",
            "rs_menu_is_winbar", "rs_menu_is_popup", "rs_menu_is_toolbar",
