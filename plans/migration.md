@@ -234,6 +234,16 @@ Profiling time arithmetic - pure computation, no allocation:
 - [x] `profile_signed` - Converts time to signed value (pure) - swapped to Rust
 - [x] `profile_cmp` - Compares two times (pure) - swapped to Rust
 
+#### 1.16 Menu Utilities (`src/nvim/menu.c` → `nvim-rs/menu`)
+
+Menu name classification - pure string prefix checks, no allocation:
+
+- [x] `menu_is_winbar` - Check if name is WinBar menu (pure) - swapped to Rust
+- [x] `menu_is_popup` - Check if name is PopUp menu (pure) - swapped to Rust
+- [x] `menu_is_toolbar` - Check if name is ToolBar menu (pure) - swapped to Rust
+- [x] `menu_is_menubar` - Check if name is MenuBar menu (pure) - swapped to Rust
+- [x] `menu_is_separator` - Check if name is separator (pure) - swapped to Rust
+
 #### 1.9 Memory Utilities (`src/nvim/memory.c` → `nvim-rs/memutil`)
 
 Pure string/memory utility functions, no allocation:
