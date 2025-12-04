@@ -50,6 +50,7 @@ extern int rs_hexhex2nr(const char *p);
 extern unsigned rs_nr2hex(unsigned n);
 extern char *rs_skip_to_newline(const char *p);
 extern bool rs_vim_isblankline(const char *lbuf);
+extern size_t rs_transchar_hex(char *buf, int c);
 #endif
 
 static bool chartab_initialized = false;
@@ -653,6 +654,9 @@ void transchar_nonprint(const buf_T *buf, char *charbuf, int c)
 size_t transchar_hex(char *const buf, const int c)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_CHARSET
+  return rs_transchar_hex(buf, c);
+#else
   size_t i = 0;
 
   buf[i++] = '<';
@@ -669,6 +673,7 @@ size_t transchar_hex(char *const buf, const int c)
   buf[i++] = '>';
   buf[i] = NUL;
   return i;
+#endif
 }
 
 /// Mirror text "str" for right-left displaying.
