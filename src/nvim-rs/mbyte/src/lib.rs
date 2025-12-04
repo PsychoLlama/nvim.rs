@@ -276,6 +276,33 @@ pub fn utf_valid(c: i32) -> bool {
     c >= 0 && c <= 0x10_FFFF && !(0xD800..=0xDFFF).contains(&c)
 }
 
+/// Check if a string is valid UTF-8.
+///
+/// If `end` is None, stops at the first NUL byte.
+/// If `end` is Some(n), checks exactly n bytes.
+pub fn utf_valid_string(s: &[u8], len: Option<usize>) -> bool {
+    let end = len.unwrap_or(s.len());
+    let mut i = 0;
+
+    while i < end && (len.is_some() || s[i] != 0) {
+        let l = UTF8LEN_TAB_ZERO[s[i] as usize] as usize;
+        if l == 0 {
+            return false; // invalid lead byte
+        }
+        if i + l > end {
+            return false; // incomplete byte sequence
+        }
+        // Check continuation bytes
+        for j in 1..l {
+            if i + j >= s.len() || (s[i + j] & 0xC0) != 0x80 {
+                return false; // invalid trail byte
+            }
+        }
+        i += l;
+    }
+    true
+}
+
 // FFI functions
 
 /// Get the byte length of UTF-8 encoding for a Unicode codepoint.
@@ -385,6 +412,41 @@ pub unsafe extern "C" fn rs_utf_ptr2len_len(p: *const c_char, size: c_int) -> c_
 
     let slice = unsafe { std::slice::from_raw_parts(p as *const u8, size as usize) };
     utf_ptr2len_len(slice, size as usize) as c_int
+}
+
+/// Check if a string is valid UTF-8.
+///
+/// # Safety
+///
+/// `s` must be a valid pointer to a string. If `end` is not null, the string
+/// must have at least `end - s` bytes. If `end` is null, `s` must be null-terminated.
+#[no_mangle]
+pub unsafe extern "C" fn rs_utf_valid_string(s: *const c_char, end: *const c_char) -> c_int {
+    if s.is_null() {
+        return 1; // NULL is considered valid (matches C behavior)
+    }
+
+    let len = if end.is_null() {
+        // Find NUL terminator - but we need to determine max safe length
+        let mut len = 0;
+        while unsafe { *s.add(len) } != 0 {
+            len += 1;
+            if len > 1_000_000 {
+                break; // Safety limit
+            }
+        }
+        len
+    } else {
+        (end as usize).saturating_sub(s as usize)
+    };
+
+    if len == 0 {
+        return 1; // Empty string is valid
+    }
+
+    let slice = unsafe { std::slice::from_raw_parts(s as *const u8, len) };
+    let use_len = if end.is_null() { None } else { Some(len) };
+    c_int::from(utf_valid_string(slice, use_len))
 }
 
 #[cfg(test)]

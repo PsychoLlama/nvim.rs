@@ -15,6 +15,7 @@ extern int rs_utf_byte2len(int b);
 extern int rs_utf_ptr2char(const char *p);
 extern int rs_utf_ptr2len(const char *p);
 extern int rs_utf_ptr2len_len(const char *p, int size);
+extern int rs_utf_valid_string(const char *s, const char *end);
 
 // C implementations (simplified from nvim/mbyte.c)
 static uint8_t utf8len_tab[256] = {
@@ -138,6 +139,47 @@ static int c_utf_ptr2char(const char *p) {
     // len == 6
     return (int)((v0 << 30) + (v1 << 24) + (v2 << 18) + (v3 << 12) + (v4 << 6) + v5
                  - ((0x80 << 24) + (0x80 << 18) + (0x80 << 12) + (0x80 << 6) + 0x80));
+}
+
+// UTF-8 length table with 0 for invalid lead bytes (continuation bytes, FE, FF)
+static uint8_t utf8len_tab_zero[256] = {
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // 0x80-0x8F (continuation bytes)
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // 0x90-0x9F
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // 0xA0-0xAF
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  // 0xB0-0xBF
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+    3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+    4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 0, 0,  // FE and FF are invalid
+};
+
+static bool c_utf_valid_string(const char *s, const char *end) {
+    const uint8_t *p = (uint8_t *)s;
+
+    while (end == NULL ? *p != 0 : p < (uint8_t *)end) {
+        int l = utf8len_tab_zero[*p];
+        if (l == 0) {
+            return false;  // invalid lead byte
+        }
+        if (end != NULL && p + l > (uint8_t *)end) {
+            return false;  // incomplete byte sequence
+        }
+        p++;
+        while (--l > 0) {
+            if ((*p++ & 0xc0) != 0x80) {
+                return false;  // invalid trail byte
+            }
+        }
+    }
+    return true;
 }
 
 static int tests_passed = 0;
@@ -341,6 +383,58 @@ void test_roundtrip(void) {
     }
 }
 
+void test_utf_valid_string(void) {
+    printf("Testing utf_valid_string:\n");
+
+    struct {
+        const char *str;
+        int len;  // -1 for NUL-terminated, otherwise explicit length
+        bool expected;
+        const char *desc;
+    } test_cases[] = {
+        // Valid strings
+        {"", -1, true, "empty NUL-terminated"},
+        {"A", -1, true, "single ASCII"},
+        {"hello", -1, true, "ASCII string"},
+        {"\xC3\xA1", -1, true, "2-byte (á)"},
+        {"\xE2\x82\xAC", -1, true, "3-byte (€)"},
+        {"\xF0\x9F\x98\x80", -1, true, "4-byte (😀)"},
+        {"hello\xC3\xA1world", -1, true, "mixed ASCII and 2-byte"},
+        {"\xC3\xA1\xE2\x82\xAC\xF0\x9F\x98\x80", -1, true, "2+3+4 byte sequence"},
+
+        // Invalid strings (NUL-terminated)
+        {"\x80", -1, false, "continuation byte at start"},
+        {"\xC3", -1, false, "incomplete 2-byte (missing continuation)"},
+        {"\xC3X", -1, false, "invalid continuation byte (X)"},
+        {"\xE2\x82", -1, false, "incomplete 3-byte (missing last)"},
+        {"\xF0\x9F\x98", -1, false, "incomplete 4-byte (missing last)"},
+        {"\xFE", -1, false, "invalid lead byte 0xFE"},
+        {"\xFF", -1, false, "invalid lead byte 0xFF"},
+
+        // With explicit length
+        {"AB", 2, true, "explicit len=2"},
+        {"\xC3\xA1", 2, true, "2-byte explicit len=2"},
+        {"\xC3\xA1X", 2, true, "2-byte explicit len=2 (ignore trailing)"},
+        {"\xC3\xA1", 1, false, "2-byte truncated len=1"},
+        {"\xE2\x82\xAC", 2, false, "3-byte truncated len=2"},
+    };
+    int n = sizeof(test_cases) / sizeof(test_cases[0]);
+
+    for (int i = 0; i < n; i++) {
+        const char *str = test_cases[i].str;
+        const char *end = (test_cases[i].len < 0) ? NULL : (str + test_cases[i].len);
+
+        bool c_result = c_utf_valid_string(str, end);
+        int rs_result = rs_utf_valid_string(str, end);
+        bool rs_bool = (rs_result != 0);
+
+        char name[128];
+        snprintf(name, sizeof(name), "valid_string(%s) expected=%d C=%d Rust=%d",
+                 test_cases[i].desc, test_cases[i].expected, c_result, rs_bool);
+        TEST(name, c_result == rs_bool && c_result == test_cases[i].expected);
+    }
+}
+
 int main(void) {
     printf("=== Comparing C and Rust mbyte implementations ===\n\n");
 
@@ -351,6 +445,7 @@ int main(void) {
     test_utf_ptr2len_len();
     test_utf_ptr2char();
     test_roundtrip();
+    test_utf_valid_string();
 
     printf("\n=== Results ===\n");
     printf("Passed: %d\n", tests_passed);

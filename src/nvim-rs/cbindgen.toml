@@ -22,6 +22,7 @@ include = ["rs_xfpclassify", "rs_xisinf", "rs_xisnan", "rs_xctz", "rs_xpopcount"
            "rs_vim_append_digit_int", "rs_trim_to_int", "rs_is_power_of_two",
            "rs_utf_char2len", "rs_utf_char2bytes", "rs_utf_byte2len",
            "rs_utf_ptr2char", "rs_utf_ptr2len", "rs_utf_ptr2len_len",
+           "rs_utf_valid_string",
            "rs_vim_ispathsep", "rs_vim_ispathsep_nocolon", "rs_vim_ispathlistsep",
            "rs_path_head_length", "rs_path_is_absolute", "rs_path_tail", "rs_path_is_url",
            "rs_vim_stricmp", "rs_vim_strnicmp", "rs_striequal", "rs_vim_strchr",

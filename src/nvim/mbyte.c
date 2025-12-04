@@ -94,6 +94,7 @@ extern int rs_utf_byte2len(int b);
 extern int rs_utf_ptr2char(const char *p);
 extern int rs_utf_ptr2len(const char *p);
 extern int rs_utf_ptr2len_len(const char *p, int size);
+extern int rs_utf_valid_string(const char *s, const char *end);
 #endif
 
 static const char e_list_item_nr_is_not_list[]
@@ -2191,6 +2192,9 @@ theend:
 /// When "end" is NULL stop at the first NUL.  Otherwise stop at "end".
 bool utf_valid_string(const char *s, const char *end)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_valid_string(s, end) != 0;
+#else
   const uint8_t *p = (uint8_t *)s;
 
   while (end == NULL ? *p != NUL : p < (uint8_t *)end) {
@@ -2209,6 +2213,7 @@ bool utf_valid_string(const char *s, const char *end)
     }
   }
   return true;
+#endif
 }
 
 // If the cursor moves on an trail byte, set the cursor on the lead byte.
