@@ -71,7 +71,16 @@ if(USE_RUST)
     message(STATUS "Using Rust library: ${RUST_NVIM_LIB}")
     target_link_libraries(main_lib INTERFACE ${RUST_NVIM_LIB} pthread dl m)
     # Enable all available Rust implementations
-    target_compile_definitions(nvim_bin PRIVATE USE_RUST_CHARSET USE_RUST_MATH USE_RUST_PATH USE_RUST_STRINGS USE_RUST_MBYTE)
+    target_compile_definitions(nvim_bin PRIVATE
+      USE_RUST_CHARSET
+      USE_RUST_INDENT
+      USE_RUST_KEYCODES
+      USE_RUST_MATH
+      USE_RUST_MBYTE
+      USE_RUST_MEMUTIL
+      USE_RUST_PATH
+      USE_RUST_STRINGS
+    )
   else()
     message(WARNING "USE_RUST enabled but Rust library not found. Run 'cargo build --release' first.")
   endif()
