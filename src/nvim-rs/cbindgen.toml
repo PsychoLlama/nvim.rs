@@ -49,4 +49,6 @@ include = ["rs_xfpclassify", "rs_xisinf", "rs_xisnan", "rs_xctz", "rs_xpopcount"
            "rs_menu_is_menubar", "rs_menu_is_separator",
            "rs_help_heuristic",
            "rs_base64_encode", "rs_base64_decode",
+           "rs_sha256_start", "rs_sha256_update", "rs_sha256_finish", "rs_sha256_bytes",
+           "Sha256Context",
            "nvim_rs_version"]

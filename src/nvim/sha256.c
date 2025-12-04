@@ -21,6 +21,20 @@
 #include "nvim/sha256.h"
 
 #include "sha256.c.generated.h"
+
+#ifdef USE_RUST_ENCODING
+// Rust SHA-256 context has identical layout to context_sha256_T
+typedef struct {
+  uint32_t total[2];
+  uint32_t state[8];
+  uint8_t buffer[SHA256_BUFFER_SIZE];
+} Sha256Context;
+
+extern void rs_sha256_start(Sha256Context *ctx);
+extern void rs_sha256_update(Sha256Context *ctx, const uint8_t *input, size_t length);
+extern void rs_sha256_finish(Sha256Context *ctx, uint8_t *digest);
+extern const char *rs_sha256_bytes(const uint8_t *buf, size_t buf_len, const uint8_t *salt, size_t salt_len);
+#endif
 #define GET_UINT32(n, b, i) { \
   (n) = ((uint32_t)(b)[(i)] << 24) \
         | ((uint32_t)(b)[(i) + 1] << 16) \
@@ -37,6 +51,9 @@
 
 void sha256_start(context_sha256_T *ctx)
 {
+#ifdef USE_RUST_ENCODING
+  rs_sha256_start((Sha256Context *)ctx);
+#else
   ctx->total[0] = 0;
   ctx->total[1] = 0;
 
@@ -48,6 +65,7 @@ void sha256_start(context_sha256_T *ctx)
   ctx->state[5] = 0x9B05688C;
   ctx->state[6] = 0x1F83D9AB;
   ctx->state[7] = 0x5BE0CD19;
+#endif
 }
 
 static void sha256_process(context_sha256_T *ctx, const uint8_t data[SHA256_BUFFER_SIZE])
@@ -179,6 +197,9 @@ static void sha256_process(context_sha256_T *ctx, const uint8_t data[SHA256_BUFF
 
 void sha256_update(context_sha256_T *ctx, const uint8_t *input, size_t length)
 {
+#ifdef USE_RUST_ENCODING
+  rs_sha256_update((Sha256Context *)ctx, input, length);
+#else
   if (length == 0) {
     return;
   }
@@ -211,6 +232,7 @@ void sha256_update(context_sha256_T *ctx, const uint8_t *input, size_t length)
   if (length) {
     memcpy(ctx->buffer + left, input, length);
   }
+#endif
 }
 
 static uint8_t sha256_padding[SHA256_BUFFER_SIZE] = {
@@ -222,6 +244,9 @@ static uint8_t sha256_padding[SHA256_BUFFER_SIZE] = {
 
 void sha256_finish(context_sha256_T *ctx, uint8_t digest[SHA256_SUM_SIZE])
 {
+#ifdef USE_RUST_ENCODING
+  rs_sha256_finish((Sha256Context *)ctx, digest);
+#else
   uint32_t high = (ctx->total[0] >> 29) | (ctx->total[1] <<  3);
   uint32_t low = (ctx->total[0] <<  3);
 
@@ -243,6 +268,7 @@ void sha256_finish(context_sha256_T *ctx, uint8_t digest[SHA256_SUM_SIZE])
   PUT_UINT32(ctx->state[5], digest, 20);
   PUT_UINT32(ctx->state[6], digest, 24);
   PUT_UINT32(ctx->state[7], digest, 28);
+#endif
 }
 
 #define SHA_STEP 2
@@ -259,6 +285,12 @@ void sha256_finish(context_sha256_T *ctx, uint8_t digest[SHA256_SUM_SIZE])
 const char *sha256_bytes(const uint8_t *restrict buf,  size_t buf_len, const uint8_t *restrict salt,
                          size_t salt_len)
 {
+#ifdef USE_RUST_ENCODING
+  // Rust implementation handles everything internally
+  // Still call self-test to validate the implementation once
+  sha256_self_test();
+  return rs_sha256_bytes(buf, buf_len, salt, salt_len);
+#else
   static char hexit[SHA256_BUFFER_SIZE + 1];  // buf size + NULL
 
   sha256_self_test();
@@ -278,6 +310,7 @@ const char *sha256_bytes(const uint8_t *restrict buf,  size_t buf_len, const uin
   }
   hexit[sizeof(hexit) - 1] = NUL;
   return hexit;
+#endif
 }
 
 // These are the standard FIPS-180-2 test vectors
