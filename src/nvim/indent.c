@@ -52,6 +52,11 @@
 
 #include "indent.c.generated.h"
 
+#ifdef USE_RUST_INDENT
+extern int rs_tabstop_padding(int col, int64_t ts_arg, const int *vts);
+extern int rs_indent_size_ts(const char *ptr, int64_t ts, const int *vts);
+#endif
+
 /// Set the integer values corresponding to the string setting of 'vartabstop'.
 /// "array" will be set, caller must free it if needed.
 ///
@@ -121,6 +126,9 @@ bool tabstop_set(char *var, colnr_T **array)
 int tabstop_padding(colnr_T col, OptInt ts_arg, const colnr_T *vts)
   FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_INDENT
+  return rs_tabstop_padding(col, ts_arg, vts);
+#else
   OptInt ts = ts_arg == 0 ? 8 : ts_arg;
   colnr_T tabcol = 0;
   int t;
@@ -144,6 +152,7 @@ int tabstop_padding(colnr_T col, OptInt ts_arg, const colnr_T *vts)
   }
 
   return padding;
+#endif
 }
 
 /// Find the size of the tab that covers a particular column.
@@ -411,6 +420,9 @@ int indent_size_no_ts(char const *ptr)
 int indent_size_ts(char const *ptr, OptInt ts, colnr_T *vts)
   FUNC_ATTR_NONNULL_ARG(1) FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_INDENT
+  return rs_indent_size_ts(ptr, ts, vts);
+#else
   assert(char2cells(' ') == 1);
 
   int vcol = 0;
@@ -458,6 +470,7 @@ int indent_size_ts(char const *ptr, OptInt ts, colnr_T *vts)
       return vcol;
     }
   }
+#endif
 }
 
 /// Set the indent of the current line.

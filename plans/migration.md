@@ -196,6 +196,14 @@ Skip functions and hex conversion - all pure, no allocation:
 - [ ] `skip_to_newline` - Uses xstrchrnul
 - [ ] Character classification functions (use global state g_chartab)
 
+#### 1.7 Indent Utilities (`src/nvim/indent.c` → `nvim-rs/indent`)
+
+Tabstop calculation - pure arithmetic, no allocation:
+
+- [x] `tabstop_padding` - Calculate padding needed to reach next tabstop (pure) - swapped to Rust
+- [x] `indent_size_ts` - Calculate indent size with tabstops (pure) - swapped to Rust
+- [ ] `indent_size_no_ts` - Uses byte2cells which depends on g_chartab
+
 **Validation:**
 
 ```bash

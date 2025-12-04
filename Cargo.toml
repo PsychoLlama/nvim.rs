@@ -5,6 +5,7 @@ members = [
     "src/nvim-rs/charset",
     "src/nvim-rs/collections",
     "src/nvim-rs/encoding",
+    "src/nvim-rs/indent",
     "src/nvim-rs/math",
     "src/nvim-rs/mbyte",
     "src/nvim-rs/memory",

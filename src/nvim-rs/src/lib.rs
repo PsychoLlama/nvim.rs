@@ -14,6 +14,7 @@
 // Re-export all FFI functions from sub-crates
 // This ensures they're included in the static library
 pub use nvim_charset::*;
+pub use nvim_indent::*;
 pub use nvim_math::*;
 pub use nvim_mbyte::*;
 pub use nvim_path::*;
