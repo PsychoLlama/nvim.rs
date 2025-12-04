@@ -223,6 +223,24 @@ pub unsafe extern "C" fn rs_getwhitecols(p: *const c_char) -> isize {
     result.offset_from(p)
 }
 
+/// Skip over text until '\n' (newline) or NUL.
+///
+/// Returns a pointer to the next '\n' or the NUL terminator.
+///
+/// # Safety
+/// The pointer must be valid and point to a null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_skip_to_newline(p: *const c_char) -> *const c_char {
+    if p.is_null() {
+        return p;
+    }
+    let mut ptr = p;
+    while *ptr != 0 && *ptr != b'\n' as c_char {
+        ptr = ptr.add(1);
+    }
+    ptr
+}
+
 // ============================================================================
 // Hex/Number conversion functions
 // ============================================================================
@@ -600,6 +618,46 @@ mod tests {
 
             // Null pointer
             assert_eq!(rs_getwhitecols(std::ptr::null()), 0);
+        }
+    }
+
+    #[test]
+    fn test_skip_to_newline() {
+        unsafe {
+            // Skip to newline
+            let s = CString::new("hello\nworld").unwrap();
+            let result = rs_skip_to_newline(s.as_ptr());
+            assert_eq!(*result, b'\n' as c_char);
+            let offset = result.offset_from(s.as_ptr());
+            assert_eq!(offset, 5);
+
+            // No newline - skip to NUL
+            let s = CString::new("hello world").unwrap();
+            let result = rs_skip_to_newline(s.as_ptr());
+            assert_eq!(*result, 0);
+
+            // Newline at start
+            let s = CString::new("\nhello").unwrap();
+            let result = rs_skip_to_newline(s.as_ptr());
+            assert_eq!(*result, b'\n' as c_char);
+            let offset = result.offset_from(s.as_ptr());
+            assert_eq!(offset, 0);
+
+            // Empty string
+            let s = CString::new("").unwrap();
+            let result = rs_skip_to_newline(s.as_ptr());
+            assert_eq!(*result, 0);
+
+            // Multiple newlines - stops at first
+            let s = CString::new("line1\nline2\nline3").unwrap();
+            let result = rs_skip_to_newline(s.as_ptr());
+            assert_eq!(*result, b'\n' as c_char);
+            let offset = result.offset_from(s.as_ptr());
+            assert_eq!(offset, 5);
+
+            // Null pointer
+            let result = rs_skip_to_newline(std::ptr::null());
+            assert!(result.is_null());
         }
     }
 }

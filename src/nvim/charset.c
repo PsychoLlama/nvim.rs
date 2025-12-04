@@ -48,6 +48,7 @@ extern intptr_t rs_getwhitecols(const char *p);
 extern int rs_hex2nr(int c);
 extern int rs_hexhex2nr(const char *p);
 extern unsigned rs_nr2hex(unsigned n);
+extern char *rs_skip_to_newline(const char *p);
 #endif
 
 static bool chartab_initialized = false;
@@ -1150,7 +1151,11 @@ char *skip_to_newline(const char *const p)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
   FUNC_ATTR_NONNULL_RET
 {
+#ifdef USE_RUST_CHARSET
+  return rs_skip_to_newline(p);
+#else
   return xstrchrnul(p, NL);
+#endif
 }
 
 /// Gets a number from a string and skips over it, signalling overflow.

@@ -193,7 +193,7 @@ Skip functions and hex conversion - all pure, no allocation:
 - [x] `nr2hex` - Convert nibble to hex char (pure) - swapped to Rust
 - [x] `skiptowhite_esc` - Skip to whitespace respecting escapes (pure) - swapped to Rust
 - [x] `getwhitecols` - Count whitespace columns at start (pure) - swapped to Rust
-- [ ] `skip_to_newline` - Uses xstrchrnul
+- [x] `skip_to_newline` - Skip to newline (pure) - swapped to Rust
 - [ ] Character classification functions (use global state g_chartab)
 
 #### 1.7 Indent Utilities (`src/nvim/indent.c` → `nvim-rs/indent`)
