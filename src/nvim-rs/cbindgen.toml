@@ -40,4 +40,5 @@ include = ["rs_xfpclassify", "rs_xisinf", "rs_xisnan", "rs_xctz", "rs_xpopcount"
            "rs_name_to_mod_mask", "rs_handle_x_keys",
            "rs_xstrnlen", "rs_xstrchrnul", "rs_xmemscan", "rs_strcnt", "rs_memcnt",
            "rs_xmemrchr", "rs_strequal", "rs_strnequal",
+           "rs_hash_hash", "rs_hash_hash_len",
            "nvim_rs_version"]

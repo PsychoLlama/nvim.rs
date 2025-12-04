@@ -31,6 +31,11 @@
 #include "nvim/message.h"
 #include "nvim/vim_defs.h"
 
+#ifdef USE_RUST_MEMUTIL
+extern hash_T rs_hash_hash(const char *key);
+extern hash_T rs_hash_hash_len(const char *key, size_t len);
+#endif
+
 // Magic value for algorithm that walks through the array.
 #define PERTURB_SHIFT 5
 
@@ -401,6 +406,9 @@ static void hash_may_resize(hashtab_T *ht, size_t minitems)
 /// lower the percentage the better.
 hash_T hash_hash(const char *key)
 {
+#ifdef USE_RUST_MEMUTIL
+  return rs_hash_hash(key);
+#else
   hash_T hash = (uint8_t)(*key);
 
   if (hash == 0) {
@@ -415,6 +423,7 @@ hash_T hash_hash(const char *key)
   }
 
   return hash;
+#endif
 }
 
 /// Get the hash number for a key that is not a NUL-terminated string
@@ -429,6 +438,9 @@ hash_T hash_hash(const char *key)
 hash_T hash_hash_len(const char *key, const size_t len)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_MEMUTIL
+  return rs_hash_hash_len(key, len);
+#else
   if (len == 0) {
     return 0;
   }
@@ -442,6 +454,7 @@ hash_T hash_hash_len(const char *key, const size_t len)
   }
 
   return hash;
+#endif
 }
 
 #undef HASH_CYCLE_BODY

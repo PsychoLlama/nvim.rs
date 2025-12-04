@@ -310,6 +310,8 @@ TEST_FILE=test/functional/core/fileio_spec.lua make functionaltest
 
 - [x] Implement `HashMap`-compatible structure in Rust
 - [x] Expose C-compatible API via FFI
+- [x] `hash_hash` - Compute hash for null-terminated string - swapped to Rust
+- [x] `hash_hash_len` - Compute hash for string with known length - swapped to Rust
 - [ ] Used throughout codebase - careful migration
 
 #### 3.2 Growing Array (`src/nvim/garray.c`)

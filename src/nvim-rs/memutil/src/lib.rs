@@ -6,6 +6,10 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 #![allow(clippy::missing_safety_doc)]
 #![allow(unsafe_code)]
+#![allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
+#![allow(clippy::cast_sign_loss)] // c_char to u8 is intentional
+#![allow(clippy::option_if_let_else)] // match is clearer for FFI code
+#![allow(clippy::naive_bytecount)] // No external dependencies wanted
 
 use std::ffi::c_char;
 
@@ -193,6 +197,67 @@ pub unsafe extern "C" fn rs_strnequal(a: *const c_char, b: *const c_char, n: usi
     }
 }
 
+// Hash type (matches C hash_T = size_t).
+type HashT = usize;
+
+/// Compute hash for a null-terminated string.
+///
+/// Uses the same polynomial hash algorithm as nvim's hashtab.c:
+/// hash = hash * 101 + byte
+///
+/// # Safety
+///
+/// `key` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_hash_hash(key: *const c_char) -> HashT {
+    if key.is_null() {
+        return 0;
+    }
+
+    let first_byte = *key as u8;
+    if first_byte == 0 {
+        return 0;
+    }
+
+    let mut hash = first_byte as HashT;
+    let mut p = key.add(1);
+
+    loop {
+        let byte = *p as u8;
+        if byte == 0 {
+            break;
+        }
+        hash = hash.wrapping_mul(101).wrapping_add(byte as HashT);
+        p = p.add(1);
+    }
+
+    hash
+}
+
+/// Compute hash for a string with known length.
+///
+/// Uses the same polynomial hash algorithm as nvim's hashtab.c.
+///
+/// # Safety
+///
+/// `key` must be a valid pointer to at least `len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_hash_hash_len(key: *const c_char, len: usize) -> HashT {
+    if key.is_null() || len == 0 {
+        return 0;
+    }
+
+    let first_byte = *key as u8;
+    let mut hash = first_byte as HashT;
+
+    for i in 1..len {
+        let byte = *key.add(i) as u8;
+        hash = hash.wrapping_mul(101).wrapping_add(byte as HashT);
+    }
+
+    hash
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -295,6 +360,54 @@ mod tests {
 
             // n == 0
             assert!(rs_strnequal(s1.as_ptr().cast(), s2.as_ptr().cast(), 0));
+        }
+    }
+
+    #[test]
+    fn test_hash_hash() {
+        unsafe {
+            let key1 = b"hello\0";
+            let key2 = b"world\0";
+            let key3 = b"hello\0";
+
+            let hash1 = rs_hash_hash(key1.as_ptr().cast());
+            let hash2 = rs_hash_hash(key2.as_ptr().cast());
+            let hash3 = rs_hash_hash(key3.as_ptr().cast());
+
+            // Same string should have same hash
+            assert_eq!(hash1, hash3);
+
+            // Different strings should (usually) have different hashes
+            assert_ne!(hash1, hash2);
+
+            // Empty string should hash to 0
+            let empty = b"\0";
+            assert_eq!(rs_hash_hash(empty.as_ptr().cast()), 0);
+
+            // NULL should hash to 0
+            assert_eq!(rs_hash_hash(std::ptr::null()), 0);
+        }
+    }
+
+    #[test]
+    fn test_hash_hash_len() {
+        unsafe {
+            let key = b"hello world\0";
+
+            let hash_full = rs_hash_hash_len(key.as_ptr().cast(), 11);
+            let hash_hello = rs_hash_hash_len(key.as_ptr().cast(), 5);
+
+            let hello_only = b"hello\0";
+            let hello_hash = rs_hash_hash(hello_only.as_ptr().cast());
+
+            // Hash of first 5 chars should match hash of "hello"
+            assert_eq!(hash_hello, hello_hash);
+
+            // Full hash should be different
+            assert_ne!(hash_full, hash_hello);
+
+            // Empty length should hash to 0
+            assert_eq!(rs_hash_hash_len(key.as_ptr().cast(), 0), 0);
         }
     }
 }
