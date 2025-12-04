@@ -13,6 +13,10 @@ crate-type = ["staticlib", "rlib"]
 workspace = true
 
 [dependencies]
+nvim-math = { path = "math" }
+nvim-mbyte = { path = "mbyte" }
+nvim-path = { path = "path" }
+nvim-strings = { path = "strings" }
 
 [build-dependencies]
 cbindgen = "0.27"

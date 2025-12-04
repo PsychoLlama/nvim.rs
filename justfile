@@ -70,6 +70,11 @@ rust-fmt-check:
 # Run all Rust checks (clippy + fmt + test)
 rust-check: rust-fmt-check rust-clippy rust-test
 
+# Test Rust FFI from C (compares Rust vs C implementations)
+rust-ffi-test: rust-build
+    cc -o /tmp/compare_math src/nvim-rs/test/compare_math.c -L target/release -lnvim_rs -lpthread -ldl -lm
+    /tmp/compare_math
+
 # Full build: Rust + C
 build-all: rust-build build
 
