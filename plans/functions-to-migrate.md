@@ -13,9 +13,9 @@ Candidates for Rust migration, organized by priority.
 ### shada.c
 - [x] `hist_type2char` (line 2175) - Translates history type number to character - MIGRATED Phase 1.24 (added to cmdhist crate)
 
-### quickfix.c (static functions - may need to be exposed)
-- [ ] `qf_stack_empty` (line 923) - Returns true if quickfix stack is empty
-- [ ] `qf_list_empty` (line 931) - Returns true if quickfix list is empty
+### quickfix.c (static functions - NOT SUITABLE)
+- ~~`qf_stack_empty` (line 923)~~ - Depends on quickfix stack pointer
+- ~~`qf_list_empty` (line 931)~~ - Depends on quickfix list pointer
 
 ### window.c (frame tree functions)
 - [ ] `frame_has_win` (line 3563) - Recursive check if frame contains window
@@ -69,3 +69,14 @@ Candidates for Rust migration, organized by priority.
 - Static functions may need to be exposed or have their Rust equivalents called from within the existing C function
 - Window/frame functions require understanding of the frame tree structure
 - Some functions marked PURE actually depend on global state (curtab, firstwin, etc.)
+
+## Search Results (2025-12-04)
+
+Most remaining FUNC_ATTR_PURE/FUNC_ATTR_CONST functions fall into these categories:
+1. Functions accessing global state (p_paste, curbuf, State, etc.)
+2. Functions taking complex struct pointers (win_T*, buf_T*, frame_T*)
+3. Functions calling external libraries (utf8proc_*)
+
+The trivial pure functions have largely been migrated. Next steps should focus on:
+- Building out Rust infrastructure for handling struct types via FFI
+- Or identifying new simple functions without the PURE/CONST attributes
