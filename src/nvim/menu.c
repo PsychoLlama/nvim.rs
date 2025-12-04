@@ -48,6 +48,15 @@
 
 #include "menu.c.generated.h"
 
+#ifdef USE_RUST_MENU
+// Rust implementations of menu name classification functions
+extern bool rs_menu_is_winbar(const char *name);
+extern bool rs_menu_is_popup(const char *name);
+extern bool rs_menu_is_toolbar(const char *name);
+extern bool rs_menu_is_menubar(const char *name);
+extern bool rs_menu_is_separator(const char *name);
+#endif
+
 /// The character for each menu mode
 static char *menu_mode_chars[] = { "n", "v", "s", "o", "i", "c", "tl", "t" };
 
@@ -58,7 +67,11 @@ static const char e_nomenu[] = N_("E329: No menu \"%s\"");
 static bool menu_is_winbar(const char *const name)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_MENU
+  return rs_menu_is_winbar(name);
+#else
   return (strncmp(name, "WinBar", 6) == 0);
+#endif
 }
 
 static vimmenu_T **get_root_menu(const char *const name)
@@ -1323,31 +1336,47 @@ static char *menu_text(const char *str, int *mnemonic, char **actext)
 bool menu_is_menubar(const char *const name)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_MENU
+  return rs_menu_is_menubar(name);
+#else
   return !menu_is_popup(name)
          && !menu_is_toolbar(name)
          && !menu_is_winbar(name)
          && *name != MNU_HIDDEN_CHAR;
+#endif
 }
 
 // Return true if "name" is a popup menu name.
 bool menu_is_popup(const char *const name)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_MENU
+  return rs_menu_is_popup(name);
+#else
   return strncmp(name, "PopUp", 5) == 0;
+#endif
 }
 
 // Return true if "name" is a toolbar menu name.
 bool menu_is_toolbar(const char *const name)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_MENU
+  return rs_menu_is_toolbar(name);
+#else
   return strncmp(name, "ToolBar", 7) == 0;
+#endif
 }
 
 /// @return  true if the name is a menu separator identifier: Starts and ends
 ///          with '-'
 bool menu_is_separator(char *name)
 {
+#ifdef USE_RUST_MENU
+  return rs_menu_is_separator(name);
+#else
   return name[0] == '-' && name[strlen(name) - 1] == '-';
+#endif
 }
 
 /// True if a popup menu or starts with \ref MNU_HIDDEN_CHAR
