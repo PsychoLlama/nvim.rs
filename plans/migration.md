@@ -264,8 +264,10 @@ TEST_FILE=test/functional/core/fileio_spec.lua make functionaltest
 
 #### 3.3 Multibyte/UTF-8 (`src/nvim/mbyte.c`)
 
-- [x] UTF-8 encoding/decoding (utf_ptr2char, utf_char2bytes, utf_ptr2len)
-- [x] UTF-8 byte length tables (utf8len_tab, utf8len_tab_zero)
+- [x] UTF-8 encoding/decoding (utf_ptr2char, utf_char2bytes, utf_ptr2len) - swapped to Rust
+- [x] UTF-8 byte length tables (utf8len_tab, utf8len_tab_zero) - implemented in Rust
+- [x] `utf_char2len` - Get UTF-8 byte length for codepoint - swapped to Rust
+- [x] `utf_byte2len` - Get UTF-8 length from first byte - swapped to Rust
 - [ ] Character width calculation (utf_char2cells - requires display tables)
 - [ ] Composing character handling (utfc_ptr2len - requires grapheme state)
 - [ ] Encoding conversion (iconv integration)

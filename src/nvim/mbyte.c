@@ -86,6 +86,16 @@ struct interval {
 #include "mbyte.c.generated.h"
 // uncrustify:on
 
+#ifdef USE_RUST_MBYTE
+// Rust implementations - declarations
+extern int rs_utf_char2len(int c);
+extern int rs_utf_char2bytes(int c, char *buf);
+extern int rs_utf_byte2len(int b);
+extern int rs_utf_ptr2char(const char *p);
+extern int rs_utf_ptr2len(const char *p);
+extern int rs_utf_ptr2len_len(const char *p, int size);
+#endif
+
 static const char e_list_item_nr_is_not_list[]
   = N_("E1109: List item %d is not a List");
 static const char e_list_item_nr_does_not_contain_3_numbers[]
@@ -668,6 +678,9 @@ size_t mb_string2cells_len(const char *str, size_t size)
 int utf_ptr2char(const char *const p_in)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_ptr2char(p_in);
+#else
   uint8_t *p = (uint8_t *)p_in;
 
   uint32_t const v0 = p[0];
@@ -722,6 +735,7 @@ int utf_ptr2char(const char *const p_in)
 #undef S
 #undef CHECK
 #undef LEN_RETURN
+#endif
 }
 
 // Convert a UTF-8 byte sequence to a wide character.
@@ -916,6 +930,9 @@ static schar_T schar_from_buf_first(const char *buf, size_t len, bool first_comp
 int utf_ptr2len(const char *const p_in)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_ptr2len(p_in);
+#else
   uint8_t *p = (uint8_t *)p_in;
   if (*p == NUL) {
     return 0;
@@ -927,6 +944,7 @@ int utf_ptr2len(const char *const p_in)
     }
   }
   return len;
+#endif
 }
 
 // Return length of UTF-8 character, obtained from the first byte.
@@ -934,7 +952,11 @@ int utf_ptr2len(const char *const p_in)
 // Returns 1 for an invalid first byte value.
 int utf_byte2len(int b)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_byte2len(b);
+#else
   return utf8len_tab[b];
+#endif
 }
 
 // Get the length of UTF-8 byte sequence "p[size]".  Does not include any
@@ -1052,6 +1074,9 @@ int utfc_ptr2len_len(const char *p, int size)
 /// Determine how many bytes certain unicode codepoint will occupy
 int utf_char2len(const int c)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_char2len(c);
+#else
   if (c < 0x80) {
     return 1;
   } else if (c < 0x800) {
@@ -1065,6 +1090,7 @@ int utf_char2len(const int c)
   } else {
     return 6;
   }
+#endif
 }
 
 /// Convert Unicode character to UTF-8 string
@@ -1075,6 +1101,9 @@ int utf_char2len(const int c)
 /// @return Number of bytes (1-6).
 int utf_char2bytes(const int c, char *const buf)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_char2bytes(c, buf);
+#else
   if (c < 0x80) {  // 7 bits
     buf[0] = (char)c;
     return 1;
@@ -1109,6 +1138,7 @@ int utf_char2bytes(const int c, char *const buf)
     buf[5] = (char)(0x80 + ((unsigned)c & 0x3f));
     return 6;
   }
+#endif
 }
 
 /// Return true if "c" is a legacy composing UTF-8 character.
