@@ -114,6 +114,8 @@
 #ifdef USE_RUST_EX_DOCMD
 // Rust implementations - declarations
 extern int rs_ends_excmd(int c);
+extern const char *rs_find_nextcmd(const char *p);
+extern const char *rs_check_nextcmd(const char *p);
 #endif
 
 static const char e_ambiguous_use_of_user_defined_command[]
@@ -4637,6 +4639,9 @@ int ends_excmd(int c) FUNC_ATTR_CONST
 ///          NULL if not found.
 char *find_nextcmd(const char *p)
 {
+#ifdef USE_RUST_EX_DOCMD
+  return (char *)rs_find_nextcmd(p);
+#else
   while (*p != '|' && *p != '\n') {
     if (*p == NUL) {
       return NULL;
@@ -4644,6 +4649,7 @@ char *find_nextcmd(const char *p)
     p++;
   }
   return (char *)p + 1;
+#endif
 }
 
 /// Check if *p is a separator between Ex commands, skipping over white space.
@@ -4651,12 +4657,16 @@ char *find_nextcmd(const char *p)
 /// @return  NULL if it isn't, the following character if it is.
 char *check_nextcmd(char *p)
 {
+#ifdef USE_RUST_EX_DOCMD
+  return (char *)rs_check_nextcmd(p);
+#else
   char *s = skipwhite(p);
 
   if (*s == '|' || *s == '\n') {
     return s + 1;
   }
   return NULL;
+#endif
 }
 
 /// - if there are more files to edit

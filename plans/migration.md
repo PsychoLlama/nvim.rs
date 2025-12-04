@@ -261,6 +261,13 @@ Pure utility functions for Ex command parsing:
 
 - [x] `ends_excmd` - Check if character ends an Ex command (pure) - swapped to Rust
 
+#### 1.28 Additional Ex Command Utilities (`src/nvim/ex_docmd.c` → `nvim-rs/ex_docmd`)
+
+More Ex command parsing functions (string scanning, no global state):
+
+- [x] `find_nextcmd` - Find next command after '|' or '\n' separator (pure) - swapped to Rust
+- [x] `check_nextcmd` - Check if at command separator after whitespace (pure) - swapped to Rust
+
 #### 1.23 File I/O Utilities (`src/nvim/fileio.c` → `nvim-rs/fileio`)
 
 Pure utility functions for file operations:

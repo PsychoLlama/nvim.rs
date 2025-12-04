@@ -99,7 +99,7 @@ The trivial pure functions have largely been migrated. Next steps should focus o
 | nvim-help | ✅ Swapped | help_heuristic |
 | nvim-encoding | ✅ Swapped | base64_encode, base64_decode, sha256_* |
 | nvim-cmdhist | ✅ Swapped | hist_char2type, hist_type2char |
-| nvim-ex_docmd | ✅ Swapped | ends_excmd |
+| nvim-ex_docmd | ✅ Swapped | ends_excmd, find_nextcmd, check_nextcmd |
 | nvim-fileio | ✅ Swapped | time_differs |
 
 ### Partially Swapped Crates
