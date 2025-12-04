@@ -73,6 +73,7 @@ if(USE_RUST)
     # Enable all available Rust implementations
     target_compile_definitions(nvim_bin PRIVATE
       USE_RUST_CHARSET
+      USE_RUST_CMDHIST
       USE_RUST_INDENT
       USE_RUST_KEYCODES
       USE_RUST_MATH

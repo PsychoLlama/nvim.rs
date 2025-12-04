@@ -1,0 +1,11 @@
+[package]
+name = "nvim-cmdhist"
+version = "0.1.0"
+edition = "2021"
+description = "Command history utilities for Neovim"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]

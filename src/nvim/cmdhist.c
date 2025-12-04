@@ -32,6 +32,10 @@
 
 #include "cmdhist.c.generated.h"
 
+#ifdef USE_RUST_CMDHIST
+extern HistoryType rs_hist_char2type(int c);
+#endif
+
 static histentry_T *(history[HIST_COUNT]) = { NULL, NULL, NULL, NULL, NULL };
 static int hisidx[HIST_COUNT] = { -1, -1, -1, -1, -1 };  ///< lastused entry
 /// identifying (unique) number of newest history entry
@@ -69,6 +73,9 @@ int *get_hisnum(int hist_type)
 HistoryType hist_char2type(const int c)
   FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_CMDHIST
+  return rs_hist_char2type(c);
+#else
   switch (c) {
   case ':':
     return HIST_CMD;
@@ -87,6 +94,7 @@ HistoryType hist_char2type(const int c)
   }
   // Silence -Wreturn-type
   return 0;
+#endif
 }
 
 /// Table of history names.
