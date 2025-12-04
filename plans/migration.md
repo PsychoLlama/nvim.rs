@@ -198,6 +198,7 @@ Skip functions and hex conversion - all pure, no allocation:
 - [x] `skiptowhite_esc` - Skip to whitespace respecting escapes (pure) - swapped to Rust
 - [x] `getwhitecols` - Count whitespace columns at start (pure) - swapped to Rust
 - [x] `skip_to_newline` - Skip to newline (pure) - swapped to Rust
+- [x] `vim_isblankline` - Check if line is blank (pure) - swapped to Rust
 - [ ] Character classification functions (use global state g_chartab)
 
 #### 1.7 Indent Utilities (`src/nvim/indent.c` → `nvim-rs/indent`)
