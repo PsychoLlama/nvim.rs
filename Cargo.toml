@@ -4,6 +4,7 @@ members = [
     "src/nvim-rs",
     "src/nvim-rs/math",
     "src/nvim-rs/memory",
+    "src/nvim-rs/os",
 ]
 
 [workspace.package]
