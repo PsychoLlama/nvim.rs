@@ -1,0 +1,23 @@
+[workspace]
+resolver = "2"
+members = [
+    "src/nvim-rs",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/neovim/neovim"
+
+[workspace.lints.rust]
+# Note: unsafe_code is allowed at crate level for FFI, but should be minimized
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"
+nursery = "warn"
+
+[profile.release]
+lto = true
+codegen-units = 1

@@ -1,0 +1,18 @@
+[package]
+name = "nvim-rs"
+description = "Rust components for Neovim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+
+[build-dependencies]
+cbindgen = "0.27"
