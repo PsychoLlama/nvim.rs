@@ -147,11 +147,14 @@ These use `xmalloc` - migrate AFTER memory bridge is ready:
 - Phase 0.5 (memory) complete
 - Phase 3.3 (mbyte) complete for `utfc_ptr2len` etc.
 
-- [ ] `vim_strsave` - String duplication (uses xmallocz)
-- [ ] `vim_strnsave` - Bounded string copy (uses xmallocz)
-- [ ] `vim_strchr` - Character search
-- [ ] `concat_str` - String concatenation
-- [ ] `vim_stricmp` / `vim_strnicmp` - Case-insensitive comparison
+- [ ] `vim_strsave` - String duplication (uses xmallocz) - defer until C integration
+- [ ] `vim_strnsave` - Bounded string copy (uses xmallocz) - defer until C integration
+- [x] `vim_strchr` - Character search (ASCII only, multibyte requires mbyte)
+- [x] `concat_str` - String concatenation
+- [x] `vim_stricmp` / `vim_strnicmp` - Case-insensitive comparison
+- [x] `striequal` - Case-insensitive equality check
+- [x] `has_non_ascii` - Check for non-ASCII characters
+- [x] `sort_strings` - Sort array of strings
 
 #### 1.4 Path Utilities (PARTIAL - some pure, some not)
 
