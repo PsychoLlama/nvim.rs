@@ -322,20 +322,23 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 
 #### 2.1 Environment & System Info
 
-- [x] `src/nvim/os/env.c` → `nvim-rs/os/env`
+- [ ] `src/nvim/os/env.c` → `nvim-rs/os/env`
   - `os_getenv`, `os_setenv`, `os_unsetenv`
   - `os_get_hostname`, `os_get_user_name`
   - `os_get_pid`
-- [x] `src/nvim/os/time.c` → `nvim-rs/os/time`
+  - **Status**: Rust code exists but NOT swapped - uses Rust allocator, needs xmalloc integration
+- [ ] `src/nvim/os/time.c` → `nvim-rs/os/time`
   - `os_hrtime`, `os_utime`, `os_localtime_r`
+  - **Status**: Rust code exists but NOT swapped
 
 #### 2.2 Filesystem Operations
 
-- [x] `src/nvim/os/fs.c` → `nvim-rs/os/fs`
+- [ ] `src/nvim/os/fs.c` → `nvim-rs/os/fs`
   - `os_file_exists`, `os_isdir`, `os_can_exe`
   - `os_getperm`, `os_setperm`, `os_file_is_readable`
   - `os_rename`, `os_copy`, `os_remove`
   - `os_mkdir`, `os_rmdir`, `os_scandir`
+  - **Status**: Rust code exists but NOT swapped - uses libuv in C
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
 
@@ -367,16 +370,16 @@ TEST_FILE=test/functional/core/fileio_spec.lua make functionaltest
 
 #### 3.1 Hash Table (`src/nvim/hashtab.c`)
 
-- [x] Implement `HashMap`-compatible structure in Rust
+- [x] Implement `HashMap`-compatible structure in Rust (exists in collections crate)
 - [x] Expose C-compatible API via FFI
 - [x] `hash_hash` - Compute hash for null-terminated string - swapped to Rust
 - [x] `hash_hash_len` - Compute hash for string with known length - swapped to Rust
-- [ ] Used throughout codebase - careful migration
+- [ ] Full hashtab migration - Used throughout codebase, careful migration needed
 
 #### 3.2 Growing Array (`src/nvim/garray.c`)
 
-- [x] Map to `Vec<T>` with C-compatible wrapper
-- [x] Provide `ga_init`, `ga_grow`, `ga_append`, `ga_clear`
+- [x] Map to `Vec<T>` with C-compatible wrapper (exists in collections crate)
+- [ ] Provide `ga_init`, `ga_grow`, `ga_append`, `ga_clear` - NOT swapped yet
 
 #### 3.3 Multibyte/UTF-8 (`src/nvim/mbyte.c`)
 

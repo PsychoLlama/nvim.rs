@@ -80,3 +80,39 @@ Most remaining FUNC_ATTR_PURE/FUNC_ATTR_CONST functions fall into these categori
 The trivial pure functions have largely been migrated. Next steps should focus on:
 - Building out Rust infrastructure for handling struct types via FFI
 - Or identifying new simple functions without the PURE/CONST attributes
+
+## Crate Status Audit (2025-12-04)
+
+### Fully Swapped Crates (functions called from C)
+| Crate | Status | Functions |
+|-------|--------|-----------|
+| nvim-math | ✅ Swapped | xfpclassify, xisinf, xisnan, xctz, xpopcount, num_divide, num_modulus, etc. |
+| nvim-charset | ✅ Swapped | skipwhite, skipdigits, hex2nr, transchar_hex, etc. |
+| nvim-path | ✅ Swapped | vim_ispathsep, path_tail, path_is_url, etc. |
+| nvim-strings | ✅ Swapped | vim_stricmp, vim_strchr, has_non_ascii, valid_name, etc. |
+| nvim-mbyte | ✅ Swapped | utf_char2len, utf_ptr2char, utf_printable, etc. |
+| nvim-memutil | ✅ Swapped | xstrchrnul, xmemscan, strcnt, strequal, hash_hash, etc. |
+| nvim-indent | ✅ Swapped | tabstop_padding, indent_size_ts |
+| nvim-keycodes | ✅ Swapped | name_to_mod_mask, handle_x_keys |
+| nvim-profile | ✅ Swapped | profile_zero, profile_add, profile_sub, etc. |
+| nvim-menu | ✅ Swapped | menu_is_winbar, menu_is_popup, etc. |
+| nvim-help | ✅ Swapped | help_heuristic |
+| nvim-encoding | ✅ Swapped | base64_encode, base64_decode, sha256_* |
+| nvim-cmdhist | ✅ Swapped | hist_char2type, hist_type2char |
+| nvim-ex_docmd | ✅ Swapped | ends_excmd |
+| nvim-fileio | ✅ Swapped | time_differs |
+
+### Unswapped Crates (Rust code exists but NOT used from C)
+| Crate | Status | Blocker |
+|-------|--------|---------|
+| nvim-os | ❌ Not swapped | Uses Rust allocator, needs xmalloc integration; C uses libuv |
+| nvim-collections (garray) | ❌ Not swapped | Complex data structure, needs careful C integration |
+| nvim-collections (hashtab) | Partial | Only hash functions swapped, not full hashtab |
+
+### Migration Blockers
+
+1. **Memory allocation mismatch**: OS crate allocates with Rust `CString`, but nvim uses `xmalloc`. Returning allocated strings requires using nvim's allocator.
+
+2. **libuv dependency**: OS/filesystem functions in C use libuv for portability. Rust would need to either wrap libuv or replace it entirely.
+
+3. **Complex struct types**: frame_T, win_T, buf_T have deep pointer hierarchies. Simple FFI doesn't work; need either opaque pointers with callbacks or full struct mirroring.
