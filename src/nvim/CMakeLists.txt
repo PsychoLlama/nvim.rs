@@ -58,6 +58,24 @@ if(ENABLE_WASMTIME)
   target_compile_definitions(nvim_bin PRIVATE HAVE_WASMTIME)
 endif()
 
+# Rust library integration (optional, for incremental migration)
+option(USE_RUST_MATH "Use Rust implementations of math functions" OFF)
+if(USE_RUST_MATH)
+  # Find the pre-built Rust static library
+  find_library(RUST_NVIM_LIB
+    NAMES nvim_rs libnvim_rs
+    PATHS ${CMAKE_SOURCE_DIR}/target/release
+    NO_DEFAULT_PATH
+  )
+  if(RUST_NVIM_LIB)
+    message(STATUS "Using Rust math library: ${RUST_NVIM_LIB}")
+    target_link_libraries(main_lib INTERFACE ${RUST_NVIM_LIB} pthread dl m)
+    target_compile_definitions(nvim_bin PRIVATE USE_RUST_MATH)
+  else()
+    message(WARNING "USE_RUST_MATH enabled but Rust library not found. Run 'cargo build --release' first.")
+  endif()
+endif()
+
 # The unit test lib requires LuaJIT; it will be skipped if LuaJIT is missing.
 option(PREFER_LUA "Prefer Lua over LuaJIT in the nvim executable." OFF)
 if(PREFER_LUA)

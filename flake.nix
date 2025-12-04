@@ -46,6 +46,7 @@
           clippy
           rustfmt
           rust-analyzer
+          rust-cbindgen
         ];
 
         # Dependencies for running tests

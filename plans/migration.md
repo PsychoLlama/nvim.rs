@@ -132,7 +132,7 @@ make test                        # Nvim still works
 - [x] `vim_append_digit_int` - Safe digit append with overflow check
 - [x] `trim_to_int` - Clamp int64 to int range
 - [x] Create C-compatible wrapper functions using `#[no_mangle]`
-- [ ] Replace C implementations with calls to Rust
+- [x] Replace C implementations with calls to Rust (USE_RUST_MATH=ON)
 
 #### 1.2 Encoding Utilities (REQUIRES Phase 0.5)
 
