@@ -32,6 +32,7 @@ include = ["rs_xfpclassify", "rs_xisinf", "rs_xisnan", "rs_xctz", "rs_xpopcount"
            "rs_path_has_drive_letter", "rs_path_with_url", "rs_vim_isAbsName",
            "rs_vim_stricmp", "rs_vim_strnicmp", "rs_striequal", "rs_vim_strchr",
            "rs_has_non_ascii", "rs_concat_str", "rs_sort_strings", "rs_valid_name",
+           "rs_find_tty_option_end", "rs_is_tty_option",
            "rs_skipwhite", "rs_skipwhite_len", "rs_skipdigits", "rs_skipbin",
            "rs_skiphex", "rs_skiptodigit", "rs_skiptobin", "rs_skiptohex",
            "rs_skiptowhite", "rs_skiptowhite_esc", "rs_getwhitecols", "rs_skip_to_newline",

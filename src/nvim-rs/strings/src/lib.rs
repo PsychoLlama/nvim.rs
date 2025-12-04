@@ -308,6 +308,96 @@ pub unsafe extern "C" fn rs_valid_name(val: *const c_char, allowed: *const c_cha
     1
 }
 
+/// Skip over the name of a TTY option or keycode option.
+///
+/// Returns a pointer to the character after the option name, or NULL if
+/// the option is not a TTY or keycode option.
+///
+/// TTY options are: "term", "ttytype", "t_XX", or "<t_XX>" style keycodes.
+///
+/// # Safety
+///
+/// `arg` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_tty_option_end(arg: *const c_char) -> *const c_char {
+    if arg.is_null() {
+        return std::ptr::null();
+    }
+
+    // Check for "term"
+    let term = b"term\0";
+    if strequal_bytes(arg, term) {
+        return arg.add(4); // length of "term"
+    }
+
+    // Check for "ttytype"
+    let ttytype = b"ttytype\0";
+    if strequal_bytes(arg, ttytype) {
+        return arg.add(7); // length of "ttytype"
+    }
+
+    let mut p = arg;
+    let mut delimit = false;
+
+    // Check for <t_XX> style
+    if *arg as u8 == b'<' {
+        delimit = true;
+        p = p.add(1);
+    }
+
+    // Check for t_XX pattern
+    if *p as u8 == b't' && *p.add(1) as u8 == b'_' && *p.add(2) != 0 && *p.add(3) != 0 {
+        p = p.add(4);
+    } else if delimit {
+        // Search for delimiting >
+        while *p != 0 && *p as u8 != b'>' {
+            p = p.add(1);
+        }
+    }
+
+    // Return NULL when delimiting > is not found
+    if delimit {
+        if *p as u8 != b'>' {
+            return std::ptr::null();
+        }
+        p = p.add(1);
+    }
+
+    if arg == p {
+        std::ptr::null()
+    } else {
+        p
+    }
+}
+
+/// Helper to compare C string with byte literal
+#[inline]
+fn strequal_bytes(s: *const c_char, bytes: &[u8]) -> bool {
+    unsafe {
+        for (i, &b) in bytes.iter().enumerate() {
+            if b == 0 {
+                return true; // Reached end of literal, strings match up to here
+            }
+            if *s.add(i) as u8 != b {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+/// Check if an option name is a TTY option.
+///
+/// Returns 1 if the option is a TTY option, 0 otherwise.
+///
+/// # Safety
+///
+/// `name` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_tty_option(name: *const c_char) -> c_int {
+    c_int::from(!rs_find_tty_option_end(name).is_null())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -518,6 +608,66 @@ mod tests {
 
             // NULL is valid
             assert_eq!(rs_valid_name(std::ptr::null(), std::ptr::null()), 1);
+        }
+    }
+
+    #[test]
+    fn test_find_tty_option_end() {
+        let term = CString::new("term").unwrap();
+        let ttytype = CString::new("ttytype").unwrap();
+        let t_xx = CString::new("t_ab").unwrap();
+        let t_xx_delim = CString::new("<t_cd>").unwrap();
+        let not_tty = CString::new("noterm").unwrap();
+        let t_short = CString::new("t_a").unwrap();
+        let delim_no_close = CString::new("<t_ab").unwrap();
+
+        unsafe {
+            // "term" should return pointer after "term"
+            let result = rs_find_tty_option_end(term.as_ptr());
+            assert!(!result.is_null());
+            assert_eq!(result.offset_from(term.as_ptr()), 4);
+
+            // "ttytype" should return pointer after "ttytype"
+            let result = rs_find_tty_option_end(ttytype.as_ptr());
+            assert!(!result.is_null());
+            assert_eq!(result.offset_from(ttytype.as_ptr()), 7);
+
+            // "t_ab" should return pointer after "t_ab"
+            let result = rs_find_tty_option_end(t_xx.as_ptr());
+            assert!(!result.is_null());
+            assert_eq!(result.offset_from(t_xx.as_ptr()), 4);
+
+            // "<t_cd>" should return pointer after ">"
+            let result = rs_find_tty_option_end(t_xx_delim.as_ptr());
+            assert!(!result.is_null());
+            assert_eq!(result.offset_from(t_xx_delim.as_ptr()), 6);
+
+            // "noterm" should return NULL
+            let result = rs_find_tty_option_end(not_tty.as_ptr());
+            assert!(result.is_null());
+
+            // "t_a" (too short) should return NULL
+            let result = rs_find_tty_option_end(t_short.as_ptr());
+            assert!(result.is_null());
+
+            // "<t_ab" (no closing >) should return NULL
+            let result = rs_find_tty_option_end(delim_no_close.as_ptr());
+            assert!(result.is_null());
+        }
+    }
+
+    #[test]
+    fn test_is_tty_option() {
+        let term = CString::new("term").unwrap();
+        let ttytype = CString::new("ttytype").unwrap();
+        let t_xx = CString::new("t_ab").unwrap();
+        let not_tty = CString::new("noterm").unwrap();
+
+        unsafe {
+            assert_eq!(rs_is_tty_option(term.as_ptr()), 1);
+            assert_eq!(rs_is_tty_option(ttytype.as_ptr()), 1);
+            assert_eq!(rs_is_tty_option(t_xx.as_ptr()), 1);
+            assert_eq!(rs_is_tty_option(not_tty.as_ptr()), 0);
         }
     }
 }

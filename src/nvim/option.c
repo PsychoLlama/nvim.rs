@@ -119,6 +119,8 @@
 
 #ifdef USE_RUST_STRINGS
 extern int rs_valid_name(const char *val, const char *allowed);
+extern const char *rs_find_tty_option_end(const char *arg);
+extern int rs_is_tty_option(const char *name);
 #endif
 
 static const char e_unknown_option[]
@@ -1036,6 +1038,9 @@ static int validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_
 /// option name.
 static const char *find_tty_option_end(const char *arg)
 {
+#ifdef USE_RUST_STRINGS
+  return rs_find_tty_option_end(arg);
+#else
   if (strequal(arg, "term")) {
     return arg + sizeof("term") - 1;
   } else if (strequal(arg, "ttytype")) {
@@ -1067,6 +1072,7 @@ static const char *find_tty_option_end(const char *arg)
   }
 
   return arg == p ? NULL : p;
+#endif
 }
 
 /// Skip over the name of an option.
@@ -3019,7 +3025,11 @@ void check_redraw(uint32_t flags)
 bool is_tty_option(const char *name)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_STRINGS
+  return rs_is_tty_option(name);
+#else
   return find_tty_option_end(name) != NULL;
+#endif
 }
 
 /// Get value of TTY option.

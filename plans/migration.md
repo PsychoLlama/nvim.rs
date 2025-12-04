@@ -159,6 +159,8 @@ These use `xmalloc` - migrate AFTER memory bridge is ready:
 - [x] `sort_strings` - Sort array of strings - swapped to Rust
 - [x] `vim_strnicmp_asc` - ASCII-only case-insensitive compare - swapped to Rust
 - [x] `valid_name` - Validate name contains only alphanumeric/allowed chars (from option.c) - swapped to Rust
+- [x] `find_tty_option_end` - Find end of TTY option name (from option.c) - swapped to Rust
+- [x] `is_tty_option` - Check if name is a TTY option (from option.c) - swapped to Rust
 
 #### 1.4 Path Utilities (PARTIAL - some pure, some not)
 
