@@ -141,8 +141,8 @@ pub unsafe extern "C" fn rs_os_unsetenv(name: *const c_char) -> c_int {
 
 /// Get the current process ID.
 #[no_mangle]
-pub extern "C" fn rs_os_get_pid() -> u64 {
-    std::process::id().into()
+pub extern "C" fn rs_os_get_pid() -> i64 {
+    i64::from(std::process::id())
 }
 
 /// Get the hostname.

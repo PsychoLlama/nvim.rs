@@ -102,12 +102,17 @@ The trivial pure functions have largely been migrated. Next steps should focus o
 | nvim-ex_docmd | ✅ Swapped | ends_excmd |
 | nvim-fileio | ✅ Swapped | time_differs |
 
+### Partially Swapped Crates
+| Crate | Status | Functions |
+|-------|--------|-----------|
+| nvim-os | ✅ Partial | os_get_pid (Phase 1.26) - More functions ready but blocked by libuv differences |
+| nvim-collections (hashtab) | ✅ Partial | hash_hash, hash_hash_len - Full hashtab not swapped |
+
 ### Unswapped Crates (Rust code exists but NOT used from C)
 | Crate | Status | Blocker |
 |-------|--------|---------|
-| nvim-os | 🔧 Partially ready | Memory allocator fixed (uses NvimString), but C uses libuv for env functions |
+| nvim-os (env/fs) | 🔧 Ready but blocked | Memory allocator fixed (uses NvimString), but C uses libuv for env functions |
 | nvim-collections (garray) | ❌ Not swapped | Complex data structure, needs careful C integration |
-| nvim-collections (hashtab) | Partial | Only hash functions swapped, not full hashtab |
 
 ### Migration Blockers
 

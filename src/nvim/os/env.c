@@ -361,15 +361,23 @@ char *os_getenvname_at_index(size_t index)
 #endif
 }
 
+#ifdef USE_RUST_OS
+extern int64_t rs_os_get_pid(void);
+#endif
+
 /// Get the process ID of the Nvim process.
 ///
 /// @return the process ID.
 int64_t os_get_pid(void)
 {
-#ifdef MSWIN
-  return (int64_t)GetCurrentProcessId();
+#ifdef USE_RUST_OS
+  return rs_os_get_pid();
 #else
+# ifdef MSWIN
+  return (int64_t)GetCurrentProcessId();
+# else
   return (int64_t)getpid();
+# endif
 #endif
 }
 

@@ -2,11 +2,13 @@
 //!
 //! Provides portable filesystem abstractions.
 
-use std::ffi::{c_char, c_int, CStr, CString};
+use std::ffi::{c_char, c_int, CStr};
 use std::fs;
 use std::os::raw::c_uint;
 use std::path::Path;
 use std::ptr;
+
+use nvim_memory::NvimString;
 
 use crate::{FAIL, OK};
 
@@ -422,8 +424,8 @@ pub unsafe extern "C" fn rs_os_chdir(path: *const c_char) -> c_int {
 
 /// Read the target of a symbolic link.
 ///
-/// Returns a newly allocated string that must be freed by the caller,
-/// or NULL on failure.
+/// Returns a newly allocated string (via `xmallocz`) that must be freed
+/// with `xfree`, or NULL on failure.
 ///
 /// # Safety
 ///
@@ -442,29 +444,18 @@ pub unsafe extern "C" fn rs_os_readlink(path: *const c_char) -> *mut c_char {
 
     match fs::read_link(path_str) {
         Ok(target) => match target.to_str() {
-            Some(s) => match CString::new(s) {
-                Ok(cstr) => cstr.into_raw(),
-                Err(_) => ptr::null_mut(),
-            },
+            Some(s) => {
+                // Use NvimString which allocates with xmallocz
+                NvimString::new(s).into_raw()
+            }
             None => ptr::null_mut(),
         },
         Err(_) => ptr::null_mut(),
     }
 }
 
-/// Free a string returned by `rs_os_readlink`.
-///
-/// # Safety
-///
-/// `ptr` must have been returned by `rs_os_readlink` or be null.
-#[no_mangle]
-pub unsafe extern "C" fn rs_os_readlink_free(ptr: *mut c_char) {
-    if !ptr.is_null() {
-        unsafe {
-            drop(CString::from_raw(ptr));
-        }
-    }
-}
+// Note: rs_os_readlink_free is no longer needed since rs_os_readlink now uses
+// xmallocz. Callers should use xfree() directly to free returned strings.
 
 #[cfg(test)]
 mod tests {
