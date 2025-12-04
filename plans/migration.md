@@ -258,6 +258,12 @@ Pure utility functions for Ex command parsing:
 
 - [x] `ends_excmd` - Check if character ends an Ex command (pure) - swapped to Rust
 
+#### 1.23 File I/O Utilities (`src/nvim/fileio.c` → `nvim-rs/fileio`)
+
+Pure utility functions for file operations:
+
+- [x] `time_differs` - Compare file modification times with FAT tolerance (pure) - swapped to Rust
+
 #### 1.9 Memory Utilities (`src/nvim/memory.c` → `nvim-rs/memutil`)
 
 Pure string/memory utility functions, no allocation:

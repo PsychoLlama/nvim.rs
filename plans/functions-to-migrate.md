@@ -8,7 +8,7 @@ Candidates for Rust migration, organized by priority.
 - [x] `ends_excmd` (line 4622) - Returns true if character is command terminator (NUL, '|', '"', '\n') - MIGRATED Phase 1.22
 
 ### fileio.c
-- [ ] `time_differs` (line 2164) - Compares file modification times with FAT tolerance
+- [x] `time_differs` (line 2164) - Compares file modification times with FAT tolerance - MIGRATED Phase 1.23
 
 ### quickfix.c (static functions - may need to be exposed)
 - [ ] `qf_stack_empty` (line 923) - Returns true if quickfix stack is empty
