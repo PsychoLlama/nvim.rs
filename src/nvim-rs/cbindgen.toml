@@ -25,7 +25,7 @@ include = ["rs_xfpclassify", "rs_xisinf", "rs_xisnan", "rs_xctz", "rs_xpopcount"
            "rs_utf_ptr2char", "rs_utf_ptr2len", "rs_utf_ptr2len_len",
            "rs_utf_valid_string",
            "rs_utf_eat_space", "rs_utf_allow_break_before", "rs_utf_allow_break_after", "rs_utf_allow_break",
-           "rs_utf_printable",
+           "rs_utf_printable", "rs_utf_cp_bounds", "rs_utf_cp_bounds_len", "CharBoundsOff",
            "rs_vim_ispathsep", "rs_vim_ispathsep_nocolon", "rs_vim_ispathlistsep",
            "rs_path_head_length", "rs_is_path_head", "rs_get_past_head",
            "rs_path_is_absolute", "rs_path_tail", "rs_path_is_url",
