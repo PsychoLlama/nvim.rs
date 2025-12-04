@@ -652,6 +652,187 @@ pub extern "C" fn rs_utf_printable(c: c_int) -> c_int {
     c_int::from(utf_printable(c))
 }
 
+// Codepoint boundary detection
+
+/// Result of finding codepoint boundaries.
+///
+/// Represents the offset from a pointer to the beginning and end of
+/// the UTF-8 codepoint it points into.
+#[repr(C)]
+pub struct CharBoundsOff {
+    /// Offset to the first byte of the codepoint (negative or zero).
+    pub begin_off: i8,
+    /// Offset to one past the end byte of the codepoint (positive).
+    pub end_off: i8,
+}
+
+/// Maximum number of bytes in a UTF-8 codepoint (nvim supports 6 for legacy).
+const MB_MAXCHAR: usize = 6;
+
+/// Find the codepoint boundaries for a pointer into a UTF-8 string.
+///
+/// Given a base pointer and a pointer somewhere into the string,
+/// returns the offsets from `p_in` to the first byte and one-past-end
+/// byte of the codepoint that `p_in` points into.
+///
+/// `p_len` limits the number of bytes after `p_in`.
+///
+/// Note: Counts individual codepoints of composed characters separately.
+///
+/// Returns `{ 0, 1 }` for:
+/// - ASCII bytes (fast path)
+/// - Invalid/incomplete sequences
+/// - When the first byte cannot be found
+pub fn utf_cp_bounds_len(base: &[u8], p_offset: usize, p_len: usize) -> CharBoundsOff {
+    if p_offset >= base.len() || p_len == 0 {
+        return CharBoundsOff {
+            begin_off: 0,
+            end_off: 1,
+        };
+    }
+
+    let p = base[p_offset];
+
+    // Fast path for ASCII
+    if p < 0x80 {
+        return CharBoundsOff {
+            begin_off: 0,
+            end_off: 1,
+        };
+    }
+
+    // Search backwards for the first byte of the codepoint
+    let max_backwards = p_offset.min(MB_MAXCHAR - 1);
+    let mut first_off: isize = 0;
+
+    while utf_is_continuation(base[(p_offset as isize + first_off) as usize]) {
+        first_off -= 1;
+        if first_off == -(max_backwards as isize) - 1 {
+            // Failed to find first byte
+            return CharBoundsOff {
+                begin_off: 0,
+                end_off: 1,
+            };
+        }
+    }
+
+    // Get expected length from first byte
+    let first_byte_idx = (p_offset as isize + first_off) as usize;
+    let max_end_off = UTF8LEN_TAB[base[first_byte_idx] as usize] as isize + first_off;
+
+    // Check for illegal or incomplete sequence
+    if max_end_off <= 0 || max_end_off > p_len as isize {
+        return CharBoundsOff {
+            begin_off: 0,
+            end_off: 1,
+        };
+    }
+
+    // Verify all continuation bytes are valid
+    for end_off in 1..max_end_off {
+        let idx = (p_offset as isize + end_off) as usize;
+        if idx >= base.len() || !utf_is_continuation(base[idx]) {
+            return CharBoundsOff {
+                begin_off: 0,
+                end_off: 1,
+            };
+        }
+    }
+
+    CharBoundsOff {
+        begin_off: -first_off as i8,
+        end_off: max_end_off as i8,
+    }
+}
+
+/// Find the codepoint boundaries for a pointer into a NUL-terminated UTF-8 string.
+///
+/// This is a convenience wrapper around `utf_cp_bounds_len` with an unlimited
+/// forward length (suitable for NUL-terminated strings).
+pub fn utf_cp_bounds(base: &[u8], p_offset: usize) -> CharBoundsOff {
+    let remaining = base.len().saturating_sub(p_offset);
+    utf_cp_bounds_len(base, p_offset, remaining.max(1))
+}
+
+/// FFI wrapper for `utf_cp_bounds_len`.
+///
+/// Returns the offset from `p_in` to the first and one-past-end bytes
+/// of the codepoint it points to.
+///
+/// # Safety
+///
+/// - `base` must be a valid pointer
+/// - `p_in` must point into the memory starting at `base`
+/// - `p_len` must not exceed the remaining bytes after `p_in`
+#[no_mangle]
+pub unsafe extern "C" fn rs_utf_cp_bounds_len(
+    base: *const c_char,
+    p_in: *const c_char,
+    p_len: c_int,
+) -> CharBoundsOff {
+    if base.is_null() || p_in.is_null() || p_len <= 0 || p_in < base {
+        return CharBoundsOff {
+            begin_off: 0,
+            end_off: 1,
+        };
+    }
+
+    let offset = p_in.offset_from(base) as usize;
+
+    // We need to read from base up to p_in + p_len
+    let total_len = offset + p_len as usize;
+    let slice = std::slice::from_raw_parts(base as *const u8, total_len);
+
+    utf_cp_bounds_len(slice, offset, p_len as usize)
+}
+
+/// FFI wrapper for `utf_cp_bounds`.
+///
+/// Returns the offset from `p_in` to the first and one-past-end bytes
+/// of the codepoint it points to. The string must be NUL-terminated.
+///
+/// # Safety
+///
+/// - `base` must be a valid pointer to a NUL-terminated string
+/// - `p_in` must point into the memory starting at `base`
+#[no_mangle]
+pub unsafe extern "C" fn rs_utf_cp_bounds(
+    base: *const c_char,
+    p_in: *const c_char,
+) -> CharBoundsOff {
+    if base.is_null() || p_in.is_null() || p_in < base {
+        return CharBoundsOff {
+            begin_off: 0,
+            end_off: 1,
+        };
+    }
+
+    let offset = p_in.offset_from(base) as usize;
+
+    // Find NUL terminator to determine length
+    let mut len = 0;
+    while *base.add(len) != 0 {
+        len += 1;
+        if len > 1_000_000 {
+            // Safety limit
+            return CharBoundsOff {
+                begin_off: 0,
+                end_off: 1,
+            };
+        }
+    }
+
+    if offset >= len {
+        return CharBoundsOff {
+            begin_off: 0,
+            end_off: 1,
+        };
+    }
+
+    let slice = std::slice::from_raw_parts(base as *const u8, len);
+    utf_cp_bounds(slice, offset)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -952,5 +1133,165 @@ mod tests {
         assert_eq!(rs_utf_allow_break(b'a' as c_int, b'b' as c_int), 1);
         assert_eq!(rs_utf_allow_break(0x2014, 0x2014), 0); // Two em dashes
         assert_eq!(rs_utf_allow_break(0x2026, 0x2026), 0); // Two horizontal ellipses
+    }
+
+    #[test]
+    fn test_utf_cp_bounds_ascii() {
+        // ASCII: pointing at 'e'
+        let s = b"Hello";
+        let bounds = utf_cp_bounds(s, 1);
+        assert_eq!(bounds.begin_off, 0);
+        assert_eq!(bounds.end_off, 1);
+    }
+
+    #[test]
+    fn test_utf_cp_bounds_2byte() {
+        // 2-byte UTF-8: é (U+00E9) = [0xC3, 0xA9]
+        let s = &[0xC3u8, 0xA9];
+
+        // Pointing at first byte
+        let bounds = utf_cp_bounds(s, 0);
+        assert_eq!(bounds.begin_off, 0);
+        assert_eq!(bounds.end_off, 2);
+
+        // Pointing at second byte (continuation)
+        let bounds = utf_cp_bounds(s, 1);
+        assert_eq!(bounds.begin_off, 1); // 1 byte back to first byte
+        assert_eq!(bounds.end_off, 1); // 1 byte forward to end
+    }
+
+    #[test]
+    fn test_utf_cp_bounds_3byte() {
+        // 3-byte UTF-8: € (U+20AC) = [0xE2, 0x82, 0xAC]
+        let s = &[0xE2u8, 0x82, 0xAC];
+
+        // Pointing at first byte
+        let bounds = utf_cp_bounds(s, 0);
+        assert_eq!(bounds.begin_off, 0);
+        assert_eq!(bounds.end_off, 3);
+
+        // Pointing at second byte
+        let bounds = utf_cp_bounds(s, 1);
+        assert_eq!(bounds.begin_off, 1);
+        assert_eq!(bounds.end_off, 2);
+
+        // Pointing at third byte
+        let bounds = utf_cp_bounds(s, 2);
+        assert_eq!(bounds.begin_off, 2);
+        assert_eq!(bounds.end_off, 1);
+    }
+
+    #[test]
+    fn test_utf_cp_bounds_4byte() {
+        // 4-byte UTF-8: 😀 (U+1F600) = [0xF0, 0x9F, 0x98, 0x80]
+        let s = &[0xF0u8, 0x9F, 0x98, 0x80];
+
+        // Pointing at first byte
+        let bounds = utf_cp_bounds(s, 0);
+        assert_eq!(bounds.begin_off, 0);
+        assert_eq!(bounds.end_off, 4);
+
+        // Pointing at third byte
+        let bounds = utf_cp_bounds(s, 2);
+        assert_eq!(bounds.begin_off, 2);
+        assert_eq!(bounds.end_off, 2);
+    }
+
+    #[test]
+    fn test_utf_cp_bounds_len_limited() {
+        // 3-byte UTF-8 but limited to 2 bytes
+        let s = &[0xE2u8, 0x82, 0xAC];
+
+        // Limited to 2 bytes - incomplete sequence
+        let bounds = utf_cp_bounds_len(s, 0, 2);
+        assert_eq!(bounds.begin_off, 0);
+        assert_eq!(bounds.end_off, 1); // Invalid - returns 1
+
+        // Full 3 bytes available
+        let bounds = utf_cp_bounds_len(s, 0, 3);
+        assert_eq!(bounds.begin_off, 0);
+        assert_eq!(bounds.end_off, 3);
+    }
+
+    #[test]
+    fn test_utf_cp_bounds_mixed_string() {
+        // "Héllo" = ['H', 0xC3, 0xA9, 'l', 'l', 'o']
+        let s = &[b'H', 0xC3, 0xA9, b'l', b'l', b'o'];
+
+        // Pointing at 'H'
+        let bounds = utf_cp_bounds(s, 0);
+        assert_eq!(bounds.begin_off, 0);
+        assert_eq!(bounds.end_off, 1);
+
+        // Pointing at first byte of 'é'
+        let bounds = utf_cp_bounds(s, 1);
+        assert_eq!(bounds.begin_off, 0);
+        assert_eq!(bounds.end_off, 2);
+
+        // Pointing at second byte of 'é'
+        let bounds = utf_cp_bounds(s, 2);
+        assert_eq!(bounds.begin_off, 1);
+        assert_eq!(bounds.end_off, 1);
+
+        // Pointing at 'l'
+        let bounds = utf_cp_bounds(s, 3);
+        assert_eq!(bounds.begin_off, 0);
+        assert_eq!(bounds.end_off, 1);
+    }
+
+    #[test]
+    fn test_utf_cp_bounds_invalid() {
+        // Invalid: lone continuation byte
+        let s = &[0x80u8];
+        let bounds = utf_cp_bounds(s, 0);
+        assert_eq!(bounds.begin_off, 0);
+        assert_eq!(bounds.end_off, 1);
+
+        // Invalid: missing continuation bytes
+        let s = &[0xC3u8]; // Should be followed by continuation
+        let bounds = utf_cp_bounds(s, 0);
+        assert_eq!(bounds.begin_off, 0);
+        assert_eq!(bounds.end_off, 1);
+    }
+
+    #[test]
+    fn test_ffi_utf_cp_bounds() {
+        use std::ffi::CString;
+
+        // "Héllo"
+        let s = CString::new([b'H', 0xC3, 0xA9, b'l', b'l', b'o'].as_slice()).unwrap();
+        let base = s.as_ptr();
+
+        // Pointing at 'H'
+        let bounds = unsafe { rs_utf_cp_bounds(base, base) };
+        assert_eq!(bounds.begin_off, 0);
+        assert_eq!(bounds.end_off, 1);
+
+        // Pointing at first byte of 'é'
+        let bounds = unsafe { rs_utf_cp_bounds(base, base.add(1)) };
+        assert_eq!(bounds.begin_off, 0);
+        assert_eq!(bounds.end_off, 2);
+
+        // Pointing at second byte of 'é'
+        let bounds = unsafe { rs_utf_cp_bounds(base, base.add(2)) };
+        assert_eq!(bounds.begin_off, 1);
+        assert_eq!(bounds.end_off, 1);
+    }
+
+    #[test]
+    fn test_ffi_utf_cp_bounds_len() {
+        // Euro sign: [0xE2, 0x82, 0xAC]
+        let s = [0xE2u8 as i8, 0x82u8 as i8, 0xACu8 as i8, 0];
+        let base = s.as_ptr();
+
+        // Full length available
+        let bounds = unsafe { rs_utf_cp_bounds_len(base, base, 3) };
+        assert_eq!(bounds.begin_off, 0);
+        assert_eq!(bounds.end_off, 3);
+
+        // Limited length - incomplete
+        let bounds = unsafe { rs_utf_cp_bounds_len(base, base, 2) };
+        assert_eq!(bounds.begin_off, 0);
+        assert_eq!(bounds.end_off, 1); // Invalid due to incomplete sequence
     }
 }

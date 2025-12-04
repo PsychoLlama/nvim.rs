@@ -100,6 +100,14 @@ extern int rs_utf_allow_break_before(int cc);
 extern int rs_utf_allow_break_after(int cc);
 extern int rs_utf_allow_break(int cc, int ncc);
 extern int rs_utf_printable(int c);
+
+// Rust struct for codepoint boundary offsets
+typedef struct {
+  int8_t begin_off;  // Offset to the first byte of the codepoint
+  int8_t end_off;    // Offset to one past the end byte of the codepoint
+} RsCharBoundsOff;
+extern RsCharBoundsOff rs_utf_cp_bounds_len(const char *base, const char *p_in, int p_len);
+extern RsCharBoundsOff rs_utf_cp_bounds(const char *base, const char *p_in);
 #endif
 
 static const char e_list_item_nr_is_not_list[]
@@ -2114,6 +2122,10 @@ int mb_off_next(const char *base, const char *p)
 CharBoundsOff utf_cp_bounds_len(char const *base, char const *p_in, int p_len)
   FUNC_ATTR_PURE FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_MBYTE
+  RsCharBoundsOff rs_result = rs_utf_cp_bounds_len(base, p_in, p_len);
+  return (CharBoundsOff){ .begin_off = rs_result.begin_off, .end_off = rs_result.end_off };
+#else
   assert(base <= p_in && p_len > 0);
   uint8_t const *const b = (uint8_t *)base;
   uint8_t const *const p = (uint8_t *)p_in;
@@ -2141,6 +2153,7 @@ CharBoundsOff utf_cp_bounds_len(char const *base, char const *p_in, int p_len)
   }
 
   return (CharBoundsOff){ .begin_off = (int8_t)-first_off, .end_off = (int8_t)max_end_off };
+#endif
 }
 
 /// Returns the offset in bytes from "p_in" to the first and one-past-end bytes
@@ -2151,7 +2164,12 @@ CharBoundsOff utf_cp_bounds_len(char const *base, char const *p_in, int p_len)
 CharBoundsOff utf_cp_bounds(char const *base, char const *p_in)
   FUNC_ATTR_PURE FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_MBYTE
+  RsCharBoundsOff rs_result = rs_utf_cp_bounds(base, p_in);
+  return (CharBoundsOff){ .begin_off = rs_result.begin_off, .end_off = rs_result.end_off };
+#else
   return utf_cp_bounds_len(base, p_in, INT_MAX);
+#endif
 }
 
 // Find the next illegal byte sequence.
