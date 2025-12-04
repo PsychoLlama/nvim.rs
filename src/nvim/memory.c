@@ -56,6 +56,17 @@ MemRealloc mem_realloc = &realloc;
 
 #include "memory.c.generated.h"
 
+#ifdef USE_RUST_MEMUTIL
+extern size_t rs_xstrnlen(const char *s, size_t n);
+extern char *rs_xstrchrnul(const char *str, char c);
+extern void *rs_xmemscan(const void *addr, char c, size_t size);
+extern size_t rs_strcnt(const char *str, char c);
+extern size_t rs_memcnt(const void *data, char c, size_t len);
+extern void *rs_xmemrchr(const void *src, uint8_t c, size_t len);
+extern bool rs_strequal(const char *a, const char *b);
+extern bool rs_strnequal(const char *a, const char *b, size_t n);
+#endif
+
 #ifdef EXITFREE
 bool entered_free_all_mem = false;
 #endif
@@ -273,8 +284,12 @@ size_t xstrnlen(const char *s, size_t n)
 char *xstrchrnul(const char *str, char c)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_MEMUTIL
+  return (char *)rs_xstrchrnul(str, c);
+#else
   char *p = strchr(str, c);
   return p ? p : (char *)(str + strlen(str));
+#endif
 }
 
 /// A version of memchr() that returns a pointer one past the end
@@ -288,8 +303,12 @@ char *xstrchrnul(const char *str, char c)
 void *xmemscan(const void *addr, char c, size_t size)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_MEMUTIL
+  return (void *)rs_xmemscan(addr, c, size);
+#else
   char *p = memchr(addr, c, size);
   return p ? p : (char *)addr + size;
+#endif
 }
 
 /// Replaces every instance of `c` with `x`.
@@ -334,6 +353,9 @@ void memchrsub(void *data, char c, char x, size_t len)
 size_t strcnt(const char *str, char c)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_MEMUTIL
+  return rs_strcnt(str, c);
+#else
   assert(c != 0);
   size_t cnt = 0;
   while ((str = strchr(str, c))) {
@@ -341,6 +363,7 @@ size_t strcnt(const char *str, char c)
     str++;  // Skip the instance of c.
   }
   return cnt;
+#endif
 }
 
 /// Counts the number of occurrences of byte `c` in `data[len]`.
@@ -352,6 +375,9 @@ size_t strcnt(const char *str, char c)
 size_t memcnt(const void *data, char c, size_t len)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_MEMUTIL
+  return rs_memcnt(data, c, len);
+#else
   size_t cnt = 0;
   const char *ptr = data;
   const char *end = ptr + len;
@@ -360,6 +386,7 @@ size_t memcnt(const void *data, char c, size_t len)
     ptr++;  // Skip the instance of c.
   }
   return cnt;
+#endif
 }
 
 /// Copies the string pointed to by src (including the terminating NUL
@@ -507,12 +534,16 @@ char *xstrdupnul(const char *const str)
 void *xmemrchr(const void *src, uint8_t c, size_t len)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_MEMUTIL
+  return (void *)rs_xmemrchr(src, c, len);
+#else
   while (len--) {
     if (((uint8_t *)src)[len] == c) {
       return (uint8_t *)src + len;
     }
   }
   return NULL;
+#endif
 }
 
 /// strndup() wrapper
@@ -545,14 +576,22 @@ void *xmemdup(const void *data, size_t len)
 bool strequal(const char *a, const char *b)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_MEMUTIL
+  return rs_strequal(a, b);
+#else
   return (a == NULL && b == NULL) || (a && b && strcmp(a, b) == 0);
+#endif
 }
 
 /// Returns true if first `n` characters of strings `a` and `b` are equal. Arguments may be NULL.
 bool strnequal(const char *a, const char *b, size_t n)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_MEMUTIL
+  return rs_strnequal(a, b, n);
+#else
   return (a == NULL && b == NULL) || (a && b && strncmp(a, b, n) == 0);
+#endif
 }
 
 /// Writes time_t to "buf[8]".

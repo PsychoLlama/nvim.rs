@@ -18,6 +18,7 @@ pub use nvim_indent::*;
 pub use nvim_keycodes::*;
 pub use nvim_math::*;
 pub use nvim_mbyte::*;
+pub use nvim_memutil::*;
 pub use nvim_path::*;
 pub use nvim_strings::*;
 

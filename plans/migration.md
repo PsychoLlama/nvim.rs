@@ -211,6 +211,18 @@ Key code mapping - pure lookup/switch, no allocation:
 - [x] `name_to_mod_mask` - Map modifier char to mask bit (pure) - swapped to Rust
 - [x] `handle_x_keys` - Map X-terminal keys to standard keys (pure) - swapped to Rust
 
+#### 1.9 Memory Utilities (`src/nvim/memory.c` → `nvim-rs/memutil`)
+
+Pure string/memory utility functions, no allocation:
+
+- [x] `xstrchrnul` - strchr that returns NUL pointer if not found (pure) - swapped to Rust
+- [x] `xmemscan` - memchr that returns end pointer if not found (pure) - swapped to Rust
+- [x] `strcnt` - Count occurrences of char in string (pure) - swapped to Rust
+- [x] `memcnt` - Count occurrences of byte in memory (pure) - swapped to Rust
+- [x] `xmemrchr` - Reverse memchr (pure) - swapped to Rust
+- [x] `strequal` - Null-safe string equality (pure) - swapped to Rust
+- [x] `strnequal` - Null-safe bounded string equality (pure) - swapped to Rust
+
 **Validation:**
 
 ```bash

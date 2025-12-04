@@ -10,6 +10,7 @@ members = [
     "src/nvim-rs/math",
     "src/nvim-rs/mbyte",
     "src/nvim-rs/memory",
+    "src/nvim-rs/memutil",
     "src/nvim-rs/os",
     "src/nvim-rs/path",
     "src/nvim-rs/strings",

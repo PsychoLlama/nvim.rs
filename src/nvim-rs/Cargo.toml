@@ -18,6 +18,7 @@ nvim-indent = { path = "indent" }
 nvim-keycodes = { path = "keycodes" }
 nvim-math = { path = "math" }
 nvim-mbyte = { path = "mbyte" }
+nvim-memutil = { path = "memutil" }
 nvim-path = { path = "path" }
 nvim-strings = { path = "strings" }
 

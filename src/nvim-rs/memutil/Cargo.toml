@@ -1,0 +1,12 @@
+[package]
+name = "nvim-memutil"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Memory/string utility functions for Neovim"
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[lints]
+workspace = true
