@@ -221,6 +221,19 @@ History type conversion - pure lookup/switch, no allocation:
 
 - [x] `hist_char2type` - Map history prefix char to type (pure) - swapped to Rust
 
+#### 1.15 Profile Utilities (`src/nvim/profile.c` → `nvim-rs/profile`)
+
+Profiling time arithmetic - pure computation, no allocation:
+
+- [x] `profile_zero` - Returns the zero time (pure) - swapped to Rust
+- [x] `profile_divide` - Divides time by count (pure) - swapped to Rust
+- [x] `profile_add` - Adds two times (pure) - swapped to Rust
+- [x] `profile_sub` - Subtracts two times (pure) - swapped to Rust
+- [x] `profile_self` - Calculates self time from total and children (pure) - swapped to Rust
+- [x] `profile_equal` - Checks time equality (pure) - swapped to Rust
+- [x] `profile_signed` - Converts time to signed value (pure) - swapped to Rust
+- [x] `profile_cmp` - Compares two times (pure) - swapped to Rust
+
 #### 1.9 Memory Utilities (`src/nvim/memory.c` → `nvim-rs/memutil`)
 
 Pure string/memory utility functions, no allocation:
