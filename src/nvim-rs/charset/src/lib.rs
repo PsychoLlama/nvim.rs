@@ -318,6 +318,52 @@ pub unsafe extern "C" fn rs_hexhex2nr(p: *const c_char) -> c_int {
     (rs_hex2nr(c_int::from(c0)) << 4) + rs_hex2nr(c_int::from(c1))
 }
 
+/// Convert a non-printable character to hex C string like "<FFFF>".
+///
+/// Formats the character as `<XX>` for values <= 0xFF,
+/// `<XXXX>` for values <= 0xFFFF, or `<XXXXXX>` for larger values.
+///
+/// Returns the number of bytes written (excluding the NUL terminator).
+///
+/// # Safety
+/// The buffer must be valid and have at least 9 bytes of space
+/// (for the longest format: `<XXXXXX>\0`).
+#[no_mangle]
+pub unsafe extern "C" fn rs_transchar_hex(buf: *mut c_char, c: c_int) -> usize {
+    if buf.is_null() {
+        return 0;
+    }
+
+    let c = c as u32;
+    let mut i = 0usize;
+
+    *buf.add(i) = b'<' as c_char;
+    i += 1;
+
+    if c > 0xFF {
+        if c > 0xFFFF {
+            *buf.add(i) = rs_nr2hex(c >> 20) as c_char;
+            i += 1;
+            *buf.add(i) = rs_nr2hex(c >> 16) as c_char;
+            i += 1;
+        }
+        *buf.add(i) = rs_nr2hex(c >> 12) as c_char;
+        i += 1;
+        *buf.add(i) = rs_nr2hex(c >> 8) as c_char;
+        i += 1;
+    }
+
+    *buf.add(i) = rs_nr2hex(c >> 4) as c_char;
+    i += 1;
+    *buf.add(i) = rs_nr2hex(c) as c_char;
+    i += 1;
+    *buf.add(i) = b'>' as c_char;
+    i += 1;
+    *buf.add(i) = 0; // NUL terminator
+
+    i
+}
+
 // ============================================================================
 // Tests
 // ============================================================================
@@ -739,6 +785,65 @@ mod tests {
 
             // Null pointer - blank (edge case)
             assert!(rs_vim_isblankline(std::ptr::null()));
+        }
+    }
+
+    #[test]
+    fn test_transchar_hex() {
+        unsafe {
+            let mut buf = [0i8; 16];
+
+            // Single byte value (0x00 - 0xFF) -> "<XX>"
+            let len = rs_transchar_hex(buf.as_mut_ptr(), 0x00);
+            assert_eq!(len, 4);
+            assert_eq!(&buf[..5], [b'<' as i8, b'0' as i8, b'0' as i8, b'>' as i8, 0]);
+
+            let len = rs_transchar_hex(buf.as_mut_ptr(), 0x1A);
+            assert_eq!(len, 4);
+            assert_eq!(&buf[..5], [b'<' as i8, b'1' as i8, b'a' as i8, b'>' as i8, 0]);
+
+            let len = rs_transchar_hex(buf.as_mut_ptr(), 0xFF);
+            assert_eq!(len, 4);
+            assert_eq!(&buf[..5], [b'<' as i8, b'f' as i8, b'f' as i8, b'>' as i8, 0]);
+
+            // Two byte value (0x100 - 0xFFFF) -> "<XXXX>"
+            let len = rs_transchar_hex(buf.as_mut_ptr(), 0x100);
+            assert_eq!(len, 6);
+            assert_eq!(
+                &buf[..7],
+                [b'<' as i8, b'0' as i8, b'1' as i8, b'0' as i8, b'0' as i8, b'>' as i8, 0]
+            );
+
+            let len = rs_transchar_hex(buf.as_mut_ptr(), 0xABCD);
+            assert_eq!(len, 6);
+            assert_eq!(
+                &buf[..7],
+                [b'<' as i8, b'a' as i8, b'b' as i8, b'c' as i8, b'd' as i8, b'>' as i8, 0]
+            );
+
+            // Three byte value (> 0xFFFF) -> "<XXXXXX>"
+            let len = rs_transchar_hex(buf.as_mut_ptr(), 0x10000);
+            assert_eq!(len, 8);
+            assert_eq!(
+                &buf[..9],
+                [
+                    b'<' as i8, b'0' as i8, b'1' as i8, b'0' as i8, b'0' as i8, b'0' as i8,
+                    b'0' as i8, b'>' as i8, 0
+                ]
+            );
+
+            let len = rs_transchar_hex(buf.as_mut_ptr(), 0x12ABCD);
+            assert_eq!(len, 8);
+            assert_eq!(
+                &buf[..9],
+                [
+                    b'<' as i8, b'1' as i8, b'2' as i8, b'a' as i8, b'b' as i8, b'c' as i8,
+                    b'd' as i8, b'>' as i8, 0
+                ]
+            );
+
+            // Null buffer returns 0
+            assert_eq!(rs_transchar_hex(std::ptr::null_mut(), 0x42), 0);
         }
     }
 }
