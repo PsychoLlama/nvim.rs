@@ -157,3 +157,27 @@ Searched the following files for unexplored pure functions:
 - Complex struct FFI (win_T, buf_T, list_T, dict_T)
 - Global state access patterns
 - Callback/event loop integration
+
+## Session 4 Summary (2025-12-04)
+
+**Phase 1.28**: Successfully swapped two more ex_docmd functions to Rust:
+- `find_nextcmd` - Find next command after '|' or '\n' separator
+- `check_nextcmd` - Check if at command separator after whitespace
+
+These are pure string scanning functions with no global state dependencies.
+
+**Exhaustive search performed**: Searched for additional candidates:
+- `rem_backslash` - Uses `vim_isfilec` which accesses `g_chartab` global
+- `mb_charlen` - Uses `utfc_ptr2len` for composing character handling
+- `vim_strsize` - Uses `utfc_ptr2len` and `ptr2cells`
+- `os_shell_is_cmdexe` - Uses `os_getenv_noalloc` for global env access
+
+**Conclusion**: No more simple pure functions identified. All remaining candidates:
+1. Access global state (`g_chartab`, `curbuf`, options)
+2. Use complex UTF-8 composing character functions (`utfc_ptr2len`)
+3. Call external libraries (utf8proc, libuv)
+4. Take struct pointers (win_T*, buf_T*)
+
+Phase 1 pure function migration is complete. Future migration requires:
+- Complex struct FFI infrastructure
+- Or accepting libuv behavior differences for OS functions
