@@ -50,6 +50,7 @@ extern int rs_vim_ispathlistsep(int c);
 extern int rs_path_head_length(void);
 extern int rs_path_is_absolute(const char *path);
 extern int rs_path_is_url(const char *p);
+extern const char *rs_path_tail(const char *fname);
 #endif
 
 #include "path.c.generated.h"
@@ -109,6 +110,9 @@ FileComparison path_full_compare(char *const s1, char *const s2, const bool chec
 char *path_tail(const char *fname)
   FUNC_ATTR_NONNULL_RET
 {
+#ifdef USE_RUST_PATH
+  return (char *)rs_path_tail(fname);
+#else
   if (fname == NULL) {
     return "";
   }
@@ -123,6 +127,7 @@ char *path_tail(const char *fname)
     MB_PTR_ADV(p);
   }
   return (char *)tail;
+#endif
 }
 
 /// Get pointer to tail of "fname", including path separators.

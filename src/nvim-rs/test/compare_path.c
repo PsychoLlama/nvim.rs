@@ -14,6 +14,7 @@ extern int rs_vim_ispathlistsep(int c);
 extern int rs_path_head_length(void);
 extern int rs_path_is_absolute(const char *path);
 extern int rs_path_is_url(const char *p);
+extern const char *rs_path_tail(const char *fname);
 
 // C implementations (from nvim/path.c, for Unix)
 static bool c_vim_ispathsep(int c) {
@@ -44,6 +45,28 @@ static int c_path_is_url(const char *p) {
         return 2;  // URL_BACKSLASH
     }
     return 0;
+}
+
+// C implementation of path_tail (Unix version, simplified)
+static const char *c_path_tail(const char *fname) {
+    static const char *empty = "";
+    if (fname == NULL) {
+        return empty;
+    }
+    // Skip leading slashes (simplified get_past_head for Unix)
+    const char *tail = fname;
+    while (*tail == '/') {
+        tail++;
+    }
+    const char *p = tail;
+    // Find last part of path
+    while (*p != '\0') {
+        if (*p == '/') {
+            tail = p + 1;
+        }
+        p++;
+    }
+    return tail;
 }
 
 static int tests_passed = 0;
@@ -172,6 +195,49 @@ void test_path_is_url(void) {
     }
 }
 
+void test_path_tail(void) {
+    printf("Testing path_tail:\n");
+
+    struct {
+        const char *path;
+        const char *expected;
+    } test_cases[] = {
+        {"/home/user/file.txt", "file.txt"},
+        {"/home/user/", ""},
+        {"file.txt", "file.txt"},
+        {"/", ""},
+        {"", ""},
+        {"///multiple/slashes///file", "file"},
+        {"/a/b/c", "c"},
+        {"relative/path/to/file", "file"},
+        {".", "."},
+        {"..", ".."},
+        {"./file", "file"},
+        {"../file", "file"},
+    };
+    int n = sizeof(test_cases) / sizeof(test_cases[0]);
+
+    for (int i = 0; i < n; i++) {
+        const char *path = test_cases[i].path;
+        const char *expected = test_cases[i].expected;
+        const char *c_result = c_path_tail(path);
+        const char *rs_result = rs_path_tail(path);
+
+        bool match = (strcmp(c_result, rs_result) == 0);
+        char name[256];
+        snprintf(name, sizeof(name), "path_tail(\"%s\") C=\"%s\" Rust=\"%s\" expected=\"%s\"",
+                 path, c_result, rs_result, expected);
+        TEST(name, match);
+    }
+
+    // Test NULL handling
+    const char *null_c = c_path_tail(NULL);
+    const char *null_rs = rs_path_tail(NULL);
+    char name[128];
+    snprintf(name, sizeof(name), "path_tail(NULL) C=\"%s\" Rust=\"%s\"", null_c, null_rs);
+    TEST(name, strcmp(null_c, null_rs) == 0);
+}
+
 int main(void) {
     printf("=== Comparing C and Rust path implementations ===\n\n");
 
@@ -181,6 +247,7 @@ int main(void) {
     test_path_head_length();
     test_path_is_absolute();
     test_path_is_url();
+    test_path_tail();
 
     printf("\n=== Results ===\n");
     printf("Passed: %d\n", tests_passed);
