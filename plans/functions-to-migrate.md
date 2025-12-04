@@ -139,3 +139,21 @@ Searched the following files for unexplored pure functions:
 - `viml/parser/expressions.c` - Inline functions with static lookup tables
 
 **Conclusion**: All remaining FUNC_ATTR_PURE/CONST functions fall into unsuitable categories. The Phase 1 pure function migration is complete.
+
+## Session 3 Summary (2025-12-04)
+
+**Phases 1.26 and 1.27**: Successfully swapped two OS layer functions to Rust:
+- `os_get_pid` - Process ID retrieval
+- `os_get_hostname` - Hostname retrieval
+
+**Current Status**: 130+ Rust functions linked into nvim binary, 16+ crates with swapped functions.
+
+**Remaining OS functions blocked**: Most other OS layer functions (`os_getenv`, `os_setenv`, filesystem operations) use libuv which has subtly different behavior than Rust's `std`. Swapping these would require either:
+1. Using libuv-sys crate in Rust to match exact behavior
+2. Verifying behavior matches in all edge cases
+3. Accepting potential subtle differences
+
+**Next migration targets would require**:
+- Complex struct FFI (win_T, buf_T, list_T, dict_T)
+- Global state access patterns
+- Callback/event loop integration
