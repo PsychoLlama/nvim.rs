@@ -74,6 +74,7 @@ if(USE_RUST)
     target_compile_definitions(nvim_bin PRIVATE
       USE_RUST_CHARSET
       USE_RUST_CMDHIST
+      USE_RUST_HELP
       USE_RUST_INDENT
       USE_RUST_KEYCODES
       USE_RUST_MATH

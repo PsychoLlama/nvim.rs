@@ -50,6 +50,10 @@
 
 #include "help.c.generated.h"
 
+#ifdef USE_RUST_HELP
+extern int rs_help_heuristic(const char *matched_string, int offset, bool wrong_case);
+#endif
+
 /// ":help": open a read-only window on a help file
 void ex_help(exarg_T *eap)
 {
@@ -259,6 +263,9 @@ char *check_help_lang(char *arg)
 int help_heuristic(char *matched_string, int offset, bool wrong_case)
   FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_HELP
+  return rs_help_heuristic(matched_string, offset, wrong_case);
+#else
   int num_letters = 0;
   for (char *p = matched_string; *p; p++) {
     if (ASCII_ISALNUM(*p)) {
@@ -289,6 +296,7 @@ int help_heuristic(char *matched_string, int offset, bool wrong_case)
     offset += 100;
   }
   return 100 * num_letters + (int)strlen(matched_string) + offset;
+#endif
 }
 
 /// Compare functions for qsort() below, that checks the help heuristics number

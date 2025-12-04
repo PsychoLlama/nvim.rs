@@ -244,6 +244,12 @@ Menu name classification - pure string prefix checks, no allocation:
 - [x] `menu_is_menubar` - Check if name is MenuBar menu (pure) - swapped to Rust
 - [x] `menu_is_separator` - Check if name is separator (pure) - swapped to Rust
 
+#### 1.17 Help Utilities (`src/nvim/help.c` → `nvim-rs/help`)
+
+Help system heuristic scoring - pure function with no external dependencies:
+
+- [x] `help_heuristic` - Calculate match quality score for help tags (pure) - swapped to Rust
+
 #### 1.9 Memory Utilities (`src/nvim/memory.c` → `nvim-rs/memutil`)
 
 Pure string/memory utility functions, no allocation:
