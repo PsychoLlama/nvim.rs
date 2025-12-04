@@ -251,6 +251,105 @@ pub unsafe extern "C" fn rs_path_is_url(p: *const c_char) -> c_int {
     0
 }
 
+/// Check if a path has a Windows drive letter.
+///
+/// A drive letter is: alpha followed by ':' or '|', then optionally
+/// followed by '/', '\', '?', or '#'.
+///
+/// # Safety
+///
+/// `p` must be a valid pointer to at least `path_len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_path_has_drive_letter(p: *const c_char, path_len: usize) -> c_int {
+    if p.is_null() || path_len < 2 {
+        return 0;
+    }
+
+    let c0 = *p as u8;
+    let c1 = *p.add(1) as u8;
+
+    // First char must be alpha
+    if !c0.is_ascii_alphabetic() {
+        return 0;
+    }
+
+    // Second char must be ':' or '|'
+    if c1 != b':' && c1 != b'|' {
+        return 0;
+    }
+
+    // If only 2 chars, that's a valid drive letter
+    if path_len == 2 {
+        return 1;
+    }
+
+    // Third char must be '/', '\', '?', or '#'
+    let c2 = *p.add(2) as u8;
+    c_int::from(c2 == b'/' || c2 == b'\\' || c2 == b'?' || c2 == b'#')
+}
+
+/// Check if a path starts with a URL scheme.
+///
+/// Returns `URL_SLASH` (1) for "scheme://", `URL_BACKSLASH` (2) for "scheme:\\",
+/// or 0 if not a URL.
+///
+/// This function checks for a valid URL scheme following RFC3986:
+/// - Must start with an alpha character
+/// - Body can contain: alpha, digit, '+', '-', '.'
+/// - Must end with a valid scheme character (not '+', '-', or '.')
+/// - Must be followed by ":/" or ":\\"
+///
+/// # Safety
+///
+/// `fname` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_path_with_url(fname: *const c_char) -> c_int {
+    if fname.is_null() {
+        return 0;
+    }
+
+    let c0 = *fname as u8;
+
+    // First character must be alpha
+    if !c0.is_ascii_alphabetic() {
+        return 0;
+    }
+
+    // Check for drive letter - if it looks like a drive letter, not a URL
+    // Need to find length first
+    let mut len = 0;
+    let mut p = fname;
+    while *p != 0 {
+        len += 1;
+        p = p.add(1);
+    }
+
+    if rs_path_has_drive_letter(fname, len) != 0 {
+        return 0;
+    }
+
+    // Scan the scheme body: alpha, digit, '+', '-', '.'
+    p = fname.add(1);
+    while {
+        let c = *p as u8;
+        c.is_ascii_alphanumeric() || c == b'+' || c == b'-' || c == b'.'
+    } {
+        p = p.add(1);
+    }
+
+    // Check last char before p is not '+', '-', or '.'
+    // p points to first non-scheme char, so check p-1
+    if p > fname.add(1) {
+        let last = *p.sub(1) as u8;
+        if last == b'+' || last == b'-' || last == b'.' {
+            return 0;
+        }
+    }
+
+    // Check for ":/" or ":\\"
+    rs_path_is_url(p)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

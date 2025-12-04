@@ -51,6 +51,8 @@ extern int rs_path_head_length(void);
 extern int rs_path_is_absolute(const char *path);
 extern int rs_path_is_url(const char *p);
 extern const char *rs_path_tail(const char *fname);
+extern int rs_path_has_drive_letter(const char *p, size_t path_len);
+extern int rs_path_with_url(const char *fname);
 #endif
 
 #include "path.c.generated.h"
@@ -1749,10 +1751,14 @@ size_t simplify_filename(char *filename)
 bool path_has_drive_letter(const char *p, size_t path_len)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_PATH
+  return rs_path_has_drive_letter(p, path_len) != 0;
+#else
   return path_len >= 2
          && ASCII_ISALPHA(p[0])
          && (p[1] == ':' || p[1] == '|')
          && (path_len == 2 || ((p[2] == '/') | (p[2] == '\\') | (p[2] == '?') | (p[2] == '#')));
+#endif
 }
 
 // Check if the ":/" of a URL is at the pointer, return URL_SLASH.
@@ -1782,6 +1788,9 @@ int path_is_url(const char *p)
 int path_with_url(const char *fname)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_PATH
+  return rs_path_with_url(fname);
+#else
   const char *p;
 
   // first character must be alpha
@@ -1803,6 +1812,7 @@ int path_with_url(const char *fname)
 
   // ":/" or ":\\" must follow
   return path_is_url(p);
+#endif
 }
 
 bool path_with_extension(const char *path, const char *extension)

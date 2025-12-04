@@ -15,6 +15,8 @@ extern int rs_path_head_length(void);
 extern int rs_path_is_absolute(const char *path);
 extern int rs_path_is_url(const char *p);
 extern const char *rs_path_tail(const char *fname);
+extern int rs_path_has_drive_letter(const char *p, size_t path_len);
+extern int rs_path_with_url(const char *fname);
 
 // C implementations (from nvim/path.c, for Unix)
 static bool c_vim_ispathsep(int c) {
@@ -238,6 +240,139 @@ void test_path_tail(void) {
     TEST(name, strcmp(null_c, null_rs) == 0);
 }
 
+// C implementation of path_has_drive_letter
+static bool c_path_has_drive_letter(const char *p, size_t path_len) {
+    if (path_len < 2) return false;
+    // ASCII_ISALPHA check
+    char c0 = p[0];
+    if (!((c0 >= 'A' && c0 <= 'Z') || (c0 >= 'a' && c0 <= 'z'))) return false;
+    // Second char must be ':' or '|'
+    if (p[1] != ':' && p[1] != '|') return false;
+    // If only 2 chars, that's valid
+    if (path_len == 2) return true;
+    // Third char must be '/', '\', '?', or '#'
+    return p[2] == '/' || p[2] == '\\' || p[2] == '?' || p[2] == '#';
+}
+
+// C implementation of path_with_url
+static int c_path_with_url(const char *fname) {
+    // First char must be alpha
+    char c0 = fname[0];
+    if (!((c0 >= 'A' && c0 <= 'Z') || (c0 >= 'a' && c0 <= 'z'))) {
+        return 0;
+    }
+
+    // Check for drive letter
+    if (c_path_has_drive_letter(fname, strlen(fname))) {
+        return 0;
+    }
+
+    // Scan scheme body: alpha, digit, '+', '-', '.'
+    const char *p = fname + 1;
+    while ((*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z') ||
+           (*p >= '0' && *p <= '9') || *p == '+' || *p == '-' || *p == '.') {
+        p++;
+    }
+
+    // Check last char is not '+', '-', or '.'
+    if (p > fname + 1) {
+        char last = p[-1];
+        if (last == '+' || last == '-' || last == '.') {
+            return 0;
+        }
+    }
+
+    // Check for ":/" or ":\\"
+    return c_path_is_url(p);
+}
+
+void test_path_has_drive_letter(void) {
+    printf("Testing path_has_drive_letter:\n");
+
+    struct {
+        const char *path;
+        bool expected;
+        const char *desc;
+    } test_cases[] = {
+        // Valid drive letters
+        {"C:/", true, "C:/"},
+        {"D:\\", true, "D:\\"},
+        {"c:/", true, "lowercase c:/"},
+        {"Z:\\", true, "Z:\\"},
+        {"C|/", true, "C|/ (pipe)"},
+        {"C|\\", true, "C|\\ (pipe)"},
+        {"C:?", true, "C:?"},
+        {"C:#", true, "C:#"},
+        {"C:", true, "C: (len=2)"},
+
+        // Invalid drive letters
+        {"C", false, "C (too short)"},
+        {"1:/", false, "1:/ (not alpha)"},
+        {"/home", false, "/home (starts with /)"},
+        {"://", false, ":// (no alpha)"},
+        {"C:x", false, "C:x (invalid third char)"},
+        {"", false, "empty"},
+    };
+    int n = sizeof(test_cases) / sizeof(test_cases[0]);
+
+    for (int i = 0; i < n; i++) {
+        const char *path = test_cases[i].path;
+        size_t len = strlen(path);
+        bool c_result = c_path_has_drive_letter(path, len);
+        bool rs_result = (rs_path_has_drive_letter(path, len) != 0);
+
+        char name[128];
+        snprintf(name, sizeof(name), "drive_letter(\"%s\") expected=%d C=%d Rust=%d",
+                 test_cases[i].desc, test_cases[i].expected, c_result, rs_result);
+        TEST(name, c_result == rs_result && c_result == test_cases[i].expected);
+    }
+}
+
+void test_path_with_url(void) {
+    printf("Testing path_with_url:\n");
+
+    struct {
+        const char *path;
+        int expected;  // 0, URL_SLASH (1), or URL_BACKSLASH (2)
+        const char *desc;
+    } test_cases[] = {
+        // Valid URLs
+        {"http://example.com", 1, "http://"},
+        {"https://example.com", 1, "https://"},
+        {"ftp://server/file", 1, "ftp://"},
+        {"file:///path", 1, "file:///"},
+        {"mailto://user@host", 1, "mailto://"},
+        {"custom-scheme://foo", 1, "custom-scheme://"},
+        {"a+b.c://", 1, "a+b.c://"},
+        {"http:\\\\server", 2, "http:\\\\ (backslash)"},
+
+        // Not URLs
+        {"C:/path", 0, "C:/ (drive letter)"},
+        {"C:\\path", 0, "C:\\ (drive letter)"},
+        {"/home/user", 0, "/home (not alpha start)"},
+        {"123://", 0, "123:// (not alpha start)"},
+        {"http", 0, "http (no ://)"},
+        {"http:", 0, "http: (no slash)"},
+        {"http:/foo", 1, "http:/foo (single slash is still URL)"},
+        {"+scheme://", 0, "+scheme (starts with +)"},
+        {"scheme+://", 0, "scheme+ (ends with +)"},
+        {"scheme-://", 0, "scheme- (ends with -)"},
+        {"scheme.://", 0, "scheme. (ends with .)"},
+    };
+    int n = sizeof(test_cases) / sizeof(test_cases[0]);
+
+    for (int i = 0; i < n; i++) {
+        const char *path = test_cases[i].path;
+        int c_result = c_path_with_url(path);
+        int rs_result = rs_path_with_url(path);
+
+        char name[128];
+        snprintf(name, sizeof(name), "with_url(\"%s\") expected=%d C=%d Rust=%d",
+                 test_cases[i].desc, test_cases[i].expected, c_result, rs_result);
+        TEST(name, c_result == rs_result && c_result == test_cases[i].expected);
+    }
+}
+
 int main(void) {
     printf("=== Comparing C and Rust path implementations ===\n\n");
 
@@ -248,6 +383,8 @@ int main(void) {
     test_path_is_absolute();
     test_path_is_url();
     test_path_tail();
+    test_path_has_drive_letter();
+    test_path_with_url();
 
     printf("\n=== Results ===\n");
     printf("Passed: %d\n", tests_passed);
