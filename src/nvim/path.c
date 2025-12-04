@@ -48,6 +48,8 @@ extern int rs_vim_ispathsep(int c);
 extern int rs_vim_ispathsep_nocolon(int c);
 extern int rs_vim_ispathlistsep(int c);
 extern int rs_path_head_length(void);
+extern int rs_is_path_head(const char *path);
+extern const char *rs_get_past_head(const char *path);
 extern int rs_path_is_absolute(const char *path);
 extern int rs_path_is_url(const char *p);
 extern const char *rs_path_tail(const char *fname);
@@ -225,10 +227,14 @@ int path_head_length(void)
 bool is_path_head(const char *path)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef MSWIN
-  return isalpha((uint8_t)path[0]) && path[1] == ':';
+#ifdef USE_RUST_PATH
+  return rs_is_path_head(path) != 0;
 #else
+# ifdef MSWIN
+  return isalpha((uint8_t)path[0]) && path[1] == ':';
+# else
   return vim_ispathsep(*path);
+# endif
 #endif
 }
 
@@ -238,20 +244,24 @@ bool is_path_head(const char *path)
 char *get_past_head(const char *path)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_PATH
+  return (char *)rs_get_past_head(path);
+#else
   const char *retval = path;
 
-#ifdef MSWIN
+# ifdef MSWIN
   // May skip "c:"
   if (is_path_head(path)) {
     retval = path + 2;
   }
-#endif
+# endif
 
   while (vim_ispathsep(*retval)) {
     retval++;
   }
 
   return (char *)retval;
+#endif
 }
 
 /// @return true if 'c' is a path separator.

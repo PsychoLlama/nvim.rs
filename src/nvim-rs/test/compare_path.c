@@ -12,6 +12,8 @@ extern int rs_vim_ispathsep(int c);
 extern int rs_vim_ispathsep_nocolon(int c);
 extern int rs_vim_ispathlistsep(int c);
 extern int rs_path_head_length(void);
+extern int rs_is_path_head(const char *path);
+extern const char *rs_get_past_head(const char *path);
 extern int rs_path_is_absolute(const char *path);
 extern int rs_path_is_url(const char *p);
 extern const char *rs_path_tail(const char *fname);
@@ -47,6 +49,21 @@ static int c_path_is_url(const char *p) {
         return 2;  // URL_BACKSLASH
     }
     return 0;
+}
+
+// C implementation of is_path_head (Unix version)
+static bool c_is_path_head(const char *path) {
+    return c_vim_ispathsep(*path);
+}
+
+// C implementation of get_past_head (Unix version)
+static const char *c_get_past_head(const char *path) {
+    const char *retval = path;
+    // On Unix, just skip past leading path separators
+    while (c_vim_ispathsep(*retval)) {
+        retval++;
+    }
+    return retval;
 }
 
 // C implementation of path_tail (Unix version, simplified)
@@ -144,6 +161,65 @@ void test_path_head_length(void) {
     char name[64];
     snprintf(name, sizeof(name), "path_head_length C=%d Rust=%d", c_result, rs_result);
     TEST(name, c_result == rs_result);
+}
+
+void test_is_path_head(void) {
+    printf("Testing is_path_head:\n");
+
+    const char *test_paths[] = {
+        "/home/user",
+        "/",
+        "home/user",
+        "./file",
+        "../file",
+        "file.txt",
+        "",
+        "~/file",
+        "a",
+    };
+    int n = sizeof(test_paths) / sizeof(test_paths[0]);
+
+    for (int i = 0; i < n; i++) {
+        const char *path = test_paths[i];
+        bool c_result = c_is_path_head(path);
+        bool rs_result = rs_is_path_head(path) != 0;
+
+        char name[128];
+        snprintf(name, sizeof(name), "is_path_head(\"%s\") C=%d Rust=%d", path, c_result, rs_result);
+        TEST(name, c_result == rs_result);
+    }
+}
+
+void test_get_past_head(void) {
+    printf("Testing get_past_head:\n");
+
+    struct {
+        const char *path;
+        const char *expected;
+    } test_cases[] = {
+        {"/home/user", "home/user"},
+        {"/", ""},
+        {"///home", "home"},
+        {"home/user", "home/user"},
+        {"./file", "./file"},
+        {"", ""},
+        {"a", "a"},
+        {"///", ""},
+    };
+    int n = sizeof(test_cases) / sizeof(test_cases[0]);
+
+    for (int i = 0; i < n; i++) {
+        const char *path = test_cases[i].path;
+        const char *expected = test_cases[i].expected;
+        const char *c_result = c_get_past_head(path);
+        const char *rs_result = rs_get_past_head(path);
+
+        bool match = (strcmp(c_result, rs_result) == 0);
+        char name[256];
+        snprintf(name, sizeof(name), "get_past_head(\"%s\") C=\"%s\" Rust=\"%s\" expected=\"%s\"",
+                 path, c_result, rs_result, expected);
+        TEST(name, match && strcmp(c_result, expected) == 0);
+    }
 }
 
 void test_path_is_absolute(void) {
@@ -380,6 +456,8 @@ int main(void) {
     test_ispathsep_nocolon();
     test_ispathlistsep();
     test_path_head_length();
+    test_is_path_head();
+    test_get_past_head();
     test_path_is_absolute();
     test_path_is_url();
     test_path_tail();

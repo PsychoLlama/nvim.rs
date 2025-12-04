@@ -92,6 +92,67 @@ pub extern "C" fn rs_path_head_length() -> c_int {
     }
 }
 
+/// Check if path begins with characters denoting the head of a path.
+///
+/// On Unix, returns true if the path starts with a path separator ('/').
+/// On Windows, returns true if the path starts with a drive letter (e.g., "D:").
+///
+/// # Safety
+///
+/// `path` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_path_head(path: *const c_char) -> c_int {
+    if path.is_null() {
+        return 0;
+    }
+
+    #[cfg(windows)]
+    {
+        let c0 = *path as u8;
+        let c1 = *path.add(1) as u8;
+        c_int::from(c0.is_ascii_alphabetic() && c1 == b':')
+    }
+
+    #[cfg(not(windows))]
+    {
+        // On Unix, check if path starts with a path separator
+        c_int::from(rs_vim_ispathsep(*path as c_int) != 0)
+    }
+}
+
+/// Get a pointer to one character past the head of a path name.
+///
+/// On Unix: returns pointer past leading "/" characters.
+/// On Windows: returns pointer past "C:\" (drive letter + separators).
+/// If there is no head, the original path is returned.
+///
+/// # Safety
+///
+/// `path` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_past_head(path: *const c_char) -> *const c_char {
+    if path.is_null() {
+        return path;
+    }
+
+    let mut retval = path;
+
+    #[cfg(windows)]
+    {
+        // May skip "c:"
+        if rs_is_path_head(path) != 0 {
+            retval = path.add(2);
+        }
+    }
+
+    // Skip past path separators
+    while rs_vim_ispathsep(*retval as c_int) != 0 {
+        retval = retval.add(1);
+    }
+
+    retval
+}
+
 /// Check if a path is absolute.
 ///
 /// On Unix, a path is absolute if it starts with '/' or '~'.
@@ -443,5 +504,73 @@ mod tests {
 
         let no_colon = CString::new("/home/user").unwrap();
         assert_eq!(unsafe { rs_path_is_url(no_colon.as_ptr()) }, 0);
+    }
+
+    #[test]
+    fn test_is_path_head() {
+        #[cfg(unix)]
+        {
+            // On Unix, path head starts with '/'
+            let root = CString::new("/home/user").unwrap();
+            assert_eq!(unsafe { rs_is_path_head(root.as_ptr()) }, 1);
+
+            let slash = CString::new("/").unwrap();
+            assert_eq!(unsafe { rs_is_path_head(slash.as_ptr()) }, 1);
+
+            let rel = CString::new("home/user").unwrap();
+            assert_eq!(unsafe { rs_is_path_head(rel.as_ptr()) }, 0);
+
+            let dot = CString::new("./file").unwrap();
+            assert_eq!(unsafe { rs_is_path_head(dot.as_ptr()) }, 0);
+
+            let tilde = CString::new("~/file").unwrap();
+            assert_eq!(unsafe { rs_is_path_head(tilde.as_ptr()) }, 0);
+
+            let empty = CString::new("").unwrap();
+            assert_eq!(unsafe { rs_is_path_head(empty.as_ptr()) }, 0);
+
+            // NULL returns 0
+            assert_eq!(unsafe { rs_is_path_head(std::ptr::null()) }, 0);
+        }
+    }
+
+    #[test]
+    fn test_get_past_head() {
+        #[cfg(unix)]
+        {
+            // Skip past leading slashes
+            let root = CString::new("/home/user").unwrap();
+            let past = unsafe { rs_get_past_head(root.as_ptr()) };
+            let past_str = unsafe { std::ffi::CStr::from_ptr(past) };
+            assert_eq!(past_str.to_str().unwrap(), "home/user");
+
+            // Multiple slashes
+            let multi = CString::new("///home/user").unwrap();
+            let past = unsafe { rs_get_past_head(multi.as_ptr()) };
+            let past_str = unsafe { std::ffi::CStr::from_ptr(past) };
+            assert_eq!(past_str.to_str().unwrap(), "home/user");
+
+            // Just slash
+            let slash = CString::new("/").unwrap();
+            let past = unsafe { rs_get_past_head(slash.as_ptr()) };
+            let past_str = unsafe { std::ffi::CStr::from_ptr(past) };
+            assert_eq!(past_str.to_str().unwrap(), "");
+
+            // No head - returns original
+            let rel = CString::new("home/user").unwrap();
+            let past = unsafe { rs_get_past_head(rel.as_ptr()) };
+            let past_str = unsafe { std::ffi::CStr::from_ptr(past) };
+            assert_eq!(past_str.to_str().unwrap(), "home/user");
+
+            // Empty string
+            let empty = CString::new("").unwrap();
+            let past = unsafe { rs_get_past_head(empty.as_ptr()) };
+            let past_str = unsafe { std::ffi::CStr::from_ptr(past) };
+            assert_eq!(past_str.to_str().unwrap(), "");
+
+            // NULL returns NULL
+            let past = unsafe { rs_get_past_head(std::ptr::null()) };
+            assert!(past.is_null());
+        }
     }
 }
