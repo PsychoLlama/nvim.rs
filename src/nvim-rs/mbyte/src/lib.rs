@@ -449,6 +449,133 @@ pub unsafe extern "C" fn rs_utf_valid_string(s: *const c_char, end: *const c_cha
     c_int::from(utf_valid_string(slice, use_len))
 }
 
+// Line breaking functions
+
+/// Whether space is NOT allowed before/after 'c'.
+///
+/// Returns true for various CJK and fullwidth punctuation characters
+/// where whitespace should be suppressed.
+#[inline]
+pub fn utf_eat_space(cc: i32) -> bool {
+    (0x2000..=0x206F).contains(&cc) // General punctuations
+        || (0x2E00..=0x2E7F).contains(&cc) // Supplemental punctuations
+        || (0x3000..=0x303F).contains(&cc) // CJK symbols and punctuations
+        || (0xFF01..=0xFF0F).contains(&cc) // Full width ASCII punctuations
+        || (0xFF1A..=0xFF20).contains(&cc) // ..
+        || (0xFF3B..=0xFF40).contains(&cc) // ..
+        || (0xFF5B..=0xFF65).contains(&cc) // ..
+}
+
+/// Characters that prohibit line break before them (BOL prohibition).
+/// Sorted for binary search.
+static BOL_PROHIBITION_PUNCT: &[i32] = &[
+    b'!' as i32,
+    b'%' as i32,
+    b')' as i32,
+    b',' as i32,
+    b':' as i32,
+    b';' as i32,
+    b'>' as i32,
+    b'?' as i32,
+    b']' as i32,
+    b'}' as i32,
+    0x2019, // ' right single quotation mark
+    0x201D, // " right double quotation mark
+    0x2020, // † dagger
+    0x2021, // ‡ double dagger
+    0x2026, // … horizontal ellipsis
+    0x2030, // ‰ per mille sign
+    0x2031, // ‱ per the thousand sign
+    0x203C, // ‼ double exclamation mark
+    0x2047, // ⁇ double question mark
+    0x2048, // ⁈ question exclamation mark
+    0x2049, // ⁉ exclamation question mark
+    0x2103, // ℃ degree celsius
+    0x2109, // ℉ degree fahrenheit
+    0x3001, // 、 ideographic comma
+    0x3002, // 。 ideographic full stop
+    0x3009, // 〉 right angle bracket
+    0x300B, // 》 right double angle bracket
+    0x300D, // 」 right corner bracket
+    0x300F, // 』 right white corner bracket
+    0x3011, // 】 right black lenticular bracket
+    0x3015, // 〕 right tortoise shell bracket
+    0x3017, // 〗 right white lenticular bracket
+    0x3019, // 〙 right white tortoise shell bracket
+    0x301B, // 〛 right white square bracket
+    0xFF01, // ！ fullwidth exclamation mark
+    0xFF09, // ） fullwidth right parenthesis
+    0xFF0C, // ， fullwidth comma
+    0xFF0E, // ． fullwidth full stop
+    0xFF1A, // ： fullwidth colon
+    0xFF1B, // ； fullwidth semicolon
+    0xFF1F, // ？ fullwidth question mark
+    0xFF3D, // ］ fullwidth right square bracket
+    0xFF5D, // ｝ fullwidth right curly bracket
+];
+
+/// Whether line break is allowed before "cc".
+///
+/// Returns false for characters that should not appear at the beginning
+/// of a line (closing brackets, punctuation marks, etc.).
+#[inline]
+pub fn utf_allow_break_before(cc: i32) -> bool {
+    BOL_PROHIBITION_PUNCT.binary_search(&cc).is_err()
+}
+
+/// Characters that prohibit line break after them (EOL prohibition).
+/// Sorted for binary search.
+static EOL_PROHIBITION_PUNCT: &[i32] = &[
+    b'(' as i32,
+    b'<' as i32,
+    b'[' as i32,
+    b'`' as i32,
+    b'{' as i32,
+    0x2018, // ' left single quotation mark
+    0x201C, // " left double quotation mark
+    0x3008, // 〈 left angle bracket
+    0x300A, // 《 left double angle bracket
+    0x300C, // 「 left corner bracket
+    0x300E, // 『 left white corner bracket
+    0x3010, // 【 left black lenticular bracket
+    0x3014, // 〔 left tortoise shell bracket
+    0x3016, // 〖 left white lenticular bracket
+    0x3018, // 〘 left white tortoise shell bracket
+    0x301A, // 〚 left white square bracket
+    0xFF08, // （ fullwidth left parenthesis
+    0xFF3B, // ［ fullwidth left square bracket
+    0xFF5B, // ｛ fullwidth left curly bracket
+];
+
+/// Whether line break is allowed after "cc".
+///
+/// Returns false for characters that should not appear at the end
+/// of a line (opening brackets, quotation marks, etc.).
+#[inline]
+pub fn utf_allow_break_after(cc: i32) -> bool {
+    EOL_PROHIBITION_PUNCT.binary_search(&cc).is_err()
+}
+
+// FFI wrappers for line breaking functions
+
+/// Whether space is NOT allowed before/after 'c'.
+#[no_mangle]
+pub extern "C" fn rs_utf_eat_space(cc: c_int) -> c_int {
+    c_int::from(utf_eat_space(cc))
+}
+
+/// Whether line break is allowed before "cc".
+#[no_mangle]
+pub extern "C" fn rs_utf_allow_break_before(cc: c_int) -> c_int {
+    c_int::from(utf_allow_break_before(cc))
+}
+
+/// Whether line break is allowed after "cc".
+#[no_mangle]
+pub extern "C" fn rs_utf_allow_break_after(cc: c_int) -> c_int {
+    c_int::from(utf_allow_break_after(cc))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -16,6 +16,9 @@ extern int rs_utf_ptr2char(const char *p);
 extern int rs_utf_ptr2len(const char *p);
 extern int rs_utf_ptr2len_len(const char *p, int size);
 extern int rs_utf_valid_string(const char *s, const char *end);
+extern int rs_utf_eat_space(int cc);
+extern int rs_utf_allow_break_before(int cc);
+extern int rs_utf_allow_break_after(int cc);
 
 // C implementations (simplified from nvim/mbyte.c)
 static uint8_t utf8len_tab[256] = {
@@ -435,6 +438,207 @@ void test_utf_valid_string(void) {
     }
 }
 
+// C implementation of utf_eat_space
+static bool c_utf_eat_space(int cc) {
+    return (cc >= 0x2000 && cc <= 0x206F)   // General punctuations
+           || (cc >= 0x2e00 && cc <= 0x2e7f)   // Supplemental punctuations
+           || (cc >= 0x3000 && cc <= 0x303f)   // CJK symbols and punctuations
+           || (cc >= 0xff01 && cc <= 0xff0f)   // Full width ASCII punctuations
+           || (cc >= 0xff1a && cc <= 0xff20)   // ..
+           || (cc >= 0xff3b && cc <= 0xff40)   // ..
+           || (cc >= 0xff5b && cc <= 0xff65);  // ..
+}
+
+// BOL prohibition punctuation (sorted for binary search)
+static const int BOL_prohibition_punct[] = {
+    '!', '%', ')', ',', ':', ';', '>', '?', ']', '}',
+    0x2019, 0x201d, 0x2020, 0x2021, 0x2026, 0x2030, 0x2031, 0x203c,
+    0x2047, 0x2048, 0x2049, 0x2103, 0x2109,
+    0x3001, 0x3002, 0x3009, 0x300b, 0x300d, 0x300f, 0x3011, 0x3015,
+    0x3017, 0x3019, 0x301b,
+    0xff01, 0xff09, 0xff0c, 0xff0e, 0xff1a, 0xff1b, 0xff1f, 0xff3d, 0xff5d,
+};
+
+#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
+
+static bool c_utf_allow_break_before(int cc) {
+    int first = 0;
+    int last = ARRAY_SIZE(BOL_prohibition_punct) - 1;
+
+    while (first < last) {
+        const int mid = (first + last) / 2;
+        if (cc == BOL_prohibition_punct[mid]) {
+            return false;
+        } else if (cc > BOL_prohibition_punct[mid]) {
+            first = mid + 1;
+        } else {
+            last = mid - 1;
+        }
+    }
+    return cc != BOL_prohibition_punct[first];
+}
+
+// EOL prohibition punctuation (sorted for binary search)
+static const int EOL_prohibition_punct[] = {
+    '(', '<', '[', '`', '{',
+    0x2018, 0x201c,
+    0x3008, 0x300a, 0x300c, 0x300e, 0x3010, 0x3014, 0x3016, 0x3018, 0x301a,
+    0xff08, 0xff3b, 0xff5b,
+};
+
+static bool c_utf_allow_break_after(int cc) {
+    int first = 0;
+    int last = ARRAY_SIZE(EOL_prohibition_punct) - 1;
+
+    while (first < last) {
+        const int mid = (first + last) / 2;
+        if (cc == EOL_prohibition_punct[mid]) {
+            return false;
+        } else if (cc > EOL_prohibition_punct[mid]) {
+            first = mid + 1;
+        } else {
+            last = mid - 1;
+        }
+    }
+    return cc != EOL_prohibition_punct[first];
+}
+
+void test_utf_eat_space(void) {
+    printf("Testing utf_eat_space:\n");
+
+    struct {
+        int cc;
+        bool expected;
+        const char *desc;
+    } test_cases[] = {
+        // ASCII - should NOT eat space
+        {'a', false, "ASCII 'a'"},
+        {' ', false, "ASCII space"},
+        {'.', false, "ASCII period"},
+        // General punctuations (0x2000-0x206F)
+        {0x2000, true, "general punct start"},
+        {0x2014, true, "em dash"},
+        {0x206F, true, "general punct end"},
+        // Supplemental punctuations (0x2E00-0x2E7F)
+        {0x2E00, true, "supplemental punct start"},
+        {0x2E7F, true, "supplemental punct end"},
+        // CJK symbols (0x3000-0x303F)
+        {0x3000, true, "ideographic space"},
+        {0x3001, true, "ideographic comma"},
+        {0x303F, true, "CJK end"},
+        // Full width ASCII punctuations
+        {0xFF01, true, "fullwidth !"},
+        {0xFF0F, true, "fullwidth /"},
+        {0xFF1A, true, "fullwidth :"},
+        {0xFF3B, true, "fullwidth ["},
+        {0xFF5B, true, "fullwidth {"},
+        // Outside ranges
+        {0x1FFF, false, "below general punct"},
+        {0x2070, false, "above general punct"},
+        {0x2DFF, false, "below supplemental punct"},
+        {0x2E80, false, "above supplemental punct"},
+    };
+    int n = sizeof(test_cases) / sizeof(test_cases[0]);
+
+    for (int i = 0; i < n; i++) {
+        int cc = test_cases[i].cc;
+        bool c_result = c_utf_eat_space(cc);
+        bool rs_result = (rs_utf_eat_space(cc) != 0);
+
+        char name[128];
+        snprintf(name, sizeof(name), "eat_space(0x%X %s) expected=%d C=%d Rust=%d",
+                 cc, test_cases[i].desc, test_cases[i].expected, c_result, rs_result);
+        TEST(name, c_result == rs_result && c_result == test_cases[i].expected);
+    }
+}
+
+void test_utf_allow_break_before(void) {
+    printf("Testing utf_allow_break_before:\n");
+
+    struct {
+        int cc;
+        bool expected;
+        const char *desc;
+    } test_cases[] = {
+        // Regular characters - break allowed
+        {'a', true, "ASCII 'a'"},
+        {' ', true, "space"},
+        {'(', true, "open paren"},
+        // Prohibited characters - break NOT allowed before
+        {'!', false, "exclamation"},
+        {')', false, "close paren"},
+        {',', false, "comma"},
+        {':', false, "colon"},
+        {';', false, "semicolon"},
+        {'?', false, "question"},
+        {']', false, "close bracket"},
+        {'}', false, "close brace"},
+        // CJK punctuation
+        {0x3001, false, "ideographic comma"},
+        {0x3002, false, "ideographic period"},
+        {0xFF01, false, "fullwidth !"},
+        {0xFF09, false, "fullwidth )"},
+        // Allowed before
+        {0x3000, true, "ideographic space"},
+        {0x4E00, true, "CJK unified"},
+    };
+    int n = sizeof(test_cases) / sizeof(test_cases[0]);
+
+    for (int i = 0; i < n; i++) {
+        int cc = test_cases[i].cc;
+        bool c_result = c_utf_allow_break_before(cc);
+        bool rs_result = (rs_utf_allow_break_before(cc) != 0);
+
+        char name[128];
+        snprintf(name, sizeof(name), "break_before(0x%X %s) expected=%d C=%d Rust=%d",
+                 cc, test_cases[i].desc, test_cases[i].expected, c_result, rs_result);
+        TEST(name, c_result == rs_result && c_result == test_cases[i].expected);
+    }
+}
+
+void test_utf_allow_break_after(void) {
+    printf("Testing utf_allow_break_after:\n");
+
+    struct {
+        int cc;
+        bool expected;
+        const char *desc;
+    } test_cases[] = {
+        // Regular characters - break allowed
+        {'a', true, "ASCII 'a'"},
+        {' ', true, "space"},
+        {')', true, "close paren"},
+        // Prohibited characters - break NOT allowed after
+        {'(', false, "open paren"},
+        {'<', false, "less than"},
+        {'[', false, "open bracket"},
+        {'`', false, "backtick"},
+        {'{', false, "open brace"},
+        // CJK opening brackets
+        {0x3008, false, "left angle bracket"},
+        {0x300A, false, "left double angle"},
+        {0x300C, false, "left corner bracket"},
+        {0xFF08, false, "fullwidth ("},
+        {0xFF3B, false, "fullwidth ["},
+        {0xFF5B, false, "fullwidth {"},
+        // Allowed after
+        {0x3009, true, "right angle bracket"},
+        {0x4E00, true, "CJK unified"},
+    };
+    int n = sizeof(test_cases) / sizeof(test_cases[0]);
+
+    for (int i = 0; i < n; i++) {
+        int cc = test_cases[i].cc;
+        bool c_result = c_utf_allow_break_after(cc);
+        bool rs_result = (rs_utf_allow_break_after(cc) != 0);
+
+        char name[128];
+        snprintf(name, sizeof(name), "break_after(0x%X %s) expected=%d C=%d Rust=%d",
+                 cc, test_cases[i].desc, test_cases[i].expected, c_result, rs_result);
+        TEST(name, c_result == rs_result && c_result == test_cases[i].expected);
+    }
+}
+
 int main(void) {
     printf("=== Comparing C and Rust mbyte implementations ===\n\n");
 
@@ -446,6 +650,9 @@ int main(void) {
     test_utf_ptr2char();
     test_roundtrip();
     test_utf_valid_string();
+    test_utf_eat_space();
+    test_utf_allow_break_before();
+    test_utf_allow_break_after();
 
     printf("\n=== Results ===\n");
     printf("Passed: %d\n", tests_passed);

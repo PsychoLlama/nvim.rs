@@ -95,6 +95,9 @@ extern int rs_utf_ptr2char(const char *p);
 extern int rs_utf_ptr2len(const char *p);
 extern int rs_utf_ptr2len_len(const char *p, int size);
 extern int rs_utf_valid_string(const char *s, const char *end);
+extern int rs_utf_eat_space(int cc);
+extern int rs_utf_allow_break_before(int cc);
+extern int rs_utf_allow_break_after(int cc);
 #endif
 
 static const char e_list_item_nr_is_not_list[]
@@ -1914,6 +1917,9 @@ StrCharInfo utfc_next_impl(StrCharInfo cur)
 bool utf_eat_space(int cc)
   FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_eat_space(cc) != 0;
+#else
   return (cc >= 0x2000 && cc <= 0x206F)   // General punctuations
          || (cc >= 0x2e00 && cc <= 0x2e7f)   // Supplemental punctuations
          || (cc >= 0x3000 && cc <= 0x303f)   // CJK symbols and punctuations
@@ -1921,12 +1927,16 @@ bool utf_eat_space(int cc)
          || (cc >= 0xff1a && cc <= 0xff20)   // ..
          || (cc >= 0xff3b && cc <= 0xff40)   // ..
          || (cc >= 0xff5b && cc <= 0xff65);  // ..
+#endif
 }
 
 // Whether line break is allowed before "cc".
 bool utf_allow_break_before(int cc)
   FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_allow_break_before(cc) != 0;
+#else
   static const int BOL_prohibition_punct[] = {
     '!',
     '%',
@@ -1938,8 +1948,8 @@ bool utf_allow_break_before(int cc)
     '?',
     ']',
     '}',
-    0x2019,  // ’ right single quotation mark
-    0x201d,  // ” right double quotation mark
+    0x2019,  // ' right single quotation mark
+    0x201d,  // " right double quotation mark
     0x2020,  // † dagger
     0x2021,  // ‡ double dagger
     0x2026,  // … horizontal ellipsis
@@ -1989,12 +1999,16 @@ bool utf_allow_break_before(int cc)
   }
 
   return cc != BOL_prohibition_punct[first];
+#endif
 }
 
 // Whether line break is allowed after "cc".
 bool utf_allow_break_after(int cc)
   FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_allow_break_after(cc) != 0;
+#else
   static const int EOL_prohibition_punct[] = {
     '(',
     '<',
@@ -2002,8 +2016,8 @@ bool utf_allow_break_after(int cc)
     '`',
     '{',
     // 0x2014,  // — em dash
-    0x2018,     // ‘ left single quotation mark
-    0x201c,     // “ left double quotation mark
+    0x2018,     // ' left single quotation mark
+    0x201c,     // " left double quotation mark
     // 0x2053,  // ～ swung dash
     0x3008,     // 〈 left angle bracket
     0x300a,     // 《 left double angle bracket
@@ -2035,6 +2049,7 @@ bool utf_allow_break_after(int cc)
   }
 
   return cc != EOL_prohibition_punct[first];
+#endif
 }
 
 // Whether line break is allowed between "cc" and "ncc".
