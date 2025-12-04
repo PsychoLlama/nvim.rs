@@ -204,6 +204,13 @@ Tabstop calculation - pure arithmetic, no allocation:
 - [x] `indent_size_ts` - Calculate indent size with tabstops (pure) - swapped to Rust
 - [ ] `indent_size_no_ts` - Uses byte2cells which depends on g_chartab
 
+#### 1.8 Keycode Utilities (`src/nvim/keycodes.c` → `nvim-rs/keycodes`)
+
+Key code mapping - pure lookup/switch, no allocation:
+
+- [x] `name_to_mod_mask` - Map modifier char to mask bit (pure) - swapped to Rust
+- [x] `handle_x_keys` - Map X-terminal keys to standard keys (pure) - swapped to Rust
+
 **Validation:**
 
 ```bash

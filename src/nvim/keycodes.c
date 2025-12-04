@@ -27,6 +27,11 @@
 #include "keycode_names.generated.h"
 #include "keycodes.c.generated.h"
 
+#ifdef USE_RUST_KEYCODES
+extern int rs_name_to_mod_mask(int c);
+extern int rs_handle_x_keys(int key);
+#endif
+
 // Some useful tables.
 
 static const struct modmasktable {
@@ -176,6 +181,9 @@ static struct mousetable {
 int name_to_mod_mask(int c)
   FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_KEYCODES
+  return rs_name_to_mod_mask(c);
+#else
   c = TOUPPER_ASC(c);
   for (size_t i = 0; mod_mask_table[i].mod_mask != 0; i++) {
     if (c == (uint8_t)mod_mask_table[i].name) {
@@ -183,6 +191,7 @@ int name_to_mod_mask(int c)
     }
   }
   return 0;
+#endif
 }
 
 /// Check if there is a special key code for "key" with specified modifiers
@@ -222,6 +231,9 @@ int simplify_key(const int key, int *modifiers)
 int handle_x_keys(const int key)
   FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_KEYCODES
+  return rs_handle_x_keys(key);
+#else
   switch (key) {
   case K_XUP:
     return K_UP;
@@ -257,6 +269,7 @@ int handle_x_keys(const int key)
     return K_S_F4;
   }
   return key;
+#endif
 }
 
 /// @return  a string which contains the name of the given key when the given modifiers are down.
