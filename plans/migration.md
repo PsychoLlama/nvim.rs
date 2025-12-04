@@ -270,6 +270,9 @@ TEST_FILE=test/functional/core/fileio_spec.lua make functionaltest
 - [x] `utf_byte2len` - Get UTF-8 length from first byte - swapped to Rust
 - [x] `utf_ptr2len_len` - Get UTF-8 length with size limit - swapped to Rust
 - [x] `utf_valid_string` - Validate UTF-8 string - swapped to Rust
+- [x] `utf_eat_space` - Whether space is not allowed before/after character - swapped to Rust
+- [x] `utf_allow_break_before` - Whether line break is allowed before character - swapped to Rust
+- [x] `utf_allow_break_after` - Whether line break is allowed after character - swapped to Rust
 - [ ] Character width calculation (utf_char2cells - requires display tables)
 - [ ] Composing character handling (utfc_ptr2len - requires grapheme state)
 - [ ] Encoding conversion (iconv integration)
