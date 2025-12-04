@@ -43,6 +43,8 @@ extern const char *rs_skiptodigit(const char *q);
 extern const char *rs_skiptobin(const char *q);
 extern const char *rs_skiptohex(const char *q);
 extern const char *rs_skiptowhite(const char *p);
+extern const char *rs_skiptowhite_esc(const char *p);
+extern intptr_t rs_getwhitecols(const char *p);
 extern int rs_hex2nr(int c);
 extern int rs_hexhex2nr(const char *p);
 #endif
@@ -962,7 +964,11 @@ intptr_t getwhitecols_curline(void)
 intptr_t getwhitecols(const char *p)
   FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_CHARSET
+  return rs_getwhitecols(p);
+#else
   return skipwhite(p) - p;
+#endif
 }
 
 /// Skip over digits
@@ -1117,6 +1123,9 @@ char *skiptowhite(const char *p)
 char *skiptowhite_esc(const char *p)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_CHARSET
+  return (char *)rs_skiptowhite_esc(p);
+#else
   while (*p != ' ' && *p != '\t' && *p != NUL) {
     if (((*p == '\\') || (*p == Ctrl_V)) && (*(p + 1) != NUL)) {
       p++;
@@ -1124,6 +1133,7 @@ char *skiptowhite_esc(const char *p)
     p++;
   }
   return (char *)p;
+#endif
 }
 
 /// Skip over text until '\n' or NUL.

@@ -186,6 +186,43 @@ pub unsafe extern "C" fn rs_skiptowhite(p: *const c_char) -> *const c_char {
     ptr
 }
 
+// Ctrl_V constant (ASCII 22)
+const CTRL_V: u8 = 22;
+
+/// Skip to whitespace, respecting escaped characters.
+/// Like skiptowhite(), but also skips escaped chars (backslash or Ctrl-V).
+///
+/// # Safety
+/// The pointer must be valid and point to a null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_skiptowhite_esc(p: *const c_char) -> *const c_char {
+    if p.is_null() {
+        return p;
+    }
+    let mut ptr = p;
+    while *ptr != 0 && *ptr != b' ' as c_char && *ptr != b'\t' as c_char {
+        // If we see a backslash or Ctrl-V, and the next char is not NUL, skip it
+        if (*ptr == b'\\' as c_char || *ptr == CTRL_V as c_char) && *ptr.add(1) != 0 {
+            ptr = ptr.add(1);
+        }
+        ptr = ptr.add(1);
+    }
+    ptr
+}
+
+/// Return the number of whitespace columns (bytes) at the start of a string.
+///
+/// # Safety
+/// The pointer must be valid and point to a null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_getwhitecols(p: *const c_char) -> isize {
+    if p.is_null() {
+        return 0;
+    }
+    let result = rs_skipwhite(p);
+    result.offset_from(p)
+}
+
 // ============================================================================
 // Hex conversion functions
 // ============================================================================
@@ -451,6 +488,84 @@ mod tests {
 
             let s = CString::new("G1").unwrap();
             assert_eq!(rs_hexhex2nr(s.as_ptr()), -1);
+        }
+    }
+
+    #[test]
+    fn test_skiptowhite_esc() {
+        unsafe {
+            // Normal case - skip to space
+            let s = CString::new("hello world").unwrap();
+            let result = rs_skiptowhite_esc(s.as_ptr());
+            assert_eq!(*result, b' ' as c_char);
+
+            // Escaped space with backslash - should skip over it and continue
+            // "hello\ world" - the backslash escapes the space, so we continue to end
+            let s = CString::new("hello\\ world").unwrap();
+            let result = rs_skiptowhite_esc(s.as_ptr());
+            let offset = result.offset_from(s.as_ptr());
+            assert_eq!(offset, 12); // Scans entire string "hello\ world" (12 bytes)
+
+            // With actual space after escaped char
+            let s = CString::new("hello\\x world").unwrap();
+            let result = rs_skiptowhite_esc(s.as_ptr());
+            // backslash escapes 'x', then continues to space
+            let offset = result.offset_from(s.as_ptr());
+            assert_eq!(offset, 7); // "hello\x" then hits space
+
+            // Escaped space with Ctrl-V (ASCII 22)
+            // "hi<Ctrl-V> x" - Ctrl-V escapes space, then continues to scan "x" to NUL
+            let s = vec![b'h', b'i', 22, b' ', b'x', 0]; // "hi<Ctrl-V> x"
+            let result = rs_skiptowhite_esc(s.as_ptr() as *const c_char);
+            let offset = result.offset_from(s.as_ptr() as *const c_char);
+            assert_eq!(offset, 5); // Scans to NUL at position 5
+
+            // No whitespace
+            let s = CString::new("hello").unwrap();
+            let result = rs_skiptowhite_esc(s.as_ptr());
+            assert_eq!(*result, 0);
+
+            // Backslash at end (next char is NUL)
+            let s = CString::new("hello\\").unwrap();
+            let result = rs_skiptowhite_esc(s.as_ptr());
+            assert_eq!(*result, 0);
+
+            // Tab
+            let s = CString::new("hello\tworld").unwrap();
+            let result = rs_skiptowhite_esc(s.as_ptr());
+            assert_eq!(*result, b'\t' as c_char);
+        }
+    }
+
+    #[test]
+    fn test_getwhitecols() {
+        unsafe {
+            // Spaces at start
+            let s = CString::new("   hello").unwrap();
+            assert_eq!(rs_getwhitecols(s.as_ptr()), 3);
+
+            // Tabs at start
+            let s = CString::new("\t\thello").unwrap();
+            assert_eq!(rs_getwhitecols(s.as_ptr()), 2);
+
+            // Mixed spaces and tabs
+            let s = CString::new(" \t \thello").unwrap();
+            assert_eq!(rs_getwhitecols(s.as_ptr()), 4);
+
+            // No whitespace
+            let s = CString::new("hello").unwrap();
+            assert_eq!(rs_getwhitecols(s.as_ptr()), 0);
+
+            // Empty string
+            let s = CString::new("").unwrap();
+            assert_eq!(rs_getwhitecols(s.as_ptr()), 0);
+
+            // All whitespace
+            let s = CString::new("   ").unwrap();
+            assert_eq!(rs_getwhitecols(s.as_ptr()), 3);
+
+            // Null pointer
+            assert_eq!(rs_getwhitecols(std::ptr::null()), 0);
         }
     }
 }

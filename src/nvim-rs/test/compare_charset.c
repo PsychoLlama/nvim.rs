@@ -20,6 +20,8 @@ extern const char *rs_skiptodigit(const char *q);
 extern const char *rs_skiptobin(const char *q);
 extern const char *rs_skiptohex(const char *q);
 extern const char *rs_skiptowhite(const char *p);
+extern const char *rs_skiptowhite_esc(const char *p);
+extern intptr_t rs_getwhitecols(const char *p);
 extern int rs_hex2nr(int c);
 extern int rs_hexhex2nr(const char *p);
 
@@ -107,6 +109,22 @@ static char *c_skiptowhite(const char *p) {
         p++;
     }
     return (char *)p;
+}
+
+#define Ctrl_V 22  // ASCII value for Ctrl-V
+
+static char *c_skiptowhite_esc(const char *p) {
+    while (*p != ' ' && *p != '\t' && *p != '\0') {
+        if ((*p == '\\' || *p == Ctrl_V) && *(p + 1) != '\0') {
+            p++;
+        }
+        p++;
+    }
+    return (char *)p;
+}
+
+static intptr_t c_getwhitecols(const char *p) {
+    return c_skipwhite(p) - p;
 }
 
 static int c_hex2nr(int c) {
@@ -441,6 +459,71 @@ void test_hexhex2nr(void) {
     }
 }
 
+void test_skiptowhite_esc(void) {
+    printf("Testing skiptowhite_esc:\n");
+
+    const char *test_strs[] = {
+        "hello world",
+        "hello\tworld",
+        "hello",
+        "",
+        " leading",
+        "nospace",
+        "hello\\ world",     // backslash escapes space, continues to end
+        "hello\\x world",    // backslash escapes x, then hits space
+    };
+    int n = sizeof(test_strs) / sizeof(test_strs[0]);
+
+    for (int i = 0; i < n; i++) {
+        const char *c_result = c_skiptowhite_esc(test_strs[i]);
+        const char *rs_result = rs_skiptowhite_esc(test_strs[i]);
+
+        ptrdiff_t c_offset = c_result - test_strs[i];
+        ptrdiff_t rs_offset = rs_result - test_strs[i];
+
+        char name[128];
+        snprintf(name, sizeof(name), "skiptowhite_esc test_%d: offset C=%td Rust=%td",
+                 i, c_offset, rs_offset);
+        TEST(name, c_offset == rs_offset);
+    }
+
+    // Test with Ctrl-V escape
+    char ctrl_v_str[] = {'h', 'i', Ctrl_V, ' ', 'x', '\0'};
+    const char *c_result = c_skiptowhite_esc(ctrl_v_str);
+    const char *rs_result = rs_skiptowhite_esc(ctrl_v_str);
+    ptrdiff_t c_offset = c_result - ctrl_v_str;
+    ptrdiff_t rs_offset = rs_result - ctrl_v_str;
+    char name[128];
+    snprintf(name, sizeof(name), "skiptowhite_esc with Ctrl-V: offset C=%td Rust=%td",
+             c_offset, rs_offset);
+    TEST(name, c_offset == rs_offset);
+}
+
+void test_getwhitecols(void) {
+    printf("Testing getwhitecols:\n");
+
+    const char *test_strs[] = {
+        "   hello",
+        "\t\thello",
+        " \t \thello",
+        "hello",
+        "",
+        "   ",
+        "\t\t\t",
+    };
+    int n = sizeof(test_strs) / sizeof(test_strs[0]);
+
+    for (int i = 0; i < n; i++) {
+        intptr_t c_result = c_getwhitecols(test_strs[i]);
+        intptr_t rs_result = rs_getwhitecols(test_strs[i]);
+
+        char name[128];
+        snprintf(name, sizeof(name), "getwhitecols test_%d: C=%td Rust=%td",
+                 i, (ptrdiff_t)c_result, (ptrdiff_t)rs_result);
+        TEST(name, c_result == rs_result);
+    }
+}
+
 int main(void) {
     printf("=== Comparing C and Rust charset implementations ===\n\n");
 
@@ -453,6 +536,8 @@ int main(void) {
     test_skiptobin();
     test_skiptohex();
     test_skiptowhite();
+    test_skiptowhite_esc();
+    test_getwhitecols();
     test_hex2nr();
     test_hexhex2nr();
 

@@ -188,7 +188,8 @@ Skip functions and hex conversion - all pure, no allocation:
 - [x] `skiptowhite` - Skip to next whitespace (pure) - swapped to Rust
 - [x] `hex2nr` - Convert hex char to value (pure) - swapped to Rust
 - [x] `hexhex2nr` - Convert two hex chars to byte (pure) - swapped to Rust
-- [ ] `skiptowhite_esc` - Skip to whitespace respecting escapes (uses Ctrl_V constant)
+- [x] `skiptowhite_esc` - Skip to whitespace respecting escapes (pure) - swapped to Rust
+- [x] `getwhitecols` - Count whitespace columns at start (pure) - swapped to Rust
 - [ ] `skip_to_newline` - Uses xstrchrnul
 - [ ] Character classification functions (use global state g_chartab)
 
