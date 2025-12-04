@@ -21,6 +21,7 @@ pub use nvim_math::*;
 pub use nvim_mbyte::*;
 pub use nvim_memutil::*;
 pub use nvim_path::*;
+pub use nvim_profile::*;
 pub use nvim_strings::*;
 
 /// FFI-safe result type for operations that can fail

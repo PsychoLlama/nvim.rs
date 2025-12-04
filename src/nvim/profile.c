@@ -35,6 +35,18 @@
 
 #include "profile.c.generated.h"
 
+#ifdef USE_RUST_PROFILE
+// Rust implementations of pure profile functions
+extern proftime_T rs_profile_zero(void);
+extern proftime_T rs_profile_divide(proftime_T tm, int count);
+extern proftime_T rs_profile_add(proftime_T tm1, proftime_T tm2);
+extern proftime_T rs_profile_sub(proftime_T tm1, proftime_T tm2);
+extern proftime_T rs_profile_self(proftime_T self, proftime_T total, proftime_T children);
+extern bool rs_profile_equal(proftime_T tm1, proftime_T tm2);
+extern int64_t rs_profile_signed(proftime_T tm);
+extern int rs_profile_cmp(proftime_T tm1, proftime_T tm2);
+#endif
+
 /// Struct used in sn_prl_ga for every line of a script.
 typedef struct {
   int snp_count;                ///< nr of times line was executed
@@ -113,7 +125,11 @@ bool profile_passed_limit(proftime_T tm) FUNC_ATTR_WARN_UNUSED_RESULT
 /// @return the zero time
 proftime_T profile_zero(void) FUNC_ATTR_CONST
 {
+#ifdef USE_RUST_PROFILE
+  return rs_profile_zero();
+#else
   return 0;
+#endif
 }
 
 /// Divides time `tm` by `count`.
@@ -121,11 +137,15 @@ proftime_T profile_zero(void) FUNC_ATTR_CONST
 /// @return 0 if count <= 0, otherwise tm / count
 proftime_T profile_divide(proftime_T tm, int count) FUNC_ATTR_CONST
 {
+#ifdef USE_RUST_PROFILE
+  return rs_profile_divide(tm, count);
+#else
   if (count <= 0) {
     return profile_zero();
   }
 
   return (proftime_T)round((double)tm / (double)count);
+#endif
 }
 
 /// Adds time `tm2` to `tm1`.
@@ -133,7 +153,11 @@ proftime_T profile_divide(proftime_T tm, int count) FUNC_ATTR_CONST
 /// @return `tm1` + `tm2`
 proftime_T profile_add(proftime_T tm1, proftime_T tm2) FUNC_ATTR_CONST
 {
+#ifdef USE_RUST_PROFILE
+  return rs_profile_add(tm1, tm2);
+#else
   return tm1 + tm2;
+#endif
 }
 
 /// Subtracts time `tm2` from `tm1`.
@@ -146,7 +170,11 @@ proftime_T profile_add(proftime_T tm1, proftime_T tm2) FUNC_ATTR_CONST
 /// @return `tm1` - `tm2`
 proftime_T profile_sub(proftime_T tm1, proftime_T tm2) FUNC_ATTR_CONST
 {
+#ifdef USE_RUST_PROFILE
+  return rs_profile_sub(tm1, tm2);
+#else
   return tm1 - tm2;
+#endif
 }
 
 /// Adds the `self` time from the total time and the `children` time.
@@ -156,6 +184,9 @@ proftime_T profile_sub(proftime_T tm1, proftime_T tm2) FUNC_ATTR_CONST
 proftime_T profile_self(proftime_T self, proftime_T total, proftime_T children)
   FUNC_ATTR_CONST
 {
+#ifdef USE_RUST_PROFILE
+  return rs_profile_self(self, total, children);
+#else
   // check that the result won't be negative, which can happen with
   // recursive calls.
   if (total <= children) {
@@ -164,6 +195,7 @@ proftime_T profile_self(proftime_T self, proftime_T total, proftime_T children)
 
   // add the total time to self and subtract the children's time from self
   return profile_sub(profile_add(self, total), children);
+#endif
 }
 
 /// Gets the current waittime.
@@ -194,7 +226,11 @@ proftime_T profile_sub_wait(proftime_T tm, proftime_T tma) FUNC_ATTR_PURE
 /// @return true if `tm1` == `tm2`
 static bool profile_equal(proftime_T tm1, proftime_T tm2) FUNC_ATTR_CONST
 {
+#ifdef USE_RUST_PROFILE
+  return rs_profile_equal(tm1, tm2);
+#else
   return tm1 == tm2;
+#endif
 }
 
 /// Converts time duration `tm` (`profile_sub` result) to a signed integer.
@@ -203,10 +239,14 @@ static bool profile_equal(proftime_T tm1, proftime_T tm2) FUNC_ATTR_CONST
 int64_t profile_signed(proftime_T tm)
   FUNC_ATTR_CONST
 {
+#ifdef USE_RUST_PROFILE
+  return rs_profile_signed(tm);
+#else
   // (tm > INT64_MAX) is >=150 years, so we can assume it was produced by
   // arithmetic of two proftime_T values.  For human-readable representation
   // (and Vim-compat) we want the difference after unsigned wraparound. #10452
   return (tm <= INT64_MAX) ? (int64_t)tm : -(int64_t)(UINT64_MAX - tm);
+#endif
 }
 
 /// Compares profiling times.
@@ -218,10 +258,14 @@ int64_t profile_signed(proftime_T tm)
 ///         >0: `tm2` > `tm1`
 int profile_cmp(proftime_T tm1, proftime_T tm2) FUNC_ATTR_CONST
 {
+#ifdef USE_RUST_PROFILE
+  return rs_profile_cmp(tm1, tm2);
+#else
   if (tm1 == tm2) {
     return 0;
   }
   return profile_signed(tm2 - tm1) < 0 ? -1 : 1;
+#endif
 }
 
 static char *profile_fname = NULL;

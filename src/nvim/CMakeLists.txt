@@ -80,6 +80,7 @@ if(USE_RUST)
       USE_RUST_MBYTE
       USE_RUST_MEMUTIL
       USE_RUST_PATH
+      USE_RUST_PROFILE
       USE_RUST_STRINGS
     )
   else()
