@@ -98,6 +98,7 @@ extern int rs_utf_valid_string(const char *s, const char *end);
 extern int rs_utf_eat_space(int cc);
 extern int rs_utf_allow_break_before(int cc);
 extern int rs_utf_allow_break_after(int cc);
+extern int rs_utf_printable(int c);
 #endif
 
 static const char e_list_item_nr_is_not_list[]
@@ -1175,6 +1176,9 @@ bool utf_iscomposing_legacy(int c)
 bool utf_printable(int c)
   FUNC_ATTR_CONST
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_printable(c);
+#else
   if (c < 0x180B || c > 0xFFFF) {
     return c != 0x70F;
   }
@@ -1204,6 +1208,7 @@ bool utf_printable(int c)
   // (corresponding bits in both masks are equal).
   return _mm_movemask_epi8(_mm_cmpgt_epi16(value, lo))
          == _mm_movemask_epi8(_mm_cmpgt_epi16(value, hi));
+#endif
 }
 
 #else
@@ -1240,6 +1245,9 @@ static bool intable(const struct interval *table, size_t n_items, int c)
 bool utf_printable(int c)
   FUNC_ATTR_CONST
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_printable(c);
+#else
   // Sorted list of non-overlapping intervals.
   // 0xd800-0xdfff is reserved for UTF-16, actually illegal.
   static const struct interval nonprint[] = {
@@ -1249,6 +1257,7 @@ bool utf_printable(int c)
   };
 
   return !intable(nonprint, ARRAY_SIZE(nonprint), c);
+#endif
 }
 
 #endif

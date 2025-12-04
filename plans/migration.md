@@ -328,6 +328,7 @@ TEST_FILE=test/functional/core/fileio_spec.lua make functionaltest
 - [x] `utf_eat_space` - Whether space is not allowed before/after character - swapped to Rust
 - [x] `utf_allow_break_before` - Whether line break is allowed before character - swapped to Rust
 - [x] `utf_allow_break_after` - Whether line break is allowed after character - swapped to Rust
+- [x] `utf_printable` - Check if character can be displayed normally - swapped to Rust
 - [ ] Character width calculation (utf_char2cells - requires display tables)
 - [ ] Composing character handling (utfc_ptr2len - requires grapheme state)
 - [ ] Encoding conversion (iconv integration)

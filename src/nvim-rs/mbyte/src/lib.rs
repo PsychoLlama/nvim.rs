@@ -576,6 +576,61 @@ pub extern "C" fn rs_utf_allow_break_after(cc: c_int) -> c_int {
     c_int::from(utf_allow_break_after(cc))
 }
 
+// Character printability
+
+/// Sorted list of non-printable character ranges for utf_printable.
+/// These are characters that cannot be displayed in a normal way.
+/// 0xd800-0xdfff is reserved for UTF-16 surrogates (actually illegal).
+static NONPRINT_RANGES: &[(i32, i32)] = &[
+    (0x070f, 0x070f), // Syriac abbreviation mark
+    (0x180b, 0x180e), // Mongolian free variation selectors
+    (0x200b, 0x200f), // Zero width space, directional marks
+    (0x202a, 0x202e), // Embedding/override controls
+    (0x2060, 0x206f), // Word joiner, invisible operators
+    (0xd800, 0xdfff), // UTF-16 surrogates (illegal in UTF-8)
+    (0xfeff, 0xfeff), // BOM / ZWNBSP
+    (0xfff9, 0xfffb), // Interlinear annotation anchors
+    (0xfffe, 0xffff), // Non-characters
+];
+
+/// Check if a character is in any of the non-printable ranges.
+#[inline]
+fn in_nonprint_range(c: i32) -> bool {
+    // Binary search through sorted ranges
+    let mut lo = 0;
+    let mut hi = NONPRINT_RANGES.len();
+
+    while lo < hi {
+        let mid = (lo + hi) / 2;
+        let (first, last) = NONPRINT_RANGES[mid];
+        if last < c {
+            lo = mid + 1;
+        } else if first > c {
+            hi = mid;
+        } else {
+            return true; // c is in [first, last]
+        }
+    }
+    false
+}
+
+/// Return true for characters that can be displayed in a normal way.
+/// Only for characters of 0x100 and above!
+///
+/// This checks if a character is NOT in any of the ranges that contain
+/// non-printable/control characters (format controls, surrogates, etc.).
+#[inline]
+pub fn utf_printable(c: i32) -> bool {
+    !in_nonprint_range(c)
+}
+
+/// Return true for characters that can be displayed in a normal way.
+/// FFI wrapper for utf_printable.
+#[no_mangle]
+pub extern "C" fn rs_utf_printable(c: c_int) -> c_int {
+    c_int::from(utf_printable(c))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -791,5 +846,60 @@ mod tests {
         let ascii = CString::new("Hello").unwrap();
         let len = unsafe { rs_utf_ptr2len(ascii.as_ptr()) };
         assert_eq!(len, 1);
+    }
+
+    #[test]
+    fn test_utf_printable() {
+        // Normal printable characters
+        assert!(utf_printable(0x100)); // Latin Extended
+        assert!(utf_printable(0x4E00)); // CJK Unified
+        assert!(utf_printable(0x1F600)); // Emoji
+
+        // Non-printable: Syriac abbreviation mark
+        assert!(!utf_printable(0x070f));
+
+        // Non-printable: Mongolian free variation selectors
+        assert!(!utf_printable(0x180b));
+        assert!(!utf_printable(0x180e));
+
+        // Non-printable: Zero width space and directional marks
+        assert!(!utf_printable(0x200b));
+        assert!(!utf_printable(0x200f));
+
+        // Non-printable: Embedding/override controls
+        assert!(!utf_printable(0x202a));
+        assert!(!utf_printable(0x202e));
+
+        // Non-printable: Word joiner and invisible operators
+        assert!(!utf_printable(0x2060));
+        assert!(!utf_printable(0x206f));
+
+        // Non-printable: Surrogates (illegal in UTF-8)
+        assert!(!utf_printable(0xd800));
+        assert!(!utf_printable(0xdfff));
+
+        // Non-printable: BOM
+        assert!(!utf_printable(0xfeff));
+
+        // Non-printable: Interlinear annotation anchors
+        assert!(!utf_printable(0xfff9));
+        assert!(!utf_printable(0xfffb));
+
+        // Non-printable: Non-characters
+        assert!(!utf_printable(0xfffe));
+        assert!(!utf_printable(0xffff));
+
+        // Edge cases - just outside non-print ranges
+        assert!(utf_printable(0x070e)); // before Syriac abbreviation
+        assert!(utf_printable(0x0710)); // after Syriac abbreviation
+        assert!(utf_printable(0x180a)); // before Mongolian FSV
+        assert!(utf_printable(0x180f)); // after Mongolian FSV
+    }
+
+    #[test]
+    fn test_ffi_utf_printable() {
+        assert_eq!(rs_utf_printable(0x100), 1);
+        assert_eq!(rs_utf_printable(0x200b), 0); // Zero width space
+        assert_eq!(rs_utf_printable(0xd800), 0); // Surrogate
     }
 }
