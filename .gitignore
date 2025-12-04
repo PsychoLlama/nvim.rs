@@ -85,3 +85,7 @@ tags
 /contrib/result-*
 
 CMakeUserPresets.json
+
+# Rust/Cargo
+/target/
+Cargo.lock

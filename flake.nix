@@ -39,6 +39,15 @@
           luaEnv
         ];
 
+        # Rust toolchain for migration
+        rustToolchain = with pkgs; [
+          rustc
+          cargo
+          clippy
+          rustfmt
+          rust-analyzer
+        ];
+
         # Dependencies for running tests
         checkInputs = with pkgs; [
           nodejs
@@ -55,7 +64,7 @@
         devShells.default = pkgs.mkShell {
           inherit buildInputs nativeBuildInputs;
 
-          packages = checkInputs ++ [ pkgs.just ];
+          packages = checkInputs ++ rustToolchain ++ [ pkgs.just ];
 
           # Ensure pkg-config can find our dependencies
           PKG_CONFIG_PATH = pkgs.lib.makeSearchPath "lib/pkgconfig" buildInputs;
