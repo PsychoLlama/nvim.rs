@@ -967,6 +967,9 @@ int utf_byte2len(int b)
 // Never returns zero.
 int utf_ptr2len_len(const char *p, int size)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_ptr2len_len(p, size);
+#else
   int m;
 
   int len = utf8len_tab[(uint8_t)(*p)];
@@ -984,6 +987,7 @@ int utf_ptr2len_len(const char *p, int size)
     }
   }
   return len;
+#endif
 }
 
 /// Return the number of bytes occupied by a UTF-8 character in a string.

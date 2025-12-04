@@ -14,6 +14,7 @@ extern int rs_utf_char2bytes(int c, char *buf);
 extern int rs_utf_byte2len(int b);
 extern int rs_utf_ptr2char(const char *p);
 extern int rs_utf_ptr2len(const char *p);
+extern int rs_utf_ptr2len_len(const char *p, int size);
 
 // C implementations (simplified from nvim/mbyte.c)
 static uint8_t utf8len_tab[256] = {
@@ -91,6 +92,17 @@ static int c_utf_ptr2len(const char *p) {
     int len = utf8len_tab[*pp];
     for (int i = 1; i < len; i++) {
         if ((pp[i] & 0xc0) != 0x80) return 1;
+    }
+    return len;
+}
+
+static int c_utf_ptr2len_len(const char *p, int size) {
+    if (size < 1) return 1;
+    int len = utf8len_tab[(uint8_t)(*p)];
+    if (len == 1) return 1;
+    int m = (len > size) ? size : len;
+    for (int i = 1; i < m; i++) {
+        if ((p[i] & 0xc0) != 0x80) return 1;
     }
     return len;
 }
@@ -271,6 +283,39 @@ void test_utf_ptr2char(void) {
     }
 }
 
+void test_utf_ptr2len_len(void) {
+    printf("Testing utf_ptr2len_len:\n");
+
+    struct {
+        const char *str;
+        int size;
+        const char *desc;
+    } test_cases[] = {
+        {"A", 1, "ASCII size=1"},
+        {"AB", 2, "ASCII size=2"},
+        {"\xC3\xA1", 2, "2-byte complete"},
+        {"\xC3\xA1", 1, "2-byte truncated"},
+        {"\xE2\x82\xAC", 3, "3-byte complete"},
+        {"\xE2\x82\xAC", 2, "3-byte truncated"},
+        {"\xE2\x82\xAC", 1, "3-byte size=1"},
+        {"\xF0\x9F\x98\x80", 4, "4-byte complete"},
+        {"\xF0\x9F\x98\x80", 2, "4-byte truncated"},
+        {"\x80", 1, "continuation as first"},
+        {"\xC3\x00", 2, "invalid continuation"},
+    };
+    int n = sizeof(test_cases) / sizeof(test_cases[0]);
+
+    for (int i = 0; i < n; i++) {
+        int c_result = c_utf_ptr2len_len(test_cases[i].str, test_cases[i].size);
+        int rs_result = rs_utf_ptr2len_len(test_cases[i].str, test_cases[i].size);
+
+        char name[128];
+        snprintf(name, sizeof(name), "ptr2len_len(%s, %d) C=%d Rust=%d",
+                 test_cases[i].desc, test_cases[i].size, c_result, rs_result);
+        TEST(name, c_result == rs_result);
+    }
+}
+
 void test_roundtrip(void) {
     printf("Testing roundtrip (char2bytes -> ptr2char):\n");
 
@@ -303,6 +348,7 @@ int main(void) {
     test_utf_char2bytes();
     test_utf_byte2len();
     test_utf_ptr2len();
+    test_utf_ptr2len_len();
     test_utf_ptr2char();
     test_roundtrip();
 
