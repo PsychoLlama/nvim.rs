@@ -143,12 +143,13 @@ pub extern "C" fn rs_is_power_of_two(x: u64) -> c_int {
 /// Divide n1 by n2, handling division by zero and overflow.
 ///
 /// Returns:
-/// - VARNUMBER_MIN (similar to NaN) if n1 == 0 and n2 == 0
-/// - -VARNUMBER_MAX if n1 < 0 and n2 == 0
-/// - VARNUMBER_MAX if n1 > 0 and n2 == 0
-/// - VARNUMBER_MAX if n1 == VARNUMBER_MIN and n2 == -1 (overflow case)
+/// - `VARNUMBER_MIN` (similar to NaN) if n1 == 0 and n2 == 0
+/// - `-VARNUMBER_MAX` if n1 < 0 and n2 == 0
+/// - `VARNUMBER_MAX` if n1 > 0 and n2 == 0
+/// - `VARNUMBER_MAX` if n1 == `VARNUMBER_MIN` and n2 == -1 (overflow case)
 /// - n1 / n2 otherwise
 #[no_mangle]
+#[allow(clippy::comparison_chain)]
 pub extern "C" fn rs_num_divide(n1: i64, n2: i64) -> i64 {
     if n2 == 0 {
         // Division by zero - give an error message?

@@ -6,6 +6,7 @@
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
 
 use std::ffi::c_char;
 use std::ffi::c_int;
@@ -190,7 +191,7 @@ pub unsafe extern "C" fn rs_skiptowhite(p: *const c_char) -> *const c_char {
 const CTRL_V: u8 = 22;
 
 /// Skip to whitespace, respecting escaped characters.
-/// Like skiptowhite(), but also skips escaped chars (backslash or Ctrl-V).
+/// Like `skiptowhite()`, but also skips escaped chars (backslash or `Ctrl-V`).
 ///
 /// # Safety
 /// The pointer must be valid and point to a null-terminated C string.
@@ -841,7 +842,7 @@ mod tests {
                 ]
             );
 
-            let len = rs_transchar_hex(buf.as_mut_ptr(), 0x12ABCD);
+            let len = rs_transchar_hex(buf.as_mut_ptr(), 0x0012_ABCD);
             assert_eq!(len, 8);
             assert_eq!(
                 &buf[..9],

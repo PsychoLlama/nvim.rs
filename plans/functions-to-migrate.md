@@ -40,7 +40,7 @@ Candidates for Rust migration, organized by priority.
 
 ### spell.c
 - [ ] `spell_mb_isword_class` (line 2509) - Character class word check
-- [ ] `valid_spelllang` (line 3655) - Validate spelllang option value
+- ~~`valid_spelllang` (line 3655)~~ - Wrapper around `valid_name` (already migrated), no value in duplicating
 
 ## TIER 3 - Moderate Candidates (Parameter passing required)
 

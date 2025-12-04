@@ -5,6 +5,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 #![allow(clippy::missing_safety_doc)]
 #![allow(unsafe_code)]
+#![allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
 
 use std::os::raw::c_int;
 
@@ -156,8 +157,8 @@ pub extern "C" fn rs_name_to_mod_mask(c: c_int) -> c_int {
 
 /// Change <xKey> to <Key>
 ///
-/// Maps X-terminal specific key codes (like K_XUP, K_XF1) to their
-/// standard equivalents (K_UP, K_F1).
+/// Maps X-terminal specific key codes (like `K_XUP`, `K_XF1`) to their
+/// standard equivalents (`K_UP`, `K_F1`).
 #[no_mangle]
 pub extern "C" fn rs_handle_x_keys(key: c_int) -> c_int {
     match key {
