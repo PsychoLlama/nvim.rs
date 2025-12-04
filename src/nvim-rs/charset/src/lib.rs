@@ -242,6 +242,26 @@ pub unsafe extern "C" fn rs_skip_to_newline(p: *const c_char) -> *const c_char {
 }
 
 // ============================================================================
+// Line classification functions
+// ============================================================================
+
+/// Check that the string is empty or only contains whitespace (blanks/tabs).
+///
+/// Returns true if the line is blank (empty, whitespace only, or ends at line terminator).
+///
+/// # Safety
+/// The pointer must be valid and point to a null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_isblankline(lbuf: *const c_char) -> bool {
+    if lbuf.is_null() {
+        return true;
+    }
+    let p = rs_skipwhite(lbuf);
+    // NUL, CR, or LF all count as "blank line" (end of line or empty)
+    *p == 0 || *p == b'\r' as c_char || *p == b'\n' as c_char
+}
+
+// ============================================================================
 // Hex/Number conversion functions
 // ============================================================================
 
@@ -268,9 +288,9 @@ pub extern "C" fn rs_nr2hex(n: u32) -> u32 {
 #[no_mangle]
 pub extern "C" fn rs_hex2nr(c: c_int) -> c_int {
     let c = c as u8;
-    if c >= b'a' && c <= b'f' {
+    if (b'a'..=b'f').contains(&c) {
         c_int::from(c - b'a' + 10)
-    } else if c >= b'A' && c <= b'F' {
+    } else if (b'A'..=b'F').contains(&c) {
         c_int::from(c - b'A' + 10)
     } else {
         c_int::from(c.wrapping_sub(b'0'))
@@ -303,6 +323,7 @@ pub unsafe extern "C" fn rs_hexhex2nr(p: *const c_char) -> c_int {
 // ============================================================================
 
 #[cfg(test)]
+#[allow(clippy::cast_lossless)]
 mod tests {
     use super::*;
     use std::ffi::CString;
@@ -485,35 +506,35 @@ mod tests {
     #[test]
     fn test_nr2hex() {
         // Test 0-9 -> '0'-'9'
-        assert_eq!(rs_nr2hex(0), b'0' as u32);
-        assert_eq!(rs_nr2hex(5), b'5' as u32);
-        assert_eq!(rs_nr2hex(9), b'9' as u32);
+        assert_eq!(rs_nr2hex(0), u32::from(b'0'));
+        assert_eq!(rs_nr2hex(5), u32::from(b'5'));
+        assert_eq!(rs_nr2hex(9), u32::from(b'9'));
 
         // Test 10-15 -> 'a'-'f' (lowercase)
-        assert_eq!(rs_nr2hex(10), b'a' as u32);
-        assert_eq!(rs_nr2hex(11), b'b' as u32);
-        assert_eq!(rs_nr2hex(15), b'f' as u32);
+        assert_eq!(rs_nr2hex(10), u32::from(b'a'));
+        assert_eq!(rs_nr2hex(11), u32::from(b'b'));
+        assert_eq!(rs_nr2hex(15), u32::from(b'f'));
 
         // Test that only lower 4 bits are used
-        assert_eq!(rs_nr2hex(0x10), b'0' as u32); // 16 -> 0
-        assert_eq!(rs_nr2hex(0x1f), b'f' as u32); // 31 -> 15 -> 'f'
-        assert_eq!(rs_nr2hex(0xff), b'f' as u32); // 255 -> 15 -> 'f'
+        assert_eq!(rs_nr2hex(0x10), u32::from(b'0')); // 16 -> 0
+        assert_eq!(rs_nr2hex(0x1f), u32::from(b'f')); // 31 -> 15 -> 'f'
+        assert_eq!(rs_nr2hex(0xff), u32::from(b'f')); // 255 -> 15 -> 'f'
     }
 
     #[test]
     fn test_hex2nr() {
         // Test digits
-        assert_eq!(rs_hex2nr(b'0' as c_int), 0);
-        assert_eq!(rs_hex2nr(b'5' as c_int), 5);
-        assert_eq!(rs_hex2nr(b'9' as c_int), 9);
+        assert_eq!(rs_hex2nr(c_int::from(b'0')), 0);
+        assert_eq!(rs_hex2nr(c_int::from(b'5')), 5);
+        assert_eq!(rs_hex2nr(c_int::from(b'9')), 9);
 
         // Test uppercase
-        assert_eq!(rs_hex2nr(b'A' as c_int), 10);
-        assert_eq!(rs_hex2nr(b'F' as c_int), 15);
+        assert_eq!(rs_hex2nr(c_int::from(b'A')), 10);
+        assert_eq!(rs_hex2nr(c_int::from(b'F')), 15);
 
         // Test lowercase
-        assert_eq!(rs_hex2nr(b'a' as c_int), 10);
-        assert_eq!(rs_hex2nr(b'f' as c_int), 15);
+        assert_eq!(rs_hex2nr(c_int::from(b'a')), 10);
+        assert_eq!(rs_hex2nr(c_int::from(b'f')), 15);
     }
 
     #[test]
@@ -567,9 +588,9 @@ mod tests {
 
             // Escaped space with Ctrl-V (ASCII 22)
             // "hi<Ctrl-V> x" - Ctrl-V escapes space, then continues to scan "x" to NUL
-            let s = vec![b'h', b'i', 22, b' ', b'x', 0]; // "hi<Ctrl-V> x"
-            let result = rs_skiptowhite_esc(s.as_ptr() as *const c_char);
-            let offset = result.offset_from(s.as_ptr() as *const c_char);
+            let s: [u8; 6] = [b'h', b'i', 22, b' ', b'x', 0]; // "hi<Ctrl-V> x"
+            let result = rs_skiptowhite_esc(s.as_ptr().cast::<c_char>());
+            let offset = result.offset_from(s.as_ptr().cast::<c_char>());
             assert_eq!(offset, 5); // Scans to NUL at position 5
 
             // No whitespace
@@ -658,6 +679,66 @@ mod tests {
             // Null pointer
             let result = rs_skip_to_newline(std::ptr::null());
             assert!(result.is_null());
+        }
+    }
+
+    #[test]
+    fn test_vim_isblankline() {
+        unsafe {
+            // Empty string - blank
+            let s = CString::new("").unwrap();
+            assert!(rs_vim_isblankline(s.as_ptr()));
+
+            // Only spaces - blank
+            let s = CString::new("   ").unwrap();
+            assert!(rs_vim_isblankline(s.as_ptr()));
+
+            // Only tabs - blank
+            let s = CString::new("\t\t").unwrap();
+            assert!(rs_vim_isblankline(s.as_ptr()));
+
+            // Mixed whitespace - blank
+            let s = CString::new(" \t \t ").unwrap();
+            assert!(rs_vim_isblankline(s.as_ptr()));
+
+            // Contains text - not blank
+            let s = CString::new("hello").unwrap();
+            assert!(!rs_vim_isblankline(s.as_ptr()));
+
+            // Whitespace before text - not blank
+            let s = CString::new("   hello").unwrap();
+            assert!(!rs_vim_isblankline(s.as_ptr()));
+
+            // Text before whitespace - not blank
+            let s = CString::new("hello   ").unwrap();
+            assert!(!rs_vim_isblankline(s.as_ptr()));
+
+            // Single character - not blank
+            let s = CString::new("x").unwrap();
+            assert!(!rs_vim_isblankline(s.as_ptr()));
+
+            // Line ending with \n (newline) - blank
+            let s = CString::new("\n").unwrap();
+            assert!(rs_vim_isblankline(s.as_ptr()));
+
+            // Whitespace followed by \n - blank
+            let s = CString::new("   \n").unwrap();
+            assert!(rs_vim_isblankline(s.as_ptr()));
+
+            // Line ending with \r (carriage return) - blank
+            let s = CString::new("\r").unwrap();
+            assert!(rs_vim_isblankline(s.as_ptr()));
+
+            // Whitespace followed by \r - blank
+            let s = CString::new("   \r").unwrap();
+            assert!(rs_vim_isblankline(s.as_ptr()));
+
+            // Whitespace followed by \r\n (CRLF) - blank
+            let s = CString::new("   \r\n").unwrap();
+            assert!(rs_vim_isblankline(s.as_ptr()));
+
+            // Null pointer - blank (edge case)
+            assert!(rs_vim_isblankline(std::ptr::null()));
         }
     }
 }
