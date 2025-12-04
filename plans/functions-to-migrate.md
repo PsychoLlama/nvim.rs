@@ -105,7 +105,7 @@ The trivial pure functions have largely been migrated. Next steps should focus o
 ### Partially Swapped Crates
 | Crate | Status | Functions |
 |-------|--------|-----------|
-| nvim-os | ✅ Partial | os_get_pid (Phase 1.26) - More functions ready but blocked by libuv differences |
+| nvim-os | ✅ Partial | os_get_pid (Phase 1.26), os_get_hostname (Phase 1.27) - More functions ready but blocked by libuv differences |
 | nvim-collections (hashtab) | ✅ Partial | hash_hash, hash_hash_len - Full hashtab not swapped |
 
 ### Unswapped Crates (Rust code exists but NOT used from C)

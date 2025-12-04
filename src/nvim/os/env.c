@@ -393,13 +393,22 @@ void os_hint_priority(void)
 #endif
 }
 
+#ifdef USE_RUST_OS
+extern int rs_os_get_hostname(char *buf, size_t size);
+#endif
+
 /// Gets the hostname of the current machine.
 ///
 /// @param hostname   Buffer to store the hostname.
 /// @param size       Size of `hostname`.
 void os_get_hostname(char *hostname, size_t size)
 {
-#ifdef HAVE_SYS_UTSNAME_H
+#ifdef USE_RUST_OS
+  if (rs_os_get_hostname(hostname, size) != 0) {
+    *hostname = NUL;
+  }
+#else
+# ifdef HAVE_SYS_UTSNAME_H
   struct utsname vutsname;
 
   if (uname(&vutsname) < 0) {
@@ -407,7 +416,7 @@ void os_get_hostname(char *hostname, size_t size)
   } else {
     xstrlcpy(hostname, vutsname.nodename, size);
   }
-#elif defined(MSWIN)
+# elif defined(MSWIN)
   wchar_t host_utf16[MAX_COMPUTERNAME_LENGTH + 1];
   DWORD host_wsize = sizeof(host_utf16) / sizeof(host_utf16[0]);
   if (GetComputerNameW(host_utf16, &host_wsize) == 0) {
@@ -426,9 +435,10 @@ void os_get_hostname(char *hostname, size_t size)
   }
   xstrlcpy(hostname, host_utf8, size);
   xfree(host_utf8);
-#else
+# else
   emsg("os_get_hostname failed: missing uname()");
   *hostname = NUL;
+# endif
 #endif
 }
 
