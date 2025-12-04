@@ -1,0 +1,781 @@
+# Neovim C-to-Rust Migration Plan
+
+## Executive Summary
+
+This document outlines an incremental strategy to migrate Neovim's ~257,000 lines of C code to Rust. The migration prioritizes maintaining a working, testable system at every step by leveraging FFI boundaries and Rust's `unsafe` capabilities where necessary.
+
+**Key Principles:**
+
+1. **Always Working**: Every milestone produces a buildable, testable Neovim
+2. **Incremental Validation**: Each phase has clear acceptance criteria
+3. **FFI-First**: Use `unsafe` Rust interop with C during transition
+4. **Test Continuity**: Existing 500+ functional tests must pass throughout
+
+---
+
+## Current Architecture Overview
+
+```
+┌───────────────────────────────────────────────────────────────┐
+│                         main.c (entry)                        │
+├────────────┬───────────────┬───────────────┬──────────────────┤
+│   os/      │    event/     │   msgpack_rpc/│      tui/        │
+│ (40 files) │  (11 files)   │  (10 files)   │   (7 files)      │
+│  OS layer  │  Event loop   │     RPC       │  Terminal UI     │
+├────────────┴───────────────┴───────────────┴──────────────────┤
+│                     Core Editor Engine                        │
+│  buffer.c, window.c, memline.c, normal.c, edit.c, eval.c, ... │
+├───────────────────────────────────────────────────────────────┤
+│   api/           │     lua/          │      eval/             │
+│  (30+ files)     │   (18 files)      │    (29 files)          │
+│  RPC API layer   │  Lua integration  │  VimL evaluation       │
+└───────────────────────────────────────────────────────────────┘
+```
+
+**Dependencies:** LuaJIT, libuv, tree-sitter, UTF-8proc, libintl, unibilium
+
+---
+
+## Migration Phases
+
+### Phase 0: Infrastructure Setup (Foundation)
+
+**Goal:** Establish Rust build infrastructure alongside existing CMake
+
+#### 0.1 Add Rust Build System
+
+- [ ] Add `Cargo.toml` at repository root with workspace configuration
+- [ ] Create `src/nvim-rs/` directory for Rust crates
+- [ ] Integrate Cargo into CMake build via `corrosion` or custom cmake rules
+- [ ] Ensure `make` builds both C and Rust components
+- [ ] Set up `cbindgen` for generating C headers from Rust
+- [ ] Set up `bindgen` for generating Rust bindings from C headers
+
+#### 0.2 CI Integration
+
+- [ ] Add Rust toolchain to GitHub Actions workflows
+- [ ] Add `cargo clippy` and `cargo fmt` checks
+- [ ] Ensure all existing tests still pass
+
+**Validation:**
+
+```bash
+make                    # Builds nvim with Rust crate (no-op initially)
+make test               # All 500+ functional tests pass
+cargo test              # Rust unit tests pass (empty initially)
+```
+
+**Deliverable:** Hybrid C/Rust build system working
+
+---
+
+### Phase 1: Pure Utility Functions (Low Risk)
+
+**Goal:** Migrate isolated utility functions with no state dependencies
+
+These functions have clear inputs/outputs and minimal dependencies:
+
+#### 1.1 String Utilities (`src/nvim/strings.c` → `nvim-rs/strings`)
+
+- [ ] `vim_strsave` - String duplication
+- [ ] `vim_strnsave` - Bounded string copy
+- [ ] `vim_strchr` - Character search
+- [ ] `concat_str` - String concatenation
+- [ ] `vim_stricmp` / `vim_strnicmp` - Case-insensitive comparison
+- [ ] Create C-compatible wrapper functions using `#[no_mangle]`
+- [ ] Replace C implementations with calls to Rust
+
+#### 1.2 Math/Encoding Utilities
+
+- [ ] `src/nvim/base64.c` → `nvim-rs/base64`
+- [ ] `src/nvim/sha256.c` → `nvim-rs/sha256`
+- [ ] `src/nvim/math.c` → `nvim-rs/math`
+- [ ] Pure algorithms, no global state
+
+#### 1.3 Path Utilities (`src/nvim/path.c` partial)
+
+- [ ] `path_tail` - Get filename from path
+- [ ] `path_head_length` - Directory prefix length
+- [ ] `vim_ispathsep` - Path separator check
+- [ ] Path normalization functions
+
+**Validation:**
+
+```bash
+make test                              # All tests pass
+TEST_FILE=test/unit/path_spec.lua make unittest  # Path unit tests
+cargo test                             # Rust unit tests for migrated code
+```
+
+**FFI Pattern:**
+
+```rust
+// src/nvim-rs/strings/lib.rs
+#[no_mangle]
+pub extern "C" fn vim_strsave(s: *const c_char) -> *mut c_char {
+    // Safe Rust implementation with unsafe FFI boundary
+}
+```
+
+---
+
+### Phase 2: OS Abstraction Layer (Clear Boundary)
+
+**Goal:** Migrate `src/nvim/os/` - the platform abstraction layer
+
+This layer has well-defined interfaces and minimal coupling to editor internals.
+
+#### 2.1 Environment & System Info
+
+- [ ] `src/nvim/os/env.c` → `nvim-rs/os/env`
+  - `os_getenv`, `os_setenv`, `os_unsetenv`
+  - `os_get_hostname`, `os_get_user_name`
+  - `os_get_pid`
+- [ ] `src/nvim/os/time.c` → `nvim-rs/os/time`
+  - `os_hrtime`, `os_utime`, `os_localtime_r`
+
+#### 2.2 Filesystem Operations
+
+- [ ] `src/nvim/os/fs.c` → `nvim-rs/os/fs`
+  - `os_file_exists`, `os_isdir`, `os_can_exe`
+  - `os_getperm`, `os_setperm`, `os_file_is_readable`
+  - `os_rename`, `os_copy`, `os_remove`
+  - `os_mkdir`, `os_rmdir`, `os_scandir`
+- [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
+  - File read/write with proper error handling
+
+#### 2.3 Dynamic Loading
+
+- [ ] `src/nvim/os/dl.c` → `nvim-rs/os/dl`
+  - `os_dlopen`, `os_dlsym`, `os_dlclose`
+  - Use `libloading` crate
+
+#### 2.4 Memory Allocation
+
+- [ ] `src/nvim/os/mem.c` → custom allocator integration
+  - Careful: global allocator affects everything
+  - May need `#[global_allocator]` or keep C allocator initially
+
+**Validation:**
+
+```bash
+TEST_FILE=test/unit/os/fs_spec.lua make unittest
+TEST_FILE=test/unit/os/env_spec.lua make unittest
+TEST_FILE=test/functional/core/fileio_spec.lua make functionaltest
+```
+
+---
+
+### Phase 3: Data Structures (Foundational)
+
+**Goal:** Migrate core data structures that underpin the editor
+
+#### 3.1 Hash Table (`src/nvim/hashtab.c`)
+
+- [ ] Implement `HashMap`-compatible structure in Rust
+- [ ] Expose C-compatible API via FFI
+- [ ] Used throughout codebase - careful migration
+
+#### 3.2 Growing Array (`src/nvim/garray.c`)
+
+- [ ] Map to `Vec<T>` with C-compatible wrapper
+- [ ] Provide `ga_init`, `ga_grow`, `ga_append`, `ga_clear`
+
+#### 3.3 Memory Buffer (`src/nvim/mbyte.c`)
+
+- [ ] UTF-8 handling → use `std::str` / encoding crates
+- [ ] Character width calculation
+- [ ] Encoding conversion
+
+#### 3.4 Mark Tree (`src/nvim/marktree.c`)
+
+- [ ] Interval tree for extmarks
+- [ ] Complex but self-contained data structure
+- [ ] Critical for LSP and highlighting performance
+
+**Validation:**
+
+```bash
+TEST_FILE=test/unit/marktree_spec.lua make unittest
+# Run full test suite - data structures are foundational
+make test
+```
+
+---
+
+### Phase 4: Event Loop & Async I/O (Core Infrastructure)
+
+**Goal:** Migrate the libuv-based event system
+
+This is a critical phase - the event loop touches everything.
+
+#### 4.1 Event Loop Wrapper
+
+- [ ] `src/nvim/event/loop.c` → `nvim-rs/event/loop`
+- [ ] Options:
+  - A) Wrap libuv with Rust (keep C compatibility)
+  - B) Replace with `tokio`/`async-std` (larger change)
+- [ ] Recommend Option A initially for compatibility
+
+#### 4.2 Stream Handling
+
+- [ ] `src/nvim/event/rstream.c` → Rust read streams
+- [ ] `src/nvim/event/wstream.c` → Rust write streams
+- [ ] `src/nvim/event/stream.c` → Base stream utilities
+
+#### 4.3 Process Management
+
+- [ ] `src/nvim/event/proc.c` → `nvim-rs/event/proc`
+- [ ] `src/nvim/event/libuv_proc.c` → libuv process wrapper
+- [ ] Job control for `:terminal`, `:!cmd`, etc.
+
+#### 4.4 Async Primitives
+
+- [ ] `src/nvim/event/multiqueue.c` → Event queue
+- [ ] `src/nvim/event/signal.c` → Signal handling
+- [ ] `src/nvim/event/time.c` → Timer management
+- [ ] `src/nvim/event/socket.c` → Socket handling
+
+**Validation:**
+
+```bash
+TEST_FILE=test/functional/core/job_spec.lua make functionaltest
+TEST_FILE=test/functional/terminal/ make functionaltest
+# Terminal and async tests are critical
+```
+
+---
+
+### Phase 5: MessagePack RPC Layer (API Boundary)
+
+**Goal:** Migrate the RPC protocol implementation
+
+Clean API boundary - external UIs communicate through this layer.
+
+#### 5.1 MessagePack Encoding/Decoding
+
+- [ ] `src/nvim/msgpack_rpc/packer.c` → Use `rmp` crate
+- [ ] `src/nvim/msgpack_rpc/unpacker.c` → Use `rmp` crate
+
+#### 5.2 Channel Management
+
+- [ ] `src/nvim/msgpack_rpc/channel.c` → `nvim-rs/rpc/channel`
+- [ ] `src/nvim/msgpack_rpc/server.c` → `nvim-rs/rpc/server`
+
+#### 5.3 API Dispatch
+
+- [ ] Code generation for API dispatch (modify `gen_api_dispatch.lua`)
+- [ ] Generate Rust dispatch code alongside C
+
+**Validation:**
+
+```bash
+TEST_FILE=test/functional/api/ make functionaltest
+# Test with external UIs (nvim-qt, neovide)
+```
+
+---
+
+### Phase 6: API Layer (External Interface)
+
+**Goal:** Migrate `src/nvim/api/` - the public API surface
+
+#### 6.1 API Type System
+
+- [ ] Port `src/nvim/api/private/defs.h` types to Rust
+- [ ] `Object`, `Array`, `Dict`, `String`, `Integer`, etc.
+- [ ] Implement `From`/`Into` traits for C interop
+
+#### 6.2 Core API Functions
+
+- [ ] `src/nvim/api/vim.c` → Core editor API
+- [ ] `src/nvim/api/buffer.c` → Buffer API
+- [ ] `src/nvim/api/window.c` → Window API
+- [ ] `src/nvim/api/tabpage.c` → Tab API
+- [ ] `src/nvim/api/options.c` → Option API
+
+#### 6.3 Extended API
+
+- [ ] `src/nvim/api/extmark.c` → Extmark API
+- [ ] `src/nvim/api/ui.c` → UI events API
+- [ ] `src/nvim/api/command.c` → Command API
+- [ ] `src/nvim/api/autocmd.c` → Autocmd API
+
+**Validation:**
+
+```bash
+# Full API test suite
+TEST_FILE=test/functional/api/ make functionaltest
+# Lua API bindings
+TEST_FILE=test/functional/lua/ make functionaltest
+```
+
+---
+
+### Phase 7: Terminal UI (User-Facing)
+
+**Goal:** Migrate `src/nvim/tui/` - terminal rendering
+
+#### 7.1 TUI Core
+
+- [ ] `src/nvim/tui/tui.c` → `nvim-rs/tui`
+- [ ] Consider using `crossterm` or direct terminfo
+- [ ] `src/nvim/tui/terminfo.c` → terminfo database handling
+
+#### 7.2 Input Processing
+
+- [ ] `src/nvim/tui/input.c` → Terminal input parsing
+- [ ] Key sequence decoding
+
+**Validation:**
+
+```bash
+TEST_FILE=test/functional/ui/ make functionaltest
+# Manual testing: visual inspection of rendering
+```
+
+---
+
+### Phase 8: Buffer & Text Storage (Core Editor)
+
+**Goal:** Migrate the text representation layer
+
+This is the heart of the editor - careful migration required.
+
+#### 8.1 Memory Line Storage
+
+- [ ] `src/nvim/memline.c` (4,247 lines) → Text storage engine
+- [ ] `src/nvim/memfile.c` → Swap file handling
+- [ ] B-tree structure for line storage
+
+#### 8.2 Buffer Management
+
+- [ ] `src/nvim/buffer.c` (4,250 lines) → Buffer lifecycle
+- [ ] Buffer list management
+- [ ] File loading/saving integration
+
+#### 8.3 Undo System
+
+- [ ] `src/nvim/undo.c` → Undo tree
+- [ ] Complex branching undo history
+
+**Validation:**
+
+```bash
+TEST_FILE=test/functional/core/fileio_spec.lua make functionaltest
+TEST_FILE=test/functional/editor/buffer_spec.lua make functionaltest
+TEST_FILE=test/functional/legacy/undo_spec.lua make functionaltest
+```
+
+---
+
+### Phase 9: Window & Display (Rendering)
+
+**Goal:** Migrate window management and screen rendering
+
+#### 9.1 Window Management
+
+- [ ] `src/nvim/window.c` (7,599 lines) → Window layout
+- [ ] Split handling, window navigation
+- [ ] Floating windows (`winfloat.c`)
+
+#### 9.2 Screen Rendering
+
+- [ ] `src/nvim/drawscreen.c` → Full screen redraw
+- [ ] `src/nvim/drawline.c` → Line rendering
+- [ ] `src/nvim/grid.c` → Grid management
+
+#### 9.3 Highlighting
+
+- [ ] `src/nvim/highlight.c` → Highlight attributes
+- [ ] `src/nvim/highlight_group.c` → Highlight groups
+- [ ] `src/nvim/syntax.c` (5,673 lines) → Legacy syntax
+
+**Validation:**
+
+```bash
+TEST_FILE=test/functional/ui/screen_basic_spec.lua make functionaltest
+TEST_FILE=test/functional/ui/float_spec.lua make functionaltest
+TEST_FILE=test/functional/ui/highlight_spec.lua make functionaltest
+```
+
+---
+
+### Phase 10: Modal Editing (User Interaction)
+
+**Goal:** Migrate input processing and modal behavior
+
+#### 10.1 Normal Mode
+
+- [ ] `src/nvim/normal.c` (6,670 lines) → Normal mode commands
+- [ ] Motion commands
+- [ ] Operator handling
+
+#### 10.2 Insert Mode
+
+- [ ] `src/nvim/edit.c` (4,358 lines) → Insert mode
+- [ ] `src/nvim/insexpand.c` (6,581 lines) → Completion
+
+#### 10.3 Command Line
+
+- [ ] `src/nvim/ex_getln.c` (5,007 lines) → Command line editing
+- [ ] `src/nvim/cmdexpand.c` (4,261 lines) → Command completion
+
+**Validation:**
+
+```bash
+TEST_FILE=test/functional/editor/mode_insert_spec.lua make functionaltest
+TEST_FILE=test/functional/editor/mode_cmdline_spec.lua make functionaltest
+# Extensive manual testing for modal behavior
+```
+
+---
+
+### Phase 11: Ex Commands (Command Processing)
+
+**Goal:** Migrate the Ex command infrastructure
+
+#### 11.1 Command Dispatcher
+
+- [ ] `src/nvim/ex_docmd.c` (8,318 lines) → Command parsing & dispatch
+- [ ] Command range handling
+- [ ] Command modifiers
+
+#### 11.2 Command Implementations
+
+- [ ] `src/nvim/ex_cmds.c` (5,080 lines) → Individual commands
+- [ ] `src/nvim/ex_cmds2.c` → More commands
+- [ ] `src/nvim/usercmd.c` → User-defined commands
+
+**Validation:**
+
+```bash
+TEST_FILE=test/functional/ex_cmds/ make functionaltest
+TEST_FILE=test/functional/legacy/ make functionaltest
+```
+
+---
+
+### Phase 12: VimL Evaluation Engine (Scripting)
+
+**Goal:** Migrate the VimL interpreter
+
+This is one of the largest and most complex subsystems.
+
+#### 12.1 Expression Evaluator
+
+- [ ] `src/nvim/eval.c` (6,931 lines) → Expression evaluation
+- [ ] `src/nvim/eval/typval.c` → Type system
+- [ ] `src/nvim/eval/vars.c` → Variable handling
+
+#### 12.2 Built-in Functions
+
+- [ ] `src/nvim/eval/funcs.c` → 300+ built-in functions
+- [ ] `src/nvim/eval/userfunc.c` → User function handling
+
+#### 12.3 VimL Parser
+
+- [ ] `src/nvim/viml/parser/` → VimL parser
+- [ ] Consider using a parser generator
+
+**Validation:**
+
+```bash
+TEST_FILE=test/functional/vimscript/ make functionaltest
+TEST_FILE=test/functional/eval/ make functionaltest
+TEST_FILE=test/old/testdir/ make oldtest
+```
+
+---
+
+### Phase 13: Lua Integration (Modern Scripting)
+
+**Goal:** Migrate Lua runtime integration
+
+#### 13.1 Lua Executor
+
+- [ ] `src/nvim/lua/executor.c` → Lua code execution
+- [ ] `src/nvim/lua/converter.c` → Type conversion
+- [ ] Decide: mlua, rlua, or direct FFI
+
+#### 13.2 Lua APIs
+
+- [ ] `src/nvim/lua/stdlib.c` → Standard library
+- [ ] `src/nvim/lua/treesitter.c` → Tree-sitter API
+- [ ] `src/nvim/lua/fs.c` → Filesystem API
+
+**Validation:**
+
+```bash
+TEST_FILE=test/functional/lua/ make functionaltest
+TEST_FILE=test/functional/treesitter/ make functionaltest
+```
+
+---
+
+### Phase 14: Search & Navigation (Editor Features)
+
+**Goal:** Migrate search, tags, and navigation
+
+#### 14.1 Regular Expressions
+
+- [ ] `src/nvim/regexp.c` (16,262 lines) → Regex engine
+- [ ] Options: Port existing or use `regex` crate
+- [ ] Must maintain Vim regex compatibility
+
+#### 14.2 Search
+
+- [ ] `src/nvim/search.c` → Search implementation
+- [ ] `src/nvim/quickfix.c` (7,776 lines) → Quickfix list
+
+#### 14.3 Tags
+
+- [ ] `src/nvim/tag.c` → Tag navigation
+- [ ] `src/nvim/tagfunc.c` → Tag functions
+
+**Validation:**
+
+```bash
+TEST_FILE=test/functional/legacy/search_spec.lua make functionaltest
+TEST_FILE=test/functional/legacy/quickfix_spec.lua make functionaltest
+```
+
+---
+
+### Phase 15: Auxiliary Features (Completion)
+
+**Goal:** Migrate remaining subsystems
+
+#### 15.1 Spelling
+
+- [ ] `src/nvim/spell.c` → Spell checking
+- [ ] `src/nvim/spellfile.c` (5,751 lines) → Spell file handling
+- [ ] `src/nvim/spellsuggest.c` → Suggestions
+
+#### 15.2 Diff
+
+- [ ] `src/nvim/diff.c` (4,324 lines) → Diff mode
+- [ ] Integration with bundled xdiff
+
+#### 15.3 Folding
+
+- [ ] `src/nvim/fold.c` → Code folding
+
+#### 15.4 Autocommands
+
+- [ ] `src/nvim/autocmd.c` → Autocommand system
+
+**Validation:**
+
+```bash
+make test  # Full test suite
+make oldtest  # Vim compatibility
+```
+
+---
+
+### Phase 16: Final Integration & Cleanup
+
+**Goal:** Remove C code, finalize pure Rust implementation
+
+#### 16.1 Remove FFI Wrappers
+
+- [ ] Replace `extern "C"` functions with pure Rust calls
+- [ ] Remove `unsafe` blocks where possible
+- [ ] Audit remaining `unsafe` for soundness
+
+#### 16.2 Optimize
+
+- [ ] Profile and optimize hot paths
+- [ ] Leverage Rust's zero-cost abstractions
+- [ ] Memory usage optimization
+
+#### 16.3 Documentation
+
+- [ ] API documentation with `rustdoc`
+- [ ] Architecture documentation
+- [ ] Contributing guide for Rust
+
+**Validation:**
+
+```bash
+make test           # All tests pass
+make benchmark      # Performance acceptable
+cargo clippy        # No warnings
+cargo audit         # No security issues
+```
+
+---
+
+## Testing Strategy
+
+### Continuous Validation
+
+Every commit during migration must pass:
+
+```bash
+# Quick validation (run on every commit)
+make                    # Build succeeds
+cargo test             # Rust unit tests pass
+make functionaltest    # Core functional tests
+
+# Full validation (run before merge)
+make test              # All tests pass
+make oldtest           # Vim compatibility
+VALGRIND=1 make test   # Memory safety
+```
+
+### Test Categories
+
+| Category         | Count | Purpose                |
+| ---------------- | ----- | ---------------------- |
+| Functional tests | ~500  | End-to-end behavior    |
+| Unit tests       | ~50   | Component isolation    |
+| Old tests        | ~100  | Vim compatibility      |
+| Benchmarks       | ~20   | Performance regression |
+
+### FFI Testing
+
+For each migrated module, add:
+
+1. **Rust unit tests** - Test pure Rust logic
+2. **FFI boundary tests** - Test C↔Rust interop
+3. **Integration tests** - Test in full Nvim context
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_rust_implementation() {
+        // Pure Rust test
+    }
+
+    #[test]
+    fn test_ffi_roundtrip() {
+        // C-compatible interface test
+    }
+}
+```
+
+### Regression Detection
+
+```bash
+# Compare before/after each phase
+./build/bin/nvim --version          # Version info
+./build/bin/nvim --startuptime /tmp/startup.log  # Startup time
+hyperfine './build/bin/nvim +q'     # Benchmark
+```
+
+---
+
+## Risk Mitigation
+
+### High-Risk Areas
+
+| Component     | Risk                | Mitigation                          |
+| ------------- | ------------------- | ----------------------------------- |
+| Memory layout | ABI incompatibility | Extensive FFI testing, `repr(C)`    |
+| Event loop    | Deadlocks           | Keep libuv initially, migrate later |
+| Regex engine  | Compatibility       | Port existing, extensive test suite |
+| VimL eval     | Complex state       | Last to migrate, thorough testing   |
+
+### Rollback Strategy
+
+Each phase should be independently revertible:
+
+1. Keep C code in separate branch until phase validated
+2. Feature flags for Rust vs C implementation
+3. Automated bisect-friendly commits
+
+---
+
+## Timeline Considerations
+
+This migration is a multi-year effort. Rough ordering by complexity:
+
+1. **Phases 0-3** (Foundation): Can proceed in parallel, low risk
+2. **Phases 4-5** (Infrastructure): Sequential, moderate risk
+3. **Phases 6-7** (Interface): Can proceed in parallel after Phase 5
+4. **Phases 8-11** (Core): Sequential, high complexity
+5. **Phases 12-13** (Scripting): High complexity, extensive testing
+6. **Phases 14-16** (Completion): Cleanup and optimization
+
+---
+
+## Success Criteria
+
+### Per-Phase Gates
+
+- [ ] All existing tests pass
+- [ ] No performance regression >10%
+- [ ] Memory usage comparable
+- [ ] `cargo clippy` clean
+- [ ] Documentation updated
+
+### Final Goals
+
+- [ ] 100% Rust (except LuaJIT FFI)
+- [ ] Memory safety without runtime cost
+- [ ] Maintainable, idiomatic Rust code
+- [ ] All 500+ functional tests passing
+- [ ] Vim compatibility preserved
+- [ ] External UI compatibility preserved
+
+---
+
+## Appendix: File Inventory
+
+### Largest C Files (Migration Complexity)
+
+| File          | Lines  | Phase |
+| ------------- | ------ | ----- |
+| `regexp.c`    | 16,262 | 14    |
+| `ex_docmd.c`  | 8,318  | 11    |
+| `quickfix.c`  | 7,776  | 14    |
+| `window.c`    | 7,599  | 9     |
+| `eval.c`      | 6,931  | 12    |
+| `normal.c`    | 6,670  | 10    |
+| `insexpand.c` | 6,581  | 10    |
+| `option.c`    | 6,424  | 6     |
+| `spellfile.c` | 5,751  | 15    |
+| `syntax.c`    | 5,673  | 9     |
+
+### Module Dependencies
+
+```
+os/ ──────────────────────────────┐
+event/ ───────────────────────────┤
+                                  ├──► api/ ──► msgpack_rpc/
+data structures (hashtab, etc.) ──┤              │
+                                  │              ▼
+buffer/memline ───────────────────┼──► tui/ ◄── ui/
+                                  │
+window/screen ────────────────────┤
+                                  │
+eval/ ────────────────────────────┼──► lua/
+                                  │
+normal/edit/ex_cmds ──────────────┘
+```
+
+---
+
+## Getting Started
+
+```bash
+# Clone and build baseline
+git clone https://github.com/neovim/neovim
+cd neovim
+make CMAKE_BUILD_TYPE=RelWithDebInfo
+
+# Run tests to establish baseline
+make test
+
+# Begin Phase 0: Add Rust infrastructure
+# (See Phase 0 tasks above)
+```
+
+---
+
+_This document should be updated as the migration progresses. Each completed phase should be checked off and any lessons learned documented._
