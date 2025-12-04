@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "src/nvim-rs",
+    "src/nvim-rs/math",
 ]
 
 [workspace.package]
