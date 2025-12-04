@@ -1,0 +1,13 @@
+[package]
+name = "nvim-encoding"
+description = "Encoding utilities for Neovim - base64 and SHA-256"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+nvim-memory = { path = "../memory" }
+
+[lints]
+workspace = true
