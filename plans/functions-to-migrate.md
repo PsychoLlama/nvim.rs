@@ -10,6 +10,9 @@ Candidates for Rust migration, organized by priority.
 ### fileio.c
 - [x] `time_differs` (line 2164) - Compares file modification times with FAT tolerance - MIGRATED Phase 1.23
 
+### shada.c
+- [x] `hist_type2char` (line 2175) - Translates history type number to character - MIGRATED Phase 1.24 (added to cmdhist crate)
+
 ### quickfix.c (static functions - may need to be exposed)
 - [ ] `qf_stack_empty` (line 923) - Returns true if quickfix stack is empty
 - [ ] `qf_list_empty` (line 931) - Returns true if quickfix list is empty

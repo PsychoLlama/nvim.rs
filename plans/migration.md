@@ -264,6 +264,12 @@ Pure utility functions for file operations:
 
 - [x] `time_differs` - Compare file modification times with FAT tolerance (pure) - swapped to Rust
 
+#### 1.24 Command History Utilities (`src/nvim/shada.c` → `nvim-rs/cmdhist`)
+
+Additional history type conversion functions:
+
+- [x] `hist_type2char` - Translate history type number to character (pure) - swapped to Rust
+
 #### 1.9 Memory Utilities (`src/nvim/memory.c` → `nvim-rs/memutil`)
 
 Pure string/memory utility functions, no allocation:
