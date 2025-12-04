@@ -373,6 +373,8 @@ TEST_FILE=test/functional/core/fileio_spec.lua make functionaltest
 - [x] `utf_allow_break_after` - Whether line break is allowed after character - swapped to Rust
 - [x] `utf_allow_break` - Whether line break is allowed between two characters - swapped to Rust
 - [x] `utf_printable` - Check if character can be displayed normally - swapped to Rust
+- [x] `utf_cp_bounds_len` - Get codepoint boundaries with length limit - swapped to Rust
+- [x] `utf_cp_bounds` - Get codepoint boundaries (NUL-terminated) - swapped to Rust
 - [ ] Character width calculation (utf_char2cells - requires display tables)
 - [ ] Composing character handling (utfc_ptr2len - requires grapheme state)
 - [ ] Encoding conversion (iconv integration)
