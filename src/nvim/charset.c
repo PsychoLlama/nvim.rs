@@ -49,6 +49,7 @@ extern int rs_hex2nr(int c);
 extern int rs_hexhex2nr(const char *p);
 extern unsigned rs_nr2hex(unsigned n);
 extern char *rs_skip_to_newline(const char *p);
+extern bool rs_vim_isblankline(const char *lbuf);
 #endif
 
 static bool chartab_initialized = false;
@@ -1247,8 +1248,12 @@ int32_t getdigits_int32(char **pp, bool strict, int32_t def)
 bool vim_isblankline(char *lbuf)
   FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_CHARSET
+  return rs_vim_isblankline(lbuf);
+#else
   char *p = skipwhite(lbuf);
   return *p == NUL || *p == '\r' || *p == '\n';
+#endif
 }
 
 /// Convert a string into a long and/or unsigned long, taking care of

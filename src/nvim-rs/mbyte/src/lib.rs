@@ -599,7 +599,7 @@ pub extern "C" fn rs_utf_allow_break(cc: c_int, ncc: c_int) -> c_int {
 
 // Character printability
 
-/// Sorted list of non-printable character ranges for utf_printable.
+/// Sorted list of non-printable character ranges for `utf_printable`.
 /// These are characters that cannot be displayed in a normal way.
 /// 0xd800-0xdfff is reserved for UTF-16 surrogates (actually illegal).
 static NONPRINT_RANGES: &[(i32, i32)] = &[
@@ -622,7 +622,7 @@ fn in_nonprint_range(c: i32) -> bool {
     let mut hi = NONPRINT_RANGES.len();
 
     while lo < hi {
-        let mid = (lo + hi) / 2;
+        let mid = usize::midpoint(lo, hi);
         let (first, last) = NONPRINT_RANGES[mid];
         if last < c {
             lo = mid + 1;
@@ -646,7 +646,7 @@ pub fn utf_printable(c: i32) -> bool {
 }
 
 /// Return true for characters that can be displayed in a normal way.
-/// FFI wrapper for utf_printable.
+/// FFI wrapper for `utf_printable`.
 #[no_mangle]
 pub extern "C" fn rs_utf_printable(c: c_int) -> c_int {
     c_int::from(utf_printable(c))

@@ -336,7 +336,7 @@ pub unsafe extern "C" fn rs_valid_name(val: *const c_char, allowed: *const c_cha
 /// Returns a pointer to the character after the option name, or NULL if
 /// the option is not a TTY or keycode option.
 ///
-/// TTY options are: "term", "ttytype", "t_XX", or "<t_XX>" style keycodes.
+/// TTY options are: "term", "ttytype", `t_XX`, or `<t_XX>` style keycodes.
 ///
 /// # Safety
 ///
@@ -422,6 +422,7 @@ pub unsafe extern "C" fn rs_is_tty_option(name: *const c_char) -> c_int {
 }
 
 #[cfg(test)]
+#[allow(clippy::cast_lossless)]
 mod tests {
     use super::*;
     use std::ffi::CString;

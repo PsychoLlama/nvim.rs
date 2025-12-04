@@ -259,6 +259,7 @@ pub unsafe extern "C" fn rs_hash_hash_len(key: *const c_char, len: usize) -> Has
 }
 
 #[cfg(test)]
+#[allow(clippy::cast_possible_wrap)]
 mod tests {
     use super::*;
 

@@ -91,16 +91,43 @@ struct ModMaskEntry {
 
 /// Table mapping modifier names to modifier flags
 static MOD_MASK_TABLE: &[ModMaskEntry] = &[
-    ModMaskEntry { mod_flag: MOD_MASK_ALT, name: b'M' },
-    ModMaskEntry { mod_flag: MOD_MASK_META, name: b'T' },
-    ModMaskEntry { mod_flag: MOD_MASK_CTRL, name: b'C' },
-    ModMaskEntry { mod_flag: MOD_MASK_SHIFT, name: b'S' },
-    ModMaskEntry { mod_flag: MOD_MASK_2CLICK, name: b'2' },
-    ModMaskEntry { mod_flag: MOD_MASK_3CLICK, name: b'3' },
-    ModMaskEntry { mod_flag: MOD_MASK_4CLICK, name: b'4' },
-    ModMaskEntry { mod_flag: MOD_MASK_CMD, name: b'D' },
+    ModMaskEntry {
+        mod_flag: MOD_MASK_ALT,
+        name: b'M',
+    },
+    ModMaskEntry {
+        mod_flag: MOD_MASK_META,
+        name: b'T',
+    },
+    ModMaskEntry {
+        mod_flag: MOD_MASK_CTRL,
+        name: b'C',
+    },
+    ModMaskEntry {
+        mod_flag: MOD_MASK_SHIFT,
+        name: b'S',
+    },
+    ModMaskEntry {
+        mod_flag: MOD_MASK_2CLICK,
+        name: b'2',
+    },
+    ModMaskEntry {
+        mod_flag: MOD_MASK_3CLICK,
+        name: b'3',
+    },
+    ModMaskEntry {
+        mod_flag: MOD_MASK_4CLICK,
+        name: b'4',
+    },
+    ModMaskEntry {
+        mod_flag: MOD_MASK_CMD,
+        name: b'D',
+    },
     // 'A' must be last - it's an alias for ALT
-    ModMaskEntry { mod_flag: MOD_MASK_ALT, name: b'A' },
+    ModMaskEntry {
+        mod_flag: MOD_MASK_ALT,
+        name: b'A',
+    },
 ];
 
 /// Convert ASCII character to uppercase (ASCII only)
@@ -153,6 +180,7 @@ pub extern "C" fn rs_handle_x_keys(key: c_int) -> c_int {
 }
 
 #[cfg(test)]
+#[allow(clippy::cast_lossless)]
 mod tests {
     use super::*;
 

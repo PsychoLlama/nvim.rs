@@ -68,7 +68,7 @@ pub unsafe extern "C" fn rs_menu_is_menubar(name: *const c_char) -> bool {
     let bytes = cstr.to_bytes();
 
     if bytes.is_empty() {
-        return true;  // Empty name is menubar
+        return true; // Empty name is menubar
     }
 
     // Not a menubar if starts with hidden char or is popup/toolbar/winbar
@@ -76,9 +76,7 @@ pub unsafe extern "C" fn rs_menu_is_menubar(name: *const c_char) -> bool {
         return false;
     }
 
-    !bytes.starts_with(b"PopUp")
-        && !bytes.starts_with(b"ToolBar")
-        && !bytes.starts_with(b"WinBar")
+    !bytes.starts_with(b"PopUp") && !bytes.starts_with(b"ToolBar") && !bytes.starts_with(b"WinBar")
 }
 
 /// Check if name is a menu separator identifier.

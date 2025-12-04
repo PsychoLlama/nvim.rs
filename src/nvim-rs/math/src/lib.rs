@@ -181,6 +181,7 @@ pub extern "C" fn rs_num_modulus(n1: i64, n2: i64) -> i64 {
 }
 
 #[cfg(test)]
+#[allow(clippy::cast_lossless)]
 mod tests {
     use super::*;
 
