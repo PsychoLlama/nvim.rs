@@ -116,3 +116,18 @@ The trivial pure functions have largely been migrated. Next steps should focus o
 2. **libuv dependency**: OS/filesystem functions in C use libuv for portability. Rust would need to either wrap libuv or replace it entirely.
 
 3. **Complex struct types**: frame_T, win_T, buf_T have deep pointer hierarchies. Simple FFI doesn't work; need either opaque pointers with callbacks or full struct mirroring.
+
+## Additional Search (2025-12-04 session 2)
+
+Searched the following files for unexplored pure functions:
+- `arabic.c` - Functions use `p_arshape`, `p_tbidi` globals
+- `autocmd.c` - All functions access global autocmd lists
+- `buffer.c` - `bt_*` functions (bt_help, bt_normal, bt_quickfix, etc.) all take `buf_T*` structs
+- `cmdexpand.c` - Functions use `wop_flags` global
+- `digraph.c` - `digraph_get` uses `user_digraphs` global and static tables
+- `mapping.c` - Functions use `p_cpo` global, call `replace_termcodes`
+- `plines.c` - Functions access window struct internals (`wp->w_view_width`)
+- `register.c` - Returns global pointers
+- `viml/parser/expressions.c` - Inline functions with static lookup tables
+
+**Conclusion**: All remaining FUNC_ATTR_PURE/CONST functions fall into unsuitable categories. The Phase 1 pure function migration is complete.
