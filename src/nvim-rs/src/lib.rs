@@ -15,6 +15,7 @@
 // This ensures they're included in the static library
 pub use nvim_charset::*;
 pub use nvim_cmdhist::*;
+pub use nvim_encoding::base64::*;
 pub use nvim_help::*;
 pub use nvim_indent::*;
 pub use nvim_keycodes::*;

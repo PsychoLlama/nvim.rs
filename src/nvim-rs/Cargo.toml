@@ -15,6 +15,7 @@ workspace = true
 [dependencies]
 nvim-charset = { path = "charset" }
 nvim-cmdhist = { path = "cmdhist" }
+nvim-encoding = { path = "encoding" }
 nvim-help = { path = "help" }
 nvim-indent = { path = "indent" }
 nvim-keycodes = { path = "keycodes" }

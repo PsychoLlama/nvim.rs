@@ -15,7 +15,7 @@ rename_variants = "ScreamingSnakeCase"
 
 [parse]
 parse_deps = true
-include = ["nvim-charset", "nvim-cmdhist", "nvim-help", "nvim-indent", "nvim-keycodes", "nvim-math", "nvim-mbyte", "nvim-memutil", "nvim-menu", "nvim-path", "nvim-profile", "nvim-strings"]
+include = ["nvim-charset", "nvim-cmdhist", "nvim-encoding", "nvim-help", "nvim-indent", "nvim-keycodes", "nvim-math", "nvim-mbyte", "nvim-memutil", "nvim-menu", "nvim-path", "nvim-profile", "nvim-strings"]
 
 [export]
 include = ["rs_xfpclassify", "rs_xisinf", "rs_xisnan", "rs_xctz", "rs_xpopcount",
@@ -48,4 +48,5 @@ include = ["rs_xfpclassify", "rs_xisinf", "rs_xisnan", "rs_xctz", "rs_xpopcount"
            "rs_menu_is_winbar", "rs_menu_is_popup", "rs_menu_is_toolbar",
            "rs_menu_is_menubar", "rs_menu_is_separator",
            "rs_help_heuristic",
+           "rs_base64_encode", "rs_base64_decode",
            "nvim_rs_version"]

@@ -141,11 +141,13 @@ pub fn decode(src: &[u8]) -> Option<Vec<u8>> {
     let mut dest = Vec::with_capacity(out_len);
     let mut acc = 0u32;
     let mut acc_len = 0;
+    let mut leftover_i: Option<usize> = None;
 
-    for &c in src {
+    for (i, &c) in src.iter().enumerate() {
         let d = CHAR_TO_INDEX[c as usize];
         if d == 0 {
             if c == b'=' {
+                leftover_i = Some(i);
                 break;
             }
             return None;
@@ -162,6 +164,22 @@ pub fn decode(src: &[u8]) -> Option<Vec<u8>> {
     // Validate remaining bits
     if acc_len > 4 || (acc & ((1 << acc_len) - 1)) != 0 {
         return None;
+    }
+
+    // Validate padding: all chars from leftover_i to end must be '='
+    // and padding count must match expected (acc_len / 2)
+    if let Some(start) = leftover_i {
+        let padding_len = acc_len / 2;
+        let mut padding_chars = 0;
+        for &c in &src[start..] {
+            if c != b'=' {
+                return None;
+            }
+            padding_chars += 1;
+        }
+        if padding_chars != padding_len {
+            return None;
+        }
     }
 
     Some(dest)
