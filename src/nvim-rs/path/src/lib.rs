@@ -94,38 +94,49 @@ pub extern "C" fn rs_path_head_length() -> c_int {
 
 /// Check if a path is absolute.
 ///
-/// On Unix, a path is absolute if it starts with '/'.
+/// On Unix, a path is absolute if it starts with '/' or '~'.
 /// On Windows, a path is absolute if it starts with a drive letter (e.g., "C:\")
 /// or a UNC path (e.g., "\\server\share").
+///
+/// # Safety
+///
+/// `path` must be a valid null-terminated C string, or NULL.
 #[no_mangle]
-pub extern "C" fn rs_path_is_absolute(path: *const c_char) -> c_int {
+pub unsafe extern "C" fn rs_path_is_absolute(path: *const c_char) -> c_int {
     if path.is_null() {
         return 0;
     }
 
-    let first = unsafe { *path as u8 };
+    let first = *path as u8;
 
     #[cfg(unix)]
     {
-        c_int::from(first == b'/')
+        // UNIX: starts with '/' or '~'
+        c_int::from(first == b'/' || first == b'~')
     }
 
     #[cfg(windows)]
     {
-        // Check for drive letter (e.g., "C:\")
+        // Empty string is not absolute
+        if first == 0 {
+            return 0;
+        }
+        // Check for drive letter (e.g., "C:\") - must have path separator after colon
         if first.is_ascii_alphabetic() {
-            let second = unsafe { *path.add(1) as u8 };
+            let second = *path.add(1) as u8;
             if second == b':' {
-                let third = unsafe { *path.add(2) as u8 };
+                let third = *path.add(2) as u8;
+                // Use vim_ispathsep_nocolon semantics (/ or \)
                 if third == b'/' || third == b'\\' {
                     return 1;
                 }
             }
         }
-        // Check for UNC path (e.g., "\\server")
-        if first == b'\\' || first == b'/' {
-            let second = unsafe { *path.add(1) as u8 };
-            if second == b'\\' || second == b'/' {
+        // Check for UNC path (e.g., "\\server" or "//server")
+        // Must have two identical separators
+        if (first == b'\\' || first == b'/') {
+            let second = *path.add(1) as u8;
+            if first == second {
                 return 1;
             }
         }
@@ -134,7 +145,7 @@ pub extern "C" fn rs_path_is_absolute(path: *const c_char) -> c_int {
 
     #[cfg(not(any(unix, windows)))]
     {
-        c_int::from(first == b'/')
+        c_int::from(first == b'/' || first == b'~')
     }
 }
 
@@ -205,54 +216,35 @@ pub unsafe extern "C" fn rs_path_tail(fname: *const c_char) -> *const c_char {
     tail
 }
 
-/// Check if a path is a URL.
+// Return values for path_is_url
+const URL_SLASH: c_int = 1;
+const URL_BACKSLASH: c_int = 2;
+
+/// Check if string starts with ":/" or ":\\".
 ///
-/// Returns non-zero if the path starts with a URL scheme like "http://".
+/// Returns `URL_SLASH` (1) for ":/", `URL_BACKSLASH` (2) for ":\\", 0 otherwise.
+/// This is a helper for `path_with_url` - it checks if we're at the scheme separator.
 ///
 /// # Safety
 ///
-/// `path` must be a valid null-terminated C string.
+/// `p` must be a valid null-terminated C string.
 #[no_mangle]
-pub unsafe extern "C" fn rs_path_is_url(path: *const c_char) -> c_int {
-    if path.is_null() {
+pub unsafe extern "C" fn rs_path_is_url(p: *const c_char) -> c_int {
+    if p.is_null() {
         return 0;
     }
 
-    let mut p = path;
+    let c0 = *p as u8;
+    let c1 = *p.add(1) as u8;
 
-    // Check for scheme (alphanumeric + '+', '-', '.')
-    unsafe {
-        let first = *p as u8;
-        if !first.is_ascii_alphabetic() {
-            return 0;
-        }
+    if c0 == b':' && c1 == b'/' {
+        return URL_SLASH;
+    }
 
-        p = p.add(1);
-        while *p != 0 {
-            let c = *p as u8;
-            if c == b':' {
-                break;
-            }
-            if !c.is_ascii_alphanumeric() && c != b'+' && c != b'-' && c != b'.' {
-                return 0;
-            }
-            p = p.add(1);
-        }
-
-        // Check for "://"
-        if *p as u8 == b':' {
-            let next1 = *p.add(1) as u8;
-            let next2 = *p.add(2) as u8;
-            if next1 == b'/' && next2 == b'/' {
-                return 1;
-            }
-            // Also accept ":\" for Windows paths in URLs
-            #[cfg(windows)]
-            {
-                if next1 == b'\\' && next2 == b'\\' {
-                    return 1;
-                }
-            }
+    if c0 == b':' && c1 == b'\\' {
+        let c2 = *p.add(2) as u8;
+        if c2 == b'\\' {
+            return URL_BACKSLASH;
         }
     }
 
@@ -306,13 +298,16 @@ mod tests {
         #[cfg(unix)]
         {
             let abs = CString::new("/home/user").unwrap();
-            assert_eq!(rs_path_is_absolute(abs.as_ptr()), 1);
+            assert_eq!(unsafe { rs_path_is_absolute(abs.as_ptr()) }, 1);
+
+            let tilde = CString::new("~/documents").unwrap();
+            assert_eq!(unsafe { rs_path_is_absolute(tilde.as_ptr()) }, 1);
 
             let rel = CString::new("home/user").unwrap();
-            assert_eq!(rs_path_is_absolute(rel.as_ptr()), 0);
+            assert_eq!(unsafe { rs_path_is_absolute(rel.as_ptr()) }, 0);
 
             let dot = CString::new("./file").unwrap();
-            assert_eq!(rs_path_is_absolute(dot.as_ptr()), 0);
+            assert_eq!(unsafe { rs_path_is_absolute(dot.as_ptr()) }, 0);
         }
     }
 
@@ -336,19 +331,18 @@ mod tests {
 
     #[test]
     fn test_path_is_url() {
-        let http = CString::new("http://example.com").unwrap();
-        assert_eq!(unsafe { rs_path_is_url(http.as_ptr()) }, 1);
+        // path_is_url checks if string starts with ":/" or ":\\"
+        // It's called from path_with_url after scanning past the scheme name
+        let url_slash = CString::new("://example.com").unwrap();
+        assert_eq!(unsafe { rs_path_is_url(url_slash.as_ptr()) }, URL_SLASH);
 
-        let https = CString::new("https://example.com").unwrap();
-        assert_eq!(unsafe { rs_path_is_url(https.as_ptr()) }, 1);
+        let url_backslash = CString::new(":\\\\server\\share").unwrap();
+        assert_eq!(unsafe { rs_path_is_url(url_backslash.as_ptr()) }, URL_BACKSLASH);
 
-        let file = CString::new("file:///home/user").unwrap();
-        assert_eq!(unsafe { rs_path_is_url(file.as_ptr()) }, 1);
+        let just_colon = CString::new(":foo").unwrap();
+        assert_eq!(unsafe { rs_path_is_url(just_colon.as_ptr()) }, 0);
 
-        let not_url = CString::new("/home/user").unwrap();
-        assert_eq!(unsafe { rs_path_is_url(not_url.as_ptr()) }, 0);
-
-        let not_url2 = CString::new("C:/Users").unwrap();
-        assert_eq!(unsafe { rs_path_is_url(not_url2.as_ptr()) }, 0);
+        let no_colon = CString::new("/home/user").unwrap();
+        assert_eq!(unsafe { rs_path_is_url(no_colon.as_ptr()) }, 0);
     }
 }

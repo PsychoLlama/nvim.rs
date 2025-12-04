@@ -42,6 +42,16 @@ enum {
 # undef gen_expand_wildcards
 #endif
 
+#ifdef USE_RUST_PATH
+// Rust implementations - declarations
+extern int rs_vim_ispathsep(int c);
+extern int rs_vim_ispathsep_nocolon(int c);
+extern int rs_vim_ispathlistsep(int c);
+extern int rs_path_head_length(void);
+extern int rs_path_is_absolute(const char *path);
+extern int rs_path_is_url(const char *p);
+#endif
+
 #include "path.c.generated.h"
 
 /// Compare two file names.
@@ -188,10 +198,14 @@ const char *path_next_component(const char *fname)
 ///   - 1 otherwise
 int path_head_length(void)
 {
-#ifdef MSWIN
-  return 3;
+#ifdef USE_RUST_PATH
+  return rs_path_head_length();
 #else
+# ifdef MSWIN
+  return 3;
+# else
   return 1;
+# endif
 #endif
 }
 
@@ -237,13 +251,17 @@ char *get_past_head(const char *path)
 /// Note that for MS-Windows this includes the colon.
 bool vim_ispathsep(int c)
 {
-#ifdef UNIX
-  return c == '/';          // Unix has ':' inside file names
+#ifdef USE_RUST_PATH
+  return rs_vim_ispathsep(c) != 0;
 #else
-# ifdef BACKSLASH_IN_FILENAME
-  return c == ':' || c == '/' || c == '\\';
+# ifdef UNIX
+  return c == '/';          // Unix has ':' inside file names
 # else
+#  ifdef BACKSLASH_IN_FILENAME
+  return c == ':' || c == '/' || c == '\\';
+#  else
   return c == ':' || c == '/';
+#  endif
 # endif
 #endif
 }
@@ -251,20 +269,28 @@ bool vim_ispathsep(int c)
 // Like vim_ispathsep(c), but exclude the colon for MS-Windows.
 bool vim_ispathsep_nocolon(int c)
 {
+#ifdef USE_RUST_PATH
+  return rs_vim_ispathsep_nocolon(c) != 0;
+#else
   return vim_ispathsep(c)
-#ifdef BACKSLASH_IN_FILENAME
+# ifdef BACKSLASH_IN_FILENAME
          && c != ':'
-#endif
+# endif
   ;
+#endif
 }
 
 /// @return true if 'c' is a path list separator.
 bool vim_ispathlistsep(int c)
 {
-#ifdef UNIX
-  return c == ':';
+#ifdef USE_RUST_PATH
+  return rs_vim_ispathlistsep(c) != 0;
 #else
+# ifdef UNIX
+  return c == ':';
+# else
   return c == ';';      // might not be right for every system...
+# endif
 #endif
 }
 
@@ -1730,6 +1756,9 @@ bool path_has_drive_letter(const char *p, size_t path_len)
 int path_is_url(const char *p)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_PATH
+  return rs_path_is_url(p);
+#else
   // In the spec ':' is enough to recognize a scheme
   // https://url.spec.whatwg.org/#scheme-state
   if (strncmp(p, ":/", 2) == 0) {
@@ -1738,6 +1767,7 @@ int path_is_url(const char *p)
     return URL_BACKSLASH;
   }
   return 0;
+#endif
 }
 
 /// Check if "fname" starts with "name://" or "name:\\".
@@ -2367,16 +2397,20 @@ static int path_to_absolute(const char *fname, char *buf, size_t len, int force)
 bool path_is_absolute(const char *fname)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef MSWIN
+#ifdef USE_RUST_PATH
+  return rs_path_is_absolute(fname) != 0;
+#else
+# ifdef MSWIN
   if (*fname == NUL) {
     return false;
   }
   // A name like "d:/foo" and "//server/share" is absolute
   return ((isalpha((uint8_t)fname[0]) && fname[1] == ':' && vim_ispathsep_nocolon(fname[2]))
           || (vim_ispathsep_nocolon(fname[0]) && fname[0] == fname[1]));
-#else
+# else
   // UNIX: This just checks if the file name starts with '/' or '~'.
   return *fname == '/' || *fname == '~';
+# endif
 #endif
 }
 

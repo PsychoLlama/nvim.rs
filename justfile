@@ -74,6 +74,8 @@ rust-check: rust-fmt-check rust-clippy rust-test
 rust-ffi-test: rust-build
     cc -o /tmp/compare_math src/nvim-rs/test/compare_math.c -L target/release -lnvim_rs -lpthread -ldl -lm
     /tmp/compare_math
+    cc -o /tmp/compare_path src/nvim-rs/test/compare_path.c -L target/release -lnvim_rs -lpthread -ldl -lm
+    /tmp/compare_path
 
 # Full build: Rust + C
 build-all: rust-build build

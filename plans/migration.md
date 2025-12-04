@@ -158,9 +158,13 @@ These use `xmalloc` - migrate AFTER memory bridge is ready:
 
 #### 1.4 Path Utilities (PARTIAL - some pure, some not)
 
-- [x] `vim_ispathsep` - Path separator check (pure)
+- [x] `vim_ispathsep` - Path separator check (pure) - swapped to Rust
+- [x] `vim_ispathsep_nocolon` - Path separator check excluding colon (pure) - swapped to Rust
+- [x] `vim_ispathlistsep` - Path list separator check (pure) - swapped to Rust
 - [x] `path_tail` - Get filename from path (pure)
-- [x] `path_head_length` - Directory prefix length (pure)
+- [x] `path_head_length` - Directory prefix length (pure) - swapped to Rust
+- [x] `path_is_absolute` - Check if path is absolute (pure) - swapped to Rust
+- [x] `path_is_url` - Check for URL scheme separator (pure) - swapped to Rust
 - [ ] Path normalization functions (may use allocation)
 
 **Validation:**
