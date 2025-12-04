@@ -46,8 +46,8 @@ This document outlines an incremental strategy to migrate Neovim's ~257,000 line
 
 - [x] Add `Cargo.toml` at repository root with workspace configuration
 - [x] Create `src/nvim-rs/` directory for Rust crates
-- [ ] Integrate Cargo into CMake build via `corrosion` or custom cmake rules
-- [ ] Ensure `make` builds both C and Rust components
+- [x] Integrate Cargo into CMake build via custom cmake rules (USE_RUST_MATH option)
+- [ ] Ensure `make` builds both C and Rust components automatically
 - [x] Set up `cbindgen` for generating C headers from Rust
 - [ ] Set up `bindgen` for generating Rust bindings from C headers
 
