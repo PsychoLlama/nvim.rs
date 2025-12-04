@@ -224,8 +224,24 @@ pub unsafe extern "C" fn rs_getwhitecols(p: *const c_char) -> isize {
 }
 
 // ============================================================================
-// Hex conversion functions
+// Hex/Number conversion functions
 // ============================================================================
+
+/// Convert the lower 4 bits of a byte to its hex character.
+///
+/// Lower case letters are used to avoid the confusion of <F1> being 0xf1 or
+/// function key 1.
+///
+/// Returns the hex character ('0'-'9', 'a'-'f').
+#[no_mangle]
+pub extern "C" fn rs_nr2hex(n: u32) -> u32 {
+    let nibble = n & 0xf;
+    if nibble <= 9 {
+        nibble + u32::from(b'0')
+    } else {
+        nibble - 10 + u32::from(b'a')
+    }
+}
 
 /// Return the value of a single hex character.
 /// Only valid when the argument is '0'-'9', 'A'-'F', or 'a'-'f'.
@@ -446,6 +462,24 @@ mod tests {
             let result = rs_skiptowhite(s.as_ptr());
             assert_eq!(*result, 0);
         }
+    }
+
+    #[test]
+    fn test_nr2hex() {
+        // Test 0-9 -> '0'-'9'
+        assert_eq!(rs_nr2hex(0), b'0' as u32);
+        assert_eq!(rs_nr2hex(5), b'5' as u32);
+        assert_eq!(rs_nr2hex(9), b'9' as u32);
+
+        // Test 10-15 -> 'a'-'f' (lowercase)
+        assert_eq!(rs_nr2hex(10), b'a' as u32);
+        assert_eq!(rs_nr2hex(11), b'b' as u32);
+        assert_eq!(rs_nr2hex(15), b'f' as u32);
+
+        // Test that only lower 4 bits are used
+        assert_eq!(rs_nr2hex(0x10), b'0' as u32); // 16 -> 0
+        assert_eq!(rs_nr2hex(0x1f), b'f' as u32); // 31 -> 15 -> 'f'
+        assert_eq!(rs_nr2hex(0xff), b'f' as u32); // 255 -> 15 -> 'f'
     }
 
     #[test]

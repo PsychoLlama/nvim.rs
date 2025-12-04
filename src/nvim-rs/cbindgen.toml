@@ -20,6 +20,7 @@ include = ["nvim-charset", "nvim-math", "nvim-mbyte", "nvim-path", "nvim-strings
 [export]
 include = ["rs_xfpclassify", "rs_xisinf", "rs_xisnan", "rs_xctz", "rs_xpopcount",
            "rs_vim_append_digit_int", "rs_trim_to_int", "rs_is_power_of_two",
+           "rs_num_divide", "rs_num_modulus",
            "rs_utf_char2len", "rs_utf_char2bytes", "rs_utf_byte2len",
            "rs_utf_ptr2char", "rs_utf_ptr2len", "rs_utf_ptr2len_len",
            "rs_utf_valid_string",
@@ -33,5 +34,5 @@ include = ["rs_xfpclassify", "rs_xisinf", "rs_xisnan", "rs_xctz", "rs_xpopcount"
            "rs_skipwhite", "rs_skipwhite_len", "rs_skipdigits", "rs_skipbin",
            "rs_skiphex", "rs_skiptodigit", "rs_skiptobin", "rs_skiptohex",
            "rs_skiptowhite", "rs_skiptowhite_esc", "rs_getwhitecols",
-           "rs_hex2nr", "rs_hexhex2nr",
+           "rs_hex2nr", "rs_hexhex2nr", "rs_nr2hex",
            "nvim_rs_version"]

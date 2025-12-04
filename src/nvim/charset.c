@@ -47,6 +47,7 @@ extern const char *rs_skiptowhite_esc(const char *p);
 extern intptr_t rs_getwhitecols(const char *p);
 extern int rs_hex2nr(int c);
 extern int rs_hexhex2nr(const char *p);
+extern unsigned rs_nr2hex(unsigned n);
 #endif
 
 static bool chartab_initialized = false;
@@ -690,10 +691,14 @@ void rl_mirror_ascii(char *str, char *end)
 static inline unsigned nr2hex(unsigned n)
   FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_CHARSET
+  return rs_nr2hex(n);
+#else
   if ((n & 0xf) <= 9) {
     return (n & 0xf) + '0';
   }
   return (n & 0xf) - 10 + 'a';
+#endif
 }
 
 /// Return number of display cells occupied by byte "b".

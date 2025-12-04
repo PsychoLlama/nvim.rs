@@ -131,6 +131,8 @@ make test                        # Nvim still works
 - [x] `xpopcount` - Population count (set bits)
 - [x] `vim_append_digit_int` - Safe digit append with overflow check
 - [x] `trim_to_int` - Clamp int64 to int range
+- [x] `num_divide` - Safe integer division with overflow handling - swapped to Rust
+- [x] `num_modulus` - Safe integer modulus - swapped to Rust
 - [x] Create C-compatible wrapper functions using `#[no_mangle]`
 - [x] Replace C implementations with calls to Rust (USE_RUST_MATH=ON)
 
@@ -188,6 +190,7 @@ Skip functions and hex conversion - all pure, no allocation:
 - [x] `skiptowhite` - Skip to next whitespace (pure) - swapped to Rust
 - [x] `hex2nr` - Convert hex char to value (pure) - swapped to Rust
 - [x] `hexhex2nr` - Convert two hex chars to byte (pure) - swapped to Rust
+- [x] `nr2hex` - Convert nibble to hex char (pure) - swapped to Rust
 - [x] `skiptowhite_esc` - Skip to whitespace respecting escapes (pure) - swapped to Rust
 - [x] `getwhitecols` - Count whitespace columns at start (pure) - swapped to Rust
 - [ ] `skip_to_newline` - Uses xstrchrnul

@@ -83,6 +83,11 @@
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
+#ifdef USE_RUST_MATH
+extern int64_t rs_num_divide(int64_t n1, int64_t n2);
+extern int64_t rs_num_modulus(int64_t n1, int64_t n2);
+#endif
+
 // TODO(ZyX-I): Remove DICT_MAXNEST, make users be non-recursive instead
 
 #define DICT_MAXNEST 100        // maximum nesting of lists and dicts
@@ -169,6 +174,9 @@ void restore_v_event(dict_T *v_event, save_v_event_T *sve)
 varnumber_T num_divide(varnumber_T n1, varnumber_T n2)
   FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_MATH
+  return rs_num_divide(n1, n2);
+#else
   varnumber_T result;
 
   if (n2 == 0) {  // give an error message?
@@ -188,14 +196,19 @@ varnumber_T num_divide(varnumber_T n1, varnumber_T n2)
   }
 
   return result;
+#endif
 }
 
 /// @return  "n1" modulus "n2", taking care of dividing by zero.
 varnumber_T num_modulus(varnumber_T n1, varnumber_T n2)
   FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_MATH
+  return rs_num_modulus(n1, n2);
+#else
   // Give an error when n2 is 0?
   return (n2 == 0) ? 0 : (n1 % n2);
+#endif
 }
 
 /// Initialize the global and v: variables.

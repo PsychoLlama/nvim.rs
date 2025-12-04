@@ -140,6 +140,46 @@ pub extern "C" fn rs_is_power_of_two(x: u64) -> c_int {
     c_int::from(x.is_power_of_two())
 }
 
+/// Divide n1 by n2, handling division by zero and overflow.
+///
+/// Returns:
+/// - VARNUMBER_MIN (similar to NaN) if n1 == 0 and n2 == 0
+/// - -VARNUMBER_MAX if n1 < 0 and n2 == 0
+/// - VARNUMBER_MAX if n1 > 0 and n2 == 0
+/// - VARNUMBER_MAX if n1 == VARNUMBER_MIN and n2 == -1 (overflow case)
+/// - n1 / n2 otherwise
+#[no_mangle]
+pub extern "C" fn rs_num_divide(n1: i64, n2: i64) -> i64 {
+    if n2 == 0 {
+        // Division by zero - give an error message?
+        if n1 == 0 {
+            i64::MIN // similar to NaN
+        } else if n1 < 0 {
+            -i64::MAX
+        } else {
+            i64::MAX
+        }
+    } else if n1 == i64::MIN && n2 == -1 {
+        // Specific case: trying to do VARNUMBER_MIN / -1 results in a positive
+        // number that doesn't fit in varnumber_T and causes an FPE
+        i64::MAX
+    } else {
+        n1 / n2
+    }
+}
+
+/// Compute n1 modulus n2, handling division by zero.
+///
+/// Returns 0 if n2 == 0, otherwise returns n1 % n2.
+#[no_mangle]
+pub extern "C" fn rs_num_modulus(n1: i64, n2: i64) -> i64 {
+    if n2 == 0 {
+        0
+    } else {
+        n1 % n2
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -241,5 +281,43 @@ mod tests {
         assert_eq!(rs_is_power_of_two(4), 1);
         assert_eq!(rs_is_power_of_two(5), 0);
         assert_eq!(rs_is_power_of_two(1 << 63), 1);
+    }
+
+    #[test]
+    fn test_num_divide() {
+        // Normal division
+        assert_eq!(rs_num_divide(10, 2), 5);
+        assert_eq!(rs_num_divide(10, 3), 3);
+        assert_eq!(rs_num_divide(-10, 2), -5);
+        assert_eq!(rs_num_divide(10, -2), -5);
+        assert_eq!(rs_num_divide(-10, -2), 5);
+
+        // Division by zero
+        assert_eq!(rs_num_divide(0, 0), i64::MIN); // NaN-like
+        assert_eq!(rs_num_divide(1, 0), i64::MAX);
+        assert_eq!(rs_num_divide(-1, 0), -i64::MAX);
+        assert_eq!(rs_num_divide(100, 0), i64::MAX);
+        assert_eq!(rs_num_divide(-100, 0), -i64::MAX);
+
+        // Overflow case: MIN / -1 would overflow
+        assert_eq!(rs_num_divide(i64::MIN, -1), i64::MAX);
+
+        // Edge cases
+        assert_eq!(rs_num_divide(i64::MAX, 1), i64::MAX);
+        assert_eq!(rs_num_divide(i64::MIN, 1), i64::MIN);
+    }
+
+    #[test]
+    fn test_num_modulus() {
+        // Normal modulus
+        assert_eq!(rs_num_modulus(10, 3), 1);
+        assert_eq!(rs_num_modulus(10, 5), 0);
+        assert_eq!(rs_num_modulus(-10, 3), -1);
+        assert_eq!(rs_num_modulus(10, -3), 1);
+
+        // Modulus by zero
+        assert_eq!(rs_num_modulus(10, 0), 0);
+        assert_eq!(rs_num_modulus(-10, 0), 0);
+        assert_eq!(rs_num_modulus(0, 0), 0);
     }
 }

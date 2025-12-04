@@ -24,6 +24,7 @@ extern const char *rs_skiptowhite_esc(const char *p);
 extern intptr_t rs_getwhitecols(const char *p);
 extern int rs_hex2nr(int c);
 extern int rs_hexhex2nr(const char *p);
+extern unsigned rs_nr2hex(unsigned n);
 
 // C implementations
 static inline bool ascii_iswhite(int c) {
@@ -142,6 +143,13 @@ static int c_hexhex2nr(const char *p) {
         return -1;
     }
     return (c_hex2nr(p[0]) << 4) + c_hex2nr(p[1]);
+}
+
+static inline unsigned c_nr2hex(unsigned n) {
+    if ((n & 0xf) <= 9) {
+        return (n & 0xf) + '0';
+    }
+    return (n & 0xf) - 10 + 'a';
 }
 
 static int tests_passed = 0;
@@ -459,6 +467,33 @@ void test_hexhex2nr(void) {
     }
 }
 
+void test_nr2hex(void) {
+    printf("Testing nr2hex:\n");
+
+    // Test values 0-15 (single hex digit)
+    for (unsigned i = 0; i <= 15; i++) {
+        unsigned c_result = c_nr2hex(i);
+        unsigned rs_result = rs_nr2hex(i);
+
+        char name[64];
+        snprintf(name, sizeof(name), "nr2hex(%u): C='%c' Rust='%c'", i, (char)c_result, (char)rs_result);
+        TEST(name, c_result == rs_result);
+    }
+
+    // Test that only lower 4 bits are used
+    unsigned test_vals[] = {0x10, 0x1f, 0xff, 0x100, 0xabc};
+    int n = sizeof(test_vals) / sizeof(test_vals[0]);
+
+    for (int i = 0; i < n; i++) {
+        unsigned c_result = c_nr2hex(test_vals[i]);
+        unsigned rs_result = rs_nr2hex(test_vals[i]);
+
+        char name[64];
+        snprintf(name, sizeof(name), "nr2hex(0x%x): C='%c' Rust='%c'", test_vals[i], (char)c_result, (char)rs_result);
+        TEST(name, c_result == rs_result);
+    }
+}
+
 void test_skiptowhite_esc(void) {
     printf("Testing skiptowhite_esc:\n");
 
@@ -540,6 +575,7 @@ int main(void) {
     test_getwhitecols();
     test_hex2nr();
     test_hexhex2nr();
+    test_nr2hex();
 
     printf("\n=== Results ===\n");
     printf("Passed: %d\n", tests_passed);
