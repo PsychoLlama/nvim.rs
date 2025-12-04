@@ -11,4 +11,5 @@
 ## Migration Plan
 
 - The migration plan is stored in `plans/migration.md`.
+- **Update the checklist in `plans/migration.md` as you complete items.** Mark items with `[x]` when done.
 - If you encounter fundamental issues, research alternatives and create a new plan for following phases.

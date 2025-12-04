@@ -44,17 +44,17 @@ This document outlines an incremental strategy to migrate Neovim's ~257,000 line
 
 #### 0.1 Add Rust Build System
 
-- [ ] Add `Cargo.toml` at repository root with workspace configuration
-- [ ] Create `src/nvim-rs/` directory for Rust crates
+- [x] Add `Cargo.toml` at repository root with workspace configuration
+- [x] Create `src/nvim-rs/` directory for Rust crates
 - [ ] Integrate Cargo into CMake build via `corrosion` or custom cmake rules
 - [ ] Ensure `make` builds both C and Rust components
-- [ ] Set up `cbindgen` for generating C headers from Rust
+- [x] Set up `cbindgen` for generating C headers from Rust
 - [ ] Set up `bindgen` for generating Rust bindings from C headers
 
 #### 0.2 CI Integration
 
-- [ ] Add Rust toolchain to GitHub Actions workflows
-- [ ] Add `cargo clippy` and `cargo fmt` checks
+- [x] Add Rust toolchain to GitHub Actions workflows (via nix flake)
+- [x] Add `cargo clippy` and `cargo fmt` checks (via justfile)
 - [ ] Ensure all existing tests still pass
 
 **Validation:**
@@ -77,8 +77,8 @@ Most nvim code uses `xmalloc`/`xfree` from `nvim/memory.h`. Rust code must inter
 
 #### 0.5.1 Create Memory FFI Module
 
-- [ ] Create `nvim-rs/memory/` crate
-- [ ] Define FFI bindings to nvim's allocator:
+- [x] Create `nvim-rs/memory/` crate
+- [x] Define FFI bindings to nvim's allocator:
 
 ```rust
 // src/nvim-rs/memory/src/lib.rs
@@ -94,13 +94,13 @@ extern "C" {
 }
 ```
 
-- [ ] Create safe wrapper types (`NvimBox<T>`, `NvimVec<T>`) that use nvim's allocator
-- [ ] Implement `Drop` for automatic cleanup
+- [x] Create safe wrapper types (`NvimBox<T>`, `NvimVec<T>`) that use nvim's allocator
+- [x] Implement `Drop` for automatic cleanup
 
 #### 0.5.2 String Interop Types
 
-- [ ] Create `NvimString` type for C-compatible strings allocated with `xmalloc`
-- [ ] Implement conversions: `&str` ↔ `NvimString` ↔ `*const c_char`
+- [x] Create `NvimString` type for C-compatible strings allocated with `xmalloc`
+- [x] Implement conversions: `&str` ↔ `NvimString` ↔ `*const c_char`
 
 **Validation:**
 
@@ -124,22 +124,22 @@ make test                        # Nvim still works
 
 `math.c` has minimal dependencies (only `vim_defs.h` for macros). Start here.
 
-- [ ] `xfpclassify` - Float classification
-- [ ] `xisinf` - Infinity check
-- [ ] `xisnan` - NaN check
-- [ ] `xctz` - Count trailing zeroes
-- [ ] `xpopcount` - Population count (set bits)
-- [ ] `vim_append_digit_int` - Safe digit append with overflow check
-- [ ] `trim_to_int` - Clamp int64 to int range
-- [ ] Create C-compatible wrapper functions using `#[no_mangle]`
+- [x] `xfpclassify` - Float classification
+- [x] `xisinf` - Infinity check
+- [x] `xisnan` - NaN check
+- [x] `xctz` - Count trailing zeroes
+- [x] `xpopcount` - Population count (set bits)
+- [x] `vim_append_digit_int` - Safe digit append with overflow check
+- [x] `trim_to_int` - Clamp int64 to int range
+- [x] Create C-compatible wrapper functions using `#[no_mangle]`
 - [ ] Replace C implementations with calls to Rust
 
 #### 1.2 Encoding Utilities (REQUIRES Phase 0.5)
 
 These use `xmalloc` - migrate AFTER memory bridge is ready:
 
-- [ ] `src/nvim/base64.c` → `nvim-rs/base64` (uses xmalloc)
-- [ ] `src/nvim/sha256.c` → `nvim-rs/sha256` (uses nvim/memory.h)
+- [x] `src/nvim/base64.c` → `nvim-rs/encoding/base64` (uses xmalloc)
+- [x] `src/nvim/sha256.c` → `nvim-rs/encoding/sha256` (uses nvim/memory.h)
 
 #### 1.3 String Utilities (REQUIRES Phase 0.5 + mbyte)
 
@@ -155,9 +155,9 @@ These use `xmalloc` - migrate AFTER memory bridge is ready:
 
 #### 1.4 Path Utilities (PARTIAL - some pure, some not)
 
-- [ ] `vim_ispathsep` - Path separator check (pure)
-- [ ] `path_tail` - Get filename from path (pure)
-- [ ] `path_head_length` - Directory prefix length (pure)
+- [x] `vim_ispathsep` - Path separator check (pure)
+- [x] `path_tail` - Get filename from path (pure)
+- [x] `path_head_length` - Directory prefix length (pure)
 - [ ] Path normalization functions (may use allocation)
 
 **Validation:**
@@ -200,16 +200,16 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 
 #### 2.1 Environment & System Info
 
-- [ ] `src/nvim/os/env.c` → `nvim-rs/os/env`
+- [x] `src/nvim/os/env.c` → `nvim-rs/os/env`
   - `os_getenv`, `os_setenv`, `os_unsetenv`
   - `os_get_hostname`, `os_get_user_name`
   - `os_get_pid`
-- [ ] `src/nvim/os/time.c` → `nvim-rs/os/time`
+- [x] `src/nvim/os/time.c` → `nvim-rs/os/time`
   - `os_hrtime`, `os_utime`, `os_localtime_r`
 
 #### 2.2 Filesystem Operations
 
-- [ ] `src/nvim/os/fs.c` → `nvim-rs/os/fs`
+- [x] `src/nvim/os/fs.c` → `nvim-rs/os/fs`
   - `os_file_exists`, `os_isdir`, `os_can_exe`
   - `os_getperm`, `os_setperm`, `os_file_is_readable`
   - `os_rename`, `os_copy`, `os_remove`
@@ -245,14 +245,14 @@ TEST_FILE=test/functional/core/fileio_spec.lua make functionaltest
 
 #### 3.1 Hash Table (`src/nvim/hashtab.c`)
 
-- [ ] Implement `HashMap`-compatible structure in Rust
-- [ ] Expose C-compatible API via FFI
+- [x] Implement `HashMap`-compatible structure in Rust
+- [x] Expose C-compatible API via FFI
 - [ ] Used throughout codebase - careful migration
 
 #### 3.2 Growing Array (`src/nvim/garray.c`)
 
-- [ ] Map to `Vec<T>` with C-compatible wrapper
-- [ ] Provide `ga_init`, `ga_grow`, `ga_append`, `ga_clear`
+- [x] Map to `Vec<T>` with C-compatible wrapper
+- [x] Provide `ga_init`, `ga_grow`, `ga_append`, `ga_clear`
 
 #### 3.3 Memory Buffer (`src/nvim/mbyte.c`)
 
