@@ -105,15 +105,18 @@ The trivial pure functions have largely been migrated. Next steps should focus o
 ### Unswapped Crates (Rust code exists but NOT used from C)
 | Crate | Status | Blocker |
 |-------|--------|---------|
-| nvim-os | ❌ Not swapped | Uses Rust allocator, needs xmalloc integration; C uses libuv |
+| nvim-os | 🔧 Partially ready | Memory allocator fixed (uses NvimString), but C uses libuv for env functions |
 | nvim-collections (garray) | ❌ Not swapped | Complex data structure, needs careful C integration |
 | nvim-collections (hashtab) | Partial | Only hash functions swapped, not full hashtab |
 
 ### Migration Blockers
 
-1. **Memory allocation mismatch**: OS crate allocates with Rust `CString`, but nvim uses `xmalloc`. Returning allocated strings requires using nvim's allocator.
+1. **Memory allocation mismatch**: ~~OS crate allocates with Rust `CString`~~ **FIXED (Phase 1.25)**: `rs_os_getenv` now uses `NvimString` which allocates with `xmallocz`.
 
-2. **libuv dependency**: OS/filesystem functions in C use libuv for portability. Rust would need to either wrap libuv or replace it entirely.
+2. **libuv dependency**: OS/filesystem functions in C use libuv for portability. Rust's `std::env` differs in edge cases (error codes, Unicode handling on Windows). Options:
+   - Keep C implementation for critical functions
+   - Wrap libuv calls in Rust using libuv-sys crate
+   - Gradually replace where behavior matches
 
 3. **Complex struct types**: frame_T, win_T, buf_T have deep pointer hierarchies. Simple FFI doesn't work; need either opaque pointers with callbacks or full struct mirroring.
 
