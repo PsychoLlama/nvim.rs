@@ -140,8 +140,8 @@ make test                        # Nvim still works
 
 These use `xmalloc` - migrate AFTER memory bridge is ready:
 
-- [x] `src/nvim/base64.c` → `nvim-rs/encoding/base64` (uses xmalloc)
-- [x] `src/nvim/sha256.c` → `nvim-rs/encoding/sha256` (uses nvim/memory.h)
+- [x] `src/nvim/base64.c` → `nvim-rs/encoding/base64` (uses xmalloc) - swapped to Rust
+- [ ] `src/nvim/sha256.c` → `nvim-rs/encoding/sha256` (Rust impl exists, needs struct alignment for FFI)
 
 #### 1.3 String Utilities (REQUIRES Phase 0.5 + mbyte)
 
