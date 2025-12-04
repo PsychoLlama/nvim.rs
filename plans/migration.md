@@ -166,6 +166,8 @@ These use `xmalloc` - migrate AFTER memory bridge is ready:
 - [x] `path_head_length` - Directory prefix length (pure) - swapped to Rust
 - [x] `path_is_absolute` - Check if path is absolute (pure) - swapped to Rust
 - [x] `path_is_url` - Check for URL scheme separator (pure) - swapped to Rust
+- [x] `path_has_drive_letter` - Check for Windows drive letter (pure) - swapped to Rust
+- [x] `path_with_url` - Check if path starts with URL scheme (pure) - swapped to Rust
 - [ ] Path normalization functions (may use allocation)
 
 **Validation:**
