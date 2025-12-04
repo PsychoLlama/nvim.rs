@@ -76,6 +76,8 @@ rust-ffi-test: rust-build
     /tmp/compare_math
     cc -o /tmp/compare_path src/nvim-rs/test/compare_path.c -L target/release -lnvim_rs -lpthread -ldl -lm
     /tmp/compare_path
+    cc -o /tmp/compare_strings src/nvim-rs/test/compare_strings.c -L target/release -lnvim_rs -lpthread -ldl -lm
+    /tmp/compare_strings
 
 # Full build: Rust + C
 build-all: rust-build build

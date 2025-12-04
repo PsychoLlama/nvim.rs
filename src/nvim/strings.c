@@ -37,6 +37,15 @@
 
 #include "strings.c.generated.h"
 
+#ifdef USE_RUST_STRINGS
+// Rust implementations - declarations
+extern int rs_vim_stricmp(const char *s1, const char *s2);
+extern int rs_vim_strnicmp(const char *s1, const char *s2, size_t len);
+extern int rs_striequal(const char *s1, const char *s2);
+extern int rs_has_non_ascii(const char *s);
+extern void rs_sort_strings(char **files, int count);
+#endif
+
 static const char e_cannot_mix_positional_and_non_positional_str[]
   = N_("E1500: Cannot mix positional and non-positional arguments: %s");
 static const char e_fmt_arg_nr_unused_str[]
@@ -479,6 +488,9 @@ bool striequal(const char *a, const char *b)
 int vim_strnicmp_asc(const char *s1, const char *s2, size_t len)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_STRINGS
+  return rs_vim_strnicmp(s1, s2, len);
+#else
   int i = 0;
   while (len > 0) {
     i = TOLOWER_ASC(*s1) - TOLOWER_ASC(*s2);
@@ -493,6 +505,7 @@ int vim_strnicmp_asc(const char *s1, const char *s2, size_t len)
     len--;
   }
   return i;
+#endif
 }
 
 /// strchr() version which handles multibyte strings
@@ -520,15 +533,21 @@ char *vim_strchr(const char *const string, const int c)
 
 // Sort an array of strings.
 
+#ifndef USE_RUST_STRINGS
 static int sort_compare(const void *s1, const void *s2)
   FUNC_ATTR_NONNULL_ALL
 {
   return strcmp(*(char **)s1, *(char **)s2);
 }
+#endif
 
 void sort_strings(char **files, int count)
 {
+#ifdef USE_RUST_STRINGS
+  rs_sort_strings(files, count);
+#else
   qsort((void *)files, (size_t)count, sizeof(char *), sort_compare);
+#endif
 }
 
 // Return true if string "s" contains a non-ASCII character (128 or higher).
@@ -536,6 +555,9 @@ void sort_strings(char **files, int count)
 bool has_non_ascii(const char *s)
   FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_STRINGS
+  return rs_has_non_ascii(s) != 0;
+#else
   if (s != NULL) {
     for (const char *p = s; *p != NUL; p++) {
       if ((uint8_t)(*p) >= 128) {
@@ -544,6 +566,7 @@ bool has_non_ascii(const char *s)
     }
   }
   return false;
+#endif
 }
 
 /// Return true if string "s" contains a non-ASCII character (128 or higher).
