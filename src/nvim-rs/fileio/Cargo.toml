@@ -1,0 +1,10 @@
+[package]
+name = "nvim-fileio"
+version = "0.1.0"
+edition = "2021"
+description = "File I/O utilities for Neovim"
+
+[dependencies]
+
+[lib]
+crate-type = ["rlib"]

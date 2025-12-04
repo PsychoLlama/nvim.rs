@@ -17,6 +17,7 @@ nvim-charset = { path = "charset" }
 nvim-cmdhist = { path = "cmdhist" }
 nvim-encoding = { path = "encoding" }
 nvim-ex-docmd = { path = "ex_docmd" }
+nvim-fileio = { path = "fileio" }
 nvim-help = { path = "help" }
 nvim-indent = { path = "indent" }
 nvim-keycodes = { path = "keycodes" }

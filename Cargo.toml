@@ -7,6 +7,7 @@ members = [
     "src/nvim-rs/collections",
     "src/nvim-rs/encoding",
     "src/nvim-rs/ex_docmd",
+    "src/nvim-rs/fileio",
     "src/nvim-rs/help",
     "src/nvim-rs/indent",
     "src/nvim-rs/keycodes",

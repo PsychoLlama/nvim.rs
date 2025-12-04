@@ -18,6 +18,7 @@ pub use nvim_cmdhist::*;
 pub use nvim_encoding::base64::*;
 pub use nvim_encoding::sha256::*;
 pub use nvim_ex_docmd::*;
+pub use nvim_fileio::*;
 pub use nvim_help::*;
 pub use nvim_indent::*;
 pub use nvim_keycodes::*;

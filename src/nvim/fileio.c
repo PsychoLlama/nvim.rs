@@ -93,6 +93,12 @@
 # define UV_FS_COPYFILE_FICLONE 0
 #endif
 
+#ifdef USE_RUST_FILEIO
+// Rust implementations - declarations
+extern int rs_time_differs(int64_t file_sec, int64_t file_nsec, int64_t mtime, int64_t mtime_ns,
+                           int fat_tolerance);
+#endif
+
 #include "fileio.c.generated.h"
 
 static const char *e_auchangedbuf = N_("E812: Autocommands changed buffer or buffer name");
@@ -2163,6 +2169,15 @@ void msg_add_lines(int insert_space, linenr_T lnum, off_T nchars)
 bool time_differs(const FileInfo *file_info, int64_t mtime, int64_t mtime_ns)
   FUNC_ATTR_CONST
 {
+#ifdef USE_RUST_FILEIO
+#if defined(__linux__) || defined(MSWIN)
+  return rs_time_differs(file_info->stat.st_mtim.tv_sec, file_info->stat.st_mtim.tv_nsec,
+                         mtime, mtime_ns, 1);
+#else
+  return rs_time_differs(file_info->stat.st_mtim.tv_sec, file_info->stat.st_mtim.tv_nsec,
+                         mtime, mtime_ns, 0);
+#endif
+#else
 #if defined(__linux__) || defined(MSWIN)
   return file_info->stat.st_mtim.tv_nsec != mtime_ns
          // On a FAT filesystem, esp. under Linux, there are only 5 bits to store
@@ -2173,6 +2188,7 @@ bool time_differs(const FileInfo *file_info, int64_t mtime, int64_t mtime_ns)
 #else
   return file_info->stat.st_mtim.tv_nsec != mtime_ns
          || file_info->stat.st_mtim.tv_sec != mtime;
+#endif
 #endif
 }
 
