@@ -27,7 +27,7 @@ include = ["rs_xfpclassify", "rs_xisinf", "rs_xisnan", "rs_xctz", "rs_xpopcount"
            "rs_vim_ispathsep", "rs_vim_ispathsep_nocolon", "rs_vim_ispathlistsep",
            "rs_path_head_length", "rs_is_path_head", "rs_get_past_head",
            "rs_path_is_absolute", "rs_path_tail", "rs_path_is_url",
-           "rs_path_has_drive_letter", "rs_path_with_url",
+           "rs_path_has_drive_letter", "rs_path_with_url", "rs_vim_isAbsName",
            "rs_vim_stricmp", "rs_vim_strnicmp", "rs_striequal", "rs_vim_strchr",
            "rs_has_non_ascii", "rs_concat_str", "rs_sort_strings",
            "nvim_rs_version"]

@@ -19,6 +19,7 @@ extern int rs_path_is_url(const char *p);
 extern const char *rs_path_tail(const char *fname);
 extern int rs_path_has_drive_letter(const char *p, size_t path_len);
 extern int rs_path_with_url(const char *fname);
+extern int rs_vim_isAbsName(const char *name);
 
 // C implementations (from nvim/path.c, for Unix)
 static bool c_vim_ispathsep(int c) {
@@ -362,6 +363,11 @@ static int c_path_with_url(const char *fname) {
     return c_path_is_url(p);
 }
 
+// C implementation of vim_isAbsName
+static bool c_vim_isAbsName(const char *name) {
+    return c_path_with_url(name) != 0 || c_path_is_absolute(name);
+}
+
 void test_path_has_drive_letter(void) {
     printf("Testing path_has_drive_letter:\n");
 
@@ -449,6 +455,47 @@ void test_path_with_url(void) {
     }
 }
 
+void test_vim_isAbsName(void) {
+    printf("Testing vim_isAbsName:\n");
+
+    struct {
+        const char *path;
+        bool expected;
+        const char *desc;
+    } test_cases[] = {
+        // Absolute paths
+        {"/home/user", true, "/home/user (absolute)"},
+        {"/", true, "/ (root)"},
+        {"~/documents", true, "~/documents (tilde)"},
+        {"~", true, "~ (tilde only)"},
+
+        // URLs
+        {"http://example.com", true, "http:// (URL)"},
+        {"https://example.com", true, "https:// (URL)"},
+        {"ftp://server/file", true, "ftp:// (URL)"},
+        {"file:///path", true, "file:/// (URL)"},
+
+        // Relative paths (not absolute, not URL)
+        {"home/user", false, "home/user (relative)"},
+        {"./file", false, "./file (relative)"},
+        {"../file", false, "../file (relative)"},
+        {"file.txt", false, "file.txt (relative)"},
+        {"", false, "empty"},
+    };
+    int n = sizeof(test_cases) / sizeof(test_cases[0]);
+
+    for (int i = 0; i < n; i++) {
+        const char *path = test_cases[i].path;
+        bool c_result = c_vim_isAbsName(path);
+        bool rs_result = rs_vim_isAbsName(path) != 0;
+
+        char name[128];
+        snprintf(name, sizeof(name), "vim_isAbsName(\"%s\") expected=%d C=%d Rust=%d",
+                 test_cases[i].desc, test_cases[i].expected, c_result, rs_result);
+        TEST(name, c_result == rs_result && c_result == test_cases[i].expected);
+    }
+}
+
 int main(void) {
     printf("=== Comparing C and Rust path implementations ===\n\n");
 
@@ -463,6 +510,7 @@ int main(void) {
     test_path_tail();
     test_path_has_drive_letter();
     test_path_with_url();
+    test_vim_isAbsName();
 
     printf("\n=== Results ===\n");
     printf("Passed: %d\n", tests_passed);

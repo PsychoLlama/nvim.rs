@@ -55,6 +55,7 @@ extern int rs_path_is_url(const char *p);
 extern const char *rs_path_tail(const char *fname);
 extern int rs_path_has_drive_letter(const char *p, size_t path_len);
 extern int rs_path_with_url(const char *fname);
+extern int rs_vim_isAbsName(const char *name);
 #endif
 
 #include "path.c.generated.h"
@@ -1839,7 +1840,11 @@ bool path_with_extension(const char *path, const char *extension)
 bool vim_isAbsName(const char *name)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_PATH
+  return rs_vim_isAbsName(name) != 0;
+#else
   return path_with_url(name) != 0 || path_is_absolute(name);
+#endif
 }
 
 /// Save absolute file name to "buf[len]".

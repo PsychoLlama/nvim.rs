@@ -411,6 +411,23 @@ pub unsafe extern "C" fn rs_path_with_url(fname: *const c_char) -> c_int {
     rs_path_is_url(p)
 }
 
+/// Check if a path is a full (absolute) path name or URL.
+///
+/// Returns true if the path is either:
+/// - A URL (starts with a scheme like "http://")
+/// - An absolute path (starts with "/" on Unix, "C:\" on Windows)
+///
+/// # Safety
+///
+/// `name` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_isAbsName(name: *const c_char) -> c_int {
+    if name.is_null() {
+        return 0;
+    }
+    c_int::from(rs_path_with_url(name) != 0 || rs_path_is_absolute(name) != 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -571,6 +588,48 @@ mod tests {
             // NULL returns NULL
             let past = unsafe { rs_get_past_head(std::ptr::null()) };
             assert!(past.is_null());
+        }
+    }
+
+    #[test]
+    fn test_vim_isAbsName() {
+        #[cfg(unix)]
+        {
+            // Absolute paths
+            let abs = CString::new("/home/user").unwrap();
+            assert_eq!(unsafe { rs_vim_isAbsName(abs.as_ptr()) }, 1);
+
+            let tilde = CString::new("~/documents").unwrap();
+            assert_eq!(unsafe { rs_vim_isAbsName(tilde.as_ptr()) }, 1);
+
+            // URLs
+            let http = CString::new("http://example.com").unwrap();
+            assert_eq!(unsafe { rs_vim_isAbsName(http.as_ptr()) }, 1);
+
+            let https = CString::new("https://example.com").unwrap();
+            assert_eq!(unsafe { rs_vim_isAbsName(https.as_ptr()) }, 1);
+
+            let file = CString::new("file:///path").unwrap();
+            assert_eq!(unsafe { rs_vim_isAbsName(file.as_ptr()) }, 1);
+
+            // Relative paths (not absolute, not URL)
+            let rel = CString::new("home/user").unwrap();
+            assert_eq!(unsafe { rs_vim_isAbsName(rel.as_ptr()) }, 0);
+
+            let dot = CString::new("./file").unwrap();
+            assert_eq!(unsafe { rs_vim_isAbsName(dot.as_ptr()) }, 0);
+
+            let dotdot = CString::new("../file").unwrap();
+            assert_eq!(unsafe { rs_vim_isAbsName(dotdot.as_ptr()) }, 0);
+
+            let file_only = CString::new("file.txt").unwrap();
+            assert_eq!(unsafe { rs_vim_isAbsName(file_only.as_ptr()) }, 0);
+
+            // Empty and NULL
+            let empty = CString::new("").unwrap();
+            assert_eq!(unsafe { rs_vim_isAbsName(empty.as_ptr()) }, 0);
+
+            assert_eq!(unsafe { rs_vim_isAbsName(std::ptr::null()) }, 0);
         }
     }
 }
