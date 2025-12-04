@@ -117,6 +117,10 @@
 # include "nvim/arglist.h"
 #endif
 
+#ifdef USE_RUST_STRINGS
+extern int rs_valid_name(const char *val, const char *allowed);
+#endif
+
 static const char e_unknown_option[]
   = N_("E518: Unknown option");
 static const char e_not_allowed_in_modeline[]
@@ -1698,6 +1702,9 @@ void redraw_titles(void)
 bool valid_name(const char *val, const char *allowed)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_STRINGS
+  return rs_valid_name(val, allowed);
+#else
   for (const char *s = val; *s != NUL; s++) {
     if (!ASCII_ISALNUM(*s)
         && vim_strchr(allowed, (uint8_t)(*s)) == NULL) {
@@ -1705,6 +1712,7 @@ bool valid_name(const char *val, const char *allowed)
     }
   }
   return true;
+#endif
 }
 
 void check_blending(win_T *wp)

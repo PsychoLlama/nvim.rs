@@ -158,6 +158,7 @@ These use `xmalloc` - migrate AFTER memory bridge is ready:
 - [x] `has_non_ascii` - Check for non-ASCII characters - swapped to Rust
 - [x] `sort_strings` - Sort array of strings - swapped to Rust
 - [x] `vim_strnicmp_asc` - ASCII-only case-insensitive compare - swapped to Rust
+- [x] `valid_name` - Validate name contains only alphanumeric/allowed chars (from option.c) - swapped to Rust
 
 #### 1.4 Path Utilities (PARTIAL - some pure, some not)
 

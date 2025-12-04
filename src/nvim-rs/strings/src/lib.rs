@@ -267,6 +267,47 @@ pub unsafe extern "C" fn rs_sort_strings(files: *mut *mut c_char, count: c_int) 
     });
 }
 
+/// Check if a character is ASCII alphanumeric.
+#[inline]
+fn ascii_isalnum(c: u8) -> bool {
+    c.is_ascii_alphanumeric()
+}
+
+/// Check if a string is a valid name: only alphanumeric ASCII or allowed characters.
+///
+/// Returns true if `val` consists only of alphanumeric ASCII characters
+/// or characters that appear in `allowed`.
+///
+/// # Safety
+///
+/// Both `val` and `allowed` must be valid null-terminated C strings.
+#[no_mangle]
+pub unsafe extern "C" fn rs_valid_name(val: *const c_char, allowed: *const c_char) -> c_int {
+    if val.is_null() {
+        return 1; // Empty/null is considered valid
+    }
+
+    let mut s = val;
+    loop {
+        let c = *s as u8;
+        if c == 0 {
+            break;
+        }
+
+        // Check if alphanumeric
+        if !ascii_isalnum(c) {
+            // Check if in allowed set
+            if allowed.is_null() || rs_vim_strchr(allowed, c_int::from(c)).is_null() {
+                return 0;
+            }
+        }
+
+        s = s.add(1);
+    }
+
+    1
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -440,6 +481,43 @@ mod tests {
                 .collect();
 
             assert_eq!(sorted, vec!["apple", "mango", "zebra"]);
+        }
+    }
+
+    #[test]
+    fn test_valid_name() {
+        let alphanumeric = CString::new("hello123").unwrap();
+        let with_underscore = CString::new("hello_world").unwrap();
+        let with_special = CString::new("hello!world").unwrap();
+        let empty = CString::new("").unwrap();
+        let allowed_underscore = CString::new("_").unwrap();
+        let allowed_chars = CString::new("_-").unwrap();
+
+        unsafe {
+            // Pure alphanumeric is always valid
+            assert_eq!(rs_valid_name(alphanumeric.as_ptr(), std::ptr::null()), 1);
+
+            // Underscore not allowed by default
+            assert_eq!(rs_valid_name(with_underscore.as_ptr(), std::ptr::null()), 0);
+
+            // Underscore allowed when in allowed set
+            assert_eq!(
+                rs_valid_name(with_underscore.as_ptr(), allowed_underscore.as_ptr()),
+                1
+            );
+
+            // Special char not allowed
+            assert_eq!(rs_valid_name(with_special.as_ptr(), std::ptr::null()), 0);
+            assert_eq!(
+                rs_valid_name(with_special.as_ptr(), allowed_chars.as_ptr()),
+                0
+            );
+
+            // Empty string is valid
+            assert_eq!(rs_valid_name(empty.as_ptr(), std::ptr::null()), 1);
+
+            // NULL is valid
+            assert_eq!(rs_valid_name(std::ptr::null(), std::ptr::null()), 1);
         }
     }
 }
