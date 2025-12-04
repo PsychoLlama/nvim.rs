@@ -257,11 +257,13 @@ TEST_FILE=test/functional/core/fileio_spec.lua make functionaltest
 - [x] Map to `Vec<T>` with C-compatible wrapper
 - [x] Provide `ga_init`, `ga_grow`, `ga_append`, `ga_clear`
 
-#### 3.3 Memory Buffer (`src/nvim/mbyte.c`)
+#### 3.3 Multibyte/UTF-8 (`src/nvim/mbyte.c`)
 
-- [ ] UTF-8 handling → use `std::str` / encoding crates
-- [ ] Character width calculation
-- [ ] Encoding conversion
+- [x] UTF-8 encoding/decoding (utf_ptr2char, utf_char2bytes, utf_ptr2len)
+- [x] UTF-8 byte length tables (utf8len_tab, utf8len_tab_zero)
+- [ ] Character width calculation (utf_char2cells - requires display tables)
+- [ ] Composing character handling (utfc_ptr2len - requires grapheme state)
+- [ ] Encoding conversion (iconv integration)
 
 #### 3.4 Mark Tree (`src/nvim/marktree.c`)
 
