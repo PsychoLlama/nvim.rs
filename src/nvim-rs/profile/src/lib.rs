@@ -50,7 +50,11 @@ pub extern "C" fn rs_profile_sub(tm1: Proftime, tm2: Proftime) -> Proftime {
 ///
 /// Returns if `total` <= `children`, then self, otherwise `self` + `total` - `children`.
 #[no_mangle]
-pub extern "C" fn rs_profile_self(self_time: Proftime, total: Proftime, children: Proftime) -> Proftime {
+pub extern "C" fn rs_profile_self(
+    self_time: Proftime,
+    total: Proftime,
+    children: Proftime,
+) -> Proftime {
     // Check that the result won't be negative, which can happen with recursive calls.
     if total <= children {
         return self_time;
@@ -159,7 +163,7 @@ mod tests {
         // The C code does: -(int64_t)(UINT64_MAX - tm)
         // When tm = u64::MAX: UINT64_MAX - UINT64_MAX = 0, so result is 0
         // When tm = u64::MAX - 99: UINT64_MAX - (UINT64_MAX - 99) = 99, so result is -99
-        assert_eq!(rs_profile_signed(u64::MAX), 0);  // Edge case from C implementation
+        assert_eq!(rs_profile_signed(u64::MAX), 0); // Edge case from C implementation
         assert_eq!(rs_profile_signed(u64::MAX - 99), -99);
     }
 

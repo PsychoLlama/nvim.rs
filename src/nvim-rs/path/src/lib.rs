@@ -514,7 +514,10 @@ mod tests {
         assert_eq!(unsafe { rs_path_is_url(url_slash.as_ptr()) }, URL_SLASH);
 
         let url_backslash = CString::new(":\\\\server\\share").unwrap();
-        assert_eq!(unsafe { rs_path_is_url(url_backslash.as_ptr()) }, URL_BACKSLASH);
+        assert_eq!(
+            unsafe { rs_path_is_url(url_backslash.as_ptr()) },
+            URL_BACKSLASH
+        );
 
         let just_colon = CString::new(":foo").unwrap();
         assert_eq!(unsafe { rs_path_is_url(just_colon.as_ptr()) }, 0);
@@ -592,6 +595,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(non_snake_case)]
     fn test_vim_isAbsName() {
         #[cfg(unix)]
         {
