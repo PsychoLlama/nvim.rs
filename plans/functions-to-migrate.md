@@ -266,3 +266,9 @@ All trivial pure functions and data structures have been migrated. Remaining opt
 3. **Global state access**: Would enable g_chartab-dependent functions
 
 The migration has reached a natural plateau. Further progress requires choosing an infrastructure investment.
+
+**Phase 2.3**: Successfully swapped two OS filesystem functions to Rust:
+- `os_path_exists` - Check if a path exists
+- `os_isdir` - Check if a path is a directory
+
+These use Rust's `std::fs` instead of libuv. The 90 filesystem unit tests pass, confirming behavioral equivalence for standard use cases.

@@ -347,12 +347,13 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 
 #### 2.2 Filesystem Operations
 
-- [ ] `src/nvim/os/fs.c` → `nvim-rs/os/fs`
-  - `os_file_exists`, `os_isdir`, `os_can_exe`
-  - `os_getperm`, `os_setperm`, `os_file_is_readable`
+- [x] `os_path_exists` - **Phase 2.3**: Swapped to Rust (USE_RUST_OS_FS)
+- [x] `os_isdir` - **Phase 2.3**: Swapped to Rust (USE_RUST_OS_FS)
+- [ ] `src/nvim/os/fs.c` → `nvim-rs/os/fs` (remaining functions)
+  - `os_can_exe`, `os_getperm`, `os_setperm`, `os_file_is_readable`
   - `os_rename`, `os_copy`, `os_remove`
   - `os_mkdir`, `os_rmdir`, `os_scandir`
-  - **Status**: Rust code exists but NOT swapped - uses libuv in C
+  - **Status**: Rust code exists, 2 functions swapped (Phase 2.3)
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
 
