@@ -9,6 +9,7 @@ repository.workspace = true
 [dependencies]
 libc = "0.2"
 nvim-memory = { path = "../memory" }
+nvim-memutil = { path = "../memutil" }
 
 [lints]
 workspace = true

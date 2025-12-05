@@ -14,15 +14,31 @@
 
 #include "garray.c.generated.h"  // IWYU pragma: keep
 
+#ifdef USE_RUST_GARRAY
+// Rust implementations
+extern void rs_ga_init(garray_T *gap, int itemsize, int growsize);
+extern void rs_ga_set_growsize(garray_T *gap, int growsize);
+extern void rs_ga_clear(garray_T *gap);
+extern void rs_ga_grow(garray_T *gap, int n);
+extern void rs_ga_concat(garray_T *gap, const char *s);
+extern void rs_ga_concat_len(garray_T *gap, const char *s, size_t len);
+extern void rs_ga_append(garray_T *gap, uint8_t c);
+extern void *rs_ga_append_via_ptr(garray_T *gap, size_t item_size);
+#endif
+
 /// Clear an allocated growing array.
 void ga_clear(garray_T *gap)
 {
+#ifdef USE_RUST_GARRAY
+  rs_ga_clear(gap);
+#else
   xfree(gap->ga_data);
 
   // Initialize growing array without resetting itemsize or growsize
   gap->ga_data = NULL;
   gap->ga_maxlen = 0;
   gap->ga_len = 0;
+#endif
 }
 
 /// Clear a growing array that contains a list of strings.
@@ -40,11 +56,15 @@ void ga_clear_strings(garray_T *gap)
 /// @param growsize
 void ga_init(garray_T *gap, int itemsize, int growsize)
 {
+#ifdef USE_RUST_GARRAY
+  rs_ga_init(gap, itemsize, growsize);
+#else
   gap->ga_data = NULL;
   gap->ga_maxlen = 0;
   gap->ga_len = 0;
   gap->ga_itemsize = itemsize;
   ga_set_growsize(gap, growsize);
+#endif
 }
 
 /// A setter for the growsize that guarantees it will be at least 1.
@@ -53,12 +73,16 @@ void ga_init(garray_T *gap, int itemsize, int growsize)
 /// @param growsize
 void ga_set_growsize(garray_T *gap, int growsize)
 {
+#ifdef USE_RUST_GARRAY
+  rs_ga_set_growsize(gap, growsize);
+#else
   if (growsize < 1) {
     WLOG("trying to set an invalid ga_growsize: %d", growsize);
     gap->ga_growsize = 1;
   } else {
     gap->ga_growsize = growsize;
   }
+#endif
 }
 
 /// Make room in growing array "gap" for at least "n" items.
@@ -67,6 +91,9 @@ void ga_set_growsize(garray_T *gap, int growsize)
 /// @param n
 void ga_grow(garray_T *gap, int n)
 {
+#ifdef USE_RUST_GARRAY
+  rs_ga_grow(gap, n);
+#else
   if (gap->ga_maxlen - gap->ga_len >= n) {
     // the garray still has enough space, do nothing
     return;
@@ -95,6 +122,7 @@ void ga_grow(garray_T *gap, int n)
 
   gap->ga_maxlen = new_maxlen;
   gap->ga_data = pp;
+#endif
 }
 
 /// Sort "gap" and remove duplicate entries. "gap" is expected to contain a
@@ -170,11 +198,15 @@ char *ga_concat_strings(const garray_T *gap, const char *sep)
 /// @param s
 void ga_concat(garray_T *gap, const char *restrict s)
 {
+#ifdef USE_RUST_GARRAY
+  rs_ga_concat(gap, s);
+#else
   if (s == NULL) {
     return;
   }
 
   ga_concat_len(gap, s, strlen(s));
+#endif
 }
 
 /// Concatenate a string to a growarray which contains characters
@@ -185,6 +217,9 @@ void ga_concat(garray_T *gap, const char *restrict s)
 void ga_concat_len(garray_T *const gap, const char *restrict s, const size_t len)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_GARRAY
+  rs_ga_concat_len(gap, s, len);
+#else
   if (len == 0) {
     return;
   }
@@ -192,6 +227,7 @@ void ga_concat_len(garray_T *const gap, const char *restrict s, const size_t len
   char *data = gap->ga_data;
   memcpy(data + gap->ga_len, s, len);
   gap->ga_len += (int)len;
+#endif
 }
 
 /// Append one byte to a growarray which contains bytes.
@@ -200,14 +236,22 @@ void ga_concat_len(garray_T *const gap, const char *restrict s, const size_t len
 /// @param c
 void ga_append(garray_T *gap, uint8_t c)
 {
+#ifdef USE_RUST_GARRAY
+  rs_ga_append(gap, c);
+#else
   GA_APPEND(uint8_t, gap, c);
+#endif
 }
 
 void *ga_append_via_ptr(garray_T *gap, size_t item_size)
 {
+#ifdef USE_RUST_GARRAY
+  return rs_ga_append_via_ptr(gap, item_size);
+#else
   if ((int)item_size != gap->ga_itemsize) {
     WLOG("wrong item size (%zu), should be %d", item_size, gap->ga_itemsize);
   }
   ga_grow(gap, 1);
   return ((char *)gap->ga_data) + (item_size * (size_t)gap->ga_len++);
+#endif
 }

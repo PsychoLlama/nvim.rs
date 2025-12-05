@@ -15,6 +15,8 @@
 // This ensures they're included in the static library
 pub use nvim_charset::*;
 pub use nvim_cmdhist::*;
+pub use nvim_collections::garray::*;
+// Note: hashtab functions (rs_hash_hash, rs_hash_hash_len) are already in nvim_memutil
 pub use nvim_encoding::base64::*;
 pub use nvim_encoding::sha256::*;
 pub use nvim_ex_docmd::*;

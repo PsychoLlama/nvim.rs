@@ -2,11 +2,15 @@
 //!
 //! A hash table with string keys, compatible with nvim's hashtab_T.
 //! Uses the same hashing algorithm and collision resolution as the C version.
+//!
+//! Note: The hash functions (rs_hash_hash, rs_hash_hash_len) are exported from
+//! nvim_memutil, not from this module, to avoid duplicate symbol issues.
 
 use std::ffi::{c_char, c_int};
 use std::ptr;
 
 use nvim_memory::{xcalloc, xfree};
+use nvim_memutil::{rs_hash_hash, rs_hash_hash_len};
 
 /// Initial size for a hashtable (must be a power of 2).
 pub const HT_INIT_SIZE: usize = 16;
@@ -120,58 +124,8 @@ pub unsafe extern "C" fn rs_hash_clear(ht: *mut HashTab) {
     }
 }
 
-/// Compute hash for a null-terminated string.
-///
-/// # Safety
-///
-/// `key` must be a valid null-terminated C string.
-#[no_mangle]
-pub unsafe extern "C" fn rs_hash_hash(key: *const c_char) -> HashT {
-    if key.is_null() {
-        return 0;
-    }
-
-    let first_byte = unsafe { *key as u8 };
-    if first_byte == 0 {
-        return 0;
-    }
-
-    let mut hash = first_byte as HashT;
-    let mut p = unsafe { key.add(1) };
-
-    loop {
-        let byte = unsafe { *p as u8 };
-        if byte == 0 {
-            break;
-        }
-        hash = hash.wrapping_mul(101).wrapping_add(byte as HashT);
-        p = unsafe { p.add(1) };
-    }
-
-    hash
-}
-
-/// Compute hash for a string with known length.
-///
-/// # Safety
-///
-/// `key` must be a valid pointer to at least `len` bytes.
-#[no_mangle]
-pub unsafe extern "C" fn rs_hash_hash_len(key: *const c_char, len: usize) -> HashT {
-    if key.is_null() || len == 0 {
-        return 0;
-    }
-
-    let first_byte = unsafe { *key as u8 };
-    let mut hash = first_byte as HashT;
-
-    for i in 1..len {
-        let byte = unsafe { *key.add(i) as u8 };
-        hash = hash.wrapping_mul(101).wrapping_add(byte as HashT);
-    }
-
-    hash
-}
+// Note: rs_hash_hash and rs_hash_hash_len are imported from nvim_memutil
+// to avoid duplicate FFI symbol definitions.
 
 /// Look up a key in the hash table.
 ///
