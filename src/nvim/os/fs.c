@@ -73,6 +73,7 @@ extern int rs_os_dirname(char *buf, size_t len);
 extern int rs_os_rename(const char *path, const char *new_path);
 extern int rs_os_setperm(const char *path, int perm);
 extern int32_t rs_os_getperm(const char *path);
+extern int rs_os_remove(const char *path);
 #endif
 
 #ifdef HAVE_XATTR
@@ -1209,9 +1210,13 @@ void os_closedir(Directory *dir)
 int os_remove(const char *path)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_remove(path);
+#else
   int r;
   RUN_UV_FS_FUNC(r, uv_fs_unlink, path, NULL);
   return r;
+#endif
 }
 
 /// Get the file information for a given path

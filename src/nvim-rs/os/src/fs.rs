@@ -447,7 +447,7 @@ pub unsafe extern "C" fn rs_os_mkdir_all(path: *const c_char, _mode: c_uint) -> 
 
 /// Remove a file.
 ///
-/// Returns 0 on success, -1 on failure.
+/// Returns 0 on success, libuv-compatible error code on failure.
 ///
 /// # Safety
 ///
@@ -455,18 +455,18 @@ pub unsafe extern "C" fn rs_os_mkdir_all(path: *const c_char, _mode: c_uint) -> 
 #[no_mangle]
 pub unsafe extern "C" fn rs_os_remove(path: *const c_char) -> c_int {
     if path.is_null() {
-        return -1;
+        return -22; // UV_EINVAL
     }
 
     let path_cstr = unsafe { CStr::from_ptr(path) };
     let path_str = match path_cstr.to_str() {
         Ok(s) => s,
-        Err(_) => return -1,
+        Err(_) => return -22, // UV_EINVAL for invalid UTF-8
     };
 
     match fs::remove_file(path_str) {
         Ok(()) => 0,
-        Err(_) => -1,
+        Err(e) => io_error_to_uv_error(&e),
     }
 }
 
