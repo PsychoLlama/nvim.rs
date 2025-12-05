@@ -20,6 +20,11 @@
 
 #include "os/time.c.generated.h"
 
+#ifdef USE_RUST_OS
+// Rust implementations - declarations
+extern uint64_t rs_os_time(void);
+#endif
+
 /// Gets a high-resolution (nanosecond), monotonically-increasing time relative
 /// to an arbitrary time in the past.
 ///
@@ -193,5 +198,9 @@ char *os_strptime(const char *str, const char *format, struct tm *tm)
 Timestamp os_time(void)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_OS
+  return rs_os_time();
+#else
   return (Timestamp)time(NULL);
+#endif
 }

@@ -334,13 +334,14 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 
 - [x] `os_get_pid` - **Phase 1.26**: Swapped to Rust (USE_RUST_OS)
 - [x] `os_get_hostname` - **Phase 1.27**: Swapped to Rust (USE_RUST_OS)
+- [x] `os_time` - **Phase 1.29**: Swapped to Rust (USE_RUST_OS)
 - [ ] `src/nvim/os/env.c` → `nvim-rs/os/env`
   - `os_getenv`, `os_setenv`, `os_unsetenv`
   - `os_get_user_name`
   - **Status**: Rust code exists, allocator fixed (Phase 1.25), but NOT swapped - C uses libuv
 - [ ] `src/nvim/os/time.c` → `nvim-rs/os/time`
   - `os_hrtime`, `os_utime`, `os_localtime_r`
-  - **Status**: Rust code exists but NOT swapped - C uses libuv
+  - **Status**: Rust code exists, `os_time` swapped (Phase 1.29), but most functions NOT swapped - C uses libuv
 
 #### 2.2 Filesystem Operations
 

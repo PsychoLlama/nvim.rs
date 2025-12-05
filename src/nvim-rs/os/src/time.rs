@@ -22,11 +22,14 @@ pub extern "C" fn rs_os_hrtime() -> u64 {
 }
 
 /// Get the current Unix timestamp in seconds.
+///
+/// Returns seconds since Unix epoch as unsigned 64-bit integer,
+/// matching nvim's `Timestamp` type (`uint64_t`).
 #[no_mangle]
-pub extern "C" fn rs_os_time() -> i64 {
+pub extern "C" fn rs_os_time() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
+        .map(|d| d.as_secs())
         .unwrap_or(0)
 }
 
@@ -249,7 +252,7 @@ mod tests {
 
     #[test]
     fn test_localtime_r() {
-        let timestamp = 1_700_000_000i64; // Nov 14, 2023
+        let timestamp: i64 = 1_700_000_000; // Nov 14, 2023
         let mut tm = RsTime::default();
         let result = unsafe { rs_os_localtime_r(timestamp, &mut tm) };
         assert_eq!(result, 0);
