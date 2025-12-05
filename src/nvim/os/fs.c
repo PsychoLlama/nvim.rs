@@ -84,6 +84,7 @@ extern int rs_os_copy(const char *path, const char *new_path, int flags);
 extern int rs_os_close(int fd);
 extern int rs_os_dup(int fd);
 extern int rs_os_exepath(char *buffer, size_t *size);
+extern int rs_os_nodetype(const char *name);
 #endif
 
 #ifdef HAVE_XATTR
@@ -189,6 +190,9 @@ int os_nodetype(const char *name)
   FUNC_ATTR_NONNULL_ALL
 {
 #ifndef MSWIN  // Unix
+#ifdef USE_RUST_OS_FS
+  return rs_os_nodetype(name);
+#else
   uv_stat_t statbuf;
   if (0 != os_stat(name, &statbuf)) {
     return NODE_NORMAL;  // File doesn't exist.
@@ -204,6 +208,7 @@ int os_nodetype(const char *name)
   // Everything else is writable?
   // buf_write() expects NODE_WRITABLE for char device /dev/stderr.
   return NODE_WRITABLE;
+#endif
 #else  // Windows
   // Edge case from Vim os_win32.c:
   // We can't open a file with a name "\\.\con" or "\\.\prn", trying to read

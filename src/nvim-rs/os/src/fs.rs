@@ -1049,6 +1049,79 @@ fn try_clone_file(src: &str, dst: &str) -> Result<c_int, std::io::Error> {
     }
 }
 
+// Node type constants (matching fs_defs.h)
+const NODE_NORMAL: c_int = 0; // file or directory
+const NODE_WRITABLE: c_int = 1; // something we can write to (char device, fifo, socket)
+const NODE_OTHER: c_int = 2; // non-writable thing (e.g., block device)
+
+/// Check what type of filesystem node `name` is.
+///
+/// Returns:
+/// - `NODE_NORMAL` (0): file or directory (or doesn't exist)
+/// - `NODE_WRITABLE` (1): writable device, socket, fifo, etc.
+/// - `NODE_OTHER` (2): non-writable things (e.g., block device)
+///
+/// # Safety
+///
+/// `name` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_nodetype(name: *const c_char) -> c_int {
+    if name.is_null() {
+        return NODE_NORMAL;
+    }
+
+    let path_cstr = unsafe { CStr::from_ptr(name) };
+    let path_str = match path_cstr.to_str() {
+        Ok(s) => s,
+        Err(_) => return NODE_NORMAL,
+    };
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::FileTypeExt;
+
+        // Use symlink_metadata to get the actual file type (like stat, not lstat)
+        // Actually, the C code uses uv_fs_stat which follows symlinks, so we use metadata
+        let meta = match fs::metadata(path_str) {
+            Ok(m) => m,
+            Err(_) => return NODE_NORMAL, // File doesn't exist
+        };
+
+        let file_type = meta.file_type();
+
+        // Regular file or directory
+        if file_type.is_file() || file_type.is_dir() {
+            return NODE_NORMAL;
+        }
+
+        // Block device is not writable (in the sense nvim uses)
+        if file_type.is_block_device() {
+            return NODE_OTHER;
+        }
+
+        // Everything else (char device, fifo, socket) is considered writable
+        // This matches the C code comment: "Everything else is writable?"
+        NODE_WRITABLE
+    }
+
+    #[cfg(not(unix))]
+    {
+        // On Windows, the C code uses uv_guess_handle which requires opening the file.
+        // For now, we just check if it's a regular file or directory.
+        let meta = match fs::metadata(path_str) {
+            Ok(m) => m,
+            Err(_) => return NODE_NORMAL, // File doesn't exist
+        };
+
+        if meta.is_file() || meta.is_dir() {
+            NODE_NORMAL
+        } else {
+            // On Windows, other types are rare but could be pipes etc.
+            NODE_OTHER
+        }
+    }
+}
+
 /// Get the path to the currently running executable.
 ///
 /// Returns 0 on success, libuv-compatible error code on failure.
