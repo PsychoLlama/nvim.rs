@@ -69,6 +69,7 @@ extern int rs_os_isdir(const char *path);
 extern int rs_os_isrealdir(const char *path);
 extern int rs_os_file_is_readable(const char *path);
 extern int rs_os_file_is_writable(const char *path);
+extern int rs_os_dirname(char *buf, size_t len);
 #endif
 
 #ifdef HAVE_XATTR
@@ -116,12 +117,16 @@ int os_chdir(const char *path)
 int os_dirname(char *buf, size_t len)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_dirname(buf, len);
+#else
   int error_number;
   if ((error_number = uv_cwd(buf, &len)) != kLibuvSuccess) {
     xstrlcpy(buf, uv_strerror(error_number), len);
     return FAIL;
   }
   return OK;
+#endif
 }
 
 /// Check if the given path is a directory and not a symlink to a directory.
