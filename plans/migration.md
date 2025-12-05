@@ -336,6 +336,7 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - [x] `os_get_hostname` - **Phase 1.27**: Swapped to Rust (USE_RUST_OS)
 - [x] `os_time` - **Phase 1.29**: Swapped to Rust (USE_RUST_OS)
 - [x] `os_hrtime` - **Phase 1.30**: Swapped to Rust (USE_RUST_OS)
+- [x] `os_sleep` - **Phase 1.31**: Swapped to Rust (USE_RUST_OS)
 - [ ] `src/nvim/os/env.c` → `nvim-rs/os/env`
   - `os_getenv`, `os_setenv`, `os_unsetenv`
   - `os_get_user_name`

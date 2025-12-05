@@ -24,6 +24,7 @@
 // Rust implementations - declarations
 extern uint64_t rs_os_time(void);
 extern uint64_t rs_os_hrtime(void);
+extern void rs_os_sleep_ms(uint64_t ms);
 #endif
 
 /// Gets a high-resolution (nanosecond), monotonically-increasing time relative
@@ -83,10 +84,14 @@ void os_delay(uint64_t ms, bool ignoreinput)
 /// @param us          Number of microseconds to sleep.
 void os_sleep(uint64_t ms)
 {
+#ifdef USE_RUST_OS
+  rs_os_sleep_ms(ms);
+#else
   if (ms > UINT_MAX) {
     ms = UINT_MAX;
   }
   uv_sleep((unsigned)ms);
+#endif
 }
 
 // Cache of the current timezone name as retrieved from TZ, or an empty string
