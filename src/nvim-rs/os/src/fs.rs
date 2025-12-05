@@ -12,6 +12,38 @@ use nvim_memory::NvimString;
 
 use crate::{FAIL, OK};
 
+/// Convert a Rust `io::Error` to a libuv-compatible error code.
+///
+/// libuv uses negated errno values (e.g., `UV_ENOENT` = -2 = -ENOENT).
+/// This function maps common Rust `io::ErrorKind` values to their libuv equivalents.
+fn io_error_to_uv_error(err: &std::io::Error) -> i32 {
+    use std::io::ErrorKind;
+
+    // On Unix, we can get the raw os error directly
+    #[cfg(unix)]
+    if let Some(errno) = err.raw_os_error() {
+        // libuv negates errno values
+        return -errno;
+    }
+
+    // Fall back to mapping ErrorKind for cross-platform compatibility
+    match err.kind() {
+        ErrorKind::NotFound => -2,            // UV_ENOENT = -ENOENT
+        ErrorKind::PermissionDenied => -13,   // UV_EACCES = -EACCES
+        ErrorKind::AlreadyExists => -17,      // UV_EEXIST = -EEXIST
+        ErrorKind::InvalidInput => -22,       // UV_EINVAL = -EINVAL
+        ErrorKind::NotADirectory => -20,      // UV_ENOTDIR = -ENOTDIR
+        ErrorKind::IsADirectory => -21,       // UV_EISDIR = -EISDIR
+        ErrorKind::DirectoryNotEmpty => -39,  // UV_ENOTEMPTY = -ENOTEMPTY
+        ErrorKind::ReadOnlyFilesystem => -30, // UV_EROFS = -EROFS
+        ErrorKind::FileTooLarge => -27,       // UV_EFBIG = -EFBIG
+        ErrorKind::StorageFull => -28,        // UV_ENOSPC = -ENOSPC
+        ErrorKind::TimedOut => -110,          // UV_ETIMEDOUT = -ETIMEDOUT
+        ErrorKind::Interrupted => -4,         // UV_EINTR = -EINTR
+        _ => -1,                              // Generic error
+    }
+}
+
 /// Check if a path exists.
 ///
 /// # Safety
@@ -242,7 +274,8 @@ pub unsafe extern "C" fn rs_os_file_is_writable(path: *const c_char) -> c_int {
 
 /// Get file permissions (mode bits).
 ///
-/// Returns the mode on success, -1 on failure.
+/// Returns the mode on success, libuv-compatible error code on failure
+/// (e.g., `UV_ENOENT` = -2 for file not found).
 ///
 /// # Safety
 ///
@@ -250,13 +283,13 @@ pub unsafe extern "C" fn rs_os_file_is_writable(path: *const c_char) -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_os_getperm(path: *const c_char) -> i32 {
     if path.is_null() {
-        return -1;
+        return -22; // UV_EINVAL
     }
 
     let path_cstr = unsafe { CStr::from_ptr(path) };
     let path_str = match path_cstr.to_str() {
         Ok(s) => s,
-        Err(_) => return -1,
+        Err(_) => return -22, // UV_EINVAL for invalid UTF-8
     };
 
     #[cfg(unix)]
@@ -264,7 +297,7 @@ pub unsafe extern "C" fn rs_os_getperm(path: *const c_char) -> i32 {
         use std::os::unix::fs::MetadataExt;
         match fs::metadata(path_str) {
             Ok(meta) => meta.mode() as i32,
-            Err(_) => -1,
+            Err(e) => io_error_to_uv_error(&e),
         }
     }
 
@@ -284,7 +317,7 @@ pub unsafe extern "C" fn rs_os_getperm(path: *const c_char) -> i32 {
                 }
                 mode
             }
-            Err(_) => -1,
+            Err(e) => io_error_to_uv_error(&e),
         }
     }
 }

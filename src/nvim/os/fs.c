@@ -72,6 +72,7 @@ extern int rs_os_file_is_writable(const char *path);
 extern int rs_os_dirname(char *buf, size_t len);
 extern int rs_os_rename(const char *path, const char *new_path);
 extern int rs_os_setperm(const char *path, int perm);
+extern int32_t rs_os_getperm(const char *path);
 #endif
 
 #ifdef HAVE_XATTR
@@ -785,12 +786,16 @@ static int os_stat(const char *name, uv_stat_t *statbuf)
 /// @return libuv error code on error.
 int32_t os_getperm(const char *name)
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_getperm(name);
+#else
   uv_stat_t statbuf;
   int stat_result = os_stat(name, &statbuf);
   if (stat_result == kLibuvSuccess) {
     return (int32_t)statbuf.st_mode;
   }
   return stat_result;
+#endif
 }
 
 /// Set the permission of a file.
