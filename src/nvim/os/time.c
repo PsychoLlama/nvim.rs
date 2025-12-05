@@ -23,6 +23,7 @@
 #ifdef USE_RUST_OS
 // Rust implementations - declarations
 extern uint64_t rs_os_time(void);
+extern uint64_t rs_os_hrtime(void);
 #endif
 
 /// Gets a high-resolution (nanosecond), monotonically-increasing time relative
@@ -34,7 +35,11 @@ extern uint64_t rs_os_time(void);
 uint64_t os_hrtime(void)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_OS
+  return rs_os_hrtime();
+#else
   return uv_hrtime();
+#endif
 }
 
 /// Gets a millisecond-resolution, monotonically-increasing time relative to an
