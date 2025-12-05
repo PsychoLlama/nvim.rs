@@ -741,6 +741,90 @@ pub unsafe extern "C" fn rs_os_mkdtemp(
     }
 }
 
+/// Change ownership of a file.
+///
+/// Returns 0 on success, libuv-compatible error code on failure.
+/// If `owner` or `group` is -1 (max value for unsigned), that ID is not changed.
+///
+/// # Safety
+///
+/// `path` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_chown(path: *const c_char, owner: u32, group: u32) -> c_int {
+    if path.is_null() {
+        return -22; // UV_EINVAL
+    }
+
+    #[cfg(unix)]
+    {
+        let path_cstr = unsafe { CStr::from_ptr(path) };
+
+        // Convert -1 (max u32) to libc's convention
+        let uid: libc::uid_t = if owner == u32::MAX {
+            libc::uid_t::MAX // -1 in unsigned
+        } else {
+            owner as libc::uid_t
+        };
+        let gid: libc::gid_t = if group == u32::MAX {
+            libc::gid_t::MAX // -1 in unsigned
+        } else {
+            group as libc::gid_t
+        };
+
+        let result = unsafe { libc::chown(path_cstr.as_ptr(), uid, gid) };
+
+        if result == 0 {
+            0
+        } else {
+            -(*libc::__errno_location())
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        // chown is not meaningful on non-Unix systems
+        let _ = (path, owner, group);
+        0 // Success (no-op)
+    }
+}
+
+/// Change ownership of a file by file descriptor.
+///
+/// Returns 0 on success, libuv-compatible error code on failure.
+/// If `owner` or `group` is -1 (max value for unsigned), that ID is not changed.
+#[no_mangle]
+pub extern "C" fn rs_os_fchown(fd: c_int, owner: u32, group: u32) -> c_int {
+    #[cfg(unix)]
+    {
+        // Convert -1 (max u32) to libc's convention
+        let uid: libc::uid_t = if owner == u32::MAX {
+            libc::uid_t::MAX
+        } else {
+            owner as libc::uid_t
+        };
+        let gid: libc::gid_t = if group == u32::MAX {
+            libc::gid_t::MAX
+        } else {
+            group as libc::gid_t
+        };
+
+        let result = unsafe { libc::fchown(fd, uid, gid) };
+
+        if result == 0 {
+            0
+        } else {
+            unsafe { -(*libc::__errno_location()) }
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        // fchown is not meaningful on non-Unix systems
+        let _ = (fd, owner, group);
+        0 // Success (no-op)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

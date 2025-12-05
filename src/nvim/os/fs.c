@@ -77,6 +77,8 @@ extern int rs_os_remove(const char *path);
 extern int rs_os_rmdir(const char *path);
 extern int rs_os_mkdir(const char *path, unsigned int mode);
 extern int rs_os_mkdtemp(const char *templ, char *path, size_t path_len);
+extern int rs_os_chown(const char *path, unsigned int owner, unsigned int group);
+extern int rs_os_fchown(int fd, unsigned int owner, unsigned int group);
 #endif
 
 #ifdef HAVE_XATTR
@@ -947,9 +949,13 @@ bool os_file_owned(const char *fname)
 /// @note If `owner` or `group` is -1, then that ID is not changed.
 int os_chown(const char *path, uv_uid_t owner, uv_gid_t group)
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_chown(path, owner, group);
+#else
   int r;
   RUN_UV_FS_FUNC(r, uv_fs_chown, path, owner, group, NULL);
   return r;
+#endif
 }
 
 /// Changes the owner and group of the file referred to by the open file
@@ -960,9 +966,13 @@ int os_chown(const char *path, uv_uid_t owner, uv_gid_t group)
 /// @note If `owner` or `group` is -1, then that ID is not changed.
 int os_fchown(int fd, uv_uid_t owner, uv_gid_t group)
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_fchown(fd, owner, group);
+#else
   int r;
   RUN_UV_FS_FUNC(r, uv_fs_fchown, fd, owner, group, NULL);
   return r;
+#endif
 }
 
 /// Check if a path exists.

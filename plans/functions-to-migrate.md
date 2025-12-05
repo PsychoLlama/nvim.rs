@@ -307,13 +307,17 @@ These use Rust's `std::fs` instead of libuv. The 90 filesystem unit tests pass, 
 **Phase 2.14**: Swapped one more OS filesystem function:
 - `os_mkdtemp` - Create a temporary directory from a template. Uses `libc::mkdtemp` on Unix.
 
+**Phase 2.15**: Swapped two more OS filesystem functions:
+- `os_chown` - Change file ownership. Uses `libc::chown` on Unix.
+- `os_fchown` - Change file ownership by file descriptor. Uses `libc::fchown` on Unix.
+
 **Remaining OS filesystem functions (require more work):**
 - `os_copy` - Uses libuv flags (UV_FS_COPYFILE_EXCL, UV_FS_COPYFILE_FICLONE) not available in Rust std::fs::copy
 - `os_can_exe` - Complex function with output parameters and PATH searching
 - `os_scandir` - Returns directory iterator, would need iterator pattern in Rust FFI
 
 **Phase 2 Summary (Updated 2025-12-04):**
-- 13 OS filesystem functions swapped to Rust
+- 15 OS filesystem functions swapped to Rust
 - All using USE_RUST_OS_FS compile flag
 - Added `io_error_to_uv_error` helper for libuv-compatible error codes
 - Remaining functions require libuv-specific features or complex FFI patterns
