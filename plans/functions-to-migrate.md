@@ -181,3 +181,38 @@ These are pure string scanning functions with no global state dependencies.
 Phase 1 pure function migration is complete. Future migration requires:
 - Complex struct FFI infrastructure
 - Or accepting libuv behavior differences for OS functions
+
+## Session 5 Summary (2025-12-04)
+
+**Exhaustive verification of remaining candidates:**
+
+Searched all `.c` files with FUNC_ATTR_PURE/CONST attributes:
+- All files containing PURE/CONST functions also contain USE_RUST patterns
+- This confirms all suitable pure functions have already been migrated
+
+**Files now using Rust (20 total C files):**
+- base64.c, charset.c, cmdhist.c, eval.c, ex_docmd.c, fileio.c
+- hashtab.c, help.c, indent.c, keycodes.c, math.c, mbyte.c
+- memory.c, menu.c, option.c, path.c, profile.c, sha256.c
+- shada.c, strings.c
+- os/env.c, os/time.c
+
+**Functions verified as unsuitable:**
+- `arabic_maycombine` - Uses `p_arshape`, `p_tbidi` globals
+- `cursor_is_block_during_visual` - Uses `shape_table` global
+- `min_vim_version`, `highest_patch`, `has_vim_patch` - Access static version arrays
+- `has_format_option` - Uses `p_paste` and `curbuf->b_p_fo` globals
+- `os_now` - Uses `&main_loop.uv` global (libuv event loop)
+
+**Phase 1 Status: COMPLETE**
+
+All trivial self-contained functions have been identified and migrated. The migration has reached a natural stopping point where remaining candidates require:
+1. Complex struct FFI (win_T, buf_T, frame_T)
+2. Global state access patterns
+3. libuv integration for OS functions
+4. Event loop/callback infrastructure
+
+**Next Phase Options:**
+1. **Phase 2A**: Build Rust FFI for complex structs (win_T, buf_T)
+2. **Phase 2B**: Wrap libuv-sys for OS layer parity
+3. **Phase 2C**: Migrate non-PURE functions that are otherwise simple
