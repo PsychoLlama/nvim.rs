@@ -382,13 +382,21 @@ TEST_FILE=test/functional/core/fileio_spec.lua make functionaltest
 
 **Goal:** Migrate core data structures that underpin the editor
 
-#### 3.1 Hash Table (`src/nvim/hashtab.c`)
+#### 3.1 Hash Table (`src/nvim/hashtab.c`) ✅ SWAPPED
 
 - [x] Implement `HashMap`-compatible structure in Rust (exists in collections crate)
 - [x] Expose C-compatible API via FFI
 - [x] `hash_hash` - Compute hash for null-terminated string - swapped to Rust
 - [x] `hash_hash_len` - Compute hash for string with known length - swapped to Rust
-- [ ] Full hashtab migration - Used throughout codebase, careful migration needed
+- [x] `hash_init` - Initialize empty hash table - **Phase 2.2**: swapped to Rust
+- [x] `hash_clear` - Free array without freeing values - **Phase 2.2**: swapped to Rust
+- [x] `hash_find` - Find item by key - **Phase 2.2**: swapped to Rust
+- [x] `hash_find_len` - Find item by key with known length - **Phase 2.2**: swapped to Rust
+- [x] `hash_lookup` - Find item with precomputed hash - **Phase 2.2**: swapped to Rust
+- [x] `hash_add_item` - Add item to hash table - **Phase 2.2**: swapped to Rust
+- [x] `hash_remove` - Remove item from hash table - **Phase 2.2**: swapped to Rust
+- [x] `hash_lock` - Lock hash table from resizing - **Phase 2.2**: swapped to Rust
+- [x] `hash_unlock` - Unlock hash table - **Phase 2.2**: swapped to Rust
 
 #### 3.2 Growing Array (`src/nvim/garray.c`) ✅ SWAPPED
 
