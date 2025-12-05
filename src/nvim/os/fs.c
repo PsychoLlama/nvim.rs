@@ -83,6 +83,7 @@ extern int rs_os_file_settime(const char *path, double atime, double mtime);
 extern int rs_os_copy(const char *path, const char *new_path, int flags);
 extern int rs_os_close(int fd);
 extern int rs_os_dup(int fd);
+extern int rs_os_exepath(char *buffer, size_t *size);
 #endif
 
 #ifdef HAVE_XATTR
@@ -258,7 +259,11 @@ int os_nodetype(const char *name)
 int os_exepath(char *buffer, size_t *size)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_exepath(buffer, size);
+#else
   return uv_exepath(buffer, size);
+#endif
 }
 
 /// Checks if the file `name` is executable.

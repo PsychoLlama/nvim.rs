@@ -1049,6 +1049,57 @@ fn try_clone_file(src: &str, dst: &str) -> Result<c_int, std::io::Error> {
     }
 }
 
+/// Get the path to the currently running executable.
+///
+/// Returns 0 on success, libuv-compatible error code on failure.
+/// On success, the path is written to `buffer` (null-terminated) and
+/// `size` is updated to the actual length (not including null terminator).
+///
+/// # Safety
+///
+/// - `buffer` must point to a buffer of at least `*size` bytes
+/// - `size` must be a valid pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_exepath(buffer: *mut c_char, size: *mut usize) -> c_int {
+    if buffer.is_null() || size.is_null() {
+        return -22; // UV_EINVAL
+    }
+
+    let buf_size = unsafe { *size };
+    if buf_size == 0 {
+        return -22; // UV_EINVAL
+    }
+
+    match std::env::current_exe() {
+        Ok(path) => {
+            match path.to_str() {
+                Some(path_str) => {
+                    let path_bytes = path_str.as_bytes();
+                    if path_bytes.len() >= buf_size {
+                        // Path is too long for buffer
+                        return -7; // UV_E2BIG
+                    }
+
+                    unsafe {
+                        ptr::copy_nonoverlapping(
+                            path_bytes.as_ptr(),
+                            buffer.cast(),
+                            path_bytes.len(),
+                        );
+                        // Null terminate
+                        *buffer.add(path_bytes.len()) = 0;
+                        // Update size to actual length (not including null)
+                        *size = path_bytes.len();
+                    }
+                    0
+                }
+                None => -22, // UV_EINVAL - path not valid UTF-8
+            }
+        }
+        Err(e) => io_error_to_uv_error(&e),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
