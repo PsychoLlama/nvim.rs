@@ -148,8 +148,10 @@ pub unsafe extern "C" fn rs_os_file_is_readable(path: *const c_char) -> c_int {
 
 /// Check if a file is writable.
 ///
-/// Note: This checks if we can open the file for writing, not just
-/// the permission bits.
+/// Returns:
+/// - 0 if `name` is not writable
+/// - 1 if `name` is writable (file)
+/// - 2 if `name` is a writable directory
 ///
 /// # Safety
 ///
@@ -168,28 +170,74 @@ pub unsafe extern "C" fn rs_os_file_is_writable(path: *const c_char) -> c_int {
 
     let path = Path::new(path_str);
 
-    // If file doesn't exist, check if parent directory is writable
+    // Check if path exists
     if !path.exists() {
-        return match path.parent() {
-            Some(parent) if parent.exists() => {
-                // Try to create a temp file in the parent
-                c_int::from(
-                    fs::OpenOptions::new()
-                        .write(true)
-                        .create_new(true)
-                        .open(path)
-                        .map(|_| {
-                            let _ = fs::remove_file(path);
-                        })
-                        .is_ok(),
-                )
-            }
-            _ => 0,
-        };
+        return 0;
     }
 
-    // Try to open existing file for writing (append mode to not truncate)
-    c_int::from(fs::OpenOptions::new().append(true).open(path_str).is_ok())
+    // Check write access - on Unix, we can use access() equivalent
+    #[cfg(unix)]
+    {
+        // Get metadata
+        let meta = match fs::metadata(path) {
+            Ok(m) => m,
+            Err(_) => return 0,
+        };
+
+        // Try to open for writing to test actual access
+        let is_writable = if meta.is_dir() {
+            // For directories, try to create a temp file
+            use std::io::ErrorKind;
+            let test_path = path.join(".nvim_write_test");
+            match fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&test_path)
+            {
+                Ok(_) => {
+                    let _ = fs::remove_file(&test_path);
+                    true
+                }
+                Err(e) if e.kind() == ErrorKind::AlreadyExists => {
+                    // File exists, try to open it for writing (append implies write)
+                    fs::OpenOptions::new().append(true).open(&test_path).is_ok()
+                }
+                Err(_) => false,
+            }
+        } else {
+            // For files, try to open for writing (append mode to not truncate)
+            fs::OpenOptions::new().append(true).open(path).is_ok()
+        };
+
+        if is_writable {
+            if meta.is_dir() {
+                2
+            } else {
+                1
+            }
+        } else {
+            0
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        // On non-Unix, use simpler check
+        let meta = match fs::metadata(path) {
+            Ok(m) => m,
+            Err(_) => return 0,
+        };
+
+        if meta.permissions().readonly() {
+            return 0;
+        }
+
+        if meta.is_dir() {
+            2
+        } else {
+            1
+        }
+    }
 }
 
 /// Get file permissions (mode bits).

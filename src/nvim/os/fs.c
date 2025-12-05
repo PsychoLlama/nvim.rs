@@ -68,6 +68,7 @@ extern int rs_os_path_exists(const char *path);
 extern int rs_os_isdir(const char *path);
 extern int rs_os_isrealdir(const char *path);
 extern int rs_os_file_is_readable(const char *path);
+extern int rs_os_file_is_writable(const char *path);
 #endif
 
 #ifdef HAVE_XATTR
@@ -996,12 +997,16 @@ bool os_file_is_readable(const char *name)
 int os_file_is_writable(const char *name)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_file_is_writable(name);
+#else
   int r;
   RUN_UV_FS_FUNC(r, uv_fs_access, name, W_OK, NULL);
   if (r == 0) {
     return os_isdir(name) ? 2 : 1;
   }
   return 0;
+#endif
 }
 
 /// Rename a file or directory.
