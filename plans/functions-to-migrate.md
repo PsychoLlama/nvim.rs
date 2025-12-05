@@ -272,3 +272,6 @@ The migration has reached a natural plateau. Further progress requires choosing 
 - `os_isdir` - Check if a path is a directory
 
 These use Rust's `std::fs` instead of libuv. The 90 filesystem unit tests pass, confirming behavioral equivalence for standard use cases.
+
+**Phase 2.4**: Swapped one more OS filesystem function:
+- `os_file_is_readable` - Check if a file is readable (uses `fs::File::open` instead of `access(R_OK)`)
