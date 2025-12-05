@@ -66,6 +66,7 @@
 // Rust filesystem implementations
 extern int rs_os_path_exists(const char *path);
 extern int rs_os_isdir(const char *path);
+extern int rs_os_file_is_readable(const char *path);
 #endif
 
 #ifdef HAVE_XATTR
@@ -973,9 +974,13 @@ int os_file_settime(const char *path, double atime, double mtime)
 bool os_file_is_readable(const char *name)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_file_is_readable(name) != 0;
+#else
   int r;
   RUN_UV_FS_FUNC(r, uv_fs_access, name, R_OK, NULL);
   return (r == 0);
+#endif
 }
 
 /// Check if a file is writable.
