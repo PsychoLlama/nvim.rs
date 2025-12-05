@@ -74,6 +74,7 @@ extern int rs_os_rename(const char *path, const char *new_path);
 extern int rs_os_setperm(const char *path, int perm);
 extern int32_t rs_os_getperm(const char *path);
 extern int rs_os_remove(const char *path);
+extern int rs_os_rmdir(const char *path);
 #endif
 
 #ifdef HAVE_XATTR
@@ -1166,9 +1167,13 @@ int os_mkdtemp(const char *templ, char *path)
 int os_rmdir(const char *path)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_rmdir(path);
+#else
   int r;
   RUN_UV_FS_FUNC(r, uv_fs_rmdir, path, NULL);
   return r;
+#endif
 }
 
 /// Opens a directory.
