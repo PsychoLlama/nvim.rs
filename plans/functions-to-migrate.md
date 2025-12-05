@@ -341,8 +341,11 @@ These use Rust's `std::fs` instead of libuv. The 90 filesystem unit tests pass, 
 **Phase 2.21**: Swapped executable path function to Rust:
 - `os_exepath` - Get path to currently running executable. Uses `std::env::current_exe()`.
 
+**Phase 2.22**: Swapped node type detection function to Rust (Unix only):
+- `os_nodetype` - Check what type of filesystem node a path is (normal/writable/other). Uses `std::fs::metadata` with `FileTypeExt`.
+
 **Phase 2 Summary (Updated 2025-12-05):**
-- 20 OS filesystem functions swapped to Rust (USE_RUST_OS_FS)
+- 21 OS filesystem functions swapped to Rust (USE_RUST_OS_FS)
 - 2 OS process/memory functions swapped to Rust (USE_RUST_OS_PROC, USE_RUST_OS_MEM)
 - 1 OS input function swapped to Rust (USE_RUST_OS_INPUT)
 - Added `io_error_to_uv_error` helper for libuv-compatible error codes
