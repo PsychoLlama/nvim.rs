@@ -81,6 +81,8 @@ extern int rs_os_chown(const char *path, unsigned int owner, unsigned int group)
 extern int rs_os_fchown(int fd, unsigned int owner, unsigned int group);
 extern int rs_os_file_settime(const char *path, double atime, double mtime);
 extern int rs_os_copy(const char *path, const char *new_path, int flags);
+extern int rs_os_close(int fd);
+extern int rs_os_dup(int fd);
 #endif
 
 #ifdef HAVE_XATTR
@@ -549,9 +551,13 @@ int os_set_cloexec(const int fd)
 /// @return 0 or libuv error code on failure.
 int os_close(const int fd)
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_close(fd);
+#else
   int r;
   RUN_UV_FS_FUNC(r, uv_fs_close, fd, NULL);
   return r;
+#endif
 }
 
 /// Duplicate file descriptor
@@ -562,6 +568,9 @@ int os_close(const int fd)
 int os_dup(const int fd)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_dup(fd);
+#else
   int ret;
 os_dup_dup:
   ret = dup(fd);
@@ -575,6 +584,7 @@ os_dup_dup:
     }
   }
   return ret;
+#endif
 }
 
 /// Open the file descriptor for stdin.

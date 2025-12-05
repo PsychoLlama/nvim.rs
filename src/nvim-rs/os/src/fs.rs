@@ -880,6 +880,65 @@ pub unsafe extern "C" fn rs_os_file_settime(path: *const c_char, atime: f64, mti
     }
 }
 
+/// Close a file descriptor.
+///
+/// Returns 0 on success, libuv-compatible error code on failure.
+#[no_mangle]
+pub extern "C" fn rs_os_close(fd: c_int) -> c_int {
+    #[cfg(unix)]
+    {
+        let result = unsafe { libc::close(fd) };
+        if result == 0 {
+            0
+        } else {
+            unsafe { -(*libc::__errno_location()) }
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        // On Windows, use _close
+        let result = unsafe { libc::close(fd) };
+        if result == 0 {
+            0
+        } else {
+            -1 // Generic error
+        }
+    }
+}
+
+/// Duplicate a file descriptor.
+///
+/// Returns the new file descriptor on success, libuv-compatible error code on failure.
+#[no_mangle]
+pub extern "C" fn rs_os_dup(fd: c_int) -> c_int {
+    #[cfg(unix)]
+    {
+        loop {
+            let result = unsafe { libc::dup(fd) };
+            if result >= 0 {
+                return result;
+            }
+            let errno = unsafe { *libc::__errno_location() };
+            if errno == libc::EINTR {
+                // Retry on EINTR
+                continue;
+            }
+            return -errno;
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        let result = unsafe { libc::dup(fd) };
+        if result >= 0 {
+            result
+        } else {
+            -1 // Generic error
+        }
+    }
+}
+
 // libuv copy file flags
 const UV_FS_COPYFILE_EXCL: c_int = 0x0001;
 const UV_FS_COPYFILE_FICLONE: c_int = 0x0002;

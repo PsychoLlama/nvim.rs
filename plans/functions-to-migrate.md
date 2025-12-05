@@ -323,8 +323,12 @@ These use Rust's `std::fs` instead of libuv. The 90 filesystem unit tests pass, 
 - `os_can_exe` - Complex function with output parameters and PATH searching
 - `os_scandir` - Returns directory iterator, would need iterator pattern in Rust FFI
 
+**Phase 2.18**: Swapped two more OS file descriptor functions:
+- `os_close` - Close a file descriptor. Uses `libc::close` on Unix.
+- `os_dup` - Duplicate a file descriptor. Uses `libc::dup` on Unix with EINTR retry.
+
 **Phase 2 Summary (Updated 2025-12-04):**
-- 17 OS filesystem functions swapped to Rust
+- 19 OS filesystem functions swapped to Rust
 - All using USE_RUST_OS_FS compile flag
 - Added `io_error_to_uv_error` helper for libuv-compatible error codes
 - Remaining functions require complex FFI patterns
