@@ -634,6 +634,113 @@ pub unsafe extern "C" fn rs_os_readlink(path: *const c_char) -> *mut c_char {
 // Note: rs_os_readlink_free is no longer needed since rs_os_readlink now uses
 // xmallocz. Callers should use xfree() directly to free returned strings.
 
+/// Create a temporary directory from a template.
+///
+/// The template must end with "XXXXXX" which will be replaced by random characters.
+/// On success, the created path is written to the output buffer.
+///
+/// Returns 0 on success, libuv-compatible error code on failure.
+///
+/// # Safety
+///
+/// - `template` must be a valid null-terminated C string ending with "XXXXXX"
+/// - `path` must point to a buffer of at least `path_len` bytes
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_mkdtemp(
+    template: *const c_char,
+    path: *mut c_char,
+    path_len: usize,
+) -> c_int {
+    if template.is_null() || path.is_null() || path_len == 0 {
+        return -22; // UV_EINVAL
+    }
+
+    #[cfg(unix)]
+    {
+        // mkdtemp modifies the template in place, so we need a mutable copy
+        let template_cstr = unsafe { CStr::from_ptr(template) };
+        let template_bytes = template_cstr.to_bytes_with_nul();
+
+        // Check that template ends with XXXXXX
+        if template_bytes.len() < 7 {
+            return -22; // UV_EINVAL - template too short
+        }
+
+        // Create a mutable buffer for mkdtemp
+        let mut buf: Vec<u8> = template_bytes.to_vec();
+
+        let result = unsafe { libc::mkdtemp(buf.as_mut_ptr().cast()) };
+
+        if result.is_null() {
+            // mkdtemp failed, get errno
+            let errno = *libc::__errno_location();
+            return -errno;
+        }
+
+        // Copy the result to the output path
+        let result_len = buf.len(); // includes null terminator
+        if result_len > path_len {
+            // Path too long for output buffer
+            // Clean up by removing the created directory
+            let _ = libc::rmdir(buf.as_ptr().cast());
+            return -36; // UV_ENAMETOOLONG
+        }
+
+        unsafe {
+            ptr::copy_nonoverlapping(buf.as_ptr(), path.cast(), result_len);
+        }
+        0
+    }
+
+    #[cfg(not(unix))]
+    {
+        // On non-Unix, use a fallback with random directory name
+        use std::time::SystemTime;
+
+        let template_cstr = unsafe { CStr::from_ptr(template) };
+        let template_str = match template_cstr.to_str() {
+            Ok(s) => s,
+            Err(_) => return -22, // UV_EINVAL
+        };
+
+        // Find and replace XXXXXX with random chars
+        if !template_str.ends_with("XXXXXX") {
+            return -22; // UV_EINVAL
+        }
+
+        // Generate a unique suffix based on time and process ID
+        let now = SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let pid = std::process::id();
+        let suffix = format!("{:06x}", (now ^ u128::from(pid)) & 0xFFFFFF);
+
+        let new_path = format!("{}{}", &template_str[..template_str.len() - 6], suffix);
+
+        // Try to create the directory
+        match fs::create_dir(&new_path) {
+            Ok(()) => {
+                let new_path_bytes = new_path.as_bytes();
+                if new_path_bytes.len() + 1 > path_len {
+                    let _ = fs::remove_dir(&new_path);
+                    return -36; // UV_ENAMETOOLONG
+                }
+                unsafe {
+                    ptr::copy_nonoverlapping(
+                        new_path_bytes.as_ptr(),
+                        path.cast(),
+                        new_path_bytes.len(),
+                    );
+                    *path.add(new_path_bytes.len()) = 0;
+                }
+                0
+            }
+            Err(e) => io_error_to_uv_error(&e),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

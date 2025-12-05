@@ -76,6 +76,7 @@ extern int32_t rs_os_getperm(const char *path);
 extern int rs_os_remove(const char *path);
 extern int rs_os_rmdir(const char *path);
 extern int rs_os_mkdir(const char *path, unsigned int mode);
+extern int rs_os_mkdtemp(const char *templ, char *path, size_t path_len);
 #endif
 
 #ifdef HAVE_XATTR
@@ -1157,6 +1158,9 @@ int os_file_mkdir(char *fname, int32_t mode)
 int os_mkdtemp(const char *templ, char *path)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_mkdtemp(templ, path, TEMP_FILE_PATH_MAXLEN);
+#else
   uv_fs_t request;
   int result = uv_fs_mkdtemp(NULL, &request, templ, NULL);
   if (result == kLibuvSuccess) {
@@ -1164,6 +1168,7 @@ int os_mkdtemp(const char *templ, char *path)
   }
   uv_fs_req_cleanup(&request);
   return result;
+#endif
 }
 
 /// Remove a directory.
