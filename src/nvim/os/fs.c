@@ -70,6 +70,7 @@ extern int rs_os_isrealdir(const char *path);
 extern int rs_os_file_is_readable(const char *path);
 extern int rs_os_file_is_writable(const char *path);
 extern int rs_os_dirname(char *buf, size_t len);
+extern int rs_os_rename(const char *path, const char *new_path);
 #endif
 
 #ifdef HAVE_XATTR
@@ -1020,9 +1021,13 @@ int os_file_is_writable(const char *name)
 int os_rename(const char *path, const char *new_path)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_rename(path, new_path);
+#else
   int r;
   RUN_UV_FS_FUNC(r, uv_fs_rename, path, new_path, NULL);
   return (r == kLibuvSuccess ? OK : FAIL);
+#endif
 }
 
 /// Make a directory.

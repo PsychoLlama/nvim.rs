@@ -416,7 +416,7 @@ pub unsafe extern "C" fn rs_os_rmdir(path: *const c_char) -> c_int {
 
 /// Rename/move a file or directory.
 ///
-/// Returns 0 on success, -1 on failure.
+/// Returns OK on success, FAIL on failure.
 ///
 /// # Safety
 ///
@@ -424,7 +424,7 @@ pub unsafe extern "C" fn rs_os_rmdir(path: *const c_char) -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_os_rename(from: *const c_char, to: *const c_char) -> c_int {
     if from.is_null() || to.is_null() {
-        return -1;
+        return FAIL;
     }
 
     let from_cstr = unsafe { CStr::from_ptr(from) };
@@ -432,17 +432,17 @@ pub unsafe extern "C" fn rs_os_rename(from: *const c_char, to: *const c_char) ->
 
     let from_str = match from_cstr.to_str() {
         Ok(s) => s,
-        Err(_) => return -1,
+        Err(_) => return FAIL,
     };
 
     let to_str = match to_cstr.to_str() {
         Ok(s) => s,
-        Err(_) => return -1,
+        Err(_) => return FAIL,
     };
 
     match fs::rename(from_str, to_str) {
-        Ok(()) => 0,
-        Err(_) => -1,
+        Ok(()) => OK,
+        Err(_) => FAIL,
     }
 }
 
