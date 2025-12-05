@@ -36,20 +36,38 @@ extern hash_T rs_hash_hash(const char *key);
 extern hash_T rs_hash_hash_len(const char *key, size_t len);
 #endif
 
+#ifdef USE_RUST_HASHTAB
+// Rust hashtab implementations
+extern void rs_hash_init(hashtab_T *ht);
+extern void rs_hash_clear(hashtab_T *ht);
+extern hashitem_T *rs_hash_lookup(const hashtab_T *ht, const char *key, size_t key_len, hash_T hash);
+extern hashitem_T *rs_hash_find(const hashtab_T *ht, const char *key);
+extern hashitem_T *rs_hash_find_len(const hashtab_T *ht, const char *key, size_t len);
+extern void rs_hash_add_item(hashtab_T *ht, hashitem_T *hi, char *key, hash_T hash);
+extern void rs_hash_remove(hashtab_T *ht, hashitem_T *hi);
+extern void rs_hash_lock(hashtab_T *ht);
+extern void rs_hash_unlock(hashtab_T *ht);
+#endif
+
 // Magic value for algorithm that walks through the array.
 #define PERTURB_SHIFT 5
 
 #include "hashtab.c.generated.h"
 
+// Global marker for removed items - used by both C and Rust
 char hash_removed;
 
 /// Initialize an empty hash table.
 void hash_init(hashtab_T *ht)
 {
+#ifdef USE_RUST_HASHTAB
+  rs_hash_init(ht);
+#else
   // This zeroes all "ht_" entries and all the "hi_key" in "ht_smallarray".
   CLEAR_POINTER(ht);
   ht->ht_array = ht->ht_smallarray;
   ht->ht_mask = HT_INIT_SIZE - 1;
+#endif
 }
 
 /// Free the array of a hash table without freeing contained values.
@@ -58,9 +76,13 @@ void hash_init(hashtab_T *ht)
 /// right next!
 void hash_clear(hashtab_T *ht)
 {
+#ifdef USE_RUST_HASHTAB
+  rs_hash_clear(ht);
+#else
   if (ht->ht_array != ht->ht_smallarray) {
     xfree(ht->ht_array);
   }
+#endif
 }
 
 /// Free the array of a hash table and all contained values.
@@ -89,7 +111,11 @@ void hash_clear_all(hashtab_T *ht, unsigned off)
 ///                  is changed in any way.
 hashitem_T *hash_find(const hashtab_T *const ht, const char *const key)
 {
+#ifdef USE_RUST_HASHTAB
+  return rs_hash_find(ht, key);
+#else
   return hash_lookup(ht, key, strlen(key), hash_hash(key));
+#endif
 }
 
 /// Like hash_find, but key is not NUL-terminated
@@ -106,7 +132,11 @@ hashitem_T *hash_find(const hashtab_T *const ht, const char *const key)
 ///                  is changed in any way.
 hashitem_T *hash_find_len(const hashtab_T *const ht, const char *const key, const size_t len)
 {
+#ifdef USE_RUST_HASHTAB
+  return rs_hash_find_len(ht, key, len);
+#else
   return hash_lookup(ht, key, len, hash_hash_len(key, len));
+#endif
 }
 
 /// Like hash_find(), but caller computes "hash".
@@ -123,6 +153,9 @@ hashitem_T *hash_find_len(const hashtab_T *const ht, const char *const key, cons
 hashitem_T *hash_lookup(const hashtab_T *const ht, const char *const key, const size_t key_len,
                         const hash_T hash)
 {
+#ifdef USE_RUST_HASHTAB
+  return rs_hash_lookup(ht, key, key_len, hash);
+#else
 #ifdef HT_DEBUG
   hash_count_lookup++;
 #endif
@@ -177,6 +210,7 @@ hashitem_T *hash_lookup(const hashtab_T *const ht, const char *const key, const 
       freeitem = hi;
     }
   }
+#endif
 }
 
 /// Print the efficiency of hashtable lookups.
@@ -224,6 +258,9 @@ int hash_add(hashtab_T *ht, char *key)
 /// @param hash The precomputed hash value for the key.
 void hash_add_item(hashtab_T *ht, hashitem_T *hi, char *key, hash_T hash)
 {
+#ifdef USE_RUST_HASHTAB
+  rs_hash_add_item(ht, hi, key, hash);
+#else
   ht->ht_used++;
   ht->ht_changed++;
   if (hi->hi_key == NULL) {
@@ -234,6 +271,7 @@ void hash_add_item(hashtab_T *ht, hashitem_T *hi, char *key, hash_T hash)
 
   // When the space gets low may resize the array.
   hash_may_resize(ht, 0);
+#endif
 }
 
 /// Remove item "hi" from hashtable "ht".
@@ -244,10 +282,14 @@ void hash_add_item(hashtab_T *ht, hashitem_T *hi, char *key, hash_T hash)
 ///           It must have been obtained with hash_lookup().
 void hash_remove(hashtab_T *ht, hashitem_T *hi)
 {
+#ifdef USE_RUST_HASHTAB
+  rs_hash_remove(ht, hi);
+#else
   ht->ht_used--;
   ht->ht_changed++;
   hi->hi_key = HI_KEY_REMOVED;
   hash_may_resize(ht, 0);
+#endif
 }
 
 /// Lock hashtable (prevent changes in ht_array).
@@ -256,7 +298,11 @@ void hash_remove(hashtab_T *ht, hashitem_T *hi)
 /// Must call hash_unlock() later.
 void hash_lock(hashtab_T *ht)
 {
+#ifdef USE_RUST_HASHTAB
+  rs_hash_lock(ht);
+#else
   ht->ht_locked++;
+#endif
 }
 
 /// Unlock hashtable (allow changes in ht_array again).
@@ -265,8 +311,12 @@ void hash_lock(hashtab_T *ht)
 /// This must balance a call to hash_lock().
 void hash_unlock(hashtab_T *ht)
 {
+#ifdef USE_RUST_HASHTAB
+  rs_hash_unlock(ht);
+#else
   ht->ht_locked--;
   hash_may_resize(ht, 0);
+#endif
 }
 
 /// Resize hashtable (new size can be given or automatically computed).

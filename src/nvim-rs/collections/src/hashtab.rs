@@ -12,6 +12,14 @@ use std::ptr;
 use nvim_memory::{xcalloc, xfree};
 use nvim_memutil::{rs_hash_hash, rs_hash_hash_len};
 
+// Import the C global for the removed marker
+// This ensures Rust and C use the same marker value
+extern "C" {
+    /// The C global variable used as a marker for removed hash items.
+    /// Using the address of this variable as a magic marker.
+    static mut hash_removed: c_char;
+}
+
 /// Initial size for a hashtable (must be a power of 2).
 pub const HT_INIT_SIZE: usize = 16;
 
@@ -59,13 +67,21 @@ pub struct HashTab {
     pub ht_smallarray: [HashItem; HT_INIT_SIZE],
 }
 
-// Static marker for removed items
-static mut HASH_REMOVED_MARKER: c_char = 0;
-
 /// Get the address used to mark removed items.
+/// Uses the C global hash_removed for compatibility.
+///
+/// # Safety
+///
+/// This function accesses a mutable static, which requires unsafe.
+/// The global is defined in C and is guaranteed to exist.
 #[no_mangle]
 pub extern "C" fn rs_hash_key_removed() -> *mut c_char {
-    ptr::addr_of_mut!(HASH_REMOVED_MARKER)
+    // SAFETY: hash_removed is a global defined in C hashtab.c
+    // that is guaranteed to exist for the lifetime of the program.
+    #[allow(unused_unsafe)]
+    unsafe {
+        ptr::addr_of_mut!(hash_removed)
+    }
 }
 
 /// Check if a hash item is empty (never used or removed).
