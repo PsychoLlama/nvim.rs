@@ -1352,6 +1352,35 @@ pub unsafe extern "C" fn rs_os_write(
     written_bytes as isize
 }
 
+/// `FileID` structure matching nvim's `FileID` in `fs_defs.h`
+///
+/// Contains inode and `device_id` to uniquely identify a file.
+#[repr(C)]
+pub struct FileID {
+    pub inode: u64,
+    pub device_id: u64,
+}
+
+/// Check if two `FileID`s are equal.
+///
+/// # Safety
+///
+/// Both `file_id_1` and `file_id_2` must be valid pointers to `FileID` structs.
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_fileid_equal(
+    file_id_1: *const FileID,
+    file_id_2: *const FileID,
+) -> bool {
+    if file_id_1.is_null() || file_id_2.is_null() {
+        return false;
+    }
+
+    let id1 = unsafe { &*file_id_1 };
+    let id2 = unsafe { &*file_id_2 };
+
+    id1.inode == id2.inode && id1.device_id == id2.device_id
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1402,5 +1431,25 @@ mod tests {
         let path = CString::new(".").unwrap();
         let perm = unsafe { rs_os_getperm(path.as_ptr()) };
         assert!(perm > 0);
+    }
+
+    #[test]
+    fn test_fileid_equal() {
+        let id1 = FileID {
+            inode: 123,
+            device_id: 456,
+        };
+        let id2 = FileID {
+            inode: 123,
+            device_id: 456,
+        };
+        let id3 = FileID {
+            inode: 789,
+            device_id: 456,
+        };
+
+        assert!(unsafe { rs_os_fileid_equal(&id1, &id2) });
+        assert!(!unsafe { rs_os_fileid_equal(&id1, &id3) });
+        assert!(!unsafe { rs_os_fileid_equal(std::ptr::null(), &id1) });
     }
 }
