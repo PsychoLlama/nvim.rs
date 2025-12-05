@@ -278,3 +278,6 @@ These use Rust's `std::fs` instead of libuv. The 90 filesystem unit tests pass, 
 
 **Phase 2.5**: Swapped one more OS filesystem function:
 - `os_isrealdir` - Check if a path is a real directory (not a symlink to one). Uses `symlink_metadata` (lstat) in Rust.
+
+**Phase 2.6**: Swapped one more OS filesystem function:
+- `os_file_is_writable` - Returns 0 (not writable), 1 (file writable), or 2 (directory writable). Uses append mode to test actual write access.
