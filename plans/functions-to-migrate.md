@@ -347,8 +347,12 @@ These use Rust's `std::fs` instead of libuv. The 90 filesystem unit tests pass, 
 **Phase 2.23**: Swapped close-on-exec function to Rust:
 - `os_set_cloexec` - Set the FD_CLOEXEC flag on a file descriptor using fcntl.
 
+**Phase 2.24**: Swapped read/write functions to Rust:
+- `os_read` - Read from file descriptor with EINTR/EAGAIN handling and EOF detection.
+- `os_write` - Write to file descriptor with EINTR/EAGAIN handling.
+
 **Phase 2 Summary (Updated 2025-12-05):**
-- 22 OS filesystem functions swapped to Rust (USE_RUST_OS_FS)
+- 24 OS filesystem functions swapped to Rust (USE_RUST_OS_FS)
 - 2 OS process/memory functions swapped to Rust (USE_RUST_OS_PROC, USE_RUST_OS_MEM)
 - 1 OS input function swapped to Rust (USE_RUST_OS_INPUT)
 - Added `io_error_to_uv_error` helper for libuv-compatible error codes
@@ -372,8 +376,7 @@ These functions haven't been migrated because they have complex dependencies:
 - `os_file_owned` - Uses os_fileinfo
 
 ### Functions with complex error translation:
-- `os_read` / `os_write` - Use os_translate_sys_error with EINTR/EAGAIN handling
-- `os_readv` - Uses struct iovec
+- `os_readv` - Uses struct iovec (vectored I/O)
 
 ### Functions with complex control flow:
 - `os_can_exe` - PATH searching with multiple helper functions
