@@ -46,6 +46,10 @@ static int cursorhold_tb_change_cnt = 0;  ///< tb_change_cnt when waiting starte
 
 #include "os/input.c.generated.h"
 
+#ifdef USE_RUST_OS_INPUT
+extern bool rs_os_isatty(int fd);
+#endif
+
 void input_start(void)
 {
   if (!read_stream.s.closed) {
@@ -245,7 +249,11 @@ void veryfast_breakcheck(void)
 /// @return `true` if file descriptor refers to a terminal.
 bool os_isatty(int fd)
 {
+#ifdef USE_RUST_OS_INPUT
+  return rs_os_isatty(fd);
+#else
   return uv_guess_handle(fd) == UV_TTY;
+#endif
 }
 
 size_t input_available(void)

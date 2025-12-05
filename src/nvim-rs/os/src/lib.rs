@@ -22,6 +22,7 @@
 
 pub mod env;
 pub mod fs;
+pub mod input;
 pub mod mem;
 pub mod proc;
 pub mod time;
