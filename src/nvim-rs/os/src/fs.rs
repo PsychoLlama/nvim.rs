@@ -1122,6 +1122,40 @@ pub unsafe extern "C" fn rs_os_nodetype(name: *const c_char) -> c_int {
     }
 }
 
+/// Set the close-on-exec flag on a file descriptor.
+///
+/// Returns 0 on success, -1 on failure.
+#[no_mangle]
+pub extern "C" fn rs_os_set_cloexec(fd: c_int) -> c_int {
+    #[cfg(unix)]
+    {
+        // Get current flags
+        let flags = unsafe { libc::fcntl(fd, libc::F_GETFD) };
+        if flags < 0 {
+            return -1;
+        }
+
+        // Check if FD_CLOEXEC is already set
+        if (flags & libc::FD_CLOEXEC) != 0 {
+            return 0; // Already set
+        }
+
+        // Set FD_CLOEXEC
+        let result = unsafe { libc::fcntl(fd, libc::F_SETFD, flags | libc::FD_CLOEXEC) };
+        if result < 0 {
+            return -1;
+        }
+        0
+    }
+
+    #[cfg(not(unix))]
+    {
+        // On Windows, files should be opened with O_NOINHERIT
+        let _ = fd;
+        -1
+    }
+}
+
 /// Get the path to the currently running executable.
 ///
 /// Returns 0 on success, libuv-compatible error code on failure.

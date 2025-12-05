@@ -85,6 +85,7 @@ extern int rs_os_close(int fd);
 extern int rs_os_dup(int fd);
 extern int rs_os_exepath(char *buffer, size_t *size);
 extern int rs_os_nodetype(const char *name);
+extern int rs_os_set_cloexec(int fd);
 #endif
 
 #ifdef HAVE_XATTR
@@ -532,6 +533,9 @@ FILE *os_fopen(const char *path, const char *flags)
 // @return -1 if failed to set, 0 otherwise.
 int os_set_cloexec(const int fd)
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_set_cloexec(fd);
+#else
 #ifdef HAVE_FD_CLOEXEC
   int e;
   int fdflags = fcntl(fd, F_GETFD);
@@ -554,6 +558,7 @@ int os_set_cloexec(const int fd)
   // No FD_CLOEXEC flag. On Windows, the file should have been opened with
   // O_NOINHERIT anyway.
   return -1;
+#endif
 }
 
 /// Close a file
