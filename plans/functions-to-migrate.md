@@ -327,8 +327,14 @@ These use Rust's `std::fs` instead of libuv. The 90 filesystem unit tests pass, 
 - `os_close` - Close a file descriptor. Uses `libc::close` on Unix.
 - `os_dup` - Duplicate a file descriptor. Uses `libc::dup` on Unix with EINTR retry.
 
+**Phase 2.19**: Swapped process and memory functions to Rust:
+- `os_proc_running` - Check if a process is running. Uses `libc::kill(pid, 0)` to test without sending a signal.
+- `os_get_total_mem_kib` - Get total system memory in KiB. Uses `libc::sysinfo` on Linux, `sysctl` on macOS.
+- Added new `proc.rs` and `mem.rs` modules to `nvim-rs/os` crate.
+- Added `USE_RUST_OS_PROC` and `USE_RUST_OS_MEM` compile flags.
+
 **Phase 2 Summary (Updated 2025-12-04):**
-- 19 OS filesystem functions swapped to Rust
-- All using USE_RUST_OS_FS compile flag
+- 19 OS filesystem functions swapped to Rust (USE_RUST_OS_FS)
+- 2 OS process/memory functions swapped to Rust (USE_RUST_OS_PROC, USE_RUST_OS_MEM)
 - Added `io_error_to_uv_error` helper for libuv-compatible error codes
 - Remaining functions require complex FFI patterns
