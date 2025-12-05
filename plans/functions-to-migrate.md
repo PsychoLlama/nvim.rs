@@ -294,3 +294,6 @@ These use Rust's `std::fs` instead of libuv. The 90 filesystem unit tests pass, 
 **Phase 2.10**: Swapped one more OS filesystem function:
 - `os_getperm` - Get file permissions (mode bits). Uses `std::fs::metadata()` with `MetadataExt::mode()` on Unix. Returns libuv-compatible error codes on failure (e.g., UV_ENOENT = -2).
 - Added `io_error_to_uv_error` helper function for consistent error code translation.
+
+**Phase 2.11**: Swapped one more OS filesystem function:
+- `os_remove` - Remove a file. Uses `std::fs::remove_file()`. Returns 0 on success, libuv-compatible error code on failure.
