@@ -216,3 +216,30 @@ All trivial self-contained functions have been identified and migrated. The migr
 1. **Phase 2A**: Build Rust FFI for complex structs (win_T, buf_T)
 2. **Phase 2B**: Wrap libuv-sys for OS layer parity
 3. **Phase 2C**: Migrate non-PURE functions that are otherwise simple
+
+## Session 6 Summary (2025-12-04)
+
+**Extended search for Phase 2 candidates:**
+
+Searched for non-PURE functions that might still be simple:
+- OS functions (`os/input.c`, `os/stdpaths.c`, etc.) - all use libuv or global state
+- String comparison functions (`vim_stricmp`, `vim_strnicmp`) - use `TOLOWER_LOC` locale macro
+- Eval functions (`encode_check_json_key`, `find_internal_func`) - use `typval_T*` structs or global arrays
+- Register functions in headers - already inline, minimal benefit from migration
+
+**Inline functions reviewed (in headers):**
+- `is_literal_register`, `op_reg_index`, `is_append_register`, `get_register_name` - pure but already inlined
+- `ascii_is*` functions - header inlines, already optimized
+- `mt_*` marktree functions - use `MTKey` struct
+
+**Confirmed findings:**
+- All non-inlined PURE/CONST functions are either migrated or unsuitable
+- Header inline functions provide minimal benefit from migration
+- Remaining candidates fall into categories requiring infrastructure work
+
+**Phase 2 would require choosing one of:**
+1. **Struct FFI**: Define opaque handle patterns for win_T, buf_T
+2. **libuv binding**: Add libuv-sys crate and wrap OS functions
+3. **Global state bridge**: Create Rust access patterns for g_chartab, curbuf, etc.
+
+Each option requires significant infrastructure work before additional functions can migrate.
