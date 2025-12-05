@@ -287,3 +287,6 @@ These use Rust's `std::fs` instead of libuv. The 90 filesystem unit tests pass, 
 
 **Phase 2.8**: Swapped one more OS filesystem function:
 - `os_rename` - Rename/move a file or directory. Returns OK/FAIL. Uses `std::fs::rename()` instead of libuv's `uv_fs_rename()`.
+
+**Phase 2.9**: Swapped one more OS filesystem function:
+- `os_setperm` - Set file permissions (mode bits). Uses `std::fs::set_permissions()` with `PermissionsExt::from_mode()` on Unix. Returns OK/FAIL.
