@@ -79,6 +79,7 @@ extern int rs_os_mkdir(const char *path, unsigned int mode);
 extern int rs_os_mkdtemp(const char *templ, char *path, size_t path_len);
 extern int rs_os_chown(const char *path, unsigned int owner, unsigned int group);
 extern int rs_os_fchown(int fd, unsigned int owner, unsigned int group);
+extern int rs_os_file_settime(const char *path, double atime, double mtime);
 #endif
 
 #ifdef HAVE_XATTR
@@ -999,9 +1000,13 @@ bool os_path_exists(const char *path)
 /// @return 0 on success, or negative error code.
 int os_file_settime(const char *path, double atime, double mtime)
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_file_settime(path, atime, mtime);
+#else
   int r;
   RUN_UV_FS_FUNC(r, uv_fs_utime, path, atime, mtime, NULL);
   return r;
+#endif
 }
 
 /// Check if a file is readable.

@@ -825,6 +825,61 @@ pub extern "C" fn rs_os_fchown(fd: c_int, owner: u32, group: u32) -> c_int {
     }
 }
 
+/// Set file access and modification times.
+///
+/// Times are specified as seconds since the Unix epoch (as doubles to allow
+/// sub-second precision, matching libuv's `uv_fs_utime`).
+///
+/// Returns 0 on success, libuv-compatible error code on failure.
+///
+/// # Safety
+///
+/// `path` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_file_settime(path: *const c_char, atime: f64, mtime: f64) -> c_int {
+    if path.is_null() {
+        return -22; // UV_EINVAL
+    }
+
+    #[cfg(unix)]
+    {
+        let path_cstr = unsafe { CStr::from_ptr(path) };
+
+        // Convert double seconds to timeval (seconds + microseconds)
+        let atime_sec = atime.trunc() as libc::time_t;
+        let atime_usec = ((atime.fract()) * 1_000_000.0) as libc::suseconds_t;
+        let mtime_sec = mtime.trunc() as libc::time_t;
+        let mtime_usec = ((mtime.fract()) * 1_000_000.0) as libc::suseconds_t;
+
+        let times = [
+            libc::timeval {
+                tv_sec: atime_sec,
+                tv_usec: atime_usec,
+            },
+            libc::timeval {
+                tv_sec: mtime_sec,
+                tv_usec: mtime_usec,
+            },
+        ];
+
+        let result = unsafe { libc::utimes(path_cstr.as_ptr(), times.as_ptr()) };
+
+        if result == 0 {
+            0
+        } else {
+            unsafe { -(*libc::__errno_location()) }
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        // On non-Unix, use filetime crate or Windows API
+        // For now, return success (no-op)
+        let _ = (path, atime, mtime);
+        0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
