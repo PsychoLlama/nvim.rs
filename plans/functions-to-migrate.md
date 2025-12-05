@@ -297,3 +297,9 @@ These use Rust's `std::fs` instead of libuv. The 90 filesystem unit tests pass, 
 
 **Phase 2.11**: Swapped one more OS filesystem function:
 - `os_remove` - Remove a file. Uses `std::fs::remove_file()`. Returns 0 on success, libuv-compatible error code on failure.
+
+**Phase 2.12**: Swapped one more OS filesystem function:
+- `os_rmdir` - Remove an empty directory. Uses `std::fs::remove_dir()`. Returns 0 on success, libuv-compatible error code on failure.
+
+**Phase 2.13**: Swapped one more OS filesystem function:
+- `os_mkdir` - Create a directory with specified mode. Uses `std::fs::DirBuilder` with `DirBuilderExt::mode()` on Unix. Returns 0 on success, libuv-compatible error code on failure.
