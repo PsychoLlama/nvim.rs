@@ -284,3 +284,6 @@ These use Rust's `std::fs` instead of libuv. The 90 filesystem unit tests pass, 
 
 **Phase 2.7**: Swapped one more OS filesystem function:
 - `os_dirname` - Get current working directory. Uses `std::env::current_dir()` instead of libuv's `uv_cwd()`.
+
+**Phase 2.8**: Swapped one more OS filesystem function:
+- `os_rename` - Rename/move a file or directory. Returns OK/FAIL. Uses `std::fs::rename()` instead of libuv's `uv_fs_rename()`.
