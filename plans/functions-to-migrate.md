@@ -275,3 +275,6 @@ These use Rust's `std::fs` instead of libuv. The 90 filesystem unit tests pass, 
 
 **Phase 2.4**: Swapped one more OS filesystem function:
 - `os_file_is_readable` - Check if a file is readable (uses `fs::File::open` instead of `access(R_OK)`)
+
+**Phase 2.5**: Swapped one more OS filesystem function:
+- `os_isrealdir` - Check if a path is a real directory (not a symlink to one). Uses `symlink_metadata` (lstat) in Rust.
