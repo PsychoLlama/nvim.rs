@@ -72,6 +72,39 @@ pub unsafe extern "C" fn rs_os_isfile(path: *const c_char) -> c_int {
     c_int::from(Path::new(path_str).is_file())
 }
 
+/// Check if a path is a directory and NOT a symlink to a directory.
+///
+/// # Safety
+///
+/// `path` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_isrealdir(path: *const c_char) -> c_int {
+    if path.is_null() {
+        return 0;
+    }
+
+    let path_cstr = unsafe { CStr::from_ptr(path) };
+    let path_str = match path_cstr.to_str() {
+        Ok(s) => s,
+        Err(_) => return 0,
+    };
+
+    let path = Path::new(path_str);
+
+    // Use symlink_metadata (lstat) to check if it's a symlink
+    match fs::symlink_metadata(path) {
+        Ok(meta) => {
+            // If it's a symlink, return false
+            if meta.file_type().is_symlink() {
+                return 0;
+            }
+            // Otherwise, check if it's a directory
+            c_int::from(meta.is_dir())
+        }
+        Err(_) => 0,
+    }
+}
+
 /// Check if a path is a symbolic link.
 ///
 /// # Safety

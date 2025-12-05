@@ -66,6 +66,7 @@
 // Rust filesystem implementations
 extern int rs_os_path_exists(const char *path);
 extern int rs_os_isdir(const char *path);
+extern int rs_os_isrealdir(const char *path);
 extern int rs_os_file_is_readable(const char *path);
 #endif
 
@@ -128,6 +129,9 @@ int os_dirname(char *buf, size_t len)
 bool os_isrealdir(const char *name)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_isrealdir(name) != 0;
+#else
   uv_fs_t request;
   if (uv_fs_lstat(NULL, &request, name, NULL) != kLibuvSuccess) {
     return false;
@@ -136,6 +140,7 @@ bool os_isrealdir(const char *name)
     return false;
   }
   return S_ISDIR(request.statbuf.st_mode);
+#endif
 }
 
 /// Check if the given path exists and is a directory.
