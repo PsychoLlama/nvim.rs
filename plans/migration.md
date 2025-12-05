@@ -366,10 +366,12 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - [x] `os_copy` - **Phase 2.17**: Swapped to Rust (USE_RUST_OS_FS)
 - [x] `os_close` - **Phase 2.18**: Swapped to Rust (USE_RUST_OS_FS)
 - [x] `os_dup` - **Phase 2.18**: Swapped to Rust (USE_RUST_OS_FS)
+- [x] `os_proc_running` - **Phase 2.19**: Swapped to Rust (USE_RUST_OS_PROC)
+- [x] `os_get_total_mem_kib` - **Phase 2.19**: Swapped to Rust (USE_RUST_OS_MEM)
 - [ ] `src/nvim/os/fs.c` → `nvim-rs/os/fs` (remaining functions)
   - `os_can_exe`
   - `os_scandir`
-  - **Status**: Rust code exists, 19 functions swapped (Phase 2.3-2.18)
+  - **Status**: Rust code exists, 19 fs functions swapped (Phase 2.3-2.18), 2 proc/mem functions (Phase 2.19)
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
 
