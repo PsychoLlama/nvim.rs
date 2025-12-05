@@ -1207,6 +1207,151 @@ pub unsafe extern "C" fn rs_os_exepath(buffer: *mut c_char, size: *mut usize) ->
     }
 }
 
+// libuv error codes for read/write
+const UV_EINTR: c_int = -4;
+const UV_EAGAIN: c_int = -11;
+
+/// Convert errno to libuv error code.
+fn errno_to_uv_error(errno: c_int) -> c_int {
+    -errno
+}
+
+/// Read from a file descriptor.
+///
+/// Handles EINTR by retrying. When `non_blocking` is true, EAGAIN causes
+/// immediate return instead of retry.
+///
+/// Returns the number of bytes read, or a negative libuv error code.
+/// Sets `*ret_eof` to true if EOF was reached.
+///
+/// # Safety
+///
+/// - `ret_eof` must be a valid pointer
+/// - `ret_buf` must point to a buffer of at least `size` bytes (or be NULL if size is 0)
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_read(
+    fd: c_int,
+    ret_eof: *mut bool,
+    ret_buf: *mut c_char,
+    size: usize,
+    non_blocking: bool,
+) -> isize {
+    if ret_eof.is_null() {
+        return -22; // UV_EINVAL
+    }
+
+    unsafe { *ret_eof = false };
+
+    if ret_buf.is_null() {
+        if size == 0 {
+            return 0;
+        }
+        return -22; // UV_EINVAL
+    }
+
+    let mut read_bytes: usize = 0;
+
+    while read_bytes < size {
+        let remaining = size - read_bytes;
+        let buf_ptr = unsafe { ret_buf.add(read_bytes) };
+
+        let cur_read = unsafe { libc::read(fd, buf_ptr.cast(), remaining) };
+
+        match cur_read.cmp(&0) {
+            std::cmp::Ordering::Greater => {
+                // Safe: cur_read > 0, so cast to usize is safe
+                #[allow(clippy::cast_sign_loss)]
+                {
+                    read_bytes += cur_read as usize;
+                }
+            }
+            std::cmp::Ordering::Less => {
+                let errno = unsafe { *libc::__errno_location() };
+                unsafe { *libc::__errno_location() = 0 };
+                let error = errno_to_uv_error(errno);
+
+                if non_blocking && error == UV_EAGAIN {
+                    break;
+                }
+                if error != UV_EINTR && error != UV_EAGAIN {
+                    return error as isize;
+                }
+                // EINTR or EAGAIN (blocking): retry
+            }
+            std::cmp::Ordering::Equal => {
+                // cur_read == 0 means EOF
+                unsafe { *ret_eof = true };
+                break;
+            }
+        }
+    }
+
+    read_bytes as isize
+}
+
+/// Write to a file descriptor.
+///
+/// Handles EINTR by retrying. When `non_blocking` is true, EAGAIN causes
+/// immediate return instead of retry.
+///
+/// Returns the number of bytes written, or a negative libuv error code.
+///
+/// # Safety
+///
+/// - `buf` must point to a buffer of at least `size` bytes (or be NULL if size is 0)
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_write(
+    fd: c_int,
+    buf: *const c_char,
+    size: usize,
+    non_blocking: bool,
+) -> isize {
+    if buf.is_null() {
+        if size == 0 {
+            return 0;
+        }
+        return -22; // UV_EINVAL
+    }
+
+    let mut written_bytes: usize = 0;
+
+    while written_bytes < size {
+        let remaining = size - written_bytes;
+        let buf_ptr = unsafe { buf.add(written_bytes) };
+
+        let cur_written = unsafe { libc::write(fd, buf_ptr.cast(), remaining) };
+
+        match cur_written.cmp(&0) {
+            std::cmp::Ordering::Greater => {
+                // Safe: cur_written > 0, so cast to usize is safe
+                #[allow(clippy::cast_sign_loss)]
+                {
+                    written_bytes += cur_written as usize;
+                }
+            }
+            std::cmp::Ordering::Less => {
+                let errno = unsafe { *libc::__errno_location() };
+                unsafe { *libc::__errno_location() = 0 };
+                let error = errno_to_uv_error(errno);
+
+                if non_blocking && error == UV_EAGAIN {
+                    break;
+                }
+                if error != UV_EINTR && error != UV_EAGAIN {
+                    return error as isize;
+                }
+                // EINTR or EAGAIN (blocking): retry
+            }
+            std::cmp::Ordering::Equal => {
+                // cur_written == 0 is unusual for write, treat as error
+                return -5; // UV_EIO
+            }
+        }
+    }
+
+    written_bytes as isize
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

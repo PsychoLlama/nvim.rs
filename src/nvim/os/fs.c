@@ -86,6 +86,8 @@ extern int rs_os_dup(int fd);
 extern int rs_os_exepath(char *buffer, size_t *size);
 extern int rs_os_nodetype(const char *name);
 extern int rs_os_set_cloexec(int fd);
+extern ptrdiff_t rs_os_read(int fd, bool *ret_eof, char *ret_buf, size_t size, bool non_blocking);
+extern ptrdiff_t rs_os_write(int fd, const char *buf, size_t size, bool non_blocking);
 #endif
 
 #ifdef HAVE_XATTR
@@ -634,6 +636,9 @@ ptrdiff_t os_read(const int fd, bool *const ret_eof, char *const ret_buf, const 
                   const bool non_blocking)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_read(fd, ret_eof, ret_buf, size, non_blocking);
+#else
   *ret_eof = false;
   if (ret_buf == NULL) {
     assert(size == 0);
@@ -664,6 +669,7 @@ ptrdiff_t os_read(const int fd, bool *const ret_eof, char *const ret_buf, const 
     }
   }
   return (ptrdiff_t)read_bytes;
+#endif
 }
 
 #ifdef HAVE_READV
@@ -738,6 +744,9 @@ ptrdiff_t os_readv(const int fd, bool *const ret_eof, struct iovec *iov, size_t 
 ptrdiff_t os_write(const int fd, const char *const buf, const size_t size, const bool non_blocking)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_write(fd, buf, size, non_blocking);
+#else
   if (buf == NULL) {
     assert(size == 0);
     return 0;
@@ -766,6 +775,7 @@ ptrdiff_t os_write(const int fd, const char *const buf, const size_t size, const
     }
   }
   return (ptrdiff_t)written_bytes;
+#endif
 }
 
 /// Copies a file from `path` to `new_path`.
