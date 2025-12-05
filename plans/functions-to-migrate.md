@@ -314,13 +314,17 @@ These use Rust's `std::fs` instead of libuv. The 90 filesystem unit tests pass, 
 **Phase 2.16**: Swapped one more OS filesystem function:
 - `os_file_settime` - Set file access and modification times. Uses `libc::utimes` on Unix with sub-second precision.
 
+**Phase 2.17**: Swapped one more OS filesystem function:
+- `os_copy` - Copy a file with optional COW clone support. Uses `std::fs::copy` with FICLONE ioctl fallback on Linux.
+  - Supports `UV_FS_COPYFILE_EXCL` flag (fail if destination exists)
+  - Supports `UV_FS_COPYFILE_FICLONE` flag (attempt COW clone on supported filesystems)
+
 **Remaining OS filesystem functions (require more work):**
-- `os_copy` - Uses libuv flags (UV_FS_COPYFILE_EXCL, UV_FS_COPYFILE_FICLONE) not available in Rust std::fs::copy
 - `os_can_exe` - Complex function with output parameters and PATH searching
 - `os_scandir` - Returns directory iterator, would need iterator pattern in Rust FFI
 
 **Phase 2 Summary (Updated 2025-12-04):**
-- 16 OS filesystem functions swapped to Rust
+- 17 OS filesystem functions swapped to Rust
 - All using USE_RUST_OS_FS compile flag
 - Added `io_error_to_uv_error` helper for libuv-compatible error codes
-- Remaining functions require libuv-specific features or complex FFI patterns
+- Remaining functions require complex FFI patterns

@@ -80,6 +80,7 @@ extern int rs_os_mkdtemp(const char *templ, char *path, size_t path_len);
 extern int rs_os_chown(const char *path, unsigned int owner, unsigned int group);
 extern int rs_os_fchown(int fd, unsigned int owner, unsigned int group);
 extern int rs_os_file_settime(const char *path, double atime, double mtime);
+extern int rs_os_copy(const char *path, const char *new_path, int flags);
 #endif
 
 #ifdef HAVE_XATTR
@@ -752,9 +753,13 @@ ptrdiff_t os_write(const int fd, const char *const buf, const size_t size, const
 /// @return 0 on success, or libuv error code on failure.
 int os_copy(const char *path, const char *new_path, int flags)
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_copy(path, new_path, flags);
+#else
   int r;
   RUN_UV_FS_FUNC(r, uv_fs_copyfile, path, new_path, flags, NULL);
   return r;
+#endif
 }
 
 /// Flushes file modifications to disk.

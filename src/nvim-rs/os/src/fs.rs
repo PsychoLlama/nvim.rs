@@ -880,6 +880,116 @@ pub unsafe extern "C" fn rs_os_file_settime(path: *const c_char, atime: f64, mti
     }
 }
 
+// libuv copy file flags
+const UV_FS_COPYFILE_EXCL: c_int = 0x0001;
+const UV_FS_COPYFILE_FICLONE: c_int = 0x0002;
+#[allow(dead_code)]
+const UV_FS_COPYFILE_FICLONE_FORCE: c_int = 0x0004;
+
+/// Copy a file from one path to another.
+///
+/// Flags:
+/// - `UV_FS_COPYFILE_EXCL` (0x0001): Fail if destination exists
+/// - `UV_FS_COPYFILE_FICLONE` (0x0002): Attempt copy-on-write clone (best effort)
+/// - `UV_FS_COPYFILE_FICLONE_FORCE` (0x0004): Require copy-on-write clone
+///
+/// Returns 0 on success, libuv-compatible error code on failure.
+///
+/// # Safety
+///
+/// `path` and `new_path` must be valid null-terminated C strings.
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_copy(
+    path: *const c_char,
+    new_path: *const c_char,
+    flags: c_int,
+) -> c_int {
+    if path.is_null() || new_path.is_null() {
+        return -22; // UV_EINVAL
+    }
+
+    let path_cstr = unsafe { CStr::from_ptr(path) };
+    let new_path_cstr = unsafe { CStr::from_ptr(new_path) };
+
+    let path_str = match path_cstr.to_str() {
+        Ok(s) => s,
+        Err(_) => return -22, // UV_EINVAL for invalid UTF-8
+    };
+
+    let new_path_str = match new_path_cstr.to_str() {
+        Ok(s) => s,
+        Err(_) => return -22, // UV_EINVAL for invalid UTF-8
+    };
+
+    // Check if EXCL flag is set and destination exists
+    if (flags & UV_FS_COPYFILE_EXCL) != 0 && Path::new(new_path_str).exists() {
+        return -17; // UV_EEXIST
+    }
+
+    // Attempt copy with optional COW clone support
+    #[cfg(target_os = "linux")]
+    {
+        // On Linux, try copy_file_range first which can do COW on supported filesystems
+        if (flags & UV_FS_COPYFILE_FICLONE) != 0 {
+            if let Ok(result) = try_clone_file(path_str, new_path_str) {
+                if result == 0 {
+                    return 0;
+                }
+                // Clone failed, fall through to regular copy
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = flags; // Silence unused warning for flags on non-Linux
+    }
+
+    // Regular copy using std::fs::copy
+    match fs::copy(path_str, new_path_str) {
+        Ok(_) => 0,
+        Err(e) => io_error_to_uv_error(&e),
+    }
+}
+
+/// Attempt to clone a file using Linux's FICLONE ioctl.
+/// Returns Ok(0) on success, Ok(-1) if cloning is not supported, or Err on other failures.
+#[cfg(target_os = "linux")]
+fn try_clone_file(src: &str, dst: &str) -> Result<c_int, std::io::Error> {
+    use std::fs::OpenOptions;
+    use std::os::unix::io::AsRawFd;
+
+    // FICLONE ioctl number (from linux/fs.h)
+    // #define FICLONE _IOW(0x94, 9, int)
+    // This is 0x40049409 on most architectures
+    const FICLONE: libc::c_ulong = 0x4004_9409;
+
+    // Open source file for reading
+    let src_file = std::fs::File::open(src)?;
+
+    // Create destination file (truncate if exists)
+    let dst_file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(dst)?;
+
+    let src_fd = src_file.as_raw_fd();
+    let dst_fd = dst_file.as_raw_fd();
+
+    // Try FICLONE ioctl
+    let result = unsafe { libc::ioctl(dst_fd, FICLONE, src_fd) };
+
+    if result == 0 {
+        Ok(0)
+    } else {
+        // Clone failed, return -1 to indicate fallback needed
+        // Remove the empty destination file we created
+        let _ = std::fs::remove_file(dst);
+        Ok(-1)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
