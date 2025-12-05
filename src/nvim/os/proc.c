@@ -45,6 +45,10 @@
 
 #include "os/proc.c.generated.h"
 
+#ifdef USE_RUST_OS_PROC
+extern bool rs_os_proc_running(int pid);
+#endif
+
 #ifdef MSWIN
 static bool os_proc_tree_kill_rec(void *proc, int sig)
 {
@@ -269,6 +273,9 @@ Dict os_proc_info(int pid, Arena *arena)
 /// Return true if process `pid` is running.
 bool os_proc_running(int pid)
 {
+#ifdef USE_RUST_OS_PROC
+  return rs_os_proc_running(pid);
+#else
   int err = uv_kill(pid, 0);
   // If there is no error the process must be running.
   if (err == 0) {
@@ -281,4 +288,5 @@ bool os_proc_running(int pid)
   // If the process is running and owned by another user we get EPERM.  With
   // other errors the process might be running, assuming it is then.
   return true;
+#endif
 }

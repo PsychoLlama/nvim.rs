@@ -22,6 +22,8 @@
 
 pub mod env;
 pub mod fs;
+pub mod mem;
+pub mod proc;
 pub mod time;
 
 use std::ffi::c_int;
