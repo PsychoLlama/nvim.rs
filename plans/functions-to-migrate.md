@@ -106,7 +106,7 @@ The trivial pure functions have largely been migrated. Next steps should focus o
 | Crate | Status | Functions |
 |-------|--------|-----------|
 | nvim-os | ✅ Partial | os_get_pid (1.26), os_get_hostname (1.27), os_time (1.29), os_hrtime (1.30), os_sleep (1.31) |
-| nvim-collections (hashtab) | ✅ Partial | hash_hash, hash_hash_len - Full hashtab not swapped |
+| nvim-collections (hashtab) | ✅ Swapped (2.2) | hash_hash, hash_hash_len, hash_init, hash_clear, hash_find, hash_find_len, hash_lookup, hash_add_item, hash_remove, hash_lock, hash_unlock |
 | nvim-collections (garray) | ✅ Swapped (2.1) | ga_init, ga_set_growsize, ga_clear, ga_grow, ga_append, ga_append_via_ptr, ga_concat, ga_concat_len |
 
 ### Unswapped Crates (Rust code exists but NOT used from C)
@@ -243,3 +243,26 @@ Searched for non-PURE functions that might still be simple:
 3. **Global state bridge**: Create Rust access patterns for g_chartab, curbuf, etc.
 
 Each option requires significant infrastructure work before additional functions can migrate.
+
+## Session 7 Summary (2025-12-04)
+
+**Phase 2.2**: Successfully swapped all hashtab operations to Rust:
+- `hash_init`, `hash_clear` - table lifecycle
+- `hash_find`, `hash_find_len`, `hash_lookup` - item lookup
+- `hash_add_item`, `hash_remove` - item mutation
+- `hash_lock`, `hash_unlock` - resize locking
+
+Key technical detail: Rust imports the C global `hash_removed` to ensure both implementations use the same marker for removed items.
+
+**Current Status**:
+- Phase 1 (pure functions): COMPLETE
+- Phase 2.1 (garray): COMPLETE
+- Phase 2.2 (hashtab): COMPLETE
+
+**Next migration opportunities**:
+All trivial pure functions and data structures have been migrated. Remaining options:
+1. **OS filesystem functions**: Rust implementations exist in fs.rs but use `std::fs` instead of libuv - may have subtle behavioral differences
+2. **Struct FFI**: Would enable window.c frame functions, buffer.c validation
+3. **Global state access**: Would enable g_chartab-dependent functions
+
+The migration has reached a natural plateau. Further progress requires choosing an infrastructure investment.
