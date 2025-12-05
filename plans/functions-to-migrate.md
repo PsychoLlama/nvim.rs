@@ -353,3 +353,36 @@ These use Rust's `std::fs` instead of libuv. The 90 filesystem unit tests pass, 
 - 1 OS input function swapped to Rust (USE_RUST_OS_INPUT)
 - Added `io_error_to_uv_error` helper for libuv-compatible error codes
 - Remaining functions require complex FFI patterns
+
+---
+
+## Remaining OS Functions (Require Infrastructure)
+
+These functions haven't been migrated because they have complex dependencies:
+
+### Functions with global state dependencies:
+- `os_chdir` - Uses verbose_enter/leave, ui_call_chdir
+- `os_fsync` - Updates g_stats.fsync counter
+- `os_open_stdin_fd` - Uses stdin_fd global
+
+### Functions with libuv structure dependencies:
+- `os_fileinfo` / `os_fileinfo_link` / `os_fileinfo_fd` - Fill FileInfo/uv_stat_t
+- `os_scandir` / `os_closedir` - Directory iterator pattern
+- `os_stat` (static) - Returns uv_stat_t
+- `os_file_owned` - Uses os_fileinfo
+
+### Functions with complex error translation:
+- `os_read` / `os_write` - Use os_translate_sys_error with EINTR/EAGAIN handling
+- `os_readv` - Uses struct iovec
+
+### Functions with complex control flow:
+- `os_can_exe` - PATH searching with multiple helper functions
+- `os_mkdir_recurse` - Recursive directory creation
+- `os_open` / `os_fopen` - Uses libuv uv_fs_open
+
+### Functions with memory allocation:
+- String functions in strings.c that use xmalloc
+- Functions that return allocated strings
+
+### Functions with Vim-specific types:
+- Functions using typval_T, list_T, garray_T, etc.
