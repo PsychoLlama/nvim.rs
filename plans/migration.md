@@ -390,10 +390,17 @@ TEST_FILE=test/functional/core/fileio_spec.lua make functionaltest
 - [x] `hash_hash_len` - Compute hash for string with known length - swapped to Rust
 - [ ] Full hashtab migration - Used throughout codebase, careful migration needed
 
-#### 3.2 Growing Array (`src/nvim/garray.c`)
+#### 3.2 Growing Array (`src/nvim/garray.c`) ✅ SWAPPED
 
 - [x] Map to `Vec<T>` with C-compatible wrapper (exists in collections crate)
-- [ ] Provide `ga_init`, `ga_grow`, `ga_append`, `ga_clear` - NOT swapped yet
+- [x] `rs_ga_init` - Initialize growing array - **Phase 2.1**: swapped to Rust
+- [x] `rs_ga_set_growsize` - Set growth size - **Phase 2.1**: swapped to Rust
+- [x] `rs_ga_clear` - Clear and free array data - **Phase 2.1**: swapped to Rust
+- [x] `rs_ga_grow` - Grow array to accommodate items - **Phase 2.1**: swapped to Rust
+- [x] `rs_ga_append` - Append single byte - **Phase 2.1**: swapped to Rust
+- [x] `rs_ga_append_via_ptr` - Get pointer for appending - **Phase 2.1**: swapped to Rust
+- [x] `rs_ga_concat` - Concatenate null-terminated string - **Phase 2.1**: swapped to Rust
+- [x] `rs_ga_concat_len` - Concatenate string with length - **Phase 2.1**: swapped to Rust
 
 #### 3.3 Multibyte/UTF-8 (`src/nvim/mbyte.c`)
 

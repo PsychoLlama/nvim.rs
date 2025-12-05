@@ -107,12 +107,12 @@ The trivial pure functions have largely been migrated. Next steps should focus o
 |-------|--------|-----------|
 | nvim-os | ✅ Partial | os_get_pid (1.26), os_get_hostname (1.27), os_time (1.29), os_hrtime (1.30), os_sleep (1.31) |
 | nvim-collections (hashtab) | ✅ Partial | hash_hash, hash_hash_len - Full hashtab not swapped |
+| nvim-collections (garray) | ✅ Swapped (2.1) | ga_init, ga_set_growsize, ga_clear, ga_grow, ga_append, ga_append_via_ptr, ga_concat, ga_concat_len |
 
 ### Unswapped Crates (Rust code exists but NOT used from C)
 | Crate | Status | Blocker |
 |-------|--------|---------|
 | nvim-os (env/fs) | 🔧 Ready but blocked | Memory allocator fixed (uses NvimString), but C uses libuv for env functions |
-| nvim-collections (garray) | ❌ Not swapped | Complex data structure, needs careful C integration |
 
 ### Migration Blockers
 
