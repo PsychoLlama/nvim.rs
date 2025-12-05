@@ -333,8 +333,14 @@ These use Rust's `std::fs` instead of libuv. The 90 filesystem unit tests pass, 
 - Added new `proc.rs` and `mem.rs` modules to `nvim-rs/os` crate.
 - Added `USE_RUST_OS_PROC` and `USE_RUST_OS_MEM` compile flags.
 
-**Phase 2 Summary (Updated 2025-12-04):**
+**Phase 2.20**: Swapped input-related function to Rust:
+- `os_isatty` - Check if file descriptor refers to a terminal. Uses libc `isatty()` directly instead of libuv's `uv_guess_handle()`.
+- Added new `input.rs` module to `nvim-rs/os` crate.
+- Added `USE_RUST_OS_INPUT` compile flag.
+
+**Phase 2 Summary (Updated 2025-12-05):**
 - 19 OS filesystem functions swapped to Rust (USE_RUST_OS_FS)
 - 2 OS process/memory functions swapped to Rust (USE_RUST_OS_PROC, USE_RUST_OS_MEM)
+- 1 OS input function swapped to Rust (USE_RUST_OS_INPUT)
 - Added `io_error_to_uv_error` helper for libuv-compatible error codes
 - Remaining functions require complex FFI patterns
