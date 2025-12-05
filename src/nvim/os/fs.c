@@ -62,6 +62,12 @@
 
 #include "os/fs.c.generated.h"
 
+#ifdef USE_RUST_OS_FS
+// Rust filesystem implementations
+extern int rs_os_path_exists(const char *path);
+extern int rs_os_isdir(const char *path);
+#endif
+
 #ifdef HAVE_XATTR
 static const char e_xattr_erange[]
   = N_("E1506: Buffer too small to copy xattr value or key");
@@ -137,12 +143,16 @@ bool os_isrealdir(const char *name)
 bool os_isdir(const char *name)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_isdir(name) != 0;
+#else
   int32_t mode = os_getperm(name);
   if (mode < 0) {
     return false;
   }
 
   return S_ISDIR(mode);
+#endif
 }
 
 /// Check what `name` is:
@@ -933,8 +943,12 @@ int os_fchown(int fd, uv_uid_t owner, uv_gid_t group)
 /// @return `true` if `path` exists
 bool os_path_exists(const char *path)
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_path_exists(path) != 0;
+#else
   uv_stat_t statbuf;
   return os_stat(path, &statbuf) == kLibuvSuccess;
+#endif
 }
 
 /// Sets file access and modification times.
