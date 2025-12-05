@@ -289,6 +289,54 @@ pub unsafe extern "C" fn rs_os_getperm(path: *const c_char) -> i32 {
     }
 }
 
+/// Set file permissions (mode bits).
+///
+/// Returns OK on success, FAIL on failure.
+///
+/// # Safety
+///
+/// `path` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_setperm(path: *const c_char, perm: c_int) -> c_int {
+    if path.is_null() {
+        return FAIL;
+    }
+
+    let path_cstr = unsafe { CStr::from_ptr(path) };
+    let path_str = match path_cstr.to_str() {
+        Ok(s) => s,
+        Err(_) => return FAIL,
+    };
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        // perm is a Unix mode (positive value), safe to cast
+        #[allow(clippy::cast_sign_loss)]
+        let permissions = fs::Permissions::from_mode(perm as u32);
+        match fs::set_permissions(path_str, permissions) {
+            Ok(()) => OK,
+            Err(_) => FAIL,
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        // On non-Unix, we can only set readonly flag
+        let meta = match fs::metadata(path_str) {
+            Ok(m) => m,
+            Err(_) => return FAIL,
+        };
+        let mut permissions = meta.permissions();
+        // If write bits are clear, set readonly
+        permissions.set_readonly((perm & 0o222) == 0);
+        match fs::set_permissions(path_str, permissions) {
+            Ok(()) => OK,
+            Err(_) => FAIL,
+        }
+    }
+}
+
 /// Get file size in bytes.
 ///
 /// Returns the size on success, -1 on failure.

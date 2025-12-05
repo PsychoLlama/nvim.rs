@@ -71,6 +71,7 @@ extern int rs_os_file_is_readable(const char *path);
 extern int rs_os_file_is_writable(const char *path);
 extern int rs_os_dirname(char *buf, size_t len);
 extern int rs_os_rename(const char *path, const char *new_path);
+extern int rs_os_setperm(const char *path, int perm);
 #endif
 
 #ifdef HAVE_XATTR
@@ -798,9 +799,13 @@ int32_t os_getperm(const char *name)
 int os_setperm(const char *const name, int perm)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_setperm(name, perm);
+#else
   int r;
   RUN_UV_FS_FUNC(r, uv_fs_chmod, name, perm, NULL);
   return (r == kLibuvSuccess ? OK : FAIL);
+#endif
 }
 
 #ifdef HAVE_XATTR
