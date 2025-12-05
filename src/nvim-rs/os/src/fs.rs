@@ -395,28 +395,43 @@ pub unsafe extern "C" fn rs_os_filesize(path: *const c_char) -> i64 {
     }
 }
 
-/// Create a directory.
+/// Create a directory with the specified mode.
 ///
-/// Returns 0 on success, -1 on failure.
+/// Returns 0 on success, libuv-compatible error code on failure.
 ///
 /// # Safety
 ///
 /// `path` must be a valid null-terminated C string.
 #[no_mangle]
-pub unsafe extern "C" fn rs_os_mkdir(path: *const c_char, _mode: c_uint) -> c_int {
+pub unsafe extern "C" fn rs_os_mkdir(path: *const c_char, mode: c_uint) -> c_int {
     if path.is_null() {
-        return -1;
+        return -22; // UV_EINVAL
     }
 
     let path_cstr = unsafe { CStr::from_ptr(path) };
     let path_str = match path_cstr.to_str() {
         Ok(s) => s,
-        Err(_) => return -1,
+        Err(_) => return -22, // UV_EINVAL for invalid UTF-8
     };
 
-    match fs::create_dir(path_str) {
-        Ok(()) => 0,
-        Err(_) => -1,
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        let result = fs::DirBuilder::new().mode(mode).create(path_str);
+        match result {
+            Ok(()) => 0,
+            Err(e) => io_error_to_uv_error(&e),
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        // On non-Unix, mode is ignored
+        let _ = mode;
+        match fs::create_dir(path_str) {
+            Ok(()) => 0,
+            Err(e) => io_error_to_uv_error(&e),
+        }
     }
 }
 
