@@ -410,9 +410,6 @@ pub unsafe extern "C" fn rs_vim_is_fname_char(c: c_int) -> c_int {
     )
 }
 
-// Note: vim_isprintc is NOT migrated because it calls utf_printable for chars >= 0x100,
-// which would require cross-crate dependency on nvim-mbyte.
-
 /// Return number of display cells occupied by byte "b".
 ///
 /// This assumes the byte is ASCII (< 0x80). For bytes >= 0x80, returns 0
