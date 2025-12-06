@@ -98,6 +98,7 @@ if(USE_RUST)
       USE_RUST_REGISTER
       USE_RUST_SPELL
       USE_RUST_STRINGS
+      USE_RUST_OPS
     )
   else()
     message(WARNING "USE_RUST enabled but Rust library not found. Run 'cargo build --release' first.")
