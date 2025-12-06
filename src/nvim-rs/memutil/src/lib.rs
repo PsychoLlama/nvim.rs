@@ -279,6 +279,27 @@ pub unsafe extern "C" fn rs_hash_hash_len(key: *const c_char, len: usize) -> Has
     hash
 }
 
+/// Arena alignment constant: max of pointer size and double size.
+/// On 64-bit platforms this is 8 bytes.
+const ARENA_ALIGN: usize = {
+    let ptr_size = std::mem::size_of::<*const ()>();
+    let double_size = std::mem::size_of::<f64>();
+    if ptr_size > double_size {
+        ptr_size
+    } else {
+        double_size
+    }
+};
+
+/// Align an offset to the arena alignment boundary.
+///
+/// Returns the smallest value >= `off` that is aligned to `ARENA_ALIGN` bytes.
+#[no_mangle]
+pub extern "C" fn rs_arena_align_offset(off: u64) -> usize {
+    let align = ARENA_ALIGN as u64;
+    ((off + (align - 1)) & !(align - 1)) as usize
+}
+
 #[cfg(test)]
 #[allow(clippy::cast_possible_wrap)]
 mod tests {
@@ -459,5 +480,28 @@ mod tests {
             rs_time_to_bytes(-1, buf.as_mut_ptr());
             assert_eq!(buf, [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
         }
+    }
+
+    #[test]
+    fn test_arena_align_offset() {
+        // ARENA_ALIGN is 8 on 64-bit platforms
+        assert_eq!(ARENA_ALIGN, 8);
+
+        // Already aligned values should be unchanged
+        assert_eq!(rs_arena_align_offset(0), 0);
+        assert_eq!(rs_arena_align_offset(8), 8);
+        assert_eq!(rs_arena_align_offset(16), 16);
+        assert_eq!(rs_arena_align_offset(64), 64);
+
+        // Unaligned values should round up to next alignment
+        assert_eq!(rs_arena_align_offset(1), 8);
+        assert_eq!(rs_arena_align_offset(7), 8);
+        assert_eq!(rs_arena_align_offset(9), 16);
+        assert_eq!(rs_arena_align_offset(15), 16);
+        assert_eq!(rs_arena_align_offset(17), 24);
+
+        // Edge cases
+        assert_eq!(rs_arena_align_offset(4), 8);
+        assert_eq!(rs_arena_align_offset(12), 16);
     }
 }

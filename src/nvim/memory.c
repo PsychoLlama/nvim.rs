@@ -66,6 +66,7 @@ extern void *rs_xmemrchr(const void *src, uint8_t c, size_t len);
 extern bool rs_strequal(const char *a, const char *b);
 extern bool rs_strnequal(const char *a, const char *b, size_t n);
 extern void rs_time_to_bytes(int64_t time_, uint8_t *buf);
+extern size_t rs_arena_align_offset(uint64_t off);
 #endif
 
 #ifdef EXITFREE
@@ -772,12 +773,16 @@ void arena_alloc_block(Arena *arena)
   blk->prev = prev_blk;
 }
 
+#ifdef USE_RUST_MEMUTIL
+#define arena_align_offset(off) rs_arena_align_offset(off)
+#else
 static size_t arena_align_offset(uint64_t off)
 {
 #define ARENA_ALIGN MAX(sizeof(void *), sizeof(double))
   return ((off + (ARENA_ALIGN - 1)) & ~(ARENA_ALIGN - 1));
 #undef ARENA_ALIGN
 }
+#endif
 
 /// @param arena if NULL, do a global allocation. caller must then free the value!
 /// @param size if zero, will still return a non-null pointer, but not a usable or unique one
