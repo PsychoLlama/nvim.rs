@@ -53,6 +53,8 @@ extern bool rs_vim_isblankline(const char *lbuf);
 extern size_t rs_transchar_hex(char *buf, int c);
 extern int rs_vim_isfilec(int c);
 extern int rs_vim_is_fname_char(int c);
+extern int rs_byte2cells(int b);
+extern int rs_vim_isIDc(int c);
 #endif
 
 static bool chartab_initialized = false;
@@ -725,10 +727,14 @@ static inline unsigned nr2hex(unsigned n)
 int byte2cells(int b)
   FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_CHARSET
+  return rs_byte2cells(b);
+#else
   if (b >= 0x80) {
     return 0;
   }
   return g_chartab[b] & CT_CELL_MASK;
+#endif
 }
 
 /// Return number of display cells occupied by character "c".
@@ -812,7 +818,11 @@ int vim_strnsize(const char *s, int len)
 bool vim_isIDc(int c)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_CHARSET
+  return rs_vim_isIDc(c) != 0;
+#else
   return c > 0 && c < 0x100 && (g_chartab[c] & CT_ID_CHAR);
+#endif
 }
 
 /// Check that "c" is a keyword character:
