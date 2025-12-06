@@ -504,9 +504,14 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - **Phase 2.66**: ASCII uppercase (strings):
   - `vim_strup` - Convert ASCII string to uppercase in-place
   - Locale-independent, only handles a-z → A-Z conversion
+- **Phase 2.67**: ASCII uppercase copy (strings):
+  - `vim_strcpy_up` - Copy string while converting to uppercase
+  - `vim_strncpy_up` - Copy with length limit while converting to uppercase
+  - `vim_memcpy_up` - Memory copy while converting to uppercase
+  - Same ASCII-only conversion as vim_strup (a-z → A-Z)
 - **Remaining infrastructure needed** for further progress:
   1. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 27 crates, 90 functions swapped to Rust
+- Total: 27 crates, 93 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
