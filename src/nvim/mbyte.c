@@ -101,6 +101,7 @@ extern int rs_utf_allow_break_after(int cc);
 extern int rs_utf_allow_break(int cc, int ncc);
 extern int rs_utf_printable(int c);
 extern int rs_utf_iscomposing_legacy(int c);
+extern int rs_utf_iscomposing_first(int c);
 
 // Rust struct for codepoint boundary offsets
 typedef struct {
@@ -827,7 +828,11 @@ int mb_cptr2char_adv(const char **pp)
 /// the string.
 bool utf_iscomposing_first(int c)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_iscomposing_first(c);
+#else
   return c >= 128 && !utf8proc_grapheme_break(' ', c);
+#endif
 }
 
 /// Check if the character pointed to by "p2" is a composing character when it

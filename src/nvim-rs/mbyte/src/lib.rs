@@ -25,7 +25,7 @@
 
 use std::ffi::{c_char, c_int};
 
-use nvim_utf8proc::get_property;
+use nvim_utf8proc::{get_property, grapheme_break};
 
 /// Maximum bytes in a UTF-8 character (standard is 4, but nvim supports up to 6).
 pub const MB_MAXBYTES: usize = 6;
@@ -678,6 +678,24 @@ pub extern "C" fn rs_utf_iscomposing_legacy(c: c_int) -> c_int {
     c_int::from(utf_iscomposing_legacy(c))
 }
 
+/// Check if a character at the start of a string needs a space prefix.
+///
+/// When "c" is the first char of a string, determine if it needs to be prefixed
+/// by a space byte to be drawn correctly, and not merge with the space left of
+/// the string.
+///
+/// Returns true if "c" would combine with a preceding space (no grapheme break).
+#[inline]
+pub fn utf_iscomposing_first(c: i32) -> bool {
+    c >= 128 && !grapheme_break(b' ' as i32, c)
+}
+
+/// FFI wrapper for `utf_iscomposing_first`.
+#[no_mangle]
+pub extern "C" fn rs_utf_iscomposing_first(c: c_int) -> c_int {
+    c_int::from(utf_iscomposing_first(c))
+}
+
 // Codepoint boundary detection
 
 /// Result of finding codepoint boundaries.
@@ -1154,6 +1172,26 @@ mod tests {
         assert_eq!(rs_utf_iscomposing_legacy(0x0300), 1);
         assert_eq!(rs_utf_iscomposing_legacy(0x20DD), 1);
         assert_eq!(rs_utf_iscomposing_legacy(0x41), 0);
+    }
+
+    #[test]
+    fn test_utf_iscomposing_first() {
+        // U+0300 COMBINING GRAVE ACCENT - would combine with preceding space
+        assert!(utf_iscomposing_first(0x0300));
+
+        // ASCII 'A' - would not combine (has grapheme break)
+        assert!(!utf_iscomposing_first(0x41));
+
+        // ASCII characters below 128 always return false
+        assert!(!utf_iscomposing_first(b' ' as i32));
+        assert!(!utf_iscomposing_first(b'a' as i32));
+    }
+
+    #[test]
+    fn test_ffi_utf_iscomposing_first() {
+        assert_eq!(rs_utf_iscomposing_first(0x0300), 1);
+        assert_eq!(rs_utf_iscomposing_first(0x41), 0);
+        assert_eq!(rs_utf_iscomposing_first(b'a' as c_int), 0);
     }
 
     #[test]

@@ -107,6 +107,12 @@ extern "C" {
     /// Returns a pointer to a static property structure for the given codepoint.
     /// The returned pointer is valid for the lifetime of the program.
     pub fn utf8proc_get_property(codepoint: i32) -> *const Utf8procProperty;
+
+    /// Check if there is a grapheme break between two codepoints.
+    ///
+    /// Returns true if there is a grapheme break between codepoint1 and codepoint2.
+    /// The values are UCS-4 codepoints.
+    pub fn utf8proc_grapheme_break(codepoint1: i32, codepoint2: i32) -> bool;
 }
 
 /// Safe wrapper to get Unicode properties for a codepoint.
@@ -114,7 +120,7 @@ extern "C" {
 /// Returns None if the codepoint is invalid (though utf8proc typically
 /// returns properties for unassigned codepoints with category CN).
 #[inline]
-#[must_use] 
+#[must_use]
 pub fn get_property(codepoint: i32) -> Option<&'static Utf8procProperty> {
     // SAFETY: utf8proc_get_property always returns a valid pointer to static data
     unsafe {
@@ -125,6 +131,17 @@ pub fn get_property(codepoint: i32) -> Option<&'static Utf8procProperty> {
             Some(&*prop)
         }
     }
+}
+
+/// Check if there is a grapheme break between two codepoints.
+///
+/// Returns true if there is a grapheme break (i.e., the codepoints are in
+/// different grapheme clusters).
+#[inline]
+#[must_use]
+pub fn grapheme_break(codepoint1: i32, codepoint2: i32) -> bool {
+    // SAFETY: utf8proc_grapheme_break is a pure function with no side effects
+    unsafe { utf8proc_grapheme_break(codepoint1, codepoint2) }
 }
 
 
@@ -168,5 +185,17 @@ mod tests {
         // ASCII 'A' is not composing
         let prop = get_property(0x41).expect("should get property for 'A'");
         assert!(!prop.is_composing_legacy());
+    }
+
+    #[test]
+    fn test_grapheme_break() {
+        // Space followed by combining accent - no break (combines with space)
+        assert!(!grapheme_break(b' ' as i32, 0x0300));
+
+        // Two ASCII letters - break between them
+        assert!(grapheme_break(b'a' as i32, b'b' as i32));
+
+        // Letter followed by combining accent - no break
+        assert!(!grapheme_break(b'e' as i32, 0x0301)); // e + acute accent
     }
 }
