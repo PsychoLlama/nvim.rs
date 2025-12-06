@@ -378,11 +378,12 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - [x] `os_fileinfo_id_equal`, `os_fileinfo_id`, `os_fileinfo_inode`, `os_fileinfo_size`, `os_fileinfo_hardlinks`, `os_fileinfo_blocksize` - **Phase 2.27**: Swapped to Rust (USE_RUST_OS_FS)
 - [x] `os_realpath` - **Phase 2.28**: Swapped to Rust (USE_RUST_OS_FS)
 - [x] `os_open` - **Phase 2.29**: Swapped to Rust (USE_RUST_OS_FS)
+- [x] `os_fopen` - **Phase 2.30**: Swapped to Rust (USE_RUST_OS_FS)
 - [ ] `src/nvim/os/fs.c` → `nvim-rs/os/fs` (remaining functions)
   - `os_can_exe`
   - `os_scandir`
   - `os_readv` (vectored I/O)
-  - **Status**: Rust code exists, 34 fs functions swapped (Phase 2.3-2.18, 2.21-2.29), 3 other os functions (Phase 2.19-2.20)
+  - **Status**: Rust code exists, 35 fs functions swapped (Phase 2.3-2.18, 2.21-2.30), 3 other os functions (Phase 2.19-2.20)
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
 
