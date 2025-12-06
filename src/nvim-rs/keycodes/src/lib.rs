@@ -44,6 +44,30 @@ const KE_S_XF2: c_int = 72;
 const KE_S_XF3: c_int = 73;
 const KE_S_XF4: c_int = 74;
 
+// Mouse key KE_* constants (from keycodes.h)
+const KE_LEFTMOUSE: c_int = 44;
+const KE_LEFTDRAG: c_int = 45;
+const KE_LEFTRELEASE: c_int = 46;
+const KE_MIDDLEMOUSE: c_int = 47;
+const KE_MIDDLEDRAG: c_int = 48;
+const KE_MIDDLERELEASE: c_int = 49;
+const KE_RIGHTMOUSE: c_int = 50;
+const KE_RIGHTDRAG: c_int = 51;
+const KE_RIGHTRELEASE: c_int = 52;
+const KE_LEFTMOUSE_NM: c_int = 69;
+const KE_LEFTRELEASE_NM: c_int = 70;
+const KE_MOUSEDOWN: c_int = 75;
+const KE_MOUSEUP: c_int = 76;
+const KE_MOUSELEFT: c_int = 77;
+const KE_MOUSERIGHT: c_int = 78;
+const KE_X1MOUSE: c_int = 89;
+const KE_X1DRAG: c_int = 90;
+const KE_X1RELEASE: c_int = 91;
+const KE_X2MOUSE: c_int = 92;
+const KE_X2DRAG: c_int = 93;
+const KE_X2RELEASE: c_int = 94;
+const KE_MOUSEMOVE: c_int = 100;
+
 /// Convert termcap codes to internal key representation
 /// TERMCAP2KEY(a, b) = -((a) + ((int)(b) << 8))
 const fn termcap2key(a: c_int, b: c_int) -> c_int {
@@ -83,6 +107,30 @@ const K_S_XF1: c_int = termcap2key(KS_EXTRA, KE_S_XF1);
 const K_S_XF2: c_int = termcap2key(KS_EXTRA, KE_S_XF2);
 const K_S_XF3: c_int = termcap2key(KS_EXTRA, KE_S_XF3);
 const K_S_XF4: c_int = termcap2key(KS_EXTRA, KE_S_XF4);
+
+// Mouse key codes
+const K_LEFTMOUSE: c_int = termcap2key(KS_EXTRA, KE_LEFTMOUSE);
+const K_LEFTMOUSE_NM: c_int = termcap2key(KS_EXTRA, KE_LEFTMOUSE_NM);
+const K_LEFTDRAG: c_int = termcap2key(KS_EXTRA, KE_LEFTDRAG);
+const K_LEFTRELEASE: c_int = termcap2key(KS_EXTRA, KE_LEFTRELEASE);
+const K_LEFTRELEASE_NM: c_int = termcap2key(KS_EXTRA, KE_LEFTRELEASE_NM);
+const K_MOUSEMOVE: c_int = termcap2key(KS_EXTRA, KE_MOUSEMOVE);
+const K_MIDDLEMOUSE: c_int = termcap2key(KS_EXTRA, KE_MIDDLEMOUSE);
+const K_MIDDLEDRAG: c_int = termcap2key(KS_EXTRA, KE_MIDDLEDRAG);
+const K_MIDDLERELEASE: c_int = termcap2key(KS_EXTRA, KE_MIDDLERELEASE);
+const K_RIGHTMOUSE: c_int = termcap2key(KS_EXTRA, KE_RIGHTMOUSE);
+const K_RIGHTDRAG: c_int = termcap2key(KS_EXTRA, KE_RIGHTDRAG);
+const K_RIGHTRELEASE: c_int = termcap2key(KS_EXTRA, KE_RIGHTRELEASE);
+const K_MOUSEDOWN: c_int = termcap2key(KS_EXTRA, KE_MOUSEDOWN);
+const K_MOUSEUP: c_int = termcap2key(KS_EXTRA, KE_MOUSEUP);
+const K_MOUSELEFT: c_int = termcap2key(KS_EXTRA, KE_MOUSELEFT);
+const K_MOUSERIGHT: c_int = termcap2key(KS_EXTRA, KE_MOUSERIGHT);
+const K_X1MOUSE: c_int = termcap2key(KS_EXTRA, KE_X1MOUSE);
+const K_X1DRAG: c_int = termcap2key(KS_EXTRA, KE_X1DRAG);
+const K_X1RELEASE: c_int = termcap2key(KS_EXTRA, KE_X1RELEASE);
+const K_X2MOUSE: c_int = termcap2key(KS_EXTRA, KE_X2MOUSE);
+const K_X2DRAG: c_int = termcap2key(KS_EXTRA, KE_X2DRAG);
+const K_X2RELEASE: c_int = termcap2key(KS_EXTRA, KE_X2RELEASE);
 
 /// Modifier mask table entry
 struct ModMaskEntry {
@@ -180,6 +228,36 @@ pub extern "C" fn rs_handle_x_keys(key: c_int) -> c_int {
     }
 }
 
+/// Return true if "c" is a mouse key.
+#[no_mangle]
+pub extern "C" fn rs_is_mouse_key(c: c_int) -> bool {
+    matches!(
+        c,
+        K_LEFTMOUSE
+            | K_LEFTMOUSE_NM
+            | K_LEFTDRAG
+            | K_LEFTRELEASE
+            | K_LEFTRELEASE_NM
+            | K_MOUSEMOVE
+            | K_MIDDLEMOUSE
+            | K_MIDDLEDRAG
+            | K_MIDDLERELEASE
+            | K_RIGHTMOUSE
+            | K_RIGHTDRAG
+            | K_RIGHTRELEASE
+            | K_MOUSEDOWN
+            | K_MOUSEUP
+            | K_MOUSELEFT
+            | K_MOUSERIGHT
+            | K_X1MOUSE
+            | K_X1DRAG
+            | K_X1RELEASE
+            | K_X2MOUSE
+            | K_X2DRAG
+            | K_X2RELEASE
+    )
+}
+
 #[cfg(test)]
 #[allow(clippy::cast_lossless)]
 mod tests {
@@ -233,5 +311,42 @@ mod tests {
         assert_eq!(rs_handle_x_keys(K_F1), K_F1);
         assert_eq!(rs_handle_x_keys(0), 0);
         assert_eq!(rs_handle_x_keys(42), 42);
+    }
+
+    #[test]
+    fn test_is_mouse_key() {
+        // All mouse keys should return true
+        assert!(rs_is_mouse_key(K_LEFTMOUSE));
+        assert!(rs_is_mouse_key(K_LEFTMOUSE_NM));
+        assert!(rs_is_mouse_key(K_LEFTDRAG));
+        assert!(rs_is_mouse_key(K_LEFTRELEASE));
+        assert!(rs_is_mouse_key(K_LEFTRELEASE_NM));
+        assert!(rs_is_mouse_key(K_MOUSEMOVE));
+        assert!(rs_is_mouse_key(K_MIDDLEMOUSE));
+        assert!(rs_is_mouse_key(K_MIDDLEDRAG));
+        assert!(rs_is_mouse_key(K_MIDDLERELEASE));
+        assert!(rs_is_mouse_key(K_RIGHTMOUSE));
+        assert!(rs_is_mouse_key(K_RIGHTDRAG));
+        assert!(rs_is_mouse_key(K_RIGHTRELEASE));
+        assert!(rs_is_mouse_key(K_MOUSEDOWN));
+        assert!(rs_is_mouse_key(K_MOUSEUP));
+        assert!(rs_is_mouse_key(K_MOUSELEFT));
+        assert!(rs_is_mouse_key(K_MOUSERIGHT));
+        assert!(rs_is_mouse_key(K_X1MOUSE));
+        assert!(rs_is_mouse_key(K_X1DRAG));
+        assert!(rs_is_mouse_key(K_X1RELEASE));
+        assert!(rs_is_mouse_key(K_X2MOUSE));
+        assert!(rs_is_mouse_key(K_X2DRAG));
+        assert!(rs_is_mouse_key(K_X2RELEASE));
+
+        // Non-mouse keys should return false
+        assert!(!rs_is_mouse_key(K_UP));
+        assert!(!rs_is_mouse_key(K_DOWN));
+        assert!(!rs_is_mouse_key(K_LEFT));
+        assert!(!rs_is_mouse_key(K_RIGHT));
+        assert!(!rs_is_mouse_key(K_F1));
+        assert!(!rs_is_mouse_key(0));
+        assert!(!rs_is_mouse_key(42));
+        assert!(!rs_is_mouse_key(b'a' as c_int));
     }
 }

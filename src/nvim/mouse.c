@@ -1126,9 +1126,17 @@ void ins_mousescroll(int dir)
   }
 }
 
+#ifdef USE_RUST_KEYCODES
+// Rust implementation of is_mouse_key
+extern bool rs_is_mouse_key(int c);
+#endif
+
 /// Return true if "c" is a mouse key.
 bool is_mouse_key(int c)
 {
+#ifdef USE_RUST_KEYCODES
+  return rs_is_mouse_key(c);
+#else
   return c == K_LEFTMOUSE
          || c == K_LEFTMOUSE_NM
          || c == K_LEFTDRAG
@@ -1151,6 +1159,7 @@ bool is_mouse_key(int c)
          || c == K_X2MOUSE
          || c == K_X2DRAG
          || c == K_X2RELEASE;
+#endif
 }
 
 /// @return  true when 'mousemodel' is set to "popup" or "popup_setpos".

@@ -219,6 +219,7 @@ Key code mapping - pure lookup/switch, no allocation:
 
 - [x] `name_to_mod_mask` - Map modifier char to mask bit (pure) - swapped to Rust
 - [x] `handle_x_keys` - Map X-terminal keys to standard keys (pure) - swapped to Rust
+- [x] `is_mouse_key` - **Phase 2.40**: Check if key code is a mouse key (pure) - swapped to Rust (USE_RUST_KEYCODES)
 
 #### 1.14 Command History Utilities (`src/nvim/cmdhist.c` → `nvim-rs/cmdhist`)
 
