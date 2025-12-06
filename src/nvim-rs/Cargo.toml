@@ -20,6 +20,7 @@ nvim-collections = { path = "collections" }
 nvim-encoding = { path = "encoding" }
 nvim-ex-docmd = { path = "ex_docmd" }
 nvim-fileio = { path = "fileio" }
+nvim-grid = { path = "grid" }
 nvim-help = { path = "help" }
 nvim-indent = { path = "indent" }
 nvim-keycodes = { path = "keycodes" }
