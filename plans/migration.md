@@ -498,9 +498,12 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - **Phase 2.64**: RTL ASCII mirroring (charset):
   - `rl_mirror_ascii` - Reverse ASCII string in-place for right-to-left text
   - Pure pointer manipulation, no global state
+- **Phase 2.65**: BOM removal (mbyte):
+  - `remove_bom` - Remove UTF-8 BOM sequences from string in-place
+  - Simple byte manipulation, searches for 0xEF 0xBB 0xBF sequences
 - **Remaining infrastructure needed** for further progress:
   1. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 27 crates, 88 functions swapped to Rust
+- Total: 27 crates, 89 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
