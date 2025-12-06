@@ -507,3 +507,31 @@ All remaining FUNC_ATTR_PURE/CONST functions and simple predicates fall into one
 1. **utf8proc-rs integration** - Would unlock utf_iscomposing* functions
 2. ~~**g_chartab FFI** - Would unlock vim_isfilec, vim_isprintc, etc.~~ **DONE (Phase 2.47-2.49)**: g_chartab exposed, vim_isfilec, vim_is_fname_char, byte2cells, vim_isIDc, vim_isprintc migrated (vim_isprintc also uses cross-crate nvim-mbyte dependency)
 3. **Complex struct FFI** - Would unlock window.c, buffer.c functions
+
+## Session 9 Search Summary (2025-12-06)
+
+Exhaustive search for Phase 2.50+ candidates. Cross-crate dependencies now work (charset → mbyte).
+
+**Files examined without USE_RUST patterns (30 files with FUNC_ATTR_PURE/CONST):**
+- arabic.c, autocmd.c, buffer_updates.c, cmdexpand.c, context.c
+- cursor_shape.c, diff.c, digraph.c, edit.c, ex_cmds.c
+- ex_eval.c, ex_getln.c, fuzzy.c, getchar.c, highlight_group.c
+- indent_c.c, insexpand.c, mapping.c, optionstr.c, plines.c
+- quickfix.c, regexp.c, runtime.c, search.c, sign.c
+- textformat.c, usercmd.c, version.c, window.c, winfloat.c
+
+**Results:**
+- All candidates use global state, complex structs, or external libs
+- version.c: `has_nvim_version`, `min_vim_version`, `highest_patch`, `has_vim_patch` - use static version arrays
+- cursor_shape.c: All functions use `shape_table` global
+- digraph.c: `digraph_get`, `getexactdigraph` - use `user_digraphs` global and static table
+- plines.c: `charsize_fast_impl`, `in_win_border` - use `win_T*` structs
+- mbyte.c: `utf_char2cells` - uses `cw_table` global and utf8proc
+- grid.c: Most schar functions use `glyph_cache` Set global
+
+**Conclusion:** Migration has reached a plateau. Remaining candidates require:
+1. **utf8proc binding** - For character width, composing chars
+2. **Global state bridges** - For cw_table, shape_table, etc.
+3. **Complex struct FFI** - For win_T*, buf_T* parameters
+
+The next significant progress requires infrastructure investment rather than individual function migration.
