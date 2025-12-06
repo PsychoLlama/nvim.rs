@@ -477,6 +477,7 @@ static bool prop_is_emojilike(const utf8proc_property_t *prop)
 
 #ifdef USE_RUST_MBYTE
 extern int rs_utf_char2cells(int c);
+extern int rs_utf_ptr2cells(const char *p);
 #endif
 
 /// For UTF-8 character "c" return 2 for a double-width character, 1 for others.
@@ -527,6 +528,9 @@ int utf_char2cells(int c)
 /// This doesn't take care of unprintable characters, use ptr2cells() for that.
 int utf_ptr2cells(const char *p_in)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_ptr2cells(p_in);
+#else
   const uint8_t *p = (const uint8_t *)p_in;
   // Need to convert to a character number.
   if ((*p) >= 0x80) {
@@ -551,6 +555,7 @@ int utf_ptr2cells(const char *p_in)
     return cells;
   }
   return 1;
+#endif
 }
 
 /// Convert a UTF-8 byte sequence to a character number.

@@ -941,6 +941,189 @@ pub extern "C" fn rs_utf_char2cells(c: c_int) -> c_int {
     utf_char2cells(c)
 }
 
+// Character to cell width from pointer
+
+/// VS-16 (Variation Selector 16) codepoint: U+FE0F
+/// This turns certain characters into emoji presentation.
+const VS16_CODEPOINT: i32 = 0xFE0F;
+
+/// Decode UTF-8 byte sequence to Unicode codepoint with strict validation.
+///
+/// Returns `Some(codepoint)` for sequences with valid structure (correct
+/// continuation bytes), `None` for structurally invalid sequences.
+///
+/// Note: This function DOES NOT reject overlong encodings - it returns
+/// the decoded codepoint even if it's an ASCII value from a multibyte
+/// sequence. The caller should check for overlong sequences if needed.
+///
+/// Invalid sequences (returning None) include:
+/// - Empty input
+/// - Incomplete sequences (not enough bytes)
+/// - Invalid continuation bytes (not 0x80-0xBF)
+/// - Invalid lead byte (continuation byte or 0xFE/0xFF as first byte)
+fn utf_ptr2char_strict(p: &[u8]) -> Option<i32> {
+    if p.is_empty() {
+        return None;
+    }
+
+    let v0 = p[0] as u32;
+
+    // Fast path for ASCII
+    if v0 < 0x80 {
+        return Some(v0 as i32);
+    }
+
+    let len = UTF8LEN_TAB[v0 as usize];
+    // len == 1 means invalid lead byte (continuation byte 0x80-0xBF or 0xFE/0xFF)
+    if len < 2 || p.len() < len as usize {
+        return None; // Invalid lead byte or incomplete sequence
+    }
+
+    // Check continuation bytes
+    macro_rules! check_cont {
+        ($v:expr) => {
+            if ($v & 0xC0) != 0x80 {
+                return None;
+            }
+        };
+    }
+
+    let v1 = p[1] as u32;
+    check_cont!(v1);
+
+    if len == 2 {
+        let c = ((v0 << 6) + v1 - ((0xC0 << 6) + 0x80)) as i32;
+        return Some(c);
+    }
+
+    let v2 = p[2] as u32;
+    check_cont!(v2);
+
+    if len == 3 {
+        let c = ((v0 << 12) + (v1 << 6) + v2 - ((0xE0 << 12) + (0x80 << 6) + 0x80)) as i32;
+        return Some(c);
+    }
+
+    let v3 = p[3] as u32;
+    check_cont!(v3);
+
+    if len == 4 {
+        let c = ((v0 << 18) + (v1 << 12) + (v2 << 6) + v3
+            - ((0xF0 << 18) + (0x80 << 12) + (0x80 << 6) + 0x80)) as i32;
+        return Some(c);
+    }
+
+    let v4 = p[4] as u32;
+    check_cont!(v4);
+
+    if len == 5 {
+        let c = ((v0 << 24) + (v1 << 18) + (v2 << 12) + (v3 << 6) + v4
+            - ((0xF8 << 24) + (0x80 << 18) + (0x80 << 12) + (0x80 << 6) + 0x80))
+            as i32;
+        return Some(c);
+    }
+
+    // len == 6
+    let v5 = p[5] as u32;
+    check_cont!(v5);
+
+    let c = ((v0 << 30) + (v1 << 24) + (v2 << 18) + (v3 << 12) + (v4 << 6) + v5
+        - ((0x80 << 24) + (0x80 << 18) + (0x80 << 12) + (0x80 << 6) + 0x80)) as i32;
+    Some(c)
+}
+
+extern "C" {
+    /// char2cells from charset crate for overlong ASCII sequences
+    fn rs_char2cells(c: c_int) -> c_int;
+}
+
+/// Return the number of display cells character at "*p" occupies.
+///
+/// This doesn't take care of unprintable characters, use `ptr2cells()` for that.
+///
+/// For ASCII (single byte), returns 1.
+/// For valid multibyte UTF-8, returns the character's cell width.
+/// For invalid/illegal UTF-8 sequences, returns 4 (displayed as `<xx>`).
+/// For overlong ASCII encodings, returns char2cells of the decoded value.
+///
+/// Also checks for emoji presentation selector (VS-16) following emoji-like
+/// characters, returning 2 cells if found (when 'emoji' option is enabled).
+pub fn utf_ptr2cells(p: &[u8]) -> i32 {
+    if p.is_empty() {
+        return 1;
+    }
+
+    let first = p[0];
+
+    // ASCII fast path
+    if first < 0x80 {
+        return 1;
+    }
+
+    // Multibyte - need to decode
+    let len = UTF8LEN_TAB[first as usize] as usize;
+
+    // Try to decode with validation
+    match utf_ptr2char_strict(p) {
+        None => {
+            // Invalid/illegal byte sequence - displayed as <xx>
+            4
+        }
+        Some(c) if c < 0x80 => {
+            // ASCII value from multibyte = overlong sequence
+            // SAFETY: rs_char2cells just accesses g_chartab
+            unsafe { rs_char2cells(c) }
+        }
+        Some(c) => {
+            let cells = utf_char2cells(c);
+
+            // Check for emoji presentation selector (VS-16)
+            if cells == 1 && emoji_is_enabled() {
+                if let Some(prop) = get_property(c) {
+                    if prop.is_emojilike() && p.len() > len {
+                        // Check if next character is VS-16 (U+FE0F)
+                        let c2 = utf_ptr2char(&p[len..]);
+                        if c2 == VS16_CODEPOINT {
+                            return 2; // emoji presentation
+                        }
+                    }
+                }
+            }
+
+            cells
+        }
+    }
+}
+
+/// FFI wrapper for `utf_ptr2cells`.
+///
+/// # Safety
+///
+/// `p` must be a valid pointer to a null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_utf_ptr2cells(p: *const c_char) -> c_int {
+    if p.is_null() {
+        return 1;
+    }
+
+    // Find string length (we need enough for char + potential VS-16)
+    let mut len = 0;
+    while len < 16 {
+        // 6 bytes max char + 3 bytes VS-16 + margin
+        if unsafe { *p.add(len) } == 0 {
+            break;
+        }
+        len += 1;
+    }
+
+    if len == 0 {
+        return 1;
+    }
+
+    let slice = unsafe { std::slice::from_raw_parts(p as *const u8, len) };
+    utf_ptr2cells(slice)
+}
+
 // Codepoint boundary detection
 
 /// Result of finding codepoint boundaries.
@@ -1713,4 +1896,65 @@ mod tests {
         assert_eq!(bounds.begin_off, 0);
         assert_eq!(bounds.end_off, 1); // Invalid due to incomplete sequence
     }
+
+    #[test]
+    fn test_utf_ptr2char_strict() {
+        // Valid ASCII
+        assert_eq!(utf_ptr2char_strict(b"A"), Some(0x41));
+
+        // Valid 2-byte UTF-8: é (U+00E9)
+        assert_eq!(utf_ptr2char_strict(&[0xC3, 0xA9]), Some(0xE9));
+
+        // Valid 3-byte UTF-8: € (U+20AC)
+        assert_eq!(utf_ptr2char_strict(&[0xE2, 0x82, 0xAC]), Some(0x20AC));
+
+        // Valid 4-byte UTF-8: 😀 (U+1F600)
+        assert_eq!(utf_ptr2char_strict(&[0xF0, 0x9F, 0x98, 0x80]), Some(0x1F600));
+
+        // Invalid: lone continuation byte
+        assert_eq!(utf_ptr2char_strict(&[0x80]), None);
+
+        // Invalid: incomplete 2-byte sequence
+        assert_eq!(utf_ptr2char_strict(&[0xC3]), None);
+
+        // Invalid: incomplete 3-byte sequence
+        assert_eq!(utf_ptr2char_strict(&[0xE2, 0x82]), None);
+
+        // Invalid: bad continuation byte
+        assert_eq!(utf_ptr2char_strict(&[0xC3, 0x00]), None);
+
+        // Empty input
+        assert_eq!(utf_ptr2char_strict(&[]), None);
+    }
+
+    #[test]
+    fn test_utf_ptr2cells_ascii() {
+        // ASCII returns 1
+        assert_eq!(utf_ptr2cells(b"A"), 1);
+        assert_eq!(utf_ptr2cells(b"z"), 1);
+        assert_eq!(utf_ptr2cells(b" "), 1);
+    }
+
+    #[test]
+    fn test_utf_ptr2cells_invalid() {
+        // Invalid sequences return 4 (displayed as <xx>)
+        // Lone continuation byte
+        assert_eq!(utf_ptr2cells(&[0x80]), 4);
+
+        // Incomplete 2-byte sequence
+        assert_eq!(utf_ptr2cells(&[0xC3]), 4);
+
+        // Bad continuation byte in 2-byte sequence
+        assert_eq!(utf_ptr2cells(&[0xC3, 0x00]), 4);
+    }
+
+    #[test]
+    fn test_utf_ptr2cells_empty() {
+        // Empty returns 1 (default)
+        assert_eq!(utf_ptr2cells(&[]), 1);
+    }
+
+    // Note: Tests for UTF-8 multibyte cell widths are complex because
+    // they depend on vim_isprintc, p_ambw, p_emoji, and cw_table globals.
+    // Those are tested via integration tests in neovim.
 }
