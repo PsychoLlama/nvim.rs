@@ -25,6 +25,7 @@ members = [
     "src/nvim-rs/spell",
     "src/nvim-rs/strings",
     "src/nvim-rs/eval",
+    "src/nvim-rs/utf8proc",
 ]
 
 [workspace.package]
