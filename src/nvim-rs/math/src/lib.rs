@@ -181,6 +181,24 @@ pub extern "C" fn rs_num_modulus(n1: i64, n2: i64) -> i64 {
     }
 }
 
+/// Calculate the percentage that `part` is of the `whole`.
+///
+/// With 32 bit longs and more than 21,474,836 lines multiplying by 100
+/// causes an overflow, thus for large numbers divide instead.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)] // We're converting to c_int intentionally
+pub extern "C" fn rs_calc_percentage(part: i64, whole: i64) -> c_int {
+    if whole == 0 {
+        return 0; // Avoid division by zero
+    }
+    let result = if part > 1_000_000 {
+        part / (whole / 100)
+    } else {
+        (part * 100) / whole
+    };
+    result as c_int
+}
+
 #[cfg(test)]
 #[allow(clippy::cast_lossless)]
 mod tests {
@@ -321,5 +339,28 @@ mod tests {
         assert_eq!(rs_num_modulus(10, 0), 0);
         assert_eq!(rs_num_modulus(-10, 0), 0);
         assert_eq!(rs_num_modulus(0, 0), 0);
+    }
+
+    #[test]
+    fn test_calc_percentage() {
+        // Normal cases
+        assert_eq!(rs_calc_percentage(50, 100), 50);
+        assert_eq!(rs_calc_percentage(25, 100), 25);
+        assert_eq!(rs_calc_percentage(1, 100), 1);
+        assert_eq!(rs_calc_percentage(100, 100), 100);
+        assert_eq!(rs_calc_percentage(0, 100), 0);
+
+        // Large numbers (uses different algorithm when part > 1_000_000)
+        assert_eq!(rs_calc_percentage(2_000_000, 4_000_000), 50);
+        assert_eq!(rs_calc_percentage(1_000_001, 2_000_002), 50);
+        assert_eq!(rs_calc_percentage(10_000_000, 100_000_000), 10);
+
+        // Division by zero protection
+        assert_eq!(rs_calc_percentage(50, 0), 0);
+        assert_eq!(rs_calc_percentage(0, 0), 0);
+
+        // Small fractions (should round down)
+        assert_eq!(rs_calc_percentage(1, 1000), 0);
+        assert_eq!(rs_calc_percentage(5, 1000), 0);
     }
 }

@@ -116,6 +116,10 @@
 
 #include "buffer.c.generated.h"
 
+#ifdef USE_RUST_MATH
+extern int rs_calc_percentage(int64_t part, int64_t whole);
+#endif
+
 static const char e_attempt_to_delete_buffer_that_is_in_use_str[]
   = N_("E937: Attempt to delete a buffer that is in use: %s");
 
@@ -132,10 +136,14 @@ typedef enum {
 /// Calculate the percentage that `part` is of the `whole`.
 int calc_percentage(int64_t part, int64_t whole)
 {
+#ifdef USE_RUST_MATH
+  return rs_calc_percentage(part, whole);
+#else
   // With 32 bit longs and more than 21,474,836 lines multiplying by 100
   // causes an overflow, thus for large numbers divide instead.
   return (part > 1000000) ? (int)(part / (whole / 100))
                           : (int)((part * 100) / whole);
+#endif
 }
 
 /// @return  the highest possible buffer number
