@@ -39,8 +39,9 @@
 #include "grid.c.generated.h"
 
 #ifdef USE_RUST_GRID
-// Rust implementation of schar_high
+// Rust implementations of schar functions
 extern bool rs_schar_high(schar_T sc);
+extern char rs_schar_get_ascii(schar_T sc);
 #endif
 
 // temporary buffer for rendering a single screenline, so it can be
@@ -226,10 +227,14 @@ int schar_get_first_codepoint(schar_T sc)
 /// @return ascii char or NUL if not ascii
 char schar_get_ascii(schar_T sc)
 {
-#ifdef ORDER_BIG_ENDIAN
-  return (!(sc & 0x80FFFFFF)) ? *(char *)&sc : NUL;
+#ifdef USE_RUST_GRID
+  return rs_schar_get_ascii(sc);
 #else
+#  ifdef ORDER_BIG_ENDIAN
+  return (!(sc & 0x80FFFFFF)) ? *(char *)&sc : NUL;
+#  else
   return (sc < 0x80) ? (char)sc : NUL;
+#  endif
 #endif
 }
 
