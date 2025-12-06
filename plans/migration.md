@@ -509,9 +509,12 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
   - `vim_strncpy_up` - Copy with length limit while converting to uppercase
   - `vim_memcpy_up` - Memory copy while converting to uppercase
   - Same ASCII-only conversion as vim_strup (a-z → A-Z)
+- **Phase 2.68**: Trailing whitespace deletion (strings):
+  - `del_trailing_spaces` - Delete trailing spaces/tabs from string
+  - Preserves escaped whitespace (preceded by backslash or Ctrl_V)
 - **Remaining infrastructure needed** for further progress:
   1. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 27 crates, 93 functions swapped to Rust
+- Total: 27 crates, 94 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
