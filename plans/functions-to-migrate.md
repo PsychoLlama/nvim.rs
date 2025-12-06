@@ -564,9 +564,11 @@ Exhaustive search for Phase 2.50+ candidates. Cross-crate dependencies now work 
 - Cross-crate call from charset to mbyte for utf_char2cells
 
 **Remaining utf8proc-dependent functions:**
-- `utfc_char2cells` - Wrapper calling utf_char2cells (✅ now migrated) - good candidate for Phase 2.58
+- `utf_ptr2cells` - Get display cells from UTF-8 string pointer (depends on utf_char2cells, pointer operations)
+- `ptr2cells` - Get display cells from string pointer (depends on utf_ptr2cells)
+- `utf_class_tab` - Get Unicode character class (depends on vim_iswordc_tab - circular dep)
 
-**Conclusion:** char2cells now migrated. `utfc_char2cells` is now unblocked!
+**Conclusion:** char2cells now migrated. Next candidates need pointer FFI or complex struct handling.
 
 Remaining candidates require:
 1. **Complex struct FFI** - For win_T*, buf_T* parameters
