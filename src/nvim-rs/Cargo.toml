@@ -13,6 +13,7 @@ crate-type = ["staticlib", "rlib"]
 workspace = true
 
 [dependencies]
+nvim-arabic = { path = "arabic" }
 nvim-charset = { path = "charset" }
 nvim-cmdhist = { path = "cmdhist" }
 nvim-eval = { path = "eval" }

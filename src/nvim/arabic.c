@@ -25,6 +25,11 @@
 #include "nvim/macros_defs.h"
 #include "nvim/option_vars.h"
 
+#ifdef USE_RUST_ARABIC
+extern bool rs_arabic_combine(int one, int two);
+extern bool rs_arabic_maycombine(int two);
+#endif
+
 // Unicode values for Arabic characters.
 enum {
   a_HAMZA = 0x0621,
@@ -245,6 +250,9 @@ static int can_join(int c1, int c2)
 bool arabic_maycombine(int two)
   FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_ARABIC
+  return rs_arabic_maycombine(two);
+#else
   if (p_arshape && !p_tbidi) {
     return two == a_ALEF_MADDA
            || two == a_ALEF_HAMZA_ABOVE
@@ -252,6 +260,7 @@ bool arabic_maycombine(int two)
            || two == a_ALEF;
   }
   return false;
+#endif
 }
 
 /// Check whether we are dealing with Arabic combining characters.
@@ -263,10 +272,14 @@ bool arabic_maycombine(int two)
 bool arabic_combine(int one, int two)
   FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_ARABIC
+  return rs_arabic_combine(one, two);
+#else
   if (one == a_LAM) {
     return arabic_maycombine(two);
   }
   return false;
+#endif
 }
 
 /// @return  true if 'c' is an Arabic ISO-8859-6 character

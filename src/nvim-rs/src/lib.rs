@@ -13,6 +13,7 @@
 
 // Re-export all FFI functions from sub-crates
 // This ensures they're included in the static library
+pub use nvim_arabic::*;
 pub use nvim_charset::*;
 pub use nvim_cmdhist::*;
 pub use nvim_collections::garray::*;

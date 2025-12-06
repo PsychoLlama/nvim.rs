@@ -490,9 +490,14 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
   - `mb_string2cells` - Count display cells for entire string
   - `mb_string2cells_len` - Count display cells with length limit
   - Uses utf_ptr2cells (migrated) and utfc_ptr2len/utfc_ptr2len_len (callback to C)
+- **Phase 2.63**: Arabic text combining (arabic):
+  - `arabic_combine` - Check for Arabic combining characters (LAM + ALEF pairs)
+  - `arabic_maycombine` - Check if character may combine with previous
+  - **New crate**: nvim-arabic
+  - Reads global options p_arshape and p_tbidi via extern C
 - **Remaining infrastructure needed** for further progress:
   1. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 26 crates, 84 functions swapped to Rust
+- Total: 27 crates, 86 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
