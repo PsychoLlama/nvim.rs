@@ -188,6 +188,11 @@ bool did_set_spelltab;
 
 #include "spell.c.generated.h"
 
+#ifdef USE_RUST_SPELL
+// Rust implementation of spell_valid_case
+extern bool rs_spell_valid_case(int wordflags, int treeflags);
+#endif
+
 /// mode values for find_word
 enum {
   FIND_FOLDWORD     = 0,  ///< find word case-folded
@@ -1230,10 +1235,14 @@ static int fold_more(matchinf_T *mip)
 /// @param treeflags Flags for the word in the spell tree.
 bool spell_valid_case(int wordflags, int treeflags)
 {
+#ifdef USE_RUST_SPELL
+  return rs_spell_valid_case(wordflags, treeflags);
+#else
   return (wordflags == WF_ALLCAP && (treeflags & WF_FIXCAP) == 0)
          || ((treeflags & (WF_ALLCAP | WF_KEEPCAP)) == 0
              && ((treeflags & WF_ONECAP) == 0
                  || (wordflags & WF_ONECAP) != 0));
+#endif
 }
 
 /// Return true if spell checking is enabled for "wp".

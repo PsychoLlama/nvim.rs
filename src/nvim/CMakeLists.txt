@@ -94,6 +94,7 @@ if(USE_RUST)
       USE_RUST_OS_PROC
       USE_RUST_PATH
       USE_RUST_PROFILE
+      USE_RUST_SPELL
       USE_RUST_STRINGS
     )
   else()
