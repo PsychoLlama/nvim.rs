@@ -461,7 +461,7 @@ After completing Phase 2.46 (valid_yank_reg), decided to expose g_chartab global
 
 **Functions using g_chartab + other dependencies:**
 - `vim_isfilec_or_wc` - Uses vim_isfilec + path_has_wildcard (cross-module)
-- `vim_isprintc` - Uses g_chartab + utf_printable (mbyte cross-crate)
+- ~~`vim_isprintc`~~ - ✅ **MIGRATED Phase 2.49** - Uses g_chartab + nvim-mbyte::utf_printable (first cross-crate dependency)
 
 **Functions using shape_table global:**
 - `cursor_is_block_during_visual` - Accesses shape_table array
@@ -500,10 +500,10 @@ All remaining FUNC_ATTR_PURE/CONST functions and simple predicates fall into one
 
 **Migration Status:**
 - 25 Rust crates in workspace
-- 68+ functions swapped from C to Rust
-- 115+ USE_RUST ifdef patterns across 20+ C files
+- 69+ functions swapped from C to Rust
+- 116+ USE_RUST ifdef patterns across 20+ C files
 
 **Next Steps (require infrastructure investment):**
 1. **utf8proc-rs integration** - Would unlock utf_iscomposing* functions
-2. ~~**g_chartab FFI** - Would unlock vim_isfilec, vim_isprintc, etc.~~ **DONE (Phase 2.47-2.48)**: g_chartab exposed, vim_isfilec, vim_is_fname_char, byte2cells, vim_isIDc migrated
+2. ~~**g_chartab FFI** - Would unlock vim_isfilec, vim_isprintc, etc.~~ **DONE (Phase 2.47-2.49)**: g_chartab exposed, vim_isfilec, vim_is_fname_char, byte2cells, vim_isIDc, vim_isprintc migrated (vim_isprintc also uses cross-crate nvim-mbyte dependency)
 3. **Complex struct FFI** - Would unlock window.c, buffer.c functions
