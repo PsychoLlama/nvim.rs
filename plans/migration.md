@@ -501,9 +501,12 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - **Phase 2.65**: BOM removal (mbyte):
   - `remove_bom` - Remove UTF-8 BOM sequences from string in-place
   - Simple byte manipulation, searches for 0xEF 0xBB 0xBF sequences
+- **Phase 2.66**: ASCII uppercase (strings):
+  - `vim_strup` - Convert ASCII string to uppercase in-place
+  - Locale-independent, only handles a-z → A-Z conversion
 - **Remaining infrastructure needed** for further progress:
   1. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 27 crates, 89 functions swapped to Rust
+- Total: 27 crates, 90 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
