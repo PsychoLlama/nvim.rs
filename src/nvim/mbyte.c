@@ -103,6 +103,7 @@ extern int rs_utf_printable(int c);
 extern int rs_utf_iscomposing_legacy(int c);
 extern int rs_utf_iscomposing_first(int c);
 extern int rs_utf_fold(int a);
+extern int rs_utf_ambiguous_width(const char *p);
 
 // Rust struct for codepoint boundary offsets
 typedef struct {
@@ -1410,6 +1411,9 @@ int utf_class_tab(const int c, const uint64_t *const chartab)
 
 bool utf_ambiguous_width(const char *p)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_ambiguous_width(p) != 0;
+#else
   // be quick if there is nothing to print or ASCII-only
   if (p[0] == NUL || p[1] == NUL) {
     return false;
@@ -1426,6 +1430,7 @@ bool utf_ambiguous_width(const char *p)
   // check if second sequence is 0xFE0F VS-16 which can turn things into emoji,
   // safe with NUL (no second sequence)
   return memcmp(p + info.len, "\xef\xb8\x8f", 3) == 0;
+#endif
 }
 
 // Return the folded-case equivalent of "a", which is a UCS-4 character.  Uses

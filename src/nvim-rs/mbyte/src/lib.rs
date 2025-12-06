@@ -718,6 +718,77 @@ pub extern "C" fn rs_utf_fold(a: c_int) -> c_int {
     utf_fold(a)
 }
 
+// Ambiguous width detection
+
+/// VS-16 (Variation Selector 16) UTF-8 encoding: U+FE0F = 0xEF 0xB8 0x8F
+/// This turns certain characters into emoji presentation.
+const VS16: [u8; 3] = [0xEF, 0xB8, 0x8F];
+
+/// Check if a UTF-8 character has ambiguous width.
+///
+/// Returns true if:
+/// - The character has the East Asian Ambiguous Width property, or
+/// - The character is emoji-like (extended pictographic or regional indicator), or
+/// - The character is followed by VS-16 (U+FE0F) which turns things into emoji
+///
+/// Returns false for:
+/// - Empty strings (NUL at start)
+/// - ASCII characters (single-byte)
+pub fn utf_ambiguous_width(p: &[u8]) -> bool {
+    // Be quick if there is nothing to print or ASCII-only
+    if p.is_empty() || p[0] == 0 || (p.len() == 1 || p.len() >= 2 && p[1] == 0) {
+        return false;
+    }
+
+    // Decode the first character
+    let c = utf_ptr2char(p);
+    let len = utf_ptr2len(p);
+
+    if c >= 0x80 {
+        if let Some(prop) = get_property(c) {
+            if prop.ambiguous_width() || prop.is_emojilike() {
+                return true;
+            }
+        }
+    }
+
+    // Check if second sequence is 0xFE0F VS-16 which can turn things into emoji
+    if len < p.len() && p.len() - len >= 3 {
+        return p[len..len + 3] == VS16;
+    }
+
+    false
+}
+
+/// FFI wrapper for `utf_ambiguous_width`.
+///
+/// # Safety
+///
+/// `p` must be a valid pointer to a null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_utf_ambiguous_width(p: *const c_char) -> c_int {
+    if p.is_null() {
+        return 0;
+    }
+
+    // Find string length (we need at least enough for char + potential VS-16)
+    let mut len = 0;
+    while len < 16 {
+        // 6 bytes max char + 3 bytes VS-16 + margin
+        if unsafe { *p.add(len) } == 0 {
+            break;
+        }
+        len += 1;
+    }
+
+    if len == 0 {
+        return 0;
+    }
+
+    let slice = unsafe { std::slice::from_raw_parts(p as *const u8, len) };
+    c_int::from(utf_ambiguous_width(slice))
+}
+
 // Codepoint boundary detection
 
 /// Result of finding codepoint boundaries.
@@ -1240,6 +1311,65 @@ mod tests {
         assert_eq!(rs_utf_fold(b'A' as c_int), b'a' as c_int);
         assert_eq!(rs_utf_fold(b'a' as c_int), b'a' as c_int);
         assert_eq!(rs_utf_fold(0xDF), 0xDF); // ß unchanged
+    }
+
+    #[test]
+    fn test_utf_ambiguous_width() {
+        // Empty/NUL - not ambiguous
+        assert!(!utf_ambiguous_width(&[]));
+        assert!(!utf_ambiguous_width(&[0]));
+
+        // ASCII - not ambiguous
+        assert!(!utf_ambiguous_width(b"A"));
+        assert!(!utf_ambiguous_width(b"Hello"));
+
+        // ASCII followed by NUL - not ambiguous
+        assert!(!utf_ambiguous_width(&[b'A', 0]));
+
+        // Ambiguous width character: U+00A7 (§ section sign)
+        // UTF-8: 0xC2 0xA7
+        assert!(utf_ambiguous_width(&[0xC2, 0xA7]));
+
+        // Ambiguous width character: U+00B0 (° degree sign)
+        // UTF-8: 0xC2 0xB0
+        assert!(utf_ambiguous_width(&[0xC2, 0xB0]));
+
+        // Extended pictographic (emoji): U+1F600 (grinning face)
+        // UTF-8: 0xF0 0x9F 0x98 0x80
+        assert!(utf_ambiguous_width(&[0xF0, 0x9F, 0x98, 0x80]));
+
+        // Regional indicator: U+1F1E6 (regional indicator A)
+        // UTF-8: 0xF0 0x9F 0x87 0xA6
+        assert!(utf_ambiguous_width(&[0xF0, 0x9F, 0x87, 0xA6]));
+
+        // Non-ambiguous CJK character: U+4E2D (中)
+        // UTF-8: 0xE4 0xB8 0xAD
+        assert!(!utf_ambiguous_width(&[0xE4, 0xB8, 0xAD]));
+
+        // Character followed by VS-16 (U+FE0F) - becomes emoji
+        // Example: # + VS-16 = emoji presentation
+        // '#' (0x23) followed by VS-16 (0xEF 0xB8 0x8F)
+        assert!(utf_ambiguous_width(&[0x23, 0xEF, 0xB8, 0x8F]));
+
+        // Character not followed by VS-16 - just normal #
+        assert!(!utf_ambiguous_width(&[0x23, 0]));
+    }
+
+    #[test]
+    fn test_ffi_utf_ambiguous_width() {
+        use std::ffi::CString;
+
+        // ASCII - not ambiguous
+        let s = CString::new("A").unwrap();
+        assert_eq!(unsafe { rs_utf_ambiguous_width(s.as_ptr()) }, 0);
+
+        // Ambiguous: § (U+00A7)
+        let s = CString::new([0xC2u8, 0xA7].as_slice()).unwrap();
+        assert_eq!(unsafe { rs_utf_ambiguous_width(s.as_ptr()) }, 1);
+
+        // Emoji: 😀 (U+1F600)
+        let s = CString::new([0xF0u8, 0x9F, 0x98, 0x80].as_slice()).unwrap();
+        assert_eq!(unsafe { rs_utf_ambiguous_width(s.as_ptr()) }, 1);
     }
 
     #[test]
