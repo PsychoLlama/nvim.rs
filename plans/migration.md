@@ -406,20 +406,22 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - [x] `get_op_type` - **Phase 2.43**: Swapped to Rust (USE_RUST_OPS) - translate command chars to operator type
 - [x] `skip_to_option_part` - **Phase 2.44**: Swapped to Rust (USE_RUST_STRINGS) - skip comma/spaces in option args
 - [x] `skip_luafunc_name`, `check_luafunc_name` - **Phase 2.45**: Swapped to Rust (USE_RUST_EVAL) - v:lua function name parsing
+- [x] `valid_yank_reg` - **Phase 2.46**: Swapped to Rust (USE_RUST_REGISTER) - validate register names
 
 **Session 7 (2025-12-05): Phases 2.36-2.38**
 - Created `nvim-spell` crate with `spell_valid_case` and `byte_in_str`
 - Created `nvim-grid` crate with `schar_high` (endianness-aware)
 - Total: 23 crates in workspace, 48+ functions swapped to Rust
 
-**Session 8 (2025-12-06): Phases 2.39-2.45**
+**Session 8 (2025-12-06): Phases 2.39-2.46**
 - Added `schar_get_ascii` to nvim-grid crate (ASCII extraction from schar)
 - Added `is_mouse_key` to nvim-keycodes crate (mouse key detection)
 - Added `schar_from_char` to nvim-grid crate (using nvim-mbyte::utf_char2bytes)
 - Created `nvim-ops` crate with operator lookup functions (5 functions total)
 - Added `skip_to_option_part` to nvim-strings crate
 - Added `skip_luafunc_name`, `check_luafunc_name` to nvim-eval crate (v:lua function name parsing)
-- Total: 24 crates, 63+ functions swapped to Rust
+- Created `nvim-register` crate with `valid_yank_reg` (register name validation)
+- Total: 25 crates, 64+ functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
