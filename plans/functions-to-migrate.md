@@ -569,8 +569,12 @@ Exhaustive search for Phase 2.50+ candidates. Cross-crate dependencies now work 
 - Handles overlong encodings specially (calls char2cells)
 - Checks for VS-16 emoji presentation selector
 
+**Phase 2.59**: Migrated `ptr2cells`:
+- ✅ MIGRATED - Get display cells from string pointer
+- For ASCII, looks up g_chartab; for UTF-8, calls utf_ptr2cells
+- Cross-crate call from charset to mbyte
+
 **Remaining utf8proc-dependent functions:**
-- `ptr2cells` - Get display cells from string pointer (depends on utf_ptr2cells) - **NEXT CANDIDATE**
 - `utf_class_tab` - Get Unicode character class (depends on vim_iswordc_tab - circular dep)
 
 **Conclusion:** char2cells now migrated. Next candidates need pointer FFI or complex struct handling.
