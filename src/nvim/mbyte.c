@@ -108,6 +108,7 @@ extern int rs_mb_charlen(const char *str);
 extern int rs_mb_charlen_len(const char *str, int len);
 extern size_t rs_mb_string2cells(const char *str);
 extern size_t rs_mb_string2cells_len(const char *str, size_t size);
+extern void rs_remove_bom(char *s);
 
 // Rust struct for codepoint boundary offsets
 typedef struct {
@@ -436,6 +437,9 @@ int bomb_size(void)
 // Remove all BOM from "s" by moving remaining text.
 void remove_bom(char *s)
 {
+#ifdef USE_RUST_MBYTE
+  rs_remove_bom(s);
+#else
   char *p = s;
 
   while ((p = strchr(p, 0xef)) != NULL) {
@@ -445,6 +449,7 @@ void remove_bom(char *s)
       p++;
     }
   }
+#endif
 }
 
 /// Get class of pointer:

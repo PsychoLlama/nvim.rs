@@ -1405,6 +1405,57 @@ pub unsafe extern "C" fn rs_utf_cp_bounds(
     utf_cp_bounds(slice, offset)
 }
 
+/// Remove all UTF-8 BOM sequences from a string in place.
+///
+/// The UTF-8 BOM is the byte sequence 0xEF 0xBB 0xBF. This function finds
+/// and removes all occurrences by shifting the remaining content.
+///
+/// # Safety
+///
+/// - `s` must be a valid pointer to a mutable, NUL-terminated C string
+/// - The string must have enough space for in-place modification
+// UTF-8 BOM bytes
+const BOM_0: u8 = 0xEF;
+const BOM_1: u8 = 0xBB;
+const BOM_2: u8 = 0xBF;
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_remove_bom(s: *mut c_char) {
+    if s.is_null() {
+        return;
+    }
+
+    let mut p = s as *mut u8;
+
+    loop {
+        // Find next 0xEF byte
+        while *p != 0 && *p != BOM_0 {
+            p = p.add(1);
+        }
+
+        if *p == 0 {
+            break;
+        }
+
+        // Check if this is a BOM sequence
+        if *p.add(1) == BOM_1 && *p.add(2) == BOM_2 {
+            // Remove the 3-byte BOM by shifting the rest of the string
+            let src = p.add(3);
+            // Calculate length of remaining string including NUL
+            let mut len = 0;
+            while *src.add(len) != 0 {
+                len += 1;
+            }
+            // Move len+1 bytes (including NUL terminator)
+            core::ptr::copy(src, p, len + 1);
+            // Don't advance p - there might be another BOM at the same position
+        } else {
+            // Not a BOM, move to next byte
+            p = p.add(1);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2060,4 +2111,43 @@ mod tests {
     // Note: Tests for UTF-8 multibyte cell widths are complex because
     // they depend on vim_isprintc, p_ambw, p_emoji, and cw_table globals.
     // Those are tested via integration tests in neovim.
+
+    #[test]
+    fn test_remove_bom() {
+        // No BOM - string unchanged
+        let mut s = *b"Hello\0";
+        unsafe { rs_remove_bom(s.as_mut_ptr().cast()) };
+        assert_eq!(&s[..5], b"Hello");
+
+        // Single BOM at start
+        let mut s = [0xEFu8, 0xBB, 0xBF, b'H', b'i', 0];
+        unsafe { rs_remove_bom(s.as_mut_ptr().cast()) };
+        assert_eq!(&s[..2], b"Hi");
+        assert_eq!(s[2], 0);
+
+        // BOM in the middle
+        let mut s = [b'A', 0xEF, 0xBB, 0xBF, b'B', 0, 0, 0];
+        unsafe { rs_remove_bom(s.as_mut_ptr().cast()) };
+        assert_eq!(&s[..2], b"AB");
+        assert_eq!(s[2], 0);
+
+        // Multiple BOMs
+        let mut s = [0xEFu8, 0xBB, 0xBF, 0xEF, 0xBB, 0xBF, b'X', 0, 0, 0, 0, 0, 0];
+        unsafe { rs_remove_bom(s.as_mut_ptr().cast()) };
+        assert_eq!(s[0], b'X');
+        assert_eq!(s[1], 0);
+
+        // Partial BOM (0xEF not followed by 0xBB 0xBF) - unchanged
+        let mut s = [0xEFu8, 0xBC, 0x80, 0];
+        unsafe { rs_remove_bom(s.as_mut_ptr().cast()) };
+        assert_eq!(&s[..3], &[0xEF, 0xBC, 0x80]);
+
+        // Empty string
+        let mut s = [0u8];
+        unsafe { rs_remove_bom(s.as_mut_ptr().cast()) };
+        assert_eq!(s[0], 0);
+
+        // Null pointer - should not crash
+        unsafe { rs_remove_bom(core::ptr::null_mut()) };
+    }
 }
