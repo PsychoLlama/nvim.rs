@@ -654,6 +654,45 @@ pub unsafe extern "C" fn rs_rl_mirror_ascii(str: *mut c_char, end: *const c_char
     }
 }
 
+/// Check if we should remove a backslash from a file name argument.
+///
+/// On Unix: always remove backslash before non-NUL characters.
+/// On Windows: remove backslash before space or before ASCII non-wildcard
+/// non-filename characters. For multi-byte characters (>= 0x80), assume
+/// all are valid file name characters.
+///
+/// # Safety
+/// - `str` must be a valid pointer to a null-terminated C string.
+/// - On Windows, this accesses the global `g_chartab` array.
+#[no_mangle]
+pub unsafe extern "C" fn rs_rem_backslash(s: *const c_char) -> bool {
+    if s.is_null() {
+        return false;
+    }
+
+    let c0 = *s as u8;
+    let c1 = *s.add(1) as u8;
+
+    if c0 != b'\\' {
+        return false;
+    }
+
+    #[cfg(windows)]
+    {
+        // On Windows: backslash is path separator, so only remove in specific cases
+        // BACKSLASH_IN_FILENAME is defined on Windows
+        c1 < 0x80
+            && (c1 == b' '
+                || (c1 != 0 && c1 != b'*' && c1 != b'?' && rs_vim_isfilec(c1 as c_int) == 0))
+    }
+
+    #[cfg(not(windows))]
+    {
+        // On Unix: backslash is escape character, remove before any non-NUL char
+        c1 != 0
+    }
+}
+
 // ============================================================================
 // Tests
 // ============================================================================
@@ -1182,6 +1221,34 @@ mod tests {
 
             // Test null pointer - should not crash
             rs_rl_mirror_ascii(std::ptr::null_mut(), std::ptr::null());
+        }
+    }
+
+    #[test]
+    fn test_rem_backslash() {
+        unsafe {
+            // Backslash followed by a regular character - should remove
+            let s = CString::new("\\a").unwrap();
+            assert!(rs_rem_backslash(s.as_ptr()));
+
+            // Backslash followed by space - should remove
+            let s = CString::new("\\ ").unwrap();
+            assert!(rs_rem_backslash(s.as_ptr()));
+
+            // Backslash at end of string (followed by NUL) - should NOT remove
+            let s = CString::new("\\").unwrap();
+            assert!(!rs_rem_backslash(s.as_ptr()));
+
+            // No backslash at start - should NOT remove
+            let s = CString::new("abc").unwrap();
+            assert!(!rs_rem_backslash(s.as_ptr()));
+
+            // Null pointer - should NOT crash and return false
+            assert!(!rs_rem_backslash(std::ptr::null()));
+
+            // Backslash followed by another backslash
+            let s = CString::new("\\\\").unwrap();
+            assert!(rs_rem_backslash(s.as_ptr()));
         }
     }
 }

@@ -60,6 +60,7 @@ extern int rs_ptr2cells(const char *p);
 extern int rs_vim_strsize(const char *s);
 extern int rs_vim_strnsize(const char *s, int len);
 extern void rs_rl_mirror_ascii(char *str, const char *end);
+extern bool rs_rem_backslash(const char *str);
 #endif
 
 static bool chartab_initialized = false;
@@ -1594,7 +1595,10 @@ int hexhex2nr(const char *p)
 bool rem_backslash(const char *str)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-#ifdef BACKSLASH_IN_FILENAME
+#ifdef USE_RUST_CHARSET
+  return rs_rem_backslash(str);
+#else
+# ifdef BACKSLASH_IN_FILENAME
   return str[0] == '\\'
          && (uint8_t)str[1] < 0x80
          && (str[1] == ' '
@@ -1603,8 +1607,9 @@ bool rem_backslash(const char *str)
                  && str[1] != '?'
                  && !vim_isfilec((uint8_t)str[1])));
 
-#else
+# else
   return str[0] == '\\' && str[1] != NUL;
+# endif
 #endif
 }
 
