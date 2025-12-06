@@ -505,7 +505,11 @@ int vim_strnicmp(const char *s1, const char *s2, size_t len)
 bool striequal(const char *a, const char *b)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_STRINGS
+  return rs_striequal(a, b) != 0;
+#else
   return (a == NULL && b == NULL) || (a && b && STRICMP(a, b) == 0);
+#endif
 }
 
 /// Compare two ASCII strings, for length "len", ignoring case, ignoring locale.
