@@ -1400,6 +1400,50 @@ pub struct FileInfo {
     pub stat: UvStat,
 }
 
+/// Convert a libc `stat` struct to a `UvStat` struct.
+///
+/// libuv stores all stat fields as u64 for portability, while libc uses
+/// platform-specific types. This function performs the conversion.
+///
+/// Note: We allow sign loss and unnecessary casts here because:
+/// - libc uses signed types for some fields (`st_size`, `st_blksize`, `st_blocks`)
+///   while libuv uses unsigned u64. These values should always be non-negative.
+/// - libc type sizes vary by platform, so we cast uniformly for portability.
+#[cfg(unix)]
+#[allow(clippy::cast_sign_loss, clippy::unnecessary_cast, clippy::cast_lossless)]
+fn stat_to_uv_stat(st: &libc::stat) -> UvStat {
+    UvStat {
+        st_dev: st.st_dev as u64,
+        st_mode: st.st_mode as u64,
+        st_nlink: st.st_nlink as u64,
+        st_uid: st.st_uid as u64,
+        st_gid: st.st_gid as u64,
+        st_rdev: st.st_rdev as u64,
+        st_ino: st.st_ino as u64,
+        st_size: st.st_size as u64,
+        st_blksize: st.st_blksize as u64,
+        st_blocks: st.st_blocks as u64,
+        st_flags: 0, // Not available on Linux, BSD-specific
+        st_gen: 0,   // Not available on Linux, BSD-specific
+        st_atim: UvTimespec {
+            tv_sec: st.st_atime,
+            tv_nsec: st.st_atime_nsec,
+        },
+        st_mtim: UvTimespec {
+            tv_sec: st.st_mtime,
+            tv_nsec: st.st_mtime_nsec,
+        },
+        st_ctim: UvTimespec {
+            tv_sec: st.st_ctime,
+            tv_nsec: st.st_ctime_nsec,
+        },
+        st_birthtim: UvTimespec {
+            tv_sec: 0,
+            tv_nsec: 0,
+        }, // Not available on Linux
+    }
+}
+
 /// Check if two `FileID`s are equal.
 ///
 /// # Safety
@@ -1539,6 +1583,127 @@ pub unsafe extern "C" fn rs_os_fileinfo_blocksize(file_info: *const FileInfo) ->
 
     let info = unsafe { &*file_info };
     info.stat.st_blksize
+}
+
+/// Get file information for a given path (follows symlinks).
+///
+/// # Safety
+///
+/// - `path` must be a valid null-terminated C string, or NULL.
+/// - `file_info` must be a valid pointer to a `FileInfo` struct.
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_fileinfo(
+    path: *const c_char,
+    file_info: *mut FileInfo,
+) -> bool {
+    if file_info.is_null() {
+        return false;
+    }
+
+    // Clear the struct
+    unsafe { ptr::write_bytes(file_info, 0, 1) };
+
+    if path.is_null() {
+        return false;
+    }
+
+    #[cfg(unix)]
+    {
+        let mut statbuf: libc::stat = unsafe { std::mem::zeroed() };
+        let result = unsafe { libc::stat(path, &mut statbuf) };
+        if result == 0 {
+            let info = unsafe { &mut *file_info };
+            info.stat = stat_to_uv_stat(&statbuf);
+            true
+        } else {
+            false
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        false
+    }
+}
+
+/// Get file information for a given path without following symlinks.
+///
+/// # Safety
+///
+/// - `path` must be a valid null-terminated C string, or NULL.
+/// - `file_info` must be a valid pointer to a `FileInfo` struct.
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_fileinfo_link(
+    path: *const c_char,
+    file_info: *mut FileInfo,
+) -> bool {
+    if file_info.is_null() {
+        return false;
+    }
+
+    // Clear the struct
+    unsafe { ptr::write_bytes(file_info, 0, 1) };
+
+    if path.is_null() {
+        return false;
+    }
+
+    #[cfg(unix)]
+    {
+        let mut statbuf: libc::stat = unsafe { std::mem::zeroed() };
+        let result = unsafe { libc::lstat(path, &mut statbuf) };
+        if result == 0 {
+            let info = unsafe { &mut *file_info };
+            info.stat = stat_to_uv_stat(&statbuf);
+            true
+        } else {
+            false
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        false
+    }
+}
+
+/// Get file information for a given file descriptor.
+///
+/// # Safety
+///
+/// - `file_info` must be a valid pointer to a `FileInfo` struct.
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_fileinfo_fd(
+    file_descriptor: c_int,
+    file_info: *mut FileInfo,
+) -> bool {
+    if file_info.is_null() {
+        return false;
+    }
+
+    // Clear the struct
+    unsafe { ptr::write_bytes(file_info, 0, 1) };
+
+    #[cfg(unix)]
+    {
+        let mut statbuf: libc::stat = unsafe { std::mem::zeroed() };
+        let result = unsafe { libc::fstat(file_descriptor, &mut statbuf) };
+        if result == 0 {
+            let info = unsafe { &mut *file_info };
+            info.stat = stat_to_uv_stat(&statbuf);
+            true
+        } else {
+            false
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        let _ = file_descriptor;
+        false
+    }
 }
 
 /// Return the canonicalized absolute pathname.

@@ -96,6 +96,9 @@ extern uint64_t rs_os_fileinfo_inode(const FileInfo *file_info);
 extern uint64_t rs_os_fileinfo_size(const FileInfo *file_info);
 extern uint64_t rs_os_fileinfo_hardlinks(const FileInfo *file_info);
 extern uint64_t rs_os_fileinfo_blocksize(const FileInfo *file_info);
+extern bool rs_os_fileinfo(const char *path, FileInfo *file_info);
+extern bool rs_os_fileinfo_link(const char *path, FileInfo *file_info);
+extern bool rs_os_fileinfo_fd(int file_descriptor, FileInfo *file_info);
 extern char *rs_os_realpath(const char *name, char *buf, size_t len);
 extern int rs_os_open(const char *path, int flags, int mode);
 extern FILE *rs_os_fopen(const char *path, const char *flags);
@@ -1319,8 +1322,12 @@ int os_remove(const char *path)
 bool os_fileinfo(const char *path, FileInfo *file_info)
   FUNC_ATTR_NONNULL_ARG(2)
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_fileinfo(path, file_info);
+#else
   CLEAR_POINTER(file_info);
   return os_stat(path, &(file_info->stat)) == kLibuvSuccess;
+#endif
 }
 
 /// Get the file information for a given path without following links
@@ -1331,6 +1338,9 @@ bool os_fileinfo(const char *path, FileInfo *file_info)
 bool os_fileinfo_link(const char *path, FileInfo *file_info)
   FUNC_ATTR_NONNULL_ARG(2)
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_fileinfo_link(path, file_info);
+#else
   CLEAR_POINTER(file_info);
   if (path == NULL) {
     return false;
@@ -1342,6 +1352,7 @@ bool os_fileinfo_link(const char *path, FileInfo *file_info)
   }
   uv_fs_req_cleanup(&request);
   return ok;
+#endif
 }
 
 /// Get the file information for a given file descriptor
@@ -1352,6 +1363,9 @@ bool os_fileinfo_link(const char *path, FileInfo *file_info)
 bool os_fileinfo_fd(int file_descriptor, FileInfo *file_info)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_fileinfo_fd(file_descriptor, file_info);
+#else
   uv_fs_t request;
   CLEAR_POINTER(file_info);
   bool ok = uv_fs_fstat(NULL,
@@ -1363,6 +1377,7 @@ bool os_fileinfo_fd(int file_descriptor, FileInfo *file_info)
   }
   uv_fs_req_cleanup(&request);
   return ok;
+#endif
 }
 
 /// Compare the inodes of two FileInfos
