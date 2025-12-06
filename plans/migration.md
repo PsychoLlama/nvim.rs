@@ -523,9 +523,12 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - **Phase 2.72**: Location list command check (ex_docmd):
   - `is_loclist_cmd` - Check if command index is a location list command
   - Uses C helper function `cmdname_first_char` to access cmdnames array
+- **Phase 2.73**: Multibyte string search (strings):
+  - `vim_strchr` - Find character in string with UTF-8 support
+  - Uses `utf_char2bytes` from mbyte crate for non-ASCII characters
 - **Remaining infrastructure needed** for further progress:
   1. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 27 crates, 98 functions swapped to Rust
+- Total: 27 crates, 99 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
