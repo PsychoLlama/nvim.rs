@@ -89,6 +89,7 @@ extern int rs_op_on_lines(int op);
 extern int rs_op_is_change(int op);
 extern int rs_get_op_char(int optype);
 extern int rs_get_extra_op_char(int optype);
+extern int rs_get_op_type(int char1, int char2);
 #endif
 
 // Flags for third item in "opchars".
@@ -135,6 +136,9 @@ static const char opchars[][3] = {
 /// Must only be called with a valid operator name!
 int get_op_type(int char1, int char2)
 {
+#ifdef USE_RUST_OPS
+  return rs_get_op_type(char1, char2);
+#else
   int i;
 
   if (char1 == 'r') {
@@ -166,6 +170,7 @@ int get_op_type(int char1, int char2)
     }
   }
   return i;
+#endif
 }
 
 /// @return  true if operator "op" always works on whole lines.

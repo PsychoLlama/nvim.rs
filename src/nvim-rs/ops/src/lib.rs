@@ -20,6 +20,14 @@ const CTRL_A: u8 = 1;
 /// Ctrl+X character
 const CTRL_X: u8 = 24;
 
+/// Operator type constants (must match ops.h)
+const OP_NOP: c_int = 0;
+const OP_YANK: c_int = 2;
+const OP_TILDE: c_int = 7;
+const OP_REPLACE: c_int = 16;
+const OP_NR_ADD: c_int = 28;
+const OP_NR_SUB: c_int = 29;
+
 /// Operator character table.
 /// Each entry is [char1, char2, flags].
 /// Index must correspond with OP_* defines in ops.h!
@@ -124,6 +132,55 @@ fn get_extra_op_char_impl(optype: c_int) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_get_extra_op_char(optype: c_int) -> c_int {
     get_extra_op_char_impl(optype)
+}
+
+/// Translate a command name into an operator type.
+///
+/// Must only be called with a valid operator name!
+/// Returns the operator ID matching the given char1/char2 pair.
+/// Special cases are handled for 'r', '~', 'g'+Ctrl-A, 'g'+Ctrl-X, 'z'+'y'.
+///
+/// Returns `OP_NOP` (0) if no match is found (instead of calling `internal_error`).
+#[inline]
+#[allow(clippy::cast_possible_truncation)] // CTRL_A/CTRL_X are small values
+fn get_op_type_impl(char1: c_int, char2: c_int) -> c_int {
+    // Special case: 'r' ignores second character
+    if char1 == c_int::from(b'r') {
+        return OP_REPLACE;
+    }
+    // Special case: '~' when tilde is an operator
+    if char1 == c_int::from(b'~') {
+        return OP_TILDE;
+    }
+    // Special case: 'g' + Ctrl-A = add
+    if char1 == c_int::from(b'g') && char2 == c_int::from(CTRL_A) {
+        return OP_NR_ADD;
+    }
+    // Special case: 'g' + Ctrl-X = subtract
+    if char1 == c_int::from(b'g') && char2 == c_int::from(CTRL_X) {
+        return OP_NR_SUB;
+    }
+    // Special case: 'z' + 'y' = yank
+    if char1 == c_int::from(b'z') && char2 == c_int::from(b'y') {
+        return OP_YANK;
+    }
+
+    // Search in opchars table
+    for (i, entry) in OPCHARS.iter().enumerate() {
+        if c_int::from(entry[0]) == char1 && c_int::from(entry[1]) == char2 {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+            return i as c_int;
+        }
+    }
+
+    // No match found - return OP_NOP instead of calling internal_error
+    OP_NOP
+}
+
+/// FFI wrapper for `get_op_type`.
+#[no_mangle]
+pub extern "C" fn rs_get_op_type(char1: c_int, char2: c_int) -> c_int {
+    get_op_type_impl(char1, char2)
 }
 
 #[cfg(test)]
@@ -258,5 +315,56 @@ mod tests {
         assert_eq!(rs_op_is_change(OP_YANK), 0);
         assert_eq!(rs_get_op_char(OP_DELETE), b'd' as c_int);
         assert_eq!(rs_get_extra_op_char(OP_TILDE), b'~' as c_int);
+    }
+
+    #[test]
+    fn test_get_op_type() {
+        // Single-char operators
+        assert_eq!(get_op_type_impl(b'd' as c_int, 0), OP_DELETE);
+        assert_eq!(get_op_type_impl(b'y' as c_int, 0), OP_YANK);
+        assert_eq!(get_op_type_impl(b'c' as c_int, 0), OP_CHANGE);
+        assert_eq!(get_op_type_impl(b'<' as c_int, 0), OP_LSHIFT);
+        assert_eq!(get_op_type_impl(b'>' as c_int, 0), OP_RSHIFT);
+        assert_eq!(get_op_type_impl(b'!' as c_int, 0), OP_FILTER);
+        assert_eq!(get_op_type_impl(b'=' as c_int, 0), OP_INDENT);
+        assert_eq!(get_op_type_impl(b':' as c_int, 0), OP_COLON);
+        assert_eq!(get_op_type_impl(b'J' as c_int, 0), OP_JOIN);
+
+        // Two-char operators (g prefix)
+        assert_eq!(get_op_type_impl(b'g' as c_int, b'~' as c_int), OP_TILDE);
+        assert_eq!(get_op_type_impl(b'g' as c_int, b'q' as c_int), OP_FORMAT);
+        assert_eq!(get_op_type_impl(b'g' as c_int, b'U' as c_int), OP_UPPER);
+        assert_eq!(get_op_type_impl(b'g' as c_int, b'u' as c_int), OP_LOWER);
+        assert_eq!(get_op_type_impl(b'g' as c_int, b'J' as c_int), 14); // OP_JOIN_NS
+        assert_eq!(get_op_type_impl(b'g' as c_int, b'?' as c_int), 15); // OP_ROT13
+        assert_eq!(get_op_type_impl(b'g' as c_int, b'w' as c_int), 26); // OP_FORMAT2
+        assert_eq!(get_op_type_impl(b'g' as c_int, b'@' as c_int), 27); // OP_FUNCTION
+
+        // Two-char operators (z prefix)
+        assert_eq!(get_op_type_impl(b'z' as c_int, b'f' as c_int), 19); // OP_FOLD
+        assert_eq!(get_op_type_impl(b'z' as c_int, b'o' as c_int), 20); // OP_FOLDOPEN
+        assert_eq!(get_op_type_impl(b'z' as c_int, b'O' as c_int), 21); // OP_FOLDOPENREC
+        assert_eq!(get_op_type_impl(b'z' as c_int, b'c' as c_int), 22); // OP_FOLDCLOSE
+        assert_eq!(get_op_type_impl(b'z' as c_int, b'd' as c_int), 24); // OP_FOLDDEL
+        assert_eq!(get_op_type_impl(b'z' as c_int, b'D' as c_int), 25); // OP_FOLDDELREC
+
+        // Special cases
+        assert_eq!(get_op_type_impl(b'r' as c_int, 0), OP_REPLACE);
+        assert_eq!(get_op_type_impl(b'r' as c_int, b'x' as c_int), OP_REPLACE); // ignores second char
+        assert_eq!(get_op_type_impl(b'~' as c_int, 0), OP_TILDE);
+        assert_eq!(get_op_type_impl(b'g' as c_int, 1), OP_NR_ADD); // Ctrl+A
+        assert_eq!(get_op_type_impl(b'g' as c_int, 24), OP_NR_SUB); // Ctrl+X
+        assert_eq!(get_op_type_impl(b'z' as c_int, b'y' as c_int), OP_YANK);
+
+        // Invalid - should return OP_NOP
+        assert_eq!(get_op_type_impl(b'x' as c_int, 0), OP_NOP);
+        assert_eq!(get_op_type_impl(b'g' as c_int, b'x' as c_int), OP_NOP);
+    }
+
+    #[test]
+    fn test_ffi_get_op_type() {
+        assert_eq!(rs_get_op_type(b'd' as c_int, 0), OP_DELETE);
+        assert_eq!(rs_get_op_type(b'g' as c_int, b'~' as c_int), OP_TILDE);
+        assert_eq!(rs_get_op_type(b'r' as c_int, 0), OP_REPLACE);
     }
 }
