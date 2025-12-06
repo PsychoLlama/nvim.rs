@@ -478,9 +478,13 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
   - `ptr2cells` - Get display cells from string pointer
   - For ASCII, looks up g_chartab; for UTF-8, calls utf_ptr2cells
   - Cross-crate call from charset to mbyte
+- **Phase 2.60**: String size (charset):
+  - `vim_strsize` - Get display cell count for entire string
+  - `vim_strnsize` - Get display cell count for string with length limit
+  - Calls back to C for utfc_ptr2len (not yet migrated)
 - **Remaining infrastructure needed** for further progress:
   1. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 26 crates, 78 functions swapped to Rust
+- Total: 26 crates, 80 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling

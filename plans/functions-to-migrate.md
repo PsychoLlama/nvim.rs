@@ -171,7 +171,8 @@ These are pure string scanning functions with no global state dependencies.
 **Exhaustive search performed**: Searched for additional candidates:
 - `rem_backslash` - Uses `vim_isfilec` which accesses `g_chartab` global
 - `mb_charlen` - Uses `utfc_ptr2len` for composing character handling
-- `vim_strsize` - Uses `utfc_ptr2len` and `ptr2cells`
+- `vim_strsize` - **Phase 2.60**: Migrated with callback to C for `utfc_ptr2len`
+- `vim_strnsize` - **Phase 2.60**: Migrated with callback to C for `utfc_ptr2len`
 - `os_shell_is_cmdexe` - Uses `os_getenv_noalloc` for global env access
 
 **Conclusion**: No more simple pure functions identified. All remaining candidates:
