@@ -408,6 +408,7 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - [x] `skip_luafunc_name`, `check_luafunc_name` - **Phase 2.45**: Swapped to Rust (USE_RUST_EVAL) - v:lua function name parsing
 - [x] `valid_yank_reg` - **Phase 2.46**: Swapped to Rust (USE_RUST_REGISTER) - validate register names
 - [x] `vim_isfilec`, `vim_is_fname_char` - **Phase 2.47**: Swapped to Rust (USE_RUST_CHARSET) - file name character checks (exposed g_chartab)
+- [x] `byte2cells`, `vim_isIDc` - **Phase 2.48**: Swapped to Rust (USE_RUST_CHARSET) - display cell count and identifier char check
 
 **Session 7 (2025-12-05): Phases 2.36-2.38**
 - Created `nvim-spell` crate with `spell_valid_case` and `byte_in_str`
@@ -424,7 +425,8 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - Created `nvim-register` crate with `valid_yank_reg` (register name validation)
 - Exposed `g_chartab` C global for Rust access (infrastructure for charset functions)
 - Added `vim_isfilec`, `vim_is_fname_char` to nvim-charset crate (file name char checks)
-- Total: 25 crates, 66+ functions swapped to Rust
+- Added `byte2cells`, `vim_isIDc` to nvim-charset crate (display cells and identifier chars)
+- Total: 25 crates, 68+ functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
