@@ -20,6 +20,7 @@ pub use nvim_collections::hashtab::*;
 // Note: rs_hash_hash, rs_hash_hash_len are in nvim_memutil (not re-exported from hashtab)
 pub use nvim_encoding::base64::*;
 pub use nvim_encoding::sha256::*;
+pub use nvim_eval::*;
 pub use nvim_ex_docmd::*;
 pub use nvim_fileio::*;
 pub use nvim_help::*;

@@ -392,6 +392,7 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
     - `os_open_stdin_fd` - global state (stdin_fd)
     - `os_mkdir_recurse/os_file_mkdir` - xmalloc, error messaging
     - `os_copy_xattr` - xmalloc, emsg()
+- [x] `eval_isnamec`, `eval_isnamec1`, `eval_isdictc` - **Phase 2.33**: Swapped to Rust (USE_RUST_EVAL)
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
 

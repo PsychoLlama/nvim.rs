@@ -15,6 +15,7 @@ workspace = true
 [dependencies]
 nvim-charset = { path = "charset" }
 nvim-cmdhist = { path = "cmdhist" }
+nvim-eval = { path = "eval" }
 nvim-collections = { path = "collections" }
 nvim-encoding = { path = "encoding" }
 nvim-ex-docmd = { path = "ex_docmd" }

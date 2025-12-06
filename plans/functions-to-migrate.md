@@ -385,11 +385,17 @@ These use Rust's `std::fs` instead of libuv. The 90 filesystem unit tests pass, 
 - `os_fileid` - Get FileID (inode/device) for a path.
 - `os_file_owned` - Check if current user owns a file.
 
+**Phase 2.33**: Swapped eval character check functions to Rust:
+- `eval_isnamec` - Check if char can be used in variable/function name.
+- `eval_isnamec1` - Check if char can be first char in var/func name.
+- `eval_isdictc` - Check if char can be used as dictionary key char.
+
 **Phase 2 Summary (2025-12-05) - OS MIGRATION COMPLETE:**
 - **43 OS functions swapped to Rust** across 3 compile flags:
   - 40 filesystem functions (USE_RUST_OS_FS)
   - 2 process/memory functions (USE_RUST_OS_PROC, USE_RUST_OS_MEM)
   - 1 input function (USE_RUST_OS_INPUT)
+- **3 eval functions swapped to Rust** (USE_RUST_EVAL)
 - Added `io_error_to_uv_error` helper for libuv-compatible error codes
 - Added `FileID`, `UvStat`, `FileInfo` repr(C) structs for file identity comparison
 - Added `stat_to_uv_stat` helper for converting libc stat to libuv UvStat

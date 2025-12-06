@@ -88,6 +88,12 @@ extern int64_t rs_num_divide(int64_t n1, int64_t n2);
 extern int64_t rs_num_modulus(int64_t n1, int64_t n2);
 #endif
 
+#ifdef USE_RUST_EVAL
+extern bool rs_eval_isnamec(int c);
+extern bool rs_eval_isnamec1(int c);
+extern bool rs_eval_isdictc(int c);
+#endif
+
 // TODO(ZyX-I): Remove DICT_MAXNEST, make users be non-recursive instead
 
 #define DICT_MAXNEST 100        // maximum nesting of lists and dicts
@@ -5730,21 +5736,33 @@ static char *make_expanded_name(const char *in_start, char *expr_start, char *ex
 ///          Does not include '{' or '}' for magic braces.
 bool eval_isnamec(int c)
 {
+#ifdef USE_RUST_EVAL
+  return rs_eval_isnamec(c);
+#else
   return ASCII_ISALNUM(c) || c == '_' || c == ':' || c == AUTOLOAD_CHAR;
+#endif
 }
 
 /// @return  true if character "c" can be used as the first character in a
 ///          variable or function name (excluding '{' and '}').
 bool eval_isnamec1(int c)
 {
+#ifdef USE_RUST_EVAL
+  return rs_eval_isnamec1(c);
+#else
   return ASCII_ISALPHA(c) || c == '_';
+#endif
 }
 
 /// @return  true if character "c" can be used as the first character of a
 ///          dictionary key.
 bool eval_isdictc(int c)
 {
+#ifdef USE_RUST_EVAL
+  return rs_eval_isdictc(c);
+#else
   return ASCII_ISALNUM(c) || c == '_';
+#endif
 }
 
 /// Set the v:argv list.
