@@ -1361,6 +1361,45 @@ pub struct FileID {
     pub device_id: u64,
 }
 
+/// `uv_timespec_t` structure matching libuv's timespec.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct UvTimespec {
+    pub tv_sec: libc::c_long,
+    pub tv_nsec: libc::c_long,
+}
+
+/// `uv_stat_t` structure matching libuv's stat structure.
+///
+/// This must match the exact layout of libuv's `uv_stat_t`.
+#[repr(C)]
+pub struct UvStat {
+    pub st_dev: u64,
+    pub st_mode: u64,
+    pub st_nlink: u64,
+    pub st_uid: u64,
+    pub st_gid: u64,
+    pub st_rdev: u64,
+    pub st_ino: u64,
+    pub st_size: u64,
+    pub st_blksize: u64,
+    pub st_blocks: u64,
+    pub st_flags: u64,
+    pub st_gen: u64,
+    pub st_atim: UvTimespec,
+    pub st_mtim: UvTimespec,
+    pub st_ctim: UvTimespec,
+    pub st_birthtim: UvTimespec,
+}
+
+/// `FileInfo` structure matching nvim's `FileInfo` in `fs_defs.h`
+///
+/// Wraps a `uv_stat_t` structure.
+#[repr(C)]
+pub struct FileInfo {
+    pub stat: UvStat,
+}
+
 /// Check if two `FileID`s are equal.
 ///
 /// # Safety
@@ -1379,6 +1418,29 @@ pub unsafe extern "C" fn rs_os_fileid_equal(
     let id2 = unsafe { &*file_id_2 };
 
     id1.inode == id2.inode && id1.device_id == id2.device_id
+}
+
+/// Check if a `FileID` equals a `FileInfo`.
+///
+/// Compares the inode and device from the `FileID` against the corresponding
+/// fields in the `FileInfo`'s stat structure.
+///
+/// # Safety
+///
+/// Both `file_id` and `file_info` must be valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_fileid_equal_fileinfo(
+    file_id: *const FileID,
+    file_info: *const FileInfo,
+) -> bool {
+    if file_id.is_null() || file_info.is_null() {
+        return false;
+    }
+
+    let id = unsafe { &*file_id };
+    let info = unsafe { &*file_info };
+
+    id.inode == info.stat.st_ino && id.device_id == info.stat.st_dev
 }
 
 #[cfg(test)]
@@ -1451,5 +1513,66 @@ mod tests {
         assert!(unsafe { rs_os_fileid_equal(&id1, &id2) });
         assert!(!unsafe { rs_os_fileid_equal(&id1, &id3) });
         assert!(!unsafe { rs_os_fileid_equal(std::ptr::null(), &id1) });
+    }
+
+    #[test]
+    fn test_fileid_equal_fileinfo() {
+        // Create a FileID
+        let file_id = FileID {
+            inode: 12345,
+            device_id: 67890,
+        };
+
+        // Create a matching FileInfo with zero-initialized timespec fields
+        let zero_ts = UvTimespec {
+            tv_sec: 0,
+            tv_nsec: 0,
+        };
+        let matching_info = FileInfo {
+            stat: UvStat {
+                st_dev: 67890,
+                st_mode: 0,
+                st_nlink: 0,
+                st_uid: 0,
+                st_gid: 0,
+                st_rdev: 0,
+                st_ino: 12345,
+                st_size: 0,
+                st_blksize: 0,
+                st_blocks: 0,
+                st_flags: 0,
+                st_gen: 0,
+                st_atim: zero_ts,
+                st_mtim: zero_ts,
+                st_ctim: zero_ts,
+                st_birthtim: zero_ts,
+            },
+        };
+
+        // Create a non-matching FileInfo (different inode)
+        let non_matching_info = FileInfo {
+            stat: UvStat {
+                st_dev: 67890,
+                st_mode: 0,
+                st_nlink: 0,
+                st_uid: 0,
+                st_gid: 0,
+                st_rdev: 0,
+                st_ino: 99999, // Different inode
+                st_size: 0,
+                st_blksize: 0,
+                st_blocks: 0,
+                st_flags: 0,
+                st_gen: 0,
+                st_atim: zero_ts,
+                st_mtim: zero_ts,
+                st_ctim: zero_ts,
+                st_birthtim: zero_ts,
+            },
+        };
+
+        assert!(unsafe { rs_os_fileid_equal_fileinfo(&file_id, &matching_info) });
+        assert!(!unsafe { rs_os_fileid_equal_fileinfo(&file_id, &non_matching_info) });
+        assert!(!unsafe { rs_os_fileid_equal_fileinfo(std::ptr::null(), &matching_info) });
     }
 }

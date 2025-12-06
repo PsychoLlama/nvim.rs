@@ -89,6 +89,7 @@ extern int rs_os_set_cloexec(int fd);
 extern ptrdiff_t rs_os_read(int fd, bool *ret_eof, char *ret_buf, size_t size, bool non_blocking);
 extern ptrdiff_t rs_os_write(int fd, const char *buf, size_t size, bool non_blocking);
 extern bool rs_os_fileid_equal(const FileID *file_id_1, const FileID *file_id_2);
+extern bool rs_os_fileid_equal_fileinfo(const FileID *file_id, const FileInfo *file_info);
 #endif
 
 #ifdef HAVE_XATTR
@@ -1444,8 +1445,12 @@ bool os_fileid_equal(const FileID *file_id_1, const FileID *file_id_2)
 bool os_fileid_equal_fileinfo(const FileID *file_id, const FileInfo *file_info)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_fileid_equal_fileinfo(file_id, file_info);
+#else
   return file_id->inode == file_info->stat.st_ino
          && file_id->device_id == file_info->stat.st_dev;
+#endif
 }
 
 /// Return the canonicalized absolute pathname.
