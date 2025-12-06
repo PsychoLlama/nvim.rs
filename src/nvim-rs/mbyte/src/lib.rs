@@ -599,6 +599,51 @@ pub extern "C" fn rs_utf_allow_break(cc: c_int, ncc: c_int) -> c_int {
     c_int::from(utf_allow_break(cc, ncc))
 }
 
+// External reference to utfc_ptr2len from C
+// This function returns the byte length of a UTF-8 character including composing characters
+extern "C" {
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+}
+
+/// Return the number of characters in a string.
+/// Composing characters are not counted separately.
+///
+/// Calls back to C's utfc_ptr2len for proper composing character handling.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mb_charlen(str: *const c_char) -> c_int {
+    if str.is_null() {
+        return 0;
+    }
+
+    let mut p = str;
+    let mut count: c_int = 0;
+
+    while *p != 0 {
+        p = p.add(utfc_ptr2len(p) as usize);
+        count += 1;
+    }
+
+    count
+}
+
+/// Return the number of characters in a string, limited to "len" bytes.
+/// Composing characters are not counted separately.
+///
+/// Calls back to C's utfc_ptr2len for proper composing character handling.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mb_charlen_len(str: *const c_char, len: c_int) -> c_int {
+    let mut p = str;
+    let end = str.add(len as usize);
+    let mut count: c_int = 0;
+
+    while *p != 0 && p < end {
+        p = p.add(utfc_ptr2len(p) as usize);
+        count += 1;
+    }
+
+    count
+}
+
 // Character printability
 
 /// Sorted list of non-printable character ranges for `utf_printable`.
