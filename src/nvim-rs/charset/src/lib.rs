@@ -12,6 +12,8 @@ use std::ffi::c_char;
 use std::ffi::c_int;
 
 // Chartab flag masks (from charset.c)
+const CT_CELL_MASK: u8 = 0x07; // mask: nr of display cells (1, 2 or 4)
+const CT_ID_CHAR: u8 = 0x20; // flag: set for ID chars
 const CT_FNAME_CHAR: u8 = 0x40; // flag: set for file name chars
 
 // External reference to g_chartab from C
@@ -409,6 +411,38 @@ pub unsafe extern "C" fn rs_vim_is_fname_char(c: c_int) -> c_int {
 
 // Note: vim_isprintc is NOT migrated because it calls utf_printable for chars >= 0x100,
 // which would require cross-crate dependency on nvim-mbyte.
+
+/// Return number of display cells occupied by byte "b".
+///
+/// This assumes the byte is ASCII (< 0x80). For bytes >= 0x80, returns 0
+/// since the actual cell count depends on further bytes in UTF-8.
+///
+/// # Safety
+/// This function accesses the global `g_chartab` array which must be initialized.
+#[no_mangle]
+pub unsafe extern "C" fn rs_byte2cells(b: c_int) -> c_int {
+    if b >= 0x80 {
+        0
+    } else {
+        c_int::from(g_chartab[b as usize] & CT_CELL_MASK)
+    }
+}
+
+/// Check that "c" is a normal identifier character:
+/// Letters and characters from the 'isident' option.
+///
+/// # Safety
+/// This function accesses the global `g_chartab` array which must be initialized.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_isIDc(c: c_int) -> c_int {
+    c_int::from(c > 0 && c < 0x100 && (g_chartab[c as usize] & CT_ID_CHAR) != 0)
+}
+
+// Note: char2cells is NOT migrated because it calls IS_SPECIAL/K_SECOND macros
+// and utf_char2cells, which would require cross-crate dependencies.
+
+// Note: vim_iswordc and related functions are NOT migrated because they use
+// curbuf global or buffer-specific chartabs.
 
 // ============================================================================
 // Tests
