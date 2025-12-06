@@ -74,6 +74,60 @@ pub extern "C" fn rs_eval_isdictc(c: c_int) -> bool {
     ascii_isalnum(c) || c == b'_'
 }
 
+use std::ffi::c_char;
+
+/// Skip past the v:lua function name.
+///
+/// Valid characters in a v:lua function name are:
+/// - Alphanumeric (A-Z, a-z, 0-9)
+/// - Underscore (_)
+/// - Hyphen (-)
+/// - Dot (.)
+/// - Single quote (')
+///
+/// # Safety
+///
+/// `p` must be a valid null-terminated C string pointing to the character
+/// AFTER the "v:lua." prefix.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub unsafe extern "C" fn rs_skip_luafunc_name(p: *const c_char) -> *const c_char {
+    let mut ptr = p;
+    loop {
+        #[allow(clippy::cast_sign_loss)]
+        let c = *ptr as u8;
+        if ascii_isalnum(c) || c == b'_' || c == b'-' || c == b'.' || c == b'\'' {
+            ptr = ptr.add(1);
+        } else {
+            break;
+        }
+    }
+    ptr
+}
+
+/// Check the function name after "v:lua.".
+///
+/// Returns the length of the function name if valid, 0 otherwise.
+/// If `paren` is true, the name must be followed by '('.
+/// If `paren` is false, the name must be followed by NUL.
+///
+/// # Safety
+///
+/// `str` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_luafunc_name(str: *const c_char, paren: bool) -> c_int {
+    let end = rs_skip_luafunc_name(str);
+    let expected_char = if paren { b'(' } else { 0 };
+    #[allow(clippy::cast_sign_loss)]
+    if *end as u8 != expected_char {
+        return 0;
+    }
+    // Calculate the length
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    let len = end.offset_from(str) as c_int;
+    len
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -127,5 +181,71 @@ mod tests {
         assert!(!rs_eval_isdictc(c_int::from(b'#')));
         assert!(!rs_eval_isdictc(c_int::from(b' ')));
         assert!(!rs_eval_isdictc(-1));
+    }
+
+    #[test]
+    fn test_skip_luafunc_name() {
+        use std::ffi::CString;
+
+        let simple = CString::new("myfunc(").unwrap();
+        let dotted = CString::new("module.func(").unwrap();
+        let with_hyphen = CString::new("my-func(").unwrap();
+        let with_quote = CString::new("require'foo'(").unwrap();
+        let empty = CString::new("(").unwrap();
+        let with_underscore = CString::new("my_func_name").unwrap();
+
+        unsafe {
+            // Simple function name
+            let result = rs_skip_luafunc_name(simple.as_ptr());
+            assert_eq!(*result as u8, b'(');
+
+            // Dotted module path
+            let result = rs_skip_luafunc_name(dotted.as_ptr());
+            assert_eq!(*result as u8, b'(');
+
+            // With hyphen
+            let result = rs_skip_luafunc_name(with_hyphen.as_ptr());
+            assert_eq!(*result as u8, b'(');
+
+            // With single quote
+            let result = rs_skip_luafunc_name(with_quote.as_ptr());
+            assert_eq!(*result as u8, b'(');
+
+            // Empty (starts with '(')
+            let result = rs_skip_luafunc_name(empty.as_ptr());
+            assert_eq!(*result as u8, b'(');
+
+            // Ends with NUL
+            let result = rs_skip_luafunc_name(with_underscore.as_ptr());
+            assert_eq!(*result as u8, 0);
+        }
+    }
+
+    #[test]
+    fn test_check_luafunc_name() {
+        use std::ffi::CString;
+
+        let valid_paren = CString::new("myfunc(").unwrap();
+        let valid_nul = CString::new("myfunc").unwrap();
+        let invalid_paren = CString::new("myfunc").unwrap();
+        let invalid_nul = CString::new("myfunc(").unwrap();
+        let empty = CString::new("(").unwrap();
+
+        unsafe {
+            // Valid with paren=true
+            assert_eq!(rs_check_luafunc_name(valid_paren.as_ptr(), true), 6);
+
+            // Valid with paren=false
+            assert_eq!(rs_check_luafunc_name(valid_nul.as_ptr(), false), 6);
+
+            // Invalid: expects paren but not found
+            assert_eq!(rs_check_luafunc_name(invalid_paren.as_ptr(), true), 0);
+
+            // Invalid: expects NUL but found paren
+            assert_eq!(rs_check_luafunc_name(invalid_nul.as_ptr(), false), 0);
+
+            // Empty name (length 0) is still valid if followed by expected char
+            assert_eq!(rs_check_luafunc_name(empty.as_ptr(), true), 0);
+        }
     }
 }

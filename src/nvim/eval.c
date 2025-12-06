@@ -92,6 +92,8 @@ extern int64_t rs_num_modulus(int64_t n1, int64_t n2);
 extern bool rs_eval_isnamec(int c);
 extern bool rs_eval_isnamec1(int c);
 extern bool rs_eval_isdictc(int c);
+extern const char *rs_skip_luafunc_name(const char *p);
+extern int rs_check_luafunc_name(const char *str, bool paren);
 #endif
 
 // TODO(ZyX-I): Remove DICT_MAXNEST, make users be non-recursive instead
@@ -5797,21 +5799,29 @@ static bool tv_is_luafunc(typval_T *tv)
 const char *skip_luafunc_name(const char *p)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_EVAL
+  return rs_skip_luafunc_name(p);
+#else
   while (ASCII_ISALNUM(*p) || *p == '_' || *p == '-' || *p == '.' || *p == '\'') {
     p++;
   }
   return p;
+#endif
 }
 
 /// check the function name after "v:lua."
 int check_luafunc_name(const char *const str, const bool paren)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_EVAL
+  return rs_check_luafunc_name(str, paren);
+#else
   const char *const p = skip_luafunc_name(str);
   if (*p != (paren ? '(' : NUL)) {
     return 0;
   }
   return (int)(p - str);
+#endif
 }
 
 /// Return the character "str[index]" where "index" is the character index,
