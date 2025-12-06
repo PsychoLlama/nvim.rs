@@ -438,10 +438,15 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
   - `Utf8procProperty` struct with accessors for charwidth, ambiguous_width, boundclass
   - `get_property()` safe wrapper for Unicode property queries
   - `is_emojilike()` method for emoji detection
+- **Phase 2.51**: First function using utf8proc bindings:
+  - `utf_iscomposing_legacy` - check if character is nonspacing/enclosing mark
+  - Added Unicode category constants (MN=6, ME=8) to utf8proc crate
+  - Added `is_composing_legacy()` method to `Utf8procProperty`
+  - Added nvim-utf8proc dependency to nvim-mbyte crate
 - **Remaining infrastructure needed** for further progress:
   1. **Global state bridges** - For p_ambw, p_emoji, cw_table options
   2. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 26 crates, 69+ functions swapped to Rust
+- Total: 26 crates, 70 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
