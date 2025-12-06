@@ -45,6 +45,7 @@ extern int rs_striequal(const char *s1, const char *s2);
 extern int rs_has_non_ascii(const char *s);
 extern int rs_has_non_ascii_len(const char *s, size_t len);
 extern void rs_sort_strings(char **files, int count);
+extern void rs_vim_strup(char *p);
 #endif
 
 static const char e_cannot_mix_positional_and_non_positional_str[]
@@ -329,10 +330,14 @@ char *vim_strnsave_up(const char *string, size_t len)
 void vim_strup(char *p)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_STRINGS
+  rs_vim_strup(p);
+#else
   uint8_t c;
   while ((c = (uint8_t)(*p)) != NUL) {
     *p++ = (char)(uint8_t)(c < 'a' || c > 'z' ? c : c - 0x20);
   }
+#endif
 }
 
 // strcpy plus vim_strup.

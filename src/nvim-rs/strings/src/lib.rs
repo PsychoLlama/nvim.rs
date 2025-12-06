@@ -31,6 +31,16 @@ fn tolower_asc(c: u8) -> u8 {
     }
 }
 
+/// Convert ASCII lowercase to uppercase.
+#[inline]
+fn toupper_asc(c: u8) -> u8 {
+    if c.is_ascii_lowercase() {
+        c - (b'a' - b'A')
+    } else {
+        c
+    }
+}
+
 /// Compare two strings, ignoring case (ASCII only).
 ///
 /// This is a locale-independent comparison that only handles ASCII characters.
@@ -129,6 +139,31 @@ pub unsafe extern "C" fn rs_vim_strnicmp(
 #[no_mangle]
 pub unsafe extern "C" fn rs_striequal(s1: *const c_char, s2: *const c_char) -> c_int {
     c_int::from(unsafe { rs_vim_stricmp(s1, s2) } == 0)
+}
+
+/// Convert a string to uppercase in-place (ASCII only).
+///
+/// This is a locale-independent conversion that only handles ASCII 'a'-'z'.
+/// Non-ASCII characters are left unchanged.
+///
+/// # Safety
+///
+/// `p` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_strup(p: *mut c_char) {
+    if p.is_null() {
+        return;
+    }
+
+    let mut ptr = p as *mut u8;
+    loop {
+        let c = *ptr;
+        if c == 0 {
+            break;
+        }
+        *ptr = toupper_asc(c);
+        ptr = ptr.add(1);
+    }
 }
 
 /// Find a character in a string.
@@ -461,6 +496,48 @@ mod tests {
         assert_eq!(tolower_asc(b'z'), b'z');
         assert_eq!(tolower_asc(b'0'), b'0');
         assert_eq!(tolower_asc(b' '), b' ');
+    }
+
+    #[test]
+    fn test_toupper_asc() {
+        assert_eq!(toupper_asc(b'a'), b'A');
+        assert_eq!(toupper_asc(b'z'), b'Z');
+        assert_eq!(toupper_asc(b'A'), b'A');
+        assert_eq!(toupper_asc(b'Z'), b'Z');
+        assert_eq!(toupper_asc(b'0'), b'0');
+        assert_eq!(toupper_asc(b' '), b' ');
+        assert_eq!(toupper_asc(0x80), 0x80); // Non-ASCII unchanged
+    }
+
+    #[test]
+    fn test_vim_strup() {
+        // Basic lowercase to uppercase
+        let mut s = *b"hello\0";
+        unsafe { rs_vim_strup(s.as_mut_ptr().cast()) };
+        assert_eq!(&s[..5], b"HELLO");
+
+        // Mixed case
+        let mut s = *b"HeLLo WoRLD\0";
+        unsafe { rs_vim_strup(s.as_mut_ptr().cast()) };
+        assert_eq!(&s[..11], b"HELLO WORLD");
+
+        // Already uppercase
+        let mut s = *b"HELLO\0";
+        unsafe { rs_vim_strup(s.as_mut_ptr().cast()) };
+        assert_eq!(&s[..5], b"HELLO");
+
+        // Empty string
+        let mut s = *b"\0";
+        unsafe { rs_vim_strup(s.as_mut_ptr().cast()) };
+        assert_eq!(s[0], 0);
+
+        // Numbers and symbols unchanged
+        let mut s = *b"hello123!@#\0";
+        unsafe { rs_vim_strup(s.as_mut_ptr().cast()) };
+        assert_eq!(&s[..11], b"HELLO123!@#");
+
+        // NULL handling - should not crash
+        unsafe { rs_vim_strup(std::ptr::null_mut()) };
     }
 
     #[test]
