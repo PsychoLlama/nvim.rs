@@ -200,6 +200,27 @@ pub unsafe extern "C" fn rs_strnequal(a: *const c_char, b: *const c_char, n: usi
 // Hash type (matches C hash_T = size_t).
 type HashT = usize;
 
+/// Writes a `time_t` value to an 8-byte buffer in big-endian format.
+///
+/// The `time_t` value is converted to an unsigned 64-bit integer and
+/// written to the buffer with the most significant byte first.
+///
+/// # Safety
+///
+/// `buf` must point to a buffer of at least 8 bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_time_to_bytes(time_: i64, buf: *mut u8) {
+    if buf.is_null() {
+        return;
+    }
+
+    let time_u64 = time_ as u64;
+    // Write in big-endian order (most significant byte first)
+    for i in 0..8 {
+        *buf.add(i) = ((time_u64 >> ((7 - i) * 8)) & 0xFF) as u8;
+    }
+}
+
 /// Compute hash for a null-terminated string.
 ///
 /// Uses the same polynomial hash algorithm as nvim's hashtab.c:
@@ -409,6 +430,34 @@ mod tests {
 
             // Empty length should hash to 0
             assert_eq!(rs_hash_hash_len(key.as_ptr().cast(), 0), 0);
+        }
+    }
+
+    #[test]
+    fn test_time_to_bytes() {
+        unsafe {
+            let mut buf = [0u8; 8];
+
+            // Test with zero
+            rs_time_to_bytes(0, buf.as_mut_ptr());
+            assert_eq!(buf, [0, 0, 0, 0, 0, 0, 0, 0]);
+
+            // Test with 1 - should be in last byte
+            rs_time_to_bytes(1, buf.as_mut_ptr());
+            assert_eq!(buf, [0, 0, 0, 0, 0, 0, 0, 1]);
+
+            // Test with 0x0102030405060708
+            rs_time_to_bytes(0x0102030405060708, buf.as_mut_ptr());
+            assert_eq!(buf, [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
+
+            // Test with a realistic timestamp (e.g., 1700000000 = 2023-11-14)
+            rs_time_to_bytes(1700000000, buf.as_mut_ptr());
+            // 1700000000 = 0x6553f100 in hex
+            assert_eq!(buf, [0, 0, 0, 0, 0x65, 0x53, 0xF1, 0x00]);
+
+            // Test with negative value (rare but possible)
+            rs_time_to_bytes(-1, buf.as_mut_ptr());
+            assert_eq!(buf, [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
         }
     }
 }

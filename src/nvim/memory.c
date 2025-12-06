@@ -65,6 +65,7 @@ extern size_t rs_memcnt(const void *data, char c, size_t len);
 extern void *rs_xmemrchr(const void *src, uint8_t c, size_t len);
 extern bool rs_strequal(const char *a, const char *b);
 extern bool rs_strnequal(const char *a, const char *b, size_t n);
+extern void rs_time_to_bytes(int64_t time_, uint8_t *buf);
 #endif
 
 #ifdef EXITFREE
@@ -597,11 +598,15 @@ bool strnequal(const char *a, const char *b, size_t n)
 /// Writes time_t to "buf[8]".
 void time_to_bytes(time_t time_, uint8_t buf[8])
 {
+#ifdef USE_RUST_MEMUTIL
+  rs_time_to_bytes((int64_t)time_, buf);
+#else
   // time_t can be up to 8 bytes in size, more than uintmax_t in 32 bits
   // systems, thus we can't use put_bytes() here.
   for (size_t i = 7, bufi = 0; bufi < 8; i--, bufi++) {
     buf[bufi] = (uint8_t)((uint64_t)time_ >> (i * 8));
   }
+#endif
 }
 
 /// Iterative merge sort for doubly linked list.
