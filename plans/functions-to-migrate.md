@@ -404,23 +404,26 @@ These functions haven't been migrated because they have complex dependencies:
 - `os_fsync` - Updates g_stats.fsync counter
 - `os_open_stdin_fd` - Uses stdin_fd global
 
-### Functions with libuv structure dependencies:
-- `os_fileinfo` / `os_fileinfo_link` / `os_fileinfo_fd` - Fill FileInfo/uv_stat_t
-- `os_scandir` / `os_closedir` - Directory iterator pattern
-- `os_stat` (static) - Returns uv_stat_t
-- `os_file_owned` - Uses os_fileinfo
+### Functions with directory iteration:
+- `os_scandir` / `os_closedir` - Directory iterator pattern with Directory struct
 
 ### Functions with complex error translation:
 - `os_readv` - Uses struct iovec (vectored I/O)
 
 ### Functions with complex control flow:
 - `os_can_exe` - PATH searching with multiple helper functions
-- `os_mkdir_recurse` - Recursive directory creation
-- `os_open` / `os_fopen` - Uses libuv uv_fs_open
+- `os_mkdir_recurse` - Recursive directory creation with xmalloc, path helpers
+- `os_file_mkdir` - Uses os_mkdir_recurse and error messaging
 
-### Functions with memory allocation:
-- String functions in strings.c that use xmalloc
-- Functions that return allocated strings
+### Functions with memory allocation or error messaging:
+- `os_copy_xattr` - Uses xmalloc and emsg()
+- `os_ctime_r` / `os_ctime` - Uses translation macro _(), strftime
+
+**Note:** As of Phase 2.32, 40+ OS filesystem functions have been swapped to Rust.
+Most remaining simple functions have been migrated. Further progress requires:
+1. Complex struct FFI for directory iteration
+2. Access to nvim's global state (verbose, UI, stats)
+3. Access to memory allocation and error messaging APIs
 
 ### Functions with Vim-specific types:
 - Functions using typval_T, list_T, garray_T, etc.
