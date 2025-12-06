@@ -1,6 +1,8 @@
 // ops.c: implementation of various operators: op_shift, op_delete, op_tilde,
 //        op_change, op_yank, do_join
 
+#define USE_RUST_OPS 1
+
 #include <assert.h>
 #include <ctype.h>
 #include <inttypes.h>
@@ -80,6 +82,14 @@
 #include "nvim/vim_defs.h"
 
 #include "ops.c.generated.h"
+
+#ifdef USE_RUST_OPS
+// Rust implementations of operator functions
+extern int rs_op_on_lines(int op);
+extern int rs_op_is_change(int op);
+extern int rs_get_op_char(int optype);
+extern int rs_get_extra_op_char(int optype);
+#endif
 
 // Flags for third item in "opchars".
 #define OPF_LINES  1  // operator always works on lines
@@ -161,13 +171,21 @@ int get_op_type(int char1, int char2)
 /// @return  true if operator "op" always works on whole lines.
 int op_on_lines(int op)
 {
+#ifdef USE_RUST_OPS
+  return rs_op_on_lines(op);
+#else
   return opchars[op][2] & OPF_LINES;
+#endif
 }
 
 /// @return  true if operator "op" changes text.
 int op_is_change(int op)
 {
+#ifdef USE_RUST_OPS
+  return rs_op_is_change(op);
+#else
   return opchars[op][2] & OPF_CHANGE;
+#endif
 }
 
 /// Get first operator command character.
@@ -175,13 +193,21 @@ int op_is_change(int op)
 /// @return  'g' or 'z' if there is another command character.
 int get_op_char(int optype)
 {
+#ifdef USE_RUST_OPS
+  return rs_get_op_char(optype);
+#else
   return opchars[optype][0];
+#endif
 }
 
 /// Get second operator command character.
 int get_extra_op_char(int optype)
 {
+#ifdef USE_RUST_OPS
+  return rs_get_extra_op_char(optype);
+#else
   return opchars[optype][1];
+#endif
 }
 
 /// handle a shift operation

@@ -31,6 +31,7 @@ pub use nvim_math::*;
 pub use nvim_mbyte::*;
 pub use nvim_memutil::*;
 pub use nvim_menu::*;
+pub use nvim_ops::*;
 pub use nvim_os::env::*;
 pub use nvim_os::fs::*;
 pub use nvim_os::time::*;
