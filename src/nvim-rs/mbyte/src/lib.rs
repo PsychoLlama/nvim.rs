@@ -25,7 +25,7 @@
 
 use std::ffi::{c_char, c_int, c_longlong};
 
-use nvim_utf8proc::{casefold, get_property, grapheme_break};
+use nvim_utf8proc::{casefold, get_property, grapheme_break, Utf8procProperty};
 
 /// Maximum bytes in a UTF-8 character (standard is 4, but nvim supports up to 6).
 pub const MB_MAXBYTES: usize = 6;
@@ -665,11 +665,7 @@ pub extern "C" fn rs_utf_printable(c: c_int) -> c_int {
 /// Returns false for negative values.
 #[inline]
 pub fn utf_iscomposing_legacy(c: i32) -> bool {
-    if let Some(prop) = get_property(c) {
-        prop.is_composing_legacy()
-    } else {
-        false
-    }
+    get_property(c).is_some_and(Utf8procProperty::is_composing_legacy)
 }
 
 /// FFI wrapper for `utf_iscomposing_legacy`.
@@ -791,8 +787,8 @@ pub unsafe extern "C" fn rs_utf_ambiguous_width(p: *const c_char) -> c_int {
 
 // Cell width table access (setcellwidths())
 
-/// Cell width interval as set by setcellwidths().
-/// Matches the C struct cw_interval_T.
+/// Cell width interval as set by `setcellwidths()`.
+/// Matches the C struct `cw_interval_T`.
 #[repr(C)]
 struct CwInterval {
     first: c_longlong,  // int64_t
@@ -801,17 +797,24 @@ struct CwInterval {
 }
 
 extern "C" {
-    /// Cell width table pointer (set by setcellwidths()).
+    /// Cell width table pointer (set by `setcellwidths()`).
     static cw_table: *const CwInterval;
     /// Size of the cell width table.
     static cw_table_size: usize;
+
+    /// 'ambiwidth' option: "single" or "double".
+    /// Points to a C string; first character 'd' means double width.
+    static p_ambw: *const c_char;
+
+    /// 'emoji' option: boolean (0 or non-zero).
+    static p_emoji: c_int;
 }
 
 /// Return the value of the cellwidth table for the character `c`.
 ///
 /// Returns 1 or 2 when `c` is in the cellwidth table, 0 if not.
 ///
-/// This function performs binary search on the cw_table set by `setcellwidths()`.
+/// This function performs binary search on the `cw_table` set by `setcellwidths()`.
 #[inline]
 pub fn cw_value(c: i32) -> i32 {
     // SAFETY: cw_table and cw_table_size are managed by C code.
@@ -854,6 +857,88 @@ pub fn cw_value(c: i32) -> i32 {
 #[no_mangle]
 pub extern "C" fn rs_cw_value(c: c_int) -> c_int {
     cw_value(c)
+}
+
+// Character cell width calculation
+
+extern "C" {
+    /// Check if a character is printable. Defined in charset.c.
+    fn rs_vim_isprintc(c: c_int) -> c_int;
+}
+
+/// Check if a character is printable (safe wrapper).
+#[inline]
+fn vim_isprintc(c: i32) -> bool {
+    // SAFETY: rs_vim_isprintc is a safe function that just reads g_chartab
+    unsafe { rs_vim_isprintc(c) != 0 }
+}
+
+/// Check if 'ambiwidth' option is set to "double".
+#[inline]
+fn ambiwidth_is_double() -> bool {
+    // SAFETY: p_ambw is set during option initialization
+    unsafe {
+        !p_ambw.is_null() && *p_ambw == b'd' as c_char
+    }
+}
+
+/// Check if 'emoji' option is enabled.
+#[inline]
+fn emoji_is_enabled() -> bool {
+    // SAFETY: p_emoji is set during option initialization
+    unsafe { p_emoji != 0 }
+}
+
+/// For UTF-8 character "c" return 2 for a double-width character, 1 for others.
+///
+/// Returns 4 or 6 for an unprintable character.
+/// Is only correct for characters >= 0x80.
+///
+/// When `p_ambw` is "double", return 2 for a character with East Asian Width
+/// class 'A'(mbiguous).
+///
+/// # Panics
+///
+/// Panics if `c` is unprintable and greater than 0xFFFF.
+#[inline]
+pub fn utf_char2cells(c: i32) -> i32 {
+    if c < 0x80 {
+        return 1;
+    }
+
+    if !vim_isprintc(c) {
+        assert!(c <= 0xFFFF);
+        // unprintable is displayed either as <xx> or <xxxx>
+        return if c > 0xFF { 6 } else { 4 };
+    }
+
+    let n = cw_value(c);
+    if n != 0 {
+        return n;
+    }
+
+    if let Some(prop) = get_property(c) {
+        if prop.charwidth() == 2 {
+            return 2;
+        }
+        if ambiwidth_is_double() && prop.ambiguous_width() {
+            return 2;
+        }
+
+        // Characters below 1F000 may be considered single width traditionally,
+        // making them double width causes problems.
+        if emoji_is_enabled() && c >= 0x1f000 && !prop.ambiguous_width() && prop.is_emojilike() {
+            return 2;
+        }
+    }
+
+    1
+}
+
+/// FFI wrapper for `utf_char2cells`.
+#[no_mangle]
+pub extern "C" fn rs_utf_char2cells(c: c_int) -> c_int {
+    utf_char2cells(c)
 }
 
 // Codepoint boundary detection

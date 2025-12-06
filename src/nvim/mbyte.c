@@ -475,6 +475,10 @@ static bool prop_is_emojilike(const utf8proc_property_t *prop)
          || prop->boundclass == UTF8PROC_BOUNDCLASS_REGIONAL_INDICATOR;
 }
 
+#ifdef USE_RUST_MBYTE
+extern int rs_utf_char2cells(int c);
+#endif
+
 /// For UTF-8 character "c" return 2 for a double-width character, 1 for others.
 /// Returns 4 or 6 for an unprintable character.
 /// Is only correct for characters >= 0x80.
@@ -482,6 +486,9 @@ static bool prop_is_emojilike(const utf8proc_property_t *prop)
 /// class 'A'(mbiguous).
 int utf_char2cells(int c)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_char2cells(c);
+#else
   if (c < 0x80) {
     return 1;
   }
@@ -513,6 +520,7 @@ int utf_char2cells(int c)
   }
 
   return 1;
+#endif
 }
 
 /// Return the number of display cells character at "*p" occupies.

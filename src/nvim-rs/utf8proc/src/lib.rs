@@ -179,7 +179,7 @@ pub fn grapheme_break(codepoint1: i32, codepoint2: i32) -> bool {
 pub fn casefold(codepoint: i32) -> i32 {
     // Fast path for ASCII
     if codepoint < 0x80 {
-        return if codepoint >= 0x41 && codepoint <= 0x5a {
+        return if (0x41..=0x5a).contains(&codepoint) {
             codepoint + 32
         } else {
             codepoint
