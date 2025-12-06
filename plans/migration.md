@@ -495,9 +495,12 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
   - `arabic_maycombine` - Check if character may combine with previous
   - **New crate**: nvim-arabic
   - Reads global options p_arshape and p_tbidi via extern C
+- **Phase 2.64**: RTL ASCII mirroring (charset):
+  - `rl_mirror_ascii` - Reverse ASCII string in-place for right-to-left text
+  - Pure pointer manipulation, no global state
 - **Remaining infrastructure needed** for further progress:
   1. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 27 crates, 86 functions swapped to Rust
+- Total: 27 crates, 88 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
