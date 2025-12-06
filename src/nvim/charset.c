@@ -55,6 +55,7 @@ extern int rs_vim_isfilec(int c);
 extern int rs_vim_is_fname_char(int c);
 extern int rs_byte2cells(int b);
 extern int rs_vim_isIDc(int c);
+extern int rs_vim_isprintc(int c);
 #endif
 
 static bool chartab_initialized = false;
@@ -940,10 +941,14 @@ bool vim_isfilec_or_wc(int c)
 bool vim_isprintc(int c)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_CHARSET
+  return rs_vim_isprintc(c) != 0;
+#else
   if (c >= 0x100) {
     return utf_printable(c);
   }
   return c > 0 && (g_chartab[c] & CT_PRINT_CHAR);
+#endif
 }
 
 /// skipwhite: skip over ' ' and '\t'.

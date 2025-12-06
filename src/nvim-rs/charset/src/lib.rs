@@ -13,6 +13,7 @@ use std::ffi::c_int;
 
 // Chartab flag masks (from charset.c)
 const CT_CELL_MASK: u8 = 0x07; // mask: nr of display cells (1, 2 or 4)
+const CT_PRINT_CHAR: u8 = 0x10; // flag: set for printable chars
 const CT_ID_CHAR: u8 = 0x20; // flag: set for ID chars
 const CT_FNAME_CHAR: u8 = 0x40; // flag: set for file name chars
 
@@ -443,6 +444,24 @@ pub unsafe extern "C" fn rs_vim_isIDc(c: c_int) -> c_int {
 
 // Note: vim_iswordc and related functions are NOT migrated because they use
 // curbuf global or buffer-specific chartabs.
+
+/// Check that "c" is a printable character.
+///
+/// For characters >= 0x100, uses `utf_printable` from nvim-mbyte.
+/// For single-byte characters, checks `CT_PRINT_CHAR` flag in `g_chartab`.
+///
+/// # Safety
+/// This function accesses the global `g_chartab` array which must be initialized.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_isprintc(c: c_int) -> c_int {
+    if c >= 0x100 {
+        // Use utf_printable from nvim-mbyte crate for multibyte chars
+        c_int::from(nvim_mbyte::utf_printable(c))
+    } else {
+        // Single-byte: check g_chartab
+        c_int::from(c > 0 && (g_chartab[c as usize] & CT_PRINT_CHAR) != 0)
+    }
+}
 
 // ============================================================================
 // Tests
