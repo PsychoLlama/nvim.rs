@@ -381,8 +381,12 @@ These use Rust's `std::fs` instead of libuv. The 90 filesystem unit tests pass, 
 - `os_fileinfo_link` - Get file info (lstat) without following symlinks.
 - `os_fileinfo_fd` - Get file info (fstat) for an open file descriptor.
 
+**Phase 2.32**: Swapped file ID and ownership functions to Rust:
+- `os_fileid` - Get FileID (inode/device) for a path.
+- `os_file_owned` - Check if current user owns a file.
+
 **Phase 2 Summary (Updated 2025-12-05):**
-- 38 OS filesystem functions swapped to Rust (USE_RUST_OS_FS)
+- 40 OS filesystem functions swapped to Rust (USE_RUST_OS_FS)
 - 2 OS process/memory functions swapped to Rust (USE_RUST_OS_PROC, USE_RUST_OS_MEM)
 - 1 OS input function swapped to Rust (USE_RUST_OS_INPUT)
 - Added `io_error_to_uv_error` helper for libuv-compatible error codes
