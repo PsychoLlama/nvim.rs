@@ -104,6 +104,8 @@ extern int rs_utf_iscomposing_legacy(int c);
 extern int rs_utf_iscomposing_first(int c);
 extern int rs_utf_fold(int a);
 extern int rs_utf_ambiguous_width(const char *p);
+extern int rs_mb_charlen(const char *str);
+extern int rs_mb_charlen_len(const char *str, int len);
 
 // Rust struct for codepoint boundary offsets
 typedef struct {
@@ -2354,6 +2356,9 @@ char *mb_prevptr(char *line, char *p)
 /// following composing characters) counts as one.
 int mb_charlen(const char *str)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_mb_charlen(str);
+#else
   const char *p = str;
   int count;
 
@@ -2366,11 +2371,15 @@ int mb_charlen(const char *str)
   }
 
   return count;
+#endif
 }
 
 /// Like mb_charlen() but for a string with specified length.
 int mb_charlen_len(const char *str, int len)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_mb_charlen_len(str, len);
+#else
   const char *p = str;
   int count;
 
@@ -2379,6 +2388,7 @@ int mb_charlen_len(const char *str, int len)
   }
 
   return count;
+#endif
 }
 
 /// Try to unescape a multibyte character
