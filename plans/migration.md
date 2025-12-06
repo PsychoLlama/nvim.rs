@@ -469,9 +469,14 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
   - `char2cells` - Get display cells for any character including special keys
   - Handles special keys (negative values), ASCII via g_chartab, UTF-8 via utf_char2cells
   - Cross-crate call from charset to mbyte
+- **Phase 2.58**: Pointer to cells (mbyte):
+  - `utf_ptr2cells` - Get display cells from UTF-8 string pointer
+  - Validates UTF-8 structure, returns 4 for invalid sequences (<xx> display)
+  - Handles overlong encodings, emoji presentation (VS-16)
+  - Added utf_ptr2char_strict helper for validation
 - **Remaining infrastructure needed** for further progress:
   1. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 26 crates, 76 functions swapped to Rust
+- Total: 26 crates, 77 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
