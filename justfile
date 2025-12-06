@@ -36,11 +36,11 @@ unittest:
 
 # Run the built nvim
 run *ARGS:
-    ./build/bin/nvim {{ARGS}}
+    VIMRUNTIME=runtime ./build/bin/nvim {{ARGS}}
 
 # Show nvim version
 version:
-    ./build/bin/nvim --version
+    VIMRUNTIME=runtime ./build/bin/nvim --version
 
 # === Rust Commands ===
 
