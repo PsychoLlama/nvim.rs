@@ -8,9 +8,9 @@
 use std::ffi::c_int;
 
 // Word flags from spell_defs.h
-const WF_ONECAP: c_int = 0x02;  // word with one capital (or all capitals)
-const WF_ALLCAP: c_int = 0x04;  // word must be all capitals
-const WF_FIXCAP: c_int = 0x40;  // keep-case word, allcap not allowed
+const WF_ONECAP: c_int = 0x02; // word with one capital (or all capitals)
+const WF_ALLCAP: c_int = 0x04; // word must be all capitals
+const WF_FIXCAP: c_int = 0x40; // keep-case word, allcap not allowed
 const WF_KEEPCAP: c_int = 0x80; // keep-case word
 
 /// Check if the word flags match the tree flags for valid case handling.

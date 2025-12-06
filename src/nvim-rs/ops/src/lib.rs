@@ -32,36 +32,36 @@ const OP_NR_SUB: c_int = 29;
 /// Each entry is [char1, char2, flags].
 /// Index must correspond with OP_* defines in ops.h!
 static OPCHARS: [[u8; 3]; 30] = [
-    [NUL, NUL, 0],                         // OP_NOP
-    [b'd', NUL, OPF_CHANGE],               // OP_DELETE
-    [b'y', NUL, 0],                        // OP_YANK
-    [b'c', NUL, OPF_CHANGE],               // OP_CHANGE
-    [b'<', NUL, OPF_LINES | OPF_CHANGE],   // OP_LSHIFT
-    [b'>', NUL, OPF_LINES | OPF_CHANGE],   // OP_RSHIFT
-    [b'!', NUL, OPF_LINES | OPF_CHANGE],   // OP_FILTER
-    [b'g', b'~', OPF_CHANGE],              // OP_TILDE
-    [b'=', NUL, OPF_LINES | OPF_CHANGE],   // OP_INDENT
-    [b'g', b'q', OPF_LINES | OPF_CHANGE],  // OP_FORMAT
-    [b':', NUL, OPF_LINES],                // OP_COLON
-    [b'g', b'U', OPF_CHANGE],              // OP_UPPER
-    [b'g', b'u', OPF_CHANGE],              // OP_LOWER
-    [b'J', NUL, OPF_LINES | OPF_CHANGE],   // OP_JOIN
-    [b'g', b'J', OPF_LINES | OPF_CHANGE],  // OP_JOIN_NS
-    [b'g', b'?', OPF_CHANGE],              // OP_ROT13
-    [b'r', NUL, OPF_CHANGE],               // OP_REPLACE
-    [b'I', NUL, OPF_CHANGE],               // OP_INSERT
-    [b'A', NUL, OPF_CHANGE],               // OP_APPEND
-    [b'z', b'f', 0],                       // OP_FOLD
-    [b'z', b'o', OPF_LINES],               // OP_FOLDOPEN
-    [b'z', b'O', OPF_LINES],               // OP_FOLDOPENREC
-    [b'z', b'c', OPF_LINES],               // OP_FOLDCLOSE
-    [b'z', b'C', OPF_LINES],               // OP_FOLDCLOSEREC
-    [b'z', b'd', OPF_LINES],               // OP_FOLDDEL
-    [b'z', b'D', OPF_LINES],               // OP_FOLDDELREC
-    [b'g', b'w', OPF_LINES | OPF_CHANGE],  // OP_FORMAT2
-    [b'g', b'@', OPF_CHANGE],              // OP_FUNCTION
-    [CTRL_A, NUL, OPF_CHANGE],             // OP_NR_ADD
-    [CTRL_X, NUL, OPF_CHANGE],             // OP_NR_SUB
+    [NUL, NUL, 0],                        // OP_NOP
+    [b'd', NUL, OPF_CHANGE],              // OP_DELETE
+    [b'y', NUL, 0],                       // OP_YANK
+    [b'c', NUL, OPF_CHANGE],              // OP_CHANGE
+    [b'<', NUL, OPF_LINES | OPF_CHANGE],  // OP_LSHIFT
+    [b'>', NUL, OPF_LINES | OPF_CHANGE],  // OP_RSHIFT
+    [b'!', NUL, OPF_LINES | OPF_CHANGE],  // OP_FILTER
+    [b'g', b'~', OPF_CHANGE],             // OP_TILDE
+    [b'=', NUL, OPF_LINES | OPF_CHANGE],  // OP_INDENT
+    [b'g', b'q', OPF_LINES | OPF_CHANGE], // OP_FORMAT
+    [b':', NUL, OPF_LINES],               // OP_COLON
+    [b'g', b'U', OPF_CHANGE],             // OP_UPPER
+    [b'g', b'u', OPF_CHANGE],             // OP_LOWER
+    [b'J', NUL, OPF_LINES | OPF_CHANGE],  // OP_JOIN
+    [b'g', b'J', OPF_LINES | OPF_CHANGE], // OP_JOIN_NS
+    [b'g', b'?', OPF_CHANGE],             // OP_ROT13
+    [b'r', NUL, OPF_CHANGE],              // OP_REPLACE
+    [b'I', NUL, OPF_CHANGE],              // OP_INSERT
+    [b'A', NUL, OPF_CHANGE],              // OP_APPEND
+    [b'z', b'f', 0],                      // OP_FOLD
+    [b'z', b'o', OPF_LINES],              // OP_FOLDOPEN
+    [b'z', b'O', OPF_LINES],              // OP_FOLDOPENREC
+    [b'z', b'c', OPF_LINES],              // OP_FOLDCLOSE
+    [b'z', b'C', OPF_LINES],              // OP_FOLDCLOSEREC
+    [b'z', b'd', OPF_LINES],              // OP_FOLDDEL
+    [b'z', b'D', OPF_LINES],              // OP_FOLDDELREC
+    [b'g', b'w', OPF_LINES | OPF_CHANGE], // OP_FORMAT2
+    [b'g', b'@', OPF_CHANGE],             // OP_FUNCTION
+    [CTRL_A, NUL, OPF_CHANGE],            // OP_NR_ADD
+    [CTRL_X, NUL, OPF_CHANGE],            // OP_NR_SUB
 ];
 
 /// Check if operator always works on whole lines.

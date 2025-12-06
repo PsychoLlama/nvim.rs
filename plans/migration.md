@@ -520,9 +520,12 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
   - Uses `rem_backslash` internally for consistent behavior
 - **Phase 2.71**: String equality (strings):
   - `striequal` - Case-insensitive string equality check (ASCII)
+- **Phase 2.72**: Location list command check (ex_docmd):
+  - `is_loclist_cmd` - Check if command index is a location list command
+  - Uses C helper function `cmdname_first_char` to access cmdnames array
 - **Remaining infrastructure needed** for further progress:
   1. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 27 crates, 97 functions swapped to Rust
+- Total: 27 crates, 98 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling

@@ -65,7 +65,7 @@ pub mod options {
 impl Utf8procProperty {
     /// Get the character width (0, 1, or 2).
     #[inline]
-    #[must_use] 
+    #[must_use]
     pub const fn charwidth(&self) -> u8 {
         // charwidth is bits 4-5 of _flags (after bidi_mirrored, comp_exclusion, ignorable, control_boundary)
         ((self._flags >> 4) & 0x3) as u8
@@ -73,7 +73,7 @@ impl Utf8procProperty {
 
     /// Check if the character has ambiguous East Asian width.
     #[inline]
-    #[must_use] 
+    #[must_use]
     pub const fn ambiguous_width(&self) -> bool {
         // ambiguous_width is bit 6 of _flags
         (self._flags >> 6) & 0x1 != 0
@@ -81,7 +81,7 @@ impl Utf8procProperty {
 
     /// Get the boundclass value for grapheme break rules.
     #[inline]
-    #[must_use] 
+    #[must_use]
     pub const fn boundclass(&self) -> u8 {
         // boundclass is bits 8-13 of _flags (after pad at bit 7)
         ((self._flags >> 8) & 0x3F) as u8
@@ -211,7 +211,6 @@ pub fn casefold(codepoint: i32) -> i32 {
         codepoint
     }
 }
-
 
 #[cfg(test)]
 mod tests {

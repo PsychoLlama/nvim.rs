@@ -321,17 +321,18 @@ pub unsafe extern "C" fn rs_del_trailing_spaces(ptr: *mut c_char) {
     }
 }
 
+/// Maximum bytes in a UTF-8 sequence (from nvim's macros)
+const MB_MAXBYTES: usize = 6;
+
 /// Find a character in a string.
 ///
-/// For ASCII characters (< 128), uses standard strchr.
-/// For non-ASCII characters, this simplified version returns NULL
-/// (full multibyte support requires mbyte functions).
+/// For ASCII characters (< 128), uses simple byte search.
+/// For non-ASCII characters, converts the codepoint to UTF-8 and uses strstr.
 ///
 /// Returns NULL if:
 /// - The string is NULL
 /// - The character is <= 0
 /// - The character is not found
-/// - The character is >= 128 (multibyte not supported in this version)
 ///
 /// # Safety
 ///
@@ -358,9 +359,13 @@ pub unsafe extern "C" fn rs_vim_strchr(string: *const c_char, c: c_int) -> *cons
         }
     }
 
-    // For non-ASCII, we'd need utf_char2bytes which is in mbyte
-    // Return NULL for now - full support will be added when mbyte is migrated
-    std::ptr::null()
+    // For non-ASCII, convert to UTF-8 and use strstr
+    let mut u8char = [0u8; MB_MAXBYTES + 1];
+    let len = nvim_mbyte::utf_char2bytes(c, &mut u8char);
+    u8char[len] = 0; // null-terminate
+
+    // Use libc strstr to find the UTF-8 sequence
+    libc::strstr(string, u8char.as_ptr() as *const c_char)
 }
 
 /// Check if a string contains a non-ASCII character (128 or higher).
@@ -930,9 +935,41 @@ mod tests {
             assert!(rs_vim_strchr(std::ptr::null(), b'o' as c_int).is_null());
             assert!(rs_vim_strchr(hello.as_ptr(), 0).is_null());
             assert!(rs_vim_strchr(hello.as_ptr(), -1).is_null());
+        }
+    }
 
-            // Non-ASCII (not supported yet)
-            assert!(rs_vim_strchr(hello.as_ptr(), 0x80).is_null());
+    #[test]
+    fn test_vim_strchr_multibyte() {
+        // String with UTF-8 characters: "Hello世界emoji😀end"
+        let utf8_str = CString::new("Hello世界emoji😀end").unwrap();
+
+        unsafe {
+            // Find ASCII character in mixed string
+            let result = rs_vim_strchr(utf8_str.as_ptr(), b'H' as c_int);
+            assert!(!result.is_null());
+            assert_eq!(*result as u8, b'H');
+
+            // Find CJK character 世 (U+4E16)
+            let result = rs_vim_strchr(utf8_str.as_ptr(), 0x4E16);
+            assert!(!result.is_null());
+            // First byte of 世 in UTF-8 is 0xE4
+            assert_eq!(*result as u8, 0xE4);
+
+            // Find CJK character 界 (U+754C)
+            let result = rs_vim_strchr(utf8_str.as_ptr(), 0x754C);
+            assert!(!result.is_null());
+            // First byte of 界 in UTF-8 is 0xE7
+            assert_eq!(*result as u8, 0xE7);
+
+            // Find emoji 😀 (U+1F600)
+            let result = rs_vim_strchr(utf8_str.as_ptr(), 0x1F600);
+            assert!(!result.is_null());
+            // First byte of 😀 in UTF-8 is 0xF0
+            assert_eq!(*result as u8, 0xF0);
+
+            // Character not in string - CJK 日 (U+65E5)
+            let result = rs_vim_strchr(utf8_str.as_ptr(), 0x65E5);
+            assert!(result.is_null());
         }
     }
 

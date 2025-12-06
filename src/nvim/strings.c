@@ -50,6 +50,7 @@ extern void rs_vim_strcpy_up(char *restrict dst, const char *restrict src);
 extern void rs_vim_strncpy_up(char *restrict dst, const char *restrict src, size_t n);
 extern void rs_vim_memcpy_up(char *restrict dst, const char *restrict src, size_t n);
 extern void rs_del_trailing_spaces(char *ptr);
+extern const char *rs_vim_strchr(const char *string, int c);
 #endif
 
 static const char e_cannot_mix_positional_and_non_positional_str[]
@@ -549,6 +550,9 @@ int vim_strnicmp_asc(const char *s1, const char *s2, size_t len)
 char *vim_strchr(const char *const string, const int c)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_STRINGS
+  return (char *)rs_vim_strchr(string, c);
+#else
   if (c <= 0) {
     return NULL;
   } else if (c < 0x80) {
@@ -559,6 +563,7 @@ char *vim_strchr(const char *const string, const int c)
     u8char[len] = NUL;
     return strstr(string, u8char);
   }
+#endif
 }
 
 // Sort an array of strings.
