@@ -355,12 +355,16 @@ These use Rust's `std::fs` instead of libuv. The 90 filesystem unit tests pass, 
 - `os_fileid_equal` - Compare two FileID structures for equality.
 - Added `FileID` repr(C) struct definition to Rust.
 
+**Phase 2.26**: Swapped FileID/FileInfo comparison function to Rust:
+- `os_fileid_equal_fileinfo` - Compare FileID with FileInfo.
+- Added `UvTimespec`, `UvStat`, and `FileInfo` repr(C) structs matching libuv.
+
 **Phase 2 Summary (Updated 2025-12-05):**
-- 25 OS filesystem functions swapped to Rust (USE_RUST_OS_FS)
+- 26 OS filesystem functions swapped to Rust (USE_RUST_OS_FS)
 - 2 OS process/memory functions swapped to Rust (USE_RUST_OS_PROC, USE_RUST_OS_MEM)
 - 1 OS input function swapped to Rust (USE_RUST_OS_INPUT)
 - Added `io_error_to_uv_error` helper for libuv-compatible error codes
-- Added `FileID` struct for file identity comparison
+- Added `FileID`, `UvStat`, `FileInfo` structs for file identity comparison
 - Remaining functions require complex FFI patterns
 
 ---
