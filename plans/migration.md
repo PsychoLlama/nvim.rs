@@ -398,6 +398,7 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - [x] `spell_valid_case` - **Phase 2.36**: Swapped to Rust (USE_RUST_SPELL) - spell case flag validation
 - [x] `byte_in_str` - **Phase 2.37**: Swapped to Rust (USE_RUST_SPELL) - byte search in string
 - [x] `schar_high` - **Phase 2.38**: Swapped to Rust (USE_RUST_GRID) - screen char cache format check
+- [x] `schar_get_ascii` - **Phase 2.39**: Swapped to Rust (USE_RUST_GRID) - get ASCII char from schar
 
 **Session 7 (2025-12-05): Phases 2.36-2.38**
 - Created `nvim-spell` crate with `spell_valid_case` and `byte_in_str`
