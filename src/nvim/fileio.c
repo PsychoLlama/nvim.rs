@@ -97,6 +97,7 @@
 // Rust implementations - declarations
 extern int rs_time_differs(int64_t file_sec, int64_t file_nsec, int64_t mtime, int64_t mtime_ns,
                            int fat_tolerance);
+extern bool rs_is_dev_fd_file(const char *fname);
 #endif
 
 #include "fileio.c.generated.h"
@@ -1899,11 +1900,15 @@ theend:
 bool is_dev_fd_file(char *fname)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_FILEIO
+  return rs_is_dev_fd_file(fname);
+#else
   return strncmp(fname, "/dev/fd/", 8) == 0
          && ascii_isdigit((uint8_t)fname[8])
          && *skipdigits(fname + 9) == NUL
          && (fname[9] != NUL
              || (fname[8] != '0' && fname[8] != '1' && fname[8] != '2'));
+#endif
 }
 #endif
 
