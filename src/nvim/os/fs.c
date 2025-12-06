@@ -97,6 +97,7 @@ extern uint64_t rs_os_fileinfo_size(const FileInfo *file_info);
 extern uint64_t rs_os_fileinfo_hardlinks(const FileInfo *file_info);
 extern uint64_t rs_os_fileinfo_blocksize(const FileInfo *file_info);
 extern char *rs_os_realpath(const char *name, char *buf, size_t len);
+extern int rs_os_open(const char *path, int flags, int mode);
 #endif
 
 #ifdef HAVE_XATTR
@@ -471,12 +472,19 @@ end:
 /// @return file descriptor, or negative error code on failure
 int os_open(const char *path, int flags, int mode)
 {
+#ifdef USE_RUST_OS_FS
+  if (path == NULL) {
+    return UV_EINVAL;
+  }
+  return rs_os_open(path, flags, mode);
+#else
   if (path == NULL) {  // uv_fs_open asserts on NULL. #7561
     return UV_EINVAL;
   }
   int r;
   RUN_UV_FS_FUNC(r, uv_fs_open, path, flags, mode, NULL);
   return r;
+#endif
 }
 
 /// Compatibility wrapper conforming to fopen(3).

@@ -1602,6 +1602,37 @@ pub unsafe extern "C" fn rs_os_realpath(
     }
 }
 
+/// Open or create a file.
+///
+/// Returns a file descriptor on success, or a negative libuv error code on failure.
+///
+/// # Safety
+///
+/// `path` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_open(path: *const c_char, flags: c_int, mode: c_int) -> c_int {
+    if path.is_null() {
+        return -22; // UV_EINVAL
+    }
+
+    #[cfg(unix)]
+    {
+        let fd = unsafe { libc::open(path, flags, mode) };
+        if fd < 0 {
+            // Return libuv-compatible error code (negated errno)
+            unsafe { -(*libc::__errno_location()) }
+        } else {
+            fd
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        let _ = (path, flags, mode);
+        -38 // UV_ENOSYS
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
