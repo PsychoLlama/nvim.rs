@@ -430,14 +430,18 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - Added `vim_isprintc` to nvim-charset crate (first cross-crate dependency: charset → mbyte)
 - Total: 25 crates, 69+ functions swapped to Rust
 
-**Session 9 (2025-12-06): Migration Plateau Verification**
+**Session 9 (2025-12-06): Migration Plateau + utf8proc Infrastructure**
 - Exhaustive search for Phase 2.50+ candidates across 30 C files
 - Confirmed all FUNC_ATTR_PURE/CONST functions either migrated or unsuitable
 - Verified build and Rust tests pass (210 rs_* symbols in nvim binary)
-- **Plateau reached**: Remaining functions require infrastructure investment:
-  1. **utf8proc-rs crate** - For utf_char2cells, composing character functions
-  2. **Global state bridges** - For cw_table, shape_table, version arrays
-  3. **Complex struct FFI** - For win_T*, buf_T* parameters
+- **Phase 2.50**: Created `nvim-utf8proc` crate with FFI bindings to utf8proc library:
+  - `Utf8procProperty` struct with accessors for charwidth, ambiguous_width, boundclass
+  - `get_property()` safe wrapper for Unicode property queries
+  - `is_emojilike()` method for emoji detection
+- **Remaining infrastructure needed** for further progress:
+  1. **Global state bridges** - For p_ambw, p_emoji, cw_table options
+  2. **Complex struct FFI** - For win_T*, buf_T* parameters
+- Total: 26 crates, 69+ functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
