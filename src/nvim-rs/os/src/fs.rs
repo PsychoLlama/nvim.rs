@@ -1541,6 +1541,67 @@ pub unsafe extern "C" fn rs_os_fileinfo_blocksize(file_info: *const FileInfo) ->
     info.stat.st_blksize
 }
 
+/// Return the canonicalized absolute pathname.
+///
+/// Uses libc's `realpath()` to resolve the canonical path, then copies
+/// the result to the provided buffer (or allocates one if `buf` is NULL).
+///
+/// # Safety
+///
+/// - `name` must be a valid null-terminated C string.
+/// - If `buf` is not NULL, it must point to a buffer of at least `len` bytes.
+/// - The caller is responsible for freeing any allocated buffer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_realpath(
+    name: *const c_char,
+    buf: *mut c_char,
+    len: usize,
+) -> *mut c_char {
+    if name.is_null() {
+        return ptr::null_mut();
+    }
+
+    #[cfg(unix)]
+    {
+        // Call libc::realpath with NULL to let it allocate the buffer
+        let resolved = unsafe { libc::realpath(name, ptr::null_mut()) };
+        if resolved.is_null() {
+            return ptr::null_mut();
+        }
+
+        // Get the length of the resolved path
+        let resolved_len = unsafe { libc::strlen(resolved) };
+
+        // Determine the output buffer
+        let out_buf = if buf.is_null() {
+            // Allocate using nvim's allocator
+            unsafe { nvim_memory::xmalloc(len).cast::<c_char>() }
+        } else {
+            buf
+        };
+
+        // Copy the resolved path to the output buffer, respecting the length limit
+        let copy_len = std::cmp::min(resolved_len, len.saturating_sub(1));
+        unsafe {
+            ptr::copy_nonoverlapping(resolved, out_buf, copy_len);
+            // Null-terminate
+            *out_buf.add(copy_len) = 0;
+        }
+
+        // Free the buffer allocated by realpath
+        unsafe { libc::free(resolved.cast::<libc::c_void>()) };
+
+        out_buf
+    }
+
+    #[cfg(not(unix))]
+    {
+        // On non-Unix systems, return NULL (not implemented)
+        let _ = (name, buf, len);
+        ptr::null_mut()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

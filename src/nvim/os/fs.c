@@ -96,6 +96,7 @@ extern uint64_t rs_os_fileinfo_inode(const FileInfo *file_info);
 extern uint64_t rs_os_fileinfo_size(const FileInfo *file_info);
 extern uint64_t rs_os_fileinfo_hardlinks(const FileInfo *file_info);
 extern uint64_t rs_os_fileinfo_blocksize(const FileInfo *file_info);
+extern char *rs_os_realpath(const char *name, char *buf, size_t len);
 #endif
 
 #ifdef HAVE_XATTR
@@ -1495,6 +1496,9 @@ bool os_fileid_equal_fileinfo(const FileID *file_id, const FileInfo *file_info)
 char *os_realpath(const char *name, char *buf, size_t len)
   FUNC_ATTR_NONNULL_ARG(1)
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_realpath(name, buf, len);
+#else
   uv_fs_t request;
   int result = uv_fs_realpath(NULL, &request, name, NULL);
   if (result == kLibuvSuccess) {
@@ -1505,6 +1509,7 @@ char *os_realpath(const char *name, char *buf, size_t len)
   }
   uv_fs_req_cleanup(&request);
   return result == kLibuvSuccess ? buf : NULL;
+#endif
 }
 
 #ifdef MSWIN
