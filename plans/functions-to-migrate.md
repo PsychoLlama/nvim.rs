@@ -390,6 +390,9 @@ These use Rust's `std::fs` instead of libuv. The 90 filesystem unit tests pass, 
 - `eval_isnamec1` - Check if char can be first char in var/func name.
 - `eval_isdictc` - Check if char can be used as dictionary key char.
 
+**Phase 2.34**: Swapped arithmetic function to Rust:
+- `calc_percentage` - Calculate percentage (part of whole), with overflow handling for large numbers.
+
 **Phase 2 Summary (2025-12-05) - OS MIGRATION COMPLETE:**
 - **43 OS functions swapped to Rust** across 3 compile flags:
   - 40 filesystem functions (USE_RUST_OS_FS)
