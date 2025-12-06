@@ -445,17 +445,23 @@ Most remaining simple functions have been migrated. Further progress requires:
 ### Functions with Vim-specific types:
 - Functions using typval_T, list_T, garray_T, etc.
 
-## Session 8 (continued 2025-12-06) - Exhaustive Search for More Candidates
+## Session 8 (continued 2025-12-06) - g_chartab Infrastructure Migration
 
-After completing Phase 2.46 (valid_yank_reg), performed exhaustive search for additional migration candidates:
+After completing Phase 2.46 (valid_yank_reg), decided to expose g_chartab global for Rust access:
 
-### Functions Examined and Ruled Out:
+**Phase 2.47**: Exposed g_chartab global and migrated:
+- `vim_isfilec` - ✅ MIGRATED - Uses g_chartab for CT_FNAME_CHAR lookup
+- `vim_is_fname_char` - ✅ MIGRATED - Wrapper around vim_isfilec with extra chars
 
-**Functions using g_chartab global:**
-- `vim_isfilec` - Uses g_chartab for CT_FNAME_CHAR lookup
-- `vim_is_fname_char` - Wrapper around vim_isfilec
-- `vim_isfilec_or_wc` - Uses vim_isfilec + path_has_wildcard
-- `vim_isprintc` - Uses g_chartab for CT_PRINT_CHAR lookup
+**Phase 2.48**: Additional g_chartab functions migrated:
+- `byte2cells` - ✅ MIGRATED - Uses g_chartab for CT_CELL_MASK lookup
+- `vim_isIDc` - ✅ MIGRATED - Uses g_chartab for CT_ID_CHAR lookup
+
+### Functions Still Ruled Out:
+
+**Functions using g_chartab + other dependencies:**
+- `vim_isfilec_or_wc` - Uses vim_isfilec + path_has_wildcard (cross-module)
+- `vim_isprintc` - Uses g_chartab + utf_printable (mbyte cross-crate)
 
 **Functions using shape_table global:**
 - `cursor_is_block_during_visual` - Accesses shape_table array
@@ -494,10 +500,10 @@ All remaining FUNC_ATTR_PURE/CONST functions and simple predicates fall into one
 
 **Migration Status:**
 - 25 Rust crates in workspace
-- 64+ functions swapped from C to Rust
+- 68+ functions swapped from C to Rust
 - 115+ USE_RUST ifdef patterns across 20+ C files
 
 **Next Steps (require infrastructure investment):**
 1. **utf8proc-rs integration** - Would unlock utf_iscomposing* functions
-2. **g_chartab FFI** - Would unlock vim_isfilec, vim_isprintc, etc.
+2. ~~**g_chartab FFI** - Would unlock vim_isfilec, vim_isprintc, etc.~~ **DONE (Phase 2.47-2.48)**: g_chartab exposed, vim_isfilec, vim_is_fname_char, byte2cells, vim_isIDc migrated
 3. **Complex struct FFI** - Would unlock window.c, buffer.c functions
