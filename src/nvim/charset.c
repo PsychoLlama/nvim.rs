@@ -738,6 +738,10 @@ int byte2cells(int b)
 #endif
 }
 
+#ifdef USE_RUST_CHARSET
+extern int rs_char2cells(int c);
+#endif
+
 /// Return number of display cells occupied by character "c".
 ///
 /// "c" can be a special key (negative number) in which case 3 or 4 is returned.
@@ -748,6 +752,9 @@ int byte2cells(int b)
 /// @return Number of display cells.
 int char2cells(int c)
 {
+#ifdef USE_RUST_CHARSET
+  return rs_char2cells(c);
+#else
   if (IS_SPECIAL(c)) {
     return char2cells(K_SECOND(c)) + 2;
   }
@@ -757,6 +764,7 @@ int char2cells(int c)
     return utf_char2cells(c);
   }
   return g_chartab[c & 0xff] & CT_CELL_MASK;
+#endif
 }
 
 /// Return number of display cells occupied by character at "*p".

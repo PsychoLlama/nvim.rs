@@ -258,28 +258,28 @@ mod tests {
     #[test]
     fn test_grapheme_break() {
         // Space followed by combining accent - no break (combines with space)
-        assert!(!grapheme_break(b' ' as i32, 0x0300));
+        assert!(!grapheme_break(i32::from(b' '), 0x0300));
 
         // Two ASCII letters - break between them
-        assert!(grapheme_break(b'a' as i32, b'b' as i32));
+        assert!(grapheme_break(i32::from(b'a'), i32::from(b'b')));
 
         // Letter followed by combining accent - no break
-        assert!(!grapheme_break(b'e' as i32, 0x0301)); // e + acute accent
+        assert!(!grapheme_break(i32::from(b'e'), 0x0301)); // e + acute accent
     }
 
     #[test]
     fn test_casefold_ascii() {
         // ASCII uppercase to lowercase
-        assert_eq!(casefold(b'A' as i32), b'a' as i32);
-        assert_eq!(casefold(b'Z' as i32), b'z' as i32);
+        assert_eq!(casefold(i32::from(b'A')), i32::from(b'a'));
+        assert_eq!(casefold(i32::from(b'Z')), i32::from(b'z'));
 
         // ASCII lowercase unchanged
-        assert_eq!(casefold(b'a' as i32), b'a' as i32);
-        assert_eq!(casefold(b'z' as i32), b'z' as i32);
+        assert_eq!(casefold(i32::from(b'a')), i32::from(b'a'));
+        assert_eq!(casefold(i32::from(b'z')), i32::from(b'z'));
 
         // ASCII non-letters unchanged
-        assert_eq!(casefold(b'0' as i32), b'0' as i32);
-        assert_eq!(casefold(b'!' as i32), b'!' as i32);
+        assert_eq!(casefold(i32::from(b'0')), i32::from(b'0'));
+        assert_eq!(casefold(i32::from(b'!')), i32::from(b'!'));
     }
 
     #[test]

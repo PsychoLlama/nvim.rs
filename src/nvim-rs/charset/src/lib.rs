@@ -436,11 +436,60 @@ pub unsafe extern "C" fn rs_vim_isIDc(c: c_int) -> c_int {
     c_int::from(c > 0 && c < 0x100 && (g_chartab[c as usize] & CT_ID_CHAR) != 0)
 }
 
-// Note: char2cells is NOT migrated because it calls IS_SPECIAL/K_SECOND macros
-// and utf_char2cells, which would require cross-crate dependencies.
-
 // Note: vim_iswordc and related functions are NOT migrated because they use
 // curbuf global or buffer-specific chartabs.
+
+// Key code constants for char2cells (from keycodes.h)
+// Special keys are represented as negative values.
+const fn is_special(c: i32) -> bool {
+    c < 0
+}
+
+// KEY2TERMCAP0(x) = (-(x)) & 0xff
+// For special keys (c < 0), get the low byte of the absolute value
+const fn key2termcap0(c: i32) -> i32 {
+    (-c) & 0xff
+}
+
+// K_SECOND: get second byte when translating special key code
+// For special keys (c < 0), this is just KEY2TERMCAP0
+// (K_SPECIAL and NUL checks are not possible when c < 0)
+const fn k_second(c: i32) -> i32 {
+    key2termcap0(c)
+}
+
+/// Return number of display cells occupied by character "c".
+///
+/// "c" can be a special key (negative number) in which case 3 or 4 is returned.
+/// A TAB is counted as two cells: "^I" or four: "<09>".
+///
+/// # Safety
+/// This function accesses the global `g_chartab` array which must be initialized.
+#[must_use]
+pub fn char2cells(c: i32) -> i32 {
+    if is_special(c) {
+        // Special key - recursively get cells for the "second byte" + 2
+        return char2cells(k_second(c)) + 2;
+    }
+
+    if c >= 0x80 {
+        // UTF-8: above 0x80 need to check the value
+        return nvim_mbyte::utf_char2cells(c);
+    }
+
+    // ASCII: get cell count from chartab
+    // SAFETY: caller must ensure g_chartab is initialized
+    unsafe { i32::from(g_chartab[(c & 0xff) as usize] & CT_CELL_MASK) }
+}
+
+/// FFI wrapper for `char2cells`.
+///
+/// # Safety
+/// This function accesses the global `g_chartab` array which must be initialized.
+#[no_mangle]
+pub extern "C" fn rs_char2cells(c: c_int) -> c_int {
+    char2cells(c)
+}
 
 /// Check that "c" is a printable character.
 ///
