@@ -25,7 +25,7 @@
 
 use std::ffi::{c_char, c_int};
 
-use nvim_utf8proc::{get_property, grapheme_break};
+use nvim_utf8proc::{casefold, get_property, grapheme_break};
 
 /// Maximum bytes in a UTF-8 character (standard is 4, but nvim supports up to 6).
 pub const MB_MAXBYTES: usize = 6;
@@ -696,6 +696,28 @@ pub extern "C" fn rs_utf_iscomposing_first(c: c_int) -> c_int {
     c_int::from(utf_iscomposing_first(c))
 }
 
+// Case folding
+
+/// Return the folded-case equivalent of a Unicode codepoint.
+///
+/// Uses full case folding for case-insensitive string comparison.
+/// For ASCII, this is simple lowercase conversion (A-Z -> a-z).
+///
+/// Note: Some characters have multi-character case foldings (e.g., ß -> ss),
+/// but this function returns only single-character results. Characters with
+/// problematic multi-char foldings are returned unchanged to maintain
+/// compatibility with Vim's spell checking.
+#[inline]
+pub fn utf_fold(a: i32) -> i32 {
+    casefold(a)
+}
+
+/// FFI wrapper for `utf_fold`.
+#[no_mangle]
+pub extern "C" fn rs_utf_fold(a: c_int) -> c_int {
+    utf_fold(a)
+}
+
 // Codepoint boundary detection
 
 /// Result of finding codepoint boundaries.
@@ -1192,6 +1214,32 @@ mod tests {
         assert_eq!(rs_utf_iscomposing_first(0x0300), 1);
         assert_eq!(rs_utf_iscomposing_first(0x41), 0);
         assert_eq!(rs_utf_iscomposing_first(b'a' as c_int), 0);
+    }
+
+    #[test]
+    fn test_utf_fold() {
+        // ASCII uppercase to lowercase
+        assert_eq!(utf_fold(b'A' as i32), b'a' as i32);
+        assert_eq!(utf_fold(b'Z' as i32), b'z' as i32);
+
+        // ASCII lowercase unchanged
+        assert_eq!(utf_fold(b'a' as i32), b'a' as i32);
+        assert_eq!(utf_fold(b'z' as i32), b'z' as i32);
+
+        // ASCII non-letters unchanged
+        assert_eq!(utf_fold(b'0' as i32), b'0' as i32);
+        assert_eq!(utf_fold(b'!' as i32), b'!' as i32);
+
+        // Special cases that should remain unchanged
+        assert_eq!(utf_fold(0xDF), 0xDF); // ß
+        assert_eq!(utf_fold(0x130), 0x130); // İ
+    }
+
+    #[test]
+    fn test_ffi_utf_fold() {
+        assert_eq!(rs_utf_fold(b'A' as c_int), b'a' as c_int);
+        assert_eq!(rs_utf_fold(b'a' as c_int), b'a' as c_int);
+        assert_eq!(rs_utf_fold(0xDF), 0xDF); // ß unchanged
     }
 
     #[test]

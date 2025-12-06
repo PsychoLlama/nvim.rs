@@ -102,6 +102,7 @@ extern int rs_utf_allow_break(int cc, int ncc);
 extern int rs_utf_printable(int c);
 extern int rs_utf_iscomposing_legacy(int c);
 extern int rs_utf_iscomposing_first(int c);
+extern int rs_utf_fold(int a);
 
 // Rust struct for codepoint boundary offsets
 typedef struct {
@@ -1431,6 +1432,9 @@ bool utf_ambiguous_width(const char *p)
 // full case folding.
 int utf_fold(int a)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_fold(a);
+#else
   if (a < 0x80) {
     // be fast for ASCII
     return a >= 0x41 && a <= 0x5a ? a + 32 : a;
@@ -1452,6 +1456,7 @@ int utf_fold(int a)
   utf8proc_ssize_t res = utf8proc_decompose_char(a, result, 1, UTF8PROC_CASEFOLD, NULL);
 
   return (res == 1) ? result[0] : a;
+#endif
 }
 
 // Vim's own character class functions.  These exist because many library

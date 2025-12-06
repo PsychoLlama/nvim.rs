@@ -56,6 +56,12 @@ pub mod boundclass {
     pub const EXTENDED_PICTOGRAPHIC: u8 = 19;
 }
 
+/// utf8proc option flags for decomposition and normalization.
+pub mod options {
+    /// Performs unicode case folding, for case-insensitive comparison.
+    pub const CASEFOLD: i32 = 1 << 10;
+}
+
 impl Utf8procProperty {
     /// Get the character width (0, 1, or 2).
     #[inline]
@@ -113,6 +119,21 @@ extern "C" {
     /// Returns true if there is a grapheme break between codepoint1 and codepoint2.
     /// The values are UCS-4 codepoints.
     pub fn utf8proc_grapheme_break(codepoint1: i32, codepoint2: i32) -> bool;
+
+    /// Decompose a single Unicode codepoint.
+    ///
+    /// The result is written to `dst` buffer of size `bufsize`.
+    /// `options` controls the type of decomposition (e.g., CASEFOLD).
+    /// `last_boundclass` can be NULL if not needed.
+    ///
+    /// Returns the number of codepoints written on success, or a negative error code.
+    pub fn utf8proc_decompose_char(
+        codepoint: i32,
+        dst: *mut i32,
+        bufsize: isize,
+        options: i32,
+        last_boundclass: *mut i32,
+    ) -> isize;
 }
 
 /// Safe wrapper to get Unicode properties for a codepoint.
@@ -142,6 +163,53 @@ pub fn get_property(codepoint: i32) -> Option<&'static Utf8procProperty> {
 pub fn grapheme_break(codepoint1: i32, codepoint2: i32) -> bool {
     // SAFETY: utf8proc_grapheme_break is a pure function with no side effects
     unsafe { utf8proc_grapheme_break(codepoint1, codepoint2) }
+}
+
+/// Case-fold a Unicode codepoint.
+///
+/// Returns the folded-case equivalent of `codepoint` for case-insensitive
+/// comparison. For ASCII, this is simple lowercase conversion.
+///
+/// Some characters have multi-character case foldings (e.g., ß -> ss),
+/// but this function only returns single-character results. Characters
+/// with problematic multi-char foldings (0xdf=ß, 0x130=İ) are returned
+/// unchanged to maintain compatibility with Vim's spell checking.
+#[inline]
+#[must_use]
+pub fn casefold(codepoint: i32) -> i32 {
+    // Fast path for ASCII
+    if codepoint < 0x80 {
+        return if codepoint >= 0x41 && codepoint <= 0x5a {
+            codepoint + 32
+        } else {
+            codepoint
+        };
+    }
+
+    // Workaround for characters that break with full case folding:
+    // - 0xdf (ß) folds to "ss" which breaks Vim spell tests
+    // - 0x130 (İ) folds to "i̇" (i + combining dot)
+    if codepoint == 0xdf || codepoint == 0x130 {
+        return codepoint;
+    }
+
+    let mut result: i32 = 0;
+    // SAFETY: We provide a valid buffer and size
+    let res = unsafe {
+        utf8proc_decompose_char(
+            codepoint,
+            &raw mut result,
+            1,
+            options::CASEFOLD,
+            std::ptr::null_mut(),
+        )
+    };
+
+    if res == 1 {
+        result
+    } else {
+        codepoint
+    }
 }
 
 
@@ -197,5 +265,40 @@ mod tests {
 
         // Letter followed by combining accent - no break
         assert!(!grapheme_break(b'e' as i32, 0x0301)); // e + acute accent
+    }
+
+    #[test]
+    fn test_casefold_ascii() {
+        // ASCII uppercase to lowercase
+        assert_eq!(casefold(b'A' as i32), b'a' as i32);
+        assert_eq!(casefold(b'Z' as i32), b'z' as i32);
+
+        // ASCII lowercase unchanged
+        assert_eq!(casefold(b'a' as i32), b'a' as i32);
+        assert_eq!(casefold(b'z' as i32), b'z' as i32);
+
+        // ASCII non-letters unchanged
+        assert_eq!(casefold(b'0' as i32), b'0' as i32);
+        assert_eq!(casefold(b'!' as i32), b'!' as i32);
+    }
+
+    #[test]
+    fn test_casefold_unicode() {
+        // Latin Extended uppercase
+        // U+00C0 (À) -> U+00E0 (à)
+        assert_eq!(casefold(0x00C0), 0x00E0);
+
+        // Greek uppercase
+        // U+0391 (Α) -> U+03B1 (α)
+        assert_eq!(casefold(0x0391), 0x03B1);
+    }
+
+    #[test]
+    fn test_casefold_special_cases() {
+        // ß (U+00DF) should remain unchanged (workaround for full case folding)
+        assert_eq!(casefold(0xDF), 0xDF);
+
+        // İ (U+0130) should remain unchanged (workaround for full case folding)
+        assert_eq!(casefold(0x130), 0x130);
     }
 }
