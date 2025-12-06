@@ -1443,6 +1443,104 @@ pub unsafe extern "C" fn rs_os_fileid_equal_fileinfo(
     id.inode == info.stat.st_ino && id.device_id == info.stat.st_dev
 }
 
+/// Compare the inodes of two `FileInfo`s.
+///
+/// # Safety
+///
+/// Both `file_info_1` and `file_info_2` must be valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_fileinfo_id_equal(
+    file_info_1: *const FileInfo,
+    file_info_2: *const FileInfo,
+) -> bool {
+    if file_info_1.is_null() || file_info_2.is_null() {
+        return false;
+    }
+
+    let info1 = unsafe { &*file_info_1 };
+    let info2 = unsafe { &*file_info_2 };
+
+    info1.stat.st_ino == info2.stat.st_ino && info1.stat.st_dev == info2.stat.st_dev
+}
+
+/// Get the `FileID` of a `FileInfo`.
+///
+/// # Safety
+///
+/// Both `file_info` and `file_id` must be valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_fileinfo_id(file_info: *const FileInfo, file_id: *mut FileID) {
+    if file_info.is_null() || file_id.is_null() {
+        return;
+    }
+
+    let info = unsafe { &*file_info };
+    let id = unsafe { &mut *file_id };
+
+    id.inode = info.stat.st_ino;
+    id.device_id = info.stat.st_dev;
+}
+
+/// Get the inode of a `FileInfo`.
+///
+/// # Safety
+///
+/// `file_info` must be a valid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_fileinfo_inode(file_info: *const FileInfo) -> u64 {
+    if file_info.is_null() {
+        return 0;
+    }
+
+    let info = unsafe { &*file_info };
+    info.stat.st_ino
+}
+
+/// Get the size of a file from a `FileInfo`.
+///
+/// # Safety
+///
+/// `file_info` must be a valid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_fileinfo_size(file_info: *const FileInfo) -> u64 {
+    if file_info.is_null() {
+        return 0;
+    }
+
+    let info = unsafe { &*file_info };
+    info.stat.st_size
+}
+
+/// Get the number of hardlinks from a `FileInfo`.
+///
+/// # Safety
+///
+/// `file_info` must be a valid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_fileinfo_hardlinks(file_info: *const FileInfo) -> u64 {
+    if file_info.is_null() {
+        return 0;
+    }
+
+    let info = unsafe { &*file_info };
+    info.stat.st_nlink
+}
+
+/// Get the blocksize from a `FileInfo`.
+///
+/// # Safety
+///
+/// `file_info` must be a valid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_fileinfo_blocksize(file_info: *const FileInfo) -> u64 {
+    if file_info.is_null() {
+        return 0;
+    }
+
+    let info = unsafe { &*file_info };
+    info.stat.st_blksize
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

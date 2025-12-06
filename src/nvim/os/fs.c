@@ -90,6 +90,12 @@ extern ptrdiff_t rs_os_read(int fd, bool *ret_eof, char *ret_buf, size_t size, b
 extern ptrdiff_t rs_os_write(int fd, const char *buf, size_t size, bool non_blocking);
 extern bool rs_os_fileid_equal(const FileID *file_id_1, const FileID *file_id_2);
 extern bool rs_os_fileid_equal_fileinfo(const FileID *file_id, const FileInfo *file_info);
+extern bool rs_os_fileinfo_id_equal(const FileInfo *file_info_1, const FileInfo *file_info_2);
+extern void rs_os_fileinfo_id(const FileInfo *file_info, FileID *file_id);
+extern uint64_t rs_os_fileinfo_inode(const FileInfo *file_info);
+extern uint64_t rs_os_fileinfo_size(const FileInfo *file_info);
+extern uint64_t rs_os_fileinfo_hardlinks(const FileInfo *file_info);
+extern uint64_t rs_os_fileinfo_blocksize(const FileInfo *file_info);
 #endif
 
 #ifdef HAVE_XATTR
@@ -1351,8 +1357,12 @@ bool os_fileinfo_fd(int file_descriptor, FileInfo *file_info)
 bool os_fileinfo_id_equal(const FileInfo *file_info_1, const FileInfo *file_info_2)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_fileinfo_id_equal(file_info_1, file_info_2);
+#else
   return file_info_1->stat.st_ino == file_info_2->stat.st_ino
          && file_info_1->stat.st_dev == file_info_2->stat.st_dev;
+#endif
 }
 
 /// Get the `FileID` of a `FileInfo`
@@ -1362,8 +1372,12 @@ bool os_fileinfo_id_equal(const FileInfo *file_info_1, const FileInfo *file_info
 void os_fileinfo_id(const FileInfo *file_info, FileID *file_id)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_OS_FS
+  rs_os_fileinfo_id(file_info, file_id);
+#else
   file_id->inode = file_info->stat.st_ino;
   file_id->device_id = file_info->stat.st_dev;
+#endif
 }
 
 /// Get the inode of a `FileInfo`
@@ -1374,7 +1388,11 @@ void os_fileinfo_id(const FileInfo *file_info, FileID *file_id)
 uint64_t os_fileinfo_inode(const FileInfo *file_info)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_fileinfo_inode(file_info);
+#else
   return file_info->stat.st_ino;
+#endif
 }
 
 /// Get the size of a file from a `FileInfo`.
@@ -1383,7 +1401,11 @@ uint64_t os_fileinfo_inode(const FileInfo *file_info)
 uint64_t os_fileinfo_size(const FileInfo *file_info)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_fileinfo_size(file_info);
+#else
   return file_info->stat.st_size;
+#endif
 }
 
 /// Get the number of hardlinks from a `FileInfo`.
@@ -1392,7 +1414,11 @@ uint64_t os_fileinfo_size(const FileInfo *file_info)
 uint64_t os_fileinfo_hardlinks(const FileInfo *file_info)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_fileinfo_hardlinks(file_info);
+#else
   return file_info->stat.st_nlink;
+#endif
 }
 
 /// Get the blocksize from a `FileInfo`.
@@ -1401,7 +1427,11 @@ uint64_t os_fileinfo_hardlinks(const FileInfo *file_info)
 uint64_t os_fileinfo_blocksize(const FileInfo *file_info)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_fileinfo_blocksize(file_info);
+#else
   return file_info->stat.st_blksize;
+#endif
 }
 
 /// Get the `FileID` for a given path
