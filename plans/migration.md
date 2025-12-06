@@ -512,9 +512,12 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - **Phase 2.68**: Trailing whitespace deletion (strings):
   - `del_trailing_spaces` - Delete trailing spaces/tabs from string
   - Preserves escaped whitespace (preceded by backslash or Ctrl_V)
+- **Phase 2.69**: Backslash handling in file paths (charset):
+  - `rem_backslash` - Check if backslash should be removed from filename
+  - Platform-specific: Unix always removes, Windows has special rules
 - **Remaining infrastructure needed** for further progress:
   1. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 27 crates, 94 functions swapped to Rust
+- Total: 27 crates, 95 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
