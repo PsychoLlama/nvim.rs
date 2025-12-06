@@ -465,9 +465,13 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
   - Returns 4 or 6 for unprintable characters
   - Depends on vim_isprintc, cw_value, utf8proc properties
   - Exposed p_ambw and p_emoji globals for Rust FFI access
+- **Phase 2.57**: Character display cells (charset):
+  - `char2cells` - Get display cells for any character including special keys
+  - Handles special keys (negative values), ASCII via g_chartab, UTF-8 via utf_char2cells
+  - Cross-crate call from charset to mbyte
 - **Remaining infrastructure needed** for further progress:
   1. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 26 crates, 75 functions swapped to Rust
+- Total: 26 crates, 76 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling

@@ -558,10 +558,15 @@ Exhaustive search for Phase 2.50+ candidates. Cross-crate dependencies now work 
 - Exposed p_ambw and p_emoji globals for Rust FFI access
 - Depends on vim_isprintc, cw_value, utf8proc properties
 
-**Remaining utf8proc-dependent functions:**
-- `utfc_char2cells` - Wrapper calling utf_char2cells (✅ now migrated) - good candidate for Phase 2.57
+**Phase 2.57**: Migrated `char2cells`:
+- ✅ MIGRATED - Get display cells for any character including special keys
+- In charset crate - handles special keys (negative values), ASCII via g_chartab, UTF-8 via utf_char2cells
+- Cross-crate call from charset to mbyte for utf_char2cells
 
-**Conclusion:** p_ambw and p_emoji globals now exposed. `utfc_char2cells` is now unblocked!
+**Remaining utf8proc-dependent functions:**
+- `utfc_char2cells` - Wrapper calling utf_char2cells (✅ now migrated) - good candidate for Phase 2.58
+
+**Conclusion:** char2cells now migrated. `utfc_char2cells` is now unblocked!
 
 Remaining candidates require:
 1. **Complex struct FFI** - For win_T*, buf_T* parameters
