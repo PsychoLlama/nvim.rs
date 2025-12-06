@@ -59,6 +59,7 @@ extern int rs_vim_isprintc(int c);
 extern int rs_ptr2cells(const char *p);
 extern int rs_vim_strsize(const char *s);
 extern int rs_vim_strnsize(const char *s, int len);
+extern void rs_rl_mirror_ascii(char *str, const char *end);
 #endif
 
 static bool chartab_initialized = false;
@@ -689,11 +690,15 @@ size_t transchar_hex(char *const buf, const int c)
 /// Only works for single-byte characters (e.g., numbers).
 void rl_mirror_ascii(char *str, char *end)
 {
+#ifdef USE_RUST_CHARSET
+  rs_rl_mirror_ascii(str, end);
+#else
   for (char *p1 = str, *p2 = (end ? end : str + strlen(str)) - 1; p1 < p2; p1++, p2--) {
     char t = *p1;
     *p1 = *p2;
     *p2 = t;
   }
+#endif
 }
 
 /// Convert the lower 4 bits of byte "c" to its hex character
