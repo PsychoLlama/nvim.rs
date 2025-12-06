@@ -599,10 +599,12 @@ pub extern "C" fn rs_utf_allow_break(cc: c_int, ncc: c_int) -> c_int {
     c_int::from(utf_allow_break(cc, ncc))
 }
 
-// External reference to utfc_ptr2len from C
-// This function returns the byte length of a UTF-8 character including composing characters
+// External references to C functions for composing character handling
 extern "C" {
+    // Returns the byte length of a UTF-8 character including composing characters
     fn utfc_ptr2len(p: *const c_char) -> c_int;
+    // Same as utfc_ptr2len but with maximum size limit
+    fn utfc_ptr2len_len(p: *const c_char, size: c_int) -> c_int;
 }
 
 /// Return the number of characters in a string.
@@ -642,6 +644,61 @@ pub unsafe extern "C" fn rs_mb_charlen_len(str: *const c_char, len: c_int) -> c_
     }
 
     count
+}
+
+/// Return the number of cells occupied by a string.
+/// Uses utf_ptr2cells (already migrated) and utfc_ptr2len (callback to C).
+#[no_mangle]
+pub unsafe extern "C" fn rs_mb_string2cells(str: *const c_char) -> usize {
+    if str.is_null() {
+        return 0;
+    }
+
+    let mut p = str;
+    let mut clen: usize = 0;
+
+    while *p != 0 {
+        let slice = std::slice::from_raw_parts(p.cast::<u8>(), 6.min(strlen_safe(p)));
+        clen += utf_ptr2cells(slice) as usize;
+        p = p.add(utfc_ptr2len(p) as usize);
+    }
+
+    clen
+}
+
+/// Return the number of cells occupied by a string with maximum length.
+/// Uses utf_ptr2cells (already migrated) and utfc_ptr2len_len (callback to C).
+#[no_mangle]
+pub unsafe extern "C" fn rs_mb_string2cells_len(str: *const c_char, size: usize) -> usize {
+    if str.is_null() {
+        return 0;
+    }
+
+    let mut p = str;
+    let end = str.add(size);
+    let mut clen: usize = 0;
+
+    while *p != 0 && p < end {
+        let remaining = (end as usize - p as usize) as c_int;
+        // Create a slice limited to the remaining bytes - utf_ptr2cells handles length-limited input
+        let slice = std::slice::from_raw_parts(p.cast::<u8>(), remaining as usize);
+        clen += utf_ptr2cells(slice) as usize;
+        p = p.add(utfc_ptr2len_len(p, remaining) as usize);
+    }
+
+    clen
+}
+
+/// Safe strlen helper
+#[inline]
+unsafe fn strlen_safe(s: *const c_char) -> usize {
+    let mut len = 0;
+    let mut p = s;
+    while *p != 0 && len < 6 {
+        len += 1;
+        p = p.add(1);
+    }
+    len
 }
 
 // Character printability
@@ -836,9 +893,9 @@ pub unsafe extern "C" fn rs_utf_ambiguous_width(p: *const c_char) -> c_int {
 /// Matches the C struct `cw_interval_T`.
 #[repr(C)]
 struct CwInterval {
-    first: c_longlong,  // int64_t
-    last: c_longlong,   // int64_t
-    width: i8,          // char
+    first: c_longlong, // int64_t
+    last: c_longlong,  // int64_t
+    width: i8,         // char
 }
 
 extern "C" {
@@ -922,9 +979,7 @@ fn vim_isprintc(c: i32) -> bool {
 #[inline]
 fn ambiwidth_is_double() -> bool {
     // SAFETY: p_ambw is set during option initialization
-    unsafe {
-        !p_ambw.is_null() && *p_ambw == b'd' as c_char
-    }
+    unsafe { !p_ambw.is_null() && *p_ambw == b'd' as c_char }
 }
 
 /// Check if 'emoji' option is enabled.
@@ -1954,7 +2009,10 @@ mod tests {
         assert_eq!(utf_ptr2char_strict(&[0xE2, 0x82, 0xAC]), Some(0x20AC));
 
         // Valid 4-byte UTF-8: 😀 (U+1F600)
-        assert_eq!(utf_ptr2char_strict(&[0xF0, 0x9F, 0x98, 0x80]), Some(0x1F600));
+        assert_eq!(
+            utf_ptr2char_strict(&[0xF0, 0x9F, 0x98, 0x80]),
+            Some(0x1F600)
+        );
 
         // Invalid: lone continuation byte
         assert_eq!(utf_ptr2char_strict(&[0x80]), None);

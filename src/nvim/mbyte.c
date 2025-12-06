@@ -106,6 +106,8 @@ extern int rs_utf_fold(int a);
 extern int rs_utf_ambiguous_width(const char *p);
 extern int rs_mb_charlen(const char *str);
 extern int rs_mb_charlen_len(const char *str, int len);
+extern size_t rs_mb_string2cells(const char *str);
+extern size_t rs_mb_string2cells_len(const char *str, size_t size);
 
 // Rust struct for codepoint boundary offsets
 typedef struct {
@@ -670,6 +672,9 @@ int utf_ptr2cells_len(const char *p, int size)
 /// @return The number of cells occupied by string `str`
 size_t mb_string2cells(const char *str)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_mb_string2cells(str);
+#else
   size_t clen = 0;
 
   for (const char *p = str; *p != NUL; p += utfc_ptr2len(p)) {
@@ -677,6 +682,7 @@ size_t mb_string2cells(const char *str)
   }
 
   return clen;
+#endif
 }
 
 /// Get the number of cells occupied by string `str` with maximum length `size`
@@ -688,6 +694,9 @@ size_t mb_string2cells(const char *str)
 size_t mb_string2cells_len(const char *str, size_t size)
   FUNC_ATTR_NONNULL_ARG(1)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_mb_string2cells_len(str, size);
+#else
   size_t clen = 0;
 
   for (const char *p = str; *p != NUL && p < str + size;
@@ -696,6 +705,7 @@ size_t mb_string2cells_len(const char *str, size_t size)
   }
 
   return clen;
+#endif
 }
 
 /// Convert a UTF-8 byte sequence to a character number.
