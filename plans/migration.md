@@ -447,10 +447,15 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
   - `utf_iscomposing_first` - check if char would combine with preceding space
   - Added `utf8proc_grapheme_break` FFI binding to utf8proc crate
   - Added `grapheme_break()` safe wrapper function
+- **Phase 2.53**: Case folding function:
+  - `utf_fold` - Unicode case folding for case-insensitive comparison
+  - Added `utf8proc_decompose_char` FFI binding to utf8proc crate
+  - Added `UTF8PROC_CASEFOLD` option constant
+  - Added `casefold()` function with workarounds for ß and İ
 - **Remaining infrastructure needed** for further progress:
   1. **Global state bridges** - For p_ambw, p_emoji, cw_table options
   2. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 26 crates, 71 functions swapped to Rust
+- Total: 26 crates, 72 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling

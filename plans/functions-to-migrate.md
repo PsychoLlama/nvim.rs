@@ -529,9 +529,26 @@ Exhaustive search for Phase 2.50+ candidates. Cross-crate dependencies now work 
 - mbyte.c: `utf_char2cells` - uses `cw_table` global and utf8proc
 - grid.c: Most schar functions use `glyph_cache` Set global
 
-**Conclusion:** Migration has reached a plateau. Remaining candidates require:
-1. **utf8proc binding** - For character width, composing chars
-2. **Global state bridges** - For cw_table, shape_table, etc.
-3. **Complex struct FFI** - For win_T*, buf_T* parameters
+**Phase 2.50**: Created utf8proc FFI crate (`nvim-utf8proc`):
+- `Utf8procProperty` struct with `charwidth()`, `ambiguous_width()`, `boundclass()`, `is_emojilike()`, `is_composing_legacy()`
+- `utf8proc_get_property` and `utf8proc_grapheme_break` FFI bindings
+- Safe wrappers: `get_property()`, `grapheme_break()`
 
-The next significant progress requires infrastructure investment rather than individual function migration.
+**Phase 2.51**: Migrated `utf_iscomposing_legacy`:
+- ✅ MIGRATED - Uses utf8proc category (MN=6, ME=8)
+
+**Phase 2.52**: Migrated `utf_iscomposing_first`:
+- ✅ MIGRATED - Uses utf8proc grapheme_break
+
+**Phase 2.53**: Migrated `utf_fold`:
+- ✅ MIGRATED - Uses utf8proc_decompose_char with UTF8PROC_CASEFOLD
+
+**Remaining utf8proc-dependent functions:**
+- `utf_char2cells` - Uses `cw_value()` global (p_ambw option) and utf8proc - **BLOCKED**
+- `utfc_char2cells` - Uses `cw_value()` global and utf8proc - **BLOCKED**
+
+**Conclusion:** utf8proc infrastructure complete. `utf_char2cells` family still blocked by global state (cw_value).
+
+Remaining candidates require:
+1. **Global state bridges** - For cw_table, shape_table, cw_value, etc.
+2. **Complex struct FFI** - For win_T*, buf_T* parameters
