@@ -444,3 +444,60 @@ Most remaining simple functions have been migrated. Further progress requires:
 
 ### Functions with Vim-specific types:
 - Functions using typval_T, list_T, garray_T, etc.
+
+## Session 8 (continued 2025-12-06) - Exhaustive Search for More Candidates
+
+After completing Phase 2.46 (valid_yank_reg), performed exhaustive search for additional migration candidates:
+
+### Functions Examined and Ruled Out:
+
+**Functions using g_chartab global:**
+- `vim_isfilec` - Uses g_chartab for CT_FNAME_CHAR lookup
+- `vim_is_fname_char` - Wrapper around vim_isfilec
+- `vim_isfilec_or_wc` - Uses vim_isfilec + path_has_wildcard
+- `vim_isprintc` - Uses g_chartab for CT_PRINT_CHAR lookup
+
+**Functions using shape_table global:**
+- `cursor_is_block_during_visual` - Accesses shape_table array
+- `cursor_mode_uses_syn_id` - Iterates shape_table array
+- `cursor_get_mode_idx` - Uses State global + shape_table
+
+**Functions using utf8proc library:**
+- `utf_iscomposing_first` - Calls utf8proc_grapheme_break
+- `utf_iscomposing_legacy` - Calls utf8proc_get_property
+
+**Functions using static version arrays:**
+- `min_vim_version` - Returns vim_versions[0]
+- `highest_patch` - Returns included_patchsets[0][0]
+- `has_vim_patch` - Searches included_patchsets arrays
+
+**Functions in cursor.c:**
+- All functions use `curwin`, `curbuf` globals
+
+**Mark functions (mark.c):**
+- All functions use globals or complex structs (pos_T, fmark_T)
+
+**Header inline functions (minimal benefit to migrate):**
+- `mark_global_index`, `mark_local_index` - Already inlined by compiler
+- `ascii_is*` functions - Already inlined in headers
+
+### Conclusion
+
+**Phase 2 Simple Function Migration is Complete.**
+
+All remaining FUNC_ATTR_PURE/CONST functions and simple predicates fall into one of these categories:
+
+1. **Global state access** - g_chartab, shape_table, State, curwin, curbuf
+2. **External library calls** - utf8proc for Unicode property queries
+3. **Static data tables** - Version arrays, command tables
+4. **Already inline** - Header functions already optimized by compiler
+
+**Migration Status:**
+- 25 Rust crates in workspace
+- 64+ functions swapped from C to Rust
+- 115+ USE_RUST ifdef patterns across 20+ C files
+
+**Next Steps (require infrastructure investment):**
+1. **utf8proc-rs integration** - Would unlock utf_iscomposing* functions
+2. **g_chartab FFI** - Would unlock vim_isfilec, vim_isprintc, etc.
+3. **Complex struct FFI** - Would unlock window.c, buffer.c functions
