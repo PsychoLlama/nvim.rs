@@ -409,13 +409,14 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - [x] `valid_yank_reg` - **Phase 2.46**: Swapped to Rust (USE_RUST_REGISTER) - validate register names
 - [x] `vim_isfilec`, `vim_is_fname_char` - **Phase 2.47**: Swapped to Rust (USE_RUST_CHARSET) - file name character checks (exposed g_chartab)
 - [x] `byte2cells`, `vim_isIDc` - **Phase 2.48**: Swapped to Rust (USE_RUST_CHARSET) - display cell count and identifier char check
+- [x] `vim_isprintc` - **Phase 2.49**: Swapped to Rust (USE_RUST_CHARSET) - printable character check (uses nvim-mbyte::utf_printable)
 
 **Session 7 (2025-12-05): Phases 2.36-2.38**
 - Created `nvim-spell` crate with `spell_valid_case` and `byte_in_str`
 - Created `nvim-grid` crate with `schar_high` (endianness-aware)
 - Total: 23 crates in workspace, 48+ functions swapped to Rust
 
-**Session 8 (2025-12-06): Phases 2.39-2.46**
+**Session 8 (2025-12-06): Phases 2.39-2.49**
 - Added `schar_get_ascii` to nvim-grid crate (ASCII extraction from schar)
 - Added `is_mouse_key` to nvim-keycodes crate (mouse key detection)
 - Added `schar_from_char` to nvim-grid crate (using nvim-mbyte::utf_char2bytes)
@@ -426,7 +427,8 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - Exposed `g_chartab` C global for Rust access (infrastructure for charset functions)
 - Added `vim_isfilec`, `vim_is_fname_char` to nvim-charset crate (file name char checks)
 - Added `byte2cells`, `vim_isIDc` to nvim-charset crate (display cells and identifier chars)
-- Total: 25 crates, 68+ functions swapped to Rust
+- Added `vim_isprintc` to nvim-charset crate (first cross-crate dependency: charset → mbyte)
+- Total: 25 crates, 69+ functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
