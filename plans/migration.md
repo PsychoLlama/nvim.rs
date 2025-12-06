@@ -486,9 +486,13 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
   - `mb_charlen` - Count characters in string (composing chars not counted)
   - `mb_charlen_len` - Count characters in string with length limit
   - Calls back to C for utfc_ptr2len (not yet migrated)
+- **Phase 2.62**: String cell count (mbyte):
+  - `mb_string2cells` - Count display cells for entire string
+  - `mb_string2cells_len` - Count display cells with length limit
+  - Uses utf_ptr2cells (migrated) and utfc_ptr2len/utfc_ptr2len_len (callback to C)
 - **Remaining infrastructure needed** for further progress:
   1. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 26 crates, 82 functions swapped to Rust
+- Total: 26 crates, 84 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
