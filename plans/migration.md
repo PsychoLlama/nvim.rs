@@ -292,6 +292,7 @@ Pure string/memory utility functions, no allocation:
 - [x] `xmemrchr` - Reverse memchr (pure) - swapped to Rust
 - [x] `strequal` - Null-safe string equality (pure) - swapped to Rust
 - [x] `strnequal` - Null-safe bounded string equality (pure) - swapped to Rust
+- [x] `time_to_bytes` - Write time_t to 8-byte buffer in big-endian (pure) - swapped to Rust
 
 **Validation:**
 
@@ -526,9 +527,12 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - **Phase 2.73**: Multibyte string search (strings):
   - `vim_strchr` - Find character in string with UTF-8 support
   - Uses `utf_char2bytes` from mbyte crate for non-ASCII characters
+- **Phase 2.74**: Time serialization (memutil):
+  - `time_to_bytes` - Write time_t value to 8-byte buffer in big-endian format
+  - Used by shada file serialization
 - **Remaining infrastructure needed** for further progress:
   1. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 27 crates, 99 functions swapped to Rust
+- Total: 27 crates, 100 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
