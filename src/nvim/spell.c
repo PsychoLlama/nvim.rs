@@ -189,8 +189,9 @@ bool did_set_spelltab;
 #include "spell.c.generated.h"
 
 #ifdef USE_RUST_SPELL
-// Rust implementation of spell_valid_case
+// Rust implementations of spell functions
 extern bool rs_spell_valid_case(int wordflags, int treeflags);
+extern bool rs_byte_in_str(const uint8_t *str, int n);
 #endif
 
 /// mode values for find_word
@@ -1840,12 +1841,16 @@ void count_common_word(slang_T *lp, char *word, int len, uint8_t count)
 // Like strchr() but independent of locale.
 bool byte_in_str(uint8_t *str, int n)
 {
+#ifdef USE_RUST_SPELL
+  return rs_byte_in_str(str, n);
+#else
   for (uint8_t *p = str; *p != NUL; p++) {
     if (*p == n) {
       return true;
     }
   }
   return false;
+#endif
 }
 
 // Truncate "slang->sl_syllable" at the first slash and put the following items
