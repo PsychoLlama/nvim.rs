@@ -22,6 +22,12 @@ extern "C" {
     static g_chartab: [u8; 256];
 }
 
+// External reference to utfc_ptr2len from C
+// This function returns the byte length of a UTF-8 character including composing characters
+extern "C" {
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+}
+
 // ASCII character classification helpers (inline, pure functions)
 
 /// Check if character is ASCII whitespace (' ' or '\t')
@@ -549,6 +555,60 @@ pub unsafe extern "C" fn rs_ptr2cells(p: *const c_char) -> c_int {
     // SAFETY: caller guarantees p points to valid string
     let slice = std::slice::from_raw_parts(p.cast::<u8>(), 6);
     ptr2cells(slice)
+}
+
+// MAXCOL constant from Vim - very large column value
+const MAXCOL: c_int = 0x7fff_ffff;
+
+/// Return the number of character cells string "s" will take on the screen,
+/// counting TABs as two cells: "^I".
+///
+/// 's' must be non-null.
+///
+/// # Safety
+/// - The pointer must be valid and point to a null-terminated C string.
+/// - The global `g_chartab` array must be initialized.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_strsize(s: *const c_char) -> c_int {
+    rs_vim_strnsize(s, MAXCOL)
+}
+
+/// Return the number of character cells string "s[len]" will take on the
+/// screen, counting TABs as two cells: "^I".
+///
+/// 's' must be non-null.
+///
+/// # Safety
+/// - The pointer must be valid and point to a null-terminated C string.
+/// - The global `g_chartab` array must be initialized.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_strnsize(s: *const c_char, len: c_int) -> c_int {
+    if s.is_null() {
+        return 0;
+    }
+
+    let mut p = s;
+    let mut size: c_int = 0;
+    let mut remaining = len;
+
+    while *p != 0 && remaining > 0 {
+        remaining -= 1;
+
+        // Get the byte length of this character (including composing chars)
+        let char_len = utfc_ptr2len(p);
+
+        // Get the display cell count for this character
+        let slice = std::slice::from_raw_parts(p.cast::<u8>(), 6);
+        size += ptr2cells(slice);
+
+        // Advance pointer by character length
+        p = p.add(char_len as usize);
+
+        // Adjust remaining length (subtract l-1 because we already subtracted 1)
+        remaining -= char_len - 1;
+    }
+
+    size
 }
 
 // ============================================================================

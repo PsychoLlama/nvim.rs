@@ -57,6 +57,8 @@ extern int rs_byte2cells(int b);
 extern int rs_vim_isIDc(int c);
 extern int rs_vim_isprintc(int c);
 extern int rs_ptr2cells(const char *p);
+extern int rs_vim_strsize(const char *s);
+extern int rs_vim_strnsize(const char *s, int len);
 #endif
 
 static bool chartab_initialized = false;
@@ -800,7 +802,11 @@ int ptr2cells(const char *p_in)
 /// @return number of character cells.
 int vim_strsize(const char *s)
 {
+#ifdef USE_RUST_CHARSET
+  return rs_vim_strsize(s);
+#else
   return vim_strnsize(s, MAXCOL);
+#endif
 }
 
 /// Return the number of character cells string "s[len]" will take on the
@@ -814,6 +820,9 @@ int vim_strsize(const char *s)
 /// @return Number of character cells.
 int vim_strnsize(const char *s, int len)
 {
+#ifdef USE_RUST_CHARSET
+  return rs_vim_strnsize(s, len);
+#else
   assert(s != NULL);
   int size = 0;
   while (*s != NUL && --len >= 0) {
@@ -823,6 +832,7 @@ int vim_strnsize(const char *s, int len)
     len -= l - 1;
   }
   return size;
+#endif
 }
 
 /// Check that "c" is a normal identifier character:
