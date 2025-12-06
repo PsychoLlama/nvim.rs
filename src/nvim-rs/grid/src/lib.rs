@@ -5,8 +5,13 @@
 
 #![allow(unsafe_code)] // FFI requires unsafe
 
+use std::ffi::c_int;
+
 /// Type alias for screen character (matches C's `schar_T` which is `uint32_t`).
 type ScharT = u32;
+
+/// Unicode replacement character
+const REPLACEMENT_CHAR: i32 = 0xFFFD;
 
 /// Check if a screen character is stored in the high (cache) format.
 ///
@@ -72,6 +77,33 @@ const fn schar_get_ascii_impl(sc: ScharT) -> i8 {
 #[allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
 pub extern "C" fn rs_schar_get_ascii(sc: ScharT) -> i8 {
     schar_get_ascii_impl(sc)
+}
+
+/// Put a unicode character in a screen cell.
+///
+/// Converts a Unicode codepoint to an `schar_T` by encoding it as UTF-8
+/// and storing the bytes in the u32 value.
+/// Characters >= 0x200000 are replaced with the Unicode replacement character (0xFFFD).
+#[inline]
+fn schar_from_char_impl(c: c_int) -> ScharT {
+    let c = if c >= 0x20_0000 { REPLACEMENT_CHAR } else { c };
+
+    // Write UTF-8 bytes into a buffer
+    let mut buf = [0u8; 4];
+    nvim_mbyte::utf_char2bytes(c, &mut buf);
+
+    // Convert the buffer to schar_T (native endianness)
+    // On little-endian: first UTF-8 byte goes to lowest byte of u32
+    // On big-endian: first UTF-8 byte goes to highest byte of u32
+    ScharT::from_ne_bytes(buf)
+}
+
+/// FFI wrapper for `schar_from_char`.
+///
+/// Put a unicode character in a screen cell.
+#[no_mangle]
+pub extern "C" fn rs_schar_from_char(c: c_int) -> ScharT {
+    schar_from_char_impl(c)
 }
 
 #[cfg(test)]
@@ -179,6 +211,99 @@ mod tests {
         {
             assert_eq!(rs_schar_get_ascii(0x4100_0000), b'A' as i8);
             assert_eq!(rs_schar_get_ascii(0x8000_0000), 0);
+        }
+    }
+
+    #[test]
+    fn test_schar_from_char_ascii() {
+        // ASCII characters should be stored in the first byte
+        #[cfg(target_endian = "little")]
+        {
+            assert_eq!(schar_from_char_impl(b'A' as c_int), 0x0000_0041);
+            assert_eq!(schar_from_char_impl(b'a' as c_int), 0x0000_0061);
+            assert_eq!(schar_from_char_impl(b' ' as c_int), 0x0000_0020);
+            assert_eq!(schar_from_char_impl(0), 0x0000_0000);
+        }
+        #[cfg(target_endian = "big")]
+        {
+            assert_eq!(schar_from_char_impl(b'A' as c_int), 0x4100_0000);
+            assert_eq!(schar_from_char_impl(b'a' as c_int), 0x6100_0000);
+            assert_eq!(schar_from_char_impl(b' ' as c_int), 0x2000_0000);
+            assert_eq!(schar_from_char_impl(0), 0x0000_0000);
+        }
+    }
+
+    #[test]
+    fn test_schar_from_char_multibyte() {
+        // 2-byte UTF-8: U+00E9 (é) = 0xC3 0xA9
+        #[cfg(target_endian = "little")]
+        {
+            assert_eq!(schar_from_char_impl(0x00E9), 0x0000_A9C3);
+        }
+        #[cfg(target_endian = "big")]
+        {
+            assert_eq!(schar_from_char_impl(0x00E9), 0xC3A9_0000);
+        }
+
+        // 3-byte UTF-8: U+4E2D (中) = 0xE4 0xB8 0xAD
+        #[cfg(target_endian = "little")]
+        {
+            assert_eq!(schar_from_char_impl(0x4E2D), 0x00AD_B8E4);
+        }
+        #[cfg(target_endian = "big")]
+        {
+            assert_eq!(schar_from_char_impl(0x4E2D), 0xE4B8_AD00);
+        }
+
+        // 4-byte UTF-8: U+1F600 (😀) = 0xF0 0x9F 0x98 0x80
+        #[cfg(target_endian = "little")]
+        {
+            assert_eq!(schar_from_char_impl(0x1_F600), 0x8098_9FF0);
+        }
+        #[cfg(target_endian = "big")]
+        {
+            assert_eq!(schar_from_char_impl(0x1_F600), 0xF09F_9880);
+        }
+    }
+
+    #[test]
+    fn test_schar_from_char_replacement() {
+        // Characters >= 0x200000 should be replaced with U+FFFD
+        // U+FFFD = 0xEF 0xBF 0xBD
+        #[cfg(target_endian = "little")]
+        {
+            let replacement = 0x00BD_BFEF_u32;
+            assert_eq!(schar_from_char_impl(0x20_0000), replacement);
+            assert_eq!(schar_from_char_impl(0x7FFF_FFFF), replacement);
+        }
+        #[cfg(target_endian = "big")]
+        {
+            let replacement = 0xEFBF_BD00_u32;
+            assert_eq!(schar_from_char_impl(0x20_0000), replacement);
+            assert_eq!(schar_from_char_impl(0x7FFF_FFFF), replacement);
+        }
+    }
+
+    #[test]
+    fn test_ffi_schar_from_char() {
+        // Just verify the FFI wrapper works
+        #[cfg(target_endian = "little")]
+        {
+            assert_eq!(rs_schar_from_char(b'A' as c_int), 0x0000_0041);
+        }
+        #[cfg(target_endian = "big")]
+        {
+            assert_eq!(rs_schar_from_char(b'A' as c_int), 0x4100_0000);
+        }
+    }
+
+    #[test]
+    #[allow(clippy::cast_possible_wrap)]
+    fn test_schar_roundtrip() {
+        // Verify that schar_from_char and schar_get_ascii are consistent for ASCII
+        for c in 0..0x80 {
+            let sc = schar_from_char_impl(c);
+            assert_eq!(schar_get_ascii_impl(sc), c as i8);
         }
     }
 }

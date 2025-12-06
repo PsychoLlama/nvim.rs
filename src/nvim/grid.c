@@ -42,6 +42,7 @@
 // Rust implementations of schar functions
 extern bool rs_schar_high(schar_T sc);
 extern char rs_schar_get_ascii(schar_T sc);
+extern schar_T rs_schar_from_char(int c);
 #endif
 
 // temporary buffer for rendering a single screenline, so it can be
@@ -1227,6 +1228,9 @@ win_T *get_win_by_grid_handle(handle_T handle)
 /// Put a unicode character in a screen cell.
 schar_T schar_from_char(int c)
 {
+#ifdef USE_RUST_GRID
+  return rs_schar_from_char(c);
+#else
   schar_T sc = 0;
   if (c >= 0x200000) {
     // TODO(bfredl): this must NEVER happen, even if the file contained overlong sequences
@@ -1234,4 +1238,5 @@ schar_T schar_from_char(int c)
   }
   utf_char2bytes(c, (char *)&sc);
   return sc;
+#endif
 }
