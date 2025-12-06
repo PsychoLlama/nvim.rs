@@ -32,6 +32,7 @@ nvim-ops = { path = "ops" }
 nvim-os = { path = "os" }
 nvim-path = { path = "path" }
 nvim-profile = { path = "profile" }
+nvim-register = { path = "register" }
 nvim-spell = { path = "spell" }
 nvim-strings = { path = "strings" }
 
