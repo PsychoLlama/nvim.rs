@@ -1633,6 +1633,70 @@ pub unsafe extern "C" fn rs_os_open(path: *const c_char, flags: c_int, mode: c_i
     }
 }
 
+/// Open a file using fopen-style flags.
+///
+/// Converts fopen-style mode strings ("r", "w", "a", "r+", "w+", "a+", with optional "b")
+/// to `open()` flags and returns a `FILE*` pointer.
+///
+/// # Safety
+///
+/// - `path` must be a valid null-terminated C string.
+/// - `flags` must be a valid null-terminated C string with length 1-2.
+/// - The returned `FILE*` must be closed with `fclose()` when done.
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_fopen(
+    path: *const c_char,
+    flags: *const c_char,
+) -> *mut libc::FILE {
+    if path.is_null() || flags.is_null() {
+        return ptr::null_mut();
+    }
+
+    #[cfg(unix)]
+    {
+        let flags_cstr = unsafe { CStr::from_ptr(flags) };
+        let flags_bytes = flags_cstr.to_bytes();
+
+        if flags_bytes.is_empty() || flags_bytes.len() > 2 {
+            return ptr::null_mut();
+        }
+
+        let iflags = if flags_bytes.len() == 1 || flags_bytes[1] == b'b' {
+            // Single char or char + 'b'
+            match flags_bytes[0] {
+                b'r' => libc::O_RDONLY,
+                b'w' => libc::O_WRONLY | libc::O_CREAT | libc::O_TRUNC,
+                b'a' => libc::O_WRONLY | libc::O_CREAT | libc::O_APPEND,
+                _ => return ptr::null_mut(),
+            }
+        } else if flags_bytes[1] == b'+' {
+            // Char followed by '+'
+            match flags_bytes[0] {
+                b'r' => libc::O_RDWR,
+                b'w' => libc::O_RDWR | libc::O_CREAT | libc::O_TRUNC,
+                b'a' => libc::O_RDWR | libc::O_CREAT | libc::O_APPEND,
+                _ => return ptr::null_mut(),
+            }
+        } else {
+            return ptr::null_mut();
+        };
+
+        // Default mode 0666, will be umask-adjusted
+        let fd = unsafe { libc::open(path, iflags, 0o666) };
+        if fd < 0 {
+            return ptr::null_mut();
+        }
+
+        unsafe { libc::fdopen(fd, flags) }
+    }
+
+    #[cfg(not(unix))]
+    {
+        let _ = (path, flags);
+        ptr::null_mut()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

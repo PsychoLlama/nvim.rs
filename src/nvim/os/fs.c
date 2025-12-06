@@ -98,6 +98,7 @@ extern uint64_t rs_os_fileinfo_hardlinks(const FileInfo *file_info);
 extern uint64_t rs_os_fileinfo_blocksize(const FileInfo *file_info);
 extern char *rs_os_realpath(const char *name, char *buf, size_t len);
 extern int rs_os_open(const char *path, int flags, int mode);
+extern FILE *rs_os_fopen(const char *path, const char *flags);
 #endif
 
 #ifdef HAVE_XATTR
@@ -499,6 +500,9 @@ int os_open(const char *path, int flags, int mode)
 /// @return FILE pointer, or NULL on error.
 FILE *os_fopen(const char *path, const char *flags)
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_fopen(path, flags);
+#else
   assert(flags != NULL && strlen(flags) > 0 && strlen(flags) <= 2);
   int iflags = 0;
   // Per table in fopen(3) manpage.
@@ -545,6 +549,7 @@ FILE *os_fopen(const char *path, const char *flags)
     return NULL;
   }
   return fdopen(fd, flags);
+#endif
 }
 
 /// Sets file descriptor `fd` to close-on-exec.
