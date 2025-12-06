@@ -263,6 +263,64 @@ pub unsafe extern "C" fn rs_vim_memcpy_up(dst: *mut c_char, src: *const c_char, 
     }
 }
 
+/// Delete trailing whitespace from a string.
+///
+/// Removes trailing spaces and tabs from the end of the string,
+/// but only if the whitespace is not preceded by a backslash ('\\') or Ctrl_V (0x16).
+/// This preserves intentionally escaped trailing whitespace.
+///
+/// Note: This function stops at the first character of the string. If the entire
+/// string is whitespace (e.g. "   "), only the characters after the first will
+/// be deleted (matches C behavior).
+///
+/// # Safety
+///
+/// `ptr` must be a valid null-terminated mutable C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_del_trailing_spaces(ptr: *mut c_char) {
+    if ptr.is_null() {
+        return;
+    }
+
+    // Find the length of the string
+    let p = ptr as *mut u8;
+    let len = libc::strlen(ptr as *const libc::c_char);
+    if len == 0 {
+        return;
+    }
+
+    // Start at the end of the string (pointing to the NUL terminator)
+    let mut q = p.add(len);
+    const BACKSLASH: u8 = b'\\';
+    const CTRL_V: u8 = 0x16; // ASCII 22
+
+    // Match the C code: while (--q > ptr && ascii_iswhite(q[0]) && q[-1] != '\\' && q[-1] != Ctrl_V)
+    loop {
+        // First decrement q
+        q = q.sub(1);
+
+        // Then check if q > p (not at start of string)
+        if q <= p {
+            break;
+        }
+
+        // Check if current char is whitespace (space or tab)
+        let c = *q;
+        if c != b' ' && c != b'\t' {
+            break;
+        }
+
+        // Check if preceded by backslash or Ctrl_V
+        let prev = *q.sub(1);
+        if prev == BACKSLASH || prev == CTRL_V {
+            break;
+        }
+
+        // Delete this trailing whitespace character
+        *q = 0;
+    }
+}
+
 /// Find a character in a string.
 ///
 /// For ASCII characters (< 128), uses standard strchr.
@@ -720,6 +778,70 @@ mod tests {
             rs_vim_memcpy_up(std::ptr::null_mut(), src.as_ptr().cast(), 5);
             let mut dst = [0u8; 5];
             rs_vim_memcpy_up(dst.as_mut_ptr().cast(), std::ptr::null(), 5);
+        };
+    }
+
+    #[test]
+    fn test_del_trailing_spaces() {
+        // Basic trailing spaces removal
+        let mut s = *b"hello   \0";
+        unsafe { rs_del_trailing_spaces(s.as_mut_ptr().cast()) };
+        assert_eq!(&s[..5], b"hello");
+        assert_eq!(s[5], 0);
+
+        // Trailing tabs removal
+        let mut s = *b"hello\t\t\0";
+        unsafe { rs_del_trailing_spaces(s.as_mut_ptr().cast()) };
+        assert_eq!(&s[..5], b"hello");
+        assert_eq!(s[5], 0);
+
+        // Mixed spaces and tabs
+        let mut s = *b"hello \t \0";
+        unsafe { rs_del_trailing_spaces(s.as_mut_ptr().cast()) };
+        assert_eq!(&s[..5], b"hello");
+        assert_eq!(s[5], 0);
+
+        // No trailing whitespace - should be unchanged
+        let mut s = *b"hello\0xxx";
+        unsafe { rs_del_trailing_spaces(s.as_mut_ptr().cast()) };
+        assert_eq!(&s[..6], b"hello\0");
+
+        // Escaped space with backslash - should NOT be deleted
+        let mut s = *b"hello\\ \0";
+        unsafe { rs_del_trailing_spaces(s.as_mut_ptr().cast()) };
+        assert_eq!(
+            unsafe { std::ffi::CStr::from_ptr(s.as_ptr().cast()) }
+                .to_str()
+                .unwrap(),
+            "hello\\ "
+        );
+
+        // Escaped space with Ctrl_V (0x16) - should NOT be deleted
+        let mut s = [b'h', b'e', b'l', b'l', b'o', 0x16, b' ', 0];
+        unsafe { rs_del_trailing_spaces(s.as_mut_ptr().cast()) };
+        assert_eq!(
+            unsafe { std::ffi::CStr::from_ptr(s.as_ptr().cast()) }
+                .to_str()
+                .unwrap()
+                .len(),
+            7 // h, e, l, l, o, Ctrl_V, space
+        );
+
+        // Empty string
+        let mut s = *b"\0";
+        unsafe { rs_del_trailing_spaces(s.as_mut_ptr().cast()) };
+        assert_eq!(s[0], 0);
+
+        // All whitespace - first char stays (C behavior: --q > ptr stops at first char)
+        let mut s = *b"   \0";
+        unsafe { rs_del_trailing_spaces(s.as_mut_ptr().cast()) };
+        // C logic: loops while q > ptr, so ptr[0] never gets deleted
+        assert_eq!(s[0], b' ');
+        assert_eq!(s[1], 0);
+
+        // NULL pointer - should not crash
+        unsafe {
+            rs_del_trailing_spaces(std::ptr::null_mut());
         };
     }
 

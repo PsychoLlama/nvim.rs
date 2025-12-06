@@ -49,6 +49,7 @@ extern void rs_vim_strup(char *p);
 extern void rs_vim_strcpy_up(char *restrict dst, const char *restrict src);
 extern void rs_vim_strncpy_up(char *restrict dst, const char *restrict src, size_t n);
 extern void rs_vim_memcpy_up(char *restrict dst, const char *restrict src, size_t n);
+extern void rs_del_trailing_spaces(char *ptr);
 #endif
 
 static const char e_cannot_mix_positional_and_non_positional_str[]
@@ -441,10 +442,14 @@ char *strcase_save(const char *const orig, bool upper)
 void del_trailing_spaces(char *ptr)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_STRINGS
+  rs_del_trailing_spaces(ptr);
+#else
   char *q = ptr + strlen(ptr);
   while (--q > ptr && ascii_iswhite(q[0]) && q[-1] != '\\' && q[-1] != Ctrl_V) {
     *q = NUL;
   }
+#endif
 }
 
 #if (!defined(HAVE_STRCASECMP) && !defined(HAVE_STRICMP))
