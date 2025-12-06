@@ -51,6 +51,8 @@ extern unsigned rs_nr2hex(unsigned n);
 extern char *rs_skip_to_newline(const char *p);
 extern bool rs_vim_isblankline(const char *lbuf);
 extern size_t rs_transchar_hex(char *buf, int c);
+extern int rs_vim_isfilec(int c);
+extern int rs_vim_is_fname_char(int c);
 #endif
 
 static bool chartab_initialized = false;
@@ -65,7 +67,8 @@ static bool chartab_initialized = false;
   ((chartab)[(unsigned)(c) >> 6] & (1ull << ((c) & 0x3f)))
 
 // Table used below, see init_chartab() for an explanation
-static uint8_t g_chartab[256];
+// Not static - exposed for Rust FFI access
+uint8_t g_chartab[256];
 
 // Flags for g_chartab[].
 #define CT_CELL_MASK  0x07  ///< mask: nr of display cells (1, 2 or 4)
@@ -887,7 +890,11 @@ bool vim_iswordp_buf(const char *const p, buf_T *const buf)
 bool vim_isfilec(int c)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_CHARSET
+  return rs_vim_isfilec(c) != 0;
+#else
   return c >= 0x100 || (c > 0 && (g_chartab[c] & CT_FNAME_CHAR));
+#endif
 }
 
 /// Check if "c" is a valid file-name character, including characters left
@@ -895,7 +902,11 @@ bool vim_isfilec(int c)
 bool vim_is_fname_char(int c)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_CHARSET
+  return rs_vim_is_fname_char(c) != 0;
+#else
   return vim_isfilec(c) || c == ',' || c == ' ' || c == '@' || c == ':';
+#endif
 }
 
 /// Check that "c" is a valid file-name character or a wildcard character

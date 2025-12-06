@@ -11,6 +11,14 @@
 use std::ffi::c_char;
 use std::ffi::c_int;
 
+// Chartab flag masks (from charset.c)
+const CT_FNAME_CHAR: u8 = 0x40; // flag: set for file name chars
+
+// External reference to g_chartab from C
+extern "C" {
+    static g_chartab: [u8; 256];
+}
+
 // ASCII character classification helpers (inline, pure functions)
 
 /// Check if character is ASCII whitespace (' ' or '\t')
@@ -364,6 +372,43 @@ pub unsafe extern "C" fn rs_transchar_hex(buf: *mut c_char, c: c_int) -> usize {
 
     i
 }
+
+// ============================================================================
+// Character classification functions (using g_chartab)
+// ============================================================================
+
+/// Check if `c` is a valid file-name character.
+///
+/// Assume characters above 0x100 are valid (multi-byte).
+/// To be used for commands like "gf".
+///
+/// # Safety
+/// This function accesses the global `g_chartab` array which must be initialized.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_isfilec(c: c_int) -> c_int {
+    // Multibyte characters (>= 0x100) are valid file name characters
+    // Single-byte characters need the CT_FNAME_CHAR flag set in g_chartab
+    c_int::from(c >= 0x100 || (c > 0 && (g_chartab[c as usize] & CT_FNAME_CHAR) != 0))
+}
+
+/// Check if "c" is a valid file-name character, including characters left
+/// out of 'isfname' to make "gf" work, such as ',', ' ', '@', ':', etc.
+///
+/// # Safety
+/// This function accesses the global `g_chartab` array which must be initialized.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_is_fname_char(c: c_int) -> c_int {
+    c_int::from(
+        rs_vim_isfilec(c) != 0
+            || c == c_int::from(b',')
+            || c == c_int::from(b' ')
+            || c == c_int::from(b'@')
+            || c == c_int::from(b':'),
+    )
+}
+
+// Note: vim_isprintc is NOT migrated because it calls utf_printable for chars >= 0x100,
+// which would require cross-crate dependency on nvim-mbyte.
 
 // ============================================================================
 // Tests
