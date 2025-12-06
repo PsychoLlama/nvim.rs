@@ -93,14 +93,16 @@ The trivial pure functions have largely been migrated. Next steps should focus o
 | nvim-mbyte | ✅ Swapped | utf_char2len, utf_ptr2char, utf_printable, etc. |
 | nvim-memutil | ✅ Swapped | xstrchrnul, xmemscan, strcnt, strequal, hash_hash, etc. |
 | nvim-indent | ✅ Swapped | tabstop_padding, indent_size_ts |
-| nvim-keycodes | ✅ Swapped | name_to_mod_mask, handle_x_keys |
+| nvim-keycodes | ✅ Swapped | name_to_mod_mask, handle_x_keys, is_mouse_key |
 | nvim-profile | ✅ Swapped | profile_zero, profile_add, profile_sub, etc. |
 | nvim-menu | ✅ Swapped | menu_is_winbar, menu_is_popup, etc. |
 | nvim-help | ✅ Swapped | help_heuristic |
 | nvim-encoding | ✅ Swapped | base64_encode, base64_decode, sha256_* |
 | nvim-cmdhist | ✅ Swapped | hist_char2type, hist_type2char |
 | nvim-ex_docmd | ✅ Swapped | ends_excmd, find_nextcmd, check_nextcmd |
-| nvim-fileio | ✅ Swapped | time_differs |
+| nvim-fileio | ✅ Swapped | time_differs, is_dev_fd_file |
+| nvim-spell | ✅ Swapped | spell_valid_case, byte_in_str |
+| nvim-grid | ✅ Swapped | schar_high, schar_get_ascii, schar_from_char |
 
 ### Partially Swapped Crates
 | Crate | Status | Functions |
