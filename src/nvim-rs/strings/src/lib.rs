@@ -166,6 +166,103 @@ pub unsafe extern "C" fn rs_vim_strup(p: *mut c_char) {
     }
 }
 
+/// Copy a string while converting to uppercase (ASCII only).
+///
+/// Copies from `src` to `dst`, converting lowercase a-z to uppercase A-Z.
+/// The destination is null-terminated.
+///
+/// # Safety
+///
+/// - `dst` and `src` must be valid, non-overlapping pointers.
+/// - `dst` must have enough space for `strlen(src) + 1` bytes.
+/// - `src` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_strcpy_up(dst: *mut c_char, src: *const c_char) {
+    if dst.is_null() || src.is_null() {
+        return;
+    }
+
+    let mut d = dst as *mut u8;
+    let mut s = src as *const u8;
+
+    loop {
+        let c = *s;
+        if c == 0 {
+            *d = 0;
+            break;
+        }
+        *d = toupper_asc(c);
+        d = d.add(1);
+        s = s.add(1);
+    }
+}
+
+/// Copy a string with length limit while converting to uppercase (ASCII only).
+///
+/// Copies up to `n` characters from `src` to `dst`, converting lowercase a-z
+/// to uppercase A-Z. The destination is always null-terminated.
+///
+/// # Safety
+///
+/// - `dst` and `src` must be valid, non-overlapping pointers.
+/// - `dst` must have enough space for `n + 1` bytes.
+/// - `src` must be a valid null-terminated C string or at least `n` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_strncpy_up(dst: *mut c_char, src: *const c_char, n: usize) {
+    if dst.is_null() || src.is_null() {
+        if !dst.is_null() {
+            *(dst as *mut u8) = 0;
+        }
+        return;
+    }
+
+    let mut d = dst as *mut u8;
+    let mut s = src as *const u8;
+    let mut remaining = n;
+
+    while remaining > 0 {
+        let c = *s;
+        if c == 0 {
+            break;
+        }
+        *d = toupper_asc(c);
+        d = d.add(1);
+        s = s.add(1);
+        remaining -= 1;
+    }
+
+    *d = 0;
+}
+
+/// Copy memory while converting to uppercase (ASCII only).
+///
+/// Copies exactly `n` bytes from `src` to `dst`, converting lowercase a-z
+/// to uppercase A-Z. Does NOT null-terminate.
+///
+/// # Safety
+///
+/// - `dst` and `src` must be valid, non-overlapping pointers.
+/// - `dst` must have enough space for `n` bytes.
+/// - `src` must point to at least `n` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_memcpy_up(dst: *mut c_char, src: *const c_char, n: usize) {
+    if dst.is_null() || src.is_null() || n == 0 {
+        return;
+    }
+
+    let mut d = dst as *mut u8;
+    let mut s = src as *const u8;
+    let mut remaining = n;
+
+    while remaining > 0 {
+        let c = *s;
+        *d = toupper_asc(c);
+        d = d.add(1);
+        s = s.add(1);
+        remaining -= 1;
+    }
+}
+
 /// Find a character in a string.
 ///
 /// For ASCII characters (< 128), uses standard strchr.
@@ -538,6 +635,92 @@ mod tests {
 
         // NULL handling - should not crash
         unsafe { rs_vim_strup(std::ptr::null_mut()) };
+    }
+
+    #[test]
+    fn test_vim_strcpy_up() {
+        // Basic copy with uppercase
+        let src = b"hello\0";
+        let mut dst = [0u8; 10];
+        unsafe { rs_vim_strcpy_up(dst.as_mut_ptr().cast(), src.as_ptr().cast()) };
+        assert_eq!(&dst[..6], b"HELLO\0");
+
+        // Mixed case
+        let src = b"HeLLo WoRLD\0";
+        let mut dst = [0u8; 15];
+        unsafe { rs_vim_strcpy_up(dst.as_mut_ptr().cast(), src.as_ptr().cast()) };
+        assert_eq!(&dst[..12], b"HELLO WORLD\0");
+
+        // Empty string
+        let src = b"\0";
+        let mut dst = [0u8; 5];
+        unsafe { rs_vim_strcpy_up(dst.as_mut_ptr().cast(), src.as_ptr().cast()) };
+        assert_eq!(dst[0], 0);
+
+        // NULL handling - should not crash
+        unsafe {
+            let mut dst = [0u8; 5];
+            rs_vim_strcpy_up(dst.as_mut_ptr().cast(), std::ptr::null());
+            rs_vim_strcpy_up(std::ptr::null_mut(), src.as_ptr().cast());
+        };
+    }
+
+    #[test]
+    fn test_vim_strncpy_up() {
+        // Copy with limit
+        let src = b"hello world\0";
+        let mut dst = [0u8; 10];
+        unsafe { rs_vim_strncpy_up(dst.as_mut_ptr().cast(), src.as_ptr().cast(), 5) };
+        assert_eq!(&dst[..6], b"HELLO\0");
+
+        // Copy entire string (limit larger than string)
+        let src = b"hi\0";
+        let mut dst = [0u8; 10];
+        unsafe { rs_vim_strncpy_up(dst.as_mut_ptr().cast(), src.as_ptr().cast(), 100) };
+        assert_eq!(&dst[..3], b"HI\0");
+
+        // Zero length
+        let src = b"hello\0";
+        let mut dst = [0u8; 10];
+        dst[0] = b'X';
+        unsafe { rs_vim_strncpy_up(dst.as_mut_ptr().cast(), src.as_ptr().cast(), 0) };
+        assert_eq!(dst[0], 0); // Should write NUL
+
+        // NULL handling
+        unsafe {
+            let mut dst = [0u8; 5];
+            rs_vim_strncpy_up(dst.as_mut_ptr().cast(), std::ptr::null(), 5);
+            assert_eq!(dst[0], 0); // Should write NUL
+        };
+    }
+
+    #[test]
+    fn test_vim_memcpy_up() {
+        // Basic memcpy with uppercase (no NUL termination)
+        let src = b"hello";
+        let mut dst = [0u8; 10];
+        unsafe { rs_vim_memcpy_up(dst.as_mut_ptr().cast(), src.as_ptr().cast(), 5) };
+        assert_eq!(&dst[..5], b"HELLO");
+        assert_eq!(dst[5], 0); // Unwritten bytes unchanged
+
+        // Partial copy
+        let src = b"hello world";
+        let mut dst = [0u8; 10];
+        unsafe { rs_vim_memcpy_up(dst.as_mut_ptr().cast(), src.as_ptr().cast(), 5) };
+        assert_eq!(&dst[..5], b"HELLO");
+
+        // Zero length - should not crash or write anything
+        let src = b"hello";
+        let mut dst = [b'X'; 5];
+        unsafe { rs_vim_memcpy_up(dst.as_mut_ptr().cast(), src.as_ptr().cast(), 0) };
+        assert_eq!(&dst, b"XXXXX");
+
+        // NULL handling
+        unsafe {
+            rs_vim_memcpy_up(std::ptr::null_mut(), src.as_ptr().cast(), 5);
+            let mut dst = [0u8; 5];
+            rs_vim_memcpy_up(dst.as_mut_ptr().cast(), std::ptr::null(), 5);
+        };
     }
 
     #[test]

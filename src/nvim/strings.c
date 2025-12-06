@@ -46,6 +46,9 @@ extern int rs_has_non_ascii(const char *s);
 extern int rs_has_non_ascii_len(const char *s, size_t len);
 extern void rs_sort_strings(char **files, int count);
 extern void rs_vim_strup(char *p);
+extern void rs_vim_strcpy_up(char *restrict dst, const char *restrict src);
+extern void rs_vim_strncpy_up(char *restrict dst, const char *restrict src, size_t n);
+extern void rs_vim_memcpy_up(char *restrict dst, const char *restrict src, size_t n);
 #endif
 
 static const char e_cannot_mix_positional_and_non_positional_str[]
@@ -344,33 +347,45 @@ void vim_strup(char *p)
 void vim_strcpy_up(char *restrict dst, const char *restrict src)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_STRINGS
+  rs_vim_strcpy_up(dst, src);
+#else
   uint8_t c;
   while ((c = (uint8_t)(*src++)) != NUL) {
     *dst++ = (char)(uint8_t)(c < 'a' || c > 'z' ? c : c - 0x20);
   }
   *dst = NUL;
+#endif
 }
 
 // strncpy (NUL-terminated) plus vim_strup.
 void vim_strncpy_up(char *restrict dst, const char *restrict src, size_t n)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_STRINGS
+  rs_vim_strncpy_up(dst, src, n);
+#else
   uint8_t c;
   while (n-- && (c = (uint8_t)(*src++)) != NUL) {
     *dst++ = (char)(uint8_t)(c < 'a' || c > 'z' ? c : c - 0x20);
   }
   *dst = NUL;
+#endif
 }
 
 // memcpy (does not NUL-terminate) plus vim_strup.
 void vim_memcpy_up(char *restrict dst, const char *restrict src, size_t n)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_STRINGS
+  rs_vim_memcpy_up(dst, src, n);
+#else
   uint8_t c;
   while (n--) {
     c = (uint8_t)(*src++);
     *dst++ = (char)(uint8_t)(c < 'a' || c > 'z' ? c : c - 0x20);
   }
+#endif
 }
 
 /// Make given string all upper-case or all lower-case
