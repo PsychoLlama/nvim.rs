@@ -452,10 +452,14 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
   - Added `utf8proc_decompose_char` FFI binding to utf8proc crate
   - Added `UTF8PROC_CASEFOLD` option constant
   - Added `casefold()` function with workarounds for ß and İ
+- **Phase 2.54**: Ambiguous width detection:
+  - `utf_ambiguous_width` - Check if UTF-8 character has ambiguous display width
+  - Uses utf8proc bindings for property lookup (ambiguous_width, is_emojilike)
+  - Detects VS-16 (U+FE0F) variation selector for emoji presentation
 - **Remaining infrastructure needed** for further progress:
   1. **Global state bridges** - For p_ambw, p_emoji, cw_table options
   2. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 26 crates, 72 functions swapped to Rust
+- Total: 26 crates, 73 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling

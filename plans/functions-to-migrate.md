@@ -543,6 +543,10 @@ Exhaustive search for Phase 2.50+ candidates. Cross-crate dependencies now work 
 **Phase 2.53**: Migrated `utf_fold`:
 - ✅ MIGRATED - Uses utf8proc_decompose_char with UTF8PROC_CASEFOLD
 
+**Phase 2.54**: Migrated `utf_ambiguous_width`:
+- ✅ MIGRATED - Uses utf8proc property lookup for ambiguous_width and is_emojilike
+- Detects VS-16 (U+FE0F) variation selector for emoji presentation
+
 **Remaining utf8proc-dependent functions:**
 - `utf_char2cells` - Uses `cw_value()` global (p_ambw option) and utf8proc - **BLOCKED**
 - `utfc_char2cells` - Uses `cw_value()` global and utf8proc - **BLOCKED**
