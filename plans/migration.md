@@ -398,6 +398,12 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - [x] `spell_valid_case` - **Phase 2.36**: Swapped to Rust (USE_RUST_SPELL) - spell case flag validation
 - [x] `byte_in_str` - **Phase 2.37**: Swapped to Rust (USE_RUST_SPELL) - byte search in string
 - [x] `schar_high` - **Phase 2.38**: Swapped to Rust (USE_RUST_GRID) - screen char cache format check
+
+**Session 7 (2025-12-05): Phases 2.36-2.38**
+- Created `nvim-spell` crate with `spell_valid_case` and `byte_in_str`
+- Created `nvim-grid` crate with `schar_high` (endianness-aware)
+- Total: 23 crates in workspace, 48+ functions swapped to Rust
+
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
 
