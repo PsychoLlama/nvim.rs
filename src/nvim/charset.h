@@ -28,6 +28,10 @@ typedef enum {
   STR2NR_QUOTE = (1 << 4),  ///< Ignore embedded single quotes.
 } ChStr2NrFlags;
 
+// Character classification table - exposed for Rust FFI
+// Flags: CT_CELL_MASK (0x07), CT_PRINT_CHAR (0x10), CT_ID_CHAR (0x20), CT_FNAME_CHAR (0x40)
+extern uint8_t g_chartab[256];
+
 #include "charset.h.generated.h"
 #include "charset.h.inline.generated.h"
 
