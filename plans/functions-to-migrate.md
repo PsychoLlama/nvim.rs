@@ -376,8 +376,13 @@ These use Rust's `std::fs` instead of libuv. The 90 filesystem unit tests pass, 
 **Phase 2.30**: Swapped fopen function to Rust:
 - `os_fopen` - Open a file using fopen-style flags, using libc open() and fdopen().
 
+**Phase 2.31**: Swapped file stat functions to Rust:
+- `os_fileinfo` - Get file info (stat) following symlinks.
+- `os_fileinfo_link` - Get file info (lstat) without following symlinks.
+- `os_fileinfo_fd` - Get file info (fstat) for an open file descriptor.
+
 **Phase 2 Summary (Updated 2025-12-05):**
-- 35 OS filesystem functions swapped to Rust (USE_RUST_OS_FS)
+- 38 OS filesystem functions swapped to Rust (USE_RUST_OS_FS)
 - 2 OS process/memory functions swapped to Rust (USE_RUST_OS_PROC, USE_RUST_OS_MEM)
 - 1 OS input function swapped to Rust (USE_RUST_OS_INPUT)
 - Added `io_error_to_uv_error` helper for libuv-compatible error codes
