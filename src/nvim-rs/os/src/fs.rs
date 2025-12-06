@@ -1410,7 +1410,11 @@ pub struct FileInfo {
 ///   while libuv uses unsigned u64. These values should always be non-negative.
 /// - libc type sizes vary by platform, so we cast uniformly for portability.
 #[cfg(unix)]
-#[allow(clippy::cast_sign_loss, clippy::unnecessary_cast, clippy::cast_lossless)]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::unnecessary_cast,
+    clippy::cast_lossless
+)]
 fn stat_to_uv_stat(st: &libc::stat) -> UvStat {
     UvStat {
         st_dev: st.st_dev as u64,
@@ -1543,8 +1547,7 @@ pub unsafe extern "C" fn rs_os_file_owned(fname: *const c_char) -> bool {
         let file_owned = unsafe { libc::stat(fname, &mut statbuf) } == 0 && statbuf.st_uid == uid;
 
         // Check if we own the link itself (not following symlinks)
-        let link_owned =
-            unsafe { libc::lstat(fname, &mut statbuf) } == 0 && statbuf.st_uid == uid;
+        let link_owned = unsafe { libc::lstat(fname, &mut statbuf) } == 0 && statbuf.st_uid == uid;
 
         file_owned && link_owned
     }
@@ -1660,10 +1663,7 @@ pub unsafe extern "C" fn rs_os_fileinfo_blocksize(file_info: *const FileInfo) ->
 /// - `path` must be a valid null-terminated C string, or NULL.
 /// - `file_info` must be a valid pointer to a `FileInfo` struct.
 #[no_mangle]
-pub unsafe extern "C" fn rs_os_fileinfo(
-    path: *const c_char,
-    file_info: *mut FileInfo,
-) -> bool {
+pub unsafe extern "C" fn rs_os_fileinfo(path: *const c_char, file_info: *mut FileInfo) -> bool {
     if file_info.is_null() {
         return false;
     }
@@ -1877,10 +1877,7 @@ pub unsafe extern "C" fn rs_os_open(path: *const c_char, flags: c_int, mode: c_i
 /// - `flags` must be a valid null-terminated C string with length 1-2.
 /// - The returned `FILE*` must be closed with `fclose()` when done.
 #[no_mangle]
-pub unsafe extern "C" fn rs_os_fopen(
-    path: *const c_char,
-    flags: *const c_char,
-) -> *mut libc::FILE {
+pub unsafe extern "C" fn rs_os_fopen(path: *const c_char, flags: *const c_char) -> *mut libc::FILE {
     if path.is_null() || flags.is_null() {
         return ptr::null_mut();
     }

@@ -381,11 +381,17 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - [x] `os_fopen` - **Phase 2.30**: Swapped to Rust (USE_RUST_OS_FS)
 - [x] `os_fileinfo`, `os_fileinfo_link`, `os_fileinfo_fd` - **Phase 2.31**: Swapped to Rust (USE_RUST_OS_FS)
 - [x] `os_fileid`, `os_file_owned` - **Phase 2.32**: Swapped to Rust (USE_RUST_OS_FS)
-- [ ] `src/nvim/os/fs.c` → `nvim-rs/os/fs` (remaining functions)
-  - `os_can_exe`
-  - `os_scandir`
-  - `os_readv` (vectored I/O)
-  - **Status**: Rust code exists, 40 fs functions swapped (Phase 2.3-2.18, 2.21-2.32), 3 other os functions (Phase 2.19-2.20)
+- [x] **Phase 2 OS Migration: COMPLETE** - All simple self-contained OS functions migrated
+  - **43 functions swapped**: 40 fs (USE_RUST_OS_FS), 2 proc/mem (USE_RUST_OS_PROC, USE_RUST_OS_MEM), 1 input (USE_RUST_OS_INPUT)
+  - **Remaining blocked functions** (require infrastructure):
+    - `os_can_exe` - PATH searching with helper functions
+    - `os_scandir/os_closedir` - Directory iteration pattern
+    - `os_readv` - vectored I/O with iovec struct
+    - `os_chdir` - global state (verbose, UI)
+    - `os_fsync` - global state (g_stats)
+    - `os_open_stdin_fd` - global state (stdin_fd)
+    - `os_mkdir_recurse/os_file_mkdir` - xmalloc, error messaging
+    - `os_copy_xattr` - xmalloc, emsg()
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
 
