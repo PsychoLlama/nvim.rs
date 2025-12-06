@@ -612,6 +612,49 @@ pub unsafe extern "C" fn rs_vim_strnsize(s: *const c_char, len: c_int) -> c_int 
 }
 
 // ============================================================================
+// String reversal functions
+// ============================================================================
+
+/// Reverse an ASCII string in-place.
+///
+/// Reverses the characters between `str` and `end` (exclusive).
+/// If `end` is null, reverses from `str` to the end of the string (NUL terminator).
+///
+/// This is used for right-to-left text handling.
+///
+/// # Safety
+/// - `str` must be a valid pointer to a mutable C string.
+/// - If `end` is not null, `end` must point within the same string as `str`, after `str`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_rl_mirror_ascii(str: *mut c_char, end: *const c_char) {
+    if str.is_null() {
+        return;
+    }
+
+    // Calculate end pointer: if end is null, find the NUL terminator
+    let mut p1 = str;
+    #[allow(clippy::ptr_cast_constness)]
+    let mut p2 = if end.is_null() {
+        // Find string length and point to last char
+        let mut p = str;
+        while *p != 0 {
+            p = p.add(1);
+        }
+        p.sub(1)
+    } else {
+        // end points one past the last char we want to include
+        (end as *mut c_char).sub(1)
+    };
+
+    // Swap characters from both ends moving toward the middle
+    while p1 < p2 {
+        core::ptr::swap(p1, p2);
+        p1 = p1.add(1);
+        p2 = p2.sub(1);
+    }
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -1100,6 +1143,45 @@ mod tests {
 
             // Null buffer returns 0
             assert_eq!(rs_transchar_hex(std::ptr::null_mut(), 0x42), 0);
+        }
+    }
+
+    #[test]
+    fn test_rl_mirror_ascii() {
+        unsafe {
+            // Test reversing "hello" -> "olleh"
+            let mut s = *b"hello\0";
+            rs_rl_mirror_ascii(s.as_mut_ptr().cast::<c_char>(), std::ptr::null());
+            assert_eq!(&s[..5], b"olleh");
+
+            // Test with explicit end pointer
+            let mut s = *b"hello world\0";
+            let end = s.as_ptr().add(5); // reverse only "hello"
+            rs_rl_mirror_ascii(s.as_mut_ptr().cast::<c_char>(), end.cast::<c_char>());
+            assert_eq!(&s[..11], b"olleh world");
+
+            // Test empty string
+            let mut s = *b"\0";
+            rs_rl_mirror_ascii(s.as_mut_ptr().cast::<c_char>(), std::ptr::null());
+            assert_eq!(s[0], 0);
+
+            // Test single character
+            let mut s = *b"a\0";
+            rs_rl_mirror_ascii(s.as_mut_ptr().cast::<c_char>(), std::ptr::null());
+            assert_eq!(&s[..1], b"a");
+
+            // Test two characters
+            let mut s = *b"ab\0";
+            rs_rl_mirror_ascii(s.as_mut_ptr().cast::<c_char>(), std::ptr::null());
+            assert_eq!(&s[..2], b"ba");
+
+            // Test palindrome
+            let mut s = *b"racecar\0";
+            rs_rl_mirror_ascii(s.as_mut_ptr().cast::<c_char>(), std::ptr::null());
+            assert_eq!(&s[..7], b"racecar");
+
+            // Test null pointer - should not crash
+            rs_rl_mirror_ascii(std::ptr::null_mut(), std::ptr::null());
         }
     }
 }
