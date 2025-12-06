@@ -61,6 +61,7 @@ extern int rs_vim_strsize(const char *s);
 extern int rs_vim_strnsize(const char *s, int len);
 extern void rs_rl_mirror_ascii(char *str, const char *end);
 extern bool rs_rem_backslash(const char *str);
+extern void rs_backslash_halve(char *p);
 #endif
 
 static bool chartab_initialized = false;
@@ -1618,6 +1619,9 @@ bool rem_backslash(const char *str)
 /// @param p
 void backslash_halve(char *p)
 {
+#ifdef USE_RUST_CHARSET
+  rs_backslash_halve(p);
+#else
   for (; *p && !rem_backslash(p); p++) {}
   if (*p != NUL) {
     char *dst = p;
@@ -1633,6 +1637,7 @@ start:
     }
     *dst = NUL;
   }
+#endif
 }
 
 /// backslash_halve() plus save the result in allocated memory.

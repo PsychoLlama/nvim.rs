@@ -654,6 +654,57 @@ pub unsafe extern "C" fn rs_rl_mirror_ascii(str: *mut c_char, end: *const c_char
     }
 }
 
+/// Halve the number of backslashes in a file name argument.
+///
+/// Modifies the string in-place, removing backslashes that should be removed
+/// according to rem_backslash rules.
+///
+/// # Safety
+/// - `p` must be a valid pointer to a mutable null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_backslash_halve(p: *mut c_char) {
+    if p.is_null() {
+        return;
+    }
+
+    // Find the first position where we should remove a backslash
+    let mut src = p;
+    while *src != 0 && !rs_rem_backslash(src) {
+        src = src.add(1);
+    }
+
+    // If no backslash to remove, we're done
+    if *src == 0 {
+        return;
+    }
+
+    // Start copying from the character after the backslash
+    let mut dst = src;
+
+    // Copy the character after the backslash (skip the backslash itself)
+    *dst = *src.add(1);
+    dst = dst.add(1);
+    src = src.add(2);
+
+    // Continue through the rest of the string
+    while *src != 0 {
+        if rs_rem_backslash(src) {
+            // Skip backslash, copy next char
+            *dst = *src.add(1);
+            dst = dst.add(1);
+            src = src.add(2);
+        } else {
+            // Copy char as-is
+            *dst = *src;
+            dst = dst.add(1);
+            src = src.add(1);
+        }
+    }
+
+    // Null-terminate
+    *dst = 0;
+}
+
 /// Check if we should remove a backslash from a file name argument.
 ///
 /// On Unix: always remove backslash before non-NUL characters.
@@ -1249,6 +1300,54 @@ mod tests {
             // Backslash followed by another backslash
             let s = CString::new("\\\\").unwrap();
             assert!(rs_rem_backslash(s.as_ptr()));
+        }
+    }
+
+    #[test]
+    fn test_backslash_halve() {
+        unsafe {
+            // Single backslash before character - should be removed
+            let mut s = *b"\\a\0";
+            rs_backslash_halve(s.as_mut_ptr().cast::<c_char>());
+            assert_eq!(&s[..2], b"a\0");
+
+            // Multiple backslashes - each should be halved
+            let mut s = *b"\\a\\b\\c\0";
+            rs_backslash_halve(s.as_mut_ptr().cast::<c_char>());
+            assert_eq!(&s[..4], b"abc\0");
+
+            // Backslash before space
+            let mut s = *b"\\ \0";
+            rs_backslash_halve(s.as_mut_ptr().cast::<c_char>());
+            assert_eq!(&s[..2], b" \0");
+
+            // No backslash - string unchanged
+            let mut s = *b"abc\0";
+            rs_backslash_halve(s.as_mut_ptr().cast::<c_char>());
+            assert_eq!(&s[..4], b"abc\0");
+
+            // Double backslash - halved to single backslash
+            let mut s = *b"\\\\\0";
+            rs_backslash_halve(s.as_mut_ptr().cast::<c_char>());
+            assert_eq!(&s[..2], b"\\\0");
+
+            // Empty string
+            let mut s = *b"\0";
+            rs_backslash_halve(s.as_mut_ptr().cast::<c_char>());
+            assert_eq!(s[0], 0);
+
+            // Backslash at end (followed by NUL) - NOT removed
+            let mut s = *b"\\\0";
+            rs_backslash_halve(s.as_mut_ptr().cast::<c_char>());
+            assert_eq!(&s[..2], b"\\\0");
+
+            // Mixed content
+            let mut s = *b"foo\\bar\\baz\0";
+            rs_backslash_halve(s.as_mut_ptr().cast::<c_char>());
+            assert_eq!(&s[..10], b"foobarbaz\0");
+
+            // Null pointer - should not crash
+            rs_backslash_halve(std::ptr::null_mut());
         }
     }
 }
