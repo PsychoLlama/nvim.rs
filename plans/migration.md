@@ -408,6 +408,12 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - Created `nvim-grid` crate with `schar_high` (endianness-aware)
 - Total: 23 crates in workspace, 48+ functions swapped to Rust
 
+**Session 8 (2025-12-06): Phases 2.39-2.41**
+- Added `schar_get_ascii` to nvim-grid crate (ASCII extraction from schar)
+- Added `is_mouse_key` to nvim-keycodes crate (mouse key detection)
+- Added `schar_from_char` to nvim-grid crate (using nvim-mbyte::utf_char2bytes)
+- Total: 51+ functions swapped to Rust
+
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
 
