@@ -30,6 +30,7 @@ nvim-menu = { path = "menu" }
 nvim-os = { path = "os" }
 nvim-path = { path = "path" }
 nvim-profile = { path = "profile" }
+nvim-spell = { path = "spell" }
 nvim-strings = { path = "strings" }
 
 [build-dependencies]
