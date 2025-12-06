@@ -547,12 +547,17 @@ Exhaustive search for Phase 2.50+ candidates. Cross-crate dependencies now work 
 - ✅ MIGRATED - Uses utf8proc property lookup for ambiguous_width and is_emojilike
 - Detects VS-16 (U+FE0F) variation selector for emoji presentation
 
-**Remaining utf8proc-dependent functions:**
-- `utf_char2cells` - Uses `cw_value()` global (p_ambw option) and utf8proc - **BLOCKED**
-- `utfc_char2cells` - Uses `cw_value()` global and utf8proc - **BLOCKED**
+**Phase 2.55**: Migrated `cw_value`:
+- ✅ MIGRATED - Lookup custom cell width from setcellwidths() table
+- Exposed cw_table and cw_table_size globals for Rust FFI access
+- Binary search implementation matching C behavior
 
-**Conclusion:** utf8proc infrastructure complete. `utf_char2cells` family still blocked by global state (cw_value).
+**Remaining utf8proc-dependent functions:**
+- `utf_char2cells` - Uses cw_value (✅ now migrated), p_ambw, p_emoji globals, and utf8proc - needs global option bridges
+- `utfc_char2cells` - Uses cw_value (✅ now migrated), p_ambw, p_emoji globals - needs global option bridges
+
+**Conclusion:** cw_table infrastructure now exposed. `utf_char2cells` family still blocked by p_ambw and p_emoji global options.
 
 Remaining candidates require:
-1. **Global state bridges** - For cw_table, shape_table, cw_value, etc.
+1. **Global option bridges** - For p_ambw, p_emoji (cw_table now exposed)
 2. **Complex struct FFI** - For win_T*, buf_T* parameters
