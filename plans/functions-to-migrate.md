@@ -367,8 +367,11 @@ These use Rust's `std::fs` instead of libuv. The 90 filesystem unit tests pass, 
 - `os_fileinfo_hardlinks` - Get hardlink count from FileInfo.
 - `os_fileinfo_blocksize` - Get blocksize from FileInfo.
 
+**Phase 2.28**: Swapped realpath function to Rust:
+- `os_realpath` - Return canonicalized absolute pathname using libc realpath().
+
 **Phase 2 Summary (Updated 2025-12-05):**
-- 32 OS filesystem functions swapped to Rust (USE_RUST_OS_FS)
+- 33 OS filesystem functions swapped to Rust (USE_RUST_OS_FS)
 - 2 OS process/memory functions swapped to Rust (USE_RUST_OS_PROC, USE_RUST_OS_MEM)
 - 1 OS input function swapped to Rust (USE_RUST_OS_INPUT)
 - Added `io_error_to_uv_error` helper for libuv-compatible error codes
