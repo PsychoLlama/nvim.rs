@@ -552,12 +552,16 @@ Exhaustive search for Phase 2.50+ candidates. Cross-crate dependencies now work 
 - Exposed cw_table and cw_table_size globals for Rust FFI access
 - Binary search implementation matching C behavior
 
-**Remaining utf8proc-dependent functions:**
-- `utf_char2cells` - Uses cw_value (✅ now migrated), p_ambw, p_emoji globals, and utf8proc - needs global option bridges
-- `utfc_char2cells` - Uses cw_value (✅ now migrated), p_ambw, p_emoji globals - needs global option bridges
+**Phase 2.56**: Migrated `utf_char2cells`:
+- ✅ MIGRATED - Get display width (1 or 2) for UTF-8 characters
+- Returns 4 or 6 for unprintable characters
+- Exposed p_ambw and p_emoji globals for Rust FFI access
+- Depends on vim_isprintc, cw_value, utf8proc properties
 
-**Conclusion:** cw_table infrastructure now exposed. `utf_char2cells` family still blocked by p_ambw and p_emoji global options.
+**Remaining utf8proc-dependent functions:**
+- `utfc_char2cells` - Wrapper calling utf_char2cells (✅ now migrated) - good candidate for Phase 2.57
+
+**Conclusion:** p_ambw and p_emoji globals now exposed. `utfc_char2cells` is now unblocked!
 
 Remaining candidates require:
-1. **Global option bridges** - For p_ambw, p_emoji (cw_table now exposed)
-2. **Complex struct FFI** - For win_T*, buf_T* parameters
+1. **Complex struct FFI** - For win_T*, buf_T* parameters

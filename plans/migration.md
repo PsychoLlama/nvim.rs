@@ -460,10 +460,14 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
   - `cw_value` - Lookup custom cell width from setcellwidths() table
   - Exposed cw_table and cw_table_size globals for Rust FFI access
   - Binary search implementation matching C behavior
+- **Phase 2.56**: Character cell width calculation:
+  - `utf_char2cells` - Get display width (1 or 2) for UTF-8 character
+  - Returns 4 or 6 for unprintable characters
+  - Depends on vim_isprintc, cw_value, utf8proc properties
+  - Exposed p_ambw and p_emoji globals for Rust FFI access
 - **Remaining infrastructure needed** for further progress:
-  1. **Global state bridges** - For p_ambw, p_emoji options (cw_table now exposed)
-  2. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 26 crates, 74 functions swapped to Rust
+  1. **Complex struct FFI** - For win_T*, buf_T* parameters
+- Total: 26 crates, 75 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
