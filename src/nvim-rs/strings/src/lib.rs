@@ -421,6 +421,32 @@ pub unsafe extern "C" fn rs_is_tty_option(name: *const c_char) -> c_int {
     c_int::from(!rs_find_tty_option_end(name).is_null())
 }
 
+/// Skip to the next part of an option argument: skip space and comma.
+///
+/// Returns a pointer to the first non-space, non-comma character.
+/// If the string starts with a comma, it is skipped first.
+/// Then any spaces are skipped.
+///
+/// # Safety
+///
+/// `p` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_skip_to_option_part(p: *const c_char) -> *const c_char {
+    let mut ptr = p;
+
+    // Skip leading comma
+    if *ptr as u8 == b',' {
+        ptr = ptr.add(1);
+    }
+
+    // Skip spaces
+    while *ptr as u8 == b' ' {
+        ptr = ptr.add(1);
+    }
+
+    ptr
+}
+
 #[cfg(test)]
 #[allow(clippy::cast_lossless)]
 mod tests {
@@ -715,6 +741,52 @@ mod tests {
             assert_eq!(rs_is_tty_option(ttytype.as_ptr()), 1);
             assert_eq!(rs_is_tty_option(t_xx.as_ptr()), 1);
             assert_eq!(rs_is_tty_option(not_tty.as_ptr()), 0);
+        }
+    }
+
+    #[test]
+    fn test_skip_to_option_part() {
+        let comma_space = CString::new(", next").unwrap();
+        let just_comma = CString::new(",next").unwrap();
+        let just_spaces = CString::new("   next").unwrap();
+        let comma_multi_space = CString::new(",   next").unwrap();
+        let no_skip = CString::new("next").unwrap();
+        let empty = CString::new("").unwrap();
+        let only_comma = CString::new(",").unwrap();
+        let only_spaces = CString::new("   ").unwrap();
+
+        unsafe {
+            // ", next" -> skip comma and space
+            let result = rs_skip_to_option_part(comma_space.as_ptr());
+            assert_eq!(*result as u8, b'n');
+
+            // ",next" -> skip comma only
+            let result = rs_skip_to_option_part(just_comma.as_ptr());
+            assert_eq!(*result as u8, b'n');
+
+            // "   next" -> skip spaces only
+            let result = rs_skip_to_option_part(just_spaces.as_ptr());
+            assert_eq!(*result as u8, b'n');
+
+            // ",   next" -> skip comma and multiple spaces
+            let result = rs_skip_to_option_part(comma_multi_space.as_ptr());
+            assert_eq!(*result as u8, b'n');
+
+            // "next" -> no skipping needed
+            let result = rs_skip_to_option_part(no_skip.as_ptr());
+            assert_eq!(*result as u8, b'n');
+
+            // "" -> returns pointer to empty
+            let result = rs_skip_to_option_part(empty.as_ptr());
+            assert_eq!(*result as u8, 0);
+
+            // "," -> returns pointer to NUL after comma
+            let result = rs_skip_to_option_part(only_comma.as_ptr());
+            assert_eq!(*result as u8, 0);
+
+            // "   " -> returns pointer to NUL after spaces
+            let result = rs_skip_to_option_part(only_spaces.as_ptr());
+            assert_eq!(*result as u8, 0);
         }
     }
 }

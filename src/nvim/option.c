@@ -121,6 +121,7 @@
 extern int rs_valid_name(const char *val, const char *allowed);
 extern const char *rs_find_tty_option_end(const char *arg);
 extern int rs_is_tty_option(const char *name);
+extern const char *rs_skip_to_option_part(const char *p);
 #endif
 
 static const char e_unknown_option[]
@@ -6267,6 +6268,9 @@ void set_fileformat(int eol_style, int opt_flags)
 /// Skip to next part of an option argument: skip space and comma
 char *skip_to_option_part(const char *p)
 {
+#ifdef USE_RUST_STRINGS
+  return (char *)rs_skip_to_option_part(p);
+#else
   if (*p == ',') {
     p++;
   }
@@ -6274,6 +6278,7 @@ char *skip_to_option_part(const char *p)
     p++;
   }
   return (char *)p;
+#endif
 }
 
 /// Isolate one part of a string option separated by `sep_chars`.
