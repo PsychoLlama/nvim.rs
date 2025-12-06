@@ -393,6 +393,9 @@ These use Rust's `std::fs` instead of libuv. The 90 filesystem unit tests pass, 
 **Phase 2.34**: Swapped arithmetic function to Rust:
 - `calc_percentage` - Calculate percentage (part of whole), with overflow handling for large numbers.
 
+**Phase 2.35**: Swapped fileio function to Rust:
+- `is_dev_fd_file` - Check if path matches /dev/fd/N pattern (excluding 0, 1, 2).
+
 **Phase 2 Summary (2025-12-05) - OS MIGRATION COMPLETE:**
 - **43 OS functions swapped to Rust** across 3 compile flags:
   - 40 filesystem functions (USE_RUST_OS_FS)

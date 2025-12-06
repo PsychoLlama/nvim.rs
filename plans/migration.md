@@ -394,6 +394,7 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
     - `os_copy_xattr` - xmalloc, emsg()
 - [x] `eval_isnamec`, `eval_isnamec1`, `eval_isdictc` - **Phase 2.33**: Swapped to Rust (USE_RUST_EVAL)
 - [x] `calc_percentage` - **Phase 2.34**: Swapped to Rust (USE_RUST_MATH) - pure arithmetic, overflow handling
+- [x] `is_dev_fd_file` - **Phase 2.35**: Swapped to Rust (USE_RUST_FILEIO) - /dev/fd/ path check
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
 
