@@ -39,6 +39,43 @@ pub extern "C" fn rs_spell_valid_case(wordflags: c_int, treeflags: c_int) -> boo
     spell_valid_case_impl(wordflags, treeflags)
 }
 
+/// Check if byte `n` appears in string `str`.
+///
+/// Like `strchr()` but independent of locale.
+/// Returns true if the byte is found.
+#[inline]
+#[allow(clippy::cast_sign_loss)] // n is always in range 0-255 for byte values
+#[allow(clippy::cast_possible_truncation)] // n is always in range 0-255 for byte values
+#[allow(clippy::missing_const_for_fn)] // unsafe blocks prevent const
+fn byte_in_str_impl(str: *const u8, n: c_int) -> bool {
+    if str.is_null() {
+        return false;
+    }
+
+    let n = n as u8;
+    let mut p = str;
+
+    // SAFETY: We iterate until we hit NUL, which is the contract
+    unsafe {
+        while *p != 0 {
+            if *p == n {
+                return true;
+            }
+            p = p.add(1);
+        }
+    }
+    false
+}
+
+/// FFI wrapper for `byte_in_str`.
+///
+/// Check if byte `n` appears in string `str`.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
+pub extern "C" fn rs_byte_in_str(str: *const u8, n: c_int) -> bool {
+    byte_in_str_impl(str, n)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -97,5 +134,40 @@ mod tests {
         assert!(rs_spell_valid_case(0, 0));
         assert!(!rs_spell_valid_case(0, WF_ONECAP));
         assert!(!rs_spell_valid_case(WF_ALLCAP, WF_FIXCAP | WF_ALLCAP)); // both branches fail
+    }
+
+    #[test]
+    fn test_byte_in_str_found() {
+        let s = b"hello\0";
+        assert!(byte_in_str_impl(s.as_ptr(), c_int::from(b'h')));
+        assert!(byte_in_str_impl(s.as_ptr(), c_int::from(b'e')));
+        assert!(byte_in_str_impl(s.as_ptr(), c_int::from(b'l')));
+        assert!(byte_in_str_impl(s.as_ptr(), c_int::from(b'o')));
+    }
+
+    #[test]
+    fn test_byte_in_str_not_found() {
+        let s = b"hello\0";
+        assert!(!byte_in_str_impl(s.as_ptr(), c_int::from(b'x')));
+        assert!(!byte_in_str_impl(s.as_ptr(), c_int::from(b'H'))); // case-sensitive
+        assert!(!byte_in_str_impl(s.as_ptr(), 0)); // NUL is terminator, not in string
+    }
+
+    #[test]
+    fn test_byte_in_str_empty() {
+        let s = b"\0";
+        assert!(!byte_in_str_impl(s.as_ptr(), c_int::from(b'a')));
+    }
+
+    #[test]
+    fn test_byte_in_str_null() {
+        assert!(!byte_in_str_impl(std::ptr::null(), c_int::from(b'a')));
+    }
+
+    #[test]
+    fn test_ffi_byte_in_str() {
+        let s = b"test\0";
+        assert!(rs_byte_in_str(s.as_ptr(), c_int::from(b't')));
+        assert!(!rs_byte_in_str(s.as_ptr(), c_int::from(b'x')));
     }
 }
