@@ -509,6 +509,48 @@ pub unsafe extern "C" fn rs_vim_isprintc(c: c_int) -> c_int {
     }
 }
 
+/// Return number of display cells occupied by character at "*p".
+/// A TAB is counted as two cells: "^I" or four: "<09>".
+///
+/// For UTF-8 (first byte >= 0x80), delegates to `utf_ptr2cells`.
+/// For ASCII, looks up cell count in `g_chartab`.
+///
+/// # Safety
+/// This function accesses the global `g_chartab` array which must be initialized.
+#[must_use]
+pub fn ptr2cells(p: &[u8]) -> i32 {
+    if p.is_empty() {
+        return 1;
+    }
+
+    let first = p[0];
+    if first >= 0x80 {
+        // UTF-8: need to look at more bytes
+        return nvim_mbyte::utf_ptr2cells(p);
+    }
+
+    // ASCII: get cell count from chartab
+    // SAFETY: caller must ensure g_chartab is initialized
+    unsafe { i32::from(g_chartab[first as usize] & CT_CELL_MASK) }
+}
+
+/// FFI wrapper for `ptr2cells`.
+///
+/// # Safety
+/// - The pointer must be valid and point to a null-terminated C string.
+/// - The global `g_chartab` array must be initialized.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ptr2cells(p: *const c_char) -> c_int {
+    if p.is_null() {
+        return 1;
+    }
+    // Create a slice from the pointer - we need at least enough bytes
+    // for the longest possible UTF-8 sequence (4 bytes)
+    // SAFETY: caller guarantees p points to valid string
+    let slice = std::slice::from_raw_parts(p.cast::<u8>(), 6);
+    ptr2cells(slice)
+}
+
 // ============================================================================
 // Tests
 // ============================================================================

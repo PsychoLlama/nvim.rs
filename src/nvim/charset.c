@@ -56,6 +56,7 @@ extern int rs_vim_is_fname_char(int c);
 extern int rs_byte2cells(int b);
 extern int rs_vim_isIDc(int c);
 extern int rs_vim_isprintc(int c);
+extern int rs_ptr2cells(const char *p);
 #endif
 
 static bool chartab_initialized = false;
@@ -775,6 +776,9 @@ int char2cells(int c)
 /// @return number of display cells.
 int ptr2cells(const char *p_in)
 {
+#ifdef USE_RUST_CHARSET
+  return rs_ptr2cells(p_in);
+#else
   uint8_t *p = (uint8_t *)p_in;
   // For UTF-8 we need to look at more bytes if the first byte is >= 0x80.
   if (*p >= 0x80) {
@@ -783,6 +787,7 @@ int ptr2cells(const char *p_in)
 
   // For DBCS we can tell the cell count from the first byte.
   return g_chartab[*p] & CT_CELL_MASK;
+#endif
 }
 
 /// Return the number of character cells string "s" will take on the screen,
