@@ -518,9 +518,11 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - **Phase 2.70**: Backslash halving (charset):
   - `backslash_halve` - Halve backslashes in file name argument
   - Uses `rem_backslash` internally for consistent behavior
+- **Phase 2.71**: String equality (strings):
+  - `striequal` - Case-insensitive string equality check (ASCII)
 - **Remaining infrastructure needed** for further progress:
   1. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 27 crates, 96 functions swapped to Rust
+- Total: 27 crates, 97 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
