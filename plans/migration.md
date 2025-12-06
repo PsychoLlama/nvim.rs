@@ -293,6 +293,7 @@ Pure string/memory utility functions, no allocation:
 - [x] `strequal` - Null-safe string equality (pure) - swapped to Rust
 - [x] `strnequal` - Null-safe bounded string equality (pure) - swapped to Rust
 - [x] `time_to_bytes` - Write time_t to 8-byte buffer in big-endian (pure) - swapped to Rust
+- [x] `arena_align_offset` - Align offset to arena alignment boundary (pure) - swapped to Rust
 
 **Validation:**
 
@@ -530,9 +531,12 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - **Phase 2.74**: Time serialization (memutil):
   - `time_to_bytes` - Write time_t value to 8-byte buffer in big-endian format
   - Used by shada file serialization
+- **Phase 2.75**: Arena memory alignment (memutil):
+  - `arena_align_offset` - Align offset to arena alignment boundary (8 bytes on 64-bit)
+  - Used by arena allocator in memory.c
 - **Remaining infrastructure needed** for further progress:
   1. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 27 crates, 100 functions swapped to Rust
+- Total: 27 crates, 101 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
