@@ -1487,6 +1487,74 @@ pub unsafe extern "C" fn rs_os_fileid_equal_fileinfo(
     id.inode == info.stat.st_ino && id.device_id == info.stat.st_dev
 }
 
+/// Get the `FileID` for a given path.
+///
+/// # Safety
+///
+/// - `path` must be a valid null-terminated C string.
+/// - `file_id` must be a valid pointer to a `FileID` struct.
+#[no_mangle]
+#[allow(clippy::unnecessary_cast)]
+pub unsafe extern "C" fn rs_os_fileid(path: *const c_char, file_id: *mut FileID) -> bool {
+    if path.is_null() || file_id.is_null() {
+        return false;
+    }
+
+    #[cfg(unix)]
+    {
+        let mut statbuf: libc::stat = unsafe { std::mem::zeroed() };
+        let result = unsafe { libc::stat(path, &mut statbuf) };
+        if result == 0 {
+            let id = unsafe { &mut *file_id };
+            id.inode = statbuf.st_ino as u64;
+            id.device_id = statbuf.st_dev as u64;
+            true
+        } else {
+            false
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        false
+    }
+}
+
+/// Check if the current user owns a file.
+///
+/// Uses both `stat()` and `lstat()` for extra security (checks both the file
+/// and the symlink itself if applicable).
+///
+/// # Safety
+///
+/// `fname` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_os_file_owned(fname: *const c_char) -> bool {
+    if fname.is_null() {
+        return false;
+    }
+
+    #[cfg(unix)]
+    {
+        let uid = unsafe { libc::getuid() };
+        let mut statbuf: libc::stat = unsafe { std::mem::zeroed() };
+
+        // Check if we own the file (following symlinks)
+        let file_owned = unsafe { libc::stat(fname, &mut statbuf) } == 0 && statbuf.st_uid == uid;
+
+        // Check if we own the link itself (not following symlinks)
+        let link_owned =
+            unsafe { libc::lstat(fname, &mut statbuf) } == 0 && statbuf.st_uid == uid;
+
+        file_owned && link_owned
+    }
+
+    #[cfg(not(unix))]
+    {
+        true // On Windows, assume owned (TODO: proper implementation)
+    }
+}
+
 /// Compare the inodes of two `FileInfo`s.
 ///
 /// # Safety

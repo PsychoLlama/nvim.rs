@@ -99,6 +99,8 @@ extern uint64_t rs_os_fileinfo_blocksize(const FileInfo *file_info);
 extern bool rs_os_fileinfo(const char *path, FileInfo *file_info);
 extern bool rs_os_fileinfo_link(const char *path, FileInfo *file_info);
 extern bool rs_os_fileinfo_fd(int file_descriptor, FileInfo *file_info);
+extern bool rs_os_fileid(const char *path, FileID *file_id);
+extern bool rs_os_file_owned(const char *fname);
 extern char *rs_os_realpath(const char *name, char *buf, size_t len);
 extern int rs_os_open(const char *path, int flags, int mode);
 extern FILE *rs_os_fopen(const char *path, const char *flags);
@@ -987,6 +989,16 @@ void os_free_acl(vim_acl_T aclent)
   }
 }
 
+#ifdef USE_RUST_OS_FS
+/// Checks if the current user owns a file.
+///
+/// Uses both stat() and lstat() for extra security.
+bool os_file_owned(const char *fname)
+  FUNC_ATTR_NONNULL_ALL
+{
+  return rs_os_file_owned(fname);
+}
+#else
 #ifdef UNIX
 /// Checks if the current user owns a file.
 ///
@@ -1006,6 +1018,7 @@ bool os_file_owned(const char *fname)
 {
   return true;  // TODO(justinmk): Windows. #8244
 }
+#endif
 #endif
 
 /// Changes the owner and group of a file, like chown(2).
@@ -1471,6 +1484,9 @@ uint64_t os_fileinfo_blocksize(const FileInfo *file_info)
 bool os_fileid(const char *path, FileID *file_id)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_OS_FS
+  return rs_os_fileid(path, file_id);
+#else
   uv_stat_t statbuf;
   if (os_stat(path, &statbuf) == kLibuvSuccess) {
     file_id->inode = statbuf.st_ino;
@@ -1478,6 +1494,7 @@ bool os_fileid(const char *path, FileID *file_id)
     return true;
   }
   return false;
+#endif
 }
 
 /// Check if two `FileID`s are equal
