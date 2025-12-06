@@ -403,18 +403,19 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - [x] `is_mouse_key` - **Phase 2.40**: Swapped to Rust (USE_RUST_KEYCODES) - check if key is mouse key
 - [x] `schar_from_char` - **Phase 2.41**: Swapped to Rust (USE_RUST_GRID) - convert codepoint to schar
 - [x] `op_on_lines`, `op_is_change`, `get_op_char`, `get_extra_op_char` - **Phase 2.42**: Swapped to Rust (USE_RUST_OPS) - operator lookup functions
+- [x] `get_op_type` - **Phase 2.43**: Swapped to Rust (USE_RUST_OPS) - translate command chars to operator type
 
 **Session 7 (2025-12-05): Phases 2.36-2.38**
 - Created `nvim-spell` crate with `spell_valid_case` and `byte_in_str`
 - Created `nvim-grid` crate with `schar_high` (endianness-aware)
 - Total: 23 crates in workspace, 48+ functions swapped to Rust
 
-**Session 8 (2025-12-06): Phases 2.39-2.42**
+**Session 8 (2025-12-06): Phases 2.39-2.43**
 - Added `schar_get_ascii` to nvim-grid crate (ASCII extraction from schar)
 - Added `is_mouse_key` to nvim-keycodes crate (mouse key detection)
 - Added `schar_from_char` to nvim-grid crate (using nvim-mbyte::utf_char2bytes)
-- Created `nvim-ops` crate with operator lookup functions
-- Total: 24 crates, 55+ functions swapped to Rust
+- Created `nvim-ops` crate with operator lookup functions (5 functions total)
+- Total: 24 crates, 60+ functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
