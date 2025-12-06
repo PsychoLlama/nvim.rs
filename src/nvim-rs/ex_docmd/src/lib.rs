@@ -7,6 +7,11 @@
 use std::ffi::{c_char, c_int};
 use std::ptr;
 
+// FFI declaration for C helper function
+extern "C" {
+    fn cmdname_first_char(cmdidx: c_int) -> c_int;
+}
+
 /// Check if character ends an Ex command.
 ///
 /// Returns true if the character is one of:
@@ -126,6 +131,29 @@ pub unsafe extern "C" fn rs_check_nextcmd(p: *const c_char) -> *const c_char {
     } else {
         ptr::null()
     }
+}
+
+/// Check if command index is for a location list command.
+///
+/// Returns true if the command at the given index starts with 'l',
+/// indicating it's a location list command rather than a quickfix command.
+/// Returns false if the index is out of bounds.
+#[inline]
+pub fn is_loclist_cmd(cmdidx: i32, cmd_size: i32) -> bool {
+    if cmdidx < 0 || cmdidx >= cmd_size {
+        return false;
+    }
+    // Call C helper to get first char of command name
+    let first_char = unsafe { cmdname_first_char(cmdidx) };
+    first_char == b'l' as c_int
+}
+
+/// FFI wrapper for `is_loclist_cmd`.
+///
+/// Returns 1 if the command is a location list command, 0 otherwise.
+#[no_mangle]
+pub extern "C" fn rs_is_loclist_cmd(cmdidx: c_int, cmd_size: c_int) -> c_int {
+    c_int::from(is_loclist_cmd(cmdidx, cmd_size))
 }
 
 #[cfg(test)]

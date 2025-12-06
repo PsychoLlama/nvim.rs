@@ -116,6 +116,7 @@
 extern int rs_ends_excmd(int c);
 extern const char *rs_find_nextcmd(const char *p);
 extern const char *rs_check_nextcmd(const char *p);
+extern int rs_is_loclist_cmd(int cmdidx, int cmd_size);
 #endif
 
 static const char e_ambiguous_use_of_user_defined_command[]
@@ -181,6 +182,16 @@ struct dbg_stuff {
 
 // Declare cmdnames[].
 #include "ex_cmds_defs.generated.h"
+
+// Helper function to get first character of command name for Rust FFI
+// Returns 0 if cmdidx is out of bounds
+int cmdname_first_char(int cmdidx)
+{
+  if (cmdidx < 0 || cmdidx >= CMD_SIZE) {
+    return 0;
+  }
+  return (unsigned char)cmdnames[cmdidx].cmd_name[0];
+}
 
 static char dollar_command[2] = { '$', 0 };
 
@@ -7909,10 +7920,14 @@ static void ex_folddo(exarg_T *eap)
 bool is_loclist_cmd(int cmdidx)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_EX_DOCMD
+  return rs_is_loclist_cmd(cmdidx, CMD_SIZE) != 0;
+#else
   if (cmdidx < 0 || cmdidx >= CMD_SIZE) {
     return false;
   }
   return cmdnames[cmdidx].cmd_name[0] == 'l';
+#endif
 }
 
 bool get_pressedreturn(void)
