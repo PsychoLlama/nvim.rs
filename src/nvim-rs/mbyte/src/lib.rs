@@ -25,6 +25,8 @@
 
 use std::ffi::{c_char, c_int};
 
+use nvim_utf8proc::get_property;
+
 /// Maximum bytes in a UTF-8 character (standard is 4, but nvim supports up to 6).
 pub const MB_MAXBYTES: usize = 6;
 
@@ -652,6 +654,30 @@ pub extern "C" fn rs_utf_printable(c: c_int) -> c_int {
     c_int::from(utf_printable(c))
 }
 
+// Unicode property functions using utf8proc
+
+/// Check if a character is a composing character (legacy check).
+///
+/// Returns true for nonspacing marks (Mn) and enclosing marks (Me).
+/// This is a legacy check - for proper grapheme cluster detection,
+/// use the stateful grapheme algorithm instead.
+///
+/// Returns false for negative values.
+#[inline]
+pub fn utf_iscomposing_legacy(c: i32) -> bool {
+    if let Some(prop) = get_property(c) {
+        prop.is_composing_legacy()
+    } else {
+        false
+    }
+}
+
+/// FFI wrapper for `utf_iscomposing_legacy`.
+#[no_mangle]
+pub extern "C" fn rs_utf_iscomposing_legacy(c: c_int) -> c_int {
+    c_int::from(utf_iscomposing_legacy(c))
+}
+
 // Codepoint boundary detection
 
 /// Result of finding codepoint boundaries.
@@ -1103,6 +1129,31 @@ mod tests {
         assert_eq!(rs_utf_printable(0x100), 1);
         assert_eq!(rs_utf_printable(0x200b), 0); // Zero width space
         assert_eq!(rs_utf_printable(0xd800), 0); // Surrogate
+    }
+
+    #[test]
+    fn test_utf_iscomposing_legacy() {
+        // U+0300 COMBINING GRAVE ACCENT is a nonspacing mark (Mn)
+        assert!(utf_iscomposing_legacy(0x0300));
+
+        // U+20DD COMBINING ENCLOSING CIRCLE is an enclosing mark (Me)
+        assert!(utf_iscomposing_legacy(0x20DD));
+
+        // ASCII 'A' is not composing
+        assert!(!utf_iscomposing_legacy(0x41));
+
+        // Space is not composing
+        assert!(!utf_iscomposing_legacy(0x20));
+
+        // Negative values return false
+        assert!(!utf_iscomposing_legacy(-1));
+    }
+
+    #[test]
+    fn test_ffi_utf_iscomposing_legacy() {
+        assert_eq!(rs_utf_iscomposing_legacy(0x0300), 1);
+        assert_eq!(rs_utf_iscomposing_legacy(0x20DD), 1);
+        assert_eq!(rs_utf_iscomposing_legacy(0x41), 0);
     }
 
     #[test]

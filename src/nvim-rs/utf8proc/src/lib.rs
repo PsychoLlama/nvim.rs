@@ -5,6 +5,7 @@
 
 #![allow(unsafe_code)]
 #![allow(non_camel_case_types)]
+#![allow(clippy::used_underscore_binding)]
 
 /// utf8proc property structure containing Unicode character information.
 ///
@@ -37,6 +38,16 @@ pub struct Utf8procProperty {
     // boundclass: 6
     // indic_conjunct_break: 2
     _flags: u16,
+}
+
+/// Unicode General Category values (subset used by Neovim)
+pub mod category {
+    /// Mark, nonspacing (Mn)
+    pub const MN: i16 = 6;
+    /// Mark, spacing combining (Mc)
+    pub const MC: i16 = 7;
+    /// Mark, enclosing (Me)
+    pub const ME: i16 = 8;
 }
 
 /// Boundclass values for grapheme break rules
@@ -76,6 +87,17 @@ impl Utf8procProperty {
     pub const fn is_emojilike(&self) -> bool {
         let bc = self.boundclass();
         bc == boundclass::EXTENDED_PICTOGRAPHIC || bc == boundclass::REGIONAL_INDICATOR
+    }
+
+    /// Check if this is a composing character (legacy check).
+    ///
+    /// Returns true for nonspacing marks (Mn) and enclosing marks (Me).
+    /// This is a legacy check - for proper grapheme cluster detection,
+    /// use the stateful grapheme algorithm instead.
+    #[inline]
+    #[must_use]
+    pub const fn is_composing_legacy(&self) -> bool {
+        self.category == category::MN || self.category == category::ME
     }
 }
 
@@ -131,5 +153,20 @@ mod tests {
         // U+0300 is COMBINING GRAVE ACCENT
         let prop = get_property(0x0300).expect("should get property for combining accent");
         assert_eq!(prop.charwidth(), 0);
+    }
+
+    #[test]
+    fn test_is_composing_legacy() {
+        // U+0300 COMBINING GRAVE ACCENT is a nonspacing mark (Mn)
+        let prop = get_property(0x0300).expect("should get property for combining accent");
+        assert!(prop.is_composing_legacy());
+
+        // U+20DD COMBINING ENCLOSING CIRCLE is an enclosing mark (Me)
+        let prop = get_property(0x20DD).expect("should get property for enclosing mark");
+        assert!(prop.is_composing_legacy());
+
+        // ASCII 'A' is not composing
+        let prop = get_property(0x41).expect("should get property for 'A'");
+        assert!(!prop.is_composing_legacy());
     }
 }

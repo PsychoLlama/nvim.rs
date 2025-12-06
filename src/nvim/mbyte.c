@@ -100,6 +100,7 @@ extern int rs_utf_allow_break_before(int cc);
 extern int rs_utf_allow_break_after(int cc);
 extern int rs_utf_allow_break(int cc, int ncc);
 extern int rs_utf_printable(int c);
+extern int rs_utf_iscomposing_legacy(int c);
 
 // Rust struct for codepoint boundary offsets
 typedef struct {
@@ -1172,8 +1173,12 @@ int utf_char2bytes(const int c, char *const buf)
 /// Returns false for negative values.
 bool utf_iscomposing_legacy(int c)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_iscomposing_legacy(c);
+#else
   const utf8proc_property_t *prop = utf8proc_get_property(c);
   return prop->category == UTF8PROC_CATEGORY_MN || prop->category == UTF8PROC_CATEGORY_ME;
+#endif
 }
 
 #ifdef __SSE2__
