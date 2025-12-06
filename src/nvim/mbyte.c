@@ -2951,21 +2951,30 @@ char *string_convert_ext(const vimconv_T *const vcp, char *ptr, size_t *lenp, si
 }
 
 /// Table set by setcellwidths().
+/// Exposed for Rust FFI access.
 typedef struct {
   int64_t first;
   int64_t last;
   char width;
 } cw_interval_T;
 
-static cw_interval_T *cw_table = NULL;
-static size_t cw_table_size = 0;
+// Exposed for Rust FFI access (remove static).
+cw_interval_T *cw_table = NULL;
+size_t cw_table_size = 0;
+
+#ifdef USE_RUST_MBYTE
+extern int rs_cw_value(int c);
+#endif
 
 /// Return the value of the cellwidth table for the character `c`.
 ///
 /// @param c The source character.
 /// @return 1 or 2 when `c` is in the cellwidth table, 0 if not.
-static int cw_value(int c)
+int cw_value(int c)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_cw_value(c);
+#else
   if (cw_table == NULL) {
     return 0;
   }
@@ -2989,6 +2998,7 @@ static int cw_value(int c)
     }
   }
   return 0;
+#endif
 }
 
 static int tv_nr_compare(const void *a1, const void *a2)

@@ -23,7 +23,7 @@
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::uninlined_format_args)]
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_longlong};
 
 use nvim_utf8proc::{casefold, get_property, grapheme_break};
 
@@ -787,6 +787,73 @@ pub unsafe extern "C" fn rs_utf_ambiguous_width(p: *const c_char) -> c_int {
 
     let slice = unsafe { std::slice::from_raw_parts(p as *const u8, len) };
     c_int::from(utf_ambiguous_width(slice))
+}
+
+// Cell width table access (setcellwidths())
+
+/// Cell width interval as set by setcellwidths().
+/// Matches the C struct cw_interval_T.
+#[repr(C)]
+struct CwInterval {
+    first: c_longlong,  // int64_t
+    last: c_longlong,   // int64_t
+    width: i8,          // char
+}
+
+extern "C" {
+    /// Cell width table pointer (set by setcellwidths()).
+    static cw_table: *const CwInterval;
+    /// Size of the cell width table.
+    static cw_table_size: usize;
+}
+
+/// Return the value of the cellwidth table for the character `c`.
+///
+/// Returns 1 or 2 when `c` is in the cellwidth table, 0 if not.
+///
+/// This function performs binary search on the cw_table set by `setcellwidths()`.
+#[inline]
+pub fn cw_value(c: i32) -> i32 {
+    // SAFETY: cw_table and cw_table_size are managed by C code.
+    // cw_table is NULL initially and only set by setcellwidths().
+    let table = unsafe { cw_table };
+    let size = unsafe { cw_table_size };
+
+    if table.is_null() || size == 0 {
+        return 0;
+    }
+
+    // SAFETY: We just checked table is not null and size is valid.
+    let slice = unsafe { std::slice::from_raw_parts(table, size) };
+
+    // Quick check for Latin1 etc. characters
+    if (c as c_longlong) < slice[0].first {
+        return 0;
+    }
+
+    // Binary search in table
+    let mut bot: i32 = 0;
+    let mut top: i32 = size as i32 - 1;
+
+    while top >= bot {
+        let mid = i32::midpoint(bot, top);
+        let entry = &slice[mid as usize];
+        if entry.last < c as c_longlong {
+            bot = mid + 1;
+        } else if entry.first > c as c_longlong {
+            top = mid - 1;
+        } else {
+            return entry.width as i32;
+        }
+    }
+
+    0
+}
+
+/// FFI wrapper for `cw_value`.
+#[no_mangle]
+pub extern "C" fn rs_cw_value(c: c_int) -> c_int {
+    cw_value(c)
 }
 
 // Codepoint boundary detection
