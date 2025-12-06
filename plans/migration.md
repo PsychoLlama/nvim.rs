@@ -397,6 +397,7 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - [x] `is_dev_fd_file` - **Phase 2.35**: Swapped to Rust (USE_RUST_FILEIO) - /dev/fd/ path check
 - [x] `spell_valid_case` - **Phase 2.36**: Swapped to Rust (USE_RUST_SPELL) - spell case flag validation
 - [x] `byte_in_str` - **Phase 2.37**: Swapped to Rust (USE_RUST_SPELL) - byte search in string
+- [x] `schar_high` - **Phase 2.38**: Swapped to Rust (USE_RUST_GRID) - screen char cache format check
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
 

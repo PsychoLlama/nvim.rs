@@ -38,6 +38,11 @@
 
 #include "grid.c.generated.h"
 
+#ifdef USE_RUST_GRID
+// Rust implementation of schar_high
+extern bool rs_schar_high(schar_T sc);
+#endif
+
 // temporary buffer for rendering a single screenline, so it can be
 // compared with previous contents to calculate smallest delta.
 // Per-cell attributes
@@ -133,10 +138,14 @@ void schar_cache_clear(void)
 
 bool schar_high(schar_T sc)
 {
-#ifdef ORDER_BIG_ENDIAN
-  return ((sc & 0xFF000000) == 0xFF000000);
+#ifdef USE_RUST_GRID
+  return rs_schar_high(sc);
 #else
+#  ifdef ORDER_BIG_ENDIAN
+  return ((sc & 0xFF000000) == 0xFF000000);
+#  else
   return ((sc & 0xFF) == 0xFF);
+#  endif
 #endif
 }
 
