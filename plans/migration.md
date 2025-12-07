@@ -93,10 +93,17 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - [x] bt_dontwrite: checks nowrite, nofile, terminal, or prompt buffers
 - [x] Updated cbindgen exports
 
-**Remaining candidates:**
-- window.c frame functions
-- plines.c display calculations
-- bt_nofileread (static function, lower priority)
+**Phase 3.4: Exploration (No additional migrations)**
+Most simple pure functions (`FUNC_ATTR_PURE`, `FUNC_ATTR_CONST`) in the codebase
+are now migrated. Remaining candidates either:
+- Return global state (not truly pure functions)
+- Are static/internal to their file
+- Require complex struct access via opaque handles
+
+**Next targets requiring opaque handle pattern:**
+- window.c frame functions (need WinHandle + frame accessors)
+- plines.c display calculations (need window/buffer accessors)
+- bt_nofileread (static, lower priority)
 
 ### Phase 4: Event Loop & Async I/O
 - event/loop.c - libuv wrapper or tokio replacement
