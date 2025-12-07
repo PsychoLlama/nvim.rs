@@ -83,13 +83,29 @@
 # define PATHSEPSTR     "/"
 #endif
 
+#ifdef USE_RUST_ASCII
+extern int rs_ascii_iswhite(int c);
+extern int rs_ascii_iswhite_or_nul(int c);
+extern int rs_ascii_iswhite_nl_or_nul(int c);
+extern int rs_ascii_isdigit(int c);
+extern int rs_ascii_isxdigit(int c);
+extern int rs_ascii_isident(int c);
+extern int rs_ascii_isbdigit(int c);
+extern int rs_ascii_isodigit(int c);
+extern int rs_ascii_isspace(int c);
+#endif
+
 /// Checks if `c` is a space or tab character.
 ///
 /// @see {ascii_isdigit}
 static inline bool ascii_iswhite(int c)
   FUNC_ATTR_CONST FUNC_ATTR_ALWAYS_INLINE
 {
+#ifdef USE_RUST_ASCII
+  return rs_ascii_iswhite(c) != 0;
+#else
   return c == ' ' || c == '\t';
+#endif
 }
 
 /// Checks if `c` is a space or tab character or NUL.
@@ -98,7 +114,11 @@ static inline bool ascii_iswhite(int c)
 static inline bool ascii_iswhite_or_nul(int c)
   FUNC_ATTR_CONST FUNC_ATTR_ALWAYS_INLINE
 {
+#ifdef USE_RUST_ASCII
+  return rs_ascii_iswhite_or_nul(c) != 0;
+#else
   return ascii_iswhite(c) || c == NUL;
+#endif
 }
 
 /// Checks if `c` is a space or tab or newline character or NUL.
@@ -107,7 +127,11 @@ static inline bool ascii_iswhite_or_nul(int c)
 static inline bool ascii_iswhite_nl_or_nul(int c)
   FUNC_ATTR_CONST FUNC_ATTR_ALWAYS_INLINE
 {
+#ifdef USE_RUST_ASCII
+  return rs_ascii_iswhite_nl_or_nul(c) != 0;
+#else
   return ascii_iswhite(c) || c == '\n' || c == NUL;
+#endif
 }
 
 /// Check whether character is a decimal digit.
@@ -122,7 +146,11 @@ static inline bool ascii_iswhite_nl_or_nul(int c)
 static inline bool ascii_isdigit(int c)
   FUNC_ATTR_CONST FUNC_ATTR_ALWAYS_INLINE
 {
+#ifdef USE_RUST_ASCII
+  return rs_ascii_isdigit(c) != 0;
+#else
   return c >= '0' && c <= '9';
+#endif
 }
 
 /// Checks if `c` is a hexadecimal digit, that is, one of 0-9, a-f, A-F.
@@ -131,9 +159,13 @@ static inline bool ascii_isdigit(int c)
 static inline bool ascii_isxdigit(int c)
   FUNC_ATTR_CONST FUNC_ATTR_ALWAYS_INLINE
 {
+#ifdef USE_RUST_ASCII
+  return rs_ascii_isxdigit(c) != 0;
+#else
   return (c >= '0' && c <= '9')
          || (c >= 'a' && c <= 'f')
          || (c >= 'A' && c <= 'F');
+#endif
 }
 
 /// Checks if `c` is an “identifier” character
@@ -142,7 +174,11 @@ static inline bool ascii_isxdigit(int c)
 static inline bool ascii_isident(int c)
   FUNC_ATTR_CONST FUNC_ATTR_ALWAYS_INLINE
 {
+#ifdef USE_RUST_ASCII
+  return rs_ascii_isident(c) != 0;
+#else
   return ASCII_ISALNUM(c) || c == '_';
+#endif
 }
 
 /// Checks if `c` is a binary digit, that is, 0-1.
@@ -151,7 +187,11 @@ static inline bool ascii_isident(int c)
 static inline bool ascii_isbdigit(int c)
   FUNC_ATTR_CONST FUNC_ATTR_ALWAYS_INLINE
 {
+#ifdef USE_RUST_ASCII
+  return rs_ascii_isbdigit(c) != 0;
+#else
   return (c == '0' || c == '1');
+#endif
 }
 
 /// Checks if `c` is an octal digit, that is, 0-7.
@@ -160,7 +200,11 @@ static inline bool ascii_isbdigit(int c)
 static inline bool ascii_isodigit(int c)
   FUNC_ATTR_CONST FUNC_ATTR_ALWAYS_INLINE
 {
+#ifdef USE_RUST_ASCII
+  return rs_ascii_isodigit(c) != 0;
+#else
   return (c >= '0' && c <= '7');
+#endif
 }
 
 /// Checks if `c` is a white-space character, that is,
@@ -170,5 +214,9 @@ static inline bool ascii_isodigit(int c)
 static inline bool ascii_isspace(int c)
   FUNC_ATTR_CONST FUNC_ATTR_ALWAYS_INLINE
 {
+#ifdef USE_RUST_ASCII
+  return rs_ascii_isspace(c) != 0;
+#else
   return (c >= 9 && c <= 13) || c == ' ';
+#endif
 }

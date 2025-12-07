@@ -12,21 +12,21 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 3.11 Complete)
+## Current Status (Phase 3.12 Complete)
 
-**147+ functions migrated across 31 Rust crates:**
+**160+ functions migrated across 32 Rust crates:**
 - nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
 - nvim-memutil, nvim-os, nvim-collections, nvim-encoding
 - nvim-utf8proc, nvim-arabic, nvim-grid, nvim-ops, nvim-register
 - nvim-spell, nvim-eval, nvim-ex_docmd, nvim-indent, nvim-keycodes
 - nvim-profile, nvim-menu, nvim-help, nvim-cmdhist, nvim-fileio
-- nvim-version, nvim-window, nvim-buffer, nvim-mark
+- nvim-version, nvim-window, nvim-buffer, nvim-mark, nvim-ascii
 
 **Build system:**
 - Cargo workspace at `src/nvim-rs/`
 - CMake integration via USE_RUST_* flags
 - cbindgen generates C headers from Rust
-- 284 rs_* symbols exported
+- 299 rs_* symbols exported
 
 ---
 
@@ -138,6 +138,20 @@ Remaining FUNC_ATTR_PURE/FUNC_ATTR_CONST functions require infrastructure not ye
 - [x] rs_ltoreq(): compare positions (a <= b)
 - [x] USE_RUST_MARK conditional compilation in mark.h and mark_defs.h
 - [x] USE_RUST_MATH conditional compilation in math.h for is_power_of_two
+
+**Phase 3.12: ASCII character classification functions ✅**
+- [x] New nvim-ascii crate for pure ASCII character classification
+- [x] rs_ascii_iswhite(): checks space or tab
+- [x] rs_ascii_iswhite_or_nul(): space, tab, or NUL
+- [x] rs_ascii_iswhite_nl_or_nul(): space, tab, newline, or NUL
+- [x] rs_ascii_isdigit(): decimal digit 0-9
+- [x] rs_ascii_isxdigit(): hexadecimal digit 0-9, a-f, A-F
+- [x] rs_ascii_isbdigit(): binary digit 0-1
+- [x] rs_ascii_isodigit(): octal digit 0-7
+- [x] rs_ascii_isspace(): whitespace (\f, \n, \r, \t, \v, space)
+- [x] rs_ascii_isident(): identifier char (alphanumeric or underscore)
+- [x] rs_ascii_isupper(), rs_ascii_islower(), rs_ascii_isalpha(), rs_ascii_isalnum()
+- [x] USE_RUST_ASCII conditional compilation in ascii_defs.h
 
 **Phase 3.5: Window/frame function exploration (blocked)**
 Window and frame functions require infrastructure not yet in place:
@@ -261,4 +275,4 @@ extern "C" {
 **Test:** `just test`
 **Rust tests:** `cargo test --workspace`
 **Check:** `cargo clippy && cargo fmt --check`
-**Symbols:** `nm build/bin/nvim | grep "T rs_" | wc -l` (currently 269)
+**Symbols:** `nm target/release/libnvim_rs.a | grep " T rs_" | wc -l` (currently 299)

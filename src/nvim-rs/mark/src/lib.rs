@@ -147,11 +147,31 @@ mod tests {
 
     #[test]
     fn test_lt() {
-        let pos1 = PosT { lnum: 1, col: 5, coladd: 0 };
-        let pos2 = PosT { lnum: 2, col: 3, coladd: 0 };
-        let pos3 = PosT { lnum: 1, col: 10, coladd: 0 };
-        let pos4 = PosT { lnum: 1, col: 5, coladd: 1 };
-        let pos5 = PosT { lnum: 1, col: 5, coladd: 0 };
+        let pos1 = PosT {
+            lnum: 1,
+            col: 5,
+            coladd: 0,
+        };
+        let pos2 = PosT {
+            lnum: 2,
+            col: 3,
+            coladd: 0,
+        };
+        let pos3 = PosT {
+            lnum: 1,
+            col: 10,
+            coladd: 0,
+        };
+        let pos4 = PosT {
+            lnum: 1,
+            col: 5,
+            coladd: 1,
+        };
+        let pos5 = PosT {
+            lnum: 1,
+            col: 5,
+            coladd: 0,
+        };
 
         // Different lines
         assert_ne!(rs_lt(pos1, pos2), 0); // pos1 < pos2 (line 1 < line 2)
@@ -171,11 +191,31 @@ mod tests {
 
     #[test]
     fn test_equalpos() {
-        let pos1 = PosT { lnum: 1, col: 5, coladd: 0 };
-        let pos2 = PosT { lnum: 1, col: 5, coladd: 0 };
-        let pos3 = PosT { lnum: 1, col: 5, coladd: 1 };
-        let pos4 = PosT { lnum: 1, col: 6, coladd: 0 };
-        let pos5 = PosT { lnum: 2, col: 5, coladd: 0 };
+        let pos1 = PosT {
+            lnum: 1,
+            col: 5,
+            coladd: 0,
+        };
+        let pos2 = PosT {
+            lnum: 1,
+            col: 5,
+            coladd: 0,
+        };
+        let pos3 = PosT {
+            lnum: 1,
+            col: 5,
+            coladd: 1,
+        };
+        let pos4 = PosT {
+            lnum: 1,
+            col: 6,
+            coladd: 0,
+        };
+        let pos5 = PosT {
+            lnum: 2,
+            col: 5,
+            coladd: 0,
+        };
 
         assert_ne!(rs_equalpos(pos1, pos2), 0); // equal
         assert_eq!(rs_equalpos(pos1, pos3), 0); // different coladd
@@ -185,10 +225,26 @@ mod tests {
 
     #[test]
     fn test_ltoreq() {
-        let pos1 = PosT { lnum: 1, col: 5, coladd: 0 };
-        let pos2 = PosT { lnum: 1, col: 5, coladd: 0 };
-        let pos3 = PosT { lnum: 1, col: 10, coladd: 0 };
-        let pos4 = PosT { lnum: 2, col: 1, coladd: 0 };
+        let pos1 = PosT {
+            lnum: 1,
+            col: 5,
+            coladd: 0,
+        };
+        let pos2 = PosT {
+            lnum: 1,
+            col: 5,
+            coladd: 0,
+        };
+        let pos3 = PosT {
+            lnum: 1,
+            col: 10,
+            coladd: 0,
+        };
+        let pos4 = PosT {
+            lnum: 2,
+            col: 1,
+            coladd: 0,
+        };
 
         // Equal positions
         assert_ne!(rs_ltoreq(pos1, pos2), 0);
