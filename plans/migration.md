@@ -13,9 +13,9 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 3.27 Complete)
+## Current Status (Phase 3.28 Complete)
 
-**170+ functions migrated across 32 Rust crates:**
+**175+ functions migrated across 32 Rust crates:**
 
 - nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
 - nvim-memutil, nvim-os, nvim-collections, nvim-encoding
@@ -29,7 +29,7 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - Cargo workspace at `src/nvim-rs/`
 - CMake integration via USE*RUST*\* flags
 - cbindgen generates C headers from Rust
-- 328 rs\_\* symbols exported
+- 330 rs\_\* symbols exported
 
 ---
 
@@ -145,6 +145,12 @@ Validation functions migrated: `win_valid`, `win_valid_any_tab`, `valid_tabpage`
 - [x] Implemented frame_check_height_impl (verify FR_ROW children heights)
 - [x] Implemented frame_check_width_impl (verify FR_COL children widths)
 - [x] Used for window layout consistency validation
+
+### Phase 3.28: win_find_by_handle ✅
+
+- [x] Added nvim_win_get_handle accessor for window handle field
+- [x] Implemented win_find_by_handle_impl (iterate curtab windows)
+- [x] Returns window by handle in current tabpage
 
 ### Remaining Blockers
 
