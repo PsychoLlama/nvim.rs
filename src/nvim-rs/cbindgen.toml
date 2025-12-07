@@ -60,5 +60,5 @@ include = ["rs_xfpclassify", "rs_xisinf", "rs_xisnan", "rs_xctz", "rs_xpopcount"
            "rs_valid_spelllang", "rs_spell_valid_case", "rs_byte_in_str",
            "rs_win_locked", "WinHandle",
            "rs_bt_prompt", "rs_bt_normal", "rs_bt_quickfix", "rs_bt_terminal",
-           "rs_bt_nofile", "rs_bt_help", "BufHandle",
+           "rs_bt_nofile", "rs_bt_help", "rs_bt_nofilename", "rs_bt_dontwrite", "BufHandle",
            "nvim_rs_version"]

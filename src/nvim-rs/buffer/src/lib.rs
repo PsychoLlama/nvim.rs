@@ -55,6 +55,9 @@ extern "C" {
 
     /// Get the `b_help` field from a buffer.
     fn nvim_buf_get_help(buf: BufHandle) -> c_int;
+
+    /// Check if buffer has a terminal attached (`buf->terminal != NULL`).
+    fn nvim_buf_get_terminal(buf: BufHandle) -> c_int;
 }
 
 /// Check if buffer is a prompt buffer ('buftype' starts with 'p').
@@ -131,8 +134,7 @@ fn bt_nofile_impl(buf: BufHandle) -> bool {
     }
     // SAFETY: We check for null above.
     unsafe {
-        nvim_buf_get_buftype(buf) == b'n' as c_char
-            && nvim_buf_get_buftype_2(buf) == b'f' as c_char
+        nvim_buf_get_buftype(buf) == b'n' as c_char && nvim_buf_get_buftype_2(buf) == b'f' as c_char
     }
 }
 
@@ -158,6 +160,59 @@ pub extern "C" fn rs_bt_help(buf: BufHandle) -> c_int {
     c_int::from(bt_help_impl(buf))
 }
 
+/// Check if buffer has a name that may not be a file name.
+///
+/// Returns true if buffer is "nofile", "acwrite", terminal, or "prompt".
+/// This means the buffer name may not be a file name, at least not for writing.
+#[inline]
+fn bt_nofilename_impl(buf: BufHandle) -> bool {
+    if buf.is_null() {
+        return false;
+    }
+    // SAFETY: We check for null above.
+    unsafe {
+        let bt0 = nvim_buf_get_buftype(buf);
+        // "nofile": b_p_bt[0]=='n' && b_p_bt[2]=='f'
+        // "acwrite": b_p_bt[0]=='a'
+        // terminal: buf->terminal != NULL
+        // "prompt": b_p_bt[0]=='p'
+        (bt0 == b'n' as c_char && nvim_buf_get_buftype_2(buf) == b'f' as c_char)
+            || bt0 == b'a' as c_char
+            || nvim_buf_get_terminal(buf) != 0
+            || bt0 == b'p' as c_char
+    }
+}
+
+/// FFI wrapper for `bt_nofilename`.
+#[no_mangle]
+pub extern "C" fn rs_bt_nofilename(buf: BufHandle) -> c_int {
+    c_int::from(bt_nofilename_impl(buf))
+}
+
+/// Check if buffer should not be written.
+///
+/// Returns true if buffer is "nowrite", "nofile", terminal, or "prompt".
+#[inline]
+fn bt_dontwrite_impl(buf: BufHandle) -> bool {
+    if buf.is_null() {
+        return false;
+    }
+    // SAFETY: We check for null above.
+    unsafe {
+        let bt0 = nvim_buf_get_buftype(buf);
+        // "nowrite" or "nofile": b_p_bt[0]=='n'
+        // terminal: buf->terminal != NULL
+        // "prompt": b_p_bt[0]=='p'
+        bt0 == b'n' as c_char || nvim_buf_get_terminal(buf) != 0 || bt0 == b'p' as c_char
+    }
+}
+
+/// FFI wrapper for `bt_dontwrite`.
+#[no_mangle]
+pub extern "C" fn rs_bt_dontwrite(buf: BufHandle) -> c_int {
+    c_int::from(bt_dontwrite_impl(buf))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -172,6 +227,8 @@ mod tests {
         assert!(!bt_terminal_impl(handle));
         assert!(!bt_nofile_impl(handle));
         assert!(!bt_help_impl(handle));
+        assert!(!bt_nofilename_impl(handle));
+        assert!(!bt_dontwrite_impl(handle));
     }
 
     #[test]
