@@ -167,6 +167,12 @@ extern "C" {
     /// Get the `fr_next` field from a frame (next sibling).
     fn nvim_frame_get_next(frp: FrameHandle) -> FrameHandle;
 
+    /// Get the `fr_parent` field from a frame.
+    fn nvim_frame_get_parent(frp: FrameHandle) -> FrameHandle;
+
+    /// Get the `w_frame` field from a window.
+    fn nvim_win_get_frame(wp: WinHandle) -> FrameHandle;
+
     /// Get the `w_p_wfh` (winfixheight) field from a window.
     fn nvim_win_get_wfh(wp: WinHandle) -> c_int;
 
@@ -605,6 +611,52 @@ fn frame_fixed_width_impl(frp: FrameHandle) -> bool {
 #[no_mangle]
 pub extern "C" fn rs_frame_fixed_width(frp: FrameHandle) -> c_int {
     c_int::from(frame_fixed_width_impl(frp))
+}
+
+/// Check if window is at the bottom of its column.
+///
+/// This is the Rust equivalent of `is_bottom_win()` in window.c.
+/// Returns true if there are no windows below the current window.
+/// Traverses up the frame tree, checking if any parent is a column
+/// layout with a sibling frame below.
+#[inline]
+fn is_bottom_win_impl(wp: WinHandle) -> bool {
+    if wp.is_null() {
+        return true;
+    }
+
+    // Get the window's frame
+    // SAFETY: wp is not null, and nvim_win_get_frame is a safe accessor
+    let mut frp = unsafe { nvim_win_get_frame(wp) };
+
+    // Traverse up the frame tree
+    loop {
+        // SAFETY: Safe accessor
+        let parent = unsafe { nvim_frame_get_parent(frp) };
+        if parent.is_null() {
+            break;
+        }
+
+        // If parent is a column layout and there's a sibling below, not at bottom
+        // SAFETY: Safe accessors
+        let parent_layout = unsafe { nvim_frame_get_layout(parent) };
+        let next_sibling = unsafe { nvim_frame_get_next(frp) };
+
+        if parent_layout == FR_COL && !next_sibling.is_null() {
+            return false;
+        }
+
+        frp = parent;
+    }
+    true
+}
+
+/// FFI wrapper for `is_bottom_win`.
+///
+/// Returns non-zero if the window is at the bottom.
+#[no_mangle]
+pub extern "C" fn rs_is_bottom_win(wp: WinHandle) -> c_int {
+    c_int::from(is_bottom_win_impl(wp))
 }
 
 /// Count the number of windows in the current tabpage.

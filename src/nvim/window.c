@@ -100,6 +100,7 @@ extern int rs_valid_tabpage_win(tabpage_T *tpc);
 extern int rs_frame_has_win(frame_T *frp, win_T *wp);
 extern int rs_frame_fixed_height(frame_T *frp);
 extern int rs_frame_fixed_width(frame_T *frp);
+extern int rs_is_bottom_win(win_T *wp);
 #endif
 
 // Accessor functions for Rust opaque handle pattern.
@@ -208,6 +209,20 @@ frame_T *nvim_frame_get_child(frame_T *frp)
 frame_T *nvim_frame_get_next(frame_T *frp)
 {
   return frp->fr_next;
+}
+
+/// Get the fr_parent field from a frame (accessor for Rust).
+/// Parent frame in the frame tree.
+frame_T *nvim_frame_get_parent(frame_T *frp)
+{
+  return frp->fr_parent;
+}
+
+/// Get the w_frame field from a window (accessor for Rust).
+/// The window's frame in the frame tree.
+frame_T *nvim_win_get_frame(win_T *wp)
+{
+  return wp->w_frame;
 }
 
 /// Get w_p_wfh (winfixheight) from a window (accessor for Rust).
@@ -3746,12 +3761,16 @@ static bool frame_has_win(const frame_T *frp, const win_T *wp)
 static bool is_bottom_win(win_T *wp)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_WINDOW
+  return rs_is_bottom_win(wp) != 0;
+#else
   for (frame_T *frp = wp->w_frame; frp->fr_parent != NULL; frp = frp->fr_parent) {
     if (frp->fr_parent->fr_layout == FR_COL && frp->fr_next != NULL) {
       return false;
     }
   }
   return true;
+#endif
 }
 
 /// Set a new height for a frame.  Recursively sets the height for contained
