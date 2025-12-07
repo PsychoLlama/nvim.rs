@@ -86,6 +86,9 @@
 
 #ifdef USE_RUST_WINDOW
 extern int rs_win_locked(win_T *wp);
+extern int rs_win_valid(win_T *win);
+extern int rs_tabpage_win_valid(tabpage_T *tp, win_T *win);
+extern int rs_one_window(void);
 #endif
 
 // Accessor functions for Rust opaque handle pattern.
@@ -107,6 +110,51 @@ int nvim_win_get_floating(win_T *wp)
 int nvim_win_get_pvw(win_T *wp)
 {
   return wp->w_p_pvw;
+}
+
+/// Get the w_next field from a window (accessor for Rust).
+win_T *nvim_win_get_next(win_T *wp)
+{
+  return wp->w_next;
+}
+
+// Global state accessors for Rust.
+// These provide safe access to global variables from Rust code.
+
+/// Get the current window (accessor for Rust).
+win_T *nvim_get_curwin(void)
+{
+  return curwin;
+}
+
+/// Get the first window in the current tab (accessor for Rust).
+win_T *nvim_get_firstwin(void)
+{
+  return firstwin;
+}
+
+/// Get the last window in the current tab (accessor for Rust).
+win_T *nvim_get_lastwin(void)
+{
+  return lastwin;
+}
+
+/// Get the current buffer (accessor for Rust).
+buf_T *nvim_get_curbuf(void)
+{
+  return curbuf;
+}
+
+/// Get the current tabpage (accessor for Rust).
+tabpage_T *nvim_get_curtab(void)
+{
+  return curtab;
+}
+
+/// Get the tp_firstwin field from a tabpage (accessor for Rust).
+win_T *nvim_tabpage_get_firstwin(tabpage_T *tp)
+{
+  return tp->tp_firstwin;
 }
 
 #define NOWIN           ((win_T *)-1)   // non-existing window
@@ -1700,7 +1748,11 @@ static void win_init_some(win_T *newp, win_T *oldp)
 /// @param  win  window to check
 bool win_valid(const win_T *win) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_WINDOW
+  return rs_win_valid((win_T *)win) != 0;
+#else
   return tabpage_win_valid(curtab, win);
+#endif
 }
 
 /// Check if "win" is a pointer to an existing window in tabpage "tp".
@@ -1709,6 +1761,9 @@ bool win_valid(const win_T *win) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 bool tabpage_win_valid(const tabpage_T *tp, const win_T *win)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_WINDOW
+  return rs_tabpage_win_valid((tabpage_T *)tp, (win_T *)win) != 0;
+#else
   if (win == NULL) {
     return false;
   }
@@ -1719,6 +1774,7 @@ bool tabpage_win_valid(const tabpage_T *tp, const win_T *win)
     }
   }
   return false;
+#endif
 }
 
 // Find window "handle" in the current tab page.
