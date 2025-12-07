@@ -12,21 +12,21 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 3.10 Complete)
+## Current Status (Phase 3.11 Complete)
 
-**141+ functions migrated across 30 Rust crates:**
+**147+ functions migrated across 31 Rust crates:**
 - nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
 - nvim-memutil, nvim-os, nvim-collections, nvim-encoding
 - nvim-utf8proc, nvim-arabic, nvim-grid, nvim-ops, nvim-register
 - nvim-spell, nvim-eval, nvim-ex_docmd, nvim-indent, nvim-keycodes
 - nvim-profile, nvim-menu, nvim-help, nvim-cmdhist, nvim-fileio
-- nvim-version, nvim-window, nvim-buffer
+- nvim-version, nvim-window, nvim-buffer, nvim-mark
 
 **Build system:**
 - Cargo workspace at `src/nvim-rs/`
 - CMake integration via USE_RUST_* flags
 - cbindgen generates C headers from Rust
-- 279 rs_* symbols exported
+- 284 rs_* symbols exported
 
 ---
 
@@ -128,6 +128,16 @@ Remaining FUNC_ATTR_PURE/FUNC_ATTR_CONST functions require infrastructure not ye
 - [x] rs_get_register_name(): converts register index back to character name
 - [x] USE_RUST_REGISTER conditional compilation in register.h
 - [x] DELETION_REGISTER, STAR_REGISTER, PLUS_REGISTER constants
+
+**Phase 3.11: Math and mark inline functions ✅**
+- [x] New nvim-mark crate with pos_T FFI struct
+- [x] rs_mark_global_index(): convert global mark name (A-Z, 0-9) to index
+- [x] rs_mark_local_index(): convert local mark name (a-z, ", ^, .) to index
+- [x] rs_lt(): compare positions (a < b)
+- [x] rs_equalpos(): check position equality
+- [x] rs_ltoreq(): compare positions (a <= b)
+- [x] USE_RUST_MARK conditional compilation in mark.h and mark_defs.h
+- [x] USE_RUST_MATH conditional compilation in math.h for is_power_of_two
 
 **Phase 3.5: Window/frame function exploration (blocked)**
 Window and frame functions require infrastructure not yet in place:

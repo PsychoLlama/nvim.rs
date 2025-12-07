@@ -14,6 +14,7 @@ members = [
     "src/nvim-rs/help",
     "src/nvim-rs/indent",
     "src/nvim-rs/keycodes",
+    "src/nvim-rs/mark",
     "src/nvim-rs/math",
     "src/nvim-rs/mbyte",
     "src/nvim-rs/memory",

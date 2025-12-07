@@ -97,10 +97,19 @@ typedef struct {
 
 #define INIT_XFMARK { INIT_FMARK, NULL }
 
+#ifdef USE_RUST_MARK
+extern int rs_lt(pos_T a, pos_T b);
+extern int rs_equalpos(pos_T a, pos_T b);
+extern int rs_ltoreq(pos_T a, pos_T b);
+#endif
+
 /// Return true if position a is before (less than) position b.
 static inline bool lt(pos_T a, pos_T b)
   FUNC_ATTR_CONST FUNC_ATTR_ALWAYS_INLINE
 {
+#ifdef USE_RUST_MARK
+  return rs_lt(a, b) != 0;
+#else
   if (a.lnum != b.lnum) {
     return a.lnum < b.lnum;
   } else if (a.col != b.col) {
@@ -108,18 +117,27 @@ static inline bool lt(pos_T a, pos_T b)
   } else {
     return a.coladd < b.coladd;
   }
+#endif
 }
 
 static inline bool equalpos(pos_T a, pos_T b)
   FUNC_ATTR_CONST FUNC_ATTR_ALWAYS_INLINE
 {
+#ifdef USE_RUST_MARK
+  return rs_equalpos(a, b) != 0;
+#else
   return (a.lnum == b.lnum) && (a.col == b.col) && (a.coladd == b.coladd);
+#endif
 }
 
 static inline bool ltoreq(pos_T a, pos_T b)
   FUNC_ATTR_CONST FUNC_ATTR_ALWAYS_INLINE
 {
+#ifdef USE_RUST_MARK
+  return rs_ltoreq(a, b) != 0;
+#else
   return lt(a, b) || equalpos(a, b);
+#endif
 }
 
 static inline void clearpos(pos_T *a)

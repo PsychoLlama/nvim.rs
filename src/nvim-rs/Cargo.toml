@@ -26,6 +26,7 @@ nvim-grid = { path = "grid" }
 nvim-help = { path = "help" }
 nvim-indent = { path = "indent" }
 nvim-keycodes = { path = "keycodes" }
+nvim-mark = { path = "mark" }
 nvim-math = { path = "math" }
 nvim-mbyte = { path = "mbyte" }
 nvim-memutil = { path = "memutil" }

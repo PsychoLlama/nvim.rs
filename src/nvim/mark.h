@@ -12,21 +12,33 @@
 #include "mark.h.generated.h"
 #include "mark.h.inline.generated.h"
 
+#ifdef USE_RUST_MARK
+extern int rs_mark_global_index(int name);
+extern int rs_mark_local_index(int name);
+#endif
+
 /// Convert mark name to the offset
 static inline int mark_global_index(const char name)
   FUNC_ATTR_CONST
 {
+#ifdef USE_RUST_MARK
+  return rs_mark_global_index((int)name);
+#else
   return (ASCII_ISUPPER(name)
           ? (name - 'A')
           : (ascii_isdigit(name)
              ? (NMARKS + (name - '0'))
              : -1));
+#endif
 }
 
 /// Convert local mark name to the offset
 static inline int mark_local_index(const char name)
   FUNC_ATTR_CONST
 {
+#ifdef USE_RUST_MARK
+  return rs_mark_local_index((int)name);
+#else
   return (ASCII_ISLOWER(name)
           ? (name - 'a')
           : (name == '"'
@@ -36,6 +48,7 @@ static inline int mark_local_index(const char name)
                 : (name == '.'
                    ? NMARKS + 2
                    : -1))));
+#endif
 }
 
 /// Global marks (marks with file number or name)
