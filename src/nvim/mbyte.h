@@ -53,13 +53,21 @@ extern const uint8_t utf8len_tab[256];
 #define MB_PTR_BACK(s, p) \
   (p -= utf_head_off((char *)(s), (char *)(p) - 1) + 1)
 
+#ifdef USE_RUST_MBYTE
+extern int rs_utf_is_trail_byte(int byte);
+#endif
+
 /// Check whether a given UTF-8 byte is a trailing byte (10xx.xxxx).
 
 static inline bool utf_is_trail_byte(uint8_t const byte)
   FUNC_ATTR_CONST FUNC_ATTR_ALWAYS_INLINE
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_is_trail_byte(byte) != 0;
+#else
   // uint8_t is for clang to use smaller cmp
   return (uint8_t)(byte & 0xC0U) == 0x80U;
+#endif
 }
 
 /// Convert a UTF-8 byte sequence to a Unicode code point.

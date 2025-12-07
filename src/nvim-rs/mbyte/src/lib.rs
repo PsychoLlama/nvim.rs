@@ -457,6 +457,25 @@ pub extern "C" fn rs_utf_byte2len(b: c_int) -> c_int {
     }
 }
 
+/// Check whether a given UTF-8 byte is a trailing byte (10xx.xxxx).
+///
+/// A UTF-8 trailing byte has the bit pattern 10xxxxxx (0x80-0xBF).
+///
+/// # Arguments
+/// * `byte` - The byte value to check
+///
+/// # Returns
+/// 1 if the byte is a UTF-8 trailing byte, 0 otherwise
+#[no_mangle]
+pub extern "C" fn rs_utf_is_trail_byte(byte: c_int) -> c_int {
+    // Only check bottom 8 bits, treat out-of-range as non-trail
+    if byte < 0 || byte > 255 {
+        return 0;
+    }
+    let b = byte as u8;
+    c_int::from((b & 0xC0) == 0x80)
+}
+
 /// Decode UTF-8 byte sequence to Unicode codepoint.
 ///
 /// # Safety
@@ -2396,6 +2415,44 @@ mod tests {
         // Invalid
         assert_eq!(UTF8LEN_TAB[0xFE], 1);
         assert_eq!(UTF8LEN_TAB[0xFF], 1);
+    }
+
+    #[test]
+    fn test_utf_is_trail_byte() {
+        // Trailing bytes (10xxxxxx = 0x80-0xBF)
+        for b in 0x80..=0xBF {
+            assert_ne!(
+                rs_utf_is_trail_byte(b),
+                0,
+                "Expected 0x{:02X} to be a trail byte",
+                b
+            );
+        }
+
+        // Non-trailing bytes: ASCII (0x00-0x7F)
+        for b in 0x00..=0x7F {
+            assert_eq!(
+                rs_utf_is_trail_byte(b),
+                0,
+                "Expected 0x{:02X} to NOT be a trail byte",
+                b
+            );
+        }
+
+        // Non-trailing bytes: Multi-byte sequence starts (0xC0-0xFF)
+        for b in 0xC0..=0xFF {
+            assert_eq!(
+                rs_utf_is_trail_byte(b),
+                0,
+                "Expected 0x{:02X} to NOT be a trail byte",
+                b
+            );
+        }
+
+        // Edge cases: negative and out-of-range values
+        assert_eq!(rs_utf_is_trail_byte(-1), 0);
+        assert_eq!(rs_utf_is_trail_byte(256), 0);
+        assert_eq!(rs_utf_is_trail_byte(1000), 0);
     }
 
     #[test]
