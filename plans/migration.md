@@ -12,9 +12,9 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 2.85 Complete)
+## Current Status (Phase 2.86 Complete)
 
-**117+ functions migrated across 27 Rust crates:**
+**118+ functions migrated across 27 Rust crates:**
 - nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
 - nvim-memutil, nvim-os, nvim-collections, nvim-encoding
 - nvim-utf8proc, nvim-arabic, nvim-grid, nvim-ops, nvim-register
