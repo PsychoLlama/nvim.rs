@@ -174,6 +174,48 @@ tabpage_T *nvim_get_first_tabpage(void)
   return first_tabpage;
 }
 
+// Frame accessors for Rust opaque handle pattern.
+
+/// Get the fr_layout field from a frame (accessor for Rust).
+/// Returns FR_LEAF (0), FR_ROW (1), or FR_COL (2).
+int nvim_frame_get_layout(frame_T *frp)
+{
+  return frp->fr_layout;
+}
+
+/// Get the fr_win field from a frame (accessor for Rust).
+/// Only valid when fr_layout == FR_LEAF.
+win_T *nvim_frame_get_win(frame_T *frp)
+{
+  return frp->fr_win;
+}
+
+/// Get the fr_child field from a frame (accessor for Rust).
+/// First child frame (for FR_ROW or FR_COL layouts).
+frame_T *nvim_frame_get_child(frame_T *frp)
+{
+  return frp->fr_child;
+}
+
+/// Get the fr_next field from a frame (accessor for Rust).
+/// Next sibling frame in parent.
+frame_T *nvim_frame_get_next(frame_T *frp)
+{
+  return frp->fr_next;
+}
+
+/// Get w_p_wfh (winfixheight) from a window (accessor for Rust).
+int nvim_win_get_wfh(win_T *wp)
+{
+  return wp->w_p_wfh;
+}
+
+/// Get w_p_wfw (winfixwidth) from a window (accessor for Rust).
+int nvim_win_get_wfw(win_T *wp)
+{
+  return wp->w_p_wfw;
+}
+
 #define NOWIN           ((win_T *)-1)   // non-existing window
 
 #define ROWS_AVAIL (Rows - p_ch - tabline_height() - global_stl_height())
