@@ -96,6 +96,11 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 **Phase 3.4: Simple function exploration complete**
 Most simple pure functions (`FUNC_ATTR_PURE`, `FUNC_ATTR_CONST`) are now migrated.
 
+**Phase 3.6: Additional window accessors ✅**
+- [x] nvim_win_get_floating accessor for w_floating field
+- [x] nvim_win_get_pvw accessor for w_p_pvw (preview window) field
+- [x] rs_win_floating() and rs_win_pvw() Rust implementations
+
 **Phase 3.5: Window/frame function exploration (blocked)**
 Window and frame functions require infrastructure not yet in place:
 - Global state access: `firstwin`, `curtab`, `first_tabpage`, `aucmd_win`

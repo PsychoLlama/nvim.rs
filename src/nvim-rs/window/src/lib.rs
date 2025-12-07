@@ -48,6 +48,12 @@ impl WinHandle {
 extern "C" {
     /// Get the `w_locked` field from a window.
     fn nvim_win_get_locked(win: WinHandle) -> c_int;
+
+    /// Get the `w_floating` field from a window.
+    fn nvim_win_get_floating(win: WinHandle) -> c_int;
+
+    /// Get the `w_p_pvw` (preview window) field from a window.
+    fn nvim_win_get_pvw(win: WinHandle) -> c_int;
 }
 
 /// Check if a window is locked (`w_locked` field).
@@ -71,6 +77,48 @@ pub extern "C" fn rs_win_locked(wp: WinHandle) -> c_int {
     c_int::from(win_locked_impl(wp))
 }
 
+/// Check if a window is floating (`w_floating` field).
+///
+/// A floating window is a popup window that appears above other windows.
+#[inline]
+fn win_floating_impl(wp: WinHandle) -> bool {
+    if wp.is_null() {
+        return false;
+    }
+    // SAFETY: We check for null above, and nvim_win_get_floating
+    // is a simple field accessor that handles the pointer safely.
+    unsafe { nvim_win_get_floating(wp) != 0 }
+}
+
+/// FFI wrapper for `win_floating`.
+///
+/// Returns non-zero if the window is floating.
+#[no_mangle]
+pub extern "C" fn rs_win_floating(wp: WinHandle) -> c_int {
+    c_int::from(win_floating_impl(wp))
+}
+
+/// Check if a window is a preview window (`w_p_pvw` field).
+///
+/// A preview window is used for displaying preview information.
+#[inline]
+fn win_pvw_impl(wp: WinHandle) -> bool {
+    if wp.is_null() {
+        return false;
+    }
+    // SAFETY: We check for null above, and nvim_win_get_pvw
+    // is a simple field accessor that handles the pointer safely.
+    unsafe { nvim_win_get_pvw(wp) != 0 }
+}
+
+/// FFI wrapper for `win_pvw`.
+///
+/// Returns non-zero if the window is a preview window.
+#[no_mangle]
+pub extern "C" fn rs_win_pvw(wp: WinHandle) -> c_int {
+    c_int::from(win_pvw_impl(wp))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -80,6 +128,8 @@ mod tests {
         let handle = unsafe { WinHandle::from_ptr(std::ptr::null_mut()) };
         assert!(handle.is_null());
         assert!(!win_locked_impl(handle));
+        assert!(!win_floating_impl(handle));
+        assert!(!win_pvw_impl(handle));
     }
 
     #[test]
