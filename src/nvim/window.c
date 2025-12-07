@@ -97,6 +97,9 @@ extern int rs_last_window(win_T *win);
 extern int rs_win_count(void);
 extern int rs_tabpage_index(tabpage_T *ftp);
 extern int rs_valid_tabpage_win(tabpage_T *tpc);
+extern int rs_frame_has_win(frame_T *frp, win_T *wp);
+extern int rs_frame_fixed_height(frame_T *frp);
+extern int rs_frame_fixed_width(frame_T *frp);
 #endif
 
 // Accessor functions for Rust opaque handle pattern.
@@ -3722,6 +3725,9 @@ win_T *frame2win(frame_T *frp)
 static bool frame_has_win(const frame_T *frp, const win_T *wp)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ARG(1)
 {
+#ifdef USE_RUST_WINDOW
+  return rs_frame_has_win((frame_T *)frp, (win_T *)wp) != 0;
+#else
   if (frp->fr_layout == FR_LEAF) {
     return frp->fr_win == wp;
   }
@@ -3732,6 +3738,7 @@ static bool frame_has_win(const frame_T *frp, const win_T *wp)
     }
   }
   return false;
+#endif
 }
 
 /// Check if current window is at the bottom
@@ -3857,6 +3864,9 @@ void frame_new_height(frame_T *topfrp, int height, bool topfirst, bool wfh, bool
 static bool frame_fixed_height(frame_T *frp)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_WINDOW
+  return rs_frame_fixed_height(frp) != 0;
+#else
   // frame with one window: fixed height if 'winfixheight' set.
   if (frp->fr_win != NULL) {
     return frp->fr_win->w_p_wfh;
@@ -3880,6 +3890,7 @@ static bool frame_fixed_height(frame_T *frp)
     }
   }
   return true;
+#endif
 }
 
 /// Return true if width of frame "frp" should not be changed because of
@@ -3891,6 +3902,9 @@ static bool frame_fixed_height(frame_T *frp)
 static bool frame_fixed_width(frame_T *frp)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_WINDOW
+  return rs_frame_fixed_width(frp) != 0;
+#else
   // frame with one window: fixed width if 'winfixwidth' set.
   if (frp->fr_win != NULL) {
     return frp->fr_win->w_p_wfw;
@@ -3914,6 +3928,7 @@ static bool frame_fixed_width(frame_T *frp)
     }
   }
   return true;
+#endif
 }
 
 // Add a status line to windows at the bottom of "frp".
