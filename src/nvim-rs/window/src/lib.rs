@@ -607,6 +607,50 @@ pub extern "C" fn rs_frame_fixed_width(frp: FrameHandle) -> c_int {
     c_int::from(frame_fixed_width_impl(frp))
 }
 
+/// Count the number of windows in the current tabpage.
+///
+/// This is the Rust equivalent of `win_count()` in window.c.
+/// Iterates through all windows in the current tab (firstwin -> `w_next`).
+#[inline]
+fn win_count_impl() -> c_int {
+    // SAFETY: nvim_get_firstwin and nvim_win_get_next are safe accessors
+    let mut count: c_int = 0;
+    let mut wp = unsafe { nvim_get_firstwin() };
+    while !wp.is_null() {
+        count += 1;
+        wp = unsafe { nvim_win_get_next(wp) };
+    }
+    count
+}
+
+/// FFI wrapper for `win_count`.
+#[no_mangle]
+pub extern "C" fn rs_win_count() -> c_int {
+    win_count_impl()
+}
+
+/// Get the 1-based index of a tabpage.
+///
+/// This is the Rust equivalent of `tabpage_index()` in window.c.
+/// Iterates through tabpages from `first_tabpage` to find the index.
+#[inline]
+fn tabpage_index_impl(ftp: TabpageHandle) -> c_int {
+    // SAFETY: nvim_get_first_tabpage and nvim_tabpage_get_next are safe accessors
+    let mut i: c_int = 1;
+    let mut tp = unsafe { nvim_get_first_tabpage() };
+    while !tp.is_null() && tp != ftp {
+        i += 1;
+        tp = unsafe { nvim_tabpage_get_next(tp) };
+    }
+    i
+}
+
+/// FFI wrapper for `tabpage_index`.
+#[no_mangle]
+pub extern "C" fn rs_tabpage_index(ftp: TabpageHandle) -> c_int {
+    tabpage_index_impl(ftp)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

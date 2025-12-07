@@ -94,6 +94,8 @@ extern int rs_valid_tabpage(tabpage_T *tpc);
 extern int rs_one_tabpage(void);
 extern int rs_one_window_in_tab(win_T *win, tabpage_T *tp);
 extern int rs_last_window(win_T *win);
+extern int rs_win_count(void);
+extern int rs_tabpage_index(tabpage_T *ftp);
 #endif
 
 // Accessor functions for Rust opaque handle pattern.
@@ -1873,12 +1875,16 @@ bool win_valid_any_tab(win_T *win) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 // Return the number of windows.
 int win_count(void)
 {
+#ifdef USE_RUST_WINDOW
+  return rs_win_count();
+#else
   int count = 0;
 
   FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
     count++;
   }
   return count;
+#endif
 }
 
 /// Make "count" windows on the screen.
@@ -4608,6 +4614,9 @@ tabpage_T *find_tabpage(int n)
 // When not found returns number of tab pages plus one.
 int tabpage_index(tabpage_T *ftp)
 {
+#ifdef USE_RUST_WINDOW
+  return rs_tabpage_index(ftp);
+#else
   int i = 1;
   tabpage_T *tp;
 
@@ -4615,6 +4624,7 @@ int tabpage_index(tabpage_T *ftp)
     i++;
   }
   return i;
+#endif
 }
 
 /// Prepare for leaving the current tab page.
