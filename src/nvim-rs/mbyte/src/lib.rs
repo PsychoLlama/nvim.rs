@@ -816,6 +816,175 @@ pub extern "C" fn rs_utf_fold(a: c_int) -> c_int {
     utf_fold(a)
 }
 
+// UTF-8 string comparison
+
+/// Safely read a character from a UTF-8 buffer with length limit.
+///
+/// Returns the decoded codepoint and the number of bytes consumed.
+/// Returns (0, 0) at end of buffer.
+/// Returns (-1, 0) for invalid/incomplete sequences (caller should handle bytewise).
+/// Returns (byte, 1) for ASCII characters including NUL.
+///
+/// This is an internal helper for utf_strnicmp.
+fn utf_safe_read_char_adv(s: &[u8]) -> (i32, usize) {
+    if s.is_empty() {
+        return (0, 0); // end of buffer
+    }
+
+    let k = UTF8LEN_TAB_ZERO[s[0] as usize] as usize;
+
+    if k == 1 {
+        // ASCII character or NUL
+        return (s[0] as i32, 1);
+    }
+
+    if k <= s.len() {
+        // We have a multibyte sequence and it isn't truncated by buffer
+        // limits so utf_ptr2char is safe to use. Or the first byte is
+        // illegal (k=0), and it's also safe to use utf_ptr2char.
+        let c = utf_ptr2char(s);
+
+        // On failure, utf_ptr2char returns the first byte, so here we
+        // check equality with the first byte. The only non-ASCII character
+        // which equals the first byte of its own UTF-8 representation is
+        // U+00C3 (UTF-8: 0xC3 0x83), so need to check that special case too.
+        // It's safe even if n=1, else we would have k=2 > n.
+        if c != s[0] as i32 || (c == 0xC3 && s.len() > 1 && s[1] == 0x83) {
+            // byte sequence was successfully decoded
+            return (c, k);
+        }
+    }
+
+    // byte sequence is incomplete or illegal
+    (-1, 0)
+}
+
+/// Compare two UTF-8 strings case-insensitively.
+///
+/// Compares s1[0..n1] with s2[0..n2] using case folding.
+///
+/// Returns:
+/// - 0 if strings are equal
+/// - negative if s1 < s2
+/// - positive if s1 > s2
+pub fn utf_strnicmp(s1: &[u8], s2: &[u8]) -> i32 {
+    let mut i1 = 0;
+    let mut i2 = 0;
+
+    loop {
+        let (c1, len1) = utf_safe_read_char_adv(&s1[i1..]);
+        let (c2, len2) = utf_safe_read_char_adv(&s2[i2..]);
+        i1 += len1;
+        i2 += len2;
+
+        if c1 <= 0 || c2 <= 0 {
+            // End of string or invalid sequence
+            if c1 == 0 || c2 == 0 {
+                // some string ended. shorter string is smaller
+                if c1 == 0 && c2 == 0 {
+                    return 0;
+                }
+                return if c1 == 0 { -1 } else { 1 };
+            }
+
+            // Continue with bytewise comparison for invalid sequences
+            // If only one string had an error, comparison should be made with
+            // folded version of the other string.
+            let (cmp_s1, cmp_n1, cmp_s2, cmp_n2);
+            let mut fold_buf = [0u8; 6];
+
+            if c1 != -1 && c2 == -1 {
+                // s1 is valid, s2 had error - fold s1
+                let folded = utf_fold(c1);
+                let fold_len = utf_char2bytes(folded, &mut fold_buf);
+                cmp_s1 = &fold_buf[..fold_len];
+                cmp_n1 = fold_len;
+                cmp_s2 = &s2[i2 - len2..];
+                cmp_n2 = s2.len() - (i2 - len2);
+            } else if c2 != -1 && c1 == -1 {
+                // s2 is valid, s1 had error - fold s2
+                let folded = utf_fold(c2);
+                let fold_len = utf_char2bytes(folded, &mut fold_buf);
+                cmp_s1 = &s1[i1 - len1..];
+                cmp_n1 = s1.len() - (i1 - len1);
+                cmp_s2 = &fold_buf[..fold_len];
+                cmp_n2 = fold_len;
+            } else {
+                // Both had errors
+                cmp_s1 = &s1[i1..];
+                cmp_n1 = s1.len() - i1;
+                cmp_s2 = &s2[i2..];
+                cmp_n2 = s2.len() - i2;
+            }
+
+            // Bytewise comparison
+            let mut j1 = 0;
+            let mut j2 = 0;
+            while j1 < cmp_n1 && j2 < cmp_n2 {
+                if cmp_s1[j1] == 0 || cmp_s2[j2] == 0 {
+                    break;
+                }
+                let cdiff = cmp_s1[j1] as i32 - cmp_s2[j2] as i32;
+                if cdiff != 0 {
+                    return cdiff;
+                }
+                j1 += 1;
+                j2 += 1;
+            }
+
+            // Check for NUL termination
+            let n1_remaining = if j1 < cmp_n1 && cmp_s1[j1] == 0 {
+                0
+            } else {
+                cmp_n1 - j1
+            };
+            let n2_remaining = if j2 < cmp_n2 && cmp_s2[j2] == 0 {
+                0
+            } else {
+                cmp_n2 - j2
+            };
+
+            return if n1_remaining == 0 && n2_remaining == 0 {
+                0
+            } else if n1_remaining == 0 {
+                -1
+            } else {
+                1
+            };
+        }
+
+        if c1 == c2 {
+            continue;
+        }
+
+        let cdiff = utf_fold(c1) - utf_fold(c2);
+        if cdiff != 0 {
+            return cdiff;
+        }
+    }
+}
+
+/// FFI wrapper for `utf_strnicmp`.
+///
+/// # Safety
+///
+/// - s1 must be valid for reads of n1 bytes
+/// - s2 must be valid for reads of n2 bytes
+#[no_mangle]
+pub unsafe extern "C" fn rs_utf_strnicmp(
+    s1: *const c_char,
+    s2: *const c_char,
+    n1: usize,
+    n2: usize,
+) -> c_int {
+    if s1.is_null() || s2.is_null() {
+        return 0;
+    }
+    let slice1 = std::slice::from_raw_parts(s1 as *const u8, n1);
+    let slice2 = std::slice::from_raw_parts(s2 as *const u8, n2);
+    utf_strnicmp(slice1, slice2)
+}
+
 // Ambiguous width detection
 
 /// VS-16 (Variation Selector 16) UTF-8 encoding: U+FE0F = 0xEF 0xB8 0x8F

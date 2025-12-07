@@ -583,6 +583,10 @@ Exhaustive search for Phase 2.50+ candidates. Cross-crate dependencies now work 
 - `mb_utflen` - Measure string length in UTF-32 codepoints and UTF-16 code units (for LSP position handling)
 - `mb_utf_index_to_bytes` - Convert UTF-16/UTF-32 index to byte offset
 
+**Phase 2.79**: Migrated cell width with size limit:
+- `utf_ptr2cells_len` - Get display cells from UTF-8 string pointer with size limit
+- Handles truncated sequences, illegal bytes, overlong encodings, and emoji presentation
+
 **Conclusion:** char2cells now migrated. Next candidates need pointer FFI or complex struct handling.
 
 Remaining candidates require:
