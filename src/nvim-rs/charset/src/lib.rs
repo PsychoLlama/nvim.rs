@@ -745,6 +745,54 @@ pub unsafe extern "C" fn rs_rem_backslash(s: *const c_char) -> bool {
 }
 
 // ============================================================================
+// Word character detection using buffer chartab
+// ============================================================================
+
+/// Check a bit in the buffer chartab (uint64_t[4] bitmap).
+///
+/// This replicates the C macro:
+/// `GET_CHARTAB_TAB(chartab, c) ((chartab)[(unsigned)(c) >> 6] & (1ull << ((c) & 0x3f)))`
+#[inline]
+fn get_chartab_tab(chartab: &[u64; 4], c: u8) -> bool {
+    let idx = (c >> 6) as usize;
+    let bit = 1u64 << (c & 0x3f);
+    (chartab[idx] & bit) != 0
+}
+
+/// Check if a character is a word character using buffer-specific chartab.
+///
+/// For Latin1 characters (< 0x100), uses the chartab bitmap directly.
+/// For multibyte characters (>= 0x100), uses utf_class_tab to determine
+/// if the character class is >= 2 (word character).
+///
+/// The `chartab` is a buffer-specific `uint64_t[4]` array set via 'iskeyword'.
+#[inline]
+pub fn vim_iswordc_tab(c: i32, chartab: &[u64; 4]) -> bool {
+    if c >= 0x100 {
+        // Multibyte: use utf_class_tab, word char if class >= 2
+        nvim_mbyte::utf_class_tab_impl(c, chartab) >= 2
+    } else {
+        // Latin1: check chartab directly
+        c > 0 && get_chartab_tab(chartab, c as u8)
+    }
+}
+
+/// FFI wrapper for `vim_iswordc_tab`.
+///
+/// # Safety
+///
+/// - `chartab` must be a valid pointer to a `[u64; 4]` array
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_iswordc_tab(c: c_int, chartab: *const u64) -> c_int {
+    if chartab.is_null() {
+        return 0;
+    }
+
+    let chartab_arr: &[u64; 4] = &*(chartab as *const [u64; 4]);
+    c_int::from(vim_iswordc_tab(c, chartab_arr))
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 

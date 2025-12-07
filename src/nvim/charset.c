@@ -62,6 +62,7 @@ extern int rs_vim_strnsize(const char *s, int len);
 extern void rs_rl_mirror_ascii(char *str, const char *end);
 extern bool rs_rem_backslash(const char *str);
 extern void rs_backslash_halve(char *p);
+extern int rs_vim_iswordc_tab(int c, const uint64_t *chartab);
 #endif
 
 static bool chartab_initialized = false;
@@ -876,9 +877,13 @@ bool vim_iswordc(const int c)
 bool vim_iswordc_tab(const int c, const uint64_t *const chartab)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_CHARSET
+  return rs_vim_iswordc_tab(c, chartab) != 0;
+#else
   return (c >= 0x100
           ? (utf_class_tab(c, chartab) >= 2)
           : (c > 0 && GET_CHARTAB_TAB(chartab, c) != 0));
+#endif
 }
 
 /// Check that "c" is a keyword character:

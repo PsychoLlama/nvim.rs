@@ -109,6 +109,7 @@ extern int rs_mb_charlen_len(const char *str, int len);
 extern size_t rs_mb_string2cells(const char *str);
 extern size_t rs_mb_string2cells_len(const char *str, size_t size);
 extern void rs_remove_bom(char *s);
+extern int rs_utf_class_tab(int c, const uint64_t *chartab);
 
 // Rust struct for codepoint boundary offsets
 typedef struct {
@@ -1325,6 +1326,9 @@ int utf_class(const int c)
 int utf_class_tab(const int c, const uint64_t *const chartab)
   FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_class_tab(c, chartab);
+#else
   // sorted list of non-overlapping intervals
   static struct clinterval {
     unsigned first;
@@ -1437,6 +1441,7 @@ int utf_class_tab(const int c, const uint64_t *const chartab)
 
   // most other characters are "word" characters
   return 2;
+#endif
 }
 
 bool utf_ambiguous_width(const char *p)
