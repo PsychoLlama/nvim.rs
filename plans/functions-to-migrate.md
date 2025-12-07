@@ -1,10 +1,10 @@
 # Functions to Migrate
 
-## Status: Simple Function Migration COMPLETE (Phase 2.90)
+## Status: Simple Function Migration (Phase 2.91)
 
-**122+ functions migrated across 28 Rust crates.**
+**123+ functions migrated across 28 Rust crates.**
 
-All FUNC_ATTR_PURE/CONST simple functions have been exhaustively migrated. The `utf_ptr2CharInfo_impl` function was the last pure function that could be migrated without infrastructure investment.
+Nearly all FUNC_ATTR_PURE/CONST simple functions have been migrated. Continue searching for remaining simple pure functions.
 
 Remaining candidates require one of:
 - Access to global state (options, curbuf, curwin)
@@ -96,7 +96,7 @@ These OS functions haven't been migrated due to complex dependencies:
 | nvim-ops | op_on_lines, op_is_change, get_op_type, get_op_char |
 | nvim-register | valid_yank_reg |
 | nvim-spell | spell_valid_case, byte_in_str |
-| nvim-eval | eval_isnamec, skip_luafunc_name |
+| nvim-eval | eval_isnamec, skip_luafunc_name, var_flavour |
 | nvim-ex_docmd | ends_excmd, find_nextcmd, is_loclist_cmd |
 | nvim-indent | tabstop_padding, indent_size_ts |
 | nvim-keycodes | name_to_mod_mask, handle_x_keys, is_mouse_key |

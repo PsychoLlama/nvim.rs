@@ -94,6 +94,7 @@ extern bool rs_eval_isnamec1(int c);
 extern bool rs_eval_isdictc(int c);
 extern const char *rs_skip_luafunc_name(const char *p);
 extern int rs_check_luafunc_name(const char *str, bool paren);
+extern var_flavour_T rs_var_flavour(const char *varname);
 #endif
 
 // TODO(ZyX-I): Remove DICT_MAXNEST, make users be non-recursive instead
@@ -6317,6 +6318,9 @@ const char *find_option_var_end(const char **const arg, OptIndex *const opt_idxp
 var_flavour_T var_flavour(char *varname)
   FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_EVAL
+  return rs_var_flavour(varname);
+#else
   char *p = varname;
 
   if (ASCII_ISUPPER(*p)) {
@@ -6328,6 +6332,7 @@ var_flavour_T var_flavour(char *varname)
     return VAR_FLAVOUR_SHADA;
   }
   return VAR_FLAVOUR_DEFAULT;
+#endif
 }
 
 void var_set_global(const char *const name, typval_T vartv)

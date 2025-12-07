@@ -128,6 +128,63 @@ pub unsafe extern "C" fn rs_check_luafunc_name(str: *const c_char, paren: bool) 
     len
 }
 
+/// Variable flavour types for persistence (ShaDa) handling.
+///
+/// These match the C enum var_flavour_T in eval.h.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VarFlavour {
+    /// Variable doesn't start with uppercase
+    Default = 1,
+    /// Variable starts with uppercase, has some lowercase
+    Session = 2,
+    /// Variable is all uppercase
+    Shada = 4,
+}
+
+/// Determine the "flavour" of a variable name for persistence handling.
+///
+/// - All uppercase (e.g., "FOO") -> Shada
+/// - Starts with uppercase but has lowercase (e.g., "Foo") -> Session
+/// - Starts with lowercase -> Default
+///
+/// # Safety
+///
+/// `varname` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_var_flavour(varname: *const c_char) -> VarFlavour {
+    if varname.is_null() {
+        return VarFlavour::Default;
+    }
+
+    let mut p = varname;
+
+    // Check first character - must be uppercase to be Session or Shada
+    #[allow(clippy::cast_sign_loss)]
+    let first = *p as u8;
+    if !ascii_isupper(first) {
+        return VarFlavour::Default;
+    }
+
+    // Move to next character and check all remaining
+    p = p.add(1);
+    loop {
+        #[allow(clippy::cast_sign_loss)]
+        let c = *p as u8;
+        if c == 0 {
+            break;
+        }
+        // If any lowercase letter found, it's Session flavour
+        if ascii_islower(c) {
+            return VarFlavour::Session;
+        }
+        p = p.add(1);
+    }
+
+    // All uppercase -> Shada flavour
+    VarFlavour::Shada
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -246,6 +303,52 @@ mod tests {
 
             // Empty name (length 0) is still valid if followed by expected char
             assert_eq!(rs_check_luafunc_name(empty.as_ptr(), true), 0);
+        }
+    }
+
+    #[test]
+    fn test_var_flavour() {
+        use std::ffi::CString;
+
+        // All uppercase -> Shada
+        let all_upper = CString::new("FOO").unwrap();
+        let single_upper = CString::new("X").unwrap();
+        let upper_with_numbers = CString::new("FOO123").unwrap();
+        let upper_underscore = CString::new("FOO_BAR").unwrap();
+
+        // Mixed case (starts uppercase with lowercase) -> Session
+        let mixed = CString::new("Foo").unwrap();
+        let mixed2 = CString::new("FooBar").unwrap();
+        let mixed_mid = CString::new("FOo").unwrap();
+
+        // Starts lowercase -> Default
+        let lower = CString::new("foo").unwrap();
+        let lower_mixed = CString::new("fooBar").unwrap();
+        let underscore_start = CString::new("_foo").unwrap();
+        let number_start = CString::new("123foo").unwrap();
+        let empty = CString::new("").unwrap();
+
+        unsafe {
+            // All uppercase -> Shada
+            assert_eq!(rs_var_flavour(all_upper.as_ptr()), VarFlavour::Shada);
+            assert_eq!(rs_var_flavour(single_upper.as_ptr()), VarFlavour::Shada);
+            assert_eq!(rs_var_flavour(upper_with_numbers.as_ptr()), VarFlavour::Shada);
+            assert_eq!(rs_var_flavour(upper_underscore.as_ptr()), VarFlavour::Shada);
+
+            // Mixed case -> Session
+            assert_eq!(rs_var_flavour(mixed.as_ptr()), VarFlavour::Session);
+            assert_eq!(rs_var_flavour(mixed2.as_ptr()), VarFlavour::Session);
+            assert_eq!(rs_var_flavour(mixed_mid.as_ptr()), VarFlavour::Session);
+
+            // Starts lowercase/other -> Default
+            assert_eq!(rs_var_flavour(lower.as_ptr()), VarFlavour::Default);
+            assert_eq!(rs_var_flavour(lower_mixed.as_ptr()), VarFlavour::Default);
+            assert_eq!(rs_var_flavour(underscore_start.as_ptr()), VarFlavour::Default);
+            assert_eq!(rs_var_flavour(number_start.as_ptr()), VarFlavour::Default);
+            assert_eq!(rs_var_flavour(empty.as_ptr()), VarFlavour::Default);
+
+            // Null pointer -> Default
+            assert_eq!(rs_var_flavour(std::ptr::null()), VarFlavour::Default);
         }
     }
 }
