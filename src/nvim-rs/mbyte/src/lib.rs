@@ -1019,6 +1019,28 @@ pub unsafe extern "C" fn rs_mb_stricmp(s1: *const c_char, s2: *const c_char) -> 
     rs_mb_strnicmp(s1, s2, MAXCOL)
 }
 
+/// FFI wrapper for `mb_strcmp_ic`.
+///
+/// Compare two strings optionally ignoring case.
+/// When `ic` is true, uses case-insensitive comparison (mb_stricmp).
+/// When `ic` is false, uses case-sensitive comparison (strcmp).
+///
+/// # Safety
+///
+/// - s1 and s2 must be valid null-terminated strings
+#[no_mangle]
+pub unsafe extern "C" fn rs_mb_strcmp_ic(
+    ic: bool,
+    s1: *const c_char,
+    s2: *const c_char,
+) -> c_int {
+    if ic {
+        rs_mb_stricmp(s1, s2)
+    } else {
+        libc::strcmp(s1, s2) as c_int
+    }
+}
+
 // Ambiguous width detection
 
 /// VS-16 (Variation Selector 16) UTF-8 encoding: U+FE0F = 0xEF 0xB8 0x8F

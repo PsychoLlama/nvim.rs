@@ -117,6 +117,7 @@ extern ssize_t rs_mb_utf_index_to_bytes(const char *s, size_t len, size_t index,
 extern int rs_utf_strnicmp(const char *s1, const char *s2, size_t n1, size_t n2);
 extern int rs_mb_strnicmp(const char *s1, const char *s2, size_t nn);
 extern int rs_mb_stricmp(const char *s1, const char *s2);
+extern int rs_mb_strcmp_ic(bool ic, const char *s1, const char *s2);
 
 // Rust struct for codepoint boundary offsets
 typedef struct {
@@ -3253,5 +3254,9 @@ char *get_encoding_name(expand_T *xp FUNC_ATTR_UNUSED, int idx)
 int mb_strcmp_ic(bool ic, const char *s1, const char *s2)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_MBYTE
+  return rs_mb_strcmp_ic(ic, s1, s2);
+#else
   return (ic ? mb_stricmp(s1, s2) : strcmp(s1, s2));
+#endif
 }
