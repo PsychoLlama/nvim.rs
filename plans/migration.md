@@ -13,7 +13,7 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 3.16 Complete)
+## Current Status (Phase 3.17 Complete)
 
 **160+ functions migrated across 32 Rust crates:**
 
@@ -233,6 +233,19 @@ Remaining FUNC_ATTR_PURE/FUNC_ATTR_CONST functions require infrastructure not ye
 - [x] rs_rgb(): pack RGB values into 24-bit integer (available but not wired to C macro due to static initializer use)
 - [x] USE_RUST_MARK conditional compilation in macros_defs.h
 
+**Phase 3.17: Global state accessors and window validation ✅**
+
+- [x] C accessor functions for global state:
+  - nvim_get_curwin(), nvim_get_firstwin(), nvim_get_lastwin()
+  - nvim_get_curbuf(), nvim_get_curtab()
+  - nvim_win_get_next() for window list traversal
+  - nvim_tabpage_get_firstwin() for tabpage window access
+- [x] TabpageHandle opaque type for tabpage_T* pointers
+- [x] rs_win_valid(): check if window exists in current tabpage
+- [x] rs_tabpage_win_valid(): check if window exists in given tabpage
+- [x] rs_one_window(): check if only one window exists
+- [x] win_valid() and tabpage_win_valid() wired to Rust implementations
+
 **Phase 3 Simple Function Migration: Substantially Complete**
 Most simple pure functions (FUNC_ATTR_PURE, FUNC_ATTR_CONST) have been migrated.
 Remaining blockers for further simple function migration:
@@ -242,17 +255,16 @@ Remaining blockers for further simple function migration:
 - Complex struct field access (typval_T, win_T internals)
   Further progress requires Phase 4+ infrastructure.
 
-**Phase 3.5: Window/frame function exploration (blocked)**
-Window and frame functions require infrastructure not yet in place:
+**Phase 3.5: Window/frame function exploration (partially unblocked)**
+Window validation now works. Remaining items:
 
-- Global state access: `firstwin`, `curtab`, `first_tabpage`, `aucmd_win`
-- Iteration macros: `FOR_ALL_WINDOWS_IN_TAB`, `FOR_ALL_FRAMES`, `FOR_ALL_TAB_WINDOWS`
-- Multiple opaque handles: `FrameHandle`, `TabpageHandle` (in addition to `WinHandle`)
-- Linked list traversal patterns
+- Global state access for `first_tabpage`, `aucmd_win` (add more accessors as needed)
+- Iteration macros: `FOR_ALL_FRAMES`, `FOR_ALL_TAB_WINDOWS` (need FOR_ALL_TABS support)
+- FrameHandle opaque type (for frame tree traversal)
 
-**Blocked targets (need Phase 4+ infrastructure):**
+**Remaining targets:**
 
-- `win_valid`, `win_valid_any_tab`, `only_one_window` - need global state + iteration
+- `win_valid_any_tab` - needs FOR_ALL_TABS iteration
 - `frame_fixed_height`, `frame_fixed_width` - need FrameHandle + recursive iteration
 - `frame_has_win` - needs FrameHandle + linked list traversal
 - plines.c display calculations - need window/buffer accessors with options
