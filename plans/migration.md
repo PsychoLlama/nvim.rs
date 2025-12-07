@@ -176,6 +176,14 @@ Remaining FUNC_ATTR_PURE/FUNC_ATTR_CONST functions require infrastructure not ye
 - [x] rs_rgb(): pack RGB values into 24-bit integer (available but not wired to C macro due to static initializer use)
 - [x] USE_RUST_MARK conditional compilation in macros_defs.h
 
+**Phase 3 Simple Function Migration: Substantially Complete**
+Most simple pure functions (FUNC_ATTR_PURE, FUNC_ATTR_CONST) have been migrated.
+Remaining blockers for further simple function migration:
+- Static initializer macros (RGB_, schar_from_ascii) cannot use function calls
+- Global state arrays (breakat_flags, g_chartab, etc.)
+- Complex struct field access (typval_T, win_T internals)
+Further progress requires Phase 4+ infrastructure.
+
 **Phase 3.5: Window/frame function exploration (blocked)**
 Window and frame functions require infrastructure not yet in place:
 - Global state access: `firstwin`, `curtab`, `first_tabpage`, `aucmd_win`
