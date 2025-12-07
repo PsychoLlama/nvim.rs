@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "src/nvim-rs",
     "src/nvim-rs/arabic",
+    "src/nvim-rs/buffer",
     "src/nvim-rs/charset",
     "src/nvim-rs/cmdhist",
     "src/nvim-rs/collections",
