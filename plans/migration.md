@@ -2,1237 +2,191 @@
 
 ## Executive Summary
 
-This document outlines an incremental strategy to migrate Neovim's ~257,000 lines of C code to Rust. The migration prioritizes maintaining a working, testable system at every step by leveraging FFI boundaries and Rust's `unsafe` capabilities where necessary.
+Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a working system at every step.
 
 **Key Principles:**
-
-1. **Always Working**: Every milestone produces a buildable, testable Neovim
+1. **Always Working**: Every milestone produces buildable, testable Neovim
 2. **Incremental Validation**: Each phase has clear acceptance criteria
 3. **FFI-First**: Use `unsafe` Rust interop with C during transition
 4. **Test Continuity**: Existing ~460 functional tests must pass throughout
 
 ---
 
-## Current Architecture Overview
+## Current Status (Phase 2.84 Complete)
 
-```
-┌───────────────────────────────────────────────────────────────┐
-│                         main.c (entry)                        │
-├────────────┬───────────────┬───────────────┬──────────────────┤
-│   os/      │    event/     │   msgpack_rpc/│      tui/        │
-│ (40 files) │  (11 files)   │  (10 files)   │   (7 files)      │
-│  OS layer  │  Event loop   │     RPC       │  Terminal UI     │
-├────────────┴───────────────┴───────────────┴──────────────────┤
-│                     Core Editor Engine                        │
-│  buffer.c, window.c, memline.c, normal.c, edit.c, eval.c, ... │
-├───────────────────────────────────────────────────────────────┤
-│   api/           │     lua/          │      eval/             │
-│  (30+ files)     │   (18 files)      │    (29 files)          │
-│  RPC API layer   │  Lua integration  │  VimL evaluation       │
-└───────────────────────────────────────────────────────────────┘
-```
+**113+ functions migrated across 27 Rust crates:**
+- nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
+- nvim-memutil, nvim-os, nvim-collections, nvim-encoding
+- nvim-utf8proc, nvim-arabic, nvim-grid, nvim-ops, nvim-register
+- nvim-spell, nvim-eval, nvim-ex_docmd, nvim-indent, nvim-keycodes
+- nvim-profile, nvim-menu, nvim-help, nvim-cmdhist, nvim-fileio
 
-**Dependencies:** LuaJIT, libuv, tree-sitter, UTF-8proc, libintl, unibilium
+**Build system:**
+- Cargo workspace at `src/nvim-rs/`
+- CMake integration via USE_RUST_* flags
+- cbindgen generates C headers from Rust
 
 ---
 
-## Migration Phases
+## Completed Phases
 
-### Phase 0: Infrastructure Setup (Foundation)
+### Phase 0: Infrastructure ✅
+- [x] Cargo.toml workspace configuration
+- [x] CMake/Cargo integration (USE_RUST_* options)
+- [x] cbindgen for C header generation
+- [x] CI integration via nix flake
 
-**Goal:** Establish Rust build infrastructure alongside existing CMake
+### Phase 0.5: Memory Allocation Bridge ✅
+- [x] FFI bindings to xmalloc/xfree
+- [x] NvimBox<T>, NvimVec<T>, NvimString wrappers
 
-#### 0.1 Add Rust Build System
+### Phase 1: Pure Utility Functions ✅
+- [x] Math utilities (math.c)
+- [x] Encoding (base64.c, sha256.c)
+- [x] String utilities (strings.c partial)
+- [x] Path utilities (path.c)
+- [x] Character set (charset.c)
+- [x] Indent (indent.c)
+- [x] Keycodes (keycodes.c)
+- [x] Command history (cmdhist.c)
+- [x] Profile (profile.c)
+- [x] Menu (menu.c)
+- [x] Help (help.c)
+- [x] Ex commands (ex_docmd.c partial)
+- [x] Memory utilities (memory.c)
 
-- [x] Add `Cargo.toml` at repository root with workspace configuration
-- [x] Create `src/nvim-rs/` directory for Rust crates
-- [x] Integrate Cargo into CMake build via custom cmake rules (USE_RUST_MATH option)
-- [ ] Ensure `make` builds both C and Rust components automatically
-- [x] Set up `cbindgen` for generating C headers from Rust
-- [ ] Set up `bindgen` for generating Rust bindings from C headers
-
-#### 0.2 CI Integration
-
-- [x] Add Rust toolchain to GitHub Actions workflows (via nix flake)
-- [x] Add `cargo clippy` and `cargo fmt` checks (via justfile)
-- [ ] Ensure all existing tests still pass
-
-**Validation:**
-
-```bash
-make                    # Builds nvim with Rust crate (no-op initially)
-make test               # All ~460 functional tests pass
-cargo test              # Rust unit tests pass (empty initially)
-```
-
-**Deliverable:** Hybrid C/Rust build system working
-
----
-
-### Phase 0.5: Memory Allocation Bridge (Critical Foundation)
-
-**Goal:** Establish FFI bridge for memory allocation before migrating any code that allocates
-
-Most nvim code uses `xmalloc`/`xfree` from `nvim/memory.h`. Rust code must interoperate with this allocation system.
-
-#### 0.5.1 Create Memory FFI Module
-
-- [x] Create `nvim-rs/memory/` crate
-- [x] Define FFI bindings to nvim's allocator:
-
-```rust
-// src/nvim-rs/memory/src/lib.rs
-use std::ffi::c_void;
-use std::os::raw::c_size_t;
-
-extern "C" {
-    pub fn xmalloc(size: c_size_t) -> *mut c_void;
-    pub fn xcalloc(count: c_size_t, size: c_size_t) -> *mut c_void;
-    pub fn xrealloc(ptr: *mut c_void, size: c_size_t) -> *mut c_void;
-    pub fn xmallocz(size: c_size_t) -> *mut c_void;
-    pub fn xfree(ptr: *mut c_void);
-}
-```
-
-- [x] Create safe wrapper types (`NvimBox<T>`, `NvimVec<T>`) that use nvim's allocator
-- [x] Implement `Drop` for automatic cleanup
-
-#### 0.5.2 String Interop Types
-
-- [x] Create `NvimString` type for C-compatible strings allocated with `xmalloc`
-- [x] Implement conversions: `&str` ↔ `NvimString` ↔ `*const c_char`
-
-**Validation:**
-
-```bash
-cargo test -p nvim-memory        # Memory wrapper tests
-make test                        # Nvim still works
-```
-
-**Deliverable:** Safe Rust wrappers for nvim's memory allocation
+### Phase 2: OS & Data Structures ✅
+- [x] Growing array (garray.c) → nvim-collections
+- [x] Hash table (hashtab.c) → nvim-collections
+- [x] 43 OS filesystem functions → nvim-os
+- [x] UTF-8/multibyte (mbyte.c partial) → nvim-mbyte
+- [x] utf8proc bindings → nvim-utf8proc
+- [x] Arabic text → nvim-arabic
+- [x] Grid/screen chars → nvim-grid
+- [x] Operators → nvim-ops
+- [x] Registers → nvim-register
+- [x] Spell checking → nvim-spell
+- [x] Eval helpers → nvim-eval
 
 ---
 
-### Phase 1: Pure Utility Functions (Low Risk) ✅ COMPLETE
-
-**Goal:** Migrate isolated utility functions with no state dependencies
-
-**Status (2025-12-04):** Phase 1 is complete. All trivial pure functions have been migrated.
-Remaining FUNC_ATTR_PURE/CONST functions require struct access or global state.
-
-> **Note:** Many "utility" functions in nvim actually use `xmalloc`/`xfree` and are
-> NOT pure. Phase 0.5 must be completed first. Start with truly pure functions.
-
-#### 1.1 Math Utilities (`src/nvim/math.c` → `nvim-rs/math`) ✓ TRULY PURE
-
-`math.c` has minimal dependencies (only `vim_defs.h` for macros). Start here.
-
-- [x] `xfpclassify` - Float classification
-- [x] `xisinf` - Infinity check
-- [x] `xisnan` - NaN check
-- [x] `xctz` - Count trailing zeroes
-- [x] `xpopcount` - Population count (set bits)
-- [x] `vim_append_digit_int` - Safe digit append with overflow check
-- [x] `trim_to_int` - Clamp int64 to int range
-- [x] `num_divide` - Safe integer division with overflow handling - swapped to Rust
-- [x] `num_modulus` - Safe integer modulus - swapped to Rust
-- [x] Create C-compatible wrapper functions using `#[no_mangle]`
-- [x] Replace C implementations with calls to Rust (USE_RUST_MATH=ON)
-
-#### 1.2 Encoding Utilities (REQUIRES Phase 0.5)
-
-These use `xmalloc` - migrate AFTER memory bridge is ready:
-
-- [x] `src/nvim/base64.c` → `nvim-rs/encoding/base64` (uses xmalloc) - swapped to Rust
-- [x] `src/nvim/sha256.c` → `nvim-rs/encoding/sha256` (uses nvim/memory.h) - swapped to Rust
-
-#### 1.3 String Utilities (REQUIRES Phase 0.5 + mbyte)
-
-`strings.c` has heavy dependencies (~20 nvim headers). Defer until:
-- Phase 0.5 (memory) complete
-- Phase 3.3 (mbyte) complete for `utfc_ptr2len` etc.
-
-- [ ] `vim_strsave` - String duplication (uses xmallocz) - defer until C integration
-- [ ] `vim_strnsave` - Bounded string copy (uses xmallocz) - defer until C integration
-- [x] `vim_strchr` - Character search (ASCII only, multibyte requires mbyte)
-- [x] `concat_str` - String concatenation
-- [x] `vim_stricmp` / `vim_strnicmp` - Case-insensitive comparison
-- [x] `striequal` - Case-insensitive equality check
-- [x] `has_non_ascii` - Check for non-ASCII characters - swapped to Rust
-- [x] `has_non_ascii_len` - Check for non-ASCII characters with length limit - swapped to Rust
-- [x] `sort_strings` - Sort array of strings - swapped to Rust
-- [x] `vim_strnicmp_asc` - ASCII-only case-insensitive compare - swapped to Rust
-- [x] `valid_name` - Validate name contains only alphanumeric/allowed chars (from option.c) - swapped to Rust
-- [x] `find_tty_option_end` - Find end of TTY option name (from option.c) - swapped to Rust
-- [x] `is_tty_option` - Check if name is a TTY option (from option.c) - swapped to Rust
-
-#### 1.4 Path Utilities (PARTIAL - some pure, some not)
-
-- [x] `vim_ispathsep` - Path separator check (pure) - swapped to Rust
-- [x] `vim_ispathsep_nocolon` - Path separator check excluding colon (pure) - swapped to Rust
-- [x] `vim_ispathlistsep` - Path list separator check (pure) - swapped to Rust
-- [x] `path_tail` - Get filename from path (pure) - swapped to Rust
-- [x] `path_head_length` - Directory prefix length (pure) - swapped to Rust
-- [x] `path_is_absolute` - Check if path is absolute (pure) - swapped to Rust
-- [x] `path_is_url` - Check for URL scheme separator (pure) - swapped to Rust
-- [x] `path_has_drive_letter` - Check for Windows drive letter (pure) - swapped to Rust
-- [x] `path_with_url` - Check if path starts with URL scheme (pure) - swapped to Rust
-- [x] `is_path_head` - Check if path starts with path head (pure) - swapped to Rust
-- [x] `get_past_head` - Get pointer past path head (pure) - swapped to Rust
-- [x] `vim_isAbsName` - Check if path is absolute or URL (pure) - swapped to Rust
-- [ ] Path normalization functions (may use allocation)
-
-#### 1.5 Character Set Utilities (`src/nvim/charset.c` → `nvim-rs/charset`)
-
-Skip functions and hex conversion - all pure, no allocation:
-
-- [x] `skipwhite` - Skip over ' ' and '\t' (pure) - swapped to Rust
-- [x] `skipwhite_len` - Skip whitespace up to N bytes (pure) - swapped to Rust
-- [x] `skipdigits` - Skip over digit characters (pure) - swapped to Rust
-- [x] `skipbin` - Skip over binary digits (pure) - swapped to Rust
-- [x] `skiphex` - Skip over hex digits (pure) - swapped to Rust
-- [x] `skiptodigit` - Skip to next digit (pure) - swapped to Rust
-- [x] `skiptobin` - Skip to next binary digit (pure) - swapped to Rust
-- [x] `skiptohex` - Skip to next hex digit (pure) - swapped to Rust
-- [x] `skiptowhite` - Skip to next whitespace (pure) - swapped to Rust
-- [x] `hex2nr` - Convert hex char to value (pure) - swapped to Rust
-- [x] `hexhex2nr` - Convert two hex chars to byte (pure) - swapped to Rust
-- [x] `nr2hex` - Convert nibble to hex char (pure) - swapped to Rust
-- [x] `skiptowhite_esc` - Skip to whitespace respecting escapes (pure) - swapped to Rust
-- [x] `getwhitecols` - Count whitespace columns at start (pure) - swapped to Rust
-- [x] `skip_to_newline` - Skip to newline (pure) - swapped to Rust
-- [x] `vim_isblankline` - Check if line is blank (pure) - swapped to Rust
-- [x] `transchar_hex` - Format character as hex string like `<XX>` (pure) - swapped to Rust
-- [ ] Character classification functions (use global state g_chartab)
-
-#### 1.7 Indent Utilities (`src/nvim/indent.c` → `nvim-rs/indent`)
-
-Tabstop calculation - pure arithmetic, no allocation:
-
-- [x] `tabstop_padding` - Calculate padding needed to reach next tabstop (pure) - swapped to Rust
-- [x] `indent_size_ts` - Calculate indent size with tabstops (pure) - swapped to Rust
-- [ ] `indent_size_no_ts` - Uses byte2cells which depends on g_chartab
-
-#### 1.8 Keycode Utilities (`src/nvim/keycodes.c` → `nvim-rs/keycodes`)
-
-Key code mapping - pure lookup/switch, no allocation:
-
-- [x] `name_to_mod_mask` - Map modifier char to mask bit (pure) - swapped to Rust
-- [x] `handle_x_keys` - Map X-terminal keys to standard keys (pure) - swapped to Rust
-- [x] `is_mouse_key` - **Phase 2.40**: Check if key code is a mouse key (pure) - swapped to Rust (USE_RUST_KEYCODES)
-
-#### 1.14 Command History Utilities (`src/nvim/cmdhist.c` → `nvim-rs/cmdhist`)
-
-History type conversion - pure lookup/switch, no allocation:
-
-- [x] `hist_char2type` - Map history prefix char to type (pure) - swapped to Rust
-
-#### 1.15 Profile Utilities (`src/nvim/profile.c` → `nvim-rs/profile`)
-
-Profiling time arithmetic - pure computation, no allocation:
-
-- [x] `profile_zero` - Returns the zero time (pure) - swapped to Rust
-- [x] `profile_divide` - Divides time by count (pure) - swapped to Rust
-- [x] `profile_add` - Adds two times (pure) - swapped to Rust
-- [x] `profile_sub` - Subtracts two times (pure) - swapped to Rust
-- [x] `profile_self` - Calculates self time from total and children (pure) - swapped to Rust
-- [x] `profile_equal` - Checks time equality (pure) - swapped to Rust
-- [x] `profile_signed` - Converts time to signed value (pure) - swapped to Rust
-- [x] `profile_cmp` - Compares two times (pure) - swapped to Rust
-
-#### 1.16 Menu Utilities (`src/nvim/menu.c` → `nvim-rs/menu`)
-
-Menu name classification - pure string prefix checks, no allocation:
-
-- [x] `menu_is_winbar` - Check if name is WinBar menu (pure) - swapped to Rust
-- [x] `menu_is_popup` - Check if name is PopUp menu (pure) - swapped to Rust
-- [x] `menu_is_toolbar` - Check if name is ToolBar menu (pure) - swapped to Rust
-- [x] `menu_is_menubar` - Check if name is MenuBar menu (pure) - swapped to Rust
-- [x] `menu_is_separator` - Check if name is separator (pure) - swapped to Rust
-
-#### 1.17 Help Utilities (`src/nvim/help.c` → `nvim-rs/help`)
-
-Help system heuristic scoring - pure function with no external dependencies:
-
-- [x] `help_heuristic` - Calculate match quality score for help tags (pure) - swapped to Rust
-
-#### 1.22 Ex Command Utilities (`src/nvim/ex_docmd.c` → `nvim-rs/ex_docmd`)
-
-Pure utility functions for Ex command parsing:
-
-- [x] `ends_excmd` - Check if character ends an Ex command (pure) - swapped to Rust
-
-#### 1.28 Additional Ex Command Utilities (`src/nvim/ex_docmd.c` → `nvim-rs/ex_docmd`)
-
-More Ex command parsing functions (string scanning, no global state):
-
-- [x] `find_nextcmd` - Find next command after '|' or '\n' separator (pure) - swapped to Rust
-- [x] `check_nextcmd` - Check if at command separator after whitespace (pure) - swapped to Rust
-
-#### 1.23 File I/O Utilities (`src/nvim/fileio.c` → `nvim-rs/fileio`)
-
-Pure utility functions for file operations:
-
-- [x] `time_differs` - Compare file modification times with FAT tolerance (pure) - swapped to Rust
-
-#### 1.24 Command History Utilities (`src/nvim/shada.c` → `nvim-rs/cmdhist`)
-
-Additional history type conversion functions:
-
-- [x] `hist_type2char` - Translate history type number to character (pure) - swapped to Rust
-
-#### 1.9 Memory Utilities (`src/nvim/memory.c` → `nvim-rs/memutil`)
-
-Pure string/memory utility functions, no allocation:
-
-- [x] `xstrchrnul` - strchr that returns NUL pointer if not found (pure) - swapped to Rust
-- [x] `xmemscan` - memchr that returns end pointer if not found (pure) - swapped to Rust
-- [x] `strcnt` - Count occurrences of char in string (pure) - swapped to Rust
-- [x] `memcnt` - Count occurrences of byte in memory (pure) - swapped to Rust
-- [x] `xmemrchr` - Reverse memchr (pure) - swapped to Rust
-- [x] `strequal` - Null-safe string equality (pure) - swapped to Rust
-- [x] `strnequal` - Null-safe bounded string equality (pure) - swapped to Rust
-- [x] `time_to_bytes` - Write time_t to 8-byte buffer in big-endian (pure) - swapped to Rust
-- [x] `arena_align_offset` - Align offset to arena alignment boundary (pure) - swapped to Rust
-
-**Validation:**
-
-```bash
-make test                              # All tests pass
-cargo test -p nvim-math                # Rust unit tests for math module
-```
-
-**FFI Pattern:**
-
-```rust
-// src/nvim-rs/math/src/lib.rs
-use std::os::raw::{c_int, c_uint};
-
-/// Count trailing zeroes in a 64-bit value
-#[no_mangle]
-pub extern "C" fn xctz(x: u64) -> c_int {
-    if x == 0 {
-        64
-    } else {
-        x.trailing_zeros() as c_int
-    }
-}
-
-/// Count set bits (population count)
-#[no_mangle]
-pub extern "C" fn xpopcount(x: u64) -> c_uint {
-    x.count_ones()
-}
-```
-
----
-
-### Phase 2: OS Abstraction Layer (Clear Boundary)
-
-**Goal:** Migrate `src/nvim/os/` - the platform abstraction layer
-
-This layer has well-defined interfaces and minimal coupling to editor internals.
-
-#### 2.1 Environment & System Info
-
-- [x] `os_get_pid` - **Phase 1.26**: Swapped to Rust (USE_RUST_OS)
-- [x] `os_get_hostname` - **Phase 1.27**: Swapped to Rust (USE_RUST_OS)
-- [x] `os_time` - **Phase 1.29**: Swapped to Rust (USE_RUST_OS)
-- [x] `os_hrtime` - **Phase 1.30**: Swapped to Rust (USE_RUST_OS)
-- [x] `os_sleep` - **Phase 1.31**: Swapped to Rust (USE_RUST_OS)
-- [ ] `src/nvim/os/env.c` → `nvim-rs/os/env`
-  - `os_getenv`, `os_setenv`, `os_unsetenv`
-  - `os_get_user_name`
-  - **Status**: Rust code exists, allocator fixed (Phase 1.25), but NOT swapped - C uses libuv
-- [ ] `src/nvim/os/time.c` → `nvim-rs/os/time`
-  - `os_hrtime`, `os_utime`, `os_localtime_r`
-  - **Status**: Rust code exists, `os_time` swapped (Phase 1.29), but most functions NOT swapped - C uses libuv
-
-#### 2.2 Filesystem Operations
-
-- [x] `os_path_exists` - **Phase 2.3**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_isdir` - **Phase 2.3**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_file_is_readable` - **Phase 2.4**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_isrealdir` - **Phase 2.5**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_file_is_writable` - **Phase 2.6**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_dirname` - **Phase 2.7**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_rename` - **Phase 2.8**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_setperm` - **Phase 2.9**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_getperm` - **Phase 2.10**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_remove` - **Phase 2.11**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_rmdir` - **Phase 2.12**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_mkdir` - **Phase 2.13**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_mkdtemp` - **Phase 2.14**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_chown` - **Phase 2.15**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_fchown` - **Phase 2.15**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_file_settime` - **Phase 2.16**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_copy` - **Phase 2.17**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_close` - **Phase 2.18**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_dup` - **Phase 2.18**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_proc_running` - **Phase 2.19**: Swapped to Rust (USE_RUST_OS_PROC)
-- [x] `os_get_total_mem_kib` - **Phase 2.19**: Swapped to Rust (USE_RUST_OS_MEM)
-- [x] `os_isatty` - **Phase 2.20**: Swapped to Rust (USE_RUST_OS_INPUT)
-- [x] `os_exepath` - **Phase 2.21**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_nodetype` - **Phase 2.22**: Swapped to Rust (USE_RUST_OS_FS, Unix only)
-- [x] `os_set_cloexec` - **Phase 2.23**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_read` / `os_write` - **Phase 2.24**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_fileid_equal` - **Phase 2.25**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_fileid_equal_fileinfo` - **Phase 2.26**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_fileinfo_id_equal`, `os_fileinfo_id`, `os_fileinfo_inode`, `os_fileinfo_size`, `os_fileinfo_hardlinks`, `os_fileinfo_blocksize` - **Phase 2.27**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_realpath` - **Phase 2.28**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_open` - **Phase 2.29**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_fopen` - **Phase 2.30**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_fileinfo`, `os_fileinfo_link`, `os_fileinfo_fd` - **Phase 2.31**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] `os_fileid`, `os_file_owned` - **Phase 2.32**: Swapped to Rust (USE_RUST_OS_FS)
-- [x] **Phase 2 OS Migration: COMPLETE** - All simple self-contained OS functions migrated
-  - **43 functions swapped**: 40 fs (USE_RUST_OS_FS), 2 proc/mem (USE_RUST_OS_PROC, USE_RUST_OS_MEM), 1 input (USE_RUST_OS_INPUT)
-  - **Remaining blocked functions** (require infrastructure):
-    - `os_can_exe` - PATH searching with helper functions
-    - `os_scandir/os_closedir` - Directory iteration pattern
-    - `os_readv` - vectored I/O with iovec struct
-    - `os_chdir` - global state (verbose, UI)
-    - `os_fsync` - global state (g_stats)
-    - `os_open_stdin_fd` - global state (stdin_fd)
-    - `os_mkdir_recurse/os_file_mkdir` - xmalloc, error messaging
-    - `os_copy_xattr` - xmalloc, emsg()
-- [x] `eval_isnamec`, `eval_isnamec1`, `eval_isdictc` - **Phase 2.33**: Swapped to Rust (USE_RUST_EVAL)
-- [x] `calc_percentage` - **Phase 2.34**: Swapped to Rust (USE_RUST_MATH) - pure arithmetic, overflow handling
-- [x] `is_dev_fd_file` - **Phase 2.35**: Swapped to Rust (USE_RUST_FILEIO) - /dev/fd/ path check
-- [x] `spell_valid_case` - **Phase 2.36**: Swapped to Rust (USE_RUST_SPELL) - spell case flag validation
-- [x] `byte_in_str` - **Phase 2.37**: Swapped to Rust (USE_RUST_SPELL) - byte search in string
-- [x] `schar_high` - **Phase 2.38**: Swapped to Rust (USE_RUST_GRID) - screen char cache format check
-- [x] `schar_get_ascii` - **Phase 2.39**: Swapped to Rust (USE_RUST_GRID) - get ASCII char from schar
-- [x] `is_mouse_key` - **Phase 2.40**: Swapped to Rust (USE_RUST_KEYCODES) - check if key is mouse key
-- [x] `schar_from_char` - **Phase 2.41**: Swapped to Rust (USE_RUST_GRID) - convert codepoint to schar
-- [x] `op_on_lines`, `op_is_change`, `get_op_char`, `get_extra_op_char` - **Phase 2.42**: Swapped to Rust (USE_RUST_OPS) - operator lookup functions
-- [x] `get_op_type` - **Phase 2.43**: Swapped to Rust (USE_RUST_OPS) - translate command chars to operator type
-- [x] `skip_to_option_part` - **Phase 2.44**: Swapped to Rust (USE_RUST_STRINGS) - skip comma/spaces in option args
-- [x] `skip_luafunc_name`, `check_luafunc_name` - **Phase 2.45**: Swapped to Rust (USE_RUST_EVAL) - v:lua function name parsing
-- [x] `valid_yank_reg` - **Phase 2.46**: Swapped to Rust (USE_RUST_REGISTER) - validate register names
-- [x] `vim_isfilec`, `vim_is_fname_char` - **Phase 2.47**: Swapped to Rust (USE_RUST_CHARSET) - file name character checks (exposed g_chartab)
-- [x] `byte2cells`, `vim_isIDc` - **Phase 2.48**: Swapped to Rust (USE_RUST_CHARSET) - display cell count and identifier char check
-- [x] `vim_isprintc` - **Phase 2.49**: Swapped to Rust (USE_RUST_CHARSET) - printable character check (uses nvim-mbyte::utf_printable)
-
-**Session 7 (2025-12-05): Phases 2.36-2.38**
-- Created `nvim-spell` crate with `spell_valid_case` and `byte_in_str`
-- Created `nvim-grid` crate with `schar_high` (endianness-aware)
-- Total: 23 crates in workspace, 48+ functions swapped to Rust
-
-**Session 8 (2025-12-06): Phases 2.39-2.49**
-- Added `schar_get_ascii` to nvim-grid crate (ASCII extraction from schar)
-- Added `is_mouse_key` to nvim-keycodes crate (mouse key detection)
-- Added `schar_from_char` to nvim-grid crate (using nvim-mbyte::utf_char2bytes)
-- Created `nvim-ops` crate with operator lookup functions (5 functions total)
-- Added `skip_to_option_part` to nvim-strings crate
-- Added `skip_luafunc_name`, `check_luafunc_name` to nvim-eval crate (v:lua function name parsing)
-- Created `nvim-register` crate with `valid_yank_reg` (register name validation)
-- Exposed `g_chartab` C global for Rust access (infrastructure for charset functions)
-- Added `vim_isfilec`, `vim_is_fname_char` to nvim-charset crate (file name char checks)
-- Added `byte2cells`, `vim_isIDc` to nvim-charset crate (display cells and identifier chars)
-- Added `vim_isprintc` to nvim-charset crate (first cross-crate dependency: charset → mbyte)
-- Total: 25 crates, 69+ functions swapped to Rust
-
-**Session 9 (2025-12-06): Migration Plateau + utf8proc Infrastructure**
-- Exhaustive search for Phase 2.50+ candidates across 30 C files
-- Confirmed all FUNC_ATTR_PURE/CONST functions either migrated or unsuitable
-- Verified build and Rust tests pass (210 rs_* symbols in nvim binary)
-- **Phase 2.50**: Created `nvim-utf8proc` crate with FFI bindings to utf8proc library:
-  - `Utf8procProperty` struct with accessors for charwidth, ambiguous_width, boundclass
-  - `get_property()` safe wrapper for Unicode property queries
-  - `is_emojilike()` method for emoji detection
-- **Phase 2.51**: First function using utf8proc bindings:
-  - `utf_iscomposing_legacy` - check if character is nonspacing/enclosing mark
-  - Added Unicode category constants (MN=6, ME=8) to utf8proc crate
-  - Added `is_composing_legacy()` method to `Utf8procProperty`
-  - Added nvim-utf8proc dependency to nvim-mbyte crate
-- **Phase 2.52**: Second function using utf8proc bindings:
-  - `utf_iscomposing_first` - check if char would combine with preceding space
-  - Added `utf8proc_grapheme_break` FFI binding to utf8proc crate
-  - Added `grapheme_break()` safe wrapper function
-- **Phase 2.53**: Case folding function:
-  - `utf_fold` - Unicode case folding for case-insensitive comparison
-  - Added `utf8proc_decompose_char` FFI binding to utf8proc crate
-  - Added `UTF8PROC_CASEFOLD` option constant
-  - Added `casefold()` function with workarounds for ß and İ
-- **Phase 2.54**: Ambiguous width detection:
-  - `utf_ambiguous_width` - Check if UTF-8 character has ambiguous display width
-  - Uses utf8proc bindings for property lookup (ambiguous_width, is_emojilike)
-  - Detects VS-16 (U+FE0F) variation selector for emoji presentation
-- **Phase 2.55**: Cell width table access:
-  - `cw_value` - Lookup custom cell width from setcellwidths() table
-  - Exposed cw_table and cw_table_size globals for Rust FFI access
-  - Binary search implementation matching C behavior
-- **Phase 2.56**: Character cell width calculation:
-  - `utf_char2cells` - Get display width (1 or 2) for UTF-8 character
-  - Returns 4 or 6 for unprintable characters
-  - Depends on vim_isprintc, cw_value, utf8proc properties
-  - Exposed p_ambw and p_emoji globals for Rust FFI access
-- **Phase 2.57**: Character display cells (charset):
-  - `char2cells` - Get display cells for any character including special keys
-  - Handles special keys (negative values), ASCII via g_chartab, UTF-8 via utf_char2cells
-  - Cross-crate call from charset to mbyte
-- **Phase 2.58**: Pointer to cells (mbyte):
-  - `utf_ptr2cells` - Get display cells from UTF-8 string pointer
-  - Validates UTF-8 structure, returns 4 for invalid sequences (<xx> display)
-  - Handles overlong encodings, emoji presentation (VS-16)
-  - Added utf_ptr2char_strict helper for validation
-- **Phase 2.59**: Pointer to cells (charset):
-  - `ptr2cells` - Get display cells from string pointer
-  - For ASCII, looks up g_chartab; for UTF-8, calls utf_ptr2cells
-  - Cross-crate call from charset to mbyte
-- **Phase 2.60**: String size (charset):
-  - `vim_strsize` - Get display cell count for entire string
-  - `vim_strnsize` - Get display cell count for string with length limit
-  - Calls back to C for utfc_ptr2len (not yet migrated)
-- **Phase 2.61**: Character length (mbyte):
-  - `mb_charlen` - Count characters in string (composing chars not counted)
-  - `mb_charlen_len` - Count characters in string with length limit
-  - Calls back to C for utfc_ptr2len (not yet migrated)
-- **Phase 2.62**: String cell count (mbyte):
-  - `mb_string2cells` - Count display cells for entire string
-  - `mb_string2cells_len` - Count display cells with length limit
-  - Uses utf_ptr2cells (migrated) and utfc_ptr2len/utfc_ptr2len_len (callback to C)
-- **Phase 2.63**: Arabic text combining (arabic):
-  - `arabic_combine` - Check for Arabic combining characters (LAM + ALEF pairs)
-  - `arabic_maycombine` - Check if character may combine with previous
-  - **New crate**: nvim-arabic
-  - Reads global options p_arshape and p_tbidi via extern C
-- **Phase 2.64**: RTL ASCII mirroring (charset):
-  - `rl_mirror_ascii` - Reverse ASCII string in-place for right-to-left text
-  - Pure pointer manipulation, no global state
-- **Phase 2.65**: BOM removal (mbyte):
-  - `remove_bom` - Remove UTF-8 BOM sequences from string in-place
-  - Simple byte manipulation, searches for 0xEF 0xBB 0xBF sequences
-- **Phase 2.66**: ASCII uppercase (strings):
-  - `vim_strup` - Convert ASCII string to uppercase in-place
-  - Locale-independent, only handles a-z → A-Z conversion
-- **Phase 2.67**: ASCII uppercase copy (strings):
-  - `vim_strcpy_up` - Copy string while converting to uppercase
-  - `vim_strncpy_up` - Copy with length limit while converting to uppercase
-  - `vim_memcpy_up` - Memory copy while converting to uppercase
-  - Same ASCII-only conversion as vim_strup (a-z → A-Z)
-- **Phase 2.68**: Trailing whitespace deletion (strings):
-  - `del_trailing_spaces` - Delete trailing spaces/tabs from string
-  - Preserves escaped whitespace (preceded by backslash or Ctrl_V)
-- **Phase 2.69**: Backslash handling in file paths (charset):
-  - `rem_backslash` - Check if backslash should be removed from filename
-  - Platform-specific: Unix always removes, Windows has special rules
-- **Phase 2.70**: Backslash halving (charset):
-  - `backslash_halve` - Halve backslashes in file name argument
-  - Uses `rem_backslash` internally for consistent behavior
-- **Phase 2.71**: String equality (strings):
-  - `striequal` - Case-insensitive string equality check (ASCII)
-- **Phase 2.72**: Location list command check (ex_docmd):
-  - `is_loclist_cmd` - Check if command index is a location list command
-  - Uses C helper function `cmdname_first_char` to access cmdnames array
-- **Phase 2.73**: Multibyte string search (strings):
-  - `vim_strchr` - Find character in string with UTF-8 support
-  - Uses `utf_char2bytes` from mbyte crate for non-ASCII characters
-- **Phase 2.74**: Time serialization (memutil):
-  - `time_to_bytes` - Write time_t value to 8-byte buffer in big-endian format
-  - Used by shada file serialization
-- **Phase 2.75**: Arena memory alignment (memutil):
-  - `arena_align_offset` - Align offset to arena alignment boundary (8 bytes on 64-bit)
-  - Used by arena allocator in memory.c
-- **Phase 2.76**: Character class functions (charset/mbyte):
-  - `vim_iswordc_tab` - Check if character is a word character using buffer chartab
-  - `utf_class_tab` - Get Unicode character class (blank, punct, word, emoji, CJK, etc.)
-  - Static UTF_CLASS_TABLE with 73 Unicode range entries for character classification
-  - Uses utf8proc properties for emoji detection (boundclass)
-- **Phase 2.77**: Multi-byte character class (mbyte):
-  - `mb_get_class_tab` - Get character class from UTF-8 string pointer
-  - Combines UTF8LEN_TAB lookup, ascii_iswhite check, chartab lookup, and utf_class_tab
-  - Used for word motion commands (w, b, e, etc.) to determine word boundaries
-- **Phase 2.78**: UTF-8 length calculation (mbyte):
-  - `mb_utflen` - Count codepoints and UTF-16 code units in a string
-  - `mb_utf_index_to_bytes` - Convert codepoint/code unit index to byte offset
-- **Phase 2.79**: Cell width with size limit (mbyte):
-  - `utf_ptr2cells_len` - Get display cells from UTF-8 string pointer with size limit
-  - Handles truncated sequences, illegal bytes, overlong encodings
-- **Phase 2.80**: Character pointer advance (mbyte):
-  - `mb_cptr2char_adv` - Get character at pointer and advance to next character
-  - Returns composing characters as separate characters (unlike mb_ptr2char_adv)
-- **Phase 2.81**: Case-insensitive string comparison (mbyte):
-  - `utf_strnicmp` - Compare two UTF-8 strings case-insensitively
-  - `utf_safe_read_char_adv` - Internal helper for safe UTF-8 character reading
-  - Handles incomplete/invalid sequences with bytewise comparison fallback
-  - Used primarily by spell checking subsystem
-- **Phase 2.82**: Case-insensitive string comparison wrappers (mbyte):
-  - `mb_strnicmp` - Wrapper calling utf_strnicmp with same length for both strings
-  - `mb_stricmp` - Wrapper calling mb_strnicmp with MAXCOL length
-- **Phase 2.83**: Optional case comparison wrapper (mbyte):
-  - `mb_strcmp_ic` - Wrapper selecting between case-sensitive (strcmp) or case-insensitive (mb_stricmp) based on `ic` flag
-- **Phase 2.84**: Encoding name prefix skipper (mbyte):
-  - `enc_skip` - Skip Vim-specific encoding name prefixes ("2byte-", "8bit-")
-- **Remaining infrastructure needed** for further progress:
-  1. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 27 crates, 113 functions swapped to Rust
-
-- [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
-  - File read/write with proper error handling
-
-#### 2.3 Dynamic Loading
-
-- [ ] `src/nvim/os/dl.c` → `nvim-rs/os/dl`
-  - `os_dlopen`, `os_dlsym`, `os_dlclose`
-  - Use `libloading` crate
-
-#### 2.4 Memory Allocation
-
-- [ ] `src/nvim/os/mem.c` → custom allocator integration
-  - Careful: global allocator affects everything
-  - May need `#[global_allocator]` or keep C allocator initially
-
-**Validation:**
-
-```bash
-TEST_FILE=test/unit/os/fs_spec.lua make unittest
-TEST_FILE=test/unit/os/env_spec.lua make unittest
-TEST_FILE=test/functional/core/fileio_spec.lua make functionaltest
-```
-
----
-
-### Phase 3: Data Structures (Foundational)
-
-**Goal:** Migrate core data structures that underpin the editor
-
-#### 3.1 Hash Table (`src/nvim/hashtab.c`) ✅ SWAPPED
-
-- [x] Implement `HashMap`-compatible structure in Rust (exists in collections crate)
-- [x] Expose C-compatible API via FFI
-- [x] `hash_hash` - Compute hash for null-terminated string - swapped to Rust
-- [x] `hash_hash_len` - Compute hash for string with known length - swapped to Rust
-- [x] `hash_init` - Initialize empty hash table - **Phase 2.2**: swapped to Rust
-- [x] `hash_clear` - Free array without freeing values - **Phase 2.2**: swapped to Rust
-- [x] `hash_find` - Find item by key - **Phase 2.2**: swapped to Rust
-- [x] `hash_find_len` - Find item by key with known length - **Phase 2.2**: swapped to Rust
-- [x] `hash_lookup` - Find item with precomputed hash - **Phase 2.2**: swapped to Rust
-- [x] `hash_add_item` - Add item to hash table - **Phase 2.2**: swapped to Rust
-- [x] `hash_remove` - Remove item from hash table - **Phase 2.2**: swapped to Rust
-- [x] `hash_lock` - Lock hash table from resizing - **Phase 2.2**: swapped to Rust
-- [x] `hash_unlock` - Unlock hash table - **Phase 2.2**: swapped to Rust
-
-#### 3.2 Growing Array (`src/nvim/garray.c`) ✅ SWAPPED
-
-- [x] Map to `Vec<T>` with C-compatible wrapper (exists in collections crate)
-- [x] `rs_ga_init` - Initialize growing array - **Phase 2.1**: swapped to Rust
-- [x] `rs_ga_set_growsize` - Set growth size - **Phase 2.1**: swapped to Rust
-- [x] `rs_ga_clear` - Clear and free array data - **Phase 2.1**: swapped to Rust
-- [x] `rs_ga_grow` - Grow array to accommodate items - **Phase 2.1**: swapped to Rust
-- [x] `rs_ga_append` - Append single byte - **Phase 2.1**: swapped to Rust
-- [x] `rs_ga_append_via_ptr` - Get pointer for appending - **Phase 2.1**: swapped to Rust
-- [x] `rs_ga_concat` - Concatenate null-terminated string - **Phase 2.1**: swapped to Rust
-- [x] `rs_ga_concat_len` - Concatenate string with length - **Phase 2.1**: swapped to Rust
-
-#### 3.3 Multibyte/UTF-8 (`src/nvim/mbyte.c`)
-
-- [x] UTF-8 encoding/decoding (utf_ptr2char, utf_char2bytes, utf_ptr2len) - swapped to Rust
-- [x] UTF-8 byte length tables (utf8len_tab, utf8len_tab_zero) - implemented in Rust
-- [x] `utf_char2len` - Get UTF-8 byte length for codepoint - swapped to Rust
-- [x] `utf_byte2len` - Get UTF-8 length from first byte - swapped to Rust
-- [x] `utf_ptr2len_len` - Get UTF-8 length with size limit - swapped to Rust
-- [x] `utf_valid_string` - Validate UTF-8 string - swapped to Rust
-- [x] `utf_eat_space` - Whether space is not allowed before/after character - swapped to Rust
-- [x] `utf_allow_break_before` - Whether line break is allowed before character - swapped to Rust
-- [x] `utf_allow_break_after` - Whether line break is allowed after character - swapped to Rust
-- [x] `utf_allow_break` - Whether line break is allowed between two characters - swapped to Rust
-- [x] `utf_printable` - Check if character can be displayed normally - swapped to Rust
-- [x] `utf_cp_bounds_len` - Get codepoint boundaries with length limit - swapped to Rust
-- [x] `utf_cp_bounds` - Get codepoint boundaries (NUL-terminated) - swapped to Rust
-- [ ] Character width calculation (utf_char2cells - requires display tables)
-- [ ] Composing character handling (utfc_ptr2len - requires grapheme state)
-- [ ] Encoding conversion (iconv integration)
-
-#### 3.4 Mark Tree (`src/nvim/marktree.c`)
-
-- [ ] Interval tree for extmarks
-- [ ] Complex but self-contained data structure
-- [ ] Critical for LSP and highlighting performance
-
-**Validation:**
-
-```bash
-TEST_FILE=test/unit/marktree_spec.lua make unittest
-# Run full test suite - data structures are foundational
-make test
-```
-
----
-
-### Phase 4: Event Loop & Async I/O (Core Infrastructure)
-
-**Goal:** Migrate the libuv-based event system
-
-This is a critical phase - the event loop touches everything.
-
-#### 4.1 Event Loop Wrapper
-
-- [ ] `src/nvim/event/loop.c` → `nvim-rs/event/loop`
-- [ ] Options:
-  - A) Wrap libuv with Rust (keep C compatibility)
-  - B) Replace with `tokio`/`async-std` (larger change)
-- [ ] Recommend Option A initially for compatibility
-
-#### 4.2 Stream Handling
-
-- [ ] `src/nvim/event/rstream.c` → Rust read streams
-- [ ] `src/nvim/event/wstream.c` → Rust write streams
-- [ ] `src/nvim/event/stream.c` → Base stream utilities
-
-#### 4.3 Process Management
-
-- [ ] `src/nvim/event/proc.c` → `nvim-rs/event/proc`
-- [ ] `src/nvim/event/libuv_proc.c` → libuv process wrapper
-- [ ] Job control for `:terminal`, `:!cmd`, etc.
-
-#### 4.4 Async Primitives
-
-- [ ] `src/nvim/event/multiqueue.c` → Event queue
-- [ ] `src/nvim/event/signal.c` → Signal handling
-- [ ] `src/nvim/event/time.c` → Timer management
-- [ ] `src/nvim/event/socket.c` → Socket handling
-
-**Validation:**
-
-```bash
-TEST_FILE=test/functional/core/job_spec.lua make functionaltest
-TEST_FILE=test/functional/terminal/ make functionaltest
-# Terminal and async tests are critical
-```
-
----
-
-### Phase 5: MessagePack RPC Layer (API Boundary)
-
-**Goal:** Migrate the RPC protocol implementation
-
-Clean API boundary - external UIs communicate through this layer.
-
-#### 5.1 MessagePack Encoding/Decoding
-
-- [ ] `src/nvim/msgpack_rpc/packer.c` → Use `rmp` crate
-- [ ] `src/nvim/msgpack_rpc/unpacker.c` → Use `rmp` crate
-
-#### 5.2 Channel Management
-
-- [ ] `src/nvim/msgpack_rpc/channel.c` → `nvim-rs/rpc/channel`
-- [ ] `src/nvim/msgpack_rpc/server.c` → `nvim-rs/rpc/server`
-
-#### 5.3 API Dispatch
-
-- [ ] Code generation for API dispatch (modify `gen_api_dispatch.lua`)
-- [ ] Generate Rust dispatch code alongside C
-
-**Validation:**
-
-```bash
-TEST_FILE=test/functional/api/ make functionaltest
-# Test with external UIs (nvim-qt, neovide)
-```
-
----
-
-### Phase 6: API Layer (External Interface)
-
-**Goal:** Migrate `src/nvim/api/` - the public API surface
-
-#### 6.1 API Type System
-
-- [ ] Port `src/nvim/api/private/defs.h` types to Rust
-- [ ] `Object`, `Array`, `Dict`, `String`, `Integer`, etc.
-- [ ] Implement `From`/`Into` traits for C interop
-
-#### 6.2 Core API Functions
-
-- [ ] `src/nvim/api/vim.c` → Core editor API
-- [ ] `src/nvim/api/buffer.c` → Buffer API
-- [ ] `src/nvim/api/window.c` → Window API
-- [ ] `src/nvim/api/tabpage.c` → Tab API
-- [ ] `src/nvim/api/options.c` → Option API
-
-#### 6.3 Extended API
-
-- [ ] `src/nvim/api/extmark.c` → Extmark API
-- [ ] `src/nvim/api/ui.c` → UI events API
-- [ ] `src/nvim/api/command.c` → Command API
-- [ ] `src/nvim/api/autocmd.c` → Autocmd API
-
-**Validation:**
-
-```bash
-# Full API test suite
-TEST_FILE=test/functional/api/ make functionaltest
-# Lua API bindings
-TEST_FILE=test/functional/lua/ make functionaltest
-```
-
----
-
-### Phase 7: Terminal UI (User-Facing)
-
-**Goal:** Migrate `src/nvim/tui/` - terminal rendering
-
-#### 7.1 TUI Core
-
-- [ ] `src/nvim/tui/tui.c` → `nvim-rs/tui`
-- [ ] Consider using `crossterm` or direct terminfo
-- [ ] `src/nvim/tui/terminfo.c` → terminfo database handling
-
-#### 7.2 Input Processing
-
-- [ ] `src/nvim/tui/input.c` → Terminal input parsing
-- [ ] Key sequence decoding
-
-**Validation:**
-
-```bash
-TEST_FILE=test/functional/ui/ make functionaltest
-# Manual testing: visual inspection of rendering
-```
-
----
-
-### Phase 8: Buffer & Text Storage (Core Editor)
-
-**Goal:** Migrate the text representation layer
-
-This is the heart of the editor - careful migration required.
-
-#### 8.1 Memory Line Storage
-
-- [ ] `src/nvim/memline.c` (4,247 lines) → Text storage engine
-- [ ] `src/nvim/memfile.c` → Swap file handling
-- [ ] B-tree structure for line storage
-
-#### 8.2 Buffer Management
-
-- [ ] `src/nvim/buffer.c` (4,250 lines) → Buffer lifecycle
-- [ ] Buffer list management
-- [ ] File loading/saving integration
-
-#### 8.3 Undo System
-
-- [ ] `src/nvim/undo.c` → Undo tree
-- [ ] Complex branching undo history
-
-**Validation:**
-
-```bash
-TEST_FILE=test/functional/core/fileio_spec.lua make functionaltest
-TEST_FILE=test/functional/editor/buffer_spec.lua make functionaltest
-TEST_FILE=test/functional/legacy/undo_spec.lua make functionaltest
-```
-
----
-
-### Phase 9: Window & Display (Rendering)
-
-**Goal:** Migrate window management and screen rendering
-
-#### 9.1 Window Management
-
-- [ ] `src/nvim/window.c` (7,599 lines) → Window layout
-- [ ] Split handling, window navigation
-- [ ] Floating windows (`winfloat.c`)
-
-#### 9.2 Screen Rendering
-
-- [ ] `src/nvim/drawscreen.c` → Full screen redraw
-- [ ] `src/nvim/drawline.c` → Line rendering
-- [ ] `src/nvim/grid.c` → Grid management
-
-#### 9.3 Highlighting
-
-- [ ] `src/nvim/highlight.c` → Highlight attributes
-- [ ] `src/nvim/highlight_group.c` → Highlight groups
-- [ ] `src/nvim/syntax.c` (5,673 lines) → Legacy syntax
-
-**Validation:**
-
-```bash
-TEST_FILE=test/functional/ui/screen_basic_spec.lua make functionaltest
-TEST_FILE=test/functional/ui/float_spec.lua make functionaltest
-TEST_FILE=test/functional/ui/highlight_spec.lua make functionaltest
-```
-
----
-
-### Phase 10: Modal Editing (User Interaction)
-
-**Goal:** Migrate input processing and modal behavior
-
-#### 10.1 Normal Mode
-
-- [ ] `src/nvim/normal.c` (6,670 lines) → Normal mode commands
-- [ ] Motion commands
-- [ ] Operator handling
-
-#### 10.2 Insert Mode
-
-- [ ] `src/nvim/edit.c` (4,358 lines) → Insert mode
-- [ ] `src/nvim/insexpand.c` (6,581 lines) → Completion
-
-#### 10.3 Command Line
-
-- [ ] `src/nvim/ex_getln.c` (5,007 lines) → Command line editing
-- [ ] `src/nvim/cmdexpand.c` (4,261 lines) → Command completion
-
-**Validation:**
-
-```bash
-TEST_FILE=test/functional/editor/mode_insert_spec.lua make functionaltest
-TEST_FILE=test/functional/editor/mode_cmdline_spec.lua make functionaltest
-# Extensive manual testing for modal behavior
-```
-
----
-
-### Phase 11: Ex Commands (Command Processing)
-
-**Goal:** Migrate the Ex command infrastructure
-
-#### 11.1 Command Dispatcher
-
-- [ ] `src/nvim/ex_docmd.c` (8,318 lines) → Command parsing & dispatch
-- [ ] Command range handling
-- [ ] Command modifiers
-
-#### 11.2 Command Implementations
-
-- [ ] `src/nvim/ex_cmds.c` (5,080 lines) → Individual commands
-- [ ] `src/nvim/ex_cmds2.c` → More commands
-- [ ] `src/nvim/usercmd.c` → User-defined commands
-
-**Validation:**
-
-```bash
-TEST_FILE=test/functional/ex_cmds/ make functionaltest
-TEST_FILE=test/functional/legacy/ make functionaltest
-```
-
----
-
-### Phase 12: VimL Evaluation Engine (Scripting)
-
-**Goal:** Migrate the VimL interpreter
-
-This is one of the largest and most complex subsystems.
-
-#### 12.1 Expression Evaluator
-
-- [ ] `src/nvim/eval.c` (6,931 lines) → Expression evaluation
-- [ ] `src/nvim/eval/typval.c` → Type system
-- [ ] `src/nvim/eval/vars.c` → Variable handling
-
-#### 12.2 Built-in Functions
-
-- [ ] `src/nvim/eval/funcs.c` → 300+ built-in functions
-- [ ] `src/nvim/eval/userfunc.c` → User function handling
-
-#### 12.3 VimL Parser
-
-- [ ] `src/nvim/viml/parser/` → VimL parser
-- [ ] Consider using a parser generator
-
-**Validation:**
-
-```bash
-TEST_FILE=test/functional/vimscript/ make functionaltest
-TEST_FILE=test/functional/eval/ make functionaltest
-TEST_FILE=test/old/testdir/ make oldtest
-```
-
----
-
-### Phase 13: Lua Integration (Modern Scripting)
-
-**Goal:** Migrate Lua runtime integration
-
-#### 13.1 Lua Executor
-
-- [ ] `src/nvim/lua/executor.c` → Lua code execution
-- [ ] `src/nvim/lua/converter.c` → Type conversion
-- [ ] Decide: mlua, rlua, or direct FFI
-
-#### 13.2 Lua APIs
-
-- [ ] `src/nvim/lua/stdlib.c` → Standard library
-- [ ] `src/nvim/lua/treesitter.c` → Tree-sitter API
-- [ ] `src/nvim/lua/fs.c` → Filesystem API
-
-**Validation:**
-
-```bash
-TEST_FILE=test/functional/lua/ make functionaltest
-TEST_FILE=test/functional/treesitter/ make functionaltest
-```
-
----
-
-### Phase 14: Search & Navigation (Editor Features)
-
-**Goal:** Migrate search, tags, and navigation
-
-#### 14.1 Regular Expressions
-
-- [ ] `src/nvim/regexp.c` (16,262 lines) → Regex engine
-- [ ] Options: Port existing or use `regex` crate
-- [ ] Must maintain Vim regex compatibility
-
-#### 14.2 Search
-
-- [ ] `src/nvim/search.c` → Search implementation
-- [ ] `src/nvim/quickfix.c` (7,776 lines) → Quickfix list
-
-#### 14.3 Tags
-
-- [ ] `src/nvim/tag.c` → Tag navigation
-- [ ] `src/nvim/tagfunc.c` → Tag functions
-
-**Validation:**
-
-```bash
-TEST_FILE=test/functional/legacy/search_spec.lua make functionaltest
-TEST_FILE=test/functional/legacy/quickfix_spec.lua make functionaltest
-```
-
----
-
-### Phase 15: Auxiliary Features (Completion)
-
-**Goal:** Migrate remaining subsystems
-
-#### 15.1 Spelling
-
-- [ ] `src/nvim/spell.c` → Spell checking
-- [ ] `src/nvim/spellfile.c` (5,751 lines) → Spell file handling
-- [ ] `src/nvim/spellsuggest.c` → Suggestions
-
-#### 15.2 Diff
-
-- [ ] `src/nvim/diff.c` (4,324 lines) → Diff mode
-- [ ] Integration with bundled xdiff
-
-#### 15.3 Folding
-
-- [ ] `src/nvim/fold.c` → Code folding
-
-#### 15.4 Autocommands
-
-- [ ] `src/nvim/autocmd.c` → Autocommand system
-
-**Validation:**
-
-```bash
-make test  # Full test suite
-make oldtest  # Vim compatibility
-```
-
----
-
-### Phase 16: Final Integration & Cleanup
-
-**Goal:** Remove C code, finalize pure Rust implementation
-
-#### 16.1 Remove FFI Wrappers
-
-- [ ] Replace `extern "C"` functions with pure Rust calls
-- [ ] Remove `unsafe` blocks where possible
-- [ ] Audit remaining `unsafe` for soundness
-
-#### 16.2 Optimize
-
-- [ ] Profile and optimize hot paths
-- [ ] Leverage Rust's zero-cost abstractions
-- [ ] Memory usage optimization
-
-#### 16.3 Documentation
-
-- [ ] API documentation with `rustdoc`
-- [ ] Architecture documentation
-- [ ] Contributing guide for Rust
-
-**Validation:**
-
-```bash
-make test           # All tests pass
-make benchmark      # Performance acceptable
-cargo clippy        # No warnings
-cargo audit         # No security issues
-```
+## Remaining Phases (Future Work)
+
+### Phase 3: Complex Struct FFI
+**Blocked by:** Need opaque handle patterns for win_T, buf_T, frame_T
+
+Candidates once infrastructure ready:
+- window.c frame functions
+- buffer.c validation functions
+- plines.c display calculations
+
+### Phase 4: Event Loop & Async I/O
+- event/loop.c - libuv wrapper or tokio replacement
+- event/rstream.c, wstream.c - stream handling
+- event/proc.c - process management
+
+### Phase 5: MessagePack RPC
+- msgpack_rpc/packer.c, unpacker.c → rmp crate
+- msgpack_rpc/channel.c, server.c
+
+### Phase 6: API Layer
+- api/vim.c, buffer.c, window.c, tabpage.c
+- API type system (Object, Array, Dict, String)
+
+### Phase 7: Terminal UI
+- tui/tui.c - terminal rendering
+- tui/input.c - input processing
+
+### Phase 8: Buffer & Text Storage
+- memline.c - text storage engine
+- buffer.c - buffer lifecycle
+- undo.c - undo tree
+
+### Phase 9: Window & Display
+- window.c - window layout
+- drawscreen.c, drawline.c - rendering
+- highlight.c, syntax.c - highlighting
+
+### Phase 10-15: Editor Core
+- normal.c, edit.c - modal editing
+- ex_docmd.c, ex_cmds.c - commands
+- eval.c - VimL evaluation
+- lua/executor.c - Lua integration
+- regexp.c - regex engine
+- spell.c, diff.c, fold.c - features
+
+### Phase 16: Final Cleanup
+- Remove FFI wrappers
+- Reduce unsafe blocks
+- Performance optimization
 
 ---
 
 ## Testing Strategy
 
-### Continuous Validation
-
-Every commit during migration must pass:
-
 ```bash
-# Quick validation (run on every commit)
-make                    # Build succeeds
-cargo test             # Rust unit tests pass
-make functionaltest    # Core functional tests
+# Quick validation (every commit)
+just build                  # Build succeeds
+cargo clippy               # No warnings
+just functionaltest        # Core tests
 
-# Full validation (run before merge)
-make test              # All tests pass
-make oldtest           # Vim compatibility
-VALGRIND=1 make test   # Memory safety
+# Full validation (before merge)
+just test                  # All tests pass
 ```
 
-### Test Categories
+---
 
-| Category         | Count | Purpose                |
-| ---------------- | ----- | ---------------------- |
-| Functional tests | ~460  | End-to-end behavior    |
-| Unit tests       | ~50   | Component isolation    |
-| Old tests        | ~100  | Vim compatibility      |
-| Benchmarks       | ~20   | Performance regression |
-
-### FFI Testing
-
-For each migrated module, add:
-
-1. **Rust unit tests** - Test pure Rust logic
-2. **FFI boundary tests** - Test C↔Rust interop
-3. **Integration tests** - Test in full Nvim context
+## FFI Pattern Reference
 
 ```rust
-#[cfg(test)]
-mod tests {
-    use super::*;
+// Example: Pure function export
+#[no_mangle]
+pub extern "C" fn rs_function_name(arg: c_int) -> c_int {
+    // Rust implementation
+}
 
-    #[test]
-    fn test_rust_implementation() {
-        // Pure Rust test
-    }
+// Example: C global access
+extern "C" {
+    static g_chartab: [u64; 4];
+    static mut cw_table: *const CwEntry;
+}
 
-    #[test]
-    fn test_ffi_roundtrip() {
-        // C-compatible interface test
-    }
+// Example: C callback
+extern "C" {
+    fn utfc_ptr2len(p: *const u8) -> c_int;
 }
 ```
 
-### Regression Detection
+---
 
-```bash
-# Compare before/after each phase
-./build/bin/nvim --version          # Version info
-./build/bin/nvim --startuptime /tmp/startup.log  # Startup time
-hyperfine './build/bin/nvim +q'     # Benchmark
-```
+## Risk Areas
+
+| Component | Risk | Mitigation |
+|-----------|------|------------|
+| Memory layout | ABI mismatch | repr(C), extensive FFI testing |
+| Event loop | Deadlocks | Keep libuv initially |
+| Regex engine | Compatibility | Port existing, not replace |
+| VimL eval | Complex state | Last to migrate |
 
 ---
 
-## Risk Mitigation
+## File Inventory (Largest)
 
-### High-Risk Areas
-
-| Component     | Risk                | Mitigation                          |
-| ------------- | ------------------- | ----------------------------------- |
-| Memory layout | ABI incompatibility | Extensive FFI testing, `repr(C)`    |
-| Event loop    | Deadlocks           | Keep libuv initially, migrate later |
-| Regex engine  | Compatibility       | Port existing, extensive test suite |
-| VimL eval     | Complex state       | Last to migrate, thorough testing   |
-
-### Rollback Strategy
-
-Each phase should be independently revertible:
-
-1. Keep C code in separate branch until phase validated
-2. Feature flags for Rust vs C implementation
-3. Automated bisect-friendly commits
+| File | Lines | Phase |
+|------|-------|-------|
+| regexp.c | 16,262 | 14 |
+| ex_docmd.c | 8,318 | 11 |
+| quickfix.c | 7,776 | 14 |
+| window.c | 7,599 | 9 |
+| eval.c | 6,931 | 12 |
+| normal.c | 6,670 | 10 |
 
 ---
 
-## Timeline Considerations
+## Quick Reference
 
-This migration is a multi-year effort. Rough ordering by complexity:
-
-1. **Phases 0-3** (Foundation): Can proceed in parallel, low risk
-2. **Phases 4-5** (Infrastructure): Sequential, moderate risk
-3. **Phases 6-7** (Interface): Can proceed in parallel after Phase 5
-4. **Phases 8-11** (Core): Sequential, high complexity
-5. **Phases 12-13** (Scripting): High complexity, extensive testing
-6. **Phases 14-16** (Completion): Cleanup and optimization
-
----
-
-## Success Criteria
-
-### Per-Phase Gates
-
-- [ ] All existing tests pass
-- [ ] No performance regression >10%
-- [ ] Memory usage comparable
-- [ ] `cargo clippy` clean
-- [ ] Documentation updated
-
-### Final Goals
-
-- [ ] 100% Rust (except LuaJIT FFI)
-- [ ] Memory safety without runtime cost
-- [ ] Maintainable, idiomatic Rust code
-- [ ] All ~460 functional tests passing
-- [ ] Vim compatibility preserved
-- [ ] External UI compatibility preserved
-
----
-
-## Appendix: File Inventory
-
-### Largest C Files (Migration Complexity)
-
-| File          | Lines  | Phase |
-| ------------- | ------ | ----- |
-| `regexp.c`    | 16,262 | 14    |
-| `ex_docmd.c`  | 8,318  | 11    |
-| `quickfix.c`  | 7,776  | 14    |
-| `window.c`    | 7,599  | 9     |
-| `eval.c`      | 6,931  | 12    |
-| `normal.c`    | 6,670  | 10    |
-| `insexpand.c` | 6,581  | 10    |
-| `option.c`    | 6,424  | 6     |
-| `spellfile.c` | 5,751  | 15    |
-| `syntax.c`    | 5,673  | 9     |
-
-### Module Dependencies
-
-```
-os/ ──────────────────────────────┐
-event/ ───────────────────────────┤
-                                  ├──► api/ ──► msgpack_rpc/
-data structures (hashtab, etc.) ──┤              │
-                                  │              ▼
-buffer/memline ───────────────────┼──► tui/ ◄── ui/
-                                  │
-window/screen ────────────────────┤
-                                  │
-eval/ ────────────────────────────┼──► lua/
-                                  │
-normal/edit/ex_cmds ──────────────┘
-```
-
----
-
-## Getting Started
-
-```bash
-# Clone and build baseline
-git clone https://github.com/neovim/neovim
-cd neovim
-make CMAKE_BUILD_TYPE=RelWithDebInfo
-
-# Run tests to establish baseline
-make test
-
-# Begin Phase 0: Add Rust infrastructure
-# (See Phase 0 tasks above)
-```
-
----
-
-_This document should be updated as the migration progresses. Each completed phase should be checked off and any lessons learned documented._
+**Build:** `just build`
+**Test:** `just test`
+**Rust tests:** `cargo test --workspace`
+**Check:** `cargo clippy && cargo fmt --check`
+**Symbols:** `nm build/bin/nvim | grep "T rs_" | wc -l` (currently 249)
