@@ -119,6 +119,10 @@ extern int rs_mb_strnicmp(const char *s1, const char *s2, size_t nn);
 extern int rs_mb_stricmp(const char *s1, const char *s2);
 extern int rs_mb_strcmp_ic(bool ic, const char *s1, const char *s2);
 extern char *rs_enc_skip(char *p);
+extern bool rs_utf_composinglike(const char *p1, const char *p2, GraphemeState *state);
+extern bool rs_utf_iscomposing(int c1, int c2, GraphemeState *state);
+extern int rs_utfc_ptr2len(const char *p);
+extern int rs_utfc_ptr2len_len(const char *p, int size);
 
 // Rust struct for codepoint boundary offsets
 typedef struct {
@@ -912,6 +916,9 @@ bool utf_iscomposing_first(int c)
 bool utf_composinglike(const char *p1, const char *p2, GraphemeState *state)
   FUNC_ATTR_NONNULL_ARG(1, 2)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_composinglike(p1, p2, state);
+#else
   if ((uint8_t)(*p2) < 128) {
     return false;
   }
@@ -924,13 +931,18 @@ bool utf_composinglike(const char *p1, const char *p2, GraphemeState *state)
   }
 
   return arabic_combine(first, second);
+#endif
 }
 
 /// same as utf_composinglike but operating on UCS-4 values
 bool utf_iscomposing(int c1, int c2, GraphemeState *state)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_iscomposing(c1, c2, state);
+#else
   return (!utf8proc_grapheme_break_stateful(c1, c2, state)
           || arabic_combine(c1, c2));
+#endif
 }
 
 /// Get the screen char at the beginning of a string
@@ -1071,6 +1083,9 @@ int utf_ptr2len_len(const char *p, int size)
 int utfc_ptr2len(const char *const p)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utfc_ptr2len(p);
+#else
   uint8_t b0 = (uint8_t)(*p);
 
   if (b0 == NUL) {
@@ -1100,6 +1115,7 @@ int utfc_ptr2len(const char *const p)
     prevlen = len;
     len += utf_ptr2len(p + len);
   }
+#endif
 }
 
 /// Return the number of bytes the UTF-8 encoding of the character at "p[size]"
@@ -1108,6 +1124,9 @@ int utfc_ptr2len(const char *const p)
 /// Returns 1 for an illegal char or an incomplete byte sequence.
 int utfc_ptr2len_len(const char *p, int size)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utfc_ptr2len_len(p, size);
+#else
   if (size < 1 || *p == NUL) {
     return 0;
   }
@@ -1148,6 +1167,7 @@ int utfc_ptr2len_len(const char *p, int size)
     len += len_next_char;
   }
   return len;
+#endif
 }
 
 /// Determine how many bytes certain unicode codepoint will occupy

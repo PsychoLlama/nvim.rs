@@ -120,6 +120,20 @@ extern "C" {
     /// The values are UCS-4 codepoints.
     pub fn utf8proc_grapheme_break(codepoint1: i32, codepoint2: i32) -> bool;
 
+    /// Check if there is a grapheme break between two codepoints (stateful).
+    ///
+    /// Returns true if there is a grapheme break between codepoint1 and codepoint2.
+    /// The `state` parameter tracks extended grapheme cluster state across calls.
+    /// It should be initialized to 0 at the start of processing a string.
+    ///
+    /// This function MUST be called IN ORDER on all codepoints in a string
+    /// for correct grapheme cluster detection.
+    pub fn utf8proc_grapheme_break_stateful(
+        codepoint1: i32,
+        codepoint2: i32,
+        state: *mut i32,
+    ) -> bool;
+
     /// Decompose a single Unicode codepoint.
     ///
     /// The result is written to `dst` buffer of size `bufsize`.
@@ -163,6 +177,19 @@ pub fn get_property(codepoint: i32) -> Option<&'static Utf8procProperty> {
 pub fn grapheme_break(codepoint1: i32, codepoint2: i32) -> bool {
     // SAFETY: utf8proc_grapheme_break is a pure function with no side effects
     unsafe { utf8proc_grapheme_break(codepoint1, codepoint2) }
+}
+
+/// Check if there is a grapheme break between two codepoints (stateful).
+///
+/// Returns true if there is a grapheme break (i.e., the codepoints are in
+/// different grapheme clusters). The `state` parameter tracks extended
+/// grapheme cluster state across calls and should be initialized to 0.
+///
+/// This function MUST be called IN ORDER on all codepoints in a string.
+#[inline]
+pub fn grapheme_break_stateful(codepoint1: i32, codepoint2: i32, state: &mut i32) -> bool {
+    // SAFETY: utf8proc_grapheme_break_stateful only reads/writes through state pointer
+    unsafe { utf8proc_grapheme_break_stateful(codepoint1, codepoint2, state) }
 }
 
 /// Case-fold a Unicode codepoint.

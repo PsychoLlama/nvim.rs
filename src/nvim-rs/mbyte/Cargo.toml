@@ -8,6 +8,7 @@ repository.workspace = true
 
 [dependencies]
 libc = "0.2"
+nvim-arabic = { path = "../arabic" }
 nvim-utf8proc = { path = "../utf8proc" }
 
 [lints]

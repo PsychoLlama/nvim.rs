@@ -50,12 +50,18 @@ fn arabic_maycombine(two: c_int) -> bool {
 ///
 /// # Safety
 /// This function reads global option variables through `arabic_maycombine`.
-#[no_mangle]
-pub extern "C" fn rs_arabic_combine(one: c_int, two: c_int) -> bool {
+#[inline]
+pub fn arabic_combine(one: c_int, two: c_int) -> bool {
     if one == A_LAM {
         return arabic_maycombine(two);
     }
     false
+}
+
+/// C-compatible wrapper for `arabic_combine`.
+#[no_mangle]
+pub extern "C" fn rs_arabic_combine(one: c_int, two: c_int) -> bool {
+    arabic_combine(one, two)
 }
 
 /// Export `arabic_maycombine` for C callers.

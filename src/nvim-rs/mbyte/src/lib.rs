@@ -25,7 +25,7 @@
 
 use std::ffi::{c_char, c_int, c_longlong};
 
-use nvim_utf8proc::{casefold, get_property, grapheme_break, Utf8procProperty};
+use nvim_utf8proc::{casefold, get_property, grapheme_break, grapheme_break_stateful, Utf8procProperty};
 
 /// Maximum bytes in a UTF-8 character (standard is 4, but nvim supports up to 6).
 pub const MB_MAXBYTES: usize = 6;
@@ -599,29 +599,32 @@ pub extern "C" fn rs_utf_allow_break(cc: c_int, ncc: c_int) -> c_int {
     c_int::from(utf_allow_break(cc, ncc))
 }
 
-// External references to C functions for composing character handling
-extern "C" {
-    // Returns the byte length of a UTF-8 character including composing characters
-    fn utfc_ptr2len(p: *const c_char) -> c_int;
-    // Same as utfc_ptr2len but with maximum size limit
-    fn utfc_ptr2len_len(p: *const c_char, size: c_int) -> c_int;
-}
-
 /// Return the number of characters in a string.
 /// Composing characters are not counted separately.
 ///
-/// Calls back to C's utfc_ptr2len for proper composing character handling.
+/// Uses the native Rust utfc_ptr2len implementation.
 #[no_mangle]
 pub unsafe extern "C" fn rs_mb_charlen(str: *const c_char) -> c_int {
     if str.is_null() {
         return 0;
     }
 
-    let mut p = str;
+    // Find string length
+    let mut len = 0usize;
+    while *str.add(len) != 0 {
+        len += 1;
+    }
+
+    if len == 0 {
+        return 0;
+    }
+
+    let slice = std::slice::from_raw_parts(str as *const u8, len);
+    let mut p = 0usize;
     let mut count: c_int = 0;
 
-    while *p != 0 {
-        p = p.add(utfc_ptr2len(p) as usize);
+    while p < len && slice[p] != 0 {
+        p += utfc_ptr2len(&slice[p..]);
         count += 1;
     }
 
@@ -631,15 +634,19 @@ pub unsafe extern "C" fn rs_mb_charlen(str: *const c_char) -> c_int {
 /// Return the number of characters in a string, limited to "len" bytes.
 /// Composing characters are not counted separately.
 ///
-/// Calls back to C's utfc_ptr2len for proper composing character handling.
+/// Uses the native Rust utfc_ptr2len_len implementation.
 #[no_mangle]
 pub unsafe extern "C" fn rs_mb_charlen_len(str: *const c_char, len: c_int) -> c_int {
-    let mut p = str;
-    let end = str.add(len as usize);
+    if str.is_null() || len <= 0 {
+        return 0;
+    }
+
+    let slice = std::slice::from_raw_parts(str as *const u8, len as usize);
+    let mut p = 0usize;
     let mut count: c_int = 0;
 
-    while *p != 0 && p < end {
-        p = p.add(utfc_ptr2len(p) as usize);
+    while p < slice.len() && slice[p] != 0 {
+        p += utfc_ptr2len_len(&slice[p..], slice.len() - p);
         count += 1;
     }
 
@@ -647,58 +654,53 @@ pub unsafe extern "C" fn rs_mb_charlen_len(str: *const c_char, len: c_int) -> c_
 }
 
 /// Return the number of cells occupied by a string.
-/// Uses utf_ptr2cells (already migrated) and utfc_ptr2len (callback to C).
+/// Uses utf_ptr2cells and native Rust utfc_ptr2len.
 #[no_mangle]
 pub unsafe extern "C" fn rs_mb_string2cells(str: *const c_char) -> usize {
     if str.is_null() {
         return 0;
     }
 
-    let mut p = str;
+    // Find string length
+    let mut len = 0usize;
+    while *str.add(len) != 0 {
+        len += 1;
+    }
+
+    if len == 0 {
+        return 0;
+    }
+
+    let slice = std::slice::from_raw_parts(str as *const u8, len);
+    let mut p = 0usize;
     let mut clen: usize = 0;
 
-    while *p != 0 {
-        let slice = std::slice::from_raw_parts(p.cast::<u8>(), 6.min(strlen_safe(p)));
-        clen += utf_ptr2cells(slice) as usize;
-        p = p.add(utfc_ptr2len(p) as usize);
+    while p < len && slice[p] != 0 {
+        clen += utf_ptr2cells(&slice[p..]) as usize;
+        p += utfc_ptr2len(&slice[p..]);
     }
 
     clen
 }
 
 /// Return the number of cells occupied by a string with maximum length.
-/// Uses utf_ptr2cells (already migrated) and utfc_ptr2len_len (callback to C).
+/// Uses utf_ptr2cells and native Rust utfc_ptr2len_len.
 #[no_mangle]
 pub unsafe extern "C" fn rs_mb_string2cells_len(str: *const c_char, size: usize) -> usize {
-    if str.is_null() {
+    if str.is_null() || size == 0 {
         return 0;
     }
 
-    let mut p = str;
-    let end = str.add(size);
+    let slice = std::slice::from_raw_parts(str as *const u8, size);
+    let mut p = 0usize;
     let mut clen: usize = 0;
 
-    while *p != 0 && p < end {
-        let remaining = (end as usize - p as usize) as c_int;
-        // Create a slice limited to the remaining bytes - utf_ptr2cells handles length-limited input
-        let slice = std::slice::from_raw_parts(p.cast::<u8>(), remaining as usize);
-        clen += utf_ptr2cells(slice) as usize;
-        p = p.add(utfc_ptr2len_len(p, remaining) as usize);
+    while p < size && slice[p] != 0 {
+        clen += utf_ptr2cells(&slice[p..]) as usize;
+        p += utfc_ptr2len_len(&slice[p..], size - p);
     }
 
     clen
-}
-
-/// Safe strlen helper
-#[inline]
-unsafe fn strlen_safe(s: *const c_char) -> usize {
-    let mut len = 0;
-    let mut p = s;
-    while *p != 0 && len < 6 {
-        len += 1;
-        p = p.add(1);
-    }
-    len
 }
 
 // Character printability
@@ -2904,10 +2906,280 @@ mod tests {
         // Empty returns 1 (default)
         assert_eq!(utf_ptr2cells(&[]), 1);
     }
+}
 
-    // Note: Tests for UTF-8 multibyte cell widths are complex because
-    // they depend on vim_isprintc, p_ambw, p_emoji, and cw_table globals.
-    // Those are tested via integration tests in neovim.
+// ============================================================================
+// Composing character detection and utfc_ptr2len
+// ============================================================================
+
+/// Check if two characters form a composing sequence.
+///
+/// Uses the Unicode grapheme break algorithm (stateful) and Arabic combining rules
+/// to determine if `second` should compose with the character at `first`.
+///
+/// Returns true if there is NO grapheme break between the characters (they combine).
+#[inline]
+pub fn utf_composinglike(first: i32, second: i32, state: &mut i32) -> bool {
+    // Use stateful grapheme break algorithm
+    if !grapheme_break_stateful(first, second, state) {
+        return true;
+    }
+
+    // Check Arabic combining (Lam + Alef ligatures)
+    nvim_arabic::arabic_combine(first, second)
+}
+
+/// Check if two characters form a composing sequence (UCS-4 interface).
+///
+/// Same as `utf_composinglike` but taking raw codepoint values.
+#[inline]
+pub fn utf_iscomposing(c1: i32, c2: i32, state: &mut i32) -> bool {
+    !grapheme_break_stateful(c1, c2, state) || nvim_arabic::arabic_combine(c1, c2)
+}
+
+/// C-compatible wrapper for `utf_composinglike`.
+///
+/// Takes two string pointers and checks if they form a composing sequence.
+/// `state` must point to an i32 initialized to 0 at the start of processing.
+///
+/// # Safety
+/// - `p1` and `p2` must be valid pointers to UTF-8 strings
+/// - `state` must be a valid pointer to an i32
+#[no_mangle]
+pub unsafe extern "C" fn rs_utf_composinglike(
+    p1: *const c_char,
+    p2: *const c_char,
+    state: *mut i32,
+) -> bool {
+    if p1.is_null() || p2.is_null() || state.is_null() {
+        return false;
+    }
+
+    // Quick check: if p2 points to ASCII, it's definitely not composing
+    if (*(p2 as *const u8)) < 0x80 {
+        return false;
+    }
+
+    // Create slices from pointers (6 bytes is max UTF-8 char length)
+    let slice1 = std::slice::from_raw_parts(p1 as *const u8, 6);
+    let slice2 = std::slice::from_raw_parts(p2 as *const u8, 6);
+
+    let first = utf_ptr2char(slice1);
+    let second = utf_ptr2char(slice2);
+
+    utf_composinglike(first, second, &mut *state)
+}
+
+/// C-compatible wrapper for `utf_iscomposing`.
+///
+/// # Safety
+/// - `state` must be a valid pointer to an i32
+#[no_mangle]
+pub unsafe extern "C" fn rs_utf_iscomposing(c1: c_int, c2: c_int, state: *mut i32) -> bool {
+    if state.is_null() {
+        return false;
+    }
+    utf_iscomposing(c1, c2, &mut *state)
+}
+
+/// Return the number of bytes occupied by a UTF-8 character in a string.
+/// This includes following composing characters.
+///
+/// Returns zero for NUL.
+///
+/// This is a pure Rust implementation that doesn't require callbacks to C.
+pub fn utfc_ptr2len(p: &[u8]) -> usize {
+    if p.is_empty() || p[0] == 0 {
+        return 0;
+    }
+
+    let b0 = p[0];
+
+    // Fast path for ASCII followed by ASCII
+    if b0 < 0x80 && p.len() > 1 && p[1] < 0x80 {
+        return 1;
+    }
+
+    // Skip over first UTF-8 char, stopping at a NUL byte
+    let len = utf_ptr2len(p);
+
+    // Check for illegal byte
+    if len == 1 && b0 >= 0x80 {
+        return 1;
+    }
+
+    // Check for composing characters
+    let mut total_len = len;
+    let mut prevlen = 0usize;
+    let mut state: i32 = 0; // GRAPHEME_STATE_INIT
+
+    loop {
+        if total_len >= p.len() || p[total_len] == 0 {
+            return total_len;
+        }
+
+        // Quick check: ASCII is never composing
+        if p[total_len] < 0x80 {
+            return total_len;
+        }
+
+        // Get the codepoints for comparison
+        let prev_char = utf_ptr2char(&p[prevlen..]);
+        let next_char = utf_ptr2char(&p[total_len..]);
+
+        if !utf_composinglike(prev_char, next_char, &mut state) {
+            return total_len;
+        }
+
+        // Skip over composing char
+        prevlen = total_len;
+        total_len += utf_ptr2len(&p[total_len..]);
+    }
+}
+
+/// Return the number of bytes the UTF-8 encoding of the character at "p[size]" takes.
+/// This includes following composing characters.
+///
+/// Returns 0 for an empty string.
+/// Returns 1 for an illegal char or an incomplete byte sequence.
+pub fn utfc_ptr2len_len(p: &[u8], size: usize) -> usize {
+    if size == 0 || p.is_empty() || p[0] == 0 {
+        return 0;
+    }
+
+    let b0 = p[0];
+
+    // Fast path for ASCII followed by ASCII
+    if b0 < 0x80 && (size == 1 || (p.len() > 1 && p[1] < 0x80)) {
+        return 1;
+    }
+
+    // Skip over first UTF-8 char, stopping at a NUL byte
+    let len = utf_ptr2len_len(p, size);
+
+    // Check for illegal byte and incomplete byte sequence
+    if (len == 1 && b0 >= 0x80) || len > size {
+        return 1;
+    }
+
+    // Check for composing characters
+    let mut total_len = len;
+    let mut prevlen = 0usize;
+    let mut state: i32 = 0; // GRAPHEME_STATE_INIT
+
+    while total_len < size {
+        if total_len >= p.len() || p[total_len] == 0 {
+            break;
+        }
+
+        // Quick check: ASCII is never composing
+        if p[total_len] < 0x80 {
+            break;
+        }
+
+        // Next character length should not go beyond size
+        let remaining_size = size - total_len;
+        let remaining_slice = if total_len < p.len() {
+            &p[total_len..]
+        } else {
+            break;
+        };
+        let len_next_char = utf_ptr2len_len(remaining_slice, remaining_size);
+        if len_next_char > remaining_size {
+            break;
+        }
+
+        // Get the codepoints for comparison
+        let prev_char = utf_ptr2char(&p[prevlen..]);
+        let next_char = utf_ptr2char(&p[total_len..]);
+
+        if !utf_composinglike(prev_char, next_char, &mut state) {
+            break;
+        }
+
+        // Skip over composing char
+        prevlen = total_len;
+        total_len += len_next_char;
+    }
+
+    total_len
+}
+
+/// C-compatible wrapper for `utfc_ptr2len`.
+///
+/// Returns the number of bytes occupied by a UTF-8 character including
+/// following composing characters.
+///
+/// # Safety
+/// - `p` must be a valid pointer to a NUL-terminated UTF-8 string
+#[no_mangle]
+pub unsafe extern "C" fn rs_utfc_ptr2len(p: *const c_char) -> c_int {
+    if p.is_null() {
+        return 0;
+    }
+
+    // Find string length (with reasonable limit)
+    let mut len = 0usize;
+    while len < 1_000_000 {
+        if *p.add(len) == 0 {
+            break;
+        }
+        len += 1;
+    }
+
+    if len == 0 {
+        return 0;
+    }
+
+    let slice = std::slice::from_raw_parts(p as *const u8, len);
+    utfc_ptr2len(slice) as c_int
+}
+
+/// C-compatible wrapper for `utfc_ptr2len_len`.
+///
+/// Returns the number of bytes occupied by a UTF-8 character including
+/// following composing characters, with a size limit.
+///
+/// # Safety
+/// - `p` must be a valid pointer with at least `size` bytes
+#[no_mangle]
+pub unsafe extern "C" fn rs_utfc_ptr2len_len(p: *const c_char, size: c_int) -> c_int {
+    if p.is_null() || size <= 0 {
+        return 0;
+    }
+
+    let slice = std::slice::from_raw_parts(p as *const u8, size as usize);
+    utfc_ptr2len_len(slice, size as usize) as c_int
+}
+
+#[cfg(test)]
+mod utfc_tests {
+    use super::*;
+
+    #[test]
+    fn test_utfc_ptr2len_ascii() {
+        // Single ASCII followed by another ASCII
+        assert_eq!(utfc_ptr2len(b"ab"), 1);
+        assert_eq!(utfc_ptr2len(b"a"), 1);
+    }
+
+    #[test]
+    fn test_utfc_ptr2len_nul() {
+        assert_eq!(utfc_ptr2len(b""), 0);
+        assert_eq!(utfc_ptr2len(b"\0abc"), 0);
+    }
+
+    // Note: Tests involving actual composing characters would require
+    // utf8proc to be linked, which happens in integration tests.
+}
+
+// Note: Tests for UTF-8 multibyte cell widths are complex because
+// they depend on vim_isprintc, p_ambw, p_emoji, and cw_table globals.
+// Those are tested via integration tests in neovim.
+
+#[cfg(test)]
+mod bom_tests {
+    use super::*;
 
     #[test]
     fn test_remove_bom() {
