@@ -562,9 +562,11 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
   - `mb_stricmp` - Wrapper calling mb_strnicmp with MAXCOL length
 - **Phase 2.83**: Optional case comparison wrapper (mbyte):
   - `mb_strcmp_ic` - Wrapper selecting between case-sensitive (strcmp) or case-insensitive (mb_stricmp) based on `ic` flag
+- **Phase 2.84**: Encoding name prefix skipper (mbyte):
+  - `enc_skip` - Skip Vim-specific encoding name prefixes ("2byte-", "8bit-")
 - **Remaining infrastructure needed** for further progress:
   1. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 27 crates, 112 functions swapped to Rust
+- Total: 27 crates, 113 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
