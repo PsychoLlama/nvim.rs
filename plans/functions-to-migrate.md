@@ -579,6 +579,10 @@ Exhaustive search for Phase 2.50+ candidates. Cross-crate dependencies now work 
 **Remaining utf8proc-dependent functions:**
 - `utf_class_tab` - Get Unicode character class (depends on vim_iswordc_tab - circular dep)
 
+**Phase 2.78**: Migrated UTF-8 length measurement functions:
+- `mb_utflen` - Measure string length in UTF-32 codepoints and UTF-16 code units (for LSP position handling)
+- `mb_utf_index_to_bytes` - Convert UTF-16/UTF-32 index to byte offset
+
 **Conclusion:** char2cells now migrated. Next candidates need pointer FFI or complex struct handling.
 
 Remaining candidates require:
