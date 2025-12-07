@@ -97,6 +97,18 @@ int nvim_win_get_locked(win_T *wp)
   return wp->w_locked;
 }
 
+/// Get the w_floating field from a window (accessor for Rust).
+int nvim_win_get_floating(win_T *wp)
+{
+  return wp->w_floating;
+}
+
+/// Get the w_p_pvw (preview window) field from a window (accessor for Rust).
+int nvim_win_get_pvw(win_T *wp)
+{
+  return wp->w_p_pvw;
+}
+
 #define NOWIN           ((win_T *)-1)   // non-existing window
 
 #define ROWS_AVAIL (Rows - p_ch - tabline_height() - global_stl_height())
