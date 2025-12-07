@@ -4,7 +4,12 @@
 
 **121+ functions migrated across 27 Rust crates.**
 
-All FUNC_ATTR_PURE/CONST simple functions have been exhaustively migrated. Remaining candidates require infrastructure investment.
+All FUNC_ATTR_PURE/CONST simple functions have been exhaustively migrated. The `utf_ptr2CharInfo_impl` function was the last pure function that could be migrated without infrastructure investment.
+
+Remaining candidates require one of:
+- Access to global state (options, curbuf, curwin)
+- Static table exports (enc_canon_table, key_names_table)
+- Complex struct FFI (buf_T, win_T, frame_T)
 
 ---
 
