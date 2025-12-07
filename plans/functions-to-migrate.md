@@ -591,3 +591,41 @@ Exhaustive search for Phase 2.50+ candidates. Cross-crate dependencies now work 
 
 Remaining candidates require:
 1. **Complex struct FFI** - For win_T*, buf_T* parameters
+
+## Session 10 Summary (2025-12-06) - Simple Function Migration COMPLETE
+
+**Phase 2.84**: Migrated `enc_skip`:
+- ✅ MIGRATED - Skip leading encoding name in option value
+
+**Exhaustive Search Results:**
+
+Searched all remaining C source files for FUNC_ATTR_PURE/FUNC_ATTR_CONST functions without USE_RUST guards:
+- **profile.c** - All functions already have USE_RUST_PROFILE guards
+- **hashtab.c** - All functions already have USE_RUST_HASHTAB or USE_RUST_MEMUTIL guards
+- **path.c** - All functions have USE_RUST_PATH guards or use global options (p_fic)
+- **indent.c** - All functions have USE_RUST_INDENT guards
+- **cmdhist.c** - All functions have USE_RUST_CMDHIST guards
+- **eval.c** - All CONST functions have USE_RUST_MATH or USE_RUST_EVAL guards, or use typval_T*
+- **keycodes.c** - All functions have USE_RUST_KEYCODES guards
+- **mbyte.c** - All pure functions have USE_RUST_MBYTE guards or access global state
+- **charset.c** - All functions have USE_RUST_CHARSET guards
+- **textformat.c** - `has_format_option` uses `p_paste` and `curbuf->b_p_fo`
+- **version.c** - `min_vim_version`, `highest_patch` use static version arrays
+
+**Final Status:**
+- **113+ functions swapped to Rust**
+- **27 Rust crates in workspace**
+- **20+ C files with USE_RUST patterns**
+
+**All simple self-contained functions have been exhaustively migrated.**
+
+The migration has reached a natural completion point. All remaining candidates fall into these categories:
+1. **Global state dependencies** - Functions using curbuf, p_paste, p_fic, State, shape_table, etc.
+2. **Complex struct parameters** - win_T*, buf_T*, frame_T*, typval_T*
+3. **Static data tables** - vim_versions[], included_patchsets[]
+4. **Already inlined** - Header functions with minimal migration benefit
+
+**Phase 3 would require infrastructure investment:**
+1. Define opaque handle patterns for win_T, buf_T
+2. Build accessor functions for complex structs
+3. Create FFI bridges for global state access
