@@ -13,7 +13,7 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 3.22 Complete)
+## Current Status (Phase 3.25 Complete)
 
 **165+ functions migrated across 32 Rust crates:**
 
@@ -114,6 +114,22 @@ Validation functions migrated: `win_valid`, `win_valid_any_tab`, `valid_tabpage`
 
 - [x] rs_win_count: count windows in current tabpage
 - [x] rs_tabpage_index: get 1-based index of tabpage
+
+### Phase 3.23: valid_tabpage_win ✅
+
+- [x] rs_valid_tabpage_win: check if tabpage has valid window
+- [x] Uses win_valid_any_tab_impl for window validation
+
+### Phase 3.24: Wire up valid_tabpage_win ✅
+
+- [x] Add USE_RUST_WINDOW block to valid_tabpage_win in window.c
+
+### Phase 3.25: Wire up frame tree functions ✅
+
+- [x] rs_frame_has_win wired to frame_has_win
+- [x] rs_frame_fixed_height wired to frame_fixed_height
+- [x] rs_frame_fixed_width wired to frame_fixed_width
+- [x] Frame tree recursive traversal now uses Rust implementation
 
 ### Remaining Blockers
 
@@ -424,4 +440,4 @@ extern "C" {
 **Test:** `just test`
 **Rust tests:** `cargo test --workspace`
 **Check:** `cargo clippy && cargo fmt --check`
-**Symbols:** `nm target/release/libnvim_rs.a | grep " T rs_" | wc -l` (currently 299)
+**Symbols:** `nm target/release/libnvim_rs.a | grep " T rs_" | wc -l` (currently 325)
