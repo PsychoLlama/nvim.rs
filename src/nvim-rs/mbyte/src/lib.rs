@@ -1907,6 +1907,66 @@ pub unsafe extern "C" fn rs_utf_ptr2cells_len(p: *const c_char, size: c_int) -> 
     utf_ptr2cells_len(slice, size as usize)
 }
 
+// =============================================================================
+// mb_cptr2char_adv - Get character at pointer and advance (composing chars as separate)
+// =============================================================================
+
+/// Get character at pointer and advance the pointer to the next character.
+///
+/// Unlike `mb_ptr2char_adv` which skips composing characters, this function
+/// returns composing characters as separate characters.
+///
+/// # Arguments
+/// * `p` - Pointer to a NUL-terminated UTF-8 string
+///
+/// # Returns
+/// The Unicode codepoint of the character at the current position
+///
+/// # Safety
+/// The pointer must point to a valid NUL-terminated string.
+#[inline]
+pub fn mb_cptr2char_adv(p: &[u8]) -> (i32, usize) {
+    let c = utf_ptr2char(p);
+    let len = utf_ptr2len(p);
+    (c, len as usize)
+}
+
+/// FFI wrapper for mb_cptr2char_adv.
+///
+/// # Safety
+/// - `pp` must be a valid pointer to a pointer to a NUL-terminated string
+/// - The pointer pointed to by `pp` will be advanced
+#[no_mangle]
+pub unsafe extern "C" fn rs_mb_cptr2char_adv(pp: *mut *const c_char) -> c_int {
+    if pp.is_null() {
+        return 0;
+    }
+
+    let p = *pp;
+    if p.is_null() {
+        return 0;
+    }
+
+    // Find the NUL terminator to get the slice length
+    let mut len = 0usize;
+    while *p.add(len) != 0 {
+        len += 1;
+        // Safety: Limit to reasonable length to avoid infinite loop
+        if len > 16 * 1024 * 1024 {
+            break;
+        }
+    }
+
+    if len == 0 {
+        return 0;
+    }
+
+    let slice = std::slice::from_raw_parts(p as *const u8, len);
+    let (c, advance) = mb_cptr2char_adv(slice);
+    *pp = p.add(advance);
+    c
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
