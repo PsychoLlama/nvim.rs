@@ -215,6 +215,116 @@ pub fn utf_ptr2char(p: &[u8]) -> i32 {
         - ((0x80 << 24) + (0x80 << 18) + (0x80 << 12) + (0x80 << 6) + 0x80)) as i32
 }
 
+/// Correction table for UTF-8 decoding.
+///
+/// For lengths 0-1, sets the sign bit to indicate invalid.
+/// For lengths 2-6, subtracts the UTF-8 encoding overhead to get the raw codepoint.
+#[rustfmt::skip]
+static UTF_PTR2CHARINFO_CORRECTIONS: [u32; 7] = [
+    1u32 << 31,  // len 0: invalid
+    1u32 << 31,  // len 1: invalid (ASCII not handled)
+    // 2-byte: subtract 0x80 + (0xC0 << 6) = 0x3080
+    0u32.wrapping_sub(0x80 + (0xC0 << 6)),
+    // 3-byte: subtract 0x80 + (0x80 << 6) + (0xE0 << 12) = 0xE2080
+    0u32.wrapping_sub(0x80 + (0x80 << 6) + (0xE0 << 12)),
+    // 4-byte: subtract 0x80 + (0x80 << 6) + (0x80 << 12) + (0xF0 << 18) = 0x3C82080
+    0u32.wrapping_sub(0x80 + (0x80 << 6) + (0x80 << 12) + (0xF0 << 18)),
+    // 5-byte: subtract appropriate value
+    0u32.wrapping_sub(0x80 + (0x80 << 6) + (0x80 << 12) + (0x80 << 18) + (0xF8 << 24)),
+    // 6-byte: subtract appropriate value (note: 0xFC << 30 would overflow, omitted in C)
+    0u32.wrapping_sub(0x80 + (0x80 << 6) + (0x80 << 12) + (0x80 << 18) + (0x80 << 24)),
+];
+
+/// Convert a UTF-8 byte sequence to a character number.
+///
+/// This function does NOT handle ASCII. Only use for multibyte or invalid sequences.
+/// ASCII (including NUL) are treated as illegal sequences.
+///
+/// # Arguments
+/// * `p` - Pointer to the UTF-8 byte sequence (must have at least `len` bytes)
+/// * `len` - Length of the character in bytes (0-6). 0 or 1 indicates illegal.
+///
+/// # Returns
+/// Unicode codepoint as `i32`. A negative value indicates an illegal sequence
+/// (or ASCII, including NUL).
+///
+/// # Safety
+/// Caller must ensure `p` points to at least 2 valid bytes (for the unconditional
+/// read of the second byte), and at least `len` bytes if `len >= 2`.
+#[inline]
+pub fn utf_ptr2charinfo_impl(p: &[u8], len: usize) -> i32 {
+    // Bounds check - we always read at least 2 bytes
+    if p.len() < 2 || len > 6 {
+        return -1;
+    }
+
+    let corr = UTF_PTR2CHARINFO_CORRECTIONS[len];
+
+    // Check continuation byte validity
+    macro_rules! check_cont {
+        ($b:expr) => {
+            if ($b & 0xC0) != 0x80 {
+                return -1;
+            }
+        };
+    }
+
+    // Read first two bytes unconditionally (safe for invalid, not safe for ASCII)
+    let mut code_point: u32 = ((p[0] as u32) << 6) + (p[1] as u32);
+    check_cont!(p[1]);
+
+    if len < 3 {
+        // len == 0, 1, or 2
+        return (code_point.wrapping_add(corr)) as i32;
+    }
+
+    if p.len() < len {
+        return -1;
+    }
+
+    code_point = (code_point << 6) + (p[2] as u32);
+    check_cont!(p[2]);
+
+    if len == 3 {
+        return (code_point.wrapping_add(corr)) as i32;
+    }
+
+    code_point = (code_point << 6) + (p[3] as u32);
+    check_cont!(p[3]);
+
+    if len == 4 {
+        return (code_point.wrapping_add(corr)) as i32;
+    }
+
+    code_point = (code_point << 6) + (p[4] as u32);
+    check_cont!(p[4]);
+
+    if len == 5 {
+        return (code_point.wrapping_add(corr)) as i32;
+    }
+
+    // len == 6
+    code_point = (code_point << 6) + (p[5] as u32);
+    check_cont!(p[5]);
+
+    (code_point.wrapping_add(corr)) as i32
+}
+
+/// FFI wrapper for `utf_ptr2charinfo_impl`.
+///
+/// # Safety
+/// - `p` must be a valid pointer to at least `len` bytes (and at least 2 bytes).
+#[no_mangle]
+pub unsafe extern "C" fn rs_utf_ptr2CharInfo_impl(p: *const u8, len: usize) -> i32 {
+    if p.is_null() {
+        return -1;
+    }
+    // For safety, we need at least 2 bytes, and at least `len` bytes
+    let min_len = if len < 2 { 2 } else { len };
+    let slice = std::slice::from_raw_parts(p, min_len);
+    utf_ptr2charinfo_impl(slice, len)
+}
+
 /// Get the byte length of a UTF-8 character in a string.
 ///
 /// Does not include composing characters.
@@ -3648,5 +3758,54 @@ mod mb_off_next_tests {
         assert_eq!(mb_off_next(s, 2), 2);
         assert_eq!(mb_off_next(s, 3), 1);
         assert_eq!(mb_off_next(s, 4), 0);
+    }
+
+    #[test]
+    fn test_utf_ptr2charinfo_impl_two_byte() {
+        // "é" is U+00E9, encoded as C3 A9
+        let s = b"\xC3\xA9";
+        assert_eq!(utf_ptr2charinfo_impl(s, 2), 0xE9);
+
+        // "ü" is U+00FC, encoded as C3 BC
+        let s = b"\xC3\xBC";
+        assert_eq!(utf_ptr2charinfo_impl(s, 2), 0xFC);
+    }
+
+    #[test]
+    fn test_utf_ptr2charinfo_impl_three_byte() {
+        // "€" is U+20AC, encoded as E2 82 AC
+        let s = b"\xE2\x82\xAC";
+        assert_eq!(utf_ptr2charinfo_impl(s, 3), 0x20AC);
+
+        // "中" is U+4E2D, encoded as E4 B8 AD
+        let s = b"\xE4\xB8\xAD";
+        assert_eq!(utf_ptr2charinfo_impl(s, 3), 0x4E2D);
+    }
+
+    #[test]
+    fn test_utf_ptr2charinfo_impl_four_byte() {
+        // "𐍈" is U+10348, encoded as F0 90 8D 88
+        let s = b"\xF0\x90\x8D\x88";
+        assert_eq!(utf_ptr2charinfo_impl(s, 4), 0x10348);
+
+        // "😀" is U+1F600, encoded as F0 9F 98 80
+        let s = b"\xF0\x9F\x98\x80";
+        assert_eq!(utf_ptr2charinfo_impl(s, 4), 0x1F600);
+    }
+
+    #[test]
+    fn test_utf_ptr2charinfo_impl_invalid() {
+        // Invalid: len 0 or 1 should return negative
+        let s = b"\xC3\xA9";
+        assert!(utf_ptr2charinfo_impl(s, 0) < 0);
+        assert!(utf_ptr2charinfo_impl(s, 1) < 0);
+
+        // Invalid continuation byte
+        let s = b"\xC3\x00"; // second byte not a continuation
+        assert!(utf_ptr2charinfo_impl(s, 2) < 0);
+
+        // Too short buffer
+        let s = b"\xC3";
+        assert!(utf_ptr2charinfo_impl(s, 2) < 0);
     }
 }

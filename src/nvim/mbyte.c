@@ -125,6 +125,7 @@ extern int rs_utfc_ptr2len(const char *p);
 extern int rs_utfc_ptr2len_len(const char *p, int size);
 extern int rs_utf_head_off(const char *base, const char *p);
 extern int rs_mb_off_next(const char *base, const char *p);
+extern int32_t rs_utf_ptr2CharInfo_impl(const uint8_t *p, size_t len);
 
 // Rust struct for codepoint boundary offsets
 typedef struct {
@@ -600,6 +601,9 @@ int utf_ptr2cells(const char *p_in)
 int32_t utf_ptr2CharInfo_impl(uint8_t const *p, uintptr_t const len)
   FUNC_ATTR_PURE FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_ptr2CharInfo_impl(p, len);
+#else
 // uint8_t is a reminder for clang to use smaller cmp
 #define CHECK \
   do { \
@@ -656,6 +660,7 @@ ret:
   return (int32_t)(code_point + corr);
 
 #undef CHECK
+#endif
 }
 
 /// Like utf_ptr2cells(), but limit string length to "size".
