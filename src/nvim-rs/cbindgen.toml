@@ -57,5 +57,5 @@ include = ["rs_xfpclassify", "rs_xisinf", "rs_xisnan", "rs_xctz", "rs_xpopcount"
            "rs_os_get_pid", "rs_os_get_hostname",
            "rs_has_nvim_version",
            "rs_var_flavour", "VarFlavour",
-           "rs_valid_spelllang",
+           "rs_valid_spelllang", "rs_spell_valid_case", "rs_byte_in_str",
            "nvim_rs_version"]
