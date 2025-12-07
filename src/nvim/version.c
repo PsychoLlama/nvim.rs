@@ -48,6 +48,26 @@
 char *Versions[] = { "8.1", "8.2", "9.0", "9.1" };
 char *longVersion = NVIM_VERSION_LONG;
 char *version_buildtype = "Build type: " NVIM_VERSION_BUILD_TYPE;
+
+// FFI helper functions to expose version constants to Rust
+int nvim_get_version_major(void)
+{
+  return NVIM_VERSION_MAJOR;
+}
+
+int nvim_get_version_minor(void)
+{
+  return NVIM_VERSION_MINOR;
+}
+
+int nvim_get_version_patch(void)
+{
+  return NVIM_VERSION_PATCH;
+}
+
+#ifdef USE_RUST_VERSION
+extern bool rs_has_nvim_version(const char *version_str);
+#endif
 // Reproducible builds: omit compile info in Release builds. #15424
 #ifndef NDEBUG
 char *version_cflags = "Compilation: " NVIM_VERSION_CFLAGS;
@@ -4270,6 +4290,9 @@ static const int *included_patchsets[] = {
 bool has_nvim_version(const char *const version_str)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_VERSION
+  return rs_has_nvim_version(version_str);
+#else
   const char *p = version_str;
   int minor = 0;
   int patch = 0;
@@ -4301,6 +4324,7 @@ bool has_nvim_version(const char *const version_str)
               && (minor < NVIM_VERSION_MINOR
                   || (minor == NVIM_VERSION_MINOR
                       && patch <= NVIM_VERSION_PATCH))));
+#endif
 }
 
 int min_vim_version(void)

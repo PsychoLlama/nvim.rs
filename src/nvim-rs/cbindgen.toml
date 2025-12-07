@@ -55,4 +55,5 @@ include = ["rs_xfpclassify", "rs_xisinf", "rs_xisnan", "rs_xctz", "rs_xpopcount"
            "rs_ends_excmd",
            "rs_time_differs",
            "rs_os_get_pid", "rs_os_get_hostname",
+           "rs_has_nvim_version",
            "nvim_rs_version"]
