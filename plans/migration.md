@@ -557,9 +557,12 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
   - `utf_safe_read_char_adv` - Internal helper for safe UTF-8 character reading
   - Handles incomplete/invalid sequences with bytewise comparison fallback
   - Used primarily by spell checking subsystem
+- **Phase 2.82**: Case-insensitive string comparison wrappers (mbyte):
+  - `mb_strnicmp` - Wrapper calling utf_strnicmp with same length for both strings
+  - `mb_stricmp` - Wrapper calling mb_strnicmp with MAXCOL length
 - **Remaining infrastructure needed** for further progress:
   1. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 27 crates, 109 functions swapped to Rust
+- Total: 27 crates, 111 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
