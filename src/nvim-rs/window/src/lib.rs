@@ -184,6 +184,9 @@ extern "C" {
 
     /// Get the `fr_width` field from a frame.
     fn nvim_frame_get_width(frp: FrameHandle) -> c_int;
+
+    /// Get the `handle` field from a window.
+    fn nvim_win_get_handle(wp: WinHandle) -> c_int;
 }
 
 /// Check if a window is locked (`w_locked` field).
@@ -737,6 +740,35 @@ fn frame_check_width_impl(topfrp: FrameHandle, width: c_int) -> bool {
 #[no_mangle]
 pub extern "C" fn rs_frame_check_width(topfrp: FrameHandle, width: c_int) -> c_int {
     c_int::from(frame_check_width_impl(topfrp, width))
+}
+
+/// Find a window by its handle in the current tabpage.
+///
+/// This is the Rust equivalent of `win_find_by_handle()` in window.c.
+/// Iterates through all windows in curtab, returning the one with the matching handle.
+#[inline]
+fn win_find_by_handle_impl(handle: c_int) -> WinHandle {
+    // Get curtab to use FOR_ALL_WINDOWS_IN_TAB pattern
+    // SAFETY: All accessors handle pointers safely
+    let curtab = unsafe { nvim_get_curtab() };
+    let mut wp = get_tabpage_firstwin(curtab);
+    while !wp.is_null() {
+        // SAFETY: nvim_win_get_handle is a safe accessor
+        if unsafe { nvim_win_get_handle(wp) } == handle {
+            return wp;
+        }
+        wp = unsafe { nvim_win_get_next(wp) };
+    }
+    // Return null if not found
+    unsafe { WinHandle::from_ptr(std::ptr::null_mut()) }
+}
+
+/// FFI wrapper for `win_find_by_handle`.
+///
+/// Returns the window handle or NULL if not found.
+#[no_mangle]
+pub extern "C" fn rs_win_find_by_handle(handle: c_int) -> WinHandle {
+    win_find_by_handle_impl(handle)
 }
 
 /// Count the number of windows in the current tabpage.

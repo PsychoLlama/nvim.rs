@@ -103,6 +103,7 @@ extern int rs_frame_fixed_width(frame_T *frp);
 extern int rs_is_bottom_win(win_T *wp);
 extern int rs_frame_check_height(frame_T *topfrp, int height);
 extern int rs_frame_check_width(frame_T *topfrp, int width);
+extern win_T *rs_win_find_by_handle(int handle);
 #endif
 
 // Accessor functions for Rust opaque handle pattern.
@@ -249,6 +250,12 @@ int nvim_win_get_wfh(win_T *wp)
 int nvim_win_get_wfw(win_T *wp)
 {
   return wp->w_p_wfw;
+}
+
+/// Get handle field from a window (accessor for Rust).
+int nvim_win_get_handle(win_T *wp)
+{
+  return wp->handle;
 }
 
 #define NOWIN           ((win_T *)-1)   // non-existing window
@@ -1876,12 +1883,16 @@ bool tabpage_win_valid(const tabpage_T *tp, const win_T *win)
 win_T *win_find_by_handle(handle_T handle)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_WINDOW
+  return rs_win_find_by_handle(handle);
+#else
   FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
     if (wp->handle == handle) {
       return wp;
     }
   }
   return NULL;
+#endif
 }
 
 /// Check if "win" is a pointer to an existing window in any tabpage.
