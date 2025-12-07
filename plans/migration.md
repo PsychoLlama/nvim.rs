@@ -12,20 +12,21 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 2.89 Complete)
+## Current Status (Phase 2.90 Complete)
 
-**121+ functions migrated across 27 Rust crates:**
+**122+ functions migrated across 28 Rust crates:**
 - nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
 - nvim-memutil, nvim-os, nvim-collections, nvim-encoding
 - nvim-utf8proc, nvim-arabic, nvim-grid, nvim-ops, nvim-register
 - nvim-spell, nvim-eval, nvim-ex_docmd, nvim-indent, nvim-keycodes
 - nvim-profile, nvim-menu, nvim-help, nvim-cmdhist, nvim-fileio
+- nvim-version
 
 **Build system:**
 - Cargo workspace at `src/nvim-rs/`
 - CMake integration via USE_RUST_* flags
 - cbindgen generates C headers from Rust
-- 257 rs_* symbols exported
+- 258 rs_* symbols exported
 
 ---
 

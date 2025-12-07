@@ -42,6 +42,7 @@ pub use nvim_register::*;
 pub use nvim_spell::*;
 pub use nvim_strings::*;
 pub use nvim_utf8proc::*;
+pub use nvim_version::*;
 
 /// FFI-safe result type for operations that can fail
 #[repr(C)]

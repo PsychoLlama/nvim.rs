@@ -1,0 +1,13 @@
+[package]
+name = "nvim-version"
+description = "Version checking utilities for Neovim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+nvim-charset = { path = "../charset" }
+
+[lints]
+workspace = true

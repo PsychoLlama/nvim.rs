@@ -1,8 +1,8 @@
 # Functions to Migrate
 
-## Status: Simple Function Migration COMPLETE (Phase 2.89)
+## Status: Simple Function Migration COMPLETE (Phase 2.90)
 
-**121+ functions migrated across 27 Rust crates.**
+**122+ functions migrated across 28 Rust crates.**
 
 All FUNC_ATTR_PURE/CONST simple functions have been exhaustively migrated. The `utf_ptr2CharInfo_impl` function was the last pure function that could be migrated without infrastructure investment.
 
@@ -39,7 +39,8 @@ Remaining candidates require one of:
 - `cursor_get_mode_idx`
 
 **version.c** (static version arrays):
-- `min_vim_version`, `highest_patch`, `has_vim_patch`, `has_nvim_version`
+- `min_vim_version`, `highest_patch`, `has_vim_patch` - need vim_versions/included_patchsets arrays
+- ~~`has_nvim_version`~~ - MIGRATED (Phase 2.90)
 
 **textformat.c**:
 - `has_format_option` - Uses p_paste and curbuf->b_p_fo
@@ -104,6 +105,7 @@ These OS functions haven't been migrated due to complex dependencies:
 | nvim-help | help_heuristic |
 | nvim-cmdhist | hist_char2type, hist_type2char |
 | nvim-fileio | time_differs, is_dev_fd_file |
+| nvim-version | has_nvim_version |
 
 ---
 
