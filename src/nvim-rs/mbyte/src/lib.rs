@@ -1702,6 +1702,120 @@ pub unsafe extern "C" fn rs_mb_get_class_tab(p: *const c_char, chartab: *const u
     utf_class_tab_impl(c, chartab_arr)
 }
 
+// ============================================================================
+// UTF-8 string length measurement (Phase 2.78)
+// ============================================================================
+
+/// Measure the length of a string in corresponding UTF-32 and UTF-16 units.
+///
+/// Invalid UTF-8 bytes, or embedded surrogates, count as one code point/unit each.
+///
+/// The out parameters are incremented. This is used to measure the size of
+/// a buffer region consisting of multiple line segments.
+///
+/// # Arguments
+/// * `s` - the string slice to measure
+/// * `codepoints` - incremented with UTF-32 code point count
+/// * `codeunits` - incremented with UTF-16 code unit count
+pub fn mb_utflen(s: &[u8], codepoints: &mut usize, codeunits: &mut usize) {
+    let mut count: usize = 0;
+    let mut extra: usize = 0;
+    let mut i: usize = 0;
+
+    while i < s.len() {
+        let clen = utf_ptr2len_len(&s[i..], s.len() - i);
+        // NB: gets the byte value of invalid sequence bytes.
+        // we only care whether the char fits in the BMP or not
+        let c = if clen > 1 {
+            utf_ptr2char(&s[i..])
+        } else {
+            i32::from(s[i])
+        };
+        count += 1;
+        if c > 0xFFFF {
+            extra += 1;
+        }
+        i += clen;
+    }
+    *codepoints += count;
+    *codeunits += count + extra;
+}
+
+/// FFI wrapper for mb_utflen.
+///
+/// # Safety
+/// `s` must be a valid pointer to `len` bytes. `codepoints` and `codeunits`
+/// must be valid pointers to writable usize values.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mb_utflen(
+    s: *const c_char,
+    len: usize,
+    codepoints: *mut usize,
+    codeunits: *mut usize,
+) {
+    if s.is_null() || codepoints.is_null() || codeunits.is_null() {
+        return;
+    }
+    let slice = std::slice::from_raw_parts(s as *const u8, len);
+    mb_utflen(slice, &mut *codepoints, &mut *codeunits);
+}
+
+/// Convert a UTF-16 or UTF-32 index to byte offset.
+///
+/// Returns the byte offset corresponding to the given character index,
+/// or -1 if the index is beyond the string length.
+///
+/// # Arguments
+/// * `s` - the UTF-8 string slice
+/// * `index` - the character index (0-based)
+/// * `use_utf16_units` - if true, count UTF-16 code units (surrogates count as 2)
+pub fn mb_utf_index_to_bytes(s: &[u8], index: usize, use_utf16_units: bool) -> isize {
+    let mut count: usize = 0;
+    let mut i: usize = 0;
+
+    if index == 0 {
+        return 0;
+    }
+
+    while i < s.len() {
+        let clen = utf_ptr2len_len(&s[i..], s.len() - i);
+        // NB: gets the byte value of invalid sequence bytes.
+        // we only care whether the char fits in the BMP or not
+        let c = if clen > 1 {
+            utf_ptr2char(&s[i..])
+        } else {
+            i32::from(s[i])
+        };
+        count += 1;
+        if use_utf16_units && c > 0xFFFF {
+            count += 1;
+        }
+        if count >= index {
+            return (i + clen) as isize;
+        }
+        i += clen;
+    }
+    -1
+}
+
+/// FFI wrapper for mb_utf_index_to_bytes.
+///
+/// # Safety
+/// `s` must be a valid pointer to `len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mb_utf_index_to_bytes(
+    s: *const c_char,
+    len: usize,
+    index: usize,
+    use_utf16_units: bool,
+) -> isize {
+    if s.is_null() {
+        return -1;
+    }
+    let slice = std::slice::from_raw_parts(s as *const u8, len);
+    mb_utf_index_to_bytes(slice, index, use_utf16_units)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

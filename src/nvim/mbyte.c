@@ -111,6 +111,8 @@ extern size_t rs_mb_string2cells_len(const char *str, size_t size);
 extern void rs_remove_bom(char *s);
 extern int rs_utf_class_tab(int c, const uint64_t *chartab);
 extern int rs_mb_get_class_tab(const char *p, const uint64_t *chartab);
+extern void rs_mb_utflen(const char *s, size_t len, size_t *codepoints, size_t *codeunits);
+extern ssize_t rs_mb_utf_index_to_bytes(const char *s, size_t len, size_t index, bool use_utf16_units);
 
 // Rust struct for codepoint boundary offsets
 typedef struct {
@@ -1745,6 +1747,9 @@ int utf16_to_utf8(const wchar_t *utf16, int utf16len, char **utf8)
 void mb_utflen(const char *s, size_t len, size_t *codepoints, size_t *codeunits)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_MBYTE
+  rs_mb_utflen(s, len, codepoints, codeunits);
+#else
   size_t count = 0;
   size_t extra = 0;
   size_t clen;
@@ -1760,11 +1765,15 @@ void mb_utflen(const char *s, size_t len, size_t *codepoints, size_t *codeunits)
   }
   *codepoints += count;
   *codeunits += count + extra;
+#endif
 }
 
 ssize_t mb_utf_index_to_bytes(const char *s, size_t len, size_t index, bool use_utf16_units)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_MBYTE
+  return rs_mb_utf_index_to_bytes(s, len, index, use_utf16_units);
+#else
   size_t count = 0;
   size_t clen;
   if (index == 0) {
@@ -1784,6 +1793,7 @@ ssize_t mb_utf_index_to_bytes(const char *s, size_t len, size_t index, bool use_
     }
   }
   return -1;
+#endif
 }
 
 /// Version of strnicmp() that handles multi-byte characters.
