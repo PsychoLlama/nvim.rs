@@ -891,6 +891,31 @@ pub extern "C" fn rs_valid_tabpage_win(tpc: TabpageHandle) -> c_int {
     c_int::from(valid_tabpage_win_impl(tpc))
 }
 
+/// Find tab page by 1-based number.
+///
+/// This is the Rust equivalent of `find_tabpage()` in window.c.
+/// Iterates through tabpages from `first_tabpage` counting to n.
+/// Returns NULL when not found.
+#[inline]
+fn find_tabpage_impl(n: c_int) -> TabpageHandle {
+    // SAFETY: nvim_get_first_tabpage and nvim_tabpage_get_next are safe accessors
+    let mut i: c_int = 1;
+    let mut tp = unsafe { nvim_get_first_tabpage() };
+    while !tp.is_null() && i != n {
+        i += 1;
+        tp = unsafe { nvim_tabpage_get_next(tp) };
+    }
+    tp
+}
+
+/// FFI wrapper for `find_tabpage`.
+///
+/// Returns the tabpage at position n (1-based) or NULL if not found.
+#[no_mangle]
+pub extern "C" fn rs_find_tabpage(n: c_int) -> TabpageHandle {
+    find_tabpage_impl(n)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

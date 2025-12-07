@@ -105,6 +105,7 @@ extern int rs_frame_check_height(frame_T *topfrp, int height);
 extern int rs_frame_check_width(frame_T *topfrp, int width);
 extern win_T *rs_win_find_by_handle(int handle);
 extern tabpage_T *rs_win_find_tabpage(win_T *win);
+extern tabpage_T *rs_find_tabpage(int n);
 #endif
 
 // Accessor functions for Rust opaque handle pattern.
@@ -4666,6 +4667,9 @@ void close_tabpage(tabpage_T *tab)
 // Find tab page "n" (first one is 1).  Returns NULL when not found.
 tabpage_T *find_tabpage(int n)
 {
+#ifdef USE_RUST_WINDOW
+  return rs_find_tabpage(n);
+#else
   tabpage_T *tp;
   int i = 1;
 
@@ -4673,6 +4677,7 @@ tabpage_T *find_tabpage(int n)
     i++;
   }
   return tp;
+#endif
 }
 
 // Get index of tab page "tp".  First one has index 1.
