@@ -1,8 +1,8 @@
 # Functions to Migrate
 
-## Status: Simple Function Migration COMPLETE (Phase 2.88)
+## Status: Simple Function Migration COMPLETE (Phase 2.89)
 
-**120+ functions migrated across 27 Rust crates.**
+**121+ functions migrated across 27 Rust crates.**
 
 All FUNC_ATTR_PURE/CONST simple functions have been exhaustively migrated. Remaining candidates require infrastructure investment.
 
@@ -79,7 +79,7 @@ These OS functions haven't been migrated due to complex dependencies:
 | nvim-charset | skipwhite, skipdigits, hex2nr, vim_isfilec, byte2cells, ptr2cells, char2cells |
 | nvim-path | vim_ispathsep, path_tail, path_is_url, path_is_absolute, after_pathsep |
 | nvim-strings | vim_stricmp, vim_strchr, has_non_ascii, valid_name, vim_strup |
-| nvim-mbyte | utf_char2len, utf_ptr2char, utf_char2cells, utf_ptr2cells, utf_fold, mb_strnicmp, mb_off_next, utf_head_off |
+| nvim-mbyte | utf_char2len, utf_ptr2char, utf_char2cells, utf_ptr2cells, utf_fold, mb_strnicmp, mb_off_next, utf_head_off, utf_ptr2CharInfo_impl |
 | nvim-memutil | xstrchrnul, strcnt, strequal, hash_hash, time_to_bytes |
 | nvim-os | 43 functions: os_path_exists, os_isdir, os_open, os_read, os_write, os_fileinfo, etc. |
 | nvim-collections | hashtab (hash_init/find/add/remove), garray (ga_init/grow/concat) |
