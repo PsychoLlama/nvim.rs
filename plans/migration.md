@@ -543,9 +543,18 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
   - `mb_get_class_tab` - Get character class from UTF-8 string pointer
   - Combines UTF8LEN_TAB lookup, ascii_iswhite check, chartab lookup, and utf_class_tab
   - Used for word motion commands (w, b, e, etc.) to determine word boundaries
+- **Phase 2.78**: UTF-8 length calculation (mbyte):
+  - `mb_utflen` - Count codepoints and UTF-16 code units in a string
+  - `mb_utf_index_to_bytes` - Convert codepoint/code unit index to byte offset
+- **Phase 2.79**: Cell width with size limit (mbyte):
+  - `utf_ptr2cells_len` - Get display cells from UTF-8 string pointer with size limit
+  - Handles truncated sequences, illegal bytes, overlong encodings
+- **Phase 2.80**: Character pointer advance (mbyte):
+  - `mb_cptr2char_adv` - Get character at pointer and advance to next character
+  - Returns composing characters as separate characters (unlike mb_ptr2char_adv)
 - **Remaining infrastructure needed** for further progress:
   1. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 27 crates, 104 functions swapped to Rust
+- Total: 27 crates, 108 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
