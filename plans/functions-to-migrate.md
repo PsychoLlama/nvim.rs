@@ -1,8 +1,8 @@
 # Functions to Migrate
 
-## Status: Simple Function Migration COMPLETE (Phase 2.84)
+## Status: Simple Function Migration COMPLETE (Phase 2.88)
 
-**113+ functions migrated across 27 Rust crates.**
+**120+ functions migrated across 27 Rust crates.**
 
 All FUNC_ATTR_PURE/CONST simple functions have been exhaustively migrated. Remaining candidates require infrastructure investment.
 
