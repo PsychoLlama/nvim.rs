@@ -93,17 +93,21 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - [x] bt_dontwrite: checks nowrite, nofile, terminal, or prompt buffers
 - [x] Updated cbindgen exports
 
-**Phase 3.4: Exploration (No additional migrations)**
-Most simple pure functions (`FUNC_ATTR_PURE`, `FUNC_ATTR_CONST`) in the codebase
-are now migrated. Remaining candidates either:
-- Return global state (not truly pure functions)
-- Are static/internal to their file
-- Require complex struct access via opaque handles
+**Phase 3.4: Simple function exploration complete**
+Most simple pure functions (`FUNC_ATTR_PURE`, `FUNC_ATTR_CONST`) are now migrated.
 
-**Next targets requiring opaque handle pattern:**
-- window.c frame functions (need WinHandle + frame accessors)
-- plines.c display calculations (need window/buffer accessors)
-- bt_nofileread (static, lower priority)
+**Phase 3.5: Window/frame function exploration (blocked)**
+Window and frame functions require infrastructure not yet in place:
+- Global state access: `firstwin`, `curtab`, `first_tabpage`, `aucmd_win`
+- Iteration macros: `FOR_ALL_WINDOWS_IN_TAB`, `FOR_ALL_FRAMES`, `FOR_ALL_TAB_WINDOWS`
+- Multiple opaque handles: `FrameHandle`, `TabpageHandle` (in addition to `WinHandle`)
+- Linked list traversal patterns
+
+**Blocked targets (need Phase 4+ infrastructure):**
+- `win_valid`, `win_valid_any_tab`, `only_one_window` - need global state + iteration
+- `frame_fixed_height`, `frame_fixed_width` - need FrameHandle + recursive iteration
+- `frame_has_win` - needs FrameHandle + linked list traversal
+- plines.c display calculations - need window/buffer accessors with options
 
 ### Phase 4: Event Loop & Async I/O
 - event/loop.c - libuv wrapper or tokio replacement
