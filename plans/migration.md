@@ -12,7 +12,7 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 3.8 Complete)
+## Current Status (Phase 3.9 Complete)
 
 **137+ functions migrated across 30 Rust crates:**
 - nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
@@ -110,6 +110,16 @@ Most simple pure functions (`FUNC_ATTR_PURE`, `FUNC_ATTR_CONST`) are now migrate
 - [x] nvim_buf_get_bin accessor for b_p_bin field
 - [x] rs_get_fileformat() Rust implementation
 - [x] EOL_UNIX, EOL_DOS, EOL_MAC constants in buffer crate
+
+**Phase 3.9: Simple function exploration complete ✅**
+Comprehensive search confirms Phase 3.4 finding: most simple pure functions are migrated.
+Remaining FUNC_ATTR_PURE/FUNC_ATTR_CONST functions require infrastructure not yet in place:
+- Global state access (ctrl_x_mode, user_digraphs, event_names, etc.)
+- Complex struct access (typval_T, fuzzyItem_T, fuzmatch_str_T)
+- Locale-dependent functions (TOLOWER_LOC)
+- Functions already migrated: num_divide, num_modulus, ends_excmd, is_loclist_cmd,
+  striequal, vim_strnicmp_asc, vim_strchr, tabstop_padding, indent_size_no_ts,
+  indent_size_ts, utf_printable, utf_class_tab, utf_eat_space, utf_allow_break_*
 
 **Phase 3.5: Window/frame function exploration (blocked)**
 Window and frame functions require infrastructure not yet in place:
