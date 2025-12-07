@@ -3537,3 +3537,116 @@ mod bom_tests {
         unsafe { rs_remove_bom(core::ptr::null_mut()) };
     }
 }
+
+// ============================================================================
+// mb_off_next - Return offset to next character
+// ============================================================================
+
+/// Return the offset from `p_offset` to the next character start.
+///
+/// If `p_offset` is at the start of a character, returns 0.
+/// Otherwise, returns the offset to the next character.
+/// Can start anywhere in a stream of bytes.
+///
+/// This uses `utf_head_off` to find the start of the current character,
+/// then `utfc_ptr2len` to find where the next character starts.
+#[inline]
+pub fn mb_off_next(base: &[u8], p_offset: usize) -> usize {
+    let head_off = utf_head_off(base, p_offset);
+
+    if head_off == 0 {
+        return 0;
+    }
+
+    // p_offset - head_off is the start of the current character
+    let char_start = p_offset - head_off;
+
+    // Get the length of the character starting at char_start
+    let char_len = utfc_ptr2len(&base[char_start..]);
+
+    // Return distance from p_offset to the end of this character
+    // which is: (char_start + char_len) - p_offset = char_len - head_off
+    char_len.saturating_sub(head_off)
+}
+
+/// FFI wrapper for `mb_off_next`.
+///
+/// # Safety
+/// - `base` and `p` must be valid pointers
+/// - `p` must point to a position within or at the end of the string starting at `base`
+#[no_mangle]
+pub unsafe extern "C" fn rs_mb_off_next(base: *const c_char, p: *const c_char) -> c_int {
+    if base.is_null() || p.is_null() || p < base {
+        return 0;
+    }
+
+    let p_offset = (p as usize) - (base as usize);
+
+    // We need enough bytes to:
+    // 1. Look back up to 6 bytes (utf_head_off does this)
+    // 2. Look forward to get utfc_ptr2len (up to full grapheme cluster)
+    // Use p_offset + 32 as a conservative estimate
+    let len = p_offset + 32;
+
+    let slice = std::slice::from_raw_parts(base as *const u8, len);
+    mb_off_next(slice, p_offset) as c_int
+}
+
+#[cfg(test)]
+mod mb_off_next_tests {
+    use super::*;
+
+    #[test]
+    fn test_mb_off_next_at_start() {
+        // At start of ASCII character - return 0
+        let s = b"abc";
+        assert_eq!(mb_off_next(s, 0), 0);
+        assert_eq!(mb_off_next(s, 1), 0);
+        assert_eq!(mb_off_next(s, 2), 0);
+    }
+
+    #[test]
+    fn test_mb_off_next_in_middle_of_utf8() {
+        // "中" is 3 bytes: E4 B8 AD
+        let s = b"\xE4\xB8\xADabc";
+
+        // At start of 中
+        assert_eq!(mb_off_next(s, 0), 0);
+
+        // In middle of 中 (second byte)
+        assert_eq!(mb_off_next(s, 1), 2); // need to advance 2 more bytes
+
+        // In middle of 中 (third byte)
+        assert_eq!(mb_off_next(s, 2), 1); // need to advance 1 more byte
+
+        // At 'a' after 中
+        assert_eq!(mb_off_next(s, 3), 0);
+    }
+
+    #[test]
+    fn test_mb_off_next_two_byte() {
+        // "é" is 2 bytes: C3 A9
+        let s = b"\xC3\xA9abc";
+
+        // At start
+        assert_eq!(mb_off_next(s, 0), 0);
+
+        // In middle
+        assert_eq!(mb_off_next(s, 1), 1); // need to advance 1 byte
+
+        // At 'a'
+        assert_eq!(mb_off_next(s, 2), 0);
+    }
+
+    #[test]
+    fn test_mb_off_next_four_byte() {
+        // "𐍈" is 4 bytes: F0 90 8D 88
+        let s = b"\xF0\x90\x8D\x88abc";
+
+        assert_eq!(mb_off_next(s, 0), 0);
+        assert_eq!(mb_off_next(s, 1), 3);
+        assert_eq!(mb_off_next(s, 2), 2);
+        assert_eq!(mb_off_next(s, 3), 1);
+        assert_eq!(mb_off_next(s, 4), 0);
+    }
+}

@@ -124,6 +124,7 @@ extern bool rs_utf_iscomposing(int c1, int c2, GraphemeState *state);
 extern int rs_utfc_ptr2len(const char *p);
 extern int rs_utfc_ptr2len_len(const char *p, int size);
 extern int rs_utf_head_off(const char *base, const char *p);
+extern int rs_mb_off_next(const char *base, const char *p);
 
 // Rust struct for codepoint boundary offsets
 typedef struct {
@@ -2227,6 +2228,9 @@ void mb_copy_char(const char **const fp, char **const tp)
 /// character.  Can start anywhere in a stream of bytes.
 int mb_off_next(const char *base, const char *p)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_mb_off_next(base, p);
+#else
   int head_off = utf_head_off(base, p);
 
   if (head_off == 0) {
@@ -2234,6 +2238,7 @@ int mb_off_next(const char *base, const char *p)
   }
 
   return utfc_ptr2len(p - head_off) - head_off;
+#endif
 }
 
 /// Returns the offset in bytes from "p_in" to the first and one-past-end bytes
