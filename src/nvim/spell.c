@@ -192,6 +192,7 @@ bool did_set_spelltab;
 // Rust implementations of spell functions
 extern bool rs_spell_valid_case(int wordflags, int treeflags);
 extern bool rs_byte_in_str(const uint8_t *str, int n);
+extern bool rs_valid_spelllang(const char *val);
 #endif
 
 /// mode values for find_word
@@ -3669,7 +3670,11 @@ int expand_spelling(linenr_T lnum, char *pat, char ***matchp)
 bool valid_spelllang(const char *val)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_SPELL
+  return rs_valid_spelllang(val);
+#else
   return valid_name(val, ".-_,@");
+#endif
 }
 
 /// @return  true if "val" is a valid 'spellfile' value.

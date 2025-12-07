@@ -5,7 +5,7 @@
 
 #![allow(unsafe_code)] // FFI requires unsafe
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 
 // Word flags from spell_defs.h
 const WF_ONECAP: c_int = 0x02; // word with one capital (or all capitals)
@@ -76,9 +76,75 @@ pub extern "C" fn rs_byte_in_str(str: *const u8, n: c_int) -> bool {
     byte_in_str_impl(str, n)
 }
 
+/// Allowed characters for 'spelllang' option value.
+const SPELLLANG_ALLOWED: &[u8] = b".-_,@";
+
+/// Check if a string is a valid 'spelllang' value.
+///
+/// Valid spelllang values contain only alphanumeric characters,
+/// dots, hyphens, underscores, commas, and @ signs.
+///
+/// # Safety
+///
+/// `val` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_valid_spelllang(val: *const c_char) -> bool {
+    if val.is_null() {
+        return true;
+    }
+
+    // Convert C string to slice
+    let mut len = 0usize;
+    let mut p = val;
+    while *p != 0 {
+        len += 1;
+        p = p.add(1);
+    }
+
+    let slice = std::slice::from_raw_parts(val as *const u8, len);
+    nvim_strings::valid_name(slice, SPELLLANG_ALLOWED)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_valid_spelllang() {
+        use std::ffi::CString;
+
+        unsafe {
+            // Valid spelllang values
+            let en = CString::new("en").unwrap();
+            assert!(rs_valid_spelllang(en.as_ptr()));
+
+            let en_us = CString::new("en_US").unwrap();
+            assert!(rs_valid_spelllang(en_us.as_ptr()));
+
+            let complex = CString::new("en,de,fr").unwrap();
+            assert!(rs_valid_spelllang(complex.as_ptr()));
+
+            let with_at = CString::new("en@spell").unwrap();
+            assert!(rs_valid_spelllang(with_at.as_ptr()));
+
+            let with_dot = CString::new("en.utf-8").unwrap();
+            assert!(rs_valid_spelllang(with_dot.as_ptr()));
+
+            // Invalid spelllang values
+            let with_space = CString::new("en us").unwrap();
+            assert!(!rs_valid_spelllang(with_space.as_ptr()));
+
+            let with_special = CString::new("en!us").unwrap();
+            assert!(!rs_valid_spelllang(with_special.as_ptr()));
+
+            // Empty is valid
+            let empty = CString::new("").unwrap();
+            assert!(rs_valid_spelllang(empty.as_ptr()));
+
+            // Null is valid
+            assert!(rs_valid_spelllang(std::ptr::null()));
+        }
+    }
 
     #[test]
     fn test_spell_valid_case_allcap_word() {

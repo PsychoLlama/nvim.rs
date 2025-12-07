@@ -496,6 +496,24 @@ fn ascii_isalnum(c: u8) -> bool {
 /// Returns true if `val` consists only of alphanumeric ASCII characters
 /// or characters that appear in `allowed`.
 ///
+/// This is a Rust-callable helper function.
+pub fn valid_name(val: &[u8], allowed: &[u8]) -> bool {
+    for &c in val {
+        if c == 0 {
+            break;
+        }
+        if !c.is_ascii_alphanumeric() && !allowed.contains(&c) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Check if a string is a valid name: only alphanumeric ASCII or allowed characters.
+///
+/// Returns true if `val` consists only of alphanumeric ASCII characters
+/// or characters that appear in `allowed`.
+///
 /// # Safety
 ///
 /// Both `val` and `allowed` must be valid null-terminated C strings.
