@@ -104,6 +104,7 @@ extern int rs_is_bottom_win(win_T *wp);
 extern int rs_frame_check_height(frame_T *topfrp, int height);
 extern int rs_frame_check_width(frame_T *topfrp, int width);
 extern win_T *rs_win_find_by_handle(int handle);
+extern tabpage_T *rs_win_find_tabpage(win_T *win);
 #endif
 
 // Accessor functions for Rust opaque handle pattern.
@@ -5036,12 +5037,16 @@ void win_goto(win_T *wp)
 // Find the tabpage for window "win".
 tabpage_T *win_find_tabpage(win_T *win)
 {
+#ifdef USE_RUST_WINDOW
+  return rs_win_find_tabpage(win);
+#else
   FOR_ALL_TAB_WINDOWS(tp, wp) {
     if (wp == win) {
       return tp;
     }
   }
   return NULL;
+#endif
 }
 
 /// Get the above or below neighbor window of the specified window.

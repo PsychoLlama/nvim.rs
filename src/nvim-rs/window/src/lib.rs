@@ -771,6 +771,42 @@ pub extern "C" fn rs_win_find_by_handle(handle: c_int) -> WinHandle {
     win_find_by_handle_impl(handle)
 }
 
+/// Find the tabpage that contains a given window.
+///
+/// This is the Rust equivalent of `win_find_tabpage()` in window.c.
+/// Iterates through all tabpages and windows using FOR_ALL_TAB_WINDOWS pattern.
+#[inline]
+fn win_find_tabpage_impl(win: WinHandle) -> TabpageHandle {
+    if win.is_null() {
+        return unsafe { TabpageHandle::from_ptr(std::ptr::null_mut()) };
+    }
+
+    // FOR_ALL_TAB_WINDOWS pattern: iterate through all tabpages and their windows
+    // SAFETY: All accessors handle pointers safely
+    let mut tp = unsafe { nvim_get_first_tabpage() };
+    while !tp.is_null() {
+        // Iterate through windows in this tabpage
+        let mut wp = get_tabpage_firstwin(tp);
+        while !wp.is_null() {
+            if wp == win {
+                return tp;
+            }
+            wp = unsafe { nvim_win_get_next(wp) };
+        }
+        tp = unsafe { nvim_tabpage_get_next(tp) };
+    }
+    // Return null if not found
+    unsafe { TabpageHandle::from_ptr(std::ptr::null_mut()) }
+}
+
+/// FFI wrapper for `win_find_tabpage`.
+///
+/// Returns the tabpage that contains the window or NULL if not found.
+#[no_mangle]
+pub extern "C" fn rs_win_find_tabpage(win: WinHandle) -> TabpageHandle {
+    win_find_tabpage_impl(win)
+}
+
 /// Count the number of windows in the current tabpage.
 ///
 /// This is the Rust equivalent of `win_count()` in window.c.
