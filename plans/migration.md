@@ -12,21 +12,21 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 2.94 Complete)
+## Current Status (Phase 3.1 Complete)
 
-**126+ functions migrated across 28 Rust crates:**
+**127+ functions migrated across 29 Rust crates:**
 - nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
 - nvim-memutil, nvim-os, nvim-collections, nvim-encoding
 - nvim-utf8proc, nvim-arabic, nvim-grid, nvim-ops, nvim-register
 - nvim-spell, nvim-eval, nvim-ex_docmd, nvim-indent, nvim-keycodes
 - nvim-profile, nvim-menu, nvim-help, nvim-cmdhist, nvim-fileio
-- nvim-version
+- nvim-version, nvim-window
 
 **Build system:**
 - Cargo workspace at `src/nvim-rs/`
 - CMake integration via USE_RUST_* flags
 - cbindgen generates C headers from Rust
-- 262 rs_* symbols exported
+- 263 rs_* symbols exported
 
 ---
 
@@ -74,12 +74,16 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ## Remaining Phases (Future Work)
 
-### Phase 3: Complex Struct FFI
-**Blocked by:** Need opaque handle patterns for win_T, buf_T, frame_T
+### Phase 3: Complex Struct FFI (In Progress)
+**Phase 3.1: Opaque Window Handle Infrastructure ✅**
+- [x] WinHandle opaque type for win_T* pointers
+- [x] C accessor function pattern (nvim_win_get_locked)
+- [x] rs_win_locked() proof of concept
+- [x] USE_RUST_WINDOW conditional compilation
 
-Candidates once infrastructure ready:
+**Remaining candidates:**
 - window.c frame functions
-- buffer.c validation functions
+- buffer.c validation functions (need BufHandle)
 - plines.c display calculations
 
 ### Phase 4: Event Loop & Async I/O
@@ -191,4 +195,4 @@ extern "C" {
 **Test:** `just test`
 **Rust tests:** `cargo test --workspace`
 **Check:** `cargo clippy && cargo fmt --check`
-**Symbols:** `nm build/bin/nvim | grep "T rs_" | wc -l` (currently 249)
+**Symbols:** `nm build/bin/nvim | grep "T rs_" | wc -l` (currently 263)

@@ -84,6 +84,19 @@
 
 #include "window.c.generated.h"
 
+#ifdef USE_RUST_WINDOW
+extern int rs_win_locked(win_T *wp);
+#endif
+
+// Accessor functions for Rust opaque handle pattern.
+// These provide safe access to win_T fields from Rust code.
+
+/// Get the w_locked field from a window (accessor for Rust).
+int nvim_win_get_locked(win_T *wp)
+{
+  return wp->w_locked;
+}
+
 #define NOWIN           ((win_T *)-1)   // non-existing window
 
 #define ROWS_AVAIL (Rows - p_ch - tabline_height() - global_stl_height())
@@ -7539,7 +7552,11 @@ int get_last_winid(void)
 /// Don't let autocommands close the given window
 int win_locked(win_T *wp)
 {
+#ifdef USE_RUST_WINDOW
+  return rs_win_locked(wp);
+#else
   return wp->w_locked;
+#endif
 }
 
 void win_get_tabwin(handle_T id, int *tabnr, int *winnr)

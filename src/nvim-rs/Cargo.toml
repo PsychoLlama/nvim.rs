@@ -38,6 +38,7 @@ nvim-spell = { path = "spell" }
 nvim-strings = { path = "strings" }
 nvim-utf8proc = { path = "utf8proc" }
 nvim-version = { path = "version" }
+nvim-window = { path = "window" }
 
 [build-dependencies]
 cbindgen = "0.27"
