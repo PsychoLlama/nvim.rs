@@ -13,9 +13,9 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 3.20 Complete)
+## Current Status (Phase 3.22 Complete)
 
-**160+ functions migrated across 32 Rust crates:**
+**165+ functions migrated across 32 Rust crates:**
 
 - nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
 - nvim-memutil, nvim-os, nvim-collections, nvim-encoding
@@ -97,21 +97,36 @@ Validation functions migrated: `win_valid`, `win_valid_any_tab`, `valid_tabpage`
 
 ### Priority 3: Complex Struct FFI via bindgen
 
-**Status**: Not yet evaluated
-**Approach**: Use bindgen to generate `win_T`, `buf_T`, `frame_T` definitions. This would give direct field access instead of requiring C accessor functions for each field.
+**Status**: Evaluated - continuing with accessor pattern
+**Decision**: The opaque handle + accessor pattern is working well and is more incremental than bindgen. We can add accessors as needed for each new function, avoiding the complexity of bindgen.
+
+### Phase 3.21: FrameHandle + Frame Tree Functions ✅
+
+- [x] FrameHandle opaque type for frame_T* pointers
+- [x] FR_LEAF, FR_ROW, FR_COL constants
+- [x] C accessors: nvim_frame_get_layout, nvim_frame_get_win, nvim_frame_get_child, nvim_frame_get_next
+- [x] C accessors: nvim_win_get_wfh, nvim_win_get_wfw (window fixed height/width options)
+- [x] rs_frame_has_win: recursive check if window is in frame tree
+- [x] rs_frame_fixed_height: recursive check if any window has winfixheight
+- [x] rs_frame_fixed_width: recursive check if any window has winfixwidth
+
+### Phase 3.22: Window/Tabpage Counting ✅
+
+- [x] rs_win_count: count windows in current tabpage
+- [x] rs_tabpage_index: get 1-based index of tabpage
 
 ### Remaining Blockers
 
 Functions that still can't be migrated:
 - Static initializer macros (`RGB_`, `schar_from_ascii`) - can't use function calls
 - Global state arrays (`breakat_flags`, `g_chartab`) - need bindgen or manual FFI
-- Complex struct internals (`typval_T`, frame tree) - need bindgen
+- Complex struct internals (`typval_T`) - need more accessors
 
 ### Immediate Next Actions
 
-1. Evaluate bindgen for struct generation (Priority 3)
-2. Add FrameHandle + frame tree traversal for `frame_fixed_height`, `frame_has_win`
-3. Consider migrating more window/buffer functions now that validation works
+1. Continue migrating window/buffer functions using accessor pattern
+2. Add more accessors as needed for new functions
+3. Consider libuv wrappers when event loop work begins (Phase 4+)
 
 ---
 
