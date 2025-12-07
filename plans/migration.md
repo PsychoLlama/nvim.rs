@@ -81,36 +81,37 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ## Next Steps: Unblocking Further Migration
 
-The simple pure function migration is substantially complete. The remaining blockers require infrastructure changes:
+### Priority 1: Global State Accessors ✅ COMPLETE
 
-### Priority 1: Global State Accessors
+All core global accessors implemented:
+- Window: `nvim_get_curwin()`, `nvim_get_firstwin()`, `nvim_get_lastwin()`, `nvim_win_get_next()`
+- Buffer: `nvim_get_curbuf()`, `nvim_get_lastbuf()`, `nvim_buf_get_prev()`
+- Tabpage: `nvim_get_curtab()`, `nvim_get_first_tabpage()`, `nvim_tabpage_get_next()`, `nvim_tabpage_get_firstwin()`
 
-Most remaining functions need access to globals like `curbuf`, `curwin`, `firstwin`, `curtab`.
-
-**Approach**: C accessor functions (safe, incremental)
-
-```c
-// In nvim/window.c
-win_T *nvim_get_curwin(void) { return curwin; }
-win_T *nvim_get_firstwin(void) { return firstwin; }
-buf_T *nvim_get_curbuf(void) { return curbuf; }
-```
-
-This immediately unblocks dozens of window.c and buffer.c functions.
+Validation functions migrated: `win_valid`, `win_valid_any_tab`, `valid_tabpage`, `buf_valid`, `one_window`, `last_window`
 
 ### Priority 2: libuv Wrappers for Event Loop
 
+**Status**: Not started (Phase 4+ work)
 **Approach**: Keep libuv, create Rust wrappers around libuv handles. Replace later if needed.
 
 ### Priority 3: Complex Struct FFI via bindgen
 
-**Approach**: Use bindgen to generate `win_T`, `buf_T`, `frame_T` definitions. This gives direct field access while maintaining correctness.
+**Status**: Not yet evaluated
+**Approach**: Use bindgen to generate `win_T`, `buf_T`, `frame_T` definitions. This would give direct field access instead of requiring C accessor functions for each field.
+
+### Remaining Blockers
+
+Functions that still can't be migrated:
+- Static initializer macros (`RGB_`, `schar_from_ascii`) - can't use function calls
+- Global state arrays (`breakat_flags`, `g_chartab`) - need bindgen or manual FFI
+- Complex struct internals (`typval_T`, frame tree) - need bindgen
 
 ### Immediate Next Actions
 
-1. Add `nvim_get_curwin()`, `nvim_get_firstwin()`, `nvim_get_curbuf()` accessors
-2. Migrate `win_valid()` and `only_one_window()` as proof of concept
-3. Evaluate bindgen for struct generation
+1. Evaluate bindgen for struct generation (Priority 3)
+2. Add FrameHandle + frame tree traversal for `frame_fixed_height`, `frame_has_win`
+3. Consider migrating more window/buffer functions now that validation works
 
 ---
 

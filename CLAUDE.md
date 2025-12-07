@@ -13,3 +13,8 @@
 - The migration plan is stored in `plans/migration.md`.
 - **Update the checklist in `plans/migration.md` as you complete items.** Mark items with `[x]` when done.
 - If you encounter fundamental issues, research alternatives and create a new plan for following phases.
+- **Compact the migration file regularly** to keep it manageable:
+  - Keep the "Current Status" section updated with the latest phase
+  - Collapse completed phases into summary bullet points when they become too detailed
+  - Preserve key patterns, decisions, and blockers that inform future work
+  - Keep the "Next Steps" section focused on actionable items
