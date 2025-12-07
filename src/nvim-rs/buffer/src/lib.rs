@@ -213,6 +213,35 @@ pub extern "C" fn rs_bt_dontwrite(buf: BufHandle) -> c_int {
     c_int::from(bt_dontwrite_impl(buf))
 }
 
+/// Check if buffer should not be read from a file.
+///
+/// Returns true if buffer is "nofile", "quickfix", terminal, or "prompt".
+/// This means the buffer is not to be read from a file.
+#[inline]
+fn bt_nofileread_impl(buf: BufHandle) -> bool {
+    if buf.is_null() {
+        return false;
+    }
+    // SAFETY: We check for null above.
+    unsafe {
+        let bt0 = nvim_buf_get_buftype(buf);
+        // "nofile": b_p_bt[0]=='n' && b_p_bt[2]=='f'
+        // terminal: b_p_bt[0]=='t'
+        // quickfix: b_p_bt[0]=='q'
+        // "prompt": b_p_bt[0]=='p'
+        (bt0 == b'n' as c_char && nvim_buf_get_buftype_2(buf) == b'f' as c_char)
+            || bt0 == b't' as c_char
+            || bt0 == b'q' as c_char
+            || bt0 == b'p' as c_char
+    }
+}
+
+/// FFI wrapper for `bt_nofileread`.
+#[no_mangle]
+pub extern "C" fn rs_bt_nofileread(buf: BufHandle) -> c_int {
+    c_int::from(bt_nofileread_impl(buf))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -229,6 +258,7 @@ mod tests {
         assert!(!bt_help_impl(handle));
         assert!(!bt_nofilename_impl(handle));
         assert!(!bt_dontwrite_impl(handle));
+        assert!(!bt_nofileread_impl(handle));
     }
 
     #[test]

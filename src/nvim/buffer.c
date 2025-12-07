@@ -129,6 +129,7 @@ extern int rs_bt_nofile(buf_T *buf);
 extern int rs_bt_help(buf_T *buf);
 extern int rs_bt_nofilename(buf_T *buf);
 extern int rs_bt_dontwrite(buf_T *buf);
+extern int rs_bt_nofileread(buf_T *buf);
 #endif
 
 // Accessor functions for Rust opaque handle pattern.
@@ -4010,10 +4011,14 @@ bool bt_nofilename(const buf_T *const buf)
 static bool bt_nofileread(const buf_T *const buf)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_BUFFER
+  return rs_bt_nofileread((buf_T *)buf);
+#else
   return buf != NULL && ((buf->b_p_bt[0] == 'n' && buf->b_p_bt[2] == 'f')
                          || buf->b_p_bt[0] == 't'
                          || buf->b_p_bt[0] == 'q'
                          || buf->b_p_bt[0] == 'p');
+#endif
 }
 
 /// @return  true if "buf" has 'buftype' set to "nofile".
