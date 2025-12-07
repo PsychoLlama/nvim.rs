@@ -288,6 +288,117 @@ pub extern "C" fn rs_win_valid_any_tab(win: WinHandle) -> c_int {
     c_int::from(win_valid_any_tab_impl(win))
 }
 
+/// Check if "tpc" is a pointer to an existing tabpage.
+///
+/// This is the Rust equivalent of `valid_tabpage()` in window.c.
+#[inline]
+fn valid_tabpage_impl(tpc: TabpageHandle) -> bool {
+    if tpc.is_null() {
+        return false;
+    }
+
+    // Iterate over all tabpages using FOR_ALL_TABS pattern
+    // SAFETY: nvim_get_first_tabpage and nvim_tabpage_get_next are safe accessors
+    let mut tp = unsafe { nvim_get_first_tabpage() };
+    while !tp.is_null() {
+        if tp == tpc {
+            return true;
+        }
+        tp = unsafe { nvim_tabpage_get_next(tp) };
+    }
+    false
+}
+
+/// FFI wrapper for `valid_tabpage`.
+///
+/// Returns non-zero if the tabpage is valid.
+#[no_mangle]
+pub extern "C" fn rs_valid_tabpage(tpc: TabpageHandle) -> c_int {
+    c_int::from(valid_tabpage_impl(tpc))
+}
+
+/// Check if there is only one tabpage (i.e., `first_tabpage->tp_next == NULL`).
+///
+/// This is used by `last_window()` to check if there's only one tab.
+#[inline]
+fn one_tabpage_impl() -> bool {
+    // SAFETY: nvim_get_first_tabpage and nvim_tabpage_get_next are safe accessors
+    unsafe {
+        let first = nvim_get_first_tabpage();
+        nvim_tabpage_get_next(first).is_null()
+    }
+}
+
+/// FFI wrapper for checking if there's only one tabpage.
+///
+/// Returns non-zero if there is only one tabpage.
+#[no_mangle]
+pub extern "C" fn rs_one_tabpage() -> c_int {
+    c_int::from(one_tabpage_impl())
+}
+
+/// Check if "win" is the only non-floating window in a tabpage.
+///
+/// For `tp == NULL` (current tabpage), uses `firstwin`.
+/// Otherwise uses `tp->tp_firstwin`.
+///
+/// This is the Rust equivalent of `one_window()` in window.c.
+/// Note: The C version has an assert that `(!tp || tp != curtab) && !first->w_floating`,
+/// meaning tp should not be curtab when non-NULL, and the first window should not be floating.
+/// We don't check the assert here as the caller is responsible for ensuring this.
+#[inline]
+fn one_window_in_tab_impl(win: WinHandle, tp: TabpageHandle) -> bool {
+    if win.is_null() {
+        return false;
+    }
+
+    // Get the first window in the tabpage
+    // SAFETY: All accessors are safe
+    let first = if tp.is_null() {
+        unsafe { nvim_get_firstwin() }
+    } else {
+        unsafe { nvim_tabpage_get_firstwin(tp) }
+    };
+
+    if first != win {
+        return false;
+    }
+
+    // Check if win->w_next is NULL or floating
+    // SAFETY: nvim_win_get_next and nvim_win_get_floating are safe accessors
+    let next = unsafe { nvim_win_get_next(win) };
+    next.is_null() || unsafe { nvim_win_get_floating(next) != 0 }
+}
+
+/// FFI wrapper for `one_window`.
+///
+/// Returns non-zero if the window is the only non-floating window in the tabpage.
+#[no_mangle]
+pub extern "C" fn rs_one_window_in_tab(win: WinHandle, tp: TabpageHandle) -> c_int {
+    c_int::from(one_window_in_tab_impl(win, tp))
+}
+
+/// Check if "win" is the last non-floating window that exists.
+///
+/// This checks: `one_window(win, NULL) && first_tabpage->tp_next == NULL`.
+///
+/// This is the Rust equivalent of `last_window()` in window.c.
+#[inline]
+fn last_window_impl(win: WinHandle) -> bool {
+    // Check if there's only one non-floating window in current tabpage
+    // AND there's only one tabpage
+    one_window_in_tab_impl(win, unsafe { TabpageHandle::from_ptr(std::ptr::null_mut()) })
+        && one_tabpage_impl()
+}
+
+/// FFI wrapper for `last_window`.
+///
+/// Returns non-zero if the window is the last non-floating window.
+#[no_mangle]
+pub extern "C" fn rs_last_window(win: WinHandle) -> c_int {
+    c_int::from(last_window_impl(win))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

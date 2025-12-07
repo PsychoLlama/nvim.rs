@@ -13,7 +13,7 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 3.18 Complete)
+## Current Status (Phase 3.19 Complete)
 
 **160+ functions migrated across 32 Rust crates:**
 
@@ -253,6 +253,14 @@ Remaining FUNC_ATTR_PURE/FUNC_ATTR_CONST functions require infrastructure not ye
 - [x] rs_win_valid_any_tab(): check if window exists in any tabpage
 - [x] win_valid_any_tab() wired to Rust implementation
 - [x] FOR_ALL_TABS iteration pattern now available in Rust
+
+**Phase 3.19: Tabpage and window validation functions ✅**
+
+- [x] rs_valid_tabpage(): check if tabpage pointer is valid
+- [x] rs_one_tabpage(): check if only one tabpage exists
+- [x] rs_one_window_in_tab(): check if window is only non-floating window in tabpage
+- [x] rs_last_window(): check if window is last non-floating window
+- [x] valid_tabpage(), one_window(), last_window() wired to Rust implementations
 
 **Phase 3 Simple Function Migration: Substantially Complete**
 Most simple pure functions (FUNC_ATTR_PURE, FUNC_ATTR_CONST) have been migrated.

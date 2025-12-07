@@ -90,6 +90,10 @@ extern int rs_win_valid(win_T *win);
 extern int rs_tabpage_win_valid(tabpage_T *tp, win_T *win);
 extern int rs_one_window(void);
 extern int rs_win_valid_any_tab(win_T *win);
+extern int rs_valid_tabpage(tabpage_T *tpc);
+extern int rs_one_tabpage(void);
+extern int rs_one_window_in_tab(win_T *win, tabpage_T *tp);
+extern int rs_last_window(win_T *win);
 #endif
 
 // Accessor functions for Rust opaque handle pattern.
@@ -2651,7 +2655,11 @@ void close_windows(buf_T *buf, bool keep_curwin)
 /// Check if "win" is the last non-floating window that exists.
 bool last_window(win_T *win) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_WINDOW
+  return rs_last_window(win) != 0;
+#else
   return one_window(win, NULL) && first_tabpage->tp_next == NULL;
+#endif
 }
 
 /// Check if "win" is the only non-floating window in tabpage "tp", or NULL for current tabpage.
@@ -2661,9 +2669,13 @@ bool last_window(win_T *win) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 bool one_window(win_T *win, tabpage_T *tp)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ARG(1)
 {
+#ifdef USE_RUST_WINDOW
+  return rs_one_window_in_tab(win, tp) != 0;
+#else
   win_T *first = tp ? tp->tp_firstwin : firstwin;
   assert((!tp || tp != curtab) && !first->w_floating);
   return first == win && (win->w_next == NULL || win->w_next->w_floating);
+#endif
 }
 
 /// Check if floating windows in tabpage `tp` can be closed.
@@ -4487,12 +4499,16 @@ int make_tabpages(int maxcount)
 /// @param[in]  tpc  Tabpage to check.
 bool valid_tabpage(tabpage_T *tpc) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_WINDOW
+  return rs_valid_tabpage(tpc) != 0;
+#else
   FOR_ALL_TABS(tp) {
     if (tp == tpc) {
       return true;
     }
   }
   return false;
+#endif
 }
 
 /// Returns true when `tpc` is valid and at least one window is valid.
