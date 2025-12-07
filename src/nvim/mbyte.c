@@ -114,6 +114,7 @@ extern int rs_mb_get_class_tab(const char *p, const uint64_t *chartab);
 extern int rs_mb_cptr2char_adv(const char **pp);
 extern void rs_mb_utflen(const char *s, size_t len, size_t *codepoints, size_t *codeunits);
 extern ssize_t rs_mb_utf_index_to_bytes(const char *s, size_t len, size_t index, bool use_utf16_units);
+extern int rs_utf_strnicmp(const char *s1, const char *s2, size_t n1, size_t n2);
 
 // Rust struct for codepoint boundary offsets
 typedef struct {
@@ -1581,6 +1582,9 @@ bool mb_isalpha(int a)
 
 int utf_strnicmp(const char *s1, const char *s2, size_t n1, size_t n2)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_strnicmp(s1, s2, n1, n2);
+#else
   int c1, c2;
   char buffer[6];
 
@@ -1650,6 +1654,7 @@ int utf_strnicmp(const char *s1, const char *s2, size_t n1, size_t n2)
     return 0;
   }
   return n1 == 0 ? -1 : 1;
+#endif
 }
 
 #ifdef MSWIN
