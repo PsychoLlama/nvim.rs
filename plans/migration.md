@@ -12,9 +12,9 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 3.9 Complete)
+## Current Status (Phase 3.10 Complete)
 
-**137+ functions migrated across 30 Rust crates:**
+**141+ functions migrated across 30 Rust crates:**
 - nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
 - nvim-memutil, nvim-os, nvim-collections, nvim-encoding
 - nvim-utf8proc, nvim-arabic, nvim-grid, nvim-ops, nvim-register
@@ -26,7 +26,7 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - Cargo workspace at `src/nvim-rs/`
 - CMake integration via USE_RUST_* flags
 - cbindgen generates C headers from Rust
-- 275 rs_* symbols exported
+- 279 rs_* symbols exported
 
 ---
 
@@ -120,6 +120,14 @@ Remaining FUNC_ATTR_PURE/FUNC_ATTR_CONST functions require infrastructure not ye
 - Functions already migrated: num_divide, num_modulus, ends_excmd, is_loclist_cmd,
   striequal, vim_strnicmp_asc, vim_strchr, tabstop_padding, indent_size_no_ts,
   indent_size_ts, utf_printable, utf_class_tab, utf_eat_space, utf_allow_break_*
+
+**Phase 3.10: Register inline functions ✅**
+- [x] rs_is_literal_register(): checks if register is *, +, or alphanumeric
+- [x] rs_op_reg_index(): converts register name to y_regs array index
+- [x] rs_is_append_register(): checks if register name is uppercase (append mode)
+- [x] rs_get_register_name(): converts register index back to character name
+- [x] USE_RUST_REGISTER conditional compilation in register.h
+- [x] DELETION_REGISTER, STAR_REGISTER, PLUS_REGISTER constants
 
 **Phase 3.5: Window/frame function exploration (blocked)**
 Window and frame functions require infrastructure not yet in place:
