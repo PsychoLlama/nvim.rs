@@ -28,6 +28,7 @@ members = [
     "src/nvim-rs/eval",
     "src/nvim-rs/utf8proc",
     "src/nvim-rs/version",
+    "src/nvim-rs/window",
 ]
 
 [workspace.package]
