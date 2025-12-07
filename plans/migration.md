@@ -552,9 +552,14 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - **Phase 2.80**: Character pointer advance (mbyte):
   - `mb_cptr2char_adv` - Get character at pointer and advance to next character
   - Returns composing characters as separate characters (unlike mb_ptr2char_adv)
+- **Phase 2.81**: Case-insensitive string comparison (mbyte):
+  - `utf_strnicmp` - Compare two UTF-8 strings case-insensitively
+  - `utf_safe_read_char_adv` - Internal helper for safe UTF-8 character reading
+  - Handles incomplete/invalid sequences with bytewise comparison fallback
+  - Used primarily by spell checking subsystem
 - **Remaining infrastructure needed** for further progress:
   1. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 27 crates, 108 functions swapped to Rust
+- Total: 27 crates, 109 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling
