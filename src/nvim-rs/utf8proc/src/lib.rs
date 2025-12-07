@@ -52,8 +52,27 @@ pub mod category {
 
 /// Boundclass values for grapheme break rules
 pub mod boundclass {
+    pub const START: u8 = 0;
+    pub const OTHER: u8 = 1;
+    pub const CR: u8 = 2;
+    pub const LF: u8 = 3;
+    pub const CONTROL: u8 = 4;
+    pub const EXTEND: u8 = 5;
+    pub const L: u8 = 6;
+    pub const V: u8 = 7;
+    pub const T: u8 = 8;
+    pub const LV: u8 = 9;
+    pub const LVT: u8 = 10;
     pub const REGIONAL_INDICATOR: u8 = 11;
+    pub const SPACINGMARK: u8 = 12;
+    pub const PREPEND: u8 = 13;
+    pub const ZWJ: u8 = 14;
+    pub const E_BASE: u8 = 15;
+    pub const E_MODIFIER: u8 = 16;
+    pub const GLUE_AFTER_ZWJ: u8 = 17;
+    pub const E_BASE_GAZ: u8 = 18;
     pub const EXTENDED_PICTOGRAPHIC: u8 = 19;
+    pub const E_ZWG: u8 = 20;
 }
 
 /// utf8proc option flags for decomposition and normalization.
