@@ -2192,9 +2192,70 @@ pub unsafe extern "C" fn rs_mb_cptr2char_adv(pp: *mut *const c_char) -> c_int {
     c
 }
 
+// =============================================================================
+// enc_skip - Skip Vim-specific encoding name prefixes (Phase 2.84)
+// =============================================================================
+
+/// Skip the Vim-specific head of an 'encoding' name.
+///
+/// Vim supports encoding names with prefixes like "2byte-" and "8bit-".
+/// This function returns a pointer past these prefixes if present.
+///
+/// Examples:
+/// - "2byte-utf-8" -> "utf-8"
+/// - "8bit-latin1" -> "latin1"
+/// - "utf-8" -> "utf-8" (unchanged)
+///
+/// # Safety
+///
+/// `p` must be a valid pointer to a NUL-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_enc_skip(p: *mut c_char) -> *mut c_char {
+    if p.is_null() {
+        return p;
+    }
+
+    // Check for "2byte-" prefix (6 bytes)
+    if libc::strncmp(p, c"2byte-".as_ptr(), 6) == 0 {
+        return p.add(6);
+    }
+
+    // Check for "8bit-" prefix (5 bytes)
+    if libc::strncmp(p, c"8bit-".as_ptr(), 5) == 0 {
+        return p.add(5);
+    }
+
+    p
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_enc_skip() {
+        unsafe {
+            // Test "2byte-" prefix
+            let s = c"2byte-utf-8";
+            let result = rs_enc_skip(s.as_ptr() as *mut c_char);
+            assert_eq!(libc::strcmp(result, c"utf-8".as_ptr()), 0);
+
+            // Test "8bit-" prefix
+            let s = c"8bit-latin1";
+            let result = rs_enc_skip(s.as_ptr() as *mut c_char);
+            assert_eq!(libc::strcmp(result, c"latin1".as_ptr()), 0);
+
+            // Test no prefix
+            let s = c"utf-8";
+            let result = rs_enc_skip(s.as_ptr() as *mut c_char);
+            assert_eq!(libc::strcmp(result, c"utf-8".as_ptr()), 0);
+
+            // Test empty string
+            let s = c"";
+            let result = rs_enc_skip(s.as_ptr() as *mut c_char);
+            assert_eq!(libc::strcmp(result, c"".as_ptr()), 0);
+        }
+    }
 
     #[test]
     fn test_utf8len_tab() {

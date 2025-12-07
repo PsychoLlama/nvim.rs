@@ -118,6 +118,7 @@ extern int rs_utf_strnicmp(const char *s1, const char *s2, size_t n1, size_t n2)
 extern int rs_mb_strnicmp(const char *s1, const char *s2, size_t nn);
 extern int rs_mb_stricmp(const char *s1, const char *s2);
 extern int rs_mb_strcmp_ic(bool ic, const char *s1, const char *s2);
+extern char *rs_enc_skip(char *p);
 
 // Rust struct for codepoint boundary offsets
 typedef struct {
@@ -2502,6 +2503,9 @@ const char *mb_unescape(const char **const pp)
 /// Skip the Vim specific head of a 'encoding' name.
 char *enc_skip(char *p)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_enc_skip(p);
+#else
   if (strncmp(p, "2byte-", 6) == 0) {
     return p + 6;
   }
@@ -2509,6 +2513,7 @@ char *enc_skip(char *p)
     return p + 5;
   }
   return p;
+#endif
 }
 
 /// Find the canonical name for encoding "enc".
