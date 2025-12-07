@@ -108,6 +108,7 @@ extern tabpage_T *rs_win_find_tabpage(win_T *win);
 extern tabpage_T *rs_find_tabpage(int n);
 extern int rs_get_last_winid(void);
 extern win_T *rs_lastwin_nofloating(void);
+extern win_T *rs_frame2win(frame_T *frp);
 #endif
 
 // Accessor functions for Rust opaque handle pattern.
@@ -3762,10 +3763,14 @@ static tabpage_T *alt_tabpage(void)
 win_T *frame2win(frame_T *frp)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_WINDOW
+  return rs_frame2win(frp);
+#else
   while (frp->fr_win == NULL) {
     frp = frp->fr_child;
   }
   return frp->fr_win;
+#endif
 }
 
 /// Check that the frame "frp" contains the window "wp".

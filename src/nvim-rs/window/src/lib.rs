@@ -961,6 +961,28 @@ pub extern "C" fn rs_lastwin_nofloating() -> WinHandle {
     lastwin_nofloating_impl()
 }
 
+/// Find the left-upper window in frame.
+///
+/// Walks down the frame tree following fr_child until a leaf frame
+/// with a window is found.
+#[inline]
+fn frame2win_impl(mut frp: FrameHandle) -> WinHandle {
+    // SAFETY: All accessor calls are safe. The caller guarantees frp is non-null.
+    // The loop walks down until we find a leaf with fr_win != NULL.
+    unsafe {
+        while nvim_frame_get_win(frp).is_null() {
+            frp = nvim_frame_get_child(frp);
+        }
+        nvim_frame_get_win(frp)
+    }
+}
+
+/// FFI wrapper for `frame2win`.
+#[no_mangle]
+pub extern "C" fn rs_frame2win(frp: FrameHandle) -> WinHandle {
+    frame2win_impl(frp)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
