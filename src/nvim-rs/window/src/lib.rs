@@ -651,6 +651,46 @@ pub extern "C" fn rs_tabpage_index(ftp: TabpageHandle) -> c_int {
     tabpage_index_impl(ftp)
 }
 
+/// Check if a tabpage has any valid window.
+///
+/// This is the Rust equivalent of `valid_tabpage_win()` in window.c.
+/// Iterates through all tabpages to find `tpc`, then checks if any window
+/// in that tabpage is valid (using `win_valid_any_tab`).
+#[inline]
+fn valid_tabpage_win_impl(tpc: TabpageHandle) -> bool {
+    if tpc.is_null() {
+        return false;
+    }
+
+    // Find the tabpage in the list
+    // SAFETY: All accessors handle pointers safely
+    let mut tp = unsafe { nvim_get_first_tabpage() };
+    while !tp.is_null() {
+        if tp == tpc {
+            // Found the tabpage - check if any window is valid
+            let mut wp = get_tabpage_firstwin(tp);
+            while !wp.is_null() {
+                if win_valid_any_tab_impl(wp) {
+                    return true;
+                }
+                wp = unsafe { nvim_win_get_next(wp) };
+            }
+            return false;
+        }
+        tp = unsafe { nvim_tabpage_get_next(tp) };
+    }
+    // Tabpage not found - shouldn't happen
+    false
+}
+
+/// FFI wrapper for `valid_tabpage_win`.
+///
+/// Returns non-zero if the tabpage has at least one valid window.
+#[no_mangle]
+pub extern "C" fn rs_valid_tabpage_win(tpc: TabpageHandle) -> c_int {
+    c_int::from(valid_tabpage_win_impl(tpc))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -690,5 +730,13 @@ mod tests {
         assert_eq!(FR_LEAF, 0);
         assert_eq!(FR_ROW, 1);
         assert_eq!(FR_COL, 2);
+    }
+
+    #[test]
+    fn test_tabpage_handle_null() {
+        let handle = unsafe { TabpageHandle::from_ptr(std::ptr::null_mut()) };
+        assert!(handle.is_null());
+        assert!(!valid_tabpage_impl(handle));
+        assert!(!valid_tabpage_win_impl(handle));
     }
 }
