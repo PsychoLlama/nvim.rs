@@ -101,6 +101,8 @@ extern int rs_frame_has_win(frame_T *frp, win_T *wp);
 extern int rs_frame_fixed_height(frame_T *frp);
 extern int rs_frame_fixed_width(frame_T *frp);
 extern int rs_is_bottom_win(win_T *wp);
+extern int rs_frame_check_height(frame_T *topfrp, int height);
+extern int rs_frame_check_width(frame_T *topfrp, int width);
 #endif
 
 // Accessor functions for Rust opaque handle pattern.
@@ -223,6 +225,18 @@ frame_T *nvim_frame_get_parent(frame_T *frp)
 frame_T *nvim_win_get_frame(win_T *wp)
 {
   return wp->w_frame;
+}
+
+/// Get fr_height field from a frame (accessor for Rust).
+int nvim_frame_get_height(frame_T *frp)
+{
+  return frp->fr_height;
+}
+
+/// Get fr_width field from a frame (accessor for Rust).
+int nvim_frame_get_width(frame_T *frp)
+{
+  return frp->fr_width;
 }
 
 /// Get w_p_wfh (winfixheight) from a window (accessor for Rust).
@@ -7600,6 +7614,9 @@ static win_T *restore_snapshot_rec(frame_T *sn, frame_T *fr)
 static bool frame_check_height(const frame_T *topfrp, int height)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_WINDOW
+  return rs_frame_check_height((frame_T *)topfrp, height) != 0;
+#else
   if (topfrp->fr_height != height) {
     return false;
   }
@@ -7612,6 +7629,7 @@ static bool frame_check_height(const frame_T *topfrp, int height)
     }
   }
   return true;
+#endif
 }
 
 /// Check that "topfrp" and its children are at the right width.
@@ -7621,6 +7639,9 @@ static bool frame_check_height(const frame_T *topfrp, int height)
 static bool frame_check_width(const frame_T *topfrp, int width)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_WINDOW
+  return rs_frame_check_width((frame_T *)topfrp, width) != 0;
+#else
   if (topfrp->fr_width != width) {
     return false;
   }
@@ -7633,6 +7654,7 @@ static bool frame_check_width(const frame_T *topfrp, int width)
     }
   }
   return true;
+#endif
 }
 
 /// Simple int comparison function for use with qsort()

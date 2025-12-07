@@ -178,6 +178,12 @@ extern "C" {
 
     /// Get the `w_p_wfw` (winfixwidth) field from a window.
     fn nvim_win_get_wfw(wp: WinHandle) -> c_int;
+
+    /// Get the `fr_height` field from a frame.
+    fn nvim_frame_get_height(frp: FrameHandle) -> c_int;
+
+    /// Get the `fr_width` field from a frame.
+    fn nvim_frame_get_width(frp: FrameHandle) -> c_int;
 }
 
 /// Check if a window is locked (`w_locked` field).
@@ -657,6 +663,80 @@ fn is_bottom_win_impl(wp: WinHandle) -> bool {
 #[no_mangle]
 pub extern "C" fn rs_is_bottom_win(wp: WinHandle) -> c_int {
     c_int::from(is_bottom_win_impl(wp))
+}
+
+/// Check that "topfrp" and its children are at the right height.
+///
+/// This is the Rust equivalent of `frame_check_height()` in window.c.
+/// If the frame is a FR_ROW layout, all children must have the same height.
+#[inline]
+fn frame_check_height_impl(topfrp: FrameHandle, height: c_int) -> bool {
+    if topfrp.is_null() {
+        return false;
+    }
+
+    // SAFETY: We check for null above.
+    unsafe {
+        if nvim_frame_get_height(topfrp) != height {
+            return false;
+        }
+        // If it's a row layout, check all children have the same height
+        if nvim_frame_get_layout(topfrp) == FR_ROW {
+            let mut child = nvim_frame_get_child(topfrp);
+            while !child.is_null() {
+                if nvim_frame_get_height(child) != height {
+                    return false;
+                }
+                child = nvim_frame_get_next(child);
+            }
+        }
+    }
+    true
+}
+
+/// FFI wrapper for `frame_check_height`.
+///
+/// Returns non-zero if all frames have the expected height.
+#[no_mangle]
+pub extern "C" fn rs_frame_check_height(topfrp: FrameHandle, height: c_int) -> c_int {
+    c_int::from(frame_check_height_impl(topfrp, height))
+}
+
+/// Check that "topfrp" and its children are at the right width.
+///
+/// This is the Rust equivalent of `frame_check_width()` in window.c.
+/// If the frame is a FR_COL layout, all children must have the same width.
+#[inline]
+fn frame_check_width_impl(topfrp: FrameHandle, width: c_int) -> bool {
+    if topfrp.is_null() {
+        return false;
+    }
+
+    // SAFETY: We check for null above.
+    unsafe {
+        if nvim_frame_get_width(topfrp) != width {
+            return false;
+        }
+        // If it's a column layout, check all children have the same width
+        if nvim_frame_get_layout(topfrp) == FR_COL {
+            let mut child = nvim_frame_get_child(topfrp);
+            while !child.is_null() {
+                if nvim_frame_get_width(child) != width {
+                    return false;
+                }
+                child = nvim_frame_get_next(child);
+            }
+        }
+    }
+    true
+}
+
+/// FFI wrapper for `frame_check_width`.
+///
+/// Returns non-zero if all frames have the expected width.
+#[no_mangle]
+pub extern "C" fn rs_frame_check_width(topfrp: FrameHandle, width: c_int) -> c_int {
+    c_int::from(frame_check_width_impl(topfrp, width))
 }
 
 /// Count the number of windows in the current tabpage.
