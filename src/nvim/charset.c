@@ -63,6 +63,7 @@ extern void rs_rl_mirror_ascii(char *str, const char *end);
 extern bool rs_rem_backslash(const char *str);
 extern void rs_backslash_halve(char *p);
 extern int rs_vim_iswordc_tab(int c, const uint64_t *chartab);
+extern size_t rs_transstr_len(const char *s, bool untab);
 #endif
 
 static bool chartab_initialized = false;
@@ -344,6 +345,9 @@ void trans_characters(char *buf, int bufsize)
 size_t transstr_len(const char *const s, bool untab)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_CHARSET
+  return rs_transstr_len(s, untab);
+#else
   const char *p = s;
   size_t len = 0;
 
@@ -370,6 +374,7 @@ size_t transstr_len(const char *const s, bool untab)
     }
   }
   return len;
+#endif
 }
 
 /// Replace special characters with printable ones

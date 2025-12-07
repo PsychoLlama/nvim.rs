@@ -793,6 +793,108 @@ pub unsafe extern "C" fn rs_vim_iswordc_tab(c: c_int, chartab: *const u64) -> c_
 }
 
 // ============================================================================
+// String translation length calculation
+// ============================================================================
+
+const TAB: u8 = b'\t';
+
+/// Calculate the length of translated hex representation for a character.
+///
+/// Returns the number of bytes needed for `<XX>`, `<XXXX>`, or `<XXXXXX>` format.
+#[inline]
+fn transchar_hex_len(c: i32) -> usize {
+    let c = c as u32;
+    if c > 0xFFFF {
+        8 // <XXXXXX>
+    } else if c > 0xFF {
+        6 // <XXXX>
+    } else {
+        4 // <XX>
+    }
+}
+
+/// Calculate the length of a string capable of holding s with all specials replaced.
+///
+/// Assumes replacing special characters with printable ones just like
+/// strtrans() does.
+///
+/// # Arguments
+/// * `s` - String to check (as byte slice)
+/// * `untab` - If false, TAB is counted as 1 cell; if true, as printable representation
+///
+/// # Returns
+/// Number of bytes needed to hold a translation of `s`, NUL byte not included.
+pub fn transstr_len(s: &[u8], untab: bool) -> usize {
+    let mut len = 0usize;
+    let mut pos = 0usize;
+
+    while pos < s.len() && s[pos] != 0 {
+        // Get length including composing characters
+        let l = nvim_mbyte::utfc_ptr2len(&s[pos..]);
+
+        if l > 1 {
+            // Multi-byte character
+            let c = nvim_mbyte::utf_ptr2char(&s[pos..]);
+            if nvim_mbyte::utf_printable(c) {
+                // Printable character, keep as-is
+                len += l;
+            } else {
+                // Non-printable: convert each codepoint to hex
+                let mut off = 0;
+                while off < l {
+                    let cp = nvim_mbyte::utf_ptr2char(&s[pos + off..]);
+                    len += transchar_hex_len(cp);
+                    let cp_len = nvim_mbyte::utf_ptr2len(&s[pos + off..]);
+                    off += cp_len;
+                }
+            }
+            pos += l;
+        } else if s[pos] == TAB && !untab {
+            // TAB when not untabbing: count as 1
+            len += 1;
+            pos += 1;
+        } else {
+            // Single byte character
+            let b2c_l = unsafe { rs_byte2cells(s[pos] as c_int) };
+            // Illegal byte sequence may occupy up to 4 characters
+            len += if b2c_l > 0 { b2c_l as usize } else { 4 };
+            pos += 1;
+        }
+    }
+
+    len
+}
+
+/// FFI wrapper for `transstr_len`.
+///
+/// Find length of a string capable of holding s with all specials replaced.
+///
+/// # Safety
+/// - `s` must be a valid pointer to a null-terminated string
+#[no_mangle]
+pub unsafe extern "C" fn rs_transstr_len(s: *const c_char, untab: bool) -> usize {
+    if s.is_null() {
+        return 0;
+    }
+
+    // Find string length
+    let mut len = 0usize;
+    while len < 1_000_000 {
+        if *s.add(len) == 0 {
+            break;
+        }
+        len += 1;
+    }
+
+    if len == 0 {
+        return 0;
+    }
+
+    let slice = std::slice::from_raw_parts(s as *const u8, len);
+    transstr_len(slice, untab)
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
