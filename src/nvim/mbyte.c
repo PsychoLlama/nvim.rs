@@ -115,6 +115,8 @@ extern int rs_mb_cptr2char_adv(const char **pp);
 extern void rs_mb_utflen(const char *s, size_t len, size_t *codepoints, size_t *codeunits);
 extern ssize_t rs_mb_utf_index_to_bytes(const char *s, size_t len, size_t index, bool use_utf16_units);
 extern int rs_utf_strnicmp(const char *s1, const char *s2, size_t n1, size_t n2);
+extern int rs_mb_strnicmp(const char *s1, const char *s2, size_t nn);
+extern int rs_mb_stricmp(const char *s1, const char *s2);
 
 // Rust struct for codepoint boundary offsets
 typedef struct {
@@ -1820,7 +1822,11 @@ ssize_t mb_utf_index_to_bytes(const char *s, size_t len, size_t index, bool use_
 ///          two characters otherwise.
 int mb_strnicmp(const char *s1, const char *s2, const size_t nn)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_mb_strnicmp(s1, s2, nn);
+#else
   return utf_strnicmp(s1, s2, nn, nn);
+#endif
 }
 
 /// Compare strings case-insensitively
@@ -1837,7 +1843,11 @@ int mb_strnicmp(const char *s1, const char *s2, const size_t nn)
 /// @return 0 if strings are equal, <0 if s1 < s2, >0 if s1 > s2.
 int mb_stricmp(const char *s1, const char *s2)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_mb_stricmp(s1, s2);
+#else
   return mb_strnicmp(s1, s2, MAXCOL);
+#endif
 }
 
 // "g8": show bytes of the UTF-8 char under the cursor.  Doesn't matter what
