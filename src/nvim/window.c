@@ -106,6 +106,7 @@ extern int rs_frame_check_width(frame_T *topfrp, int width);
 extern win_T *rs_win_find_by_handle(int handle);
 extern tabpage_T *rs_win_find_tabpage(win_T *win);
 extern tabpage_T *rs_find_tabpage(int n);
+extern int rs_get_last_winid(void);
 #endif
 
 // Accessor functions for Rust opaque handle pattern.
@@ -5445,6 +5446,12 @@ win_T *buf_jump_open_tab(buf_T *buf)
 
 static int last_win_id = LOWEST_WIN_ID - 1;
 
+/// Get the last_win_id global (accessor for Rust).
+int nvim_get_last_win_id(void)
+{
+  return last_win_id;
+}
+
 /// @param hidden  allocate a window structure and link it in the window if
 //                 false.
 win_T *win_alloc(win_T *after, bool hidden)
@@ -7781,7 +7788,11 @@ skip:
 
 int get_last_winid(void)
 {
+#ifdef USE_RUST_WINDOW
+  return rs_get_last_winid();
+#else
   return last_win_id;
+#endif
 }
 
 /// Don't let autocommands close the given window

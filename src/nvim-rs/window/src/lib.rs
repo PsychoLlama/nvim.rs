@@ -916,6 +916,28 @@ pub extern "C" fn rs_find_tabpage(n: c_int) -> TabpageHandle {
     find_tabpage_impl(n)
 }
 
+// C accessor for last_win_id global
+extern "C" {
+    /// Get the `last_win_id` global.
+    fn nvim_get_last_win_id() -> c_int;
+}
+
+/// Get the last window ID assigned.
+///
+/// This is the Rust equivalent of `get_last_winid()` in window.c.
+/// Returns the global last_win_id value.
+#[inline]
+fn get_last_winid_impl() -> c_int {
+    // SAFETY: nvim_get_last_win_id is a safe accessor
+    unsafe { nvim_get_last_win_id() }
+}
+
+/// FFI wrapper for `get_last_winid`.
+#[no_mangle]
+pub extern "C" fn rs_get_last_winid() -> c_int {
+    get_last_winid_impl()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
