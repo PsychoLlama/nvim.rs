@@ -1816,6 +1816,97 @@ pub unsafe extern "C" fn rs_mb_utf_index_to_bytes(
     mb_utf_index_to_bytes(slice, index, use_utf16_units)
 }
 
+/// Like `utf_ptr2cells()`, but limit string length to `size`.
+///
+/// For an empty string or truncated character returns 1.
+/// For valid multibyte UTF-8, returns the character's cell width.
+/// For invalid/illegal UTF-8 sequences, returns 4 (displayed as `<xx>`).
+/// For overlong ASCII encodings, returns char2cells of the decoded value.
+///
+/// Also checks for emoji presentation selector (VS-16) following emoji-like
+/// characters, returning 2 cells if found (when 'emoji' option is enabled).
+pub fn utf_ptr2cells_len(p: &[u8], size: usize) -> i32 {
+    // Empty or beyond size limit
+    if size == 0 || p.is_empty() {
+        return 1;
+    }
+
+    let first = p[0];
+
+    // ASCII fast path
+    if first < 0x80 {
+        return 1;
+    }
+
+    // Multibyte - limit slice to size
+    let effective_len = p.len().min(size);
+    let p = &p[..effective_len];
+
+    // Get the expected UTF-8 sequence length from the first byte
+    let expected_len = UTF8LEN_TAB[first as usize] as usize;
+
+    // Get actual valid length within bounds
+    let actual_len = utf_ptr2len_len(p, p.len());
+
+    // If truncated (actual < expected), return 1
+    if actual_len < expected_len {
+        return 1;
+    }
+
+    // Try to decode the character
+    let c = utf_ptr2char(p);
+
+    // Check for illegal byte (utf_ptr2len returns 1 for invalid sequences)
+    // or NUL character
+    if utf_ptr2len(p) == 1 || c == 0 {
+        return 4;
+    }
+
+    // If the char is ASCII it must be an overlong sequence
+    if c < 0x80 {
+        // SAFETY: rs_char2cells just accesses g_chartab
+        return unsafe { rs_char2cells(c) };
+    }
+
+    let cells = utf_char2cells(c);
+
+    // Check for emoji presentation selector (VS-16)
+    if cells == 1 && emoji_is_enabled() {
+        if let Some(prop) = get_property(c) {
+            if prop.is_emojilike() && effective_len > actual_len {
+                // There's more data after this character
+                let remaining = &p[actual_len..];
+                // Check if the next character is complete
+                let next_expected = UTF8LEN_TAB[remaining[0] as usize] as usize;
+                let next_actual = utf_ptr2len_len(remaining, remaining.len());
+                if next_actual == next_expected {
+                    let c2 = utf_ptr2char(remaining);
+                    if c2 == VS16_CODEPOINT {
+                        return 2; // emoji presentation
+                    }
+                }
+            }
+        }
+    }
+
+    cells
+}
+
+/// FFI wrapper for `utf_ptr2cells_len`.
+///
+/// # Safety
+///
+/// `p` must be a valid pointer to at least `size` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_utf_ptr2cells_len(p: *const c_char, size: c_int) -> c_int {
+    if p.is_null() || size <= 0 {
+        return 1;
+    }
+
+    let slice = std::slice::from_raw_parts(p as *const u8, size as usize);
+    utf_ptr2cells_len(slice, size as usize)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

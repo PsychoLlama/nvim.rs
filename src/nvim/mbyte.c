@@ -495,6 +495,7 @@ static bool prop_is_emojilike(const utf8proc_property_t *prop)
 #ifdef USE_RUST_MBYTE
 extern int rs_utf_char2cells(int c);
 extern int rs_utf_ptr2cells(const char *p);
+extern int rs_utf_ptr2cells_len(const char *p, int size);
 #endif
 
 /// For UTF-8 character "c" return 2 for a double-width character, 1 for others.
@@ -649,6 +650,9 @@ ret:
 /// For an empty string or truncated character returns 1.
 int utf_ptr2cells_len(const char *p, int size)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_ptr2cells_len(p, size);
+#else
   // Need to convert to a wide character.
   if (size > 0 && (uint8_t)(*p) >= 0x80) {
     int len = utf_ptr2len_len(p, size);
@@ -676,6 +680,7 @@ int utf_ptr2cells_len(const char *p, int size)
     return cells;
   }
   return 1;
+#endif
 }
 
 /// Calculate the number of cells occupied by string `str`.
