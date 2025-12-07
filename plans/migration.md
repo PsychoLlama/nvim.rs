@@ -13,9 +13,9 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 3.25 Complete)
+## Current Status (Phase 3.27 Complete)
 
-**165+ functions migrated across 32 Rust crates:**
+**170+ functions migrated across 32 Rust crates:**
 
 - nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
 - nvim-memutil, nvim-os, nvim-collections, nvim-encoding
@@ -29,7 +29,7 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - Cargo workspace at `src/nvim-rs/`
 - CMake integration via USE*RUST*\* flags
 - cbindgen generates C headers from Rust
-- 310 rs\_\* symbols exported
+- 328 rs\_\* symbols exported
 
 ---
 
@@ -130,6 +130,21 @@ Validation functions migrated: `win_valid`, `win_valid_any_tab`, `valid_tabpage`
 - [x] rs_frame_fixed_height wired to frame_fixed_height
 - [x] rs_frame_fixed_width wired to frame_fixed_width
 - [x] Frame tree recursive traversal now uses Rust implementation
+
+### Phase 3.26: is_bottom_win ✅
+
+- [x] Added nvim_frame_get_parent accessor for fr_parent field
+- [x] Added nvim_win_get_frame accessor for w_frame field
+- [x] Implemented is_bottom_win_impl in Rust (frame tree traversal)
+- [x] Used to determine if window is at bottom of column
+
+### Phase 3.27: frame_check_height/width ✅
+
+- [x] Added nvim_frame_get_height accessor for fr_height field
+- [x] Added nvim_frame_get_width accessor for fr_width field
+- [x] Implemented frame_check_height_impl (verify FR_ROW children heights)
+- [x] Implemented frame_check_width_impl (verify FR_COL children widths)
+- [x] Used for window layout consistency validation
 
 ### Remaining Blockers
 
