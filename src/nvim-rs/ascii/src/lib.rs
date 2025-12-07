@@ -208,6 +208,97 @@ pub extern "C" fn rs_ascii_tolower(c: c_int) -> c_int {
     }
 }
 
+/// Returns the ordinal index of a letter (0-25).
+/// If the character is lowercase ('a'-'z'), returns 0-25.
+/// If the character is uppercase ('A'-'Z'), returns 0-25.
+/// Otherwise returns the offset from 'A' (may be negative or >25).
+///
+/// # Arguments
+/// * `c` - The character code
+///
+/// # Returns
+/// The ordinal index (0-25 for valid letters)
+#[no_mangle]
+pub extern "C" fn rs_char_ord(c: c_int) -> c_int {
+    // Original C: ((uint8_t)(x) < 'a' ? (uint8_t)(x) - 'A' : (uint8_t)(x) - 'a')
+    let byte = (c & 0xFF) as u8;
+    if byte < b'a' {
+        i32::from(byte.wrapping_sub(b'A'))
+    } else {
+        i32::from(byte.wrapping_sub(b'a'))
+    }
+}
+
+/// Returns the ordinal index of a lowercase letter (0-25 for 'a'-'z').
+///
+/// # Arguments
+/// * `c` - The character code (should be 'a'-'z')
+///
+/// # Returns
+/// The ordinal index (0-25 for 'a'-'z')
+#[no_mangle]
+pub extern "C" fn rs_char_ord_low(c: c_int) -> c_int {
+    // Original C: ((uint8_t)(x) - 'a')
+    let byte = (c & 0xFF) as u8;
+    i32::from(byte.wrapping_sub(b'a'))
+}
+
+/// Returns the ordinal index of an uppercase letter (0-25 for 'A'-'Z').
+///
+/// # Arguments
+/// * `c` - The character code (should be 'A'-'Z')
+///
+/// # Returns
+/// The ordinal index (0-25 for 'A'-'Z')
+#[no_mangle]
+pub extern "C" fn rs_char_ord_up(c: c_int) -> c_int {
+    // Original C: ((uint8_t)(x) - 'A')
+    let byte = (c & 0xFF) as u8;
+    i32::from(byte.wrapping_sub(b'A'))
+}
+
+/// ROT13 encoding - rotates a character by 13 positions within the alphabet.
+///
+/// # Arguments
+/// * `c` - The character code to rotate
+/// * `a` - The base character ('a' for lowercase, 'A' for uppercase)
+///
+/// # Returns
+/// The ROT13 encoded character
+#[no_mangle]
+pub extern "C" fn rs_rot13(c: c_int, a: c_int) -> c_int {
+    // Original C: (((((c) - (a)) + 13) % 26) + (a))
+    (((c - a) + 13) % 26) + a
+}
+
+/// Sets the meta bit (bit 7) on a character.
+///
+/// # Arguments
+/// * `c` - The character code
+///
+/// # Returns
+/// The character with bit 7 set
+#[no_mangle]
+pub extern "C" fn rs_meta(c: c_int) -> c_int {
+    // Original C: ((x) | 0x80)
+    c | 0x80
+}
+
+/// Converts a character to its control character equivalent.
+/// This is done by uppercasing and XORing with 0x40.
+/// For example, '?' -> DEL (127), '@' -> NUL (0), 'a' or 'A' -> Ctrl-A (1)
+///
+/// # Arguments
+/// * `c` - The character code to convert
+///
+/// # Returns
+/// The control character equivalent
+#[no_mangle]
+pub extern "C" fn rs_ctrl_chr(c: c_int) -> c_int {
+    // Original C: (TOUPPER_ASC(x) ^ 0x40)
+    rs_ascii_toupper(c) ^ 0x40
+}
+
 // ============================================================================
 // Tests
 // ============================================================================
@@ -399,5 +490,69 @@ mod tests {
         assert_eq!(rs_ascii_tolower(i32::from(b'_')), i32::from(b'_'));
         assert_eq!(rs_ascii_tolower(-1), -1);
         assert_eq!(rs_ascii_tolower(256), 256);
+    }
+
+    #[test]
+    fn test_char_ord() {
+        // Lowercase letters return 0-25
+        for (i, c) in (b'a'..=b'z').enumerate() {
+            assert_eq!(rs_char_ord(i32::from(c)), i as i32);
+        }
+        // Uppercase letters also return 0-25
+        for (i, c) in (b'A'..=b'Z').enumerate() {
+            assert_eq!(rs_char_ord(i32::from(c)), i as i32);
+        }
+    }
+
+    #[test]
+    fn test_char_ord_low() {
+        // Lowercase letters return 0-25
+        for (i, c) in (b'a'..=b'z').enumerate() {
+            assert_eq!(rs_char_ord_low(i32::from(c)), i as i32);
+        }
+    }
+
+    #[test]
+    fn test_char_ord_up() {
+        // Uppercase letters return 0-25
+        for (i, c) in (b'A'..=b'Z').enumerate() {
+            assert_eq!(rs_char_ord_up(i32::from(c)), i as i32);
+        }
+    }
+
+    #[test]
+    fn test_rot13() {
+        // ROT13 of 'a' with base 'a' should be 'n'
+        assert_eq!(rs_rot13(i32::from(b'a'), i32::from(b'a')), i32::from(b'n'));
+        // ROT13 of 'n' with base 'a' should be 'a' (ROT13 is self-inverse)
+        assert_eq!(rs_rot13(i32::from(b'n'), i32::from(b'a')), i32::from(b'a'));
+        // ROT13 of 'z' with base 'a' should be 'm'
+        assert_eq!(rs_rot13(i32::from(b'z'), i32::from(b'a')), i32::from(b'm'));
+        // ROT13 of 'A' with base 'A' should be 'N'
+        assert_eq!(rs_rot13(i32::from(b'A'), i32::from(b'A')), i32::from(b'N'));
+    }
+
+    #[test]
+    fn test_meta() {
+        // Setting meta bit on 'a' (0x61) gives 0xE1
+        assert_eq!(rs_meta(i32::from(b'a')), 0xE1);
+        // Setting meta bit on 0 gives 0x80
+        assert_eq!(rs_meta(0), 0x80);
+        // Setting meta bit on something that already has it is idempotent
+        assert_eq!(rs_meta(0x80), 0x80);
+    }
+
+    #[test]
+    fn test_ctrl_chr() {
+        // '?' -> DEL (127)
+        assert_eq!(rs_ctrl_chr(i32::from(b'?')), 127);
+        // '@' -> NUL (0)
+        assert_eq!(rs_ctrl_chr(i32::from(b'@')), 0);
+        // 'A' -> Ctrl-A (1)
+        assert_eq!(rs_ctrl_chr(i32::from(b'A')), 1);
+        // 'a' -> Ctrl-A (1) (case-insensitive)
+        assert_eq!(rs_ctrl_chr(i32::from(b'a')), 1);
+        // 'Z' -> Ctrl-Z (26)
+        assert_eq!(rs_ctrl_chr(i32::from(b'Z')), 26);
     }
 }

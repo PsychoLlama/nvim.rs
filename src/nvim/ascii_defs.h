@@ -8,12 +8,25 @@
 
 // Definitions of various common control characters.
 
-#define CHAR_ORD(x)      ((uint8_t)(x) < 'a' \
-                          ? (uint8_t)(x) - 'A' \
-                          : (uint8_t)(x) - 'a')
-#define CHAR_ORD_LOW(x)   ((uint8_t)(x) - 'a')
-#define CHAR_ORD_UP(x)    ((uint8_t)(x) - 'A')
-#define ROT13(c, a)     (((((c) - (a)) + 13) % 26) + (a))
+#ifdef USE_RUST_ASCII
+extern int rs_char_ord(int c);
+extern int rs_char_ord_low(int c);
+extern int rs_char_ord_up(int c);
+extern int rs_rot13(int c, int a);
+extern int rs_meta(int c);
+extern int rs_ctrl_chr(int c);
+# define CHAR_ORD(x)      rs_char_ord(x)
+# define CHAR_ORD_LOW(x)  rs_char_ord_low(x)
+# define CHAR_ORD_UP(x)   rs_char_ord_up(x)
+# define ROT13(c, a)      rs_rot13(c, a)
+#else
+# define CHAR_ORD(x)      ((uint8_t)(x) < 'a' \
+                           ? (uint8_t)(x) - 'A' \
+                           : (uint8_t)(x) - 'a')
+# define CHAR_ORD_LOW(x)  ((uint8_t)(x) - 'a')
+# define CHAR_ORD_UP(x)   ((uint8_t)(x) - 'A')
+# define ROT13(c, a)      (((((c) - (a)) + 13) % 26) + (a))
+#endif
 
 #define NUL             '\000'
 #define BELL            '\007'
@@ -34,8 +47,13 @@
 
 #define POUND           0xA3
 
-#define CTRL_CHR(x)     (TOUPPER_ASC(x) ^ 0x40)  // '?' -> DEL, '@' -> ^@, etc.
-#define META(x)         ((x) | 0x80)
+#ifdef USE_RUST_ASCII
+# define CTRL_CHR(x)     rs_ctrl_chr(x)  // '?' -> DEL, '@' -> ^@, etc.
+# define META(x)         rs_meta(x)
+#else
+# define CTRL_CHR(x)     (TOUPPER_ASC(x) ^ 0x40)  // '?' -> DEL, '@' -> ^@, etc.
+# define META(x)         ((x) | 0x80)
+#endif
 
 #define CTRL_F_STR      "\006"
 #define CTRL_H_STR      "\010"
