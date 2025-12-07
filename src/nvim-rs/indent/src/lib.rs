@@ -135,6 +135,41 @@ pub unsafe extern "C" fn rs_indent_size_ts(
     }
 }
 
+/// Compute the size of the indent (in window cells) in line `ptr`,
+/// without tabstops (count tab as ^I or <09>).
+///
+/// This function treats tabs as their control-character display width
+/// (typically 2 characters for ^I).
+///
+/// # Safety
+/// - `ptr` must point to a valid null-terminated C string.
+/// - The global `g_chartab` array must be initialized.
+#[no_mangle]
+pub unsafe extern "C" fn rs_indent_size_no_ts(ptr: *const c_char) -> c_int {
+    if ptr.is_null() {
+        return 0;
+    }
+
+    // Get the display width of a tab character (^I = 2 cells)
+    // TAB is 0x09 which is < 0x80, so byte2cells will work correctly
+    let tab_size = nvim_charset::byte2cells(b'\t');
+
+    let mut p = ptr;
+    let mut vcol: c_int = 0;
+
+    loop {
+        let c = *p;
+        p = p.add(1);
+        if c == SPACE {
+            vcol += 1;
+        } else if c == TAB {
+            vcol += tab_size;
+        } else {
+            return vcol;
+        }
+    }
+}
+
 // ============================================================================
 // Tests
 // ============================================================================

@@ -423,13 +423,22 @@ pub unsafe extern "C" fn rs_vim_is_fname_char(c: c_int) -> c_int {
 ///
 /// # Safety
 /// This function accesses the global `g_chartab` array which must be initialized.
-#[no_mangle]
-pub unsafe extern "C" fn rs_byte2cells(b: c_int) -> c_int {
+#[inline]
+pub unsafe fn byte2cells(b: u8) -> c_int {
     if b >= 0x80 {
         0
     } else {
         c_int::from(g_chartab[b as usize] & CT_CELL_MASK)
     }
+}
+
+/// C-compatible wrapper for byte2cells.
+///
+/// # Safety
+/// This function accesses the global `g_chartab` array which must be initialized.
+#[no_mangle]
+pub unsafe extern "C" fn rs_byte2cells(b: c_int) -> c_int {
+    byte2cells(b as u8)
 }
 
 /// Check that "c" is a normal identifier character:

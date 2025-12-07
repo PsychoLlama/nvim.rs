@@ -55,6 +55,7 @@
 #ifdef USE_RUST_INDENT
 extern int rs_tabstop_padding(int col, int64_t ts_arg, const int *vts);
 extern int rs_indent_size_ts(const char *ptr, int64_t ts, const int *vts);
+extern int rs_indent_size_no_ts(const char *ptr);
 #endif
 
 /// Set the integer values corresponding to the string setting of 'vartabstop'.
@@ -400,6 +401,9 @@ int get_indent_buf(buf_T *buf, linenr_T lnum)
 int indent_size_no_ts(char const *ptr)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_INDENT
+  return rs_indent_size_no_ts(ptr);
+#else
   int tab_size = byte2cells(TAB);
 
   int vcol = 0;
@@ -413,6 +417,7 @@ int indent_size_no_ts(char const *ptr)
       return vcol;
     }
   }
+#endif
 }
 
 /// Compute the size of the indent (in window cells) in line "ptr",

@@ -9,3 +9,4 @@ description = "Indentation utilities for Neovim"
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
+nvim-charset = { path = "../charset" }

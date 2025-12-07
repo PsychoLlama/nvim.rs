@@ -38,7 +38,7 @@ include = ["rs_xfpclassify", "rs_xisinf", "rs_xisnan", "rs_xctz", "rs_xpopcount"
            "rs_skiptowhite", "rs_skiptowhite_esc", "rs_getwhitecols", "rs_skip_to_newline",
            "rs_vim_isblankline",
            "rs_hex2nr", "rs_hexhex2nr", "rs_nr2hex", "rs_transchar_hex", "rs_transstr_len",
-           "rs_tabstop_padding", "rs_indent_size_ts",
+           "rs_tabstop_padding", "rs_indent_size_ts", "rs_indent_size_no_ts",
            "rs_name_to_mod_mask", "rs_handle_x_keys",
            "rs_xstrnlen", "rs_xstrchrnul", "rs_xmemscan", "rs_strcnt", "rs_memcnt",
            "rs_xmemrchr", "rs_strequal", "rs_strnequal",
