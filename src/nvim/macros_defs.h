@@ -40,8 +40,15 @@
 #define TOLOWER_LOC tolower
 
 // toupper() and tolower() for ASCII only and ignore the current locale.
-#define TOUPPER_ASC(c) (((c) < 'a' || (c) > 'z') ? (c) : (c) - ('a' - 'A'))
-#define TOLOWER_ASC(c) (((c) < 'A' || (c) > 'Z') ? (c) : (c) + ('a' - 'A'))
+#ifdef USE_RUST_ASCII
+extern int rs_ascii_toupper(int c);
+extern int rs_ascii_tolower(int c);
+# define TOUPPER_ASC(c) rs_ascii_toupper(c)
+# define TOLOWER_ASC(c) rs_ascii_tolower(c)
+#else
+# define TOUPPER_ASC(c) (((c) < 'a' || (c) > 'z') ? (c) : (c) - ('a' - 'A'))
+# define TOLOWER_ASC(c) (((c) < 'A' || (c) > 'Z') ? (c) : (c) + ('a' - 'A'))
+#endif
 
 // Like isalpha() but reject non-ASCII characters.  Can't be used with a
 // special key (negative value).

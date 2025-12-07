@@ -12,7 +12,7 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 3.13 Complete)
+## Current Status (Phase 3.14 Complete)
 
 **160+ functions migrated across 32 Rust crates:**
 - nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
@@ -26,7 +26,7 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - Cargo workspace at `src/nvim-rs/`
 - CMake integration via USE_RUST_* flags
 - cbindgen generates C headers from Rust
-- 300 rs_* symbols exported
+- 302 rs_* symbols exported
 
 ---
 
@@ -152,6 +152,15 @@ Remaining FUNC_ATTR_PURE/FUNC_ATTR_CONST functions require infrastructure not ye
 - [x] rs_ascii_isident(): identifier char (alphanumeric or underscore)
 - [x] rs_ascii_isupper(), rs_ascii_islower(), rs_ascii_isalpha(), rs_ascii_isalnum()
 - [x] USE_RUST_ASCII conditional compilation in ascii_defs.h
+
+**Phase 3.13: UTF-8 trailing byte detection ✅**
+- [x] rs_utf_is_trail_byte(): check if byte is UTF-8 trailing byte (10xxxxxx)
+- [x] USE_RUST_MBYTE conditional compilation in mbyte.h
+
+**Phase 3.14: ASCII case conversion ✅**
+- [x] rs_ascii_toupper(): convert lowercase to uppercase (a-z -> A-Z)
+- [x] rs_ascii_tolower(): convert uppercase to lowercase (A-Z -> a-z)
+- [x] USE_RUST_ASCII conditional compilation for TOUPPER_ASC/TOLOWER_ASC macros in macros_defs.h
 
 **Phase 3.5: Window/frame function exploration (blocked)**
 Window and frame functions require infrastructure not yet in place:

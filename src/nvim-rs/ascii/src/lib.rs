@@ -174,6 +174,40 @@ pub extern "C" fn rs_ascii_isident(c: c_int) -> c_int {
     c_int::from(rs_ascii_isalnum(c) != 0 || c == i32::from(b'_'))
 }
 
+/// Converts ASCII lowercase letter to uppercase ('a'-'z' -> 'A'-'Z').
+/// Non-lowercase letters are returned unchanged.
+///
+/// # Arguments
+/// * `c` - The character code to convert
+///
+/// # Returns
+/// The uppercase equivalent if 'a'-'z', otherwise the original character
+#[no_mangle]
+pub extern "C" fn rs_ascii_toupper(c: c_int) -> c_int {
+    if c >= i32::from(b'a') && c <= i32::from(b'z') {
+        c - (i32::from(b'a') - i32::from(b'A'))
+    } else {
+        c
+    }
+}
+
+/// Converts ASCII uppercase letter to lowercase ('A'-'Z' -> 'a'-'z').
+/// Non-uppercase letters are returned unchanged.
+///
+/// # Arguments
+/// * `c` - The character code to convert
+///
+/// # Returns
+/// The lowercase equivalent if 'A'-'Z', otherwise the original character
+#[no_mangle]
+pub extern "C" fn rs_ascii_tolower(c: c_int) -> c_int {
+    if c >= i32::from(b'A') && c <= i32::from(b'Z') {
+        c + (i32::from(b'a') - i32::from(b'A'))
+    } else {
+        c
+    }
+}
+
 // ============================================================================
 // Tests
 // ============================================================================
@@ -327,5 +361,43 @@ mod tests {
         assert_ne!(rs_ascii_isident(i32::from(b'_')), 0);
         assert_eq!(rs_ascii_isident(i32::from(b' ')), 0);
         assert_eq!(rs_ascii_isident(i32::from(b'-')), 0);
+    }
+
+    #[test]
+    fn test_ascii_toupper() {
+        // Lowercase letters are converted to uppercase
+        for c in b'a'..=b'z' {
+            let expected = c - (b'a' - b'A');
+            assert_eq!(rs_ascii_toupper(i32::from(c)), i32::from(expected));
+        }
+        // Uppercase letters are unchanged
+        for c in b'A'..=b'Z' {
+            assert_eq!(rs_ascii_toupper(i32::from(c)), i32::from(c));
+        }
+        // Other characters are unchanged
+        assert_eq!(rs_ascii_toupper(i32::from(b'0')), i32::from(b'0'));
+        assert_eq!(rs_ascii_toupper(i32::from(b' ')), i32::from(b' '));
+        assert_eq!(rs_ascii_toupper(i32::from(b'_')), i32::from(b'_'));
+        assert_eq!(rs_ascii_toupper(-1), -1);
+        assert_eq!(rs_ascii_toupper(256), 256);
+    }
+
+    #[test]
+    fn test_ascii_tolower() {
+        // Uppercase letters are converted to lowercase
+        for c in b'A'..=b'Z' {
+            let expected = c + (b'a' - b'A');
+            assert_eq!(rs_ascii_tolower(i32::from(c)), i32::from(expected));
+        }
+        // Lowercase letters are unchanged
+        for c in b'a'..=b'z' {
+            assert_eq!(rs_ascii_tolower(i32::from(c)), i32::from(c));
+        }
+        // Other characters are unchanged
+        assert_eq!(rs_ascii_tolower(i32::from(b'0')), i32::from(b'0'));
+        assert_eq!(rs_ascii_tolower(i32::from(b' ')), i32::from(b' '));
+        assert_eq!(rs_ascii_tolower(i32::from(b'_')), i32::from(b'_'));
+        assert_eq!(rs_ascii_tolower(-1), -1);
+        assert_eq!(rs_ascii_tolower(256), 256);
     }
 }
