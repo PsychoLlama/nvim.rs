@@ -107,6 +107,7 @@ extern win_T *rs_win_find_by_handle(int handle);
 extern tabpage_T *rs_win_find_tabpage(win_T *win);
 extern tabpage_T *rs_find_tabpage(int n);
 extern int rs_get_last_winid(void);
+extern win_T *rs_lastwin_nofloating(void);
 #endif
 
 // Accessor functions for Rust opaque handle pattern.
@@ -134,6 +135,12 @@ int nvim_win_get_pvw(win_T *wp)
 win_T *nvim_win_get_next(win_T *wp)
 {
   return wp->w_next;
+}
+
+/// Get the w_prev field from a window (accessor for Rust).
+win_T *nvim_win_get_prev(win_T *wp)
+{
+  return wp->w_prev;
 }
 
 // Global state accessors for Rust.
@@ -7854,9 +7861,13 @@ void win_ui_flush(bool validate)
 
 win_T *lastwin_nofloating(void)
 {
+#ifdef USE_RUST_WINDOW
+  return rs_lastwin_nofloating();
+#else
   win_T *res = lastwin;
   while (res->w_floating) {
     res = res->w_prev;
   }
   return res;
+#endif
 }

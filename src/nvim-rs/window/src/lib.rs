@@ -132,6 +132,9 @@ extern "C" {
     /// Get the `w_next` field from a window.
     fn nvim_win_get_next(win: WinHandle) -> WinHandle;
 
+    /// Get the `w_prev` field from a window.
+    fn nvim_win_get_prev(win: WinHandle) -> WinHandle;
+
     // Global state accessors
     /// Get the current window.
     fn nvim_get_curwin() -> WinHandle;
@@ -936,6 +939,26 @@ fn get_last_winid_impl() -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_get_last_winid() -> c_int {
     get_last_winid_impl()
+}
+
+/// Find the last non-floating window.
+///
+/// This is the Rust equivalent of `lastwin_nofloating()` in window.c.
+/// Iterates backwards from `lastwin` to find the first non-floating window.
+#[inline]
+fn lastwin_nofloating_impl() -> WinHandle {
+    // SAFETY: nvim_get_lastwin, nvim_win_get_prev, nvim_win_get_floating are safe accessors
+    let mut res = unsafe { nvim_get_lastwin() };
+    while !res.is_null() && unsafe { nvim_win_get_floating(res) } != 0 {
+        res = unsafe { nvim_win_get_prev(res) };
+    }
+    res
+}
+
+/// FFI wrapper for `lastwin_nofloating`.
+#[no_mangle]
+pub extern "C" fn rs_lastwin_nofloating() -> WinHandle {
+    lastwin_nofloating_impl()
 }
 
 #[cfg(test)]
