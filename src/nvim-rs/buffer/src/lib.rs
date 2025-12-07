@@ -70,6 +70,9 @@ extern "C" {
 
     /// Get the `b_prev` field from a buffer.
     fn nvim_buf_get_prev(buf: BufHandle) -> BufHandle;
+
+    /// Get the `top_file_num` global (highest file number counter).
+    fn nvim_get_top_file_num() -> c_int;
 }
 
 /// Check if "buf" is a pointer to an existing buffer.
@@ -319,6 +322,22 @@ fn get_fileformat_impl(buf: BufHandle) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_get_fileformat(buf: BufHandle) -> c_int {
     get_fileformat_impl(buf)
+}
+
+/// Get the highest possible buffer number.
+///
+/// Returns `top_file_num - 1` since `top_file_num` is the next number
+/// to be assigned to a new buffer.
+#[inline]
+fn get_highest_fnum_impl() -> c_int {
+    // SAFETY: nvim_get_top_file_num is a simple global accessor
+    unsafe { nvim_get_top_file_num() - 1 }
+}
+
+/// FFI wrapper for `get_highest_fnum`.
+#[no_mangle]
+pub extern "C" fn rs_get_highest_fnum() -> c_int {
+    get_highest_fnum_impl()
 }
 
 #[cfg(test)]

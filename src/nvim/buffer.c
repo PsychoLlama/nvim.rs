@@ -131,6 +131,7 @@ extern int rs_bt_nofilename(buf_T *buf);
 extern int rs_bt_dontwrite(buf_T *buf);
 extern int rs_bt_nofileread(buf_T *buf);
 extern int rs_buf_valid(buf_T *buf);
+extern int rs_get_highest_fnum(void);
 #endif
 
 // Accessor functions for Rust opaque handle pattern.
@@ -192,6 +193,12 @@ static int buf_free_count = 0;
 
 static int top_file_num = 1;            ///< highest file number
 
+/// Get the top_file_num global (accessor for Rust).
+int nvim_get_top_file_num(void)
+{
+  return top_file_num;
+}
+
 typedef enum {
   kBffClearWinInfo = 1,
   kBffInitChangedtick = 2,
@@ -213,7 +220,11 @@ int calc_percentage(int64_t part, int64_t whole)
 /// @return  the highest possible buffer number
 int get_highest_fnum(void)
 {
+#ifdef USE_RUST_BUFFER
+  return rs_get_highest_fnum();
+#else
   return top_file_num - 1;
+#endif
 }
 
 /// Read data from buffer for retrying.
