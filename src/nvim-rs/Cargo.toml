@@ -14,6 +14,7 @@ workspace = true
 
 [dependencies]
 nvim-arabic = { path = "arabic" }
+nvim-buffer = { path = "buffer" }
 nvim-charset = { path = "charset" }
 nvim-cmdhist = { path = "cmdhist" }
 nvim-eval = { path = "eval" }

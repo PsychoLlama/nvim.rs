@@ -72,6 +72,7 @@ if(USE_RUST)
     target_link_libraries(main_lib INTERFACE ${RUST_NVIM_LIB} pthread dl m)
     # Enable all available Rust implementations
     target_compile_definitions(nvim_bin PRIVATE
+      USE_RUST_BUFFER
       USE_RUST_CHARSET
       USE_RUST_CMDHIST
       USE_RUST_ENCODING

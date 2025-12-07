@@ -120,6 +120,36 @@
 extern int rs_calc_percentage(int64_t part, int64_t whole);
 #endif
 
+#ifdef USE_RUST_BUFFER
+extern int rs_bt_prompt(buf_T *buf);
+extern int rs_bt_normal(buf_T *buf);
+extern int rs_bt_quickfix(buf_T *buf);
+extern int rs_bt_terminal(buf_T *buf);
+extern int rs_bt_nofile(buf_T *buf);
+extern int rs_bt_help(buf_T *buf);
+#endif
+
+// Accessor functions for Rust opaque handle pattern.
+// These provide safe access to buf_T fields from Rust code.
+
+/// Get the first character of the b_p_bt (buftype option) field.
+char nvim_buf_get_buftype(buf_T *buf)
+{
+  return buf->b_p_bt[0];
+}
+
+/// Get the third character of the b_p_bt field (for nofile/nowrite check).
+char nvim_buf_get_buftype_2(buf_T *buf)
+{
+  return buf->b_p_bt[2];
+}
+
+/// Get the b_help field from a buffer.
+int nvim_buf_get_help(buf_T *buf)
+{
+  return buf->b_help;
+}
+
 static const char e_attempt_to_delete_buffer_that_is_in_use_str[]
   = N_("E937: Attempt to delete a buffer that is in use: %s");
 
@@ -3555,7 +3585,11 @@ void fname_expand(buf_T *buf, char **ffname, char **sfname)
 bool bt_prompt(buf_T *buf)
   FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_BUFFER
+  return rs_bt_prompt(buf);
+#else
   return buf != NULL && buf->b_p_bt[0] == 'p';
+#endif
 }
 
 /// Open a window for a number of buffers.
@@ -3907,28 +3941,44 @@ static int chk_modeline(linenr_T lnum, int flags)
 bool bt_help(const buf_T *const buf)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_BUFFER
+  return rs_bt_help((buf_T *)buf);
+#else
   return buf != NULL && buf->b_help;
+#endif
 }
 
 /// @return  true if "buf" is a normal buffer, 'buftype' is empty.
 bool bt_normal(const buf_T *const buf)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_BUFFER
+  return rs_bt_normal((buf_T *)buf);
+#else
   return buf != NULL && buf->b_p_bt[0] == NUL;
+#endif
 }
 
 /// @return  true if "buf" is the quickfix buffer.
 bool bt_quickfix(const buf_T *const buf)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_BUFFER
+  return rs_bt_quickfix((buf_T *)buf);
+#else
   return buf != NULL && buf->b_p_bt[0] == 'q';
+#endif
 }
 
 /// @return  true if "buf" is a terminal buffer.
 bool bt_terminal(const buf_T *const buf)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_BUFFER
+  return rs_bt_terminal((buf_T *)buf);
+#else
   return buf != NULL && buf->b_p_bt[0] == 't';
+#endif
 }
 
 /// @return  true if "buf" is a "nofile", "acwrite", "terminal" or "prompt"
@@ -3958,7 +4008,11 @@ static bool bt_nofileread(const buf_T *const buf)
 bool bt_nofile(const buf_T *const buf)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_BUFFER
+  return rs_bt_nofile((buf_T *)buf);
+#else
   return buf != NULL && buf->b_p_bt[0] == 'n' && buf->b_p_bt[2] == 'f';
+#endif
 }
 
 /// @return  true if "buf" is a "nowrite", "nofile", "terminal" or "prompt"

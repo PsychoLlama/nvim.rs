@@ -15,7 +15,7 @@ rename_variants = "ScreamingSnakeCase"
 
 [parse]
 parse_deps = true
-include = ["nvim-charset", "nvim-cmdhist", "nvim-encoding", "nvim-eval", "nvim-ex-docmd", "nvim-fileio", "nvim-help", "nvim-indent", "nvim-keycodes", "nvim-math", "nvim-mbyte", "nvim-memutil", "nvim-menu", "nvim-os", "nvim-path", "nvim-profile", "nvim-spell", "nvim-strings", "nvim-window"]
+include = ["nvim-buffer", "nvim-charset", "nvim-cmdhist", "nvim-encoding", "nvim-eval", "nvim-ex-docmd", "nvim-fileio", "nvim-help", "nvim-indent", "nvim-keycodes", "nvim-math", "nvim-mbyte", "nvim-memutil", "nvim-menu", "nvim-os", "nvim-path", "nvim-profile", "nvim-spell", "nvim-strings", "nvim-window"]
 
 [export]
 include = ["rs_xfpclassify", "rs_xisinf", "rs_xisnan", "rs_xctz", "rs_xpopcount",
@@ -59,4 +59,6 @@ include = ["rs_xfpclassify", "rs_xisinf", "rs_xisnan", "rs_xctz", "rs_xpopcount"
            "rs_var_flavour", "VarFlavour",
            "rs_valid_spelllang", "rs_spell_valid_case", "rs_byte_in_str",
            "rs_win_locked", "WinHandle",
+           "rs_bt_prompt", "rs_bt_normal", "rs_bt_quickfix", "rs_bt_terminal",
+           "rs_bt_nofile", "rs_bt_help", "BufHandle",
            "nvim_rs_version"]
