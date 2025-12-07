@@ -113,7 +113,10 @@ fn parse_int(s: &[u8]) -> Option<i32> {
 #[inline]
 pub fn has_nvim_version(version_str: &[u8]) -> bool {
     // Find the null terminator if present
-    let len = version_str.iter().position(|&b| b == 0).unwrap_or(version_str.len());
+    let len = version_str
+        .iter()
+        .position(|&b| b == 0)
+        .unwrap_or(version_str.len());
     let s = &version_str[..len];
 
     let (req_major, req_minor, req_patch) = match parse_version_string(s) {
@@ -126,8 +129,7 @@ pub fn has_nvim_version(version_str: &[u8]) -> bool {
     // Compare versions
     req_major < cur_major
         || (req_major == cur_major
-            && (req_minor < cur_minor
-                || (req_minor == cur_minor && req_patch <= cur_patch)))
+            && (req_minor < cur_minor || (req_minor == cur_minor && req_patch <= cur_patch)))
 }
 
 /// FFI wrapper for has_nvim_version

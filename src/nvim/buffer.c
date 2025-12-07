@@ -127,6 +127,8 @@ extern int rs_bt_quickfix(buf_T *buf);
 extern int rs_bt_terminal(buf_T *buf);
 extern int rs_bt_nofile(buf_T *buf);
 extern int rs_bt_help(buf_T *buf);
+extern int rs_bt_nofilename(buf_T *buf);
+extern int rs_bt_dontwrite(buf_T *buf);
 #endif
 
 // Accessor functions for Rust opaque handle pattern.
@@ -148,6 +150,12 @@ char nvim_buf_get_buftype_2(buf_T *buf)
 int nvim_buf_get_help(buf_T *buf)
 {
   return buf->b_help;
+}
+
+/// Check if buffer has a terminal attached (buf->terminal != NULL).
+int nvim_buf_get_terminal(buf_T *buf)
+{
+  return buf->terminal != NULL;
 }
 
 static const char e_attempt_to_delete_buffer_that_is_in_use_str[]
@@ -3987,10 +3995,14 @@ bool bt_terminal(const buf_T *const buf)
 bool bt_nofilename(const buf_T *const buf)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_BUFFER
+  return rs_bt_nofilename((buf_T *)buf);
+#else
   return buf != NULL && ((buf->b_p_bt[0] == 'n' && buf->b_p_bt[2] == 'f')
                          || buf->b_p_bt[0] == 'a'
                          || buf->terminal
                          || buf->b_p_bt[0] == 'p');
+#endif
 }
 
 /// @return  true if "buf" is a "nofile", "quickfix", "terminal" or "prompt"
@@ -4020,9 +4032,13 @@ bool bt_nofile(const buf_T *const buf)
 bool bt_dontwrite(const buf_T *const buf)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_BUFFER
+  return rs_bt_dontwrite((buf_T *)buf);
+#else
   return buf != NULL && (buf->b_p_bt[0] == 'n'
                          || buf->terminal
                          || buf->b_p_bt[0] == 'p');
+#endif
 }
 
 bool bt_dontwrite_msg(const buf_T *const buf)

@@ -295,6 +295,7 @@ const ARENA_ALIGN: usize = {
 ///
 /// Returns the smallest value >= `off` that is aligned to `ARENA_ALIGN` bytes.
 #[no_mangle]
+#[allow(clippy::cast_possible_truncation)] // Intentional for 32-bit platforms
 pub extern "C" fn rs_arena_align_offset(off: u64) -> usize {
     let align = ARENA_ALIGN as u64;
     ((off + (align - 1)) & !(align - 1)) as usize
@@ -467,8 +468,8 @@ mod tests {
             rs_time_to_bytes(1, buf.as_mut_ptr());
             assert_eq!(buf, [0, 0, 0, 0, 0, 0, 0, 1]);
 
-            // Test with 0x0102030405060708
-            rs_time_to_bytes(0x0102030405060708, buf.as_mut_ptr());
+            // Test with 0x0102_0304_0506_0708
+            rs_time_to_bytes(0x0102_0304_0506_0708, buf.as_mut_ptr());
             assert_eq!(buf, [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
 
             // Test with a realistic timestamp (e.g., 1700000000 = 2023-11-14)

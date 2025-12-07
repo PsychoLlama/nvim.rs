@@ -128,9 +128,9 @@ pub unsafe extern "C" fn rs_check_luafunc_name(str: *const c_char, paren: bool) 
     len
 }
 
-/// Variable flavour types for persistence (ShaDa) handling.
+/// Variable flavour types for persistence (`ShaDa`) handling.
 ///
-/// These match the C enum var_flavour_T in eval.h.
+/// These match the C enum `var_flavour_T` in eval.h.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VarFlavour {
@@ -152,6 +152,7 @@ pub enum VarFlavour {
 ///
 /// `varname` must be a valid null-terminated C string.
 #[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
 pub unsafe extern "C" fn rs_var_flavour(varname: *const c_char) -> VarFlavour {
     if varname.is_null() {
         return VarFlavour::Default;
@@ -241,6 +242,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::cast_sign_loss)]
     fn test_skip_luafunc_name() {
         use std::ffi::CString;
 
@@ -332,7 +334,10 @@ mod tests {
             // All uppercase -> Shada
             assert_eq!(rs_var_flavour(all_upper.as_ptr()), VarFlavour::Shada);
             assert_eq!(rs_var_flavour(single_upper.as_ptr()), VarFlavour::Shada);
-            assert_eq!(rs_var_flavour(upper_with_numbers.as_ptr()), VarFlavour::Shada);
+            assert_eq!(
+                rs_var_flavour(upper_with_numbers.as_ptr()),
+                VarFlavour::Shada
+            );
             assert_eq!(rs_var_flavour(upper_underscore.as_ptr()), VarFlavour::Shada);
 
             // Mixed case -> Session
@@ -343,7 +348,10 @@ mod tests {
             // Starts lowercase/other -> Default
             assert_eq!(rs_var_flavour(lower.as_ptr()), VarFlavour::Default);
             assert_eq!(rs_var_flavour(lower_mixed.as_ptr()), VarFlavour::Default);
-            assert_eq!(rs_var_flavour(underscore_start.as_ptr()), VarFlavour::Default);
+            assert_eq!(
+                rs_var_flavour(underscore_start.as_ptr()),
+                VarFlavour::Default
+            );
             assert_eq!(rs_var_flavour(number_start.as_ptr()), VarFlavour::Default);
             assert_eq!(rs_var_flavour(empty.as_ptr()), VarFlavour::Default);
 

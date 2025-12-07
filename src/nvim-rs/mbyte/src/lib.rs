@@ -25,7 +25,9 @@
 
 use std::ffi::{c_char, c_int, c_longlong};
 
-use nvim_utf8proc::{casefold, get_property, grapheme_break, grapheme_break_stateful, Utf8procProperty};
+use nvim_utf8proc::{
+    casefold, get_property, grapheme_break, grapheme_break_stateful, Utf8procProperty,
+};
 
 /// Maximum bytes in a UTF-8 character (standard is 4, but nvim supports up to 6).
 pub const MB_MAXBYTES: usize = 6;
@@ -1107,11 +1109,7 @@ pub unsafe extern "C" fn rs_utf_strnicmp(
 /// - s1 must be valid for reads of nn bytes
 /// - s2 must be valid for reads of nn bytes
 #[no_mangle]
-pub unsafe extern "C" fn rs_mb_strnicmp(
-    s1: *const c_char,
-    s2: *const c_char,
-    nn: usize,
-) -> c_int {
+pub unsafe extern "C" fn rs_mb_strnicmp(s1: *const c_char, s2: *const c_char, nn: usize) -> c_int {
     rs_utf_strnicmp(s1, s2, nn, nn)
 }
 
@@ -1141,11 +1139,7 @@ pub unsafe extern "C" fn rs_mb_stricmp(s1: *const c_char, s2: *const c_char) -> 
 ///
 /// - s1 and s2 must be valid null-terminated strings
 #[no_mangle]
-pub unsafe extern "C" fn rs_mb_strcmp_ic(
-    ic: bool,
-    s1: *const c_char,
-    s2: *const c_char,
-) -> c_int {
+pub unsafe extern "C" fn rs_mb_strcmp_ic(ic: bool, s1: *const c_char, s2: *const c_char) -> c_int {
     if ic {
         rs_mb_stricmp(s1, s2)
     } else {

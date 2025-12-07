@@ -12,9 +12,9 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 3.2 Complete)
+## Current Status (Phase 3.3 Complete)
 
-**133+ functions migrated across 30 Rust crates:**
+**135+ functions migrated across 30 Rust crates:**
 - nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
 - nvim-memutil, nvim-os, nvim-collections, nvim-encoding
 - nvim-utf8proc, nvim-arabic, nvim-grid, nvim-ops, nvim-register
@@ -26,7 +26,7 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - Cargo workspace at `src/nvim-rs/`
 - CMake integration via USE_RUST_* flags
 - cbindgen generates C headers from Rust
-- 269 rs_* symbols exported
+- 271 rs_* symbols exported
 
 ---
 
@@ -87,9 +87,16 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - [x] Buffer type checks: bt_prompt, bt_normal, bt_quickfix, bt_terminal, bt_nofile, bt_help
 - [x] USE_RUST_BUFFER conditional compilation
 
+**Phase 3.3: Additional Buffer Type Checks ✅**
+- [x] nvim_buf_get_terminal accessor for buf->terminal field
+- [x] bt_nofilename: checks nofile, acwrite, terminal, or prompt buffers
+- [x] bt_dontwrite: checks nowrite, nofile, terminal, or prompt buffers
+- [x] Updated cbindgen exports
+
 **Remaining candidates:**
 - window.c frame functions
 - plines.c display calculations
+- bt_nofileread (static function, lower priority)
 
 ### Phase 4: Event Loop & Async I/O
 - event/loop.c - libuv wrapper or tokio replacement
