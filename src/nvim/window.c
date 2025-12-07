@@ -96,6 +96,7 @@ extern int rs_one_window_in_tab(win_T *win, tabpage_T *tp);
 extern int rs_last_window(win_T *win);
 extern int rs_win_count(void);
 extern int rs_tabpage_index(tabpage_T *ftp);
+extern int rs_valid_tabpage_win(tabpage_T *tpc);
 #endif
 
 // Accessor functions for Rust opaque handle pattern.
@@ -4562,6 +4563,9 @@ bool valid_tabpage(tabpage_T *tpc) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 /// Returns true when `tpc` is valid and at least one window is valid.
 int valid_tabpage_win(tabpage_T *tpc)
 {
+#ifdef USE_RUST_WINDOW
+  return rs_valid_tabpage_win(tpc);
+#else
   FOR_ALL_TABS(tp) {
     if (tp == tpc) {
       FOR_ALL_WINDOWS_IN_TAB(wp, tp) {
@@ -4574,6 +4578,7 @@ int valid_tabpage_win(tabpage_T *tpc)
   }
   // shouldn't happen
   return false;
+#endif
 }
 
 /// Close tabpage `tab`, assuming it has no windows in it.
