@@ -3152,6 +3152,287 @@ pub unsafe extern "C" fn rs_utfc_ptr2len_len(p: *const c_char, size: c_int) -> c
     utfc_ptr2len_len(slice, size as usize) as c_int
 }
 
+// ============================================================================
+// utf_head_off - find offset to start of character including composing
+// ============================================================================
+
+use nvim_utf8proc::boundclass;
+
+/// Check if a UTF-8 byte is a continuation byte (10xxxxxx).
+#[inline]
+fn is_trail_byte(b: u8) -> bool {
+    (b & 0xC0) == 0x80
+}
+
+/// Decode UTF-8 sequence and return codepoint.
+/// Returns None for invalid sequences, Some(codepoint) for valid.
+fn utf_ptr2char_checked(p: &[u8], expected_len: usize) -> Option<i32> {
+    if p.len() < expected_len || expected_len == 0 {
+        return None;
+    }
+
+    let v0 = p[0] as u32;
+    if v0 < 0x80 {
+        return Some(v0 as i32);
+    }
+
+    // Check continuation bytes
+    macro_rules! check_cont {
+        ($v:expr) => {
+            if ($v & 0xC0) != 0x80 {
+                return None;
+            }
+        };
+    }
+
+    if expected_len < 2 || p.len() < 2 {
+        return None;
+    }
+    let v1 = p[1] as u32;
+    check_cont!(v1);
+
+    if expected_len == 2 {
+        return Some(((v0 << 6) + v1 - ((0xC0 << 6) + 0x80)) as i32);
+    }
+
+    if p.len() < 3 {
+        return None;
+    }
+    let v2 = p[2] as u32;
+    check_cont!(v2);
+
+    if expected_len == 3 {
+        return Some(((v0 << 12) + (v1 << 6) + v2 - ((0xE0 << 12) + (0x80 << 6) + 0x80)) as i32);
+    }
+
+    if p.len() < 4 {
+        return None;
+    }
+    let v3 = p[3] as u32;
+    check_cont!(v3);
+
+    if expected_len == 4 {
+        return Some(
+            ((v0 << 18) + (v1 << 12) + (v2 << 6) + v3
+                - ((0xF0 << 18) + (0x80 << 12) + (0x80 << 6) + 0x80)) as i32,
+        );
+    }
+
+    if p.len() < 5 {
+        return None;
+    }
+    let v4 = p[4] as u32;
+    check_cont!(v4);
+
+    if expected_len == 5 {
+        return Some(
+            ((v0 << 24) + (v1 << 18) + (v2 << 12) + (v3 << 6) + v4
+                - ((0xF8 << 24) + (0x80 << 18) + (0x80 << 12) + (0x80 << 6) + 0x80))
+                as i32,
+        );
+    }
+
+    if p.len() < 6 {
+        return None;
+    }
+    let v5 = p[5] as u32;
+    check_cont!(v5);
+
+    Some(
+        ((v0 << 30) + (v1 << 24) + (v2 << 18) + (v3 << 12) + (v4 << 6) + v5
+            - ((0x80 << 24) + (0x80 << 18) + (0x80 << 12) + (0x80 << 6) + 0x80)) as i32,
+    )
+}
+
+/// Check if boundclass bc always starts a new cluster regardless of what's before.
+/// False negatives are allowed (perf cost, not correctness).
+#[inline]
+fn always_break(bc: u8) -> bool {
+    bc == boundclass::CONTROL
+}
+
+/// Check if bc2 always starts a cluster after bc1.
+/// False negatives are allowed (perf cost, not correctness).
+#[inline]
+fn always_break_two(bc1: u8, bc2: u8) -> bool {
+    // Don't check for CONTROL for bc2 as it either has been checked by
+    // "always_break" on first iteration or when it was bc1 in the previous iteration
+    (bc1 != boundclass::PREPEND && bc2 == boundclass::OTHER)
+        || (bc1 >= boundclass::CR && bc1 <= boundclass::CONTROL)
+        || (bc2 == boundclass::EXTENDED_PICTOGRAPHIC
+            && (bc1 == boundclass::OTHER || bc1 == boundclass::EXTENDED_PICTOGRAPHIC))
+}
+
+/// Return offset from `p` to the start of a character, including composing characters.
+///
+/// `base` must be the start of the string (or a known grapheme cluster start).
+/// `p_offset` is the byte offset of the position to check within `base`.
+///
+/// If `p` points to the NUL at the end of the string, returns 0.
+/// Returns 0 when already at the first byte of a character.
+///
+/// The string must be NUL-terminated or at least cover the range [0, p_offset].
+pub fn utf_head_off(base: &[u8], p_offset: usize) -> usize {
+    if p_offset == 0 || base.is_empty() {
+        return 0;
+    }
+
+    // Clamp p_offset to valid range
+    let p_offset = p_offset.min(base.len().saturating_sub(1));
+
+    // Fast path for ASCII
+    if base[p_offset] < 0x80 {
+        return 0;
+    }
+
+    // Move start backwards to find first byte of this codepoint
+    let mut start = p_offset;
+    while start > 0 && is_trail_byte(base[start]) && (p_offset - start) < 6 {
+        start -= 1;
+    }
+
+    let last_len = UTF8LEN_TAB[base[start] as usize] as usize;
+    let cur_code = match utf_ptr2char_checked(&base[start..], last_len) {
+        Some(c) => c,
+        None => return 0, // Invalid sequence
+    };
+
+    if p_offset >= start + last_len {
+        return 0; // p is part of an illegal sequence
+    }
+
+    let safe_end = start + last_len;
+
+    // Get boundclass
+    let cur_bc = match get_property(cur_code) {
+        Some(prop) => prop.boundclass(),
+        None => return p_offset - start,
+    };
+
+    if always_break(cur_bc) || start == 0 {
+        return p_offset - start;
+    }
+
+    // Backtrack to find start of cluster
+    let mut cur_pos = start;
+    let p_start = start;
+    let mut cur_code = cur_code;
+    let mut cur_bc = cur_bc;
+
+    loop {
+        // Check for NUL before start
+        if start > 0 && base[start - 1] == 0 {
+            break;
+        }
+
+        if start == 0 {
+            break;
+        }
+
+        start -= 1;
+
+        // Stop on ASCII
+        if base[start] < 0x80 {
+            break;
+        }
+
+        // Find start of previous character
+        while start > 0 && is_trail_byte(base[start]) && (cur_pos - start) < 6 {
+            start -= 1;
+        }
+
+        let prev_len = UTF8LEN_TAB[base[start] as usize] as usize;
+        let prev_code = match utf_ptr2char_checked(&base[start..], prev_len) {
+            Some(c) => c,
+            None => {
+                start = cur_pos;
+                break;
+            }
+        };
+
+        if prev_len < (cur_pos - start) {
+            start = cur_pos;
+            break;
+        }
+
+        let prev_bc = match get_property(prev_code) {
+            Some(prop) => prop.boundclass(),
+            None => {
+                start = cur_pos;
+                break;
+            }
+        };
+
+        if always_break_two(prev_bc, cur_bc) && !nvim_arabic::arabic_combine(prev_code, cur_code) {
+            start = cur_pos;
+            break;
+        } else if start == 0 {
+            break;
+        }
+
+        cur_pos = start;
+        cur_bc = prev_bc;
+        cur_code = prev_code;
+    }
+
+    // Hot path: we are already on the first codepoint of a sequence
+    if start == p_start && last_len > p_offset - start {
+        return p_offset - start;
+    }
+
+    // Forward scan to find actual cluster boundary
+    let mut q = start;
+    while q < p_offset {
+        let remaining = safe_end.saturating_sub(q);
+        if remaining == 0 || q >= base.len() {
+            break;
+        }
+        let len = utfc_ptr2len_len(&base[q..], remaining);
+        if len == 0 {
+            break;
+        }
+
+        if q + len > p_offset {
+            return p_offset - q;
+        }
+
+        q += len;
+    }
+
+    0
+}
+
+/// C-compatible wrapper for `utf_head_off`.
+///
+/// # Safety
+/// - `base` and `p` must be valid pointers within the same allocated memory region
+/// - Memory from `base` to at least `p + MB_MAXBYTES` must be accessible
+#[no_mangle]
+pub unsafe extern "C" fn rs_utf_head_off(base: *const c_char, p: *const c_char) -> c_int {
+    if base.is_null() || p.is_null() || p < base {
+        return 0;
+    }
+
+    // Calculate offset
+    let p_offset = (p as usize) - (base as usize);
+
+    // The algorithm needs to:
+    // 1. Back up from p to find the start of the current codepoint (at most 6 bytes)
+    // 2. Back up further to find cluster start (potentially many characters)
+    // 3. Forward scan from cluster start back to p
+    //
+    // For the forward scan, we only scan up to safe_end = start + last_len,
+    // where start is the position of the codepoint containing p, and last_len
+    // is its byte length. So we never scan past p + MB_MAXBYTES from the original position.
+    //
+    // We need at least p_offset + MB_MAXBYTES bytes of valid memory.
+    // Use p_offset + 8 to be safe (max 6 bytes for a character + 2 for safety).
+    let len = p_offset + 8;
+
+    let slice = std::slice::from_raw_parts(base as *const u8, len);
+    utf_head_off(slice, p_offset) as c_int
+}
+
 #[cfg(test)]
 mod utfc_tests {
     use super::*;
@@ -3171,6 +3452,42 @@ mod utfc_tests {
 
     // Note: Tests involving actual composing characters would require
     // utf8proc to be linked, which happens in integration tests.
+}
+
+#[cfg(test)]
+mod head_off_tests {
+    use super::*;
+
+    #[test]
+    fn test_head_off_ascii() {
+        // ASCII: always at start
+        let s = b"hello\0";
+        assert_eq!(utf_head_off(s, 0), 0);
+        assert_eq!(utf_head_off(s, 1), 0);
+        assert_eq!(utf_head_off(s, 4), 0);
+    }
+
+    #[test]
+    fn test_head_off_multibyte() {
+        // 2-byte UTF-8: é is 0xC3 0xA9
+        let s = b"\xc3\xa9x\0"; // "éx\0"
+        assert_eq!(utf_head_off(s, 0), 0); // At first byte of é
+        assert_eq!(utf_head_off(s, 1), 1); // At second byte of é -> offset 1 to first
+        assert_eq!(utf_head_off(s, 2), 0); // At 'x' - ASCII
+
+        // 3-byte UTF-8: 中 is 0xE4 0xB8 0xAD
+        let s = b"\xe4\xb8\xadx\0"; // "中x\0"
+        assert_eq!(utf_head_off(s, 0), 0); // At first byte
+        assert_eq!(utf_head_off(s, 1), 1); // At second byte
+        assert_eq!(utf_head_off(s, 2), 2); // At third byte
+        assert_eq!(utf_head_off(s, 3), 0); // At 'x'
+    }
+
+    #[test]
+    fn test_head_off_empty() {
+        assert_eq!(utf_head_off(b"", 0), 0);
+        assert_eq!(utf_head_off(b"\0", 0), 0);
+    }
 }
 
 // Note: Tests for UTF-8 multibyte cell widths are complex because

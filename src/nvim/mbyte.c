@@ -123,6 +123,7 @@ extern bool rs_utf_composinglike(const char *p1, const char *p2, GraphemeState *
 extern bool rs_utf_iscomposing(int c1, int c2, GraphemeState *state);
 extern int rs_utfc_ptr2len(const char *p);
 extern int rs_utfc_ptr2len_len(const char *p, int size);
+extern int rs_utf_head_off(const char *base, const char *p);
 
 // Rust struct for codepoint boundary offsets
 typedef struct {
@@ -1935,6 +1936,9 @@ static bool always_break_two(int bc1, int bc2)
 /// Returns 0 when already at the first byte of a character.
 int utf_head_off(const char *base_in, const char *p_in)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_head_off(base_in, p_in);
+#else
   if ((uint8_t)(*p_in) < 0x80) {              // be quick for ASCII
     return 0;
   }
@@ -2017,6 +2021,7 @@ int utf_head_off(const char *base_in, const char *p_in)
   }
 
   return 0;
+#endif
 }
 
 /// Assumes caller already handles ascii. see `utfc_next`
