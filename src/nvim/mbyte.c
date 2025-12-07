@@ -110,6 +110,7 @@ extern size_t rs_mb_string2cells(const char *str);
 extern size_t rs_mb_string2cells_len(const char *str, size_t size);
 extern void rs_remove_bom(char *s);
 extern int rs_utf_class_tab(int c, const uint64_t *chartab);
+extern int rs_mb_get_class_tab(const char *p, const uint64_t *chartab);
 
 // Rust struct for codepoint boundary offsets
 typedef struct {
@@ -467,6 +468,9 @@ int mb_get_class(const char *p)
 int mb_get_class_tab(const char *p, const uint64_t *const chartab)
   FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_MBYTE
+  return rs_mb_get_class_tab(p, chartab);
+#else
   if (MB_BYTE2LEN((uint8_t)p[0]) == 1) {
     if (p[0] == NUL || ascii_iswhite(p[0])) {
       return 0;
@@ -477,6 +481,7 @@ int mb_get_class_tab(const char *p, const uint64_t *const chartab)
     return 1;
   }
   return utf_class_tab(utf_ptr2char(p), chartab);
+#endif
 }
 
 static bool prop_is_emojilike(const utf8proc_property_t *prop)

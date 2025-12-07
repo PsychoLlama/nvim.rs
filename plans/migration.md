@@ -534,9 +534,18 @@ This layer has well-defined interfaces and minimal coupling to editor internals.
 - **Phase 2.75**: Arena memory alignment (memutil):
   - `arena_align_offset` - Align offset to arena alignment boundary (8 bytes on 64-bit)
   - Used by arena allocator in memory.c
+- **Phase 2.76**: Character class functions (charset/mbyte):
+  - `vim_iswordc_tab` - Check if character is a word character using buffer chartab
+  - `utf_class_tab` - Get Unicode character class (blank, punct, word, emoji, CJK, etc.)
+  - Static UTF_CLASS_TABLE with 73 Unicode range entries for character classification
+  - Uses utf8proc properties for emoji detection (boundclass)
+- **Phase 2.77**: Multi-byte character class (mbyte):
+  - `mb_get_class_tab` - Get character class from UTF-8 string pointer
+  - Combines UTF8LEN_TAB lookup, ascii_iswhite check, chartab lookup, and utf_class_tab
+  - Used for word motion commands (w, b, e, etc.) to determine word boundaries
 - **Remaining infrastructure needed** for further progress:
   1. **Complex struct FFI** - For win_T*, buf_T* parameters
-- Total: 27 crates, 101 functions swapped to Rust
+- Total: 27 crates, 104 functions swapped to Rust
 
 - [ ] `src/nvim/os/fileio.c` → `nvim-rs/os/fileio`
   - File read/write with proper error handling

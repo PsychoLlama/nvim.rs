@@ -1631,6 +1631,77 @@ pub unsafe extern "C" fn rs_utf_class_tab(c: c_int, chartab: *const u64) -> c_in
     utf_class_tab_impl(c, chartab_arr)
 }
 
+/// Check if a character is ASCII whitespace (space or tab).
+#[inline]
+fn ascii_iswhite(c: u8) -> bool {
+    c == b' ' || c == b'\t'
+}
+
+/// Get the character class from a UTF-8 string pointer.
+///
+/// This is the Rust equivalent of `mb_get_class_tab` from mbyte.c.
+///
+/// Returns:
+/// - 0 = blank (whitespace or NUL)
+/// - 1 = punctuation
+/// - 2 = word character
+/// - >2 = other word characters (CJK, emoji, etc.)
+#[inline]
+pub fn mb_get_class_tab_impl(p: &[u8], chartab: &[u64; 4]) -> i32 {
+    // Check if this is a single-byte (ASCII) character
+    if UTF8LEN_TAB[p[0] as usize] == 1 {
+        // Check for blank (NUL or whitespace)
+        if p[0] == 0 || ascii_iswhite(p[0]) {
+            return 0;
+        }
+        // Check chartab for word character
+        if get_chartab_tab(chartab, p[0]) {
+            return 2;
+        }
+        // Otherwise punctuation
+        return 1;
+    }
+    // Multi-byte character - decode and get class
+    let c = utf_ptr2char(p);
+    utf_class_tab_impl(c, chartab)
+}
+
+/// FFI wrapper for `mb_get_class_tab_impl`.
+///
+/// Get the character class from a UTF-8 string pointer.
+///
+/// # Safety
+///
+/// - `p` must be a valid pointer to a NUL-terminated or sufficiently long UTF-8 string
+/// - `chartab` must be a valid pointer to a `[u64; 4]` array
+#[no_mangle]
+pub unsafe extern "C" fn rs_mb_get_class_tab(p: *const c_char, chartab: *const u64) -> c_int {
+    if p.is_null() || chartab.is_null() {
+        return 0;
+    }
+
+    let first_byte = *(p as *const u8);
+    let chartab_arr: &[u64; 4] = &*(chartab as *const [u64; 4]);
+
+    // Check if this is a single-byte (ASCII) character
+    if UTF8LEN_TAB[first_byte as usize] == 1 {
+        // Check for blank (NUL or whitespace)
+        if first_byte == 0 || ascii_iswhite(first_byte) {
+            return 0;
+        }
+        // Check chartab for word character
+        if get_chartab_tab(chartab_arr, first_byte) {
+            return 2;
+        }
+        // Otherwise punctuation
+        return 1;
+    }
+
+    // Multi-byte character - decode and get class using the FFI wrapper
+    let c = rs_utf_ptr2char(p);
+    utf_class_tab_impl(c, chartab_arr)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
