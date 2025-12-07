@@ -107,6 +107,12 @@ extern "C" {
 
     /// Get the `tp_firstwin` field from a tabpage.
     fn nvim_tabpage_get_firstwin(tp: TabpageHandle) -> WinHandle;
+
+    /// Get the `tp_next` field from a tabpage.
+    fn nvim_tabpage_get_next(tp: TabpageHandle) -> TabpageHandle;
+
+    /// Get the first tabpage (`first_tabpage` global).
+    fn nvim_get_first_tabpage() -> TabpageHandle;
 }
 
 /// Check if a window is locked (`w_locked` field).
@@ -251,6 +257,35 @@ fn one_window_impl() -> bool {
 #[no_mangle]
 pub extern "C" fn rs_one_window() -> c_int {
     c_int::from(one_window_impl())
+}
+
+/// Check if "win" is a pointer to an existing window in any tabpage.
+///
+/// This is the Rust equivalent of `win_valid_any_tab()` in window.c.
+#[inline]
+fn win_valid_any_tab_impl(win: WinHandle) -> bool {
+    if win.is_null() {
+        return false;
+    }
+
+    // Iterate over all tabpages using FOR_ALL_TABS pattern
+    // SAFETY: nvim_get_first_tabpage and nvim_tabpage_get_next are safe accessors
+    let mut tp = unsafe { nvim_get_first_tabpage() };
+    while !tp.is_null() {
+        if tabpage_win_valid_impl(tp, win) {
+            return true;
+        }
+        tp = unsafe { nvim_tabpage_get_next(tp) };
+    }
+    false
+}
+
+/// FFI wrapper for `win_valid_any_tab`.
+///
+/// Returns non-zero if the window is valid in any tabpage.
+#[no_mangle]
+pub extern "C" fn rs_win_valid_any_tab(win: WinHandle) -> c_int {
+    c_int::from(win_valid_any_tab_impl(win))
 }
 
 #[cfg(test)]

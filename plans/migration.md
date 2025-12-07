@@ -13,7 +13,7 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 3.17 Complete)
+## Current Status (Phase 3.18 Complete)
 
 **160+ functions migrated across 32 Rust crates:**
 
@@ -246,6 +246,14 @@ Remaining FUNC_ATTR_PURE/FUNC_ATTR_CONST functions require infrastructure not ye
 - [x] rs_one_window(): check if only one window exists
 - [x] win_valid() and tabpage_win_valid() wired to Rust implementations
 
+**Phase 3.18: Tabpage iteration and cross-tab window validation ✅**
+
+- [x] nvim_get_first_tabpage(): get first_tabpage global
+- [x] nvim_tabpage_get_next(): get tp_next field from tabpage
+- [x] rs_win_valid_any_tab(): check if window exists in any tabpage
+- [x] win_valid_any_tab() wired to Rust implementation
+- [x] FOR_ALL_TABS iteration pattern now available in Rust
+
 **Phase 3 Simple Function Migration: Substantially Complete**
 Most simple pure functions (FUNC_ATTR_PURE, FUNC_ATTR_CONST) have been migrated.
 Remaining blockers for further simple function migration:
@@ -256,15 +264,14 @@ Remaining blockers for further simple function migration:
   Further progress requires Phase 4+ infrastructure.
 
 **Phase 3.5: Window/frame function exploration (partially unblocked)**
-Window validation now works. Remaining items:
+Window validation now works. Tabpage iteration now works. Remaining items:
 
-- Global state access for `first_tabpage`, `aucmd_win` (add more accessors as needed)
-- Iteration macros: `FOR_ALL_FRAMES`, `FOR_ALL_TAB_WINDOWS` (need FOR_ALL_TABS support)
+- Global state access for `aucmd_win` (add more accessors as needed)
+- Iteration macros: `FOR_ALL_FRAMES`, `FOR_ALL_TAB_WINDOWS`
 - FrameHandle opaque type (for frame tree traversal)
 
 **Remaining targets:**
 
-- `win_valid_any_tab` - needs FOR_ALL_TABS iteration
 - `frame_fixed_height`, `frame_fixed_width` - need FrameHandle + recursive iteration
 - `frame_has_win` - needs FrameHandle + linked list traversal
 - plines.c display calculations - need window/buffer accessors with options

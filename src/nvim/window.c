@@ -89,6 +89,7 @@ extern int rs_win_locked(win_T *wp);
 extern int rs_win_valid(win_T *win);
 extern int rs_tabpage_win_valid(tabpage_T *tp, win_T *win);
 extern int rs_one_window(void);
+extern int rs_win_valid_any_tab(win_T *win);
 #endif
 
 // Accessor functions for Rust opaque handle pattern.
@@ -155,6 +156,18 @@ tabpage_T *nvim_get_curtab(void)
 win_T *nvim_tabpage_get_firstwin(tabpage_T *tp)
 {
   return tp->tp_firstwin;
+}
+
+/// Get the tp_next field from a tabpage (accessor for Rust).
+tabpage_T *nvim_tabpage_get_next(tabpage_T *tp)
+{
+  return tp->tp_next;
+}
+
+/// Get the first tabpage (accessor for Rust).
+tabpage_T *nvim_get_first_tabpage(void)
+{
+  return first_tabpage;
 }
 
 #define NOWIN           ((win_T *)-1)   // non-existing window
@@ -1795,6 +1808,9 @@ win_T *win_find_by_handle(handle_T handle)
 /// @param  win  window to check
 bool win_valid_any_tab(win_T *win) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_WINDOW
+  return rs_win_valid_any_tab(win) != 0;
+#else
   if (win == NULL) {
     return false;
   }
@@ -1805,6 +1821,7 @@ bool win_valid_any_tab(win_T *win) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
     }
   }
   return false;
+#endif
 }
 
 // Return the number of windows.
