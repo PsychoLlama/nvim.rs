@@ -9,7 +9,7 @@
 
 use std::ffi::c_int;
 
-/// Opaque handle to a Neovim window (win_T*).
+/// Opaque handle to a Neovim window (`win_T*`).
 ///
 /// This is an opaque pointer type - Rust code should not attempt to
 /// dereference or inspect the contents. All field access is done
@@ -30,12 +30,14 @@ impl WinHandle {
 
     /// Get the raw pointer.
     #[inline]
+    #[must_use]
     pub const fn as_ptr(self) -> *mut std::ffi::c_void {
         self.0
     }
 
     /// Check if the handle is null.
     #[inline]
+    #[must_use]
     pub const fn is_null(self) -> bool {
         self.0.is_null()
     }
@@ -44,11 +46,11 @@ impl WinHandle {
 // C accessor functions for window fields.
 // These are defined in window.c and provide safe access to win_T fields.
 extern "C" {
-    /// Get the w_locked field from a window.
+    /// Get the `w_locked` field from a window.
     fn nvim_win_get_locked(win: WinHandle) -> c_int;
 }
 
-/// Check if a window is locked (w_locked field).
+/// Check if a window is locked (`w_locked` field).
 ///
 /// A locked window cannot be closed by autocommands.
 #[inline]
@@ -61,7 +63,7 @@ fn win_locked_impl(wp: WinHandle) -> bool {
     unsafe { nvim_win_get_locked(wp) != 0 }
 }
 
-/// FFI wrapper for win_locked.
+/// FFI wrapper for `win_locked`.
 ///
 /// Returns non-zero if the window is locked.
 #[no_mangle]

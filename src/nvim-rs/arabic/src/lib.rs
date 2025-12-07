@@ -51,6 +51,7 @@ fn arabic_maycombine(two: c_int) -> bool {
 /// # Safety
 /// This function reads global option variables through `arabic_maycombine`.
 #[inline]
+#[must_use]
 pub fn arabic_combine(one: c_int, two: c_int) -> bool {
     if one == A_LAM {
         return arabic_maycombine(two);

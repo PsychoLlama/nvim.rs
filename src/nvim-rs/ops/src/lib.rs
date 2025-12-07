@@ -184,6 +184,7 @@ pub extern "C" fn rs_get_op_type(char1: c_int, char2: c_int) -> c_int {
 }
 
 #[cfg(test)]
+#[allow(clippy::cast_lossless)]
 mod tests {
     use super::*;
 
