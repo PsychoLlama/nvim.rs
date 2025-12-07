@@ -12,9 +12,9 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 3.7 Complete)
+## Current Status (Phase 3.8 Complete)
 
-**136+ functions migrated across 30 Rust crates:**
+**137+ functions migrated across 30 Rust crates:**
 - nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
 - nvim-memutil, nvim-os, nvim-collections, nvim-encoding
 - nvim-utf8proc, nvim-arabic, nvim-grid, nvim-ops, nvim-register
@@ -26,7 +26,7 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - Cargo workspace at `src/nvim-rs/`
 - CMake integration via USE_RUST_* flags
 - cbindgen generates C headers from Rust
-- 274 rs_* symbols exported
+- 275 rs_* symbols exported
 
 ---
 
@@ -104,6 +104,12 @@ Most simple pure functions (`FUNC_ATTR_PURE`, `FUNC_ATTR_CONST`) are now migrate
 **Phase 3.7: Additional buffer type checks ✅**
 - [x] bt_nofileread: checks nofile, quickfix, terminal, or prompt buffers
 - [x] rs_bt_nofileread() Rust implementation using existing accessors
+
+**Phase 3.8: File format accessor ✅**
+- [x] nvim_buf_get_fileformat accessor for b_p_ff[0] field
+- [x] nvim_buf_get_bin accessor for b_p_bin field
+- [x] rs_get_fileformat() Rust implementation
+- [x] EOL_UNIX, EOL_DOS, EOL_MAC constants in buffer crate
 
 **Phase 3.5: Window/frame function exploration (blocked)**
 Window and frame functions require infrastructure not yet in place:

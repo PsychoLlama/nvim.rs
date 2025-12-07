@@ -58,6 +58,12 @@ extern "C" {
 
     /// Check if buffer has a terminal attached (`buf->terminal != NULL`).
     fn nvim_buf_get_terminal(buf: BufHandle) -> c_int;
+
+    /// Get the first character of the `b_p_ff` (fileformat option) field.
+    fn nvim_buf_get_fileformat(buf: BufHandle) -> c_char;
+
+    /// Get the `b_p_bin` (binary mode) field from a buffer.
+    fn nvim_buf_get_bin(buf: BufHandle) -> c_int;
 }
 
 /// Check if buffer is a prompt buffer ('buftype' starts with 'p').
@@ -242,6 +248,43 @@ pub extern "C" fn rs_bt_nofileread(buf: BufHandle) -> c_int {
     c_int::from(bt_nofileread_impl(buf))
 }
 
+/// End-of-line type constants (matching C defines in `option_vars.h`).
+pub const EOL_UNIX: c_int = 0; // NL
+pub const EOL_DOS: c_int = 1; // CR NL
+pub const EOL_MAC: c_int = 2; // CR
+
+/// Get the current end-of-line type for a buffer.
+///
+/// Returns `EOL_DOS`, `EOL_UNIX`, or `EOL_MAC` based on the buffer's
+/// 'fileformat' and 'binary' options.
+#[inline]
+fn get_fileformat_impl(buf: BufHandle) -> c_int {
+    if buf.is_null() {
+        return EOL_UNIX;
+    }
+    // SAFETY: We check for null above.
+    unsafe {
+        // If binary mode or first char is 'u' (unix), return EOL_UNIX
+        #[allow(clippy::cast_sign_loss)]
+        let ff = nvim_buf_get_fileformat(buf) as u8;
+        if nvim_buf_get_bin(buf) != 0 || ff == b'u' {
+            return EOL_UNIX;
+        }
+        // If first char is 'm' (mac), return EOL_MAC
+        if ff == b'm' {
+            return EOL_MAC;
+        }
+        // Otherwise (dos), return EOL_DOS
+        EOL_DOS
+    }
+}
+
+/// FFI wrapper for `get_fileformat`.
+#[no_mangle]
+pub extern "C" fn rs_get_fileformat(buf: BufHandle) -> c_int {
+    get_fileformat_impl(buf)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -259,6 +302,8 @@ mod tests {
         assert!(!bt_nofilename_impl(handle));
         assert!(!bt_dontwrite_impl(handle));
         assert!(!bt_nofileread_impl(handle));
+        // Null buffer defaults to EOL_UNIX
+        assert_eq!(get_fileformat_impl(handle), EOL_UNIX);
     }
 
     #[test]

@@ -124,6 +124,10 @@ extern int rs_is_tty_option(const char *name);
 extern const char *rs_skip_to_option_part(const char *p);
 #endif
 
+#ifdef USE_RUST_BUFFER
+extern int rs_get_fileformat(buf_T *buf);
+#endif
+
 static const char e_unknown_option[]
   = N_("E518: Unknown option");
 static const char e_not_allowed_in_modeline[]
@@ -6182,6 +6186,9 @@ char *get_showbreak_value(win_T *const win)
 int get_fileformat(const buf_T *buf)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_BUFFER
+  return rs_get_fileformat((buf_T *)buf);
+#else
   int c = (unsigned char)(*buf->b_p_ff);
 
   if (buf->b_p_bin || c == 'u') {
@@ -6191,6 +6198,7 @@ int get_fileformat(const buf_T *buf)
     return EOL_MAC;
   }
   return EOL_DOS;
+#endif
 }
 
 /// Like get_fileformat(), but override 'fileformat' with "p" for "++opt=val"

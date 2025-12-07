@@ -159,6 +159,18 @@ int nvim_buf_get_terminal(buf_T *buf)
   return buf->terminal != NULL;
 }
 
+/// Get the first character of the b_p_ff (fileformat option) field.
+char nvim_buf_get_fileformat(buf_T *buf)
+{
+  return buf->b_p_ff[0];
+}
+
+/// Get the b_p_bin (binary mode) field from a buffer.
+int nvim_buf_get_bin(buf_T *buf)
+{
+  return buf->b_p_bin;
+}
+
 static const char e_attempt_to_delete_buffer_that_is_in_use_str[]
   = N_("E937: Attempt to delete a buffer that is in use: %s");
 
