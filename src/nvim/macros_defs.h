@@ -182,4 +182,9 @@ extern int rs_ascii_tolower(int c);
 # define PRAGMA_DIAG_POP
 #endif
 
-#define EMPTY_POS(a) ((a).lnum == 0 && (a).col == 0 && (a).coladd == 0)
+#ifdef USE_RUST_MARK
+extern int rs_empty_pos(pos_T a);
+# define EMPTY_POS(a) (rs_empty_pos(a) != 0)
+#else
+# define EMPTY_POS(a) ((a).lnum == 0 && (a).col == 0 && (a).coladd == 0)
+#endif

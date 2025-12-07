@@ -106,6 +106,27 @@ pub extern "C" fn rs_schar_from_char(c: c_int) -> ScharT {
     schar_from_char_impl(c)
 }
 
+/// Pack RGB values into a single 24-bit integer.
+///
+/// The format is 0x00RRGGBB:
+/// - Red in bits 16-23
+/// - Green in bits 8-15
+/// - Blue in bits 0-7
+///
+/// # Arguments
+/// * `r` - Red component (0-255)
+/// * `g` - Green component (0-255)
+/// * `b` - Blue component (0-255)
+///
+/// # Returns
+/// Packed RGB value as a 32-bit integer
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
+pub extern "C" fn rs_rgb(r: c_int, g: c_int, b: c_int) -> c_int {
+    // Original C: (((r) << 16) | ((g) << 8) | (b))
+    ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -305,5 +326,47 @@ mod tests {
             let sc = schar_from_char_impl(c);
             assert_eq!(schar_get_ascii_impl(sc), c as i8);
         }
+    }
+
+    #[test]
+    fn test_rgb_basic() {
+        // Test basic RGB packing: 0x00RRGGBB format
+        assert_eq!(rs_rgb(0, 0, 0), 0x00_00_00); // Black
+        assert_eq!(rs_rgb(255, 255, 255), 0xFF_FF_FF); // White
+        assert_eq!(rs_rgb(255, 0, 0), 0xFF_00_00); // Red
+        assert_eq!(rs_rgb(0, 255, 0), 0x00_FF_00); // Green
+        assert_eq!(rs_rgb(0, 0, 255), 0x00_00_FF); // Blue
+    }
+
+    #[test]
+    fn test_rgb_components() {
+        // Test that components are placed in correct positions
+        // Red in bits 16-23
+        assert_eq!(rs_rgb(0x12, 0, 0), 0x12_00_00);
+        // Green in bits 8-15
+        assert_eq!(rs_rgb(0, 0x34, 0), 0x00_34_00);
+        // Blue in bits 0-7
+        assert_eq!(rs_rgb(0, 0, 0x56), 0x00_00_56);
+        // All components combined
+        assert_eq!(rs_rgb(0x12, 0x34, 0x56), 0x12_34_56);
+    }
+
+    #[test]
+    fn test_rgb_masking() {
+        // Test that only the lower 8 bits of each component are used
+        // Values >= 256 should have upper bits masked off
+        assert_eq!(rs_rgb(0x1FF, 0, 0), 0xFF_00_00); // 0x1FF & 0xFF = 0xFF
+        assert_eq!(rs_rgb(0, 0x1FF, 0), 0x00_FF_00);
+        assert_eq!(rs_rgb(0, 0, 0x1FF), 0x00_00_FF);
+        assert_eq!(rs_rgb(0x100, 0x100, 0x100), 0x00_00_00); // 0x100 & 0xFF = 0
+    }
+
+    #[test]
+    fn test_rgb_negative() {
+        // Test with negative values (shouldn't happen normally, but test the masking)
+        // -1 as signed int has all bits set, & 0xFF = 0xFF
+        assert_eq!(rs_rgb(-1, 0, 0), 0xFF_00_00);
+        assert_eq!(rs_rgb(0, -1, 0), 0x00_FF_00);
+        assert_eq!(rs_rgb(0, 0, -1), 0x00_00_FF);
     }
 }

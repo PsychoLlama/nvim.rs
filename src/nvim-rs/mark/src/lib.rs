@@ -103,6 +103,14 @@ pub extern "C" fn rs_ltoreq(a: PosT, b: PosT) -> c_int {
     c_int::from(rs_lt(a, b) != 0 || rs_equalpos(a, b) != 0)
 }
 
+/// Return true if position is empty (all fields are 0).
+///
+/// Matches the C macro: `EMPTY_POS(a) ((a).lnum == 0 && (a).col == 0 && (a).coladd == 0)`
+#[no_mangle]
+pub extern "C" fn rs_empty_pos(a: PosT) -> c_int {
+    c_int::from(a.lnum == 0 && a.col == 0 && a.coladd == 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -256,5 +264,45 @@ mod tests {
         // Greater than
         assert_eq!(rs_ltoreq(pos3, pos1), 0);
         assert_eq!(rs_ltoreq(pos4, pos1), 0);
+    }
+
+    #[test]
+    fn test_empty_pos() {
+        // Empty position (all zeros)
+        let empty = PosT {
+            lnum: 0,
+            col: 0,
+            coladd: 0,
+        };
+        assert_ne!(rs_empty_pos(empty), 0);
+
+        // Non-empty positions (at least one field non-zero)
+        let non_empty1 = PosT {
+            lnum: 1,
+            col: 0,
+            coladd: 0,
+        };
+        assert_eq!(rs_empty_pos(non_empty1), 0);
+
+        let non_empty2 = PosT {
+            lnum: 0,
+            col: 1,
+            coladd: 0,
+        };
+        assert_eq!(rs_empty_pos(non_empty2), 0);
+
+        let non_empty3 = PosT {
+            lnum: 0,
+            col: 0,
+            coladd: 1,
+        };
+        assert_eq!(rs_empty_pos(non_empty3), 0);
+
+        let non_empty4 = PosT {
+            lnum: 1,
+            col: 5,
+            coladd: 2,
+        };
+        assert_eq!(rs_empty_pos(non_empty4), 0);
     }
 }

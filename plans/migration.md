@@ -12,7 +12,7 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 3.15 Complete)
+## Current Status (Phase 3.16 Complete)
 
 **160+ functions migrated across 32 Rust crates:**
 - nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
@@ -26,7 +26,7 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - Cargo workspace at `src/nvim-rs/`
 - CMake integration via USE_RUST_* flags
 - cbindgen generates C headers from Rust
-- 308 rs_* symbols exported
+- 310 rs_* symbols exported
 
 ---
 
@@ -170,6 +170,11 @@ Remaining FUNC_ATTR_PURE/FUNC_ATTR_CONST functions require infrastructure not ye
 - [x] rs_meta(): set meta bit (bit 7)
 - [x] rs_ctrl_chr(): convert to control character equivalent
 - [x] USE_RUST_ASCII conditional compilation in ascii_defs.h
+
+**Phase 3.16: Position and RGB utilities ✅**
+- [x] rs_empty_pos(): check if position is empty (all fields are 0)
+- [x] rs_rgb(): pack RGB values into 24-bit integer (available but not wired to C macro due to static initializer use)
+- [x] USE_RUST_MARK conditional compilation in macros_defs.h
 
 **Phase 3.5: Window/frame function exploration (blocked)**
 Window and frame functions require infrastructure not yet in place:
