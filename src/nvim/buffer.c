@@ -130,6 +130,7 @@ extern int rs_bt_help(buf_T *buf);
 extern int rs_bt_nofilename(buf_T *buf);
 extern int rs_bt_dontwrite(buf_T *buf);
 extern int rs_bt_nofileread(buf_T *buf);
+extern int rs_buf_valid(buf_T *buf);
 #endif
 
 // Accessor functions for Rust opaque handle pattern.
@@ -169,6 +170,18 @@ char nvim_buf_get_fileformat(buf_T *buf)
 int nvim_buf_get_bin(buf_T *buf)
 {
   return buf->b_p_bin;
+}
+
+/// Get the last buffer in the buffer list (lastbuf global).
+buf_T *nvim_get_lastbuf(void)
+{
+  return lastbuf;
+}
+
+/// Get the b_prev field from a buffer.
+buf_T *nvim_buf_get_prev(buf_T *buf)
+{
+  return buf->b_prev;
 }
 
 static const char e_attempt_to_delete_buffer_that_is_in_use_str[]
@@ -510,6 +523,9 @@ bool bufref_valid(bufref_T *bufref)
 bool buf_valid(buf_T *buf)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_BUFFER
+  return rs_buf_valid(buf) != 0;
+#else
   if (buf == NULL) {
     return false;
   }
@@ -521,6 +537,7 @@ bool buf_valid(buf_T *buf)
     }
   }
   return false;
+#endif
 }
 
 /// Return true when buffer "buf" can be unloaded.

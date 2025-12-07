@@ -64,6 +64,42 @@ extern "C" {
 
     /// Get the `b_p_bin` (binary mode) field from a buffer.
     fn nvim_buf_get_bin(buf: BufHandle) -> c_int;
+
+    /// Get the last buffer in the buffer list (`lastbuf` global).
+    fn nvim_get_lastbuf() -> BufHandle;
+
+    /// Get the `b_prev` field from a buffer.
+    fn nvim_buf_get_prev(buf: BufHandle) -> BufHandle;
+}
+
+/// Check if "buf" is a pointer to an existing buffer.
+///
+/// This is the Rust equivalent of `buf_valid()` in buffer.c.
+/// Iterates backwards through the buffer list (lastbuf -> b_prev).
+#[inline]
+fn buf_valid_impl(buf: BufHandle) -> bool {
+    if buf.is_null() {
+        return false;
+    }
+
+    // Iterate backwards through the buffer list
+    // SAFETY: nvim_get_lastbuf and nvim_buf_get_prev are safe accessors
+    let mut bp = unsafe { nvim_get_lastbuf() };
+    while !bp.is_null() {
+        if bp == buf {
+            return true;
+        }
+        bp = unsafe { nvim_buf_get_prev(bp) };
+    }
+    false
+}
+
+/// FFI wrapper for `buf_valid`.
+///
+/// Returns non-zero if the buffer is valid.
+#[no_mangle]
+pub extern "C" fn rs_buf_valid(buf: BufHandle) -> c_int {
+    c_int::from(buf_valid_impl(buf))
 }
 
 /// Check if buffer is a prompt buffer ('buftype' starts with 'p').
@@ -293,6 +329,7 @@ mod tests {
     fn test_buf_handle_null() {
         let handle = unsafe { BufHandle::from_ptr(std::ptr::null_mut()) };
         assert!(handle.is_null());
+        assert!(!buf_valid_impl(handle));
         assert!(!bt_prompt_impl(handle));
         assert!(!bt_normal_impl(handle));
         assert!(!bt_quickfix_impl(handle));
