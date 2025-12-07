@@ -56,6 +56,7 @@ extern const char *rs_path_tail(const char *fname);
 extern int rs_path_has_drive_letter(const char *p, size_t path_len);
 extern int rs_path_with_url(const char *fname);
 extern int rs_vim_isAbsName(const char *name);
+extern int rs_after_pathsep(const char *b, const char *p);
 #endif
 
 #include "path.c.generated.h"
@@ -1985,8 +1986,12 @@ void path_fix_case(char *name)
 int after_pathsep(const char *b, const char *p)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_PATH
+  return rs_after_pathsep(b, p);
+#else
   return p > b && vim_ispathsep(p[-1])
          && utf_head_off(b, p - 1) == 0;
+#endif
 }
 
 /// Return true if file names "f1" and "f2" are in the same directory.

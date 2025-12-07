@@ -6,6 +6,7 @@
 //! - `vim_ispathsep` - Check if a character is a path separator
 //! - `path_tail` - Get the filename component of a path
 //! - `path_head_length` - Get the length of the path head
+//! - `after_pathsep` - Check if position is just after a path separator
 
 #![allow(unsafe_code)]
 #![allow(clippy::missing_const_for_fn)]
@@ -15,6 +16,35 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
 use std::ffi::{c_char, c_int};
+
+use nvim_mbyte::utf_head_off;
+
+// ============================================================================
+// Internal helpers
+// ============================================================================
+
+/// Check if a byte is a path separator (internal use).
+#[inline]
+fn is_pathsep(c: u8) -> bool {
+    #[cfg(unix)]
+    {
+        c == b'/'
+    }
+
+    #[cfg(windows)]
+    {
+        c == b':' || c == b'/' || c == b'\\'
+    }
+
+    #[cfg(not(any(unix, windows)))]
+    {
+        c == b'/'
+    }
+}
+
+// ============================================================================
+// FFI exports
+// ============================================================================
 
 /// Check if a character is a path separator.
 ///
@@ -635,5 +665,109 @@ mod tests {
 
             assert_eq!(unsafe { rs_vim_isAbsName(std::ptr::null()) }, 0);
         }
+    }
+}
+
+// ============================================================================
+// after_pathsep - Check if position is just after a path separator
+// ============================================================================
+
+/// Return true if "p_offset" points to just after a path separator.
+/// Takes care of multi-byte characters.
+/// "base" must contain the full path/filename.
+///
+/// # Arguments
+/// * `base` - The base string (start of the file name)
+/// * `p_offset` - Offset into base where we're checking
+///
+/// # Returns
+/// true if the character before p_offset is a path separator and it's
+/// the start of a UTF-8 sequence (not a continuation byte).
+#[inline]
+pub fn after_pathsep(base: &[u8], p_offset: usize) -> bool {
+    if p_offset == 0 || p_offset > base.len() {
+        return false;
+    }
+
+    // Check if the byte before p is a path separator
+    let prev_byte = base[p_offset - 1];
+    if !is_pathsep(prev_byte) {
+        return false;
+    }
+
+    // Check if the byte before p is the start of a UTF-8 sequence
+    // (utf_head_off returns 0 if we're at the start of a character)
+    utf_head_off(base, p_offset - 1) == 0
+}
+
+/// FFI wrapper for `after_pathsep`.
+///
+/// # Safety
+/// - `b` and `p` must be valid pointers
+/// - `p` must point to a position within or at the end of the string starting at `b`
+#[no_mangle]
+pub unsafe extern "C" fn rs_after_pathsep(b: *const c_char, p: *const c_char) -> c_int {
+    if b.is_null() || p.is_null() || p < b {
+        return 0;
+    }
+
+    let p_offset = (p as usize) - (b as usize);
+
+    // We need at least p_offset bytes, but also room for utf_head_off to look back
+    // Use p_offset + 8 as a conservative estimate
+    let len = p_offset + 8;
+
+    let slice = std::slice::from_raw_parts(b as *const u8, len);
+    c_int::from(after_pathsep(slice, p_offset))
+}
+
+#[cfg(test)]
+mod after_pathsep_tests {
+    use super::*;
+
+    #[test]
+    fn test_after_pathsep_basic() {
+        // After a slash
+        let path = b"/home/user";
+        assert!(after_pathsep(path, 1)); // After first '/'
+        assert!(after_pathsep(path, 6)); // After '/' before 'user'
+
+        // Not after slash
+        assert!(!after_pathsep(path, 0)); // At start
+        assert!(!after_pathsep(path, 2)); // After 'h'
+        assert!(!after_pathsep(path, 5)); // After 'e'
+    }
+
+    #[test]
+    fn test_after_pathsep_multibyte() {
+        // Path with multibyte character: "/中/file"
+        // '中' is 3 bytes: E4 B8 AD
+        let path = b"/\xE4\xB8\xAD/file";
+
+        assert!(after_pathsep(path, 1)); // After first '/'
+        assert!(after_pathsep(path, 5)); // After second '/' (position of 'f')
+
+        // In the middle of '中' - not after pathsep
+        assert!(!after_pathsep(path, 2)); // Second byte of '中'
+        assert!(!after_pathsep(path, 3)); // Third byte of '中'
+        assert!(!after_pathsep(path, 4)); // This is '/' but checking position after it
+    }
+
+    #[test]
+    fn test_after_pathsep_edge_cases() {
+        let path = b"/";
+        assert!(after_pathsep(path, 1)); // After the only '/'
+        assert!(!after_pathsep(path, 0)); // At start
+
+        let empty = b"";
+        assert!(!after_pathsep(empty, 0)); // Empty string
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_after_pathsep_unix_only() {
+        // On Unix, only '/' is a path separator
+        let path = b"C:\\Windows";
+        assert!(!after_pathsep(path, 3)); // After '\' - not a pathsep on Unix
     }
 }
