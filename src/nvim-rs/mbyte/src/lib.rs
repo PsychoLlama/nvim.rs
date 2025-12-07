@@ -985,6 +985,40 @@ pub unsafe extern "C" fn rs_utf_strnicmp(
     utf_strnicmp(slice1, slice2)
 }
 
+/// FFI wrapper for `mb_strnicmp`.
+///
+/// Compares two strings case-insensitively up to `nn` bytes.
+/// This is a wrapper around `utf_strnicmp` with the same length for both strings.
+///
+/// # Safety
+///
+/// - s1 must be valid for reads of nn bytes
+/// - s2 must be valid for reads of nn bytes
+#[no_mangle]
+pub unsafe extern "C" fn rs_mb_strnicmp(
+    s1: *const c_char,
+    s2: *const c_char,
+    nn: usize,
+) -> c_int {
+    rs_utf_strnicmp(s1, s2, nn, nn)
+}
+
+/// MAXCOL constant (same as in Neovim's pos_defs.h)
+const MAXCOL: usize = 0x7fff_ffff;
+
+/// FFI wrapper for `mb_stricmp`.
+///
+/// Compares two strings case-insensitively (up to MAXCOL bytes).
+/// This is a wrapper around `mb_strnicmp` with MAXCOL as the length limit.
+///
+/// # Safety
+///
+/// - s1 and s2 must be valid null-terminated strings
+#[no_mangle]
+pub unsafe extern "C" fn rs_mb_stricmp(s1: *const c_char, s2: *const c_char) -> c_int {
+    rs_mb_strnicmp(s1, s2, MAXCOL)
+}
+
 // Ambiguous width detection
 
 /// VS-16 (Variation Selector 16) UTF-8 encoding: U+FE0F = 0xEF 0xB8 0x8F
