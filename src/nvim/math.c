@@ -14,6 +14,8 @@
 
 #include "math.c.generated.h"
 
+#define USE_RUST_MATH 1
+
 #ifdef USE_RUST_MATH
 // Rust implementations - declarations
 extern int rs_xfpclassify(double d);
