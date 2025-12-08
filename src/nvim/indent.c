@@ -52,6 +52,8 @@
 
 #include "indent.c.generated.h"
 
+#define USE_RUST_INDENT 1
+
 #ifdef USE_RUST_INDENT
 extern int rs_tabstop_padding(int col, int64_t ts_arg, const int *vts);
 extern int rs_indent_size_ts(const char *ptr, int64_t ts, const int *vts);

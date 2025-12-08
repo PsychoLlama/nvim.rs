@@ -33,6 +33,8 @@
 
 #include "charset.c.generated.h"
 
+#define USE_RUST_CHARSET 1
+
 #ifdef USE_RUST_CHARSET
 extern const char *rs_skipwhite(const char *p);
 extern const char *rs_skipwhite_len(const char *p, size_t len);
