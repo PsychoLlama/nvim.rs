@@ -521,6 +521,80 @@ pub extern "C" fn rs_vim_iswordc(c: c_int) -> c_int {
     c_int::from(vim_iswordc_impl(c))
 }
 
+// ============================================================================
+// Word character detection using pointer (multi-byte aware)
+// ============================================================================
+
+/// Check if a pointer points to a word character for a specific buffer.
+///
+/// This is the Rust equivalent of `vim_iswordp_buf` in charset.c.
+/// Gets the character from the pointer (handling multi-byte) and checks
+/// if it's a word character using the buffer's `b_chartab`.
+#[inline]
+fn vim_iswordp_buf_impl(p: &[u8], buf: BufHandle) -> bool {
+    if p.is_empty() || buf.0.is_null() {
+        return false;
+    }
+
+    // Get the first byte
+    let first_byte = p[0];
+
+    // Determine if it's a multi-byte character (first byte >= 0x80)
+    let c = if first_byte >= 0x80 {
+        // Multi-byte: use utf_ptr2char to get the full codepoint
+        nvim_mbyte::utf_ptr2char(p)
+    } else {
+        // Single byte: just use the byte value
+        i32::from(first_byte)
+    };
+
+    vim_iswordc_buf_impl(c, buf)
+}
+
+/// FFI wrapper for `vim_iswordp_buf`.
+///
+/// # Safety
+///
+/// - `p` must be a valid pointer to a C string.
+/// - `buf` must be a valid buffer handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_iswordp_buf(p: *const c_char, buf: *mut std::ffi::c_void) -> c_int {
+    if p.is_null() {
+        return 0;
+    }
+
+    // Create a slice from the pointer - need at least 4 bytes for UTF-8
+    let slice = std::slice::from_raw_parts(p.cast::<u8>(), 6);
+    c_int::from(vim_iswordp_buf_impl(slice, BufHandle(buf)))
+}
+
+/// Check if a pointer points to a word character for the current buffer.
+///
+/// This is the Rust equivalent of `vim_iswordp` in charset.c.
+/// Uses the current buffer's (`curbuf`) `b_chartab`.
+#[inline]
+fn vim_iswordp_impl(p: &[u8]) -> bool {
+    // SAFETY: nvim_get_curbuf returns the current buffer (may be null during startup)
+    let buf = unsafe { nvim_get_curbuf() };
+    vim_iswordp_buf_impl(p, buf)
+}
+
+/// FFI wrapper for `vim_iswordp`.
+///
+/// # Safety
+///
+/// - `p` must be a valid pointer to a C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_iswordp(p: *const c_char) -> c_int {
+    if p.is_null() {
+        return 0;
+    }
+
+    // Create a slice from the pointer - need at least 6 bytes for safety
+    let slice = std::slice::from_raw_parts(p.cast::<u8>(), 6);
+    c_int::from(vim_iswordp_impl(slice))
+}
+
 // Key code constants for char2cells (from keycodes.h)
 // Special keys are represented as negative values.
 const fn is_special(c: i32) -> bool {

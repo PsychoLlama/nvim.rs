@@ -67,6 +67,8 @@ extern void rs_backslash_halve(char *p);
 extern int rs_vim_iswordc_tab(int c, const uint64_t *chartab);
 extern int rs_vim_iswordc(int c);
 extern int rs_vim_iswordc_buf(int c, buf_T *buf);
+extern int rs_vim_iswordp(const char *p);
+extern int rs_vim_iswordp_buf(const char *p, buf_T *buf);
 extern size_t rs_transstr_len(const char *s, bool untab);
 #endif
 
@@ -923,7 +925,11 @@ bool vim_iswordc_buf(const int c, buf_T *const buf)
 bool vim_iswordp(const char *const p)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_CHARSET
+  return rs_vim_iswordp(p) != 0;
+#else
   return vim_iswordp_buf(p, curbuf);
+#endif
 }
 
 /// Just like vim_iswordc_buf() but uses a pointer to the (multi-byte)
@@ -936,12 +942,16 @@ bool vim_iswordp(const char *const p)
 bool vim_iswordp_buf(const char *const p, buf_T *const buf)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_CHARSET
+  return rs_vim_iswordp_buf(p, buf) != 0;
+#else
   int c = (uint8_t)(*p);
 
   if (MB_BYTE2LEN(c) > 1) {
     c = utf_ptr2char(p);
   }
   return vim_iswordc_buf(c, buf);
+#endif
 }
 
 /// Check that "c" is a valid file-name character as specified with the
