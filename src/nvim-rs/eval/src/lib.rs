@@ -1,9 +1,55 @@
 //! Evaluation utilities for Neovim
 //!
 //! This crate provides functions for evaluating VimL/Lua expressions,
-//! including character validation for variable and function names.
+//! including character validation for variable and function names,
+//! and type conversion utilities.
 
 use std::ffi::c_int;
+
+// =============================================================================
+// TriState type and conversions
+// =============================================================================
+
+// C TriState enum values (from types_defs.h)
+const K_NONE: c_int = -1;
+const K_FALSE: c_int = 0;
+const K_TRUE: c_int = 1;
+
+/// Convert an integer to a TriState value.
+///
+/// - `val == 0` -> `kFalse`
+/// - `val >= 1` -> `kTrue`
+/// - `val < 0` (or other) -> `kNone`
+///
+/// Equivalent to C macro `TRISTATE_FROM_INT(val)`.
+#[no_mangle]
+pub extern "C" fn rs_tristate_from_int(val: c_int) -> c_int {
+    if val == 0 {
+        K_FALSE
+    } else if val >= 1 {
+        K_TRUE
+    } else {
+        K_NONE
+    }
+}
+
+/// Convert a TriState value to a boolean with a default.
+///
+/// - `val == kTrue` -> `true`
+/// - `val == kFalse` -> `false`
+/// - `val == kNone` -> `default`
+///
+/// Equivalent to C macro `TRISTATE_TO_BOOL(val, default)`.
+#[no_mangle]
+pub extern "C" fn rs_tristate_to_bool(val: c_int, default: bool) -> bool {
+    if val == K_TRUE {
+        true
+    } else if val == K_FALSE {
+        false
+    } else {
+        default
+    }
+}
 
 /// The autoload character used in function/variable names.
 const AUTOLOAD_CHAR: u8 = b'#';
@@ -358,5 +404,36 @@ mod tests {
             // Null pointer -> Default
             assert_eq!(rs_var_flavour(std::ptr::null()), VarFlavour::Default);
         }
+    }
+
+    #[test]
+    fn test_tristate_from_int() {
+        // Zero -> kFalse (0)
+        assert_eq!(rs_tristate_from_int(0), K_FALSE);
+
+        // Positive -> kTrue (1)
+        assert_eq!(rs_tristate_from_int(1), K_TRUE);
+        assert_eq!(rs_tristate_from_int(42), K_TRUE);
+        assert_eq!(rs_tristate_from_int(i32::MAX), K_TRUE);
+
+        // Negative -> kNone (-1)
+        assert_eq!(rs_tristate_from_int(-1), K_NONE);
+        assert_eq!(rs_tristate_from_int(-42), K_NONE);
+        assert_eq!(rs_tristate_from_int(i32::MIN), K_NONE);
+    }
+
+    #[test]
+    fn test_tristate_to_bool() {
+        // kTrue -> true regardless of default
+        assert!(rs_tristate_to_bool(K_TRUE, false));
+        assert!(rs_tristate_to_bool(K_TRUE, true));
+
+        // kFalse -> false regardless of default
+        assert!(!rs_tristate_to_bool(K_FALSE, false));
+        assert!(!rs_tristate_to_bool(K_FALSE, true));
+
+        // kNone -> default
+        assert!(!rs_tristate_to_bool(K_NONE, false));
+        assert!(rs_tristate_to_bool(K_NONE, true));
     }
 }
