@@ -52,10 +52,17 @@ extern int rs_ascii_tolower(int c);
 
 // Like isalpha() but reject non-ASCII characters.  Can't be used with a
 // special key (negative value).
-#define ASCII_ISLOWER(c) ((unsigned)(c) >= 'a' && (unsigned)(c) <= 'z')
-#define ASCII_ISUPPER(c) ((unsigned)(c) >= 'A' && (unsigned)(c) <= 'Z')
-#define ASCII_ISALPHA(c) (ASCII_ISUPPER(c) || ASCII_ISLOWER(c))
-#define ASCII_ISALNUM(c) (ASCII_ISALPHA(c) || ascii_isdigit(c))
+#ifdef USE_RUST_ASCII
+# define ASCII_ISLOWER(c) (rs_ascii_islower(c) != 0)
+# define ASCII_ISUPPER(c) (rs_ascii_isupper(c) != 0)
+# define ASCII_ISALPHA(c) (rs_ascii_isalpha(c) != 0)
+# define ASCII_ISALNUM(c) (rs_ascii_isalnum(c) != 0)
+#else
+# define ASCII_ISLOWER(c) ((unsigned)(c) >= 'a' && (unsigned)(c) <= 'z')
+# define ASCII_ISUPPER(c) ((unsigned)(c) >= 'A' && (unsigned)(c) <= 'Z')
+# define ASCII_ISALPHA(c) (ASCII_ISUPPER(c) || ASCII_ISLOWER(c))
+# define ASCII_ISALNUM(c) (ASCII_ISALPHA(c) || ascii_isdigit(c))
+#endif
 
 // Returns empty string if it is NULL.
 #define EMPTY_IF_NULL(x) ((x) ? (x) : "")

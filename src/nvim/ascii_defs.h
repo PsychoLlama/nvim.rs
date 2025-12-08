@@ -17,6 +17,10 @@ extern int rs_char_ord_up(int c);
 extern int rs_rot13(int c, int a);
 extern int rs_meta(int c);
 extern int rs_ctrl_chr(int c);
+extern int rs_ascii_islower(int c);
+extern int rs_ascii_isupper(int c);
+extern int rs_ascii_isalpha(int c);
+extern int rs_ascii_isalnum(int c);
 # define CHAR_ORD(x)      rs_char_ord(x)
 # define CHAR_ORD_LOW(x)  rs_char_ord_low(x)
 # define CHAR_ORD_UP(x)   rs_char_ord_up(x)
