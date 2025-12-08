@@ -32,6 +32,8 @@
 
 #include "cmdhist.c.generated.h"
 
+#define USE_RUST_CMDHIST 1
+
 #ifdef USE_RUST_CMDHIST
 extern HistoryType rs_hist_char2type(int c);
 #endif
