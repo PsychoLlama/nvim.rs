@@ -6,6 +6,8 @@
 
 #include "ascii_defs.h.inline.generated.h"
 
+#define USE_RUST_ASCII 1
+
 // Definitions of various common control characters.
 
 #ifdef USE_RUST_ASCII
