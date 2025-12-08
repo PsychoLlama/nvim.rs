@@ -1987,6 +1987,39 @@ pub unsafe extern "C" fn rs_utf_class_tab(c: c_int, chartab: *const u64) -> c_in
     utf_class_tab_impl(c, chartab_arr)
 }
 
+/// FFI wrapper for `utf_class`.
+///
+/// Get class of a Unicode character using current buffer's chartab.
+#[no_mangle]
+pub unsafe extern "C" fn rs_utf_class(c: c_int) -> c_int {
+    // Get current buffer and its chartab
+    let curbuf = nvim_get_curbuf();
+    if curbuf.is_null() {
+        // No current buffer - use default behavior
+        if c < 0x100 {
+            if c == i32::from(b' ') || c == i32::from(b'\t') || c == 0 || c == 0xa0 {
+                return 0;
+            }
+            return 1;
+        }
+        return utf_class_tab_impl(c, &[0, 0, 0, 0]);
+    }
+    let chartab = nvim_buf_get_chartab(curbuf);
+    if chartab.is_null() {
+        // No chartab - use default behavior
+        if c < 0x100 {
+            if c == i32::from(b' ') || c == i32::from(b'\t') || c == 0 || c == 0xa0 {
+                return 0;
+            }
+            return 1;
+        }
+        return utf_class_tab_impl(c, &[0, 0, 0, 0]);
+    }
+
+    // Delegate to rs_utf_class_tab
+    rs_utf_class_tab(c, chartab)
+}
+
 /// Check if a character is ASCII whitespace (space or tab).
 #[inline]
 fn ascii_iswhite(c: u8) -> bool {

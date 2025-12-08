@@ -112,6 +112,7 @@ extern size_t rs_mb_string2cells(const char *str);
 extern size_t rs_mb_string2cells_len(const char *str, size_t size);
 extern void rs_remove_bom(char *s);
 extern int rs_utf_class_tab(int c, const uint64_t *chartab);
+extern int rs_utf_class(int c);
 extern int rs_mb_get_class_tab(const char *p, const uint64_t *chartab);
 extern int rs_mb_get_class(const char *p);
 extern int rs_mb_cptr2char_adv(const char **pp);
@@ -1376,7 +1377,11 @@ bool utf_printable(int c)
 // 2 or bigger: some class of word character.
 int utf_class(const int c)
 {
+#ifdef USE_RUST_MBYTE
+  return rs_utf_class(c);
+#else
   return utf_class_tab(c, curbuf->b_chartab);
+#endif
 }
 
 int utf_class_tab(const int c, const uint64_t *const chartab)
