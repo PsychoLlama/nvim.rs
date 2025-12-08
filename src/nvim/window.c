@@ -84,6 +84,8 @@
 
 #include "window.c.generated.h"
 
+#define USE_RUST_WINDOW 1
+
 #ifdef USE_RUST_WINDOW
 extern int rs_win_locked(win_T *wp);
 extern int rs_win_valid(win_T *win);
