@@ -13,9 +13,9 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 3.62 Complete - Window/Buffer Function Audit)
+## Current Status (Phase 3.67 Complete - vim_iswordp Migration)
 
-**348 Rust functions exported across 34 Rust crates:**
+**350+ Rust functions exported across 34 Rust crates:**
 
 - nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
 - nvim-memutil, nvim-os, nvim-collections, nvim-encoding
@@ -33,7 +33,7 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - 348 rs_* symbols exported
 - 40 USE_RUST_* defines active across C files
 
-**Recent Progress (Phase 3.52-3.62):**
+**Recent Progress (Phase 3.52-3.67):**
 - Phase 3.52: Enabled USE_RUST_OS_PROC (os_proc_running)
 - Phase 3.53: Enabled USE_RUST_ASCII (21 ASCII character functions)
 - Phase 3.54: Enabled USE_RUST_MARK (6 position/mark functions)
@@ -45,6 +45,11 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - Phase 3.60: Added is_internal_call to Rust (new nvim-api crate)
 - Phase 3.61: Audited remaining FUNC_ATTR_PURE/CONST functions - all simple ones already migrated
 - Phase 3.62: Audited window/buffer functions - all migratable ones already done (20+ functions)
+- Phase 3.63: Added vim_iswordc and vim_iswordc_buf to Rust (word character classification)
+- Phase 3.64: Added ascii_toupper and ascii_tolower to Rust
+- Phase 3.65: Added ASCII character ordinals and utilities to Rust
+- Phase 3.66: Added empty_pos and rgb to Rust (position check, RGB macro)
+- Phase 3.67: Added vim_iswordp and vim_iswordp_buf to Rust (pointer-based word char checks)
 
 **Phase 3 Simple Function Migration: COMPLETE**
 
