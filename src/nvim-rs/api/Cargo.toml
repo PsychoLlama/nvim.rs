@@ -1,0 +1,10 @@
+[package]
+name = "nvim-api"
+version = "0.1.0"
+edition = "2021"
+description = "API utilities for Neovim"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]

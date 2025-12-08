@@ -13,6 +13,7 @@
 
 // Re-export all FFI functions from sub-crates
 // This ensures they're included in the static library
+pub use nvim_api::*;
 pub use nvim_arabic::*;
 pub use nvim_ascii::*;
 pub use nvim_buffer::*;
@@ -20,6 +21,7 @@ pub use nvim_charset::*;
 pub use nvim_cmdhist::*;
 pub use nvim_collections::garray::*;
 pub use nvim_collections::hashtab::*;
+pub use nvim_collections::queue::*;
 // Note: rs_hash_hash, rs_hash_hash_len are in nvim_memutil (not re-exported from hashtab)
 pub use nvim_encoding::base64::*;
 pub use nvim_encoding::sha256::*;

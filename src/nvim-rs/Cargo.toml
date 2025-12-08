@@ -13,6 +13,7 @@ crate-type = ["staticlib", "rlib"]
 workspace = true
 
 [dependencies]
+nvim-api = { path = "api" }
 nvim-arabic = { path = "arabic" }
 nvim-ascii = { path = "ascii" }
 nvim-buffer = { path = "buffer" }

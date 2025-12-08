@@ -43,6 +43,8 @@ typedef enum {
   kMessageTypeRedrawEvent = 3,
 } MessageType;
 
+#define USE_RUST_API 1
+
 /// Mask for all internal calls
 #define INTERNAL_CALL_MASK (((uint64_t)1) << (sizeof(uint64_t) * 8 - 1))
 
@@ -52,6 +54,10 @@ typedef enum {
 /// Internal call from Lua code
 #define LUA_INTERNAL_CALL (VIML_INTERNAL_CALL + 1)
 
+#ifdef USE_RUST_API
+extern int rs_is_internal_call(uint64_t channel_id);
+#endif
+
 /// Check whether call is internal
 ///
 /// @param[in]  channel_id  Channel id.
@@ -60,7 +66,11 @@ typedef enum {
 static inline bool is_internal_call(const uint64_t channel_id)
   FUNC_ATTR_ALWAYS_INLINE FUNC_ATTR_CONST
 {
+#ifdef USE_RUST_API
+  return rs_is_internal_call(channel_id) != 0;
+#else
   return !!(channel_id & INTERNAL_CALL_MASK);
+#endif
 }
 
 typedef struct {
