@@ -25,6 +25,8 @@
 #include "nvim/macros_defs.h"
 #include "nvim/option_vars.h"
 
+#define USE_RUST_ARABIC 1
+
 #ifdef USE_RUST_ARABIC
 extern bool rs_arabic_combine(int one, int two);
 extern bool rs_arabic_maycombine(int two);
