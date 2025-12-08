@@ -13,7 +13,7 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 3.61 Complete - Simple Function Migration Audit)
+## Current Status (Phase 3.62 Complete - Window/Buffer Function Audit)
 
 **348 Rust functions exported across 34 Rust crates:**
 
@@ -33,7 +33,7 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - 348 rs_* symbols exported
 - 40 USE_RUST_* defines active across C files
 
-**Recent Progress (Phase 3.52-3.60):**
+**Recent Progress (Phase 3.52-3.62):**
 - Phase 3.52: Enabled USE_RUST_OS_PROC (os_proc_running)
 - Phase 3.53: Enabled USE_RUST_ASCII (21 ASCII character functions)
 - Phase 3.54: Enabled USE_RUST_MARK (6 position/mark functions)
@@ -44,14 +44,17 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - Phase 3.59: Migrated all remaining QUEUE operations (6 functions) to Rust
 - Phase 3.60: Added is_internal_call to Rust (new nvim-api crate)
 - Phase 3.61: Audited remaining FUNC_ATTR_PURE/CONST functions - all simple ones already migrated
+- Phase 3.62: Audited window/buffer functions - all migratable ones already done (20+ functions)
 
 **Phase 3 Simple Function Migration: COMPLETE**
 
-Most simple FUNC_ATTR_PURE/FUNC_ATTR_CONST functions have been migrated. Remaining unmigrated
+Most simple FUNC_ATTR_PURE/FUNC_ATTR_CONST functions have been migrated. Window/buffer validation
+functions (26 rs_* functions in nvim-window, 12 in nvim-buffer) are complete. Remaining unmigrated
 functions require either:
-- Global state access (buf_hide, event_ignored, etc. need cmdmod, p_ei, etc.)
+- Global state access (buf_hide, event_ignored, only_one_window, etc. need cmdmod, p_ei, etc.)
 - Complex struct internals (typval_T, win_T internals beyond accessors)
 - Static initializers (RGB_, schar_from_ascii - can't use function calls)
+- Side effects (functions that modify state, not pure)
 
 ---
 
