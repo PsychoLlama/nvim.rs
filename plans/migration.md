@@ -396,6 +396,42 @@ Window validation, tabpage iteration, and frame tree functions are complete.
 
 ### Phase 4: Event Loop & Async I/O
 
+**Status**: Analysis complete, blocked by libuv dependency complexity
+
+**Analysis (2025-12-08)**:
+The event loop code in `src/nvim/event/` is deeply integrated with libuv:
+- `loop.c` (227 LOC): uv_loop_t, uv_async_t, uv_timer_t, uv_mutex_t
+- `multiqueue.c` (288 LOC): Uses QUEUE macros (already migrated), xmalloc
+- `time.c` (74 LOC): uv_timer_t wrapper
+- `signal.c`: uv_signal_t wrapper
+- `stream.c`, `rstream.c`, `wstream.c`: uv_stream_t, uv_pipe_t, uv_tcp_t
+- `proc.c`, `libuv_proc.c`: Process spawning via libuv
+
+**Dependency Structure**:
+```
+event/defs.h → uv.h (libuv types)
+    ↓
+TimeWatcher, SignalWatcher, Stream, RStream, Proc
+    ↓
+event/loop.c (main event loop)
+```
+
+**Options**:
+1. **libuv-sys2**: Thin FFI bindings to existing libuv (safest, incremental)
+2. **libuv crate**: Safe Rust wrapper for libuv (medium effort)
+3. **tokio replacement**: Full async runtime swap (large effort, breaking change)
+
+**Recommended approach**: Option 1 (libuv-sys2) for Phase 4
+- Keep existing libuv usage intact
+- Create Rust wrappers around C event structs (like WinHandle/BufHandle pattern)
+- Migrate helper functions first (multiqueue is candidate - uses QUEUE macros)
+- Replace libuv later when async runtime is clearer
+
+**Potential Phase 4 candidates** (low libuv dependency):
+- `multiqueue.c`: Already uses Rust QUEUE functions, xmalloc only
+- Simple event creation macros (`event_create`)
+
+Files:
 - event/loop.c - libuv wrapper or tokio replacement
 - event/rstream.c, wstream.c - stream handling
 - event/proc.c - process management
