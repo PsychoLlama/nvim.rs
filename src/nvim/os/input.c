@@ -46,6 +46,8 @@ static int cursorhold_tb_change_cnt = 0;  ///< tb_change_cnt when waiting starte
 
 #include "os/input.c.generated.h"
 
+#define USE_RUST_OS_INPUT 1
+
 #ifdef USE_RUST_OS_INPUT
 extern bool rs_os_isatty(int fd);
 #endif

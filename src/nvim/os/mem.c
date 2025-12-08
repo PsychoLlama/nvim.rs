@@ -5,6 +5,8 @@
 
 #include "nvim/os/os.h"
 
+#define USE_RUST_OS_MEM 1
+
 #ifdef USE_RUST_OS_MEM
 extern uint64_t rs_os_get_total_mem_kib(void);
 #endif

@@ -20,6 +20,8 @@
 
 #include "os/time.c.generated.h"
 
+#define USE_RUST_OS 1
+
 #ifdef USE_RUST_OS
 // Rust implementations - declarations
 extern uint64_t rs_os_time(void);
