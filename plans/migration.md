@@ -13,9 +13,9 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 3.57 Complete - Simple Function Migration Complete)
+## Current Status (Phase 3.58 Complete - QUEUE_EMPTY Migration)
 
-**341 Rust functions exported across 33 Rust crates:**
+**342 Rust functions exported across 33 Rust crates:**
 
 - nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
 - nvim-memutil, nvim-os, nvim-collections, nvim-encoding
@@ -30,16 +30,17 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - Cargo workspace at `src/nvim-rs/`
 - CMake integration via USE_RUST_* flags (all enabled)
 - cbindgen generates C headers from Rust
-- 341 rs_* symbols exported
-- 38 USE_RUST_* defines active across C files
+- 342 rs_* symbols exported
+- 39 USE_RUST_* defines active across C files
 
-**Recent Progress (Phase 3.52-3.57):**
+**Recent Progress (Phase 3.52-3.58):**
 - Phase 3.52: Enabled USE_RUST_OS_PROC (os_proc_running)
 - Phase 3.53: Enabled USE_RUST_ASCII (21 ASCII character functions)
 - Phase 3.54: Enabled USE_RUST_MARK (6 position/mark functions)
 - Phase 3.55: Added rs_clearpos to mark crate
 - Phase 3.56: Connected ASCII_IS* macros to existing Rust implementations
 - Phase 3.57: Verified Phase 3 simple function migration substantially complete
+- Phase 3.58: Added QUEUE_EMPTY to Rust (libuv-style circular linked list check)
 
 **Phase 3 Simple Function Migration: COMPLETE**
 
