@@ -73,12 +73,21 @@ extern "C" {
 
     /// Get the `top_file_num` global (highest file number counter).
     fn nvim_get_top_file_num() -> c_int;
+
+    /// Get the first character of the `b_p_bh` (bufhidden option) field.
+    fn nvim_buf_get_bufhidden(buf: BufHandle) -> c_char;
+
+    /// Get the global `p_hid` option (hidden buffers).
+    fn nvim_get_p_hid() -> c_int;
+
+    /// Get the `cmdmod.cmod_flags` field.
+    fn nvim_get_cmdmod_cmod_flags() -> c_int;
 }
 
 /// Check if "buf" is a pointer to an existing buffer.
 ///
 /// This is the Rust equivalent of `buf_valid()` in buffer.c.
-/// Iterates backwards through the buffer list (lastbuf -> b_prev).
+/// Iterates backwards through the buffer list (`lastbuf` -> `b_prev`).
 #[inline]
 fn buf_valid_impl(buf: BufHandle) -> bool {
     if buf.is_null() {
@@ -340,6 +349,43 @@ pub extern "C" fn rs_get_highest_fnum() -> c_int {
     get_highest_fnum_impl()
 }
 
+/// Command modifier flag for `:hide` (matches C `CMOD_HIDE` = 0x0020).
+const CMOD_HIDE: c_int = 0x0020;
+
+/// Check if a buffer should be hidden when abandoned.
+///
+/// Returns true if:
+/// - 'bufhidden' option is "hide", OR
+/// - 'bufhidden' is empty AND ('hidden' option is set OR `:hide` modifier was used)
+///
+/// Returns false if 'bufhidden' is "unload", "wipe", or "delete".
+#[inline]
+fn buf_hide_impl(buf: BufHandle) -> bool {
+    if buf.is_null() {
+        return false;
+    }
+
+    // SAFETY: We check for null above, and the accessors handle the pointer safely.
+    unsafe {
+        // 'bufhidden' overrules 'hidden' and ":hide", check it first
+        let bh = nvim_buf_get_bufhidden(buf) as u8;
+        match bh {
+            // "unload", "wipe", "delete" -> don't hide
+            b'u' | b'w' | b'd' => false,
+            // "hide" -> hide
+            b'h' => true,
+            // empty (NUL) or anything else -> fall through to global options
+            _ => nvim_get_p_hid() != 0 || (nvim_get_cmdmod_cmod_flags() & CMOD_HIDE) != 0,
+        }
+    }
+}
+
+/// FFI wrapper for `buf_hide`.
+#[no_mangle]
+pub extern "C" fn rs_buf_hide(buf: BufHandle) -> c_int {
+    c_int::from(buf_hide_impl(buf))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -358,6 +404,7 @@ mod tests {
         assert!(!bt_nofilename_impl(handle));
         assert!(!bt_dontwrite_impl(handle));
         assert!(!bt_nofileread_impl(handle));
+        assert!(!buf_hide_impl(handle));
         // Null buffer defaults to EOL_UNIX
         assert_eq!(get_fileformat_impl(handle), EOL_UNIX);
     }

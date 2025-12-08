@@ -135,6 +135,7 @@ extern int rs_bt_dontwrite(buf_T *buf);
 extern int rs_bt_nofileread(buf_T *buf);
 extern int rs_buf_valid(buf_T *buf);
 extern int rs_get_highest_fnum(void);
+extern int rs_buf_hide(buf_T *buf);
 #endif
 
 // Accessor functions for Rust opaque handle pattern.
@@ -200,6 +201,24 @@ static int top_file_num = 1;            ///< highest file number
 int nvim_get_top_file_num(void)
 {
   return top_file_num;
+}
+
+/// Get the first character of the b_p_bh (bufhidden option) field.
+char nvim_buf_get_bufhidden(buf_T *buf)
+{
+  return buf->b_p_bh[0];
+}
+
+/// Get the global p_hid option (hidden buffers).
+int nvim_get_p_hid(void)
+{
+  return p_hid;
+}
+
+/// Get the cmdmod.cmod_flags field.
+int nvim_get_cmdmod_cmod_flags(void)
+{
+  return cmdmod.cmod_flags;
 }
 
 typedef enum {
@@ -4104,6 +4123,9 @@ bool bt_dontwrite_msg(const buf_T *const buf)
 bool buf_hide(const buf_T *const buf)
   FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_BUFFER
+  return rs_buf_hide((buf_T *)buf) != 0;
+#else
   // 'bufhidden' overrules 'hidden' and ":hide", check it first
   switch (buf->b_p_bh[0]) {
   case 'u':                         // "unload"
@@ -4114,6 +4136,7 @@ bool buf_hide(const buf_T *const buf)
     return true;            // "hide"
   }
   return p_hid || (cmdmod.cmod_flags & CMOD_HIDE);
+#endif
 }
 
 /// @return  special buffer name or
