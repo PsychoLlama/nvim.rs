@@ -117,6 +117,10 @@
 # include "nvim/arglist.h"
 #endif
 
+#define USE_RUST_STRINGS 1
+#define USE_RUST_BUFFER 1
+#define USE_RUST_PATH 1
+
 #ifdef USE_RUST_STRINGS
 extern int rs_valid_name(const char *val, const char *allowed);
 extern const char *rs_find_tty_option_end(const char *arg);
