@@ -53,6 +53,8 @@
 
 #include "mouse.c.generated.h"
 
+#define USE_RUST_KEYCODES 1
+
 static linenr_T orig_topline = 0;
 static int orig_topfill = 0;
 
