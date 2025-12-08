@@ -458,6 +458,105 @@ pub unsafe extern "C" fn rs_vim_isAbsName(name: *const c_char) -> c_int {
     c_int::from(rs_path_with_url(name) != 0 || rs_path_is_absolute(name) != 0)
 }
 
+// ============================================================================
+// Shell detection functions
+// ============================================================================
+
+extern "C" {
+    fn nvim_get_p_sh() -> *const c_char;
+    fn nvim_get_p_ffs() -> *const c_char;
+}
+
+/// Check if 'shell' option contains "csh" in the tail.
+///
+/// Returns 1 if the shell appears to be csh-like, 0 otherwise.
+#[no_mangle]
+pub extern "C" fn rs_csh_like_shell() -> c_int {
+    unsafe {
+        let p_sh = nvim_get_p_sh();
+        if p_sh.is_null() {
+            return 0;
+        }
+        let tail = rs_path_tail(p_sh);
+        if tail.is_null() {
+            return 0;
+        }
+        // Check if "csh" substring exists in tail
+        let mut p = tail;
+        while *p != 0 {
+            if *p as u8 == b'c' {
+                let next = p.add(1);
+                if *next as u8 == b's' {
+                    let next2 = p.add(2);
+                    if *next2 as u8 == b'h' {
+                        return 1;
+                    }
+                }
+            }
+            p = p.add(1);
+        }
+        0
+    }
+}
+
+/// Check if 'shell' option contains "fish" in the tail.
+///
+/// Returns 1 if the shell appears to be fish-like, 0 otherwise.
+#[no_mangle]
+pub extern "C" fn rs_fish_like_shell() -> c_int {
+    unsafe {
+        let p_sh = nvim_get_p_sh();
+        if p_sh.is_null() {
+            return 0;
+        }
+        let tail = rs_path_tail(p_sh);
+        if tail.is_null() {
+            return 0;
+        }
+        // Check if "fish" substring exists in tail
+        let mut p = tail;
+        while *p != 0 {
+            if *p as u8 == b'f' {
+                let next1 = p.add(1);
+                if *next1 as u8 == b'i' {
+                    let next2 = p.add(2);
+                    if *next2 as u8 == b's' {
+                        let next3 = p.add(3);
+                        if *next3 as u8 == b'h' {
+                            return 1;
+                        }
+                    }
+                }
+            }
+            p = p.add(1);
+        }
+        0
+    }
+}
+
+// EOL type values matching C definitions
+const EOL_UNIX: c_int = 0;
+const EOL_DOS: c_int = 1;
+const EOL_MAC: c_int = 2;
+
+/// Return the default fileformat from 'fileformats' option.
+///
+/// Returns EOL_MAC (2) for 'mac', EOL_DOS (1) for 'dos', EOL_UNIX (0) otherwise.
+#[no_mangle]
+pub extern "C" fn rs_default_fileformat() -> c_int {
+    unsafe {
+        let p_ffs = nvim_get_p_ffs();
+        if p_ffs.is_null() || *p_ffs == 0 {
+            return EOL_UNIX;
+        }
+        match *p_ffs as u8 {
+            b'm' => EOL_MAC,
+            b'd' => EOL_DOS,
+            _ => EOL_UNIX,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

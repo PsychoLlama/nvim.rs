@@ -128,6 +128,23 @@ extern const char *rs_skip_to_option_part(const char *p);
 extern int rs_get_fileformat(buf_T *buf);
 #endif
 
+#ifdef USE_RUST_PATH
+extern int rs_csh_like_shell(void);
+extern int rs_fish_like_shell(void);
+extern int rs_default_fileformat(void);
+
+// Accessor functions for Rust code
+const char *nvim_get_p_sh(void)
+{
+  return p_sh;
+}
+
+const char *nvim_get_p_ffs(void)
+{
+  return p_ffs;
+}
+#endif
+
 static const char e_unknown_option[]
   = N_("E518: Unknown option");
 static const char e_not_allowed_in_modeline[]
@@ -6231,6 +6248,9 @@ int get_fileformat_force(const buf_T *buf, const exarg_T *eap)
 /// Return the default fileformat from 'fileformats'.
 int default_fileformat(void)
 {
+#ifdef USE_RUST_PATH
+  return rs_default_fileformat();
+#else
   switch (*p_ffs) {
   case 'm':
     return EOL_MAC;
@@ -6238,6 +6258,7 @@ int default_fileformat(void)
     return EOL_DOS;
   }
   return EOL_UNIX;
+#endif
 }
 
 /// Set the current end-of-line type to EOL_UNIX, EOL_MAC, or EOL_DOS.
@@ -6330,13 +6351,21 @@ size_t copy_option_part(char **option, char *buf, size_t maxlen, char *sep_chars
 /// Return true when 'shell' has "csh" in the tail.
 int csh_like_shell(void)
 {
+#ifdef USE_RUST_PATH
+  return rs_csh_like_shell();
+#else
   return strstr(path_tail(p_sh), "csh") != NULL;
+#endif
 }
 
 /// Return true when 'shell' has "fish" in the tail.
 bool fish_like_shell(void)
 {
+#ifdef USE_RUST_PATH
+  return rs_fish_like_shell();
+#else
   return strstr(path_tail(p_sh), "fish") != NULL;
+#endif
 }
 
 /// Get window or buffer local options
