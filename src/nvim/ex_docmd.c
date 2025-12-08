@@ -111,6 +111,8 @@
 #include "nvim/window.h"
 #include "nvim/winfloat.h"
 
+#define USE_RUST_EX_DOCMD 1
+
 #ifdef USE_RUST_EX_DOCMD
 // Rust implementations - declarations
 extern int rs_ends_excmd(int c);

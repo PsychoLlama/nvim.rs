@@ -83,6 +83,9 @@
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
+#define USE_RUST_MATH 1
+#define USE_RUST_EVAL 1
+
 #ifdef USE_RUST_MATH
 extern int64_t rs_num_divide(int64_t n1, int64_t n2);
 extern int64_t rs_num_modulus(int64_t n1, int64_t n2);

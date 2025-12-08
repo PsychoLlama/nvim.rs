@@ -93,6 +93,8 @@
 # define UV_FS_COPYFILE_FICLONE 0
 #endif
 
+#define USE_RUST_FILEIO 1
+
 #ifdef USE_RUST_FILEIO
 // Rust implementations - declarations
 extern int rs_time_differs(int64_t file_sec, int64_t file_nsec, int64_t mtime, int64_t mtime_ns,
