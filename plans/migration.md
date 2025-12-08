@@ -13,9 +13,9 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 3.67 Complete - vim_iswordp Migration)
+## Current Status (Phase 3 COMPLETE - 357 rs_* Functions)
 
-**355 Rust functions exported across 34 Rust crates:**
+**357 Rust functions exported across 34 Rust crates:**
 
 - nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
 - nvim-memutil, nvim-os, nvim-collections, nvim-encoding
@@ -30,10 +30,10 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - Cargo workspace at `src/nvim-rs/`
 - CMake integration via USE_RUST_* flags (all enabled)
 - cbindgen generates C headers from Rust
-- 355 rs_* symbols exported
-- 40 USE_RUST_* defines active across C files
+- 357 rs_* symbols exported
+- 40+ USE_RUST_* defines active across C files
 
-**Recent Progress (Phase 3.52-3.67):**
+**Recent Progress (Phase 3.52-3.68):**
 - Phase 3.52: Enabled USE_RUST_OS_PROC (os_proc_running)
 - Phase 3.53: Enabled USE_RUST_ASCII (21 ASCII character functions)
 - Phase 3.54: Enabled USE_RUST_MARK (6 position/mark functions)
@@ -50,16 +50,19 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - Phase 3.65: Added ASCII character ordinals and utilities to Rust
 - Phase 3.66: Added empty_pos and rgb to Rust (position check, RGB macro)
 - Phase 3.67: Added vim_iswordp and vim_iswordp_buf to Rust (pointer-based word char checks)
+- Phase 3.68: Added TriState conversion functions to Rust
 
-**Phase 3 Simple Function Migration: COMPLETE**
+**Phase 3 Simple Function Migration: COMPLETE ✅**
 
-Most simple FUNC_ATTR_PURE/FUNC_ATTR_CONST functions have been migrated. Window/buffer validation
-functions (26 rs_* functions in nvim-window, 12 in nvim-buffer) are complete. Remaining unmigrated
-functions require either:
-- Global state access (buf_hide, event_ignored, only_one_window, etc. need cmdmod, p_ei, etc.)
+All viable simple FUNC_ATTR_PURE/FUNC_ATTR_CONST functions have been migrated. Window/buffer validation
+functions (26 rs_* functions in nvim-window, 12 in nvim-buffer) are complete. Global state accessor
+pattern proven with buf_hide (uses nvim_get_p_hid() and nvim_get_cmdmod_cmod_flags()).
+
+Remaining unmigrated functions are blocked by:
 - Complex struct internals (typval_T, win_T internals beyond accessors)
 - Static initializers (RGB_, schar_from_ascii - can't use function calls)
 - Side effects (functions that modify state, not pure)
+- Global state arrays (breakat_flags, g_chartab, shape_table)
 
 ---
 
