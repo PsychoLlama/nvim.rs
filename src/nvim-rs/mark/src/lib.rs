@@ -111,6 +111,21 @@ pub extern "C" fn rs_empty_pos(a: PosT) -> c_int {
     c_int::from(a.lnum == 0 && a.col == 0 && a.coladd == 0)
 }
 
+/// Clear a position by setting all fields to 0.
+///
+/// # Safety
+///
+/// `a` must be a valid, non-null pointer to a PosT struct.
+#[no_mangle]
+pub unsafe extern "C" fn rs_clearpos(a: *mut PosT) {
+    if a.is_null() {
+        return;
+    }
+    (*a).lnum = 0;
+    (*a).col = 0;
+    (*a).coladd = 0;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -304,5 +319,25 @@ mod tests {
             coladd: 2,
         };
         assert_eq!(rs_empty_pos(non_empty4), 0);
+    }
+
+    #[test]
+    fn test_clearpos() {
+        // Clear a non-empty position
+        let mut pos = PosT {
+            lnum: 10,
+            col: 5,
+            coladd: 2,
+        };
+        unsafe { rs_clearpos(&mut pos) };
+        assert_eq!(pos.lnum, 0);
+        assert_eq!(pos.col, 0);
+        assert_eq!(pos.coladd, 0);
+
+        // Should be empty after clearing
+        assert_ne!(rs_empty_pos(pos), 0);
+
+        // Null pointer should be handled gracefully
+        unsafe { rs_clearpos(std::ptr::null_mut()) };
     }
 }

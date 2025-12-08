@@ -103,6 +103,7 @@ typedef struct {
 extern int rs_lt(pos_T a, pos_T b);
 extern int rs_equalpos(pos_T a, pos_T b);
 extern int rs_ltoreq(pos_T a, pos_T b);
+extern void rs_clearpos(pos_T *a);
 #endif
 
 /// Return true if position a is before (less than) position b.
@@ -145,7 +146,11 @@ static inline bool ltoreq(pos_T a, pos_T b)
 static inline void clearpos(pos_T *a)
   FUNC_ATTR_ALWAYS_INLINE
 {
+#ifdef USE_RUST_MARK
+  rs_clearpos(a);
+#else
   a->lnum = 0;
   a->col = 0;
   a->coladd = 0;
+#endif
 }
