@@ -65,6 +65,8 @@ extern void rs_rl_mirror_ascii(char *str, const char *end);
 extern bool rs_rem_backslash(const char *str);
 extern void rs_backslash_halve(char *p);
 extern int rs_vim_iswordc_tab(int c, const uint64_t *chartab);
+extern int rs_vim_iswordc(int c);
+extern int rs_vim_iswordc_buf(int c, buf_T *buf);
 extern size_t rs_transstr_len(const char *s, bool untab);
 #endif
 
@@ -872,7 +874,11 @@ bool vim_isIDc(int c)
 bool vim_iswordc(const int c)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_CHARSET
+  return rs_vim_iswordc(c) != 0;
+#else
   return vim_iswordc_buf(c, curbuf);
+#endif
 }
 
 /// Check that "c" is a keyword character
@@ -902,7 +908,11 @@ bool vim_iswordc_tab(const int c, const uint64_t *const chartab)
 bool vim_iswordc_buf(const int c, buf_T *const buf)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ARG(2)
 {
+#ifdef USE_RUST_CHARSET
+  return rs_vim_iswordc_buf(c, buf) != 0;
+#else
   return vim_iswordc_tab(c, buf->b_chartab);
+#endif
 }
 
 /// Just like vim_iswordc() but uses a pointer to the (multi-byte) character.

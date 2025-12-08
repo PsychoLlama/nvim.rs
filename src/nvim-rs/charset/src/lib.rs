@@ -451,8 +451,75 @@ pub unsafe extern "C" fn rs_vim_isIDc(c: c_int) -> c_int {
     c_int::from(c > 0 && c < 0x100 && (g_chartab[c as usize] & CT_ID_CHAR) != 0)
 }
 
-// Note: vim_iswordc and related functions are NOT migrated because they use
-// curbuf global or buffer-specific chartabs.
+// ============================================================================
+// Word character detection using buffer (via C accessors)
+// ============================================================================
+
+// Opaque buffer handle type - matches BufHandle in buffer crate
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct BufHandle(*mut std::ffi::c_void);
+
+// C accessor functions for buffer fields
+extern "C" {
+    /// Get the current buffer (`curbuf` global).
+    fn nvim_get_curbuf() -> BufHandle;
+
+    /// Get the `b_chartab` field from a buffer.
+    fn nvim_buf_get_chartab(buf: BufHandle) -> *const u64;
+}
+
+/// Check if a character is a word character using buffer-specific chartab.
+///
+/// This is the Rust equivalent of `vim_iswordc_buf` in charset.c.
+/// Uses the buffer's `b_chartab` (set via 'iskeyword' option).
+///
+/// # Safety
+///
+/// - `buf` must be a valid buffer handle (non-null, valid `buf_T*`).
+#[inline]
+fn vim_iswordc_buf_impl(c: c_int, buf: BufHandle) -> bool {
+    if buf.0.is_null() {
+        return false;
+    }
+
+    // SAFETY: buf is a valid buffer handle, nvim_buf_get_chartab returns valid pointer
+    let chartab_ptr = unsafe { nvim_buf_get_chartab(buf) };
+    if chartab_ptr.is_null() {
+        return false;
+    }
+
+    // SAFETY: chartab_ptr is a valid pointer to [u64; 4]
+    let chartab: &[u64; 4] = unsafe { &*(chartab_ptr as *const [u64; 4]) };
+    vim_iswordc_tab(c, chartab)
+}
+
+/// FFI wrapper for `vim_iswordc_buf`.
+///
+/// # Safety
+///
+/// - `buf` must be a valid buffer handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_iswordc_buf(c: c_int, buf: *mut std::ffi::c_void) -> c_int {
+    c_int::from(vim_iswordc_buf_impl(c, BufHandle(buf)))
+}
+
+/// Check if a character is a word character for the current buffer.
+///
+/// This is the Rust equivalent of `vim_iswordc` in charset.c.
+/// Uses the current buffer's (`curbuf`) `b_chartab`.
+#[inline]
+fn vim_iswordc_impl(c: c_int) -> bool {
+    // SAFETY: nvim_get_curbuf returns the current buffer (may be null during startup)
+    let buf = unsafe { nvim_get_curbuf() };
+    vim_iswordc_buf_impl(c, buf)
+}
+
+/// FFI wrapper for `vim_iswordc`.
+#[no_mangle]
+pub extern "C" fn rs_vim_iswordc(c: c_int) -> c_int {
+    c_int::from(vim_iswordc_impl(c))
+}
 
 // Key code constants for char2cells (from keycodes.h)
 // Special keys are represented as negative values.

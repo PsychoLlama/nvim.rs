@@ -221,6 +221,12 @@ int nvim_get_cmdmod_cmod_flags(void)
   return cmdmod.cmod_flags;
 }
 
+/// Get the b_chartab field from a buffer.
+uint64_t *nvim_buf_get_chartab(buf_T *buf)
+{
+  return buf->b_chartab;
+}
+
 typedef enum {
   kBffClearWinInfo = 1,
   kBffInitChangedtick = 2,
