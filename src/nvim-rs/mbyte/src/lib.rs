@@ -1260,6 +1260,12 @@ extern "C" {
 
     /// 'emoji' option: boolean (0 or non-zero).
     static p_emoji: c_int;
+
+    /// Get the current buffer (`curbuf` global).
+    fn nvim_get_curbuf() -> *mut std::ffi::c_void;
+
+    /// Get the `b_chartab` field from a buffer.
+    fn nvim_buf_get_chartab(buf: *mut std::ffi::c_void) -> *const u64;
 }
 
 /// Return the value of the cellwidth table for the character `c`.
@@ -2050,6 +2056,33 @@ pub unsafe extern "C" fn rs_mb_get_class_tab(p: *const c_char, chartab: *const u
     // Multi-byte character - decode and get class using the FFI wrapper
     let c = rs_utf_ptr2char(p);
     utf_class_tab_impl(c, chartab_arr)
+}
+
+/// FFI wrapper for `mb_get_class`.
+///
+/// Get the character class from a UTF-8 string pointer using current buffer's chartab.
+///
+/// # Safety
+///
+/// - `p` must be a valid pointer to a NUL-terminated or sufficiently long UTF-8 string
+#[no_mangle]
+pub unsafe extern "C" fn rs_mb_get_class(p: *const c_char) -> c_int {
+    if p.is_null() {
+        return 0;
+    }
+
+    // Get current buffer and its chartab
+    let curbuf = nvim_get_curbuf();
+    if curbuf.is_null() {
+        return 0;
+    }
+    let chartab = nvim_buf_get_chartab(curbuf);
+    if chartab.is_null() {
+        return 0;
+    }
+
+    // Delegate to rs_mb_get_class_tab
+    rs_mb_get_class_tab(p, chartab)
 }
 
 // ============================================================================

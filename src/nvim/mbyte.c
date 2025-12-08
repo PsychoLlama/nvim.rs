@@ -113,6 +113,7 @@ extern size_t rs_mb_string2cells_len(const char *str, size_t size);
 extern void rs_remove_bom(char *s);
 extern int rs_utf_class_tab(int c, const uint64_t *chartab);
 extern int rs_mb_get_class_tab(const char *p, const uint64_t *chartab);
+extern int rs_mb_get_class(const char *p);
 extern int rs_mb_cptr2char_adv(const char **pp);
 extern void rs_mb_utflen(const char *s, size_t len, size_t *codepoints, size_t *codeunits);
 extern ssize_t rs_mb_utf_index_to_bytes(const char *s, size_t len, size_t index, bool use_utf16_units);
@@ -479,7 +480,11 @@ void remove_bom(char *s)
 int mb_get_class(const char *p)
   FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_MBYTE
+  return rs_mb_get_class(p);
+#else
   return mb_get_class_tab(p, curbuf->b_chartab);
+#endif
 }
 
 int mb_get_class_tab(const char *p, const uint64_t *const chartab)
