@@ -367,17 +367,23 @@ Remaining blockers for further simple function migration:
 - Complex struct field access (typval_T, win_T internals)
   Further progress requires Phase 4+ infrastructure.
 
-**Phase 3.5: Window/frame function exploration (partially unblocked)**
-Window validation now works. Tabpage iteration now works. Remaining items:
+**Phase 3.5: Window/frame function exploration ✅**
+Window validation, tabpage iteration, and frame tree functions are complete.
+
+- [x] FrameHandle opaque type for frame_T* pointers
+- [x] Frame accessors: nvim_frame_get_layout, nvim_frame_get_win, nvim_frame_get_child, nvim_frame_get_next, nvim_frame_get_parent, nvim_frame_get_height, nvim_frame_get_width
+- [x] Window frame accessors: nvim_win_get_frame, nvim_win_get_wfh, nvim_win_get_wfw
+- [x] rs_frame_fixed_height(): check if frame has fixed height (recursive)
+- [x] rs_frame_fixed_width(): check if frame has fixed width (recursive)
+- [x] rs_frame_has_win(): check if frame tree contains window (recursive)
+- [x] rs_is_bottom_win(): check if window is at bottom of column
+- [x] rs_frame_check_height(), rs_frame_check_width(): validate frame dimensions
+- [x] rs_frame2win(): find window in frame tree
+- [x] USE_RUST_WINDOW conditional compilation enabled
+
+**Remaining targets for future work:**
 
 - Global state access for `aucmd_win` (add more accessors as needed)
-- Iteration macros: `FOR_ALL_FRAMES`, `FOR_ALL_TAB_WINDOWS`
-- FrameHandle opaque type (for frame tree traversal)
-
-**Remaining targets:**
-
-- `frame_fixed_height`, `frame_fixed_width` - need FrameHandle + recursive iteration
-- `frame_has_win` - needs FrameHandle + linked list traversal
 - plines.c display calculations - need window/buffer accessors with options
 
 ### Phase 4: Event Loop & Async I/O
