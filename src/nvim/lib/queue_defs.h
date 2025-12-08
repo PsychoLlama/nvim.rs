@@ -21,6 +21,8 @@
 
 #include <stddef.h>
 
+#define USE_RUST_QUEUE 1
+
 typedef struct queue {
   struct queue *next;
   struct queue *prev;
@@ -43,11 +45,19 @@ typedef struct queue {
       (q) = next; \
   }
 
+#ifdef USE_RUST_QUEUE
+extern int rs_queue_empty(const QUEUE *q);
+#endif
+
 // ffi.cdef is unable to swallow `bool` in place of `int` here.
 static inline int QUEUE_EMPTY(const QUEUE *const q)
   FUNC_ATTR_ALWAYS_INLINE FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_QUEUE
+  return rs_queue_empty(q);
+#else
   return q == q->next;
+#endif
 }
 
 #define QUEUE_HEAD(q) (q)->next

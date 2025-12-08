@@ -3,6 +3,7 @@
 //! This module provides C-compatible implementations of:
 //! - Growing arrays (garray) - dynamic arrays that grow as needed
 //! - Hash tables (hashtab) - string-keyed hash tables
+//! - Queue (queue) - circular doubly-linked list queue
 //!
 //! These are designed to be compatible with nvim's existing C code.
 
@@ -21,3 +22,4 @@
 
 pub mod garray;
 pub mod hashtab;
+pub mod queue;
