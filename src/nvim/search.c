@@ -109,6 +109,22 @@ static uint8_t lastc[2] = { NUL, NUL };   // last character searched for
 static Direction lastcdir = FORWARD;      // last direction of character search
 static bool last_t_cmd = true;            // last search t_cmd
 static char lastc_bytes[MAX_SCHAR_SIZE + 1];
+
+// Rust FFI declarations
+extern int rs_last_csearch_forward(void);
+extern int rs_last_csearch_until(void);
+
+/// Get the lastcdir static variable (accessor for Rust).
+int nvim_get_lastcdir(void)
+{
+  return lastcdir;
+}
+
+/// Get the last_t_cmd static variable (accessor for Rust).
+int nvim_get_last_t_cmd(void)
+{
+  return last_t_cmd;
+}
 static int lastc_bytelen = 1;             // >1 for multi-byte char
 
 // copy of spats[], for keeping the search patterns while executing autocmds
@@ -452,12 +468,20 @@ const char *last_csearch(void)
 
 int last_csearch_forward(void)
 {
+#ifdef USE_RUST_SEARCH
+  return rs_last_csearch_forward();
+#else
   return lastcdir == FORWARD;
+#endif
 }
 
 int last_csearch_until(void)
 {
+#ifdef USE_RUST_SEARCH
+  return rs_last_csearch_until();
+#else
   return last_t_cmd;
+#endif
 }
 
 void set_last_csearch(int c, char *s, int len)

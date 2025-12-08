@@ -37,6 +37,7 @@ nvim-os = { path = "os" }
 nvim-path = { path = "path" }
 nvim-profile = { path = "profile" }
 nvim-register = { path = "register" }
+nvim-search = { path = "search" }
 nvim-spell = { path = "spell" }
 nvim-strings = { path = "strings" }
 nvim-utf8proc = { path = "utf8proc" }

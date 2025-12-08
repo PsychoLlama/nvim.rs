@@ -26,6 +26,7 @@ members = [
     "src/nvim-rs/path",
     "src/nvim-rs/profile",
     "src/nvim-rs/register",
+    "src/nvim-rs/search",
     "src/nvim-rs/spell",
     "src/nvim-rs/strings",
     "src/nvim-rs/eval",

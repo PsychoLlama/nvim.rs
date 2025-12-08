@@ -42,6 +42,7 @@ pub use nvim_os::time::*;
 pub use nvim_path::*;
 pub use nvim_profile::*;
 pub use nvim_register::*;
+pub use nvim_search::*;
 pub use nvim_spell::*;
 pub use nvim_strings::*;
 pub use nvim_utf8proc::*;
