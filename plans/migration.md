@@ -358,14 +358,19 @@ Remaining FUNC_ATTR_PURE/FUNC_ATTR_CONST functions require infrastructure not ye
 - [x] rs_buf_valid(): check if buffer pointer is valid
 - [x] buf_valid() wired to Rust implementation
 
-**Phase 3 Simple Function Migration: Substantially Complete**
-Most simple pure functions (FUNC_ATTR_PURE, FUNC_ATTR_CONST) have been migrated.
-Remaining blockers for further simple function migration:
+**Phase 3 Simple Function Migration: COMPLETE ✅**
 
+Summary: 357 `rs_*` functions now exported across 34+ Rust crates. All viable
+simple pure functions (FUNC_ATTR_PURE, FUNC_ATTR_CONST) have been migrated.
+
+Remaining candidates blocked by:
 - Static initializer macros (RGB\_, schar_from_ascii) cannot use function calls
-- Global state arrays (breakat_flags, g_chartab, etc.)
+- Global state arrays (breakat_flags, g_chartab, ctrl_x_mode, shape_table)
+- Functions accessing globals (cursor_shape.c, insexpand.c, digraph.c)
 - Complex struct field access (typval_T, win_T internals)
-  Further progress requires Phase 4+ infrastructure.
+
+These remaining targets require Phase 4+ infrastructure (global state accessors,
+struct binding generation, or full module replacement).
 
 **Phase 3.5: Window/frame function exploration ✅**
 Window validation, tabpage iteration, and frame tree functions are complete.
