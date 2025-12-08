@@ -497,4 +497,4 @@ extern "C" {
 **Test:** `just test`
 **Rust tests:** `cargo test --workspace`
 **Check:** `cargo clippy && cargo fmt --check`
-**Symbols:** `nm target/release/libnvim_rs.a | grep " T rs_" | wc -l` (currently 325)
+**Symbols:** `nm build/bin/nvim | grep " T rs_" | wc -l` (currently 357)
