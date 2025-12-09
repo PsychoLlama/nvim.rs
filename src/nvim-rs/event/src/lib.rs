@@ -320,6 +320,15 @@ extern "C" {
     fn nvim_timewatcher_get_data(tw: TimeWatcherHandle) -> *mut std::ffi::c_void;
     fn nvim_timewatcher_get_events(tw: TimeWatcherHandle) -> MultiQueueHandle;
     fn nvim_timewatcher_is_blockable(tw: TimeWatcherHandle) -> c_int;
+    fn nvim_timewatcher_set_data(tw: TimeWatcherHandle, data: *mut std::ffi::c_void);
+    fn nvim_timewatcher_set_events(tw: TimeWatcherHandle, events: MultiQueueHandle);
+    fn nvim_timewatcher_set_blockable(tw: TimeWatcherHandle, blockable: c_int);
+    fn nvim_timewatcher_get_cb(tw: TimeWatcherHandle) -> *mut std::ffi::c_void;
+    fn nvim_timewatcher_set_cb(tw: TimeWatcherHandle, cb: *mut std::ffi::c_void);
+    fn nvim_timewatcher_get_close_cb(tw: TimeWatcherHandle) -> *mut std::ffi::c_void;
+    fn nvim_timewatcher_set_close_cb(tw: TimeWatcherHandle, cb: *mut std::ffi::c_void);
+    fn nvim_timewatcher_call_cb(tw: TimeWatcherHandle);
+    fn nvim_timewatcher_call_close_cb(tw: TimeWatcherHandle);
 
     // Proc accessors
     fn nvim_proc_get_status(proc: ProcHandle) -> c_int;
@@ -654,6 +663,155 @@ pub unsafe extern "C" fn rs_timewatcher_should_skip(tw: TimeWatcherHandle) -> c_
         return 0;
     }
     rs_timewatcher_events_pending(tw)
+}
+
+/// Get the data pointer from a TimeWatcher
+///
+/// # Safety
+///
+/// `tw` must be a valid TimeWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_timewatcher_get_data(tw: TimeWatcherHandle) -> *mut std::ffi::c_void {
+    if tw.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_timewatcher_get_data(tw)
+}
+
+/// Set the data pointer for a TimeWatcher
+///
+/// # Safety
+///
+/// `tw` must be a valid TimeWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_timewatcher_set_data(tw: TimeWatcherHandle, data: *mut std::ffi::c_void) {
+    if !tw.is_null() {
+        nvim_timewatcher_set_data(tw, data);
+    }
+}
+
+/// Get the events queue from a TimeWatcher
+///
+/// # Safety
+///
+/// `tw` must be a valid TimeWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_timewatcher_get_events(tw: TimeWatcherHandle) -> MultiQueueHandle {
+    if tw.is_null() {
+        return MultiQueueHandle::null();
+    }
+    nvim_timewatcher_get_events(tw)
+}
+
+/// Set the events queue for a TimeWatcher
+///
+/// # Safety
+///
+/// `tw` must be a valid TimeWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_timewatcher_set_events(tw: TimeWatcherHandle, events: MultiQueueHandle) {
+    if !tw.is_null() {
+        nvim_timewatcher_set_events(tw, events);
+    }
+}
+
+/// Check if a TimeWatcher is blockable
+///
+/// # Safety
+///
+/// `tw` must be a valid TimeWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_timewatcher_is_blockable(tw: TimeWatcherHandle) -> c_int {
+    if tw.is_null() {
+        return 0;
+    }
+    nvim_timewatcher_is_blockable(tw)
+}
+
+/// Set the blockable flag for a TimeWatcher
+///
+/// # Safety
+///
+/// `tw` must be a valid TimeWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_timewatcher_set_blockable(tw: TimeWatcherHandle, blockable: c_int) {
+    if !tw.is_null() {
+        nvim_timewatcher_set_blockable(tw, blockable);
+    }
+}
+
+/// Get the cb (timer callback) from a TimeWatcher (as void* for FFI)
+///
+/// # Safety
+///
+/// `tw` must be a valid TimeWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_timewatcher_get_cb(tw: TimeWatcherHandle) -> *mut std::ffi::c_void {
+    if tw.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_timewatcher_get_cb(tw)
+}
+
+/// Set the cb (timer callback) for a TimeWatcher
+///
+/// # Safety
+///
+/// `tw` must be a valid TimeWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_timewatcher_set_cb(tw: TimeWatcherHandle, cb: *mut std::ffi::c_void) {
+    if !tw.is_null() {
+        nvim_timewatcher_set_cb(tw, cb);
+    }
+}
+
+/// Get the close_cb from a TimeWatcher (as void* for FFI)
+///
+/// # Safety
+///
+/// `tw` must be a valid TimeWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_timewatcher_get_close_cb(tw: TimeWatcherHandle) -> *mut std::ffi::c_void {
+    if tw.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_timewatcher_get_close_cb(tw)
+}
+
+/// Set the close_cb for a TimeWatcher
+///
+/// # Safety
+///
+/// `tw` must be a valid TimeWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_timewatcher_set_close_cb(tw: TimeWatcherHandle, cb: *mut std::ffi::c_void) {
+    if !tw.is_null() {
+        nvim_timewatcher_set_close_cb(tw, cb);
+    }
+}
+
+/// Call the timer callback if set
+///
+/// # Safety
+///
+/// `tw` must be a valid TimeWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_timewatcher_call_cb(tw: TimeWatcherHandle) {
+    if !tw.is_null() {
+        nvim_timewatcher_call_cb(tw);
+    }
+}
+
+/// Call the close callback if set
+///
+/// # Safety
+///
+/// `tw` must be a valid TimeWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_timewatcher_call_close_cb(tw: TimeWatcherHandle) {
+    if !tw.is_null() {
+        nvim_timewatcher_call_close_cb(tw);
+    }
 }
 
 /// Check if a process has stopped (exited or stopped_time != 0)
