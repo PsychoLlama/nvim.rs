@@ -15,6 +15,14 @@
 
 #include "event/rstream.c.generated.h"
 
+#ifdef USE_RUST_EVENT
+// Rust implementation in nvim-event crate
+extern int rs_stream_is_closed(Stream *stream);
+#define stream_is_closed(s) rs_stream_is_closed(s)
+#else
+#define stream_is_closed(s) ((s)->closed)
+#endif
+
 void rstream_init_fd(Loop *loop, RStream *stream, int fd)
   FUNC_ATTR_NONNULL_ARG(1, 2)
 {
@@ -183,7 +191,7 @@ static void read_event(void **argv)
     rstream_consume(stream, consumed);
   }
   stream->s.pending_reqs--;
-  if (stream->s.closed && !stream->s.pending_reqs) {
+  if (stream_is_closed(&stream->s) && !stream->s.pending_reqs) {
     // Last pending read; free the stream.
     stream_close_handle(&stream->s);
   }

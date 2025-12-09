@@ -20,6 +20,14 @@ typedef struct {
 
 #include "event/wstream.c.generated.h"
 
+#ifdef USE_RUST_EVENT
+// Rust implementation in nvim-event crate
+extern int rs_stream_is_closed(Stream *stream);
+#define stream_is_closed(s) rs_stream_is_closed(s)
+#else
+#define stream_is_closed(s) ((s)->closed)
+#endif
+
 void wstream_init_fd(Loop *loop, Stream *stream, int fd, size_t maxmem)
   FUNC_ATTR_NONNULL_ARG(1) FUNC_ATTR_NONNULL_ARG(2)
 {
@@ -69,7 +77,7 @@ bool wstream_write(Stream *stream, WBuffer *buffer)
 {
   assert(stream->maxmem);
   // This should not be called after a stream was freed
-  assert(!stream->closed);
+  assert(!stream_is_closed(stream));
 
   uv_buf_t uvbuf;
   uvbuf.base = buffer->data;
@@ -153,7 +161,7 @@ static void write_cb(uv_write_t *req, int status)
 
   data->stream->pending_reqs--;
 
-  if (data->stream->closed && data->stream->pending_reqs == 0) {
+  if (stream_is_closed(data->stream) && data->stream->pending_reqs == 0) {
     // Last pending write; free the stream.
     stream_close_handle(data->stream);
   }
