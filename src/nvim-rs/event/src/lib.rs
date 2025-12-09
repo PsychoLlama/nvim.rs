@@ -426,6 +426,14 @@ extern "C" {
     fn nvim_socket_watcher_get_events(watcher: SocketWatcherHandle) -> MultiQueueHandle;
     fn nvim_socket_watcher_get_data(watcher: SocketWatcherHandle) -> *mut std::ffi::c_void;
     fn nvim_socket_watcher_is_tcp(watcher: SocketWatcherHandle) -> c_int;
+    fn nvim_socket_watcher_set_data(watcher: SocketWatcherHandle, data: *mut std::ffi::c_void);
+    fn nvim_socket_watcher_set_events(watcher: SocketWatcherHandle, events: MultiQueueHandle);
+    fn nvim_socket_watcher_get_cb(watcher: SocketWatcherHandle) -> *mut std::ffi::c_void;
+    fn nvim_socket_watcher_set_cb(watcher: SocketWatcherHandle, cb: *mut std::ffi::c_void);
+    fn nvim_socket_watcher_get_close_cb(watcher: SocketWatcherHandle) -> *mut std::ffi::c_void;
+    fn nvim_socket_watcher_set_close_cb(watcher: SocketWatcherHandle, cb: *mut std::ffi::c_void);
+    fn nvim_socket_watcher_call_cb(watcher: SocketWatcherHandle, status: c_int);
+    fn nvim_socket_watcher_call_close_cb(watcher: SocketWatcherHandle);
 }
 
 // =============================================================================
@@ -1945,6 +1953,104 @@ pub unsafe extern "C" fn rs_socket_watcher_is_tcp(watcher: SocketWatcherHandle) 
         return 0;
     }
     nvim_socket_watcher_is_tcp(watcher)
+}
+
+/// Set the user data for a SocketWatcher
+///
+/// # Safety
+///
+/// `watcher` must be a valid SocketWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_socket_watcher_set_data(watcher: SocketWatcherHandle, data: *mut std::ffi::c_void) {
+    if !watcher.is_null() {
+        nvim_socket_watcher_set_data(watcher, data);
+    }
+}
+
+/// Set the events queue for a SocketWatcher
+///
+/// # Safety
+///
+/// `watcher` must be a valid SocketWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_socket_watcher_set_events(watcher: SocketWatcherHandle, events: MultiQueueHandle) {
+    if !watcher.is_null() {
+        nvim_socket_watcher_set_events(watcher, events);
+    }
+}
+
+/// Get the cb from a SocketWatcher (as void* for FFI)
+///
+/// # Safety
+///
+/// `watcher` must be a valid SocketWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_socket_watcher_get_cb(watcher: SocketWatcherHandle) -> *mut std::ffi::c_void {
+    if watcher.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_socket_watcher_get_cb(watcher)
+}
+
+/// Set the cb for a SocketWatcher
+///
+/// # Safety
+///
+/// `watcher` must be a valid SocketWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_socket_watcher_set_cb(watcher: SocketWatcherHandle, cb: *mut std::ffi::c_void) {
+    if !watcher.is_null() {
+        nvim_socket_watcher_set_cb(watcher, cb);
+    }
+}
+
+/// Get the close_cb from a SocketWatcher (as void* for FFI)
+///
+/// # Safety
+///
+/// `watcher` must be a valid SocketWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_socket_watcher_get_close_cb(watcher: SocketWatcherHandle) -> *mut std::ffi::c_void {
+    if watcher.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_socket_watcher_get_close_cb(watcher)
+}
+
+/// Set the close_cb for a SocketWatcher
+///
+/// # Safety
+///
+/// `watcher` must be a valid SocketWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_socket_watcher_set_close_cb(watcher: SocketWatcherHandle, cb: *mut std::ffi::c_void) {
+    if !watcher.is_null() {
+        nvim_socket_watcher_set_close_cb(watcher, cb);
+    }
+}
+
+/// Call the socket callback if set
+///
+/// # Safety
+///
+/// `watcher` must be a valid SocketWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_socket_watcher_call_cb(watcher: SocketWatcherHandle, status: c_int) {
+    if !watcher.is_null() {
+        nvim_socket_watcher_call_cb(watcher, status);
+    }
+}
+
+/// Call the close callback if set
+///
+/// # Safety
+///
+/// `watcher` must be a valid SocketWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_socket_watcher_call_close_cb(watcher: SocketWatcherHandle) {
+    if !watcher.is_null() {
+        nvim_socket_watcher_call_close_cb(watcher);
+    }
 }
 
 // =============================================================================

@@ -23,6 +23,41 @@
 
 #include "event/socket.c.generated.h"
 
+#ifdef USE_RUST_EVENT
+// Rust function declarations
+extern void *rs_socket_watcher_get_data(SocketWatcher *watcher);
+extern void rs_socket_watcher_set_data(SocketWatcher *watcher, void *data);
+#define socket_watcher_get_data(w) rs_socket_watcher_get_data(w)
+#define socket_watcher_set_data(w, d) rs_socket_watcher_set_data(w, d)
+extern MultiQueue *rs_socket_watcher_get_events(SocketWatcher *watcher);
+extern void rs_socket_watcher_set_events(SocketWatcher *watcher, MultiQueue *events);
+#define socket_watcher_get_events(w) rs_socket_watcher_get_events(w)
+#define socket_watcher_set_events(w, e) rs_socket_watcher_set_events(w, e)
+extern void *rs_socket_watcher_get_cb(SocketWatcher *watcher);
+extern void rs_socket_watcher_set_cb(SocketWatcher *watcher, void *cb);
+#define socket_watcher_get_cb(w) ((socket_cb)rs_socket_watcher_get_cb(w))
+#define socket_watcher_set_cb(w, c) rs_socket_watcher_set_cb(w, (void *)(c))
+extern void *rs_socket_watcher_get_close_cb(SocketWatcher *watcher);
+extern void rs_socket_watcher_set_close_cb(SocketWatcher *watcher, void *cb);
+#define socket_watcher_get_close_cb(w) ((socket_close_cb)rs_socket_watcher_get_close_cb(w))
+#define socket_watcher_set_close_cb(w, c) rs_socket_watcher_set_close_cb(w, (void *)(c))
+extern void rs_socket_watcher_call_cb(SocketWatcher *watcher, int status);
+extern void rs_socket_watcher_call_close_cb(SocketWatcher *watcher);
+#define socket_watcher_call_cb(w, s) rs_socket_watcher_call_cb(w, s)
+#define socket_watcher_call_close_cb(w) rs_socket_watcher_call_close_cb(w)
+#else
+#define socket_watcher_get_data(w) ((w)->data)
+#define socket_watcher_set_data(w, d) ((w)->data = (d))
+#define socket_watcher_get_events(w) ((w)->events)
+#define socket_watcher_set_events(w, e) ((w)->events = (e))
+#define socket_watcher_get_cb(w) ((w)->cb)
+#define socket_watcher_set_cb(w, c) ((w)->cb = (c))
+#define socket_watcher_get_close_cb(w) ((w)->close_cb)
+#define socket_watcher_set_close_cb(w, c) ((w)->close_cb = (c))
+#define socket_watcher_call_cb(w, s) do { if ((w)->cb) (w)->cb((w), (s), (w)->data); } while (0)
+#define socket_watcher_call_close_cb(w) do { if ((w)->close_cb) (w)->close_cb((w), (w)->data); } while (0)
+#endif
+
 int socket_watcher_init(Loop *loop, SocketWatcher *watcher, const char *endpoint)
   FUNC_ATTR_NONNULL_ALL
 {
@@ -69,10 +104,10 @@ int socket_watcher_init(Loop *loop, SocketWatcher *watcher, const char *endpoint
   }
 
   watcher->stream->data = watcher;
-  watcher->cb = NULL;
-  watcher->close_cb = NULL;
-  watcher->events = NULL;
-  watcher->data = NULL;
+  socket_watcher_set_cb(watcher, NULL);
+  socket_watcher_set_close_cb(watcher, NULL);
+  socket_watcher_set_events(watcher, NULL);
+  socket_watcher_set_data(watcher, NULL);
 
   return 0;
 }
@@ -80,7 +115,7 @@ int socket_watcher_init(Loop *loop, SocketWatcher *watcher, const char *endpoint
 int socket_watcher_start(SocketWatcher *watcher, int backlog, socket_cb cb)
   FUNC_ATTR_NONNULL_ALL
 {
-  watcher->cb = cb;
+  socket_watcher_set_cb(watcher, cb);
   int result = UV_EINVAL;
 
   if (watcher->stream->type == UV_TCP) {
@@ -161,7 +196,7 @@ int socket_watcher_accept(SocketWatcher *watcher, RStream *stream)
 void socket_watcher_close(SocketWatcher *watcher, socket_close_cb cb)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  watcher->close_cb = cb;
+  socket_watcher_set_close_cb(watcher, cb);
   uv_close((uv_handle_t *)watcher->stream, close_cb);
 }
 
@@ -169,21 +204,19 @@ static void connection_event(void **argv)
 {
   SocketWatcher *watcher = argv[0];
   int status = (int)(uintptr_t)(argv[1]);
-  watcher->cb(watcher, status, watcher->data);
+  socket_watcher_call_cb(watcher, status);
 }
 
 static void connection_cb(uv_stream_t *handle, int status)
 {
   SocketWatcher *watcher = handle->data;
-  CREATE_EVENT(watcher->events, connection_event, watcher, (void *)(uintptr_t)status);
+  CREATE_EVENT(socket_watcher_get_events(watcher), connection_event, watcher, (void *)(uintptr_t)status);
 }
 
 static void close_cb(uv_handle_t *handle)
 {
   SocketWatcher *watcher = handle->data;
-  if (watcher->close_cb) {
-    watcher->close_cb(watcher, watcher->data);
-  }
+  socket_watcher_call_close_cb(watcher);
 }
 
 static void connect_cb(uv_connect_t *req, int status)
@@ -297,4 +330,56 @@ void *nvim_socket_watcher_get_data(SocketWatcher *watcher)
 int nvim_socket_watcher_is_tcp(SocketWatcher *watcher)
 {
   return (watcher->stream && watcher->stream->type == UV_TCP) ? 1 : 0;
+}
+
+/// Set the user data for a SocketWatcher (accessor for Rust).
+void nvim_socket_watcher_set_data(SocketWatcher *watcher, void *data)
+{
+  watcher->data = data;
+}
+
+/// Set the events queue for a SocketWatcher (accessor for Rust).
+void nvim_socket_watcher_set_events(SocketWatcher *watcher, MultiQueue *events)
+{
+  watcher->events = events;
+}
+
+/// Get the cb from a SocketWatcher (accessor for Rust).
+void *nvim_socket_watcher_get_cb(SocketWatcher *watcher)
+{
+  return (void *)watcher->cb;
+}
+
+/// Set the cb for a SocketWatcher (accessor for Rust).
+void nvim_socket_watcher_set_cb(SocketWatcher *watcher, void *cb)
+{
+  watcher->cb = (socket_cb)cb;
+}
+
+/// Get the close_cb from a SocketWatcher (accessor for Rust).
+void *nvim_socket_watcher_get_close_cb(SocketWatcher *watcher)
+{
+  return (void *)watcher->close_cb;
+}
+
+/// Set the close_cb for a SocketWatcher (accessor for Rust).
+void nvim_socket_watcher_set_close_cb(SocketWatcher *watcher, void *cb)
+{
+  watcher->close_cb = (socket_close_cb)cb;
+}
+
+/// Call the socket callback if set (accessor for Rust).
+void nvim_socket_watcher_call_cb(SocketWatcher *watcher, int status)
+{
+  if (watcher->cb) {
+    watcher->cb(watcher, status, watcher->data);
+  }
+}
+
+/// Call the close callback if set (accessor for Rust).
+void nvim_socket_watcher_call_close_cb(SocketWatcher *watcher)
+{
+  if (watcher->close_cb) {
+    watcher->close_cb(watcher, watcher->data);
+  }
 }
