@@ -47,6 +47,8 @@ extern uint64_t rs_proc_get_stopped_time(Proc *proc);
 #define proc_get_stopped_time(p) rs_proc_get_stopped_time(p)
 extern int rs_proc_get_pid(Proc *proc);
 #define proc_get_pid(p) rs_proc_get_pid(p)
+extern void rs_proc_set_pid(Proc *proc, int pid);
+#define proc_set_pid(p, pid) rs_proc_set_pid(p, pid)
 extern int rs_proc_get_refcount(Proc *proc);
 #define proc_get_refcount(p) rs_proc_get_refcount(p)
 extern void rs_proc_incref(Proc *proc);
@@ -75,6 +77,7 @@ extern Loop *rs_proc_get_loop(Proc *proc);
 #define proc_set_status(p, s) ((p)->status = (s))
 #define proc_get_stopped_time(p) ((p)->stopped_time)
 #define proc_get_pid(p) ((p)->pid)
+#define proc_set_pid(p, pid) ((p)->pid = (pid))
 #define proc_get_refcount(p) ((p)->refcount)
 #define proc_incref(p) ((p)->refcount++)
 #define proc_decref(p) (--(p)->refcount)
@@ -551,6 +554,12 @@ uint64_t nvim_proc_get_stopped_time(Proc *proc)
 int nvim_proc_get_pid(Proc *proc)
 {
   return proc->pid;
+}
+
+/// Set the pid field of a Proc (accessor for Rust).
+void nvim_proc_set_pid(Proc *proc, int pid)
+{
+  proc->pid = pid;
 }
 
 /// Get the refcount field from a Proc (accessor for Rust).

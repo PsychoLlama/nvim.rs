@@ -51,11 +51,17 @@ int forkpty(int *, char *, const struct termios *, const struct winsize *);
 // Rust implementation in nvim-event crate
 extern void rs_proc_set_status(Proc *proc, int status);
 extern Loop *rs_proc_get_loop(Proc *proc);
+extern int rs_proc_get_pid(Proc *proc);
+extern void rs_proc_set_pid(Proc *proc, int pid);
 #define proc_set_status(p, s) rs_proc_set_status(p, s)
 #define proc_get_loop(p) rs_proc_get_loop(p)
+#define proc_get_pid(p) rs_proc_get_pid(p)
+#define proc_set_pid(p, pid) rs_proc_set_pid(p, pid)
 #else
 #define proc_set_status(p, s) ((p)->status = (s))
 #define proc_get_loop(p) ((p)->loop)
+#define proc_get_pid(p) ((p)->pid)
+#define proc_set_pid(p, pid) ((p)->pid = (pid))
 #endif
 
 #if !defined(HAVE_FORKPTY) && !defined(__APPLE__)
@@ -231,7 +237,7 @@ int pty_proc_spawn(PtyProc *ptyproc)
   }
 
   ptyproc->tty_fd = master;
-  proc->pid = pid;
+  proc_set_pid(proc, pid);
   return 0;
 
 error:
@@ -409,7 +415,7 @@ static void chld_handler(uv_signal_t *handle, int signum)
   for (size_t i = 0; i < kv_size(loop->children); i++) {
     Proc *proc = kv_A(loop->children, i);
     do {
-      pid = waitpid(proc->pid, &stat, WNOHANG);
+      pid = waitpid(proc_get_pid(proc), &stat, WNOHANG);
     } while (pid < 0 && errno == EINTR);
 
     if (pid <= 0) {

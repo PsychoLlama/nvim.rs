@@ -23,17 +23,20 @@ extern int rs_stream_is_closed(Stream *stream);
 extern void rs_proc_set_status(Proc *proc, int status);
 extern int rs_proc_get_detach(Proc *proc);
 extern Loop *rs_proc_get_loop(Proc *proc);
+extern void rs_proc_set_pid(Proc *proc, int pid);
 #define rstream_is_closed(s) rs_rstream_is_closed(s)
 #define stream_is_closed(s) rs_stream_is_closed(s)
 #define proc_set_status(p, s) rs_proc_set_status(p, s)
 #define proc_get_detach(p) rs_proc_get_detach(p)
 #define proc_get_loop(p) rs_proc_get_loop(p)
+#define proc_set_pid(p, pid) rs_proc_set_pid(p, pid)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define stream_is_closed(s) ((s)->closed)
 #define proc_set_status(p, s) ((p)->status = (s))
 #define proc_get_detach(p) ((p)->detach)
 #define proc_get_loop(p) ((p)->loop)
+#define proc_set_pid(p, pid) ((p)->pid = (pid))
 #endif
 
 /// @returns zero on success, or negative error code
@@ -115,7 +118,7 @@ int libuv_proc_spawn(LibuvProc *uvproc)
     return status;
   }
 
-  proc->pid = uvproc->uv.pid;
+  proc_set_pid(proc, uvproc->uv.pid);
   return status;
 }
 

@@ -326,6 +326,7 @@ extern "C" {
     fn nvim_proc_set_status(proc: ProcHandle, status: c_int);
     fn nvim_proc_get_stopped_time(proc: ProcHandle) -> u64;
     fn nvim_proc_get_pid(proc: ProcHandle) -> c_int;
+    fn nvim_proc_set_pid(proc: ProcHandle, pid: c_int);
     fn nvim_proc_get_refcount(proc: ProcHandle) -> c_int;
     fn nvim_proc_is_closed(proc: ProcHandle) -> c_int;
     fn nvim_proc_get_loop(proc: ProcHandle) -> LoopHandle;
@@ -645,6 +646,18 @@ pub unsafe extern "C" fn rs_proc_get_pid(proc: ProcHandle) -> c_int {
         return -1;
     }
     nvim_proc_get_pid(proc)
+}
+
+/// Set the pid on a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_set_pid(proc: ProcHandle, pid: c_int) {
+    if !proc.is_null() {
+        nvim_proc_set_pid(proc, pid);
+    }
 }
 
 /// Get the reference count from a Proc
