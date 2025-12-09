@@ -360,6 +360,24 @@ pub unsafe extern "C" fn rs_multiqueue_has_parent(mq: MultiQueueHandle) -> c_int
     nvim_multiqueue_has_parent(mq)
 }
 
+/// Check if there are pending events in a queue
+///
+/// Combines null check with empty check: returns true if queue exists and has events.
+/// This matches the C pattern: `events && !multiqueue_empty(events)`
+///
+/// Returns 1 if there are pending events, 0 otherwise.
+///
+/// # Safety
+///
+/// `mq` may be null (will return 0 if null)
+#[no_mangle]
+pub unsafe extern "C" fn rs_pending_events(mq: MultiQueueHandle) -> c_int {
+    if mq.is_null() {
+        return 0;
+    }
+    c_int::from(rs_multiqueue_empty(mq) == 0)
+}
+
 /// Get the size of thread_events from a Loop (pure Rust implementation)
 ///
 /// Combines rs_loop_get_thread_events and rs_multiqueue_size.
