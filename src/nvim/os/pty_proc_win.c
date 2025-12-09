@@ -14,6 +14,17 @@
 
 #include "os/pty_proc_win.c.generated.h"
 
+#ifdef USE_RUST_EVENT
+// Rust implementation in nvim-event crate
+extern int rs_rstream_is_closed(RStream *stream);
+extern int rs_rstream_did_eof(RStream *stream);
+#define rstream_is_closed(s) rs_rstream_is_closed(s)
+#define rstream_did_eof(s) rs_rstream_did_eof(s)
+#else
+#define rstream_is_closed(s) ((s)->s.closed)
+#define rstream_did_eof(s) ((s)->did_eof)
+#endif
+
 static void CALLBACK pty_proc_terminate_cb(void *context, BOOLEAN unused)
   FUNC_ATTR_NONNULL_ALL
 {
@@ -45,7 +56,7 @@ static bool pty_proc_can_finish(PtyProc *ptyproc)
   Proc *proc = (Proc *)ptyproc;
 
   assert(ptyproc->finish_wait != NULL);
-  return proc->out.s.closed || proc->out.did_eof || !uv_is_readable(proc->out.s.uvstream);
+  return rstream_is_closed(&proc->out) || rstream_did_eof(&proc->out) || !uv_is_readable(proc->out.s.uvstream);
 }
 
 /// @returns zero on success, or negative error code.
