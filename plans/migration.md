@@ -13,13 +13,13 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 4.12 - Proc Field Accessors Complete)
+## Current Status (Phase 4.13 - Proc Field Accessors Complete)
 
-**55 event loop rs_* functions in nvim-event crate:**
+**66 event loop rs_* functions in nvim-event crate:**
 
 All Proc struct fields now have complete accessor coverage with USE_RUST_EVENT macros:
 
-**Proc Field Accessors (Phase 4.12):**
+**Proc Field Accessors (Phase 4.13):**
 - proc_get_status / proc_set_status - process exit status
 - proc_get_pid / proc_set_pid - process ID
 - proc_get_refcount / proc_incref / proc_decref - reference counting
@@ -28,15 +28,20 @@ All Proc struct fields now have complete accessor coverage with USE_RUST_EVENT m
 - proc_get_detach / proc_set_detach - detach flag
 - proc_get_events / proc_set_events - event queue
 - proc_get_loop - Loop handle
-- proc_get_stopped_time - stopped time
+- proc_get_stopped_time / proc_set_stopped_time - stopped time
+- proc_get_exit_signal / proc_set_exit_signal - exit signal
+- proc_get_argv / proc_set_argv - command line arguments
+- proc_get_exepath_raw / proc_set_exepath - executable path
+- proc_get_cwd / proc_set_cwd - working directory
+- proc_get_env / proc_set_env - environment dictionary
 
 **Files with USE_RUST_EVENT wired:**
 - proc.c: All proc field accesses via macros
-- libuv_proc.c: proc_set_status, proc_get_detach, proc_get_loop, proc_set_pid
-- pty_proc_unix.c: proc_set_status, proc_get_loop, proc_get_pid, proc_set_pid
-- pty_proc_win.c: proc_set_status, proc_get_loop, proc_set_pid, rstream macros
-- channel.c: proc_get_status, proc_get_type, proc_set_detach, proc_set_events
-- shell.c: proc_set_events
+- libuv_proc.c: proc_set_status, proc_get_detach, proc_get_loop, proc_set_pid, proc_get_argv, proc_get_cwd, proc_get_env, proc_get_exit_signal
+- pty_proc_unix.c: proc_set_status, proc_get_loop, proc_get_pid, proc_set_pid, proc_get_argv, proc_get_cwd, proc_get_env
+- pty_proc_win.c: proc_set_status, proc_get_loop, proc_set_pid, proc_get_argv, proc_get_cwd, proc_get_env, proc_get_exit_signal
+- channel.c: proc_get_status, proc_get_type, proc_set_detach, proc_set_events, proc_set_argv, proc_set_exepath, proc_set_cwd, proc_get_env, proc_set_env
+- shell.c: proc_set_events, proc_set_argv
 
 **Build system:**
 - Cargo workspace at `src/nvim-rs/`
