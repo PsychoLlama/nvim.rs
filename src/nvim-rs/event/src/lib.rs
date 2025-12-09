@@ -650,6 +650,19 @@ pub unsafe extern "C" fn rs_proc_get_refcount(proc: ProcHandle) -> c_int {
     nvim_proc_get_refcount(proc)
 }
 
+/// Get the status from a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_get_status(proc: ProcHandle) -> c_int {
+    if proc.is_null() {
+        return -1;
+    }
+    nvim_proc_get_status(proc)
+}
+
 /// Check if a process is closed
 ///
 /// # Safety

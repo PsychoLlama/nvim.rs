@@ -63,9 +63,12 @@ static uint64_t next_chan_id = CHAN_STDERR + 1;
 #ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern int rs_stream_is_closed(Stream *stream);
+extern int rs_proc_get_status(Proc *proc);
 #define stream_is_closed(s) rs_stream_is_closed(s)
+#define proc_get_status(p) rs_proc_get_status(p)
 #else
 #define stream_is_closed(s) ((s)->closed)
+#define proc_get_status(p) ((p)->status)
 #endif
 
 /// Teardown the module
@@ -428,7 +431,7 @@ Channel *channel_job_start(char **argv, const char *exepath, CallbackReader on_s
       tv_dict_free(proc->env);
     }
     channel_destroy_early(chan);
-    *status_out = proc->status;
+    *status_out = proc_get_status(proc);
     return NULL;
   }
   xfree(cmd);
