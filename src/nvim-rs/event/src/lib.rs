@@ -334,6 +334,9 @@ extern "C" {
     fn nvim_proc_set_detach(proc: ProcHandle, detach: c_int);
     fn nvim_proc_get_events(proc: ProcHandle) -> MultiQueueHandle;
     fn nvim_proc_set_events(proc: ProcHandle, events: MultiQueueHandle);
+    fn nvim_proc_set_closed(proc: ProcHandle, closed: c_int);
+    fn nvim_proc_incref(proc: ProcHandle);
+    fn nvim_proc_decref(proc: ProcHandle) -> c_int;
 
     // Stream accessors
     fn nvim_stream_is_closed(stream: StreamHandle) -> c_int;
@@ -782,6 +785,43 @@ pub unsafe extern "C" fn rs_proc_set_events(proc: ProcHandle, events: MultiQueue
     if !proc.is_null() {
         nvim_proc_set_events(proc, events);
     }
+}
+
+/// Set closed field of a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_set_closed(proc: ProcHandle, closed: c_int) {
+    if !proc.is_null() {
+        nvim_proc_set_closed(proc, closed);
+    }
+}
+
+/// Increment the refcount of a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_incref(proc: ProcHandle) {
+    if !proc.is_null() {
+        nvim_proc_incref(proc);
+    }
+}
+
+/// Decrement the refcount of a Proc and return new value
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_decref(proc: ProcHandle) -> c_int {
+    if proc.is_null() {
+        return 0;
+    }
+    nvim_proc_decref(proc)
 }
 
 /// Check if a Stream is closed

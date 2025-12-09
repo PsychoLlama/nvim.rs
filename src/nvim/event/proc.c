@@ -37,6 +37,8 @@ extern int rs_rstream_did_eof(RStream *stream);
 #define rstream_did_eof(s) rs_rstream_did_eof(s)
 extern int rs_proc_is_closed(Proc *proc);
 #define proc_is_closed(p) rs_proc_is_closed(p)
+extern void rs_proc_set_closed(Proc *proc, int closed);
+#define proc_set_closed(p, c) rs_proc_set_closed(p, c)
 extern int rs_proc_get_status(Proc *proc);
 #define proc_get_status(p) rs_proc_get_status(p)
 extern void rs_proc_set_status(Proc *proc, int status);
@@ -47,6 +49,10 @@ extern int rs_proc_get_pid(Proc *proc);
 #define proc_get_pid(p) rs_proc_get_pid(p)
 extern int rs_proc_get_refcount(Proc *proc);
 #define proc_get_refcount(p) rs_proc_get_refcount(p)
+extern void rs_proc_incref(Proc *proc);
+#define proc_incref(p) rs_proc_incref(p)
+extern int rs_proc_decref(Proc *proc);
+#define proc_decref(p) rs_proc_decref(p)
 extern int rs_proc_get_type(Proc *proc);
 #define proc_get_type(p) rs_proc_get_type(p)
 extern int rs_proc_get_detach(Proc *proc);
@@ -62,11 +68,14 @@ extern void rs_proc_set_events(Proc *proc, MultiQueue *events);
 #define rstream_num_bytes(s) ((s)->num_bytes)
 #define rstream_did_eof(s) ((s)->did_eof)
 #define proc_is_closed(p) ((p)->closed)
+#define proc_set_closed(p, c) ((p)->closed = (c))
 #define proc_get_status(p) ((p)->status)
 #define proc_set_status(p, s) ((p)->status = (s))
 #define proc_get_stopped_time(p) ((p)->stopped_time)
 #define proc_get_pid(p) ((p)->pid)
 #define proc_get_refcount(p) ((p)->refcount)
+#define proc_incref(p) ((p)->refcount++)
+#define proc_decref(p) (--(p)->refcount)
 #define proc_get_type(p) ((p)->type)
 #define proc_get_detach(p) ((p)->detach)
 #define proc_set_detach(p, d) ((p)->detach = (d))
@@ -153,26 +162,26 @@ int proc_spawn(Proc *proc, bool in, bool out, bool err)
     stream_init(NULL, &proc->in, -1, (uv_stream_t *)&proc->in.uv.pipe);
     proc->in.internal_data = proc;
     proc->in.internal_close_cb = on_proc_stream_close;
-    proc->refcount++;
+    proc_incref(proc);
   }
 
   if (out) {
     stream_init(NULL, &proc->out.s, -1, (uv_stream_t *)&proc->out.s.uv.pipe);
     proc->out.s.internal_data = proc;
     proc->out.s.internal_close_cb = on_proc_stream_close;
-    proc->refcount++;
+    proc_incref(proc);
   }
 
   if (err) {
     stream_init(NULL, &proc->err.s, -1, (uv_stream_t *)&proc->err.s.uv.pipe);
     proc->err.s.internal_data = proc;
     proc->err.s.internal_close_cb = on_proc_stream_close;
-    proc->refcount++;
+    proc_incref(proc);
   }
 
   proc->internal_exit_cb = on_proc_exit;
   proc->internal_close_cb = decref;
-  proc->refcount++;
+  proc_incref(proc);
   kv_push(proc->loop->children, proc);
   DLOG("new: pid=%d exepath=[%s]", proc_get_pid(proc), proc_get_exepath(proc));
   return 0;
@@ -227,7 +236,7 @@ int proc_wait(Proc *proc, int ms, MultiQueue *events)
 
   // Increase refcount to stop the exit callback from being called (and possibly
   // freed) before we have a chance to get the status.
-  proc->refcount++;
+  proc_incref(proc);
   LOOP_PROCESS_EVENTS_UNTIL(proc->loop, events, ms,
                             // Until...
                             got_int                       // interrupted by the user
@@ -257,7 +266,7 @@ int proc_wait(Proc *proc, int ms, MultiQueue *events)
       multiqueue_process_events(proc_get_events(proc));
     }
   } else {
-    proc->refcount--;
+    proc_decref(proc);
   }
 
   return proc_get_status(proc);
@@ -339,7 +348,7 @@ static void proc_close_event(void **argv)
 
 static void decref(Proc *proc)
 {
-  if (--proc->refcount != 0) {
+  if (proc_decref(proc) != 0) {
     return;
   }
 
@@ -368,7 +377,7 @@ static void proc_close(Proc *proc)
     return;
   }
   assert(!proc_is_closed(proc));
-  proc->closed = true;
+  proc_set_closed(proc, 1);
 
   if (proc_get_detach(proc)) {
     if (proc_get_type(proc) == kProcTypeUv) {
@@ -593,4 +602,22 @@ MultiQueue *nvim_proc_get_events(Proc *proc)
 void nvim_proc_set_events(Proc *proc, MultiQueue *events)
 {
   proc->events = events;
+}
+
+/// Set the closed field of a Proc (accessor for Rust).
+void nvim_proc_set_closed(Proc *proc, int closed)
+{
+  proc->closed = closed != 0;
+}
+
+/// Increment the refcount of a Proc (accessor for Rust).
+void nvim_proc_incref(Proc *proc)
+{
+  proc->refcount++;
+}
+
+/// Decrement the refcount of a Proc and return the new value (accessor for Rust).
+int nvim_proc_decref(Proc *proc)
+{
+  return --proc->refcount;
 }
