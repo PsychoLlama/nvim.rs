@@ -13,24 +13,28 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 5.1 - MessagePack RPC Infrastructure)
+## Current Status (Phase 5.5 - Insert-mode Completion)
 
-**Phase 4 Event Loop Accessors: COMPLETE ✅**
+**Phase 5.5 Complete ✅ - ctrl_x_mode_* Functions Migrated**
 
-All event watcher types (TimeWatcher, SignalWatcher, SocketWatcher), Stream types, Loop
-struct field accessors, RStream field accessors, Stream internal callback accessors,
-and stream_init field accessors now have complete accessor coverage with USE_RUST_EVENT
-macros throughout the event loop subsystem. 137 rs_* functions in nvim-event crate.
+Created nvim-insexpand crate with 18 rs_ctrl_x_mode_* functions:
+- Simple checks: ctrl_x_mode_none, ctrl_x_mode_normal, ctrl_x_mode_scroll
+- Completion types: ctrl_x_mode_whole_line, ctrl_x_mode_files, ctrl_x_mode_tags
+- Path completion: ctrl_x_mode_path_patterns, ctrl_x_mode_path_defines
+- Text completion: ctrl_x_mode_dictionary, ctrl_x_mode_thesaurus
+- Advanced: ctrl_x_mode_cmdline, ctrl_x_mode_function, ctrl_x_mode_omni
+- Special: ctrl_x_mode_spell, ctrl_x_mode_line_or_eval, ctrl_x_mode_register
+- State checks: ctrl_x_mode_not_default, ctrl_x_mode_not_defined_yet
 
-**Key Milestone:** USE_RUST is now ON by default in CMakeLists.txt.
+Uses opaque handle pattern with nvim_get_ctrl_x_mode() accessor.
+CTRL_X_* constants duplicated in Rust to match C enum values.
 
-**Phase 5 Goal:** Migrate MessagePack RPC packer/unpacker functions to Rust.
+Tests: 49 completion, 380 API tests pass
 
-MessagePack files to migrate:
-- packer.c (8.6KB) - msgpack serialization
-- unpacker.c (19KB) - msgpack deserialization
-- channel.c (21KB) - RPC channel management
-- server.c (8.5KB) - RPC server
+**Phase 5.4 Complete ✅ - Multiqueue Functions Wired**
+
+Wired multiqueue_empty and multiqueue_size to existing Rust implementations
+(rs_multiqueue_empty, rs_multiqueue_size) via USE_RUST_EVENT conditionals.
 
 **Phase 5.1-5.3 Complete ✅ - MessagePack Packer Migrated**
 
