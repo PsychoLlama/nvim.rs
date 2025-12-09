@@ -177,6 +177,33 @@ impl Event {
     }
 }
 
+/// Check if an event is nil (has no handler)
+///
+/// Returns 1 if nil, 0 if not nil.
+///
+/// # Safety
+///
+/// `event` must be a valid pointer to an Event struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_event_is_nil(event: *const Event) -> c_int {
+    if event.is_null() {
+        return 1;
+    }
+    c_int::from((*event).is_nil())
+}
+
+/// Create a nil event and write it to the output pointer
+///
+/// # Safety
+///
+/// `out` must be a valid pointer to Event memory
+#[no_mangle]
+pub unsafe extern "C" fn rs_event_nil(out: *mut Event) {
+    if !out.is_null() {
+        *out = Event::nil();
+    }
+}
+
 // =============================================================================
 // C Accessor Functions (defined in event/defs.c or similar)
 // =============================================================================
