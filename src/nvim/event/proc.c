@@ -33,9 +33,12 @@ extern int rs_rstream_is_closed(RStream *stream);
 #define rstream_is_closed(s) rs_rstream_is_closed(s)
 extern int rs_proc_is_closed(Proc *proc);
 #define proc_is_closed(p) rs_proc_is_closed(p)
+extern int rs_proc_get_status(Proc *proc);
+#define proc_get_status(p) rs_proc_get_status(p)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define proc_is_closed(p) ((p)->closed)
+#define proc_get_status(p) ((p)->status)
 #endif
 
 // Time for a process to exit cleanly before we send KILL.
@@ -180,7 +183,7 @@ int proc_wait(Proc *proc, int ms, MultiQueue *events)
   FUNC_ATTR_NONNULL_ARG(1)
 {
   if (!proc->refcount) {
-    int status = proc->status;
+    int status = proc_get_status(proc);
     LOOP_PROCESS_EVENTS(proc->loop, proc->events, 0);
     return status;
   }
@@ -224,13 +227,13 @@ int proc_wait(Proc *proc, int ms, MultiQueue *events)
     proc->refcount--;
   }
 
-  return proc->status;
+  return proc_get_status(proc);
 }
 
 /// Ask a process to terminate and eventually kill if it doesn't respond
 void proc_stop(Proc *proc) FUNC_ATTR_NONNULL_ALL
 {
-  bool exited = (proc->status >= 0);
+  bool exited = (proc_get_status(proc) >= 0);
   if (exited || proc->stopped_time) {
     return;
   }
@@ -270,7 +273,7 @@ static void children_kill_cb(uv_timer_t *handle)
 
   for (size_t i = 0; i < kv_size(loop->children); i++) {
     Proc *proc = kv_A(loop->children, i);
-    bool exited = (proc->status >= 0);
+    bool exited = (proc_get_status(proc) >= 0);
     if (exited || !proc->stopped_time) {
       continue;
     }
@@ -295,7 +298,7 @@ static void proc_close_event(void **argv)
   if (proc->cb) {
     // User (hint: channel_job_start) is responsible for calling
     // proc_free().
-    proc->cb(proc, proc->status, proc->data);
+    proc->cb(proc, proc_get_status(proc), proc->data);
   } else {
     proc_free(proc);
   }
@@ -447,7 +450,7 @@ void exit_on_closed_chan(int status)
 static void on_proc_exit(Proc *proc)
 {
   Loop *loop = proc->loop;
-  ILOG("child exited: pid=%d status=%d" PRIu64, proc->pid, proc->status);
+  ILOG("child exited: pid=%d status=%d" PRIu64, proc->pid, proc_get_status(proc));
 
   // TODO(justinmk): figure out why rpc_close sometimes(??) isn't called.
   // Theories:
@@ -464,7 +467,7 @@ static void on_proc_exit(Proc *proc)
       if (ui_client_channel_id == server_chan_id) {
         // If the current embedded server has exited and no new server is started,
         // the client should exit with the same status.
-        exit_on_closed_chan(proc->status);
+        exit_on_closed_chan(proc_get_status(proc));
       }
     }
   }
