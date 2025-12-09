@@ -19,9 +19,12 @@
 #ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern int rs_rstream_is_closed(RStream *stream);
+extern int rs_stream_is_closed(Stream *stream);
 #define rstream_is_closed(s) rs_rstream_is_closed(s)
+#define stream_is_closed(s) rs_stream_is_closed(s)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
+#define stream_is_closed(s) ((s)->closed)
 #endif
 
 /// @returns zero on success, or negative error code
@@ -68,7 +71,7 @@ int libuv_proc_spawn(LibuvProc *uvproc)
     uvproc->uvopts.env = NULL;
   }
 
-  if (!proc->in.closed) {
+  if (!stream_is_closed(&proc->in)) {
     uvproc->uvstdio[0].flags = UV_CREATE_PIPE | UV_READABLE_PIPE;
 #ifdef MSWIN
     uvproc->uvstdio[0].flags |= proc->overlapped ? UV_OVERLAPPED_PIPE : 0;
