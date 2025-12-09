@@ -22,6 +22,7 @@ extern void rs_mpack_raw(const char *data, size_t len, PackerBuffer *packer);
 extern void rs_mpack_str(const char *data, size_t len, PackerBuffer *packer);
 extern void rs_mpack_bin(const char *data, size_t len, PackerBuffer *packer);
 extern void rs_mpack_ext(const char *buf, size_t len, int8_t type, PackerBuffer *packer);
+extern void rs_mpack_handle(int object_type, int handle, PackerBuffer *packer);
 extern size_t rs_mpack_remaining(PackerBuffer *packer);
 #endif
 
@@ -190,6 +191,12 @@ void mpack_ext(char *buf, size_t len, int8_t type, PackerBuffer *packer)
 }
 #endif  // USE_RUST_MSGPACK
 
+#ifdef USE_RUST_MSGPACK
+void mpack_handle(ObjectType type, handle_T handle, PackerBuffer *packer)
+{
+  rs_mpack_handle((int)type, handle, packer);
+}
+#else
 void mpack_handle(ObjectType type, handle_T handle, PackerBuffer *packer)
 {
   char exttype = (char)(type - EXT_OBJECT_TYPE_SHIFT);
@@ -213,6 +220,7 @@ void mpack_handle(ObjectType type, handle_T handle, PackerBuffer *packer)
     packer->ptr += packsize;
   }
 }
+#endif  // USE_RUST_MSGPACK
 
 void mpack_object(Object *obj, PackerBuffer *packer)
 {

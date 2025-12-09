@@ -555,6 +555,58 @@ pub unsafe extern "C" fn rs_mpack_ext(
     rs_mpack_raw(buf, len, packer);
 }
 
+/// Shift value for EXT object types (kObjectTypeBuffer = 8)
+/// Enum values: Nil=0, Boolean=1, Integer=2, Float=3, String=4, Array=5, Dict=6, LuaRef=7, Buffer=8
+pub const EXT_OBJECT_TYPE_SHIFT: i32 = 8;
+
+/// Pack a Neovim handle (Buffer/Window/Tabpage) as a msgpack extension.
+///
+/// The handle is packed as a fixext or ext8 depending on the value range.
+/// Small handles in range [-31, 127] use fixext 1, larger handles use ext8
+/// with a variable-length unsigned int encoding.
+///
+/// # Safety
+///
+/// `packer` must be a valid PackerBuffer pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_mpack_handle(
+    object_type: c_int,
+    handle: c_int,
+    packer: *mut PackerBuffer,
+) {
+    if packer.is_null() {
+        return;
+    }
+
+    let ext_type = (object_type - EXT_OBJECT_TYPE_SHIFT) as u8;
+    let mut ptr = nvim_packer_get_ptr(packer);
+
+    if (-0x1f..=0x7f).contains(&handle) {
+        // fixext 1: small handles fit in a single byte
+        rs_mpack_w(&mut ptr, 0xd4);
+        rs_mpack_w(&mut ptr, ext_type);
+        rs_mpack_w(&mut ptr, handle as u8);
+        nvim_packer_set_ptr(packer, ptr);
+    } else {
+        // Larger handles need ext8 with uint encoding
+        // Pack the handle as uint into a temporary buffer
+        let mut buf = [0u8; MPACK_ITEM_SIZE];
+        let mut pos = buf.as_mut_ptr();
+        rs_mpack_uint(&mut pos, handle as u32);
+        let packsize = (pos as usize) - (buf.as_ptr() as usize);
+
+        // Write ext8 header
+        rs_mpack_w(&mut ptr, 0xc7);
+        rs_mpack_w(&mut ptr, packsize as u8);
+        rs_mpack_w(&mut ptr, ext_type);
+
+        // Copy packed uint data
+        std::ptr::copy_nonoverlapping(buf.as_ptr(), ptr, packsize);
+        ptr = ptr.add(packsize);
+        nvim_packer_set_ptr(packer, ptr);
+    }
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
