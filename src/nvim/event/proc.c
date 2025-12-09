@@ -116,6 +116,9 @@ extern void rs_proc_call_internal_exit_cb(Proc *proc);
 #define proc_call_internal_exit_cb(p) rs_proc_call_internal_exit_cb(p)
 extern void rs_proc_call_internal_close_cb(Proc *proc);
 #define proc_call_internal_close_cb(p) rs_proc_call_internal_close_cb(p)
+// Loop accessors
+extern MultiQueue *rs_loop_get_events(Loop *loop);
+#define loop_get_events(l) rs_loop_get_events(l)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define rstream_num_bytes(s) ((s)->num_bytes)
@@ -160,6 +163,8 @@ extern void rs_proc_call_internal_close_cb(Proc *proc);
 #define proc_call_cb(p, s, d) do { if ((p)->cb) (p)->cb((p), (s), (d)); } while (0)
 #define proc_call_internal_exit_cb(p) do { if ((p)->internal_exit_cb) (p)->internal_exit_cb(p); } while (0)
 #define proc_call_internal_close_cb(p) do { if ((p)->internal_close_cb) (p)->internal_close_cb(p); } while (0)
+// Loop accessors (fallback)
+#define loop_get_events(l) ((l)->events)
 #endif
 
 // Time for a process to exit cleanly before we send KILL.
@@ -273,15 +278,15 @@ void proc_teardown(Loop *loop) FUNC_ATTR_NONNULL_ALL
     Proc *proc = kv_A(loop->children, i);
     if (proc_get_detach(proc) || proc_get_type(proc) == kProcTypePty) {
       // Close handles to process without killing it.
-      CREATE_EVENT(loop->events, proc_close_handles, proc);
+      CREATE_EVENT(loop_get_events(loop), proc_close_handles, proc);
     } else {
       proc_stop(proc);
     }
   }
 
   // Wait until all children exit and all close events are processed.
-  LOOP_PROCESS_EVENTS_UNTIL(loop, loop->events, -1,
-                            kv_size(loop->children) == 0 && multiqueue_empty(loop->events));
+  LOOP_PROCESS_EVENTS_UNTIL(loop, loop_get_events(loop), -1,
+                            kv_size(loop->children) == 0 && multiqueue_empty(loop_get_events(loop)));
   pty_proc_teardown(loop);
 }
 
@@ -597,7 +602,7 @@ static void on_proc_exit(Proc *proc)
   // OS. We are still in the libuv loop, so we cannot call code that polls for
   // more data directly. Instead delay the reading after the libuv loop by
   // queueing proc_close_handles() as an event.
-  MultiQueue *queue = proc_get_events(proc) ? proc_get_events(proc) : loop->events;
+  MultiQueue *queue = proc_get_events(proc) ? proc_get_events(proc) : loop_get_events(loop);
   CREATE_EVENT(queue, proc_close_handles, proc);
 }
 

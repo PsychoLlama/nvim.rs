@@ -31,6 +31,9 @@ extern void rs_signal_watcher_call_cb(SignalWatcher *watcher);
 extern void rs_signal_watcher_call_close_cb(SignalWatcher *watcher);
 #define signal_watcher_call_cb(w) rs_signal_watcher_call_cb(w)
 #define signal_watcher_call_close_cb(w) rs_signal_watcher_call_close_cb(w)
+// Loop accessors
+extern MultiQueue *rs_loop_get_fast_events(Loop *loop);
+#define loop_get_fast_events(l) rs_loop_get_fast_events(l)
 #else
 #define signal_watcher_get_data(w) ((w)->data)
 #define signal_watcher_set_data(w, d) ((w)->data = (d))
@@ -42,6 +45,8 @@ extern void rs_signal_watcher_call_close_cb(SignalWatcher *watcher);
 #define signal_watcher_set_close_cb(w, c) ((w)->close_cb = (c))
 #define signal_watcher_call_cb(w) do { if ((w)->cb) (w)->cb((w), (w)->uv.signum, (w)->data); } while (0)
 #define signal_watcher_call_close_cb(w) do { if ((w)->close_cb) (w)->close_cb((w), (w)->data); } while (0)
+// Loop accessors (fallback)
+#define loop_get_fast_events(l) ((l)->fast_events)
 #endif
 
 void signal_watcher_init(Loop *loop, SignalWatcher *watcher, void *data)
@@ -51,7 +56,7 @@ void signal_watcher_init(Loop *loop, SignalWatcher *watcher, void *data)
   watcher->uv.data = watcher;
   signal_watcher_set_data(watcher, data);
   signal_watcher_set_cb(watcher, NULL);
-  signal_watcher_set_events(watcher, loop->fast_events);
+  signal_watcher_set_events(watcher, loop_get_fast_events(loop));
 }
 
 void signal_watcher_start(SignalWatcher *watcher, signal_cb cb, int signum)

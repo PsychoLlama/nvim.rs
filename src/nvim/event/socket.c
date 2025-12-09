@@ -45,6 +45,9 @@ extern void rs_socket_watcher_call_cb(SocketWatcher *watcher, int status);
 extern void rs_socket_watcher_call_close_cb(SocketWatcher *watcher);
 #define socket_watcher_call_cb(w, s) rs_socket_watcher_call_cb(w, s)
 #define socket_watcher_call_close_cb(w) rs_socket_watcher_call_close_cb(w)
+// Loop accessors
+extern MultiQueue *rs_loop_get_fast_events(Loop *loop);
+#define loop_get_fast_events(l) rs_loop_get_fast_events(l)
 #else
 #define socket_watcher_get_data(w) ((w)->data)
 #define socket_watcher_set_data(w, d) ((w)->data = (d))
@@ -56,6 +59,8 @@ extern void rs_socket_watcher_call_close_cb(SocketWatcher *watcher);
 #define socket_watcher_set_close_cb(w, c) ((w)->close_cb = (c))
 #define socket_watcher_call_cb(w, s) do { if ((w)->cb) (w)->cb((w), (s), (w)->data); } while (0)
 #define socket_watcher_call_close_cb(w) do { if ((w)->close_cb) (w)->close_cb((w), (w)->data); } while (0)
+// Loop accessors (fallback)
+#define loop_get_fast_events(l) ((l)->fast_events)
 #endif
 
 int socket_watcher_init(Loop *loop, SocketWatcher *watcher, const char *endpoint)

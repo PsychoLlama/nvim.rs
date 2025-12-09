@@ -38,6 +38,9 @@ extern void rs_timewatcher_call_cb(TimeWatcher *tw);
 extern void rs_timewatcher_call_close_cb(TimeWatcher *tw);
 #define timewatcher_call_cb(tw) rs_timewatcher_call_cb(tw)
 #define timewatcher_call_close_cb(tw) rs_timewatcher_call_close_cb(tw)
+// Loop accessors
+extern MultiQueue *rs_loop_get_fast_events(Loop *loop);
+#define loop_get_fast_events(l) rs_loop_get_fast_events(l)
 #else
 #define timewatcher_should_skip(tw) ((tw)->blockable && !multiqueue_empty((tw)->events))
 #define timewatcher_get_data(tw) ((tw)->data)
@@ -52,6 +55,8 @@ extern void rs_timewatcher_call_close_cb(TimeWatcher *tw);
 #define timewatcher_set_close_cb(tw, c) ((tw)->close_cb = (c))
 #define timewatcher_call_cb(tw) do { if ((tw)->cb) (tw)->cb((tw), (tw)->data); } while (0)
 #define timewatcher_call_close_cb(tw) do { if ((tw)->close_cb) (tw)->close_cb((tw), (tw)->data); } while (0)
+// Loop accessors (fallback)
+#define loop_get_fast_events(l) ((l)->fast_events)
 #endif
 
 void time_watcher_init(Loop *loop, TimeWatcher *watcher, void *data)
@@ -60,7 +65,7 @@ void time_watcher_init(Loop *loop, TimeWatcher *watcher, void *data)
   uv_timer_init(&loop->uv, &watcher->uv);
   watcher->uv.data = watcher;
   timewatcher_set_data(watcher, data);
-  timewatcher_set_events(watcher, loop->fast_events);
+  timewatcher_set_events(watcher, loop_get_fast_events(loop));
   timewatcher_set_blockable(watcher, false);
 }
 
