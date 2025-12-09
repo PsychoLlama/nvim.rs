@@ -13,25 +13,36 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 4.26 - Loop Field Accessors Wired Everywhere)
+## Current Status (Phase 5.1 - MessagePack RPC Infrastructure)
 
-**137 event loop rs_* functions in nvim-event crate:**
+**Phase 4 Event Loop Accessors: COMPLETE ✅**
 
 All event watcher types (TimeWatcher, SignalWatcher, SocketWatcher), Stream types, Loop
 struct field accessors, RStream field accessors, Stream internal callback accessors,
 and stream_init field accessors now have complete accessor coverage with USE_RUST_EVENT
-macros throughout the event loop subsystem, channel subsystem, and all files that access
-main_loop.events/fast_events.
+macros throughout the event loop subsystem. 137 rs_* functions in nvim-event crate.
 
-**Recent Progress (Phase 4.22-4.26):**
-- Phase 4.22: Wired proc->in/out/err stream accessors in proc.c
-- Phase 4.23: Wired all stream_init() field accessors (fpos, curmem, maxmem, pending_reqs, write_cb, events)
-- Phase 4.24: Wired stream_get_events in rstream.c and stream_set_closed, stream_get_events, stream_get_cb_data in proc.c
-- Phase 4.25: Wired stream_is_closed and stream_get_pending_reqs in channel.c
-- Phase 4.26: Wired loop_get_events/loop_get_fast_events across all 16 C files:
-  - msgpack_rpc/channel.c, ui_client.c, channel.c, terminal.c, lua/executor.c
-  - autocmd.c, eval.c, eval/funcs.c, os/shell.c, state.c, getchar.c
-  - ex_docmd.c, os/input.c, api/ui.c, main.c
+**Key Milestone:** USE_RUST is now ON by default in CMakeLists.txt.
+
+**Phase 5 Goal:** Migrate MessagePack RPC packer/unpacker functions to Rust.
+
+MessagePack files to migrate:
+- packer.c (8.6KB) - msgpack serialization
+- unpacker.c (19KB) - msgpack deserialization
+- channel.c (21KB) - RPC channel management
+- server.c (8.5KB) - RPC server
+
+**Phase 5.1 Tasks:**
+- [ ] Create nvim-msgpack crate
+- [ ] Implement basic msgpack packing primitives (mpack_uint, mpack_integer, etc.)
+- [ ] Wire to USE_RUST_MSGPACK conditional
+
+**Phase 4 Summary (4.16-4.26):**
+- Watcher accessors (TimeWatcher, SignalWatcher, SocketWatcher)
+- Loop field accessors (events, fast_events, thread_events)
+- Stream/RStream/Proc field accessors
+- Stream callbacks (write_cb, close_cb, internal callbacks)
+- Wired loop_get_events/loop_get_fast_events across 16 C files
 
 **Stream Internal Callback Accessors (Phase 4.21):**
 - stream_get_internal_data / stream_set_internal_data - internal data pointer
