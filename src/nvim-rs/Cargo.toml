@@ -34,6 +34,7 @@ nvim-math = { path = "math" }
 nvim-mbyte = { path = "mbyte" }
 nvim-memutil = { path = "memutil" }
 nvim-menu = { path = "menu" }
+nvim-msgpack = { path = "msgpack" }
 nvim-ops = { path = "ops" }
 nvim-os = { path = "os" }
 nvim-path = { path = "path" }
