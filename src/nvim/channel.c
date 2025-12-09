@@ -92,8 +92,12 @@ extern void rs_proc_set_overlapped(Proc *proc, int overlapped);
 #define proc_set_overlapped(p, o) rs_proc_set_overlapped(p, o)
 extern void rs_proc_set_cb(Proc *proc, void *cb);
 #define proc_set_cb(p, c) rs_proc_set_cb(p, (void *)(c))
+// Stream accessors for proc->in/out
+extern size_t rs_stream_get_pending_reqs(Stream *stream);
+#define stream_get_pending_reqs(s) rs_stream_get_pending_reqs(s)
 #else
 #define stream_is_closed(s) ((s)->closed)
+#define stream_get_pending_reqs(s) ((s)->pending_reqs)
 #define proc_get_status(p) ((p)->status)
 #define proc_get_type(p) ((p)->type)
 #define proc_set_detach(p, d) ((p)->detach = (d))
@@ -882,7 +886,7 @@ void channel_terminal_open(buf_T *buf, Channel *chan)
 static void term_write(const char *buf, size_t size, void *data)
 {
   Channel *chan = data;
-  if (chan->stream.proc.in.closed) {
+  if (stream_is_closed(&chan->stream.proc.in)) {
     // If the backing stream was closed abruptly, there may be write events
     // ahead of the terminal close event. Just ignore the writes.
     ILOG("write failed: stream is closed");
@@ -901,7 +905,7 @@ static void term_resize(uint16_t width, uint16_t height, void *data)
 static inline void term_delayed_free(void **argv)
 {
   Channel *chan = argv[0];
-  if (chan->stream.proc.in.pending_reqs || chan->stream.proc.out.s.pending_reqs) {
+  if (stream_get_pending_reqs(&chan->stream.proc.in) || stream_get_pending_reqs(&chan->stream.proc.out.s)) {
     multiqueue_put(chan->events, term_delayed_free, chan);
     return;
   }
