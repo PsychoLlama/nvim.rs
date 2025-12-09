@@ -26,15 +26,21 @@ extern int rs_stream_is_closed(Stream *stream);
 extern size_t rs_stream_pending_reqs(Stream *stream);
 extern void rs_stream_pending_reqs_inc(Stream *stream);
 extern void rs_stream_pending_reqs_dec(Stream *stream);
+extern size_t rs_stream_get_curmem(Stream *stream);
+extern size_t rs_stream_get_maxmem(Stream *stream);
 #define stream_is_closed(s) rs_stream_is_closed(s)
 #define stream_pending_reqs(s) rs_stream_pending_reqs(s)
 #define stream_pending_reqs_inc(s) rs_stream_pending_reqs_inc(s)
 #define stream_pending_reqs_dec(s) rs_stream_pending_reqs_dec(s)
+#define stream_get_curmem(s) rs_stream_get_curmem(s)
+#define stream_get_maxmem(s) rs_stream_get_maxmem(s)
 #else
 #define stream_is_closed(s) ((s)->closed)
 #define stream_pending_reqs(s) ((s)->pending_reqs)
 #define stream_pending_reqs_inc(s) ((s)->pending_reqs++)
 #define stream_pending_reqs_dec(s) ((s)->pending_reqs--)
+#define stream_get_curmem(s) ((s)->curmem)
+#define stream_get_maxmem(s) ((s)->maxmem)
 #endif
 
 void wstream_init_fd(Loop *loop, Stream *stream, int fd, size_t maxmem)
@@ -84,7 +90,7 @@ void wstream_set_write_cb(Stream *stream, stream_write_cb cb, void *data)
 bool wstream_write(Stream *stream, WBuffer *buffer)
   FUNC_ATTR_NONNULL_ALL
 {
-  assert(stream->maxmem);
+  assert(stream_get_maxmem(stream));
   // This should not be called after a stream was freed
   assert(!stream_is_closed(stream));
 
@@ -108,7 +114,7 @@ bool wstream_write(Stream *stream, WBuffer *buffer)
     return req.result > 0;
   }
 
-  if (stream->curmem > stream->maxmem) {
+  if (stream_get_curmem(stream) > stream_get_maxmem(stream)) {
     goto err;
   }
 
