@@ -331,6 +331,8 @@ extern "C" {
     // Stream accessors
     fn nvim_stream_is_closed(stream: StreamHandle) -> c_int;
     fn nvim_stream_pending_reqs(stream: StreamHandle) -> usize;
+    fn nvim_stream_pending_reqs_inc(stream: StreamHandle);
+    fn nvim_stream_pending_reqs_dec(stream: StreamHandle);
     fn nvim_stream_get_fd(stream: StreamHandle) -> c_int;
     fn nvim_stream_get_curmem(stream: StreamHandle) -> usize;
     fn nvim_stream_get_maxmem(stream: StreamHandle) -> usize;
@@ -685,6 +687,30 @@ pub unsafe extern "C" fn rs_stream_pending_reqs(stream: StreamHandle) -> usize {
         return 0;
     }
     nvim_stream_pending_reqs(stream)
+}
+
+/// Increment the pending requests count for a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_pending_reqs_inc(stream: StreamHandle) {
+    if !stream.is_null() {
+        nvim_stream_pending_reqs_inc(stream);
+    }
+}
+
+/// Decrement the pending requests count for a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_pending_reqs_dec(stream: StreamHandle) {
+    if !stream.is_null() {
+        nvim_stream_pending_reqs_dec(stream);
+    }
 }
 
 /// Get the file descriptor from a Stream

@@ -23,9 +23,18 @@ typedef struct {
 #ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern int rs_stream_is_closed(Stream *stream);
+extern size_t rs_stream_pending_reqs(Stream *stream);
+extern void rs_stream_pending_reqs_inc(Stream *stream);
+extern void rs_stream_pending_reqs_dec(Stream *stream);
 #define stream_is_closed(s) rs_stream_is_closed(s)
+#define stream_pending_reqs(s) rs_stream_pending_reqs(s)
+#define stream_pending_reqs_inc(s) rs_stream_pending_reqs_inc(s)
+#define stream_pending_reqs_dec(s) rs_stream_pending_reqs_dec(s)
 #else
 #define stream_is_closed(s) ((s)->closed)
+#define stream_pending_reqs(s) ((s)->pending_reqs)
+#define stream_pending_reqs_inc(s) ((s)->pending_reqs++)
+#define stream_pending_reqs_dec(s) ((s)->pending_reqs--)
 #endif
 
 void wstream_init_fd(Loop *loop, Stream *stream, int fd, size_t maxmem)
@@ -115,7 +124,7 @@ bool wstream_write(Stream *stream, WBuffer *buffer)
     goto err;
   }
 
-  stream->pending_reqs++;
+  stream_pending_reqs_inc(stream);
   return true;
 
 err:
@@ -159,9 +168,9 @@ static void write_cb(uv_write_t *req, int status)
     data->stream->write_cb(data->stream, data->stream->cb_data, status);
   }
 
-  data->stream->pending_reqs--;
+  stream_pending_reqs_dec(data->stream);
 
-  if (stream_is_closed(data->stream) && data->stream->pending_reqs == 0) {
+  if (stream_is_closed(data->stream) && stream_pending_reqs(data->stream) == 0) {
     // Last pending write; free the stream.
     stream_close_handle(data->stream);
   }

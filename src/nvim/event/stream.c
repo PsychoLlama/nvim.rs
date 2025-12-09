@@ -199,3 +199,15 @@ MultiQueue *nvim_stream_get_events(Stream *stream)
 {
   return stream->events;
 }
+
+/// Increment pending requests count for a Stream (accessor for Rust).
+void nvim_stream_pending_reqs_inc(Stream *stream)
+{
+  stream->pending_reqs++;
+}
+
+/// Decrement pending requests count for a Stream (accessor for Rust).
+void nvim_stream_pending_reqs_dec(Stream *stream)
+{
+  stream->pending_reqs--;
+}

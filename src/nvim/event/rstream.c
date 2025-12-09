@@ -18,9 +18,18 @@
 #ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern int rs_stream_is_closed(Stream *stream);
+extern size_t rs_stream_pending_reqs(Stream *stream);
+extern void rs_stream_pending_reqs_inc(Stream *stream);
+extern void rs_stream_pending_reqs_dec(Stream *stream);
 #define stream_is_closed(s) rs_stream_is_closed(s)
+#define stream_pending_reqs(s) rs_stream_pending_reqs(s)
+#define stream_pending_reqs_inc(s) rs_stream_pending_reqs_inc(s)
+#define stream_pending_reqs_dec(s) rs_stream_pending_reqs_dec(s)
 #else
 #define stream_is_closed(s) ((s)->closed)
+#define stream_pending_reqs(s) ((s)->pending_reqs)
+#define stream_pending_reqs_inc(s) ((s)->pending_reqs++)
+#define stream_pending_reqs_dec(s) ((s)->pending_reqs--)
 #endif
 
 void rstream_init_fd(Loop *loop, RStream *stream, int fd)
@@ -190,8 +199,8 @@ static void read_event(void **argv)
     assert(consumed <= available);
     rstream_consume(stream, consumed);
   }
-  stream->s.pending_reqs--;
-  if (stream_is_closed(&stream->s) && !stream->s.pending_reqs) {
+  stream_pending_reqs_dec(&stream->s);
+  if (stream_is_closed(&stream->s) && !stream_pending_reqs(&stream->s)) {
     // Last pending read; free the stream.
     stream_close_handle(&stream->s);
   }
@@ -236,7 +245,7 @@ static void invoke_read_cb(RStream *stream, bool eof)
   }
 
   // Don't let the stream be closed before the event is processed.
-  stream->s.pending_reqs++;
+  stream_pending_reqs_inc(&stream->s);
   stream->pending_read = true;
   CREATE_EVENT(stream->s.events, read_event, stream);
 }
