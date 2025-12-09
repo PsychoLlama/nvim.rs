@@ -16,6 +16,14 @@
 
 #include "event/libuv_proc.c.generated.h"
 
+#ifdef USE_RUST_EVENT
+// Rust implementation in nvim-event crate
+extern int rs_rstream_is_closed(RStream *stream);
+#define rstream_is_closed(s) rs_rstream_is_closed(s)
+#else
+#define rstream_is_closed(s) ((s)->s.closed)
+#endif
+
 /// @returns zero on success, or negative error code
 int libuv_proc_spawn(LibuvProc *uvproc)
   FUNC_ATTR_NONNULL_ALL
@@ -68,7 +76,7 @@ int libuv_proc_spawn(LibuvProc *uvproc)
     uvproc->uvstdio[0].data.stream = (uv_stream_t *)(&proc->in.uv.pipe);
   }
 
-  if (!proc->out.s.closed) {
+  if (!rstream_is_closed(&proc->out)) {
     uvproc->uvstdio[1].flags = UV_CREATE_PIPE | UV_WRITABLE_PIPE;
 #ifdef MSWIN
     // pipe must be readable for IOCP to work on Windows.
@@ -78,7 +86,7 @@ int libuv_proc_spawn(LibuvProc *uvproc)
     uvproc->uvstdio[1].data.stream = (uv_stream_t *)(&proc->out.s.uv.pipe);
   }
 
-  if (!proc->err.s.closed) {
+  if (!rstream_is_closed(&proc->err)) {
     uvproc->uvstdio[2].flags = UV_CREATE_PIPE | UV_WRITABLE_PIPE;
     uvproc->uvstdio[2].data.stream = (uv_stream_t *)(&proc->err.s.uv.pipe);
   } else if (proc->fwd_err) {
