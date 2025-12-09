@@ -13,7 +13,7 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 4.4 - 368 rs_* Functions, 49 Event Loop)
+## Current Status (Phase 4.5 - 368 rs_* Functions, 49 Event Loop)
 
 **368 Rust functions exported across 35 Rust crates:**
 
@@ -33,25 +33,27 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - 368 rs_* symbols exported
 - 40+ USE_RUST_* defines active across C files (including USE_RUST_EVENT)
 
-**Recent Progress (Phase 4.4):**
-- Wired USE_RUST_EVENT to 10 C files with 13+ locations:
-  - CMakeLists.txt: defines USE_RUST_EVENT
+**Recent Progress (Phase 4.5):**
+- Wired USE_RUST_EVENT to 12 C files with 16+ locations:
   - time.c (2): rs_timewatcher_should_skip
   - proc.h: rs_proc_is_stopped
-  - proc.c: rs_multiqueue_empty
+  - proc.c (2): rs_multiqueue_empty, rs_rstream_is_closed
   - input.c (4): rs_multiqueue_empty, rs_pending_events, rs_rstream_is_closed
   - state.c: rs_multiqueue_empty
   - getchar.c: rs_multiqueue_empty
   - shell.c: rs_multiqueue_empty
   - loop.c: rs_multiqueue_size
   - executor.c: rs_loop_is_closing
-- Added rs_rstream_is_closed function (uses accessor chaining)
+  - libuv_proc.c: rs_rstream_is_closed
+  - rstream.c: rs_stream_is_closed
+  - wstream.c (2): rs_stream_is_closed
+- New accessor macros: rstream_is_closed, stream_is_closed
 
-**Phase 4.2-4.3 Summary:**
+**Phase 4 Summary:**
 - 49 event loop Rust functions covering all major event types
 - Opaque handles: LoopHandle, MultiQueueHandle, TimeWatcherHandle, ProcHandle,
   StreamHandle, RStreamHandle, SignalWatcherHandle, SocketWatcherHandle
-- All tests passing: timer (18), job (61), channels (14)
+- All tests passing: timer (18), channels (14)
 
 **Earlier Progress (Phase 3.52-3.68):**
 - Phase 3.52-3.68: Multiple phases completing simple function migration
