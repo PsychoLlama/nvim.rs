@@ -41,6 +41,8 @@ extern void rs_stream_set_close_cb_data(Stream *stream, void *data);
 #define stream_set_close_cb(s, c) rs_stream_set_close_cb(s, (void *)(c))
 #define stream_get_close_cb_data(s) rs_stream_get_close_cb_data(s)
 #define stream_set_close_cb_data(s, d) rs_stream_set_close_cb_data(s, d)
+extern MultiQueue *rs_stream_get_events(Stream *stream);
+#define stream_get_events(s) rs_stream_get_events(s)
 // RStream field accessors
 extern int rs_rstream_did_eof(RStream *stream);
 #define rstream_did_eof(s) rs_rstream_did_eof(s)
@@ -69,6 +71,7 @@ extern void rs_rstream_num_bytes_add(RStream *stream, size_t amount);
 #define stream_set_close_cb(s, c) ((s)->close_cb = (c))
 #define stream_get_close_cb_data(s) ((s)->close_cb_data)
 #define stream_set_close_cb_data(s, d) ((s)->close_cb_data = (d))
+#define stream_get_events(s) ((s)->events)
 // RStream field accessors (fallback)
 #define rstream_did_eof(s) ((s)->did_eof)
 #define rstream_set_did_eof(s, e) ((s)->did_eof = (e))
@@ -294,7 +297,7 @@ static void invoke_read_cb(RStream *stream, bool eof)
   // Don't let the stream be closed before the event is processed.
   stream_pending_reqs_inc(&stream->s);
   stream->pending_read = true;
-  CREATE_EVENT(stream->s.events, read_event, stream);
+  CREATE_EVENT(stream_get_events(&stream->s), read_event, stream);
 }
 
 static void rstream_close_cb(Stream *s, void *data)

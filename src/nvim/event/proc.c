@@ -124,6 +124,12 @@ extern void rs_stream_set_internal_data(Stream *stream, void *data);
 #define stream_set_internal_data(s, d) rs_stream_set_internal_data(s, d)
 extern void rs_stream_set_internal_close_cb(Stream *stream, void *cb);
 #define stream_set_internal_close_cb(s, c) rs_stream_set_internal_close_cb(s, (void *)(c))
+extern void rs_stream_set_closed(Stream *stream, int closed);
+#define stream_set_closed(s, c) rs_stream_set_closed(s, c)
+extern MultiQueue *rs_stream_get_events(Stream *stream);
+#define stream_get_events(s) rs_stream_get_events(s)
+extern void *rs_stream_get_cb_data(Stream *stream);
+#define stream_get_cb_data(s) rs_stream_get_cb_data(s)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define rstream_num_bytes(s) ((s)->num_bytes)
@@ -173,6 +179,9 @@ extern void rs_stream_set_internal_close_cb(Stream *stream, void *cb);
 // Stream accessors for proc->in/out/err (fallback)
 #define stream_set_internal_data(s, d) ((s)->internal_data = (d))
 #define stream_set_internal_close_cb(s, c) ((s)->internal_close_cb = (c))
+#define stream_set_closed(s, c) ((s)->closed = (c))
+#define stream_get_events(s) ((s)->events)
+#define stream_get_cb_data(s) ((s)->cb_data)
 #endif
 
 // Time for a process to exit cleanly before we send KILL.
@@ -199,19 +208,19 @@ int proc_spawn(Proc *proc, bool in, bool out, bool err)
   if (in) {
     uv_pipe_init(&proc_get_loop(proc)->uv, &proc->in.uv.pipe, 0);
   } else {
-    proc->in.closed = true;
+    stream_set_closed(&proc->in, true);
   }
 
   if (out) {
     uv_pipe_init(&proc_get_loop(proc)->uv, &proc->out.s.uv.pipe, 0);
   } else {
-    proc->out.s.closed = true;
+    stream_set_closed(&proc->out.s, true);
   }
 
   if (err) {
     uv_pipe_init(&proc_get_loop(proc)->uv, &proc->err.s.uv.pipe, 0);
   } else {
-    proc->err.s.closed = true;
+    stream_set_closed(&proc->err.s, true);
   }
 
 #ifdef USE_GCOV
@@ -519,8 +528,8 @@ static void flush_stream(Proc *proc, RStream *stream)
 
     // Poll for data and process the generated events.
     loop_poll_events(proc_get_loop(proc), 0);
-    if (stream->s.events) {
-      multiqueue_process_events(stream->s.events);
+    if (stream_get_events(&stream->s)) {
+      multiqueue_process_events(stream_get_events(&stream->s));
     }
 
     // Stream can be closed if it is empty.
@@ -528,7 +537,7 @@ static void flush_stream(Proc *proc, RStream *stream)
       if (stream->read_cb && !rstream_did_eof(stream)) {
         // Stream callback could miss EOF handling if a child keeps the stream
         // open. But only send EOF if we haven't already.
-        stream->read_cb(stream, stream->buffer, 0, stream->s.cb_data, true);
+        stream->read_cb(stream, stream->buffer, 0, stream_get_cb_data(&stream->s), true);
       }
       break;
     }
