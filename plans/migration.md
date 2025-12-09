@@ -13,9 +13,9 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 4.7 - 368 rs_* Functions, 49 Event Loop)
+## Current Status (Phase 4.8 - 370 rs_* Functions, 51 Event Loop)
 
-**368 Rust functions exported across 35 Rust crates:**
+**370 Rust functions exported across 35 Rust crates:**
 
 - nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
 - nvim-memutil, nvim-os, nvim-collections, nvim-encoding
@@ -23,18 +23,18 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - nvim-spell, nvim-eval, nvim-ex_docmd, nvim-indent, nvim-keycodes
 - nvim-profile, nvim-menu, nvim-help, nvim-cmdhist, nvim-fileio
 - nvim-version, nvim-window, nvim-buffer, nvim-mark, nvim-ascii
-- nvim-search, nvim-api, **nvim-event** (49 functions)
+- nvim-search, nvim-api, **nvim-event** (51 functions)
 
 **Build system:**
 
 - Cargo workspace at `src/nvim-rs/`
 - CMake integration via USE_RUST_* flags (all enabled)
 - cbindgen generates C headers from Rust
-- 368 rs_* symbols exported
+- 370 rs_* symbols exported
 - 40+ USE_RUST_* defines active across C files (including USE_RUST_EVENT)
 
-**Recent Progress (Phase 4.7):**
-- Wired USE_RUST_EVENT to 16 C files with 21+ locations:
+**Recent Progress (Phase 4.8):**
+- Wired USE_RUST_EVENT to 16 C files with 25+ locations:
   - time.c: timewatcher_should_skip macro
   - proc.h: rs_proc_is_stopped
   - proc.c (4): rs_multiqueue_empty, rs_rstream_is_closed, rs_proc_is_closed
@@ -45,16 +45,16 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
   - loop.c: rs_multiqueue_size
   - executor.c: loop_is_closing macro
   - libuv_proc.c (3): rs_rstream_is_closed, rs_stream_is_closed, stream_is_closed macro
-  - rstream.c: stream_is_closed macro
-  - wstream.c (2): stream_is_closed macro
+  - rstream.c (4): stream_is_closed, stream_pending_reqs, stream_pending_reqs_inc/dec
+  - wstream.c (5): stream_is_closed, stream_pending_reqs, stream_pending_reqs_inc/dec
   - channel.c: stream_is_closed macro
-  - stream.c: stream_is_closed macro
+  - stream.c: stream_is_closed macro, pending_reqs accessors
 - Simplified #ifdef patterns: All USE_RUST_EVENT locations now use fallback macros
   for non-Rust builds, eliminating redundant #ifdef blocks around usage sites
-- Latest: Added stream_is_closed macro to libuv_proc.c for consistent Rust wiring
+- Latest: Added stream_pending_reqs inc/dec accessors for full pending_reqs migration
 
 **Phase 4 Summary:**
-- 49 event loop Rust functions covering all major event types
+- 51 event loop Rust functions covering all major event types
 - Opaque handles: LoopHandle, MultiQueueHandle, TimeWatcherHandle, ProcHandle,
   StreamHandle, RStreamHandle, SignalWatcherHandle, SocketWatcherHandle
 - All tests passing: timer (18), channels (14)
