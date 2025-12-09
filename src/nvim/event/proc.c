@@ -485,3 +485,21 @@ uint64_t nvim_proc_get_stopped_time(Proc *proc)
 {
   return proc->stopped_time;
 }
+
+/// Get the pid field from a Proc (accessor for Rust).
+int nvim_proc_get_pid(Proc *proc)
+{
+  return proc->pid;
+}
+
+/// Get the refcount field from a Proc (accessor for Rust).
+int nvim_proc_get_refcount(Proc *proc)
+{
+  return proc->refcount;
+}
+
+/// Check if a Proc is closed (accessor for Rust).
+int nvim_proc_is_closed(Proc *proc)
+{
+  return proc->closed ? 1 : 0;
+}

@@ -239,6 +239,9 @@ extern "C" {
     // Proc accessors
     fn nvim_proc_get_status(proc: ProcHandle) -> c_int;
     fn nvim_proc_get_stopped_time(proc: ProcHandle) -> u64;
+    fn nvim_proc_get_pid(proc: ProcHandle) -> c_int;
+    fn nvim_proc_get_refcount(proc: ProcHandle) -> c_int;
+    fn nvim_proc_is_closed(proc: ProcHandle) -> c_int;
 }
 
 // =============================================================================
@@ -458,6 +461,45 @@ pub unsafe extern "C" fn rs_proc_is_stopped(proc: ProcHandle) -> c_int {
     let stopped_time = nvim_proc_get_stopped_time(proc);
     let exited = status >= 0;
     c_int::from(exited || stopped_time != 0)
+}
+
+/// Get the process ID from a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_get_pid(proc: ProcHandle) -> c_int {
+    if proc.is_null() {
+        return -1;
+    }
+    nvim_proc_get_pid(proc)
+}
+
+/// Get the reference count from a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_get_refcount(proc: ProcHandle) -> c_int {
+    if proc.is_null() {
+        return 0;
+    }
+    nvim_proc_get_refcount(proc)
+}
+
+/// Check if a process is closed
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_is_closed(proc: ProcHandle) -> c_int {
+    if proc.is_null() {
+        return 1;
+    }
+    nvim_proc_is_closed(proc)
 }
 
 // =============================================================================
