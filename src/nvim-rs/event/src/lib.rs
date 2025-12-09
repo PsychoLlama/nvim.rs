@@ -437,6 +437,41 @@ pub unsafe extern "C" fn rs_loop_children_count(loop_: LoopHandle) -> usize {
     nvim_loop_children_count(loop_)
 }
 
+/// Check if a Loop's events queue is empty
+///
+/// Convenience function combining rs_loop_get_events and rs_multiqueue_empty.
+///
+/// # Safety
+///
+/// `loop_` must be a valid Loop handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_loop_events_empty(loop_: LoopHandle) -> c_int {
+    if loop_.is_null() {
+        return 1;
+    }
+    let events = nvim_loop_get_events(loop_);
+    if events.is_null() {
+        return 1;
+    }
+    rs_multiqueue_empty(events)
+}
+
+/// Check if a Loop has pending events (events queue not empty)
+///
+/// Convenience function that returns true if there are events to process.
+/// Matches the pattern: `!multiqueue_empty(loop->events)`
+///
+/// # Safety
+///
+/// `loop_` must be a valid Loop handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_loop_has_pending_events(loop_: LoopHandle) -> c_int {
+    if loop_.is_null() {
+        return 0;
+    }
+    c_int::from(rs_loop_events_empty(loop_) == 0)
+}
+
 /// Check if a MultiQueue is empty (pure Rust implementation)
 ///
 /// Uses the headtail accessor and checks if the queue is self-referential.
