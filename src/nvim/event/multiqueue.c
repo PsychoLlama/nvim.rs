@@ -301,3 +301,15 @@ size_t nvim_multiqueue_size(MultiQueue *mq)
 {
   return multiqueue_size(mq);
 }
+
+/// Get the headtail QUEUE pointer from a MultiQueue (accessor for Rust).
+QUEUE *nvim_multiqueue_get_headtail(MultiQueue *mq)
+{
+  return &mq->headtail;
+}
+
+/// Get the size field from a MultiQueue (accessor for Rust).
+size_t nvim_multiqueue_get_size_field(MultiQueue *mq)
+{
+  return mq->size;
+}

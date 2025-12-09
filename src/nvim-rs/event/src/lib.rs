@@ -160,6 +160,13 @@ impl Event {
 // C Accessor Functions (defined in event/defs.c or similar)
 // =============================================================================
 
+/// QUEUE structure matching Neovim's lib/queue_defs.h (same as in nvim-collections)
+#[repr(C)]
+pub struct Queue {
+    pub next: *mut Queue,
+    pub prev: *mut Queue,
+}
+
 extern "C" {
     // Loop accessors
     fn nvim_loop_get_events(loop_: LoopHandle) -> MultiQueueHandle;
@@ -169,6 +176,8 @@ extern "C" {
     // MultiQueue accessors
     fn nvim_multiqueue_empty(mq: MultiQueueHandle) -> c_int;
     fn nvim_multiqueue_size(mq: MultiQueueHandle) -> usize;
+    fn nvim_multiqueue_get_headtail(mq: MultiQueueHandle) -> *mut Queue;
+    fn nvim_multiqueue_get_size_field(mq: MultiQueueHandle) -> usize;
 
     // TimeWatcher accessors
     fn nvim_timewatcher_get_data(tw: TimeWatcherHandle) -> *mut std::ffi::c_void;
@@ -219,7 +228,9 @@ pub unsafe extern "C" fn rs_loop_get_fast_events(loop_: LoopHandle) -> MultiQueu
     nvim_loop_get_fast_events(loop_)
 }
 
-/// Check if a MultiQueue is empty
+/// Check if a MultiQueue is empty (pure Rust implementation)
+///
+/// Uses the headtail accessor and checks if the queue is self-referential.
 ///
 /// # Safety
 ///
@@ -229,10 +240,17 @@ pub unsafe extern "C" fn rs_multiqueue_empty(mq: MultiQueueHandle) -> c_int {
     if mq.is_null() {
         return 1;
     }
-    nvim_multiqueue_empty(mq)
+    let headtail = nvim_multiqueue_get_headtail(mq);
+    if headtail.is_null() {
+        return 1;
+    }
+    // A queue is empty when it points to itself (circular reference to self)
+    c_int::from(headtail == (*headtail).next)
 }
 
-/// Get the size of a MultiQueue
+/// Get the size of a MultiQueue (pure Rust implementation)
+///
+/// Directly reads the size field via accessor.
 ///
 /// # Safety
 ///
@@ -242,7 +260,7 @@ pub unsafe extern "C" fn rs_multiqueue_size(mq: MultiQueueHandle) -> usize {
     if mq.is_null() {
         return 0;
     }
-    nvim_multiqueue_size(mq)
+    nvim_multiqueue_get_size_field(mq)
 }
 
 /// Check if TimeWatcher event queue is empty
