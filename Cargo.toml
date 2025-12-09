@@ -22,6 +22,7 @@ members = [
     "src/nvim-rs/mbyte",
     "src/nvim-rs/memory",
     "src/nvim-rs/memutil",
+    "src/nvim-rs/msgpack",
     "src/nvim-rs/menu",
     "src/nvim-rs/ops",
     "src/nvim-rs/os",
