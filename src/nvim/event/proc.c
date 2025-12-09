@@ -37,11 +37,14 @@ extern int rs_proc_get_status(Proc *proc);
 #define proc_get_status(p) rs_proc_get_status(p)
 extern uint64_t rs_proc_get_stopped_time(Proc *proc);
 #define proc_get_stopped_time(p) rs_proc_get_stopped_time(p)
+extern int rs_proc_get_pid(Proc *proc);
+#define proc_get_pid(p) rs_proc_get_pid(p)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define proc_is_closed(p) ((p)->closed)
 #define proc_get_status(p) ((p)->status)
 #define proc_get_stopped_time(p) ((p)->stopped_time)
+#define proc_get_pid(p) ((p)->pid)
 #endif
 
 // Time for a process to exit cleanly before we send KILL.
@@ -144,7 +147,7 @@ int proc_spawn(Proc *proc, bool in, bool out, bool err)
   proc->internal_close_cb = decref;
   proc->refcount++;
   kv_push(proc->loop->children, proc);
-  DLOG("new: pid=%d exepath=[%s]", proc->pid, proc_get_exepath(proc));
+  DLOG("new: pid=%d exepath=[%s]", proc_get_pid(proc), proc_get_exepath(proc));
   return 0;
 }
 
@@ -245,7 +248,7 @@ void proc_stop(Proc *proc) FUNC_ATTR_NONNULL_ALL
 
   switch (proc->type) {
   case kProcTypeUv:
-    os_proc_tree_kill(proc->pid, SIGTERM);
+    os_proc_tree_kill(proc_get_pid(proc), SIGTERM);
     break;
   case kProcTypePty:
     // close all streams for pty processes to send SIGHUP to the process
@@ -283,10 +286,10 @@ static void children_kill_cb(uv_timer_t *handle)
     uint64_t term_sent = UINT64_MAX == proc_get_stopped_time(proc);
     if (kProcTypePty != proc->type || term_sent) {
       proc->exit_signal = SIGKILL;
-      os_proc_tree_kill(proc->pid, SIGKILL);
+      os_proc_tree_kill(proc_get_pid(proc), SIGKILL);
     } else {
       proc->exit_signal = SIGTERM;
-      os_proc_tree_kill(proc->pid, SIGTERM);
+      os_proc_tree_kill(proc_get_pid(proc), SIGTERM);
       proc->stopped_time = UINT64_MAX;  // Flag: SIGTERM was sent.
       // Restart timer.
       uv_timer_start(&proc->loop->children_kill_timer, children_kill_cb,
@@ -453,7 +456,7 @@ void exit_on_closed_chan(int status)
 static void on_proc_exit(Proc *proc)
 {
   Loop *loop = proc->loop;
-  ILOG("child exited: pid=%d status=%d" PRIu64, proc->pid, proc_get_status(proc));
+  ILOG("child exited: pid=%d status=%d" PRIu64, proc_get_pid(proc), proc_get_status(proc));
 
   // TODO(justinmk): figure out why rpc_close sometimes(??) isn't called.
   // Theories:

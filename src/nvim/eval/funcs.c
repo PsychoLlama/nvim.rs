@@ -132,6 +132,14 @@
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
+#ifdef USE_RUST_EVENT
+// Rust implementation in nvim-event crate
+extern int rs_proc_get_pid(Proc *proc);
+#define proc_get_pid(p) rs_proc_get_pid(p)
+#else
+#define proc_get_pid(p) ((p)->pid)
+#endif
+
 /// Describe data to return from find_some_match()
 typedef enum {
   kSomeMatch,  ///< Data for match().
@@ -3293,7 +3301,7 @@ static void f_jobpid(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 
   Proc *proc = &data->stream.proc;
-  rettv->vval.v_number = proc->pid;
+  rettv->vval.v_number = proc_get_pid(proc);
 }
 
 /// "jobresize(job, width, height)" function
