@@ -403,8 +403,12 @@ extern "C" {
 
     // RStream accessors
     fn nvim_rstream_did_eof(stream: RStreamHandle) -> c_int;
+    fn nvim_rstream_set_did_eof(stream: RStreamHandle, eof: c_int);
     fn nvim_rstream_want_read(stream: RStreamHandle) -> c_int;
+    fn nvim_rstream_set_want_read(stream: RStreamHandle, want_read: c_int);
     fn nvim_rstream_num_bytes(stream: RStreamHandle) -> usize;
+    fn nvim_rstream_set_num_bytes(stream: RStreamHandle, num_bytes: usize);
+    fn nvim_rstream_num_bytes_add(stream: RStreamHandle, amount: usize);
     fn nvim_rstream_available(stream: RStreamHandle) -> usize;
     fn nvim_rstream_get_stream(stream: RStreamHandle) -> StreamHandle;
 
@@ -1764,6 +1768,54 @@ pub unsafe extern "C" fn rs_rstream_is_closed(stream: RStreamHandle) -> c_int {
         return 1;
     }
     nvim_stream_is_closed(inner_stream)
+}
+
+/// Set the did_eof flag for an RStream
+///
+/// # Safety
+///
+/// `stream` must be a valid RStream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_rstream_set_did_eof(stream: RStreamHandle, eof: c_int) {
+    if !stream.is_null() {
+        nvim_rstream_set_did_eof(stream, eof);
+    }
+}
+
+/// Set the want_read flag for an RStream
+///
+/// # Safety
+///
+/// `stream` must be a valid RStream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_rstream_set_want_read(stream: RStreamHandle, want_read: c_int) {
+    if !stream.is_null() {
+        nvim_rstream_set_want_read(stream, want_read);
+    }
+}
+
+/// Set the num_bytes for an RStream
+///
+/// # Safety
+///
+/// `stream` must be a valid RStream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_rstream_set_num_bytes(stream: RStreamHandle, num_bytes: usize) {
+    if !stream.is_null() {
+        nvim_rstream_set_num_bytes(stream, num_bytes);
+    }
+}
+
+/// Add to the num_bytes for an RStream
+///
+/// # Safety
+///
+/// `stream` must be a valid RStream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_rstream_num_bytes_add(stream: RStreamHandle, amount: usize) {
+    if !stream.is_null() {
+        nvim_rstream_num_bytes_add(stream, amount);
+    }
 }
 
 /// Get the signal number from a SignalWatcher

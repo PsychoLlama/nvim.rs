@@ -41,6 +41,21 @@ extern void rs_stream_set_close_cb_data(Stream *stream, void *data);
 #define stream_set_close_cb(s, c) rs_stream_set_close_cb(s, (void *)(c))
 #define stream_get_close_cb_data(s) rs_stream_get_close_cb_data(s)
 #define stream_set_close_cb_data(s, d) rs_stream_set_close_cb_data(s, d)
+// RStream field accessors
+extern int rs_rstream_did_eof(RStream *stream);
+#define rstream_did_eof(s) rs_rstream_did_eof(s)
+extern void rs_rstream_set_did_eof(RStream *stream, int eof);
+#define rstream_set_did_eof(s, e) rs_rstream_set_did_eof(s, e)
+extern int rs_rstream_want_read(RStream *stream);
+#define rstream_want_read(s) rs_rstream_want_read(s)
+extern void rs_rstream_set_want_read(RStream *stream, int want_read);
+#define rstream_set_want_read(s, w) rs_rstream_set_want_read(s, w)
+extern size_t rs_rstream_num_bytes(RStream *stream);
+#define rstream_num_bytes(s) rs_rstream_num_bytes(s)
+extern void rs_rstream_set_num_bytes(RStream *stream, size_t num_bytes);
+#define rstream_set_num_bytes(s, n) rs_rstream_set_num_bytes(s, n)
+extern void rs_rstream_num_bytes_add(RStream *stream, size_t amount);
+#define rstream_num_bytes_add(s, a) rs_rstream_num_bytes_add(s, a)
 #else
 #define stream_is_closed(s) ((s)->closed)
 #define stream_pending_reqs(s) ((s)->pending_reqs)
@@ -54,6 +69,14 @@ extern void rs_stream_set_close_cb_data(Stream *stream, void *data);
 #define stream_set_close_cb(s, c) ((s)->close_cb = (c))
 #define stream_get_close_cb_data(s) ((s)->close_cb_data)
 #define stream_set_close_cb_data(s, d) ((s)->close_cb_data = (d))
+// RStream field accessors (fallback)
+#define rstream_did_eof(s) ((s)->did_eof)
+#define rstream_set_did_eof(s, e) ((s)->did_eof = (e))
+#define rstream_want_read(s) ((s)->want_read)
+#define rstream_set_want_read(s, w) ((s)->want_read = (w))
+#define rstream_num_bytes(s) ((s)->num_bytes)
+#define rstream_set_num_bytes(s, n) ((s)->num_bytes = (n))
+#define rstream_num_bytes_add(s, a) ((s)->num_bytes += (a))
 #endif
 
 void rstream_init_fd(Loop *loop, RStream *stream, int fd)
@@ -74,7 +97,7 @@ void rstream_init(RStream *stream)
   FUNC_ATTR_NONNULL_ARG(1)
 {
   stream->read_cb = NULL;
-  stream->num_bytes = 0;
+  rstream_set_num_bytes(stream, 0);
   stream->buffer = alloc_block();
   stream->read_pos = stream->write_pos = stream->buffer;
   stream_set_close_cb(&stream->s, rstream_close_cb);
@@ -99,7 +122,7 @@ void rstream_start(RStream *stream, stream_read_cb cb, void *data)
 {
   stream->read_cb = cb;
   stream_set_cb_data(&stream->s, data);
-  stream->want_read = true;
+  rstream_set_want_read(stream, 1);
   if (!stream->paused_full) {
     rstream_start_inner(stream);
   }
@@ -125,7 +148,7 @@ void rstream_stop(RStream *stream)
   FUNC_ATTR_NONNULL_ALL
 {
   rstream_stop_inner(stream);
-  stream->want_read = false;
+  rstream_set_want_read(stream, 0);
 }
 
 // Callbacks used by libuv
@@ -171,7 +194,7 @@ static void read_cb(uv_stream_t *uvstream, ssize_t cnt, const uv_buf_t *buf)
 
   // at this point we're sure that cnt is positive, no error occurred
   size_t nread = (size_t)cnt;
-  stream->num_bytes += nread;
+  rstream_num_bytes_add(stream, nread);
   stream->write_pos += cnt;
   invoke_read_cb(stream, false);
 }
@@ -219,7 +242,7 @@ static void read_event(void **argv)
   if (stream->read_cb) {
     size_t available = rstream_available(stream);
     size_t consumed = stream->read_cb(stream, stream->read_pos, available,
-                                      stream_get_cb_data(&stream->s), stream->did_eof);
+                                      stream_get_cb_data(&stream->s), rstream_did_eof(stream));
     assert(consumed <= available);
     rstream_consume(stream, consumed);
   }
@@ -247,7 +270,7 @@ void rstream_consume(RStream *stream, size_t consumed)
     stream->read_pos = stream->write_pos = stream->buffer;
   }
 
-  if (stream->want_read && stream->paused_full && rstream_space(stream)) {
+  if (rstream_want_read(stream) && stream->paused_full && rstream_space(stream)) {
     assert(stream->read_cb);
     stream->paused_full = false;
     rstream_start_inner(stream);
@@ -256,7 +279,7 @@ void rstream_consume(RStream *stream, size_t consumed)
 
 static void invoke_read_cb(RStream *stream, bool eof)
 {
-  stream->did_eof |= eof;
+  rstream_set_did_eof(stream, rstream_did_eof(stream) | (eof ? 1 : 0));
 
   if (!rstream_space(stream)) {
     rstream_stop_inner(stream);
@@ -320,4 +343,28 @@ size_t nvim_rstream_available(RStream *stream)
 Stream *nvim_rstream_get_stream(RStream *stream)
 {
   return &stream->s;
+}
+
+/// Set the did_eof flag for an RStream (accessor for Rust).
+void nvim_rstream_set_did_eof(RStream *stream, int eof)
+{
+  stream->did_eof = eof != 0;
+}
+
+/// Set the want_read flag for an RStream (accessor for Rust).
+void nvim_rstream_set_want_read(RStream *stream, int want_read)
+{
+  stream->want_read = want_read != 0;
+}
+
+/// Set the num_bytes for an RStream (accessor for Rust).
+void nvim_rstream_set_num_bytes(RStream *stream, size_t num_bytes)
+{
+  stream->num_bytes = num_bytes;
+}
+
+/// Add to the num_bytes for an RStream (accessor for Rust).
+void nvim_rstream_num_bytes_add(RStream *stream, size_t amount)
+{
+  stream->num_bytes += amount;
 }
