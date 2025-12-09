@@ -151,3 +151,25 @@ static void close_cb(uv_handle_t *handle)
     stream->internal_close_cb(stream, stream->internal_data);
   }
 }
+
+// =============================================================================
+// Rust accessor functions for opaque handle pattern
+// =============================================================================
+
+/// Check if a Stream is closed (accessor for Rust).
+int nvim_stream_is_closed(Stream *stream)
+{
+  return stream->closed ? 1 : 0;
+}
+
+/// Get the pending requests count from a Stream (accessor for Rust).
+size_t nvim_stream_pending_reqs(Stream *stream)
+{
+  return stream->pending_reqs;
+}
+
+/// Get the file descriptor from a Stream (accessor for Rust).
+int nvim_stream_get_fd(Stream *stream)
+{
+  return stream->fd;
+}

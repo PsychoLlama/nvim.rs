@@ -258,3 +258,9 @@ int nvim_loop_get_recursive(Loop *loop)
 {
   return loop->recursive;
 }
+
+/// Get the number of children processes from a Loop (accessor for Rust).
+size_t nvim_loop_children_count(Loop *loop)
+{
+  return kv_size(loop->children);
+}

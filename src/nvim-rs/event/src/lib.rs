@@ -128,6 +128,27 @@ impl ProcHandle {
     }
 }
 
+/// Opaque handle to a Stream (I/O stream)
+///
+/// Stream represents an I/O stream (pipe, tcp, file, etc.)
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StreamHandle(*mut std::ffi::c_void);
+
+impl StreamHandle {
+    /// Create a null handle
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+
+    /// Check if handle is null
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
 // =============================================================================
 // Event Structure
 // =============================================================================
@@ -223,6 +244,7 @@ extern "C" {
     fn nvim_loop_get_thread_events(loop_: LoopHandle) -> MultiQueueHandle;
     fn nvim_loop_is_closing(loop_: LoopHandle) -> c_int;
     fn nvim_loop_get_recursive(loop_: LoopHandle) -> c_int;
+    fn nvim_loop_children_count(loop_: LoopHandle) -> usize;
 
     // MultiQueue accessors
     fn nvim_multiqueue_empty(mq: MultiQueueHandle) -> c_int;
@@ -242,6 +264,11 @@ extern "C" {
     fn nvim_proc_get_pid(proc: ProcHandle) -> c_int;
     fn nvim_proc_get_refcount(proc: ProcHandle) -> c_int;
     fn nvim_proc_is_closed(proc: ProcHandle) -> c_int;
+
+    // Stream accessors
+    fn nvim_stream_is_closed(stream: StreamHandle) -> c_int;
+    fn nvim_stream_pending_reqs(stream: StreamHandle) -> usize;
+    fn nvim_stream_get_fd(stream: StreamHandle) -> c_int;
 }
 
 // =============================================================================
@@ -311,6 +338,19 @@ pub unsafe extern "C" fn rs_loop_get_recursive(loop_: LoopHandle) -> c_int {
         return 0;
     }
     nvim_loop_get_recursive(loop_)
+}
+
+/// Get the number of children processes from a Loop
+///
+/// # Safety
+///
+/// `loop_` must be a valid Loop handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_loop_children_count(loop_: LoopHandle) -> usize {
+    if loop_.is_null() {
+        return 0;
+    }
+    nvim_loop_children_count(loop_)
 }
 
 /// Check if a MultiQueue is empty (pure Rust implementation)
@@ -500,6 +540,45 @@ pub unsafe extern "C" fn rs_proc_is_closed(proc: ProcHandle) -> c_int {
         return 1;
     }
     nvim_proc_is_closed(proc)
+}
+
+/// Check if a Stream is closed
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_is_closed(stream: StreamHandle) -> c_int {
+    if stream.is_null() {
+        return 1;
+    }
+    nvim_stream_is_closed(stream)
+}
+
+/// Get the pending requests count from a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_pending_reqs(stream: StreamHandle) -> usize {
+    if stream.is_null() {
+        return 0;
+    }
+    nvim_stream_pending_reqs(stream)
+}
+
+/// Get the file descriptor from a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_get_fd(stream: StreamHandle) -> c_int {
+    if stream.is_null() {
+        return -1;
+    }
+    nvim_stream_get_fd(stream)
 }
 
 // =============================================================================
