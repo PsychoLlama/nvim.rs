@@ -13,42 +13,38 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 4.14 - Proc Struct Complete)
+## Current Status (Phase 4.15 - Stream/RStream Complete)
 
-**79 event loop rs_* functions in nvim-event crate:**
+**97 event loop rs_* functions in nvim-event crate:**
 
-All Proc struct fields now have complete accessor coverage with USE_RUST_EVENT macros,
-including callback function pointers.
+All Stream struct fields now have complete accessor coverage with USE_RUST_EVENT macros.
+Both wstream.c and rstream.c have been fully wired.
 
-**Proc Field Accessors (Phase 4.14):**
-- proc_get_status / proc_set_status - process exit status
-- proc_get_pid / proc_set_pid - process ID
-- proc_get_refcount / proc_incref / proc_decref - reference counting
-- proc_get_type - process type (kProcTypeUv/kProcTypePty)
-- proc_is_closed / proc_set_closed - closed state
-- proc_get_detach / proc_set_detach - detach flag
-- proc_get_events / proc_set_events - event queue
-- proc_get_loop - Loop handle
-- proc_get_stopped_time / proc_set_stopped_time - stopped time
-- proc_get_exit_signal / proc_set_exit_signal - exit signal
-- proc_get_argv / proc_set_argv - command line arguments
-- proc_get_exepath_raw / proc_set_exepath - executable path
-- proc_get_cwd / proc_set_cwd - working directory
-- proc_get_env / proc_set_env - environment dictionary
-- proc_get_fwd_err / proc_set_fwd_err - forward stderr flag
-- proc_get_overlapped / proc_set_overlapped - overlapped I/O flag
-- proc_get_cb / proc_set_cb - exit callback
-- proc_get_internal_exit_cb / proc_set_internal_exit_cb - internal exit callback
-- proc_get_internal_close_cb / proc_set_internal_close_cb - internal close callback
-- proc_call_cb / proc_call_internal_exit_cb / proc_call_internal_close_cb - callback helpers
+**Stream Field Accessors (Phase 4.15):**
+- stream_is_closed / stream_set_closed - closed state
+- stream_pending_reqs / stream_pending_reqs_inc / stream_pending_reqs_dec - pending request count
+- stream_get_curmem / stream_curmem_add / stream_curmem_sub - current memory usage
+- stream_get_maxmem / stream_set_maxmem - maximum memory limit
+- stream_get_write_cb / stream_set_write_cb / stream_call_write_cb - write callback
+- stream_get_cb_data / stream_set_cb_data - callback data
+- stream_get_fpos / stream_set_fpos / stream_fpos_add - file position
+- stream_get_close_cb / stream_set_close_cb - close callback
+- stream_get_close_cb_data / stream_set_close_cb_data - close callback data
+- stream_get_fd - file descriptor
+- stream_get_events - events queue
 
 **Files with USE_RUST_EVENT wired:**
+- wstream.c: All stream field accesses via macros (complete)
+- rstream.c: All stream field accesses via macros (complete)
+- stream.c: Base accessors and fallback macros
 - proc.c: All proc field accesses via macros including callbacks
 - libuv_proc.c: proc_set_status, proc_get_detach, proc_get_loop, proc_set_pid, proc_get_argv, proc_get_cwd, proc_get_env, proc_get_exit_signal, proc_get_fwd_err, proc_get_overlapped, proc_call_internal_exit_cb, proc_call_internal_close_cb
 - pty_proc_unix.c: proc_set_status, proc_get_loop, proc_get_pid, proc_set_pid, proc_get_argv, proc_get_cwd, proc_get_env, proc_call_internal_exit_cb, proc_call_internal_close_cb
 - pty_proc_win.c: proc_set_status, proc_get_loop, proc_set_pid, proc_get_argv, proc_get_cwd, proc_get_env, proc_get_exit_signal, proc_call_internal_exit_cb, proc_call_internal_close_cb
 - channel.c: proc_get_status, proc_get_type, proc_set_detach, proc_set_events, proc_set_argv, proc_set_exepath, proc_set_cwd, proc_get_env, proc_set_env, proc_get_fwd_err, proc_set_fwd_err, proc_get_overlapped, proc_set_overlapped, proc_set_cb
 - shell.c: proc_set_events, proc_set_argv
+- time.c: timewatcher_should_skip macro
+- loop.c: multiqueue_size macro
 
 **Build system:**
 - Cargo workspace at `src/nvim-rs/`
