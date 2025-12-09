@@ -145,6 +145,14 @@ struct TUIData {
 static bool cursor_style_enabled = false;
 #include "tui/tui.c.generated.h"
 
+#ifdef USE_RUST_EVENT
+// Rust implementation in nvim-event crate
+extern int rs_rstream_did_eof(RStream *stream);
+#define rstream_did_eof(s) rs_rstream_did_eof(s)
+#else
+#define rstream_did_eof(s) ((s)->did_eof)
+#endif
+
 #define TERMINFO_SEQ_LIMIT 128
 
 #define terminfo_print_num1(tui, what, num) terminfo_print_num(tui, what, num, 0, 0)
@@ -636,8 +644,8 @@ void tui_stop(TUIData *tui)
 
   // Wait until DA1 response is received, or stdin is closed (#35744).
   LOOP_PROCESS_EVENTS_UNTIL(tui->loop, tui->loop->events, EXIT_TIMEOUT_MS,
-                            tui->stopped || tui->input.read_stream.did_eof);
-  if (!tui->stopped && !tui->input.read_stream.did_eof) {
+                            tui->stopped || rstream_did_eof(&tui->input.read_stream));
+  if (!tui->stopped && !rstream_did_eof(&tui->input.read_stream)) {
     WLOG("TUI: timed out waiting for DA1 response");
   }
   tui->stopped = true;
