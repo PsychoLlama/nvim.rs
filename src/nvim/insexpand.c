@@ -102,6 +102,10 @@ extern int rs_ctrl_x_mode_line_or_eval(void);
 extern int rs_ctrl_x_mode_register(void);
 extern int rs_ctrl_x_mode_not_default(void);
 extern int rs_ctrl_x_mode_not_defined_yet(void);
+// Rust implementations of compl_status_* functions
+extern int rs_compl_status_adding(void);
+extern int rs_compl_status_sol(void);
+extern int rs_compl_status_local(void);
 #endif
 
 // Definitions used for CTRL-X submode.
@@ -538,6 +542,11 @@ bool ctrl_x_mode_not_defined_yet(void)
 }
 #endif  // USE_RUST_INSEXPAND
 
+#ifdef USE_RUST_INSEXPAND
+bool compl_status_adding(void) { return rs_compl_status_adding() != 0; }
+bool compl_status_sol(void) { return rs_compl_status_sol() != 0; }
+bool compl_status_local(void) { return rs_compl_status_local() != 0; }
+#else
 /// @return  true if currently in "normal" or "adding" insert completion matches state
 bool compl_status_adding(void)
 {
@@ -556,6 +565,7 @@ bool compl_status_local(void)
 {
   return compl_cont_status & CONT_LOCAL;
 }
+#endif  // USE_RUST_INSEXPAND
 
 /// Clear the completion status flags
 void compl_status_clear(void)
@@ -6632,4 +6642,10 @@ void f_preinserted(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 int nvim_get_ctrl_x_mode(void)
 {
   return ctrl_x_mode;
+}
+
+/// Get the completion continuation status (accessor for Rust).
+int nvim_get_compl_cont_status(void)
+{
+  return compl_cont_status;
 }

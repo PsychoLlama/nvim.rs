@@ -33,9 +33,15 @@ const CTRL_X_CMDLINE_CTRL_X: c_int = 17;
 // const CTRL_X_BUFNAMES: c_int = 18;
 const CTRL_X_REGISTER: c_int = 19;
 
-// C accessor for the static ctrl_x_mode variable
+// Completion status flags (from insexpand.c)
+const CONT_ADDING: c_int = 1;
+const CONT_SOL: c_int = 16;
+const CONT_LOCAL: c_int = 32;
+
+// C accessors for static variables
 extern "C" {
     fn nvim_get_ctrl_x_mode() -> c_int;
+    fn nvim_get_compl_cont_status() -> c_int;
 }
 
 /// Check if CTRL-X mode is none (0).
@@ -146,6 +152,28 @@ pub unsafe extern "C" fn rs_ctrl_x_mode_not_default() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_ctrl_x_mode_not_defined_yet() -> c_int {
     c_int::from(nvim_get_ctrl_x_mode() == CTRL_X_NOT_DEFINED_YET)
+}
+
+// =============================================================================
+// Completion status functions
+// =============================================================================
+
+/// Check if in "normal" or "adding" completion state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compl_status_adding() -> c_int {
+    c_int::from((nvim_get_compl_cont_status() & CONT_ADDING) != 0)
+}
+
+/// Check if completion pattern includes start of line.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compl_status_sol() -> c_int {
+    c_int::from((nvim_get_compl_cont_status() & CONT_SOL) != 0)
+}
+
+/// Check if ^X^P/^X^N will do local completion.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compl_status_local() -> c_int {
+    c_int::from((nvim_get_compl_cont_status() & CONT_LOCAL) != 0)
 }
 
 #[cfg(test)]
