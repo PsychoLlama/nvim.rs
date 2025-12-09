@@ -387,6 +387,10 @@ extern "C" {
     fn nvim_stream_get_fpos(stream: StreamHandle) -> i64;
     fn nvim_stream_set_fpos(stream: StreamHandle, fpos: i64);
     fn nvim_stream_fpos_add(stream: StreamHandle, amount: i64);
+    fn nvim_stream_get_close_cb(stream: StreamHandle) -> *mut std::ffi::c_void;
+    fn nvim_stream_set_close_cb(stream: StreamHandle, cb: *mut std::ffi::c_void);
+    fn nvim_stream_get_close_cb_data(stream: StreamHandle) -> *mut std::ffi::c_void;
+    fn nvim_stream_set_close_cb_data(stream: StreamHandle, data: *mut std::ffi::c_void);
 
     // RStream accessors
     fn nvim_rstream_did_eof(stream: RStreamHandle) -> c_int;
@@ -1453,6 +1457,56 @@ pub unsafe extern "C" fn rs_stream_set_fpos(stream: StreamHandle, fpos: i64) {
 pub unsafe extern "C" fn rs_stream_fpos_add(stream: StreamHandle, amount: i64) {
     if !stream.is_null() {
         nvim_stream_fpos_add(stream, amount);
+    }
+}
+
+/// Get the close_cb from a Stream (as void* for FFI)
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_get_close_cb(stream: StreamHandle) -> *mut std::ffi::c_void {
+    if stream.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_stream_get_close_cb(stream)
+}
+
+/// Set the close_cb for a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_set_close_cb(stream: StreamHandle, cb: *mut std::ffi::c_void) {
+    if !stream.is_null() {
+        nvim_stream_set_close_cb(stream, cb);
+    }
+}
+
+/// Get the close_cb_data from a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_get_close_cb_data(stream: StreamHandle) -> *mut std::ffi::c_void {
+    if stream.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_stream_get_close_cb_data(stream)
+}
+
+/// Set the close_cb_data for a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_set_close_cb_data(stream: StreamHandle, data: *mut std::ffi::c_void) {
+    if !stream.is_null() {
+        nvim_stream_set_close_cb_data(stream, data);
     }
 }
 

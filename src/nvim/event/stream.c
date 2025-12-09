@@ -306,3 +306,27 @@ void nvim_stream_fpos_add(Stream *stream, int64_t amount)
 {
   stream->fpos += amount;
 }
+
+/// Get the close_cb from a Stream (accessor for Rust).
+void *nvim_stream_get_close_cb(Stream *stream)
+{
+  return (void *)stream->close_cb;
+}
+
+/// Set the close_cb for a Stream (accessor for Rust).
+void nvim_stream_set_close_cb(Stream *stream, void *cb)
+{
+  stream->close_cb = (stream_close_cb)cb;
+}
+
+/// Get the close_cb_data from a Stream (accessor for Rust).
+void *nvim_stream_get_close_cb_data(Stream *stream)
+{
+  return stream->close_cb_data;
+}
+
+/// Set the close_cb_data for a Stream (accessor for Rust).
+void nvim_stream_set_close_cb_data(Stream *stream, void *data)
+{
+  stream->close_cb_data = data;
+}

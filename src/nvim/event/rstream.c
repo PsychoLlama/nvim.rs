@@ -25,11 +25,35 @@ extern void rs_stream_pending_reqs_dec(Stream *stream);
 #define stream_pending_reqs(s) rs_stream_pending_reqs(s)
 #define stream_pending_reqs_inc(s) rs_stream_pending_reqs_inc(s)
 #define stream_pending_reqs_dec(s) rs_stream_pending_reqs_dec(s)
+extern void *rs_stream_get_cb_data(Stream *stream);
+extern void rs_stream_set_cb_data(Stream *stream, void *data);
+#define stream_get_cb_data(s) rs_stream_get_cb_data(s)
+#define stream_set_cb_data(s, d) rs_stream_set_cb_data(s, d)
+extern int64_t rs_stream_get_fpos(Stream *stream);
+extern void rs_stream_fpos_add(Stream *stream, int64_t amount);
+#define stream_get_fpos(s) rs_stream_get_fpos(s)
+#define stream_fpos_add(s, a) rs_stream_fpos_add(s, a)
+extern void *rs_stream_get_close_cb(Stream *stream);
+extern void rs_stream_set_close_cb(Stream *stream, void *cb);
+extern void *rs_stream_get_close_cb_data(Stream *stream);
+extern void rs_stream_set_close_cb_data(Stream *stream, void *data);
+#define stream_get_close_cb(s) ((stream_close_cb)rs_stream_get_close_cb(s))
+#define stream_set_close_cb(s, c) rs_stream_set_close_cb(s, (void *)(c))
+#define stream_get_close_cb_data(s) rs_stream_get_close_cb_data(s)
+#define stream_set_close_cb_data(s, d) rs_stream_set_close_cb_data(s, d)
 #else
 #define stream_is_closed(s) ((s)->closed)
 #define stream_pending_reqs(s) ((s)->pending_reqs)
 #define stream_pending_reqs_inc(s) ((s)->pending_reqs++)
 #define stream_pending_reqs_dec(s) ((s)->pending_reqs--)
+#define stream_get_cb_data(s) ((s)->cb_data)
+#define stream_set_cb_data(s, d) ((s)->cb_data = (d))
+#define stream_get_fpos(s) ((s)->fpos)
+#define stream_fpos_add(s, a) ((s)->fpos += (a))
+#define stream_get_close_cb(s) ((s)->close_cb)
+#define stream_set_close_cb(s, c) ((s)->close_cb = (c))
+#define stream_get_close_cb_data(s) ((s)->close_cb_data)
+#define stream_set_close_cb_data(s, d) ((s)->close_cb_data = (d))
 #endif
 
 void rstream_init_fd(Loop *loop, RStream *stream, int fd)
@@ -53,8 +77,8 @@ void rstream_init(RStream *stream)
   stream->num_bytes = 0;
   stream->buffer = alloc_block();
   stream->read_pos = stream->write_pos = stream->buffer;
-  stream->s.close_cb = rstream_close_cb;
-  stream->s.close_cb_data = stream;
+  stream_set_close_cb(&stream->s, rstream_close_cb);
+  stream_set_close_cb_data(&stream->s, stream);
 }
 
 void rstream_start_inner(RStream *stream)
@@ -74,7 +98,7 @@ void rstream_start(RStream *stream, stream_read_cb cb, void *data)
   FUNC_ATTR_NONNULL_ARG(1)
 {
   stream->read_cb = cb;
-  stream->s.cb_data = data;
+  stream_set_cb_data(&stream->s, data);
   stream->want_read = true;
   if (!stream->paused_full) {
     rstream_start_inner(stream);
@@ -172,7 +196,7 @@ static void fread_idle_cb(uv_idle_t *handle)
   stream->uvbuf.len = UV_BUF_LEN(rstream_space(stream));
 
   // Synchronous read
-  uv_fs_read(handle->loop, &req, stream->s.fd, &stream->uvbuf, 1, stream->s.fpos, NULL);
+  uv_fs_read(handle->loop, &req, stream->s.fd, &stream->uvbuf, 1, stream_get_fpos(&stream->s), NULL);
 
   uv_fs_req_cleanup(&req);
 
@@ -184,7 +208,7 @@ static void fread_idle_cb(uv_idle_t *handle)
 
   // no errors (req.result (ssize_t) is positive), it's safe to use.
   stream->write_pos += req.result;
-  stream->s.fpos += req.result;
+  stream_fpos_add(&stream->s, req.result);
   invoke_read_cb(stream, false);
 }
 
@@ -194,8 +218,8 @@ static void read_event(void **argv)
   stream->pending_read = false;
   if (stream->read_cb) {
     size_t available = rstream_available(stream);
-    size_t consumed = stream->read_cb(stream, stream->read_pos, available, stream->s.cb_data,
-                                      stream->did_eof);
+    size_t consumed = stream->read_cb(stream, stream->read_pos, available,
+                                      stream_get_cb_data(&stream->s), stream->did_eof);
     assert(consumed <= available);
     rstream_consume(stream, consumed);
   }
