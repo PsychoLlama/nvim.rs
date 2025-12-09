@@ -46,6 +46,19 @@ extern void rs_stream_set_close_cb_data(Stream *stream, void *data);
 #define stream_set_close_cb_data(s, d) rs_stream_set_close_cb_data(s, d)
 extern void rs_stream_call_close_cb(Stream *stream);
 #define stream_call_close_cb(s) rs_stream_call_close_cb(s)
+// Additional stream field accessors
+extern void rs_stream_set_curmem(Stream *stream, size_t curmem);
+#define stream_set_curmem(s, c) rs_stream_set_curmem(s, c)
+extern void rs_stream_set_maxmem(Stream *stream, size_t maxmem);
+#define stream_set_maxmem(s, m) rs_stream_set_maxmem(s, m)
+extern void rs_stream_set_pending_reqs(Stream *stream, size_t pending_reqs);
+#define stream_set_pending_reqs(s, p) rs_stream_set_pending_reqs(s, p)
+extern void rs_stream_set_write_cb(Stream *stream, void *cb);
+#define stream_set_write_cb(s, c) rs_stream_set_write_cb(s, (void *)(c))
+extern void rs_stream_set_events(Stream *stream, MultiQueue *events);
+#define stream_set_events(s, e) rs_stream_set_events(s, e)
+extern void rs_stream_set_fpos(Stream *stream, int64_t fpos);
+#define stream_set_fpos(s, f) rs_stream_set_fpos(s, f)
 #else
 #define stream_is_closed(s) ((s)->closed)
 #define stream_get_fd(s) ((s)->fd)
@@ -61,6 +74,13 @@ extern void rs_stream_call_close_cb(Stream *stream);
 #define stream_get_close_cb_data(s) ((s)->close_cb_data)
 #define stream_set_close_cb_data(s, d) ((s)->close_cb_data = (d))
 #define stream_call_close_cb(s) do { if ((s)->close_cb) (s)->close_cb((s), (s)->close_cb_data); } while (0)
+// Additional stream field accessors (fallback)
+#define stream_set_curmem(s, c) ((s)->curmem = (c))
+#define stream_set_maxmem(s, m) ((s)->maxmem = (m))
+#define stream_set_pending_reqs(s, p) ((s)->pending_reqs = (p))
+#define stream_set_write_cb(s, c) ((s)->write_cb = (c))
+#define stream_set_events(s, e) ((s)->events = (e))
+#define stream_set_fpos(s, f) ((s)->fpos = (f))
 #endif
 
 // For compatibility with libuv < 1.19.0 (tested on 1.18.0)
@@ -131,16 +151,16 @@ void stream_init(Loop *loop, Stream *stream, int fd, uv_stream_t *uvstream)
     stream->uvstream->data = stream;
   }
 
-  stream->fpos = 0;
+  stream_set_fpos(stream, 0);
   stream_set_internal_data(stream, NULL);
-  stream->curmem = 0;
-  stream->maxmem = 0;
-  stream->pending_reqs = 0;
-  stream->write_cb = NULL;
+  stream_set_curmem(stream, 0);
+  stream_set_maxmem(stream, 0);
+  stream_set_pending_reqs(stream, 0);
+  stream_set_write_cb(stream, NULL);
   stream_set_close_cb(stream, NULL);
   stream_set_internal_close_cb(stream, NULL);
   stream_set_closed(stream, false);
-  stream->events = NULL;
+  stream_set_events(stream, NULL);
 }
 
 void stream_may_close(Stream *stream)
@@ -399,4 +419,16 @@ void nvim_stream_call_internal_close_cb(Stream *stream)
   if (stream->internal_close_cb) {
     stream->internal_close_cb(stream, stream->internal_data);
   }
+}
+
+/// Set the pending_reqs for a Stream (accessor for Rust).
+void nvim_stream_set_pending_reqs(Stream *stream, size_t pending_reqs)
+{
+  stream->pending_reqs = pending_reqs;
+}
+
+/// Set the events queue for a Stream (accessor for Rust).
+void nvim_stream_set_events(Stream *stream, MultiQueue *events)
+{
+  stream->events = events;
 }

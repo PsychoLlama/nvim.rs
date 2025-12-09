@@ -406,6 +406,8 @@ extern "C" {
     fn nvim_stream_set_internal_close_cb(stream: StreamHandle, cb: *mut std::ffi::c_void);
     fn nvim_stream_call_close_cb(stream: StreamHandle);
     fn nvim_stream_call_internal_close_cb(stream: StreamHandle);
+    fn nvim_stream_set_pending_reqs(stream: StreamHandle, pending_reqs: usize);
+    fn nvim_stream_set_events(stream: StreamHandle, events: MultiQueueHandle);
 
     // RStream accessors
     fn nvim_rstream_did_eof(stream: RStreamHandle) -> c_int;
@@ -1765,6 +1767,30 @@ pub unsafe extern "C" fn rs_stream_call_close_cb(stream: StreamHandle) {
 pub unsafe extern "C" fn rs_stream_call_internal_close_cb(stream: StreamHandle) {
     if !stream.is_null() {
         nvim_stream_call_internal_close_cb(stream);
+    }
+}
+
+/// Set the pending_reqs for a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_set_pending_reqs(stream: StreamHandle, pending_reqs: usize) {
+    if !stream.is_null() {
+        nvim_stream_set_pending_reqs(stream, pending_reqs);
+    }
+}
+
+/// Set the events queue for a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_set_events(stream: StreamHandle, events: MultiQueueHandle) {
+    if !stream.is_null() {
+        nvim_stream_set_events(stream, events);
     }
 }
 
