@@ -1,0 +1,14 @@
+[package]
+name = "nvim-insexpand"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Insert-mode completion (CTRL-X) mode checking for Neovim"
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+
+[lints]
+workspace = true

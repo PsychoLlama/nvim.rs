@@ -27,6 +27,7 @@ nvim-ex-docmd = { path = "ex_docmd" }
 nvim-fileio = { path = "fileio" }
 nvim-grid = { path = "grid" }
 nvim-help = { path = "help" }
+nvim-insexpand = { path = "insexpand" }
 nvim-indent = { path = "indent" }
 nvim-keycodes = { path = "keycodes" }
 nvim-mark = { path = "mark" }

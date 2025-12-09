@@ -82,6 +82,28 @@
 #include "nvim/window.h"
 #include "nvim/winfloat.h"
 
+#ifdef USE_RUST_INSEXPAND
+// Rust implementations of ctrl_x_mode_* functions
+extern int rs_ctrl_x_mode_none(void);
+extern int rs_ctrl_x_mode_normal(void);
+extern int rs_ctrl_x_mode_scroll(void);
+extern int rs_ctrl_x_mode_whole_line(void);
+extern int rs_ctrl_x_mode_files(void);
+extern int rs_ctrl_x_mode_tags(void);
+extern int rs_ctrl_x_mode_path_patterns(void);
+extern int rs_ctrl_x_mode_path_defines(void);
+extern int rs_ctrl_x_mode_dictionary(void);
+extern int rs_ctrl_x_mode_thesaurus(void);
+extern int rs_ctrl_x_mode_cmdline(void);
+extern int rs_ctrl_x_mode_function(void);
+extern int rs_ctrl_x_mode_omni(void);
+extern int rs_ctrl_x_mode_spell(void);
+extern int rs_ctrl_x_mode_line_or_eval(void);
+extern int rs_ctrl_x_mode_register(void);
+extern int rs_ctrl_x_mode_not_default(void);
+extern int rs_ctrl_x_mode_not_defined_yet(void);
+#endif
+
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
 // and ctrl_x_mode_names[].
@@ -377,6 +399,27 @@ void ins_ctrl_x(void)
 
 // Functions to check the current CTRL-X mode.
 
+#ifdef USE_RUST_INSEXPAND
+bool ctrl_x_mode_none(void) { return rs_ctrl_x_mode_none() != 0; }
+bool ctrl_x_mode_normal(void) { return rs_ctrl_x_mode_normal() != 0; }
+bool ctrl_x_mode_scroll(void) { return rs_ctrl_x_mode_scroll() != 0; }
+bool ctrl_x_mode_whole_line(void) { return rs_ctrl_x_mode_whole_line() != 0; }
+bool ctrl_x_mode_files(void) { return rs_ctrl_x_mode_files() != 0; }
+bool ctrl_x_mode_tags(void) { return rs_ctrl_x_mode_tags() != 0; }
+bool ctrl_x_mode_path_patterns(void) { return rs_ctrl_x_mode_path_patterns() != 0; }
+bool ctrl_x_mode_path_defines(void) { return rs_ctrl_x_mode_path_defines() != 0; }
+bool ctrl_x_mode_dictionary(void) { return rs_ctrl_x_mode_dictionary() != 0; }
+bool ctrl_x_mode_thesaurus(void) { return rs_ctrl_x_mode_thesaurus() != 0; }
+bool ctrl_x_mode_cmdline(void) { return rs_ctrl_x_mode_cmdline() != 0; }
+bool ctrl_x_mode_function(void) { return rs_ctrl_x_mode_function() != 0; }
+bool ctrl_x_mode_omni(void) { return rs_ctrl_x_mode_omni() != 0; }
+bool ctrl_x_mode_spell(void) { return rs_ctrl_x_mode_spell() != 0; }
+static bool ctrl_x_mode_eval(void) { return ctrl_x_mode == CTRL_X_EVAL; }  // static, not exported
+bool ctrl_x_mode_line_or_eval(void) { return rs_ctrl_x_mode_line_or_eval() != 0; }
+bool ctrl_x_mode_register(void) { return rs_ctrl_x_mode_register() != 0; }
+bool ctrl_x_mode_not_default(void) { return rs_ctrl_x_mode_not_default() != 0; }
+bool ctrl_x_mode_not_defined_yet(void) { return rs_ctrl_x_mode_not_defined_yet() != 0; }
+#else
 bool ctrl_x_mode_none(void)
   FUNC_ATTR_PURE
 {
@@ -493,6 +536,7 @@ bool ctrl_x_mode_not_defined_yet(void)
 {
   return ctrl_x_mode == CTRL_X_NOT_DEFINED_YET;
 }
+#endif  // USE_RUST_INSEXPAND
 
 /// @return  true if currently in "normal" or "adding" insert completion matches state
 bool compl_status_adding(void)
@@ -6578,4 +6622,14 @@ void f_preinserted(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   if (ins_compl_preinsert_effect()) {
     rettv->vval.v_number = 1;
   }
+}
+
+// =============================================================================
+// Rust accessor functions for opaque handle pattern
+// =============================================================================
+
+/// Get the current CTRL-X mode (accessor for Rust).
+int nvim_get_ctrl_x_mode(void)
+{
+  return ctrl_x_mode;
 }
