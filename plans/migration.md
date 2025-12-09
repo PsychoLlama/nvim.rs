@@ -13,13 +13,18 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 4.20 - RStream Accessors Wired)
+## Current Status (Phase 4.21 - Stream Internal Callbacks Wired)
 
-**129 event loop rs_* functions in nvim-event crate:**
+**135 event loop rs_* functions in nvim-event crate:**
 
 All event watcher types (TimeWatcher, SignalWatcher, SocketWatcher), Stream types, Loop
-struct field accessors, and RStream field accessors now have complete accessor coverage
-with USE_RUST_EVENT macros.
+struct field accessors, RStream field accessors, and Stream internal callback accessors
+now have complete accessor coverage with USE_RUST_EVENT macros.
+
+**Stream Internal Callback Accessors (Phase 4.21):**
+- stream_get_internal_data / stream_set_internal_data - internal data pointer
+- stream_get_internal_close_cb / stream_set_internal_close_cb - internal close callback
+- stream_call_close_cb / stream_call_internal_close_cb - callback invocation
 
 **RStream Field Accessors (Phase 4.20):**
 - rstream_did_eof / rstream_set_did_eof - EOF flag
