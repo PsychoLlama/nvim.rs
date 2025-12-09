@@ -35,10 +35,13 @@ extern int rs_proc_is_closed(Proc *proc);
 #define proc_is_closed(p) rs_proc_is_closed(p)
 extern int rs_proc_get_status(Proc *proc);
 #define proc_get_status(p) rs_proc_get_status(p)
+extern uint64_t rs_proc_get_stopped_time(Proc *proc);
+#define proc_get_stopped_time(p) rs_proc_get_stopped_time(p)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define proc_is_closed(p) ((p)->closed)
 #define proc_get_status(p) ((p)->status)
+#define proc_get_stopped_time(p) ((p)->stopped_time)
 #endif
 
 // Time for a process to exit cleanly before we send KILL.
@@ -234,7 +237,7 @@ int proc_wait(Proc *proc, int ms, MultiQueue *events)
 void proc_stop(Proc *proc) FUNC_ATTR_NONNULL_ALL
 {
   bool exited = (proc_get_status(proc) >= 0);
-  if (exited || proc->stopped_time) {
+  if (exited || proc_get_stopped_time(proc)) {
     return;
   }
   proc->stopped_time = os_hrtime();
@@ -274,10 +277,10 @@ static void children_kill_cb(uv_timer_t *handle)
   for (size_t i = 0; i < kv_size(loop->children); i++) {
     Proc *proc = kv_A(loop->children, i);
     bool exited = (proc_get_status(proc) >= 0);
-    if (exited || !proc->stopped_time) {
+    if (exited || !proc_get_stopped_time(proc)) {
       continue;
     }
-    uint64_t term_sent = UINT64_MAX == proc->stopped_time;
+    uint64_t term_sent = UINT64_MAX == proc_get_stopped_time(proc);
     if (kProcTypePty != proc->type || term_sent) {
       proc->exit_signal = SIGKILL;
       os_proc_tree_kill(proc->pid, SIGKILL);

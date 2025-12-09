@@ -676,6 +676,19 @@ pub unsafe extern "C" fn rs_proc_is_closed(proc: ProcHandle) -> c_int {
     nvim_proc_is_closed(proc)
 }
 
+/// Get the stopped_time from a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_get_stopped_time(proc: ProcHandle) -> u64 {
+    if proc.is_null() {
+        return 0;
+    }
+    nvim_proc_get_stopped_time(proc)
+}
+
 /// Check if a Stream is closed
 ///
 /// # Safety
