@@ -65,8 +65,6 @@ int nvim_get_version_patch(void)
   return NVIM_VERSION_PATCH;
 }
 
-#define USE_RUST_VERSION 1
-
 #ifdef USE_RUST_VERSION
 extern bool rs_has_nvim_version(const char *version_str);
 #endif

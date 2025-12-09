@@ -116,9 +116,6 @@
 
 #include "buffer.c.generated.h"
 
-#define USE_RUST_MATH 1
-#define USE_RUST_BUFFER 1
-
 #ifdef USE_RUST_MATH
 extern int rs_calc_percentage(int64_t part, int64_t whole);
 #endif

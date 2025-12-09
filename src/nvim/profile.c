@@ -35,8 +35,6 @@
 
 #include "profile.c.generated.h"
 
-#define USE_RUST_PROFILE 1
-
 #ifdef USE_RUST_PROFILE
 // Rust implementations of pure profile functions
 extern proftime_T rs_profile_zero(void);

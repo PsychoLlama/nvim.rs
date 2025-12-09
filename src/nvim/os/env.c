@@ -361,8 +361,6 @@ char *os_getenvname_at_index(size_t index)
 #endif
 }
 
-#define USE_RUST_OS 1
-
 #ifdef USE_RUST_OS
 extern int64_t rs_os_get_pid(void);
 #endif

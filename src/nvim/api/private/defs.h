@@ -43,8 +43,6 @@ typedef enum {
   kMessageTypeRedrawEvent = 3,
 } MessageType;
 
-#define USE_RUST_API 1
-
 /// Mask for all internal calls
 #define INTERNAL_CALL_MASK (((uint64_t)1) << (sizeof(uint64_t) * 8 - 1))
 

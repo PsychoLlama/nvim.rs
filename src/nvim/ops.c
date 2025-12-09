@@ -1,8 +1,6 @@
 // ops.c: implementation of various operators: op_shift, op_delete, op_tilde,
 //        op_change, op_yank, do_join
 
-#define USE_RUST_OPS 1
-
 #include <assert.h>
 #include <ctype.h>
 #include <inttypes.h>

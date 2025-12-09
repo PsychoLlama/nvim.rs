@@ -22,8 +22,6 @@
 
 #include "sha256.c.generated.h"
 
-#define USE_RUST_ENCODING 1
-
 #ifdef USE_RUST_ENCODING
 // Rust SHA-256 context has identical layout to context_sha256_T
 typedef struct {

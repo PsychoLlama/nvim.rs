@@ -65,8 +65,6 @@
 #include "nvim/version.h"
 #include "nvim/vim_defs.h"
 
-#define USE_RUST_CMDHIST 1
-
 #ifdef USE_RUST_CMDHIST
 extern int rs_hist_type2char(int hist_type);
 #endif

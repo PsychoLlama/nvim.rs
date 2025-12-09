@@ -37,8 +37,6 @@
 
 #include "strings.c.generated.h"
 
-#define USE_RUST_STRINGS 1
-
 #ifdef USE_RUST_STRINGS
 // Rust implementations - declarations
 extern int rs_vim_stricmp(const char *s1, const char *s2);

@@ -21,8 +21,6 @@
 
 #include <stddef.h>
 
-#define USE_RUST_QUEUE 1
-
 typedef struct queue {
   struct queue *next;
   struct queue *prev;

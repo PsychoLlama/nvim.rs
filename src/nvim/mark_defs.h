@@ -1,7 +1,5 @@
 #pragma once
 
-#define USE_RUST_MARK 1
-
 #include <stdbool.h>
 
 #include "nvim/func_attr.h"

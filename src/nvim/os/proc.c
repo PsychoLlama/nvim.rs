@@ -45,8 +45,6 @@
 
 #include "os/proc.c.generated.h"
 
-#define USE_RUST_OS_PROC 1
-
 #ifdef USE_RUST_OS_PROC
 extern bool rs_os_proc_running(int pid);
 #endif

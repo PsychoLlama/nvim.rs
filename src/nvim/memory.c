@@ -56,8 +56,6 @@ MemRealloc mem_realloc = &realloc;
 
 #include "memory.c.generated.h"
 
-#define USE_RUST_MEMUTIL 1
-
 #ifdef USE_RUST_MEMUTIL
 extern size_t rs_xstrnlen(const char *s, size_t n);
 extern char *rs_xstrchrnul(const char *str, char c);

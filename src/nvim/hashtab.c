@@ -31,9 +31,6 @@
 #include "nvim/message.h"
 #include "nvim/vim_defs.h"
 
-#define USE_RUST_MEMUTIL 1
-#define USE_RUST_HASHTAB 1
-
 #ifdef USE_RUST_MEMUTIL
 extern hash_T rs_hash_hash(const char *key);
 extern hash_T rs_hash_hash_len(const char *key, size_t len);

@@ -38,8 +38,6 @@
 
 #include "grid.c.generated.h"
 
-#define USE_RUST_GRID 1
-
 #ifdef USE_RUST_GRID
 // Rust implementations of schar functions
 extern bool rs_schar_high(schar_T sc);

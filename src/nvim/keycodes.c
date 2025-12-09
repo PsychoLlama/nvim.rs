@@ -27,8 +27,6 @@
 #include "keycode_names.generated.h"
 #include "keycodes.c.generated.h"
 
-#define USE_RUST_KEYCODES 1
-
 #ifdef USE_RUST_KEYCODES
 extern int rs_name_to_mod_mask(int c);
 extern int rs_handle_x_keys(int key);

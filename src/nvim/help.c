@@ -50,8 +50,6 @@
 
 #include "help.c.generated.h"
 
-#define USE_RUST_HELP 1
-
 #ifdef USE_RUST_HELP
 extern int rs_help_heuristic(const char *matched_string, int offset, bool wrong_case);
 #endif

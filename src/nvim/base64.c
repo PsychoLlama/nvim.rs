@@ -14,8 +14,6 @@
 
 #include "base64.c.generated.h"
 
-#define USE_RUST_ENCODING 1
-
 #ifdef USE_RUST_ENCODING
 extern char *rs_base64_encode(const uint8_t *src, size_t src_len);
 extern char *rs_base64_decode(const uint8_t *src, size_t src_len, size_t *out_len);

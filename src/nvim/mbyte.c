@@ -86,8 +86,6 @@ struct interval {
 #include "mbyte.c.generated.h"
 // uncrustify:on
 
-#define USE_RUST_MBYTE 1
-
 #ifdef USE_RUST_MBYTE
 // Rust implementations - declarations
 extern int rs_utf_char2len(int c);

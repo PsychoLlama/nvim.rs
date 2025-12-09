@@ -48,8 +48,6 @@
 
 #include "menu.c.generated.h"
 
-#define USE_RUST_MENU 1
-
 #ifdef USE_RUST_MENU
 // Rust implementations of menu name classification functions
 extern bool rs_menu_is_winbar(const char *name);

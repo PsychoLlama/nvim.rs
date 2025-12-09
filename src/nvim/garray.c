@@ -14,8 +14,6 @@
 
 #include "garray.c.generated.h"  // IWYU pragma: keep
 
-#define USE_RUST_GARRAY 1
-
 #ifdef USE_RUST_GARRAY
 // Rust implementations
 extern void rs_ga_init(garray_T *gap, int itemsize, int growsize);

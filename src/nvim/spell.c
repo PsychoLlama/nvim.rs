@@ -188,8 +188,6 @@ bool did_set_spelltab;
 
 #include "spell.c.generated.h"
 
-#define USE_RUST_SPELL 1
-
 #ifdef USE_RUST_SPELL
 // Rust implementations of spell functions
 extern bool rs_spell_valid_case(int wordflags, int treeflags);

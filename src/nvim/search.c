@@ -65,8 +65,6 @@
 
 #include "search.c.generated.h"
 
-#define USE_RUST_SEARCH 1
-
 static const char e_search_hit_top_without_match_for_str[]
   = N_("E384: Search hit TOP without match for: %s");
 static const char e_search_hit_bottom_without_match_for_str[]

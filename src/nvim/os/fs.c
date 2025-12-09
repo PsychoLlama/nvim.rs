@@ -62,8 +62,6 @@
 
 #include "os/fs.c.generated.h"
 
-#define USE_RUST_OS_FS 1
-
 #ifdef USE_RUST_OS_FS
 // Rust filesystem implementations
 extern int rs_os_path_exists(const char *path);

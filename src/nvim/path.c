@@ -42,8 +42,6 @@ enum {
 # undef gen_expand_wildcards
 #endif
 
-#define USE_RUST_PATH 1
-
 #ifdef USE_RUST_PATH
 // Rust implementations - declarations
 extern int rs_vim_ispathsep(int c);

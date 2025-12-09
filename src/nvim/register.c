@@ -4,8 +4,6 @@
 
 #include "nvim/api/private/helpers.h"
 
-#define USE_RUST_REGISTER 1
-
 #ifdef USE_RUST_REGISTER
 extern bool rs_valid_yank_reg(int regname, bool writing);
 #endif
