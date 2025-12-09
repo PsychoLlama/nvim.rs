@@ -156,7 +156,7 @@ int input_get(uint8_t *buf, int maxlen, int ms, int tb_change_cnt, MultiQueue *e
     uint64_t wait_start = os_hrtime();
     cursorhold_time = MIN(cursorhold_time, (int)p_ut);
     if ((result = inbuf_poll((int)p_ut - cursorhold_time, events)) == kFalse) {
-      if (read_stream.s.closed && silent_mode) {
+      if (rstream_is_closed(&read_stream) && silent_mode) {
         // Drained eventloop & initial input; exit silent/batch-mode (-es/-Es).
         read_error_exit();
       }

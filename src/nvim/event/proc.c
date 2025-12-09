@@ -29,6 +29,10 @@
 // Rust implementation in nvim-event crate
 extern int rs_multiqueue_empty(MultiQueue *mq);
 #define multiqueue_empty(mq) rs_multiqueue_empty(mq)
+extern int rs_rstream_is_closed(RStream *stream);
+#define rstream_is_closed(s) rs_rstream_is_closed(s)
+#else
+#define rstream_is_closed(s) ((s)->s.closed)
 #endif
 
 // Time for a process to exit cleanly before we send KILL.
@@ -350,7 +354,7 @@ static void proc_close(Proc *proc)
 static void flush_stream(Proc *proc, RStream *stream)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  if (!stream || stream->s.closed) {
+  if (!stream || rstream_is_closed(stream)) {
     return;
   }
 
@@ -369,7 +373,7 @@ static void flush_stream(Proc *proc, RStream *stream)
   size_t max_bytes = stream->num_bytes + (size_t)system_buffer_size;
 
   // Read remaining data.
-  while (!stream->s.closed && stream->num_bytes < max_bytes) {
+  while (!rstream_is_closed(stream) && stream->num_bytes < max_bytes) {
     // Remember number of bytes before polling
     size_t num_bytes = stream->num_bytes;
 
