@@ -13,13 +13,14 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 4.13 - Proc Field Accessors Complete)
+## Current Status (Phase 4.14 - Proc Struct Complete)
 
-**66 event loop rs_* functions in nvim-event crate:**
+**79 event loop rs_* functions in nvim-event crate:**
 
-All Proc struct fields now have complete accessor coverage with USE_RUST_EVENT macros:
+All Proc struct fields now have complete accessor coverage with USE_RUST_EVENT macros,
+including callback function pointers.
 
-**Proc Field Accessors (Phase 4.13):**
+**Proc Field Accessors (Phase 4.14):**
 - proc_get_status / proc_set_status - process exit status
 - proc_get_pid / proc_set_pid - process ID
 - proc_get_refcount / proc_incref / proc_decref - reference counting
@@ -34,13 +35,19 @@ All Proc struct fields now have complete accessor coverage with USE_RUST_EVENT m
 - proc_get_exepath_raw / proc_set_exepath - executable path
 - proc_get_cwd / proc_set_cwd - working directory
 - proc_get_env / proc_set_env - environment dictionary
+- proc_get_fwd_err / proc_set_fwd_err - forward stderr flag
+- proc_get_overlapped / proc_set_overlapped - overlapped I/O flag
+- proc_get_cb / proc_set_cb - exit callback
+- proc_get_internal_exit_cb / proc_set_internal_exit_cb - internal exit callback
+- proc_get_internal_close_cb / proc_set_internal_close_cb - internal close callback
+- proc_call_cb / proc_call_internal_exit_cb / proc_call_internal_close_cb - callback helpers
 
 **Files with USE_RUST_EVENT wired:**
-- proc.c: All proc field accesses via macros
-- libuv_proc.c: proc_set_status, proc_get_detach, proc_get_loop, proc_set_pid, proc_get_argv, proc_get_cwd, proc_get_env, proc_get_exit_signal
-- pty_proc_unix.c: proc_set_status, proc_get_loop, proc_get_pid, proc_set_pid, proc_get_argv, proc_get_cwd, proc_get_env
-- pty_proc_win.c: proc_set_status, proc_get_loop, proc_set_pid, proc_get_argv, proc_get_cwd, proc_get_env, proc_get_exit_signal
-- channel.c: proc_get_status, proc_get_type, proc_set_detach, proc_set_events, proc_set_argv, proc_set_exepath, proc_set_cwd, proc_get_env, proc_set_env
+- proc.c: All proc field accesses via macros including callbacks
+- libuv_proc.c: proc_set_status, proc_get_detach, proc_get_loop, proc_set_pid, proc_get_argv, proc_get_cwd, proc_get_env, proc_get_exit_signal, proc_get_fwd_err, proc_get_overlapped, proc_call_internal_exit_cb, proc_call_internal_close_cb
+- pty_proc_unix.c: proc_set_status, proc_get_loop, proc_get_pid, proc_set_pid, proc_get_argv, proc_get_cwd, proc_get_env, proc_call_internal_exit_cb, proc_call_internal_close_cb
+- pty_proc_win.c: proc_set_status, proc_get_loop, proc_set_pid, proc_get_argv, proc_get_cwd, proc_get_env, proc_get_exit_signal, proc_call_internal_exit_cb, proc_call_internal_close_cb
+- channel.c: proc_get_status, proc_get_type, proc_set_detach, proc_set_events, proc_set_argv, proc_set_exepath, proc_set_cwd, proc_get_env, proc_set_env, proc_get_fwd_err, proc_set_fwd_err, proc_get_overlapped, proc_set_overlapped, proc_set_cb
 - shell.c: proc_set_events, proc_set_argv
 
 **Build system:**
