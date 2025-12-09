@@ -13,13 +13,20 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 4.21 - Stream Internal Callbacks Wired)
+## Current Status (Phase 4.25 - Channel Stream Accessors Wired)
 
-**135 event loop rs_* functions in nvim-event crate:**
+**137 event loop rs_* functions in nvim-event crate:**
 
 All event watcher types (TimeWatcher, SignalWatcher, SocketWatcher), Stream types, Loop
-struct field accessors, RStream field accessors, and Stream internal callback accessors
-now have complete accessor coverage with USE_RUST_EVENT macros.
+struct field accessors, RStream field accessors, Stream internal callback accessors,
+and stream_init field accessors now have complete accessor coverage with USE_RUST_EVENT
+macros throughout the event loop subsystem and channel subsystem.
+
+**Recent Progress (Phase 4.22-4.25):**
+- Phase 4.22: Wired proc->in/out/err stream accessors in proc.c
+- Phase 4.23: Wired all stream_init() field accessors (fpos, curmem, maxmem, pending_reqs, write_cb, events)
+- Phase 4.24: Wired stream_get_events in rstream.c and stream_set_closed, stream_get_events, stream_get_cb_data in proc.c
+- Phase 4.25: Wired stream_is_closed and stream_get_pending_reqs in channel.c
 
 **Stream Internal Callback Accessors (Phase 4.21):**
 - stream_get_internal_data / stream_set_internal_data - internal data pointer
@@ -83,9 +90,16 @@ SocketWatcher (Phase 4.18):
 - libuv_proc.c: proc_set_status, proc_get_detach, proc_get_loop, proc_set_pid, proc_get_argv, proc_get_cwd, proc_get_env, proc_get_exit_signal, proc_get_fwd_err, proc_get_overlapped, proc_call_internal_exit_cb, proc_call_internal_close_cb
 - pty_proc_unix.c: proc_set_status, proc_get_loop, proc_get_pid, proc_set_pid, proc_get_argv, proc_get_cwd, proc_get_env, proc_call_internal_exit_cb, proc_call_internal_close_cb
 - pty_proc_win.c: proc_set_status, proc_get_loop, proc_set_pid, proc_get_argv, proc_get_cwd, proc_get_env, proc_get_exit_signal, proc_call_internal_exit_cb, proc_call_internal_close_cb
-- channel.c: proc_get_status, proc_get_type, proc_set_detach, proc_set_events, proc_set_argv, proc_set_exepath, proc_set_cwd, proc_get_env, proc_set_env, proc_get_fwd_err, proc_set_fwd_err, proc_get_overlapped, proc_set_overlapped, proc_set_cb
+- channel.c: proc_get_status, proc_get_type, proc_set_detach, proc_set_events, proc_set_argv, proc_set_exepath, proc_set_cwd, proc_get_env, proc_set_env, proc_get_fwd_err, proc_set_fwd_err, proc_get_overlapped, proc_set_overlapped, proc_set_cb, stream_is_closed, stream_get_pending_reqs
 - shell.c: proc_set_events, proc_set_argv
 - loop.c: multiqueue_size macro
+
+**Event loop accessor wiring now complete:**
+- All Stream field accesses via macros
+- All RStream field accesses via macros
+- All Proc field accesses via macros (including callbacks)
+- All watcher field accesses via macros (TimeWatcher, SignalWatcher, SocketWatcher)
+- Stream field accesses in channel.c wired
 
 **Build system:**
 - Cargo workspace at `src/nvim-rs/`
