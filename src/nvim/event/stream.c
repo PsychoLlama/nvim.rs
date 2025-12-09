@@ -20,8 +20,11 @@
 // Rust implementation in nvim-event crate
 extern int rs_stream_is_closed(Stream *stream);
 #define stream_is_closed(s) rs_stream_is_closed(s)
+extern int rs_stream_get_fd(Stream *stream);
+#define stream_get_fd(s) rs_stream_get_fd(s)
 #else
 #define stream_is_closed(s) ((s)->closed)
+#define stream_get_fd(s) ((s)->fd)
 #endif
 
 // For compatibility with libuv < 1.19.0 (tested on 1.18.0)
@@ -114,7 +117,7 @@ void stream_may_close(Stream *stream)
   stream->closed = true;
 
 #ifdef MSWIN
-  if (UV_TTY == uv_guess_handle(stream->fd)) {
+  if (UV_TTY == uv_guess_handle(stream_get_fd(stream))) {
     // Undo UV_TTY_MODE_RAW from stream_init(). #10801
     uv_tty_set_mode(&stream->uv.tty, UV_TTY_MODE_NORMAL);
   }
