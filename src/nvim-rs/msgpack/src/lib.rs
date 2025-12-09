@@ -349,6 +349,265 @@ pub unsafe extern "C" fn rs_mpack_bin_header(ptr: *mut *mut u8, len: usize) {
 }
 
 // =============================================================================
+// PackerBuffer-aware functions
+// =============================================================================
+
+/// Max possible length: bytecode + 8 int/float bytes
+/// Ext objects are maximum 8=3+5 (nested uint32 payload)
+pub const MPACK_ITEM_SIZE: usize = 9;
+
+/// PackerBuffer structure matching C packer_buffer_t
+///
+/// This is an opaque handle - we use C accessors to interact with it.
+#[repr(C)]
+pub struct PackerBuffer {
+    _opaque: [u8; 0],
+}
+
+/// Callback type for buffer flush
+pub type PackerBufferFlush = Option<unsafe extern "C" fn(*mut PackerBuffer)>;
+
+// C accessor functions for PackerBuffer
+extern "C" {
+    fn nvim_packer_get_ptr(packer: *mut PackerBuffer) -> *mut u8;
+    fn nvim_packer_set_ptr(packer: *mut PackerBuffer, ptr: *mut u8);
+    fn nvim_packer_get_endptr(packer: *mut PackerBuffer) -> *mut u8;
+    fn nvim_packer_flush(packer: *mut PackerBuffer);
+}
+
+/// Get remaining space in the packer buffer.
+///
+/// # Safety
+///
+/// `packer` must be a valid PackerBuffer pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_mpack_remaining(packer: *mut PackerBuffer) -> usize {
+    if packer.is_null() {
+        return 0;
+    }
+    let ptr = nvim_packer_get_ptr(packer);
+    let endptr = nvim_packer_get_endptr(packer);
+    if ptr.is_null() || endptr.is_null() {
+        return 0;
+    }
+    (endptr as usize).saturating_sub(ptr as usize)
+}
+
+/// Check if buffer needs flushing and flush if necessary.
+///
+/// Ensures at least 2 * MPACK_ITEM_SIZE bytes are available.
+///
+/// # Safety
+///
+/// `packer` must be a valid PackerBuffer pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_mpack_check_buffer(packer: *mut PackerBuffer) {
+    if packer.is_null() {
+        return;
+    }
+    if rs_mpack_remaining(packer) < 2 * MPACK_ITEM_SIZE {
+        nvim_packer_flush(packer);
+    }
+}
+
+/// Pack raw bytes into the buffer, handling flush as needed.
+///
+/// This copies data in chunks, flushing the buffer when full.
+///
+/// # Safety
+///
+/// - `data` must be valid for `len` bytes
+/// - `packer` must be a valid PackerBuffer pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_mpack_raw(data: *const u8, len: usize, packer: *mut PackerBuffer) {
+    if packer.is_null() || (data.is_null() && len > 0) {
+        return;
+    }
+
+    let mut pos: usize = 0;
+    while pos < len {
+        let ptr = nvim_packer_get_ptr(packer);
+        let endptr = nvim_packer_get_endptr(packer);
+        let remaining = (endptr as usize).saturating_sub(ptr as usize);
+        let to_copy = std::cmp::min(len - pos, remaining);
+
+        if to_copy > 0 {
+            std::ptr::copy_nonoverlapping(data.add(pos), ptr, to_copy);
+            nvim_packer_set_ptr(packer, ptr.add(to_copy));
+        }
+        pos += to_copy;
+
+        if pos < len {
+            nvim_packer_flush(packer);
+        }
+    }
+    rs_mpack_check_buffer(packer);
+}
+
+/// Pack a string (header + data) into the buffer.
+///
+/// # Safety
+///
+/// - `data` must be valid for `len` bytes
+/// - `packer` must be a valid PackerBuffer pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_mpack_str(data: *const u8, len: usize, packer: *mut PackerBuffer) {
+    if packer.is_null() {
+        return;
+    }
+
+    // Write header
+    let mut ptr = nvim_packer_get_ptr(packer);
+    if len < 32 {
+        rs_mpack_w(&mut ptr, 0xa0 | (len as u8));
+    } else if len < 0xff {
+        rs_mpack_w(&mut ptr, 0xd9);
+        rs_mpack_w(&mut ptr, len as u8);
+    } else if len < 0xffff {
+        rs_mpack_w(&mut ptr, 0xda);
+        rs_mpack_w2(&mut ptr, len as u32);
+    } else if len < 0xffff_ffff {
+        rs_mpack_w(&mut ptr, 0xdb);
+        rs_mpack_w4(&mut ptr, len as u32);
+    } else {
+        // C would abort() here - we just return without writing
+        return;
+    }
+    nvim_packer_set_ptr(packer, ptr);
+
+    // Write data
+    rs_mpack_raw(data, len, packer);
+}
+
+/// Pack binary data (header + data) into the buffer.
+///
+/// # Safety
+///
+/// - `data` must be valid for `len` bytes
+/// - `packer` must be a valid PackerBuffer pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_mpack_bin(data: *const u8, len: usize, packer: *mut PackerBuffer) {
+    if packer.is_null() {
+        return;
+    }
+
+    // Write header
+    let mut ptr = nvim_packer_get_ptr(packer);
+    if len < 0xff {
+        rs_mpack_w(&mut ptr, 0xc4);
+        rs_mpack_w(&mut ptr, len as u8);
+    } else if len < 0xffff {
+        rs_mpack_w(&mut ptr, 0xc5);
+        rs_mpack_w2(&mut ptr, len as u32);
+    } else if len < 0xffff_ffff {
+        rs_mpack_w(&mut ptr, 0xc6);
+        rs_mpack_w4(&mut ptr, len as u32);
+    } else {
+        // C would abort() here - we just return without writing
+        return;
+    }
+    nvim_packer_set_ptr(packer, ptr);
+
+    // Write data
+    rs_mpack_raw(data, len, packer);
+}
+
+/// Pack an extension type (header + type byte + data) into the buffer.
+///
+/// # Safety
+///
+/// - `buf` must be valid for `len` bytes
+/// - `packer` must be a valid PackerBuffer pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_mpack_ext(
+    buf: *const u8,
+    len: usize,
+    ext_type: i8,
+    packer: *mut PackerBuffer,
+) {
+    if packer.is_null() {
+        return;
+    }
+
+    // Write header based on length
+    let mut ptr = nvim_packer_get_ptr(packer);
+    if len == 1 {
+        rs_mpack_w(&mut ptr, 0xd4);
+    } else if len == 2 {
+        rs_mpack_w(&mut ptr, 0xd5);
+    } else if len <= 0xff {
+        rs_mpack_w(&mut ptr, 0xc7);
+        rs_mpack_w(&mut ptr, len as u8);
+    } else if len < 0xffff {
+        rs_mpack_w(&mut ptr, 0xc8);
+        rs_mpack_w2(&mut ptr, len as u32);
+    } else if len < 0xffff_ffff {
+        rs_mpack_w(&mut ptr, 0xc9);
+        rs_mpack_w4(&mut ptr, len as u32);
+    } else {
+        // C would abort() here
+        return;
+    }
+    rs_mpack_w(&mut ptr, ext_type as u8);
+    nvim_packer_set_ptr(packer, ptr);
+
+    // Write data
+    rs_mpack_raw(buf, len, packer);
+}
+
+/// Shift value for EXT object types (kObjectTypeBuffer = 8)
+/// Enum values: Nil=0, Boolean=1, Integer=2, Float=3, String=4, Array=5, Dict=6, LuaRef=7, Buffer=8
+pub const EXT_OBJECT_TYPE_SHIFT: i32 = 8;
+
+/// Pack a Neovim handle (Buffer/Window/Tabpage) as a msgpack extension.
+///
+/// The handle is packed as a fixext or ext8 depending on the value range.
+/// Small handles in range [-31, 127] use fixext 1, larger handles use ext8
+/// with a variable-length unsigned int encoding.
+///
+/// # Safety
+///
+/// `packer` must be a valid PackerBuffer pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_mpack_handle(
+    object_type: c_int,
+    handle: c_int,
+    packer: *mut PackerBuffer,
+) {
+    if packer.is_null() {
+        return;
+    }
+
+    let ext_type = (object_type - EXT_OBJECT_TYPE_SHIFT) as u8;
+    let mut ptr = nvim_packer_get_ptr(packer);
+
+    if (-0x1f..=0x7f).contains(&handle) {
+        // fixext 1: small handles fit in a single byte
+        rs_mpack_w(&mut ptr, 0xd4);
+        rs_mpack_w(&mut ptr, ext_type);
+        rs_mpack_w(&mut ptr, handle as u8);
+        nvim_packer_set_ptr(packer, ptr);
+    } else {
+        // Larger handles need ext8 with uint encoding
+        // Pack the handle as uint into a temporary buffer
+        let mut buf = [0u8; MPACK_ITEM_SIZE];
+        let mut pos = buf.as_mut_ptr();
+        rs_mpack_uint(&mut pos, handle as u32);
+        let packsize = (pos as usize) - (buf.as_ptr() as usize);
+
+        // Write ext8 header
+        rs_mpack_w(&mut ptr, 0xc7);
+        rs_mpack_w(&mut ptr, packsize as u8);
+        rs_mpack_w(&mut ptr, ext_type);
+
+        // Copy packed uint data
+        std::ptr::copy_nonoverlapping(buf.as_ptr(), ptr, packsize);
+        ptr = ptr.add(packsize);
+        nvim_packer_set_ptr(packer, ptr);
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

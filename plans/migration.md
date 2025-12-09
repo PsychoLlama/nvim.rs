@@ -32,22 +32,22 @@ MessagePack files to migrate:
 - channel.c (21KB) - RPC channel management
 - server.c (8.5KB) - RPC server
 
-**Phase 5.1 Complete ✅:**
-- [x] Created nvim-msgpack crate with 14 rs_* functions
-- [x] Implemented basic msgpack packing primitives:
-  - rs_mpack_w, rs_mpack_w2, rs_mpack_w4, rs_mpack_w8 - byte writers
-  - rs_mpack_nil, rs_mpack_bool - simple types
-  - rs_mpack_uint, rs_mpack_uint64, rs_mpack_integer - integers
-  - rs_mpack_float8 - 64-bit floats
-  - rs_mpack_array, rs_mpack_map - container headers
-  - rs_mpack_str_header, rs_mpack_bin_header - string/binary headers
-- [x] Wired to USE_RUST_MSGPACK conditional in packer.h
-- [x] Tests: 380 API tests, 18 timer tests, 14 channel tests pass
+**Phase 5.1-5.3 Complete ✅ - MessagePack Packer Migrated**
 
-**Phase 5.2 Tasks:**
-- [ ] Migrate mpack_str (full string packing with buffer flush)
-- [ ] Migrate mpack_bin (full binary packing with buffer flush)
-- [ ] Migrate mpack_raw (raw data packing)
+21 rs_mpack_* functions in nvim-msgpack crate:
+- Byte writers: rs_mpack_w, rs_mpack_w2, rs_mpack_w4, rs_mpack_w8
+- Simple types: rs_mpack_nil, rs_mpack_bool
+- Integers: rs_mpack_uint, rs_mpack_uint64, rs_mpack_integer
+- Float: rs_mpack_float8
+- Container headers: rs_mpack_array, rs_mpack_map, rs_mpack_str_header, rs_mpack_bin_header
+- Buffer-aware: rs_mpack_raw, rs_mpack_str, rs_mpack_bin, rs_mpack_ext
+- Buffer utils: rs_mpack_check_buffer, rs_mpack_remaining
+- Handle: rs_mpack_handle
+
+C accessor functions for PackerBuffer opaque handle pattern.
+mpack_object* functions remain in C (glue code that calls Rust primitives).
+
+Tests: 380 API, 172 buffer, 118 window, 18 timer, 14 channel tests pass
 
 **Phase 4 Summary (4.16-4.26):**
 - Watcher accessors (TimeWatcher, SignalWatcher, SocketWatcher)

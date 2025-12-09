@@ -15,12 +15,30 @@
 
 #include "msgpack_rpc/packer.c.generated.h"
 
+#ifdef USE_RUST_MSGPACK
+// Rust implementations from nvim-msgpack crate
+extern void rs_mpack_check_buffer(PackerBuffer *packer);
+extern void rs_mpack_raw(const char *data, size_t len, PackerBuffer *packer);
+extern void rs_mpack_str(const char *data, size_t len, PackerBuffer *packer);
+extern void rs_mpack_bin(const char *data, size_t len, PackerBuffer *packer);
+extern void rs_mpack_ext(const char *buf, size_t len, int8_t type, PackerBuffer *packer);
+extern void rs_mpack_handle(int object_type, int handle, PackerBuffer *packer);
+extern size_t rs_mpack_remaining(PackerBuffer *packer);
+#endif
+
+#ifdef USE_RUST_MSGPACK
+void mpack_check_buffer(PackerBuffer *packer)
+{
+  rs_mpack_check_buffer(packer);
+}
+#else
 void mpack_check_buffer(PackerBuffer *packer)
 {
   if (mpack_remaining(packer) < 2 * MPACK_ITEM_SIZE) {
     packer->packer_flush(packer);
   }
 }
+#endif
 
 static void mpack_w8(char **b, const char *data)
 {
@@ -73,6 +91,27 @@ void mpack_float8(char **ptr, double i)
   mpack_w8(ptr, (char *)&i);
 }
 
+#ifdef USE_RUST_MSGPACK
+void mpack_str(String str, PackerBuffer *packer)
+{
+  rs_mpack_str(str.data, str.size, packer);
+}
+
+void mpack_bin(String str, PackerBuffer *packer)
+{
+  rs_mpack_bin(str.data, str.size, packer);
+}
+
+void mpack_raw(const char *data, size_t len, PackerBuffer *packer)
+{
+  rs_mpack_raw(data, len, packer);
+}
+
+void mpack_ext(char *buf, size_t len, int8_t type, PackerBuffer *packer)
+{
+  rs_mpack_ext(buf, len, type, packer);
+}
+#else
 void mpack_str(String str, PackerBuffer *packer)
 {
   const size_t len = str.size;
@@ -150,7 +189,14 @@ void mpack_ext(char *buf, size_t len, int8_t type, PackerBuffer *packer)
   mpack_w(&packer->ptr, type);
   mpack_raw(buf, len, packer);
 }
+#endif  // USE_RUST_MSGPACK
 
+#ifdef USE_RUST_MSGPACK
+void mpack_handle(ObjectType type, handle_T handle, PackerBuffer *packer)
+{
+  rs_mpack_handle((int)type, handle, packer);
+}
+#else
 void mpack_handle(ObjectType type, handle_T handle, PackerBuffer *packer)
 {
   char exttype = (char)(type - EXT_OBJECT_TYPE_SHIFT);
@@ -174,6 +220,7 @@ void mpack_handle(ObjectType type, handle_T handle, PackerBuffer *packer)
     packer->ptr += packsize;
   }
 }
+#endif  // USE_RUST_MSGPACK
 
 void mpack_object(Object *obj, PackerBuffer *packer)
 {
@@ -317,4 +364,40 @@ static void flush_string_buffer(PackerBuffer *buffer)
 String packer_take_string(PackerBuffer *buffer)
 {
   return (String){ .data = buffer->startptr, .size = (size_t)(buffer->ptr - buffer->startptr) };
+}
+
+// =============================================================================
+// Rust accessor functions for opaque handle pattern
+// =============================================================================
+
+/// Get the current write pointer from a PackerBuffer (accessor for Rust).
+char *nvim_packer_get_ptr(PackerBuffer *packer)
+{
+  return packer->ptr;
+}
+
+/// Set the current write pointer in a PackerBuffer (accessor for Rust).
+void nvim_packer_set_ptr(PackerBuffer *packer, char *ptr)
+{
+  packer->ptr = ptr;
+}
+
+/// Get the end pointer from a PackerBuffer (accessor for Rust).
+char *nvim_packer_get_endptr(PackerBuffer *packer)
+{
+  return packer->endptr;
+}
+
+/// Get the start pointer from a PackerBuffer (accessor for Rust).
+char *nvim_packer_get_startptr(PackerBuffer *packer)
+{
+  return packer->startptr;
+}
+
+/// Call the packer_flush callback (accessor for Rust).
+void nvim_packer_flush(PackerBuffer *packer)
+{
+  if (packer->packer_flush) {
+    packer->packer_flush(packer);
+  }
 }
