@@ -330,6 +330,10 @@ extern "C" {
     fn nvim_proc_is_closed(proc: ProcHandle) -> c_int;
     fn nvim_proc_get_loop(proc: ProcHandle) -> LoopHandle;
     fn nvim_proc_get_type(proc: ProcHandle) -> c_int;
+    fn nvim_proc_get_detach(proc: ProcHandle) -> c_int;
+    fn nvim_proc_set_detach(proc: ProcHandle, detach: c_int);
+    fn nvim_proc_get_events(proc: ProcHandle) -> MultiQueueHandle;
+    fn nvim_proc_set_events(proc: ProcHandle, events: MultiQueueHandle);
 
     // Stream accessors
     fn nvim_stream_is_closed(stream: StreamHandle) -> c_int;
@@ -728,6 +732,56 @@ pub unsafe extern "C" fn rs_proc_get_type(proc: ProcHandle) -> c_int {
         return -1;
     }
     nvim_proc_get_type(proc)
+}
+
+/// Get the detach flag from a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_get_detach(proc: ProcHandle) -> c_int {
+    if proc.is_null() {
+        return 0;
+    }
+    nvim_proc_get_detach(proc)
+}
+
+/// Set the detach flag on a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_set_detach(proc: ProcHandle, detach: c_int) {
+    if !proc.is_null() {
+        nvim_proc_set_detach(proc, detach);
+    }
+}
+
+/// Get the events queue from a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_get_events(proc: ProcHandle) -> MultiQueueHandle {
+    if proc.is_null() {
+        return MultiQueueHandle::null();
+    }
+    nvim_proc_get_events(proc)
+}
+
+/// Set the events queue on a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_set_events(proc: ProcHandle, events: MultiQueueHandle) {
+    if !proc.is_null() {
+        nvim_proc_set_events(proc, events);
+    }
 }
 
 /// Check if a Stream is closed

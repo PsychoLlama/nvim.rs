@@ -65,13 +65,19 @@ static uint64_t next_chan_id = CHAN_STDERR + 1;
 extern int rs_stream_is_closed(Stream *stream);
 extern int rs_proc_get_status(Proc *proc);
 extern int rs_proc_get_type(Proc *proc);
+extern void rs_proc_set_detach(Proc *proc, int detach);
+extern void rs_proc_set_events(Proc *proc, MultiQueue *events);
 #define stream_is_closed(s) rs_stream_is_closed(s)
 #define proc_get_status(p) rs_proc_get_status(p)
 #define proc_get_type(p) rs_proc_get_type(p)
+#define proc_set_detach(p, d) rs_proc_set_detach(p, d)
+#define proc_set_events(p, e) rs_proc_set_events(p, e)
 #else
 #define stream_is_closed(s) ((s)->closed)
 #define proc_get_status(p) ((p)->status)
 #define proc_get_type(p) ((p)->type)
+#define proc_set_detach(p, d) ((p)->detach = (d))
+#define proc_set_events(p, e) ((p)->events = (e))
 #endif
 
 /// Teardown the module
@@ -407,8 +413,8 @@ Channel *channel_job_start(char **argv, const char *exepath, CallbackReader on_s
   proc->argv = argv;
   proc->exepath = exepath;
   proc->cb = channel_proc_exit_cb;
-  proc->events = chan->events;
-  proc->detach = detach;
+  proc_set_events(proc, chan->events);
+  proc_set_detach(proc, detach);
   proc->cwd = cwd;
   proc->env = env;
   proc->overlapped = overlapped;

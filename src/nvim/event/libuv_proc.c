@@ -21,13 +21,16 @@
 extern int rs_rstream_is_closed(RStream *stream);
 extern int rs_stream_is_closed(Stream *stream);
 extern void rs_proc_set_status(Proc *proc, int status);
+extern int rs_proc_get_detach(Proc *proc);
 #define rstream_is_closed(s) rs_rstream_is_closed(s)
 #define stream_is_closed(s) rs_stream_is_closed(s)
 #define proc_set_status(p, s) rs_proc_set_status(p, s)
+#define proc_get_detach(p) rs_proc_get_detach(p)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define stream_is_closed(s) ((s)->closed)
 #define proc_set_status(p, s) ((p)->status = (s))
+#define proc_get_detach(p) ((p)->detach)
 #endif
 
 /// @returns zero on success, or negative error code
@@ -44,7 +47,7 @@ int libuv_proc_spawn(LibuvProc *uvproc)
   if (os_shell_is_cmdexe(proc->argv[0])) {
     uvproc->uvopts.flags |= UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS;
   }
-  if (proc->detach) {
+  if (proc_get_detach(proc)) {
     uvproc->uvopts.flags |= UV_PROCESS_DETACHED;
   }
 #else

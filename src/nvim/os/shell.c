@@ -50,7 +50,11 @@
 #ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern int rs_multiqueue_empty(MultiQueue *mq);
+extern void rs_proc_set_events(Proc *proc, MultiQueue *events);
 #define multiqueue_empty(mq) rs_multiqueue_empty(mq)
+#define proc_set_events(p, e) rs_proc_set_events(p, e)
+#else
+#define proc_set_events(p, e) ((p)->events = (e))
 #endif
 
 #define NS_1_SECOND         1000000000U     // 1 second, in nanoseconds
@@ -887,7 +891,7 @@ static int do_os_system(char **argv, const char *input, size_t len, char **outpu
   LibuvProc uvproc = libuv_proc_init(&main_loop, &buf);
   Proc *proc = &uvproc.proc;
   MultiQueue *events = multiqueue_new_child(main_loop.events);
-  proc->events = events;
+  proc_set_events(proc, events);
   proc->argv = argv;
   int status = proc_spawn(proc, has_input, true, true);
   if (status) {

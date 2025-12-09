@@ -49,6 +49,14 @@ extern int rs_proc_get_refcount(Proc *proc);
 #define proc_get_refcount(p) rs_proc_get_refcount(p)
 extern int rs_proc_get_type(Proc *proc);
 #define proc_get_type(p) rs_proc_get_type(p)
+extern int rs_proc_get_detach(Proc *proc);
+#define proc_get_detach(p) rs_proc_get_detach(p)
+extern void rs_proc_set_detach(Proc *proc, int detach);
+#define proc_set_detach(p, d) rs_proc_set_detach(p, d)
+extern MultiQueue *rs_proc_get_events(Proc *proc);
+#define proc_get_events(p) rs_proc_get_events(p)
+extern void rs_proc_set_events(Proc *proc, MultiQueue *events);
+#define proc_set_events(p, e) rs_proc_set_events(p, e)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define rstream_num_bytes(s) ((s)->num_bytes)
@@ -60,6 +68,10 @@ extern int rs_proc_get_type(Proc *proc);
 #define proc_get_pid(p) ((p)->pid)
 #define proc_get_refcount(p) ((p)->refcount)
 #define proc_get_type(p) ((p)->type)
+#define proc_get_detach(p) ((p)->detach)
+#define proc_set_detach(p, d) ((p)->detach = (d))
+#define proc_get_events(p) ((p)->events)
+#define proc_set_events(p, e) ((p)->events = (e))
 #endif
 
 // Time for a process to exit cleanly before we send KILL.
@@ -171,7 +183,7 @@ void proc_teardown(Loop *loop) FUNC_ATTR_NONNULL_ALL
   proc_is_tearing_down = true;
   for (size_t i = 0; i < kv_size(loop->children); i++) {
     Proc *proc = kv_A(loop->children, i);
-    if (proc->detach || proc_get_type(proc) == kProcTypePty) {
+    if (proc_get_detach(proc) || proc_get_type(proc) == kProcTypePty) {
       // Close handles to process without killing it.
       CREATE_EVENT(loop->events, proc_close_handles, proc);
     } else {
@@ -205,12 +217,12 @@ int proc_wait(Proc *proc, int ms, MultiQueue *events)
 {
   if (!proc_get_refcount(proc)) {
     int status = proc_get_status(proc);
-    LOOP_PROCESS_EVENTS(proc->loop, proc->events, 0);
+    LOOP_PROCESS_EVENTS(proc->loop, proc_get_events(proc), 0);
     return status;
   }
 
   if (!events) {
-    events = proc->events;
+    events = proc_get_events(proc);
   }
 
   // Increase refcount to stop the exit callback from being called (and possibly
@@ -240,9 +252,9 @@ int proc_wait(Proc *proc, int ms, MultiQueue *events)
   if (proc_get_refcount(proc) == 1) {
     // Job exited, free its resources.
     decref(proc);
-    if (proc->events) {
+    if (proc_get_events(proc)) {
       // decref() created an exit event, process it now.
-      multiqueue_process_events(proc->events);
+      multiqueue_process_events(proc_get_events(proc));
     }
   } else {
     proc->refcount--;
@@ -345,20 +357,20 @@ static void decref(Proc *proc)
             sizeof(&kv_A(loop->children, i)) * (kv_size(loop->children) - (i + 1)));
   }
   kv_size(loop->children)--;
-  CREATE_EVENT(proc->events, proc_close_event, proc);
+  CREATE_EVENT(proc_get_events(proc), proc_close_event, proc);
 }
 
 static void proc_close(Proc *proc)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  if (proc_is_tearing_down && proc_is_closed(proc) && (proc->detach || proc_get_type(proc) == kProcTypePty)) {
+  if (proc_is_tearing_down && proc_is_closed(proc) && (proc_get_detach(proc) || proc_get_type(proc) == kProcTypePty)) {
     // If a detached/pty process dies while tearing down it might get closed twice.
     return;
   }
   assert(!proc_is_closed(proc));
   proc->closed = true;
 
-  if (proc->detach) {
+  if (proc_get_detach(proc)) {
     if (proc_get_type(proc) == kProcTypeUv) {
       uv_unref((uv_handle_t *)&(((LibuvProc *)proc)->uv));
     }
@@ -497,7 +509,7 @@ static void on_proc_exit(Proc *proc)
   // OS. We are still in the libuv loop, so we cannot call code that polls for
   // more data directly. Instead delay the reading after the libuv loop by
   // queueing proc_close_handles() as an event.
-  MultiQueue *queue = proc->events ? proc->events : loop->events;
+  MultiQueue *queue = proc_get_events(proc) ? proc_get_events(proc) : loop->events;
   CREATE_EVENT(queue, proc_close_handles, proc);
 }
 
@@ -557,4 +569,28 @@ Loop *nvim_proc_get_loop(Proc *proc)
 int nvim_proc_get_type(Proc *proc)
 {
   return (int)proc->type;
+}
+
+/// Get the detach field from a Proc (accessor for Rust).
+int nvim_proc_get_detach(Proc *proc)
+{
+  return proc->detach ? 1 : 0;
+}
+
+/// Set the detach field of a Proc (accessor for Rust).
+void nvim_proc_set_detach(Proc *proc, int detach)
+{
+  proc->detach = detach != 0;
+}
+
+/// Get the events queue from a Proc (accessor for Rust).
+MultiQueue *nvim_proc_get_events(Proc *proc)
+{
+  return proc->events;
+}
+
+/// Set the events queue of a Proc (accessor for Rust).
+void nvim_proc_set_events(Proc *proc, MultiQueue *events)
+{
+  proc->events = events;
 }
