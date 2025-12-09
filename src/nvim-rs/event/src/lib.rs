@@ -382,6 +382,11 @@ extern "C" {
     fn nvim_stream_get_write_cb(stream: StreamHandle) -> *mut std::ffi::c_void;
     fn nvim_stream_set_write_cb(stream: StreamHandle, cb: *mut std::ffi::c_void);
     fn nvim_stream_call_write_cb(stream: StreamHandle, data: *mut std::ffi::c_void, status: c_int);
+    fn nvim_stream_get_cb_data(stream: StreamHandle) -> *mut std::ffi::c_void;
+    fn nvim_stream_set_cb_data(stream: StreamHandle, data: *mut std::ffi::c_void);
+    fn nvim_stream_get_fpos(stream: StreamHandle) -> i64;
+    fn nvim_stream_set_fpos(stream: StreamHandle, fpos: i64);
+    fn nvim_stream_fpos_add(stream: StreamHandle, amount: i64);
 
     // RStream accessors
     fn nvim_rstream_did_eof(stream: RStreamHandle) -> c_int;
@@ -1386,6 +1391,68 @@ pub unsafe extern "C" fn rs_stream_call_write_cb(
 ) {
     if !stream.is_null() {
         nvim_stream_call_write_cb(stream, data, status);
+    }
+}
+
+/// Get the cb_data from a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_get_cb_data(stream: StreamHandle) -> *mut std::ffi::c_void {
+    if stream.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_stream_get_cb_data(stream)
+}
+
+/// Set the cb_data for a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_set_cb_data(stream: StreamHandle, data: *mut std::ffi::c_void) {
+    if !stream.is_null() {
+        nvim_stream_set_cb_data(stream, data);
+    }
+}
+
+/// Get the fpos from a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_get_fpos(stream: StreamHandle) -> i64 {
+    if stream.is_null() {
+        return 0;
+    }
+    nvim_stream_get_fpos(stream)
+}
+
+/// Set the fpos for a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_set_fpos(stream: StreamHandle, fpos: i64) {
+    if !stream.is_null() {
+        nvim_stream_set_fpos(stream, fpos);
+    }
+}
+
+/// Add to the fpos for a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_fpos_add(stream: StreamHandle, amount: i64) {
+    if !stream.is_null() {
+        nvim_stream_fpos_add(stream, amount);
     }
 }
 

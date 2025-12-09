@@ -276,3 +276,33 @@ void nvim_stream_call_write_cb(Stream *stream, void *data, int status)
     stream->write_cb(stream, data, status);
   }
 }
+
+/// Get the cb_data from a Stream (accessor for Rust).
+void *nvim_stream_get_cb_data(Stream *stream)
+{
+  return stream->cb_data;
+}
+
+/// Set the cb_data for a Stream (accessor for Rust).
+void nvim_stream_set_cb_data(Stream *stream, void *data)
+{
+  stream->cb_data = data;
+}
+
+/// Get the fpos from a Stream (accessor for Rust).
+int64_t nvim_stream_get_fpos(Stream *stream)
+{
+  return stream->fpos;
+}
+
+/// Set the fpos for a Stream (accessor for Rust).
+void nvim_stream_set_fpos(Stream *stream, int64_t fpos)
+{
+  stream->fpos = fpos;
+}
+
+/// Add to the fpos for a Stream (accessor for Rust).
+void nvim_stream_fpos_add(Stream *stream, int64_t amount)
+{
+  stream->fpos += amount;
+}

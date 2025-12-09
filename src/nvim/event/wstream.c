@@ -46,6 +46,16 @@ extern void rs_stream_call_write_cb(Stream *stream, void *data, int status);
 #define stream_get_write_cb(s) ((stream_write_cb)rs_stream_get_write_cb(s))
 #define stream_set_write_cb(s, c) rs_stream_set_write_cb(s, (void *)(c))
 #define stream_call_write_cb(s, d, st) rs_stream_call_write_cb(s, d, st)
+extern void *rs_stream_get_cb_data(Stream *stream);
+extern void rs_stream_set_cb_data(Stream *stream, void *data);
+#define stream_get_cb_data(s) rs_stream_get_cb_data(s)
+#define stream_set_cb_data(s, d) rs_stream_set_cb_data(s, d)
+extern int64_t rs_stream_get_fpos(Stream *stream);
+extern void rs_stream_set_fpos(Stream *stream, int64_t fpos);
+extern void rs_stream_fpos_add(Stream *stream, int64_t amount);
+#define stream_get_fpos(s) rs_stream_get_fpos(s)
+#define stream_set_fpos(s, f) rs_stream_set_fpos(s, f)
+#define stream_fpos_add(s, a) rs_stream_fpos_add(s, a)
 #else
 #define stream_is_closed(s) ((s)->closed)
 #define stream_pending_reqs(s) ((s)->pending_reqs)
@@ -59,6 +69,11 @@ extern void rs_stream_call_write_cb(Stream *stream, void *data, int status);
 #define stream_get_write_cb(s) ((s)->write_cb)
 #define stream_set_write_cb(s, c) ((s)->write_cb = (c))
 #define stream_call_write_cb(s, d, st) do { if ((s)->write_cb) (s)->write_cb((s), (d), (st)); } while (0)
+#define stream_get_cb_data(s) ((s)->cb_data)
+#define stream_set_cb_data(s, d) ((s)->cb_data = (d))
+#define stream_get_fpos(s) ((s)->fpos)
+#define stream_set_fpos(s, f) ((s)->fpos = (f))
+#define stream_fpos_add(s, a) ((s)->fpos += (a))
 #endif
 
 void wstream_init_fd(Loop *loop, Stream *stream, int fd, size_t maxmem)
@@ -95,7 +110,7 @@ void wstream_set_write_cb(Stream *stream, stream_write_cb cb, void *data)
   FUNC_ATTR_NONNULL_ARG(1, 2)
 {
   stream_set_write_cb(stream, cb);
-  stream->cb_data = data;
+  stream_set_cb_data(stream, data);
 }
 
 /// Queues data for writing to the backing file descriptor of a `Stream`
@@ -120,15 +135,15 @@ bool wstream_write(Stream *stream, WBuffer *buffer)
     uv_fs_t req;
 
     // Synchronous write
-    uv_fs_write(stream->uv.idle.loop, &req, stream->fd, &uvbuf, 1, stream->fpos, NULL);
+    uv_fs_write(stream->uv.idle.loop, &req, stream->fd, &uvbuf, 1, stream_get_fpos(stream), NULL);
 
     uv_fs_req_cleanup(&req);
 
     wstream_release_wbuffer(buffer);
 
-    assert(stream->write_cb == NULL);
+    assert(stream_get_write_cb(stream) == NULL);
 
-    stream->fpos += MAX(req.result, 0);
+    stream_fpos_add(stream, MAX(req.result, 0));
     return req.result > 0;
   }
 
@@ -188,7 +203,7 @@ static void write_cb(uv_write_t *req, int status)
 
   wstream_release_wbuffer(data->buffer);
 
-  stream_call_write_cb(data->stream, data->stream->cb_data, status);
+  stream_call_write_cb(data->stream, stream_get_cb_data(data->stream), status);
 
   stream_pending_reqs_dec(data->stream);
 
