@@ -13,7 +13,7 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 4.5 - 368 rs_* Functions, 49 Event Loop)
+## Current Status (Phase 4.6 - 368 rs_* Functions, 49 Event Loop)
 
 **368 Rust functions exported across 35 Rust crates:**
 
@@ -33,21 +33,24 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - 368 rs_* symbols exported
 - 40+ USE_RUST_* defines active across C files (including USE_RUST_EVENT)
 
-**Recent Progress (Phase 4.5):**
-- Wired USE_RUST_EVENT to 12 C files with 16+ locations:
-  - time.c (2): rs_timewatcher_should_skip
+**Recent Progress (Phase 4.6):**
+- Wired USE_RUST_EVENT to 15 C files with 20+ locations:
+  - time.c: timewatcher_should_skip macro
   - proc.h: rs_proc_is_stopped
-  - proc.c (2): rs_multiqueue_empty, rs_rstream_is_closed
+  - proc.c (4): rs_multiqueue_empty, rs_rstream_is_closed, rs_proc_is_closed
   - input.c (4): rs_multiqueue_empty, rs_pending_events, rs_rstream_is_closed
   - state.c: rs_multiqueue_empty
   - getchar.c: rs_multiqueue_empty
   - shell.c: rs_multiqueue_empty
   - loop.c: rs_multiqueue_size
-  - executor.c: rs_loop_is_closing
+  - executor.c: loop_is_closing macro
   - libuv_proc.c: rs_rstream_is_closed
-  - rstream.c: rs_stream_is_closed
-  - wstream.c (2): rs_stream_is_closed
-- New accessor macros: rstream_is_closed, stream_is_closed
+  - rstream.c: stream_is_closed macro
+  - wstream.c (2): stream_is_closed macro
+  - channel.c: stream_is_closed macro
+  - stream.c: stream_is_closed macro
+- Simplified #ifdef patterns: All USE_RUST_EVENT locations now use fallback macros
+  for non-Rust builds, eliminating redundant #ifdef blocks around usage sites
 
 **Phase 4 Summary:**
 - 49 event loop Rust functions covering all major event types
