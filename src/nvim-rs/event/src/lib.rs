@@ -375,6 +375,13 @@ extern "C" {
     fn nvim_stream_get_events(stream: StreamHandle) -> MultiQueueHandle;
     fn nvim_stream_set_closed(stream: StreamHandle, closed: c_int);
     fn nvim_stream_get_pending_reqs(stream: StreamHandle) -> usize;
+    fn nvim_stream_set_maxmem(stream: StreamHandle, maxmem: usize);
+    fn nvim_stream_set_curmem(stream: StreamHandle, curmem: usize);
+    fn nvim_stream_curmem_add(stream: StreamHandle, amount: usize);
+    fn nvim_stream_curmem_sub(stream: StreamHandle, amount: usize);
+    fn nvim_stream_get_write_cb(stream: StreamHandle) -> *mut std::ffi::c_void;
+    fn nvim_stream_set_write_cb(stream: StreamHandle, cb: *mut std::ffi::c_void);
+    fn nvim_stream_call_write_cb(stream: StreamHandle, data: *mut std::ffi::c_void, status: c_int);
 
     // RStream accessors
     fn nvim_rstream_did_eof(stream: RStreamHandle) -> c_int;
@@ -1291,6 +1298,95 @@ pub unsafe extern "C" fn rs_stream_get_pending_reqs(stream: StreamHandle) -> usi
         return 0;
     }
     nvim_stream_get_pending_reqs(stream)
+}
+
+/// Set the maxmem field for a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_set_maxmem(stream: StreamHandle, maxmem: usize) {
+    if !stream.is_null() {
+        nvim_stream_set_maxmem(stream, maxmem);
+    }
+}
+
+/// Set the curmem field for a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_set_curmem(stream: StreamHandle, curmem: usize) {
+    if !stream.is_null() {
+        nvim_stream_set_curmem(stream, curmem);
+    }
+}
+
+/// Add to the curmem field for a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_curmem_add(stream: StreamHandle, amount: usize) {
+    if !stream.is_null() {
+        nvim_stream_curmem_add(stream, amount);
+    }
+}
+
+/// Subtract from the curmem field for a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_curmem_sub(stream: StreamHandle, amount: usize) {
+    if !stream.is_null() {
+        nvim_stream_curmem_sub(stream, amount);
+    }
+}
+
+/// Get the write callback from a Stream (as void* for FFI)
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_get_write_cb(stream: StreamHandle) -> *mut std::ffi::c_void {
+    if stream.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_stream_get_write_cb(stream)
+}
+
+/// Set the write callback for a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_set_write_cb(stream: StreamHandle, cb: *mut std::ffi::c_void) {
+    if !stream.is_null() {
+        nvim_stream_set_write_cb(stream, cb);
+    }
+}
+
+/// Call the write callback if set
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_call_write_cb(
+    stream: StreamHandle,
+    data: *mut std::ffi::c_void,
+    status: c_int,
+) {
+    if !stream.is_null() {
+        nvim_stream_call_write_cb(stream, data, status);
+    }
 }
 
 /// Check if an RStream has reached EOF

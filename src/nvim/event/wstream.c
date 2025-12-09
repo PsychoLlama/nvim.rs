@@ -34,6 +34,18 @@ extern size_t rs_stream_get_maxmem(Stream *stream);
 #define stream_pending_reqs_dec(s) rs_stream_pending_reqs_dec(s)
 #define stream_get_curmem(s) rs_stream_get_curmem(s)
 #define stream_get_maxmem(s) rs_stream_get_maxmem(s)
+extern void rs_stream_set_maxmem(Stream *stream, size_t maxmem);
+#define stream_set_maxmem(s, m) rs_stream_set_maxmem(s, m)
+extern void rs_stream_curmem_add(Stream *stream, size_t amount);
+extern void rs_stream_curmem_sub(Stream *stream, size_t amount);
+#define stream_curmem_add(s, a) rs_stream_curmem_add(s, a)
+#define stream_curmem_sub(s, a) rs_stream_curmem_sub(s, a)
+extern void *rs_stream_get_write_cb(Stream *stream);
+extern void rs_stream_set_write_cb(Stream *stream, void *cb);
+extern void rs_stream_call_write_cb(Stream *stream, void *data, int status);
+#define stream_get_write_cb(s) ((stream_write_cb)rs_stream_get_write_cb(s))
+#define stream_set_write_cb(s, c) rs_stream_set_write_cb(s, (void *)(c))
+#define stream_call_write_cb(s, d, st) rs_stream_call_write_cb(s, d, st)
 #else
 #define stream_is_closed(s) ((s)->closed)
 #define stream_pending_reqs(s) ((s)->pending_reqs)
@@ -41,6 +53,12 @@ extern size_t rs_stream_get_maxmem(Stream *stream);
 #define stream_pending_reqs_dec(s) ((s)->pending_reqs--)
 #define stream_get_curmem(s) ((s)->curmem)
 #define stream_get_maxmem(s) ((s)->maxmem)
+#define stream_set_maxmem(s, m) ((s)->maxmem = (m))
+#define stream_curmem_add(s, a) ((s)->curmem += (a))
+#define stream_curmem_sub(s, a) ((s)->curmem -= (a))
+#define stream_get_write_cb(s) ((s)->write_cb)
+#define stream_set_write_cb(s, c) ((s)->write_cb = (c))
+#define stream_call_write_cb(s, d, st) do { if ((s)->write_cb) (s)->write_cb((s), (d), (st)); } while (0)
 #endif
 
 void wstream_init_fd(Loop *loop, Stream *stream, int fd, size_t maxmem)
@@ -59,7 +77,7 @@ void wstream_init_stream(Stream *stream, uv_stream_t *uvstream, size_t maxmem)
 
 void wstream_init(Stream *stream, size_t maxmem)
 {
-  stream->maxmem = maxmem ? maxmem : DEFAULT_MAXMEM;
+  stream_set_maxmem(stream, maxmem ? maxmem : DEFAULT_MAXMEM);
 }
 
 /// Sets a callback that will be called on completion of a write request,
@@ -76,7 +94,7 @@ void wstream_init(Stream *stream, size_t maxmem)
 void wstream_set_write_cb(Stream *stream, stream_write_cb cb, void *data)
   FUNC_ATTR_NONNULL_ARG(1, 2)
 {
-  stream->write_cb = cb;
+  stream_set_write_cb(stream, cb);
   stream->cb_data = data;
 }
 
@@ -118,7 +136,7 @@ bool wstream_write(Stream *stream, WBuffer *buffer)
     goto err;
   }
 
-  stream->curmem += buffer->size;
+  stream_curmem_add(stream, buffer->size);
 
   WRequest *data = xmalloc(sizeof(WRequest));
   data->stream = stream;
@@ -166,13 +184,11 @@ static void write_cb(uv_write_t *req, int status)
 {
   WRequest *data = req->data;
 
-  data->stream->curmem -= data->buffer->size;
+  stream_curmem_sub(data->stream, data->buffer->size);
 
   wstream_release_wbuffer(data->buffer);
 
-  if (data->stream->write_cb) {
-    data->stream->write_cb(data->stream, data->stream->cb_data, status);
-  }
+  stream_call_write_cb(data->stream, data->stream->cb_data, status);
 
   stream_pending_reqs_dec(data->stream);
 

@@ -232,3 +232,47 @@ size_t nvim_stream_get_pending_reqs(Stream *stream)
 {
   return stream->pending_reqs;
 }
+
+/// Set the maxmem field for a Stream (accessor for Rust).
+void nvim_stream_set_maxmem(Stream *stream, size_t maxmem)
+{
+  stream->maxmem = maxmem;
+}
+
+/// Set the curmem field for a Stream (accessor for Rust).
+void nvim_stream_set_curmem(Stream *stream, size_t curmem)
+{
+  stream->curmem = curmem;
+}
+
+/// Add to the curmem field for a Stream (accessor for Rust).
+void nvim_stream_curmem_add(Stream *stream, size_t amount)
+{
+  stream->curmem += amount;
+}
+
+/// Subtract from the curmem field for a Stream (accessor for Rust).
+void nvim_stream_curmem_sub(Stream *stream, size_t amount)
+{
+  stream->curmem -= amount;
+}
+
+/// Get the write callback from a Stream (accessor for Rust).
+void *nvim_stream_get_write_cb(Stream *stream)
+{
+  return (void *)stream->write_cb;
+}
+
+/// Set the write callback for a Stream (accessor for Rust).
+void nvim_stream_set_write_cb(Stream *stream, void *cb)
+{
+  stream->write_cb = (stream_write_cb)cb;
+}
+
+/// Call the write callback if set (accessor for Rust).
+void nvim_stream_call_write_cb(Stream *stream, void *data, int status)
+{
+  if (stream->write_cb) {
+    stream->write_cb(stream, data, status);
+  }
+}
