@@ -346,6 +346,9 @@ extern "C" {
     fn nvim_proc_set_cwd(proc: ProcHandle, cwd: *const std::ffi::c_char);
     fn nvim_proc_get_env(proc: ProcHandle) -> *mut std::ffi::c_void;
     fn nvim_proc_set_env(proc: ProcHandle, env: *mut std::ffi::c_void);
+    fn nvim_proc_set_stopped_time(proc: ProcHandle, stopped_time: u64);
+    fn nvim_proc_get_exit_signal(proc: ProcHandle) -> u8;
+    fn nvim_proc_set_exit_signal(proc: ProcHandle, exit_signal: u8);
 
     // Stream accessors
     fn nvim_stream_is_closed(stream: StreamHandle) -> c_int;
@@ -942,6 +945,43 @@ pub unsafe extern "C" fn rs_proc_get_env(proc: ProcHandle) -> *mut std::ffi::c_v
 pub unsafe extern "C" fn rs_proc_set_env(proc: ProcHandle, env: *mut std::ffi::c_void) {
     if !proc.is_null() {
         nvim_proc_set_env(proc, env);
+    }
+}
+
+/// Set the stopped_time on a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_set_stopped_time(proc: ProcHandle, stopped_time: u64) {
+    if !proc.is_null() {
+        nvim_proc_set_stopped_time(proc, stopped_time);
+    }
+}
+
+/// Get the exit_signal from a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_get_exit_signal(proc: ProcHandle) -> u8 {
+    if proc.is_null() {
+        return 0;
+    }
+    nvim_proc_get_exit_signal(proc)
+}
+
+/// Set the exit_signal on a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_set_exit_signal(proc: ProcHandle, exit_signal: u8) {
+    if !proc.is_null() {
+        nvim_proc_set_exit_signal(proc, exit_signal);
     }
 }
 

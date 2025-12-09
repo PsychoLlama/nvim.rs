@@ -32,6 +32,8 @@ extern dict_T *rs_proc_get_env(Proc *proc);
 #define proc_get_argv(p) rs_proc_get_argv(p)
 #define proc_get_cwd(p) rs_proc_get_cwd(p)
 #define proc_get_env(p) rs_proc_get_env(p)
+extern uint8_t rs_proc_get_exit_signal(Proc *proc);
+#define proc_get_exit_signal(p) rs_proc_get_exit_signal(p)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define rstream_did_eof(s) ((s)->did_eof)
@@ -41,6 +43,7 @@ extern dict_T *rs_proc_get_env(Proc *proc);
 #define proc_get_argv(p) ((p)->argv)
 #define proc_get_cwd(p) ((p)->cwd)
 #define proc_get_env(p) ((p)->env)
+#define proc_get_exit_signal(p) ((p)->exit_signal)
 #endif
 
 static void CALLBACK pty_proc_terminate_cb(void *context, BOOLEAN unused)
@@ -265,7 +268,7 @@ static void pty_proc_finish(PtyProc *ptyproc)
 
   DWORD exit_code = 0;
   GetExitCodeProcess(ptyproc->proc_handle, &exit_code);
-  proc_set_status(proc, proc->exit_signal ? 128 + proc->exit_signal : (int)exit_code);
+  proc_set_status(proc, proc_get_exit_signal(proc) ? 128 + proc_get_exit_signal(proc) : (int)exit_code);
 
   proc->internal_exit_cb(proc);
 }

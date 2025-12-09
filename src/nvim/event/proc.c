@@ -83,6 +83,12 @@ extern dict_T *rs_proc_get_env(Proc *proc);
 extern void rs_proc_set_env(Proc *proc, dict_T *env);
 #define proc_get_env(p) rs_proc_get_env(p)
 #define proc_set_env(p, e) rs_proc_set_env(p, e)
+extern void rs_proc_set_stopped_time(Proc *proc, uint64_t stopped_time);
+#define proc_set_stopped_time(p, t) rs_proc_set_stopped_time(p, t)
+extern uint8_t rs_proc_get_exit_signal(Proc *proc);
+extern void rs_proc_set_exit_signal(Proc *proc, uint8_t sig);
+#define proc_get_exit_signal(p) rs_proc_get_exit_signal(p)
+#define proc_set_exit_signal(p, s) rs_proc_set_exit_signal(p, s)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define rstream_num_bytes(s) ((s)->num_bytes)
@@ -111,6 +117,9 @@ extern void rs_proc_set_env(Proc *proc, dict_T *env);
 #define proc_set_cwd(p, c) ((p)->cwd = (c))
 #define proc_get_env(p) ((p)->env)
 #define proc_set_env(p, e) ((p)->env = (e))
+#define proc_set_stopped_time(p, t) ((p)->stopped_time = (t))
+#define proc_get_exit_signal(p) ((p)->exit_signal)
+#define proc_set_exit_signal(p, s) ((p)->exit_signal = (s))
 #endif
 
 // Time for a process to exit cleanly before we send KILL.
@@ -309,8 +318,8 @@ void proc_stop(Proc *proc) FUNC_ATTR_NONNULL_ALL
   if (exited || proc_get_stopped_time(proc)) {
     return;
   }
-  proc->stopped_time = os_hrtime();
-  proc->exit_signal = SIGTERM;
+  proc_set_stopped_time(proc, os_hrtime());
+  proc_set_exit_signal(proc, SIGTERM);
 
   switch (proc_get_type(proc)) {
   case kProcTypeUv:
@@ -351,12 +360,12 @@ static void children_kill_cb(uv_timer_t *handle)
     }
     uint64_t term_sent = UINT64_MAX == proc_get_stopped_time(proc);
     if (kProcTypePty != proc_get_type(proc) || term_sent) {
-      proc->exit_signal = SIGKILL;
+      proc_set_exit_signal(proc, SIGKILL);
       os_proc_tree_kill(proc_get_pid(proc), SIGKILL);
     } else {
-      proc->exit_signal = SIGTERM;
+      proc_set_exit_signal(proc, SIGTERM);
       os_proc_tree_kill(proc_get_pid(proc), SIGTERM);
-      proc->stopped_time = UINT64_MAX;  // Flag: SIGTERM was sent.
+      proc_set_stopped_time(proc, UINT64_MAX);  // Flag: SIGTERM was sent.
       // Restart timer.
       uv_timer_start(&proc_get_loop(proc)->children_kill_timer, children_kill_cb,
                      KILL_TIMEOUT_MS, 0);
@@ -704,4 +713,22 @@ dict_T *nvim_proc_get_env(Proc *proc)
 void nvim_proc_set_env(Proc *proc, dict_T *env)
 {
   proc->env = env;
+}
+
+/// Set the stopped_time field of a Proc (accessor for Rust).
+void nvim_proc_set_stopped_time(Proc *proc, uint64_t stopped_time)
+{
+  proc->stopped_time = stopped_time;
+}
+
+/// Get the exit_signal field from a Proc (accessor for Rust).
+uint8_t nvim_proc_get_exit_signal(Proc *proc)
+{
+  return proc->exit_signal;
+}
+
+/// Set the exit_signal field of a Proc (accessor for Rust).
+void nvim_proc_set_exit_signal(Proc *proc, uint8_t exit_signal)
+{
+  proc->exit_signal = exit_signal;
 }

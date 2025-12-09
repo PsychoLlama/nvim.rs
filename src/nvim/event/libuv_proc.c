@@ -36,6 +36,8 @@ extern dict_T *rs_proc_get_env(Proc *proc);
 #define proc_get_argv(p) rs_proc_get_argv(p)
 #define proc_get_cwd(p) rs_proc_get_cwd(p)
 #define proc_get_env(p) rs_proc_get_env(p)
+extern uint8_t rs_proc_get_exit_signal(Proc *proc);
+#define proc_get_exit_signal(p) rs_proc_get_exit_signal(p)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define stream_is_closed(s) ((s)->closed)
@@ -46,6 +48,7 @@ extern dict_T *rs_proc_get_env(Proc *proc);
 #define proc_get_argv(p) ((p)->argv)
 #define proc_get_cwd(p) ((p)->cwd)
 #define proc_get_env(p) ((p)->env)
+#define proc_get_exit_signal(p) ((p)->exit_signal)
 #endif
 
 /// @returns zero on success, or negative error code
@@ -154,7 +157,7 @@ static void exit_cb(uv_process_t *handle, int64_t status, int term_signal)
   Proc *proc = handle->data;
 #if defined(MSWIN)
   // Use stored/expected signal.
-  term_signal = proc->exit_signal;
+  term_signal = proc_get_exit_signal(proc);
 #endif
   proc_set_status(proc, term_signal ? 128 + term_signal : (int)status);
   proc->internal_exit_cb(proc);
