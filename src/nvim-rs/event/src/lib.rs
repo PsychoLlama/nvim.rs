@@ -107,6 +107,27 @@ impl TimeWatcherHandle {
     }
 }
 
+/// Opaque handle to a Proc (OS process)
+///
+/// Proc represents a child process managed by the event loop.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProcHandle(*mut std::ffi::c_void);
+
+impl ProcHandle {
+    /// Create a null handle
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+
+    /// Check if handle is null
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
 // =============================================================================
 // Event Structure
 // =============================================================================
@@ -160,11 +181,12 @@ impl Event {
 // C Accessor Functions (defined in event/defs.c or similar)
 // =============================================================================
 
-/// QUEUE structure matching Neovim's lib/queue_defs.h (same as in nvim-collections)
+/// QUEUE structure matching Neovim's lib/queue_defs.h
+/// Named EventQueue to avoid collision with Queue from nvim-collections
 #[repr(C)]
-pub struct Queue {
-    pub next: *mut Queue,
-    pub prev: *mut Queue,
+pub struct EventQueue {
+    pub next: *mut EventQueue,
+    pub prev: *mut EventQueue,
 }
 
 extern "C" {
@@ -176,13 +198,17 @@ extern "C" {
     // MultiQueue accessors
     fn nvim_multiqueue_empty(mq: MultiQueueHandle) -> c_int;
     fn nvim_multiqueue_size(mq: MultiQueueHandle) -> usize;
-    fn nvim_multiqueue_get_headtail(mq: MultiQueueHandle) -> *mut Queue;
+    fn nvim_multiqueue_get_headtail(mq: MultiQueueHandle) -> *mut EventQueue;
     fn nvim_multiqueue_get_size_field(mq: MultiQueueHandle) -> usize;
 
     // TimeWatcher accessors
     fn nvim_timewatcher_get_data(tw: TimeWatcherHandle) -> *mut std::ffi::c_void;
     fn nvim_timewatcher_get_events(tw: TimeWatcherHandle) -> MultiQueueHandle;
     fn nvim_timewatcher_is_blockable(tw: TimeWatcherHandle) -> c_int;
+
+    // Proc accessors
+    fn nvim_proc_get_status(proc: ProcHandle) -> c_int;
+    fn nvim_proc_get_stopped_time(proc: ProcHandle) -> u64;
 }
 
 // =============================================================================
@@ -301,6 +327,28 @@ pub unsafe extern "C" fn rs_timewatcher_should_skip(tw: TimeWatcherHandle) -> c_
         return 0;
     }
     rs_timewatcher_events_pending(tw)
+}
+
+/// Check if a process has stopped (exited or stopped_time != 0)
+///
+/// This implements the logic from proc.h proc_is_stopped():
+/// ```c
+/// bool exited = (proc->status >= 0);
+/// return exited || (proc->stopped_time != 0);
+/// ```
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_is_stopped(proc: ProcHandle) -> c_int {
+    if proc.is_null() {
+        return 0;
+    }
+    let status = nvim_proc_get_status(proc);
+    let stopped_time = nvim_proc_get_stopped_time(proc);
+    let exited = status >= 0;
+    c_int::from(exited || stopped_time != 0)
 }
 
 // =============================================================================

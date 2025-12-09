@@ -39,10 +39,19 @@ static inline const char *proc_get_exepath(Proc *proc)
   return proc->exepath != NULL ? proc->exepath : proc->argv[0];
 }
 
+#ifdef USE_RUST_EVENT
+extern int rs_proc_is_stopped(Proc *proc);
+
+static inline bool proc_is_stopped(Proc *proc)
+{
+  return rs_proc_is_stopped(proc) != 0;
+}
+#else
 static inline bool proc_is_stopped(Proc *proc)
 {
   bool exited = (proc->status >= 0);
   return exited || (proc->stopped_time != 0);
 }
+#endif
 
 #include "event/proc.h.generated.h"

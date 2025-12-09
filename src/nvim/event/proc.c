@@ -469,3 +469,19 @@ static void on_proc_stream_close(Stream *stream, void *data)
   Proc *proc = data;
   decref(proc);
 }
+
+// =============================================================================
+// Rust accessor functions for opaque handle pattern
+// =============================================================================
+
+/// Get the status field from a Proc (accessor for Rust).
+int nvim_proc_get_status(Proc *proc)
+{
+  return proc->status;
+}
+
+/// Get the stopped_time field from a Proc (accessor for Rust).
+uint64_t nvim_proc_get_stopped_time(Proc *proc)
+{
+  return proc->stopped_time;
+}
