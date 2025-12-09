@@ -64,11 +64,14 @@ static uint64_t next_chan_id = CHAN_STDERR + 1;
 // Rust implementation in nvim-event crate
 extern int rs_stream_is_closed(Stream *stream);
 extern int rs_proc_get_status(Proc *proc);
+extern int rs_proc_get_type(Proc *proc);
 #define stream_is_closed(s) rs_stream_is_closed(s)
 #define proc_get_status(p) rs_proc_get_status(p)
+#define proc_get_type(p) rs_proc_get_type(p)
 #else
 #define stream_is_closed(s) ((s)->closed)
 #define proc_get_status(p) ((p)->status)
+#define proc_get_type(p) ((p)->type)
 #endif
 
 /// Teardown the module
@@ -151,7 +154,7 @@ bool channel_close(uint64_t id, ChannelPart part, const char **error)
     if (part == kChannelPartStderr || part == kChannelPartAll) {
       rstream_may_close(&proc->err);
     }
-    if (proc->type == kProcTypePty && part == kChannelPartAll) {
+    if (proc_get_type(proc) == kProcTypePty && part == kChannelPartAll) {
       pty_proc_close_master(&chan->stream.pty);
     }
 
@@ -412,7 +415,7 @@ Channel *channel_job_start(char **argv, const char *exepath, CallbackReader on_s
 
   char *cmd = xstrdup(proc_get_exepath(proc));
   bool has_out, has_err;
-  if (proc->type == kProcTypePty) {
+  if (proc_get_type(proc) == kProcTypePty) {
     has_out = true;
     has_err = false;
   } else {

@@ -47,6 +47,8 @@ extern int rs_proc_get_pid(Proc *proc);
 #define proc_get_pid(p) rs_proc_get_pid(p)
 extern int rs_proc_get_refcount(Proc *proc);
 #define proc_get_refcount(p) rs_proc_get_refcount(p)
+extern int rs_proc_get_type(Proc *proc);
+#define proc_get_type(p) rs_proc_get_type(p)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define rstream_num_bytes(s) ((s)->num_bytes)
@@ -57,6 +59,7 @@ extern int rs_proc_get_refcount(Proc *proc);
 #define proc_get_stopped_time(p) ((p)->stopped_time)
 #define proc_get_pid(p) ((p)->pid)
 #define proc_get_refcount(p) ((p)->refcount)
+#define proc_get_type(p) ((p)->type)
 #endif
 
 // Time for a process to exit cleanly before we send KILL.
@@ -104,7 +107,7 @@ int proc_spawn(Proc *proc, bool in, bool out, bool err)
 #endif
 
   int status;
-  switch (proc->type) {
+  switch (proc_get_type(proc)) {
   case kProcTypeUv:
     status = libuv_proc_spawn((LibuvProc *)proc);
     break;
@@ -124,7 +127,7 @@ int proc_spawn(Proc *proc, bool in, bool out, bool err)
       uv_close((uv_handle_t *)&proc->err.s.uv.pipe, NULL);
     }
 
-    if (proc->type == kProcTypeUv) {
+    if (proc_get_type(proc) == kProcTypeUv) {
       uv_close((uv_handle_t *)&(((LibuvProc *)proc)->uv), NULL);
     } else {
       proc_close(proc);
@@ -168,7 +171,7 @@ void proc_teardown(Loop *loop) FUNC_ATTR_NONNULL_ALL
   proc_is_tearing_down = true;
   for (size_t i = 0; i < kv_size(loop->children); i++) {
     Proc *proc = kv_A(loop->children, i);
-    if (proc->detach || proc->type == kProcTypePty) {
+    if (proc->detach || proc_get_type(proc) == kProcTypePty) {
       // Close handles to process without killing it.
       CREATE_EVENT(loop->events, proc_close_handles, proc);
     } else {
@@ -258,7 +261,7 @@ void proc_stop(Proc *proc) FUNC_ATTR_NONNULL_ALL
   proc->stopped_time = os_hrtime();
   proc->exit_signal = SIGTERM;
 
-  switch (proc->type) {
+  switch (proc_get_type(proc)) {
   case kProcTypeUv:
     os_proc_tree_kill(proc_get_pid(proc), SIGTERM);
     break;
@@ -296,7 +299,7 @@ static void children_kill_cb(uv_timer_t *handle)
       continue;
     }
     uint64_t term_sent = UINT64_MAX == proc_get_stopped_time(proc);
-    if (kProcTypePty != proc->type || term_sent) {
+    if (kProcTypePty != proc_get_type(proc) || term_sent) {
       proc->exit_signal = SIGKILL;
       os_proc_tree_kill(proc_get_pid(proc), SIGKILL);
     } else {
@@ -348,7 +351,7 @@ static void decref(Proc *proc)
 static void proc_close(Proc *proc)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  if (proc_is_tearing_down && proc_is_closed(proc) && (proc->detach || proc->type == kProcTypePty)) {
+  if (proc_is_tearing_down && proc_is_closed(proc) && (proc->detach || proc_get_type(proc) == kProcTypePty)) {
     // If a detached/pty process dies while tearing down it might get closed twice.
     return;
   }
@@ -356,12 +359,12 @@ static void proc_close(Proc *proc)
   proc->closed = true;
 
   if (proc->detach) {
-    if (proc->type == kProcTypeUv) {
+    if (proc_get_type(proc) == kProcTypeUv) {
       uv_unref((uv_handle_t *)&(((LibuvProc *)proc)->uv));
     }
   }
 
-  switch (proc->type) {
+  switch (proc_get_type(proc)) {
   case kProcTypeUv:
     libuv_proc_close((LibuvProc *)proc);
     break;
@@ -548,4 +551,10 @@ void nvim_proc_set_status(Proc *proc, int status)
 Loop *nvim_proc_get_loop(Proc *proc)
 {
   return proc->loop;
+}
+
+/// Get the type field from a Proc (accessor for Rust).
+int nvim_proc_get_type(Proc *proc)
+{
+  return (int)proc->type;
 }

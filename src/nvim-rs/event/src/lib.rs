@@ -329,6 +329,7 @@ extern "C" {
     fn nvim_proc_get_refcount(proc: ProcHandle) -> c_int;
     fn nvim_proc_is_closed(proc: ProcHandle) -> c_int;
     fn nvim_proc_get_loop(proc: ProcHandle) -> LoopHandle;
+    fn nvim_proc_get_type(proc: ProcHandle) -> c_int;
 
     // Stream accessors
     fn nvim_stream_is_closed(stream: StreamHandle) -> c_int;
@@ -714,6 +715,19 @@ pub unsafe extern "C" fn rs_proc_get_loop(proc: ProcHandle) -> LoopHandle {
         return LoopHandle::null();
     }
     nvim_proc_get_loop(proc)
+}
+
+/// Get the type from a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_get_type(proc: ProcHandle) -> c_int {
+    if proc.is_null() {
+        return -1;
+    }
+    nvim_proc_get_type(proc)
 }
 
 /// Check if a Stream is closed
