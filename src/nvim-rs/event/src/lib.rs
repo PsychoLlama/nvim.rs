@@ -202,6 +202,7 @@ extern "C" {
     fn nvim_multiqueue_size(mq: MultiQueueHandle) -> usize;
     fn nvim_multiqueue_get_headtail(mq: MultiQueueHandle) -> *mut EventQueue;
     fn nvim_multiqueue_get_size_field(mq: MultiQueueHandle) -> usize;
+    fn nvim_multiqueue_has_parent(mq: MultiQueueHandle) -> c_int;
 
     // TimeWatcher accessors
     fn nvim_timewatcher_get_data(tw: TimeWatcherHandle) -> *mut std::ffi::c_void;
@@ -315,6 +316,21 @@ pub unsafe extern "C" fn rs_multiqueue_size(mq: MultiQueueHandle) -> usize {
         return 0;
     }
     nvim_multiqueue_get_size_field(mq)
+}
+
+/// Check if a MultiQueue has a parent
+///
+/// Returns 1 if the queue has a parent, 0 otherwise.
+///
+/// # Safety
+///
+/// `mq` must be a valid MultiQueue handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_multiqueue_has_parent(mq: MultiQueueHandle) -> c_int {
+    if mq.is_null() {
+        return 0;
+    }
+    nvim_multiqueue_has_parent(mq)
 }
 
 /// Get the size of thread_events from a Loop (pure Rust implementation)

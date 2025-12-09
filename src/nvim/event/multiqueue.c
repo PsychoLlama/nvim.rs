@@ -313,3 +313,9 @@ size_t nvim_multiqueue_get_size_field(MultiQueue *mq)
 {
   return mq->size;
 }
+
+/// Check if a MultiQueue has a parent (accessor for Rust).
+int nvim_multiqueue_has_parent(MultiQueue *mq)
+{
+  return mq->parent != NULL ? 1 : 0;
+}
