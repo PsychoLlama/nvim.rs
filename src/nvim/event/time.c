@@ -71,3 +71,25 @@ static void close_cb(uv_handle_t *handle)
     CREATE_EVENT(watcher->events, close_event, watcher);
   }
 }
+
+// =============================================================================
+// Rust accessor functions for opaque handle pattern
+// =============================================================================
+
+/// Get the data pointer from a TimeWatcher (accessor for Rust).
+void *nvim_timewatcher_get_data(TimeWatcher *tw)
+{
+  return tw->data;
+}
+
+/// Get the events queue from a TimeWatcher (accessor for Rust).
+MultiQueue *nvim_timewatcher_get_events(TimeWatcher *tw)
+{
+  return tw->events;
+}
+
+/// Check if a TimeWatcher is blockable (accessor for Rust).
+int nvim_timewatcher_is_blockable(TimeWatcher *tw)
+{
+  return tw->blockable ? 1 : 0;
+}

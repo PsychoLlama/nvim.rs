@@ -285,3 +285,19 @@ static void multiqueue_oneshot_event(void **argv)
     xfree(data);
   }
 }
+
+// =============================================================================
+// Rust accessor functions for opaque handle pattern
+// =============================================================================
+
+/// Check if a MultiQueue is empty (accessor for Rust).
+int nvim_multiqueue_empty(MultiQueue *mq)
+{
+  return multiqueue_empty(mq) ? 1 : 0;
+}
+
+/// Get the size of a MultiQueue (accessor for Rust).
+size_t nvim_multiqueue_size(MultiQueue *mq)
+{
+  return multiqueue_size(mq);
+}

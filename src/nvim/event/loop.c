@@ -224,3 +224,25 @@ static void timer_close_cb(uv_handle_t *handle)
 {
   xfree(handle->data);
 }
+
+// =============================================================================
+// Rust accessor functions for opaque handle pattern
+// =============================================================================
+
+/// Get the events queue from a Loop (accessor for Rust).
+MultiQueue *nvim_loop_get_events(Loop *loop)
+{
+  return loop->events;
+}
+
+/// Get the fast_events queue from a Loop (accessor for Rust).
+MultiQueue *nvim_loop_get_fast_events(Loop *loop)
+{
+  return loop->fast_events;
+}
+
+/// Check if the loop is closing (accessor for Rust).
+int nvim_loop_is_closing(Loop *loop)
+{
+  return loop->closing ? 1 : 0;
+}
