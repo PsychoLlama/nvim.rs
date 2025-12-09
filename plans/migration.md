@@ -13,9 +13,9 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 4.9 - 373 rs_* Functions, 53 Event Loop)
+## Current Status (Phase 4.10 - 375 rs_* Functions, 55 Event Loop)
 
-**373 Rust functions exported across 35 Rust crates:**
+**375 Rust functions exported across 35 Rust crates:**
 
 - nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
 - nvim-memutil, nvim-os, nvim-collections, nvim-encoding
@@ -23,25 +23,26 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - nvim-spell, nvim-eval, nvim-ex_docmd, nvim-indent, nvim-keycodes
 - nvim-profile, nvim-menu, nvim-help, nvim-cmdhist, nvim-fileio
 - nvim-version, nvim-window, nvim-buffer, nvim-mark, nvim-ascii
-- nvim-search, nvim-api, **nvim-event** (53 functions)
+- nvim-search, nvim-api, **nvim-event** (55 functions)
 
 **Build system:**
 
 - Cargo workspace at `src/nvim-rs/`
 - CMake integration via USE_RUST_* flags (all enabled)
 - cbindgen generates C headers from Rust
-- 373 rs_* symbols exported
+- 375 rs_* symbols exported
 - 40+ USE_RUST_* defines active across C files (including USE_RUST_EVENT)
 
-**Recent Progress (Phase 4.9):**
-- Wired Proc field accessors throughout codebase:
-  - proc.c: proc_get_status, proc_get_stopped_time, proc_get_pid, proc_get_refcount
-  - channel.c: proc_get_status
-  - funcs.c: proc_get_pid
-- Stream/RStream accessors continue to work for pending_reqs and closed state
-- All Proc fields now accessible via Rust macros for reads
-- Added rs_proc_get_stopped_time wrapper in nvim-event crate
-- Wired USE_RUST_EVENT to 17+ C files with 30+ locations
+**Recent Progress (Phase 4.10):**
+- Added proc_set_status macro for write access to Proc status field:
+  - proc.c: proc_set_status wrapper for status writes
+  - libuv_proc.c: proc_set_status in exit_cb
+  - pty_proc_unix.c: proc_set_status in chld_handler
+  - pty_proc_win.c: proc_set_status in pty_proc_finish
+- Added rs_proc_get_loop wrapper for proc->loop access
+- Wired rstream accessors in pty_proc_win.c (rstream_is_closed, rstream_did_eof)
+- All Proc fields now accessible via Rust macros for both reads AND writes
+- USE_RUST_EVENT active in 18+ C files with 35+ macro locations
 
 **Phase 4 Summary:**
 - 53 event loop Rust functions covering all major event types
