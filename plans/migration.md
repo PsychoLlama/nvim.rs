@@ -13,9 +13,9 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 4.3 - 367 rs_* Functions, 47 Event Loop)
+## Current Status (Phase 4.4 - 368 rs_* Functions, 49 Event Loop)
 
-**367 Rust functions exported across 35 Rust crates:**
+**368 Rust functions exported across 35 Rust crates:**
 
 - nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
 - nvim-memutil, nvim-os, nvim-collections, nvim-encoding
@@ -23,30 +23,32 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - nvim-spell, nvim-eval, nvim-ex_docmd, nvim-indent, nvim-keycodes
 - nvim-profile, nvim-menu, nvim-help, nvim-cmdhist, nvim-fileio
 - nvim-version, nvim-window, nvim-buffer, nvim-mark, nvim-ascii
-- nvim-search, nvim-api, **nvim-event** (47 functions)
+- nvim-search, nvim-api, **nvim-event** (49 functions)
 
 **Build system:**
 
 - Cargo workspace at `src/nvim-rs/`
 - CMake integration via USE_RUST_* flags (all enabled)
 - cbindgen generates C headers from Rust
-- 367 rs_* symbols exported
+- 368 rs_* symbols exported
 - 40+ USE_RUST_* defines active across C files (including USE_RUST_EVENT)
 
-**Recent Progress (Phase 4.3):**
-- Wired USE_RUST_EVENT to 9 C files with 12 locations:
+**Recent Progress (Phase 4.4):**
+- Wired USE_RUST_EVENT to 10 C files with 13+ locations:
   - CMakeLists.txt: defines USE_RUST_EVENT
   - time.c (2): rs_timewatcher_should_skip
   - proc.h: rs_proc_is_stopped
   - proc.c: rs_multiqueue_empty
-  - input.c (3): rs_multiqueue_empty, rs_pending_events
+  - input.c (4): rs_multiqueue_empty, rs_pending_events, rs_rstream_is_closed
   - state.c: rs_multiqueue_empty
   - getchar.c: rs_multiqueue_empty
   - shell.c: rs_multiqueue_empty
   - loop.c: rs_multiqueue_size
+  - executor.c: rs_loop_is_closing
+- Added rs_rstream_is_closed function (uses accessor chaining)
 
-**Phase 4.2 Summary:**
-- 47 event loop Rust functions covering all major event types
+**Phase 4.2-4.3 Summary:**
+- 49 event loop Rust functions covering all major event types
 - Opaque handles: LoopHandle, MultiQueueHandle, TimeWatcherHandle, ProcHandle,
   StreamHandle, RStreamHandle, SignalWatcherHandle, SocketWatcherHandle
 - All tests passing: timer (18), job (61), channels (14)
