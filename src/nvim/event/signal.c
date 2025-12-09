@@ -9,20 +9,55 @@
 
 #include "event/signal.c.generated.h"
 
+#ifdef USE_RUST_EVENT
+// Rust function declarations
+extern void *rs_signal_watcher_get_data(SignalWatcher *watcher);
+extern void rs_signal_watcher_set_data(SignalWatcher *watcher, void *data);
+#define signal_watcher_get_data(w) rs_signal_watcher_get_data(w)
+#define signal_watcher_set_data(w, d) rs_signal_watcher_set_data(w, d)
+extern MultiQueue *rs_signal_watcher_get_events(SignalWatcher *watcher);
+extern void rs_signal_watcher_set_events(SignalWatcher *watcher, MultiQueue *events);
+#define signal_watcher_get_events(w) rs_signal_watcher_get_events(w)
+#define signal_watcher_set_events(w, e) rs_signal_watcher_set_events(w, e)
+extern void *rs_signal_watcher_get_cb(SignalWatcher *watcher);
+extern void rs_signal_watcher_set_cb(SignalWatcher *watcher, void *cb);
+#define signal_watcher_get_cb(w) ((signal_cb)rs_signal_watcher_get_cb(w))
+#define signal_watcher_set_cb(w, c) rs_signal_watcher_set_cb(w, (void *)(c))
+extern void *rs_signal_watcher_get_close_cb(SignalWatcher *watcher);
+extern void rs_signal_watcher_set_close_cb(SignalWatcher *watcher, void *cb);
+#define signal_watcher_get_close_cb(w) ((signal_close_cb)rs_signal_watcher_get_close_cb(w))
+#define signal_watcher_set_close_cb(w, c) rs_signal_watcher_set_close_cb(w, (void *)(c))
+extern void rs_signal_watcher_call_cb(SignalWatcher *watcher);
+extern void rs_signal_watcher_call_close_cb(SignalWatcher *watcher);
+#define signal_watcher_call_cb(w) rs_signal_watcher_call_cb(w)
+#define signal_watcher_call_close_cb(w) rs_signal_watcher_call_close_cb(w)
+#else
+#define signal_watcher_get_data(w) ((w)->data)
+#define signal_watcher_set_data(w, d) ((w)->data = (d))
+#define signal_watcher_get_events(w) ((w)->events)
+#define signal_watcher_set_events(w, e) ((w)->events = (e))
+#define signal_watcher_get_cb(w) ((w)->cb)
+#define signal_watcher_set_cb(w, c) ((w)->cb = (c))
+#define signal_watcher_get_close_cb(w) ((w)->close_cb)
+#define signal_watcher_set_close_cb(w, c) ((w)->close_cb = (c))
+#define signal_watcher_call_cb(w) do { if ((w)->cb) (w)->cb((w), (w)->uv.signum, (w)->data); } while (0)
+#define signal_watcher_call_close_cb(w) do { if ((w)->close_cb) (w)->close_cb((w), (w)->data); } while (0)
+#endif
+
 void signal_watcher_init(Loop *loop, SignalWatcher *watcher, void *data)
   FUNC_ATTR_NONNULL_ARG(1) FUNC_ATTR_NONNULL_ARG(2)
 {
   uv_signal_init(&loop->uv, &watcher->uv);
   watcher->uv.data = watcher;
-  watcher->data = data;
-  watcher->cb = NULL;
-  watcher->events = loop->fast_events;
+  signal_watcher_set_data(watcher, data);
+  signal_watcher_set_cb(watcher, NULL);
+  signal_watcher_set_events(watcher, loop->fast_events);
 }
 
 void signal_watcher_start(SignalWatcher *watcher, signal_cb cb, int signum)
   FUNC_ATTR_NONNULL_ALL
 {
-  watcher->cb = cb;
+  signal_watcher_set_cb(watcher, cb);
   uv_signal_start(&watcher->uv, signal_watcher_cb, signum);
 }
 
@@ -35,28 +70,26 @@ void signal_watcher_stop(SignalWatcher *watcher)
 void signal_watcher_close(SignalWatcher *watcher, signal_close_cb cb)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  watcher->close_cb = cb;
+  signal_watcher_set_close_cb(watcher, cb);
   uv_close((uv_handle_t *)&watcher->uv, close_cb);
 }
 
 static void signal_event(void **argv)
 {
   SignalWatcher *watcher = argv[0];
-  watcher->cb(watcher, watcher->uv.signum, watcher->data);
+  signal_watcher_call_cb(watcher);
 }
 
 static void signal_watcher_cb(uv_signal_t *handle, int signum)
 {
   SignalWatcher *watcher = handle->data;
-  CREATE_EVENT(watcher->events, signal_event, watcher);
+  CREATE_EVENT(signal_watcher_get_events(watcher), signal_event, watcher);
 }
 
 static void close_cb(uv_handle_t *handle)
 {
   SignalWatcher *watcher = handle->data;
-  if (watcher->close_cb) {
-    watcher->close_cb(watcher, watcher->data);
-  }
+  signal_watcher_call_close_cb(watcher);
 }
 
 // =============================================================================
@@ -79,4 +112,56 @@ MultiQueue *nvim_signal_watcher_get_events(SignalWatcher *watcher)
 void *nvim_signal_watcher_get_data(SignalWatcher *watcher)
 {
   return watcher->data;
+}
+
+/// Set the user data for a SignalWatcher (accessor for Rust).
+void nvim_signal_watcher_set_data(SignalWatcher *watcher, void *data)
+{
+  watcher->data = data;
+}
+
+/// Set the events queue for a SignalWatcher (accessor for Rust).
+void nvim_signal_watcher_set_events(SignalWatcher *watcher, MultiQueue *events)
+{
+  watcher->events = events;
+}
+
+/// Get the cb from a SignalWatcher (accessor for Rust).
+void *nvim_signal_watcher_get_cb(SignalWatcher *watcher)
+{
+  return (void *)watcher->cb;
+}
+
+/// Set the cb for a SignalWatcher (accessor for Rust).
+void nvim_signal_watcher_set_cb(SignalWatcher *watcher, void *cb)
+{
+  watcher->cb = (signal_cb)cb;
+}
+
+/// Get the close_cb from a SignalWatcher (accessor for Rust).
+void *nvim_signal_watcher_get_close_cb(SignalWatcher *watcher)
+{
+  return (void *)watcher->close_cb;
+}
+
+/// Set the close_cb for a SignalWatcher (accessor for Rust).
+void nvim_signal_watcher_set_close_cb(SignalWatcher *watcher, void *cb)
+{
+  watcher->close_cb = (signal_close_cb)cb;
+}
+
+/// Call the signal callback if set (accessor for Rust).
+void nvim_signal_watcher_call_cb(SignalWatcher *watcher)
+{
+  if (watcher->cb) {
+    watcher->cb(watcher, watcher->uv.signum, watcher->data);
+  }
+}
+
+/// Call the close callback if set (accessor for Rust).
+void nvim_signal_watcher_call_close_cb(SignalWatcher *watcher)
+{
+  if (watcher->close_cb) {
+    watcher->close_cb(watcher, watcher->data);
+  }
 }

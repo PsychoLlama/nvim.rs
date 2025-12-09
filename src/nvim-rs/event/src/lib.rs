@@ -412,6 +412,14 @@ extern "C" {
     fn nvim_signal_watcher_get_signum(watcher: SignalWatcherHandle) -> c_int;
     fn nvim_signal_watcher_get_events(watcher: SignalWatcherHandle) -> MultiQueueHandle;
     fn nvim_signal_watcher_get_data(watcher: SignalWatcherHandle) -> *mut std::ffi::c_void;
+    fn nvim_signal_watcher_set_data(watcher: SignalWatcherHandle, data: *mut std::ffi::c_void);
+    fn nvim_signal_watcher_set_events(watcher: SignalWatcherHandle, events: MultiQueueHandle);
+    fn nvim_signal_watcher_get_cb(watcher: SignalWatcherHandle) -> *mut std::ffi::c_void;
+    fn nvim_signal_watcher_set_cb(watcher: SignalWatcherHandle, cb: *mut std::ffi::c_void);
+    fn nvim_signal_watcher_get_close_cb(watcher: SignalWatcherHandle) -> *mut std::ffi::c_void;
+    fn nvim_signal_watcher_set_close_cb(watcher: SignalWatcherHandle, cb: *mut std::ffi::c_void);
+    fn nvim_signal_watcher_call_cb(watcher: SignalWatcherHandle);
+    fn nvim_signal_watcher_call_close_cb(watcher: SignalWatcherHandle);
 
     // SocketWatcher accessors
     fn nvim_socket_watcher_get_addr(watcher: SocketWatcherHandle) -> *const std::ffi::c_char;
@@ -1787,6 +1795,104 @@ pub unsafe extern "C" fn rs_signal_watcher_get_data(watcher: SignalWatcherHandle
         return std::ptr::null_mut();
     }
     nvim_signal_watcher_get_data(watcher)
+}
+
+/// Set the user data for a SignalWatcher
+///
+/// # Safety
+///
+/// `watcher` must be a valid SignalWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_signal_watcher_set_data(watcher: SignalWatcherHandle, data: *mut std::ffi::c_void) {
+    if !watcher.is_null() {
+        nvim_signal_watcher_set_data(watcher, data);
+    }
+}
+
+/// Set the events queue for a SignalWatcher
+///
+/// # Safety
+///
+/// `watcher` must be a valid SignalWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_signal_watcher_set_events(watcher: SignalWatcherHandle, events: MultiQueueHandle) {
+    if !watcher.is_null() {
+        nvim_signal_watcher_set_events(watcher, events);
+    }
+}
+
+/// Get the cb from a SignalWatcher (as void* for FFI)
+///
+/// # Safety
+///
+/// `watcher` must be a valid SignalWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_signal_watcher_get_cb(watcher: SignalWatcherHandle) -> *mut std::ffi::c_void {
+    if watcher.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_signal_watcher_get_cb(watcher)
+}
+
+/// Set the cb for a SignalWatcher
+///
+/// # Safety
+///
+/// `watcher` must be a valid SignalWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_signal_watcher_set_cb(watcher: SignalWatcherHandle, cb: *mut std::ffi::c_void) {
+    if !watcher.is_null() {
+        nvim_signal_watcher_set_cb(watcher, cb);
+    }
+}
+
+/// Get the close_cb from a SignalWatcher (as void* for FFI)
+///
+/// # Safety
+///
+/// `watcher` must be a valid SignalWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_signal_watcher_get_close_cb(watcher: SignalWatcherHandle) -> *mut std::ffi::c_void {
+    if watcher.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_signal_watcher_get_close_cb(watcher)
+}
+
+/// Set the close_cb for a SignalWatcher
+///
+/// # Safety
+///
+/// `watcher` must be a valid SignalWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_signal_watcher_set_close_cb(watcher: SignalWatcherHandle, cb: *mut std::ffi::c_void) {
+    if !watcher.is_null() {
+        nvim_signal_watcher_set_close_cb(watcher, cb);
+    }
+}
+
+/// Call the signal callback if set
+///
+/// # Safety
+///
+/// `watcher` must be a valid SignalWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_signal_watcher_call_cb(watcher: SignalWatcherHandle) {
+    if !watcher.is_null() {
+        nvim_signal_watcher_call_cb(watcher);
+    }
+}
+
+/// Call the close callback if set
+///
+/// # Safety
+///
+/// `watcher` must be a valid SignalWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_signal_watcher_call_close_cb(watcher: SignalWatcherHandle) {
+    if !watcher.is_null() {
+        nvim_signal_watcher_call_close_cb(watcher);
+    }
 }
 
 /// Get the address from a SocketWatcher
