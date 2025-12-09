@@ -323,10 +323,12 @@ extern "C" {
 
     // Proc accessors
     fn nvim_proc_get_status(proc: ProcHandle) -> c_int;
+    fn nvim_proc_set_status(proc: ProcHandle, status: c_int);
     fn nvim_proc_get_stopped_time(proc: ProcHandle) -> u64;
     fn nvim_proc_get_pid(proc: ProcHandle) -> c_int;
     fn nvim_proc_get_refcount(proc: ProcHandle) -> c_int;
     fn nvim_proc_is_closed(proc: ProcHandle) -> c_int;
+    fn nvim_proc_get_loop(proc: ProcHandle) -> LoopHandle;
 
     // Stream accessors
     fn nvim_stream_is_closed(stream: StreamHandle) -> c_int;
@@ -687,6 +689,31 @@ pub unsafe extern "C" fn rs_proc_get_stopped_time(proc: ProcHandle) -> u64 {
         return 0;
     }
     nvim_proc_get_stopped_time(proc)
+}
+
+/// Set the status field of a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_set_status(proc: ProcHandle, status: c_int) {
+    if !proc.is_null() {
+        nvim_proc_set_status(proc, status);
+    }
+}
+
+/// Get the loop from a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_get_loop(proc: ProcHandle) -> LoopHandle {
+    if proc.is_null() {
+        return LoopHandle::null();
+    }
+    nvim_proc_get_loop(proc)
 }
 
 /// Check if a Stream is closed

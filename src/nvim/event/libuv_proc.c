@@ -20,11 +20,14 @@
 // Rust implementation in nvim-event crate
 extern int rs_rstream_is_closed(RStream *stream);
 extern int rs_stream_is_closed(Stream *stream);
+extern void rs_proc_set_status(Proc *proc, int status);
 #define rstream_is_closed(s) rs_rstream_is_closed(s)
 #define stream_is_closed(s) rs_stream_is_closed(s)
+#define proc_set_status(p, s) rs_proc_set_status(p, s)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define stream_is_closed(s) ((s)->closed)
+#define proc_set_status(p, s) ((p)->status = (s))
 #endif
 
 /// @returns zero on success, or negative error code
@@ -135,7 +138,7 @@ static void exit_cb(uv_process_t *handle, int64_t status, int term_signal)
   // Use stored/expected signal.
   term_signal = proc->exit_signal;
 #endif
-  proc->status = term_signal ? 128 + term_signal : (int)status;
+  proc_set_status(proc, term_signal ? 128 + term_signal : (int)status);
   proc->internal_exit_cb(proc);
 }
 

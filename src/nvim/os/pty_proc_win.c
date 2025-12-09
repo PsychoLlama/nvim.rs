@@ -18,11 +18,14 @@
 // Rust implementation in nvim-event crate
 extern int rs_rstream_is_closed(RStream *stream);
 extern int rs_rstream_did_eof(RStream *stream);
+extern void rs_proc_set_status(Proc *proc, int status);
 #define rstream_is_closed(s) rs_rstream_is_closed(s)
 #define rstream_did_eof(s) rs_rstream_did_eof(s)
+#define proc_set_status(p, s) rs_proc_set_status(p, s)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define rstream_did_eof(s) ((s)->did_eof)
+#define proc_set_status(p, s) ((p)->status = (s))
 #endif
 
 static void CALLBACK pty_proc_terminate_cb(void *context, BOOLEAN unused)
@@ -247,7 +250,7 @@ static void pty_proc_finish(PtyProc *ptyproc)
 
   DWORD exit_code = 0;
   GetExitCodeProcess(ptyproc->proc_handle, &exit_code);
-  proc->status = proc->exit_signal ? 128 + proc->exit_signal : (int)exit_code;
+  proc_set_status(proc, proc->exit_signal ? 128 + proc->exit_signal : (int)exit_code);
 
   proc->internal_exit_cb(proc);
 }

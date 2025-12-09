@@ -47,6 +47,14 @@ int forkpty(int *, char *, const struct termios *, const struct winsize *);
 
 #include "os/pty_proc_unix.c.generated.h"
 
+#ifdef USE_RUST_EVENT
+// Rust implementation in nvim-event crate
+extern void rs_proc_set_status(Proc *proc, int status);
+#define proc_set_status(p, s) rs_proc_set_status(p, s)
+#else
+#define proc_set_status(p, s) ((p)->status = (s))
+#endif
+
 #if !defined(HAVE_FORKPTY) && !defined(__APPLE__)
 
 // this header defines STR, just as nvim.h, but it is defined as ('S'<<8),
@@ -406,9 +414,9 @@ static void chld_handler(uv_signal_t *handle, int signum)
     }
 
     if (WIFEXITED(stat)) {
-      proc->status = WEXITSTATUS(stat);
+      proc_set_status(proc, WEXITSTATUS(stat));
     } else if (WIFSIGNALED(stat)) {
-      proc->status = 128 + WTERMSIG(stat);
+      proc_set_status(proc, 128 + WTERMSIG(stat));
     }
     proc->internal_exit_cb(proc);
   }

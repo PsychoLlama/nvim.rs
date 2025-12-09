@@ -39,6 +39,8 @@ extern int rs_proc_is_closed(Proc *proc);
 #define proc_is_closed(p) rs_proc_is_closed(p)
 extern int rs_proc_get_status(Proc *proc);
 #define proc_get_status(p) rs_proc_get_status(p)
+extern void rs_proc_set_status(Proc *proc, int status);
+#define proc_set_status(p, s) rs_proc_set_status(p, s)
 extern uint64_t rs_proc_get_stopped_time(Proc *proc);
 #define proc_get_stopped_time(p) rs_proc_get_stopped_time(p)
 extern int rs_proc_get_pid(Proc *proc);
@@ -51,6 +53,7 @@ extern int rs_proc_get_refcount(Proc *proc);
 #define rstream_did_eof(s) ((s)->did_eof)
 #define proc_is_closed(p) ((p)->closed)
 #define proc_get_status(p) ((p)->status)
+#define proc_set_status(p, s) ((p)->status = (s))
 #define proc_get_stopped_time(p) ((p)->stopped_time)
 #define proc_get_pid(p) ((p)->pid)
 #define proc_get_refcount(p) ((p)->refcount)
@@ -127,7 +130,7 @@ int proc_spawn(Proc *proc, bool in, bool out, bool err)
       proc_close(proc);
     }
     proc_free(proc);
-    proc->status = -1;
+    proc_set_status(proc, -1);
     return status;
   }
 
@@ -228,7 +231,7 @@ int proc_wait(Proc *proc, int ms, MultiQueue *events)
       LOOP_PROCESS_EVENTS(proc->loop, events, 0);
     }
 
-    proc->status = -2;
+    proc_set_status(proc, -2);
   }
 
   if (proc_get_refcount(proc) == 1) {
@@ -533,4 +536,16 @@ int nvim_proc_get_refcount(Proc *proc)
 int nvim_proc_is_closed(Proc *proc)
 {
   return proc->closed ? 1 : 0;
+}
+
+/// Set the status field of a Proc (accessor for Rust).
+void nvim_proc_set_status(Proc *proc, int status)
+{
+  proc->status = status;
+}
+
+/// Get the loop field from a Proc (accessor for Rust).
+Loop *nvim_proc_get_loop(Proc *proc)
+{
+  return proc->loop;
 }
