@@ -13,9 +13,9 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 4.10 - 375 rs_* Functions, 55 Event Loop)
+## Current Status (Phase 4.11 - 404 rs_* Functions, 58 Event Loop)
 
-**375 Rust functions exported across 35 Rust crates:**
+**404 Rust functions exported across 35 Rust crates:**
 
 - nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
 - nvim-memutil, nvim-os, nvim-collections, nvim-encoding
@@ -23,26 +23,29 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - nvim-spell, nvim-eval, nvim-ex_docmd, nvim-indent, nvim-keycodes
 - nvim-profile, nvim-menu, nvim-help, nvim-cmdhist, nvim-fileio
 - nvim-version, nvim-window, nvim-buffer, nvim-mark, nvim-ascii
-- nvim-search, nvim-api, **nvim-event** (55 functions)
+- nvim-search, nvim-api, **nvim-event** (58 functions)
 
 **Build system:**
 
 - Cargo workspace at `src/nvim-rs/`
 - CMake integration via USE_RUST_* flags (all enabled)
 - cbindgen generates C headers from Rust
-- 375 rs_* symbols exported
-- 40+ USE_RUST_* defines active across C files (including USE_RUST_EVENT)
+- 404 rs_* symbols exported
+- 45+ USE_RUST_* defines active across C files (including USE_RUST_EVENT)
 
-**Recent Progress (Phase 4.10):**
+**Recent Progress (Phase 4.11):**
 - Added proc_set_status macro for write access to Proc status field:
   - proc.c: proc_set_status wrapper for status writes
   - libuv_proc.c: proc_set_status in exit_cb
   - pty_proc_unix.c: proc_set_status in chld_handler
   - pty_proc_win.c: proc_set_status in pty_proc_finish
-- Added rs_proc_get_loop wrapper for proc->loop access
+- Added proc_get_type macro for proc type field access:
+  - proc.c: all proc->type reads converted to proc_get_type(proc)
+  - channel.c: proc->type reads converted
+- Added rs_proc_get_loop, rs_proc_get_type wrappers
 - Wired rstream accessors in pty_proc_win.c (rstream_is_closed, rstream_did_eof)
 - All Proc fields now accessible via Rust macros for both reads AND writes
-- USE_RUST_EVENT active in 18+ C files with 35+ macro locations
+- USE_RUST_EVENT active in 18+ C files with 40+ macro locations
 
 **Phase 4 Summary:**
 - 53 event loop Rust functions covering all major event types
