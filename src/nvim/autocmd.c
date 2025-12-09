@@ -71,6 +71,10 @@ extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) ((l)->events)
 #endif
 
+#ifdef USE_RUST_AUTOCMD
+extern int rs_is_autocmd_blocked(void);
+#endif
+
 static const char e_autocommand_nesting_too_deep[]
   = N_("E218: Autocommand nesting too deep");
 
@@ -1993,11 +1997,19 @@ void unblock_autocmds(void)
   }
 }
 
+#ifdef USE_RUST_AUTOCMD
+bool is_autocmd_blocked(void)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_is_autocmd_blocked() != 0;
+}
+#else
 bool is_autocmd_blocked(void)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
   return autocmd_blocked != 0;
 }
+#endif
 
 /// Find next matching autocommand.
 /// If next autocommand was not found, sets lastpat to NULL and cmdidx to SIZE_MAX on apc.
@@ -2693,4 +2705,14 @@ void do_filetype_autocmd(buf_T *buf, bool force)
     varp = NULL;
   }
   secure = secure_save;
+}
+
+// =============================================================================
+// Rust FFI accessor functions
+// =============================================================================
+
+/// C accessor for the static autocmd_blocked variable (used by Rust FFI).
+int nvim_get_autocmd_blocked(void)
+{
+  return autocmd_blocked;
 }

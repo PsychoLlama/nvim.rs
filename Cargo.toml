@@ -5,6 +5,7 @@ members = [
     "src/nvim-rs/api",
     "src/nvim-rs/arabic",
     "src/nvim-rs/ascii",
+    "src/nvim-rs/autocmd",
     "src/nvim-rs/buffer",
     "src/nvim-rs/charset",
     "src/nvim-rs/cmdhist",
