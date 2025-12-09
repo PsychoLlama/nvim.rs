@@ -119,6 +119,14 @@ extern const char *rs_check_nextcmd(const char *p);
 extern int rs_is_loclist_cmd(int cmdidx, int cmd_size);
 #endif
 
+#ifdef USE_RUST_EVENT
+// Rust implementation in nvim-event crate
+extern MultiQueue *rs_loop_get_events(Loop *loop);
+#define loop_get_events(l) rs_loop_get_events(l)
+#else
+#define loop_get_events(l) ((l)->events)
+#endif
+
 static const char e_ambiguous_use_of_user_defined_command[]
   = N_("E464: Ambiguous use of user-defined command");
 static const char e_no_call_stack_to_substitute_for_stack[]
@@ -6330,7 +6338,7 @@ void do_sleep(int64_t msec, bool hide_cursor)
   }
 
   ui_flush();  // flush before waiting
-  LOOP_PROCESS_EVENTS_UNTIL(&main_loop, main_loop.events, msec, got_int);
+  LOOP_PROCESS_EVENTS_UNTIL(&main_loop, loop_get_events(&main_loop), msec, got_int);
 
   // If CTRL-C was typed to interrupt the sleep, drop the CTRL-C from the
   // input buffer, otherwise a following call to input() fails.

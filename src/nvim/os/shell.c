@@ -52,12 +52,15 @@
 extern int rs_multiqueue_empty(MultiQueue *mq);
 extern void rs_proc_set_events(Proc *proc, MultiQueue *events);
 extern void rs_proc_set_argv(Proc *proc, char **argv);
+extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define multiqueue_empty(mq) rs_multiqueue_empty(mq)
 #define proc_set_events(p, e) rs_proc_set_events(p, e)
 #define proc_set_argv(p, a) rs_proc_set_argv(p, a)
+#define loop_get_events(l) rs_loop_get_events(l)
 #else
 #define proc_set_events(p, e) ((p)->events = (e))
 #define proc_set_argv(p, a) ((p)->argv = (a))
+#define loop_get_events(l) ((l)->events)
 #endif
 
 #define NS_1_SECOND         1000000000U     // 1 second, in nanoseconds
@@ -893,7 +896,7 @@ static int do_os_system(char **argv, const char *input, size_t len, char **outpu
 
   LibuvProc uvproc = libuv_proc_init(&main_loop, &buf);
   Proc *proc = &uvproc.proc;
-  MultiQueue *events = multiqueue_new_child(main_loop.events);
+  MultiQueue *events = multiqueue_new_child(loop_get_events(&main_loop));
   proc_set_events(proc, events);
   proc_set_argv(proc, argv);
   int status = proc_spawn(proc, has_input, true, true);

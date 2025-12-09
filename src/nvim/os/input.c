@@ -53,11 +53,14 @@ extern bool rs_os_isatty(int fd);
 #ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern int rs_multiqueue_empty(MultiQueue *mq);
+extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define multiqueue_empty(mq) rs_multiqueue_empty(mq)
 extern int rs_rstream_is_closed(RStream *stream);
 #define rstream_is_closed(s) rs_rstream_is_closed(s)
+#define loop_get_events(l) rs_loop_get_events(l)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
+#define loop_get_events(l) ((l)->events)
 #endif
 
 void input_start(void)
@@ -94,8 +97,8 @@ static void create_cursorhold_event(bool events_enabled)
   // have been called (`inbuf_poll` would return `kTrue`).
   // TODO(tarruda): Cursorhold should be implemented as a timer set during the
   // `state_check` callback for the states where it can be triggered.
-  assert(!events_enabled || multiqueue_empty(main_loop.events));
-  multiqueue_put(main_loop.events, cursorhold_event, NULL);
+  assert(!events_enabled || multiqueue_empty(loop_get_events(&main_loop)));
+  multiqueue_put(loop_get_events(&main_loop), cursorhold_event, NULL);
 }
 
 static void reset_cursorhold_wait(int tb_change_cnt)
@@ -162,7 +165,7 @@ int input_get(uint8_t *buf, int maxlen, int ms, int tb_change_cnt, MultiQueue *e
       }
       reset_cursorhold_wait(tb_change_cnt);
       if (trigger_cursorhold() && !typebuf_changed(tb_change_cnt)) {
-        create_cursorhold_event(events == main_loop.events);
+        create_cursorhold_event(events == loop_get_events(&main_loop));
       } else {
         before_blocking();
         result = inbuf_poll(-1, events);
@@ -524,7 +527,7 @@ static TriState inbuf_poll(int ms, MultiQueue *events)
     prof_input_start();
   }
 
-  if ((ms == -1 || ms > 0) && events != main_loop.events && !input_eof) {
+  if ((ms == -1 || ms > 0) && events != loop_get_events(&main_loop) && !input_eof) {
     // The pending input provoked a blocking wait. Do special events now. #6247
     blocking = true;
     multiqueue_process_events(ch_before_blocking_events);

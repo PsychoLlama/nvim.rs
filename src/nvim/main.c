@@ -139,6 +139,14 @@ enum {
 
 #include "main.c.generated.h"
 
+#ifdef USE_RUST_EVENT
+// Rust implementation in nvim-event crate
+extern MultiQueue *rs_loop_get_events(Loop *loop);
+#define loop_get_events(l) rs_loop_get_events(l)
+#else
+#define loop_get_events(l) ((l)->events)
+#endif
+
 Loop main_loop;
 
 static char *argv0 = NULL;
@@ -154,7 +162,7 @@ static const char *err_extra_cmd =
 void event_init(void)
 {
   loop_init(&main_loop, NULL);
-  resize_events = multiqueue_new_child(main_loop.events);
+  resize_events = multiqueue_new_child(loop_get_events(&main_loop));
 
   signal_init();
   // mspgack-rpc initialization
@@ -167,12 +175,12 @@ void event_init(void)
 /// @returns false if main_loop could not be closed gracefully
 static bool event_teardown(void)
 {
-  if (!main_loop.events) {
+  if (!loop_get_events(&main_loop)) {
     input_stop();
     return true;
   }
 
-  multiqueue_process_events(main_loop.events);
+  multiqueue_process_events(loop_get_events(&main_loop));
   loop_poll_events(&main_loop, 0);  // Drain thread_events, fast_events.
   input_stop();
   channel_teardown();

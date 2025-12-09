@@ -45,6 +45,14 @@
 #include "api/ui.c.generated.h"
 #include "ui_events_remote.generated.h"  // IWYU pragma: export
 
+#ifdef USE_RUST_EVENT
+// Rust implementation in nvim-event crate
+extern MultiQueue *rs_loop_get_events(Loop *loop);
+#define loop_get_events(l) rs_loop_get_events(l)
+#else
+#define loop_get_events(l) ((l)->events)
+#endif
+
 // TODO(bfredl): just make UI:s owned by their channels instead
 static PMap(uint64_t) connected_uis = MAP_INIT;
 
@@ -134,7 +142,7 @@ void remote_ui_wait_for_attach(bool only_stdio)
     LOOP_PROCESS_EVENTS_UNTIL(&main_loop, channel->events, -1,
                               map_has(uint64_t, &connected_uis, CHAN_STDIO));
   } else {
-    LOOP_PROCESS_EVENTS_UNTIL(&main_loop, main_loop.events, -1,
+    LOOP_PROCESS_EVENTS_UNTIL(&main_loop, loop_get_events(&main_loop), -1,
                               ui_active());
   }
 }

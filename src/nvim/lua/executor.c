@@ -102,8 +102,14 @@ typedef struct {
 // Rust implementation in nvim-event crate
 extern int rs_loop_is_closing(Loop *loop);
 #define loop_is_closing(loop) rs_loop_is_closing(loop)
+extern MultiQueue *rs_loop_get_events(Loop *loop);
+#define loop_get_events(l) rs_loop_get_events(l)
+extern MultiQueue *rs_loop_get_fast_events(Loop *loop);
+#define loop_get_fast_events(l) rs_loop_get_fast_events(l)
 #else
 #define loop_is_closing(loop) ((loop)->closing)
+#define loop_get_events(l) ((l)->events)
+#define loop_get_fast_events(l) ((l)->fast_events)
 #endif
 
 #define PUSH_ALL_TYPVALS(lstate, args, argcount, special) \
@@ -236,7 +242,7 @@ static int nlua_fast_cfpcall(lua_State *lstate, int nargs, int nresult, int flag
     size_t len;
     const char *error = nlua_get_error(lstate, &len);
 
-    multiqueue_put(main_loop.events, nlua_luv_error_event,
+    multiqueue_put(loop_get_events(&main_loop), nlua_luv_error_event,
                    error != NULL ? xstrdup(error) : NULL, (void *)(intptr_t)kCallback);
     lua_pop(lstate, 1);  // error message
     retval = -status;
@@ -411,7 +417,7 @@ static int nlua_schedule(lua_State *const lstate)
 
   LuaRef cb = nlua_ref_global(lstate, 1);
   // Pass along UI event handler to disable on error.
-  multiqueue_put(main_loop.events, nlua_schedule_event, (void *)(ptrdiff_t)cb,
+  multiqueue_put(loop_get_events(&main_loop), nlua_schedule_event, (void *)(ptrdiff_t)cb,
                  (void *)(ptrdiff_t)ui_event_ns_id);
   return 0;
 }
@@ -496,7 +502,7 @@ static int nlua_wait(lua_State *lstate)
     fast_only = lua_toboolean(lstate, 4);
   }
 
-  MultiQueue *loop_events = fast_only ? main_loop.fast_events : main_loop.events;
+  MultiQueue *loop_events = fast_only ? loop_get_fast_events(&main_loop) : loop_get_events(&main_loop);
 
   TimeWatcher *tw = xmalloc(sizeof(TimeWatcher));
 
@@ -1052,7 +1058,7 @@ static int nlua_print(lua_State *const lstate)
                                         msg_ga.ga_data,
                                         (void *)(intptr_t)msg_ga.ga_len));
   } else if (in_fast_callback) {
-    multiqueue_put(main_loop.events, nlua_print_event,
+    multiqueue_put(loop_get_events(&main_loop), nlua_print_event,
                    msg_ga.ga_data, (void *)(intptr_t)msg_ga.ga_len);
   } else {
     nlua_print_event((void *[]){ msg_ga.ga_data, (void *)(intptr_t)msg_ga.ga_len });

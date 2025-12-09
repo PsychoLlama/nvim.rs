@@ -35,6 +35,17 @@
 
 #include "msgpack_rpc/channel.c.generated.h"
 
+#ifdef USE_RUST_EVENT
+// Rust implementation in nvim-event crate
+extern MultiQueue *rs_loop_get_events(Loop *loop);
+#define loop_get_events(l) rs_loop_get_events(l)
+extern MultiQueue *rs_loop_get_fast_events(Loop *loop);
+#define loop_get_fast_events(l) rs_loop_get_fast_events(l)
+#else
+#define loop_get_events(l) ((l)->events)
+#define loop_get_fast_events(l) ((l)->fast_events)
+#endif
+
 #ifdef NVIM_LOG_DEBUG
 # define REQ "[request]  "
 # define RES "[response] "
@@ -70,7 +81,7 @@ static void log_notify(char *dir, uint64_t channel_id, const char *name)
 
 void rpc_init(void)
 {
-  ch_before_blocking_events = multiqueue_new_child(main_loop.events);
+  ch_before_blocking_events = multiqueue_new_child(loop_get_events(&main_loop));
 }
 
 void rpc_start(Channel *channel)
@@ -482,7 +493,7 @@ void rpc_close(Channel *channel)
   channel->rpc.closed = true;
 
   // Scheduled to avoid running UILeave autocommands in a libuv handler.
-  multiqueue_put(main_loop.fast_events, rpc_close_event, channel);
+  multiqueue_put(loop_get_fast_events(&main_loop), rpc_close_event, channel);
 }
 
 static void rpc_close_event(void **argv)

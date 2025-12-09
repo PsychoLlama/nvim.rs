@@ -74,7 +74,11 @@
 #ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern int rs_multiqueue_empty(MultiQueue *mq);
+extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define multiqueue_empty(mq) rs_multiqueue_empty(mq)
+#define loop_get_events(l) rs_loop_get_events(l)
+#else
+#define loop_get_events(l) ((l)->events)
 #endif
 
 /// State for adding bytes to a recording or 'showcmd'.
@@ -1955,8 +1959,8 @@ static void getchar_common(typval_T *argvars, typval_T *rettv, bool allow_number
       if (!char_avail()) {
         // Flush screen updates before blocking.
         ui_flush();
-        input_get(NULL, 0, -1, typebuf.tb_change_cnt, main_loop.events);
-        if (!input_available() && !multiqueue_empty(main_loop.events)) {
+        input_get(NULL, 0, -1, typebuf.tb_change_cnt, loop_get_events(&main_loop));
+        if (!input_available() && !multiqueue_empty(loop_get_events(&main_loop))) {
           state_handle_k_event();
           continue;
         }

@@ -135,9 +135,12 @@
 #ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern int rs_proc_get_pid(Proc *proc);
+extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define proc_get_pid(p) rs_proc_get_pid(p)
+#define loop_get_events(l) rs_loop_get_events(l)
 #else
 #define proc_get_pid(p) ((p)->pid)
+#define loop_get_events(l) ((l)->events)
 #endif
 
 /// Describe data to return from find_some_match()
@@ -2615,7 +2618,7 @@ static void f_wait(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 
   // Start dummy timer.
   time_watcher_init(&main_loop, tw, NULL);
-  tw->events = main_loop.events;
+  tw->events = loop_get_events(&main_loop);
   tw->blockable = true;
   time_watcher_start(tw, dummy_timer_due_cb, (uint64_t)interval, (uint64_t)interval);
 
@@ -2627,7 +2630,7 @@ static void f_wait(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   // Flush screen updates before blocking.
   ui_flush();
 
-  LOOP_PROCESS_EVENTS_UNTIL(&main_loop, main_loop.events, timeout,
+  LOOP_PROCESS_EVENTS_UNTIL(&main_loop, loop_get_events(&main_loop), timeout,
                             eval_expr_typval(&expr, false, &argv, 0, &exprval) != OK
                             || tv_get_number_chk(&exprval, &error)
                             || called_emsg > called_emsg_before || error || got_int);
@@ -3776,7 +3779,7 @@ static void f_jobwait(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
       continue;
     }
     multiqueue_process_events(jobs[i]->events);
-    multiqueue_replace_parent(jobs[i]->events, main_loop.events);
+    multiqueue_replace_parent(jobs[i]->events, loop_get_events(&main_loop));
 
     tv_list_append_number(rv, jobs[i]->stream.proc.status);
     channel_decref(jobs[i]);

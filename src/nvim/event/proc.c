@@ -119,6 +119,8 @@ extern void rs_proc_call_internal_close_cb(Proc *proc);
 // Loop accessors
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)
+extern MultiQueue *rs_loop_get_fast_events(Loop *loop);
+#define loop_get_fast_events(l) rs_loop_get_fast_events(l)
 // Stream accessors for proc->in/out/err
 extern void rs_stream_set_internal_data(Stream *stream, void *data);
 #define stream_set_internal_data(s, d) rs_stream_set_internal_data(s, d)
@@ -176,6 +178,7 @@ extern void *rs_stream_get_cb_data(Stream *stream);
 #define proc_call_internal_close_cb(p) do { if ((p)->internal_close_cb) (p)->internal_close_cb(p); } while (0)
 // Loop accessors (fallback)
 #define loop_get_events(l) ((l)->events)
+#define loop_get_fast_events(l) ((l)->fast_events)
 // Stream accessors for proc->in/out/err (fallback)
 #define stream_set_internal_data(s, d) ((s)->internal_data = (d))
 #define stream_set_internal_close_cb(s, c) ((s)->internal_close_cb = (c))
@@ -560,7 +563,7 @@ static void proc_close_handles(void **argv)
 static void exit_delay_cb(uv_timer_t *handle)
 {
   uv_timer_stop(&main_loop.exit_delay_timer);
-  multiqueue_put(main_loop.fast_events, exit_event, main_loop.exit_delay_timer.data);
+  multiqueue_put(loop_get_fast_events(&main_loop), exit_event, main_loop.exit_delay_timer.data);
 }
 
 static void exit_event(void **argv)
@@ -587,7 +590,7 @@ static void exit_event(void **argv)
 void exit_on_closed_chan(int status)
 {
   DLOG("self-exit triggered by closed RPC channel...");
-  multiqueue_put(main_loop.fast_events, exit_event, (void *)(intptr_t)status);
+  multiqueue_put(loop_get_fast_events(&main_loop), exit_event, (void *)(intptr_t)status);
 }
 
 static void on_proc_exit(Proc *proc)

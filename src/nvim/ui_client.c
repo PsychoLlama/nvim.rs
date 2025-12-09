@@ -33,6 +33,14 @@
 # include "nvim/os/os_win_console.h"
 #endif
 
+#ifdef USE_RUST_EVENT
+// Rust implementation in nvim-event crate
+extern MultiQueue *rs_loop_get_fast_events(Loop *loop);
+#define loop_get_fast_events(l) rs_loop_get_fast_events(l)
+#else
+#define loop_get_fast_events(l) ((l)->fast_events)
+#endif
+
 static TUIData *tui = NULL;
 static int tui_width = 0;
 static int tui_height = 0;
@@ -287,7 +295,7 @@ void ui_client_event_connect(Array args)
   }
 
   char *server_addr = args.items[0].data.string.data;
-  multiqueue_put(main_loop.fast_events, channel_connect_event, server_addr);
+  multiqueue_put(loop_get_fast_events(&main_loop), channel_connect_event, server_addr);
   // Set a dummy channel ID to prevent client exit when server detaches.
   ui_client_channel_id = UINT64_MAX;
 }

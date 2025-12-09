@@ -127,6 +127,14 @@ typedef struct {
 
 #include "terminal.c.generated.h"
 
+#ifdef USE_RUST_EVENT
+// Rust implementation in nvim-event crate
+extern MultiQueue *rs_loop_get_events(Loop *loop);
+#define loop_get_events(l) rs_loop_get_events(l)
+#else
+#define loop_get_events(l) ((l)->events)
+#endif
+
 // Delay for refreshing the terminal buffer after receiving updates from
 // libvterm. Improves performance when receiving large bursts of data.
 #define REFRESH_DELAY 10
@@ -280,7 +288,7 @@ static void schedule_termrequest(Terminal *term)
   kv_init(*term->pending.send);
 
   int line = row_to_linenr(term, term->cursor.row);
-  multiqueue_put(main_loop.events, emit_termrequest, term,
+  multiqueue_put(loop_get_events(&main_loop), emit_termrequest, term,
                  xmemdup(term->termrequest_buffer.items, term->termrequest_buffer.size),
                  (void *)(intptr_t)term->termrequest_buffer.size, term->pending.send,
                  (void *)(intptr_t)line, (void *)(intptr_t)term->cursor.col,
@@ -411,7 +419,7 @@ void terminal_init(void)
 {
   time_watcher_init(&main_loop, &refresh_timer, NULL);
   // refresh_timer_cb will redraw the screen which can call vimscript
-  refresh_timer.events = multiqueue_new_child(main_loop.events);
+  refresh_timer.events = multiqueue_new_child(loop_get_events(&main_loop));
 }
 
 void terminal_teardown(void)
@@ -1569,7 +1577,7 @@ static int term_selection_set(VTermSelectionMask mask, VTermStringFragment frag,
 
   if (frag.final) {
     char *data = xmemdupz(term->selection.items, kv_size(term->selection));
-    multiqueue_put(main_loop.events, term_clipboard_set, (void *)mask, data);
+    multiqueue_put(loop_get_events(&main_loop), term_clipboard_set, (void *)mask, data);
   }
 
   return 1;
@@ -2111,7 +2119,7 @@ static void refresh_terminal(Terminal *term)
   adjust_topline_cursor(term, buf, ml_added);
 
   // Copy pending events back to the main event queue
-  multiqueue_move_events(main_loop.events, term->pending.events);
+  multiqueue_move_events(loop_get_events(&main_loop), term->pending.events);
 }
 
 static void refresh_cursor(Terminal *term, bool *cursor_visible)

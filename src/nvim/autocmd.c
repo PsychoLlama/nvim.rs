@@ -63,6 +63,14 @@
 #include "auevents_name_map.generated.h"
 #include "autocmd.c.generated.h"
 
+#ifdef USE_RUST_EVENT
+// Rust implementation in nvim-event crate
+extern MultiQueue *rs_loop_get_events(Loop *loop);
+#define loop_get_events(l) rs_loop_get_events(l)
+#else
+#define loop_get_events(l) ((l)->events)
+#endif
+
 static const char e_autocommand_nesting_too_deep[]
   = N_("E218: Autocommand nesting too deep");
 
@@ -2599,7 +2607,7 @@ void may_trigger_vim_suspend_resume(bool suspend)
     pending_vimresume = kTrue;
   } else if (!suspend && pending_vimresume == kTrue) {
     pending_vimresume = kNone;
-    multiqueue_put(main_loop.events, vimresume_event, NULL);
+    multiqueue_put(loop_get_events(&main_loop), vimresume_event, NULL);
   }
 }
 

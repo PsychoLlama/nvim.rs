@@ -95,6 +95,9 @@ extern void rs_proc_set_cb(Proc *proc, void *cb);
 // Stream accessors for proc->in/out
 extern size_t rs_stream_get_pending_reqs(Stream *stream);
 #define stream_get_pending_reqs(s) rs_stream_get_pending_reqs(s)
+// Loop accessors
+extern MultiQueue *rs_loop_get_events(Loop *loop);
+#define loop_get_events(l) rs_loop_get_events(l)
 #else
 #define stream_is_closed(s) ((s)->closed)
 #define stream_get_pending_reqs(s) ((s)->pending_reqs)
@@ -112,6 +115,7 @@ extern size_t rs_stream_get_pending_reqs(Stream *stream);
 #define proc_get_overlapped(p) ((p)->overlapped)
 #define proc_set_overlapped(p, o) ((p)->overlapped = (o))
 #define proc_set_cb(p, c) ((p)->cb = (c))
+#define loop_get_events(l) ((l)->events)
 #endif
 
 /// Teardown the module
@@ -269,7 +273,7 @@ Channel *channel_alloc(ChannelStreamType type)
   } else {
     chan->id = next_chan_id++;
   }
-  chan->events = multiqueue_new_child(main_loop.events);
+  chan->events = multiqueue_new_child(loop_get_events(&main_loop));
   chan->refcount = 1;
   chan->exit_status = -1;
   chan->streamtype = type;
@@ -322,7 +326,7 @@ void channel_decref(Channel *chan)
 {
   if (!(--chan->refcount)) {
     // delay free, so that libuv is done with the handles
-    multiqueue_put(main_loop.events, free_channel_event, chan);
+    multiqueue_put(loop_get_events(&main_loop), free_channel_event, chan);
   }
 }
 
@@ -376,7 +380,7 @@ static void channel_destroy_early(Channel *chan)
   }
 
   // uv will keep a reference to handles until next loop tick, so delay free
-  multiqueue_put(main_loop.events, free_channel_event, chan);
+  multiqueue_put(loop_get_events(&main_loop), free_channel_event, chan);
 }
 
 static void close_cb(Stream *stream, void *data)
@@ -928,7 +932,7 @@ void channel_info_changed(Channel *chan, bool new_chan)
   event_T event = new_chan ? EVENT_CHANOPEN : EVENT_CHANINFO;
   if (has_event(event)) {
     channel_incref(chan);
-    multiqueue_put(main_loop.events, set_info_event, chan, (void *)(intptr_t)event);
+    multiqueue_put(loop_get_events(&main_loop), set_info_event, chan, (void *)(intptr_t)event);
   }
 }
 

@@ -34,7 +34,11 @@
 #ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern int rs_multiqueue_empty(MultiQueue *mq);
+extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define multiqueue_empty(mq) rs_multiqueue_empty(mq)
+#define loop_get_events(l) rs_loop_get_events(l)
+#else
+#define loop_get_events(l) ((l)->events)
 #endif
 
 void state_enter(VimState *s)
@@ -64,7 +68,7 @@ getkey:
     //   case of the three where typebuf.tb_len > 0 after vpeekc() returns NUL.
     if (vpeekc() != NUL || typebuf.tb_len > 0) {
       key = safe_vgetc();
-    } else if (!multiqueue_empty(main_loop.events)) {
+    } else if (!multiqueue_empty(loop_get_events(&main_loop))) {
       // No input available and processing events may take time, flush now.
       ui_flush();
       // Event was made available after the last multiqueue_process_events call
@@ -82,9 +86,9 @@ getkey:
       ui_flush();
       // Call `input_get` directly to block for events or user input without consuming anything from
       // `os/input.c:input_buffer` or calling the mapping engine.
-      input_get(NULL, 0, -1, typebuf.tb_change_cnt, main_loop.events);
+      input_get(NULL, 0, -1, typebuf.tb_change_cnt, loop_get_events(&main_loop));
       // If an event was put into the queue, we send K_EVENT directly.
-      if (!input_available() && !multiqueue_empty(main_loop.events)) {
+      if (!input_available() && !multiqueue_empty(loop_get_events(&main_loop))) {
         key = K_EVENT;
       } else {
         goto getkey;
@@ -119,12 +123,12 @@ getkey:
 void state_handle_k_event(void)
 {
   while (true) {
-    Event event = multiqueue_get(main_loop.events);
+    Event event = multiqueue_get(loop_get_events(&main_loop));
     if (event.handler) {
       event.handler(event.argv);
     }
 
-    if (multiqueue_empty(main_loop.events)) {
+    if (multiqueue_empty(loop_get_events(&main_loop))) {
       // don't breakcheck before return, caller should return to main-loop
       // and handle input already.
       return;

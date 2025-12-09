@@ -97,6 +97,14 @@ extern int rs_check_luafunc_name(const char *str, bool paren);
 extern var_flavour_T rs_var_flavour(const char *varname);
 #endif
 
+#ifdef USE_RUST_EVENT
+// Rust implementation in nvim-event crate
+extern MultiQueue *rs_loop_get_events(Loop *loop);
+#define loop_get_events(l) rs_loop_get_events(l)
+#else
+#define loop_get_events(l) ((l)->events)
+#endif
+
 // TODO(ZyX-I): Remove DICT_MAXNEST, make users be non-recursive instead
 
 #define DICT_MAXNEST 100        // maximum nesting of lists and dicts
@@ -5068,7 +5076,7 @@ uint64_t timer_start(const int64_t timeout, const int repeat_count, const Callba
   timer->callback = *callback;
 
   time_watcher_init(&main_loop, &timer->tw, timer);
-  timer->tw.events = multiqueue_new_child(main_loop.events);
+  timer->tw.events = multiqueue_new_child(loop_get_events(&main_loop));
   // if main loop is blocked, don't queue up multiple events
   timer->tw.blockable = true;
   time_watcher_start(&timer->tw, timer_due_cb, (uint64_t)timeout, (uint64_t)timeout);
