@@ -14,6 +14,7 @@ members = [
     "src/nvim-rs/encoding",
     "src/nvim-rs/event",
     "src/nvim-rs/ex_docmd",
+    "src/nvim-rs/ex_eval",
     "src/nvim-rs/fileio",
     "src/nvim-rs/grid",
     "src/nvim-rs/help",

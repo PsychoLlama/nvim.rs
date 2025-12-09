@@ -36,6 +36,10 @@
 
 #include "ex_eval.c.generated.h"
 
+#ifdef USE_RUST_EX_EVAL
+extern int rs_aborted_in_try(void);
+#endif
+
 static const char e_multiple_else[] = N_("E583: Multiple :else");
 static const char e_multiple_finally[] = N_("E607: Multiple :finally");
 
@@ -138,6 +142,13 @@ bool should_abort(int retcode)
 /// ended on an error.  This means that parsing commands is continued in order
 /// to find finally clauses to be executed, and that some errors in skipped
 /// commands are still reported.
+#ifdef USE_RUST_EX_EVAL
+bool aborted_in_try(void)
+  FUNC_ATTR_PURE
+{
+  return rs_aborted_in_try() != 0;
+}
+#else
 bool aborted_in_try(void)
   FUNC_ATTR_PURE
 {
@@ -145,6 +156,7 @@ bool aborted_in_try(void)
   // determines whether searching for finally clauses is necessary.
   return force_abort;
 }
+#endif
 
 /// cause_errthrow(): Cause a throw of an error exception if appropriate.
 ///
@@ -2027,4 +2039,14 @@ bool has_loop_cmd(char *p)
     return true;
   }
   return false;
+}
+
+// =============================================================================
+// Rust FFI accessor functions
+// =============================================================================
+
+/// C accessor for the global force_abort variable (used by Rust FFI).
+int nvim_get_force_abort(void)
+{
+  return force_abort ? 1 : 0;
 }

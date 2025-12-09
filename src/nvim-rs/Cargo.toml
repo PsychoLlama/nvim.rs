@@ -26,6 +26,7 @@ nvim-collections = { path = "collections" }
 nvim-encoding = { path = "encoding" }
 nvim-event = { path = "event" }
 nvim-ex-docmd = { path = "ex_docmd" }
+nvim-ex-eval = { path = "ex_eval" }
 nvim-fileio = { path = "fileio" }
 nvim-grid = { path = "grid" }
 nvim-help = { path = "help" }
