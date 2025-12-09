@@ -59,7 +59,7 @@ if(ENABLE_WASMTIME)
 endif()
 
 # Rust library integration (optional, for incremental migration)
-option(USE_RUST "Use Rust implementations where available" OFF)
+option(USE_RUST "Use Rust implementations where available" ON)
 if(USE_RUST)
   # Find the pre-built Rust static library
   find_library(RUST_NVIM_LIB
