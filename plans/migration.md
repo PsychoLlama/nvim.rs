@@ -13,12 +13,36 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 4.15 - Stream/RStream Complete)
+## Current Status (Phase 4.18 - All Watchers Complete)
 
-**97 event loop rs_* functions in nvim-event crate:**
+**125 event loop rs_* functions in nvim-event crate:**
 
-All Stream struct fields now have complete accessor coverage with USE_RUST_EVENT macros.
-Both wstream.c and rstream.c have been fully wired.
+All event watcher types (TimeWatcher, SignalWatcher, SocketWatcher) and Stream types now have
+complete accessor coverage with USE_RUST_EVENT macros.
+
+**Watcher Accessors (Phase 4.16-4.18):**
+
+TimeWatcher (Phase 4.16):
+- timewatcher_get_data/timewatcher_set_data
+- timewatcher_get_events/timewatcher_set_events
+- timewatcher_is_blockable/timewatcher_set_blockable
+- timewatcher_get_cb/timewatcher_set_cb
+- timewatcher_get_close_cb/timewatcher_set_close_cb
+- timewatcher_call_cb/timewatcher_call_close_cb
+
+SignalWatcher (Phase 4.17):
+- signal_watcher_get_data/signal_watcher_set_data
+- signal_watcher_get_events/signal_watcher_set_events
+- signal_watcher_get_cb/signal_watcher_set_cb
+- signal_watcher_get_close_cb/signal_watcher_set_close_cb
+- signal_watcher_call_cb/signal_watcher_call_close_cb
+
+SocketWatcher (Phase 4.18):
+- socket_watcher_get_data/socket_watcher_set_data
+- socket_watcher_get_events/socket_watcher_set_events
+- socket_watcher_get_cb/socket_watcher_set_cb
+- socket_watcher_get_close_cb/socket_watcher_set_close_cb
+- socket_watcher_call_cb/socket_watcher_call_close_cb
 
 **Stream Field Accessors (Phase 4.15):**
 - stream_is_closed / stream_set_closed - closed state
@@ -34,6 +58,9 @@ Both wstream.c and rstream.c have been fully wired.
 - stream_get_events - events queue
 
 **Files with USE_RUST_EVENT wired:**
+- time.c: All TimeWatcher field accesses via macros (complete)
+- signal.c: All SignalWatcher field accesses via macros (complete)
+- socket.c: All SocketWatcher field accesses via macros (complete)
 - wstream.c: All stream field accesses via macros (complete)
 - rstream.c: All stream field accesses via macros (complete)
 - stream.c: Base accessors and fallback macros
@@ -43,7 +70,6 @@ Both wstream.c and rstream.c have been fully wired.
 - pty_proc_win.c: proc_set_status, proc_get_loop, proc_set_pid, proc_get_argv, proc_get_cwd, proc_get_env, proc_get_exit_signal, proc_call_internal_exit_cb, proc_call_internal_close_cb
 - channel.c: proc_get_status, proc_get_type, proc_set_detach, proc_set_events, proc_set_argv, proc_set_exepath, proc_set_cwd, proc_get_env, proc_set_env, proc_get_fwd_err, proc_set_fwd_err, proc_get_overlapped, proc_set_overlapped, proc_set_cb
 - shell.c: proc_set_events, proc_set_argv
-- time.c: timewatcher_should_skip macro
 - loop.c: multiqueue_size macro
 
 **Build system:**
