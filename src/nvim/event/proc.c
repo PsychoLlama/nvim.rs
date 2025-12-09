@@ -39,12 +39,15 @@ extern uint64_t rs_proc_get_stopped_time(Proc *proc);
 #define proc_get_stopped_time(p) rs_proc_get_stopped_time(p)
 extern int rs_proc_get_pid(Proc *proc);
 #define proc_get_pid(p) rs_proc_get_pid(p)
+extern int rs_proc_get_refcount(Proc *proc);
+#define proc_get_refcount(p) rs_proc_get_refcount(p)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define proc_is_closed(p) ((p)->closed)
 #define proc_get_status(p) ((p)->status)
 #define proc_get_stopped_time(p) ((p)->stopped_time)
 #define proc_get_pid(p) ((p)->pid)
+#define proc_get_refcount(p) ((p)->refcount)
 #endif
 
 // Time for a process to exit cleanly before we send KILL.
@@ -188,7 +191,7 @@ void proc_close_streams(Proc *proc) FUNC_ATTR_NONNULL_ALL
 int proc_wait(Proc *proc, int ms, MultiQueue *events)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  if (!proc->refcount) {
+  if (!proc_get_refcount(proc)) {
     int status = proc_get_status(proc);
     LOOP_PROCESS_EVENTS(proc->loop, proc->events, 0);
     return status;
@@ -203,8 +206,8 @@ int proc_wait(Proc *proc, int ms, MultiQueue *events)
   proc->refcount++;
   LOOP_PROCESS_EVENTS_UNTIL(proc->loop, events, ms,
                             // Until...
-                            got_int                   // interrupted by the user
-                            || proc->refcount == 1);  // job exited
+                            got_int                       // interrupted by the user
+                            || proc_get_refcount(proc) == 1);  // job exited
 
   // Assume that a user hitting CTRL-C does not like the current job.  Kill it.
   if (got_int) {
@@ -214,7 +217,7 @@ int proc_wait(Proc *proc, int ms, MultiQueue *events)
       // We can only return if all streams/handles are closed and the job
       // exited.
       LOOP_PROCESS_EVENTS_UNTIL(proc->loop, events, -1,
-                                proc->refcount == 1);
+                                proc_get_refcount(proc) == 1);
     } else {
       LOOP_PROCESS_EVENTS(proc->loop, events, 0);
     }
@@ -222,7 +225,7 @@ int proc_wait(Proc *proc, int ms, MultiQueue *events)
     proc->status = -2;
   }
 
-  if (proc->refcount == 1) {
+  if (proc_get_refcount(proc) == 1) {
     // Job exited, free its resources.
     decref(proc);
     if (proc->events) {
