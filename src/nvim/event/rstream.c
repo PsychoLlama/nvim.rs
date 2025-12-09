@@ -246,3 +246,37 @@ void rstream_may_close(RStream *stream)
 {
   stream_may_close(&stream->s);
 }
+
+// =============================================================================
+// Rust accessor functions for opaque handle pattern
+// =============================================================================
+
+/// Check if an RStream has reached EOF (accessor for Rust).
+int nvim_rstream_did_eof(RStream *stream)
+{
+  return stream->did_eof ? 1 : 0;
+}
+
+/// Check if an RStream wants to read (accessor for Rust).
+int nvim_rstream_want_read(RStream *stream)
+{
+  return stream->want_read ? 1 : 0;
+}
+
+/// Get the number of bytes read by RStream (accessor for Rust).
+size_t nvim_rstream_num_bytes(RStream *stream)
+{
+  return stream->num_bytes;
+}
+
+/// Get the number of bytes available in RStream buffer (accessor for Rust).
+size_t nvim_rstream_available(RStream *stream)
+{
+  return rstream_available(stream);
+}
+
+/// Get the underlying Stream from RStream (accessor for Rust).
+Stream *nvim_rstream_get_stream(RStream *stream)
+{
+  return &stream->s;
+}

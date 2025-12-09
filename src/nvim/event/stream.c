@@ -173,3 +173,21 @@ int nvim_stream_get_fd(Stream *stream)
 {
   return stream->fd;
 }
+
+/// Get the current memory usage from a Stream (accessor for Rust).
+size_t nvim_stream_get_curmem(Stream *stream)
+{
+  return stream->curmem;
+}
+
+/// Get the maximum memory limit from a Stream (accessor for Rust).
+size_t nvim_stream_get_maxmem(Stream *stream)
+{
+  return stream->maxmem;
+}
+
+/// Get the events queue from a Stream (accessor for Rust).
+MultiQueue *nvim_stream_get_events(Stream *stream)
+{
+  return stream->events;
+}

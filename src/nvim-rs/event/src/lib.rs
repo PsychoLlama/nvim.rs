@@ -149,6 +149,27 @@ impl StreamHandle {
     }
 }
 
+/// Opaque handle to an RStream (read stream)
+///
+/// RStream wraps a Stream for reading data asynchronously.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RStreamHandle(*mut std::ffi::c_void);
+
+impl RStreamHandle {
+    /// Create a null handle
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+
+    /// Check if handle is null
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
 // =============================================================================
 // Event Structure
 // =============================================================================
@@ -269,6 +290,16 @@ extern "C" {
     fn nvim_stream_is_closed(stream: StreamHandle) -> c_int;
     fn nvim_stream_pending_reqs(stream: StreamHandle) -> usize;
     fn nvim_stream_get_fd(stream: StreamHandle) -> c_int;
+    fn nvim_stream_get_curmem(stream: StreamHandle) -> usize;
+    fn nvim_stream_get_maxmem(stream: StreamHandle) -> usize;
+    fn nvim_stream_get_events(stream: StreamHandle) -> MultiQueueHandle;
+
+    // RStream accessors
+    fn nvim_rstream_did_eof(stream: RStreamHandle) -> c_int;
+    fn nvim_rstream_want_read(stream: RStreamHandle) -> c_int;
+    fn nvim_rstream_num_bytes(stream: RStreamHandle) -> usize;
+    fn nvim_rstream_available(stream: RStreamHandle) -> usize;
+    fn nvim_rstream_get_stream(stream: RStreamHandle) -> StreamHandle;
 }
 
 // =============================================================================
@@ -579,6 +610,110 @@ pub unsafe extern "C" fn rs_stream_get_fd(stream: StreamHandle) -> c_int {
         return -1;
     }
     nvim_stream_get_fd(stream)
+}
+
+/// Get the current memory usage from a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_get_curmem(stream: StreamHandle) -> usize {
+    if stream.is_null() {
+        return 0;
+    }
+    nvim_stream_get_curmem(stream)
+}
+
+/// Get the maximum memory limit from a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_get_maxmem(stream: StreamHandle) -> usize {
+    if stream.is_null() {
+        return 0;
+    }
+    nvim_stream_get_maxmem(stream)
+}
+
+/// Get the events queue from a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_get_events(stream: StreamHandle) -> MultiQueueHandle {
+    if stream.is_null() {
+        return MultiQueueHandle::null();
+    }
+    nvim_stream_get_events(stream)
+}
+
+/// Check if an RStream has reached EOF
+///
+/// # Safety
+///
+/// `stream` must be a valid RStream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_rstream_did_eof(stream: RStreamHandle) -> c_int {
+    if stream.is_null() {
+        return 0;
+    }
+    nvim_rstream_did_eof(stream)
+}
+
+/// Check if an RStream wants to read
+///
+/// # Safety
+///
+/// `stream` must be a valid RStream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_rstream_want_read(stream: RStreamHandle) -> c_int {
+    if stream.is_null() {
+        return 0;
+    }
+    nvim_rstream_want_read(stream)
+}
+
+/// Get the number of bytes read by RStream
+///
+/// # Safety
+///
+/// `stream` must be a valid RStream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_rstream_num_bytes(stream: RStreamHandle) -> usize {
+    if stream.is_null() {
+        return 0;
+    }
+    nvim_rstream_num_bytes(stream)
+}
+
+/// Get the number of bytes available in RStream buffer
+///
+/// # Safety
+///
+/// `stream` must be a valid RStream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_rstream_available(stream: RStreamHandle) -> usize {
+    if stream.is_null() {
+        return 0;
+    }
+    nvim_rstream_available(stream)
+}
+
+/// Get the underlying Stream from RStream
+///
+/// # Safety
+///
+/// `stream` must be a valid RStream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_rstream_get_stream(stream: RStreamHandle) -> StreamHandle {
+    if stream.is_null() {
+        return StreamHandle::null();
+    }
+    nvim_rstream_get_stream(stream)
 }
 
 // =============================================================================
