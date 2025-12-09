@@ -373,6 +373,8 @@ extern "C" {
     fn nvim_stream_get_curmem(stream: StreamHandle) -> usize;
     fn nvim_stream_get_maxmem(stream: StreamHandle) -> usize;
     fn nvim_stream_get_events(stream: StreamHandle) -> MultiQueueHandle;
+    fn nvim_stream_set_closed(stream: StreamHandle, closed: c_int);
+    fn nvim_stream_get_pending_reqs(stream: StreamHandle) -> usize;
 
     // RStream accessors
     fn nvim_rstream_did_eof(stream: RStreamHandle) -> c_int;
@@ -1264,6 +1266,31 @@ pub unsafe extern "C" fn rs_stream_get_events(stream: StreamHandle) -> MultiQueu
         return MultiQueueHandle::null();
     }
     nvim_stream_get_events(stream)
+}
+
+/// Set the closed flag for a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_set_closed(stream: StreamHandle, closed: c_int) {
+    if !stream.is_null() {
+        nvim_stream_set_closed(stream, closed);
+    }
+}
+
+/// Get the pending requests count for a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_get_pending_reqs(stream: StreamHandle) -> usize {
+    if stream.is_null() {
+        return 0;
+    }
+    nvim_stream_get_pending_reqs(stream)
 }
 
 /// Check if an RStream has reached EOF

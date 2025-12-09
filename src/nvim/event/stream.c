@@ -22,9 +22,15 @@ extern int rs_stream_is_closed(Stream *stream);
 #define stream_is_closed(s) rs_stream_is_closed(s)
 extern int rs_stream_get_fd(Stream *stream);
 #define stream_get_fd(s) rs_stream_get_fd(s)
+extern void rs_stream_set_closed(Stream *stream, int closed);
+#define stream_set_closed(s, c) rs_stream_set_closed(s, c)
+extern size_t rs_stream_get_pending_reqs(Stream *stream);
+#define stream_get_pending_reqs(s) rs_stream_get_pending_reqs(s)
 #else
 #define stream_is_closed(s) ((s)->closed)
 #define stream_get_fd(s) ((s)->fd)
+#define stream_set_closed(s, c) ((s)->closed = (c))
+#define stream_get_pending_reqs(s) ((s)->pending_reqs)
 #endif
 
 // For compatibility with libuv < 1.19.0 (tested on 1.18.0)
@@ -103,7 +109,7 @@ void stream_init(Loop *loop, Stream *stream, int fd, uv_stream_t *uvstream)
   stream->write_cb = NULL;
   stream->close_cb = NULL;
   stream->internal_close_cb = NULL;
-  stream->closed = false;
+  stream_set_closed(stream, false);
   stream->events = NULL;
 }
 
@@ -114,7 +120,7 @@ void stream_may_close(Stream *stream)
     return;
   }
   DLOG("closing Stream: %p", (void *)stream);
-  stream->closed = true;
+  stream_set_closed(stream, true);
 
 #ifdef MSWIN
   if (UV_TTY == uv_guess_handle(stream_get_fd(stream))) {
@@ -123,7 +129,7 @@ void stream_may_close(Stream *stream)
   }
 #endif
 
-  if (!stream->pending_reqs) {
+  if (!stream_get_pending_reqs(stream)) {
     stream_close_handle(stream);
   }  // Else: rstream.c:read_event() or wstream.c:write_cb() will call stream_close_handle().
 }
@@ -213,4 +219,16 @@ void nvim_stream_pending_reqs_inc(Stream *stream)
 void nvim_stream_pending_reqs_dec(Stream *stream)
 {
   stream->pending_reqs--;
+}
+
+/// Set the closed flag for a Stream (accessor for Rust).
+void nvim_stream_set_closed(Stream *stream, int closed)
+{
+  stream->closed = closed != 0;
+}
+
+/// Get the pending requests count for a Stream (accessor for Rust).
+size_t nvim_stream_get_pending_reqs(Stream *stream)
+{
+  return stream->pending_reqs;
 }
