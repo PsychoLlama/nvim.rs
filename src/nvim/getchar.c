@@ -71,6 +71,12 @@
 #include "nvim/undo.h"
 #include "nvim/vim_defs.h"
 
+#ifdef USE_RUST_EVENT
+// Rust implementation in nvim-event crate
+extern int rs_multiqueue_empty(MultiQueue *mq);
+#define multiqueue_empty(mq) rs_multiqueue_empty(mq)
+#endif
+
 /// State for adding bytes to a recording or 'showcmd'.
 typedef struct {
   uint8_t buf[MB_MAXBYTES * 3 + 4];

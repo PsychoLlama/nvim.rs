@@ -31,6 +31,12 @@
 
 #include "state.c.generated.h"
 
+#ifdef USE_RUST_EVENT
+// Rust implementation in nvim-event crate
+extern int rs_multiqueue_empty(MultiQueue *mq);
+#define multiqueue_empty(mq) rs_multiqueue_empty(mq)
+#endif
+
 void state_enter(VimState *s)
   FUNC_ATTR_NONNULL_ALL
 {
