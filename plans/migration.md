@@ -13,9 +13,9 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 3 COMPLETE - 357 rs_* Functions)
+## Current Status (Phase 4.1 IN PROGRESS - 335 rs_* Functions)
 
-**357 Rust functions exported across 34 Rust crates:**
+**335 Rust functions exported across 35 Rust crates:**
 
 - nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
 - nvim-memutil, nvim-os, nvim-collections, nvim-encoding
@@ -23,34 +23,27 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - nvim-spell, nvim-eval, nvim-ex_docmd, nvim-indent, nvim-keycodes
 - nvim-profile, nvim-menu, nvim-help, nvim-cmdhist, nvim-fileio
 - nvim-version, nvim-window, nvim-buffer, nvim-mark, nvim-ascii
-- nvim-search, nvim-api
+- nvim-search, nvim-api, **nvim-event** (NEW)
 
 **Build system:**
 
 - Cargo workspace at `src/nvim-rs/`
 - CMake integration via USE_RUST_* flags (all enabled)
 - cbindgen generates C headers from Rust
-- 357 rs_* symbols exported
-- 40+ USE_RUST_* defines active across C files
+- 335 rs_* symbols exported
+- 40+ USE_RUST_* defines active across C files (including USE_RUST_EVENT)
 
-**Recent Progress (Phase 3.52-3.68):**
-- Phase 3.52: Enabled USE_RUST_OS_PROC (os_proc_running)
-- Phase 3.53: Enabled USE_RUST_ASCII (21 ASCII character functions)
-- Phase 3.54: Enabled USE_RUST_MARK (6 position/mark functions)
-- Phase 3.55: Added rs_clearpos to mark crate
-- Phase 3.56: Connected ASCII_IS* macros to existing Rust implementations
-- Phase 3.57: Verified Phase 3 simple function migration substantially complete
-- Phase 3.58: Added QUEUE_EMPTY to Rust (libuv-style circular linked list check)
-- Phase 3.59: Migrated all remaining QUEUE operations (6 functions) to Rust
-- Phase 3.60: Added is_internal_call to Rust (new nvim-api crate)
-- Phase 3.61: Audited remaining FUNC_ATTR_PURE/CONST functions - all simple ones already migrated
-- Phase 3.62: Audited window/buffer functions - all migratable ones already done (20+ functions)
-- Phase 3.63: Added vim_iswordc and vim_iswordc_buf to Rust (word character classification)
-- Phase 3.64: Added ascii_toupper and ascii_tolower to Rust
-- Phase 3.65: Added ASCII character ordinals and utilities to Rust
-- Phase 3.66: Added empty_pos and rgb to Rust (position check, RGB macro)
-- Phase 3.67: Added vim_iswordp and vim_iswordp_buf to Rust (pointer-based word char checks)
-- Phase 3.68: Added TriState conversion functions to Rust
+**Recent Progress (Phase 3.69-4.1):**
+- Phase 3.69: Enabled USE_RUST_ARABIC for combining character detection
+- Phase 3.70: Removed hardcoded USE_RUST_* defines from 40 C files (centralized in CMakeLists.txt)
+- **Phase 4.1**: Created nvim-event crate with libuv wrapper infrastructure
+  - Added LoopHandle, MultiQueueHandle, TimeWatcherHandle opaque types
+  - Added C accessor functions for Loop, MultiQueue, TimeWatcher
+  - Wired rs_timewatcher_should_skip() to time_watcher_cb
+  - Enabled USE_RUST_EVENT flag
+
+**Earlier Progress (Phase 3.52-3.68):**
+- Phase 3.52-3.68: Multiple phases completing simple function migration
 
 **Phase 3 Simple Function Migration: COMPLETE ✅**
 
@@ -396,18 +389,35 @@ Window validation, tabpage iteration, and frame tree functions are complete.
 
 ### Phase 4: Event Loop & Async I/O
 
-**Status**: Analysis complete, blocked by libuv dependency complexity
+**Status**: IN PROGRESS - Phase 4.1 complete
 
-**Analysis (2025-12-08)**:
-The event loop code in `src/nvim/event/` is deeply integrated with libuv:
-- `loop.c` (227 LOC): uv_loop_t, uv_async_t, uv_timer_t, uv_mutex_t
-- `multiqueue.c` (288 LOC): Uses QUEUE macros (already migrated), xmalloc
-- `time.c` (74 LOC): uv_timer_t wrapper
-- `signal.c`: uv_signal_t wrapper
-- `stream.c`, `rstream.c`, `wstream.c`: uv_stream_t, uv_pipe_t, uv_tcp_t
-- `proc.c`, `libuv_proc.c`: Process spawning via libuv
+**Phase 4.1: Event Loop Wrapper Infrastructure ✅** (2025-12-08)
 
-**Dependency Structure**:
+Created nvim-event crate with opaque handle pattern for libuv wrappers:
+
+- [x] nvim-event crate with opaque handle types:
+  - LoopHandle for Loop* (event loop context)
+  - MultiQueueHandle for MultiQueue* (hierarchical event queue)
+  - TimeWatcherHandle for TimeWatcher* (timer wrapper)
+- [x] Event struct matching C event/defs.h
+- [x] C accessor functions:
+  - Loop: nvim_loop_get_events, nvim_loop_get_fast_events, nvim_loop_is_closing
+  - MultiQueue: nvim_multiqueue_empty, nvim_multiqueue_size
+  - TimeWatcher: nvim_timewatcher_get_data, nvim_timewatcher_get_events, nvim_timewatcher_is_blockable
+- [x] Rust wrapper functions:
+  - rs_loop_is_closing, rs_loop_get_events, rs_loop_get_fast_events
+  - rs_multiqueue_empty, rs_multiqueue_size
+  - rs_timewatcher_events_pending, rs_timewatcher_should_skip
+- [x] USE_RUST_EVENT flag enabled in CMakeLists.txt
+- [x] time_watcher_cb now uses rs_timewatcher_should_skip() for blockable check
+
+**Approach**: Wrap libuv, don't replace it (yet)
+- Keep existing libuv usage intact
+- Use opaque handle + accessor pattern (proven with WinHandle/BufHandle)
+- Migrate helper functions incrementally
+- Consider async runtime replacement in later phases
+
+**Architecture**:
 ```
 event/defs.h → uv.h (libuv types)
     ↓
@@ -416,20 +426,10 @@ TimeWatcher, SignalWatcher, Stream, RStream, Proc
 event/loop.c (main event loop)
 ```
 
-**Options**:
-1. **libuv-sys2**: Thin FFI bindings to existing libuv (safest, incremental)
-2. **libuv crate**: Safe Rust wrapper for libuv (medium effort)
-3. **tokio replacement**: Full async runtime swap (large effort, breaking change)
-
-**Recommended approach**: Option 1 (libuv-sys2) for Phase 4
-- Keep existing libuv usage intact
-- Create Rust wrappers around C event structs (like WinHandle/BufHandle pattern)
-- Migrate helper functions first (multiqueue is candidate - uses QUEUE macros)
-- Replace libuv later when async runtime is clearer
-
-**Potential Phase 4 candidates** (low libuv dependency):
-- `multiqueue.c`: Already uses Rust QUEUE functions, xmalloc only
-- Simple event creation macros (`event_create`)
+**Next candidates**:
+- More TimeWatcher functions (time_watcher_init, time_watcher_start, etc.)
+- multiqueue helper functions
+- Loop helper functions
 
 Files:
 - event/loop.c - libuv wrapper or tokio replacement
