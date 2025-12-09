@@ -13,20 +13,25 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 4.25 - Channel Stream Accessors Wired)
+## Current Status (Phase 4.26 - Loop Field Accessors Wired Everywhere)
 
 **137 event loop rs_* functions in nvim-event crate:**
 
 All event watcher types (TimeWatcher, SignalWatcher, SocketWatcher), Stream types, Loop
 struct field accessors, RStream field accessors, Stream internal callback accessors,
 and stream_init field accessors now have complete accessor coverage with USE_RUST_EVENT
-macros throughout the event loop subsystem and channel subsystem.
+macros throughout the event loop subsystem, channel subsystem, and all files that access
+main_loop.events/fast_events.
 
-**Recent Progress (Phase 4.22-4.25):**
+**Recent Progress (Phase 4.22-4.26):**
 - Phase 4.22: Wired proc->in/out/err stream accessors in proc.c
 - Phase 4.23: Wired all stream_init() field accessors (fpos, curmem, maxmem, pending_reqs, write_cb, events)
 - Phase 4.24: Wired stream_get_events in rstream.c and stream_set_closed, stream_get_events, stream_get_cb_data in proc.c
 - Phase 4.25: Wired stream_is_closed and stream_get_pending_reqs in channel.c
+- Phase 4.26: Wired loop_get_events/loop_get_fast_events across all 16 C files:
+  - msgpack_rpc/channel.c, ui_client.c, channel.c, terminal.c, lua/executor.c
+  - autocmd.c, eval.c, eval/funcs.c, os/shell.c, state.c, getchar.c
+  - ex_docmd.c, os/input.c, api/ui.c, main.c
 
 **Stream Internal Callback Accessors (Phase 4.21):**
 - stream_get_internal_data / stream_set_internal_data - internal data pointer
