@@ -16,6 +16,14 @@
 
 #include "event/stream.c.generated.h"
 
+#ifdef USE_RUST_EVENT
+// Rust implementation in nvim-event crate
+extern int rs_stream_is_closed(Stream *stream);
+#define stream_is_closed(s) rs_stream_is_closed(s)
+#else
+#define stream_is_closed(s) ((s)->closed)
+#endif
+
 // For compatibility with libuv < 1.19.0 (tested on 1.18.0)
 #if UV_VERSION_MINOR < 19
 # define uv_stream_get_write_queue_size(stream) stream->write_queue_size
@@ -99,7 +107,7 @@ void stream_init(Loop *loop, Stream *stream, int fd, uv_stream_t *uvstream)
 void stream_may_close(Stream *stream)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  if (stream->closed) {
+  if (stream_is_closed(stream)) {
     return;
   }
   DLOG("closing Stream: %p", (void *)stream);

@@ -60,6 +60,14 @@ static uint64_t next_chan_id = CHAN_STDERR + 1;
 
 #include "channel.c.generated.h"
 
+#ifdef USE_RUST_EVENT
+// Rust implementation in nvim-event crate
+extern int rs_stream_is_closed(Stream *stream);
+#define stream_is_closed(s) rs_stream_is_closed(s)
+#else
+#define stream_is_closed(s) ((s)->closed)
+#endif
+
 /// Teardown the module
 void channel_teardown(void)
 {
@@ -603,7 +611,7 @@ size_t channel_send(uint64_t id, char *data, size_t len, bool data_owned, const 
   }
 
   Stream *in = channel_instream(chan);
-  if (in->closed) {
+  if (stream_is_closed(in)) {
     *error = _("Can't send data to closed stream");
     goto retfree;
   }

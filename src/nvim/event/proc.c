@@ -31,8 +31,11 @@ extern int rs_multiqueue_empty(MultiQueue *mq);
 #define multiqueue_empty(mq) rs_multiqueue_empty(mq)
 extern int rs_rstream_is_closed(RStream *stream);
 #define rstream_is_closed(s) rs_rstream_is_closed(s)
+extern int rs_proc_is_closed(Proc *proc);
+#define proc_is_closed(p) rs_proc_is_closed(p)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
+#define proc_is_closed(p) ((p)->closed)
 #endif
 
 // Time for a process to exit cleanly before we send KILL.
@@ -324,11 +327,11 @@ static void decref(Proc *proc)
 static void proc_close(Proc *proc)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  if (proc_is_tearing_down && proc->closed && (proc->detach || proc->type == kProcTypePty)) {
+  if (proc_is_tearing_down && proc_is_closed(proc) && (proc->detach || proc->type == kProcTypePty)) {
     // If a detached/pty process dies while tearing down it might get closed twice.
     return;
   }
-  assert(!proc->closed);
+  assert(!proc_is_closed(proc));
   proc->closed = true;
 
   if (proc->detach) {
