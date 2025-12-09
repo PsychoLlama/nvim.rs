@@ -13,7 +13,21 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 5.7 - Diff Options)
+## Current Status (Phase 5.9 - Exception Handling)
+
+**Total: 542 rs_* functions migrated to Rust**
+
+**Phase 5.9 Complete ✅ - aborted_in_try Migrated**
+
+Created nvim-ex-eval crate with rs_aborted_in_try() function.
+Uses nvim_get_force_abort() accessor to return the global force_abort value.
+Determines if a function with "abort" flag should not be considered ended on error.
+
+**Phase 5.8 Complete ✅ - is_autocmd_blocked Migrated**
+
+Created nvim-autocmd crate with rs_is_autocmd_blocked() function.
+Uses nvim_get_autocmd_blocked() accessor to check if autocmd_blocked != 0.
+Tests: 24 autocmd tests pass
 
 **Phase 5.7 Complete ✅ - diffopt_* Functions Migrated**
 
@@ -24,8 +38,6 @@ Created nvim-diff crate with 4 rs_diffopt_* functions:
 - rs_diffopt_filler() - check for "filler" option
 
 Uses opaque handle pattern with nvim_get_diff_flags() accessor.
-DIFF_* constants duplicated in Rust to match C #define values.
-
 Tests: 47 diff, 380 API tests pass
 
 **Phase 5.6 Complete ✅ - compl_status_* Functions Migrated**
