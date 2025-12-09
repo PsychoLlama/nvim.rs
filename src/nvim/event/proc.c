@@ -31,6 +31,10 @@ extern int rs_multiqueue_empty(MultiQueue *mq);
 #define multiqueue_empty(mq) rs_multiqueue_empty(mq)
 extern int rs_rstream_is_closed(RStream *stream);
 #define rstream_is_closed(s) rs_rstream_is_closed(s)
+extern size_t rs_rstream_num_bytes(RStream *stream);
+#define rstream_num_bytes(s) rs_rstream_num_bytes(s)
+extern int rs_rstream_did_eof(RStream *stream);
+#define rstream_did_eof(s) rs_rstream_did_eof(s)
 extern int rs_proc_is_closed(Proc *proc);
 #define proc_is_closed(p) rs_proc_is_closed(p)
 extern int rs_proc_get_status(Proc *proc);
@@ -43,6 +47,8 @@ extern int rs_proc_get_refcount(Proc *proc);
 #define proc_get_refcount(p) rs_proc_get_refcount(p)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
+#define rstream_num_bytes(s) ((s)->num_bytes)
+#define rstream_did_eof(s) ((s)->did_eof)
 #define proc_is_closed(p) ((p)->closed)
 #define proc_get_status(p) ((p)->status)
 #define proc_get_stopped_time(p) ((p)->stopped_time)
@@ -385,12 +391,12 @@ static void flush_stream(Proc *proc, RStream *stream)
     system_buffer_size = ARENA_BLOCK_SIZE;
   }
 
-  size_t max_bytes = stream->num_bytes + (size_t)system_buffer_size;
+  size_t max_bytes = rstream_num_bytes(stream) + (size_t)system_buffer_size;
 
   // Read remaining data.
-  while (!rstream_is_closed(stream) && stream->num_bytes < max_bytes) {
+  while (!rstream_is_closed(stream) && rstream_num_bytes(stream) < max_bytes) {
     // Remember number of bytes before polling
-    size_t num_bytes = stream->num_bytes;
+    size_t num_bytes = rstream_num_bytes(stream);
 
     // Poll for data and process the generated events.
     loop_poll_events(proc->loop, 0);
@@ -399,8 +405,8 @@ static void flush_stream(Proc *proc, RStream *stream)
     }
 
     // Stream can be closed if it is empty.
-    if (num_bytes == stream->num_bytes) {
-      if (stream->read_cb && !stream->did_eof) {
+    if (num_bytes == rstream_num_bytes(stream)) {
+      if (stream->read_cb && !rstream_did_eof(stream)) {
         // Stream callback could miss EOF handling if a child keeps the stream
         // open. But only send EOF if we haven't already.
         stream->read_cb(stream, stream->buffer, 0, stream->s.cb_data, true);
