@@ -26,11 +26,41 @@ extern void rs_stream_set_closed(Stream *stream, int closed);
 #define stream_set_closed(s, c) rs_stream_set_closed(s, c)
 extern size_t rs_stream_get_pending_reqs(Stream *stream);
 #define stream_get_pending_reqs(s) rs_stream_get_pending_reqs(s)
+extern void *rs_stream_get_internal_data(Stream *stream);
+extern void rs_stream_set_internal_data(Stream *stream, void *data);
+#define stream_get_internal_data(s) rs_stream_get_internal_data(s)
+#define stream_set_internal_data(s, d) rs_stream_set_internal_data(s, d)
+extern void *rs_stream_get_internal_close_cb(Stream *stream);
+extern void rs_stream_set_internal_close_cb(Stream *stream, void *cb);
+#define stream_get_internal_close_cb(s) ((stream_close_cb)rs_stream_get_internal_close_cb(s))
+#define stream_set_internal_close_cb(s, c) rs_stream_set_internal_close_cb(s, (void *)(c))
+extern void rs_stream_call_internal_close_cb(Stream *stream);
+#define stream_call_internal_close_cb(s) rs_stream_call_internal_close_cb(s)
+extern void *rs_stream_get_close_cb(Stream *stream);
+extern void rs_stream_set_close_cb(Stream *stream, void *cb);
+extern void *rs_stream_get_close_cb_data(Stream *stream);
+extern void rs_stream_set_close_cb_data(Stream *stream, void *data);
+#define stream_get_close_cb(s) ((stream_close_cb)rs_stream_get_close_cb(s))
+#define stream_set_close_cb(s, c) rs_stream_set_close_cb(s, (void *)(c))
+#define stream_get_close_cb_data(s) rs_stream_get_close_cb_data(s)
+#define stream_set_close_cb_data(s, d) rs_stream_set_close_cb_data(s, d)
+extern void rs_stream_call_close_cb(Stream *stream);
+#define stream_call_close_cb(s) rs_stream_call_close_cb(s)
 #else
 #define stream_is_closed(s) ((s)->closed)
 #define stream_get_fd(s) ((s)->fd)
 #define stream_set_closed(s, c) ((s)->closed = (c))
 #define stream_get_pending_reqs(s) ((s)->pending_reqs)
+#define stream_get_internal_data(s) ((s)->internal_data)
+#define stream_set_internal_data(s, d) ((s)->internal_data = (d))
+#define stream_get_internal_close_cb(s) ((s)->internal_close_cb)
+#define stream_set_internal_close_cb(s, c) ((s)->internal_close_cb = (c))
+#define stream_call_internal_close_cb(s) do { if ((s)->internal_close_cb) (s)->internal_close_cb((s), (s)->internal_data); } while (0)
+#define stream_get_close_cb(s) ((s)->close_cb)
+#define stream_set_close_cb(s, c) ((s)->close_cb = (c))
+#define stream_get_close_cb_data(s) ((s)->close_cb_data)
+#define stream_set_close_cb_data(s, d) ((s)->close_cb_data = (d))
+#define stream_call_close_cb(s) do { if ((s)->close_cb) (s)->close_cb((s), (s)->close_cb_data); } while (0)
 #endif
 
 // For compatibility with libuv < 1.19.0 (tested on 1.18.0)
@@ -102,13 +132,13 @@ void stream_init(Loop *loop, Stream *stream, int fd, uv_stream_t *uvstream)
   }
 
   stream->fpos = 0;
-  stream->internal_data = NULL;
+  stream_set_internal_data(stream, NULL);
   stream->curmem = 0;
   stream->maxmem = 0;
   stream->pending_reqs = 0;
   stream->write_cb = NULL;
-  stream->close_cb = NULL;
-  stream->internal_close_cb = NULL;
+  stream_set_close_cb(stream, NULL);
+  stream_set_internal_close_cb(stream, NULL);
   stream_set_closed(stream, false);
   stream->events = NULL;
 }
@@ -161,11 +191,11 @@ static void close_cb(uv_handle_t *handle)
   Stream *stream = handle->data;
   // Need to check if handle->data is NULL here as this callback may be called between
   // the handle's initialization and stream_init() (e.g. in socket_connect()).
-  if (stream && stream->close_cb) {
-    stream->close_cb(stream, stream->close_cb_data);
+  if (stream && stream_get_close_cb(stream)) {
+    stream_call_close_cb(stream);
   }
-  if (stream && stream->internal_close_cb) {
-    stream->internal_close_cb(stream, stream->internal_data);
+  if (stream && stream_get_internal_close_cb(stream)) {
+    stream_call_internal_close_cb(stream);
   }
 }
 
@@ -329,4 +359,44 @@ void *nvim_stream_get_close_cb_data(Stream *stream)
 void nvim_stream_set_close_cb_data(Stream *stream, void *data)
 {
   stream->close_cb_data = data;
+}
+
+/// Get the internal_data from a Stream (accessor for Rust).
+void *nvim_stream_get_internal_data(Stream *stream)
+{
+  return stream->internal_data;
+}
+
+/// Set the internal_data for a Stream (accessor for Rust).
+void nvim_stream_set_internal_data(Stream *stream, void *data)
+{
+  stream->internal_data = data;
+}
+
+/// Get the internal_close_cb from a Stream (accessor for Rust).
+void *nvim_stream_get_internal_close_cb(Stream *stream)
+{
+  return (void *)stream->internal_close_cb;
+}
+
+/// Set the internal_close_cb for a Stream (accessor for Rust).
+void nvim_stream_set_internal_close_cb(Stream *stream, void *cb)
+{
+  stream->internal_close_cb = (stream_close_cb)cb;
+}
+
+/// Call the close_cb if set (accessor for Rust).
+void nvim_stream_call_close_cb(Stream *stream)
+{
+  if (stream->close_cb) {
+    stream->close_cb(stream, stream->close_cb_data);
+  }
+}
+
+/// Call the internal_close_cb if set (accessor for Rust).
+void nvim_stream_call_internal_close_cb(Stream *stream)
+{
+  if (stream->internal_close_cb) {
+    stream->internal_close_cb(stream, stream->internal_data);
+  }
 }

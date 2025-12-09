@@ -400,6 +400,12 @@ extern "C" {
     fn nvim_stream_set_close_cb(stream: StreamHandle, cb: *mut std::ffi::c_void);
     fn nvim_stream_get_close_cb_data(stream: StreamHandle) -> *mut std::ffi::c_void;
     fn nvim_stream_set_close_cb_data(stream: StreamHandle, data: *mut std::ffi::c_void);
+    fn nvim_stream_get_internal_data(stream: StreamHandle) -> *mut std::ffi::c_void;
+    fn nvim_stream_set_internal_data(stream: StreamHandle, data: *mut std::ffi::c_void);
+    fn nvim_stream_get_internal_close_cb(stream: StreamHandle) -> *mut std::ffi::c_void;
+    fn nvim_stream_set_internal_close_cb(stream: StreamHandle, cb: *mut std::ffi::c_void);
+    fn nvim_stream_call_close_cb(stream: StreamHandle);
+    fn nvim_stream_call_internal_close_cb(stream: StreamHandle);
 
     // RStream accessors
     fn nvim_rstream_did_eof(stream: RStreamHandle) -> c_int;
@@ -1685,6 +1691,80 @@ pub unsafe extern "C" fn rs_stream_get_close_cb_data(stream: StreamHandle) -> *m
 pub unsafe extern "C" fn rs_stream_set_close_cb_data(stream: StreamHandle, data: *mut std::ffi::c_void) {
     if !stream.is_null() {
         nvim_stream_set_close_cb_data(stream, data);
+    }
+}
+
+/// Get the internal_data from a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_get_internal_data(stream: StreamHandle) -> *mut std::ffi::c_void {
+    if stream.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_stream_get_internal_data(stream)
+}
+
+/// Set the internal_data for a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_set_internal_data(stream: StreamHandle, data: *mut std::ffi::c_void) {
+    if !stream.is_null() {
+        nvim_stream_set_internal_data(stream, data);
+    }
+}
+
+/// Get the internal_close_cb from a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_get_internal_close_cb(stream: StreamHandle) -> *mut std::ffi::c_void {
+    if stream.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_stream_get_internal_close_cb(stream)
+}
+
+/// Set the internal_close_cb for a Stream
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_set_internal_close_cb(stream: StreamHandle, cb: *mut std::ffi::c_void) {
+    if !stream.is_null() {
+        nvim_stream_set_internal_close_cb(stream, cb);
+    }
+}
+
+/// Call the close_cb if set
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_call_close_cb(stream: StreamHandle) {
+    if !stream.is_null() {
+        nvim_stream_call_close_cb(stream);
+    }
+}
+
+/// Call the internal_close_cb if set
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_call_internal_close_cb(stream: StreamHandle) {
+    if !stream.is_null() {
+        nvim_stream_call_internal_close_cb(stream);
     }
 }
 
