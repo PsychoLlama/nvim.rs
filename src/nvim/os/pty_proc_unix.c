@@ -50,9 +50,12 @@ int forkpty(int *, char *, const struct termios *, const struct winsize *);
 #ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern void rs_proc_set_status(Proc *proc, int status);
+extern Loop *rs_proc_get_loop(Proc *proc);
 #define proc_set_status(p, s) rs_proc_set_status(p, s)
+#define proc_get_loop(p) rs_proc_get_loop(p)
 #else
 #define proc_set_status(p, s) ((p)->status = (s))
+#define proc_get_loop(p) ((p)->loop)
 #endif
 
 #if !defined(HAVE_FORKPTY) && !defined(__APPLE__)
@@ -184,7 +187,7 @@ int pty_proc_spawn(PtyProc *ptyproc)
   int status = 0;  // zero or negative error code (libuv convention)
   Proc *proc = (Proc *)ptyproc;
   assert(proc->err.s.closed);
-  uv_signal_start(&proc->loop->children_watcher, chld_handler, SIGCHLD);
+  uv_signal_start(&proc_get_loop(proc)->children_watcher, chld_handler, SIGCHLD);
   ptyproc->winsize = (struct winsize){ ptyproc->height, ptyproc->width, 0, 0 };
   uv_disable_stdio_inheritance();
   int master;

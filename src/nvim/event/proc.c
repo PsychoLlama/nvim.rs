@@ -63,6 +63,8 @@ extern MultiQueue *rs_proc_get_events(Proc *proc);
 #define proc_get_events(p) rs_proc_get_events(p)
 extern void rs_proc_set_events(Proc *proc, MultiQueue *events);
 #define proc_set_events(p, e) rs_proc_set_events(p, e)
+extern Loop *rs_proc_get_loop(Proc *proc);
+#define proc_get_loop(p) rs_proc_get_loop(p)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define rstream_num_bytes(s) ((s)->num_bytes)
@@ -81,6 +83,7 @@ extern void rs_proc_set_events(Proc *proc, MultiQueue *events);
 #define proc_set_detach(p, d) ((p)->detach = (d))
 #define proc_get_events(p) ((p)->events)
 #define proc_set_events(p, e) ((p)->events = (e))
+#define proc_get_loop(p) ((p)->loop)
 #endif
 
 // Time for a process to exit cleanly before we send KILL.
@@ -105,19 +108,19 @@ int proc_spawn(Proc *proc, bool in, bool out, bool err)
   assert(!(err && proc->fwd_err));
 
   if (in) {
-    uv_pipe_init(&proc->loop->uv, &proc->in.uv.pipe, 0);
+    uv_pipe_init(&proc_get_loop(proc)->uv, &proc->in.uv.pipe, 0);
   } else {
     proc->in.closed = true;
   }
 
   if (out) {
-    uv_pipe_init(&proc->loop->uv, &proc->out.s.uv.pipe, 0);
+    uv_pipe_init(&proc_get_loop(proc)->uv, &proc->out.s.uv.pipe, 0);
   } else {
     proc->out.s.closed = true;
   }
 
   if (err) {
-    uv_pipe_init(&proc->loop->uv, &proc->err.s.uv.pipe, 0);
+    uv_pipe_init(&proc_get_loop(proc)->uv, &proc->err.s.uv.pipe, 0);
   } else {
     proc->err.s.closed = true;
   }
@@ -182,7 +185,7 @@ int proc_spawn(Proc *proc, bool in, bool out, bool err)
   proc->internal_exit_cb = on_proc_exit;
   proc->internal_close_cb = decref;
   proc_incref(proc);
-  kv_push(proc->loop->children, proc);
+  kv_push(proc_get_loop(proc)->children, proc);
   DLOG("new: pid=%d exepath=[%s]", proc_get_pid(proc), proc_get_exepath(proc));
   return 0;
 }
@@ -226,7 +229,7 @@ int proc_wait(Proc *proc, int ms, MultiQueue *events)
 {
   if (!proc_get_refcount(proc)) {
     int status = proc_get_status(proc);
-    LOOP_PROCESS_EVENTS(proc->loop, proc_get_events(proc), 0);
+    LOOP_PROCESS_EVENTS(proc_get_loop(proc), proc_get_events(proc), 0);
     return status;
   }
 
@@ -237,7 +240,7 @@ int proc_wait(Proc *proc, int ms, MultiQueue *events)
   // Increase refcount to stop the exit callback from being called (and possibly
   // freed) before we have a chance to get the status.
   proc_incref(proc);
-  LOOP_PROCESS_EVENTS_UNTIL(proc->loop, events, ms,
+  LOOP_PROCESS_EVENTS_UNTIL(proc_get_loop(proc), events, ms,
                             // Until...
                             got_int                       // interrupted by the user
                             || proc_get_refcount(proc) == 1);  // job exited
@@ -249,10 +252,10 @@ int proc_wait(Proc *proc, int ms, MultiQueue *events)
     if (ms == -1) {
       // We can only return if all streams/handles are closed and the job
       // exited.
-      LOOP_PROCESS_EVENTS_UNTIL(proc->loop, events, -1,
+      LOOP_PROCESS_EVENTS_UNTIL(proc_get_loop(proc), events, -1,
                                 proc_get_refcount(proc) == 1);
     } else {
-      LOOP_PROCESS_EVENTS(proc->loop, events, 0);
+      LOOP_PROCESS_EVENTS(proc_get_loop(proc), events, 0);
     }
 
     proc_set_status(proc, -2);
@@ -294,7 +297,7 @@ void proc_stop(Proc *proc) FUNC_ATTR_NONNULL_ALL
   }
 
   // (Re)start timer to verify that stopped process(es) died.
-  uv_timer_start(&proc->loop->children_kill_timer, children_kill_cb,
+  uv_timer_start(&proc_get_loop(proc)->children_kill_timer, children_kill_cb,
                  KILL_TIMEOUT_MS, 0);
 }
 
@@ -328,7 +331,7 @@ static void children_kill_cb(uv_timer_t *handle)
       os_proc_tree_kill(proc_get_pid(proc), SIGTERM);
       proc->stopped_time = UINT64_MAX;  // Flag: SIGTERM was sent.
       // Restart timer.
-      uv_timer_start(&proc->loop->children_kill_timer, children_kill_cb,
+      uv_timer_start(&proc_get_loop(proc)->children_kill_timer, children_kill_cb,
                      KILL_TIMEOUT_MS, 0);
     }
   }
@@ -352,7 +355,7 @@ static void decref(Proc *proc)
     return;
   }
 
-  Loop *loop = proc->loop;
+  Loop *loop = proc_get_loop(proc);
   size_t i;
   for (i = 0; i < kv_size(loop->children); i++) {
     Proc *current = kv_A(loop->children, i);
@@ -426,7 +429,7 @@ static void flush_stream(Proc *proc, RStream *stream)
     size_t num_bytes = rstream_num_bytes(stream);
 
     // Poll for data and process the generated events.
-    loop_poll_events(proc->loop, 0);
+    loop_poll_events(proc_get_loop(proc), 0);
     if (stream->s.events) {
       multiqueue_process_events(stream->s.events);
     }
@@ -491,7 +494,7 @@ void exit_on_closed_chan(int status)
 
 static void on_proc_exit(Proc *proc)
 {
-  Loop *loop = proc->loop;
+  Loop *loop = proc_get_loop(proc);
   ILOG("child exited: pid=%d status=%d" PRIu64, proc_get_pid(proc), proc_get_status(proc));
 
   // TODO(justinmk): figure out why rpc_close sometimes(??) isn't called.

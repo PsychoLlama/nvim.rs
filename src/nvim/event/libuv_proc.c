@@ -22,15 +22,18 @@ extern int rs_rstream_is_closed(RStream *stream);
 extern int rs_stream_is_closed(Stream *stream);
 extern void rs_proc_set_status(Proc *proc, int status);
 extern int rs_proc_get_detach(Proc *proc);
+extern Loop *rs_proc_get_loop(Proc *proc);
 #define rstream_is_closed(s) rs_rstream_is_closed(s)
 #define stream_is_closed(s) rs_stream_is_closed(s)
 #define proc_set_status(p, s) rs_proc_set_status(p, s)
 #define proc_get_detach(p) rs_proc_get_detach(p)
+#define proc_get_loop(p) rs_proc_get_loop(p)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define stream_is_closed(s) ((s)->closed)
 #define proc_set_status(p, s) ((p)->status = (s))
 #define proc_get_detach(p) ((p)->detach)
+#define proc_get_loop(p) ((p)->loop)
 #endif
 
 /// @returns zero on success, or negative error code
@@ -104,7 +107,7 @@ int libuv_proc_spawn(LibuvProc *uvproc)
   }
 
   int status;
-  if ((status = uv_spawn(&proc->loop->uv, &uvproc->uv, &uvproc->uvopts))) {
+  if ((status = uv_spawn(&proc_get_loop(proc)->uv, &uvproc->uv, &uvproc->uvopts))) {
     ILOG("uv_spawn(%s) failed: %s", uvproc->uvopts.file, uv_strerror(status));
     if (uvproc->uvopts.env) {
       os_free_fullenv(uvproc->uvopts.env);
