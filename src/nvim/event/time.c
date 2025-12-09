@@ -13,6 +13,9 @@
 #ifdef USE_RUST_EVENT
 // Rust function declarations
 extern int rs_timewatcher_should_skip(TimeWatcher *tw);
+#define timewatcher_should_skip(tw) rs_timewatcher_should_skip(tw)
+#else
+#define timewatcher_should_skip(tw) ((tw)->blockable && !multiqueue_empty((tw)->events))
 #endif
 
 void time_watcher_init(Loop *loop, TimeWatcher *watcher, void *data)
@@ -55,16 +58,10 @@ static void time_watcher_cb(uv_timer_t *handle)
   FUNC_ATTR_NONNULL_ALL
 {
   TimeWatcher *watcher = handle->data;
-#ifdef USE_RUST_EVENT
-  if (rs_timewatcher_should_skip(watcher)) {
+  // Check if the timer blocked and there already is an unprocessed event waiting
+  if (timewatcher_should_skip(watcher)) {
     return;
   }
-#else
-  if (watcher->blockable && !multiqueue_empty(watcher->events)) {
-    // the timer blocked and there already is an unprocessed event waiting
-    return;
-  }
-#endif
   CREATE_EVENT(watcher->events, time_event, watcher);
 }
 
