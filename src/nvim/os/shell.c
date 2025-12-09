@@ -47,6 +47,12 @@
 #include "nvim/ui.h"
 #include "nvim/vim_defs.h"
 
+#ifdef USE_RUST_EVENT
+// Rust implementation in nvim-event crate
+extern int rs_multiqueue_empty(MultiQueue *mq);
+#define multiqueue_empty(mq) rs_multiqueue_empty(mq)
+#endif
+
 #define NS_1_SECOND         1000000000U     // 1 second, in nanoseconds
 #define OUT_DATA_THRESHOLD  1024 * 10U      // 10KB, "a few screenfuls" of data.
 

@@ -25,6 +25,12 @@
 
 #include "event/proc.c.generated.h"
 
+#ifdef USE_RUST_EVENT
+// Rust implementation in nvim-event crate
+extern int rs_multiqueue_empty(MultiQueue *mq);
+#define multiqueue_empty(mq) rs_multiqueue_empty(mq)
+#endif
+
 // Time for a process to exit cleanly before we send KILL.
 // For PTY processes SIGTERM is sent first (in case SIGHUP was not enough).
 #define KILL_TIMEOUT_MS 2000
