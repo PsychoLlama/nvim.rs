@@ -13,7 +13,29 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 5.5 - Insert-mode Completion)
+## Current Status (Phase 5.7 - Diff Options)
+
+**Phase 5.7 Complete ✅ - diffopt_* Functions Migrated**
+
+Created nvim-diff crate with 4 rs_diffopt_* functions:
+- rs_diffopt_horizontal() - check for "horizontal" option
+- rs_diffopt_hiddenoff() - check for "hiddenoff" option
+- rs_diffopt_closeoff() - check for "closeoff" option
+- rs_diffopt_filler() - check for "filler" option
+
+Uses opaque handle pattern with nvim_get_diff_flags() accessor.
+DIFF_* constants duplicated in Rust to match C #define values.
+
+Tests: 47 diff, 380 API tests pass
+
+**Phase 5.6 Complete ✅ - compl_status_* Functions Migrated**
+
+Added 3 more functions to nvim-insexpand crate:
+- rs_compl_status_adding() - check CONT_ADDING flag
+- rs_compl_status_sol() - check CONT_SOL flag
+- rs_compl_status_local() - check CONT_LOCAL flag
+
+Uses nvim_get_compl_cont_status() accessor.
 
 **Phase 5.5 Complete ✅ - ctrl_x_mode_* Functions Migrated**
 
