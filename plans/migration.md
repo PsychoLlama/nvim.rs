@@ -13,12 +13,18 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 4.19 - Loop Accessors Wired)
+## Current Status (Phase 4.20 - RStream Accessors Wired)
 
-**125 event loop rs_* functions in nvim-event crate:**
+**129 event loop rs_* functions in nvim-event crate:**
 
-All event watcher types (TimeWatcher, SignalWatcher, SocketWatcher), Stream types, and Loop
-struct field accessors now have complete accessor coverage with USE_RUST_EVENT macros.
+All event watcher types (TimeWatcher, SignalWatcher, SocketWatcher), Stream types, Loop
+struct field accessors, and RStream field accessors now have complete accessor coverage
+with USE_RUST_EVENT macros.
+
+**RStream Field Accessors (Phase 4.20):**
+- rstream_did_eof / rstream_set_did_eof - EOF flag
+- rstream_want_read / rstream_set_want_read - want read flag
+- rstream_num_bytes / rstream_set_num_bytes / rstream_num_bytes_add - byte count
 
 **Loop Field Accessors (Phase 4.19):**
 - loop_get_events - get events queue from Loop (used in proc.c)
