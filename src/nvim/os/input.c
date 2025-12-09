@@ -54,11 +54,15 @@ extern bool rs_os_isatty(int fd);
 // Rust implementation in nvim-event crate
 extern int rs_multiqueue_empty(MultiQueue *mq);
 #define multiqueue_empty(mq) rs_multiqueue_empty(mq)
+extern int rs_rstream_is_closed(RStream *stream);
+#define rstream_is_closed(s) rs_rstream_is_closed(s)
+#else
+#define rstream_is_closed(s) ((s)->s.closed)
 #endif
 
 void input_start(void)
 {
-  if (!read_stream.s.closed) {
+  if (!rstream_is_closed(&read_stream)) {
     return;
   }
 
@@ -69,7 +73,7 @@ void input_start(void)
 
 void input_stop(void)
 {
-  if (read_stream.s.closed) {
+  if (rstream_is_closed(&read_stream)) {
     return;
   }
 

@@ -804,6 +804,23 @@ pub unsafe extern "C" fn rs_rstream_get_stream(stream: RStreamHandle) -> StreamH
     nvim_rstream_get_stream(stream)
 }
 
+/// Check if an RStream is closed (via its underlying Stream)
+///
+/// # Safety
+///
+/// `stream` must be a valid RStream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_rstream_is_closed(stream: RStreamHandle) -> c_int {
+    if stream.is_null() {
+        return 1; // Treat null as closed
+    }
+    let inner_stream = nvim_rstream_get_stream(stream);
+    if inner_stream.is_null() {
+        return 1;
+    }
+    nvim_stream_is_closed(inner_stream)
+}
+
 /// Get the signal number from a SignalWatcher
 ///
 /// # Safety
