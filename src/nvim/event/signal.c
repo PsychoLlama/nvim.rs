@@ -58,3 +58,25 @@ static void close_cb(uv_handle_t *handle)
     watcher->close_cb(watcher, watcher->data);
   }
 }
+
+// =============================================================================
+// Rust accessor functions for opaque handle pattern
+// =============================================================================
+
+/// Get the signal number from a SignalWatcher (accessor for Rust).
+int nvim_signal_watcher_get_signum(SignalWatcher *watcher)
+{
+  return watcher->uv.signum;
+}
+
+/// Get the events queue from a SignalWatcher (accessor for Rust).
+MultiQueue *nvim_signal_watcher_get_events(SignalWatcher *watcher)
+{
+  return watcher->events;
+}
+
+/// Get the user data from a SignalWatcher (accessor for Rust).
+void *nvim_signal_watcher_get_data(SignalWatcher *watcher)
+{
+  return watcher->data;
+}

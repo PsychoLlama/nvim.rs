@@ -270,3 +270,31 @@ cleanup:
   uv_freeaddrinfo(addr_req.addrinfo);
   return success;
 }
+
+// =============================================================================
+// Rust accessor functions for opaque handle pattern
+// =============================================================================
+
+/// Get the address from a SocketWatcher (accessor for Rust).
+const char *nvim_socket_watcher_get_addr(SocketWatcher *watcher)
+{
+  return watcher->addr;
+}
+
+/// Get the events queue from a SocketWatcher (accessor for Rust).
+MultiQueue *nvim_socket_watcher_get_events(SocketWatcher *watcher)
+{
+  return watcher->events;
+}
+
+/// Get the user data from a SocketWatcher (accessor for Rust).
+void *nvim_socket_watcher_get_data(SocketWatcher *watcher)
+{
+  return watcher->data;
+}
+
+/// Check if a SocketWatcher is TCP type (accessor for Rust).
+int nvim_socket_watcher_is_tcp(SocketWatcher *watcher)
+{
+  return (watcher->stream && watcher->stream->type == UV_TCP) ? 1 : 0;
+}

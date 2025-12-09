@@ -170,6 +170,48 @@ impl RStreamHandle {
     }
 }
 
+/// Opaque handle to a SignalWatcher
+///
+/// SignalWatcher wraps a libuv signal handle for signal handling.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SignalWatcherHandle(*mut std::ffi::c_void);
+
+impl SignalWatcherHandle {
+    /// Create a null handle
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+
+    /// Check if handle is null
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+/// Opaque handle to a SocketWatcher
+///
+/// SocketWatcher wraps TCP/pipe sockets for accepting connections.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SocketWatcherHandle(*mut std::ffi::c_void);
+
+impl SocketWatcherHandle {
+    /// Create a null handle
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+
+    /// Check if handle is null
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
 // =============================================================================
 // Event Structure
 // =============================================================================
@@ -300,6 +342,17 @@ extern "C" {
     fn nvim_rstream_num_bytes(stream: RStreamHandle) -> usize;
     fn nvim_rstream_available(stream: RStreamHandle) -> usize;
     fn nvim_rstream_get_stream(stream: RStreamHandle) -> StreamHandle;
+
+    // SignalWatcher accessors
+    fn nvim_signal_watcher_get_signum(watcher: SignalWatcherHandle) -> c_int;
+    fn nvim_signal_watcher_get_events(watcher: SignalWatcherHandle) -> MultiQueueHandle;
+    fn nvim_signal_watcher_get_data(watcher: SignalWatcherHandle) -> *mut std::ffi::c_void;
+
+    // SocketWatcher accessors
+    fn nvim_socket_watcher_get_addr(watcher: SocketWatcherHandle) -> *const std::ffi::c_char;
+    fn nvim_socket_watcher_get_events(watcher: SocketWatcherHandle) -> MultiQueueHandle;
+    fn nvim_socket_watcher_get_data(watcher: SocketWatcherHandle) -> *mut std::ffi::c_void;
+    fn nvim_socket_watcher_is_tcp(watcher: SocketWatcherHandle) -> c_int;
 }
 
 // =============================================================================
@@ -714,6 +767,97 @@ pub unsafe extern "C" fn rs_rstream_get_stream(stream: RStreamHandle) -> StreamH
         return StreamHandle::null();
     }
     nvim_rstream_get_stream(stream)
+}
+
+/// Get the signal number from a SignalWatcher
+///
+/// # Safety
+///
+/// `watcher` must be a valid SignalWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_signal_watcher_get_signum(watcher: SignalWatcherHandle) -> c_int {
+    if watcher.is_null() {
+        return 0;
+    }
+    nvim_signal_watcher_get_signum(watcher)
+}
+
+/// Get the events queue from a SignalWatcher
+///
+/// # Safety
+///
+/// `watcher` must be a valid SignalWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_signal_watcher_get_events(watcher: SignalWatcherHandle) -> MultiQueueHandle {
+    if watcher.is_null() {
+        return MultiQueueHandle::null();
+    }
+    nvim_signal_watcher_get_events(watcher)
+}
+
+/// Get the user data from a SignalWatcher
+///
+/// # Safety
+///
+/// `watcher` must be a valid SignalWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_signal_watcher_get_data(watcher: SignalWatcherHandle) -> *mut std::ffi::c_void {
+    if watcher.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_signal_watcher_get_data(watcher)
+}
+
+/// Get the address from a SocketWatcher
+///
+/// # Safety
+///
+/// `watcher` must be a valid SocketWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_socket_watcher_get_addr(watcher: SocketWatcherHandle) -> *const std::ffi::c_char {
+    if watcher.is_null() {
+        return std::ptr::null();
+    }
+    nvim_socket_watcher_get_addr(watcher)
+}
+
+/// Get the events queue from a SocketWatcher
+///
+/// # Safety
+///
+/// `watcher` must be a valid SocketWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_socket_watcher_get_events(watcher: SocketWatcherHandle) -> MultiQueueHandle {
+    if watcher.is_null() {
+        return MultiQueueHandle::null();
+    }
+    nvim_socket_watcher_get_events(watcher)
+}
+
+/// Get the user data from a SocketWatcher
+///
+/// # Safety
+///
+/// `watcher` must be a valid SocketWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_socket_watcher_get_data(watcher: SocketWatcherHandle) -> *mut std::ffi::c_void {
+    if watcher.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_socket_watcher_get_data(watcher)
+}
+
+/// Check if a SocketWatcher is TCP type
+///
+/// # Safety
+///
+/// `watcher` must be a valid SocketWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_socket_watcher_is_tcp(watcher: SocketWatcherHandle) -> c_int {
+    if watcher.is_null() {
+        return 0;
+    }
+    nvim_socket_watcher_is_tcp(watcher)
 }
 
 // =============================================================================
