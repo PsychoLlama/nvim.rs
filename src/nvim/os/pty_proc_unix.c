@@ -53,15 +53,24 @@ extern void rs_proc_set_status(Proc *proc, int status);
 extern Loop *rs_proc_get_loop(Proc *proc);
 extern int rs_proc_get_pid(Proc *proc);
 extern void rs_proc_set_pid(Proc *proc, int pid);
+extern char **rs_proc_get_argv(Proc *proc);
+extern const char *rs_proc_get_cwd(Proc *proc);
+extern dict_T *rs_proc_get_env(Proc *proc);
 #define proc_set_status(p, s) rs_proc_set_status(p, s)
 #define proc_get_loop(p) rs_proc_get_loop(p)
 #define proc_get_pid(p) rs_proc_get_pid(p)
 #define proc_set_pid(p, pid) rs_proc_set_pid(p, pid)
+#define proc_get_argv(p) rs_proc_get_argv(p)
+#define proc_get_cwd(p) rs_proc_get_cwd(p)
+#define proc_get_env(p) rs_proc_get_env(p)
 #else
 #define proc_set_status(p, s) ((p)->status = (s))
 #define proc_get_loop(p) ((p)->loop)
 #define proc_get_pid(p) ((p)->pid)
 #define proc_set_pid(p, pid) ((p)->pid = (pid))
+#define proc_get_argv(p) ((p)->argv)
+#define proc_get_cwd(p) ((p)->cwd)
+#define proc_get_env(p) ((p)->env)
 #endif
 
 #if !defined(HAVE_FORKPTY) && !defined(__APPLE__)
@@ -301,16 +310,16 @@ static void init_child(PtyProc *ptyproc)
   signal(SIGALRM, SIG_DFL);
 
   Proc *proc = (Proc *)ptyproc;
-  if (proc->cwd && os_chdir(proc->cwd) != 0) {
-    ELOG("chdir(%s) failed: %s", proc->cwd, strerror(errno));
+  if (proc_get_cwd(proc) && os_chdir(proc_get_cwd(proc)) != 0) {
+    ELOG("chdir(%s) failed: %s", proc_get_cwd(proc), strerror(errno));
     return;
   }
 
   const char *prog = proc_get_exepath(proc);
 
-  assert(proc->env);
-  environ = tv_dict_to_env(proc->env);
-  execvp(prog, proc->argv);
+  assert(proc_get_env(proc));
+  environ = tv_dict_to_env(proc_get_env(proc));
+  execvp(prog, proc_get_argv(proc));
   ELOG("execvp(%s) failed: %s", prog, strerror(errno));
 
   _exit(122);  // 122 is EXEC_FAILED in the Vim source.

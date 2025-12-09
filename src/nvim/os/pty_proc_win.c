@@ -21,17 +21,26 @@ extern int rs_rstream_did_eof(RStream *stream);
 extern void rs_proc_set_status(Proc *proc, int status);
 extern Loop *rs_proc_get_loop(Proc *proc);
 extern void rs_proc_set_pid(Proc *proc, int pid);
+extern char **rs_proc_get_argv(Proc *proc);
+extern const char *rs_proc_get_cwd(Proc *proc);
+extern dict_T *rs_proc_get_env(Proc *proc);
 #define rstream_is_closed(s) rs_rstream_is_closed(s)
 #define rstream_did_eof(s) rs_rstream_did_eof(s)
 #define proc_set_status(p, s) rs_proc_set_status(p, s)
 #define proc_get_loop(p) rs_proc_get_loop(p)
 #define proc_set_pid(p, pid) rs_proc_set_pid(p, pid)
+#define proc_get_argv(p) rs_proc_get_argv(p)
+#define proc_get_cwd(p) rs_proc_get_cwd(p)
+#define proc_get_env(p) rs_proc_get_env(p)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define rstream_did_eof(s) ((s)->did_eof)
 #define proc_set_status(p, s) ((p)->status = (s))
 #define proc_get_loop(p) ((p)->loop)
 #define proc_set_pid(p, pid) ((p)->pid = (pid))
+#define proc_get_argv(p) ((p)->argv)
+#define proc_get_cwd(p) ((p)->cwd)
+#define proc_get_env(p) ((p)->env)
 #endif
 
 static void CALLBACK pty_proc_terminate_cb(void *context, BOOLEAN unused)
@@ -110,23 +119,23 @@ int pty_proc_spawn(PtyProc *ptyproc)
                     pty_proc_connect_cb);
   }
 
-  if (proc->cwd != NULL) {
-    status = utf8_to_utf16(proc->cwd, -1, &cwd);
+  if (proc_get_cwd(proc) != NULL) {
+    status = utf8_to_utf16(proc_get_cwd(proc), -1, &cwd);
     if (status != 0) {
-      emsg = "utf8_to_utf16(proc->cwd) failed";
+      emsg = "utf8_to_utf16(proc_get_cwd(proc)) failed";
       goto cleanup;
     }
   }
 
-  status = build_cmd_line(proc->argv, &cmd_line,
-                          os_shell_is_cmdexe(proc->argv[0]));
+  status = build_cmd_line(proc_get_argv(proc), &cmd_line,
+                          os_shell_is_cmdexe(proc_get_argv(proc)[0]));
   if (status != 0) {
     emsg = "build_cmd_line failed";
     goto cleanup;
   }
 
-  if (proc->env != NULL) {
-    status = build_env_block(proc->env, &env);
+  if (proc_get_env(proc) != NULL) {
+    status = build_env_block(proc_get_env(proc), &env);
   }
 
   if (status != 0) {
@@ -172,7 +181,7 @@ cleanup:
   if (status) {
     // In the case of an error of MultiByteToWideChar or CreateProcessW.
     ELOG("pty_proc_spawn(%s): %s: error code: %d",
-         proc->argv[0], emsg, status);
+         proc_get_argv(proc)[0], emsg, status);
     status = os_translate_sys_error(status);
   }
   os_conpty_free(conpty_object);

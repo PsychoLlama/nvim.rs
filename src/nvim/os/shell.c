@@ -51,10 +51,13 @@
 // Rust implementation in nvim-event crate
 extern int rs_multiqueue_empty(MultiQueue *mq);
 extern void rs_proc_set_events(Proc *proc, MultiQueue *events);
+extern void rs_proc_set_argv(Proc *proc, char **argv);
 #define multiqueue_empty(mq) rs_multiqueue_empty(mq)
 #define proc_set_events(p, e) rs_proc_set_events(p, e)
+#define proc_set_argv(p, a) rs_proc_set_argv(p, a)
 #else
 #define proc_set_events(p, e) ((p)->events = (e))
+#define proc_set_argv(p, a) ((p)->argv = (a))
 #endif
 
 #define NS_1_SECOND         1000000000U     // 1 second, in nanoseconds
@@ -892,7 +895,7 @@ static int do_os_system(char **argv, const char *input, size_t len, char **outpu
   Proc *proc = &uvproc.proc;
   MultiQueue *events = multiqueue_new_child(main_loop.events);
   proc_set_events(proc, events);
-  proc->argv = argv;
+  proc_set_argv(proc, argv);
   int status = proc_spawn(proc, has_input, true, true);
   if (status) {
     loop_poll_events(&main_loop, 0);

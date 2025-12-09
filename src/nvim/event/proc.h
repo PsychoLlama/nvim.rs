@@ -34,10 +34,21 @@ static inline Proc proc_init(Loop *loop, ProcType type, void *data)
 }
 
 /// Get the path to the executable of the process.
+#ifdef USE_RUST_EVENT
+extern const char *rs_proc_get_exepath_raw(Proc *proc);
+extern char **rs_proc_get_argv(Proc *proc);
+
+static inline const char *proc_get_exepath(Proc *proc)
+{
+  const char *exepath = rs_proc_get_exepath_raw(proc);
+  return exepath != NULL ? exepath : rs_proc_get_argv(proc)[0];
+}
+#else
 static inline const char *proc_get_exepath(Proc *proc)
 {
   return proc->exepath != NULL ? proc->exepath : proc->argv[0];
 }
+#endif
 
 #ifdef USE_RUST_EVENT
 extern int rs_proc_is_stopped(Proc *proc);

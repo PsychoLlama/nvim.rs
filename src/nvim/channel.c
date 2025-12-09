@@ -67,17 +67,32 @@ extern int rs_proc_get_status(Proc *proc);
 extern int rs_proc_get_type(Proc *proc);
 extern void rs_proc_set_detach(Proc *proc, int detach);
 extern void rs_proc_set_events(Proc *proc, MultiQueue *events);
+extern void rs_proc_set_argv(Proc *proc, char **argv);
+extern void rs_proc_set_exepath(Proc *proc, const char *exepath);
+extern void rs_proc_set_cwd(Proc *proc, const char *cwd);
+extern dict_T *rs_proc_get_env(Proc *proc);
+extern void rs_proc_set_env(Proc *proc, dict_T *env);
 #define stream_is_closed(s) rs_stream_is_closed(s)
 #define proc_get_status(p) rs_proc_get_status(p)
 #define proc_get_type(p) rs_proc_get_type(p)
 #define proc_set_detach(p, d) rs_proc_set_detach(p, d)
 #define proc_set_events(p, e) rs_proc_set_events(p, e)
+#define proc_set_argv(p, a) rs_proc_set_argv(p, a)
+#define proc_set_exepath(p, e) rs_proc_set_exepath(p, e)
+#define proc_set_cwd(p, c) rs_proc_set_cwd(p, c)
+#define proc_get_env(p) rs_proc_get_env(p)
+#define proc_set_env(p, e) rs_proc_set_env(p, e)
 #else
 #define stream_is_closed(s) ((s)->closed)
 #define proc_get_status(p) ((p)->status)
 #define proc_get_type(p) ((p)->type)
 #define proc_set_detach(p, d) ((p)->detach = (d))
 #define proc_set_events(p, e) ((p)->events = (e))
+#define proc_set_argv(p, a) ((p)->argv = (a))
+#define proc_set_exepath(p, e) ((p)->exepath = (e))
+#define proc_set_cwd(p, c) ((p)->cwd = (c))
+#define proc_get_env(p) ((p)->env)
+#define proc_set_env(p, e) ((p)->env = (e))
 #endif
 
 /// Teardown the module
@@ -410,13 +425,13 @@ Channel *channel_job_start(char **argv, const char *exepath, CallbackReader on_s
   }
 
   Proc *proc = &chan->stream.proc;
-  proc->argv = argv;
-  proc->exepath = exepath;
+  proc_set_argv(proc, argv);
+  proc_set_exepath(proc, exepath);
   proc->cb = channel_proc_exit_cb;
   proc_set_events(proc, chan->events);
   proc_set_detach(proc, detach);
-  proc->cwd = cwd;
-  proc->env = env;
+  proc_set_cwd(proc, cwd);
+  proc_set_env(proc, env);
   proc->overlapped = overlapped;
 
   char *cmd = xstrdup(proc_get_exepath(proc));
@@ -436,16 +451,16 @@ Channel *channel_job_start(char **argv, const char *exepath, CallbackReader on_s
   if (status) {
     semsg(_(e_jobspawn), os_strerror(status), cmd);
     xfree(cmd);
-    if (proc->env) {
-      tv_dict_free(proc->env);
+    if (proc_get_env(proc)) {
+      tv_dict_free(proc_get_env(proc));
     }
     channel_destroy_early(chan);
     *status_out = proc_get_status(proc);
     return NULL;
   }
   xfree(cmd);
-  if (proc->env) {
-    tv_dict_free(proc->env);
+  if (proc_get_env(proc)) {
+    tv_dict_free(proc_get_env(proc));
   }
 
   if (has_in) {

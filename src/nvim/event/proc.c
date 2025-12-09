@@ -67,6 +67,22 @@ extern void rs_proc_set_events(Proc *proc, MultiQueue *events);
 #define proc_set_events(p, e) rs_proc_set_events(p, e)
 extern Loop *rs_proc_get_loop(Proc *proc);
 #define proc_get_loop(p) rs_proc_get_loop(p)
+extern char **rs_proc_get_argv(Proc *proc);
+extern void rs_proc_set_argv(Proc *proc, char **argv);
+#define proc_get_argv(p) rs_proc_get_argv(p)
+#define proc_set_argv(p, a) rs_proc_set_argv(p, a)
+extern const char *rs_proc_get_exepath_raw(Proc *proc);
+extern void rs_proc_set_exepath(Proc *proc, const char *exepath);
+#define proc_get_exepath_raw(p) rs_proc_get_exepath_raw(p)
+#define proc_set_exepath(p, e) rs_proc_set_exepath(p, e)
+extern const char *rs_proc_get_cwd(Proc *proc);
+extern void rs_proc_set_cwd(Proc *proc, const char *cwd);
+#define proc_get_cwd(p) rs_proc_get_cwd(p)
+#define proc_set_cwd(p, c) rs_proc_set_cwd(p, c)
+extern dict_T *rs_proc_get_env(Proc *proc);
+extern void rs_proc_set_env(Proc *proc, dict_T *env);
+#define proc_get_env(p) rs_proc_get_env(p)
+#define proc_set_env(p, e) rs_proc_set_env(p, e)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define rstream_num_bytes(s) ((s)->num_bytes)
@@ -87,6 +103,14 @@ extern Loop *rs_proc_get_loop(Proc *proc);
 #define proc_get_events(p) ((p)->events)
 #define proc_set_events(p, e) ((p)->events = (e))
 #define proc_get_loop(p) ((p)->loop)
+#define proc_get_argv(p) ((p)->argv)
+#define proc_set_argv(p, a) ((p)->argv = (a))
+#define proc_get_exepath_raw(p) ((p)->exepath)
+#define proc_set_exepath(p, e) ((p)->exepath = (e))
+#define proc_get_cwd(p) ((p)->cwd)
+#define proc_set_cwd(p, c) ((p)->cwd = (c))
+#define proc_get_env(p) ((p)->env)
+#define proc_set_env(p, e) ((p)->env = (e))
 #endif
 
 // Time for a process to exit cleanly before we send KILL.
@@ -307,9 +331,9 @@ void proc_stop(Proc *proc) FUNC_ATTR_NONNULL_ALL
 /// Frees process-owned resources.
 void proc_free(Proc *proc) FUNC_ATTR_NONNULL_ALL
 {
-  if (proc->argv != NULL) {
-    shell_free_argv(proc->argv);
-    proc->argv = NULL;
+  if (proc_get_argv(proc) != NULL) {
+    shell_free_argv(proc_get_argv(proc));
+    proc_set_argv(proc, NULL);
   }
 }
 
@@ -632,4 +656,52 @@ void nvim_proc_incref(Proc *proc)
 int nvim_proc_decref(Proc *proc)
 {
   return --proc->refcount;
+}
+
+/// Get the argv field from a Proc (accessor for Rust).
+char **nvim_proc_get_argv(Proc *proc)
+{
+  return proc->argv;
+}
+
+/// Set the argv field of a Proc (accessor for Rust).
+void nvim_proc_set_argv(Proc *proc, char **argv)
+{
+  proc->argv = argv;
+}
+
+/// Get the exepath field from a Proc (accessor for Rust).
+const char *nvim_proc_get_exepath(Proc *proc)
+{
+  return proc->exepath;
+}
+
+/// Set the exepath field of a Proc (accessor for Rust).
+void nvim_proc_set_exepath(Proc *proc, const char *exepath)
+{
+  proc->exepath = exepath;
+}
+
+/// Get the cwd field from a Proc (accessor for Rust).
+const char *nvim_proc_get_cwd(Proc *proc)
+{
+  return proc->cwd;
+}
+
+/// Set the cwd field of a Proc (accessor for Rust).
+void nvim_proc_set_cwd(Proc *proc, const char *cwd)
+{
+  proc->cwd = cwd;
+}
+
+/// Get the env field from a Proc (accessor for Rust).
+dict_T *nvim_proc_get_env(Proc *proc)
+{
+  return proc->env;
+}
+
+/// Set the env field of a Proc (accessor for Rust).
+void nvim_proc_set_env(Proc *proc, dict_T *env)
+{
+  proc->env = env;
 }

@@ -338,6 +338,14 @@ extern "C" {
     fn nvim_proc_set_closed(proc: ProcHandle, closed: c_int);
     fn nvim_proc_incref(proc: ProcHandle);
     fn nvim_proc_decref(proc: ProcHandle) -> c_int;
+    fn nvim_proc_get_argv(proc: ProcHandle) -> *mut *mut std::ffi::c_char;
+    fn nvim_proc_set_argv(proc: ProcHandle, argv: *mut *mut std::ffi::c_char);
+    fn nvim_proc_get_exepath(proc: ProcHandle) -> *const std::ffi::c_char;
+    fn nvim_proc_set_exepath(proc: ProcHandle, exepath: *const std::ffi::c_char);
+    fn nvim_proc_get_cwd(proc: ProcHandle) -> *const std::ffi::c_char;
+    fn nvim_proc_set_cwd(proc: ProcHandle, cwd: *const std::ffi::c_char);
+    fn nvim_proc_get_env(proc: ProcHandle) -> *mut std::ffi::c_void;
+    fn nvim_proc_set_env(proc: ProcHandle, env: *mut std::ffi::c_void);
 
     // Stream accessors
     fn nvim_stream_is_closed(stream: StreamHandle) -> c_int;
@@ -835,6 +843,106 @@ pub unsafe extern "C" fn rs_proc_decref(proc: ProcHandle) -> c_int {
         return 0;
     }
     nvim_proc_decref(proc)
+}
+
+/// Get the argv from a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_get_argv(proc: ProcHandle) -> *mut *mut std::ffi::c_char {
+    if proc.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_proc_get_argv(proc)
+}
+
+/// Set the argv on a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_set_argv(proc: ProcHandle, argv: *mut *mut std::ffi::c_char) {
+    if !proc.is_null() {
+        nvim_proc_set_argv(proc, argv);
+    }
+}
+
+/// Get the exepath from a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_get_exepath_raw(proc: ProcHandle) -> *const std::ffi::c_char {
+    if proc.is_null() {
+        return std::ptr::null();
+    }
+    nvim_proc_get_exepath(proc)
+}
+
+/// Set the exepath on a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_set_exepath(proc: ProcHandle, exepath: *const std::ffi::c_char) {
+    if !proc.is_null() {
+        nvim_proc_set_exepath(proc, exepath);
+    }
+}
+
+/// Get the cwd from a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_get_cwd(proc: ProcHandle) -> *const std::ffi::c_char {
+    if proc.is_null() {
+        return std::ptr::null();
+    }
+    nvim_proc_get_cwd(proc)
+}
+
+/// Set the cwd on a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_set_cwd(proc: ProcHandle, cwd: *const std::ffi::c_char) {
+    if !proc.is_null() {
+        nvim_proc_set_cwd(proc, cwd);
+    }
+}
+
+/// Get the env from a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_get_env(proc: ProcHandle) -> *mut std::ffi::c_void {
+    if proc.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_proc_get_env(proc)
+}
+
+/// Set the env on a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_set_env(proc: ProcHandle, env: *mut std::ffi::c_void) {
+    if !proc.is_null() {
+        nvim_proc_set_env(proc, env);
+    }
 }
 
 /// Check if a Stream is closed

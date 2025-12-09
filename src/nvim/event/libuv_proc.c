@@ -24,12 +24,18 @@ extern void rs_proc_set_status(Proc *proc, int status);
 extern int rs_proc_get_detach(Proc *proc);
 extern Loop *rs_proc_get_loop(Proc *proc);
 extern void rs_proc_set_pid(Proc *proc, int pid);
+extern char **rs_proc_get_argv(Proc *proc);
+extern const char *rs_proc_get_cwd(Proc *proc);
+extern dict_T *rs_proc_get_env(Proc *proc);
 #define rstream_is_closed(s) rs_rstream_is_closed(s)
 #define stream_is_closed(s) rs_stream_is_closed(s)
 #define proc_set_status(p, s) rs_proc_set_status(p, s)
 #define proc_get_detach(p) rs_proc_get_detach(p)
 #define proc_get_loop(p) rs_proc_get_loop(p)
 #define proc_set_pid(p, pid) rs_proc_set_pid(p, pid)
+#define proc_get_argv(p) rs_proc_get_argv(p)
+#define proc_get_cwd(p) rs_proc_get_cwd(p)
+#define proc_get_env(p) rs_proc_get_env(p)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define stream_is_closed(s) ((s)->closed)
@@ -37,6 +43,9 @@ extern void rs_proc_set_pid(Proc *proc, int pid);
 #define proc_get_detach(p) ((p)->detach)
 #define proc_get_loop(p) ((p)->loop)
 #define proc_set_pid(p, pid) ((p)->pid = (pid))
+#define proc_get_argv(p) ((p)->argv)
+#define proc_get_cwd(p) ((p)->cwd)
+#define proc_get_env(p) ((p)->env)
 #endif
 
 /// @returns zero on success, or negative error code
@@ -45,12 +54,12 @@ int libuv_proc_spawn(LibuvProc *uvproc)
 {
   Proc *proc = (Proc *)uvproc;
   uvproc->uvopts.file = proc_get_exepath(proc);
-  uvproc->uvopts.args = proc->argv;
+  uvproc->uvopts.args = proc_get_argv(proc);
   uvproc->uvopts.flags = UV_PROCESS_WINDOWS_HIDE;
 #ifdef MSWIN
   // libuv collapses the argv to a CommandLineToArgvW()-style string. cmd.exe
   // expects a different syntax (must be prepared by the caller before now).
-  if (os_shell_is_cmdexe(proc->argv[0])) {
+  if (os_shell_is_cmdexe(proc_get_argv(proc)[0])) {
     uvproc->uvopts.flags |= UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS;
   }
   if (proc_get_detach(proc)) {
@@ -61,7 +70,7 @@ int libuv_proc_spawn(LibuvProc *uvproc)
   uvproc->uvopts.flags |= UV_PROCESS_DETACHED;
 #endif
   uvproc->uvopts.exit_cb = exit_cb;
-  uvproc->uvopts.cwd = proc->cwd;
+  uvproc->uvopts.cwd = proc_get_cwd(proc);
 
   uvproc->uvopts.stdio = uvproc->uvstdio;
   uvproc->uvopts.stdio_count = 3;
@@ -77,8 +86,8 @@ int libuv_proc_spawn(LibuvProc *uvproc)
   }
   uvproc->uv.data = proc;
 
-  if (proc->env) {
-    uvproc->uvopts.env = tv_dict_to_env(proc->env);
+  if (proc_get_env(proc)) {
+    uvproc->uvopts.env = tv_dict_to_env(proc_get_env(proc));
   } else {
     uvproc->uvopts.env = NULL;
   }
