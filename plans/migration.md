@@ -13,9 +13,9 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 4.1 COMPLETE - 375 rs_* Functions)
+## Current Status (Phase 4.2 - 365 rs_* Functions, 38 Event Loop)
 
-**375 Rust functions exported across 35 Rust crates:**
+**365 Rust functions exported across 35 Rust crates:**
 
 - nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
 - nvim-memutil, nvim-os, nvim-collections, nvim-encoding
@@ -23,30 +23,39 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 - nvim-spell, nvim-eval, nvim-ex_docmd, nvim-indent, nvim-keycodes
 - nvim-profile, nvim-menu, nvim-help, nvim-cmdhist, nvim-fileio
 - nvim-version, nvim-window, nvim-buffer, nvim-mark, nvim-ascii
-- nvim-search, nvim-api, **nvim-event** (18 functions)
+- nvim-search, nvim-api, **nvim-event** (38 functions)
 
 **Build system:**
 
 - Cargo workspace at `src/nvim-rs/`
 - CMake integration via USE_RUST_* flags (all enabled)
 - cbindgen generates C headers from Rust
-- 375 rs_* symbols exported
+- 365 rs_* symbols exported
 - 40+ USE_RUST_* defines active across C files (including USE_RUST_EVENT)
 
-**Recent Progress (Phase 4.1):**
-- Created nvim-event crate with libuv wrapper infrastructure (opaque handle pattern)
-- Added LoopHandle, MultiQueueHandle, TimeWatcherHandle, ProcHandle opaque types
-- Added C accessor functions in loop.c, multiqueue.c, time.c, proc.c
-- Implemented 18 event loop functions:
+**Recent Progress (Phase 4.2):**
+- Extended nvim-event crate with full opaque handle coverage:
+  - Added StreamHandle, RStreamHandle opaque types with accessors
+  - Added SignalWatcherHandle, SocketWatcherHandle opaque types with accessors
+- 38 event loop Rust functions:
   - Loop: rs_loop_is_closing, rs_loop_get_events, rs_loop_get_fast_events,
-    rs_loop_get_thread_events, rs_loop_get_recursive, rs_loop_thread_events_size
+    rs_loop_get_thread_events, rs_loop_get_recursive, rs_loop_thread_events_size,
+    rs_loop_children_count
   - MultiQueue: rs_multiqueue_empty (pure Rust), rs_multiqueue_size (pure Rust),
     rs_multiqueue_has_parent, rs_pending_events
-  - TimeWatcher: rs_timewatcher_events_pending, rs_timewatcher_should_skip (wired to time_watcher_cb)
-  - Proc: rs_proc_is_stopped (wired to proc_is_stopped), rs_proc_get_pid,
-    rs_proc_get_refcount, rs_proc_is_closed
+  - TimeWatcher: rs_timewatcher_events_pending, rs_timewatcher_should_skip
+  - Proc: rs_proc_is_stopped, rs_proc_get_pid, rs_proc_get_refcount, rs_proc_is_closed
+  - Stream: rs_stream_is_closed, rs_stream_pending_reqs, rs_stream_get_fd,
+    rs_stream_get_curmem, rs_stream_get_maxmem, rs_stream_get_events
+  - RStream: rs_rstream_did_eof, rs_rstream_want_read, rs_rstream_num_bytes,
+    rs_rstream_available, rs_rstream_get_stream
+  - SignalWatcher: rs_signal_watcher_get_signum, rs_signal_watcher_get_events,
+    rs_signal_watcher_get_data
+  - SocketWatcher: rs_socket_watcher_get_addr, rs_socket_watcher_get_events,
+    rs_socket_watcher_get_data, rs_socket_watcher_is_tcp
   - Event: rs_event_is_nil, rs_event_nil
-- Enabled USE_RUST_EVENT flag - 18 timer tests and 61 job tests passing
+- USE_RUST_EVENT flag wired to time_watcher_cb and proc_is_stopped
+- 18 timer tests and 61 job tests passing
 
 **Earlier Progress (Phase 3.52-3.68):**
 - Phase 3.52-3.68: Multiple phases completing simple function migration
