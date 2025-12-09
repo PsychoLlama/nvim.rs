@@ -246,3 +246,15 @@ int nvim_loop_is_closing(Loop *loop)
 {
   return loop->closing ? 1 : 0;
 }
+
+/// Get the thread_events queue from a Loop (accessor for Rust).
+MultiQueue *nvim_loop_get_thread_events(Loop *loop)
+{
+  return loop->thread_events;
+}
+
+/// Get the recursive count from a Loop (accessor for Rust).
+int nvim_loop_get_recursive(Loop *loop)
+{
+  return loop->recursive;
+}

@@ -193,7 +193,9 @@ extern "C" {
     // Loop accessors
     fn nvim_loop_get_events(loop_: LoopHandle) -> MultiQueueHandle;
     fn nvim_loop_get_fast_events(loop_: LoopHandle) -> MultiQueueHandle;
+    fn nvim_loop_get_thread_events(loop_: LoopHandle) -> MultiQueueHandle;
     fn nvim_loop_is_closing(loop_: LoopHandle) -> c_int;
+    fn nvim_loop_get_recursive(loop_: LoopHandle) -> c_int;
 
     // MultiQueue accessors
     fn nvim_multiqueue_empty(mq: MultiQueueHandle) -> c_int;
@@ -254,6 +256,32 @@ pub unsafe extern "C" fn rs_loop_get_fast_events(loop_: LoopHandle) -> MultiQueu
     nvim_loop_get_fast_events(loop_)
 }
 
+/// Get the thread_events queue from a Loop
+///
+/// # Safety
+///
+/// `loop_` must be a valid Loop handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_loop_get_thread_events(loop_: LoopHandle) -> MultiQueueHandle {
+    if loop_.is_null() {
+        return MultiQueueHandle::null();
+    }
+    nvim_loop_get_thread_events(loop_)
+}
+
+/// Get the recursive count from a Loop
+///
+/// # Safety
+///
+/// `loop_` must be a valid Loop handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_loop_get_recursive(loop_: LoopHandle) -> c_int {
+    if loop_.is_null() {
+        return 0;
+    }
+    nvim_loop_get_recursive(loop_)
+}
+
 /// Check if a MultiQueue is empty (pure Rust implementation)
 ///
 /// Uses the headtail accessor and checks if the queue is self-referential.
@@ -287,6 +315,26 @@ pub unsafe extern "C" fn rs_multiqueue_size(mq: MultiQueueHandle) -> usize {
         return 0;
     }
     nvim_multiqueue_get_size_field(mq)
+}
+
+/// Get the size of thread_events from a Loop (pure Rust implementation)
+///
+/// Combines rs_loop_get_thread_events and rs_multiqueue_size.
+/// Note: This does NOT handle locking - caller must hold the mutex.
+///
+/// # Safety
+///
+/// `loop_` must be a valid Loop handle. Caller must ensure thread safety.
+#[no_mangle]
+pub unsafe extern "C" fn rs_loop_thread_events_size(loop_: LoopHandle) -> usize {
+    if loop_.is_null() {
+        return 0;
+    }
+    let thread_events = nvim_loop_get_thread_events(loop_);
+    if thread_events.is_null() {
+        return 0;
+    }
+    nvim_multiqueue_get_size_field(thread_events)
 }
 
 /// Check if TimeWatcher event queue is empty
