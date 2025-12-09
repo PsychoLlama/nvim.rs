@@ -70,6 +70,13 @@
 #include "nvim/window.h"
 #include "xdiff/xdiff.h"
 
+#ifdef USE_RUST_DIFF
+extern int rs_diffopt_horizontal(void);
+extern int rs_diffopt_hiddenoff(void);
+extern int rs_diffopt_closeoff(void);
+extern int rs_diffopt_filler(void);
+#endif
+
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
 
@@ -2782,32 +2789,64 @@ int diffopt_changed(void)
 }
 
 /// Check that "diffopt" contains "horizontal".
+#ifdef USE_RUST_DIFF
+bool diffopt_horizontal(void)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_diffopt_horizontal() != 0;
+}
+#else
 bool diffopt_horizontal(void)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
   return (diff_flags & DIFF_HORIZONTAL) != 0;
 }
+#endif
 
 // Return true if 'diffopt' contains "hiddenoff".
+#ifdef USE_RUST_DIFF
+bool diffopt_hiddenoff(void)
+  FUNC_ATTR_PURE
+{
+  return rs_diffopt_hiddenoff() != 0;
+}
+#else
 bool diffopt_hiddenoff(void)
   FUNC_ATTR_PURE
 {
   return (diff_flags & DIFF_HIDDEN_OFF) != 0;
 }
+#endif
 
 // Return true if 'diffopt' contains "closeoff".
+#ifdef USE_RUST_DIFF
+bool diffopt_closeoff(void)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_diffopt_closeoff() != 0;
+}
+#else
 bool diffopt_closeoff(void)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
   return (diff_flags & DIFF_CLOSE_OFF) != 0;
 }
+#endif
 
 // Return true if 'diffopt' contains "filler".
+#ifdef USE_RUST_DIFF
+bool diffopt_filler(void)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_diffopt_filler() != 0;
+}
+#else
 bool diffopt_filler(void)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
   return (diff_flags & DIFF_FILLER) != 0;
 }
+#endif
 
 /// Called when a line has been updated. Used for updating inline diff in Insert
 /// mode without waiting for global diff update later.
@@ -4321,4 +4360,14 @@ void f_diff_hlID(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     }
   }
   rettv->vval.v_number = hlID;
+}
+
+// =============================================================================
+// Rust FFI accessor functions
+// =============================================================================
+
+/// C accessor for the static diff_flags variable (used by Rust FFI).
+int nvim_get_diff_flags(void)
+{
+  return diff_flags;
 }

@@ -19,6 +19,7 @@ nvim-ascii = { path = "ascii" }
 nvim-buffer = { path = "buffer" }
 nvim-charset = { path = "charset" }
 nvim-cmdhist = { path = "cmdhist" }
+nvim-diff = { path = "diff" }
 nvim-eval = { path = "eval" }
 nvim-collections = { path = "collections" }
 nvim-encoding = { path = "encoding" }

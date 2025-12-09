@@ -22,6 +22,7 @@ pub use nvim_cmdhist::*;
 pub use nvim_collections::garray::*;
 pub use nvim_collections::hashtab::*;
 pub use nvim_collections::queue::*;
+pub use nvim_diff::*;
 // Note: rs_hash_hash, rs_hash_hash_len are in nvim_memutil (not re-exported from hashtab)
 pub use nvim_encoding::base64::*;
 pub use nvim_encoding::sha256::*;
