@@ -98,6 +98,12 @@ typedef struct {
 #include "lua/executor.c.generated.h"
 #include "lua/vim_module.generated.h"
 
+#ifdef USE_RUST_EVENT
+// Rust implementation in nvim-event crate
+extern int rs_loop_is_closing(Loop *loop);
+#define loop_is_closing(loop) rs_loop_is_closing(loop)
+#endif
+
 #define PUSH_ALL_TYPVALS(lstate, args, argcount, special) \
   for (int i = 0; i < argcount; i++) { \
     if (args[i].v_type == VAR_UNKNOWN) { \
@@ -397,7 +403,11 @@ static int nlua_schedule(lua_State *const lstate)
 
   // If main_loop is closing don't schedule tasks to run in the future,
   // otherwise any refs allocated here will not be cleaned up.
+#ifdef USE_RUST_EVENT
+  if (loop_is_closing(&main_loop)) {
+#else
   if (main_loop.closing) {
+#endif
     return 0;
   }
 
