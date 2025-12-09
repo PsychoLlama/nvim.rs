@@ -349,6 +349,10 @@ extern "C" {
     fn nvim_proc_set_stopped_time(proc: ProcHandle, stopped_time: u64);
     fn nvim_proc_get_exit_signal(proc: ProcHandle) -> u8;
     fn nvim_proc_set_exit_signal(proc: ProcHandle, exit_signal: u8);
+    fn nvim_proc_get_fwd_err(proc: ProcHandle) -> c_int;
+    fn nvim_proc_set_fwd_err(proc: ProcHandle, fwd_err: c_int);
+    fn nvim_proc_get_overlapped(proc: ProcHandle) -> c_int;
+    fn nvim_proc_set_overlapped(proc: ProcHandle, overlapped: c_int);
 
     // Stream accessors
     fn nvim_stream_is_closed(stream: StreamHandle) -> c_int;
@@ -982,6 +986,56 @@ pub unsafe extern "C" fn rs_proc_get_exit_signal(proc: ProcHandle) -> u8 {
 pub unsafe extern "C" fn rs_proc_set_exit_signal(proc: ProcHandle, exit_signal: u8) {
     if !proc.is_null() {
         nvim_proc_set_exit_signal(proc, exit_signal);
+    }
+}
+
+/// Get the fwd_err flag from a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_get_fwd_err(proc: ProcHandle) -> c_int {
+    if proc.is_null() {
+        return 0;
+    }
+    nvim_proc_get_fwd_err(proc)
+}
+
+/// Set the fwd_err flag on a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_set_fwd_err(proc: ProcHandle, fwd_err: c_int) {
+    if !proc.is_null() {
+        nvim_proc_set_fwd_err(proc, fwd_err);
+    }
+}
+
+/// Get the overlapped flag from a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_get_overlapped(proc: ProcHandle) -> c_int {
+    if proc.is_null() {
+        return 0;
+    }
+    nvim_proc_get_overlapped(proc)
+}
+
+/// Set the overlapped flag on a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_set_overlapped(proc: ProcHandle, overlapped: c_int) {
+    if !proc.is_null() {
+        nvim_proc_set_overlapped(proc, overlapped);
     }
 }
 

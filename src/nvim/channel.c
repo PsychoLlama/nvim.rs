@@ -72,6 +72,10 @@ extern void rs_proc_set_exepath(Proc *proc, const char *exepath);
 extern void rs_proc_set_cwd(Proc *proc, const char *cwd);
 extern dict_T *rs_proc_get_env(Proc *proc);
 extern void rs_proc_set_env(Proc *proc, dict_T *env);
+extern int rs_proc_get_fwd_err(Proc *proc);
+extern void rs_proc_set_fwd_err(Proc *proc, int fwd_err);
+extern int rs_proc_get_overlapped(Proc *proc);
+extern void rs_proc_set_overlapped(Proc *proc, int overlapped);
 #define stream_is_closed(s) rs_stream_is_closed(s)
 #define proc_get_status(p) rs_proc_get_status(p)
 #define proc_get_type(p) rs_proc_get_type(p)
@@ -82,6 +86,10 @@ extern void rs_proc_set_env(Proc *proc, dict_T *env);
 #define proc_set_cwd(p, c) rs_proc_set_cwd(p, c)
 #define proc_get_env(p) rs_proc_get_env(p)
 #define proc_set_env(p, e) rs_proc_set_env(p, e)
+#define proc_get_fwd_err(p) rs_proc_get_fwd_err(p)
+#define proc_set_fwd_err(p, f) rs_proc_set_fwd_err(p, f)
+#define proc_get_overlapped(p) rs_proc_get_overlapped(p)
+#define proc_set_overlapped(p, o) rs_proc_set_overlapped(p, o)
 #else
 #define stream_is_closed(s) ((s)->closed)
 #define proc_get_status(p) ((p)->status)
@@ -93,6 +101,10 @@ extern void rs_proc_set_env(Proc *proc, dict_T *env);
 #define proc_set_cwd(p, c) ((p)->cwd = (c))
 #define proc_get_env(p) ((p)->env)
 #define proc_set_env(p, e) ((p)->env = (e))
+#define proc_get_fwd_err(p) ((p)->fwd_err)
+#define proc_set_fwd_err(p, f) ((p)->fwd_err = (f))
+#define proc_get_overlapped(p) ((p)->overlapped)
+#define proc_set_overlapped(p, o) ((p)->overlapped = (o))
 #endif
 
 /// Teardown the module
@@ -432,7 +444,7 @@ Channel *channel_job_start(char **argv, const char *exepath, CallbackReader on_s
   proc_set_detach(proc, detach);
   proc_set_cwd(proc, cwd);
   proc_set_env(proc, env);
-  proc->overlapped = overlapped;
+  proc_set_overlapped(proc, overlapped);
 
   char *cmd = xstrdup(proc_get_exepath(proc));
   bool has_out, has_err;
@@ -442,7 +454,7 @@ Channel *channel_job_start(char **argv, const char *exepath, CallbackReader on_s
   } else {
     has_out = rpc || callback_reader_set(chan->on_data);
     has_err = callback_reader_set(chan->on_stderr);
-    proc->fwd_err = chan->on_stderr.fwd_err;
+    proc_set_fwd_err(proc, chan->on_stderr.fwd_err);
   }
 
   bool has_in = stdin_mode == kChannelStdinPipe;

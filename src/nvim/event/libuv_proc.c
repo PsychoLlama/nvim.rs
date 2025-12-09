@@ -38,6 +38,10 @@ extern dict_T *rs_proc_get_env(Proc *proc);
 #define proc_get_env(p) rs_proc_get_env(p)
 extern uint8_t rs_proc_get_exit_signal(Proc *proc);
 #define proc_get_exit_signal(p) rs_proc_get_exit_signal(p)
+extern int rs_proc_get_fwd_err(Proc *proc);
+extern int rs_proc_get_overlapped(Proc *proc);
+#define proc_get_fwd_err(p) rs_proc_get_fwd_err(p)
+#define proc_get_overlapped(p) rs_proc_get_overlapped(p)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define stream_is_closed(s) ((s)->closed)
@@ -49,6 +53,8 @@ extern uint8_t rs_proc_get_exit_signal(Proc *proc);
 #define proc_get_cwd(p) ((p)->cwd)
 #define proc_get_env(p) ((p)->env)
 #define proc_get_exit_signal(p) ((p)->exit_signal)
+#define proc_get_fwd_err(p) ((p)->fwd_err)
+#define proc_get_overlapped(p) ((p)->overlapped)
 #endif
 
 /// @returns zero on success, or negative error code
@@ -98,7 +104,7 @@ int libuv_proc_spawn(LibuvProc *uvproc)
   if (!stream_is_closed(&proc->in)) {
     uvproc->uvstdio[0].flags = UV_CREATE_PIPE | UV_READABLE_PIPE;
 #ifdef MSWIN
-    uvproc->uvstdio[0].flags |= proc->overlapped ? UV_OVERLAPPED_PIPE : 0;
+    uvproc->uvstdio[0].flags |= proc_get_overlapped(proc) ? UV_OVERLAPPED_PIPE : 0;
 #endif
     uvproc->uvstdio[0].data.stream = (uv_stream_t *)(&proc->in.uv.pipe);
   }
@@ -107,7 +113,7 @@ int libuv_proc_spawn(LibuvProc *uvproc)
     uvproc->uvstdio[1].flags = UV_CREATE_PIPE | UV_WRITABLE_PIPE;
 #ifdef MSWIN
     // pipe must be readable for IOCP to work on Windows.
-    uvproc->uvstdio[1].flags |= proc->overlapped
+    uvproc->uvstdio[1].flags |= proc_get_overlapped(proc)
                                 ? (UV_READABLE_PIPE | UV_OVERLAPPED_PIPE) : 0;
 #endif
     uvproc->uvstdio[1].data.stream = (uv_stream_t *)(&proc->out.s.uv.pipe);
@@ -116,7 +122,7 @@ int libuv_proc_spawn(LibuvProc *uvproc)
   if (!rstream_is_closed(&proc->err)) {
     uvproc->uvstdio[2].flags = UV_CREATE_PIPE | UV_WRITABLE_PIPE;
     uvproc->uvstdio[2].data.stream = (uv_stream_t *)(&proc->err.s.uv.pipe);
-  } else if (proc->fwd_err) {
+  } else if (proc_get_fwd_err(proc)) {
     uvproc->uvstdio[2].flags = UV_INHERIT_FD;
     uvproc->uvstdio[2].data.fd = STDERR_FILENO;
   }

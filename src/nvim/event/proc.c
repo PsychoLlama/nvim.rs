@@ -89,6 +89,14 @@ extern uint8_t rs_proc_get_exit_signal(Proc *proc);
 extern void rs_proc_set_exit_signal(Proc *proc, uint8_t sig);
 #define proc_get_exit_signal(p) rs_proc_get_exit_signal(p)
 #define proc_set_exit_signal(p, s) rs_proc_set_exit_signal(p, s)
+extern int rs_proc_get_fwd_err(Proc *proc);
+extern void rs_proc_set_fwd_err(Proc *proc, int fwd_err);
+#define proc_get_fwd_err(p) rs_proc_get_fwd_err(p)
+#define proc_set_fwd_err(p, f) rs_proc_set_fwd_err(p, f)
+extern int rs_proc_get_overlapped(Proc *proc);
+extern void rs_proc_set_overlapped(Proc *proc, int overlapped);
+#define proc_get_overlapped(p) rs_proc_get_overlapped(p)
+#define proc_set_overlapped(p, o) rs_proc_set_overlapped(p, o)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define rstream_num_bytes(s) ((s)->num_bytes)
@@ -120,6 +128,10 @@ extern void rs_proc_set_exit_signal(Proc *proc, uint8_t sig);
 #define proc_set_stopped_time(p, t) ((p)->stopped_time = (t))
 #define proc_get_exit_signal(p) ((p)->exit_signal)
 #define proc_set_exit_signal(p, s) ((p)->exit_signal = (s))
+#define proc_get_fwd_err(p) ((p)->fwd_err)
+#define proc_set_fwd_err(p, f) ((p)->fwd_err = (f))
+#define proc_get_overlapped(p) ((p)->overlapped)
+#define proc_set_overlapped(p, o) ((p)->overlapped = (o))
 #endif
 
 // Time for a process to exit cleanly before we send KILL.
@@ -141,7 +153,7 @@ int proc_spawn(Proc *proc, bool in, bool out, bool err)
   FUNC_ATTR_NONNULL_ALL
 {
   // forwarding stderr contradicts with processing it internally
-  assert(!(err && proc->fwd_err));
+  assert(!(err && proc_get_fwd_err(proc)));
 
   if (in) {
     uv_pipe_init(&proc_get_loop(proc)->uv, &proc->in.uv.pipe, 0);
@@ -731,4 +743,28 @@ uint8_t nvim_proc_get_exit_signal(Proc *proc)
 void nvim_proc_set_exit_signal(Proc *proc, uint8_t exit_signal)
 {
   proc->exit_signal = exit_signal;
+}
+
+/// Get the fwd_err field from a Proc (accessor for Rust).
+int nvim_proc_get_fwd_err(Proc *proc)
+{
+  return proc->fwd_err ? 1 : 0;
+}
+
+/// Set the fwd_err field of a Proc (accessor for Rust).
+void nvim_proc_set_fwd_err(Proc *proc, int fwd_err)
+{
+  proc->fwd_err = fwd_err != 0;
+}
+
+/// Get the overlapped field from a Proc (accessor for Rust).
+int nvim_proc_get_overlapped(Proc *proc)
+{
+  return proc->overlapped ? 1 : 0;
+}
+
+/// Set the overlapped field of a Proc (accessor for Rust).
+void nvim_proc_set_overlapped(Proc *proc, int overlapped)
+{
+  proc->overlapped = overlapped != 0;
 }
