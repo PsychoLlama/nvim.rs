@@ -90,6 +90,8 @@ extern void rs_proc_set_overlapped(Proc *proc, int overlapped);
 #define proc_set_fwd_err(p, f) rs_proc_set_fwd_err(p, f)
 #define proc_get_overlapped(p) rs_proc_get_overlapped(p)
 #define proc_set_overlapped(p, o) rs_proc_set_overlapped(p, o)
+extern void rs_proc_set_cb(Proc *proc, void *cb);
+#define proc_set_cb(p, c) rs_proc_set_cb(p, (void *)(c))
 #else
 #define stream_is_closed(s) ((s)->closed)
 #define proc_get_status(p) ((p)->status)
@@ -105,6 +107,7 @@ extern void rs_proc_set_overlapped(Proc *proc, int overlapped);
 #define proc_set_fwd_err(p, f) ((p)->fwd_err = (f))
 #define proc_get_overlapped(p) ((p)->overlapped)
 #define proc_set_overlapped(p, o) ((p)->overlapped = (o))
+#define proc_set_cb(p, c) ((p)->cb = (c))
 #endif
 
 /// Teardown the module
@@ -439,7 +442,7 @@ Channel *channel_job_start(char **argv, const char *exepath, CallbackReader on_s
   Proc *proc = &chan->stream.proc;
   proc_set_argv(proc, argv);
   proc_set_exepath(proc, exepath);
-  proc->cb = channel_proc_exit_cb;
+  proc_set_cb(proc, channel_proc_exit_cb);
   proc_set_events(proc, chan->events);
   proc_set_detach(proc, detach);
   proc_set_cwd(proc, cwd);

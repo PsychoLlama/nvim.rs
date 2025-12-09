@@ -97,6 +97,25 @@ extern int rs_proc_get_overlapped(Proc *proc);
 extern void rs_proc_set_overlapped(Proc *proc, int overlapped);
 #define proc_get_overlapped(p) rs_proc_get_overlapped(p)
 #define proc_set_overlapped(p, o) rs_proc_set_overlapped(p, o)
+// Callback accessors - use void* for FFI compatibility
+extern void *rs_proc_get_cb(Proc *proc);
+extern void rs_proc_set_cb(Proc *proc, void *cb);
+#define proc_get_cb(p) ((proc_exit_cb)rs_proc_get_cb(p))
+#define proc_set_cb(p, c) rs_proc_set_cb(p, (void *)(c))
+extern void *rs_proc_get_internal_exit_cb(Proc *proc);
+extern void rs_proc_set_internal_exit_cb(Proc *proc, void *cb);
+#define proc_get_internal_exit_cb(p) ((internal_proc_cb)rs_proc_get_internal_exit_cb(p))
+#define proc_set_internal_exit_cb(p, c) rs_proc_set_internal_exit_cb(p, (void *)(c))
+extern void *rs_proc_get_internal_close_cb(Proc *proc);
+extern void rs_proc_set_internal_close_cb(Proc *proc, void *cb);
+#define proc_get_internal_close_cb(p) ((internal_proc_cb)rs_proc_get_internal_close_cb(p))
+#define proc_set_internal_close_cb(p, c) rs_proc_set_internal_close_cb(p, (void *)(c))
+extern void rs_proc_call_cb(Proc *proc, int status, void *data);
+#define proc_call_cb(p, s, d) rs_proc_call_cb(p, s, d)
+extern void rs_proc_call_internal_exit_cb(Proc *proc);
+#define proc_call_internal_exit_cb(p) rs_proc_call_internal_exit_cb(p)
+extern void rs_proc_call_internal_close_cb(Proc *proc);
+#define proc_call_internal_close_cb(p) rs_proc_call_internal_close_cb(p)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define rstream_num_bytes(s) ((s)->num_bytes)
@@ -132,6 +151,15 @@ extern void rs_proc_set_overlapped(Proc *proc, int overlapped);
 #define proc_set_fwd_err(p, f) ((p)->fwd_err = (f))
 #define proc_get_overlapped(p) ((p)->overlapped)
 #define proc_set_overlapped(p, o) ((p)->overlapped = (o))
+#define proc_get_cb(p) ((p)->cb)
+#define proc_set_cb(p, c) ((p)->cb = (c))
+#define proc_get_internal_exit_cb(p) ((p)->internal_exit_cb)
+#define proc_set_internal_exit_cb(p, c) ((p)->internal_exit_cb = (c))
+#define proc_get_internal_close_cb(p) ((p)->internal_close_cb)
+#define proc_set_internal_close_cb(p, c) ((p)->internal_close_cb = (c))
+#define proc_call_cb(p, s, d) do { if ((p)->cb) (p)->cb((p), (s), (d)); } while (0)
+#define proc_call_internal_exit_cb(p) do { if ((p)->internal_exit_cb) (p)->internal_exit_cb(p); } while (0)
+#define proc_call_internal_close_cb(p) do { if ((p)->internal_close_cb) (p)->internal_close_cb(p); } while (0)
 #endif
 
 // Time for a process to exit cleanly before we send KILL.
@@ -230,8 +258,8 @@ int proc_spawn(Proc *proc, bool in, bool out, bool err)
     proc_incref(proc);
   }
 
-  proc->internal_exit_cb = on_proc_exit;
-  proc->internal_close_cb = decref;
+  proc_set_internal_exit_cb(proc, on_proc_exit);
+  proc_set_internal_close_cb(proc, decref);
   proc_incref(proc);
   kv_push(proc_get_loop(proc)->children, proc);
   DLOG("new: pid=%d exepath=[%s]", proc_get_pid(proc), proc_get_exepath(proc));
@@ -388,10 +416,10 @@ static void children_kill_cb(uv_timer_t *handle)
 static void proc_close_event(void **argv)
 {
   Proc *proc = argv[0];
-  if (proc->cb) {
+  if (proc_get_cb(proc)) {
     // User (hint: channel_job_start) is responsible for calling
     // proc_free().
-    proc->cb(proc, proc_get_status(proc), proc->data);
+    proc_call_cb(proc, proc_get_status(proc), proc->data);
   } else {
     proc_free(proc);
   }
@@ -767,4 +795,64 @@ int nvim_proc_get_overlapped(Proc *proc)
 void nvim_proc_set_overlapped(Proc *proc, int overlapped)
 {
   proc->overlapped = overlapped != 0;
+}
+
+/// Get the cb (exit callback) field of a Proc (accessor for Rust).
+proc_exit_cb nvim_proc_get_cb(Proc *proc)
+{
+  return proc->cb;
+}
+
+/// Set the cb (exit callback) field of a Proc (accessor for Rust).
+void nvim_proc_set_cb(Proc *proc, proc_exit_cb cb)
+{
+  proc->cb = cb;
+}
+
+/// Get the internal_exit_cb field of a Proc (accessor for Rust).
+internal_proc_cb nvim_proc_get_internal_exit_cb(Proc *proc)
+{
+  return proc->internal_exit_cb;
+}
+
+/// Set the internal_exit_cb field of a Proc (accessor for Rust).
+void nvim_proc_set_internal_exit_cb(Proc *proc, internal_proc_cb cb)
+{
+  proc->internal_exit_cb = cb;
+}
+
+/// Get the internal_close_cb field of a Proc (accessor for Rust).
+internal_proc_cb nvim_proc_get_internal_close_cb(Proc *proc)
+{
+  return proc->internal_close_cb;
+}
+
+/// Set the internal_close_cb field of a Proc (accessor for Rust).
+void nvim_proc_set_internal_close_cb(Proc *proc, internal_proc_cb cb)
+{
+  proc->internal_close_cb = cb;
+}
+
+/// Call proc->cb if set (accessor for Rust).
+void nvim_proc_call_cb(Proc *proc, int status, void *data)
+{
+  if (proc->cb) {
+    proc->cb(proc, status, data);
+  }
+}
+
+/// Call proc->internal_exit_cb (accessor for Rust).
+void nvim_proc_call_internal_exit_cb(Proc *proc)
+{
+  if (proc->internal_exit_cb) {
+    proc->internal_exit_cb(proc);
+  }
+}
+
+/// Call proc->internal_close_cb if set (accessor for Rust).
+void nvim_proc_call_internal_close_cb(Proc *proc)
+{
+  if (proc->internal_close_cb) {
+    proc->internal_close_cb(proc);
+  }
 }

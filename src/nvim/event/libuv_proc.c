@@ -42,6 +42,10 @@ extern int rs_proc_get_fwd_err(Proc *proc);
 extern int rs_proc_get_overlapped(Proc *proc);
 #define proc_get_fwd_err(p) rs_proc_get_fwd_err(p)
 #define proc_get_overlapped(p) rs_proc_get_overlapped(p)
+extern void rs_proc_call_internal_exit_cb(Proc *proc);
+extern void rs_proc_call_internal_close_cb(Proc *proc);
+#define proc_call_internal_exit_cb(p) rs_proc_call_internal_exit_cb(p)
+#define proc_call_internal_close_cb(p) rs_proc_call_internal_close_cb(p)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define stream_is_closed(s) ((s)->closed)
@@ -55,6 +59,8 @@ extern int rs_proc_get_overlapped(Proc *proc);
 #define proc_get_exit_signal(p) ((p)->exit_signal)
 #define proc_get_fwd_err(p) ((p)->fwd_err)
 #define proc_get_overlapped(p) ((p)->overlapped)
+#define proc_call_internal_exit_cb(p) do { if ((p)->internal_exit_cb) (p)->internal_exit_cb(p); } while (0)
+#define proc_call_internal_close_cb(p) do { if ((p)->internal_close_cb) (p)->internal_close_cb(p); } while (0)
 #endif
 
 /// @returns zero on success, or negative error code
@@ -149,9 +155,7 @@ void libuv_proc_close(LibuvProc *uvproc)
 static void close_cb(uv_handle_t *handle)
 {
   Proc *proc = handle->data;
-  if (proc->internal_close_cb) {
-    proc->internal_close_cb(proc);
-  }
+  proc_call_internal_close_cb(proc);
   LibuvProc *uvproc = (LibuvProc *)proc;
   if (uvproc->uvopts.env) {
     os_free_fullenv(uvproc->uvopts.env);
@@ -166,7 +170,7 @@ static void exit_cb(uv_process_t *handle, int64_t status, int term_signal)
   term_signal = proc_get_exit_signal(proc);
 #endif
   proc_set_status(proc, term_signal ? 128 + term_signal : (int)status);
-  proc->internal_exit_cb(proc);
+  proc_call_internal_exit_cb(proc);
 }
 
 LibuvProc libuv_proc_init(Loop *loop, void *data)

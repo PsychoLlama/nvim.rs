@@ -63,6 +63,10 @@ extern dict_T *rs_proc_get_env(Proc *proc);
 #define proc_get_argv(p) rs_proc_get_argv(p)
 #define proc_get_cwd(p) rs_proc_get_cwd(p)
 #define proc_get_env(p) rs_proc_get_env(p)
+extern void rs_proc_call_internal_exit_cb(Proc *proc);
+extern void rs_proc_call_internal_close_cb(Proc *proc);
+#define proc_call_internal_exit_cb(p) rs_proc_call_internal_exit_cb(p)
+#define proc_call_internal_close_cb(p) rs_proc_call_internal_close_cb(p)
 #else
 #define proc_set_status(p, s) ((p)->status = (s))
 #define proc_get_loop(p) ((p)->loop)
@@ -71,6 +75,8 @@ extern dict_T *rs_proc_get_env(Proc *proc);
 #define proc_get_argv(p) ((p)->argv)
 #define proc_get_cwd(p) ((p)->cwd)
 #define proc_get_env(p) ((p)->env)
+#define proc_call_internal_exit_cb(p) do { if ((p)->internal_exit_cb) (p)->internal_exit_cb(p); } while (0)
+#define proc_call_internal_close_cb(p) do { if ((p)->internal_close_cb) (p)->internal_close_cb(p); } while (0)
 #endif
 
 #if !defined(HAVE_FORKPTY) && !defined(__APPLE__)
@@ -273,9 +279,7 @@ void pty_proc_close(PtyProc *ptyproc)
 {
   pty_proc_close_master(ptyproc);
   Proc *proc = (Proc *)ptyproc;
-  if (proc->internal_close_cb) {
-    proc->internal_close_cb(proc);
-  }
+  proc_call_internal_close_cb(proc);
 }
 
 void pty_proc_close_master(PtyProc *ptyproc) FUNC_ATTR_NONNULL_ALL
@@ -436,7 +440,7 @@ static void chld_handler(uv_signal_t *handle, int signum)
     } else if (WIFSIGNALED(stat)) {
       proc_set_status(proc, 128 + WTERMSIG(stat));
     }
-    proc->internal_exit_cb(proc);
+    proc_call_internal_exit_cb(proc);
   }
 }
 

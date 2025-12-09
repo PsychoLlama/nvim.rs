@@ -353,6 +353,16 @@ extern "C" {
     fn nvim_proc_set_fwd_err(proc: ProcHandle, fwd_err: c_int);
     fn nvim_proc_get_overlapped(proc: ProcHandle) -> c_int;
     fn nvim_proc_set_overlapped(proc: ProcHandle, overlapped: c_int);
+    // Callback accessors - use void* for FFI compatibility
+    fn nvim_proc_get_cb(proc: ProcHandle) -> *mut std::ffi::c_void;
+    fn nvim_proc_set_cb(proc: ProcHandle, cb: *mut std::ffi::c_void);
+    fn nvim_proc_get_internal_exit_cb(proc: ProcHandle) -> *mut std::ffi::c_void;
+    fn nvim_proc_set_internal_exit_cb(proc: ProcHandle, cb: *mut std::ffi::c_void);
+    fn nvim_proc_get_internal_close_cb(proc: ProcHandle) -> *mut std::ffi::c_void;
+    fn nvim_proc_set_internal_close_cb(proc: ProcHandle, cb: *mut std::ffi::c_void);
+    fn nvim_proc_call_cb(proc: ProcHandle, status: c_int, data: *mut std::ffi::c_void);
+    fn nvim_proc_call_internal_exit_cb(proc: ProcHandle);
+    fn nvim_proc_call_internal_close_cb(proc: ProcHandle);
 
     // Stream accessors
     fn nvim_stream_is_closed(stream: StreamHandle) -> c_int;
@@ -1036,6 +1046,121 @@ pub unsafe extern "C" fn rs_proc_get_overlapped(proc: ProcHandle) -> c_int {
 pub unsafe extern "C" fn rs_proc_set_overlapped(proc: ProcHandle, overlapped: c_int) {
     if !proc.is_null() {
         nvim_proc_set_overlapped(proc, overlapped);
+    }
+}
+
+/// Get the cb (exit callback) field of a Proc (as void* for FFI)
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_get_cb(proc: ProcHandle) -> *mut std::ffi::c_void {
+    if proc.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_proc_get_cb(proc)
+}
+
+/// Set the cb (exit callback) field of a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_set_cb(proc: ProcHandle, cb: *mut std::ffi::c_void) {
+    if !proc.is_null() {
+        nvim_proc_set_cb(proc, cb);
+    }
+}
+
+/// Get the internal_exit_cb field of a Proc (as void* for FFI)
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_get_internal_exit_cb(proc: ProcHandle) -> *mut std::ffi::c_void {
+    if proc.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_proc_get_internal_exit_cb(proc)
+}
+
+/// Set the internal_exit_cb field of a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_set_internal_exit_cb(proc: ProcHandle, cb: *mut std::ffi::c_void) {
+    if !proc.is_null() {
+        nvim_proc_set_internal_exit_cb(proc, cb);
+    }
+}
+
+/// Get the internal_close_cb field of a Proc (as void* for FFI)
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_get_internal_close_cb(proc: ProcHandle) -> *mut std::ffi::c_void {
+    if proc.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_proc_get_internal_close_cb(proc)
+}
+
+/// Set the internal_close_cb field of a Proc
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_set_internal_close_cb(proc: ProcHandle, cb: *mut std::ffi::c_void) {
+    if !proc.is_null() {
+        nvim_proc_set_internal_close_cb(proc, cb);
+    }
+}
+
+/// Call proc->cb if set
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_call_cb(
+    proc: ProcHandle,
+    status: c_int,
+    data: *mut std::ffi::c_void,
+) {
+    if !proc.is_null() {
+        nvim_proc_call_cb(proc, status, data);
+    }
+}
+
+/// Call proc->internal_exit_cb if set
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_call_internal_exit_cb(proc: ProcHandle) {
+    if !proc.is_null() {
+        nvim_proc_call_internal_exit_cb(proc);
+    }
+}
+
+/// Call proc->internal_close_cb if set
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_call_internal_close_cb(proc: ProcHandle) {
+    if !proc.is_null() {
+        nvim_proc_call_internal_close_cb(proc);
     }
 }
 

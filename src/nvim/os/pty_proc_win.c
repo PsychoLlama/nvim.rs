@@ -34,6 +34,10 @@ extern dict_T *rs_proc_get_env(Proc *proc);
 #define proc_get_env(p) rs_proc_get_env(p)
 extern uint8_t rs_proc_get_exit_signal(Proc *proc);
 #define proc_get_exit_signal(p) rs_proc_get_exit_signal(p)
+extern void rs_proc_call_internal_exit_cb(Proc *proc);
+extern void rs_proc_call_internal_close_cb(Proc *proc);
+#define proc_call_internal_exit_cb(p) rs_proc_call_internal_exit_cb(p)
+#define proc_call_internal_close_cb(p) rs_proc_call_internal_close_cb(p)
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define rstream_did_eof(s) ((s)->did_eof)
@@ -44,6 +48,8 @@ extern uint8_t rs_proc_get_exit_signal(Proc *proc);
 #define proc_get_cwd(p) ((p)->cwd)
 #define proc_get_env(p) ((p)->env)
 #define proc_get_exit_signal(p) ((p)->exit_signal)
+#define proc_call_internal_exit_cb(p) do { if ((p)->internal_exit_cb) (p)->internal_exit_cb(p); } while (0)
+#define proc_call_internal_close_cb(p) do { if ((p)->internal_close_cb) (p)->internal_close_cb(p); } while (0)
 #endif
 
 static void CALLBACK pty_proc_terminate_cb(void *context, BOOLEAN unused)
@@ -229,9 +235,7 @@ void pty_proc_close(PtyProc *ptyproc)
     ptyproc->proc_handle = NULL;
   }
 
-  if (proc->internal_close_cb) {
-    proc->internal_close_cb(proc);
-  }
+  proc_call_internal_close_cb(proc);
 }
 
 void pty_proc_close_master(PtyProc *ptyproc)
@@ -270,7 +274,7 @@ static void pty_proc_finish(PtyProc *ptyproc)
   GetExitCodeProcess(ptyproc->proc_handle, &exit_code);
   proc_set_status(proc, proc_get_exit_signal(proc) ? 128 + proc_get_exit_signal(proc) : (int)exit_code);
 
-  proc->internal_exit_cb(proc);
+  proc_call_internal_exit_cb(proc);
 }
 
 /// Build the command line to pass to CreateProcessW.
