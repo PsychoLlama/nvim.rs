@@ -119,6 +119,11 @@ extern void rs_proc_call_internal_close_cb(Proc *proc);
 // Loop accessors
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)
+// Stream accessors for proc->in/out/err
+extern void rs_stream_set_internal_data(Stream *stream, void *data);
+#define stream_set_internal_data(s, d) rs_stream_set_internal_data(s, d)
+extern void rs_stream_set_internal_close_cb(Stream *stream, void *cb);
+#define stream_set_internal_close_cb(s, c) rs_stream_set_internal_close_cb(s, (void *)(c))
 #else
 #define rstream_is_closed(s) ((s)->s.closed)
 #define rstream_num_bytes(s) ((s)->num_bytes)
@@ -165,6 +170,9 @@ extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define proc_call_internal_close_cb(p) do { if ((p)->internal_close_cb) (p)->internal_close_cb(p); } while (0)
 // Loop accessors (fallback)
 #define loop_get_events(l) ((l)->events)
+// Stream accessors for proc->in/out/err (fallback)
+#define stream_set_internal_data(s, d) ((s)->internal_data = (d))
+#define stream_set_internal_close_cb(s, c) ((s)->internal_close_cb = (c))
 #endif
 
 // Time for a process to exit cleanly before we send KILL.
@@ -244,22 +252,22 @@ int proc_spawn(Proc *proc, bool in, bool out, bool err)
 
   if (in) {
     stream_init(NULL, &proc->in, -1, (uv_stream_t *)&proc->in.uv.pipe);
-    proc->in.internal_data = proc;
-    proc->in.internal_close_cb = on_proc_stream_close;
+    stream_set_internal_data(&proc->in, proc);
+    stream_set_internal_close_cb(&proc->in, on_proc_stream_close);
     proc_incref(proc);
   }
 
   if (out) {
     stream_init(NULL, &proc->out.s, -1, (uv_stream_t *)&proc->out.s.uv.pipe);
-    proc->out.s.internal_data = proc;
-    proc->out.s.internal_close_cb = on_proc_stream_close;
+    stream_set_internal_data(&proc->out.s, proc);
+    stream_set_internal_close_cb(&proc->out.s, on_proc_stream_close);
     proc_incref(proc);
   }
 
   if (err) {
     stream_init(NULL, &proc->err.s, -1, (uv_stream_t *)&proc->err.s.uv.pipe);
-    proc->err.s.internal_data = proc;
-    proc->err.s.internal_close_cb = on_proc_stream_close;
+    stream_set_internal_data(&proc->err.s, proc);
+    stream_set_internal_close_cb(&proc->err.s, on_proc_stream_close);
     proc_incref(proc);
   }
 
