@@ -13,45 +13,41 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 4.11 - 404 rs_* Functions, 58 Event Loop)
+## Current Status (Phase 4.12 - Proc Field Accessors Complete)
 
-**404 Rust functions exported across 35 Rust crates:**
+**55 event loop rs_* functions in nvim-event crate:**
 
-- nvim-math, nvim-charset, nvim-path, nvim-strings, nvim-mbyte
-- nvim-memutil, nvim-os, nvim-collections, nvim-encoding
-- nvim-utf8proc, nvim-arabic, nvim-grid, nvim-ops, nvim-register
-- nvim-spell, nvim-eval, nvim-ex_docmd, nvim-indent, nvim-keycodes
-- nvim-profile, nvim-menu, nvim-help, nvim-cmdhist, nvim-fileio
-- nvim-version, nvim-window, nvim-buffer, nvim-mark, nvim-ascii
-- nvim-search, nvim-api, **nvim-event** (58 functions)
+All Proc struct fields now have complete accessor coverage with USE_RUST_EVENT macros:
+
+**Proc Field Accessors (Phase 4.12):**
+- proc_get_status / proc_set_status - process exit status
+- proc_get_pid / proc_set_pid - process ID
+- proc_get_refcount / proc_incref / proc_decref - reference counting
+- proc_get_type - process type (kProcTypeUv/kProcTypePty)
+- proc_is_closed / proc_set_closed - closed state
+- proc_get_detach / proc_set_detach - detach flag
+- proc_get_events / proc_set_events - event queue
+- proc_get_loop - Loop handle
+- proc_get_stopped_time - stopped time
+
+**Files with USE_RUST_EVENT wired:**
+- proc.c: All proc field accesses via macros
+- libuv_proc.c: proc_set_status, proc_get_detach, proc_get_loop, proc_set_pid
+- pty_proc_unix.c: proc_set_status, proc_get_loop, proc_get_pid, proc_set_pid
+- pty_proc_win.c: proc_set_status, proc_get_loop, proc_set_pid, rstream macros
+- channel.c: proc_get_status, proc_get_type, proc_set_detach, proc_set_events
+- shell.c: proc_set_events
 
 **Build system:**
-
 - Cargo workspace at `src/nvim-rs/`
 - CMake integration via USE_RUST_* flags (all enabled)
 - cbindgen generates C headers from Rust
-- 404 rs_* symbols exported
-- 45+ USE_RUST_* defines active across C files (including USE_RUST_EVENT)
+- USE_RUST_EVENT active in 18+ C files with 50+ macro locations
 
-**Recent Progress (Phase 4.11):**
-- Added proc_set_status macro for write access to Proc status field:
-  - proc.c: proc_set_status wrapper for status writes
-  - libuv_proc.c: proc_set_status in exit_cb
-  - pty_proc_unix.c: proc_set_status in chld_handler
-  - pty_proc_win.c: proc_set_status in pty_proc_finish
-- Added proc_get_type macro for proc type field access:
-  - proc.c: all proc->type reads converted to proc_get_type(proc)
-  - channel.c: proc->type reads converted
-- Added rs_proc_get_loop, rs_proc_get_type wrappers
-- Wired rstream accessors in pty_proc_win.c (rstream_is_closed, rstream_did_eof)
-- All Proc fields now accessible via Rust macros for both reads AND writes
-- USE_RUST_EVENT active in 18+ C files with 40+ macro locations
-
-**Phase 4 Summary:**
-- 53 event loop Rust functions covering all major event types
-- Opaque handles: LoopHandle, MultiQueueHandle, TimeWatcherHandle, ProcHandle,
-  StreamHandle, RStreamHandle, SignalWatcherHandle, SocketWatcherHandle
-- All tests passing: timer (18), channels (14), job (61 pass, 1 known flaky)
+**Tests passing:**
+- Timer tests: 18 pass
+- Channel tests: 14 pass
+- Job tests: 61 pass, 1 skip, 1 known flaky (#25086)
 
 **Earlier Progress (Phase 3.52-3.68):**
 - Phase 3.52-3.68: Multiple phases completing simple function migration
