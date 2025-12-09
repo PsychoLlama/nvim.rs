@@ -50,6 +50,12 @@ static int cursorhold_tb_change_cnt = 0;  ///< tb_change_cnt when waiting starte
 extern bool rs_os_isatty(int fd);
 #endif
 
+#ifdef USE_RUST_EVENT
+// Rust implementation in nvim-event crate
+extern int rs_multiqueue_empty(MultiQueue *mq);
+#define multiqueue_empty(mq) rs_multiqueue_empty(mq)
+#endif
+
 void input_start(void)
 {
   if (!read_stream.s.closed) {
