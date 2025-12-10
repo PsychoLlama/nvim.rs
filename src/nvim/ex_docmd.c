@@ -117,6 +117,7 @@ extern int rs_ends_excmd(int c);
 extern const char *rs_find_nextcmd(const char *p);
 extern const char *rs_check_nextcmd(const char *p);
 extern int rs_is_loclist_cmd(int cmdidx, int cmd_size);
+extern int rs_get_pressedreturn(void);
 #endif
 
 #ifdef USE_RUST_EVENT
@@ -7941,12 +7942,22 @@ bool is_loclist_cmd(int cmdidx)
 bool get_pressedreturn(void)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_EX_DOCMD
+  return rs_get_pressedreturn() != 0;
+#else
   return ex_pressedreturn;
+#endif
 }
 
 void set_pressedreturn(bool val)
 {
   ex_pressedreturn = val;
+}
+
+// C accessor for Rust to read ex_pressedreturn
+int nvim_get_ex_pressedreturn(void)
+{
+  return ex_pressedreturn ? 1 : 0;
 }
 
 /// ":checkhealth [plugins]"

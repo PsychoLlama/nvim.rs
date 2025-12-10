@@ -7,9 +7,10 @@
 use std::ffi::{c_char, c_int};
 use std::ptr;
 
-// FFI declaration for C helper function
+// FFI declarations for C helper functions
 extern "C" {
     fn cmdname_first_char(cmdidx: c_int) -> c_int;
+    fn nvim_get_ex_pressedreturn() -> c_int;
 }
 
 /// Check if character ends an Ex command.
@@ -154,6 +155,18 @@ pub fn is_loclist_cmd(cmdidx: i32, cmd_size: i32) -> bool {
 #[no_mangle]
 pub extern "C" fn rs_is_loclist_cmd(cmdidx: c_int, cmd_size: c_int) -> c_int {
     c_int::from(is_loclist_cmd(cmdidx, cmd_size))
+}
+
+/// Get the current value of ex_pressedreturn.
+///
+/// Returns true if the user pressed Enter on an empty command line.
+///
+/// # Safety
+///
+/// Calls external C function to access static variable.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_pressedreturn() -> c_int {
+    nvim_get_ex_pressedreturn()
 }
 
 #[cfg(test)]
