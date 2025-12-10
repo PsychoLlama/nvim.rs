@@ -73,6 +73,8 @@ extern MultiQueue *rs_loop_get_events(Loop *loop);
 
 #ifdef USE_RUST_AUTOCMD
 extern int rs_is_autocmd_blocked(void);
+extern size_t rs_aucmd_pattern_length(const char *pat);
+extern const char *rs_aucmd_next_pattern(const char *pat, size_t patlen);
 #endif
 
 static const char e_autocommand_nesting_too_deep[]
@@ -1110,6 +1112,13 @@ int autocmd_register(int64_t id, event_T event, const char *pat, int patlen, int
   return OK;
 }
 
+#ifdef USE_RUST_AUTOCMD
+size_t aucmd_pattern_length(const char *pat)
+  FUNC_ATTR_PURE
+{
+  return rs_aucmd_pattern_length(pat);
+}
+#else
 size_t aucmd_pattern_length(const char *pat)
   FUNC_ATTR_PURE
 {
@@ -1141,7 +1150,15 @@ size_t aucmd_pattern_length(const char *pat)
 
   return strlen(pat);
 }
+#endif
 
+#ifdef USE_RUST_AUTOCMD
+const char *aucmd_next_pattern(const char *pat, size_t patlen)
+  FUNC_ATTR_PURE
+{
+  return rs_aucmd_next_pattern(pat, patlen);
+}
+#else
 const char *aucmd_next_pattern(const char *pat, size_t patlen)
   FUNC_ATTR_PURE
 {
@@ -1151,6 +1168,7 @@ const char *aucmd_next_pattern(const char *pat, size_t patlen)
   }
   return pat;
 }
+#endif
 
 /// Implementation of ":doautocmd [group] event [fname]".
 /// Return OK for success, FAIL for failure;
