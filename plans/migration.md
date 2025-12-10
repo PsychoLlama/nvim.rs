@@ -12,7 +12,7 @@ Working on migrating pure functions that access static variables via C accessors
 
 **Pattern**: For functions that read static/global state, create a C accessor function (e.g., `nvim_get_foo()`) that Rust can call via FFI.
 
-**Last completed**: Phase 5.18 - diff_internal() (diff crate, uses diffexpr option accessor)
+**Last completed**: Phase 5.19 - hooked up rs_mpack_uint64, rs_mpack_integer, rs_mpack_float8
 
 ---
 
@@ -108,7 +108,7 @@ extern "C" { fn nvim_get_foo_field() -> c_int; }
 | 2 | OS & data structures (garray, hashtab, fs) | ✅ |
 | 3 | Complex struct FFI (window, buffer, frame handles) | ✅ |
 | 4 | Event loop accessors (watchers, streams, loop fields) | ✅ |
-| 5.1-5.18 | Static variable accessor pattern | ✅ |
+| 5.1-5.19 | Static variable accessor pattern | ✅ |
 
 ### Phase 5 Complete
 
