@@ -27,6 +27,10 @@
 
 #include "context.c.generated.h"
 
+#ifdef USE_RUST_CONTEXT
+extern size_t rs_ctx_size(void);
+#endif
+
 int kCtxAll = (kCtxRegs | kCtxJumps | kCtxBufs | kCtxGVars | kCtxSFuncs
                | kCtxFuncs);
 
@@ -45,7 +49,11 @@ void ctx_free_all(void)
 size_t ctx_size(void)
   FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_CONTEXT
+  return rs_ctx_size();
+#else
   return kv_size(ctx_stack);
+#endif
 }
 
 /// Returns pointer to Context object with given zero-based index from the top
@@ -322,4 +330,11 @@ int ctx_from_dict(Dict dict, Context *ctx, Error *err)
   }
 
   return types;
+}
+
+// Rust FFI accessor functions
+
+size_t nvim_get_ctx_stack_size(void)
+{
+  return kv_size(ctx_stack);
 }

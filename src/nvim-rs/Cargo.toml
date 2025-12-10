@@ -25,6 +25,7 @@ nvim-cursor-shape = { path = "cursor_shape" }
 nvim-diff = { path = "diff" }
 nvim-eval = { path = "eval" }
 nvim-collections = { path = "collections" }
+nvim-context = { path = "context" }
 nvim-encoding = { path = "encoding" }
 nvim-event = { path = "event" }
 nvim-ex-docmd = { path = "ex_docmd" }
