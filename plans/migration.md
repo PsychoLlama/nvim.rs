@@ -2,7 +2,7 @@
 
 ## Current Status
 
-**561 rs_* functions migrated** (as of 2025-12-09)
+**562 rs_* functions migrated** (as of 2025-12-10)
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
@@ -12,7 +12,7 @@ Working on migrating pure functions that access static variables via C accessors
 
 **Pattern**: For functions that read static/global state, create a C accessor function (e.g., `nvim_get_foo()`) that Rust can call via FFI.
 
-**Last completed**: Phase 5.19 - hooked up rs_mpack_uint64, rs_mpack_integer, rs_mpack_float8
+**Last completed**: Phase 5.20 - migrated cursor_get_mode_idx with global state accessors
 
 ---
 
@@ -108,11 +108,11 @@ extern "C" { fn nvim_get_foo_field() -> c_int; }
 | 2 | OS & data structures (garray, hashtab, fs) | ✅ |
 | 3 | Complex struct FFI (window, buffer, frame handles) | ✅ |
 | 4 | Event loop accessors (watchers, streams, loop fields) | ✅ |
-| 5.1-5.19 | Static variable accessor pattern | ✅ |
+| 5.1-5.20 | Static variable accessor pattern | ✅ |
 
 ### Phase 5 Complete
 
-**Phase 5** (static variable accessor pattern) is complete with 561 functions migrated.
+**Phase 5** (static variable accessor pattern) is complete with 562 functions migrated.
 
 All simple `FUNC_ATTR_PURE`/`FUNC_ATTR_CONST` functions are done. Remaining candidates either:
 - Are `static` (internal only, not externally visible)
