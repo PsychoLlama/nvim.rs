@@ -11,6 +11,10 @@ use std::os::raw::c_int;
 /// Profile time type (nanoseconds since some epoch)
 pub type Proftime = u64;
 
+extern "C" {
+    fn nvim_get_prof_wait_time() -> Proftime;
+}
+
 /// Returns the zero time.
 #[no_mangle]
 pub extern "C" fn rs_profile_zero() -> Proftime {
@@ -102,6 +106,29 @@ pub extern "C" fn rs_profile_cmp(tm1: Proftime, tm2: Proftime) -> c_int {
     } else {
         1
     }
+}
+
+/// Gets the current waittime.
+///
+/// # Safety
+///
+/// Calls external C function to access static variable.
+#[no_mangle]
+pub unsafe extern "C" fn rs_profile_get_wait() -> Proftime {
+    nvim_get_prof_wait_time()
+}
+
+/// Subtracts the passed waittime since `tm`.
+///
+/// Returns `tma` - (waittime - `tm`)
+///
+/// # Safety
+///
+/// Calls external C function to access static variable.
+#[no_mangle]
+pub unsafe extern "C" fn rs_profile_sub_wait(tm: Proftime, tma: Proftime) -> Proftime {
+    let tm3 = rs_profile_sub(nvim_get_prof_wait_time(), tm);
+    rs_profile_sub(tma, tm3)
 }
 
 #[cfg(test)]

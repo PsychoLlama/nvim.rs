@@ -45,6 +45,8 @@ extern proftime_T rs_profile_self(proftime_T self, proftime_T total, proftime_T 
 extern bool rs_profile_equal(proftime_T tm1, proftime_T tm2);
 extern int64_t rs_profile_signed(proftime_T tm);
 extern int rs_profile_cmp(proftime_T tm1, proftime_T tm2);
+extern proftime_T rs_profile_get_wait(void);
+extern proftime_T rs_profile_sub_wait(proftime_T tm, proftime_T tma);
 #endif
 
 /// Struct used in sn_prl_ga for every line of a script.
@@ -203,7 +205,11 @@ proftime_T profile_self(proftime_T self, proftime_T total, proftime_T children)
 /// @return the current waittime
 static proftime_T profile_get_wait(void) FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_PROFILE
+  return rs_profile_get_wait();
+#else
   return prof_wait_time;
+#endif
 }
 
 /// Sets the current waittime.
@@ -217,8 +223,12 @@ void profile_set_wait(proftime_T wait)
 /// @return `tma` - (waittime - `tm`)
 proftime_T profile_sub_wait(proftime_T tm, proftime_T tma) FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_PROFILE
+  return rs_profile_sub_wait(tm, tma);
+#else
   proftime_T tm3 = profile_sub(profile_get_wait(), tm);
   return profile_sub(tma, tm3);
+#endif
 }
 
 /// Checks if time `tm1` is equal to `tm2`.
@@ -1027,4 +1037,10 @@ void time_finish(void)
   time_fd = NULL;
 
   XFREE_CLEAR(startuptime_buf);
+}
+
+// C accessor for Rust to read prof_wait_time
+proftime_T nvim_get_prof_wait_time(void)
+{
+  return prof_wait_time;
 }
