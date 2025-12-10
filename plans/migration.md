@@ -2,7 +2,7 @@
 
 ## Current Status
 
-**549 rs_* functions migrated** (as of 2025-12-09)
+**558 rs_* functions migrated** (as of 2025-12-09)
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
@@ -12,7 +12,7 @@ Working on migrating pure functions that access static variables via C accessors
 
 **Pattern**: For functions that read static/global state, create a C accessor function (e.g., `nvim_get_foo()`) that Rust can call via FFI.
 
-**Last completed**: Phase 5.13 - nvim-cmdline crate (cmdline_overstrike, cmdline_at_end)
+**Last completed**: Phase 5.16 - nvim-context crate (ctx_size)
 
 ---
 
@@ -33,6 +33,8 @@ All Rust code lives in `src/nvim-rs/`. The main crate re-exports all FFI functio
 | nvim-cmdline | Command line | overstrike, at_end |
 | nvim-cmdhist | Command history | hist_char2type |
 | nvim-collections | Data structures | garray, hashtab, queue |
+| nvim-context | Context stack | ctx_size |
+| nvim-cursor-shape | Cursor shapes | cursor_is_block_during_visual, cursor_mode_uses_syn_id |
 | nvim-diff | Diff options | diffopt_* flags |
 | nvim-encoding | Base64, SHA256 | encode/decode |
 | nvim-eval | Eval helpers | num_divide, num_modulus |
@@ -40,6 +42,7 @@ All Rust code lives in `src/nvim-rs/`. The main crate re-exports all FFI functio
 | nvim-ex-docmd | Ex commands | ends_excmd, find_nextcmd, is_loclist_cmd |
 | nvim-ex-eval | Exception handling | aborted_in_try |
 | nvim-fileio | File I/O | time_differs |
+| nvim-getchar | Typeahead buffer | stuff_empty, typebuf_*, using_script |
 | nvim-grid | Screen grid | schar operations |
 | nvim-help | Help system | help tag lookup |
 | nvim-indent | Indentation | tabstop calculations |
