@@ -2,7 +2,7 @@
 
 ## Current Status
 
-**558 rs_* functions migrated** (as of 2025-12-09)
+**560 rs_* functions migrated** (as of 2025-12-09)
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
@@ -12,7 +12,7 @@ Working on migrating pure functions that access static variables via C accessors
 
 **Pattern**: For functions that read static/global state, create a C accessor function (e.g., `nvim_get_foo()`) that Rust can call via FFI.
 
-**Last completed**: Phase 5.16 - nvim-context crate (ctx_size)
+**Last completed**: Phase 5.17 - nvim-version crate (min_vim_version, highest_patch)
 
 ---
 
@@ -108,15 +108,19 @@ extern "C" { fn nvim_get_foo_field() -> c_int; }
 | 2 | OS & data structures (garray, hashtab, fs) | ✅ |
 | 3 | Complex struct FFI (window, buffer, frame handles) | ✅ |
 | 4 | Event loop accessors (watchers, streams, loop fields) | ✅ |
-| 5.1-5.13 | Static variable accessor pattern | ✅ |
+| 5.1-5.17 | Static variable accessor pattern | ✅ |
 
 ### In Progress
 
 **Phase 5+**: Continue migrating pure functions using accessor pattern.
 
-Most simple `FUNC_ATTR_PURE`/`FUNC_ATTR_CONST` functions are done. Remaining candidates:
-- Functions accessing complex global arrays (shape_table, breakat_flags)
-- Functions with complex struct internals (typval_T)
+Most simple `FUNC_ATTR_PURE`/`FUNC_ATTR_CONST` functions are done. Remaining functions either:
+- Are `static` (internal only, not externally visible)
+- Access complex structs (typval_T, win_T, buf_T) that require extensive FFI
+- Access generated arrays (event_names) that would need duplication
+- Access multiple global variables with complex interdependencies
+
+Next focus should be Phase 6 (MessagePack) or deeper integration work.
 
 ### Future Phases (Roadmap)
 
