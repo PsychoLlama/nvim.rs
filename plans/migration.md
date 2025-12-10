@@ -13,9 +13,28 @@ Incremental migration of Neovim's ~257,000 lines of C to Rust, prioritizing a wo
 
 ---
 
-## Current Status (Phase 5.9 - Exception Handling)
+## Current Status (Phase 5.12 - Continued Pure Function Migration)
 
-**Total: 542 rs_* functions migrated to Rust**
+**Total: 546 rs_* functions migrated to Rust**
+
+**Phase 5.12 In Progress - Finding More Pure Functions**
+
+Most simple FUNC_ATTR_PURE/FUNC_ATTR_CONST functions have been migrated.
+Remaining candidates access complex data structures (linked lists, arrays, global structs).
+Next phase will focus on more complex accessors or move to different patterns.
+
+**Phase 5.11 Complete ✅ - profile_get_wait/profile_sub_wait**
+
+Added 2 new functions to nvim-profile crate:
+- rs_profile_get_wait() - get current waittime
+- rs_profile_sub_wait() - subtract waittime since a time point
+Uses nvim_get_prof_wait_time() accessor.
+
+**Phase 5.10 Complete ✅ - nlua_is_deferred_safe**
+
+Created nvim-lua crate with rs_nlua_is_deferred_safe() function.
+Uses nvim_get_in_fast_callback() accessor to check if deferred is safe.
+Tests: 38 luaeval tests pass
 
 **Phase 5.9 Complete ✅ - aborted_in_try Migrated**
 
