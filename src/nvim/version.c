@@ -67,6 +67,8 @@ int nvim_get_version_patch(void)
 
 #ifdef USE_RUST_VERSION
 extern bool rs_has_nvim_version(const char *version_str);
+extern int rs_min_vim_version(void);
+extern int rs_highest_patch(void);
 #endif
 // Reproducible builds: omit compile info in Release builds. #15424
 #ifndef NDEBUG
@@ -4330,14 +4332,22 @@ bool has_nvim_version(const char *const version_str)
 int min_vim_version(void)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_VERSION
+  return rs_min_vim_version();
+#else
   return vim_versions[0];
+#endif
 }
 
 int highest_patch(void)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_VERSION
+  return rs_highest_patch();
+#else
   // this relies on the highest patch number to be the first entry
   return included_patchsets[0][0];
+#endif
 }
 
 /// Checks whether a Vim patch has been included.
@@ -4690,4 +4700,16 @@ void ex_intro(exarg_T *eap)
   screenclear();
   intro_message(true);
   wait_return(true);
+}
+
+// Rust FFI accessor functions
+
+int nvim_get_min_vim_version(void)
+{
+  return vim_versions[0];
+}
+
+int nvim_get_highest_patch(void)
+{
+  return included_patchsets[0][0];
 }

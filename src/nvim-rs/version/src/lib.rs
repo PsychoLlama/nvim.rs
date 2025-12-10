@@ -15,6 +15,10 @@ extern "C" {
     fn nvim_get_version_minor() -> c_int;
     /// Get the patch version number
     fn nvim_get_version_patch() -> c_int;
+    /// Get the minimum supported Vim version (e.g., 801 for 8.01)
+    fn nvim_get_min_vim_version() -> c_int;
+    /// Get the highest patch number for the minimum Vim version
+    fn nvim_get_highest_patch() -> c_int;
 }
 
 /// Get the current Neovim version as (major, minor, patch)
@@ -132,7 +136,7 @@ pub fn has_nvim_version(version_str: &[u8]) -> bool {
             && (req_minor < cur_minor || (req_minor == cur_minor && req_patch <= cur_patch)))
 }
 
-/// FFI wrapper for has_nvim_version
+/// FFI wrapper for `has_nvim_version`.
 ///
 /// # Safety
 /// - `version_str` must be a valid null-terminated C string
@@ -148,8 +152,32 @@ pub unsafe extern "C" fn rs_has_nvim_version(version_str: *const c_char) -> c_in
         len += 1;
     }
 
-    let slice = std::slice::from_raw_parts(version_str as *const u8, len);
+    let slice = std::slice::from_raw_parts(version_str.cast::<u8>(), len);
     c_int::from(has_nvim_version(slice))
+}
+
+/// Returns the minimum supported Vim version.
+///
+/// This is `vim_versions[0]`, e.g., 801 for Vim 8.01.
+///
+/// # Safety
+///
+/// Calls external C function to access static array.
+#[no_mangle]
+pub unsafe extern "C" fn rs_min_vim_version() -> c_int {
+    nvim_get_min_vim_version()
+}
+
+/// Returns the highest patch number for the minimum Vim version.
+///
+/// This is `included_patchsets[0][0]`, the first entry in the patchset array.
+///
+/// # Safety
+///
+/// Calls external C function to access static array.
+#[no_mangle]
+pub unsafe extern "C" fn rs_highest_patch() -> c_int {
+    nvim_get_highest_patch()
 }
 
 #[cfg(test)]
