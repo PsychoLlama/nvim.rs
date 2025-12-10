@@ -10,6 +10,7 @@ members = [
     "src/nvim-rs/charset",
     "src/nvim-rs/cmdline",
     "src/nvim-rs/cmdhist",
+    "src/nvim-rs/cursor_shape",
     "src/nvim-rs/collections",
     "src/nvim-rs/diff",
     "src/nvim-rs/encoding",

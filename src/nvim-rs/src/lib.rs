@@ -21,6 +21,7 @@ pub use nvim_buffer::*;
 pub use nvim_charset::*;
 pub use nvim_cmdline::*;
 pub use nvim_cmdhist::*;
+pub use nvim_cursor_shape::*;
 pub use nvim_collections::garray::*;
 pub use nvim_collections::hashtab::*;
 pub use nvim_collections::queue::*;

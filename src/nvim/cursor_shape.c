@@ -20,6 +20,11 @@
 
 #include "cursor_shape.c.generated.h"
 
+#ifdef USE_RUST_CURSOR_SHAPE
+extern int rs_cursor_is_block_during_visual(int exclusive);
+extern int rs_cursor_mode_uses_syn_id(int syn_id);
+#endif
+
 static const char e_digit_expected[] = N_("E548: Digit expected");
 
 /// Handling of cursor and mouse pointer shapes in various modes.
@@ -278,9 +283,13 @@ const char *parse_shape_opt(int what)
 bool cursor_is_block_during_visual(bool exclusive)
   FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_CURSOR_SHAPE
+  return rs_cursor_is_block_during_visual(exclusive ? 1 : 0) != 0;
+#else
   int mode_idx = exclusive ? SHAPE_IDX_VE : SHAPE_IDX_V;
   return (SHAPE_BLOCK == shape_table[mode_idx].shape
           && 0 == shape_table[mode_idx].blinkon);
+#endif
 }
 
 /// Map cursor mode from string to integer
@@ -302,6 +311,9 @@ int cursor_mode_str2int(const char *mode)
 bool cursor_mode_uses_syn_id(int syn_id)
   FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_CURSOR_SHAPE
+  return rs_cursor_mode_uses_syn_id(syn_id) != 0;
+#else
   if (*p_guicursor == NUL) {
     return false;
   }
@@ -312,6 +324,7 @@ bool cursor_mode_uses_syn_id(int syn_id)
     }
   }
   return false;
+#endif
 }
 
 /// Return the index into shape_table[] for the current mode.
@@ -360,4 +373,31 @@ static void clear_shape_table(void)
     shape_table[idx].id = 0;
     shape_table[idx].id_lm = 0;
   }
+}
+
+// Rust FFI accessor functions for shape_table
+
+int nvim_get_shape_table_shape(int idx)
+{
+  return (int)shape_table[idx].shape;
+}
+
+int nvim_get_shape_table_blinkon(int idx)
+{
+  return shape_table[idx].blinkon;
+}
+
+int nvim_get_shape_table_id(int idx)
+{
+  return shape_table[idx].id;
+}
+
+int nvim_get_shape_table_id_lm(int idx)
+{
+  return shape_table[idx].id_lm;
+}
+
+int nvim_is_guicursor_empty(void)
+{
+  return *p_guicursor == NUL ? 1 : 0;
 }
