@@ -108,19 +108,24 @@ extern "C" { fn nvim_get_foo_field() -> c_int; }
 | 2 | OS & data structures (garray, hashtab, fs) | ✅ |
 | 3 | Complex struct FFI (window, buffer, frame handles) | ✅ |
 | 4 | Event loop accessors (watchers, streams, loop fields) | ✅ |
-| 5.1-5.17 | Static variable accessor pattern | ✅ |
+| 5.1-5.18 | Static variable accessor pattern | ✅ |
 
-### In Progress
+### Phase 5 Complete
 
-**Phase 5+**: Continue migrating pure functions using accessor pattern.
+**Phase 5** (static variable accessor pattern) is complete with 561 functions migrated.
 
-Most simple `FUNC_ATTR_PURE`/`FUNC_ATTR_CONST` functions are done. Remaining functions either:
+All simple `FUNC_ATTR_PURE`/`FUNC_ATTR_CONST` functions are done. Remaining candidates either:
 - Are `static` (internal only, not externally visible)
-- Access complex structs (typval_T, win_T, buf_T) that require extensive FFI
-- Access generated arrays (event_names) that would need duplication
-- Access multiple global variables with complex interdependencies
+- Access complex structs (typval_T, win_T, buf_T) requiring extensive FFI
+- Access generated arrays (event_names, cmdidx values)
+- Iterate over global window/buffer lists
+- Access multiple interdependent globals
 
-Next focus should be Phase 6 (MessagePack) or deeper integration work.
+### Next Phase
+
+**Phase 6 (MessagePack)**: The msgpack packer is already migrated. The unpacker (`unpacker.c`) uses mpack library callbacks and is more complex.
+
+Alternative: Focus on deeper integration work or expand existing crates with non-pure functions that are still amenable to FFI.
 
 ### Future Phases (Roadmap)
 
