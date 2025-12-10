@@ -24,6 +24,9 @@ extern void rs_mpack_bin(const char *data, size_t len, PackerBuffer *packer);
 extern void rs_mpack_ext(const char *buf, size_t len, int8_t type, PackerBuffer *packer);
 extern void rs_mpack_handle(int object_type, int handle, PackerBuffer *packer);
 extern size_t rs_mpack_remaining(PackerBuffer *packer);
+extern void rs_mpack_uint64(uint8_t **ptr, uint64_t val);
+extern void rs_mpack_integer(uint8_t **ptr, int64_t val);
+extern void rs_mpack_float8(uint8_t **ptr, double val);
 #endif
 
 #ifdef USE_RUST_MSGPACK
@@ -40,6 +43,7 @@ void mpack_check_buffer(PackerBuffer *packer)
 }
 #endif
 
+#ifndef USE_RUST_MSGPACK
 static void mpack_w8(char **b, const char *data)
 {
 #ifdef ORDER_BIG_ENDIAN
@@ -51,7 +55,14 @@ static void mpack_w8(char **b, const char *data)
   }
 #endif
 }
+#endif
 
+#ifdef USE_RUST_MSGPACK
+void mpack_uint64(char **ptr, uint64_t i)
+{
+  rs_mpack_uint64((uint8_t **)ptr, i);
+}
+#else
 void mpack_uint64(char **ptr, uint64_t i)
 {
   if (i > 0xfffffff) {
@@ -61,7 +72,14 @@ void mpack_uint64(char **ptr, uint64_t i)
     mpack_uint(ptr, (uint32_t)i);
   }
 }
+#endif
 
+#ifdef USE_RUST_MSGPACK
+void mpack_integer(char **ptr, Integer i)
+{
+  rs_mpack_integer((uint8_t **)ptr, i);
+}
+#else
 void mpack_integer(char **ptr, Integer i)
 {
   if (i >= 0) {
@@ -84,12 +102,20 @@ void mpack_integer(char **ptr, Integer i)
     }
   }
 }
+#endif
 
+#ifdef USE_RUST_MSGPACK
+void mpack_float8(char **ptr, double i)
+{
+  rs_mpack_float8((uint8_t **)ptr, i);
+}
+#else
 void mpack_float8(char **ptr, double i)
 {
   mpack_w(ptr, 0xcb);
   mpack_w8(ptr, (char *)&i);
 }
+#endif
 
 #ifdef USE_RUST_MSGPACK
 void mpack_str(String str, PackerBuffer *packer)
