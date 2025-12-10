@@ -37,6 +37,7 @@ pub use nvim_help::*;
 pub use nvim_indent::*;
 pub use nvim_insexpand::*;
 pub use nvim_keycodes::*;
+pub use nvim_lua::*;
 pub use nvim_mark::*;
 pub use nvim_math::*;
 pub use nvim_mbyte::*;

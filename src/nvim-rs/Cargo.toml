@@ -33,6 +33,7 @@ nvim-help = { path = "help" }
 nvim-insexpand = { path = "insexpand" }
 nvim-indent = { path = "indent" }
 nvim-keycodes = { path = "keycodes" }
+nvim-lua = { path = "lua" }
 nvim-mark = { path = "mark" }
 nvim-math = { path = "math" }
 nvim-mbyte = { path = "mbyte" }

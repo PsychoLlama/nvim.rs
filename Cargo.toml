@@ -21,6 +21,7 @@ members = [
     "src/nvim-rs/indent",
     "src/nvim-rs/insexpand",
     "src/nvim-rs/keycodes",
+    "src/nvim-rs/lua",
     "src/nvim-rs/mark",
     "src/nvim-rs/math",
     "src/nvim-rs/mbyte",
