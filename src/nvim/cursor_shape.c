@@ -23,6 +23,7 @@
 #ifdef USE_RUST_CURSOR_SHAPE
 extern int rs_cursor_is_block_during_visual(int exclusive);
 extern int rs_cursor_mode_uses_syn_id(int syn_id);
+extern int rs_cursor_get_mode_idx(void);
 #endif
 
 static const char e_digit_expected[] = N_("E548: Digit expected");
@@ -328,6 +329,13 @@ bool cursor_mode_uses_syn_id(int syn_id)
 }
 
 /// Return the index into shape_table[] for the current mode.
+#ifdef USE_RUST_CURSOR_SHAPE
+int cursor_get_mode_idx(void)
+  FUNC_ATTR_PURE
+{
+  return rs_cursor_get_mode_idx();
+}
+#else
 int cursor_get_mode_idx(void)
   FUNC_ATTR_PURE
 {
@@ -361,6 +369,7 @@ int cursor_get_mode_idx(void)
     return SHAPE_IDX_N;
   }
 }
+#endif
 
 /// Clears all entries in shape_table to block, blinkon0, and default color.
 static void clear_shape_table(void)
@@ -400,4 +409,26 @@ int nvim_get_shape_table_id_lm(int idx)
 int nvim_is_guicursor_empty(void)
 {
   return *p_guicursor == NUL ? 1 : 0;
+}
+
+// Additional accessors for cursor_get_mode_idx
+
+int nvim_get_state(void)
+{
+  return State;
+}
+
+int nvim_get_finish_op(void)
+{
+  return finish_op ? 1 : 0;
+}
+
+int nvim_get_visual_active(void)
+{
+  return VIsual_active ? 1 : 0;
+}
+
+char nvim_get_p_sel_first(void)
+{
+  return *p_sel;
 }
