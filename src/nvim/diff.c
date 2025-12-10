@@ -75,6 +75,7 @@ extern int rs_diffopt_horizontal(void);
 extern int rs_diffopt_hiddenoff(void);
 extern int rs_diffopt_closeoff(void);
 extern int rs_diffopt_filler(void);
+extern int rs_diff_internal(void);
 #endif
 
 static bool diff_busy = false;         // using diff structs, don't change them
@@ -1046,11 +1047,19 @@ theend:
 /// Return true if the options are set to use the internal diff library.
 /// Note that if the internal diff failed for one of the buffers, the external
 /// diff will be used anyway.
+#ifdef USE_RUST_DIFF
+int diff_internal(void)
+  FUNC_ATTR_PURE
+{
+  return rs_diff_internal();
+}
+#else
 int diff_internal(void)
   FUNC_ATTR_PURE
 {
   return (diff_flags & DIFF_INTERNAL) != 0 && *p_dex == NUL;
 }
+#endif
 
 /// Completely update the diffs for the buffers involved.
 ///
@@ -4370,4 +4379,10 @@ void f_diff_hlID(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 int nvim_get_diff_flags(void)
 {
   return diff_flags;
+}
+
+/// Returns true if the 'diffexpr' option (p_dex) is empty (used by Rust FFI).
+bool nvim_is_diffexpr_empty(void)
+{
+  return *p_dex == NUL;
 }
