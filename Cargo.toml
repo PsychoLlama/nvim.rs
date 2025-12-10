@@ -8,6 +8,7 @@ members = [
     "src/nvim-rs/autocmd",
     "src/nvim-rs/buffer",
     "src/nvim-rs/charset",
+    "src/nvim-rs/cmdline",
     "src/nvim-rs/cmdhist",
     "src/nvim-rs/collections",
     "src/nvim-rs/diff",

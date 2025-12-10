@@ -223,6 +223,11 @@ static int cedit_key = -1;  ///< key value of 'cedit' option
 
 #include "ex_getln.c.generated.h"
 
+#ifdef USE_RUST_CMDLINE
+extern int rs_cmdline_overstrike(void);
+extern int rs_cmdline_at_end(void);
+#endif
+
 static handle_T cmdpreview_bufnr = 0;
 static int cmdpreview_ns = 0;
 
@@ -3188,14 +3193,22 @@ char *getexline(int c, void *cookie, int indent, bool do_concat)
 bool cmdline_overstrike(void)
   FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_CMDLINE
+  return rs_cmdline_overstrike() != 0;
+#else
   return ccline.overstrike;
+#endif
 }
 
 /// Return true if the cursor is at the end of the cmdline.
 bool cmdline_at_end(void)
   FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_CMDLINE
+  return rs_cmdline_at_end() != 0;
+#else
   return (ccline.cmdpos >= ccline.cmdlen);
+#endif
 }
 
 /// Deallocate a command line buffer, updating the buffer size and length.
@@ -5004,4 +5017,20 @@ void f_wildtrigger(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     // Insert it into the typeahead buffer
     ins_typebuf((char *)key_string, REMAP_NONE, 0, true, false);
   }
+}
+
+// C accessors for Rust to read ccline fields
+int nvim_get_ccline_overstrike(void)
+{
+  return ccline.overstrike;
+}
+
+int nvim_get_ccline_cmdpos(void)
+{
+  return ccline.cmdpos;
+}
+
+int nvim_get_ccline_cmdlen(void)
+{
+  return ccline.cmdlen;
 }

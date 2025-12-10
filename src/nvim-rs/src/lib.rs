@@ -19,6 +19,7 @@ pub use nvim_ascii::*;
 pub use nvim_autocmd::*;
 pub use nvim_buffer::*;
 pub use nvim_charset::*;
+pub use nvim_cmdline::*;
 pub use nvim_cmdhist::*;
 pub use nvim_collections::garray::*;
 pub use nvim_collections::hashtab::*;
