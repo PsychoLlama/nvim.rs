@@ -2,7 +2,7 @@
 
 ## Current Status
 
-**583 rs_* functions migrated** (as of 2025-12-11)
+**585 rs_* functions migrated** (as of 2025-12-11)
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
@@ -22,6 +22,8 @@ Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get cur
   - `rs_copy_string`: Copy String with arena support
   - `rs_api_clear_error`: Clear error and free message
   - `rs_error_set`: Check if error is set
+  - `rs_string_to_cstr`: Copy String to NUL-terminated C string
+  - `rs_ga_take_string`: Take garray memory as String
 
 **Phase 6.0 - Rust MessagePack Unpacker** (completed)
 - Implemented pure Rust msgpack unpacker using `rmp` crate
