@@ -425,6 +425,63 @@ pub unsafe extern "C" fn rs_api_clear_error(err: *mut Error) {
     e.err_type = K_ERROR_TYPE_NONE;
 }
 
+// FFI for xstrndup
+extern "C" {
+    fn xstrndup(str: *const c_char, len: usize) -> *mut c_char;
+}
+
+/// Copies a String to an allocated, NUL-terminated C string.
+///
+/// # Safety
+/// `str` must have valid data pointer if size > 0.
+///
+/// # Arguments
+/// * `str` - The String to copy
+///
+/// # Returns
+/// A newly allocated NUL-terminated C string
+#[no_mangle]
+pub unsafe extern "C" fn rs_string_to_cstr(str: NvimString) -> *mut c_char {
+    xstrndup(str.data, str.size)
+}
+
+/// GArray struct matching C definition
+#[repr(C)]
+pub struct GArray {
+    pub ga_data: *mut c_char,
+    pub ga_len: c_int,
+    pub ga_maxlen: c_int,
+    pub ga_itemsize: c_int,
+    pub ga_growsize: c_int,
+}
+
+/// Return the owned memory of a ga as a String.
+/// Reinitializes the ga to a valid empty state.
+///
+/// # Safety
+/// `ga` must be a valid pointer to a garray_T.
+///
+/// # Arguments
+/// * `ga` - The garray to take ownership of
+///
+/// # Returns
+/// A String containing the ga's data
+#[no_mangle]
+pub unsafe extern "C" fn rs_ga_take_string(ga: *mut GArray) -> NvimString {
+    if ga.is_null() {
+        return NvimString::default();
+    }
+    let g = &mut *ga;
+    let str = NvimString {
+        data: g.ga_data,
+        size: g.ga_len as usize,
+    };
+    g.ga_data = ptr::null_mut();
+    g.ga_len = 0;
+    g.ga_maxlen = 0;
+    str
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

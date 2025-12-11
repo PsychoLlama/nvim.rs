@@ -357,7 +357,11 @@ String cstr_to_string(const char *str)
 char *string_to_cstr(String str)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_API
+  return rs_string_to_cstr(str);
+#else
   return xstrndup(str.data, str.size);
+#endif
 }
 
 /// Copies buffer to an allocated String.
@@ -424,11 +428,15 @@ String cstr_as_string(const char *str) FUNC_ATTR_PURE
 /// Reinitializes the ga to a valid empty state.
 String ga_take_string(garray_T *ga)
 {
+#ifdef USE_RUST_API
+  return rs_ga_take_string(ga);
+#else
   String str = { .data = (char *)ga->ga_data, .size = (size_t)ga->ga_len };
   ga->ga_data = NULL;
   ga->ga_len = 0;
   ga->ga_maxlen = 0;
   return str;
+#endif
 }
 
 /// Creates "readfile()-style" ArrayOf(String) from a binary string.

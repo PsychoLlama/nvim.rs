@@ -124,6 +124,8 @@ extern void rs_api_free_string(String value);
 extern bool rs_api_object_to_bool(Object obj, const char *what, bool nil_value, Error *err);
 extern String rs_copy_string(String str, Arena *arena);
 extern void rs_api_clear_error(Error *value);
+extern char *rs_string_to_cstr(String str);
+extern String rs_ga_take_string(garray_T *ga);
 #endif
 
 #define API_CLEAR_STRING(s) \
