@@ -2,7 +2,7 @@
 
 ## Current Status
 
-**565 rs_* functions migrated** (as of 2025-12-11)
+**566 rs_* functions migrated** (as of 2025-12-11)
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
@@ -12,7 +12,7 @@ Working on migrating pure functions that access static variables via C accessors
 
 **Pattern**: For functions that read static/global state, create a C accessor function (e.g., `nvim_get_foo()`) that Rust can call via FFI.
 
-**Last completed**: Phase 5.22 - migrated cmdline_fuzzy_complete (uses nvim_get_wop_flags() accessor)
+**Last completed**: Phase 5.23 - migrated aborting() (uses nvim_get_did_emsg, nvim_get_got_int, nvim_get_did_throw accessors)
 
 ---
 
