@@ -39,6 +39,7 @@
 #ifdef USE_RUST_EX_EVAL
 extern int rs_aborted_in_try(void);
 extern int rs_aborting(void);
+extern int rs_should_abort(int retcode);
 #endif
 
 static const char e_multiple_else[] = N_("E583: Multiple :else");
@@ -141,10 +142,17 @@ void update_force_abort(void)
 /// abort the script processing.  Can be used to suppress an autocommand after
 /// execution of a failing subcommand as long as the error message has not been
 /// displayed and actually caused the abortion.
+#ifdef USE_RUST_EX_EVAL
+bool should_abort(int retcode)
+{
+  return rs_should_abort(retcode) != 0;
+}
+#else
 bool should_abort(int retcode)
 {
   return (retcode == FAIL && trylevel != 0 && !emsg_silent) || aborting();
 }
+#endif
 
 /// @return  true if a function with the "abort" flag should not be considered
 /// ended on an error.  This means that parsing commands is continued in order
@@ -2075,4 +2083,16 @@ int nvim_get_got_int(void)
 int nvim_get_did_throw(void)
 {
   return did_throw ? 1 : 0;
+}
+
+/// C accessor for the global trylevel variable (used by Rust FFI).
+int nvim_get_trylevel(void)
+{
+  return trylevel;
+}
+
+/// C accessor for the global emsg_silent variable (used by Rust FFI).
+int nvim_get_emsg_silent(void)
+{
+  return emsg_silent;
 }
