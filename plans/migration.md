@@ -12,7 +12,10 @@ Working on migrating pure functions that access static variables via C accessors
 
 **Pattern**: For functions that read static/global state, create a C accessor function (e.g., `nvim_get_foo()`) that Rust can call via FFI.
 
-**Last completed**: Phase 5.24 - migrated should_abort() (uses nvim_get_trylevel, nvim_get_emsg_silent accessors)
+**Recent Phases**:
+- Phase 5.22 - `cmdline_fuzzy_complete()` (uses nvim_get_wop_flags accessor)
+- Phase 5.23 - `aborting()` (uses nvim_get_did_emsg, nvim_get_got_int, nvim_get_did_throw accessors)
+- Phase 5.24 - `should_abort()` (uses nvim_get_trylevel, nvim_get_emsg_silent accessors)
 
 ---
 
@@ -108,11 +111,11 @@ extern "C" { fn nvim_get_foo_field() -> c_int; }
 | 2 | OS & data structures (garray, hashtab, fs) | ✅ |
 | 3 | Complex struct FFI (window, buffer, frame handles) | ✅ |
 | 4 | Event loop accessors (watchers, streams, loop fields) | ✅ |
-| 5.1-5.21 | Static variable accessor pattern | ✅ |
+| 5.1-5.24 | Static variable accessor pattern | ✅ |
 
 ### Phase 5 Complete
 
-**Phase 5** (static variable accessor pattern) is complete with 564 functions migrated.
+**Phase 5** (static variable accessor pattern) is complete with 567 functions migrated.
 
 All simple `FUNC_ATTR_PURE`/`FUNC_ATTR_CONST` functions are done. Remaining candidates either:
 - Are `static` (internal only, not externally visible)
