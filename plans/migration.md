@@ -2,11 +2,22 @@
 
 ## Current Status
 
-**570 rs_* functions migrated** (as of 2025-12-11)
+**579 rs_* functions migrated** (as of 2025-12-11)
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
 ### Recent Work (December 2025)
+
+**Phase 7.0 - API Helper Functions** (completed)
+- Added Rust implementations to nvim-api crate:
+  - `rs_api_typename`: Get type name string for ObjectType
+  - `rs_cchar_to_string`: Single char to String
+  - `rs_cstr_to_string`: Copy C string to String
+  - `rs_cstr_as_string`: C string to String (no copy)
+  - `rs_cbuf_to_string`: Copy buffer to String
+  - `rs_cstrn_to_string`: Copy C string with maxsize
+  - `rs_cstrn_as_string`: C string with maxsize (no copy)
+  - `rs_api_free_string`: Free String data
 
 **Phase 6.0 - Rust MessagePack Unpacker** (completed)
 - Implemented pure Rust msgpack unpacker using `rmp` crate
@@ -115,6 +126,7 @@ extern "C" { fn nvim_get_foo_field() -> c_int; }
 | 4 | Event loop accessors (watchers, streams, loop fields) | ✅ |
 | 5.1-5.31 | Static variable accessor pattern | ✅ |
 | 6.0 | MessagePack unpacker (rs_unpack) | ✅ |
+| 7.0 | API helper functions (string, typename) | ✅ |
 
 ### Phase 6 Complete
 

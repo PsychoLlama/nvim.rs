@@ -315,11 +315,15 @@ tabpage_T *find_tab_by_handle(Tabpage tabpage, Error *err)
 ///         empty String is returned
 String cchar_to_string(char c)
 {
+#ifdef USE_RUST_API
+  return rs_cchar_to_string(c);
+#else
   char buf[] = { c, NUL };
   return (String){
     .data = xmemdupz(buf, 1),
     .size = (c != NUL) ? 1 : 0
   };
+#endif
 }
 
 /// Copies a C string into a String (binary safe string, characters + length).
@@ -331,6 +335,9 @@ String cchar_to_string(char c)
 ///         empty String is returned
 String cstr_to_string(const char *str)
 {
+#ifdef USE_RUST_API
+  return rs_cstr_to_string(str);
+#else
   if (str == NULL) {
     return (String)STRING_INIT;
   }
@@ -340,6 +347,7 @@ String cstr_to_string(const char *str)
     .data = xmemdupz(str, len),
     .size = len,
   };
+#endif
 }
 
 /// Copies a String to an allocated, NUL-terminated C string.
@@ -363,22 +371,34 @@ char *string_to_cstr(String str)
 String cbuf_to_string(const char *buf, size_t size)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_API
+  return rs_cbuf_to_string(buf, size);
+#else
   return (String){
     .data = xmemdupz(buf, size),
     .size = size
   };
+#endif
 }
 
 String cstrn_to_string(const char *str, size_t maxsize)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_API
+  return rs_cstrn_to_string(str, maxsize);
+#else
   return cbuf_to_string(str, strnlen(str, maxsize));
+#endif
 }
 
 String cstrn_as_string(char *str, size_t maxsize)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_API
+  return rs_cstrn_as_string(str, maxsize);
+#else
   return cbuf_as_string(str, strnlen(str, maxsize));
+#endif
 }
 
 /// Creates a String using the given C string. Unlike
@@ -389,10 +409,14 @@ String cstrn_as_string(char *str, size_t maxsize)
 ///           str was NULL
 String cstr_as_string(const char *str) FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_API
+  return rs_cstr_as_string(str);
+#else
   if (str == NULL) {
     return (String)STRING_INIT;
   }
   return (String){ .data = (char *)str, .size = strlen(str) };
+#endif
 }
 
 /// Return the owned memory of a ga as a String
@@ -504,7 +528,11 @@ String buf_get_text(buf_T *buf, int64_t lnum, int64_t start_col, int64_t end_col
 
 void api_free_string(String value)
 {
+#ifdef USE_RUST_API
+  rs_api_free_string(value);
+#else
   xfree(value.data);
+#endif
 }
 
 Array arena_array(Arena *arena, size_t max_size)
@@ -741,6 +769,9 @@ int object_to_hl_id(Object obj, const char *what, Error *err)
 
 char *api_typename(ObjectType t)
 {
+#ifdef USE_RUST_API
+  return rs_api_typename((int)t);
+#else
   switch (t) {
   case kObjectTypeNil:
     return "nil";
@@ -766,6 +797,7 @@ char *api_typename(ObjectType t)
     return "Tabpage";
   }
   UNREACHABLE;
+#endif
 }
 
 HlMessage parse_hl_msg(ArrayOf(Tuple(String, *HLGroupID)) chunks, bool is_err, Error *err)
