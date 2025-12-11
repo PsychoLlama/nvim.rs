@@ -4,12 +4,18 @@
 
 #![allow(unsafe_code)]
 
+use std::ffi::c_char;
 use std::os::raw::c_int;
+use std::os::raw::c_uint;
+
+// Flag value from option_vars.generated.h
+const K_OPT_WOP_FLAG_FUZZY: c_uint = 0x01;
 
 extern "C" {
     fn nvim_get_ccline_overstrike() -> c_int;
     fn nvim_get_ccline_cmdpos() -> c_int;
     fn nvim_get_ccline_cmdlen() -> c_int;
+    fn nvim_get_wop_flags() -> c_uint;
 }
 
 /// Check if command line is in overstrike mode.
@@ -32,4 +38,26 @@ pub unsafe extern "C" fn rs_cmdline_overstrike() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_cmdline_at_end() -> c_int {
     c_int::from(nvim_get_ccline_cmdpos() >= nvim_get_ccline_cmdlen())
+}
+
+/// Check if fuzzy completion is enabled and the search string is non-empty.
+///
+/// Returns true if the 'wildoptions' contains "fuzzy" and the string is
+/// not empty.
+///
+/// # Safety
+///
+/// `fuzzystr` must be a valid NUL-terminated C string.
+/// Calls external C function to access the wop_flags global.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cmdline_fuzzy_complete(fuzzystr: *const c_char) -> c_int {
+    if fuzzystr.is_null() {
+        return 0;
+    }
+
+    let flags = nvim_get_wop_flags();
+    let has_fuzzy_flag = (flags & K_OPT_WOP_FLAG_FUZZY) != 0;
+    let is_non_empty = *fuzzystr != 0;
+
+    c_int::from(has_fuzzy_flag && is_non_empty)
 }
