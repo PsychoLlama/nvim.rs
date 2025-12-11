@@ -96,6 +96,71 @@ extern "C" {
     fn xmemdupz(data: *const c_char, len: usize) -> *mut c_char;
     fn strlen(s: *const c_char) -> usize;
     fn strnlen(s: *const c_char, maxlen: usize) -> usize;
+    fn arena_memdupz(arena: *mut Arena, data: *const c_char, len: usize) -> *mut c_char;
+    fn api_set_error(err: *mut Error, err_type: c_int, format: *const c_char, ...);
+}
+
+/// Opaque Arena type from C
+#[repr(C)]
+pub struct Arena {
+    _private: [u8; 0],
+}
+
+/// Error struct matching C definition
+#[repr(C)]
+pub struct Error {
+    pub err_type: c_int,
+    pub msg: *mut c_char,
+}
+
+/// LuaRef type (same as Integer in C)
+pub type LuaRef = i64;
+
+/// Object union data
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union ObjectData {
+    pub boolean: bool,
+    pub integer: i64,
+    pub floating: f64,
+    pub string: NvimString,
+    pub array: Array,
+    pub dict: Dict,
+    pub luaref: LuaRef,
+}
+
+/// Array struct matching C definition (kvec)
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct Array {
+    pub size: usize,
+    pub capacity: usize,
+    pub items: *mut Object,
+}
+
+/// KeyValuePair struct matching C definition
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct KeyValuePair {
+    pub key: NvimString,
+    pub value: Object,
+}
+
+/// Dict struct matching C definition (kvec of KeyValuePair)
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct Dict {
+    pub size: usize,
+    pub capacity: usize,
+    pub items: *mut KeyValuePair,
+}
+
+/// Object struct matching C definition
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Object {
+    pub obj_type: c_int,
+    pub data: ObjectData,
 }
 
 /// String struct matching C definition
@@ -252,6 +317,112 @@ pub unsafe extern "C" fn rs_cchar_to_string(c: c_char) -> NvimString {
 #[no_mangle]
 pub unsafe extern "C" fn rs_api_free_string(value: NvimString) {
     xfree(value.data);
+}
+
+/// ObjectType constants
+const K_OBJECT_TYPE_NIL: c_int = 0;
+const K_OBJECT_TYPE_BOOLEAN: c_int = 1;
+const K_OBJECT_TYPE_INTEGER: c_int = 2;
+
+/// ErrorType constants
+const K_ERROR_TYPE_VALIDATION: c_int = 1;
+
+/// Force object to bool.
+/// If it fails, returns false and sets err.
+///
+/// # Safety
+/// `what` must be a valid null-terminated C string.
+/// `err` must be a valid pointer to an Error struct.
+///
+/// # Arguments
+/// * `obj` - The object to coerce to a boolean
+/// * `what` - The name of the object, used for error message
+/// * `nil_value` - What to return if the type is nil
+/// * `err` - Set if there was an error in converting to a bool
+///
+/// # Returns
+/// The boolean value of the object
+#[no_mangle]
+pub unsafe extern "C" fn rs_api_object_to_bool(
+    obj: Object,
+    what: *const c_char,
+    nil_value: bool,
+    err: *mut Error,
+) -> bool {
+    match obj.obj_type {
+        K_OBJECT_TYPE_BOOLEAN => obj.data.boolean,
+        K_OBJECT_TYPE_INTEGER => obj.data.integer != 0, // C semantics: non-zero int is true
+        K_OBJECT_TYPE_NIL => nil_value, // caller decides what NIL means
+        _ => {
+            // Set error: "%s is not a boolean"
+            static FMT: &[u8] = b"%s is not a boolean\0";
+            api_set_error(err, K_ERROR_TYPE_VALIDATION, FMT.as_ptr() as *const c_char, what);
+            false
+        }
+    }
+}
+
+/// Copy a String, allocating new memory.
+/// If arena is non-NULL, uses arena allocation; otherwise uses xmalloc.
+///
+/// # Safety
+/// `arena` must be NULL or a valid Arena pointer.
+/// `str` must have valid data pointer if size > 0.
+///
+/// # Arguments
+/// * `str` - The String to copy
+/// * `arena` - Arena for allocation (can be NULL for global allocation)
+///
+/// # Returns
+/// A newly allocated copy of the string
+#[no_mangle]
+pub unsafe extern "C" fn rs_copy_string(str: NvimString, arena: *mut Arena) -> NvimString {
+    if str.data.is_null() {
+        return NvimString::default();
+    }
+    NvimString {
+        data: arena_memdupz(arena, str.data, str.size),
+        size: str.size,
+    }
+}
+
+/// ErrorType constants for comparison
+const K_ERROR_TYPE_NONE: c_int = -1;
+
+/// Check if an error is set.
+///
+/// # Arguments
+/// * `err` - The Error to check
+///
+/// # Returns
+/// true if the error type is not kErrorTypeNone
+#[no_mangle]
+pub extern "C" fn rs_error_set(err: *const Error) -> bool {
+    if err.is_null() {
+        return false;
+    }
+    unsafe { (*err).err_type != K_ERROR_TYPE_NONE }
+}
+
+/// Clear an error, freeing its message.
+///
+/// # Safety
+/// `err` must be a valid pointer to an Error struct.
+/// If err->msg is non-null, it must have been allocated with xmalloc.
+#[no_mangle]
+pub unsafe extern "C" fn rs_api_clear_error(err: *mut Error) {
+    if err.is_null() {
+        return;
+    }
+    let e = &mut *err;
+    if e.err_type == K_ERROR_TYPE_NONE {
+        return;
+    }
+    if !e.msg.is_null() {
+        xfree(e.msg);
+        e.msg = ptr::null_mut();
+    }
+    e.err_type = K_ERROR_TYPE_NONE;
 }
 
 #[cfg(test)]

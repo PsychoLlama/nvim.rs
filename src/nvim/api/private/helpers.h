@@ -121,6 +121,9 @@ extern String rs_cstrn_to_string(const char *str, size_t maxsize);
 extern String rs_cstrn_as_string(char *str, size_t maxsize);
 extern String rs_cchar_to_string(char c);
 extern void rs_api_free_string(String value);
+extern bool rs_api_object_to_bool(Object obj, const char *what, bool nil_value, Error *err);
+extern String rs_copy_string(String str, Arena *arena);
+extern void rs_api_clear_error(Error *value);
 #endif
 
 #define API_CLEAR_STRING(s) \

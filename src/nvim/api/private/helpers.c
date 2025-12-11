@@ -619,12 +619,16 @@ void api_free_dict(Dict value)
 void api_clear_error(Error *value)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_API
+  rs_api_clear_error(value);
+#else
   if (!ERROR_SET(value)) {
     return;
   }
   xfree(value->msg);
   value->msg = NULL;
   value->type = kErrorTypeNone;
+#endif
 }
 
 // initialized once, never freed
@@ -659,11 +663,15 @@ String api_metadata_raw(void)
 
 String copy_string(String str, Arena *arena)
 {
+#ifdef USE_RUST_API
+  return rs_copy_string(str, arena);
+#else
   if (str.data != NULL) {
     return (String){ .data = arena_memdupz(arena, str.data, str.size), .size = str.size };
   } else {
     return (String)STRING_INIT;
   }
+#endif
 }
 
 Array copy_array(Array array, Arena *arena)
@@ -741,6 +749,9 @@ void api_set_error(Error *err, ErrorType errType, const char *format, ...)
 /// @param err          Set if there was an error in converting to a bool
 bool api_object_to_bool(Object obj, const char *what, bool nil_value, Error *err)
 {
+#ifdef USE_RUST_API
+  return rs_api_object_to_bool(obj, what, nil_value, err);
+#else
   if (obj.type == kObjectTypeBoolean) {
     return obj.data.boolean;
   } else if (obj.type == kObjectTypeInteger) {
@@ -751,6 +762,7 @@ bool api_object_to_bool(Object obj, const char *what, bool nil_value, Error *err
     api_set_error(err, kErrorTypeValidation, "%s is not a boolean", what);
     return false;
   }
+#endif
 }
 
 int object_to_hl_id(Object obj, const char *what, Error *err)
