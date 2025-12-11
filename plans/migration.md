@@ -2,27 +2,21 @@
 
 ## Current Status
 
-**569 rs_* functions migrated** (as of 2025-12-11)
+**570 rs_* functions migrated** (as of 2025-12-11)
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
 ### Recent Work (December 2025)
 
-Working on migrating pure functions that access static variables via C accessors.
+**Phase 6.0 - Rust MessagePack Unpacker** (completed)
+- Implemented pure Rust msgpack unpacker using `rmp` crate
+- New crate: nvim-unpacker in src/nvim-rs/unpacker/
+- Replaces C mpack-based unpack() function with rs_unpack()
+- 48 USE_RUST_* flags now enabled (added USE_RUST_UNPACKER)
 
-**Pattern**: For functions that read static/global state, create a C accessor function (e.g., `nvim_get_foo()`) that Rust can call via FFI.
-
-**Recent Phases**:
-- Phase 5.22 - `cmdline_fuzzy_complete()` (uses nvim_get_wop_flags accessor)
-- Phase 5.23 - `aborting()` (uses nvim_get_did_emsg, nvim_get_got_int, nvim_get_did_throw accessors)
-- Phase 5.24 - `should_abort()` (uses nvim_get_trylevel, nvim_get_emsg_silent accessors)
-- Phase 5.25 - `is_in_cmdwin()` (uses nvim_get_cmdwin_type, nvim_get_cmdline_type accessors)
-- Phase 5.26 - `last_csearch()` (uses nvim_get_lastc_bytes accessor)
-- Phase 5.27 - `_hash_key_removed()` (wrapper to existing rs_hash_key_removed)
-- Phase 5.28 - Enable USE_RUST_ASCII (ASCII_ISLOWER, ASCII_ISUPPER, TOUPPER_ASC, etc.)
-- Phase 5.29 - Enable USE_RUST_QUEUE (QUEUE_EMPTY, QUEUE_INIT, QUEUE_ADD, etc.)
-- Phase 5.30 - Enable USE_RUST_API (is_internal_call)
-- Phase 5.31 - Enable USE_RUST_MARK (lt, equalpos, ltoreq, clearpos, EMPTY_POS)
+**Previous Work**:
+- Phase 5.1-5.31 - Static variable accessor pattern (569 functions)
+- Phases 0-4 - Build infrastructure, memory bridge, OS functions, event loop
 
 ---
 
@@ -65,6 +59,7 @@ All Rust code lives in `src/nvim-rs/`. The main crate re-exports all FFI functio
 | nvim-memutil | Memory utilities | hash functions |
 | nvim-menu | Menu system | menu helpers |
 | nvim-msgpack | MessagePack | mpack_* packer functions |
+| nvim-unpacker | MessagePack | rs_unpack unpacker |
 | nvim-ops | Operators | format helpers |
 | nvim-os | OS functions | env, fs, time (43 functions) |
 | nvim-path | Path utilities | path manipulation |
@@ -119,29 +114,25 @@ extern "C" { fn nvim_get_foo_field() -> c_int; }
 | 3 | Complex struct FFI (window, buffer, frame handles) | ✅ |
 | 4 | Event loop accessors (watchers, streams, loop fields) | ✅ |
 | 5.1-5.31 | Static variable accessor pattern | ✅ |
+| 6.0 | MessagePack unpacker (rs_unpack) | ✅ |
 
-### Phase 5 Complete
+### Phase 6 Complete
 
-**Phase 5** (static variable accessor pattern) is complete with 569 functions migrated.
+**Phase 6.0** replaced the C mpack-based unpacker with a pure Rust implementation using the `rmp` crate. The Rust unpacker:
+- Handles all msgpack types (nil, bool, int, float, string, binary, array, map, ext)
+- Uses arena_alloc() for memory allocation (compatible with C code)
+- Properly handles Buffer/Window/Tabpage EXT types
 
-All simple `FUNC_ATTR_PURE`/`FUNC_ATTR_CONST` functions are done. All 47 `USE_RUST_*` flags in CMakeLists.txt are enabled. Remaining candidates either:
-- Are `static` (internal only, not externally visible)
-- Access complex structs (typval_T, win_T, buf_T) requiring extensive FFI
-- Access generated arrays (event_names, cmdidx values)
-- Iterate over global window/buffer lists
-- Access multiple interdependent globals
+All 48 `USE_RUST_*` flags are now enabled.
 
 ### Next Phase
 
-**Phase 6 (MessagePack)**: The msgpack packer is already migrated. The unpacker (`unpacker.c`) uses mpack library callbacks and is more complex.
-
-Alternative: Focus on deeper integration work or expand existing crates with non-pure functions that are still amenable to FFI.
+Focus on deeper integration work or expand existing crates with non-pure functions that are still amenable to FFI.
 
 ### Future Phases (Roadmap)
 
 | Phase | Target | Notes |
 |-------|--------|-------|
-| 6 | MessagePack RPC | packer.c, unpacker.c → rmp crate |
 | 7 | API Layer | api/*.c |
 | 8 | Terminal UI | tui/*.c |
 | 9 | Buffer & Text | memline.c, buffer.c, undo.c |
