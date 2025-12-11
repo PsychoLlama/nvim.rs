@@ -53,6 +53,10 @@ extern int rs_ascii_tolower(int c);
 // Like isalpha() but reject non-ASCII characters.  Can't be used with a
 // special key (negative value).
 #ifdef USE_RUST_ASCII
+extern int rs_ascii_islower(int c);
+extern int rs_ascii_isupper(int c);
+extern int rs_ascii_isalpha(int c);
+extern int rs_ascii_isalnum(int c);
 # define ASCII_ISLOWER(c) (rs_ascii_islower(c) != 0)
 # define ASCII_ISUPPER(c) (rs_ascii_isupper(c) != 0)
 # define ASCII_ISALPHA(c) (rs_ascii_isalpha(c) != 0)
