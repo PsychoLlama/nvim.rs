@@ -47,6 +47,7 @@ extern void rs_hash_add_item(hashtab_T *ht, hashitem_T *hi, char *key, hash_T ha
 extern void rs_hash_remove(hashtab_T *ht, hashitem_T *hi);
 extern void rs_hash_lock(hashtab_T *ht);
 extern void rs_hash_unlock(hashtab_T *ht);
+extern const char *rs_hash_key_removed(void);
 #endif
 
 // Magic value for algorithm that walks through the array.
@@ -513,8 +514,16 @@ hash_T hash_hash_len(const char *key, const size_t len)
 ///
 /// Used for testing because luajit ffi does not allow getting addresses of
 /// globals.
+#ifdef USE_RUST_HASHTAB
+const char *_hash_key_removed(void)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_hash_key_removed();
+}
+#else
 const char *_hash_key_removed(void)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
   return HI_KEY_REMOVED;
 }
+#endif
