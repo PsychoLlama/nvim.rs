@@ -2,7 +2,7 @@
 
 ## Current Status
 
-**567 rs_* functions migrated** (as of 2025-12-11)
+**569 rs_* functions migrated** (as of 2025-12-11)
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
@@ -16,6 +16,8 @@ Working on migrating pure functions that access static variables via C accessors
 - Phase 5.22 - `cmdline_fuzzy_complete()` (uses nvim_get_wop_flags accessor)
 - Phase 5.23 - `aborting()` (uses nvim_get_did_emsg, nvim_get_got_int, nvim_get_did_throw accessors)
 - Phase 5.24 - `should_abort()` (uses nvim_get_trylevel, nvim_get_emsg_silent accessors)
+- Phase 5.25 - `is_in_cmdwin()` (uses nvim_get_cmdwin_type, nvim_get_cmdline_type accessors)
+- Phase 5.26 - `last_csearch()` (uses nvim_get_lastc_bytes accessor)
 
 ---
 
@@ -111,11 +113,11 @@ extern "C" { fn nvim_get_foo_field() -> c_int; }
 | 2 | OS & data structures (garray, hashtab, fs) | ✅ |
 | 3 | Complex struct FFI (window, buffer, frame handles) | ✅ |
 | 4 | Event loop accessors (watchers, streams, loop fields) | ✅ |
-| 5.1-5.24 | Static variable accessor pattern | ✅ |
+| 5.1-5.26 | Static variable accessor pattern | ✅ |
 
 ### Phase 5 Complete
 
-**Phase 5** (static variable accessor pattern) is complete with 567 functions migrated.
+**Phase 5** (static variable accessor pattern) continues with 569 functions migrated.
 
 All simple `FUNC_ATTR_PURE`/`FUNC_ATTR_CONST` functions are done. Remaining candidates either:
 - Are `static` (internal only, not externally visible)
