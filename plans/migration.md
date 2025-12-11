@@ -18,6 +18,8 @@ Working on migrating pure functions that access static variables via C accessors
 - Phase 5.24 - `should_abort()` (uses nvim_get_trylevel, nvim_get_emsg_silent accessors)
 - Phase 5.25 - `is_in_cmdwin()` (uses nvim_get_cmdwin_type, nvim_get_cmdline_type accessors)
 - Phase 5.26 - `last_csearch()` (uses nvim_get_lastc_bytes accessor)
+- Phase 5.27 - `_hash_key_removed()` (wrapper to existing rs_hash_key_removed)
+- Phase 5.28 - Enable USE_RUST_ASCII (ASCII_ISLOWER, ASCII_ISUPPER, TOUPPER_ASC, etc.)
 
 ---
 
