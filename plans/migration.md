@@ -118,13 +118,13 @@ extern "C" { fn nvim_get_foo_field() -> c_int; }
 | 2 | OS & data structures (garray, hashtab, fs) | ✅ |
 | 3 | Complex struct FFI (window, buffer, frame handles) | ✅ |
 | 4 | Event loop accessors (watchers, streams, loop fields) | ✅ |
-| 5.1-5.26 | Static variable accessor pattern | ✅ |
+| 5.1-5.31 | Static variable accessor pattern | ✅ |
 
 ### Phase 5 Complete
 
-**Phase 5** (static variable accessor pattern) continues with 569 functions migrated.
+**Phase 5** (static variable accessor pattern) is complete with 569 functions migrated.
 
-All simple `FUNC_ATTR_PURE`/`FUNC_ATTR_CONST` functions are done. Remaining candidates either:
+All simple `FUNC_ATTR_PURE`/`FUNC_ATTR_CONST` functions are done. All 47 `USE_RUST_*` flags in CMakeLists.txt are enabled. Remaining candidates either:
 - Are `static` (internal only, not externally visible)
 - Access complex structs (typval_T, win_T, buf_T) requiring extensive FFI
 - Access generated arrays (event_names, cmdidx values)
