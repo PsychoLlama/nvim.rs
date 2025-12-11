@@ -2,11 +2,14 @@
 
 ## Current Status
 
-**590 rs_* functions migrated** (as of 2025-12-11)
+**591 rs_* functions migrated** (as of 2025-12-11)
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
 ### Recent Work (December 2025)
+
+**Phase 7.4 - Object to Highlight ID** (completed)
+- Added `rs_object_to_hl_id`: Convert Object to highlight group ID
 
 **Phase 7.3 - API Validation Functions** (completed)
 - Added validation error functions to nvim-api crate:

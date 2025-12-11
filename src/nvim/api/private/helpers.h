@@ -130,6 +130,8 @@ extern String rs_ga_take_string(garray_T *ga);
 extern void rs_api_free_object(Object value);
 extern void rs_api_free_array(Array value);
 extern void rs_api_free_dict(Dict value);
+// Rust implementation of object_to_hl_id
+extern int rs_object_to_hl_id(Object obj, const char *what, Error *err);
 #endif
 
 #define API_CLEAR_STRING(s) \

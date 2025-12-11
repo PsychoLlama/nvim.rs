@@ -667,6 +667,56 @@ pub unsafe extern "C" fn rs_api_err_exp(
     }
 }
 
+// FFI declarations for highlight functions
+extern "C" {
+    fn syn_check_group(name: *const c_char, len: usize) -> c_int;
+    fn highlight_num_groups() -> c_int;
+}
+
+/// Convert an Object to a highlight group ID.
+///
+/// # Safety
+/// `what` must be a valid null-terminated C string.
+/// `err` must be a valid pointer to an Error struct.
+///
+/// # Arguments
+/// * `obj` - The Object to convert (String or Integer)
+/// * `what` - Description for error messages
+/// * `err` - Error struct to set on failure
+///
+/// # Returns
+/// The highlight group ID, or 0 on failure
+#[no_mangle]
+pub unsafe extern "C" fn rs_object_to_hl_id(
+    obj: Object,
+    what: *const c_char,
+    err: *mut Error,
+) -> c_int {
+    match obj.obj_type {
+        K_OBJECT_TYPE_STRING => {
+            let str = obj.data.string;
+            if str.size == 0 {
+                return 0;
+            }
+            syn_check_group(str.data, str.size)
+        }
+        K_OBJECT_TYPE_INTEGER => {
+            let id = obj.data.integer as c_int;
+            let num_groups = highlight_num_groups();
+            if 1 <= id && id <= num_groups {
+                id
+            } else {
+                0
+            }
+        }
+        _ => {
+            static FMT: &[u8] = b"Invalid hl_group: %s\0";
+            api_set_error(err, K_ERROR_TYPE_VALIDATION, FMT.as_ptr() as *const c_char, what);
+            0
+        }
+    }
+}
+
 /// Copies a String to an allocated, NUL-terminated C string.
 ///
 /// # Safety

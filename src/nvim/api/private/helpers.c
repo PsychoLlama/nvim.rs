@@ -787,6 +787,9 @@ bool api_object_to_bool(Object obj, const char *what, bool nil_value, Error *err
 
 int object_to_hl_id(Object obj, const char *what, Error *err)
 {
+#ifdef USE_RUST_API
+  return rs_object_to_hl_id(obj, what, err);
+#else
   if (obj.type == kObjectTypeString) {
     String str = obj.data.string;
     return str.size ? syn_check_group(str.data, str.size) : 0;
@@ -797,6 +800,7 @@ int object_to_hl_id(Object obj, const char *what, Error *err)
     api_set_error(err, kErrorTypeValidation, "Invalid hl_group: %s", what);
     return 0;
   }
+#endif
 }
 
 char *api_typename(ObjectType t)
