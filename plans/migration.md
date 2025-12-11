@@ -2,11 +2,16 @@
 
 ## Current Status
 
-**588 rs_* functions migrated** (as of 2025-12-11)
+**590 rs_* functions migrated** (as of 2025-12-11)
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
 ### Recent Work (December 2025)
+
+**Phase 7.3 - API Validation Functions** (completed)
+- Added validation error functions to nvim-api crate:
+  - `rs_api_err_invalid`: Generate "Invalid ..." error messages
+  - `rs_api_err_exp`: Generate "Invalid ...: expected ..." error messages
 
 **Phase 7.2 - API Free Functions** (completed)
 - Added recursive free functions to nvim-api crate:

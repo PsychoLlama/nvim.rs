@@ -11,6 +11,9 @@
 /// Creates "Invalid …" message and sets it on `err`.
 void api_err_invalid(Error *err, const char *name, const char *val_s, int64_t val_n, bool quote_val)
 {
+#ifdef USE_RUST_API
+  rs_api_err_invalid(err, name, val_s, val_n, quote_val);
+#else
   ErrorType errtype = kErrorTypeValidation;
   // Treat `name` without whitespace as a parameter (surround in quotes).
   // Treat `name` with whitespace as a description (no quotes).
@@ -35,11 +38,15 @@ void api_err_invalid(Error *err, const char *name, const char *val_s, int64_t va
   } else {
     api_set_error(err, errtype, quote_val ? "Invalid '%s': '%s'" : "Invalid '%s': %s", name, val_s);
   }
+#endif
 }
 
 /// Creates "Invalid …: expected …" message and sets it on `err`.
 void api_err_exp(Error *err, const char *name, const char *expected, const char *actual)
 {
+#ifdef USE_RUST_API
+  rs_api_err_exp(err, name, expected, actual);
+#else
   ErrorType errtype = kErrorTypeValidation;
   // Treat `name` without whitespace as a parameter (surround in quotes).
   // Treat `name` with whitespace as a description (no quotes).
@@ -55,6 +62,7 @@ void api_err_exp(Error *err, const char *name, const char *expected, const char 
   api_set_error(err, errtype,
                 has_space ? "Invalid %s: expected %s, got %s" : "Invalid '%s': expected %s, got %s",
                 name, expected, actual);
+#endif
 }
 
 bool check_string_array(Array arr, char *name, bool disallow_nl, Error *err)

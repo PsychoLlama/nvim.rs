@@ -515,9 +515,156 @@ pub unsafe extern "C" fn rs_api_clear_error(err: *mut Error) {
     e.err_type = K_ERROR_TYPE_NONE;
 }
 
-// FFI for xstrndup
+// FFI for xstrndup and strchr
 extern "C" {
     fn xstrndup(str: *const c_char, len: usize) -> *mut c_char;
+    fn strchr(s: *const c_char, c: c_int) -> *mut c_char;
+}
+
+/// Creates "Invalid …" message and sets it on `err`.
+///
+/// # Safety
+/// All string parameters must be valid null-terminated C strings.
+/// `err` must be a valid pointer to an Error struct.
+///
+/// # Arguments
+/// * `err` - Error struct to set
+/// * `name` - Name of the parameter/field (quoted if no spaces, unquoted otherwise)
+/// * `val_s` - String value (NULL for numeric error, empty for no value)
+/// * `val_n` - Numeric value (only used if val_s is NULL)
+/// * `quote_val` - Whether to quote string values
+#[no_mangle]
+pub unsafe extern "C" fn rs_api_err_invalid(
+    err: *mut Error,
+    name: *const c_char,
+    val_s: *const c_char,
+    val_n: i64,
+    quote_val: bool,
+) {
+    // Treat `name` without whitespace as a parameter (surround in quotes).
+    // Treat `name` with whitespace as a description (no quotes).
+    let has_space = !strchr(name, b' ' as c_int).is_null();
+
+    // No value case: val_s is non-null but empty
+    if !val_s.is_null() && *val_s == 0 {
+        if has_space {
+            static FMT: &[u8] = b"Invalid %s\0";
+            api_set_error(err, K_ERROR_TYPE_VALIDATION, FMT.as_ptr() as *const c_char, name);
+        } else {
+            static FMT: &[u8] = b"Invalid '%s'\0";
+            api_set_error(err, K_ERROR_TYPE_VALIDATION, FMT.as_ptr() as *const c_char, name);
+        }
+        return;
+    }
+
+    // Number value case: val_s is NULL
+    if val_s.is_null() {
+        if has_space {
+            static FMT: &[u8] = b"Invalid %s: %lld\0";
+            api_set_error(
+                err,
+                K_ERROR_TYPE_VALIDATION,
+                FMT.as_ptr() as *const c_char,
+                name,
+                val_n,
+            );
+        } else {
+            static FMT: &[u8] = b"Invalid '%s': %lld\0";
+            api_set_error(
+                err,
+                K_ERROR_TYPE_VALIDATION,
+                FMT.as_ptr() as *const c_char,
+                name,
+                val_n,
+            );
+        }
+        return;
+    }
+
+    // String value case
+    if has_space {
+        if quote_val {
+            static FMT: &[u8] = b"Invalid %s: '%s'\0";
+            api_set_error(err, K_ERROR_TYPE_VALIDATION, FMT.as_ptr() as *const c_char, name, val_s);
+        } else {
+            static FMT: &[u8] = b"Invalid %s: %s\0";
+            api_set_error(err, K_ERROR_TYPE_VALIDATION, FMT.as_ptr() as *const c_char, name, val_s);
+        }
+    } else if quote_val {
+        static FMT: &[u8] = b"Invalid '%s': '%s'\0";
+        api_set_error(err, K_ERROR_TYPE_VALIDATION, FMT.as_ptr() as *const c_char, name, val_s);
+    } else {
+        static FMT: &[u8] = b"Invalid '%s': %s\0";
+        api_set_error(err, K_ERROR_TYPE_VALIDATION, FMT.as_ptr() as *const c_char, name, val_s);
+    }
+}
+
+/// Creates "Invalid …: expected …" message and sets it on `err`.
+///
+/// # Safety
+/// All string parameters must be valid null-terminated C strings (actual may be NULL).
+/// `err` must be a valid pointer to an Error struct.
+///
+/// # Arguments
+/// * `err` - Error struct to set
+/// * `name` - Name of the parameter/field
+/// * `expected` - Expected type/value description
+/// * `actual` - Actual type/value description (may be NULL)
+#[no_mangle]
+pub unsafe extern "C" fn rs_api_err_exp(
+    err: *mut Error,
+    name: *const c_char,
+    expected: *const c_char,
+    actual: *const c_char,
+) {
+    // Treat `name` without whitespace as a parameter (surround in quotes).
+    // Treat `name` with whitespace as a description (no quotes).
+    let has_space = !strchr(name, b' ' as c_int).is_null();
+
+    if actual.is_null() {
+        if has_space {
+            static FMT: &[u8] = b"Invalid %s: expected %s\0";
+            api_set_error(
+                err,
+                K_ERROR_TYPE_VALIDATION,
+                FMT.as_ptr() as *const c_char,
+                name,
+                expected,
+            );
+        } else {
+            static FMT: &[u8] = b"Invalid '%s': expected %s\0";
+            api_set_error(
+                err,
+                K_ERROR_TYPE_VALIDATION,
+                FMT.as_ptr() as *const c_char,
+                name,
+                expected,
+            );
+        }
+        return;
+    }
+
+    if has_space {
+        static FMT: &[u8] = b"Invalid %s: expected %s, got %s\0";
+        api_set_error(
+            err,
+            K_ERROR_TYPE_VALIDATION,
+            FMT.as_ptr() as *const c_char,
+            name,
+            expected,
+            actual,
+        );
+    } else {
+        static FMT: &[u8] = b"Invalid '%s': expected %s, got %s\0";
+        api_set_error(
+            err,
+            K_ERROR_TYPE_VALIDATION,
+            FMT.as_ptr() as *const c_char,
+            name,
+            expected,
+            actual,
+        );
+    }
 }
 
 /// Copies a String to an allocated, NUL-terminated C string.
