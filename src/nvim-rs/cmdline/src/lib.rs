@@ -16,6 +16,8 @@ extern "C" {
     fn nvim_get_ccline_cmdpos() -> c_int;
     fn nvim_get_ccline_cmdlen() -> c_int;
     fn nvim_get_wop_flags() -> c_uint;
+    fn nvim_get_cmdwin_type() -> c_int;
+    fn nvim_get_cmdline_type() -> c_int;
 }
 
 /// Check if command line is in overstrike mode.
@@ -60,4 +62,22 @@ pub unsafe extern "C" fn rs_cmdline_fuzzy_complete(fuzzystr: *const c_char) -> c
     let is_non_empty = *fuzzystr != 0;
 
     c_int::from(has_fuzzy_flag && is_non_empty)
+}
+
+/// NUL character constant
+const NUL: c_int = 0;
+
+/// Check if in the cmdwin, not editing the command line.
+///
+/// Returns true if `cmdwin_type` != 0 AND `get_cmdline_type()` == NUL.
+///
+/// # Safety
+///
+/// Calls external C functions to access global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_in_cmdwin() -> c_int {
+    let cmdwin_type = nvim_get_cmdwin_type();
+    let cmdline_type = nvim_get_cmdline_type();
+
+    c_int::from(cmdwin_type != 0 && cmdline_type == NUL)
 }

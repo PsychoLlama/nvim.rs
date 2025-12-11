@@ -226,6 +226,7 @@ static int cedit_key = -1;  ///< key value of 'cedit' option
 #ifdef USE_RUST_CMDLINE
 extern int rs_cmdline_overstrike(void);
 extern int rs_cmdline_at_end(void);
+extern int rs_is_in_cmdwin(void);
 #endif
 
 static handle_T cmdpreview_bufnr = 0;
@@ -4808,11 +4809,19 @@ static int open_cmdwin(void)
 }
 
 /// @return true if in the cmdwin, not editing the command line.
+#ifdef USE_RUST_CMDLINE
+bool is_in_cmdwin(void)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_is_in_cmdwin() != 0;
+}
+#else
 bool is_in_cmdwin(void)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
   return cmdwin_type != 0 && get_cmdline_type() == NUL;
 }
+#endif
 
 /// Get script string
 ///
@@ -5033,4 +5042,16 @@ int nvim_get_ccline_cmdpos(void)
 int nvim_get_ccline_cmdlen(void)
 {
   return ccline.cmdlen;
+}
+
+// C accessor for cmdwin_type global
+int nvim_get_cmdwin_type(void)
+{
+  return cmdwin_type;
+}
+
+// C accessor wrapper for static get_cmdline_type()
+int nvim_get_cmdline_type(void)
+{
+  return get_cmdline_type();
 }
