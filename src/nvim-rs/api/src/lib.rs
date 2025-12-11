@@ -91,6 +91,7 @@ pub extern "C" fn rs_api_typename(t: c_int) -> *const c_char {
 
 // FFI declarations for C functions we need
 extern "C" {
+    #[allow(dead_code)]
     fn xmalloc(size: usize) -> *mut c_char;
     fn xfree(ptr: *mut c_char);
     fn xmemdupz(data: *const c_char, len: usize) -> *mut c_char;
@@ -296,6 +297,9 @@ pub unsafe extern "C" fn rs_cstrn_as_string(s: *mut c_char, maxsize: usize) -> N
 /// Does not support multibyte characters.
 /// The resulting string is NUL-terminated.
 ///
+/// # Safety
+/// Calls xmemdupz which must be available at link time.
+///
 /// # Arguments
 /// * `c` - The char to convert
 ///
@@ -317,6 +321,89 @@ pub unsafe extern "C" fn rs_cchar_to_string(c: c_char) -> NvimString {
 #[no_mangle]
 pub unsafe extern "C" fn rs_api_free_string(value: NvimString) {
     xfree(value.data);
+}
+
+// FFI declaration for api_free_luaref (in Lua executor)
+extern "C" {
+    fn api_free_luaref(r: LuaRef);
+}
+
+/// ObjectType constants for free functions
+const K_OBJECT_TYPE_STRING: c_int = 4;
+const K_OBJECT_TYPE_ARRAY: c_int = 5;
+const K_OBJECT_TYPE_DICT: c_int = 6;
+const K_OBJECT_TYPE_LUAREF: c_int = 7;
+
+/// Free an Object and all its nested data.
+///
+/// # Safety
+/// The object's data must have been allocated with xmalloc/xmemdupz.
+/// For strings, arrays, and dicts, frees recursively.
+///
+/// # Arguments
+/// * `value` - The Object to free
+#[no_mangle]
+pub unsafe extern "C" fn rs_api_free_object(value: Object) {
+    match value.obj_type {
+        // These types have no heap data
+        K_OBJECT_TYPE_NIL
+        | K_OBJECT_TYPE_BOOLEAN
+        | K_OBJECT_TYPE_INTEGER
+        | 3 /* Float */
+        | 8 /* Buffer */
+        | 9 /* Window */
+        | 10 /* Tabpage */ => {}
+
+        K_OBJECT_TYPE_STRING => {
+            rs_api_free_string(value.data.string);
+        }
+
+        K_OBJECT_TYPE_ARRAY => {
+            rs_api_free_array(value.data.array);
+        }
+
+        K_OBJECT_TYPE_DICT => {
+            rs_api_free_dict(value.data.dict);
+        }
+
+        K_OBJECT_TYPE_LUAREF => {
+            api_free_luaref(value.data.luaref);
+        }
+
+        _ => {}
+    }
+}
+
+/// Free an Array and all its items recursively.
+///
+/// # Safety
+/// The array's items must have been allocated with xmalloc.
+///
+/// # Arguments
+/// * `value` - The Array to free
+#[no_mangle]
+pub unsafe extern "C" fn rs_api_free_array(value: Array) {
+    for i in 0..value.size {
+        rs_api_free_object(*value.items.add(i));
+    }
+    xfree(value.items as *mut c_char);
+}
+
+/// Free a Dict and all its key-value pairs recursively.
+///
+/// # Safety
+/// The dict's items must have been allocated with xmalloc.
+///
+/// # Arguments
+/// * `value` - The Dict to free
+#[no_mangle]
+pub unsafe extern "C" fn rs_api_free_dict(value: Dict) {
+    for i in 0..value.size {
+        let item = &*value.items.add(i);
+        rs_api_free_string(item.key);
+        rs_api_free_object(item.value);
+    }
+    xfree(value.items as *mut c_char);
 }
 
 /// ObjectType constants
@@ -391,17 +478,20 @@ const K_ERROR_TYPE_NONE: c_int = -1;
 
 /// Check if an error is set.
 ///
+/// # Safety
+/// `err` must be NULL or a valid pointer to an Error struct.
+///
 /// # Arguments
 /// * `err` - The Error to check
 ///
 /// # Returns
 /// true if the error type is not kErrorTypeNone
 #[no_mangle]
-pub extern "C" fn rs_error_set(err: *const Error) -> bool {
+pub unsafe extern "C" fn rs_error_set(err: *const Error) -> bool {
     if err.is_null() {
         return false;
     }
-    unsafe { (*err).err_type != K_ERROR_TYPE_NONE }
+    (*err).err_type != K_ERROR_TYPE_NONE
 }
 
 /// Clear an error, freeing its message.

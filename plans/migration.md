@@ -2,13 +2,19 @@
 
 ## Current Status
 
-**585 rs_* functions migrated** (as of 2025-12-11)
+**588 rs_* functions migrated** (as of 2025-12-11)
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
 ### Recent Work (December 2025)
 
-**Phase 7.0 - API Helper Functions** (completed)
+**Phase 7.2 - API Free Functions** (completed)
+- Added recursive free functions to nvim-api crate:
+  - `rs_api_free_object`: Recursively free an Object and all nested data
+  - `rs_api_free_array`: Free Array and all items recursively
+  - `rs_api_free_dict`: Free Dict and all key-value pairs recursively
+
+**Phase 7.0-7.1 - API Helper Functions** (completed)
 - Added Rust implementations to nvim-api crate:
   - `rs_api_typename`: Get type name string for ObjectType
   - `rs_cchar_to_string`: Single char to String

@@ -126,6 +126,10 @@ extern String rs_copy_string(String str, Arena *arena);
 extern void rs_api_clear_error(Error *value);
 extern char *rs_string_to_cstr(String str);
 extern String rs_ga_take_string(garray_T *ga);
+// Rust implementations of recursive free functions
+extern void rs_api_free_object(Object value);
+extern void rs_api_free_array(Array value);
+extern void rs_api_free_dict(Dict value);
 #endif
 
 #define API_CLEAR_STRING(s) \

@@ -577,6 +577,9 @@ Array arena_take_arraybuilder(Arena *arena, ArrayBuilder *arr)
 
 void api_free_object(Object value)
 {
+#ifdef USE_RUST_API
+  rs_api_free_object(value);
+#else
   switch (value.type) {
   case kObjectTypeNil:
   case kObjectTypeBoolean:
@@ -603,25 +606,34 @@ void api_free_object(Object value)
     api_free_luaref(value.data.luaref);
     break;
   }
+#endif
 }
 
 void api_free_array(Array value)
 {
+#ifdef USE_RUST_API
+  rs_api_free_array(value);
+#else
   for (size_t i = 0; i < value.size; i++) {
     api_free_object(value.items[i]);
   }
 
   xfree(value.items);
+#endif
 }
 
 void api_free_dict(Dict value)
 {
+#ifdef USE_RUST_API
+  rs_api_free_dict(value);
+#else
   for (size_t i = 0; i < value.size; i++) {
     api_free_string(value.items[i].key);
     api_free_object(value.items[i].value);
   }
 
   xfree(value.items);
+#endif
 }
 
 void api_clear_error(Error *value)
