@@ -38,6 +38,7 @@
 
 #ifdef USE_RUST_EX_EVAL
 extern int rs_aborted_in_try(void);
+extern int rs_aborting(void);
 #endif
 
 static const char e_multiple_else[] = N_("E583: Multiple :else");
@@ -113,10 +114,17 @@ static bool cause_abort = false;
 /// That is, during cancellation of an expression evaluation after an aborting
 /// function call or due to a parsing error, aborting() always returns the same
 /// value. "got_int" is also set by calling interrupt().
+#ifdef USE_RUST_EX_EVAL
+bool aborting(void)
+{
+  return rs_aborting() != 0;
+}
+#else
 bool aborting(void)
 {
   return (did_emsg && force_abort) || got_int || did_throw;
 }
+#endif
 
 /// The value of "force_abort" is temporarily reset by the first emsg() call
 /// during an expression evaluation, and "cause_abort" is used instead.  It might
@@ -2049,4 +2057,22 @@ bool has_loop_cmd(char *p)
 int nvim_get_force_abort(void)
 {
   return force_abort ? 1 : 0;
+}
+
+/// C accessor for the global did_emsg variable (used by Rust FFI).
+int nvim_get_did_emsg(void)
+{
+  return did_emsg;
+}
+
+/// C accessor for the global got_int variable (used by Rust FFI).
+int nvim_get_got_int(void)
+{
+  return got_int ? 1 : 0;
+}
+
+/// C accessor for the global did_throw variable (used by Rust FFI).
+int nvim_get_did_throw(void)
+{
+  return did_throw ? 1 : 0;
 }
