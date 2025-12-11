@@ -102,6 +102,10 @@ extern int rs_lt(pos_T a, pos_T b);
 extern int rs_equalpos(pos_T a, pos_T b);
 extern int rs_ltoreq(pos_T a, pos_T b);
 extern void rs_clearpos(pos_T *a);
+extern int rs_empty_pos(pos_T a);
+# define EMPTY_POS(a) (rs_empty_pos(a) != 0)
+#else
+# define EMPTY_POS(a) ((a).lnum == 0 && (a).col == 0 && (a).coladd == 0)
 #endif
 
 /// Return true if position a is before (less than) position b.

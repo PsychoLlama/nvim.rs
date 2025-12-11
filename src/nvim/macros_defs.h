@@ -193,9 +193,4 @@ extern int rs_ascii_isalnum(int c);
 # define PRAGMA_DIAG_POP
 #endif
 
-#if defined(USE_RUST_MARK) && !defined(NVIM_NLUA0)
-extern int rs_empty_pos(pos_T a);
-# define EMPTY_POS(a) (rs_empty_pos(a) != 0)
-#else
-# define EMPTY_POS(a) ((a).lnum == 0 && (a).col == 0 && (a).coladd == 0)
-#endif
+// EMPTY_POS macro moved to mark_defs.h (requires pos_T from pos_defs.h)
