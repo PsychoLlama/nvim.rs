@@ -21,6 +21,8 @@ Working on migrating pure functions that access static variables via C accessors
 - Phase 5.27 - `_hash_key_removed()` (wrapper to existing rs_hash_key_removed)
 - Phase 5.28 - Enable USE_RUST_ASCII (ASCII_ISLOWER, ASCII_ISUPPER, TOUPPER_ASC, etc.)
 - Phase 5.29 - Enable USE_RUST_QUEUE (QUEUE_EMPTY, QUEUE_INIT, QUEUE_ADD, etc.)
+- Phase 5.30 - Enable USE_RUST_API (is_internal_call)
+- Phase 5.31 - Enable USE_RUST_MARK (lt, equalpos, ltoreq, clearpos, EMPTY_POS)
 
 ---
 
