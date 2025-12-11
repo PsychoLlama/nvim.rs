@@ -17,8 +17,15 @@
 
 #include "msgpack_rpc/unpacker.c.generated.h"
 
+#ifdef USE_RUST_UNPACKER
+extern Object rs_unpack(const char *data, size_t size, Arena *arena, Error *err);
+#endif
+
 Object unpack(const char *data, size_t size, Arena *arena, Error *err)
 {
+#ifdef USE_RUST_UNPACKER
+  return rs_unpack(data, size, arena, err);
+#else
   Unpacker unpacker;
   mpack_parser_init(&unpacker.parser, 0);
   unpacker.parser.data.p = &unpacker;
@@ -40,6 +47,7 @@ Object unpack(const char *data, size_t size, Arena *arena, Error *err)
   }
 
   return unpacker.result;
+#endif
 }
 
 static void api_parse_enter(mpack_parser_t *parser, mpack_node_t *node)
