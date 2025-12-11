@@ -6,7 +6,7 @@
 
 #![allow(unsafe_code)] // FFI requires unsafe
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 
 // C accessor functions for search state.
 // These are defined in search.c and provide safe access to static variables.
@@ -16,6 +16,9 @@ extern "C" {
 
     /// Get the `last_t_cmd` static variable.
     fn nvim_get_last_t_cmd() -> c_int;
+
+    /// Get the `lastc_bytes` static variable.
+    fn nvim_get_lastc_bytes() -> *const c_char;
 }
 
 /// Direction constant for FORWARD.
@@ -53,6 +56,18 @@ fn last_csearch_until_impl() -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_last_csearch_until() -> c_int {
     last_csearch_until_impl()
+}
+
+/// Get the last character search bytes.
+///
+/// Returns a pointer to the static `lastc_bytes` array.
+///
+/// # Safety
+///
+/// Calls external C function to get pointer to static variable.
+#[no_mangle]
+pub unsafe extern "C" fn rs_last_csearch() -> *const c_char {
+    nvim_get_lastc_bytes()
 }
 
 #[cfg(test)]

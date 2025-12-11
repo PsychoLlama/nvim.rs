@@ -113,6 +113,7 @@ static char lastc_bytes[MAX_SCHAR_SIZE + 1];
 // Rust FFI declarations
 extern int rs_last_csearch_forward(void);
 extern int rs_last_csearch_until(void);
+extern const char *rs_last_csearch(void);
 
 /// Get the lastcdir static variable (accessor for Rust).
 int nvim_get_lastcdir(void)
@@ -124,6 +125,12 @@ int nvim_get_lastcdir(void)
 int nvim_get_last_t_cmd(void)
 {
   return last_t_cmd;
+}
+
+/// Get the lastc_bytes static variable (accessor for Rust).
+const char *nvim_get_lastc_bytes(void)
+{
+  return lastc_bytes;
 }
 static int lastc_bytelen = 1;             // >1 for multi-byte char
 
@@ -460,11 +467,19 @@ bool pat_has_uppercase(char *pat)
   return false;
 }
 
+#ifdef USE_RUST_SEARCH
+const char *last_csearch(void)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_last_csearch();
+}
+#else
 const char *last_csearch(void)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
   return lastc_bytes;
 }
+#endif
 
 int last_csearch_forward(void)
 {
