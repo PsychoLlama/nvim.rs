@@ -780,6 +780,490 @@ fn format_number(buf: &mut [u8], val: c_long, cmd: u8, width: usize) -> usize {
 }
 
 // ============================================================================
+// Terminal Detection and Terminfo Patching
+// ============================================================================
+
+/// Terminfo definition indices (must match terminfo_enum_defs.h)
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[allow(non_camel_case_types, dead_code)]
+pub enum TerminfoDef {
+    kTerm_carriage_return = 0,
+    kTerm_change_scroll_region,
+    kTerm_clear_screen,
+    kTerm_clr_eol,
+    kTerm_clr_eos,
+    kTerm_cursor_address,
+    kTerm_cursor_down,
+    kTerm_cursor_invisible,
+    kTerm_cursor_left,
+    kTerm_cursor_home,
+    kTerm_cursor_normal,
+    kTerm_cursor_up,
+    kTerm_cursor_right,
+    kTerm_delete_line,
+    kTerm_enter_bold_mode,
+    kTerm_enter_ca_mode,
+    kTerm_enter_italics_mode,
+    kTerm_enter_reverse_mode,
+    kTerm_enter_standout_mode,
+    kTerm_enter_underline_mode,
+    kTerm_erase_chars,
+    kTerm_exit_attribute_mode,
+    kTerm_exit_ca_mode,
+    kTerm_from_status_line,
+    kTerm_insert_line,
+    kTerm_keypad_local,
+    kTerm_keypad_xmit,
+    kTerm_parm_delete_line,
+    kTerm_parm_down_cursor,
+    kTerm_parm_insert_line,
+    kTerm_parm_left_cursor,
+    kTerm_parm_right_cursor,
+    kTerm_parm_up_cursor,
+    kTerm_set_a_background,
+    kTerm_set_a_foreground,
+    kTerm_set_attributes,
+    kTerm_set_lr_margin,
+    kTerm_to_status_line,
+    // Extended (kTermExtOffset)
+    kTerm_reset_cursor_style,
+    kTerm_set_cursor_style,
+    kTerm_enter_strikethrough_mode,
+    kTerm_set_rgb_foreground,
+    kTerm_set_rgb_background,
+    kTerm_set_cursor_color,
+    kTerm_reset_cursor_color,
+    kTerm_set_underline_style,
+    kTermCount,
+}
+
+const KTERM_COUNT: usize = TerminfoDef::kTermCount as usize;
+
+/// Context for terminal detection - passed from C with all necessary info
+#[repr(C)]
+pub struct TermDetectContext {
+    /// TERM environment variable
+    pub term: *const c_char,
+    /// COLORTERM environment variable
+    pub colorterm: *const c_char,
+    /// VTE version (0 if not VTE)
+    pub vte_version: c_int,
+    /// Konsole version (0 if not Konsole)
+    pub konsole_version: c_int,
+    /// Whether ITERM_SESSION_ID is set
+    pub iterm_env: c_int,
+    /// Whether running in Terminal.app (macOS)
+    pub nsterm: c_int,
+    /// Whether XTERM_VERSION is set
+    pub has_xterm_version: c_int,
+    /// Whether TMUX is set
+    pub tmux_env: c_int,
+    /// WEZTERM_VERSION string (may be null)
+    pub wezterm_version: *const c_char,
+}
+
+/// Mutable terminfo state that can be modified by detection
+#[repr(C)]
+pub struct TerminfoState {
+    /// Back color erase support
+    pub bce: c_int,
+    /// Maximum colors
+    pub max_colors: c_int,
+    /// Has Tc or RGB extended capability
+    pub has_tc_or_rgb: c_int,
+    /// Has Su extended capability
+    pub has_su: c_int,
+    /// Terminfo string definitions (array of kTermCount pointers)
+    pub defs: *mut *const c_char,
+}
+
+/// Output flags from terminal detection
+#[repr(C)]
+pub struct TermDetectOutput {
+    /// Can resize screen
+    pub can_resize_screen: c_int,
+    /// Can set title
+    pub can_set_title: c_int,
+    /// Reset scroll region escape sequence (may be null)
+    pub reset_scroll_region: *const c_char,
+    /// Enable focus reporting escape sequence
+    pub enable_focus_reporting: *const c_char,
+    /// Disable focus reporting escape sequence
+    pub disable_focus_reporting: *const c_char,
+    /// Set cursor color as string (vs numeric)
+    pub set_cursor_color_as_str: c_int,
+    /// Key encoding to use (0=legacy, 1=kitty, 2=xterm)
+    pub key_encoding: c_int,
+    /// Enable extended underline
+    pub enable_extended_underline: c_int,
+}
+
+/// Internal helper to check term family using Rust strings
+fn is_term_family(term: &[u8], family: &[u8]) -> bool {
+    if term.len() < family.len() {
+        return false;
+    }
+    if &term[..family.len()] != family {
+        return false;
+    }
+    if term.len() == family.len() {
+        return true;
+    }
+    let next = term[family.len()];
+    next == b'-' || next == b'.'
+}
+
+/// Check if string contains substring
+fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+    haystack
+        .windows(needle.len())
+        .any(|window| window == needle)
+}
+
+/// Detect terminal type and patch terminfo bugs.
+///
+/// This function analyzes the terminal environment and patches known
+/// terminfo bugs for various terminal emulators.
+///
+/// # Safety
+///
+/// All pointers in ctx and state must be valid or null as documented.
+/// state.defs must point to an array of at least kTermCount pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_patch_terminfo_bugs(
+    ctx: *const TermDetectContext,
+    state: *mut TerminfoState,
+) {
+    if ctx.is_null() || state.is_null() {
+        return;
+    }
+
+    let ctx = &*ctx;
+    let state = &mut *state;
+
+    let term = if ctx.term.is_null() {
+        &[]
+    } else {
+        CStr::from_ptr(ctx.term).to_bytes()
+    };
+
+    let colorterm = if ctx.colorterm.is_null() {
+        &[]
+    } else {
+        CStr::from_ptr(ctx.colorterm).to_bytes()
+    };
+
+    let nsterm = ctx.nsterm != 0;
+    let iterm_env = ctx.iterm_env != 0;
+    let has_xterm_version = ctx.has_xterm_version != 0;
+    let tmux_env = ctx.tmux_env != 0;
+    let vte_version = ctx.vte_version;
+    let konsolev = ctx.konsole_version;
+
+    // Terminal type detection
+    let xterm = is_term_family(term, b"xterm") || nsterm;
+    let hterm = is_term_family(term, b"hterm");
+    let kitty = is_term_family(term, b"xterm-kitty");
+    let linuxvt = is_term_family(term, b"linux");
+    let bsdvt = is_bsd_console(term);
+    let rxvt = is_term_family(term, b"rxvt");
+    let _teraterm = is_term_family(term, b"teraterm");
+    let putty = is_term_family(term, b"putty");
+    let screen = is_term_family(term, b"screen");
+    let tmux = is_term_family(term, b"tmux") || tmux_env;
+    let st = is_term_family(term, b"st");
+    let gnome = is_term_family(term, b"gnome") || is_term_family(term, b"vte");
+    let iterm = is_term_family(term, b"iterm")
+        || is_term_family(term, b"iterm2")
+        || is_term_family(term, b"iTerm.app")
+        || is_term_family(term, b"iTerm2.app");
+    let _alacritty = is_term_family(term, b"alacritty");
+    let _foot = is_term_family(term, b"foot");
+
+    let iterm_pretending_xterm = xterm && iterm_env;
+    let gnome_pretending_xterm = xterm && !colorterm.is_empty() && contains(colorterm, b"gnome-terminal");
+    let mate_pretending_xterm = xterm && !colorterm.is_empty() && contains(colorterm, b"mate-terminal");
+    let true_xterm = xterm && has_xterm_version && !bsdvt;
+    let _cygwin = is_term_family(term, b"cygwin");
+
+    // Access defs array
+    let defs = std::slice::from_raw_parts_mut(state.defs, KTERM_COUNT);
+
+    // Disable BCE in some cases we know it is not working. #8806
+    if tmux || screen || kitty {
+        state.bce = 0;
+    }
+
+    // Terminal-specific terminfo patches
+    if xterm || hterm {
+        if !hterm {
+            set_if_empty(defs, TerminfoDef::kTerm_to_status_line, b"\x1b]0;\0");
+            set_if_empty(defs, TerminfoDef::kTerm_from_status_line, b"\x07\0");
+        }
+        set_if_empty(defs, TerminfoDef::kTerm_enter_italics_mode, b"\x1b[3m\0");
+        set_if_empty(defs, TerminfoDef::kTerm_set_lr_margin, b"\x1b[%i%p1%d;%p2%ds\0");
+    } else if rxvt {
+        set_if_empty(defs, TerminfoDef::kTerm_enter_italics_mode, b"\x1b[3m\0");
+        set_if_empty(defs, TerminfoDef::kTerm_to_status_line, b"\x1b]2\0");
+        set_if_empty(defs, TerminfoDef::kTerm_from_status_line, b"\x07\0");
+        set_str(defs, TerminfoDef::kTerm_enter_ca_mode, b"\x1b[?1049h\0");
+        set_str(defs, TerminfoDef::kTerm_exit_ca_mode, b"\x1b[?1049l\0");
+    } else if screen {
+        set_if_empty(defs, TerminfoDef::kTerm_to_status_line, b"\x1b_\0");
+        set_if_empty(defs, TerminfoDef::kTerm_from_status_line, b"\x1b\\\0");
+    } else if tmux {
+        set_if_empty(defs, TerminfoDef::kTerm_to_status_line, b"\x1b_\0");
+        set_if_empty(defs, TerminfoDef::kTerm_from_status_line, b"\x1b\\\0");
+        set_if_empty(defs, TerminfoDef::kTerm_enter_italics_mode, b"\x1b[3m\0");
+    } else if is_term_family(term, b"interix") {
+        set_if_empty(defs, TerminfoDef::kTerm_carriage_return, b"\x0d\0");
+    } else if linuxvt {
+        set_if_empty(defs, TerminfoDef::kTerm_parm_up_cursor, b"\x1b[%p1%dA\0");
+        set_if_empty(defs, TerminfoDef::kTerm_parm_down_cursor, b"\x1b[%p1%dB\0");
+        set_if_empty(defs, TerminfoDef::kTerm_parm_right_cursor, b"\x1b[%p1%dC\0");
+        set_if_empty(defs, TerminfoDef::kTerm_parm_left_cursor, b"\x1b[%p1%dD\0");
+    } else if iterm {
+        set_str(defs, TerminfoDef::kTerm_enter_ca_mode, b"\x1b[?1049h\0");
+        set_str(defs, TerminfoDef::kTerm_exit_ca_mode, b"\x1b[?1049l\0");
+        set_if_empty(defs, TerminfoDef::kTerm_enter_italics_mode, b"\x1b[3m\0");
+    }
+    // putty, st: No bugs in vanilla terminfo for our purposes
+
+    // 256 color support despite what terminfo says
+    if state.max_colors < 256 {
+        if true_xterm || iterm || iterm_pretending_xterm {
+            state.max_colors = 256;
+            // Use colon separator (ISO 8613-6 compliant)
+            set_str(defs, TerminfoDef::kTerm_set_a_foreground,
+                b"\x1b[%?%p1%{8}%<%t3%p1%d%e%p1%{16}%<%t9%p1%{8}%-%d%e38:5:%p1%d%;m\0");
+            set_str(defs, TerminfoDef::kTerm_set_a_background,
+                b"\x1b[%?%p1%{8}%<%t4%p1%d%e%p1%{16}%<%t10%p1%{8}%-%d%e48:5:%p1%d%;m\0");
+        } else if konsolev != 0 || xterm || gnome || rxvt || st || putty
+            || linuxvt || mate_pretending_xterm || gnome_pretending_xterm || tmux
+            || contains(colorterm, b"256") || contains(term, b"256")
+        {
+            state.max_colors = 256;
+            // Use semicolon separator (more compatible)
+            set_str(defs, TerminfoDef::kTerm_set_a_foreground,
+                b"\x1b[%?%p1%{8}%<%t3%p1%d%e%p1%{16}%<%t9%p1%{8}%-%d%e38;5;%p1%d%;m\0");
+            set_str(defs, TerminfoDef::kTerm_set_a_background,
+                b"\x1b[%?%p1%{8}%<%t4%p1%d%e%p1%{16}%<%t10%p1%{8}%-%d%e48;5;%p1%d%;m\0");
+        }
+    }
+
+    // 16 color support
+    if state.max_colors < 16 && !colorterm.is_empty() {
+        state.max_colors = 16;
+        set_if_empty(defs, TerminfoDef::kTerm_set_a_foreground,
+            b"\x1b[%?%p1%{8}%<%t3%p1%d%e%p1%{16}%<%t9%p1%{8}%-%d%e39%;m\0");
+        set_if_empty(defs, TerminfoDef::kTerm_set_a_background,
+            b"\x1b[%?%p1%{8}%<%t4%p1%d%e%p1%{16}%<%t10%p1%{8}%-%d%e39%;m\0");
+    }
+
+    // Blacklist terminals that cannot be trusted to report DECSCUSR support
+    if st || (vte_version != 0 && vte_version < 3900) || konsolev != 0 {
+        defs[TerminfoDef::kTerm_reset_cursor_style as usize] = std::ptr::null();
+    }
+}
+
+/// Augment terminfo with capabilities not in standard terminfo.
+///
+/// # Safety
+///
+/// All pointers must be valid or null as documented.
+#[no_mangle]
+pub unsafe extern "C" fn rs_augment_terminfo(
+    ctx: *const TermDetectContext,
+    state: *mut TerminfoState,
+    output: *mut TermDetectOutput,
+) {
+    if ctx.is_null() || state.is_null() || output.is_null() {
+        return;
+    }
+
+    let ctx = &*ctx;
+    let state = &mut *state;
+    let output = &mut *output;
+
+    let term = if ctx.term.is_null() {
+        &[]
+    } else {
+        CStr::from_ptr(ctx.term).to_bytes()
+    };
+
+    let nsterm = ctx.nsterm != 0;
+    let iterm_env = ctx.iterm_env != 0;
+    let tmux_env = ctx.tmux_env != 0;
+    let vte_version = ctx.vte_version;
+    let konsolev = ctx.konsole_version;
+
+    // Terminal type detection
+    let xterm = is_term_family(term, b"xterm") || nsterm;
+    let hterm = is_term_family(term, b"hterm");
+    let bsdvt = is_bsd_console(term);
+    let dtterm = is_term_family(term, b"dtterm");
+    let rxvt = is_term_family(term, b"rxvt");
+    let teraterm = is_term_family(term, b"teraterm");
+    let putty = is_term_family(term, b"putty");
+    let screen = is_term_family(term, b"screen");
+    let tmux = is_term_family(term, b"tmux") || tmux_env;
+    let st = is_term_family(term, b"st");
+    let iterm = is_term_family(term, b"iterm")
+        || is_term_family(term, b"iterm2")
+        || is_term_family(term, b"iTerm.app")
+        || is_term_family(term, b"iTerm2.app");
+    let alacritty = is_term_family(term, b"alacritty");
+    let kitty = is_term_family(term, b"xterm-kitty");
+    let has_xterm_version = ctx.has_xterm_version != 0;
+
+    let iterm_pretending_xterm = xterm && iterm_env;
+    let true_xterm = xterm && has_xterm_version && !bsdvt;
+
+    // Access defs array
+    let defs = std::slice::from_raw_parts_mut(state.defs, KTERM_COUNT);
+
+    // Can resize screen
+    if dtterm || xterm || konsolev != 0 || teraterm || rxvt {
+        output.can_resize_screen = 1;
+    }
+
+    // Reset scroll region
+    if putty || xterm || hterm || rxvt {
+        output.reset_scroll_region = b"\x1b[r\0".as_ptr() as *const c_char;
+    }
+
+    // RGB color support
+    let has_colon_rgb = !tmux && !screen
+        && vte_version == 0  // VTE colon-support has a big memory leak. #7573
+        && (iterm || iterm_pretending_xterm || true_xterm);
+
+    if defs[TerminfoDef::kTerm_set_rgb_foreground as usize].is_null() {
+        if has_colon_rgb {
+            defs[TerminfoDef::kTerm_set_rgb_foreground as usize] =
+                b"\x1b[38:2:%p1%d:%p2%d:%p3%dm\0".as_ptr() as *const c_char;
+        } else {
+            defs[TerminfoDef::kTerm_set_rgb_foreground as usize] =
+                b"\x1b[38;2;%p1%d;%p2%d;%p3%dm\0".as_ptr() as *const c_char;
+        }
+    }
+
+    if defs[TerminfoDef::kTerm_set_rgb_background as usize].is_null() {
+        if has_colon_rgb {
+            defs[TerminfoDef::kTerm_set_rgb_background as usize] =
+                b"\x1b[48:2:%p1%d:%p2%d:%p3%dm\0".as_ptr() as *const c_char;
+        } else {
+            defs[TerminfoDef::kTerm_set_rgb_background as usize] =
+                b"\x1b[48;2;%p1%d;%p2%d;%p3%dm\0".as_ptr() as *const c_char;
+        }
+    }
+
+    // Cursor color
+    if defs[TerminfoDef::kTerm_set_cursor_color as usize].is_null() {
+        if iterm || iterm_pretending_xterm {
+            if tmux {
+                defs[TerminfoDef::kTerm_set_cursor_color as usize] =
+                    b"\x1bPtmux;\x1b\x1b]Pl%p1%06x\x1b\\\x1b\\\0".as_ptr() as *const c_char;
+            } else {
+                defs[TerminfoDef::kTerm_set_cursor_color as usize] =
+                    b"\x1b]Pl%p1%06x\x1b\\\0".as_ptr() as *const c_char;
+            }
+        } else if (xterm || hterm || rxvt || tmux || alacritty || st)
+            && (vte_version == 0 || vte_version >= 3900)
+        {
+            defs[TerminfoDef::kTerm_set_cursor_color as usize] =
+                b"\x1b]12;%p1%s\x07\0".as_ptr() as *const c_char;
+        }
+    }
+
+    // Check if cursor color format uses string parameter
+    let cursor_color = defs[TerminfoDef::kTerm_set_cursor_color as usize];
+    if !cursor_color.is_null() {
+        let cursor_color_bytes = CStr::from_ptr(cursor_color).to_bytes();
+        output.set_cursor_color_as_str = i32::from(contains(cursor_color_bytes, b"%s"));
+
+        set_if_empty(defs, TerminfoDef::kTerm_reset_cursor_color, b"\x1b]112\x07\0");
+    }
+
+    // Can set title
+    if !defs[TerminfoDef::kTerm_to_status_line as usize].is_null()
+        && !defs[TerminfoDef::kTerm_from_status_line as usize].is_null()
+    {
+        output.can_set_title = 1;
+    }
+
+    // Focus reporting
+    if rxvt {
+        output.enable_focus_reporting = b"\x1b[?1004h\x1b]777;focus;on\x07\0".as_ptr() as *const c_char;
+        output.disable_focus_reporting = b"\x1b[?1004l\x1b]777;focus;off\x07\0".as_ptr() as *const c_char;
+    } else {
+        output.enable_focus_reporting = b"\x1b[?1004h\0".as_ptr() as *const c_char;
+        output.disable_focus_reporting = b"\x1b[?1004l\0".as_ptr() as *const c_char;
+    }
+
+    // Extended underline support
+    let wezterm_ok = if ctx.wezterm_version.is_null() {
+        false
+    } else {
+        let wv = CStr::from_ptr(ctx.wezterm_version).to_bytes();
+        wv > b"20210203-095643"
+    };
+
+    if defs[TerminfoDef::kTerm_set_underline_style as usize].is_null() {
+        if vte_version >= 5102 || konsolev >= 221170 || state.has_su != 0 || wezterm_ok {
+            output.enable_extended_underline = 1;
+        }
+    } else {
+        output.enable_extended_underline = 1;
+    }
+
+    // Key encoding
+    if kitty || (vte_version != 0 && vte_version < 5400) {
+        output.key_encoding = 0; // kKeyEncodingLegacy
+    } else {
+        output.key_encoding = 2; // kKeyEncodingXterm (fallback until kitty query)
+    }
+}
+
+/// Helper to check if terminal is BSD console
+fn is_bsd_console(term: &[u8]) -> bool {
+    #[cfg(any(
+        target_os = "freebsd",
+        target_os = "netbsd",
+        target_os = "openbsd",
+        target_os = "dragonfly"
+    ))]
+    {
+        if term == b"vt220" || term == b"vt100" {
+            return true;
+        }
+        #[cfg(target_os = "freebsd")]
+        {
+            if term == b"xterm" {
+                // Would need to check XTERM_VERSION env var
+                // For now, handled by caller passing has_xterm_version
+                return false;
+            }
+        }
+    }
+    let _ = term;
+    false
+}
+
+/// Set terminfo string if currently empty
+fn set_if_empty(defs: &mut [*const c_char], idx: TerminfoDef, val: &'static [u8]) {
+    let i = idx as usize;
+    if defs[i].is_null() {
+        defs[i] = val.as_ptr() as *const c_char;
+    }
+}
+
+/// Set terminfo string unconditionally
+fn set_str(defs: &mut [*const c_char], idx: TerminfoDef, val: &'static [u8]) {
+    defs[idx as usize] = val.as_ptr() as *const c_char;
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 

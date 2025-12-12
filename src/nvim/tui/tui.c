@@ -153,6 +153,48 @@ extern int rs_rstream_did_eof(RStream *stream);
 #define rstream_did_eof(s) ((s)->did_eof)
 #endif
 
+#ifdef USE_RUST_TUI
+// Rust terminal detection structures and functions
+
+/// Context for terminal detection - passed to Rust
+typedef struct {
+  const char *term;
+  const char *colorterm;
+  int vte_version;
+  int konsole_version;
+  int iterm_env;
+  int nsterm;
+  int has_xterm_version;
+  int tmux_env;
+  const char *wezterm_version;
+} TermDetectContext;
+
+/// Mutable terminfo state
+typedef struct {
+  int bce;
+  int max_colors;
+  int has_tc_or_rgb;
+  int has_su;
+  const char **defs;
+} TerminfoState;
+
+/// Output flags from terminal detection
+typedef struct {
+  int can_resize_screen;
+  int can_set_title;
+  const char *reset_scroll_region;
+  const char *enable_focus_reporting;
+  const char *disable_focus_reporting;
+  int set_cursor_color_as_str;
+  int key_encoding;
+  int enable_extended_underline;
+} TermDetectOutput;
+
+extern void rs_patch_terminfo_bugs(const TermDetectContext *ctx, TerminfoState *state);
+extern void rs_augment_terminfo(const TermDetectContext *ctx, TerminfoState *state,
+                                TermDetectOutput *output);
+#endif
+
 #define TERMINFO_SEQ_LIMIT 128
 
 #define terminfo_print_num1(tui, what, num) terminfo_print_num(tui, what, num, 0, 0)
@@ -430,8 +472,55 @@ static void terminfo_start(TUIData *tui)
   // truecolor support must be checked before patching/augmenting terminfo
   tui->rgb = term_has_truecolor(tui, colorterm);
 
+#ifdef USE_RUST_TUI
+  // Use Rust implementations for terminal detection
+  char *xterm_version_env = os_getenv("XTERM_VERSION");
+  TermDetectContext ctx = {
+    .term = term,
+    .colorterm = colorterm,
+    .vte_version = vtev,
+    .konsole_version = konsolev,
+    .iterm_env = iterm_env ? 1 : 0,
+    .nsterm = nsterm ? 1 : 0,
+    .has_xterm_version = xterm_version_env ? 1 : 0,
+    .tmux_env = tmux ? 1 : 0,
+    .wezterm_version = weztermv,
+  };
+  TerminfoState state = {
+    .bce = tui->ti.bce ? 1 : 0,
+    .max_colors = tui->ti.max_colors,
+    .has_tc_or_rgb = tui->ti.has_Tc_or_RGB ? 1 : 0,
+    .has_su = tui->ti.Su ? 1 : 0,
+    .defs = tui->ti.defs,
+  };
+  TermDetectOutput output = { 0 };
+
+  rs_patch_terminfo_bugs(&ctx, &state);
+
+  // Apply state changes back
+  tui->ti.bce = state.bce != 0;
+  tui->ti.max_colors = state.max_colors;
+
+  rs_augment_terminfo(&ctx, &state, &output);
+
+  // Apply output flags
+  tui->can_resize_screen = output.can_resize_screen != 0;
+  tui->can_set_title = output.can_set_title != 0;
+  tui->terminfo_ext.reset_scroll_region = (char *)output.reset_scroll_region;
+  tui->terminfo_ext.enable_focus_reporting = (char *)output.enable_focus_reporting;
+  tui->terminfo_ext.disable_focus_reporting = (char *)output.disable_focus_reporting;
+  tui->set_cursor_color_as_str = output.set_cursor_color_as_str != 0;
+  tui->input.key_encoding = (KeyEncoding)output.key_encoding;
+  if (output.enable_extended_underline) {
+    tui_enable_extended_underline(tui);
+  }
+  // It should be pretty safe to always enable this
+  tui->terminfo_ext.enter_altfont_mode = "\x1b[11m";
+  xfree(xterm_version_env);
+#else
   patch_terminfo_bugs(tui, term, colorterm, vtev, konsolev, iterm_env, nsterm);
   augment_terminfo(tui, term, vtev, konsolev, weztermv, iterm_env, nsterm);
+#endif
 
 #define TI_HAS(name) (tui->ti.defs[name] != NULL)
   tui->can_change_scroll_region = TI_HAS(kTerm_change_scroll_region);
