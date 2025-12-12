@@ -2,21 +2,34 @@
 
 ## Current Status
 
-**627 rs_* functions migrated**
+**630 rs_* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
 ### Current Work
 
 **Phase 9 - Highlight Functions** (in progress)
-- Phase 9.0-9.7: Color blending, conversion, name lookups (complete)
-- Phase 9.8: HlEntry struct, attribute entry infrastructure (complete)
+- Phase 9.0-9.7: Color blending, conversion, name lookups ✅
+- Phase 9.8: HlEntry struct, attribute entry infrastructure ✅
   - Added: HlKind enum, HlEntry struct, AttrEntryStore
   - Added: rs_highlight_init, rs_syn_attr2entry, rs_get_attr_entry
   - Added: rs_combine_cache_get/put, rs_blend_cache_get/put
   - Added: rs_clear_hl_tables, rs_highlight_use_hlstate, rs_hl_invalidate_blends
-- Phase 9.9+: Connect C code to use Rust entry store (next)
-- Run `grep -n "pub.*extern.*fn rs_" src/nvim-rs/highlight/src/lib.rs` to see all functions
+- Phase 9.9-9.12: Connect C code to Rust with validation ✅
+  - C code now stores entries/URLs in both C and Rust
+  - Assertions validate identical behavior
+  - All 37 API + 80 UI highlight tests pass
+- Phase 9.13+: Remaining highlight.c functions (namespace, inspection) - blocked on Object type migration
+
+**Highlight Migration Status:**
+- Core computation: Fully in Rust (rgb_blend, cterm_blend, combine_attrs, blend_attrs)
+- Entry storage: Duplicated in Rust with validation
+- URL storage: Duplicated in Rust with validation
+- Cache management: Duplicated in Rust with validation
+- Namespace system: Still in C (requires Lua callback wrappers)
+- API conversion: Still in C (requires Object type system in Rust)
+
+Run `grep -n "pub.*extern.*fn rs_" src/nvim-rs/highlight/src/lib.rs` to see all functions
 
 ---
 
@@ -49,7 +62,7 @@ All Rust code lives in `src/nvim-rs/`. The main crate re-exports all FFI functio
 | nvim-getchar | Typeahead buffer | stuff_empty, typebuf_*, using_script |
 | nvim-grid | Screen grid | schar operations |
 | nvim-help | Help system | help tag lookup |
-| nvim-highlight | Color manipulation | rgb_blend, cterm_blend, name_to_ctermcolor |
+| nvim-highlight | Color & attr system | rgb_blend, hl_combine_attrs_compute, HlEntry store |
 | nvim-indent | Indentation | tabstop calculations |
 | nvim-insexpand | Insert completion | ctrl_x_mode_*, compl_status_* |
 | nvim-keycodes | Key codes | name_to_mod_mask, handle_x_keys |
@@ -119,7 +132,7 @@ extern "C" { fn nvim_get_foo_field() -> c_int; }
 | 6.0 | MessagePack unpacker (rs_unpack) | ✅ |
 | 7.x | API layer functions | 🔄 |
 | 8.0-8.4 | Terminal UI (terminfo, detection) | ✅ |
-| 9.0-9.1 | Highlight color functions | 🔄 |
+| 9.0-9.12 | Highlight core (color, entry store, caches) | ✅ |
 
 ### Future Phases (Roadmap)
 
