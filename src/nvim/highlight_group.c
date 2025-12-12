@@ -68,6 +68,16 @@ int nvim_get_normal_bg(void)
   return normal_bg;
 }
 
+int nvim_get_normal_sp(void)
+{
+  return normal_sp;
+}
+
+char nvim_get_p_bg(void)
+{
+  return *p_bg;
+}
+
 /// \addtogroup SG_SET
 /// @{
 enum {

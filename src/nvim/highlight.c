@@ -576,6 +576,14 @@ void hl_invalidate_blends(void)
 
 /// Combine HlAttrFlags.
 /// The underline attribute in "prim_ae" overrules the one in "char_ae" if both are present.
+#ifdef USE_RUST_HIGHLIGHT
+extern int16_t rs_hl_combine_ae(int16_t char_ae, int16_t prim_ae);
+
+static int16_t hl_combine_ae(int16_t char_ae, int16_t prim_ae)
+{
+  return rs_hl_combine_ae(char_ae, prim_ae);
+}
+#else
 static int16_t hl_combine_ae(int16_t char_ae, int16_t prim_ae)
 {
   int16_t char_ul = char_ae & HL_UNDERLINE_MASK;
@@ -583,6 +591,7 @@ static int16_t hl_combine_ae(int16_t char_ae, int16_t prim_ae)
   int16_t new_ul = prim_ul ? prim_ul : char_ul;
   return (char_ae & ~HL_UNDERLINE_MASK) | (prim_ae & ~HL_UNDERLINE_MASK) | new_ul;
 }
+#endif
 
 // Combine special attributes (e.g., for spelling) with other attributes
 // (e.g., for syntax highlighting).
@@ -671,6 +680,14 @@ int hl_combine_attr(int char_attr, int prim_attr)
 ///
 /// If colors are unset, use builtin default colors. Never returns -1
 /// Cterm colors are unchanged.
+#ifdef USE_RUST_HIGHLIGHT
+extern HlAttrs rs_get_colors_force(HlAttrs attrs);
+
+static HlAttrs get_colors_force(HlAttrs attrs)
+{
+  return rs_get_colors_force(attrs);
+}
+#else
 static HlAttrs get_colors_force(HlAttrs attrs)
 {
   if (attrs.rgb_bg_color == -1) {
@@ -694,6 +711,7 @@ static HlAttrs get_colors_force(HlAttrs attrs)
 
   return attrs;
 }
+#endif
 
 /// Blend overlay attributes (for popupmenu) with other attributes
 ///

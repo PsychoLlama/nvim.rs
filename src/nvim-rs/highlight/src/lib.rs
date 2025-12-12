@@ -12,6 +12,130 @@ extern "C" {
     fn nvim_get_normal_fg() -> c_int;
     /// Get the normal background color
     fn nvim_get_normal_bg() -> c_int;
+    /// Get the normal special color
+    fn nvim_get_normal_sp() -> c_int;
+    /// Get p_bg (background option: 'd' for dark, 'l' for light)
+    fn nvim_get_p_bg() -> c_char;
+}
+
+// ============================================================================
+// Highlight Attribute Flags (from highlight_defs.h)
+// ============================================================================
+
+/// Highlight attribute flags
+pub mod hl_attr_flags {
+    pub const HL_INVERSE: i16 = 0x01;
+    pub const HL_BOLD: i16 = 0x02;
+    pub const HL_ITALIC: i16 = 0x04;
+    pub const HL_UNDERLINE_MASK: i16 = 0x38;
+    pub const HL_UNDERLINE: i16 = 0x08;
+    pub const HL_UNDERCURL: i16 = 0x10;
+    pub const HL_UNDERDOUBLE: i16 = 0x18;
+    pub const HL_UNDERDOTTED: i16 = 0x20;
+    pub const HL_UNDERDASHED: i16 = 0x28;
+    pub const HL_STANDOUT: i16 = 0x0040;
+    pub const HL_STRIKETHROUGH: i16 = 0x0080;
+    pub const HL_ALTFONT: i16 = 0x0100;
+    pub const HL_NOCOMBINE: i16 = 0x0400;
+    pub const HL_BG_INDEXED: i16 = 0x0800;
+    pub const HL_FG_INDEXED: i16 = 0x1000;
+    pub const HL_DEFAULT: i16 = 0x2000;
+    pub const HL_GLOBAL: i16 = 0x4000;
+}
+
+use hl_attr_flags::*;
+
+// ============================================================================
+// HlAttrs Struct (matches C struct in highlight_defs.h)
+// ============================================================================
+
+/// Stores a complete highlighting entry, including colors and attributes
+/// for both TUI and GUI. This must match the C struct exactly.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct HlAttrs {
+    pub rgb_ae_attr: i16,
+    pub cterm_ae_attr: i16,
+    pub rgb_fg_color: i32,
+    pub rgb_bg_color: i32,
+    pub rgb_sp_color: i32,
+    pub cterm_fg_color: i16,
+    pub cterm_bg_color: i16,
+    pub hl_blend: i32,
+    pub url: i32,
+}
+
+impl HlAttrs {
+    /// Create a new HlAttrs with default values (matching HLATTRS_INIT)
+    pub const fn new() -> Self {
+        HlAttrs {
+            rgb_ae_attr: 0,
+            cterm_ae_attr: 0,
+            rgb_fg_color: -1,
+            rgb_bg_color: -1,
+            rgb_sp_color: -1,
+            cterm_fg_color: 0,
+            cterm_bg_color: 0,
+            hl_blend: -1,
+            url: -1,
+        }
+    }
+}
+
+// ============================================================================
+// Highlight Attribute Combination Functions
+// ============================================================================
+
+/// Combine two attribute flags, handling underline styles specially.
+/// The primary (prim_ae) attribute overrides the char attribute, except
+/// for underline styles where we prefer the primary if set.
+#[no_mangle]
+pub extern "C" fn rs_hl_combine_ae(char_ae: i16, prim_ae: i16) -> i16 {
+    let char_ul = char_ae & HL_UNDERLINE_MASK;
+    let prim_ul = prim_ae & HL_UNDERLINE_MASK;
+    let new_ul = if prim_ul != 0 { prim_ul } else { char_ul };
+    (char_ae & !HL_UNDERLINE_MASK) | (prim_ae & !HL_UNDERLINE_MASK) | new_ul
+}
+
+/// Get the used RGB colors for an attr group, filling in defaults.
+/// If colors are unset (-1), use normal_fg/bg/sp or builtin defaults.
+/// Also handles HL_INVERSE by swapping fg and bg.
+///
+/// # Safety
+/// This function calls C accessor functions for global variables.
+/// It must only be called when the Neovim runtime is properly initialized.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_colors_force(mut attrs: HlAttrs) -> HlAttrs {
+    // Fill in defaults from normal highlight group
+    if attrs.rgb_bg_color == -1 {
+        attrs.rgb_bg_color = nvim_get_normal_bg();
+    }
+    if attrs.rgb_fg_color == -1 {
+        attrs.rgb_fg_color = nvim_get_normal_fg();
+    }
+    if attrs.rgb_sp_color == -1 {
+        attrs.rgb_sp_color = nvim_get_normal_sp();
+    }
+
+    // Apply builtin defaults based on 'background' option
+    let dark = nvim_get_p_bg() == b'd' as c_char;
+    if attrs.rgb_fg_color == -1 {
+        attrs.rgb_fg_color = if dark { 0xFFFFFF } else { 0x000000 };
+    }
+    if attrs.rgb_bg_color == -1 {
+        attrs.rgb_bg_color = if dark { 0x000000 } else { 0xFFFFFF };
+    }
+    if attrs.rgb_sp_color == -1 {
+        attrs.rgb_sp_color = 0xFF0000; // default special color is red
+    }
+
+    // Handle inverse attribute by swapping fg and bg
+    if (attrs.rgb_ae_attr & HL_INVERSE) != 0 {
+        std::mem::swap(&mut attrs.rgb_fg_color, &mut attrs.rgb_bg_color);
+        attrs.rgb_ae_attr &= !HL_INVERSE;
+    }
+
+    attrs
 }
 
 // ============================================================================
