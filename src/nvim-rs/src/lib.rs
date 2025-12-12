@@ -38,6 +38,7 @@ pub use nvim_fileio::*;
 pub use nvim_getchar::*;
 pub use nvim_grid::*;
 pub use nvim_help::*;
+pub use nvim_highlight::*;
 pub use nvim_indent::*;
 pub use nvim_insexpand::*;
 pub use nvim_keycodes::*;
