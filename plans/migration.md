@@ -2,15 +2,15 @@
 
 ## Current Status
 
-**607 rs_* functions migrated**
+**608 rs_* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
 ### Current Work
 
-**Phase 8 - Terminal UI Functions** (in progress)
-- nvim-tui crate: terminfo_*, patch_terminfo_bugs, augment_terminfo, term_has_truecolor
-- Run `grep -n "pub.*extern.*fn rs_" src/nvim-rs/tui/src/lib.rs` to see all functions
+**Phase 9 - Highlight Functions** (in progress)
+- nvim-highlight crate: rgb_blend, cterm_blend, color conversion, name_to_ctermcolor
+- Run `grep -n "pub.*extern.*fn rs_" src/nvim-rs/highlight/src/lib.rs` to see all functions
 
 ---
 
@@ -43,7 +43,7 @@ All Rust code lives in `src/nvim-rs/`. The main crate re-exports all FFI functio
 | nvim-getchar | Typeahead buffer | stuff_empty, typebuf_*, using_script |
 | nvim-grid | Screen grid | schar operations |
 | nvim-help | Help system | help tag lookup |
-| nvim-highlight | Color manipulation | rgb_blend, cterm_blend, color conversion |
+| nvim-highlight | Color manipulation | rgb_blend, cterm_blend, name_to_ctermcolor |
 | nvim-indent | Indentation | tabstop calculations |
 | nvim-insexpand | Insert completion | ctrl_x_mode_*, compl_status_* |
 | nvim-keycodes | Key codes | name_to_mod_mask, handle_x_keys |
@@ -112,16 +112,16 @@ extern "C" { fn nvim_get_foo_field() -> c_int; }
 | 5.1-5.31 | Static variable accessor pattern | ✅ |
 | 6.0 | MessagePack unpacker (rs_unpack) | ✅ |
 | 7.x | API layer functions | 🔄 |
-| 8.0 | Terminal UI (initial) | 🔄 |
+| 8.0-8.4 | Terminal UI (terminfo, detection) | ✅ |
+| 9.0-9.1 | Highlight color functions | 🔄 |
 
 ### Future Phases (Roadmap)
 
 | Phase | Target | Notes |
 |-------|--------|-------|
-| 8 | Terminal UI | tui/*.c (terminfo, input) |
-| 9 | Buffer & Text | memline.c, buffer.c, undo.c |
-| 10 | Window & Display | window.c, drawscreen.c |
-| 11-15 | Editor Core | normal.c, eval.c, regexp.c |
+| 10 | Buffer & Text | memline.c, buffer.c, undo.c |
+| 11 | Window & Display | window.c, drawscreen.c |
+| 12-15 | Editor Core | normal.c, eval.c, regexp.c |
 | 16 | Final Cleanup | Remove FFI, reduce unsafe |
 
 ---
