@@ -1,9 +1,152 @@
 //! Terminal UI utilities for Neovim
 //!
-//! This crate provides terminfo-related functions for the terminal UI.
+//! This crate provides terminfo-related functions for the terminal UI,
+//! including key modifier handling and terminfo format string processing.
 
 use std::ffi::{c_char, c_int, c_long, CStr};
 use std::io::Write;
+
+// ============================================================================
+// Key Modifier Constants (matching termkey_defs.h and input.c)
+// ============================================================================
+
+/// Shift modifier (from libtermkey)
+const TERMKEY_KEYMOD_SHIFT: c_int = 1 << 0;
+/// Alt modifier (from libtermkey)
+const TERMKEY_KEYMOD_ALT: c_int = 1 << 1;
+/// Ctrl modifier (from libtermkey)
+const TERMKEY_KEYMOD_CTRL: c_int = 1 << 2;
+/// Super modifier (D- in Nvim, not from libtermkey)
+const KEYMOD_SUPER: c_int = 1 << 3;
+/// Meta modifier (T- in Nvim, not from libtermkey)
+const KEYMOD_META: c_int = 1 << 5;
+
+// ============================================================================
+// Key Modifier Functions
+// ============================================================================
+
+/// Handle TERMKEY_KEYMOD_* modifiers (Shift, Alt, Ctrl).
+///
+/// Writes modifier prefix strings ("S-", "A-", "C-") to the buffer based on
+/// the modifier flags. Used to build key notation like "<C-A-x>".
+///
+/// # Safety
+///
+/// - `buf` must point to a valid buffer of at least `buflen` bytes
+/// - The caller must ensure the buffer has enough space for the modifiers
+///   (up to 6 bytes for "S-A-C-")
+///
+/// # Arguments
+/// * `modifiers` - Modifier flags (TERMKEY_KEYMOD_*)
+/// * `buf` - Buffer to write to
+/// * `buflen` - Size of buffer
+///
+/// # Returns
+/// Number of bytes written to buffer, excluding any NUL terminator
+#[no_mangle]
+pub unsafe extern "C" fn rs_handle_termkey_modifiers(
+    modifiers: c_int,
+    buf: *mut c_char,
+    buflen: usize,
+) -> usize {
+    if buf.is_null() || buflen == 0 {
+        return 0;
+    }
+
+    let buf_slice = std::slice::from_raw_parts_mut(buf as *mut u8, buflen);
+    handle_termkey_modifiers_impl(modifiers, buf_slice)
+}
+
+/// Internal implementation of termkey modifier handling
+fn handle_termkey_modifiers_impl(modifiers: c_int, buf: &mut [u8]) -> usize {
+    let mut len = 0usize;
+
+    // Shift
+    if (modifiers & TERMKEY_KEYMOD_SHIFT) != 0 {
+        if len + 2 <= buf.len() {
+            buf[len] = b'S';
+            buf[len + 1] = b'-';
+            len += 2;
+        }
+    }
+
+    // Alt
+    if (modifiers & TERMKEY_KEYMOD_ALT) != 0 {
+        if len + 2 <= buf.len() {
+            buf[len] = b'A';
+            buf[len + 1] = b'-';
+            len += 2;
+        }
+    }
+
+    // Ctrl
+    if (modifiers & TERMKEY_KEYMOD_CTRL) != 0 {
+        if len + 2 <= buf.len() {
+            buf[len] = b'C';
+            buf[len + 1] = b'-';
+            len += 2;
+        }
+    }
+
+    len
+}
+
+/// Handle additional modifiers not handled by libtermkey.
+///
+/// Currently handles Super ("D-") and Meta ("T-") modifiers that are
+/// supported in Nvim but not directly by libtermkey.
+///
+/// # Safety
+///
+/// - `buf` must point to a valid buffer of at least `buflen` bytes
+/// - The caller must ensure the buffer has enough space for the modifiers
+///   (up to 4 bytes for "D-T-")
+///
+/// # Arguments
+/// * `modifiers` - Modifier flags (including KEYMOD_SUPER and KEYMOD_META)
+/// * `buf` - Buffer to write to
+/// * `buflen` - Size of buffer
+///
+/// # Returns
+/// Number of bytes written to buffer, excluding any NUL terminator
+#[no_mangle]
+pub unsafe extern "C" fn rs_handle_more_modifiers(
+    modifiers: c_int,
+    buf: *mut c_char,
+    buflen: usize,
+) -> usize {
+    if buf.is_null() || buflen == 0 {
+        return 0;
+    }
+
+    let buf_slice = std::slice::from_raw_parts_mut(buf as *mut u8, buflen);
+    handle_more_modifiers_impl(modifiers, buf_slice)
+}
+
+/// Internal implementation of additional modifier handling
+fn handle_more_modifiers_impl(modifiers: c_int, buf: &mut [u8]) -> usize {
+    let mut len = 0usize;
+
+    // Super (D-)
+    if (modifiers & KEYMOD_SUPER) != 0 {
+        if len + 2 <= buf.len() {
+            buf[len] = b'D';
+            buf[len + 1] = b'-';
+            len += 2;
+        }
+    }
+
+    // Meta (T-)
+    if (modifiers & KEYMOD_META) != 0 {
+        if len + 2 <= buf.len() {
+            buf[len] = b'T';
+            buf[len + 1] = b'-';
+            len += 2;
+        }
+    }
+
+    len
+}
 
 // ============================================================================
 // Terminfo Functions
@@ -810,5 +953,120 @@ mod tests {
         // %{42}%d pushes 42 and formats
         assert_eq!(fmt_test("%{42}%d", &[]), "42");
         assert_eq!(fmt_test("%p1%{10}%+%d", &[(5, None)]), "15");
+    }
+
+    // ========================================================================
+    // Key Modifier Tests
+    // ========================================================================
+
+    /// Helper to test termkey modifiers
+    fn termkey_modifiers_test(modifiers: c_int) -> String {
+        let mut buf = [0u8; 64];
+        let len = handle_termkey_modifiers_impl(modifiers, &mut buf);
+        String::from_utf8_lossy(&buf[..len]).into_owned()
+    }
+
+    /// Helper to test additional modifiers
+    fn more_modifiers_test(modifiers: c_int) -> String {
+        let mut buf = [0u8; 64];
+        let len = handle_more_modifiers_impl(modifiers, &mut buf);
+        String::from_utf8_lossy(&buf[..len]).into_owned()
+    }
+
+    #[test]
+    fn test_termkey_modifiers_none() {
+        assert_eq!(termkey_modifiers_test(0), "");
+    }
+
+    #[test]
+    fn test_termkey_modifiers_shift() {
+        assert_eq!(termkey_modifiers_test(TERMKEY_KEYMOD_SHIFT), "S-");
+    }
+
+    #[test]
+    fn test_termkey_modifiers_alt() {
+        assert_eq!(termkey_modifiers_test(TERMKEY_KEYMOD_ALT), "A-");
+    }
+
+    #[test]
+    fn test_termkey_modifiers_ctrl() {
+        assert_eq!(termkey_modifiers_test(TERMKEY_KEYMOD_CTRL), "C-");
+    }
+
+    #[test]
+    fn test_termkey_modifiers_shift_alt() {
+        assert_eq!(
+            termkey_modifiers_test(TERMKEY_KEYMOD_SHIFT | TERMKEY_KEYMOD_ALT),
+            "S-A-"
+        );
+    }
+
+    #[test]
+    fn test_termkey_modifiers_all() {
+        assert_eq!(
+            termkey_modifiers_test(TERMKEY_KEYMOD_SHIFT | TERMKEY_KEYMOD_ALT | TERMKEY_KEYMOD_CTRL),
+            "S-A-C-"
+        );
+    }
+
+    #[test]
+    fn test_more_modifiers_none() {
+        assert_eq!(more_modifiers_test(0), "");
+    }
+
+    #[test]
+    fn test_more_modifiers_super() {
+        assert_eq!(more_modifiers_test(KEYMOD_SUPER), "D-");
+    }
+
+    #[test]
+    fn test_more_modifiers_meta() {
+        assert_eq!(more_modifiers_test(KEYMOD_META), "T-");
+    }
+
+    #[test]
+    fn test_more_modifiers_both() {
+        assert_eq!(more_modifiers_test(KEYMOD_SUPER | KEYMOD_META), "D-T-");
+    }
+
+    #[test]
+    fn test_termkey_modifiers_ffi() {
+        let mut buf = [0i8; 64];
+        let len = unsafe {
+            rs_handle_termkey_modifiers(
+                TERMKEY_KEYMOD_CTRL | TERMKEY_KEYMOD_ALT,
+                buf.as_mut_ptr(),
+                buf.len(),
+            )
+        };
+        let result =
+            String::from_utf8_lossy(unsafe { std::mem::transmute::<&[i8], &[u8]>(&buf[..len]) });
+        assert_eq!(result, "A-C-");
+    }
+
+    #[test]
+    fn test_more_modifiers_ffi() {
+        let mut buf = [0i8; 64];
+        let len = unsafe {
+            rs_handle_more_modifiers(KEYMOD_SUPER | KEYMOD_META, buf.as_mut_ptr(), buf.len())
+        };
+        let result =
+            String::from_utf8_lossy(unsafe { std::mem::transmute::<&[i8], &[u8]>(&buf[..len]) });
+        assert_eq!(result, "D-T-");
+    }
+
+    #[test]
+    fn test_termkey_modifiers_null_buf() {
+        let len = unsafe { rs_handle_termkey_modifiers(TERMKEY_KEYMOD_CTRL, std::ptr::null_mut(), 64) };
+        assert_eq!(len, 0);
+    }
+
+    #[test]
+    fn test_termkey_modifiers_zero_len() {
+        let mut buf = [0i8; 1];
+        let len = unsafe {
+            rs_handle_termkey_modifiers(TERMKEY_KEYMOD_CTRL, buf.as_mut_ptr(), 0)
+        };
+        assert_eq!(len, 0);
     }
 }
