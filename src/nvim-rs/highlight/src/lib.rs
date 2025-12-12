@@ -1,9 +1,12 @@
 //! Highlight and color manipulation functions for Neovim
 //!
 //! This crate provides color blending and conversion functions used by the
-//! highlight system.
+//! highlight system. It also manages the highlight attribute entry table
+//! that maps attribute IDs to their properties.
 
+use std::collections::HashMap;
 use std::ffi::{c_char, c_int, CStr};
+use std::sync::{LazyLock, Mutex};
 
 extern "C" {
     /// Get the terminal color count from C globals
@@ -80,6 +83,384 @@ impl HlAttrs {
             url: -1,
         }
     }
+}
+
+// ============================================================================
+// HlKind Enum (matches C enum in highlight_defs.h)
+// ============================================================================
+
+/// The kind/source of a highlight entry
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum HlKind {
+    #[default]
+    Unknown = 0,
+    UI = 1,
+    Syntax = 2,
+    Terminal = 3,
+    Combine = 4,
+    Blend = 5,
+    BlendThrough = 6,
+    Invalid = 7,
+}
+
+// ============================================================================
+// HlEntry Struct (matches C struct in highlight_defs.h)
+// ============================================================================
+
+/// A complete highlight entry with attributes and semantic information.
+/// This must match the C struct exactly for FFI compatibility.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct HlEntry {
+    /// The highlight attributes (colors, styles)
+    pub attr: HlAttrs,
+    /// The kind/source of this highlight
+    pub kind: HlKind,
+    /// First ID (meaning depends on kind: syntax group ID, UI index, etc.)
+    pub id1: c_int,
+    /// Second ID (meaning depends on kind: namespace ID, linked group ID, etc.)
+    pub id2: c_int,
+    /// Window ID (used for window-specific highlights)
+    pub winid: c_int,
+}
+
+impl HlEntry {
+    /// Create a new HlEntry with default values
+    pub const fn new() -> Self {
+        HlEntry {
+            attr: HlAttrs::new(),
+            kind: HlKind::Invalid,
+            id1: 0,
+            id2: 0,
+            winid: 0,
+        }
+    }
+}
+
+// For HashMap key usage - entries are considered equal if all fields match
+impl PartialEq for HlEntry {
+    fn eq(&self, other: &Self) -> bool {
+        // Compare attr fields
+        self.attr.rgb_ae_attr == other.attr.rgb_ae_attr
+            && self.attr.cterm_ae_attr == other.attr.cterm_ae_attr
+            && self.attr.rgb_fg_color == other.attr.rgb_fg_color
+            && self.attr.rgb_bg_color == other.attr.rgb_bg_color
+            && self.attr.rgb_sp_color == other.attr.rgb_sp_color
+            && self.attr.cterm_fg_color == other.attr.cterm_fg_color
+            && self.attr.cterm_bg_color == other.attr.cterm_bg_color
+            && self.attr.hl_blend == other.attr.hl_blend
+            && self.attr.url == other.attr.url
+            // Compare other fields
+            && self.kind == other.kind
+            && self.id1 == other.id1
+            && self.id2 == other.id2
+            && self.winid == other.winid
+    }
+}
+
+impl Eq for HlEntry {}
+
+impl std::hash::Hash for HlEntry {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.attr.rgb_ae_attr.hash(state);
+        self.attr.cterm_ae_attr.hash(state);
+        self.attr.rgb_fg_color.hash(state);
+        self.attr.rgb_bg_color.hash(state);
+        self.attr.rgb_sp_color.hash(state);
+        self.attr.cterm_fg_color.hash(state);
+        self.attr.cterm_bg_color.hash(state);
+        self.attr.hl_blend.hash(state);
+        self.attr.url.hash(state);
+        self.kind.hash(state);
+        self.id1.hash(state);
+        self.id2.hash(state);
+        self.winid.hash(state);
+    }
+}
+
+// ============================================================================
+// Attribute Entry Store - Global State
+// ============================================================================
+
+/// Maximum number of attribute entries (from C: MAX_TYPENR)
+const MAX_TYPENR: usize = 65535;
+
+/// The attribute entry store manages the global table of highlight entries.
+/// Each entry maps an attribute ID to its HlEntry.
+struct AttrEntryStore {
+    /// Vector of entries indexed by attribute ID
+    entries: Vec<HlEntry>,
+    /// Reverse lookup: entry -> attribute ID (for deduplication)
+    entry_to_id: HashMap<HlEntry, c_int>,
+    /// Cache for combined attributes: (char_attr << 16 | prim_attr) -> result_id
+    combine_cache: HashMap<c_int, c_int>,
+    /// Cache for blended attributes: (back_attr << 16 | front_attr) -> result_id
+    blend_cache: HashMap<c_int, c_int>,
+    /// Cache for blend-through attributes
+    blendthrough_cache: HashMap<c_int, c_int>,
+    /// Whether hlstate mode is active
+    hlstate_active: bool,
+}
+
+impl AttrEntryStore {
+    /// Create a new empty store
+    fn new() -> Self {
+        AttrEntryStore {
+            entries: Vec::new(),
+            entry_to_id: HashMap::new(),
+            combine_cache: HashMap::new(),
+            blend_cache: HashMap::new(),
+            blendthrough_cache: HashMap::new(),
+            hlstate_active: false,
+        }
+    }
+
+    /// Initialize the store with a dummy entry at index 0
+    fn init(&mut self) {
+        if self.entries.is_empty() {
+            // Index 0 is reserved for "no attribute"
+            let dummy = HlEntry {
+                attr: HlAttrs::new(),
+                kind: HlKind::Invalid,
+                id1: 0,
+                id2: 0,
+                winid: 0,
+            };
+            self.entries.push(dummy);
+            // Don't add to entry_to_id - we want ID 0 to be special
+        }
+    }
+
+    /// Get the number of entries
+    fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Check if an entry exists and return its ID, or insert and return new ID
+    fn get_or_insert(&mut self, mut entry: HlEntry) -> Option<c_int> {
+        // If hlstate is not active, clear semantic info to reduce table size
+        if !self.hlstate_active {
+            entry.kind = HlKind::Unknown;
+            entry.id1 = 0;
+            entry.id2 = 0;
+        }
+
+        // Check if entry already exists
+        if let Some(&id) = self.entry_to_id.get(&entry) {
+            return Some(id);
+        }
+
+        // Check if we're at capacity
+        if self.entries.len() >= MAX_TYPENR {
+            return None; // Signal that we need to clear and retry
+        }
+
+        // Insert new entry
+        let id = self.entries.len() as c_int;
+        self.entries.push(entry);
+        self.entry_to_id.insert(entry, id);
+        Some(id)
+    }
+
+    /// Get an entry by ID
+    fn get(&self, id: c_int) -> Option<&HlEntry> {
+        if id >= 0 && (id as usize) < self.entries.len() {
+            Some(&self.entries[id as usize])
+        } else {
+            None
+        }
+    }
+
+    /// Clear all tables and reinitialize
+    fn clear(&mut self) {
+        self.entries.clear();
+        self.entry_to_id.clear();
+        self.combine_cache.clear();
+        self.blend_cache.clear();
+        self.blendthrough_cache.clear();
+        self.init();
+    }
+
+    /// Clear just the blend caches
+    fn clear_blend_caches(&mut self) {
+        self.blend_cache.clear();
+        self.blendthrough_cache.clear();
+    }
+
+    /// Enable hlstate mode
+    fn enable_hlstate(&mut self) -> bool {
+        if self.hlstate_active {
+            return false;
+        }
+        self.hlstate_active = true;
+        true
+    }
+}
+
+// Global store instance - using LazyLock + Mutex for thread safety
+// Note: Neovim is single-threaded, but Mutex is required for safe global state in Rust
+static ATTR_STORE: LazyLock<Mutex<AttrEntryStore>> =
+    LazyLock::new(|| Mutex::new(AttrEntryStore::new()));
+
+// ============================================================================
+// FFI Functions for Attribute Entry Management
+// ============================================================================
+
+/// Initialize the highlight attribute table.
+/// This should be called once during Neovim startup.
+#[no_mangle]
+pub extern "C" fn rs_highlight_init() {
+    let mut store = ATTR_STORE.lock().unwrap();
+    store.init();
+}
+
+/// Get the number of attribute entries in the table.
+#[no_mangle]
+pub extern "C" fn rs_attr_entry_count() -> c_int {
+    let store = ATTR_STORE.lock().unwrap();
+    store.len() as c_int
+}
+
+/// Get highlight attributes for an attribute ID.
+/// Returns HLATTRS_INIT if the ID is invalid or the tables were cleared.
+#[no_mangle]
+pub extern "C" fn rs_syn_attr2entry(attr: c_int) -> HlAttrs {
+    let store = ATTR_STORE.lock().unwrap();
+    if let Some(entry) = store.get(attr) {
+        entry.attr
+    } else {
+        HlAttrs::new()
+    }
+}
+
+/// Get a full HlEntry by attribute ID.
+/// Returns a default Invalid entry if the ID is invalid.
+#[no_mangle]
+pub extern "C" fn rs_get_attr_entry_by_id(attr: c_int) -> HlEntry {
+    let store = ATTR_STORE.lock().unwrap();
+    if let Some(entry) = store.get(attr) {
+        *entry
+    } else {
+        HlEntry::new()
+    }
+}
+
+/// Result type for get_attr_entry operations
+#[repr(C)]
+pub struct GetAttrEntryResult {
+    /// The attribute ID (0 = error, >0 = valid ID)
+    pub id: c_int,
+    /// Whether this is a new entry that needs UI notification
+    pub is_new: bool,
+}
+
+/// Add or lookup an attribute entry.
+/// Returns the attribute ID and whether it's a new entry.
+/// If the table is full and the entry is a Combine type, returns id=0.
+#[no_mangle]
+pub extern "C" fn rs_get_attr_entry(entry: HlEntry) -> GetAttrEntryResult {
+    let mut store = ATTR_STORE.lock().unwrap();
+
+    // Check if entry already exists (quick path)
+    let mut test_entry = entry;
+    if !store.hlstate_active {
+        test_entry.kind = HlKind::Unknown;
+        test_entry.id1 = 0;
+        test_entry.id2 = 0;
+    }
+    if let Some(&id) = store.entry_to_id.get(&test_entry) {
+        return GetAttrEntryResult { id, is_new: false };
+    }
+
+    // Try to insert
+    match store.get_or_insert(entry) {
+        Some(id) => GetAttrEntryResult { id, is_new: true },
+        None => {
+            // Table is full - signal that C code should clear and retry
+            // For Combine entries, we return 0 to indicate failure
+            GetAttrEntryResult {
+                id: -1, // Signal overflow
+                is_new: false,
+            }
+        }
+    }
+}
+
+/// Clear all highlight tables. If reinit is true, reinitialize after clearing.
+#[no_mangle]
+pub extern "C" fn rs_clear_hl_tables(reinit: bool) {
+    let mut store = ATTR_STORE.lock().unwrap();
+    if reinit {
+        store.clear();
+    } else {
+        // Full destruction - just clear everything
+        store.entries.clear();
+        store.entry_to_id.clear();
+        store.combine_cache.clear();
+        store.blend_cache.clear();
+        store.blendthrough_cache.clear();
+    }
+}
+
+/// Enable hlstate mode. Returns true if the table was reset (first time enabling).
+#[no_mangle]
+pub extern "C" fn rs_highlight_use_hlstate() -> bool {
+    let mut store = ATTR_STORE.lock().unwrap();
+    if store.enable_hlstate() {
+        // Tables need to be rebuilt - but we don't clear here,
+        // the caller (C code) will handle that
+        true
+    } else {
+        false
+    }
+}
+
+/// Invalidate blend caches. Called when colors change.
+#[no_mangle]
+pub extern "C" fn rs_hl_invalidate_blends() {
+    let mut store = ATTR_STORE.lock().unwrap();
+    store.clear_blend_caches();
+}
+
+/// Check if an entry with the given key exists in the combine cache.
+/// Returns the cached ID or -1 if not found.
+#[no_mangle]
+pub extern "C" fn rs_combine_cache_get(combine_tag: c_int) -> c_int {
+    let store = ATTR_STORE.lock().unwrap();
+    store.combine_cache.get(&combine_tag).copied().unwrap_or(-1)
+}
+
+/// Insert a value into the combine cache.
+#[no_mangle]
+pub extern "C" fn rs_combine_cache_put(combine_tag: c_int, id: c_int) {
+    let mut store = ATTR_STORE.lock().unwrap();
+    store.combine_cache.insert(combine_tag, id);
+}
+
+/// Check if an entry with the given key exists in the blend cache.
+/// Returns the cached ID or -1 if not found.
+#[no_mangle]
+pub extern "C" fn rs_blend_cache_get(combine_tag: c_int, through: bool) -> c_int {
+    let store = ATTR_STORE.lock().unwrap();
+    let cache = if through {
+        &store.blendthrough_cache
+    } else {
+        &store.blend_cache
+    };
+    cache.get(&combine_tag).copied().unwrap_or(-1)
+}
+
+/// Insert a value into the blend cache.
+#[no_mangle]
+pub extern "C" fn rs_blend_cache_put(combine_tag: c_int, id: c_int, through: bool) {
+    let mut store = ATTR_STORE.lock().unwrap();
+    let cache = if through {
+        &mut store.blendthrough_cache
+    } else {
+        &mut store.blend_cache
+    };
+    cache.insert(combine_tag, id);
 }
 
 // ============================================================================
@@ -2500,5 +2881,130 @@ mod tests {
         assert_eq!(lookup_color(0, 8), 0);
         // DarkGray at index 12 should be 0 (8 & 7 = 0) for 8 colors
         assert_eq!(lookup_color(12, 8), 0);
+    }
+
+    // ============================================================================
+    // Attribute Entry Tests
+    // ============================================================================
+
+    #[test]
+    fn test_highlight_init() {
+        // Clear and reinit
+        rs_clear_hl_tables(true);
+        // After init, we should have 1 entry (the dummy at index 0)
+        assert_eq!(rs_attr_entry_count(), 1);
+    }
+
+    #[test]
+    fn test_syn_attr2entry_invalid() {
+        // Invalid attr should return default HlAttrs
+        let attrs = rs_syn_attr2entry(-1);
+        assert_eq!(attrs.rgb_fg_color, -1);
+        assert_eq!(attrs.rgb_bg_color, -1);
+        assert_eq!(attrs.hl_blend, -1);
+    }
+
+    #[test]
+    fn test_syn_attr2entry_zero() {
+        rs_clear_hl_tables(true);
+        // Attr 0 is the dummy entry
+        let attrs = rs_syn_attr2entry(0);
+        assert_eq!(attrs.rgb_fg_color, -1);
+        assert_eq!(attrs.rgb_bg_color, -1);
+    }
+
+    #[test]
+    fn test_get_attr_entry_new() {
+        rs_clear_hl_tables(true);
+        let entry = HlEntry {
+            attr: HlAttrs {
+                rgb_fg_color: 0xFF0000,
+                rgb_bg_color: 0x00FF00,
+                ..HlAttrs::new()
+            },
+            kind: HlKind::UI,
+            id1: 1,
+            id2: 0,
+            winid: 0,
+        };
+        let result = rs_get_attr_entry(entry);
+        assert!(result.id > 0);
+        assert!(result.is_new);
+    }
+
+    #[test]
+    fn test_get_attr_entry_existing() {
+        rs_clear_hl_tables(true);
+        let entry = HlEntry {
+            attr: HlAttrs {
+                rgb_fg_color: 0x123456,
+                rgb_bg_color: 0x654321,
+                ..HlAttrs::new()
+            },
+            kind: HlKind::Syntax,
+            id1: 5,
+            id2: 0,
+            winid: 0,
+        };
+        let result1 = rs_get_attr_entry(entry);
+        assert!(result1.is_new);
+        let result2 = rs_get_attr_entry(entry);
+        assert!(!result2.is_new);
+        assert_eq!(result1.id, result2.id);
+    }
+
+    #[test]
+    fn test_combine_cache() {
+        rs_clear_hl_tables(true);
+        let tag = (5 << 16) + 3;
+        // Initially not in cache
+        assert_eq!(rs_combine_cache_get(tag), -1);
+        // Put in cache
+        rs_combine_cache_put(tag, 42);
+        // Now should be found
+        assert_eq!(rs_combine_cache_get(tag), 42);
+    }
+
+    #[test]
+    fn test_blend_cache() {
+        rs_clear_hl_tables(true);
+        let tag = (10 << 16) + 7;
+        // Test non-through cache
+        assert_eq!(rs_blend_cache_get(tag, false), -1);
+        rs_blend_cache_put(tag, 99, false);
+        assert_eq!(rs_blend_cache_get(tag, false), 99);
+        // Through cache should still be empty
+        assert_eq!(rs_blend_cache_get(tag, true), -1);
+        // Add to through cache
+        rs_blend_cache_put(tag, 88, true);
+        assert_eq!(rs_blend_cache_get(tag, true), 88);
+    }
+
+    #[test]
+    fn test_invalidate_blends() {
+        rs_clear_hl_tables(true);
+        let tag = (20 << 16) + 15;
+        rs_blend_cache_put(tag, 77, false);
+        rs_blend_cache_put(tag, 66, true);
+        assert_eq!(rs_blend_cache_get(tag, false), 77);
+        assert_eq!(rs_blend_cache_get(tag, true), 66);
+        // Invalidate
+        rs_hl_invalidate_blends();
+        // Both caches should be empty now
+        assert_eq!(rs_blend_cache_get(tag, false), -1);
+        assert_eq!(rs_blend_cache_get(tag, true), -1);
+    }
+
+    #[test]
+    fn test_hlkind_values() {
+        // Ensure enum values match C
+        assert_eq!(HlKind::Unknown as i32, 0);
+        assert_eq!(HlKind::UI as i32, 1);
+        assert_eq!(HlKind::Syntax as i32, 2);
+        assert_eq!(HlKind::Terminal as i32, 3);
+        assert_eq!(HlKind::Combine as i32, 4);
+        assert_eq!(HlKind::Blend as i32, 5);
+        assert_eq!(HlKind::BlendThrough as i32, 6);
+        assert_eq!(HlKind::Invalid as i32, 7);
     }
 }
