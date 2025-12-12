@@ -1264,6 +1264,52 @@ fn set_str(defs: &mut [*const c_char], idx: TerminfoDef, val: &'static [u8]) {
 }
 
 // ============================================================================
+// Truecolor Detection
+// ============================================================================
+
+/// Check if the terminal supports truecolor.
+///
+/// Returns true if:
+/// - $COLORTERM is "truecolor" or "24bit", OR
+/// - terminfo has Tc or RGB extended capability, OR
+/// - terminfo has both setrgbf and setrgbb capabilities
+///
+/// # Safety
+///
+/// - `colorterm` must be a valid NUL-terminated C string or NULL
+/// - `defs` must point to an array of at least kTermCount pointers
+#[no_mangle]
+pub unsafe extern "C" fn rs_term_has_truecolor(
+    colorterm: *const c_char,
+    has_tc_or_rgb: c_int,
+    defs: *const *const c_char,
+) -> c_int {
+    // Check $COLORTERM
+    if !colorterm.is_null() {
+        let colorterm_bytes = CStr::from_ptr(colorterm).to_bytes();
+        if colorterm_bytes == b"truecolor" || colorterm_bytes == b"24bit" {
+            return 1;
+        }
+    }
+
+    // Check terminfo Tc or RGB extended capability
+    if has_tc_or_rgb != 0 {
+        return 1;
+    }
+
+    // Check for setrgbf and setrgbb capabilities
+    if defs.is_null() {
+        return 0;
+    }
+
+    let defs_slice = std::slice::from_raw_parts(defs, KTERM_COUNT);
+    let setrgbf = !defs_slice[TerminfoDef::kTerm_set_rgb_foreground as usize].is_null();
+    let setrgbb = !defs_slice[TerminfoDef::kTerm_set_rgb_background as usize].is_null();
+
+    c_int::from(setrgbf && setrgbb)
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -1552,5 +1598,52 @@ mod tests {
             rs_handle_termkey_modifiers(TERMKEY_KEYMOD_CTRL, buf.as_mut_ptr(), 0)
         };
         assert_eq!(len, 0);
+    }
+
+    // ========================================================================
+    // Truecolor Detection Tests
+    // ========================================================================
+
+    #[test]
+    fn test_term_has_truecolor_colorterm() {
+        let truecolor = CString::new("truecolor").unwrap();
+        assert_eq!(
+            unsafe { rs_term_has_truecolor(truecolor.as_ptr(), 0, std::ptr::null()) },
+            1
+        );
+
+        let bit24 = CString::new("24bit").unwrap();
+        assert_eq!(
+            unsafe { rs_term_has_truecolor(bit24.as_ptr(), 0, std::ptr::null()) },
+            1
+        );
+    }
+
+    #[test]
+    fn test_term_has_truecolor_tc_rgb_cap() {
+        // has_tc_or_rgb flag is set
+        assert_eq!(
+            unsafe { rs_term_has_truecolor(std::ptr::null(), 1, std::ptr::null()) },
+            1
+        );
+    }
+
+    #[test]
+    fn test_term_has_truecolor_no_support() {
+        // Neither COLORTERM nor Tc/RGB capability
+        assert_eq!(
+            unsafe { rs_term_has_truecolor(std::ptr::null(), 0, std::ptr::null()) },
+            0
+        );
+    }
+
+    #[test]
+    fn test_term_has_truecolor_invalid_colorterm() {
+        // COLORTERM set but not to truecolor/24bit
+        let gnome = CString::new("gnome-terminal").unwrap();
+        assert_eq!(
+            unsafe { rs_term_has_truecolor(gnome.as_ptr(), 0, std::ptr::null()) },
+            0
+        );
     }
 }

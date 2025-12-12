@@ -193,6 +193,7 @@ typedef struct {
 extern void rs_patch_terminfo_bugs(const TermDetectContext *ctx, TerminfoState *state);
 extern void rs_augment_terminfo(const TermDetectContext *ctx, TerminfoState *state,
                                 TermDetectOutput *output);
+extern int rs_term_has_truecolor(const char *colorterm, int has_tc_or_rgb, const char **defs);
 #endif
 
 #define TERMINFO_SEQ_LIMIT 128
@@ -470,7 +471,12 @@ static void terminfo_start(TUIData *tui)
   tui->screen_or_tmux = screen || tmux;
 
   // truecolor support must be checked before patching/augmenting terminfo
+#ifdef USE_RUST_TUI
+  tui->rgb = rs_term_has_truecolor(colorterm, tui->ti.has_Tc_or_RGB ? 1 : 0,
+                                    (const char **)tui->ti.defs) != 0;
+#else
   tui->rgb = term_has_truecolor(tui, colorterm);
+#endif
 
 #ifdef USE_RUST_TUI
   // Use Rust implementations for terminal detection
