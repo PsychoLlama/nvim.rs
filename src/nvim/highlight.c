@@ -786,6 +786,19 @@ static int cterm_blend(int ratio, int16_t c1, int16_t c2)
 {
   return rs_cterm_blend(ratio, c1, c2);
 }
+
+/// Converts RGB color to 8-bit color (0-255).
+static int hl_rgb2cterm_color(int rgb)
+{
+  return rs_hl_rgb2cterm_color(rgb);
+}
+
+/// Converts 8-bit color (0-255) to RGB color.
+/// This is compatible with xterm.
+static int hl_cterm2rgb_color(int nr)
+{
+  return rs_hl_cterm2rgb_color(nr);
+}
 #else
 static int rgb_blend(int ratio, int rgb1, int rgb2)
 {
@@ -813,7 +826,6 @@ static int cterm_blend(int ratio, int16_t c1, int16_t c2)
   int rgb_blended = rgb_blend(ratio, rgb1, rgb2);
   return hl_rgb2cterm_color(rgb_blended);
 }
-#endif
 
 /// Converts RGB color to 8-bit color (0-255).
 static int hl_rgb2cterm_color(int rgb)
@@ -883,6 +895,7 @@ static int hl_cterm2rgb_color(int nr)
   }
   return (r << 16) + (g << 8) + b;
 }
+#endif
 
 /// Get highlight attributes for a attribute code
 HlAttrs syn_attr2entry(int attr)
