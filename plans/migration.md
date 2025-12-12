@@ -2,7 +2,7 @@
 
 ## Current Status
 
-**603 rs_* functions migrated**
+**607 rs_* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
@@ -43,6 +43,7 @@ All Rust code lives in `src/nvim-rs/`. The main crate re-exports all FFI functio
 | nvim-getchar | Typeahead buffer | stuff_empty, typebuf_*, using_script |
 | nvim-grid | Screen grid | schar operations |
 | nvim-help | Help system | help tag lookup |
+| nvim-highlight | Color manipulation | rgb_blend, cterm_blend, color conversion |
 | nvim-indent | Indentation | tabstop calculations |
 | nvim-insexpand | Insert completion | ctrl_x_mode_*, compl_status_* |
 | nvim-keycodes | Key codes | name_to_mod_mask, handle_x_keys |
