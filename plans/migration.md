@@ -2,14 +2,14 @@
 
 ## Current Status
 
-**608 rs_* functions migrated**
+**609 rs_* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
 ### Current Work
 
 **Phase 9 - Highlight Functions** (in progress)
-- nvim-highlight crate: rgb_blend, cterm_blend, color conversion, name_to_ctermcolor
+- nvim-highlight crate: rgb_blend, cterm_blend, color conversion, name_to_ctermcolor, name_to_color
 - Run `grep -n "pub.*extern.*fn rs_" src/nvim-rs/highlight/src/lib.rs` to see all functions
 
 ---
