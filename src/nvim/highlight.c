@@ -3,12 +3,6 @@
 #include <assert.h>
 #include <inttypes.h>
 
-#ifdef USE_RUST_HIGHLIGHT
-extern int rs_rgb_blend(int ratio, int rgb1, int rgb2);
-extern int rs_hl_cterm2rgb_color(int nr);
-extern int rs_hl_rgb2cterm_color(int rgb);
-extern int rs_cterm_blend(int ratio, int16_t c1, int16_t c2);
-#endif
 #include <lauxlib.h>
 #include <string.h>
 
@@ -40,6 +34,25 @@ extern int rs_cterm_blend(int ratio, int16_t c1, int16_t c2);
 #include "nvim/vim_defs.h"
 
 #include "highlight.c.generated.h"
+
+#ifdef USE_RUST_HIGHLIGHT
+extern int rs_rgb_blend(int ratio, int rgb1, int rgb2);
+extern int rs_hl_cterm2rgb_color(int nr);
+extern int rs_hl_rgb2cterm_color(int rgb);
+extern int rs_cterm_blend(int ratio, int16_t c1, int16_t c2);
+
+// Input struct for rs_hl_blend_attrs_compute
+typedef struct {
+  HlAttrs battrs_raw;
+  HlAttrs battrs;
+  HlAttrs fattrs_raw;
+  HlAttrs fattrs;
+  int ratio;
+  bool through;
+} HlBlendInput;
+
+extern HlAttrs rs_hl_blend_attrs_compute(HlBlendInput input);
+#endif
 
 static bool hlstate_active = false;
 
@@ -747,6 +760,17 @@ int hl_blend_attrs(int back_attr, int front_attr, bool *through)
   HlAttrs battrs = get_colors_force(battrs_raw);
   HlAttrs cattrs;
 
+#ifdef USE_RUST_HIGHLIGHT
+  HlBlendInput input = {
+    .battrs_raw = battrs_raw,
+    .battrs = battrs,
+    .fattrs_raw = fattrs_raw,
+    .fattrs = fattrs,
+    .ratio = ratio,
+    .through = *through,
+  };
+  cattrs = rs_hl_blend_attrs_compute(input);
+#else
   if (*through) {
     cattrs = battrs;
     cattrs.rgb_fg_color = rgb_blend(ratio, battrs.rgb_fg_color, fattrs.rgb_bg_color);
@@ -785,6 +809,7 @@ int hl_blend_attrs(int back_attr, int front_attr, bool *through)
                           : rgb_blend(ratio, battrs.rgb_bg_color, fattrs.rgb_bg_color);
   }
   cattrs.hl_blend = -1;  // blend property was consumed
+#endif
   HlKind kind = *through ? kHlBlendThrough : kHlBlend;
   id = get_attr_entry((HlEntry){ .attr = cattrs, .kind = kind,
                                  .id1 = back_attr, .id2 = front_attr });

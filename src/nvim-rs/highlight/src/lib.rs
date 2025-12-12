@@ -138,6 +138,194 @@ pub unsafe extern "C" fn rs_get_colors_force(mut attrs: HlAttrs) -> HlAttrs {
     attrs
 }
 
+/// Input for blend computation - contains raw and forced colors for both layers
+#[repr(C)]
+pub struct HlBlendInput {
+    /// Back layer raw attributes (before color forcing)
+    pub battrs_raw: HlAttrs,
+    /// Back layer attributes (with forced colors)
+    pub battrs: HlAttrs,
+    /// Front layer raw attributes (before color forcing)
+    pub fattrs_raw: HlAttrs,
+    /// Front layer attributes (with forced colors)
+    pub fattrs: HlAttrs,
+    /// Blend ratio (0-100)
+    pub ratio: c_int,
+    /// Whether this is a "through" blend (for floating windows)
+    pub through: bool,
+}
+
+/// Compute blended highlight attributes.
+///
+/// This is the pure computation core of hl_blend_attrs. It takes pre-fetched
+/// attributes and returns the blended result without any side effects.
+///
+/// # Arguments
+/// * `input` - Contains raw and forced attributes for both layers, ratio, and blend mode
+///
+/// # Returns
+/// The blended HlAttrs
+#[no_mangle]
+pub extern "C" fn rs_hl_blend_attrs_compute(input: HlBlendInput) -> HlAttrs {
+    let HlBlendInput {
+        battrs_raw,
+        battrs,
+        fattrs_raw,
+        fattrs,
+        ratio,
+        through,
+    } = input;
+
+    let mut cattrs: HlAttrs;
+
+    if through {
+        // "Through" blend: back layer shows through front layer's background
+        cattrs = battrs;
+        cattrs.rgb_fg_color = rgb_blend_internal(ratio, battrs.rgb_fg_color, fattrs.rgb_bg_color);
+
+        // Only apply special colors when the foreground attribute has an underline or undercurl
+        if (fattrs_raw.rgb_ae_attr & (HL_UNDERLINE | HL_UNDERCURL)) != 0 {
+            cattrs.rgb_sp_color =
+                rgb_blend_internal(ratio, battrs.rgb_sp_color, fattrs.rgb_bg_color);
+        } else {
+            cattrs.rgb_sp_color = -1;
+        }
+
+        cattrs.cterm_bg_color = fattrs.cterm_bg_color;
+        cattrs.cterm_fg_color =
+            cterm_blend_internal(ratio, battrs.cterm_fg_color, fattrs.cterm_bg_color);
+        cattrs.rgb_ae_attr &= !(HL_FG_INDEXED | HL_BG_INDEXED);
+    } else {
+        // Normal blend: front layer blends with back layer
+        cattrs = fattrs;
+        cattrs.rgb_fg_color =
+            rgb_blend_internal(ratio / 2, battrs.rgb_fg_color, fattrs.rgb_fg_color);
+
+        if (cattrs.rgb_ae_attr & HL_UNDERLINE_MASK) != 0 {
+            cattrs.rgb_sp_color =
+                rgb_blend_internal(ratio / 2, battrs.rgb_bg_color, fattrs.rgb_sp_color);
+        } else {
+            cattrs.rgb_sp_color = -1;
+        }
+
+        cattrs.rgb_ae_attr &= !HL_BG_INDEXED;
+    }
+
+    // Handle background transparency
+    // Special case for blend=100: preserve back layer background exactly (including bg=NONE)
+    if ratio == 100 && battrs_raw.rgb_bg_color == -1 {
+        // For 100% blend with transparent background, preserve the transparency
+        cattrs.rgb_bg_color = -1;
+    } else {
+        // Use the raw attributes (before forcing colors) to check original transparency
+        cattrs.rgb_bg_color = if battrs_raw.rgb_bg_color == -1 && fattrs_raw.rgb_bg_color == -1 {
+            -1
+        } else {
+            rgb_blend_internal(ratio, battrs.rgb_bg_color, fattrs.rgb_bg_color)
+        };
+    }
+
+    // Blend property was consumed
+    cattrs.hl_blend = -1;
+
+    cattrs
+}
+
+/// Internal RGB blend function (same as rs_rgb_blend but for internal use)
+fn rgb_blend_internal(ratio: c_int, rgb1: c_int, rgb2: c_int) -> c_int {
+    let a = ratio;
+    let b = 100 - ratio;
+
+    let r1 = (rgb1 >> 16) & 0xFF;
+    let g1 = (rgb1 >> 8) & 0xFF;
+    let b1 = rgb1 & 0xFF;
+
+    let r2 = (rgb2 >> 16) & 0xFF;
+    let g2 = (rgb2 >> 8) & 0xFF;
+    let b2 = rgb2 & 0xFF;
+
+    let mr = (a * r1 + b * r2) / 100;
+    let mg = (a * g1 + b * g2) / 100;
+    let mb = (a * b1 + b * b2) / 100;
+
+    (mr << 16) + (mg << 8) + mb
+}
+
+/// Internal cterm blend function
+fn cterm_blend_internal(ratio: c_int, c1: i16, c2: i16) -> i16 {
+    // Convert cterm colors to RGB, blend, then convert back
+    let rgb1 = cterm2rgb_internal(c1 as c_int);
+    let rgb2 = cterm2rgb_internal(c2 as c_int);
+    let blended = rgb_blend_internal(ratio, rgb1, rgb2);
+    rgb2cterm_internal(blended)
+}
+
+/// Internal cterm to RGB conversion
+fn cterm2rgb_internal(nr: c_int) -> c_int {
+    if nr < 16 {
+        let entry = &ANSI_TABLE[nr as usize];
+        return (c_int::from(entry[0]) << 16) | (c_int::from(entry[1]) << 8) | c_int::from(entry[2]);
+    }
+
+    if nr < 232 {
+        let idx = (nr - 16) as usize;
+        let r = CUBE_VALUE[idx / 36];
+        let g = CUBE_VALUE[(idx / 6) % 6];
+        let b = CUBE_VALUE[idx % 6];
+        return (r << 16) | (g << 8) | b;
+    }
+
+    let grey = GREY_RAMP[(nr - 232) as usize];
+    (grey << 16) | (grey << 8) | grey
+}
+
+/// Internal RGB to cterm conversion
+fn rgb2cterm_internal(rgb: c_int) -> i16 {
+    let r = ((rgb >> 16) & 0xFF) as i32;
+    let g = ((rgb >> 8) & 0xFF) as i32;
+    let b = (rgb & 0xFF) as i32;
+
+    // Check for grey
+    if r == g && g == b {
+        // Find closest grey
+        if r < 4 {
+            return 16; // black in cube
+        }
+        if r > 243 {
+            return 231; // white in cube
+        }
+        // Find closest grey ramp value
+        let grey_idx = ((r - 8) / 10) as usize;
+        if grey_idx < 24 {
+            return (232 + grey_idx) as i16;
+        }
+    }
+
+    // Find closest color cube value
+    let r_idx = closest_cube_idx(r);
+    let g_idx = closest_cube_idx(g);
+    let b_idx = closest_cube_idx(b);
+
+    (16 + r_idx * 36 + g_idx * 6 + b_idx) as i16
+}
+
+/// Find closest 6x6x6 color cube index for a component value
+fn closest_cube_idx(val: i32) -> i32 {
+    if val < 48 {
+        0
+    } else if val < 115 {
+        1
+    } else if val < 155 {
+        2
+    } else if val < 195 {
+        3
+    } else if val < 235 {
+        4
+    } else {
+        5
+    }
+}
+
 // ============================================================================
 // Color Blending
 // ============================================================================
