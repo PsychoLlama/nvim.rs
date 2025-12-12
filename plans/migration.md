@@ -2,19 +2,15 @@
 
 ## Current Status
 
-**597 rs_* functions migrated** (as of 2025-12-11)
+**598 rs_* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
-### Recent Work (December 2025)
+### Current Work
 
 **Phase 8 - Terminal UI Functions** (in progress)
-- nvim-tui crate: terminfo_is_term_family, terminfo_is_bsd_console
+- nvim-tui crate: terminfo_is_term_family, terminfo_is_bsd_console, terminfo_fmt
 - Run `grep -n "pub.*extern.*fn rs_" src/nvim-rs/tui/src/lib.rs` to see all functions
-
-**Phase 7 - API Layer Functions** (partial)
-- nvim-api crate: string helpers, typename, free functions, validation errors, object_to_hl_id, luarefs_free functions
-- nvim-context crate: ctx_free (frees Context object resources)
 
 ---
 
