@@ -3,7 +3,12 @@
 //! This crate provides color blending and conversion functions used by the
 //! highlight system.
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int, CStr};
+
+extern "C" {
+    /// Get the terminal color count from C globals
+    fn nvim_get_t_colors() -> c_int;
+}
 
 // ============================================================================
 // Color Blending
@@ -144,6 +149,133 @@ pub extern "C" fn rs_cterm_blend(ratio: c_int, c1: i16, c2: i16) -> c_int {
 }
 
 // ============================================================================
+// Color Name Lookup
+// ============================================================================
+
+/// Color names for terminal colors (28 entries)
+const COLOR_NAMES: [&str; 28] = [
+    "Black",
+    "DarkBlue",
+    "DarkGreen",
+    "DarkCyan",
+    "DarkRed",
+    "DarkMagenta",
+    "Brown",
+    "DarkYellow",
+    "Gray",
+    "Grey",
+    "LightGray",
+    "LightGrey",
+    "DarkGray",
+    "DarkGrey",
+    "Blue",
+    "LightBlue",
+    "Green",
+    "LightGreen",
+    "Cyan",
+    "LightCyan",
+    "Red",
+    "LightRed",
+    "Magenta",
+    "LightMagenta",
+    "Yellow",
+    "LightYellow",
+    "White",
+    "NONE",
+];
+
+/// Color numbers for 16-color terminals
+const COLOR_NUMBERS_16: [c_int; 28] = [
+    0, 1, 2, 3, 4, 5, 6, 6, 7, 7, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13, 14, 14, 15, -1,
+];
+
+/// Color numbers for 8-color terminals
+const COLOR_NUMBERS_8: [c_int; 28] = [
+    0, 4, 2, 6, 1, 5, 3, 3, 7, 7, 7, 7, 8, 8, 12, 12, 10, 10, 14, 14, 9, 9, 13, 13, 11, 11, 15, -1,
+];
+
+/// Color numbers for xterm with 88 colors
+const COLOR_NUMBERS_88: [c_int; 28] = [
+    0, 4, 2, 6, 1, 5, 32, 72, 84, 84, 7, 7, 82, 82, 12, 43, 10, 61, 14, 63, 9, 74, 13, 75, 11, 78,
+    15, -1,
+];
+
+/// Color numbers for xterm with 256 colors
+const COLOR_NUMBERS_256: [c_int; 28] = [
+    0, 4, 2, 6, 1, 5, 130, 3, 248, 248, 7, 7, 242, 242, 12, 81, 10, 121, 14, 159, 9, 224, 13, 225,
+    11, 229, 15, -1,
+];
+
+/// Lookup the "cterm" value for a color index based on terminal color count.
+fn lookup_color(idx: usize, t_colors: c_int) -> c_int {
+    // Use the _16 table to check if it's a valid color name.
+    let color = COLOR_NUMBERS_16[idx];
+    if color < 0 {
+        return -1;
+    }
+
+    // Select appropriate color table based on terminal color count
+    if t_colors == 8 {
+        COLOR_NUMBERS_8[idx] & 7 // truncate to 8 colors
+    } else if t_colors == 16 {
+        COLOR_NUMBERS_8[idx]
+    } else if t_colors == 88 {
+        COLOR_NUMBERS_88[idx]
+    } else if t_colors >= 256 {
+        COLOR_NUMBERS_256[idx]
+    } else {
+        color
+    }
+}
+
+/// Case-insensitive comparison for ASCII strings
+fn str_icmp(a: &str, b: &str) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    a.bytes()
+        .zip(b.bytes())
+        .all(|(c1, c2)| c1.eq_ignore_ascii_case(&c2))
+}
+
+/// Convert a color name to its cterm color number.
+///
+/// # Arguments
+/// * `name` - Color name (null-terminated C string)
+///
+/// # Returns
+/// cterm color number, or -1 if not found
+///
+/// # Safety
+/// `name` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_name_to_ctermcolor(name: *const c_char) -> c_int {
+    if name.is_null() {
+        return -1;
+    }
+
+    let name_cstr = unsafe { CStr::from_ptr(name) };
+    let name_str = match name_cstr.to_str() {
+        Ok(s) => s,
+        Err(_) => return -1,
+    };
+
+    if name_str.is_empty() {
+        return -1;
+    }
+
+    // Find matching color name (case-insensitive)
+    for (idx, color_name) in COLOR_NAMES.iter().enumerate().rev() {
+        if str_icmp(name_str, color_name) {
+            let t_colors = unsafe { nvim_get_t_colors() };
+            return lookup_color(idx, t_colors);
+        }
+    }
+
+    -1
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -231,5 +363,46 @@ mod tests {
         // Result might not be exactly 196 due to conversion losses
         // but should be close (pure red area)
         assert!(c >= 190 && c <= 200);
+    }
+
+    // Tests for color name lookup (unit tests that don't depend on C)
+    #[test]
+    fn test_str_icmp_equal() {
+        assert!(str_icmp("Black", "black"));
+        assert!(str_icmp("BLACK", "black"));
+        assert!(str_icmp("DarkBlue", "DARKBLUE"));
+    }
+
+    #[test]
+    fn test_str_icmp_not_equal() {
+        assert!(!str_icmp("Black", "White"));
+        assert!(!str_icmp("Black", "Blac"));
+        assert!(!str_icmp("Black", "Blackx"));
+    }
+
+    #[test]
+    fn test_lookup_color_256() {
+        // Black at index 0 should be 0 for 256 colors
+        assert_eq!(lookup_color(0, 256), 0);
+        // Blue at index 14 should be 12 for 256 colors
+        assert_eq!(lookup_color(14, 256), 12);
+        // NONE at index 27 should be -1
+        assert_eq!(lookup_color(27, 256), -1);
+    }
+
+    #[test]
+    fn test_lookup_color_16() {
+        // Black at index 0 should be 0 for 16 colors
+        assert_eq!(lookup_color(0, 16), 0);
+        // DarkBlue at index 1 should be 4 for 16 colors (from _8 table)
+        assert_eq!(lookup_color(1, 16), 4);
+    }
+
+    #[test]
+    fn test_lookup_color_8() {
+        // Black at index 0 should be 0 for 8 colors
+        assert_eq!(lookup_color(0, 8), 0);
+        // DarkGray at index 12 should be 0 (8 & 7 = 0) for 8 colors
+        assert_eq!(lookup_color(12, 8), 0);
     }
 }

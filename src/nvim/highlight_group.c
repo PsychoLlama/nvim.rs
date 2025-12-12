@@ -52,6 +52,12 @@
 #include "nvim/ui_defs.h"
 #include "nvim/vim_defs.h"
 
+// Accessor for Rust FFI
+int nvim_get_t_colors(void)
+{
+  return t_colors;
+}
+
 /// \addtogroup SG_SET
 /// @{
 enum {
@@ -3212,6 +3218,14 @@ const char *coloridx_to_name(int idx, int val, char hexbuf[8])
   }
 }
 
+#ifdef USE_RUST_HIGHLIGHT
+extern int rs_name_to_ctermcolor(const char *name);
+
+int name_to_ctermcolor(const char *name)
+{
+  return rs_name_to_ctermcolor(name);
+}
+#else
 int name_to_ctermcolor(const char *name)
 {
   int i;
@@ -3228,3 +3242,4 @@ int name_to_ctermcolor(const char *name)
   TriState bold = kNone;
   return lookup_color(i, false, &bold);
 }
+#endif
