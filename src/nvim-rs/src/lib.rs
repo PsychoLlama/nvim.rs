@@ -62,6 +62,7 @@ pub use nvim_utf8proc::*;
 pub use nvim_version::*;
 pub use nvim_window::*;
 pub use nvim_unpacker::*;
+pub use nvim_tui::*;
 
 /// FFI-safe result type for operations that can fail
 #[repr(C)]

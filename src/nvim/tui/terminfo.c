@@ -28,6 +28,20 @@ typedef struct {
 
 #include "tui/terminfo.c.generated.h"
 
+#ifdef USE_RUST_TUI
+extern int rs_terminfo_is_term_family(const char *term, const char *family);
+extern int rs_terminfo_is_bsd_console(const char *term);
+
+bool terminfo_is_term_family(const char *term, const char *family)
+{
+  return rs_terminfo_is_term_family(term, family) != 0;
+}
+
+bool terminfo_is_bsd_console(const char *term)
+{
+  return rs_terminfo_is_bsd_console(term) != 0;
+}
+#else
 bool terminfo_is_term_family(const char *term, const char *family)
 {
   if (!term) {
@@ -60,6 +74,7 @@ bool terminfo_is_bsd_console(const char *term)
 #endif
   return false;
 }
+#endif
 
 /// Loads a built-in terminfo db when we (unibilium) failed to load a terminfo
 /// record from the environment (termcap systems, unrecognized $TERM, …).

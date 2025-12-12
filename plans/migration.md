@@ -2,16 +2,19 @@
 
 ## Current Status
 
-**595 rs_* functions migrated** (as of 2025-12-11)
+**597 rs_* functions migrated** (as of 2025-12-11)
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
 ### Recent Work (December 2025)
 
-**Phase 7 - API Layer Functions** (in progress)
+**Phase 8 - Terminal UI Functions** (in progress)
+- nvim-tui crate: terminfo_is_term_family, terminfo_is_bsd_console
+- Run `grep -n "pub.*extern.*fn rs_" src/nvim-rs/tui/src/lib.rs` to see all functions
+
+**Phase 7 - API Layer Functions** (partial)
 - nvim-api crate: string helpers, typename, free functions, validation errors, object_to_hl_id, luarefs_free functions
 - nvim-context crate: ctx_free (frees Context object resources)
-- Run `grep -n "pub.*extern.*fn rs_" src/nvim-rs/api/src/lib.rs` to see all functions
 
 ---
 
@@ -64,6 +67,7 @@ All Rust code lives in `src/nvim-rs/`. The main crate re-exports all FFI functio
 | nvim-spell | Spell check | langmap, langword |
 | nvim-strings | String utilities | vim_str* functions |
 | nvim-utf8proc | UTF-8 processing | utf8proc bindings |
+| nvim-tui | Terminal UI | terminfo_is_term_family, terminfo_is_bsd_console |
 | nvim-version | Version info | version string |
 | nvim-window | Window operations | win_valid, frame_* functions |
 
@@ -111,13 +115,13 @@ extern "C" { fn nvim_get_foo_field() -> c_int; }
 | 5.1-5.31 | Static variable accessor pattern | ✅ |
 | 6.0 | MessagePack unpacker (rs_unpack) | ✅ |
 | 7.x | API layer functions | 🔄 |
+| 8.0 | Terminal UI (initial) | 🔄 |
 
 ### Future Phases (Roadmap)
 
 | Phase | Target | Notes |
 |-------|--------|-------|
-| 7 | API Layer | api/*.c |
-| 8 | Terminal UI | tui/*.c |
+| 8 | Terminal UI | tui/*.c (terminfo, input) |
 | 9 | Buffer & Text | memline.c, buffer.c, undo.c |
 | 10 | Window & Display | window.c, drawscreen.c |
 | 11-15 | Editor Core | normal.c, eval.c, regexp.c |

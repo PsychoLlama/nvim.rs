@@ -120,6 +120,7 @@ if(USE_RUST)
       USE_RUST_WINDOW
       USE_RUST_MSGPACK
       USE_RUST_UNPACKER
+      USE_RUST_TUI
     )
   else()
     message(WARNING "USE_RUST enabled but Rust library not found. Run 'cargo build --release' first.")

@@ -56,6 +56,7 @@ nvim-utf8proc = { path = "utf8proc" }
 nvim-version = { path = "version" }
 nvim-window = { path = "window" }
 nvim-unpacker = { path = "unpacker" }
+nvim-tui = { path = "tui" }
 
 [build-dependencies]
 cbindgen = "0.27"
