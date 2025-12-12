@@ -606,6 +606,11 @@ void clear_hl_tables(bool reinit)
     xfree((void *)url);
   });
 
+#ifdef USE_RUST_HIGHLIGHT
+  // Also clear Rust tables
+  rs_clear_hl_tables(reinit);
+#endif
+
   if (reinit) {
     set_clear(HlEntry, &attr_entries);
     highlight_init();
@@ -631,6 +636,10 @@ void hl_invalidate_blends(void)
 {
   map_clear(int, &blend_attr_entries);
   map_clear(int, &blendthrough_attr_entries);
+#ifdef USE_RUST_HIGHLIGHT
+  // Also invalidate Rust blend caches
+  rs_hl_invalidate_blends();
+#endif
   highlight_changed();
   update_window_hl(curwin, true);
 }
@@ -671,6 +680,11 @@ int hl_combine_attr(int char_attr, int prim_attr)
   // TODO(bfredl): could use a struct for clearer intent.
   int combine_tag = (char_attr << 16) + prim_attr;
   int id = map_get(int, int)(&combine_attr_entries, combine_tag);
+#ifdef USE_RUST_HIGHLIGHT
+  // Validate Rust cache matches C cache
+  int rs_id = rs_combine_cache_get(combine_tag);
+  assert((id > 0 && rs_id == id) || (id == 0 && rs_id == -1));
+#endif
   if (id > 0) {
     return id;
   }
@@ -741,6 +755,10 @@ int hl_combine_attr(int char_attr, int prim_attr)
                                  .id1 = char_attr, .id2 = prim_attr });
   if (id > 0) {
     map_put(int, int)(&combine_attr_entries, combine_tag, id);
+#ifdef USE_RUST_HIGHLIGHT
+    // Also store in Rust cache
+    rs_combine_cache_put(combine_tag, id);
+#endif
   }
 
   return id;
@@ -809,6 +827,11 @@ int hl_blend_attrs(int back_attr, int front_attr, bool *through)
                         ? &blendthrough_attr_entries
                         : &blend_attr_entries);
   int id = map_get(int, int)(map, combine_tag);
+#ifdef USE_RUST_HIGHLIGHT
+  // Validate Rust cache matches C cache
+  int rs_id = rs_blend_cache_get(combine_tag, *through);
+  assert((id > 0 && rs_id == id) || (id == 0 && rs_id == -1));
+#endif
   if (id > 0) {
     return id;
   }
@@ -872,6 +895,10 @@ int hl_blend_attrs(int back_attr, int front_attr, bool *through)
                                  .id1 = back_attr, .id2 = front_attr });
   if (id > 0) {
     map_put(int, int)(map, combine_tag, id);
+#ifdef USE_RUST_HIGHLIGHT
+    // Also store in Rust cache
+    rs_blend_cache_put(combine_tag, id, *through);
+#endif
   }
   return id;
 }
