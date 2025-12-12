@@ -138,6 +138,89 @@ pub unsafe extern "C" fn rs_get_colors_force(mut attrs: HlAttrs) -> HlAttrs {
     attrs
 }
 
+/// Input for hl_combine_attr computation - contains the two attribute sets to combine
+#[repr(C)]
+pub struct HlCombineInput {
+    /// Character (low-priority) attributes
+    pub char_aep: HlAttrs,
+    /// Primary (high-priority) attributes
+    pub prim_aep: HlAttrs,
+}
+
+/// Compute combined highlight attributes.
+///
+/// This is the pure computation core of hl_combine_attr. It takes pre-fetched
+/// attributes and returns the combined result without any side effects.
+///
+/// The primary (prim_aep) attributes override the character (char_aep) attributes,
+/// with special handling for various properties like colors, blend, and URL.
+#[no_mangle]
+pub extern "C" fn rs_hl_combine_attrs_compute(input: HlCombineInput) -> HlAttrs {
+    let HlCombineInput { char_aep, prim_aep } = input;
+
+    // Start with low-priority attribute, and override colors if present below
+    let mut new_en = char_aep;
+
+    // Handle cterm attributes with HL_NOCOMBINE check
+    if (prim_aep.cterm_ae_attr & HL_NOCOMBINE) != 0 {
+        new_en.cterm_ae_attr = prim_aep.cterm_ae_attr;
+    } else {
+        new_en.cterm_ae_attr = rs_hl_combine_ae(new_en.cterm_ae_attr, prim_aep.cterm_ae_attr);
+    }
+
+    // Handle rgb attributes with HL_NOCOMBINE check
+    if (prim_aep.rgb_ae_attr & HL_NOCOMBINE) != 0 {
+        new_en.rgb_ae_attr = prim_aep.rgb_ae_attr;
+    } else {
+        new_en.rgb_ae_attr = rs_hl_combine_ae(new_en.rgb_ae_attr, prim_aep.rgb_ae_attr);
+    }
+
+    // Override cterm foreground color if primary has one
+    if prim_aep.cterm_fg_color > 0 {
+        new_en.cterm_fg_color = prim_aep.cterm_fg_color;
+        new_en.rgb_ae_attr &=
+            (!HL_FG_INDEXED) | (prim_aep.rgb_ae_attr & HL_FG_INDEXED);
+    }
+
+    // Override cterm background color if primary has one
+    if prim_aep.cterm_bg_color > 0 {
+        new_en.cterm_bg_color = prim_aep.cterm_bg_color;
+        new_en.rgb_ae_attr &=
+            (!HL_BG_INDEXED) | (prim_aep.rgb_ae_attr & HL_BG_INDEXED);
+    }
+
+    // Override rgb foreground color if primary has one
+    if prim_aep.rgb_fg_color >= 0 {
+        new_en.rgb_fg_color = prim_aep.rgb_fg_color;
+        new_en.rgb_ae_attr &=
+            (!HL_FG_INDEXED) | (prim_aep.rgb_ae_attr & HL_FG_INDEXED);
+    }
+
+    // Override rgb background color if primary has one
+    if prim_aep.rgb_bg_color >= 0 {
+        new_en.rgb_bg_color = prim_aep.rgb_bg_color;
+        new_en.rgb_ae_attr &=
+            (!HL_BG_INDEXED) | (prim_aep.rgb_ae_attr & HL_BG_INDEXED);
+    }
+
+    // Override special color if primary has one
+    if prim_aep.rgb_sp_color >= 0 {
+        new_en.rgb_sp_color = prim_aep.rgb_sp_color;
+    }
+
+    // Override blend if primary has one
+    if prim_aep.hl_blend >= 0 {
+        new_en.hl_blend = prim_aep.hl_blend;
+    }
+
+    // Inherit URL if char doesn't have one and prim does
+    if new_en.url == -1 && prim_aep.url >= 0 {
+        new_en.url = prim_aep.url;
+    }
+
+    new_en
+}
+
 /// Input for blend computation - contains raw and forced colors for both layers
 #[repr(C)]
 pub struct HlBlendInput {

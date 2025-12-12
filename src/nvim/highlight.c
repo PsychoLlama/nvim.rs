@@ -41,6 +41,14 @@ extern int rs_hl_cterm2rgb_color(int nr);
 extern int rs_hl_rgb2cterm_color(int rgb);
 extern int rs_cterm_blend(int ratio, int16_t c1, int16_t c2);
 
+// Input struct for rs_hl_combine_attrs_compute
+typedef struct {
+  HlAttrs char_aep;
+  HlAttrs prim_aep;
+} HlCombineInput;
+
+extern HlAttrs rs_hl_combine_attrs_compute(HlCombineInput input);
+
 // Input struct for rs_hl_blend_attrs_compute
 typedef struct {
   HlAttrs battrs_raw;
@@ -629,9 +637,17 @@ int hl_combine_attr(int char_attr, int prim_attr)
 
   HlAttrs char_aep = syn_attr2entry(char_attr);
   HlAttrs prim_aep = syn_attr2entry(prim_attr);
+  HlAttrs new_en;
 
+#ifdef USE_RUST_HIGHLIGHT
+  HlCombineInput input = {
+    .char_aep = char_aep,
+    .prim_aep = prim_aep,
+  };
+  new_en = rs_hl_combine_attrs_compute(input);
+#else
   // start with low-priority attribute, and override colors if present below.
-  HlAttrs new_en = char_aep;
+  new_en = char_aep;
 
   if (prim_aep.cterm_ae_attr & HL_NOCOMBINE) {
     new_en.cterm_ae_attr = prim_aep.cterm_ae_attr;
@@ -679,6 +695,7 @@ int hl_combine_attr(int char_attr, int prim_attr)
   if ((new_en.url == -1) && (prim_aep.url >= 0)) {
     new_en.url = prim_aep.url;
   }
+#endif
 
   id = get_attr_entry((HlEntry){ .attr = new_en, .kind = kHlCombine,
                                  .id1 = char_attr, .id2 = prim_attr });
