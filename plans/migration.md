@@ -2,14 +2,20 @@
 
 ## Current Status
 
-**615 rs_* functions migrated**
+**627 rs_* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
 ### Current Work
 
 **Phase 9 - Highlight Functions** (in progress)
-- nvim-highlight crate: rgb_blend, cterm_blend, color conversion, name_to_ctermcolor, name_to_color, coloridx_to_name, HlAttrs struct, hl_combine_ae, get_colors_force, hl_blend_attrs_compute, hl_combine_attrs_compute, lookup_color
+- Phase 9.0-9.7: Color blending, conversion, name lookups (complete)
+- Phase 9.8: HlEntry struct, attribute entry infrastructure (complete)
+  - Added: HlKind enum, HlEntry struct, AttrEntryStore
+  - Added: rs_highlight_init, rs_syn_attr2entry, rs_get_attr_entry
+  - Added: rs_combine_cache_get/put, rs_blend_cache_get/put
+  - Added: rs_clear_hl_tables, rs_highlight_use_hlstate, rs_hl_invalidate_blends
+- Phase 9.9+: Connect C code to use Rust entry store (next)
 - Run `grep -n "pub.*extern.*fn rs_" src/nvim-rs/highlight/src/lib.rs` to see all functions
 
 ---
