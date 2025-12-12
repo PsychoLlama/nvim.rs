@@ -902,6 +902,25 @@ static int color_numbers_8[28] = { 0, 4, 2, 6,
 // color_names[].
 // "boldp" will be set to kTrue or kFalse for a foreground color when using 8
 // colors, otherwise it will be unchanged.
+#ifdef USE_RUST_HIGHLIGHT
+typedef struct {
+  int color;
+  int bold;  // -1 = unchanged, 0 = kFalse, 1 = kTrue
+} LookupColorResult;
+extern LookupColorResult rs_lookup_color(int idx, bool foreground);
+
+static int lookup_color(const int idx, const bool foreground, TriState *const boldp)
+{
+  LookupColorResult result = rs_lookup_color(idx, foreground);
+  if (result.bold == 0) {
+    *boldp = kFalse;
+  } else if (result.bold == 1) {
+    *boldp = kTrue;
+  }
+  // bold == -1 means unchanged, leave boldp as-is
+  return result.color;
+}
+#else
 static int lookup_color(const int idx, const bool foreground, TriState *const boldp)
 {
   int color = color_numbers_16[idx];
@@ -933,6 +952,7 @@ static int lookup_color(const int idx, const bool foreground, TriState *const bo
   }
   return color;
 }
+#endif
 
 void set_hl_group(int id, HlAttrs attrs, Dict(highlight) *dict, int link_id)
 {

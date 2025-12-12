@@ -627,6 +627,85 @@ fn lookup_color(idx: usize, t_colors: c_int) -> c_int {
     }
 }
 
+/// Result of lookup_color with bold state
+#[repr(C)]
+pub struct LookupColorResult {
+    /// The cterm color number (-1 if invalid)
+    pub color: c_int,
+    /// Bold state: -1 = unchanged, 0 = false, 1 = true
+    pub bold: c_int,
+}
+
+/// Lookup the "cterm" value for a color index.
+///
+/// This is the FFI wrapper that handles the bold attribute for foreground
+/// colors on 8-color terminals.
+///
+/// # Arguments
+/// * `idx` - Index into color_names array (0-27)
+/// * `foreground` - Whether this is a foreground color lookup
+///
+/// # Returns
+/// LookupColorResult with color number and bold state.
+/// - bold == -1: unchanged (don't modify boldp)
+/// - bold == 0: set to kFalse
+/// - bold == 1: set to kTrue
+///
+/// # Safety
+/// Calls C accessor functions for global variables.
+#[no_mangle]
+pub unsafe extern "C" fn rs_lookup_color(idx: c_int, foreground: bool) -> LookupColorResult {
+    // Bounds check
+    if idx < 0 || idx >= 28 {
+        return LookupColorResult { color: -1, bold: -1 };
+    }
+    let idx = idx as usize;
+
+    let t_colors = nvim_get_t_colors();
+
+    // Use the _16 table to check if it's a valid color name.
+    let color_16 = COLOR_NUMBERS_16[idx];
+    if color_16 < 0 {
+        return LookupColorResult { color: -1, bold: -1 };
+    }
+
+    if t_colors == 8 {
+        // t_Co is 8: use the 8 colors table
+        let color = COLOR_NUMBERS_8[idx];
+        let bold = if foreground {
+            // set/reset bold attribute to get light foreground
+            // colors (on some terminals, e.g. "linux")
+            if color & 8 != 0 { 1 } else { 0 }
+        } else {
+            -1 // unchanged
+        };
+        LookupColorResult {
+            color: color & 7, // truncate to 8 colors
+            bold,
+        }
+    } else if t_colors == 16 {
+        LookupColorResult {
+            color: COLOR_NUMBERS_8[idx],
+            bold: -1,
+        }
+    } else if t_colors == 88 {
+        LookupColorResult {
+            color: COLOR_NUMBERS_88[idx],
+            bold: -1,
+        }
+    } else if t_colors >= 256 {
+        LookupColorResult {
+            color: COLOR_NUMBERS_256[idx],
+            bold: -1,
+        }
+    } else {
+        LookupColorResult {
+            color: color_16,
+            bold: -1,
+        }
+    }
+}
+
 /// Case-insensitive comparison for ASCII strings
 fn str_icmp(a: &str, b: &str) -> bool {
     if a.len() != b.len() {
