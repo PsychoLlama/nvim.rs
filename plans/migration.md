@@ -8,46 +8,9 @@ Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get cur
 
 ### Recent Work (December 2025)
 
-**Phase 7.4 - Object to Highlight ID** (completed)
-- Added `rs_object_to_hl_id`: Convert Object to highlight group ID
-
-**Phase 7.3 - API Validation Functions** (completed)
-- Added validation error functions to nvim-api crate:
-  - `rs_api_err_invalid`: Generate "Invalid ..." error messages
-  - `rs_api_err_exp`: Generate "Invalid ...: expected ..." error messages
-
-**Phase 7.2 - API Free Functions** (completed)
-- Added recursive free functions to nvim-api crate:
-  - `rs_api_free_object`: Recursively free an Object and all nested data
-  - `rs_api_free_array`: Free Array and all items recursively
-  - `rs_api_free_dict`: Free Dict and all key-value pairs recursively
-
-**Phase 7.0-7.1 - API Helper Functions** (completed)
-- Added Rust implementations to nvim-api crate:
-  - `rs_api_typename`: Get type name string for ObjectType
-  - `rs_cchar_to_string`: Single char to String
-  - `rs_cstr_to_string`: Copy C string to String
-  - `rs_cstr_as_string`: C string to String (no copy)
-  - `rs_cbuf_to_string`: Copy buffer to String
-  - `rs_cstrn_to_string`: Copy C string with maxsize
-  - `rs_cstrn_as_string`: C string with maxsize (no copy)
-  - `rs_api_free_string`: Free String data
-  - `rs_api_object_to_bool`: Coerce Object to bool
-  - `rs_copy_string`: Copy String with arena support
-  - `rs_api_clear_error`: Clear error and free message
-  - `rs_error_set`: Check if error is set
-  - `rs_string_to_cstr`: Copy String to NUL-terminated C string
-  - `rs_ga_take_string`: Take garray memory as String
-
-**Phase 6.0 - Rust MessagePack Unpacker** (completed)
-- Implemented pure Rust msgpack unpacker using `rmp` crate
-- New crate: nvim-unpacker in src/nvim-rs/unpacker/
-- Replaces C mpack-based unpack() function with rs_unpack()
-- 48 USE_RUST_* flags now enabled (added USE_RUST_UNPACKER)
-
-**Previous Work**:
-- Phase 5.1-5.31 - Static variable accessor pattern (569 functions)
-- Phases 0-4 - Build infrastructure, memory bridge, OS functions, event loop
+**Phase 7 - API Layer Functions** (in progress)
+- nvim-api crate: string helpers, typename, free functions, validation errors, object_to_hl_id
+- Run `grep -n "pub.*extern.*fn rs_" src/nvim-rs/api/src/lib.rs` to see all functions
 
 ---
 
@@ -146,20 +109,7 @@ extern "C" { fn nvim_get_foo_field() -> c_int; }
 | 4 | Event loop accessors (watchers, streams, loop fields) | ✅ |
 | 5.1-5.31 | Static variable accessor pattern | ✅ |
 | 6.0 | MessagePack unpacker (rs_unpack) | ✅ |
-| 7.0 | API helper functions (string, typename) | ✅ |
-
-### Phase 6 Complete
-
-**Phase 6.0** replaced the C mpack-based unpacker with a pure Rust implementation using the `rmp` crate. The Rust unpacker:
-- Handles all msgpack types (nil, bool, int, float, string, binary, array, map, ext)
-- Uses arena_alloc() for memory allocation (compatible with C code)
-- Properly handles Buffer/Window/Tabpage EXT types
-
-All 48 `USE_RUST_*` flags are now enabled.
-
-### Next Phase
-
-Focus on deeper integration work or expand existing crates with non-pure functions that are still amenable to FFI.
+| 7.x | API layer functions | 🔄 |
 
 ### Future Phases (Roadmap)
 
