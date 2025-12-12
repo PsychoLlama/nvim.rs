@@ -60,6 +60,29 @@ typedef struct {
 } HlBlendInput;
 
 extern HlAttrs rs_hl_blend_attrs_compute(HlBlendInput input);
+
+// Attribute entry management functions
+extern void rs_highlight_init(void);
+extern int rs_attr_entry_count(void);
+extern HlAttrs rs_syn_attr2entry(int attr);
+extern HlEntry rs_get_attr_entry_by_id(int attr);
+
+// Result type for rs_get_attr_entry
+typedef struct {
+  int id;
+  bool is_new;
+} GetAttrEntryResult;
+
+extern GetAttrEntryResult rs_get_attr_entry(HlEntry entry);
+extern void rs_clear_hl_tables(bool reinit);
+extern bool rs_highlight_use_hlstate(void);
+extern void rs_hl_invalidate_blends(void);
+
+// Cache functions
+extern int rs_combine_cache_get(int combine_tag);
+extern void rs_combine_cache_put(int combine_tag, int id);
+extern int rs_blend_cache_get(int combine_tag, bool through);
+extern void rs_blend_cache_put(int combine_tag, int id, bool through);
 #endif
 
 static bool hlstate_active = false;
@@ -79,6 +102,10 @@ static PMap(int) ns_hl_attr;
 
 void highlight_init(void)
 {
+#ifdef USE_RUST_HIGHLIGHT
+  // Initialize Rust attribute entry store
+  rs_highlight_init();
+#endif
   // index 0 is no attribute, add dummy entry:
   set_put(HlEntry, &attr_entries, ((HlEntry){ .attr = HLATTRS_INIT, .kind = kHlInvalid,
                                               .id1 = 0, .id2 = 0 }));
@@ -114,6 +141,12 @@ retry: {}
   MHPutStatus status;
   uint32_t k = set_put_idx(HlEntry, &attr_entries, entry, &status);
   if (status == kMHExisting) {
+#ifdef USE_RUST_HIGHLIGHT
+    // Also check Rust returns the same ID
+    GetAttrEntryResult rs_result = rs_get_attr_entry(entry);
+    assert(!rs_result.is_new);  // Should also be existing in Rust
+    assert(rs_result.id == (int)k);  // IDs should match
+#endif
     return (int)k;
   }
 
@@ -141,6 +174,13 @@ retry: {}
 
   // new attr id, send event to remote ui:s
   int id = (int)k;
+
+#ifdef USE_RUST_HIGHLIGHT
+  // Also store in Rust - should get the same ID
+  GetAttrEntryResult rs_result = rs_get_attr_entry(entry);
+  assert(rs_result.is_new);  // Should also be new in Rust
+  assert(rs_result.id == id);  // IDs should match
+#endif
 
   Arena arena = ARENA_EMPTY;
   Array inspect = hl_inspect(id, &arena);
@@ -964,7 +1004,23 @@ HlAttrs syn_attr2entry(int attr)
     // invalid attribute code, or the tables were cleared
     return HLATTRS_INIT;
   }
+#ifdef USE_RUST_HIGHLIGHT
+  // Validate Rust implementation matches C (debug only)
+  HlAttrs c_result = attr_entry(attr).attr;
+  HlAttrs rs_result = rs_syn_attr2entry(attr);
+  assert(c_result.rgb_ae_attr == rs_result.rgb_ae_attr);
+  assert(c_result.cterm_ae_attr == rs_result.cterm_ae_attr);
+  assert(c_result.rgb_fg_color == rs_result.rgb_fg_color);
+  assert(c_result.rgb_bg_color == rs_result.rgb_bg_color);
+  assert(c_result.rgb_sp_color == rs_result.rgb_sp_color);
+  assert(c_result.cterm_fg_color == rs_result.cterm_fg_color);
+  assert(c_result.cterm_bg_color == rs_result.cterm_bg_color);
+  assert(c_result.hl_blend == rs_result.hl_blend);
+  assert(c_result.url == rs_result.url);
+  return c_result;
+#else
   return attr_entry(attr).attr;
+#endif
 }
 
 /// Gets highlight description for id `attr_id` as a map.
