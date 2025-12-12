@@ -132,6 +132,10 @@ extern void rs_api_free_array(Array value);
 extern void rs_api_free_dict(Dict value);
 // Rust implementation of object_to_hl_id
 extern int rs_object_to_hl_id(Object obj, const char *what, Error *err);
+// Rust implementations of luarefs free functions
+extern void rs_api_luarefs_free_object(Object value);
+extern void rs_api_luarefs_free_array(Array value);
+extern void rs_api_luarefs_free_dict(Dict value);
 #endif
 
 #define API_CLEAR_STRING(s) \

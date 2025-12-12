@@ -769,6 +769,61 @@ pub unsafe extern "C" fn rs_ga_take_string(ga: *mut GArray) -> NvimString {
     str
 }
 
+/// Free luarefs from an Object (only frees luarefs, not other data).
+///
+/// This function recursively frees luarefs from nested arrays and dicts,
+/// but does not free the actual string/array/dict memory.
+///
+/// # Safety
+/// The object must have valid pointers for array and dict items.
+///
+/// # Arguments
+/// * `value` - The Object to free luarefs from
+#[no_mangle]
+pub unsafe extern "C" fn rs_api_luarefs_free_object(value: Object) {
+    match value.obj_type {
+        K_OBJECT_TYPE_LUAREF => {
+            api_free_luaref(value.data.luaref);
+        }
+        K_OBJECT_TYPE_ARRAY => {
+            rs_api_luarefs_free_array(value.data.array);
+        }
+        K_OBJECT_TYPE_DICT => {
+            rs_api_luarefs_free_dict(value.data.dict);
+        }
+        _ => {}
+    }
+}
+
+/// Free luarefs from an Array (only frees luarefs, not other data).
+///
+/// # Safety
+/// The array's items must be valid pointers.
+///
+/// # Arguments
+/// * `value` - The Array to free luarefs from
+#[no_mangle]
+pub unsafe extern "C" fn rs_api_luarefs_free_array(value: Array) {
+    for i in 0..value.size {
+        rs_api_luarefs_free_object(*value.items.add(i));
+    }
+}
+
+/// Free luarefs from a Dict (only frees luarefs, not other data).
+///
+/// # Safety
+/// The dict's items must be valid pointers.
+///
+/// # Arguments
+/// * `value` - The Dict to free luarefs from
+#[no_mangle]
+pub unsafe extern "C" fn rs_api_luarefs_free_dict(value: Dict) {
+    for i in 0..value.size {
+        let item = &*value.items.add(i);
+        rs_api_luarefs_free_object(item.value);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

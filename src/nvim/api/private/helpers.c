@@ -1013,6 +1013,9 @@ Dict api_keydict_to_dict(void *value, KeySetLink *table, size_t max_size, Arena 
 
 void api_luarefs_free_object(Object value)
 {
+#ifdef USE_RUST_API
+  rs_api_luarefs_free_object(value);
+#else
   // TODO(bfredl): this is more complicated than it needs to be.
   // we should be able to lock down more specifically where luarefs can be
   switch (value.type) {
@@ -1031,6 +1034,7 @@ void api_luarefs_free_object(Object value)
   default:
     break;
   }
+#endif
 }
 
 void api_luarefs_free_keydict(void *dict, KeySetLink *table)
@@ -1049,16 +1053,24 @@ void api_luarefs_free_keydict(void *dict, KeySetLink *table)
 
 void api_luarefs_free_array(Array value)
 {
+#ifdef USE_RUST_API
+  rs_api_luarefs_free_array(value);
+#else
   for (size_t i = 0; i < value.size; i++) {
     api_luarefs_free_object(value.items[i]);
   }
+#endif
 }
 
 void api_luarefs_free_dict(Dict value)
 {
+#ifdef USE_RUST_API
+  rs_api_luarefs_free_dict(value);
+#else
   for (size_t i = 0; i < value.size; i++) {
     api_luarefs_free_object(value.items[i].value);
   }
+#endif
 }
 
 /// Set a named mark
