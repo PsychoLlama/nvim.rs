@@ -2,7 +2,7 @@
 
 ## Current Status
 
-**594 rs_* functions migrated** (as of 2025-12-11)
+**595 rs_* functions migrated** (as of 2025-12-11)
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
@@ -10,6 +10,7 @@ Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get cur
 
 **Phase 7 - API Layer Functions** (in progress)
 - nvim-api crate: string helpers, typename, free functions, validation errors, object_to_hl_id, luarefs_free functions
+- nvim-context crate: ctx_free (frees Context object resources)
 - Run `grep -n "pub.*extern.*fn rs_" src/nvim-rs/api/src/lib.rs` to see all functions
 
 ---
