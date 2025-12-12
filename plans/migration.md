@@ -2,14 +2,14 @@
 
 ## Current Status
 
-**598 rs_* functions migrated**
+**600 rs_* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
 ### Current Work
 
 **Phase 8 - Terminal UI Functions** (in progress)
-- nvim-tui crate: terminfo_is_term_family, terminfo_is_bsd_console, terminfo_fmt
+- nvim-tui crate: terminfo_is_term_family, terminfo_is_bsd_console, terminfo_fmt, handle_termkey_modifiers, handle_more_modifiers
 - Run `grep -n "pub.*extern.*fn rs_" src/nvim-rs/tui/src/lib.rs` to see all functions
 
 ---
@@ -63,7 +63,7 @@ All Rust code lives in `src/nvim-rs/`. The main crate re-exports all FFI functio
 | nvim-spell | Spell check | langmap, langword |
 | nvim-strings | String utilities | vim_str* functions |
 | nvim-utf8proc | UTF-8 processing | utf8proc bindings |
-| nvim-tui | Terminal UI | terminfo_is_term_family, terminfo_is_bsd_console |
+| nvim-tui | Terminal UI | terminfo_*, handle_termkey_modifiers, handle_more_modifiers |
 | nvim-version | Version info | version string |
 | nvim-window | Window operations | win_valid, frame_* functions |
 

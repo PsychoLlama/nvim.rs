@@ -221,6 +221,48 @@ static void tinput_enqueue(TermInput *input, const char *buf, size_t size)
   input->key_buffer_len += to_copy;
 }
 
+enum {
+  KEYMOD_SUPER      = 1 << 3,
+  KEYMOD_META       = 1 << 5,
+#ifdef _MSC_VER
+# pragma warning(push)
+# pragma warning(disable : 5287)
+#endif
+  KEYMOD_RECOGNIZED = (TERMKEY_KEYMOD_SHIFT | TERMKEY_KEYMOD_ALT | TERMKEY_KEYMOD_CTRL
+                       | KEYMOD_SUPER | KEYMOD_META),
+#ifdef _MSC_VER
+# pragma warning(pop)
+#endif
+};
+
+#ifdef USE_RUST_TUI
+// Rust implementations in nvim-tui crate
+extern size_t rs_handle_termkey_modifiers(int modifiers, char *buf, size_t buflen);
+extern size_t rs_handle_more_modifiers(int modifiers, char *buf, size_t buflen);
+
+/// Handle TERMKEY_KEYMOD_* modifiers, i.e. Shift, Alt and Ctrl.
+///
+/// @return  The number of bytes written into "buf", excluding the final NUL.
+static size_t handle_termkey_modifiers(TermKeyKey *key, char *buf, size_t buflen)
+  FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  size_t len = rs_handle_termkey_modifiers(key->modifiers, buf, buflen);
+  assert(len < buflen);
+  return len;
+}
+
+/// Handle modifiers not handled by libtermkey.
+/// Currently only Super ("D-") and Meta ("T-") are supported in Nvim.
+///
+/// @return  The number of bytes written into "buf", excluding the final NUL.
+static size_t handle_more_modifiers(TermKeyKey *key, char *buf, size_t buflen)
+  FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  size_t len = rs_handle_more_modifiers(key->modifiers, buf, buflen);
+  assert(len < buflen);
+  return len;
+}
+#else
 /// Handle TERMKEY_KEYMOD_* modifiers, i.e. Shift, Alt and Ctrl.
 ///
 /// @return  The number of bytes written into "buf", excluding the final NUL.
@@ -241,20 +283,6 @@ static size_t handle_termkey_modifiers(TermKeyKey *key, char *buf, size_t buflen
   return len;
 }
 
-enum {
-  KEYMOD_SUPER      = 1 << 3,
-  KEYMOD_META       = 1 << 5,
-#ifdef _MSC_VER
-# pragma warning(push)
-# pragma warning(disable : 5287)
-#endif
-  KEYMOD_RECOGNIZED = (TERMKEY_KEYMOD_SHIFT | TERMKEY_KEYMOD_ALT | TERMKEY_KEYMOD_CTRL
-                       | KEYMOD_SUPER | KEYMOD_META),
-#ifdef _MSC_VER
-# pragma warning(pop)
-#endif
-};
-
 /// Handle modifiers not handled by libtermkey.
 /// Currently only Super ("D-") and Meta ("T-") are supported in Nvim.
 ///
@@ -272,6 +300,7 @@ static size_t handle_more_modifiers(TermKeyKey *key, char *buf, size_t buflen)
   assert(len < buflen);
   return len;
 }
+#endif
 
 static void handle_kitty_key_protocol(TermInput *input, TermKeyKey *key)
 {
