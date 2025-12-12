@@ -83,6 +83,11 @@ extern int rs_combine_cache_get(int combine_tag);
 extern void rs_combine_cache_put(int combine_tag, int id);
 extern int rs_blend_cache_get(int combine_tag, bool through);
 extern void rs_blend_cache_put(int combine_tag, int id, bool through);
+
+// URL functions
+extern uint32_t rs_hl_add_url_index(const char *url);
+extern const char *rs_hl_get_url(uint32_t index);
+extern uint32_t rs_hl_url_count(void);
 #endif
 
 static bool hlstate_active = false;
@@ -569,6 +574,12 @@ int hl_add_url(int attr, const char *url)
     urls.keys[k] = xstrdup(url);
   }
 
+#ifdef USE_RUST_HIGHLIGHT
+  // Also add URL to Rust - should get the same index
+  uint32_t rs_k = rs_hl_add_url_index(url);
+  assert(rs_k == k);  // Indices should match
+#endif
+
   attrs.url = (int32_t)k;
 
   int new = get_attr_entry((HlEntry){
@@ -588,6 +599,12 @@ int hl_add_url(int attr, const char *url)
 const char *hl_get_url(uint32_t index)
 {
   assert(urls.keys);
+#ifdef USE_RUST_HIGHLIGHT
+  // Validate Rust returns the same URL
+  const char *rs_url = rs_hl_get_url(index);
+  assert(rs_url != NULL);
+  assert(strcmp(urls.keys[index], rs_url) == 0);
+#endif
   return urls.keys[index];
 }
 

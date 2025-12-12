@@ -199,6 +199,10 @@ struct AttrEntryStore {
     blend_cache: HashMap<c_int, c_int>,
     /// Cache for blend-through attributes
     blendthrough_cache: HashMap<c_int, c_int>,
+    /// URL storage: index -> URL string (as CString for FFI)
+    urls: Vec<std::ffi::CString>,
+    /// URL reverse lookup: URL string -> index
+    url_to_index: HashMap<String, u32>,
     /// Whether hlstate mode is active
     hlstate_active: bool,
 }
@@ -212,6 +216,8 @@ impl AttrEntryStore {
             combine_cache: HashMap::new(),
             blend_cache: HashMap::new(),
             blendthrough_cache: HashMap::new(),
+            urls: Vec::new(),
+            url_to_index: HashMap::new(),
             hlstate_active: false,
         }
     }
@@ -279,7 +285,30 @@ impl AttrEntryStore {
         self.combine_cache.clear();
         self.blend_cache.clear();
         self.blendthrough_cache.clear();
+        self.urls.clear();
+        self.url_to_index.clear();
         self.init();
+    }
+
+    /// Add or lookup a URL. Returns the index.
+    fn add_url(&mut self, url: &str) -> u32 {
+        if let Some(&index) = self.url_to_index.get(url) {
+            return index;
+        }
+        let index = self.urls.len() as u32;
+        // Store as CString for FFI compatibility
+        let cstring = std::ffi::CString::new(url).unwrap_or_default();
+        self.urls.push(cstring);
+        self.url_to_index.insert(url.to_string(), index);
+        index
+    }
+
+    /// Get a URL C string pointer by index
+    fn get_url_ptr(&self, index: u32) -> *const c_char {
+        self.urls
+            .get(index as usize)
+            .map(|s| s.as_ptr())
+            .unwrap_or(std::ptr::null())
     }
 
     /// Clear just the blend caches
@@ -461,6 +490,41 @@ pub extern "C" fn rs_blend_cache_put(combine_tag: c_int, id: c_int, through: boo
         &mut store.blend_cache
     };
     cache.insert(combine_tag, id);
+}
+
+// ============================================================================
+// URL Management Functions
+// ============================================================================
+
+/// Add or lookup a URL. Returns the index.
+///
+/// # Safety
+/// The url pointer must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_hl_add_url_index(url: *const c_char) -> u32 {
+    let url_str = std::ffi::CStr::from_ptr(url).to_str().unwrap_or("");
+    let mut store = ATTR_STORE.lock().unwrap();
+    store.add_url(url_str)
+}
+
+/// Get a URL by its index. Returns null if index is invalid.
+///
+/// Note: The returned pointer points to memory owned by the URL store.
+/// It remains valid as long as the URL store isn't cleared.
+/// This is safe because:
+/// 1. URLs are never removed individually (only during clear_hl_tables)
+/// 2. CString memory is stable (doesn't move during reallocations of Vec)
+#[no_mangle]
+pub extern "C" fn rs_hl_get_url(index: u32) -> *const c_char {
+    let store = ATTR_STORE.lock().unwrap();
+    store.get_url_ptr(index)
+}
+
+/// Get the number of URLs stored.
+#[no_mangle]
+pub extern "C" fn rs_hl_url_count() -> u32 {
+    let store = ATTR_STORE.lock().unwrap();
+    store.urls.len() as u32
 }
 
 // ============================================================================
