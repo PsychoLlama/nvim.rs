@@ -3223,6 +3223,14 @@ RgbValue name_to_color(const char *name, int *idx)
 }
 #endif
 
+#ifdef USE_RUST_HIGHLIGHT
+extern const char *rs_coloridx_to_name(int idx, int val, char *hexbuf);
+
+const char *coloridx_to_name(int idx, int val, char hexbuf[8])
+{
+  return rs_coloridx_to_name(idx, val, hexbuf);
+}
+#else
 const char *coloridx_to_name(int idx, int val, char hexbuf[8])
 {
   if (idx >= 0) {
@@ -3242,6 +3250,7 @@ const char *coloridx_to_name(int idx, int val, char hexbuf[8])
     abort();
   }
 }
+#endif
 
 #ifdef USE_RUST_HIGHLIGHT
 extern int rs_name_to_ctermcolor(const char *name);
