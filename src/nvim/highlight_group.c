@@ -52,10 +52,20 @@
 #include "nvim/ui_defs.h"
 #include "nvim/vim_defs.h"
 
-// Accessor for Rust FFI
+// Accessors for Rust FFI
 int nvim_get_t_colors(void)
 {
   return t_colors;
+}
+
+int nvim_get_normal_fg(void)
+{
+  return normal_fg;
+}
+
+int nvim_get_normal_bg(void)
+{
+  return normal_bg;
 }
 
 /// \addtogroup SG_SET
@@ -3163,6 +3173,20 @@ color_name_table_T color_name_table[] = {
 /// @param[in] name string value to convert to RGB
 /// @param[out] idx index in color table or special value
 /// return the hex value or -1 if could not find a correct value
+#ifdef USE_RUST_HIGHLIGHT
+typedef struct {
+  int color;
+  int idx;
+} NameToColorResult;
+extern NameToColorResult rs_name_to_color(const char *name);
+
+RgbValue name_to_color(const char *name, int *idx)
+{
+  NameToColorResult result = rs_name_to_color(name);
+  *idx = result.idx;
+  return result.color;
+}
+#else
 RgbValue name_to_color(const char *name, int *idx)
 {
   if (name[0] == '#' && isxdigit((uint8_t)name[1]) && isxdigit((uint8_t)name[2])
@@ -3197,6 +3221,7 @@ RgbValue name_to_color(const char *name, int *idx)
   *idx = kColorIdxNone;
   return -1;
 }
+#endif
 
 const char *coloridx_to_name(int idx, int val, char hexbuf[8])
 {
