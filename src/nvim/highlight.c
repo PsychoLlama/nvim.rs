@@ -273,6 +273,13 @@ int c_ns_get_hl(int *ns_id, int hl_id, bool link, int nodefault)
   *ns_id = ns;
   return result;
 }
+
+// Wrapper for get_attr_entry callable from Rust
+// Allows Rust to create highlight attribute entries with proper UI dispatch
+int c_get_attr_entry(HlEntry entry)
+{
+  return get_attr_entry(entry);
+}
 #endif
 
 int ns_get_hl(NS *ns_hl, int hl_id, bool link, bool nodefault)
@@ -400,6 +407,14 @@ int hl_get_ui_attr(int ns_id, int idx, int final_id, bool optional)
 /// @param attr  The original attribute code.
 ///
 /// @return      The attribute code with 'winblend' applied.
+#ifdef USE_RUST_HIGHLIGHT
+extern int rs_hl_apply_winblend(int winbl, int attr);
+
+int hl_apply_winblend(int winbl, int attr)
+{
+  return rs_hl_apply_winblend(winbl, attr);
+}
+#else
 int hl_apply_winblend(int winbl, int attr)
 {
   HlEntry entry = rs_get_attr_entry_by_id(attr);
@@ -410,6 +425,7 @@ int hl_apply_winblend(int winbl, int attr)
   }
   return attr;
 }
+#endif
 
 void update_window_hl(win_T *wp, bool invalid)
 {
@@ -534,6 +550,14 @@ int win_bg_attr(win_T *wp)
 }
 
 /// Gets HL_UNDERLINE highlight.
+#ifdef USE_RUST_HIGHLIGHT
+extern int rs_hl_get_underline(void);
+
+int hl_get_underline(void)
+{
+  return rs_hl_get_underline();
+}
+#else
 int hl_get_underline(void)
 {
   return get_attr_entry((HlEntry){
@@ -553,6 +577,7 @@ int hl_get_underline(void)
     .id2 = 0,
   });
 }
+#endif
 
 /// Augment an existing attribute with a URL.
 ///
@@ -588,11 +613,20 @@ const char *hl_get_url(uint32_t index)
 }
 
 /// Get attribute code for forwarded :terminal highlights.
+#ifdef USE_RUST_HIGHLIGHT
+extern int rs_hl_get_term_attr(HlAttrs *aep);
+
+int hl_get_term_attr(HlAttrs *aep)
+{
+  return rs_hl_get_term_attr(aep);
+}
+#else
 int hl_get_term_attr(HlAttrs *aep)
 {
   return get_attr_entry((HlEntry){ .attr = *aep, .kind = kHlTerminal,
                                    .id1 = 0, .id2 = 0 });
 }
+#endif
 
 /// Clear all highlight tables.
 void clear_hl_tables(bool reinit)

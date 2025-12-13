@@ -2,24 +2,24 @@
 
 ## Current Status
 
-**661 rs_* functions migrated**
+**664 rs_* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
 ### Current Work
 
+**Phase 13 - Attribute Entry Callback & Attr Builders** ✅
+- Phase 13.1: Add c_get_attr_entry callback for Rust
+  - `c_get_attr_entry()` - C callback for UI dispatch
+- Phase 13.2-13.4: Migrate attribute builder functions
+  - `rs_hl_get_underline()` - underline highlight attribute
+  - `rs_hl_get_term_attr()` - terminal highlight attributes
+  - `rs_hl_apply_winblend()` - apply winblend to attributes
+
 **Phase 12 - Highlight Wrapper Functions** ✅
-- Phase 12.1: Migrate trivial wrapper functions
-  - `rs_syn_id2attr()` - wraps syn_ns_id2attr(-1, id, &optional)
-  - `rs_syn_get_final_id()` - wraps syn_ns_get_final_id with curwin namespace
-  - `rs_syn_name2attr()` - lookup name then get attr
-  - `rs_highlight_exists()` - check if group exists
-  - `rs_restore_cterm_colors()` - reset color globals
-- Phase 12.2: Add window struct accessors
-  - `nvim_win_get_ns_hl()` - get w_ns_hl field
-  - `c_curwin_ns_hl_active()` - get current window's active namespace
-- Phase 12.3: Migrate win_check_ns_hl
-  - `rs_win_check_ns_hl()` - prepare window for drawing
+- Phase 12.1: Trivial wrapper functions (syn_id2attr, syn_get_final_id, etc.)
+- Phase 12.2: Window struct accessors (nvim_win_get_ns_hl, c_curwin_ns_hl_active)
+- Phase 12.3: `rs_win_check_ns_hl()` - prepare window for drawing
 
 **Phase 11 - hl_table Accessors & syn_* Functions** ✅
 - Phase 11.1-11.2: C accessor functions for hl_table (HlGroup array)

@@ -1167,6 +1167,8 @@ extern "C" {
     fn c_syn_add_group(name: *const c_char, len: usize) -> c_int;
     /// Call ns_get_hl from C (handles Lua callback if needed)
     fn c_ns_get_hl(ns_id: *mut c_int, hl_id: c_int, link: bool, nodefault: c_int) -> c_int;
+    /// Call get_attr_entry from C (handles UI dispatch for new entries)
+    fn c_get_attr_entry(entry: HlEntry) -> c_int;
 }
 
 /// Find highlight group name in the table and return its ID.
@@ -1443,6 +1445,80 @@ pub unsafe extern "C" fn rs_win_check_ns_hl(wp: *mut c_void) -> bool {
     let ns_hl = if wp.is_null() { -1 } else { nvim_win_get_ns_hl(wp) };
     rs_set_ns_hl_win(ns_hl);
     rs_hl_check_ns()
+}
+
+// ============================================================================
+// Attribute Entry Creation Functions
+// ============================================================================
+
+/// Gets HL_UNDERLINE highlight.
+/// Creates an attribute entry with just underline style set.
+///
+/// This mirrors the C function `hl_get_underline(void)`.
+#[no_mangle]
+pub extern "C" fn rs_hl_get_underline() -> c_int {
+    let entry = HlEntry {
+        attr: HlAttrs {
+            cterm_ae_attr: HL_UNDERLINE,
+            cterm_fg_color: 0,
+            cterm_bg_color: 0,
+            rgb_ae_attr: HL_UNDERLINE,
+            rgb_fg_color: -1,
+            rgb_bg_color: -1,
+            rgb_sp_color: -1,
+            hl_blend: -1,
+            url: -1,
+        },
+        kind: HlKind::UI,
+        id1: 0,
+        id2: 0,
+        winid: 0,
+    };
+    unsafe { c_get_attr_entry(entry) }
+}
+
+/// Get attribute code for forwarded :terminal highlights.
+///
+/// This mirrors the C function `hl_get_term_attr(HlAttrs *aep)`.
+///
+/// # Safety
+/// The aep pointer must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_hl_get_term_attr(aep: *const HlAttrs) -> c_int {
+    if aep.is_null() {
+        return 0;
+    }
+    let entry = HlEntry {
+        attr: *aep,
+        kind: HlKind::Terminal,
+        id1: 0,
+        id2: 0,
+        winid: 0,
+    };
+    c_get_attr_entry(entry)
+}
+
+/// Apply 'winblend' to highlight attributes.
+/// If the blend attribute is not set, the winblend value overrides it.
+///
+/// This mirrors the C function `hl_apply_winblend(int winbl, int attr)`.
+///
+/// # Arguments
+/// * `winbl` - The 'winblend' value
+/// * `attr` - The original attribute code
+///
+/// # Returns
+/// The attribute code with 'winblend' applied.
+#[no_mangle]
+pub extern "C" fn rs_hl_apply_winblend(winbl: c_int, attr: c_int) -> c_int {
+    let mut entry = rs_get_attr_entry_by_id(attr);
+    // if blend= attribute is not set, 'winblend' value overrides it.
+    if entry.attr.hl_blend == -1 && winbl > 0 {
+        entry.attr.hl_blend = winbl;
+        unsafe { c_get_attr_entry(entry) }
+    } else {
+        attr
+    }
 }
 
 // ============================================================================
