@@ -1817,6 +1817,200 @@ fn cterm_blend_internal(ratio: c_int, c1: i16, c2: i16) -> i16 {
     rgb2cterm_internal(blended)
 }
 
+// ============================================================================
+// Full Attribute Combination Functions
+// ============================================================================
+
+/// Combine two attribute codes to create a third.
+///
+/// This combines "char_attr" (e.g., from syntax highlighting) with "prim_attr"
+/// (e.g., from search highlighting). "prim_attr" overrules "char_attr".
+/// This creates a new group when required.
+///
+/// Since we expect there to be a lot of spelling mistakes we cache the result.
+///
+/// # Returns
+/// The combined attribute ID.
+#[no_mangle]
+pub unsafe extern "C" fn rs_hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int {
+    // Early returns
+    if char_attr == 0 {
+        return prim_attr;
+    }
+    if prim_attr == 0 {
+        return char_attr;
+    }
+
+    // Check cache first
+    let combine_tag = (char_attr << 16) + prim_attr;
+    let cached = rs_combine_cache_get(combine_tag);
+    if cached > 0 {
+        return cached;
+    }
+
+    // Compute combined attributes
+    let char_aep = rs_syn_attr2entry(char_attr);
+    let prim_aep = rs_syn_attr2entry(prim_attr);
+    let input = HlCombineInput { char_aep, prim_aep };
+    let new_en = rs_hl_combine_attrs_compute(input);
+
+    // Get or create entry
+    let id = c_get_attr_entry(HlEntry {
+        attr: new_en,
+        kind: HlKind::Combine,
+        id1: char_attr,
+        id2: prim_attr,
+        winid: 0,
+    });
+
+    if id > 0 {
+        rs_combine_cache_put(combine_tag, id);
+    }
+
+    id
+}
+
+/// Blend overlay attributes (for popup menu) with other attributes.
+///
+/// This creates a new group when required.
+/// This is called per-cell, so cache the result.
+///
+/// # Arguments
+/// * `back_attr` - Background attribute
+/// * `front_attr` - Foreground (overlay) attribute
+/// * `through` - Input/output: whether this is a "through" blend (caller decides, may be cleared)
+///
+/// # Returns
+/// The blended attribute ID.
+#[no_mangle]
+pub unsafe extern "C" fn rs_hl_blend_attrs(
+    back_attr: c_int,
+    front_attr: c_int,
+    through: *mut bool,
+) -> c_int {
+    // Cannot blend uninitialized cells
+    if front_attr < 0 || back_attr < 0 {
+        return front_attr;
+    }
+
+    let fattrs_raw = rs_syn_attr2entry(front_attr);
+    let fattrs = rs_get_colors_force(fattrs_raw);
+    let ratio = fattrs.hl_blend;
+
+    if ratio <= 0 {
+        *through = false;
+        return front_attr;
+    }
+
+    // Check cache using the through value passed by caller
+    let combine_tag = (back_attr << 16) + front_attr;
+    let cached = rs_blend_cache_get(combine_tag, *through);
+    if cached > 0 {
+        return cached;
+    }
+
+    // Compute blended attributes
+    let battrs_raw = rs_syn_attr2entry(back_attr);
+    let battrs = rs_get_colors_force(battrs_raw);
+    let input = HlBlendInput {
+        battrs_raw,
+        battrs,
+        fattrs_raw,
+        fattrs,
+        ratio,
+        through: *through,
+    };
+    let cattrs = rs_hl_blend_attrs_compute(input);
+
+    let kind = if *through {
+        HlKind::BlendThrough
+    } else {
+        HlKind::Blend
+    };
+    let id = c_get_attr_entry(HlEntry {
+        attr: cattrs,
+        kind,
+        id1: back_attr,
+        id2: front_attr,
+        winid: 0,
+    });
+
+    if id > 0 {
+        rs_blend_cache_put(combine_tag, id, *through);
+    }
+
+    id
+}
+
+/// Get highlight attribute for syntax highlighting.
+///
+/// Creates a new highlight entry for syntax highlighting with the given attributes.
+///
+/// # Arguments
+/// * `ns_id` - Namespace ID (0 for global)
+/// * `idx` - Syntax group index
+/// * `at_en` - Highlight attributes
+///
+/// # Returns
+/// The attribute ID, or 0 if all attributes are cleared.
+#[no_mangle]
+pub unsafe extern "C" fn rs_hl_get_syn_attr(
+    ns_id: c_int,
+    idx: c_int,
+    at_en: HlAttrs,
+) -> c_int {
+    // Check if any meaningful attribute is set
+    if at_en.cterm_fg_color != 0
+        || at_en.cterm_bg_color != 0
+        || at_en.rgb_fg_color != -1
+        || at_en.rgb_bg_color != -1
+        || at_en.rgb_sp_color != -1
+        || at_en.cterm_ae_attr != 0
+        || at_en.rgb_ae_attr != 0
+        || ns_id != 0
+    {
+        return c_get_attr_entry(HlEntry {
+            attr: at_en,
+            kind: HlKind::Syntax,
+            id1: idx,
+            id2: ns_id,
+            winid: 0,
+        });
+    }
+
+    // If all fields are cleared, return default
+    0
+}
+
+/// Add a URL to an existing attribute.
+///
+/// # Arguments
+/// * `attr` - Existing attribute to combine with
+/// * `url` - URL string
+///
+/// # Returns
+/// Combined attribute with URL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_hl_add_url(attr: c_int, url: *const c_char) -> c_int {
+    let mut attrs = HlAttrs::new();
+
+    // Add URL to storage and get index
+    let k = rs_hl_add_url_index(url);
+    attrs.url = k as i32;
+
+    // Create new entry for the URL attribute
+    let new = c_get_attr_entry(HlEntry {
+        attr: attrs,
+        kind: HlKind::UI,
+        id1: 0,
+        id2: 0,
+        winid: 0,
+    });
+
+    // Combine with existing attribute
+    rs_hl_combine_attr(attr, new)
+}
+
 /// Internal cterm to RGB conversion
 fn cterm2rgb_internal(nr: c_int) -> c_int {
     if nr < 16 {

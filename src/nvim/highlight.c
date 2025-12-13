@@ -87,6 +87,12 @@ extern const char *rs_hl_get_url(uint32_t index);
 // Color forcing
 extern HlAttrs rs_get_colors_force(HlAttrs attrs);
 
+// Full attribute combination functions (Phase 14)
+extern int rs_hl_combine_attr(int char_attr, int prim_attr);
+extern int rs_hl_blend_attrs(int back_attr, int front_attr, bool *through);
+extern int rs_hl_get_syn_attr(int ns_id, int idx, HlAttrs at_en);
+extern int rs_hl_add_url(int attr, const char *url);
+
 // Namespace highlight storage functions (ns_hls now in Rust)
 extern bool rs_ns_hls_has(int ns_id, int syn_id);
 extern ColorItem rs_ns_hls_get(int ns_id, int syn_id);
@@ -236,6 +242,13 @@ void ui_send_all_hls(RemoteUI *ui)
   }
 }
 
+#ifdef USE_RUST_HIGHLIGHT
+/// Get attribute code for a syntax group.
+int hl_get_syn_attr(int ns_id, int idx, HlAttrs at_en)
+{
+  return rs_hl_get_syn_attr(ns_id, idx, at_en);
+}
+#else
 /// Get attribute code for a syntax group.
 int hl_get_syn_attr(int ns_id, int idx, HlAttrs at_en)
 {
@@ -250,6 +263,7 @@ int hl_get_syn_attr(int ns_id, int idx, HlAttrs at_en)
   // If all the fields are cleared, clear the attr field back to default value
   return 0;
 }
+#endif
 
 void ns_hl_def(NS ns_id, int hl_id, HlAttrs attrs, int link_id, Dict(highlight) *dict)
 {
@@ -579,6 +593,13 @@ int hl_get_underline(void)
 }
 #endif
 
+#ifdef USE_RUST_HIGHLIGHT
+/// Augment an existing attribute with a URL.
+int hl_add_url(int attr, const char *url)
+{
+  return rs_hl_add_url(attr, url);
+}
+#else
 /// Augment an existing attribute with a URL.
 ///
 /// @param attr Existing attribute to combine with
@@ -601,6 +622,7 @@ int hl_add_url(int attr, const char *url)
 
   return hl_combine_attr(attr, new);
 }
+#endif
 
 /// Get a URL by its index.
 ///
@@ -651,6 +673,13 @@ void hl_invalidate_blends(void)
   update_window_hl(curwin, true);
 }
 
+#ifdef USE_RUST_HIGHLIGHT
+// Combine special attributes (e.g., for spelling) with other attributes.
+int hl_combine_attr(int char_attr, int prim_attr)
+{
+  return rs_hl_combine_attr(char_attr, prim_attr);
+}
+#else
 // Combine special attributes (e.g., for spelling) with other attributes
 // (e.g., for syntax highlighting).
 // "prim_attr" overrules "char_attr".
@@ -689,6 +718,7 @@ int hl_combine_attr(int char_attr, int prim_attr)
 
   return id;
 }
+#endif
 
 /// Get the used rgb colors for an attr group.
 ///
@@ -699,6 +729,13 @@ static HlAttrs get_colors_force(HlAttrs attrs)
   return rs_get_colors_force(attrs);
 }
 
+#ifdef USE_RUST_HIGHLIGHT
+/// Blend overlay attributes (for popupmenu) with other attributes.
+int hl_blend_attrs(int back_attr, int front_attr, bool *through)
+{
+  return rs_hl_blend_attrs(back_attr, front_attr, through);
+}
+#else
 /// Blend overlay attributes (for popupmenu) with other attributes
 ///
 /// This creates a new group when required.
@@ -748,6 +785,7 @@ int hl_blend_attrs(int back_attr, int front_attr, bool *through)
   }
   return id;
 }
+#endif
 
 /// Get highlight attributes for a attribute code
 HlAttrs syn_attr2entry(int attr)

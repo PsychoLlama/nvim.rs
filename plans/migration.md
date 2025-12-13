@@ -2,31 +2,34 @@
 
 ## Current Status
 
-**664 rs_* functions migrated**
+**668 rs_* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
 ### Current Work
 
+**Phase 14 - Core Attribute Combination Functions** ✅
+- `rs_hl_combine_attr()` - combine char and primary attributes
+- `rs_hl_blend_attrs()` - blend popup/overlay attributes
+- `rs_hl_get_syn_attr()` - create syntax highlight attribute
+- `rs_hl_add_url()` - add URL to attribute
+
 **Phase 13 - Attribute Entry Callback & Attr Builders** ✅
-- Phase 13.1: Add c_get_attr_entry callback for Rust
-  - `c_get_attr_entry()` - C callback for UI dispatch
-- Phase 13.2-13.4: Migrate attribute builder functions
-  - `rs_hl_get_underline()` - underline highlight attribute
-  - `rs_hl_get_term_attr()` - terminal highlight attributes
-  - `rs_hl_apply_winblend()` - apply winblend to attributes
+- `c_get_attr_entry()` - C callback for UI dispatch
+- `rs_hl_get_underline()`, `rs_hl_get_term_attr()`, `rs_hl_apply_winblend()`
 
 **Phase 12 - Highlight Wrapper Functions** ✅
-- Phase 12.1: Trivial wrapper functions (syn_id2attr, syn_get_final_id, etc.)
-- Phase 12.2: Window struct accessors (nvim_win_get_ns_hl, c_curwin_ns_hl_active)
-- Phase 12.3: `rs_win_check_ns_hl()` - prepare window for drawing
+- Trivial wrappers: syn_id2attr, syn_get_final_id, etc.
+- Window accessors: nvim_win_get_ns_hl, c_curwin_ns_hl_active
+- `rs_win_check_ns_hl()` - prepare window for drawing
 
 **Phase 11 - hl_table Accessors & syn_* Functions** ✅
-- Phase 11.1-11.2: C accessor functions for hl_table (HlGroup array)
-- Phase 11.3-11.7: syn_* functions migrated to Rust
+- C accessor functions for hl_table (HlGroup array)
+- syn_* lookup/link functions in Rust
 
 **Highlight Migration Status:**
 - Core computation: Fully in Rust (rgb_blend, cterm_blend, combine_attrs, blend_attrs)
+- Attribute combination: Fully in Rust (hl_combine_attr, hl_blend_attrs, hl_add_url)
 - Entry storage: Rust only (AttrEntryStore)
 - URL storage: Rust only
 - Cache management: Rust only (combine/blend caches)
