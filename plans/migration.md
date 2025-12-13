@@ -37,10 +37,11 @@ Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get cur
 - C accessor functions for hl_table (HlGroup array)
 - syn_* lookup/link functions in Rust
 
-**Highlight Migration Status:**
+**Highlight Migration Status:** ✅ COMPLETE
 - Core computation: Fully in Rust (rgb_blend, cterm_blend, combine_attrs, blend_attrs)
 - Attribute combination: Fully in Rust (hl_combine_attr, hl_blend_attrs, hl_add_url)
-- UI highlight lookup: Fully in Rust (hl_get_ui_attr)
+- UI highlight lookup: Fully in Rust (hl_get_ui_attr, win_bg_attr)
+- Window highlight update: Fully in Rust (update_window_hl)
 - Entry storage: Rust only (AttrEntryStore)
 - URL storage: Rust only
 - Cache management: Rust only (combine/blend caches)
@@ -50,11 +51,11 @@ Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get cur
 - hl_table access: C accessors, syn_* lookup/link functions in Rust
 - API conversion: Still in C (requires Object type system in Rust)
 
-**What remains in C (highlight.c):**
-- `hlattrs2dict/dict2hlattrs` - Arena memory + API types
-- `get_attr_entry` - UI event dispatch
-- `update_window_hl` - C struct access (win_T fields)
-- `ns_get_hl` middle phase - Lua callback execution
+**What remains in C (not migratable without major work):**
+- `hlattrs2dict/dict2hlattrs` - Arena memory + API types (Dict, Object)
+- `get_attr_entry` - UI event dispatch (ui_call_hl_attr_define)
+- `ns_get_hl` middle phase - Lua callback execution (nlua_call_ref)
+- `highlight_changed` - UI events, hl_table manipulation, garray
 
 **What remains in C (highlight_group.c):**
 - `syn_add_group` - Arena string allocation, map mutation
