@@ -96,6 +96,9 @@ extern int rs_hl_add_url(int attr, const char *url);
 // UI highlight attribute function (Phase 15)
 extern int rs_hl_get_ui_attr(int ns_id, int idx, int final_id, bool optional);
 
+// Window background attribute function (Phase 16)
+extern int rs_win_bg_attr(win_T *wp);
+
 // Namespace highlight storage functions (ns_hls now in Rust)
 extern bool rs_ns_hls_has(int ns_id, int syn_id);
 extern ColorItem rs_ns_hls_get(int ns_id, int syn_id);
@@ -153,6 +156,10 @@ bool nvim_get_pum_drawn(void) { return pum_drawn(); }
 void nvim_set_must_redraw_pum(bool value) { must_redraw_pum = value; }
 int nvim_get_hlf_pni(void) { return HLF_PNI; }
 int nvim_get_hlf_pst(void) { return HLF_PST; }
+
+// Accessors for win_bg_attr (Phase 16)
+int nvim_get_hlf_none(void) { return HLF_NONE; }
+int nvim_get_hlf_inactive(void) { return HLF_INACTIVE; }
 
 // Forward declaration for update_ns_hl wrapper
 static void update_ns_hl(int ns_id);
@@ -565,6 +572,12 @@ static void update_ns_hl(int ns_id)
   p->hl_cached = true;
 }
 
+#ifdef USE_RUST_HIGHLIGHT
+int win_bg_attr(win_T *wp)
+{
+  return rs_win_bg_attr(wp);
+}
+#else
 int win_bg_attr(win_T *wp)
 {
   if (ns_hl_fast < 0) {
@@ -580,6 +593,7 @@ int win_bg_attr(win_T *wp)
     return hl_attr_active[HLF_INACTIVE];
   }
 }
+#endif
 
 /// Gets HL_UNDERLINE highlight.
 #ifdef USE_RUST_HIGHLIGHT

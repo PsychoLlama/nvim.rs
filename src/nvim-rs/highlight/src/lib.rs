@@ -91,6 +91,18 @@ extern "C" {
     fn nvim_get_hlf_pni() -> c_int;
     /// Get HLF_PST enum value
     fn nvim_get_hlf_pst() -> c_int;
+
+    // Accessors for win_bg_attr (Phase 16)
+    /// Get current window pointer
+    fn nvim_get_curwin() -> *mut c_void;
+    /// Get w_hl_attr_normal field from window
+    fn nvim_win_get_hl_attr_normal(wp: *mut c_void) -> c_int;
+    /// Get w_hl_attr_normalnc field from window
+    fn nvim_win_get_hl_attr_normalnc(wp: *mut c_void) -> c_int;
+    /// Get HLF_NONE enum value
+    fn nvim_get_hlf_none() -> c_int;
+    /// Get HLF_INACTIVE enum value
+    fn nvim_get_hlf_inactive() -> c_int;
 }
 
 // ============================================================================
@@ -2079,6 +2091,42 @@ pub unsafe extern "C" fn rs_hl_get_ui_attr(
         id2: final_id,
         winid: 0,
     })
+}
+
+/// Get background attribute for a window.
+///
+/// Returns the appropriate background highlight attribute based on whether
+/// the window is current or not, and whether namespace fast mode is active.
+///
+/// # Arguments
+/// * `wp` - Window pointer (opaque c_void)
+///
+/// # Returns
+/// The background attribute ID for the window.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_bg_attr(wp: *mut c_void) -> c_int {
+    let ns_hl_fast = nvim_get_ns_hl_fast();
+    let curwin = nvim_get_curwin();
+    let hl_attr_active = nvim_get_hl_attr_active();
+    let hlf_none = nvim_get_hlf_none();
+    let hlf_inactive = nvim_get_hlf_inactive();
+
+    if ns_hl_fast < 0 {
+        let local = if wp == curwin {
+            nvim_win_get_hl_attr_normal(wp)
+        } else {
+            nvim_win_get_hl_attr_normalnc(wp)
+        };
+        if local != 0 {
+            return local;
+        }
+    }
+
+    if wp == curwin || *hl_attr_active.offset(hlf_inactive as isize) == 0 {
+        *hl_attr_active.offset(hlf_none as isize)
+    } else {
+        *hl_attr_active.offset(hlf_inactive as isize)
+    }
 }
 
 /// Internal cterm to RGB conversion

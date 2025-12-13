@@ -138,6 +138,18 @@ int nvim_win_get_ns_hl(win_T *wp)
   return wp->w_ns_hl;
 }
 
+/// Get the w_hl_attr_normal field from a window (accessor for Rust).
+int nvim_win_get_hl_attr_normal(win_T *wp)
+{
+  return wp->w_hl_attr_normal;
+}
+
+/// Get the w_hl_attr_normalnc field from a window (accessor for Rust).
+int nvim_win_get_hl_attr_normalnc(win_T *wp)
+{
+  return wp->w_hl_attr_normalnc;
+}
+
 /// Get the w_next field from a window (accessor for Rust).
 win_T *nvim_win_get_next(win_T *wp)
 {
