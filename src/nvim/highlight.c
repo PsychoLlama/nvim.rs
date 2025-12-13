@@ -87,10 +87,14 @@ extern const char *rs_hl_get_url(uint32_t index);
 // Color forcing
 extern HlAttrs rs_get_colors_force(HlAttrs attrs);
 
+// Namespace highlight storage functions (ns_hls now in Rust)
+extern bool rs_ns_hls_has(int ns_id, int syn_id);
+extern ColorItem rs_ns_hls_get(int ns_id, int syn_id);
+extern void rs_ns_hls_put(int ns_id, int syn_id, ColorItem item);
+
 static bool hlstate_active = false;
 
-/// highlight entries private to a namespace
-static Map(ColorKey, ColorItem) ns_hls;
+/// highlight attributes per namespace (still in C for now)
 typedef int NSHlAttr[HLF_COUNT];
 static PMap(int) ns_hl_attr;
 
@@ -208,7 +212,7 @@ void ns_hl_def(NS ns_id, int hl_id, HlAttrs attrs, int link_id, Dict(highlight) 
     return;
   }
   if ((attrs.rgb_ae_attr & HL_DEFAULT)
-      && map_has(ColorKey, &ns_hls, (ColorKey(ns_id, hl_id)))) {
+      && rs_ns_hls_has(ns_id, hl_id)) {
     return;
   }
   DecorProvider *p = get_decor_provider(ns_id, true);
@@ -218,7 +222,7 @@ void ns_hl_def(NS ns_id, int hl_id, HlAttrs attrs, int link_id, Dict(highlight) 
                    .version = p->hl_valid,
                    .is_default = (attrs.rgb_ae_attr & HL_DEFAULT),
                    .link_global = (attrs.rgb_ae_attr & HL_GLOBAL) };
-  map_put(ColorKey, ColorItem)(&ns_hls, ColorKey(ns_id, hl_id), it);
+  rs_ns_hls_put(ns_id, hl_id, it);
   p->hl_cached = false;
 }
 
@@ -241,7 +245,7 @@ int ns_get_hl(NS *ns_hl, int hl_id, bool link, bool nodefault)
   int ns_id = *ns_hl;
 
   DecorProvider *p = get_decor_provider(ns_id, true);
-  ColorItem it = map_get(ColorKey, ColorItem)(&ns_hls, ColorKey(ns_id, hl_id));
+  ColorItem it = rs_ns_hls_get(ns_id, hl_id);
   // TODO(bfredl): map_ref true even this?
   bool valid_item = it.version >= p->hl_valid;
 
@@ -278,7 +282,7 @@ int ns_get_hl(NS *ns_hl, int hl_id, bool link, bool nodefault)
     it.version = p->hl_valid - tmp;
     it.is_default = attrs.rgb_ae_attr & HL_DEFAULT;
     it.link_global = attrs.rgb_ae_attr & HL_GLOBAL;
-    map_put(ColorKey, ColorItem)(&ns_hls, ColorKey(ns_id, hl_id), it);
+    rs_ns_hls_put(ns_id, hl_id, it);
     valid_item = true;
   }
 
@@ -573,7 +577,7 @@ int hl_get_term_attr(HlAttrs *aep)
 /// Clear all highlight tables.
 void clear_hl_tables(bool reinit)
 {
-  // Rust handles all attribute entry, cache, and URL storage
+  // Rust handles all attribute entry, cache, URL, and namespace storage
   rs_clear_hl_tables(reinit);
 
   if (reinit) {
@@ -581,10 +585,8 @@ void clear_hl_tables(bool reinit)
     highlight_attr_set_all();
     highlight_changed();
     screen_invalidate_highlights();
-  } else {
-    // Full destruction - also destroy namespace storage (still in C)
-    map_destroy(ColorKey, &ns_hls);
   }
+  // Note: ns_hls destruction is now handled by Rust in rs_clear_hl_tables
 }
 
 void hl_invalidate_blends(void)

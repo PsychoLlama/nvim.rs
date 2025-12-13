@@ -138,6 +138,43 @@ impl HlEntry {
     }
 }
 
+// ============================================================================
+// ColorKey and ColorItem (for namespace highlight storage)
+// ============================================================================
+
+/// Key for namespace highlight lookup (matches C ColorKey)
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct ColorKey {
+    pub ns_id: c_int,
+    pub syn_id: c_int,
+}
+
+/// Cached highlight item for namespace highlights (matches C ColorItem)
+/// Default values match COLOR_ITEM_INITIALIZER
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct ColorItem {
+    pub attr_id: c_int,
+    pub link_id: c_int,
+    pub version: c_int,
+    pub is_default: bool,
+    pub link_global: bool,
+}
+
+impl Default for ColorItem {
+    fn default() -> Self {
+        // Matches COLOR_ITEM_INITIALIZER from C
+        ColorItem {
+            attr_id: -1,
+            link_id: -1,
+            version: -1,
+            is_default: false,
+            link_global: false,
+        }
+    }
+}
+
 // For HashMap key usage - entries are considered equal if all fields match
 impl PartialEq for HlEntry {
     fn eq(&self, other: &Self) -> bool {
@@ -205,6 +242,8 @@ struct AttrEntryStore {
     url_to_index: HashMap<String, u32>,
     /// Whether hlstate mode is active
     hlstate_active: bool,
+    /// Namespace highlight storage: (ns_id, syn_id) -> ColorItem
+    ns_hls: HashMap<ColorKey, ColorItem>,
 }
 
 impl AttrEntryStore {
@@ -219,6 +258,7 @@ impl AttrEntryStore {
             urls: Vec::new(),
             url_to_index: HashMap::new(),
             hlstate_active: false,
+            ns_hls: HashMap::new(),
         }
     }
 
@@ -287,7 +327,35 @@ impl AttrEntryStore {
         self.blendthrough_cache.clear();
         self.urls.clear();
         self.url_to_index.clear();
+        // Note: ns_hls is NOT cleared here - only on full destruction
         self.init();
+    }
+
+    /// Destroy the namespace highlight storage (only on full cleanup)
+    fn destroy_ns_hls(&mut self) {
+        self.ns_hls.clear();
+    }
+
+    // ========================================================================
+    // Namespace highlight storage operations
+    // ========================================================================
+
+    /// Check if a namespace highlight exists
+    fn ns_hls_has(&self, ns_id: c_int, syn_id: c_int) -> bool {
+        self.ns_hls.contains_key(&ColorKey { ns_id, syn_id })
+    }
+
+    /// Get a namespace highlight item (returns default if not found)
+    fn ns_hls_get(&self, ns_id: c_int, syn_id: c_int) -> ColorItem {
+        self.ns_hls
+            .get(&ColorKey { ns_id, syn_id })
+            .copied()
+            .unwrap_or_default()
+    }
+
+    /// Put a namespace highlight item
+    fn ns_hls_put(&mut self, ns_id: c_int, syn_id: c_int, item: ColorItem) {
+        self.ns_hls.insert(ColorKey { ns_id, syn_id }, item);
     }
 
     /// Add or lookup a URL. Returns the index.
@@ -417,18 +485,20 @@ pub extern "C" fn rs_get_attr_entry(entry: HlEntry) -> GetAttrEntryResult {
 }
 
 /// Clear all highlight tables. If reinit is true, reinitialize after clearing.
+/// If reinit is false, also destroys namespace storage.
 #[no_mangle]
 pub extern "C" fn rs_clear_hl_tables(reinit: bool) {
     let mut store = ATTR_STORE.lock().unwrap();
     if reinit {
         store.clear();
     } else {
-        // Full destruction - just clear everything
+        // Full destruction - clear everything including namespace storage
         store.entries.clear();
         store.entry_to_id.clear();
         store.combine_cache.clear();
         store.blend_cache.clear();
         store.blendthrough_cache.clear();
+        store.destroy_ns_hls();
     }
 }
 
@@ -443,6 +513,31 @@ pub extern "C" fn rs_highlight_use_hlstate() -> bool {
     } else {
         false
     }
+}
+
+// ============================================================================
+// FFI Functions for Namespace Highlight Storage (ns_hls)
+// ============================================================================
+
+/// Check if a namespace highlight entry exists.
+#[no_mangle]
+pub extern "C" fn rs_ns_hls_has(ns_id: c_int, syn_id: c_int) -> bool {
+    let store = ATTR_STORE.lock().unwrap();
+    store.ns_hls_has(ns_id, syn_id)
+}
+
+/// Get a namespace highlight item. Returns COLOR_ITEM_INITIALIZER if not found.
+#[no_mangle]
+pub extern "C" fn rs_ns_hls_get(ns_id: c_int, syn_id: c_int) -> ColorItem {
+    let store = ATTR_STORE.lock().unwrap();
+    store.ns_hls_get(ns_id, syn_id)
+}
+
+/// Put a namespace highlight item.
+#[no_mangle]
+pub extern "C" fn rs_ns_hls_put(ns_id: c_int, syn_id: c_int, item: ColorItem) {
+    let mut store = ATTR_STORE.lock().unwrap();
+    store.ns_hls_put(ns_id, syn_id, item);
 }
 
 /// Invalidate blend caches. Called when colors change.
