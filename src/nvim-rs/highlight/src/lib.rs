@@ -43,6 +43,14 @@ extern "C" {
     fn nvim_set_hl_attr_active(attrs: *const c_int);
     /// Get pointer to default highlight_attr array
     fn nvim_get_highlight_attr() -> *const c_int;
+
+    // DecorProvider accessors
+    /// Get hl_valid and set hl_cached=false atomically. Creates provider if needed.
+    fn nvim_decor_provider_hl_def_prepare(ns_id: c_int) -> c_int;
+
+    // Highlight functions that need C interop
+    /// Get or create a syntax attribute entry
+    fn hl_get_syn_attr(ns_id: c_int, idx: c_int, at_en: HlAttrs) -> c_int;
 }
 
 // ============================================================================
@@ -603,6 +611,65 @@ pub extern "C" fn rs_ns_hls_put(ns_id: c_int, syn_id: c_int, item: ColorItem) {
     store.ns_hls_put(ns_id, syn_id, item);
 }
 
+/// Define a highlight in a namespace.
+/// This is the core logic of ns_hl_def() moved to Rust.
+///
+/// # Arguments
+/// * `ns_id` - Namespace ID (must be > 0, ns_id=0 is handled by C)
+/// * `hl_id` - Highlight group ID (syn_id)
+/// * `attrs` - Highlight attributes
+/// * `link_id` - Link target ID (0 if not a link)
+///
+/// The function:
+/// 1. Checks if HL_DEFAULT flag is set and entry already exists -> returns false
+/// 2. Gets/creates DecorProvider and retrieves hl_valid, sets hl_cached=false
+/// 3. Computes attr_id via hl_get_syn_attr (if not a link)
+/// 4. Creates ColorItem and stores it
+///
+/// Returns true if the highlight was defined, false if skipped due to HL_DEFAULT.
+#[no_mangle]
+pub extern "C" fn rs_ns_hl_def(
+    ns_id: c_int,
+    hl_id: c_int,
+    attrs: HlAttrs,
+    link_id: c_int,
+) -> bool {
+    let is_default = (attrs.rgb_ae_attr & HL_DEFAULT) != 0;
+    let is_global = (attrs.rgb_ae_attr & HL_GLOBAL) != 0;
+
+    // If HL_DEFAULT is set and entry already exists, skip
+    if is_default {
+        let store = ATTR_STORE.lock().unwrap();
+        if store.ns_hls_has(ns_id, hl_id) {
+            return false;
+        }
+    }
+
+    // Get hl_valid from DecorProvider and set hl_cached = false
+    let version = unsafe { nvim_decor_provider_hl_def_prepare(ns_id) };
+
+    // Compute attr_id: -1 if link, otherwise call hl_get_syn_attr
+    let attr_id = if link_id > 0 {
+        -1
+    } else {
+        unsafe { hl_get_syn_attr(ns_id, hl_id, attrs) }
+    };
+
+    // Create and store the ColorItem
+    let item = ColorItem {
+        attr_id,
+        link_id,
+        version,
+        is_default,
+        link_global: is_global,
+    };
+
+    let mut store = ATTR_STORE.lock().unwrap();
+    store.ns_hls_put(ns_id, hl_id, item);
+
+    true
+}
+
 // ============================================================================
 // FFI Functions for Per-namespace UI Highlight Attributes (ns_hl_attr)
 // ============================================================================
@@ -687,9 +754,13 @@ pub extern "C" fn rs_get_hl_attr_active() -> *const c_int {
 }
 
 /// Set pointer to active highlight attributes.
+///
+/// # Safety
+/// The caller must ensure that `attrs` is a valid pointer to an array of
+/// at least HLF_COUNT integers.
 #[no_mangle]
-pub extern "C" fn rs_set_hl_attr_active(attrs: *const c_int) {
-    unsafe { nvim_set_hl_attr_active(attrs) }
+pub unsafe extern "C" fn rs_set_hl_attr_active(attrs: *const c_int) {
+    nvim_set_hl_attr_active(attrs)
 }
 
 /// Get pointer to default highlight_attr array.

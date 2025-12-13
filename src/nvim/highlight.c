@@ -96,6 +96,9 @@ extern void rs_ns_hls_put(int ns_id, int syn_id, ColorItem item);
 extern const int *rs_ns_hl_attr_get(int ns_id);
 extern int *rs_ns_hl_attr_get_or_create(int ns_id);
 
+// Namespace highlight definition (ns_hl_def core logic in Rust)
+extern bool rs_ns_hl_def(int ns_id, int hl_id, HlAttrs attrs, int link_id);
+
 // C accessor functions for namespace globals (callable from Rust)
 int nvim_get_ns_hl_global(void) { return ns_hl_global; }
 void nvim_set_ns_hl_global(int ns) { ns_hl_global = ns; }
@@ -229,19 +232,8 @@ void ns_hl_def(NS ns_id, int hl_id, HlAttrs attrs, int link_id, Dict(highlight) 
     set_hl_group(hl_id, attrs, dict, link_id);
     return;
   }
-  if ((attrs.rgb_ae_attr & HL_DEFAULT)
-      && rs_ns_hls_has(ns_id, hl_id)) {
-    return;
-  }
-  DecorProvider *p = get_decor_provider(ns_id, true);
-  int attr_id = link_id > 0 ? -1 : hl_get_syn_attr(ns_id, hl_id, attrs);
-  ColorItem it = { .attr_id = attr_id,
-                   .link_id = link_id,
-                   .version = p->hl_valid,
-                   .is_default = (attrs.rgb_ae_attr & HL_DEFAULT),
-                   .link_global = (attrs.rgb_ae_attr & HL_GLOBAL) };
-  rs_ns_hls_put(ns_id, hl_id, it);
-  p->hl_cached = false;
+  // Namespace highlight definition is handled by Rust
+  rs_ns_hl_def(ns_id, hl_id, attrs, link_id);
 }
 
 int ns_get_hl(NS *ns_hl, int hl_id, bool link, bool nodefault)

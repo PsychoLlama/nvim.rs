@@ -321,6 +321,34 @@ DecorProvider *get_decor_provider(NS ns_id, bool force)
   return item;
 }
 
+// Accessor functions for Rust to access DecorProvider fields
+
+/// Get hl_valid for a namespace. Returns -1 if provider doesn't exist.
+int nvim_decor_provider_get_hl_valid(int ns_id)
+{
+  DecorProvider *p = get_decor_provider(ns_id, false);
+  return p ? p->hl_valid : -1;
+}
+
+/// Set hl_cached for a namespace. Creates provider if force=true.
+void nvim_decor_provider_set_hl_cached(int ns_id, bool cached, bool force)
+{
+  DecorProvider *p = get_decor_provider(ns_id, force);
+  if (p) {
+    p->hl_cached = cached;
+  }
+}
+
+/// Get hl_valid and set hl_cached=false atomically. Creates provider if needed.
+/// Returns the hl_valid value.
+int nvim_decor_provider_hl_def_prepare(int ns_id)
+{
+  DecorProvider *p = get_decor_provider(ns_id, true);
+  int result = p->hl_valid;
+  p->hl_cached = false;
+  return result;
+}
+
 void decor_provider_clear(DecorProvider *p)
 {
   if (p == NULL) {
