@@ -35,11 +35,7 @@
 
 #include "highlight.c.generated.h"
 
-#ifdef USE_RUST_HIGHLIGHT
-extern int rs_rgb_blend(int ratio, int rgb1, int rgb2);
-extern int rs_hl_cterm2rgb_color(int nr);
-extern int rs_hl_rgb2cterm_color(int rgb);
-extern int rs_cterm_blend(int ratio, int16_t c1, int16_t c2);
+// Rust FFI declarations - highlight storage and computation is handled by Rust
 
 // Input struct for rs_hl_combine_attrs_compute
 typedef struct {
@@ -87,18 +83,11 @@ extern void rs_blend_cache_put(int combine_tag, int id, bool through);
 // URL functions
 extern uint32_t rs_hl_add_url_index(const char *url);
 extern const char *rs_hl_get_url(uint32_t index);
-extern uint32_t rs_hl_url_count(void);
-#endif
+
+// Color forcing
+extern HlAttrs rs_get_colors_force(HlAttrs attrs);
 
 static bool hlstate_active = false;
-
-static Set(HlEntry) attr_entries = SET_INIT;
-static Map(int, int) combine_attr_entries = MAP_INIT;
-static Map(int, int) blend_attr_entries = MAP_INIT;
-static Map(int, int) blendthrough_attr_entries = MAP_INIT;
-static Set(cstr_t) urls = SET_INIT;
-
-#define attr_entry(i) attr_entries.keys[i]
 
 /// highlight entries private to a namespace
 static Map(ColorKey, ColorItem) ns_hls;
@@ -107,13 +96,8 @@ static PMap(int) ns_hl_attr;
 
 void highlight_init(void)
 {
-#ifdef USE_RUST_HIGHLIGHT
-  // Initialize Rust attribute entry store
+  // Rust handles the attribute entry store including the dummy entry at index 0
   rs_highlight_init();
-#endif
-  // index 0 is no attribute, add dummy entry:
-  set_put(HlEntry, &attr_entries, ((HlEntry){ .attr = HLATTRS_INIT, .kind = kHlInvalid,
-                                              .id1 = 0, .id2 = 0 }));
 }
 
 /// @return true if hl table was reset
@@ -123,6 +107,8 @@ bool highlight_use_hlstate(void)
     return false;
   }
   hlstate_active = true;
+  // Notify Rust about hlstate mode change
+  rs_highlight_use_hlstate();
   // hl tables must now be rebuilt.
   clear_hl_tables(true);
   return true;
@@ -134,30 +120,16 @@ bool highlight_use_hlstate(void)
 /// @return 0 for error.
 static int get_attr_entry(HlEntry entry)
 {
+  // Rust handles hlstate_active normalization internally
+  static bool recursive = false;
   bool retried = false;
-  if (!hlstate_active) {
-    // This information will not be used, erase it and reduce the table size.
-    entry.kind = kHlUnknown;
-    entry.id1 = 0;
-    entry.id2 = 0;
-  }
 
 retry: {}
-  MHPutStatus status;
-  uint32_t k = set_put_idx(HlEntry, &attr_entries, entry, &status);
-  if (status == kMHExisting) {
-#ifdef USE_RUST_HIGHLIGHT
-    // Also check Rust returns the same ID
-    GetAttrEntryResult rs_result = rs_get_attr_entry(entry);
-    assert(!rs_result.is_new);  // Should also be existing in Rust
-    assert(rs_result.id == (int)k);  // IDs should match
-#endif
-    return (int)k;
-  }
+  GetAttrEntryResult rs_result = rs_get_attr_entry(entry);
 
-  static bool recursive = false;
-  if (set_size(&attr_entries) > MAX_TYPENR) {
-    // Running out of attribute entries!  remove all attributes, and
+  if (rs_result.id == -1) {
+    // Table overflow - Rust signals this with id == -1
+    // Running out of attribute entries! Remove all attributes and
     // compute new ones for all groups.
     // When called recursively, we are really out of numbers.
     if (recursive || retried) {
@@ -177,15 +149,13 @@ retry: {}
     goto retry;
   }
 
-  // new attr id, send event to remote ui:s
-  int id = (int)k;
+  if (!rs_result.is_new) {
+    // Existing entry - just return the ID
+    return rs_result.id;
+  }
 
-#ifdef USE_RUST_HIGHLIGHT
-  // Also store in Rust - should get the same ID
-  GetAttrEntryResult rs_result = rs_get_attr_entry(entry);
-  assert(rs_result.is_new);  // Should also be new in Rust
-  assert(rs_result.id == id);  // IDs should match
-#endif
+  // New attr id, send event to remote UIs
+  int id = rs_result.id;
 
   Arena arena = ARENA_EMPTY;
   Array inspect = hl_inspect(id, &arena);
@@ -200,10 +170,11 @@ retry: {}
 /// When a UI connects, we need to send it the table of highlights used so far.
 void ui_send_all_hls(RemoteUI *ui)
 {
-  for (size_t i = 1; i < set_size(&attr_entries); i++) {
+  int count = rs_attr_entry_count();
+  for (int i = 1; i < count; i++) {
     Arena arena = ARENA_EMPTY;
-    Array inspect = hl_inspect((int)i, &arena);
-    HlAttrs attr = attr_entry(i).attr;
+    Array inspect = hl_inspect(i, &arena);
+    HlAttrs attr = rs_syn_attr2entry(i);
     remote_ui_hl_attr_define(ui, (Integer)i, attr, attr, inspect);
     arena_mem_free(arena_finish(&arena));
   }
@@ -404,7 +375,7 @@ int hl_get_ui_attr(int ns_id, int idx, int final_id, bool optional)
 /// @return      The attribute code with 'winblend' applied.
 int hl_apply_winblend(int winbl, int attr)
 {
-  HlEntry entry = attr_entry(attr);
+  HlEntry entry = rs_get_attr_entry_by_id(attr);
   // if blend= attribute is not set, 'winblend' value overrides it.
   if (entry.attr.hl_blend == -1 && winbl > 0) {
     entry.attr.hl_blend = winbl;
@@ -568,18 +539,8 @@ int hl_add_url(int attr, const char *url)
 {
   HlAttrs attrs = HLATTRS_INIT;
 
-  MHPutStatus status;
-  uint32_t k = set_put_idx(cstr_t, &urls, url, &status);
-  if (status != kMHExisting) {
-    urls.keys[k] = xstrdup(url);
-  }
-
-#ifdef USE_RUST_HIGHLIGHT
-  // Also add URL to Rust - should get the same index
-  uint32_t rs_k = rs_hl_add_url_index(url);
-  assert(rs_k == k);  // Indices should match
-#endif
-
+  // Rust handles URL storage
+  uint32_t k = rs_hl_add_url_index(url);
   attrs.url = (int32_t)k;
 
   int new = get_attr_entry((HlEntry){
@@ -598,14 +559,8 @@ int hl_add_url(int attr, const char *url)
 /// @return URL
 const char *hl_get_url(uint32_t index)
 {
-  assert(urls.keys);
-#ifdef USE_RUST_HIGHLIGHT
-  // Validate Rust returns the same URL
-  const char *rs_url = rs_hl_get_url(index);
-  assert(rs_url != NULL);
-  assert(strcmp(urls.keys[index], rs_url) == 0);
-#endif
-  return urls.keys[index];
+  // Rust handles URL storage
+  return rs_hl_get_url(index);
 }
 
 /// Get attribute code for forwarded :terminal highlights.
@@ -618,67 +573,27 @@ int hl_get_term_attr(HlAttrs *aep)
 /// Clear all highlight tables.
 void clear_hl_tables(bool reinit)
 {
-  const char *url = NULL;
-  set_foreach(&urls, url, {
-    xfree((void *)url);
-  });
-
-#ifdef USE_RUST_HIGHLIGHT
-  // Also clear Rust tables
+  // Rust handles all attribute entry, cache, and URL storage
   rs_clear_hl_tables(reinit);
-#endif
 
   if (reinit) {
-    set_clear(HlEntry, &attr_entries);
-    highlight_init();
-    map_clear(int, &combine_attr_entries);
-    map_clear(int, &blend_attr_entries);
-    map_clear(int, &blendthrough_attr_entries);
-    set_clear(cstr_t, &urls);
     memset(highlight_attr_last, -1, sizeof(highlight_attr_last));
     highlight_attr_set_all();
     highlight_changed();
     screen_invalidate_highlights();
   } else {
-    set_destroy(HlEntry, &attr_entries);
-    map_destroy(int, &combine_attr_entries);
-    map_destroy(int, &blend_attr_entries);
-    map_destroy(int, &blendthrough_attr_entries);
+    // Full destruction - also destroy namespace storage (still in C)
     map_destroy(ColorKey, &ns_hls);
-    set_destroy(cstr_t, &urls);
   }
 }
 
 void hl_invalidate_blends(void)
 {
-  map_clear(int, &blend_attr_entries);
-  map_clear(int, &blendthrough_attr_entries);
-#ifdef USE_RUST_HIGHLIGHT
-  // Also invalidate Rust blend caches
+  // Rust handles blend cache management
   rs_hl_invalidate_blends();
-#endif
   highlight_changed();
   update_window_hl(curwin, true);
 }
-
-/// Combine HlAttrFlags.
-/// The underline attribute in "prim_ae" overrules the one in "char_ae" if both are present.
-#ifdef USE_RUST_HIGHLIGHT
-extern int16_t rs_hl_combine_ae(int16_t char_ae, int16_t prim_ae);
-
-static int16_t hl_combine_ae(int16_t char_ae, int16_t prim_ae)
-{
-  return rs_hl_combine_ae(char_ae, prim_ae);
-}
-#else
-static int16_t hl_combine_ae(int16_t char_ae, int16_t prim_ae)
-{
-  int16_t char_ul = char_ae & HL_UNDERLINE_MASK;
-  int16_t prim_ul = prim_ae & HL_UNDERLINE_MASK;
-  int16_t new_ul = prim_ul ? prim_ul : char_ul;
-  return (char_ae & ~HL_UNDERLINE_MASK) | (prim_ae & ~HL_UNDERLINE_MASK) | new_ul;
-}
-#endif
 
 // Combine special attributes (e.g., for spelling) with other attributes
 // (e.g., for syntax highlighting).
@@ -694,88 +609,26 @@ int hl_combine_attr(int char_attr, int prim_attr)
     return char_attr;
   }
 
-  // TODO(bfredl): could use a struct for clearer intent.
+  // Check Rust cache first
   int combine_tag = (char_attr << 16) + prim_attr;
-  int id = map_get(int, int)(&combine_attr_entries, combine_tag);
-#ifdef USE_RUST_HIGHLIGHT
-  // Validate Rust cache matches C cache
-  int rs_id = rs_combine_cache_get(combine_tag);
-  assert((id > 0 && rs_id == id) || (id == 0 && rs_id == -1));
-#endif
+  int id = rs_combine_cache_get(combine_tag);
   if (id > 0) {
     return id;
   }
 
+  // Compute combined attributes in Rust
   HlAttrs char_aep = syn_attr2entry(char_attr);
   HlAttrs prim_aep = syn_attr2entry(prim_attr);
-  HlAttrs new_en;
-
-#ifdef USE_RUST_HIGHLIGHT
   HlCombineInput input = {
     .char_aep = char_aep,
     .prim_aep = prim_aep,
   };
-  new_en = rs_hl_combine_attrs_compute(input);
-#else
-  // start with low-priority attribute, and override colors if present below.
-  new_en = char_aep;
-
-  if (prim_aep.cterm_ae_attr & HL_NOCOMBINE) {
-    new_en.cterm_ae_attr = prim_aep.cterm_ae_attr;
-  } else {
-    new_en.cterm_ae_attr = hl_combine_ae(new_en.cterm_ae_attr, prim_aep.cterm_ae_attr);
-  }
-  if (prim_aep.rgb_ae_attr & HL_NOCOMBINE) {
-    new_en.rgb_ae_attr = prim_aep.rgb_ae_attr;
-  } else {
-    new_en.rgb_ae_attr = hl_combine_ae(new_en.rgb_ae_attr, prim_aep.rgb_ae_attr);
-  }
-
-  if (prim_aep.cterm_fg_color > 0) {
-    new_en.cterm_fg_color = prim_aep.cterm_fg_color;
-    new_en.rgb_ae_attr &= ((~HL_FG_INDEXED)
-                           | (prim_aep.rgb_ae_attr & HL_FG_INDEXED));
-  }
-
-  if (prim_aep.cterm_bg_color > 0) {
-    new_en.cterm_bg_color = prim_aep.cterm_bg_color;
-    new_en.rgb_ae_attr &= ((~HL_BG_INDEXED)
-                           | (prim_aep.rgb_ae_attr & HL_BG_INDEXED));
-  }
-
-  if (prim_aep.rgb_fg_color >= 0) {
-    new_en.rgb_fg_color = prim_aep.rgb_fg_color;
-    new_en.rgb_ae_attr &= ((~HL_FG_INDEXED)
-                           | (prim_aep.rgb_ae_attr & HL_FG_INDEXED));
-  }
-
-  if (prim_aep.rgb_bg_color >= 0) {
-    new_en.rgb_bg_color = prim_aep.rgb_bg_color;
-    new_en.rgb_ae_attr &= ((~HL_BG_INDEXED)
-                           | (prim_aep.rgb_ae_attr & HL_BG_INDEXED));
-  }
-
-  if (prim_aep.rgb_sp_color >= 0) {
-    new_en.rgb_sp_color = prim_aep.rgb_sp_color;
-  }
-
-  if (prim_aep.hl_blend >= 0) {
-    new_en.hl_blend = prim_aep.hl_blend;
-  }
-
-  if ((new_en.url == -1) && (prim_aep.url >= 0)) {
-    new_en.url = prim_aep.url;
-  }
-#endif
+  HlAttrs new_en = rs_hl_combine_attrs_compute(input);
 
   id = get_attr_entry((HlEntry){ .attr = new_en, .kind = kHlCombine,
                                  .id1 = char_attr, .id2 = prim_attr });
   if (id > 0) {
-    map_put(int, int)(&combine_attr_entries, combine_tag, id);
-#ifdef USE_RUST_HIGHLIGHT
-    // Also store in Rust cache
     rs_combine_cache_put(combine_tag, id);
-#endif
   }
 
   return id;
@@ -785,38 +638,10 @@ int hl_combine_attr(int char_attr, int prim_attr)
 ///
 /// If colors are unset, use builtin default colors. Never returns -1
 /// Cterm colors are unchanged.
-#ifdef USE_RUST_HIGHLIGHT
-extern HlAttrs rs_get_colors_force(HlAttrs attrs);
-
 static HlAttrs get_colors_force(HlAttrs attrs)
 {
   return rs_get_colors_force(attrs);
 }
-#else
-static HlAttrs get_colors_force(HlAttrs attrs)
-{
-  if (attrs.rgb_bg_color == -1) {
-    attrs.rgb_bg_color = normal_bg;
-  }
-  if (attrs.rgb_fg_color == -1) {
-    attrs.rgb_fg_color = normal_fg;
-  }
-  if (attrs.rgb_sp_color == -1) {
-    attrs.rgb_sp_color = normal_sp;
-  }
-  HL_SET_DEFAULT_COLORS(attrs.rgb_fg_color, attrs.rgb_bg_color,
-                        attrs.rgb_sp_color);
-
-  if (attrs.rgb_ae_attr & HL_INVERSE) {
-    int temp = attrs.rgb_bg_color;
-    attrs.rgb_bg_color = attrs.rgb_fg_color;
-    attrs.rgb_fg_color = temp;
-    attrs.rgb_ae_attr &= ~HL_INVERSE;
-  }
-
-  return attrs;
-}
-#endif
 
 /// Blend overlay attributes (for popupmenu) with other attributes
 ///
@@ -839,25 +664,16 @@ int hl_blend_attrs(int back_attr, int front_attr, bool *through)
     return front_attr;
   }
 
+  // Check Rust cache first
   int combine_tag = (back_attr << 16) + front_attr;
-  Map(int, int) *map = (*through
-                        ? &blendthrough_attr_entries
-                        : &blend_attr_entries);
-  int id = map_get(int, int)(map, combine_tag);
-#ifdef USE_RUST_HIGHLIGHT
-  // Validate Rust cache matches C cache
-  int rs_id = rs_blend_cache_get(combine_tag, *through);
-  assert((id > 0 && rs_id == id) || (id == 0 && rs_id == -1));
-#endif
+  int id = rs_blend_cache_get(combine_tag, *through);
   if (id > 0) {
     return id;
   }
 
+  // Compute blended attributes in Rust
   HlAttrs battrs_raw = syn_attr2entry(back_attr);
   HlAttrs battrs = get_colors_force(battrs_raw);
-  HlAttrs cattrs;
-
-#ifdef USE_RUST_HIGHLIGHT
   HlBlendInput input = {
     .battrs_raw = battrs_raw,
     .battrs = battrs,
@@ -866,205 +682,22 @@ int hl_blend_attrs(int back_attr, int front_attr, bool *through)
     .ratio = ratio,
     .through = *through,
   };
-  cattrs = rs_hl_blend_attrs_compute(input);
-#else
-  if (*through) {
-    cattrs = battrs;
-    cattrs.rgb_fg_color = rgb_blend(ratio, battrs.rgb_fg_color, fattrs.rgb_bg_color);
-    // Only apply special colors when the foreground attribute has an underline or undercurl.
-    if (fattrs_raw.rgb_ae_attr & (HL_UNDERLINE | HL_UNDERCURL)) {
-      cattrs.rgb_sp_color = rgb_blend(ratio, battrs.rgb_sp_color, fattrs.rgb_bg_color);
-    } else {
-      cattrs.rgb_sp_color = -1;
-    }
+  HlAttrs cattrs = rs_hl_blend_attrs_compute(input);
 
-    cattrs.cterm_bg_color = fattrs.cterm_bg_color;
-    cattrs.cterm_fg_color = (int16_t)cterm_blend(ratio, battrs.cterm_fg_color,
-                                                 fattrs.cterm_bg_color);
-    cattrs.rgb_ae_attr &= ~(HL_FG_INDEXED | HL_BG_INDEXED);
-  } else {
-    cattrs = fattrs;
-    cattrs.rgb_fg_color = rgb_blend(ratio/2, battrs.rgb_fg_color, fattrs.rgb_fg_color);
-    if (cattrs.rgb_ae_attr & (HL_UNDERLINE_MASK)) {
-      cattrs.rgb_sp_color = rgb_blend(ratio/2, battrs.rgb_bg_color, fattrs.rgb_sp_color);
-    } else {
-      cattrs.rgb_sp_color = -1;
-    }
-
-    cattrs.rgb_ae_attr &= ~HL_BG_INDEXED;
-  }
-
-  // Check if we should preserve background transparency
-  // Special case for blend=100: preserve back layer background exactly (including bg=NONE)
-  if (ratio == 100 && battrs_raw.rgb_bg_color == -1) {
-    // For 100% blend with transparent background, preserve the transparency
-    cattrs.rgb_bg_color = -1;
-  } else {
-    // Use the raw attributes (before forcing colors) to check original transparency
-    cattrs.rgb_bg_color = (battrs_raw.rgb_bg_color == -1) && (fattrs_raw.rgb_bg_color == -1)
-                          ? -1
-                          : rgb_blend(ratio, battrs.rgb_bg_color, fattrs.rgb_bg_color);
-  }
-  cattrs.hl_blend = -1;  // blend property was consumed
-#endif
   HlKind kind = *through ? kHlBlendThrough : kHlBlend;
   id = get_attr_entry((HlEntry){ .attr = cattrs, .kind = kind,
                                  .id1 = back_attr, .id2 = front_attr });
   if (id > 0) {
-    map_put(int, int)(map, combine_tag, id);
-#ifdef USE_RUST_HIGHLIGHT
-    // Also store in Rust cache
     rs_blend_cache_put(combine_tag, id, *through);
-#endif
   }
   return id;
 }
 
-#ifdef USE_RUST_HIGHLIGHT
-static int rgb_blend(int ratio, int rgb1, int rgb2)
-{
-  return rs_rgb_blend(ratio, rgb1, rgb2);
-}
-
-static int cterm_blend(int ratio, int16_t c1, int16_t c2)
-{
-  return rs_cterm_blend(ratio, c1, c2);
-}
-
-/// Converts RGB color to 8-bit color (0-255).
-static int hl_rgb2cterm_color(int rgb)
-{
-  return rs_hl_rgb2cterm_color(rgb);
-}
-
-/// Converts 8-bit color (0-255) to RGB color.
-/// This is compatible with xterm.
-static int hl_cterm2rgb_color(int nr)
-{
-  return rs_hl_cterm2rgb_color(nr);
-}
-#else
-static int rgb_blend(int ratio, int rgb1, int rgb2)
-{
-  int a = ratio;
-  int b = 100 - ratio;
-  int r1 = (rgb1 & 0xFF0000) >> 16;
-  int g1 = (rgb1 & 0x00FF00) >> 8;
-  int b1 = (rgb1 & 0x0000FF) >> 0;
-  int r2 = (rgb2 & 0xFF0000) >> 16;
-  int g2 = (rgb2 & 0x00FF00) >> 8;
-  int b2 = (rgb2 & 0x0000FF) >> 0;
-  int mr = (a * r1 + b * r2)/100;
-  int mg = (a * g1 + b * g2)/100;
-  int mb = (a * b1 + b * b2)/100;
-  return (mr << 16) + (mg << 8) + mb;
-}
-
-static int cterm_blend(int ratio, int16_t c1, int16_t c2)
-{
-  // 1. Convert cterm color numbers to RGB.
-  // 2. Blend the RGB colors.
-  // 3. Convert the RGB result to a cterm color.
-  int rgb1 = hl_cterm2rgb_color(c1);
-  int rgb2 = hl_cterm2rgb_color(c2);
-  int rgb_blended = rgb_blend(ratio, rgb1, rgb2);
-  return hl_rgb2cterm_color(rgb_blended);
-}
-
-/// Converts RGB color to 8-bit color (0-255).
-static int hl_rgb2cterm_color(int rgb)
-{
-  int r = (rgb & 0xFF0000) >> 16;
-  int g = (rgb & 0x00FF00) >> 8;
-  int b = (rgb & 0x0000FF) >> 0;
-
-  return (r * 6 / 256) * 36 + (g * 6 / 256) * 6 + (b * 6 / 256);
-}
-
-/// Converts 8-bit color (0-255) to RGB color.
-/// This is compatible with xterm.
-static int hl_cterm2rgb_color(int nr)
-{
-  static int cube_value[] = {
-    0x00, 0x5F, 0x87, 0xAF, 0xD7, 0xFF
-  };
-  static int grey_ramp[] = {
-    0x08, 0x12, 0x1C, 0x26, 0x30, 0x3A, 0x44, 0x4E, 0x58, 0x62, 0x6C, 0x76,
-    0x80, 0x8A, 0x94, 0x9E, 0xA8, 0xB2, 0xBC, 0xC6, 0xD0, 0xDA, 0xE4, 0xEE
-  };
-  static uint8_t ansi_table[16][4] = {
-    //  R    G    B   idx
-    {   0,   0,   0,  1 },  // black
-    { 224,   0,   0,  2 },  // dark red
-    {   0, 224,   0,  3 },  // dark green
-    { 224, 224,   0,  4 },  // dark yellow / brown
-    {   0,   0, 224,  5 },  // dark blue
-    { 224,   0, 224,  6 },  // dark magenta
-    {   0, 224, 224,  7 },  // dark cyan
-    { 224, 224, 224,  8 },  // light grey
-
-    { 128, 128, 128,  9 },  // dark grey
-    { 255,  64,  64, 10 },  // light red
-    {  64, 255,  64, 11 },  // light green
-    { 255, 255,  64, 12 },  // yellow
-    {  64,  64, 255, 13 },  // light blue
-    { 255,  64, 255, 14 },  // light magenta
-    {  64, 255, 255, 15 },  // light cyan
-    { 255, 255, 255, 16 },  // white
-  };
-
-  int r = 0;
-  int g = 0;
-  int b = 0;
-  int idx;
-  // *ansi_idx = 0;
-
-  if (nr < 16) {
-    r = ansi_table[nr][0];
-    g = ansi_table[nr][1];
-    b = ansi_table[nr][2];
-    // *ansi_idx = ansi_table[nr][3];
-  } else if (nr < 232) {  // 216 color-cube
-    idx = nr - 16;
-    r = cube_value[idx / 36 % 6];
-    g = cube_value[idx / 6  % 6];
-    b = cube_value[idx      % 6];
-    // *ansi_idx = -1;
-  } else if (nr < 256) {  // 24 greyscale ramp
-    idx = nr - 232;
-    r = grey_ramp[idx];
-    g = grey_ramp[idx];
-    b = grey_ramp[idx];
-    // *ansi_idx = -1;
-  }
-  return (r << 16) + (g << 8) + b;
-}
-#endif
-
 /// Get highlight attributes for a attribute code
 HlAttrs syn_attr2entry(int attr)
 {
-  if (attr <= 0 || attr >= (int)set_size(&attr_entries)) {
-    // invalid attribute code, or the tables were cleared
-    return HLATTRS_INIT;
-  }
-#ifdef USE_RUST_HIGHLIGHT
-  // Validate Rust implementation matches C (debug only)
-  HlAttrs c_result = attr_entry(attr).attr;
-  HlAttrs rs_result = rs_syn_attr2entry(attr);
-  assert(c_result.rgb_ae_attr == rs_result.rgb_ae_attr);
-  assert(c_result.cterm_ae_attr == rs_result.cterm_ae_attr);
-  assert(c_result.rgb_fg_color == rs_result.rgb_fg_color);
-  assert(c_result.rgb_bg_color == rs_result.rgb_bg_color);
-  assert(c_result.rgb_sp_color == rs_result.rgb_sp_color);
-  assert(c_result.cterm_fg_color == rs_result.cterm_fg_color);
-  assert(c_result.cterm_bg_color == rs_result.cterm_bg_color);
-  assert(c_result.hl_blend == rs_result.hl_blend);
-  assert(c_result.url == rs_result.url);
-  return c_result;
-#else
-  return attr_entry(attr).attr;
-#endif
+  // Rust handles bounds checking and returns HLATTRS_INIT equivalent for invalid IDs
+  return rs_syn_attr2entry(attr);
 }
 
 /// Gets highlight description for id `attr_id` as a map.
@@ -1076,7 +709,7 @@ Dict hl_get_attr_by_id(Integer attr_id, Boolean rgb, Arena *arena, Error *err)
     return dic;
   }
 
-  if (attr_id <= 0 || attr_id >= (int)set_size(&attr_entries)) {
+  if (attr_id <= 0 || attr_id >= rs_attr_entry_count()) {
     api_set_error(err, kErrorTypeException,
                   "Invalid attribute id: %" PRId64, attr_id);
     return dic;
@@ -1389,11 +1022,11 @@ Array hl_inspect(int attr, Arena *arena)
 
 static size_t hl_inspect_size(int attr)
 {
-  if (attr <= 0 || attr >= (int)set_size(&attr_entries)) {
+  if (attr <= 0 || attr >= rs_attr_entry_count()) {
     return 0;
   }
 
-  HlEntry e = attr_entry(attr);
+  HlEntry e = rs_get_attr_entry_by_id(attr);
   if (e.kind == kHlCombine || e.kind == kHlBlend || e.kind == kHlBlendThrough) {
     return hl_inspect_size(e.id1) + hl_inspect_size(e.id2);
   }
@@ -1403,11 +1036,11 @@ static size_t hl_inspect_size(int attr)
 static void hl_inspect_impl(Array *arr, int attr, Arena *arena)
 {
   Dict item = ARRAY_DICT_INIT;
-  if (attr <= 0 || attr >= (int)set_size(&attr_entries)) {
+  if (attr <= 0 || attr >= rs_attr_entry_count()) {
     return;
   }
 
-  HlEntry e = attr_entry(attr);
+  HlEntry e = rs_get_attr_entry_by_id(attr);
   switch (e.kind) {
   case kHlSyntax:
     item = arena_dict(arena, 3);
