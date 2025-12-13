@@ -2,17 +2,18 @@
 
 ## Current Status
 
-**668 rs_* functions migrated**
+**669 rs_* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
 ### Current Work
 
+**Phase 15 - UI Highlight Attribute Function** ✅
+- `rs_hl_get_ui_attr()` - get attribute for builtin highlight groups
+- C accessors: nvim_get_p_pb, nvim_get_pum_drawn, nvim_set_must_redraw_pum, nvim_get_hlf_pni/pst
+
 **Phase 14 - Core Attribute Combination Functions** ✅
-- `rs_hl_combine_attr()` - combine char and primary attributes
-- `rs_hl_blend_attrs()` - blend popup/overlay attributes
-- `rs_hl_get_syn_attr()` - create syntax highlight attribute
-- `rs_hl_add_url()` - add URL to attribute
+- `rs_hl_combine_attr()`, `rs_hl_blend_attrs()`, `rs_hl_get_syn_attr()`, `rs_hl_add_url()`
 
 **Phase 13 - Attribute Entry Callback & Attr Builders** ✅
 - `c_get_attr_entry()` - C callback for UI dispatch
@@ -30,6 +31,7 @@ Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get cur
 **Highlight Migration Status:**
 - Core computation: Fully in Rust (rgb_blend, cterm_blend, combine_attrs, blend_attrs)
 - Attribute combination: Fully in Rust (hl_combine_attr, hl_blend_attrs, hl_add_url)
+- UI highlight lookup: Fully in Rust (hl_get_ui_attr)
 - Entry storage: Rust only (AttrEntryStore)
 - URL storage: Rust only
 - Cache management: Rust only (combine/blend caches)
@@ -42,7 +44,7 @@ Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get cur
 **What remains in C (highlight.c):**
 - `hlattrs2dict/dict2hlattrs` - Arena memory + API types
 - `get_attr_entry` - UI event dispatch
-- `hl_get_ui_attr`, `update_window_hl` - C struct access
+- `update_window_hl` - C struct access (win_T fields)
 - `ns_get_hl` middle phase - Lua callback execution
 
 **What remains in C (highlight_group.c):**

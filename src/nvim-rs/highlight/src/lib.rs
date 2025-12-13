@@ -79,6 +79,18 @@ extern "C" {
     fn highlight_group_parent(id: c_int) -> c_int;
     /// Lookup a highlight group by uppercase name, returns ID (1-based) or 0 if not found
     fn nvim_highlight_name_lookup(name_u: *const c_char) -> c_int;
+
+    // Accessors for hl_get_ui_attr (Phase 15)
+    /// Get 'pumblend' option value
+    fn nvim_get_p_pb() -> c_int;
+    /// Check if popup menu is drawn
+    fn nvim_get_pum_drawn() -> bool;
+    /// Set must_redraw_pum flag
+    fn nvim_set_must_redraw_pum(value: bool);
+    /// Get HLF_PNI enum value
+    fn nvim_get_hlf_pni() -> c_int;
+    /// Get HLF_PST enum value
+    fn nvim_get_hlf_pst() -> c_int;
 }
 
 // ============================================================================
@@ -2009,6 +2021,64 @@ pub unsafe extern "C" fn rs_hl_add_url(attr: c_int, url: *const c_char) -> c_int
 
     // Combine with existing attribute
     rs_hl_combine_attr(attr, new)
+}
+
+/// Get attribute code for a builtin highlight group.
+///
+/// The final syntax group could be modified by hi-link or 'winhighlight'.
+///
+/// # Arguments
+/// * `ns_id` - Namespace ID
+/// * `idx` - Highlight field index (HLF_* value)
+/// * `final_id` - Final syntax group ID after link resolution
+/// * `optional` - If true, return 0 when no attributes are set
+///
+/// # Returns
+/// The attribute ID for the UI highlight.
+#[no_mangle]
+pub unsafe extern "C" fn rs_hl_get_ui_attr(
+    ns_id: c_int,
+    idx: c_int,
+    final_id: c_int,
+    optional: bool,
+) -> c_int {
+    let mut attrs = HlAttrs::new();
+    let mut available = false;
+    let mut opt = optional;
+
+    if final_id > 0 {
+        let syn_attr = rs_syn_ns_id2attr(ns_id, final_id, &mut opt);
+        if syn_attr > 0 {
+            attrs = rs_syn_attr2entry(syn_attr);
+            available = true;
+        }
+    }
+
+    // Handle popup menu highlights - apply 'pumblend'
+    let hlf_pni = nvim_get_hlf_pni();
+    let hlf_pst = nvim_get_hlf_pst();
+    if hlf_pni <= idx && idx <= hlf_pst {
+        let p_pb = nvim_get_p_pb();
+        if attrs.hl_blend == -1 && p_pb > 0 {
+            attrs.hl_blend = p_pb;
+        }
+        if nvim_get_pum_drawn() {
+            nvim_set_must_redraw_pum(true);
+        }
+    }
+
+    // Use 'opt' (which may have been modified by rs_syn_ns_id2attr) instead of 'optional'
+    if opt && !available {
+        return 0;
+    }
+
+    c_get_attr_entry(HlEntry {
+        attr: attrs,
+        kind: HlKind::UI,
+        id1: idx,
+        id2: final_id,
+        winid: 0,
+    })
 }
 
 /// Internal cterm to RGB conversion

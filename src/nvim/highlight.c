@@ -93,6 +93,9 @@ extern int rs_hl_blend_attrs(int back_attr, int front_attr, bool *through);
 extern int rs_hl_get_syn_attr(int ns_id, int idx, HlAttrs at_en);
 extern int rs_hl_add_url(int attr, const char *url);
 
+// UI highlight attribute function (Phase 15)
+extern int rs_hl_get_ui_attr(int ns_id, int idx, int final_id, bool optional);
+
 // Namespace highlight storage functions (ns_hls now in Rust)
 extern bool rs_ns_hls_has(int ns_id, int syn_id);
 extern ColorItem rs_ns_hls_get(int ns_id, int syn_id);
@@ -143,6 +146,13 @@ const int *nvim_get_highlight_attr(void) { return highlight_attr; }
 
 // Accessor for need_highlight_changed global
 void nvim_set_need_highlight_changed(bool value) { need_highlight_changed = value; }
+
+// Accessors for hl_get_ui_attr (Phase 15)
+int nvim_get_p_pb(void) { return (int)p_pb; }
+bool nvim_get_pum_drawn(void) { return pum_drawn(); }
+void nvim_set_must_redraw_pum(bool value) { must_redraw_pum = value; }
+int nvim_get_hlf_pni(void) { return HLF_PNI; }
+int nvim_get_hlf_pst(void) { return HLF_PST; }
 
 // Forward declaration for update_ns_hl wrapper
 static void update_ns_hl(int ns_id);
@@ -383,6 +393,13 @@ bool win_check_ns_hl(win_T *wp)
 }
 #endif
 
+#ifdef USE_RUST_HIGHLIGHT
+/// Get attribute code for a builtin highlight group.
+int hl_get_ui_attr(int ns_id, int idx, int final_id, bool optional)
+{
+  return rs_hl_get_ui_attr(ns_id, idx, final_id, optional);
+}
+#else
 /// Get attribute code for a builtin highlight group.
 ///
 /// The final syntax group could be modified by hi-link or 'winhighlight'.
@@ -414,6 +431,7 @@ int hl_get_ui_attr(int ns_id, int idx, int final_id, bool optional)
   return get_attr_entry((HlEntry){ .attr = attrs, .kind = kHlUI,
                                    .id1 = idx, .id2 = final_id });
 }
+#endif
 
 /// Apply 'winblend' to highlight attributes.
 ///
