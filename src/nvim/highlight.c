@@ -114,6 +114,9 @@ extern NsGetHlPreResult rs_ns_get_hl_post(int ns_id, int hl_id, HlAttrs attrs, i
                                           bool fallback, int version_offset, bool link,
                                           bool nodefault);
 
+// hl_check_ns implementation in Rust
+extern bool rs_hl_check_ns(void);
+
 // C accessor functions for namespace globals (callable from Rust)
 int nvim_get_ns_hl_global(void) { return ns_hl_global; }
 void nvim_set_ns_hl_global(int ns) { ns_hl_global = ns; }
@@ -131,6 +134,15 @@ const int *nvim_get_hl_attr_active(void) { return hl_attr_active; }
 void nvim_set_hl_attr_active(const int *attrs) { hl_attr_active = (int *)attrs; }
 
 const int *nvim_get_highlight_attr(void) { return highlight_attr; }
+
+// Accessor for need_highlight_changed global
+void nvim_set_need_highlight_changed(bool value) { need_highlight_changed = value; }
+
+// Forward declaration for update_ns_hl wrapper
+static void update_ns_hl(int ns_id);
+
+// Wrapper for update_ns_hl (called from Rust)
+void nvim_update_ns_hl(int ns_id) { update_ns_hl(ns_id); }
 
 static bool hlstate_active = false;
 
@@ -316,29 +328,8 @@ int ns_get_hl(NS *ns_hl, int hl_id, bool link, bool nodefault)
 
 bool hl_check_ns(void)
 {
-  int ns = 0;
-  if (ns_hl_fast > 0) {
-    ns = ns_hl_fast;
-  } else if (ns_hl_win >= 0) {
-    ns = ns_hl_win;
-  } else {
-    ns = ns_hl_global;
-  }
-  if (ns_hl_active == ns) {
-    return false;
-  }
-
-  ns_hl_active = ns;
-  hl_attr_active = highlight_attr;
-  if (ns > 0) {
-    update_ns_hl(ns);
-    const int *hl_def = rs_ns_hl_attr_get(ns);
-    if (hl_def) {
-      hl_attr_active = (int *)hl_def;
-    }
-  }
-  need_highlight_changed = true;
-  return true;
+  // Namespace switching logic is implemented in Rust
+  return rs_hl_check_ns();
 }
 
 /// prepare for drawing window `wp` or global elements if NULL
@@ -474,7 +465,7 @@ void update_window_hl(win_T *wp, bool invalid)
   }
 }
 
-void update_ns_hl(int ns_id)
+static void update_ns_hl(int ns_id)
 {
   if (ns_id <= 0) {
     return;

@@ -55,6 +55,10 @@ extern "C" {
     // Highlight functions that need C interop
     /// Get or create a syntax attribute entry
     fn hl_get_syn_attr(ns_id: c_int, idx: c_int, at_en: HlAttrs) -> c_int;
+    /// Set need_highlight_changed global
+    fn nvim_set_need_highlight_changed(value: bool);
+    /// Call update_ns_hl to refresh namespace highlight attributes
+    fn nvim_update_ns_hl(ns_id: c_int);
 }
 
 // ============================================================================
@@ -875,6 +879,68 @@ fn compute_ns_get_hl_result(
             item: *item,
         }
     }
+}
+
+// ============================================================================
+// FFI Functions for hl_check_ns()
+// ============================================================================
+
+/// Check and switch to the active highlight namespace.
+/// Returns true if the namespace changed.
+///
+/// This implements the core logic of hl_check_ns():
+/// 1. Resolve namespace priority: ns_hl_fast > ns_hl_win > ns_hl_global
+/// 2. If namespace unchanged, return false
+/// 3. Update ns_hl_active and hl_attr_active
+/// 4. If namespace > 0, call update_ns_hl and get namespace attrs
+/// 5. Set need_highlight_changed = true
+#[no_mangle]
+pub extern "C" fn rs_hl_check_ns() -> bool {
+    // Resolve namespace priority
+    let ns_hl_fast = unsafe { nvim_get_ns_hl_fast() };
+    let ns_hl_win = unsafe { nvim_get_ns_hl_win() };
+    let ns_hl_global = unsafe { nvim_get_ns_hl_global() };
+
+    let ns = if ns_hl_fast > 0 {
+        ns_hl_fast
+    } else if ns_hl_win >= 0 {
+        ns_hl_win
+    } else {
+        ns_hl_global
+    };
+
+    // Check if namespace changed
+    let ns_hl_active = unsafe { nvim_get_ns_hl_active() };
+    if ns_hl_active == ns {
+        return false;
+    }
+
+    // Update active namespace
+    unsafe { nvim_set_ns_hl_active(ns) };
+
+    // Reset to default highlight_attr
+    let highlight_attr = unsafe { nvim_get_highlight_attr() };
+    unsafe { nvim_set_hl_attr_active(highlight_attr) };
+
+    // If namespace > 0, update namespace highlights and get the attrs
+    if ns > 0 {
+        // Call C to update namespace highlights (involves Lua/syntax lookups)
+        unsafe { nvim_update_ns_hl(ns) };
+
+        // Get the namespace-specific attribute array
+        let store = ATTR_STORE.lock().unwrap();
+        let hl_def = store.ns_hl_attr_get(ns);
+        drop(store);
+
+        if !hl_def.is_null() {
+            unsafe { nvim_set_hl_attr_active(hl_def) };
+        }
+    }
+
+    // Signal that highlights changed
+    unsafe { nvim_set_need_highlight_changed(true) };
+
+    true
 }
 
 // ============================================================================
