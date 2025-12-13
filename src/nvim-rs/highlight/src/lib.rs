@@ -19,6 +19,30 @@ extern "C" {
     fn nvim_get_normal_sp() -> c_int;
     /// Get p_bg (background option: 'd' for dark, 'l' for light)
     fn nvim_get_p_bg() -> c_char;
+
+    // Namespace highlight global accessors
+    /// Get global highlight namespace (0 = use default)
+    fn nvim_get_ns_hl_global() -> c_int;
+    /// Set global highlight namespace
+    fn nvim_set_ns_hl_global(ns: c_int);
+    /// Get window-specific highlight namespace (-1 = not set)
+    fn nvim_get_ns_hl_win() -> c_int;
+    /// Set window-specific highlight namespace
+    fn nvim_set_ns_hl_win(ns: c_int);
+    /// Get fast callback highlight namespace (-1 = not set)
+    fn nvim_get_ns_hl_fast() -> c_int;
+    /// Set fast callback highlight namespace
+    fn nvim_set_ns_hl_fast(ns: c_int);
+    /// Get currently active/cached highlight namespace
+    fn nvim_get_ns_hl_active() -> c_int;
+    /// Set currently active/cached highlight namespace
+    fn nvim_set_ns_hl_active(ns: c_int);
+    /// Get pointer to currently active highlight attributes
+    fn nvim_get_hl_attr_active() -> *const c_int;
+    /// Set pointer to active highlight attributes
+    fn nvim_set_hl_attr_active(attrs: *const c_int);
+    /// Get pointer to default highlight_attr array
+    fn nvim_get_highlight_attr() -> *const c_int;
 }
 
 // ============================================================================
@@ -598,6 +622,80 @@ pub extern "C" fn rs_ns_hl_attr_get(ns_id: c_int) -> *const c_int {
 pub extern "C" fn rs_ns_hl_attr_get_or_create(ns_id: c_int) -> *mut c_int {
     let mut store = ATTR_STORE.lock().unwrap();
     store.ns_hl_attr_get_or_create(ns_id)
+}
+
+// ============================================================================
+// Namespace Global Accessor FFI Functions
+// ============================================================================
+//
+// These functions wrap C accessors for namespace globals, allowing Rust code
+// to read/write these values. The globals remain in C for now because they
+// are accessed from many files, but Rust can call these to manipulate them.
+
+/// Get the global highlight namespace (0 = use default).
+#[no_mangle]
+pub extern "C" fn rs_get_ns_hl_global() -> c_int {
+    unsafe { nvim_get_ns_hl_global() }
+}
+
+/// Set the global highlight namespace.
+#[no_mangle]
+pub extern "C" fn rs_set_ns_hl_global(ns: c_int) {
+    unsafe { nvim_set_ns_hl_global(ns) }
+}
+
+/// Get the window-specific highlight namespace (-1 = not set).
+#[no_mangle]
+pub extern "C" fn rs_get_ns_hl_win() -> c_int {
+    unsafe { nvim_get_ns_hl_win() }
+}
+
+/// Set the window-specific highlight namespace.
+#[no_mangle]
+pub extern "C" fn rs_set_ns_hl_win(ns: c_int) {
+    unsafe { nvim_set_ns_hl_win(ns) }
+}
+
+/// Get the fast callback highlight namespace (-1 = not set).
+#[no_mangle]
+pub extern "C" fn rs_get_ns_hl_fast() -> c_int {
+    unsafe { nvim_get_ns_hl_fast() }
+}
+
+/// Set the fast callback highlight namespace.
+#[no_mangle]
+pub extern "C" fn rs_set_ns_hl_fast(ns: c_int) {
+    unsafe { nvim_set_ns_hl_fast(ns) }
+}
+
+/// Get the currently active/cached highlight namespace.
+#[no_mangle]
+pub extern "C" fn rs_get_ns_hl_active() -> c_int {
+    unsafe { nvim_get_ns_hl_active() }
+}
+
+/// Set the currently active/cached highlight namespace.
+#[no_mangle]
+pub extern "C" fn rs_set_ns_hl_active(ns: c_int) {
+    unsafe { nvim_set_ns_hl_active(ns) }
+}
+
+/// Get pointer to currently active highlight attributes.
+#[no_mangle]
+pub extern "C" fn rs_get_hl_attr_active() -> *const c_int {
+    unsafe { nvim_get_hl_attr_active() }
+}
+
+/// Set pointer to active highlight attributes.
+#[no_mangle]
+pub extern "C" fn rs_set_hl_attr_active(attrs: *const c_int) {
+    unsafe { nvim_set_hl_attr_active(attrs) }
+}
+
+/// Get pointer to default highlight_attr array.
+#[no_mangle]
+pub extern "C" fn rs_get_highlight_attr() -> *const c_int {
+    unsafe { nvim_get_highlight_attr() }
 }
 
 /// Invalidate blend caches. Called when colors change.

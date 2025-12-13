@@ -96,6 +96,24 @@ extern void rs_ns_hls_put(int ns_id, int syn_id, ColorItem item);
 extern const int *rs_ns_hl_attr_get(int ns_id);
 extern int *rs_ns_hl_attr_get_or_create(int ns_id);
 
+// C accessor functions for namespace globals (callable from Rust)
+int nvim_get_ns_hl_global(void) { return ns_hl_global; }
+void nvim_set_ns_hl_global(int ns) { ns_hl_global = ns; }
+
+int nvim_get_ns_hl_win(void) { return ns_hl_win; }
+void nvim_set_ns_hl_win(int ns) { ns_hl_win = ns; }
+
+int nvim_get_ns_hl_fast(void) { return ns_hl_fast; }
+void nvim_set_ns_hl_fast(int ns) { ns_hl_fast = ns; }
+
+int nvim_get_ns_hl_active(void) { return ns_hl_active; }
+void nvim_set_ns_hl_active(int ns) { ns_hl_active = ns; }
+
+const int *nvim_get_hl_attr_active(void) { return hl_attr_active; }
+void nvim_set_hl_attr_active(const int *attrs) { hl_attr_active = (int *)attrs; }
+
+const int *nvim_get_highlight_attr(void) { return highlight_attr; }
+
 static bool hlstate_active = false;
 
 void highlight_init(void)
