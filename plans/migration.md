@@ -2,20 +2,28 @@
 
 ## Current Status
 
-**650 rs_* functions migrated**
+**661 rs_* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
 ### Current Work
 
-**Phase 11 - hl_table Accessors** ✅
-- Phase 11.1: Add C accessor functions for hl_table (HlGroup array)
-  - `highlight_num_groups()` - count of groups
-  - `highlight_link_id(id)` - link target ID
-  - `highlight_group_attr(id)` - attribute ID (sg_attr)
-  - `highlight_group_cleared(id)` - cleared flag
-  - `highlight_group_set(id)` - sg_set flags
-  - Rust extern declarations for all accessors
+**Phase 12 - Highlight Wrapper Functions** ✅
+- Phase 12.1: Migrate trivial wrapper functions
+  - `rs_syn_id2attr()` - wraps syn_ns_id2attr(-1, id, &optional)
+  - `rs_syn_get_final_id()` - wraps syn_ns_get_final_id with curwin namespace
+  - `rs_syn_name2attr()` - lookup name then get attr
+  - `rs_highlight_exists()` - check if group exists
+  - `rs_restore_cterm_colors()` - reset color globals
+- Phase 12.2: Add window struct accessors
+  - `nvim_win_get_ns_hl()` - get w_ns_hl field
+  - `c_curwin_ns_hl_active()` - get current window's active namespace
+- Phase 12.3: Migrate win_check_ns_hl
+  - `rs_win_check_ns_hl()` - prepare window for drawing
+
+**Phase 11 - hl_table Accessors & syn_* Functions** ✅
+- Phase 11.1-11.2: C accessor functions for hl_table (HlGroup array)
+- Phase 11.3-11.7: syn_* functions migrated to Rust
 
 **Highlight Migration Status:**
 - Core computation: Fully in Rust (rgb_blend, cterm_blend, combine_attrs, blend_attrs)
@@ -24,14 +32,19 @@ Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get cur
 - Cache management: Rust only (combine/blend caches)
 - Namespace storage: Rust only (ns_hls, ns_hl_attr)
 - Namespace globals: Bidirectional accessors (C owns, Rust can read/write)
-- Namespace logic: Fully Rust (ns_hl_def, ns_get_hl, hl_check_ns); Lua/syntax callbacks in C
-- hl_table access: C accessors enable future syn_* migration
+- Namespace logic: Fully Rust (ns_hl_def, ns_get_hl, hl_check_ns); Lua callbacks in C
+- hl_table access: C accessors, syn_* lookup/link functions in Rust
 - API conversion: Still in C (requires Object type system in Rust)
 
 **What remains in C (highlight.c):**
 - `hlattrs2dict/dict2hlattrs` - Arena memory + API types
 - `get_attr_entry` - UI event dispatch
 - `hl_get_ui_attr`, `update_window_hl` - C struct access
+- `ns_get_hl` middle phase - Lua callback execution
+
+**What remains in C (highlight_group.c):**
+- `syn_add_group` - Arena string allocation, map mutation
+- `set_hl_group`, `do_highlight` - Dict types, command parsing
 
 Run `grep -n "pub.*extern.*fn rs_" src/nvim-rs/highlight/src/lib.rs` to see all functions
 
@@ -139,12 +152,12 @@ extern "C" { fn nvim_get_foo_field() -> c_int; }
 | 9.0-9.13 | Highlight core (Rust single source of truth) | ✅ |
 | 10.1-10.6 | Namespace system (storage, globals, ns_hl_def, ns_get_hl, hl_check_ns) | ✅ |
 | 11.1 | hl_table accessors (highlight_group_attr, etc.) | ✅ |
+| 11.2-11.7 | syn_* functions (syn_id2name, syn_name2id_len, syn_check_group, syn_ns_get_final_id, syn_ns_id2attr) | ✅ |
 
 ### Future Phases (Roadmap)
 
 | Phase | Target | Notes |
 |-------|--------|-------|
-| 11.2+ | syn_* functions | Use hl_table accessors (medium complexity) |
 | 12 | Buffer & Text | memline.c, buffer.c, undo.c |
 | 13 | Window & Display | window.c, drawscreen.c |
 | 14-15 | Editor Core | normal.c, eval.c, regexp.c |

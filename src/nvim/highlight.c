@@ -347,11 +347,20 @@ bool hl_check_ns(void)
 /// prepare for drawing window `wp` or global elements if NULL
 ///
 /// Note: pum should be drawn in the context of the current window!
+#ifdef USE_RUST_HIGHLIGHT
+extern bool rs_win_check_ns_hl(win_T *wp);
+
+bool win_check_ns_hl(win_T *wp)
+{
+  return rs_win_check_ns_hl(wp);
+}
+#else
 bool win_check_ns_hl(win_T *wp)
 {
   ns_hl_win = wp ? wp->w_ns_hl : -1;
   return hl_check_ns();
 }
+#endif
 
 /// Get attribute code for a builtin highlight group.
 ///

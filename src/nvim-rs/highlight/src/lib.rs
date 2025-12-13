@@ -5,7 +5,7 @@
 //! that maps attribute IDs to their properties.
 
 use std::collections::HashMap;
-use std::ffi::{c_char, c_int, CStr};
+use std::ffi::{c_char, c_int, c_void, CStr};
 use std::sync::{LazyLock, Mutex};
 
 extern "C" {
@@ -1317,6 +1317,132 @@ pub unsafe extern "C" fn rs_syn_ns_id2attr(
 
     // Fall back to sg_attr from hl_table
     highlight_group_attr(idx)
+}
+
+/// Translate a group ID to highlight attributes.
+/// This is a simple wrapper around rs_syn_ns_id2attr(-1, hl_id, &optional).
+///
+/// This mirrors the C function `syn_id2attr(int hl_id)`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_id2attr(hl_id: c_int) -> c_int {
+    let mut optional = false;
+    rs_syn_ns_id2attr(-1, hl_id, &mut optional)
+}
+
+/// Translate a group ID to the final group ID (following links).
+/// Uses the current window's active namespace.
+///
+/// This mirrors the C function `syn_get_final_id(int hl_id)`.
+///
+/// Note: This function needs access to curwin->w_ns_hl_active which
+/// requires a window accessor. For now we pass -1 to use the current
+/// active namespace.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_final_id(mut hl_id: c_int) -> c_int {
+    // Get current window's active namespace via C accessor
+    let mut ns_id = c_curwin_ns_hl_active();
+    rs_syn_ns_get_final_id(&mut ns_id, &mut hl_id);
+    hl_id
+}
+
+/// Lookup a highlight group name and return its attributes.
+/// Returns 0 if not found.
+///
+/// This mirrors the C function `syn_name2attr(const char *name)`.
+///
+/// # Safety
+/// The name pointer must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_name2attr(name: *const c_char) -> c_int {
+    if name.is_null() {
+        return 0;
+    }
+    let name_cstr = CStr::from_ptr(name);
+    let len = name_cstr.to_bytes().len();
+    let id = rs_syn_name2id_len(name, len);
+    if id != 0 {
+        rs_syn_id2attr(id)
+    } else {
+        0
+    }
+}
+
+/// Return true (1) if highlight group "name" exists.
+///
+/// This mirrors the C function `highlight_exists(const char *name)`.
+///
+/// # Safety
+/// The name pointer must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_highlight_exists(name: *const c_char) -> c_int {
+    if name.is_null() {
+        return 0;
+    }
+    let name_cstr = CStr::from_ptr(name);
+    let len = name_cstr.to_bytes().len();
+    let id = rs_syn_name2id_len(name, len);
+    if id > 0 { 1 } else { 0 }
+}
+
+// ============================================================================
+// Color Reset Functions
+// ============================================================================
+
+extern "C" {
+    /// Set normal_fg global
+    fn nvim_set_normal_fg(val: c_int);
+    /// Set normal_bg global
+    fn nvim_set_normal_bg(val: c_int);
+    /// Set normal_sp global
+    fn nvim_set_normal_sp(val: c_int);
+    /// Set cterm_normal_fg_color global
+    fn nvim_set_cterm_normal_fg_color(val: c_int);
+    /// Set cterm_normal_bg_color global
+    fn nvim_set_cterm_normal_bg_color(val: c_int);
+    /// Get curwin->w_ns_hl_active (current window's active namespace)
+    fn c_curwin_ns_hl_active() -> c_int;
+    /// Get w_ns_hl field from a window
+    fn nvim_win_get_ns_hl(wp: *mut c_void) -> c_int;
+}
+
+/// Reset the cterm colors to what they were before Vim was started.
+/// Resets normal_fg, normal_bg, normal_sp to -1 and cterm colors to 0.
+///
+/// This mirrors the C function `restore_cterm_colors(void)`.
+#[no_mangle]
+pub extern "C" fn rs_restore_cterm_colors() {
+    unsafe {
+        nvim_set_normal_fg(-1);
+        nvim_set_normal_bg(-1);
+        nvim_set_normal_sp(-1);
+        nvim_set_cterm_normal_fg_color(0);
+        nvim_set_cterm_normal_bg_color(0);
+    }
+}
+
+// ============================================================================
+// Window Highlight Functions
+// ============================================================================
+
+/// Prepare window for drawing with namespace highlights.
+/// Sets ns_hl_win to the window's namespace and calls hl_check_ns().
+///
+/// This mirrors the C function `win_check_ns_hl(win_T *wp)`.
+///
+/// # Arguments
+/// * `wp` - Pointer to win_T struct (can be null)
+///
+/// # Returns
+/// true if the namespace changed.
+///
+/// # Safety
+/// The wp pointer must be either null or a valid pointer to a win_T struct.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_check_ns_hl(wp: *mut c_void) -> bool {
+    // Set ns_hl_win based on whether wp is provided
+    let ns_hl = if wp.is_null() { -1 } else { nvim_win_get_ns_hl(wp) };
+    rs_set_ns_hl_win(ns_hl);
+    rs_hl_check_ns()
 }
 
 // ============================================================================

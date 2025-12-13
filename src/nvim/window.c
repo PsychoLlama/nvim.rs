@@ -132,6 +132,12 @@ int nvim_win_get_pvw(win_T *wp)
   return wp->w_p_pvw;
 }
 
+/// Get the w_ns_hl (highlight namespace) field from a window (accessor for Rust).
+int nvim_win_get_ns_hl(win_T *wp)
+{
+  return wp->w_ns_hl;
+}
+
 /// Get the w_next field from a window (accessor for Rust).
 win_T *nvim_win_get_next(win_T *wp)
 {

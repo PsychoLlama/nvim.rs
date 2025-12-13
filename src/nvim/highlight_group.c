@@ -73,6 +73,47 @@ int nvim_get_normal_sp(void)
   return normal_sp;
 }
 
+void nvim_set_normal_fg(int val)
+{
+  normal_fg = val;
+}
+
+void nvim_set_normal_bg(int val)
+{
+  normal_bg = val;
+}
+
+void nvim_set_normal_sp(int val)
+{
+  normal_sp = val;
+}
+
+int nvim_get_cterm_normal_fg_color(void)
+{
+  return cterm_normal_fg_color;
+}
+
+int nvim_get_cterm_normal_bg_color(void)
+{
+  return cterm_normal_bg_color;
+}
+
+void nvim_set_cterm_normal_fg_color(int val)
+{
+  cterm_normal_fg_color = val;
+}
+
+void nvim_set_cterm_normal_bg_color(int val)
+{
+  cterm_normal_bg_color = val;
+}
+
+/// Get current window's active highlight namespace
+int c_curwin_ns_hl_active(void)
+{
+  return curwin->w_ns_hl_active;
+}
+
 char nvim_get_p_bg(void)
 {
   return *p_bg;
@@ -1658,6 +1699,14 @@ void free_highlight(void)
 
 /// Reset the cterm colors to what they were before Vim was started, if
 /// possible.  Otherwise reset them to zero.
+#ifdef USE_RUST_HIGHLIGHT
+extern void rs_restore_cterm_colors(void);
+
+void restore_cterm_colors(void)
+{
+  rs_restore_cterm_colors();
+}
+#else
 void restore_cterm_colors(void)
 {
   normal_fg = -1;
@@ -1666,6 +1715,7 @@ void restore_cterm_colors(void)
   cterm_normal_fg_color = 0;
   cterm_normal_bg_color = 0;
 }
+#endif
 
 /// @param check_link  if true also check for an existing link.
 ///
@@ -2124,6 +2174,15 @@ int syn_name2id_len(const char *name, size_t len)
 
 /// Lookup a highlight group name and return its attributes.
 /// Return zero if not found.
+#ifdef USE_RUST_HIGHLIGHT
+extern int rs_syn_name2attr(const char *name);
+
+int syn_name2attr(const char *name)
+  FUNC_ATTR_NONNULL_ALL
+{
+  return rs_syn_name2attr(name);
+}
+#else
 int syn_name2attr(const char *name)
   FUNC_ATTR_NONNULL_ALL
 {
@@ -2134,12 +2193,22 @@ int syn_name2attr(const char *name)
   }
   return 0;
 }
+#endif
 
 /// Return true if highlight group "name" exists.
+#ifdef USE_RUST_HIGHLIGHT
+extern int rs_highlight_exists(const char *name);
+
+int highlight_exists(const char *name)
+{
+  return rs_highlight_exists(name);
+}
+#else
 int highlight_exists(const char *name)
 {
   return syn_name2id(name) > 0;
 }
+#endif
 
 /// Return the name of highlight group "id".
 /// When not a valid ID return an empty string.
@@ -2271,11 +2340,20 @@ static int syn_add_group(const char *name, size_t len)
 
 /// Translate a group ID to highlight attributes.
 /// @see syn_attr2entry
+#ifdef USE_RUST_HIGHLIGHT
+extern int rs_syn_id2attr(int hl_id);
+
+int syn_id2attr(int hl_id)
+{
+  return rs_syn_id2attr(hl_id);
+}
+#else
 int syn_id2attr(int hl_id)
 {
   bool optional = false;
   return syn_ns_id2attr(-1, hl_id, &optional);
 }
+#endif
 
 #ifdef USE_RUST_HIGHLIGHT
 extern int rs_syn_ns_id2attr(int ns_id, int hl_id, bool *optional);
@@ -2306,12 +2384,21 @@ int syn_ns_id2attr(int ns_id, int hl_id, bool *optional)
 #endif
 
 /// Translate a group ID to the final group ID (following links).
+#ifdef USE_RUST_HIGHLIGHT
+extern int rs_syn_get_final_id(int hl_id);
+
+int syn_get_final_id(int hl_id)
+{
+  return rs_syn_get_final_id(hl_id);
+}
+#else
 int syn_get_final_id(int hl_id)
 {
   int ns_id = curwin->w_ns_hl_active;
   syn_ns_get_final_id(&ns_id, &hl_id);
   return hl_id;
 }
+#endif
 
 #ifdef USE_RUST_HIGHLIGHT
 extern bool rs_syn_ns_get_final_id(int *ns_id, int *hl_idp);
