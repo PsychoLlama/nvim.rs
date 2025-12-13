@@ -92,11 +92,11 @@ extern bool rs_ns_hls_has(int ns_id, int syn_id);
 extern ColorItem rs_ns_hls_get(int ns_id, int syn_id);
 extern void rs_ns_hls_put(int ns_id, int syn_id, ColorItem item);
 
-static bool hlstate_active = false;
+// Per-namespace UI highlight attribute functions (ns_hl_attr now in Rust)
+extern const int *rs_ns_hl_attr_get(int ns_id);
+extern int *rs_ns_hl_attr_get_or_create(int ns_id);
 
-/// highlight attributes per namespace (still in C for now)
-typedef int NSHlAttr[HLF_COUNT];
-static PMap(int) ns_hl_attr;
+static bool hlstate_active = false;
 
 void highlight_init(void)
 {
@@ -321,9 +321,9 @@ bool hl_check_ns(void)
   hl_attr_active = highlight_attr;
   if (ns > 0) {
     update_ns_hl(ns);
-    NSHlAttr *hl_def = (NSHlAttr *)pmap_get(int)(&ns_hl_attr, ns);
+    const int *hl_def = rs_ns_hl_attr_get(ns);
     if (hl_def) {
-      hl_attr_active = *hl_def;
+      hl_attr_active = (int *)hl_def;
     }
   }
   need_highlight_changed = true;
@@ -396,7 +396,7 @@ void update_window_hl(win_T *wp, bool invalid)
   if (ns_id != wp->w_ns_hl_active || wp->w_ns_hl_attr == NULL) {
     wp->w_ns_hl_active = ns_id;
 
-    wp->w_ns_hl_attr = *(NSHlAttr *)pmap_get(int)(&ns_hl_attr, ns_id);
+    wp->w_ns_hl_attr = (int *)rs_ns_hl_attr_get(ns_id);
     if (!wp->w_ns_hl_attr) {
       // No specific highlights, use the defaults.
       wp->w_ns_hl_attr = highlight_attr;
@@ -473,11 +473,8 @@ void update_ns_hl(int ns_id)
     return;
   }
 
-  NSHlAttr **alloc = (NSHlAttr **)pmap_put_ref(int)(&ns_hl_attr, ns_id, NULL, NULL);
-  if (*alloc == NULL) {
-    *alloc = xmalloc(sizeof(**alloc));
-  }
-  int *hl_attrs = **alloc;
+  // Get or create the attribute array in Rust storage
+  int *hl_attrs = rs_ns_hl_attr_get_or_create(ns_id);
 
   for (int hlf = 1; hlf < HLF_COUNT; hlf++) {
     int id = syn_check_group(hlf_names[hlf], strlen(hlf_names[hlf]));

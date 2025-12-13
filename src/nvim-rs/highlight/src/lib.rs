@@ -175,6 +175,17 @@ impl Default for ColorItem {
     }
 }
 
+// ============================================================================
+// NSHlAttr - Per-namespace UI highlight attributes
+// ============================================================================
+
+/// Number of UI highlight groups (HLF_COUNT from highlight_defs.h)
+/// This must match the C definition.
+pub const HLF_COUNT: usize = 78;
+
+/// Per-namespace UI highlight attribute array
+pub type NSHlAttr = [c_int; HLF_COUNT];
+
 // For HashMap key usage - entries are considered equal if all fields match
 impl PartialEq for HlEntry {
     fn eq(&self, other: &Self) -> bool {
@@ -244,6 +255,9 @@ struct AttrEntryStore {
     hlstate_active: bool,
     /// Namespace highlight storage: (ns_id, syn_id) -> ColorItem
     ns_hls: HashMap<ColorKey, ColorItem>,
+    /// Per-namespace UI highlight attributes: ns_id -> Box<NSHlAttr>
+    /// Using Box to ensure stable pointers when HashMap reallocates
+    ns_hl_attr: HashMap<c_int, Box<NSHlAttr>>,
 }
 
 impl AttrEntryStore {
@@ -259,6 +273,7 @@ impl AttrEntryStore {
             url_to_index: HashMap::new(),
             hlstate_active: false,
             ns_hls: HashMap::new(),
+            ns_hl_attr: HashMap::new(),
         }
     }
 
@@ -334,6 +349,7 @@ impl AttrEntryStore {
     /// Destroy the namespace highlight storage (only on full cleanup)
     fn destroy_ns_hls(&mut self) {
         self.ns_hls.clear();
+        self.ns_hl_attr.clear();
     }
 
     // ========================================================================
@@ -356,6 +372,29 @@ impl AttrEntryStore {
     /// Put a namespace highlight item
     fn ns_hls_put(&mut self, ns_id: c_int, syn_id: c_int, item: ColorItem) {
         self.ns_hls.insert(ColorKey { ns_id, syn_id }, item);
+    }
+
+    // ========================================================================
+    // Per-namespace UI highlight attribute operations (ns_hl_attr)
+    // ========================================================================
+
+    /// Get pointer to namespace UI highlight attributes.
+    /// Returns null if no entry exists for this namespace.
+    fn ns_hl_attr_get(&self, ns_id: c_int) -> *const c_int {
+        self.ns_hl_attr
+            .get(&ns_id)
+            .map(|boxed| boxed.as_ptr())
+            .unwrap_or(std::ptr::null())
+    }
+
+    /// Get or create pointer to namespace UI highlight attributes.
+    /// Creates a zeroed array if no entry exists.
+    /// Returns mutable pointer for C to fill in the values.
+    fn ns_hl_attr_get_or_create(&mut self, ns_id: c_int) -> *mut c_int {
+        self.ns_hl_attr
+            .entry(ns_id)
+            .or_insert_with(|| Box::new([0; HLF_COUNT]))
+            .as_mut_ptr()
     }
 
     /// Add or lookup a URL. Returns the index.
@@ -538,6 +577,27 @@ pub extern "C" fn rs_ns_hls_get(ns_id: c_int, syn_id: c_int) -> ColorItem {
 pub extern "C" fn rs_ns_hls_put(ns_id: c_int, syn_id: c_int, item: ColorItem) {
     let mut store = ATTR_STORE.lock().unwrap();
     store.ns_hls_put(ns_id, syn_id, item);
+}
+
+// ============================================================================
+// FFI Functions for Per-namespace UI Highlight Attributes (ns_hl_attr)
+// ============================================================================
+
+/// Get pointer to namespace UI highlight attributes.
+/// Returns NULL if no entry exists for this namespace.
+#[no_mangle]
+pub extern "C" fn rs_ns_hl_attr_get(ns_id: c_int) -> *const c_int {
+    let store = ATTR_STORE.lock().unwrap();
+    store.ns_hl_attr_get(ns_id)
+}
+
+/// Get or create pointer to namespace UI highlight attributes.
+/// Creates a zeroed array if no entry exists.
+/// Returns mutable pointer for C to fill in the values.
+#[no_mangle]
+pub extern "C" fn rs_ns_hl_attr_get_or_create(ns_id: c_int) -> *mut c_int {
+    let mut store = ATTR_STORE.lock().unwrap();
+    store.ns_hl_attr_get_or_create(ns_id)
 }
 
 /// Invalidate blend caches. Called when colors change.
