@@ -2,7 +2,7 @@
 
 ## Current Status
 
-**630 rs_* functions migrated**
+**646 rs_* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
@@ -15,7 +15,10 @@ Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get cur
 - Phase 10.2: ns_hl_attr PMap storage to Rust ✅
   - Added HLF_COUNT constant, NSHlAttr type
   - rs_ns_hl_attr_get/get_or_create functions
-- Phase 10.3+: Namespace globals, ns_get_hl pre/post split (planned)
+- Phase 10.3: Namespace global accessors ✅
+  - C accessors in highlight.c for ns_hl_global/win/fast/active, hl_attr_active
+  - Rust wrappers rs_get/set_ns_hl_* for bidirectional access
+- Phase 10.4+: ns_hl_def migration, ns_get_hl pre/post split (planned)
 
 **Highlight Migration Status:**
 - Core computation: Fully in Rust (rgb_blend, cterm_blend, combine_attrs, blend_attrs)
@@ -23,6 +26,7 @@ Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get cur
 - URL storage: Rust only
 - Cache management: Rust only (combine/blend caches)
 - Namespace storage: Rust only (ns_hls, ns_hl_attr)
+- Namespace globals: Bidirectional accessors (C owns, Rust can read/write)
 - Namespace logic: Still in C (ns_get_hl Lua callback, hl_check_ns)
 - API conversion: Still in C (requires Object type system in Rust)
 
@@ -130,7 +134,7 @@ extern "C" { fn nvim_get_foo_field() -> c_int; }
 | 7.x | API layer functions | 🔄 |
 | 8.0-8.4 | Terminal UI (terminfo, detection) | ✅ |
 | 9.0-9.13 | Highlight core (Rust single source of truth) | ✅ |
-| 10.1-10.2 | Namespace storage (ns_hls, ns_hl_attr) | ✅ |
+| 10.1-10.3 | Namespace storage & globals (ns_hls, ns_hl_attr, accessors) | ✅ |
 
 ### Future Phases (Roadmap)
 
