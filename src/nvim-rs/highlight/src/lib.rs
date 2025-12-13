@@ -63,6 +63,8 @@ extern "C" {
     // hl_table (HlGroup array) accessors from highlight_group.c
     /// Get the number of highlight groups
     fn highlight_num_groups() -> c_int;
+    /// Get the name of a highlight group (0-based index)
+    fn highlight_group_name(id: c_int) -> *const c_char;
     /// Get the link target ID of a highlight group (0-based index)
     fn highlight_link_id(id: c_int) -> c_int;
     /// Get the attribute ID (sg_attr) of a highlight group (0-based index)
@@ -71,6 +73,12 @@ extern "C" {
     fn highlight_group_cleared(id: c_int) -> bool;
     /// Get the sg_set flags of a highlight group (0-based index)
     fn highlight_group_set(id: c_int) -> c_int;
+    /// Get the uppercase name of a highlight group (0-based index)
+    fn highlight_group_name_upper(id: c_int) -> *const c_char;
+    /// Get the parent ID of a highlight group (0-based index, for @nested.groups)
+    fn highlight_group_parent(id: c_int) -> c_int;
+    /// Lookup a highlight group by uppercase name, returns ID (1-based) or 0 if not found
+    fn nvim_highlight_name_lookup(name_u: *const c_char) -> c_int;
 }
 
 // ============================================================================
@@ -1099,6 +1107,216 @@ pub extern "C" fn rs_blend_cache_put(combine_tag: c_int, id: c_int, through: boo
         &mut store.blend_cache
     };
     cache.insert(combine_tag, id);
+}
+
+// ============================================================================
+// Highlight Group Name Functions (syn_* family from highlight_group.c)
+// ============================================================================
+
+/// Maximum length for a highlight group name.
+/// Must match MAX_SYN_NAME in highlight_group.c.
+const MAX_SYN_NAME: usize = 200;
+
+/// Empty string constant for returning when group ID is invalid.
+/// This is a static CStr that lives for the lifetime of the program.
+static EMPTY_STRING: &CStr = unsafe { CStr::from_bytes_with_nul_unchecked(b"\0") };
+
+/// Return the name of highlight group "id".
+/// When not a valid ID (1-based), returns an empty string.
+///
+/// This mirrors the C function `syn_id2name(int id)` from highlight_group.c.
+/// Note: The returned pointer points to memory owned by C (highlight_arena).
+#[no_mangle]
+pub extern "C" fn rs_syn_id2name(id: c_int) -> *const c_char {
+    let num_groups = unsafe { highlight_num_groups() };
+    if id <= 0 || id > num_groups {
+        return EMPTY_STRING.as_ptr();
+    }
+    // id is 1-based, index is 0-based
+    unsafe { highlight_group_name(id - 1) }
+}
+
+/// Lookup a highlight group name and return its ID.
+///
+/// This mirrors the C function `syn_name2id_len(const char *name, size_t len)`.
+/// Returns the highlight group ID (1-based), or 0 if not found.
+///
+/// # Safety
+/// The name pointer must be valid for at least `len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_name2id_len(name: *const c_char, len: usize) -> c_int {
+    if name.is_null() || len == 0 || len > MAX_SYN_NAME {
+        return 0;
+    }
+
+    // Convert name to uppercase in a stack buffer
+    let mut name_u = [0u8; MAX_SYN_NAME + 1];
+    let name_bytes = std::slice::from_raw_parts(name as *const u8, len);
+    for (i, &b) in name_bytes.iter().enumerate() {
+        name_u[i] = b.to_ascii_uppercase();
+    }
+    name_u[len] = 0; // null-terminate
+
+    // Lookup in the highlight_unames map via C accessor
+    nvim_highlight_name_lookup(name_u.as_ptr() as *const c_char)
+}
+
+// C functions for highlight group operations
+extern "C" {
+    /// Add a new highlight group (stays in C due to Arena allocation)
+    fn c_syn_add_group(name: *const c_char, len: usize) -> c_int;
+    /// Call ns_get_hl from C (handles Lua callback if needed)
+    fn c_ns_get_hl(ns_id: *mut c_int, hl_id: c_int, link: bool, nodefault: c_int) -> c_int;
+}
+
+/// Find highlight group name in the table and return its ID.
+/// If it doesn't exist yet, a new entry is created (via C).
+///
+/// This mirrors the C function `syn_check_group(const char *name, size_t len)`.
+/// Returns the highlight group ID (1-based), or 0 for failure.
+///
+/// Note: The error message for name too long is still in C since emsg() requires
+/// C context. We return 0 to signal failure.
+///
+/// # Safety
+/// The name pointer must be valid for at least `len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_check_group(name: *const c_char, len: usize) -> c_int {
+    // Note: We don't emit the error message here - the C wrapper handles it
+    // for len > MAX_SYN_NAME since emsg() needs C context
+    if name.is_null() || len == 0 || len > MAX_SYN_NAME {
+        return 0;
+    }
+
+    // Try to find existing group first
+    let id = rs_syn_name2id_len(name, len);
+    if id != 0 {
+        return id;
+    }
+
+    // Group doesn't exist - call C to create it (handles Arena allocation)
+    c_syn_add_group(name, len)
+}
+
+/// Translate a group ID to the final group ID (following links).
+/// Also checks namespace overrides.
+///
+/// This mirrors the C function `syn_ns_get_final_id(int *ns_id, int *hl_idp)`.
+///
+/// # Arguments
+/// * `ns_id` - Pointer to namespace ID (may be modified)
+/// * `hl_idp` - Pointer to highlight group ID (will be set to final ID)
+///
+/// # Returns
+/// true if a namespace explicitly defined a value (making the highlight non-optional).
+///
+/// # Safety
+/// Both pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_ns_get_final_id(ns_id: *mut c_int, hl_idp: *mut c_int) -> bool {
+    let mut hl_id = *hl_idp;
+    let mut used = false;
+
+    let num_groups = highlight_num_groups();
+    if hl_id > num_groups || hl_id < 1 {
+        *hl_idp = 0;
+        return false; // Can be called from eval!!
+    }
+
+    // Follow links until there is no more.
+    // Look out for loops! Break after 100 links.
+    for _count in 0..100 {
+        let idx = hl_id - 1; // index is ID minus one
+
+        // Get sg_set for this group (needed for ns_get_hl)
+        let sg_set = highlight_group_set(idx);
+
+        // Check namespace override (link=true to get link target)
+        let check = c_ns_get_hl(ns_id, hl_id, true, sg_set);
+
+        if check == 0 {
+            // Namespace explicitly defined this group to be empty (broke the link)
+            *hl_idp = hl_id;
+            return true;
+        } else if check > 0 {
+            // Namespace provides a link target
+            used = true;
+            hl_id = check;
+            continue;
+        }
+
+        // check < 0 means no namespace override, use hl_table values
+
+        // Check sg_link
+        let link_id = highlight_link_id(idx);
+        if link_id > 0 && link_id <= num_groups {
+            hl_id = link_id;
+            continue;
+        }
+
+        // Check sg_parent for cleared @nested.groups
+        let cleared = highlight_group_cleared(idx);
+        let parent = highlight_group_parent(idx);
+        if cleared && parent > 0 {
+            hl_id = parent;
+            continue;
+        }
+
+        // No more links to follow
+        break;
+    }
+
+    *hl_idp = hl_id;
+    used
+}
+
+/// Translate a group ID to highlight attributes.
+/// Also checks namespace overrides.
+///
+/// This mirrors the C function `syn_ns_id2attr(int ns_id, int hl_id, bool *optional)`.
+///
+/// # Arguments
+/// * `ns_id` - Namespace ID (-1 for current active namespace)
+/// * `hl_id` - Highlight group ID (1-based)
+/// * `optional` - Pointer to flag indicating if highlight is optional
+///
+/// # Returns
+/// The attribute ID for this highlight group.
+///
+/// # Safety
+/// The optional pointer must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_ns_id2attr(
+    mut ns_id: c_int,
+    mut hl_id: c_int,
+    optional: *mut bool,
+) -> c_int {
+    // Follow links to final ID
+    if rs_syn_ns_get_final_id(&mut ns_id, &mut hl_id) {
+        // If the namespace explicitly defines a group to be empty, it is not optional
+        *optional = false;
+    }
+
+    // Handle case where hl_id became 0 (invalid)
+    if hl_id == 0 {
+        return 0;
+    }
+
+    let idx = hl_id - 1; // index is ID minus one
+
+    // Get sg_set for ns_get_hl
+    let sg_set = highlight_group_set(idx);
+
+    // Check namespace for attribute (link=false to get attr, not link target)
+    let attr = c_ns_get_hl(&mut ns_id, hl_id, false, sg_set);
+
+    // if a highlight group is optional, don't use the global value
+    if attr >= 0 || (*optional && ns_id > 0) {
+        return attr;
+    }
+
+    // Fall back to sg_attr from hl_table
+    highlight_group_attr(idx)
 }
 
 // ============================================================================

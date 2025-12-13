@@ -263,6 +263,18 @@ void ns_hl_def(NS ns_id, int hl_id, HlAttrs attrs, int link_id, Dict(highlight) 
   rs_ns_hl_def(ns_id, hl_id, attrs, link_id);
 }
 
+#ifdef USE_RUST_HIGHLIGHT
+// Wrapper for ns_get_hl callable from Rust
+// nodefault is sg_set flags in this context
+int c_ns_get_hl(int *ns_id, int hl_id, bool link, int nodefault)
+{
+  NS ns = *ns_id;
+  int result = ns_get_hl(&ns, hl_id, link, nodefault);
+  *ns_id = ns;
+  return result;
+}
+#endif
+
 int ns_get_hl(NS *ns_hl, int hl_id, bool link, bool nodefault)
 {
   static int recursive = 0;

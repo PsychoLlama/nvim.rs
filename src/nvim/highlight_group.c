@@ -797,6 +797,36 @@ int highlight_group_set(int id)
   return hl_table[id].sg_set;
 }
 
+/// Returns the uppercase name of a highlight group.
+/// @param id Highlight group index (0-based)
+/// @return The sg_name_u field, or NULL if out of bounds
+const char *highlight_group_name_upper(int id)
+{
+  if (id < 0 || id >= highlight_ga.ga_len) {
+    return NULL;
+  }
+  return hl_table[id].sg_name_u;
+}
+
+/// Returns the parent ID of a highlight group (for @nested.groups).
+/// @param id Highlight group index (0-based)
+/// @return The sg_parent field, or 0 if out of bounds
+int highlight_group_parent(int id)
+{
+  if (id < 0 || id >= highlight_ga.ga_len) {
+    return 0;
+  }
+  return hl_table[id].sg_parent;
+}
+
+/// Lookup a highlight group by uppercase name.
+/// @param name_u Uppercase name to look up (must be null-terminated)
+/// @return The highlight group ID (1-based), or 0 if not found
+int nvim_highlight_name_lookup(const char *name_u)
+{
+  return map_get(cstr_t, int)(&highlight_unames, name_u);
+}
+
 /// Create default links for Nvim* highlight groups used for cmdline coloring
 void syn_init_cmdline_highlight(bool reset, bool init)
 {
@@ -2063,6 +2093,15 @@ int syn_name2id(const char *name)
 ///
 /// @param highlight name e.g. 'Cursor', 'Normal'
 /// @return the highlight id, else 0 if \p name does not exist
+#ifdef USE_RUST_HIGHLIGHT
+extern int rs_syn_name2id_len(const char *name, size_t len);
+
+int syn_name2id_len(const char *name, size_t len)
+  FUNC_ATTR_NONNULL_ALL
+{
+  return rs_syn_name2id_len(name, len);
+}
+#else
 int syn_name2id_len(const char *name, size_t len)
   FUNC_ATTR_NONNULL_ALL
 {
@@ -2081,6 +2120,7 @@ int syn_name2id_len(const char *name, size_t len)
   // the expected value for missing highlight group.
   return map_get(cstr_t, int)(&highlight_unames, name_u);
 }
+#endif
 
 /// Lookup a highlight group name and return its attributes.
 /// Return zero if not found.
@@ -2103,6 +2143,14 @@ int highlight_exists(const char *name)
 
 /// Return the name of highlight group "id".
 /// When not a valid ID return an empty string.
+#ifdef USE_RUST_HIGHLIGHT
+extern const char *rs_syn_id2name(int id);
+
+char *syn_id2name(int id)
+{
+  return (char *)rs_syn_id2name(id);
+}
+#else
 char *syn_id2name(int id)
 {
   if (id <= 0 || id > highlight_ga.ga_len) {
@@ -2110,6 +2158,7 @@ char *syn_id2name(int id)
   }
   return hl_table[id - 1].sg_name;
 }
+#endif
 
 /// Find highlight group name in the table and return its ID.
 /// If it doesn't exist yet, a new entry is created.
@@ -2118,6 +2167,28 @@ char *syn_id2name(int id)
 /// @param len length of \p pp
 ///
 /// @return 0 for failure else the id of the group
+#ifdef USE_RUST_HIGHLIGHT
+// Forward declaration of syn_add_group for Rust to call back
+static int syn_add_group(const char *name, size_t len);
+
+// Exposed to Rust for creating new highlight groups
+int c_syn_add_group(const char *name, size_t len)
+{
+  return syn_add_group(name, len);
+}
+
+extern int rs_syn_check_group(const char *name, size_t len);
+
+int syn_check_group(const char *name, size_t len)
+{
+  // Handle error message for name too long in C (emsg needs C context)
+  if (len > MAX_SYN_NAME) {
+    emsg(_(e_highlight_group_name_too_long));
+    return 0;
+  }
+  return rs_syn_check_group(name, len);
+}
+#else
 int syn_check_group(const char *name, size_t len)
 {
   if (len > MAX_SYN_NAME) {
@@ -2130,6 +2201,7 @@ int syn_check_group(const char *name, size_t len)
   }
   return id;
 }
+#endif
 
 /// Add new highlight group and return its ID.
 ///
@@ -2205,6 +2277,15 @@ int syn_id2attr(int hl_id)
   return syn_ns_id2attr(-1, hl_id, &optional);
 }
 
+#ifdef USE_RUST_HIGHLIGHT
+extern int rs_syn_ns_id2attr(int ns_id, int hl_id, bool *optional);
+
+int syn_ns_id2attr(int ns_id, int hl_id, bool *optional)
+  FUNC_ATTR_NONNULL_ALL
+{
+  return rs_syn_ns_id2attr(ns_id, hl_id, optional);
+}
+#else
 int syn_ns_id2attr(int ns_id, int hl_id, bool *optional)
   FUNC_ATTR_NONNULL_ALL
 {
@@ -2222,6 +2303,7 @@ int syn_ns_id2attr(int ns_id, int hl_id, bool *optional)
   }
   return sgp->sg_attr;
 }
+#endif
 
 /// Translate a group ID to the final group ID (following links).
 int syn_get_final_id(int hl_id)
@@ -2231,6 +2313,14 @@ int syn_get_final_id(int hl_id)
   return hl_id;
 }
 
+#ifdef USE_RUST_HIGHLIGHT
+extern bool rs_syn_ns_get_final_id(int *ns_id, int *hl_idp);
+
+bool syn_ns_get_final_id(int *ns_id, int *hl_idp)
+{
+  return rs_syn_ns_get_final_id(ns_id, hl_idp);
+}
+#else
 bool syn_ns_get_final_id(int *ns_id, int *hl_idp)
 {
   int hl_id = *hl_idp;
@@ -2271,6 +2361,7 @@ bool syn_ns_get_final_id(int *ns_id, int *hl_idp)
   *hl_idp = hl_id;
   return used;
 }
+#endif
 
 /// Refresh the color attributes of all highlight groups.
 void highlight_attr_set_all(void)
