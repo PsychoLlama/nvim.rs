@@ -2,7 +2,7 @@
 
 ## Current Status
 
-**647 rs_* functions migrated**
+**649 rs_* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
@@ -21,7 +21,11 @@ Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get cur
 - Phase 10.4: ns_hl_def() migration ✅
   - DecorProvider accessor (nvim_decor_provider_hl_def_prepare)
   - rs_ns_hl_def() handles HL_DEFAULT check, attr creation, storage
-- Phase 10.5+: ns_get_hl pre/post split (planned)
+- Phase 10.5: ns_get_hl() pre/post split ✅
+  - rs_ns_get_hl_pre() handles cache check, namespace resolution
+  - rs_ns_get_hl_post() handles storage and result computation
+  - Lua callback (nlua_call_ref) stays in C
+- Phase 10.6+: hl_check_ns migration (planned)
 
 **Highlight Migration Status:**
 - Core computation: Fully in Rust (rgb_blend, cterm_blend, combine_attrs, blend_attrs)
@@ -30,7 +34,7 @@ Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get cur
 - Cache management: Rust only (combine/blend caches)
 - Namespace storage: Rust only (ns_hls, ns_hl_attr)
 - Namespace globals: Bidirectional accessors (C owns, Rust can read/write)
-- Namespace logic: Still in C (ns_get_hl Lua callback, hl_check_ns)
+- Namespace logic: Mostly Rust (ns_hl_def, ns_get_hl pre/post); Lua callback in C
 - API conversion: Still in C (requires Object type system in Rust)
 
 Run `grep -n "pub.*extern.*fn rs_" src/nvim-rs/highlight/src/lib.rs` to see all functions
@@ -137,7 +141,7 @@ extern "C" { fn nvim_get_foo_field() -> c_int; }
 | 7.x | API layer functions | 🔄 |
 | 8.0-8.4 | Terminal UI (terminfo, detection) | ✅ |
 | 9.0-9.13 | Highlight core (Rust single source of truth) | ✅ |
-| 10.1-10.4 | Namespace storage, globals, ns_hl_def (ns_hls, ns_hl_attr, accessors) | ✅ |
+| 10.1-10.5 | Namespace system (storage, globals, ns_hl_def, ns_get_hl split) | ✅ |
 
 ### Future Phases (Roadmap)
 
