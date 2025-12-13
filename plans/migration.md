@@ -8,24 +8,19 @@ Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get cur
 
 ### Current Work
 
-**Phase 9 - Highlight Functions** (in progress)
+**Phase 9 - Highlight Functions** (complete)
 - Phase 9.0-9.7: Color blending, conversion, name lookups ✅
 - Phase 9.8: HlEntry struct, attribute entry infrastructure ✅
-  - Added: HlKind enum, HlEntry struct, AttrEntryStore
-  - Added: rs_highlight_init, rs_syn_attr2entry, rs_get_attr_entry
-  - Added: rs_combine_cache_get/put, rs_blend_cache_get/put
-  - Added: rs_clear_hl_tables, rs_highlight_use_hlstate, rs_hl_invalidate_blends
 - Phase 9.9-9.12: Connect C code to Rust with validation ✅
-  - C code now stores entries/URLs in both C and Rust
-  - Assertions validate identical behavior
-  - All 37 API + 80 UI highlight tests pass
-- Phase 9.13+: Remaining highlight.c functions (namespace, inspection) - blocked on Object type migration
+- Phase 9.13: Remove C dual-storage, Rust is single source of truth ✅
+  - Removed ~370 lines of dead C code
+  - All 125 highlight tests pass (37 API + 80 UI + 8 hlstate)
 
 **Highlight Migration Status:**
 - Core computation: Fully in Rust (rgb_blend, cterm_blend, combine_attrs, blend_attrs)
-- Entry storage: Duplicated in Rust with validation
-- URL storage: Duplicated in Rust with validation
-- Cache management: Duplicated in Rust with validation
+- Entry storage: Rust only (AttrEntryStore)
+- URL storage: Rust only
+- Cache management: Rust only (combine/blend caches)
 - Namespace system: Still in C (requires Lua callback wrappers)
 - API conversion: Still in C (requires Object type system in Rust)
 
@@ -132,7 +127,7 @@ extern "C" { fn nvim_get_foo_field() -> c_int; }
 | 6.0 | MessagePack unpacker (rs_unpack) | ✅ |
 | 7.x | API layer functions | 🔄 |
 | 8.0-8.4 | Terminal UI (terminfo, detection) | ✅ |
-| 9.0-9.12 | Highlight core (color, entry store, caches) | ✅ |
+| 9.0-9.13 | Highlight core (Rust single source of truth) | ✅ |
 
 ### Future Phases (Roadmap)
 
