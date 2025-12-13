@@ -8,6 +8,9 @@ use std::collections::HashMap;
 use std::ffi::{c_char, c_int, c_void, CStr};
 use std::sync::{LazyLock, Mutex};
 
+// Re-export API types for hlattrs2dict and hl_inspect
+use nvim_api::{Arena, Array, Dict, Object};
+
 extern "C" {
     /// Get the terminal color count from C globals
     fn nvim_get_t_colors() -> c_int;
@@ -4325,6 +4328,364 @@ pub unsafe extern "C" fn rs_coloridx_to_name(
             std::ptr::null()
         }
     }
+}
+
+// ============================================================================
+// hlattrs2dict - Convert HlAttrs to Dict
+// ============================================================================
+
+/// Static key strings for hlattrs2dict (zero-copy)
+mod hlattrs_keys {
+    pub static REVERSE: &[u8] = b"reverse\0";
+    pub static BOLD: &[u8] = b"bold\0";
+    pub static ITALIC: &[u8] = b"italic\0";
+    pub static UNDERLINE: &[u8] = b"underline\0";
+    pub static UNDERCURL: &[u8] = b"undercurl\0";
+    pub static UNDERDOUBLE: &[u8] = b"underdouble\0";
+    pub static UNDERDOTTED: &[u8] = b"underdotted\0";
+    pub static UNDERDASHED: &[u8] = b"underdashed\0";
+    pub static STANDOUT: &[u8] = b"standout\0";
+    pub static STRIKETHROUGH: &[u8] = b"strikethrough\0";
+    pub static ALTFONT: &[u8] = b"altfont\0";
+    pub static NOCOMBINE: &[u8] = b"nocombine\0";
+    pub static FG: &[u8] = b"fg\0";
+    pub static BG: &[u8] = b"bg\0";
+    pub static SP: &[u8] = b"sp\0";
+    pub static FOREGROUND: &[u8] = b"foreground\0";
+    pub static BACKGROUND: &[u8] = b"background\0";
+    pub static SPECIAL: &[u8] = b"special\0";
+    pub static FG_INDEXED: &[u8] = b"fg_indexed\0";
+    pub static BG_INDEXED: &[u8] = b"bg_indexed\0";
+    pub static CTERMFG: &[u8] = b"ctermfg\0";
+    pub static CTERMBG: &[u8] = b"ctermbg\0";
+    pub static BLEND: &[u8] = b"blend\0";
+}
+
+/// Maximum items in hlattrs dict
+const HLATTRS_DICT_SIZE: usize = 16;
+
+/// Convert HlAttrs to Dict representation.
+///
+/// Equivalent to C's hlattrs2dict function. Outputs highlight attributes as
+/// key-value pairs suitable for API responses.
+///
+/// # Arguments
+/// * `hl` - Pre-allocated Dict for colors (must have capacity >= HLATTRS_DICT_SIZE)
+/// * `hl_attrs` - Pre-allocated Dict for attributes (can be NULL to use `hl`)
+/// * `ae` - The HlAttrs to convert
+/// * `use_rgb` - If true, output RGB colors; if false, output cterm colors
+/// * `short_keys` - If true, use short keys (fg/bg/sp/ctermfg/ctermbg); if false, use long keys
+///
+/// # Safety
+/// - `hl` must be a valid pointer to a Dict with capacity >= HLATTRS_DICT_SIZE
+/// - `hl_attrs` must be NULL or a valid pointer to a Dict with capacity >= HLATTRS_DICT_SIZE
+#[no_mangle]
+pub unsafe extern "C" fn rs_hlattrs2dict(
+    hl: *mut Dict,
+    hl_attrs: *mut Dict,
+    ae: HlAttrs,
+    use_rgb: bool,
+    short_keys: bool,
+) {
+    use hlattrs_keys::*;
+
+    // Use raw pointers to avoid borrow checker issues when hl_attrs == hl
+    let hl_ptr = hl;
+    let attrs_ptr = if hl_attrs.is_null() { hl } else { hl_attrs };
+
+    debug_assert!((*hl_ptr).capacity >= HLATTRS_DICT_SIZE);
+    debug_assert!((*attrs_ptr).capacity >= HLATTRS_DICT_SIZE);
+
+    let mask = if use_rgb {
+        ae.rgb_ae_attr
+    } else {
+        ae.cterm_ae_attr
+    };
+
+    // Attribute flags
+    if (mask & HL_INVERSE) != 0 {
+        (*attrs_ptr).put_static(REVERSE.as_ptr() as *const c_char, Object::boolean(true));
+    }
+
+    if (mask & HL_BOLD) != 0 {
+        (*attrs_ptr).put_static(BOLD.as_ptr() as *const c_char, Object::boolean(true));
+    }
+
+    if (mask & HL_ITALIC) != 0 {
+        (*attrs_ptr).put_static(ITALIC.as_ptr() as *const c_char, Object::boolean(true));
+    }
+
+    // Underline styles (mutually exclusive)
+    match mask & HL_UNDERLINE_MASK {
+        x if x == HL_UNDERLINE => {
+            (*attrs_ptr).put_static(UNDERLINE.as_ptr() as *const c_char, Object::boolean(true));
+        }
+        x if x == HL_UNDERCURL => {
+            (*attrs_ptr).put_static(UNDERCURL.as_ptr() as *const c_char, Object::boolean(true));
+        }
+        x if x == HL_UNDERDOUBLE => {
+            (*attrs_ptr).put_static(UNDERDOUBLE.as_ptr() as *const c_char, Object::boolean(true));
+        }
+        x if x == HL_UNDERDOTTED => {
+            (*attrs_ptr).put_static(UNDERDOTTED.as_ptr() as *const c_char, Object::boolean(true));
+        }
+        x if x == HL_UNDERDASHED => {
+            (*attrs_ptr).put_static(UNDERDASHED.as_ptr() as *const c_char, Object::boolean(true));
+        }
+        _ => {}
+    }
+
+    if (mask & HL_STANDOUT) != 0 {
+        (*attrs_ptr).put_static(STANDOUT.as_ptr() as *const c_char, Object::boolean(true));
+    }
+
+    if (mask & HL_STRIKETHROUGH) != 0 {
+        (*attrs_ptr).put_static(STRIKETHROUGH.as_ptr() as *const c_char, Object::boolean(true));
+    }
+
+    if (mask & HL_ALTFONT) != 0 {
+        (*attrs_ptr).put_static(ALTFONT.as_ptr() as *const c_char, Object::boolean(true));
+    }
+
+    if (mask & HL_NOCOMBINE) != 0 {
+        (*attrs_ptr).put_static(NOCOMBINE.as_ptr() as *const c_char, Object::boolean(true));
+    }
+
+    // Colors
+    if use_rgb {
+        if ae.rgb_fg_color != -1 {
+            let key = if short_keys { FG } else { FOREGROUND };
+            (*hl_ptr).put_static(key.as_ptr() as *const c_char, Object::integer(ae.rgb_fg_color as i64));
+        }
+
+        if ae.rgb_bg_color != -1 {
+            let key = if short_keys { BG } else { BACKGROUND };
+            (*hl_ptr).put_static(key.as_ptr() as *const c_char, Object::integer(ae.rgb_bg_color as i64));
+        }
+
+        if ae.rgb_sp_color != -1 {
+            let key = if short_keys { SP } else { SPECIAL };
+            (*hl_ptr).put_static(key.as_ptr() as *const c_char, Object::integer(ae.rgb_sp_color as i64));
+        }
+
+        if !short_keys {
+            if (mask & HL_FG_INDEXED) != 0 {
+                (*hl_ptr).put_static(FG_INDEXED.as_ptr() as *const c_char, Object::boolean(true));
+            }
+
+            if (mask & HL_BG_INDEXED) != 0 {
+                (*hl_ptr).put_static(BG_INDEXED.as_ptr() as *const c_char, Object::boolean(true));
+            }
+        }
+    } else {
+        // cterm colors
+        if ae.cterm_fg_color != 0 {
+            let key = if short_keys { CTERMFG } else { FOREGROUND };
+            (*hl_ptr).put_static(key.as_ptr() as *const c_char, Object::integer((ae.cterm_fg_color - 1) as i64));
+        }
+
+        if ae.cterm_bg_color != 0 {
+            let key = if short_keys { CTERMBG } else { BACKGROUND };
+            (*hl_ptr).put_static(key.as_ptr() as *const c_char, Object::integer((ae.cterm_bg_color - 1) as i64));
+        }
+    }
+
+    // Blend (only for RGB, or for long keys)
+    if ae.hl_blend > -1 && (use_rgb || !short_keys) {
+        (*hl_ptr).put_static(BLEND.as_ptr() as *const c_char, Object::integer(ae.hl_blend as i64));
+    }
+}
+
+// ============================================================================
+// hl_inspect - Convert highlight attribute to Array of Dicts
+// ============================================================================
+
+extern "C" {
+    fn nvim_get_hlf_name(idx: c_int) -> *const c_char;
+    fn arena_alloc(arena: *mut Arena, size: usize) -> *mut c_char;
+}
+
+/// Static key strings for hl_inspect (zero-copy)
+mod hl_inspect_keys {
+    pub static KIND: &[u8] = b"kind\0";
+    pub static HI_NAME: &[u8] = b"hi_name\0";
+    pub static UI_NAME: &[u8] = b"ui_name\0";
+    pub static ID: &[u8] = b"id\0";
+    pub static SYNTAX: &[u8] = b"syntax\0";
+    pub static UI: &[u8] = b"ui\0";
+    pub static TERM: &[u8] = b"term\0";
+    pub static NORMAL: &[u8] = b"Normal\0";
+}
+
+use nvim_api::NvimString;
+
+/// Get the size needed for hl_inspect array (recursive for combined attributes)
+fn hl_inspect_size(attr: c_int) -> usize {
+    let count = rs_attr_entry_count();
+    if attr <= 0 || attr >= count {
+        return 0;
+    }
+
+    let e = rs_get_attr_entry_by_id(attr);
+    if e.kind == HlKind::Combine || e.kind == HlKind::Blend || e.kind == HlKind::BlendThrough {
+        return hl_inspect_size(e.id1) + hl_inspect_size(e.id2);
+    }
+    1
+}
+
+/// Recursive implementation of hl_inspect
+///
+/// # Safety
+/// - `arr` must be a valid pointer to an Array with sufficient capacity
+/// - `arena` must be a valid Arena pointer
+unsafe fn hl_inspect_impl(arr: *mut Array, attr: c_int, arena: *mut Arena) {
+    use hl_inspect_keys::*;
+
+    let count = rs_attr_entry_count();
+    if attr <= 0 || attr >= count {
+        return;
+    }
+
+    let e = rs_get_attr_entry_by_id(attr);
+
+    match e.kind {
+        HlKind::Syntax => {
+            // Create dict with 3 items: kind, hi_name, id
+            let dict_items =
+                arena_alloc(arena, 3 * std::mem::size_of::<nvim_api::KeyValuePair>())
+                    as *mut nvim_api::KeyValuePair;
+            let mut item = Dict {
+                size: 0,
+                capacity: 3,
+                items: dict_items,
+            };
+
+            item.put_static(KIND.as_ptr() as *const c_char,
+                Object::string(NvimString {
+                    data: SYNTAX.as_ptr() as *mut c_char,
+                    size: SYNTAX.len() - 1, // exclude null terminator
+                }));
+
+            let hi_name = rs_syn_id2name(e.id1);
+            item.put_static(HI_NAME.as_ptr() as *const c_char,
+                Object::string(NvimString {
+                    data: hi_name as *mut c_char,
+                    size: if hi_name.is_null() { 0 } else { strlen(hi_name) },
+                }));
+
+            item.put_static(ID.as_ptr() as *const c_char, Object::integer(attr as i64));
+
+            (*arr).push(Object::dict(item));
+        }
+
+        HlKind::UI => {
+            // Create dict with 4 items: kind, ui_name, hi_name, id
+            let dict_items =
+                arena_alloc(arena, 4 * std::mem::size_of::<nvim_api::KeyValuePair>())
+                    as *mut nvim_api::KeyValuePair;
+            let mut item = Dict {
+                size: 0,
+                capacity: 4,
+                items: dict_items,
+            };
+
+            item.put_static(KIND.as_ptr() as *const c_char,
+                Object::string(NvimString {
+                    data: UI.as_ptr() as *mut c_char,
+                    size: UI.len() - 1,
+                }));
+
+            // ui_name: "Normal" if id1 == -1, else hlf_names[id1]
+            let ui_name = if e.id1 == -1 {
+                NORMAL.as_ptr() as *const c_char
+            } else {
+                nvim_get_hlf_name(e.id1)
+            };
+            item.put_static(UI_NAME.as_ptr() as *const c_char,
+                Object::string(NvimString {
+                    data: ui_name as *mut c_char,
+                    size: if ui_name.is_null() { 0 } else { strlen(ui_name) },
+                }));
+
+            let hi_name = rs_syn_id2name(e.id2);
+            item.put_static(HI_NAME.as_ptr() as *const c_char,
+                Object::string(NvimString {
+                    data: hi_name as *mut c_char,
+                    size: if hi_name.is_null() { 0 } else { strlen(hi_name) },
+                }));
+
+            item.put_static(ID.as_ptr() as *const c_char, Object::integer(attr as i64));
+
+            (*arr).push(Object::dict(item));
+        }
+
+        HlKind::Terminal => {
+            // Create dict with 2 items: kind, id
+            let dict_items =
+                arena_alloc(arena, 2 * std::mem::size_of::<nvim_api::KeyValuePair>())
+                    as *mut nvim_api::KeyValuePair;
+            let mut item = Dict {
+                size: 0,
+                capacity: 2,
+                items: dict_items,
+            };
+
+            item.put_static(KIND.as_ptr() as *const c_char,
+                Object::string(NvimString {
+                    data: TERM.as_ptr() as *mut c_char,
+                    size: TERM.len() - 1,
+                }));
+
+            item.put_static(ID.as_ptr() as *const c_char, Object::integer(attr as i64));
+
+            (*arr).push(Object::dict(item));
+        }
+
+        HlKind::Combine | HlKind::Blend | HlKind::BlendThrough => {
+            // Flatten combined attributes recursively
+            hl_inspect_impl(arr, e.id1, arena);
+            hl_inspect_impl(arr, e.id2, arena);
+        }
+
+        HlKind::Unknown | HlKind::Invalid => {
+            // Do nothing
+        }
+    }
+}
+
+extern "C" {
+    fn strlen(s: *const c_char) -> usize;
+    fn nvim_get_hlstate_active() -> bool;
+}
+
+/// Inspect a highlight attribute and return an Array of Dicts describing its composition.
+///
+/// This is equivalent to C's `hl_inspect()` function. For combined/blended attributes,
+/// it recursively flattens the tree structure into an array.
+///
+/// # Safety
+/// - `arena` must be a valid Arena pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_hl_inspect(attr: c_int, arena: *mut Arena) -> Array {
+    if !nvim_get_hlstate_active() {
+        return Array::empty();
+    }
+
+    let size = hl_inspect_size(attr);
+    if size == 0 {
+        return Array::empty();
+    }
+
+    // Allocate array using arena
+    let items = arena_alloc(arena, size * std::mem::size_of::<Object>()) as *mut Object;
+    let mut ret = Array {
+        size: 0,
+        capacity: size,
+        items,
+    };
+
+    hl_inspect_impl(&mut ret, attr, arena);
+    ret
 }
 
 // ============================================================================

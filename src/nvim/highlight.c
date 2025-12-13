@@ -161,6 +161,10 @@ int nvim_get_hlf_pst(void) { return HLF_PST; }
 int nvim_get_hlf_none(void) { return HLF_NONE; }
 int nvim_get_hlf_inactive(void) { return HLF_INACTIVE; }
 
+// Accessors for hl_inspect (Phase 18)
+const char *nvim_get_hlf_name(int idx) { return hlf_names[idx]; }
+// nvim_get_hlstate_active is defined after hlstate_active (line ~182)
+
 // Accessors for update_window_hl (Phase 17)
 int nvim_get_hlf_nfloat(void) { return HLF_NFLOAT; }
 int nvim_get_hlf_border(void) { return HLF_BORDER; }
@@ -174,6 +178,9 @@ static void update_ns_hl(int ns_id);
 void nvim_update_ns_hl(int ns_id) { update_ns_hl(ns_id); }
 
 static bool hlstate_active = false;
+
+// Accessor for hl_inspect (Phase 18) - must be after hlstate_active
+bool nvim_get_hlstate_active(void) { return hlstate_active; }
 
 void highlight_init(void)
 {
@@ -867,6 +874,14 @@ Dict hl_get_attr_by_id(Integer attr_id, Boolean rgb, Arena *arena, Error *err)
 /// @param use_rgb use 'gui*' settings if true, else resorts to 'cterm*'
 /// @param short_keys change (foreground, background, special) to (fg, bg, sp) for 'gui*' settings
 ///                          (foreground, background) to (ctermfg, ctermbg) for 'cterm*' settings
+#ifdef USE_RUST_HIGHLIGHT
+extern void rs_hlattrs2dict(Dict *hl, Dict *hl_attrs, HlAttrs ae, bool use_rgb, bool short_keys);
+
+void hlattrs2dict(Dict *hl, Dict *hl_attrs, HlAttrs ae, bool use_rgb, bool short_keys)
+{
+  rs_hlattrs2dict(hl, hl_attrs, ae, use_rgb, short_keys);
+}
+#else
 void hlattrs2dict(Dict *hl, Dict *hl_attrs, HlAttrs ae, bool use_rgb, bool short_keys)
 {
   hl_attrs = hl_attrs ? hl_attrs : hl;
@@ -960,6 +975,7 @@ void hlattrs2dict(Dict *hl, Dict *hl_attrs, HlAttrs ae, bool use_rgb, bool short
     PUT_C(*hl, "blend", INTEGER_OBJ(ae.hl_blend));
   }
 }
+#endif  // USE_RUST_HIGHLIGHT
 
 HlAttrs dict2hlattrs(Dict(highlight) *dict, bool use_rgb, int *link_id, Error *err)
 {
@@ -1151,6 +1167,17 @@ int object_to_color(Object val, char *key, bool rgb, Error *err)
   }
 }
 
+#ifdef USE_RUST_HIGHLIGHT
+extern Array rs_hl_inspect(int attr, Arena *arena);
+
+Array hl_inspect(int attr, Arena *arena)
+{
+  return rs_hl_inspect(attr, arena);
+}
+#else
+static size_t hl_inspect_size(int attr);
+static void hl_inspect_impl(Array *arr, int attr, Arena *arena);
+
 Array hl_inspect(int attr, Arena *arena)
 {
   if (!hlstate_active) {
@@ -1217,3 +1244,4 @@ static void hl_inspect_impl(Array *arr, int attr, Arena *arena)
   PUT_C(item, "id", INTEGER_OBJ(attr));
   ADD_C(*arr, DICT_OBJ(item));
 }
+#endif  // USE_RUST_HIGHLIGHT

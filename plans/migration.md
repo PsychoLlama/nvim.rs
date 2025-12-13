@@ -2,46 +2,29 @@
 
 ## Current Status
 
-**671 rs_* functions migrated**
+**685 rs_* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
 ### Current Work
+
+**Phase 18 - API Types & Dict Building** ✅
+- Added Object constructors, Dict/Array helpers, arena allocation to nvim-api crate
+- `rs_hlattrs2dict()` - convert HlAttrs to Dict for API responses
+- `rs_hl_inspect()` - inspect highlight attribute composition
+- C accessors: nvim_get_hlf_name, nvim_get_hlstate_active
 
 **Phase 17 - Window Highlight Update** ✅
 - `rs_update_window_hl()` - update all highlight attributes for a window
 - C accessors: window config (external, border, border_hl_ids, shadow), grid blending
 - HLF constants: nvim_get_hlf_nfloat/border/count
 
-**Phase 16 - Window Background Attribute** ✅
-- `rs_win_bg_attr()` - get background attribute for window
-- C accessors: nvim_win_get_hl_attr_normal/nc, nvim_get_hlf_none/inactive
-
-**Phase 15 - UI Highlight Attribute Function** ✅
-- `rs_hl_get_ui_attr()` - get attribute for builtin highlight groups
-- C accessors: nvim_get_p_pb, nvim_get_pum_drawn, nvim_set_must_redraw_pum, nvim_get_hlf_pni/pst
-
-**Phase 14 - Core Attribute Combination Functions** ✅
-- `rs_hl_combine_attr()`, `rs_hl_blend_attrs()`, `rs_hl_get_syn_attr()`, `rs_hl_add_url()`
-
-**Phase 13 - Attribute Entry Callback & Attr Builders** ✅
-- `c_get_attr_entry()` - C callback for UI dispatch
-- `rs_hl_get_underline()`, `rs_hl_get_term_attr()`, `rs_hl_apply_winblend()`
-
-**Phase 12 - Highlight Wrapper Functions** ✅
-- Trivial wrappers: syn_id2attr, syn_get_final_id, etc.
-- Window accessors: nvim_win_get_ns_hl, c_curwin_ns_hl_active
-- `rs_win_check_ns_hl()` - prepare window for drawing
-
-**Phase 11 - hl_table Accessors & syn_* Functions** ✅
-- C accessor functions for hl_table (HlGroup array)
-- syn_* lookup/link functions in Rust
-
 **Highlight Migration Status:** ✅ COMPLETE
 - Core computation: Fully in Rust (rgb_blend, cterm_blend, combine_attrs, blend_attrs)
 - Attribute combination: Fully in Rust (hl_combine_attr, hl_blend_attrs, hl_add_url)
 - UI highlight lookup: Fully in Rust (hl_get_ui_attr, win_bg_attr)
 - Window highlight update: Fully in Rust (update_window_hl)
+- API conversion: Fully in Rust (hlattrs2dict, hl_inspect)
 - Entry storage: Rust only (AttrEntryStore)
 - URL storage: Rust only
 - Cache management: Rust only (combine/blend caches)
@@ -49,10 +32,9 @@ Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get cur
 - Namespace globals: Bidirectional accessors (C owns, Rust can read/write)
 - Namespace logic: Fully Rust (ns_hl_def, ns_get_hl, hl_check_ns); Lua callbacks in C
 - hl_table access: C accessors, syn_* lookup/link functions in Rust
-- API conversion: Still in C (requires Object type system in Rust)
 
 **What remains in C (not migratable without major work):**
-- `hlattrs2dict/dict2hlattrs` - Arena memory + API types (Dict, Object)
+- `dict2hlattrs` - Validation/parsing from Dict (error API needed)
 - `get_attr_entry` - UI event dispatch (ui_call_hl_attr_define)
 - `ns_get_hl` middle phase - Lua callback execution (nlua_call_ref)
 - `highlight_changed` - UI events, hl_table manipulation, garray

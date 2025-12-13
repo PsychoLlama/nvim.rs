@@ -889,3 +889,244 @@ mod tests {
         }
     }
 }
+
+// =============================================================================
+// Object constructors - equivalent to C macros like BOOLEAN_OBJ, INTEGER_OBJ
+// =============================================================================
+
+impl Object {
+    /// Create a nil object
+    #[inline]
+    pub const fn nil() -> Self {
+        Self {
+            obj_type: ObjectType::Nil as c_int,
+            data: ObjectData { integer: 0 },
+        }
+    }
+
+    /// Create a boolean object
+    #[inline]
+    pub const fn boolean(b: bool) -> Self {
+        Self {
+            obj_type: ObjectType::Boolean as c_int,
+            data: ObjectData { boolean: b },
+        }
+    }
+
+    /// Create an integer object
+    #[inline]
+    pub const fn integer(i: i64) -> Self {
+        Self {
+            obj_type: ObjectType::Integer as c_int,
+            data: ObjectData { integer: i },
+        }
+    }
+
+    /// Create a float object
+    #[inline]
+    pub const fn float(f: f64) -> Self {
+        Self {
+            obj_type: ObjectType::Float as c_int,
+            data: ObjectData { floating: f },
+        }
+    }
+
+    /// Create a string object (takes ownership of the NvimString)
+    #[inline]
+    pub const fn string(s: NvimString) -> Self {
+        Self {
+            obj_type: ObjectType::String as c_int,
+            data: ObjectData { string: s },
+        }
+    }
+
+    /// Create an array object
+    #[inline]
+    pub const fn array(a: Array) -> Self {
+        Self {
+            obj_type: ObjectType::Array as c_int,
+            data: ObjectData { array: a },
+        }
+    }
+
+    /// Create a dict object
+    #[inline]
+    pub const fn dict(d: Dict) -> Self {
+        Self {
+            obj_type: ObjectType::Dict as c_int,
+            data: ObjectData { dict: d },
+        }
+    }
+}
+
+/// C-callable object constructors
+#[no_mangle]
+pub extern "C" fn rs_nil_obj() -> Object {
+    Object::nil()
+}
+
+#[no_mangle]
+pub extern "C" fn rs_boolean_obj(b: bool) -> Object {
+    Object::boolean(b)
+}
+
+#[no_mangle]
+pub extern "C" fn rs_integer_obj(i: i64) -> Object {
+    Object::integer(i)
+}
+
+#[no_mangle]
+pub extern "C" fn rs_float_obj(f: f64) -> Object {
+    Object::float(f)
+}
+
+#[no_mangle]
+pub extern "C" fn rs_string_obj(s: NvimString) -> Object {
+    Object::string(s)
+}
+
+#[no_mangle]
+pub extern "C" fn rs_array_obj(a: Array) -> Object {
+    Object::array(a)
+}
+
+#[no_mangle]
+pub extern "C" fn rs_dict_obj(d: Dict) -> Object {
+    Object::dict(d)
+}
+
+// =============================================================================
+// Arena allocation wrappers
+// =============================================================================
+
+/// Allocate an Array with a given capacity using arena allocation.
+/// If arena is NULL, uses xmalloc.
+///
+/// # Safety
+/// Arena must be NULL or a valid arena pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_arena_array(arena: *mut Arena, max_size: usize) -> Array {
+    let items = if arena.is_null() {
+        xmalloc(max_size * std::mem::size_of::<Object>()) as *mut Object
+    } else {
+        arena_alloc(arena, max_size * std::mem::size_of::<Object>()) as *mut Object
+    };
+    Array {
+        size: 0,
+        capacity: max_size,
+        items,
+    }
+}
+
+/// Allocate a Dict with a given capacity using arena allocation.
+/// If arena is NULL, uses xmalloc.
+///
+/// # Safety
+/// Arena must be NULL or a valid arena pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_arena_dict(arena: *mut Arena, max_size: usize) -> Dict {
+    let items = if arena.is_null() {
+        xmalloc(max_size * std::mem::size_of::<KeyValuePair>()) as *mut KeyValuePair
+    } else {
+        arena_alloc(arena, max_size * std::mem::size_of::<KeyValuePair>()) as *mut KeyValuePair
+    };
+    Dict {
+        size: 0,
+        capacity: max_size,
+        items,
+    }
+}
+
+extern "C" {
+    fn arena_alloc(arena: *mut Arena, size: usize) -> *mut c_char;
+}
+
+// =============================================================================
+// Dict/Array manipulation helpers
+// =============================================================================
+
+impl Array {
+    /// Push an object to the array.
+    ///
+    /// # Safety
+    /// The array must have been allocated with sufficient capacity.
+    #[inline]
+    pub unsafe fn push(&mut self, obj: Object) {
+        debug_assert!(self.size < self.capacity);
+        *self.items.add(self.size) = obj;
+        self.size += 1;
+    }
+
+    /// Create an empty array (no allocation)
+    #[inline]
+    pub const fn empty() -> Self {
+        Self {
+            size: 0,
+            capacity: 0,
+            items: ptr::null_mut(),
+        }
+    }
+}
+
+impl Dict {
+    /// Put a key-value pair into the dict.
+    /// Key must be a static C string (not copied).
+    ///
+    /// # Safety
+    /// - The dict must have been allocated with sufficient capacity.
+    /// - The key must be a valid static C string that outlives the dict.
+    #[inline]
+    pub unsafe fn put_static(&mut self, key: *const c_char, value: Object) {
+        debug_assert!(self.size < self.capacity);
+        let pair = &mut *self.items.add(self.size);
+        pair.key = NvimString {
+            data: key as *mut c_char,
+            size: strlen(key),
+        };
+        pair.value = value;
+        self.size += 1;
+    }
+
+    /// Create an empty dict (no allocation)
+    #[inline]
+    pub const fn empty() -> Self {
+        Self {
+            size: 0,
+            capacity: 0,
+            items: ptr::null_mut(),
+        }
+    }
+}
+
+/// Push an object to an array.
+///
+/// # Safety
+/// The array must have been allocated with sufficient capacity.
+#[no_mangle]
+pub unsafe extern "C" fn rs_array_push(arr: *mut Array, obj: Object) {
+    (*arr).push(obj);
+}
+
+/// Put a key-value pair into a dict.
+/// Key must be a static C string (not copied).
+///
+/// # Safety
+/// - The dict must have been allocated with sufficient capacity.
+/// - The key must be a valid static C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_dict_put_static(dict: *mut Dict, key: *const c_char, value: Object) {
+    (*dict).put_static(key, value);
+}
+
+/// Create a String from a static C string literal.
+/// Does not copy the data.
+///
+/// # Safety
+/// The string must be a valid static C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_static_cstr(s: *const c_char) -> NvimString {
+    NvimString {
+        data: s as *mut c_char,
+        size: strlen(s),
+    }
+}
