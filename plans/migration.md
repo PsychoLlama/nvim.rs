@@ -8,20 +8,22 @@ Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get cur
 
 ### Current Work
 
-**Phase 9 - Highlight Functions** (complete)
-- Phase 9.0-9.7: Color blending, conversion, name lookups ✅
-- Phase 9.8: HlEntry struct, attribute entry infrastructure ✅
-- Phase 9.9-9.12: Connect C code to Rust with validation ✅
-- Phase 9.13: Remove C dual-storage, Rust is single source of truth ✅
-  - Removed ~370 lines of dead C code
-  - All 125 highlight tests pass (37 API + 80 UI + 8 hlstate)
+**Phase 10 - Namespace Highlight System** (in progress)
+- Phase 10.1: ns_hls Map storage to Rust ✅
+  - Added ColorKey, ColorItem structs
+  - rs_ns_hls_has/get/put functions
+- Phase 10.2: ns_hl_attr PMap storage to Rust ✅
+  - Added HLF_COUNT constant, NSHlAttr type
+  - rs_ns_hl_attr_get/get_or_create functions
+- Phase 10.3+: Namespace globals, ns_get_hl pre/post split (planned)
 
 **Highlight Migration Status:**
 - Core computation: Fully in Rust (rgb_blend, cterm_blend, combine_attrs, blend_attrs)
 - Entry storage: Rust only (AttrEntryStore)
 - URL storage: Rust only
 - Cache management: Rust only (combine/blend caches)
-- Namespace system: Still in C (requires Lua callback wrappers)
+- Namespace storage: Rust only (ns_hls, ns_hl_attr)
+- Namespace logic: Still in C (ns_get_hl Lua callback, hl_check_ns)
 - API conversion: Still in C (requires Object type system in Rust)
 
 Run `grep -n "pub.*extern.*fn rs_" src/nvim-rs/highlight/src/lib.rs` to see all functions
@@ -128,6 +130,7 @@ extern "C" { fn nvim_get_foo_field() -> c_int; }
 | 7.x | API layer functions | 🔄 |
 | 8.0-8.4 | Terminal UI (terminfo, detection) | ✅ |
 | 9.0-9.13 | Highlight core (Rust single source of truth) | ✅ |
+| 10.1-10.2 | Namespace storage (ns_hls, ns_hl_attr) | ✅ |
 
 ### Future Phases (Roadmap)
 
