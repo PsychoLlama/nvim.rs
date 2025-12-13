@@ -786,6 +786,17 @@ bool highlight_group_cleared(int id)
   return hl_table[id].sg_cleared;
 }
 
+/// Returns the sg_set flags of a highlight group.
+/// @param id Highlight group index (0-based)
+/// @return The sg_set field (combination of SG_* flags), or 0 if out of bounds
+int highlight_group_set(int id)
+{
+  if (id < 0 || id >= highlight_ga.ga_len) {
+    return 0;
+  }
+  return hl_table[id].sg_set;
+}
+
 /// Create default links for Nvim* highlight groups used for cmdline coloring
 void syn_init_cmdline_highlight(bool reset, bool init)
 {

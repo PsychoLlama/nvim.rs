@@ -69,6 +69,8 @@ extern "C" {
     fn highlight_group_attr(id: c_int) -> c_int;
     /// Check if a highlight group has been cleared (0-based index)
     fn highlight_group_cleared(id: c_int) -> bool;
+    /// Get the sg_set flags of a highlight group (0-based index)
+    fn highlight_group_set(id: c_int) -> c_int;
 }
 
 // ============================================================================
