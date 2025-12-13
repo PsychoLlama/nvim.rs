@@ -99,6 +99,21 @@ extern int *rs_ns_hl_attr_get_or_create(int ns_id);
 // Namespace highlight definition (ns_hl_def core logic in Rust)
 extern bool rs_ns_hl_def(int ns_id, int hl_id, HlAttrs attrs, int link_id);
 
+// Result from rs_ns_get_hl_pre()
+typedef struct {
+  int ns_id;
+  bool need_callback;
+  int result;
+  bool set_ns_to_zero;
+  ColorItem item;
+} NsGetHlPreResult;
+
+// Namespace highlight lookup (ns_get_hl pre/post split)
+extern NsGetHlPreResult rs_ns_get_hl_pre(int ns_hl, int hl_id, bool link, bool nodefault);
+extern NsGetHlPreResult rs_ns_get_hl_post(int ns_id, int hl_id, HlAttrs attrs, int link_id,
+                                          bool fallback, int version_offset, bool link,
+                                          bool nodefault);
+
 // C accessor functions for namespace globals (callable from Rust)
 int nvim_get_ns_hl_global(void) { return ns_hl_global; }
 void nvim_set_ns_hl_global(int ns) { ns_hl_global = ns; }
@@ -240,77 +255,63 @@ int ns_get_hl(NS *ns_hl, int hl_id, bool link, bool nodefault)
 {
   static int recursive = 0;
 
-  if (*ns_hl == 0) {
-    // ns=0 (the default namespace) does not have a provider so stop here
-    return -1;
-  }
+  // Pre-callback phase: check cache, resolve namespace
+  NsGetHlPreResult pre = rs_ns_get_hl_pre(*ns_hl, hl_id, link, nodefault);
+  *ns_hl = pre.ns_id;
 
-  if (*ns_hl < 0) {
-    if (ns_hl_active <= 0) {
-      return -1;
-    }
-    *ns_hl = ns_hl_active;
-  }
-
-  int ns_id = *ns_hl;
-
-  DecorProvider *p = get_decor_provider(ns_id, true);
-  ColorItem it = rs_ns_hls_get(ns_id, hl_id);
-  // TODO(bfredl): map_ref true even this?
-  bool valid_item = it.version >= p->hl_valid;
-
-  if (!valid_item && p->hl_def != LUA_NOREF && !recursive) {
-    MAXSIZE_TEMP_ARRAY(args, 3);
-    ADD_C(args, INTEGER_OBJ((Integer)ns_id));
-    ADD_C(args, CSTR_AS_OBJ(syn_id2name(hl_id)));
-    ADD_C(args, BOOLEAN_OBJ(link));
-    // TODO(bfredl): preload the "global" attr dict?
-
-    Error err = ERROR_INIT;
-    recursive++;
-    Object ret = nlua_call_ref(p->hl_def, "hl_def", args, kRetObject, NULL, &err);
-    recursive--;
-
-    // TODO(bfredl): or "inherit", combine with global value?
-    bool fallback = true;
-    int tmp = false;
-    HlAttrs attrs = HLATTRS_INIT;
-    if (ret.type == kObjectTypeDict) {
-      fallback = false;
-      Dict(highlight) dict = KEYDICT_INIT;
-      if (api_dict_to_keydict(&dict, KeyDict_highlight_get_field, ret.data.dict, &err)) {
-        attrs = dict2hlattrs(&dict, true, &it.link_id, &err);
-        fallback = GET_BOOL_OR_TRUE(&dict, highlight, fallback);
-        tmp = dict.fallback;  // or false
-        if (it.link_id >= 0) {
-          fallback = true;
-        }
-      }
-    }
-
-    it.attr_id = fallback ? -1 : hl_get_syn_attr(ns_id, hl_id, attrs);
-    it.version = p->hl_valid - tmp;
-    it.is_default = attrs.rgb_ae_attr & HL_DEFAULT;
-    it.link_global = attrs.rgb_ae_attr & HL_GLOBAL;
-    rs_ns_hls_put(ns_id, hl_id, it);
-    valid_item = true;
-  }
-
-  if ((it.is_default && nodefault) || !valid_item) {
-    return -1;
-  }
-
-  if (link) {
-    if (it.attr_id >= 0) {
-      return 0;
-    }
-    if (it.link_global) {
+  // If no callback needed, return the result directly
+  if (!pre.need_callback) {
+    if (pre.set_ns_to_zero) {
       *ns_hl = 0;
     }
-    return it.link_id;
-  } else {
-    return it.attr_id;
+    return pre.result;
   }
+
+  // Lua callback phase - only runs if cache miss and callback is defined
+  if (recursive) {
+    // Avoid infinite recursion
+    return -1;
+  }
+
+  int ns_id = pre.ns_id;
+  DecorProvider *p = get_decor_provider(ns_id, true);
+  ColorItem it = pre.item;
+
+  MAXSIZE_TEMP_ARRAY(args, 3);
+  ADD_C(args, INTEGER_OBJ((Integer)ns_id));
+  ADD_C(args, CSTR_AS_OBJ(syn_id2name(hl_id)));
+  ADD_C(args, BOOLEAN_OBJ(link));
+
+  Error err = ERROR_INIT;
+  recursive++;
+  Object ret = nlua_call_ref(p->hl_def, "hl_def", args, kRetObject, NULL, &err);
+  recursive--;
+
+  // Parse Lua callback result
+  bool fallback = true;
+  int tmp = false;
+  HlAttrs attrs = HLATTRS_INIT;
+  int link_id = it.link_id;
+  if (ret.type == kObjectTypeDict) {
+    fallback = false;
+    Dict(highlight) dict = KEYDICT_INIT;
+    if (api_dict_to_keydict(&dict, KeyDict_highlight_get_field, ret.data.dict, &err)) {
+      attrs = dict2hlattrs(&dict, true, &link_id, &err);
+      fallback = GET_BOOL_OR_TRUE(&dict, highlight, fallback);
+      tmp = dict.fallback;  // or false
+      if (link_id >= 0) {
+        fallback = true;
+      }
+    }
+  }
+
+  // Post-callback phase: store result and compute final return value
+  NsGetHlPreResult post = rs_ns_get_hl_post(ns_id, hl_id, attrs, link_id,
+                                            fallback, tmp, link, nodefault);
+  if (post.set_ns_to_zero) {
+    *ns_hl = 0;
+  }
+  return post.result;
 }
 
 bool hl_check_ns(void)

@@ -47,6 +47,10 @@ extern "C" {
     // DecorProvider accessors
     /// Get hl_valid and set hl_cached=false atomically. Creates provider if needed.
     fn nvim_decor_provider_hl_def_prepare(ns_id: c_int) -> c_int;
+    /// Get hl_valid for a namespace. Returns -1 if no provider exists.
+    fn nvim_decor_provider_get_hl_valid(ns_id: c_int) -> c_int;
+    /// Check if namespace has a hl_def callback defined.
+    fn nvim_decor_provider_has_hl_def(ns_id: c_int) -> bool;
 
     // Highlight functions that need C interop
     /// Get or create a syntax attribute entry
@@ -668,6 +672,209 @@ pub extern "C" fn rs_ns_hl_def(
     store.ns_hls_put(ns_id, hl_id, item);
 
     true
+}
+
+// ============================================================================
+// FFI Functions for ns_get_hl() Pre/Post Split
+// ============================================================================
+//
+// ns_get_hl() is split into three parts:
+// 1. Pre: Check cache, resolve namespace, determine if Lua callback is needed
+// 2. Middle: Lua callback (stays in C)
+// 3. Post: Store result and compute final return value
+
+/// Result from rs_ns_get_hl_pre().
+/// Tells C whether to call Lua callback or return immediately.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct NsGetHlPreResult {
+    /// Resolved namespace ID (updated from input if was < 0)
+    pub ns_id: c_int,
+    /// If true, caller should invoke Lua callback
+    pub need_callback: bool,
+    /// If need_callback is false, this is the final result
+    pub result: c_int,
+    /// If need_callback is false and link was requested, indicates if ns should be set to 0
+    pub set_ns_to_zero: bool,
+    /// The current ColorItem for this hl_id (for C to use if callback needed)
+    pub item: ColorItem,
+}
+
+/// Pre-callback phase of ns_get_hl().
+/// Checks if we have a valid cached entry or need to call Lua.
+///
+/// # Arguments
+/// * `ns_hl` - Namespace ID (can be negative, meaning use ns_hl_active)
+/// * `hl_id` - Highlight group ID
+/// * `link` - If true, return link target instead of attr
+/// * `nodefault` - If true, return -1 for default highlights
+///
+/// # Returns
+/// A result indicating whether Lua callback is needed, or the final result.
+#[no_mangle]
+pub extern "C" fn rs_ns_get_hl_pre(
+    ns_hl: c_int,
+    hl_id: c_int,
+    link: bool,
+    nodefault: bool,
+) -> NsGetHlPreResult {
+    // ns=0 (the default namespace) does not have a provider
+    if ns_hl == 0 {
+        return NsGetHlPreResult {
+            ns_id: 0,
+            need_callback: false,
+            result: -1,
+            set_ns_to_zero: false,
+            item: ColorItem::default(),
+        };
+    }
+
+    // Resolve negative ns_hl to ns_hl_active
+    let ns_id = if ns_hl < 0 {
+        let active = unsafe { nvim_get_ns_hl_active() };
+        if active <= 0 {
+            return NsGetHlPreResult {
+                ns_id: active,
+                need_callback: false,
+                result: -1,
+                set_ns_to_zero: false,
+                item: ColorItem::default(),
+            };
+        }
+        active
+    } else {
+        ns_hl
+    };
+
+    // Get the cached ColorItem
+    let store = ATTR_STORE.lock().unwrap();
+    let item = store.ns_hls_get(ns_id, hl_id);
+    drop(store);
+
+    // Check if item is valid (version >= hl_valid)
+    let hl_valid = unsafe { nvim_decor_provider_get_hl_valid(ns_id) };
+    let valid_item = item.version >= hl_valid;
+
+    // Check if we need to call the Lua callback
+    let has_callback = unsafe { nvim_decor_provider_has_hl_def(ns_id) };
+
+    if !valid_item && has_callback {
+        // Need to call Lua callback - C will handle this
+        return NsGetHlPreResult {
+            ns_id,
+            need_callback: true,
+            result: 0,
+            set_ns_to_zero: false,
+            item,
+        };
+    }
+
+    // No callback needed - compute final result
+    compute_ns_get_hl_result(ns_id, &item, valid_item, link, nodefault)
+}
+
+/// Post-callback phase of ns_get_hl().
+/// Called after Lua callback to store the new ColorItem and compute result.
+///
+/// # Arguments
+/// * `ns_id` - Namespace ID
+/// * `hl_id` - Highlight group ID
+/// * `attrs` - Parsed highlight attributes from Lua
+/// * `link_id` - Link target from Lua (-1 if no link)
+/// * `fallback` - Whether highlight should fall back
+/// * `version_offset` - Offset to subtract from hl_valid (for "tmp" flag)
+/// * `link` - If true, return link target
+/// * `nodefault` - If true, return -1 for default highlights
+///
+/// # Returns
+/// A result with the final value and whether to set ns to 0.
+#[no_mangle]
+pub extern "C" fn rs_ns_get_hl_post(
+    ns_id: c_int,
+    hl_id: c_int,
+    attrs: HlAttrs,
+    link_id: c_int,
+    fallback: bool,
+    version_offset: c_int,
+    link: bool,
+    nodefault: bool,
+) -> NsGetHlPreResult {
+    // Get hl_valid from provider
+    let hl_valid = unsafe { nvim_decor_provider_get_hl_valid(ns_id) };
+
+    // Compute attr_id
+    let attr_id = if fallback {
+        -1
+    } else {
+        unsafe { hl_get_syn_attr(ns_id, hl_id, attrs) }
+    };
+
+    // Create and store ColorItem
+    let item = ColorItem {
+        attr_id,
+        link_id,
+        version: hl_valid - version_offset,
+        is_default: (attrs.rgb_ae_attr & HL_DEFAULT) != 0,
+        link_global: (attrs.rgb_ae_attr & HL_GLOBAL) != 0,
+    };
+
+    {
+        let mut store = ATTR_STORE.lock().unwrap();
+        store.ns_hls_put(ns_id, hl_id, item);
+    }
+
+    // Compute and return final result (valid_item is true after storing)
+    compute_ns_get_hl_result(ns_id, &item, true, link, nodefault)
+}
+
+/// Helper to compute final ns_get_hl result from ColorItem.
+fn compute_ns_get_hl_result(
+    ns_id: c_int,
+    item: &ColorItem,
+    valid_item: bool,
+    link: bool,
+    nodefault: bool,
+) -> NsGetHlPreResult {
+    // Check is_default && nodefault, or !valid_item
+    if (item.is_default && nodefault) || !valid_item {
+        return NsGetHlPreResult {
+            ns_id,
+            need_callback: false,
+            result: -1,
+            set_ns_to_zero: false,
+            item: *item,
+        };
+    }
+
+    if link {
+        if item.attr_id >= 0 {
+            // Has attr, not a link
+            NsGetHlPreResult {
+                ns_id,
+                need_callback: false,
+                result: 0,
+                set_ns_to_zero: false,
+                item: *item,
+            }
+        } else {
+            // Is a link
+            NsGetHlPreResult {
+                ns_id,
+                need_callback: false,
+                result: item.link_id,
+                set_ns_to_zero: item.link_global,
+                item: *item,
+            }
+        }
+    } else {
+        NsGetHlPreResult {
+            ns_id,
+            need_callback: false,
+            result: item.attr_id,
+            set_ns_to_zero: false,
+            item: *item,
+        }
+    }
 }
 
 // ============================================================================

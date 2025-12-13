@@ -349,6 +349,13 @@ int nvim_decor_provider_hl_def_prepare(int ns_id)
   return result;
 }
 
+/// Check if namespace has a hl_def callback defined.
+bool nvim_decor_provider_has_hl_def(int ns_id)
+{
+  DecorProvider *p = get_decor_provider(ns_id, false);
+  return p && p->hl_def != LUA_NOREF;
+}
+
 void decor_provider_clear(DecorProvider *p)
 {
   if (p == NULL) {
