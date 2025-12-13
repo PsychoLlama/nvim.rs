@@ -103,6 +103,53 @@ extern "C" {
     fn nvim_get_hlf_none() -> c_int;
     /// Get HLF_INACTIVE enum value
     fn nvim_get_hlf_inactive() -> c_int;
+
+    // Accessors for update_window_hl (Phase 17)
+    /// Get HLF_NFLOAT enum value
+    fn nvim_get_hlf_nfloat() -> c_int;
+    /// Get HLF_BORDER enum value
+    fn nvim_get_hlf_border() -> c_int;
+    /// Get HLF_COUNT enum value
+    fn nvim_get_hlf_count() -> c_int;
+    // nvim_get_highlight_attr is already defined above (line 45)
+    // nvim_update_ns_hl is already defined above (line 61)
+    // nvim_win_get_ns_hl is defined below in window accessors section
+    /// Get w_ns_hl_active field from window
+    fn nvim_win_get_ns_hl_active(wp: *mut c_void) -> c_int;
+    /// Set w_ns_hl_active field of window
+    fn nvim_win_set_ns_hl_active(wp: *mut c_void, val: c_int);
+    /// Get w_ns_hl_attr pointer from window
+    fn nvim_win_get_ns_hl_attr(wp: *mut c_void) -> *mut c_int;
+    /// Set w_ns_hl_attr pointer of window
+    fn nvim_win_set_ns_hl_attr(wp: *mut c_void, val: *mut c_int);
+    /// Get w_hl_needs_update field from window
+    fn nvim_win_get_hl_needs_update(wp: *mut c_void) -> bool;
+    /// Set w_hl_needs_update field of window
+    fn nvim_win_set_hl_needs_update(wp: *mut c_void, val: bool);
+    /// Set w_hl_attr_normal field of window
+    fn nvim_win_set_hl_attr_normal(wp: *mut c_void, val: c_int);
+    /// Set w_hl_attr_normalnc field of window
+    fn nvim_win_set_hl_attr_normalnc(wp: *mut c_void, val: c_int);
+    /// Get w_floating field from window
+    fn nvim_win_get_floating(wp: *mut c_void) -> c_int;
+    /// Get w_config.external field from window
+    fn nvim_win_get_config_external(wp: *mut c_void) -> bool;
+    /// Get w_config.border field from window
+    fn nvim_win_get_config_border(wp: *mut c_void) -> bool;
+    /// Get w_config.border_hl_ids[idx] from window
+    fn nvim_win_get_config_border_hl_id(wp: *mut c_void, idx: c_int) -> c_int;
+    /// Set w_config.border_attr[idx] of window
+    fn nvim_win_set_config_border_attr(wp: *mut c_void, idx: c_int, val: c_int);
+    /// Set w_config.shadow field of window
+    fn nvim_win_set_config_shadow(wp: *mut c_void, val: bool);
+    /// Get w_config.shadow field from window
+    fn nvim_win_get_config_shadow(wp: *mut c_void) -> bool;
+    /// Get w_p_winbl field from window
+    fn nvim_win_get_p_winbl(wp: *mut c_void) -> c_int;
+    /// Get w_grid_alloc.blending field from window
+    fn nvim_win_get_grid_blending(wp: *mut c_void) -> bool;
+    /// Set w_grid_alloc.blending field of window
+    fn nvim_win_set_grid_blending(wp: *mut c_void, val: bool);
 }
 
 // ============================================================================
@@ -2127,6 +2174,129 @@ pub unsafe extern "C" fn rs_win_bg_attr(wp: *mut c_void) -> c_int {
     } else {
         *hl_attr_active.offset(hlf_inactive as isize)
     }
+}
+
+/// Helper: check_blending - updates w_grid_alloc.blending based on winbl and shadow
+unsafe fn check_blending(wp: *mut c_void) {
+    let winbl = nvim_win_get_p_winbl(wp);
+    let floating = nvim_win_get_floating(wp) != 0;
+    let shadow = nvim_win_get_config_shadow(wp);
+    let blending = winbl > 0 || (floating && shadow);
+    nvim_win_set_grid_blending(wp, blending);
+}
+
+/// Update window highlights.
+///
+/// This function updates the highlight attributes for a window based on its
+/// namespace highlights and floating window configuration.
+#[no_mangle]
+pub unsafe extern "C" fn rs_update_window_hl(wp: *mut c_void, invalid: bool) {
+    let ns_id = nvim_win_get_ns_hl(wp);
+
+    // Update namespace highlights
+    nvim_update_ns_hl(ns_id);
+
+    // Get or update the highlight attribute array for this namespace
+    if ns_id != nvim_win_get_ns_hl_active(wp) || nvim_win_get_ns_hl_attr(wp).is_null() {
+        nvim_win_set_ns_hl_active(wp, ns_id);
+
+        let hl_attr = rs_ns_hl_attr_get(ns_id);
+        if hl_attr.is_null() {
+            // No specific highlights, use the defaults
+            // Cast const to mut - C code does the same: (int *)rs_ns_hl_attr_get()
+            nvim_win_set_ns_hl_attr(wp, nvim_get_highlight_attr() as *mut c_int);
+        } else {
+            nvim_win_set_ns_hl_attr(wp, hl_attr as *mut c_int);
+        }
+    }
+
+    let hl_def = nvim_win_get_ns_hl_attr(wp);
+
+    // Early return if no update needed
+    if !nvim_win_get_hl_needs_update(wp) && !invalid {
+        return;
+    }
+    nvim_win_set_hl_needs_update(wp, false);
+
+    // Get HLF constants
+    let hlf_nfloat = nvim_get_hlf_nfloat();
+    let hlf_none = nvim_get_hlf_none();
+    let hlf_inactive = nvim_get_hlf_inactive();
+    let hlf_border = nvim_get_hlf_border();
+
+    // If a floating window is blending it always has a named
+    // wp->w_hl_attr_normal group. HL_ATTR(HLF_NFLOAT) is always named.
+    let floating = nvim_win_get_floating(wp) != 0;
+    let external = nvim_win_get_config_external(wp);
+    let float_win = floating && !external;
+
+    let hl_attr_active = nvim_get_hl_attr_active();
+    let highlight_attr = nvim_get_highlight_attr();
+
+    // Determine window specific background set in 'winhighlight'
+    let hl_attr_normal;
+    if float_win && *hl_def.offset(hlf_nfloat as isize) != 0 && ns_id > 0 {
+        hl_attr_normal = *hl_def.offset(hlf_nfloat as isize);
+    } else if *hl_def.offset(hlf_none as isize) > 0 {
+        hl_attr_normal = *hl_def.offset(hlf_none as isize);
+    } else if float_win {
+        let hl_nfloat = *hl_attr_active.offset(hlf_nfloat as isize);
+        hl_attr_normal = if hl_nfloat > 0 {
+            hl_nfloat
+        } else {
+            *highlight_attr.offset(hlf_nfloat as isize)
+        };
+    } else {
+        hl_attr_normal = 0;
+    }
+
+    let winbl = nvim_win_get_p_winbl(wp);
+    let hl_attr_normal = if floating {
+        rs_hl_apply_winblend(winbl, hl_attr_normal)
+    } else {
+        hl_attr_normal
+    };
+    nvim_win_set_hl_attr_normal(wp, hl_attr_normal);
+
+    // Handle border highlights for floating windows
+    nvim_win_set_config_shadow(wp, false);
+    if floating && nvim_win_get_config_border(wp) {
+        for i in 0..8 {
+            let mut attr = *hl_def.offset(hlf_border as isize);
+            let border_hl_id = nvim_win_get_config_border_hl_id(wp, i);
+            if border_hl_id != 0 {
+                attr = rs_hl_get_ui_attr(ns_id, hlf_border, border_hl_id, false);
+            }
+            attr = rs_hl_apply_winblend(winbl, attr);
+            // Check if this attr has blend > 0
+            let entry = rs_get_attr_entry_by_id(attr);
+            if entry.attr.hl_blend > 0 {
+                nvim_win_set_config_shadow(wp, true);
+            }
+            nvim_win_set_config_border_attr(wp, i, attr);
+        }
+    }
+
+    // Shadow might cause blending
+    check_blending(wp);
+
+    // Compute normalnc (non-current window normal)
+    let hl_attr_normalnc;
+    if *hl_def.offset(hlf_inactive as isize) == 0 {
+        hl_attr_normalnc = rs_hl_combine_attr(
+            *hl_attr_active.offset(hlf_inactive as isize),
+            hl_attr_normal,
+        );
+    } else {
+        hl_attr_normalnc = *hl_def.offset(hlf_inactive as isize);
+    }
+
+    let hl_attr_normalnc = if floating {
+        rs_hl_apply_winblend(winbl, hl_attr_normalnc)
+    } else {
+        hl_attr_normalnc
+    };
+    nvim_win_set_hl_attr_normalnc(wp, hl_attr_normalnc);
 }
 
 /// Internal cterm to RGB conversion

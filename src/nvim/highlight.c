@@ -161,6 +161,12 @@ int nvim_get_hlf_pst(void) { return HLF_PST; }
 int nvim_get_hlf_none(void) { return HLF_NONE; }
 int nvim_get_hlf_inactive(void) { return HLF_INACTIVE; }
 
+// Accessors for update_window_hl (Phase 17)
+int nvim_get_hlf_nfloat(void) { return HLF_NFLOAT; }
+int nvim_get_hlf_border(void) { return HLF_BORDER; }
+int nvim_get_hlf_count(void) { return HLF_COUNT; }
+// nvim_get_highlight_attr is already defined above (line 148)
+
 // Forward declaration for update_ns_hl wrapper
 static void update_ns_hl(int ns_id);
 
@@ -466,6 +472,14 @@ int hl_apply_winblend(int winbl, int attr)
 }
 #endif
 
+#ifdef USE_RUST_HIGHLIGHT
+extern void rs_update_window_hl(win_T *wp, bool invalid);
+
+void update_window_hl(win_T *wp, bool invalid)
+{
+  rs_update_window_hl(wp, invalid);
+}
+#else
 void update_window_hl(win_T *wp, bool invalid)
 {
   int ns_id = wp->w_ns_hl;
@@ -540,6 +554,7 @@ void update_window_hl(win_T *wp, bool invalid)
     wp->w_hl_attr_normalnc = hl_apply_winblend((int)wp->w_p_winbl, wp->w_hl_attr_normalnc);
   }
 }
+#endif
 
 static void update_ns_hl(int ns_id)
 {

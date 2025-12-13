@@ -2,11 +2,16 @@
 
 ## Current Status
 
-**670 rs_* functions migrated**
+**671 rs_* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
 ### Current Work
+
+**Phase 17 - Window Highlight Update** ✅
+- `rs_update_window_hl()` - update all highlight attributes for a window
+- C accessors: window config (external, border, border_hl_ids, shadow), grid blending
+- HLF constants: nvim_get_hlf_nfloat/border/count
 
 **Phase 16 - Window Background Attribute** ✅
 - `rs_win_bg_attr()` - get background attribute for window

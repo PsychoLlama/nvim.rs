@@ -150,6 +150,110 @@ int nvim_win_get_hl_attr_normalnc(win_T *wp)
   return wp->w_hl_attr_normalnc;
 }
 
+// Accessors for update_window_hl (Phase 17)
+
+/// Get the w_ns_hl_active field from a window.
+int nvim_win_get_ns_hl_active(win_T *wp)
+{
+  return wp->w_ns_hl_active;
+}
+
+/// Set the w_ns_hl_active field of a window.
+void nvim_win_set_ns_hl_active(win_T *wp, int val)
+{
+  wp->w_ns_hl_active = val;
+}
+
+/// Get the w_ns_hl_attr pointer from a window.
+int *nvim_win_get_ns_hl_attr(win_T *wp)
+{
+  return wp->w_ns_hl_attr;
+}
+
+/// Set the w_ns_hl_attr pointer of a window.
+void nvim_win_set_ns_hl_attr(win_T *wp, int *val)
+{
+  wp->w_ns_hl_attr = val;
+}
+
+/// Get the w_hl_needs_update field from a window.
+bool nvim_win_get_hl_needs_update(win_T *wp)
+{
+  return wp->w_hl_needs_update;
+}
+
+/// Set the w_hl_needs_update field of a window.
+void nvim_win_set_hl_needs_update(win_T *wp, bool val)
+{
+  wp->w_hl_needs_update = val;
+}
+
+/// Set the w_hl_attr_normal field of a window.
+void nvim_win_set_hl_attr_normal(win_T *wp, int val)
+{
+  wp->w_hl_attr_normal = val;
+}
+
+/// Set the w_hl_attr_normalnc field of a window.
+void nvim_win_set_hl_attr_normalnc(win_T *wp, int val)
+{
+  wp->w_hl_attr_normalnc = val;
+}
+
+/// Get the w_config.external field from a window.
+bool nvim_win_get_config_external(win_T *wp)
+{
+  return wp->w_config.external;
+}
+
+/// Get the w_config.border flag from a window.
+bool nvim_win_get_config_border(win_T *wp)
+{
+  return wp->w_config.border;
+}
+
+/// Get a border highlight ID from w_config.border_hl_ids.
+int nvim_win_get_config_border_hl_id(win_T *wp, int idx)
+{
+  return wp->w_config.border_hl_ids[idx];
+}
+
+/// Set a border attribute in w_config.border_attr.
+void nvim_win_set_config_border_attr(win_T *wp, int idx, int val)
+{
+  wp->w_config.border_attr[idx] = val;
+}
+
+/// Set the w_config.shadow field of a window.
+void nvim_win_set_config_shadow(win_T *wp, bool val)
+{
+  wp->w_config.shadow = val;
+}
+
+/// Get the w_config.shadow field of a window.
+bool nvim_win_get_config_shadow(win_T *wp)
+{
+  return wp->w_config.shadow;
+}
+
+/// Get the w_p_winbl field from a window.
+int nvim_win_get_p_winbl(win_T *wp)
+{
+  return (int)wp->w_p_winbl;
+}
+
+/// Get the w_grid_alloc.blending field from a window.
+bool nvim_win_get_grid_blending(win_T *wp)
+{
+  return wp->w_grid_alloc.blending;
+}
+
+/// Set the w_grid_alloc.blending field of a window.
+void nvim_win_set_grid_blending(win_T *wp, bool val)
+{
+  wp->w_grid_alloc.blending = val;
+}
+
 /// Get the w_next field from a window (accessor for Rust).
 win_T *nvim_win_get_next(win_T *wp)
 {
