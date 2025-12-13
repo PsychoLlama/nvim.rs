@@ -8,26 +8,14 @@ Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get cur
 
 ### Current Work
 
-**Phase 10 - Namespace Highlight System** (in progress)
-- Phase 10.1: ns_hls Map storage to Rust ✅
-  - Added ColorKey, ColorItem structs
-  - rs_ns_hls_has/get/put functions
-- Phase 10.2: ns_hl_attr PMap storage to Rust ✅
-  - Added HLF_COUNT constant, NSHlAttr type
-  - rs_ns_hl_attr_get/get_or_create functions
-- Phase 10.3: Namespace global accessors ✅
-  - C accessors in highlight.c for ns_hl_global/win/fast/active, hl_attr_active
-  - Rust wrappers rs_get/set_ns_hl_* for bidirectional access
-- Phase 10.4: ns_hl_def() migration ✅
-  - DecorProvider accessor (nvim_decor_provider_hl_def_prepare)
-  - rs_ns_hl_def() handles HL_DEFAULT check, attr creation, storage
-- Phase 10.5: ns_get_hl() pre/post split ✅
-  - rs_ns_get_hl_pre() handles cache check, namespace resolution
-  - rs_ns_get_hl_post() handles storage and result computation
-  - Lua callback (nlua_call_ref) stays in C
-- Phase 10.6: hl_check_ns() migration ✅
-  - rs_hl_check_ns() handles namespace priority, switching, attr updates
-  - C wrappers for update_ns_hl() and need_highlight_changed
+**Phase 11 - hl_table Accessors** ✅
+- Phase 11.1: Add C accessor functions for hl_table (HlGroup array)
+  - `highlight_num_groups()` - count of groups
+  - `highlight_link_id(id)` - link target ID
+  - `highlight_group_attr(id)` - attribute ID (sg_attr)
+  - `highlight_group_cleared(id)` - cleared flag
+  - `highlight_group_set(id)` - sg_set flags
+  - Rust extern declarations for all accessors
 
 **Highlight Migration Status:**
 - Core computation: Fully in Rust (rgb_blend, cterm_blend, combine_attrs, blend_attrs)
@@ -37,7 +25,13 @@ Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get cur
 - Namespace storage: Rust only (ns_hls, ns_hl_attr)
 - Namespace globals: Bidirectional accessors (C owns, Rust can read/write)
 - Namespace logic: Fully Rust (ns_hl_def, ns_get_hl, hl_check_ns); Lua/syntax callbacks in C
+- hl_table access: C accessors enable future syn_* migration
 - API conversion: Still in C (requires Object type system in Rust)
+
+**What remains in C (highlight.c):**
+- `hlattrs2dict/dict2hlattrs` - Arena memory + API types
+- `get_attr_entry` - UI event dispatch
+- `hl_get_ui_attr`, `update_window_hl` - C struct access
 
 Run `grep -n "pub.*extern.*fn rs_" src/nvim-rs/highlight/src/lib.rs` to see all functions
 
@@ -144,14 +138,16 @@ extern "C" { fn nvim_get_foo_field() -> c_int; }
 | 8.0-8.4 | Terminal UI (terminfo, detection) | ✅ |
 | 9.0-9.13 | Highlight core (Rust single source of truth) | ✅ |
 | 10.1-10.6 | Namespace system (storage, globals, ns_hl_def, ns_get_hl, hl_check_ns) | ✅ |
+| 11.1 | hl_table accessors (highlight_group_attr, etc.) | ✅ |
 
 ### Future Phases (Roadmap)
 
 | Phase | Target | Notes |
 |-------|--------|-------|
-| 10 | Buffer & Text | memline.c, buffer.c, undo.c |
-| 11 | Window & Display | window.c, drawscreen.c |
-| 12-15 | Editor Core | normal.c, eval.c, regexp.c |
+| 11.2+ | syn_* functions | Use hl_table accessors (medium complexity) |
+| 12 | Buffer & Text | memline.c, buffer.c, undo.c |
+| 13 | Window & Display | window.c, drawscreen.c |
+| 14-15 | Editor Core | normal.c, eval.c, regexp.c |
 | 16 | Final Cleanup | Remove FFI, reduce unsafe |
 
 ---
