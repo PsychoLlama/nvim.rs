@@ -59,6 +59,16 @@ extern "C" {
     fn nvim_set_need_highlight_changed(value: bool);
     /// Call update_ns_hl to refresh namespace highlight attributes
     fn nvim_update_ns_hl(ns_id: c_int);
+
+    // hl_table (HlGroup array) accessors from highlight_group.c
+    /// Get the number of highlight groups
+    fn highlight_num_groups() -> c_int;
+    /// Get the link target ID of a highlight group (0-based index)
+    fn highlight_link_id(id: c_int) -> c_int;
+    /// Get the attribute ID (sg_attr) of a highlight group (0-based index)
+    fn highlight_group_attr(id: c_int) -> c_int;
+    /// Check if a highlight group has been cleared (0-based index)
+    fn highlight_group_cleared(id: c_int) -> bool;
 }
 
 // ============================================================================

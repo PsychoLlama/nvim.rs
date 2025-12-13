@@ -764,6 +764,28 @@ int highlight_link_id(int id)
   return hl_table[id].sg_link;
 }
 
+/// Returns the attribute ID (screen attr) of a highlight group.
+/// @param id Highlight group index (0-based)
+/// @return The sg_attr field, or 0 if id is out of bounds
+int highlight_group_attr(int id)
+{
+  if (id < 0 || id >= highlight_ga.ga_len) {
+    return 0;
+  }
+  return hl_table[id].sg_attr;
+}
+
+/// Returns whether a highlight group has been cleared.
+/// @param id Highlight group index (0-based)
+/// @return true if cleared, false otherwise (including out-of-bounds)
+bool highlight_group_cleared(int id)
+{
+  if (id < 0 || id >= highlight_ga.ga_len) {
+    return false;
+  }
+  return hl_table[id].sg_cleared;
+}
+
 /// Create default links for Nvim* highlight groups used for cmdline coloring
 void syn_init_cmdline_highlight(bool reset, bool init)
 {
