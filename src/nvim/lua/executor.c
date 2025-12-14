@@ -2464,3 +2464,20 @@ int nvim_get_in_fast_callback(void)
 {
   return in_fast_callback;
 }
+
+#ifdef USE_RUST_LUA
+/// C wrapper for nlua_call_ref callable from Rust.
+/// Note: Array is passed by value (16 bytes on 64-bit), which is ABI-safe.
+Object nvim_nlua_call_ref(LuaRef ref, const char *name, Array args,
+                          int mode, Arena *arena, Error *err)
+{
+  return nlua_call_ref(ref, name, args, (LuaRetMode)mode, arena, err);
+}
+
+/// C wrapper for nlua_call_ref_ctx (fast context support).
+Object nvim_nlua_call_ref_ctx(int fast, LuaRef ref, const char *name,
+                              Array args, int mode, Arena *arena, Error *err)
+{
+  return nlua_call_ref_ctx((bool)fast, ref, name, args, (LuaRetMode)mode, arena, err);
+}
+#endif

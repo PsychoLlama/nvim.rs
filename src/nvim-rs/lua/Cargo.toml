@@ -9,6 +9,7 @@ description = "Lua executor state checking for Neovim"
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
+nvim-api = { path = "../api" }
 
 [lints]
 workspace = true
