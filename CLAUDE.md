@@ -16,7 +16,7 @@ The migration plan lives in `plans/migration.md`. This document is critical for 
 
 1. **Current Status**: Update the function count and latest phase at the top. Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get the accurate count.
 
-2. **Crate Overview Table**: One row per crate with its purpose and 2-3 key functions. Add new crates here when created.
+2. **Crate Overview Table**: One row per crate with its purpose. Add new crates here when created. Keep sorted alphabetically.
 
 3. **Architecture & Patterns**: The opaque handle pattern, conditional compilation pattern, and build system notes. These are essential for writing new migrations correctly.
 
