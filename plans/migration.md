@@ -2,9 +2,22 @@
 
 ## Current Status
 
-**692 rs\_\* functions migrated**
+**696 rs\_\* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
+
+### Phase 25: schar_T Core Functions 🚧 IN PROGRESS
+
+Added 4 schar_T functions to nvim-grid crate:
+
+- `rs_schar_from_str` - string to schar conversion
+- `rs_schar_len` - get byte length
+- `rs_schar_cells` - get display width (1 or 2)
+- `rs_schar_get_first_codepoint` - extract first Unicode codepoint
+
+Added C accessor `nvim_glyph_cache_get()` for Rust to read from glyph cache.
+
+**Next:** Phase 26 (glyph cache Rust implementation), then remaining grid.c functions.
 
 ### Phase 24: Lua Callback FFI ✅ COMPLETE
 
@@ -15,19 +28,6 @@ Added FFI so Rust can call Lua callbacks via `nlua_call_ref()`:
 - Re-exports API types (Object, Array, Error, LuaRef)
 
 **Unlocks:** 12 files with callback dependencies (highlight.c, decoration_provider.c, autocmd.c, etc.)
-
-### Next Target: grid.c
-
-Screen character (`schar_T`) operations. Already has 3 Rust functions, ~37 total functions.
-
-**Target functions:**
-
-- `schar_from_str`, `schar_from_buf` - string to schar conversion
-- `schar_get`, `schar_get_adv` - schar to string extraction
-- `schar_len`, `schar_cells` - character metrics
-- `schar_get_first_codepoint` - Unicode handling
-- `schar_cache_*` - glyph cache management
-- `grid_*` functions - grid operations (later phases)
 
 ### Highlight Migration: ✅ COMPLETE
 
