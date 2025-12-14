@@ -730,6 +730,41 @@ pub unsafe extern "C" fn rs_get_attr_entry_full(entry: HlEntry, arena: *mut Aren
     }
 }
 
+// ============================================================================
+// ui_send_all_hls - Send all highlights to a newly connected UI (Phase 22)
+// ============================================================================
+
+extern "C" {
+    /// C wrapper for remote_ui_hl_attr_define - send highlight to one UI
+    fn nvim_remote_ui_hl_attr_define(ui: *mut c_void, id: c_int, attrs: HlAttrs, inspect: Array);
+    /// C wrapper for remote_ui_hl_group_set - send group to one UI
+    fn nvim_remote_ui_hl_group_set(ui: *mut c_void, name: *const c_char, id: c_int);
+}
+
+/// Send one highlight attribute entry to a UI.
+///
+/// # Safety
+/// - `ui` must be a valid RemoteUI pointer
+/// - `arena` must be a valid Arena pointer for hl_inspect allocation
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_send_hl_attr(ui: *mut c_void, id: c_int, arena: *mut Arena) {
+    let inspect = rs_hl_inspect(id, arena);
+    let attrs = rs_syn_attr2entry(id);
+    nvim_remote_ui_hl_attr_define(ui, id, attrs, inspect);
+}
+
+/// Send one highlight group to a UI.
+///
+/// # Safety
+/// - `ui` must be a valid RemoteUI pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_send_hl_group(ui: *mut c_void, hlf: c_int) {
+    let name = nvim_get_hlf_name(hlf);
+    let highlight_attr = nvim_get_highlight_attr();
+    let attr = *highlight_attr.add(hlf as usize);
+    nvim_remote_ui_hl_group_set(ui, name, attr);
+}
+
 /// Clear all highlight tables. If reinit is true, reinitialize after clearing.
 /// If reinit is false, also destroys namespace storage.
 #[no_mangle]

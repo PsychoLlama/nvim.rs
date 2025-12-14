@@ -2,11 +2,17 @@
 
 ## Current Status
 
-**689 rs_* functions migrated**
+**691 rs_* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
 ### Current Work
+
+**Phase 22 - ui_send_all_hls Migration** ✅
+- `rs_ui_send_hl_attr()` - sends attribute definition to single UI
+- `rs_ui_send_hl_group()` - sends highlight group mapping to single UI
+- C wrappers: nvim_remote_ui_hl_attr_define, nvim_remote_ui_hl_group_set
+- C manages arena per-attribute; loop stays in C for now
 
 **Phase 21 - get_attr_entry Migration** ✅
 - `rs_get_attr_entry_full()` - full flow: lookup/insert, retry on overflow, UI dispatch

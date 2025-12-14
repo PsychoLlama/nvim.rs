@@ -194,6 +194,18 @@ void nvim_highlight_emsg_overflow(void)
   emsg(_("E424: Too many different highlighting attributes in use"));
 }
 
+// C wrapper for remote_ui_hl_attr_define - callable from Rust
+void nvim_remote_ui_hl_attr_define(RemoteUI *ui, int id, HlAttrs attrs, Array inspect)
+{
+  remote_ui_hl_attr_define(ui, (Integer)id, attrs, attrs, inspect);
+}
+
+// C wrapper for remote_ui_hl_group_set - callable from Rust
+void nvim_remote_ui_hl_group_set(RemoteUI *ui, const char *name, int id)
+{
+  remote_ui_hl_group_set(ui, cstr_as_string(name), id);
+}
+
 void highlight_init(void)
 {
   // Rust handles the attribute entry store including the dummy entry at index 0
@@ -284,6 +296,26 @@ retry: {}
 }
 #endif  // USE_RUST_HIGHLIGHT
 
+#ifdef USE_RUST_HIGHLIGHT
+extern void rs_ui_send_hl_attr(RemoteUI *ui, int id, Arena *arena);
+extern void rs_ui_send_hl_group(RemoteUI *ui, int hlf);
+
+/// When a UI connects, we need to send it the table of highlights used so far.
+void ui_send_all_hls(RemoteUI *ui)
+{
+  // Send all highlight attribute entries
+  int count = rs_attr_entry_count();
+  for (int i = 1; i < count; i++) {
+    Arena arena = ARENA_EMPTY;
+    rs_ui_send_hl_attr(ui, i, &arena);
+    arena_mem_free(arena_finish(&arena));
+  }
+  // Send all highlight group names
+  for (int hlf = 0; hlf < HLF_COUNT; hlf++) {
+    rs_ui_send_hl_group(ui, hlf);
+  }
+}
+#else
 /// When a UI connects, we need to send it the table of highlights used so far.
 void ui_send_all_hls(RemoteUI *ui)
 {
@@ -300,6 +332,7 @@ void ui_send_all_hls(RemoteUI *ui)
                            highlight_attr[hlf]);
   }
 }
+#endif  // USE_RUST_HIGHLIGHT
 
 #ifdef USE_RUST_HIGHLIGHT
 /// Get attribute code for a syntax group.
