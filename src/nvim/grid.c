@@ -43,6 +43,10 @@
 extern bool rs_schar_high(schar_T sc);
 extern char rs_schar_get_ascii(schar_T sc);
 extern schar_T rs_schar_from_char(int c);
+extern schar_T rs_schar_from_str(const char *str);
+extern size_t rs_schar_len(schar_T sc);
+extern int rs_schar_cells(schar_T sc);
+extern int rs_schar_get_first_codepoint(schar_T sc);
 #endif
 
 // temporary buffer for rendering a single screenline, so it can be
@@ -58,6 +62,25 @@ static size_t linebuf_size = 0;
 //
 // The maximum byte size of a glyph is MAX_SCHAR_SIZE (including the final NUL).
 static Set(glyph) glyph_cache = SET_INIT;
+
+#ifdef USE_RUST_GRID
+/// C accessor for Rust to read from glyph cache
+/// @param idx Index into glyph_cache.keys
+/// @return Pointer to NUL-terminated string at idx, or NULL if out of bounds
+const char *nvim_glyph_cache_get(uint32_t idx)
+{
+  if (idx >= glyph_cache.h.n_keys) {
+    return NULL;
+  }
+  return &glyph_cache.keys[idx];
+}
+
+/// Get number of keys in glyph cache (for bounds checking)
+uint32_t nvim_glyph_cache_n_keys(void)
+{
+  return glyph_cache.h.n_keys;
+}
+#endif
 
 /// Determine if dedicated window grid should be used or the default_grid
 ///
@@ -78,10 +101,14 @@ ScreenGrid *grid_adjust(GridView *grid, int *row_off, int *col_off)
 
 schar_T schar_from_str(const char *str)
 {
+#ifdef USE_RUST_GRID
+  return rs_schar_from_str(str);
+#else
   if (str == NULL) {
     return 0;
   }
   return schar_from_buf(str, strlen(str));
+#endif
 }
 
 /// @param buf need not be NUL terminated, but may not contain embedded NULs.
@@ -184,6 +211,9 @@ size_t schar_get_adv(char **buf_out, schar_T sc)
 
 size_t schar_len(schar_T sc)
 {
+#ifdef USE_RUST_GRID
+  return rs_schar_len(sc);
+#else
   if (schar_high(sc)) {
     uint32_t idx = schar_idx(sc);
     assert(idx < glyph_cache.h.n_keys);
@@ -191,24 +221,29 @@ size_t schar_len(schar_T sc)
   } else {
     return strnlen((char *)&sc, 4);
   }
+#endif
 }
 
 int schar_cells(schar_T sc)
 {
+#ifdef USE_RUST_GRID
+  return rs_schar_cells(sc);
+#else
   // hot path
-#ifdef ORDER_BIG_ENDIAN
+#  ifdef ORDER_BIG_ENDIAN
   if (!(sc & 0x80FFFFFF)) {
     return 1;
   }
-#else
+#  else
   if (sc < 0x80) {
     return 1;
   }
-#endif
+#  endif
 
   char sc_buf[MAX_SCHAR_SIZE];
   schar_get(sc_buf, sc);
   return utf_ptr2cells(sc_buf);
+#endif
 }
 
 /// gets first raw UTF-8 byte of an schar
@@ -220,9 +255,13 @@ static char schar_get_first_byte(schar_T sc)
 
 int schar_get_first_codepoint(schar_T sc)
 {
+#ifdef USE_RUST_GRID
+  return rs_schar_get_first_codepoint(sc);
+#else
   char sc_buf[MAX_SCHAR_SIZE];
   schar_get(sc_buf, sc);
   return utf_ptr2char(sc_buf);
+#endif
 }
 
 /// @return ascii char or NUL if not ascii

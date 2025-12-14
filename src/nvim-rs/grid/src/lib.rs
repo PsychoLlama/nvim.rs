@@ -5,13 +5,23 @@
 
 #![allow(unsafe_code)] // FFI requires unsafe
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int, CStr};
 
 /// Type alias for screen character (matches C's `schar_T` which is `uint32_t`).
 type ScharT = u32;
 
 /// Unicode replacement character
 const REPLACEMENT_CHAR: i32 = 0xFFFD;
+
+/// Maximum size of a screen character in bytes (including NUL)
+const MAX_SCHAR_SIZE: usize = 32;
+
+// FFI declarations for C accessor functions
+extern "C" {
+    /// Get a string from the glyph cache by index.
+    /// Returns NULL if index is out of bounds.
+    fn nvim_glyph_cache_get(idx: u32) -> *const c_char;
+}
 
 /// Check if a screen character is stored in the high (cache) format.
 ///
@@ -125,6 +135,185 @@ pub extern "C" fn rs_schar_from_char(c: c_int) -> ScharT {
 pub extern "C" fn rs_rgb(r: c_int, g: c_int, b: c_int) -> c_int {
     // Original C: (((r) << 16) | ((g) << 8) | (b))
     ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF)
+}
+
+// =============================================================================
+// Phase 25: schar_T Core Functions
+// =============================================================================
+
+/// Extract the cache index from a "high" schar.
+///
+/// For schars stored in the glyph cache, the index is stored in the upper 24 bits
+/// (on little-endian) or lower 24 bits (on big-endian).
+#[inline]
+const fn schar_idx(sc: ScharT) -> u32 {
+    #[cfg(target_endian = "big")]
+    {
+        sc & 0x00FF_FFFF
+    }
+    #[cfg(target_endian = "little")]
+    {
+        sc >> 8
+    }
+}
+
+/// Convert an schar to its UTF-8 bytes, writing to a buffer.
+///
+/// For inline schars (<=4 bytes), extracts directly from the u32.
+/// For high schars, reads from the glyph cache via C accessor.
+///
+/// Returns the number of bytes written (not including any NUL).
+/// Does NOT write a terminating NUL.
+fn schar_get_bytes(sc: ScharT, buf: &mut [u8]) -> usize {
+    if schar_high_impl(sc) {
+        // Read from glyph cache
+        let idx = schar_idx(sc);
+        // SAFETY: nvim_glyph_cache_get returns a valid NUL-terminated string or NULL
+        let ptr = unsafe { nvim_glyph_cache_get(idx) };
+        if ptr.is_null() {
+            return 0;
+        }
+        // SAFETY: ptr is valid and NUL-terminated
+        let cstr = unsafe { CStr::from_ptr(ptr) };
+        let bytes = cstr.to_bytes();
+        let len = bytes.len().min(buf.len());
+        buf[..len].copy_from_slice(&bytes[..len]);
+        len
+    } else {
+        // Inline schar: extract bytes from u32
+        let bytes = sc.to_ne_bytes();
+        // Find length by looking for first NUL or end of 4 bytes
+        let len = bytes.iter().position(|&b| b == 0).unwrap_or(4);
+        let copy_len = len.min(buf.len());
+        buf[..copy_len].copy_from_slice(&bytes[..copy_len]);
+        copy_len
+    }
+}
+
+/// Convert a NUL-terminated string to an schar.
+///
+/// This is a wrapper around `schar_from_buf` that handles NULL input.
+/// Note: For strings > 4 bytes, this calls into C's `schar_from_buf`
+/// which writes to the glyph cache.
+#[inline]
+fn schar_from_str_impl(str_ptr: *const c_char) -> ScharT {
+    if str_ptr.is_null() {
+        return 0;
+    }
+    // SAFETY: str_ptr is not null and is expected to be NUL-terminated
+    let cstr = unsafe { CStr::from_ptr(str_ptr) };
+    let bytes = cstr.to_bytes();
+
+    // For <=4 bytes, we can store inline
+    if bytes.len() <= 4 {
+        let mut sc_bytes = [0u8; 4];
+        sc_bytes[..bytes.len()].copy_from_slice(bytes);
+        ScharT::from_ne_bytes(sc_bytes)
+    } else {
+        // For >4 bytes, we need to call C's schar_from_buf to use glyph cache
+        // Since we don't have write access to the cache yet (Phase 26),
+        // we need to call through C for now
+        extern "C" {
+            fn schar_from_buf(buf: *const c_char, len: usize) -> ScharT;
+        }
+        // SAFETY: bytes is valid and len is correct
+        unsafe { schar_from_buf(bytes.as_ptr().cast(), bytes.len()) }
+    }
+}
+
+/// FFI wrapper for `schar_from_str`.
+///
+/// Convert a NUL-terminated string to an `schar_T`.
+#[no_mangle]
+pub extern "C" fn rs_schar_from_str(str_ptr: *const c_char) -> ScharT {
+    schar_from_str_impl(str_ptr)
+}
+
+/// Get the byte length of an schar's UTF-8 content.
+///
+/// For inline schars, counts bytes until NUL or end of 4 bytes.
+/// For high schars, reads from glyph cache.
+#[inline]
+fn schar_len_impl(sc: ScharT) -> usize {
+    if schar_high_impl(sc) {
+        let idx = schar_idx(sc);
+        // SAFETY: nvim_glyph_cache_get returns valid string or NULL
+        let ptr = unsafe { nvim_glyph_cache_get(idx) };
+        if ptr.is_null() {
+            return 0;
+        }
+        // SAFETY: ptr is valid and NUL-terminated
+        unsafe { CStr::from_ptr(ptr) }.to_bytes().len()
+    } else {
+        // Inline: find first NUL byte
+        let bytes = sc.to_ne_bytes();
+        bytes.iter().position(|&b| b == 0).unwrap_or(4)
+    }
+}
+
+/// FFI wrapper for `schar_len`.
+///
+/// Get the byte length of an schar's UTF-8 content.
+#[no_mangle]
+pub extern "C" fn rs_schar_len(sc: ScharT) -> usize {
+    schar_len_impl(sc)
+}
+
+/// Get the display width (in cells) of an schar.
+///
+/// Returns 1 for ASCII and most characters, 2 for wide CJK characters.
+#[inline]
+fn schar_cells_impl(sc: ScharT) -> c_int {
+    // Hot path: ASCII characters have width 1
+    #[cfg(target_endian = "big")]
+    {
+        if (sc & 0x80FF_FFFF) == 0 {
+            return 1;
+        }
+    }
+    #[cfg(target_endian = "little")]
+    {
+        if sc < 0x80 {
+            return 1;
+        }
+    }
+
+    // For non-ASCII, get the bytes and use utf_ptr2cells
+    let mut buf = [0u8; MAX_SCHAR_SIZE];
+    let len = schar_get_bytes(sc, &mut buf);
+    if len == 0 {
+        return 1;
+    }
+
+    // Use nvim_mbyte's utf_ptr2cells
+    nvim_mbyte::utf_ptr2cells(&buf[..len])
+}
+
+/// FFI wrapper for `schar_cells`.
+///
+/// Get the display width (in cells) of an schar.
+#[no_mangle]
+pub extern "C" fn rs_schar_cells(sc: ScharT) -> c_int {
+    schar_cells_impl(sc)
+}
+
+/// Get the first Unicode codepoint from an schar.
+#[inline]
+fn schar_get_first_codepoint_impl(sc: ScharT) -> c_int {
+    let mut buf = [0u8; MAX_SCHAR_SIZE];
+    let len = schar_get_bytes(sc, &mut buf);
+    if len == 0 {
+        return 0;
+    }
+    nvim_mbyte::utf_ptr2char(&buf[..len])
+}
+
+/// FFI wrapper for `schar_get_first_codepoint`.
+///
+/// Get the first Unicode codepoint from an schar.
+#[no_mangle]
+pub extern "C" fn rs_schar_get_first_codepoint(sc: ScharT) -> c_int {
+    schar_get_first_codepoint_impl(sc)
 }
 
 #[cfg(test)]
