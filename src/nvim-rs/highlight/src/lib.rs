@@ -8,8 +8,8 @@ use std::collections::HashMap;
 use std::ffi::{c_char, c_int, c_void, CStr};
 use std::sync::{LazyLock, Mutex};
 
-// Re-export API types for hlattrs2dict and hl_inspect
-use nvim_api::{Arena, Array, Dict, Object};
+// Re-export API types for hlattrs2dict, hl_inspect, object_to_color
+use nvim_api::{Arena, Array, Dict, Error, NvimString, Object, ObjectType};
 
 extern "C" {
     /// Get the terminal color count from C globals
@@ -4517,8 +4517,6 @@ mod hl_inspect_keys {
     pub static NORMAL: &[u8] = b"Normal\0";
 }
 
-use nvim_api::NvimString;
-
 /// Get the size needed for hl_inspect array (recursive for combined attributes)
 fn hl_inspect_size(attr: c_int) -> usize {
     let count = rs_attr_entry_count();
@@ -4686,6 +4684,147 @@ pub unsafe extern "C" fn rs_hl_inspect(attr: c_int, arena: *mut Arena) -> Array 
 
     hl_inspect_impl(&mut ret, attr, arena);
     ret
+}
+
+// ============================================================================
+// object_to_color - Convert API Object to color value
+// ============================================================================
+
+extern "C" {
+    fn api_set_error(err: *mut Error, err_type: c_int, format: *const c_char, ...);
+}
+
+/// Error type constants
+const K_ERROR_TYPE_VALIDATION: c_int = 1;
+
+/// Case-insensitive string comparison for C strings
+unsafe fn stricmp_none(data: *const c_char, size: usize) -> bool {
+    // Check if string is "NONE" (case-insensitive)
+    if size != 4 {
+        return false;
+    }
+    let bytes = std::slice::from_raw_parts(data as *const u8, size);
+    bytes.eq_ignore_ascii_case(b"NONE")
+}
+
+/// Convert an API Object (Integer or String) to a color value.
+///
+/// For Integer objects, returns the value directly.
+/// For String objects, parses the color name or returns -1 for "NONE".
+///
+/// # Safety
+/// - `key` must be a valid null-terminated C string
+/// - `err` must be a valid Error pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_object_to_color(
+    val: Object,
+    key: *const c_char,
+    rgb: bool,
+    err: *mut Error,
+) -> c_int {
+    match val.obj_type {
+        t if t == ObjectType::Integer as c_int => val.data.integer as c_int,
+
+        t if t == ObjectType::String as c_int => {
+            let str_val: NvimString = val.data.string;
+
+            // Empty string or "NONE" returns -1
+            if str_val.size == 0 {
+                return -1;
+            }
+
+            // Check for "NONE" (case-insensitive)
+            if stricmp_none(str_val.data, str_val.size) {
+                return -1;
+            }
+
+            // Parse color name
+            let color = if rgb {
+                // Use name_to_color (returns NameToColorResult)
+                let result = rs_name_to_color(str_val.data);
+                result.color
+            } else {
+                // Use name_to_ctermcolor (returns int directly)
+                rs_name_to_ctermcolor(str_val.data)
+            };
+
+            // Validate color was found
+            if color < 0 {
+                // "Invalid highlight color: '%s'" - matches VALIDATE_S which quotes the value
+                static FMT: &[u8] = b"Invalid highlight color: '%s'\0";
+                api_set_error(
+                    err,
+                    K_ERROR_TYPE_VALIDATION,
+                    FMT.as_ptr() as *const c_char,
+                    str_val.data,
+                );
+            }
+
+            color
+        }
+
+        _ => {
+            // "Invalid '%s': expected String or Integer"
+            static FMT: &[u8] = b"Invalid '%s': expected String or Integer\0";
+            api_set_error(err, K_ERROR_TYPE_VALIDATION, FMT.as_ptr() as *const c_char, key);
+            0
+        }
+    }
+}
+
+// ============================================================================
+// hl_get_attr_by_id - Get highlight attributes as Dict
+// ============================================================================
+
+/// Error type for exceptions
+const K_ERROR_TYPE_EXCEPTION: c_int = 0;
+
+/// Gets highlight description for id `attr_id` as a map.
+///
+/// # Safety
+/// - `arena` must be a valid Arena pointer
+/// - `err` must be a valid Error pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_hl_get_attr_by_id(
+    attr_id: i64,
+    rgb: bool,
+    arena: *mut Arena,
+    err: *mut Error,
+) -> Dict {
+    // Empty dict for attr_id == 0
+    if attr_id == 0 {
+        return Dict::empty();
+    }
+
+    // Validate attr_id range
+    let count = rs_attr_entry_count();
+    if attr_id <= 0 || attr_id >= count as i64 {
+        // "Invalid attribute id: %lld"
+        static FMT: &[u8] = b"Invalid attribute id: %lld\0";
+        api_set_error(
+            err,
+            K_ERROR_TYPE_EXCEPTION,
+            FMT.as_ptr() as *const c_char,
+            attr_id,
+        );
+        return Dict::empty();
+    }
+
+    // Allocate dict with arena
+    let items =
+        arena_alloc(arena, HLATTRS_DICT_SIZE * std::mem::size_of::<nvim_api::KeyValuePair>())
+            as *mut nvim_api::KeyValuePair;
+    let mut retval = Dict {
+        size: 0,
+        capacity: HLATTRS_DICT_SIZE,
+        items,
+    };
+
+    // Get the attributes and convert to dict
+    let attrs = rs_syn_attr2entry(attr_id as c_int);
+    rs_hlattrs2dict(&mut retval, std::ptr::null_mut(), attrs, rgb, false);
+
+    retval
 }
 
 // ============================================================================

@@ -848,6 +848,15 @@ HlAttrs syn_attr2entry(int attr)
   return rs_syn_attr2entry(attr);
 }
 
+#ifdef USE_RUST_HIGHLIGHT
+extern Dict rs_hl_get_attr_by_id(Integer attr_id, Boolean rgb, Arena *arena, Error *err);
+
+/// Gets highlight description for id `attr_id` as a map.
+Dict hl_get_attr_by_id(Integer attr_id, Boolean rgb, Arena *arena, Error *err)
+{
+  return rs_hl_get_attr_by_id(attr_id, rgb, arena, err);
+}
+#else
 /// Gets highlight description for id `attr_id` as a map.
 Dict hl_get_attr_by_id(Integer attr_id, Boolean rgb, Arena *arena, Error *err)
 {
@@ -866,6 +875,7 @@ Dict hl_get_attr_by_id(Integer attr_id, Boolean rgb, Arena *arena, Error *err)
   hlattrs2dict(&retval, NULL, syn_attr2entry((int)attr_id), rgb, false);
   return retval;
 }
+#endif  // USE_RUST_HIGHLIGHT
 
 /// Converts an HlAttrs into Dict
 ///
@@ -1139,6 +1149,14 @@ HlAttrs dict2hlattrs(Dict(highlight) *dict, bool use_rgb, int *link_id, Error *e
 #undef HAS_KEY_X
 }
 
+#ifdef USE_RUST_HIGHLIGHT
+extern int rs_object_to_color(Object val, char *key, bool rgb, Error *err);
+
+int object_to_color(Object val, char *key, bool rgb, Error *err)
+{
+  return rs_object_to_color(val, key, rgb, err);
+}
+#else
 int object_to_color(Object val, char *key, bool rgb, Error *err)
 {
   if (val.type == kObjectTypeInteger) {
@@ -1166,6 +1184,7 @@ int object_to_color(Object val, char *key, bool rgb, Error *err)
     });
   }
 }
+#endif  // USE_RUST_HIGHLIGHT
 
 #ifdef USE_RUST_HIGHLIGHT
 extern Array rs_hl_inspect(int attr, Arena *arena);

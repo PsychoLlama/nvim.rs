@@ -2,11 +2,15 @@
 
 ## Current Status
 
-**685 rs_* functions migrated**
+**687 rs_* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
 ### Current Work
+
+**Phase 19 - API Query Functions** ✅
+- `rs_object_to_color()` - convert API Object to color value
+- `rs_hl_get_attr_by_id()` - get highlight attributes as Dict for API
 
 **Phase 18 - API Types & Dict Building** ✅
 - Added Object constructors, Dict/Array helpers, arena allocation to nvim-api crate
@@ -14,17 +18,12 @@ Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get cur
 - `rs_hl_inspect()` - inspect highlight attribute composition
 - C accessors: nvim_get_hlf_name, nvim_get_hlstate_active
 
-**Phase 17 - Window Highlight Update** ✅
-- `rs_update_window_hl()` - update all highlight attributes for a window
-- C accessors: window config (external, border, border_hl_ids, shadow), grid blending
-- HLF constants: nvim_get_hlf_nfloat/border/count
-
 **Highlight Migration Status:** ✅ COMPLETE
 - Core computation: Fully in Rust (rgb_blend, cterm_blend, combine_attrs, blend_attrs)
 - Attribute combination: Fully in Rust (hl_combine_attr, hl_blend_attrs, hl_add_url)
 - UI highlight lookup: Fully in Rust (hl_get_ui_attr, win_bg_attr)
 - Window highlight update: Fully in Rust (update_window_hl)
-- API conversion: Fully in Rust (hlattrs2dict, hl_inspect)
+- API conversion: Fully in Rust (hlattrs2dict, hl_inspect, hl_get_attr_by_id, object_to_color)
 - Entry storage: Rust only (AttrEntryStore)
 - URL storage: Rust only
 - Cache management: Rust only (combine/blend caches)
@@ -34,7 +33,7 @@ Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get cur
 - hl_table access: C accessors, syn_* lookup/link functions in Rust
 
 **What remains in C (not migratable without major work):**
-- `dict2hlattrs` - Validation/parsing from Dict (error API needed)
+- `dict2hlattrs` - Validation macros, typed dict parsing (gen_api_dispatch)
 - `get_attr_entry` - UI event dispatch (ui_call_hl_attr_define)
 - `ns_get_hl` middle phase - Lua callback execution (nlua_call_ref)
 - `highlight_changed` - UI events, hl_table manipulation, garray
