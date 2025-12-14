@@ -170,11 +170,17 @@ int nvim_get_hlf_border(void) { return HLF_BORDER; }
 int nvim_get_hlf_count(void) { return HLF_COUNT; }
 // nvim_get_highlight_attr is already defined above (line 148)
 
-// Forward declaration for update_ns_hl wrapper
+// Forward declaration for update_ns_hl
 static void update_ns_hl(int ns_id);
 
-// Wrapper for update_ns_hl (called from Rust)
+#ifdef USE_RUST_HIGHLIGHT
+extern void rs_update_ns_hl(int ns_id);
+// Wrapper for update_ns_hl - calls Rust version
+void nvim_update_ns_hl(int ns_id) { rs_update_ns_hl(ns_id); }
+#else
+// Wrapper for update_ns_hl - calls C version
 void nvim_update_ns_hl(int ns_id) { update_ns_hl(ns_id); }
+#endif
 
 // hlstate_active is now owned by Rust (ATTR_STORE.hlstate_active)
 // This accessor calls Rust to get the value

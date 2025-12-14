@@ -54,14 +54,16 @@ extern "C" {
     fn nvim_decor_provider_get_hl_valid(ns_id: c_int) -> c_int;
     /// Check if namespace has a hl_def callback defined.
     fn nvim_decor_provider_has_hl_def(ns_id: c_int) -> bool;
+    /// Get hl_cached for a namespace. Returns false if provider doesn't exist.
+    fn nvim_decor_provider_get_hl_cached(ns_id: c_int) -> bool;
+    /// Set hl_cached for a namespace. Creates provider if force=true.
+    fn nvim_decor_provider_set_hl_cached(ns_id: c_int, cached: bool, force: bool);
 
     // Highlight functions that need C interop
     /// Get or create a syntax attribute entry
     fn hl_get_syn_attr(ns_id: c_int, idx: c_int, at_en: HlAttrs) -> c_int;
     /// Set need_highlight_changed global
     fn nvim_set_need_highlight_changed(value: bool);
-    /// Call update_ns_hl to refresh namespace highlight attributes
-    fn nvim_update_ns_hl(ns_id: c_int);
 
     // hl_table (HlGroup array) accessors from highlight_group.c
     /// Get the number of highlight groups
@@ -114,8 +116,9 @@ extern "C" {
     fn nvim_get_hlf_border() -> c_int;
     /// Get HLF_COUNT enum value
     fn nvim_get_hlf_count() -> c_int;
+    /// Get hlf_names[idx] string
+    fn nvim_get_hlf_name(idx: c_int) -> *const c_char;
     // nvim_get_highlight_attr is already defined above (line 45)
-    // nvim_update_ns_hl is already defined above (line 61)
     // nvim_win_get_ns_hl is defined below in window accessors section
     /// Get w_ns_hl_active field from window
     fn nvim_win_get_ns_hl_active(wp: *mut c_void) -> c_int;
@@ -1133,8 +1136,8 @@ pub extern "C" fn rs_hl_check_ns() -> bool {
 
     // If namespace > 0, update namespace highlights and get the attrs
     if ns > 0 {
-        // Call C to update namespace highlights (involves Lua/syntax lookups)
-        unsafe { nvim_update_ns_hl(ns) };
+        // Update namespace highlights
+        unsafe { rs_update_ns_hl(ns) };
 
         // Get the namespace-specific attribute array
         let store = ATTR_STORE.lock().unwrap();
@@ -1150,6 +1153,54 @@ pub extern "C" fn rs_hl_check_ns() -> bool {
     unsafe { nvim_set_need_highlight_changed(true) };
 
     true
+}
+
+/// Update namespace highlight attributes.
+///
+/// This function populates the namespace's UI highlight attribute array
+/// by iterating through all HLF_* types and computing their attributes.
+///
+/// # Safety
+/// Must be called from the main thread (accesses global state).
+#[no_mangle]
+pub unsafe extern "C" fn rs_update_ns_hl(ns_id: c_int) {
+    if ns_id <= 0 {
+        return;
+    }
+
+    // Check if already cached
+    if nvim_decor_provider_get_hl_cached(ns_id) {
+        return;
+    }
+
+    // Get or create the attribute array
+    let hl_attrs = rs_ns_hl_attr_get_or_create(ns_id);
+
+    let hlf_count = nvim_get_hlf_count();
+    let hlf_inactive = nvim_get_hlf_inactive();
+    let hlf_nfloat = nvim_get_hlf_nfloat();
+    let hlf_none = nvim_get_hlf_none();
+
+    // Iterate through all HLF_* types (starting from 1, skipping HLF_NONE)
+    for hlf in 1..hlf_count {
+        let name = nvim_get_hlf_name(hlf);
+        if name.is_null() {
+            continue;
+        }
+        let name_cstr = CStr::from_ptr(name);
+        let name_len = name_cstr.to_bytes().len();
+        let id = rs_syn_check_group(name, name_len);
+        let optional = hlf == hlf_inactive || hlf == hlf_nfloat;
+        *hl_attrs.add(hlf as usize) = rs_hl_get_ui_attr(ns_id, hlf, id, optional);
+    }
+
+    // Handle "Normal" specially - stored at HLF_NONE (index 0)
+    static NORMAL: &[u8] = b"Normal\0";
+    let normality = rs_syn_check_group(NORMAL.as_ptr() as *const c_char, 6);
+    *hl_attrs.add(hlf_none as usize) = rs_hl_get_ui_attr(ns_id, -1, normality, true);
+
+    // Mark as cached (hl_get_ui_attr might have invalidated, so re-get provider)
+    nvim_decor_provider_set_hl_cached(ns_id, true, true);
 }
 
 // ============================================================================
@@ -2312,7 +2363,7 @@ pub unsafe extern "C" fn rs_update_window_hl(wp: *mut c_void, invalid: bool) {
     let ns_id = nvim_win_get_ns_hl(wp);
 
     // Update namespace highlights
-    nvim_update_ns_hl(ns_id);
+    rs_update_ns_hl(ns_id);
 
     // Get or update the highlight attribute array for this namespace
     if ns_id != nvim_win_get_ns_hl_active(wp) || nvim_win_get_ns_hl_attr(wp).is_null() {
@@ -4616,7 +4667,7 @@ pub unsafe extern "C" fn rs_hlattrs2dict(
 // ============================================================================
 
 extern "C" {
-    fn nvim_get_hlf_name(idx: c_int) -> *const c_char;
+    // nvim_get_hlf_name already declared in main extern block
     fn arena_alloc(arena: *mut Arena, size: usize) -> *mut c_char;
 }
 

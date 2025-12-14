@@ -330,6 +330,13 @@ int nvim_decor_provider_get_hl_valid(int ns_id)
   return p ? p->hl_valid : -1;
 }
 
+/// Get hl_cached for a namespace. Returns false if provider doesn't exist.
+bool nvim_decor_provider_get_hl_cached(int ns_id)
+{
+  DecorProvider *p = get_decor_provider(ns_id, false);
+  return p && p->hl_cached;
+}
+
 /// Set hl_cached for a namespace. Creates provider if force=true.
 void nvim_decor_provider_set_hl_cached(int ns_id, bool cached, bool force)
 {

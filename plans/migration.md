@@ -2,11 +2,17 @@
 
 ## Current Status
 
-**691 rs_* functions migrated**
+**692 rs_* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
 ### Current Work
+
+**Phase 23 - update_ns_hl Migration** ✅
+- `rs_update_ns_hl()` - populates namespace UI highlight attributes
+- Uses rs_syn_check_group, rs_hl_get_ui_attr (already in Rust)
+- C accessor: nvim_decor_provider_get_hl_cached, nvim_decor_provider_set_hl_cached
+- Rust is now single source of truth for namespace highlight update
 
 **Phase 22 - ui_send_all_hls Migration** ✅
 - `rs_ui_send_hl_attr()` - sends attribute definition to single UI
