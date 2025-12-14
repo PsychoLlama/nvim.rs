@@ -6,6 +6,15 @@
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
+### Phase 24: Lua Callback FFI ✅ COMPLETE
+
+Added FFI so Rust can call Lua callbacks via `nlua_call_ref()`:
+- C wrappers: `nvim_nlua_call_ref()`, `nvim_nlua_call_ref_ctx()` in executor.c
+- Rust: `lua_call_ref()`, `lua_call_ref_ctx()` in nvim-lua crate
+- Re-exports API types (Object, Array, Error, LuaRef)
+
+**Unlocks:** 12 files with callback dependencies (highlight.c, decoration_provider.c, autocmd.c, etc.)
+
 ### Next Target: grid.c
 
 Screen character (`schar_T`) operations. Already has 3 Rust functions, ~37 total functions.
@@ -26,7 +35,8 @@ All core highlight functions have Rust implementations via `USE_RUST_HIGHLIGHT`:
 - Core computation, attribute combination, UI lookup
 - API conversion (hlattrs2dict, hl_inspect, object_to_color)
 
-**Unmigrated (C infrastructure):** `dict2hlattrs`, `ns_get_hl` Lua callback, `highlight_changed`
+**Now unblocked:** `ns_get_hl` Lua callback (can use new Lua FFI)
+**Remaining C:** `dict2hlattrs`, `highlight_changed`
 
 ---
 
@@ -43,6 +53,7 @@ All Rust code in `src/nvim-rs/`. Key crates:
 | nvim-mbyte | UTF-8/multibyte |
 | nvim-event | Event loop, multiqueue |
 | nvim-api | API types (Object, Dict, Array) |
+| nvim-lua | Lua callback FFI (lua_call_ref) |
 | nvim-tui | Terminal UI, terminfo |
 
 ### Build System
