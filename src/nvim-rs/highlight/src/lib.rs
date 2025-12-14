@@ -848,12 +848,7 @@ pub extern "C" fn rs_ns_hls_put(ns_id: c_int, syn_id: c_int, item: ColorItem) {
 ///
 /// Returns true if the highlight was defined, false if skipped due to HL_DEFAULT.
 #[no_mangle]
-pub extern "C" fn rs_ns_hl_def(
-    ns_id: c_int,
-    hl_id: c_int,
-    attrs: HlAttrs,
-    link_id: c_int,
-) -> bool {
+pub extern "C" fn rs_ns_hl_def(ns_id: c_int, hl_id: c_int, attrs: HlAttrs, link_id: c_int) -> bool {
     let is_default = (attrs.rgb_ae_attr & HL_DEFAULT) != 0;
     let is_global = (attrs.rgb_ae_attr & HL_GLOBAL) != 0;
 
@@ -1623,7 +1618,11 @@ pub unsafe extern "C" fn rs_highlight_exists(name: *const c_char) -> c_int {
     let name_cstr = CStr::from_ptr(name);
     let len = name_cstr.to_bytes().len();
     let id = rs_syn_name2id_len(name, len);
-    if id > 0 { 1 } else { 0 }
+    if id > 0 {
+        1
+    } else {
+        0
+    }
 }
 
 // ============================================================================
@@ -1682,7 +1681,11 @@ pub extern "C" fn rs_restore_cterm_colors() {
 #[no_mangle]
 pub unsafe extern "C" fn rs_win_check_ns_hl(wp: *mut c_void) -> bool {
     // Set ns_hl_win based on whether wp is provided
-    let ns_hl = if wp.is_null() { -1 } else { nvim_win_get_ns_hl(wp) };
+    let ns_hl = if wp.is_null() {
+        -1
+    } else {
+        nvim_win_get_ns_hl(wp)
+    };
     rs_set_ns_hl_win(ns_hl);
     rs_hl_check_ns()
 }
@@ -1892,29 +1895,25 @@ pub extern "C" fn rs_hl_combine_attrs_compute(input: HlCombineInput) -> HlAttrs 
     // Override cterm foreground color if primary has one
     if prim_aep.cterm_fg_color > 0 {
         new_en.cterm_fg_color = prim_aep.cterm_fg_color;
-        new_en.rgb_ae_attr &=
-            (!HL_FG_INDEXED) | (prim_aep.rgb_ae_attr & HL_FG_INDEXED);
+        new_en.rgb_ae_attr &= (!HL_FG_INDEXED) | (prim_aep.rgb_ae_attr & HL_FG_INDEXED);
     }
 
     // Override cterm background color if primary has one
     if prim_aep.cterm_bg_color > 0 {
         new_en.cterm_bg_color = prim_aep.cterm_bg_color;
-        new_en.rgb_ae_attr &=
-            (!HL_BG_INDEXED) | (prim_aep.rgb_ae_attr & HL_BG_INDEXED);
+        new_en.rgb_ae_attr &= (!HL_BG_INDEXED) | (prim_aep.rgb_ae_attr & HL_BG_INDEXED);
     }
 
     // Override rgb foreground color if primary has one
     if prim_aep.rgb_fg_color >= 0 {
         new_en.rgb_fg_color = prim_aep.rgb_fg_color;
-        new_en.rgb_ae_attr &=
-            (!HL_FG_INDEXED) | (prim_aep.rgb_ae_attr & HL_FG_INDEXED);
+        new_en.rgb_ae_attr &= (!HL_FG_INDEXED) | (prim_aep.rgb_ae_attr & HL_FG_INDEXED);
     }
 
     // Override rgb background color if primary has one
     if prim_aep.rgb_bg_color >= 0 {
         new_en.rgb_bg_color = prim_aep.rgb_bg_color;
-        new_en.rgb_ae_attr &=
-            (!HL_BG_INDEXED) | (prim_aep.rgb_ae_attr & HL_BG_INDEXED);
+        new_en.rgb_ae_attr &= (!HL_BG_INDEXED) | (prim_aep.rgb_ae_attr & HL_BG_INDEXED);
     }
 
     // Override special color if primary has one
@@ -2194,11 +2193,7 @@ pub unsafe extern "C" fn rs_hl_blend_attrs(
 /// # Returns
 /// The attribute ID, or 0 if all attributes are cleared.
 #[no_mangle]
-pub unsafe extern "C" fn rs_hl_get_syn_attr(
-    ns_id: c_int,
-    idx: c_int,
-    at_en: HlAttrs,
-) -> c_int {
+pub unsafe extern "C" fn rs_hl_get_syn_attr(ns_id: c_int, idx: c_int, at_en: HlAttrs) -> c_int {
     // Check if any meaningful attribute is set
     if at_en.cterm_fg_color != 0
         || at_en.cterm_bg_color != 0
@@ -2472,7 +2467,9 @@ pub unsafe extern "C" fn rs_update_window_hl(wp: *mut c_void, invalid: bool) {
 fn cterm2rgb_internal(nr: c_int) -> c_int {
     if nr < 16 {
         let entry = &ANSI_TABLE[nr as usize];
-        return (c_int::from(entry[0]) << 16) | (c_int::from(entry[1]) << 8) | c_int::from(entry[2]);
+        return (c_int::from(entry[0]) << 16)
+            | (c_int::from(entry[1]) << 8)
+            | c_int::from(entry[2]);
     }
 
     if nr < 232 {
@@ -2582,22 +2579,22 @@ const GREY_RAMP: [c_int; 24] = [
 
 /// ANSI 16-color table: [R, G, B, idx]
 const ANSI_TABLE: [[u8; 4]; 16] = [
-    [0, 0, 0, 1],         // black
-    [224, 0, 0, 2],       // dark red
-    [0, 224, 0, 3],       // dark green
-    [224, 224, 0, 4],     // dark yellow / brown
-    [0, 0, 224, 5],       // dark blue
-    [224, 0, 224, 6],     // dark magenta
-    [0, 224, 224, 7],     // dark cyan
-    [224, 224, 224, 8],   // light grey
-    [128, 128, 128, 9],   // dark grey
-    [255, 64, 64, 10],    // light red
-    [64, 255, 64, 11],    // light green
-    [255, 255, 64, 12],   // light yellow
-    [64, 64, 255, 13],    // light blue
-    [255, 64, 255, 14],   // light magenta
-    [64, 255, 255, 15],   // light cyan
-    [255, 255, 255, 16],  // white
+    [0, 0, 0, 1],        // black
+    [224, 0, 0, 2],      // dark red
+    [0, 224, 0, 3],      // dark green
+    [224, 224, 0, 4],    // dark yellow / brown
+    [0, 0, 224, 5],      // dark blue
+    [224, 0, 224, 6],    // dark magenta
+    [0, 224, 224, 7],    // dark cyan
+    [224, 224, 224, 8],  // light grey
+    [128, 128, 128, 9],  // dark grey
+    [255, 64, 64, 10],   // light red
+    [64, 255, 64, 11],   // light green
+    [255, 255, 64, 12],  // light yellow
+    [64, 64, 255, 13],   // light blue
+    [255, 64, 255, 14],  // light magenta
+    [64, 255, 255, 15],  // light cyan
+    [255, 255, 255, 16], // white
 ];
 
 /// Convert 8-bit color (0-255) to RGB color.
@@ -2613,7 +2610,9 @@ pub extern "C" fn rs_hl_cterm2rgb_color(nr: c_int) -> c_int {
     if nr < 16 {
         // ANSI colors
         let entry = &ANSI_TABLE[nr as usize];
-        return (c_int::from(entry[0]) << 16) | (c_int::from(entry[1]) << 8) | c_int::from(entry[2]);
+        return (c_int::from(entry[0]) << 16)
+            | (c_int::from(entry[1]) << 8)
+            | c_int::from(entry[2]);
     }
 
     if nr < 232 {
@@ -2782,7 +2781,10 @@ pub struct LookupColorResult {
 pub unsafe extern "C" fn rs_lookup_color(idx: c_int, foreground: bool) -> LookupColorResult {
     // Bounds check
     if idx < 0 || idx >= 28 {
-        return LookupColorResult { color: -1, bold: -1 };
+        return LookupColorResult {
+            color: -1,
+            bold: -1,
+        };
     }
     let idx = idx as usize;
 
@@ -2791,7 +2793,10 @@ pub unsafe extern "C" fn rs_lookup_color(idx: c_int, foreground: bool) -> Lookup
     // Use the _16 table to check if it's a valid color name.
     let color_16 = COLOR_NUMBERS_16[idx];
     if color_16 < 0 {
-        return LookupColorResult { color: -1, bold: -1 };
+        return LookupColorResult {
+            color: -1,
+            bold: -1,
+        };
     }
 
     if t_colors == 8 {
@@ -2800,7 +2805,11 @@ pub unsafe extern "C" fn rs_lookup_color(idx: c_int, foreground: bool) -> Lookup
         let bold = if foreground {
             // set/reset bold attribute to get light foreground
             // colors (on some terminals, e.g. "linux")
-            if color & 8 != 0 { 1 } else { 0 }
+            if color & 8 != 0 {
+                1
+            } else {
+                0
+            }
         } else {
             -1 // unchanged
         };
@@ -3622,7 +3631,10 @@ fn find_color_name(name: &str) -> Option<(usize, c_int)> {
     while lo < hi {
         let mid = (lo + hi) / 2;
         let (table_name, color) = RGB_COLOR_NAME_TABLE[mid];
-        match name.to_ascii_lowercase().cmp(&table_name.to_ascii_lowercase()) {
+        match name
+            .to_ascii_lowercase()
+            .cmp(&table_name.to_ascii_lowercase())
+        {
             std::cmp::Ordering::Less => hi = mid,
             std::cmp::Ordering::Greater => lo = mid + 1,
             std::cmp::Ordering::Equal => return Some((mid, color)),
@@ -4606,7 +4618,10 @@ pub unsafe extern "C" fn rs_hlattrs2dict(
     }
 
     if (mask & HL_STRIKETHROUGH) != 0 {
-        (*attrs_ptr).put_static(STRIKETHROUGH.as_ptr() as *const c_char, Object::boolean(true));
+        (*attrs_ptr).put_static(
+            STRIKETHROUGH.as_ptr() as *const c_char,
+            Object::boolean(true),
+        );
     }
 
     if (mask & HL_ALTFONT) != 0 {
@@ -4621,17 +4636,26 @@ pub unsafe extern "C" fn rs_hlattrs2dict(
     if use_rgb {
         if ae.rgb_fg_color != -1 {
             let key = if short_keys { FG } else { FOREGROUND };
-            (*hl_ptr).put_static(key.as_ptr() as *const c_char, Object::integer(ae.rgb_fg_color as i64));
+            (*hl_ptr).put_static(
+                key.as_ptr() as *const c_char,
+                Object::integer(ae.rgb_fg_color as i64),
+            );
         }
 
         if ae.rgb_bg_color != -1 {
             let key = if short_keys { BG } else { BACKGROUND };
-            (*hl_ptr).put_static(key.as_ptr() as *const c_char, Object::integer(ae.rgb_bg_color as i64));
+            (*hl_ptr).put_static(
+                key.as_ptr() as *const c_char,
+                Object::integer(ae.rgb_bg_color as i64),
+            );
         }
 
         if ae.rgb_sp_color != -1 {
             let key = if short_keys { SP } else { SPECIAL };
-            (*hl_ptr).put_static(key.as_ptr() as *const c_char, Object::integer(ae.rgb_sp_color as i64));
+            (*hl_ptr).put_static(
+                key.as_ptr() as *const c_char,
+                Object::integer(ae.rgb_sp_color as i64),
+            );
         }
 
         if !short_keys {
@@ -4647,18 +4671,27 @@ pub unsafe extern "C" fn rs_hlattrs2dict(
         // cterm colors
         if ae.cterm_fg_color != 0 {
             let key = if short_keys { CTERMFG } else { FOREGROUND };
-            (*hl_ptr).put_static(key.as_ptr() as *const c_char, Object::integer((ae.cterm_fg_color - 1) as i64));
+            (*hl_ptr).put_static(
+                key.as_ptr() as *const c_char,
+                Object::integer((ae.cterm_fg_color - 1) as i64),
+            );
         }
 
         if ae.cterm_bg_color != 0 {
             let key = if short_keys { CTERMBG } else { BACKGROUND };
-            (*hl_ptr).put_static(key.as_ptr() as *const c_char, Object::integer((ae.cterm_bg_color - 1) as i64));
+            (*hl_ptr).put_static(
+                key.as_ptr() as *const c_char,
+                Object::integer((ae.cterm_bg_color - 1) as i64),
+            );
         }
     }
 
     // Blend (only for RGB, or for long keys)
     if ae.hl_blend > -1 && (use_rgb || !short_keys) {
-        (*hl_ptr).put_static(BLEND.as_ptr() as *const c_char, Object::integer(ae.hl_blend as i64));
+        (*hl_ptr).put_static(
+            BLEND.as_ptr() as *const c_char,
+            Object::integer(ae.hl_blend as i64),
+        );
     }
 }
 
@@ -4715,27 +4748,34 @@ unsafe fn hl_inspect_impl(arr: *mut Array, attr: c_int, arena: *mut Arena) {
     match e.kind {
         HlKind::Syntax => {
             // Create dict with 3 items: kind, hi_name, id
-            let dict_items =
-                arena_alloc(arena, 3 * std::mem::size_of::<nvim_api::KeyValuePair>())
-                    as *mut nvim_api::KeyValuePair;
+            let dict_items = arena_alloc(arena, 3 * std::mem::size_of::<nvim_api::KeyValuePair>())
+                as *mut nvim_api::KeyValuePair;
             let mut item = Dict {
                 size: 0,
                 capacity: 3,
                 items: dict_items,
             };
 
-            item.put_static(KIND.as_ptr() as *const c_char,
+            item.put_static(
+                KIND.as_ptr() as *const c_char,
                 Object::string(NvimString {
                     data: SYNTAX.as_ptr() as *mut c_char,
                     size: SYNTAX.len() - 1, // exclude null terminator
-                }));
+                }),
+            );
 
             let hi_name = rs_syn_id2name(e.id1);
-            item.put_static(HI_NAME.as_ptr() as *const c_char,
+            item.put_static(
+                HI_NAME.as_ptr() as *const c_char,
                 Object::string(NvimString {
                     data: hi_name as *mut c_char,
-                    size: if hi_name.is_null() { 0 } else { strlen(hi_name) },
-                }));
+                    size: if hi_name.is_null() {
+                        0
+                    } else {
+                        strlen(hi_name)
+                    },
+                }),
+            );
 
             item.put_static(ID.as_ptr() as *const c_char, Object::integer(attr as i64));
 
@@ -4744,20 +4784,21 @@ unsafe fn hl_inspect_impl(arr: *mut Array, attr: c_int, arena: *mut Arena) {
 
         HlKind::UI => {
             // Create dict with 4 items: kind, ui_name, hi_name, id
-            let dict_items =
-                arena_alloc(arena, 4 * std::mem::size_of::<nvim_api::KeyValuePair>())
-                    as *mut nvim_api::KeyValuePair;
+            let dict_items = arena_alloc(arena, 4 * std::mem::size_of::<nvim_api::KeyValuePair>())
+                as *mut nvim_api::KeyValuePair;
             let mut item = Dict {
                 size: 0,
                 capacity: 4,
                 items: dict_items,
             };
 
-            item.put_static(KIND.as_ptr() as *const c_char,
+            item.put_static(
+                KIND.as_ptr() as *const c_char,
                 Object::string(NvimString {
                     data: UI.as_ptr() as *mut c_char,
                     size: UI.len() - 1,
-                }));
+                }),
+            );
 
             // ui_name: "Normal" if id1 == -1, else hlf_names[id1]
             let ui_name = if e.id1 == -1 {
@@ -4765,18 +4806,30 @@ unsafe fn hl_inspect_impl(arr: *mut Array, attr: c_int, arena: *mut Arena) {
             } else {
                 nvim_get_hlf_name(e.id1)
             };
-            item.put_static(UI_NAME.as_ptr() as *const c_char,
+            item.put_static(
+                UI_NAME.as_ptr() as *const c_char,
                 Object::string(NvimString {
                     data: ui_name as *mut c_char,
-                    size: if ui_name.is_null() { 0 } else { strlen(ui_name) },
-                }));
+                    size: if ui_name.is_null() {
+                        0
+                    } else {
+                        strlen(ui_name)
+                    },
+                }),
+            );
 
             let hi_name = rs_syn_id2name(e.id2);
-            item.put_static(HI_NAME.as_ptr() as *const c_char,
+            item.put_static(
+                HI_NAME.as_ptr() as *const c_char,
                 Object::string(NvimString {
                     data: hi_name as *mut c_char,
-                    size: if hi_name.is_null() { 0 } else { strlen(hi_name) },
-                }));
+                    size: if hi_name.is_null() {
+                        0
+                    } else {
+                        strlen(hi_name)
+                    },
+                }),
+            );
 
             item.put_static(ID.as_ptr() as *const c_char, Object::integer(attr as i64));
 
@@ -4785,20 +4838,21 @@ unsafe fn hl_inspect_impl(arr: *mut Array, attr: c_int, arena: *mut Arena) {
 
         HlKind::Terminal => {
             // Create dict with 2 items: kind, id
-            let dict_items =
-                arena_alloc(arena, 2 * std::mem::size_of::<nvim_api::KeyValuePair>())
-                    as *mut nvim_api::KeyValuePair;
+            let dict_items = arena_alloc(arena, 2 * std::mem::size_of::<nvim_api::KeyValuePair>())
+                as *mut nvim_api::KeyValuePair;
             let mut item = Dict {
                 size: 0,
                 capacity: 2,
                 items: dict_items,
             };
 
-            item.put_static(KIND.as_ptr() as *const c_char,
+            item.put_static(
+                KIND.as_ptr() as *const c_char,
                 Object::string(NvimString {
                     data: TERM.as_ptr() as *mut c_char,
                     size: TERM.len() - 1,
-                }));
+                }),
+            );
 
             item.put_static(ID.as_ptr() as *const c_char, Object::integer(attr as i64));
 
@@ -4932,7 +4986,12 @@ pub unsafe extern "C" fn rs_object_to_color(
         _ => {
             // "Invalid '%s': expected String or Integer"
             static FMT: &[u8] = b"Invalid '%s': expected String or Integer\0";
-            api_set_error(err, K_ERROR_TYPE_VALIDATION, FMT.as_ptr() as *const c_char, key);
+            api_set_error(
+                err,
+                K_ERROR_TYPE_VALIDATION,
+                FMT.as_ptr() as *const c_char,
+                key,
+            );
             0
         }
     }
@@ -4977,9 +5036,10 @@ pub unsafe extern "C" fn rs_hl_get_attr_by_id(
     }
 
     // Allocate dict with arena
-    let items =
-        arena_alloc(arena, HLATTRS_DICT_SIZE * std::mem::size_of::<nvim_api::KeyValuePair>())
-            as *mut nvim_api::KeyValuePair;
+    let items = arena_alloc(
+        arena,
+        HLATTRS_DICT_SIZE * std::mem::size_of::<nvim_api::KeyValuePair>(),
+    ) as *mut nvim_api::KeyValuePair;
     let mut retval = Dict {
         size: 0,
         capacity: HLATTRS_DICT_SIZE,

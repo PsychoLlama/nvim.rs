@@ -712,7 +712,10 @@ pub unsafe extern "C" fn rs_timewatcher_get_data(tw: TimeWatcherHandle) -> *mut 
 ///
 /// `tw` must be a valid TimeWatcher handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_timewatcher_set_data(tw: TimeWatcherHandle, data: *mut std::ffi::c_void) {
+pub unsafe extern "C" fn rs_timewatcher_set_data(
+    tw: TimeWatcherHandle,
+    data: *mut std::ffi::c_void,
+) {
     if !tw.is_null() {
         nvim_timewatcher_set_data(tw, data);
     }
@@ -737,7 +740,10 @@ pub unsafe extern "C" fn rs_timewatcher_get_events(tw: TimeWatcherHandle) -> Mul
 ///
 /// `tw` must be a valid TimeWatcher handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_timewatcher_set_events(tw: TimeWatcherHandle, events: MultiQueueHandle) {
+pub unsafe extern "C" fn rs_timewatcher_set_events(
+    tw: TimeWatcherHandle,
+    events: MultiQueueHandle,
+) {
     if !tw.is_null() {
         nvim_timewatcher_set_events(tw, events);
     }
@@ -799,7 +805,9 @@ pub unsafe extern "C" fn rs_timewatcher_set_cb(tw: TimeWatcherHandle, cb: *mut s
 ///
 /// `tw` must be a valid TimeWatcher handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_timewatcher_get_close_cb(tw: TimeWatcherHandle) -> *mut std::ffi::c_void {
+pub unsafe extern "C" fn rs_timewatcher_get_close_cb(
+    tw: TimeWatcherHandle,
+) -> *mut std::ffi::c_void {
     if tw.is_null() {
         return std::ptr::null_mut();
     }
@@ -812,7 +820,10 @@ pub unsafe extern "C" fn rs_timewatcher_get_close_cb(tw: TimeWatcherHandle) -> *
 ///
 /// `tw` must be a valid TimeWatcher handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_timewatcher_set_close_cb(tw: TimeWatcherHandle, cb: *mut std::ffi::c_void) {
+pub unsafe extern "C" fn rs_timewatcher_set_close_cb(
+    tw: TimeWatcherHandle,
+    cb: *mut std::ffi::c_void,
+) {
     if !tw.is_null() {
         nvim_timewatcher_set_close_cb(tw, cb);
     }
@@ -1322,7 +1333,10 @@ pub unsafe extern "C" fn rs_proc_get_internal_close_cb(proc: ProcHandle) -> *mut
 ///
 /// `proc` must be a valid Proc handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_proc_set_internal_close_cb(proc: ProcHandle, cb: *mut std::ffi::c_void) {
+pub unsafe extern "C" fn rs_proc_set_internal_close_cb(
+    proc: ProcHandle,
+    cb: *mut std::ffi::c_void,
+) {
     if !proc.is_null() {
         nvim_proc_set_internal_close_cb(proc, cb);
     }
@@ -1677,7 +1691,9 @@ pub unsafe extern "C" fn rs_stream_set_close_cb(stream: StreamHandle, cb: *mut s
 ///
 /// `stream` must be a valid Stream handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_stream_get_close_cb_data(stream: StreamHandle) -> *mut std::ffi::c_void {
+pub unsafe extern "C" fn rs_stream_get_close_cb_data(
+    stream: StreamHandle,
+) -> *mut std::ffi::c_void {
     if stream.is_null() {
         return std::ptr::null_mut();
     }
@@ -1690,7 +1706,10 @@ pub unsafe extern "C" fn rs_stream_get_close_cb_data(stream: StreamHandle) -> *m
 ///
 /// `stream` must be a valid Stream handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_stream_set_close_cb_data(stream: StreamHandle, data: *mut std::ffi::c_void) {
+pub unsafe extern "C" fn rs_stream_set_close_cb_data(
+    stream: StreamHandle,
+    data: *mut std::ffi::c_void,
+) {
     if !stream.is_null() {
         nvim_stream_set_close_cb_data(stream, data);
     }
@@ -1702,7 +1721,9 @@ pub unsafe extern "C" fn rs_stream_set_close_cb_data(stream: StreamHandle, data:
 ///
 /// `stream` must be a valid Stream handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_stream_get_internal_data(stream: StreamHandle) -> *mut std::ffi::c_void {
+pub unsafe extern "C" fn rs_stream_get_internal_data(
+    stream: StreamHandle,
+) -> *mut std::ffi::c_void {
     if stream.is_null() {
         return std::ptr::null_mut();
     }
@@ -1715,7 +1736,10 @@ pub unsafe extern "C" fn rs_stream_get_internal_data(stream: StreamHandle) -> *m
 ///
 /// `stream` must be a valid Stream handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_stream_set_internal_data(stream: StreamHandle, data: *mut std::ffi::c_void) {
+pub unsafe extern "C" fn rs_stream_set_internal_data(
+    stream: StreamHandle,
+    data: *mut std::ffi::c_void,
+) {
     if !stream.is_null() {
         nvim_stream_set_internal_data(stream, data);
     }
@@ -1727,7 +1751,9 @@ pub unsafe extern "C" fn rs_stream_set_internal_data(stream: StreamHandle, data:
 ///
 /// `stream` must be a valid Stream handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_stream_get_internal_close_cb(stream: StreamHandle) -> *mut std::ffi::c_void {
+pub unsafe extern "C" fn rs_stream_get_internal_close_cb(
+    stream: StreamHandle,
+) -> *mut std::ffi::c_void {
     if stream.is_null() {
         return std::ptr::null_mut();
     }
@@ -1740,7 +1766,10 @@ pub unsafe extern "C" fn rs_stream_get_internal_close_cb(stream: StreamHandle) -
 ///
 /// `stream` must be a valid Stream handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_stream_set_internal_close_cb(stream: StreamHandle, cb: *mut std::ffi::c_void) {
+pub unsafe extern "C" fn rs_stream_set_internal_close_cb(
+    stream: StreamHandle,
+    cb: *mut std::ffi::c_void,
+) {
     if !stream.is_null() {
         nvim_stream_set_internal_close_cb(stream, cb);
     }
@@ -1943,7 +1972,9 @@ pub unsafe extern "C" fn rs_signal_watcher_get_signum(watcher: SignalWatcherHand
 ///
 /// `watcher` must be a valid SignalWatcher handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_signal_watcher_get_events(watcher: SignalWatcherHandle) -> MultiQueueHandle {
+pub unsafe extern "C" fn rs_signal_watcher_get_events(
+    watcher: SignalWatcherHandle,
+) -> MultiQueueHandle {
     if watcher.is_null() {
         return MultiQueueHandle::null();
     }
@@ -1956,7 +1987,9 @@ pub unsafe extern "C" fn rs_signal_watcher_get_events(watcher: SignalWatcherHand
 ///
 /// `watcher` must be a valid SignalWatcher handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_signal_watcher_get_data(watcher: SignalWatcherHandle) -> *mut std::ffi::c_void {
+pub unsafe extern "C" fn rs_signal_watcher_get_data(
+    watcher: SignalWatcherHandle,
+) -> *mut std::ffi::c_void {
     if watcher.is_null() {
         return std::ptr::null_mut();
     }
@@ -1969,7 +2002,10 @@ pub unsafe extern "C" fn rs_signal_watcher_get_data(watcher: SignalWatcherHandle
 ///
 /// `watcher` must be a valid SignalWatcher handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_signal_watcher_set_data(watcher: SignalWatcherHandle, data: *mut std::ffi::c_void) {
+pub unsafe extern "C" fn rs_signal_watcher_set_data(
+    watcher: SignalWatcherHandle,
+    data: *mut std::ffi::c_void,
+) {
     if !watcher.is_null() {
         nvim_signal_watcher_set_data(watcher, data);
     }
@@ -1981,7 +2017,10 @@ pub unsafe extern "C" fn rs_signal_watcher_set_data(watcher: SignalWatcherHandle
 ///
 /// `watcher` must be a valid SignalWatcher handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_signal_watcher_set_events(watcher: SignalWatcherHandle, events: MultiQueueHandle) {
+pub unsafe extern "C" fn rs_signal_watcher_set_events(
+    watcher: SignalWatcherHandle,
+    events: MultiQueueHandle,
+) {
     if !watcher.is_null() {
         nvim_signal_watcher_set_events(watcher, events);
     }
@@ -1993,7 +2032,9 @@ pub unsafe extern "C" fn rs_signal_watcher_set_events(watcher: SignalWatcherHand
 ///
 /// `watcher` must be a valid SignalWatcher handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_signal_watcher_get_cb(watcher: SignalWatcherHandle) -> *mut std::ffi::c_void {
+pub unsafe extern "C" fn rs_signal_watcher_get_cb(
+    watcher: SignalWatcherHandle,
+) -> *mut std::ffi::c_void {
     if watcher.is_null() {
         return std::ptr::null_mut();
     }
@@ -2006,7 +2047,10 @@ pub unsafe extern "C" fn rs_signal_watcher_get_cb(watcher: SignalWatcherHandle) 
 ///
 /// `watcher` must be a valid SignalWatcher handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_signal_watcher_set_cb(watcher: SignalWatcherHandle, cb: *mut std::ffi::c_void) {
+pub unsafe extern "C" fn rs_signal_watcher_set_cb(
+    watcher: SignalWatcherHandle,
+    cb: *mut std::ffi::c_void,
+) {
     if !watcher.is_null() {
         nvim_signal_watcher_set_cb(watcher, cb);
     }
@@ -2018,7 +2062,9 @@ pub unsafe extern "C" fn rs_signal_watcher_set_cb(watcher: SignalWatcherHandle, 
 ///
 /// `watcher` must be a valid SignalWatcher handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_signal_watcher_get_close_cb(watcher: SignalWatcherHandle) -> *mut std::ffi::c_void {
+pub unsafe extern "C" fn rs_signal_watcher_get_close_cb(
+    watcher: SignalWatcherHandle,
+) -> *mut std::ffi::c_void {
     if watcher.is_null() {
         return std::ptr::null_mut();
     }
@@ -2031,7 +2077,10 @@ pub unsafe extern "C" fn rs_signal_watcher_get_close_cb(watcher: SignalWatcherHa
 ///
 /// `watcher` must be a valid SignalWatcher handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_signal_watcher_set_close_cb(watcher: SignalWatcherHandle, cb: *mut std::ffi::c_void) {
+pub unsafe extern "C" fn rs_signal_watcher_set_close_cb(
+    watcher: SignalWatcherHandle,
+    cb: *mut std::ffi::c_void,
+) {
     if !watcher.is_null() {
         nvim_signal_watcher_set_close_cb(watcher, cb);
     }
@@ -2067,7 +2116,9 @@ pub unsafe extern "C" fn rs_signal_watcher_call_close_cb(watcher: SignalWatcherH
 ///
 /// `watcher` must be a valid SocketWatcher handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_socket_watcher_get_addr(watcher: SocketWatcherHandle) -> *const std::ffi::c_char {
+pub unsafe extern "C" fn rs_socket_watcher_get_addr(
+    watcher: SocketWatcherHandle,
+) -> *const std::ffi::c_char {
     if watcher.is_null() {
         return std::ptr::null();
     }
@@ -2080,7 +2131,9 @@ pub unsafe extern "C" fn rs_socket_watcher_get_addr(watcher: SocketWatcherHandle
 ///
 /// `watcher` must be a valid SocketWatcher handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_socket_watcher_get_events(watcher: SocketWatcherHandle) -> MultiQueueHandle {
+pub unsafe extern "C" fn rs_socket_watcher_get_events(
+    watcher: SocketWatcherHandle,
+) -> MultiQueueHandle {
     if watcher.is_null() {
         return MultiQueueHandle::null();
     }
@@ -2093,7 +2146,9 @@ pub unsafe extern "C" fn rs_socket_watcher_get_events(watcher: SocketWatcherHand
 ///
 /// `watcher` must be a valid SocketWatcher handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_socket_watcher_get_data(watcher: SocketWatcherHandle) -> *mut std::ffi::c_void {
+pub unsafe extern "C" fn rs_socket_watcher_get_data(
+    watcher: SocketWatcherHandle,
+) -> *mut std::ffi::c_void {
     if watcher.is_null() {
         return std::ptr::null_mut();
     }
@@ -2119,7 +2174,10 @@ pub unsafe extern "C" fn rs_socket_watcher_is_tcp(watcher: SocketWatcherHandle) 
 ///
 /// `watcher` must be a valid SocketWatcher handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_socket_watcher_set_data(watcher: SocketWatcherHandle, data: *mut std::ffi::c_void) {
+pub unsafe extern "C" fn rs_socket_watcher_set_data(
+    watcher: SocketWatcherHandle,
+    data: *mut std::ffi::c_void,
+) {
     if !watcher.is_null() {
         nvim_socket_watcher_set_data(watcher, data);
     }
@@ -2131,7 +2189,10 @@ pub unsafe extern "C" fn rs_socket_watcher_set_data(watcher: SocketWatcherHandle
 ///
 /// `watcher` must be a valid SocketWatcher handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_socket_watcher_set_events(watcher: SocketWatcherHandle, events: MultiQueueHandle) {
+pub unsafe extern "C" fn rs_socket_watcher_set_events(
+    watcher: SocketWatcherHandle,
+    events: MultiQueueHandle,
+) {
     if !watcher.is_null() {
         nvim_socket_watcher_set_events(watcher, events);
     }
@@ -2143,7 +2204,9 @@ pub unsafe extern "C" fn rs_socket_watcher_set_events(watcher: SocketWatcherHand
 ///
 /// `watcher` must be a valid SocketWatcher handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_socket_watcher_get_cb(watcher: SocketWatcherHandle) -> *mut std::ffi::c_void {
+pub unsafe extern "C" fn rs_socket_watcher_get_cb(
+    watcher: SocketWatcherHandle,
+) -> *mut std::ffi::c_void {
     if watcher.is_null() {
         return std::ptr::null_mut();
     }
@@ -2156,7 +2219,10 @@ pub unsafe extern "C" fn rs_socket_watcher_get_cb(watcher: SocketWatcherHandle) 
 ///
 /// `watcher` must be a valid SocketWatcher handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_socket_watcher_set_cb(watcher: SocketWatcherHandle, cb: *mut std::ffi::c_void) {
+pub unsafe extern "C" fn rs_socket_watcher_set_cb(
+    watcher: SocketWatcherHandle,
+    cb: *mut std::ffi::c_void,
+) {
     if !watcher.is_null() {
         nvim_socket_watcher_set_cb(watcher, cb);
     }
@@ -2168,7 +2234,9 @@ pub unsafe extern "C" fn rs_socket_watcher_set_cb(watcher: SocketWatcherHandle, 
 ///
 /// `watcher` must be a valid SocketWatcher handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_socket_watcher_get_close_cb(watcher: SocketWatcherHandle) -> *mut std::ffi::c_void {
+pub unsafe extern "C" fn rs_socket_watcher_get_close_cb(
+    watcher: SocketWatcherHandle,
+) -> *mut std::ffi::c_void {
     if watcher.is_null() {
         return std::ptr::null_mut();
     }
@@ -2181,7 +2249,10 @@ pub unsafe extern "C" fn rs_socket_watcher_get_close_cb(watcher: SocketWatcherHa
 ///
 /// `watcher` must be a valid SocketWatcher handle
 #[no_mangle]
-pub unsafe extern "C" fn rs_socket_watcher_set_close_cb(watcher: SocketWatcherHandle, cb: *mut std::ffi::c_void) {
+pub unsafe extern "C" fn rs_socket_watcher_set_close_cb(
+    watcher: SocketWatcherHandle,
+    cb: *mut std::ffi::c_void,
+) {
     if !watcher.is_null() {
         nvim_socket_watcher_set_close_cb(watcher, cb);
     }

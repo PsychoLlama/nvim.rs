@@ -412,8 +412,7 @@ fn terminfo_fmt_impl(buf: &mut [u8], input: &[u8], params: &mut [TpVar]) -> Opti
             snums: &mut snums,
             params,
         };
-        let (new_i, new_out_pos) =
-            process_format_command(buf, out_pos, input, i - 1, &mut ctx)?;
+        let (new_i, new_out_pos) = process_format_command(buf, out_pos, input, i - 1, &mut ctx)?;
         i = new_i;
         out_pos = new_out_pos;
     }
@@ -982,8 +981,10 @@ pub unsafe extern "C" fn rs_patch_terminfo_bugs(
     let _foot = is_term_family(term, b"foot");
 
     let iterm_pretending_xterm = xterm && iterm_env;
-    let gnome_pretending_xterm = xterm && !colorterm.is_empty() && contains(colorterm, b"gnome-terminal");
-    let mate_pretending_xterm = xterm && !colorterm.is_empty() && contains(colorterm, b"mate-terminal");
+    let gnome_pretending_xterm =
+        xterm && !colorterm.is_empty() && contains(colorterm, b"gnome-terminal");
+    let mate_pretending_xterm =
+        xterm && !colorterm.is_empty() && contains(colorterm, b"mate-terminal");
     let true_xterm = xterm && has_xterm_version && !bsdvt;
     let _cygwin = is_term_family(term, b"cygwin");
 
@@ -1002,7 +1003,11 @@ pub unsafe extern "C" fn rs_patch_terminfo_bugs(
             set_if_empty(defs, TerminfoDef::kTerm_from_status_line, b"\x07\0");
         }
         set_if_empty(defs, TerminfoDef::kTerm_enter_italics_mode, b"\x1b[3m\0");
-        set_if_empty(defs, TerminfoDef::kTerm_set_lr_margin, b"\x1b[%i%p1%d;%p2%ds\0");
+        set_if_empty(
+            defs,
+            TerminfoDef::kTerm_set_lr_margin,
+            b"\x1b[%i%p1%d;%p2%ds\0",
+        );
     } else if rxvt {
         set_if_empty(defs, TerminfoDef::kTerm_enter_italics_mode, b"\x1b[3m\0");
         set_if_empty(defs, TerminfoDef::kTerm_to_status_line, b"\x1b]2\0");
@@ -1035,30 +1040,57 @@ pub unsafe extern "C" fn rs_patch_terminfo_bugs(
         if true_xterm || iterm || iterm_pretending_xterm {
             state.max_colors = 256;
             // Use colon separator (ISO 8613-6 compliant)
-            set_str(defs, TerminfoDef::kTerm_set_a_foreground,
-                b"\x1b[%?%p1%{8}%<%t3%p1%d%e%p1%{16}%<%t9%p1%{8}%-%d%e38:5:%p1%d%;m\0");
-            set_str(defs, TerminfoDef::kTerm_set_a_background,
-                b"\x1b[%?%p1%{8}%<%t4%p1%d%e%p1%{16}%<%t10%p1%{8}%-%d%e48:5:%p1%d%;m\0");
-        } else if konsolev != 0 || xterm || gnome || rxvt || st || putty
-            || linuxvt || mate_pretending_xterm || gnome_pretending_xterm || tmux
-            || contains(colorterm, b"256") || contains(term, b"256")
+            set_str(
+                defs,
+                TerminfoDef::kTerm_set_a_foreground,
+                b"\x1b[%?%p1%{8}%<%t3%p1%d%e%p1%{16}%<%t9%p1%{8}%-%d%e38:5:%p1%d%;m\0",
+            );
+            set_str(
+                defs,
+                TerminfoDef::kTerm_set_a_background,
+                b"\x1b[%?%p1%{8}%<%t4%p1%d%e%p1%{16}%<%t10%p1%{8}%-%d%e48:5:%p1%d%;m\0",
+            );
+        } else if konsolev != 0
+            || xterm
+            || gnome
+            || rxvt
+            || st
+            || putty
+            || linuxvt
+            || mate_pretending_xterm
+            || gnome_pretending_xterm
+            || tmux
+            || contains(colorterm, b"256")
+            || contains(term, b"256")
         {
             state.max_colors = 256;
             // Use semicolon separator (more compatible)
-            set_str(defs, TerminfoDef::kTerm_set_a_foreground,
-                b"\x1b[%?%p1%{8}%<%t3%p1%d%e%p1%{16}%<%t9%p1%{8}%-%d%e38;5;%p1%d%;m\0");
-            set_str(defs, TerminfoDef::kTerm_set_a_background,
-                b"\x1b[%?%p1%{8}%<%t4%p1%d%e%p1%{16}%<%t10%p1%{8}%-%d%e48;5;%p1%d%;m\0");
+            set_str(
+                defs,
+                TerminfoDef::kTerm_set_a_foreground,
+                b"\x1b[%?%p1%{8}%<%t3%p1%d%e%p1%{16}%<%t9%p1%{8}%-%d%e38;5;%p1%d%;m\0",
+            );
+            set_str(
+                defs,
+                TerminfoDef::kTerm_set_a_background,
+                b"\x1b[%?%p1%{8}%<%t4%p1%d%e%p1%{16}%<%t10%p1%{8}%-%d%e48;5;%p1%d%;m\0",
+            );
         }
     }
 
     // 16 color support
     if state.max_colors < 16 && !colorterm.is_empty() {
         state.max_colors = 16;
-        set_if_empty(defs, TerminfoDef::kTerm_set_a_foreground,
-            b"\x1b[%?%p1%{8}%<%t3%p1%d%e%p1%{16}%<%t9%p1%{8}%-%d%e39%;m\0");
-        set_if_empty(defs, TerminfoDef::kTerm_set_a_background,
-            b"\x1b[%?%p1%{8}%<%t4%p1%d%e%p1%{16}%<%t10%p1%{8}%-%d%e39%;m\0");
+        set_if_empty(
+            defs,
+            TerminfoDef::kTerm_set_a_foreground,
+            b"\x1b[%?%p1%{8}%<%t3%p1%d%e%p1%{16}%<%t9%p1%{8}%-%d%e39%;m\0",
+        );
+        set_if_empty(
+            defs,
+            TerminfoDef::kTerm_set_a_background,
+            b"\x1b[%?%p1%{8}%<%t4%p1%d%e%p1%{16}%<%t10%p1%{8}%-%d%e39%;m\0",
+        );
     }
 
     // Blacklist terminals that cannot be trusted to report DECSCUSR support
@@ -1182,7 +1214,11 @@ pub unsafe extern "C" fn rs_augment_terminfo(
         let cursor_color_bytes = CStr::from_ptr(cursor_color).to_bytes();
         output.set_cursor_color_as_str = i32::from(contains(cursor_color_bytes, b"%s"));
 
-        set_if_empty(defs, TerminfoDef::kTerm_reset_cursor_color, b"\x1b]112\x07\0");
+        set_if_empty(
+            defs,
+            TerminfoDef::kTerm_reset_cursor_color,
+            b"\x1b]112\x07\0",
+        );
     }
 
     // Can set title
@@ -1194,8 +1230,10 @@ pub unsafe extern "C" fn rs_augment_terminfo(
 
     // Focus reporting
     if rxvt {
-        output.enable_focus_reporting = b"\x1b[?1004h\x1b]777;focus;on\x07\0".as_ptr() as *const c_char;
-        output.disable_focus_reporting = b"\x1b[?1004l\x1b]777;focus;off\x07\0".as_ptr() as *const c_char;
+        output.enable_focus_reporting =
+            b"\x1b[?1004h\x1b]777;focus;on\x07\0".as_ptr() as *const c_char;
+        output.disable_focus_reporting =
+            b"\x1b[?1004l\x1b]777;focus;off\x07\0".as_ptr() as *const c_char;
     } else {
         output.enable_focus_reporting = b"\x1b[?1004h\0".as_ptr() as *const c_char;
         output.disable_focus_reporting = b"\x1b[?1004l\0".as_ptr() as *const c_char;
@@ -1385,15 +1423,9 @@ mod tests {
         )))]
         {
             let term = CString::new("vt100").unwrap();
-            assert_eq!(
-                unsafe { rs_terminfo_is_bsd_console(term.as_ptr()) },
-                0
-            );
+            assert_eq!(unsafe { rs_terminfo_is_bsd_console(term.as_ptr()) }, 0);
             let term = CString::new("vt220").unwrap();
-            assert_eq!(
-                unsafe { rs_terminfo_is_bsd_console(term.as_ptr()) },
-                0
-            );
+            assert_eq!(unsafe { rs_terminfo_is_bsd_console(term.as_ptr()) }, 0);
         }
     }
 
@@ -1587,16 +1619,15 @@ mod tests {
 
     #[test]
     fn test_termkey_modifiers_null_buf() {
-        let len = unsafe { rs_handle_termkey_modifiers(TERMKEY_KEYMOD_CTRL, std::ptr::null_mut(), 64) };
+        let len =
+            unsafe { rs_handle_termkey_modifiers(TERMKEY_KEYMOD_CTRL, std::ptr::null_mut(), 64) };
         assert_eq!(len, 0);
     }
 
     #[test]
     fn test_termkey_modifiers_zero_len() {
         let mut buf = [0i8; 1];
-        let len = unsafe {
-            rs_handle_termkey_modifiers(TERMKEY_KEYMOD_CTRL, buf.as_mut_ptr(), 0)
-        };
+        let len = unsafe { rs_handle_termkey_modifiers(TERMKEY_KEYMOD_CTRL, buf.as_mut_ptr(), 0) };
         assert_eq!(len, 0);
     }
 

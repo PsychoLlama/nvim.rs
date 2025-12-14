@@ -97,10 +97,7 @@ pub unsafe extern "C" fn rs_aucmd_pattern_length(pat: *const c_char) -> usize {
 /// `pat` must be a valid pointer within a NUL-terminated C string, and
 /// `patlen` must not exceed the remaining length of the string.
 #[no_mangle]
-pub unsafe extern "C" fn rs_aucmd_next_pattern(
-    pat: *const c_char,
-    patlen: usize,
-) -> *const c_char {
+pub unsafe extern "C" fn rs_aucmd_next_pattern(pat: *const c_char, patlen: usize) -> *const c_char {
     let mut p = pat.add(patlen);
     if *p == b',' as c_char {
         p = p.add(1);

@@ -19,19 +19,19 @@ pub use nvim_ascii::*;
 pub use nvim_autocmd::*;
 pub use nvim_buffer::*;
 pub use nvim_charset::*;
-pub use nvim_cmdline::*;
 pub use nvim_cmdhist::*;
-pub use nvim_cursor_shape::*;
+pub use nvim_cmdline::*;
 pub use nvim_collections::garray::*;
 pub use nvim_collections::hashtab::*;
 pub use nvim_collections::queue::*;
 pub use nvim_context::*;
+pub use nvim_cursor_shape::*;
 pub use nvim_diff::*;
 // Note: rs_hash_hash, rs_hash_hash_len are in nvim_memutil (not re-exported from hashtab)
 pub use nvim_encoding::base64::*;
 pub use nvim_encoding::sha256::*;
-pub use nvim_event::*;
 pub use nvim_eval::*;
+pub use nvim_event::*;
 pub use nvim_ex_docmd::*;
 pub use nvim_ex_eval::*;
 pub use nvim_fileio::*;
@@ -59,11 +59,11 @@ pub use nvim_register::*;
 pub use nvim_search::*;
 pub use nvim_spell::*;
 pub use nvim_strings::*;
+pub use nvim_tui::*;
+pub use nvim_unpacker::*;
 pub use nvim_utf8proc::*;
 pub use nvim_version::*;
 pub use nvim_window::*;
-pub use nvim_unpacker::*;
-pub use nvim_tui::*;
 
 /// FFI-safe result type for operations that can fail
 #[repr(C)]

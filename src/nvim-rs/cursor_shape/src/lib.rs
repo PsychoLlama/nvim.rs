@@ -21,24 +21,24 @@ pub enum CursorShape {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModeShape {
-    N = 0,      // Normal mode
-    V = 1,      // Visual mode
-    I = 2,      // Insert mode
-    R = 3,      // Replace mode
-    C = 4,      // Command line Normal mode
-    Ci = 5,     // Command line Insert mode
-    Cr = 6,     // Command line Replace mode
-    O = 7,      // Operator-pending mode
-    Ve = 8,     // Visual mode with 'selection' exclusive
-    Cline = 9,  // On command line
+    N = 0,     // Normal mode
+    V = 1,     // Visual mode
+    I = 2,     // Insert mode
+    R = 3,     // Replace mode
+    C = 4,     // Command line Normal mode
+    Ci = 5,    // Command line Insert mode
+    Cr = 6,    // Command line Replace mode
+    O = 7,     // Operator-pending mode
+    Ve = 8,    // Visual mode with 'selection' exclusive
+    Cline = 9, // On command line
     Status = 10,
     Sdrag = 11,
     Vsep = 12,
     Vdrag = 13,
     More = 14,
     Morel = 15,
-    Sm = 16,    // showing matching paren
-    Term = 17,  // Terminal mode
+    Sm = 16,   // showing matching paren
+    Term = 17, // Terminal mode
     Count = 18,
 }
 

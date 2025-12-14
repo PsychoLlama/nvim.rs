@@ -99,13 +99,11 @@ pub type Array = KVec<Object>;
 
 /// `KeyValuePair` for Dict
 #[repr(C)]
-#[derive(Clone, Copy)]
-#[derive(Default)]
+#[derive(Clone, Copy, Default)]
 pub struct KeyValuePair {
     pub key: NvimString,
     pub value: Object,
 }
-
 
 /// Dict type - `kvec_t(KeyValuePair)`
 pub type Dict = KVec<KeyValuePair>;
@@ -144,7 +142,7 @@ impl Default for Object {
 }
 
 impl Object {
-    #[must_use] 
+    #[must_use]
     pub const fn nil() -> Self {
         Self {
             r#type: ObjectType::Nil,
@@ -152,7 +150,7 @@ impl Object {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn boolean(b: bool) -> Self {
         Self {
             r#type: ObjectType::Boolean,
@@ -160,7 +158,7 @@ impl Object {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn integer(i: i64) -> Self {
         Self {
             r#type: ObjectType::Integer,
@@ -168,7 +166,7 @@ impl Object {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn float(f: f64) -> Self {
         Self {
             r#type: ObjectType::Float,
@@ -176,7 +174,7 @@ impl Object {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn string(s: NvimString) -> Self {
         Self {
             r#type: ObjectType::String,
@@ -184,7 +182,7 @@ impl Object {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn array(a: Array) -> Self {
         Self {
             r#type: ObjectType::Array,
@@ -192,7 +190,7 @@ impl Object {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn dict(d: Dict) -> Self {
         Self {
             r#type: ObjectType::Dict,
@@ -200,7 +198,7 @@ impl Object {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn buffer(handle: i64) -> Self {
         Self {
             r#type: ObjectType::Buffer,
@@ -208,7 +206,7 @@ impl Object {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn window(handle: i64) -> Self {
         Self {
             r#type: ObjectType::Window,
@@ -216,7 +214,7 @@ impl Object {
         }
     }
 
-    #[must_use] 
+    #[must_use]
     pub const fn tabpage(handle: i64) -> Self {
         Self {
             r#type: ObjectType::Tabpage,
@@ -648,7 +646,9 @@ pub unsafe extern "C" fn rs_unpack(
                 api_set_error(
                     err,
                     ErrorType::Exception,
-                    b"trailing data in msgpack string\0".as_ptr().cast::<c_char>(),
+                    b"trailing data in msgpack string\0"
+                        .as_ptr()
+                        .cast::<c_char>(),
                 );
             }
             obj

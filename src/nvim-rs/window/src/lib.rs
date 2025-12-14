@@ -464,8 +464,9 @@ pub extern "C" fn rs_one_window_in_tab(win: WinHandle, tp: TabpageHandle) -> c_i
 fn last_window_impl(win: WinHandle) -> bool {
     // Check if there's only one non-floating window in current tabpage
     // AND there's only one tabpage
-    one_window_in_tab_impl(win, unsafe { TabpageHandle::from_ptr(std::ptr::null_mut()) })
-        && one_tabpage_impl()
+    one_window_in_tab_impl(win, unsafe {
+        TabpageHandle::from_ptr(std::ptr::null_mut())
+    }) && one_tabpage_impl()
 }
 
 /// FFI wrapper for `last_window`.

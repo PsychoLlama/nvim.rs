@@ -439,11 +439,16 @@ pub unsafe extern "C" fn rs_api_object_to_bool(
     match obj.obj_type {
         K_OBJECT_TYPE_BOOLEAN => obj.data.boolean,
         K_OBJECT_TYPE_INTEGER => obj.data.integer != 0, // C semantics: non-zero int is true
-        K_OBJECT_TYPE_NIL => nil_value, // caller decides what NIL means
+        K_OBJECT_TYPE_NIL => nil_value,                 // caller decides what NIL means
         _ => {
             // Set error: "%s is not a boolean"
             static FMT: &[u8] = b"%s is not a boolean\0";
-            api_set_error(err, K_ERROR_TYPE_VALIDATION, FMT.as_ptr() as *const c_char, what);
+            api_set_error(
+                err,
+                K_ERROR_TYPE_VALIDATION,
+                FMT.as_ptr() as *const c_char,
+                what,
+            );
             false
         }
     }
@@ -549,10 +554,20 @@ pub unsafe extern "C" fn rs_api_err_invalid(
     if !val_s.is_null() && *val_s == 0 {
         if has_space {
             static FMT: &[u8] = b"Invalid %s\0";
-            api_set_error(err, K_ERROR_TYPE_VALIDATION, FMT.as_ptr() as *const c_char, name);
+            api_set_error(
+                err,
+                K_ERROR_TYPE_VALIDATION,
+                FMT.as_ptr() as *const c_char,
+                name,
+            );
         } else {
             static FMT: &[u8] = b"Invalid '%s'\0";
-            api_set_error(err, K_ERROR_TYPE_VALIDATION, FMT.as_ptr() as *const c_char, name);
+            api_set_error(
+                err,
+                K_ERROR_TYPE_VALIDATION,
+                FMT.as_ptr() as *const c_char,
+                name,
+            );
         }
         return;
     }
@@ -585,17 +600,41 @@ pub unsafe extern "C" fn rs_api_err_invalid(
     if has_space {
         if quote_val {
             static FMT: &[u8] = b"Invalid %s: '%s'\0";
-            api_set_error(err, K_ERROR_TYPE_VALIDATION, FMT.as_ptr() as *const c_char, name, val_s);
+            api_set_error(
+                err,
+                K_ERROR_TYPE_VALIDATION,
+                FMT.as_ptr() as *const c_char,
+                name,
+                val_s,
+            );
         } else {
             static FMT: &[u8] = b"Invalid %s: %s\0";
-            api_set_error(err, K_ERROR_TYPE_VALIDATION, FMT.as_ptr() as *const c_char, name, val_s);
+            api_set_error(
+                err,
+                K_ERROR_TYPE_VALIDATION,
+                FMT.as_ptr() as *const c_char,
+                name,
+                val_s,
+            );
         }
     } else if quote_val {
         static FMT: &[u8] = b"Invalid '%s': '%s'\0";
-        api_set_error(err, K_ERROR_TYPE_VALIDATION, FMT.as_ptr() as *const c_char, name, val_s);
+        api_set_error(
+            err,
+            K_ERROR_TYPE_VALIDATION,
+            FMT.as_ptr() as *const c_char,
+            name,
+            val_s,
+        );
     } else {
         static FMT: &[u8] = b"Invalid '%s': %s\0";
-        api_set_error(err, K_ERROR_TYPE_VALIDATION, FMT.as_ptr() as *const c_char, name, val_s);
+        api_set_error(
+            err,
+            K_ERROR_TYPE_VALIDATION,
+            FMT.as_ptr() as *const c_char,
+            name,
+            val_s,
+        );
     }
 }
 
@@ -711,7 +750,12 @@ pub unsafe extern "C" fn rs_object_to_hl_id(
         }
         _ => {
             static FMT: &[u8] = b"Invalid hl_group: %s\0";
-            api_set_error(err, K_ERROR_TYPE_VALIDATION, FMT.as_ptr() as *const c_char, what);
+            api_set_error(
+                err,
+                K_ERROR_TYPE_VALIDATION,
+                FMT.as_ptr() as *const c_char,
+                what,
+            );
             0
         }
     }
