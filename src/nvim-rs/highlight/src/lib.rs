@@ -688,6 +688,13 @@ pub extern "C" fn rs_highlight_use_hlstate() -> bool {
     }
 }
 
+/// Get hlstate_active flag. Rust is the source of truth.
+#[no_mangle]
+pub extern "C" fn rs_get_hlstate_active() -> bool {
+    let store = ATTR_STORE.lock().unwrap();
+    store.hlstate_active
+}
+
 // ============================================================================
 // FFI Functions for Namespace Highlight Storage (ns_hls)
 // ============================================================================

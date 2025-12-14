@@ -163,7 +163,6 @@ int nvim_get_hlf_inactive(void) { return HLF_INACTIVE; }
 
 // Accessors for hl_inspect (Phase 18)
 const char *nvim_get_hlf_name(int idx) { return hlf_names[idx]; }
-// nvim_get_hlstate_active is defined after hlstate_active (line ~182)
 
 // Accessors for update_window_hl (Phase 17)
 int nvim_get_hlf_nfloat(void) { return HLF_NFLOAT; }
@@ -177,10 +176,10 @@ static void update_ns_hl(int ns_id);
 // Wrapper for update_ns_hl (called from Rust)
 void nvim_update_ns_hl(int ns_id) { update_ns_hl(ns_id); }
 
-static bool hlstate_active = false;
-
-// Accessor for hl_inspect (Phase 18) - must be after hlstate_active
-bool nvim_get_hlstate_active(void) { return hlstate_active; }
+// hlstate_active is now owned by Rust (ATTR_STORE.hlstate_active)
+// This accessor calls Rust to get the value
+extern bool rs_get_hlstate_active(void);
+bool nvim_get_hlstate_active(void) { return rs_get_hlstate_active(); }
 
 void highlight_init(void)
 {
@@ -189,14 +188,13 @@ void highlight_init(void)
 }
 
 /// @return true if hl table was reset
+/// Rust handles the state transition, C handles clear_hl_tables callback
 bool highlight_use_hlstate(void)
 {
-  if (hlstate_active) {
+  // rs_highlight_use_hlstate returns true if this is the first time enabling
+  if (!rs_highlight_use_hlstate()) {
     return false;
   }
-  hlstate_active = true;
-  // Notify Rust about hlstate mode change
-  rs_highlight_use_hlstate();
   // hl tables must now be rebuilt.
   clear_hl_tables(true);
   return true;
@@ -1199,7 +1197,7 @@ static void hl_inspect_impl(Array *arr, int attr, Arena *arena);
 
 Array hl_inspect(int attr, Arena *arena)
 {
-  if (!hlstate_active) {
+  if (!nvim_get_hlstate_active()) {
     return (Array)ARRAY_DICT_INIT;
   }
   Array ret = arena_array(arena, hl_inspect_size(attr));

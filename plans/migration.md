@@ -2,21 +2,19 @@
 
 ## Current Status
 
-**687 rs_* functions migrated**
+**688 rs_* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
 ### Current Work
 
+**Phase 20 - hlstate Consolidation** ✅
+- `rs_get_hlstate_active()` - Rust is now single source of truth for hlstate_active
+- `highlight_use_hlstate()` simplified - just calls Rust + clear_hl_tables callback
+
 **Phase 19 - API Query Functions** ✅
 - `rs_object_to_color()` - convert API Object to color value
 - `rs_hl_get_attr_by_id()` - get highlight attributes as Dict for API
-
-**Phase 18 - API Types & Dict Building** ✅
-- Added Object constructors, Dict/Array helpers, arena allocation to nvim-api crate
-- `rs_hlattrs2dict()` - convert HlAttrs to Dict for API responses
-- `rs_hl_inspect()` - inspect highlight attribute composition
-- C accessors: nvim_get_hlf_name, nvim_get_hlstate_active
 
 **Highlight Migration Status:** ✅ COMPLETE
 - Core computation: Fully in Rust (rgb_blend, cterm_blend, combine_attrs, blend_attrs)
@@ -24,6 +22,7 @@ Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get cur
 - UI highlight lookup: Fully in Rust (hl_get_ui_attr, win_bg_attr)
 - Window highlight update: Fully in Rust (update_window_hl)
 - API conversion: Fully in Rust (hlattrs2dict, hl_inspect, hl_get_attr_by_id, object_to_color)
+- hlstate management: Rust is source of truth (rs_get_hlstate_active, rs_highlight_use_hlstate)
 - Entry storage: Rust only (AttrEntryStore)
 - URL storage: Rust only
 - Cache management: Rust only (combine/blend caches)
