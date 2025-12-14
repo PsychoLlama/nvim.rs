@@ -181,6 +181,19 @@ void nvim_update_ns_hl(int ns_id) { update_ns_hl(ns_id); }
 extern bool rs_get_hlstate_active(void);
 bool nvim_get_hlstate_active(void) { return rs_get_hlstate_active(); }
 
+// C wrapper for UI dispatch - callable from Rust
+// Sends hl_attr_define event to all UIs
+void nvim_ui_call_hl_attr_define(int id, HlAttrs attrs, Array inspect)
+{
+  ui_call_hl_attr_define(id, attrs, attrs, inspect);
+}
+
+// C wrapper for emsg - callable from Rust
+void nvim_highlight_emsg_overflow(void)
+{
+  emsg(_("E424: Too many different highlighting attributes in use"));
+}
+
 void highlight_init(void)
 {
   // Rust handles the attribute entry store including the dummy entry at index 0
@@ -200,6 +213,23 @@ bool highlight_use_hlstate(void)
   return true;
 }
 
+#ifdef USE_RUST_HIGHLIGHT
+extern int rs_get_attr_entry_full(HlEntry entry, Arena *arena);
+
+/// Return the attr number for a set of colors and font, and optionally
+/// a semantic description (see ext_hlstate documentation).
+/// Add a new entry to the attr_entries array if the combination is new.
+/// @return 0 for error.
+static int get_attr_entry(HlEntry entry)
+{
+  // Rust handles the full flow: lookup/insert, retry on overflow, UI dispatch
+  // We just manage the arena for hl_inspect
+  Arena arena = ARENA_EMPTY;
+  int id = rs_get_attr_entry_full(entry, &arena);
+  arena_mem_free(arena_finish(&arena));
+  return id;
+}
+#else
 /// Return the attr number for a set of colors and font, and optionally
 /// a semantic description (see ext_hlstate documentation).
 /// Add a new entry to the attr_entries array if the combination is new.
@@ -252,6 +282,7 @@ retry: {}
   arena_mem_free(arena_finish(&arena));
   return id;
 }
+#endif  // USE_RUST_HIGHLIGHT
 
 /// When a UI connects, we need to send it the table of highlights used so far.
 void ui_send_all_hls(RemoteUI *ui)

@@ -2,19 +2,20 @@
 
 ## Current Status
 
-**688 rs_* functions migrated**
+**689 rs_* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
 ### Current Work
 
+**Phase 21 - get_attr_entry Migration** ✅
+- `rs_get_attr_entry_full()` - full flow: lookup/insert, retry on overflow, UI dispatch
+- C wrappers: nvim_ui_call_hl_attr_define, nvim_highlight_emsg_overflow
+- C just manages arena; Rust handles retry logic with AtomicBool for recursion detection
+
 **Phase 20 - hlstate Consolidation** ✅
 - `rs_get_hlstate_active()` - Rust is now single source of truth for hlstate_active
 - `highlight_use_hlstate()` simplified - just calls Rust + clear_hl_tables callback
-
-**Phase 19 - API Query Functions** ✅
-- `rs_object_to_color()` - convert API Object to color value
-- `rs_hl_get_attr_by_id()` - get highlight attributes as Dict for API
 
 **Highlight Migration Status:** ✅ COMPLETE
 - Core computation: Fully in Rust (rgb_blend, cterm_blend, combine_attrs, blend_attrs)
@@ -23,7 +24,7 @@ Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get cur
 - Window highlight update: Fully in Rust (update_window_hl)
 - API conversion: Fully in Rust (hlattrs2dict, hl_inspect, hl_get_attr_by_id, object_to_color)
 - hlstate management: Rust is source of truth (rs_get_hlstate_active, rs_highlight_use_hlstate)
-- Entry storage: Rust only (AttrEntryStore)
+- Entry storage: Rust only (AttrEntryStore), with UI dispatch via C callback
 - URL storage: Rust only
 - Cache management: Rust only (combine/blend caches)
 - Namespace storage: Rust only (ns_hls, ns_hl_attr)
@@ -33,7 +34,6 @@ Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get cur
 
 **What remains in C (not migratable without major work):**
 - `dict2hlattrs` - Validation macros, typed dict parsing (gen_api_dispatch)
-- `get_attr_entry` - UI event dispatch (ui_call_hl_attr_define)
 - `ns_get_hl` middle phase - Lua callback execution (nlua_call_ref)
 - `highlight_changed` - UI events, hl_table manipulation, garray
 

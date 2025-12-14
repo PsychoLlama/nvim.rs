@@ -657,6 +657,79 @@ pub extern "C" fn rs_get_attr_entry(entry: HlEntry) -> GetAttrEntryResult {
     }
 }
 
+// ============================================================================
+// Full get_attr_entry with UI dispatch (Phase 21)
+// ============================================================================
+
+extern "C" {
+    /// C wrapper for UI dispatch - sends hl_attr_define event to all UIs
+    fn nvim_ui_call_hl_attr_define(id: c_int, attrs: HlAttrs, inspect: Array);
+    /// C wrapper for emsg - reports table overflow error
+    fn nvim_highlight_emsg_overflow();
+    /// C wrapper for clear_hl_tables - clears tables and triggers highlight_changed
+    fn clear_hl_tables(reinit: bool);
+}
+
+/// Thread-local flag to detect recursive get_attr_entry calls
+static GET_ATTR_ENTRY_RECURSIVE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Full get_attr_entry implementation with retry logic and UI dispatch.
+///
+/// This is the complete replacement for C's get_attr_entry() function.
+/// It handles:
+/// - Adding/looking up attribute entries
+/// - Table overflow with retry (clear tables once and retry)
+/// - UI dispatch for new entries
+///
+/// Returns 0 for error, positive ID for success.
+///
+/// # Safety
+/// - `arena` must be a valid Arena pointer for hl_inspect allocation
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_attr_entry_full(entry: HlEntry, arena: *mut Arena) -> c_int {
+    use std::sync::atomic::Ordering;
+
+    let mut retried = false;
+
+    loop {
+        // Try to get or insert the entry
+        let result = rs_get_attr_entry(entry);
+
+        if result.id == -1 {
+            // Table overflow
+            let recursive = GET_ATTR_ENTRY_RECURSIVE.load(Ordering::SeqCst);
+            if recursive || retried {
+                nvim_highlight_emsg_overflow();
+                return 0;
+            }
+
+            GET_ATTR_ENTRY_RECURSIVE.store(true, Ordering::SeqCst);
+            clear_hl_tables(true);
+            GET_ATTR_ENTRY_RECURSIVE.store(false, Ordering::SeqCst);
+
+            if entry.kind == HlKind::Combine {
+                // Combine entry is now invalid, don't retry
+                return 0;
+            }
+            retried = true;
+            continue;
+        }
+
+        if !result.is_new {
+            // Existing entry - just return the ID
+            return result.id;
+        }
+
+        // New entry - send UI event
+        let id = result.id;
+        let inspect = rs_hl_inspect(id, arena);
+        nvim_ui_call_hl_attr_define(id, entry.attr, inspect);
+
+        return id;
+    }
+}
+
 /// Clear all highlight tables. If reinit is true, reinitialize after clearing.
 /// If reinit is false, also destroys namespace storage.
 #[no_mangle]
