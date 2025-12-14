@@ -35,8 +35,10 @@ All core highlight functions have Rust implementations via `USE_RUST_HIGHLIGHT`:
 - Core computation, attribute combination, UI lookup
 - API conversion (hlattrs2dict, hl_inspect, object_to_color)
 
-**Now unblocked:** `ns_get_hl` Lua callback (can use new Lua FFI)
-**Remaining C:** `dict2hlattrs`, `highlight_changed`
+**Remaining C (low priority):**
+- `dict2hlattrs` - Uses generated API keyset `Dict(highlight)`, complex to port
+- `ns_get_hl` callback logic - Blocked by dict2hlattrs (uses it to parse Lua result)
+- `highlight_changed` - Calls into syntax/screen subsystems
 
 ---
 
