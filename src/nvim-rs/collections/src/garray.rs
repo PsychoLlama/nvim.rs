@@ -249,6 +249,110 @@ pub unsafe extern "C" fn rs_ga_concat_len(gap: *mut GArray, s: *const c_char, le
     }
 }
 
+/// Clear a growing array that contains a list of string pointers.
+///
+/// Frees each string pointer in the array, then clears the array itself.
+///
+/// # Safety
+///
+/// `gap` must be a valid pointer to a `GArray` structure containing
+/// char* pointers (strings allocated with xmalloc/xstrdup).
+#[no_mangle]
+pub unsafe extern "C" fn rs_ga_clear_strings(gap: *mut GArray) {
+    if gap.is_null() {
+        return;
+    }
+
+    let gap_ref = unsafe { &*gap };
+    if !gap_ref.ga_data.is_null() {
+        let strings = gap_ref.ga_data as *mut *mut c_char;
+        for i in 0..gap_ref.ga_len {
+            let str_ptr = unsafe { *strings.add(i as usize) };
+            unsafe { xfree(str_ptr.cast()) };
+        }
+    }
+
+    unsafe { rs_ga_clear(gap) };
+}
+
+/// Concatenate all strings in a growing array with a separator.
+///
+/// Returns a newly allocated string containing all strings joined by `sep`.
+/// Returns an empty string if the array is empty.
+///
+/// # Safety
+///
+/// `gap` must be a valid pointer to a `GArray` structure containing
+/// char* pointers (null-terminated strings).
+/// `sep` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ga_concat_strings(
+    gap: *const GArray,
+    sep: *const c_char,
+) -> *mut c_char {
+    use nvim_memory::xmallocz;
+
+    if gap.is_null() || sep.is_null() {
+        // Return empty string
+        let ret = unsafe { xmallocz(0) } as *mut c_char;
+        unsafe { *ret = 0 };
+        return ret;
+    }
+
+    let gap_ref = unsafe { &*gap };
+    let nelem = gap_ref.ga_len as usize;
+
+    if nelem == 0 {
+        // Return empty string
+        let ret = unsafe { xmallocz(0) } as *mut c_char;
+        unsafe { *ret = 0 };
+        return ret;
+    }
+
+    let strings = gap_ref.ga_data as *const *const c_char;
+    let sep_len = unsafe { libc::strlen(sep) };
+
+    // Calculate total length
+    let mut total_len: usize = 0;
+    for i in 0..nelem {
+        let s = unsafe { *strings.add(i) };
+        if !s.is_null() {
+            total_len += unsafe { libc::strlen(s) };
+        }
+    }
+
+    // Add space for separators: (nelem - 1) * sep_len
+    if nelem > 1 {
+        total_len += (nelem - 1) * sep_len;
+    }
+
+    // Allocate result buffer (xmallocz adds +1 for NUL and zeroes it)
+    let ret = unsafe { xmallocz(total_len) } as *mut c_char;
+    let mut pos: usize = 0;
+
+    for i in 0..nelem {
+        let s = unsafe { *strings.add(i) };
+        if !s.is_null() {
+            let s_len = unsafe { libc::strlen(s) };
+            unsafe {
+                ptr::copy_nonoverlapping(s, ret.add(pos), s_len);
+            }
+            pos += s_len;
+        }
+
+        // Add separator after each string except the last
+        if i < nelem - 1 && sep_len > 0 {
+            unsafe {
+                ptr::copy_nonoverlapping(sep, ret.add(pos), sep_len);
+            }
+            pos += sep_len;
+        }
+    }
+
+    // NUL terminator is already set by xmallocz
+    ret
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
