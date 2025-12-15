@@ -1583,8 +1583,13 @@ pub unsafe extern "C" fn rs_grid_ins_lines(
         if width != grid_cols {
             // need to copy part of a line
             let mut j = end - 1 - i;
-            while j - line_count >= row {
+            // C does: while ((j -= line_count) >= row)
+            // We need to decrement j BEFORE checking condition
+            loop {
                 j -= line_count;
+                if j < row {
+                    break;
+                }
                 linecopy_impl(grid, j + line_count, j, col, width);
             }
             j += line_count;
@@ -1594,8 +1599,13 @@ pub unsafe extern "C" fn rs_grid_ins_lines(
             // whole width, moving the line pointers is faster
             let mut j = end - 1 - i;
             let temp = *line_offset.add(j as usize);
-            while j - line_count >= row {
+            // C does: while ((j -= line_count) >= row)
+            // We need to decrement j BEFORE checking condition
+            loop {
                 j -= line_count;
+                if j < row {
+                    break;
+                }
                 *line_offset.add((j + line_count) as usize) = *line_offset.add(j as usize);
             }
             *line_offset.add((j + line_count) as usize) = temp;
@@ -1635,8 +1645,13 @@ pub unsafe extern "C" fn rs_grid_del_lines(
         if width != grid_cols {
             // need to copy part of a line
             let mut j = row + i;
-            while j + line_count <= end - 1 {
+            // C does: while ((j += line_count) <= end - 1)
+            // We need to increment j BEFORE checking condition
+            loop {
                 j += line_count;
+                if j > end - 1 {
+                    break;
+                }
                 linecopy_impl(grid, j - line_count, j, col, width);
             }
             j -= line_count;
@@ -1646,8 +1661,13 @@ pub unsafe extern "C" fn rs_grid_del_lines(
             // whole width, moving the line pointers is faster
             let mut j = row + i;
             let temp = *line_offset.add(j as usize);
-            while j + line_count <= end - 1 {
+            // C does: while ((j += line_count) <= end - 1)
+            // We need to increment j BEFORE checking condition
+            loop {
                 j += line_count;
+                if j > end - 1 {
+                    break;
+                }
                 *line_offset.add((j - line_count) as usize) = *line_offset.add(j as usize);
             }
             *line_offset.add((j - line_count) as usize) = temp;
