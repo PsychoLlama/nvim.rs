@@ -6,6 +6,15 @@
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
+### Phase 29: Grid Line State Accessors ✅ COMPLETE
+
+Added C accessors for grid_line_* static state (10 get/set pairs + 1 UI wrapper):
+- Grid pointer, row, coloff, maxcol
+- first, last, clear_to, bg_attr, clear_attr, flags
+- `nvim_ui_grid_cursor_goto()` - UI cursor positioning
+
+**Next:** Phase 30 (grid line content functions).
+
 ### Phase 28: Line Buffer Infrastructure ✅ COMPLETE
 
 Added C accessors for line buffer globals:
@@ -14,8 +23,6 @@ Added C accessors for line buffer globals:
 - `nvim_get_linebuf_vcol()` - linebuf_vcol array
 - `nvim_get_linebuf_scratch()` - scratch buffer
 - `nvim_get_linebuf_size()` - buffer size
-
-**Next:** Phase 29 (grid line state functions).
 
 ### Phase 27: schar_get Functions ✅ COMPLETE
 
