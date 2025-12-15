@@ -98,6 +98,40 @@ int nvim_check_chars_options(void)
 {
   return check_chars_options() != NULL ? 1 : 0;
 }
+
+// =============================================================================
+// Line buffer accessors (Phase 28)
+// =============================================================================
+
+/// Get pointer to linebuf_char array
+schar_T *nvim_get_linebuf_char(void)
+{
+  return linebuf_char;
+}
+
+/// Get pointer to linebuf_attr array
+sattr_T *nvim_get_linebuf_attr(void)
+{
+  return linebuf_attr;
+}
+
+/// Get pointer to linebuf_vcol array
+colnr_T *nvim_get_linebuf_vcol(void)
+{
+  return linebuf_vcol;
+}
+
+/// Get pointer to linebuf_scratch buffer
+char *nvim_get_linebuf_scratch(void)
+{
+  return linebuf_scratch;
+}
+
+/// Get the current linebuf size
+size_t nvim_get_linebuf_size(void)
+{
+  return linebuf_size;
+}
 #endif
 
 /// Determine if dedicated window grid should be used or the default_grid
