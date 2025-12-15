@@ -2,9 +2,17 @@
 
 ## Current Status
 
-**724 rs\_\* functions migrated**
+**727 rs\_\* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
+
+### Phase 43: Dead Code Cleanup ✅ COMPLETE
+
+Removed 1132 lines of dead C fallback code from files with complete Rust implementations:
+- grid.c: -738 lines (36 #else blocks removed)
+- highlight_group.c: -269 lines (14 #else blocks removed)
+- buffer.c: -88 lines (extern wrapper cleanup)
+- diff.c: -43 lines (extern wrapper cleanup)
 
 ### Highlight Migration: ✅ COMPLETE (Dead Code Removed)
 
@@ -30,6 +38,10 @@ All grid.c functions that can reasonably be migrated are now in Rust.
 
 | Phase | Name | Key Functions |
 |-------|------|---------------|
+| 43 | Dead Code Cleanup | Removed 1132 lines from grid.c, highlight_group.c, buffer.c, diff.c |
+| 42 | Garray Complete | `rs_ga_clear_strings`, `rs_ga_concat_strings` |
+| 41 | Hashtab Complete | `rs_hash_clear_all`, removed dead C code |
+| 40 | Encoding Cleanup | Removed dead SHA-256 + Base64 fallback code |
 | 39 | Grid Handle Assignment | `rs_grid_assign_handle`, `rs_get_bordertext_col` |
 | 38 | Grid Line Puts | `rs_grid_line_puts` |
 | 37 | Grid Line Start/Mirror | `rs_grid_line_start`, `rs_linebuf_mirror` |
