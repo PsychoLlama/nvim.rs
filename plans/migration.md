@@ -2,9 +2,21 @@
 
 ## Current Status
 
-**701 rs\_\* functions migrated**
+**705 rs\_\* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
+
+### Phase 30: Grid Line Content Functions ✅ COMPLETE
+
+Added Rust implementations for grid line content manipulation:
+- `rs_grid_line_put_schar` - put single schar at column
+- `rs_grid_line_fill` - fill column range with schar
+- `rs_grid_line_clear_end` - set clear range for line
+- `rs_grid_line_cursor_goto` - move cursor to column
+
+C accessor: `nvim_screengrid_get_handle()` for ScreenGrid handle.
+
+**Next:** Phase 31 (grid line flush functions).
 
 ### Phase 29: Grid Line State Accessors ✅ COMPLETE
 
