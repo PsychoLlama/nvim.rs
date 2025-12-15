@@ -2,9 +2,22 @@
 
 ## Current Status
 
-**714 rs\_\* functions migrated**
+**716 rs\_\* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
+
+### Phase 36: Grid Scrolling ✅ COMPLETE
+
+Rust implementations for grid scrolling functions:
+- `rs_grid_ins_lines` - insert lines by scrolling down
+- `rs_grid_del_lines` - delete lines by scrolling up
+- `linecopy_impl` - copy portion of line within grid (internal)
+
+C wrapper: `nvim_ui_call_grid_scroll()` for UI scroll notifications.
+
+**Note:** Phase 35 (grid allocation) skipped - memory allocation functions are tightly coupled to C's xmalloc/xfree.
+
+**Next:** Phase 37 (window grid) or remaining grid.c functions.
 
 ### Phase 34: Grid Operations ✅ COMPLETE
 
@@ -16,8 +29,6 @@ Rust implementations for grid manipulation functions:
 - `rs_grid_clear` - clear rectangular region
 
 C accessors added (3 new): `nvim_gridview_get_target/row_offset/col_offset`.
-
-**Next:** Phase 35 (grid allocation).
 
 ### Phase 33: Arabic Shaping ✅ COMPLETE
 
