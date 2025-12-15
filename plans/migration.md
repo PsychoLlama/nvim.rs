@@ -6,6 +6,14 @@
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
+### Phase 44: Dead Code Cleanup 2 ✅ COMPLETE
+
+Removed 1888 lines of dead C fallback code from files with complete Rust implementations:
+- mbyte.c: -1132 lines (47 #else blocks removed)
+- charset.c: -308 lines (35 #else blocks removed)
+- window.c: -240 lines (22 #else blocks removed)
+- api/private/helpers.c: -208 lines (20 #else blocks removed)
+
 ### Phase 43: Dead Code Cleanup ✅ COMPLETE
 
 Removed 1132 lines of dead C fallback code from files with complete Rust implementations:
@@ -38,6 +46,7 @@ All grid.c functions that can reasonably be migrated are now in Rust.
 
 | Phase | Name | Key Functions |
 |-------|------|---------------|
+| 44 | Dead Code Cleanup 2 | Removed 1888 lines from mbyte.c, charset.c, window.c, helpers.c |
 | 43 | Dead Code Cleanup | Removed 1132 lines from grid.c, highlight_group.c, buffer.c, diff.c |
 | 42 | Garray Complete | `rs_ga_clear_strings`, `rs_ga_concat_strings` |
 | 41 | Hashtab Complete | `rs_hash_clear_all`, removed dead C code |
