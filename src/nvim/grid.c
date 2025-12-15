@@ -63,6 +63,13 @@ extern void rs_grid_put_linebuf(ScreenGrid *grid, int row, int coloff, int col, 
                                 int clear_width, int bg_attr, int clear_attr, colnr_T last_vcol,
                                 int flags);
 extern void rs_line_do_arabic_shape(schar_T *buf, int cols);
+// Phase 34: Grid operations
+extern ScreenGrid *rs_grid_adjust(GridView *view, int *row_off, int *col_off);
+extern void rs_grid_clear_line(ScreenGrid *grid, size_t off, int width, bool valid);
+extern void rs_grid_invalidate(ScreenGrid *grid);
+extern schar_T rs_grid_getchar(ScreenGrid *grid, int row, int col, int *attrp);
+extern void rs_grid_clear(GridView *grid, int start_row, int end_row, int start_col, int end_col,
+                          int attr);
 #endif
 
 // temporary buffer for rendering a single screenline, so it can be
@@ -370,6 +377,22 @@ int nvim_get_p_tbidi(void)
   return p_tbidi;
 }
 
+// GridView field accessors
+ScreenGrid *nvim_gridview_get_target(GridView *view)
+{
+  return view->target;
+}
+
+int nvim_gridview_get_row_offset(GridView *view)
+{
+  return view->row_offset;
+}
+
+int nvim_gridview_get_col_offset(GridView *view)
+{
+  return view->col_offset;
+}
+
 // Function wrappers
 void nvim_line_do_arabic_shape(schar_T *buf, int cols)
 {
@@ -395,9 +418,13 @@ void nvim_ui_line(ScreenGrid *grid, int row, bool invalid_row, int startcol, int
 /// screen positions.
 ScreenGrid *grid_adjust(GridView *grid, int *row_off, int *col_off)
 {
+#ifdef USE_RUST_GRID
+  return rs_grid_adjust(grid, row_off, col_off);
+#else
   *row_off += grid->row_offset;
   *col_off += grid->col_offset;
   return grid->target;
+#endif
 }
 
 schar_T schar_from_str(const char *str)
@@ -689,17 +716,25 @@ next:
 /// are cleared.
 void grid_clear_line(ScreenGrid *grid, size_t off, int width, bool valid)
 {
+#ifdef USE_RUST_GRID
+  rs_grid_clear_line(grid, off, width, valid);
+#else
   for (int col = 0; col < width; col++) {
     grid->chars[off + (size_t)col] = schar_from_ascii(' ');
   }
   int fill = valid ? 0 : -1;
   memset(grid->attrs + off, fill, (size_t)width * sizeof(sattr_T));
   memset(grid->vcols + off, -1, (size_t)width * sizeof(colnr_T));
+#endif
 }
 
 void grid_invalidate(ScreenGrid *grid)
 {
+#ifdef USE_RUST_GRID
+  rs_grid_invalidate(grid);
+#else
   memset(grid->attrs, -1, sizeof(sattr_T) * (size_t)grid->rows * (size_t)grid->cols);
+#endif
 }
 
 static bool grid_invalid_row(ScreenGrid *grid, int row)
@@ -712,6 +747,9 @@ static bool grid_invalid_row(ScreenGrid *grid, int row)
 /// @param[out] attrp  set to the character's attribute (optional)
 schar_T grid_getchar(ScreenGrid *grid, int row, int col, int *attrp)
 {
+#ifdef USE_RUST_GRID
+  return rs_grid_getchar(grid, row, col, attrp);
+#else
   // safety check
   if (grid->chars == NULL || row >= grid->rows || col >= grid->cols) {
     return NUL;
@@ -722,6 +760,7 @@ schar_T grid_getchar(ScreenGrid *grid, int row, int col, int *attrp)
     *attrp = grid->attrs[off];
   }
   return grid->chars[off];
+#endif
 }
 
 static ScreenGrid *grid_line_grid = NULL;
@@ -1023,6 +1062,9 @@ void grid_line_flush_if_valid_row(void)
 
 void grid_clear(GridView *grid, int start_row, int end_row, int start_col, int end_col, int attr)
 {
+#ifdef USE_RUST_GRID
+  rs_grid_clear(grid, start_row, end_row, start_col, end_col, attr);
+#else
   for (int row = start_row; row < end_row; row++) {
     grid_line_start(grid, row);
     end_col = MIN(end_col, grid_line_maxcol);
@@ -1033,6 +1075,7 @@ void grid_clear(GridView *grid, int start_row, int end_row, int start_col, int e
     grid_line_clear_end(start_col, end_col, attr, 0);
     grid_line_flush();
   }
+#endif
 }
 
 /// Check whether the given character needs redrawing:

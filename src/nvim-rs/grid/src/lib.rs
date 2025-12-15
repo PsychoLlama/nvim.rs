@@ -1319,6 +1319,184 @@ pub unsafe extern "C" fn rs_line_do_arabic_shape(buf: *mut ScharT, cols: c_int) 
     }
 }
 
+// =============================================================================
+// Phase 34: Grid Operations
+// =============================================================================
+
+/// Opaque pointer type for GridView
+type GridViewPtr = *mut std::ffi::c_void;
+
+// Additional C accessor functions for Phase 34
+extern "C" {
+    // GridView field accessors
+    fn nvim_gridview_get_target(view: GridViewPtr) -> *mut std::ffi::c_void;
+    fn nvim_gridview_get_row_offset(view: GridViewPtr) -> c_int;
+    fn nvim_gridview_get_col_offset(view: GridViewPtr) -> c_int;
+}
+
+/// Adjust grid viewport coordinates and return target grid.
+///
+/// This is the Rust equivalent of C's `grid_adjust()`.
+/// Adds the viewport offsets to row/col and returns the target ScreenGrid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_adjust(
+    view: GridViewPtr,
+    row_off: *mut c_int,
+    col_off: *mut c_int,
+) -> *mut std::ffi::c_void {
+    *row_off += nvim_gridview_get_row_offset(view);
+    *col_off += nvim_gridview_get_col_offset(view);
+    nvim_gridview_get_target(view)
+}
+
+/// Clear a line in the grid starting at "off" until "width" characters are cleared.
+///
+/// This is the Rust equivalent of C's `grid_clear_line()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_clear_line(
+    grid: *mut std::ffi::c_void,
+    off: usize,
+    width: c_int,
+    valid: bool,
+) {
+    let chars = nvim_screengrid_get_chars(grid);
+    let attrs = nvim_screengrid_get_attrs(grid);
+    let vcols = nvim_screengrid_get_vcols(grid);
+
+    // Fill chars with space
+    let space = schar_from_char_impl(b' ' as c_int);
+    for col in 0..width as usize {
+        *chars.add(off + col) = space;
+    }
+
+    // Fill attrs with 0 (valid) or -1 (invalid)
+    let fill: SattrT = if valid { 0 } else { -1 };
+    for col in 0..width as usize {
+        *attrs.add(off + col) = fill;
+    }
+
+    // Fill vcols with -1
+    for col in 0..width as usize {
+        *vcols.add(off + col) = -1;
+    }
+}
+
+/// Invalidate all rows in a grid by setting all attrs to -1.
+///
+/// This is the Rust equivalent of C's `grid_invalidate()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_invalidate(grid: *mut std::ffi::c_void) {
+    let attrs = nvim_screengrid_get_attrs(grid);
+    let rows = nvim_screengrid_get_rows(grid);
+    let cols = nvim_screengrid_get_cols(grid);
+    let total = (rows as usize) * (cols as usize);
+
+    // Set all attrs to -1
+    for i in 0..total {
+        *attrs.add(i) = -1;
+    }
+}
+
+/// Check if a grid row is invalid (has attr < 0 at start of line).
+///
+/// This is the Rust equivalent of C's `grid_invalid_row()`.
+#[inline]
+unsafe fn grid_invalid_row_impl(grid: *mut std::ffi::c_void, row: c_int) -> bool {
+    let attrs = nvim_screengrid_get_attrs(grid);
+    let line_offset = nvim_screengrid_get_line_offset(grid);
+    let off = *line_offset.add(row as usize);
+    *attrs.add(off) < 0
+}
+
+/// Get a single character directly from grid.chars.
+///
+/// This is the Rust equivalent of C's `grid_getchar()`.
+/// Returns NUL if out of bounds or grid.chars is NULL.
+///
+/// @param grid  The ScreenGrid to read from
+/// @param row   Row index
+/// @param col   Column index
+/// @param attrp Optional pointer to receive the character's attribute
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_getchar(
+    grid: *mut std::ffi::c_void,
+    row: c_int,
+    col: c_int,
+    attrp: *mut c_int,
+) -> ScharT {
+    let chars = nvim_screengrid_get_chars(grid);
+
+    // Safety check
+    if chars.is_null() {
+        return 0; // NUL
+    }
+
+    let rows = nvim_screengrid_get_rows(grid);
+    let cols = nvim_screengrid_get_cols(grid);
+
+    if row >= rows || col >= cols {
+        return 0; // NUL
+    }
+
+    let line_offset = nvim_screengrid_get_line_offset(grid);
+    let off = *line_offset.add(row as usize) + col as usize;
+
+    if !attrp.is_null() {
+        let attrs = nvim_screengrid_get_attrs(grid);
+        *attrp = (*attrs.add(off)) as c_int;
+    }
+
+    *chars.add(off)
+}
+
+// Additional extern declarations for grid_clear
+extern "C" {
+    fn nvim_set_grid_line_row(row: c_int);
+}
+
+/// Clear a rectangular region of a grid.
+///
+/// This is the Rust equivalent of C's `grid_clear()`.
+/// Clears from start_row to end_row, start_col to end_col with given attribute.
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_clear(
+    view: GridViewPtr,
+    start_row: c_int,
+    end_row: c_int,
+    start_col: c_int,
+    end_col: c_int,
+    attr: c_int,
+) {
+    for row in start_row..end_row {
+        // Call grid_line_start equivalent
+        let mut adjusted_row = row;
+        let mut col = 0;
+        let grid = rs_grid_adjust(view, &mut adjusted_row, &mut col);
+
+        // screengrid_line_start equivalent
+        let maxcol = nvim_screengrid_get_cols(grid);
+        let grid_rows = nvim_screengrid_get_rows(grid);
+
+        // Store grid line state
+        nvim_set_grid_line_grid(grid);
+        nvim_set_grid_line_row(adjusted_row);
+
+        let effective_maxcol = std::cmp::min(maxcol, maxcol - col);
+        let effective_end_col = std::cmp::min(end_col, effective_maxcol);
+
+        if adjusted_row >= grid_rows || start_col >= effective_end_col {
+            nvim_set_grid_line_grid(std::ptr::null_mut());
+            return;
+        }
+
+        // grid_line_clear_end equivalent
+        rs_grid_line_clear_end(start_col, effective_end_col, attr, 0);
+
+        // grid_line_flush
+        rs_grid_line_flush();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
