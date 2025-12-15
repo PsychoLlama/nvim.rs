@@ -6,167 +6,45 @@
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
-### Phase 39: Grid Handle Assignment ✅ COMPLETE
+### Highlight Migration: ✅ COMPLETE (Dead Code Removed)
 
-Added Rust implementations for grid handle management and border text positioning:
-- `rs_grid_assign_handle` - assign unique handle to grid (counter kept in Rust via AtomicI32)
-- `rs_get_bordertext_col` - calculate starting column for border text alignment
-
-C accessor added: `nvim_screengrid_get_handle_ptr()` for Rust to write grid handle.
-
-**Note:** `grid_draw_border` remains in C - requires VirtText iteration, highlight combination, and decoration system FFI which adds significant complexity for minimal gain.
-
-### Phase 38: Grid Line Puts ✅ COMPLETE
-
-Added Rust implementation for text rendering to line buffer:
-- `rs_grid_line_puts` - put multibyte text at column position
-- `utfc_ptrlen2schar_impl` - internal helper for UTF-8 to schar conversion
-
-Handles: UTF-8 length detection, display width, composing characters, double-width characters, truncation with '>', invalid sequence replacement.
-
-**Note:** Phase 35 (grid allocation) and window grid functions remain in C - tightly coupled to C memory/window systems.
-
-### Phase 37: Grid Line Start/Getchar/Mirror ✅ COMPLETE
-
-Rust implementations for grid line initialization and RTL mirroring:
-- `rs_grid_line_start` - start grid line rendering (wrapper)
-- `rs_screengrid_line_start` - low-level grid line state setup
-- `rs_grid_line_getchar` - get character from current screen line
-- `rs_linebuf_mirror` - mirror line buffer for RTL text
-- `rs_grid_line_mirror` - mirror current grid line with state update
-
-C accessor added: `nvim_get_full_screen()` for debug mode detection.
-
-### Phase 36: Grid Scrolling ✅ COMPLETE (with bugfix)
-
-Rust implementations for grid scrolling functions:
-- `rs_grid_ins_lines` - insert lines by scrolling down
-- `rs_grid_del_lines` - delete lines by scrolling up
-- `linecopy_impl` - copy portion of line within grid (internal)
-
-C wrapper: `nvim_ui_call_grid_scroll()` for UI scroll notifications.
-
-**Bugfix (2025-12-15):** Fixed loop iteration order in scroll functions. The C code uses `while ((j += n) <= end)` which increments j BEFORE checking the condition. The Rust translation incorrectly checked FIRST then incremented, causing j to have wrong final value and clearing incorrect lines (memory corruption, garbage characters).
-
-### Phase 34: Grid Operations ✅ COMPLETE
-
-Rust implementations for grid manipulation functions:
-- `rs_grid_adjust` - viewport coordinate adjustment
-- `rs_grid_clear_line` - clear line with spaces
-- `rs_grid_invalidate` - mark all rows invalid
-- `rs_grid_getchar` - get character from grid
-- `rs_grid_clear` - clear rectangular region
-
-C accessors added (3 new): `nvim_gridview_get_target/row_offset/col_offset`.
-
-### Phase 33: Arabic Shaping ✅ COMPLETE
-
-Rust implementation of Arabic contextual shaping for display lines:
-- `rs_line_do_arabic_shape` - apply Arabic shaping to line buffer
-
-C wrapper: `nvim_arabic_shape()` in arabic.c for Rust to call `arabic_shape()`.
-
-### Phase 32: grid_put_linebuf Implementation ✅ COMPLETE
-
-Full Rust implementation of the core rendering function (~170 lines):
-- `rs_grid_put_linebuf` - move buffered line to grid with delta detection
-
-C accessors added (15 new) for grid arrays, fields, globals, and functions.
-
-### Phase 31: Grid Line Flush Functions ✅ COMPLETE
-
-Added Rust implementations for grid line flushing:
-- `rs_grid_line_flush` - commit line buffer to UI
-- `rs_grid_line_flush_if_valid_row` - safe flush with row validation
-
-C accessors added:
-- `nvim_screengrid_get_rows()` - get grid row count
-- `nvim_get_rdb_flags()` - get rdb_flags global
-
-### Phase 30: Grid Line Content Functions ✅ COMPLETE
-
-Added Rust implementations for grid line content manipulation:
-- `rs_grid_line_put_schar` - put single schar at column
-- `rs_grid_line_fill` - fill column range with schar
-- `rs_grid_line_clear_end` - set clear range for line
-- `rs_grid_line_cursor_goto` - move cursor to column
-
-C accessor: `nvim_screengrid_get_handle()` for ScreenGrid handle.
-
-### Phase 29: Grid Line State Accessors ✅ COMPLETE
-
-Added C accessors for grid_line_* static state (10 get/set pairs + 1 UI wrapper):
-- Grid pointer, row, coloff, maxcol
-- first, last, clear_to, bg_attr, clear_attr, flags
-- `nvim_ui_grid_cursor_goto()` - UI cursor positioning
-
-**Next:** Phase 30 (grid line content functions).
-
-### Phase 28: Line Buffer Infrastructure ✅ COMPLETE
-
-Added C accessors for line buffer globals:
-- `nvim_get_linebuf_char()` - linebuf_char array
-- `nvim_get_linebuf_attr()` - linebuf_attr array
-- `nvim_get_linebuf_vcol()` - linebuf_vcol array
-- `nvim_get_linebuf_scratch()` - scratch buffer
-- `nvim_get_linebuf_size()` - buffer size
-
-### Phase 27: schar_get Functions ✅ COMPLETE
-
-Added schar to string conversion functions:
-- `rs_schar_get` - convert schar to NUL-terminated UTF-8 string
-- `rs_schar_get_adv` - convert schar to UTF-8, advancing buffer pointer
-
-### Phase 26: Glyph Cache Rust Implementation ✅ COMPLETE
-
-Full Rust rewrite of the glyph cache (replacing C's `Set(glyph)`):
-
-- `GlyphCache` struct with HashMap for glyph storage and lookup
-- `rs_schar_from_buf` - buffer to schar (writes to Rust cache)
-- `rs_schar_cache_clear_if_full` - check/clear if >2^21 entries
-- `rs_schar_cache_clear` - clear cache, call callbacks
-
-C accessor wrappers for Rust to call:
-- `nvim_decor_check_invalid_glyphs()` - invalidate decoration glyphs
-- `nvim_check_chars_options()` - regenerate char options
-
-**Next:** Phase 27 (schar_get functions), then remaining grid.c functions.
-
-### Phase 25: schar_T Core Functions ✅ COMPLETE
-
-Added 4 schar_T functions to nvim-grid crate:
-
-- `rs_schar_from_str` - string to schar conversion
-- `rs_schar_len` - get byte length
-- `rs_schar_cells` - get display width (1 or 2)
-- `rs_schar_get_first_codepoint` - extract first Unicode codepoint
-
-Added C accessor `nvim_glyph_cache_get()` for Rust to read from glyph cache.
-
-### Phase 24: Lua Callback FFI ✅ COMPLETE
-
-Added FFI so Rust can call Lua callbacks via `nlua_call_ref()`:
-
-- C wrappers: `nvim_nlua_call_ref()`, `nvim_nlua_call_ref_ctx()` in executor.c
-- Rust: `lua_call_ref()`, `lua_call_ref_ctx()` in nvim-lua crate
-- Re-exports API types (Object, Array, Error, LuaRef)
-
-**Unlocks:** 12 files with callback dependencies (highlight.c, decoration_provider.c, autocmd.c, etc.)
-
-### Highlight Migration: ✅ COMPLETE
-
-All core highlight functions have Rust implementations via `USE_RUST_HIGHLIGHT`:
-
-- Entry storage, caches, URL storage (Rust only)
-- Namespace storage and logic (Rust only)
-- Core computation, attribute combination, UI lookup
-- API conversion (hlattrs2dict, hl_inspect, object_to_color)
+All core highlight functions have Rust implementations. The `USE_RUST_HIGHLIGHT` conditional compilation has been removed - all C fallback code deleted (615 lines removed from highlight.c).
 
 **Remaining C (low priority):**
-
 - `dict2hlattrs` - Uses generated API keyset `Dict(highlight)`, complex to port
-- `ns_get_hl` callback logic - Blocked by dict2hlattrs (uses it to parse Lua result)
+- `ns_get_hl` callback logic - Blocked by dict2hlattrs
 - `highlight_changed` - Calls into syntax/screen subsystems
+
+### Grid Migration: Phases 25-39 ✅ COMPLETE
+
+All grid.c functions that can reasonably be migrated are now in Rust.
+
+**Remaining in C (by design):**
+- `grid_alloc/grid_free` - Tightly coupled to C memory management
+- `win_grid_alloc` - Window system integration
+- `grid_draw_border` - VirtText iteration, decoration system FFI complexity
+
+---
+
+## Completed Phases Summary
+
+| Phase | Name | Key Functions |
+|-------|------|---------------|
+| 39 | Grid Handle Assignment | `rs_grid_assign_handle`, `rs_get_bordertext_col` |
+| 38 | Grid Line Puts | `rs_grid_line_puts` |
+| 37 | Grid Line Start/Mirror | `rs_grid_line_start`, `rs_linebuf_mirror` |
+| 36 | Grid Scrolling | `rs_grid_ins_lines`, `rs_grid_del_lines` |
+| 34 | Grid Operations | `rs_grid_adjust`, `rs_grid_clear`, `rs_grid_getchar` |
+| 33 | Arabic Shaping | `rs_line_do_arabic_shape` |
+| 32 | grid_put_linebuf | `rs_grid_put_linebuf` |
+| 31 | Grid Line Flush | `rs_grid_line_flush` |
+| 30 | Grid Line Content | `rs_grid_line_put_schar`, `rs_grid_line_fill` |
+| 29 | Grid Line State | C accessors for grid_line_* state |
+| 28 | Line Buffer Infra | C accessors for linebuf_* globals |
+| 27 | schar_get | `rs_schar_get`, `rs_schar_get_adv` |
+| 26 | Glyph Cache | `rs_schar_from_buf`, `GlyphCache` struct |
+| 25 | schar_T Core | `rs_schar_from_str`, `rs_schar_len`, `rs_schar_cells` |
+| 24 | Lua Callback FFI | `lua_call_ref()` in nvim-lua crate |
 
 ---
 
