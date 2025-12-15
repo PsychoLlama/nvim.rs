@@ -5,7 +5,9 @@
 
 #![allow(unsafe_code)] // FFI requires unsafe
 
+use std::collections::HashMap;
 use std::ffi::{c_char, c_int, CStr};
+use std::sync::{LazyLock, Mutex};
 
 /// Type alias for screen character (matches C's `schar_T` which is `uint32_t`).
 type ScharT = u32;
@@ -16,11 +18,112 @@ const REPLACEMENT_CHAR: i32 = 0xFFFD;
 /// Maximum size of a screen character in bytes (including NUL)
 const MAX_SCHAR_SIZE: usize = 32;
 
-// FFI declarations for C accessor functions
+/// Capacity threshold for clearing the glyph cache (2^21)
+const GLYPH_CACHE_CLEAR_THRESHOLD: usize = 1 << 21;
+
+// =============================================================================
+// Glyph Cache Implementation (Phase 26)
+// =============================================================================
+
+/// A cache for glyphs that don't fit in a 4-byte `schar_T`.
+///
+/// Glyphs > 4 bytes are stored in this cache, and the `schar_T` value
+/// stores an index into the cache with a 0xFF marker byte.
+struct GlyphCache {
+    /// Map from glyph bytes to their index in the cache
+    map: HashMap<Box<[u8]>, u32>,
+    /// Storage for glyph strings (stored contiguously with NUL separators)
+    /// Each entry's index points to the start of its string in this buffer
+    strings: Vec<u8>,
+    /// Number of entries (for index allocation)
+    count: u32,
+}
+
+impl GlyphCache {
+    fn new() -> Self {
+        Self {
+            map: HashMap::new(),
+            strings: Vec::new(),
+            count: 0,
+        }
+    }
+
+    /// Insert a glyph into the cache, returning its index.
+    ///
+    /// If the glyph already exists, returns its existing index.
+    fn insert(&mut self, bytes: &[u8]) -> u32 {
+        // Check if already cached
+        if let Some(&idx) = self.map.get(bytes) {
+            return idx;
+        }
+
+        // Store the string and get its index
+        #[allow(clippy::cast_possible_truncation)] // Cache can't exceed 2^24 entries
+        let idx = self.strings.len() as u32;
+
+        // Store the bytes followed by NUL
+        self.strings.extend_from_slice(bytes);
+        self.strings.push(0); // NUL terminator
+
+        // Add to map
+        self.map.insert(bytes.into(), idx);
+        self.count += 1;
+
+        idx
+    }
+
+    /// Get a glyph string by index.
+    ///
+    /// Returns the bytes (without NUL terminator) or None if out of bounds.
+    fn get(&self, idx: u32) -> Option<&[u8]> {
+        let start = idx as usize;
+        if start >= self.strings.len() {
+            return None;
+        }
+
+        // Find the NUL terminator
+        let end = self.strings[start..]
+            .iter()
+            .position(|&b| b == 0)
+            .map(|pos| start + pos)?;
+
+        Some(&self.strings[start..end])
+    }
+
+    /// Check if the cache has exceeded the clear threshold.
+    const fn is_full(&self) -> bool {
+        self.count as usize > GLYPH_CACHE_CLEAR_THRESHOLD
+    }
+
+    /// Clear the cache completely.
+    fn clear(&mut self) {
+        self.map.clear();
+        self.strings.clear();
+        self.count = 0;
+    }
+
+    /// Get the number of entries in the cache.
+    #[allow(dead_code)]
+    const fn len(&self) -> u32 {
+        self.count
+    }
+}
+
+/// Global glyph cache instance.
+///
+/// Uses a Mutex for thread-safety, though Neovim is primarily single-threaded.
+/// `LazyLock` ensures the cache is initialized on first access.
+static GLYPH_CACHE: LazyLock<Mutex<GlyphCache>> =
+    LazyLock::new(|| Mutex::new(GlyphCache::new()));
+
+// FFI declarations for C callback functions
 extern "C" {
-    /// Get a string from the glyph cache by index.
-    /// Returns NULL if index is out of bounds.
-    fn nvim_glyph_cache_get(idx: u32) -> *const c_char;
+    /// Called when glyph cache is cleared to invalidate decoration glyphs.
+    fn nvim_decor_check_invalid_glyphs();
+
+    /// Called when glyph cache is cleared to regenerate char options.
+    /// Returns non-zero on error (which should never happen).
+    fn nvim_check_chars_options() -> c_int;
 }
 
 /// Check if a screen character is stored in the high (cache) format.
@@ -160,25 +263,20 @@ const fn schar_idx(sc: ScharT) -> u32 {
 /// Convert an schar to its UTF-8 bytes, writing to a buffer.
 ///
 /// For inline schars (<=4 bytes), extracts directly from the u32.
-/// For high schars, reads from the glyph cache via C accessor.
+/// For high schars, reads from the Rust glyph cache.
 ///
 /// Returns the number of bytes written (not including any NUL).
 /// Does NOT write a terminating NUL.
 fn schar_get_bytes(sc: ScharT, buf: &mut [u8]) -> usize {
     if schar_high_impl(sc) {
-        // Read from glyph cache
+        // Read from Rust glyph cache
         let idx = schar_idx(sc);
-        // SAFETY: nvim_glyph_cache_get returns a valid NUL-terminated string or NULL
-        let ptr = unsafe { nvim_glyph_cache_get(idx) };
-        if ptr.is_null() {
-            return 0;
-        }
-        // SAFETY: ptr is valid and NUL-terminated
-        let cstr = unsafe { CStr::from_ptr(ptr) };
-        let bytes = cstr.to_bytes();
-        let len = bytes.len().min(buf.len());
-        buf[..len].copy_from_slice(&bytes[..len]);
-        len
+        let cache = GLYPH_CACHE.lock().unwrap();
+        cache.get(idx).map_or(0, |bytes| {
+            let len = bytes.len().min(buf.len());
+            buf[..len].copy_from_slice(&bytes[..len]);
+            len
+        })
     } else {
         // Inline schar: extract bytes from u32
         let bytes = sc.to_ne_bytes();
@@ -192,9 +290,7 @@ fn schar_get_bytes(sc: ScharT, buf: &mut [u8]) -> usize {
 
 /// Convert a NUL-terminated string to an schar.
 ///
-/// This is a wrapper around `schar_from_buf` that handles NULL input.
-/// Note: For strings > 4 bytes, this calls into C's `schar_from_buf`
-/// which writes to the glyph cache.
+/// This is a wrapper around `schar_from_buf_impl` that handles NULL input.
 #[inline]
 fn schar_from_str_impl(str_ptr: *const c_char) -> ScharT {
     if str_ptr.is_null() {
@@ -202,22 +298,36 @@ fn schar_from_str_impl(str_ptr: *const c_char) -> ScharT {
     }
     // SAFETY: str_ptr is not null and is expected to be NUL-terminated
     let cstr = unsafe { CStr::from_ptr(str_ptr) };
-    let bytes = cstr.to_bytes();
+    schar_from_buf_impl(cstr.to_bytes())
+}
 
-    // For <=4 bytes, we can store inline
+/// Convert a byte slice to an schar.
+///
+/// For <=4 bytes, stores inline in the u32.
+/// For >4 bytes, stores in the Rust glyph cache and returns index with 0xFF marker.
+#[inline]
+fn schar_from_buf_impl(bytes: &[u8]) -> ScharT {
+    debug_assert!(bytes.len() < MAX_SCHAR_SIZE);
+
     if bytes.len() <= 4 {
+        // Store inline
         let mut sc_bytes = [0u8; 4];
         sc_bytes[..bytes.len()].copy_from_slice(bytes);
         ScharT::from_ne_bytes(sc_bytes)
     } else {
-        // For >4 bytes, we need to call C's schar_from_buf to use glyph cache
-        // Since we don't have write access to the cache yet (Phase 26),
-        // we need to call through C for now
-        extern "C" {
-            fn schar_from_buf(buf: *const c_char, len: usize) -> ScharT;
+        // Store in glyph cache
+        let idx = GLYPH_CACHE.lock().unwrap().insert(bytes);
+        debug_assert!(idx < 0x00FF_FFFF);
+
+        // Encode index with 0xFF marker
+        #[cfg(target_endian = "big")]
+        {
+            idx + (0xFF << 24)
         }
-        // SAFETY: bytes is valid and len is correct
-        unsafe { schar_from_buf(bytes.as_ptr().cast(), bytes.len()) }
+        #[cfg(target_endian = "little")]
+        {
+            0xFF + (idx << 8)
+        }
     }
 }
 
@@ -229,21 +339,90 @@ pub extern "C" fn rs_schar_from_str(str_ptr: *const c_char) -> ScharT {
     schar_from_str_impl(str_ptr)
 }
 
+/// FFI wrapper for `schar_from_buf`.
+///
+/// Convert a byte buffer to an `schar_T`.
+/// The buffer need not be NUL-terminated but must not contain embedded NULs.
+/// Caller must ensure `len < MAX_SCHAR_SIZE`.
+///
+/// # Safety
+/// - `buf` must be valid for reading `len` bytes
+/// - `len` must be less than `MAX_SCHAR_SIZE`
+#[no_mangle]
+pub unsafe extern "C" fn rs_schar_from_buf(buf: *const c_char, len: usize) -> ScharT {
+    debug_assert!(len < MAX_SCHAR_SIZE);
+    if buf.is_null() || len == 0 {
+        return 0;
+    }
+    // SAFETY: caller guarantees buf is valid for len bytes
+    let bytes = std::slice::from_raw_parts(buf.cast::<u8>(), len);
+    schar_from_buf_impl(bytes)
+}
+
+/// Check if cache is full, and if so, clear it.
+///
+/// Returns true if cache was cleared.
+fn schar_cache_clear_if_full_impl() -> bool {
+    let is_full = {
+        let cache = GLYPH_CACHE.lock().unwrap();
+        cache.is_full()
+    };
+
+    if is_full {
+        schar_cache_clear_impl();
+        true
+    } else {
+        false
+    }
+}
+
+/// FFI wrapper for `schar_cache_clear_if_full`.
+///
+/// Check if cache is full, and if so, clear it.
+/// Returns true if cache was cleared.
+#[no_mangle]
+pub extern "C" fn rs_schar_cache_clear_if_full() -> bool {
+    schar_cache_clear_if_full_impl()
+}
+
+/// Clear the glyph cache completely.
+fn schar_cache_clear_impl() {
+    // Call C callbacks before clearing
+    // SAFETY: these C functions have no safety requirements
+    unsafe {
+        nvim_decor_check_invalid_glyphs();
+    }
+
+    // Clear the cache
+    {
+        let mut cache = GLYPH_CACHE.lock().unwrap();
+        cache.clear();
+    }
+
+    // Regenerate char options (must not fail)
+    // SAFETY: this C function has no safety requirements
+    let result = unsafe { nvim_check_chars_options() };
+    assert!(result == 0, "check_chars_options() failed after cache clear");
+}
+
+/// FFI wrapper for `schar_cache_clear`.
+///
+/// Clear the glyph cache completely.
+#[no_mangle]
+pub extern "C" fn rs_schar_cache_clear() {
+    schar_cache_clear_impl();
+}
+
 /// Get the byte length of an schar's UTF-8 content.
 ///
 /// For inline schars, counts bytes until NUL or end of 4 bytes.
-/// For high schars, reads from glyph cache.
+/// For high schars, reads from Rust glyph cache.
 #[inline]
 fn schar_len_impl(sc: ScharT) -> usize {
     if schar_high_impl(sc) {
         let idx = schar_idx(sc);
-        // SAFETY: nvim_glyph_cache_get returns valid string or NULL
-        let ptr = unsafe { nvim_glyph_cache_get(idx) };
-        if ptr.is_null() {
-            return 0;
-        }
-        // SAFETY: ptr is valid and NUL-terminated
-        unsafe { CStr::from_ptr(ptr) }.to_bytes().len()
+        let cache = GLYPH_CACHE.lock().unwrap();
+        cache.get(idx).map_or(0, <[u8]>::len)
     } else {
         // Inline: find first NUL byte
         let bytes = sc.to_ne_bytes();

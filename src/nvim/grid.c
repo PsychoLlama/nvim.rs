@@ -44,9 +44,12 @@ extern bool rs_schar_high(schar_T sc);
 extern char rs_schar_get_ascii(schar_T sc);
 extern schar_T rs_schar_from_char(int c);
 extern schar_T rs_schar_from_str(const char *str);
+extern schar_T rs_schar_from_buf(const char *buf, size_t len);
 extern size_t rs_schar_len(schar_T sc);
 extern int rs_schar_cells(schar_T sc);
 extern int rs_schar_get_first_codepoint(schar_T sc);
+extern bool rs_schar_cache_clear_if_full(void);
+extern void rs_schar_cache_clear(void);
 #endif
 
 // temporary buffer for rendering a single screenline, so it can be
@@ -79,6 +82,19 @@ const char *nvim_glyph_cache_get(uint32_t idx)
 uint32_t nvim_glyph_cache_n_keys(void)
 {
   return glyph_cache.h.n_keys;
+}
+
+/// C accessor for Rust to call decor_check_invalid_glyphs()
+void nvim_decor_check_invalid_glyphs(void)
+{
+  decor_check_invalid_glyphs();
+}
+
+/// C accessor for Rust to call check_chars_options()
+/// @return 0 on success, non-zero on error
+int nvim_check_chars_options(void)
+{
+  return check_chars_options() != NULL ? 1 : 0;
 }
 #endif
 
@@ -116,6 +132,9 @@ schar_T schar_from_str(const char *str)
 /// caller must ensure len < MAX_SCHAR_SIZE (not =, as NUL needs a byte)
 schar_T schar_from_buf(const char *buf, size_t len)
 {
+#ifdef USE_RUST_GRID
+  return rs_schar_from_buf(buf, len);
+#else
   assert(len < MAX_SCHAR_SIZE);
   if (len <= 4) {
     schar_T sc = 0;
@@ -127,12 +146,13 @@ schar_T schar_from_buf(const char *buf, size_t len)
     MHPutStatus status;
     uint32_t idx = set_put_idx(glyph, &glyph_cache, str, &status);
     assert(idx < 0xFFFFFF);
-#ifdef ORDER_BIG_ENDIAN
+#  ifdef ORDER_BIG_ENDIAN
     return idx + ((uint32_t)0xFF << 24);
-#else
+#  else
     return 0xFF + (idx << 8);
-#endif
+#  endif
   }
+#endif
 }
 
 /// Check if cache is full, and if it is, clear it.
@@ -143,6 +163,9 @@ schar_T schar_from_buf(const char *buf, size_t len)
 /// and you need to use UPD_CLEAR
 bool schar_cache_clear_if_full(void)
 {
+#ifdef USE_RUST_GRID
+  return rs_schar_cache_clear_if_full();
+#else
   // note: critical max is really (1<<24)-1. This gives us some marginal
   // until next time update_screen() is called
   if (glyph_cache.h.n_keys > (1<<21)) {
@@ -150,10 +173,14 @@ bool schar_cache_clear_if_full(void)
     return true;
   }
   return false;
+#endif
 }
 
 void schar_cache_clear(void)
 {
+#ifdef USE_RUST_GRID
+  rs_schar_cache_clear();
+#else
   decor_check_invalid_glyphs();
   set_clear(glyph, &glyph_cache);
 
@@ -163,6 +190,7 @@ void schar_cache_clear(void)
   if (check_chars_options()) {
     abort();
   }
+#endif
 }
 
 bool schar_high(schar_T sc)
