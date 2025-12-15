@@ -702,6 +702,176 @@ pub unsafe extern "C" fn rs_grid_line_fill(
     end_col
 }
 
+/// Put a string of text at a column position.
+///
+/// Handles multibyte characters, double-width characters, and truncation.
+/// Returns the number of cells used.
+///
+/// # Safety
+/// Must be called after `grid_line_start()` and before `grid_line_flush()`.
+/// `text` must be a valid pointer to UTF-8 bytes.
+/// If `textlen >= 0`, at most `textlen` bytes are read.
+/// If `textlen < 0`, the text must be NUL-terminated.
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_line_puts(
+    mut col: c_int,
+    text: *const c_char,
+    textlen: c_int,
+    attr: c_int,
+) -> c_int {
+    if text.is_null() {
+        return 0;
+    }
+
+    let grid = nvim_get_grid_line_grid();
+    debug_assert!(!grid.is_null());
+
+    let start_col = col;
+    let max_col = nvim_get_grid_line_maxcol();
+    let linebuf_char = nvim_get_linebuf_char();
+    let linebuf_attr = nvim_get_linebuf_attr();
+    let linebuf_vcol = nvim_get_linebuf_vcol();
+
+    let text_u8 = text.cast::<u8>();
+    let mut ptr_offset: isize = 0;
+
+    // Continue while: in bounds, within length limit (if set), and not at NUL
+    while col < max_col
+        && (textlen < 0 || (ptr_offset as c_int) < textlen)
+        && *text_u8.offset(ptr_offset) != 0
+    {
+        // Get the multibyte character length
+        let mbyte_blen = if textlen >= 0 {
+            let maxlen = textlen as isize - ptr_offset;
+            let len = nvim_mbyte::utfc_ptr2len_len(
+                std::slice::from_raw_parts(text_u8.offset(ptr_offset), maxlen as usize),
+                maxlen as usize,
+            );
+            if len > maxlen as usize {
+                1
+            } else {
+                len
+            }
+        } else {
+            // NUL-terminated string
+            let remaining = std::slice::from_raw_parts(
+                text_u8.offset(ptr_offset),
+                MAX_SCHAR_SIZE, // sufficient for one character
+            );
+            nvim_mbyte::utfc_ptr2len(remaining)
+        };
+
+        // Get schar and first codepoint
+        let ptr_slice =
+            std::slice::from_raw_parts(text_u8.offset(ptr_offset), mbyte_blen);
+        let (schar, mbyte_cells) = utfc_ptrlen2schar_impl(ptr_slice);
+
+        // Handle invalid or too-wide characters
+        let (schar, mbyte_cells) = if mbyte_cells > 2 || schar == 0 {
+            (schar_from_char_impl(REPLACEMENT_CHAR), 1)
+        } else {
+            (schar, mbyte_cells)
+        };
+
+        // Handle truncation at edge
+        let (schar, mbyte_cells) = if col + mbyte_cells > max_col {
+            // Only 1 cell left, but character requires 2: use '>'
+            (schar_from_char_impl(b'>' as c_int), 1)
+        } else {
+            (schar, mbyte_cells)
+        };
+
+        // Handle overwriting right half of double-width character
+        if ptr_offset == 0 {
+            let first = nvim_get_grid_line_first();
+            let last = nvim_get_grid_line_last();
+            if col > first && col < last && *linebuf_char.offset(col as isize) == 0 {
+                *linebuf_char.offset((col - 1) as isize) =
+                    schar_from_char_impl(b'>' as c_int);
+            }
+        }
+
+        // Write to line buffer
+        *linebuf_char.offset(col as isize) = schar;
+        #[allow(clippy::cast_possible_truncation)]
+        {
+            *linebuf_attr.offset(col as isize) = attr as SattrT;
+        }
+        *linebuf_vcol.offset(col as isize) = -1;
+
+        // Handle double-width character
+        if mbyte_cells == 2 {
+            *linebuf_char.offset((col + 1) as isize) = 0;
+            #[allow(clippy::cast_possible_truncation)]
+            {
+                *linebuf_attr.offset((col + 1) as isize) = attr as SattrT;
+            }
+            *linebuf_vcol.offset((col + 1) as isize) = -1;
+        }
+
+        col += mbyte_cells;
+        ptr_offset += mbyte_blen as isize;
+    }
+
+    // Update dirty region
+    if col > start_col {
+        let first = nvim_get_grid_line_first();
+        let last = nvim_get_grid_line_last();
+        nvim_set_grid_line_first(first.min(start_col));
+        nvim_set_grid_line_last(last.max(col));
+    }
+
+    col - start_col
+}
+
+/// Convert a UTF-8 byte sequence to an schar_T and get its display width.
+///
+/// This implements the logic of C's `utfc_ptrlen2schar`, handling:
+/// - Invalid sequences (returns 0 schar)
+/// - Composing characters as first char (prepends space)
+/// - Display width calculation
+fn utfc_ptrlen2schar_impl(bytes: &[u8]) -> (ScharT, c_int) {
+    if bytes.is_empty() {
+        return (0, 1);
+    }
+
+    let len = bytes.len();
+
+    // Invalid or truncated sequence
+    if (len == 1 && bytes[0] >= 0x80) || len == 0 {
+        return (0, 1);
+    }
+
+    // Get first codepoint
+    let c = nvim_mbyte::utf_ptr2char(bytes);
+
+    // Check if first character is a composing character
+    let first_compose = nvim_mbyte::utf_iscomposing_first(c);
+
+    // Limit length for schar storage
+    let maxlen = MAX_SCHAR_SIZE - 1 - if first_compose { 1 } else { 0 };
+    let actual_len = if len > maxlen {
+        nvim_mbyte::utfc_ptr2len_len(bytes, maxlen)
+    } else {
+        len
+    };
+
+    // Create schar, prepending space if first char is a composing character
+    let schar = if first_compose {
+        let mut buf = [0u8; MAX_SCHAR_SIZE];
+        buf[0] = b' ';
+        buf[1..1 + actual_len].copy_from_slice(&bytes[..actual_len]);
+        schar_from_buf_impl(&buf[..actual_len + 1])
+    } else {
+        schar_from_buf_impl(&bytes[..actual_len])
+    };
+
+    // Get display width
+    let cells = nvim_mbyte::utf_ptr2cells_len(bytes, actual_len);
+
+    (schar, cells)
+}
+
 /// Set the clear range for the current line.
 ///
 /// # Safety

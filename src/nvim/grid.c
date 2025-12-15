@@ -54,6 +54,7 @@ extern bool rs_schar_cache_clear_if_full(void);
 extern void rs_schar_cache_clear(void);
 // Rust implementations of grid_line functions
 extern void rs_grid_line_put_schar(int col, schar_T schar, int attr);
+extern int rs_grid_line_puts(int col, const char *text, int textlen, int attr);
 extern int rs_grid_line_fill(int start_col, int end_col, schar_T sc, int attr);
 extern void rs_grid_line_clear_end(int start_col, int end_col, int bg_attr, int clear_attr);
 extern void rs_grid_line_cursor_goto(int col);
@@ -894,6 +895,9 @@ void grid_line_put_schar(int col, schar_T schar, int attr)
 /// @return number of grid cells used
 int grid_line_puts(int col, const char *text, int textlen, int attr)
 {
+#ifdef USE_RUST_GRID
+  return rs_grid_line_puts(col, text, textlen, attr);
+#else
   const char *ptr = text;
   int len = textlen;
 
@@ -955,6 +959,7 @@ int grid_line_puts(int col, const char *text, int textlen, int attr)
   }
 
   return col - start_col;
+#endif
 }
 
 int grid_line_fill(int start_col, int end_col, schar_T sc, int attr)
