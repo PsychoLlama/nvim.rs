@@ -2,30 +2,30 @@
 
 ## Current Status
 
-**708 rs\_\* functions migrated**
+**709 rs\_\* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
+
+### Phase 33: Arabic Shaping ✅ COMPLETE
+
+Rust implementation of Arabic contextual shaping for display lines:
+- `rs_line_do_arabic_shape` - apply Arabic shaping to line buffer
+
+Helper functions added:
+- `arabic_char()` - Arabic character range check
+- `schar_in_arabic_block()` - detect Arabic first byte
+- `schar_get_first_two_codepoints()` - extract base char and combining mark
+
+C wrapper: `nvim_arabic_shape()` in arabic.c for Rust to call `arabic_shape()`.
+
+**Next:** Phase 34 (grid operations).
 
 ### Phase 32: grid_put_linebuf Implementation ✅ COMPLETE
 
 Full Rust implementation of the core rendering function (~170 lines):
 - `rs_grid_put_linebuf` - move buffered line to grid with delta detection
 
-Features implemented:
-- Delta detection (only redraw changed characters)
-- Double-width character handling
-- Right-to-left text support (SLF_RIGHTLEFT)
-- Arabic shaping integration
-- Attribute combination with hl_combine_attr
-- Throttled/dirty_col handling
-
-C accessors added (15 new):
-- Grid arrays: `nvim_screengrid_get_chars/attrs/vcols/line_offset/dirty_col`
-- Grid fields: `nvim_screengrid_get_cols`, `nvim_screengrid_get_throttled`
-- Globals: `nvim_get_default_grid`, `nvim_get_exmode_active`, `nvim_get_p_arshape`, `nvim_get_p_tbidi`
-- Functions: `nvim_line_do_arabic_shape`, `nvim_ui_line`
-
-**Next:** Phase 33 (Arabic shaping) or Phase 34 (grid operations).
+C accessors added (15 new) for grid arrays, fields, globals, and functions.
 
 ### Phase 31: Grid Line Flush Functions ✅ COMPLETE
 
