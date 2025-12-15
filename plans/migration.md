@@ -2,11 +2,26 @@
 
 ## Current Status
 
-**696 rs\_\* functions migrated**
+**699 rs\_\* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
-### Phase 25: schar_T Core Functions 🚧 IN PROGRESS
+### Phase 26: Glyph Cache Rust Implementation ✅ COMPLETE
+
+Full Rust rewrite of the glyph cache (replacing C's `Set(glyph)`):
+
+- `GlyphCache` struct with HashMap for glyph storage and lookup
+- `rs_schar_from_buf` - buffer to schar (writes to Rust cache)
+- `rs_schar_cache_clear_if_full` - check/clear if >2^21 entries
+- `rs_schar_cache_clear` - clear cache, call callbacks
+
+C accessor wrappers for Rust to call:
+- `nvim_decor_check_invalid_glyphs()` - invalidate decoration glyphs
+- `nvim_check_chars_options()` - regenerate char options
+
+**Next:** Phase 27 (schar_get functions), then remaining grid.c functions.
+
+### Phase 25: schar_T Core Functions ✅ COMPLETE
 
 Added 4 schar_T functions to nvim-grid crate:
 
@@ -16,8 +31,6 @@ Added 4 schar_T functions to nvim-grid crate:
 - `rs_schar_get_first_codepoint` - extract first Unicode codepoint
 
 Added C accessor `nvim_glyph_cache_get()` for Rust to read from glyph cache.
-
-**Next:** Phase 26 (glyph cache Rust implementation), then remaining grid.c functions.
 
 ### Phase 24: Lua Callback FFI ✅ COMPLETE
 
