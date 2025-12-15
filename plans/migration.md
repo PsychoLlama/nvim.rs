@@ -21,7 +21,7 @@ C accessor added: `nvim_get_full_screen()` for debug mode detection.
 
 **Next:** Phase 38 (border drawing) or remaining grid.c functions.
 
-### Phase 36: Grid Scrolling ✅ COMPLETE
+### Phase 36: Grid Scrolling ✅ COMPLETE (with bugfix)
 
 Rust implementations for grid scrolling functions:
 - `rs_grid_ins_lines` - insert lines by scrolling down
@@ -29,6 +29,8 @@ Rust implementations for grid scrolling functions:
 - `linecopy_impl` - copy portion of line within grid (internal)
 
 C wrapper: `nvim_ui_call_grid_scroll()` for UI scroll notifications.
+
+**Bugfix (2025-12-15):** Fixed loop iteration order in scroll functions. The C code uses `while ((j += n) <= end)` which increments j BEFORE checking the condition. The Rust translation incorrectly checked FIRST then incremented, causing j to have wrong final value and clearing incorrect lines (memory corruption, garbage characters).
 
 ### Phase 34: Grid Operations ✅ COMPLETE
 
