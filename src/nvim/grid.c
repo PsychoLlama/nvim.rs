@@ -75,6 +75,12 @@ extern void rs_grid_ins_lines(ScreenGrid *grid, int row, int line_count, int end
                               int width);
 extern void rs_grid_del_lines(ScreenGrid *grid, int row, int line_count, int end, int col,
                               int width);
+// Phase 37: Grid line start/getchar/mirror
+extern void rs_screengrid_line_start(ScreenGrid *grid, int row, int col);
+extern void rs_grid_line_start(GridView *view, int row);
+extern schar_T rs_grid_line_getchar(int col, int *attr);
+extern void rs_linebuf_mirror(int *firstp, int *lastp, int *clearp, int width);
+extern void rs_grid_line_mirror(int width);
 #endif
 
 // temporary buffer for rendering a single screenline, so it can be
@@ -380,6 +386,11 @@ int nvim_get_p_arshape(void)
 int nvim_get_p_tbidi(void)
 {
   return p_tbidi;
+}
+
+bool nvim_get_full_screen(void)
+{
+  return full_screen;
 }
 
 // GridView field accessors
@@ -791,13 +802,20 @@ static int grid_line_flags = 0;
 /// another line.
 void grid_line_start(GridView *view, int row)
 {
+#ifdef USE_RUST_GRID
+  rs_grid_line_start(view, row);
+#else
   int col = 0;
   ScreenGrid *grid = grid_adjust(view, &row, &col);
   screengrid_line_start(grid, row, col);
+#endif
 }
 
 void screengrid_line_start(ScreenGrid *grid, int row, int col)
 {
+#ifdef USE_RUST_GRID
+  rs_screengrid_line_start(grid, row, col);
+#else
   grid_line_maxcol = grid->cols;
   assert(grid_line_grid == NULL);
   grid_line_row = row;
@@ -820,6 +838,7 @@ void screengrid_line_start(ScreenGrid *grid, int row, int col)
     memset(linebuf_char, 0xFF, sizeof(schar_T) * linebuf_size);
     memset(linebuf_attr, 0xFF, sizeof(sattr_T) * linebuf_size);
   }
+#endif
 }
 
 /// Get present char from current rendered screen line
@@ -829,6 +848,9 @@ void screengrid_line_start(ScreenGrid *grid, int row, int col)
 /// @return char or space if out of bounds
 schar_T grid_line_getchar(int col, int *attr)
 {
+#ifdef USE_RUST_GRID
+  return rs_grid_line_getchar(col, attr);
+#else
   if (col < grid_line_maxcol) {
     col += grid_line_coloff;
     size_t off = grid_line_grid->line_offset[grid_line_row] + (size_t)col;
@@ -840,6 +862,7 @@ schar_T grid_line_getchar(int col, int *attr)
     // NUL is a very special value (right-half of double width), space is True Neutral™
     return schar_from_ascii(' ');
   }
+#endif
 }
 
 void grid_line_put_schar(int col, schar_T schar, int attr)
@@ -985,16 +1008,23 @@ void grid_line_cursor_goto(int col)
 
 void grid_line_mirror(int width)
 {
+#ifdef USE_RUST_GRID
+  rs_grid_line_mirror(width);
+#else
   grid_line_clear_to = MAX(grid_line_last, grid_line_clear_to);
   if (grid_line_first >= grid_line_clear_to) {
     return;
   }
   linebuf_mirror(&grid_line_first, &grid_line_last, &grid_line_clear_to, width);
   grid_line_flags |= SLF_RIGHTLEFT;
+#endif
 }
 
 void linebuf_mirror(int *firstp, int *lastp, int *clearp, int width)
 {
+#ifdef USE_RUST_GRID
+  rs_linebuf_mirror(firstp, lastp, clearp, width);
+#else
   int first = *firstp;
   int last = *lastp;
 
@@ -1029,6 +1059,7 @@ void linebuf_mirror(int *firstp, int *lastp, int *clearp, int width)
   *firstp = width - *clearp;
   *clearp = width - first;
   *lastp = width - last;
+#endif
 }
 
 /// End a group of grid_line_puts calls and send the screen buffer to the UI layer.

@@ -1501,6 +1501,15 @@ pub unsafe extern "C" fn rs_grid_clear(
 // Phase 36: Grid Scrolling
 // =============================================================================
 
+// Additional C accessors for Phase 37
+extern "C" {
+    fn nvim_get_full_screen() -> bool;
+    fn nvim_set_grid_line_coloff(coloff: c_int);
+    fn nvim_set_grid_line_maxcol(maxcol: c_int);
+    fn nvim_set_grid_line_flags(flags: c_int);
+    fn nvim_get_linebuf_scratch() -> *mut c_char;
+}
+
 // C accessor for UI scroll call
 extern "C" {
     fn nvim_ui_call_grid_scroll(
@@ -1654,6 +1663,238 @@ pub unsafe extern "C" fn rs_grid_del_lines(
         let handle = nvim_screengrid_get_handle(grid);
         nvim_ui_call_grid_scroll(handle, row, end, col, col + width, line_count, 0);
     }
+}
+
+// =============================================================================
+// Phase 37: Grid Line Start/Getchar/Mirror
+// =============================================================================
+
+/// kOptRdbFlagInvalid (0x04)
+const K_OPT_RDB_FLAG_INVALID_P37: c_uint = 0x04;
+
+/// Start rendering a grid line at the low level.
+///
+/// This is the Rust equivalent of C's `screengrid_line_start()`.
+/// Sets up all grid line state variables for rendering.
+///
+/// # Safety
+/// - `grid` must be a valid ScreenGrid pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_screengrid_line_start(
+    grid: *mut std::ffi::c_void,
+    row: c_int,
+    col: c_int,
+) {
+    let grid_cols = nvim_screengrid_get_cols(grid);
+    let linebuf_sz = nvim_get_linebuf_size();
+
+    // grid_line_maxcol = grid->cols
+    // assert(grid_line_grid == NULL)
+    debug_assert!(nvim_get_grid_line_grid().is_null());
+
+    nvim_set_grid_line_row(row);
+    nvim_set_grid_line_grid(grid);
+    nvim_set_grid_line_coloff(col);
+
+    // grid_line_first = (int)linebuf_size
+    #[allow(clippy::cast_possible_truncation)]
+    nvim_set_grid_line_first(linebuf_sz as c_int);
+
+    // grid_line_maxcol = MIN(grid_line_maxcol, grid->cols - grid_line_coloff)
+    let effective_maxcol = (grid_cols - col).min(grid_cols);
+    nvim_set_grid_line_maxcol(effective_maxcol);
+
+    nvim_set_grid_line_last(0);
+    nvim_set_grid_line_clear_to(0);
+    nvim_set_grid_line_bg_attr(0);
+    nvim_set_grid_line_clear_attr(0);
+    nvim_set_grid_line_flags(0);
+
+    #[allow(clippy::cast_possible_truncation)]
+    let maxcol = effective_maxcol as usize;
+    debug_assert!(maxcol <= linebuf_sz);
+
+    // In debug/invalid mode, fill linebuf with invalid values
+    if nvim_get_full_screen() && (nvim_get_rdb_flags() & K_OPT_RDB_FLAG_INVALID_P37) != 0 {
+        let linebuf_char = nvim_get_linebuf_char();
+        let linebuf_attr = nvim_get_linebuf_attr();
+        debug_assert!(!linebuf_char.is_null());
+
+        // memset with 0xFF
+        std::ptr::write_bytes(linebuf_char, 0xFF, linebuf_sz);
+        std::ptr::write_bytes(linebuf_attr, 0xFF, linebuf_sz);
+    }
+}
+
+/// Start a group of grid_line_puts calls that builds a single grid line.
+///
+/// This is the Rust equivalent of C's `grid_line_start()`.
+/// Must be matched with a grid_line_flush call before moving to another line.
+///
+/// # Safety
+/// - `view` must be a valid GridView pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_line_start(view: *mut std::ffi::c_void, row: c_int) {
+    let mut adjusted_row = row;
+    let mut col: c_int = 0;
+    let grid = rs_grid_adjust(view, &mut adjusted_row, &mut col);
+    rs_screengrid_line_start(grid, adjusted_row, col);
+}
+
+/// Get present char from current rendered screen line.
+///
+/// This is the Rust equivalent of C's `grid_line_getchar()`.
+/// This indicates what already is on screen, not the pending render buffer.
+///
+/// # Safety
+/// Must be called after `grid_line_start()`.
+///
+/// @return char or space if out of bounds
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_line_getchar(col: c_int, attr: *mut c_int) -> ScharT {
+    let maxcol = nvim_get_grid_line_maxcol();
+
+    if col < maxcol {
+        let grid = nvim_get_grid_line_grid();
+        let coloff = nvim_get_grid_line_coloff();
+        let row = nvim_get_grid_line_row();
+        let line_offset = nvim_screengrid_get_line_offset(grid);
+        let adjusted_col = col + coloff;
+        let off = *line_offset.add(row as usize) + adjusted_col as usize;
+
+        if !attr.is_null() {
+            let attrs = nvim_screengrid_get_attrs(grid);
+            *attr = (*attrs.add(off)) as c_int;
+        }
+
+        let chars = nvim_screengrid_get_chars(grid);
+        *chars.add(off)
+    } else {
+        // NUL is a very special value (right-half of double width), space is True Neutral™
+        schar_from_char_impl(b' ' as c_int)
+    }
+}
+
+/// Mirror the line buffer for right-to-left text.
+///
+/// This is the Rust equivalent of C's `linebuf_mirror()`.
+/// Reverses the order of characters, attributes, and vcols in the buffer.
+///
+/// # Safety
+/// - `firstp`, `lastp`, `clearp` must be valid pointers
+#[no_mangle]
+pub unsafe extern "C" fn rs_linebuf_mirror(
+    firstp: *mut c_int,
+    lastp: *mut c_int,
+    clearp: *mut c_int,
+    width: c_int,
+) {
+    let first = *firstp;
+    let last = *lastp;
+
+    let n = (last - first) as usize;
+    let mirror = width - 1; // Mirrors are more fun than television.
+
+    let linebuf_char = nvim_get_linebuf_char();
+    let linebuf_attr = nvim_get_linebuf_attr();
+    let linebuf_vcol = nvim_get_linebuf_vcol();
+    let scratch = nvim_get_linebuf_scratch();
+
+    // Mirror characters
+    {
+        let scratch_char = scratch.cast::<ScharT>();
+        // Copy linebuf_char[first..last] to scratch_char[first..last]
+        std::ptr::copy_nonoverlapping(
+            linebuf_char.offset(first as isize),
+            scratch_char.offset(first as isize),
+            n,
+        );
+
+        let mut col = first;
+        while col < last {
+            let rev = mirror - col;
+            // Check for double-width character (second cell is 0)
+            if col + 1 < last && *scratch_char.offset((col + 1) as isize) == 0 {
+                *linebuf_char.offset((rev - 1) as isize) = *scratch_char.offset(col as isize);
+                *linebuf_char.offset(rev as isize) = 0;
+                col += 1;
+            } else {
+                *linebuf_char.offset(rev as isize) = *scratch_char.offset(col as isize);
+            }
+            col += 1;
+        }
+    }
+
+    // Mirror attributes (assumes doublewidth chars are self-consistent)
+    {
+        let scratch_attr = scratch.cast::<SattrT>();
+        std::ptr::copy_nonoverlapping(
+            linebuf_attr.offset(first as isize),
+            scratch_attr.offset(first as isize),
+            n,
+        );
+
+        for col in first..last {
+            *linebuf_attr.offset((mirror - col) as isize) = *scratch_attr.offset(col as isize);
+        }
+    }
+
+    // Mirror vcols
+    {
+        let scratch_vcol = scratch.cast::<ColnrT>();
+        std::ptr::copy_nonoverlapping(
+            linebuf_vcol.offset(first as isize),
+            scratch_vcol.offset(first as isize),
+            n,
+        );
+
+        for col in first..last {
+            *linebuf_vcol.offset((mirror - col) as isize) = *scratch_vcol.offset(col as isize);
+        }
+    }
+
+    // Update the pointers
+    *firstp = width - *clearp;
+    *clearp = width - first;
+    *lastp = width - last;
+}
+
+/// Mirror the current grid line for right-to-left text display.
+///
+/// This is the Rust equivalent of C's `grid_line_mirror()`.
+/// Updates the grid line state and sets the SLF_RIGHTLEFT flag.
+///
+/// # Safety
+/// Must be called after `grid_line_start()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_line_mirror(width: c_int) {
+    let last = nvim_get_grid_line_last();
+    let clear_to = nvim_get_grid_line_clear_to();
+
+    // grid_line_clear_to = MAX(grid_line_last, grid_line_clear_to)
+    let new_clear_to = last.max(clear_to);
+    nvim_set_grid_line_clear_to(new_clear_to);
+
+    let first = nvim_get_grid_line_first();
+    if first >= new_clear_to {
+        return;
+    }
+
+    // Call linebuf_mirror with pointers to update state
+    let mut first_val = first;
+    let mut last_val = last;
+    let mut clear_val = new_clear_to;
+
+    rs_linebuf_mirror(&mut first_val, &mut last_val, &mut clear_val, width);
+
+    // Update the grid line state
+    nvim_set_grid_line_first(first_val);
+    nvim_set_grid_line_last(last_val);
+    nvim_set_grid_line_clear_to(clear_val);
+
+    // Set the RTL flag
+    let flags = nvim_get_grid_line_flags();
+    nvim_set_grid_line_flags(flags | SLF_RIGHTLEFT);
 }
 
 #[cfg(test)]
