@@ -70,6 +70,11 @@ extern void rs_grid_invalidate(ScreenGrid *grid);
 extern schar_T rs_grid_getchar(ScreenGrid *grid, int row, int col, int *attrp);
 extern void rs_grid_clear(GridView *grid, int start_row, int end_row, int start_col, int end_col,
                           int attr);
+// Phase 36: Grid scrolling
+extern void rs_grid_ins_lines(ScreenGrid *grid, int row, int line_count, int end, int col,
+                              int width);
+extern void rs_grid_del_lines(ScreenGrid *grid, int row, int line_count, int end, int col,
+                              int width);
 #endif
 
 // temporary buffer for rendering a single screenline, so it can be
@@ -403,6 +408,12 @@ void nvim_ui_line(ScreenGrid *grid, int row, bool invalid_row, int startcol, int
                   int clearcol, int clearattr, bool wrap)
 {
   ui_line(grid, row, invalid_row, startcol, endcol, clearcol, clearattr, wrap);
+}
+
+void nvim_ui_call_grid_scroll(handle_T handle, int top, int bot, int left, int right, int rows,
+                              int cols)
+{
+  ui_call_grid_scroll(handle, top, bot, left, right, rows, cols);
 }
 #endif
 
@@ -1460,6 +1471,9 @@ void grid_assign_handle(ScreenGrid *grid)
 /// 'row', 'col' and 'end' are relative to the start of the region.
 void grid_ins_lines(ScreenGrid *grid, int row, int line_count, int end, int col, int width)
 {
+#ifdef USE_RUST_GRID
+  rs_grid_ins_lines(grid, row, line_count, end, col, width);
+#else
   int j;
   unsigned temp;
 
@@ -1492,6 +1506,7 @@ void grid_ins_lines(ScreenGrid *grid, int row, int line_count, int end, int col,
   if (!grid->throttled) {
     ui_call_grid_scroll(grid->handle, row, end, col, col + width, -line_count, 0);
   }
+#endif
 }
 
 /// delete lines on the screen and move lines up.
@@ -1500,6 +1515,9 @@ void grid_ins_lines(ScreenGrid *grid, int row, int line_count, int end, int col,
 /// 'row' and 'end' are relative to the start of the region.
 void grid_del_lines(ScreenGrid *grid, int row, int line_count, int end, int col, int width)
 {
+#ifdef USE_RUST_GRID
+  rs_grid_del_lines(grid, row, line_count, end, col, width);
+#else
   int j;
   unsigned temp;
 
@@ -1533,6 +1551,7 @@ void grid_del_lines(ScreenGrid *grid, int row, int line_count, int end, int col,
   if (!grid->throttled) {
     ui_call_grid_scroll(grid->handle, row, end, col, col + width, line_count, 0);
   }
+#endif
 }
 
 static void grid_draw_bordertext(VirtText vt, int col, int winbl, const int *hl_attr,

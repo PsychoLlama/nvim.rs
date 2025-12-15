@@ -1497,6 +1497,165 @@ pub unsafe extern "C" fn rs_grid_clear(
     }
 }
 
+// =============================================================================
+// Phase 36: Grid Scrolling
+// =============================================================================
+
+// C accessor for UI scroll call
+extern "C" {
+    fn nvim_ui_call_grid_scroll(
+        handle: HandleT,
+        top: c_int,
+        bot: c_int,
+        left: c_int,
+        right: c_int,
+        rows: c_int,
+        cols: c_int,
+    );
+}
+
+/// Copy a portion of one line to another within a grid.
+///
+/// This is the Rust equivalent of C's `linecopy()`.
+#[inline]
+unsafe fn linecopy_impl(
+    grid: *mut std::ffi::c_void,
+    to: c_int,
+    from: c_int,
+    col: c_int,
+    width: c_int,
+) {
+    let chars = nvim_screengrid_get_chars(grid);
+    let attrs = nvim_screengrid_get_attrs(grid);
+    let vcols = nvim_screengrid_get_vcols(grid);
+    let line_offset = nvim_screengrid_get_line_offset(grid);
+
+    let off_to = *line_offset.add(to as usize) + col as usize;
+    let off_from = *line_offset.add(from as usize) + col as usize;
+    let width_usize = width as usize;
+
+    // Use memmove since regions may overlap
+    std::ptr::copy(
+        chars.add(off_from),
+        chars.add(off_to),
+        width_usize,
+    );
+    std::ptr::copy(
+        attrs.add(off_from),
+        attrs.add(off_to),
+        width_usize,
+    );
+    std::ptr::copy(
+        vcols.add(off_from),
+        vcols.add(off_to),
+        width_usize,
+    );
+}
+
+/// Insert lines in a grid by scrolling down.
+///
+/// This is the Rust equivalent of C's `grid_ins_lines()`.
+/// Shifts lines down and clears the inserted lines at the top.
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_ins_lines(
+    grid: *mut std::ffi::c_void,
+    row: c_int,
+    line_count: c_int,
+    end: c_int,
+    col: c_int,
+    width: c_int,
+) {
+    if line_count <= 0 {
+        return;
+    }
+
+    let grid_cols = nvim_screengrid_get_cols(grid);
+    let line_offset = nvim_screengrid_get_line_offset(grid);
+
+    // Shift line_offset[] line_count down to reflect the inserted lines.
+    // Clear the inserted lines.
+    for i in 0..line_count {
+        if width != grid_cols {
+            // need to copy part of a line
+            let mut j = end - 1 - i;
+            while j - line_count >= row {
+                j -= line_count;
+                linecopy_impl(grid, j + line_count, j, col, width);
+            }
+            j += line_count;
+            let off = *line_offset.add(j as usize) + col as usize;
+            rs_grid_clear_line(grid, off, width, false);
+        } else {
+            // whole width, moving the line pointers is faster
+            let mut j = end - 1 - i;
+            let temp = *line_offset.add(j as usize);
+            while j - line_count >= row {
+                j -= line_count;
+                *line_offset.add((j + line_count) as usize) = *line_offset.add(j as usize);
+            }
+            *line_offset.add((j + line_count) as usize) = temp;
+            rs_grid_clear_line(grid, temp, grid_cols, false);
+        }
+    }
+
+    if !nvim_screengrid_get_throttled(grid) {
+        let handle = nvim_screengrid_get_handle(grid);
+        nvim_ui_call_grid_scroll(handle, row, end, col, col + width, -line_count, 0);
+    }
+}
+
+/// Delete lines in a grid by scrolling up.
+///
+/// This is the Rust equivalent of C's `grid_del_lines()`.
+/// Shifts lines up and clears the deleted lines at the bottom.
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_del_lines(
+    grid: *mut std::ffi::c_void,
+    row: c_int,
+    line_count: c_int,
+    end: c_int,
+    col: c_int,
+    width: c_int,
+) {
+    if line_count <= 0 {
+        return;
+    }
+
+    let grid_cols = nvim_screengrid_get_cols(grid);
+    let line_offset = nvim_screengrid_get_line_offset(grid);
+
+    // Now shift line_offset[] line_count up to reflect the deleted lines.
+    // Clear the inserted lines.
+    for i in 0..line_count {
+        if width != grid_cols {
+            // need to copy part of a line
+            let mut j = row + i;
+            while j + line_count <= end - 1 {
+                j += line_count;
+                linecopy_impl(grid, j - line_count, j, col, width);
+            }
+            j -= line_count;
+            let off = *line_offset.add(j as usize) + col as usize;
+            rs_grid_clear_line(grid, off, width, false);
+        } else {
+            // whole width, moving the line pointers is faster
+            let mut j = row + i;
+            let temp = *line_offset.add(j as usize);
+            while j + line_count <= end - 1 {
+                j += line_count;
+                *line_offset.add((j - line_count) as usize) = *line_offset.add(j as usize);
+            }
+            *line_offset.add((j - line_count) as usize) = temp;
+            rs_grid_clear_line(grid, temp, grid_cols, false);
+        }
+    }
+
+    if !nvim_screengrid_get_throttled(grid) {
+        let handle = nvim_screengrid_get_handle(grid);
+        nvim_ui_call_grid_scroll(handle, row, end, col, col + width, line_count, 0);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
