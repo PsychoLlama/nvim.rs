@@ -589,19 +589,38 @@ extern "C" {
     // rdb_flags global
     fn nvim_get_rdb_flags() -> c_uint;
 
-    // Wrapper for grid_put_linebuf (the complex function stays in C for now)
-    fn nvim_grid_put_linebuf(
+    // ScreenGrid array accessors
+    fn nvim_screengrid_get_chars(grid: *mut std::ffi::c_void) -> *mut ScharT;
+    fn nvim_screengrid_get_attrs(grid: *mut std::ffi::c_void) -> *mut SattrT;
+    fn nvim_screengrid_get_vcols(grid: *mut std::ffi::c_void) -> *mut ColnrT;
+    fn nvim_screengrid_get_line_offset(grid: *mut std::ffi::c_void) -> *mut usize;
+    fn nvim_screengrid_get_dirty_col(grid: *mut std::ffi::c_void) -> *mut c_int;
+
+    // ScreenGrid field accessors
+    fn nvim_screengrid_get_cols(grid: *mut std::ffi::c_void) -> c_int;
+    fn nvim_screengrid_get_throttled(grid: *mut std::ffi::c_void) -> bool;
+
+    // Global accessors
+    fn nvim_get_default_grid() -> *mut std::ffi::c_void;
+    fn nvim_get_exmode_active() -> bool;
+    fn nvim_get_p_arshape() -> c_int;
+    fn nvim_get_p_tbidi() -> c_int;
+
+    // Function wrappers
+    fn nvim_line_do_arabic_shape(buf: *mut ScharT, cols: c_int);
+    fn nvim_ui_line(
         grid: *mut std::ffi::c_void,
         row: c_int,
-        coloff: c_int,
-        col: c_int,
+        invalid_row: bool,
+        startcol: c_int,
         endcol: c_int,
-        clear_width: c_int,
-        bg_attr: c_int,
-        clear_attr: c_int,
-        last_vcol: c_int,
-        flags: c_int,
+        clearcol: c_int,
+        clearattr: c_int,
+        wrap: bool,
     );
+
+    // hl_combine_attr from highlight module
+    fn rs_hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int;
 }
 
 /// Put a single schar at a column position.
@@ -749,7 +768,8 @@ pub unsafe extern "C" fn rs_grid_line_flush() {
     let clear_attr = nvim_get_grid_line_clear_attr();
     let flags = nvim_get_grid_line_flags();
 
-    nvim_grid_put_linebuf(
+    // Call Rust implementation directly (not through C wrapper to avoid recursion)
+    rs_grid_put_linebuf(
         grid, row, coloff, first, last, clear_to, bg_attr, clear_attr, -1, flags,
     );
 }
@@ -780,6 +800,357 @@ pub unsafe extern "C" fn rs_grid_line_flush_if_valid_row() {
     }
 
     rs_grid_line_flush();
+}
+
+// =============================================================================
+// Phase 32: grid_put_linebuf Implementation
+// =============================================================================
+
+/// SLF_RIGHTLEFT flag (0x01)
+const SLF_RIGHTLEFT: c_int = 1;
+/// SLF_WRAP flag (0x02)
+const SLF_WRAP: c_int = 2;
+/// SLF_INC_VCOL flag (0x04)
+const SLF_INC_VCOL: c_int = 4;
+
+/// rdb_flags value for kOptRdbFlagNodelta (0x08)
+const K_OPT_RDB_FLAG_NODELTA: c_uint = 0x08;
+
+/// Check whether the given character needs redrawing.
+///
+/// Returns true if the character at `col` differs from what's in the grid
+/// or if forced redraw flags are set.
+#[inline]
+unsafe fn grid_char_needs_redraw(
+    linebuf_char: *const ScharT,
+    linebuf_attr: *const SattrT,
+    grid_chars: *const ScharT,
+    grid_attrs: *const SattrT,
+    col: c_int,
+    off_to: usize,
+    cols: c_int,
+) -> bool {
+    if cols <= 0 {
+        return false;
+    }
+
+    let col_idx = col as isize;
+    let off = off_to;
+
+    // Check if char or attr differs
+    if *linebuf_char.offset(col_idx) != *grid_chars.add(off)
+        || *linebuf_attr.offset(col_idx) != *grid_attrs.add(off)
+    {
+        return true;
+    }
+
+    // Check second cell of double-width char
+    if cols > 1
+        && *linebuf_char.offset(col_idx + 1) == 0
+        && *linebuf_char.offset(col_idx + 1) != *grid_chars.add(off + 1)
+    {
+        return true;
+    }
+
+    // Force redraw in exmode or with nodelta flag
+    if nvim_get_exmode_active() || (nvim_get_rdb_flags() & K_OPT_RDB_FLAG_NODELTA) != 0 {
+        return true;
+    }
+
+    false
+}
+
+/// Check if a grid row is invalid (marked for full redraw).
+#[inline]
+unsafe fn grid_invalid_row(grid_attrs: *const SattrT, line_offset: usize) -> bool {
+    // A row is invalid if its first attribute is negative
+    *grid_attrs.add(line_offset) < 0
+}
+
+/// Move one buffered line to the window grid, but only the characters that
+/// have actually changed.
+///
+/// This is the core rendering function that handles:
+/// - Delta detection (only redraw changed characters)
+/// - Double-width character handling
+/// - Right-to-left text support
+/// - Arabic shaping
+/// - Attribute combination
+///
+/// # Safety
+/// - `grid` must be a valid ScreenGrid pointer
+/// - All grid arrays must be valid and properly sized
+#[no_mangle]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_grid_put_linebuf(
+    grid: *mut std::ffi::c_void,
+    row: c_int,
+    coloff: c_int,
+    mut col: c_int,
+    mut endcol: c_int,
+    mut clear_width: c_int,
+    bg_attr: c_int,
+    mut clear_attr: c_int,
+    mut last_vcol: ColnrT,
+    flags: c_int,
+) {
+    debug_assert!(row >= 0 && row < nvim_screengrid_get_rows(grid));
+
+    let grid_cols = nvim_screengrid_get_cols(grid);
+
+    // Clamp endcol to grid width
+    if endcol > grid_cols {
+        endcol = grid_cols;
+    }
+
+    // Get grid arrays
+    let grid_chars = nvim_screengrid_get_chars(grid);
+    let grid_attrs = nvim_screengrid_get_attrs(grid);
+    let grid_vcols = nvim_screengrid_get_vcols(grid);
+    let grid_line_offset = nvim_screengrid_get_line_offset(grid);
+
+    // Safety check
+    if grid_chars.is_null() || row >= nvim_screengrid_get_rows(grid) || coloff >= grid_cols {
+        return;
+    }
+
+    // Get line buffers
+    let linebuf_char = nvim_get_linebuf_char();
+    let linebuf_attr = nvim_get_linebuf_attr();
+    let linebuf_vcol = nvim_get_linebuf_vcol();
+
+    // Check if this is an invalid row (needs full redraw)
+    let default_grid = nvim_get_default_grid();
+    let line_off = *grid_line_offset.add(row as usize);
+    let invalid_row =
+        grid != default_grid && grid_invalid_row(grid_attrs, line_off) && col == 0;
+
+    let off_to = line_off + coloff as usize;
+    let max_off_to = line_off + grid_cols as usize;
+
+    // Handle overwriting right half of double-width character
+    if col > 0 && *grid_chars.add(off_to + col as usize) == 0 {
+        *linebuf_char.offset((col - 1) as isize) = schar_from_char_impl(b'>' as c_int);
+        *linebuf_attr.offset((col - 1) as isize) =
+            *grid_attrs.add(off_to + (col - 1) as usize);
+        col -= 1;
+    }
+
+    // Handle right-to-left mode
+    let mut clear_start = endcol;
+    if (flags & SLF_RIGHTLEFT) != 0 {
+        clear_start = col;
+        col = endcol;
+        endcol = clear_width;
+        clear_width = col;
+    }
+
+    // Apply Arabic shaping if enabled
+    if nvim_get_p_arshape() != 0 && nvim_get_p_tbidi() == 0 && endcol > col {
+        nvim_line_do_arabic_shape(linebuf_char.offset(col as isize), endcol - col);
+    }
+
+    // Combine background attribute with line attributes
+    if bg_attr != 0 {
+        for c in col..endcol {
+            let attr = *linebuf_attr.offset(c as isize) as c_int;
+            #[allow(clippy::cast_possible_truncation)]
+            {
+                *linebuf_attr.offset(c as isize) = rs_hl_combine_attr(bg_attr, attr) as SattrT;
+            }
+        }
+    }
+
+    // Initialize dirty range tracking
+    let mut start_dirty: c_int = -1;
+    let mut end_dirty: c_int = 0;
+    let mut clear_next = false;
+
+    // Check if first character needs redraw
+    let mut redraw_next = grid_char_needs_redraw(
+        linebuf_char,
+        linebuf_attr,
+        grid_chars,
+        grid_attrs,
+        col,
+        off_to + col as usize,
+        endcol - col,
+    );
+
+    // Process each character
+    while col < endcol {
+        // Determine if this is a double-width character
+        let char_cells = if col + 1 < endcol && *linebuf_char.offset((col + 1) as isize) == 0 {
+            2
+        } else {
+            1
+        };
+
+        let redraw_this = redraw_next;
+        let off = off_to + col as usize;
+
+        // Check if next character needs redraw
+        redraw_next = grid_char_needs_redraw(
+            linebuf_char,
+            linebuf_attr,
+            grid_chars,
+            grid_attrs,
+            col + char_cells,
+            off + char_cells as usize,
+            endcol - col - char_cells,
+        );
+
+        if redraw_this {
+            if start_dirty == -1 {
+                start_dirty = col;
+            }
+            end_dirty = col + char_cells;
+
+            // Check if we need to clear the right half of an old double-width char
+            if col + char_cells == endcol
+                && (off + char_cells as usize) < max_off_to
+                && *grid_chars.add(off + char_cells as usize) == 0
+            {
+                clear_next = true;
+            }
+
+            // Copy character to grid
+            *grid_chars.add(off) = *linebuf_char.offset(col as isize);
+            if char_cells == 2 {
+                *grid_chars.add(off + 1) = *linebuf_char.offset((col + 1) as isize);
+            }
+
+            // Copy attributes to grid
+            *grid_attrs.add(off) = *linebuf_attr.offset(col as isize);
+            if char_cells == 2 {
+                *grid_attrs.add(off + 1) = *linebuf_attr.offset(col as isize);
+            }
+        }
+
+        // Always update vcols
+        *grid_vcols.add(off) = *linebuf_vcol.offset(col as isize);
+        if char_cells == 2 {
+            *grid_vcols.add(off + 1) = *linebuf_vcol.offset((col + 1) as isize);
+        }
+
+        col += char_cells;
+    }
+
+    // Clear right half of overwritten double-width character
+    if clear_next {
+        *grid_chars.add(off_to + col as usize) = schar_from_char_impl(b' ' as c_int);
+        end_dirty += 1;
+    }
+
+    // Handle double-width character at clear boundary
+    if (off_to + clear_width as usize) < max_off_to
+        && *grid_chars.add(off_to + clear_width as usize) == 0
+    {
+        clear_width += 1;
+    }
+
+    // Update vcols in RTL clear region
+    let mut clear_dirty_start: c_int = -1;
+    let mut clear_end: c_int = -1;
+
+    if (flags & SLF_RIGHTLEFT) != 0 {
+        for c in (clear_start..clear_width).rev() {
+            let off = off_to + c as usize;
+            if (flags & SLF_INC_VCOL) != 0 {
+                last_vcol += 1;
+                *grid_vcols.add(off) = last_vcol;
+            } else {
+                *grid_vcols.add(off) = last_vcol;
+            }
+        }
+    }
+
+    // Combine clear_attr with bg_attr
+    clear_attr = rs_hl_combine_attr(bg_attr, clear_attr);
+
+    // Clear the rest of the line
+    let space_char = schar_from_char_impl(b' ' as c_int);
+    #[allow(clippy::cast_possible_truncation)]
+    let clear_attr_val = clear_attr as SattrT;
+
+    for c in clear_start..clear_width {
+        let off = off_to + c as usize;
+        if *grid_chars.add(off) != space_char
+            || *grid_attrs.add(off) != clear_attr_val
+            || (nvim_get_rdb_flags() & K_OPT_RDB_FLAG_NODELTA) != 0
+        {
+            *grid_chars.add(off) = space_char;
+            *grid_attrs.add(off) = clear_attr_val;
+            if clear_dirty_start == -1 {
+                clear_dirty_start = c;
+            }
+            clear_end = c + 1;
+        }
+        if (flags & SLF_RIGHTLEFT) == 0 {
+            if (flags & SLF_INC_VCOL) != 0 {
+                last_vcol += 1;
+                *grid_vcols.add(off) = last_vcol;
+            } else {
+                *grid_vcols.add(off) = last_vcol;
+            }
+        }
+    }
+
+    // Determine final dirty range and send to UI
+    if (flags & SLF_RIGHTLEFT) != 0 && start_dirty != -1 && clear_dirty_start != -1 {
+        let throttled = nvim_screengrid_get_throttled(grid);
+        if throttled || clear_dirty_start >= start_dirty - 5 {
+            // Cannot draw now or too small to be worth a separate "clear" event
+            start_dirty = clear_dirty_start;
+        } else {
+            nvim_ui_line(
+                grid,
+                row,
+                invalid_row,
+                coloff + clear_dirty_start,
+                coloff + clear_dirty_start,
+                coloff + clear_end,
+                clear_attr,
+                (flags & SLF_WRAP) != 0,
+            );
+        }
+        clear_end = end_dirty;
+    } else {
+        if start_dirty == -1 {
+            // Clear only
+            start_dirty = clear_dirty_start;
+            end_dirty = clear_dirty_start;
+        } else if clear_end < end_dirty {
+            // Put only
+            clear_end = end_dirty;
+        } else {
+            end_dirty = endcol;
+        }
+    }
+
+    // Send final UI update
+    if clear_end > start_dirty {
+        let throttled = nvim_screengrid_get_throttled(grid);
+        if !throttled {
+            nvim_ui_line(
+                grid,
+                row,
+                invalid_row,
+                coloff + start_dirty,
+                coloff + end_dirty,
+                coloff + clear_end,
+                clear_attr,
+                (flags & SLF_WRAP) != 0,
+            );
+        } else {
+            let dirty_col = nvim_screengrid_get_dirty_col(grid);
+            if !dirty_col.is_null() {
+                if clear_end > *dirty_col.add(row as usize) {
+                    *dirty_col.add(row as usize) = clear_end;
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]

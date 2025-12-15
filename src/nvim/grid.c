@@ -59,6 +59,9 @@ extern void rs_grid_line_clear_end(int start_col, int end_col, int bg_attr, int 
 extern void rs_grid_line_cursor_goto(int col);
 extern void rs_grid_line_flush(void);
 extern void rs_grid_line_flush_if_valid_row(void);
+extern void rs_grid_put_linebuf(ScreenGrid *grid, int row, int coloff, int col, int endcol,
+                                int clear_width, int bg_attr, int clear_attr, colnr_T last_vcol,
+                                int flags);
 #endif
 
 // temporary buffer for rendering a single screenline, so it can be
@@ -306,6 +309,76 @@ void nvim_grid_put_linebuf(ScreenGrid *grid, int row, int coloff, int col, int e
 {
   grid_put_linebuf(grid, row, coloff, col, endcol, clear_width, bg_attr, clear_attr,
                    (colnr_T)last_vcol, flags);
+}
+
+// ScreenGrid array accessors
+schar_T *nvim_screengrid_get_chars(ScreenGrid *grid)
+{
+  return grid ? grid->chars : NULL;
+}
+
+sattr_T *nvim_screengrid_get_attrs(ScreenGrid *grid)
+{
+  return grid ? grid->attrs : NULL;
+}
+
+colnr_T *nvim_screengrid_get_vcols(ScreenGrid *grid)
+{
+  return grid ? grid->vcols : NULL;
+}
+
+size_t *nvim_screengrid_get_line_offset(ScreenGrid *grid)
+{
+  return grid ? grid->line_offset : NULL;
+}
+
+int *nvim_screengrid_get_dirty_col(ScreenGrid *grid)
+{
+  return grid ? grid->dirty_col : NULL;
+}
+
+// ScreenGrid field accessors
+int nvim_screengrid_get_cols(ScreenGrid *grid)
+{
+  return grid ? grid->cols : 0;
+}
+
+bool nvim_screengrid_get_throttled(ScreenGrid *grid)
+{
+  return grid ? grid->throttled : false;
+}
+
+// Global accessors
+ScreenGrid *nvim_get_default_grid(void)
+{
+  return &default_grid;
+}
+
+bool nvim_get_exmode_active(void)
+{
+  return exmode_active;
+}
+
+int nvim_get_p_arshape(void)
+{
+  return p_arshape;
+}
+
+int nvim_get_p_tbidi(void)
+{
+  return p_tbidi;
+}
+
+// Function wrappers
+void nvim_line_do_arabic_shape(schar_T *buf, int cols)
+{
+  line_do_arabic_shape(buf, cols);
+}
+
+void nvim_ui_line(ScreenGrid *grid, int row, bool invalid_row, int startcol, int endcol,
+                  int clearcol, int clearattr, bool wrap)
+{
+  ui_line(grid, row, invalid_row, startcol, endcol, clearcol, clearattr, wrap);
 }
 #endif
 
@@ -992,6 +1065,10 @@ static int grid_char_needs_redraw(ScreenGrid *grid, int col, size_t off_to, int 
 void grid_put_linebuf(ScreenGrid *grid, int row, int coloff, int col, int endcol, int clear_width,
                       int bg_attr, int clear_attr, colnr_T last_vcol, int flags)
 {
+#ifdef USE_RUST_GRID
+  rs_grid_put_linebuf(grid, row, coloff, col, endcol, clear_width, bg_attr, clear_attr, last_vcol,
+                      flags);
+#else
   bool redraw_next;                         // redraw_this for next character
   bool clear_next = false;
   assert(0 <= row && row < grid->rows);
@@ -1162,6 +1239,7 @@ void grid_put_linebuf(ScreenGrid *grid, int row, int coloff, int col, int endcol
       }
     }
   }
+#endif
 }
 
 void grid_alloc(ScreenGrid *grid, int rows, int columns, bool copy, bool valid)

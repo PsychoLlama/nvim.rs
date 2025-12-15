@@ -2,9 +2,30 @@
 
 ## Current Status
 
-**707 rs\_\* functions migrated**
+**708 rs\_\* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
+
+### Phase 32: grid_put_linebuf Implementation ✅ COMPLETE
+
+Full Rust implementation of the core rendering function (~170 lines):
+- `rs_grid_put_linebuf` - move buffered line to grid with delta detection
+
+Features implemented:
+- Delta detection (only redraw changed characters)
+- Double-width character handling
+- Right-to-left text support (SLF_RIGHTLEFT)
+- Arabic shaping integration
+- Attribute combination with hl_combine_attr
+- Throttled/dirty_col handling
+
+C accessors added (15 new):
+- Grid arrays: `nvim_screengrid_get_chars/attrs/vcols/line_offset/dirty_col`
+- Grid fields: `nvim_screengrid_get_cols`, `nvim_screengrid_get_throttled`
+- Globals: `nvim_get_default_grid`, `nvim_get_exmode_active`, `nvim_get_p_arshape`, `nvim_get_p_tbidi`
+- Functions: `nvim_line_do_arabic_shape`, `nvim_ui_line`
+
+**Next:** Phase 33 (Arabic shaping) or Phase 34 (grid operations).
 
 ### Phase 31: Grid Line Flush Functions ✅ COMPLETE
 
@@ -15,9 +36,6 @@ Added Rust implementations for grid line flushing:
 C accessors added:
 - `nvim_screengrid_get_rows()` - get grid row count
 - `nvim_get_rdb_flags()` - get rdb_flags global
-- `nvim_grid_put_linebuf()` - wrapper for grid_put_linebuf (stays in C)
-
-**Next:** Phase 32 (grid_put_linebuf - high complexity).
 
 ### Phase 30: Grid Line Content Functions ✅ COMPLETE
 
