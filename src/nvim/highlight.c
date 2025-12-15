@@ -173,14 +173,9 @@ int nvim_get_hlf_count(void) { return HLF_COUNT; }
 // Forward declaration for update_ns_hl
 static void update_ns_hl(int ns_id);
 
-#ifdef USE_RUST_HIGHLIGHT
 extern void rs_update_ns_hl(int ns_id);
 // Wrapper for update_ns_hl - calls Rust version
 void nvim_update_ns_hl(int ns_id) { rs_update_ns_hl(ns_id); }
-#else
-// Wrapper for update_ns_hl - calls C version
-void nvim_update_ns_hl(int ns_id) { update_ns_hl(ns_id); }
-#endif
 
 // hlstate_active is now owned by Rust (ATTR_STORE.hlstate_active)
 // This accessor calls Rust to get the value
@@ -231,7 +226,6 @@ bool highlight_use_hlstate(void)
   return true;
 }
 
-#ifdef USE_RUST_HIGHLIGHT
 extern int rs_get_attr_entry_full(HlEntry entry, Arena *arena);
 
 /// Return the attr number for a set of colors and font, and optionally
@@ -247,62 +241,7 @@ static int get_attr_entry(HlEntry entry)
   arena_mem_free(arena_finish(&arena));
   return id;
 }
-#else
-/// Return the attr number for a set of colors and font, and optionally
-/// a semantic description (see ext_hlstate documentation).
-/// Add a new entry to the attr_entries array if the combination is new.
-/// @return 0 for error.
-static int get_attr_entry(HlEntry entry)
-{
-  // Rust handles hlstate_active normalization internally
-  static bool recursive = false;
-  bool retried = false;
 
-retry: {}
-  GetAttrEntryResult rs_result = rs_get_attr_entry(entry);
-
-  if (rs_result.id == -1) {
-    // Table overflow - Rust signals this with id == -1
-    // Running out of attribute entries! Remove all attributes and
-    // compute new ones for all groups.
-    // When called recursively, we are really out of numbers.
-    if (recursive || retried) {
-      emsg(_("E424: Too many different highlighting attributes in use"));
-      return 0;
-    }
-    recursive = true;
-
-    clear_hl_tables(true);
-
-    recursive = false;
-    if (entry.kind == kHlCombine) {
-      // This entry is now invalid, don't put it
-      return 0;
-    }
-    retried = true;
-    goto retry;
-  }
-
-  if (!rs_result.is_new) {
-    // Existing entry - just return the ID
-    return rs_result.id;
-  }
-
-  // New attr id, send event to remote UIs
-  int id = rs_result.id;
-
-  Arena arena = ARENA_EMPTY;
-  Array inspect = hl_inspect(id, &arena);
-
-  // Note: internally we don't distinguish between cterm and rgb attributes,
-  // remote_ui_hl_attr_define will however.
-  ui_call_hl_attr_define(id, entry.attr, entry.attr, inspect);
-  arena_mem_free(arena_finish(&arena));
-  return id;
-}
-#endif  // USE_RUST_HIGHLIGHT
-
-#ifdef USE_RUST_HIGHLIGHT
 extern void rs_ui_send_hl_attr(RemoteUI *ui, int id, Arena *arena);
 extern void rs_ui_send_hl_group(RemoteUI *ui, int hlf);
 
@@ -321,47 +260,12 @@ void ui_send_all_hls(RemoteUI *ui)
     rs_ui_send_hl_group(ui, hlf);
   }
 }
-#else
-/// When a UI connects, we need to send it the table of highlights used so far.
-void ui_send_all_hls(RemoteUI *ui)
-{
-  int count = rs_attr_entry_count();
-  for (int i = 1; i < count; i++) {
-    Arena arena = ARENA_EMPTY;
-    Array inspect = hl_inspect(i, &arena);
-    HlAttrs attr = rs_syn_attr2entry(i);
-    remote_ui_hl_attr_define(ui, (Integer)i, attr, attr, inspect);
-    arena_mem_free(arena_finish(&arena));
-  }
-  for (size_t hlf = 0; hlf < HLF_COUNT; hlf++) {
-    remote_ui_hl_group_set(ui, cstr_as_string(hlf_names[hlf]),
-                           highlight_attr[hlf]);
-  }
-}
-#endif  // USE_RUST_HIGHLIGHT
 
-#ifdef USE_RUST_HIGHLIGHT
 /// Get attribute code for a syntax group.
 int hl_get_syn_attr(int ns_id, int idx, HlAttrs at_en)
 {
   return rs_hl_get_syn_attr(ns_id, idx, at_en);
 }
-#else
-/// Get attribute code for a syntax group.
-int hl_get_syn_attr(int ns_id, int idx, HlAttrs at_en)
-{
-  // TODO(bfredl): should we do this unconditionally
-  if (at_en.cterm_fg_color != 0 || at_en.cterm_bg_color != 0
-      || at_en.rgb_fg_color != -1 || at_en.rgb_bg_color != -1
-      || at_en.rgb_sp_color != -1 || at_en.cterm_ae_attr != 0
-      || at_en.rgb_ae_attr != 0 || ns_id != 0) {
-    return get_attr_entry((HlEntry){ .attr = at_en, .kind = kHlSyntax,
-                                     .id1 = idx, .id2 = ns_id });
-  }
-  // If all the fields are cleared, clear the attr field back to default value
-  return 0;
-}
-#endif
 
 void ns_hl_def(NS ns_id, int hl_id, HlAttrs attrs, int link_id, Dict(highlight) *dict)
 {
@@ -375,7 +279,6 @@ void ns_hl_def(NS ns_id, int hl_id, HlAttrs attrs, int link_id, Dict(highlight) 
   rs_ns_hl_def(ns_id, hl_id, attrs, link_id);
 }
 
-#ifdef USE_RUST_HIGHLIGHT
 // Wrapper for ns_get_hl callable from Rust
 // nodefault is sg_set flags in this context
 int c_ns_get_hl(int *ns_id, int hl_id, bool link, int nodefault)
@@ -392,7 +295,6 @@ int c_get_attr_entry(HlEntry entry)
 {
   return get_attr_entry(entry);
 }
-#endif
 
 int ns_get_hl(NS *ns_hl, int hl_id, bool link, bool nodefault)
 {
@@ -466,60 +368,18 @@ bool hl_check_ns(void)
 /// prepare for drawing window `wp` or global elements if NULL
 ///
 /// Note: pum should be drawn in the context of the current window!
-#ifdef USE_RUST_HIGHLIGHT
 extern bool rs_win_check_ns_hl(win_T *wp);
 
 bool win_check_ns_hl(win_T *wp)
 {
   return rs_win_check_ns_hl(wp);
 }
-#else
-bool win_check_ns_hl(win_T *wp)
-{
-  ns_hl_win = wp ? wp->w_ns_hl : -1;
-  return hl_check_ns();
-}
-#endif
 
-#ifdef USE_RUST_HIGHLIGHT
 /// Get attribute code for a builtin highlight group.
 int hl_get_ui_attr(int ns_id, int idx, int final_id, bool optional)
 {
   return rs_hl_get_ui_attr(ns_id, idx, final_id, optional);
 }
-#else
-/// Get attribute code for a builtin highlight group.
-///
-/// The final syntax group could be modified by hi-link or 'winhighlight'.
-int hl_get_ui_attr(int ns_id, int idx, int final_id, bool optional)
-{
-  HlAttrs attrs = HLATTRS_INIT;
-  bool available = false;
-
-  if (final_id > 0) {
-    int syn_attr = syn_ns_id2attr(ns_id, final_id, &optional);
-    if (syn_attr > 0) {
-      attrs = syn_attr2entry(syn_attr);
-      available = true;
-    }
-  }
-
-  if (HLF_PNI <= idx && idx <= HLF_PST) {
-    if (attrs.hl_blend == -1 && p_pb > 0) {
-      attrs.hl_blend = (int)p_pb;
-    }
-    if (pum_drawn()) {
-      must_redraw_pum = true;
-    }
-  }
-
-  if (optional && !available) {
-    return 0;
-  }
-  return get_attr_entry((HlEntry){ .attr = attrs, .kind = kHlUI,
-                                   .id1 = idx, .id2 = final_id });
-}
-#endif
 
 /// Apply 'winblend' to highlight attributes.
 ///
@@ -527,109 +387,19 @@ int hl_get_ui_attr(int ns_id, int idx, int final_id, bool optional)
 /// @param attr  The original attribute code.
 ///
 /// @return      The attribute code with 'winblend' applied.
-#ifdef USE_RUST_HIGHLIGHT
 extern int rs_hl_apply_winblend(int winbl, int attr);
 
 int hl_apply_winblend(int winbl, int attr)
 {
   return rs_hl_apply_winblend(winbl, attr);
 }
-#else
-int hl_apply_winblend(int winbl, int attr)
-{
-  HlEntry entry = rs_get_attr_entry_by_id(attr);
-  // if blend= attribute is not set, 'winblend' value overrides it.
-  if (entry.attr.hl_blend == -1 && winbl > 0) {
-    entry.attr.hl_blend = winbl;
-    attr = get_attr_entry(entry);
-  }
-  return attr;
-}
-#endif
 
-#ifdef USE_RUST_HIGHLIGHT
 extern void rs_update_window_hl(win_T *wp, bool invalid);
 
 void update_window_hl(win_T *wp, bool invalid)
 {
   rs_update_window_hl(wp, invalid);
 }
-#else
-void update_window_hl(win_T *wp, bool invalid)
-{
-  int ns_id = wp->w_ns_hl;
-
-  update_ns_hl(ns_id);
-  if (ns_id != wp->w_ns_hl_active || wp->w_ns_hl_attr == NULL) {
-    wp->w_ns_hl_active = ns_id;
-
-    wp->w_ns_hl_attr = (int *)rs_ns_hl_attr_get(ns_id);
-    if (!wp->w_ns_hl_attr) {
-      // No specific highlights, use the defaults.
-      wp->w_ns_hl_attr = highlight_attr;
-    }
-  }
-
-  int *hl_def = wp->w_ns_hl_attr;
-
-  if (!wp->w_hl_needs_update && !invalid) {
-    return;
-  }
-  wp->w_hl_needs_update = false;
-
-  // If a floating window is blending it always have a named
-  // wp->w_hl_attr_normal group. HL_ATTR(HLF_NFLOAT) is always named.
-
-  // determine window specific background set in 'winhighlight'
-  bool float_win = wp->w_floating && !wp->w_config.external;
-  if (float_win && hl_def[HLF_NFLOAT] != 0 && ns_id > 0) {
-    wp->w_hl_attr_normal = hl_def[HLF_NFLOAT];
-  } else if (hl_def[HLF_NONE] > 0) {
-    wp->w_hl_attr_normal = hl_def[HLF_NONE];
-  } else if (float_win) {
-    wp->w_hl_attr_normal = HL_ATTR(HLF_NFLOAT) > 0
-                           ? HL_ATTR(HLF_NFLOAT) : highlight_attr[HLF_NFLOAT];
-  } else {
-    wp->w_hl_attr_normal = 0;
-  }
-
-  if (wp->w_floating) {
-    wp->w_hl_attr_normal = hl_apply_winblend((int)wp->w_p_winbl, wp->w_hl_attr_normal);
-  }
-
-  wp->w_config.shadow = false;
-  if (wp->w_floating && wp->w_config.border) {
-    for (int i = 0; i < 8; i++) {
-      int attr = hl_def[HLF_BORDER];
-      if (wp->w_config.border_hl_ids[i]) {
-        attr = hl_get_ui_attr(ns_id, HLF_BORDER,
-                              wp->w_config.border_hl_ids[i], false);
-      }
-      attr = hl_apply_winblend((int)wp->w_p_winbl, attr);
-      if (syn_attr2entry(attr).hl_blend > 0) {
-        wp->w_config.shadow = true;
-      }
-      wp->w_config.border_attr[i] = attr;
-    }
-  }
-
-  // shadow might cause blending
-  check_blending(wp);
-
-  // TODO(bfredl): this a bit ad-hoc. move it from highlight ns logic to 'winhl'
-  // implementation?
-  if (hl_def[HLF_INACTIVE] == 0) {
-    wp->w_hl_attr_normalnc = hl_combine_attr(HL_ATTR(HLF_INACTIVE),
-                                             wp->w_hl_attr_normal);
-  } else {
-    wp->w_hl_attr_normalnc = hl_def[HLF_INACTIVE];
-  }
-
-  if (wp->w_floating) {
-    wp->w_hl_attr_normalnc = hl_apply_winblend((int)wp->w_p_winbl, wp->w_hl_attr_normalnc);
-  }
-}
-#endif
 
 static void update_ns_hl(int ns_id)
 {
@@ -662,89 +432,24 @@ static void update_ns_hl(int ns_id)
   p->hl_cached = true;
 }
 
-#ifdef USE_RUST_HIGHLIGHT
 int win_bg_attr(win_T *wp)
 {
   return rs_win_bg_attr(wp);
 }
-#else
-int win_bg_attr(win_T *wp)
-{
-  if (ns_hl_fast < 0) {
-    int local = (wp == curwin) ? wp->w_hl_attr_normal : wp->w_hl_attr_normalnc;
-    if (local) {
-      return local;
-    }
-  }
-
-  if (wp == curwin || hl_attr_active[HLF_INACTIVE] == 0) {
-    return hl_attr_active[HLF_NONE];
-  } else {
-    return hl_attr_active[HLF_INACTIVE];
-  }
-}
-#endif
 
 /// Gets HL_UNDERLINE highlight.
-#ifdef USE_RUST_HIGHLIGHT
 extern int rs_hl_get_underline(void);
 
 int hl_get_underline(void)
 {
   return rs_hl_get_underline();
 }
-#else
-int hl_get_underline(void)
-{
-  return get_attr_entry((HlEntry){
-    .attr = (HlAttrs){
-      .cterm_ae_attr = (int16_t)HL_UNDERLINE,
-      .cterm_fg_color = 0,
-      .cterm_bg_color = 0,
-      .rgb_ae_attr = (int16_t)HL_UNDERLINE,
-      .rgb_fg_color = -1,
-      .rgb_bg_color = -1,
-      .rgb_sp_color = -1,
-      .hl_blend = -1,
-      .url = -1,
-    },
-    .kind = kHlUI,
-    .id1 = 0,
-    .id2 = 0,
-  });
-}
-#endif
 
-#ifdef USE_RUST_HIGHLIGHT
 /// Augment an existing attribute with a URL.
 int hl_add_url(int attr, const char *url)
 {
   return rs_hl_add_url(attr, url);
 }
-#else
-/// Augment an existing attribute with a URL.
-///
-/// @param attr Existing attribute to combine with
-/// @param url The URL to associate with the highlight attribute
-/// @return Combined attribute
-int hl_add_url(int attr, const char *url)
-{
-  HlAttrs attrs = HLATTRS_INIT;
-
-  // Rust handles URL storage
-  uint32_t k = rs_hl_add_url_index(url);
-  attrs.url = (int32_t)k;
-
-  int new = get_attr_entry((HlEntry){
-    .attr = attrs,
-    .kind = kHlUI,
-    .id1 = 0,
-    .id2 = 0,
-  });
-
-  return hl_combine_attr(attr, new);
-}
-#endif
 
 /// Get a URL by its index.
 ///
@@ -757,20 +462,12 @@ const char *hl_get_url(uint32_t index)
 }
 
 /// Get attribute code for forwarded :terminal highlights.
-#ifdef USE_RUST_HIGHLIGHT
 extern int rs_hl_get_term_attr(HlAttrs *aep);
 
 int hl_get_term_attr(HlAttrs *aep)
 {
   return rs_hl_get_term_attr(aep);
 }
-#else
-int hl_get_term_attr(HlAttrs *aep)
-{
-  return get_attr_entry((HlEntry){ .attr = *aep, .kind = kHlTerminal,
-                                   .id1 = 0, .id2 = 0 });
-}
-#endif
 
 /// Clear all highlight tables.
 void clear_hl_tables(bool reinit)
@@ -795,52 +492,11 @@ void hl_invalidate_blends(void)
   update_window_hl(curwin, true);
 }
 
-#ifdef USE_RUST_HIGHLIGHT
 // Combine special attributes (e.g., for spelling) with other attributes.
 int hl_combine_attr(int char_attr, int prim_attr)
 {
   return rs_hl_combine_attr(char_attr, prim_attr);
 }
-#else
-// Combine special attributes (e.g., for spelling) with other attributes
-// (e.g., for syntax highlighting).
-// "prim_attr" overrules "char_attr".
-// This creates a new group when required.
-// Since we expect there to be a lot of spelling mistakes we cache the result.
-// Return the resulting attributes.
-int hl_combine_attr(int char_attr, int prim_attr)
-{
-  if (char_attr == 0) {
-    return prim_attr;
-  } else if (prim_attr == 0) {
-    return char_attr;
-  }
-
-  // Check Rust cache first
-  int combine_tag = (char_attr << 16) + prim_attr;
-  int id = rs_combine_cache_get(combine_tag);
-  if (id > 0) {
-    return id;
-  }
-
-  // Compute combined attributes in Rust
-  HlAttrs char_aep = syn_attr2entry(char_attr);
-  HlAttrs prim_aep = syn_attr2entry(prim_attr);
-  HlCombineInput input = {
-    .char_aep = char_aep,
-    .prim_aep = prim_aep,
-  };
-  HlAttrs new_en = rs_hl_combine_attrs_compute(input);
-
-  id = get_attr_entry((HlEntry){ .attr = new_en, .kind = kHlCombine,
-                                 .id1 = char_attr, .id2 = prim_attr });
-  if (id > 0) {
-    rs_combine_cache_put(combine_tag, id);
-  }
-
-  return id;
-}
-#endif
 
 /// Get the used rgb colors for an attr group.
 ///
@@ -851,63 +507,11 @@ static HlAttrs get_colors_force(HlAttrs attrs)
   return rs_get_colors_force(attrs);
 }
 
-#ifdef USE_RUST_HIGHLIGHT
 /// Blend overlay attributes (for popupmenu) with other attributes.
 int hl_blend_attrs(int back_attr, int front_attr, bool *through)
 {
   return rs_hl_blend_attrs(back_attr, front_attr, through);
 }
-#else
-/// Blend overlay attributes (for popupmenu) with other attributes
-///
-/// This creates a new group when required.
-/// This is called per-cell, so cache the result.
-///
-/// @return the resulting attributes.
-int hl_blend_attrs(int back_attr, int front_attr, bool *through)
-{
-  // Cannot blend uninitialized cells, use front_attr for uninitialized background cells.
-  if (front_attr < 0 || back_attr < 0) {
-    return front_attr;
-  }
-
-  HlAttrs fattrs_raw = syn_attr2entry(front_attr);
-  HlAttrs fattrs = get_colors_force(fattrs_raw);
-  int ratio = fattrs.hl_blend;
-  if (ratio <= 0) {
-    *through = false;
-    return front_attr;
-  }
-
-  // Check Rust cache first
-  int combine_tag = (back_attr << 16) + front_attr;
-  int id = rs_blend_cache_get(combine_tag, *through);
-  if (id > 0) {
-    return id;
-  }
-
-  // Compute blended attributes in Rust
-  HlAttrs battrs_raw = syn_attr2entry(back_attr);
-  HlAttrs battrs = get_colors_force(battrs_raw);
-  HlBlendInput input = {
-    .battrs_raw = battrs_raw,
-    .battrs = battrs,
-    .fattrs_raw = fattrs_raw,
-    .fattrs = fattrs,
-    .ratio = ratio,
-    .through = *through,
-  };
-  HlAttrs cattrs = rs_hl_blend_attrs_compute(input);
-
-  HlKind kind = *through ? kHlBlendThrough : kHlBlend;
-  id = get_attr_entry((HlEntry){ .attr = cattrs, .kind = kind,
-                                 .id1 = back_attr, .id2 = front_attr });
-  if (id > 0) {
-    rs_blend_cache_put(combine_tag, id, *through);
-  }
-  return id;
-}
-#endif
 
 /// Get highlight attributes for a attribute code
 HlAttrs syn_attr2entry(int attr)
@@ -916,7 +520,6 @@ HlAttrs syn_attr2entry(int attr)
   return rs_syn_attr2entry(attr);
 }
 
-#ifdef USE_RUST_HIGHLIGHT
 extern Dict rs_hl_get_attr_by_id(Integer attr_id, Boolean rgb, Arena *arena, Error *err);
 
 /// Gets highlight description for id `attr_id` as a map.
@@ -924,26 +527,6 @@ Dict hl_get_attr_by_id(Integer attr_id, Boolean rgb, Arena *arena, Error *err)
 {
   return rs_hl_get_attr_by_id(attr_id, rgb, arena, err);
 }
-#else
-/// Gets highlight description for id `attr_id` as a map.
-Dict hl_get_attr_by_id(Integer attr_id, Boolean rgb, Arena *arena, Error *err)
-{
-  Dict dic = ARRAY_DICT_INIT;
-
-  if (attr_id == 0) {
-    return dic;
-  }
-
-  if (attr_id <= 0 || attr_id >= rs_attr_entry_count()) {
-    api_set_error(err, kErrorTypeException,
-                  "Invalid attribute id: %" PRId64, attr_id);
-    return dic;
-  }
-  Dict retval = arena_dict(arena, HLATTRS_DICT_SIZE);
-  hlattrs2dict(&retval, NULL, syn_attr2entry((int)attr_id), rgb, false);
-  return retval;
-}
-#endif  // USE_RUST_HIGHLIGHT
 
 /// Converts an HlAttrs into Dict
 ///
@@ -952,108 +535,12 @@ Dict hl_get_attr_by_id(Integer attr_id, Boolean rgb, Arena *arena, Error *err)
 /// @param use_rgb use 'gui*' settings if true, else resorts to 'cterm*'
 /// @param short_keys change (foreground, background, special) to (fg, bg, sp) for 'gui*' settings
 ///                          (foreground, background) to (ctermfg, ctermbg) for 'cterm*' settings
-#ifdef USE_RUST_HIGHLIGHT
 extern void rs_hlattrs2dict(Dict *hl, Dict *hl_attrs, HlAttrs ae, bool use_rgb, bool short_keys);
 
 void hlattrs2dict(Dict *hl, Dict *hl_attrs, HlAttrs ae, bool use_rgb, bool short_keys)
 {
   rs_hlattrs2dict(hl, hl_attrs, ae, use_rgb, short_keys);
 }
-#else
-void hlattrs2dict(Dict *hl, Dict *hl_attrs, HlAttrs ae, bool use_rgb, bool short_keys)
-{
-  hl_attrs = hl_attrs ? hl_attrs : hl;
-  assert(hl->capacity >= HLATTRS_DICT_SIZE);  // at most 16 items
-  assert(hl_attrs->capacity >= HLATTRS_DICT_SIZE);  // at most 16 items
-  int mask = use_rgb ? ae.rgb_ae_attr : ae.cterm_ae_attr;
-
-  if (mask & HL_INVERSE) {
-    PUT_C(*hl_attrs, "reverse", BOOLEAN_OBJ(true));
-  }
-
-  if (mask & HL_BOLD) {
-    PUT_C(*hl_attrs, "bold", BOOLEAN_OBJ(true));
-  }
-
-  if (mask & HL_ITALIC) {
-    PUT_C(*hl_attrs, "italic", BOOLEAN_OBJ(true));
-  }
-
-  switch (mask & HL_UNDERLINE_MASK) {
-  case HL_UNDERLINE:
-    PUT_C(*hl_attrs, "underline", BOOLEAN_OBJ(true));
-    break;
-
-  case HL_UNDERCURL:
-    PUT_C(*hl_attrs, "undercurl", BOOLEAN_OBJ(true));
-    break;
-
-  case HL_UNDERDOUBLE:
-    PUT_C(*hl_attrs, "underdouble", BOOLEAN_OBJ(true));
-    break;
-
-  case HL_UNDERDOTTED:
-    PUT_C(*hl_attrs, "underdotted", BOOLEAN_OBJ(true));
-    break;
-
-  case HL_UNDERDASHED:
-    PUT_C(*hl_attrs, "underdashed", BOOLEAN_OBJ(true));
-    break;
-  }
-
-  if (mask & HL_STANDOUT) {
-    PUT_C(*hl_attrs, "standout", BOOLEAN_OBJ(true));
-  }
-
-  if (mask & HL_STRIKETHROUGH) {
-    PUT_C(*hl_attrs, "strikethrough", BOOLEAN_OBJ(true));
-  }
-
-  if (mask & HL_ALTFONT) {
-    PUT_C(*hl_attrs, "altfont", BOOLEAN_OBJ(true));
-  }
-
-  if (mask & HL_NOCOMBINE) {
-    PUT_C(*hl_attrs, "nocombine", BOOLEAN_OBJ(true));
-  }
-
-  if (use_rgb) {
-    if (ae.rgb_fg_color != -1) {
-      PUT_C(*hl, short_keys ? "fg" : "foreground", INTEGER_OBJ(ae.rgb_fg_color));
-    }
-
-    if (ae.rgb_bg_color != -1) {
-      PUT_C(*hl, short_keys ? "bg" : "background", INTEGER_OBJ(ae.rgb_bg_color));
-    }
-
-    if (ae.rgb_sp_color != -1) {
-      PUT_C(*hl, short_keys ? "sp" : "special", INTEGER_OBJ(ae.rgb_sp_color));
-    }
-
-    if (!short_keys) {
-      if (mask & HL_FG_INDEXED) {
-        PUT_C(*hl, "fg_indexed", BOOLEAN_OBJ(true));
-      }
-
-      if (mask & HL_BG_INDEXED) {
-        PUT_C(*hl, "bg_indexed", BOOLEAN_OBJ(true));
-      }
-    }
-  } else {
-    if (ae.cterm_fg_color != 0) {
-      PUT_C(*hl, short_keys ? "ctermfg" : "foreground", INTEGER_OBJ(ae.cterm_fg_color - 1));
-    }
-
-    if (ae.cterm_bg_color != 0) {
-      PUT_C(*hl, short_keys ? "ctermbg" : "background", INTEGER_OBJ(ae.cterm_bg_color - 1));
-    }
-  }
-
-  if (ae.hl_blend > -1 && (use_rgb || !short_keys)) {
-    PUT_C(*hl, "blend", INTEGER_OBJ(ae.hl_blend));
-  }
-}
-#endif  // USE_RUST_HIGHLIGHT
 
 HlAttrs dict2hlattrs(Dict(highlight) *dict, bool use_rgb, int *link_id, Error *err)
 {
@@ -1217,118 +704,16 @@ HlAttrs dict2hlattrs(Dict(highlight) *dict, bool use_rgb, int *link_id, Error *e
 #undef HAS_KEY_X
 }
 
-#ifdef USE_RUST_HIGHLIGHT
 extern int rs_object_to_color(Object val, char *key, bool rgb, Error *err);
 
 int object_to_color(Object val, char *key, bool rgb, Error *err)
 {
   return rs_object_to_color(val, key, rgb, err);
 }
-#else
-int object_to_color(Object val, char *key, bool rgb, Error *err)
-{
-  if (val.type == kObjectTypeInteger) {
-    return (int)val.data.integer;
-  } else if (val.type == kObjectTypeString) {
-    String str = val.data.string;
-    // TODO(bfredl): be more fancy with "bg", "fg" etc
-    if (!str.size || STRICMP(str.data, "NONE") == 0) {
-      return -1;
-    }
-    int color;
-    if (rgb) {
-      int dummy;
-      color = name_to_color(str.data, &dummy);
-    } else {
-      color = name_to_ctermcolor(str.data);
-    }
-    VALIDATE_S((color >= 0), "highlight color", str.data, {
-      return color;
-    });
-    return color;
-  } else {
-    VALIDATE_EXP(false, key, "String or Integer", NULL, {
-      return 0;
-    });
-  }
-}
-#endif  // USE_RUST_HIGHLIGHT
 
-#ifdef USE_RUST_HIGHLIGHT
 extern Array rs_hl_inspect(int attr, Arena *arena);
 
 Array hl_inspect(int attr, Arena *arena)
 {
   return rs_hl_inspect(attr, arena);
 }
-#else
-static size_t hl_inspect_size(int attr);
-static void hl_inspect_impl(Array *arr, int attr, Arena *arena);
-
-Array hl_inspect(int attr, Arena *arena)
-{
-  if (!nvim_get_hlstate_active()) {
-    return (Array)ARRAY_DICT_INIT;
-  }
-  Array ret = arena_array(arena, hl_inspect_size(attr));
-  hl_inspect_impl(&ret, attr, arena);
-  return ret;
-}
-
-static size_t hl_inspect_size(int attr)
-{
-  if (attr <= 0 || attr >= rs_attr_entry_count()) {
-    return 0;
-  }
-
-  HlEntry e = rs_get_attr_entry_by_id(attr);
-  if (e.kind == kHlCombine || e.kind == kHlBlend || e.kind == kHlBlendThrough) {
-    return hl_inspect_size(e.id1) + hl_inspect_size(e.id2);
-  }
-  return 1;
-}
-
-static void hl_inspect_impl(Array *arr, int attr, Arena *arena)
-{
-  Dict item = ARRAY_DICT_INIT;
-  if (attr <= 0 || attr >= rs_attr_entry_count()) {
-    return;
-  }
-
-  HlEntry e = rs_get_attr_entry_by_id(attr);
-  switch (e.kind) {
-  case kHlSyntax:
-    item = arena_dict(arena, 3);
-    PUT_C(item, "kind", CSTR_AS_OBJ("syntax"));
-    PUT_C(item, "hi_name", CSTR_AS_OBJ(syn_id2name(e.id1)));
-    break;
-
-  case kHlUI:
-    item = arena_dict(arena, 4);
-    PUT_C(item, "kind", CSTR_AS_OBJ("ui"));
-    const char *ui_name = (e.id1 == -1) ? "Normal" : hlf_names[e.id1];
-    PUT_C(item, "ui_name", CSTR_AS_OBJ(ui_name));
-    PUT_C(item, "hi_name", CSTR_AS_OBJ(syn_id2name(e.id2)));
-    break;
-
-  case kHlTerminal:
-    item = arena_dict(arena, 2);
-    PUT_C(item, "kind", CSTR_AS_OBJ("term"));
-    break;
-
-  case kHlCombine:
-  case kHlBlend:
-  case kHlBlendThrough:
-    // attribute combination is associative, so flatten to an array
-    hl_inspect_impl(arr, e.id1, arena);
-    hl_inspect_impl(arr, e.id2, arena);
-    return;
-
-  case kHlUnknown:
-  case kHlInvalid:
-    return;
-  }
-  PUT_C(item, "id", INTEGER_OBJ(attr));
-  ADD_C(*arr, DICT_OBJ(item));
-}
-#endif  // USE_RUST_HIGHLIGHT
