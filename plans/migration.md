@@ -2,23 +2,29 @@
 
 ## Current Status
 
-**709 rs\_\* functions migrated**
+**714 rs\_\* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
+
+### Phase 34: Grid Operations ✅ COMPLETE
+
+Rust implementations for grid manipulation functions:
+- `rs_grid_adjust` - viewport coordinate adjustment
+- `rs_grid_clear_line` - clear line with spaces
+- `rs_grid_invalidate` - mark all rows invalid
+- `rs_grid_getchar` - get character from grid
+- `rs_grid_clear` - clear rectangular region
+
+C accessors added (3 new): `nvim_gridview_get_target/row_offset/col_offset`.
+
+**Next:** Phase 35 (grid allocation).
 
 ### Phase 33: Arabic Shaping ✅ COMPLETE
 
 Rust implementation of Arabic contextual shaping for display lines:
 - `rs_line_do_arabic_shape` - apply Arabic shaping to line buffer
 
-Helper functions added:
-- `arabic_char()` - Arabic character range check
-- `schar_in_arabic_block()` - detect Arabic first byte
-- `schar_get_first_two_codepoints()` - extract base char and combining mark
-
 C wrapper: `nvim_arabic_shape()` in arabic.c for Rust to call `arabic_shape()`.
-
-**Next:** Phase 34 (grid operations).
 
 ### Phase 32: grid_put_linebuf Implementation ✅ COMPLETE
 
