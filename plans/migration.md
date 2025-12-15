@@ -2,9 +2,17 @@
 
 ## Current Status
 
-**699 rs\_\* functions migrated**
+**701 rs\_\* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
+
+### Phase 27: schar_get Functions ✅ COMPLETE
+
+Added schar to string conversion functions:
+- `rs_schar_get` - convert schar to NUL-terminated UTF-8 string
+- `rs_schar_get_adv` - convert schar to UTF-8, advancing buffer pointer
+
+**Next:** Phase 28 (line buffer infrastructure).
 
 ### Phase 26: Glyph Cache Rust Implementation ✅ COMPLETE
 
