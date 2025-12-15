@@ -2,9 +2,19 @@
 
 ## Current Status
 
-**722 rs\_\* functions migrated**
+**724 rs\_\* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
+
+### Phase 39: Grid Handle Assignment ✅ COMPLETE
+
+Added Rust implementations for grid handle management and border text positioning:
+- `rs_grid_assign_handle` - assign unique handle to grid (counter kept in Rust via AtomicI32)
+- `rs_get_bordertext_col` - calculate starting column for border text alignment
+
+C accessor added: `nvim_screengrid_get_handle_ptr()` for Rust to write grid handle.
+
+**Note:** `grid_draw_border` remains in C - requires VirtText iteration, highlight combination, and decoration system FFI which adds significant complexity for minimal gain.
 
 ### Phase 38: Grid Line Puts ✅ COMPLETE
 
@@ -14,7 +24,7 @@ Added Rust implementation for text rendering to line buffer:
 
 Handles: UTF-8 length detection, display width, composing characters, double-width characters, truncation with '>', invalid sequence replacement.
 
-**Note:** Phase 35 (grid allocation), grid_draw_border, and window grid functions remain in C - tightly coupled to C memory/window/VirtText systems.
+**Note:** Phase 35 (grid allocation) and window grid functions remain in C - tightly coupled to C memory/window systems.
 
 ### Phase 37: Grid Line Start/Getchar/Mirror ✅ COMPLETE
 

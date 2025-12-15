@@ -2083,6 +2083,80 @@ pub unsafe extern "C" fn rs_grid_line_mirror(width: c_int) {
     nvim_set_grid_line_flags(flags | SLF_RIGHTLEFT);
 }
 
+// =============================================================================
+// Phase 39: Grid Handle Assignment and Border Text Alignment
+// =============================================================================
+
+use std::sync::atomic::{AtomicI32, Ordering};
+
+/// Default grid handle value (matches C's DEFAULT_GRID_HANDLE)
+const DEFAULT_GRID_HANDLE: i32 = 1;
+
+/// Static counter for grid handle assignment, kept in Rust.
+/// Starts at DEFAULT_GRID_HANDLE (1).
+static LAST_GRID_HANDLE: AtomicI32 = AtomicI32::new(DEFAULT_GRID_HANDLE);
+
+/// Alignment positions for border text (matches C's AlignTextPos enum).
+#[repr(i32)]
+#[allow(dead_code)]
+enum AlignTextPos {
+    Left = 0,
+    Center = 1,
+    Right = 2,
+}
+
+// External C functions for ScreenGrid handle access
+extern "C" {
+    fn nvim_screengrid_get_handle_ptr(grid: *mut std::ffi::c_void) -> *mut HandleT;
+}
+
+/// Assign a unique handle to a grid.
+///
+/// If the grid already has a handle (non-zero), it is not modified.
+/// Otherwise, a new unique handle is assigned using an atomic counter.
+///
+/// # Safety
+/// `grid` must be a valid ScreenGrid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_assign_handle(grid: *mut std::ffi::c_void) {
+    let handle_ptr = nvim_screengrid_get_handle_ptr(grid);
+    if handle_ptr.is_null() {
+        return;
+    }
+
+    // Only assign if not already assigned
+    if *handle_ptr == 0 {
+        // Atomically increment and get the new value
+        *handle_ptr = LAST_GRID_HANDLE.fetch_add(1, Ordering::Relaxed) + 1;
+    }
+}
+
+/// Calculate the starting column for border text based on alignment.
+///
+/// Returns 1-indexed column position for the text within the border.
+///
+/// # Arguments
+/// * `total_col` - Total number of columns available
+/// * `text_width` - Width of the text to place
+/// * `align` - Alignment position (0=left, 1=center, 2=right)
+#[no_mangle]
+pub extern "C" fn rs_get_bordertext_col(total_col: c_int, text_width: c_int, align: c_int) -> c_int {
+    match align {
+        0 => 1, // kAlignLeft
+        1 => {
+            // kAlignCenter
+            let col = (total_col - text_width) / 2 + 1;
+            col.max(1)
+        }
+        2 => {
+            // kAlignRight
+            let col = total_col - text_width + 1;
+            col.max(1)
+        }
+        _ => 1, // Fallback to left alignment
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2324,5 +2398,41 @@ mod tests {
         assert_eq!(rs_rgb(-1, 0, 0), 0xFF_00_00);
         assert_eq!(rs_rgb(0, -1, 0), 0x00_FF_00);
         assert_eq!(rs_rgb(0, 0, -1), 0x00_00_FF);
+    }
+
+    #[test]
+    fn test_get_bordertext_col_left() {
+        // Left alignment always returns 1
+        assert_eq!(rs_get_bordertext_col(10, 5, 0), 1);
+        assert_eq!(rs_get_bordertext_col(100, 50, 0), 1);
+        assert_eq!(rs_get_bordertext_col(5, 10, 0), 1); // text wider than space
+    }
+
+    #[test]
+    fn test_get_bordertext_col_center() {
+        // Center alignment: (total - width) / 2 + 1
+        assert_eq!(rs_get_bordertext_col(10, 4, 1), 4); // (10-4)/2 + 1 = 4
+        assert_eq!(rs_get_bordertext_col(20, 10, 1), 6); // (20-10)/2 + 1 = 6
+        assert_eq!(rs_get_bordertext_col(10, 10, 1), 1); // (10-10)/2 + 1 = 1
+        // When text is wider, clamp to 1
+        assert_eq!(rs_get_bordertext_col(5, 10, 1), 1); // (5-10)/2 + 1 = -1.5 -> 1
+    }
+
+    #[test]
+    fn test_get_bordertext_col_right() {
+        // Right alignment: total - width + 1
+        assert_eq!(rs_get_bordertext_col(10, 4, 2), 7); // 10 - 4 + 1 = 7
+        assert_eq!(rs_get_bordertext_col(20, 10, 2), 11); // 20 - 10 + 1 = 11
+        assert_eq!(rs_get_bordertext_col(10, 10, 2), 1); // 10 - 10 + 1 = 1
+        // When text is wider, clamp to 1
+        assert_eq!(rs_get_bordertext_col(5, 10, 2), 1); // 5 - 10 + 1 = -4 -> 1
+    }
+
+    #[test]
+    fn test_get_bordertext_col_invalid() {
+        // Invalid alignment values fallback to left (1)
+        assert_eq!(rs_get_bordertext_col(10, 5, 3), 1);
+        assert_eq!(rs_get_bordertext_col(10, 5, -1), 1);
+        assert_eq!(rs_get_bordertext_col(10, 5, 100), 1);
     }
 }

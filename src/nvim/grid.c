@@ -82,6 +82,9 @@ extern void rs_grid_line_start(GridView *view, int row);
 extern schar_T rs_grid_line_getchar(int col, int *attr);
 extern void rs_linebuf_mirror(int *firstp, int *lastp, int *clearp, int width);
 extern void rs_grid_line_mirror(int width);
+// Phase 39: Grid handle assignment and border text
+extern void rs_grid_assign_handle(ScreenGrid *grid);
+extern int rs_get_bordertext_col(int total_col, int text_width, int align);
 #endif
 
 // temporary buffer for rendering a single screenline, so it can be
@@ -309,6 +312,12 @@ void nvim_ui_grid_cursor_goto(handle_T grid_handle, int row, int col)
 handle_T nvim_screengrid_get_handle(ScreenGrid *grid)
 {
   return grid ? grid->handle : 0;
+}
+
+/// Get pointer to handle in a ScreenGrid (for Rust to assign)
+handle_T *nvim_screengrid_get_handle_ptr(ScreenGrid *grid)
+{
+  return grid ? &grid->handle : NULL;
 }
 
 /// Get rows from a ScreenGrid pointer
@@ -1491,12 +1500,16 @@ void win_grid_alloc(win_T *wp)
 /// assign a handle to the grid. The grid need not be allocated.
 void grid_assign_handle(ScreenGrid *grid)
 {
+#ifdef USE_RUST_GRID
+  rs_grid_assign_handle(grid);
+#else
   static int last_grid_handle = DEFAULT_GRID_HANDLE;
 
   // only assign a grid handle if not already
   if (grid->handle == 0) {
     grid->handle = ++last_grid_handle;
   }
+#endif
 }
 
 /// insert lines on the screen and move the existing lines down
@@ -1609,6 +1622,9 @@ static void grid_draw_bordertext(VirtText vt, int col, int winbl, const int *hl_
 
 static int get_bordertext_col(int total_col, int text_width, AlignTextPos align)
 {
+#ifdef USE_RUST_GRID
+  return rs_get_bordertext_col(total_col, text_width, (int)align);
+#else
   switch (align) {
   case kAlignLeft:
     return 1;
@@ -1618,6 +1634,7 @@ static int get_bordertext_col(int total_col, int text_width, AlignTextPos align)
     return MAX(total_col - text_width + 1, 1);
   }
   UNREACHABLE;
+#endif
 }
 
 /// draw border on floating window grid
