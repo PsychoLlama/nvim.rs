@@ -6,7 +6,7 @@
 #![allow(unsafe_code)] // FFI requires unsafe
 
 use std::collections::HashMap;
-use std::ffi::{c_char, c_int, CStr};
+use std::ffi::{c_char, c_int, c_uint, CStr};
 use std::sync::{LazyLock, Mutex};
 
 /// Type alias for screen character (matches C's `schar_T` which is `uint32_t`).
@@ -577,6 +577,31 @@ extern "C" {
 
     // ScreenGrid field accessor (we need the handle field)
     fn nvim_screengrid_get_handle(grid: *mut std::ffi::c_void) -> HandleT;
+    fn nvim_screengrid_get_rows(grid: *mut std::ffi::c_void) -> c_int;
+
+    // For grid_line_flush
+    fn nvim_get_grid_line_coloff() -> c_int;
+    fn nvim_get_grid_line_bg_attr() -> c_int;
+    fn nvim_get_grid_line_clear_attr() -> c_int;
+    fn nvim_get_grid_line_flags() -> c_int;
+    fn nvim_set_grid_line_grid(grid: *mut std::ffi::c_void);
+
+    // rdb_flags global
+    fn nvim_get_rdb_flags() -> c_uint;
+
+    // Wrapper for grid_put_linebuf (the complex function stays in C for now)
+    fn nvim_grid_put_linebuf(
+        grid: *mut std::ffi::c_void,
+        row: c_int,
+        coloff: c_int,
+        col: c_int,
+        endcol: c_int,
+        clear_width: c_int,
+        bg_attr: c_int,
+        clear_attr: c_int,
+        last_vcol: c_int,
+        flags: c_int,
+    );
 }
 
 /// Put a single schar at a column position.
@@ -680,6 +705,81 @@ pub unsafe extern "C" fn rs_grid_line_cursor_goto(col: c_int) {
     let handle = nvim_screengrid_get_handle(grid);
     let row = nvim_get_grid_line_row();
     nvim_ui_grid_cursor_goto(handle, row, col);
+}
+
+// =============================================================================
+// Phase 31: Grid Line Flush Functions
+// =============================================================================
+
+/// rdb_flags value for kOptRdbFlagInvalid (0x04)
+const K_OPT_RDB_FLAG_INVALID: c_uint = 0x04;
+
+/// Flush the current grid line to the UI.
+///
+/// This commits the line buffer to the grid and sends UI updates.
+/// Calls `grid_put_linebuf` (which remains in C for now).
+///
+/// # Safety
+/// Must be called after `grid_line_start()` with an active grid line.
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_line_flush() {
+    let grid = nvim_get_grid_line_grid();
+    // Clear grid_line_grid to indicate flush is done
+    nvim_set_grid_line_grid(std::ptr::null_mut());
+
+    let first = nvim_get_grid_line_first();
+    let last = nvim_get_grid_line_last();
+    let clear_to = nvim_get_grid_line_clear_to();
+    let maxcol = nvim_get_grid_line_maxcol();
+
+    // grid_line_clear_to = MAX(grid_line_last, grid_line_clear_to)
+    let clear_to = clear_to.max(last);
+    nvim_set_grid_line_clear_to(clear_to);
+
+    debug_assert!(clear_to <= maxcol);
+
+    // Early exit if nothing to flush
+    if first >= clear_to {
+        return;
+    }
+
+    let row = nvim_get_grid_line_row();
+    let coloff = nvim_get_grid_line_coloff();
+    let bg_attr = nvim_get_grid_line_bg_attr();
+    let clear_attr = nvim_get_grid_line_clear_attr();
+    let flags = nvim_get_grid_line_flags();
+
+    nvim_grid_put_linebuf(
+        grid, row, coloff, first, last, clear_to, bg_attr, clear_attr, -1, flags,
+    );
+}
+
+/// Flush grid line but only if on a valid row.
+///
+/// This is a stopgap until message.c has been refactored to behave.
+/// If the row is invalid and kOptRdbFlagInvalid is set, aborts.
+///
+/// # Safety
+/// Must be called after `grid_line_start()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_line_flush_if_valid_row() {
+    let grid = nvim_get_grid_line_grid();
+    let row = nvim_get_grid_line_row();
+    let grid_rows = nvim_screengrid_get_rows(grid);
+
+    if row < 0 || row >= grid_rows {
+        let rdb_flags = nvim_get_rdb_flags();
+        if (rdb_flags & K_OPT_RDB_FLAG_INVALID) != 0 {
+            // In debug/invalid mode, abort on invalid row
+            std::process::abort();
+        } else {
+            // Clear grid_line_grid and return without flushing
+            nvim_set_grid_line_grid(std::ptr::null_mut());
+            return;
+        }
+    }
+
+    rs_grid_line_flush();
 }
 
 #[cfg(test)]

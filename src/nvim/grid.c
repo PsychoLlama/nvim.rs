@@ -57,6 +57,8 @@ extern void rs_grid_line_put_schar(int col, schar_T schar, int attr);
 extern int rs_grid_line_fill(int start_col, int end_col, schar_T sc, int attr);
 extern void rs_grid_line_clear_end(int start_col, int end_col, int bg_attr, int clear_attr);
 extern void rs_grid_line_cursor_goto(int col);
+extern void rs_grid_line_flush(void);
+extern void rs_grid_line_flush_if_valid_row(void);
 #endif
 
 // temporary buffer for rendering a single screenline, so it can be
@@ -284,6 +286,26 @@ void nvim_ui_grid_cursor_goto(handle_T grid_handle, int row, int col)
 handle_T nvim_screengrid_get_handle(ScreenGrid *grid)
 {
   return grid ? grid->handle : 0;
+}
+
+/// Get rows from a ScreenGrid pointer
+int nvim_screengrid_get_rows(ScreenGrid *grid)
+{
+  return grid ? grid->rows : 0;
+}
+
+/// Get rdb_flags global
+unsigned int nvim_get_rdb_flags(void)
+{
+  return rdb_flags;
+}
+
+/// Wrapper for grid_put_linebuf (called from Rust)
+void nvim_grid_put_linebuf(ScreenGrid *grid, int row, int coloff, int col, int endcol,
+                           int clear_width, int bg_attr, int clear_attr, int last_vcol, int flags)
+{
+  grid_put_linebuf(grid, row, coloff, col, endcol, clear_width, bg_attr, clear_attr,
+                   (colnr_T)last_vcol, flags);
 }
 #endif
 
@@ -884,6 +906,9 @@ void linebuf_mirror(int *firstp, int *lastp, int *clearp, int width)
 /// End a group of grid_line_puts calls and send the screen buffer to the UI layer.
 void grid_line_flush(void)
 {
+#ifdef USE_RUST_GRID
+  rs_grid_line_flush();
+#else
   ScreenGrid *grid = grid_line_grid;
   grid_line_grid = NULL;
   grid_line_clear_to = MAX(grid_line_last, grid_line_clear_to);
@@ -895,6 +920,7 @@ void grid_line_flush(void)
   grid_put_linebuf(grid, grid_line_row, grid_line_coloff, grid_line_first, grid_line_last,
                    grid_line_clear_to, grid_line_bg_attr, grid_line_clear_attr, -1,
                    grid_line_flags);
+#endif
 }
 
 /// flush grid line but only if on a valid row
@@ -902,6 +928,9 @@ void grid_line_flush(void)
 /// This is a stopgap until message.c has been refactored to behave
 void grid_line_flush_if_valid_row(void)
 {
+#ifdef USE_RUST_GRID
+  rs_grid_line_flush_if_valid_row();
+#else
   if (grid_line_row < 0 || grid_line_row >= grid_line_grid->rows) {
     if (rdb_flags & kOptRdbFlagInvalid) {
       abort();
@@ -911,6 +940,7 @@ void grid_line_flush_if_valid_row(void)
     }
   }
   grid_line_flush();
+#endif
 }
 
 void grid_clear(GridView *grid, int start_row, int end_row, int start_col, int end_col, int attr)
