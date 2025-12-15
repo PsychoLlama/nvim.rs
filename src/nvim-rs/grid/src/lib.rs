@@ -542,8 +542,8 @@ pub extern "C" fn rs_schar_get_first_codepoint(sc: ScharT) -> c_int {
 // Phase 30: Grid Line Content Functions
 // =============================================================================
 
-/// Type alias for screen attribute (matches C's `sattr_T` which is `int16_t`).
-type SattrT = i16;
+/// Type alias for screen attribute (matches C's `sattr_T` which is `int32_t`).
+type SattrT = i32;
 
 /// Type alias for column number (matches C's `colnr_T` which is `int32_t`).
 type ColnrT = i32;
