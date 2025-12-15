@@ -6,13 +6,22 @@
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
+### Phase 28: Line Buffer Infrastructure ✅ COMPLETE
+
+Added C accessors for line buffer globals:
+- `nvim_get_linebuf_char()` - linebuf_char array
+- `nvim_get_linebuf_attr()` - linebuf_attr array
+- `nvim_get_linebuf_vcol()` - linebuf_vcol array
+- `nvim_get_linebuf_scratch()` - scratch buffer
+- `nvim_get_linebuf_size()` - buffer size
+
+**Next:** Phase 29 (grid line state functions).
+
 ### Phase 27: schar_get Functions ✅ COMPLETE
 
 Added schar to string conversion functions:
 - `rs_schar_get` - convert schar to NUL-terminated UTF-8 string
 - `rs_schar_get_adv` - convert schar to UTF-8, advancing buffer pointer
-
-**Next:** Phase 28 (line buffer infrastructure).
 
 ### Phase 26: Glyph Cache Rust Implementation ✅ COMPLETE
 
