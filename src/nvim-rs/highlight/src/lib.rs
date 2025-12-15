@@ -2485,50 +2485,17 @@ fn cterm2rgb_internal(nr: c_int) -> c_int {
 }
 
 /// Internal RGB to cterm conversion
+///
+/// Matches C's hl_rgb2cterm_color: simple 6x6x6 cube mapping without grey detection.
+/// Returns 0-215 (cube indices without the +16 offset).
 fn rgb2cterm_internal(rgb: c_int) -> i16 {
     let r = ((rgb >> 16) & 0xFF) as i32;
     let g = ((rgb >> 8) & 0xFF) as i32;
     let b = (rgb & 0xFF) as i32;
 
-    // Check for grey
-    if r == g && g == b {
-        // Find closest grey
-        if r < 4 {
-            return 16; // black in cube
-        }
-        if r > 243 {
-            return 231; // white in cube
-        }
-        // Find closest grey ramp value
-        let grey_idx = ((r - 8) / 10) as usize;
-        if grey_idx < 24 {
-            return (232 + grey_idx) as i16;
-        }
-    }
-
-    // Find closest color cube value
-    let r_idx = closest_cube_idx(r);
-    let g_idx = closest_cube_idx(g);
-    let b_idx = closest_cube_idx(b);
-
-    (16 + r_idx * 36 + g_idx * 6 + b_idx) as i16
-}
-
-/// Find closest 6x6x6 color cube index for a component value
-fn closest_cube_idx(val: i32) -> i32 {
-    if val < 48 {
-        0
-    } else if val < 115 {
-        1
-    } else if val < 155 {
-        2
-    } else if val < 195 {
-        3
-    } else if val < 235 {
-        4
-    } else {
-        5
-    }
+    // Simple cube mapping: (r * 6 / 256) * 36 + (g * 6 / 256) * 6 + (b * 6 / 256)
+    // This matches C's hl_rgb2cterm_color exactly
+    ((r * 6 / 256) * 36 + (g * 6 / 256) * 6 + (b * 6 / 256)) as i16
 }
 
 // ============================================================================
