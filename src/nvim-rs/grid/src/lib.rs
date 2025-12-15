@@ -413,6 +413,49 @@ pub extern "C" fn rs_schar_cache_clear() {
     schar_cache_clear_impl();
 }
 
+// =============================================================================
+// Phase 27: schar_get Functions
+// =============================================================================
+
+/// FFI wrapper for `schar_get`.
+///
+/// Convert an `schar_T` to a NUL-terminated UTF-8 string.
+/// Writes to `buf_out` and sets final NUL.
+///
+/// # Safety
+/// - `buf_out` must be valid for writing at least `MAX_SCHAR_SIZE` bytes
+#[no_mangle]
+pub unsafe extern "C" fn rs_schar_get(buf_out: *mut c_char, sc: ScharT) -> usize {
+    debug_assert!(!buf_out.is_null());
+    // SAFETY: caller guarantees buf_out is valid for MAX_SCHAR_SIZE bytes
+    let buf = std::slice::from_raw_parts_mut(buf_out.cast::<u8>(), MAX_SCHAR_SIZE);
+    let len = schar_get_bytes(sc, buf);
+    // Set final NUL
+    buf[len] = 0;
+    len
+}
+
+/// FFI wrapper for `schar_get_adv`.
+///
+/// Convert an `schar_T` to UTF-8 bytes, advancing the buffer pointer.
+/// Does NOT set final NUL.
+///
+/// # Safety
+/// - `buf_out` must point to a valid `*mut c_char` pointer
+/// - The pointed-to buffer must be valid for writing at least `MAX_SCHAR_SIZE` bytes
+#[no_mangle]
+pub unsafe extern "C" fn rs_schar_get_adv(buf_out: *mut *mut c_char, sc: ScharT) -> usize {
+    debug_assert!(!buf_out.is_null());
+    debug_assert!(!(*buf_out).is_null());
+    // SAFETY: caller guarantees buf_out points to valid pointer with enough space
+    let ptr = *buf_out;
+    let buf = std::slice::from_raw_parts_mut(ptr.cast::<u8>(), MAX_SCHAR_SIZE);
+    let len = schar_get_bytes(sc, buf);
+    // Advance the pointer
+    *buf_out = ptr.add(len);
+    len
+}
+
 /// Get the byte length of an schar's UTF-8 content.
 ///
 /// For inline schars, counts bytes until NUL or end of 4 bytes.

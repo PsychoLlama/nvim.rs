@@ -45,6 +45,8 @@ extern char rs_schar_get_ascii(schar_T sc);
 extern schar_T rs_schar_from_char(int c);
 extern schar_T rs_schar_from_str(const char *str);
 extern schar_T rs_schar_from_buf(const char *buf, size_t len);
+extern size_t rs_schar_get(char *buf_out, schar_T sc);
+extern size_t rs_schar_get_adv(char **buf_out, schar_T sc);
 extern size_t rs_schar_len(schar_T sc);
 extern int rs_schar_cells(schar_T sc);
 extern int rs_schar_get_first_codepoint(schar_T sc);
@@ -215,14 +217,21 @@ bool schar_high(schar_T sc)
 /// sets final NUL
 size_t schar_get(char *buf_out, schar_T sc)
 {
+#ifdef USE_RUST_GRID
+  return rs_schar_get(buf_out, sc);
+#else
   size_t len = schar_get_adv(&buf_out, sc);
   *buf_out = NUL;
   return len;
+#endif
 }
 
 /// advance buf_out. do NOT set final NUL
 size_t schar_get_adv(char **buf_out, schar_T sc)
 {
+#ifdef USE_RUST_GRID
+  return rs_schar_get_adv(buf_out, sc);
+#else
   size_t len;
   if (schar_high(sc)) {
     uint32_t idx = schar_idx(sc);
@@ -235,6 +244,7 @@ size_t schar_get_adv(char **buf_out, schar_T sc)
   }
   *buf_out += len;
   return len;
+#endif
 }
 
 size_t schar_len(schar_T sc)
