@@ -33,7 +33,6 @@
 
 #include "charset.c.generated.h"
 
-#ifdef USE_RUST_CHARSET
 extern const char *rs_skipwhite(const char *p);
 extern const char *rs_skipwhite_len(const char *p, size_t len);
 extern const char *rs_skipdigits(const char *q);
@@ -68,7 +67,6 @@ extern int rs_vim_iswordc_buf(int c, buf_T *buf);
 extern int rs_vim_iswordp(const char *p);
 extern int rs_vim_iswordp_buf(const char *p, buf_T *buf);
 extern size_t rs_transstr_len(const char *s, bool untab);
-#endif
 
 static bool chartab_initialized = false;
 
@@ -349,36 +347,7 @@ void trans_characters(char *buf, int bufsize)
 size_t transstr_len(const char *const s, bool untab)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_CHARSET
   return rs_transstr_len(s, untab);
-#else
-  const char *p = s;
-  size_t len = 0;
-
-  while (*p) {
-    const size_t l = (size_t)utfc_ptr2len(p);
-    if (l > 1) {
-      if (vim_isprintc(utf_ptr2char(p))) {
-        len += l;
-      } else {
-        for (size_t off = 0; off < l; off += (size_t)utf_ptr2len(p + off)) {
-          int c = utf_ptr2char(p + off);
-          char hexbuf[9];
-          len += transchar_hex(hexbuf, c);
-        }
-      }
-      p += l;
-    } else if (*p == TAB && !untab) {
-      len += 1;
-      p++;
-    } else {
-      const int b2c_l = byte2cells((uint8_t)(*p++));
-      // Illegal byte sequence may occupy up to 4 characters.
-      len += (size_t)(b2c_l > 0 ? b2c_l : 4);
-    }
-  }
-  return len;
-#endif
 }
 
 /// Replace special characters with printable ones
@@ -676,41 +645,14 @@ void transchar_nonprint(const buf_T *buf, char *charbuf, int c)
 size_t transchar_hex(char *const buf, const int c)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_CHARSET
   return rs_transchar_hex(buf, c);
-#else
-  size_t i = 0;
-
-  buf[i++] = '<';
-  if (c > 0xFF) {
-    if (c > 0xFFFF) {
-      buf[i++] = (char)nr2hex((unsigned)c >> 20);
-      buf[i++] = (char)nr2hex((unsigned)c >> 16);
-    }
-    buf[i++] = (char)nr2hex((unsigned)c >> 12);
-    buf[i++] = (char)nr2hex((unsigned)c >> 8);
-  }
-  buf[i++] = (char)(nr2hex((unsigned)c >> 4));
-  buf[i++] = (char)(nr2hex((unsigned)c));
-  buf[i++] = '>';
-  buf[i] = NUL;
-  return i;
-#endif
 }
 
 /// Mirror text "str" for right-left displaying.
 /// Only works for single-byte characters (e.g., numbers).
 void rl_mirror_ascii(char *str, char *end)
 {
-#ifdef USE_RUST_CHARSET
   rs_rl_mirror_ascii(str, end);
-#else
-  for (char *p1 = str, *p2 = (end ? end : str + strlen(str)) - 1; p1 < p2; p1++, p2--) {
-    char t = *p1;
-    *p1 = *p2;
-    *p2 = t;
-  }
-#endif
 }
 
 /// Convert the lower 4 bits of byte "c" to its hex character
@@ -724,14 +666,7 @@ void rl_mirror_ascii(char *str, char *end)
 static inline unsigned nr2hex(unsigned n)
   FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_CHARSET
   return rs_nr2hex(n);
-#else
-  if ((n & 0xf) <= 9) {
-    return (n & 0xf) + '0';
-  }
-  return (n & 0xf) - 10 + 'a';
-#endif
 }
 
 /// Return number of display cells occupied by byte "b".
@@ -748,19 +683,10 @@ static inline unsigned nr2hex(unsigned n)
 int byte2cells(int b)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_CHARSET
   return rs_byte2cells(b);
-#else
-  if (b >= 0x80) {
-    return 0;
-  }
-  return g_chartab[b] & CT_CELL_MASK;
-#endif
 }
 
-#ifdef USE_RUST_CHARSET
 extern int rs_char2cells(int c);
-#endif
 
 /// Return number of display cells occupied by character "c".
 ///
@@ -772,19 +698,7 @@ extern int rs_char2cells(int c);
 /// @return Number of display cells.
 int char2cells(int c)
 {
-#ifdef USE_RUST_CHARSET
   return rs_char2cells(c);
-#else
-  if (IS_SPECIAL(c)) {
-    return char2cells(K_SECOND(c)) + 2;
-  }
-
-  if (c >= 0x80) {
-    // UTF-8: above 0x80 need to check the value
-    return utf_char2cells(c);
-  }
-  return g_chartab[c & 0xff] & CT_CELL_MASK;
-#endif
 }
 
 /// Return number of display cells occupied by character at "*p".
@@ -795,18 +709,7 @@ int char2cells(int c)
 /// @return number of display cells.
 int ptr2cells(const char *p_in)
 {
-#ifdef USE_RUST_CHARSET
   return rs_ptr2cells(p_in);
-#else
-  uint8_t *p = (uint8_t *)p_in;
-  // For UTF-8 we need to look at more bytes if the first byte is >= 0x80.
-  if (*p >= 0x80) {
-    return utf_ptr2cells(p_in);
-  }
-
-  // For DBCS we can tell the cell count from the first byte.
-  return g_chartab[*p] & CT_CELL_MASK;
-#endif
 }
 
 /// Return the number of character cells string "s" will take on the screen,
@@ -819,11 +722,7 @@ int ptr2cells(const char *p_in)
 /// @return number of character cells.
 int vim_strsize(const char *s)
 {
-#ifdef USE_RUST_CHARSET
   return rs_vim_strsize(s);
-#else
-  return vim_strnsize(s, MAXCOL);
-#endif
 }
 
 /// Return the number of character cells string "s[len]" will take on the
@@ -837,19 +736,7 @@ int vim_strsize(const char *s)
 /// @return Number of character cells.
 int vim_strnsize(const char *s, int len)
 {
-#ifdef USE_RUST_CHARSET
   return rs_vim_strnsize(s, len);
-#else
-  assert(s != NULL);
-  int size = 0;
-  while (*s != NUL && --len >= 0) {
-    int l = utfc_ptr2len(s);
-    size += ptr2cells(s);
-    s += l;
-    len -= l - 1;
-  }
-  return size;
-#endif
 }
 
 /// Check that "c" is a normal identifier character:
@@ -859,11 +746,7 @@ int vim_strnsize(const char *s, int len)
 bool vim_isIDc(int c)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_CHARSET
   return rs_vim_isIDc(c) != 0;
-#else
-  return c > 0 && c < 0x100 && (g_chartab[c] & CT_ID_CHAR);
-#endif
 }
 
 /// Check that "c" is a keyword character:
@@ -874,11 +757,7 @@ bool vim_isIDc(int c)
 bool vim_iswordc(const int c)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_CHARSET
   return rs_vim_iswordc(c) != 0;
-#else
-  return vim_iswordc_buf(c, curbuf);
-#endif
 }
 
 /// Check that "c" is a keyword character
@@ -890,13 +769,7 @@ bool vim_iswordc(const int c)
 bool vim_iswordc_tab(const int c, const uint64_t *const chartab)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_CHARSET
   return rs_vim_iswordc_tab(c, chartab) != 0;
-#else
-  return (c >= 0x100
-          ? (utf_class_tab(c, chartab) >= 2)
-          : (c > 0 && GET_CHARTAB_TAB(chartab, c) != 0));
-#endif
 }
 
 /// Check that "c" is a keyword character:
@@ -908,11 +781,7 @@ bool vim_iswordc_tab(const int c, const uint64_t *const chartab)
 bool vim_iswordc_buf(const int c, buf_T *const buf)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ARG(2)
 {
-#ifdef USE_RUST_CHARSET
   return rs_vim_iswordc_buf(c, buf) != 0;
-#else
-  return vim_iswordc_tab(c, buf->b_chartab);
-#endif
 }
 
 /// Just like vim_iswordc() but uses a pointer to the (multi-byte) character.
@@ -923,11 +792,7 @@ bool vim_iswordc_buf(const int c, buf_T *const buf)
 bool vim_iswordp(const char *const p)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_CHARSET
   return rs_vim_iswordp(p) != 0;
-#else
-  return vim_iswordp_buf(p, curbuf);
-#endif
 }
 
 /// Just like vim_iswordc_buf() but uses a pointer to the (multi-byte)
@@ -940,16 +805,7 @@ bool vim_iswordp(const char *const p)
 bool vim_iswordp_buf(const char *const p, buf_T *const buf)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_CHARSET
   return rs_vim_iswordp_buf(p, buf) != 0;
-#else
-  int c = (uint8_t)(*p);
-
-  if (MB_BYTE2LEN(c) > 1) {
-    c = utf_ptr2char(p);
-  }
-  return vim_iswordc_buf(c, buf);
-#endif
 }
 
 /// Check that "c" is a valid file-name character as specified with the
@@ -961,11 +817,7 @@ bool vim_iswordp_buf(const char *const p, buf_T *const buf)
 bool vim_isfilec(int c)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_CHARSET
   return rs_vim_isfilec(c) != 0;
-#else
-  return c >= 0x100 || (c > 0 && (g_chartab[c] & CT_FNAME_CHAR));
-#endif
 }
 
 /// Check if "c" is a valid file-name character, including characters left
@@ -973,11 +825,7 @@ bool vim_isfilec(int c)
 bool vim_is_fname_char(int c)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_CHARSET
   return rs_vim_is_fname_char(c) != 0;
-#else
-  return vim_isfilec(c) || c == ',' || c == ' ' || c == '@' || c == ':';
-#endif
 }
 
 /// Check that "c" is a valid file-name character or a wildcard character
@@ -1001,14 +849,7 @@ bool vim_isfilec_or_wc(int c)
 bool vim_isprintc(int c)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_CHARSET
   return rs_vim_isprintc(c) != 0;
-#else
-  if (c >= 0x100) {
-    return utf_printable(c);
-  }
-  return c > 0 && (g_chartab[c] & CT_PRINT_CHAR);
-#endif
 }
 
 /// skipwhite: skip over ' ' and '\t'.
@@ -1020,14 +861,7 @@ char *skipwhite(const char *p)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
   FUNC_ATTR_NONNULL_RET
 {
-#ifdef USE_RUST_CHARSET
   return (char *)rs_skipwhite(p);
-#else
-  while (ascii_iswhite(*p)) {
-    p++;
-  }
-  return (char *)p;
-#endif
 }
 
 /// Like `skipwhite`, but skip up to `len` characters.
@@ -1042,14 +876,7 @@ char *skipwhite_len(const char *p, size_t len)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
   FUNC_ATTR_NONNULL_RET
 {
-#ifdef USE_RUST_CHARSET
   return (char *)rs_skipwhite_len(p, len);
-#else
-  for (; len > 0 && ascii_iswhite(*p); len--) {
-    p++;
-  }
-  return (char *)p;
-#endif
 }
 
 // getwhitecols: return the number of whitespace
@@ -1062,11 +889,7 @@ intptr_t getwhitecols_curline(void)
 intptr_t getwhitecols(const char *p)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_CHARSET
   return rs_getwhitecols(p);
-#else
-  return skipwhite(p) - p;
-#endif
 }
 
 /// Skip over digits
@@ -1078,16 +901,7 @@ char *skipdigits(const char *q)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
   FUNC_ATTR_NONNULL_RET
 {
-#ifdef USE_RUST_CHARSET
   return (char *)rs_skipdigits(q);
-#else
-  const char *p = q;
-  while (ascii_isdigit(*p)) {
-    // skip to next non-digit
-    p++;
-  }
-  return (char *)p;
-#endif
 }
 
 /// skip over binary digits
@@ -1100,16 +914,7 @@ const char *skipbin(const char *q)
   FUNC_ATTR_NONNULL_ALL
   FUNC_ATTR_NONNULL_RET
 {
-#ifdef USE_RUST_CHARSET
   return rs_skipbin(q);
-#else
-  const char *p = q;
-  while (ascii_isbdigit(*p)) {
-    // skip to next non-digit
-    p++;
-  }
-  return p;
-#endif
 }
 
 /// skip over digits and hex characters
@@ -1121,16 +926,7 @@ const char *skipbin(const char *q)
 char *skiphex(char *q)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_CHARSET
   return (char *)rs_skiphex(q);
-#else
-  char *p = q;
-  while (ascii_isxdigit(*p)) {
-    // skip to next non-digit
-    p++;
-  }
-  return p;
-#endif
 }
 
 /// skip to digit (or NUL after the string)
@@ -1141,16 +937,7 @@ char *skiphex(char *q)
 char *skiptodigit(char *q)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_CHARSET
   return (char *)rs_skiptodigit(q);
-#else
-  char *p = q;
-  while (*p != NUL && !ascii_isdigit(*p)) {
-    // skip to next digit
-    p++;
-  }
-  return p;
-#endif
 }
 
 /// skip to binary character (or NUL after the string)
@@ -1163,16 +950,7 @@ const char *skiptobin(const char *q)
   FUNC_ATTR_NONNULL_ALL
   FUNC_ATTR_NONNULL_RET
 {
-#ifdef USE_RUST_CHARSET
   return rs_skiptobin(q);
-#else
-  const char *p = q;
-  while (*p != NUL && !ascii_isbdigit(*p)) {
-    // skip to next digit
-    p++;
-  }
-  return p;
-#endif
 }
 
 /// skip to hex character (or NUL after the string)
@@ -1183,16 +961,7 @@ const char *skiptobin(const char *q)
 char *skiptohex(char *q)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_CHARSET
   return (char *)rs_skiptohex(q);
-#else
-  char *p = q;
-  while (*p != NUL && !ascii_isxdigit(*p)) {
-    // skip to next digit
-    p++;
-  }
-  return p;
-#endif
 }
 
 /// Skip over text until ' ' or '\t' or NUL
@@ -1203,14 +972,7 @@ char *skiptohex(char *q)
 char *skiptowhite(const char *p)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_CHARSET
   return (char *)rs_skiptowhite(p);
-#else
-  while (*p != ' ' && *p != '\t' && *p != NUL) {
-    p++;
-  }
-  return (char *)p;
-#endif
 }
 
 /// skiptowhite_esc: Like skiptowhite(), but also skip escaped chars
@@ -1221,17 +983,7 @@ char *skiptowhite(const char *p)
 char *skiptowhite_esc(const char *p)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_CHARSET
   return (char *)rs_skiptowhite_esc(p);
-#else
-  while (*p != ' ' && *p != '\t' && *p != NUL) {
-    if (((*p == '\\') || (*p == Ctrl_V)) && (*(p + 1) != NUL)) {
-      p++;
-    }
-    p++;
-  }
-  return (char *)p;
-#endif
 }
 
 /// Skip over text until '\n' or NUL.
@@ -1243,11 +995,7 @@ char *skip_to_newline(const char *const p)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
   FUNC_ATTR_NONNULL_RET
 {
-#ifdef USE_RUST_CHARSET
   return rs_skip_to_newline(p);
-#else
-  return xstrchrnul(p, NL);
-#endif
 }
 
 /// Gets a number from a string and skips over it, signalling overflow.
@@ -1339,12 +1087,7 @@ int32_t getdigits_int32(char **pp, bool strict, int32_t def)
 bool vim_isblankline(char *lbuf)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_CHARSET
   return rs_vim_isblankline(lbuf);
-#else
-  char *p = skipwhite(lbuf);
-  return *p == NUL || *p == '\r' || *p == '\n';
-#endif
 }
 
 /// Convert a string into a long and/or unsigned long, taking care of
@@ -1580,18 +1323,7 @@ vim_str2nr_proceed:
 int hex2nr(int c)
   FUNC_ATTR_CONST
 {
-#ifdef USE_RUST_CHARSET
   return rs_hex2nr(c);
-#else
-  if ((c >= 'a') && (c <= 'f')) {
-    return c - 'a' + 10;
-  }
-
-  if ((c >= 'A') && (c <= 'F')) {
-    return c - 'A' + 10;
-  }
-  return c - '0';
-#endif
 }
 
 /// Convert two hex characters to a byte.
@@ -1600,14 +1332,7 @@ int hex2nr(int c)
 int hexhex2nr(const char *p)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_CHARSET
   return rs_hexhex2nr(p);
-#else
-  if (!ascii_isxdigit(p[0]) || !ascii_isxdigit(p[1])) {
-    return -1;
-  }
-  return (hex2nr(p[0]) << 4) + hex2nr(p[1]);
-#endif
 }
 
 /// Check that "str" starts with a backslash that should be removed.
@@ -1626,22 +1351,7 @@ int hexhex2nr(const char *p)
 bool rem_backslash(const char *str)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_CHARSET
   return rs_rem_backslash(str);
-#else
-# ifdef BACKSLASH_IN_FILENAME
-  return str[0] == '\\'
-         && (uint8_t)str[1] < 0x80
-         && (str[1] == ' '
-             || (str[1] != NUL
-                 && str[1] != '*'
-                 && str[1] != '?'
-                 && !vim_isfilec((uint8_t)str[1])));
-
-# else
-  return str[0] == '\\' && str[1] != NUL;
-# endif
-#endif
 }
 
 /// Halve the number of backslashes in a file name argument.
@@ -1649,25 +1359,7 @@ bool rem_backslash(const char *str)
 /// @param p
 void backslash_halve(char *p)
 {
-#ifdef USE_RUST_CHARSET
   rs_backslash_halve(p);
-#else
-  for (; *p && !rem_backslash(p); p++) {}
-  if (*p != NUL) {
-    char *dst = p;
-    goto start;
-    while (*p != NUL) {
-      if (rem_backslash(p)) {
-start:
-        *dst++ = *(p + 1);
-        p += 2;
-      } else {
-        *dst++ = *p++;
-      }
-    }
-    *dst = NUL;
-  }
-#endif
 }
 
 /// backslash_halve() plus save the result in allocated memory.

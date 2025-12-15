@@ -84,7 +84,6 @@
 
 #include "window.c.generated.h"
 
-#ifdef USE_RUST_WINDOW
 extern int rs_win_locked(win_T *wp);
 extern int rs_win_valid(win_T *win);
 extern int rs_tabpage_win_valid(tabpage_T *tp, win_T *win);
@@ -109,7 +108,6 @@ extern tabpage_T *rs_find_tabpage(int n);
 extern int rs_get_last_winid(void);
 extern win_T *rs_lastwin_nofloating(void);
 extern win_T *rs_frame2win(frame_T *frp);
-#endif
 
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to win_T fields from Rust code.
@@ -1982,11 +1980,7 @@ static void win_init_some(win_T *newp, win_T *oldp)
 /// @param  win  window to check
 bool win_valid(const win_T *win) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_WINDOW
   return rs_win_valid((win_T *)win) != 0;
-#else
-  return tabpage_win_valid(curtab, win);
-#endif
 }
 
 /// Check if "win" is a pointer to an existing window in tabpage "tp".
@@ -1995,20 +1989,7 @@ bool win_valid(const win_T *win) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 bool tabpage_win_valid(const tabpage_T *tp, const win_T *win)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_WINDOW
   return rs_tabpage_win_valid((tabpage_T *)tp, (win_T *)win) != 0;
-#else
-  if (win == NULL) {
-    return false;
-  }
-
-  FOR_ALL_WINDOWS_IN_TAB(wp, tp) {
-    if (wp == win) {
-      return true;
-    }
-  }
-  return false;
-#endif
 }
 
 // Find window "handle" in the current tab page.
@@ -2016,16 +1997,7 @@ bool tabpage_win_valid(const tabpage_T *tp, const win_T *win)
 win_T *win_find_by_handle(handle_T handle)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_WINDOW
   return rs_win_find_by_handle(handle);
-#else
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp->handle == handle) {
-      return wp;
-    }
-  }
-  return NULL;
-#endif
 }
 
 /// Check if "win" is a pointer to an existing window in any tabpage.
@@ -2033,35 +2005,13 @@ win_T *win_find_by_handle(handle_T handle)
 /// @param  win  window to check
 bool win_valid_any_tab(win_T *win) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_WINDOW
   return rs_win_valid_any_tab(win) != 0;
-#else
-  if (win == NULL) {
-    return false;
-  }
-
-  FOR_ALL_TAB_WINDOWS(tp, wp) {
-    if (wp == win) {
-      return true;
-    }
-  }
-  return false;
-#endif
 }
 
 // Return the number of windows.
 int win_count(void)
 {
-#ifdef USE_RUST_WINDOW
   return rs_win_count();
-#else
-  int count = 0;
-
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    count++;
-  }
-  return count;
-#endif
 }
 
 /// Make "count" windows on the screen.
@@ -2880,11 +2830,7 @@ void close_windows(buf_T *buf, bool keep_curwin)
 /// Check if "win" is the last non-floating window that exists.
 bool last_window(win_T *win) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_WINDOW
   return rs_last_window(win) != 0;
-#else
-  return one_window(win, NULL) && first_tabpage->tp_next == NULL;
-#endif
 }
 
 /// Check if "win" is the only non-floating window in tabpage "tp", or NULL for current tabpage.
@@ -2894,13 +2840,7 @@ bool last_window(win_T *win) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 bool one_window(win_T *win, tabpage_T *tp)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ARG(1)
 {
-#ifdef USE_RUST_WINDOW
   return rs_one_window_in_tab(win, tp) != 0;
-#else
-  win_T *first = tp ? tp->tp_firstwin : firstwin;
-  assert((!tp || tp != curtab) && !first->w_floating);
-  return first == win && (win->w_next == NULL || win->w_next->w_floating);
-#endif
 }
 
 /// Check if floating windows in tabpage `tp` can be closed.
@@ -3885,14 +3825,7 @@ static tabpage_T *alt_tabpage(void)
 win_T *frame2win(frame_T *frp)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_WINDOW
   return rs_frame2win(frp);
-#else
-  while (frp->fr_win == NULL) {
-    frp = frp->fr_child;
-  }
-  return frp->fr_win;
-#endif
 }
 
 /// Check that the frame "frp" contains the window "wp".
@@ -3902,20 +3835,7 @@ win_T *frame2win(frame_T *frp)
 static bool frame_has_win(const frame_T *frp, const win_T *wp)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ARG(1)
 {
-#ifdef USE_RUST_WINDOW
   return rs_frame_has_win((frame_T *)frp, (win_T *)wp) != 0;
-#else
-  if (frp->fr_layout == FR_LEAF) {
-    return frp->fr_win == wp;
-  }
-  const frame_T *p;
-  FOR_ALL_FRAMES(p, frp->fr_child) {
-    if (frame_has_win(p, wp)) {
-      return true;
-    }
-  }
-  return false;
-#endif
 }
 
 /// Check if current window is at the bottom
@@ -3923,16 +3843,7 @@ static bool frame_has_win(const frame_T *frp, const win_T *wp)
 static bool is_bottom_win(win_T *wp)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_WINDOW
   return rs_is_bottom_win(wp) != 0;
-#else
-  for (frame_T *frp = wp->w_frame; frp->fr_parent != NULL; frp = frp->fr_parent) {
-    if (frp->fr_parent->fr_layout == FR_COL && frp->fr_next != NULL) {
-      return false;
-    }
-  }
-  return true;
-#endif
 }
 
 /// Set a new height for a frame.  Recursively sets the height for contained
@@ -4045,33 +3956,7 @@ void frame_new_height(frame_T *topfrp, int height, bool topfirst, bool wfh, bool
 static bool frame_fixed_height(frame_T *frp)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_WINDOW
   return rs_frame_fixed_height(frp) != 0;
-#else
-  // frame with one window: fixed height if 'winfixheight' set.
-  if (frp->fr_win != NULL) {
-    return frp->fr_win->w_p_wfh;
-  }
-  if (frp->fr_layout == FR_ROW) {
-    // The frame is fixed height if one of the frames in the row is fixed
-    // height.
-    FOR_ALL_FRAMES(frp, frp->fr_child) {
-      if (frame_fixed_height(frp)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  // frp->fr_layout == FR_COL: The frame is fixed height if all of the
-  // frames in the row are fixed height.
-  FOR_ALL_FRAMES(frp, frp->fr_child) {
-    if (!frame_fixed_height(frp)) {
-      return false;
-    }
-  }
-  return true;
-#endif
 }
 
 /// Return true if width of frame "frp" should not be changed because of
@@ -4083,33 +3968,7 @@ static bool frame_fixed_height(frame_T *frp)
 static bool frame_fixed_width(frame_T *frp)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_WINDOW
   return rs_frame_fixed_width(frp) != 0;
-#else
-  // frame with one window: fixed width if 'winfixwidth' set.
-  if (frp->fr_win != NULL) {
-    return frp->fr_win->w_p_wfw;
-  }
-  if (frp->fr_layout == FR_COL) {
-    // The frame is fixed width if one of the frames in the row is fixed
-    // width.
-    FOR_ALL_FRAMES(frp, frp->fr_child) {
-      if (frame_fixed_width(frp)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  // frp->fr_layout == FR_ROW: The frame is fixed width if all of the
-  // frames in the row are fixed width.
-  FOR_ALL_FRAMES(frp, frp->fr_child) {
-    if (!frame_fixed_width(frp)) {
-      return false;
-    }
-  }
-  return true;
-#endif
 }
 
 // Add a status line to windows at the bottom of "frp".
@@ -4744,37 +4603,13 @@ int make_tabpages(int maxcount)
 /// @param[in]  tpc  Tabpage to check.
 bool valid_tabpage(tabpage_T *tpc) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_WINDOW
   return rs_valid_tabpage(tpc) != 0;
-#else
-  FOR_ALL_TABS(tp) {
-    if (tp == tpc) {
-      return true;
-    }
-  }
-  return false;
-#endif
 }
 
 /// Returns true when `tpc` is valid and at least one window is valid.
 int valid_tabpage_win(tabpage_T *tpc)
 {
-#ifdef USE_RUST_WINDOW
   return rs_valid_tabpage_win(tpc);
-#else
-  FOR_ALL_TABS(tp) {
-    if (tp == tpc) {
-      FOR_ALL_WINDOWS_IN_TAB(wp, tp) {
-        if (win_valid_any_tab(wp)) {
-          return true;
-        }
-      }
-      return false;
-    }
-  }
-  // shouldn't happen
-  return false;
-#endif
 }
 
 /// Close tabpage `tab`, assuming it has no windows in it.
@@ -4802,34 +4637,14 @@ void close_tabpage(tabpage_T *tab)
 // Find tab page "n" (first one is 1).  Returns NULL when not found.
 tabpage_T *find_tabpage(int n)
 {
-#ifdef USE_RUST_WINDOW
   return rs_find_tabpage(n);
-#else
-  tabpage_T *tp;
-  int i = 1;
-
-  for (tp = first_tabpage; tp != NULL && i != n; tp = tp->tp_next) {
-    i++;
-  }
-  return tp;
-#endif
 }
 
 // Get index of tab page "tp".  First one has index 1.
 // When not found returns number of tab pages plus one.
 int tabpage_index(tabpage_T *ftp)
 {
-#ifdef USE_RUST_WINDOW
   return rs_tabpage_index(ftp);
-#else
-  int i = 1;
-  tabpage_T *tp;
-
-  for (tp = first_tabpage; tp != NULL && tp != ftp; tp = tp->tp_next) {
-    i++;
-  }
-  return i;
-#endif
 }
 
 /// Prepare for leaving the current tab page.
@@ -5177,16 +4992,7 @@ void win_goto(win_T *wp)
 // Find the tabpage for window "win".
 tabpage_T *win_find_tabpage(win_T *win)
 {
-#ifdef USE_RUST_WINDOW
   return rs_win_find_tabpage(win);
-#else
-  FOR_ALL_TAB_WINDOWS(tp, wp) {
-    if (wp == win) {
-      return tp;
-    }
-  }
-  return NULL;
-#endif
 }
 
 /// Get the above or below neighbor window of the specified window.
@@ -7776,22 +7582,7 @@ static win_T *restore_snapshot_rec(frame_T *sn, frame_T *fr)
 static bool frame_check_height(const frame_T *topfrp, int height)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_WINDOW
   return rs_frame_check_height((frame_T *)topfrp, height) != 0;
-#else
-  if (topfrp->fr_height != height) {
-    return false;
-  }
-  if (topfrp->fr_layout == FR_ROW) {
-    const frame_T *frp;
-    FOR_ALL_FRAMES(frp, topfrp->fr_child) {
-      if (frp->fr_height != height) {
-        return false;
-      }
-    }
-  }
-  return true;
-#endif
 }
 
 /// Check that "topfrp" and its children are at the right width.
@@ -7801,22 +7592,7 @@ static bool frame_check_height(const frame_T *topfrp, int height)
 static bool frame_check_width(const frame_T *topfrp, int width)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_WINDOW
   return rs_frame_check_width((frame_T *)topfrp, width) != 0;
-#else
-  if (topfrp->fr_width != width) {
-    return false;
-  }
-  if (topfrp->fr_layout == FR_COL) {
-    const frame_T *frp;
-    FOR_ALL_FRAMES(frp, topfrp->fr_child) {
-      if (frp->fr_width != width) {
-        return false;
-      }
-    }
-  }
-  return true;
-#endif
 }
 
 /// Simple int comparison function for use with qsort()
@@ -7922,21 +7698,13 @@ skip:
 
 int get_last_winid(void)
 {
-#ifdef USE_RUST_WINDOW
   return rs_get_last_winid();
-#else
-  return last_win_id;
-#endif
 }
 
 /// Don't let autocommands close the given window
 int win_locked(win_T *wp)
 {
-#ifdef USE_RUST_WINDOW
   return rs_win_locked(wp);
-#else
-  return wp->w_locked;
-#endif
 }
 
 void win_get_tabwin(handle_T id, int *tabnr, int *winnr)
@@ -7988,13 +7756,5 @@ void win_ui_flush(bool validate)
 
 win_T *lastwin_nofloating(void)
 {
-#ifdef USE_RUST_WINDOW
   return rs_lastwin_nofloating();
-#else
-  win_T *res = lastwin;
-  while (res->w_floating) {
-    res = res->w_prev;
-  }
-  return res;
-#endif
 }

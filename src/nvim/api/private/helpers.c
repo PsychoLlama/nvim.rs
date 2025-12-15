@@ -315,15 +315,7 @@ tabpage_T *find_tab_by_handle(Tabpage tabpage, Error *err)
 ///         empty String is returned
 String cchar_to_string(char c)
 {
-#ifdef USE_RUST_API
   return rs_cchar_to_string(c);
-#else
-  char buf[] = { c, NUL };
-  return (String){
-    .data = xmemdupz(buf, 1),
-    .size = (c != NUL) ? 1 : 0
-  };
-#endif
 }
 
 /// Copies a C string into a String (binary safe string, characters + length).
@@ -335,19 +327,7 @@ String cchar_to_string(char c)
 ///         empty String is returned
 String cstr_to_string(const char *str)
 {
-#ifdef USE_RUST_API
   return rs_cstr_to_string(str);
-#else
-  if (str == NULL) {
-    return (String)STRING_INIT;
-  }
-
-  size_t len = strlen(str);
-  return (String){
-    .data = xmemdupz(str, len),
-    .size = len,
-  };
-#endif
 }
 
 /// Copies a String to an allocated, NUL-terminated C string.
@@ -357,11 +337,7 @@ String cstr_to_string(const char *str)
 char *string_to_cstr(String str)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_API
   return rs_string_to_cstr(str);
-#else
-  return xstrndup(str.data, str.size);
-#endif
 }
 
 /// Copies buffer to an allocated String.
@@ -375,34 +351,19 @@ char *string_to_cstr(String str)
 String cbuf_to_string(const char *buf, size_t size)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_API
   return rs_cbuf_to_string(buf, size);
-#else
-  return (String){
-    .data = xmemdupz(buf, size),
-    .size = size
-  };
-#endif
 }
 
 String cstrn_to_string(const char *str, size_t maxsize)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_API
   return rs_cstrn_to_string(str, maxsize);
-#else
-  return cbuf_to_string(str, strnlen(str, maxsize));
-#endif
 }
 
 String cstrn_as_string(char *str, size_t maxsize)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_API
   return rs_cstrn_as_string(str, maxsize);
-#else
-  return cbuf_as_string(str, strnlen(str, maxsize));
-#endif
 }
 
 /// Creates a String using the given C string. Unlike
@@ -413,14 +374,7 @@ String cstrn_as_string(char *str, size_t maxsize)
 ///           str was NULL
 String cstr_as_string(const char *str) FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_API
   return rs_cstr_as_string(str);
-#else
-  if (str == NULL) {
-    return (String)STRING_INIT;
-  }
-  return (String){ .data = (char *)str, .size = strlen(str) };
-#endif
 }
 
 /// Return the owned memory of a ga as a String
@@ -428,15 +382,7 @@ String cstr_as_string(const char *str) FUNC_ATTR_PURE
 /// Reinitializes the ga to a valid empty state.
 String ga_take_string(garray_T *ga)
 {
-#ifdef USE_RUST_API
   return rs_ga_take_string(ga);
-#else
-  String str = { .data = (char *)ga->ga_data, .size = (size_t)ga->ga_len };
-  ga->ga_data = NULL;
-  ga->ga_len = 0;
-  ga->ga_maxlen = 0;
-  return str;
-#endif
 }
 
 /// Creates "readfile()-style" ArrayOf(String) from a binary string.
@@ -536,11 +482,7 @@ String buf_get_text(buf_T *buf, int64_t lnum, int64_t start_col, int64_t end_col
 
 void api_free_string(String value)
 {
-#ifdef USE_RUST_API
   rs_api_free_string(value);
-#else
-  xfree(value.data);
-#endif
 }
 
 Array arena_array(Arena *arena, size_t max_size)
@@ -577,78 +519,23 @@ Array arena_take_arraybuilder(Arena *arena, ArrayBuilder *arr)
 
 void api_free_object(Object value)
 {
-#ifdef USE_RUST_API
   rs_api_free_object(value);
-#else
-  switch (value.type) {
-  case kObjectTypeNil:
-  case kObjectTypeBoolean:
-  case kObjectTypeInteger:
-  case kObjectTypeFloat:
-  case kObjectTypeBuffer:
-  case kObjectTypeWindow:
-  case kObjectTypeTabpage:
-    break;
-
-  case kObjectTypeString:
-    api_free_string(value.data.string);
-    break;
-
-  case kObjectTypeArray:
-    api_free_array(value.data.array);
-    break;
-
-  case kObjectTypeDict:
-    api_free_dict(value.data.dict);
-    break;
-
-  case kObjectTypeLuaRef:
-    api_free_luaref(value.data.luaref);
-    break;
-  }
-#endif
 }
 
 void api_free_array(Array value)
 {
-#ifdef USE_RUST_API
   rs_api_free_array(value);
-#else
-  for (size_t i = 0; i < value.size; i++) {
-    api_free_object(value.items[i]);
-  }
-
-  xfree(value.items);
-#endif
 }
 
 void api_free_dict(Dict value)
 {
-#ifdef USE_RUST_API
   rs_api_free_dict(value);
-#else
-  for (size_t i = 0; i < value.size; i++) {
-    api_free_string(value.items[i].key);
-    api_free_object(value.items[i].value);
-  }
-
-  xfree(value.items);
-#endif
 }
 
 void api_clear_error(Error *value)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_API
   rs_api_clear_error(value);
-#else
-  if (!ERROR_SET(value)) {
-    return;
-  }
-  xfree(value->msg);
-  value->msg = NULL;
-  value->type = kErrorTypeNone;
-#endif
 }
 
 // initialized once, never freed
@@ -683,15 +570,7 @@ String api_metadata_raw(void)
 
 String copy_string(String str, Arena *arena)
 {
-#ifdef USE_RUST_API
   return rs_copy_string(str, arena);
-#else
-  if (str.data != NULL) {
-    return (String){ .data = arena_memdupz(arena, str.data, str.size), .size = str.size };
-  } else {
-    return (String)STRING_INIT;
-  }
-#endif
 }
 
 Array copy_array(Array array, Arena *arena)
@@ -769,71 +648,17 @@ void api_set_error(Error *err, ErrorType errType, const char *format, ...)
 /// @param err          Set if there was an error in converting to a bool
 bool api_object_to_bool(Object obj, const char *what, bool nil_value, Error *err)
 {
-#ifdef USE_RUST_API
   return rs_api_object_to_bool(obj, what, nil_value, err);
-#else
-  if (obj.type == kObjectTypeBoolean) {
-    return obj.data.boolean;
-  } else if (obj.type == kObjectTypeInteger) {
-    return obj.data.integer;  // C semantics: non-zero int is true
-  } else if (obj.type == kObjectTypeNil) {
-    return nil_value;  // caller decides what NIL (missing retval in Lua) means
-  } else {
-    api_set_error(err, kErrorTypeValidation, "%s is not a boolean", what);
-    return false;
-  }
-#endif
 }
 
 int object_to_hl_id(Object obj, const char *what, Error *err)
 {
-#ifdef USE_RUST_API
   return rs_object_to_hl_id(obj, what, err);
-#else
-  if (obj.type == kObjectTypeString) {
-    String str = obj.data.string;
-    return str.size ? syn_check_group(str.data, str.size) : 0;
-  } else if (obj.type == kObjectTypeInteger) {
-    int id = (int)obj.data.integer;
-    return (1 <= id && id <= highlight_num_groups()) ? id : 0;
-  } else {
-    api_set_error(err, kErrorTypeValidation, "Invalid hl_group: %s", what);
-    return 0;
-  }
-#endif
 }
 
 char *api_typename(ObjectType t)
 {
-#ifdef USE_RUST_API
   return rs_api_typename((int)t);
-#else
-  switch (t) {
-  case kObjectTypeNil:
-    return "nil";
-  case kObjectTypeBoolean:
-    return "Boolean";
-  case kObjectTypeInteger:
-    return "Integer";
-  case kObjectTypeFloat:
-    return "Float";
-  case kObjectTypeString:
-    return "String";
-  case kObjectTypeArray:
-    return "Array";
-  case kObjectTypeDict:
-    return "Dict";
-  case kObjectTypeLuaRef:
-    return "Function";
-  case kObjectTypeBuffer:
-    return "Buffer";
-  case kObjectTypeWindow:
-    return "Window";
-  case kObjectTypeTabpage:
-    return "Tabpage";
-  }
-  UNREACHABLE;
-#endif
 }
 
 HlMessage parse_hl_msg(ArrayOf(Tuple(String, *HLGroupID)) chunks, bool is_err, Error *err)
@@ -1013,28 +838,7 @@ Dict api_keydict_to_dict(void *value, KeySetLink *table, size_t max_size, Arena 
 
 void api_luarefs_free_object(Object value)
 {
-#ifdef USE_RUST_API
   rs_api_luarefs_free_object(value);
-#else
-  // TODO(bfredl): this is more complicated than it needs to be.
-  // we should be able to lock down more specifically where luarefs can be
-  switch (value.type) {
-  case kObjectTypeLuaRef:
-    api_free_luaref(value.data.luaref);
-    break;
-
-  case kObjectTypeArray:
-    api_luarefs_free_array(value.data.array);
-    break;
-
-  case kObjectTypeDict:
-    api_luarefs_free_dict(value.data.dict);
-    break;
-
-  default:
-    break;
-  }
-#endif
 }
 
 void api_luarefs_free_keydict(void *dict, KeySetLink *table)
@@ -1053,24 +857,12 @@ void api_luarefs_free_keydict(void *dict, KeySetLink *table)
 
 void api_luarefs_free_array(Array value)
 {
-#ifdef USE_RUST_API
   rs_api_luarefs_free_array(value);
-#else
-  for (size_t i = 0; i < value.size; i++) {
-    api_luarefs_free_object(value.items[i]);
-  }
-#endif
 }
 
 void api_luarefs_free_dict(Dict value)
 {
-#ifdef USE_RUST_API
   rs_api_luarefs_free_dict(value);
-#else
-  for (size_t i = 0; i < value.size; i++) {
-    api_luarefs_free_object(value.items[i].value);
-  }
-#endif
 }
 
 /// Set a named mark

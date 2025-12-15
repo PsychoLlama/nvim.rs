@@ -456,19 +456,7 @@ int bomb_size(void)
 // Remove all BOM from "s" by moving remaining text.
 void remove_bom(char *s)
 {
-#ifdef USE_RUST_MBYTE
   rs_remove_bom(s);
-#else
-  char *p = s;
-
-  while ((p = strchr(p, 0xef)) != NULL) {
-    if ((uint8_t)p[1] == 0xbb && (uint8_t)p[2] == 0xbf) {
-      STRMOVE(p, p + 3);
-    } else {
-      p++;
-    }
-  }
-#endif
 }
 
 /// Get class of pointer:
@@ -479,30 +467,13 @@ void remove_bom(char *s)
 int mb_get_class(const char *p)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_MBYTE
   return rs_mb_get_class(p);
-#else
-  return mb_get_class_tab(p, curbuf->b_chartab);
-#endif
 }
 
 int mb_get_class_tab(const char *p, const uint64_t *const chartab)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_MBYTE
   return rs_mb_get_class_tab(p, chartab);
-#else
-  if (MB_BYTE2LEN((uint8_t)p[0]) == 1) {
-    if (p[0] == NUL || ascii_iswhite(p[0])) {
-      return 0;
-    }
-    if (vim_iswordc_tab((uint8_t)p[0], chartab)) {
-      return 2;
-    }
-    return 1;
-  }
-  return utf_class_tab(utf_ptr2char(p), chartab);
-#endif
 }
 
 static bool prop_is_emojilike(const utf8proc_property_t *prop)
@@ -511,11 +482,9 @@ static bool prop_is_emojilike(const utf8proc_property_t *prop)
          || prop->boundclass == UTF8PROC_BOUNDCLASS_REGIONAL_INDICATOR;
 }
 
-#ifdef USE_RUST_MBYTE
 extern int rs_utf_char2cells(int c);
 extern int rs_utf_ptr2cells(const char *p);
 extern int rs_utf_ptr2cells_len(const char *p, int size);
-#endif
 
 /// For UTF-8 character "c" return 2 for a double-width character, 1 for others.
 /// Returns 4 or 6 for an unprintable character.
@@ -524,75 +493,14 @@ extern int rs_utf_ptr2cells_len(const char *p, int size);
 /// class 'A'(mbiguous).
 int utf_char2cells(int c)
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_char2cells(c);
-#else
-  if (c < 0x80) {
-    return 1;
-  }
-
-  if (!vim_isprintc(c)) {
-    assert(c <= 0xFFFF);
-    // unprintable is displayed either as <xx> or <xxxx>
-    return c > 0xFF ? 6 : 4;
-  }
-
-  int n = cw_value(c);
-  if (n != 0) {
-    return n;
-  }
-
-  const utf8proc_property_t *prop = utf8proc_get_property(c);
-
-  if (prop->charwidth == 2) {
-    return 2;
-  }
-  if (*p_ambw == 'd' && prop->ambiguous_width) {
-    return 2;
-  }
-
-  // Characters below 1F000 may be considered single width traditionally,
-  // making them double width causes problems.
-  if (p_emoji && c >= 0x1f000 && !prop->ambiguous_width && prop_is_emojilike(prop)) {
-    return 2;
-  }
-
-  return 1;
-#endif
 }
 
 /// Return the number of display cells character at "*p" occupies.
 /// This doesn't take care of unprintable characters, use ptr2cells() for that.
 int utf_ptr2cells(const char *p_in)
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_ptr2cells(p_in);
-#else
-  const uint8_t *p = (const uint8_t *)p_in;
-  // Need to convert to a character number.
-  if ((*p) >= 0x80) {
-    int len = utf8len_tab[*p];
-    int32_t c = utf_ptr2CharInfo_impl(p, (uintptr_t)len);
-    // An illegal byte is displayed as <xx>.
-    if (c <= 0) {
-      return 4;
-    }
-    // If the char is ASCII it must be an overlong sequence.
-    if (c < 0x80) {
-      return char2cells(c);
-    }
-    int cells = utf_char2cells(c);
-    if (cells == 1 && p_emoji
-        && prop_is_emojilike(utf8proc_get_property(c))) {
-      int c2 = utf_ptr2char(p_in + len);
-      if (c2 == 0xFE0F) {
-        return 2;  // emoji presentation
-      }
-    }
-    return cells;
-  }
-  return 1;
-#endif
 }
 
 /// Convert a UTF-8 byte sequence to a character number.
@@ -607,103 +515,14 @@ int utf_ptr2cells(const char *p_in)
 int32_t utf_ptr2CharInfo_impl(uint8_t const *p, uintptr_t const len)
   FUNC_ATTR_PURE FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_ptr2CharInfo_impl(p, len);
-#else
-// uint8_t is a reminder for clang to use smaller cmp
-#define CHECK \
-  do { \
-    if (EXPECT((uint8_t)(cur & 0xC0U) != 0x80U, false)) { \
-      return -1; \
-    } \
-  } while (0)
-
-  static uint32_t const corrections[] = {
-    (1U << 31),  // invalid - set invalid bits (safe to add as first 2 bytes
-    (1U << 31),  // won't affect highest bit in normal ret)
-    -(0x80U + (0xC0U << 6)),  // multibyte - subtract added UTF8 bits (1..10xxx and 10xxx)
-    -(0x80U + (0x80U << 6) + (0xE0U << 12)),
-    -(0x80U + (0x80U << 6) + (0x80U << 12) + (0xF0U << 18)),
-    -(0x80U + (0x80U << 6) + (0x80U << 12) + (0x80U << 18) + (0xF8U << 24)),
-    -(0x80U + (0x80U << 6) + (0x80U << 12) + (0x80U << 18) + (0x80U << 24)),  // + (0xFCU << 30)
-  };
-
-  // len is 0-6, but declared uintptr_t to avoid zeroing out upper bits
-  uint32_t const corr = corrections[len];
-  uint8_t cur;
-
-  // reading second byte unconditionally, safe for invalid
-  // as it cannot be the last byte, not safe for ascii
-  uint32_t code_point = ((uint32_t)p[0] << 6) + (cur = p[1]);
-  CHECK;
-  if ((uint32_t)len < 3) {
-    goto ret;  // len == 0, 1, 2
-  }
-
-  code_point = (code_point << 6) + (cur = p[2]);
-  CHECK;
-  if ((uint32_t)len == 3) {
-    goto ret;
-  }
-
-  code_point = (code_point << 6) + (cur = p[3]);
-  CHECK;
-  if ((uint32_t)len == 4) {
-    goto ret;
-  }
-
-  code_point = (code_point << 6) + (cur = p[4]);
-  CHECK;
-  if ((uint32_t)len == 5) {
-    goto ret;
-  }
-
-  code_point = (code_point << 6) + (cur = p[5]);
-  CHECK;
-  // len == 6
-
-ret:
-  return (int32_t)(code_point + corr);
-
-#undef CHECK
-#endif
 }
 
 /// Like utf_ptr2cells(), but limit string length to "size".
 /// For an empty string or truncated character returns 1.
 int utf_ptr2cells_len(const char *p, int size)
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_ptr2cells_len(p, size);
-#else
-  // Need to convert to a wide character.
-  if (size > 0 && (uint8_t)(*p) >= 0x80) {
-    int len = utf_ptr2len_len(p, size);
-    if (len < utf8len_tab[(uint8_t)(*p)]) {
-      return 1;        // truncated
-    }
-    int c = utf_ptr2char(p);
-    // An illegal byte is displayed as <xx>.
-    if (utf_ptr2len(p) == 1 || c == NUL) {
-      return 4;
-    }
-    // If the char is ASCII it must be an overlong sequence.
-    if (c < 0x80) {
-      return char2cells(c);
-    }
-    int cells = utf_char2cells(c);
-    if (cells == 1 && p_emoji && size > len
-        && prop_is_emojilike(utf8proc_get_property(c))
-        && utf_ptr2len_len(p + len, size - len) == utf8len_tab[(uint8_t)p[len]]) {
-      int c2 = utf_ptr2char(p + len);
-      if (c2 == 0xFE0F) {
-        return 2;  // emoji presentation
-      }
-    }
-    return cells;
-  }
-  return 1;
-#endif
 }
 
 /// Calculate the number of cells occupied by string `str`.
@@ -713,17 +532,7 @@ int utf_ptr2cells_len(const char *p, int size)
 /// @return The number of cells occupied by string `str`
 size_t mb_string2cells(const char *str)
 {
-#ifdef USE_RUST_MBYTE
   return rs_mb_string2cells(str);
-#else
-  size_t clen = 0;
-
-  for (const char *p = str; *p != NUL; p += utfc_ptr2len(p)) {
-    clen += (size_t)utf_ptr2cells(p);
-  }
-
-  return clen;
-#endif
 }
 
 /// Get the number of cells occupied by string `str` with maximum length `size`
@@ -735,18 +544,7 @@ size_t mb_string2cells(const char *str)
 size_t mb_string2cells_len(const char *str, size_t size)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-#ifdef USE_RUST_MBYTE
   return rs_mb_string2cells_len(str, size);
-#else
-  size_t clen = 0;
-
-  for (const char *p = str; *p != NUL && p < str + size;
-       p += utfc_ptr2len_len(p, (int)size - (int)(p - str))) {
-    clen += (size_t)utf_ptr2cells_len(p, (int)size - (int)(p - str));
-  }
-
-  return clen;
-#endif
 }
 
 /// Convert a UTF-8 byte sequence to a character number.
@@ -762,64 +560,7 @@ size_t mb_string2cells_len(const char *str, size_t size)
 int utf_ptr2char(const char *const p_in)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_ptr2char(p_in);
-#else
-  uint8_t *p = (uint8_t *)p_in;
-
-  uint32_t const v0 = p[0];
-  if (EXPECT(v0 < 0x80U, true)) {  // Be quick for ASCII.
-    return (int)v0;
-  }
-
-  const uint8_t len = utf8len_tab[v0];
-  if (EXPECT(len < 2, false)) {
-    return (int)v0;
-  }
-
-#define CHECK(v) \
-  do { \
-    if (EXPECT((uint8_t)((v) & 0xC0U) != 0x80U, false)) { \
-      return (int)v0; \
-    } \
-  } while (0)
-#define LEN_RETURN(len_v, result) \
-  do { \
-    if (len == (len_v)) { \
-      return (int)(result); \
-    } \
-  } while (0)
-#define S(s) ((uint32_t)0x80U << (s))
-
-  uint32_t const v1 = p[1];
-  CHECK(v1);
-  LEN_RETURN(2, (v0 << 6) + v1 - ((0xC0U << 6) + S(0)));
-
-  uint32_t const v2 = p[2];
-  CHECK(v2);
-  LEN_RETURN(3, (v0 << 12) + (v1 << 6) + v2 - ((0xE0U << 12) + S(6) + S(0)));
-
-  uint32_t const v3 = p[3];
-  CHECK(v3);
-  LEN_RETURN(4, (v0 << 18) + (v1 << 12) + (v2 << 6) + v3
-             - ((0xF0U << 18) + S(12) + S(6) + S(0)));
-
-  uint32_t const v4 = p[4];
-  CHECK(v4);
-  LEN_RETURN(5, (v0 << 24) + (v1 << 18) + (v2 << 12) + (v3 << 6) + v4
-             - ((0xF8U << 24) + S(18) + S(12) + S(6) + S(0)));
-
-  uint32_t const v5 = p[5];
-  CHECK(v5);
-  // len == 6
-  return (int)((v0 << 30) + (v1 << 24) + (v2 << 18) + (v3 << 12) + (v4 << 6) + v5
-               // - (0xFCU << 30)
-               - (S(24) + S(18) + S(12) + S(6) + S(0)));
-
-#undef S
-#undef CHECK
-#undef LEN_RETURN
-#endif
 }
 
 // Convert a UTF-8 byte sequence to a wide character.
@@ -886,13 +627,7 @@ int mb_ptr2char_adv(const char **const pp)
 // Note: composing characters are returned as separate characters.
 int mb_cptr2char_adv(const char **pp)
 {
-#ifdef USE_RUST_MBYTE
   return rs_mb_cptr2char_adv(pp);
-#else
-  int c = utf_ptr2char(*pp);
-  *pp += utf_ptr2len(*pp);
-  return c;
-#endif
 }
 
 /// When "c" is the first char of a string, determine if it needs to be prefixed
@@ -900,11 +635,7 @@ int mb_cptr2char_adv(const char **pp)
 /// the string.
 bool utf_iscomposing_first(int c)
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_iscomposing_first(c);
-#else
-  return c >= 128 && !utf8proc_grapheme_break(' ', c);
-#endif
 }
 
 /// Check if the character pointed to by "p2" is a composing character when it
@@ -929,33 +660,13 @@ bool utf_iscomposing_first(int c)
 bool utf_composinglike(const char *p1, const char *p2, GraphemeState *state)
   FUNC_ATTR_NONNULL_ARG(1, 2)
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_composinglike(p1, p2, state);
-#else
-  if ((uint8_t)(*p2) < 128) {
-    return false;
-  }
-
-  int first = utf_ptr2char(p1);
-  int second = utf_ptr2char(p2);
-
-  if (!utf8proc_grapheme_break_stateful(first, second, state)) {
-    return true;
-  }
-
-  return arabic_combine(first, second);
-#endif
 }
 
 /// same as utf_composinglike but operating on UCS-4 values
 bool utf_iscomposing(int c1, int c2, GraphemeState *state)
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_iscomposing(c1, c2, state);
-#else
-  return (!utf8proc_grapheme_break_stateful(c1, c2, state)
-          || arabic_combine(c1, c2));
-#endif
 }
 
 /// Get the screen char at the beginning of a string
@@ -1030,21 +741,7 @@ static schar_T schar_from_buf_first(const char *buf, size_t len, bool first_comp
 int utf_ptr2len(const char *const p_in)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_ptr2len(p_in);
-#else
-  uint8_t *p = (uint8_t *)p_in;
-  if (*p == NUL) {
-    return 0;
-  }
-  const int len = utf8len_tab[*p];
-  for (int i = 1; i < len; i++) {
-    if ((p[i] & 0xc0) != 0x80) {
-      return 1;
-    }
-  }
-  return len;
-#endif
 }
 
 // Return length of UTF-8 character, obtained from the first byte.
@@ -1052,11 +749,7 @@ int utf_ptr2len(const char *const p_in)
 // Returns 1 for an invalid first byte value.
 int utf_byte2len(int b)
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_byte2len(b);
-#else
-  return utf8len_tab[b];
-#endif
 }
 
 // Get the length of UTF-8 byte sequence "p[size]".  Does not include any
@@ -1067,27 +760,7 @@ int utf_byte2len(int b)
 // Never returns zero.
 int utf_ptr2len_len(const char *p, int size)
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_ptr2len_len(p, size);
-#else
-  int m;
-
-  int len = utf8len_tab[(uint8_t)(*p)];
-  if (len == 1) {
-    return 1;           // NUL, ascii or illegal lead byte
-  }
-  if (len > size) {
-    m = size;           // incomplete byte sequence.
-  } else {
-    m = len;
-  }
-  for (int i = 1; i < m; i++) {
-    if ((p[i] & 0xc0) != 0x80) {
-      return 1;
-    }
-  }
-  return len;
-#endif
 }
 
 /// Return the number of bytes occupied by a UTF-8 character in a string.
@@ -1096,39 +769,7 @@ int utf_ptr2len_len(const char *p, int size)
 int utfc_ptr2len(const char *const p)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_MBYTE
   return rs_utfc_ptr2len(p);
-#else
-  uint8_t b0 = (uint8_t)(*p);
-
-  if (b0 == NUL) {
-    return 0;
-  }
-  if (b0 < 0x80 && (uint8_t)p[1] < 0x80) {  // be quick for ASCII
-    return 1;
-  }
-
-  // Skip over first UTF-8 char, stopping at a NUL byte.
-  int len = utf_ptr2len(p);
-
-  // Check for illegal byte.
-  if (len == 1 && b0 >= 0x80) {
-    return 1;
-  }
-
-  // Check for composing characters.
-  int prevlen = 0;
-  GraphemeState state = GRAPHEME_STATE_INIT;
-  while (true) {
-    if ((uint8_t)p[len] < 0x80 || !utf_composinglike(p + prevlen, p + len, &state)) {
-      return len;
-    }
-
-    // Skip over composing char.
-    prevlen = len;
-    len += utf_ptr2len(p + len);
-  }
-#endif
 }
 
 /// Return the number of bytes the UTF-8 encoding of the character at "p[size]"
@@ -1137,72 +778,13 @@ int utfc_ptr2len(const char *const p)
 /// Returns 1 for an illegal char or an incomplete byte sequence.
 int utfc_ptr2len_len(const char *p, int size)
 {
-#ifdef USE_RUST_MBYTE
   return rs_utfc_ptr2len_len(p, size);
-#else
-  if (size < 1 || *p == NUL) {
-    return 0;
-  }
-  if ((uint8_t)p[0] < 0x80 && (size == 1 || (uint8_t)p[1] < 0x80)) {  // be quick for ASCII
-    return 1;
-  }
-
-  // Skip over first UTF-8 char, stopping at a NUL byte.
-  int len = utf_ptr2len_len(p, size);
-
-  // Check for illegal byte and incomplete byte sequence.
-  if ((len == 1 && (uint8_t)p[0] >= 0x80) || len > size) {
-    return 1;
-  }
-
-  // Check for composing characters.  We can only display a limited amount, but
-  // skip all of them (otherwise the cursor would get stuck).
-  int prevlen = 0;
-  GraphemeState state = GRAPHEME_STATE_INIT;
-  while (len < size) {
-    if ((uint8_t)p[len] < 0x80) {
-      break;
-    }
-
-    // Next character length should not go beyond size to ensure that
-    // utf_composinglike(...) does not read beyond size.
-    int len_next_char = utf_ptr2len_len(p + len, size - len);
-    if (len_next_char > size - len) {
-      break;
-    }
-
-    if (!utf_composinglike(p + prevlen, p + len, &state)) {
-      break;
-    }
-
-    // Skip over composing char
-    prevlen = len;
-    len += len_next_char;
-  }
-  return len;
-#endif
 }
 
 /// Determine how many bytes certain unicode codepoint will occupy
 int utf_char2len(const int c)
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_char2len(c);
-#else
-  if (c < 0x80) {
-    return 1;
-  } else if (c < 0x800) {
-    return 2;
-  } else if (c < 0x10000) {
-    return 3;
-  } else if (c < 0x200000) {
-    return 4;
-  } else if (c < 0x4000000) {
-    return 5;
-  } else {
-    return 6;
-  }
-#endif
 }
 
 /// Convert Unicode character to UTF-8 string
@@ -1213,44 +795,7 @@ int utf_char2len(const int c)
 /// @return Number of bytes (1-6).
 int utf_char2bytes(const int c, char *const buf)
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_char2bytes(c, buf);
-#else
-  if (c < 0x80) {  // 7 bits
-    buf[0] = (char)c;
-    return 1;
-  } else if (c < 0x800) {  // 11 bits
-    buf[0] = (char)(0xc0 + ((unsigned)c >> 6));
-    buf[1] = (char)(0x80 + ((unsigned)c & 0x3f));
-    return 2;
-  } else if (c < 0x10000) {  // 16 bits
-    buf[0] = (char)(0xe0 + ((unsigned)c >> 12));
-    buf[1] = (char)(0x80 + (((unsigned)c >> 6) & 0x3f));
-    buf[2] = (char)(0x80 + ((unsigned)c & 0x3f));
-    return 3;
-  } else if (c < 0x200000) {  // 21 bits
-    buf[0] = (char)(0xf0 + ((unsigned)c >> 18));
-    buf[1] = (char)(0x80 + (((unsigned)c >> 12) & 0x3f));
-    buf[2] = (char)(0x80 + (((unsigned)c >> 6) & 0x3f));
-    buf[3] = (char)(0x80 + ((unsigned)c & 0x3f));
-    return 4;
-  } else if (c < 0x4000000) {  // 26 bits
-    buf[0] = (char)(0xf8 + ((unsigned)c >> 24));
-    buf[1] = (char)(0x80 + (((unsigned)c >> 18) & 0x3f));
-    buf[2] = (char)(0x80 + (((unsigned)c >> 12) & 0x3f));
-    buf[3] = (char)(0x80 + (((unsigned)c >> 6) & 0x3f));
-    buf[4] = (char)(0x80 + ((unsigned)c & 0x3f));
-    return 5;
-  } else {  // 31 bits
-    buf[0] = (char)(0xfc + ((unsigned)c >> 30));
-    buf[1] = (char)(0x80 + (((unsigned)c >> 24) & 0x3f));
-    buf[2] = (char)(0x80 + (((unsigned)c >> 18) & 0x3f));
-    buf[3] = (char)(0x80 + (((unsigned)c >> 12) & 0x3f));
-    buf[4] = (char)(0x80 + (((unsigned)c >> 6) & 0x3f));
-    buf[5] = (char)(0x80 + ((unsigned)c & 0x3f));
-    return 6;
-  }
-#endif
 }
 
 /// Return true if "c" is a legacy composing UTF-8 character.
@@ -1266,12 +811,7 @@ int utf_char2bytes(const int c, char *const buf)
 /// Returns false for negative values.
 bool utf_iscomposing_legacy(int c)
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_iscomposing_legacy(c);
-#else
-  const utf8proc_property_t *prop = utf8proc_get_property(c);
-  return prop->category == UTF8PROC_CATEGORY_MN || prop->category == UTF8PROC_CATEGORY_ME;
-#endif
 }
 
 #ifdef __SSE2__
@@ -1283,39 +823,7 @@ bool utf_iscomposing_legacy(int c)
 bool utf_printable(int c)
   FUNC_ATTR_CONST
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_printable(c);
-#else
-  if (c < 0x180B || c > 0xFFFF) {
-    return c != 0x70F;
-  }
-
-# define L(v) ((int16_t)((v) - 1))  // lower bound (exclusive)
-# define H(v) ((int16_t)(v))  // upper bound (inclusive)
-
-  // Boundaries of unprintable characters.
-  // Some values are negative when converted to int16_t.
-  // Ranges must not wrap around when converted to int16_t.
-  __m128i const lo = _mm_setr_epi16(L(0x180b), L(0x200b), L(0x202a), L(0x2060),
-                                    L(0xd800), L(0xfeff), L(0xfff9), L(0xfffe));
-
-  __m128i const hi = _mm_setr_epi16(H(0x180e), H(0x200f), H(0x202e), H(0x206f),
-                                    H(0xdfff), H(0xfeff), H(0xfffb), H(0xffff));
-
-# undef L
-# undef H
-
-  __m128i value = _mm_set1_epi16((int16_t)c);
-
-  // Using _mm_cmplt_epi16() is less optimal, since it would require
-  // swapping operands (sse2 only has cmpgt instruction),
-  // and only the second operand can be a memory location.
-
-  // Character is printable when it is above/below both bounds of each range
-  // (corresponding bits in both masks are equal).
-  return _mm_movemask_epi8(_mm_cmpgt_epi16(value, lo))
-         == _mm_movemask_epi8(_mm_cmpgt_epi16(value, hi));
-#endif
 }
 
 #else
@@ -1352,19 +860,7 @@ static bool intable(const struct interval *table, size_t n_items, int c)
 bool utf_printable(int c)
   FUNC_ATTR_CONST
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_printable(c);
-#else
-  // Sorted list of non-overlapping intervals.
-  // 0xd800-0xdfff is reserved for UTF-16, actually illegal.
-  static const struct interval nonprint[] = {
-    { 0x070f, 0x070f }, { 0x180b, 0x180e }, { 0x200b, 0x200f }, { 0x202a, 0x202e },
-    { 0x2060, 0x206f }, { 0xd800, 0xdfff }, { 0xfeff, 0xfeff }, { 0xfff9, 0xfffb },
-    { 0xfffe, 0xffff }
-  };
-
-  return !intable(nonprint, ARRAY_SIZE(nonprint), c);
-#endif
 }
 
 #endif
@@ -1375,187 +871,25 @@ bool utf_printable(int c)
 // 2 or bigger: some class of word character.
 int utf_class(const int c)
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_class(c);
-#else
-  return utf_class_tab(c, curbuf->b_chartab);
-#endif
 }
 
 int utf_class_tab(const int c, const uint64_t *const chartab)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_class_tab(c, chartab);
-#else
-  // sorted list of non-overlapping intervals
-  static struct clinterval {
-    unsigned first;
-    unsigned last;
-    unsigned cls;
-  } classes[] = {
-    { 0x037e, 0x037e, 1 },              // Greek question mark
-    { 0x0387, 0x0387, 1 },              // Greek ano teleia
-    { 0x055a, 0x055f, 1 },              // Armenian punctuation
-    { 0x0589, 0x0589, 1 },              // Armenian full stop
-    { 0x05be, 0x05be, 1 },
-    { 0x05c0, 0x05c0, 1 },
-    { 0x05c3, 0x05c3, 1 },
-    { 0x05f3, 0x05f4, 1 },
-    { 0x060c, 0x060c, 1 },
-    { 0x061b, 0x061b, 1 },
-    { 0x061f, 0x061f, 1 },
-    { 0x066a, 0x066d, 1 },
-    { 0x06d4, 0x06d4, 1 },
-    { 0x0700, 0x070d, 1 },              // Syriac punctuation
-    { 0x0964, 0x0965, 1 },
-    { 0x0970, 0x0970, 1 },
-    { 0x0df4, 0x0df4, 1 },
-    { 0x0e4f, 0x0e4f, 1 },
-    { 0x0e5a, 0x0e5b, 1 },
-    { 0x0f04, 0x0f12, 1 },
-    { 0x0f3a, 0x0f3d, 1 },
-    { 0x0f85, 0x0f85, 1 },
-    { 0x104a, 0x104f, 1 },              // Myanmar punctuation
-    { 0x10fb, 0x10fb, 1 },              // Georgian punctuation
-    { 0x1361, 0x1368, 1 },              // Ethiopic punctuation
-    { 0x166d, 0x166e, 1 },              // Canadian Syl. punctuation
-    { 0x1680, 0x1680, 0 },
-    { 0x169b, 0x169c, 1 },
-    { 0x16eb, 0x16ed, 1 },
-    { 0x1735, 0x1736, 1 },
-    { 0x17d4, 0x17dc, 1 },              // Khmer punctuation
-    { 0x1800, 0x180a, 1 },              // Mongolian punctuation
-    { 0x2000, 0x200b, 0 },              // spaces
-    { 0x200c, 0x2027, 1 },              // punctuation and symbols
-    { 0x2028, 0x2029, 0 },
-    { 0x202a, 0x202e, 1 },              // punctuation and symbols
-    { 0x202f, 0x202f, 0 },
-    { 0x2030, 0x205e, 1 },              // punctuation and symbols
-    { 0x205f, 0x205f, 0 },
-    { 0x2060, 0x206f, 1 },              // punctuation and symbols
-    { 0x2070, 0x207f, 0x2070 },         // superscript
-    { 0x2080, 0x2094, 0x2080 },         // subscript
-    { 0x20a0, 0x27ff, 1 },              // all kinds of symbols
-    { 0x2800, 0x28ff, 0x2800 },         // braille
-    { 0x2900, 0x2998, 1 },              // arrows, brackets, etc.
-    { 0x29d8, 0x29db, 1 },
-    { 0x29fc, 0x29fd, 1 },
-    { 0x2e00, 0x2e7f, 1 },              // supplemental punctuation
-    { 0x3000, 0x3000, 0 },              // ideographic space
-    { 0x3001, 0x3020, 1 },              // ideographic punctuation
-    { 0x3030, 0x3030, 1 },
-    { 0x303d, 0x303d, 1 },
-    { 0x3040, 0x309f, 0x3040 },         // Hiragana
-    { 0x30a0, 0x30ff, 0x30a0 },         // Katakana
-    { 0x3300, 0x9fff, 0x4e00 },         // CJK Ideographs
-    { 0xac00, 0xd7a3, 0xac00 },         // Hangul Syllables
-    { 0xf900, 0xfaff, 0x4e00 },         // CJK Ideographs
-    { 0xfd3e, 0xfd3f, 1 },
-    { 0xfe30, 0xfe6b, 1 },              // punctuation forms
-    { 0xff00, 0xff0f, 1 },              // half/fullwidth ASCII
-    { 0xff1a, 0xff20, 1 },              // half/fullwidth ASCII
-    { 0xff3b, 0xff40, 1 },              // half/fullwidth ASCII
-    { 0xff5b, 0xff65, 1 },              // half/fullwidth ASCII
-    { 0x1d000, 0x1d24f, 1 },            // Musical notation
-    { 0x1d400, 0x1d7ff, 1 },            // Mathematical Alphanumeric Symbols
-    { 0x1f000, 0x1f2ff, 1 },            // Game pieces; enclosed characters
-    { 0x1f300, 0x1f9ff, 1 },            // Many symbol blocks
-    { 0x20000, 0x2a6df, 0x4e00 },       // CJK Ideographs
-    { 0x2a700, 0x2b73f, 0x4e00 },       // CJK Ideographs
-    { 0x2b740, 0x2b81f, 0x4e00 },       // CJK Ideographs
-    { 0x2f800, 0x2fa1f, 0x4e00 },       // CJK Ideographs
-  };
-  int bot = 0;
-  int top = ARRAY_SIZE(classes) - 1;
-
-  // First quick check for Latin1 characters, use 'iskeyword'.
-  if (c < 0x100) {
-    if (c == ' ' || c == '\t' || c == NUL || c == 0xa0) {
-      return 0;             // blank
-    }
-    if (vim_iswordc_tab(c, chartab)) {
-      return 2;             // word character
-    }
-    return 1;               // punctuation
-  }
-
-  const utf8proc_property_t *prop = utf8proc_get_property(c);
-  // emoji
-  if (prop_is_emojilike(prop)) {
-    return 3;
-  }
-
-  // binary search in table
-  while (top >= bot) {
-    int mid = (bot + top) / 2;
-    if (classes[mid].last < (unsigned)c) {
-      bot = mid + 1;
-    } else if (classes[mid].first > (unsigned)c) {
-      top = mid - 1;
-    } else {
-      return (int)classes[mid].cls;
-    }
-  }
-
-  // most other characters are "word" characters
-  return 2;
-#endif
 }
 
 bool utf_ambiguous_width(const char *p)
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_ambiguous_width(p) != 0;
-#else
-  // be quick if there is nothing to print or ASCII-only
-  if (p[0] == NUL || p[1] == NUL) {
-    return false;
-  }
-
-  CharInfo info = utf_ptr2CharInfo(p);
-  if (info.value >= 0x80) {
-    const utf8proc_property_t *prop = utf8proc_get_property(info.value);
-    if (prop->ambiguous_width || prop_is_emojilike(prop)) {
-      return true;
-    }
-  }
-
-  // check if second sequence is 0xFE0F VS-16 which can turn things into emoji,
-  // safe with NUL (no second sequence)
-  return memcmp(p + info.len, "\xef\xb8\x8f", 3) == 0;
-#endif
 }
 
 // Return the folded-case equivalent of "a", which is a UCS-4 character.  Uses
 // full case folding.
 int utf_fold(int a)
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_fold(a);
-#else
-  if (a < 0x80) {
-    // be fast for ASCII
-    return a >= 0x41 && a <= 0x5a ? a + 32 : a;
-  }
-
-  // TODO(dundargoc): utf8proc only does full case folding, which breaks some tests. This is a
-  // temporary workaround to circumvent failing tests.
-  //
-  // (0xdf) ß == ss in full casefolding. Using this however breaks the vim spell tests and the error
-  // E763 is thrown. This is due to the test spells relying on the vim spell files.
-  //
-  // (0x130) İ == i̇ in full casefolding.
-  if (a == 0xdf || a == 0x130) {
-    return a;
-  }
-
-  utf8proc_int32_t result[1];
-
-  utf8proc_ssize_t res = utf8proc_decompose_char(a, result, 1, UTF8PROC_CASEFOLD, NULL);
-
-  return (res == 1) ? result[0] : a;
-#endif
 }
 
 // Vim's own character class functions.  These exist because many library
@@ -1623,79 +957,7 @@ bool mb_isalpha(int a)
 
 int utf_strnicmp(const char *s1, const char *s2, size_t n1, size_t n2)
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_strnicmp(s1, s2, n1, n2);
-#else
-  int c1, c2;
-  char buffer[6];
-
-  while (true) {
-    c1 = utf_safe_read_char_adv(&s1, &n1);
-    c2 = utf_safe_read_char_adv(&s2, &n2);
-
-    if (c1 <= 0 || c2 <= 0) {
-      break;
-    }
-
-    if (c1 == c2) {
-      continue;
-    }
-
-    int cdiff = utf_fold(c1) - utf_fold(c2);
-    if (cdiff != 0) {
-      return cdiff;
-    }
-  }
-
-  // some string ended or has an incomplete/illegal character sequence
-
-  if (c1 == 0 || c2 == 0) {
-    // some string ended. shorter string is smaller
-    if (c1 == 0 && c2 == 0) {
-      return 0;
-    }
-    return c1 == 0 ? -1 : 1;
-  }
-
-  // Continue with bytewise comparison to produce some result that
-  // would make comparison operations involving this function transitive.
-  //
-  // If only one string had an error, comparison should be made with
-  // folded version of the other string. In this case it is enough
-  // to fold just one character to determine the result of comparison.
-
-  if (c1 != -1 && c2 == -1) {
-    n1 = (size_t)utf_char2bytes(utf_fold(c1), buffer);
-    s1 = buffer;
-  } else if (c2 != -1 && c1 == -1) {
-    n2 = (size_t)utf_char2bytes(utf_fold(c2), buffer);
-    s2 = buffer;
-  }
-
-  while (n1 > 0 && n2 > 0 && *s1 != NUL && *s2 != NUL) {
-    int cdiff = (int)((uint8_t)(*s1)) - (int)((uint8_t)(*s2));
-    if (cdiff != 0) {
-      return cdiff;
-    }
-
-    s1++;
-    s2++;
-    n1--;
-    n2--;
-  }
-
-  if (n1 > 0 && *s1 == NUL) {
-    n1 = 0;
-  }
-  if (n2 > 0 && *s2 == NUL) {
-    n2 = 0;
-  }
-
-  if (n1 == 0 && n2 == 0) {
-    return 0;
-  }
-  return n1 == 0 ? -1 : 1;
-#endif
 }
 
 #ifdef MSWIN
@@ -1803,53 +1065,13 @@ int utf16_to_utf8(const wchar_t *utf16, int utf16len, char **utf8)
 void mb_utflen(const char *s, size_t len, size_t *codepoints, size_t *codeunits)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_MBYTE
   rs_mb_utflen(s, len, codepoints, codeunits);
-#else
-  size_t count = 0;
-  size_t extra = 0;
-  size_t clen;
-  for (size_t i = 0; i < len; i += clen) {
-    clen = (size_t)utf_ptr2len_len(s + i, (int)(len - i));
-    // NB: gets the byte value of invalid sequence bytes.
-    // we only care whether the char fits in the BMP or not
-    int c = (clen > 1) ? utf_ptr2char(s + i) : (uint8_t)s[i];
-    count++;
-    if (c > 0xFFFF) {
-      extra++;
-    }
-  }
-  *codepoints += count;
-  *codeunits += count + extra;
-#endif
 }
 
 ssize_t mb_utf_index_to_bytes(const char *s, size_t len, size_t index, bool use_utf16_units)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_MBYTE
   return rs_mb_utf_index_to_bytes(s, len, index, use_utf16_units);
-#else
-  size_t count = 0;
-  size_t clen;
-  if (index == 0) {
-    return 0;
-  }
-  for (size_t i = 0; i < len; i += clen) {
-    clen = (size_t)utf_ptr2len_len(s + i, (int)(len - i));
-    // NB: gets the byte value of invalid sequence bytes.
-    // we only care whether the char fits in the BMP or not
-    int c = (clen > 1) ? utf_ptr2char(s + i) : (uint8_t)s[i];
-    count++;
-    if (use_utf16_units && c > 0xFFFF) {
-      count++;
-    }
-    if (count >= index) {
-      return (ssize_t)(i + clen);
-    }
-  }
-  return -1;
-#endif
 }
 
 /// Version of strnicmp() that handles multi-byte characters.
@@ -1861,11 +1083,7 @@ ssize_t mb_utf_index_to_bytes(const char *s, size_t len, size_t index, bool use_
 ///          two characters otherwise.
 int mb_strnicmp(const char *s1, const char *s2, const size_t nn)
 {
-#ifdef USE_RUST_MBYTE
   return rs_mb_strnicmp(s1, s2, nn);
-#else
-  return utf_strnicmp(s1, s2, nn, nn);
-#endif
 }
 
 /// Compare strings case-insensitively
@@ -1882,11 +1100,7 @@ int mb_strnicmp(const char *s1, const char *s2, const size_t nn)
 /// @return 0 if strings are equal, <0 if s1 < s2, >0 if s1 > s2.
 int mb_stricmp(const char *s1, const char *s2)
 {
-#ifdef USE_RUST_MBYTE
   return rs_mb_stricmp(s1, s2);
-#else
-  return mb_strnicmp(s1, s2, MAXCOL);
-#endif
 }
 
 // "g8": show bytes of the UTF-8 char under the cursor.  Doesn't matter what
@@ -1952,92 +1166,7 @@ static bool always_break_two(int bc1, int bc2)
 /// Returns 0 when already at the first byte of a character.
 int utf_head_off(const char *base_in, const char *p_in)
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_head_off(base_in, p_in);
-#else
-  if ((uint8_t)(*p_in) < 0x80) {              // be quick for ASCII
-    return 0;
-  }
-
-  const uint8_t *base = (uint8_t *)base_in;
-  const uint8_t *p = (uint8_t *)p_in;
-
-  const uint8_t *start = p;
-
-  // move start to the first byte of this codepoint
-  // might stop on a continuation byte if overlong, handled by utf_ptr2CharInfo_impl
-  while (start > base && (*start & 0xc0) == 0x80 && (p - start) < 6) {
-    start--;
-  }
-
-  const uint8_t last_len = utf8len_tab[*start];
-  int32_t cur_code = utf_ptr2CharInfo_impl(start, (uintptr_t)last_len);
-  if (cur_code < 0 || p - start >= last_len) {
-    return 0;  // p must be part of an illegal sequence
-  }
-  const uint8_t * const safe_end = start + last_len;
-
-  int cur_bc = utf8proc_get_property(cur_code)->boundclass;
-  if (always_break(cur_bc) || start == base) {
-    return (int)(p - start);
-  }
-
-  // backtrack to find the start of a cluster. we might go too far, checked in the next loop
-  const uint8_t *cur_pos = start;
-  const uint8_t *const p_start = start;
-
-  while (true) {
-    if (start[-1] == NUL) {
-      break;
-    }
-
-    start--;
-    if (*start < 0x80) {  // stop on ascii, we are done
-      break;
-    }
-
-    while (start > base && (*start & 0xc0) == 0x80 && (cur_pos - start) < 6) {
-      start--;
-    }
-
-    int prev_len = utf8len_tab[*start];
-    int32_t prev_code = utf_ptr2CharInfo_impl(start, (uintptr_t)prev_len);
-    if (prev_code < 0 || prev_len < cur_pos - start) {
-      start = cur_pos;  // start at valid sequence after invalid bytes
-      break;
-    }
-
-    int prev_bc = utf8proc_get_property(prev_code)->boundclass;
-    if (always_break_two(prev_bc, cur_bc) && !arabic_combine(prev_code, cur_code)) {
-      start = cur_pos;  // prev_code cannot be a part of this cluster
-      break;
-    } else if (start == base) {
-      break;
-    }
-    cur_pos = start;
-    cur_bc = prev_bc;
-    cur_code = prev_code;
-  }
-
-  // hot path: we are already on the first codepoint of a sequence
-  if (start == p_start && last_len > p - start) {
-    return (int)(p - start);
-  }
-
-  const uint8_t *q = start;
-  while (q < p) {
-    // don't need to find end of cluster. once we reached the codepoint of p, we are done
-    int len = utfc_ptr2len_len((const char *)q, (int)(safe_end - q));
-
-    if (q + len > p) {
-      return (int)(p - q);
-    }
-
-    q += len;
-  }
-
-  return 0;
-#endif
 }
 
 /// Assumes caller already handles ascii. see `utfc_next`
@@ -2073,156 +1202,28 @@ StrCharInfo utfc_next_impl(StrCharInfo cur)
 bool utf_eat_space(int cc)
   FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_eat_space(cc) != 0;
-#else
-  return (cc >= 0x2000 && cc <= 0x206F)   // General punctuations
-         || (cc >= 0x2e00 && cc <= 0x2e7f)   // Supplemental punctuations
-         || (cc >= 0x3000 && cc <= 0x303f)   // CJK symbols and punctuations
-         || (cc >= 0xff01 && cc <= 0xff0f)   // Full width ASCII punctuations
-         || (cc >= 0xff1a && cc <= 0xff20)   // ..
-         || (cc >= 0xff3b && cc <= 0xff40)   // ..
-         || (cc >= 0xff5b && cc <= 0xff65);  // ..
-#endif
 }
 
 // Whether line break is allowed before "cc".
 bool utf_allow_break_before(int cc)
   FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_allow_break_before(cc) != 0;
-#else
-  static const int BOL_prohibition_punct[] = {
-    '!',
-    '%',
-    ')',
-    ',',
-    ':',
-    ';',
-    '>',
-    '?',
-    ']',
-    '}',
-    0x2019,  // ' right single quotation mark
-    0x201d,  // " right double quotation mark
-    0x2020,  // † dagger
-    0x2021,  // ‡ double dagger
-    0x2026,  // … horizontal ellipsis
-    0x2030,  // ‰ per mille sign
-    0x2031,  // ‱ per the thousand sign
-    0x203c,  // ‼ double exclamation mark
-    0x2047,  // ⁇ double question mark
-    0x2048,  // ⁈ question exclamation mark
-    0x2049,  // ⁉ exclamation question mark
-    0x2103,  // ℃ degree celsius
-    0x2109,  // ℉ degree fahrenheit
-    0x3001,  // 、 ideographic comma
-    0x3002,  // 。 ideographic full stop
-    0x3009,  // 〉 right angle bracket
-    0x300b,  // 》 right double angle bracket
-    0x300d,  // 」 right corner bracket
-    0x300f,  // 』 right white corner bracket
-    0x3011,  // 】 right black lenticular bracket
-    0x3015,  // 〕 right tortoise shell bracket
-    0x3017,  // 〗 right white lenticular bracket
-    0x3019,  // 〙 right white tortoise shell bracket
-    0x301b,  // 〛 right white square bracket
-    0xff01,  // ！ fullwidth exclamation mark
-    0xff09,  // ） fullwidth right parenthesis
-    0xff0c,  // ， fullwidth comma
-    0xff0e,  // ． fullwidth full stop
-    0xff1a,  // ： fullwidth colon
-    0xff1b,  // ； fullwidth semicolon
-    0xff1f,  // ？ fullwidth question mark
-    0xff3d,  // ］ fullwidth right square bracket
-    0xff5d,  // ｝ fullwidth right curly bracket
-  };
-
-  int first = 0;
-  int last = ARRAY_SIZE(BOL_prohibition_punct) - 1;
-
-  while (first < last) {
-    const int mid = (first + last) / 2;
-
-    if (cc == BOL_prohibition_punct[mid]) {
-      return false;
-    } else if (cc > BOL_prohibition_punct[mid]) {
-      first = mid + 1;
-    } else {
-      last = mid - 1;
-    }
-  }
-
-  return cc != BOL_prohibition_punct[first];
-#endif
 }
 
 // Whether line break is allowed after "cc".
 bool utf_allow_break_after(int cc)
   FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_allow_break_after(cc) != 0;
-#else
-  static const int EOL_prohibition_punct[] = {
-    '(',
-    '<',
-    '[',
-    '`',
-    '{',
-    // 0x2014,  // — em dash
-    0x2018,     // ' left single quotation mark
-    0x201c,     // " left double quotation mark
-    // 0x2053,  // ～ swung dash
-    0x3008,     // 〈 left angle bracket
-    0x300a,     // 《 left double angle bracket
-    0x300c,     // 「 left corner bracket
-    0x300e,     // 『 left white corner bracket
-    0x3010,     // 【 left black lenticular bracket
-    0x3014,     // 〔 left tortoise shell bracket
-    0x3016,     // 〖 left white lenticular bracket
-    0x3018,     // 〘 left white tortoise shell bracket
-    0x301a,     // 〚 left white square bracket
-    0xff08,     // （ fullwidth left parenthesis
-    0xff3b,     // ［ fullwidth left square bracket
-    0xff5b,     // ｛ fullwidth left curly bracket
-  };
-
-  int first = 0;
-  int last = ARRAY_SIZE(EOL_prohibition_punct) - 1;
-
-  while (first < last) {
-    const int mid = (first + last)/2;
-
-    if (cc == EOL_prohibition_punct[mid]) {
-      return false;
-    } else if (cc > EOL_prohibition_punct[mid]) {
-      first = mid + 1;
-    } else {
-      last = mid - 1;
-    }
-  }
-
-  return cc != EOL_prohibition_punct[first];
-#endif
 }
 
 // Whether line break is allowed between "cc" and "ncc".
 bool utf_allow_break(int cc, int ncc)
   FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_allow_break(cc, ncc);
-#else
-  // don't break between two-letter punctuations
-  if (cc == ncc
-      && (cc == 0x2014         // em dash
-          || cc == 0x2026)) {  // horizontal ellipsis
-    return false;
-  }
-  return utf_allow_break_after(cc) && utf_allow_break_before(ncc);
-#endif
 }
 
 /// Copy a character, advancing the pointers
@@ -2243,17 +1244,7 @@ void mb_copy_char(const char **const fp, char **const tp)
 /// character.  Can start anywhere in a stream of bytes.
 int mb_off_next(const char *base, const char *p)
 {
-#ifdef USE_RUST_MBYTE
   return rs_mb_off_next(base, p);
-#else
-  int head_off = utf_head_off(base, p);
-
-  if (head_off == 0) {
-    return 0;
-  }
-
-  return utfc_ptr2len(p - head_off) - head_off;
-#endif
 }
 
 /// Returns the offset in bytes from "p_in" to the first and one-past-end bytes
@@ -2264,38 +1255,8 @@ int mb_off_next(const char *base, const char *p)
 CharBoundsOff utf_cp_bounds_len(char const *base, char const *p_in, int p_len)
   FUNC_ATTR_PURE FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_MBYTE
   RsCharBoundsOff rs_result = rs_utf_cp_bounds_len(base, p_in, p_len);
   return (CharBoundsOff){ .begin_off = rs_result.begin_off, .end_off = rs_result.end_off };
-#else
-  assert(base <= p_in && p_len > 0);
-  uint8_t const *const b = (uint8_t *)base;
-  uint8_t const *const p = (uint8_t *)p_in;
-  if (*p < 0x80U) {  // be quick for ASCII
-    return (CharBoundsOff){ 0, 1 };
-  }
-
-  int const max_first_off = -MIN((int)(p - b), MB_MAXCHAR - 1);
-  int first_off = 0;
-  for (; utf_is_trail_byte(p[first_off]); first_off--) {
-    if (first_off == max_first_off) {  // failed to find first byte
-      return (CharBoundsOff){ 0, 1 };
-    }
-  }
-
-  int const max_end_off = utf8len_tab[p[first_off]] + first_off;
-  if (max_end_off <= 0 || max_end_off > p_len) {  // illegal or incomplete sequence
-    return (CharBoundsOff){ 0, 1 };
-  }
-
-  for (int end_off = 1; end_off < max_end_off; end_off++) {
-    if (!utf_is_trail_byte(p[end_off])) {  // not enough trail bytes
-      return (CharBoundsOff){ 0, 1 };
-    }
-  }
-
-  return (CharBoundsOff){ .begin_off = (int8_t)-first_off, .end_off = (int8_t)max_end_off };
-#endif
 }
 
 /// Returns the offset in bytes from "p_in" to the first and one-past-end bytes
@@ -2306,12 +1267,8 @@ CharBoundsOff utf_cp_bounds_len(char const *base, char const *p_in, int p_len)
 CharBoundsOff utf_cp_bounds(char const *base, char const *p_in)
   FUNC_ATTR_PURE FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_MBYTE
   RsCharBoundsOff rs_result = rs_utf_cp_bounds(base, p_in);
   return (CharBoundsOff){ .begin_off = rs_result.begin_off, .end_off = rs_result.end_off };
-#else
-  return utf_cp_bounds_len(base, p_in, INT_MAX);
-#endif
 }
 
 // Find the next illegal byte sequence.
@@ -2381,28 +1338,7 @@ theend:
 /// When "end" is NULL stop at the first NUL.  Otherwise stop at "end".
 bool utf_valid_string(const char *s, const char *end)
 {
-#ifdef USE_RUST_MBYTE
   return rs_utf_valid_string(s, end) != 0;
-#else
-  const uint8_t *p = (uint8_t *)s;
-
-  while (end == NULL ? *p != NUL : p < (uint8_t *)end) {
-    int l = utf8len_tab_zero[*p];
-    if (l == 0) {
-      return false;  // invalid lead byte
-    }
-    if (end != NULL && p + l > (uint8_t *)end) {
-      return false;  // incomplete byte sequence
-    }
-    p++;
-    while (--l > 0) {
-      if ((*p++ & 0xc0) != 0x80) {
-        return false;  // invalid trail byte
-      }
-    }
-  }
-  return true;
-#endif
 }
 
 // If the cursor moves on an trail byte, set the cursor on the lead byte.
@@ -2463,39 +1399,13 @@ char *mb_prevptr(char *line, char *p)
 /// following composing characters) counts as one.
 int mb_charlen(const char *str)
 {
-#ifdef USE_RUST_MBYTE
   return rs_mb_charlen(str);
-#else
-  const char *p = str;
-  int count;
-
-  if (p == NULL) {
-    return 0;
-  }
-
-  for (count = 0; *p != NUL; count++) {
-    p += utfc_ptr2len(p);
-  }
-
-  return count;
-#endif
 }
 
 /// Like mb_charlen() but for a string with specified length.
 int mb_charlen_len(const char *str, int len)
 {
-#ifdef USE_RUST_MBYTE
   return rs_mb_charlen_len(str, len);
-#else
-  const char *p = str;
-  int count;
-
-  for (count = 0; *p != NUL && p < str + len; count++) {
-    p += utfc_ptr2len(p);
-  }
-
-  return count;
-#endif
 }
 
 /// Try to unescape a multibyte character
@@ -2548,17 +1458,7 @@ const char *mb_unescape(const char **const pp)
 /// Skip the Vim specific head of a 'encoding' name.
 char *enc_skip(char *p)
 {
-#ifdef USE_RUST_MBYTE
   return rs_enc_skip(p);
-#else
-  if (strncmp(p, "2byte-", 6) == 0) {
-    return p + 6;
-  }
-  if (strncmp(p, "8bit-", 5) == 0) {
-    return p + 5;
-  }
-  return p;
-#endif
 }
 
 /// Find the canonical name for encoding "enc".
@@ -3096,9 +1996,7 @@ typedef struct {
 cw_interval_T *cw_table = NULL;
 size_t cw_table_size = 0;
 
-#ifdef USE_RUST_MBYTE
 extern int rs_cw_value(int c);
-#endif
 
 /// Return the value of the cellwidth table for the character `c`.
 ///
@@ -3106,33 +2004,7 @@ extern int rs_cw_value(int c);
 /// @return 1 or 2 when `c` is in the cellwidth table, 0 if not.
 int cw_value(int c)
 {
-#ifdef USE_RUST_MBYTE
   return rs_cw_value(c);
-#else
-  if (cw_table == NULL) {
-    return 0;
-  }
-
-  // first quick check for Latin1 etc. characters
-  if (c < cw_table[0].first) {
-    return 0;
-  }
-
-  // binary search in table
-  int bot = 0;
-  int top = (int)cw_table_size - 1;
-  while (top >= bot) {
-    int mid = (bot + top) / 2;
-    if (cw_table[mid].last < c) {
-      bot = mid + 1;
-    } else if (cw_table[mid].first > c) {
-      top = mid - 1;
-    } else {
-      return cw_table[mid].width;
-    }
-  }
-  return 0;
-#endif
 }
 
 static int tv_nr_compare(const void *a1, const void *a2)
@@ -3304,9 +2176,5 @@ char *get_encoding_name(expand_T *xp FUNC_ATTR_UNUSED, int idx)
 int mb_strcmp_ic(bool ic, const char *s1, const char *s2)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_MBYTE
   return rs_mb_strcmp_ic(ic, s1, s2);
-#else
-  return (ic ? mb_stricmp(s1, s2) : strcmp(s1, s2));
-#endif
 }
