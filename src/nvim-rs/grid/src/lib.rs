@@ -1464,33 +1464,29 @@ pub unsafe extern "C" fn rs_grid_clear(
     start_row: c_int,
     end_row: c_int,
     start_col: c_int,
-    end_col: c_int,
+    mut end_col: c_int,
     attr: c_int,
 ) {
     for row in start_row..end_row {
-        // Call grid_line_start equivalent
-        let mut adjusted_row = row;
-        let mut col = 0;
-        let grid = rs_grid_adjust(view, &mut adjusted_row, &mut col);
+        // Call grid_line_start to properly initialize all grid line state
+        rs_grid_line_start(view, row);
 
-        // screengrid_line_start equivalent
-        let maxcol = nvim_screengrid_get_cols(grid);
+        // Clamp end_col to grid_line_maxcol (set by grid_line_start)
+        end_col = std::cmp::min(end_col, nvim_get_grid_line_maxcol());
+
+        // Get the grid and row from the line state
+        let grid = nvim_get_grid_line_grid();
+        let grid_line_row = nvim_get_grid_line_row();
         let grid_rows = nvim_screengrid_get_rows(grid);
 
-        // Store grid line state
-        nvim_set_grid_line_grid(grid);
-        nvim_set_grid_line_row(adjusted_row);
-
-        let effective_maxcol = std::cmp::min(maxcol, maxcol - col);
-        let effective_end_col = std::cmp::min(end_col, effective_maxcol);
-
-        if adjusted_row >= grid_rows || start_col >= effective_end_col {
+        if grid_line_row >= grid_rows || start_col >= end_col {
+            // TODO(bfredl): make callers behave instead
             nvim_set_grid_line_grid(std::ptr::null_mut());
             return;
         }
 
         // grid_line_clear_end equivalent
-        rs_grid_line_clear_end(start_col, effective_end_col, attr, 0);
+        rs_grid_line_clear_end(start_col, end_col, attr, 0);
 
         // grid_line_flush
         rs_grid_line_flush();
