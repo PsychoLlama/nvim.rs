@@ -52,6 +52,11 @@ extern int rs_schar_cells(schar_T sc);
 extern int rs_schar_get_first_codepoint(schar_T sc);
 extern bool rs_schar_cache_clear_if_full(void);
 extern void rs_schar_cache_clear(void);
+// Rust implementations of grid_line functions
+extern void rs_grid_line_put_schar(int col, schar_T schar, int attr);
+extern int rs_grid_line_fill(int start_col, int end_col, schar_T sc, int attr);
+extern void rs_grid_line_clear_end(int start_col, int end_col, int bg_attr, int clear_attr);
+extern void rs_grid_line_cursor_goto(int col);
 #endif
 
 // temporary buffer for rendering a single screenline, so it can be
@@ -273,6 +278,12 @@ void nvim_set_grid_line_flags(int flags)
 void nvim_ui_grid_cursor_goto(handle_T grid_handle, int row, int col)
 {
   ui_grid_cursor_goto(grid_handle, row, col);
+}
+
+/// Get handle from a ScreenGrid pointer
+handle_T nvim_screengrid_get_handle(ScreenGrid *grid)
+{
+  return grid ? grid->handle : 0;
 }
 #endif
 
@@ -683,6 +694,9 @@ schar_T grid_line_getchar(int col, int *attr)
 
 void grid_line_put_schar(int col, schar_T schar, int attr)
 {
+#ifdef USE_RUST_GRID
+  rs_grid_line_put_schar(col, schar, attr);
+#else
   assert(grid_line_grid);
   if (col >= grid_line_maxcol) {
     return;
@@ -695,6 +709,7 @@ void grid_line_put_schar(int col, schar_T schar, int attr)
   // TODO(bfredl): Y U NO DOUBLEWIDTH?
   grid_line_last = MAX(grid_line_last, col + 1);
   linebuf_vcol[col] = -1;
+#endif
 }
 
 /// Put string "text" at "col" position relative to the grid line from the
@@ -771,6 +786,9 @@ int grid_line_puts(int col, const char *text, int textlen, int attr)
 
 int grid_line_fill(int start_col, int end_col, schar_T sc, int attr)
 {
+#ifdef USE_RUST_GRID
+  return rs_grid_line_fill(start_col, end_col, sc, attr);
+#else
   end_col = MIN(end_col, grid_line_maxcol);
   if (start_col >= end_col) {
     return end_col;
@@ -785,12 +803,16 @@ int grid_line_fill(int start_col, int end_col, schar_T sc, int attr)
   grid_line_first = MIN(grid_line_first, start_col);
   grid_line_last = MAX(grid_line_last, end_col);
   return end_col;
+#endif
 }
 
 /// @param bg_attr     applies to both the buffered line and the columns to clear
 /// @param clear_attr  applies only to the columns to clear
 void grid_line_clear_end(int start_col, int end_col, int bg_attr, int clear_attr)
 {
+#ifdef USE_RUST_GRID
+  rs_grid_line_clear_end(start_col, end_col, bg_attr, clear_attr);
+#else
   if (grid_line_first > start_col) {
     grid_line_first = start_col;
     grid_line_last = start_col;
@@ -798,12 +820,17 @@ void grid_line_clear_end(int start_col, int end_col, int bg_attr, int clear_attr
   grid_line_clear_to = end_col;
   grid_line_bg_attr = bg_attr;
   grid_line_clear_attr = clear_attr;
+#endif
 }
 
 /// move the cursor to a position in a currently rendered line.
 void grid_line_cursor_goto(int col)
 {
+#ifdef USE_RUST_GRID
+  rs_grid_line_cursor_goto(col);
+#else
   ui_grid_cursor_goto(grid_line_grid->handle, grid_line_row, col);
+#endif
 }
 
 void grid_line_mirror(int width)

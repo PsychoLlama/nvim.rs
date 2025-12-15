@@ -538,6 +538,150 @@ pub extern "C" fn rs_schar_get_first_codepoint(sc: ScharT) -> c_int {
     schar_get_first_codepoint_impl(sc)
 }
 
+// =============================================================================
+// Phase 30: Grid Line Content Functions
+// =============================================================================
+
+/// Type alias for screen attribute (matches C's `sattr_T` which is `int16_t`).
+type SattrT = i16;
+
+/// Type alias for column number (matches C's `colnr_T` which is `int32_t`).
+type ColnrT = i32;
+
+/// Type alias for handle (matches C's `handle_T` which is `int`).
+type HandleT = c_int;
+
+// C accessor functions for line buffer arrays and grid line state
+extern "C" {
+    // Line buffer accessors
+    fn nvim_get_linebuf_char() -> *mut ScharT;
+    fn nvim_get_linebuf_attr() -> *mut SattrT;
+    fn nvim_get_linebuf_vcol() -> *mut ColnrT;
+    fn nvim_get_linebuf_size() -> usize;
+
+    // Grid line state accessors
+    fn nvim_get_grid_line_grid() -> *mut std::ffi::c_void;
+    fn nvim_get_grid_line_row() -> c_int;
+    fn nvim_get_grid_line_maxcol() -> c_int;
+    fn nvim_get_grid_line_first() -> c_int;
+    fn nvim_set_grid_line_first(first: c_int);
+    fn nvim_get_grid_line_last() -> c_int;
+    fn nvim_set_grid_line_last(last: c_int);
+    fn nvim_get_grid_line_clear_to() -> c_int;
+    fn nvim_set_grid_line_clear_to(clear_to: c_int);
+    fn nvim_set_grid_line_bg_attr(bg_attr: c_int);
+    fn nvim_set_grid_line_clear_attr(clear_attr: c_int);
+
+    // UI function
+    fn nvim_ui_grid_cursor_goto(grid_handle: HandleT, row: c_int, col: c_int);
+
+    // ScreenGrid field accessor (we need the handle field)
+    fn nvim_screengrid_get_handle(grid: *mut std::ffi::c_void) -> HandleT;
+}
+
+/// Put a single schar at a column position.
+///
+/// # Safety
+/// Must be called after `grid_line_start()` and before `grid_line_flush()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_line_put_schar(col: c_int, schar: ScharT, attr: c_int) {
+    let grid = nvim_get_grid_line_grid();
+    debug_assert!(!grid.is_null());
+
+    let maxcol = nvim_get_grid_line_maxcol();
+    if col >= maxcol {
+        return;
+    }
+
+    let linebuf_char = nvim_get_linebuf_char();
+    let linebuf_attr = nvim_get_linebuf_attr();
+    let linebuf_vcol = nvim_get_linebuf_vcol();
+
+    *linebuf_char.offset(col as isize) = schar;
+    #[allow(clippy::cast_possible_truncation)]
+    {
+        *linebuf_attr.offset(col as isize) = attr as SattrT;
+    }
+    *linebuf_vcol.offset(col as isize) = -1;
+
+    let first = nvim_get_grid_line_first();
+    let last = nvim_get_grid_line_last();
+    nvim_set_grid_line_first(first.min(col));
+    nvim_set_grid_line_last(last.max(col + 1));
+}
+
+/// Fill a range of columns with a single schar.
+///
+/// # Safety
+/// Must be called after `grid_line_start()` and before `grid_line_flush()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_line_fill(
+    start_col: c_int,
+    end_col: c_int,
+    sc: ScharT,
+    attr: c_int,
+) -> c_int {
+    let maxcol = nvim_get_grid_line_maxcol();
+    let end_col = end_col.min(maxcol);
+
+    if start_col >= end_col {
+        return end_col;
+    }
+
+    let linebuf_char = nvim_get_linebuf_char();
+    let linebuf_attr = nvim_get_linebuf_attr();
+    let linebuf_vcol = nvim_get_linebuf_vcol();
+
+    #[allow(clippy::cast_possible_truncation)]
+    let attr_val = attr as SattrT;
+
+    for col in start_col..end_col {
+        *linebuf_char.offset(col as isize) = sc;
+        *linebuf_attr.offset(col as isize) = attr_val;
+        *linebuf_vcol.offset(col as isize) = -1;
+    }
+
+    let first = nvim_get_grid_line_first();
+    let last = nvim_get_grid_line_last();
+    nvim_set_grid_line_first(first.min(start_col));
+    nvim_set_grid_line_last(last.max(end_col));
+
+    end_col
+}
+
+/// Set the clear range for the current line.
+///
+/// # Safety
+/// Must be called after `grid_line_start()` and before `grid_line_flush()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_line_clear_end(
+    start_col: c_int,
+    end_col: c_int,
+    bg_attr: c_int,
+    clear_attr: c_int,
+) {
+    let first = nvim_get_grid_line_first();
+    if first > start_col {
+        nvim_set_grid_line_first(start_col);
+        nvim_set_grid_line_last(start_col);
+    }
+    nvim_set_grid_line_clear_to(end_col);
+    nvim_set_grid_line_bg_attr(bg_attr);
+    nvim_set_grid_line_clear_attr(clear_attr);
+}
+
+/// Move the cursor to a position in the currently rendered line.
+///
+/// # Safety
+/// Must be called after `grid_line_start()` and before `grid_line_flush()`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_line_cursor_goto(col: c_int) {
+    let grid = nvim_get_grid_line_grid();
+    let handle = nvim_screengrid_get_handle(grid);
+    let row = nvim_get_grid_line_row();
+    nvim_ui_grid_cursor_goto(handle, row, col);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
