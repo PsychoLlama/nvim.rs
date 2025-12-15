@@ -140,6 +140,42 @@ pub unsafe extern "C" fn rs_hash_clear(ht: *mut HashTab) {
     }
 }
 
+/// Free the array of a hash table and all contained values.
+///
+/// The `off` parameter is the offset from start of value to start of key.
+/// This is used because the key pointer points into an allocated structure,
+/// and we need to free the structure itself (which starts `off` bytes before
+/// the key).
+///
+/// # Safety
+///
+/// `ht` must be a valid pointer to a `HashTab` structure.
+/// All items in the hash table must have keys that point into structures
+/// that were allocated with xmalloc and can be freed with xfree.
+#[no_mangle]
+pub unsafe extern "C" fn rs_hash_clear_all(ht: *mut HashTab, off: libc::c_uint) {
+    if ht.is_null() {
+        return;
+    }
+
+    let ht_ref = unsafe { &*ht };
+    let mut todo = ht_ref.ht_used;
+    let mut hi = ht_ref.ht_array;
+
+    while todo > 0 {
+        let hi_ref = unsafe { &*hi };
+        if !hashitem_empty(hi_ref) {
+            // Free the value structure (key - off)
+            let value_ptr = unsafe { hi_ref.hi_key.offset(-(off as isize)) };
+            unsafe { xfree(value_ptr.cast()) };
+            todo -= 1;
+        }
+        hi = unsafe { hi.add(1) };
+    }
+
+    unsafe { rs_hash_clear(ht) };
+}
+
 // Note: rs_hash_hash and rs_hash_hash_len are imported from nvim_memutil
 // to avoid duplicate FFI symbol definitions.
 
