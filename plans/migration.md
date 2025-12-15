@@ -2,9 +2,19 @@
 
 ## Current Status
 
-**721 rs\_\* functions migrated**
+**722 rs\_\* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
+
+### Phase 38: Grid Line Puts ✅ COMPLETE
+
+Added Rust implementation for text rendering to line buffer:
+- `rs_grid_line_puts` - put multibyte text at column position
+- `utfc_ptrlen2schar_impl` - internal helper for UTF-8 to schar conversion
+
+Handles: UTF-8 length detection, display width, composing characters, double-width characters, truncation with '>', invalid sequence replacement.
+
+**Note:** Phase 35 (grid allocation), grid_draw_border, and window grid functions remain in C - tightly coupled to C memory/window/VirtText systems.
 
 ### Phase 37: Grid Line Start/Getchar/Mirror ✅ COMPLETE
 
@@ -16,10 +26,6 @@ Rust implementations for grid line initialization and RTL mirroring:
 - `rs_grid_line_mirror` - mirror current grid line with state update
 
 C accessor added: `nvim_get_full_screen()` for debug mode detection.
-
-**Note:** Phase 35 (grid allocation) and complex window grid functions skipped - tightly coupled to C memory/window systems.
-
-**Next:** Phase 38 (border drawing) or remaining grid.c functions.
 
 ### Phase 36: Grid Scrolling ✅ COMPLETE (with bugfix)
 
