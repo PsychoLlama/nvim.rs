@@ -62,6 +62,7 @@ extern void rs_grid_line_flush_if_valid_row(void);
 extern void rs_grid_put_linebuf(ScreenGrid *grid, int row, int coloff, int col, int endcol,
                                 int clear_width, int bg_attr, int clear_attr, colnr_T last_vcol,
                                 int flags);
+extern void rs_line_do_arabic_shape(schar_T *buf, int cols);
 #endif
 
 // temporary buffer for rendering a single screenline, so it can be
@@ -621,6 +622,9 @@ static void schar_get_first_two_codepoints(schar_T sc, int *c0, int *c1)
 
 void line_do_arabic_shape(schar_T *buf, int cols)
 {
+#ifdef USE_RUST_GRID
+  rs_line_do_arabic_shape(buf, cols);
+#else
   int i = 0;
 
   for (i = 0; i < cols; i++) {
@@ -678,6 +682,7 @@ next:
     c0 = c0next;
     c1 = c1next;
   }
+#endif
 }
 
 /// clear a line in the grid starting at "off" until "width" characters

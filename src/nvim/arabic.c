@@ -355,3 +355,11 @@ int arabic_shape(int c, int *c1p, int prev_c, int prev_c1, int next_c)
   // Return the shaped character
   return curr_c;
 }
+
+#ifdef USE_RUST_GRID
+/// C wrapper for arabic_shape, callable from Rust
+int nvim_arabic_shape(int c, int *c1p, int prev_c, int prev_c1, int next_c)
+{
+  return arabic_shape(c, c1p, prev_c, prev_c1, next_c);
+}
+#endif

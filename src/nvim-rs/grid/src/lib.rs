@@ -621,6 +621,15 @@ extern "C" {
 
     // hl_combine_attr from highlight module
     fn rs_hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int;
+
+    // Arabic shaping function
+    fn nvim_arabic_shape(
+        c: c_int,
+        c1p: *mut c_int,
+        prev_c: c_int,
+        prev_c1: c_int,
+        next_c: c_int,
+    ) -> c_int;
 }
 
 /// Put a single schar at a column position.
@@ -1150,6 +1159,163 @@ pub unsafe extern "C" fn rs_grid_put_linebuf(
                 }
             }
         }
+    }
+}
+
+// =============================================================================
+// Phase 33: Arabic Shaping
+// =============================================================================
+
+/// Arabic character range check: ((ch) & 0xFF00) == 0x0600
+#[inline]
+const fn arabic_char(ch: c_int) -> bool {
+    (ch & 0xFF00) == 0x0600
+}
+
+/// Check if first byte indicates Arabic block (0xD8 or 0xD9)
+#[inline]
+fn schar_in_arabic_block(sc: ScharT) -> bool {
+    let first_byte = if schar_high_impl(sc) {
+        // High schar: read from cache
+        let idx = schar_idx(sc);
+        let cache = GLYPH_CACHE.lock().unwrap();
+        cache.get(idx).map_or(0, |bytes| bytes.first().copied().unwrap_or(0))
+    } else {
+        // Inline schar: extract first byte
+        let bytes = sc.to_ne_bytes();
+        bytes[0]
+    };
+    (first_byte & 0xFE) == 0xD8
+}
+
+/// Get the first two Unicode codepoints from an schar.
+#[inline]
+fn schar_get_first_two_codepoints(sc: ScharT) -> (c_int, c_int) {
+    let mut buf = [0u8; MAX_SCHAR_SIZE];
+    let len = schar_get_bytes(sc, &mut buf);
+
+    if len == 0 {
+        return (0, 0);
+    }
+
+    let c0 = nvim_mbyte::utf_ptr2char(&buf[..len]);
+    if c0 == 0 {
+        return (0, 0);
+    }
+
+    let c0_len = nvim_mbyte::utf_char2len(c0);
+    let c1 = if c0_len < len {
+        nvim_mbyte::utf_ptr2char(&buf[c0_len..len])
+    } else {
+        0
+    };
+
+    (c0, c1)
+}
+
+/// Apply Arabic shaping to a line buffer.
+///
+/// This function modifies characters in the buffer to apply contextual
+/// Arabic shaping rules.
+///
+/// # Safety
+/// - `buf` must be a valid pointer to `cols` schar_T elements
+#[no_mangle]
+pub unsafe extern "C" fn rs_line_do_arabic_shape(buf: *mut ScharT, cols: c_int) {
+    if buf.is_null() || cols <= 0 {
+        return;
+    }
+
+    // Find first Arabic character
+    let mut i = 0;
+    while i < cols {
+        if schar_in_arabic_block(*buf.add(i as usize)) {
+            break;
+        }
+        i += 1;
+    }
+
+    // No Arabic characters found
+    if i >= cols {
+        return;
+    }
+
+    let mut c0prev: c_int = 0;
+    let (mut c0, mut c1) = schar_get_first_two_codepoints(*buf.add(i as usize));
+
+    while i < cols {
+        let (c0next, c1next) = if i + 1 < cols {
+            schar_get_first_two_codepoints(*buf.add((i + 1) as usize))
+        } else {
+            (0, 0)
+        };
+
+        if !arabic_char(c0) {
+            // Not an Arabic character, skip to next
+            c0prev = c0;
+            c0 = c0next;
+            c1 = c1next;
+            i += 1;
+            continue;
+        }
+
+        let mut c1new = c1;
+        let c0new = nvim_arabic_shape(c0, &mut c1new, c0next, c1next, c0prev);
+
+        if c0new == c0 && c1new == c1 {
+            // Unchanged, skip to next
+            c0prev = c0;
+            c0 = c0next;
+            c1 = c1next;
+            i += 1;
+            continue;
+        }
+
+        // Get original schar bytes
+        let mut scbuf = [0u8; MAX_SCHAR_SIZE];
+        let _ = schar_get_bytes(*buf.add(i as usize), &mut scbuf);
+
+        // Build new schar with shaped characters
+        let mut scbuf_new = [0u8; MAX_SCHAR_SIZE];
+        let mut len = nvim_mbyte::utf_char2bytes(c0new, &mut scbuf_new);
+        if c1new != 0 {
+            len += nvim_mbyte::utf_char2bytes(c1new, &mut scbuf_new[len..]);
+        }
+
+        // Calculate offset past the original c0 and c1
+        let c0_len = nvim_mbyte::utf_char2len(c0);
+        let c1_len = if c1 != 0 { nvim_mbyte::utf_char2len(c1) } else { 0 };
+        let off = c0_len + c1_len;
+
+        // Copy remaining bytes from original schar
+        let rest_start = off;
+        let mut rest_len = 0;
+        while rest_start + rest_len < MAX_SCHAR_SIZE && scbuf[rest_start + rest_len] != 0 {
+            rest_len += 1;
+        }
+
+        // Check if result fits, discard a codepoint if too big
+        if rest_len + len + 1 > MAX_SCHAR_SIZE {
+            // Find last codepoint boundary and remove one
+            if rest_len > 0 {
+                let rest_slice = &scbuf[rest_start..rest_start + rest_len];
+                let bounds = nvim_mbyte::utf_cp_bounds(rest_slice, rest_len - 1);
+                rest_len = rest_len.saturating_sub(bounds.begin_off as usize + 1);
+            }
+        }
+
+        // Copy rest to new buffer
+        if rest_len > 0 {
+            scbuf_new[len..len + rest_len].copy_from_slice(&scbuf[rest_start..rest_start + rest_len]);
+        }
+
+        // Create new schar from buffer
+        *buf.add(i as usize) = schar_from_buf_impl(&scbuf_new[..len + rest_len]);
+
+        c0prev = c0;
+        c0 = c0next;
+        c1 = c1next;
+        i += 1;
     }
 }
 
