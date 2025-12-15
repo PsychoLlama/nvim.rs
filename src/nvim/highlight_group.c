@@ -1006,7 +1006,6 @@ static int color_numbers_8[28] = { 0, 4, 2, 6,
 // color_names[].
 // "boldp" will be set to kTrue or kFalse for a foreground color when using 8
 // colors, otherwise it will be unchanged.
-#ifdef USE_RUST_HIGHLIGHT
 typedef struct {
   int color;
   int bold;  // -1 = unchanged, 0 = kFalse, 1 = kTrue
@@ -1024,39 +1023,6 @@ static int lookup_color(const int idx, const bool foreground, TriState *const bo
   // bold == -1 means unchanged, leave boldp as-is
   return result.color;
 }
-#else
-static int lookup_color(const int idx, const bool foreground, TriState *const boldp)
-{
-  int color = color_numbers_16[idx];
-
-  // Use the _16 table to check if it's a valid color name.
-  if (color < 0) {
-    return -1;
-  }
-
-  if (t_colors == 8) {
-    // t_Co is 8: use the 8 colors table
-    color = color_numbers_8[idx];
-    if (foreground) {
-      // set/reset bold attribute to get light foreground
-      // colors (on some terminals, e.g. "linux")
-      if (color & 8) {
-        *boldp = kTrue;
-      } else {
-        *boldp = kFalse;
-      }
-    }
-    color &= 7;   // truncate to 8 colors
-  } else if (t_colors == 16) {
-    color = color_numbers_8[idx];
-  } else if (t_colors == 88) {
-    color = color_numbers_88[idx];
-  } else if (t_colors >= 256) {
-    color = color_numbers_256[idx];
-  }
-  return color;
-}
-#endif
 
 void set_hl_group(int id, HlAttrs attrs, Dict(highlight) *dict, int link_id)
 {
@@ -1699,23 +1665,12 @@ void free_highlight(void)
 
 /// Reset the cterm colors to what they were before Vim was started, if
 /// possible.  Otherwise reset them to zero.
-#ifdef USE_RUST_HIGHLIGHT
 extern void rs_restore_cterm_colors(void);
 
 void restore_cterm_colors(void)
 {
   rs_restore_cterm_colors();
 }
-#else
-void restore_cterm_colors(void)
-{
-  normal_fg = -1;
-  normal_bg = -1;
-  normal_sp = -1;
-  cterm_normal_fg_color = 0;
-  cterm_normal_bg_color = 0;
-}
-#endif
 
 /// @param check_link  if true also check for an existing link.
 ///
@@ -2143,7 +2098,6 @@ int syn_name2id(const char *name)
 ///
 /// @param highlight name e.g. 'Cursor', 'Normal'
 /// @return the highlight id, else 0 if \p name does not exist
-#ifdef USE_RUST_HIGHLIGHT
 extern int rs_syn_name2id_len(const char *name, size_t len);
 
 int syn_name2id_len(const char *name, size_t len)
@@ -2151,30 +2105,9 @@ int syn_name2id_len(const char *name, size_t len)
 {
   return rs_syn_name2id_len(name, len);
 }
-#else
-int syn_name2id_len(const char *name, size_t len)
-  FUNC_ATTR_NONNULL_ALL
-{
-  char name_u[MAX_SYN_NAME + 1];
-
-  if (len == 0 || len > MAX_SYN_NAME) {
-    return 0;
-  }
-
-  // Avoid using stricmp() too much, it's slow on some systems
-  // Avoid alloc()/free(), these are slow too.
-  vim_memcpy_up(name_u, name, len);
-  name_u[len] = NUL;
-
-  // map_get(..., int) returns 0 when no key is present, which is
-  // the expected value for missing highlight group.
-  return map_get(cstr_t, int)(&highlight_unames, name_u);
-}
-#endif
 
 /// Lookup a highlight group name and return its attributes.
 /// Return zero if not found.
-#ifdef USE_RUST_HIGHLIGHT
 extern int rs_syn_name2attr(const char *name);
 
 int syn_name2attr(const char *name)
@@ -2182,52 +2115,23 @@ int syn_name2attr(const char *name)
 {
   return rs_syn_name2attr(name);
 }
-#else
-int syn_name2attr(const char *name)
-  FUNC_ATTR_NONNULL_ALL
-{
-  int id = syn_name2id(name);
-
-  if (id != 0) {
-    return syn_id2attr(id);
-  }
-  return 0;
-}
-#endif
 
 /// Return true if highlight group "name" exists.
-#ifdef USE_RUST_HIGHLIGHT
 extern int rs_highlight_exists(const char *name);
 
 int highlight_exists(const char *name)
 {
   return rs_highlight_exists(name);
 }
-#else
-int highlight_exists(const char *name)
-{
-  return syn_name2id(name) > 0;
-}
-#endif
 
 /// Return the name of highlight group "id".
 /// When not a valid ID return an empty string.
-#ifdef USE_RUST_HIGHLIGHT
 extern const char *rs_syn_id2name(int id);
 
 char *syn_id2name(int id)
 {
   return (char *)rs_syn_id2name(id);
 }
-#else
-char *syn_id2name(int id)
-{
-  if (id <= 0 || id > highlight_ga.ga_len) {
-    return "";
-  }
-  return hl_table[id - 1].sg_name;
-}
-#endif
 
 /// Find highlight group name in the table and return its ID.
 /// If it doesn't exist yet, a new entry is created.
@@ -2236,7 +2140,6 @@ char *syn_id2name(int id)
 /// @param len length of \p pp
 ///
 /// @return 0 for failure else the id of the group
-#ifdef USE_RUST_HIGHLIGHT
 // Forward declaration of syn_add_group for Rust to call back
 static int syn_add_group(const char *name, size_t len);
 
@@ -2257,20 +2160,6 @@ int syn_check_group(const char *name, size_t len)
   }
   return rs_syn_check_group(name, len);
 }
-#else
-int syn_check_group(const char *name, size_t len)
-{
-  if (len > MAX_SYN_NAME) {
-    emsg(_(e_highlight_group_name_too_long));
-    return 0;
-  }
-  int id = syn_name2id_len(name, len);
-  if (id == 0) {  // doesn't exist yet
-    return syn_add_group(name, len);
-  }
-  return id;
-}
-#endif
 
 /// Add new highlight group and return its ID.
 ///
@@ -2340,22 +2229,13 @@ static int syn_add_group(const char *name, size_t len)
 
 /// Translate a group ID to highlight attributes.
 /// @see syn_attr2entry
-#ifdef USE_RUST_HIGHLIGHT
 extern int rs_syn_id2attr(int hl_id);
 
 int syn_id2attr(int hl_id)
 {
   return rs_syn_id2attr(hl_id);
 }
-#else
-int syn_id2attr(int hl_id)
-{
-  bool optional = false;
-  return syn_ns_id2attr(-1, hl_id, &optional);
-}
-#endif
 
-#ifdef USE_RUST_HIGHLIGHT
 extern int rs_syn_ns_id2attr(int ns_id, int hl_id, bool *optional);
 
 int syn_ns_id2attr(int ns_id, int hl_id, bool *optional)
@@ -2363,92 +2243,21 @@ int syn_ns_id2attr(int ns_id, int hl_id, bool *optional)
 {
   return rs_syn_ns_id2attr(ns_id, hl_id, optional);
 }
-#else
-int syn_ns_id2attr(int ns_id, int hl_id, bool *optional)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (syn_ns_get_final_id(&ns_id, &hl_id)) {
-    // If the namespace explicitly defines a group to be empty, it is not optional
-    *optional = false;
-  }
-  HlGroup *sgp = &hl_table[hl_id - 1];  // index is ID minus one
-
-  int attr = ns_get_hl(&ns_id, hl_id, false, sgp->sg_set);
-
-  // if a highlight group is optional, don't use the global value
-  if (attr >= 0 || (*optional && ns_id > 0)) {
-    return attr;
-  }
-  return sgp->sg_attr;
-}
-#endif
 
 /// Translate a group ID to the final group ID (following links).
-#ifdef USE_RUST_HIGHLIGHT
 extern int rs_syn_get_final_id(int hl_id);
 
 int syn_get_final_id(int hl_id)
 {
   return rs_syn_get_final_id(hl_id);
 }
-#else
-int syn_get_final_id(int hl_id)
-{
-  int ns_id = curwin->w_ns_hl_active;
-  syn_ns_get_final_id(&ns_id, &hl_id);
-  return hl_id;
-}
-#endif
 
-#ifdef USE_RUST_HIGHLIGHT
 extern bool rs_syn_ns_get_final_id(int *ns_id, int *hl_idp);
 
 bool syn_ns_get_final_id(int *ns_id, int *hl_idp)
 {
   return rs_syn_ns_get_final_id(ns_id, hl_idp);
 }
-#else
-bool syn_ns_get_final_id(int *ns_id, int *hl_idp)
-{
-  int hl_id = *hl_idp;
-  bool used = false;
-
-  if (hl_id > highlight_ga.ga_len || hl_id < 1) {
-    *hl_idp = 0;
-    return false;  // Can be called from eval!!
-  }
-
-  // Follow links until there is no more.
-  // Look out for loops!  Break after 100 links.
-  for (int count = 100; --count >= 0;) {
-    HlGroup *sgp = &hl_table[hl_id - 1];  // index is ID minus one
-
-    // TODO(bfredl): when using "tmp" attribute (no link) the function might be
-    // called twice. it needs be smart enough to remember attr only to
-    // syn_id2attr time
-    int check = ns_get_hl(ns_id, hl_id, true, sgp->sg_set);
-    if (check == 0) {
-      *hl_idp = hl_id;
-      return true;  // how dare! it broke the link!
-    } else if (check > 0) {
-      used = true;
-      hl_id = check;
-      continue;
-    }
-
-    if (sgp->sg_link > 0 && sgp->sg_link <= highlight_ga.ga_len) {
-      hl_id = sgp->sg_link;
-    } else if (sgp->sg_cleared && sgp->sg_parent > 0) {
-      hl_id = sgp->sg_parent;
-    } else {
-      break;
-    }
-  }
-
-  *hl_idp = hl_id;
-  return used;
-}
-#endif
 
 /// Refresh the color attributes of all highlight groups.
 void highlight_attr_set_all(void)
@@ -3414,7 +3223,6 @@ color_name_table_T color_name_table[] = {
 /// @param[in] name string value to convert to RGB
 /// @param[out] idx index in color table or special value
 /// return the hex value or -1 if could not find a correct value
-#ifdef USE_RUST_HIGHLIGHT
 typedef struct {
   int color;
   int idx;
@@ -3427,94 +3235,17 @@ RgbValue name_to_color(const char *name, int *idx)
   *idx = result.idx;
   return result.color;
 }
-#else
-RgbValue name_to_color(const char *name, int *idx)
-{
-  if (name[0] == '#' && isxdigit((uint8_t)name[1]) && isxdigit((uint8_t)name[2])
-      && isxdigit((uint8_t)name[3]) && isxdigit((uint8_t)name[4]) && isxdigit((uint8_t)name[5])
-      && isxdigit((uint8_t)name[6]) && name[7] == NUL) {
-    // rgb hex string
-    *idx = kColorIdxHex;
-    return (RgbValue)strtol(name + 1, NULL, 16);
-  } else if (!STRICMP(name, "bg") || !STRICMP(name, "background")) {
-    *idx = kColorIdxBg;
-    return normal_bg;
-  } else if (!STRICMP(name, "fg") || !STRICMP(name, "foreground")) {
-    *idx = kColorIdxFg;
-    return normal_fg;
-  }
 
-  int lo = 0;
-  int hi = ARRAY_SIZE(color_name_table) - 1;  // don't count NULL element
-  while (lo < hi) {
-    int m = (lo + hi) / 2;
-    int cmp = STRICMP(name, color_name_table[m].name);
-    if (cmp < 0) {
-      hi = m;
-    } else if (cmp > 0) {
-      lo = m + 1;
-    } else {  // found match
-      *idx = m;
-      return color_name_table[m].color;
-    }
-  }
-
-  *idx = kColorIdxNone;
-  return -1;
-}
-#endif
-
-#ifdef USE_RUST_HIGHLIGHT
 extern const char *rs_coloridx_to_name(int idx, int val, char *hexbuf);
 
 const char *coloridx_to_name(int idx, int val, char hexbuf[8])
 {
   return rs_coloridx_to_name(idx, val, hexbuf);
 }
-#else
-const char *coloridx_to_name(int idx, int val, char hexbuf[8])
-{
-  if (idx >= 0) {
-    return color_name_table[idx].name;
-  }
-  switch (idx) {
-  case kColorIdxNone:
-    return NULL;
-  case kColorIdxFg:
-    return "fg";
-  case kColorIdxBg:
-    return "bg";
-  case kColorIdxHex:
-    snprintf(hexbuf, 7 + 1, "#%06x", val);
-    return hexbuf;
-  default:
-    abort();
-  }
-}
-#endif
 
-#ifdef USE_RUST_HIGHLIGHT
 extern int rs_name_to_ctermcolor(const char *name);
 
 int name_to_ctermcolor(const char *name)
 {
   return rs_name_to_ctermcolor(name);
 }
-#else
-int name_to_ctermcolor(const char *name)
-{
-  int i;
-  int off = TOUPPER_ASC(*name);
-  for (i = ARRAY_SIZE(color_names); --i >= 0;) {
-    if (off == color_names[i][0]
-        && STRICMP(name + 1, color_names[i] + 1) == 0) {
-      break;
-    }
-  }
-  if (i < 0) {
-    return -1;
-  }
-  TriState bold = kNone;
-  return lookup_color(i, false, &bold);
-}
-#endif
