@@ -111,7 +111,6 @@ typedef kvec_withinit_t(Object, 16) ArrayBuilder;
 #define STATIC_CSTR_AS_OBJ(s) STRING_OBJ(STATIC_CSTR_AS_STRING(s))
 #define STATIC_CSTR_TO_OBJ(s) STRING_OBJ(STATIC_CSTR_TO_STRING(s))
 
-#ifdef USE_RUST_API
 // Rust implementations of API string helpers
 extern char *rs_api_typename(int t);
 extern String rs_cstr_as_string(const char *str);
@@ -136,7 +135,6 @@ extern int rs_object_to_hl_id(Object obj, const char *what, Error *err);
 extern void rs_api_luarefs_free_object(Object value);
 extern void rs_api_luarefs_free_array(Array value);
 extern void rs_api_luarefs_free_dict(Dict value);
-#endif
 
 #define API_CLEAR_STRING(s) \
   do { \

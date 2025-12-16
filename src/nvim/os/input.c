@@ -607,16 +607,10 @@ static void read_error_exit(void)
   preserve_exit(_("Nvim: Error reading input, exiting...\n"));
 }
 
-#ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern bool rs_pending_events(MultiQueue *events);
-#endif
 
 static bool pending_events(MultiQueue *events)
 {
-#ifdef USE_RUST_EVENT
   return rs_pending_events(events);
-#else
-  return events && !multiqueue_empty(events);
-#endif
 }
