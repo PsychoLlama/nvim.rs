@@ -513,6 +513,19 @@ extern "C" {
     fn nvim_list_get_first(l: ListHandle) -> ListItemHandle;
     fn nvim_list_get_last(l: ListHandle) -> ListItemHandle;
 
+    // List cache accessors (for tv_list_find optimization)
+    fn nvim_list_get_idx(l: ListHandle) -> c_int;
+    fn nvim_list_get_idx_item(l: ListHandle) -> ListItemHandle;
+    fn nvim_list_set_idx(l: ListHandle, idx: c_int);
+    fn nvim_list_set_idx_item(l: ListHandle, item: ListItemHandle);
+    fn nvim_list_get_copyid(l: ListHandle) -> c_int;
+    fn nvim_list_get_copylist(l: ListHandle) -> ListHandle;
+
+    // Listitem accessors
+    fn nvim_listitem_get_next(li: ListItemHandle) -> ListItemHandle;
+    fn nvim_listitem_get_prev(li: ListItemHandle) -> ListItemHandle;
+    fn nvim_listitem_get_tv(li: ListItemHandle) -> TypevalHandle;
+
     // Dict accessors
     fn nvim_dict_get_ht_used(d: DictHandle) -> usize;
     fn nvim_dict_get_lock(d: DictHandle) -> c_int;
@@ -626,6 +639,157 @@ fn tv_list_uidx_impl(l: ListHandle, mut n: c_int) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_tv_list_uidx(l: ListHandle, n: c_int) -> c_int {
     tv_list_uidx_impl(l, n)
+}
+
+/// Get copy ID of a list (used for cycle detection during copy).
+#[inline]
+fn tv_list_copyid_impl(l: ListHandle) -> c_int {
+    if l.is_null() {
+        return 0;
+    }
+    unsafe { nvim_list_get_copyid(l) }
+}
+
+/// FFI wrapper: get list copy ID.
+#[no_mangle]
+pub extern "C" fn rs_tv_list_copyid(l: ListHandle) -> c_int {
+    tv_list_copyid_impl(l)
+}
+
+/// Get the latest copy of a list (set during tv_list_copy).
+#[inline]
+fn tv_list_latest_copy_impl(l: ListHandle) -> ListHandle {
+    if l.is_null() {
+        return ListHandle(std::ptr::null());
+    }
+    unsafe { nvim_list_get_copylist(l) }
+}
+
+/// FFI wrapper: get list's latest copy.
+#[no_mangle]
+pub extern "C" fn rs_tv_list_latest_copy(l: ListHandle) -> ListHandle {
+    tv_list_latest_copy_impl(l)
+}
+
+// =============================================================================
+// Listitem operations
+// =============================================================================
+
+/// Get next list item.
+#[inline]
+fn tv_listitem_next_impl(li: ListItemHandle) -> ListItemHandle {
+    if li.is_null() {
+        return ListItemHandle(std::ptr::null());
+    }
+    unsafe { nvim_listitem_get_next(li) }
+}
+
+/// FFI wrapper: get next list item.
+#[no_mangle]
+pub extern "C" fn rs_tv_listitem_next(li: ListItemHandle) -> ListItemHandle {
+    tv_listitem_next_impl(li)
+}
+
+/// Get previous list item.
+#[inline]
+fn tv_listitem_prev_impl(li: ListItemHandle) -> ListItemHandle {
+    if li.is_null() {
+        return ListItemHandle(std::ptr::null());
+    }
+    unsafe { nvim_listitem_get_prev(li) }
+}
+
+/// FFI wrapper: get previous list item.
+#[no_mangle]
+pub extern "C" fn rs_tv_listitem_prev(li: ListItemHandle) -> ListItemHandle {
+    tv_listitem_prev_impl(li)
+}
+
+/// Get typval from list item.
+#[inline]
+fn tv_listitem_tv_impl(li: ListItemHandle) -> TypevalHandle {
+    if li.is_null() {
+        return TypevalHandle(std::ptr::null());
+    }
+    unsafe { nvim_listitem_get_tv(li) }
+}
+
+/// FFI wrapper: get typval from list item.
+#[no_mangle]
+pub extern "C" fn rs_tv_listitem_tv(li: ListItemHandle) -> TypevalHandle {
+    tv_listitem_tv_impl(li)
+}
+
+// =============================================================================
+// List find operation (tv_list_find)
+// =============================================================================
+
+/// Find list item at index n.
+///
+/// This is a full implementation of `tv_list_find` from C.
+/// It uses the list's cached index for optimization.
+#[inline]
+fn tv_list_find_impl(l: ListHandle, n: c_int) -> ListItemHandle {
+    if l.is_null() {
+        return ListItemHandle(std::ptr::null());
+    }
+
+    // Normalize index
+    let n = tv_list_uidx_impl(l, n);
+    if n == -1 {
+        return ListItemHandle(std::ptr::null());
+    }
+
+    let len = tv_list_len_impl(l);
+    let cached_item = unsafe { nvim_list_get_idx_item(l) };
+    let cached_idx = unsafe { nvim_list_get_idx(l) };
+
+    let (mut item, mut idx) = if !cached_item.is_null() {
+        // Use cached index for optimization
+        if n < cached_idx / 2 {
+            // Closest to start
+            (tv_list_first_impl(l), 0)
+        } else if n > (cached_idx + len) / 2 {
+            // Closest to end
+            (tv_list_last_impl(l), len - 1)
+        } else {
+            // Closest to cached
+            (cached_item, cached_idx)
+        }
+    } else {
+        // No cache, choose start or end
+        if n < len / 2 {
+            (tv_list_first_impl(l), 0)
+        } else {
+            (tv_list_last_impl(l), len - 1)
+        }
+    };
+
+    // Search forward
+    while n > idx {
+        item = tv_listitem_next_impl(item);
+        idx += 1;
+    }
+
+    // Search backward
+    while n < idx {
+        item = tv_listitem_prev_impl(item);
+        idx -= 1;
+    }
+
+    // Update cache
+    unsafe {
+        nvim_list_set_idx(l, idx);
+        nvim_list_set_idx_item(l, item);
+    }
+
+    item
+}
+
+/// FFI wrapper: find list item at index.
+#[no_mangle]
+pub extern "C" fn rs_tv_list_find(l: ListHandle, n: c_int) -> ListItemHandle {
+    tv_list_find_impl(l, n)
 }
 
 // =============================================================================

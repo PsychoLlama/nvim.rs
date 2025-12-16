@@ -4848,3 +4848,65 @@ uint8_t nvim_blob_get_byte(const blob_T *b, int idx)
 {
   return ((uint8_t *)b->bv_ga.ga_data)[idx];
 }
+
+// =============================================================================
+// Listitem accessor functions for Rust
+// =============================================================================
+
+/// Get li_next from a listitem (accessor for Rust).
+listitem_T *nvim_listitem_get_next(const listitem_T *li)
+{
+  return li->li_next;
+}
+
+/// Get li_prev from a listitem (accessor for Rust).
+listitem_T *nvim_listitem_get_prev(const listitem_T *li)
+{
+  return li->li_prev;
+}
+
+/// Get pointer to li_tv from a listitem (accessor for Rust).
+typval_T *nvim_listitem_get_tv(listitem_T *li)
+{
+  return &li->li_tv;
+}
+
+// =============================================================================
+// List cache accessor functions for Rust (for tv_list_find optimization)
+// =============================================================================
+
+/// Get lv_idx from a list (accessor for Rust).
+int nvim_list_get_idx(const list_T *l)
+{
+  return l->lv_idx;
+}
+
+/// Get lv_idx_item from a list (accessor for Rust).
+listitem_T *nvim_list_get_idx_item(const list_T *l)
+{
+  return l->lv_idx_item;
+}
+
+/// Set lv_idx on a list (accessor for Rust).
+void nvim_list_set_idx(list_T *l, int idx)
+{
+  l->lv_idx = idx;
+}
+
+/// Set lv_idx_item on a list (accessor for Rust).
+void nvim_list_set_idx_item(list_T *l, listitem_T *item)
+{
+  l->lv_idx_item = item;
+}
+
+/// Get lv_copyID from a list (accessor for Rust).
+int nvim_list_get_copyid(const list_T *l)
+{
+  return l->lv_copyID;
+}
+
+/// Get lv_copylist from a list (accessor for Rust).
+list_T *nvim_list_get_copylist(const list_T *l)
+{
+  return l->lv_copylist;
+}
