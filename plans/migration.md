@@ -6,6 +6,20 @@
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
+### Phase 52: Dead Code Cleanup 10 ✅ COMPLETE
+
+Removed 206 lines of dead C fallback code from event/*.c files:
+- socket.c: socket_watcher_* accessor macros, loop_get_fast_events
+- signal.c: signal_watcher_* accessor macros, loop_get_fast_events
+- time.c: timewatcher_* accessor macros, loop_get_fast_events
+- proc.c: proc_*, rstream_*, stream_*, loop_* accessor macros (55 lines)
+- libuv_proc.c: rstream_*, stream_*, proc_* accessor macros
+- loop.c: multiqueue_size macro wrapper removal
+- multiqueue.c: multiqueue_empty, multiqueue_size function wrappers
+- stream.c: stream_* accessor macros
+- rstream.c: stream_*, rstream_* accessor macros
+- wstream.c: stream_* accessor macros
+
 ### Phase 51: Dead Code Cleanup 9 ✅ COMPLETE
 
 Removed 159 lines of dead C fallback code from scattered modules:
