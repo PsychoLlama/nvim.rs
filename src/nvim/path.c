@@ -42,7 +42,6 @@ enum {
 # undef gen_expand_wildcards
 #endif
 
-#ifdef USE_RUST_PATH
 // Rust implementations - declarations
 extern int rs_vim_ispathsep(int c);
 extern int rs_vim_ispathsep_nocolon(int c);
@@ -57,7 +56,6 @@ extern int rs_path_has_drive_letter(const char *p, size_t path_len);
 extern int rs_path_with_url(const char *fname);
 extern int rs_vim_isAbsName(const char *name);
 extern int rs_after_pathsep(const char *b, const char *p);
-#endif
 
 #include "path.c.generated.h"
 
@@ -116,24 +114,7 @@ FileComparison path_full_compare(char *const s1, char *const s2, const bool chec
 char *path_tail(const char *fname)
   FUNC_ATTR_NONNULL_RET
 {
-#ifdef USE_RUST_PATH
   return (char *)rs_path_tail(fname);
-#else
-  if (fname == NULL) {
-    return "";
-  }
-
-  const char *tail = get_past_head(fname);
-  const char *p = tail;
-  // Find last part of path.
-  while (*p != NUL) {
-    if (vim_ispathsep_nocolon(*p)) {
-      tail = p + 1;
-    }
-    MB_PTR_ADV(p);
-  }
-  return (char *)tail;
-#endif
 }
 
 /// Get pointer to tail of "fname", including path separators.
@@ -209,15 +190,7 @@ const char *path_next_component(const char *fname)
 ///   - 1 otherwise
 int path_head_length(void)
 {
-#ifdef USE_RUST_PATH
   return rs_path_head_length();
-#else
-# ifdef MSWIN
-  return 3;
-# else
-  return 1;
-# endif
-#endif
 }
 
 /// Returns true if path begins with characters denoting the head of a path
@@ -229,15 +202,7 @@ int path_head_length(void)
 bool is_path_head(const char *path)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_PATH
   return rs_is_path_head(path) != 0;
-#else
-# ifdef MSWIN
-  return isalpha((uint8_t)path[0]) && path[1] == ':';
-# else
-  return vim_ispathsep(*path);
-# endif
-#endif
 }
 
 /// Get a pointer to one character past the head of a path name.
@@ -246,71 +211,26 @@ bool is_path_head(const char *path)
 char *get_past_head(const char *path)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_PATH
   return (char *)rs_get_past_head(path);
-#else
-  const char *retval = path;
-
-# ifdef MSWIN
-  // May skip "c:"
-  if (is_path_head(path)) {
-    retval = path + 2;
-  }
-# endif
-
-  while (vim_ispathsep(*retval)) {
-    retval++;
-  }
-
-  return (char *)retval;
-#endif
 }
 
 /// @return true if 'c' is a path separator.
 /// Note that for MS-Windows this includes the colon.
 bool vim_ispathsep(int c)
 {
-#ifdef USE_RUST_PATH
   return rs_vim_ispathsep(c) != 0;
-#else
-# ifdef UNIX
-  return c == '/';          // Unix has ':' inside file names
-# else
-#  ifdef BACKSLASH_IN_FILENAME
-  return c == ':' || c == '/' || c == '\\';
-#  else
-  return c == ':' || c == '/';
-#  endif
-# endif
-#endif
 }
 
 // Like vim_ispathsep(c), but exclude the colon for MS-Windows.
 bool vim_ispathsep_nocolon(int c)
 {
-#ifdef USE_RUST_PATH
   return rs_vim_ispathsep_nocolon(c) != 0;
-#else
-  return vim_ispathsep(c)
-# ifdef BACKSLASH_IN_FILENAME
-         && c != ':'
-# endif
-  ;
-#endif
 }
 
 /// @return true if 'c' is a path list separator.
 bool vim_ispathlistsep(int c)
 {
-#ifdef USE_RUST_PATH
   return rs_vim_ispathlistsep(c) != 0;
-#else
-# ifdef UNIX
-  return c == ':';
-# else
-  return c == ';';      // might not be right for every system...
-# endif
-#endif
 }
 
 /// Shorten the path of a file from "~/foo/../.bar/fname" to "~/f/../.b/fname"
@@ -1763,14 +1683,7 @@ size_t simplify_filename(char *filename)
 bool path_has_drive_letter(const char *p, size_t path_len)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_PATH
   return rs_path_has_drive_letter(p, path_len) != 0;
-#else
-  return path_len >= 2
-         && ASCII_ISALPHA(p[0])
-         && (p[1] == ':' || p[1] == '|')
-         && (path_len == 2 || ((p[2] == '/') | (p[2] == '\\') | (p[2] == '?') | (p[2] == '#')));
-#endif
 }
 
 // Check if the ":/" of a URL is at the pointer, return URL_SLASH.
@@ -1779,18 +1692,7 @@ bool path_has_drive_letter(const char *p, size_t path_len)
 int path_is_url(const char *p)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_PATH
   return rs_path_is_url(p);
-#else
-  // In the spec ':' is enough to recognize a scheme
-  // https://url.spec.whatwg.org/#scheme-state
-  if (strncmp(p, ":/", 2) == 0) {
-    return URL_SLASH;
-  } else if (strncmp(p, ":\\\\", 3) == 0) {
-    return URL_BACKSLASH;
-  }
-  return 0;
-#endif
 }
 
 /// Check if "fname" starts with "name://" or "name:\\".
@@ -1800,31 +1702,7 @@ int path_is_url(const char *p)
 int path_with_url(const char *fname)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_PATH
   return rs_path_with_url(fname);
-#else
-  const char *p;
-
-  // first character must be alpha
-  if (!ASCII_ISALPHA(*fname)) {
-    return 0;
-  }
-
-  if (path_has_drive_letter(fname, strlen(fname))) {
-    return 0;
-  }
-
-  // check body: (alpha, digit, '+', '-', '.') following RFC3986
-  for (p = fname + 1; (ASCII_ISALNUM(*p) || (*p == '+') || (*p == '-') || (*p == '.')); p++) {}
-
-  // check last char is not '+', '-', or '.'
-  if ((p[-1] == '+') || (p[-1] == '-') || (p[-1] == '.')) {
-    return 0;
-  }
-
-  // ":/" or ":\\" must follow
-  return path_is_url(p);
-#endif
 }
 
 bool path_with_extension(const char *path, const char *extension)
@@ -1841,11 +1719,7 @@ bool path_with_extension(const char *path, const char *extension)
 bool vim_isAbsName(const char *name)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_PATH
   return rs_vim_isAbsName(name) != 0;
-#else
-  return path_with_url(name) != 0 || path_is_absolute(name);
-#endif
 }
 
 /// Save absolute file name to "buf[len]".
@@ -1986,12 +1860,7 @@ void path_fix_case(char *name)
 int after_pathsep(const char *b, const char *p)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_PATH
   return rs_after_pathsep(b, p);
-#else
-  return p > b && vim_ispathsep(p[-1])
-         && utf_head_off(b, p - 1) == 0;
-#endif
 }
 
 /// Return true if file names "f1" and "f2" are in the same directory.
@@ -2432,21 +2301,7 @@ static int path_to_absolute(const char *fname, char *buf, size_t len, int force)
 bool path_is_absolute(const char *fname)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_PATH
   return rs_path_is_absolute(fname) != 0;
-#else
-# ifdef MSWIN
-  if (*fname == NUL) {
-    return false;
-  }
-  // A name like "d:/foo" and "//server/share" is absolute
-  return ((isalpha((uint8_t)fname[0]) && fname[1] == ':' && vim_ispathsep_nocolon(fname[2]))
-          || (vim_ispathsep_nocolon(fname[0]) && fname[0] == fname[1]));
-# else
-  // UNIX: This just checks if the file name starts with '/' or '~'.
-  return *fname == '/' || *fname == '~';
-# endif
-#endif
 }
 
 /// Builds a full path from an invocation name `argv0`, based on heuristics.

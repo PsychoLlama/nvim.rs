@@ -37,7 +37,6 @@
 
 #include "strings.c.generated.h"
 
-#ifdef USE_RUST_STRINGS
 // Rust implementations - declarations
 extern int rs_vim_stricmp(const char *s1, const char *s2);
 extern int rs_vim_strnicmp(const char *s1, const char *s2, size_t len);
@@ -51,7 +50,6 @@ extern void rs_vim_strncpy_up(char *restrict dst, const char *restrict src, size
 extern void rs_vim_memcpy_up(char *restrict dst, const char *restrict src, size_t n);
 extern void rs_del_trailing_spaces(char *ptr);
 extern const char *rs_vim_strchr(const char *string, int c);
-#endif
 
 static const char e_cannot_mix_positional_and_non_positional_str[]
   = N_("E1500: Cannot mix positional and non-positional arguments: %s");
@@ -335,59 +333,28 @@ char *vim_strnsave_up(const char *string, size_t len)
 void vim_strup(char *p)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_STRINGS
   rs_vim_strup(p);
-#else
-  uint8_t c;
-  while ((c = (uint8_t)(*p)) != NUL) {
-    *p++ = (char)(uint8_t)(c < 'a' || c > 'z' ? c : c - 0x20);
-  }
-#endif
 }
 
 // strcpy plus vim_strup.
 void vim_strcpy_up(char *restrict dst, const char *restrict src)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_STRINGS
   rs_vim_strcpy_up(dst, src);
-#else
-  uint8_t c;
-  while ((c = (uint8_t)(*src++)) != NUL) {
-    *dst++ = (char)(uint8_t)(c < 'a' || c > 'z' ? c : c - 0x20);
-  }
-  *dst = NUL;
-#endif
 }
 
 // strncpy (NUL-terminated) plus vim_strup.
 void vim_strncpy_up(char *restrict dst, const char *restrict src, size_t n)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_STRINGS
   rs_vim_strncpy_up(dst, src, n);
-#else
-  uint8_t c;
-  while (n-- && (c = (uint8_t)(*src++)) != NUL) {
-    *dst++ = (char)(uint8_t)(c < 'a' || c > 'z' ? c : c - 0x20);
-  }
-  *dst = NUL;
-#endif
 }
 
 // memcpy (does not NUL-terminate) plus vim_strup.
 void vim_memcpy_up(char *restrict dst, const char *restrict src, size_t n)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_STRINGS
   rs_vim_memcpy_up(dst, src, n);
-#else
-  uint8_t c;
-  while (n--) {
-    c = (uint8_t)(*src++);
-    *dst++ = (char)(uint8_t)(c < 'a' || c > 'z' ? c : c - 0x20);
-  }
-#endif
 }
 
 /// Make given string all upper-case or all lower-case
@@ -443,14 +410,7 @@ char *strcase_save(const char *const orig, bool upper)
 void del_trailing_spaces(char *ptr)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_STRINGS
   rs_del_trailing_spaces(ptr);
-#else
-  char *q = ptr + strlen(ptr);
-  while (--q > ptr && ascii_iswhite(q[0]) && q[-1] != '\\' && q[-1] != Ctrl_V) {
-    *q = NUL;
-  }
-#endif
 }
 
 #if (!defined(HAVE_STRCASECMP) && !defined(HAVE_STRICMP))
@@ -506,11 +466,7 @@ int vim_strnicmp(const char *s1, const char *s2, size_t len)
 bool striequal(const char *a, const char *b)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_STRINGS
   return rs_striequal(a, b) != 0;
-#else
-  return (a == NULL && b == NULL) || (a && b && STRICMP(a, b) == 0);
-#endif
 }
 
 /// Compare two ASCII strings, for length "len", ignoring case, ignoring locale.
@@ -519,24 +475,7 @@ bool striequal(const char *a, const char *b)
 int vim_strnicmp_asc(const char *s1, const char *s2, size_t len)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_STRINGS
   return rs_vim_strnicmp(s1, s2, len);
-#else
-  int i = 0;
-  while (len > 0) {
-    i = TOLOWER_ASC(*s1) - TOLOWER_ASC(*s2);
-    if (i != 0) {
-      break;                       // this character is different
-    }
-    if (*s1 == NUL) {
-      break;                       // strings match until NUL
-    }
-    s1++;
-    s2++;
-    len--;
-  }
-  return i;
-#endif
 }
 
 /// strchr() version which handles multibyte strings
@@ -550,39 +489,14 @@ int vim_strnicmp_asc(const char *s1, const char *s2, size_t len)
 char *vim_strchr(const char *const string, const int c)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_STRINGS
   return (char *)rs_vim_strchr(string, c);
-#else
-  if (c <= 0) {
-    return NULL;
-  } else if (c < 0x80) {
-    return strchr(string, c);
-  } else {
-    char u8char[MB_MAXBYTES + 1];
-    const int len = utf_char2bytes(c, u8char);
-    u8char[len] = NUL;
-    return strstr(string, u8char);
-  }
-#endif
 }
 
 // Sort an array of strings.
 
-#ifndef USE_RUST_STRINGS
-static int sort_compare(const void *s1, const void *s2)
-  FUNC_ATTR_NONNULL_ALL
-{
-  return strcmp(*(char **)s1, *(char **)s2);
-}
-#endif
-
 void sort_strings(char **files, int count)
 {
-#ifdef USE_RUST_STRINGS
   rs_sort_strings(files, count);
-#else
-  qsort((void *)files, (size_t)count, sizeof(char *), sort_compare);
-#endif
 }
 
 // Return true if string "s" contains a non-ASCII character (128 or higher).
@@ -590,18 +504,7 @@ void sort_strings(char **files, int count)
 bool has_non_ascii(const char *s)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_STRINGS
   return rs_has_non_ascii(s) != 0;
-#else
-  if (s != NULL) {
-    for (const char *p = s; *p != NUL; p++) {
-      if ((uint8_t)(*p) >= 128) {
-        return true;
-      }
-    }
-  }
-  return false;
-#endif
 }
 
 /// Return true if string "s" contains a non-ASCII character (128 or higher).
@@ -609,18 +512,7 @@ bool has_non_ascii(const char *s)
 bool has_non_ascii_len(const char *const s, const size_t len)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_STRINGS
   return rs_has_non_ascii_len(s, len);
-#else
-  if (s != NULL) {
-    for (size_t i = 0; i < len; i++) {
-      if ((uint8_t)s[i] >= 128) {
-        return true;
-      }
-    }
-  }
-  return false;
-#endif
 }
 
 /// Concatenate two strings and return the result in allocated memory.

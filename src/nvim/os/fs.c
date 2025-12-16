@@ -62,7 +62,6 @@
 
 #include "os/fs.c.generated.h"
 
-#ifdef USE_RUST_OS_FS
 // Rust filesystem implementations
 extern int rs_os_path_exists(const char *path);
 extern int rs_os_isdir(const char *path);
@@ -104,7 +103,6 @@ extern bool rs_os_file_owned(const char *fname);
 extern char *rs_os_realpath(const char *name, char *buf, size_t len);
 extern int rs_os_open(const char *path, int flags, int mode);
 extern FILE *rs_os_fopen(const char *path, const char *flags);
-#endif
 
 #ifdef HAVE_XATTR
 static const char e_xattr_erange[]
@@ -151,16 +149,7 @@ int os_chdir(const char *path)
 int os_dirname(char *buf, size_t len)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_dirname(buf, len);
-#else
-  int error_number;
-  if ((error_number = uv_cwd(buf, &len)) != kLibuvSuccess) {
-    xstrlcpy(buf, uv_strerror(error_number), len);
-    return FAIL;
-  }
-  return OK;
-#endif
 }
 
 /// Check if the given path is a directory and not a symlink to a directory.
@@ -169,18 +158,7 @@ int os_dirname(char *buf, size_t len)
 bool os_isrealdir(const char *name)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_isrealdir(name) != 0;
-#else
-  uv_fs_t request;
-  if (uv_fs_lstat(NULL, &request, name, NULL) != kLibuvSuccess) {
-    return false;
-  }
-  if (S_ISLNK(request.statbuf.st_mode)) {
-    return false;
-  }
-  return S_ISDIR(request.statbuf.st_mode);
-#endif
 }
 
 /// Check if the given path exists and is a directory.
@@ -189,16 +167,7 @@ bool os_isrealdir(const char *name)
 bool os_isdir(const char *name)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_isdir(name) != 0;
-#else
-  int32_t mode = os_getperm(name);
-  if (mode < 0) {
-    return false;
-  }
-
-  return S_ISDIR(mode);
-#endif
 }
 
 /// Check what `name` is:
@@ -209,25 +178,7 @@ int os_nodetype(const char *name)
   FUNC_ATTR_NONNULL_ALL
 {
 #ifndef MSWIN  // Unix
-#ifdef USE_RUST_OS_FS
   return rs_os_nodetype(name);
-#else
-  uv_stat_t statbuf;
-  if (0 != os_stat(name, &statbuf)) {
-    return NODE_NORMAL;  // File doesn't exist.
-  }
-  // uv_handle_type does not distinguish BLK and DIR.
-  //    Related: https://github.com/joyent/libuv/pull/1421
-  if (S_ISREG(statbuf.st_mode) || S_ISDIR(statbuf.st_mode)) {
-    return NODE_NORMAL;
-  }
-  if (S_ISBLK(statbuf.st_mode)) {  // block device isn't writable
-    return NODE_OTHER;
-  }
-  // Everything else is writable?
-  // buf_write() expects NODE_WRITABLE for char device /dev/stderr.
-  return NODE_WRITABLE;
-#endif
 #else  // Windows
   // Edge case from Vim os_win32.c:
   // We can't open a file with a name "\\.\con" or "\\.\prn", trying to read
@@ -283,11 +234,7 @@ int os_nodetype(const char *name)
 int os_exepath(char *buffer, size_t *size)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_exepath(buffer, size);
-#else
-  return uv_exepath(buffer, size);
-#endif
 }
 
 /// Checks if the file `name` is executable.
@@ -478,19 +425,10 @@ end:
 /// @return file descriptor, or negative error code on failure
 int os_open(const char *path, int flags, int mode)
 {
-#ifdef USE_RUST_OS_FS
   if (path == NULL) {
     return UV_EINVAL;
   }
   return rs_os_open(path, flags, mode);
-#else
-  if (path == NULL) {  // uv_fs_open asserts on NULL. #7561
-    return UV_EINVAL;
-  }
-  int r;
-  RUN_UV_FS_FUNC(r, uv_fs_open, path, flags, mode, NULL);
-  return r;
-#endif
 }
 
 /// Compatibility wrapper conforming to fopen(3).
@@ -505,56 +443,7 @@ int os_open(const char *path, int flags, int mode)
 /// @return FILE pointer, or NULL on error.
 FILE *os_fopen(const char *path, const char *flags)
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_fopen(path, flags);
-#else
-  assert(flags != NULL && strlen(flags) > 0 && strlen(flags) <= 2);
-  int iflags = 0;
-  // Per table in fopen(3) manpage.
-  if (flags[1] == NUL || flags[1] == 'b') {
-    switch (flags[0]) {
-    case 'r':
-      iflags = O_RDONLY;
-      break;
-    case 'w':
-      iflags = O_WRONLY | O_CREAT | O_TRUNC;
-      break;
-    case 'a':
-      iflags = O_WRONLY | O_CREAT | O_APPEND;
-      break;
-    default:
-      abort();
-    }
-#ifdef MSWIN
-    if (flags[1] == 'b') {
-      iflags |= O_BINARY;
-    }
-#endif
-  } else {
-    // char 0 must be one of ('r','w','a').
-    // char 1 is always '+' ('b' is handled above).
-    assert(flags[1] == '+');
-    switch (flags[0]) {
-    case 'r':
-      iflags = O_RDWR;
-      break;
-    case 'w':
-      iflags = O_RDWR | O_CREAT | O_TRUNC;
-      break;
-    case 'a':
-      iflags = O_RDWR | O_CREAT | O_APPEND;
-      break;
-    default:
-      abort();
-    }
-  }
-  // Per fopen(3) manpage: default to 0666, it will be umask-adjusted.
-  int fd = os_open(path, iflags, 0666);
-  if (fd < 0) {
-    return NULL;
-  }
-  return fdopen(fd, flags);
-#endif
 }
 
 /// Sets file descriptor `fd` to close-on-exec.
@@ -562,32 +451,7 @@ FILE *os_fopen(const char *path, const char *flags)
 // @return -1 if failed to set, 0 otherwise.
 int os_set_cloexec(const int fd)
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_set_cloexec(fd);
-#else
-#ifdef HAVE_FD_CLOEXEC
-  int e;
-  int fdflags = fcntl(fd, F_GETFD);
-  if (fdflags < 0) {
-    e = errno;
-    ELOG("Failed to get flags on descriptor %d: %s", fd, strerror(e));
-    errno = e;
-    return -1;
-  }
-  if ((fdflags & FD_CLOEXEC) == 0
-      && fcntl(fd, F_SETFD, fdflags | FD_CLOEXEC) == -1) {
-    e = errno;
-    ELOG("Failed to set CLOEXEC on descriptor %d: %s", fd, strerror(e));
-    errno = e;
-    return -1;
-  }
-  return 0;
-#endif
-
-  // No FD_CLOEXEC flag. On Windows, the file should have been opened with
-  // O_NOINHERIT anyway.
-  return -1;
-#endif
 }
 
 /// Close a file
@@ -595,13 +459,7 @@ int os_set_cloexec(const int fd)
 /// @return 0 or libuv error code on failure.
 int os_close(const int fd)
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_close(fd);
-#else
-  int r;
-  RUN_UV_FS_FUNC(r, uv_fs_close, fd, NULL);
-  return r;
-#endif
 }
 
 /// Duplicate file descriptor
@@ -612,23 +470,7 @@ int os_close(const int fd)
 int os_dup(const int fd)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_dup(fd);
-#else
-  int ret;
-os_dup_dup:
-  ret = dup(fd);
-  if (ret < 0) {
-    const int error = os_translate_sys_error(errno);
-    errno = 0;
-    if (error == UV_EINTR) {
-      goto os_dup_dup;
-    } else {
-      return error;
-    }
-  }
-  return ret;
-#endif
 }
 
 /// Open the file descriptor for stdin.
@@ -663,40 +505,7 @@ ptrdiff_t os_read(const int fd, bool *const ret_eof, char *const ret_buf, const 
                   const bool non_blocking)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_read(fd, ret_eof, ret_buf, size, non_blocking);
-#else
-  *ret_eof = false;
-  if (ret_buf == NULL) {
-    assert(size == 0);
-    return 0;
-  }
-  size_t read_bytes = 0;
-  while (read_bytes != size) {
-    assert(size >= read_bytes);
-    const ptrdiff_t cur_read_bytes = read(fd, ret_buf + read_bytes,
-                                          IO_COUNT(size - read_bytes));
-    if (cur_read_bytes > 0) {
-      read_bytes += (size_t)cur_read_bytes;
-    }
-    if (cur_read_bytes < 0) {
-      const int error = os_translate_sys_error(errno);
-      errno = 0;
-      if (non_blocking && error == UV_EAGAIN) {
-        break;
-      } else if (error == UV_EINTR || error == UV_EAGAIN) {
-        continue;
-      } else {
-        return (ptrdiff_t)error;
-      }
-    }
-    if (cur_read_bytes == 0) {
-      *ret_eof = true;
-      break;
-    }
-  }
-  return (ptrdiff_t)read_bytes;
-#endif
 }
 
 #ifdef HAVE_READV
@@ -771,38 +580,7 @@ ptrdiff_t os_readv(const int fd, bool *const ret_eof, struct iovec *iov, size_t 
 ptrdiff_t os_write(const int fd, const char *const buf, const size_t size, const bool non_blocking)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_write(fd, buf, size, non_blocking);
-#else
-  if (buf == NULL) {
-    assert(size == 0);
-    return 0;
-  }
-  size_t written_bytes = 0;
-  while (written_bytes != size) {
-    assert(size >= written_bytes);
-    const ptrdiff_t cur_written_bytes = write(fd, buf + written_bytes,
-                                              IO_COUNT(size - written_bytes));
-    if (cur_written_bytes > 0) {
-      written_bytes += (size_t)cur_written_bytes;
-    }
-    if (cur_written_bytes < 0) {
-      const int error = os_translate_sys_error(errno);
-      errno = 0;
-      if (non_blocking && error == UV_EAGAIN) {
-        break;
-      } else if (error == UV_EINTR || error == UV_EAGAIN) {
-        continue;
-      } else {
-        return error;
-      }
-    }
-    if (cur_written_bytes == 0) {
-      return UV_UNKNOWN;
-    }
-  }
-  return (ptrdiff_t)written_bytes;
-#endif
 }
 
 /// Copies a file from `path` to `new_path`.
@@ -815,13 +593,7 @@ ptrdiff_t os_write(const int fd, const char *const buf, const size_t size, const
 /// @return 0 on success, or libuv error code on failure.
 int os_copy(const char *path, const char *new_path, int flags)
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_copy(path, new_path, flags);
-#else
-  int r;
-  RUN_UV_FS_FUNC(r, uv_fs_copyfile, path, new_path, flags, NULL);
-  return r;
-#endif
 }
 
 /// Flushes file modifications to disk.
@@ -860,16 +632,7 @@ static int os_stat(const char *name, uv_stat_t *statbuf)
 /// @return libuv error code on error.
 int32_t os_getperm(const char *name)
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_getperm(name);
-#else
-  uv_stat_t statbuf;
-  int stat_result = os_stat(name, &statbuf);
-  if (stat_result == kLibuvSuccess) {
-    return (int32_t)statbuf.st_mode;
-  }
-  return stat_result;
-#endif
 }
 
 /// Set the permission of a file.
@@ -878,13 +641,7 @@ int32_t os_getperm(const char *name)
 int os_setperm(const char *const name, int perm)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_setperm(name, perm);
-#else
-  int r;
-  RUN_UV_FS_FUNC(r, uv_fs_chmod, name, perm, NULL);
-  return (r == kLibuvSuccess ? OK : FAIL);
-#endif
 }
 
 #ifdef HAVE_XATTR
@@ -989,7 +746,6 @@ void os_free_acl(vim_acl_T aclent)
   }
 }
 
-#ifdef USE_RUST_OS_FS
 /// Checks if the current user owns a file.
 ///
 /// Uses both stat() and lstat() for extra security.
@@ -998,28 +754,6 @@ bool os_file_owned(const char *fname)
 {
   return rs_os_file_owned(fname);
 }
-#else
-#ifdef UNIX
-/// Checks if the current user owns a file.
-///
-/// Uses both uv_fs_stat() and uv_fs_lstat() via os_fileinfo() and
-/// os_fileinfo_link() respectively for extra security.
-bool os_file_owned(const char *fname)
-  FUNC_ATTR_NONNULL_ALL
-{
-  uid_t uid = getuid();
-  FileInfo finfo;
-  bool file_owned = os_fileinfo(fname, &finfo) && finfo.stat.st_uid == uid;
-  bool link_owned = os_fileinfo_link(fname, &finfo) && finfo.stat.st_uid == uid;
-  return file_owned && link_owned;
-}
-#else
-bool os_file_owned(const char *fname)
-{
-  return true;  // TODO(justinmk): Windows. #8244
-}
-#endif
-#endif
 
 /// Changes the owner and group of a file, like chown(2).
 ///
@@ -1028,13 +762,7 @@ bool os_file_owned(const char *fname)
 /// @note If `owner` or `group` is -1, then that ID is not changed.
 int os_chown(const char *path, uv_uid_t owner, uv_gid_t group)
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_chown(path, owner, group);
-#else
-  int r;
-  RUN_UV_FS_FUNC(r, uv_fs_chown, path, owner, group, NULL);
-  return r;
-#endif
 }
 
 /// Changes the owner and group of the file referred to by the open file
@@ -1045,13 +773,7 @@ int os_chown(const char *path, uv_uid_t owner, uv_gid_t group)
 /// @note If `owner` or `group` is -1, then that ID is not changed.
 int os_fchown(int fd, uv_uid_t owner, uv_gid_t group)
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_fchown(fd, owner, group);
-#else
-  int r;
-  RUN_UV_FS_FUNC(r, uv_fs_fchown, fd, owner, group, NULL);
-  return r;
-#endif
 }
 
 /// Check if a path exists.
@@ -1059,12 +781,7 @@ int os_fchown(int fd, uv_uid_t owner, uv_gid_t group)
 /// @return `true` if `path` exists
 bool os_path_exists(const char *path)
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_path_exists(path) != 0;
-#else
-  uv_stat_t statbuf;
-  return os_stat(path, &statbuf) == kLibuvSuccess;
-#endif
 }
 
 /// Sets file access and modification times.
@@ -1078,13 +795,7 @@ bool os_path_exists(const char *path)
 /// @return 0 on success, or negative error code.
 int os_file_settime(const char *path, double atime, double mtime)
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_file_settime(path, atime, mtime);
-#else
-  int r;
-  RUN_UV_FS_FUNC(r, uv_fs_utime, path, atime, mtime, NULL);
-  return r;
-#endif
 }
 
 /// Check if a file is readable.
@@ -1093,13 +804,7 @@ int os_file_settime(const char *path, double atime, double mtime)
 bool os_file_is_readable(const char *name)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_file_is_readable(name) != 0;
-#else
-  int r;
-  RUN_UV_FS_FUNC(r, uv_fs_access, name, R_OK, NULL);
-  return (r == 0);
-#endif
 }
 
 /// Check if a file is writable.
@@ -1110,16 +815,7 @@ bool os_file_is_readable(const char *name)
 int os_file_is_writable(const char *name)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_file_is_writable(name);
-#else
-  int r;
-  RUN_UV_FS_FUNC(r, uv_fs_access, name, W_OK, NULL);
-  if (r == 0) {
-    return os_isdir(name) ? 2 : 1;
-  }
-  return 0;
-#endif
 }
 
 /// Rename a file or directory.
@@ -1128,13 +824,7 @@ int os_file_is_writable(const char *name)
 int os_rename(const char *path, const char *new_path)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_rename(path, new_path);
-#else
-  int r;
-  RUN_UV_FS_FUNC(r, uv_fs_rename, path, new_path, NULL);
-  return (r == kLibuvSuccess ? OK : FAIL);
-#endif
 }
 
 /// Make a directory.
@@ -1143,13 +833,7 @@ int os_rename(const char *path, const char *new_path)
 int os_mkdir(const char *path, int32_t mode)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_mkdir(path, (unsigned int)mode);
-#else
-  int r;
-  RUN_UV_FS_FUNC(r, uv_fs_mkdir, path, mode, NULL);
-  return r;
-#endif
 }
 
 /// Make a directory, with higher levels when needed
@@ -1251,17 +935,7 @@ int os_file_mkdir(char *fname, int32_t mode)
 int os_mkdtemp(const char *templ, char *path)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_mkdtemp(templ, path, TEMP_FILE_PATH_MAXLEN);
-#else
-  uv_fs_t request;
-  int result = uv_fs_mkdtemp(NULL, &request, templ, NULL);
-  if (result == kLibuvSuccess) {
-    xstrlcpy(path, request.path, TEMP_FILE_PATH_MAXLEN);
-  }
-  uv_fs_req_cleanup(&request);
-  return result;
-#endif
 }
 
 /// Remove a directory.
@@ -1270,13 +944,7 @@ int os_mkdtemp(const char *templ, char *path)
 int os_rmdir(const char *path)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_rmdir(path);
-#else
-  int r;
-  RUN_UV_FS_FUNC(r, uv_fs_rmdir, path, NULL);
-  return r;
-#endif
 }
 
 /// Opens a directory.
@@ -1318,13 +986,7 @@ void os_closedir(Directory *dir)
 int os_remove(const char *path)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_remove(path);
-#else
-  int r;
-  RUN_UV_FS_FUNC(r, uv_fs_unlink, path, NULL);
-  return r;
-#endif
 }
 
 /// Get the file information for a given path
@@ -1335,12 +997,7 @@ int os_remove(const char *path)
 bool os_fileinfo(const char *path, FileInfo *file_info)
   FUNC_ATTR_NONNULL_ARG(2)
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_fileinfo(path, file_info);
-#else
-  CLEAR_POINTER(file_info);
-  return os_stat(path, &(file_info->stat)) == kLibuvSuccess;
-#endif
 }
 
 /// Get the file information for a given path without following links
@@ -1351,21 +1008,7 @@ bool os_fileinfo(const char *path, FileInfo *file_info)
 bool os_fileinfo_link(const char *path, FileInfo *file_info)
   FUNC_ATTR_NONNULL_ARG(2)
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_fileinfo_link(path, file_info);
-#else
-  CLEAR_POINTER(file_info);
-  if (path == NULL) {
-    return false;
-  }
-  uv_fs_t request;
-  bool ok = uv_fs_lstat(NULL, &request, path, NULL) == kLibuvSuccess;
-  if (ok) {
-    file_info->stat = request.statbuf;
-  }
-  uv_fs_req_cleanup(&request);
-  return ok;
-#endif
 }
 
 /// Get the file information for a given file descriptor
@@ -1376,21 +1019,7 @@ bool os_fileinfo_link(const char *path, FileInfo *file_info)
 bool os_fileinfo_fd(int file_descriptor, FileInfo *file_info)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_fileinfo_fd(file_descriptor, file_info);
-#else
-  uv_fs_t request;
-  CLEAR_POINTER(file_info);
-  bool ok = uv_fs_fstat(NULL,
-                        &request,
-                        file_descriptor,
-                        NULL) == kLibuvSuccess;
-  if (ok) {
-    file_info->stat = request.statbuf;
-  }
-  uv_fs_req_cleanup(&request);
-  return ok;
-#endif
 }
 
 /// Compare the inodes of two FileInfos
@@ -1399,12 +1028,7 @@ bool os_fileinfo_fd(int file_descriptor, FileInfo *file_info)
 bool os_fileinfo_id_equal(const FileInfo *file_info_1, const FileInfo *file_info_2)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_fileinfo_id_equal(file_info_1, file_info_2);
-#else
-  return file_info_1->stat.st_ino == file_info_2->stat.st_ino
-         && file_info_1->stat.st_dev == file_info_2->stat.st_dev;
-#endif
 }
 
 /// Get the `FileID` of a `FileInfo`
@@ -1414,12 +1038,7 @@ bool os_fileinfo_id_equal(const FileInfo *file_info_1, const FileInfo *file_info
 void os_fileinfo_id(const FileInfo *file_info, FileID *file_id)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_OS_FS
   rs_os_fileinfo_id(file_info, file_id);
-#else
-  file_id->inode = file_info->stat.st_ino;
-  file_id->device_id = file_info->stat.st_dev;
-#endif
 }
 
 /// Get the inode of a `FileInfo`
@@ -1430,11 +1049,7 @@ void os_fileinfo_id(const FileInfo *file_info, FileID *file_id)
 uint64_t os_fileinfo_inode(const FileInfo *file_info)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_fileinfo_inode(file_info);
-#else
-  return file_info->stat.st_ino;
-#endif
 }
 
 /// Get the size of a file from a `FileInfo`.
@@ -1443,11 +1058,7 @@ uint64_t os_fileinfo_inode(const FileInfo *file_info)
 uint64_t os_fileinfo_size(const FileInfo *file_info)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_fileinfo_size(file_info);
-#else
-  return file_info->stat.st_size;
-#endif
 }
 
 /// Get the number of hardlinks from a `FileInfo`.
@@ -1456,11 +1067,7 @@ uint64_t os_fileinfo_size(const FileInfo *file_info)
 uint64_t os_fileinfo_hardlinks(const FileInfo *file_info)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_fileinfo_hardlinks(file_info);
-#else
-  return file_info->stat.st_nlink;
-#endif
 }
 
 /// Get the blocksize from a `FileInfo`.
@@ -1469,11 +1076,7 @@ uint64_t os_fileinfo_hardlinks(const FileInfo *file_info)
 uint64_t os_fileinfo_blocksize(const FileInfo *file_info)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_fileinfo_blocksize(file_info);
-#else
-  return file_info->stat.st_blksize;
-#endif
 }
 
 /// Get the `FileID` for a given path
@@ -1484,17 +1087,7 @@ uint64_t os_fileinfo_blocksize(const FileInfo *file_info)
 bool os_fileid(const char *path, FileID *file_id)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_fileid(path, file_id);
-#else
-  uv_stat_t statbuf;
-  if (os_stat(path, &statbuf) == kLibuvSuccess) {
-    file_id->inode = statbuf.st_ino;
-    file_id->device_id = statbuf.st_dev;
-    return true;
-  }
-  return false;
-#endif
 }
 
 /// Check if two `FileID`s are equal
@@ -1505,12 +1098,7 @@ bool os_fileid(const char *path, FileID *file_id)
 bool os_fileid_equal(const FileID *file_id_1, const FileID *file_id_2)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_fileid_equal(file_id_1, file_id_2);
-#else
-  return file_id_1->inode == file_id_2->inode
-         && file_id_1->device_id == file_id_2->device_id;
-#endif
 }
 
 /// Check if a `FileID` is equal to a `FileInfo`
@@ -1521,12 +1109,7 @@ bool os_fileid_equal(const FileID *file_id_1, const FileID *file_id_2)
 bool os_fileid_equal_fileinfo(const FileID *file_id, const FileInfo *file_info)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_fileid_equal_fileinfo(file_id, file_info);
-#else
-  return file_id->inode == file_info->stat.st_ino
-         && file_id->device_id == file_info->stat.st_dev;
-#endif
 }
 
 /// Return the canonicalized absolute pathname.
@@ -1541,20 +1124,7 @@ bool os_fileid_equal_fileinfo(const FileID *file_id, const FileInfo *file_info)
 char *os_realpath(const char *name, char *buf, size_t len)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-#ifdef USE_RUST_OS_FS
   return rs_os_realpath(name, buf, len);
-#else
-  uv_fs_t request;
-  int result = uv_fs_realpath(NULL, &request, name, NULL);
-  if (result == kLibuvSuccess) {
-    if (buf == NULL) {
-      buf = xmalloc(len);
-    }
-    xstrlcpy(buf, request.ptr, len);
-  }
-  uv_fs_req_cleanup(&request);
-  return result == kLibuvSuccess ? buf : NULL;
-#endif
 }
 
 #ifdef MSWIN
