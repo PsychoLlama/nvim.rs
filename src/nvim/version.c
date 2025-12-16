@@ -65,11 +65,9 @@ int nvim_get_version_patch(void)
   return NVIM_VERSION_PATCH;
 }
 
-#ifdef USE_RUST_VERSION
 extern bool rs_has_nvim_version(const char *version_str);
 extern int rs_min_vim_version(void);
 extern int rs_highest_patch(void);
-#endif
 // Reproducible builds: omit compile info in Release builds. #15424
 #ifndef NDEBUG
 char *version_cflags = "Compilation: " NVIM_VERSION_CFLAGS;
@@ -4292,62 +4290,19 @@ static const int *included_patchsets[] = {
 bool has_nvim_version(const char *const version_str)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_VERSION
   return rs_has_nvim_version(version_str);
-#else
-  const char *p = version_str;
-  int minor = 0;
-  int patch = 0;
-
-  if (!ascii_isdigit(*p)) {
-    return false;
-  }
-  int major = atoi(p);
-  p = strchr(p, '.');  // Find the next dot.
-
-  if (p) {
-    p++;  // Advance past the dot.
-    if (!ascii_isdigit(*p)) {
-      return false;
-    }
-    minor = atoi(p);
-    p = strchr(p, '.');
-    if (p) {
-      p++;
-      if (!ascii_isdigit(*p)) {
-        return false;
-      }
-      patch = atoi(p);
-    }
-  }
-
-  return (major < NVIM_VERSION_MAJOR
-          || (major == NVIM_VERSION_MAJOR
-              && (minor < NVIM_VERSION_MINOR
-                  || (minor == NVIM_VERSION_MINOR
-                      && patch <= NVIM_VERSION_PATCH))));
-#endif
 }
 
 int min_vim_version(void)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_VERSION
   return rs_min_vim_version();
-#else
-  return vim_versions[0];
-#endif
 }
 
 int highest_patch(void)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_VERSION
   return rs_highest_patch();
-#else
-  // this relies on the highest patch number to be the first entry
-  return included_patchsets[0][0];
-#endif
 }
 
 /// Checks whether a Vim patch has been included.

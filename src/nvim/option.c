@@ -117,18 +117,15 @@
 # include "nvim/arglist.h"
 #endif
 
-#ifdef USE_RUST_STRINGS
 extern int rs_valid_name(const char *val, const char *allowed);
 extern const char *rs_find_tty_option_end(const char *arg);
 extern int rs_is_tty_option(const char *name);
 extern const char *rs_skip_to_option_part(const char *p);
-#endif
 
 #ifdef USE_RUST_BUFFER
 extern int rs_get_fileformat(buf_T *buf);
 #endif
 
-#ifdef USE_RUST_PATH
 extern int rs_csh_like_shell(void);
 extern int rs_fish_like_shell(void);
 extern int rs_default_fileformat(void);
@@ -143,7 +140,6 @@ const char *nvim_get_p_ffs(void)
 {
   return p_ffs;
 }
-#endif
 
 static const char e_unknown_option[]
   = N_("E518: Unknown option");
@@ -1060,41 +1056,7 @@ static int validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_
 /// option name.
 static const char *find_tty_option_end(const char *arg)
 {
-#ifdef USE_RUST_STRINGS
   return rs_find_tty_option_end(arg);
-#else
-  if (strequal(arg, "term")) {
-    return arg + sizeof("term") - 1;
-  } else if (strequal(arg, "ttytype")) {
-    return arg + sizeof("ttytype") - 1;
-  }
-
-  const char *p = arg;
-  bool delimit = false;  // whether to delimit <
-
-  if (arg[0] == '<') {
-    // look out for <t_>;>
-    delimit = true;
-    p++;
-  }
-  if (p[0] == 't' && p[1] == '_' && p[2] && p[3]) {
-    p += 4;
-  } else if (delimit) {
-    // Search for delimiting >.
-    while (*p != NUL && *p != '>') {
-      p++;
-    }
-  }
-  // Return NULL when delimiting > is not found.
-  if (delimit) {
-    if (*p != '>') {
-      return NULL;
-    }
-    p++;
-  }
-
-  return arg == p ? NULL : p;
-#endif
 }
 
 /// Skip over the name of an option.
@@ -1730,17 +1692,7 @@ void redraw_titles(void)
 bool valid_name(const char *val, const char *allowed)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_STRINGS
   return rs_valid_name(val, allowed);
-#else
-  for (const char *s = val; *s != NUL; s++) {
-    if (!ASCII_ISALNUM(*s)
-        && vim_strchr(allowed, (uint8_t)(*s)) == NULL) {
-      return false;
-    }
-  }
-  return true;
-#endif
 }
 
 void check_blending(win_T *wp)
@@ -3047,11 +2999,7 @@ void check_redraw(uint32_t flags)
 bool is_tty_option(const char *name)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_STRINGS
   return rs_is_tty_option(name);
-#else
-  return find_tty_option_end(name) != NULL;
-#endif
 }
 
 /// Get value of TTY option.
@@ -6248,17 +6196,7 @@ int get_fileformat_force(const buf_T *buf, const exarg_T *eap)
 /// Return the default fileformat from 'fileformats'.
 int default_fileformat(void)
 {
-#ifdef USE_RUST_PATH
   return rs_default_fileformat();
-#else
-  switch (*p_ffs) {
-  case 'm':
-    return EOL_MAC;
-  case 'd':
-    return EOL_DOS;
-  }
-  return EOL_UNIX;
-#endif
 }
 
 /// Set the current end-of-line type to EOL_UNIX, EOL_MAC, or EOL_DOS.
@@ -6297,17 +6235,7 @@ void set_fileformat(int eol_style, int opt_flags)
 /// Skip to next part of an option argument: skip space and comma
 char *skip_to_option_part(const char *p)
 {
-#ifdef USE_RUST_STRINGS
   return (char *)rs_skip_to_option_part(p);
-#else
-  if (*p == ',') {
-    p++;
-  }
-  while (*p == ' ') {
-    p++;
-  }
-  return (char *)p;
-#endif
 }
 
 /// Isolate one part of a string option separated by `sep_chars`.
@@ -6351,21 +6279,13 @@ size_t copy_option_part(char **option, char *buf, size_t maxlen, char *sep_chars
 /// Return true when 'shell' has "csh" in the tail.
 int csh_like_shell(void)
 {
-#ifdef USE_RUST_PATH
   return rs_csh_like_shell();
-#else
-  return strstr(path_tail(p_sh), "csh") != NULL;
-#endif
 }
 
 /// Return true when 'shell' has "fish" in the tail.
 bool fish_like_shell(void)
 {
-#ifdef USE_RUST_PATH
   return rs_fish_like_shell();
-#else
-  return strstr(path_tail(p_sh), "fish") != NULL;
-#endif
 }
 
 /// Get window or buffer local options

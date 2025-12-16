@@ -56,7 +56,6 @@ MemRealloc mem_realloc = &realloc;
 
 #include "memory.c.generated.h"
 
-#ifdef USE_RUST_MEMUTIL
 extern size_t rs_xstrnlen(const char *s, size_t n);
 extern char *rs_xstrchrnul(const char *str, char c);
 extern void *rs_xmemscan(const void *addr, char c, size_t size);
@@ -67,7 +66,6 @@ extern bool rs_strequal(const char *a, const char *b);
 extern bool rs_strnequal(const char *a, const char *b, size_t n);
 extern void rs_time_to_bytes(int64_t time_, uint8_t *buf);
 extern size_t rs_arena_align_offset(uint64_t off);
-#endif
 
 #ifdef EXITFREE
 bool entered_free_all_mem = false;
@@ -286,12 +284,7 @@ size_t xstrnlen(const char *s, size_t n)
 char *xstrchrnul(const char *str, char c)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_MEMUTIL
   return (char *)rs_xstrchrnul(str, c);
-#else
-  char *p = strchr(str, c);
-  return p ? p : (char *)(str + strlen(str));
-#endif
 }
 
 /// A version of memchr() that returns a pointer one past the end
@@ -305,12 +298,7 @@ char *xstrchrnul(const char *str, char c)
 void *xmemscan(const void *addr, char c, size_t size)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_MEMUTIL
   return (void *)rs_xmemscan(addr, c, size);
-#else
-  char *p = memchr(addr, c, size);
-  return p ? p : (char *)addr + size;
-#endif
 }
 
 /// Replaces every instance of `c` with `x`.
@@ -355,17 +343,7 @@ void memchrsub(void *data, char c, char x, size_t len)
 size_t strcnt(const char *str, char c)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_MEMUTIL
   return rs_strcnt(str, c);
-#else
-  assert(c != 0);
-  size_t cnt = 0;
-  while ((str = strchr(str, c))) {
-    cnt++;
-    str++;  // Skip the instance of c.
-  }
-  return cnt;
-#endif
 }
 
 /// Counts the number of occurrences of byte `c` in `data[len]`.
@@ -377,18 +355,7 @@ size_t strcnt(const char *str, char c)
 size_t memcnt(const void *data, char c, size_t len)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_MEMUTIL
   return rs_memcnt(data, c, len);
-#else
-  size_t cnt = 0;
-  const char *ptr = data;
-  const char *end = ptr + len;
-  while ((ptr = memchr(ptr, c, (size_t)(end - ptr))) != NULL) {
-    cnt++;
-    ptr++;  // Skip the instance of c.
-  }
-  return cnt;
-#endif
 }
 
 /// Copies the string pointed to by src (including the terminating NUL
@@ -536,16 +503,7 @@ char *xstrdupnul(const char *const str)
 void *xmemrchr(const void *src, uint8_t c, size_t len)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_MEMUTIL
   return (void *)rs_xmemrchr(src, c, len);
-#else
-  while (len--) {
-    if (((uint8_t *)src)[len] == c) {
-      return (uint8_t *)src + len;
-    }
-  }
-  return NULL;
-#endif
 }
 
 /// strndup() wrapper
@@ -578,36 +536,20 @@ void *xmemdup(const void *data, size_t len)
 bool strequal(const char *a, const char *b)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_MEMUTIL
   return rs_strequal(a, b);
-#else
-  return (a == NULL && b == NULL) || (a && b && strcmp(a, b) == 0);
-#endif
 }
 
 /// Returns true if first `n` characters of strings `a` and `b` are equal. Arguments may be NULL.
 bool strnequal(const char *a, const char *b, size_t n)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_MEMUTIL
   return rs_strnequal(a, b, n);
-#else
-  return (a == NULL && b == NULL) || (a && b && strncmp(a, b, n) == 0);
-#endif
 }
 
 /// Writes time_t to "buf[8]".
 void time_to_bytes(time_t time_, uint8_t buf[8])
 {
-#ifdef USE_RUST_MEMUTIL
   rs_time_to_bytes((int64_t)time_, buf);
-#else
-  // time_t can be up to 8 bytes in size, more than uintmax_t in 32 bits
-  // systems, thus we can't use put_bytes() here.
-  for (size_t i = 7, bufi = 0; bufi < 8; i--, bufi++) {
-    buf[bufi] = (uint8_t)((uint64_t)time_ >> (i * 8));
-  }
-#endif
 }
 
 /// Iterative merge sort for doubly linked list.
@@ -773,16 +715,7 @@ void arena_alloc_block(Arena *arena)
   blk->prev = prev_blk;
 }
 
-#ifdef USE_RUST_MEMUTIL
 #define arena_align_offset(off) rs_arena_align_offset(off)
-#else
-static size_t arena_align_offset(uint64_t off)
-{
-#define ARENA_ALIGN MAX(sizeof(void *), sizeof(double))
-  return ((off + (ARENA_ALIGN - 1)) & ~(ARENA_ALIGN - 1));
-#undef ARENA_ALIGN
-}
-#endif
 
 /// @param arena if NULL, do a global allocation. caller must then free the value!
 /// @param size if zero, will still return a non-null pointer, but not a usable or unique one

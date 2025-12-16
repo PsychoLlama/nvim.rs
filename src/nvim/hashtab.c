@@ -26,10 +26,8 @@
 #include "nvim/message.h"
 #include "nvim/vim_defs.h"
 
-#ifdef USE_RUST_MEMUTIL
 extern hash_T rs_hash_hash(const char *key);
 extern hash_T rs_hash_hash_len(const char *key, size_t len);
-#endif
 
 // Rust hashtab implementations
 extern void rs_hash_init(hashtab_T *ht);
@@ -208,24 +206,7 @@ void hash_unlock(hashtab_T *ht)
 /// lower the percentage the better.
 hash_T hash_hash(const char *key)
 {
-#ifdef USE_RUST_MEMUTIL
   return rs_hash_hash(key);
-#else
-  hash_T hash = (uint8_t)(*key);
-
-  if (hash == 0) {
-    return 0;
-  }
-
-  // A simplistic algorithm that appears to do very well.
-  // Suggested by George Reilly.
-  const uint8_t *p = (uint8_t *)key + 1;
-  while (*p != NUL) {
-    HASH_CYCLE_BODY(hash, p);
-  }
-
-  return hash;
-#endif
 }
 
 /// Get the hash number for a key that is not a NUL-terminated string
@@ -240,23 +221,7 @@ hash_T hash_hash(const char *key)
 hash_T hash_hash_len(const char *key, const size_t len)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_MEMUTIL
   return rs_hash_hash_len(key, len);
-#else
-  if (len == 0) {
-    return 0;
-  }
-
-  hash_T hash = *(uint8_t *)key;
-  const uint8_t *end = (uint8_t *)key + len;
-
-  const uint8_t *p = (const uint8_t *)key + 1;
-  while (p < end) {
-    HASH_CYCLE_BODY(hash, p);
-  }
-
-  return hash;
-#endif
 }
 
 #undef HASH_CYCLE_BODY

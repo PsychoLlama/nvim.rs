@@ -27,10 +27,8 @@
 #include "keycode_names.generated.h"
 #include "keycodes.c.generated.h"
 
-#ifdef USE_RUST_KEYCODES
 extern int rs_name_to_mod_mask(int c);
 extern int rs_handle_x_keys(int key);
-#endif
 
 // Some useful tables.
 
@@ -181,17 +179,7 @@ static struct mousetable {
 int name_to_mod_mask(int c)
   FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_KEYCODES
   return rs_name_to_mod_mask(c);
-#else
-  c = TOUPPER_ASC(c);
-  for (size_t i = 0; mod_mask_table[i].mod_mask != 0; i++) {
-    if (c == (uint8_t)mod_mask_table[i].name) {
-      return mod_mask_table[i].mod_flag;
-    }
-  }
-  return 0;
-#endif
 }
 
 /// Check if there is a special key code for "key" with specified modifiers
@@ -231,45 +219,7 @@ int simplify_key(const int key, int *modifiers)
 int handle_x_keys(const int key)
   FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_KEYCODES
   return rs_handle_x_keys(key);
-#else
-  switch (key) {
-  case K_XUP:
-    return K_UP;
-  case K_XDOWN:
-    return K_DOWN;
-  case K_XLEFT:
-    return K_LEFT;
-  case K_XRIGHT:
-    return K_RIGHT;
-  case K_XHOME:
-    return K_HOME;
-  case K_ZHOME:
-    return K_HOME;
-  case K_XEND:
-    return K_END;
-  case K_ZEND:
-    return K_END;
-  case K_XF1:
-    return K_F1;
-  case K_XF2:
-    return K_F2;
-  case K_XF3:
-    return K_F3;
-  case K_XF4:
-    return K_F4;
-  case K_S_XF1:
-    return K_S_F1;
-  case K_S_XF2:
-    return K_S_F2;
-  case K_S_XF3:
-    return K_S_F3;
-  case K_S_XF4:
-    return K_S_F4;
-  }
-  return key;
-#endif
 }
 
 /// @return  a string which contains the name of the given key when the given modifiers are down.
