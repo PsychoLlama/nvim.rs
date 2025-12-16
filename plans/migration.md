@@ -6,6 +6,16 @@
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
+### Phase 48: Dead Code Cleanup 6 ✅ COMPLETE
+
+Removed 298 lines of dead C fallback code from files with 4-count USE_RUST conditionals:
+- autocmd.c: aucmd_pattern_length, aucmd_next_pattern, is_autocmd_blocked
+- cmdhist.c/shada.c: hist_char2type, hist_type2char
+- cursor_shape.c: cursor_is_block_during_visual, cursor_mode_uses_syn_id, cursor_get_mode_idx
+- spell.c: spell_valid_case, byte_in_str, valid_spelllang
+- indent.c: tabstop_padding, indent_size_no_ts, indent_size_ts
+- ex_eval.c: aborting, should_abort, aborted_in_try
+
 ### Phase 47: Dead Code Cleanup 5 ✅ COMPLETE
 
 Removed 383 lines of dead C fallback code from files with 1-3 USE_RUST conditionals:
@@ -82,6 +92,7 @@ All grid.c functions that can reasonably be migrated are now in Rust.
 
 | Phase | Name | Key Functions |
 |-------|------|---------------|
+| 48 | Dead Code Cleanup 6 | Removed 298 lines from autocmd, cmdhist, cursor_shape, spell, indent, ex_eval |
 | 47 | Dead Code Cleanup 5 | Removed 383 lines from 16 misc files (arabic, mbyte, help, register, os/*, etc) |
 | 46 | Dead Code Cleanup 4 | Removed 408 lines from math.c, memory.c, hashtab.c, version.c, arabic.c, keycodes.c, mouse.c, option.c |
 | 45 | Dead Code Cleanup 3 | Removed 743 lines from os/fs.c, path.c, strings.c, profile.c |
