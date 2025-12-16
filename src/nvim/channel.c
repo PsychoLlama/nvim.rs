@@ -60,7 +60,6 @@ static uint64_t next_chan_id = CHAN_STDERR + 1;
 
 #include "channel.c.generated.h"
 
-#ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern int rs_stream_is_closed(Stream *stream);
 extern int rs_proc_get_status(Proc *proc);
@@ -98,25 +97,6 @@ extern size_t rs_stream_get_pending_reqs(Stream *stream);
 // Loop accessors
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)
-#else
-#define stream_is_closed(s) ((s)->closed)
-#define stream_get_pending_reqs(s) ((s)->pending_reqs)
-#define proc_get_status(p) ((p)->status)
-#define proc_get_type(p) ((p)->type)
-#define proc_set_detach(p, d) ((p)->detach = (d))
-#define proc_set_events(p, e) ((p)->events = (e))
-#define proc_set_argv(p, a) ((p)->argv = (a))
-#define proc_set_exepath(p, e) ((p)->exepath = (e))
-#define proc_set_cwd(p, c) ((p)->cwd = (c))
-#define proc_get_env(p) ((p)->env)
-#define proc_set_env(p, e) ((p)->env = (e))
-#define proc_get_fwd_err(p) ((p)->fwd_err)
-#define proc_set_fwd_err(p, f) ((p)->fwd_err = (f))
-#define proc_get_overlapped(p) ((p)->overlapped)
-#define proc_set_overlapped(p, o) ((p)->overlapped = (o))
-#define proc_set_cb(p, c) ((p)->cb = (c))
-#define loop_get_events(l) ((l)->events)
-#endif
 
 /// Teardown the module
 void channel_teardown(void)

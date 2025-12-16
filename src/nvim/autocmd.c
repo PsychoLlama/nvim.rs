@@ -63,13 +63,9 @@
 #include "auevents_name_map.generated.h"
 #include "autocmd.c.generated.h"
 
-#ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)
-#else
-#define loop_get_events(l) ((l)->events)
-#endif
 
 extern int rs_is_autocmd_blocked(void);
 extern size_t rs_aucmd_pattern_length(const char *pat);

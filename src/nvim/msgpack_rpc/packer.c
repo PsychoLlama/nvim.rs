@@ -15,7 +15,6 @@
 
 #include "msgpack_rpc/packer.c.generated.h"
 
-#ifdef USE_RUST_MSGPACK
 // Rust implementations from nvim-msgpack crate
 extern void rs_mpack_check_buffer(PackerBuffer *packer);
 extern void rs_mpack_raw(const char *data, size_t len, PackerBuffer *packer);
@@ -27,97 +26,27 @@ extern size_t rs_mpack_remaining(PackerBuffer *packer);
 extern void rs_mpack_uint64(uint8_t **ptr, uint64_t val);
 extern void rs_mpack_integer(uint8_t **ptr, int64_t val);
 extern void rs_mpack_float8(uint8_t **ptr, double val);
-#endif
 
-#ifdef USE_RUST_MSGPACK
 void mpack_check_buffer(PackerBuffer *packer)
 {
   rs_mpack_check_buffer(packer);
 }
-#else
-void mpack_check_buffer(PackerBuffer *packer)
-{
-  if (mpack_remaining(packer) < 2 * MPACK_ITEM_SIZE) {
-    packer->packer_flush(packer);
-  }
-}
-#endif
 
-#ifndef USE_RUST_MSGPACK
-static void mpack_w8(char **b, const char *data)
-{
-#ifdef ORDER_BIG_ENDIAN
-  memcpy(*b, data, 8);
-  *b += 8;
-#else
-  for (int i = 7; i >= 0; i--) {
-    *(*b)++ = data[i];
-  }
-#endif
-}
-#endif
-
-#ifdef USE_RUST_MSGPACK
 void mpack_uint64(char **ptr, uint64_t i)
 {
   rs_mpack_uint64((uint8_t **)ptr, i);
 }
-#else
-void mpack_uint64(char **ptr, uint64_t i)
-{
-  if (i > 0xfffffff) {
-    mpack_w(ptr, 0xcf);
-    mpack_w8(ptr, (char *)&i);
-  } else {
-    mpack_uint(ptr, (uint32_t)i);
-  }
-}
-#endif
 
-#ifdef USE_RUST_MSGPACK
 void mpack_integer(char **ptr, Integer i)
 {
   rs_mpack_integer((uint8_t **)ptr, i);
 }
-#else
-void mpack_integer(char **ptr, Integer i)
-{
-  if (i >= 0) {
-    mpack_uint64(ptr, (uint64_t)i);
-  } else {
-    if (i < -0x80000000LL) {
-      mpack_w(ptr, 0xd3);
-      mpack_w8(ptr, (char *)&i);
-    } else if (i < -0x8000) {
-      mpack_w(ptr, 0xd2);
-      mpack_w4(ptr, (uint32_t)i);
-    } else if (i < -0x80) {
-      mpack_w(ptr, 0xd1);
-      mpack_w2(ptr, (uint32_t)i);
-    } else if (i < -0x20) {
-      mpack_w(ptr, 0xd0);
-      mpack_w(ptr, (char)i);
-    } else {
-      mpack_w(ptr, (char)i);
-    }
-  }
-}
-#endif
 
-#ifdef USE_RUST_MSGPACK
 void mpack_float8(char **ptr, double i)
 {
   rs_mpack_float8((uint8_t **)ptr, i);
 }
-#else
-void mpack_float8(char **ptr, double i)
-{
-  mpack_w(ptr, 0xcb);
-  mpack_w8(ptr, (char *)&i);
-}
-#endif
 
-#ifdef USE_RUST_MSGPACK
 void mpack_str(String str, PackerBuffer *packer)
 {
   rs_mpack_str(str.data, str.size, packer);
@@ -137,116 +66,11 @@ void mpack_ext(char *buf, size_t len, int8_t type, PackerBuffer *packer)
 {
   rs_mpack_ext(buf, len, type, packer);
 }
-#else
-void mpack_str(String str, PackerBuffer *packer)
-{
-  const size_t len = str.size;
-  if (len < 32) {
-    mpack_w(&packer->ptr, 0xa0 | len);
-  } else if (len < 0xff) {
-    mpack_w(&packer->ptr, 0xd9);
-    mpack_w(&packer->ptr, len);
-  } else if (len < 0xffff) {
-    mpack_w(&packer->ptr, 0xda);
-    mpack_w2(&packer->ptr, (uint32_t)len);
-  } else if (len < 0xffffffff) {
-    mpack_w(&packer->ptr, 0xdb);
-    mpack_w4(&packer->ptr, (uint32_t)len);
-  } else {
-    abort();
-  }
 
-  mpack_raw(str.data, len, packer);
-}
-
-void mpack_bin(String str, PackerBuffer *packer)
-{
-  const size_t len = str.size;
-  if (len < 0xff) {
-    mpack_w(&packer->ptr, 0xc4);
-    mpack_w(&packer->ptr, len);
-  } else if (len < 0xffff) {
-    mpack_w(&packer->ptr, 0xc5);
-    mpack_w2(&packer->ptr, (uint32_t)len);
-  } else if (len < 0xffffffff) {
-    mpack_w(&packer->ptr, 0xc6);
-    mpack_w4(&packer->ptr, (uint32_t)len);
-  } else {
-    abort();
-  }
-
-  mpack_raw(str.data, len, packer);
-}
-
-void mpack_raw(const char *data, size_t len, PackerBuffer *packer)
-{
-  size_t pos = 0;
-  while (pos < len) {
-    ptrdiff_t remaining = packer->endptr - packer->ptr;
-    size_t to_copy = MIN(len - pos, (size_t)remaining);
-    memcpy(packer->ptr, data + pos, to_copy);
-    packer->ptr += to_copy;
-    pos += to_copy;
-
-    if (pos < len) {
-      packer->packer_flush(packer);
-    }
-  }
-  mpack_check_buffer(packer);
-}
-
-void mpack_ext(char *buf, size_t len, int8_t type, PackerBuffer *packer)
-{
-  if (len == 1) {
-    mpack_w(&packer->ptr, 0xd4);
-  } else if (len == 2) {
-    mpack_w(&packer->ptr, 0xd5);
-  } else if (len <= 0xff) {
-    mpack_w(&packer->ptr, 0xc7);
-  } else if (len < 0xffff) {
-    mpack_w(&packer->ptr, 0xc8);
-    mpack_w2(&packer->ptr, (uint32_t)len);
-  } else if (len < 0xffffffff) {
-    mpack_w(&packer->ptr, 0xc9);
-    mpack_w4(&packer->ptr, (uint32_t)len);
-  } else {
-    abort();
-  }
-  mpack_w(&packer->ptr, type);
-  mpack_raw(buf, len, packer);
-}
-#endif  // USE_RUST_MSGPACK
-
-#ifdef USE_RUST_MSGPACK
 void mpack_handle(ObjectType type, handle_T handle, PackerBuffer *packer)
 {
   rs_mpack_handle((int)type, handle, packer);
 }
-#else
-void mpack_handle(ObjectType type, handle_T handle, PackerBuffer *packer)
-{
-  char exttype = (char)(type - EXT_OBJECT_TYPE_SHIFT);
-  if (-0x1f <= handle && handle <= 0x7f) {
-    mpack_w(&packer->ptr, 0xd4);
-    mpack_w(&packer->ptr, exttype);
-    mpack_w(&packer->ptr, (char)handle);
-  } else {
-    // we want to encode some small negative sentinel like -1. This is handled above
-    assert(handle >= 0);
-    // FAIL: we cannot use fixext 4/8 due to a design error
-    // (in theory fixext 2 for handle<=0xff but we don't gain much from it)
-    char buf[MPACK_ITEM_SIZE];
-    char *pos = buf;
-    mpack_uint(&pos, (uint32_t)handle);
-    ptrdiff_t packsize = pos - buf;
-    mpack_w(&packer->ptr, 0xc7);
-    mpack_w(&packer->ptr, packsize);
-    mpack_w(&packer->ptr, exttype);
-    memcpy(packer->ptr, buf, (size_t)packsize);
-    packer->ptr += packsize;
-  }
-}
-#endif  // USE_RUST_MSGPACK
 
 void mpack_object(Object *obj, PackerBuffer *packer)
 {

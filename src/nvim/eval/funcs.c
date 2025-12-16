@@ -132,16 +132,11 @@
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
-#ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern int rs_proc_get_pid(Proc *proc);
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define proc_get_pid(p) rs_proc_get_pid(p)
 #define loop_get_events(l) rs_loop_get_events(l)
-#else
-#define proc_get_pid(p) ((p)->pid)
-#define loop_get_events(l) ((l)->events)
-#endif
 
 /// Describe data to return from find_some_match()
 typedef enum {

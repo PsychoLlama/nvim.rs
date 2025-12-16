@@ -33,13 +33,9 @@
 # include "nvim/os/os_win_console.h"
 #endif
 
-#ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_fast_events(Loop *loop);
 #define loop_get_fast_events(l) rs_loop_get_fast_events(l)
-#else
-#define loop_get_fast_events(l) ((l)->fast_events)
-#endif
 
 static TUIData *tui = NULL;
 static int tui_width = 0;

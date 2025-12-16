@@ -71,24 +71,18 @@
 #include "nvim/undo.h"
 #include "nvim/vim_defs.h"
 
-#ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern int rs_multiqueue_empty(MultiQueue *mq);
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define multiqueue_empty(mq) rs_multiqueue_empty(mq)
 #define loop_get_events(l) rs_loop_get_events(l)
-#else
-#define loop_get_events(l) ((l)->events)
-#endif
 
-#ifdef USE_RUST_GETCHAR
 extern int rs_stuff_empty(void);
 extern int rs_readbuf1_empty(void);
 extern int rs_typebuf_changed(int tb_change_cnt);
 extern int rs_typebuf_typed(void);
 extern int rs_typebuf_maplen(void);
 extern int rs_using_script(void);
-#endif
 
 /// State for adding bytes to a recording or 'showcmd'.
 typedef struct {
@@ -440,11 +434,7 @@ static void start_stuff(void)
 bool stuff_empty(void)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_GETCHAR
   return rs_stuff_empty() != 0;
-#else
-  return (readbuf1.bh_first.b_next == NULL && readbuf2.bh_first.b_next == NULL);
-#endif
 }
 
 /// @return  true if readbuf1 is empty.  There may still be redo characters in
@@ -452,11 +442,7 @@ bool stuff_empty(void)
 bool readbuf1_empty(void)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_GETCHAR
   return rs_readbuf1_empty() != 0;
-#else
-  return (readbuf1.bh_first.b_next == NULL);
-#endif
 }
 
 /// Set a typeahead character that won't be flushed.
@@ -1092,12 +1078,7 @@ int ins_char_typebuf(int c, int modifiers, bool on_key_ignore)
 bool typebuf_changed(int tb_change_cnt)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_GETCHAR
   return rs_typebuf_changed(tb_change_cnt) != 0;
-#else
-  return tb_change_cnt != 0 && (typebuf.tb_change_cnt != tb_change_cnt
-                                || typebuf_was_filled);
-#endif
 }
 
 /// Return true if there are no characters in the typeahead buffer that have
@@ -1105,22 +1086,14 @@ bool typebuf_changed(int tb_change_cnt)
 int typebuf_typed(void)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_GETCHAR
   return rs_typebuf_typed();
-#else
-  return typebuf.tb_maplen == 0;
-#endif
 }
 
 /// Get the number of characters that are mapped (or not typed).
 int typebuf_maplen(void)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_GETCHAR
   return rs_typebuf_maplen();
-#else
-  return typebuf.tb_maplen;
-#endif
 }
 
 /// Remove "len" characters from typebuf.tb_buf[typebuf.tb_off + offset]
@@ -1522,11 +1495,7 @@ bool open_scriptin(char *scriptin_name)
 int using_script(void)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_GETCHAR
   return rs_using_script();
-#else
-  return curscript >= 0;
-#endif
 }
 
 /// This function is called just before doing a blocking wait.  Thus after

@@ -35,16 +35,11 @@
 
 #include "msgpack_rpc/channel.c.generated.h"
 
-#ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)
 extern MultiQueue *rs_loop_get_fast_events(Loop *loop);
 #define loop_get_fast_events(l) rs_loop_get_fast_events(l)
-#else
-#define loop_get_events(l) ((l)->events)
-#define loop_get_fast_events(l) ((l)->fast_events)
-#endif
 
 #ifdef NVIM_LOG_DEBUG
 # define REQ "[request]  "

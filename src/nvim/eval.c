@@ -86,22 +86,16 @@
 extern int64_t rs_num_divide(int64_t n1, int64_t n2);
 extern int64_t rs_num_modulus(int64_t n1, int64_t n2);
 
-#ifdef USE_RUST_EVAL
 extern bool rs_eval_isnamec(int c);
 extern bool rs_eval_isnamec1(int c);
 extern bool rs_eval_isdictc(int c);
 extern const char *rs_skip_luafunc_name(const char *p);
 extern int rs_check_luafunc_name(const char *str, bool paren);
 extern var_flavour_T rs_var_flavour(const char *varname);
-#endif
 
-#ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)
-#else
-#define loop_get_events(l) ((l)->events)
-#endif
 
 // TODO(ZyX-I): Remove DICT_MAXNEST, make users be non-recursive instead
 
@@ -5718,33 +5712,21 @@ static char *make_expanded_name(const char *in_start, char *expr_start, char *ex
 ///          Does not include '{' or '}' for magic braces.
 bool eval_isnamec(int c)
 {
-#ifdef USE_RUST_EVAL
   return rs_eval_isnamec(c);
-#else
-  return ASCII_ISALNUM(c) || c == '_' || c == ':' || c == AUTOLOAD_CHAR;
-#endif
 }
 
 /// @return  true if character "c" can be used as the first character in a
 ///          variable or function name (excluding '{' and '}').
 bool eval_isnamec1(int c)
 {
-#ifdef USE_RUST_EVAL
   return rs_eval_isnamec1(c);
-#else
-  return ASCII_ISALPHA(c) || c == '_';
-#endif
 }
 
 /// @return  true if character "c" can be used as the first character of a
 ///          dictionary key.
 bool eval_isdictc(int c)
 {
-#ifdef USE_RUST_EVAL
   return rs_eval_isdictc(c);
-#else
-  return ASCII_ISALNUM(c) || c == '_';
-#endif
 }
 
 /// Set the v:argv list.
@@ -5779,29 +5761,14 @@ static bool tv_is_luafunc(typval_T *tv)
 const char *skip_luafunc_name(const char *p)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_EVAL
   return rs_skip_luafunc_name(p);
-#else
-  while (ASCII_ISALNUM(*p) || *p == '_' || *p == '-' || *p == '.' || *p == '\'') {
-    p++;
-  }
-  return p;
-#endif
 }
 
 /// check the function name after "v:lua."
 int check_luafunc_name(const char *const str, const bool paren)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_EVAL
   return rs_check_luafunc_name(str, paren);
-#else
-  const char *const p = skip_luafunc_name(str);
-  if (*p != (paren ? '(' : NUL)) {
-    return 0;
-  }
-  return (int)(p - str);
-#endif
 }
 
 /// Return the character "str[index]" where "index" is the character index,
@@ -6297,21 +6264,7 @@ const char *find_option_var_end(const char **const arg, OptIndex *const opt_idxp
 var_flavour_T var_flavour(char *varname)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_EVAL
   return rs_var_flavour(varname);
-#else
-  char *p = varname;
-
-  if (ASCII_ISUPPER(*p)) {
-    while (*(++p)) {
-      if (ASCII_ISLOWER(*p)) {
-        return VAR_FLAVOUR_SESSION;
-      }
-    }
-    return VAR_FLAVOUR_SHADA;
-  }
-  return VAR_FLAVOUR_DEFAULT;
-#endif
 }
 
 void var_set_global(const char *const name, typval_T vartv)

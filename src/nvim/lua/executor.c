@@ -100,7 +100,6 @@ typedef struct {
 #include "lua/executor.c.generated.h"
 #include "lua/vim_module.generated.h"
 
-#ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern int rs_loop_is_closing(Loop *loop);
 #define loop_is_closing(loop) rs_loop_is_closing(loop)
@@ -108,11 +107,6 @@ extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)
 extern MultiQueue *rs_loop_get_fast_events(Loop *loop);
 #define loop_get_fast_events(l) rs_loop_get_fast_events(l)
-#else
-#define loop_is_closing(loop) ((loop)->closing)
-#define loop_get_events(l) ((l)->events)
-#define loop_get_fast_events(l) ((l)->fast_events)
-#endif
 
 #define PUSH_ALL_TYPVALS(lstate, args, argcount, special) \
   for (int i = 0; i < argcount; i++) { \

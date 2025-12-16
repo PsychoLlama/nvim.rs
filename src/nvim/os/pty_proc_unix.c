@@ -47,7 +47,6 @@ int forkpty(int *, char *, const struct termios *, const struct winsize *);
 
 #include "os/pty_proc_unix.c.generated.h"
 
-#ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern void rs_proc_set_status(Proc *proc, int status);
 extern Loop *rs_proc_get_loop(Proc *proc);
@@ -67,17 +66,6 @@ extern void rs_proc_call_internal_exit_cb(Proc *proc);
 extern void rs_proc_call_internal_close_cb(Proc *proc);
 #define proc_call_internal_exit_cb(p) rs_proc_call_internal_exit_cb(p)
 #define proc_call_internal_close_cb(p) rs_proc_call_internal_close_cb(p)
-#else
-#define proc_set_status(p, s) ((p)->status = (s))
-#define proc_get_loop(p) ((p)->loop)
-#define proc_get_pid(p) ((p)->pid)
-#define proc_set_pid(p, pid) ((p)->pid = (pid))
-#define proc_get_argv(p) ((p)->argv)
-#define proc_get_cwd(p) ((p)->cwd)
-#define proc_get_env(p) ((p)->env)
-#define proc_call_internal_exit_cb(p) do { if ((p)->internal_exit_cb) (p)->internal_exit_cb(p); } while (0)
-#define proc_call_internal_close_cb(p) do { if ((p)->internal_close_cb) (p)->internal_close_cb(p); } while (0)
-#endif
 
 #if !defined(HAVE_FORKPTY) && !defined(__APPLE__)
 

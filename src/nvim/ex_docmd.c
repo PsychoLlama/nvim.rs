@@ -118,13 +118,9 @@ extern const char *rs_check_nextcmd(const char *p);
 extern int rs_is_loclist_cmd(int cmdidx, int cmd_size);
 extern int rs_get_pressedreturn(void);
 
-#ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)
-#else
-#define loop_get_events(l) ((l)->events)
-#endif
 
 static const char e_ambiguous_use_of_user_defined_command[]
   = N_("E464: Ambiguous use of user-defined command");

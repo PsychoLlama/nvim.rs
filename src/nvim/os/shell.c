@@ -47,7 +47,6 @@
 #include "nvim/ui.h"
 #include "nvim/vim_defs.h"
 
-#ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern int rs_multiqueue_empty(MultiQueue *mq);
 extern void rs_proc_set_events(Proc *proc, MultiQueue *events);
@@ -57,11 +56,6 @@ extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define proc_set_events(p, e) rs_proc_set_events(p, e)
 #define proc_set_argv(p, a) rs_proc_set_argv(p, a)
 #define loop_get_events(l) rs_loop_get_events(l)
-#else
-#define proc_set_events(p, e) ((p)->events = (e))
-#define proc_set_argv(p, a) ((p)->argv = (a))
-#define loop_get_events(l) ((l)->events)
-#endif
 
 #define NS_1_SECOND         1000000000U     // 1 second, in nanoseconds
 #define OUT_DATA_THRESHOLD  1024 * 10U      // 10KB, "a few screenfuls" of data.
