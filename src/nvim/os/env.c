@@ -361,24 +361,14 @@ char *os_getenvname_at_index(size_t index)
 #endif
 }
 
-#ifdef USE_RUST_OS
 extern int64_t rs_os_get_pid(void);
-#endif
 
 /// Get the process ID of the Nvim process.
 ///
 /// @return the process ID.
 int64_t os_get_pid(void)
 {
-#ifdef USE_RUST_OS
   return rs_os_get_pid();
-#else
-# ifdef MSWIN
-  return (int64_t)GetCurrentProcessId();
-# else
-  return (int64_t)getpid();
-# endif
-#endif
 }
 
 /// Signals to the OS that Nvim is an application for "interactive work"
@@ -393,9 +383,7 @@ void os_hint_priority(void)
 #endif
 }
 
-#ifdef USE_RUST_OS
 extern int rs_os_get_hostname(char *buf, size_t size);
-#endif
 
 /// Gets the hostname of the current machine.
 ///
@@ -403,43 +391,9 @@ extern int rs_os_get_hostname(char *buf, size_t size);
 /// @param size       Size of `hostname`.
 void os_get_hostname(char *hostname, size_t size)
 {
-#ifdef USE_RUST_OS
   if (rs_os_get_hostname(hostname, size) != 0) {
     *hostname = NUL;
   }
-#else
-# ifdef HAVE_SYS_UTSNAME_H
-  struct utsname vutsname;
-
-  if (uname(&vutsname) < 0) {
-    *hostname = NUL;
-  } else {
-    xstrlcpy(hostname, vutsname.nodename, size);
-  }
-# elif defined(MSWIN)
-  wchar_t host_utf16[MAX_COMPUTERNAME_LENGTH + 1];
-  DWORD host_wsize = sizeof(host_utf16) / sizeof(host_utf16[0]);
-  if (GetComputerNameW(host_utf16, &host_wsize) == 0) {
-    *hostname = NUL;
-    DWORD err = GetLastError();
-    semsg("GetComputerNameW failed: %d", err);
-    return;
-  }
-  host_utf16[host_wsize] = NUL;
-
-  char *host_utf8;
-  int conversion_result = utf16_to_utf8(host_utf16, -1, &host_utf8);
-  if (conversion_result != 0) {
-    semsg("utf16_to_utf8 failed: %d", conversion_result);
-    return;
-  }
-  xstrlcpy(hostname, host_utf8, size);
-  xfree(host_utf8);
-# else
-  emsg("os_get_hostname failed: missing uname()");
-  *hostname = NUL;
-# endif
-#endif
 }
 
 /// The "real" home directory as determined by `init_homedir`.

@@ -43,24 +43,18 @@ typedef struct queue {
       (q) = next; \
   }
 
-#ifdef USE_RUST_QUEUE
 extern int rs_queue_empty(const QUEUE *q);
 extern void rs_queue_init(QUEUE *q);
 extern void rs_queue_add(QUEUE *h, QUEUE *n);
 extern void rs_queue_insert_head(QUEUE *h, QUEUE *q);
 extern void rs_queue_insert_tail(QUEUE *h, QUEUE *q);
 extern void rs_queue_remove(QUEUE *q);
-#endif
 
 // ffi.cdef is unable to swallow `bool` in place of `int` here.
 static inline int QUEUE_EMPTY(const QUEUE *const q)
   FUNC_ATTR_ALWAYS_INLINE FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_QUEUE
   return rs_queue_empty(q);
-#else
-  return q == q->next;
-#endif
 }
 
 #define QUEUE_HEAD(q) (q)->next
@@ -68,60 +62,29 @@ static inline int QUEUE_EMPTY(const QUEUE *const q)
 static inline void QUEUE_INIT(QUEUE *const q)
   FUNC_ATTR_ALWAYS_INLINE
 {
-#ifdef USE_RUST_QUEUE
   rs_queue_init(q);
-#else
-  q->next = q;
-  q->prev = q;
-#endif
 }
 
 static inline void QUEUE_ADD(QUEUE *const h, QUEUE *const n)
   FUNC_ATTR_ALWAYS_INLINE
 {
-#ifdef USE_RUST_QUEUE
   rs_queue_add(h, n);
-#else
-  h->prev->next = n->next;
-  n->next->prev = h->prev;
-  h->prev = n->prev;
-  h->prev->next = h;
-#endif
 }
 
 static inline void QUEUE_INSERT_HEAD(QUEUE *const h, QUEUE *const q)
   FUNC_ATTR_ALWAYS_INLINE
 {
-#ifdef USE_RUST_QUEUE
   rs_queue_insert_head(h, q);
-#else
-  q->next = h->next;
-  q->prev = h;
-  q->next->prev = q;
-  h->next = q;
-#endif
 }
 
 static inline void QUEUE_INSERT_TAIL(QUEUE *const h, QUEUE *const q)
   FUNC_ATTR_ALWAYS_INLINE
 {
-#ifdef USE_RUST_QUEUE
   rs_queue_insert_tail(h, q);
-#else
-  q->next = h;
-  q->prev = h->prev;
-  q->prev->next = q;
-  h->prev = q;
-#endif
 }
 
 static inline void QUEUE_REMOVE(QUEUE *const q)
   FUNC_ATTR_ALWAYS_INLINE
 {
-#ifdef USE_RUST_QUEUE
   rs_queue_remove(q);
-#else
-  q->prev->next = q->next;
-  q->next->prev = q->prev;
-#endif
 }

@@ -20,12 +20,10 @@
 
 #include "os/time.c.generated.h"
 
-#ifdef USE_RUST_OS
 // Rust implementations - declarations
 extern uint64_t rs_os_time(void);
 extern uint64_t rs_os_hrtime(void);
 extern void rs_os_sleep_ms(uint64_t ms);
-#endif
 
 /// Gets a high-resolution (nanosecond), monotonically-increasing time relative
 /// to an arbitrary time in the past.
@@ -36,11 +34,7 @@ extern void rs_os_sleep_ms(uint64_t ms);
 uint64_t os_hrtime(void)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_OS
   return rs_os_hrtime();
-#else
-  return uv_hrtime();
-#endif
 }
 
 /// Gets a millisecond-resolution, monotonically-increasing time relative to an
@@ -84,14 +78,7 @@ void os_delay(uint64_t ms, bool ignoreinput)
 /// @param us          Number of microseconds to sleep.
 void os_sleep(uint64_t ms)
 {
-#ifdef USE_RUST_OS
   rs_os_sleep_ms(ms);
-#else
-  if (ms > UINT_MAX) {
-    ms = UINT_MAX;
-  }
-  uv_sleep((unsigned)ms);
-#endif
 }
 
 // Cache of the current timezone name as retrieved from TZ, or an empty string
@@ -208,9 +195,5 @@ char *os_strptime(const char *str, const char *format, struct tm *tm)
 Timestamp os_time(void)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_OS
   return rs_os_time();
-#else
-  return (Timestamp)time(NULL);
-#endif
 }

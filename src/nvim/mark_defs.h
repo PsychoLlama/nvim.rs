@@ -97,62 +97,34 @@ typedef struct {
 
 #define INIT_XFMARK { INIT_FMARK, NULL }
 
-#ifdef USE_RUST_MARK
 extern int rs_lt(pos_T a, pos_T b);
 extern int rs_equalpos(pos_T a, pos_T b);
 extern int rs_ltoreq(pos_T a, pos_T b);
 extern void rs_clearpos(pos_T *a);
 extern int rs_empty_pos(pos_T a);
-# define EMPTY_POS(a) (rs_empty_pos(a) != 0)
-#else
-# define EMPTY_POS(a) ((a).lnum == 0 && (a).col == 0 && (a).coladd == 0)
-#endif
+#define EMPTY_POS(a) (rs_empty_pos(a) != 0)
 
 /// Return true if position a is before (less than) position b.
 static inline bool lt(pos_T a, pos_T b)
   FUNC_ATTR_CONST FUNC_ATTR_ALWAYS_INLINE
 {
-#ifdef USE_RUST_MARK
   return rs_lt(a, b) != 0;
-#else
-  if (a.lnum != b.lnum) {
-    return a.lnum < b.lnum;
-  } else if (a.col != b.col) {
-    return a.col < b.col;
-  } else {
-    return a.coladd < b.coladd;
-  }
-#endif
 }
 
 static inline bool equalpos(pos_T a, pos_T b)
   FUNC_ATTR_CONST FUNC_ATTR_ALWAYS_INLINE
 {
-#ifdef USE_RUST_MARK
   return rs_equalpos(a, b) != 0;
-#else
-  return (a.lnum == b.lnum) && (a.col == b.col) && (a.coladd == b.coladd);
-#endif
 }
 
 static inline bool ltoreq(pos_T a, pos_T b)
   FUNC_ATTR_CONST FUNC_ATTR_ALWAYS_INLINE
 {
-#ifdef USE_RUST_MARK
   return rs_ltoreq(a, b) != 0;
-#else
-  return lt(a, b) || equalpos(a, b);
-#endif
 }
 
 static inline void clearpos(pos_T *a)
   FUNC_ATTR_ALWAYS_INLINE
 {
-#ifdef USE_RUST_MARK
   rs_clearpos(a);
-#else
-  a->lnum = 0;
-  a->col = 0;
-  a->coladd = 0;
-#endif
 }
