@@ -6,6 +6,11 @@
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
+### Phase 59: Wire tv_list_find ✅ COMPLETE
+
+Wired `tv_list_find` to call `rs_tv_list_find` directly, removing 55 lines of C implementation.
+This is the first typval function fully replaced with Rust implementation.
+
 ### Phase 58: Listitem Navigation ✅ COMPLETE
 
 Added complete list traversal infrastructure enabling migration of eval.c list operations.
