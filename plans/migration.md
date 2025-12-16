@@ -2,9 +2,24 @@
 
 ## Current Status
 
-**759 rs\_\* functions migrated**
+**765 rs\_\* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
+
+### Phase 58: Listitem Navigation ✅ COMPLETE
+
+Added complete list traversal infrastructure enabling migration of eval.c list operations.
+Implements `tv_list_find` in pure Rust with the same cache optimization as C.
+
+New C accessors (9):
+- listitem: `nvim_listitem_get_next`, `nvim_listitem_get_prev`, `nvim_listitem_get_tv`
+- list cache: `nvim_list_get_idx`, `nvim_list_get_idx_item`, `nvim_list_set_idx`,
+              `nvim_list_set_idx_item`, `nvim_list_get_copyid`, `nvim_list_get_copylist`
+
+New Rust functions (6):
+- `rs_tv_list_copyid`, `rs_tv_list_latest_copy`
+- `rs_tv_listitem_next`, `rs_tv_listitem_prev`, `rs_tv_listitem_tv`
+- `rs_tv_list_find` (full implementation with cache optimization)
 
 ### Phase 57: Typval Expansion ✅ COMPLETE
 
