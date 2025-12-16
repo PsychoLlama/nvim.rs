@@ -70,59 +70,6 @@ if(USE_RUST)
   if(RUST_NVIM_LIB)
     message(STATUS "Using Rust library: ${RUST_NVIM_LIB}")
     target_link_libraries(main_lib INTERFACE ${RUST_NVIM_LIB} pthread dl m)
-    # Enable all available Rust implementations
-    target_compile_definitions(nvim_bin PRIVATE
-      USE_RUST_API
-      USE_RUST_ARABIC
-      USE_RUST_ASCII
-      USE_RUST_AUTOCMD
-      USE_RUST_BUFFER
-      USE_RUST_CHARSET
-      USE_RUST_CMDLINE
-      USE_RUST_CMDHIST
-      USE_RUST_CONTEXT
-      USE_RUST_CURSOR_SHAPE
-      USE_RUST_DIFF
-      USE_RUST_ENCODING
-      USE_RUST_EVAL
-      USE_RUST_EVENT
-      USE_RUST_EX_DOCMD
-      USE_RUST_EX_EVAL
-      USE_RUST_FILEIO
-      USE_RUST_GARRAY
-      USE_RUST_GETCHAR
-      USE_RUST_GRID
-      USE_RUST_HASHTAB
-      USE_RUST_HELP
-      USE_RUST_HIGHLIGHT
-      USE_RUST_INDENT
-      USE_RUST_INSEXPAND
-      USE_RUST_KEYCODES
-      USE_RUST_LUA
-      USE_RUST_MARK
-      USE_RUST_MATH
-      USE_RUST_MBYTE
-      USE_RUST_MEMUTIL
-      USE_RUST_MENU
-      USE_RUST_OS
-      USE_RUST_OS_FS
-      USE_RUST_OS_INPUT
-      USE_RUST_OS_MEM
-      USE_RUST_OS_PROC
-      USE_RUST_PATH
-      USE_RUST_PROFILE
-      USE_RUST_QUEUE
-      USE_RUST_REGISTER
-      USE_RUST_SEARCH
-      USE_RUST_SPELL
-      USE_RUST_STRINGS
-      USE_RUST_OPS
-      USE_RUST_VERSION
-      USE_RUST_WINDOW
-      USE_RUST_MSGPACK
-      USE_RUST_UNPACKER
-      USE_RUST_TUI
-    )
   else()
     message(WARNING "USE_RUST enabled but Rust library not found. Run 'cargo build --release' first.")
   endif()
