@@ -58,6 +58,7 @@ nvim-version = { path = "version" }
 nvim-window = { path = "window" }
 nvim-unpacker = { path = "unpacker" }
 nvim-tui = { path = "tui" }
+nvim-typval = { path = "typval" }
 
 [build-dependencies]
 cbindgen = "0.27"

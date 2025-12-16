@@ -4688,3 +4688,67 @@ bool tv2bool(const typval_T *const tv)
   }
   return false;
 }
+
+// =============================================================================
+// Rust accessor functions for opaque typval_T handle pattern
+// =============================================================================
+
+/// Get the v_type field from a typval (accessor for Rust).
+int nvim_tv_get_type(const typval_T *tv)
+{
+  return (int)tv->v_type;
+}
+
+/// Get the v_number field from a typval (accessor for Rust).
+int64_t nvim_tv_get_number(const typval_T *tv)
+{
+  return tv->vval.v_number;
+}
+
+/// Get the v_bool field from a typval (accessor for Rust).
+int nvim_tv_get_bool(const typval_T *tv)
+{
+  return (int)tv->vval.v_bool;
+}
+
+/// Get the v_special field from a typval (accessor for Rust).
+int nvim_tv_get_special(const typval_T *tv)
+{
+  return (int)tv->vval.v_special;
+}
+
+/// Get the v_float field from a typval (accessor for Rust).
+double nvim_tv_get_float(const typval_T *tv)
+{
+  return tv->vval.v_float;
+}
+
+/// Get the v_string field from a typval (accessor for Rust).
+const char *nvim_tv_get_string_ptr(const typval_T *tv)
+{
+  return tv->vval.v_string;
+}
+
+/// Check if v_list is NULL (accessor for Rust).
+int nvim_tv_list_is_null(const typval_T *tv)
+{
+  return tv->vval.v_list == NULL;
+}
+
+/// Check if v_dict is NULL (accessor for Rust).
+int nvim_tv_dict_is_null(const typval_T *tv)
+{
+  return tv->vval.v_dict == NULL;
+}
+
+/// Check if v_blob is NULL (accessor for Rust).
+int nvim_tv_blob_is_null(const typval_T *tv)
+{
+  return tv->vval.v_blob == NULL;
+}
+
+/// Check if v_partial is NULL (accessor for Rust).
+int nvim_tv_partial_is_null(const typval_T *tv)
+{
+  return tv->vval.v_partial == NULL;
+}
