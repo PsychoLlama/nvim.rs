@@ -792,6 +792,32 @@ pub extern "C" fn rs_tv_list_find(l: ListHandle, n: c_int) -> ListItemHandle {
     tv_list_find_impl(l, n)
 }
 
+/// Get the index of a list item within a list.
+/// Returns -1 if the list is NULL or item is not in the list.
+#[inline]
+fn tv_list_idx_of_item_impl(l: ListHandle, item: ListItemHandle) -> c_int {
+    if l.is_null() {
+        return -1;
+    }
+
+    let mut idx = 0;
+    let mut li = tv_list_first_impl(l);
+    while !li.is_null() {
+        if li.0 == item.0 {
+            return idx;
+        }
+        li = tv_listitem_next_impl(li);
+        idx += 1;
+    }
+    -1
+}
+
+/// FFI wrapper: get index of list item in list.
+#[no_mangle]
+pub extern "C" fn rs_tv_list_idx_of_item(l: ListHandle, item: ListItemHandle) -> c_int {
+    tv_list_idx_of_item_impl(l, item)
+}
+
 // =============================================================================
 // Dict operations
 // =============================================================================

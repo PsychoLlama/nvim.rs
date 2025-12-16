@@ -43,6 +43,7 @@
 
 // Rust FFI functions
 extern listitem_T *rs_tv_list_find(list_T *l, int n);
+extern int rs_tv_list_idx_of_item(const list_T *l, const listitem_T *item);
 
 /// struct storing information about current sort
 typedef struct {
@@ -1656,17 +1657,7 @@ static listitem_T *tv_list_find_index(list_T *const l, int *const idx)
 int tv_list_idx_of_item(const list_T *const l, const listitem_T *const item)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
-  if (l == NULL) {
-    return -1;
-  }
-  int idx = 0;
-  TV_LIST_ITER_CONST(l, li, {
-    if (li == item) {
-      return idx;
-    }
-    idx++;
-  });
-  return -1;
+  return rs_tv_list_idx_of_item(l, item);
 }
 
 //{{{1 Dictionaries
