@@ -4752,3 +4752,99 @@ int nvim_tv_partial_is_null(const typval_T *tv)
 {
   return tv->vval.v_partial == NULL;
 }
+
+/// Get the v_list pointer from a typval (accessor for Rust).
+list_T *nvim_tv_get_list(const typval_T *tv)
+{
+  return tv->vval.v_list;
+}
+
+/// Get the v_dict pointer from a typval (accessor for Rust).
+dict_T *nvim_tv_get_dict(const typval_T *tv)
+{
+  return tv->vval.v_dict;
+}
+
+/// Get the v_blob pointer from a typval (accessor for Rust).
+blob_T *nvim_tv_get_blob(const typval_T *tv)
+{
+  return tv->vval.v_blob;
+}
+
+// =============================================================================
+// List accessor functions for Rust
+// =============================================================================
+
+/// Get lv_len from a list (accessor for Rust).
+int nvim_list_get_len(const list_T *l)
+{
+  return l->lv_len;
+}
+
+/// Get lv_lock from a list (accessor for Rust).
+int nvim_list_get_lock(const list_T *l)
+{
+  return (int)l->lv_lock;
+}
+
+/// Check if lv_watch is non-NULL (accessor for Rust).
+int nvim_list_has_watchers(const list_T *l)
+{
+  return l->lv_watch != NULL;
+}
+
+/// Get lv_first from a list (accessor for Rust).
+listitem_T *nvim_list_get_first(const list_T *l)
+{
+  return l->lv_first;
+}
+
+/// Get lv_last from a list (accessor for Rust).
+listitem_T *nvim_list_get_last(const list_T *l)
+{
+  return l->lv_last;
+}
+
+// =============================================================================
+// Dict accessor functions for Rust
+// =============================================================================
+
+/// Get dv_hashtab.ht_used from a dict (accessor for Rust).
+size_t nvim_dict_get_ht_used(const dict_T *d)
+{
+  return d->dv_hashtab.ht_used;
+}
+
+/// Get dv_lock from a dict (accessor for Rust).
+int nvim_dict_get_lock(const dict_T *d)
+{
+  return (int)d->dv_lock;
+}
+
+/// Check if dict has watchers (accessor for Rust).
+int nvim_dict_has_watchers(const dict_T *d)
+{
+  return !QUEUE_EMPTY(&d->watchers);
+}
+
+// =============================================================================
+// Blob accessor functions for Rust
+// =============================================================================
+
+/// Get bv_ga.ga_len from a blob (accessor for Rust).
+int nvim_blob_get_len(const blob_T *b)
+{
+  return b->bv_ga.ga_len;
+}
+
+/// Get bv_lock from a blob (accessor for Rust).
+int nvim_blob_get_lock(const blob_T *b)
+{
+  return (int)b->bv_lock;
+}
+
+/// Get a byte from blob at index (accessor for Rust).
+uint8_t nvim_blob_get_byte(const blob_T *b, int idx)
+{
+  return ((uint8_t *)b->bv_ga.ga_data)[idx];
+}

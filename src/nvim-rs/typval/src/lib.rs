@@ -421,6 +421,360 @@ pub extern "C" fn rs_tv_is_truthy(tv: TypevalHandle) -> c_int {
     c_int::from(tv_is_truthy_impl(tv))
 }
 
+// =============================================================================
+// Opaque handle types for list_T, dict_T, blob_T
+// =============================================================================
+
+/// Opaque handle to a Vimscript list (`list_T*`).
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ListHandle(*const std::ffi::c_void);
+
+impl ListHandle {
+    /// Create a new list handle from a raw pointer.
+    #[inline]
+    pub const unsafe fn from_ptr(ptr: *const std::ffi::c_void) -> Self {
+        Self(ptr)
+    }
+
+    /// Check if the handle is null.
+    #[inline]
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+/// Opaque handle to a Vimscript dict (`dict_T*`).
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DictHandle(*const std::ffi::c_void);
+
+impl DictHandle {
+    /// Create a new dict handle from a raw pointer.
+    #[inline]
+    pub const unsafe fn from_ptr(ptr: *const std::ffi::c_void) -> Self {
+        Self(ptr)
+    }
+
+    /// Check if the handle is null.
+    #[inline]
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+/// Opaque handle to a Vimscript blob (`blob_T*`).
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BlobHandle(*const std::ffi::c_void);
+
+impl BlobHandle {
+    /// Create a new blob handle from a raw pointer.
+    #[inline]
+    pub const unsafe fn from_ptr(ptr: *const std::ffi::c_void) -> Self {
+        Self(ptr)
+    }
+
+    /// Check if the handle is null.
+    #[inline]
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+/// Opaque handle to a list item (`listitem_T*`).
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ListItemHandle(*const std::ffi::c_void);
+
+impl ListItemHandle {
+    /// Check if the handle is null.
+    #[inline]
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+// C accessor functions for list_T, dict_T, blob_T
+extern "C" {
+    // Typval -> container getters
+    fn nvim_tv_get_list(tv: TypevalHandle) -> ListHandle;
+    fn nvim_tv_get_dict(tv: TypevalHandle) -> DictHandle;
+    fn nvim_tv_get_blob(tv: TypevalHandle) -> BlobHandle;
+
+    // List accessors
+    fn nvim_list_get_len(l: ListHandle) -> c_int;
+    fn nvim_list_get_lock(l: ListHandle) -> c_int;
+    fn nvim_list_has_watchers(l: ListHandle) -> c_int;
+    fn nvim_list_get_first(l: ListHandle) -> ListItemHandle;
+    fn nvim_list_get_last(l: ListHandle) -> ListItemHandle;
+
+    // Dict accessors
+    fn nvim_dict_get_ht_used(d: DictHandle) -> usize;
+    fn nvim_dict_get_lock(d: DictHandle) -> c_int;
+    fn nvim_dict_has_watchers(d: DictHandle) -> c_int;
+
+    // Blob accessors
+    fn nvim_blob_get_len(b: BlobHandle) -> c_int;
+    fn nvim_blob_get_lock(b: BlobHandle) -> c_int;
+    fn nvim_blob_get_byte(b: BlobHandle, idx: c_int) -> u8;
+}
+
+// =============================================================================
+// List operations
+// =============================================================================
+
+/// Get the number of items in a list.
+/// Returns 0 if the list is NULL.
+#[inline]
+fn tv_list_len_impl(l: ListHandle) -> c_int {
+    if l.is_null() {
+        return 0;
+    }
+    unsafe { nvim_list_get_len(l) }
+}
+
+/// FFI wrapper: get list length.
+#[no_mangle]
+pub extern "C" fn rs_tv_list_len(l: ListHandle) -> c_int {
+    tv_list_len_impl(l)
+}
+
+/// Get list lock status.
+/// Returns VAR_FIXED (2) for NULL lists.
+#[inline]
+fn tv_list_locked_impl(l: ListHandle) -> c_int {
+    if l.is_null() {
+        return 2; // VAR_FIXED
+    }
+    unsafe { nvim_list_get_lock(l) }
+}
+
+/// FFI wrapper: get list lock status.
+#[no_mangle]
+pub extern "C" fn rs_tv_list_locked(l: ListHandle) -> c_int {
+    tv_list_locked_impl(l)
+}
+
+/// Check whether list has watchers.
+#[inline]
+fn tv_list_has_watchers_impl(l: ListHandle) -> bool {
+    if l.is_null() {
+        return false;
+    }
+    unsafe { nvim_list_has_watchers(l) != 0 }
+}
+
+/// FFI wrapper: check if list has watchers.
+#[no_mangle]
+pub extern "C" fn rs_tv_list_has_watchers(l: ListHandle) -> c_int {
+    c_int::from(tv_list_has_watchers_impl(l))
+}
+
+/// Get first list item.
+/// Returns NULL for NULL or empty lists.
+#[inline]
+fn tv_list_first_impl(l: ListHandle) -> ListItemHandle {
+    if l.is_null() {
+        return ListItemHandle(std::ptr::null());
+    }
+    unsafe { nvim_list_get_first(l) }
+}
+
+/// FFI wrapper: get first list item.
+#[no_mangle]
+pub extern "C" fn rs_tv_list_first(l: ListHandle) -> ListItemHandle {
+    tv_list_first_impl(l)
+}
+
+/// Get last list item.
+/// Returns NULL for NULL or empty lists.
+#[inline]
+fn tv_list_last_impl(l: ListHandle) -> ListItemHandle {
+    if l.is_null() {
+        return ListItemHandle(std::ptr::null());
+    }
+    unsafe { nvim_list_get_last(l) }
+}
+
+/// FFI wrapper: get last list item.
+#[no_mangle]
+pub extern "C" fn rs_tv_list_last(l: ListHandle) -> ListItemHandle {
+    tv_list_last_impl(l)
+}
+
+/// Normalize list index: return either -1 or non-negative index.
+#[inline]
+fn tv_list_uidx_impl(l: ListHandle, mut n: c_int) -> c_int {
+    let len = tv_list_len_impl(l);
+    // Negative index is relative to the end.
+    if n < 0 {
+        n += len;
+    }
+    // Check for index out of range.
+    if n < 0 || n >= len {
+        return -1;
+    }
+    n
+}
+
+/// FFI wrapper: normalize list index.
+#[no_mangle]
+pub extern "C" fn rs_tv_list_uidx(l: ListHandle, n: c_int) -> c_int {
+    tv_list_uidx_impl(l, n)
+}
+
+// =============================================================================
+// Dict operations
+// =============================================================================
+
+/// Get the number of items in a dictionary.
+/// Returns 0 if the dict is NULL.
+#[inline]
+fn tv_dict_len_impl(d: DictHandle) -> i64 {
+    if d.is_null() {
+        return 0;
+    }
+    unsafe { nvim_dict_get_ht_used(d) as i64 }
+}
+
+/// FFI wrapper: get dict length.
+#[no_mangle]
+pub extern "C" fn rs_tv_dict_len(d: DictHandle) -> i64 {
+    tv_dict_len_impl(d)
+}
+
+/// Get dict lock status.
+#[inline]
+fn tv_dict_locked_impl(d: DictHandle) -> c_int {
+    if d.is_null() {
+        return 2; // VAR_FIXED
+    }
+    unsafe { nvim_dict_get_lock(d) }
+}
+
+/// FFI wrapper: get dict lock status.
+#[no_mangle]
+pub extern "C" fn rs_tv_dict_locked(d: DictHandle) -> c_int {
+    tv_dict_locked_impl(d)
+}
+
+/// Check if dictionary is watched.
+#[inline]
+fn tv_dict_is_watched_impl(d: DictHandle) -> bool {
+    if d.is_null() {
+        return false;
+    }
+    unsafe { nvim_dict_has_watchers(d) != 0 }
+}
+
+/// FFI wrapper: check if dict is watched.
+#[no_mangle]
+pub extern "C" fn rs_tv_dict_is_watched(d: DictHandle) -> c_int {
+    c_int::from(tv_dict_is_watched_impl(d))
+}
+
+// =============================================================================
+// Blob operations
+// =============================================================================
+
+/// Get the length of the data in the blob, in bytes.
+/// Returns 0 if the blob is NULL.
+#[inline]
+fn tv_blob_len_impl(b: BlobHandle) -> c_int {
+    if b.is_null() {
+        return 0;
+    }
+    unsafe { nvim_blob_get_len(b) }
+}
+
+/// FFI wrapper: get blob length.
+#[no_mangle]
+pub extern "C" fn rs_tv_blob_len(b: BlobHandle) -> c_int {
+    tv_blob_len_impl(b)
+}
+
+/// Get blob lock status.
+#[inline]
+fn tv_blob_locked_impl(b: BlobHandle) -> c_int {
+    if b.is_null() {
+        return 2; // VAR_FIXED
+    }
+    unsafe { nvim_blob_get_lock(b) }
+}
+
+/// FFI wrapper: get blob lock status.
+#[no_mangle]
+pub extern "C" fn rs_tv_blob_locked(b: BlobHandle) -> c_int {
+    tv_blob_locked_impl(b)
+}
+
+/// Get the byte at index `idx` in the blob.
+/// Caller must ensure blob is non-NULL and idx is valid.
+#[inline]
+fn tv_blob_get_impl(b: BlobHandle, idx: c_int) -> u8 {
+    unsafe { nvim_blob_get_byte(b, idx) }
+}
+
+/// FFI wrapper: get byte from blob.
+#[no_mangle]
+pub extern "C" fn rs_tv_blob_get(b: BlobHandle, idx: c_int) -> u8 {
+    tv_blob_get_impl(b, idx)
+}
+
+// =============================================================================
+// Typval -> container conversions
+// =============================================================================
+
+/// Get the list from a typval (returns NULL handle if not a list or NULL).
+#[inline]
+fn tv_get_list_impl(tv: TypevalHandle) -> ListHandle {
+    if tv.is_null() || tv_type_impl(tv) != VarType::List {
+        return ListHandle(std::ptr::null());
+    }
+    unsafe { nvim_tv_get_list(tv) }
+}
+
+/// FFI wrapper: get list from typval.
+#[no_mangle]
+pub extern "C" fn rs_tv_get_list(tv: TypevalHandle) -> ListHandle {
+    tv_get_list_impl(tv)
+}
+
+/// Get the dict from a typval (returns NULL handle if not a dict or NULL).
+#[inline]
+fn tv_get_dict_impl(tv: TypevalHandle) -> DictHandle {
+    if tv.is_null() || tv_type_impl(tv) != VarType::Dict {
+        return DictHandle(std::ptr::null());
+    }
+    unsafe { nvim_tv_get_dict(tv) }
+}
+
+/// FFI wrapper: get dict from typval.
+#[no_mangle]
+pub extern "C" fn rs_tv_get_dict(tv: TypevalHandle) -> DictHandle {
+    tv_get_dict_impl(tv)
+}
+
+/// Get the blob from a typval (returns NULL handle if not a blob or NULL).
+#[inline]
+fn tv_get_blob_impl(tv: TypevalHandle) -> BlobHandle {
+    if tv.is_null() || tv_type_impl(tv) != VarType::Blob {
+        return BlobHandle(std::ptr::null());
+    }
+    unsafe { nvim_tv_get_blob(tv) }
+}
+
+/// FFI wrapper: get blob from typval.
+#[no_mangle]
+pub extern "C" fn rs_tv_get_blob(tv: TypevalHandle) -> BlobHandle {
+    tv_get_blob_impl(tv)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -443,5 +797,41 @@ mod tests {
         assert!(!tv_is_string_impl(handle));
         assert!(!tv_is_float_impl(handle));
         assert!(tv_is_empty_impl(handle));
+    }
+
+    #[test]
+    fn test_list_handle_null() {
+        let handle = unsafe { ListHandle::from_ptr(std::ptr::null()) };
+        assert!(handle.is_null());
+        assert_eq!(tv_list_len_impl(handle), 0);
+        assert_eq!(tv_list_locked_impl(handle), 2); // VAR_FIXED
+        assert!(!tv_list_has_watchers_impl(handle));
+        assert!(tv_list_first_impl(handle).is_null());
+        assert!(tv_list_last_impl(handle).is_null());
+    }
+
+    #[test]
+    fn test_dict_handle_null() {
+        let handle = unsafe { DictHandle::from_ptr(std::ptr::null()) };
+        assert!(handle.is_null());
+        assert_eq!(tv_dict_len_impl(handle), 0);
+        assert_eq!(tv_dict_locked_impl(handle), 2); // VAR_FIXED
+        assert!(!tv_dict_is_watched_impl(handle));
+    }
+
+    #[test]
+    fn test_blob_handle_null() {
+        let handle = unsafe { BlobHandle::from_ptr(std::ptr::null()) };
+        assert!(handle.is_null());
+        assert_eq!(tv_blob_len_impl(handle), 0);
+        assert_eq!(tv_blob_locked_impl(handle), 2); // VAR_FIXED
+    }
+
+    #[test]
+    fn test_list_uidx() {
+        // With null list (len=0), all indices should return -1
+        let null_list = unsafe { ListHandle::from_ptr(std::ptr::null()) };
+        assert_eq!(tv_list_uidx_impl(null_list, 0), -1);
+        assert_eq!(tv_list_uidx_impl(null_list, -1), -1);
     }
 }
