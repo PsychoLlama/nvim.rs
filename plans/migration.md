@@ -6,6 +6,18 @@
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
+### Phase 46: Dead Code Cleanup 4 ✅ COMPLETE
+
+Removed 408 lines of dead C fallback code from eight migrated modules:
+- math.c: 7 functions cleaned (xfpclassify, xisinf, xisnan, xctz, xpopcount, vim_append_digit_int, trim_to_int)
+- memory.c: 8 functions + 1 macro cleaned
+- hashtab.c: 2 functions cleaned (hash_hash, hash_hash_len)
+- version.c: 3 functions cleaned (has_nvim_version, min_vim_version, highest_patch)
+- arabic.c: 2 functions cleaned (arabic_maycombine, arabic_combine)
+- keycodes.c: 2 functions cleaned (name_to_mod_mask, handle_x_keys)
+- mouse.c: 1 function cleaned (is_mouse_key)
+- option.c: 7 functions cleaned (find_tty_option_end, valid_name, is_tty_option, default_fileformat, skip_to_option_part, csh_like_shell, fish_like_shell)
+
 ### Phase 45: Dead Code Cleanup 3 ✅ COMPLETE
 
 Removed 743 lines of dead C fallback code from four migrated modules:
@@ -54,6 +66,7 @@ All grid.c functions that can reasonably be migrated are now in Rust.
 
 | Phase | Name | Key Functions |
 |-------|------|---------------|
+| 46 | Dead Code Cleanup 4 | Removed 408 lines from math.c, memory.c, hashtab.c, version.c, arabic.c, keycodes.c, mouse.c, option.c |
 | 45 | Dead Code Cleanup 3 | Removed 743 lines from os/fs.c, path.c, strings.c, profile.c |
 | 44 | Dead Code Cleanup 2 | Removed 1888 lines from mbyte.c, charset.c, window.c, helpers.c |
 | 43 | Dead Code Cleanup | Removed 1132 lines from grid.c, highlight_group.c, buffer.c, diff.c |
