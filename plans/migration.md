@@ -6,6 +6,16 @@
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
+### Phase 50: Dead Code Cleanup 8 ✅ COMPLETE
+
+Removed 212 lines of dead C fallback code from header files and small modules:
+- ascii_defs.h: 12 USE_RUST_ASCII conditionals (macros + 9 inline functions)
+- os/time.c: 4 USE_RUST_OS conditionals (os_hrtime, os_sleep, os_time)
+- os/env.c: 4 USE_RUST_OS conditionals (os_get_pid, os_get_hostname)
+- mark.h: 3 USE_RUST_MARK conditionals (mark_global_index, mark_local_index)
+- mark_defs.h: 5 USE_RUST_MARK conditionals (lt, equalpos, ltoreq, clearpos, EMPTY_POS)
+- queue_defs.h: 7 USE_RUST_QUEUE conditionals (QUEUE_* inline functions)
+
 ### Phase 49: Dead Code Cleanup 7 ✅ COMPLETE
 
 Removed 187 lines of dead C fallback code from files with 3-6 USE_RUST conditionals:
