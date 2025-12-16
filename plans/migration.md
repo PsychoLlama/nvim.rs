@@ -2,9 +2,28 @@
 
 ## Current Status
 
-**744 rs\_\* functions migrated**
+**759 rs\_\* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
+
+### Phase 57: Typval Expansion ✅ COMPLETE
+
+Expanded `nvim-typval` crate with list/dict/blob operations, enabling future migration
+of container operations in eval.c.
+
+New opaque handles: `ListHandle`, `DictHandle`, `BlobHandle`, `ListItemHandle`
+
+New Rust functions (15):
+- List: `rs_tv_list_len`, `rs_tv_list_locked`, `rs_tv_list_has_watchers`, `rs_tv_list_first`, `rs_tv_list_last`, `rs_tv_list_uidx`
+- Dict: `rs_tv_dict_len`, `rs_tv_dict_locked`, `rs_tv_dict_is_watched`
+- Blob: `rs_tv_blob_len`, `rs_tv_blob_locked`, `rs_tv_blob_get`
+- Getters: `rs_tv_get_list`, `rs_tv_get_dict`, `rs_tv_get_blob`
+
+New C accessors in `typval.c` (18):
+- `nvim_tv_get_list`, `nvim_tv_get_dict`, `nvim_tv_get_blob`
+- `nvim_list_get_len`, `nvim_list_get_lock`, `nvim_list_has_watchers`, `nvim_list_get_first`, `nvim_list_get_last`
+- `nvim_dict_get_ht_used`, `nvim_dict_get_lock`, `nvim_dict_has_watchers`
+- `nvim_blob_get_len`, `nvim_blob_get_lock`, `nvim_blob_get_byte`
 
 ### Phase 56: Typval Crate ✅ COMPLETE
 
