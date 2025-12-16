@@ -153,7 +153,6 @@ extern int rs_rstream_did_eof(RStream *stream);
 #define rstream_did_eof(s) ((s)->did_eof)
 #endif
 
-#ifdef USE_RUST_TUI
 // Rust terminal detection structures and functions
 
 /// Context for terminal detection - passed to Rust
@@ -194,7 +193,6 @@ extern void rs_patch_terminfo_bugs(const TermDetectContext *ctx, TerminfoState *
 extern void rs_augment_terminfo(const TermDetectContext *ctx, TerminfoState *state,
                                 TermDetectOutput *output);
 extern int rs_term_has_truecolor(const char *colorterm, int has_tc_or_rgb, const char **defs);
-#endif
 
 #define TERMINFO_SEQ_LIMIT 128
 
@@ -471,14 +469,9 @@ static void terminfo_start(TUIData *tui)
   tui->screen_or_tmux = screen || tmux;
 
   // truecolor support must be checked before patching/augmenting terminfo
-#ifdef USE_RUST_TUI
   tui->rgb = rs_term_has_truecolor(colorterm, tui->ti.has_Tc_or_RGB ? 1 : 0,
                                     (const char **)tui->ti.defs) != 0;
-#else
-  tui->rgb = term_has_truecolor(tui, colorterm);
-#endif
 
-#ifdef USE_RUST_TUI
   // Use Rust implementations for terminal detection
   char *xterm_version_env = os_getenv("XTERM_VERSION");
   TermDetectContext ctx = {
@@ -523,10 +516,6 @@ static void terminfo_start(TUIData *tui)
   // It should be pretty safe to always enable this
   tui->terminfo_ext.enter_altfont_mode = "\x1b[11m";
   xfree(xterm_version_env);
-#else
-  patch_terminfo_bugs(tui, term, colorterm, vtev, konsolev, iterm_env, nsterm);
-  augment_terminfo(tui, term, vtev, konsolev, weztermv, iterm_env, nsterm);
-#endif
 
 #define TI_HAS(name) (tui->ti.defs[name] != NULL)
   tui->can_change_scroll_region = TI_HAS(kTerm_change_scroll_region);

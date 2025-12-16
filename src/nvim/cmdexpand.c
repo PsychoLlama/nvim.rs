@@ -98,9 +98,7 @@ static int compl_selected;
 /// cmdline before expansion
 static char *cmdline_orig = NULL;
 
-#ifdef USE_RUST_CMDLINE
 extern int rs_cmdline_fuzzy_complete(const char *fuzzystr);
-#endif
 
 // C accessor for Rust FFI
 unsigned nvim_get_wop_flags(void)
@@ -153,19 +151,11 @@ static bool cmdline_fuzzy_completion_supported(const expand_T *const xp)
 /// Returns true if fuzzy completion for cmdline completion is enabled and
 /// "fuzzystr" is not empty.  If search pattern is empty, then don't use fuzzy
 /// matching.
-#ifdef USE_RUST_CMDLINE
 bool cmdline_fuzzy_complete(const char *const fuzzystr)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
 {
   return rs_cmdline_fuzzy_complete(fuzzystr) != 0;
 }
-#else
-bool cmdline_fuzzy_complete(const char *const fuzzystr)
-  FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
-{
-  return (wop_flags & kOptWopFlagFuzzy) && *fuzzystr != NUL;
-}
-#endif
 
 /// Sort function for the completion matches.
 /// <SNR> functions should be sorted to the end.

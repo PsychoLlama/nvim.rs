@@ -111,14 +111,12 @@
 #include "nvim/window.h"
 #include "nvim/winfloat.h"
 
-#ifdef USE_RUST_EX_DOCMD
 // Rust implementations - declarations
 extern int rs_ends_excmd(int c);
 extern const char *rs_find_nextcmd(const char *p);
 extern const char *rs_check_nextcmd(const char *p);
 extern int rs_is_loclist_cmd(int cmdidx, int cmd_size);
 extern int rs_get_pressedreturn(void);
-#endif
 
 #ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
@@ -4648,28 +4646,14 @@ static void ex_blast(exarg_T *eap)
 
 int ends_excmd(int c) FUNC_ATTR_CONST
 {
-#ifdef USE_RUST_EX_DOCMD
   return rs_ends_excmd(c);
-#else
-  return c == NUL || c == '|' || c == '"' || c == '\n';
-#endif
 }
 
 /// @return  the next command, after the first '|' or '\n' or,
 ///          NULL if not found.
 char *find_nextcmd(const char *p)
 {
-#ifdef USE_RUST_EX_DOCMD
   return (char *)rs_find_nextcmd(p);
-#else
-  while (*p != '|' && *p != '\n') {
-    if (*p == NUL) {
-      return NULL;
-    }
-    p++;
-  }
-  return (char *)p + 1;
-#endif
 }
 
 /// Check if *p is a separator between Ex commands, skipping over white space.
@@ -4677,16 +4661,7 @@ char *find_nextcmd(const char *p)
 /// @return  NULL if it isn't, the following character if it is.
 char *check_nextcmd(char *p)
 {
-#ifdef USE_RUST_EX_DOCMD
   return (char *)rs_check_nextcmd(p);
-#else
-  char *s = skipwhite(p);
-
-  if (*s == '|' || *s == '\n') {
-    return s + 1;
-  }
-  return NULL;
-#endif
 }
 
 /// - if there are more files to edit
@@ -7929,24 +7904,13 @@ static void ex_folddo(exarg_T *eap)
 bool is_loclist_cmd(int cmdidx)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_EX_DOCMD
   return rs_is_loclist_cmd(cmdidx, CMD_SIZE) != 0;
-#else
-  if (cmdidx < 0 || cmdidx >= CMD_SIZE) {
-    return false;
-  }
-  return cmdnames[cmdidx].cmd_name[0] == 'l';
-#endif
 }
 
 bool get_pressedreturn(void)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_EX_DOCMD
   return rs_get_pressedreturn() != 0;
-#else
-  return ex_pressedreturn;
-#endif
 }
 
 void set_pressedreturn(bool val)

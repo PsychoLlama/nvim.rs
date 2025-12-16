@@ -223,11 +223,9 @@ static int cedit_key = -1;  ///< key value of 'cedit' option
 
 #include "ex_getln.c.generated.h"
 
-#ifdef USE_RUST_CMDLINE
 extern int rs_cmdline_overstrike(void);
 extern int rs_cmdline_at_end(void);
 extern int rs_is_in_cmdwin(void);
-#endif
 
 static handle_T cmdpreview_bufnr = 0;
 static int cmdpreview_ns = 0;
@@ -3194,22 +3192,14 @@ char *getexline(int c, void *cookie, int indent, bool do_concat)
 bool cmdline_overstrike(void)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_CMDLINE
   return rs_cmdline_overstrike() != 0;
-#else
-  return ccline.overstrike;
-#endif
 }
 
 /// Return true if the cursor is at the end of the cmdline.
 bool cmdline_at_end(void)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_CMDLINE
   return rs_cmdline_at_end() != 0;
-#else
-  return (ccline.cmdpos >= ccline.cmdlen);
-#endif
 }
 
 /// Deallocate a command line buffer, updating the buffer size and length.
@@ -4809,19 +4799,11 @@ static int open_cmdwin(void)
 }
 
 /// @return true if in the cmdwin, not editing the command line.
-#ifdef USE_RUST_CMDLINE
 bool is_in_cmdwin(void)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
   return rs_is_in_cmdwin() != 0;
 }
-#else
-bool is_in_cmdwin(void)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return cmdwin_type != 0 && get_cmdline_type() == NUL;
-}
-#endif
 
 /// Get script string
 ///

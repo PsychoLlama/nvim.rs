@@ -81,14 +81,12 @@
 
 #include "ops.c.generated.h"
 
-#ifdef USE_RUST_OPS
 // Rust implementations of operator functions
 extern int rs_op_on_lines(int op);
 extern int rs_op_is_change(int op);
 extern int rs_get_op_char(int optype);
 extern int rs_get_extra_op_char(int optype);
 extern int rs_get_op_type(int char1, int char2);
-#endif
 
 // Flags for third item in "opchars".
 #define OPF_LINES  1  // operator always works on lines
@@ -134,61 +132,19 @@ static const char opchars[][3] = {
 /// Must only be called with a valid operator name!
 int get_op_type(int char1, int char2)
 {
-#ifdef USE_RUST_OPS
   return rs_get_op_type(char1, char2);
-#else
-  int i;
-
-  if (char1 == 'r') {
-    // ignore second character
-    return OP_REPLACE;
-  }
-  if (char1 == '~') {
-    // when tilde is an operator
-    return OP_TILDE;
-  }
-  if (char1 == 'g' && char2 == Ctrl_A) {
-    // add
-    return OP_NR_ADD;
-  }
-  if (char1 == 'g' && char2 == Ctrl_X) {
-    // subtract
-    return OP_NR_SUB;
-  }
-  if (char1 == 'z' && char2 == 'y') {  // OP_YANK
-    return OP_YANK;
-  }
-  for (i = 0;; i++) {
-    if (opchars[i][0] == char1 && opchars[i][1] == char2) {
-      break;
-    }
-    if (i == (int)(ARRAY_SIZE(opchars) - 1)) {
-      internal_error("get_op_type()");
-      break;
-    }
-  }
-  return i;
-#endif
 }
 
 /// @return  true if operator "op" always works on whole lines.
 int op_on_lines(int op)
 {
-#ifdef USE_RUST_OPS
   return rs_op_on_lines(op);
-#else
-  return opchars[op][2] & OPF_LINES;
-#endif
 }
 
 /// @return  true if operator "op" changes text.
 int op_is_change(int op)
 {
-#ifdef USE_RUST_OPS
   return rs_op_is_change(op);
-#else
-  return opchars[op][2] & OPF_CHANGE;
-#endif
 }
 
 /// Get first operator command character.
@@ -196,21 +152,13 @@ int op_is_change(int op)
 /// @return  'g' or 'z' if there is another command character.
 int get_op_char(int optype)
 {
-#ifdef USE_RUST_OPS
   return rs_get_op_char(optype);
-#else
-  return opchars[optype][0];
-#endif
 }
 
 /// Get second operator command character.
 int get_extra_op_char(int optype)
 {
-#ifdef USE_RUST_OPS
   return rs_get_extra_op_char(optype);
-#else
-  return opchars[optype][1];
-#endif
 }
 
 /// handle a shift operation
