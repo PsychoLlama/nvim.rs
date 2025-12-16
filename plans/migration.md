@@ -2,9 +2,14 @@
 
 ## Current Status
 
-**767 rs\_\* functions migrated**
+**768 rs\_\* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
+
+### Phase 62: tv_blob_equal ✅ COMPLETE
+
+Added `rs_tv_blob_equal` to Rust - compares two blobs byte-by-byte. Empty and NULL
+blobs are considered equal. This is the first blob comparison operation migrated.
 
 ### Phase 61: tv_list_reverse ✅ COMPLETE
 
