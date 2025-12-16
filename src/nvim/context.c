@@ -27,10 +27,8 @@
 
 #include "context.c.generated.h"
 
-#ifdef USE_RUST_CONTEXT
 extern size_t rs_ctx_size(void);
 extern void rs_ctx_free(Context *ctx);
-#endif
 
 int kCtxAll = (kCtxRegs | kCtxJumps | kCtxBufs | kCtxGVars | kCtxSFuncs
                | kCtxFuncs);
@@ -50,11 +48,7 @@ void ctx_free_all(void)
 size_t ctx_size(void)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_CONTEXT
   return rs_ctx_size();
-#else
-  return kv_size(ctx_stack);
-#endif
 }
 
 /// Returns pointer to Context object with given zero-based index from the top
@@ -74,15 +68,7 @@ Context *ctx_get(size_t index)
 void ctx_free(Context *ctx)
   FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_CONTEXT
   rs_ctx_free(ctx);
-#else
-  api_free_string(ctx->regs);
-  api_free_string(ctx->jumps);
-  api_free_string(ctx->bufs);
-  api_free_string(ctx->gvars);
-  api_free_array(ctx->funcs);
-#endif
 }
 
 /// Saves the editor state to a context.

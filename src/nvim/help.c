@@ -50,9 +50,7 @@
 
 #include "help.c.generated.h"
 
-#ifdef USE_RUST_HELP
 extern int rs_help_heuristic(const char *matched_string, int offset, bool wrong_case);
-#endif
 
 /// ":help": open a read-only window on a help file
 void ex_help(exarg_T *eap)
@@ -263,40 +261,7 @@ char *check_help_lang(char *arg)
 int help_heuristic(char *matched_string, int offset, bool wrong_case)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_HELP
   return rs_help_heuristic(matched_string, offset, wrong_case);
-#else
-  int num_letters = 0;
-  for (char *p = matched_string; *p; p++) {
-    if (ASCII_ISALNUM(*p)) {
-      num_letters++;
-    }
-  }
-
-  // Multiply the number of letters by 100 to give it a much bigger
-  // weighting than the number of characters.
-  // If there only is a match while ignoring case, add 5000.
-  // If the match starts in the middle of a word, add 10000 to put it
-  // somewhere in the last half.
-  // If the match is more than 2 chars from the start, multiply by 200 to
-  // put it after matches at the start.
-  if (offset > 0
-      && ASCII_ISALNUM(matched_string[offset])
-      && ASCII_ISALNUM(matched_string[offset - 1])) {
-    offset += 10000;
-  } else if (offset > 2) {
-    offset *= 200;
-  }
-  if (wrong_case) {
-    offset += 5000;
-  }
-  // Features are less interesting than the subjects themselves, but "+"
-  // alone is not a feature.
-  if (matched_string[0] == '+' && matched_string[1] != NUL) {
-    offset += 100;
-  }
-  return 100 * num_letters + (int)strlen(matched_string) + offset;
-#endif
 }
 
 /// Compare functions for qsort() below, that checks the help heuristics number

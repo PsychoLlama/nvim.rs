@@ -122,9 +122,7 @@ extern const char *rs_find_tty_option_end(const char *arg);
 extern int rs_is_tty_option(const char *name);
 extern const char *rs_skip_to_option_part(const char *p);
 
-#ifdef USE_RUST_BUFFER
 extern int rs_get_fileformat(buf_T *buf);
-#endif
 
 extern int rs_csh_like_shell(void);
 extern int rs_fish_like_shell(void);
@@ -6151,19 +6149,7 @@ char *get_showbreak_value(win_T *const win)
 int get_fileformat(const buf_T *buf)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-#ifdef USE_RUST_BUFFER
   return rs_get_fileformat((buf_T *)buf);
-#else
-  int c = (unsigned char)(*buf->b_p_ff);
-
-  if (buf->b_p_bin || c == 'u') {
-    return EOL_UNIX;
-  }
-  if (c == 'm') {
-    return EOL_MAC;
-  }
-  return EOL_DOS;
-#endif
 }
 
 /// Like get_fileformat(), but override 'fileformat' with "p" for "++opt=val"

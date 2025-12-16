@@ -86,7 +86,6 @@ struct interval {
 #include "mbyte.c.generated.h"
 // uncrustify:on
 
-#ifdef USE_RUST_MBYTE
 // Rust implementations - declarations
 extern int rs_utf_char2len(int c);
 extern int rs_utf_char2bytes(int c, char *buf);
@@ -136,7 +135,6 @@ typedef struct {
 } RsCharBoundsOff;
 extern RsCharBoundsOff rs_utf_cp_bounds_len(const char *base, const char *p_in, int p_len);
 extern RsCharBoundsOff rs_utf_cp_bounds(const char *base, const char *p_in);
-#endif
 
 static const char e_list_item_nr_is_not_list[]
   = N_("E1109: List item %d is not a List");

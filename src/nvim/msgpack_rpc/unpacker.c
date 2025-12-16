@@ -17,37 +17,11 @@
 
 #include "msgpack_rpc/unpacker.c.generated.h"
 
-#ifdef USE_RUST_UNPACKER
 extern Object rs_unpack(const char *data, size_t size, Arena *arena, Error *err);
-#endif
 
 Object unpack(const char *data, size_t size, Arena *arena, Error *err)
 {
-#ifdef USE_RUST_UNPACKER
   return rs_unpack(data, size, arena, err);
-#else
-  Unpacker unpacker;
-  mpack_parser_init(&unpacker.parser, 0);
-  unpacker.parser.data.p = &unpacker;
-  unpacker.arena = *arena;
-
-  int result = mpack_parse(&unpacker.parser, &data, &size,
-                           api_parse_enter, api_parse_exit);
-
-  *arena = unpacker.arena;
-
-  if (result == MPACK_NOMEM) {
-    api_set_error(err, kErrorTypeException, "object was too deep to unpack");
-  } else if (result == MPACK_EOF) {
-    api_set_error(err, kErrorTypeException, "incomplete msgpack string");
-  } else if (result == MPACK_ERROR) {
-    api_set_error(err, kErrorTypeException, "invalid msgpack string");
-  } else if (result == MPACK_OK && size) {
-    api_set_error(err, kErrorTypeException, "trailing data in msgpack string");
-  }
-
-  return unpacker.result;
-#endif
 }
 
 static void api_parse_enter(mpack_parser_t *parser, mpack_node_t *node)

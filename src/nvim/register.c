@@ -4,9 +4,7 @@
 
 #include "nvim/api/private/helpers.h"
 
-#ifdef USE_RUST_REGISTER
 extern bool rs_valid_yank_reg(int regname, bool writing);
-#endif
 #include "nvim/autocmd.h"
 #include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
@@ -152,21 +150,7 @@ char *get_expr_line_src(void)
 /// @param writing allow only writable registers
 bool valid_yank_reg(int regname, bool writing)
 {
-#ifdef USE_RUST_REGISTER
   return rs_valid_yank_reg(regname, writing);
-#else
-  if ((regname > 0 && ASCII_ISALNUM(regname))
-      || (!writing && vim_strchr("/.%:=", regname) != NULL)
-      || regname == '#'
-      || regname == '"'
-      || regname == '-'
-      || regname == '_'
-      || regname == '*'
-      || regname == '+') {
-    return true;
-  }
-  return false;
-#endif
 }
 
 /// Check if the default register (used in an unnamed paste) should be a

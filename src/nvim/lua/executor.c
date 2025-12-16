@@ -77,9 +77,7 @@
 static int in_fast_callback = 0;
 static bool in_script = false;
 
-#ifdef USE_RUST_LUA
 extern int rs_nlua_is_deferred_safe(void);
-#endif
 
 // Initialized in nlua_init().
 static lua_State *global_lstate = NULL;
@@ -1702,17 +1700,10 @@ static Object nlua_call_pop_retval(lua_State *lstate, LuaRetMode mode, Arena *ar
 
 /// check if the current execution context is safe for calling deferred API
 /// methods. Luv callbacks are unsafe as they are called inside the uv loop.
-#ifdef USE_RUST_LUA
 bool nlua_is_deferred_safe(void)
 {
   return rs_nlua_is_deferred_safe() != 0;
 }
-#else
-bool nlua_is_deferred_safe(void)
-{
-  return in_fast_callback == 0;
-}
-#endif
 
 /// Executes Lua code.
 ///
@@ -2465,7 +2456,6 @@ int nvim_get_in_fast_callback(void)
   return in_fast_callback;
 }
 
-#ifdef USE_RUST_LUA
 /// C wrapper for nlua_call_ref callable from Rust.
 /// Note: Array is passed by value (16 bytes on 64-bit), which is ABI-safe.
 Object nvim_nlua_call_ref(LuaRef ref, const char *name, Array args,
@@ -2480,4 +2470,3 @@ Object nvim_nlua_call_ref_ctx(int fast, LuaRef ref, const char *name,
 {
   return nlua_call_ref_ctx((bool)fast, ref, name, args, (LuaRetMode)mode, arena, err);
 }
-#endif

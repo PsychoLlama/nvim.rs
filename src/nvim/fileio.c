@@ -93,12 +93,10 @@
 # define UV_FS_COPYFILE_FICLONE 0
 #endif
 
-#ifdef USE_RUST_FILEIO
 // Rust implementations - declarations
 extern int rs_time_differs(int64_t file_sec, int64_t file_nsec, int64_t mtime, int64_t mtime_ns,
                            int fat_tolerance);
 extern bool rs_is_dev_fd_file(const char *fname);
-#endif
 
 #include "fileio.c.generated.h"
 
@@ -1900,15 +1898,7 @@ theend:
 bool is_dev_fd_file(char *fname)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_FILEIO
   return rs_is_dev_fd_file(fname);
-#else
-  return strncmp(fname, "/dev/fd/", 8) == 0
-         && ascii_isdigit((uint8_t)fname[8])
-         && *skipdigits(fname + 9) == NUL
-         && (fname[9] != NUL
-             || (fname[8] != '0' && fname[8] != '1' && fname[8] != '2'));
-#endif
 }
 #endif
 
@@ -2174,26 +2164,12 @@ void msg_add_lines(int insert_space, linenr_T lnum, off_T nchars)
 bool time_differs(const FileInfo *file_info, int64_t mtime, int64_t mtime_ns)
   FUNC_ATTR_CONST
 {
-#ifdef USE_RUST_FILEIO
 #if defined(__linux__) || defined(MSWIN)
   return rs_time_differs(file_info->stat.st_mtim.tv_sec, file_info->stat.st_mtim.tv_nsec,
                          mtime, mtime_ns, 1);
 #else
   return rs_time_differs(file_info->stat.st_mtim.tv_sec, file_info->stat.st_mtim.tv_nsec,
                          mtime, mtime_ns, 0);
-#endif
-#else
-#if defined(__linux__) || defined(MSWIN)
-  return file_info->stat.st_mtim.tv_nsec != mtime_ns
-         // On a FAT filesystem, esp. under Linux, there are only 5 bits to store
-         // the seconds.  Since the roundoff is done when flushing the inode, the
-         // time may change unexpectedly by one second!!!
-         || file_info->stat.st_mtim.tv_sec - mtime > 1
-         || mtime - file_info->stat.st_mtim.tv_sec > 1;
-#else
-  return file_info->stat.st_mtim.tv_nsec != mtime_ns
-         || file_info->stat.st_mtim.tv_sec != mtime;
-#endif
 #endif
 }
 

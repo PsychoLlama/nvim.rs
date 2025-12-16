@@ -82,7 +82,6 @@
 #include "nvim/window.h"
 #include "nvim/winfloat.h"
 
-#ifdef USE_RUST_INSEXPAND
 // Rust implementations of ctrl_x_mode_* functions
 extern int rs_ctrl_x_mode_none(void);
 extern int rs_ctrl_x_mode_normal(void);
@@ -106,7 +105,6 @@ extern int rs_ctrl_x_mode_not_defined_yet(void);
 extern int rs_compl_status_adding(void);
 extern int rs_compl_status_sol(void);
 extern int rs_compl_status_local(void);
-#endif
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -403,7 +401,6 @@ void ins_ctrl_x(void)
 
 // Functions to check the current CTRL-X mode.
 
-#ifdef USE_RUST_INSEXPAND
 bool ctrl_x_mode_none(void) { return rs_ctrl_x_mode_none() != 0; }
 bool ctrl_x_mode_normal(void) { return rs_ctrl_x_mode_normal() != 0; }
 bool ctrl_x_mode_scroll(void) { return rs_ctrl_x_mode_scroll() != 0; }
@@ -423,149 +420,10 @@ bool ctrl_x_mode_line_or_eval(void) { return rs_ctrl_x_mode_line_or_eval() != 0;
 bool ctrl_x_mode_register(void) { return rs_ctrl_x_mode_register() != 0; }
 bool ctrl_x_mode_not_default(void) { return rs_ctrl_x_mode_not_default() != 0; }
 bool ctrl_x_mode_not_defined_yet(void) { return rs_ctrl_x_mode_not_defined_yet() != 0; }
-#else
-bool ctrl_x_mode_none(void)
-  FUNC_ATTR_PURE
-{
-  return ctrl_x_mode == 0;
-}
 
-bool ctrl_x_mode_normal(void)
-  FUNC_ATTR_PURE
-{
-  return ctrl_x_mode == CTRL_X_NORMAL;
-}
-
-bool ctrl_x_mode_scroll(void)
-  FUNC_ATTR_PURE
-{
-  return ctrl_x_mode == CTRL_X_SCROLL;
-}
-
-bool ctrl_x_mode_whole_line(void)
-  FUNC_ATTR_PURE
-{
-  return ctrl_x_mode == CTRL_X_WHOLE_LINE;
-}
-
-bool ctrl_x_mode_files(void)
-  FUNC_ATTR_PURE
-{
-  return ctrl_x_mode == CTRL_X_FILES;
-}
-
-bool ctrl_x_mode_tags(void)
-  FUNC_ATTR_PURE
-{
-  return ctrl_x_mode == CTRL_X_TAGS;
-}
-
-bool ctrl_x_mode_path_patterns(void)
-  FUNC_ATTR_PURE
-{
-  return ctrl_x_mode == CTRL_X_PATH_PATTERNS;
-}
-
-bool ctrl_x_mode_path_defines(void)
-  FUNC_ATTR_PURE
-{
-  return ctrl_x_mode == CTRL_X_PATH_DEFINES;
-}
-
-bool ctrl_x_mode_dictionary(void)
-  FUNC_ATTR_PURE
-{
-  return ctrl_x_mode == CTRL_X_DICTIONARY;
-}
-
-bool ctrl_x_mode_thesaurus(void)
-  FUNC_ATTR_PURE
-{
-  return ctrl_x_mode == CTRL_X_THESAURUS;
-}
-
-bool ctrl_x_mode_cmdline(void)
-  FUNC_ATTR_PURE
-{
-  return ctrl_x_mode == CTRL_X_CMDLINE || ctrl_x_mode == CTRL_X_CMDLINE_CTRL_X;
-}
-
-bool ctrl_x_mode_function(void)
-  FUNC_ATTR_PURE
-{
-  return ctrl_x_mode == CTRL_X_FUNCTION;
-}
-
-bool ctrl_x_mode_omni(void)
-  FUNC_ATTR_PURE
-{
-  return ctrl_x_mode == CTRL_X_OMNI;
-}
-
-bool ctrl_x_mode_spell(void)
-  FUNC_ATTR_PURE
-{
-  return ctrl_x_mode == CTRL_X_SPELL;
-}
-
-static bool ctrl_x_mode_eval(void)
-  FUNC_ATTR_PURE
-{
-  return ctrl_x_mode == CTRL_X_EVAL;
-}
-
-bool ctrl_x_mode_line_or_eval(void)
-  FUNC_ATTR_PURE
-{
-  return ctrl_x_mode == CTRL_X_WHOLE_LINE || ctrl_x_mode == CTRL_X_EVAL;
-}
-
-bool ctrl_x_mode_register(void)
-  FUNC_ATTR_PURE
-{
-  return ctrl_x_mode == CTRL_X_REGISTER;
-}
-
-/// Whether other than default completion has been selected.
-bool ctrl_x_mode_not_default(void)
-  FUNC_ATTR_PURE
-{
-  return ctrl_x_mode != CTRL_X_NORMAL;
-}
-
-/// Whether CTRL-X was typed without a following character,
-/// not including when in CTRL-X CTRL-V mode.
-bool ctrl_x_mode_not_defined_yet(void)
-  FUNC_ATTR_PURE
-{
-  return ctrl_x_mode == CTRL_X_NOT_DEFINED_YET;
-}
-#endif  // USE_RUST_INSEXPAND
-
-#ifdef USE_RUST_INSEXPAND
 bool compl_status_adding(void) { return rs_compl_status_adding() != 0; }
 bool compl_status_sol(void) { return rs_compl_status_sol() != 0; }
 bool compl_status_local(void) { return rs_compl_status_local() != 0; }
-#else
-/// @return  true if currently in "normal" or "adding" insert completion matches state
-bool compl_status_adding(void)
-{
-  return compl_cont_status & CONT_ADDING;
-}
-
-/// @return  true if the completion pattern includes start of line, just for
-///          word-wise expansion.
-bool compl_status_sol(void)
-{
-  return compl_cont_status & CONT_SOL;
-}
-
-/// @return  true if ^X^P/^X^N will do a local completion (i.e. use complete=.)
-bool compl_status_local(void)
-{
-  return compl_cont_status & CONT_LOCAL;
-}
-#endif  // USE_RUST_INSEXPAND
 
 /// Clear the completion status flags
 void compl_status_clear(void)

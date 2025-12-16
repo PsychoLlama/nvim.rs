@@ -467,36 +467,26 @@ bool pat_has_uppercase(char *pat)
   return false;
 }
 
-#ifdef USE_RUST_SEARCH
+extern const char *rs_last_csearch(void);
+
 const char *last_csearch(void)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
   return rs_last_csearch();
 }
-#else
-const char *last_csearch(void)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return lastc_bytes;
-}
-#endif
+
+extern int rs_last_csearch_forward(void);
 
 int last_csearch_forward(void)
 {
-#ifdef USE_RUST_SEARCH
   return rs_last_csearch_forward();
-#else
-  return lastcdir == FORWARD;
-#endif
 }
+
+extern int rs_last_csearch_until(void);
 
 int last_csearch_until(void)
 {
-#ifdef USE_RUST_SEARCH
   return rs_last_csearch_until();
-#else
-  return last_t_cmd;
-#endif
 }
 
 void set_last_csearch(int c, char *s, int len)
