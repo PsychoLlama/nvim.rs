@@ -15,7 +15,6 @@
 
 #include "event/rstream.c.generated.h"
 
-#ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern int rs_stream_is_closed(Stream *stream);
 extern size_t rs_stream_pending_reqs(Stream *stream);
@@ -58,29 +57,6 @@ extern void rs_rstream_set_num_bytes(RStream *stream, size_t num_bytes);
 #define rstream_set_num_bytes(s, n) rs_rstream_set_num_bytes(s, n)
 extern void rs_rstream_num_bytes_add(RStream *stream, size_t amount);
 #define rstream_num_bytes_add(s, a) rs_rstream_num_bytes_add(s, a)
-#else
-#define stream_is_closed(s) ((s)->closed)
-#define stream_pending_reqs(s) ((s)->pending_reqs)
-#define stream_pending_reqs_inc(s) ((s)->pending_reqs++)
-#define stream_pending_reqs_dec(s) ((s)->pending_reqs--)
-#define stream_get_cb_data(s) ((s)->cb_data)
-#define stream_set_cb_data(s, d) ((s)->cb_data = (d))
-#define stream_get_fpos(s) ((s)->fpos)
-#define stream_fpos_add(s, a) ((s)->fpos += (a))
-#define stream_get_close_cb(s) ((s)->close_cb)
-#define stream_set_close_cb(s, c) ((s)->close_cb = (c))
-#define stream_get_close_cb_data(s) ((s)->close_cb_data)
-#define stream_set_close_cb_data(s, d) ((s)->close_cb_data = (d))
-#define stream_get_events(s) ((s)->events)
-// RStream field accessors (fallback)
-#define rstream_did_eof(s) ((s)->did_eof)
-#define rstream_set_did_eof(s, e) ((s)->did_eof = (e))
-#define rstream_want_read(s) ((s)->want_read)
-#define rstream_set_want_read(s, w) ((s)->want_read = (w))
-#define rstream_num_bytes(s) ((s)->num_bytes)
-#define rstream_set_num_bytes(s, n) ((s)->num_bytes = (n))
-#define rstream_num_bytes_add(s, a) ((s)->num_bytes += (a))
-#endif
 
 void rstream_init_fd(Loop *loop, RStream *stream, int fd)
   FUNC_ATTR_NONNULL_ARG(1, 2)

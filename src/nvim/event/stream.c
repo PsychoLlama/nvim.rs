@@ -16,7 +16,6 @@
 
 #include "event/stream.c.generated.h"
 
-#ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern int rs_stream_is_closed(Stream *stream);
 #define stream_is_closed(s) rs_stream_is_closed(s)
@@ -59,29 +58,6 @@ extern void rs_stream_set_events(Stream *stream, MultiQueue *events);
 #define stream_set_events(s, e) rs_stream_set_events(s, e)
 extern void rs_stream_set_fpos(Stream *stream, int64_t fpos);
 #define stream_set_fpos(s, f) rs_stream_set_fpos(s, f)
-#else
-#define stream_is_closed(s) ((s)->closed)
-#define stream_get_fd(s) ((s)->fd)
-#define stream_set_closed(s, c) ((s)->closed = (c))
-#define stream_get_pending_reqs(s) ((s)->pending_reqs)
-#define stream_get_internal_data(s) ((s)->internal_data)
-#define stream_set_internal_data(s, d) ((s)->internal_data = (d))
-#define stream_get_internal_close_cb(s) ((s)->internal_close_cb)
-#define stream_set_internal_close_cb(s, c) ((s)->internal_close_cb = (c))
-#define stream_call_internal_close_cb(s) do { if ((s)->internal_close_cb) (s)->internal_close_cb((s), (s)->internal_data); } while (0)
-#define stream_get_close_cb(s) ((s)->close_cb)
-#define stream_set_close_cb(s, c) ((s)->close_cb = (c))
-#define stream_get_close_cb_data(s) ((s)->close_cb_data)
-#define stream_set_close_cb_data(s, d) ((s)->close_cb_data = (d))
-#define stream_call_close_cb(s) do { if ((s)->close_cb) (s)->close_cb((s), (s)->close_cb_data); } while (0)
-// Additional stream field accessors (fallback)
-#define stream_set_curmem(s, c) ((s)->curmem = (c))
-#define stream_set_maxmem(s, m) ((s)->maxmem = (m))
-#define stream_set_pending_reqs(s, p) ((s)->pending_reqs = (p))
-#define stream_set_write_cb(s, c) ((s)->write_cb = (c))
-#define stream_set_events(s, e) ((s)->events = (e))
-#define stream_set_fpos(s, f) ((s)->fpos = (f))
-#endif
 
 // For compatibility with libuv < 1.19.0 (tested on 1.18.0)
 #if UV_VERSION_MINOR < 19

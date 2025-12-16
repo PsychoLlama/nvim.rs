@@ -23,7 +23,6 @@
 
 #include "event/socket.c.generated.h"
 
-#ifdef USE_RUST_EVENT
 // Rust function declarations
 extern void *rs_socket_watcher_get_data(SocketWatcher *watcher);
 extern void rs_socket_watcher_set_data(SocketWatcher *watcher, void *data);
@@ -48,20 +47,6 @@ extern void rs_socket_watcher_call_close_cb(SocketWatcher *watcher);
 // Loop accessors
 extern MultiQueue *rs_loop_get_fast_events(Loop *loop);
 #define loop_get_fast_events(l) rs_loop_get_fast_events(l)
-#else
-#define socket_watcher_get_data(w) ((w)->data)
-#define socket_watcher_set_data(w, d) ((w)->data = (d))
-#define socket_watcher_get_events(w) ((w)->events)
-#define socket_watcher_set_events(w, e) ((w)->events = (e))
-#define socket_watcher_get_cb(w) ((w)->cb)
-#define socket_watcher_set_cb(w, c) ((w)->cb = (c))
-#define socket_watcher_get_close_cb(w) ((w)->close_cb)
-#define socket_watcher_set_close_cb(w, c) ((w)->close_cb = (c))
-#define socket_watcher_call_cb(w, s) do { if ((w)->cb) (w)->cb((w), (s), (w)->data); } while (0)
-#define socket_watcher_call_close_cb(w) do { if ((w)->close_cb) (w)->close_cb((w), (w)->data); } while (0)
-// Loop accessors (fallback)
-#define loop_get_fast_events(l) ((l)->fast_events)
-#endif
 
 int socket_watcher_init(Loop *loop, SocketWatcher *watcher, const char *endpoint)
   FUNC_ATTR_NONNULL_ALL

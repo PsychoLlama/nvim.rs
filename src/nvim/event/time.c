@@ -10,7 +10,6 @@
 
 #include "event/time.c.generated.h"
 
-#ifdef USE_RUST_EVENT
 // Rust function declarations
 extern int rs_timewatcher_should_skip(TimeWatcher *tw);
 #define timewatcher_should_skip(tw) rs_timewatcher_should_skip(tw)
@@ -41,23 +40,6 @@ extern void rs_timewatcher_call_close_cb(TimeWatcher *tw);
 // Loop accessors
 extern MultiQueue *rs_loop_get_fast_events(Loop *loop);
 #define loop_get_fast_events(l) rs_loop_get_fast_events(l)
-#else
-#define timewatcher_should_skip(tw) ((tw)->blockable && !multiqueue_empty((tw)->events))
-#define timewatcher_get_data(tw) ((tw)->data)
-#define timewatcher_set_data(tw, d) ((tw)->data = (d))
-#define timewatcher_get_events(tw) ((tw)->events)
-#define timewatcher_set_events(tw, e) ((tw)->events = (e))
-#define timewatcher_is_blockable(tw) ((tw)->blockable)
-#define timewatcher_set_blockable(tw, b) ((tw)->blockable = (b))
-#define timewatcher_get_cb(tw) ((tw)->cb)
-#define timewatcher_set_cb(tw, c) ((tw)->cb = (c))
-#define timewatcher_get_close_cb(tw) ((tw)->close_cb)
-#define timewatcher_set_close_cb(tw, c) ((tw)->close_cb = (c))
-#define timewatcher_call_cb(tw) do { if ((tw)->cb) (tw)->cb((tw), (tw)->data); } while (0)
-#define timewatcher_call_close_cb(tw) do { if ((tw)->close_cb) (tw)->close_cb((tw), (tw)->data); } while (0)
-// Loop accessors (fallback)
-#define loop_get_fast_events(l) ((l)->fast_events)
-#endif
 
 void time_watcher_init(Loop *loop, TimeWatcher *watcher, void *data)
   FUNC_ATTR_NONNULL_ARG(1) FUNC_ATTR_NONNULL_ARG(2)

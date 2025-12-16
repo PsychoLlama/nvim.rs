@@ -9,7 +9,6 @@
 
 #include "event/signal.c.generated.h"
 
-#ifdef USE_RUST_EVENT
 // Rust function declarations
 extern void *rs_signal_watcher_get_data(SignalWatcher *watcher);
 extern void rs_signal_watcher_set_data(SignalWatcher *watcher, void *data);
@@ -34,20 +33,6 @@ extern void rs_signal_watcher_call_close_cb(SignalWatcher *watcher);
 // Loop accessors
 extern MultiQueue *rs_loop_get_fast_events(Loop *loop);
 #define loop_get_fast_events(l) rs_loop_get_fast_events(l)
-#else
-#define signal_watcher_get_data(w) ((w)->data)
-#define signal_watcher_set_data(w, d) ((w)->data = (d))
-#define signal_watcher_get_events(w) ((w)->events)
-#define signal_watcher_set_events(w, e) ((w)->events = (e))
-#define signal_watcher_get_cb(w) ((w)->cb)
-#define signal_watcher_set_cb(w, c) ((w)->cb = (c))
-#define signal_watcher_get_close_cb(w) ((w)->close_cb)
-#define signal_watcher_set_close_cb(w, c) ((w)->close_cb = (c))
-#define signal_watcher_call_cb(w) do { if ((w)->cb) (w)->cb((w), (w)->uv.signum, (w)->data); } while (0)
-#define signal_watcher_call_close_cb(w) do { if ((w)->close_cb) (w)->close_cb((w), (w)->data); } while (0)
-// Loop accessors (fallback)
-#define loop_get_fast_events(l) ((l)->fast_events)
-#endif
 
 void signal_watcher_init(Loop *loop, SignalWatcher *watcher, void *data)
   FUNC_ATTR_NONNULL_ARG(1) FUNC_ATTR_NONNULL_ARG(2)

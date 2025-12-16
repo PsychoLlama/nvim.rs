@@ -51,11 +51,9 @@
 #include "nvim/lib/queue_defs.h"
 #include "nvim/memory.h"
 
-#ifdef USE_RUST_EVENT
 // Rust implementations from nvim-event crate
 extern int rs_multiqueue_empty(MultiQueue *mq);
 extern size_t rs_multiqueue_size(MultiQueue *mq);
-#endif
 
 typedef struct multiqueue_item MultiQueueItem;
 struct multiqueue_item {
@@ -176,7 +174,6 @@ void multiqueue_purge_events(MultiQueue *self)
   }
 }
 
-#ifdef USE_RUST_EVENT
 bool multiqueue_empty(MultiQueue *self)
 {
   assert(self);
@@ -187,19 +184,6 @@ size_t multiqueue_size(MultiQueue *self)
 {
   return rs_multiqueue_size(self);
 }
-#else
-bool multiqueue_empty(MultiQueue *self)
-{
-  assert(self);
-  return QUEUE_EMPTY(&self->headtail);
-}
-
-/// Gets the count of all events currently in the queue.
-size_t multiqueue_size(MultiQueue *self)
-{
-  return self->size;
-}
-#endif  // USE_RUST_EVENT
 
 void multiqueue_replace_parent(MultiQueue *self, MultiQueue *new_parent)
 {

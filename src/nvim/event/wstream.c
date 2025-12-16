@@ -20,7 +20,6 @@ typedef struct {
 
 #include "event/wstream.c.generated.h"
 
-#ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern int rs_stream_is_closed(Stream *stream);
 extern size_t rs_stream_pending_reqs(Stream *stream);
@@ -56,25 +55,6 @@ extern void rs_stream_fpos_add(Stream *stream, int64_t amount);
 #define stream_get_fpos(s) rs_stream_get_fpos(s)
 #define stream_set_fpos(s, f) rs_stream_set_fpos(s, f)
 #define stream_fpos_add(s, a) rs_stream_fpos_add(s, a)
-#else
-#define stream_is_closed(s) ((s)->closed)
-#define stream_pending_reqs(s) ((s)->pending_reqs)
-#define stream_pending_reqs_inc(s) ((s)->pending_reqs++)
-#define stream_pending_reqs_dec(s) ((s)->pending_reqs--)
-#define stream_get_curmem(s) ((s)->curmem)
-#define stream_get_maxmem(s) ((s)->maxmem)
-#define stream_set_maxmem(s, m) ((s)->maxmem = (m))
-#define stream_curmem_add(s, a) ((s)->curmem += (a))
-#define stream_curmem_sub(s, a) ((s)->curmem -= (a))
-#define stream_get_write_cb(s) ((s)->write_cb)
-#define stream_set_write_cb(s, c) ((s)->write_cb = (c))
-#define stream_call_write_cb(s, d, st) do { if ((s)->write_cb) (s)->write_cb((s), (d), (st)); } while (0)
-#define stream_get_cb_data(s) ((s)->cb_data)
-#define stream_set_cb_data(s, d) ((s)->cb_data = (d))
-#define stream_get_fpos(s) ((s)->fpos)
-#define stream_set_fpos(s, f) ((s)->fpos = (f))
-#define stream_fpos_add(s, a) ((s)->fpos += (a))
-#endif
 
 void wstream_init_fd(Loop *loop, Stream *stream, int fd, size_t maxmem)
   FUNC_ATTR_NONNULL_ARG(1) FUNC_ATTR_NONNULL_ARG(2)

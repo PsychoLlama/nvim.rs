@@ -25,7 +25,6 @@
 
 #include "event/proc.c.generated.h"
 
-#ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern int rs_multiqueue_empty(MultiQueue *mq);
 #define multiqueue_empty(mq) rs_multiqueue_empty(mq)
@@ -132,60 +131,6 @@ extern MultiQueue *rs_stream_get_events(Stream *stream);
 #define stream_get_events(s) rs_stream_get_events(s)
 extern void *rs_stream_get_cb_data(Stream *stream);
 #define stream_get_cb_data(s) rs_stream_get_cb_data(s)
-#else
-#define rstream_is_closed(s) ((s)->s.closed)
-#define rstream_num_bytes(s) ((s)->num_bytes)
-#define rstream_did_eof(s) ((s)->did_eof)
-#define proc_is_closed(p) ((p)->closed)
-#define proc_set_closed(p, c) ((p)->closed = (c))
-#define proc_get_status(p) ((p)->status)
-#define proc_set_status(p, s) ((p)->status = (s))
-#define proc_get_stopped_time(p) ((p)->stopped_time)
-#define proc_get_pid(p) ((p)->pid)
-#define proc_set_pid(p, pid) ((p)->pid = (pid))
-#define proc_get_refcount(p) ((p)->refcount)
-#define proc_incref(p) ((p)->refcount++)
-#define proc_decref(p) (--(p)->refcount)
-#define proc_get_type(p) ((p)->type)
-#define proc_get_detach(p) ((p)->detach)
-#define proc_set_detach(p, d) ((p)->detach = (d))
-#define proc_get_events(p) ((p)->events)
-#define proc_set_events(p, e) ((p)->events = (e))
-#define proc_get_loop(p) ((p)->loop)
-#define proc_get_argv(p) ((p)->argv)
-#define proc_set_argv(p, a) ((p)->argv = (a))
-#define proc_get_exepath_raw(p) ((p)->exepath)
-#define proc_set_exepath(p, e) ((p)->exepath = (e))
-#define proc_get_cwd(p) ((p)->cwd)
-#define proc_set_cwd(p, c) ((p)->cwd = (c))
-#define proc_get_env(p) ((p)->env)
-#define proc_set_env(p, e) ((p)->env = (e))
-#define proc_set_stopped_time(p, t) ((p)->stopped_time = (t))
-#define proc_get_exit_signal(p) ((p)->exit_signal)
-#define proc_set_exit_signal(p, s) ((p)->exit_signal = (s))
-#define proc_get_fwd_err(p) ((p)->fwd_err)
-#define proc_set_fwd_err(p, f) ((p)->fwd_err = (f))
-#define proc_get_overlapped(p) ((p)->overlapped)
-#define proc_set_overlapped(p, o) ((p)->overlapped = (o))
-#define proc_get_cb(p) ((p)->cb)
-#define proc_set_cb(p, c) ((p)->cb = (c))
-#define proc_get_internal_exit_cb(p) ((p)->internal_exit_cb)
-#define proc_set_internal_exit_cb(p, c) ((p)->internal_exit_cb = (c))
-#define proc_get_internal_close_cb(p) ((p)->internal_close_cb)
-#define proc_set_internal_close_cb(p, c) ((p)->internal_close_cb = (c))
-#define proc_call_cb(p, s, d) do { if ((p)->cb) (p)->cb((p), (s), (d)); } while (0)
-#define proc_call_internal_exit_cb(p) do { if ((p)->internal_exit_cb) (p)->internal_exit_cb(p); } while (0)
-#define proc_call_internal_close_cb(p) do { if ((p)->internal_close_cb) (p)->internal_close_cb(p); } while (0)
-// Loop accessors (fallback)
-#define loop_get_events(l) ((l)->events)
-#define loop_get_fast_events(l) ((l)->fast_events)
-// Stream accessors for proc->in/out/err (fallback)
-#define stream_set_internal_data(s, d) ((s)->internal_data = (d))
-#define stream_set_internal_close_cb(s, c) ((s)->internal_close_cb = (c))
-#define stream_set_closed(s, c) ((s)->closed = (c))
-#define stream_get_events(s) ((s)->events)
-#define stream_get_cb_data(s) ((s)->cb_data)
-#endif
 
 // Time for a process to exit cleanly before we send KILL.
 // For PTY processes SIGTERM is sent first (in case SIGHUP was not enough).

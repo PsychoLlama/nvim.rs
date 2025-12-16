@@ -16,7 +16,6 @@
 
 #include "event/libuv_proc.c.generated.h"
 
-#ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern int rs_rstream_is_closed(RStream *stream);
 extern int rs_stream_is_closed(Stream *stream);
@@ -46,22 +45,6 @@ extern void rs_proc_call_internal_exit_cb(Proc *proc);
 extern void rs_proc_call_internal_close_cb(Proc *proc);
 #define proc_call_internal_exit_cb(p) rs_proc_call_internal_exit_cb(p)
 #define proc_call_internal_close_cb(p) rs_proc_call_internal_close_cb(p)
-#else
-#define rstream_is_closed(s) ((s)->s.closed)
-#define stream_is_closed(s) ((s)->closed)
-#define proc_set_status(p, s) ((p)->status = (s))
-#define proc_get_detach(p) ((p)->detach)
-#define proc_get_loop(p) ((p)->loop)
-#define proc_set_pid(p, pid) ((p)->pid = (pid))
-#define proc_get_argv(p) ((p)->argv)
-#define proc_get_cwd(p) ((p)->cwd)
-#define proc_get_env(p) ((p)->env)
-#define proc_get_exit_signal(p) ((p)->exit_signal)
-#define proc_get_fwd_err(p) ((p)->fwd_err)
-#define proc_get_overlapped(p) ((p)->overlapped)
-#define proc_call_internal_exit_cb(p) do { if ((p)->internal_exit_cb) (p)->internal_exit_cb(p); } while (0)
-#define proc_call_internal_close_cb(p) do { if ((p)->internal_close_cb) (p)->internal_close_cb(p); } while (0)
-#endif
 
 /// @returns zero on success, or negative error code
 int libuv_proc_spawn(LibuvProc *uvproc)
