@@ -28,7 +28,6 @@ typedef struct {
 
 #include "tui/terminfo.c.generated.h"
 
-#ifdef USE_RUST_TUI
 extern int rs_terminfo_is_term_family(const char *term, const char *family);
 extern int rs_terminfo_is_bsd_console(const char *term);
 
@@ -41,40 +40,6 @@ bool terminfo_is_bsd_console(const char *term)
 {
   return rs_terminfo_is_bsd_console(term) != 0;
 }
-#else
-bool terminfo_is_term_family(const char *term, const char *family)
-{
-  if (!term) {
-    return false;
-  }
-  size_t tlen = strlen(term);
-  size_t flen = strlen(family);
-  return tlen >= flen
-         && 0 == memcmp(term, family, flen)
-         // Per commentary in terminfo, minus is the only valid suffix separator.
-         // The screen terminfo may have a terminal name like screen.xterm. By making
-         // the dot(.) a valid separator, such terminal names will also be the
-         // terminal family of the screen.
-         && (NUL == term[flen] || '-' == term[flen] || '.' == term[flen]);
-}
-
-bool terminfo_is_bsd_console(const char *term)
-{
-#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) \
-  || defined(__DragonFly__)
-  if (strequal(term, "vt220")         // OpenBSD
-      || strequal(term, "vt100")) {   // NetBSD
-    return true;
-  }
-# if defined(__FreeBSD__)
-  // FreeBSD console sets TERM=xterm, but it does not support xterm features
-  // like cursor-shaping. Assume that TERM=xterm is degraded. #8644
-  return strequal(term, "xterm") && os_env_exists("XTERM_VERSION", true);
-# endif
-#endif
-  return false;
-}
-#endif
 
 /// Loads a built-in terminfo db when we (unibilium) failed to load a terminfo
 /// record from the environment (termcap systems, unrecognized $TERM, …).

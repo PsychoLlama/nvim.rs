@@ -6,6 +6,18 @@
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
+### Phase 51: Dead Code Cleanup 9 ✅ COMPLETE
+
+Removed 159 lines of dead C fallback code from scattered modules:
+- macros_defs.h: 2 USE_RUST_ASCII conditionals (TOUPPER_ASC, TOLOWER_ASC, ASCII_IS* macros)
+- tui/tui.c: 1 USE_RUST_EVENT conditional (rstream_did_eof)
+- tui/terminfo.c: 1 USE_RUST_TUI conditional (terminfo_is_term_family, terminfo_is_bsd_console)
+- tui/input.c: 1 USE_RUST_TUI conditional (handle_termkey_modifiers, handle_more_modifiers)
+- api/private/defs.h: 1 USE_RUST_API conditional (is_internal_call)
+- api/private/validate.h: 1 USE_RUST_API conditional (extern declarations)
+- api/private/validate.c: 2 USE_RUST_API conditionals (api_err_invalid, api_err_exp)
+- event/proc.h: 2 USE_RUST_EVENT conditionals (proc_get_exepath, proc_is_stopped)
+
 ### Phase 50: Dead Code Cleanup 8 ✅ COMPLETE
 
 Removed 212 lines of dead C fallback code from header files and small modules:
@@ -112,6 +124,9 @@ All grid.c functions that can reasonably be migrated are now in Rust.
 
 | Phase | Name | Key Functions |
 |-------|------|---------------|
+| 51 | Dead Code Cleanup 9 | Removed 159 lines from macros_defs.h, tui/*, api/private/*, event/proc.h |
+| 50 | Dead Code Cleanup 8 | Removed 212 lines from ascii_defs.h, os/time.c, os/env.c, mark.h, mark_defs.h, queue_defs.h |
+| 49 | Dead Code Cleanup 7 | Removed 187 lines from eval, tui, ops, menu, ex_docmd, cmdexpand/ex_getln |
 | 48 | Dead Code Cleanup 6 | Removed 298 lines from autocmd, cmdhist, cursor_shape, spell, indent, ex_eval |
 | 47 | Dead Code Cleanup 5 | Removed 383 lines from 16 misc files (arabic, mbyte, help, register, os/*, etc) |
 | 46 | Dead Code Cleanup 4 | Removed 408 lines from math.c, memory.c, hashtab.c, version.c, arabic.c, keycodes.c, mouse.c, option.c |

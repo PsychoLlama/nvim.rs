@@ -52,9 +52,7 @@ typedef enum {
 /// Internal call from Lua code
 #define LUA_INTERNAL_CALL (VIML_INTERNAL_CALL + 1)
 
-#ifdef USE_RUST_API
 extern int rs_is_internal_call(uint64_t channel_id);
-#endif
 
 /// Check whether call is internal
 ///
@@ -64,11 +62,7 @@ extern int rs_is_internal_call(uint64_t channel_id);
 static inline bool is_internal_call(const uint64_t channel_id)
   FUNC_ATTR_ALWAYS_INLINE FUNC_ATTR_CONST
 {
-#ifdef USE_RUST_API
   return rs_is_internal_call(channel_id) != 0;
-#else
-  return !!(channel_id & INTERNAL_CALL_MASK);
-#endif
 }
 
 typedef struct {

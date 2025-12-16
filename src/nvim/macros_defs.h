@@ -40,33 +40,21 @@
 #define TOLOWER_LOC tolower
 
 // toupper() and tolower() for ASCII only and ignore the current locale.
-#ifdef USE_RUST_ASCII
 extern int rs_ascii_toupper(int c);
 extern int rs_ascii_tolower(int c);
-# define TOUPPER_ASC(c) rs_ascii_toupper(c)
-# define TOLOWER_ASC(c) rs_ascii_tolower(c)
-#else
-# define TOUPPER_ASC(c) (((c) < 'a' || (c) > 'z') ? (c) : (c) - ('a' - 'A'))
-# define TOLOWER_ASC(c) (((c) < 'A' || (c) > 'Z') ? (c) : (c) + ('a' - 'A'))
-#endif
+#define TOUPPER_ASC(c) rs_ascii_toupper(c)
+#define TOLOWER_ASC(c) rs_ascii_tolower(c)
 
 // Like isalpha() but reject non-ASCII characters.  Can't be used with a
 // special key (negative value).
-#ifdef USE_RUST_ASCII
 extern int rs_ascii_islower(int c);
 extern int rs_ascii_isupper(int c);
 extern int rs_ascii_isalpha(int c);
 extern int rs_ascii_isalnum(int c);
-# define ASCII_ISLOWER(c) (rs_ascii_islower(c) != 0)
-# define ASCII_ISUPPER(c) (rs_ascii_isupper(c) != 0)
-# define ASCII_ISALPHA(c) (rs_ascii_isalpha(c) != 0)
-# define ASCII_ISALNUM(c) (rs_ascii_isalnum(c) != 0)
-#else
-# define ASCII_ISLOWER(c) ((unsigned)(c) >= 'a' && (unsigned)(c) <= 'z')
-# define ASCII_ISUPPER(c) ((unsigned)(c) >= 'A' && (unsigned)(c) <= 'Z')
-# define ASCII_ISALPHA(c) (ASCII_ISUPPER(c) || ASCII_ISLOWER(c))
-# define ASCII_ISALNUM(c) (ASCII_ISALPHA(c) || ascii_isdigit(c))
-#endif
+#define ASCII_ISLOWER(c) (rs_ascii_islower(c) != 0)
+#define ASCII_ISUPPER(c) (rs_ascii_isupper(c) != 0)
+#define ASCII_ISALPHA(c) (rs_ascii_isalpha(c) != 0)
+#define ASCII_ISALNUM(c) (rs_ascii_isalnum(c) != 0)
 
 // Returns empty string if it is NULL.
 #define EMPTY_IF_NULL(x) ((x) ? (x) : "")

@@ -145,13 +145,9 @@ struct TUIData {
 static bool cursor_style_enabled = false;
 #include "tui/tui.c.generated.h"
 
-#ifdef USE_RUST_EVENT
 // Rust implementation in nvim-event crate
 extern int rs_rstream_did_eof(RStream *stream);
 #define rstream_did_eof(s) rs_rstream_did_eof(s)
-#else
-#define rstream_did_eof(s) ((s)->did_eof)
-#endif
 
 // Rust terminal detection structures and functions
 

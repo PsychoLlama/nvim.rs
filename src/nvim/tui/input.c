@@ -235,7 +235,6 @@ enum {
 #endif
 };
 
-#ifdef USE_RUST_TUI
 // Rust implementations in nvim-tui crate
 extern size_t rs_handle_termkey_modifiers(int modifiers, char *buf, size_t buflen);
 extern size_t rs_handle_more_modifiers(int modifiers, char *buf, size_t buflen);
@@ -262,45 +261,6 @@ static size_t handle_more_modifiers(TermKeyKey *key, char *buf, size_t buflen)
   assert(len < buflen);
   return len;
 }
-#else
-/// Handle TERMKEY_KEYMOD_* modifiers, i.e. Shift, Alt and Ctrl.
-///
-/// @return  The number of bytes written into "buf", excluding the final NUL.
-static size_t handle_termkey_modifiers(TermKeyKey *key, char *buf, size_t buflen)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  size_t len = 0;
-  if (key->modifiers & TERMKEY_KEYMOD_SHIFT) {  // Shift
-    len += (size_t)snprintf(buf + len, buflen - len, "S-");
-  }
-  if (key->modifiers & TERMKEY_KEYMOD_ALT) {  // Alt
-    len += (size_t)snprintf(buf + len, buflen - len, "A-");
-  }
-  if (key->modifiers & TERMKEY_KEYMOD_CTRL) {  // Ctrl
-    len += (size_t)snprintf(buf + len, buflen - len, "C-");
-  }
-  assert(len < buflen);
-  return len;
-}
-
-/// Handle modifiers not handled by libtermkey.
-/// Currently only Super ("D-") and Meta ("T-") are supported in Nvim.
-///
-/// @return  The number of bytes written into "buf", excluding the final NUL.
-static size_t handle_more_modifiers(TermKeyKey *key, char *buf, size_t buflen)
-  FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  size_t len = 0;
-  if (key->modifiers & KEYMOD_SUPER) {
-    len += (size_t)snprintf(buf + len, buflen - len, "D-");
-  }
-  if (key->modifiers & KEYMOD_META) {
-    len += (size_t)snprintf(buf + len, buflen - len, "T-");
-  }
-  assert(len < buflen);
-  return len;
-}
-#endif
 
 static void handle_kitty_key_protocol(TermInput *input, TermKeyKey *key)
 {

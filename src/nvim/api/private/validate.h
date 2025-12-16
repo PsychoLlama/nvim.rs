@@ -9,12 +9,10 @@
 #include "nvim/assert_defs.h"
 #include "nvim/macros_defs.h"
 
-#ifdef USE_RUST_API
 // Rust implementations of validation error functions
 extern void rs_api_err_invalid(Error *err, const char *name, const char *val_s, int64_t val_n,
                                bool quote_val);
 extern void rs_api_err_exp(Error *err, const char *name, const char *expected, const char *actual);
-#endif
 
 #define VALIDATE(cond, fmt_, fmt_arg1, code) \
   do { \
