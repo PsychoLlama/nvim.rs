@@ -45,6 +45,7 @@
 extern listitem_T *rs_tv_list_find(list_T *l, int n);
 extern int rs_tv_list_idx_of_item(const list_T *l, const listitem_T *item);
 extern void rs_tv_list_reverse(list_T *l);
+extern bool rs_tv_blob_equal(const blob_T *b1, const blob_T *b2);
 
 /// struct storing information about current sort
 typedef struct {
@@ -2842,26 +2843,7 @@ void tv_blob_unref(blob_T *const b)
 bool tv_blob_equal(const blob_T *const b1, const blob_T *const b2)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  const int len1 = tv_blob_len(b1);
-  const int len2 = tv_blob_len(b2);
-
-  // empty and NULL are considered the same
-  if (len1 == 0 && len2 == 0) {
-    return true;
-  }
-  if (b1 == b2) {
-    return true;
-  }
-  if (len1 != len2) {
-    return false;
-  }
-
-  for (int i = 0; i < b1->bv_ga.ga_len; i++) {
-    if (tv_blob_get(b1, i) != tv_blob_get(b2, i)) {
-      return false;
-    }
-  }
-  return true;
+  return rs_tv_blob_equal(b1, b2);
 }
 
 /// Returns a slice of "blob" from index "n1" to "n2" in "rettv".  The length of

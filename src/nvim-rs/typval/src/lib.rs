@@ -974,6 +974,39 @@ pub extern "C" fn rs_tv_blob_get(b: BlobHandle, idx: c_int) -> u8 {
     tv_blob_get_impl(b, idx)
 }
 
+/// Check if two blobs are equal (byte-by-byte comparison).
+/// Empty and NULL blobs are considered equal.
+#[inline]
+fn tv_blob_equal_impl(b1: BlobHandle, b2: BlobHandle) -> bool {
+    let len1 = tv_blob_len_impl(b1);
+    let len2 = tv_blob_len_impl(b2);
+
+    // empty and NULL are considered the same
+    if len1 == 0 && len2 == 0 {
+        return true;
+    }
+    if b1.0 == b2.0 {
+        return true;
+    }
+    if len1 != len2 {
+        return false;
+    }
+
+    // Compare byte by byte
+    for i in 0..len1 {
+        if tv_blob_get_impl(b1, i) != tv_blob_get_impl(b2, i) {
+            return false;
+        }
+    }
+    true
+}
+
+/// FFI wrapper: check if two blobs are equal.
+#[no_mangle]
+pub extern "C" fn rs_tv_blob_equal(b1: BlobHandle, b2: BlobHandle) -> bool {
+    tv_blob_equal_impl(b1, b2)
+}
+
 // =============================================================================
 // Typval -> container conversions
 // =============================================================================
