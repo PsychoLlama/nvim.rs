@@ -2,9 +2,19 @@
 
 ## Current Status
 
-**766 rs\_\* functions migrated**
+**767 rs\_\* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
+
+### Phase 61: tv_list_reverse ✅ COMPLETE
+
+Added `rs_tv_list_reverse` to Rust - the first list mutation operation. This required
+adding 4 new C setter functions for list/listitem pointer modification:
+- `nvim_list_set_first`, `nvim_list_set_last`
+- `nvim_listitem_set_next`, `nvim_listitem_set_prev`
+
+The Rust implementation reverses a list in-place by swapping the first/last pointers
+and then iterating through all items swapping their next/prev pointers.
 
 ### Phase 60: tv_list_idx_of_item ✅ COMPLETE
 
