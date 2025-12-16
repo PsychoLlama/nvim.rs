@@ -44,6 +44,7 @@
 // Rust FFI functions
 extern listitem_T *rs_tv_list_find(list_T *l, int n);
 extern int rs_tv_list_idx_of_item(const list_T *l, const listitem_T *item);
+extern void rs_tv_list_reverse(list_T *l);
 
 /// struct storing information about current sort
 typedef struct {
@@ -1557,24 +1558,7 @@ bool tv_list_equal(list_T *const l1, list_T *const l2, const bool ic)
 /// @param[in,out]  l  List to reverse.
 void tv_list_reverse(list_T *const l)
 {
-  if (tv_list_len(l) <= 1) {
-    return;
-  }
-#define SWAP(a, b) \
-  do { \
-    tmp = (a); \
-    (a) = (b); \
-    (b) = tmp; \
-  } while (0)
-  listitem_T *tmp;
-
-  SWAP(l->lv_first, l->lv_last);
-  for (listitem_T *li = l->lv_first; li != NULL; li = li->li_next) {
-    SWAP(li->li_next, li->li_prev);
-  }
-#undef SWAP
-
-  l->lv_idx = l->lv_len - l->lv_idx - 1;
+  rs_tv_list_reverse(l);
 }
 
 //{{{2 Indexing/searching
@@ -4846,4 +4830,28 @@ int nvim_list_get_copyid(const list_T *l)
 list_T *nvim_list_get_copylist(const list_T *l)
 {
   return l->lv_copylist;
+}
+
+/// Set lv_first on a list (accessor for Rust).
+void nvim_list_set_first(list_T *l, listitem_T *item)
+{
+  l->lv_first = item;
+}
+
+/// Set lv_last on a list (accessor for Rust).
+void nvim_list_set_last(list_T *l, listitem_T *item)
+{
+  l->lv_last = item;
+}
+
+/// Set li_next on a listitem (accessor for Rust).
+void nvim_listitem_set_next(listitem_T *li, listitem_T *next)
+{
+  li->li_next = next;
+}
+
+/// Set li_prev on a listitem (accessor for Rust).
+void nvim_listitem_set_prev(listitem_T *li, listitem_T *prev)
+{
+  li->li_prev = prev;
 }

@@ -526,6 +526,14 @@ extern "C" {
     fn nvim_listitem_get_prev(li: ListItemHandle) -> ListItemHandle;
     fn nvim_listitem_get_tv(li: ListItemHandle) -> TypevalHandle;
 
+    // List setters (for mutation operations)
+    fn nvim_list_set_first(l: ListHandle, item: ListItemHandle);
+    fn nvim_list_set_last(l: ListHandle, item: ListItemHandle);
+
+    // Listitem setters (for mutation operations)
+    fn nvim_listitem_set_next(li: ListItemHandle, next: ListItemHandle);
+    fn nvim_listitem_set_prev(li: ListItemHandle, prev: ListItemHandle);
+
     // Dict accessors
     fn nvim_dict_get_ht_used(d: DictHandle) -> usize;
     fn nvim_dict_get_lock(d: DictHandle) -> c_int;
@@ -816,6 +824,56 @@ fn tv_list_idx_of_item_impl(l: ListHandle, item: ListItemHandle) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_tv_list_idx_of_item(l: ListHandle, item: ListItemHandle) -> c_int {
     tv_list_idx_of_item_impl(l, item)
+}
+
+/// Reverse a list in-place by swapping next/prev pointers.
+#[inline]
+fn tv_list_reverse_impl(l: ListHandle) {
+    if l.is_null() {
+        return;
+    }
+
+    let len = tv_list_len_impl(l);
+    if len <= 1 {
+        return;
+    }
+
+    // Swap lv_first and lv_last
+    let first = tv_list_first_impl(l);
+    let last = tv_list_last_impl(l);
+    unsafe {
+        nvim_list_set_first(l, last);
+        nvim_list_set_last(l, first);
+    }
+
+    // Iterate through and swap li_next and li_prev for each item.
+    // After swapping first/last, lv_first now points to old last.
+    // We traverse using li_next AFTER swapping it (which points to old li_prev).
+    let mut li = unsafe { nvim_list_get_first(l) };
+    while !li.is_null() {
+        let next = tv_listitem_next_impl(li);
+        let prev = tv_listitem_prev_impl(li);
+        unsafe {
+            nvim_listitem_set_next(li, prev);
+            nvim_listitem_set_prev(li, next);
+        }
+        // After swap, li_next now points to what was li_prev.
+        // We need to follow that to continue "backwards" through original list.
+        li = tv_listitem_next_impl(li);
+    }
+
+    // Update the cached index: new_idx = len - old_idx - 1
+    let old_idx = unsafe { nvim_list_get_idx(l) };
+    let new_idx = len - old_idx - 1;
+    unsafe {
+        nvim_list_set_idx(l, new_idx);
+    }
+}
+
+/// FFI wrapper: reverse list in-place.
+#[no_mangle]
+pub extern "C" fn rs_tv_list_reverse(l: ListHandle) {
+    tv_list_reverse_impl(l);
 }
 
 // =============================================================================
