@@ -2,9 +2,14 @@
 
 ## Current Status
 
-**765 rs\_\* functions migrated**
+**766 rs\_\* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
+
+### Phase 60: tv_list_idx_of_item ✅ COMPLETE
+
+Added `rs_tv_list_idx_of_item` to Rust and wired it up. This function finds the
+index of a given listitem within a list by iterating through the linked list.
 
 ### Phase 59: Wire tv_list_find ✅ COMPLETE
 
