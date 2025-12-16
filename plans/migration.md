@@ -2,9 +2,22 @@
 
 ## Current Status
 
-**727 rs\_\* functions migrated**
+**744 rs\_\* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
+
+### Phase 56: Typval Crate ✅ COMPLETE
+
+Added new `nvim-typval` crate with type checking and value extraction for VimL `typval_T`.
+This is foundational for migrating `eval.c` (6.9k lines, 139 typval_T references).
+
+New Rust functions (17):
+- Type predicates: `rs_tv_is_number`, `rs_tv_is_string`, `rs_tv_is_float`, etc.
+- Value extraction: `rs_tv_get_number_simple`, `rs_tv_get_float_simple`, etc.
+- Truthiness: `rs_tv_is_empty`, `rs_tv_is_truthy`
+
+New C accessors in `typval.c` (10):
+- `nvim_tv_get_type`, `nvim_tv_get_number`, `nvim_tv_get_bool`, etc.
 
 ### Phase 52: Dead Code Cleanup 10 ✅ COMPLETE
 
@@ -218,6 +231,7 @@ All Rust code in `src/nvim-rs/`. Complete crate list:
 | spell        | Spell check utilities                              |
 | strings      | String comparison, case conversion                 |
 | tui          | Terminal UI, terminfo formatting                   |
+| typval       | VimL typval_T type checking and value extraction   |
 | unpacker     | MessagePack unpacking                              |
 | utf8proc     | utf8proc FFI bindings                              |
 | version      | Version compatibility checks                       |
