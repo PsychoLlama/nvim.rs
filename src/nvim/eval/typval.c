@@ -41,6 +41,9 @@
 #include "nvim/types_defs.h"
 #include "nvim/vim_defs.h"
 
+// Rust FFI functions
+extern listitem_T *rs_tv_list_find(list_T *l, int n);
+
 /// struct storing information about current sort
 typedef struct {
   int item_compare_ic;
@@ -1583,66 +1586,9 @@ void tv_list_reverse(list_T *const l)
 ///
 /// @return Item at the given index or NULL if `n` is out of range.
 listitem_T *tv_list_find(list_T *const l, int n)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+  FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  STATIC_ASSERT(sizeof(n) == sizeof(l->lv_idx),
-                "n and lv_idx sizes do not match");
-  if (l == NULL) {
-    return NULL;
-  }
-
-  n = tv_list_uidx(l, n);
-  if (n == -1) {
-    return NULL;
-  }
-
-  int idx;
-  listitem_T *item;
-
-  // When there is a cached index may start search from there.
-  if (l->lv_idx_item != NULL) {
-    if (n < l->lv_idx / 2) {
-      // Closest to the start of the list.
-      item = l->lv_first;
-      idx = 0;
-    } else if (n > (l->lv_idx + l->lv_len) / 2) {
-      // Closest to the end of the list.
-      item = l->lv_last;
-      idx = l->lv_len - 1;
-    } else {
-      // Closest to the cached index.
-      item = l->lv_idx_item;
-      idx = l->lv_idx;
-    }
-  } else {
-    if (n < l->lv_len / 2) {
-      // Closest to the start of the list.
-      item = l->lv_first;
-      idx = 0;
-    } else {
-      // Closest to the end of the list.
-      item = l->lv_last;
-      idx = l->lv_len - 1;
-    }
-  }
-
-  while (n > idx) {
-    // Search forward.
-    item = item->li_next;
-    idx++;
-  }
-  while (n < idx) {
-    // Search backward.
-    item = item->li_prev;
-    idx--;
-  }
-
-  assert(idx == n);
-  // Cache the used index.
-  l->lv_idx = idx;
-  l->lv_idx_item = item;
-
-  return item;
+  return rs_tv_list_find(l, n);
 }
 
 /// Get list item l[n] as a number
