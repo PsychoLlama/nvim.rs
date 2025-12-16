@@ -36,11 +36,9 @@
 
 #include "ex_eval.c.generated.h"
 
-#ifdef USE_RUST_EX_EVAL
 extern int rs_aborted_in_try(void);
 extern int rs_aborting(void);
 extern int rs_should_abort(int retcode);
-#endif
 
 static const char e_multiple_else[] = N_("E583: Multiple :else");
 static const char e_multiple_finally[] = N_("E607: Multiple :finally");
@@ -115,17 +113,10 @@ static bool cause_abort = false;
 /// That is, during cancellation of an expression evaluation after an aborting
 /// function call or due to a parsing error, aborting() always returns the same
 /// value. "got_int" is also set by calling interrupt().
-#ifdef USE_RUST_EX_EVAL
 bool aborting(void)
 {
   return rs_aborting() != 0;
 }
-#else
-bool aborting(void)
-{
-  return (did_emsg && force_abort) || got_int || did_throw;
-}
-#endif
 
 /// The value of "force_abort" is temporarily reset by the first emsg() call
 /// during an expression evaluation, and "cause_abort" is used instead.  It might
@@ -142,37 +133,20 @@ void update_force_abort(void)
 /// abort the script processing.  Can be used to suppress an autocommand after
 /// execution of a failing subcommand as long as the error message has not been
 /// displayed and actually caused the abortion.
-#ifdef USE_RUST_EX_EVAL
 bool should_abort(int retcode)
 {
   return rs_should_abort(retcode) != 0;
 }
-#else
-bool should_abort(int retcode)
-{
-  return (retcode == FAIL && trylevel != 0 && !emsg_silent) || aborting();
-}
-#endif
 
 /// @return  true if a function with the "abort" flag should not be considered
 /// ended on an error.  This means that parsing commands is continued in order
 /// to find finally clauses to be executed, and that some errors in skipped
 /// commands are still reported.
-#ifdef USE_RUST_EX_EVAL
 bool aborted_in_try(void)
   FUNC_ATTR_PURE
 {
   return rs_aborted_in_try() != 0;
 }
-#else
-bool aborted_in_try(void)
-  FUNC_ATTR_PURE
-{
-  // This function is only called after an error.  In this case, "force_abort"
-  // determines whether searching for finally clauses is necessary.
-  return force_abort;
-}
-#endif
 
 /// cause_errthrow(): Cause a throw of an error exception if appropriate.
 ///

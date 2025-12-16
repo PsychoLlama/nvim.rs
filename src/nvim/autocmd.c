@@ -71,11 +71,9 @@ extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) ((l)->events)
 #endif
 
-#ifdef USE_RUST_AUTOCMD
 extern int rs_is_autocmd_blocked(void);
 extern size_t rs_aucmd_pattern_length(const char *pat);
 extern const char *rs_aucmd_next_pattern(const char *pat, size_t patlen);
-#endif
 
 static const char e_autocommand_nesting_too_deep[]
   = N_("E218: Autocommand nesting too deep");
@@ -1112,63 +1110,17 @@ int autocmd_register(int64_t id, event_T event, const char *pat, int patlen, int
   return OK;
 }
 
-#ifdef USE_RUST_AUTOCMD
 size_t aucmd_pattern_length(const char *pat)
   FUNC_ATTR_PURE
 {
   return rs_aucmd_pattern_length(pat);
 }
-#else
-size_t aucmd_pattern_length(const char *pat)
-  FUNC_ATTR_PURE
-{
-  if (*pat == NUL) {
-    return 0;
-  }
 
-  const char *endpat;
-
-  for (; *pat; pat = endpat + 1) {
-    // Find end of the pattern.
-    // Watch out for a comma in braces, like "*.\{obj,o\}".
-    endpat = pat;
-    // ignore single comma
-    if (*endpat == ',') {
-      continue;
-    }
-    int brace_level = 0;
-    for (; *endpat && (*endpat != ',' || brace_level || endpat[-1] == '\\'); endpat++) {
-      if (*endpat == '{') {
-        brace_level++;
-      } else if (*endpat == '}') {
-        brace_level--;
-      }
-    }
-
-    return (size_t)(endpat - pat);
-  }
-
-  return strlen(pat);
-}
-#endif
-
-#ifdef USE_RUST_AUTOCMD
 const char *aucmd_next_pattern(const char *pat, size_t patlen)
   FUNC_ATTR_PURE
 {
   return rs_aucmd_next_pattern(pat, patlen);
 }
-#else
-const char *aucmd_next_pattern(const char *pat, size_t patlen)
-  FUNC_ATTR_PURE
-{
-  pat = pat + patlen;
-  if (*pat == ',') {
-    pat = pat + 1;
-  }
-  return pat;
-}
-#endif
 
 /// Implementation of ":doautocmd [group] event [fname]".
 /// Return OK for success, FAIL for failure;
@@ -2015,19 +1967,11 @@ void unblock_autocmds(void)
   }
 }
 
-#ifdef USE_RUST_AUTOCMD
 bool is_autocmd_blocked(void)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
   return rs_is_autocmd_blocked() != 0;
 }
-#else
-bool is_autocmd_blocked(void)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  return autocmd_blocked != 0;
-}
-#endif
 
 /// Find next matching autocommand.
 /// If next autocommand was not found, sets lastpat to NULL and cmdidx to SIZE_MAX on apc.

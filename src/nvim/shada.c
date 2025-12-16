@@ -65,9 +65,7 @@
 #include "nvim/version.h"
 #include "nvim/vim_defs.h"
 
-#ifdef USE_RUST_CMDHIST
 extern int rs_hist_type2char(int hist_type);
-#endif
 
 #ifdef HAVE_BE64TOH
 # define _BSD_SOURCE 1  // NOLINT(bugprone-reserved-identifier)
@@ -2179,25 +2177,7 @@ static inline void find_removable_bufs(Set(ptr_t) *removable_bufs)
 static int hist_type2char(const int type)
   FUNC_ATTR_CONST
 {
-#ifdef USE_RUST_CMDHIST
   return rs_hist_type2char(type);
-#else
-  switch (type) {
-  case HIST_CMD:
-    return ':';
-  case HIST_SEARCH:
-    return '/';
-  case HIST_EXPR:
-    return '=';
-  case HIST_INPUT:
-    return '@';
-  case HIST_DEBUG:
-    return '>';
-  default:
-    abort();
-  }
-  return NUL;
-#endif
 }
 
 static PackerBuffer packer_buffer_for_file(FileDescriptor *file)

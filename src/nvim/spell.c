@@ -188,12 +188,10 @@ bool did_set_spelltab;
 
 #include "spell.c.generated.h"
 
-#ifdef USE_RUST_SPELL
 // Rust implementations of spell functions
 extern bool rs_spell_valid_case(int wordflags, int treeflags);
 extern bool rs_byte_in_str(const uint8_t *str, int n);
 extern bool rs_valid_spelllang(const char *val);
-#endif
 
 /// mode values for find_word
 enum {
@@ -1237,14 +1235,7 @@ static int fold_more(matchinf_T *mip)
 /// @param treeflags Flags for the word in the spell tree.
 bool spell_valid_case(int wordflags, int treeflags)
 {
-#ifdef USE_RUST_SPELL
   return rs_spell_valid_case(wordflags, treeflags);
-#else
-  return (wordflags == WF_ALLCAP && (treeflags & WF_FIXCAP) == 0)
-         || ((treeflags & (WF_ALLCAP | WF_KEEPCAP)) == 0
-             && ((treeflags & WF_ONECAP) == 0
-                 || (wordflags & WF_ONECAP) != 0));
-#endif
 }
 
 /// Return true if spell checking is enabled for "wp".
@@ -1842,16 +1833,7 @@ void count_common_word(slang_T *lp, char *word, int len, uint8_t count)
 // Like strchr() but independent of locale.
 bool byte_in_str(uint8_t *str, int n)
 {
-#ifdef USE_RUST_SPELL
   return rs_byte_in_str(str, n);
-#else
-  for (uint8_t *p = str; *p != NUL; p++) {
-    if (*p == n) {
-      return true;
-    }
-  }
-  return false;
-#endif
 }
 
 // Truncate "slang->sl_syllable" at the first slash and put the following items
@@ -3670,11 +3652,7 @@ int expand_spelling(linenr_T lnum, char *pat, char ***matchp)
 bool valid_spelllang(const char *val)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef USE_RUST_SPELL
   return rs_valid_spelllang(val);
-#else
-  return valid_name(val, ".-_,@");
-#endif
 }
 
 /// @return  true if "val" is a valid 'spellfile' value.

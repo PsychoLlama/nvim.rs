@@ -52,11 +52,9 @@
 
 #include "indent.c.generated.h"
 
-#ifdef USE_RUST_INDENT
 extern int rs_tabstop_padding(int col, int64_t ts_arg, const int *vts);
 extern int rs_indent_size_ts(const char *ptr, int64_t ts, const int *vts);
 extern int rs_indent_size_no_ts(const char *ptr);
-#endif
 
 /// Set the integer values corresponding to the string setting of 'vartabstop'.
 /// "array" will be set, caller must free it if needed.
@@ -127,33 +125,7 @@ bool tabstop_set(char *var, colnr_T **array)
 int tabstop_padding(colnr_T col, OptInt ts_arg, const colnr_T *vts)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_INDENT
   return rs_tabstop_padding(col, ts_arg, vts);
-#else
-  OptInt ts = ts_arg == 0 ? 8 : ts_arg;
-  colnr_T tabcol = 0;
-  int t;
-  int padding = 0;
-
-  if (vts == NULL || vts[0] == 0) {
-    return (int)(ts - (col % ts));
-  }
-
-  const int tabcount = vts[0];
-
-  for (t = 1; t <= tabcount; t++) {
-    tabcol += vts[t];
-    if (tabcol > col) {
-      padding = tabcol - col;
-      break;
-    }
-  }
-  if (t > tabcount) {
-    padding = vts[tabcount] - ((col - tabcol) % vts[tabcount]);
-  }
-
-  return padding;
-#endif
 }
 
 /// Find the size of the tab that covers a particular column.
@@ -401,23 +373,7 @@ int get_indent_buf(buf_T *buf, linenr_T lnum)
 int indent_size_no_ts(char const *ptr)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_INDENT
   return rs_indent_size_no_ts(ptr);
-#else
-  int tab_size = byte2cells(TAB);
-
-  int vcol = 0;
-  while (true) {
-    char const c = *ptr++;
-    if (c == ' ') {
-      vcol++;
-    } else if (c == TAB) {
-      vcol += tab_size;
-    } else {
-      return vcol;
-    }
-  }
-#endif
 }
 
 /// Compute the size of the indent (in window cells) in line "ptr",
@@ -425,57 +381,7 @@ int indent_size_no_ts(char const *ptr)
 int indent_size_ts(char const *ptr, OptInt ts, colnr_T *vts)
   FUNC_ATTR_NONNULL_ARG(1) FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_INDENT
   return rs_indent_size_ts(ptr, ts, vts);
-#else
-  assert(char2cells(' ') == 1);
-
-  int vcol = 0;
-  int tabstop_width, next_tab_vcol;
-
-  if (vts == NULL || vts[0] < 1) {  // tab has fixed width
-    // can ts be 0 ? This is from tabstop_padding().
-    tabstop_width = (int)(ts == 0 ? 8 : ts);
-    next_tab_vcol = tabstop_width;
-  } else {  // tab has variable width
-    colnr_T *cur_tabstop = vts + 1;
-    colnr_T *const last_tabstop = vts + vts[0];
-
-    while (cur_tabstop != last_tabstop) {
-      int cur_vcol = vcol;
-      vcol += *cur_tabstop++;
-      assert(cur_vcol < vcol);
-
-      do {
-        char const c = *ptr++;
-        if (c == ' ') {
-          cur_vcol++;
-        } else if (c == TAB) {
-          break;
-        } else {
-          return cur_vcol;
-        }
-      } while (cur_vcol != vcol);
-    }
-
-    tabstop_width = *last_tabstop;
-    next_tab_vcol = vcol + tabstop_width;
-  }
-
-  assert(tabstop_width != 0);
-  while (true) {
-    char const c = *ptr++;
-    if (c == ' ') {
-      vcol++;
-      next_tab_vcol += (vcol == next_tab_vcol) ? tabstop_width : 0;
-    } else if (c == TAB) {
-      vcol = next_tab_vcol;
-      next_tab_vcol += tabstop_width;
-    } else {
-      return vcol;
-    }
-  }
-#endif
 }
 
 /// Set the indent of the current line.

@@ -20,11 +20,9 @@
 
 #include "cursor_shape.c.generated.h"
 
-#ifdef USE_RUST_CURSOR_SHAPE
 extern int rs_cursor_is_block_during_visual(int exclusive);
 extern int rs_cursor_mode_uses_syn_id(int syn_id);
 extern int rs_cursor_get_mode_idx(void);
-#endif
 
 static const char e_digit_expected[] = N_("E548: Digit expected");
 
@@ -284,13 +282,7 @@ const char *parse_shape_opt(int what)
 bool cursor_is_block_during_visual(bool exclusive)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_CURSOR_SHAPE
   return rs_cursor_is_block_during_visual(exclusive ? 1 : 0) != 0;
-#else
-  int mode_idx = exclusive ? SHAPE_IDX_VE : SHAPE_IDX_V;
-  return (SHAPE_BLOCK == shape_table[mode_idx].shape
-          && 0 == shape_table[mode_idx].blinkon);
-#endif
 }
 
 /// Map cursor mode from string to integer
@@ -312,64 +304,15 @@ int cursor_mode_str2int(const char *mode)
 bool cursor_mode_uses_syn_id(int syn_id)
   FUNC_ATTR_PURE
 {
-#ifdef USE_RUST_CURSOR_SHAPE
   return rs_cursor_mode_uses_syn_id(syn_id) != 0;
-#else
-  if (*p_guicursor == NUL) {
-    return false;
-  }
-  for (int mode_idx = 0; mode_idx < SHAPE_IDX_COUNT; mode_idx++) {
-    if (shape_table[mode_idx].id == syn_id
-        || shape_table[mode_idx].id_lm == syn_id) {
-      return true;
-    }
-  }
-  return false;
-#endif
 }
 
 /// Return the index into shape_table[] for the current mode.
-#ifdef USE_RUST_CURSOR_SHAPE
 int cursor_get_mode_idx(void)
   FUNC_ATTR_PURE
 {
   return rs_cursor_get_mode_idx();
 }
-#else
-int cursor_get_mode_idx(void)
-  FUNC_ATTR_PURE
-{
-  if (State == MODE_SHOWMATCH) {
-    return SHAPE_IDX_SM;
-  } else if (State == MODE_TERMINAL) {
-    return SHAPE_IDX_TERM;
-  } else if (State & VREPLACE_FLAG) {
-    return SHAPE_IDX_R;
-  } else if (State & REPLACE_FLAG) {
-    return SHAPE_IDX_R;
-  } else if (State & MODE_INSERT) {
-    return SHAPE_IDX_I;
-  } else if (State & MODE_CMDLINE) {
-    if (cmdline_at_end()) {
-      return SHAPE_IDX_C;
-    } else if (cmdline_overstrike()) {
-      return SHAPE_IDX_CR;
-    } else {
-      return SHAPE_IDX_CI;
-    }
-  } else if (finish_op) {
-    return SHAPE_IDX_O;
-  } else if (VIsual_active) {
-    if (*p_sel == 'e') {
-      return SHAPE_IDX_VE;
-    } else {
-      return SHAPE_IDX_V;
-    }
-  } else {
-    return SHAPE_IDX_N;
-  }
-}
-#endif
 
 /// Clears all entries in shape_table to block, blinkon0, and default color.
 static void clear_shape_table(void)
