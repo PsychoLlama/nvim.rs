@@ -4752,6 +4752,12 @@ uint8_t nvim_blob_get_byte(const blob_T *b, int idx)
   return ((uint8_t *)b->bv_ga.ga_data)[idx];
 }
 
+/// Set a byte in blob at index (accessor for Rust).
+void nvim_blob_set_byte(blob_T *b, int idx, uint8_t c)
+{
+  ((uint8_t *)b->bv_ga.ga_data)[idx] = c;
+}
+
 // =============================================================================
 // Listitem accessor functions for Rust
 // =============================================================================

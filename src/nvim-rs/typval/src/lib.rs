@@ -543,6 +543,7 @@ extern "C" {
     fn nvim_blob_get_len(b: BlobHandle) -> c_int;
     fn nvim_blob_get_lock(b: BlobHandle) -> c_int;
     fn nvim_blob_get_byte(b: BlobHandle, idx: c_int) -> u8;
+    fn nvim_blob_set_byte(b: BlobHandle, idx: c_int, c: u8);
 }
 
 // =============================================================================
@@ -972,6 +973,19 @@ fn tv_blob_get_impl(b: BlobHandle, idx: c_int) -> u8 {
 #[no_mangle]
 pub extern "C" fn rs_tv_blob_get(b: BlobHandle, idx: c_int) -> u8 {
     tv_blob_get_impl(b, idx)
+}
+
+/// Set the byte at index `idx` in the blob.
+/// Caller must ensure blob is non-NULL and idx is valid.
+#[inline]
+fn tv_blob_set_impl(b: BlobHandle, idx: c_int, c: u8) {
+    unsafe { nvim_blob_set_byte(b, idx, c) }
+}
+
+/// FFI wrapper: set byte in blob.
+#[no_mangle]
+pub extern "C" fn rs_tv_blob_set(b: BlobHandle, idx: c_int, c: u8) {
+    tv_blob_set_impl(b, idx, c);
 }
 
 /// Check if two blobs are equal (byte-by-byte comparison).
