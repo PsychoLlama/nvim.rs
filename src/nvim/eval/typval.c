@@ -3921,6 +3921,9 @@ bool tv_equal(typval_T *const tv1, typval_T *const tv2, const bool ic)
 bool tv_check_str_or_nr(const typval_T *const tv)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_str_or_nr((TypevalHandle)tv);
+#else
   switch (tv->v_type) {
   case VAR_NUMBER:
   case VAR_STRING:
@@ -3953,6 +3956,7 @@ bool tv_check_str_or_nr(const typval_T *const tv)
   }
   abort();
   return false;
+#endif
 }
 
 #define FUNC_ERROR "E703: Using a Funcref as a Number"
@@ -3980,6 +3984,9 @@ static const char *const num_errors[] = {
 bool tv_check_num(const typval_T *const tv)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_num((TypevalHandle)tv);
+#else
   switch (tv->v_type) {
   case VAR_NUMBER:
   case VAR_BOOL:
@@ -3998,6 +4005,7 @@ bool tv_check_num(const typval_T *const tv)
   }
   abort();
   return false;
+#endif
 }
 
 #define FUNC_ERROR "E729: Using a Funcref as a String"
@@ -4024,6 +4032,9 @@ static const char *const str_errors[] = {
 bool tv_check_str(const typval_T *const tv)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_str((TypevalHandle)tv);
+#else
   switch (tv->v_type) {
   case VAR_NUMBER:
   case VAR_BOOL:
@@ -4042,6 +4053,7 @@ bool tv_check_str(const typval_T *const tv)
   }
   abort();
   return false;
+#endif
 }
 
 //{{{2 Get
@@ -4625,6 +4637,113 @@ void nvim_typval_error_string_or_func_required(int idx)
 void nvim_typval_error_list_or_blob_required(int idx)
 {
   semsg(_(e_list_or_blob_required_for_argument_nr), idx);
+}
+
+// =============================================================================
+// tv_check_num error messages (type-specific)
+// =============================================================================
+
+void nvim_typval_error_using_funcref_as_number(void)
+{
+  emsg(_("E703: Using a Funcref as a Number"));
+}
+
+void nvim_typval_error_using_list_as_number(void)
+{
+  emsg(_("E745: Using a List as a Number"));
+}
+
+void nvim_typval_error_using_dict_as_number(void)
+{
+  emsg(_("E728: Using a Dictionary as a Number"));
+}
+
+void nvim_typval_error_using_float_as_number(void)
+{
+  emsg(_("E805: Using a Float as a Number"));
+}
+
+void nvim_typval_error_using_blob_as_number(void)
+{
+  emsg(_("E974: Using a Blob as a Number"));
+}
+
+void nvim_typval_error_using_invalid_as_number(void)
+{
+  emsg(_("E685: using an invalid value as a Number"));
+}
+
+// =============================================================================
+// tv_check_str error messages (type-specific)
+// =============================================================================
+
+void nvim_typval_error_using_funcref_as_string(void)
+{
+  emsg(_("E729: Using a Funcref as a String"));
+}
+
+void nvim_typval_error_using_list_as_string(void)
+{
+  emsg(_("E730: Using a List as a String"));
+}
+
+void nvim_typval_error_using_dict_as_string(void)
+{
+  emsg(_("E731: Using a Dictionary as a String"));
+}
+
+void nvim_typval_error_using_blob_as_string(void)
+{
+  emsg(_("E976: Using a Blob as a String"));
+}
+
+void nvim_typval_error_using_invalid_as_string(void)
+{
+  emsg(_(e_using_invalid_value_as_string));
+}
+
+// =============================================================================
+// tv_check_str_or_nr error messages (type-specific)
+// =============================================================================
+
+void nvim_typval_error_str_or_nr_float(void)
+{
+  emsg(_("E805: Expected a Number or a String, Float found"));
+}
+
+void nvim_typval_error_str_or_nr_funcref(void)
+{
+  emsg(_("E703: Expected a Number or a String, Funcref found"));
+}
+
+void nvim_typval_error_str_or_nr_list(void)
+{
+  emsg(_("E745: Expected a Number or a String, List found"));
+}
+
+void nvim_typval_error_str_or_nr_dict(void)
+{
+  emsg(_("E728: Expected a Number or a String, Dictionary found"));
+}
+
+void nvim_typval_error_str_or_nr_blob(void)
+{
+  emsg(_("E974: Expected a Number or a String, Blob found"));
+}
+
+void nvim_typval_error_str_or_nr_bool(void)
+{
+  emsg(_("E5299: Expected a Number or a String, Boolean found"));
+}
+
+void nvim_typval_error_str_or_nr_special(void)
+{
+  emsg(_("E5300: Expected a Number or a String"));
+}
+
+void nvim_typval_error_str_or_nr_unknown(void)
+{
+  semsg(_(e_intern2), "tv_check_str_or_nr(UNKNOWN)");
 }
 
 /// Get the string value of a "stringish" Vimscript object.

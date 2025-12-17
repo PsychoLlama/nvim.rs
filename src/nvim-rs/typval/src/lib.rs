@@ -1096,6 +1096,31 @@ extern "C" {
     fn nvim_typval_error_string_list_or_dict_required(idx: c_int);
     fn nvim_typval_error_string_or_func_required(idx: c_int);
     fn nvim_typval_error_list_or_blob_required(idx: c_int);
+
+    // tv_check_num error messages (type-specific)
+    fn nvim_typval_error_using_funcref_as_number();
+    fn nvim_typval_error_using_list_as_number();
+    fn nvim_typval_error_using_dict_as_number();
+    fn nvim_typval_error_using_float_as_number();
+    fn nvim_typval_error_using_blob_as_number();
+    fn nvim_typval_error_using_invalid_as_number();
+
+    // tv_check_str error messages (type-specific)
+    fn nvim_typval_error_using_funcref_as_string();
+    fn nvim_typval_error_using_list_as_string();
+    fn nvim_typval_error_using_dict_as_string();
+    fn nvim_typval_error_using_blob_as_string();
+    fn nvim_typval_error_using_invalid_as_string();
+
+    // tv_check_str_or_nr error messages (type-specific)
+    fn nvim_typval_error_str_or_nr_float();
+    fn nvim_typval_error_str_or_nr_funcref();
+    fn nvim_typval_error_str_or_nr_list();
+    fn nvim_typval_error_str_or_nr_dict();
+    fn nvim_typval_error_str_or_nr_blob();
+    fn nvim_typval_error_str_or_nr_bool();
+    fn nvim_typval_error_str_or_nr_special();
+    fn nvim_typval_error_str_or_nr_unknown();
 }
 
 /// OK return value (0) matching C's OK.
@@ -1502,6 +1527,141 @@ pub extern "C" fn rs_tv_check_for_list_or_blob_arg(args: TypevalHandle, idx: c_i
     tv_check_for_list_or_blob_arg_impl(args, idx)
 }
 
+// =============================================================================
+// Type validation functions (tv_check_num, tv_check_str, tv_check_str_or_nr)
+// =============================================================================
+
+/// Check that given value is a number or can be converted to it.
+///
+/// Types that can be used as numbers: Number, Bool, Special, String.
+/// Types that emit errors: Func, Partial, List, Dict, Float, Blob, Unknown.
+#[inline]
+fn tv_check_num_impl(tv: TypevalHandle) -> bool {
+    let t = tv_type_impl(tv);
+    match t {
+        VarType::Number | VarType::Bool | VarType::Special | VarType::String => true,
+        VarType::Func | VarType::Partial => {
+            unsafe { nvim_typval_error_using_funcref_as_number() };
+            false
+        }
+        VarType::List => {
+            unsafe { nvim_typval_error_using_list_as_number() };
+            false
+        }
+        VarType::Dict => {
+            unsafe { nvim_typval_error_using_dict_as_number() };
+            false
+        }
+        VarType::Float => {
+            unsafe { nvim_typval_error_using_float_as_number() };
+            false
+        }
+        VarType::Blob => {
+            unsafe { nvim_typval_error_using_blob_as_number() };
+            false
+        }
+        VarType::Unknown => {
+            unsafe { nvim_typval_error_using_invalid_as_number() };
+            false
+        }
+    }
+}
+
+/// FFI wrapper: check if typval can be used as a number.
+#[no_mangle]
+pub extern "C" fn rs_tv_check_num(tv: TypevalHandle) -> bool {
+    tv_check_num_impl(tv)
+}
+
+/// Check that given value is a string or can be "cast" to it.
+///
+/// Types that can be used as strings: Number, Bool, Special, String, Float.
+/// Types that emit errors: Func, Partial, List, Dict, Blob, Unknown.
+#[inline]
+fn tv_check_str_impl(tv: TypevalHandle) -> bool {
+    let t = tv_type_impl(tv);
+    match t {
+        VarType::Number | VarType::Bool | VarType::Special | VarType::String | VarType::Float => {
+            true
+        }
+        VarType::Func | VarType::Partial => {
+            unsafe { nvim_typval_error_using_funcref_as_string() };
+            false
+        }
+        VarType::List => {
+            unsafe { nvim_typval_error_using_list_as_string() };
+            false
+        }
+        VarType::Dict => {
+            unsafe { nvim_typval_error_using_dict_as_string() };
+            false
+        }
+        VarType::Blob => {
+            unsafe { nvim_typval_error_using_blob_as_string() };
+            false
+        }
+        VarType::Unknown => {
+            unsafe { nvim_typval_error_using_invalid_as_string() };
+            false
+        }
+    }
+}
+
+/// FFI wrapper: check if typval can be used as a string.
+#[no_mangle]
+pub extern "C" fn rs_tv_check_str(tv: TypevalHandle) -> bool {
+    tv_check_str_impl(tv)
+}
+
+/// Check that given value is a number or string.
+///
+/// This is stricter than tv_check_num/tv_check_str: only VAR_NUMBER and VAR_STRING
+/// are accepted. Other types emit type-specific error messages.
+#[inline]
+fn tv_check_str_or_nr_impl(tv: TypevalHandle) -> bool {
+    let t = tv_type_impl(tv);
+    match t {
+        VarType::Number | VarType::String => true,
+        VarType::Float => {
+            unsafe { nvim_typval_error_str_or_nr_float() };
+            false
+        }
+        VarType::Func | VarType::Partial => {
+            unsafe { nvim_typval_error_str_or_nr_funcref() };
+            false
+        }
+        VarType::List => {
+            unsafe { nvim_typval_error_str_or_nr_list() };
+            false
+        }
+        VarType::Dict => {
+            unsafe { nvim_typval_error_str_or_nr_dict() };
+            false
+        }
+        VarType::Blob => {
+            unsafe { nvim_typval_error_str_or_nr_blob() };
+            false
+        }
+        VarType::Bool => {
+            unsafe { nvim_typval_error_str_or_nr_bool() };
+            false
+        }
+        VarType::Special => {
+            unsafe { nvim_typval_error_str_or_nr_special() };
+            false
+        }
+        VarType::Unknown => {
+            unsafe { nvim_typval_error_str_or_nr_unknown() };
+            false
+        }
+    }
+}
+
+/// FFI wrapper: check if typval is a number or string.
+#[no_mangle]
+pub extern "C" fn rs_tv_check_str_or_nr(tv: TypevalHandle) -> bool {
+    tv_check_str_or_nr_impl(tv)
+}
 
 #[cfg(test)]
 mod tests {
