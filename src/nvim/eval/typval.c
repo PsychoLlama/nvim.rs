@@ -4215,17 +4215,24 @@ float_T tv_get_float(const typval_T *const tv)
 int tv_check_for_string_arg(const typval_T *const args, const int idx)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_for_string_arg(args, idx);
+#else
   if (args[idx].v_type != VAR_STRING) {
     semsg(_(e_string_required_for_argument_nr), idx + 1);
     return FAIL;
   }
   return OK;
+#endif
 }
 
 /// Give an error and return FAIL unless "args[idx]" is a non-empty string.
 int tv_check_for_nonempty_string_arg(const typval_T *const args, const int idx)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_for_nonempty_string_arg(args, idx);
+#else
   if (tv_check_for_string_arg(args, idx) == FAIL) {
     return FAIL;
   }
@@ -4234,50 +4241,70 @@ int tv_check_for_nonempty_string_arg(const typval_T *const args, const int idx)
     return FAIL;
   }
   return OK;
+#endif
 }
 
 /// Check for an optional string argument at "idx"
 int tv_check_for_opt_string_arg(const typval_T *const args, const int idx)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_for_opt_string_arg(args, idx);
+#else
   return (args[idx].v_type == VAR_UNKNOWN
           || tv_check_for_string_arg(args, idx) != FAIL) ? OK : FAIL;
+#endif
 }
 
 /// Give an error and return FAIL unless "args[idx]" is a number.
 int tv_check_for_number_arg(const typval_T *const args, const int idx)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_for_number_arg(args, idx);
+#else
   if (args[idx].v_type != VAR_NUMBER) {
     semsg(_(e_number_required_for_argument_nr), idx + 1);
     return FAIL;
   }
   return OK;
+#endif
 }
 
 /// Check for an optional number argument at "idx"
 int tv_check_for_opt_number_arg(const typval_T *const args, const int idx)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_for_opt_number_arg(args, idx);
+#else
   return (args[idx].v_type == VAR_UNKNOWN
           || tv_check_for_number_arg(args, idx) != FAIL) ? OK : FAIL;
+#endif
 }
 
 /// Give an error and return FAIL unless "args[idx]" is a float or a number.
 int tv_check_for_float_or_nr_arg(const typval_T *const args, const int idx)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_for_float_or_nr_arg(args, idx);
+#else
   if (args[idx].v_type != VAR_FLOAT && args[idx].v_type != VAR_NUMBER) {
     semsg(_(e_float_or_number_required_for_argument_nr), idx + 1);
     return FAIL;
   }
   return OK;
+#endif
 }
 
 /// Give an error and return FAIL unless "args[idx]" is a bool.
 int tv_check_for_bool_arg(const typval_T *const args, const int idx)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_for_bool_arg(args, idx);
+#else
   if (args[idx].v_type != VAR_BOOL
       && !(args[idx].v_type == VAR_NUMBER
            && (args[idx].vval.v_number == 0
@@ -4286,6 +4313,7 @@ int tv_check_for_bool_arg(const typval_T *const args, const int idx)
     return FAIL;
   }
   return OK;
+#endif
 }
 
 /// Check for an optional bool argument at "idx".
@@ -4293,49 +4321,68 @@ int tv_check_for_bool_arg(const typval_T *const args, const int idx)
 int tv_check_for_opt_bool_arg(const typval_T *const args, const int idx)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_for_opt_bool_arg(args, idx);
+#else
   if (args[idx].v_type == VAR_UNKNOWN) {
     return OK;
   }
   return tv_check_for_bool_arg(args, idx);
+#endif
 }
 
 /// Give an error and return FAIL unless "args[idx]" is a blob.
 int tv_check_for_blob_arg(const typval_T *const args, const int idx)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_for_blob_arg(args, idx);
+#else
   if (args[idx].v_type != VAR_BLOB) {
     semsg(_(e_blob_required_for_argument_nr), idx + 1);
     return FAIL;
   }
   return OK;
+#endif
 }
 
 /// Give an error and return FAIL unless "args[idx]" is a list.
 int tv_check_for_list_arg(const typval_T *const args, const int idx)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_for_list_arg(args, idx);
+#else
   if (args[idx].v_type != VAR_LIST) {
     semsg(_(e_list_required_for_argument_nr), idx + 1);
     return FAIL;
   }
   return OK;
+#endif
 }
 
 /// Give an error and return FAIL unless "args[idx]" is a dict.
 int tv_check_for_dict_arg(const typval_T *const args, const int idx)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_for_dict_arg(args, idx);
+#else
   if (args[idx].v_type != VAR_DICT) {
     semsg(_(e_dict_required_for_argument_nr), idx + 1);
     return FAIL;
   }
   return OK;
+#endif
 }
 
 /// Give an error and return FAIL unless "args[idx]" is a non-NULL dict.
 int tv_check_for_nonnull_dict_arg(const typval_T *const args, const int idx)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_for_nonnull_dict_arg(args, idx);
+#else
   if (tv_check_for_dict_arg(args, idx) == FAIL) {
     return FAIL;
   }
@@ -4344,14 +4391,19 @@ int tv_check_for_nonnull_dict_arg(const typval_T *const args, const int idx)
     return FAIL;
   }
   return OK;
+#endif
 }
 
 /// Check for an optional dict argument at "idx"
 int tv_check_for_opt_dict_arg(const typval_T *const args, const int idx)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_for_opt_dict_arg(args, idx);
+#else
   return (args[idx].v_type == VAR_UNKNOWN
           || tv_check_for_dict_arg(args, idx) != FAIL) ? OK : FAIL;
+#endif
 }
 
 /// Give an error and return FAIL unless "args[idx]" is a string or
@@ -4359,11 +4411,15 @@ int tv_check_for_opt_dict_arg(const typval_T *const args, const int idx)
 int tv_check_for_string_or_number_arg(const typval_T *const args, const int idx)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_for_string_or_number_arg(args, idx);
+#else
   if (args[idx].v_type != VAR_STRING && args[idx].v_type != VAR_NUMBER) {
     semsg(_(e_string_or_number_required_for_argument_nr), idx + 1);
     return FAIL;
   }
   return OK;
+#endif
 }
 
 /// Give an error and return FAIL unless "args[idx]" is a buffer number.
@@ -4371,7 +4427,11 @@ int tv_check_for_string_or_number_arg(const typval_T *const args, const int idx)
 int tv_check_for_buffer_arg(const typval_T *const args, const int idx)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_for_buffer_arg(args, idx);
+#else
   return tv_check_for_string_or_number_arg(args, idx);
+#endif
 }
 
 /// Give an error and return FAIL unless "args[idx]" is a line number.
@@ -4379,24 +4439,35 @@ int tv_check_for_buffer_arg(const typval_T *const args, const int idx)
 int tv_check_for_lnum_arg(const typval_T *const args, const int idx)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_for_lnum_arg(args, idx);
+#else
   return tv_check_for_string_or_number_arg(args, idx);
+#endif
 }
 
 /// Give an error and return FAIL unless "args[idx]" is a string or a list.
 int tv_check_for_string_or_list_arg(const typval_T *const args, const int idx)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_for_string_or_list_arg(args, idx);
+#else
   if (args[idx].v_type != VAR_STRING && args[idx].v_type != VAR_LIST) {
     semsg(_(e_string_or_list_required_for_argument_nr), idx + 1);
     return FAIL;
   }
   return OK;
+#endif
 }
 
 /// Give an error and return FAIL unless "args[idx]" is a string, a list or a blob.
 int tv_check_for_string_or_list_or_blob_arg(const typval_T *const args, const int idx)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_for_string_or_list_or_blob_arg(args, idx);
+#else
   if (args[idx].v_type != VAR_STRING
       && args[idx].v_type != VAR_LIST
       && args[idx].v_type != VAR_BLOB) {
@@ -4404,20 +4475,28 @@ int tv_check_for_string_or_list_or_blob_arg(const typval_T *const args, const in
     return FAIL;
   }
   return OK;
+#endif
 }
 
 /// Check for an optional string or list argument at "idx"
 int tv_check_for_opt_string_or_list_arg(const typval_T *const args, const int idx)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_for_opt_string_or_list_arg(args, idx);
+#else
   return (args[idx].v_type == VAR_UNKNOWN
           || tv_check_for_string_or_list_arg(args, idx) != FAIL) ? OK : FAIL;
+#endif
 }
 
 /// Give an error and return FAIL unless "args[idx]" is a string or a list or a dict
 int tv_check_for_string_or_list_or_dict_arg(const typval_T *const args, const int idx)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_for_string_or_list_or_dict_arg(args, idx);
+#else
   if (args[idx].v_type != VAR_STRING
       && args[idx].v_type != VAR_LIST
       && args[idx].v_type != VAR_DICT) {
@@ -4425,6 +4504,7 @@ int tv_check_for_string_or_list_or_dict_arg(const typval_T *const args, const in
     return FAIL;
   }
   return OK;
+#endif
 }
 
 /// Give an error and return FAIL unless "args[idx]" is a string
@@ -4432,6 +4512,9 @@ int tv_check_for_string_or_list_or_dict_arg(const typval_T *const args, const in
 int tv_check_for_string_or_func_arg(const typval_T *const args, const int idx)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_for_string_or_func_arg(args, idx);
+#else
   if (args[idx].v_type != VAR_PARTIAL
       && args[idx].v_type != VAR_FUNC
       && args[idx].v_type != VAR_STRING) {
@@ -4439,17 +4522,109 @@ int tv_check_for_string_or_func_arg(const typval_T *const args, const int idx)
     return FAIL;
   }
   return OK;
+#endif
 }
 
 /// Give an error and return FAIL unless "args[idx]" is a list or a blob.
 int tv_check_for_list_or_blob_arg(const typval_T *const args, const int idx)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
+#ifdef USE_RUST_TYPVAL
+  return rs_tv_check_for_list_or_blob_arg(args, idx);
+#else
   if (args[idx].v_type != VAR_LIST && args[idx].v_type != VAR_BLOB) {
     semsg(_(e_list_or_blob_required_for_argument_nr), idx + 1);
     return FAIL;
   }
   return OK;
+#endif
+}
+
+// =============================================================================
+// Rust FFI accessor functions for error message reporting
+// These wrap semsg() calls since semsg is variadic and hard to call from Rust.
+// =============================================================================
+
+/// Get a pointer to args[idx] in a typval array.
+/// Used by Rust to safely index into typval arrays.
+const void *nvim_typval_array_get(const typval_T *args, int idx)
+{
+  return &args[idx];
+}
+
+void nvim_typval_error_string_required(int idx)
+{
+  semsg(_(e_string_required_for_argument_nr), idx);
+}
+
+void nvim_typval_error_nonempty_string_required(int idx)
+{
+  semsg(_(e_non_empty_string_required_for_argument_nr), idx);
+}
+
+void nvim_typval_error_number_required(int idx)
+{
+  semsg(_(e_number_required_for_argument_nr), idx);
+}
+
+void nvim_typval_error_float_or_number_required(int idx)
+{
+  semsg(_(e_float_or_number_required_for_argument_nr), idx);
+}
+
+void nvim_typval_error_bool_required(int idx)
+{
+  semsg(_(e_bool_required_for_argument_nr), idx);
+}
+
+void nvim_typval_error_blob_required(int idx)
+{
+  semsg(_(e_blob_required_for_argument_nr), idx);
+}
+
+void nvim_typval_error_list_required(int idx)
+{
+  semsg(_(e_list_required_for_argument_nr), idx);
+}
+
+void nvim_typval_error_dict_required(int idx)
+{
+  semsg(_(e_dict_required_for_argument_nr), idx);
+}
+
+void nvim_typval_error_nonnull_dict_required(int idx)
+{
+  semsg(_(e_non_null_dict_required_for_argument_nr), idx);
+}
+
+void nvim_typval_error_string_or_number_required(int idx)
+{
+  semsg(_(e_string_or_number_required_for_argument_nr), idx);
+}
+
+void nvim_typval_error_string_or_list_required(int idx)
+{
+  semsg(_(e_string_or_list_required_for_argument_nr), idx);
+}
+
+void nvim_typval_error_string_list_or_blob_required(int idx)
+{
+  semsg(_(e_string_list_or_blob_required_for_argument_nr), idx);
+}
+
+void nvim_typval_error_string_list_or_dict_required(int idx)
+{
+  semsg(_(e_string_list_or_dict_required_for_argument_nr), idx);
+}
+
+void nvim_typval_error_string_or_func_required(int idx)
+{
+  semsg(_(e_string_or_function_required_for_argument_nr), idx);
+}
+
+void nvim_typval_error_list_or_blob_required(int idx)
+{
+  semsg(_(e_list_or_blob_required_for_argument_nr), idx);
 }
 
 /// Get the string value of a "stringish" Vimscript object.

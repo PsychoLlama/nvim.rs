@@ -1070,6 +1070,439 @@ pub extern "C" fn rs_tv_get_blob(tv: TypevalHandle) -> BlobHandle {
     tv_get_blob_impl(tv)
 }
 
+// =============================================================================
+// Type checking functions (tv_check_for_* family)
+// =============================================================================
+
+// C accessor functions for error message reporting.
+// These wrap semsg() calls since semsg is variadic and hard to call from Rust.
+extern "C" {
+    /// Get a pointer to args[idx] in a typval array.
+    /// This avoids needing to know sizeof(typval_T) in Rust.
+    fn nvim_typval_array_get(args: TypevalHandle, idx: c_int) -> TypevalHandle;
+
+    fn nvim_typval_error_string_required(idx: c_int);
+    fn nvim_typval_error_nonempty_string_required(idx: c_int);
+    fn nvim_typval_error_number_required(idx: c_int);
+    fn nvim_typval_error_float_or_number_required(idx: c_int);
+    fn nvim_typval_error_bool_required(idx: c_int);
+    fn nvim_typval_error_blob_required(idx: c_int);
+    fn nvim_typval_error_list_required(idx: c_int);
+    fn nvim_typval_error_dict_required(idx: c_int);
+    fn nvim_typval_error_nonnull_dict_required(idx: c_int);
+    fn nvim_typval_error_string_or_number_required(idx: c_int);
+    fn nvim_typval_error_string_or_list_required(idx: c_int);
+    fn nvim_typval_error_string_list_or_blob_required(idx: c_int);
+    fn nvim_typval_error_string_list_or_dict_required(idx: c_int);
+    fn nvim_typval_error_string_or_func_required(idx: c_int);
+    fn nvim_typval_error_list_or_blob_required(idx: c_int);
+}
+
+/// OK return value (0) matching C's OK.
+const OK: c_int = 0;
+/// FAIL return value (-1) matching C's FAIL.
+const FAIL: c_int = -1;
+
+/// Get the typval at args[idx] using the C accessor.
+/// This avoids needing to know sizeof(typval_T) in Rust.
+#[inline]
+fn get_arg(args: TypevalHandle, idx: c_int) -> TypevalHandle {
+    unsafe { nvim_typval_array_get(args, idx) }
+}
+
+/// Check if args[idx] is a string. Return OK if valid, FAIL if not.
+#[inline]
+fn tv_check_for_string_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
+    let tv = get_arg(args, idx);
+    if tv_type_impl(tv) == VarType::String {
+        OK
+    } else {
+        unsafe { nvim_typval_error_string_required(idx + 1) };
+        FAIL
+    }
+}
+
+/// FFI wrapper: check if args[idx] is a string.
+#[no_mangle]
+pub extern "C" fn rs_tv_check_for_string_arg(args: TypevalHandle, idx: c_int) -> c_int {
+    tv_check_for_string_arg_impl(args, idx)
+}
+
+/// Check if args[idx] is a non-empty string. Return OK if valid, FAIL if not.
+#[inline]
+fn tv_check_for_nonempty_string_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
+    if tv_check_for_string_arg_impl(args, idx) == FAIL {
+        return FAIL;
+    }
+    let tv = get_arg(args, idx);
+    let s = unsafe { nvim_tv_get_string_ptr(tv) };
+    if s.is_null() || unsafe { *s == 0 } {
+        unsafe { nvim_typval_error_nonempty_string_required(idx + 1) };
+        return FAIL;
+    }
+    OK
+}
+
+/// FFI wrapper: check if args[idx] is a non-empty string.
+#[no_mangle]
+pub extern "C" fn rs_tv_check_for_nonempty_string_arg(args: TypevalHandle, idx: c_int) -> c_int {
+    tv_check_for_nonempty_string_arg_impl(args, idx)
+}
+
+/// Check for optional string at args[idx]. VAR_UNKNOWN is OK.
+#[inline]
+fn tv_check_for_opt_string_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
+    let tv = get_arg(args, idx);
+    if tv_type_impl(tv) == VarType::Unknown {
+        OK
+    } else {
+        tv_check_for_string_arg_impl(args, idx)
+    }
+}
+
+/// FFI wrapper: check for optional string at args[idx].
+#[no_mangle]
+pub extern "C" fn rs_tv_check_for_opt_string_arg(args: TypevalHandle, idx: c_int) -> c_int {
+    tv_check_for_opt_string_arg_impl(args, idx)
+}
+
+/// Check if args[idx] is a number. Return OK if valid, FAIL if not.
+#[inline]
+fn tv_check_for_number_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
+    let tv = get_arg(args, idx);
+    if tv_type_impl(tv) == VarType::Number {
+        OK
+    } else {
+        unsafe { nvim_typval_error_number_required(idx + 1) };
+        FAIL
+    }
+}
+
+/// FFI wrapper: check if args[idx] is a number.
+#[no_mangle]
+pub extern "C" fn rs_tv_check_for_number_arg(args: TypevalHandle, idx: c_int) -> c_int {
+    tv_check_for_number_arg_impl(args, idx)
+}
+
+/// Check for optional number at args[idx]. VAR_UNKNOWN is OK.
+#[inline]
+fn tv_check_for_opt_number_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
+    let tv = get_arg(args, idx);
+    if tv_type_impl(tv) == VarType::Unknown {
+        OK
+    } else {
+        tv_check_for_number_arg_impl(args, idx)
+    }
+}
+
+/// FFI wrapper: check for optional number at args[idx].
+#[no_mangle]
+pub extern "C" fn rs_tv_check_for_opt_number_arg(args: TypevalHandle, idx: c_int) -> c_int {
+    tv_check_for_opt_number_arg_impl(args, idx)
+}
+
+/// Check if args[idx] is a float or number. Return OK if valid, FAIL if not.
+#[inline]
+fn tv_check_for_float_or_nr_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
+    let tv = get_arg(args, idx);
+    let t = tv_type_impl(tv);
+    if t == VarType::Float || t == VarType::Number {
+        OK
+    } else {
+        unsafe { nvim_typval_error_float_or_number_required(idx + 1) };
+        FAIL
+    }
+}
+
+/// FFI wrapper: check if args[idx] is a float or number.
+#[no_mangle]
+pub extern "C" fn rs_tv_check_for_float_or_nr_arg(args: TypevalHandle, idx: c_int) -> c_int {
+    tv_check_for_float_or_nr_arg_impl(args, idx)
+}
+
+/// Check if args[idx] is a bool (VAR_BOOL or NUMBER 0/1). Return OK if valid, FAIL if not.
+#[inline]
+fn tv_check_for_bool_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
+    let tv = get_arg(args, idx);
+    let t = tv_type_impl(tv);
+    if t == VarType::Bool {
+        return OK;
+    }
+    // Also accept numbers 0 and 1 as bool values
+    if t == VarType::Number {
+        let n = unsafe { nvim_tv_get_number(tv) };
+        if n == 0 || n == 1 {
+            return OK;
+        }
+    }
+    unsafe { nvim_typval_error_bool_required(idx + 1) };
+    FAIL
+}
+
+/// FFI wrapper: check if args[idx] is a bool.
+#[no_mangle]
+pub extern "C" fn rs_tv_check_for_bool_arg(args: TypevalHandle, idx: c_int) -> c_int {
+    tv_check_for_bool_arg_impl(args, idx)
+}
+
+/// Check for optional bool at args[idx]. VAR_UNKNOWN is OK.
+#[inline]
+fn tv_check_for_opt_bool_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
+    let tv = get_arg(args, idx);
+    if tv_type_impl(tv) == VarType::Unknown {
+        OK
+    } else {
+        tv_check_for_bool_arg_impl(args, idx)
+    }
+}
+
+/// FFI wrapper: check for optional bool at args[idx].
+#[no_mangle]
+pub extern "C" fn rs_tv_check_for_opt_bool_arg(args: TypevalHandle, idx: c_int) -> c_int {
+    tv_check_for_opt_bool_arg_impl(args, idx)
+}
+
+/// Check if args[idx] is a blob. Return OK if valid, FAIL if not.
+#[inline]
+fn tv_check_for_blob_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
+    let tv = get_arg(args, idx);
+    if tv_type_impl(tv) == VarType::Blob {
+        OK
+    } else {
+        unsafe { nvim_typval_error_blob_required(idx + 1) };
+        FAIL
+    }
+}
+
+/// FFI wrapper: check if args[idx] is a blob.
+#[no_mangle]
+pub extern "C" fn rs_tv_check_for_blob_arg(args: TypevalHandle, idx: c_int) -> c_int {
+    tv_check_for_blob_arg_impl(args, idx)
+}
+
+/// Check if args[idx] is a list. Return OK if valid, FAIL if not.
+#[inline]
+fn tv_check_for_list_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
+    let tv = get_arg(args, idx);
+    if tv_type_impl(tv) == VarType::List {
+        OK
+    } else {
+        unsafe { nvim_typval_error_list_required(idx + 1) };
+        FAIL
+    }
+}
+
+/// FFI wrapper: check if args[idx] is a list.
+#[no_mangle]
+pub extern "C" fn rs_tv_check_for_list_arg(args: TypevalHandle, idx: c_int) -> c_int {
+    tv_check_for_list_arg_impl(args, idx)
+}
+
+/// Check if args[idx] is a dict. Return OK if valid, FAIL if not.
+#[inline]
+fn tv_check_for_dict_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
+    let tv = get_arg(args, idx);
+    if tv_type_impl(tv) == VarType::Dict {
+        OK
+    } else {
+        unsafe { nvim_typval_error_dict_required(idx + 1) };
+        FAIL
+    }
+}
+
+/// FFI wrapper: check if args[idx] is a dict.
+#[no_mangle]
+pub extern "C" fn rs_tv_check_for_dict_arg(args: TypevalHandle, idx: c_int) -> c_int {
+    tv_check_for_dict_arg_impl(args, idx)
+}
+
+/// Check if args[idx] is a non-NULL dict. Return OK if valid, FAIL if not.
+#[inline]
+fn tv_check_for_nonnull_dict_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
+    if tv_check_for_dict_arg_impl(args, idx) == FAIL {
+        return FAIL;
+    }
+    let tv = get_arg(args, idx);
+    if unsafe { nvim_tv_dict_is_null(tv) != 0 } {
+        unsafe { nvim_typval_error_nonnull_dict_required(idx + 1) };
+        return FAIL;
+    }
+    OK
+}
+
+/// FFI wrapper: check if args[idx] is a non-NULL dict.
+#[no_mangle]
+pub extern "C" fn rs_tv_check_for_nonnull_dict_arg(args: TypevalHandle, idx: c_int) -> c_int {
+    tv_check_for_nonnull_dict_arg_impl(args, idx)
+}
+
+/// Check for optional dict at args[idx]. VAR_UNKNOWN is OK.
+#[inline]
+fn tv_check_for_opt_dict_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
+    let tv = get_arg(args, idx);
+    if tv_type_impl(tv) == VarType::Unknown {
+        OK
+    } else {
+        tv_check_for_dict_arg_impl(args, idx)
+    }
+}
+
+/// FFI wrapper: check for optional dict at args[idx].
+#[no_mangle]
+pub extern "C" fn rs_tv_check_for_opt_dict_arg(args: TypevalHandle, idx: c_int) -> c_int {
+    tv_check_for_opt_dict_arg_impl(args, idx)
+}
+
+/// Check if args[idx] is a string or number. Return OK if valid, FAIL if not.
+#[inline]
+fn tv_check_for_string_or_number_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
+    let tv = get_arg(args, idx);
+    let t = tv_type_impl(tv);
+    if t == VarType::String || t == VarType::Number {
+        OK
+    } else {
+        unsafe { nvim_typval_error_string_or_number_required(idx + 1) };
+        FAIL
+    }
+}
+
+/// FFI wrapper: check if args[idx] is a string or number.
+#[no_mangle]
+pub extern "C" fn rs_tv_check_for_string_or_number_arg(args: TypevalHandle, idx: c_int) -> c_int {
+    tv_check_for_string_or_number_arg_impl(args, idx)
+}
+
+/// Check if args[idx] is a buffer (string or number). Return OK if valid, FAIL if not.
+#[no_mangle]
+pub extern "C" fn rs_tv_check_for_buffer_arg(args: TypevalHandle, idx: c_int) -> c_int {
+    tv_check_for_string_or_number_arg_impl(args, idx)
+}
+
+/// Check if args[idx] is a line number (string or number). Return OK if valid, FAIL if not.
+#[no_mangle]
+pub extern "C" fn rs_tv_check_for_lnum_arg(args: TypevalHandle, idx: c_int) -> c_int {
+    tv_check_for_string_or_number_arg_impl(args, idx)
+}
+
+/// Check if args[idx] is a string or list. Return OK if valid, FAIL if not.
+#[inline]
+fn tv_check_for_string_or_list_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
+    let tv = get_arg(args, idx);
+    let t = tv_type_impl(tv);
+    if t == VarType::String || t == VarType::List {
+        OK
+    } else {
+        unsafe { nvim_typval_error_string_or_list_required(idx + 1) };
+        FAIL
+    }
+}
+
+/// FFI wrapper: check if args[idx] is a string or list.
+#[no_mangle]
+pub extern "C" fn rs_tv_check_for_string_or_list_arg(args: TypevalHandle, idx: c_int) -> c_int {
+    tv_check_for_string_or_list_arg_impl(args, idx)
+}
+
+/// Check for optional string or list at args[idx]. VAR_UNKNOWN is OK.
+#[inline]
+fn tv_check_for_opt_string_or_list_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
+    let tv = get_arg(args, idx);
+    if tv_type_impl(tv) == VarType::Unknown {
+        OK
+    } else {
+        tv_check_for_string_or_list_arg_impl(args, idx)
+    }
+}
+
+/// FFI wrapper: check for optional string or list at args[idx].
+#[no_mangle]
+pub extern "C" fn rs_tv_check_for_opt_string_or_list_arg(args: TypevalHandle, idx: c_int) -> c_int {
+    tv_check_for_opt_string_or_list_arg_impl(args, idx)
+}
+
+/// Check if args[idx] is a string, list, or blob. Return OK if valid, FAIL if not.
+#[inline]
+fn tv_check_for_string_or_list_or_blob_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
+    let tv = get_arg(args, idx);
+    let t = tv_type_impl(tv);
+    if t == VarType::String || t == VarType::List || t == VarType::Blob {
+        OK
+    } else {
+        unsafe { nvim_typval_error_string_list_or_blob_required(idx + 1) };
+        FAIL
+    }
+}
+
+/// FFI wrapper: check if args[idx] is a string, list, or blob.
+#[no_mangle]
+pub extern "C" fn rs_tv_check_for_string_or_list_or_blob_arg(
+    args: TypevalHandle,
+    idx: c_int,
+) -> c_int {
+    tv_check_for_string_or_list_or_blob_arg_impl(args, idx)
+}
+
+/// Check if args[idx] is a string, list, or dict. Return OK if valid, FAIL if not.
+#[inline]
+fn tv_check_for_string_or_list_or_dict_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
+    let tv = get_arg(args, idx);
+    let t = tv_type_impl(tv);
+    if t == VarType::String || t == VarType::List || t == VarType::Dict {
+        OK
+    } else {
+        unsafe { nvim_typval_error_string_list_or_dict_required(idx + 1) };
+        FAIL
+    }
+}
+
+/// FFI wrapper: check if args[idx] is a string, list, or dict.
+#[no_mangle]
+pub extern "C" fn rs_tv_check_for_string_or_list_or_dict_arg(
+    args: TypevalHandle,
+    idx: c_int,
+) -> c_int {
+    tv_check_for_string_or_list_or_dict_arg_impl(args, idx)
+}
+
+/// Check if args[idx] is a string or function reference. Return OK if valid, FAIL if not.
+#[inline]
+fn tv_check_for_string_or_func_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
+    let tv = get_arg(args, idx);
+    let t = tv_type_impl(tv);
+    if t == VarType::Partial || t == VarType::Func || t == VarType::String {
+        OK
+    } else {
+        unsafe { nvim_typval_error_string_or_func_required(idx + 1) };
+        FAIL
+    }
+}
+
+/// FFI wrapper: check if args[idx] is a string or function reference.
+#[no_mangle]
+pub extern "C" fn rs_tv_check_for_string_or_func_arg(args: TypevalHandle, idx: c_int) -> c_int {
+    tv_check_for_string_or_func_arg_impl(args, idx)
+}
+
+/// Check if args[idx] is a list or blob. Return OK if valid, FAIL if not.
+#[inline]
+fn tv_check_for_list_or_blob_arg_impl(args: TypevalHandle, idx: c_int) -> c_int {
+    let tv = get_arg(args, idx);
+    let t = tv_type_impl(tv);
+    if t == VarType::List || t == VarType::Blob {
+        OK
+    } else {
+        unsafe { nvim_typval_error_list_or_blob_required(idx + 1) };
+        FAIL
+    }
+}
+
+/// FFI wrapper: check if args[idx] is a list or blob.
+#[no_mangle]
+pub extern "C" fn rs_tv_check_for_list_or_blob_arg(args: TypevalHandle, idx: c_int) -> c_int {
+    tv_check_for_list_or_blob_arg_impl(args, idx)
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
