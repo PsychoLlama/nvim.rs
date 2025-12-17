@@ -2,11 +2,11 @@
 
 ## Current Status
 
-**768 rs\_\* functions migrated**
+**769 rs\_\* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
-Latest: Phase 62 completed - `tv_blob_equal` migrated to Rust.
+Latest: Phase 63 completed - `rs_tv_blob_set` added to Rust.
 
 ### Highlight Migration: ✅ COMPLETE (Dead Code Removed)
 
@@ -32,6 +32,7 @@ All grid.c functions that can reasonably be migrated are now in Rust.
 
 | Phase | Name | Key Functions |
 |-------|------|---------------|
+| 63 | Blob Set | `rs_tv_blob_set` |
 | 62 | Blob Equal | `rs_tv_blob_equal` |
 | 61 | List Reverse | `rs_tv_list_reverse` |
 | 60 | List Find | `rs_tv_list_find`, `rs_tv_list_find_ni` |
