@@ -2,11 +2,11 @@
 
 ## Current Status
 
-**791 rs\_\* functions migrated**
+**794 rs\_\* functions migrated**
 
 Run `grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l` to get current count.
 
-Latest: Phase 64 completed - 22 `tv_check_for_*` argument type checkers migrated to Rust.
+Latest: Phase 65 completed - `tv_check_num`, `tv_check_str`, `tv_check_str_or_nr` type validators migrated to Rust.
 
 ### Highlight Migration: ✅ COMPLETE (Dead Code Removed)
 
@@ -32,6 +32,7 @@ All grid.c functions that can reasonably be migrated are now in Rust.
 
 | Phase | Name | Key Functions |
 |-------|------|---------------|
+| 65 | Type Validators | `rs_tv_check_num`, `rs_tv_check_str`, `rs_tv_check_str_or_nr` |
 | 64 | Type Checkers | 22 `rs_tv_check_for_*` argument validation functions |
 | 63 | Blob Set | `rs_tv_blob_set` |
 | 62 | Blob Equal | `rs_tv_blob_equal` |
