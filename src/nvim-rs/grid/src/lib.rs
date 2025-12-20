@@ -113,8 +113,7 @@ impl GlyphCache {
 ///
 /// Uses a Mutex for thread-safety, though Neovim is primarily single-threaded.
 /// `LazyLock` ensures the cache is initialized on first access.
-static GLYPH_CACHE: LazyLock<Mutex<GlyphCache>> =
-    LazyLock::new(|| Mutex::new(GlyphCache::new()));
+static GLYPH_CACHE: LazyLock<Mutex<GlyphCache>> = LazyLock::new(|| Mutex::new(GlyphCache::new()));
 
 // FFI declarations for C callback functions
 extern "C" {
@@ -402,7 +401,10 @@ fn schar_cache_clear_impl() {
     // Regenerate char options (must not fail)
     // SAFETY: this C function has no safety requirements
     let result = unsafe { nvim_check_chars_options() };
-    assert!(result == 0, "check_chars_options() failed after cache clear");
+    assert!(
+        result == 0,
+        "check_chars_options() failed after cache clear"
+    );
 }
 
 /// FFI wrapper for `schar_cache_clear`.
@@ -762,8 +764,7 @@ pub unsafe extern "C" fn rs_grid_line_puts(
         };
 
         // Get schar and first codepoint
-        let ptr_slice =
-            std::slice::from_raw_parts(text_u8.offset(ptr_offset), mbyte_blen);
+        let ptr_slice = std::slice::from_raw_parts(text_u8.offset(ptr_offset), mbyte_blen);
         let (schar, mbyte_cells) = utfc_ptrlen2schar_impl(ptr_slice);
 
         // Handle invalid or too-wide characters
@@ -786,8 +787,7 @@ pub unsafe extern "C" fn rs_grid_line_puts(
             let first = nvim_get_grid_line_first();
             let last = nvim_get_grid_line_last();
             if col > first && col < last && *linebuf_char.offset(col as isize) == 0 {
-                *linebuf_char.offset((col - 1) as isize) =
-                    schar_from_char_impl(b'>' as c_int);
+                *linebuf_char.offset((col - 1) as isize) = schar_from_char_impl(b'>' as c_int);
             }
         }
 
@@ -1101,8 +1101,7 @@ pub unsafe extern "C" fn rs_grid_put_linebuf(
     // Check if this is an invalid row (needs full redraw)
     let default_grid = nvim_get_default_grid();
     let line_off = *grid_line_offset.add(row as usize);
-    let invalid_row =
-        grid != default_grid && grid_invalid_row(grid_attrs, line_off) && col == 0;
+    let invalid_row = grid != default_grid && grid_invalid_row(grid_attrs, line_off) && col == 0;
 
     let off_to = line_off + coloff as usize;
     let max_off_to = line_off + grid_cols as usize;
@@ -1110,8 +1109,7 @@ pub unsafe extern "C" fn rs_grid_put_linebuf(
     // Handle overwriting right half of double-width character
     if col > 0 && *grid_chars.add(off_to + col as usize) == 0 {
         *linebuf_char.offset((col - 1) as isize) = schar_from_char_impl(b'>' as c_int);
-        *linebuf_attr.offset((col - 1) as isize) =
-            *grid_attrs.add(off_to + (col - 1) as usize);
+        *linebuf_attr.offset((col - 1) as isize) = *grid_attrs.add(off_to + (col - 1) as usize);
         col -= 1;
     }
 
@@ -1349,7 +1347,9 @@ fn schar_in_arabic_block(sc: ScharT) -> bool {
         // High schar: read from cache
         let idx = schar_idx(sc);
         let cache = GLYPH_CACHE.lock().unwrap();
-        cache.get(idx).map_or(0, |bytes| bytes.first().copied().unwrap_or(0))
+        cache
+            .get(idx)
+            .map_or(0, |bytes| bytes.first().copied().unwrap_or(0))
     } else {
         // Inline schar: extract first byte
         let bytes = sc.to_ne_bytes();
@@ -1454,7 +1454,11 @@ pub unsafe extern "C" fn rs_line_do_arabic_shape(buf: *mut ScharT, cols: c_int) 
 
         // Calculate offset past the original c0 and c1
         let c0_len = nvim_mbyte::utf_char2len(c0);
-        let c1_len = if c1 != 0 { nvim_mbyte::utf_char2len(c1) } else { 0 };
+        let c1_len = if c1 != 0 {
+            nvim_mbyte::utf_char2len(c1)
+        } else {
+            0
+        };
         let off = c0_len + c1_len;
 
         // Copy remaining bytes from original schar
@@ -1476,7 +1480,8 @@ pub unsafe extern "C" fn rs_line_do_arabic_shape(buf: *mut ScharT, cols: c_int) 
 
         // Copy rest to new buffer
         if rest_len > 0 {
-            scbuf_new[len..len + rest_len].copy_from_slice(&scbuf[rest_start..rest_start + rest_len]);
+            scbuf_new[len..len + rest_len]
+                .copy_from_slice(&scbuf[rest_start..rest_start + rest_len]);
         }
 
         // Create new schar from buffer
@@ -1699,21 +1704,9 @@ unsafe fn linecopy_impl(
     let width_usize = width as usize;
 
     // Use memmove since regions may overlap
-    std::ptr::copy(
-        chars.add(off_from),
-        chars.add(off_to),
-        width_usize,
-    );
-    std::ptr::copy(
-        attrs.add(off_from),
-        attrs.add(off_to),
-        width_usize,
-    );
-    std::ptr::copy(
-        vcols.add(off_from),
-        vcols.add(off_to),
-        width_usize,
-    );
+    std::ptr::copy(chars.add(off_from), chars.add(off_to), width_usize);
+    std::ptr::copy(attrs.add(off_from), attrs.add(off_to), width_usize);
+    std::ptr::copy(vcols.add(off_from), vcols.add(off_to), width_usize);
 }
 
 /// Insert lines in a grid by scrolling down.
@@ -2129,7 +2122,11 @@ pub unsafe extern "C" fn rs_grid_assign_handle(grid: *mut std::ffi::c_void) {
 /// * `text_width` - Width of the text to place
 /// * `align` - Alignment position (0=left, 1=center, 2=right)
 #[no_mangle]
-pub extern "C" fn rs_get_bordertext_col(total_col: c_int, text_width: c_int, align: c_int) -> c_int {
+pub extern "C" fn rs_get_bordertext_col(
+    total_col: c_int,
+    text_width: c_int,
+    align: c_int,
+) -> c_int {
     match align {
         0 => 1, // kAlignLeft
         1 => {
@@ -2403,7 +2400,7 @@ mod tests {
         assert_eq!(rs_get_bordertext_col(10, 4, 1), 4); // (10-4)/2 + 1 = 4
         assert_eq!(rs_get_bordertext_col(20, 10, 1), 6); // (20-10)/2 + 1 = 6
         assert_eq!(rs_get_bordertext_col(10, 10, 1), 1); // (10-10)/2 + 1 = 1
-        // When text is wider, clamp to 1
+                                                         // When text is wider, clamp to 1
         assert_eq!(rs_get_bordertext_col(5, 10, 1), 1); // (5-10)/2 + 1 = -1.5 -> 1
     }
 
@@ -2413,7 +2410,7 @@ mod tests {
         assert_eq!(rs_get_bordertext_col(10, 4, 2), 7); // 10 - 4 + 1 = 7
         assert_eq!(rs_get_bordertext_col(20, 10, 2), 11); // 20 - 10 + 1 = 11
         assert_eq!(rs_get_bordertext_col(10, 10, 2), 1); // 10 - 10 + 1 = 1
-        // When text is wider, clamp to 1
+                                                         // When text is wider, clamp to 1
         assert_eq!(rs_get_bordertext_col(5, 10, 2), 1); // 5 - 10 + 1 = -4 -> 1
     }
 

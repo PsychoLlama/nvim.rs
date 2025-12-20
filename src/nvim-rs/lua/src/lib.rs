@@ -106,7 +106,15 @@ pub unsafe fn lua_call_ref_ctx(
     arena: *mut Arena,
     err: *mut Error,
 ) -> Object {
-    nvim_nlua_call_ref_ctx(c_int::from(fast), ref_, name, args, mode as c_int, arena, err)
+    nvim_nlua_call_ref_ctx(
+        c_int::from(fast),
+        ref_,
+        name,
+        args,
+        mode as c_int,
+        arena,
+        err,
+    )
 }
 
 // =============================================================================
