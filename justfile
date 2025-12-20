@@ -22,9 +22,8 @@ clean:
     rm -rf build
     cargo clean
 
-# Run all tests
-test:
-    cmake --build build --target test
+# Run all tests (unit + functional)
+test: unittest functionaltest
 
 # Run functional tests
 functionaltest:

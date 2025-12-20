@@ -201,9 +201,11 @@ describe('profiling related functions', function()
       eq(true, profile_passed_limit(start))
     end)
 
-    itp('start + start is in the future', function()
-      local start = profile_start()
-      local future = profile_add(start, start)
+    itp('limit set in the future has not passed', function()
+      -- Use profile_setlimit to create a time in the future (1 second from now)
+      -- This is more robust than the old test which used start+start and was
+      -- flaky because in unit tests os_hrtime() starts from near zero
+      local future = profile_setlimit(1000)  -- 1000ms = 1 second
       eq(false, profile_passed_limit(future))
     end)
   end)
