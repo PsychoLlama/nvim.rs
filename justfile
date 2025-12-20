@@ -51,9 +51,28 @@ rust-build:
 rust-build-debug:
     cargo build
 
-# Run Rust tests
+# Run Rust tests for pure Rust crates (no FFI linking needed)
+# These crates don't call into C code, only export functions to C
 rust-test:
-    cargo test
+    cargo test \
+      -p nvim-ascii \
+      -p nvim-cmdhist \
+      -p nvim-collections \
+      -p nvim-encoding \
+      -p nvim-eval \
+      -p nvim-fileio \
+      -p nvim-help \
+      -p nvim-indent \
+      -p nvim-keycodes \
+      -p nvim-mark \
+      -p nvim-math \
+      -p nvim-memutil \
+      -p nvim-menu \
+      -p nvim-ops \
+      -p nvim-os \
+      -p nvim-register \
+      -p nvim-spell \
+      -p nvim-strings
 
 # Run Rust linter
 rust-clippy:
@@ -71,15 +90,11 @@ rust-fmt-check:
 rust-check: rust-fmt-check rust-clippy rust-test
 
 # Test Rust FFI from C (compares Rust vs C implementations)
+# Note: Only compare_math works standalone. Other tests need Neovim's C code
+# (utf8proc, global variables, accessor functions) - run them via `just test`
 rust-ffi-test: rust-build
     cc -o /tmp/compare_math src/nvim-rs/test/compare_math.c -L target/release -lnvim_rs -lpthread -ldl -lm
     /tmp/compare_math
-    cc -o /tmp/compare_path src/nvim-rs/test/compare_path.c -L target/release -lnvim_rs -lpthread -ldl -lm
-    /tmp/compare_path
-    cc -o /tmp/compare_strings src/nvim-rs/test/compare_strings.c -L target/release -lnvim_rs -lpthread -ldl -lm
-    /tmp/compare_strings
-    cc -o /tmp/compare_mbyte src/nvim-rs/test/compare_mbyte.c -L target/release -lnvim_rs -lpthread -ldl -lm
-    /tmp/compare_mbyte
 
 # Full build: Rust + C
 build-all: rust-build build
