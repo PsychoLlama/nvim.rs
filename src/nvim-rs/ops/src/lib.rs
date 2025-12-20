@@ -4,6 +4,8 @@
 //! from `src/nvim/ops.c`.
 
 #![allow(unsafe_code)] // FFI requires unsafe
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_const_for_fn)]
 
 use std::ffi::c_int;
 

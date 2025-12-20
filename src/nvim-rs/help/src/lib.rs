@@ -5,6 +5,9 @@
 
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::cast_possible_truncation)]
 
 use std::ffi::CStr;
 use std::os::raw::{c_char, c_int};

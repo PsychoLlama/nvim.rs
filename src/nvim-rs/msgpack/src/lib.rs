@@ -31,6 +31,10 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::doc_markdown)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::borrow_as_ptr)]
+#![allow(clippy::branches_sharing_code)]
 
 use std::ffi::c_int;
 
@@ -175,7 +179,7 @@ pub unsafe extern "C" fn rs_mpack_uint64(ptr: *mut *mut u8, val: u64) {
     }
     if val > 0x0fff_ffff {
         rs_mpack_w(ptr, 0xcf);
-        rs_mpack_w8(ptr, (&val) as *const u64 as *const u8);
+        rs_mpack_w8(ptr, (&raw const val).cast::<u8>());
     } else {
         rs_mpack_uint(ptr, val as u32);
     }
@@ -204,7 +208,7 @@ pub unsafe extern "C" fn rs_mpack_integer(ptr: *mut *mut u8, val: i64) {
     } else if val < -0x8000_0000 {
         // int 64
         rs_mpack_w(ptr, 0xd3);
-        rs_mpack_w8(ptr, (&val) as *const i64 as *const u8);
+        rs_mpack_w8(ptr, (&raw const val).cast::<u8>());
     } else if val < -0x8000 {
         // int 32
         rs_mpack_w(ptr, 0xd2);
@@ -234,7 +238,7 @@ pub unsafe extern "C" fn rs_mpack_float8(ptr: *mut *mut u8, val: f64) {
         return;
     }
     rs_mpack_w(ptr, 0xcb);
-    rs_mpack_w8(ptr, (&val) as *const f64 as *const u8);
+    rs_mpack_w8(ptr, (&raw const val).cast::<u8>());
 }
 
 /// Pack an array header (the number of elements that follow).

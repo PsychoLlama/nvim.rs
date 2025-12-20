@@ -7,6 +7,7 @@
 
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(dead_code)] // Some FFI declarations are pre-declared for future use
+#![allow(clippy::doc_markdown)]
 
 use std::ffi::c_int;
 

@@ -6,6 +6,20 @@
 //! done through C accessor functions.
 
 #![allow(unsafe_code)] // FFI requires unsafe
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::manual_c_str_literals)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::missing_const_for_fn)]
+#![allow(clippy::redundant_else)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_precision_loss)]
+#![allow(clippy::match_same_arms)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::if_not_else)]
+#![allow(clippy::manual_midpoint)]
 
 use std::ffi::{c_char, c_int};
 

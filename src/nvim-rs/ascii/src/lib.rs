@@ -3,6 +3,8 @@
 //! This crate provides pure functions for ASCII character classification,
 //! exported via FFI for use in C code.
 
+#![allow(clippy::manual_range_contains)]
+
 use std::ffi::c_int;
 
 // ============================================================================

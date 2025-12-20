@@ -6,6 +6,17 @@
 #![allow(clippy::missing_safety_doc)] // FFI functions need unsafe but docs come later
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(deprecated)] // rmp read_data_* functions are deprecated but still work
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::missing_const_for_fn)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::wildcard_imports)]
+#![allow(clippy::manual_c_str_literals)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::match_same_arms)]
 
 use std::ffi::c_char;
 use std::io::Cursor;

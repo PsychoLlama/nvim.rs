@@ -5,6 +5,7 @@
 
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(clippy::missing_safety_doc)]
+#![allow(clippy::doc_markdown)]
 
 use std::os::raw::c_int;
 

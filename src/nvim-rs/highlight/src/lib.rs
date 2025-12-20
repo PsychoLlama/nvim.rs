@@ -4,6 +4,9 @@
 //! highlight system. It also manages the highlight attribute entry table
 //! that maps attribute IDs to their properties.
 
+#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::manual_range_contains)]
+
 use std::collections::HashMap;
 use std::ffi::{c_char, c_int, c_void, CStr};
 use std::sync::{LazyLock, Mutex};
@@ -1350,7 +1353,7 @@ const MAX_SYN_NAME: usize = 200;
 
 /// Empty string constant for returning when group ID is invalid.
 /// This is a static CStr that lives for the lifetime of the program.
-static EMPTY_STRING: &CStr = unsafe { CStr::from_bytes_with_nul_unchecked(b"\0") };
+static EMPTY_STRING: &CStr = c"";
 
 /// Return the name of highlight group "id".
 /// When not a valid ID (1-based), returns an empty string.
@@ -2441,15 +2444,14 @@ pub unsafe extern "C" fn rs_update_window_hl(wp: *mut c_void, invalid: bool) {
     check_blending(wp);
 
     // Compute normalnc (non-current window normal)
-    let hl_attr_normalnc;
-    if *hl_def.offset(hlf_inactive as isize) == 0 {
-        hl_attr_normalnc = rs_hl_combine_attr(
+    let hl_attr_normalnc = if *hl_def.offset(hlf_inactive as isize) == 0 {
+        rs_hl_combine_attr(
             *hl_attr_active.offset(hlf_inactive as isize),
             hl_attr_normal,
-        );
+        )
     } else {
-        hl_attr_normalnc = *hl_def.offset(hlf_inactive as isize);
-    }
+        *hl_def.offset(hlf_inactive as isize)
+    };
 
     let hl_attr_normalnc = if floating {
         rs_hl_apply_winblend(winbl, hl_attr_normalnc)
@@ -2485,9 +2487,9 @@ fn cterm2rgb_internal(nr: c_int) -> c_int {
 /// Matches C's hl_rgb2cterm_color: simple 6x6x6 cube mapping without grey detection.
 /// Returns 0-215 (cube indices without the +16 offset).
 fn rgb2cterm_internal(rgb: c_int) -> i16 {
-    let r = ((rgb >> 16) & 0xFF) as i32;
-    let g = ((rgb >> 8) & 0xFF) as i32;
-    let b = (rgb & 0xFF) as i32;
+    let r = (rgb >> 16) & 0xFF;
+    let g = (rgb >> 8) & 0xFF;
+    let b = rgb & 0xFF;
 
     // Simple cube mapping: (r * 6 / 256) * 36 + (g * 6 / 256) * 6 + (b * 6 / 256)
     // This matches C's hl_rgb2cterm_color exactly
@@ -2743,7 +2745,7 @@ pub struct LookupColorResult {
 #[no_mangle]
 pub unsafe extern "C" fn rs_lookup_color(idx: c_int, foreground: bool) -> LookupColorResult {
     // Bounds check
-    if idx < 0 || idx >= 28 {
+    if !(0..28).contains(&idx) {
         return LookupColorResult {
             color: -1,
             bold: -1,

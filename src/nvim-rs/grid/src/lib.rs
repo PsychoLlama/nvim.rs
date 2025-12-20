@@ -4,6 +4,27 @@
 //! from `src/nvim/grid.c`.
 
 #![allow(unsafe_code)] // FFI requires unsafe
+#![allow(clippy::similar_names)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::missing_const_for_fn)]
+#![allow(clippy::cast_ptr_alignment)]
+#![allow(clippy::borrow_as_ptr)]
+#![allow(clippy::match_same_arms)]
+#![allow(clippy::ptr_as_ptr)]
+#![allow(clippy::unnecessary_cast)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::branches_sharing_code)]
+#![allow(clippy::if_not_else)]
+#![allow(clippy::cast_lossless)]
+#![allow(clippy::collapsible_else_if)]
+#![allow(clippy::collapsible_if)]
+#![allow(clippy::bool_to_int_with_if)]
+#![allow(clippy::range_plus_one)]
 
 use std::collections::HashMap;
 use std::ffi::{c_char, c_int, c_uint, CStr};

@@ -7,6 +7,12 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::ptr_as_ptr)]
+#![allow(clippy::map_entry)]
+#![allow(clippy::cast_lossless)]
 
 use std::ffi::c_char;
 use std::ffi::c_int;

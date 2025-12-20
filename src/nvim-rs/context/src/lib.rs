@@ -4,6 +4,7 @@
 
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 #![allow(clippy::missing_safety_doc)]
+#![allow(clippy::borrow_as_ptr)]
 #![allow(unsafe_code)]
 
 use std::ffi::c_char;

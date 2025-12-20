@@ -4,6 +4,9 @@
 
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(clippy::missing_safety_doc)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_panics_doc)]
+#![allow(clippy::cast_possible_wrap)]
 
 use std::ffi::{c_char, c_int};
 

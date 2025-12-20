@@ -3,6 +3,7 @@
 //! Provides Rust implementations of command line functions.
 
 #![allow(unsafe_code)]
+#![allow(clippy::doc_markdown)]
 
 use std::ffi::c_char;
 use std::os::raw::c_int;

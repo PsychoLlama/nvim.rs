@@ -4,6 +4,9 @@
 
 #![allow(unsafe_code)]
 #![allow(clippy::missing_const_for_fn)]
+#![allow(clippy::cast_lossless)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::manual_let_else)]
 
 use std::ffi::{c_char, c_int};
 

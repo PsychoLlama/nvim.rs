@@ -2,6 +2,8 @@
 //!
 //! This crate provides C-compatible implementations of API utility functions.
 
+#![allow(clippy::items_after_test_module)]
+
 use std::ffi::{c_char, c_int};
 use std::ptr;
 

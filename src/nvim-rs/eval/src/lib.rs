@@ -4,6 +4,9 @@
 //! including character validation for variable and function names,
 //! and type conversion utilities.
 
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_const_for_fn)]
+
 use std::ffi::c_int;
 
 // =============================================================================

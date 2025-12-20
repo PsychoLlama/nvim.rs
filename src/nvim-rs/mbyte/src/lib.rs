@@ -22,6 +22,14 @@
 #![allow(clippy::manual_range_contains)]
 #![allow(clippy::needless_range_loop)]
 #![allow(clippy::uninlined_format_args)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::unnecessary_cast)]
+#![allow(clippy::manual_let_else)]
+#![allow(clippy::single_match_else)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::ptr_cast_constness)]
+#![allow(clippy::as_ptr_cast_mut)]
 
 use std::ffi::{c_char, c_int, c_longlong};
 

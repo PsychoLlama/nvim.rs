@@ -368,6 +368,7 @@ fn buf_hide_impl(buf: BufHandle) -> bool {
     // SAFETY: We check for null above, and the accessors handle the pointer safely.
     unsafe {
         // 'bufhidden' overrules 'hidden' and ":hide", check it first
+        #[allow(clippy::cast_sign_loss)]
         let bh = nvim_buf_get_bufhidden(buf) as u8;
         match bh {
             // "unload", "wipe", "delete" -> don't hide

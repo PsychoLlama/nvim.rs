@@ -2,6 +2,10 @@
 //!
 //! This crate provides functions for validating register names and operations.
 
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_const_for_fn)]
+#![allow(clippy::must_use_candidate)]
+
 use std::ffi::c_int;
 
 /// Register index constants (matching `register_defs.h`).

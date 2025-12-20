@@ -3,6 +3,16 @@
 //! This crate provides terminfo-related functions for the terminal UI,
 //! including key modifier handling and terminfo format string processing.
 
+#![allow(clippy::manual_c_str_literals)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::similar_names)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::missing_const_for_fn)]
+#![allow(clippy::borrow_as_ptr)]
+#![allow(clippy::collapsible_if)]
+
 use std::ffi::{c_char, c_int, c_long, CStr};
 use std::io::Write;
 

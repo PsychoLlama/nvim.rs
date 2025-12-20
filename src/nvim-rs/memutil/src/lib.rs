@@ -10,6 +10,7 @@
 #![allow(clippy::cast_sign_loss)] // c_char to u8 is intentional
 #![allow(clippy::option_if_let_else)] // match is clearer for FFI code
 #![allow(clippy::naive_bytecount)] // No external dependencies wanted
+#![allow(clippy::unreadable_literal)]
 
 use std::ffi::c_char;
 

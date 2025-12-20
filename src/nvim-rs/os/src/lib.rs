@@ -18,6 +18,8 @@
 #![allow(clippy::cast_possible_truncation)] // Intentional truncation in time functions
 #![allow(clippy::cast_possible_wrap)] // Time values won't wrap in practice
 #![allow(clippy::borrow_as_ptr)] // Clearer in libc calls
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_safety_doc)]
 #![allow(clippy::option_if_let_else)] // Match is clearer for complex error handling
 
 pub mod env;

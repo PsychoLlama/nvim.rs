@@ -4,6 +4,9 @@
 //! from `src/nvim/spell.c`.
 
 #![allow(unsafe_code)] // FFI requires unsafe
+#![allow(clippy::ptr_as_ptr)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_safety_doc)]
 
 use std::ffi::{c_char, c_int};
 

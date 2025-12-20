@@ -14,6 +14,11 @@
 #![allow(clippy::cast_lossless)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::ptr_as_ptr)]
 
 use std::ffi::{c_char, c_int};
 

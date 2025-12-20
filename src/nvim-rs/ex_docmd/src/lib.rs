@@ -3,6 +3,13 @@
 //! Provides utility functions for Ex command parsing and processing.
 
 #![allow(unsafe_code)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::missing_const_for_fn)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_possible_truncation)]
 
 use std::ffi::{c_char, c_int};
 use std::ptr;

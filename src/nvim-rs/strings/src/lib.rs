@@ -18,6 +18,10 @@
 #![allow(clippy::ptr_as_ptr)]
 #![allow(clippy::ptr_cast_constness)]
 #![allow(clippy::as_ptr_cast_mut)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::borrow_as_ptr)]
+#![allow(clippy::items_after_statements)]
 
 use std::ffi::{c_char, c_int};
 
