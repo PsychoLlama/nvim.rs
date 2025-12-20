@@ -2,8 +2,10 @@
 
 - `rust-migration` is your main branch.
 - Commit your work regularly.
-- Run `just rust-fmt-check` and fix any issues before committing.
-- Run tests and static analysis before committing.
+- Before committing, ensure these pass:
+  - `just rust-fmt-check` - formatting
+  - `just rust-clippy` - lints
+  - `just rust-test` - unit tests
 - Use `just` to run builds, tests, and static analysis.
 - Keep the `justfile` up to date.
 
