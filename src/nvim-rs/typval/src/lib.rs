@@ -93,9 +93,6 @@ extern "C" {
     /// Get the v_bool field from a typval (only valid if v_type == VAR_BOOL).
     fn nvim_tv_get_bool(tv: TypevalHandle) -> c_int;
 
-    /// Get the v_special field from a typval (only valid if v_type == VAR_SPECIAL).
-    fn nvim_tv_get_special(tv: TypevalHandle) -> c_int;
-
     /// Get the v_float field from a typval (only valid if v_type == VAR_FLOAT).
     fn nvim_tv_get_float(tv: TypevalHandle) -> f64;
 

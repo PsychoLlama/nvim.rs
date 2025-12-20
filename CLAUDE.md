@@ -7,6 +7,7 @@
 - Run tests and static analysis before committing.
 - Use `just` to run builds, tests, and static analysis.
 - Keep the `justfile` up to date.
+- Keep builds warning-free. Run `just build` and fix any cargo or cmake warnings before committing.
 
 ## Migration Plan
 

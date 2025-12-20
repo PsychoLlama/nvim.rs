@@ -78,8 +78,6 @@ extern "C" {
     fn highlight_group_cleared(id: c_int) -> bool;
     /// Get the sg_set flags of a highlight group (0-based index)
     fn highlight_group_set(id: c_int) -> c_int;
-    /// Get the uppercase name of a highlight group (0-based index)
-    fn highlight_group_name_upper(id: c_int) -> *const c_char;
     /// Get the parent ID of a highlight group (0-based index, for @nested.groups)
     fn highlight_group_parent(id: c_int) -> c_int;
     /// Lookup a highlight group by uppercase name, returns ID (1-based) or 0 if not found
@@ -152,8 +150,6 @@ extern "C" {
     fn nvim_win_get_config_shadow(wp: *mut c_void) -> bool;
     /// Get w_p_winbl field from window
     fn nvim_win_get_p_winbl(wp: *mut c_void) -> c_int;
-    /// Get w_grid_alloc.blending field from window
-    fn nvim_win_get_grid_blending(wp: *mut c_void) -> bool;
     /// Set w_grid_alloc.blending field of window
     fn nvim_win_set_grid_blending(wp: *mut c_void, val: bool);
 }

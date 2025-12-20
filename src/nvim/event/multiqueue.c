@@ -299,12 +299,6 @@ int nvim_multiqueue_empty(MultiQueue *mq)
   return multiqueue_empty(mq) ? 1 : 0;
 }
 
-/// Get the size of a MultiQueue (accessor for Rust).
-size_t nvim_multiqueue_size(MultiQueue *mq)
-{
-  return multiqueue_size(mq);
-}
-
 /// Get the headtail QUEUE pointer from a MultiQueue (accessor for Rust).
 QUEUE *nvim_multiqueue_get_headtail(MultiQueue *mq)
 {

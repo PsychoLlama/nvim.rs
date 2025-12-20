@@ -1567,17 +1567,6 @@ pub unsafe extern "C" fn rs_grid_invalidate(grid: *mut std::ffi::c_void) {
     }
 }
 
-/// Check if a grid row is invalid (has attr < 0 at start of line).
-///
-/// This is the Rust equivalent of C's `grid_invalid_row()`.
-#[inline]
-unsafe fn grid_invalid_row_impl(grid: *mut std::ffi::c_void, row: c_int) -> bool {
-    let attrs = nvim_screengrid_get_attrs(grid);
-    let line_offset = nvim_screengrid_get_line_offset(grid);
-    let off = *line_offset.add(row as usize);
-    *attrs.add(off) < 0
-}
-
 /// Get a single character directly from grid.chars.
 ///
 /// This is the Rust equivalent of C's `grid_getchar()`.

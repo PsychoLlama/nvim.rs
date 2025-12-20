@@ -10,6 +10,7 @@
 #![allow(clippy::missing_safety_doc)] // FFI functions need unsafe but docs come later
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(clippy::wildcard_imports)] // We want to re-export everything
+#![allow(ambiguous_glob_reexports)] // nvim_api and nvim_unpacker define compatible FFI types
 
 // Re-export all FFI functions from sub-crates
 // This ensures they're included in the static library

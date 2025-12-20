@@ -4908,12 +4908,6 @@ int nvim_tv_get_bool(const typval_T *tv)
   return (int)tv->vval.v_bool;
 }
 
-/// Get the v_special field from a typval (accessor for Rust).
-int nvim_tv_get_special(const typval_T *tv)
-{
-  return (int)tv->vval.v_special;
-}
-
 /// Get the v_float field from a typval (accessor for Rust).
 double nvim_tv_get_float(const typval_T *tv)
 {

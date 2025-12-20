@@ -311,7 +311,6 @@ extern "C" {
 
     // MultiQueue accessors
     fn nvim_multiqueue_empty(mq: MultiQueueHandle) -> c_int;
-    fn nvim_multiqueue_size(mq: MultiQueueHandle) -> usize;
     fn nvim_multiqueue_get_headtail(mq: MultiQueueHandle) -> *mut EventQueue;
     fn nvim_multiqueue_get_size_field(mq: MultiQueueHandle) -> usize;
     fn nvim_multiqueue_has_parent(mq: MultiQueueHandle) -> c_int;

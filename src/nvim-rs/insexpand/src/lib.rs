@@ -20,7 +20,6 @@ const CTRL_X_FILES: c_int = 4;
 const CTRL_X_TAGS: c_int = 5 + CTRL_X_WANT_IDENT;
 const CTRL_X_PATH_PATTERNS: c_int = 6 + CTRL_X_WANT_IDENT;
 const CTRL_X_PATH_DEFINES: c_int = 7 + CTRL_X_WANT_IDENT;
-const CTRL_X_FINISHED: c_int = 8;
 const CTRL_X_DICTIONARY: c_int = 9 + CTRL_X_WANT_IDENT;
 const CTRL_X_THESAURUS: c_int = 10 + CTRL_X_WANT_IDENT;
 const CTRL_X_CMDLINE: c_int = 11;

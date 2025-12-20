@@ -240,12 +240,6 @@ int nvim_win_get_p_winbl(win_T *wp)
   return (int)wp->w_p_winbl;
 }
 
-/// Get the w_grid_alloc.blending field from a window.
-bool nvim_win_get_grid_blending(win_T *wp)
-{
-  return wp->w_grid_alloc.blending;
-}
-
 /// Set the w_grid_alloc.blending field of a window.
 void nvim_win_set_grid_blending(win_T *wp, bool val)
 {

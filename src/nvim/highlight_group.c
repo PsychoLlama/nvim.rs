@@ -838,17 +838,6 @@ int highlight_group_set(int id)
   return hl_table[id].sg_set;
 }
 
-/// Returns the uppercase name of a highlight group.
-/// @param id Highlight group index (0-based)
-/// @return The sg_name_u field, or NULL if out of bounds
-const char *highlight_group_name_upper(int id)
-{
-  if (id < 0 || id >= highlight_ga.ga_len) {
-    return NULL;
-  }
-  return hl_table[id].sg_name_u;
-}
-
 /// Returns the parent ID of a highlight group (for @nested.groups).
 /// @param id Highlight group index (0-based)
 /// @return The sg_parent field, or 0 if out of bounds
