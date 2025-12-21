@@ -29,6 +29,7 @@
 
 extern int rs_name_to_mod_mask(int c);
 extern int rs_handle_x_keys(int key);
+extern int rs_simplify_key(int key, int *modifiers);
 
 // Some useful tables.
 
@@ -192,27 +193,7 @@ int name_to_mod_mask(int c)
 int simplify_key(const int key, int *modifiers)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-  if (!(*modifiers & (MOD_MASK_SHIFT | MOD_MASK_CTRL))) {
-    return key;
-  }
-
-  // TAB is a special case.
-  if (key == TAB && (*modifiers & MOD_MASK_SHIFT)) {
-    *modifiers &= ~MOD_MASK_SHIFT;
-    return K_S_TAB;
-  }
-  const int key0 = KEY2TERMCAP0(key);
-  const int key1 = KEY2TERMCAP1(key);
-  for (int i = 0; modifier_keys_table[i] != NUL; i += MOD_KEYS_ENTRY_SIZE) {
-    if (key0 == modifier_keys_table[i + 3]
-        && key1 == modifier_keys_table[i + 4]
-        && (*modifiers & modifier_keys_table[i])) {
-      *modifiers &= ~modifier_keys_table[i];
-      return TERMCAP2KEY(modifier_keys_table[i + 1],
-                         modifier_keys_table[i + 2]);
-    }
-  }
-  return key;
+  return rs_simplify_key(key, modifiers);
 }
 
 /// Change <xKey> to <Key>
