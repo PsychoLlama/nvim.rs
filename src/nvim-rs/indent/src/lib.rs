@@ -135,6 +135,141 @@ pub unsafe extern "C" fn rs_indent_size_ts(
     }
 }
 
+/// Find the size of the tab that covers a particular column.
+///
+/// If this is being called as part of a shift operation, `col` is not the cursor
+/// column but is the column number to the left of the first non-whitespace
+/// character in the line. If the shift is to the left (`left == true`), then
+/// return the size of the tab interval to the left of the column.
+///
+/// # Safety
+/// If `vts` is non-null, it must point to a valid tabstop array where
+/// vts[0] is the count and vts[1..count+1] are the tabstop widths.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tabstop_at(
+    col: c_int,
+    ts: i64,
+    vts: *const c_int,
+    left: bool,
+) -> c_int {
+    // If no variable tabstops, use fixed width
+    if vts.is_null() || *vts == 0 {
+        return ts as c_int;
+    }
+
+    let tabcount = *vts;
+    let mut tabcol: c_int = 0;
+    let mut tab_size: c_int = 0;
+    let mut t: c_int = 1;
+
+    while t <= tabcount {
+        tabcol += *vts.offset(t as isize);
+        if tabcol > col {
+            // If shifting left and we're at the first tabstop, shift to left margin
+            if left && t == 1 {
+                tab_size = col;
+            } else {
+                let idx = if left { t - 1 } else { t };
+                tab_size = *vts.offset(idx as isize);
+            }
+            break;
+        }
+        t += 1;
+    }
+
+    // Past all defined tabstops, use the last one
+    if t > tabcount {
+        tab_size = *vts.offset(tabcount as isize);
+    }
+
+    tab_size
+}
+
+/// Find the column on which a tab starts.
+///
+/// # Safety
+/// If `vts` is non-null, it must point to a valid tabstop array.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tabstop_start(col: c_int, ts: c_int, vts: *const c_int) -> c_int {
+    if vts.is_null() || *vts == 0 {
+        return col - col % ts;
+    }
+
+    let tabcount = *vts;
+    let mut tabcol: c_int = 0;
+
+    for t in 1..=tabcount {
+        tabcol += *vts.offset(t as isize);
+        if tabcol > col {
+            return tabcol - *vts.offset(t as isize);
+        }
+    }
+
+    // Past all defined tabstops
+    let last_ts = *vts.offset(tabcount as isize);
+    let excess = tabcol % last_ts;
+    col - (col - excess) % last_ts
+}
+
+/// Compare two tabstop arrays for equality.
+///
+/// # Safety
+/// If either pointer is non-null, it must point to a valid tabstop array.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tabstop_eq(ts1: *const c_int, ts2: *const c_int) -> bool {
+    // Handle null cases
+    if ts1.is_null() && ts2.is_null() {
+        return true;
+    }
+    if ts1.is_null() || ts2.is_null() {
+        return false;
+    }
+    // Same pointer
+    if ts1 == ts2 {
+        return true;
+    }
+
+    let count1 = *ts1;
+    let count2 = *ts2;
+    if count1 != count2 {
+        return false;
+    }
+
+    for t in 1..=count1 {
+        if *ts1.offset(t as isize) != *ts2.offset(t as isize) {
+            return false;
+        }
+    }
+
+    true
+}
+
+/// Return a count of the number of tabstops.
+///
+/// # Safety
+/// If `ts` is non-null, it must point to a valid tabstop array.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tabstop_count(ts: *const c_int) -> c_int {
+    if ts.is_null() {
+        0
+    } else {
+        *ts
+    }
+}
+
+/// Return the first tabstop, or 8 if there are no tabstops defined.
+///
+/// # Safety
+/// If `ts` is non-null, it must point to a valid tabstop array with at least 2 elements.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tabstop_first(ts: *const c_int) -> c_int {
+    if ts.is_null() {
+        8
+    } else {
+        *ts.offset(1)
+    }
+}
+
 /// Compute the size of the indent (in window cells) in line `ptr`,
 /// without tabstops (count tab as ^I or <09>).
 ///
@@ -300,6 +435,132 @@ mod tests {
             let s = CString::new("    \thello").unwrap();
             // 4 spaces = at position 4, tab to 12
             assert_eq!(rs_indent_size_ts(s.as_ptr(), 8, vts.as_ptr()), 12);
+        }
+    }
+
+    #[test]
+    fn test_tabstop_at_fixed() {
+        unsafe {
+            // With null vts, returns ts directly
+            assert_eq!(rs_tabstop_at(0, 8, std::ptr::null(), false), 8);
+            assert_eq!(rs_tabstop_at(5, 8, std::ptr::null(), false), 8);
+            assert_eq!(rs_tabstop_at(0, 4, std::ptr::null(), true), 4);
+        }
+    }
+
+    #[test]
+    fn test_tabstop_at_variable() {
+        unsafe {
+            // vts = [2, 4, 8] means tabstops at 4, 12, then every 8
+            let vts: [c_int; 3] = [2, 4, 8];
+
+            // At col 0, not shifting left -> first tabstop size is 4
+            assert_eq!(rs_tabstop_at(0, 8, vts.as_ptr(), false), 4);
+            // At col 2, not shifting left -> still in first interval, size 4
+            assert_eq!(rs_tabstop_at(2, 8, vts.as_ptr(), false), 4);
+            // At col 5, not shifting left -> in second interval, size 8
+            assert_eq!(rs_tabstop_at(5, 8, vts.as_ptr(), false), 8);
+            // Past all defined tabstops -> use last (8)
+            assert_eq!(rs_tabstop_at(15, 8, vts.as_ptr(), false), 8);
+
+            // Shifting left at col 2 (in first tabstop) -> returns col value
+            assert_eq!(rs_tabstop_at(2, 8, vts.as_ptr(), true), 2);
+            // Shifting left at col 5 (in second tabstop) -> use previous tabstop size (4)
+            assert_eq!(rs_tabstop_at(5, 8, vts.as_ptr(), true), 4);
+        }
+    }
+
+    #[test]
+    fn test_tabstop_start_fixed() {
+        unsafe {
+            // With null vts, col - col % ts
+            assert_eq!(rs_tabstop_start(0, 8, std::ptr::null()), 0);
+            assert_eq!(rs_tabstop_start(5, 8, std::ptr::null()), 0);
+            assert_eq!(rs_tabstop_start(8, 8, std::ptr::null()), 8);
+            assert_eq!(rs_tabstop_start(10, 8, std::ptr::null()), 8);
+            assert_eq!(rs_tabstop_start(16, 8, std::ptr::null()), 16);
+
+            assert_eq!(rs_tabstop_start(0, 4, std::ptr::null()), 0);
+            assert_eq!(rs_tabstop_start(3, 4, std::ptr::null()), 0);
+            assert_eq!(rs_tabstop_start(4, 4, std::ptr::null()), 4);
+            assert_eq!(rs_tabstop_start(7, 4, std::ptr::null()), 4);
+        }
+    }
+
+    #[test]
+    fn test_tabstop_start_variable() {
+        unsafe {
+            // vts = [2, 4, 8] means tabstops at 4, 12, then every 8
+            let vts: [c_int; 3] = [2, 4, 8];
+
+            // col 0-3: tab starts at 0 (before first tabstop at 4)
+            assert_eq!(rs_tabstop_start(0, 8, vts.as_ptr()), 0);
+            assert_eq!(rs_tabstop_start(3, 8, vts.as_ptr()), 0);
+            // col 4-11: tab starts at 4 (first tabstop)
+            assert_eq!(rs_tabstop_start(4, 8, vts.as_ptr()), 4);
+            assert_eq!(rs_tabstop_start(10, 8, vts.as_ptr()), 4);
+            // col 12+: past defined tabstops, use last interval (8)
+            assert_eq!(rs_tabstop_start(12, 8, vts.as_ptr()), 12);
+            assert_eq!(rs_tabstop_start(15, 8, vts.as_ptr()), 12);
+            assert_eq!(rs_tabstop_start(20, 8, vts.as_ptr()), 20);
+        }
+    }
+
+    #[test]
+    fn test_tabstop_eq() {
+        unsafe {
+            // Both null
+            assert!(rs_tabstop_eq(std::ptr::null(), std::ptr::null()));
+
+            // One null, one not
+            let ts1: [c_int; 3] = [2, 4, 8];
+            assert!(!rs_tabstop_eq(ts1.as_ptr(), std::ptr::null()));
+            assert!(!rs_tabstop_eq(std::ptr::null(), ts1.as_ptr()));
+
+            // Same pointer
+            assert!(rs_tabstop_eq(ts1.as_ptr(), ts1.as_ptr()));
+
+            // Equal arrays
+            let ts2: [c_int; 3] = [2, 4, 8];
+            assert!(rs_tabstop_eq(ts1.as_ptr(), ts2.as_ptr()));
+
+            // Different counts
+            let ts3: [c_int; 4] = [3, 4, 8, 12];
+            assert!(!rs_tabstop_eq(ts1.as_ptr(), ts3.as_ptr()));
+
+            // Same count, different values
+            let ts4: [c_int; 3] = [2, 4, 6];
+            assert!(!rs_tabstop_eq(ts1.as_ptr(), ts4.as_ptr()));
+        }
+    }
+
+    #[test]
+    fn test_tabstop_count() {
+        unsafe {
+            // Null returns 0
+            assert_eq!(rs_tabstop_count(std::ptr::null()), 0);
+
+            // Non-null returns first element
+            let ts: [c_int; 3] = [2, 4, 8];
+            assert_eq!(rs_tabstop_count(ts.as_ptr()), 2);
+
+            let ts2: [c_int; 4] = [3, 4, 8, 12];
+            assert_eq!(rs_tabstop_count(ts2.as_ptr()), 3);
+        }
+    }
+
+    #[test]
+    fn test_tabstop_first() {
+        unsafe {
+            // Null returns 8
+            assert_eq!(rs_tabstop_first(std::ptr::null()), 8);
+
+            // Non-null returns second element (first tabstop)
+            let ts: [c_int; 3] = [2, 4, 8];
+            assert_eq!(rs_tabstop_first(ts.as_ptr()), 4);
+
+            let ts2: [c_int; 4] = [3, 6, 8, 12];
+            assert_eq!(rs_tabstop_first(ts2.as_ptr()), 6);
         }
     }
 }

@@ -55,6 +55,11 @@
 extern int rs_tabstop_padding(int col, int64_t ts_arg, const int *vts);
 extern int rs_indent_size_ts(const char *ptr, int64_t ts, const int *vts);
 extern int rs_indent_size_no_ts(const char *ptr);
+extern int rs_tabstop_at(int col, int64_t ts, const int *vts, bool left);
+extern int rs_tabstop_start(int col, int ts, const int *vts);
+extern bool rs_tabstop_eq(const int *ts1, const int *ts2);
+extern int rs_tabstop_count(const int *ts);
+extern int rs_tabstop_first(const int *ts);
 
 /// Set the integer values corresponding to the string setting of 'vartabstop'.
 /// "array" will be set, caller must free it if needed.
@@ -136,60 +141,13 @@ int tabstop_padding(colnr_T col, OptInt ts_arg, const colnr_T *vts)
 /// return the size of the tab interval to the left of the column.
 int tabstop_at(colnr_T col, OptInt ts, const colnr_T *vts, bool left)
 {
-  if (vts == NULL || vts[0] == 0) {
-    return (int)ts;
-  }
-
-  colnr_T tabcol = 0;  // Column of the tab stop under consideration.
-  int t;  // Tabstop index in the list of variable tab stops.
-  int tab_size = 0;  // Size of the tab stop interval to the right or left of the col.
-  const int tabcount  // Number of tab stops in the list of variable tab stops.
-    = vts[0];
-  for (t = 1; t <= tabcount; t++) {
-    tabcol += vts[t];
-    if (tabcol > col) {
-      // If shifting left (left == true), and if the column to the left of
-      // the first first non-blank character (col) in the line is
-      // already to the left of the first tabstop, set the shift amount
-      // (tab_size) to just enough to shift the line to the left margin.
-      // The value doesn't seem to matter as long as it is at least that
-      // distance.
-      if (left && (t == 1)) {
-        tab_size = col;
-      } else {
-        tab_size = vts[t - (left ? 1 : 0)];
-      }
-      break;
-    }
-  }
-  if (t > tabcount) {  // If the value of the index t is beyond the
-                       // end of the list, use the tab stop value at
-                       // the end of the list.
-    tab_size = vts[tabcount];
-  }
-
-  return tab_size;
+  return rs_tabstop_at(col, ts, vts, left);
 }
 
 /// Find the column on which a tab starts.
 colnr_T tabstop_start(colnr_T col, int ts, colnr_T *vts)
 {
-  colnr_T tabcol = 0;
-
-  if (vts == NULL || vts[0] == 0) {
-    return col - col % ts;
-  }
-
-  const int tabcount = vts[0];
-  for (int t = 1; t <= tabcount; t++) {
-    tabcol += vts[t];
-    if (tabcol > col) {
-      return (tabcol - vts[t]);
-    }
-  }
-
-  const int excess = (tabcol % vts[tabcount]);
-  return col - (col - excess) % vts[tabcount];
+  return rs_tabstop_start(col, ts, vts);
 }
 
 /// Find the number of tabs and spaces necessary to get from one column
@@ -261,23 +219,7 @@ void tabstop_fromto(colnr_T start_col, colnr_T end_col, int ts_arg, const colnr_
 /// See if two tabstop arrays contain the same values.
 static bool tabstop_eq(const colnr_T *ts1, const colnr_T *ts2)
 {
-  if ((ts1 == 0 && ts2) || (ts1 && ts2 == 0)) {
-    return false;
-  }
-  if (ts1 == ts2) {
-    return true;
-  }
-  if (ts1[0] != ts2[0]) {
-    return false;
-  }
-
-  for (int t = 1; t <= ts1[0]; t++) {
-    if (ts1[t] != ts2[t]) {
-      return false;
-    }
-  }
-
-  return true;
+  return rs_tabstop_eq(ts1, ts2);
 }
 
 /// Copy a tabstop array, allocating space for the new array.
@@ -298,13 +240,13 @@ int *tabstop_copy(const int *oldts)
 /// Return a count of the number of tabstops.
 int tabstop_count(colnr_T *ts)
 {
-  return ts != NULL ? (int)ts[0] : 0;
+  return rs_tabstop_count(ts);
 }
 
 /// Return the first tabstop, or 8 if there are no tabstops defined.
 int tabstop_first(colnr_T *ts)
 {
-  return ts != NULL ? (int)ts[1] : 8;
+  return rs_tabstop_first(ts);
 }
 
 /// Return the effective shiftwidth value for current buffer, using the
