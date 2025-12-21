@@ -61,6 +61,9 @@ extern int rs_path_fnamencmp(const char *fname1, const char *fname2, size_t len)
 extern const char *rs_gettail_dir(const char *fname);
 extern const char *rs_path_next_component(const char *fname);
 extern const char *rs_path_tail_with_sep(const char *fname);
+extern const char *rs_invocation_path_tail(const char *invocation, size_t *len);
+extern int rs_path_has_wildcard(const char *p);
+extern int rs_path_has_exp_wildcard(const char *p);
 
 #include "path.c.generated.h"
 
@@ -149,21 +152,7 @@ char *path_tail_with_sep(char *fname)
 const char *invocation_path_tail(const char *invocation, size_t *len)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_NONNULL_ARG(1)
 {
-  const char *tail = get_past_head(invocation);
-  const char *p = tail;
-  while (*p != NUL && *p != ' ') {
-    bool was_sep = vim_ispathsep_nocolon(*p);
-    MB_PTR_ADV(p);
-    if (was_sep) {
-      tail = p;  // Now tail points one past the separator.
-    }
-  }
-
-  if (len != NULL) {
-    *len = (size_t)(p - tail);
-  }
-
-  return tail;
+  return rs_invocation_path_tail(invocation, len);
 }
 
 /// Get the next path component of a path name.
@@ -447,24 +436,7 @@ char *save_abs_path(const char *name)
 bool path_has_wildcard(const char *p)
   FUNC_ATTR_NONNULL_ALL
 {
-  for (; *p; MB_PTR_ADV(p)) {
-#if defined(UNIX)
-    if (p[0] == '\\' && p[1] != NUL) {
-      p++;
-      continue;
-    }
-
-    const char *wildcards = "*?[{`'$";
-#else
-    // Windows:
-    const char *wildcards = "?*$[`";
-#endif
-    if (vim_strchr(wildcards, (uint8_t)(*p)) != NULL
-        || (p[0] == '~' && p[1] != NUL)) {
-      return true;
-    }
-  }
-  return false;
+  return rs_path_has_wildcard(p) != 0;
 }
 
 static int pstrcmp(const void *a, const void *b)
@@ -479,22 +451,7 @@ static int pstrcmp(const void *a, const void *b)
 bool path_has_exp_wildcard(const char *p)
   FUNC_ATTR_NONNULL_ALL
 {
-  for (; *p != NUL; MB_PTR_ADV(p)) {
-#if defined(UNIX)
-    if (p[0] == '\\' && p[1] != NUL) {
-      p++;
-      continue;
-    }
-
-    const char *wildcards = "*?[{";
-#else
-    const char *wildcards = "*?[";  // Windows.
-#endif
-    if (vim_strchr(wildcards, (uint8_t)(*p)) != NULL) {
-      return true;
-    }
-  }
-  return false;
+  return rs_path_has_exp_wildcard(p) != 0;
 }
 
 /// Recursively expands one path component into all matching files and/or

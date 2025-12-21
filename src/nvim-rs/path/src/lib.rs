@@ -1193,6 +1193,267 @@ mod path_tail_with_sep_tests {
     }
 }
 
+// ============================================================================
+// invocation_path_tail - Find executable in an invocation string
+// ============================================================================
+
+/// Finds the path tail (or executable) in an invocation.
+///
+/// Given a program invocation in the form "path/to/exe [args]", returns
+/// a pointer to the executable name (after the last path separator, before args).
+///
+/// # Arguments
+/// * `invocation` - A program invocation string
+/// * `len` - Optional output parameter for the length of the executable name
+///
+/// # Returns
+/// The position of the last path separator + 1.
+///
+/// # Safety
+/// - `invocation` must be a valid null-terminated C string.
+/// - `len` may be null, otherwise must be a valid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_invocation_path_tail(
+    invocation: *const c_char,
+    len: *mut usize,
+) -> *const c_char {
+    if invocation.is_null() {
+        if !len.is_null() {
+            *len = 0;
+        }
+        return invocation;
+    }
+
+    let mut tail = rs_get_past_head(invocation);
+    let mut p = tail;
+
+    while *p != 0 && *p != b' ' as c_char {
+        let was_sep = rs_vim_ispathsep_nocolon(*p as c_int) != 0;
+        // MB_PTR_ADV: advance by UTF-8 character length
+        let slice = std::slice::from_raw_parts(p as *const u8, 8);
+        let char_len = nvim_mbyte::utfc_ptr2len(slice);
+        p = p.add(char_len);
+        if was_sep {
+            tail = p; // Now tail points one past the separator.
+        }
+    }
+
+    if !len.is_null() {
+        *len = (p as usize) - (tail as usize);
+    }
+
+    tail
+}
+
+// ============================================================================
+// path_has_wildcard - Check for wildcard characters in path
+// ============================================================================
+
+/// Checks if a path has a wildcard character including '~', unless at the end.
+///
+/// Returns true if the path contains wildcard characters:
+/// - Unix: *?[{`'$
+/// - Windows: ?*$[`
+///
+/// Also returns true if '~' is found and not at the end.
+///
+/// # Safety
+/// - `p` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_path_has_wildcard(p: *const c_char) -> c_int {
+    #[cfg(unix)]
+    const WILDCARDS: &[u8] = b"*?[{`'$\0";
+    #[cfg(not(unix))]
+    const WILDCARDS: &[u8] = b"?*$[`\0";
+
+    if p.is_null() {
+        return 0;
+    }
+
+    let mut ptr = p;
+    while *ptr != 0 {
+        #[cfg(unix)]
+        {
+            // On Unix, backslash escapes the next character
+            if *ptr == b'\\' as c_char && *ptr.add(1) != 0 {
+                ptr = ptr.add(1);
+                // Skip past escaped char
+                let slice = std::slice::from_raw_parts(ptr as *const u8, 8);
+                let char_len = nvim_mbyte::utfc_ptr2len(slice);
+                ptr = ptr.add(char_len);
+                continue;
+            }
+        }
+
+        let c = *ptr as u8;
+        // Check if character is in wildcards list
+        if WILDCARDS[..WILDCARDS.len() - 1].contains(&c) {
+            return 1;
+        }
+        // Check for ~ not at end
+        if c == b'~' && *ptr.add(1) != 0 {
+            return 1;
+        }
+
+        // MB_PTR_ADV
+        let slice = std::slice::from_raw_parts(ptr as *const u8, 8);
+        let char_len = nvim_mbyte::utfc_ptr2len(slice);
+        ptr = ptr.add(char_len);
+    }
+
+    0
+}
+
+// ============================================================================
+// path_has_exp_wildcard - Check for expandable wildcard characters
+// ============================================================================
+
+/// Checks if a path has a character path_expand can expand.
+///
+/// Returns true if the path contains:
+/// - Unix: *?[{
+/// - Windows: *?[
+///
+/// # Safety
+/// - `p` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_path_has_exp_wildcard(p: *const c_char) -> c_int {
+    #[cfg(unix)]
+    const WILDCARDS: &[u8] = b"*?[{\0";
+    #[cfg(not(unix))]
+    const WILDCARDS: &[u8] = b"*?[\0";
+
+    if p.is_null() {
+        return 0;
+    }
+
+    let mut ptr = p;
+    while *ptr != 0 {
+        #[cfg(unix)]
+        {
+            // On Unix, backslash escapes the next character
+            if *ptr == b'\\' as c_char && *ptr.add(1) != 0 {
+                ptr = ptr.add(1);
+                // Skip past escaped char
+                let slice = std::slice::from_raw_parts(ptr as *const u8, 8);
+                let char_len = nvim_mbyte::utfc_ptr2len(slice);
+                ptr = ptr.add(char_len);
+                continue;
+            }
+        }
+
+        let c = *ptr as u8;
+        // Check if character is in wildcards list
+        if WILDCARDS[..WILDCARDS.len() - 1].contains(&c) {
+            return 1;
+        }
+
+        // MB_PTR_ADV
+        let slice = std::slice::from_raw_parts(ptr as *const u8, 8);
+        let char_len = nvim_mbyte::utfc_ptr2len(slice);
+        ptr = ptr.add(char_len);
+    }
+
+    0
+}
+
+#[cfg(test)]
+mod invocation_path_tail_tests {
+    use super::*;
+    use std::ffi::CString;
+
+    #[test]
+    fn test_invocation_path_tail_basic() {
+        let inv = CString::new("/usr/bin/nvim --version").unwrap();
+        let mut len: usize = 0;
+        let result = unsafe { rs_invocation_path_tail(inv.as_ptr(), std::ptr::addr_of_mut!(len)) };
+        let result_str = unsafe { std::ffi::CStr::from_ptr(result) };
+        assert_eq!(result_str.to_str().unwrap(), "nvim --version");
+        assert_eq!(len, 4); // "nvim"
+    }
+
+    #[test]
+    fn test_invocation_path_tail_no_args() {
+        let inv = CString::new("/path/to/program").unwrap();
+        let mut len: usize = 0;
+        let result = unsafe { rs_invocation_path_tail(inv.as_ptr(), std::ptr::addr_of_mut!(len)) };
+        let result_str = unsafe { std::ffi::CStr::from_ptr(result) };
+        assert_eq!(result_str.to_str().unwrap(), "program");
+        assert_eq!(len, 7); // "program"
+    }
+
+    #[test]
+    fn test_invocation_path_tail_null_len() {
+        let inv = CString::new("/bin/ls").unwrap();
+        let result = unsafe { rs_invocation_path_tail(inv.as_ptr(), std::ptr::null_mut()) };
+        let result_str = unsafe { std::ffi::CStr::from_ptr(result) };
+        assert_eq!(result_str.to_str().unwrap(), "ls");
+    }
+}
+
+#[cfg(test)]
+mod wildcard_tests {
+    use super::*;
+    use std::ffi::CString;
+
+    #[test]
+    fn test_path_has_wildcard_star() {
+        let path = CString::new("*.txt").unwrap();
+        assert_eq!(unsafe { rs_path_has_wildcard(path.as_ptr()) }, 1);
+    }
+
+    #[test]
+    fn test_path_has_wildcard_question() {
+        let path = CString::new("file?.txt").unwrap();
+        assert_eq!(unsafe { rs_path_has_wildcard(path.as_ptr()) }, 1);
+    }
+
+    #[test]
+    fn test_path_has_wildcard_bracket() {
+        let path = CString::new("file[0-9].txt").unwrap();
+        assert_eq!(unsafe { rs_path_has_wildcard(path.as_ptr()) }, 1);
+    }
+
+    #[test]
+    fn test_path_has_wildcard_tilde_not_at_end() {
+        let path = CString::new("~/documents").unwrap();
+        assert_eq!(unsafe { rs_path_has_wildcard(path.as_ptr()) }, 1);
+    }
+
+    #[test]
+    fn test_path_has_wildcard_tilde_at_end() {
+        let path = CString::new("backup~").unwrap();
+        // Tilde at end should NOT trigger wildcard
+        assert_eq!(unsafe { rs_path_has_wildcard(path.as_ptr()) }, 0);
+    }
+
+    #[test]
+    fn test_path_has_wildcard_none() {
+        let path = CString::new("/home/user/file.txt").unwrap();
+        assert_eq!(unsafe { rs_path_has_wildcard(path.as_ptr()) }, 0);
+    }
+
+    #[test]
+    fn test_path_has_exp_wildcard_star() {
+        let path = CString::new("*.txt").unwrap();
+        assert_eq!(unsafe { rs_path_has_exp_wildcard(path.as_ptr()) }, 1);
+    }
+
+    #[test]
+    fn test_path_has_exp_wildcard_none() {
+        let path = CString::new("/home/user/file.txt").unwrap();
+        assert_eq!(unsafe { rs_path_has_exp_wildcard(path.as_ptr()) }, 0);
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_path_has_exp_wildcard_brace() {
+        // Brace is only a wildcard on Unix
+        let path = CString::new("file{a,b}.txt").unwrap();
+        assert_eq!(unsafe { rs_path_has_exp_wildcard(path.as_ptr()) }, 1);
+    }
+}
+
 #[cfg(test)]
 mod gettail_dir_tests {
     use super::*;
