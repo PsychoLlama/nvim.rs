@@ -1051,6 +1051,273 @@ pub unsafe extern "C" fn rs_transstr_len(s: *const c_char, untab: bool) -> usize
 }
 
 // ============================================================================
+// Number parsing functions
+// ============================================================================
+
+use std::ffi::c_long;
+
+/// Try to parse a decimal number from a string.
+///
+/// Updates the pointer to point past the parsed number.
+/// Returns true (1) on success, false (0) on overflow.
+///
+/// Note: If no valid digits are found, returns 0 in `nr` without advancing
+/// the pointer, but still returns true (success) - matching strtoimax behavior.
+///
+/// # Safety
+/// - `pp` must be a valid pointer to a pointer to a C string.
+/// - `nr` must be a valid pointer to an isize value.
+#[no_mangle]
+pub unsafe extern "C" fn rs_try_getdigits(pp: *mut *mut c_char, nr: *mut isize) -> c_int {
+    if pp.is_null() || (*pp).is_null() || nr.is_null() {
+        *nr = 0;
+        return 1; // strtoimax returns success even with null input
+    }
+
+    let s = *pp;
+
+    // Skip leading whitespace (strtoimax does this)
+    let mut p = s as *const u8;
+    while *p == b' ' || *p == b'\t' {
+        p = p.add(1);
+    }
+
+    // Check for sign
+    let negative = *p == b'-';
+    if negative || *p == b'+' {
+        p = p.add(1);
+    }
+
+    // If no digit follows, strtoimax returns 0 without advancing past sign
+    // Actually, strtoimax doesn't advance past the sign if no digit follows
+    if !(*p >= b'0' && *p <= b'9') {
+        // No valid conversion, return 0, don't advance pointer
+        *nr = 0;
+        return 1; // success (no overflow, just no conversion)
+    }
+
+    // Parse digits
+    let mut result: isize = 0;
+    let mut overflow = false;
+
+    while *p >= b'0' && *p <= b'9' {
+        let digit = (*p - b'0') as isize;
+
+        // Check for overflow before multiplying/adding
+        if !overflow {
+            if negative {
+                // Check: result * 10 - digit < MIN  =>  result < (MIN + digit) / 10
+                if result < (isize::MIN + digit) / 10 {
+                    overflow = true;
+                }
+            } else {
+                // Check: result * 10 + digit > MAX  =>  result > (MAX - digit) / 10
+                if result > (isize::MAX - digit) / 10 {
+                    overflow = true;
+                }
+            }
+        }
+
+        if !overflow {
+            result *= 10;
+            if negative {
+                result -= digit;
+            } else {
+                result += digit;
+            }
+        }
+
+        p = p.add(1);
+    }
+
+    if overflow {
+        *nr = if negative { isize::MIN } else { isize::MAX };
+        return 0; // false - overflow occurred
+    }
+
+    *nr = result;
+    *pp = p as *mut c_char;
+    1 // success
+}
+
+/// Gets a number from a string and skips over it.
+///
+/// # Safety
+/// - `pp` must be a valid pointer to a pointer to a C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_getdigits(pp: *mut *mut c_char, strict: c_int, def: isize) -> isize {
+    let mut number: isize = 0;
+    let ok = rs_try_getdigits(pp, std::ptr::addr_of_mut!(number));
+
+    if strict != 0 && ok == 0 {
+        // In strict mode, abort on overflow
+        std::process::abort();
+    }
+
+    if ok != 0 {
+        number
+    } else {
+        def
+    }
+}
+
+/// Gets an int number from a string.
+///
+/// # Safety
+/// - `pp` must be a valid pointer to a pointer to a C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_getdigits_int(
+    pp: *mut *mut c_char,
+    strict: c_int,
+    def: c_int,
+) -> c_int {
+    let number = rs_getdigits(pp, strict, def as isize);
+
+    // Check bounds
+    if i32::try_from(number).is_ok() {
+        number as c_int
+    } else {
+        if strict != 0 {
+            std::process::abort();
+        }
+        def
+    }
+}
+
+/// Gets a long number from a string.
+///
+/// # Safety
+/// - `pp` must be a valid pointer to a pointer to a C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_getdigits_long(
+    pp: *mut *mut c_char,
+    strict: c_int,
+    def: c_long,
+) -> c_long {
+    let number = rs_getdigits(pp, strict, def as isize);
+
+    // On 64-bit systems, isize and c_long are the same size
+    // On 32-bit systems, c_long is typically 32 bits
+    #[cfg(target_pointer_width = "64")]
+    {
+        number as c_long
+    }
+
+    #[cfg(target_pointer_width = "32")]
+    {
+        if number >= c_long::MIN as isize && number <= c_long::MAX as isize {
+            number as c_long
+        } else {
+            if strict != 0 {
+                std::process::abort();
+            }
+            def
+        }
+    }
+}
+
+/// Gets an int32_t number from a string.
+///
+/// # Safety
+/// - `pp` must be a valid pointer to a pointer to a C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_getdigits_int32(pp: *mut *mut c_char, strict: c_int, def: i32) -> i32 {
+    let number = rs_getdigits(pp, strict, def as isize);
+
+    if i32::try_from(number).is_ok() {
+        number as i32
+    } else {
+        if strict != 0 {
+            std::process::abort();
+        }
+        def
+    }
+}
+
+// ============================================================================
+// Backslash save and file character detection
+// ============================================================================
+
+/// Halve the number of backslashes and return a new allocated string.
+///
+/// Like backslash_halve, but returns a newly allocated copy of the string
+/// with backslashes halved.
+///
+/// # Safety
+/// - `p` must be a valid pointer to a null-terminated C string.
+/// - The returned pointer must be freed with libc::free when no longer needed.
+#[no_mangle]
+pub unsafe extern "C" fn rs_backslash_halve_save(p: *const c_char) -> *mut c_char {
+    if p.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    // Calculate length
+    let len = libc::strlen(p);
+
+    // Allocate result buffer (same size as input is always sufficient)
+    let res = libc::malloc(len + 1) as *mut c_char;
+    if res.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let mut src = p;
+    let mut dst = res;
+
+    while *src != 0 {
+        if rs_rem_backslash(src) {
+            // Skip backslash, copy next char
+            *dst = *src.add(1);
+            dst = dst.add(1);
+            src = src.add(2);
+        } else {
+            // Copy char as-is
+            *dst = *src;
+            dst = dst.add(1);
+            src = src.add(1);
+        }
+    }
+
+    // Null-terminate
+    *dst = 0;
+    res
+}
+
+// External reference to path_has_wildcard (already in Rust)
+extern "C" {
+    fn rs_path_has_wildcard(p: *const c_char) -> c_int;
+}
+
+/// Check if a character is a valid file character or a wildcard.
+///
+/// Returns true if the character is valid in a file name or is a wildcard
+/// character. Assumes characters above 0x100 are valid (multi-byte).
+/// Explicitly treats ']' as a wildcard since path_has_wildcard("]") returns false.
+///
+/// # Safety
+/// - This function accesses global `g_chartab` for file character detection.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_isfilec_or_wc(c: c_int) -> c_int {
+    // Check if it's a valid file character
+    if rs_vim_isfilec(c) != 0 {
+        return 1;
+    }
+
+    // ']' is explicitly treated as wildcard (path_has_wildcard returns false for it)
+    if c == b']' as c_int {
+        return 1;
+    }
+
+    // Check for wildcard characters
+    let buf: [c_char; 2] = [c as c_char, 0];
+    if rs_path_has_wildcard(buf.as_ptr()) != 0 {
+        return 1;
+    }
+
+    0
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -1654,6 +1921,115 @@ mod tests {
 
             // Null pointer - should not crash
             rs_backslash_halve(std::ptr::null_mut());
+        }
+    }
+
+    #[test]
+    fn test_try_getdigits() {
+        unsafe {
+            // Simple number
+            let mut s = *b"123abc\0";
+            let mut ptr = s.as_mut_ptr().cast::<c_char>();
+            let mut nr: isize = 0;
+            let ok = rs_try_getdigits(std::ptr::addr_of_mut!(ptr), std::ptr::addr_of_mut!(nr));
+            assert_eq!(ok, 1);
+            assert_eq!(nr, 123);
+            assert_eq!(*ptr, b'a' as c_char);
+
+            // No digits - returns 0, pointer unchanged, but still success
+            let mut s = *b"abc123\0";
+            let mut ptr = s.as_mut_ptr().cast::<c_char>();
+            let start = ptr;
+            let mut nr: isize = 999;
+            let ok = rs_try_getdigits(std::ptr::addr_of_mut!(ptr), std::ptr::addr_of_mut!(nr));
+            assert_eq!(ok, 1); // success (no overflow)
+            assert_eq!(nr, 0); // returns 0 when no conversion
+            assert_eq!(ptr, start); // pointer unchanged
+
+            // Negative number
+            let mut s = *b"-456xyz\0";
+            let mut ptr = s.as_mut_ptr().cast::<c_char>();
+            let mut nr: isize = 0;
+            let ok = rs_try_getdigits(std::ptr::addr_of_mut!(ptr), std::ptr::addr_of_mut!(nr));
+            assert_eq!(ok, 1);
+            assert_eq!(nr, -456);
+            assert_eq!(*ptr, b'x' as c_char);
+
+            // Just digits
+            let mut s = *b"999\0";
+            let mut ptr = s.as_mut_ptr().cast::<c_char>();
+            let mut nr: isize = 0;
+            let ok = rs_try_getdigits(std::ptr::addr_of_mut!(ptr), std::ptr::addr_of_mut!(nr));
+            assert_eq!(ok, 1);
+            assert_eq!(nr, 999);
+            assert_eq!(*ptr, 0);
+        }
+    }
+
+    #[test]
+    fn test_getdigits() {
+        unsafe {
+            // Simple number
+            let mut s = *b"42rest\0";
+            let mut ptr = s.as_mut_ptr().cast::<c_char>();
+            let result = rs_getdigits(std::ptr::addr_of_mut!(ptr), 0, 0);
+            assert_eq!(result, 42);
+            assert_eq!(*ptr, b'r' as c_char);
+
+            // No digits - returns the parsed 0 (not the default)
+            let mut s = *b"abc\0";
+            let mut ptr = s.as_mut_ptr().cast::<c_char>();
+            let result = rs_getdigits(std::ptr::addr_of_mut!(ptr), 0, 99);
+            // strtoimax returns 0 when no digits, this is success so result is 0
+            assert_eq!(result, 0);
+        }
+    }
+
+    #[test]
+    fn test_getdigits_int() {
+        unsafe {
+            // Simple number
+            let mut s = *b"100xyz\0";
+            let mut ptr = s.as_mut_ptr().cast::<c_char>();
+            let result = rs_getdigits_int(std::ptr::addr_of_mut!(ptr), 0, 0);
+            assert_eq!(result, 100);
+            assert_eq!(*ptr, b'x' as c_char);
+
+            // Negative number
+            let mut s = *b"-50xyz\0";
+            let mut ptr = s.as_mut_ptr().cast::<c_char>();
+            let result = rs_getdigits_int(std::ptr::addr_of_mut!(ptr), 0, 0);
+            assert_eq!(result, -50);
+            assert_eq!(*ptr, b'x' as c_char);
+        }
+    }
+
+    #[test]
+    fn test_getdigits_long() {
+        unsafe {
+            // Simple number
+            let mut s = *b"1000000\0";
+            let mut ptr = s.as_mut_ptr().cast::<c_char>();
+            let result = rs_getdigits_long(std::ptr::addr_of_mut!(ptr), 0, 0);
+            assert_eq!(result, 1_000_000);
+            assert_eq!(*ptr, 0);
+        }
+    }
+
+    #[test]
+    fn test_getdigits_int32() {
+        unsafe {
+            // Simple number
+            let mut s = *b"2147483647\0"; // i32::MAX
+            let mut ptr = s.as_mut_ptr().cast::<c_char>();
+            let result = rs_getdigits_int32(std::ptr::addr_of_mut!(ptr), 0, 0);
+            assert_eq!(result, i32::MAX);
+
+            // Negative number
+            let mut s = *b"-2147483648\0"; // i32::MIN
+            let mut ptr = s.as_mut_ptr().cast::<c_char>();
+            let result = rs_getdigits_int32(std::ptr::addr_of_mut!(ptr), 0, 0);
+            assert_eq!(result, i32::MIN);
         }
     }
 }

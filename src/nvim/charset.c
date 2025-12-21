@@ -67,6 +67,13 @@ extern int rs_vim_iswordc_buf(int c, buf_T *buf);
 extern int rs_vim_iswordp(const char *p);
 extern int rs_vim_iswordp_buf(const char *p, buf_T *buf);
 extern size_t rs_transstr_len(const char *s, bool untab);
+extern int rs_try_getdigits(char **pp, intptr_t *nr);
+extern intptr_t rs_getdigits(char **pp, int strict, intptr_t def);
+extern int rs_getdigits_int(char **pp, int strict, int def);
+extern long rs_getdigits_long(char **pp, int strict, long def);
+extern int32_t rs_getdigits_int32(char **pp, int strict, int32_t def);
+extern char *rs_backslash_halve_save(const char *p);
+extern int rs_vim_isfilec_or_wc(int c);
 
 static bool chartab_initialized = false;
 
@@ -837,10 +844,7 @@ bool vim_is_fname_char(int c)
 bool vim_isfilec_or_wc(int c)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  char buf[2];
-  buf[0] = (char)c;
-  buf[1] = NUL;
-  return vim_isfilec(c) || c == ']' || path_has_wildcard(buf);
+  return rs_vim_isfilec_or_wc(c) != 0;
 }
 
 /// Check that "c" is a printable character.
@@ -1007,12 +1011,7 @@ char *skip_to_newline(const char *const p)
 /// @return true on success, false on error/overflow
 bool try_getdigits(char **pp, intmax_t *nr)
 {
-  errno = 0;
-  *nr = strtoimax(*pp, pp, 10);
-  if (errno == ERANGE && (*nr == INTMAX_MIN || *nr == INTMAX_MAX)) {
-    return false;
-  }
-  return true;
+  return rs_try_getdigits(pp, (intptr_t *)nr) != 0;
 }
 
 /// Gets a number from a string and skips over it.
@@ -1025,12 +1024,7 @@ bool try_getdigits(char **pp, intmax_t *nr)
 /// @return Number read from the string, or `def` on parse failure or overflow.
 intmax_t getdigits(char **pp, bool strict, intmax_t def)
 {
-  intmax_t number;
-  int ok = try_getdigits(pp, &number);
-  if (strict && !ok) {
-    abort();
-  }
-  return ok ? number : def;
+  return rs_getdigits(pp, strict ? 1 : 0, def);
 }
 
 /// Gets an int number from a string.
@@ -1038,15 +1032,7 @@ intmax_t getdigits(char **pp, bool strict, intmax_t def)
 /// @see getdigits
 int getdigits_int(char **pp, bool strict, int def)
 {
-  intmax_t number = getdigits(pp, strict, def);
-#if SIZEOF_INTMAX_T > SIZEOF_INT
-  if (strict) {
-    assert(number >= INT_MIN && number <= INT_MAX);
-  } else if (!(number >= INT_MIN && number <= INT_MAX)) {
-    return def;
-  }
-#endif
-  return (int)number;
+  return rs_getdigits_int(pp, strict ? 1 : 0, def);
 }
 
 /// Gets a long number from a string.
@@ -1054,15 +1040,7 @@ int getdigits_int(char **pp, bool strict, int def)
 /// @see getdigits
 long getdigits_long(char **pp, bool strict, long def)
 {
-  intmax_t number = getdigits(pp, strict, def);
-#if SIZEOF_INTMAX_T > SIZEOF_LONG
-  if (strict) {
-    assert(number >= LONG_MIN && number <= LONG_MAX);
-  } else if (!(number >= LONG_MIN && number <= LONG_MAX)) {
-    return def;
-  }
-#endif
-  return (long)number;
+  return rs_getdigits_long(pp, strict ? 1 : 0, def);
 }
 
 /// Gets a int32_t number from a string.
@@ -1070,15 +1048,7 @@ long getdigits_long(char **pp, bool strict, long def)
 /// @see getdigits
 int32_t getdigits_int32(char **pp, bool strict, int32_t def)
 {
-  intmax_t number = getdigits(pp, strict, def);
-#if SIZEOF_INTMAX_T > 4
-  if (strict) {
-    assert(number >= INT32_MIN && number <= INT32_MAX);
-  } else if (!(number >= INT32_MIN && number <= INT32_MAX)) {
-    return def;
-  }
-#endif
-  return (int32_t)number;
+  return rs_getdigits_int32(pp, strict ? 1 : 0, def);
 }
 
 /// Check that "lbuf" is empty or only contains blanks.
@@ -1370,16 +1340,5 @@ void backslash_halve(char *p)
 char *backslash_halve_save(const char *p)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
 {
-  char *res = xmalloc(strlen(p) + 1);
-  char *dst = res;
-  while (*p != NUL) {
-    if (rem_backslash(p)) {
-      *dst++ = *(p + 1);
-      p += 2;
-    } else {
-      *dst++ = *p++;
-    }
-  }
-  *dst = NUL;
-  return res;
+  return rs_backslash_halve_save(p);
 }
