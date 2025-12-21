@@ -76,6 +76,8 @@ extern "C" {
     fn rs_cmdline_at_end() -> c_int;
     /// Check if in overstrike mode on command line
     fn rs_cmdline_overstrike() -> c_int;
+    /// Get the full name for a mode index
+    fn nvim_get_shape_table_name(idx: c_int) -> *const c_char;
 }
 
 /// Returns true if the cursor is non-blinking "block" shape during
@@ -161,4 +163,35 @@ pub unsafe extern "C" fn rs_cursor_get_mode_idx() -> c_int {
     }
 
     ModeShape::N as c_int
+}
+
+/// Convert a mode name string to its index in shape_table.
+///
+/// # Safety
+/// - `mode` must be a valid, NUL-terminated C string.
+/// - Calls C accessor function for `shape_table`.
+///
+/// # Returns
+/// The mode index (0-17) if found, or -1 if not found.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cursor_mode_str2int(mode: *const c_char) -> c_int {
+    use std::ffi::CStr;
+
+    if mode.is_null() {
+        return -1;
+    }
+
+    let mode_str = CStr::from_ptr(mode);
+
+    for mode_idx in 0..ModeShape::Count as c_int {
+        let name_ptr = nvim_get_shape_table_name(mode_idx);
+        if !name_ptr.is_null() {
+            let name = CStr::from_ptr(name_ptr);
+            if mode_str == name {
+                return mode_idx;
+            }
+        }
+    }
+
+    -1
 }

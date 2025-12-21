@@ -50,6 +50,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | strings      | String comparison, case conversion, escape utils   |
 | tui          | Terminal UI, terminfo formatting                   |
 | typval       | VimL typval_T type checking and value extraction   |
+| ugrid        | Unicode grid (UGrid) operations for TUI            |
 | unpacker     | MessagePack unpacking                              |
 | utf8proc     | utf8proc FFI bindings                              |
 | version      | Version compatibility checks                       |

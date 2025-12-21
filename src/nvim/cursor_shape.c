@@ -23,6 +23,7 @@
 extern int rs_cursor_is_block_during_visual(int exclusive);
 extern int rs_cursor_mode_uses_syn_id(int syn_id);
 extern int rs_cursor_get_mode_idx(void);
+extern int rs_cursor_mode_str2int(const char *mode);
 
 static const char e_digit_expected[] = N_("E548: Digit expected");
 
@@ -291,13 +292,11 @@ bool cursor_is_block_during_visual(bool exclusive)
 /// @return -1 in case of failure, else the matching SHAPE_ID* integer
 int cursor_mode_str2int(const char *mode)
 {
-  for (int mode_idx = 0; mode_idx < SHAPE_IDX_COUNT; mode_idx++) {
-    if (strcmp(shape_table[mode_idx].full_name, mode) == 0) {
-      return mode_idx;
-    }
+  int result = rs_cursor_mode_str2int(mode);
+  if (result < 0) {
+    WLOG("Unknown mode %s", mode);
   }
-  WLOG("Unknown mode %s", mode);
-  return -1;
+  return result;
 }
 
 /// Check if a syntax id is used as a cursor style.
@@ -374,4 +373,9 @@ int nvim_get_visual_active(void)
 char nvim_get_p_sel_first(void)
 {
   return *p_sel;
+}
+
+const char *nvim_get_shape_table_name(int idx)
+{
+  return shape_table[idx].full_name;
 }
