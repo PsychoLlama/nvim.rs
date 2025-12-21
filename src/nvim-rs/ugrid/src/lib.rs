@@ -89,7 +89,14 @@ const SPACE_SCHAR: ScharT = schar_from_ascii(b' ');
 /// # Safety
 /// - `grid` must be a valid pointer to an initialized `UGrid`
 /// - The region must be within the grid bounds
-unsafe fn clear_region(grid: *mut UGrid, top: c_int, bot: c_int, left: c_int, right: c_int, attr: SattrT) {
+unsafe fn clear_region(
+    grid: *mut UGrid,
+    top: c_int,
+    bot: c_int,
+    left: c_int,
+    right: c_int,
+    attr: SattrT,
+) {
     let grid = &mut *grid;
     for row in top..=bot {
         let row_cells = *grid.cells.add(row as usize);
