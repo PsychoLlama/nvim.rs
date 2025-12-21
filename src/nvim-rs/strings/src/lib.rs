@@ -1012,6 +1012,105 @@ pub unsafe extern "C" fn rs_vim_strnsave_unquoted(
     ret
 }
 
+// FFI declarations for mbyte functions
+extern "C" {
+    fn rs_utf_ptr2len(p: *const c_char) -> c_int;
+    fn rs_utf_ptr2char(p: *const c_char) -> c_int;
+    fn rs_utf_char2len(c: c_int) -> c_int;
+    fn rs_utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
+}
+
+/// Type alias for case conversion function pointer.
+/// Takes a codepoint and returns the converted codepoint.
+pub type CaseConvertFn = unsafe extern "C" fn(c_int) -> c_int;
+
+/// Convert a string to upper or lower case.
+///
+/// This function converts all characters in the string using the provided
+/// case conversion function (typically mb_toupper or mb_tolower from C).
+///
+/// The result may be larger than the input if case conversion changes
+/// byte lengths (e.g., some Unicode case conversions).
+///
+/// # Safety
+///
+/// - `orig` must be a valid null-terminated C string
+/// - `case_fn` must be a valid function pointer (typically mb_toupper or mb_tolower)
+/// - The returned pointer must be freed by the caller using xfree
+#[no_mangle]
+pub unsafe extern "C" fn rs_strcase_save(
+    orig: *const c_char,
+    case_fn: CaseConvertFn,
+) -> *mut c_char {
+    if orig.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    // Calculate initial length
+    let mut orig_len = 0usize;
+    let mut p = orig;
+    while *p != 0 {
+        orig_len += 1;
+        p = p.add(1);
+    }
+
+    // Allocate result buffer (initial size = orig_len + 1 for NUL)
+    let mut res = libc::malloc(orig_len + 1) as *mut c_char;
+    if res.is_null() {
+        return std::ptr::null_mut();
+    }
+    let mut res_capacity = orig_len;
+
+    // Index in result string
+    let mut res_index = 0usize;
+    // Current position in original string
+    p = orig;
+
+    while *p != 0 {
+        // Get UTF-8 character length and codepoint
+        let char_len = rs_utf_ptr2len(p) as usize;
+        let codepoint = rs_utf_ptr2char(p);
+
+        // Handle invalid sequences: use byte value directly
+        let c = if char_len == 0 || codepoint < 0 {
+            *p as u8 as c_int
+        } else {
+            codepoint
+        };
+
+        // Apply case conversion
+        let converted_char = case_fn(c);
+
+        // Get byte length of new character
+        let converted_len = rs_utf_char2len(converted_char) as usize;
+
+        // Check if we need more space
+        if res_index + converted_len > res_capacity {
+            // Need more space: allocate extra for the new character + NUL
+            let new_capacity = res_index + converted_len + 1;
+            let new_res = libc::realloc(res as *mut libc::c_void, new_capacity + 1) as *mut c_char;
+            if new_res.is_null() {
+                libc::free(res as *mut libc::c_void);
+                return std::ptr::null_mut();
+            }
+            res = new_res;
+            res_capacity = new_capacity;
+        }
+
+        // Write the converted character
+        rs_utf_char2bytes(converted_char, res.add(res_index));
+        res_index += converted_len;
+
+        // Move to next character
+        let advance = if char_len > 0 { char_len } else { 1 };
+        p = p.add(advance);
+    }
+
+    // NUL-terminate the result
+    *res.add(res_index) = 0;
+    res
+}
+
 #[cfg(test)]
 #[allow(clippy::cast_lossless)]
 mod tests {

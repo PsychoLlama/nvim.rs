@@ -59,6 +59,7 @@ extern char *rs_strrep(const char *src, const char *what, const char *rep);
 extern char *rs_vim_strsave_escaped(const char *string, const char *esc_chars);
 extern char *rs_vim_strsave_escaped_ext(const char *string, const char *esc_chars, char cc, int bsl);
 extern char *rs_vim_strnsave_unquoted(const char *string, size_t length);
+extern char *rs_strcase_save(const char *orig, int (*case_fn)(int));
 
 static const char e_cannot_mix_positional_and_non_positional_str[]
   = N_("E1500: Cannot mix positional and non-positional arguments: %s");
@@ -310,42 +311,7 @@ void vim_memcpy_up(char *restrict dst, const char *restrict src, size_t n)
 char *strcase_save(const char *const orig, bool upper)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL
 {
-  // Calculate the initial length and allocate memory for the result
-  size_t orig_len = strlen(orig);
-  // +1 for the null terminator
-  char *res = xmalloc(orig_len + 1);
-  // Index in the result string
-  size_t res_index = 0;
-  // Current position in the original string
-  const char *p = orig;
-
-  while (*p != NUL) {
-    CharInfo char_info = utf_ptr2CharInfo(p);
-    int c = char_info.value < 0 ? (uint8_t)(*p) : char_info.value;
-    int newc = upper ? mb_toupper(c) : mb_tolower(c);
-    // Cast to size_t to avoid mixing types in arithmetic
-    size_t newl = (size_t)utf_char2len(newc);
-
-    // Check if there's enough space in the allocated memory
-    if (res_index + newl > orig_len) {
-      // Need more space: allocate extra space for the new character and the null terminator
-      size_t new_size = res_index + newl + 1;
-      res = xrealloc(res, new_size);
-      // Adjust the original length to the new size, minus the null terminator
-      orig_len = new_size - 1;
-    }
-
-    // Write the possibly new character into the result string
-    utf_char2bytes(newc, res + res_index);
-    // Move the index in the result string
-    res_index += newl;
-    // Move to the next character in the original string
-    p += char_info.len;
-  }
-
-  // Null-terminate the result string
-  res[res_index] = NUL;
-  return res;
+  return rs_strcase_save(orig, upper ? mb_toupper : mb_tolower);
 }
 
 // delete spaces at the end of a string

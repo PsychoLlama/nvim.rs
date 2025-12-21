@@ -133,6 +133,18 @@ extern "C" {
     /// The returned pointer is valid for the lifetime of the program.
     pub fn utf8proc_get_property(codepoint: i32) -> *const Utf8procProperty;
 
+    /// Convert a codepoint to uppercase.
+    ///
+    /// Returns the uppercase equivalent of the codepoint, or the codepoint itself
+    /// if no uppercase mapping exists.
+    pub fn utf8proc_toupper(c: i32) -> i32;
+
+    /// Convert a codepoint to lowercase.
+    ///
+    /// Returns the lowercase equivalent of the codepoint, or the codepoint itself
+    /// if no lowercase mapping exists.
+    pub fn utf8proc_tolower(c: i32) -> i32;
+
     /// Check if there is a grapheme break between two codepoints.
     ///
     /// Returns true if there is a grapheme break between codepoint1 and codepoint2.
@@ -258,6 +270,28 @@ pub fn casefold(codepoint: i32) -> i32 {
     }
 }
 
+/// Convert a codepoint to uppercase using utf8proc.
+///
+/// Returns the uppercase equivalent of the codepoint, or the codepoint itself
+/// if no uppercase mapping exists.
+#[inline]
+#[must_use]
+pub fn toupper(codepoint: i32) -> i32 {
+    // SAFETY: utf8proc_toupper is a pure function with no side effects
+    unsafe { utf8proc_toupper(codepoint) }
+}
+
+/// Convert a codepoint to lowercase using utf8proc.
+///
+/// Returns the lowercase equivalent of the codepoint, or the codepoint itself
+/// if no lowercase mapping exists.
+#[inline]
+#[must_use]
+pub fn tolower(codepoint: i32) -> i32 {
+    // SAFETY: utf8proc_tolower is a pure function with no side effects
+    unsafe { utf8proc_tolower(codepoint) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -345,5 +379,57 @@ mod tests {
 
         // İ (U+0130) should remain unchanged (workaround for full case folding)
         assert_eq!(casefold(0x130), 0x130);
+    }
+
+    #[test]
+    fn test_toupper_ascii() {
+        // ASCII lowercase to uppercase
+        assert_eq!(toupper(i32::from(b'a')), i32::from(b'A'));
+        assert_eq!(toupper(i32::from(b'z')), i32::from(b'Z'));
+
+        // ASCII uppercase unchanged
+        assert_eq!(toupper(i32::from(b'A')), i32::from(b'A'));
+        assert_eq!(toupper(i32::from(b'Z')), i32::from(b'Z'));
+
+        // ASCII non-letters unchanged
+        assert_eq!(toupper(i32::from(b'0')), i32::from(b'0'));
+        assert_eq!(toupper(i32::from(b'!')), i32::from(b'!'));
+    }
+
+    #[test]
+    fn test_tolower_ascii() {
+        // ASCII uppercase to lowercase
+        assert_eq!(tolower(i32::from(b'A')), i32::from(b'a'));
+        assert_eq!(tolower(i32::from(b'Z')), i32::from(b'z'));
+
+        // ASCII lowercase unchanged
+        assert_eq!(tolower(i32::from(b'a')), i32::from(b'a'));
+        assert_eq!(tolower(i32::from(b'z')), i32::from(b'z'));
+
+        // ASCII non-letters unchanged
+        assert_eq!(tolower(i32::from(b'0')), i32::from(b'0'));
+        assert_eq!(tolower(i32::from(b'!')), i32::from(b'!'));
+    }
+
+    #[test]
+    fn test_toupper_unicode() {
+        // Latin Extended lowercase to uppercase
+        // U+00E0 (à) -> U+00C0 (À)
+        assert_eq!(toupper(0x00E0), 0x00C0);
+
+        // Greek lowercase to uppercase
+        // U+03B1 (α) -> U+0391 (Α)
+        assert_eq!(toupper(0x03B1), 0x0391);
+    }
+
+    #[test]
+    fn test_tolower_unicode() {
+        // Latin Extended uppercase to lowercase
+        // U+00C0 (À) -> U+00E0 (à)
+        assert_eq!(tolower(0x00C0), 0x00E0);
+
+        // Greek uppercase to lowercase
+        // U+0391 (Α) -> U+03B1 (α)
+        assert_eq!(tolower(0x0391), 0x03B1);
     }
 }
