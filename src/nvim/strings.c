@@ -50,6 +50,9 @@ extern void rs_vim_strncpy_up(char *restrict dst, const char *restrict src, size
 extern void rs_vim_memcpy_up(char *restrict dst, const char *restrict src, size_t n);
 extern void rs_del_trailing_spaces(char *ptr);
 extern const char *rs_vim_strchr(const char *string, int c);
+extern char *rs_concat_str(const char *s1, const char *s2);
+extern char *rs_vim_strsave_up(const char *string);
+extern char *rs_vim_strnsave_up(const char *string, size_t len);
 
 static const char e_cannot_mix_positional_and_non_positional_str[]
   = N_("E1500: Cannot mix positional and non-positional arguments: %s");
@@ -314,9 +317,7 @@ char *vim_strsave_shellescape(const char *string, bool do_special, bool do_newli
 char *vim_strsave_up(const char *string)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL
 {
-  char *p1 = xmalloc(strlen(string) + 1);
-  vim_strcpy_up(p1, string);
-  return p1;
+  return rs_vim_strsave_up(string);
 }
 
 /// Like xstrnsave(), but make all characters uppercase.
@@ -324,9 +325,7 @@ char *vim_strsave_up(const char *string)
 char *vim_strnsave_up(const char *string, size_t len)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL
 {
-  char *p1 = xmalloc(len + 1);
-  vim_strncpy_up(p1, string, len);
-  return p1;
+  return rs_vim_strnsave_up(string, len);
 }
 
 // ASCII lower-to-upper case translation, language independent.
@@ -519,11 +518,7 @@ bool has_non_ascii_len(const char *const s, const size_t len)
 char *concat_str(const char *restrict str1, const char *restrict str2)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL
 {
-  size_t l = strlen(str1);
-  char *dest = xmalloc(l + strlen(str2) + 1);
-  STRCPY(dest, str1);
-  STRCPY(dest + l, str2);
-  return dest;
+  return rs_concat_str(str1, str2);
 }
 
 static const char *const e_printf =

@@ -469,6 +469,55 @@ pub unsafe extern "C" fn rs_concat_str(s1: *const c_char, s2: *const c_char) -> 
     result
 }
 
+/// Like vim_strsave(), but make all characters uppercase.
+///
+/// Returns a newly allocated uppercase copy of the string.
+/// This uses ASCII lower-to-upper case translation, language independent.
+///
+/// # Safety
+///
+/// `string` must be a valid null-terminated C string.
+/// The returned pointer must be freed by the caller.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_strsave_up(string: *const c_char) -> *mut c_char {
+    if string.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let len = libc::strlen(string);
+    let result = libc::malloc(len + 1) as *mut c_char;
+    if result.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    rs_vim_strcpy_up(result, string);
+    result
+}
+
+/// Like xstrnsave(), but make all characters uppercase.
+///
+/// Returns a newly allocated uppercase copy of up to `len` characters.
+/// This uses ASCII lower-to-upper case translation, language independent.
+///
+/// # Safety
+///
+/// `string` must be a valid null-terminated C string or at least `len` bytes.
+/// The returned pointer must be freed by the caller.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_strnsave_up(string: *const c_char, len: usize) -> *mut c_char {
+    if string.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let result = libc::malloc(len + 1) as *mut c_char;
+    if result.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    rs_vim_strncpy_up(result, string, len);
+    result
+}
+
 /// Sort an array of strings using strcmp.
 ///
 /// # Safety
@@ -1228,6 +1277,72 @@ mod tests {
             // "   " -> returns pointer to NUL after spaces
             let result = rs_skip_to_option_part(only_spaces.as_ptr());
             assert_eq!(*result as u8, 0);
+        }
+    }
+
+    #[test]
+    fn test_vim_strsave_up() {
+        unsafe {
+            // Basic lowercase to uppercase
+            let src = CString::new("hello").unwrap();
+            let result = rs_vim_strsave_up(src.as_ptr());
+            assert!(!result.is_null());
+            let result_str = std::ffi::CStr::from_ptr(result);
+            assert_eq!(result_str.to_str().unwrap(), "HELLO");
+            libc::free(result as *mut libc::c_void);
+
+            // Mixed case
+            let src = CString::new("HeLLo WoRLD").unwrap();
+            let result = rs_vim_strsave_up(src.as_ptr());
+            assert!(!result.is_null());
+            let result_str = std::ffi::CStr::from_ptr(result);
+            assert_eq!(result_str.to_str().unwrap(), "HELLO WORLD");
+            libc::free(result as *mut libc::c_void);
+
+            // Empty string
+            let src = CString::new("").unwrap();
+            let result = rs_vim_strsave_up(src.as_ptr());
+            assert!(!result.is_null());
+            let result_str = std::ffi::CStr::from_ptr(result);
+            assert_eq!(result_str.to_str().unwrap(), "");
+            libc::free(result as *mut libc::c_void);
+
+            // NULL handling
+            let result = rs_vim_strsave_up(std::ptr::null());
+            assert!(result.is_null());
+        }
+    }
+
+    #[test]
+    fn test_vim_strnsave_up() {
+        unsafe {
+            // Copy with limit
+            let src = CString::new("hello world").unwrap();
+            let result = rs_vim_strnsave_up(src.as_ptr(), 5);
+            assert!(!result.is_null());
+            let result_str = std::ffi::CStr::from_ptr(result);
+            assert_eq!(result_str.to_str().unwrap(), "HELLO");
+            libc::free(result as *mut libc::c_void);
+
+            // Copy with limit larger than string
+            let src = CString::new("hi").unwrap();
+            let result = rs_vim_strnsave_up(src.as_ptr(), 100);
+            assert!(!result.is_null());
+            let result_str = std::ffi::CStr::from_ptr(result);
+            assert_eq!(result_str.to_str().unwrap(), "HI");
+            libc::free(result as *mut libc::c_void);
+
+            // Zero length
+            let src = CString::new("hello").unwrap();
+            let result = rs_vim_strnsave_up(src.as_ptr(), 0);
+            assert!(!result.is_null());
+            let result_str = std::ffi::CStr::from_ptr(result);
+            assert_eq!(result_str.to_str().unwrap(), "");
+            libc::free(result as *mut libc::c_void);
+
+            // NULL handling
+            let result = rs_vim_strnsave_up(std::ptr::null(), 5);
+            assert!(result.is_null());
         }
     }
 }
