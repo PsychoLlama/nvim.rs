@@ -211,6 +211,113 @@ pub unsafe extern "C" fn rs_tabstop_start(col: c_int, ts: c_int, vts: *const c_i
     col - (col - excess) % last_ts
 }
 
+/// Result from tabstop_fromto calculation.
+#[repr(C)]
+pub struct TabstopFromtoResult {
+    /// Number of tabs to use
+    pub ntabs: c_int,
+    /// Number of spaces to use
+    pub nspcs: c_int,
+}
+
+/// Calculate the number of tabs and spaces needed to go from start_col to end_col.
+///
+/// Given a range of columns, this function calculates the optimal combination
+/// of tabs and spaces to cover that range.
+///
+/// # Arguments
+/// * `start_col` - Starting column position
+/// * `end_col` - Ending column position
+/// * `ts` - Fixed tabstop width (must be > 0)
+/// * `vts` - Variable tabstop array (can be null)
+///
+/// # Returns
+/// A `TabstopFromtoResult` with the number of tabs and spaces needed.
+///
+/// # Safety
+/// If `vts` is non-null, it must point to a valid tabstop array.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tabstop_fromto(
+    start_col: c_int,
+    end_col: c_int,
+    ts: c_int,
+    vts: *const c_int,
+) -> TabstopFromtoResult {
+    debug_assert!(ts > 0, "ts must be positive");
+
+    let mut spaces = end_col - start_col;
+
+    // If no variable tabstops, use fixed width
+    if vts.is_null() || *vts == 0 {
+        let mut tabs = 0;
+
+        let initspc = ts - (start_col % ts);
+        if spaces >= initspc {
+            spaces -= initspc;
+            tabs += 1;
+        }
+        tabs += spaces / ts;
+        spaces -= (spaces / ts) * ts;
+
+        return TabstopFromtoResult {
+            ntabs: tabs,
+            nspcs: spaces,
+        };
+    }
+
+    // Variable tabstops
+    let tabcount = *vts;
+    let mut tabcol: c_int = 0;
+    let mut padding: c_int = 0;
+    let mut t: c_int = 1;
+
+    // Find the padding needed to reach the next tabstop
+    while t <= tabcount {
+        tabcol += *vts.offset(t as isize);
+        if tabcol > start_col {
+            padding = tabcol - start_col;
+            break;
+        }
+        t += 1;
+    }
+    if t > tabcount {
+        let last_ts = *vts.offset(tabcount as isize);
+        padding = last_ts - ((start_col - tabcol) % last_ts);
+    }
+
+    // If the space needed is less than the padding no tabs can be used
+    if spaces < padding {
+        return TabstopFromtoResult {
+            ntabs: 0,
+            nspcs: spaces,
+        };
+    }
+
+    let mut ntabs = 1;
+    spaces -= padding;
+
+    // At least one tab has been used. See if any more will fit.
+    t += 1;
+    while spaces != 0 && t <= tabcount {
+        padding = *vts.offset(t as isize);
+        if spaces < padding {
+            return TabstopFromtoResult {
+                ntabs,
+                nspcs: spaces,
+            };
+        }
+        ntabs += 1;
+        spaces -= padding;
+        t += 1;
+    }
+
+    let last_ts = *vts.offset(tabcount as isize);
+    ntabs += spaces / last_ts;
+    let nspcs = spaces % last_ts;
+
+    TabstopFromtoResult { ntabs, nspcs }
+}
+
 /// Compare two tabstop arrays for equality.
 ///
 /// # Safety
@@ -561,6 +668,79 @@ mod tests {
 
             let ts2: [c_int; 4] = [3, 6, 8, 12];
             assert_eq!(rs_tabstop_first(ts2.as_ptr()), 6);
+        }
+    }
+
+    #[test]
+    fn test_tabstop_fromto_fixed() {
+        unsafe {
+            // start_col=0, end_col=8, ts=8 -> 1 tab, 0 spaces
+            let result = rs_tabstop_fromto(0, 8, 8, std::ptr::null());
+            assert_eq!(result.ntabs, 1);
+            assert_eq!(result.nspcs, 0);
+
+            // start_col=0, end_col=4, ts=8 -> 0 tabs, 4 spaces (not enough for a tab)
+            let result = rs_tabstop_fromto(0, 4, 8, std::ptr::null());
+            assert_eq!(result.ntabs, 0);
+            assert_eq!(result.nspcs, 4);
+
+            // start_col=0, end_col=16, ts=8 -> 2 tabs, 0 spaces
+            let result = rs_tabstop_fromto(0, 16, 8, std::ptr::null());
+            assert_eq!(result.ntabs, 2);
+            assert_eq!(result.nspcs, 0);
+
+            // start_col=0, end_col=10, ts=8 -> 1 tab (to 8), 2 spaces
+            let result = rs_tabstop_fromto(0, 10, 8, std::ptr::null());
+            assert_eq!(result.ntabs, 1);
+            assert_eq!(result.nspcs, 2);
+
+            // start_col=2, end_col=10, ts=8 -> 8 spaces to fill
+            // From col 2, first tab goes to col 8 (6 spaces), leaving 2
+            // 1 tab + 2 spaces
+            let result = rs_tabstop_fromto(2, 10, 8, std::ptr::null());
+            assert_eq!(result.ntabs, 1);
+            assert_eq!(result.nspcs, 2);
+
+            // start_col=2, end_col=18, ts=8 -> 16 spaces to fill
+            // From col 2, first tab goes to col 8 (6 spaces)
+            // Second tab goes to col 16 (8 spaces)
+            // Remaining 2 spaces
+            let result = rs_tabstop_fromto(2, 18, 8, std::ptr::null());
+            assert_eq!(result.ntabs, 2);
+            assert_eq!(result.nspcs, 2);
+        }
+    }
+
+    #[test]
+    fn test_tabstop_fromto_variable() {
+        unsafe {
+            // vts = [2, 4, 8] means tabstops at positions 4, 12, then every 8
+            let vts: [c_int; 3] = [2, 4, 8];
+
+            // start_col=0, end_col=4, ts=8 -> 1 tab (to 4), 0 spaces
+            let result = rs_tabstop_fromto(0, 4, 8, vts.as_ptr());
+            assert_eq!(result.ntabs, 1);
+            assert_eq!(result.nspcs, 0);
+
+            // start_col=0, end_col=2, ts=8 -> 0 tabs (not enough space), 2 spaces
+            let result = rs_tabstop_fromto(0, 2, 8, vts.as_ptr());
+            assert_eq!(result.ntabs, 0);
+            assert_eq!(result.nspcs, 2);
+
+            // start_col=0, end_col=12, ts=8 -> 2 tabs (to 4, then to 12), 0 spaces
+            let result = rs_tabstop_fromto(0, 12, 8, vts.as_ptr());
+            assert_eq!(result.ntabs, 2);
+            assert_eq!(result.nspcs, 0);
+
+            // start_col=0, end_col=20, ts=8 -> 3 tabs (4, 12, 20), 0 spaces
+            let result = rs_tabstop_fromto(0, 20, 8, vts.as_ptr());
+            assert_eq!(result.ntabs, 3);
+            assert_eq!(result.nspcs, 0);
+
+            // start_col=4, end_col=12, ts=8 -> 1 tab (from 4 to 12), 0 spaces
+            let result = rs_tabstop_fromto(4, 12, 8, vts.as_ptr());
+            assert_eq!(result.ntabs, 1);
+            assert_eq!(result.nspcs, 0);
         }
     }
 }

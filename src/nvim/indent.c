@@ -61,6 +61,12 @@ extern bool rs_tabstop_eq(const int *ts1, const int *ts2);
 extern int rs_tabstop_count(const int *ts);
 extern int rs_tabstop_first(const int *ts);
 
+typedef struct {
+  int ntabs;
+  int nspcs;
+} TabstopFromtoResult;
+extern TabstopFromtoResult rs_tabstop_fromto(int start_col, int end_col, int ts, const int *vts);
+
 /// Set the integer values corresponding to the string setting of 'vartabstop'.
 /// "array" will be set, caller must free it if needed.
 ///
@@ -155,65 +161,13 @@ colnr_T tabstop_start(colnr_T col, int ts, colnr_T *vts)
 void tabstop_fromto(colnr_T start_col, colnr_T end_col, int ts_arg, const colnr_T *vts, int *ntabs,
                     int *nspcs)
 {
-  int spaces = end_col - start_col;
-  colnr_T tabcol = 0;
-  int padding = 0;
-  int t;
+  // Resolve ts_arg if it's 0 (meaning use buffer's tabstop)
   int ts = ts_arg == 0 ? (int)curbuf->b_p_ts : ts_arg;
   assert(ts != 0);  // suppress clang "Division by zero"
 
-  if (vts == NULL || vts[0] == 0) {
-    int tabs = 0;
-
-    const int initspc = (ts - (start_col % ts));
-    if (spaces >= initspc) {
-      spaces -= initspc;
-      tabs++;
-    }
-    tabs += (spaces / ts);
-    spaces -= ((spaces / ts) * ts);
-
-    *ntabs = tabs;
-    *nspcs = spaces;
-    return;
-  }
-
-  // Find the padding needed to reach the next tabstop.
-  const int tabcount = vts[0];
-  for (t = 1; t <= tabcount; t++) {
-    tabcol += vts[t];
-    if (tabcol > start_col) {
-      padding = tabcol - start_col;
-      break;
-    }
-  }
-  if (t > tabcount) {
-    padding = vts[tabcount] - ((start_col - tabcol) % vts[tabcount]);
-  }
-
-  // If the space needed is less than the padding no tabs can be used.
-  if (spaces < padding) {
-    *ntabs = 0;
-    *nspcs = spaces;
-    return;
-  }
-
-  *ntabs = 1;
-  spaces -= padding;
-
-  // At least one tab has been used. See if any more will fit.
-  while (spaces != 0 && ++t <= tabcount) {
-    padding = vts[t];
-    if (spaces < padding) {
-      *nspcs = spaces;
-      return;
-    }
-    *ntabs += 1;
-    spaces -= padding;
-  }
-
-  *ntabs += spaces / (int)vts[tabcount];
-  *nspcs = spaces % (int)vts[tabcount];
+  TabstopFromtoResult result = rs_tabstop_fromto(start_col, end_col, ts, vts);
+  *ntabs = result.ntabs;
+  *nspcs = result.nspcs;
 }
 
 /// See if two tabstop arrays contain the same values.
