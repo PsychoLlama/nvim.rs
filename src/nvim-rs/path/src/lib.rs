@@ -1015,6 +1015,110 @@ pub unsafe extern "C" fn rs_path_fnamencmp(
     }
 }
 
+// ============================================================================
+// gettail_dir - Get end of directory name
+// ============================================================================
+
+/// Get the end of the directory name.
+///
+/// Returns a pointer to the end of the directory name, on the first path separator.
+///
+/// Examples:
+/// - "/path/file" -> pointer to '/' before "file"
+/// - "/path/dir/" -> pointer to '/' before "dir/"
+/// - "/path//dir" -> pointer to first '/' before "/dir"
+/// - "/file" -> pointer to start (fname)
+///
+/// # Safety
+/// - `fname` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_gettail_dir(fname: *const c_char) -> *const c_char {
+    if fname.is_null() {
+        return fname;
+    }
+
+    let mut dir_end = fname;
+    let mut next_dir_end = fname;
+    let mut look_for_sep = true;
+    let mut p = fname;
+
+    while *p != 0 {
+        if rs_vim_ispathsep(*p as c_int) != 0 {
+            if look_for_sep {
+                next_dir_end = p;
+                look_for_sep = false;
+            }
+        } else {
+            if !look_for_sep {
+                dir_end = next_dir_end;
+            }
+            look_for_sep = true;
+        }
+        // MB_PTR_ADV: advance by UTF-8 character length
+        // Create a slice for utfc_ptr2len
+        let slice = std::slice::from_raw_parts(p as *const u8, 8);
+        let len = nvim_mbyte::utfc_ptr2len(slice);
+        p = p.add(len);
+    }
+
+    dir_end
+}
+
+#[cfg(test)]
+mod gettail_dir_tests {
+    use super::*;
+    use std::ffi::CString;
+
+    #[test]
+    fn test_gettail_dir_basic() {
+        let path = CString::new("/path/file").unwrap();
+        let result = unsafe { rs_gettail_dir(path.as_ptr()) };
+        let result_str = unsafe { std::ffi::CStr::from_ptr(result) };
+        // Should point to "/file" (the '/' before "file")
+        assert_eq!(result_str.to_str().unwrap(), "/file");
+    }
+
+    #[test]
+    fn test_gettail_dir_trailing_slash() {
+        let path = CString::new("/path/dir/").unwrap();
+        let result = unsafe { rs_gettail_dir(path.as_ptr()) };
+        let result_str = unsafe { std::ffi::CStr::from_ptr(result) };
+        // Should point to "/dir/" (the '/' before "dir/")
+        assert_eq!(result_str.to_str().unwrap(), "/dir/");
+    }
+
+    #[test]
+    fn test_gettail_dir_double_slash() {
+        let path = CString::new("/path//dir").unwrap();
+        let result = unsafe { rs_gettail_dir(path.as_ptr()) };
+        let result_str = unsafe { std::ffi::CStr::from_ptr(result) };
+        // Should point to "//dir" (first '/' of the double slash)
+        assert_eq!(result_str.to_str().unwrap(), "//dir");
+    }
+
+    #[test]
+    fn test_gettail_dir_just_file() {
+        let path = CString::new("/file").unwrap();
+        let result = unsafe { rs_gettail_dir(path.as_ptr()) };
+        // Should point to start (fname)
+        assert_eq!(result, path.as_ptr());
+    }
+
+    #[test]
+    fn test_gettail_dir_no_slash() {
+        let path = CString::new("file.txt").unwrap();
+        let result = unsafe { rs_gettail_dir(path.as_ptr()) };
+        // Should point to start (fname)
+        assert_eq!(result, path.as_ptr());
+    }
+
+    #[test]
+    fn test_gettail_dir_null() {
+        let result = unsafe { rs_gettail_dir(std::ptr::null()) };
+        assert!(result.is_null());
+    }
+}
+
 #[cfg(test)]
 mod fnamecmp_tests {
     use super::*;

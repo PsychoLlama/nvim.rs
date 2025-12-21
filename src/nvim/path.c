@@ -58,6 +58,7 @@ extern int rs_vim_isAbsName(const char *name);
 extern int rs_after_pathsep(const char *b, const char *p);
 extern int rs_path_fnamecmp(const char *fname1, const char *fname2);
 extern int rs_path_fnamencmp(const char *fname1, const char *fname2, size_t len);
+extern const char *rs_gettail_dir(const char *fname);
 
 #include "path.c.generated.h"
 
@@ -1038,25 +1039,7 @@ static void uniquefy_paths(garray_T *gap, char *pattern, char *path_option)
 const char *gettail_dir(const char *const fname)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-  const char *dir_end = fname;
-  const char *next_dir_end = fname;
-  bool look_for_sep = true;
-
-  for (const char *p = fname; *p != NUL;) {
-    if (vim_ispathsep(*p)) {
-      if (look_for_sep) {
-        next_dir_end = p;
-        look_for_sep = false;
-      }
-    } else {
-      if (!look_for_sep) {
-        dir_end = next_dir_end;
-      }
-      look_for_sep = true;
-    }
-    MB_PTR_ADV(p);
-  }
-  return dir_end;
+  return rs_gettail_dir(fname);
 }
 
 /// Calls globpath() with 'path' values for the given pattern and stores the
