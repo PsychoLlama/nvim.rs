@@ -110,6 +110,15 @@ const KE_X2MOUSE: c_int = 92;
 const KE_X2DRAG: c_int = 93;
 const KE_X2RELEASE: c_int = 94;
 const KE_MOUSEMOVE: c_int = 100;
+const KE_IGNORE: c_int = 53;
+
+// Mouse button constants (from mouse.h)
+const MOUSE_LEFT: c_int = 0x00;
+const MOUSE_MIDDLE: c_int = 0x01;
+const MOUSE_RIGHT: c_int = 0x02;
+const MOUSE_RELEASE: c_int = 0x03;
+const MOUSE_X1: c_int = 0x300;
+const MOUSE_X2: c_int = 0x400;
 
 /// Convert termcap codes to internal key representation
 /// TERMCAP2KEY(a, b) = -((a) + ((int)(b) << 8))
@@ -855,6 +864,144 @@ pub unsafe extern "C" fn rs_simplify_key(key: c_int, modifiers: *mut c_int) -> c
     key
 }
 
+/// Mouse table entry for mapping pseudo-codes to button info
+struct MouseTableEntry {
+    pseudo_code: c_int,
+    button: c_int,
+    is_click: bool,
+    is_drag: bool,
+}
+
+/// Static table mapping mouse pseudo-codes to button, click, and drag info
+static MOUSE_TABLE: &[MouseTableEntry] = &[
+    MouseTableEntry {
+        pseudo_code: KE_LEFTMOUSE,
+        button: MOUSE_LEFT,
+        is_click: true,
+        is_drag: false,
+    },
+    MouseTableEntry {
+        pseudo_code: KE_LEFTDRAG,
+        button: MOUSE_LEFT,
+        is_click: false,
+        is_drag: true,
+    },
+    MouseTableEntry {
+        pseudo_code: KE_LEFTRELEASE,
+        button: MOUSE_LEFT,
+        is_click: false,
+        is_drag: false,
+    },
+    MouseTableEntry {
+        pseudo_code: KE_MIDDLEMOUSE,
+        button: MOUSE_MIDDLE,
+        is_click: true,
+        is_drag: false,
+    },
+    MouseTableEntry {
+        pseudo_code: KE_MIDDLEDRAG,
+        button: MOUSE_MIDDLE,
+        is_click: false,
+        is_drag: true,
+    },
+    MouseTableEntry {
+        pseudo_code: KE_MIDDLERELEASE,
+        button: MOUSE_MIDDLE,
+        is_click: false,
+        is_drag: false,
+    },
+    MouseTableEntry {
+        pseudo_code: KE_RIGHTMOUSE,
+        button: MOUSE_RIGHT,
+        is_click: true,
+        is_drag: false,
+    },
+    MouseTableEntry {
+        pseudo_code: KE_RIGHTDRAG,
+        button: MOUSE_RIGHT,
+        is_click: false,
+        is_drag: true,
+    },
+    MouseTableEntry {
+        pseudo_code: KE_RIGHTRELEASE,
+        button: MOUSE_RIGHT,
+        is_click: false,
+        is_drag: false,
+    },
+    MouseTableEntry {
+        pseudo_code: KE_X1MOUSE,
+        button: MOUSE_X1,
+        is_click: true,
+        is_drag: false,
+    },
+    MouseTableEntry {
+        pseudo_code: KE_X1DRAG,
+        button: MOUSE_X1,
+        is_click: false,
+        is_drag: true,
+    },
+    MouseTableEntry {
+        pseudo_code: KE_X1RELEASE,
+        button: MOUSE_X1,
+        is_click: false,
+        is_drag: false,
+    },
+    MouseTableEntry {
+        pseudo_code: KE_X2MOUSE,
+        button: MOUSE_X2,
+        is_click: true,
+        is_drag: false,
+    },
+    MouseTableEntry {
+        pseudo_code: KE_X2DRAG,
+        button: MOUSE_X2,
+        is_click: false,
+        is_drag: true,
+    },
+    MouseTableEntry {
+        pseudo_code: KE_X2RELEASE,
+        button: MOUSE_X2,
+        is_click: false,
+        is_drag: false,
+    },
+    // DRAG without CLICK
+    MouseTableEntry {
+        pseudo_code: KE_MOUSEMOVE,
+        button: MOUSE_RELEASE,
+        is_click: false,
+        is_drag: true,
+    },
+    // RELEASE without CLICK
+    MouseTableEntry {
+        pseudo_code: KE_IGNORE,
+        button: MOUSE_RELEASE,
+        is_click: false,
+        is_drag: false,
+    },
+];
+
+/// Look up the given mouse code to return the relevant information.
+///
+/// Returns which button is down or was released.
+///
+/// # Safety
+/// `is_click` and `is_drag` must be valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_mouse_button(
+    code: c_int,
+    is_click: *mut bool,
+    is_drag: *mut bool,
+) -> c_int {
+    for entry in MOUSE_TABLE {
+        if code == entry.pseudo_code {
+            *is_click = entry.is_click;
+            *is_drag = entry.is_drag;
+            return entry.button;
+        }
+    }
+    0 // Shouldn't get here
+}
+
 #[cfg(test)]
 #[allow(clippy::cast_lossless, clippy::borrow_as_ptr)]
 mod tests {
@@ -1024,6 +1171,107 @@ mod tests {
         // Null pointer - key unchanged
         unsafe {
             assert_eq!(rs_simplify_key(K_UP, std::ptr::null_mut()), K_UP);
+        }
+    }
+
+    #[test]
+    fn test_get_mouse_button_left() {
+        let mut is_click = false;
+        let mut is_drag = false;
+        unsafe {
+            // Left click
+            assert_eq!(
+                rs_get_mouse_button(KE_LEFTMOUSE, &mut is_click, &mut is_drag),
+                MOUSE_LEFT
+            );
+            assert!(is_click);
+            assert!(!is_drag);
+
+            // Left drag
+            assert_eq!(
+                rs_get_mouse_button(KE_LEFTDRAG, &mut is_click, &mut is_drag),
+                MOUSE_LEFT
+            );
+            assert!(!is_click);
+            assert!(is_drag);
+
+            // Left release
+            assert_eq!(
+                rs_get_mouse_button(KE_LEFTRELEASE, &mut is_click, &mut is_drag),
+                MOUSE_LEFT
+            );
+            assert!(!is_click);
+            assert!(!is_drag);
+        }
+    }
+
+    #[test]
+    fn test_get_mouse_button_middle() {
+        let mut is_click = false;
+        let mut is_drag = false;
+        unsafe {
+            assert_eq!(
+                rs_get_mouse_button(KE_MIDDLEMOUSE, &mut is_click, &mut is_drag),
+                MOUSE_MIDDLE
+            );
+            assert!(is_click);
+            assert!(!is_drag);
+        }
+    }
+
+    #[test]
+    fn test_get_mouse_button_right() {
+        let mut is_click = false;
+        let mut is_drag = false;
+        unsafe {
+            assert_eq!(
+                rs_get_mouse_button(KE_RIGHTMOUSE, &mut is_click, &mut is_drag),
+                MOUSE_RIGHT
+            );
+            assert!(is_click);
+            assert!(!is_drag);
+        }
+    }
+
+    #[test]
+    fn test_get_mouse_button_x1_x2() {
+        let mut is_click = false;
+        let mut is_drag = false;
+        unsafe {
+            assert_eq!(
+                rs_get_mouse_button(KE_X1MOUSE, &mut is_click, &mut is_drag),
+                MOUSE_X1
+            );
+            assert!(is_click);
+
+            assert_eq!(
+                rs_get_mouse_button(KE_X2MOUSE, &mut is_click, &mut is_drag),
+                MOUSE_X2
+            );
+            assert!(is_click);
+        }
+    }
+
+    #[test]
+    fn test_get_mouse_button_special() {
+        let mut is_click = false;
+        let mut is_drag = false;
+        unsafe {
+            // MOUSEMOVE - drag without click
+            assert_eq!(
+                rs_get_mouse_button(KE_MOUSEMOVE, &mut is_click, &mut is_drag),
+                MOUSE_RELEASE
+            );
+            assert!(!is_click);
+            assert!(is_drag);
+
+            // IGNORE - release without click
+            assert_eq!(
+                rs_get_mouse_button(KE_IGNORE, &mut is_click, &mut is_drag),
+                MOUSE_RELEASE
+            );
+            assert!(!is_click);
+            assert!(!is_drag);
         }
     }
 }

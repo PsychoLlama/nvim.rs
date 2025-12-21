@@ -30,6 +30,7 @@
 extern int rs_name_to_mod_mask(int c);
 extern int rs_handle_x_keys(int key);
 extern int rs_simplify_key(int key, int *modifiers);
+extern int rs_get_mouse_button(int code, bool *is_click, bool *is_drag);
 
 // Some useful tables.
 
@@ -144,34 +145,6 @@ static uint8_t modifier_keys_table[] = {
   MOD_MASK_SHIFT, 'k', 'B',                   KS_EXTRA, KE_TAB,
 
   NUL
-};
-
-static struct mousetable {
-  int pseudo_code;            // Code for pseudo mouse event
-  int button;                 // Which mouse button is it?
-  bool is_click;              // Is it a mouse button click event?
-  bool is_drag;               // Is it a mouse drag event?
-} mouse_table[] = {
-  { KE_LEFTMOUSE,        MOUSE_LEFT,     true,   false },
-  { KE_LEFTDRAG,         MOUSE_LEFT,     false,  true },
-  { KE_LEFTRELEASE,      MOUSE_LEFT,     false,  false },
-  { KE_MIDDLEMOUSE,      MOUSE_MIDDLE,   true,   false },
-  { KE_MIDDLEDRAG,       MOUSE_MIDDLE,   false,  true },
-  { KE_MIDDLERELEASE,    MOUSE_MIDDLE,   false,  false },
-  { KE_RIGHTMOUSE,       MOUSE_RIGHT,    true,   false },
-  { KE_RIGHTDRAG,        MOUSE_RIGHT,    false,  true },
-  { KE_RIGHTRELEASE,     MOUSE_RIGHT,    false,  false },
-  { KE_X1MOUSE,          MOUSE_X1,       true,   false },
-  { KE_X1DRAG,           MOUSE_X1,       false,  true },
-  { KE_X1RELEASE,        MOUSE_X1,       false,  false },
-  { KE_X2MOUSE,          MOUSE_X2,       true,   false },
-  { KE_X2DRAG,           MOUSE_X2,       false,  true },
-  { KE_X2RELEASE,        MOUSE_X2,       false,  false },
-  // DRAG without CLICK
-  { KE_MOUSEMOVE,        MOUSE_RELEASE,  false,  true },
-  // RELEASE without CLICK
-  { KE_IGNORE,           MOUSE_RELEASE,  false,  false },
-  { 0,                   0,              0,      0 },
 };
 
 /// Return the modifier mask bit (#MOD_MASK_*) corresponding to mod name
@@ -569,14 +542,7 @@ int get_special_key_code(const char *name)
 /// @return  which button is down or was released.
 int get_mouse_button(int code, bool *is_click, bool *is_drag)
 {
-  for (int i = 0; mouse_table[i].pseudo_code; i++) {
-    if (code == mouse_table[i].pseudo_code) {
-      *is_click = mouse_table[i].is_click;
-      *is_drag = mouse_table[i].is_drag;
-      return mouse_table[i].button;
-    }
-  }
-  return 0;         // Shouldn't get here
+  return rs_get_mouse_button(code, is_click, is_drag);
 }
 
 /// Replace any terminal code strings with the equivalent internal representation.
