@@ -1064,6 +1064,135 @@ pub unsafe extern "C" fn rs_gettail_dir(fname: *const c_char) -> *const c_char {
     dir_end
 }
 
+// ============================================================================
+// path_next_component - Get the next path component
+// ============================================================================
+
+/// Get the next path component of a path name.
+///
+/// Returns a pointer to the first found path separator + 1.
+/// Returns an empty string if `fname` doesn't contain a path separator.
+///
+/// # Safety
+/// - `fname` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_path_next_component(fname: *const c_char) -> *const c_char {
+    if fname.is_null() {
+        return fname;
+    }
+
+    let mut p = fname;
+    // Skip until we find a path separator or end of string
+    while *p != 0 && rs_vim_ispathsep(*p as c_int) == 0 {
+        // MB_PTR_ADV: advance by UTF-8 character length
+        let slice = std::slice::from_raw_parts(p as *const u8, 8);
+        let len = nvim_mbyte::utfc_ptr2len(slice);
+        p = p.add(len);
+    }
+    // If we found a separator, skip past it
+    if *p != 0 {
+        p = p.add(1);
+    }
+    p
+}
+
+// ============================================================================
+// path_tail_with_sep - Get path tail including leading separator
+// ============================================================================
+
+/// Get the path tail, but include the last path separator.
+///
+/// Returns:
+/// - Pointer to the last path separator of `fname`, if there is any.
+/// - `fname` if it contains no path separator.
+/// - Never NULL.
+///
+/// # Safety
+/// - `fname` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_path_tail_with_sep(fname: *const c_char) -> *const c_char {
+    if fname.is_null() {
+        return fname;
+    }
+
+    // Don't remove the '/' from "c:/file".
+    let past_head = rs_get_past_head(fname);
+    let mut tail = rs_path_tail(fname);
+
+    // Move back past path separators (but don't go before past_head)
+    while tail > past_head && rs_after_pathsep(fname, tail) != 0 {
+        tail = tail.sub(1);
+    }
+
+    tail
+}
+
+#[cfg(test)]
+mod path_next_component_tests {
+    use super::*;
+    use std::ffi::CString;
+
+    #[test]
+    fn test_path_next_component_basic() {
+        let path = CString::new("path/to/file").unwrap();
+        let result = unsafe { rs_path_next_component(path.as_ptr()) };
+        let result_str = unsafe { std::ffi::CStr::from_ptr(result) };
+        assert_eq!(result_str.to_str().unwrap(), "to/file");
+    }
+
+    #[test]
+    fn test_path_next_component_absolute() {
+        let path = CString::new("/home/user").unwrap();
+        let result = unsafe { rs_path_next_component(path.as_ptr()) };
+        let result_str = unsafe { std::ffi::CStr::from_ptr(result) };
+        assert_eq!(result_str.to_str().unwrap(), "home/user");
+    }
+
+    #[test]
+    fn test_path_next_component_no_sep() {
+        let path = CString::new("filename").unwrap();
+        let result = unsafe { rs_path_next_component(path.as_ptr()) };
+        let result_str = unsafe { std::ffi::CStr::from_ptr(result) };
+        // Should return empty string (pointing to end)
+        assert_eq!(result_str.to_str().unwrap(), "");
+    }
+
+    #[test]
+    fn test_path_next_component_null() {
+        let result = unsafe { rs_path_next_component(std::ptr::null()) };
+        assert!(result.is_null());
+    }
+}
+
+#[cfg(test)]
+mod path_tail_with_sep_tests {
+    use super::*;
+    use std::ffi::CString;
+
+    #[test]
+    fn test_path_tail_with_sep_basic() {
+        let path = CString::new("/home/user/file.txt").unwrap();
+        let result = unsafe { rs_path_tail_with_sep(path.as_ptr()) };
+        let result_str = unsafe { std::ffi::CStr::from_ptr(result) };
+        // Should point to "/file.txt"
+        assert_eq!(result_str.to_str().unwrap(), "/file.txt");
+    }
+
+    #[test]
+    fn test_path_tail_with_sep_no_sep() {
+        let path = CString::new("file.txt").unwrap();
+        let result = unsafe { rs_path_tail_with_sep(path.as_ptr()) };
+        // Should return original pointer
+        assert_eq!(result, path.as_ptr());
+    }
+
+    #[test]
+    fn test_path_tail_with_sep_null() {
+        let result = unsafe { rs_path_tail_with_sep(std::ptr::null()) };
+        assert!(result.is_null());
+    }
+}
+
 #[cfg(test)]
 mod gettail_dir_tests {
     use super::*;

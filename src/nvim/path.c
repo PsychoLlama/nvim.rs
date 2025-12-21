@@ -59,6 +59,8 @@ extern int rs_after_pathsep(const char *b, const char *p);
 extern int rs_path_fnamecmp(const char *fname1, const char *fname2);
 extern int rs_path_fnamencmp(const char *fname1, const char *fname2, size_t len);
 extern const char *rs_gettail_dir(const char *fname);
+extern const char *rs_path_next_component(const char *fname);
+extern const char *rs_path_tail_with_sep(const char *fname);
 
 #include "path.c.generated.h"
 
@@ -132,13 +134,7 @@ char *path_tail(const char *fname)
 char *path_tail_with_sep(char *fname)
   FUNC_ATTR_NONNULL_ALL
 {
-  // Don't remove the '/' from "c:/file".
-  char *past_head = get_past_head(fname);
-  char *tail = path_tail(fname);
-  while (tail > past_head && after_pathsep(fname, tail)) {
-    tail--;
-  }
-  return tail;
+  return (char *)rs_path_tail_with_sep(fname);
 }
 
 /// Finds the path tail (or executable) in an invocation.
@@ -178,13 +174,7 @@ const char *invocation_path_tail(const char *invocation, size_t *len)
 const char *path_next_component(const char *fname)
   FUNC_ATTR_NONNULL_ALL
 {
-  while (*fname != NUL && !vim_ispathsep(*fname)) {
-    MB_PTR_ADV(fname);
-  }
-  if (*fname != NUL) {
-    fname++;
-  }
-  return fname;
+  return rs_path_next_component(fname);
 }
 
 /// Returns the length of the path head on the current platform.
