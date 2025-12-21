@@ -713,6 +713,305 @@ pub unsafe extern "C" fn rs_skip_to_option_part(p: *const c_char) -> *const c_ch
     ptr
 }
 
+// External FFI functions from other Rust crates
+extern "C" {
+    fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
+    fn rs_rem_backslash(s: *const c_char) -> bool;
+}
+
+/// Save a copy of a string with given length.
+///
+/// Returns a newly allocated string containing up to `len` bytes from `string`.
+/// The result is always null-terminated.
+///
+/// # Safety
+///
+/// `string` must be a valid pointer to at least `len` bytes.
+/// The returned pointer must be freed by the caller.
+#[no_mangle]
+pub unsafe extern "C" fn rs_xstrnsave(string: *const c_char, len: usize) -> *mut c_char {
+    if string.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    // Allocate len + 1 bytes for null terminator
+    let result = libc::malloc(len + 1) as *mut c_char;
+    if result.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    // Copy the string
+    std::ptr::copy_nonoverlapping(string, result, len);
+    // Null-terminate
+    *result.add(len) = 0;
+
+    result
+}
+
+/// Reverse text into allocated memory.
+///
+/// Properly handles multi-byte UTF-8 characters, reversing them as complete
+/// code points rather than individual bytes.
+///
+/// Returns the allocated reversed string.
+///
+/// # Safety
+///
+/// `s` must be a valid null-terminated C string.
+/// The returned pointer must be freed by the caller.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reverse_text(s: *const c_char) -> *mut c_char {
+    if s.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let len = libc::strlen(s);
+    let rev = libc::malloc(len + 1) as *mut c_char;
+    if rev.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let mut s_i: usize = 0;
+    let mut rev_i = len;
+
+    while s_i < len {
+        let mb_len = rs_utfc_ptr2len(s.add(s_i)) as usize;
+        rev_i -= mb_len;
+        std::ptr::copy_nonoverlapping(s.add(s_i), rev.add(rev_i), mb_len);
+        s_i += mb_len;
+    }
+
+    *rev.add(len) = 0;
+    rev
+}
+
+/// Replace all occurrences of `what` with `rep` in `src`.
+///
+/// If no replacement happens, returns NULL.
+/// Otherwise returns a newly allocated string with all replacements made.
+///
+/// # Safety
+///
+/// All string parameters must be valid null-terminated C strings.
+/// The returned pointer must be freed by the caller.
+#[no_mangle]
+pub unsafe extern "C" fn rs_strrep(
+    src: *const c_char,
+    what: *const c_char,
+    rep: *const c_char,
+) -> *mut c_char {
+    if src.is_null() || what.is_null() || rep.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let whatlen = libc::strlen(what);
+    if whatlen == 0 {
+        return std::ptr::null_mut();
+    }
+
+    // Count occurrences
+    let mut count: usize = 0;
+    let mut pos = libc::strstr(src, what);
+    while !pos.is_null() {
+        count += 1;
+        pos = libc::strstr(pos.add(whatlen), what);
+    }
+
+    if count == 0 {
+        return std::ptr::null_mut();
+    }
+
+    let srclen = libc::strlen(src);
+    let replen = libc::strlen(rep);
+    let new_len = srclen + count * replen - count * whatlen;
+
+    let ret = libc::malloc(new_len + 1) as *mut c_char;
+    if ret.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let mut ptr = ret;
+    let mut src_ptr = src;
+    pos = libc::strstr(src_ptr, what);
+    while !pos.is_null() {
+        let idx = (pos as usize) - (src_ptr as usize);
+        std::ptr::copy_nonoverlapping(src_ptr, ptr, idx);
+        ptr = ptr.add(idx);
+        std::ptr::copy_nonoverlapping(rep, ptr, replen);
+        ptr = ptr.add(replen);
+        src_ptr = pos.add(whatlen);
+        pos = libc::strstr(src_ptr, what);
+    }
+
+    // Copy remaining
+    let remaining = libc::strlen(src_ptr);
+    std::ptr::copy_nonoverlapping(src_ptr, ptr, remaining);
+    ptr = ptr.add(remaining);
+    *ptr = 0;
+
+    ret
+}
+
+/// Save a copy of a string with characters escaped.
+///
+/// Characters in `esc_chars` are preceded by `cc` (usually backslash).
+/// If `bsl` is true, also escape characters where rem_backslash() would remove the backslash.
+///
+/// Properly handles multi-byte UTF-8 characters.
+///
+/// # Safety
+///
+/// All string parameters must be valid null-terminated C strings.
+/// The returned pointer must be freed by the caller.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_strsave_escaped_ext(
+    string: *const c_char,
+    esc_chars: *const c_char,
+    cc: c_char,
+    bsl: c_int,
+) -> *mut c_char {
+    if string.is_null() || esc_chars.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let bsl = bsl != 0;
+
+    // First count the number of escape characters required
+    let mut length: usize = 1; // count the trailing NUL
+    let mut p = string;
+    while *p != 0 {
+        let l = rs_utfc_ptr2len(p) as usize;
+        if l > 1 {
+            length += l; // count a multibyte char
+            p = p.add(l);
+            continue;
+        }
+        if !rs_vim_strchr(esc_chars, *p as u8 as c_int).is_null() || (bsl && rs_rem_backslash(p)) {
+            length += 1; // count an escape character
+        }
+        length += 1; // count an ordinary char
+        p = p.add(1);
+    }
+
+    let escaped_string = libc::malloc(length) as *mut c_char;
+    if escaped_string.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let mut p2 = escaped_string;
+    p = string;
+    while *p != 0 {
+        let l = rs_utfc_ptr2len(p) as usize;
+        if l > 1 {
+            std::ptr::copy_nonoverlapping(p, p2, l);
+            p2 = p2.add(l);
+            p = p.add(l);
+            continue;
+        }
+        if !rs_vim_strchr(esc_chars, *p as u8 as c_int).is_null() || (bsl && rs_rem_backslash(p)) {
+            *p2 = cc;
+            p2 = p2.add(1);
+        }
+        *p2 = *p;
+        p2 = p2.add(1);
+        p = p.add(1);
+    }
+    *p2 = 0;
+
+    escaped_string
+}
+
+/// Save a copy of a string with characters escaped.
+///
+/// Characters in `esc_chars` are preceded by a backslash.
+///
+/// # Safety
+///
+/// All string parameters must be valid null-terminated C strings.
+/// The returned pointer must be freed by the caller.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_strsave_escaped(
+    string: *const c_char,
+    esc_chars: *const c_char,
+) -> *mut c_char {
+    rs_vim_strsave_escaped_ext(string, esc_chars, b'\\' as c_char, 0)
+}
+
+/// Save a copy of an unquoted string.
+///
+/// Turns string like `a\bc"def\"ghi\\\n"jkl` into `a\bcdef"ghi\\njkl`, for use
+/// in shell_build_argv: the only purpose of backslash is making next character
+/// be treated literally inside the double quotes, if this character is
+/// backslash or quote.
+///
+/// # Safety
+///
+/// `string` must be a valid pointer to at least `length` bytes.
+/// The returned pointer must be freed by the caller.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_strnsave_unquoted(
+    string: *const c_char,
+    length: usize,
+) -> *mut c_char {
+    if string.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    // Helper macro to check escape condition
+    fn escape_cond(p: *const c_char, inquote: bool, string_end: *const c_char) -> bool {
+        unsafe {
+            *p as u8 == b'\\'
+                && inquote
+                && p.add(1) < string_end
+                && (*p.add(1) as u8 == b'\\' || *p.add(1) as u8 == b'"')
+        }
+    }
+
+    // First pass: count result length
+    let mut ret_length: usize = 0;
+    let mut inquote = false;
+    let string_end = string.add(length);
+    let mut p = string;
+    while p < string_end {
+        if *p as u8 == b'"' {
+            inquote = !inquote;
+        } else if escape_cond(p, inquote, string_end) {
+            ret_length += 1;
+            p = p.add(1);
+        } else {
+            ret_length += 1;
+        }
+        p = p.add(1);
+    }
+
+    // Allocate result
+    let ret = libc::malloc(ret_length + 1) as *mut c_char;
+    if ret.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    // Second pass: copy with unquoting
+    let mut rp = ret;
+    inquote = false;
+    p = string;
+    while p < string_end {
+        if *p as u8 == b'"' {
+            inquote = !inquote;
+        } else if escape_cond(p, inquote, string_end) {
+            p = p.add(1);
+            *rp = *p;
+            rp = rp.add(1);
+        } else {
+            *rp = *p;
+            rp = rp.add(1);
+        }
+        p = p.add(1);
+    }
+    *rp = 0;
+
+    ret
+}
+
 #[cfg(test)]
 #[allow(clippy::cast_lossless)]
 mod tests {
@@ -1342,6 +1641,148 @@ mod tests {
 
             // NULL handling
             let result = rs_vim_strnsave_up(std::ptr::null(), 5);
+            assert!(result.is_null());
+        }
+    }
+
+    #[test]
+    fn test_xstrnsave() {
+        unsafe {
+            // Basic copy with length limit
+            let src = CString::new("hello world").unwrap();
+            let result = rs_xstrnsave(src.as_ptr(), 5);
+            assert!(!result.is_null());
+            let result_str = std::ffi::CStr::from_ptr(result);
+            assert_eq!(result_str.to_str().unwrap(), "hello");
+            libc::free(result as *mut libc::c_void);
+
+            // Copy entire string
+            let src = CString::new("test").unwrap();
+            let result = rs_xstrnsave(src.as_ptr(), 4);
+            assert!(!result.is_null());
+            let result_str = std::ffi::CStr::from_ptr(result);
+            assert_eq!(result_str.to_str().unwrap(), "test");
+            libc::free(result as *mut libc::c_void);
+
+            // Zero length
+            let src = CString::new("hello").unwrap();
+            let result = rs_xstrnsave(src.as_ptr(), 0);
+            assert!(!result.is_null());
+            let result_str = std::ffi::CStr::from_ptr(result);
+            assert_eq!(result_str.to_str().unwrap(), "");
+            libc::free(result as *mut libc::c_void);
+
+            // NULL handling
+            let result = rs_xstrnsave(std::ptr::null(), 5);
+            assert!(result.is_null());
+        }
+    }
+
+    #[test]
+    fn test_strrep() {
+        unsafe {
+            // Basic replacement
+            let src = CString::new("hello world").unwrap();
+            let what = CString::new("world").unwrap();
+            let rep = CString::new("rust").unwrap();
+            let result = rs_strrep(src.as_ptr(), what.as_ptr(), rep.as_ptr());
+            assert!(!result.is_null());
+            let result_str = std::ffi::CStr::from_ptr(result);
+            assert_eq!(result_str.to_str().unwrap(), "hello rust");
+            libc::free(result as *mut libc::c_void);
+
+            // Multiple replacements
+            let src = CString::new("aaa bbb aaa").unwrap();
+            let what = CString::new("aaa").unwrap();
+            let rep = CString::new("X").unwrap();
+            let result = rs_strrep(src.as_ptr(), what.as_ptr(), rep.as_ptr());
+            assert!(!result.is_null());
+            let result_str = std::ffi::CStr::from_ptr(result);
+            assert_eq!(result_str.to_str().unwrap(), "X bbb X");
+            libc::free(result as *mut libc::c_void);
+
+            // Replace with longer string
+            let src = CString::new("ab ab").unwrap();
+            let what = CString::new("ab").unwrap();
+            let rep = CString::new("XYZ").unwrap();
+            let result = rs_strrep(src.as_ptr(), what.as_ptr(), rep.as_ptr());
+            assert!(!result.is_null());
+            let result_str = std::ffi::CStr::from_ptr(result);
+            assert_eq!(result_str.to_str().unwrap(), "XYZ XYZ");
+            libc::free(result as *mut libc::c_void);
+
+            // No match - returns NULL
+            let src = CString::new("hello").unwrap();
+            let what = CString::new("world").unwrap();
+            let rep = CString::new("X").unwrap();
+            let result = rs_strrep(src.as_ptr(), what.as_ptr(), rep.as_ptr());
+            assert!(result.is_null());
+
+            // Empty what - returns NULL
+            let src = CString::new("hello").unwrap();
+            let what = CString::new("").unwrap();
+            let rep = CString::new("X").unwrap();
+            let result = rs_strrep(src.as_ptr(), what.as_ptr(), rep.as_ptr());
+            assert!(result.is_null());
+
+            // NULL handling
+            let src = CString::new("hello").unwrap();
+            let what = CString::new("h").unwrap();
+            let rep = CString::new("X").unwrap();
+            assert!(rs_strrep(std::ptr::null(), what.as_ptr(), rep.as_ptr()).is_null());
+            assert!(rs_strrep(src.as_ptr(), std::ptr::null(), rep.as_ptr()).is_null());
+            assert!(rs_strrep(src.as_ptr(), what.as_ptr(), std::ptr::null()).is_null());
+        }
+    }
+
+    #[test]
+    fn test_vim_strnsave_unquoted() {
+        unsafe {
+            // Simple unquoted string (no quotes)
+            let src = CString::new("hello world").unwrap();
+            let result = rs_vim_strnsave_unquoted(src.as_ptr(), 11);
+            assert!(!result.is_null());
+            let result_str = std::ffi::CStr::from_ptr(result);
+            assert_eq!(result_str.to_str().unwrap(), "hello world");
+            libc::free(result as *mut libc::c_void);
+
+            // String with quotes - quotes removed
+            let src = b"hello\"world\"end\0";
+            let result = rs_vim_strnsave_unquoted(src.as_ptr() as *const c_char, 15);
+            assert!(!result.is_null());
+            let result_str = std::ffi::CStr::from_ptr(result);
+            // Quotes are stripped, content between quotes preserved
+            assert_eq!(result_str.to_str().unwrap(), "helloworldend");
+            libc::free(result as *mut libc::c_void);
+
+            // Escaped backslash inside quotes
+            let src = b"a\"b\\\\c\"d\0";
+            let result = rs_vim_strnsave_unquoted(src.as_ptr() as *const c_char, 9);
+            assert!(!result.is_null());
+            let result_str = std::ffi::CStr::from_ptr(result);
+            // Inside quotes, \\ becomes \
+            assert_eq!(result_str.to_str().unwrap(), "ab\\cd");
+            libc::free(result as *mut libc::c_void);
+
+            // Escaped quote inside quotes
+            let src = b"a\"b\\\"c\"d\0";
+            let result = rs_vim_strnsave_unquoted(src.as_ptr() as *const c_char, 9);
+            assert!(!result.is_null());
+            let result_str = std::ffi::CStr::from_ptr(result);
+            // Inside quotes, \" becomes "
+            assert_eq!(result_str.to_str().unwrap(), "ab\"cd");
+            libc::free(result as *mut libc::c_void);
+
+            // Empty string
+            let src = CString::new("").unwrap();
+            let result = rs_vim_strnsave_unquoted(src.as_ptr(), 0);
+            assert!(!result.is_null());
+            let result_str = std::ffi::CStr::from_ptr(result);
+            assert_eq!(result_str.to_str().unwrap(), "");
+            libc::free(result as *mut libc::c_void);
+
+            // NULL handling
+            let result = rs_vim_strnsave_unquoted(std::ptr::null(), 5);
             assert!(result.is_null());
         }
     }

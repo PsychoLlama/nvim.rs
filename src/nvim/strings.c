@@ -53,6 +53,12 @@ extern const char *rs_vim_strchr(const char *string, int c);
 extern char *rs_concat_str(const char *s1, const char *s2);
 extern char *rs_vim_strsave_up(const char *string);
 extern char *rs_vim_strnsave_up(const char *string, size_t len);
+extern char *rs_xstrnsave(const char *string, size_t len);
+extern char *rs_reverse_text(const char *s);
+extern char *rs_strrep(const char *src, const char *what, const char *rep);
+extern char *rs_vim_strsave_escaped(const char *string, const char *esc_chars);
+extern char *rs_vim_strsave_escaped_ext(const char *string, const char *esc_chars, char cc, int bsl);
+extern char *rs_vim_strnsave_unquoted(const char *string, size_t length);
 
 static const char e_cannot_mix_positional_and_non_positional_str[]
   = N_("E1500: Cannot mix positional and non-positional arguments: %s");
@@ -90,7 +96,7 @@ static const char typename_float[] = N_("float");
 char *xstrnsave(const char *string, size_t len)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL
 {
-  return strncpy(xmallocz(len), string, len);  // NOLINT(runtime/printf)
+  return rs_xstrnsave(string, len);
 }
 
 // Same as vim_strsave(), but any characters found in esc_chars are preceded
@@ -98,7 +104,7 @@ char *xstrnsave(const char *string, size_t len)
 char *vim_strsave_escaped(const char *string, const char *esc_chars)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL
 {
-  return vim_strsave_escaped_ext(string, esc_chars, '\\', false);
+  return rs_vim_strsave_escaped(string, esc_chars);
 }
 
 // Same as vim_strsave_escaped(), but when "bsl" is true also escape
@@ -107,40 +113,7 @@ char *vim_strsave_escaped(const char *string, const char *esc_chars)
 char *vim_strsave_escaped_ext(const char *string, const char *esc_chars, char cc, bool bsl)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_MALLOC FUNC_ATTR_NONNULL_ALL
 {
-  // First count the number of backslashes required.
-  // Then allocate the memory and insert them.
-  size_t length = 1;                    // count the trailing NUL
-  for (const char *p = string; *p; p++) {
-    const size_t l = (size_t)(utfc_ptr2len(p));
-    if (l > 1) {
-      length += l;                      // count a multibyte char
-      p += l - 1;
-      continue;
-    }
-    if (vim_strchr(esc_chars, (uint8_t)(*p)) != NULL || (bsl && rem_backslash(p))) {
-      length++;                         // count a backslash
-    }
-    length++;                           // count an ordinary char
-  }
-
-  char *escaped_string = xmalloc(length);
-  char *p2 = escaped_string;
-  for (const char *p = string; *p; p++) {
-    const size_t l = (size_t)(utfc_ptr2len(p));
-    if (l > 1) {
-      memcpy(p2, p, l);
-      p2 += l;
-      p += l - 1;                     // skip multibyte char
-      continue;
-    }
-    if (vim_strchr(esc_chars, (uint8_t)(*p)) != NULL || (bsl && rem_backslash(p))) {
-      *p2++ = cc;
-    }
-    *p2++ = *p;
-  }
-  *p2 = NUL;
-
-  return escaped_string;
+  return rs_vim_strsave_escaped_ext(string, esc_chars, cc, bsl ? 1 : 0);
 }
 
 /// Save a copy of an unquoted string
@@ -158,37 +131,7 @@ char *vim_strnsave_unquoted(const char *const string, const size_t length)
   FUNC_ATTR_MALLOC FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
   FUNC_ATTR_NONNULL_RET
 {
-#define ESCAPE_COND(p, inquote, string_end) \
-  (*(p) == '\\' && (inquote) && (p) + 1 < (string_end) && ((p)[1] == '\\' || (p)[1] == '"'))
-  size_t ret_length = 0;
-  bool inquote = false;
-  const char *const string_end = string + length;
-  for (const char *p = string; p < string_end; p++) {
-    if (*p == '"') {
-      inquote = !inquote;
-    } else if (ESCAPE_COND(p, inquote, string_end)) {
-      ret_length++;
-      p++;
-    } else {
-      ret_length++;
-    }
-  }
-
-  char *const ret = xmallocz(ret_length);
-  char *rp = ret;
-  inquote = false;
-  for (const char *p = string; p < string_end; p++) {
-    if (*p == '"') {
-      inquote = !inquote;
-    } else if (ESCAPE_COND(p, inquote, string_end)) {
-      *rp++ = *(++p);
-    } else {
-      *rp++ = *p;
-    }
-  }
-#undef ESCAPE_COND
-
-  return ret;
+  return rs_vim_strnsave_unquoted(string, length);
 }
 
 /// Escape "string" for use as a shell argument with system().
@@ -2321,16 +2264,7 @@ String arena_printf(Arena *arena, const char *fmt, ...)
 char *reverse_text(char *s)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_NONNULL_RET
 {
-  size_t len = strlen(s);
-  char *rev = xmalloc(len + 1);
-  for (size_t s_i = 0, rev_i = len; s_i < len; s_i++) {
-    const int mb_len = utfc_ptr2len(s + s_i);
-    rev_i -= (size_t)mb_len;
-    memmove(rev + rev_i, s + s_i, (size_t)mb_len);
-    s_i += (size_t)mb_len - 1;
-  }
-  rev[len] = NUL;
-  return rev;
+  return rs_reverse_text(s);
 }
 
 /// Replace all occurrences of "what" with "rep" in "src". If no replacement happens then NULL is
@@ -2343,36 +2277,7 @@ char *reverse_text(char *s)
 /// @return [allocated] Copy of the string.
 char *strrep(const char *src, const char *what, const char *rep)
 {
-  const char *pos = src;
-  size_t whatlen = strlen(what);
-
-  // Count occurrences
-  size_t count = 0;
-  while ((pos = strstr(pos, what)) != NULL) {
-    count++;
-    pos += whatlen;
-  }
-
-  if (count == 0) {
-    return NULL;
-  }
-
-  size_t replen = strlen(rep);
-  char *ret = xmalloc(strlen(src) + count * (replen - whatlen) + 1);
-  char *ptr = ret;
-  while ((pos = strstr(src, what)) != NULL) {
-    size_t idx = (size_t)(pos - src);
-    memcpy(ptr, src, idx);
-    ptr += idx;
-    STRCPY(ptr, rep);
-    ptr += replen;
-    src = pos + whatlen;
-  }
-
-  // Copy remaining
-  STRCPY(ptr, src);
-
-  return ret;
+  return rs_strrep(src, what, rep);
 }
 
 /// Implementation of "byteidx()" and "byteidxcomp()" functions
