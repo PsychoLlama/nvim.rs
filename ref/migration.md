@@ -7,7 +7,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | Crate        | Purpose                                            |
 | ------------ | -------------------------------------------------- |
 | api          | API types (Object, Dict, Array), type conversions  |
-| arabic       | Arabic combining char support                      |
+| arabic       | Arabic text shaping, combining char support        |
 | ascii        | ASCII character predicates                         |
 | autocmd      | Autocommand state, pattern parsing                 |
 | buffer       | Buffer type/state queries                          |
@@ -32,6 +32,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | indent       | Tab/indent size calculation                        |
 | insexpand    | CTRL-X completion mode checking                    |
 | keycodes     | Key modifier parsing                               |
+| linematch    | Line matching algorithm for diff alignment         |
 | lua          | Lua executor state, callback FFI                   |
 | mark         | Mark indices, position comparison                  |
 | math         | Floating-point classification, bit ops             |

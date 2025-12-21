@@ -44,6 +44,7 @@ pub use nvim_highlight::*;
 pub use nvim_indent::*;
 pub use nvim_insexpand::*;
 pub use nvim_keycodes::*;
+pub use nvim_linematch::*;
 pub use nvim_lua::*;
 pub use nvim_mark::*;
 pub use nvim_math::*;
