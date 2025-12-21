@@ -11,7 +11,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | ascii        | ASCII character predicates                         |
 | autocmd      | Autocommand state, pattern parsing                 |
 | buffer       | Buffer type/state queries                          |
-| charset      | Character classification, skip functions           |
+| charset      | Character classification, skip*, str2nr, case folding |
 | cmdhist      | History type conversion                            |
 | cmdline      | Command line state queries                         |
 | collections  | Data structures (garray, hashtab)                  |
@@ -47,7 +47,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | register     | Register name validation                           |
 | search       | Character search state                             |
 | spell        | Spell check utilities                              |
-| strings      | String comparison, case conversion                 |
+| strings      | String comparison, case conversion, escape utils   |
 | tui          | Terminal UI, terminfo formatting                   |
 | typval       | VimL typval_T type checking and value extraction   |
 | unpacker     | MessagePack unpacking                              |
