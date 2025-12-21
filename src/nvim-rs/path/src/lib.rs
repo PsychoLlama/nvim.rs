@@ -875,3 +875,196 @@ mod after_pathsep_tests {
         assert!(!after_pathsep(path, 3)); // After '\' - not a pathsep on Unix
     }
 }
+
+// ============================================================================
+// File name comparison functions
+// ============================================================================
+
+extern "C" {
+    /// Get the 'fileignorecase' option value.
+    fn nvim_get_p_fic() -> c_int;
+}
+
+/// Compare two file names, respecting 'fileignorecase'.
+///
+/// Handles '/' and '\\' correctly on Windows.
+///
+/// # Safety
+/// - `fname1` and `fname2` must be valid null-terminated C strings.
+///
+/// # Returns
+/// 0 if they are equal, non-zero otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn rs_path_fnamecmp(fname1: *const c_char, fname2: *const c_char) -> c_int {
+    if fname1.is_null() || fname2.is_null() {
+        if fname1.is_null() && fname2.is_null() {
+            return 0;
+        }
+        return if fname1.is_null() { -1 } else { 1 };
+    }
+
+    #[cfg(windows)]
+    {
+        // On Windows, use path_fnamencmp with max of both lengths
+        let len1 = {
+            let mut p = fname1;
+            let mut count = 0usize;
+            while *p != 0 {
+                p = p.add(1);
+                count += 1;
+            }
+            count
+        };
+        let len2 = {
+            let mut p = fname2;
+            let mut count = 0usize;
+            while *p != 0 {
+                p = p.add(1);
+                count += 1;
+            }
+            count
+        };
+        let max_len = if len1 > len2 { len1 } else { len2 };
+        rs_path_fnamencmp(fname1, fname2, max_len)
+    }
+
+    #[cfg(not(windows))]
+    {
+        // On Unix, use mb_strcmp_ic with p_fic
+        let fic = nvim_get_p_fic() != 0;
+        nvim_mbyte::rs_mb_strcmp_ic(fic, fname1, fname2)
+    }
+}
+
+/// Compare two file names up to `len` bytes, respecting 'fileignorecase'.
+///
+/// Handles '/' and '\\' correctly on Windows.
+///
+/// # Safety
+/// - `fname1` and `fname2` must be valid null-terminated C strings.
+///
+/// # Returns
+/// 0 if they are equal, non-zero otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn rs_path_fnamencmp(
+    fname1: *const c_char,
+    fname2: *const c_char,
+    len: usize,
+) -> c_int {
+    if fname1.is_null() || fname2.is_null() {
+        if fname1.is_null() && fname2.is_null() {
+            return 0;
+        }
+        return if fname1.is_null() { -1 } else { 1 };
+    }
+
+    let fic = nvim_get_p_fic() != 0;
+
+    #[cfg(windows)]
+    {
+        // On Windows, need to handle / and \ as equivalent
+        let mut c1: c_int = 0;
+        let mut c2: c_int = 0;
+        let mut p1 = fname1;
+        let mut p2 = fname2;
+        let mut remaining = len;
+
+        while remaining > 0 {
+            let slice1 = std::slice::from_raw_parts(p1 as *const u8, 6.min(remaining + 1));
+            let slice2 = std::slice::from_raw_parts(p2 as *const u8, 6.min(remaining + 1));
+            c1 = nvim_mbyte::utf_ptr2char(slice1);
+            c2 = nvim_mbyte::utf_ptr2char(slice2);
+
+            // Check for end of string or mismatch
+            let both_pathsep = (c1 == b'/' as i32 || c1 == b'\\' as i32)
+                && (c2 == b'/' as i32 || c2 == b'\\' as i32);
+
+            if c1 == 0 || c2 == 0 || !both_pathsep {
+                let mismatch = if fic {
+                    c1 != c2 && nvim_mbyte::utf_fold(c1) != nvim_mbyte::utf_fold(c2)
+                } else {
+                    c1 != c2
+                };
+                if mismatch {
+                    break;
+                }
+            }
+
+            let l1 = nvim_mbyte::utfc_ptr2len(slice1);
+            remaining = remaining.saturating_sub(l1);
+            p1 = p1.add(l1);
+            p2 = p2.add(nvim_mbyte::utfc_ptr2len(slice2));
+        }
+
+        if fic {
+            (nvim_mbyte::utf_fold(c1) - nvim_mbyte::utf_fold(c2)) as c_int
+        } else {
+            (c1 - c2) as c_int
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        // On Unix, use simple comparison
+        if fic {
+            nvim_mbyte::rs_mb_strnicmp(fname1, fname2, len)
+        } else {
+            // Use libc strncmp
+            libc::strncmp(fname1, fname2, len) as c_int
+        }
+    }
+}
+
+#[cfg(test)]
+mod fnamecmp_tests {
+    use super::*;
+    use std::ffi::CString;
+
+    #[test]
+    #[cfg(unix)]
+    fn test_path_fnamecmp_basic() {
+        unsafe {
+            let f1 = CString::new("/home/user/file.txt").unwrap();
+            let f2 = CString::new("/home/user/file.txt").unwrap();
+            // Same file - should be equal (0)
+            // Note: actual result depends on p_fic which we can't control in unit tests
+            let result = rs_path_fnamecmp(f1.as_ptr(), f2.as_ptr());
+            assert_eq!(result, 0);
+
+            // Different files
+            let f3 = CString::new("/home/user/other.txt").unwrap();
+            let result = rs_path_fnamecmp(f1.as_ptr(), f3.as_ptr());
+            assert_ne!(result, 0);
+        }
+    }
+
+    #[test]
+    fn test_path_fnamecmp_null() {
+        unsafe {
+            let f1 = CString::new("test.txt").unwrap();
+
+            // Both null - equal
+            assert_eq!(rs_path_fnamecmp(std::ptr::null(), std::ptr::null()), 0);
+
+            // One null - not equal
+            assert_ne!(rs_path_fnamecmp(f1.as_ptr(), std::ptr::null()), 0);
+            assert_ne!(rs_path_fnamecmp(std::ptr::null(), f1.as_ptr()), 0);
+        }
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_path_fnamencmp_basic() {
+        unsafe {
+            let f1 = CString::new("file.txt").unwrap();
+            let f2 = CString::new("file.txt").unwrap();
+            let f3 = CString::new("file.txT").unwrap();
+
+            // Same - should be equal
+            assert_eq!(rs_path_fnamencmp(f1.as_ptr(), f2.as_ptr(), 8), 0);
+
+            // Compare only first 4 chars "file" - should be equal
+            assert_eq!(rs_path_fnamencmp(f1.as_ptr(), f3.as_ptr(), 4), 0);
+        }
+    }
+}

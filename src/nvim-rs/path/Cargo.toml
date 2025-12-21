@@ -8,6 +8,7 @@ repository.workspace = true
 
 [dependencies]
 nvim-mbyte = { path = "../mbyte" }
+libc = "0.2"
 
 [lints]
 workspace = true

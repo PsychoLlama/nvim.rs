@@ -56,6 +56,8 @@ extern int rs_path_has_drive_letter(const char *p, size_t path_len);
 extern int rs_path_with_url(const char *fname);
 extern int rs_vim_isAbsName(const char *name);
 extern int rs_after_pathsep(const char *b, const char *p);
+extern int rs_path_fnamecmp(const char *fname1, const char *fname2);
+extern int rs_path_fnamencmp(const char *fname1, const char *fname2, size_t len);
 
 #include "path.c.generated.h"
 
@@ -314,13 +316,7 @@ bool dir_of_file_exists(char *fname)
 int path_fnamecmp(const char *fname1, const char *fname2)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef BACKSLASH_IN_FILENAME
-  const size_t len1 = strlen(fname1);
-  const size_t len2 = strlen(fname2);
-  return path_fnamencmp(fname1, fname2, MAX(len1, len2));
-#else
-  return mb_strcmp_ic((bool)p_fic, fname1, fname2);
-#endif
+  return rs_path_fnamecmp(fname1, fname2);
 }
 
 /// Compare two file names
@@ -335,31 +331,7 @@ int path_fnamecmp(const char *fname1, const char *fname2)
 int path_fnamencmp(const char *const fname1, const char *const fname2, size_t len)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-#ifdef BACKSLASH_IN_FILENAME
-  int c1 = NUL;
-  int c2 = NUL;
-
-  const char *p1 = fname1;
-  const char *p2 = fname2;
-  while (len > 0) {
-    c1 = utf_ptr2char(p1);
-    c2 = utf_ptr2char(p2);
-    if ((c1 == NUL || c2 == NUL
-         || (!((c1 == '/' || c1 == '\\') && (c2 == '\\' || c2 == '/'))))
-        && (p_fic ? (c1 != c2 && utf_fold(c1) != utf_fold(c2)) : c1 != c2)) {
-      break;
-    }
-    len -= (size_t)utfc_ptr2len(p1);
-    p1 += utfc_ptr2len(p1);
-    p2 += utfc_ptr2len(p2);
-  }
-  return p_fic ? utf_fold(c1) - utf_fold(c2) : c1 - c2;
-#else
-  if (p_fic) {
-    return mb_strnicmp(fname1, fname2, len);
-  }
-  return strncmp(fname1, fname2, len);
-#endif
+  return rs_path_fnamencmp(fname1, fname2, len);
 }
 
 /// Append fname2 to fname1

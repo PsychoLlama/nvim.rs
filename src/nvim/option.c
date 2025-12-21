@@ -139,6 +139,11 @@ const char *nvim_get_p_ffs(void)
   return p_ffs;
 }
 
+int nvim_get_p_fic(void)
+{
+  return p_fic;
+}
+
 static const char e_unknown_option[]
   = N_("E518: Unknown option");
 static const char e_not_allowed_in_modeline[]
