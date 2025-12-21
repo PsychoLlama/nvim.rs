@@ -31,6 +31,7 @@ nvim-event = { path = "event" }
 nvim-ex-docmd = { path = "ex_docmd" }
 nvim-ex-eval = { path = "ex_eval" }
 nvim-fileio = { path = "fileio" }
+nvim-fuzzy = { path = "fuzzy" }
 nvim-getchar = { path = "getchar" }
 nvim-grid = { path = "grid" }
 nvim-help = { path = "help" }

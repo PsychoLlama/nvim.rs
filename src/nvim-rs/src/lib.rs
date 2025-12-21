@@ -36,6 +36,7 @@ pub use nvim_event::*;
 pub use nvim_ex_docmd::*;
 pub use nvim_ex_eval::*;
 pub use nvim_fileio::*;
+pub use nvim_fuzzy::*;
 pub use nvim_getchar::*;
 pub use nvim_grid::*;
 pub use nvim_help::*;

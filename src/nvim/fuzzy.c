@@ -24,8 +24,6 @@
 // THE SOFTWARE.
 
 #include <assert.h>
-#include <limits.h>
-#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -47,11 +45,7 @@
 #include "nvim/memory.h"
 #include "nvim/message.h"
 
-typedef double score_t;
-
-#define SCORE_MAX INFINITY
-#define SCORE_MIN (-INFINITY)
-#define SCORE_SCALE 1000
+// Note: score_t and related constants moved to Rust (src/nvim-rs/fuzzy/)
 
 typedef struct {
   int idx;  ///< used for stable sort
@@ -64,9 +58,11 @@ typedef struct {
   int startpos;
 } fuzzyItem_T;
 
-typedef struct match_struct match_struct;
-
 #include "fuzzy.c.generated.h"
+
+// Rust FFI declaration
+extern bool rs_fuzzy_match(const char *str, const char *pat, bool matchseq,
+                           int *outScore, uint32_t *matches, int maxMatches);
 
 /// fuzzy_match()
 ///
@@ -76,73 +72,7 @@ bool fuzzy_match(char *const str, const char *const pat_arg, const bool matchseq
                  int *const outScore, uint32_t *const matches, const int maxMatches)
   FUNC_ATTR_NONNULL_ALL
 {
-  bool complete = false;
-  int numMatches = 0;
-
-  *outScore = 0;
-
-  char *const save_pat = xstrdup(pat_arg);
-  char *pat = save_pat;
-  char *p = pat;
-
-  // Try matching each word in "pat_arg" in "str"
-  while (true) {
-    if (matchseq) {
-      complete = true;
-    } else {
-      // Extract one word from the pattern (separated by space)
-      p = skipwhite(p);
-      if (*p == NUL) {
-        break;
-      }
-      pat = p;
-      while (*p != NUL && !ascii_iswhite(utf_ptr2char(p))) {
-        MB_PTR_ADV(p);
-      }
-      if (*p == NUL) {  // processed all the words
-        complete = true;
-      }
-      *p = NUL;
-    }
-
-    int score = FUZZY_SCORE_NONE;
-    if (has_match(pat, str)) {
-      score_t fzy_score = match_positions(pat, str, matches + numMatches);
-      score = (fzy_score == (score_t)SCORE_MIN
-               ? INT_MIN + 1
-               : (fzy_score == (score_t)SCORE_MAX
-                  ? INT_MAX
-                  : (fzy_score < 0
-                     ? (int)ceil(fzy_score * SCORE_SCALE - 0.5)
-                     : (int)floor(fzy_score * SCORE_SCALE + 0.5))));
-    }
-
-    if (score == FUZZY_SCORE_NONE) {
-      numMatches = 0;
-      *outScore = FUZZY_SCORE_NONE;
-      break;
-    }
-
-    if (score > 0 && *outScore > INT_MAX - score) {
-      *outScore = INT_MAX;
-    } else if (score < 0 && *outScore < INT_MIN + 1 - score) {
-      *outScore = INT_MIN + 1;
-    } else {
-      *outScore += score;
-    }
-
-    numMatches += mb_charlen(pat);
-
-    if (complete || numMatches >= maxMatches) {
-      break;
-    }
-
-    // try matching the next word
-    p++;
-  }
-
-  xfree(save_pat);
-  return numMatches != 0;
+  return rs_fuzzy_match(str, pat_arg, matchseq, outScore, matches, maxMatches);
 }
 
 /// Sort the fuzzy matches in the descending order of the match score.
@@ -716,226 +646,6 @@ theend:
   xfree(fuzmatch);
 }
 
-/// Fuzzy match algorithm ported from https://github.com/jhawthorn/fzy.
-/// This implementation extends the original by supporting multibyte characters.
-
-#define MATCH_MAX_LEN FUZZY_MATCH_MAX_LEN
-
-#define SCORE_GAP_LEADING -0.005
-#define SCORE_GAP_TRAILING -0.005
-#define SCORE_GAP_INNER -0.01
-#define SCORE_MATCH_CONSECUTIVE 1.0
-#define SCORE_MATCH_SLASH 0.9
-#define SCORE_MATCH_WORD 0.8
-#define SCORE_MATCH_CAPITAL 0.7
-#define SCORE_MATCH_DOT 0.6
-
-static int has_match(const char *const needle, const char *const haystack)
-{
-  if (!needle || !haystack || !*needle) {
-    return FAIL;
-  }
-
-  const char *n_ptr = needle;
-  const char *h_ptr = haystack;
-
-  while (*n_ptr) {
-    const int n_char = utf_ptr2char(n_ptr);
-    bool found = false;
-
-    while (*h_ptr) {
-      const int h_char = utf_ptr2char(h_ptr);
-      if (n_char == h_char || mb_toupper(n_char) == h_char) {
-        found = true;
-        h_ptr += utfc_ptr2len(h_ptr);
-        break;
-      }
-      h_ptr += utfc_ptr2len(h_ptr);
-    }
-
-    if (!found) {
-      return FAIL;
-    }
-
-    n_ptr += utfc_ptr2len(n_ptr);
-  }
-
-  return OK;
-}
-
-struct match_struct {
-  int needle_len;
-  int haystack_len;
-  int lower_needle[MATCH_MAX_LEN];    ///< stores codepoints
-  int lower_haystack[MATCH_MAX_LEN];  ///< stores codepoints
-  score_t match_bonus[MATCH_MAX_LEN];
-};
-
-#define IS_WORD_SEP(c) ((c) == '-' || (c) == '_' || (c) == ' ')
-#define IS_PATH_SEP(c) ((c) == '/')
-#define IS_DOT(c)      ((c) == '.')
-
-static score_t compute_bonus_codepoint(int last_c, int c)
-{
-  if (ASCII_ISALNUM(c) || vim_iswordc(c)) {
-    if (IS_PATH_SEP(last_c)) {
-      return SCORE_MATCH_SLASH;
-    }
-    if (IS_WORD_SEP(last_c)) {
-      return SCORE_MATCH_WORD;
-    }
-    if (IS_DOT(last_c)) {
-      return SCORE_MATCH_DOT;
-    }
-    if (mb_isupper(c) && mb_islower(last_c)) {
-      return SCORE_MATCH_CAPITAL;
-    }
-  }
-  return 0;
-}
-
-static void setup_match_struct(match_struct *const match, const char *const needle,
-                               const char *const haystack)
-{
-  int i = 0;
-  const char *p = needle;
-  while (*p != NUL && i < MATCH_MAX_LEN) {
-    const int c = utf_ptr2char(p);
-    match->lower_needle[i++] = mb_tolower(c);
-    MB_PTR_ADV(p);
-  }
-  match->needle_len = i;
-
-  i = 0;
-  p = haystack;
-  int prev_c = '/';
-  while (*p != NUL && i < MATCH_MAX_LEN) {
-    const int c = utf_ptr2char(p);
-    match->lower_haystack[i] = mb_tolower(c);
-    match->match_bonus[i] = compute_bonus_codepoint(prev_c, c);
-    prev_c = c;
-    MB_PTR_ADV(p);
-    i++;
-  }
-  match->haystack_len = i;
-}
-
-static inline void match_row(const match_struct *match, int row, score_t *curr_D, score_t *curr_M,
-                             const score_t *last_D, const score_t *last_M)
-{
-  int n = match->needle_len;
-  int m = match->haystack_len;
-  int i = row;
-
-  const int *lower_needle = match->lower_needle;
-  const int *lower_haystack = match->lower_haystack;
-  const score_t *match_bonus = match->match_bonus;
-
-  score_t prev_score = (score_t)SCORE_MIN;
-  score_t gap_score = i == n - 1 ? SCORE_GAP_TRAILING : SCORE_GAP_INNER;
-
-  // These will not be used with this value, but not all compilers see it
-  score_t prev_M = (score_t)SCORE_MIN, prev_D = (score_t)SCORE_MIN;
-
-  for (int j = 0; j < m; j++) {
-    if (lower_needle[i] == lower_haystack[j]) {
-      score_t score = (score_t)SCORE_MIN;
-      if (!i) {
-        score = (j * SCORE_GAP_LEADING) + match_bonus[j];
-      } else if (j) {  // i > 0 && j > 0
-        score = MAX(prev_M + match_bonus[j],
-                    // consecutive match, doesn't stack with match_bonus
-                    prev_D + SCORE_MATCH_CONSECUTIVE);
-      }
-      prev_D = last_D[j];
-      prev_M = last_M[j];
-      curr_D[j] = score;
-      curr_M[j] = prev_score = MAX(score, prev_score + gap_score);
-    } else {
-      prev_D = last_D[j];
-      prev_M = last_M[j];
-      curr_D[j] = (score_t)SCORE_MIN;
-      curr_M[j] = prev_score = prev_score + gap_score;
-    }
-  }
-}
-
-static score_t match_positions(const char *const needle, const char *const haystack,
-                               uint32_t *const positions)
-{
-  if (!needle || !haystack || !*needle) {
-    return (score_t)SCORE_MIN;
-  }
-
-  match_struct match;
-  setup_match_struct(&match, needle, haystack);
-
-  int n = match.needle_len;
-  int m = match.haystack_len;
-
-  if (m > MATCH_MAX_LEN || n > m) {
-    // Unreasonably large candidate: return no score
-    // If it is a valid match it will still be returned, it will
-    // just be ranked below any reasonably sized candidates
-    return (score_t)SCORE_MIN;
-  } else if (n == m) {
-    // Since this method can only be called with a haystack which
-    // matches needle. If the lengths of the strings are equal the
-    // strings themselves must also be equal (ignoring case).
-    if (positions) {
-      for (int i = 0; i < n; i++) {
-        positions[i] = (uint32_t)i;
-      }
-    }
-    return (score_t)SCORE_MAX;
-  }
-
-  // ensure n * MATCH_MAX_LEN * 2 won't overflow
-  if ((size_t)n > (SIZE_MAX / sizeof(score_t)) / MATCH_MAX_LEN / 2) {
-    return (score_t)SCORE_MIN;
-  }
-
-  // Allocate for both D and M matrices in one contiguous block
-  score_t *block = (score_t *)xmalloc(sizeof(score_t) * MATCH_MAX_LEN * (size_t)n * 2);
-
-  // D[][] Stores the best score for this position ending with a match.
-  // M[][] Stores the best possible score at this position.
-  score_t(*D)[MATCH_MAX_LEN] = (score_t(*)[MATCH_MAX_LEN])(block);
-  score_t(*M)[MATCH_MAX_LEN] = (score_t(*)[MATCH_MAX_LEN])(block
-                                                           + MATCH_MAX_LEN * (size_t)n);
-
-  match_row(&match, 0, D[0], M[0], D[0], M[0]);
-  for (int i = 1; i < n; i++) {
-    match_row(&match, i, D[i], M[i], D[i - 1], M[i - 1]);
-  }
-
-  // backtrace to find the positions of optimal matching
-  if (positions) {
-    int match_required = 0;
-    for (int i = n - 1, j = m - 1; i >= 0; i--) {
-      for (; j >= 0; j--) {
-        // There may be multiple paths which result in
-        // the optimal weight.
-        //
-        // For simplicity, we will pick the first one
-        // we encounter, the latest in the candidate
-        // string.
-        if (D[i][j] != (score_t)SCORE_MIN
-            && (match_required || D[i][j] == M[i][j])) {
-          // If this score was determined using
-          // SCORE_MATCH_CONSECUTIVE, the
-          // previous character MUST be a match
-          match_required = i && j
-                           && M[i][j] == D[i - 1][j - 1] + SCORE_MATCH_CONSECUTIVE;
-          positions[i] = (uint32_t)(j--);
-          break;
-        }
-      }
-    }
-  }
-
-  score_t result = M[n - 1][m - 1];
-
-  xfree(block);
-  return result;
-}
+// Note: The fuzzy matching algorithm implementation has been moved to Rust.
+// See src/nvim-rs/fuzzy/ for the implementation.
+// The algorithm is ported from https://github.com/jhawthorn/fzy.
