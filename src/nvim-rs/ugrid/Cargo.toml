@@ -1,0 +1,17 @@
+[package]
+name = "nvim-ugrid"
+description = "Unicode grid (UGrid) management for Neovim TUI"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+libc = "0.2"
+nvim-memory = { path = "../memory" }

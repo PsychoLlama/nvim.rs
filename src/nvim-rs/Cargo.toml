@@ -60,6 +60,7 @@ nvim-window = { path = "window" }
 nvim-unpacker = { path = "unpacker" }
 nvim-tui = { path = "tui" }
 nvim-typval = { path = "typval" }
+nvim-ugrid = { path = "ugrid" }
 
 [build-dependencies]
 cbindgen = "0.27"
