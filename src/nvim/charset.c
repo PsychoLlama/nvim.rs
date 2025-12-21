@@ -77,6 +77,7 @@ extern int rs_vim_isfilec_or_wc(int c);
 extern void rs_vim_str2nr(const char *start, int *prep, int *len, int what,
                           varnumber_T *nptr, uvarnumber_T *unptr, int maxlen,
                           bool strict, bool *overflow);
+extern void rs_transchar_nonprint(char *charbuf, int c, bool use_uhex, int fileformat);
 
 static bool chartab_initialized = false;
 
@@ -624,26 +625,9 @@ char *transchar_byte_buf(const buf_T *buf, const int c)
 ///                `:h NL-used-for-NUL`.
 void transchar_nonprint(const buf_T *buf, char *charbuf, int c)
 {
-  if (c == NL) {
-    // we use newline in place of a NUL
-    c = NUL;
-  } else if (buf != NULL && c == CAR && get_fileformat(buf) == EOL_MAC) {
-    // we use CR in place of  NL in this case
-    c = NL;
-  }
-  assert(c <= 0xff);
-
-  if (dy_flags & kOptDyFlagUhex || c > 0x7f) {
-    // 'display' has "uhex"
-    transchar_hex(charbuf, c);
-  } else {
-    // 0x00 - 0x1f and 0x7f
-    charbuf[0] = '^';
-    // DEL displayed as ^?
-    charbuf[1] = (char)(uint8_t)(c ^ 0x40);
-
-    charbuf[2] = NUL;
-  }
+  bool use_uhex = (dy_flags & kOptDyFlagUhex) != 0;
+  int fileformat = (buf != NULL) ? get_fileformat(buf) : -1;
+  rs_transchar_nonprint(charbuf, c, use_uhex, fileformat);
 }
 
 /// Convert a non-printable character to hex C string like "<FFFF>"

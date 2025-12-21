@@ -388,6 +388,64 @@ pub unsafe extern "C" fn rs_transchar_hex(buf: *mut c_char, c: c_int) -> usize {
     i
 }
 
+// Constants for line ending formats (used by transchar_nonprint)
+#[allow(dead_code)]
+const EOL_UNIX: c_int = 0; // NL
+#[allow(dead_code)]
+const EOL_DOS: c_int = 1; // CR NL
+const EOL_MAC: c_int = 2; // CR
+
+// ASCII constants
+const NL: u8 = 0x0A; // newline '\n'
+const CAR: u8 = 0x0D; // carriage return '\r'
+const NUL: u8 = 0x00; // null byte
+
+/// Convert non-printable characters to 2..4 printable ones
+///
+/// Does not work for multi-byte characters, c must be <= 255.
+///
+/// # Arguments
+/// * `charbuf` - Buffer to store result in, must be able to hold at least 5 bytes
+/// * `c` - Character to convert. NL is assumed to be NUL according to `:h NL-used-for-NUL`.
+/// * `use_uhex` - Whether to use hex format (dy_flags & kOptDyFlagUhex)
+/// * `fileformat` - File format (EOL_UNIX=0, EOL_DOS=1, EOL_MAC=2), or -1 if buf is NULL
+///
+/// # Safety
+/// The buffer must be valid and have at least 5 bytes of space.
+#[no_mangle]
+pub unsafe extern "C" fn rs_transchar_nonprint(
+    charbuf: *mut c_char,
+    mut c: c_int,
+    use_uhex: bool,
+    fileformat: c_int,
+) {
+    if charbuf.is_null() {
+        return;
+    }
+
+    // Handle newline/carriage return conversions based on context
+    if c == NL as c_int {
+        // we use newline in place of a NUL
+        c = NUL as c_int;
+    } else if c == CAR as c_int && fileformat == EOL_MAC {
+        // we use CR in place of NL in MAC format
+        c = NL as c_int;
+    }
+
+    debug_assert!(c <= 0xff);
+
+    if use_uhex || c > 0x7f {
+        // 'display' has "uhex" or high-bit character
+        rs_transchar_hex(charbuf, c);
+    } else {
+        // 0x00 - 0x1f and 0x7f
+        *charbuf = b'^' as c_char;
+        // DEL (0x7f) displayed as ^?, other control chars as ^@ through ^_
+        *charbuf.add(1) = (c ^ 0x40) as c_char;
+        *charbuf.add(2) = 0; // NUL terminator
+    }
+}
+
 // ============================================================================
 // Character classification functions (using g_chartab)
 // ============================================================================
@@ -2109,6 +2167,58 @@ mod tests {
 
             // Null buffer returns 0
             assert_eq!(rs_transchar_hex(std::ptr::null_mut(), 0x42), 0);
+        }
+    }
+
+    #[test]
+    fn test_transchar_nonprint() {
+        unsafe {
+            let mut buf = [0i8; 16];
+
+            // NUL (0x00) -> ^@ without uhex
+            rs_transchar_nonprint(buf.as_mut_ptr(), 0x00, false, EOL_UNIX);
+            assert_eq!(&buf[..3], [b'^' as i8, b'@' as i8, 0]);
+
+            // NL (0x0A) is converted to NUL first, then displayed as ^@
+            rs_transchar_nonprint(buf.as_mut_ptr(), 0x0A, false, EOL_UNIX);
+            assert_eq!(&buf[..3], [b'^' as i8, b'@' as i8, 0]);
+
+            // TAB (0x09) -> ^I
+            rs_transchar_nonprint(buf.as_mut_ptr(), 0x09, false, EOL_UNIX);
+            assert_eq!(&buf[..3], [b'^' as i8, b'I' as i8, 0]);
+
+            // DEL (0x7F) -> ^?
+            rs_transchar_nonprint(buf.as_mut_ptr(), 0x7F, false, EOL_UNIX);
+            assert_eq!(&buf[..3], [b'^' as i8, b'?' as i8, 0]);
+
+            // ESC (0x1B) -> ^[
+            rs_transchar_nonprint(buf.as_mut_ptr(), 0x1B, false, EOL_UNIX);
+            assert_eq!(&buf[..3], [b'^' as i8, b'[' as i8, 0]);
+
+            // High-bit character (0x80) uses hex format even without uhex
+            rs_transchar_nonprint(buf.as_mut_ptr(), 0x80, false, EOL_UNIX);
+            assert_eq!(
+                &buf[..5],
+                [b'<' as i8, b'8' as i8, b'0' as i8, b'>' as i8, 0]
+            );
+
+            // With uhex=true, control chars use hex format
+            rs_transchar_nonprint(buf.as_mut_ptr(), 0x00, true, EOL_UNIX);
+            assert_eq!(
+                &buf[..5],
+                [b'<' as i8, b'0' as i8, b'0' as i8, b'>' as i8, 0]
+            );
+
+            // CR (0x0D) in MAC format is converted to NL first, then displayed as ^J
+            rs_transchar_nonprint(buf.as_mut_ptr(), 0x0D, false, EOL_MAC);
+            assert_eq!(&buf[..3], [b'^' as i8, b'J' as i8, 0]);
+
+            // CR (0x0D) in UNIX format is displayed as ^M (no conversion)
+            rs_transchar_nonprint(buf.as_mut_ptr(), 0x0D, false, EOL_UNIX);
+            assert_eq!(&buf[..3], [b'^' as i8, b'M' as i8, 0]);
+
+            // Null buffer should not crash
+            rs_transchar_nonprint(std::ptr::null_mut(), 0x00, false, EOL_UNIX);
         }
     }
 
