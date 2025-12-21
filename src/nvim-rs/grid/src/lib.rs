@@ -644,15 +644,6 @@ extern "C" {
 
     // hl_combine_attr from highlight module
     fn rs_hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int;
-
-    // Arabic shaping function
-    fn nvim_arabic_shape(
-        c: c_int,
-        c1p: *mut c_int,
-        prev_c: c_int,
-        prev_c1: c_int,
-        next_c: c_int,
-    ) -> c_int;
 }
 
 /// Put a single schar at a column position.
@@ -1451,7 +1442,7 @@ pub unsafe extern "C" fn rs_line_do_arabic_shape(buf: *mut ScharT, cols: c_int) 
         }
 
         let mut c1new = c1;
-        let c0new = nvim_arabic_shape(c0, &mut c1new, c0next, c1next, c0prev);
+        let c0new = nvim_arabic::rs_arabic_shape(c0, &mut c1new, c0prev, 0, c0next);
 
         if c0new == c0 && c1new == c1 {
             // Unchanged, skip to next
