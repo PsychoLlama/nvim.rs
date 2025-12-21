@@ -13,6 +13,8 @@
 
 Migration documentation: `ref/migration.md` (crate structure and remaining work)
 
+**Keep `ref/migration.md` updated**: When adding a new Rust crate, add it to the crate table.
+
 ## Build System
 
 - Rust code: `src/nvim-rs/` workspace with per-domain crates

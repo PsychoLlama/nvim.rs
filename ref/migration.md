@@ -24,6 +24,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | ex_docmd     | Ex command parsing helpers                         |
 | ex_eval      | Exception state checking                           |
 | fileio       | File time comparison                               |
+| fuzzy        | Fuzzy matching algorithm (fzy-based)               |
 | getchar      | Typeahead buffer state                             |
 | grid         | Screen character (schar_T) operations              |
 | help         | Help tag heuristics                                |
