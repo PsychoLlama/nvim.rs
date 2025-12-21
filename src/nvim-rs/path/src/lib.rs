@@ -1357,6 +1357,138 @@ pub unsafe extern "C" fn rs_path_has_exp_wildcard(p: *const c_char) -> c_int {
     0
 }
 
+// ============================================================================
+// pathcmp - Compare paths with separator awareness
+// ============================================================================
+
+/// Compare path "p" to "q".
+///
+/// If `maxlen` >= 0, compare at most `maxlen` bytes.
+/// Return value like strcmp(p, q), but consider path separators.
+///
+/// Key behaviors:
+/// - Path separators are considered "less than" any other character
+/// - On Windows, '/' and '\\' are treated as equivalent
+/// - If `fic` is true, comparison is case-insensitive using utf_fold
+/// - A trailing slash is ignored (unless it would be "//" or ":/")
+///
+/// # Safety
+/// - `p` and `q` must be valid null-terminated C strings.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pathcmp(
+    path1: *const c_char,
+    path2: *const c_char,
+    maxlen: c_int,
+) -> c_int {
+    if path1.is_null() || path2.is_null() {
+        if path1.is_null() && path2.is_null() {
+            return 0;
+        }
+        return if path1.is_null() { -1 } else { 1 };
+    }
+
+    let fic = nvim_get_p_fic() != 0;
+    let mut idx1: usize = 0;
+    let mut idx2: usize = 0;
+    let mut shorter_path: *const c_char = std::ptr::null();
+    let mut shorter_offset: usize = 0;
+
+    loop {
+        // Check maxlen condition
+        if maxlen >= 0 && (idx1 >= maxlen as usize || idx2 >= maxlen as usize) {
+            break;
+        }
+
+        let slice1 = std::slice::from_raw_parts(path1.add(idx1) as *const u8, 8);
+        let slice2 = std::slice::from_raw_parts(path2.add(idx2) as *const u8, 8);
+        let char1 = nvim_mbyte::utf_ptr2char(slice1);
+        let char2 = nvim_mbyte::utf_ptr2char(slice2);
+
+        // End of path1: check if path2 also ends or just has a slash
+        if char1 == 0 {
+            if char2 == 0 {
+                // full match
+                return 0;
+            }
+            shorter_path = path2;
+            shorter_offset = idx2;
+            break;
+        }
+
+        // End of path2: check if path1 just has a slash
+        if char2 == 0 {
+            shorter_path = path1;
+            shorter_offset = idx1;
+            break;
+        }
+
+        // Check for character match, considering case and path separators
+        #[cfg(windows)]
+        let both_pathsep = (char1 == b'/' as i32 || char1 == b'\\' as i32)
+            && (char2 == b'/' as i32 || char2 == b'\\' as i32);
+        #[cfg(not(windows))]
+        let both_pathsep = false;
+
+        let chars_match = if fic {
+            char1 == char2 || nvim_mbyte::utf_fold(char1) == nvim_mbyte::utf_fold(char2)
+        } else {
+            char1 == char2
+        };
+
+        if !chars_match && !both_pathsep {
+            // Characters don't match
+            if rs_vim_ispathsep(char1) != 0 {
+                return -1;
+            }
+            if rs_vim_ispathsep(char2) != 0 {
+                return 1;
+            }
+            return if fic {
+                nvim_mbyte::utf_fold(char1) - nvim_mbyte::utf_fold(char2)
+            } else {
+                char1 - char2
+            };
+        }
+
+        // Advance pointers
+        idx1 += nvim_mbyte::utfc_ptr2len(slice1);
+        idx2 += nvim_mbyte::utfc_ptr2len(slice2);
+    }
+
+    // idx1 or idx2 ran into "maxlen" without finding a difference
+    if shorter_path.is_null() {
+        return 0;
+    }
+
+    // Check for trailing slash case
+    let slice_s = std::slice::from_raw_parts(shorter_path.add(shorter_offset) as *const u8, 8);
+    let trail_char = nvim_mbyte::utf_ptr2char(slice_s);
+    let char_len = nvim_mbyte::utfc_ptr2len(slice_s);
+    let slice_s2 =
+        std::slice::from_raw_parts(shorter_path.add(shorter_offset + char_len) as *const u8, 8);
+    let next_char = nvim_mbyte::utf_ptr2char(slice_s2);
+
+    // Ignore a trailing slash, but not "//" or ":/"
+    #[cfg(windows)]
+    let is_trailing_sep = trail_char == b'/' as i32 || trail_char == b'\\' as i32;
+    #[cfg(not(windows))]
+    let is_trailing_sep = trail_char == b'/' as i32;
+
+    if next_char == 0
+        && shorter_offset > 0
+        && rs_after_pathsep(shorter_path, shorter_path.add(shorter_offset)) == 0
+        && is_trailing_sep
+    {
+        return 0; // match with trailing slash
+    }
+
+    if shorter_path == path2 {
+        -1 // no match
+    } else {
+        1
+    }
+}
+
 #[cfg(test)]
 mod invocation_path_tail_tests {
     use super::*;

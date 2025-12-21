@@ -64,6 +64,7 @@ extern const char *rs_path_tail_with_sep(const char *fname);
 extern const char *rs_invocation_path_tail(const char *invocation, size_t *len);
 extern int rs_path_has_wildcard(const char *p);
 extern int rs_path_has_exp_wildcard(const char *p);
+extern int rs_pathcmp(const char *p, const char *q, int maxlen);
 
 #include "path.c.generated.h"
 
@@ -1792,71 +1793,7 @@ bool same_directory(char *f1, char *f2)
 // See also `path_full_compare`.
 int pathcmp(const char *p, const char *q, int maxlen)
 {
-  int i, j;
-  const char *s = NULL;
-
-  for (i = 0, j = 0; maxlen < 0 || (i < maxlen && j < maxlen);) {
-    int c1 = utf_ptr2char(p + i);
-    int c2 = utf_ptr2char(q + j);
-
-    // End of "p": check if "q" also ends or just has a slash.
-    if (c1 == NUL) {
-      if (c2 == NUL) {      // full match
-        return 0;
-      }
-      s = q;
-      i = j;
-      break;
-    }
-
-    // End of "q": check if "p" just has a slash.
-    if (c2 == NUL) {
-      s = p;
-      break;
-    }
-
-    if ((p_fic ? mb_toupper(c1) != mb_toupper(c2) : c1 != c2)
-#ifdef BACKSLASH_IN_FILENAME
-        // consider '/' and '\\' to be equal
-        && !((c1 == '/' && c2 == '\\')
-             || (c1 == '\\' && c2 == '/'))
-#endif
-        ) {
-      if (vim_ispathsep(c1)) {
-        return -1;
-      }
-      if (vim_ispathsep(c2)) {
-        return 1;
-      }
-      return p_fic ? mb_toupper(c1) - mb_toupper(c2)
-                   : c1 - c2;  // no match
-    }
-
-    i += utfc_ptr2len(p + i);
-    j += utfc_ptr2len(q + j);
-  }
-  if (s == NULL) {  // "i" or "j" ran into "maxlen"
-    return 0;
-  }
-
-  int c1 = utf_ptr2char(s + i);
-  int c2 = utf_ptr2char(s + i + utfc_ptr2len(s + i));
-  // ignore a trailing slash, but not "//" or ":/"
-  if (c2 == NUL
-      && i > 0
-      && !after_pathsep(s, s + i)
-#ifdef BACKSLASH_IN_FILENAME
-      && (c1 == '/' || c1 == '\\')
-#else
-      && c1 == '/'
-#endif
-      ) {
-    return 0;       // match with trailing slash
-  }
-  if (s == q) {
-    return -1;      // no match
-  }
-  return 1;
+  return rs_pathcmp(p, q, maxlen);
 }
 
 /// Try to find a shortname by comparing the fullname with the current
