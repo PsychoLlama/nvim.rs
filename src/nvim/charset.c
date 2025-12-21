@@ -78,6 +78,8 @@ extern void rs_vim_str2nr(const char *start, int *prep, int *len, int what,
                           varnumber_T *nptr, uvarnumber_T *unptr, int maxlen,
                           bool strict, bool *overflow);
 extern void rs_transchar_nonprint(char *charbuf, int c, bool use_uhex, int fileformat);
+extern char *rs_str_foldcase(const char *str, int orglen, char *buf, int buflen,
+                             int (*tolower_fn)(int));
 
 static bool chartab_initialized = false;
 
@@ -460,84 +462,7 @@ size_t kv_transstr(StringBuilder *str, const char *const s, bool untab)
 char *str_foldcase(char *str, int orglen, char *buf, int buflen)
   FUNC_ATTR_NONNULL_RET
 {
-  garray_T ga;
-  int len = orglen;
-
-#define GA_CHAR(i) ((char *)ga.ga_data)[i]
-#define GA_PTR(i) ((char *)ga.ga_data + (i))
-#define STR_CHAR(i) (buf == NULL ? GA_CHAR(i) : buf[i])
-#define STR_PTR(i) (buf == NULL ? GA_PTR(i) : buf + (i))
-
-  // Copy "str" into "buf" or allocated memory, unmodified.
-  if (buf == NULL) {
-    ga_init(&ga, 1, 10);
-
-    ga_grow(&ga, len + 1);
-    memmove(ga.ga_data, str, (size_t)len);
-    ga.ga_len = len;
-  } else {
-    if (len >= buflen) {
-      // Ugly!
-      len = buflen - 1;
-    }
-    memmove(buf, str, (size_t)len);
-  }
-
-  if (buf == NULL) {
-    GA_CHAR(len) = NUL;
-  } else {
-    buf[len] = NUL;
-  }
-
-  // Make each character lower case.
-  int i = 0;
-  while (STR_CHAR(i) != NUL) {
-    int c = utf_ptr2char(STR_PTR(i));
-    int olen = utf_ptr2len(STR_PTR(i));
-    int lc = mb_tolower(c);
-
-    // Only replace the character when it is not an invalid
-    // sequence (ASCII character or more than one byte) and
-    // mb_tolower() doesn't return the original character.
-    if (((c < 0x80) || (olen > 1)) && (c != lc)) {
-      int nlen = utf_char2len(lc);
-
-      // If the byte length changes need to shift the following
-      // characters forward or backward.
-      if (olen != nlen) {
-        if (nlen > olen) {
-          if (buf == NULL) {
-            ga_grow(&ga, nlen - olen + 1);
-          } else {
-            if (len + nlen - olen >= buflen) {
-              // out of memory, keep old char
-              lc = c;
-              nlen = olen;
-            }
-          }
-        }
-
-        if (olen != nlen) {
-          if (buf == NULL) {
-            STRMOVE(GA_PTR(i) + nlen, GA_PTR(i) + olen);
-            ga.ga_len += nlen - olen;
-          } else {
-            STRMOVE(buf + i + nlen, buf + i + olen);
-            len += nlen - olen;
-          }
-        }
-      }
-      utf_char2bytes(lc, STR_PTR(i));
-    }
-
-    // skip to next multi-byte char
-    i += utfc_ptr2len(STR_PTR(i));
-  }
-
-  if (buf == NULL) {
-    return ga.ga_data;
-  }
-  return buf;
+  return rs_str_foldcase(str, orglen, buf, buflen, mb_tolower);
 }
 
 // Catch 22: g_chartab[] can't be initialized before the options are

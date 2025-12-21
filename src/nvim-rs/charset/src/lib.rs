@@ -1679,6 +1679,131 @@ pub unsafe extern "C" fn rs_vim_str2nr(
 }
 
 // ============================================================================
+// Case Folding
+// ============================================================================
+
+// FFI declarations for mbyte functions
+extern "C" {
+    fn rs_utf_ptr2len(p: *const c_char) -> c_int;
+    fn rs_utf_ptr2char(p: *const c_char) -> c_int;
+    fn rs_utf_char2len(c: c_int) -> c_int;
+    fn rs_utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
+    fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
+}
+
+/// Type alias for case conversion function pointer.
+/// Takes a codepoint and returns the converted codepoint.
+pub type CaseConvertFn = unsafe extern "C" fn(c_int) -> c_int;
+
+/// Convert a string to do ignore-case comparing (fold case).
+///
+/// This function converts all characters in the string to lowercase using
+/// the provided case conversion function (mb_tolower from C).
+///
+/// When `buf` is NULL, allocates and returns a new string.
+/// When `buf` is not NULL, writes to `buf` up to `buflen` bytes and returns `buf`.
+///
+/// # Safety
+/// - `str` must be a valid pointer to at least `orglen` bytes
+/// - If `buf` is not NULL, it must point to at least `buflen` bytes
+/// - `tolower_fn` must be a valid function pointer (typically `mb_tolower`)
+/// - The returned pointer must be freed by the caller if buf was NULL
+#[no_mangle]
+pub unsafe extern "C" fn rs_str_foldcase(
+    str: *const c_char,
+    orglen: c_int,
+    buf: *mut c_char,
+    buflen: c_int,
+    tolower_fn: CaseConvertFn,
+) -> *mut c_char {
+    if str.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let mut len = orglen as usize;
+    let use_alloc = buf.is_null();
+
+    // Either use provided buffer or allocate one
+    let (mut data, mut capacity): (*mut c_char, usize) = if use_alloc {
+        // Allocate initial buffer with extra space for potential growth
+        let cap = len + 10;
+        let ptr = libc::malloc(cap) as *mut c_char;
+        if ptr.is_null() {
+            return std::ptr::null_mut();
+        }
+        (ptr, cap)
+    } else {
+        // Using caller-provided buffer
+        let blen = buflen as usize;
+        if len >= blen {
+            len = blen.saturating_sub(1);
+        }
+        (buf, blen)
+    };
+
+    // Copy original string to buffer
+    std::ptr::copy_nonoverlapping(str, data, len);
+    *data.add(len) = 0;
+
+    // Convert each character to lowercase
+    let mut i = 0usize;
+    while i < len && *data.add(i) != 0 {
+        let p = data.add(i);
+        let c = rs_utf_ptr2char(p);
+        let olen = rs_utf_ptr2len(p) as usize;
+        let lc = tolower_fn(c);
+
+        // Only replace when it's a valid sequence (ASCII or multi-byte) and changed
+        if ((c < 0x80) || (olen > 1)) && (c != lc) {
+            let nlen = rs_utf_char2len(lc) as usize;
+
+            // If byte length changes, need to shift following characters
+            if olen != nlen {
+                if nlen > olen {
+                    if use_alloc {
+                        // Need more space: grow the buffer
+                        let needed = len + (nlen - olen) + 1;
+                        if needed > capacity {
+                            let new_cap = needed + 10;
+                            let new_data =
+                                libc::realloc(data as *mut libc::c_void, new_cap) as *mut c_char;
+                            if new_data.is_null() {
+                                libc::free(data as *mut libc::c_void);
+                                return std::ptr::null_mut();
+                            }
+                            data = new_data;
+                            capacity = new_cap;
+                        }
+                    } else {
+                        // Fixed buffer: check if we have space
+                        if len + nlen - olen >= capacity {
+                            // Out of space, keep old character
+                            i += rs_utfc_ptr2len(data.add(i)) as usize;
+                            continue;
+                        }
+                    }
+                }
+
+                // Shift following characters
+                let src = data.add(i).add(olen);
+                let dst = data.add(i).add(nlen);
+                let remaining = len - i - olen;
+                std::ptr::copy(src, dst, remaining + 1); // +1 for NUL
+                len = (len as isize + (nlen as isize - olen as isize)) as usize;
+            }
+
+            // Write the lowercase character
+            rs_utf_char2bytes(lc, data.add(i));
+        }
+
+        // Skip to next multi-byte character
+        i += rs_utfc_ptr2len(data.add(i)) as usize;
+    }
+
+    data
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
