@@ -1318,6 +1318,309 @@ pub unsafe extern "C" fn rs_vim_isfilec_or_wc(c: c_int) -> c_int {
 }
 
 // ============================================================================
+// vim_str2nr - String to number parsing
+// ============================================================================
+
+// STR2NR flag constants - matching charset.h enum
+/// Allow binary numbers (0b...)
+const STR2NR_BIN: c_int = 1 << 0;
+/// Allow octal numbers (legacy 0...)
+const STR2NR_OCT: c_int = 1 << 1;
+/// Allow hexadecimal numbers (0x...)
+const STR2NR_HEX: c_int = 1 << 2;
+/// Allow octal with 0o prefix (0o...)
+const STR2NR_OOCT: c_int = 1 << 3;
+/// Ignore embedded single quotes in number
+const STR2NR_QUOTE: c_int = 1 << 4;
+/// Force parsing as a specific base (skip prefix detection)
+const STR2NR_FORCE: c_int = 1 << 7;
+
+// Type aliases matching Neovim's typval_defs.h
+type VarnumberT = i64;
+type UvarnumberT = u64;
+
+const VARNUMBER_MAX: VarnumberT = i64::MAX;
+const VARNUMBER_MIN: VarnumberT = i64::MIN;
+const UVARNUMBER_MAX: UvarnumberT = u64::MAX;
+
+/// Check if character is an octal digit ('0'-'7')
+#[inline]
+const fn ascii_isodigit(c: u8) -> bool {
+    c >= b'0' && c <= b'7'
+}
+
+/// Number base for vim_str2nr parsing
+enum Str2NrBase {
+    Binary,
+    Octal,
+    Decimal,
+    Hex,
+}
+
+/// Convert a string to a number in various bases.
+///
+/// Parses a string that may have a prefix indicating the base:
+/// - `0x` or `0X` for hexadecimal
+/// - `0b` or `0B` for binary
+/// - `0o` or `0O` for octal (new style)
+/// - `0` followed by octal digits for legacy octal
+///
+/// # Arguments
+/// * `start` - Pointer to the start of the string to parse
+/// * `prep` - If not null, set to prefix character ('0', 'x', 'b', 'o') or 0 for decimal
+/// * `len` - If not null, set to length of the parsed number string
+/// * `what` - Flags controlling which bases to recognize (STR2NR_BIN, STR2NR_OCT, etc.)
+/// * `nptr` - If not null, set to the signed number value
+/// * `unptr` - If not null, set to the unsigned number value
+/// * `maxlen` - Maximum length to parse (0 = no limit)
+/// * `strict` - If true, fail if alphanumeric follows the number
+/// * `overflow` - If not null, set to true if overflow occurred
+///
+/// # Safety
+/// * `start` must be a valid pointer to a null-terminated string
+/// * All non-null output pointers must be valid and writable
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_vim_str2nr(
+    start: *const c_char,
+    prep: *mut c_int,
+    len: *mut c_int,
+    what: c_int,
+    nptr: *mut VarnumberT,
+    unptr: *mut UvarnumberT,
+    maxlen: c_int,
+    strict: bool,
+    overflow: *mut bool,
+) {
+    if start.is_null() {
+        return;
+    }
+
+    let start_ptr = start as *const u8;
+    let mut ptr = start_ptr;
+    let mut pre: c_int = 0; // default is decimal
+    let mut un: UvarnumberT = 0;
+
+    // Helper to check if we've reached the end of the string or maxlen
+    let string_ended = |p: *const u8| -> bool {
+        if maxlen == 0 {
+            return false;
+        }
+        (p as isize - start_ptr as isize) >= maxlen as isize
+    };
+
+    if !len.is_null() {
+        *len = 0;
+    }
+
+    // Check for leading '-'
+    let negative = *ptr == b'-';
+    if negative {
+        ptr = ptr.add(1);
+    }
+
+    // Determine the base
+    let base: Str2NrBase;
+
+    if (what & STR2NR_FORCE) != 0 {
+        // When forcing, main consideration is skipping the prefix
+        match what & !(STR2NR_FORCE | STR2NR_QUOTE) {
+            x if x == STR2NR_HEX => {
+                // Skip 0x/0X prefix if present
+                if !string_ended(ptr.add(2))
+                    && *ptr == b'0'
+                    && (*ptr.add(1) == b'x' || *ptr.add(1) == b'X')
+                    && ascii_isxdigit(*ptr.add(2))
+                {
+                    ptr = ptr.add(2);
+                }
+                base = Str2NrBase::Hex;
+            }
+            x if x == STR2NR_BIN => {
+                // Skip 0b/0B prefix if present
+                if !string_ended(ptr.add(2))
+                    && *ptr == b'0'
+                    && (*ptr.add(1) == b'b' || *ptr.add(1) == b'B')
+                    && ascii_isbdigit(*ptr.add(2))
+                {
+                    ptr = ptr.add(2);
+                }
+                base = Str2NrBase::Binary;
+            }
+            x if x == STR2NR_OCT || x == STR2NR_OOCT || x == (STR2NR_OCT | STR2NR_OOCT) => {
+                // Skip 0o/0O prefix if present
+                if !string_ended(ptr.add(2))
+                    && *ptr == b'0'
+                    && (*ptr.add(1) == b'o' || *ptr.add(1) == b'O')
+                    && ascii_isodigit(*ptr.add(2))
+                {
+                    ptr = ptr.add(2);
+                }
+                base = Str2NrBase::Octal;
+            }
+            0 => {
+                base = Str2NrBase::Decimal;
+            }
+            _ => {
+                // Invalid combination, abort
+                return;
+            }
+        }
+    } else if (what & (STR2NR_HEX | STR2NR_OCT | STR2NR_OOCT | STR2NR_BIN)) != 0
+        && !string_ended(ptr.add(1))
+        && *ptr == b'0'
+        && *ptr.add(1) != b'8'
+        && *ptr.add(1) != b'9'
+    {
+        let pre_char = *ptr.add(1);
+
+        // Detect hexadecimal: 0x or 0X followed by hex digit
+        if (what & STR2NR_HEX) != 0
+            && !string_ended(ptr.add(2))
+            && (pre_char == b'X' || pre_char == b'x')
+            && ascii_isxdigit(*ptr.add(2))
+        {
+            pre = pre_char as c_int;
+            ptr = ptr.add(2);
+            base = Str2NrBase::Hex;
+        }
+        // Detect binary: 0b or 0B followed by 0 or 1
+        else if (what & STR2NR_BIN) != 0
+            && !string_ended(ptr.add(2))
+            && (pre_char == b'B' || pre_char == b'b')
+            && ascii_isbdigit(*ptr.add(2))
+        {
+            pre = pre_char as c_int;
+            ptr = ptr.add(2);
+            base = Str2NrBase::Binary;
+        }
+        // Detect octal: 0o or 0O followed by octal digits
+        else if (what & STR2NR_OOCT) != 0
+            && !string_ended(ptr.add(2))
+            && (pre_char == b'O' || pre_char == b'o')
+            && ascii_isodigit(*ptr.add(2))
+        {
+            pre = pre_char as c_int;
+            ptr = ptr.add(2);
+            base = Str2NrBase::Octal;
+        }
+        // Detect old octal format: 0 followed by octal digits
+        else if (what & STR2NR_OCT) != 0 && ascii_isodigit(*ptr.add(1)) {
+            // Check that all following digits are octal (no 8 or 9)
+            let mut all_octal = true;
+            let mut i = 2isize;
+            while !string_ended(ptr.add(i as usize)) && ascii_isdigit(*ptr.add(i as usize)) {
+                if *ptr.add(i as usize) > b'7' {
+                    all_octal = false;
+                    break;
+                }
+                i += 1;
+            }
+            if all_octal {
+                pre = b'0' as c_int;
+                base = Str2NrBase::Octal;
+            } else {
+                base = Str2NrBase::Decimal;
+            }
+        } else {
+            base = Str2NrBase::Decimal;
+        }
+    } else {
+        base = Str2NrBase::Decimal;
+    }
+
+    // Parse the number based on the detected base
+    let after_prefix = ptr;
+
+    let (base_val, is_valid_digit): (UvarnumberT, fn(u8) -> bool) = match base {
+        Str2NrBase::Binary => (2, ascii_isbdigit),
+        Str2NrBase::Octal => (8, ascii_isodigit),
+        Str2NrBase::Decimal => (10, ascii_isdigit),
+        Str2NrBase::Hex => (16, ascii_isxdigit),
+    };
+
+    while !string_ended(ptr) && *ptr != 0 {
+        // Handle embedded quotes (STR2NR_QUOTE flag)
+        if (what & STR2NR_QUOTE) != 0 && ptr > after_prefix && *ptr == b'\'' {
+            ptr = ptr.add(1);
+            if !string_ended(ptr) && *ptr != 0 && is_valid_digit(*ptr) {
+                continue;
+            }
+            ptr = ptr.sub(1);
+        }
+
+        if !is_valid_digit(*ptr) {
+            break;
+        }
+
+        let digit: UvarnumberT = if base_val == 16 {
+            rs_hex2nr(*ptr as c_int) as UvarnumberT
+        } else {
+            (*ptr - b'0') as UvarnumberT
+        };
+
+        // Check for overflow before multiplying
+        if un < UVARNUMBER_MAX / base_val
+            || (un == UVARNUMBER_MAX / base_val && (base_val != 10 || digit <= UVARNUMBER_MAX % 10))
+        {
+            un = base_val * un + digit;
+        } else {
+            un = UVARNUMBER_MAX;
+            if !overflow.is_null() {
+                *overflow = true;
+            }
+        }
+
+        ptr = ptr.add(1);
+    }
+
+    // Check for alphanumeric immediately following (strict mode)
+    if strict
+        && (ptr as isize - start_ptr as isize) != maxlen as isize
+        && *ptr != 0
+        && ((*ptr >= b'A' && *ptr <= b'Z')
+            || (*ptr >= b'a' && *ptr <= b'z')
+            || (*ptr >= b'0' && *ptr <= b'9'))
+    {
+        return;
+    }
+
+    // Set output values
+    if !prep.is_null() {
+        *prep = pre;
+    }
+
+    if !len.is_null() {
+        *len = (ptr as isize - start_ptr as isize) as c_int;
+    }
+
+    if !nptr.is_null() {
+        if negative {
+            // Handle negative overflow
+            if un > VARNUMBER_MAX as UvarnumberT {
+                *nptr = VARNUMBER_MIN;
+                if !overflow.is_null() {
+                    *overflow = true;
+                }
+            } else {
+                *nptr = -(un as VarnumberT);
+            }
+        } else if un > VARNUMBER_MAX as UvarnumberT {
+            *nptr = VARNUMBER_MAX;
+            if !overflow.is_null() {
+                *overflow = true;
+            }
+        } else {
+            *nptr = un as VarnumberT;
+        }
+    }
+
+    if !unptr.is_null() {
+        *unptr = un;
+    }
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
@@ -2030,6 +2333,332 @@ mod tests {
             let mut ptr = s.as_mut_ptr().cast::<c_char>();
             let result = rs_getdigits_int32(std::ptr::addr_of_mut!(ptr), 0, 0);
             assert_eq!(result, i32::MIN);
+        }
+    }
+
+    #[test]
+    fn test_vim_str2nr_decimal() {
+        unsafe {
+            // Simple decimal
+            let s = CString::new("123").unwrap();
+            let mut len: c_int = 0;
+            let mut nr: VarnumberT = 0;
+            rs_vim_str2nr(
+                s.as_ptr(),
+                std::ptr::null_mut(),
+                &raw mut len,
+                0,
+                &raw mut nr,
+                std::ptr::null_mut(),
+                0,
+                false,
+                std::ptr::null_mut(),
+            );
+            assert_eq!(nr, 123);
+            assert_eq!(len, 3);
+
+            // Decimal with trailing text
+            let s = CString::new("456abc").unwrap();
+            rs_vim_str2nr(
+                s.as_ptr(),
+                std::ptr::null_mut(),
+                &raw mut len,
+                0,
+                &raw mut nr,
+                std::ptr::null_mut(),
+                0,
+                false,
+                std::ptr::null_mut(),
+            );
+            assert_eq!(nr, 456);
+            assert_eq!(len, 3);
+
+            // Negative decimal
+            let s = CString::new("-789").unwrap();
+            rs_vim_str2nr(
+                s.as_ptr(),
+                std::ptr::null_mut(),
+                &raw mut len,
+                0,
+                &raw mut nr,
+                std::ptr::null_mut(),
+                0,
+                false,
+                std::ptr::null_mut(),
+            );
+            assert_eq!(nr, -789);
+            assert_eq!(len, 4);
+        }
+    }
+
+    #[test]
+    fn test_vim_str2nr_hex() {
+        unsafe {
+            let mut len: c_int = 0;
+            let mut nr: VarnumberT = 0;
+            let mut pre: c_int = 0;
+
+            // Hex with 0x prefix
+            let s = CString::new("0xff").unwrap();
+            rs_vim_str2nr(
+                s.as_ptr(),
+                &raw mut pre,
+                &raw mut len,
+                STR2NR_HEX,
+                &raw mut nr,
+                std::ptr::null_mut(),
+                0,
+                false,
+                std::ptr::null_mut(),
+            );
+            assert_eq!(nr, 255);
+            assert_eq!(len, 4);
+            assert_eq!(pre, b'x' as c_int);
+
+            // Hex with 0X prefix
+            let s = CString::new("0X1A2B").unwrap();
+            rs_vim_str2nr(
+                s.as_ptr(),
+                &raw mut pre,
+                &raw mut len,
+                STR2NR_HEX,
+                &raw mut nr,
+                std::ptr::null_mut(),
+                0,
+                false,
+                std::ptr::null_mut(),
+            );
+            assert_eq!(nr, 0x1A2B);
+            assert_eq!(len, 6);
+            assert_eq!(pre, b'X' as c_int);
+        }
+    }
+
+    #[test]
+    fn test_vim_str2nr_binary() {
+        unsafe {
+            let mut len: c_int = 0;
+            let mut nr: VarnumberT = 0;
+            let mut pre: c_int = 0;
+
+            // Binary with 0b prefix
+            let s = CString::new("0b1010").unwrap();
+            rs_vim_str2nr(
+                s.as_ptr(),
+                &raw mut pre,
+                &raw mut len,
+                STR2NR_BIN,
+                &raw mut nr,
+                std::ptr::null_mut(),
+                0,
+                false,
+                std::ptr::null_mut(),
+            );
+            assert_eq!(nr, 10);
+            assert_eq!(len, 6);
+            assert_eq!(pre, b'b' as c_int);
+
+            // Binary with 0B prefix
+            let s = CString::new("0B1111").unwrap();
+            rs_vim_str2nr(
+                s.as_ptr(),
+                &raw mut pre,
+                &raw mut len,
+                STR2NR_BIN,
+                &raw mut nr,
+                std::ptr::null_mut(),
+                0,
+                false,
+                std::ptr::null_mut(),
+            );
+            assert_eq!(nr, 15);
+            assert_eq!(len, 6);
+            assert_eq!(pre, b'B' as c_int);
+        }
+    }
+
+    #[test]
+    fn test_vim_str2nr_octal() {
+        unsafe {
+            let mut len: c_int = 0;
+            let mut nr: VarnumberT = 0;
+            let mut pre: c_int = 0;
+
+            // New-style octal with 0o prefix
+            let s = CString::new("0o777").unwrap();
+            rs_vim_str2nr(
+                s.as_ptr(),
+                &raw mut pre,
+                &raw mut len,
+                STR2NR_OOCT,
+                &raw mut nr,
+                std::ptr::null_mut(),
+                0,
+                false,
+                std::ptr::null_mut(),
+            );
+            assert_eq!(nr, 0o777);
+            assert_eq!(len, 5);
+            assert_eq!(pre, b'o' as c_int);
+
+            // Old-style octal with leading 0
+            let s = CString::new("0755").unwrap();
+            rs_vim_str2nr(
+                s.as_ptr(),
+                &raw mut pre,
+                &raw mut len,
+                STR2NR_OCT,
+                &raw mut nr,
+                std::ptr::null_mut(),
+                0,
+                false,
+                std::ptr::null_mut(),
+            );
+            assert_eq!(nr, 0o755);
+            assert_eq!(len, 4);
+            assert_eq!(pre, b'0' as c_int);
+
+            // Old octal: 0 followed by 8 or 9 should be decimal
+            let s = CString::new("089").unwrap();
+            rs_vim_str2nr(
+                s.as_ptr(),
+                &raw mut pre,
+                &raw mut len,
+                STR2NR_OCT,
+                &raw mut nr,
+                std::ptr::null_mut(),
+                0,
+                false,
+                std::ptr::null_mut(),
+            );
+            assert_eq!(nr, 89);
+            assert_eq!(pre, 0); // decimal
+        }
+    }
+
+    #[test]
+    fn test_vim_str2nr_quote() {
+        unsafe {
+            let mut len: c_int = 0;
+            let mut nr: VarnumberT = 0;
+
+            // Number with embedded quote
+            let s = CString::new("1'234'567").unwrap();
+            rs_vim_str2nr(
+                s.as_ptr(),
+                std::ptr::null_mut(),
+                &raw mut len,
+                STR2NR_QUOTE,
+                &raw mut nr,
+                std::ptr::null_mut(),
+                0,
+                false,
+                std::ptr::null_mut(),
+            );
+            assert_eq!(nr, 1_234_567);
+            assert_eq!(len, 9);
+
+            // Hex with embedded quote
+            let s = CString::new("0xff'ff").unwrap();
+            rs_vim_str2nr(
+                s.as_ptr(),
+                std::ptr::null_mut(),
+                &raw mut len,
+                STR2NR_HEX | STR2NR_QUOTE,
+                &raw mut nr,
+                std::ptr::null_mut(),
+                0,
+                false,
+                std::ptr::null_mut(),
+            );
+            assert_eq!(nr, 0xffff);
+            assert_eq!(len, 7);
+        }
+    }
+
+    #[test]
+    fn test_vim_str2nr_maxlen() {
+        unsafe {
+            let mut len: c_int = 0;
+            let mut nr: VarnumberT = 0;
+
+            // Parse only first 3 characters
+            let s = CString::new("12345").unwrap();
+            rs_vim_str2nr(
+                s.as_ptr(),
+                std::ptr::null_mut(),
+                &raw mut len,
+                0,
+                &raw mut nr,
+                std::ptr::null_mut(),
+                3,
+                false,
+                std::ptr::null_mut(),
+            );
+            assert_eq!(nr, 123);
+            assert_eq!(len, 3);
+        }
+    }
+
+    #[test]
+    fn test_vim_str2nr_force() {
+        unsafe {
+            let mut len: c_int = 0;
+            let mut nr: VarnumberT = 0;
+
+            // Force hex - parse without needing 0x prefix
+            let s = CString::new("ff").unwrap();
+            rs_vim_str2nr(
+                s.as_ptr(),
+                std::ptr::null_mut(),
+                &raw mut len,
+                STR2NR_FORCE | STR2NR_HEX,
+                &raw mut nr,
+                std::ptr::null_mut(),
+                0,
+                false,
+                std::ptr::null_mut(),
+            );
+            assert_eq!(nr, 255);
+            assert_eq!(len, 2);
+
+            // Force hex with 0x prefix - should skip prefix
+            let s = CString::new("0xff").unwrap();
+            rs_vim_str2nr(
+                s.as_ptr(),
+                std::ptr::null_mut(),
+                &raw mut len,
+                STR2NR_FORCE | STR2NR_HEX,
+                &raw mut nr,
+                std::ptr::null_mut(),
+                0,
+                false,
+                std::ptr::null_mut(),
+            );
+            assert_eq!(nr, 255);
+            assert_eq!(len, 4);
+        }
+    }
+
+    #[test]
+    fn test_vim_str2nr_unsigned() {
+        unsafe {
+            let mut un: UvarnumberT = 0;
+
+            // Large unsigned number
+            let s = CString::new("18446744073709551615").unwrap(); // u64::MAX
+            rs_vim_str2nr(
+                s.as_ptr(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                0,
+                std::ptr::null_mut(),
+                &raw mut un,
+                0,
+                false,
+                std::ptr::null_mut(),
+            );
+            assert_eq!(un, u64::MAX);
         }
     }
 }
