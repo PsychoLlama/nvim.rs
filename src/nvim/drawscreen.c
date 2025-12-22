@@ -2749,13 +2749,15 @@ bool conceal_cursor_line(const win_T *wp)
   return rs_conceal_cursor_line(wp) != 0;
 }
 
+extern int rs_win_cursorline_standout(win_T *wp);
+
 /// Whether cursorline is drawn in a special way
 ///
 /// If true, both old and new cursorline will need to be redrawn when moving cursor within windows.
 bool win_cursorline_standout(const win_T *wp)
   FUNC_ATTR_NONNULL_ALL
 {
-  return wp->w_p_cul || (wp == curwin && wp->w_p_cole > 0 && !conceal_cursor_line(wp));
+  return rs_win_cursorline_standout((win_T *)wp);
 }
 
 /// Update w_cursorline, taking care to set it to the to the start of a closed fold.

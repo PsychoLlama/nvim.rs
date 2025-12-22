@@ -604,6 +604,18 @@ uint32_t nvim_win_get_lcs_prec(win_T *wp)
   return wp->w_p_lcs_chars.prec;
 }
 
+/// Get the window's 'cursorline' option.
+int nvim_win_get_p_cul(win_T *wp)
+{
+  return wp->w_p_cul;
+}
+
+/// Get the window's 'conceallevel' option.
+OptInt nvim_win_get_p_cole(win_T *wp)
+{
+  return wp->w_p_cole;
+}
+
 #define NOWIN           ((win_T *)-1)   // non-existing window
 
 #define ROWS_AVAIL (Rows - p_ch - tabline_height() - global_stl_height())

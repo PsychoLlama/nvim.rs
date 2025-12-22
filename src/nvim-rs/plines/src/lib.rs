@@ -79,6 +79,10 @@ extern "C" {
     // Window properties for sms_marker_overlap
     fn nvim_win_get_p_list(wp: WinHandle) -> c_int;
     fn nvim_win_get_lcs_prec(wp: WinHandle) -> u32;
+
+    // Window properties for win_cursorline_standout
+    fn nvim_win_get_p_cul(wp: WinHandle) -> c_int;
+    fn nvim_win_get_p_cole(wp: WinHandle) -> i64;
 }
 
 // Mode constants (matching Neovim's state.h)
@@ -449,6 +453,25 @@ fn sms_marker_overlap_impl(wp: WinHandle, extra2: c_int) -> c_int {
     if extra2 > 3 { 0 } else { 3 - extra2 }
 }
 
+/// Whether cursorline is drawn in a special way.
+///
+/// If true, both old and new cursorline will need to be redrawn when moving cursor within windows.
+#[inline]
+fn win_cursorline_standout_impl(wp: WinHandle) -> bool {
+    if wp.is_null() {
+        return false;
+    }
+
+    unsafe {
+        let cul = nvim_win_get_p_cul(wp) != 0;
+        let is_curwin = nvim_win_is_curwin(wp) != 0;
+        let cole = nvim_win_get_p_cole(wp);
+        let conceal_cursor = rs_conceal_cursor_line(wp) != 0;
+
+        cul || (is_curwin && cole > 0 && !conceal_cursor)
+    }
+}
+
 // ============================================================================
 // FFI Exports
 // ============================================================================
@@ -551,6 +574,15 @@ pub extern "C" fn rs_get_showbreak_value(wp: WinHandle) -> *const c_char {
 #[no_mangle]
 pub extern "C" fn rs_sms_marker_overlap(wp: WinHandle, extra2: c_int) -> c_int {
     sms_marker_overlap_impl(wp, extra2)
+}
+
+/// Whether cursorline is drawn in a special way.
+///
+/// # Safety
+/// The `wp` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_win_cursorline_standout(wp: WinHandle) -> c_int {
+    c_int::from(win_cursorline_standout_impl(wp))
 }
 
 #[cfg(test)]
