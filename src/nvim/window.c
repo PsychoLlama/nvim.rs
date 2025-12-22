@@ -658,6 +658,24 @@ int nvim_get_p_wbr_empty(void)
   return *p_wbr == NUL;
 }
 
+/// Get the global 'showtabline' option.
+OptInt nvim_get_p_stal(void)
+{
+  return p_stal;
+}
+
+/// Check if there is more than one tabpage.
+int nvim_first_tabpage_has_next(void)
+{
+  return first_tabpage != NULL && first_tabpage->tp_next != NULL;
+}
+
+/// Check if UI has tabline extension.
+int nvim_ui_has_tabline(void)
+{
+  return ui_has(kUITabline);
+}
+
 #define NOWIN           ((win_T *)-1)   // non-existing window
 
 #define ROWS_AVAIL (Rows - p_ch - tabline_height() - global_stl_height())
@@ -7533,20 +7551,12 @@ void set_winbar(bool make_room)
   }
 }
 
+extern int rs_tabline_height(void);
+
 /// Return the number of lines used by the tab page line.
 int tabline_height(void)
 {
-  if (ui_has(kUITabline)) {
-    return 0;
-  }
-  assert(first_tabpage);
-  switch (p_stal) {
-  case 0:
-    return 0;
-  case 1:
-    return (first_tabpage->tp_next == NULL) ? 0 : 1;
-  }
-  return 1;
+  return rs_tabline_height();
 }
 
 extern int rs_global_winbar_height(void);

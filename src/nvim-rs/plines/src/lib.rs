@@ -102,6 +102,11 @@ extern "C" {
 
     // Already-migrated Rust functions
     fn rs_one_window_in_tab(win: WinHandle, tp: *const std::ffi::c_void) -> c_int;
+
+    // Tabline-related accessors
+    fn nvim_ui_has_tabline() -> c_int;
+    fn nvim_get_p_stal() -> i64;
+    fn nvim_first_tabpage_has_next() -> c_int;
 }
 
 // Mode constants (matching Neovim's state.h)
@@ -582,6 +587,28 @@ fn last_stl_height_impl(morewin: bool) -> c_int {
     }
 }
 
+/// Return the number of lines used by the tab page line.
+#[inline]
+fn tabline_height_impl() -> c_int {
+    unsafe {
+        // If UI provides tabline extension, don't draw our own
+        if nvim_ui_has_tabline() != 0 {
+            return 0;
+        }
+
+        let p_stal = nvim_get_p_stal();
+
+        match p_stal {
+            0 => 0,
+            1 => {
+                // Show tabline only if more than one tab
+                c_int::from(nvim_first_tabpage_has_next() != 0)
+            }
+            _ => 1, // Always show tabline (p_stal == 2)
+        }
+    }
+}
+
 // ============================================================================
 // FFI Exports
 // ============================================================================
@@ -729,6 +756,12 @@ pub extern "C" fn rs_global_winbar_height() -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_last_stl_height(morewin: c_int) -> c_int {
     last_stl_height_impl(morewin != 0)
+}
+
+/// Return the number of lines used by the tab page line.
+#[no_mangle]
+pub extern "C" fn rs_tabline_height() -> c_int {
+    tabline_height_impl()
 }
 
 #[cfg(test)]
