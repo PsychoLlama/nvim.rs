@@ -22,6 +22,7 @@ extern void rs_ga_append(garray_T *gap, uint8_t c);
 extern void *rs_ga_append_via_ptr(garray_T *gap, size_t item_size);
 extern void rs_ga_clear_strings(garray_T *gap);
 extern char *rs_ga_concat_strings(const garray_T *gap, const char *sep);
+extern void rs_ga_remove_duplicate_strings(garray_T *gap);
 
 /// Clear an allocated growing array.
 void ga_clear(garray_T *gap)
@@ -71,24 +72,7 @@ void ga_grow(garray_T *gap, int n)
 /// @param gap
 void ga_remove_duplicate_strings(garray_T *gap)
 {
-  char **fnames = gap->ga_data;
-
-  // sort the growing array, which puts duplicates next to each other
-  sort_strings(fnames, gap->ga_len);
-
-  // loop over the growing array in reverse
-  for (int i = gap->ga_len - 1; i > 0; i--) {
-    if (path_fnamecmp(fnames[i - 1], fnames[i]) == 0) {
-      xfree(fnames[i]);
-
-      // close the gap (move all strings one slot lower)
-      for (int j = i + 1; j < gap->ga_len; j++) {
-        fnames[j - 1] = fnames[j];
-      }
-
-      gap->ga_len--;
-    }
-  }
+  rs_ga_remove_duplicate_strings(gap);
 }
 
 /// For a growing array that contains a list of strings: concatenate all the

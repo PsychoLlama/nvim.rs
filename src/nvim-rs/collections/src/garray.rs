@@ -353,6 +353,58 @@ pub unsafe extern "C" fn rs_ga_concat_strings(
     ret
 }
 
+/// Sort a growing array of strings and remove duplicates.
+///
+/// The strings are compared using `path_fnamecmp` which handles
+/// platform-specific path comparison (case-insensitive on Windows).
+/// Duplicate strings are freed and the array is compacted.
+///
+/// # Safety
+///
+/// `gap` must be a valid pointer to a `GArray` structure containing
+/// `char*` pointers (null-terminated, allocated strings).
+#[no_mangle]
+pub unsafe extern "C" fn rs_ga_remove_duplicate_strings(gap: *mut GArray) {
+    if gap.is_null() {
+        return;
+    }
+
+    let gap_ref = unsafe { &mut *gap };
+    let nelem = gap_ref.ga_len;
+
+    if nelem <= 1 {
+        return;
+    }
+
+    let fnames = gap_ref.ga_data as *mut *mut c_char;
+
+    // Sort the array, which puts duplicates next to each other
+    nvim_strings::rs_sort_strings(fnames, nelem);
+
+    // Loop over the array in reverse, removing duplicates
+    let mut i = nelem - 1;
+    while i > 0 {
+        let fname_prev = unsafe { *fnames.add((i - 1) as usize) };
+        let fname_curr = unsafe { *fnames.add(i as usize) };
+
+        if nvim_path::rs_path_fnamecmp(fname_prev, fname_curr) == 0 {
+            // Free the duplicate
+            xfree(fname_curr as *mut c_void);
+
+            // Close the gap (move all strings one slot lower)
+            for j in (i + 1)..gap_ref.ga_len {
+                unsafe {
+                    *fnames.add((j - 1) as usize) = *fnames.add(j as usize);
+                }
+            }
+
+            gap_ref.ga_len -= 1;
+        }
+
+        i -= 1;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

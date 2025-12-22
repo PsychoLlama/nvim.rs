@@ -10,6 +10,8 @@ repository.workspace = true
 libc = "0.2"
 nvim-memory = { path = "../memory" }
 nvim-memutil = { path = "../memutil" }
+nvim-path = { path = "../path" }
+nvim-strings = { path = "../strings" }
 
 [lints]
 workspace = true
