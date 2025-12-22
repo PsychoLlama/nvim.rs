@@ -36,6 +36,7 @@
 // Rust implementations
 extern int rs_charsize_nowrap(buf_T *buf, const char *cur, int use_tabstop, int vcol, int32_t cur_char);
 extern int rs_win_may_fill(win_T *wp);
+extern int rs_in_win_border(win_T *wp, int vcol);
 
 /// Functions calculating horizontal size of text, when displayed in a window.
 
@@ -406,25 +407,7 @@ int charsize_nowrap(buf_T *buf, const char *cur, bool use_tabstop, colnr_T vcol,
 static bool in_win_border(win_T *wp, colnr_T vcol)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ARG(1)
 {
-  if (wp->w_view_width == 0) {
-    // there is no border
-    return false;
-  }
-  int width1 = wp->w_view_width - win_col_off(wp);  // width of first line (after line number)
-
-  if ((int)vcol < width1 - 1) {
-    return false;
-  }
-
-  if ((int)vcol == width1 - 1) {
-    return true;
-  }
-  int width2 = width1 + win_col_off2(wp);  // width of further lines
-
-  if (width2 <= 0) {
-    return false;
-  }
-  return (vcol - width1) % width2 == width2 - 1;
+  return rs_in_win_border(wp, (int)vcol);
 }
 
 /// Calculate virtual column until the given "len".

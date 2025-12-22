@@ -328,6 +328,44 @@ fn win_col_off2_impl(wp: WinHandle) -> c_int {
     }
 }
 
+/// Check that virtual column "vcol" is in the rightmost column of window "wp".
+///
+/// Used for determining if a double-width character wraps at the end of a line.
+#[inline]
+fn in_win_border_impl(wp: WinHandle, vcol: c_int) -> bool {
+    if wp.is_null() {
+        return false;
+    }
+
+    unsafe {
+        let view_width = nvim_win_get_view_width(wp);
+        if view_width == 0 {
+            // there is no border
+            return false;
+        }
+
+        // width of first line (after line number, etc.)
+        let width1 = view_width - rs_win_col_off(wp);
+
+        if vcol < width1 - 1 {
+            return false;
+        }
+
+        if vcol == width1 - 1 {
+            return true;
+        }
+
+        // width of further lines
+        let width2 = width1 + rs_win_col_off2(wp);
+
+        if width2 <= 0 {
+            return false;
+        }
+
+        (vcol - width1) % width2 == width2 - 1
+    }
+}
+
 // ============================================================================
 // FFI Exports
 // ============================================================================
@@ -400,6 +438,15 @@ pub extern "C" fn rs_win_col_off(wp: WinHandle) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_win_col_off2(wp: WinHandle) -> c_int {
     win_col_off2_impl(wp)
+}
+
+/// Check if vcol is in the rightmost column of window.
+///
+/// # Safety
+/// The `wp` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_in_win_border(wp: WinHandle, vcol: c_int) -> c_int {
+    c_int::from(in_win_border_impl(wp, vcol))
 }
 
 #[cfg(test)]
