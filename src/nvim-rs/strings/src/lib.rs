@@ -713,6 +713,62 @@ pub unsafe extern "C" fn rs_skip_to_option_part(p: *const c_char) -> *const c_ch
     ptr
 }
 
+/// Replace all occurrences of character `c` with character `x` in a null-terminated string.
+///
+/// This modifies the string in place.
+///
+/// # Safety
+///
+/// - `str` must be a valid, mutable null-terminated C string
+/// - `c` must not be NUL (0), as that would cause undefined behavior
+#[no_mangle]
+pub unsafe extern "C" fn rs_strchrsub(str: *mut c_char, c: c_char, x: c_char) {
+    if str.is_null() || c == 0 {
+        return;
+    }
+
+    let mut p = str as *mut u8;
+    let target = c as u8;
+    let replacement = x as u8;
+
+    loop {
+        let ch = *p;
+        if ch == 0 {
+            break;
+        }
+        if ch == target {
+            *p = replacement;
+        }
+        p = p.add(1);
+    }
+}
+
+/// Replace all occurrences of byte `c` with byte `x` in a memory region.
+///
+/// This modifies the memory region in place. Unlike strchrsub, this does not
+/// stop at NUL bytes and can be used on binary data.
+///
+/// # Safety
+///
+/// - `data` must be a valid, mutable pointer to at least `len` bytes
+/// - The memory region must not overlap with any other mutable references
+#[no_mangle]
+pub unsafe extern "C" fn rs_memchrsub(data: *mut c_char, c: c_char, x: c_char, len: usize) {
+    if data.is_null() || len == 0 {
+        return;
+    }
+
+    let target = c as u8;
+    let replacement = x as u8;
+    let bytes = std::slice::from_raw_parts_mut(data as *mut u8, len);
+
+    for byte in bytes {
+        if *byte == target {
+            *byte = replacement;
+        }
+    }
+}
+
 // External FFI functions from other Rust crates
 extern "C" {
     fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
@@ -1884,5 +1940,72 @@ mod tests {
             let result = rs_vim_strnsave_unquoted(std::ptr::null(), 5);
             assert!(result.is_null());
         }
+    }
+
+    #[test]
+    fn test_strchrsub() {
+        // Basic character replacement
+        let mut s = *b"hello\0";
+        unsafe { rs_strchrsub(s.as_mut_ptr().cast(), b'l' as c_char, b'x' as c_char) };
+        assert_eq!(&s[..6], b"hexxo\0");
+
+        // No match - string unchanged
+        let mut s = *b"hello\0";
+        unsafe { rs_strchrsub(s.as_mut_ptr().cast(), b'z' as c_char, b'x' as c_char) };
+        assert_eq!(&s[..6], b"hello\0");
+
+        // Replace all same chars
+        let mut s = *b"aaa\0";
+        unsafe { rs_strchrsub(s.as_mut_ptr().cast(), b'a' as c_char, b'b' as c_char) };
+        assert_eq!(&s[..4], b"bbb\0");
+
+        // Empty string - should not crash
+        let mut s = *b"\0";
+        unsafe { rs_strchrsub(s.as_mut_ptr().cast(), b'a' as c_char, b'b' as c_char) };
+        assert_eq!(s[0], 0);
+
+        // NULL pointer - should not crash
+        unsafe { rs_strchrsub(std::ptr::null_mut(), b'a' as c_char, b'b' as c_char) };
+
+        // c == NUL - should not modify (safety check)
+        let mut s = *b"hello\0";
+        unsafe { rs_strchrsub(s.as_mut_ptr().cast(), 0, b'x' as c_char) };
+        assert_eq!(&s[..6], b"hello\0");
+    }
+
+    #[test]
+    fn test_memchrsub() {
+        // Basic byte replacement
+        let mut data = *b"hello";
+        unsafe { rs_memchrsub(data.as_mut_ptr().cast(), b'l' as c_char, b'x' as c_char, 5) };
+        assert_eq!(&data, b"hexxo");
+
+        // No match - data unchanged
+        let mut data = *b"hello";
+        unsafe { rs_memchrsub(data.as_mut_ptr().cast(), b'z' as c_char, b'x' as c_char, 5) };
+        assert_eq!(&data, b"hello");
+
+        // Partial replacement (only first 3 bytes)
+        let mut data = *b"lllll";
+        unsafe { rs_memchrsub(data.as_mut_ptr().cast(), b'l' as c_char, b'x' as c_char, 3) };
+        assert_eq!(&data, b"xxxll");
+
+        // Binary data with NUL bytes
+        let mut data = [b'a', 0, b'a', 0, b'a'];
+        unsafe { rs_memchrsub(data.as_mut_ptr().cast(), b'a' as c_char, b'b' as c_char, 5) };
+        assert_eq!(&data, &[b'b', 0, b'b', 0, b'b']);
+
+        // Replace NUL bytes
+        let mut data = [0u8, 1, 0, 1, 0];
+        unsafe { rs_memchrsub(data.as_mut_ptr().cast(), 0, b'x' as c_char, 5) };
+        assert_eq!(&data, &[b'x', 1, b'x', 1, b'x']);
+
+        // Zero length - should not crash
+        let mut data = *b"hello";
+        unsafe { rs_memchrsub(data.as_mut_ptr().cast(), b'l' as c_char, b'x' as c_char, 0) };
+        assert_eq!(&data, b"hello"); // Unchanged
+
+        // NULL pointer - should not crash
+        unsafe { rs_memchrsub(std::ptr::null_mut(), b'a' as c_char, b'b' as c_char, 5) };
     }
 }

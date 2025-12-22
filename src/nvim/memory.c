@@ -66,6 +66,8 @@ extern bool rs_strequal(const char *a, const char *b);
 extern bool rs_strnequal(const char *a, const char *b, size_t n);
 extern void rs_time_to_bytes(int64_t time_, uint8_t *buf);
 extern size_t rs_arena_align_offset(uint64_t off);
+extern void rs_strchrsub(char *str, char c, char x);
+extern void rs_memchrsub(void *data, char c, char x, size_t len);
 
 #ifdef EXITFREE
 bool entered_free_all_mem = false;
@@ -312,9 +314,7 @@ void strchrsub(char *str, char c, char x)
   FUNC_ATTR_NONNULL_ALL
 {
   assert(c != NUL);
-  while ((str = strchr(str, c))) {
-    *str++ = x;
-  }
+  rs_strchrsub(str, c, x);
 }
 
 /// Replaces every instance of `c` with `x`.
@@ -326,11 +326,7 @@ void strchrsub(char *str, char c, char x)
 void memchrsub(void *data, char c, char x, size_t len)
   FUNC_ATTR_NONNULL_ALL
 {
-  char *p = data;
-  char *end = (char *)data + len;
-  while ((p = memchr(p, c, (size_t)(end - p)))) {
-    *p++ = x;
-  }
+  rs_memchrsub(data, c, x, len);
 }
 
 /// Counts the number of occurrences of `c` in `str`.

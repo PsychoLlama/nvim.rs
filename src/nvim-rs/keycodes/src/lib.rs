@@ -1292,7 +1292,9 @@ pub unsafe extern "C" fn rs_special_to_buf(
     clippy::cast_lossless,
     clippy::borrow_as_ptr,
     clippy::ptr_as_ptr,
-    clippy::cast_sign_loss
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap,
+    clippy::cast_possible_truncation
 )]
 mod tests {
     use super::*;
