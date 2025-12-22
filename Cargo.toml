@@ -7,6 +7,7 @@ members = [
     "src/nvim-rs/ascii",
     "src/nvim-rs/autocmd",
     "src/nvim-rs/buffer",
+    "src/nvim-rs/buffer_updates",
     "src/nvim-rs/charset",
     "src/nvim-rs/cmdline",
     "src/nvim-rs/cmdhist",
@@ -23,6 +24,7 @@ members = [
     "src/nvim-rs/getchar",
     "src/nvim-rs/grid",
     "src/nvim-rs/help",
+    "src/nvim-rs/highlight",
     "src/nvim-rs/indent",
     "src/nvim-rs/insexpand",
     "src/nvim-rs/keycodes",
@@ -47,6 +49,9 @@ members = [
     "src/nvim-rs/version",
     "src/nvim-rs/window",
     "src/nvim-rs/unpacker",
+    "src/nvim-rs/tui",
+    "src/nvim-rs/typval",
+    "src/nvim-rs/ugrid",
 ]
 
 [workspace.package]

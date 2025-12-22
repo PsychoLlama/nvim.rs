@@ -72,6 +72,7 @@ extern size_t rs_aucmd_pattern_length(const char *pat);
 extern const char *rs_aucmd_next_pattern(const char *pat, size_t patlen);
 extern int rs_aupat_is_buflocal(const char *pat, int patlen);
 extern const char *rs_event_nr2name(int event, int num_events);
+extern int rs_has_event(int event, int num_events);
 
 // C accessor for event_names array (used by Rust)
 const char *nvim_get_event_name(int event)
@@ -80,6 +81,15 @@ const char *nvim_get_event_name(int event)
     return event_names[event].name;
   }
   return NULL;
+}
+
+/// Get the number of autocommands registered for an event.
+size_t nvim_get_autocmds_count(int event)
+{
+  if (event >= 0 && event < NUM_EVENTS) {
+    return kv_size(autocmds[event]);
+  }
+  return 0;
 }
 
 static const char e_autocommand_nesting_too_deep[]
@@ -1545,7 +1555,7 @@ bool apply_autocmds_retval(event_T event, char *fname, char *fname_io, bool forc
 /// @param event the autocommand to check
 bool has_event(event_T event) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  return kv_size(autocmds[(int)event]) != 0;
+  return rs_has_event((int)event, NUM_EVENTS) != 0;
 }
 
 /// Return true when there is a CursorHold/CursorHoldI autocommand defined for

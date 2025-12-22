@@ -18,6 +18,7 @@ nvim-arabic = { path = "arabic" }
 nvim-ascii = { path = "ascii" }
 nvim-autocmd = { path = "autocmd" }
 nvim-buffer = { path = "buffer" }
+nvim-buffer-updates = { path = "buffer_updates" }
 nvim-charset = { path = "charset" }
 nvim-cmdline = { path = "cmdline" }
 nvim-cmdhist = { path = "cmdhist" }

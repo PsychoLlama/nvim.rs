@@ -16,6 +16,7 @@ use std::os::raw::c_int;
 extern "C" {
     fn nvim_get_autocmd_blocked() -> c_int;
     fn nvim_get_event_name(event: c_int) -> *const c_char;
+    fn nvim_get_autocmds_count(event: c_int) -> usize;
 }
 
 // Static "Unknown" string for invalid events
@@ -44,6 +45,18 @@ pub unsafe extern "C" fn rs_event_nr2name(event: c_int, num_events: c_int) -> *c
         }
     }
     UNKNOWN_EVENT.as_ptr().cast()
+}
+
+/// Check if there are any autocommands registered for an event.
+///
+/// Returns 1 if the event has at least one autocommand, 0 otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn rs_has_event(event: c_int, num_events: c_int) -> c_int {
+    if event >= 0 && event < num_events {
+        c_int::from(nvim_get_autocmds_count(event) > 0)
+    } else {
+        0
+    }
 }
 
 /// Returns the length of the first pattern in a comma-separated pattern list.
