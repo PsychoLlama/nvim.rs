@@ -96,6 +96,12 @@ extern "C" {
     // Global options for statusline/winbar
     fn nvim_get_p_ls() -> i64;
     fn nvim_get_p_wbr_empty() -> c_int;
+
+    // Window pointers
+    fn nvim_get_firstwin() -> WinHandle;
+
+    // Already-migrated Rust functions
+    fn rs_one_window_in_tab(win: WinHandle, tp: *const std::ffi::c_void) -> c_int;
 }
 
 // Mode constants (matching Neovim's state.h)
@@ -554,6 +560,28 @@ fn global_winbar_height_impl() -> c_int {
     unsafe { c_int::from(nvim_get_p_wbr_empty() == 0) }
 }
 
+/// Return the height of the last window's statusline, or the global statusline if set.
+///
+/// @param morewin  pretend there are two or more windows if true.
+#[inline]
+fn last_stl_height_impl(morewin: bool) -> c_int {
+    unsafe {
+        let p_ls = nvim_get_p_ls();
+
+        // p_ls > 1 means always show statusline
+        // p_ls == 1 means show statusline when more than one window
+        let show_stl = p_ls > 1
+            || (p_ls == 1
+                && (morewin || rs_one_window_in_tab(nvim_get_firstwin(), std::ptr::null()) == 0));
+
+        if show_stl {
+            STATUS_HEIGHT
+        } else {
+            0
+        }
+    }
+}
+
 // ============================================================================
 // FFI Exports
 // ============================================================================
@@ -695,6 +723,12 @@ pub extern "C" fn rs_global_stl_height() -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_global_winbar_height() -> c_int {
     global_winbar_height_impl()
+}
+
+/// Return the height of the last window's statusline, or the global statusline if set.
+#[no_mangle]
+pub extern "C" fn rs_last_stl_height(morewin: c_int) -> c_int {
+    last_stl_height_impl(morewin != 0)
 }
 
 #[cfg(test)]

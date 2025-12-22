@@ -7551,6 +7551,7 @@ int tabline_height(void)
 
 extern int rs_global_winbar_height(void);
 extern int rs_global_stl_height(void);
+extern int rs_last_stl_height(int morewin);
 
 /// Return the number of lines used by default by the window bar.
 int global_winbar_height(void)
@@ -7569,7 +7570,7 @@ int global_stl_height(void)
 /// @param morewin  pretend there are two or more windows if true.
 int last_stl_height(bool morewin)
 {
-  return (p_ls > 1 || (p_ls == 1 && (morewin || !one_window(firstwin, NULL)))) ? STATUS_HEIGHT : 0;
+  return rs_last_stl_height(morewin ? 1 : 0);
 }
 
 /// Return the minimal number of rows that is needed on the screen to display
