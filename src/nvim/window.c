@@ -616,6 +616,36 @@ OptInt nvim_win_get_p_cole(win_T *wp)
   return wp->w_p_cole;
 }
 
+/// Get the window's 'scrolloff' option.
+OptInt nvim_win_get_p_so(win_T *wp)
+{
+  return wp->w_p_so;
+}
+
+/// Get the window's 'sidescrolloff' option.
+OptInt nvim_win_get_p_siso(win_T *wp)
+{
+  return wp->w_p_siso;
+}
+
+/// Get the global 'scrolloff' option.
+OptInt nvim_get_p_so(void)
+{
+  return p_so;
+}
+
+/// Get the global 'sidescrolloff' option.
+OptInt nvim_get_p_siso(void)
+{
+  return p_siso;
+}
+
+/// Check if the buffer in window is a terminal.
+int nvim_win_buf_is_terminal(win_T *wp)
+{
+  return wp->w_buffer->terminal != NULL;
+}
+
 #define NOWIN           ((win_T *)-1)   // non-existing window
 
 #define ROWS_AVAIL (Rows - p_ch - tabline_height() - global_stl_height())

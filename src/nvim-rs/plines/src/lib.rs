@@ -83,6 +83,15 @@ extern "C" {
     // Window properties for win_cursorline_standout
     fn nvim_win_get_p_cul(wp: WinHandle) -> c_int;
     fn nvim_win_get_p_cole(wp: WinHandle) -> i64;
+
+    // Window properties for scrolloff
+    fn nvim_win_get_p_so(wp: WinHandle) -> i64;
+    fn nvim_win_get_p_siso(wp: WinHandle) -> i64;
+    fn nvim_get_p_so() -> i64;
+    fn nvim_get_p_siso() -> i64;
+
+    // Terminal mode check
+    fn nvim_win_buf_is_terminal(wp: WinHandle) -> c_int;
 }
 
 // Mode constants (matching Neovim's state.h)
@@ -90,6 +99,7 @@ const MODE_VISUAL: c_int = 0x02;
 const MODE_INSERT: c_int = 0x10;
 const MODE_NORMAL: c_int = 0x01;
 const MODE_CMDLINE: c_int = 0x04;
+const MODE_TERMINAL: c_int = 0x1000;
 
 // Sign column constants (matching Neovim's optionstr.c)
 const SCL_NUM: c_int = -1;
@@ -472,6 +482,53 @@ fn win_cursorline_standout_impl(wp: WinHandle) -> bool {
     }
 }
 
+/// Return the effective 'scrolloff' value for the current window.
+///
+/// Uses the global value when window value is negative.
+/// Disallows scrolloff in terminal-mode for terminal buffers.
+#[inline]
+fn get_scrolloff_value_impl(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        let state = nvim_get_State();
+        let is_terminal_buf = nvim_win_buf_is_terminal(wp) != 0;
+
+        // Disallow scrolloff in terminal-mode for terminal buffers
+        if (state & MODE_TERMINAL) != 0 && is_terminal_buf {
+            return 0;
+        }
+
+        let w_so = nvim_win_get_p_so(wp);
+        if w_so < 0 {
+            nvim_get_p_so() as c_int
+        } else {
+            w_so as c_int
+        }
+    }
+}
+
+/// Return the effective 'sidescrolloff' value for the current window.
+///
+/// Uses the global value when window value is negative.
+#[inline]
+fn get_sidescrolloff_value_impl(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        let w_siso = nvim_win_get_p_siso(wp);
+        if w_siso < 0 {
+            nvim_get_p_siso() as c_int
+        } else {
+            w_siso as c_int
+        }
+    }
+}
+
 // ============================================================================
 // FFI Exports
 // ============================================================================
@@ -583,6 +640,24 @@ pub extern "C" fn rs_sms_marker_overlap(wp: WinHandle, extra2: c_int) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_win_cursorline_standout(wp: WinHandle) -> c_int {
     c_int::from(win_cursorline_standout_impl(wp))
+}
+
+/// Return the effective 'scrolloff' value for the current window.
+///
+/// # Safety
+/// The `wp` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_get_scrolloff_value(wp: WinHandle) -> c_int {
+    get_scrolloff_value_impl(wp)
+}
+
+/// Return the effective 'sidescrolloff' value for the current window.
+///
+/// # Safety
+/// The `wp` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_get_sidescrolloff_value(wp: WinHandle) -> c_int {
+    get_sidescrolloff_value_impl(wp)
 }
 
 #[cfg(test)]
