@@ -9,8 +9,9 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | api          | API types (Object, Dict, Array), type conversions  |
 | arabic       | Arabic text shaping, combining char support        |
 | ascii        | ASCII character predicates                         |
-| autocmd      | Autocommand state, pattern parsing                 |
-| buffer       | Buffer type/state queries                          |
+| autocmd      | Autocommand state, pattern parsing, event checking |
+| buffer       | Buffer type/state queries, bufref validation       |
+| buffer_updates | Buffer update tracking                           |
 | charset      | Character classification, skip*, str2nr, case folding |
 | cmdhist      | History type conversion                            |
 | cmdline      | Command line state queries                         |
