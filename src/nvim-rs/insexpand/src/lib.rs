@@ -42,6 +42,7 @@ const CONT_LOCAL: c_int = 32;
 extern "C" {
     fn nvim_get_ctrl_x_mode() -> c_int;
     fn nvim_get_compl_cont_status() -> c_int;
+    fn nvim_get_compl_started() -> c_int;
 }
 
 /// Check if CTRL-X mode is none (0).
@@ -174,6 +175,12 @@ pub unsafe extern "C" fn rs_compl_status_sol() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_compl_status_local() -> c_int {
     c_int::from((nvim_get_compl_cont_status() & CONT_LOCAL) != 0)
+}
+
+/// Check if Insert completion is active.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_active() -> c_int {
+    nvim_get_compl_started()
 }
 
 #[cfg(test)]

@@ -105,6 +105,7 @@ extern int rs_ctrl_x_mode_not_defined_yet(void);
 extern int rs_compl_status_adding(void);
 extern int rs_compl_status_sol(void);
 extern int rs_compl_status_local(void);
+extern int rs_ins_compl_active(void);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -2003,7 +2004,7 @@ void ins_compl_clear(void)
 bool ins_compl_active(void)
   FUNC_ATTR_PURE
 {
-  return compl_started;
+  return rs_ins_compl_active() != 0;
 }
 
 /// Return true when wp is the actual completion window
@@ -6506,4 +6507,10 @@ int nvim_get_ctrl_x_mode(void)
 int nvim_get_compl_cont_status(void)
 {
   return compl_cont_status;
+}
+
+/// Get the completion started flag (accessor for Rust).
+int nvim_get_compl_started(void)
+{
+  return compl_started;
 }
