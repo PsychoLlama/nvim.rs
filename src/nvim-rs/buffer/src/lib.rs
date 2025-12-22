@@ -82,6 +82,21 @@ extern "C" {
 
     /// Get the `cmdmod.cmod_flags` field.
     fn nvim_get_cmdmod_cmod_flags() -> c_int;
+
+    /// Get the `buf_free_count` global counter.
+    fn nvim_get_buf_free_count() -> c_int;
+
+    /// Get the `br_buf` field from a bufref.
+    fn nvim_bufref_get_buf(bufref: *const std::ffi::c_void) -> BufHandle;
+
+    /// Get the `br_fnum` field from a bufref.
+    fn nvim_bufref_get_fnum(bufref: *const std::ffi::c_void) -> c_int;
+
+    /// Get the `br_buf_free_count` field from a bufref.
+    fn nvim_bufref_get_buf_free_count(bufref: *const std::ffi::c_void) -> c_int;
+
+    /// Get the `b_fnum` field from a buffer.
+    fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
 }
 
 /// Check if "buf" is a pointer to an existing buffer.
@@ -112,6 +127,51 @@ fn buf_valid_impl(buf: BufHandle) -> bool {
 #[no_mangle]
 pub extern "C" fn rs_buf_valid(buf: BufHandle) -> c_int {
     c_int::from(buf_valid_impl(buf))
+}
+
+/// Check if a buffer reference is still valid.
+///
+/// Uses the cached `buf_free_count` to avoid iterating through the buffer
+/// list when no buffers have been freed since the reference was created.
+/// If `buf_free_count` has changed, falls back to `buf_valid` and verifies
+/// the buffer's fnum still matches.
+///
+/// # Safety
+/// `bufref` must be a valid pointer to a `bufref_T` structure.
+#[inline]
+fn bufref_valid_impl(bufref: *const std::ffi::c_void) -> bool {
+    if bufref.is_null() {
+        return false;
+    }
+    // SAFETY: We check for null above.
+    unsafe {
+        let cached_count = nvim_bufref_get_buf_free_count(bufref);
+        let current_count = nvim_get_buf_free_count();
+
+        if cached_count == current_count {
+            // No buffers have been freed since the reference was created
+            return true;
+        }
+
+        // buf_free_count changed, need to verify the buffer is still valid
+        let buf = nvim_bufref_get_buf(bufref);
+        if !buf_valid_impl(buf) {
+            return false;
+        }
+
+        // Also verify the buffer's fnum still matches
+        let ref_fnum = nvim_bufref_get_fnum(bufref);
+        let buf_fnum = nvim_buf_get_fnum(buf);
+        ref_fnum == buf_fnum
+    }
+}
+
+/// FFI wrapper for `bufref_valid`.
+///
+/// Returns non-zero if the buffer reference is still valid.
+#[no_mangle]
+pub extern "C" fn rs_bufref_valid(bufref: *const std::ffi::c_void) -> c_int {
+    c_int::from(bufref_valid_impl(bufref))
 }
 
 /// Check if buffer is a prompt buffer ('buftype' starts with 'p').

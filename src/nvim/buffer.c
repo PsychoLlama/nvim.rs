@@ -130,6 +130,7 @@ extern int rs_bt_nofileread(buf_T *buf);
 extern int rs_buf_valid(buf_T *buf);
 extern int rs_get_highest_fnum(void);
 extern int rs_buf_hide(buf_T *buf);
+extern int rs_bufref_valid(bufref_T *bufref);
 
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to buf_T fields from Rust code.
@@ -187,6 +188,36 @@ static const char e_attempt_to_delete_buffer_that_is_in_use_str[]
 
 // Number of times free_buffer() was called.
 static int buf_free_count = 0;
+
+/// Get the buf_free_count global (accessor for Rust).
+int nvim_get_buf_free_count(void)
+{
+  return buf_free_count;
+}
+
+/// Get the br_buf field from a bufref (accessor for Rust).
+buf_T *nvim_bufref_get_buf(bufref_T *bufref)
+{
+  return bufref->br_buf;
+}
+
+/// Get the br_fnum field from a bufref (accessor for Rust).
+int nvim_bufref_get_fnum(bufref_T *bufref)
+{
+  return bufref->br_fnum;
+}
+
+/// Get the br_buf_free_count field from a bufref (accessor for Rust).
+int nvim_bufref_get_buf_free_count(bufref_T *bufref)
+{
+  return bufref->br_buf_free_count;
+}
+
+/// Get the b_fnum field from a buffer (accessor for Rust).
+int nvim_buf_get_fnum(buf_T *buf)
+{
+  return buf->b_fnum;
+}
 
 static int top_file_num = 1;            ///< highest file number
 
@@ -531,9 +562,7 @@ void set_bufref(bufref_T *bufref, buf_T *buf)
 bool bufref_valid(bufref_T *bufref)
   FUNC_ATTR_PURE
 {
-  return bufref->br_buf_free_count == buf_free_count
-         ? true
-         : buf_valid(bufref->br_buf) && bufref->br_fnum == bufref->br_buf->b_fnum;
+  return rs_bufref_valid(bufref) != 0;
 }
 
 /// Check that "buf" points to a valid buffer in the buffer list.
