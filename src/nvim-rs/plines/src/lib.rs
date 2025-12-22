@@ -65,6 +65,11 @@ extern "C" {
     // Existing Rust functions we can call
     fn rs_tabstop_padding(col: c_int, ts: i64, vts: *const c_int) -> c_int;
     fn rs_ptr2cells(p: *const c_char) -> c_int;
+
+    // Window properties for win_col_off
+    fn nvim_win_is_cmdwin(wp: WinHandle) -> c_int;
+    fn nvim_win_get_scwidth(wp: WinHandle) -> c_int;
+    fn nvim_get_p_cpo() -> *const c_char;
 }
 
 // Mode constants (matching Neovim's state.h)
@@ -75,6 +80,10 @@ const MODE_CMDLINE: c_int = 0x04;
 
 // Sign column constants (matching Neovim's optionstr.c)
 const SCL_NUM: c_int = -1;
+
+// Display constants
+const SIGN_WIDTH: c_int = 2;
+const CPO_NUMCOL: c_int = b'n' as c_int;
 
 // ============================================================================
 // Display Calculations
@@ -261,6 +270,64 @@ fn win_may_fill_impl(wp: WinHandle) -> bool {
     }
 }
 
+/// Return the offset for the window's first column.
+///
+/// Takes into account line numbers, fold column, sign column, and command-line window.
+#[inline]
+fn win_col_off_impl(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        let p_nu = nvim_win_get_p_nu(wp) != 0;
+        let p_rnu = nvim_win_get_p_rnu(wp) != 0;
+        let p_stc = nvim_win_get_p_stc(wp);
+        let has_stc = !p_stc.is_null() && *p_stc != 0;
+
+        // Number column contribution
+        let num_col = if p_nu || p_rnu || has_stc {
+            rs_number_width(wp) + c_int::from(!has_stc)
+        } else {
+            0
+        };
+
+        // Command-line window adds 1 column
+        let cmdwin_col = c_int::from(nvim_win_is_cmdwin(wp) != 0);
+
+        // Fold column
+        let fdc = nvim_win_fdccol_count(wp);
+
+        // Sign column
+        let scwidth = nvim_win_get_scwidth(wp);
+
+        num_col + cmdwin_col + fdc + (scwidth * SIGN_WIDTH)
+    }
+}
+
+/// Return the offset for wrapped lines (second screen line onwards).
+///
+/// It's positive if 'number' or 'relativenumber' is on and 'n' is in 'cpoptions'.
+#[inline]
+fn win_col_off2_impl(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        let p_nu = nvim_win_get_p_nu(wp) != 0;
+        let p_rnu = nvim_win_get_p_rnu(wp) != 0;
+        let p_stc = nvim_win_get_p_stc(wp);
+        let has_stc = !p_stc.is_null() && *p_stc != 0;
+
+        if (p_nu || p_rnu || has_stc) && !nvim_vim_strchr(nvim_get_p_cpo(), CPO_NUMCOL).is_null() {
+            rs_number_width(wp) + c_int::from(!has_stc)
+        } else {
+            0
+        }
+    }
+}
+
 // ============================================================================
 // FFI Exports
 // ============================================================================
@@ -315,6 +382,24 @@ pub extern "C" fn rs_charsize_nowrap(
 #[no_mangle]
 pub extern "C" fn rs_win_may_fill(wp: WinHandle) -> c_int {
     c_int::from(win_may_fill_impl(wp))
+}
+
+/// Return the offset for the window's first column.
+///
+/// # Safety
+/// The `wp` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_win_col_off(wp: WinHandle) -> c_int {
+    win_col_off_impl(wp)
+}
+
+/// Return the offset for wrapped lines (second screen line onwards).
+///
+/// # Safety
+/// The `wp` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_win_col_off2(wp: WinHandle) -> c_int {
+    win_col_off2_impl(wp)
 }
 
 #[cfg(test)]

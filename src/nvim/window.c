@@ -556,6 +556,24 @@ int nvim_diffopt_filler(void)
   return diffopt_filler();
 }
 
+/// Check if window is the command-line window.
+int nvim_win_is_cmdwin(win_T *wp)
+{
+  return wp == cmdwin_win;
+}
+
+/// Get the signcolumn width for a window.
+int nvim_win_get_scwidth(win_T *wp)
+{
+  return wp->w_scwidth;
+}
+
+/// Get the p_cpo global option string.
+char *nvim_get_p_cpo(void)
+{
+  return p_cpo;
+}
+
 #define NOWIN           ((win_T *)-1)   // non-existing window
 
 #define ROWS_AVAIL (Rows - p_ch - tabline_height() - global_stl_height())

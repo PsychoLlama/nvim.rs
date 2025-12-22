@@ -58,6 +58,10 @@ typedef struct {
 
 #include "move.c.generated.h"
 
+// Rust implementations
+extern int rs_win_col_off(win_T *wp);
+extern int rs_win_col_off2(win_T *wp);
+
 /// Get the number of screen lines skipped with "wp->w_skipcol".
 static int adjust_plines_for_skipcol(win_T *wp)
 {
@@ -777,10 +781,7 @@ void validate_cursor_col(win_T *wp)
 // fold column and sign column (these don't move when scrolling horizontally).
 int win_col_off(win_T *wp)
 {
-  return ((wp->w_p_nu || wp->w_p_rnu || *wp->w_p_stc != NUL)
-          ? (number_width(wp) + (*wp->w_p_stc == NUL)) : 0)
-         + ((wp != cmdwin_win) ? 0 : 1)
-         + win_fdccol_count(wp) + (wp->w_scwidth * SIGN_WIDTH);
+  return rs_win_col_off(wp);
 }
 
 // Return the difference in column offset for the second screen line of a
@@ -788,11 +789,7 @@ int win_col_off(win_T *wp)
 // is in 'cpoptions'.
 int win_col_off2(win_T *wp)
 {
-  if ((wp->w_p_nu || wp->w_p_rnu || *wp->w_p_stc != NUL)
-      && vim_strchr(p_cpo, CPO_NUMCOL) != NULL) {
-    return number_width(wp) + (*wp->w_p_stc == NUL);
-  }
-  return 0;
+  return rs_win_col_off2(wp);
 }
 
 // Compute wp->w_wcol and wp->w_virtcol.
