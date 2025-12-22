@@ -70,6 +70,7 @@ extern MultiQueue *rs_loop_get_events(Loop *loop);
 extern int rs_is_autocmd_blocked(void);
 extern size_t rs_aucmd_pattern_length(const char *pat);
 extern const char *rs_aucmd_next_pattern(const char *pat, size_t patlen);
+extern int rs_aupat_is_buflocal(const char *pat, int patlen);
 
 static const char e_autocommand_nesting_too_deep[]
   = N_("E218: Autocommand nesting too deep");
@@ -2408,7 +2409,7 @@ theend:
 bool aupat_is_buflocal(const char *pat, int patlen)
   FUNC_ATTR_PURE
 {
-  return patlen >= 8 && strncmp(pat, "<buffer", 7) == 0 && (pat)[patlen - 1] == '>';
+  return rs_aupat_is_buflocal(pat, patlen) != 0;
 }
 
 int aupat_get_buflocal_nr(const char *pat, int patlen)

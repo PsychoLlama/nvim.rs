@@ -109,6 +109,40 @@ pub unsafe extern "C" fn rs_aucmd_next_pattern(pat: *const c_char, patlen: usize
     p
 }
 
+/// Checks if an autocommand pattern is buffer-local.
+///
+/// A pattern is buffer-local if it starts with "<buffer" and ends with ">".
+/// Examples: "<buffer>", "<buffer=1>", "<buffer=abuf>"
+///
+/// # Safety
+/// `pat` must be a valid pointer to at least `patlen` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_aupat_is_buflocal(pat: *const c_char, patlen: c_int) -> c_int {
+    if pat.is_null() || patlen < 8 {
+        return 0;
+    }
+
+    let patlen = patlen as usize;
+
+    // Check starts with "<buffer" (7 chars)
+    let buffer_prefix = b"<buffer";
+    for (i, &expected) in buffer_prefix.iter().enumerate() {
+        let c = *pat.add(i) as u8;
+        // Case-insensitive comparison for 'b', 'u', 'f', 'e', 'r'
+        if i == 0 {
+            if c != b'<' {
+                return 0;
+            }
+        } else if c.to_ascii_lowercase() != expected {
+            return 0;
+        }
+    }
+
+    // Check ends with ">"
+    let last = *pat.add(patlen - 1) as u8;
+    c_int::from(last == b'>')
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -145,6 +179,38 @@ mod tests {
             let next = rs_aucmd_next_pattern(ptr, 3);
             // Should point to "*.h"
             assert_eq!(*next, b'*' as c_char);
+        }
+    }
+
+    #[test]
+    fn test_aupat_is_buflocal() {
+        unsafe {
+            // Valid buffer-local patterns
+            let buf = CString::new("<buffer>").unwrap();
+            assert_eq!(rs_aupat_is_buflocal(buf.as_ptr(), 8), 1);
+
+            let buf_eq = CString::new("<buffer=1>").unwrap();
+            assert_eq!(rs_aupat_is_buflocal(buf_eq.as_ptr(), 10), 1);
+
+            let buf_abuf = CString::new("<buffer=abuf>").unwrap();
+            assert_eq!(rs_aupat_is_buflocal(buf_abuf.as_ptr(), 13), 1);
+
+            // Case insensitive
+            let buf_upper = CString::new("<BUFFER>").unwrap();
+            assert_eq!(rs_aupat_is_buflocal(buf_upper.as_ptr(), 8), 1);
+
+            // Invalid patterns
+            let short = CString::new("<buf>").unwrap();
+            assert_eq!(rs_aupat_is_buflocal(short.as_ptr(), 5), 0);
+
+            let no_end = CString::new("<buffer").unwrap();
+            assert_eq!(rs_aupat_is_buflocal(no_end.as_ptr(), 7), 0);
+
+            let wrong_start = CString::new("buffer>").unwrap();
+            assert_eq!(rs_aupat_is_buflocal(wrong_start.as_ptr(), 7), 0);
+
+            let normal = CString::new("*.c").unwrap();
+            assert_eq!(rs_aupat_is_buflocal(normal.as_ptr(), 3), 0);
         }
     }
 }
