@@ -7,7 +7,7 @@
 #![allow(unsafe_code)]
 #![allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
 
-use std::os::raw::c_int;
+use std::os::raw::{c_int, c_uint};
 
 // Modifier mask constants (from keycodes.h)
 const MOD_MASK_SHIFT: c_int = 0x02;
@@ -26,6 +26,7 @@ const TAB: c_int = 0x09;
 const K_SPECIAL: u8 = 0x80;
 
 // KS_* values for special key type identification
+const KS_MODIFIER: u8 = 252;
 const KS_EXTRA: c_int = 253;
 const KS_SPECIAL: u8 = 254;
 
@@ -1213,6 +1214,79 @@ pub unsafe extern "C" fn rs_vim_strsave_escape_ks(
     res
 }
 
+/// Check if a key code is a special key (negative value).
+#[inline]
+const fn is_special(key: c_int) -> bool {
+    key < 0
+}
+
+/// Encode a key and modifiers into a byte sequence.
+///
+/// Writes the encoded bytes to `dst` and returns the number of bytes written.
+/// This is how characters in a string are encoded for the typeahead buffer.
+///
+/// # Safety
+///
+/// - `dst` must be a valid pointer to a buffer with at least 6 bytes of space.
+///
+/// # Returns
+///
+/// Number of bytes written to `dst`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_special_to_buf(
+    key: c_int,
+    modifiers: c_int,
+    escape_ks: bool,
+    dst: *mut std::ffi::c_char,
+) -> c_uint {
+    if dst.is_null() {
+        return 0;
+    }
+
+    let d = dst.cast::<u8>();
+    let mut dlen: c_uint = 0;
+
+    // Put the appropriate modifier in a string
+    if modifiers != 0 {
+        *d.add(dlen as usize) = K_SPECIAL;
+        *d.add(dlen as usize + 1) = KS_MODIFIER;
+        // modifiers is a bitmask that fits in a byte
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        {
+            *d.add(dlen as usize + 2) = modifiers as u8;
+        }
+        dlen += 3;
+    }
+
+    if is_special(key) {
+        *d.add(dlen as usize) = K_SPECIAL;
+        // key2termcap returns values already masked to 0xff
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        {
+            *d.add(dlen as usize + 1) = key2termcap0(key) as u8;
+            *d.add(dlen as usize + 2) = key2termcap1(key) as u8;
+        }
+        dlen += 3;
+    } else if escape_ks {
+        let after = rs_add_char2buf(key, dst.add(dlen as usize));
+        let after_offset = after.offset_from(dst);
+        // after_offset is always positive (pointer advances forward)
+        #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+        {
+            dlen = after_offset as c_uint;
+        }
+    } else {
+        let written = nvim_mbyte::rs_utf_char2bytes(key, dst.add(dlen as usize));
+        // written is always 1-6 bytes (valid UTF-8 character)
+        #[allow(clippy::cast_sign_loss)]
+        {
+            dlen += written as c_uint;
+        }
+    }
+
+    dlen
+}
+
 #[cfg(test)]
 #[allow(
     clippy::cast_lossless,
@@ -1653,6 +1727,57 @@ mod tests {
         unsafe {
             let result = rs_add_char2buf(b'A' as c_int, std::ptr::null_mut());
             assert!(result.is_null());
+        }
+    }
+
+    #[test]
+    fn test_special_to_buf_null_ptr() {
+        // Null pointer should return 0
+        unsafe {
+            let result = rs_special_to_buf(b'A' as c_int, 0, false, std::ptr::null_mut());
+            assert_eq!(result, 0);
+        }
+    }
+
+    #[test]
+    fn test_special_to_buf_regular_char() {
+        // Regular ASCII character without modifiers
+        let mut buf = [0i8; 10];
+        unsafe {
+            let result = rs_special_to_buf(b'A' as c_int, 0, false, buf.as_mut_ptr());
+            assert_eq!(result, 1);
+            assert_eq!(buf[0], b'A' as i8);
+        }
+    }
+
+    #[test]
+    fn test_special_to_buf_with_modifiers() {
+        // Character with modifiers
+        let mut buf = [0i8; 10];
+        unsafe {
+            let result = rs_special_to_buf(b'A' as c_int, MOD_MASK_CTRL, false, buf.as_mut_ptr());
+            // Should write 3 bytes for modifier + 1 byte for character
+            assert_eq!(result, 4);
+            assert_eq!(buf[0] as u8, K_SPECIAL);
+            assert_eq!(buf[1] as u8, KS_MODIFIER);
+            assert_eq!(buf[2] as u8, MOD_MASK_CTRL as u8);
+            assert_eq!(buf[3], b'A' as i8);
+        }
+    }
+
+    #[test]
+    fn test_special_to_buf_special_key() {
+        // Special key (negative key code)
+        let mut buf = [0i8; 10];
+        let key = termcap2key(b'k' as c_int, b'u' as c_int); // K_UP
+        unsafe {
+            let result = rs_special_to_buf(key, 0, false, buf.as_mut_ptr());
+            // Should write 3 bytes for special key
+            assert_eq!(result, 3);
+            assert_eq!(buf[0] as u8, K_SPECIAL);
+            // Verify the termcap bytes
+            assert_eq!(buf[1] as u8, key2termcap0(key) as u8);
+            assert_eq!(buf[2] as u8, key2termcap1(key) as u8);
         }
     }
 

@@ -34,6 +34,7 @@ extern int rs_get_mouse_button(int code, bool *is_click, bool *is_drag);
 extern void rs_vim_unescape_ks(char *p);
 extern char *rs_add_char2buf(int c, char *s);
 extern char *rs_vim_strsave_escape_ks(char *p);
+extern unsigned rs_special_to_buf(int key, int modifiers, bool escape_ks, char *dst);
 
 typedef struct {
   int key;
@@ -308,28 +309,7 @@ unsigned trans_special(const char **const srcp, const size_t src_len, char *cons
 /// This is how characters in a string are encoded.
 unsigned special_to_buf(int key, int modifiers, bool escape_ks, char *dst)
 {
-  unsigned dlen = 0;
-
-  // Put the appropriate modifier in a string.
-  if (modifiers != 0) {
-    dst[dlen++] = (char)(uint8_t)K_SPECIAL;
-    dst[dlen++] = (char)(uint8_t)KS_MODIFIER;
-    dst[dlen++] = (char)(uint8_t)modifiers;
-  }
-
-  if (IS_SPECIAL(key)) {
-    dst[dlen++] = (char)(uint8_t)K_SPECIAL;
-    dst[dlen++] = (char)(uint8_t)KEY2TERMCAP0(key);
-    dst[dlen++] = (char)(uint8_t)KEY2TERMCAP1(key);
-  } else if (escape_ks) {
-    char *after = add_char2buf(key, dst + dlen);
-    assert(after >= dst && (uintmax_t)(after - dst) <= UINT_MAX);
-    dlen = (unsigned)(after - dst);
-  } else {
-    dlen += (unsigned)utf_char2bytes(key, dst + dlen);
-  }
-
-  return dlen;
+  return rs_special_to_buf(key, modifiers, escape_ks, dst);
 }
 
 /// Try translating a <> name
