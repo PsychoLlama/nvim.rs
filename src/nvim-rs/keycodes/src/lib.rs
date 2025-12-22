@@ -1113,8 +1113,56 @@ pub unsafe extern "C" fn rs_vim_unescape_ks(p: *mut std::ffi::c_char) {
     *d = 0; // NUL terminate
 }
 
+/// Add a character to a buffer, escaping `K_SPECIAL` bytes.
+///
+/// Converts the character to UTF-8 bytes and writes them to the buffer.
+/// Any `K_SPECIAL` byte in the UTF-8 encoding is escaped as
+/// `K_SPECIAL` `KS_SPECIAL` `KE_FILLER`.
+///
+/// # Safety
+/// - `s` must be a valid pointer to a buffer with at least `MB_MAXBYTES * 3 + 1` bytes
+///   available (worst case: 6 UTF-8 bytes each escaped to 3 bytes).
+///
+/// # Returns
+/// Pointer to after the added bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_add_char2buf(
+    c: c_int,
+    s: *mut std::ffi::c_char,
+) -> *mut std::ffi::c_char {
+    if s.is_null() {
+        return s;
+    }
+
+    // Convert character to UTF-8 bytes (MB_MAXBYTES = 6 for UTF-8)
+    let mut temp = [0u8; 7];
+    let len = nvim_mbyte::rs_utf_char2bytes(c, temp.as_mut_ptr().cast::<std::ffi::c_char>());
+
+    let mut d = s.cast::<u8>();
+    let len_usize = usize::try_from(len).unwrap_or(0);
+    for &byte in temp.iter().take(len_usize) {
+        if byte == K_SPECIAL {
+            // Escape K_SPECIAL as 3-byte sequence
+            *d = K_SPECIAL;
+            *d.add(1) = KS_SPECIAL;
+            *d.add(2) = b'X'; // KE_FILLER
+            d = d.add(3);
+        } else {
+            *d = byte;
+            d = d.add(1);
+        }
+    }
+
+    d.cast()
+}
+
 #[cfg(test)]
-#[allow(clippy::cast_lossless, clippy::borrow_as_ptr, clippy::ptr_as_ptr)]
+#[allow(
+    clippy::cast_lossless,
+    clippy::borrow_as_ptr,
+    clippy::ptr_as_ptr,
+    clippy::cast_sign_loss
+)]
 mod tests {
     use super::*;
 
@@ -1498,6 +1546,56 @@ mod tests {
         // Null pointer should not crash
         unsafe {
             rs_vim_unescape_ks(std::ptr::null_mut());
+        }
+    }
+
+    #[test]
+    fn test_add_char2buf_ascii() {
+        // ASCII character 'A' should just be copied
+        let mut buf = [0i8; 20];
+        unsafe {
+            let end = rs_add_char2buf(b'A' as c_int, buf.as_mut_ptr());
+            assert_eq!(end.offset_from(buf.as_ptr()), 1);
+            assert_eq!(buf[0] as u8, b'A');
+        }
+    }
+
+    #[test]
+    fn test_add_char2buf_multibyte() {
+        // Euro sign € (U+20AC) encodes as 3 UTF-8 bytes: E2 82 AC
+        let mut buf = [0i8; 20];
+        unsafe {
+            let end = rs_add_char2buf(0x20AC, buf.as_mut_ptr());
+            assert_eq!(end.offset_from(buf.as_ptr()), 3);
+            assert_eq!(buf[0] as u8, 0xE2);
+            assert_eq!(buf[1] as u8, 0x82);
+            assert_eq!(buf[2] as u8, 0xAC);
+        }
+    }
+
+    #[test]
+    fn test_add_char2buf_k_special_escape() {
+        // Character that encodes to K_SPECIAL (0x80) should be escaped
+        // U+0080 encodes as C2 80 in UTF-8
+        let mut buf = [0i8; 20];
+        unsafe {
+            let end = rs_add_char2buf(0x80, buf.as_mut_ptr());
+            // First byte C2 is normal, second byte 0x80 gets escaped to 3 bytes
+            // Total: 1 + 3 = 4 bytes
+            assert_eq!(end.offset_from(buf.as_ptr()), 4);
+            assert_eq!(buf[0] as u8, 0xC2);
+            assert_eq!(buf[1] as u8, K_SPECIAL);
+            assert_eq!(buf[2] as u8, KS_SPECIAL);
+            assert_eq!(buf[3] as u8, b'X');
+        }
+    }
+
+    #[test]
+    fn test_add_char2buf_null_ptr() {
+        // Null pointer should be returned as-is
+        unsafe {
+            let result = rs_add_char2buf(b'A' as c_int, std::ptr::null_mut());
+            assert!(result.is_null());
         }
     }
 }

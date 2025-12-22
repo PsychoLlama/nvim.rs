@@ -10,6 +10,7 @@ crate-type = ["staticlib", "rlib"]
 
 [dependencies]
 nvim-ascii = { path = "../ascii" }
+nvim-mbyte = { path = "../mbyte" }
 
 [lints]
 workspace = true

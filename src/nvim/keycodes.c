@@ -32,6 +32,7 @@ extern int rs_handle_x_keys(int key);
 extern int rs_simplify_key(int key, int *modifiers);
 extern int rs_get_mouse_button(int code, bool *is_click, bool *is_drag);
 extern void rs_vim_unescape_ks(char *p);
+extern char *rs_add_char2buf(int c, char *s);
 
 typedef struct {
   int key;
@@ -693,20 +694,7 @@ char *replace_termcodes(const char *const from, const size_t from_len, char **co
 char *add_char2buf(int c, char *s)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  char temp[MB_MAXBYTES + 1];
-  const int len = utf_char2bytes(c, temp);
-  for (int i = 0; i < len; i++) {
-    c = (uint8_t)temp[i];
-    // Need to escape K_SPECIAL like in the typeahead buffer.
-    if (c == K_SPECIAL) {
-      *s++ = (char)(uint8_t)K_SPECIAL;
-      *s++ = (char)(uint8_t)KS_SPECIAL;
-      *s++ = KE_FILLER;
-    } else {
-      *s++ = (char)(uint8_t)c;
-    }
-  }
-  return s;
+  return rs_add_char2buf(c, s);
 }
 
 /// Copy "p" to allocated memory, escaping K_SPECIAL so that the result
