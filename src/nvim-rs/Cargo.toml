@@ -32,6 +32,7 @@ nvim-event = { path = "event" }
 nvim-ex-docmd = { path = "ex_docmd" }
 nvim-ex-eval = { path = "ex_eval" }
 nvim-fileio = { path = "fileio" }
+nvim-fold = { path = "fold" }
 nvim-fuzzy = { path = "fuzzy" }
 nvim-getchar = { path = "getchar" }
 nvim-grid = { path = "grid" }
@@ -51,6 +52,7 @@ nvim-msgpack = { path = "msgpack" }
 nvim-ops = { path = "ops" }
 nvim-os = { path = "os" }
 nvim-path = { path = "path" }
+nvim-plines = { path = "plines" }
 nvim-profile = { path = "profile" }
 nvim-register = { path = "register" }
 nvim-search = { path = "search" }

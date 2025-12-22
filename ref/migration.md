@@ -25,6 +25,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | ex_docmd     | Ex command parsing helpers                         |
 | ex_eval      | Exception state checking                           |
 | fileio       | File time comparison                               |
+| fold         | Fold method checks, fold state queries             |
 | fuzzy        | Fuzzy matching algorithm (fzy-based)               |
 | getchar      | Typeahead buffer state                             |
 | grid         | Screen character (schar_T) operations              |
@@ -45,6 +46,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | ops          | Operator type queries                              |
 | os           | OS abstractions (env, time, fs)                    |
 | path         | Path manipulation, separators                      |
+| plines       | Display calculations, number_width, foldcolumn     |
 | profile      | Profiling time arithmetic                          |
 | register     | Register name validation                           |
 | search       | Character search state                             |

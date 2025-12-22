@@ -131,6 +131,11 @@ typedef enum {
 
 #include "drawscreen.c.generated.h"
 
+// Rust FFI declarations for display calculations
+extern int rs_compute_foldcolumn(win_T *wp, int col);
+extern int rs_number_width(win_T *wp);
+extern int rs_conceal_cursor_line(const win_T *wp);
+
 static bool redraw_popupmenu = false;
 static bool msg_grid_invalid = false;
 static bool resizing_autocmd = false;
@@ -2526,11 +2531,7 @@ void win_draw_end(win_T *wp, schar_T c1, bool draw_margin, int startrow, int end
 /// space is available for window "wp", minus "col".
 int compute_foldcolumn(win_T *wp, int col)
 {
-  int fdc = win_fdccol_count(wp);
-  int wmw = wp == curwin && p_wmw == 0 ? 1 : (int)p_wmw;
-  int n = wp->w_view_width - (col + wmw);
-
-  return MIN(fdc, n);
+  return rs_compute_foldcolumn(wp, col);
 }
 
 /// Return the width of the 'number' and 'relativenumber' column.
@@ -2538,45 +2539,7 @@ int compute_foldcolumn(win_T *wp, int col)
 /// Otherwise it depends on 'numberwidth' and the line count.
 int number_width(win_T *wp)
 {
-  linenr_T lnum;
-
-  if (wp->w_p_rnu && !wp->w_p_nu) {
-    // cursor line shows "0"
-    lnum = wp->w_view_height;
-  } else {
-    // cursor line shows absolute line number
-    lnum = wp->w_buffer->b_ml.ml_line_count;
-  }
-
-  if (lnum == wp->w_nrwidth_line_count) {
-    return wp->w_nrwidth_width;
-  }
-  wp->w_nrwidth_line_count = lnum;
-
-  // reset for 'statuscolumn'
-  if (*wp->w_p_stc != NUL) {
-    wp->w_statuscol_line_count = 0;  // make sure width is re-estimated
-    wp->w_nrwidth_width = (wp->w_p_nu || wp->w_p_rnu) * (int)wp->w_p_nuw;
-    return wp->w_nrwidth_width;
-  }
-
-  int n = 0;
-  do {
-    lnum /= 10;
-    n++;
-  } while (lnum > 0);
-
-  // 'numberwidth' gives the minimal width plus one
-  n = MAX(n, (int)wp->w_p_nuw - 1);
-
-  // If 'signcolumn' is set to 'number' and there is a sign to display, then
-  // the minimal width for the number column is 2.
-  if (n < 2 && buf_meta_total(wp->w_buffer, kMTMetaSignText) && wp->w_minscwidth == SCL_NUM) {
-    n = 2;
-  }
-
-  wp->w_nrwidth_width = n;
-  return n;
+  return rs_number_width(wp);
 }
 
 /// Redraw a window later, with wp->w_redr_type >= type.
@@ -2783,23 +2746,7 @@ void win_redraw_last_status(const frame_T *frp)
 bool conceal_cursor_line(const win_T *wp)
   FUNC_ATTR_NONNULL_ALL
 {
-  int c;
-
-  if (*wp->w_p_cocu == NUL) {
-    return false;
-  }
-  if (get_real_state() & MODE_VISUAL) {
-    c = 'v';
-  } else if (State & MODE_INSERT) {
-    c = 'i';
-  } else if (State & MODE_NORMAL) {
-    c = 'n';
-  } else if (State & MODE_CMDLINE) {
-    c = 'c';
-  } else {
-    return false;
-  }
-  return vim_strchr(wp->w_p_cocu, c) != NULL;
+  return rs_conceal_cursor_line(wp) != 0;
 }
 
 /// Whether cursorline is drawn in a special way

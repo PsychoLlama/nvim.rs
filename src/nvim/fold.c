@@ -108,6 +108,16 @@ typedef void (*LevelGetter)(fline_T *);
 // static functions {{{2
 
 #include "fold.c.generated.h"
+
+// Rust FFI declarations for fold method checks
+extern int rs_foldmethodIsManual(win_T *wp);
+extern int rs_foldmethodIsIndent(win_T *wp);
+extern int rs_foldmethodIsExpr(win_T *wp);
+extern int rs_foldmethodIsMarker(win_T *wp);
+extern int rs_foldmethodIsSyntax(win_T *wp);
+extern int rs_foldmethodIsDiff(win_T *wp);
+extern int rs_hasAnyFolding(win_T *win);
+
 static const char *e_nofold = N_("E490: No fold found");
 
 // While updating the folds lines between invalid_top and invalid_bot have an
@@ -146,9 +156,7 @@ void copyFoldingState(win_T *wp_from, win_T *wp_to)
 /// @return  true if there may be folded lines in window "win".
 int hasAnyFolding(win_T *win)
 {
-  // very simple now, but can become more complex later
-  return !win->w_buffer->terminal && win->w_p_fen
-         && (!foldmethodIsManual(win) || !GA_EMPTY(&win->w_folds));
+  return rs_hasAnyFolding(win);
 }
 
 // hasFolding() {{{2
@@ -322,42 +330,42 @@ foldinfo_T fold_info(win_T *win, linenr_T lnum)
 /// @return  true if 'foldmethod' is "manual"
 bool foldmethodIsManual(win_T *wp)
 {
-  return wp->w_p_fdm[3] == 'u';
+  return rs_foldmethodIsManual(wp) != 0;
 }
 
 // foldmethodIsIndent() {{{2
 /// @return  true if 'foldmethod' is "indent"
 bool foldmethodIsIndent(win_T *wp)
 {
-  return wp->w_p_fdm[0] == 'i';
+  return rs_foldmethodIsIndent(wp) != 0;
 }
 
 // foldmethodIsExpr() {{{2
 /// @return  true if 'foldmethod' is "expr"
 bool foldmethodIsExpr(win_T *wp)
 {
-  return wp->w_p_fdm[1] == 'x';
+  return rs_foldmethodIsExpr(wp) != 0;
 }
 
 // foldmethodIsMarker() {{{2
 /// @return  true if 'foldmethod' is "marker"
 bool foldmethodIsMarker(win_T *wp)
 {
-  return wp->w_p_fdm[2] == 'r';
+  return rs_foldmethodIsMarker(wp) != 0;
 }
 
 // foldmethodIsSyntax() {{{2
 /// @return  true if 'foldmethod' is "syntax"
 bool foldmethodIsSyntax(win_T *wp)
 {
-  return wp->w_p_fdm[0] == 's';
+  return rs_foldmethodIsSyntax(wp) != 0;
 }
 
 // foldmethodIsDiff() {{{2
 /// @return  true if 'foldmethod' is "diff"
 bool foldmethodIsDiff(win_T *wp)
 {
-  return wp->w_p_fdm[0] == 'd';
+  return rs_foldmethodIsDiff(wp) != 0;
 }
 
 // closeFold() {{{2

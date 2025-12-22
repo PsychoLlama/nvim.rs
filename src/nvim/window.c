@@ -383,6 +383,161 @@ int nvim_win_get_handle(win_T *wp)
   return wp->handle;
 }
 
+// Accessors for fold.c migration (Phase: fold method checks)
+
+/// Get a character from the foldmethod string at the given index.
+/// Used by Rust foldmethodIs* functions to check fold method.
+char nvim_win_get_fdm_char(win_T *wp, int idx)
+{
+  return wp->w_p_fdm[idx];
+}
+
+/// Get the w_p_fen (foldenable) field from a window.
+int nvim_win_get_p_fen(win_T *wp)
+{
+  return wp->w_p_fen;
+}
+
+/// Check if window's buffer has a terminal.
+int nvim_win_buf_has_terminal(win_T *wp)
+{
+  return wp->w_buffer->terminal != NULL;
+}
+
+/// Check if window's folds growarray is empty.
+int nvim_win_folds_empty(win_T *wp)
+{
+  return GA_EMPTY(&wp->w_folds);
+}
+
+// Accessors for plines.c migration (Phase 3: display calculations)
+
+/// Get the w_view_width field from a window.
+int nvim_win_get_view_width(win_T *wp)
+{
+  return wp->w_view_width;
+}
+
+/// Get the w_view_height field from a window.
+int nvim_win_get_view_height(win_T *wp)
+{
+  return wp->w_view_height;
+}
+
+/// Get the fold column count for a window.
+int nvim_win_fdccol_count(win_T *wp)
+{
+  return win_fdccol_count(wp);
+}
+
+/// Check if the given window is the current window.
+int nvim_win_is_curwin(win_T *wp)
+{
+  return wp == curwin;
+}
+
+/// Get the w_p_rnu (relativenumber) field from a window.
+int nvim_win_get_p_rnu(win_T *wp)
+{
+  return wp->w_p_rnu;
+}
+
+/// Get the w_p_nu (number) field from a window.
+int nvim_win_get_p_nu(win_T *wp)
+{
+  return wp->w_p_nu;
+}
+
+/// Get the w_p_nuw (numberwidth) field from a window.
+OptInt nvim_win_get_p_nuw(win_T *wp)
+{
+  return wp->w_p_nuw;
+}
+
+/// Get the w_p_stc (statuscolumn) field from a window.
+char *nvim_win_get_p_stc(win_T *wp)
+{
+  return wp->w_p_stc;
+}
+
+/// Get the w_p_cocu (concealcursor) field from a window.
+char *nvim_win_get_p_cocu(win_T *wp)
+{
+  return wp->w_p_cocu;
+}
+
+/// Get the w_minscwidth field from a window.
+int nvim_win_get_minscwidth(win_T *wp)
+{
+  return wp->w_minscwidth;
+}
+
+/// Get the w_nrwidth_line_count field from a window.
+linenr_T nvim_win_get_nrwidth_line_count(win_T *wp)
+{
+  return wp->w_nrwidth_line_count;
+}
+
+/// Set the w_nrwidth_line_count field of a window.
+void nvim_win_set_nrwidth_line_count(win_T *wp, linenr_T val)
+{
+  wp->w_nrwidth_line_count = val;
+}
+
+/// Get the w_nrwidth_width field from a window.
+int nvim_win_get_nrwidth_width(win_T *wp)
+{
+  return wp->w_nrwidth_width;
+}
+
+/// Set the w_nrwidth_width field of a window.
+void nvim_win_set_nrwidth_width(win_T *wp, int val)
+{
+  wp->w_nrwidth_width = val;
+}
+
+/// Set the w_statuscol_line_count field of a window.
+void nvim_win_set_statuscol_line_count(win_T *wp, linenr_T val)
+{
+  wp->w_statuscol_line_count = val;
+}
+
+/// Get the buffer line count for a window.
+linenr_T nvim_win_buf_line_count(win_T *wp)
+{
+  return wp->w_buffer->b_ml.ml_line_count;
+}
+
+/// Get the sign text meta total for a window's buffer.
+int nvim_win_buf_meta_total_signtext(win_T *wp)
+{
+  return buf_meta_total(wp->w_buffer, kMTMetaSignText) > 0;
+}
+
+/// Get the global p_wmw value.
+OptInt nvim_get_p_wmw(void)
+{
+  return p_wmw;
+}
+
+/// Get the global State variable.
+int nvim_get_State(void)
+{
+  return State;
+}
+
+/// Get the real state (calls get_real_state()).
+int nvim_get_real_state(void)
+{
+  return get_real_state();
+}
+
+/// Wrapper for vim_strchr.
+char *nvim_vim_strchr(const char *s, int c)
+{
+  return vim_strchr(s, c);
+}
+
 #define NOWIN           ((win_T *)-1)   // non-existing window
 
 #define ROWS_AVAIL (Rows - p_ch - tabline_height() - global_stl_height())
