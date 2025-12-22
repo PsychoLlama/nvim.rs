@@ -33,6 +33,7 @@ extern int rs_simplify_key(int key, int *modifiers);
 extern int rs_get_mouse_button(int code, bool *is_click, bool *is_drag);
 extern void rs_vim_unescape_ks(char *p);
 extern char *rs_add_char2buf(int c, char *s);
+extern char *rs_vim_strsave_escape_ks(char *p);
 
 typedef struct {
   int key;
@@ -701,27 +702,7 @@ char *add_char2buf(int c, char *s)
 /// can be put in the typeahead buffer.
 char *vim_strsave_escape_ks(char *p)
 {
-  // Need a buffer to hold up to three times as much.  Four in case of an
-  // illegal utf-8 byte:
-  // 0xc0 -> 0xc3 - 0x80 -> 0xc3 K_SPECIAL KS_SPECIAL KE_FILLER
-  char *res = xmalloc(strlen(p) * 4 + 1);
-  char *d = res;
-  for (char *s = p; *s != NUL;) {
-    if ((uint8_t)s[0] == K_SPECIAL && s[1] != NUL && s[2] != NUL) {
-      // Copy special key unmodified.
-      *d++ = *s++;
-      *d++ = *s++;
-      *d++ = *s++;
-    } else {
-      // Add character, possibly multi-byte to destination, escaping
-      // K_SPECIAL. Be careful, it can be an illegal byte!
-      d = add_char2buf(utf_ptr2char(s), d);
-      s += utf_ptr2len(s);
-    }
-  }
-  *d = NUL;
-
-  return res;
+  return rs_vim_strsave_escape_ks(p);
 }
 
 /// Remove escaping from K_SPECIAL characters.  Reverse of

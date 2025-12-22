@@ -1156,6 +1156,63 @@ pub unsafe extern "C" fn rs_add_char2buf(
     d.cast()
 }
 
+/// Copy a string to allocated memory, escaping `K_SPECIAL` bytes.
+///
+/// This function allocates a new string and copies the input, escaping any
+/// `K_SPECIAL` bytes so the result can be put in the typeahead buffer.
+/// Existing special key sequences (`K_SPECIAL` followed by 2 bytes) are
+/// copied unchanged.
+///
+/// # Safety
+/// - `p` must be a valid pointer to a NUL-terminated C string.
+///
+/// # Returns
+/// Newly allocated string with `K_SPECIAL` bytes escaped. Caller must free.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_strsave_escape_ks(
+    p: *mut std::ffi::c_char,
+) -> *mut std::ffi::c_char {
+    if p.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    // Calculate buffer size: up to 4x the original (worst case for illegal UTF-8)
+    let len = libc::strlen(p);
+    let buf_size = len * 4 + 1;
+    let res = nvim_memory::xmalloc(buf_size).cast::<std::ffi::c_char>();
+
+    let mut s = p.cast::<u8>();
+    let mut d = res;
+
+    while *s != 0 {
+        if *s == K_SPECIAL && *s.add(1) != 0 && *s.add(2) != 0 {
+            // Copy special key unmodified (3-byte sequence)
+            let d_u8 = d.cast::<u8>();
+            *d_u8 = *s;
+            *d_u8.add(1) = *s.add(1);
+            *d_u8.add(2) = *s.add(2);
+            d = d.add(3);
+            s = s.add(3);
+        } else {
+            // Get character and advance source pointer
+            let c = nvim_mbyte::rs_utf_ptr2char(s.cast());
+            let char_len = nvim_mbyte::rs_utf_ptr2len(s.cast());
+
+            // Add character to destination, escaping K_SPECIAL
+            d = rs_add_char2buf(c, d);
+
+            // Advance source by character length
+            let advance = usize::try_from(char_len).unwrap_or(1);
+            s = s.add(advance);
+        }
+    }
+
+    // NUL terminate
+    *d = 0;
+
+    res
+}
+
 #[cfg(test)]
 #[allow(
     clippy::cast_lossless,
@@ -1598,4 +1655,7 @@ mod tests {
             assert!(result.is_null());
         }
     }
+
+    // Note: vim_strsave_escape_ks allocates memory with xmalloc which
+    // isn't available in pure Rust tests. Tested through C integration.
 }

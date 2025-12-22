@@ -9,8 +9,10 @@ description = "Keycode utilities for Neovim"
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
+libc = "0.2"
 nvim-ascii = { path = "../ascii" }
 nvim-mbyte = { path = "../mbyte" }
+nvim-memory = { path = "../memory" }
 
 [lints]
 workspace = true
