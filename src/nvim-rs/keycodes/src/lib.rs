@@ -120,6 +120,13 @@ const MOUSE_RELEASE: c_int = 0x03;
 const MOUSE_X1: c_int = 0x300;
 const MOUSE_X2: c_int = 0x400;
 
+// Special key codes for K_ZERO
+const KS_ZERO: c_int = 255;
+const KE_FILLER: c_int = b'X' as c_int;
+
+// NUL character
+const NUL: c_int = 0;
+
 /// Convert termcap codes to internal key representation
 /// TERMCAP2KEY(a, b) = -((a) + ((int)(b) << 8))
 const fn termcap2key(a: c_int, b: c_int) -> c_int {
@@ -163,6 +170,9 @@ const K_S_XF4: c_int = termcap2key(KS_EXTRA, KE_S_XF4);
 // Tab and Shift-Tab key codes
 const K_TAB: c_int = termcap2key(KS_EXTRA, KE_TAB);
 const K_S_TAB: c_int = termcap2key(b'k' as c_int, b'B' as c_int);
+
+// K_ZERO (Ctrl-@)
+const K_ZERO: c_int = termcap2key(KS_ZERO, KE_FILLER);
 
 // Shifted function keys (F5-F37)
 const K_S_F5: c_int = termcap2key(KS_EXTRA, KE_S_F5);
@@ -864,6 +874,69 @@ pub unsafe extern "C" fn rs_simplify_key(key: c_int, modifiers: *mut c_int) -> c
     key
 }
 
+/// FFI result type for `extract_modifiers`
+#[repr(C)]
+pub struct ExtractModifiersResult {
+    pub key: c_int,
+    pub did_simplify: c_int,
+}
+
+/// Extract and apply modifiers to a key.
+///
+/// Converts a key with modifiers into a simplified form. For example:
+/// - Shift+a becomes A with shift removed (unless Ctrl is also pressed)
+/// - Ctrl+a becomes A (uppercase)
+/// - When simplify=true, Ctrl+A becomes ^A (control character)
+///
+/// # Safety
+/// `modp` must be a valid pointer to a modifiers value.
+#[no_mangle]
+pub unsafe extern "C" fn rs_extract_modifiers(
+    key: c_int,
+    modp: *mut c_int,
+    simplify: bool,
+) -> ExtractModifiersResult {
+    let mut modifiers = *modp;
+    let mut result_key = key;
+    let mut did_simplify = false;
+
+    // ASCII_ISALPHA check: 'A'-'Z' or 'a'-'z'
+    let is_alpha = nvim_ascii::rs_ascii_isalpha(key) != 0;
+
+    if (modifiers & MOD_MASK_SHIFT) != 0 && is_alpha {
+        result_key = nvim_ascii::rs_ascii_toupper(key);
+        // With <C-S-a> we keep the shift modifier.
+        // With <S-a>, <A-S-a> and <S-A> we don't keep the shift modifier.
+        if (modifiers & MOD_MASK_CTRL) == 0 {
+            modifiers &= !MOD_MASK_SHIFT;
+        }
+    }
+
+    // <C-H> and <C-h> mean the same thing, always use "H"
+    if (modifiers & MOD_MASK_CTRL) != 0 && is_alpha {
+        result_key = nvim_ascii::rs_ascii_toupper(result_key);
+    }
+
+    if simplify
+        && (modifiers & MOD_MASK_CTRL) != 0
+        && ((result_key >= c_int::from(b'?') && result_key <= c_int::from(b'_')) || is_alpha)
+    {
+        result_key = nvim_ascii::rs_ctrl_chr(result_key);
+        modifiers &= !MOD_MASK_CTRL;
+        if result_key == NUL {
+            // <C-@> is <Nul>
+            result_key = K_ZERO;
+        }
+        did_simplify = true;
+    }
+
+    *modp = modifiers;
+    ExtractModifiersResult {
+        key: result_key,
+        did_simplify: c_int::from(did_simplify),
+    }
+}
+
 /// Mouse table entry for mapping pseudo-codes to button info
 struct MouseTableEntry {
     pseudo_code: c_int,
@@ -1272,6 +1345,65 @@ mod tests {
             );
             assert!(!is_click);
             assert!(!is_drag);
+        }
+    }
+
+    #[test]
+    fn test_extract_modifiers_shift_alpha() {
+        // Shift+a becomes A, shift removed
+        let mut modifiers = MOD_MASK_SHIFT;
+        unsafe {
+            let result = rs_extract_modifiers(b'a' as c_int, &mut modifiers, false);
+            assert_eq!(result.key, b'A' as c_int);
+            assert_eq!(modifiers, 0); // Shift removed
+            assert_eq!(result.did_simplify, 0);
+        }
+    }
+
+    #[test]
+    fn test_extract_modifiers_ctrl_shift_alpha() {
+        // Ctrl+Shift+a keeps shift (because ctrl is also pressed)
+        let mut modifiers = MOD_MASK_CTRL | MOD_MASK_SHIFT;
+        unsafe {
+            let result = rs_extract_modifiers(b'a' as c_int, &mut modifiers, false);
+            assert_eq!(result.key, b'A' as c_int);
+            assert_eq!(modifiers, MOD_MASK_CTRL | MOD_MASK_SHIFT); // Shift kept
+        }
+    }
+
+    #[test]
+    fn test_extract_modifiers_ctrl_alpha_simplify() {
+        // Ctrl+a with simplify becomes ^A (control character 1)
+        let mut modifiers = MOD_MASK_CTRL;
+        unsafe {
+            let result = rs_extract_modifiers(b'a' as c_int, &mut modifiers, true);
+            assert_eq!(result.key, 1); // Ctrl-A = 1
+            assert_eq!(modifiers, 0); // Ctrl removed
+            assert_eq!(result.did_simplify, 1);
+        }
+    }
+
+    #[test]
+    fn test_extract_modifiers_ctrl_at_simplify() {
+        // Ctrl+@ with simplify becomes K_ZERO
+        let mut modifiers = MOD_MASK_CTRL;
+        unsafe {
+            let result = rs_extract_modifiers(b'@' as c_int, &mut modifiers, true);
+            assert_eq!(result.key, K_ZERO); // Ctrl-@ = K_ZERO
+            assert_eq!(modifiers, 0);
+            assert_eq!(result.did_simplify, 1);
+        }
+    }
+
+    #[test]
+    fn test_extract_modifiers_no_simplify() {
+        // Ctrl+a without simplify keeps Ctrl
+        let mut modifiers = MOD_MASK_CTRL;
+        unsafe {
+            let result = rs_extract_modifiers(b'a' as c_int, &mut modifiers, false);
+            assert_eq!(result.key, b'A' as c_int); // Uppercase
+            assert_eq!(modifiers, MOD_MASK_CTRL); // Ctrl preserved
+            assert_eq!(result.did_simplify, 0);
         }
     }
 }

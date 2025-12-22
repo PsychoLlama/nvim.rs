@@ -32,6 +32,13 @@ extern int rs_handle_x_keys(int key);
 extern int rs_simplify_key(int key, int *modifiers);
 extern int rs_get_mouse_button(int code, bool *is_click, bool *is_drag);
 
+typedef struct {
+  int key;
+  int did_simplify;
+} ExtractModifiersResult;
+
+extern ExtractModifiersResult rs_extract_modifiers(int key, int *modp, bool simplify);
+
 // Some useful tables.
 
 static const struct modmasktable {
@@ -469,36 +476,11 @@ int find_special_key(const char **const srcp, const size_t src_len, int *const m
 ///                            Ctrl is removed from modifiers
 static int extract_modifiers(int key, int *modp, const bool simplify, bool *const did_simplify)
 {
-  int modifiers = *modp;
-
-  if ((modifiers & MOD_MASK_SHIFT) && ASCII_ISALPHA(key)) {
-    key = TOUPPER_ASC(key);
-    // With <C-S-a> we keep the shift modifier.
-    // With <S-a>, <A-S-a> and <S-A> we don't keep the shift modifier.
-    if (!(modifiers & MOD_MASK_CTRL)) {
-      modifiers &= ~MOD_MASK_SHIFT;
-    }
+  ExtractModifiersResult result = rs_extract_modifiers(key, modp, simplify);
+  if (did_simplify != NULL) {
+    *did_simplify = (bool)result.did_simplify;
   }
-
-  // <C-H> and <C-h> mean the same thing, always use "H"
-  if ((modifiers & MOD_MASK_CTRL) && ASCII_ISALPHA(key)) {
-    key = TOUPPER_ASC(key);
-  }
-
-  if (simplify && (modifiers & MOD_MASK_CTRL)
-      && ((key >= '?' && key <= '_') || ASCII_ISALPHA(key))) {
-    key = CTRL_CHR(key);
-    modifiers &= ~MOD_MASK_CTRL;
-    if (key == NUL) {  // <C-@> is <Nul>
-      key = K_ZERO;
-    }
-    if (did_simplify != NULL) {
-      *did_simplify = true;
-    }
-  }
-
-  *modp = modifiers;
-  return key;
+  return result.key;
 }
 
 /// Try to find key "c" in the special key table.

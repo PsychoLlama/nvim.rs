@@ -8,5 +8,8 @@ description = "Keycode utilities for Neovim"
 [lib]
 crate-type = ["staticlib", "rlib"]
 
+[dependencies]
+nvim-ascii = { path = "../ascii" }
+
 [lints]
 workspace = true
