@@ -15,6 +15,7 @@
 
 use std::ffi::{c_char, c_int};
 
+use nvim_buffer::BufHandle;
 use nvim_window::WinHandle;
 
 // C accessor functions
@@ -51,6 +52,19 @@ extern "C" {
 
     // String utilities
     fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+
+    // Buffer properties for charsize
+    fn nvim_buf_get_p_ts(buf: BufHandle) -> i64;
+    fn nvim_buf_get_p_vts_array(buf: BufHandle) -> *const c_int;
+
+    // Window properties for win_may_fill
+    fn nvim_win_get_p_diff(wp: WinHandle) -> c_int;
+    fn nvim_win_buf_meta_total_lines(wp: WinHandle) -> c_int;
+    fn nvim_diffopt_filler() -> c_int;
+
+    // Existing Rust functions we can call
+    fn rs_tabstop_padding(col: c_int, ts: i64, vts: *const c_int) -> c_int;
+    fn rs_ptr2cells(p: *const c_char) -> c_int;
 }
 
 // Mode constants (matching Neovim's state.h)
@@ -86,7 +100,11 @@ fn compute_foldcolumn_impl(wp: WinHandle, col: c_int) -> c_int {
         let n = view_width - (col + wmw);
 
         // MIN(fdc, n)
-        if fdc < n { fdc } else { n }
+        if fdc < n {
+            fdc
+        } else {
+            n
+        }
     }
 }
 
@@ -193,6 +211,56 @@ fn conceal_cursor_line_impl(wp: WinHandle) -> bool {
     }
 }
 
+// Tab character constant
+const TAB: i32 = 0x09;
+
+// Invalid byte display width (from mbyte.h)
+const K_INVALID_BYTE_CELLS: c_int = 4;
+
+/// Get the number of cells taken up on the screen at given virtual column.
+///
+/// Handles tabs, invalid bytes, and normal characters.
+#[inline]
+fn charsize_nowrap_impl(
+    buf: BufHandle,
+    cur: *const c_char,
+    use_tabstop: bool,
+    vcol: c_int,
+    cur_char: i32,
+) -> c_int {
+    if buf.is_null() {
+        return 1;
+    }
+
+    unsafe {
+        if cur_char == TAB && use_tabstop {
+            let ts = nvim_buf_get_p_ts(buf);
+            let vts = nvim_buf_get_p_vts_array(buf);
+            rs_tabstop_padding(vcol, ts, vts)
+        } else if cur_char < 0 {
+            K_INVALID_BYTE_CELLS
+        } else {
+            rs_ptr2cells(cur)
+        }
+    }
+}
+
+/// Check if there may be filler lines anywhere in window "wp".
+#[inline]
+fn win_may_fill_impl(wp: WinHandle) -> bool {
+    if wp.is_null() {
+        return false;
+    }
+
+    unsafe {
+        let p_diff = nvim_win_get_p_diff(wp) != 0;
+        let diffopt_fill = nvim_diffopt_filler() != 0;
+        let has_meta_lines = nvim_win_buf_meta_total_lines(wp) != 0;
+
+        (p_diff && diffopt_fill) || has_meta_lines
+    }
+}
+
 // ============================================================================
 // FFI Exports
 // ============================================================================
@@ -222,6 +290,31 @@ pub extern "C" fn rs_number_width(wp: WinHandle) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_conceal_cursor_line(wp: WinHandle) -> c_int {
     c_int::from(conceal_cursor_line_impl(wp))
+}
+
+/// Get the number of cells taken up on the screen at given virtual column.
+///
+/// # Safety
+/// The `buf` parameter must be a valid `buf_T*` pointer or null.
+/// The `cur` parameter must be a valid pointer to a character.
+#[no_mangle]
+pub extern "C" fn rs_charsize_nowrap(
+    buf: BufHandle,
+    cur: *const c_char,
+    use_tabstop: c_int,
+    vcol: c_int,
+    cur_char: i32,
+) -> c_int {
+    charsize_nowrap_impl(buf, cur, use_tabstop != 0, vcol, cur_char)
+}
+
+/// Check if there may be filler lines anywhere in window "wp".
+///
+/// # Safety
+/// The `wp` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_win_may_fill(wp: WinHandle) -> c_int {
+    c_int::from(win_may_fill_impl(wp))
 }
 
 #[cfg(test)]

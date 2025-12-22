@@ -251,6 +251,18 @@ uint64_t *nvim_buf_get_chartab(buf_T *buf)
   return buf->b_chartab;
 }
 
+/// Get the 'tabstop' option value for a buffer.
+OptInt nvim_buf_get_p_ts(buf_T *buf)
+{
+  return buf->b_p_ts;
+}
+
+/// Get the 'vartabstop' array for a buffer.
+int *nvim_buf_get_p_vts_array(buf_T *buf)
+{
+  return buf->b_p_vts_array;
+}
+
 typedef enum {
   kBffClearWinInfo = 1,
   kBffInitChangedtick = 2,

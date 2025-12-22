@@ -538,6 +538,24 @@ char *nvim_vim_strchr(const char *s, int c)
   return vim_strchr(s, c);
 }
 
+/// Get the 'diff' option value for a window.
+int nvim_win_get_p_diff(win_T *wp)
+{
+  return wp->w_p_diff;
+}
+
+/// Check if there are virtual lines in the window's buffer.
+int nvim_win_buf_meta_total_lines(win_T *wp)
+{
+  return buf_meta_total(wp->w_buffer, kMTMetaLines) > 0;
+}
+
+/// Get diffopt filler state.
+int nvim_diffopt_filler(void)
+{
+  return diffopt_filler();
+}
+
 #define NOWIN           ((win_T *)-1)   // non-existing window
 
 #define ROWS_AVAIL (Rows - p_ch - tabline_height() - global_stl_height())

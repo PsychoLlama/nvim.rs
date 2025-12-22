@@ -33,6 +33,10 @@
 
 #include "plines.c.generated.h"
 
+// Rust implementations
+extern int rs_charsize_nowrap(buf_T *buf, const char *cur, int use_tabstop, int vcol, int32_t cur_char);
+extern int rs_win_may_fill(win_T *wp);
+
 /// Functions calculating horizontal size of text, when displayed in a window.
 
 /// Return the number of cells the first char in "p" will take on the screen,
@@ -392,13 +396,7 @@ CharSize charsize_fast(CharsizeArg *csarg, const char *cur, colnr_T vcol, int32_
 /// @see win_chartabsize()
 int charsize_nowrap(buf_T *buf, const char *cur, bool use_tabstop, colnr_T vcol, int32_t cur_char)
 {
-  if (cur_char == TAB && use_tabstop) {
-    return tabstop_padding(vcol, buf->b_p_ts, buf->b_p_vts_array);
-  } else if (cur_char < 0) {
-    return kInvalidByteCells;
-  } else {
-    return ptr2cells(cur);
-  }
+  return rs_charsize_nowrap(buf, cur, use_tabstop, (int)vcol, cur_char);
 }
 
 /// Check that virtual column "vcol" is in the rightmost column of window "wp".
@@ -715,8 +713,7 @@ void getvcols(win_T *wp, pos_T *pos1, pos_T *pos2, colnr_T *left, colnr_T *right
 /// Check if there may be filler lines anywhere in window "wp".
 bool win_may_fill(win_T *wp)
 {
-  return ((wp->w_p_diff && diffopt_filler())
-          || buf_meta_total(wp->w_buffer, kMTMetaLines));
+  return rs_win_may_fill(wp);
 }
 
 /// Return the number of filler lines above "lnum".
