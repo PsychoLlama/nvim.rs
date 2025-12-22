@@ -61,6 +61,7 @@ typedef struct {
 // Rust implementations
 extern int rs_win_col_off(win_T *wp);
 extern int rs_win_col_off2(win_T *wp);
+extern int rs_sms_marker_overlap(win_T *wp, int extra2);
 
 /// Get the number of screen lines skipped with "wp->w_skipcol".
 static int adjust_plines_for_skipcol(win_T *wp)
@@ -200,21 +201,7 @@ void set_valid_virtcol(win_T *wp, colnr_T vcol)
 /// extra padding on the ledge.
 int sms_marker_overlap(win_T *wp, int extra2)
 {
-  if (extra2 == -1) {
-    extra2 = win_col_off(wp) - win_col_off2(wp);
-  }
-  // There is no marker overlap when in showbreak mode, thus no need to
-  // account for it.  See wlv_put_linebuf().
-  if (*get_showbreak_value(wp) != NUL) {
-    return 0;
-  }
-
-  // Overlap when 'list' and 'listchars' "precedes" are set is 1.
-  if (wp->w_p_list && wp->w_p_lcs_chars.prec) {
-    return 1;
-  }
-
-  return extra2 > 3 ? 0 : 3 - extra2;
+  return rs_sms_marker_overlap(wp, extra2);
 }
 
 /// Calculates the skipcol offset for window "wp" given how many

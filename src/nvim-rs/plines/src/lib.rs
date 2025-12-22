@@ -70,6 +70,15 @@ extern "C" {
     fn nvim_win_is_cmdwin(wp: WinHandle) -> c_int;
     fn nvim_win_get_scwidth(wp: WinHandle) -> c_int;
     fn nvim_get_p_cpo() -> *const c_char;
+
+    // Window properties for showbreak
+    fn nvim_win_get_p_sbr(wp: WinHandle) -> *const c_char;
+    fn nvim_get_p_sbr() -> *const c_char;
+    fn nvim_get_empty_string_option() -> *const c_char;
+
+    // Window properties for sms_marker_overlap
+    fn nvim_win_get_p_list(wp: WinHandle) -> c_int;
+    fn nvim_win_get_lcs_prec(wp: WinHandle) -> u32;
 }
 
 // Mode constants (matching Neovim's state.h)
@@ -366,6 +375,80 @@ fn in_win_border_impl(wp: WinHandle, vcol: c_int) -> bool {
     }
 }
 
+/// Get the 'showbreak' value for a window.
+///
+/// Returns window-local showbreak if set, otherwise global showbreak.
+/// Returns empty string if window showbreak is "NONE".
+#[inline]
+fn get_showbreak_value_impl(wp: WinHandle) -> *const c_char {
+    if wp.is_null() {
+        unsafe { return nvim_get_p_sbr(); }
+    }
+
+    unsafe {
+        let w_sbr = nvim_win_get_p_sbr(wp);
+
+        // If window showbreak is NULL or empty, use global
+        if w_sbr.is_null() || *w_sbr == 0 {
+            return nvim_get_p_sbr();
+        }
+
+        // Check for "NONE" (case-sensitive)
+        // "NONE" = 'N', 'O', 'N', 'E', '\0'
+        if *w_sbr == b'N' as c_char
+            && *w_sbr.add(1) == b'O' as c_char
+            && *w_sbr.add(2) == b'N' as c_char
+            && *w_sbr.add(3) == b'E' as c_char
+            && *w_sbr.add(4) == 0
+        {
+            return nvim_get_empty_string_option();
+        }
+
+        w_sbr
+    }
+}
+
+/// Calculate the smoothscroll marker overlap.
+///
+/// Calculates how much the 'listchars' "precedes" or 'smoothscroll' "<<<"
+/// marker overlaps with buffer text for window "wp".
+/// Parameter "extra2" should be the padding on the 2nd line, not the first
+/// line. When "extra2" is -1 calculate the padding.
+/// Returns the number of columns of overlap with buffer text, excluding the
+/// extra padding on the ledge.
+#[inline]
+fn sms_marker_overlap_impl(wp: WinHandle, extra2: c_int) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    let extra2 = if extra2 == -1 {
+        rs_win_col_off(wp) - rs_win_col_off2(wp)
+    } else {
+        extra2
+    };
+
+    // There is no marker overlap when in showbreak mode, thus no need to
+    // account for it. See wlv_put_linebuf().
+    unsafe {
+        let sbr = get_showbreak_value_impl(wp);
+        if !sbr.is_null() && *sbr != 0 {
+            return 0;
+        }
+
+        // Overlap when 'list' and 'listchars' "precedes" are set is 1.
+        let p_list = nvim_win_get_p_list(wp) != 0;
+        let prec = nvim_win_get_lcs_prec(wp);
+        if p_list && prec != 0 {
+            return 1;
+        }
+    }
+
+    // The marker is "<<<" which takes 3 columns, so overlap is 3 - extra2
+    // but only when extra2 <= 3
+    if extra2 > 3 { 0 } else { 3 - extra2 }
+}
+
 // ============================================================================
 // FFI Exports
 // ============================================================================
@@ -447,6 +530,27 @@ pub extern "C" fn rs_win_col_off2(wp: WinHandle) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_in_win_border(wp: WinHandle, vcol: c_int) -> c_int {
     c_int::from(in_win_border_impl(wp, vcol))
+}
+
+/// Get the 'showbreak' value for a window.
+///
+/// Returns window-local showbreak if set, otherwise global showbreak.
+/// Returns empty string if window showbreak is "NONE".
+///
+/// # Safety
+/// The `wp` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_get_showbreak_value(wp: WinHandle) -> *const c_char {
+    get_showbreak_value_impl(wp)
+}
+
+/// Calculate the smoothscroll marker overlap.
+///
+/// # Safety
+/// The `wp` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_sms_marker_overlap(wp: WinHandle, extra2: c_int) -> c_int {
+    sms_marker_overlap_impl(wp, extra2)
 }
 
 #[cfg(test)]

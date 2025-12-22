@@ -6134,6 +6134,8 @@ unsigned get_ve_flags(win_T *wp)
          & ~(unsigned)(kOptVeFlagNone | kOptVeFlagNoneU);
 }
 
+extern char *rs_get_showbreak_value(win_T *win);
+
 /// Get the local or global value of 'showbreak'.
 ///
 /// @param win  If not NULL, the window to get the local option from; global
@@ -6141,13 +6143,7 @@ unsigned get_ve_flags(win_T *wp)
 char *get_showbreak_value(win_T *const win)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (win->w_p_sbr == NULL || *win->w_p_sbr == NUL) {
-    return p_sbr;
-  }
-  if (strcmp(win->w_p_sbr, "NONE") == 0) {
-    return empty_string_option;
-  }
-  return win->w_p_sbr;
+  return rs_get_showbreak_value((win_T *)win);
 }
 
 /// Return the current end-of-line type: EOL_DOS, EOL_UNIX or EOL_MAC.

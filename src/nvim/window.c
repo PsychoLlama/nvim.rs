@@ -574,6 +574,36 @@ char *nvim_get_p_cpo(void)
   return p_cpo;
 }
 
+/// Get the window's showbreak option.
+char *nvim_win_get_p_sbr(win_T *wp)
+{
+  return wp->w_p_sbr;
+}
+
+/// Get the global showbreak option.
+char *nvim_get_p_sbr(void)
+{
+  return p_sbr;
+}
+
+/// Get the empty string option constant.
+char *nvim_get_empty_string_option(void)
+{
+  return empty_string_option;
+}
+
+/// Get the window's 'list' option.
+int nvim_win_get_p_list(win_T *wp)
+{
+  return wp->w_p_list;
+}
+
+/// Get the 'listchars' precedes character for window.
+uint32_t nvim_win_get_lcs_prec(win_T *wp)
+{
+  return wp->w_p_lcs_chars.prec;
+}
+
 #define NOWIN           ((win_T *)-1)   // non-existing window
 
 #define ROWS_AVAIL (Rows - p_ch - tabline_height() - global_stl_height())
