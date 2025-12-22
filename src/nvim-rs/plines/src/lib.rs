@@ -92,6 +92,10 @@ extern "C" {
 
     // Terminal mode check
     fn nvim_win_buf_is_terminal(wp: WinHandle) -> c_int;
+
+    // Global options for statusline/winbar
+    fn nvim_get_p_ls() -> i64;
+    fn nvim_get_p_wbr_empty() -> c_int;
 }
 
 // Mode constants (matching Neovim's state.h)
@@ -100,6 +104,9 @@ const MODE_INSERT: c_int = 0x10;
 const MODE_NORMAL: c_int = 0x01;
 const MODE_CMDLINE: c_int = 0x04;
 const MODE_TERMINAL: c_int = 0x1000;
+
+// Statusline constants (matching Neovim's window.h)
+const STATUS_HEIGHT: c_int = 1;
 
 // Sign column constants (matching Neovim's optionstr.c)
 const SCL_NUM: c_int = -1;
@@ -529,6 +536,24 @@ fn get_sidescrolloff_value_impl(wp: WinHandle) -> c_int {
     }
 }
 
+/// Return the number of lines used by the global statusline.
+#[inline]
+fn global_stl_height_impl() -> c_int {
+    unsafe {
+        if nvim_get_p_ls() == 3 {
+            STATUS_HEIGHT
+        } else {
+            0
+        }
+    }
+}
+
+/// Return the number of lines used by default by the window bar.
+#[inline]
+fn global_winbar_height_impl() -> c_int {
+    unsafe { c_int::from(nvim_get_p_wbr_empty() == 0) }
+}
+
 // ============================================================================
 // FFI Exports
 // ============================================================================
@@ -658,6 +683,18 @@ pub extern "C" fn rs_get_scrolloff_value(wp: WinHandle) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_get_sidescrolloff_value(wp: WinHandle) -> c_int {
     get_sidescrolloff_value_impl(wp)
+}
+
+/// Return the number of lines used by the global statusline.
+#[no_mangle]
+pub extern "C" fn rs_global_stl_height() -> c_int {
+    global_stl_height_impl()
+}
+
+/// Return the number of lines used by default by the window bar.
+#[no_mangle]
+pub extern "C" fn rs_global_winbar_height() -> c_int {
+    global_winbar_height_impl()
 }
 
 #[cfg(test)]

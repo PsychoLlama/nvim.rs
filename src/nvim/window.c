@@ -646,6 +646,18 @@ int nvim_win_buf_is_terminal(win_T *wp)
   return wp->w_buffer->terminal != NULL;
 }
 
+/// Get the global 'laststatus' option.
+OptInt nvim_get_p_ls(void)
+{
+  return p_ls;
+}
+
+/// Check if global 'winbar' option is empty.
+int nvim_get_p_wbr_empty(void)
+{
+  return *p_wbr == NUL;
+}
+
 #define NOWIN           ((win_T *)-1)   // non-existing window
 
 #define ROWS_AVAIL (Rows - p_ch - tabline_height() - global_stl_height())
@@ -7537,16 +7549,19 @@ int tabline_height(void)
   return 1;
 }
 
+extern int rs_global_winbar_height(void);
+extern int rs_global_stl_height(void);
+
 /// Return the number of lines used by default by the window bar.
 int global_winbar_height(void)
 {
-  return *p_wbr != NUL ? 1 : 0;
+  return rs_global_winbar_height();
 }
 
 /// Return the number of lines used by the global statusline
 int global_stl_height(void)
 {
-  return (p_ls == 3) ? STATUS_HEIGHT : 0;
+  return rs_global_stl_height();
 }
 
 /// Return the height of the last window's statusline, or the global statusline if set.
