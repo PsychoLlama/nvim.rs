@@ -31,6 +31,7 @@ extern int rs_name_to_mod_mask(int c);
 extern int rs_handle_x_keys(int key);
 extern int rs_simplify_key(int key, int *modifiers);
 extern int rs_get_mouse_button(int code, bool *is_click, bool *is_drag);
+extern void rs_vim_unescape_ks(char *p);
 
 typedef struct {
   int key;
@@ -739,16 +740,5 @@ char *vim_strsave_escape_ks(char *p)
 /// vim_strsave_escape_ks().  Works in-place.
 void vim_unescape_ks(char *p)
 {
-  uint8_t *s = (uint8_t *)p;
-  uint8_t *d = (uint8_t *)p;
-
-  while (*s != NUL) {
-    if (s[0] == K_SPECIAL && s[1] == KS_SPECIAL && s[2] == KE_FILLER) {
-      *d++ = K_SPECIAL;
-      s += 3;
-    } else {
-      *d++ = *s++;
-    }
-  }
-  *d = NUL;
+  rs_vim_unescape_ks(p);
 }

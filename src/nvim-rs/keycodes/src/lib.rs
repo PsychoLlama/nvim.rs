@@ -22,8 +22,12 @@ const MOD_MASK_CMD: c_int = 0x80;
 // TAB character (from ascii_defs.h)
 const TAB: c_int = 0x09;
 
-// KS_EXTRA for building special key codes
+// Special key byte that marks a multi-byte key code (from keycodes.h)
+const K_SPECIAL: u8 = 0x80;
+
+// KS_* values for special key type identification
 const KS_EXTRA: c_int = 253;
+const KS_SPECIAL: u8 = 254;
 
 // KE_* values for special keys (from keycodes.h enum key_extra)
 const KE_S_UP: c_int = 4;
@@ -1075,8 +1079,42 @@ pub unsafe extern "C" fn rs_get_mouse_button(
     0 // Shouldn't get here
 }
 
+/// Remove escaping from `K_SPECIAL` characters.
+///
+/// This is the reverse of `vim_strsave_escape_ks`. It converts escaped
+/// `K_SPECIAL` sequences (`K_SPECIAL` `KS_SPECIAL` `KE_FILLER`) back to plain
+/// `K_SPECIAL` bytes. Works in-place.
+///
+/// # Safety
+/// `p` must be a valid pointer to a NUL-terminated C string that can be
+/// modified in place.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_unescape_ks(p: *mut std::ffi::c_char) {
+    if p.is_null() {
+        return;
+    }
+
+    let mut s = p.cast::<u8>();
+    let mut d = p.cast::<u8>();
+
+    while *s != 0 {
+        if *s == K_SPECIAL && *s.add(1) == KS_SPECIAL && *s.add(2) == b'X' {
+            // Found escaped K_SPECIAL sequence, replace with single K_SPECIAL
+            *d = K_SPECIAL;
+            d = d.add(1);
+            s = s.add(3);
+        } else {
+            // Copy byte as-is
+            *d = *s;
+            d = d.add(1);
+            s = s.add(1);
+        }
+    }
+    *d = 0; // NUL terminate
+}
+
 #[cfg(test)]
-#[allow(clippy::cast_lossless, clippy::borrow_as_ptr)]
+#[allow(clippy::cast_lossless, clippy::borrow_as_ptr, clippy::ptr_as_ptr)]
 mod tests {
     use super::*;
 
@@ -1404,6 +1442,62 @@ mod tests {
             assert_eq!(result.key, b'A' as c_int); // Uppercase
             assert_eq!(modifiers, MOD_MASK_CTRL); // Ctrl preserved
             assert_eq!(result.did_simplify, 0);
+        }
+    }
+
+    #[test]
+    fn test_vim_unescape_ks_empty() {
+        // Empty string
+        let mut buf = [0u8; 1];
+        unsafe {
+            rs_vim_unescape_ks(buf.as_mut_ptr() as *mut std::ffi::c_char);
+            assert_eq!(buf[0], 0);
+        }
+    }
+
+    #[test]
+    fn test_vim_unescape_ks_no_escape() {
+        // String without any K_SPECIAL escapes
+        let mut buf = *b"hello\0";
+        unsafe {
+            rs_vim_unescape_ks(buf.as_mut_ptr() as *mut std::ffi::c_char);
+            assert_eq!(&buf[..6], b"hello\0");
+        }
+    }
+
+    #[test]
+    fn test_vim_unescape_ks_single_escape() {
+        // Single escaped K_SPECIAL sequence
+        let mut buf = [K_SPECIAL, KS_SPECIAL, b'X', 0, 0, 0];
+        unsafe {
+            rs_vim_unescape_ks(buf.as_mut_ptr() as *mut std::ffi::c_char);
+            assert_eq!(buf[0], K_SPECIAL);
+            assert_eq!(buf[1], 0); // NUL after the unescaped byte
+        }
+    }
+
+    #[test]
+    fn test_vim_unescape_ks_multiple_escapes() {
+        // Two escaped K_SPECIAL sequences: "aXXXbXXXc\0" -> "a\x80b\x80c\0"
+        let mut buf = [
+            b'a', K_SPECIAL, KS_SPECIAL, b'X', b'b', K_SPECIAL, KS_SPECIAL, b'X', b'c', 0,
+        ];
+        unsafe {
+            rs_vim_unescape_ks(buf.as_mut_ptr() as *mut std::ffi::c_char);
+            assert_eq!(buf[0], b'a');
+            assert_eq!(buf[1], K_SPECIAL);
+            assert_eq!(buf[2], b'b');
+            assert_eq!(buf[3], K_SPECIAL);
+            assert_eq!(buf[4], b'c');
+            assert_eq!(buf[5], 0);
+        }
+    }
+
+    #[test]
+    fn test_vim_unescape_ks_null_ptr() {
+        // Null pointer should not crash
+        unsafe {
+            rs_vim_unescape_ks(std::ptr::null_mut());
         }
     }
 }
