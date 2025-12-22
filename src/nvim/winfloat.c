@@ -180,14 +180,17 @@ void win_set_minimal_style(win_T *wp)
   }
 }
 
+extern int rs_win_border_height(win_T *wp);
+extern int rs_win_border_width(win_T *wp);
+
 int win_border_height(win_T *wp)
 {
-  return wp->w_border_adj[0] + wp->w_border_adj[2];
+  return rs_win_border_height(wp);
 }
 
 int win_border_width(win_T *wp)
 {
-  return wp->w_border_adj[1] + wp->w_border_adj[3];
+  return rs_win_border_width(wp);
 }
 
 void win_config_float(win_T *wp, WinConfig fconfig)

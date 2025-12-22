@@ -676,6 +676,15 @@ int nvim_ui_has_tabline(void)
   return ui_has(kUITabline);
 }
 
+/// Get a specific border adjustment value for a window.
+int nvim_win_get_border_adj(win_T *wp, int idx)
+{
+  if (idx < 0 || idx >= 4) {
+    return 0;
+  }
+  return wp->w_border_adj[idx];
+}
+
 #define NOWIN           ((win_T *)-1)   // non-existing window
 
 #define ROWS_AVAIL (Rows - p_ch - tabline_height() - global_stl_height())

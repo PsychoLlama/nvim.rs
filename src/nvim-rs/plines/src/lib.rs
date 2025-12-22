@@ -107,6 +107,9 @@ extern "C" {
     fn nvim_ui_has_tabline() -> c_int;
     fn nvim_get_p_stal() -> i64;
     fn nvim_first_tabpage_has_next() -> c_int;
+
+    // Window border accessors
+    fn nvim_win_get_border_adj(wp: WinHandle, idx: c_int) -> c_int;
 }
 
 // Mode constants (matching Neovim's state.h)
@@ -609,6 +612,30 @@ fn tabline_height_impl() -> c_int {
     }
 }
 
+/// Return the height of a floating window's border (top + bottom).
+#[inline]
+fn win_border_height_impl(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    unsafe {
+        // w_border_adj indices: 0=top, 1=right, 2=bottom, 3=left
+        nvim_win_get_border_adj(wp, 0) + nvim_win_get_border_adj(wp, 2)
+    }
+}
+
+/// Return the width of a floating window's border (left + right).
+#[inline]
+fn win_border_width_impl(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    unsafe {
+        // w_border_adj indices: 0=top, 1=right, 2=bottom, 3=left
+        nvim_win_get_border_adj(wp, 1) + nvim_win_get_border_adj(wp, 3)
+    }
+}
+
 // ============================================================================
 // FFI Exports
 // ============================================================================
@@ -762,6 +789,24 @@ pub extern "C" fn rs_last_stl_height(morewin: c_int) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_tabline_height() -> c_int {
     tabline_height_impl()
+}
+
+/// Return the height of a floating window's border.
+///
+/// # Safety
+/// The `wp` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_win_border_height(wp: WinHandle) -> c_int {
+    win_border_height_impl(wp)
+}
+
+/// Return the width of a floating window's border.
+///
+/// # Safety
+/// The `wp` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_win_border_width(wp: WinHandle) -> c_int {
+    win_border_width_impl(wp)
 }
 
 #[cfg(test)]
