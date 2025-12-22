@@ -71,6 +71,16 @@ extern int rs_is_autocmd_blocked(void);
 extern size_t rs_aucmd_pattern_length(const char *pat);
 extern const char *rs_aucmd_next_pattern(const char *pat, size_t patlen);
 extern int rs_aupat_is_buflocal(const char *pat, int patlen);
+extern const char *rs_event_nr2name(int event, int num_events);
+
+// C accessor for event_names array (used by Rust)
+const char *nvim_get_event_name(int event)
+{
+  if (event >= 0 && event < NUM_EVENTS) {
+    return event_names[event].name;
+  }
+  return NULL;
+}
 
 static const char e_autocommand_nesting_too_deep[]
   = N_("E218: Autocommand nesting too deep");
@@ -656,7 +666,7 @@ event_T event_name2nr_str(String str)
 const char *event_nr2name(event_T event)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_CONST
 {
-  return event >= 0 && event < NUM_EVENTS ? event_names[event].name : "Unknown";
+  return rs_event_nr2name((int)event, NUM_EVENTS);
 }
 
 /// Return true if "event" is included in 'eventignore(win)'.

@@ -12,10 +12,14 @@
 use std::ffi::c_char;
 use std::os::raw::c_int;
 
-// C accessor for the static autocmd_blocked variable
+// C accessors for static data
 extern "C" {
     fn nvim_get_autocmd_blocked() -> c_int;
+    fn nvim_get_event_name(event: c_int) -> *const c_char;
 }
+
+// Static "Unknown" string for invalid events
+static UNKNOWN_EVENT: &[u8] = b"Unknown\0";
 
 /// Check if autocommands are blocked.
 ///
@@ -23,6 +27,23 @@ extern "C" {
 #[no_mangle]
 pub unsafe extern "C" fn rs_is_autocmd_blocked() -> c_int {
     c_int::from(nvim_get_autocmd_blocked() != 0)
+}
+
+/// Return the name for an event.
+///
+/// Returns "Unknown" for invalid or out-of-range events.
+///
+/// # Safety
+/// The returned pointer is valid for the lifetime of the program (static data).
+#[no_mangle]
+pub unsafe extern "C" fn rs_event_nr2name(event: c_int, num_events: c_int) -> *const c_char {
+    if event >= 0 && event < num_events {
+        let name = nvim_get_event_name(event);
+        if !name.is_null() {
+            return name;
+        }
+    }
+    UNKNOWN_EVENT.as_ptr().cast()
 }
 
 /// Returns the length of the first pattern in a comma-separated pattern list.
