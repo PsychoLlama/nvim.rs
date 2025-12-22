@@ -68,6 +68,10 @@ extern void rs_time_to_bytes(int64_t time_, uint8_t *buf);
 extern size_t rs_arena_align_offset(uint64_t off);
 extern void rs_strchrsub(char *str, char c, char x);
 extern void rs_memchrsub(void *data, char c, char x, size_t len);
+extern char *rs_xstpcpy(char *restrict dst, const char *restrict src);
+extern char *rs_xstpncpy(char *restrict dst, const char *restrict src, size_t maxlen);
+extern size_t rs_xstrlcpy(char *restrict dst, const char *restrict src, size_t dsize);
+extern size_t rs_xstrlcat(char *dst, const char *src, size_t dsize);
 
 #ifdef EXITFREE
 bool entered_free_all_mem = false;
@@ -371,8 +375,7 @@ size_t memcnt(const void *data, char c, size_t len)
 char *xstpcpy(char *restrict dst, const char *restrict src)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-  const size_t len = strlen(src);
-  return (char *)memcpy(dst, src, len + 1) + len;
+  return rs_xstpcpy(dst, src);
 }
 
 /// Copies not more than n bytes (bytes that follow a NUL character are not
@@ -394,16 +397,7 @@ char *xstpcpy(char *restrict dst, const char *restrict src)
 char *xstpncpy(char *restrict dst, const char *restrict src, size_t maxlen)
   FUNC_ATTR_NONNULL_RET FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
 {
-  const char *p = memchr(src, NUL, maxlen);
-  if (p) {
-    size_t srclen = (size_t)(p - src);
-    memcpy(dst, src, srclen);
-    memset(dst + srclen, 0, maxlen - srclen);
-    return dst + srclen;
-  } else {
-    memcpy(dst, src, maxlen);
-    return dst + maxlen;
-  }
+  return rs_xstpncpy(dst, src, maxlen);
 }
 
 /// xstrlcpy - Copy a NUL-terminated string into a sized buffer
@@ -421,15 +415,7 @@ char *xstpncpy(char *restrict dst, const char *restrict src, size_t maxlen)
 size_t xstrlcpy(char *restrict dst, const char *restrict src, size_t dsize)
   FUNC_ATTR_NONNULL_ALL
 {
-  size_t slen = strlen(src);
-
-  if (dsize) {
-    size_t len = MIN(slen, dsize - 1);
-    memcpy(dst, src, len);
-    dst[len] = NUL;
-  }
-
-  return slen;  // Does not include NUL.
+  return rs_xstrlcpy(dst, src, dsize);
 }
 
 /// Appends `src` to string `dst` of size `dsize` (unlike strncat, dsize is the
@@ -450,18 +436,7 @@ size_t xstrlcat(char *const dst, const char *const src, const size_t dsize)
   FUNC_ATTR_NONNULL_ALL
 {
   assert(dsize > 0);
-  const size_t dlen = strlen(dst);
-  assert(dlen < dsize);
-  const size_t slen = strlen(src);
-
-  if (slen > dsize - dlen - 1) {
-    memmove(dst + dlen, src, dsize - dlen - 1);
-    dst[dsize - 1] = NUL;
-  } else {
-    memmove(dst + dlen, src, slen + 1);
-  }
-
-  return slen + dlen;  // Does not include NUL.
+  return rs_xstrlcat(dst, src, dsize);
 }
 
 /// strdup() wrapper

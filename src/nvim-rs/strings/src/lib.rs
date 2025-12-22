@@ -769,6 +769,132 @@ pub unsafe extern "C" fn rs_memchrsub(data: *mut c_char, c: c_char, x: c_char, l
     }
 }
 
+/// Copy a NUL-terminated string from src to dst.
+///
+/// Returns a pointer to the terminating NUL character in dst.
+/// This is the only difference with strcpy(), which returns dst.
+///
+/// WARNING: If copying takes place between objects that overlap, the behavior
+/// is undefined.
+///
+/// This is the Neovim version of POSIX 2008 stpcpy(3).
+///
+/// # Safety
+///
+/// - `dst` must be a valid, mutable pointer with enough space for strlen(src) + 1 bytes
+/// - `src` must be a valid NUL-terminated C string
+/// - `dst` and `src` must not overlap
+#[no_mangle]
+pub unsafe extern "C" fn rs_xstpcpy(dst: *mut c_char, src: *const c_char) -> *mut c_char {
+    if dst.is_null() || src.is_null() {
+        return dst;
+    }
+
+    let len = libc::strlen(src);
+    std::ptr::copy_nonoverlapping(src, dst, len + 1);
+    dst.add(len)
+}
+
+/// Copy at most maxlen bytes from src to dst.
+///
+/// If src is shorter than maxlen, zeros are written to the remaining bytes.
+/// Returns a pointer to the first NUL character written, or &dst[maxlen] if
+/// no NUL was written.
+///
+/// WARNING: xstpncpy will ALWAYS write maxlen bytes.
+///
+/// # Safety
+///
+/// - `dst` must be a valid, mutable pointer with space for at least maxlen bytes
+/// - `src` must be a valid NUL-terminated C string or at least maxlen bytes
+/// - `dst` and `src` must not overlap
+#[no_mangle]
+pub unsafe extern "C" fn rs_xstpncpy(
+    dst: *mut c_char,
+    src: *const c_char,
+    maxlen: usize,
+) -> *mut c_char {
+    if dst.is_null() || src.is_null() || maxlen == 0 {
+        return dst;
+    }
+
+    // Find NUL in src within maxlen
+    let p = libc::memchr(src.cast(), 0, maxlen);
+    if p.is_null() {
+        std::ptr::copy_nonoverlapping(src, dst, maxlen);
+        dst.add(maxlen)
+    } else {
+        let srclen = (p as usize) - (src as usize);
+        std::ptr::copy_nonoverlapping(src, dst, srclen);
+        std::ptr::write_bytes(dst.add(srclen), 0, maxlen - srclen);
+        dst.add(srclen)
+    }
+}
+
+/// Copy a NUL-terminated string into a sized buffer.
+///
+/// Compatible with *BSD strlcpy: the result is always a valid NUL-terminated
+/// string that fits in the buffer (unless the buffer size is zero).
+/// It does not pad out the result like strncpy() does.
+///
+/// Returns the length of src (may be greater than dsize - 1, indicating truncation).
+///
+/// # Safety
+///
+/// - `dst` must be a valid, mutable pointer with space for at least dsize bytes
+/// - `src` must be a valid NUL-terminated C string
+/// - `dst` and `src` must not overlap
+#[no_mangle]
+pub unsafe extern "C" fn rs_xstrlcpy(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize {
+    if src.is_null() {
+        return 0;
+    }
+
+    let slen = libc::strlen(src);
+
+    if dsize > 0 && !dst.is_null() {
+        let copy_len = if slen < dsize { slen } else { dsize - 1 };
+        std::ptr::copy_nonoverlapping(src, dst, copy_len);
+        *dst.add(copy_len) = 0;
+    }
+
+    slen
+}
+
+/// Append src to string dst of size dsize.
+///
+/// At most dsize-1 characters will be copied. Always NUL terminates.
+/// src and dst may overlap.
+///
+/// Returns the length of the resulting string as if dsize was unlimited
+/// (may be greater than dsize - 1, indicating truncation).
+///
+/// # Safety
+///
+/// - `dst` must be a valid, mutable NUL-terminated string with space for at least dsize bytes
+/// - `src` must be a valid NUL-terminated C string
+/// - dsize must be > 0
+#[no_mangle]
+pub unsafe extern "C" fn rs_xstrlcat(dst: *mut c_char, src: *const c_char, dsize: usize) -> usize {
+    if dst.is_null() || src.is_null() || dsize == 0 {
+        return 0;
+    }
+
+    let dlen = libc::strlen(dst);
+    let slen = libc::strlen(src);
+
+    if slen > dsize - dlen - 1 {
+        // Need to truncate
+        libc::memmove(dst.add(dlen).cast(), src.cast(), dsize - dlen - 1);
+        *dst.add(dsize - 1) = 0;
+    } else {
+        // Can copy full string + NUL
+        libc::memmove(dst.add(dlen).cast(), src.cast(), slen + 1);
+    }
+
+    slen + dlen
+}
+
 // External FFI functions from other Rust crates
 extern "C" {
     fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
@@ -2007,5 +2133,145 @@ mod tests {
 
         // NULL pointer - should not crash
         unsafe { rs_memchrsub(std::ptr::null_mut(), b'a' as c_char, b'b' as c_char, 5) };
+    }
+
+    #[test]
+    fn test_xstpcpy() {
+        // Basic copy
+        let src = CString::new("hello").unwrap();
+        let mut dst = [0i8; 10];
+        unsafe {
+            let result = rs_xstpcpy(dst.as_mut_ptr(), src.as_ptr());
+            // Result should point to the NUL terminator
+            assert_eq!(result, dst.as_mut_ptr().add(5));
+            assert_eq!(*result, 0);
+            // Verify the copy
+            let copied = std::ffi::CStr::from_ptr(dst.as_ptr());
+            assert_eq!(copied.to_str().unwrap(), "hello");
+        }
+
+        // Empty string
+        let src = CString::new("").unwrap();
+        let mut dst = [0i8; 10];
+        unsafe {
+            let result = rs_xstpcpy(dst.as_mut_ptr(), src.as_ptr());
+            assert_eq!(result, dst.as_mut_ptr());
+            assert_eq!(*result, 0);
+        }
+    }
+
+    #[test]
+    fn test_xstpncpy() {
+        // Copy with padding
+        let src = CString::new("hi").unwrap();
+        let mut dst = [b'X' as i8; 10];
+        unsafe {
+            let result = rs_xstpncpy(dst.as_mut_ptr(), src.as_ptr(), 5);
+            // Result should point to the NUL position
+            assert_eq!(result, dst.as_mut_ptr().add(2));
+            // Check first 5 bytes: "hi\0\0\0"
+            assert_eq!(dst[0], b'h' as i8);
+            assert_eq!(dst[1], b'i' as i8);
+            assert_eq!(dst[2], 0);
+            assert_eq!(dst[3], 0);
+            assert_eq!(dst[4], 0);
+            // Rest should be unchanged
+            assert_eq!(dst[5], b'X' as i8);
+        }
+
+        // Copy without NUL in maxlen
+        let src = CString::new("hello world").unwrap();
+        let mut dst = [0i8; 10];
+        unsafe {
+            let result = rs_xstpncpy(dst.as_mut_ptr(), src.as_ptr(), 5);
+            // Result should point to &dst[5] (no NUL written)
+            assert_eq!(result, dst.as_mut_ptr().add(5));
+            // First 5 bytes are "hello" (no NUL)
+            assert_eq!(dst[0], b'h' as i8);
+            assert_eq!(dst[4], b'o' as i8);
+        }
+    }
+
+    #[test]
+    fn test_xstrlcpy() {
+        // Basic copy that fits
+        let src = CString::new("hello").unwrap();
+        let mut dst = [0i8; 10];
+        unsafe {
+            let result = rs_xstrlcpy(dst.as_mut_ptr(), src.as_ptr(), 10);
+            assert_eq!(result, 5); // Length of "hello"
+            let copied = std::ffi::CStr::from_ptr(dst.as_ptr());
+            assert_eq!(copied.to_str().unwrap(), "hello");
+        }
+
+        // Truncation
+        let src = CString::new("hello world").unwrap();
+        let mut dst = [0i8; 6];
+        unsafe {
+            let result = rs_xstrlcpy(dst.as_mut_ptr(), src.as_ptr(), 6);
+            assert_eq!(result, 11); // Full length of "hello world"
+            let copied = std::ffi::CStr::from_ptr(dst.as_ptr());
+            assert_eq!(copied.to_str().unwrap(), "hello"); // Truncated
+        }
+
+        // Zero dsize - no write
+        let src = CString::new("hello").unwrap();
+        let mut dst = [b'X' as i8; 5];
+        unsafe {
+            let result = rs_xstrlcpy(dst.as_mut_ptr(), src.as_ptr(), 0);
+            assert_eq!(result, 5);
+            assert_eq!(dst[0], b'X' as i8); // Unchanged
+        }
+
+        // dsize = 1 - only NUL
+        let src = CString::new("hello").unwrap();
+        let mut dst = [b'X' as i8; 5];
+        unsafe {
+            let result = rs_xstrlcpy(dst.as_mut_ptr(), src.as_ptr(), 1);
+            assert_eq!(result, 5);
+            assert_eq!(dst[0], 0); // Just NUL
+        }
+    }
+
+    #[test]
+    fn test_xstrlcat() {
+        // Basic append
+        let mut dst = [0i8; 20];
+        dst[0] = b'h' as i8;
+        dst[1] = b'i' as i8;
+        dst[2] = 0;
+        let src = CString::new(" there").unwrap();
+        unsafe {
+            let result = rs_xstrlcat(dst.as_mut_ptr(), src.as_ptr(), 20);
+            assert_eq!(result, 8); // "hi" (2) + " there" (6)
+            let combined = std::ffi::CStr::from_ptr(dst.as_ptr());
+            assert_eq!(combined.to_str().unwrap(), "hi there");
+        }
+
+        // Truncation
+        let mut dst = [0i8; 10];
+        dst[0] = b'h' as i8;
+        dst[1] = b'e' as i8;
+        dst[2] = b'l' as i8;
+        dst[3] = b'l' as i8;
+        dst[4] = b'o' as i8;
+        dst[5] = 0;
+        let src = CString::new(" world").unwrap();
+        unsafe {
+            let result = rs_xstrlcat(dst.as_mut_ptr(), src.as_ptr(), 10);
+            assert_eq!(result, 11); // "hello" (5) + " world" (6)
+            let combined = std::ffi::CStr::from_ptr(dst.as_ptr());
+            assert_eq!(combined.to_str().unwrap(), "hello wor"); // Truncated at 9 chars + NUL
+        }
+
+        // Append to empty
+        let mut dst = [0i8; 10];
+        let src = CString::new("hello").unwrap();
+        unsafe {
+            let result = rs_xstrlcat(dst.as_mut_ptr(), src.as_ptr(), 10);
+            assert_eq!(result, 5);
+            let combined = std::ffi::CStr::from_ptr(dst.as_ptr());
+            assert_eq!(combined.to_str().unwrap(), "hello");
+        }
     }
 }
