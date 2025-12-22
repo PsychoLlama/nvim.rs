@@ -9,6 +9,15 @@
 use std::ffi::c_char;
 use std::ffi::c_int;
 
+use nvim_buffer::BufHandle;
+
+// C accessor functions for buffer properties
+extern "C" {
+    fn nvim_buf_get_p_sw(buf: BufHandle) -> i64;
+    fn nvim_buf_get_p_ts(buf: BufHandle) -> i64;
+    fn nvim_buf_get_p_vts_array(buf: BufHandle) -> *const c_int;
+}
+
 // Type aliases matching C types
 // colnr_T = int (i32)
 // OptInt = int64_t (i64)
@@ -410,6 +419,34 @@ pub unsafe extern "C" fn rs_indent_size_no_ts(ptr: *const c_char) -> c_int {
             return vcol;
         }
     }
+}
+
+// ============================================================================
+// Shiftwidth Calculations
+// ============================================================================
+
+/// Get the effective shiftwidth value at a given column.
+///
+/// If 'shiftwidth' is set (non-zero), returns that value.
+/// Otherwise, uses the tabstop size at the given column.
+///
+/// # Safety
+/// The `buf` parameter must be a valid buffer pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_sw_value_col(buf: BufHandle, col: c_int, left: bool) -> c_int {
+    if buf.is_null() {
+        return 8; // Default shiftwidth
+    }
+
+    let sw = nvim_buf_get_p_sw(buf);
+    if sw != 0 {
+        return sw as c_int;
+    }
+
+    // Use tabstop_at when shiftwidth is 0
+    let ts = nvim_buf_get_p_ts(buf);
+    let vts = nvim_buf_get_p_vts_array(buf);
+    rs_tabstop_at(col, ts, vts, left)
 }
 
 // ============================================================================

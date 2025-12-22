@@ -263,6 +263,12 @@ int *nvim_buf_get_p_vts_array(buf_T *buf)
   return buf->b_p_vts_array;
 }
 
+/// Get the 'shiftwidth' option value for a buffer.
+OptInt nvim_buf_get_p_sw(buf_T *buf)
+{
+  return buf->b_p_sw;
+}
+
 typedef enum {
   kBffClearWinInfo = 1,
   kBffInitChangedtick = 2,

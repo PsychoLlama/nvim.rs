@@ -66,6 +66,7 @@ typedef struct {
   int nspcs;
 } TabstopFromtoResult;
 extern TabstopFromtoResult rs_tabstop_fromto(int start_col, int end_col, int ts, const int *vts);
+extern int rs_get_sw_value_col(buf_T *buf, int col, bool left);
 
 /// Set the integer values corresponding to the string setting of 'vartabstop'.
 /// "array" will be set, caller must free it if needed.
@@ -234,8 +235,7 @@ int get_sw_value_indent(buf_T *buf, bool left)
 /// Idem, using virtual column "col".
 int get_sw_value_col(buf_T *buf, colnr_T col, bool left)
 {
-  return buf->b_p_sw ? (int)buf->b_p_sw
-                     : tabstop_at(col, buf->b_p_ts, buf->b_p_vts_array, left);
+  return rs_get_sw_value_col(buf, col, left);
 }
 
 /// Return the effective softtabstop value for the current buffer,
