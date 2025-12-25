@@ -47,6 +47,13 @@ static int cursorhold_tb_change_cnt = 0;  ///< tb_change_cnt when waiting starte
 #include "os/input.c.generated.h"
 
 extern bool rs_os_isatty(int fd);
+extern int rs_input_blocking(void);
+
+/// C accessor for blocking static.
+int nvim_get_input_blocking(void)
+{
+  return blocking;
+}
 
 // Rust implementation in nvim-event crate
 extern int rs_multiqueue_empty(MultiQueue *mq);
@@ -495,7 +502,7 @@ void input_enqueue_mouse(int code, uint8_t modifier, int grid, int row, int col)
 /// @return true if the main loop is blocked and waiting for input.
 bool input_blocking(void)
 {
-  return blocking;
+  return rs_input_blocking() != 0;
 }
 
 /// Checks for (but does not read) available input, and consumes `main_loop.events` while waiting.

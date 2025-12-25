@@ -99,11 +99,18 @@ static int compl_selected;
 static char *cmdline_orig = NULL;
 
 extern int rs_cmdline_fuzzy_complete(const char *fuzzystr);
+extern int rs_cmdline_pum_active(void);
 
 // C accessor for Rust FFI
 unsigned nvim_get_wop_flags(void)
 {
   return wop_flags;
+}
+
+/// C accessor for compl_match_array != NULL check.
+int nvim_get_compl_match_array_not_null(void)
+{
+  return compl_match_array != NULL;
 }
 
 #define SHOW_MATCH(m) (showtail ? showmatches_gettail(matches[m], false) : matches[m])
@@ -427,7 +434,7 @@ void cmdline_pum_display(bool changed_array)
 /// Returns true if the cmdline completion popup menu is being displayed.
 bool cmdline_pum_active(void)
 {
-  return pum_visible() && compl_match_array != NULL;
+  return rs_cmdline_pum_active() != 0;
 }
 
 /// Remove the cmdline completion popup menu (if present), free the list of items.

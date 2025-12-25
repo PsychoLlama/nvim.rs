@@ -19,6 +19,8 @@ extern "C" {
     fn nvim_get_wop_flags() -> c_uint;
     fn nvim_get_cmdwin_type() -> c_int;
     fn nvim_get_cmdline_type() -> c_int;
+    fn nvim_get_compl_match_array_not_null() -> c_int;
+    fn rs_pum_visible() -> c_int;
 }
 
 /// Check if command line is in overstrike mode.
@@ -81,4 +83,15 @@ pub unsafe extern "C" fn rs_is_in_cmdwin() -> c_int {
     let cmdline_type = nvim_get_cmdline_type();
 
     c_int::from(cmdwin_type != 0 && cmdline_type == NUL)
+}
+
+/// Check if the cmdline completion popup menu is being displayed.
+///
+/// Returns true if `pum_visible()` and `compl_match_array != NULL`.
+///
+/// # Safety
+/// Calls external C functions to access global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cmdline_pum_active() -> c_int {
+    c_int::from(rs_pum_visible() != 0 && nvim_get_compl_match_array_not_null() != 0)
 }
