@@ -5,6 +5,7 @@
 #include "nvim/api/private/helpers.h"
 
 extern bool rs_valid_yank_reg(int regname, bool writing);
+extern int rs_get_unname_register(void);
 #include "nvim/autocmd.h"
 #include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
@@ -62,10 +63,16 @@ static yankreg_T *y_previous = NULL;  // ptr to last written yankreg
 static const char e_search_pattern_and_expression_register_may_not_contain_two_or_more_lines[]
   = N_("E883: Search pattern and expression register may not contain two or more lines");
 
+/// C accessor for Rust to get y_previous index.
+int nvim_get_y_previous_index(void)
+{
+  return y_previous == NULL ? -1 : (int)(y_previous - &y_regs[0]);
+}
+
 /// @return the index of the register "" points to.
 int get_unname_register(void)
 {
-  return y_previous == NULL ? -1 : (int)(y_previous - &y_regs[0]);
+  return rs_get_unname_register();
 }
 
 yankreg_T *get_y_register(int reg)

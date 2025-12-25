@@ -8,6 +8,12 @@
 
 use std::ffi::c_int;
 
+// FFI declarations for C accessor functions
+extern "C" {
+    /// Get the index of the unnamed register (y_previous - y_regs), or -1 if NULL.
+    fn nvim_get_y_previous_index() -> c_int;
+}
+
 /// Register index constants (matching `register_defs.h`).
 pub const DELETION_REGISTER: c_int = 36;
 pub const STAR_REGISTER: c_int = 37;
@@ -89,6 +95,19 @@ pub extern "C" fn rs_is_append_register(regname: c_int) -> c_int {
         return 0;
     };
     c_int::from(ascii_isupper(c))
+}
+
+/// Get the index of the register that "" points to.
+///
+/// Returns the index of `y_previous` in the `y_regs` array, or -1 if
+/// `y_previous` is NULL (no previous yank).
+///
+/// # Safety
+///
+/// Calls external C function to access global register state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_unname_register() -> c_int {
+    nvim_get_y_previous_index()
 }
 
 /// Get the character name of the register with the given index.

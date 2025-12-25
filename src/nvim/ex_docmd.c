@@ -117,6 +117,7 @@ extern const char *rs_find_nextcmd(const char *p);
 extern const char *rs_check_nextcmd(const char *p);
 extern int rs_is_loclist_cmd(int cmdidx, int cmd_size);
 extern int rs_get_pressedreturn(void);
+extern int rs_expr_map_locked(void);
 
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
@@ -6976,7 +6977,7 @@ void restore_current_state(save_state_T *sst)
 
 bool expr_map_locked(void)
 {
-  return expr_map_lock > 0 && !(curbuf->b_flags & BF_DUMMY);
+  return rs_expr_map_locked() != 0;
 }
 
 /// ":normal[!] {commands}": Execute normal mode commands.
@@ -7918,6 +7919,18 @@ void set_pressedreturn(bool val)
 int nvim_get_ex_pressedreturn(void)
 {
   return ex_pressedreturn ? 1 : 0;
+}
+
+// C accessor for Rust to read expr_map_lock
+int nvim_get_expr_map_lock(void)
+{
+  return expr_map_lock;
+}
+
+// C accessor for Rust to check if curbuf has BF_DUMMY flag
+int nvim_curbuf_is_dummy(void)
+{
+  return (curbuf->b_flags & BF_DUMMY) != 0;
 }
 
 /// ":checkhealth [plugins]"

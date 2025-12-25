@@ -18,6 +18,8 @@ use std::ptr;
 extern "C" {
     fn cmdname_first_char(cmdidx: c_int) -> c_int;
     fn nvim_get_ex_pressedreturn() -> c_int;
+    fn nvim_get_expr_map_lock() -> c_int;
+    fn nvim_curbuf_is_dummy() -> c_int;
 }
 
 /// Check if character ends an Ex command.
@@ -174,6 +176,21 @@ pub extern "C" fn rs_is_loclist_cmd(cmdidx: c_int, cmd_size: c_int) -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_pressedreturn() -> c_int {
     nvim_get_ex_pressedreturn()
+}
+
+/// Check if expression mapping is locked.
+///
+/// Returns true if `expr_map_lock > 0` and current buffer is not a dummy buffer.
+/// This prevents use of ex_normal() and text changes while running an expr mapping.
+///
+/// # Safety
+///
+/// Calls external C functions to access global variables.
+#[no_mangle]
+pub unsafe extern "C" fn rs_expr_map_locked() -> c_int {
+    let lock = nvim_get_expr_map_lock();
+    let is_dummy = nvim_curbuf_is_dummy();
+    c_int::from(lock > 0 && is_dummy == 0)
 }
 
 #[cfg(test)]
