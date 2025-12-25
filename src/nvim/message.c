@@ -186,9 +186,12 @@ void msg_grid_set_pos(int row, bool scrolled)
   }
 }
 
+// Rust FFI declarations
+extern int rs_msg_use_grid(void);
+
 bool msg_use_grid(void)
 {
-  return default_grid.chars && !ui_has(kUIMessages);
+  return rs_msg_use_grid() != 0;
 }
 
 void msg_grid_validate(void)

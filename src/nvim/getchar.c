@@ -83,6 +83,7 @@ extern int rs_typebuf_changed(int tb_change_cnt);
 extern int rs_typebuf_typed(void);
 extern int rs_typebuf_maplen(void);
 extern int rs_using_script(void);
+extern int rs_noremap_keys(void);
 
 /// State for adding bytes to a recording or 'showcmd'.
 typedef struct {
@@ -912,7 +913,7 @@ static void init_typebuf(void)
 /// @return true when keys cannot be remapped.
 bool noremap_keys(void)
 {
-  return KeyNoremap & (RM_NONE|RM_SCRIPT);
+  return rs_noremap_keys() != 0;
 }
 
 /// Insert a string in position "offset" in the typeahead buffer.
@@ -3435,4 +3436,19 @@ int nvim_get_typebuf_maplen(void)
 int nvim_get_curscript(void)
 {
   return curscript;
+}
+
+int nvim_get_keynoremap(void)
+{
+  return KeyNoremap;
+}
+
+int nvim_get_rm_none(void)
+{
+  return RM_NONE;
+}
+
+int nvim_get_rm_script(void)
+{
+  return RM_SCRIPT;
 }

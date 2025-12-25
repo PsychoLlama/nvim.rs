@@ -22,6 +22,12 @@ extern "C" {
     fn nvim_get_typebuf_maplen() -> c_int;
     /// Get `curscript`
     fn nvim_get_curscript() -> c_int;
+    /// Get `KeyNoremap`
+    fn nvim_get_keynoremap() -> c_int;
+    /// Get `RM_NONE` constant
+    fn nvim_get_rm_none() -> c_int;
+    /// Get `RM_SCRIPT` constant
+    fn nvim_get_rm_script() -> c_int;
 }
 
 /// Returns true if the stuff buffer is empty.
@@ -85,4 +91,18 @@ pub unsafe extern "C" fn rs_typebuf_maplen() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_using_script() -> c_int {
     c_int::from(nvim_get_curscript() >= 0)
+}
+
+/// Return true when keys cannot be remapped.
+///
+/// Keys cannot be remapped when `KeyNoremap` has `RM_NONE` or `RM_SCRIPT` set.
+///
+/// # Safety
+/// Calls C accessor functions for `KeyNoremap` and remap constants.
+#[no_mangle]
+pub unsafe extern "C" fn rs_noremap_keys() -> c_int {
+    let keynoremap = nvim_get_keynoremap();
+    let rm_none = nvim_get_rm_none();
+    let rm_script = nvim_get_rm_script();
+    c_int::from((keynoremap & (rm_none | rm_script)) != 0)
 }

@@ -2155,6 +2155,25 @@ pub extern "C" fn rs_get_bordertext_col(
     }
 }
 
+// Message grid accessors
+extern "C" {
+    /// Check if default_grid.chars is non-NULL
+    fn nvim_get_default_grid_has_chars() -> c_int;
+    /// Check if any UI has kUIMessages extension
+    fn nvim_ui_has_messages() -> c_int;
+}
+
+/// Check if message grid should be used.
+///
+/// Returns true if default_grid.chars is allocated and no UI has kUIMessages extension.
+///
+/// # Safety
+/// Calls C accessor functions for grid and UI state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_use_grid() -> c_int {
+    c_int::from(nvim_get_default_grid_has_chars() != 0 && nvim_ui_has_messages() == 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

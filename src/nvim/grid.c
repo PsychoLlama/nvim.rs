@@ -400,6 +400,11 @@ bool nvim_get_full_screen(void)
   return full_screen;
 }
 
+int nvim_get_default_grid_has_chars(void)
+{
+  return default_grid.chars != NULL;
+}
+
 // GridView field accessors
 ScreenGrid *nvim_gridview_get_target(GridView *view)
 {

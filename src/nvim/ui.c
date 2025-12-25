@@ -185,6 +185,12 @@ size_t ui_active(void)
   return ui_count;
 }
 
+/// Check if any UI has kUIMessages extension (accessor for Rust).
+int nvim_ui_has_messages(void)
+{
+  return ui_has(kUIMessages);
+}
+
 void ui_refresh(void)
 {
   if (ui_client_channel_id) {
