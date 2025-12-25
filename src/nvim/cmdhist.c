@@ -33,6 +33,7 @@
 #include "cmdhist.c.generated.h"
 
 extern HistoryType rs_hist_char2type(int c);
+extern int rs_get_hislen(void);
 
 static histentry_T *(history[HIST_COUNT]) = { NULL, NULL, NULL, NULL, NULL };
 static int hisidx[HIST_COUNT] = { -1, -1, -1, -1, -1 };  ///< lastused entry
@@ -40,10 +41,16 @@ static int hisidx[HIST_COUNT] = { -1, -1, -1, -1, -1 };  ///< lastused entry
 static int hisnum[HIST_COUNT] = { 0, 0, 0, 0, 0 };
 static int hislen = 0;  ///< actual length of history tables
 
+/// C accessor for hislen static variable.
+int nvim_get_hislen(void)
+{
+  return hislen;
+}
+
 /// Return the length of the history tables
 int get_hislen(void)
 {
-  return hislen;
+  return rs_get_hislen();
 }
 
 /// Return a pointer to a specified history table

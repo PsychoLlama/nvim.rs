@@ -61,6 +61,10 @@
 #include "nvim/window.h"
 #include "nvim/winfloat.h"
 
+// Rust FFI declarations
+extern int rs_pum_visible(void);
+extern int rs_pum_drawn(void);
+
 static pumitem_T *pum_array = NULL;  // items of displayed pum
 static int pum_size;                // nr of items in "pum_array"
 static int pum_selected;            // index of selected item or -1
@@ -87,6 +91,17 @@ static bool pum_is_visible = false;
 static bool pum_is_drawn = false;
 static bool pum_external = false;
 static bool pum_invalid = false;  // the screen was just cleared
+
+// C accessors for Rust
+int nvim_get_pum_is_visible(void)
+{
+  return pum_is_visible;
+}
+
+int nvim_get_pum_external(void)
+{
+  return pum_external;
+}
 
 #include "popupmenu.c.generated.h"
 #define PUM_DEF_HEIGHT 10
@@ -1302,13 +1317,13 @@ void pum_clear(void)
 /// @return true if the popup menu is displayed.
 bool pum_visible(void)
 {
-  return pum_is_visible;
+  return rs_pum_visible() != 0;
 }
 
 /// @return true if the popup menu is displayed and drawn on the grid.
 bool pum_drawn(void)
 {
-  return pum_visible() && !pum_external;
+  return rs_pum_drawn() != 0;
 }
 
 /// Screen was cleared, need to redraw next time

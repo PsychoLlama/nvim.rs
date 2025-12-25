@@ -54,6 +54,7 @@ nvim-ops = { path = "ops" }
 nvim-os = { path = "os" }
 nvim-path = { path = "path" }
 nvim-plines = { path = "plines" }
+nvim-popupmenu = { path = "popupmenu" }
 nvim-profile = { path = "profile" }
 nvim-register = { path = "register" }
 nvim-search = { path = "search" }

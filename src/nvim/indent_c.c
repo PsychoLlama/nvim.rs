@@ -30,6 +30,26 @@
 #include "nvim/types_defs.h"
 #include "nvim/vim_defs.h"
 
+extern bool rs_cindent_on(void);
+
+/// C accessor for p_paste global option.
+int nvim_get_p_paste(void)
+{
+  return p_paste;
+}
+
+/// C accessor for curbuf->b_p_cin (cindent option).
+int nvim_curbuf_get_p_cin(void)
+{
+  return curbuf->b_p_cin;
+}
+
+/// C accessor for whether curbuf->b_p_inde is non-empty.
+int nvim_curbuf_get_inde_nonempty(void)
+{
+  return *curbuf->b_p_inde != NUL;
+}
+
 // Find result cache for cpp_baseclass
 typedef struct {
   int found;
@@ -236,7 +256,7 @@ bool cin_is_cinword(const char *line)
 bool cindent_on(void)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  return !p_paste && (curbuf->b_p_cin || *curbuf->b_p_inde != NUL);
+  return rs_cindent_on();
 }
 
 // Skip over white space and C comments within the line.

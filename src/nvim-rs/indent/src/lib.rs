@@ -16,6 +16,9 @@ extern "C" {
     fn nvim_buf_get_p_sw(buf: BufHandle) -> i64;
     fn nvim_buf_get_p_ts(buf: BufHandle) -> i64;
     fn nvim_buf_get_p_vts_array(buf: BufHandle) -> *const c_int;
+    fn nvim_get_p_paste() -> c_int;
+    fn nvim_curbuf_get_p_cin() -> c_int;
+    fn nvim_curbuf_get_inde_nonempty() -> c_int;
 }
 
 // Type aliases matching C types
@@ -23,6 +26,24 @@ extern "C" {
 // OptInt = int64_t (i64)
 
 const TAB: c_char = b'\t' as c_char;
+
+// ============================================================================
+// C-indenting State
+// ============================================================================
+
+/// Check that C-indenting is on.
+///
+/// Returns true if paste mode is off and either 'cindent' is set or
+/// 'indentexpr' is non-empty.
+///
+/// # Safety
+/// Calls C accessor functions for global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cindent_on() -> bool {
+    nvim_get_p_paste() == 0
+        && (nvim_curbuf_get_p_cin() != 0 || nvim_curbuf_get_inde_nonempty() != 0)
+}
+
 const SPACE: c_char = b' ' as c_char;
 
 /// Calculate the number of screen spaces a tab will occupy.

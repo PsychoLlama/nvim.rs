@@ -1,0 +1,15 @@
+[package]
+name = "nvim-popupmenu"
+description = "Popup menu state queries for Neovim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[lints]
+workspace = true
+
+[dependencies]

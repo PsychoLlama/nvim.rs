@@ -8,6 +8,21 @@
 
 use std::os::raw::c_int;
 
+// C accessor functions for history state
+extern "C" {
+    /// Get the `hislen` static variable.
+    fn nvim_get_hislen() -> c_int;
+}
+
+/// Return the length of the history tables.
+///
+/// # Safety
+/// Calls C accessor function for `hislen`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_hislen() -> c_int {
+    nvim_get_hislen()
+}
+
 /// History type constants (matching nvim's HistoryType enum)
 pub const HIST_DEFAULT: c_int = -2;
 pub const HIST_INVALID: c_int = -1;
