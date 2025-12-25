@@ -262,6 +262,19 @@ pub unsafe extern "C" fn rs_var_flavour(varname: *const c_char) -> VarFlavour {
     VarFlavour::Shada
 }
 
+extern "C" {
+    fn nvim_get_current_funccal_fc_returned() -> c_int;
+}
+
+/// Check if the current function was ended by a ":return" command.
+///
+/// # Safety
+/// Calls C accessor function for function call state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_current_func_returned() -> c_int {
+    nvim_get_current_funccal_fc_returned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

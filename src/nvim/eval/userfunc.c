@@ -3857,10 +3857,16 @@ int func_level(void *cookie)
   return ((funccall_T *)cookie)->fc_level;
 }
 
+// C accessor for current_funccal->fc_returned (used by Rust)
+int nvim_get_current_funccal_fc_returned(void) { return current_funccal->fc_returned; }
+
+// Rust implementation
+extern int rs_current_func_returned(void);
+
 /// @return  true when a function was ended by a ":return" command.
 int current_func_returned(void)
 {
-  return current_funccal->fc_returned;
+  return rs_current_func_returned();
 }
 
 bool free_unref_funccal(int copyID, int testing)
