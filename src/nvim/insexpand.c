@@ -2026,17 +2026,26 @@ void ins_compl_init_get_longest(void)
   compl_get_longest = false;
 }
 
+// C accessors for completion state (used by Rust)
+int nvim_get_compl_interrupted(void) { return compl_interrupted ? 1 : 0; }
+int nvim_get_compl_time_slice_expired(void) { return compl_time_slice_expired ? 1 : 0; }
+int nvim_get_compl_enter_selects(void) { return compl_enter_selects ? 1 : 0; }
+
+// Rust implementations
+extern int rs_ins_compl_interrupted(void);
+extern int rs_ins_compl_enter_selects(void);
+
 /// Returns true when insert completion is interrupted.
 bool ins_compl_interrupted(void)
 {
-  return compl_interrupted || compl_time_slice_expired;
+  return rs_ins_compl_interrupted() != 0;
 }
 
 /// Returns true if the <Enter> key selects a match in the completion popup
 /// menu.
 bool ins_compl_enter_selects(void)
 {
-  return compl_enter_selects;
+  return rs_ins_compl_enter_selects() != 0;
 }
 
 /// Return the column where the text starts that is being completed

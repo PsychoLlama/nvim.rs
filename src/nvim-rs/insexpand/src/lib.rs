@@ -43,6 +43,9 @@ extern "C" {
     fn nvim_get_ctrl_x_mode() -> c_int;
     fn nvim_get_compl_cont_status() -> c_int;
     fn nvim_get_compl_started() -> c_int;
+    fn nvim_get_compl_interrupted() -> c_int;
+    fn nvim_get_compl_time_slice_expired() -> c_int;
+    fn nvim_get_compl_enter_selects() -> c_int;
 }
 
 /// Check if CTRL-X mode is none (0).
@@ -181,6 +184,18 @@ pub unsafe extern "C" fn rs_compl_status_local() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_active() -> c_int {
     nvim_get_compl_started()
+}
+
+/// Check if completion was interrupted.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_interrupted() -> c_int {
+    c_int::from(nvim_get_compl_interrupted() != 0 || nvim_get_compl_time_slice_expired() != 0)
+}
+
+/// Check if pressing Enter selects a match in the completion popup.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_enter_selects() -> c_int {
+    nvim_get_compl_enter_selects()
 }
 
 #[cfg(test)]
