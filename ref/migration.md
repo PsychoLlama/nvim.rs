@@ -48,6 +48,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | os           | OS abstractions (env, time, fs)                    |
 | path         | Path manipulation, separators                      |
 | plines       | Display calculations, scrolloff, showbreak, win_col_off |
+| popupmenu    | Popup menu visibility state queries                |
 | profile      | Profiling time arithmetic                          |
 | register     | Register name validation                           |
 | search       | Character search state, search/substitute tracking |
