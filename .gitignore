@@ -89,3 +89,6 @@ CMakeUserPresets.json
 # Rust/Cargo
 /target/
 Cargo.lock
+
+# Claude Code loop state
+.claude/loop-state.local.md
