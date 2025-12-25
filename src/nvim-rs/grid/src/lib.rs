@@ -2210,6 +2210,23 @@ pub unsafe extern "C" fn rs_msg_do_throttle() -> c_int {
     c_int::from(use_grid && (rdb_flags & nothrottle) == 0)
 }
 
+// UI compositor accessors
+extern "C" {
+    fn nvim_get_composed_uis() -> c_int;
+    fn nvim_get_valid_screen() -> c_int;
+}
+
+/// Check if the compositor should draw.
+///
+/// Returns true if there are composed UIs and the screen is valid.
+///
+/// # Safety
+/// Calls C accessor functions for compositor state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_comp_should_draw() -> c_int {
+    c_int::from(nvim_get_composed_uis() != 0 && nvim_get_valid_screen() != 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

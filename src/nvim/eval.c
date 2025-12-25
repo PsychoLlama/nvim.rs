@@ -4841,9 +4841,17 @@ bool callback_from_typval(Callback *const callback, const typval_T *const arg)
 
 static int callback_depth = 0;
 
-int get_callback_depth(void)
+extern int rs_get_callback_depth(void);
+
+/// C accessor for callback_depth static.
+int nvim_get_callback_depth(void)
 {
   return callback_depth;
+}
+
+int get_callback_depth(void)
+{
+  return rs_get_callback_depth();
 }
 
 /// @return  whether the callback could be called.
@@ -6157,10 +6165,18 @@ void ex_echohl(exarg_T *eap)
   echo_hl_id = syn_name2id(eap->arg);
 }
 
+extern int rs_get_echo_hl_id(void);
+
+/// C accessor for echo_hl_id static.
+int nvim_get_echo_hl_id(void)
+{
+  return echo_hl_id;
+}
+
 /// Returns the :echo highlight id
 int get_echo_hl_id(void)
 {
-  return echo_hl_id;
+  return rs_get_echo_hl_id();
 }
 
 /// ":execute expr1 ..." execute the result of an expression.

@@ -94,9 +94,23 @@ void ui_comp_detach(RemoteUI *ui)
   ui->composed = false;
 }
 
+extern int rs_ui_comp_should_draw(void);
+
+/// C accessor for composed_uis static.
+int nvim_get_composed_uis(void)
+{
+  return composed_uis;
+}
+
+/// C accessor for valid_screen static.
+int nvim_get_valid_screen(void)
+{
+  return valid_screen;
+}
+
 bool ui_comp_should_draw(void)
 {
-  return composed_uis != 0 && valid_screen;
+  return rs_ui_comp_should_draw() != 0;
 }
 
 /// Raises or lowers the layer, syncing comp_index with zindex.

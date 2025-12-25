@@ -177,6 +177,33 @@ pub unsafe extern "C" fn rs_check_luafunc_name(str: *const c_char, paren: bool) 
     len
 }
 
+// =============================================================================
+// Eval State Accessors
+// =============================================================================
+
+extern "C" {
+    fn nvim_get_callback_depth() -> c_int;
+    fn nvim_get_echo_hl_id() -> c_int;
+}
+
+/// Get the current callback nesting depth.
+///
+/// # Safety
+/// Calls C accessor function for callback_depth static.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_callback_depth() -> c_int {
+    nvim_get_callback_depth()
+}
+
+/// Get the :echo highlight id.
+///
+/// # Safety
+/// Calls C accessor function for echo_hl_id static.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_echo_hl_id() -> c_int {
+    nvim_get_echo_hl_id()
+}
+
 /// Variable flavour types for persistence (`ShaDa`) handling.
 ///
 /// These match the C enum `var_flavour_T` in eval.h.
