@@ -2210,6 +2210,30 @@ pub unsafe extern "C" fn rs_msg_do_throttle() -> c_int {
     c_int::from(use_grid && (rdb_flags & nothrottle) == 0)
 }
 
+// Message redirection accessors
+extern "C" {
+    fn nvim_get_redir_fd_not_null() -> c_int;
+    fn nvim_get_p_vfile_not_empty() -> c_int;
+    fn nvim_get_redir_reg() -> c_int;
+    fn nvim_get_redir_vname() -> c_int;
+    fn nvim_get_capture_ga_not_null() -> c_int;
+}
+
+/// Check if output is being redirected.
+///
+/// # Safety
+/// Calls C accessor functions for redirection state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_redirecting() -> c_int {
+    c_int::from(
+        nvim_get_redir_fd_not_null() != 0
+            || nvim_get_p_vfile_not_empty() != 0
+            || nvim_get_redir_reg() != 0
+            || nvim_get_redir_vname() != 0
+            || nvim_get_capture_ga_not_null() != 0,
+    )
+}
+
 // UI compositor accessors
 extern "C" {
     fn nvim_get_composed_uis() -> c_int;

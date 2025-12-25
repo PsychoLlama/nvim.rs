@@ -209,6 +209,16 @@ unsigned int nvim_get_rdb_flag_nothrottle(void)
   return kOptRdbFlagNothrottle;
 }
 
+// C accessors for redirection state (used by Rust)
+int nvim_get_redir_fd_not_null(void) { return redir_fd != NULL ? 1 : 0; }
+int nvim_get_p_vfile_not_empty(void) { return *p_vfile != NUL ? 1 : 0; }
+int nvim_get_redir_reg(void) { return redir_reg; }
+int nvim_get_redir_vname(void) { return redir_vname ? 1 : 0; }
+int nvim_get_capture_ga_not_null(void) { return capture_ga != NULL ? 1 : 0; }
+
+// Rust implementation
+extern int rs_redirecting(void);
+
 bool msg_use_grid(void)
 {
   return rs_msg_use_grid() != 0;
@@ -3455,8 +3465,7 @@ static void redir_write(const char *const str, const ptrdiff_t maxlen)
 
 int redirecting(void)
 {
-  return redir_fd != NULL || *p_vfile != NUL
-         || redir_reg || redir_vname || capture_ga != NULL;
+  return rs_redirecting();
 }
 
 // Save and restore message kind when emitting a verbose message.
