@@ -19,6 +19,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | context      | Context stack management                           |
 | cursor_shape | Cursor mode/shape queries                          |
 | diff         | Diffopt flag queries                               |
+| edit         | Edit mode state queries                            |
 | encoding     | Base64, SHA-256                                    |
 | eval         | VimL name validation, tristate                     |
 | event        | Event loop, libuv wrappers, multiqueue             |
@@ -49,7 +50,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | plines       | Display calculations, scrolloff, showbreak, win_col_off |
 | profile      | Profiling time arithmetic                          |
 | register     | Register name validation                           |
-| search       | Character search state                             |
+| search       | Character search state, search/substitute tracking |
 | spell        | Spell check utilities                              |
 | strings      | String comparison, case conversion, escape utils   |
 | tui          | Terminal UI, terminfo formatting                   |

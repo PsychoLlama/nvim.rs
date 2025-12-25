@@ -114,6 +114,7 @@ static char lastc_bytes[MAX_SCHAR_SIZE + 1];
 extern int rs_last_csearch_forward(void);
 extern int rs_last_csearch_until(void);
 extern const char *rs_last_csearch(void);
+extern int rs_search_was_last_used(void);
 
 /// Get the lastcdir static variable (accessor for Rust).
 int nvim_get_lastcdir(void)
@@ -131,6 +132,12 @@ int nvim_get_last_t_cmd(void)
 const char *nvim_get_lastc_bytes(void)
 {
   return lastc_bytes;
+}
+
+/// Get the last_idx static variable (accessor for Rust).
+int nvim_get_last_idx(void)
+{
+  return last_idx;
 }
 static int lastc_bytelen = 1;             // >1 for multi-byte char
 
@@ -3634,5 +3641,5 @@ void set_last_used_pattern(const bool is_substitute_pattern)
 /// Returns true if search pattern was the last used one
 bool search_was_last_used(void)
 {
-  return last_idx == 0;
+  return rs_search_was_last_used() != 0;
 }

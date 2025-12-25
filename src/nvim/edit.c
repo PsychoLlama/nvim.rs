@@ -138,6 +138,15 @@ static bool ins_need_undo;              // call u_save() before inserting a
                                         // char.  Set when edit() is called.
                                         // after that arrow_used is used.
 
+// Rust FFI declarations
+extern int rs_ins_need_undo_get(void);
+
+/// Get the ins_need_undo static variable (accessor for Rust).
+int nvim_get_ins_need_undo(void)
+{
+  return ins_need_undo;
+}
+
 static TriState dont_sync_undo = kFalse;  // CTRL-G U prevents syncing undo
                                           // for the next left/right cursor key
 
@@ -1377,7 +1386,7 @@ bool edit(int cmdchar, bool startln, int count)
 
 bool ins_need_undo_get(void)
 {
-  return ins_need_undo;
+  return rs_ins_need_undo_get() != 0;
 }
 
 /// Redraw for Insert mode.

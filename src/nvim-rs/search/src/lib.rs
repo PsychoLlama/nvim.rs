@@ -19,6 +19,9 @@ extern "C" {
 
     /// Get the `lastc_bytes` static variable.
     fn nvim_get_lastc_bytes() -> *const c_char;
+
+    /// Get the `last_idx` static variable.
+    fn nvim_get_last_idx() -> c_int;
 }
 
 /// Direction constant for FORWARD.
@@ -68,6 +71,22 @@ pub extern "C" fn rs_last_csearch_until() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_last_csearch() -> *const c_char {
     nvim_get_lastc_bytes()
+}
+
+/// Check if search pattern was the last used one.
+///
+/// Returns true if `last_idx == 0`, meaning the search pattern (not substitute)
+/// was last used.
+#[inline]
+fn search_was_last_used_impl() -> bool {
+    // SAFETY: nvim_get_last_idx is a simple global accessor
+    unsafe { nvim_get_last_idx() == 0 }
+}
+
+/// FFI wrapper for `search_was_last_used`.
+#[no_mangle]
+pub extern "C" fn rs_search_was_last_used() -> c_int {
+    c_int::from(search_was_last_used_impl())
 }
 
 #[cfg(test)]

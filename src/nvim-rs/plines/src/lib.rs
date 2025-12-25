@@ -417,7 +417,9 @@ fn in_win_border_impl(wp: WinHandle, vcol: c_int) -> bool {
 #[inline]
 fn get_showbreak_value_impl(wp: WinHandle) -> *const c_char {
     if wp.is_null() {
-        unsafe { return nvim_get_p_sbr(); }
+        unsafe {
+            return nvim_get_p_sbr();
+        }
     }
 
     unsafe {
@@ -481,7 +483,11 @@ fn sms_marker_overlap_impl(wp: WinHandle, extra2: c_int) -> c_int {
 
     // The marker is "<<<" which takes 3 columns, so overlap is 3 - extra2
     // but only when extra2 <= 3
-    if extra2 > 3 { 0 } else { 3 - extra2 }
+    if extra2 > 3 {
+        0
+    } else {
+        3 - extra2
+    }
 }
 
 /// Whether cursorline is drawn in a special way.
