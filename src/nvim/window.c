@@ -42,6 +42,7 @@
 #include "nvim/grid.h"
 #include "nvim/grid_defs.h"
 #include "nvim/hashtab.h"
+#include "nvim/highlight.h"
 #include "nvim/keycodes.h"
 #include "nvim/macros_defs.h"
 #include "nvim/main.h"
@@ -668,6 +669,105 @@ OptInt nvim_get_p_stal(void)
 int nvim_first_tabpage_has_next(void)
 {
   return first_tabpage != NULL && first_tabpage->tp_next != NULL;
+}
+
+// Accessors for drawscreen.c migration (separator drawing)
+
+/// Get the w_winrow field from a window.
+int nvim_win_get_winrow(win_T *wp)
+{
+  return wp->w_winrow;
+}
+
+/// Get the w_wincol field from a window.
+int nvim_win_get_wincol(win_T *wp)
+{
+  return wp->w_wincol;
+}
+
+/// Get the w_width field from a window (internal accessor).
+int nvim_win_get_w_width(win_T *wp)
+{
+  return wp->w_width;
+}
+
+/// Get the w_height field from a window (internal accessor).
+int nvim_win_get_w_height(win_T *wp)
+{
+  return wp->w_height;
+}
+
+/// Get the w_hsep_height field from a window.
+int nvim_win_get_hsep_height(win_T *wp)
+{
+  return wp->w_hsep_height;
+}
+
+/// Get the w_vsep_width field from a window.
+int nvim_win_get_vsep_width(win_T *wp)
+{
+  return wp->w_vsep_width;
+}
+
+/// Get W_ENDROW(wp) - the row after the window content.
+int nvim_win_get_endrow(win_T *wp)
+{
+  return W_ENDROW(wp);
+}
+
+/// Get W_ENDCOL(wp) - the column after the window content.
+int nvim_win_get_endcol(win_T *wp)
+{
+  return W_ENDCOL(wp);
+}
+
+/// Get the vertical separator character (fcs_chars.vert).
+schar_T nvim_win_get_fcs_vert(win_T *wp)
+{
+  return wp->w_p_fcs_chars.vert;
+}
+
+/// Get the horizontal separator character (fcs_chars.horiz).
+schar_T nvim_win_get_fcs_horiz(win_T *wp)
+{
+  return wp->w_p_fcs_chars.horiz;
+}
+
+/// Get the vertical+horizontal connector character (fcs_chars.verthoriz).
+schar_T nvim_win_get_fcs_verthoriz(win_T *wp)
+{
+  return wp->w_p_fcs_chars.verthoriz;
+}
+
+/// Get the vertical-right connector character (fcs_chars.vertright).
+schar_T nvim_win_get_fcs_vertright(win_T *wp)
+{
+  return wp->w_p_fcs_chars.vertright;
+}
+
+/// Get the vertical-left connector character (fcs_chars.vertleft).
+schar_T nvim_win_get_fcs_vertleft(win_T *wp)
+{
+  return wp->w_p_fcs_chars.vertleft;
+}
+
+/// Get the horizontal-down connector character (fcs_chars.horizdown).
+schar_T nvim_win_get_fcs_horizdown(win_T *wp)
+{
+  return wp->w_p_fcs_chars.horizdown;
+}
+
+/// Get the horizontal-up connector character (fcs_chars.horizup).
+schar_T nvim_win_get_fcs_horizup(win_T *wp)
+{
+  return wp->w_p_fcs_chars.horizup;
+}
+
+/// Get the highlight attribute for a window's highlight group.
+/// This wraps the inline win_hl_attr function for FFI.
+int nvim_win_hl_attr(win_T *wp, int hlf)
+{
+  return win_hl_attr(wp, hlf);
 }
 
 /// Check if UI has tabline extension.

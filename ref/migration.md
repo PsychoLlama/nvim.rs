@@ -19,6 +19,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | context      | Context stack management                           |
 | cursor_shape | Cursor mode/shape queries                          |
 | diff         | Diffopt flag queries                               |
+| drawscreen   | Window separator drawing, connector functions      |
 | edit         | Edit mode state queries                            |
 | encoding     | Base64, SHA-256                                    |
 | eval         | VimL name validation, tristate                     |
@@ -78,12 +79,22 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 
 ## Functions Requiring Infrastructure
 
-### Complex Struct FFI (win_T, buf_T, frame_T)
+### Complex Struct FFI (win_T, buf_T)
 
-**window.c** (frame tree functions):
-- `frame_has_win` - Recursive frame/window check
-- `is_bottom_win` - Window layout position
-- `frame_fixed_height/width` - Frame dimension checks
+**window.c** (frame tree functions - MIGRATED):
+- `frame_has_win` - Migrated to Rust (rs_frame_has_win)
+- `is_bottom_win` - Migrated to Rust (rs_is_bottom_win)
+- `frame_fixed_height/width` - Migrated to Rust
+- `frame2win` - Migrated to Rust (rs_frame2win)
+- `frame_check_height/width` - Migrated to Rust
+
+**drawscreen.c** (separator functions - MIGRATED):
+- `hsep_connected/vsep_connected` - Migrated to Rust
+- `draw_vsep_win/draw_hsep_win` - Migrated to Rust
+- `get_corner_sep_connector` - Migrated to Rust
+- `draw_sep_connectors_win` - Migrated to Rust
+
+**window.c** (remaining):
 - `tabpage_win_valid` - Window in tabpage validation
 - `win_valid_any_tab` - Window validation across tabs
 

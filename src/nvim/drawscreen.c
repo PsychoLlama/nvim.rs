@@ -136,6 +136,16 @@ extern int rs_compute_foldcolumn(win_T *wp, int col);
 extern int rs_number_width(win_T *wp);
 extern int rs_conceal_cursor_line(const win_T *wp);
 
+// Rust FFI declarations for separator connection checks
+extern int rs_hsep_connected(win_T *wp, WindowCorner corner);
+extern int rs_vsep_connected(win_T *wp, WindowCorner corner);
+
+// Rust FFI declarations for separator drawing
+extern void rs_draw_vsep_win(win_T *wp);
+extern void rs_draw_hsep_win(win_T *wp);
+extern schar_T rs_get_corner_sep_connector(win_T *wp, WindowCorner corner);
+extern void rs_draw_sep_connectors_win(win_T *wp);
+
 static bool redraw_popupmenu = false;
 static bool msg_grid_invalid = false;
 static bool resizing_autocmd = false;
@@ -1168,179 +1178,38 @@ static bool win_redraw_signcols(win_T *wp)
 /// Assumes global statusline is enabled
 static bool hsep_connected(win_T *wp, WindowCorner corner)
 {
-  bool before = (corner == WC_TOP_LEFT || corner == WC_BOTTOM_LEFT);
-  int sep_row = (corner == WC_TOP_LEFT || corner == WC_TOP_RIGHT)
-                ? wp->w_winrow - 1 : W_ENDROW(wp);
-  frame_T *fr = wp->w_frame;
-
-  while (fr->fr_parent != NULL) {
-    if (fr->fr_parent->fr_layout == FR_ROW && (before ? fr->fr_prev : fr->fr_next) != NULL) {
-      fr = before ? fr->fr_prev : fr->fr_next;
-      break;
-    }
-    fr = fr->fr_parent;
-  }
-  if (fr->fr_parent == NULL) {
-    return false;
-  }
-  while (fr->fr_layout != FR_LEAF) {
-    fr = fr->fr_child;
-    if (fr->fr_parent->fr_layout == FR_ROW && before) {
-      while (fr->fr_next != NULL) {
-        fr = fr->fr_next;
-      }
-    } else {
-      while (fr->fr_next != NULL && frame2win(fr)->w_winrow + fr->fr_height < sep_row) {
-        fr = fr->fr_next;
-      }
-    }
-  }
-
-  return (sep_row == fr->fr_win->w_winrow - 1 || sep_row == W_ENDROW(fr->fr_win));
+  return rs_hsep_connected(wp, corner) != 0;
 }
 
 /// Check if vertical separator of window "wp" at specified window corner is connected to the
 /// vertical separator of another window
 static bool vsep_connected(win_T *wp, WindowCorner corner)
 {
-  bool before = (corner == WC_TOP_LEFT || corner == WC_TOP_RIGHT);
-  int sep_col = (corner == WC_TOP_LEFT || corner == WC_BOTTOM_LEFT)
-                ? wp->w_wincol - 1 : W_ENDCOL(wp);
-  frame_T *fr = wp->w_frame;
-
-  while (fr->fr_parent != NULL) {
-    if (fr->fr_parent->fr_layout == FR_COL && (before ? fr->fr_prev : fr->fr_next) != NULL) {
-      fr = before ? fr->fr_prev : fr->fr_next;
-      break;
-    }
-    fr = fr->fr_parent;
-  }
-  if (fr->fr_parent == NULL) {
-    return false;
-  }
-  while (fr->fr_layout != FR_LEAF) {
-    fr = fr->fr_child;
-    if (fr->fr_parent->fr_layout == FR_COL && before) {
-      while (fr->fr_next != NULL) {
-        fr = fr->fr_next;
-      }
-    } else {
-      while (fr->fr_next != NULL && frame2win(fr)->w_wincol + fr->fr_width < sep_col) {
-        fr = fr->fr_next;
-      }
-    }
-  }
-
-  return (sep_col == fr->fr_win->w_wincol - 1 || sep_col == W_ENDCOL(fr->fr_win));
+  return rs_vsep_connected(wp, corner) != 0;
 }
 
 /// Draw the vertical separator right of window "wp"
 static void draw_vsep_win(win_T *wp)
 {
-  if (!wp->w_vsep_width) {
-    return;
-  }
-
-  // draw the vertical separator right of this window
-  for (int row = wp->w_winrow; row < W_ENDROW(wp); row++) {
-    grid_line_start(&default_gridview, row);
-    grid_line_put_schar(W_ENDCOL(wp), wp->w_p_fcs_chars.vert, win_hl_attr(wp, HLF_C));
-    grid_line_flush();
-  }
+  rs_draw_vsep_win(wp);
 }
 
 /// Draw the horizontal separator below window "wp"
 static void draw_hsep_win(win_T *wp)
 {
-  if (!wp->w_hsep_height) {
-    return;
-  }
-
-  // draw the horizontal separator below this window
-  grid_line_start(&default_gridview, W_ENDROW(wp));
-  grid_line_fill(wp->w_wincol, W_ENDCOL(wp), wp->w_p_fcs_chars.horiz, win_hl_attr(wp, HLF_C));
-  grid_line_flush();
+  rs_draw_hsep_win(wp);
 }
 
 /// Get the separator connector for specified window corner of window "wp"
 static schar_T get_corner_sep_connector(win_T *wp, WindowCorner corner)
 {
-  // It's impossible for windows to be connected neither vertically nor horizontally
-  // So if they're not vertically connected, assume they're horizontally connected
-  if (vsep_connected(wp, corner)) {
-    if (hsep_connected(wp, corner)) {
-      return wp->w_p_fcs_chars.verthoriz;
-    } else if (corner == WC_TOP_LEFT || corner == WC_BOTTOM_LEFT) {
-      return wp->w_p_fcs_chars.vertright;
-    } else {
-      return wp->w_p_fcs_chars.vertleft;
-    }
-  } else if (corner == WC_TOP_LEFT || corner == WC_TOP_RIGHT) {
-    return wp->w_p_fcs_chars.horizdown;
-  } else {
-    return wp->w_p_fcs_chars.horizup;
-  }
+  return rs_get_corner_sep_connector(wp, corner);
 }
 
 /// Draw separator connecting characters on the corners of window "wp"
 static void draw_sep_connectors_win(win_T *wp)
 {
-  // Don't draw separator connectors unless global statusline is enabled and the window has
-  // either a horizontal or vertical separator
-  if (global_stl_height() == 0 || !(wp->w_hsep_height == 1 || wp->w_vsep_width == 1)) {
-    return;
-  }
-
-  int hl = win_hl_attr(wp, HLF_C);
-
-  // Determine which edges of the screen the window is located on so we can avoid drawing separators
-  // on corners contained in those edges
-  bool win_at_top;
-  bool win_at_bottom = wp->w_hsep_height == 0;
-  bool win_at_left;
-  bool win_at_right = wp->w_vsep_width == 0;
-  frame_T *frp;
-
-  for (frp = wp->w_frame; frp->fr_parent != NULL; frp = frp->fr_parent) {
-    if (frp->fr_parent->fr_layout == FR_COL && frp->fr_prev != NULL) {
-      break;
-    }
-  }
-  win_at_top = frp->fr_parent == NULL;
-  for (frp = wp->w_frame; frp->fr_parent != NULL; frp = frp->fr_parent) {
-    if (frp->fr_parent->fr_layout == FR_ROW && frp->fr_prev != NULL) {
-      break;
-    }
-  }
-  win_at_left = frp->fr_parent == NULL;
-
-  // Draw the appropriate separator connector in every corner where drawing them is necessary
-  // Make sure not to send cursor position updates to ui.
-  bool top_left = !(win_at_top || win_at_left);
-  bool top_right = !(win_at_top || win_at_right);
-  bool bot_left = !(win_at_bottom || win_at_left);
-  bool bot_right = !(win_at_bottom || win_at_right);
-
-  if (top_left) {
-    grid_line_start(&default_gridview, wp->w_winrow - 1);
-    grid_line_put_schar(wp->w_wincol - 1, get_corner_sep_connector(wp, WC_TOP_LEFT), hl);
-    grid_line_flush();
-  }
-  if (top_right) {
-    grid_line_start(&default_gridview, wp->w_winrow - 1);
-    grid_line_put_schar(W_ENDCOL(wp), get_corner_sep_connector(wp, WC_TOP_RIGHT), hl);
-    grid_line_flush();
-  }
-  if (bot_left) {
-    grid_line_start(&default_gridview, W_ENDROW(wp));
-    grid_line_put_schar(wp->w_wincol - 1, get_corner_sep_connector(wp, WC_BOTTOM_LEFT), hl);
-    grid_line_flush();
-  }
-  if (bot_right) {
-    grid_line_start(&default_gridview, W_ENDROW(wp));
-    grid_line_put_schar(W_ENDCOL(wp), get_corner_sep_connector(wp, WC_BOTTOM_RIGHT), hl);
-    grid_line_flush();
-  }
+  rs_draw_sep_connectors_win(wp);
 }
 
 /// Update a single window.
