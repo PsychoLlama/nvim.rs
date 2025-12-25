@@ -188,6 +188,26 @@ void msg_grid_set_pos(int row, bool scrolled)
 
 // Rust FFI declarations
 extern int rs_msg_use_grid(void);
+extern int rs_msg_scrollsize(void);
+extern int rs_msg_do_throttle(void);
+
+/// C accessor for msg_scrolled global.
+int nvim_get_msg_scrolled(void)
+{
+  return msg_scrolled;
+}
+
+/// C accessor for p_ch global option.
+int64_t nvim_get_p_ch(void)
+{
+  return p_ch;
+}
+
+/// C accessor for kOptRdbFlagNothrottle constant.
+unsigned int nvim_get_rdb_flag_nothrottle(void)
+{
+  return kOptRdbFlagNothrottle;
+}
 
 bool msg_use_grid(void)
 {
@@ -2525,12 +2545,12 @@ bool message_filtered(const char *msg)
 /// including horizontal separator
 int msg_scrollsize(void)
 {
-  return msg_scrolled + (int)p_ch + ((p_ch > 0 || msg_scrolled > 1) ? 1 : 0);
+  return rs_msg_scrollsize();
 }
 
 bool msg_do_throttle(void)
 {
-  return msg_use_grid() && !(rdb_flags & kOptRdbFlagNothrottle);
+  return rs_msg_do_throttle() != 0;
 }
 
 /// Scroll the screen up one line for displaying the next message line.

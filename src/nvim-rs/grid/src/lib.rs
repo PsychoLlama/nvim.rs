@@ -2174,6 +2174,42 @@ pub unsafe extern "C" fn rs_msg_use_grid() -> c_int {
     c_int::from(nvim_get_default_grid_has_chars() != 0 && nvim_ui_has_messages() == 0)
 }
 
+// Message scroll accessors
+extern "C" {
+    fn nvim_get_msg_scrolled() -> c_int;
+    fn nvim_get_p_ch() -> i64;
+    fn nvim_get_rdb_flag_nothrottle() -> c_uint;
+}
+
+/// Calculate the message scroll size including horizontal separator.
+///
+/// Returns `msg_scrolled + p_ch + separator` where separator is 1 if
+/// `p_ch > 0` or `msg_scrolled > 1`, otherwise 0.
+///
+/// # Safety
+/// Calls C accessor functions for global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_scrollsize() -> c_int {
+    let msg_scrolled = nvim_get_msg_scrolled();
+    let p_ch = nvim_get_p_ch();
+    let separator = c_int::from(p_ch > 0 || msg_scrolled > 1);
+    msg_scrolled + p_ch as c_int + separator
+}
+
+/// Check if message throttling should be used.
+///
+/// Returns true if message grid is used and nothrottle debug flag is not set.
+///
+/// # Safety
+/// Calls C accessor functions for grid and debug state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_do_throttle() -> c_int {
+    let use_grid = rs_msg_use_grid() != 0;
+    let rdb_flags = nvim_get_rdb_flags();
+    let nothrottle = nvim_get_rdb_flag_nothrottle();
+    c_int::from(use_grid && (rdb_flags & nothrottle) == 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
