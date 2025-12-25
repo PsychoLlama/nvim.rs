@@ -2285,6 +2285,23 @@ pub unsafe extern "C" fn rs_socket_watcher_call_close_cb(watcher: SocketWatcherH
 // Tests
 // =============================================================================
 
+// =============================================================================
+// State Functions
+// =============================================================================
+
+extern "C" {
+    fn nvim_get_was_safe() -> c_int;
+}
+
+/// Get whether the editor was in a safe state.
+///
+/// # Safety
+/// Calls C accessor function for was_safe static.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_was_safe_state() -> c_int {
+    nvim_get_was_safe()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

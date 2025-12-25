@@ -288,6 +288,14 @@ void may_trigger_modechanged(void)
 /// When true in a safe state when starting to wait for a character.
 static bool was_safe = false;
 
+extern int rs_get_was_safe_state(void);
+
+/// C accessor for was_safe static.
+int nvim_get_was_safe(void)
+{
+  return was_safe;
+}
+
 /// Return whether currently it is safe, assuming it was safe before (high level
 /// state didn't change).
 static bool is_safe_now(void)
@@ -329,5 +337,5 @@ void state_no_longer_safe(const char *reason)
 
 bool get_was_safe_state(void)
 {
-  return was_safe;
+  return rs_get_was_safe_state() != 0;
 }
