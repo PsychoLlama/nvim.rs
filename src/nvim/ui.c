@@ -683,10 +683,16 @@ void ui_cursor_shape(void)
   conceal_check_cursor_line();
 }
 
+// C accessor for ui_ext array (used by Rust)
+int nvim_get_ui_ext(int ext) { return ui_ext[ext] ? 1 : 0; }
+
+// Rust implementation
+extern int rs_ui_has(int ext);
+
 /// Returns true if the given UI extension is enabled.
 bool ui_has(UIExtension ext)
 {
-  return ui_ext[ext];
+  return rs_ui_has((int)ext) != 0;
 }
 
 Array ui_array(Arena *arena)

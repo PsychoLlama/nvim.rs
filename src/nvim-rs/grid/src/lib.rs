@@ -2251,6 +2251,20 @@ pub unsafe extern "C" fn rs_ui_current_col() -> c_int {
     nvim_get_ui_cursor_col()
 }
 
+// UI extension accessors
+extern "C" {
+    fn nvim_get_ui_ext(ext: c_int) -> c_int;
+}
+
+/// Check if a UI extension is enabled.
+///
+/// # Safety
+/// Calls C accessor function for UI extension state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_has(ext: c_int) -> c_int {
+    nvim_get_ui_ext(ext)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
