@@ -2013,6 +2013,9 @@ bool ins_compl_win_active(win_T *wp)
   return ins_compl_active() && wp == compl_curr_win && wp->w_buffer == compl_curr_buf;
 }
 
+// Rust implementation
+extern int rs_ins_compl_used_match(void);
+
 /// Selected one of the matches.  When false, the match was edited or
 /// using the longest common string.
 bool ins_compl_used_match(void)
@@ -2036,7 +2039,6 @@ int nvim_get_compl_length(void) { return compl_length; }
 // Rust implementations
 extern int rs_ins_compl_interrupted(void);
 extern int rs_ins_compl_enter_selects(void);
-extern int rs_ins_compl_used_match(void);
 extern int rs_ins_compl_len(void);
 
 /// Returns true when insert completion is interrupted.

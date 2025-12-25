@@ -119,9 +119,6 @@ char nvim_get_p_bg(void)
   return *p_bg;
 }
 
-// C accessor for highlight_ga.ga_len (used by Rust)
-int nvim_get_highlight_ga_len(void) { return highlight_ga.ga_len; }
-
 // Rust implementation
 extern int rs_highlight_num_groups(void);
 
@@ -138,6 +135,9 @@ enum {
 
 // builtin |highlight-groups|
 static garray_T highlight_ga = GA_EMPTY_INIT_VALUE;
+
+// C accessor for highlight_ga.ga_len (used by Rust)
+int nvim_get_highlight_ga_len(void) { return highlight_ga.ga_len; }
 
 // arena for object with same lifetime as highlight_ga (aka hl_table)
 Arena highlight_arena = ARENA_EMPTY;

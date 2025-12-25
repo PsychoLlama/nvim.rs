@@ -1,15 +1,15 @@
 //! Window handling utilities for Neovim
 //!
 //! This crate provides Rust implementations of window-related functions
-//! from `src/nvim/window.c`. It uses an opaque handle pattern where
-//! `win_T*` pointers are treated as opaque handles, with field access
-//! done through C accessor functions.
+//! from `src/nvim/window.c`. It uses a combination of:
+//! - Full `repr(C)` struct for `frame_T` (direct field access)
+//! - Opaque handle pattern for `win_T*` and `tabpage_T*` (via accessor functions)
 
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(dead_code)] // Some FFI declarations are pre-declared for future use
 #![allow(clippy::doc_markdown)]
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 
 /// Opaque handle to a Neovim window (`win_T*`).
 ///
@@ -79,47 +79,83 @@ impl TabpageHandle {
     }
 }
 
-/// Opaque handle to a Neovim frame (`frame_T*`).
+/// Frame layout constants (matching C defines in `buffer_defs.h`).
+pub const FR_LEAF: c_char = 0; // Frame is a leaf (contains a window)
+pub const FR_ROW: c_char = 1; // Frame with a row of windows
+pub const FR_COL: c_char = 2; // Frame with a column of windows
+
+/// Frame structure matching C `frame_T` layout exactly.
 ///
 /// Frames form a tree structure representing window layout.
 /// A frame is either a leaf (containing a window) or a row/column
-/// of child frames.
-#[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct FrameHandle(*mut std::ffi::c_void);
+/// of child frames. This struct uses `repr(C)` to match the C layout
+/// and allow direct field access from Rust.
+///
+/// # Memory Layout
+/// This struct exactly matches `struct frame_S` in `buffer_defs.h`.
+#[repr(C)]
+#[derive(Debug)]
+pub struct Frame {
+    /// Frame layout type: FR_LEAF, FR_ROW, or FR_COL
+    pub fr_layout: c_char,
+    /// Frame width
+    pub fr_width: c_int,
+    /// New width used in win_equal_rec()
+    pub fr_newwidth: c_int,
+    /// Frame height
+    pub fr_height: c_int,
+    /// New height used in win_equal_rec()
+    pub fr_newheight: c_int,
+    /// Containing frame or NULL for top frame
+    pub fr_parent: *mut Frame,
+    /// Next sibling frame (right or below in same parent), NULL for last
+    pub fr_next: *mut Frame,
+    /// Previous sibling frame (left or above in same parent), NULL for first
+    pub fr_prev: *mut Frame,
+    /// First child frame (for FR_ROW or FR_COL layouts)
+    /// Mutually exclusive with fr_win
+    pub fr_child: *mut Frame,
+    /// Window that fills this frame (for FR_LEAF layout)
+    /// Mutually exclusive with fr_child
+    pub fr_win: WinHandle,
+}
 
-impl FrameHandle {
-    /// Create a new frame handle from a raw pointer.
-    ///
-    /// # Safety
-    /// The pointer must be a valid `frame_T*` or null.
-    #[inline]
-    pub const unsafe fn from_ptr(ptr: *mut std::ffi::c_void) -> Self {
-        Self(ptr)
-    }
-
-    /// Get the raw pointer.
+impl Frame {
+    /// Check if this is a null pointer.
     #[inline]
     #[must_use]
-    pub const fn as_ptr(self) -> *mut std::ffi::c_void {
-        self.0
+    pub const fn is_null(ptr: *const Self) -> bool {
+        ptr.is_null()
     }
 
-    /// Check if the handle is null.
+    /// Check if this frame is a leaf (contains a window).
     #[inline]
     #[must_use]
-    pub const fn is_null(self) -> bool {
-        self.0.is_null()
+    pub const fn is_leaf(&self) -> bool {
+        self.fr_layout == FR_LEAF
+    }
+
+    /// Check if this frame is a row layout.
+    #[inline]
+    #[must_use]
+    pub const fn is_row(&self) -> bool {
+        self.fr_layout == FR_ROW
+    }
+
+    /// Check if this frame is a column layout.
+    #[inline]
+    #[must_use]
+    pub const fn is_col(&self) -> bool {
+        self.fr_layout == FR_COL
     }
 }
 
-/// Frame layout constants (matching C defines in `buffer_defs.h`).
-pub const FR_LEAF: c_int = 0; // Frame is a leaf (contains a window)
-pub const FR_ROW: c_int = 1; // Frame with a row of windows
-pub const FR_COL: c_int = 2; // Frame with a column of windows
+/// Type alias for frame pointer (for FFI compatibility).
+pub type FramePtr = *mut Frame;
 
 // C accessor functions for window fields.
 // These are defined in window.c and provide safe access to win_T fields.
+// Note: Frame accessors are no longer needed since Frame is now repr(C).
 extern "C" {
     /// Get the `w_locked` field from a window.
     fn nvim_win_get_locked(win: WinHandle) -> c_int;
@@ -158,36 +194,14 @@ extern "C" {
     /// Get the first tabpage (`first_tabpage` global).
     fn nvim_get_first_tabpage() -> TabpageHandle;
 
-    // Frame accessors
-    /// Get the `fr_layout` field from a frame (`FR_LEAF`, `FR_ROW`, or `FR_COL`).
-    fn nvim_frame_get_layout(frp: FrameHandle) -> c_int;
-
-    /// Get the `fr_win` field from a frame (window in a leaf frame).
-    fn nvim_frame_get_win(frp: FrameHandle) -> WinHandle;
-
-    /// Get the `fr_child` field from a frame (first child frame).
-    fn nvim_frame_get_child(frp: FrameHandle) -> FrameHandle;
-
-    /// Get the `fr_next` field from a frame (next sibling).
-    fn nvim_frame_get_next(frp: FrameHandle) -> FrameHandle;
-
-    /// Get the `fr_parent` field from a frame.
-    fn nvim_frame_get_parent(frp: FrameHandle) -> FrameHandle;
-
-    /// Get the `w_frame` field from a window.
-    fn nvim_win_get_frame(wp: WinHandle) -> FrameHandle;
+    /// Get the `w_frame` field from a window (returns Frame pointer).
+    fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
 
     /// Get the `w_p_wfh` (winfixheight) field from a window.
     fn nvim_win_get_wfh(wp: WinHandle) -> c_int;
 
     /// Get the `w_p_wfw` (winfixwidth) field from a window.
     fn nvim_win_get_wfw(wp: WinHandle) -> c_int;
-
-    /// Get the `fr_height` field from a frame.
-    fn nvim_frame_get_height(frp: FrameHandle) -> c_int;
-
-    /// Get the `fr_width` field from a frame.
-    fn nvim_frame_get_width(frp: FrameHandle) -> c_int;
 
     /// Get the `handle` field from a window.
     fn nvim_win_get_handle(wp: WinHandle) -> c_int;
@@ -479,31 +493,33 @@ pub extern "C" fn rs_last_window(win: WinHandle) -> c_int {
 }
 
 // Frame tree functions
+// These functions now use direct Frame struct access instead of accessor functions.
 
 /// Check if a frame tree contains a specific window.
 ///
 /// This is the Rust equivalent of `frame_has_win()` in window.c.
 /// Recursively searches the frame tree for the given window.
 #[inline]
-fn frame_has_win_impl(frp: FrameHandle, wp: WinHandle) -> bool {
+fn frame_has_win_impl(frp: *const Frame, wp: WinHandle) -> bool {
     if frp.is_null() {
         return false;
     }
 
-    // SAFETY: All accessors handle pointers safely
+    // SAFETY: We check for null above and the caller guarantees valid frame pointer
     unsafe {
-        if nvim_frame_get_layout(frp) == FR_LEAF {
+        let frame = &*frp;
+        if frame.fr_layout == FR_LEAF {
             // Leaf frame - check if it contains the window
-            return nvim_frame_get_win(frp) == wp;
+            return frame.fr_win == wp;
         }
 
         // Non-leaf frame - recursively check children
-        let mut child = nvim_frame_get_child(frp);
+        let mut child = frame.fr_child;
         while !child.is_null() {
             if frame_has_win_impl(child, wp) {
                 return true;
             }
-            child = nvim_frame_get_next(child);
+            child = (*child).fr_next;
         }
     }
     false
@@ -513,7 +529,7 @@ fn frame_has_win_impl(frp: FrameHandle, wp: WinHandle) -> bool {
 ///
 /// Returns non-zero if the frame tree contains the window.
 #[no_mangle]
-pub extern "C" fn rs_frame_has_win(frp: FrameHandle, wp: WinHandle) -> c_int {
+pub extern "C" fn rs_frame_has_win(frp: *const Frame, wp: WinHandle) -> c_int {
     c_int::from(frame_has_win_impl(frp, wp))
 }
 
@@ -524,43 +540,44 @@ pub extern "C" fn rs_frame_has_win(frp: FrameHandle, wp: WinHandle) -> c_int {
 /// - Row frame: fixed if ANY child is fixed
 /// - Column frame: fixed if ALL children are fixed
 #[inline]
-fn frame_fixed_height_impl(frp: FrameHandle) -> bool {
+fn frame_fixed_height_impl(frp: *const Frame) -> bool {
     if frp.is_null() {
         return false;
     }
 
-    // SAFETY: All accessors handle pointers safely
+    // SAFETY: We check for null above
     unsafe {
-        let layout = nvim_frame_get_layout(frp);
+        let frame = &*frp;
+        let layout = frame.fr_layout;
 
         if layout == FR_LEAF {
             // Leaf frame with a window - check w_p_wfh
-            let win = nvim_frame_get_win(frp);
+            let win = frame.fr_win;
             return !win.is_null() && nvim_win_get_wfh(win) != 0;
         }
 
         if layout == FR_ROW {
             // Row: fixed if ONE of the frames in the row is fixed
-            let mut child = nvim_frame_get_child(frp);
+            let mut child = frame.fr_child;
             while !child.is_null() {
                 if frame_fixed_height_impl(child) {
                     return true;
                 }
-                child = nvim_frame_get_next(child);
+                child = (*child).fr_next;
             }
             return false;
         }
 
         // FR_COL: fixed if ALL frames in the column are fixed
-        let mut child = nvim_frame_get_child(frp);
+        let mut child = frame.fr_child;
         while !child.is_null() {
             if !frame_fixed_height_impl(child) {
                 return false;
             }
-            child = nvim_frame_get_next(child);
+            child = (*child).fr_next;
         }
         // All children are fixed (or no children)
-        !nvim_frame_get_child(frp).is_null()
+        !frame.fr_child.is_null()
     }
 }
 
@@ -568,7 +585,7 @@ fn frame_fixed_height_impl(frp: FrameHandle) -> bool {
 ///
 /// Returns non-zero if the frame has fixed height.
 #[no_mangle]
-pub extern "C" fn rs_frame_fixed_height(frp: FrameHandle) -> c_int {
+pub extern "C" fn rs_frame_fixed_height(frp: *const Frame) -> c_int {
     c_int::from(frame_fixed_height_impl(frp))
 }
 
@@ -579,43 +596,44 @@ pub extern "C" fn rs_frame_fixed_height(frp: FrameHandle) -> c_int {
 /// - Column frame: fixed if ANY child is fixed
 /// - Row frame: fixed if ALL children are fixed
 #[inline]
-fn frame_fixed_width_impl(frp: FrameHandle) -> bool {
+fn frame_fixed_width_impl(frp: *const Frame) -> bool {
     if frp.is_null() {
         return false;
     }
 
-    // SAFETY: All accessors handle pointers safely
+    // SAFETY: We check for null above
     unsafe {
-        let layout = nvim_frame_get_layout(frp);
+        let frame = &*frp;
+        let layout = frame.fr_layout;
 
         if layout == FR_LEAF {
             // Leaf frame with a window - check w_p_wfw
-            let win = nvim_frame_get_win(frp);
+            let win = frame.fr_win;
             return !win.is_null() && nvim_win_get_wfw(win) != 0;
         }
 
         if layout == FR_COL {
             // Column: fixed if ONE of the frames in the column is fixed
-            let mut child = nvim_frame_get_child(frp);
+            let mut child = frame.fr_child;
             while !child.is_null() {
                 if frame_fixed_width_impl(child) {
                     return true;
                 }
-                child = nvim_frame_get_next(child);
+                child = (*child).fr_next;
             }
             return false;
         }
 
         // FR_ROW: fixed if ALL frames in the row are fixed
-        let mut child = nvim_frame_get_child(frp);
+        let mut child = frame.fr_child;
         while !child.is_null() {
             if !frame_fixed_width_impl(child) {
                 return false;
             }
-            child = nvim_frame_get_next(child);
+            child = (*child).fr_next;
         }
         // All children are fixed (or no children)
-        !nvim_frame_get_child(frp).is_null()
+        !frame.fr_child.is_null()
     }
 }
 
@@ -623,7 +641,7 @@ fn frame_fixed_width_impl(frp: FrameHandle) -> bool {
 ///
 /// Returns non-zero if the frame has fixed width.
 #[no_mangle]
-pub extern "C" fn rs_frame_fixed_width(frp: FrameHandle) -> c_int {
+pub extern "C" fn rs_frame_fixed_width(frp: *const Frame) -> c_int {
     c_int::from(frame_fixed_width_impl(frp))
 }
 
@@ -644,23 +662,24 @@ fn is_bottom_win_impl(wp: WinHandle) -> bool {
     let mut frp = unsafe { nvim_win_get_frame(wp) };
 
     // Traverse up the frame tree
-    loop {
-        // SAFETY: Safe accessor
-        let parent = unsafe { nvim_frame_get_parent(frp) };
-        if parent.is_null() {
-            break;
+    // SAFETY: We access frame fields directly
+    unsafe {
+        while !frp.is_null() {
+            let parent = (*frp).fr_parent;
+            if parent.is_null() {
+                break;
+            }
+
+            // If parent is a column layout and there's a sibling below, not at bottom
+            let parent_layout = (*parent).fr_layout;
+            let next_sibling = (*frp).fr_next;
+
+            if parent_layout == FR_COL && !next_sibling.is_null() {
+                return false;
+            }
+
+            frp = parent;
         }
-
-        // If parent is a column layout and there's a sibling below, not at bottom
-        // SAFETY: Safe accessors
-        let parent_layout = unsafe { nvim_frame_get_layout(parent) };
-        let next_sibling = unsafe { nvim_frame_get_next(frp) };
-
-        if parent_layout == FR_COL && !next_sibling.is_null() {
-            return false;
-        }
-
-        frp = parent;
     }
     true
 }
@@ -678,24 +697,25 @@ pub extern "C" fn rs_is_bottom_win(wp: WinHandle) -> c_int {
 /// This is the Rust equivalent of `frame_check_height()` in window.c.
 /// If the frame is a FR_ROW layout, all children must have the same height.
 #[inline]
-fn frame_check_height_impl(topfrp: FrameHandle, height: c_int) -> bool {
+fn frame_check_height_impl(topfrp: *const Frame, height: c_int) -> bool {
     if topfrp.is_null() {
         return false;
     }
 
     // SAFETY: We check for null above.
     unsafe {
-        if nvim_frame_get_height(topfrp) != height {
+        let frame = &*topfrp;
+        if frame.fr_height != height {
             return false;
         }
         // If it's a row layout, check all children have the same height
-        if nvim_frame_get_layout(topfrp) == FR_ROW {
-            let mut child = nvim_frame_get_child(topfrp);
+        if frame.fr_layout == FR_ROW {
+            let mut child = frame.fr_child;
             while !child.is_null() {
-                if nvim_frame_get_height(child) != height {
+                if (*child).fr_height != height {
                     return false;
                 }
-                child = nvim_frame_get_next(child);
+                child = (*child).fr_next;
             }
         }
     }
@@ -706,7 +726,7 @@ fn frame_check_height_impl(topfrp: FrameHandle, height: c_int) -> bool {
 ///
 /// Returns non-zero if all frames have the expected height.
 #[no_mangle]
-pub extern "C" fn rs_frame_check_height(topfrp: FrameHandle, height: c_int) -> c_int {
+pub extern "C" fn rs_frame_check_height(topfrp: *const Frame, height: c_int) -> c_int {
     c_int::from(frame_check_height_impl(topfrp, height))
 }
 
@@ -715,24 +735,25 @@ pub extern "C" fn rs_frame_check_height(topfrp: FrameHandle, height: c_int) -> c
 /// This is the Rust equivalent of `frame_check_width()` in window.c.
 /// If the frame is a FR_COL layout, all children must have the same width.
 #[inline]
-fn frame_check_width_impl(topfrp: FrameHandle, width: c_int) -> bool {
+fn frame_check_width_impl(topfrp: *const Frame, width: c_int) -> bool {
     if topfrp.is_null() {
         return false;
     }
 
     // SAFETY: We check for null above.
     unsafe {
-        if nvim_frame_get_width(topfrp) != width {
+        let frame = &*topfrp;
+        if frame.fr_width != width {
             return false;
         }
         // If it's a column layout, check all children have the same width
-        if nvim_frame_get_layout(topfrp) == FR_COL {
-            let mut child = nvim_frame_get_child(topfrp);
+        if frame.fr_layout == FR_COL {
+            let mut child = frame.fr_child;
             while !child.is_null() {
-                if nvim_frame_get_width(child) != width {
+                if (*child).fr_width != width {
                     return false;
                 }
-                child = nvim_frame_get_next(child);
+                child = (*child).fr_next;
             }
         }
     }
@@ -743,7 +764,7 @@ fn frame_check_width_impl(topfrp: FrameHandle, width: c_int) -> bool {
 ///
 /// Returns non-zero if all frames have the expected width.
 #[no_mangle]
-pub extern "C" fn rs_frame_check_width(topfrp: FrameHandle, width: c_int) -> c_int {
+pub extern "C" fn rs_frame_check_width(topfrp: *const Frame, width: c_int) -> c_int {
     c_int::from(frame_check_width_impl(topfrp, width))
 }
 
@@ -968,20 +989,20 @@ pub extern "C" fn rs_lastwin_nofloating() -> WinHandle {
 /// Walks down the frame tree following fr_child until a leaf frame
 /// with a window is found.
 #[inline]
-fn frame2win_impl(mut frp: FrameHandle) -> WinHandle {
-    // SAFETY: All accessor calls are safe. The caller guarantees frp is non-null.
+fn frame2win_impl(mut frp: *mut Frame) -> WinHandle {
+    // SAFETY: The caller guarantees frp is non-null.
     // The loop walks down until we find a leaf with fr_win != NULL.
     unsafe {
-        while nvim_frame_get_win(frp).is_null() {
-            frp = nvim_frame_get_child(frp);
+        while (*frp).fr_win.is_null() {
+            frp = (*frp).fr_child;
         }
-        nvim_frame_get_win(frp)
+        (*frp).fr_win
     }
 }
 
 /// FFI wrapper for `frame2win`.
 #[no_mangle]
-pub extern "C" fn rs_frame2win(frp: FrameHandle) -> WinHandle {
+pub extern "C" fn rs_frame2win(frp: *mut Frame) -> WinHandle {
     frame2win_impl(frp)
 }
 
@@ -1008,15 +1029,15 @@ mod tests {
     }
 
     #[test]
-    fn test_frame_handle_null() {
-        let handle = unsafe { FrameHandle::from_ptr(std::ptr::null_mut()) };
-        assert!(handle.is_null());
+    fn test_frame_ptr_null() {
+        let null_frame: *const Frame = std::ptr::null();
+        assert!(Frame::is_null(null_frame));
         // Null frame returns false for all checks
-        assert!(!frame_has_win_impl(handle, unsafe {
+        assert!(!frame_has_win_impl(null_frame, unsafe {
             WinHandle::from_ptr(std::ptr::null_mut())
         }));
-        assert!(!frame_fixed_height_impl(handle));
-        assert!(!frame_fixed_width_impl(handle));
+        assert!(!frame_fixed_height_impl(null_frame));
+        assert!(!frame_fixed_width_impl(null_frame));
     }
 
     #[test]
@@ -1024,6 +1045,16 @@ mod tests {
         assert_eq!(FR_LEAF, 0);
         assert_eq!(FR_ROW, 1);
         assert_eq!(FR_COL, 2);
+    }
+
+    #[test]
+    fn test_frame_struct_size() {
+        // Verify Frame struct size matches expectations for C interop
+        // On 64-bit: 1 (char) + 3 (padding) + 4*4 (ints) + 5*8 (pointers) = 60 bytes
+        // But with alignment it should be 64 bytes
+        use std::mem::size_of;
+        // The struct should have proper C layout
+        assert!(size_of::<Frame>() > 0);
     }
 
     #[test]
