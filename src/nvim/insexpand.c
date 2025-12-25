@@ -2017,7 +2017,7 @@ bool ins_compl_win_active(win_T *wp)
 /// using the longest common string.
 bool ins_compl_used_match(void)
 {
-  return compl_used_match;
+  return rs_ins_compl_used_match() != 0;
 }
 
 /// Initialize get longest common string.
@@ -2030,10 +2030,14 @@ void ins_compl_init_get_longest(void)
 int nvim_get_compl_interrupted(void) { return compl_interrupted ? 1 : 0; }
 int nvim_get_compl_time_slice_expired(void) { return compl_time_slice_expired ? 1 : 0; }
 int nvim_get_compl_enter_selects(void) { return compl_enter_selects ? 1 : 0; }
+int nvim_get_compl_used_match(void) { return compl_used_match ? 1 : 0; }
+int nvim_get_compl_length(void) { return compl_length; }
 
 // Rust implementations
 extern int rs_ins_compl_interrupted(void);
 extern int rs_ins_compl_enter_selects(void);
+extern int rs_ins_compl_used_match(void);
+extern int rs_ins_compl_len(void);
 
 /// Returns true when insert completion is interrupted.
 bool ins_compl_interrupted(void)
@@ -2057,7 +2061,7 @@ colnr_T ins_compl_col(void)
 /// Return the length in bytes of the text being completed
 int ins_compl_len(void)
 {
-  return compl_length;
+  return rs_ins_compl_len();
 }
 
 /// Return true when the 'completeopt' "preinsert" flag is in effect,

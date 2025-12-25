@@ -46,6 +46,8 @@ extern "C" {
     fn nvim_get_compl_interrupted() -> c_int;
     fn nvim_get_compl_time_slice_expired() -> c_int;
     fn nvim_get_compl_enter_selects() -> c_int;
+    fn nvim_get_compl_used_match() -> c_int;
+    fn nvim_get_compl_length() -> c_int;
 }
 
 /// Check if CTRL-X mode is none (0).
@@ -196,6 +198,18 @@ pub unsafe extern "C" fn rs_ins_compl_interrupted() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_enter_selects() -> c_int {
     nvim_get_compl_enter_selects()
+}
+
+/// Check if one of the matches was selected.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_used_match() -> c_int {
+    nvim_get_compl_used_match()
+}
+
+/// Return the length in bytes of the text being completed.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_len() -> c_int {
+    nvim_get_compl_length()
 }
 
 #[cfg(test)]
