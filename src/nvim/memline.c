@@ -1963,12 +1963,21 @@ errorret:
   return buf->b_ml.ml_line_ptr;
 }
 
+// C accessor for curbuf->b_ml.ml_flags (used by Rust)
+int nvim_curbuf_get_ml_flags(void) { return curbuf->b_ml.ml_flags; }
+
+// ML_LINE_DIRTY constant accessor for Rust
+int nvim_get_ml_line_dirty(void) { return ML_LINE_DIRTY; }
+
+// Rust implementation
+extern int rs_ml_line_alloced(void);
+
 /// Check if a line that was just obtained by a call to ml_get
 /// is in allocated memory.
 /// This ignores ML_ALLOCATED to get the same behavior as without ML_GET_ALLOC_LINES.
 int ml_line_alloced(void)
 {
-  return curbuf->b_ml.ml_flags & ML_LINE_DIRTY;
+  return rs_ml_line_alloced();
 }
 
 /// @param lnum  append after this line (can be 0)

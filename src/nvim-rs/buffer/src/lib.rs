@@ -97,6 +97,12 @@ extern "C" {
 
     /// Get the `b_fnum` field from a buffer.
     fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
+
+    /// Get the `curbuf->b_ml.ml_flags` field.
+    fn nvim_curbuf_get_ml_flags() -> c_int;
+
+    /// Get the `ML_LINE_DIRTY` constant.
+    fn nvim_get_ml_line_dirty() -> c_int;
 }
 
 /// Check if "buf" is a pointer to an existing buffer.
@@ -445,6 +451,17 @@ fn buf_hide_impl(buf: BufHandle) -> bool {
 #[no_mangle]
 pub extern "C" fn rs_buf_hide(buf: BufHandle) -> c_int {
     c_int::from(buf_hide_impl(buf))
+}
+
+/// Check if a line that was just obtained by a call to `ml_get` is in allocated memory.
+///
+/// This ignores `ML_ALLOCATED` to get the same behavior as without `ML_GET_ALLOC_LINES`.
+///
+/// # Safety
+/// Calls external C functions to access buffer state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_line_alloced() -> c_int {
+    nvim_curbuf_get_ml_flags() & nvim_get_ml_line_dirty()
 }
 
 #[cfg(test)]
