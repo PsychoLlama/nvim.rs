@@ -140,11 +140,18 @@ static bool ins_need_undo;              // call u_save() before inserting a
 
 // Rust FFI declarations
 extern int rs_ins_need_undo_get(void);
+extern int rs_get_can_cindent(void);
 
 /// Get the ins_need_undo static variable (accessor for Rust).
 int nvim_get_ins_need_undo(void)
 {
   return ins_need_undo;
+}
+
+/// Get the can_cindent static variable (accessor for Rust).
+int nvim_get_can_cindent(void)
+{
+  return can_cindent;
 }
 
 static TriState dont_sync_undo = kFalse;  // CTRL-G U prevents syncing undo
@@ -4341,7 +4348,7 @@ static char *do_insert_char_pre(int c)
 
 bool get_can_cindent(void)
 {
-  return can_cindent;
+  return rs_get_can_cindent() != 0;
 }
 
 void set_can_cindent(bool val)

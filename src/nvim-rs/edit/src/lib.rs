@@ -12,6 +12,8 @@ use std::ffi::c_int;
 extern "C" {
     /// Get the `ins_need_undo` static variable.
     fn nvim_get_ins_need_undo() -> c_int;
+    /// Get the `can_cindent` static variable.
+    fn nvim_get_can_cindent() -> c_int;
 }
 
 /// Check if undo is needed for insert mode.
@@ -27,6 +29,15 @@ fn ins_need_undo_get_impl() -> bool {
 #[no_mangle]
 pub extern "C" fn rs_ins_need_undo_get() -> c_int {
     c_int::from(ins_need_undo_get_impl())
+}
+
+/// Get whether cindenting may be done on this line.
+///
+/// # Safety
+/// Calls C accessor function for `can_cindent` static.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_can_cindent() -> c_int {
+    nvim_get_can_cindent()
 }
 
 #[cfg(test)]
