@@ -119,6 +119,12 @@ char nvim_get_p_bg(void)
   return *p_bg;
 }
 
+// C accessor for highlight_ga.ga_len (used by Rust)
+int nvim_get_highlight_ga_len(void) { return highlight_ga.ga_len; }
+
+// Rust implementation
+extern int rs_highlight_num_groups(void);
+
 /// \addtogroup SG_SET
 /// @{
 enum {
@@ -790,7 +796,7 @@ const char *const highlight_init_cmdline[] = {
 /// Returns the number of highlight groups.
 int highlight_num_groups(void)
 {
-  return highlight_ga.ga_len;
+  return rs_highlight_num_groups();
 }
 
 /// Returns the name of a highlight group.

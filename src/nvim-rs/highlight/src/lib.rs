@@ -5037,6 +5037,16 @@ pub unsafe extern "C" fn rs_syn_get_sub_char() -> c_int {
     nvim_get_current_sub_char()
 }
 
+extern "C" {
+    fn nvim_get_highlight_ga_len() -> c_int;
+}
+
+/// Returns the number of highlight groups.
+#[no_mangle]
+pub unsafe extern "C" fn rs_highlight_num_groups() -> c_int {
+    nvim_get_highlight_ga_len()
+}
+
 // ============================================================================
 // Tests
 // ============================================================================
