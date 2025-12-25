@@ -22,6 +22,7 @@ extern "C" {
     fn nvim_get_compl_match_array_not_null() -> c_int;
     fn rs_pum_visible() -> c_int;
     fn nvim_get_cmdpreview_ns() -> c_int;
+    fn nvim_get_ccline_cmdfirstc() -> c_int;
 }
 
 /// Check if command line is in overstrike mode.
@@ -106,4 +107,15 @@ pub unsafe extern "C" fn rs_cmdline_pum_active() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_cmdpreview_get_ns() -> c_int {
     nvim_get_cmdpreview_ns()
+}
+
+/// Get the first character of the current command line.
+///
+/// Returns `ccline.cmdfirstc`.
+///
+/// # Safety
+/// Calls external C function to access struct field.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_cmdline_firstc() -> c_int {
+    nvim_get_ccline_cmdfirstc()
 }

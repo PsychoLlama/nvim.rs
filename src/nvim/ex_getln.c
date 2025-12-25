@@ -4450,10 +4450,16 @@ void f_setcmdpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 }
 
+// C accessor for ccline.cmdfirstc (used by Rust)
+int nvim_get_ccline_cmdfirstc(void) { return ccline.cmdfirstc; }
+
+// Rust implementation
+extern int rs_get_cmdline_firstc(void);
+
 /// Return the first character of the current command line.
 int get_cmdline_firstc(void)
 {
-  return ccline.cmdfirstc;
+  return rs_get_cmdline_firstc();
 }
 
 /// Get indices that specify a range within a list (not a range of text lines

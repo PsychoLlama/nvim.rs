@@ -155,6 +155,10 @@ extern "C" {
     fn nvim_win_get_p_winbl(wp: *mut c_void) -> c_int;
     /// Set w_grid_alloc.blending field of window
     fn nvim_win_set_grid_blending(wp: *mut c_void, val: bool);
+
+    // Syntax accessors
+    /// Get current_sub_char static variable (conceal substitution character)
+    fn nvim_get_current_sub_char() -> c_int;
 }
 
 // ============================================================================
@@ -5016,6 +5020,21 @@ pub unsafe extern "C" fn rs_hl_get_attr_by_id(
     rs_hlattrs2dict(&mut retval, std::ptr::null_mut(), attrs, rgb, false);
 
     retval
+}
+
+// ============================================================================
+// Syntax Functions
+// ============================================================================
+
+/// Get the conceal substitution character.
+///
+/// Returns `current_sub_char` from syntax.c.
+///
+/// # Safety
+/// Calls external C function to access static variable.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_sub_char() -> c_int {
+    nvim_get_current_sub_char()
 }
 
 // ============================================================================

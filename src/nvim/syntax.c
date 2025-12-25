@@ -5454,10 +5454,16 @@ int syn_get_concealed_id(win_T *wp, linenr_T lnum, colnr_T col)
   return 0;
 }
 
+// C accessor for current_sub_char (used by Rust)
+int nvim_get_current_sub_char(void) { return current_sub_char; }
+
+// Rust implementation
+extern int rs_syn_get_sub_char(void);
+
 // Return conceal substitution character
 int syn_get_sub_char(void)
 {
-  return current_sub_char;
+  return rs_syn_get_sub_char();
 }
 
 // Return the syntax ID at position "i" in the current stack.
