@@ -21,6 +21,7 @@ extern "C" {
     fn nvim_get_cmdline_type() -> c_int;
     fn nvim_get_compl_match_array_not_null() -> c_int;
     fn rs_pum_visible() -> c_int;
+    fn nvim_get_cmdpreview_ns() -> c_int;
 }
 
 /// Check if command line is in overstrike mode.
@@ -94,4 +95,15 @@ pub unsafe extern "C" fn rs_is_in_cmdwin() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_cmdline_pum_active() -> c_int {
     c_int::from(rs_pum_visible() != 0 && nvim_get_compl_match_array_not_null() != 0)
+}
+
+/// Get the command preview namespace.
+///
+/// Returns the `cmdpreview_ns` static variable.
+///
+/// # Safety
+/// Calls external C function to access static variable.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cmdpreview_get_ns() -> c_int {
+    nvim_get_cmdpreview_ns()
 }

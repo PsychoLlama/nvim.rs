@@ -40,6 +40,9 @@ extern "C" {
     // Existing accessor for in_fast_callback
     fn nvim_get_in_fast_callback() -> c_int;
 
+    // Accessor for nlua_global_refs->ref_count
+    fn nvim_get_nlua_global_ref_count() -> c_int;
+
     // Lua callback invocation (USE_RUST_LUA must be enabled in build)
     fn nvim_nlua_call_ref(
         ref_: LuaRef,
@@ -131,6 +134,18 @@ pub unsafe fn lua_call_ref_ctx(
 #[no_mangle]
 pub unsafe extern "C" fn rs_nlua_is_deferred_safe() -> c_int {
     c_int::from(nvim_get_in_fast_callback() == 0)
+}
+
+/// Get the global Lua reference count.
+///
+/// Returns `nlua_global_refs->ref_count`.
+///
+/// # Safety
+///
+/// Calls external C function to access global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nlua_get_global_ref_count() -> c_int {
+    nvim_get_nlua_global_ref_count()
 }
 
 #[cfg(test)]

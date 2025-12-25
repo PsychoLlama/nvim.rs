@@ -2227,6 +2227,30 @@ pub unsafe extern "C" fn rs_ui_comp_should_draw() -> c_int {
     c_int::from(nvim_get_composed_uis() != 0 && nvim_get_valid_screen() != 0)
 }
 
+// UI cursor position accessors
+extern "C" {
+    fn nvim_get_ui_cursor_row() -> c_int;
+    fn nvim_get_ui_cursor_col() -> c_int;
+}
+
+/// Get the current UI cursor row.
+///
+/// # Safety
+/// Calls C accessor function for cursor state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_current_row() -> c_int {
+    nvim_get_ui_cursor_row()
+}
+
+/// Get the current UI cursor column.
+///
+/// # Safety
+/// Calls C accessor function for cursor state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_current_col() -> c_int {
+    nvim_get_ui_cursor_col()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

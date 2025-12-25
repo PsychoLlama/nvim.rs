@@ -5532,11 +5532,17 @@ static regprog_T *bt_regcomp(uint8_t *expr, int re_flags)
   return (regprog_T *)r;
 }
 
+// C accessor for had_eol static variable (used by Rust)
+int nvim_get_regexp_had_eol(void) { return had_eol; }
+
+// Rust implementation
+extern int rs_vim_regcomp_had_eol(void);
+
 // Check if during the previous call to vim_regcomp the EOL item "$" has been
 // found.  This is messy, but it works fine.
 int vim_regcomp_had_eol(void)
 {
-  return had_eol;
+  return rs_vim_regcomp_had_eol();
 }
 
 // Get a number after a backslash that is inside [].

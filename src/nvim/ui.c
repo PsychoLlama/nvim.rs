@@ -525,14 +525,22 @@ void ui_mode_info_set(void)
   pending_mode_info_update = true;
 }
 
+// C accessors for cursor position (used by Rust)
+int nvim_get_ui_cursor_row(void) { return cursor_row; }
+int nvim_get_ui_cursor_col(void) { return cursor_col; }
+
+// Rust implementations
+extern int rs_ui_current_row(void);
+extern int rs_ui_current_col(void);
+
 int ui_current_row(void)
 {
-  return cursor_row;
+  return rs_ui_current_row();
 }
 
 int ui_current_col(void)
 {
-  return cursor_col;
+  return rs_ui_current_col();
 }
 
 void ui_flush(void)

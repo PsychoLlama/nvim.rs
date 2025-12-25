@@ -22,6 +22,9 @@ extern "C" {
 
     /// Get the `last_idx` static variable.
     fn nvim_get_last_idx() -> c_int;
+
+    /// Get the `had_eol` static variable from regexp.c.
+    fn nvim_get_regexp_had_eol() -> c_int;
 }
 
 /// Direction constant for FORWARD.
@@ -87,6 +90,16 @@ fn search_was_last_used_impl() -> bool {
 #[no_mangle]
 pub extern "C" fn rs_search_was_last_used() -> c_int {
     c_int::from(search_was_last_used_impl())
+}
+
+/// Check if during the previous call to `vim_regcomp` the EOL item "$" was found.
+///
+/// # Safety
+///
+/// Calls external C function to access static variable.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_regcomp_had_eol() -> c_int {
+    nvim_get_regexp_had_eol()
 }
 
 #[cfg(test)]

@@ -2425,9 +2425,15 @@ handle_T cmdpreview_get_bufnr(void)
   return cmdpreview_bufnr;
 }
 
+// C accessor for cmdpreview_ns (used by Rust)
+int nvim_get_cmdpreview_ns(void) { return cmdpreview_ns; }
+
+// Rust implementation
+extern int rs_cmdpreview_get_ns(void);
+
 int cmdpreview_get_ns(void)
 {
-  return cmdpreview_ns;
+  return rs_cmdpreview_get_ns();
 }
 
 /// Sets up command preview buffer.

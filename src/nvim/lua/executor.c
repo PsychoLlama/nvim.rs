@@ -592,9 +592,15 @@ LuaRef nlua_get_empty_dict_ref(lua_State *lstate)
   return ref_state->empty_dict_ref;
 }
 
+// C accessor for nlua_global_refs->ref_count (used by Rust)
+int nvim_get_nlua_global_ref_count(void) { return nlua_global_refs->ref_count; }
+
+// Rust implementation
+extern int rs_nlua_get_global_ref_count(void);
+
 int nlua_get_global_ref_count(void)
 {
-  return nlua_global_refs->ref_count;
+  return rs_nlua_get_global_ref_count();
 }
 
 static void nlua_common_vim_init(lua_State *lstate, bool is_thread, bool is_standalone)
