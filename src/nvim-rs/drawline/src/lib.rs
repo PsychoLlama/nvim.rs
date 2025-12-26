@@ -741,6 +741,13 @@ extern "C" {
     fn nvim_wlv_set_vcol_off_co(wlv: WlvHandle, val: c_int);
     fn nvim_wlv_get_need_lbr(wlv: WlvHandle) -> bool;
     fn nvim_wlv_set_need_lbr(wlv: WlvHandle, val: bool);
+
+    // HLF constants
+    fn nvim_get_hlf_mc() -> c_int;
+    fn nvim_get_hlf_cul() -> c_int;
+
+    // Buffer handle for win
+    fn nvim_win_get_w_buffer(wp: WinHandle) -> BufHandle;
 }
 
 /// Advance wlv->color_cols past the current vcol.
@@ -1236,15 +1243,7 @@ unsafe fn draw_virt_text_impl(
             let virt_text = nvim_decor_virt_text_get_virt_text(vt);
             let hl_mode = nvim_decor_virt_text_get_hl_mode(vt);
 
-            let col = draw_virt_text_item_impl(
-                buf,
-                draw_col,
-                virt_text,
-                hl_mode,
-                max_col,
-                vcol,
-                0,
-            );
+            let col = draw_virt_text_item_impl(buf, draw_col, virt_text, hl_mode, max_col, vcol, 0);
 
             let vt_pos = nvim_decor_virt_text_get_pos(vt);
             if do_eol && (vt_pos == K_VPOS_END_OF_LINE || vt_pos == K_VPOS_END_OF_LINE_RIGHT_ALIGN)
@@ -1357,6 +1356,105 @@ unsafe fn fix_for_boguscols_impl(wlv: WlvHandle) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_fix_for_boguscols(wlv: WlvHandle) {
     fix_for_boguscols_impl(wlv);
+}
+
+// ============================================================================
+// draw_col_buf - Draw text into the line buffer
+// ============================================================================
+
+/// Draw text into the line buffer, handling color columns.
+///
+/// This function draws text from `text` (with length `len`) into the line buffer,
+/// advancing wlv->off and optionally wlv->vcol. It also handles colorcolumn highlighting.
+///
+/// # Arguments
+/// * `wp` - Window handle
+/// * `wlv` - winlinevars_T handle
+/// * `text` - Pointer to UTF-8 text to draw
+/// * `len` - Length of text in bytes
+/// * `attr` - Highlight attribute to use
+/// * `fold_vcol` - Optional pointer to vcol values for folded text (NULL if inc_vcol)
+/// * `inc_vcol` - If true, increment vcol for each cell
+///
+/// # Safety
+/// - All pointers must be valid
+/// - text must point to len bytes of valid UTF-8
+unsafe fn draw_col_buf_impl(
+    wp: WinHandle,
+    wlv: WlvHandle,
+    text: *const c_char,
+    len: usize,
+    attr: c_int,
+    fold_vcol: *const ColnrT,
+    inc_vcol: bool,
+) {
+    let buf = nvim_win_get_w_buffer(wp);
+    let view_width = nvim_win_get_view_width(wp);
+    let linebuf_char = nvim_get_linebuf_char();
+    let linebuf_attr = nvim_get_linebuf_attr();
+    let linebuf_vcol = nvim_get_linebuf_vcol();
+    let hlf_mc = nvim_get_hlf_mc();
+
+    let mut ptr = text;
+    let text_end = text.add(len);
+    let mut fold_vcol_ptr = fold_vcol;
+
+    while ptr < text_end && nvim_wlv_get_off(wlv) < view_width {
+        let off = nvim_wlv_get_off(wlv);
+
+        // Call line_putchar to render the character
+        let cells = line_putchar_impl(
+            buf,
+            &mut ptr,
+            linebuf_char.add(off as usize),
+            view_width - off,
+            off,
+        );
+
+        let mut myattr = attr;
+        if inc_vcol {
+            advance_color_col_impl(wlv, nvim_wlv_get_vcol(wlv));
+            let color_cols = nvim_wlv_get_color_cols(wlv);
+            if !color_cols.is_null() && nvim_wlv_get_vcol(wlv) == *color_cols {
+                myattr = hl_combine_attr(nvim_win_hl_attr(wp, hlf_mc), myattr);
+            }
+        }
+
+        // Fill in attr and vcol for each cell
+        for _ in 0..cells {
+            let current_off = nvim_wlv_get_off(wlv);
+            *linebuf_attr.add(current_off as usize) = myattr;
+
+            let vcol_val = if inc_vcol {
+                let v = nvim_wlv_get_vcol(wlv);
+                nvim_wlv_set_vcol(wlv, v + 1);
+                v
+            } else if !fold_vcol_ptr.is_null() {
+                let v = *fold_vcol_ptr;
+                fold_vcol_ptr = fold_vcol_ptr.add(1);
+                v
+            } else {
+                -1
+            };
+            *linebuf_vcol.add(current_off as usize) = vcol_val;
+
+            nvim_wlv_set_off(wlv, current_off + 1);
+        }
+    }
+}
+
+/// FFI export for draw_col_buf.
+#[no_mangle]
+pub unsafe extern "C" fn rs_draw_col_buf(
+    wp: WinHandle,
+    wlv: WlvHandle,
+    text: *const c_char,
+    len: usize,
+    attr: c_int,
+    fold_vcol: *const ColnrT,
+    inc_vcol: bool,
+) {
+    draw_col_buf_impl(wp, wlv, text, len, attr, fold_vcol, inc_vcol);
 }
 
 #[cfg(test)]

@@ -161,6 +161,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 - `draw_foldcolumn` - Foldcolumn setup (rs_draw_foldcolumn)
 - `fill_foldcolumn` - Foldcolumn filling (rs_fill_foldcolumn)
 - `line_putchar` - UTF-8 char to screen char (rs_line_putchar)
+- `draw_col_buf` - Draw character buffer to line (rs_draw_col_buf)
 
 ### drawline.c Accessor Functions (for Rust access to winlinevars_T)
 

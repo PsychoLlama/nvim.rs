@@ -152,6 +152,8 @@ extern int rs_draw_virt_text_item(buf_T *buf, int col, VirtText vt, int hl_mode,
 extern void rs_draw_virt_text(win_T *wp, buf_T *buf, int col_off, int *end_col, int win_row);
 extern void rs_win_line_start(win_T *wp, winlinevars_T *wlv);
 extern void rs_fix_for_boguscols(winlinevars_T *wlv);
+extern void rs_draw_col_buf(win_T *wp, winlinevars_T *wlv, const char *text, size_t len,
+                            int attr, const colnr_T *fold_vcol, bool inc_vcol);
 
 // winlinevars_T accessor functions for Rust opaque handle pattern.
 // These use void* to avoid exposing the internal winlinevars_T type in headers.
@@ -744,23 +746,7 @@ static int draw_virt_text_item(buf_T *buf, int col, VirtText vt, HlMode hl_mode,
 static void draw_col_buf(win_T *wp, winlinevars_T *wlv, const char *text, size_t len, int attr,
                          const colnr_T *fold_vcol, bool inc_vcol)
 {
-  const char *ptr = text;
-  while (ptr < text + len && wlv->off < wp->w_view_width) {
-    int cells = line_putchar(wp->w_buffer, &ptr, &linebuf_char[wlv->off],
-                             wp->w_view_width - wlv->off, wlv->off);
-    int myattr = attr;
-    if (inc_vcol) {
-      advance_color_col(wlv, wlv->vcol);
-      if (wlv->color_cols && wlv->vcol == *wlv->color_cols) {
-        myattr = hl_combine_attr(win_hl_attr(wp, HLF_MC), myattr);
-      }
-    }
-    for (int c = 0; c < cells; c++) {
-      linebuf_attr[wlv->off] = myattr;
-      linebuf_vcol[wlv->off] = inc_vcol ? wlv->vcol++ : fold_vcol ? *(fold_vcol++) : -1;
-      wlv->off++;
-    }
-  }
+  rs_draw_col_buf(wp, wlv, text, len, attr, fold_vcol, inc_vcol);
 }
 
 static void draw_col_fill(winlinevars_T *wlv, schar_T fillchar, int width, int attr)

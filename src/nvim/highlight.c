@@ -168,6 +168,8 @@ const char *nvim_get_hlf_name(int idx) { return hlf_names[idx]; }
 int nvim_get_hlf_nfloat(void) { return HLF_NFLOAT; }
 int nvim_get_hlf_border(void) { return HLF_BORDER; }
 int nvim_get_hlf_count(void) { return HLF_COUNT; }
+int nvim_get_hlf_mc(void) { return HLF_MC; }
+int nvim_get_hlf_cul(void) { return HLF_CUL; }
 // nvim_get_highlight_attr is already defined above (line 148)
 
 // Forward declaration for update_ns_hl

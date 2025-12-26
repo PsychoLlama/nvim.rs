@@ -444,6 +444,12 @@ int nvim_win_get_view_height(win_T *wp)
   return wp->w_view_height;
 }
 
+/// Get the w_buffer field from a window.
+buf_T *nvim_win_get_w_buffer(win_T *wp)
+{
+  return wp->w_buffer;
+}
+
 /// Get the fold column count for a window.
 int nvim_win_fdccol_count(win_T *wp)
 {
