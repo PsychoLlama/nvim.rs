@@ -150,6 +150,8 @@ extern int rs_line_putchar(buf_T *buf, const char **pp, schar_T *dest, int maxce
 extern int rs_draw_virt_text_item(buf_T *buf, int col, VirtText vt, int hl_mode, int max_col,
                                   int vcol, int skip_cells);
 extern void rs_draw_virt_text(win_T *wp, buf_T *buf, int col_off, int *end_col, int win_row);
+extern void rs_win_line_start(win_T *wp, winlinevars_T *wlv);
+extern void rs_fix_for_boguscols(winlinevars_T *wlv);
 
 // winlinevars_T accessor functions for Rust opaque handle pattern.
 // These use void* to avoid exposing the internal winlinevars_T type in headers.
@@ -1139,24 +1141,12 @@ static void handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t 
 /// Start a screen line at column zero.
 static void win_line_start(win_T *wp, winlinevars_T *wlv)
 {
-  wlv->col = 0;
-  wlv->off = 0;
-  wlv->need_lbr = false;
-  for (int i = 0; i < wp->w_view_width; i++) {
-    linebuf_char[i] = schar_from_ascii(' ');
-    linebuf_attr[i] = 0;
-    linebuf_vcol[i] = -1;
-  }
+  rs_win_line_start(wp, wlv);
 }
 
 static void fix_for_boguscols(winlinevars_T *wlv)
 {
-  wlv->n_extra += wlv->vcol_off_co;
-  wlv->vcol -= wlv->vcol_off_co;
-  wlv->vcol_off_co = 0;
-  wlv->col -= wlv->boguscols;
-  wlv->old_boguscols = wlv->boguscols;
-  wlv->boguscols = 0;
+  rs_fix_for_boguscols(wlv);
 }
 
 static int get_rightmost_vcol(win_T *wp, const int *color_cols)

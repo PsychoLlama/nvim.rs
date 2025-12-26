@@ -734,6 +734,13 @@ extern "C" {
     fn nvim_wlv_set_line_attr(wlv: WlvHandle, val: c_int);
     fn nvim_wlv_get_line_attr_lowprio(wlv: WlvHandle) -> c_int;
     fn nvim_wlv_set_line_attr_lowprio(wlv: WlvHandle, val: c_int);
+
+    // Additional wlv accessors for win_line_start and fix_for_boguscols
+    fn nvim_wlv_get_n_extra(wlv: WlvHandle) -> c_int;
+    fn nvim_wlv_set_n_extra(wlv: WlvHandle, val: c_int);
+    fn nvim_wlv_set_vcol_off_co(wlv: WlvHandle, val: c_int);
+    fn nvim_wlv_get_need_lbr(wlv: WlvHandle) -> bool;
+    fn nvim_wlv_set_need_lbr(wlv: WlvHandle, val: bool);
 }
 
 /// Advance wlv->color_cols past the current vcol.
@@ -1272,6 +1279,84 @@ pub unsafe extern "C" fn rs_draw_virt_text(
     win_row: c_int,
 ) {
     draw_virt_text_impl(wp, buf, col_off, end_col, win_row);
+}
+
+// ============================================================================
+// Line initialization functions
+// ============================================================================
+
+/// Initialize the line buffer for rendering.
+///
+/// Resets wlv->col, wlv->off, and wlv->need_lbr to initial values, and fills
+/// the linebuf arrays with spaces/zeros.
+///
+/// # Safety
+/// - `wp` must be a valid window handle
+/// - `wlv` must be a valid winlinevars_T handle
+unsafe fn win_line_start_impl(wp: WinHandle, wlv: WlvHandle) {
+    nvim_wlv_set_col(wlv, 0);
+    nvim_wlv_set_off(wlv, 0);
+    nvim_wlv_set_need_lbr(wlv, false);
+
+    let view_width = nvim_win_get_view_width(wp);
+    let linebuf_char = nvim_get_linebuf_char();
+    let linebuf_attr = nvim_get_linebuf_attr();
+    let linebuf_vcol = nvim_get_linebuf_vcol();
+
+    // schar_from_ascii(' ') - space character in native byte order
+    let space_schar = rs_schar_from_char(c_int::from(b' '));
+
+    for i in 0..view_width {
+        *linebuf_char.add(i as usize) = space_schar;
+        *linebuf_attr.add(i as usize) = 0;
+        *linebuf_vcol.add(i as usize) = -1;
+    }
+}
+
+/// FFI export for win_line_start.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_line_start(wp: WinHandle, wlv: WlvHandle) {
+    win_line_start_impl(wp, wlv);
+}
+
+/// Fix up the linebuf for bogus columns.
+///
+/// This adjusts n_extra, vcol, vcol_off_co, col, boguscols, and old_boguscols
+/// after handling bogus columns (extra columns for composing characters or
+/// other special cases).
+///
+/// # Safety
+/// - `wlv` must be a valid winlinevars_T handle
+unsafe fn fix_for_boguscols_impl(wlv: WlvHandle) {
+    let vcol_off_co = nvim_wlv_get_vcol_off_co(wlv);
+    let boguscols = nvim_wlv_get_boguscols(wlv);
+
+    // wlv->n_extra += wlv->vcol_off_co
+    let n_extra = nvim_wlv_get_n_extra(wlv);
+    nvim_wlv_set_n_extra(wlv, n_extra + vcol_off_co);
+
+    // wlv->vcol -= wlv->vcol_off_co
+    let vcol = nvim_wlv_get_vcol(wlv);
+    nvim_wlv_set_vcol(wlv, vcol - vcol_off_co as ColnrT);
+
+    // wlv->vcol_off_co = 0
+    nvim_wlv_set_vcol_off_co(wlv, 0);
+
+    // wlv->col -= wlv->boguscols
+    let col = nvim_wlv_get_col(wlv);
+    nvim_wlv_set_col(wlv, col - boguscols);
+
+    // wlv->old_boguscols = wlv->boguscols
+    nvim_wlv_set_old_boguscols(wlv, boguscols);
+
+    // wlv->boguscols = 0
+    nvim_wlv_set_boguscols(wlv, 0);
+}
+
+/// FFI export for fix_for_boguscols.
+#[no_mangle]
+pub unsafe extern "C" fn rs_fix_for_boguscols(wlv: WlvHandle) {
+    fix_for_boguscols_impl(wlv);
 }
 
 #[cfg(test)]

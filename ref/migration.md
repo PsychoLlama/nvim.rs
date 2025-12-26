@@ -198,6 +198,11 @@ Added ~25 accessor functions for decoration system:
 - `draw_virt_text_item` - Individual virtual text chunk rendering (rs_draw_virt_text_item)
 - `draw_virt_text` - Virtual text positioning loop (rs_draw_virt_text)
 
+### drawline.c Line Initialization Functions
+
+- `win_line_start` - Initialize line buffer for rendering (rs_win_line_start)
+- `fix_for_boguscols` - Adjust columns for bogus chars (rs_fix_for_boguscols)
+
 ### Rendering Functions Pending
 
 **drawscreen.c:**
