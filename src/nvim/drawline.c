@@ -149,6 +149,7 @@ extern void rs_advance_color_col(winlinevars_T *wlv, int vcol);
 extern int rs_line_putchar(buf_T *buf, const char **pp, schar_T *dest, int maxcells, int vcol);
 extern int rs_draw_virt_text_item(buf_T *buf, int col, VirtText vt, int hl_mode, int max_col,
                                   int vcol, int skip_cells);
+extern void rs_draw_virt_text(win_T *wp, buf_T *buf, int col_off, int *end_col, int win_row);
 
 // winlinevars_T accessor functions for Rust opaque handle pattern.
 // These use void* to avoid exposing the internal winlinevars_T type in headers.
@@ -728,105 +729,7 @@ static int line_putchar(buf_T *buf, const char **pp, schar_T *dest, int maxcells
 
 static void draw_virt_text(win_T *wp, buf_T *buf, int col_off, int *end_col, int win_row)
 {
-  DecorState *const state = &decor_state;
-  int const max_col = wp->w_view_width;
-  int right_pos = max_col;
-  bool const do_eol = state->eol_col > -1;
-
-  int const end = state->current_end;
-  int *const indices = state->ranges_i.items;
-  DecorRangeSlot *const slots = state->slots.items;
-
-  /// Total width of all virtual text with "eol_right_align" alignment
-  int totalWidthOfEolRightAlignedVirtText = 0;
-
-  for (int i = 0; i < end; i++) {
-    DecorRange *item = &slots[indices[i]].range;
-    if (!(item->start_row == state->row && decor_virt_pos(item))) {
-      continue;
-    }
-
-    DecorVirtText *vt = NULL;
-    if (item->kind == kDecorKindVirtText) {
-      assert(item->data.vt);
-      vt = item->data.vt;
-    }
-    if (decor_virt_pos(item) && item->draw_col == -1) {
-      bool updated = true;
-      VirtTextPos pos = decor_virt_pos_kind(item);
-
-      if (do_eol && pos == kVPosEndOfLineRightAlign) {
-        int eolOffset = 0;
-        if (totalWidthOfEolRightAlignedVirtText == 0) {
-          // Look ahead to the remaining decor items
-          for (int j = i; j < end; j++) {
-            /// A future decor to be handled in this function's call
-            DecorRange *lookaheadItem = &slots[indices[j]].range;
-
-            if (lookaheadItem->start_row != state->row
-                || !decor_virt_pos(lookaheadItem)
-                || lookaheadItem->draw_col != -1) {
-              continue;
-            }
-
-            /// The Virtual Text of the decor item we're looking ahead to
-            DecorVirtText *lookaheadVt = NULL;
-            if (item->kind == kDecorKindVirtText) {
-              assert(item->data.vt);
-              lookaheadVt = item->data.vt;
-            }
-
-            if (decor_virt_pos_kind(lookaheadItem) == kVPosEndOfLineRightAlign) {
-              // An extra space is added for single character spacing in EOL alignment
-              totalWidthOfEolRightAlignedVirtText += (lookaheadVt->width + 1);
-            }
-          }
-
-          // Remove one space from the total width since there's no single space after the last entry
-          totalWidthOfEolRightAlignedVirtText--;
-
-          if (totalWidthOfEolRightAlignedVirtText <= (right_pos - state->eol_col)) {
-            eolOffset = right_pos - totalWidthOfEolRightAlignedVirtText - state->eol_col;
-          }
-        }
-
-        item->draw_col = state->eol_col + eolOffset;
-      } else if (pos == kVPosRightAlign) {
-        right_pos -= vt->width;
-        item->draw_col = right_pos;
-      } else if (pos == kVPosEndOfLine && do_eol) {
-        item->draw_col = state->eol_col;
-      } else if (pos == kVPosWinCol) {
-        item->draw_col = MAX(col_off + vt->col, 0);
-      } else {
-        updated = false;
-      }
-      if (updated && (item->draw_col < 0 || item->draw_col >= wp->w_view_width)) {
-        // Out of window, don't draw at all.
-        item->draw_col = INT_MIN;
-      }
-    }
-    if (item->draw_col < 0) {
-      continue;
-    }
-    if (item->kind == kDecorKindUIWatched) {
-      // send mark position to UI
-      WinExtmark m = { (NS)item->data.ui.ns_id, item->data.ui.mark_id, win_row, item->draw_col };
-      kv_push(win_extmark_arr, m);
-    }
-    if (vt) {
-      int vcol = item->draw_col - col_off;
-      int col = draw_virt_text_item(buf, item->draw_col, vt->data.virt_text,
-                                    vt->hl_mode, max_col, vcol, 0);
-      if (do_eol && ((vt->pos == kVPosEndOfLine) || (vt->pos == kVPosEndOfLineRightAlign))) {
-        state->eol_col = col + 1;
-      }
-      *end_col = MAX(*end_col, col);
-    }
-    if (!vt || !(vt->flags & kVTRepeatLinebreak)) {
-      item->draw_col = INT_MIN;  // deactivate
-    }
-  }
+  rs_draw_virt_text(wp, buf, col_off, end_col, win_row);
 }
 
 static int draw_virt_text_item(buf_T *buf, int col, VirtText vt, HlMode hl_mode, int max_col,

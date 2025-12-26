@@ -196,11 +196,9 @@ Added ~25 accessor functions for decoration system:
 ### drawline.c Virtual Text Functions
 
 - `draw_virt_text_item` - Individual virtual text chunk rendering (rs_draw_virt_text_item)
+- `draw_virt_text` - Virtual text positioning loop (rs_draw_virt_text)
 
 ### Rendering Functions Pending
-
-**drawline.c:**
-- `draw_virt_text` - Virtual text positioning loop (complex state access)
 
 **drawscreen.c:**
 - `showmode` - Mode indicator display (message system integration)

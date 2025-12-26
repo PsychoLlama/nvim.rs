@@ -229,6 +229,10 @@ extern "C" {
 
     // win_extmark_arr push
     fn nvim_win_extmark_push(ns_id: u64, mark_id: u64, win_row: c_int, win_col: c_int);
+
+    // High-level iteration helpers for draw_virt_text
+    fn nvim_decor_state_get_active_range(state: DecorStateHandle, i: c_int) -> DecorRangeHandle;
+    fn nvim_decor_state_get_eol_right_width(state: DecorStateHandle, from_idx: c_int) -> c_int;
 }
 
 // ============================================================================
@@ -468,6 +472,20 @@ pub fn decor_range_ui_mark_id(range: DecorRangeHandle) -> u32 {
 /// Push a WinExtmark to the global win_extmark_arr.
 pub fn win_extmark_push(ns_id: u64, mark_id: u64, win_row: c_int, win_col: c_int) {
     unsafe { nvim_win_extmark_push(ns_id, mark_id, win_row, win_col) }
+}
+
+// ============================================================================
+// High-level iteration wrappers for draw_virt_text
+// ============================================================================
+
+/// Get an active DecorRange by iteration index.
+pub fn decor_state_get_active_range(state: DecorStateHandle, i: c_int) -> DecorRangeHandle {
+    unsafe { nvim_decor_state_get_active_range(state, i) }
+}
+
+/// Get the total width of EOL right-aligned virtual text.
+pub fn decor_state_get_eol_right_width(state: DecorStateHandle, from_idx: c_int) -> c_int {
+    unsafe { nvim_decor_state_get_eol_right_width(state, from_idx) }
 }
 
 // ============================================================================

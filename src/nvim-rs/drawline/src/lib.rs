@@ -170,6 +170,37 @@ extern "C" {
         pos: *mut usize,
         attr: *mut c_int,
     ) -> *const c_char;
+
+    // DecorState accessors (from decoration.c)
+    fn nvim_get_decor_state() -> *mut c_void;
+    fn nvim_decor_state_get_row(state: *mut c_void) -> c_int;
+    fn nvim_decor_state_get_eol_col(state: *mut c_void) -> c_int;
+    fn nvim_decor_state_set_eol_col(state: *mut c_void, val: c_int);
+    fn nvim_decor_state_get_current_end(state: *mut c_void) -> c_int;
+    fn nvim_decor_state_get_active_range(state: *mut c_void, i: c_int) -> *mut c_void;
+    fn nvim_decor_state_get_eol_right_width(state: *mut c_void, from_idx: c_int) -> c_int;
+
+    // DecorRange accessors
+    fn nvim_decor_range_get_start_row(range: *mut c_void) -> c_int;
+    fn nvim_decor_range_get_draw_col(range: *mut c_void) -> c_int;
+    fn nvim_decor_range_set_draw_col(range: *mut c_void, val: c_int);
+    fn nvim_decor_range_get_kind(range: *mut c_void) -> c_int;
+    fn nvim_decor_range_has_virt_pos(range: *mut c_void) -> bool;
+    fn nvim_decor_range_get_virt_pos_kind(range: *mut c_void) -> c_int;
+    fn nvim_decor_range_get_virt_text(range: *mut c_void) -> *mut c_void;
+    fn nvim_decor_range_get_ui_ns_id(range: *mut c_void) -> u64;
+    fn nvim_decor_range_get_ui_mark_id(range: *mut c_void) -> u32;
+
+    // DecorVirtText accessors
+    fn nvim_decor_virt_text_get_width(vt: *mut c_void) -> c_int;
+    fn nvim_decor_virt_text_get_col(vt: *mut c_void) -> c_int;
+    fn nvim_decor_virt_text_get_pos(vt: *mut c_void) -> c_int;
+    fn nvim_decor_virt_text_get_hl_mode(vt: *mut c_void) -> c_int;
+    fn nvim_decor_virt_text_get_flags(vt: *mut c_void) -> c_int;
+    fn nvim_decor_virt_text_get_virt_text(vt: *mut c_void) -> *mut c_void;
+
+    // win_extmark_arr push
+    fn nvim_win_extmark_push(ns_id: u64, mark_id: u64, win_row: c_int, win_col: c_int);
 }
 
 /// Opaque handle to buffer (buf_T).
@@ -197,6 +228,19 @@ const HL_MODE_BLEND: c_int = 3;
 
 /// NUL character constant.
 const NUL: c_char = 0;
+
+/// Decor kind constants (from decoration_defs.h).
+const K_DECOR_KIND_VIRT_TEXT: c_int = 2;
+const K_DECOR_KIND_UI_WATCHED: c_int = 4;
+
+/// VirtTextPos constants.
+const K_VPOS_END_OF_LINE: c_int = 0;
+const K_VPOS_END_OF_LINE_RIGHT_ALIGN: c_int = 1;
+const K_VPOS_RIGHT_ALIGN: c_int = 4;
+const K_VPOS_WIN_COL: c_int = 5;
+
+/// VirtText flag for repeat linebreak.
+const K_VT_REPEAT_LINEBREAK: c_int = 8;
 
 // ============================================================================
 // Implementation functions
@@ -1062,6 +1106,172 @@ pub unsafe extern "C" fn rs_draw_virt_text_item(
     skip_cells: c_int,
 ) -> c_int {
     draw_virt_text_item_impl(buf, col, vt, hl_mode, max_col, vcol, skip_cells)
+}
+
+// ============================================================================
+// draw_virt_text - virtual text positioning and rendering
+// ============================================================================
+
+/// Draw virtual text items for the current line.
+///
+/// This function positions and renders virtual text with various alignment modes:
+/// - EndOfLine: right after end of line
+/// - EndOfLineRightAlign: right-aligned at end of window
+/// - RightAlign: right-aligned from right edge
+/// - WinCol: at specific window column
+///
+/// # Arguments
+/// * `wp` - Window handle
+/// * `buf` - Buffer handle
+/// * `col_off` - Column offset
+/// * `end_col` - Pointer to track end column (updated)
+/// * `win_row` - Window row for UI watched marks
+///
+/// # Safety
+/// - `end_col` must be a valid pointer
+/// - wp and buf must be valid handles
+#[allow(clippy::too_many_lines)]
+unsafe fn draw_virt_text_impl(
+    wp: WinHandle,
+    buf: BufHandle,
+    col_off: c_int,
+    end_col: *mut c_int,
+    win_row: c_int,
+) {
+    let state = nvim_get_decor_state();
+    let max_col = nvim_win_get_view_width(wp);
+    let mut right_pos = max_col;
+    let eol_col = nvim_decor_state_get_eol_col(state);
+    let do_eol = eol_col > -1;
+    let row = nvim_decor_state_get_row(state);
+    let current_end = nvim_decor_state_get_current_end(state);
+
+    let mut total_width_eol_right = 0;
+
+    for i in 0..current_end {
+        let item = nvim_decor_state_get_active_range(state, i);
+        if item.is_null() {
+            continue;
+        }
+
+        // Skip if not on current row or not a virtual position
+        if nvim_decor_range_get_start_row(item) != row || !nvim_decor_range_has_virt_pos(item) {
+            continue;
+        }
+
+        let kind = nvim_decor_range_get_kind(item);
+        let vt = if kind == K_DECOR_KIND_VIRT_TEXT {
+            nvim_decor_range_get_virt_text(item)
+        } else {
+            std::ptr::null_mut()
+        };
+
+        let draw_col = nvim_decor_range_get_draw_col(item);
+        if nvim_decor_range_has_virt_pos(item) && draw_col == -1 {
+            let mut updated = true;
+            let pos = nvim_decor_range_get_virt_pos_kind(item);
+
+            if do_eol && pos == K_VPOS_END_OF_LINE_RIGHT_ALIGN {
+                let mut eol_offset = 0;
+                if total_width_eol_right == 0 {
+                    // Calculate total width of right-aligned EOL virtual text
+                    total_width_eol_right = nvim_decor_state_get_eol_right_width(state, i);
+
+                    let current_eol_col = nvim_decor_state_get_eol_col(state);
+                    if total_width_eol_right <= right_pos - current_eol_col {
+                        eol_offset = right_pos - total_width_eol_right - current_eol_col;
+                    }
+                }
+
+                let new_draw_col = nvim_decor_state_get_eol_col(state) + eol_offset;
+                nvim_decor_range_set_draw_col(item, new_draw_col);
+            } else if pos == K_VPOS_RIGHT_ALIGN {
+                if !vt.is_null() {
+                    right_pos -= nvim_decor_virt_text_get_width(vt);
+                }
+                nvim_decor_range_set_draw_col(item, right_pos);
+            } else if pos == K_VPOS_END_OF_LINE && do_eol {
+                nvim_decor_range_set_draw_col(item, nvim_decor_state_get_eol_col(state));
+            } else if pos == K_VPOS_WIN_COL {
+                if !vt.is_null() {
+                    let vt_col = nvim_decor_virt_text_get_col(vt);
+                    let new_col = std::cmp::max(col_off + vt_col, 0);
+                    nvim_decor_range_set_draw_col(item, new_col);
+                }
+            } else {
+                updated = false;
+            }
+
+            if updated {
+                let new_draw_col = nvim_decor_range_get_draw_col(item);
+                if new_draw_col < 0 || new_draw_col >= max_col {
+                    // Out of window, don't draw at all
+                    nvim_decor_range_set_draw_col(item, c_int::MIN);
+                }
+            }
+        }
+
+        let draw_col = nvim_decor_range_get_draw_col(item);
+        if draw_col < 0 {
+            continue;
+        }
+
+        // Handle UIWatched marks
+        if kind == K_DECOR_KIND_UI_WATCHED {
+            let ns_id = nvim_decor_range_get_ui_ns_id(item);
+            let mark_id = u64::from(nvim_decor_range_get_ui_mark_id(item));
+            nvim_win_extmark_push(ns_id, mark_id, win_row, draw_col);
+        }
+
+        // Render virtual text
+        if !vt.is_null() {
+            let vcol = draw_col - col_off;
+            let virt_text = nvim_decor_virt_text_get_virt_text(vt);
+            let hl_mode = nvim_decor_virt_text_get_hl_mode(vt);
+
+            let col = draw_virt_text_item_impl(
+                buf,
+                draw_col,
+                virt_text,
+                hl_mode,
+                max_col,
+                vcol,
+                0,
+            );
+
+            let vt_pos = nvim_decor_virt_text_get_pos(vt);
+            if do_eol && (vt_pos == K_VPOS_END_OF_LINE || vt_pos == K_VPOS_END_OF_LINE_RIGHT_ALIGN)
+            {
+                nvim_decor_state_set_eol_col(state, col + 1);
+            }
+
+            if !end_col.is_null() {
+                *end_col = std::cmp::max(*end_col, col);
+            }
+        }
+
+        // Deactivate unless it should repeat on linebreak
+        let flags = if !vt.is_null() {
+            nvim_decor_virt_text_get_flags(vt)
+        } else {
+            0
+        };
+        if vt.is_null() || (flags & K_VT_REPEAT_LINEBREAK) == 0 {
+            nvim_decor_range_set_draw_col(item, c_int::MIN);
+        }
+    }
+}
+
+/// Draw virtual text (FFI export).
+#[no_mangle]
+pub unsafe extern "C" fn rs_draw_virt_text(
+    wp: WinHandle,
+    buf: BufHandle,
+    col_off: c_int,
+    end_col: *mut c_int,
+    win_row: c_int,
+) {
+    draw_virt_text_impl(wp, buf, col_off, end_col, win_row);
 }
 
 #[cfg(test)]

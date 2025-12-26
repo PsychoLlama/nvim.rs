@@ -1632,3 +1632,55 @@ uint32_t nvim_decor_range_get_ui_mark_id(void *range_ptr)
   }
   return 0;
 }
+
+// ============================================================================
+// draw_virt_text helper: high-level iteration over active ranges
+// ============================================================================
+
+/// Get an active DecorRange by iteration index.
+/// This uses the sorted ranges_i array to get the actual range.
+void *nvim_decor_state_get_active_range(void *state_ptr, int i)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  if (i < 0 || i >= (int)kv_size(state->ranges_i)) {
+    return NULL;
+  }
+  int idx = kv_A(state->ranges_i, i);
+  return &kv_A(state->slots, idx).range;
+}
+
+/// Get the total width of EOL right-aligned virtual text from index i onwards.
+/// This is a helper for draw_virt_text EOL right alignment calculation.
+int nvim_decor_state_get_eol_right_width(void *state_ptr, int from_idx)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  int total_width = 0;
+  int count = (int)kv_size(state->ranges_i);
+
+  for (int j = from_idx; j < state->current_end && j < count; j++) {
+    int idx = kv_A(state->ranges_i, j);
+    DecorRange *r = &kv_A(state->slots, idx).range;
+
+    if (r->start_row != state->row || !decor_virt_pos(r) || r->draw_col != -1) {
+      continue;
+    }
+
+    if (decor_virt_pos_kind(r) == kVPosEndOfLineRightAlign) {
+      DecorVirtText *vt = NULL;
+      if (r->kind == kDecorKindVirtText) {
+        vt = r->data.vt;
+      }
+      if (vt) {
+        // An extra space is added for single character spacing
+        total_width += (vt->width + 1);
+      }
+    }
+  }
+
+  // Remove one space since no space after last entry
+  if (total_width > 0) {
+    total_width--;
+  }
+
+  return total_width;
+}
