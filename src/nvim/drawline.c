@@ -145,6 +145,7 @@ extern bool rs_use_cursor_line_nr(win_T *wp, winlinevars_T *wlv);
 extern int rs_get_line_number_attr(win_T *wp, winlinevars_T *wlv);
 extern void rs_draw_sign(bool nrcol, win_T *wp, winlinevars_T *wlv, int sign_idx);
 extern void rs_draw_lnum_col(win_T *wp, winlinevars_T *wlv);
+extern void rs_advance_color_col(winlinevars_T *wlv, int vcol);
 
 // winlinevars_T accessor functions for Rust opaque handle pattern.
 // These use void* to avoid exposing the internal winlinevars_T type in headers.
@@ -267,6 +268,370 @@ int nvim_wlv_get_sattr_hl_id(void *wlv_ptr, int sign_idx)
   return wlv->sattrs[sign_idx].hl_id;
 }
 
+/// Get the n_extra from wlv.
+int nvim_wlv_get_n_extra(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->n_extra;
+}
+
+/// Set the n_extra in wlv.
+void nvim_wlv_set_n_extra(void *wlv_ptr, int val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->n_extra = val;
+}
+
+/// Get the p_extra from wlv.
+char *nvim_wlv_get_p_extra(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->p_extra;
+}
+
+/// Set the p_extra in wlv.
+void nvim_wlv_set_p_extra(void *wlv_ptr, char *val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->p_extra = val;
+}
+
+/// Get the sc_extra from wlv.
+schar_T nvim_wlv_get_sc_extra(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->sc_extra;
+}
+
+/// Set the sc_extra in wlv.
+void nvim_wlv_set_sc_extra(void *wlv_ptr, schar_T val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->sc_extra = val;
+}
+
+/// Get the sc_final from wlv.
+schar_T nvim_wlv_get_sc_final(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->sc_final;
+}
+
+/// Set the sc_final in wlv.
+void nvim_wlv_set_sc_final(void *wlv_ptr, schar_T val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->sc_final = val;
+}
+
+/// Get the n_attr from wlv.
+int nvim_wlv_get_n_attr(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->n_attr;
+}
+
+/// Set the n_attr in wlv.
+void nvim_wlv_set_n_attr(void *wlv_ptr, int val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->n_attr = val;
+}
+
+/// Get the extra_attr from wlv.
+int nvim_wlv_get_extra_attr(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->extra_attr;
+}
+
+/// Set the extra_attr in wlv.
+void nvim_wlv_set_extra_attr(void *wlv_ptr, int val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->extra_attr = val;
+}
+
+/// Get the char_attr from wlv.
+int nvim_wlv_get_char_attr(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->char_attr;
+}
+
+/// Set the char_attr in wlv.
+void nvim_wlv_set_char_attr(void *wlv_ptr, int val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->char_attr = val;
+}
+
+/// Get the extra_for_extmark from wlv.
+bool nvim_wlv_get_extra_for_extmark(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->extra_for_extmark;
+}
+
+/// Set the extra_for_extmark in wlv.
+void nvim_wlv_set_extra_for_extmark(void *wlv_ptr, bool val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->extra_for_extmark = val;
+}
+
+/// Get the reset_extra_attr from wlv.
+bool nvim_wlv_get_reset_extra_attr(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->reset_extra_attr;
+}
+
+/// Set the reset_extra_attr in wlv.
+void nvim_wlv_set_reset_extra_attr(void *wlv_ptr, bool val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->reset_extra_attr = val;
+}
+
+/// Get the skip_cells from wlv.
+int nvim_wlv_get_skip_cells(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->skip_cells;
+}
+
+/// Set the skip_cells in wlv.
+void nvim_wlv_set_skip_cells(void *wlv_ptr, int val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->skip_cells = val;
+}
+
+/// Get the skipped_cells from wlv.
+int nvim_wlv_get_skipped_cells(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->skipped_cells;
+}
+
+/// Set the skipped_cells in wlv.
+void nvim_wlv_set_skipped_cells(void *wlv_ptr, int val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->skipped_cells = val;
+}
+
+/// Get the boguscols from wlv.
+int nvim_wlv_get_boguscols(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->boguscols;
+}
+
+/// Set the boguscols in wlv.
+void nvim_wlv_set_boguscols(void *wlv_ptr, int val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->boguscols = val;
+}
+
+/// Get the old_boguscols from wlv.
+int nvim_wlv_get_old_boguscols(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->old_boguscols;
+}
+
+/// Set the old_boguscols in wlv.
+void nvim_wlv_set_old_boguscols(void *wlv_ptr, int val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->old_boguscols = val;
+}
+
+/// Get the vcol from wlv.
+colnr_T nvim_wlv_get_vcol(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->vcol;
+}
+
+/// Set the vcol in wlv.
+void nvim_wlv_set_vcol(void *wlv_ptr, colnr_T val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->vcol = val;
+}
+
+/// Get the col from wlv.
+int nvim_wlv_get_col(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->col;
+}
+
+/// Set the col in wlv.
+void nvim_wlv_set_col(void *wlv_ptr, int val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->col = val;
+}
+
+/// Get the vcol_off_co from wlv.
+int nvim_wlv_get_vcol_off_co(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->vcol_off_co;
+}
+
+/// Set the vcol_off_co in wlv.
+void nvim_wlv_set_vcol_off_co(void *wlv_ptr, int val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->vcol_off_co = val;
+}
+
+/// Get the vcol_sbr from wlv.
+colnr_T nvim_wlv_get_vcol_sbr(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->vcol_sbr;
+}
+
+/// Set the vcol_sbr in wlv.
+void nvim_wlv_set_vcol_sbr(void *wlv_ptr, colnr_T val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->vcol_sbr = val;
+}
+
+/// Get the need_showbreak from wlv.
+bool nvim_wlv_get_need_showbreak(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->need_showbreak;
+}
+
+/// Set the need_showbreak in wlv.
+void nvim_wlv_set_need_showbreak(void *wlv_ptr, bool val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->need_showbreak = val;
+}
+
+/// Get the need_lbr from wlv.
+bool nvim_wlv_get_need_lbr(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->need_lbr;
+}
+
+/// Set the need_lbr in wlv.
+void nvim_wlv_set_need_lbr(void *wlv_ptr, bool val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->need_lbr = val;
+}
+
+/// Get the cul_attr from wlv.
+int nvim_wlv_get_cul_attr(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->cul_attr;
+}
+
+/// Set the cul_attr in wlv.
+void nvim_wlv_set_cul_attr(void *wlv_ptr, int val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->cul_attr = val;
+}
+
+/// Get the line_attr from wlv.
+int nvim_wlv_get_line_attr(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->line_attr;
+}
+
+/// Set the line_attr in wlv.
+void nvim_wlv_set_line_attr(void *wlv_ptr, int val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->line_attr = val;
+}
+
+/// Get the line_attr_lowprio from wlv.
+int nvim_wlv_get_line_attr_lowprio(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->line_attr_lowprio;
+}
+
+/// Set the line_attr_lowprio in wlv.
+void nvim_wlv_set_line_attr_lowprio(void *wlv_ptr, int val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->line_attr_lowprio = val;
+}
+
+/// Get the diff_hlf from wlv.
+int nvim_wlv_get_diff_hlf(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->diff_hlf;
+}
+
+/// Set the diff_hlf in wlv.
+void nvim_wlv_set_diff_hlf(void *wlv_ptr, int val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->diff_hlf = (hlf_T)val;
+}
+
+/// Get the fromcol from wlv.
+int nvim_wlv_get_fromcol(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->fromcol;
+}
+
+/// Set the fromcol in wlv.
+void nvim_wlv_set_fromcol(void *wlv_ptr, int val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->fromcol = val;
+}
+
+/// Get the tocol from wlv.
+int nvim_wlv_get_tocol(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->tocol;
+}
+
+/// Set the tocol in wlv.
+void nvim_wlv_set_tocol(void *wlv_ptr, int val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->tocol = val;
+}
+
+/// Get the color_cols from wlv.
+int *nvim_wlv_get_color_cols(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->color_cols;
+}
+
+/// Set the color_cols in wlv.
+void nvim_wlv_set_color_cols(void *wlv_ptr, int *val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->color_cols = val;
+}
+
 static char *extra_buf = NULL;
 static size_t extra_buf_size = 0;
 
@@ -298,14 +663,7 @@ static schar_T get_lcs_ext(win_T *wp)
 /// Advance wlv->color_cols if not NULL
 static void advance_color_col(winlinevars_T *wlv, int vcol)
 {
-  if (wlv->color_cols) {
-    while (*wlv->color_cols >= 0 && vcol > *wlv->color_cols) {
-      wlv->color_cols++;
-    }
-    if (*wlv->color_cols < 0) {
-      wlv->color_cols = NULL;
-    }
-  }
+  rs_advance_color_col(wlv, vcol);
 }
 
 /// Used when 'cursorlineopt' contains "screenline": compute the margins between

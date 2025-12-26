@@ -1333,3 +1333,258 @@ Object hl_group_name(int hl_id, bool hl_name)
     return INTEGER_OBJ(hl_id);
   }
 }
+
+// ============================================================================
+// Rust FFI accessor functions for DecorState
+// ============================================================================
+
+/// Get the global decor_state pointer for Rust FFI.
+void *nvim_get_decor_state(void)
+{
+  return &decor_state;
+}
+
+/// Get the row from decor_state.
+int nvim_decor_state_get_row(void *state_ptr)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  return state->row;
+}
+
+/// Get the eol_col from decor_state.
+int nvim_decor_state_get_eol_col(void *state_ptr)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  return state->eol_col;
+}
+
+/// Set the eol_col in decor_state.
+void nvim_decor_state_set_eol_col(void *state_ptr, int val)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  state->eol_col = val;
+}
+
+/// Get the current_end from decor_state (number of active ranges).
+int nvim_decor_state_get_current_end(void *state_ptr)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  return state->current_end;
+}
+
+/// Get the current attr from decor_state.
+int nvim_decor_state_get_current(void *state_ptr)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  return state->current;
+}
+
+/// Get the col_until from decor_state.
+int nvim_decor_state_get_col_until(void *state_ptr)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  return state->col_until;
+}
+
+/// Get the conceal from decor_state.
+int nvim_decor_state_get_conceal(void *state_ptr)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  return state->conceal;
+}
+
+/// Get the conceal_char from decor_state.
+schar_T nvim_decor_state_get_conceal_char(void *state_ptr)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  return state->conceal_char;
+}
+
+/// Get the conceal_attr from decor_state.
+int nvim_decor_state_get_conceal_attr(void *state_ptr)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  return state->conceal_attr;
+}
+
+/// Get the spell from decor_state.
+int nvim_decor_state_get_spell(void *state_ptr)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  return state->spell;
+}
+
+/// Get the window pointer from decor_state.
+void *nvim_decor_state_get_win(void *state_ptr)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  return state->win;
+}
+
+/// Get the top_row from decor_state.
+int nvim_decor_state_get_top_row(void *state_ptr)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  return state->top_row;
+}
+
+/// Get a DecorRange by index from ranges_i and slots.
+/// Returns NULL if index is out of bounds.
+void *nvim_decor_state_get_range(void *state_ptr, int idx)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  if (idx < 0 || idx >= state->current_end) {
+    return NULL;
+  }
+  int slot_idx = kv_A(state->ranges_i, idx);
+  return &kv_A(state->slots, slot_idx).range;
+}
+
+/// Get the start_row from a DecorRange.
+int nvim_decor_range_get_start_row(void *range_ptr)
+{
+  DecorRange *range = (DecorRange *)range_ptr;
+  return range->start_row;
+}
+
+/// Get the start_col from a DecorRange.
+int nvim_decor_range_get_start_col(void *range_ptr)
+{
+  DecorRange *range = (DecorRange *)range_ptr;
+  return range->start_col;
+}
+
+/// Get the end_row from a DecorRange.
+int nvim_decor_range_get_end_row(void *range_ptr)
+{
+  DecorRange *range = (DecorRange *)range_ptr;
+  return range->end_row;
+}
+
+/// Get the end_col from a DecorRange.
+int nvim_decor_range_get_end_col(void *range_ptr)
+{
+  DecorRange *range = (DecorRange *)range_ptr;
+  return range->end_col;
+}
+
+/// Get the draw_col from a DecorRange.
+int nvim_decor_range_get_draw_col(void *range_ptr)
+{
+  DecorRange *range = (DecorRange *)range_ptr;
+  return range->draw_col;
+}
+
+/// Set the draw_col in a DecorRange.
+void nvim_decor_range_set_draw_col(void *range_ptr, int val)
+{
+  DecorRange *range = (DecorRange *)range_ptr;
+  range->draw_col = val;
+}
+
+/// Get the kind from a DecorRange.
+int nvim_decor_range_get_kind(void *range_ptr)
+{
+  DecorRange *range = (DecorRange *)range_ptr;
+  return range->kind;
+}
+
+/// Get the attr_id from a DecorRange.
+int nvim_decor_range_get_attr_id(void *range_ptr)
+{
+  DecorRange *range = (DecorRange *)range_ptr;
+  return range->attr_id;
+}
+
+/// Get the priority_internal from a DecorRange.
+uint32_t nvim_decor_range_get_priority(void *range_ptr)
+{
+  DecorRange *range = (DecorRange *)range_ptr;
+  return range->priority_internal;
+}
+
+/// Check if a DecorRange has virtual text position set.
+bool nvim_decor_range_has_virt_pos(void *range_ptr)
+{
+  DecorRange *range = (DecorRange *)range_ptr;
+  return decor_virt_pos(range);
+}
+
+/// Get the virtual text position kind from a DecorRange.
+int nvim_decor_range_get_virt_pos_kind(void *range_ptr)
+{
+  DecorRange *range = (DecorRange *)range_ptr;
+  return decor_virt_pos_kind(range);
+}
+
+/// Get the DecorVirtText pointer from a DecorRange (for kDecorKindVirtText).
+void *nvim_decor_range_get_virt_text(void *range_ptr)
+{
+  DecorRange *range = (DecorRange *)range_ptr;
+  if (range->kind == kDecorKindVirtText) {
+    return range->data.vt;
+  }
+  return NULL;
+}
+
+/// Get the hl_mode from a DecorVirtText.
+int nvim_decor_virt_text_get_hl_mode(void *vt_ptr)
+{
+  DecorVirtText *vt = (DecorVirtText *)vt_ptr;
+  return vt->hl_mode;
+}
+
+/// Get the pos from a DecorVirtText.
+int nvim_decor_virt_text_get_pos(void *vt_ptr)
+{
+  DecorVirtText *vt = (DecorVirtText *)vt_ptr;
+  return vt->pos;
+}
+
+/// Get the width from a DecorVirtText.
+int nvim_decor_virt_text_get_width(void *vt_ptr)
+{
+  DecorVirtText *vt = (DecorVirtText *)vt_ptr;
+  return vt->width;
+}
+
+/// Get the col from a DecorVirtText.
+int nvim_decor_virt_text_get_col(void *vt_ptr)
+{
+  DecorVirtText *vt = (DecorVirtText *)vt_ptr;
+  return vt->col;
+}
+
+/// Get the flags from a DecorVirtText.
+int nvim_decor_virt_text_get_flags(void *vt_ptr)
+{
+  DecorVirtText *vt = (DecorVirtText *)vt_ptr;
+  return vt->flags;
+}
+
+/// Get the number of chunks in a VirtText.
+size_t nvim_decor_virt_text_get_chunk_count(void *vt_ptr)
+{
+  DecorVirtText *vt = (DecorVirtText *)vt_ptr;
+  return kv_size(vt->data.virt_text);
+}
+
+/// Get a chunk text from a VirtText by index.
+const char *nvim_decor_virt_text_get_chunk_text(void *vt_ptr, size_t idx)
+{
+  DecorVirtText *vt = (DecorVirtText *)vt_ptr;
+  if (idx >= kv_size(vt->data.virt_text)) {
+    return NULL;
+  }
+  return kv_A(vt->data.virt_text, idx).text;
+}
+
+/// Get a chunk hl_id from a VirtText by index.
+int nvim_decor_virt_text_get_chunk_hl_id(void *vt_ptr, size_t idx)
+{
+  DecorVirtText *vt = (DecorVirtText *)vt_ptr;
+  if (idx >= kv_size(vt->data.virt_text)) {
+    return 0;
+  }
+  return kv_A(vt->data.virt_text, idx).hl_id;
+}

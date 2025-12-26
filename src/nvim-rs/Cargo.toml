@@ -23,6 +23,7 @@ nvim-charset = { path = "charset" }
 nvim-cmdline = { path = "cmdline" }
 nvim-cmdhist = { path = "cmdhist" }
 nvim-cursor-shape = { path = "cursor_shape" }
+nvim-decoration = { path = "decoration" }
 nvim-diff = { path = "diff" }
 nvim-drawline = { path = "drawline" }
 nvim-drawscreen = { path = "drawscreen" }

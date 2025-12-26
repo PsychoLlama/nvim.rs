@@ -18,6 +18,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | collections  | Data structures (garray, hashtab)                  |
 | context      | Context stack management                           |
 | cursor_shape | Cursor mode/shape queries                          |
+| decoration   | Decoration/virtual text system, DecorState access  |
 | diff         | Diffopt flag queries                               |
 | drawline     | Line drawing and rendering helpers                 |
 | drawscreen   | Window separator drawing, connector functions      |
@@ -149,3 +150,59 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | `os_can_exe` | PATH searching with helper functions |
 | `os_mkdir_recurse` | Uses xmalloc, path helpers |
 | `os_readv` | Uses struct iovec (vectored I/O) |
+
+## Recent Progress: Rendering System Migration
+
+### drawline.c Migrated Functions
+
+- `advance_color_col` - Color column pointer advancement (rs_advance_color_col)
+- `draw_col_fill` - Fill column with character (rs_draw_col_fill)
+- `use_cursor_line_highlight` - Cursorline highlight check (rs_use_cursor_line_highlight)
+- `draw_foldcolumn` - Foldcolumn setup (rs_draw_foldcolumn)
+- `fill_foldcolumn` - Foldcolumn filling (rs_fill_foldcolumn)
+
+### drawline.c Accessor Functions (for Rust access to winlinevars_T)
+
+Added ~30 accessor functions for winlinevars_T fields:
+- `nvim_wlv_get/set_vcol`, `nvim_wlv_get/set_col`, `nvim_wlv_get/set_off`
+- `nvim_wlv_get/set_n_extra`, `nvim_wlv_get/set_p_extra`, `nvim_wlv_get/set_sc_extra`
+- `nvim_wlv_get/set_char_attr`, `nvim_wlv_get/set_n_attr`, `nvim_wlv_get/set_extra_attr`
+- `nvim_wlv_get/set_color_cols`, `nvim_wlv_get/set_line_attr`
+- And more for virtual text, skip cells, boguscols, etc.
+
+### decoration.c Accessor Functions (for Rust access to DecorState)
+
+Added ~25 accessor functions for decoration system:
+
+**DecorState accessors:**
+- `nvim_get_decor_state` - Get global decor_state
+- `nvim_decor_state_get/set_eol_col`, `nvim_decor_state_get_row`
+- `nvim_decor_state_get_current_end`, `nvim_decor_state_get_current`
+- `nvim_decor_state_get_conceal`, `nvim_decor_state_get_conceal_char`
+- `nvim_decor_state_get_win`, `nvim_decor_state_get_range`
+
+**DecorRange accessors:**
+- `nvim_decor_range_get_start_row/col`, `nvim_decor_range_get_end_row/col`
+- `nvim_decor_range_get/set_draw_col`, `nvim_decor_range_get_kind`
+- `nvim_decor_range_has_virt_pos`, `nvim_decor_range_get_virt_pos_kind`
+- `nvim_decor_range_get_virt_text`
+
+**DecorVirtText accessors:**
+- `nvim_decor_virt_text_get_hl_mode`, `nvim_decor_virt_text_get_pos`
+- `nvim_decor_virt_text_get_width`, `nvim_decor_virt_text_get_flags`
+- `nvim_decor_virt_text_get_chunk_count/text/hl_id`
+
+### Rendering Functions Pending
+
+**drawline.c:**
+- `line_putchar` - UTF-8 char to screen char (needs utfc_ptr2schar)
+- `draw_virt_text` - Virtual text positioning loop (complex state access)
+- `draw_virt_text_item` - Individual virtual text chunk rendering
+
+**drawscreen.c:**
+- `showmode` - Mode indicator display (message system integration)
+- `update_screen` - Screen orchestration (large, many side effects)
+
+**statusline.c:**
+- `win_redr_status` - Status line redraw
+- `draw_tabline` - Tab line rendering

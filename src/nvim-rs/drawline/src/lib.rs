@@ -629,6 +629,47 @@ fn draw_lnum_col_impl(wp: WinHandle, wlv: WlvHandle) {
     }
 }
 
+// New WLV accessor functions
+extern "C" {
+    fn nvim_wlv_get_color_cols(wlv: WlvHandle) -> *mut c_int;
+    fn nvim_wlv_set_color_cols(wlv: WlvHandle, val: *mut c_int);
+    fn nvim_wlv_get_vcol(wlv: WlvHandle) -> ColnrT;
+    fn nvim_wlv_set_vcol(wlv: WlvHandle, val: ColnrT);
+    fn nvim_wlv_get_vcol_off_co(wlv: WlvHandle) -> c_int;
+    fn nvim_wlv_get_col(wlv: WlvHandle) -> c_int;
+    fn nvim_wlv_set_col(wlv: WlvHandle, val: c_int);
+    fn nvim_wlv_get_boguscols(wlv: WlvHandle) -> c_int;
+    fn nvim_wlv_set_boguscols(wlv: WlvHandle, val: c_int);
+    fn nvim_wlv_get_old_boguscols(wlv: WlvHandle) -> c_int;
+    fn nvim_wlv_set_old_boguscols(wlv: WlvHandle, val: c_int);
+    fn nvim_wlv_get_cul_attr(wlv: WlvHandle) -> c_int;
+    fn nvim_wlv_set_cul_attr(wlv: WlvHandle, val: c_int);
+    fn nvim_wlv_get_line_attr(wlv: WlvHandle) -> c_int;
+    fn nvim_wlv_set_line_attr(wlv: WlvHandle, val: c_int);
+    fn nvim_wlv_get_line_attr_lowprio(wlv: WlvHandle) -> c_int;
+    fn nvim_wlv_set_line_attr_lowprio(wlv: WlvHandle, val: c_int);
+}
+
+/// Advance wlv->color_cols past the current vcol.
+fn advance_color_col_impl(wlv: WlvHandle, vcol: c_int) {
+    unsafe {
+        let mut color_cols = nvim_wlv_get_color_cols(wlv);
+        if color_cols.is_null() {
+            return;
+        }
+
+        while *color_cols >= 0 && vcol > *color_cols {
+            color_cols = color_cols.add(1);
+        }
+
+        if *color_cols < 0 {
+            nvim_wlv_set_color_cols(wlv, std::ptr::null_mut());
+        } else {
+            nvim_wlv_set_color_cols(wlv, color_cols);
+        }
+    }
+}
+
 // ============================================================================
 // FFI exports
 // ============================================================================
@@ -747,6 +788,12 @@ pub extern "C" fn rs_draw_sign(nrcol: bool, wp: WinHandle, wlv: WlvHandle, sign_
 #[no_mangle]
 pub extern "C" fn rs_draw_lnum_col(wp: WinHandle, wlv: WlvHandle) {
     draw_lnum_col_impl(wp, wlv);
+}
+
+/// Advance color_cols past current vcol.
+#[no_mangle]
+pub extern "C" fn rs_advance_color_col(wlv: WlvHandle, vcol: c_int) {
+    advance_color_col_impl(wlv, vcol);
 }
 
 #[cfg(test)]
