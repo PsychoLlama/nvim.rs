@@ -111,6 +111,8 @@ extern win_T *rs_lastwin_nofloating(void);
 extern win_T *rs_frame2win(frame_T *frp);
 extern int rs_frame_minheight(frame_T *topfrp, win_T *next_curwin);
 extern int rs_frame_minwidth(frame_T *topfrp, win_T *next_curwin);
+extern int rs_win_comp_pos(void);
+extern void rs_frame_comp_pos(frame_T *topfrp, int *row, int *col);
 
 // Feature flag for Rust window layout functions
 #define USE_RUST_WINDOW_LAYOUT 1
@@ -718,6 +720,42 @@ int nvim_win_get_winrow(win_T *wp)
 int nvim_win_get_wincol(win_T *wp)
 {
   return wp->w_wincol;
+}
+
+/// Set the w_winrow field of a window.
+void nvim_win_set_winrow(win_T *wp, int val)
+{
+  wp->w_winrow = val;
+}
+
+/// Set the w_wincol field of a window.
+void nvim_win_set_wincol(win_T *wp, int val)
+{
+  wp->w_wincol = val;
+}
+
+/// Set the w_redr_status field of a window.
+void nvim_win_set_redr_status(win_T *wp, int val)
+{
+  wp->w_redr_status = val;
+}
+
+/// Set the w_pos_changed field of a window.
+void nvim_win_set_pos_changed(win_T *wp, int val)
+{
+  wp->w_pos_changed = val;
+}
+
+/// Get the w_config.relative field from a window.
+int nvim_win_get_config_relative(win_T *wp)
+{
+  return (int)wp->w_config.relative;
+}
+
+/// Get the topframe global.
+frame_T *nvim_get_topframe(void)
+{
+  return topframe;
 }
 
 /// Get the w_width field from a window (internal accessor).
@@ -6622,6 +6660,9 @@ void win_size_restore(garray_T *gap)
 // Returns the row just after the last window and global statusline (if there is one).
 int win_comp_pos(void)
 {
+#ifdef USE_RUST_WINDOW_LAYOUT
+  return rs_win_comp_pos();
+#else
   int row = tabline_height();
   int col = 0;
 
@@ -6635,6 +6676,7 @@ int win_comp_pos(void)
   }
 
   return row + global_stl_height();
+#endif
 }
 
 // Update the position of the windows in frame "topfrp", using the width and
@@ -6643,6 +6685,9 @@ int win_comp_pos(void)
 // to the bottom-right position plus one.
 static void frame_comp_pos(frame_T *topfrp, int *row, int *col)
 {
+#ifdef USE_RUST_WINDOW_LAYOUT
+  rs_frame_comp_pos(topfrp, row, col);
+#else
   win_T *wp = topfrp->fr_win;
   if (wp != NULL) {
     if (wp->w_winrow != *row
@@ -6670,6 +6715,7 @@ static void frame_comp_pos(frame_T *topfrp, int *row, int *col)
       frame_comp_pos(frp, row, col);
     }
   }
+#endif
 }
 
 // Set current window height and take care of repositioning other windows to

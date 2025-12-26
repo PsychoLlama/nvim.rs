@@ -971,6 +971,46 @@ extern "C" {
 
     /// Get the global `p_wmw` (winminwidth) option value.
     fn nvim_get_p_wmw() -> i64;
+
+    // Accessors for win_comp_pos/frame_comp_pos
+    /// Set the w_winrow field of a window.
+    fn nvim_win_set_winrow(wp: WinHandle, val: c_int);
+
+    /// Set the w_wincol field of a window.
+    fn nvim_win_set_wincol(wp: WinHandle, val: c_int);
+
+    /// Set the w_redr_status field of a window.
+    fn nvim_win_set_redr_status(wp: WinHandle, val: c_int);
+
+    /// Set the w_pos_changed field of a window.
+    fn nvim_win_set_pos_changed(wp: WinHandle, val: c_int);
+
+    /// Get the w_config.relative field from a window.
+    fn nvim_win_get_config_relative(wp: WinHandle) -> c_int;
+
+    /// Get the w_winrow field from a window.
+    fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
+
+    /// Get the w_wincol field from a window.
+    fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
+
+    /// Get the w_width field from a window.
+    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
+
+    /// Get the w_height field from a window.
+    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
+
+    /// Get the topframe global.
+    fn nvim_get_topframe() -> *mut Frame;
+
+    /// Get the tabline height.
+    fn tabline_height() -> c_int;
+
+    /// Get the global statusline height.
+    fn global_stl_height() -> c_int;
+
+    /// Call redraw_later from C.
+    fn redraw_later(wp: WinHandle, redraw_type: c_int);
 }
 
 /// Get the last window ID assigned.
@@ -1198,6 +1238,125 @@ fn frame_minwidth_impl(topfrp: *const Frame, next_curwin: WinHandle) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_frame_minwidth(topfrp: *const Frame, next_curwin: WinHandle) -> c_int {
     frame_minwidth_impl(topfrp, next_curwin)
+}
+
+// ============================================================================
+// Window position computation functions
+// ============================================================================
+
+/// UPD_NOT_VALID constant from screen.h
+const UPD_NOT_VALID: c_int = 40;
+
+/// kFloatRelativeWindow constant from window.h
+const K_FLOAT_RELATIVE_WINDOW: c_int = 2;
+
+/// Update the position of the windows in a frame tree.
+///
+/// This is the Rust equivalent of `frame_comp_pos()` in window.c.
+/// Updates `*row` and `*col` from the top-left to the bottom-right position plus one.
+fn frame_comp_pos_impl(topfrp: *mut Frame, row: &mut c_int, col: &mut c_int) {
+    if topfrp.is_null() {
+        return;
+    }
+
+    // SAFETY: We check for null above
+    unsafe {
+        let frame = &*topfrp;
+        let wp = frame.fr_win;
+
+        if wp.is_null() {
+            // Non-leaf frame - iterate through children
+            let startrow = *row;
+            let startcol = *col;
+
+            let mut child = frame.fr_child;
+            while !child.is_null() {
+                if frame.is_row() {
+                    *row = startrow; // all frames are at the same row
+                } else {
+                    *col = startcol; // all frames are at the same col
+                }
+                frame_comp_pos_impl(child, row, col);
+                child = (*child).fr_next;
+            }
+        } else {
+            // Leaf frame with a window
+            let old_row = nvim_win_get_winrow(wp);
+            let old_col = nvim_win_get_wincol(wp);
+
+            if old_row != *row || old_col != *col {
+                // Position changed, update and redraw
+                nvim_win_set_winrow(wp, *row);
+                nvim_win_set_wincol(wp, *col);
+                redraw_later(wp, UPD_NOT_VALID);
+                nvim_win_set_redr_status(wp, 1);
+                nvim_win_set_pos_changed(wp, 1);
+            }
+
+            // Calculate height adjustment
+            let h = nvim_win_get_w_height(wp)
+                + nvim_win_get_hsep_height(wp)
+                + nvim_win_get_status_height(wp);
+            *row += if h > frame.fr_height {
+                frame.fr_height
+            } else {
+                h
+            };
+            *col += nvim_win_get_w_width(wp) + nvim_win_get_vsep_width(wp);
+        }
+    }
+}
+
+/// FFI wrapper for `frame_comp_pos`.
+///
+/// Updates window positions in a frame tree.
+///
+/// # Safety
+/// `row` and `col` must be valid, non-null pointers to mutable c_int values.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn rs_frame_comp_pos(topfrp: *mut Frame, row: *mut c_int, col: *mut c_int) {
+    if row.is_null() || col.is_null() {
+        return;
+    }
+    // SAFETY: We check for null above, and caller ensures row and col are valid pointers
+    unsafe {
+        frame_comp_pos_impl(topfrp, &mut *row, &mut *col);
+    }
+}
+
+/// Update the position for all windows, using the width and height of the frames.
+///
+/// This is the Rust equivalent of `win_comp_pos()` in window.c.
+/// Returns the row just after the last window and global statusline (if there is one).
+fn win_comp_pos_impl() -> c_int {
+    // SAFETY: All FFI functions are safe to call
+    unsafe {
+        let mut row = tabline_height();
+        let mut col = 0;
+
+        let topframe = nvim_get_topframe();
+        frame_comp_pos_impl(topframe, &mut row, &mut col);
+
+        // Check floating windows anchored to moved windows
+        let mut wp = nvim_get_lastwin();
+        while !wp.is_null() && nvim_win_get_floating(wp) != 0 {
+            if nvim_win_get_config_relative(wp) == K_FLOAT_RELATIVE_WINDOW {
+                nvim_win_set_pos_changed(wp, 1);
+            }
+            wp = nvim_win_get_prev(wp);
+        }
+
+        row + global_stl_height()
+    }
+}
+
+/// FFI wrapper for `win_comp_pos`.
+///
+/// Updates the position for all windows.
+#[no_mangle]
+pub extern "C" fn rs_win_comp_pos() -> c_int {
+    win_comp_pos_impl()
 }
 
 #[cfg(test)]
