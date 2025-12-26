@@ -156,6 +156,7 @@ extern void rs_draw_col_buf(win_T *wp, winlinevars_T *wlv, const char *text, siz
                             int attr, const colnr_T *fold_vcol, bool inc_vcol);
 extern void rs_apply_cursorline_highlight(win_T *wp, winlinevars_T *wlv);
 extern void rs_set_line_attr_for_diff(win_T *wp, winlinevars_T *wlv);
+extern void rs_handle_breakindent(win_T *wp, winlinevars_T *wlv);
 
 // winlinevars_T accessor functions for Rust opaque handle pattern.
 // These use void* to avoid exposing the internal winlinevars_T type in headers.
@@ -884,52 +885,7 @@ static void draw_statuscol(win_T *wp, winlinevars_T *wlv, int virtnum, int col_r
 
 static void handle_breakindent(win_T *wp, winlinevars_T *wlv)
 {
-  // draw 'breakindent': indent wrapped text accordingly
-  // if wlv->need_showbreak is set, breakindent also applies
-  if (wp->w_p_bri && (wlv->row > wlv->startrow + wlv->filler_lines
-                      || wlv->need_showbreak)) {
-    int attr = 0;
-    if (wlv->diff_hlf != (hlf_T)0) {
-      attr = win_hl_attr(wp, (int)wlv->diff_hlf);
-    }
-    int num = get_breakindent_win(wp, ml_get_buf(wp->w_buffer, wlv->lnum));
-    if (wlv->row == wlv->startrow) {
-      num -= win_col_off2(wp);
-      if (wlv->n_extra < 0) {
-        num = 0;
-      }
-    }
-
-    colnr_T vcol_before = wlv->vcol;
-
-    for (int i = 0; i < num; i++) {
-      linebuf_char[wlv->off] = schar_from_ascii(' ');
-
-      advance_color_col(wlv, wlv->vcol);
-      int myattr = attr;
-      if (wlv->color_cols && wlv->vcol == *wlv->color_cols) {
-        myattr = hl_combine_attr(win_hl_attr(wp, HLF_MC), myattr);
-      }
-      linebuf_attr[wlv->off] = myattr;
-      linebuf_vcol[wlv->off] = wlv->vcol++;  // These are vcols, sorry I don't make the rules
-      wlv->off++;
-    }
-
-    // Correct start of highlighted area for 'breakindent',
-    if (wlv->fromcol >= vcol_before && wlv->fromcol < wlv->vcol) {
-      wlv->fromcol = wlv->vcol;
-    }
-
-    // Correct end of highlighted area for 'breakindent',
-    // required wen 'linebreak' is also set.
-    if (wlv->tocol == vcol_before) {
-      wlv->tocol = wlv->vcol;
-    }
-  }
-
-  if (wp->w_skipcol > 0 && wlv->startrow == 0 && wp->w_p_wrap && wp->w_briopt_sbr) {
-    wlv->need_showbreak = false;
-  }
+  rs_handle_breakindent(wp, wlv);
 }
 
 static void handle_showbreak_and_filler(win_T *wp, winlinevars_T *wlv)

@@ -763,6 +763,20 @@ extern "C" {
 
     // Highlight functions for set_line_attr_for_diff
     fn rs_hl_get_underline() -> c_int;
+
+    // handle_breakindent accessors
+    fn nvim_win_get_briopt_sbr(wp: WinHandle) -> bool;
+    fn nvim_get_breakindent_win_lnum(wp: WinHandle, lnum: LinenrT) -> c_int;
+
+    // fromcol/tocol accessors
+    fn nvim_wlv_get_fromcol(wlv: WlvHandle) -> c_int;
+    fn nvim_wlv_set_fromcol(wlv: WlvHandle, val: c_int);
+    fn nvim_wlv_get_tocol(wlv: WlvHandle) -> c_int;
+    fn nvim_wlv_set_tocol(wlv: WlvHandle, val: c_int);
+
+    // need_showbreak accessors
+    fn nvim_wlv_get_need_showbreak(wlv: WlvHandle) -> bool;
+    fn nvim_wlv_set_need_showbreak(wlv: WlvHandle, val: bool);
 }
 
 /// Advance wlv->color_cols past the current vcol.
@@ -977,6 +991,93 @@ unsafe fn set_line_attr_for_diff_impl(wp: WinHandle, wlv: WlvHandle) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_line_attr_for_diff(wp: WinHandle, wlv: WlvHandle) {
     set_line_attr_for_diff_impl(wp, wlv);
+}
+
+/// Handle breakindent: draw indent for wrapped text.
+///
+/// If need_showbreak is set, breakindent also applies.
+unsafe fn handle_breakindent_impl(wp: WinHandle, wlv: WlvHandle) {
+    let p_bri = nvim_win_get_p_bri(wp);
+    let row = nvim_wlv_get_row(wlv);
+    let startrow = nvim_wlv_get_startrow(wlv);
+    let filler_lines = nvim_wlv_get_filler_lines(wlv);
+    let need_showbreak = nvim_wlv_get_need_showbreak(wlv);
+
+    if p_bri != 0 && (row > startrow + filler_lines || need_showbreak) {
+        let mut attr = 0;
+        let diff_hlf = nvim_wlv_get_diff_hlf(wlv);
+        if diff_hlf != 0 {
+            attr = nvim_win_hl_attr(wp, diff_hlf);
+        }
+
+        let lnum = nvim_wlv_get_lnum(wlv);
+        let mut num = nvim_get_breakindent_win_lnum(wp, lnum);
+
+        if row == startrow {
+            num -= rs_win_col_off2(wp);
+            let n_extra = nvim_wlv_get_n_extra(wlv);
+            if n_extra < 0 {
+                num = 0;
+            }
+        }
+
+        let vcol_before = nvim_wlv_get_vcol(wlv);
+        let hlf_mc = nvim_get_hlf_mc();
+
+        let linebuf_char = nvim_get_linebuf_char();
+        let linebuf_attr = nvim_get_linebuf_attr();
+        let linebuf_vcol = nvim_get_linebuf_vcol();
+
+        let space_schar = rs_schar_from_char(c_int::from(b' '));
+
+        for _ in 0..num {
+            let off = nvim_wlv_get_off(wlv);
+            *linebuf_char.add(off as usize) = space_schar;
+
+            let vcol = nvim_wlv_get_vcol(wlv);
+            advance_color_col_impl(wlv, vcol);
+
+            let mut myattr = attr;
+            let color_cols = nvim_wlv_get_color_cols(wlv);
+            if !color_cols.is_null() && vcol == *color_cols {
+                myattr = hl_combine_attr(nvim_win_hl_attr(wp, hlf_mc), myattr);
+            }
+
+            *linebuf_attr.add(off as usize) = myattr;
+            *linebuf_vcol.add(off as usize) = vcol;
+            nvim_wlv_set_vcol(wlv, vcol + 1);
+            nvim_wlv_set_off(wlv, off + 1);
+        }
+
+        // Correct start of highlighted area for 'breakindent'
+        let fromcol = nvim_wlv_get_fromcol(wlv);
+        let vcol = nvim_wlv_get_vcol(wlv);
+        if fromcol >= vcol_before && fromcol < vcol {
+            nvim_wlv_set_fromcol(wlv, vcol);
+        }
+
+        // Correct end of highlighted area for 'breakindent'
+        let tocol = nvim_wlv_get_tocol(wlv);
+        if tocol == vcol_before {
+            nvim_wlv_set_tocol(wlv, vcol);
+        }
+    }
+
+    // Handle need_showbreak clearing
+    let skipcol = nvim_win_get_skipcol(wp);
+    let startrow = nvim_wlv_get_startrow(wlv);
+    let p_wrap = nvim_win_get_p_wrap(wp);
+    let briopt_sbr = nvim_win_get_briopt_sbr(wp);
+
+    if skipcol > 0 && startrow == 0 && p_wrap != 0 && briopt_sbr {
+        nvim_wlv_set_need_showbreak(wlv, false);
+    }
+}
+
+/// Handle breakindent (FFI export).
+#[no_mangle]
+pub unsafe extern "C" fn rs_handle_breakindent(wp: WinHandle, wlv: WlvHandle) {
+    handle_breakindent_impl(wp, wlv);
 }
 
 /// Fill cells with a character.

@@ -1106,6 +1106,12 @@ int nvim_win_get_p_rl(win_T *wp)
   return wp->w_p_rl;
 }
 
+/// Get the window's 'briopt' sbr flag.
+bool nvim_win_get_briopt_sbr(win_T *wp)
+{
+  return wp->w_briopt_sbr;
+}
+
 /// Get the highlight attribute for a window's highlight group.
 /// This wraps the inline win_hl_attr function for FFI.
 int nvim_win_hl_attr(win_T *wp, int hlf)

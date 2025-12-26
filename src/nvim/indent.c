@@ -779,6 +779,13 @@ int get_breakindent_win(win_T *wp, char *line)
   return bri;
 }
 
+/// Get breakindent for window and line number (accessor for Rust FFI).
+/// Combines get_breakindent_win with ml_get_buf for convenience.
+int nvim_get_breakindent_win_lnum(win_T *wp, linenr_T lnum)
+{
+  return get_breakindent_win(wp, ml_get_buf(wp->w_buffer, lnum));
+}
+
 // When extra == 0: Return true if the cursor is before or on the first
 // non-blank in the line.
 // When extra == 1: Return true if the cursor is before the first non-blank in
