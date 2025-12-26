@@ -829,11 +829,59 @@ int nvim_win_get_p_cuc(win_T *wp)
   return wp->w_p_cuc;
 }
 
+/// Get the window's cursorline line number (w_cursorline).
+linenr_T nvim_win_get_cursorline(win_T *wp)
+{
+  return wp->w_cursorline;
+}
+
+/// Get the window's cursorlineopt flags (w_p_culopt_flags).
+int nvim_win_get_p_culopt_flags(win_T *wp)
+{
+  return wp->w_p_culopt_flags;
+}
+
+/// Get the cursor line number for the window.
+linenr_T nvim_win_get_cursor_lnum(win_T *wp)
+{
+  return wp->w_cursor.lnum;
+}
+
+/// Get the window's topline.
+linenr_T nvim_win_get_topline(win_T *wp)
+{
+  return wp->w_topline;
+}
+
+/// Get the window's skipcol.
+colnr_T nvim_win_get_skipcol(win_T *wp)
+{
+  return wp->w_skipcol;
+}
+
+/// Get the window's 'breakindent' option.
+int nvim_win_get_p_bri(win_T *wp)
+{
+  return wp->w_p_bri;
+}
+
+/// Get the window's 'rightleft' option.
+int nvim_win_get_p_rl(win_T *wp)
+{
+  return wp->w_p_rl;
+}
+
 /// Get the highlight attribute for a window's highlight group.
 /// This wraps the inline win_hl_attr function for FFI.
 int nvim_win_hl_attr(win_T *wp, int hlf)
 {
   return win_hl_attr(wp, hlf);
+}
+
+/// Get the buffer associated with a window (for Rust FFI).
+buf_T *nvim_win_get_buffer(win_T *wp)
+{
+  return wp->w_buffer;
 }
 
 /// Check if UI has tabline extension.

@@ -136,6 +136,136 @@ typedef struct {
 extern schar_T rs_get_lcs_ext(win_T *wp);
 extern void rs_margin_columns_win(win_T *wp, int *left_col, int *right_col);
 extern int rs_get_rightmost_vcol(win_T *wp, const int *color_cols);
+extern bool rs_use_cursor_line_highlight(win_T *wp, linenr_T lnum);
+extern void rs_draw_col_fill(winlinevars_T *wlv, schar_T fillchar, int width, int attr);
+extern void rs_fill_foldcolumn(win_T *wp, foldinfo_T foldinfo, linenr_T lnum, int attr,
+                               int fdc, int *wlv_off, colnr_T *out_vcol, schar_T *out_buffer);
+extern void rs_draw_foldcolumn(win_T *wp, winlinevars_T *wlv);
+extern bool rs_use_cursor_line_nr(win_T *wp, winlinevars_T *wlv);
+extern int rs_get_line_number_attr(win_T *wp, winlinevars_T *wlv);
+extern void rs_draw_sign(bool nrcol, win_T *wp, winlinevars_T *wlv, int sign_idx);
+extern void rs_draw_lnum_col(win_T *wp, winlinevars_T *wlv);
+
+// winlinevars_T accessor functions for Rust opaque handle pattern.
+// These use void* to avoid exposing the internal winlinevars_T type in headers.
+
+/// Get the line number from wlv.
+linenr_T nvim_wlv_get_lnum(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->lnum;
+}
+
+/// Get the foldinfo from wlv.
+foldinfo_T nvim_wlv_get_foldinfo(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->foldinfo;
+}
+
+/// Get the row from wlv.
+int nvim_wlv_get_row(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->row;
+}
+
+/// Get the startrow from wlv.
+int nvim_wlv_get_startrow(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->startrow;
+}
+
+/// Get the off from wlv.
+int nvim_wlv_get_off(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->off;
+}
+
+/// Set the off in wlv.
+void nvim_wlv_set_off(void *wlv_ptr, int val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->off = val;
+}
+
+/// Get the filler_lines from wlv.
+int nvim_wlv_get_filler_lines(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->filler_lines;
+}
+
+/// Get the filler_todo from wlv.
+int nvim_wlv_get_filler_todo(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->filler_todo;
+}
+
+/// Get the sign_num_attr from wlv.
+int nvim_wlv_get_sign_num_attr(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->sign_num_attr;
+}
+
+/// Get the sign_cul_attr from wlv.
+int nvim_wlv_get_sign_cul_attr(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->sign_cul_attr;
+}
+
+/// Get the prev_num_attr from wlv.
+int nvim_wlv_get_prev_num_attr(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->prev_num_attr;
+}
+
+/// Set the prev_num_attr in wlv.
+void nvim_wlv_set_prev_num_attr(void *wlv_ptr, int val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->prev_num_attr = val;
+}
+
+/// Get the n_virt_lines from wlv.
+int nvim_wlv_get_n_virt_lines(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->n_virt_lines;
+}
+
+/// Get the n_virt_below from wlv.
+int nvim_wlv_get_n_virt_below(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->n_virt_below;
+}
+
+/// Get a sign attribute text character at index.
+schar_T nvim_wlv_get_sattr_text(void *wlv_ptr, int sign_idx, int char_idx)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  if (sign_idx < 0 || sign_idx >= SIGN_SHOW_MAX || char_idx < 0 || char_idx >= 2) {
+    return 0;
+  }
+  return wlv->sattrs[sign_idx].text[char_idx];
+}
+
+/// Get a sign attribute highlight ID.
+int nvim_wlv_get_sattr_hl_id(void *wlv_ptr, int sign_idx)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  if (sign_idx < 0 || sign_idx >= SIGN_SHOW_MAX) {
+    return 0;
+  }
+  return wlv->sattrs[sign_idx].hl_id;
+}
 
 static char *extra_buf = NULL;
 static size_t extra_buf_size = 0;
@@ -455,29 +585,19 @@ static void draw_col_buf(win_T *wp, winlinevars_T *wlv, const char *text, size_t
 
 static void draw_col_fill(winlinevars_T *wlv, schar_T fillchar, int width, int attr)
 {
-  for (int i = 0; i < width; i++) {
-    linebuf_char[wlv->off] = fillchar;
-    linebuf_attr[wlv->off] = attr;
-    wlv->off++;
-  }
+  rs_draw_col_fill(wlv, fillchar, width, attr);
 }
 
 /// Return true if CursorLineSign highlight is to be used.
 bool use_cursor_line_highlight(win_T *wp, linenr_T lnum)
 {
-  return wp->w_p_cul
-         && lnum == wp->w_cursorline
-         && (wp->w_p_culopt_flags & kOptCuloptFlagNumber);
+  return rs_use_cursor_line_highlight(wp, lnum);
 }
 
 /// Setup for drawing the 'foldcolumn', if there is one.
 static void draw_foldcolumn(win_T *wp, winlinevars_T *wlv)
 {
-  int fdc = compute_foldcolumn(wp, 0);
-  if (fdc > 0) {
-    int attr = win_hl_attr(wp, use_cursor_line_highlight(wp, wlv->lnum) ? HLF_CLF : HLF_FC);
-    fill_foldcolumn(wp, wlv->foldinfo, wlv->lnum, attr, fdc, &wlv->off, NULL, NULL);
-  }
+  rs_draw_foldcolumn(wp, wlv);
 }
 
 /// Draw the foldcolumn or fill "out_buffer". Assume monocell characters.
@@ -489,42 +609,7 @@ static void draw_foldcolumn(win_T *wp, winlinevars_T *wlv)
 void fill_foldcolumn(win_T *wp, foldinfo_T foldinfo, linenr_T lnum, int attr, int fdc, int *wlv_off,
                      colnr_T *out_vcol, schar_T *out_buffer)
 {
-  bool closed = foldinfo.fi_level != 0 && foldinfo.fi_lines > 0;
-  int level = foldinfo.fi_level;
-
-  // If the column is too narrow, we start at the lowest level that
-  // fits and use numbers to indicate the depth.
-  int first_level = MAX(level - fdc - closed + 1, 1);
-  int closedcol = MIN(fdc, level);
-
-  for (int i = 0; i < fdc; i++) {
-    schar_T symbol = 0;
-    if (i >= level) {
-      symbol = schar_from_ascii(' ');
-    } else if (i == closedcol - 1 && closed) {
-      symbol = wp->w_p_fcs_chars.foldclosed;
-    } else if (foldinfo.fi_lnum == lnum && first_level + i >= foldinfo.fi_low_level) {
-      symbol = wp->w_p_fcs_chars.foldopen;
-    } else if (first_level == 1) {
-      symbol = wp->w_p_fcs_chars.foldsep;
-    } else if (wp->w_p_fcs_chars.foldinner != NUL) {
-      symbol = wp->w_p_fcs_chars.foldinner;
-    } else if (first_level + i <= 9) {
-      symbol = schar_from_ascii('0' + first_level + i);
-    } else {
-      symbol = schar_from_ascii('>');
-    }
-
-    int vcol = i >= level ? -1 : (i == closedcol - 1 && closed) ? -2 : -3;
-    if (out_buffer) {
-      out_vcol[i] = vcol;
-      out_buffer[i] = symbol;
-    } else {
-      linebuf_vcol[*wlv_off] = vcol;
-      linebuf_attr[*wlv_off] = attr;
-      linebuf_char[(*wlv_off)++] = symbol;
-    }
-  }
+  rs_fill_foldcolumn(wp, foldinfo, lnum, attr, fdc, wlv_off, out_vcol, out_buffer);
 }
 
 /// Get information needed to display the sign in line "wlv->lnum" in window "wp".
@@ -533,139 +618,27 @@ void fill_foldcolumn(win_T *wp, foldinfo_T foldinfo, linenr_T lnum, int attr, in
 /// sign, draw blank cells instead.
 static void draw_sign(bool nrcol, win_T *wp, winlinevars_T *wlv, int sign_idx)
 {
-  SignTextAttrs sattr = wlv->sattrs[sign_idx];
-  int scl_attr = win_hl_attr(wp, use_cursor_line_highlight(wp, wlv->lnum) ? HLF_CLS : HLF_SC);
-
-  if (sattr.text[0] && wlv->row == wlv->startrow + wlv->filler_lines && wlv->filler_todo <= 0) {
-    int fill = nrcol ? number_width(wp) + 1 : SIGN_WIDTH;
-    int attr = wlv->sign_cul_attr ? wlv->sign_cul_attr : sattr.hl_id ? syn_id2attr(sattr.hl_id) : 0;
-    attr = hl_combine_attr(scl_attr, attr);
-    draw_col_fill(wlv, schar_from_ascii(' '), fill, attr);
-    int sign_pos = wlv->off - SIGN_WIDTH - (int)nrcol;
-    assert(sign_pos >= 0);
-    linebuf_char[sign_pos] = sattr.text[0];
-    linebuf_char[sign_pos + 1] = sattr.text[1];
-  } else {
-    assert(!nrcol);  // handled in draw_lnum_col()
-    draw_col_fill(wlv, schar_from_ascii(' '), SIGN_WIDTH, scl_attr);
-  }
-}
-
-static inline void get_line_number_str(win_T *wp, linenr_T lnum, char *buf, size_t buf_len)
-{
-  linenr_T num;
-  char *fmt = "%*" PRIdLINENR " ";
-
-  if (wp->w_p_nu && !wp->w_p_rnu) {
-    // 'number' + 'norelativenumber'
-    num = lnum;
-  } else {
-    // 'relativenumber', don't use negative numbers
-    num = abs(get_cursor_rel_lnum(wp, lnum));
-    if (num == 0 && wp->w_p_nu && wp->w_p_rnu) {
-      // 'number' + 'relativenumber'
-      num = lnum;
-      fmt = "%-*" PRIdLINENR " ";
-    }
-  }
-
-  snprintf(buf, buf_len, fmt, number_width(wp), num);
+  rs_draw_sign(nrcol, wp, wlv, sign_idx);
 }
 
 /// Return true if CursorLineNr highlight is to be used for the number column.
-/// - 'cursorline' must be set
-/// - "wlv->lnum" must be the cursor line
-/// - 'cursorlineopt' has "number"
-/// - don't highlight filler lines (when in diff mode)
-/// - When line is wrapped and 'cursorlineopt' does not have "line", only highlight the line number
-///   itself on the first screenline of the wrapped line, otherwise highlight the number column of
-///   all screenlines of the wrapped line.
 static bool use_cursor_line_nr(win_T *wp, winlinevars_T *wlv)
 {
-  return wp->w_p_cul
-         && wlv->lnum == wp->w_cursorline
-         && (wp->w_p_culopt_flags & kOptCuloptFlagNumber)
-         && (wlv->row == wlv->startrow + wlv->filler_lines
-             || (wlv->row > wlv->startrow + wlv->filler_lines
-                 && (wp->w_p_culopt_flags & kOptCuloptFlagLine)));
+  return rs_use_cursor_line_nr(wp, wlv);
 }
 
 /// Return line number attribute, combining the appropriate LineNr* highlight
 /// with the highest priority sign numhl highlight, if any.
 static int get_line_number_attr(win_T *wp, winlinevars_T *wlv)
 {
-  int numhl_attr = wlv->sign_num_attr;
-
-  // Get previous sign numhl for virt_lines belonging to the previous line.
-  if ((wlv->n_virt_lines - wlv->filler_todo) < wlv->n_virt_below) {
-    if (wlv->prev_num_attr == -1) {
-      decor_redraw_signs(wp, wp->w_buffer, wlv->lnum - 2, NULL, NULL, NULL, &wlv->prev_num_attr);
-      if (wlv->prev_num_attr > 0) {
-        wlv->prev_num_attr = syn_id2attr(wlv->prev_num_attr);
-      }
-    }
-    numhl_attr = wlv->prev_num_attr;
-  }
-
-  if (use_cursor_line_nr(wp, wlv)) {
-    // TODO(vim): Can we use CursorLine instead of CursorLineNr
-    // when CursorLineNr isn't set?
-    return hl_combine_attr(win_hl_attr(wp, HLF_CLN), numhl_attr);
-  }
-
-  if (wp->w_p_rnu) {
-    if (wlv->lnum < wp->w_cursor.lnum) {
-      // Use LineNrAbove
-      return hl_combine_attr(win_hl_attr(wp, HLF_LNA), numhl_attr);
-    }
-    if (wlv->lnum > wp->w_cursor.lnum) {
-      // Use LineNrBelow
-      return hl_combine_attr(win_hl_attr(wp, HLF_LNB), numhl_attr);
-    }
-  }
-
-  return hl_combine_attr(win_hl_attr(wp, HLF_N), numhl_attr);
+  return rs_get_line_number_attr(wp, wlv);
 }
 
 /// Display the absolute or relative line number.  After the first row fill with
 /// blanks when the 'n' flag isn't in 'cpo'.
 static void draw_lnum_col(win_T *wp, winlinevars_T *wlv)
 {
-  bool has_cpo_n = vim_strchr(p_cpo, CPO_NUMCOL) != NULL;
-
-  if ((wp->w_p_nu || wp->w_p_rnu)
-      && (wlv->row == wlv->startrow + wlv->filler_lines || !has_cpo_n)
-      // there is no line number in a wrapped line when "n" is in
-      // 'cpoptions', but 'breakindent' assumes it anyway.
-      && !((has_cpo_n && !wp->w_p_bri) && wp->w_skipcol > 0 && wlv->lnum == wp->w_topline)) {
-    // If 'signcolumn' is set to 'number' and a sign is present in "lnum",
-    // then display the sign instead of the line number.
-    if (wp->w_minscwidth == SCL_NUM && wlv->sattrs[0].text[0]
-        && wlv->row == wlv->startrow + wlv->filler_lines && wlv->filler_todo <= 0) {
-      draw_sign(true, wp, wlv, 0);
-    } else {
-      // Draw the line number (empty space after wrapping).
-      int width = number_width(wp) + 1;
-      int attr = get_line_number_attr(wp, wlv);
-      if (wlv->row == wlv->startrow + wlv->filler_lines
-          && (wp->w_skipcol == 0 || wlv->row > 0 || (wp->w_p_nu && wp->w_p_rnu))) {
-        char buf[32];
-        get_line_number_str(wp, wlv->lnum, buf, sizeof(buf));
-        if (wp->w_skipcol > 0 && wlv->startrow == 0) {
-          for (char *c = buf; *c == ' '; c++) {
-            *c = '-';
-          }
-        }
-        if (wp->w_p_rl) {  // reverse line numbers
-          char *num = skipwhite(buf);
-          rl_mirror_ascii(num, skiptowhite(num));
-        }
-        draw_col_buf(wp, wlv, buf, (size_t)width, attr, NULL, false);
-      } else {
-        draw_col_fill(wlv, schar_from_ascii(' '), width, attr);
-      }
-    }
-  }
+  rs_draw_lnum_col(wp, wlv);
 }
 
 /// Build and draw the 'statuscolumn' string for line "lnum" in window "wp".

@@ -19,7 +19,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | context      | Context stack management                           |
 | cursor_shape | Cursor mode/shape queries                          |
 | diff         | Diffopt flag queries                               |
-| drawline     | Line drawing helpers (lcs_ext, margin_columns, foldcolumn, rightmost_vcol) |
+| drawline     | Line drawing (lcs_ext, margin_columns, foldcolumn, rightmost_vcol, draw_col_fill, draw_foldcolumn, draw_sign, draw_lnum_col, cursor_line_highlight, line_number_attr) |
 | drawscreen   | Window separator drawing, connector functions      |
 | edit         | Edit mode state queries                            |
 | encoding     | Base64, SHA-256                                    |
