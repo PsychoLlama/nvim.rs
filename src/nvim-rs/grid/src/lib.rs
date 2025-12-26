@@ -884,6 +884,65 @@ fn utfc_ptrlen2schar_impl(bytes: &[u8]) -> (ScharT, c_int) {
     (schar, cells)
 }
 
+/// Convert a UTF-8 string to an schar_T.
+///
+/// This implements the C `utfc_ptr2schar` function. Returns the schar_T value
+/// and also sets `*firstc` to the first codepoint of the string.
+///
+/// # Safety
+/// - `p` must be a valid pointer to a NUL-terminated UTF-8 string
+/// - `firstc` must be a valid pointer to a c_int
+#[no_mangle]
+pub unsafe extern "C" fn rs_utfc_ptr2schar(p: *const c_char, firstc: *mut c_int) -> ScharT {
+    if p.is_null() || firstc.is_null() {
+        if !firstc.is_null() {
+            *firstc = 0;
+        }
+        return 0;
+    }
+
+    // Find string length (up to reasonable limit)
+    let mut len = 0usize;
+    while len < MAX_SCHAR_SIZE + 10 && *p.add(len) != 0 {
+        len += 1;
+    }
+
+    if len == 0 {
+        *firstc = 0;
+        return 0;
+    }
+
+    let bytes = std::slice::from_raw_parts(p as *const u8, len);
+
+    // Get first codepoint
+    let c = nvim_mbyte::utf_ptr2char(bytes);
+    *firstc = c;
+
+    // Invalid sequence
+    if len == 1 && bytes[0] >= 0x80 {
+        return 0;
+    }
+
+    let first_compose = nvim_mbyte::utf_iscomposing_first(c);
+    let maxlen = MAX_SCHAR_SIZE - 1 - if first_compose { 1 } else { 0 };
+    let actual_len = nvim_mbyte::utfc_ptr2len_len(bytes, maxlen);
+
+    // Invalid sequence (length 1 but not ASCII)
+    if actual_len == 1 && bytes[0] >= 0x80 {
+        return 0;
+    }
+
+    // Create schar, prepending space if first char is a composing character
+    if first_compose {
+        let mut buf = [0u8; MAX_SCHAR_SIZE];
+        buf[0] = b' ';
+        buf[1..1 + actual_len].copy_from_slice(&bytes[..actual_len]);
+        schar_from_buf_impl(&buf[..actual_len + 1])
+    } else {
+        schar_from_buf_impl(&bytes[..actual_len])
+    }
+}
+
 /// Set the clear range for the current line.
 ///
 /// # Safety

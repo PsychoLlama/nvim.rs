@@ -57,6 +57,19 @@ impl DecorVirtTextHandle {
     }
 }
 
+/// Opaque handle to VirtText (kvec_t(VirtTextChunk)).
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct VirtTextHandle(*mut c_void);
+
+impl VirtTextHandle {
+    /// Check if the handle is null.
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
 /// Opaque handle to window (win_T).
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy)]
@@ -201,6 +214,21 @@ extern "C" {
     fn nvim_decor_virt_text_get_chunk_count(vt: DecorVirtTextHandle) -> usize;
     fn nvim_decor_virt_text_get_chunk_text(vt: DecorVirtTextHandle, idx: usize) -> *const c_char;
     fn nvim_decor_virt_text_get_chunk_hl_id(vt: DecorVirtTextHandle, idx: usize) -> c_int;
+    fn nvim_decor_virt_text_get_virt_text(vt: DecorVirtTextHandle) -> VirtTextHandle;
+
+    // VirtText iteration
+    fn nvim_next_virt_text_chunk(
+        vt: VirtTextHandle,
+        pos: *mut usize,
+        attr: *mut c_int,
+    ) -> *const c_char;
+
+    // UIWatched accessors
+    fn nvim_decor_range_get_ui_ns_id(range: DecorRangeHandle) -> u64;
+    fn nvim_decor_range_get_ui_mark_id(range: DecorRangeHandle) -> u32;
+
+    // win_extmark_arr push
+    fn nvim_win_extmark_push(ns_id: u64, mark_id: u64, win_row: c_int, win_col: c_int);
 }
 
 // ============================================================================
@@ -389,6 +417,57 @@ pub fn virt_text_chunk_text(vt: DecorVirtTextHandle, idx: usize) -> Option<*cons
 /// Get a chunk hl_id from a VirtText by index.
 pub fn virt_text_chunk_hl_id(vt: DecorVirtTextHandle, idx: usize) -> c_int {
     unsafe { nvim_decor_virt_text_get_chunk_hl_id(vt, idx) }
+}
+
+/// Get the VirtText handle from a DecorVirtText.
+pub fn virt_text_get_virt_text(vt: DecorVirtTextHandle) -> VirtTextHandle {
+    unsafe { nvim_decor_virt_text_get_virt_text(vt) }
+}
+
+// ============================================================================
+// VirtText iteration wrapper functions
+// ============================================================================
+
+/// Iterator for VirtText chunks.
+/// Returns the next text chunk or None if no more chunks.
+/// Updates pos and attr through the C function.
+///
+/// # Safety
+/// pos and attr must be valid pointers.
+pub unsafe fn next_virt_text_chunk(
+    vt: VirtTextHandle,
+    pos: *mut usize,
+    attr: *mut c_int,
+) -> Option<*const c_char> {
+    let ptr = nvim_next_virt_text_chunk(vt, pos, attr);
+    if ptr.is_null() {
+        None
+    } else {
+        Some(ptr)
+    }
+}
+
+// ============================================================================
+// UIWatched accessor wrapper functions
+// ============================================================================
+
+/// Get the ns_id from a UIWatched DecorRange.
+pub fn decor_range_ui_ns_id(range: DecorRangeHandle) -> u64 {
+    unsafe { nvim_decor_range_get_ui_ns_id(range) }
+}
+
+/// Get the mark_id from a UIWatched DecorRange.
+pub fn decor_range_ui_mark_id(range: DecorRangeHandle) -> u32 {
+    unsafe { nvim_decor_range_get_ui_mark_id(range) }
+}
+
+// ============================================================================
+// win_extmark_arr wrapper functions
+// ============================================================================
+
+/// Push a WinExtmark to the global win_extmark_arr.
+pub fn win_extmark_push(ns_id: u64, mark_id: u64, win_row: c_int, win_col: c_int) {
+    unsafe { nvim_win_extmark_push(ns_id, mark_id, win_row, win_col) }
 }
 
 // ============================================================================

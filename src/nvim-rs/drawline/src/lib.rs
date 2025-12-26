@@ -102,6 +102,7 @@ extern "C" {
     // Highlight functions
     fn nvim_win_hl_attr(wp: WinHandle, hlf: c_int) -> c_int;
     fn hl_combine_attr(char_attr: c_int, prim_attr: c_int) -> c_int;
+    fn hl_blend_attrs(back_attr: c_int, front_attr: c_int, through: *mut bool) -> c_int;
     fn syn_id2attr(hl_id: c_int) -> c_int;
 
     // Grid functions for schar operations
@@ -148,13 +149,54 @@ extern "C" {
 
     // Buffer handle for decoration
     fn nvim_win_get_buffer(wp: WinHandle) -> *mut c_void;
+
+    // Buffer accessor functions (for line_putchar)
+    fn nvim_buf_get_p_ts(buf: BufHandle) -> i64;
+    fn nvim_buf_get_p_vts_array(buf: BufHandle) -> *mut c_int;
+
+    // UTF-8 functions from mbyte
+    fn rs_utf_ptr2cells(p: *const c_char) -> c_int;
+    fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
+
+    // schar functions from grid (rs_schar_from_char already declared above)
+    fn rs_utfc_ptr2schar(p: *const c_char, firstc: *mut c_int) -> ScharT;
+
+    // Tab padding from indent crate
+    fn rs_tabstop_padding(col: c_int, ts: i64, vts: *const c_int) -> c_int;
+
+    // VirtText iteration (from decoration.c)
+    fn nvim_next_virt_text_chunk(
+        vt: *mut c_void,
+        pos: *mut usize,
+        attr: *mut c_int,
+    ) -> *const c_char;
 }
+
+/// Opaque handle to buffer (buf_T).
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct BufHandle(*mut c_void);
+
+use std::ffi::c_char;
+
+/// TAB character constant.
+#[allow(clippy::cast_possible_wrap)]
+const TAB: c_char = b'\t' as c_char;
 
 /// Flag for insecure wrap option.
 const K_OPT_FLAG_INSECURE: c_int = 0x04;
 
 /// SCL_NUM constant for signcolumn='number'.
 const SCL_NUM: c_int = -1;
+
+/// HlMode constants (from decoration_defs.h).
+const HL_MODE_UNKNOWN: c_int = 0;
+const HL_MODE_REPLACE: c_int = 1;
+const HL_MODE_COMBINE: c_int = 2;
+const HL_MODE_BLEND: c_int = 3;
+
+/// NUL character constant.
+const NUL: c_char = 0;
 
 // ============================================================================
 // Implementation functions
@@ -670,6 +712,65 @@ fn advance_color_col_impl(wlv: WlvHandle, vcol: c_int) {
     }
 }
 
+/// Put a character in the screen buffer for line drawing.
+///
+/// This implements the C `line_putchar` function. Returns the number of cells
+/// used, and advances `*pp` past the character.
+///
+/// # Safety
+/// - `pp` must be a valid pointer to a pointer to a NUL-terminated UTF-8 string
+/// - `dest` must be a valid pointer to at least `maxcells` schar_T values
+/// - `dest[0]` must not be 0 (caller ensures not overwriting right half of double-width)
+unsafe fn line_putchar_impl(
+    buf: BufHandle,
+    pp: *mut *const c_char,
+    dest: *mut ScharT,
+    maxcells: c_int,
+    vcol: c_int,
+) -> c_int {
+    // Caller should handle overwriting the right half of a double-width char.
+    debug_assert!(*dest != 0, "dest[0] must not be 0");
+
+    let p = *pp;
+    let mut cells = rs_utf_ptr2cells(p);
+    let c_len = rs_utfc_ptr2len(p);
+
+    debug_assert!(maxcells > 0, "maxcells must be > 0");
+    if cells > maxcells {
+        *dest = rs_schar_from_char(c_int::from(b' '));
+        return 1;
+    }
+
+    if *p == TAB {
+        let ts = nvim_buf_get_p_ts(buf);
+        let vts = nvim_buf_get_p_vts_array(buf);
+        cells = rs_tabstop_padding(vcol, ts, vts);
+        if cells > maxcells {
+            cells = maxcells;
+        }
+    }
+
+    // When overwriting the left half of a double-width char, clear the right half.
+    if cells < maxcells && *dest.add(cells as usize) == 0 {
+        *dest.add(cells as usize) = rs_schar_from_char(c_int::from(b' '));
+    }
+
+    if *p == TAB {
+        for c in 0..cells {
+            *dest.add(c as usize) = rs_schar_from_char(c_int::from(b' '));
+        }
+    } else {
+        let mut u8c: c_int = 0;
+        *dest = rs_utfc_ptr2schar(p, &mut u8c);
+        if cells > 1 {
+            *dest.add(1) = 0;
+        }
+    }
+
+    *pp = p.add(c_len as usize);
+    cells
+}
+
 // ============================================================================
 // FFI exports
 // ============================================================================
@@ -794,6 +895,173 @@ pub extern "C" fn rs_draw_lnum_col(wp: WinHandle, wlv: WlvHandle) {
 #[no_mangle]
 pub extern "C" fn rs_advance_color_col(wlv: WlvHandle, vcol: c_int) {
     advance_color_col_impl(wlv, vcol);
+}
+
+/// Put a character in the screen buffer for line drawing.
+///
+/// # Safety
+/// - `pp` must be a valid pointer to a pointer to a NUL-terminated UTF-8 string
+/// - `dest` must be a valid pointer to at least `maxcells` schar_T values
+/// - `dest[0]` must not be 0 (caller ensures not overwriting right half of double-width)
+#[no_mangle]
+pub unsafe extern "C" fn rs_line_putchar(
+    buf: BufHandle,
+    pp: *mut *const c_char,
+    dest: *mut ScharT,
+    maxcells: c_int,
+    vcol: c_int,
+) -> c_int {
+    line_putchar_impl(buf, pp, dest, maxcells, vcol)
+}
+
+// ============================================================================
+// Virtual text rendering
+// ============================================================================
+
+/// Draw a virtual text item.
+///
+/// Renders virtual text chunks to the line buffer, handling highlight modes
+/// (replace, combine, blend) and character/cell alignment.
+///
+/// # Arguments
+/// * `buf` - Buffer handle for tab expansion
+/// * `col` - Starting column in linebuf
+/// * `vt` - VirtText pointer (kvec_t of VirtTextChunk)
+/// * `hl_mode` - Highlight mode (0=unknown, 1=replace, 2=combine, 3=blend)
+/// * `max_col` - Maximum column (window width)
+/// * `vcol` - Virtual column for tab expansion
+/// * `skip_cells` - Number of cells to skip (for partial rendering)
+///
+/// # Returns
+/// The column after the last rendered character.
+///
+/// # Safety
+/// - `vt` must be a valid pointer to VirtText (kvec_t)
+/// - linebuf_char and linebuf_attr must be valid global arrays
+#[allow(clippy::too_many_lines)]
+unsafe fn draw_virt_text_item_impl(
+    buf: BufHandle,
+    mut col: c_int,
+    vt: *mut c_void,
+    hl_mode: c_int,
+    max_col: c_int,
+    mut vcol: c_int,
+    mut skip_cells: c_int,
+) -> c_int {
+    let linebuf_char = nvim_get_linebuf_char();
+    let linebuf_attr = nvim_get_linebuf_attr();
+
+    let mut virt_str: *const c_char = c"".as_ptr();
+    let mut virt_attr: c_int = 0;
+    let mut virt_pos: usize = 0;
+
+    while col < max_col {
+        // Get next chunk if current string is exhausted
+        if skip_cells >= 0 && *virt_str == NUL {
+            let next = nvim_next_virt_text_chunk(vt, &mut virt_pos, &mut virt_attr);
+            if next.is_null() {
+                break;
+            }
+            virt_str = next;
+        }
+
+        // Skip cells in the text
+        while skip_cells > 0 && *virt_str != NUL {
+            let c_len = rs_utfc_ptr2len(virt_str);
+            let cells = if *virt_str == TAB {
+                let ts = nvim_buf_get_p_ts(buf);
+                let vts = nvim_buf_get_p_vts_array(buf);
+                rs_tabstop_padding(vcol, ts, vts)
+            } else {
+                rs_utf_ptr2cells(virt_str)
+            };
+            skip_cells -= cells;
+            vcol += cells;
+            virt_str = virt_str.add(c_len as usize);
+        }
+
+        // If a double-width char or TAB doesn't fit, pad with spaces
+        let draw_str: *const c_char = if skip_cells < 0 {
+            c" ".as_ptr()
+        } else {
+            virt_str
+        };
+
+        if *draw_str == NUL {
+            continue;
+        }
+
+        debug_assert!(skip_cells <= 0);
+
+        // Calculate attribute based on highlight mode
+        let mut through = false;
+        #[allow(clippy::cast_possible_wrap)]
+        let space_char: c_char = b' ' as c_char;
+        let attr = match hl_mode {
+            HL_MODE_COMBINE => hl_combine_attr(*linebuf_attr.add(col as usize), virt_attr),
+            HL_MODE_BLEND => {
+                through = *draw_str == space_char;
+                hl_blend_attrs(*linebuf_attr.add(col as usize), virt_attr, &mut through)
+            }
+            _ => virt_attr, // HL_MODE_REPLACE or HL_MODE_UNKNOWN
+        };
+
+        // Prepare dummy buffer for "through" mode
+        let mut dummy: [ScharT; 2] = [
+            rs_schar_from_char(c_int::from(b' ')),
+            rs_schar_from_char(c_int::from(b' ')),
+        ];
+
+        let maxcells = max_col - col;
+
+        // When overwriting the right half of a double-width char, clear the left half
+        if !through && *linebuf_char.add(col as usize) == 0 {
+            debug_assert!(col > 0);
+            *linebuf_char.add((col - 1) as usize) = rs_schar_from_char(c_int::from(b' '));
+            // Clear the right half as well for the assertion in line_putchar
+            *linebuf_char.add(col as usize) = rs_schar_from_char(c_int::from(b' '));
+        }
+
+        // Draw the character
+        let dest = if through {
+            dummy.as_mut_ptr()
+        } else {
+            linebuf_char.add(col as usize)
+        };
+
+        let mut draw_str_ptr = draw_str;
+        let cells = line_putchar_impl(buf, &mut draw_str_ptr, dest, maxcells, vcol);
+
+        // Update attributes for all cells
+        for _ in 0..cells {
+            *linebuf_attr.add(col as usize) = attr;
+            col += 1;
+        }
+
+        // Update state
+        if skip_cells < 0 {
+            skip_cells += 1;
+        } else {
+            vcol += cells;
+            virt_str = draw_str_ptr;
+        }
+    }
+
+    col
+}
+
+/// Draw a virtual text item (FFI export).
+#[no_mangle]
+pub unsafe extern "C" fn rs_draw_virt_text_item(
+    buf: BufHandle,
+    col: c_int,
+    vt: *mut c_void,
+    hl_mode: c_int,
+    max_col: c_int,
+    vcol: c_int,
+    skip_cells: c_int,
+) -> c_int {
+    draw_virt_text_item_impl(buf, col, vt, hl_mode, max_col, vcol, skip_cells)
 }
 
 #[cfg(test)]

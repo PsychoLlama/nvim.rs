@@ -146,6 +146,9 @@ extern int rs_get_line_number_attr(win_T *wp, winlinevars_T *wlv);
 extern void rs_draw_sign(bool nrcol, win_T *wp, winlinevars_T *wlv, int sign_idx);
 extern void rs_draw_lnum_col(win_T *wp, winlinevars_T *wlv);
 extern void rs_advance_color_col(winlinevars_T *wlv, int vcol);
+extern int rs_line_putchar(buf_T *buf, const char **pp, schar_T *dest, int maxcells, int vcol);
+extern int rs_draw_virt_text_item(buf_T *buf, int col, VirtText vt, int hl_mode, int max_col,
+                                  int vcol, int skip_cells);
 
 // winlinevars_T accessor functions for Rust opaque handle pattern.
 // These use void* to avoid exposing the internal winlinevars_T type in headers.
@@ -632,6 +635,17 @@ void nvim_wlv_set_color_cols(void *wlv_ptr, int *val)
   wlv->color_cols = val;
 }
 
+// ============================================================================
+// win_extmark_arr accessor functions for Rust
+// ============================================================================
+
+/// Push a WinExtmark to win_extmark_arr.
+void nvim_win_extmark_push(uint64_t ns_id, uint64_t mark_id, int win_row, int win_col)
+{
+  WinExtmark m = { (NS)ns_id, mark_id, win_row, win_col };
+  kv_push(win_extmark_arr, m);
+}
+
 static char *extra_buf = NULL;
 static size_t extra_buf_size = 0;
 
@@ -709,41 +723,7 @@ static void margin_columns_win(win_T *wp, int *left_col, int *right_col)
 /// Handles composing chars
 static int line_putchar(buf_T *buf, const char **pp, schar_T *dest, int maxcells, int vcol)
 {
-  // Caller should handle overwriting the right half of a double-width char.
-  assert(dest[0] != 0);
-
-  const char *p = *pp;
-  int cells = utf_ptr2cells(p);
-  int c_len = utfc_ptr2len(p);
-  assert(maxcells > 0);
-  if (cells > maxcells) {
-    dest[0] = schar_from_ascii(' ');
-    return 1;
-  }
-
-  if (*p == TAB) {
-    cells = tabstop_padding(vcol, buf->b_p_ts, buf->b_p_vts_array);
-    cells = MIN(cells, maxcells);
-  }
-
-  // When overwriting the left half of a double-width char, clear the right half.
-  if (cells < maxcells && dest[cells] == 0) {
-    dest[cells] = schar_from_ascii(' ');
-  }
-  if (*p == TAB) {
-    for (int c = 0; c < cells; c++) {
-      dest[c] = schar_from_ascii(' ');
-    }
-  } else {
-    int u8c;
-    dest[0] = utfc_ptr2schar(p, &u8c);
-    if (cells > 1) {
-      dest[1] = 0;
-    }
-  }
-
-  *pp += c_len;
-  return cells;
+  return rs_line_putchar(buf, pp, dest, maxcells, vcol);
 }
 
 static void draw_virt_text(win_T *wp, buf_T *buf, int col_off, int *end_col, int win_row)
@@ -852,70 +832,7 @@ static void draw_virt_text(win_T *wp, buf_T *buf, int col_off, int *end_col, int
 static int draw_virt_text_item(buf_T *buf, int col, VirtText vt, HlMode hl_mode, int max_col,
                                int vcol, int skip_cells)
 {
-  const char *virt_str = "";
-  int virt_attr = 0;
-  size_t virt_pos = 0;
-
-  while (col < max_col) {
-    if (skip_cells >= 0 && *virt_str == NUL) {
-      if (virt_pos >= kv_size(vt)) {
-        break;
-      }
-      virt_attr = 0;
-      virt_str = next_virt_text_chunk(vt, &virt_pos, &virt_attr);
-      if (virt_str == NULL) {
-        break;
-      }
-    }
-    // Skip cells in the text.
-    while (skip_cells > 0 && *virt_str != NUL) {
-      int c_len = utfc_ptr2len(virt_str);
-      int cells = *virt_str == TAB
-                  ? tabstop_padding(vcol, buf->b_p_ts, buf->b_p_vts_array)
-                  : utf_ptr2cells(virt_str);
-      skip_cells -= cells;
-      vcol += cells;
-      virt_str += c_len;
-    }
-    // If a double-width char or TAB doesn't fit, pad with spaces.
-    const char *draw_str = skip_cells < 0 ? " " : virt_str;
-    if (*draw_str == NUL) {
-      continue;
-    }
-    assert(skip_cells <= 0);
-    int attr;
-    bool through = false;
-    if (hl_mode == kHlModeCombine) {
-      attr = hl_combine_attr(linebuf_attr[col], virt_attr);
-    } else if (hl_mode == kHlModeBlend) {
-      through = (*draw_str == ' ');
-      attr = hl_blend_attrs(linebuf_attr[col], virt_attr, &through);
-    } else {
-      attr = virt_attr;
-    }
-    schar_T dummy[2] = { schar_from_ascii(' '), schar_from_ascii(' ') };
-    int maxcells = max_col - col;
-    // When overwriting the right half of a double-width char, clear the left half.
-    if (!through && linebuf_char[col] == 0) {
-      assert(col > 0);
-      linebuf_char[col - 1] = schar_from_ascii(' ');
-      // Clear the right half as well for the assertion in line_putchar().
-      linebuf_char[col] = schar_from_ascii(' ');
-    }
-    int cells = line_putchar(buf, &draw_str, through ? dummy : &linebuf_char[col],
-                             maxcells, vcol);
-    for (int c = 0; c < cells; c++) {
-      linebuf_attr[col] = attr;
-      col++;
-    }
-    if (skip_cells < 0) {
-      skip_cells++;
-    } else {
-      vcol += cells;
-      virt_str = draw_str;
-    }
-  }
-  return col;
+  return rs_draw_virt_text_item(buf, col, vt, hl_mode, max_col, vcol, skip_cells);
 }
 
 // TODO(bfredl): integrate with grid.c linebuf code? madness?

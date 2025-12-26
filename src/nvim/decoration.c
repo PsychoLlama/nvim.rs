@@ -1588,3 +1588,47 @@ int nvim_decor_virt_text_get_chunk_hl_id(void *vt_ptr, size_t idx)
   }
   return kv_A(vt->data.virt_text, idx).hl_id;
 }
+
+// ============================================================================
+// Additional accessor functions for draw_virt_text migration
+// ============================================================================
+
+/// Get the VirtText data pointer from a DecorVirtText.
+void *nvim_decor_virt_text_get_virt_text(void *vt_ptr)
+{
+  DecorVirtText *vt = (DecorVirtText *)vt_ptr;
+  return &vt->data.virt_text;
+}
+
+/// Iterator for VirtText chunks - returns text and advances position.
+/// This wraps next_virt_text_chunk for FFI use.
+/// @param[in] vt_ptr Pointer to VirtText (the kvec)
+/// @param[in,out] pos Position in the VirtText
+/// @param[out] attr Highlight attribute (must be non-NULL)
+/// @return Text of the chunk, or NULL if no more chunks
+const char *nvim_next_virt_text_chunk(void *vt_ptr, size_t *pos, int *attr)
+{
+  // VirtText is a kvec_t(VirtTextChunk)
+  VirtText *vt = (VirtText *)vt_ptr;
+  return next_virt_text_chunk(*vt, pos, attr);
+}
+
+/// Get UIWatched data ns_id from a DecorRange.
+uint64_t nvim_decor_range_get_ui_ns_id(void *range_ptr)
+{
+  DecorRange *r = (DecorRange *)range_ptr;
+  if (r->kind == kDecorKindUIWatched) {
+    return r->data.ui.ns_id;
+  }
+  return 0;
+}
+
+/// Get UIWatched data mark_id from a DecorRange.
+uint32_t nvim_decor_range_get_ui_mark_id(void *range_ptr)
+{
+  DecorRange *r = (DecorRange *)range_ptr;
+  if (r->kind == kDecorKindUIWatched) {
+    return r->data.ui.mark_id;
+  }
+  return 0;
+}

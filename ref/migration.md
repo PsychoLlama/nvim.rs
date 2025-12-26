@@ -160,6 +160,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 - `use_cursor_line_highlight` - Cursorline highlight check (rs_use_cursor_line_highlight)
 - `draw_foldcolumn` - Foldcolumn setup (rs_draw_foldcolumn)
 - `fill_foldcolumn` - Foldcolumn filling (rs_fill_foldcolumn)
+- `line_putchar` - UTF-8 char to screen char (rs_line_putchar)
 
 ### drawline.c Accessor Functions (for Rust access to winlinevars_T)
 
@@ -192,12 +193,14 @@ Added ~25 accessor functions for decoration system:
 - `nvim_decor_virt_text_get_width`, `nvim_decor_virt_text_get_flags`
 - `nvim_decor_virt_text_get_chunk_count/text/hl_id`
 
+### drawline.c Virtual Text Functions
+
+- `draw_virt_text_item` - Individual virtual text chunk rendering (rs_draw_virt_text_item)
+
 ### Rendering Functions Pending
 
 **drawline.c:**
-- `line_putchar` - UTF-8 char to screen char (needs utfc_ptr2schar)
 - `draw_virt_text` - Virtual text positioning loop (complex state access)
-- `draw_virt_text_item` - Individual virtual text chunk rendering
 
 **drawscreen.c:**
 - `showmode` - Mode indicator display (message system integration)
