@@ -19,7 +19,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | context      | Context stack management                           |
 | cursor_shape | Cursor mode/shape queries                          |
 | diff         | Diffopt flag queries                               |
-| drawline     | Line drawing (lcs_ext, margin_columns, foldcolumn, rightmost_vcol, draw_col_fill, draw_foldcolumn, draw_sign, draw_lnum_col, cursor_line_highlight, line_number_attr) |
+| drawline     | Line drawing and rendering helpers                 |
 | drawscreen   | Window separator drawing, connector functions      |
 | edit         | Edit mode state queries                            |
 | encoding     | Base64, SHA-256                                    |
@@ -49,13 +49,13 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | ops          | Operator type queries                              |
 | os           | OS abstractions (env, time, fs)                    |
 | path         | Path manipulation, separators                      |
-| plines       | Display calculations, scrolloff, showbreak, win_col_off |
+| plines       | Physical line display calculations                 |
 | popupmenu    | Popup menu visibility state queries                |
 | profile      | Profiling time arithmetic                          |
 | register     | Register name validation                           |
 | search       | Character search state, search/substitute tracking |
 | spell        | Spell check utilities                              |
-| statusline   | Status line helpers (stl_connected, fillchar_status, col_print, tabwidth_calc) |
+| statusline   | Status line rendering helpers                      |
 | strings      | String comparison, case conversion, escape utils   |
 | tui          | Terminal UI, terminfo formatting                   |
 | typval       | VimL typval_T type checking and value extraction   |
@@ -63,7 +63,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | unpacker     | MessagePack unpacking                              |
 | utf8proc     | utf8proc FFI bindings                              |
 | version      | Version compatibility checks                       |
-| window       | Window state queries, validation                   |
+| window       | Window state, validation, frame layout             |
 
 ## Remaining C Code (By Design)
 
@@ -89,6 +89,15 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 - `frame_fixed_height/width` - Migrated to Rust
 - `frame2win` - Migrated to Rust (rs_frame2win)
 - `frame_check_height/width` - Migrated to Rust
+- `frame_minheight/minwidth` - Migrated to Rust (rs_frame_minheight, rs_frame_minwidth)
+- `win_comp_pos/frame_comp_pos` - Migrated to Rust (rs_win_comp_pos, rs_frame_comp_pos)
+- `frame_setheight/setwidth` - Migrated to Rust (rs_frame_setheight, rs_frame_setwidth)
+- `win_setheight_win/setwidth_win` - Migrated to Rust (rs_win_setheight_win, rs_win_setwidth_win)
+- `frame_add_height` - Migrated to Rust (rs_frame_add_height)
+- `frame_add_statusline` - Migrated to Rust (rs_frame_add_statusline)
+- `frame_set_vsep` - Migrated to Rust (rs_frame_set_vsep)
+- `frame_add_hsep` - Migrated to Rust (rs_frame_add_hsep)
+- `frame_fix_width/height` - Migrated to Rust (rs_frame_fix_width, rs_frame_fix_height)
 
 **drawscreen.c** (separator functions - MIGRATED):
 - `hsep_connected/vsep_connected` - Migrated to Rust

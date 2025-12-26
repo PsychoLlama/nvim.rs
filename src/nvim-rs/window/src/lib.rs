@@ -84,6 +84,9 @@ pub const FR_LEAF: c_char = 0; // Frame is a leaf (contains a window)
 pub const FR_ROW: c_char = 1; // Frame with a row of windows
 pub const FR_COL: c_char = 2; // Frame with a column of windows
 
+/// Status line height constant (matching C enum in `window.h`).
+pub const STATUS_HEIGHT: c_int = 1;
+
 /// Frame structure matching C `frame_T` layout exactly.
 ///
 /// Frames form a tree structure representing window layout.
@@ -1357,6 +1360,749 @@ fn win_comp_pos_impl() -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_win_comp_pos() -> c_int {
     win_comp_pos_impl()
+}
+
+// ============================================================================
+// Frame sizing functions
+// ============================================================================
+
+extern "C" {
+    /// Get the global Rows value.
+    fn nvim_get_Rows() -> c_int;
+
+    /// Get the global Columns value.
+    fn nvim_get_Columns() -> c_int;
+
+    /// Get the w_height field from a window (raw field accessor).
+    fn nvim_win_field_height(wp: WinHandle) -> c_int;
+
+    /// Set the w_height field of a window (raw field accessor).
+    fn nvim_win_field_set_height(wp: WinHandle, val: c_int);
+
+    /// Set the w_hsep_height field of a window.
+    fn nvim_win_set_hsep_height(wp: WinHandle, val: c_int);
+
+    /// Set the w_status_height field of a window.
+    fn nvim_win_set_status_height(wp: WinHandle, val: c_int);
+
+    /// Get the w_width field from a window (raw field accessor).
+    fn nvim_win_field_width(wp: WinHandle) -> c_int;
+
+    /// Set the w_width field of a window (raw field accessor).
+    fn nvim_win_field_set_width(wp: WinHandle, val: c_int);
+
+    /// Set the w_vsep_width field of a window.
+    fn nvim_win_set_vsep_width(wp: WinHandle, val: c_int);
+
+    /// Set the fr_height field of a frame.
+    fn nvim_frame_set_height(frp: *mut Frame, val: c_int);
+
+    /// Set the fr_width field of a frame.
+    fn nvim_frame_set_width(frp: *mut Frame, val: c_int);
+
+    /// Wrapper for win_new_height().
+    fn nvim_win_new_height(wp: WinHandle, height: c_int);
+
+    /// Wrapper for win_new_width().
+    fn nvim_win_new_width(wp: WinHandle, width: c_int);
+
+    /// Wrapper for frame_new_height().
+    fn nvim_frame_new_height(
+        topfrp: *mut Frame,
+        height: c_int,
+        topfirst: bool,
+        wfh: bool,
+        set_ch: bool,
+    );
+
+    /// Wrapper for frame_new_width().
+    fn nvim_frame_new_width(topfrp: *mut Frame, width: c_int, leftfirst: bool, wfw: bool);
+
+    /// Wrapper for win_config_float().
+    fn nvim_win_config_float(wp: WinHandle);
+
+    /// Wrapper for win_fix_scroll().
+    fn nvim_win_fix_scroll(upd_topline: bool);
+
+    /// Wrapper for redraw_all_later().
+    fn nvim_redraw_all_later(redraw_type: c_int);
+
+    /// Get w_config.height from a window.
+    fn nvim_win_get_config_height(wp: WinHandle) -> c_int;
+
+    /// Set w_config.height on a window.
+    fn nvim_win_set_config_height(wp: WinHandle, val: c_int);
+
+    /// Get w_config.width from a window.
+    fn nvim_win_get_config_width(wp: WinHandle) -> c_int;
+
+    /// Set w_config.width on a window.
+    fn nvim_win_set_config_width(wp: WinHandle, val: c_int);
+
+    /// Get the global p_ch (cmdheight) value.
+    fn nvim_get_window_p_ch() -> i64;
+
+    /// Get the global ROWS_AVAIL value.
+    fn nvim_get_rows_avail() -> c_int;
+
+    /// Set the global redraw_cmdline flag.
+    fn nvim_set_redraw_cmdline(val: bool);
+}
+
+/// UPD_VALID constant from screen.h
+const UPD_VALID: c_int = 20;
+
+/// Set the window height of window "win" and take care of repositioning other
+/// windows to fit around it.
+///
+/// This is the Rust equivalent of `win_setheight_win()` in window.c.
+#[allow(clippy::cast_possible_truncation)]
+fn win_setheight_win_impl(mut height: c_int, win: WinHandle) {
+    if win.is_null() {
+        return;
+    }
+
+    // SAFETY: All accessors are safe
+    unsafe {
+        // Always keep current window at least one line high, even when 'winminheight' is zero.
+        // Keep window at least two lines high if 'winbar' is enabled.
+        let curwin = nvim_get_curwin();
+        let p_wmh = nvim_get_p_wmh() as c_int;
+        let winbar_height = nvim_win_get_winbar_height(win);
+
+        let min_height = if win == curwin {
+            std::cmp::max(p_wmh, 1) + winbar_height
+        } else {
+            p_wmh + winbar_height
+        };
+        height = std::cmp::max(height, min_height);
+
+        if nvim_win_get_floating(win) != 0 {
+            // Floating window
+            nvim_win_set_config_height(win, std::cmp::max(height, 1));
+            nvim_win_config_float(win);
+            redraw_later(win, UPD_VALID);
+        } else {
+            // Normal window - use frame_setheight
+            let frame = nvim_win_get_frame(win);
+            let hsep_height = nvim_win_get_hsep_height(win);
+            let status_height = nvim_win_get_status_height(win);
+            frame_setheight_impl(frame, height + hsep_height + status_height);
+
+            // recompute the window positions
+            win_comp_pos_impl();
+            nvim_win_fix_scroll(true);
+
+            nvim_redraw_all_later(UPD_NOT_VALID);
+            nvim_set_redraw_cmdline(true);
+        }
+    }
+}
+
+/// FFI wrapper for `win_setheight_win`.
+#[no_mangle]
+pub extern "C" fn rs_win_setheight_win(height: c_int, win: WinHandle) {
+    win_setheight_win_impl(height, win);
+}
+
+/// Set the height of a frame to "height" and take care that all frames and
+/// windows inside it are resized.
+///
+/// This is the Rust equivalent of `frame_setheight()` in window.c.
+/// Strategy:
+/// - If the frame is part of a FR_COL frame, try fitting in that frame.
+/// - If that doesn't work, recursively go to containing frames to resize them.
+/// - If the frame is part of a FR_ROW frame, all frames must be resized as well.
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::too_many_lines)]
+fn frame_setheight_impl(curfrp: *mut Frame, mut height: c_int) {
+    if curfrp.is_null() {
+        return;
+    }
+
+    // SAFETY: We check for null above
+    unsafe {
+        let frame = &*curfrp;
+
+        // If the height already is the desired value, nothing to do.
+        if frame.fr_height == height {
+            return;
+        }
+
+        if frame.fr_parent.is_null() {
+            // topframe: can only change the command line height
+            if height > 0 {
+                nvim_frame_new_height(curfrp, height, false, false, true);
+            }
+        } else if (*frame.fr_parent).fr_layout == FR_ROW {
+            // Row of frames: Also need to resize frames left and right of this one.
+            // First check for the minimal height of these.
+            let h =
+                frame_minheight_impl(frame.fr_parent, WinHandle::from_ptr(std::ptr::null_mut()));
+            height = std::cmp::max(height, h);
+            frame_setheight_impl(frame.fr_parent, height);
+        } else {
+            // Column of frames: try to change only frames in this column.
+            let mut room: c_int = 0;
+            let mut room_cmdline: c_int = 0;
+            let mut room_reserved: c_int = 0;
+
+            // Do this twice:
+            // 1: compute room available, if it's not enough try resizing the containing frame.
+            // 2: compute the room available and adjust the height to it.
+            // Try not to reduce the height of a window with 'winfixheight' set.
+            for run in 1..=2 {
+                room = 0;
+                room_reserved = 0;
+                let parent = &*frame.fr_parent;
+                let mut frp = parent.fr_child;
+                while !frp.is_null() {
+                    let fr = &*frp;
+                    if frp != curfrp && !fr.fr_win.is_null() && nvim_win_get_wfh(fr.fr_win) != 0 {
+                        room_reserved += fr.fr_height;
+                    }
+                    room += fr.fr_height;
+                    if frp != curfrp {
+                        room -=
+                            frame_minheight_impl(frp, WinHandle::from_ptr(std::ptr::null_mut()));
+                    }
+                    frp = fr.fr_next;
+                }
+
+                if frame.fr_width == nvim_get_Columns() {
+                    let wp = lastwin_nofloating_impl();
+                    let p_ch = nvim_get_window_p_ch() as c_int;
+                    room_cmdline = nvim_get_Rows()
+                        - p_ch
+                        - global_stl_height()
+                        - (nvim_win_get_winrow(wp)
+                            + nvim_win_field_height(wp)
+                            + nvim_win_get_hsep_height(wp)
+                            + nvim_win_get_status_height(wp));
+                    room_cmdline = std::cmp::max(room_cmdline, 0);
+                } else {
+                    room_cmdline = 0;
+                }
+
+                if height <= room + room_cmdline {
+                    break;
+                }
+                if run == 2 || frame.fr_width == nvim_get_Columns() {
+                    height = room + room_cmdline;
+                    break;
+                }
+                frame_setheight_impl(
+                    frame.fr_parent,
+                    height
+                        + frame_minheight_impl(
+                            frame.fr_parent,
+                            WinHandle::from_ptr((-1isize) as *mut std::ffi::c_void), // NOWIN
+                        )
+                        - nvim_get_p_wmh() as c_int
+                        - 1,
+                );
+                // NOTREACHED
+            }
+
+            // Compute the number of lines we will take from others frames (can be negative!)
+            let mut take = height - frame.fr_height;
+
+            // If there is not enough room, also reduce the height of a window with 'winfixheight' set.
+            if height > room + room_cmdline - room_reserved {
+                room_reserved = room + room_cmdline - height;
+            }
+            // If there is only a 'winfixheight' window and making the window smaller,
+            // need to make the other window taller.
+            if take < 0 && room - frame.fr_height < room_reserved {
+                room_reserved = 0;
+            }
+
+            if take > 0 && room_cmdline > 0 {
+                // use lines from cmdline first
+                let use_from_cmdline = std::cmp::min(room_cmdline, take);
+                take -= use_from_cmdline;
+                let topframe = nvim_get_topframe();
+                (*topframe).fr_height += use_from_cmdline;
+            }
+
+            // set the current frame to the new height
+            nvim_frame_new_height(curfrp, height, false, false, true);
+
+            // First take lines from the frames after the current frame.
+            // If that is not enough, takes lines from frames above the current frame.
+            for run in 0..2 {
+                // 1st run: start with next window
+                // 2nd run: start with prev window
+                let mut frp = if run == 0 {
+                    frame.fr_next
+                } else {
+                    frame.fr_prev
+                };
+
+                while !frp.is_null() && take != 0 {
+                    let fr = &*frp;
+                    let h = frame_minheight_impl(frp, WinHandle::from_ptr(std::ptr::null_mut()));
+                    if room_reserved > 0 && !fr.fr_win.is_null() && nvim_win_get_wfh(fr.fr_win) != 0
+                    {
+                        if room_reserved >= fr.fr_height {
+                            room_reserved -= fr.fr_height;
+                        } else {
+                            if fr.fr_height - room_reserved > take {
+                                room_reserved = fr.fr_height - take;
+                            }
+                            take -= fr.fr_height - room_reserved;
+                            nvim_frame_new_height(frp, room_reserved, false, false, true);
+                            room_reserved = 0;
+                        }
+                    } else if fr.fr_height - take < h {
+                        take -= fr.fr_height - h;
+                        nvim_frame_new_height(frp, h, false, false, true);
+                    } else {
+                        nvim_frame_new_height(frp, fr.fr_height - take, false, false, true);
+                        take = 0;
+                    }
+                    frp = if run == 0 { fr.fr_next } else { fr.fr_prev };
+                }
+            }
+        }
+    }
+}
+
+/// FFI wrapper for `frame_setheight`.
+#[no_mangle]
+pub extern "C" fn rs_frame_setheight(curfrp: *mut Frame, height: c_int) {
+    frame_setheight_impl(curfrp, height);
+}
+
+/// Set the width of a frame to "width" and take care that all frames and
+/// windows inside it are resized.
+///
+/// This is the Rust equivalent of `frame_setwidth()` in window.c.
+/// Strategy is similar to frame_setheight().
+#[allow(clippy::cast_possible_truncation)]
+fn frame_setwidth_impl(curfrp: *mut Frame, mut width: c_int) {
+    if curfrp.is_null() {
+        return;
+    }
+
+    // SAFETY: We check for null above
+    unsafe {
+        let frame = &*curfrp;
+
+        // If the width already is the desired value, nothing to do.
+        if frame.fr_width == width {
+            return;
+        }
+
+        if frame.fr_parent.is_null() {
+            // topframe: can't change width
+            return;
+        }
+
+        if (*frame.fr_parent).fr_layout == FR_COL {
+            // Column of frames: Also need to resize frames above and below of this one.
+            // First check for the minimal width of these.
+            let w = frame_minwidth_impl(frame.fr_parent, WinHandle::from_ptr(std::ptr::null_mut()));
+            width = std::cmp::max(width, w);
+            frame_setwidth_impl(frame.fr_parent, width);
+        } else {
+            // Row of frames: try to change only frames in this row.
+            let mut room: c_int = 0;
+            let mut room_reserved: c_int = 0;
+
+            // Do this twice:
+            // 1: compute room available, if it's not enough try resizing the containing frame.
+            // 2: compute the room available and adjust the width to it.
+            for run in 1..=2 {
+                room = 0;
+                room_reserved = 0;
+                let parent = &*frame.fr_parent;
+                let mut frp = parent.fr_child;
+                while !frp.is_null() {
+                    let fr = &*frp;
+                    if frp != curfrp && !fr.fr_win.is_null() && nvim_win_get_wfw(fr.fr_win) != 0 {
+                        room_reserved += fr.fr_width;
+                    }
+                    room += fr.fr_width;
+                    if frp != curfrp {
+                        room -= frame_minwidth_impl(frp, WinHandle::from_ptr(std::ptr::null_mut()));
+                    }
+                    frp = fr.fr_next;
+                }
+
+                if width <= room {
+                    break;
+                }
+                if run == 2 || frame.fr_height >= nvim_get_rows_avail() {
+                    width = room;
+                    break;
+                }
+                frame_setwidth_impl(
+                    frame.fr_parent,
+                    width
+                        + frame_minwidth_impl(
+                            frame.fr_parent,
+                            WinHandle::from_ptr((-1isize) as *mut std::ffi::c_void), // NOWIN
+                        )
+                        - nvim_get_p_wmw() as c_int
+                        - 1,
+                );
+            }
+
+            // Compute the number of columns we will take from others frames (can be negative!)
+            let mut take = width - frame.fr_width;
+
+            // If there is not enough room, also reduce the width of a window with 'winfixwidth' set.
+            if width > room - room_reserved {
+                room_reserved = room - width;
+            }
+            // If there is only a 'winfixwidth' window and making the window smaller,
+            // need to make the other window narrower.
+            if take < 0 && room - frame.fr_width < room_reserved {
+                room_reserved = 0;
+            }
+
+            // set the current frame to the new width
+            nvim_frame_new_width(curfrp, width, false, false);
+
+            // First take columns from the frames right of the current frame.
+            // If that is not enough, takes columns from frames left of the current frame.
+            for run in 0..2 {
+                // 1st run: start with next window
+                // 2nd run: start with prev window
+                let mut frp = if run == 0 {
+                    frame.fr_next
+                } else {
+                    frame.fr_prev
+                };
+
+                while !frp.is_null() && take != 0 {
+                    let fr = &*frp;
+                    let w = frame_minwidth_impl(frp, WinHandle::from_ptr(std::ptr::null_mut()));
+                    if room_reserved > 0 && !fr.fr_win.is_null() && nvim_win_get_wfw(fr.fr_win) != 0
+                    {
+                        if room_reserved >= fr.fr_width {
+                            room_reserved -= fr.fr_width;
+                        } else {
+                            if fr.fr_width - room_reserved > take {
+                                room_reserved = fr.fr_width - take;
+                            }
+                            take -= fr.fr_width - room_reserved;
+                            nvim_frame_new_width(frp, room_reserved, false, false);
+                            room_reserved = 0;
+                        }
+                    } else if fr.fr_width - take < w {
+                        take -= fr.fr_width - w;
+                        nvim_frame_new_width(frp, w, false, false);
+                    } else {
+                        nvim_frame_new_width(frp, fr.fr_width - take, false, false);
+                        take = 0;
+                    }
+                    frp = if run == 0 { fr.fr_next } else { fr.fr_prev };
+                }
+            }
+        }
+    }
+}
+
+/// FFI wrapper for `frame_setwidth`.
+#[no_mangle]
+pub extern "C" fn rs_frame_setwidth(curfrp: *mut Frame, width: c_int) {
+    frame_setwidth_impl(curfrp, width);
+}
+
+/// Set the width of window "win" and take care of repositioning other windows
+/// to fit around it.
+///
+/// This is the Rust equivalent of `win_setwidth_win()` in window.c.
+#[allow(clippy::cast_possible_truncation)]
+fn win_setwidth_win_impl(mut width: c_int, wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+
+    // SAFETY: All accessors are safe
+    unsafe {
+        let curwin = nvim_get_curwin();
+
+        // Always keep current window at least one column wide, even when 'winminwidth' is zero.
+        if wp == curwin {
+            let p_wmw = nvim_get_p_wmw() as c_int;
+            width = std::cmp::max(std::cmp::max(width, p_wmw), 1);
+        } else if width < 0 {
+            width = 0;
+        }
+
+        if nvim_win_get_floating(wp) != 0 {
+            nvim_win_set_config_width(wp, width);
+            nvim_win_config_float(wp);
+            redraw_later(wp, UPD_NOT_VALID);
+        } else {
+            let frame = nvim_win_get_frame(wp);
+            let vsep_width = nvim_win_get_vsep_width(wp);
+            frame_setwidth_impl(frame, width + vsep_width);
+
+            // recompute the window positions
+            win_comp_pos_impl();
+            nvim_redraw_all_later(UPD_NOT_VALID);
+        }
+    }
+}
+
+/// FFI wrapper for `win_setwidth_win`.
+#[no_mangle]
+pub extern "C" fn rs_win_setwidth_win(width: c_int, wp: WinHandle) {
+    win_setwidth_win_impl(width, wp);
+}
+
+/// FFI wrapper for `frame_new_height`.
+/// Delegates to the C implementation which handles complex cmdheight logic.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn rs_frame_new_height(
+    topfrp: *mut Frame,
+    height: c_int,
+    topfirst: c_int,
+    wfh: c_int,
+    set_ch: c_int,
+) {
+    // SAFETY: nvim_frame_new_height is a C function that handles the pointer
+    unsafe { nvim_frame_new_height(topfrp, height, topfirst != 0, wfh != 0, set_ch != 0) }
+}
+
+/// FFI wrapper for `frame_new_width`.
+/// Delegates to the C implementation which handles complex logic.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn rs_frame_new_width(
+    topfrp: *mut Frame,
+    width: c_int,
+    leftfirst: c_int,
+    wfw: c_int,
+) {
+    // SAFETY: nvim_frame_new_width is a C function that handles the pointer
+    unsafe { nvim_frame_new_width(topfrp, width, leftfirst != 0, wfw != 0) }
+}
+
+// ============================================================================
+// Frame helper functions
+// ============================================================================
+
+/// Resize frame "frp" to be "n" lines higher (negative for less high).
+/// Also resize the frames it is contained in.
+///
+/// This is the Rust equivalent of `frame_add_height()` in window.c.
+fn frame_add_height_impl(frp: *mut Frame, n: c_int) {
+    if frp.is_null() {
+        return;
+    }
+
+    // SAFETY: Frame pointer is valid and we're calling FFI functions
+    unsafe {
+        let frame = &*frp;
+        nvim_frame_new_height(frp, frame.fr_height + n, false, false, false);
+
+        let mut parent = frame.fr_parent;
+        while !parent.is_null() {
+            let p = &mut *parent;
+            p.fr_height += n;
+            parent = p.fr_parent;
+        }
+    }
+}
+
+/// FFI wrapper for `frame_add_height`.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn rs_frame_add_height(frp: *mut Frame, n: c_int) {
+    frame_add_height_impl(frp, n);
+}
+
+/// Add a status line to windows at the bottom of "frp".
+/// Note: Does not check if there is room!
+///
+/// This is the Rust equivalent of `frame_add_statusline()` in window.c.
+fn frame_add_statusline_impl(frp: *mut Frame) {
+    if frp.is_null() {
+        return;
+    }
+
+    // SAFETY: Frame pointer is valid
+    unsafe {
+        let frame = &*frp;
+
+        if frame.fr_layout == FR_LEAF {
+            // Leaf frame - add status to window
+            let wp = frame.fr_win;
+            nvim_win_set_status_height(wp, STATUS_HEIGHT);
+        } else if frame.fr_layout == FR_ROW {
+            // Handle all the frames in the row
+            let mut child = frame.fr_child;
+            while !child.is_null() {
+                frame_add_statusline_impl(child);
+                child = (*child).fr_next;
+            }
+        } else {
+            // FR_COL: Only need to handle the last frame in the column
+            let mut child = frame.fr_child;
+            while !child.is_null() && !(*child).fr_next.is_null() {
+                child = (*child).fr_next;
+            }
+            frame_add_statusline_impl(child);
+        }
+    }
+}
+
+/// FFI wrapper for `frame_add_statusline`.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn rs_frame_add_statusline(frp: *mut Frame) {
+    frame_add_statusline_impl(frp);
+}
+
+/// Add or remove the vertical separator of windows to the right side of "frp".
+/// Note: Does not check if there is room!
+///
+/// This is the Rust equivalent of `frame_set_vsep()` in window.c.
+fn frame_set_vsep_impl(frp: *const Frame, add: bool) {
+    if frp.is_null() {
+        return;
+    }
+
+    // SAFETY: Frame pointer is valid
+    unsafe {
+        let frame = &*frp;
+
+        if frame.fr_layout == FR_LEAF {
+            let wp = frame.fr_win;
+            let vsep_width = nvim_win_get_vsep_width(wp);
+            let w_width = nvim_win_field_width(wp);
+
+            if add && vsep_width == 0 {
+                if w_width > 0 {
+                    // don't make it negative
+                    nvim_win_new_width(wp, w_width - 1);
+                }
+                nvim_win_set_vsep_width(wp, 1);
+            } else if !add && vsep_width == 1 {
+                nvim_win_new_width(wp, w_width + 1);
+                nvim_win_set_vsep_width(wp, 0);
+            }
+        } else if frame.fr_layout == FR_COL {
+            // Handle all the frames in the column
+            let mut child = frame.fr_child;
+            while !child.is_null() {
+                frame_set_vsep_impl(child, add);
+                child = (*child).fr_next;
+            }
+        } else {
+            // FR_ROW: Only need to handle the last frame in the row
+            let mut child = frame.fr_child;
+            while !child.is_null() && !(*child).fr_next.is_null() {
+                child = (*child).fr_next;
+            }
+            frame_set_vsep_impl(child, add);
+        }
+    }
+}
+
+/// FFI wrapper for `frame_set_vsep`.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn rs_frame_set_vsep(frp: *const Frame, add: c_int) {
+    frame_set_vsep_impl(frp, add != 0);
+}
+
+/// Add the horizontal separator to windows at the bottom of "frp".
+/// Note: Does not check if there is room or whether the windows have a statusline!
+///
+/// This is the Rust equivalent of `frame_add_hsep()` in window.c.
+fn frame_add_hsep_impl(frp: *const Frame) {
+    if frp.is_null() {
+        return;
+    }
+
+    // SAFETY: Frame pointer is valid
+    unsafe {
+        let frame = &*frp;
+
+        if frame.fr_layout == FR_LEAF {
+            let wp = frame.fr_win;
+            nvim_win_set_hsep_height(wp, 1);
+        } else if frame.fr_layout == FR_ROW {
+            // Handle all the frames in the row
+            let mut child = frame.fr_child;
+            while !child.is_null() {
+                frame_add_hsep_impl(child);
+                child = (*child).fr_next;
+            }
+        } else {
+            // FR_COL: Only need to handle the last frame in the column
+            let mut child = frame.fr_child;
+            while !child.is_null() && !(*child).fr_next.is_null() {
+                child = (*child).fr_next;
+            }
+            frame_add_hsep_impl(child);
+        }
+    }
+}
+
+/// FFI wrapper for `frame_add_hsep`.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn rs_frame_add_hsep(frp: *const Frame) {
+    frame_add_hsep_impl(frp);
+}
+
+/// Set frame width from the window it contains.
+///
+/// This is the Rust equivalent of `frame_fix_width()` in window.c.
+fn frame_fix_width_impl(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+
+    // SAFETY: Window pointer is valid
+    unsafe {
+        let frame = nvim_win_get_frame(wp);
+        if !frame.is_null() {
+            let w_width = nvim_win_field_width(wp);
+            let vsep_width = nvim_win_get_vsep_width(wp);
+            nvim_frame_set_width(frame, w_width + vsep_width);
+        }
+    }
+}
+
+/// FFI wrapper for `frame_fix_width`.
+#[no_mangle]
+pub extern "C" fn rs_frame_fix_width(wp: WinHandle) {
+    frame_fix_width_impl(wp);
+}
+
+/// Set frame height from the window it contains.
+///
+/// This is the Rust equivalent of `frame_fix_height()` in window.c.
+fn frame_fix_height_impl(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+
+    // SAFETY: Window pointer is valid
+    unsafe {
+        let frame = nvim_win_get_frame(wp);
+        if !frame.is_null() {
+            let w_height = nvim_win_field_height(wp);
+            let hsep_height = nvim_win_get_hsep_height(wp);
+            let status_height = nvim_win_get_status_height(wp);
+            nvim_frame_set_height(frame, w_height + hsep_height + status_height);
+        }
+    }
+}
+
+/// FFI wrapper for `frame_fix_height`.
+#[no_mangle]
+pub extern "C" fn rs_frame_fix_height(wp: WinHandle) {
+    frame_fix_height_impl(wp);
 }
 
 #[cfg(test)]

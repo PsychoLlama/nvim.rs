@@ -113,6 +113,18 @@ extern int rs_frame_minheight(frame_T *topfrp, win_T *next_curwin);
 extern int rs_frame_minwidth(frame_T *topfrp, win_T *next_curwin);
 extern int rs_win_comp_pos(void);
 extern void rs_frame_comp_pos(frame_T *topfrp, int *row, int *col);
+extern void rs_frame_setheight(frame_T *curfrp, int height);
+extern void rs_frame_setwidth(frame_T *curfrp, int width);
+extern void rs_win_setheight_win(int height, win_T *win);
+extern void rs_win_setwidth_win(int width, win_T *wp);
+extern void rs_frame_new_height(frame_T *topfrp, int height, int topfirst, int wfh, int set_ch);
+extern void rs_frame_new_width(frame_T *topfrp, int width, int leftfirst, int wfw);
+extern void rs_frame_add_height(frame_T *frp, int n);
+extern void rs_frame_add_statusline(frame_T *frp);
+extern void rs_frame_set_vsep(const frame_T *frp, int add);
+extern void rs_frame_add_hsep(const frame_T *frp);
+extern void rs_frame_fix_width(win_T *wp);
+extern void rs_frame_fix_height(win_T *wp);
 
 // Feature flag for Rust window layout functions
 #define USE_RUST_WINDOW_LAYOUT 1
@@ -546,6 +558,150 @@ OptInt nvim_get_p_wiw(void)
   return p_wiw;
 }
 
+/// Get the global Rows value.
+int nvim_get_Rows(void)
+{
+  return Rows;
+}
+
+/// Get the global Columns value.
+int nvim_get_Columns(void)
+{
+  return Columns;
+}
+
+/// Get the w_height field from a window (raw field accessor).
+int nvim_win_field_height(win_T *wp)
+{
+  return wp->w_height;
+}
+
+/// Set the w_height field of a window (raw field accessor).
+void nvim_win_field_set_height(win_T *wp, int val)
+{
+  wp->w_height = val;
+}
+
+/// Set the w_hsep_height field of a window.
+void nvim_win_set_hsep_height(win_T *wp, int val)
+{
+  wp->w_hsep_height = val;
+}
+
+/// Set the w_status_height field of a window.
+void nvim_win_set_status_height(win_T *wp, int val)
+{
+  wp->w_status_height = val;
+}
+
+/// Get the w_width field from a window (raw field accessor).
+int nvim_win_field_width(win_T *wp)
+{
+  return wp->w_width;
+}
+
+/// Set the w_width field of a window (raw field accessor).
+void nvim_win_field_set_width(win_T *wp, int val)
+{
+  wp->w_width = val;
+}
+
+/// Set the w_vsep_width field of a window.
+void nvim_win_set_vsep_width(win_T *wp, int val)
+{
+  wp->w_vsep_width = val;
+}
+
+/// Set the fr_height field of a frame.
+void nvim_frame_set_height(frame_T *frp, int val)
+{
+  frp->fr_height = val;
+}
+
+/// Set the fr_width field of a frame.
+void nvim_frame_set_width(frame_T *frp, int val)
+{
+  frp->fr_width = val;
+}
+
+/// Wrapper for win_new_height().
+void nvim_win_new_height(win_T *wp, int height)
+{
+  win_new_height(wp, height);
+}
+
+/// Wrapper for win_new_width().
+void nvim_win_new_width(win_T *wp, int width)
+{
+  win_new_width(wp, width);
+}
+
+/// Wrapper for frame_new_height().
+void nvim_frame_new_height(frame_T *topfrp, int height, bool topfirst, bool wfh, bool set_ch)
+{
+  frame_new_height(topfrp, height, topfirst, wfh, set_ch);
+}
+
+/// Wrapper for frame_new_width().
+void nvim_frame_new_width(frame_T *topfrp, int width, bool leftfirst, bool wfw)
+{
+  frame_new_width(topfrp, width, leftfirst, wfw);
+}
+
+/// Wrapper for win_config_float().
+void nvim_win_config_float(win_T *wp)
+{
+  win_config_float(wp, wp->w_config);
+}
+
+/// Wrapper for win_fix_scroll().
+void nvim_win_fix_scroll(bool upd_topline)
+{
+  win_fix_scroll(upd_topline);
+}
+
+/// Wrapper for redraw_all_later().
+void nvim_redraw_all_later(int type)
+{
+  redraw_all_later(type);
+}
+
+/// Get w_config.height from a window.
+int nvim_win_get_config_height(win_T *wp)
+{
+  return wp->w_config.height;
+}
+
+/// Set w_config.height on a window.
+void nvim_win_set_config_height(win_T *wp, int val)
+{
+  wp->w_config.height = val;
+}
+
+/// Get w_config.width from a window.
+int nvim_win_get_config_width(win_T *wp)
+{
+  return wp->w_config.width;
+}
+
+/// Set w_config.width on a window.
+void nvim_win_set_config_width(win_T *wp, int val)
+{
+  wp->w_config.width = val;
+}
+
+/// Get the global p_ch (cmdheight) value.
+int64_t nvim_get_window_p_ch(void)
+{
+  return p_ch;
+}
+
+/// Set the global redraw_cmdline flag.
+void nvim_set_redraw_cmdline(bool val)
+{
+  redraw_cmdline = val;
+}
+
 /// Get the w_winbar_height field from a window.
 int nvim_win_get_winbar_height(win_T *wp)
 {
@@ -975,6 +1131,12 @@ int nvim_win_get_border_adj(win_T *wp, int idx)
 #define NOWIN           ((win_T *)-1)   // non-existing window
 
 #define ROWS_AVAIL (Rows - p_ch - tabline_height() - global_stl_height())
+
+/// Get the global ROWS_AVAIL value (Rows - p_ch - tabline_height() - global_stl_height()).
+int nvim_get_rows_avail(void)
+{
+  return ROWS_AVAIL;
+}
 
 /// flags for win_enter_ext()
 typedef enum {
@@ -4558,6 +4720,9 @@ static bool frame_fixed_width(frame_T *frp)
 // Note: Does not check if there is room!
 static void frame_add_statusline(frame_T *frp)
 {
+#ifdef USE_RUST_WINDOW_LAYOUT
+  rs_frame_add_statusline(frp);
+#else
   if (frp->fr_layout == FR_LEAF) {
     win_T *wp = frp->fr_win;
     wp->w_status_height = STATUS_HEIGHT;
@@ -4572,6 +4737,7 @@ static void frame_add_statusline(frame_T *frp)
     for (frp = frp->fr_child; frp->fr_next != NULL; frp = frp->fr_next) {}
     frame_add_statusline(frp);
   }
+#endif
 }
 
 /// Set width of a frame.  Handles recursively going through contained frames.
@@ -4676,6 +4842,9 @@ static void frame_new_width(frame_T *topfrp, int width, bool leftfirst, bool wfw
 static void frame_set_vsep(const frame_T *frp, bool add)
   FUNC_ATTR_NONNULL_ARG(1)
 {
+#ifdef USE_RUST_WINDOW_LAYOUT
+  rs_frame_set_vsep(frp, add ? 1 : 0);
+#else
   if (frp->fr_layout == FR_LEAF) {
     win_T *wp = frp->fr_win;
     if (add && wp->w_vsep_width == 0) {
@@ -4701,6 +4870,7 @@ static void frame_set_vsep(const frame_T *frp, bool add)
     }
     frame_set_vsep(frp, add);
   }
+#endif
 }
 
 /// Add the horizontal separator to windows at the bottom of "frp".
@@ -4708,6 +4878,9 @@ static void frame_set_vsep(const frame_T *frp, bool add)
 static void frame_add_hsep(const frame_T *frp)
   FUNC_ATTR_NONNULL_ARG(1)
 {
+#ifdef USE_RUST_WINDOW_LAYOUT
+  rs_frame_add_hsep(frp);
+#else
   if (frp->fr_layout == FR_LEAF) {
     win_T *wp = frp->fr_win;
     wp->w_hsep_height = 1;
@@ -4725,19 +4898,28 @@ static void frame_add_hsep(const frame_T *frp)
     }
     frame_add_hsep(frp);
   }
+#endif
 }
 
 // Set frame width from the window it contains.
 static void frame_fix_width(win_T *wp)
 {
+#ifdef USE_RUST_WINDOW_LAYOUT
+  rs_frame_fix_width(wp);
+#else
   wp->w_frame->fr_width = wp->w_width + wp->w_vsep_width;
+#endif
 }
 
 // Set frame height from the window it contains.
 static void frame_fix_height(win_T *wp)
   FUNC_ATTR_NONNULL_ALL
 {
+#ifdef USE_RUST_WINDOW_LAYOUT
+  rs_frame_fix_height(wp);
+#else
   wp->w_frame->fr_height = wp->w_height + wp->w_hsep_height + wp->w_status_height;
+#endif
 }
 
 /// Compute the minimal height for frame "topfrp". Uses the 'winminheight' option.
@@ -6729,6 +6911,9 @@ void win_setheight(int height)
 // windows to fit around it.
 void win_setheight_win(int height, win_T *win)
 {
+#ifdef USE_RUST_WINDOW_LAYOUT
+  rs_win_setheight_win(height, win);
+#else
   // Always keep current window at least one line high, even when 'winminheight' is zero.
   // Keep window at least two lines high if 'winbar' is enabled.
   height = MAX(height, (int)(win == curwin ? MAX(p_wmh, 1) : p_wmh) + win->w_winbar_height);
@@ -6747,6 +6932,7 @@ void win_setheight_win(int height, win_T *win)
     redraw_all_later(UPD_NOT_VALID);
     redraw_cmdline = true;
   }
+#endif
 }
 
 // Set the height of a frame to "height" and take care that all frames and
@@ -6762,6 +6948,10 @@ void win_setheight_win(int height, win_T *win)
 // At the top level we can also use change the command line height.
 static void frame_setheight(frame_T *curfrp, int height)
 {
+#ifdef USE_RUST_WINDOW_LAYOUT
+  rs_frame_setheight(curfrp, height);
+  return;
+#endif
   // If the height already is the desired value, nothing to do.
   if (curfrp->fr_height == height) {
     return;
@@ -6902,6 +7092,9 @@ void win_setwidth(int width)
 
 void win_setwidth_win(int width, win_T *wp)
 {
+#ifdef USE_RUST_WINDOW_LAYOUT
+  rs_win_setwidth_win(width, wp);
+#else
   // Always keep current window at least one column wide, even when
   // 'winminwidth' is zero.
   if (wp == curwin) {
@@ -6920,6 +7113,7 @@ void win_setwidth_win(int width, win_T *wp)
     win_comp_pos();
     redraw_all_later(UPD_NOT_VALID);
   }
+#endif
 }
 
 // Set the width of a frame to "width" and take care that all frames and
@@ -6929,6 +7123,10 @@ void win_setwidth_win(int width, win_T *wp)
 // Strategy is similar to frame_setheight().
 static void frame_setwidth(frame_T *curfrp, int width)
 {
+#ifdef USE_RUST_WINDOW_LAYOUT
+  rs_frame_setwidth(curfrp, width);
+  return;
+#endif
   // If the width already is the desired value, nothing to do.
   if (curfrp->fr_width == width) {
     return;
@@ -7674,6 +7872,9 @@ void command_height(void)
 // Also resize the frames it is contained in.
 static void frame_add_height(frame_T *frp, int n)
 {
+#ifdef USE_RUST_WINDOW_LAYOUT
+  rs_frame_add_height(frp, n);
+#else
   frame_new_height(frp, frp->fr_height + n, false, false, false);
   while (true) {
     frp = frp->fr_parent;
@@ -7682,6 +7883,7 @@ static void frame_add_height(frame_T *frp, int n)
     }
     frp->fr_height += n;
   }
+#endif
 }
 
 /// Add or remove a status line from window(s), according to the
