@@ -132,6 +132,10 @@ typedef struct {
 
 #include "drawline.c.generated.h"
 
+// Rust implementations
+extern schar_T rs_get_lcs_ext(win_T *wp);
+extern void rs_margin_columns_win(win_T *wp, int *left_col, int *right_col);
+
 static char *extra_buf = NULL;
 static size_t extra_buf_size = 0;
 
@@ -157,15 +161,7 @@ void drawline_free_all_mem(void)
 /// shouldn't be used.
 static schar_T get_lcs_ext(win_T *wp)
 {
-  if (wp->w_p_wrap) {
-    // Line never continues beyond the right of the screen with 'wrap'.
-    return NUL;
-  }
-  if (wp->w_p_wrap_flags & kOptFlagInsecure) {
-    // If 'nowrap' was set from a modeline, forcibly use '>'.
-    return schar_from_ascii('>');
-  }
-  return wp->w_p_list ? wp->w_p_lcs_chars.ext : NUL;
+  return rs_get_lcs_ext(wp);
 }
 
 /// Advance wlv->color_cols if not NULL
@@ -204,15 +200,8 @@ static void margin_columns_win(win_T *wp, int *left_col, int *right_col)
     return;
   }
 
-  *left_col = 0;
-  *right_col = width1;
-
-  if (wp->w_virtcol >= (colnr_T)width1 && width2 > 0) {
-    *right_col = width1 + ((wp->w_virtcol - width1) / width2 + 1) * width2;
-  }
-  if (wp->w_virtcol >= (colnr_T)width1 && width2 > 0) {
-    *left_col = (wp->w_virtcol - width1) / width2 * width2 + width1;
-  }
+  // Compute using Rust implementation
+  rs_margin_columns_win(wp, left_col, right_col);
 
   // cache values
   prev_left_col = *left_col;

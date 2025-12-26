@@ -24,6 +24,7 @@ nvim-cmdline = { path = "cmdline" }
 nvim-cmdhist = { path = "cmdhist" }
 nvim-cursor-shape = { path = "cursor_shape" }
 nvim-diff = { path = "diff" }
+nvim-drawline = { path = "drawline" }
 nvim-drawscreen = { path = "drawscreen" }
 nvim-edit = { path = "edit" }
 nvim-eval = { path = "eval" }

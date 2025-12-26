@@ -775,6 +775,54 @@ schar_T nvim_win_get_fcs_stlnc(win_T *wp)
   return wp->w_p_fcs_chars.stlnc;
 }
 
+/// Get the fold closed character (fcs_chars.foldclosed).
+schar_T nvim_win_get_fcs_foldclosed(win_T *wp)
+{
+  return wp->w_p_fcs_chars.foldclosed;
+}
+
+/// Get the fold open character (fcs_chars.foldopen).
+schar_T nvim_win_get_fcs_foldopen(win_T *wp)
+{
+  return wp->w_p_fcs_chars.foldopen;
+}
+
+/// Get the fold separator character (fcs_chars.foldsep).
+schar_T nvim_win_get_fcs_foldsep(win_T *wp)
+{
+  return wp->w_p_fcs_chars.foldsep;
+}
+
+/// Get the fold inner character (fcs_chars.foldinner).
+schar_T nvim_win_get_fcs_foldinner(win_T *wp)
+{
+  return wp->w_p_fcs_chars.foldinner;
+}
+
+/// Get the listchars extends character (lcs_chars.ext).
+schar_T nvim_win_get_lcs_ext(win_T *wp)
+{
+  return wp->w_p_lcs_chars.ext;
+}
+
+/// Get the window's wrap flags (w_p_wrap_flags).
+int nvim_win_get_wrap_flags(win_T *wp)
+{
+  return wp->w_p_wrap_flags;
+}
+
+/// Get the window's 'wrap' option.
+int nvim_win_get_p_wrap(win_T *wp)
+{
+  return wp->w_p_wrap;
+}
+
+/// Get the window's virtual column (w_virtcol).
+colnr_T nvim_win_get_virtcol(win_T *wp)
+{
+  return wp->w_virtcol;
+}
+
 /// Get the highlight attribute for a window's highlight group.
 /// This wraps the inline win_hl_attr function for FFI.
 int nvim_win_hl_attr(win_T *wp, int hlf)
