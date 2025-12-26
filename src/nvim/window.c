@@ -1034,6 +1034,12 @@ schar_T nvim_win_get_fcs_foldinner(win_T *wp)
   return wp->w_p_fcs_chars.foldinner;
 }
 
+/// Get the diff character (fcs_chars.diff).
+schar_T nvim_win_get_fcs_diff(win_T *wp)
+{
+  return wp->w_p_fcs_chars.diff;
+}
+
 /// Get the listchars extends character (lcs_chars.ext).
 schar_T nvim_win_get_lcs_ext(win_T *wp)
 {

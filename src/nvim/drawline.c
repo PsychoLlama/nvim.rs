@@ -157,6 +157,7 @@ extern void rs_draw_col_buf(win_T *wp, winlinevars_T *wlv, const char *text, siz
 extern void rs_apply_cursorline_highlight(win_T *wp, winlinevars_T *wlv);
 extern void rs_set_line_attr_for_diff(win_T *wp, winlinevars_T *wlv);
 extern void rs_handle_breakindent(win_T *wp, winlinevars_T *wlv);
+extern void rs_handle_showbreak_and_filler(win_T *wp, winlinevars_T *wlv);
 
 // winlinevars_T accessor functions for Rust opaque handle pattern.
 // These use void* to avoid exposing the internal winlinevars_T type in headers.
@@ -890,41 +891,7 @@ static void handle_breakindent(win_T *wp, winlinevars_T *wlv)
 
 static void handle_showbreak_and_filler(win_T *wp, winlinevars_T *wlv)
 {
-  int remaining = wp->w_view_width - wlv->off;
-  if (wlv->filler_todo > wlv->filler_lines - wlv->n_virt_lines) {
-    // TODO(bfredl): check this doesn't inhibit TUI-style
-    //               clear-to-end-of-line.
-    draw_col_fill(wlv, schar_from_ascii(' '), remaining, 0);
-  } else if (wlv->filler_todo > 0) {
-    // Draw "deleted" diff line(s)
-    schar_T c = wp->w_p_fcs_chars.diff;
-    draw_col_fill(wlv, c, remaining, win_hl_attr(wp, HLF_DED));
-  }
-
-  char *const sbr = get_showbreak_value(wp);
-  if (*sbr != NUL && wlv->need_showbreak) {
-    // Draw 'showbreak' at the start of each broken line.
-    // Combine 'showbreak' with 'cursorline', prioritizing 'showbreak'.
-    int attr = hl_combine_attr(wlv->cul_attr, win_hl_attr(wp, HLF_AT));
-    colnr_T vcol_before = wlv->vcol;
-    draw_col_buf(wp, wlv, sbr, strlen(sbr), attr, NULL, true);
-    wlv->vcol_sbr = wlv->vcol;
-
-    // Correct start of highlighted area for 'showbreak'.
-    if (wlv->fromcol >= vcol_before && wlv->fromcol < wlv->vcol) {
-      wlv->fromcol = wlv->vcol;
-    }
-
-    // Correct end of highlighted area for 'showbreak',
-    // required when 'linebreak' is also set.
-    if (wlv->tocol == vcol_before) {
-      wlv->tocol = wlv->vcol;
-    }
-  }
-
-  if (wp->w_skipcol == 0 || wlv->startrow > 0 || !wp->w_p_wrap || !wp->w_briopt_sbr) {
-    wlv->need_showbreak = false;
-  }
+  rs_handle_showbreak_and_filler(wp, wlv);
 }
 
 static void apply_cursorline_highlight(win_T *wp, winlinevars_T *wlv)

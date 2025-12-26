@@ -58,6 +58,7 @@ pub struct FoldInfo {
 }
 
 // Highlight group constants (from highlight_defs.h)
+pub const HLF_AT: c_int = 4; // NonText (@ characters)
 pub const HLF_N: c_int = 12; // LineNr
 pub const HLF_LNA: c_int = 13; // LineNrAbove
 pub const HLF_LNB: c_int = 14; // LineNrBelow
@@ -65,6 +66,7 @@ pub const HLF_CLN: c_int = 15; // CursorLineNr
 pub const HLF_CLS: c_int = 16; // CursorLineSign
 pub const HLF_CLF: c_int = 17; // CursorLineFold
 pub const HLF_FC: c_int = 29; // FoldColumn
+pub const HLF_DED: c_int = 31; // DiffDelete (deleted diff line)
 pub const HLF_SC: c_int = 35; // SignColumn
 
 // Cursorlineopt flags (from option_vars.generated.h)
@@ -777,6 +779,12 @@ extern "C" {
     // need_showbreak accessors
     fn nvim_wlv_get_need_showbreak(wlv: WlvHandle) -> bool;
     fn nvim_wlv_set_need_showbreak(wlv: WlvHandle, val: bool);
+
+    // handle_showbreak_and_filler accessors (not yet declared above)
+    fn nvim_wlv_get_vcol_sbr(wlv: WlvHandle) -> ColnrT;
+    fn nvim_wlv_set_vcol_sbr(wlv: WlvHandle, val: ColnrT);
+    fn nvim_win_get_fcs_diff(wp: WinHandle) -> ScharT;
+    fn get_showbreak_value(wp: WinHandle) -> *const c_char;
 }
 
 /// Advance wlv->color_cols past the current vcol.
@@ -1078,6 +1086,82 @@ unsafe fn handle_breakindent_impl(wp: WinHandle, wlv: WlvHandle) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_handle_breakindent(wp: WinHandle, wlv: WlvHandle) {
     handle_breakindent_impl(wp, wlv);
+}
+
+/// Handle showbreak and filler lines.
+///
+/// Draws filler content for virtual lines and 'showbreak' string.
+unsafe fn handle_showbreak_and_filler_impl(wp: WinHandle, wlv: WlvHandle) {
+    let view_width = nvim_win_get_view_width(wp);
+    let off = nvim_wlv_get_off(wlv);
+    let remaining = view_width - off;
+
+    let filler_todo = nvim_wlv_get_filler_todo(wlv);
+    let filler_lines = nvim_wlv_get_filler_lines(wlv);
+    let n_virt_lines = nvim_wlv_get_n_virt_lines(wlv);
+
+    if filler_todo > filler_lines - n_virt_lines {
+        // Fill with spaces for virtual lines
+        let space_schar = rs_schar_from_char(c_int::from(b' '));
+        draw_col_fill_impl(wlv, space_schar, remaining, 0);
+    } else if filler_todo > 0 {
+        // Draw "deleted" diff line(s)
+        let diff_char = nvim_win_get_fcs_diff(wp);
+        let attr = nvim_win_hl_attr(wp, HLF_DED);
+        draw_col_fill_impl(wlv, diff_char, remaining, attr);
+    }
+
+    // Draw 'showbreak' at the start of each broken line
+    let sbr = get_showbreak_value(wp);
+    let need_showbreak = nvim_wlv_get_need_showbreak(wlv);
+
+    if !sbr.is_null() && *sbr != 0 && need_showbreak {
+        // Combine 'showbreak' with 'cursorline', prioritizing 'showbreak'
+        let cul_attr = nvim_wlv_get_cul_attr(wlv);
+        let at_attr = nvim_win_hl_attr(wp, HLF_AT);
+        let attr = hl_combine_attr(cul_attr, at_attr);
+        let vcol_before = nvim_wlv_get_vcol(wlv);
+
+        // Get showbreak string length
+        let mut sbr_len: usize = 0;
+        let mut p = sbr;
+        while *p != 0 {
+            sbr_len += 1;
+            p = p.add(1);
+        }
+        draw_col_buf_impl(wp, wlv, sbr, sbr_len, attr, std::ptr::null(), true);
+
+        let vcol = nvim_wlv_get_vcol(wlv);
+        nvim_wlv_set_vcol_sbr(wlv, vcol);
+
+        // Correct start of highlighted area for 'showbreak'
+        let fromcol = nvim_wlv_get_fromcol(wlv);
+        if fromcol >= vcol_before && fromcol < vcol {
+            nvim_wlv_set_fromcol(wlv, vcol);
+        }
+
+        // Correct end of highlighted area for 'showbreak'
+        let tocol = nvim_wlv_get_tocol(wlv);
+        if tocol == vcol_before {
+            nvim_wlv_set_tocol(wlv, vcol);
+        }
+    }
+
+    // Clear need_showbreak flag when appropriate
+    let skipcol = nvim_win_get_skipcol(wp);
+    let startrow = nvim_wlv_get_startrow(wlv);
+    let p_wrap = nvim_win_get_p_wrap(wp);
+    let briopt_sbr = nvim_win_get_briopt_sbr(wp);
+
+    if skipcol == 0 || startrow > 0 || p_wrap == 0 || !briopt_sbr {
+        nvim_wlv_set_need_showbreak(wlv, false);
+    }
+}
+
+/// Handle showbreak and filler (FFI export).
+#[no_mangle]
+pub unsafe extern "C" fn rs_handle_showbreak_and_filler(wp: WinHandle, wlv: WlvHandle) {
+    handle_showbreak_and_filler_impl(wp, wlv);
 }
 
 /// Fill cells with a character.
