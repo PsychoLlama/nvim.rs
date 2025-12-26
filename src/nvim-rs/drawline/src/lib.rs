@@ -41,6 +41,7 @@ pub const HLF_CLF: c_int = 43; // Cursor line fold column
 extern "C" {
     fn nvim_win_get_p_wrap(wp: WinHandle) -> c_int;
     fn nvim_win_get_p_list(wp: WinHandle) -> c_int;
+    fn nvim_win_get_p_cuc(wp: WinHandle) -> c_int;
     fn nvim_win_get_wrap_flags(wp: WinHandle) -> c_int;
     fn nvim_win_get_lcs_ext(wp: WinHandle) -> ScharT;
     fn nvim_win_get_fcs_foldclosed(wp: WinHandle) -> ScharT;
@@ -186,12 +187,59 @@ fn compute_foldcolumn_symbols(
     result
 }
 
+/// Get the rightmost virtual column that needs to be drawn.
+///
+/// This determines the rightmost column for colorcolumn or cursorcolumn
+/// highlighting. Returns 0 if neither feature is active.
+///
+/// @param wp          Window handle
+/// @param color_cols  Pointer to -1 terminated array of colorcolumn positions, or null
+/// @param color_cols_len  Number of elements in color_cols array (including terminator)
+///
+/// This is the Rust equivalent of `get_rightmost_vcol()` in drawline.c.
+fn get_rightmost_vcol_impl(wp: WinHandle, color_cols: *const c_int) -> c_int {
+    let mut ret = 0;
+
+    unsafe {
+        // Include cursor column if 'cursorcolumn' is set
+        if nvim_win_get_p_cuc(wp) != 0 {
+            ret = nvim_win_get_virtcol(wp);
+        }
+
+        // Find rightmost colorcolumn
+        if !color_cols.is_null() {
+            let mut i = 0;
+            loop {
+                let col = *color_cols.add(i);
+                if col < 0 {
+                    break;
+                }
+                if col > ret {
+                    ret = col;
+                }
+                i += 1;
+            }
+        }
+    }
+
+    ret
+}
+
 // FFI exports
 
 /// Get the 'listchars' "extends" character.
 #[no_mangle]
 pub extern "C" fn rs_get_lcs_ext(wp: WinHandle) -> ScharT {
     get_lcs_ext_impl(wp)
+}
+
+/// Get the rightmost virtual column that needs drawing.
+///
+/// # Safety
+/// `color_cols` must be a valid pointer to a -1 terminated array, or null.
+#[no_mangle]
+pub extern "C" fn rs_get_rightmost_vcol(wp: WinHandle, color_cols: *const c_int) -> c_int {
+    get_rightmost_vcol_impl(wp, color_cols)
 }
 
 /// Compute cursorline margins.

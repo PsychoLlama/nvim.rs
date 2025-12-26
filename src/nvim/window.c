@@ -823,6 +823,12 @@ colnr_T nvim_win_get_virtcol(win_T *wp)
   return wp->w_virtcol;
 }
 
+/// Get the 'cursorcolumn' option value for a window.
+int nvim_win_get_p_cuc(win_T *wp)
+{
+  return wp->w_p_cuc;
+}
+
 /// Get the highlight attribute for a window's highlight group.
 /// This wraps the inline win_hl_attr function for FFI.
 int nvim_win_hl_attr(win_T *wp, int hlf)

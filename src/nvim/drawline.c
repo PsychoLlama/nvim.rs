@@ -135,6 +135,7 @@ typedef struct {
 // Rust implementations
 extern schar_T rs_get_lcs_ext(win_T *wp);
 extern void rs_margin_columns_win(win_T *wp, int *left_col, int *right_col);
+extern int rs_get_rightmost_vcol(win_T *wp, const int *color_cols);
 
 static char *extra_buf = NULL;
 static size_t extra_buf_size = 0;
@@ -1009,20 +1010,7 @@ static void fix_for_boguscols(winlinevars_T *wlv)
 
 static int get_rightmost_vcol(win_T *wp, const int *color_cols)
 {
-  int ret = 0;
-
-  if (wp->w_p_cuc) {
-    ret = wp->w_virtcol;
-  }
-
-  if (color_cols) {
-    // determine rightmost colorcolumn to possibly draw
-    for (int i = 0; color_cols[i] >= 0; i++) {
-      ret = MAX(ret, color_cols[i]);
-    }
-  }
-
-  return ret;
+  return rs_get_rightmost_vcol(wp, color_cols);
 }
 
 /// Display line "lnum" of window "wp" on the screen.
