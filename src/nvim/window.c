@@ -109,6 +109,11 @@ extern tabpage_T *rs_find_tabpage(int n);
 extern int rs_get_last_winid(void);
 extern win_T *rs_lastwin_nofloating(void);
 extern win_T *rs_frame2win(frame_T *frp);
+extern int rs_frame_minheight(frame_T *topfrp, win_T *next_curwin);
+extern int rs_frame_minwidth(frame_T *topfrp, win_T *next_curwin);
+
+// Feature flag for Rust window layout functions
+#define USE_RUST_WINDOW_LAYOUT 1
 
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to win_T fields from Rust code.
@@ -519,6 +524,36 @@ int nvim_win_buf_meta_total_signtext(win_T *wp)
 OptInt nvim_get_p_wmw(void)
 {
   return p_wmw;
+}
+
+/// Get the global p_wh (winheight) value.
+OptInt nvim_get_p_wh(void)
+{
+  return p_wh;
+}
+
+/// Get the global p_wmh (winminheight) value.
+OptInt nvim_get_p_wmh(void)
+{
+  return p_wmh;
+}
+
+/// Get the global p_wiw (winwidth) value.
+OptInt nvim_get_p_wiw(void)
+{
+  return p_wiw;
+}
+
+/// Get the w_winbar_height field from a window.
+int nvim_win_get_winbar_height(win_T *wp)
+{
+  return wp->w_winbar_height;
+}
+
+/// Get the w_status_height field from a window.
+int nvim_win_get_status_height(win_T *wp)
+{
+  return wp->w_status_height;
 }
 
 /// Get the global State variable.
@@ -4672,6 +4707,9 @@ static void frame_fix_height(win_T *wp)
 /// When "next_curwin" is NOWIN, don't use at least one line for the current window.
 static int frame_minheight(frame_T *topfrp, win_T *next_curwin)
 {
+#ifdef USE_RUST_WINDOW_LAYOUT
+  return rs_frame_minheight(topfrp, next_curwin);
+#else
   int m;
 
   if (topfrp->fr_win != NULL) {
@@ -4710,6 +4748,7 @@ static int frame_minheight(frame_T *topfrp, win_T *next_curwin)
   }
 
   return m;
+#endif
 }
 
 /// Compute the minimal width for frame "topfrp".
@@ -4720,6 +4759,9 @@ static int frame_minheight(frame_T *topfrp, win_T *next_curwin)
 /// @param next_curwin  use p_wh and p_wiw for next_curwin
 static int frame_minwidth(frame_T *topfrp, win_T *next_curwin)
 {
+#ifdef USE_RUST_WINDOW_LAYOUT
+  return rs_frame_minwidth(topfrp, next_curwin);
+#else
   int m;
 
   if (topfrp->fr_win != NULL) {
@@ -4751,6 +4793,7 @@ static int frame_minwidth(frame_T *topfrp, win_T *next_curwin)
   }
 
   return m;
+#endif
 }
 
 /// Try to close all windows except current one.

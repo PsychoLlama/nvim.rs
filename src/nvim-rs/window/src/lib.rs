@@ -946,6 +946,31 @@ pub extern "C" fn rs_find_tabpage(n: c_int) -> TabpageHandle {
 extern "C" {
     /// Get the `last_win_id` global.
     fn nvim_get_last_win_id() -> c_int;
+
+    // Accessors for frame_minheight/frame_minwidth
+    /// Get the `w_winbar_height` field from a window.
+    fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
+
+    /// Get the `w_status_height` field from a window.
+    fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
+
+    /// Get the `w_hsep_height` field from a window (already declared but repeated for clarity).
+    fn nvim_win_get_hsep_height(wp: WinHandle) -> c_int;
+
+    /// Get the `w_vsep_width` field from a window (already declared but repeated for clarity).
+    fn nvim_win_get_vsep_width(wp: WinHandle) -> c_int;
+
+    /// Get the global `p_wh` (winheight) option value.
+    fn nvim_get_p_wh() -> i64;
+
+    /// Get the global `p_wmh` (winminheight) option value.
+    fn nvim_get_p_wmh() -> i64;
+
+    /// Get the global `p_wiw` (winwidth) option value.
+    fn nvim_get_p_wiw() -> i64;
+
+    /// Get the global `p_wmw` (winminwidth) option value.
+    fn nvim_get_p_wmw() -> i64;
 }
 
 /// Get the last window ID assigned.
@@ -1004,6 +1029,175 @@ fn frame2win_impl(mut frp: *mut Frame) -> WinHandle {
 #[no_mangle]
 pub extern "C" fn rs_frame2win(frp: *mut Frame) -> WinHandle {
     frame2win_impl(frp)
+}
+
+// ============================================================================
+// Frame minimum dimension functions
+// ============================================================================
+
+/// Compute the minimal height for a frame tree.
+///
+/// This is the Rust equivalent of `frame_minheight()` in window.c.
+/// Uses the 'winminheight' option. When `next_curwin` isn't null,
+/// use `p_wh` for that window. When `next_curwin` is `NOWIN` (-1 cast),
+/// don't use at least one line for the current window.
+///
+/// # Arguments
+/// * `topfrp` - The frame to compute minimum height for
+/// * `next_curwin` - The window that will become current, or null, or NOWIN
+#[allow(clippy::cast_possible_truncation)]
+fn frame_minheight_impl(topfrp: *const Frame, next_curwin: WinHandle) -> c_int {
+    if topfrp.is_null() {
+        return 0;
+    }
+
+    // SAFETY: We check for null above
+    unsafe {
+        let frame = &*topfrp;
+
+        if !frame.fr_win.is_null() {
+            // Leaf frame with a window
+            let wp = frame.fr_win;
+
+            // Combined height of window bar and separator or status line
+            let extra_height = nvim_win_get_winbar_height(wp)
+                + nvim_win_get_hsep_height(wp)
+                + nvim_win_get_status_height(wp);
+
+            let m = if wp == next_curwin {
+                // This window will be the current window - use p_wh
+                nvim_get_p_wh() as c_int + extra_height
+            } else {
+                // Use p_wmh for non-current windows
+                let mut m = nvim_get_p_wmh() as c_int + extra_height;
+
+                // Check if this is curwin and next_curwin is NULL (not NOWIN)
+                // NOWIN is represented as a specific non-null invalid pointer
+                // In C, NOWIN is (win_T *)-1. We check by comparing raw pointers.
+                let curwin = nvim_get_curwin();
+                let nowin_ptr = (-1isize) as *mut std::ffi::c_void;
+                let is_nowin = next_curwin.as_ptr() == nowin_ptr;
+
+                if wp == curwin && !is_nowin && next_curwin.is_null() {
+                    // Current window is minimal one line high
+                    if nvim_get_p_wmh() == 0 {
+                        m += 1;
+                    }
+                }
+                m
+            };
+
+            return m;
+        }
+
+        // Non-leaf frame - iterate through children
+        let mut m = 0;
+        let mut child = frame.fr_child;
+
+        if frame.is_row() {
+            // FR_ROW: get the max minimal height from each frame in this row
+            while !child.is_null() {
+                let n = frame_minheight_impl(child, next_curwin);
+                if n > m {
+                    m = n;
+                }
+                child = (*child).fr_next;
+            }
+        } else {
+            // FR_COL: add up the minimal heights for all frames in this column
+            while !child.is_null() {
+                m += frame_minheight_impl(child, next_curwin);
+                child = (*child).fr_next;
+            }
+        }
+        m
+    }
+}
+
+/// FFI wrapper for `frame_minheight`.
+///
+/// Computes the minimal height for a frame tree.
+#[no_mangle]
+pub extern "C" fn rs_frame_minheight(topfrp: *const Frame, next_curwin: WinHandle) -> c_int {
+    frame_minheight_impl(topfrp, next_curwin)
+}
+
+/// Compute the minimal width for a frame tree.
+///
+/// This is the Rust equivalent of `frame_minwidth()` in window.c.
+/// Uses the 'winminwidth' option. When `next_curwin` isn't null,
+/// use `p_wiw` for that window. When `next_curwin` is `NOWIN` (-1 cast),
+/// don't use at least one column for the current window.
+///
+/// # Arguments
+/// * `topfrp` - The frame to compute minimum width for
+/// * `next_curwin` - The window that will become current, or null, or NOWIN
+#[allow(clippy::cast_possible_truncation)]
+fn frame_minwidth_impl(topfrp: *const Frame, next_curwin: WinHandle) -> c_int {
+    if topfrp.is_null() {
+        return 0;
+    }
+
+    // SAFETY: We check for null above
+    unsafe {
+        let frame = &*topfrp;
+
+        if !frame.fr_win.is_null() {
+            // Leaf frame with a window
+            let wp = frame.fr_win;
+
+            let m = if wp == next_curwin {
+                // This window will be the current window - use p_wiw
+                nvim_get_p_wiw() as c_int + nvim_win_get_vsep_width(wp)
+            } else {
+                // Use p_wmw for non-current windows
+                let mut m = nvim_get_p_wmw() as c_int + nvim_win_get_vsep_width(wp);
+
+                // Check if this is curwin and next_curwin is NULL (not NOWIN)
+                let curwin = nvim_get_curwin();
+                let nowin_ptr = (-1isize) as *mut std::ffi::c_void;
+                let is_nowin = next_curwin.as_ptr() == nowin_ptr;
+
+                if nvim_get_p_wmw() == 0 && wp == curwin && !is_nowin && next_curwin.is_null() {
+                    // Current window is minimal one column wide
+                    m += 1;
+                }
+                m
+            };
+
+            return m;
+        }
+
+        // Non-leaf frame - iterate through children
+        let mut m = 0;
+        let mut child = frame.fr_child;
+
+        if frame.is_col() {
+            // FR_COL: get the max minimal width from each frame in this column
+            while !child.is_null() {
+                let n = frame_minwidth_impl(child, next_curwin);
+                if n > m {
+                    m = n;
+                }
+                child = (*child).fr_next;
+            }
+        } else {
+            // FR_ROW: add up the minimal widths for all frames in this row
+            while !child.is_null() {
+                m += frame_minwidth_impl(child, next_curwin);
+                child = (*child).fr_next;
+            }
+        }
+        m
+    }
+}
+
+/// FFI wrapper for `frame_minwidth`.
+///
+/// Computes the minimal width for a frame tree.
+#[no_mangle]
+pub extern "C" fn rs_frame_minwidth(topfrp: *const Frame, next_curwin: WinHandle) -> c_int {
+    frame_minwidth_impl(topfrp, next_curwin)
 }
 
 #[cfg(test)]
