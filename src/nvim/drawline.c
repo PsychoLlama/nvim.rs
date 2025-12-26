@@ -155,6 +155,7 @@ extern void rs_fix_for_boguscols(winlinevars_T *wlv);
 extern void rs_draw_col_buf(win_T *wp, winlinevars_T *wlv, const char *text, size_t len,
                             int attr, const colnr_T *fold_vcol, bool inc_vcol);
 extern void rs_apply_cursorline_highlight(win_T *wp, winlinevars_T *wlv);
+extern void rs_set_line_attr_for_diff(win_T *wp, winlinevars_T *wlv);
 
 // winlinevars_T accessor functions for Rust opaque handle pattern.
 // These use void* to avoid exposing the internal winlinevars_T type in headers.
@@ -977,14 +978,7 @@ static void apply_cursorline_highlight(win_T *wp, winlinevars_T *wlv)
 
 static void set_line_attr_for_diff(win_T *wp, winlinevars_T *wlv)
 {
-  wlv->line_attr = win_hl_attr(wp, (int)wlv->diff_hlf);
-  // Overlay CursorLine onto diff-mode highlight.
-  if (wlv->cul_attr) {
-    wlv->line_attr = 0 != wlv->line_attr_lowprio  // Low-priority CursorLine
-                     ? hl_combine_attr(hl_combine_attr(wlv->cul_attr, wlv->line_attr),
-                                       hl_get_underline())
-                     : hl_combine_attr(wlv->line_attr, wlv->cul_attr);
-  }
+  rs_set_line_attr_for_diff(wp, wlv);
 }
 
 /// Checks if there is more inline virtual text that need to be drawn.

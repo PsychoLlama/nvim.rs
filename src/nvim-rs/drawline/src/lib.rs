@@ -757,6 +757,12 @@ extern "C" {
     fn nvim_get_state() -> c_int;
     fn rs_bt_quickfix(buf: BufHandle) -> bool;
     fn nvim_qf_current_entry(wp: WinHandle) -> LinenrT;
+
+    // Diff highlight accessor
+    fn nvim_wlv_get_diff_hlf(wlv: WlvHandle) -> c_int;
+
+    // Highlight functions for set_line_attr_for_diff
+    fn rs_hl_get_underline() -> c_int;
 }
 
 /// Advance wlv->color_cols past the current vcol.
@@ -942,6 +948,35 @@ unsafe fn apply_cursorline_highlight_impl(wp: WinHandle, wlv: WlvHandle) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_apply_cursorline_highlight(wp: WinHandle, wlv: WlvHandle) {
     apply_cursorline_highlight_impl(wp, wlv);
+}
+
+/// Set line attribute for diff mode highlight.
+///
+/// Overlay CursorLine onto diff-mode highlight when applicable.
+unsafe fn set_line_attr_for_diff_impl(wp: WinHandle, wlv: WlvHandle) {
+    let diff_hlf = nvim_wlv_get_diff_hlf(wlv);
+    let line_attr = nvim_win_hl_attr(wp, diff_hlf);
+    nvim_wlv_set_line_attr(wlv, line_attr);
+
+    let cul_attr = nvim_wlv_get_cul_attr(wlv);
+    if cul_attr != 0 {
+        let line_attr_lowprio = nvim_wlv_get_line_attr_lowprio(wlv);
+        let new_attr = if line_attr_lowprio != 0 {
+            // Low-priority CursorLine: combine with underline
+            let combined = hl_combine_attr(cul_attr, line_attr);
+            hl_combine_attr(combined, rs_hl_get_underline())
+        } else {
+            // High-priority CursorLine
+            hl_combine_attr(line_attr, cul_attr)
+        };
+        nvim_wlv_set_line_attr(wlv, new_attr);
+    }
+}
+
+/// Set line attribute for diff mode (FFI export).
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_line_attr_for_diff(wp: WinHandle, wlv: WlvHandle) {
+    set_line_attr_for_diff_impl(wp, wlv);
 }
 
 /// Fill cells with a character.
