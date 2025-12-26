@@ -54,6 +54,7 @@
 // Rust implementations
 extern int rs_stl_connected(win_T *wp);
 extern schar_T rs_fillchar_status(int *group, win_T *wp);
+extern int rs_tabwidth_calc(int columns, int tabcount);
 
 // Determines how deeply nested %{} blocks will be evaluated in statusline.
 #define MAX_STL_EVAL_DEPTH 100
@@ -659,7 +660,7 @@ void draw_tabline(void)
       tabcount++;
     }
 
-    int tabwidth = MAX(tabcount > 0 ? (Columns - 1 + tabcount / 2) / tabcount : 0, 6);
+    int tabwidth = rs_tabwidth_calc(Columns, tabcount);
 
     int attr = attr_nosel;
     tabcount = 0;

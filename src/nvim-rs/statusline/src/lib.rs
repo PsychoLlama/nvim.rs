@@ -152,9 +152,46 @@ pub unsafe extern "C" fn rs_col_print(
     col_print_impl(slice, col, vcol)
 }
 
+/// Calculate the width for each tab in the tabline.
+///
+/// This computes an equal width for all tabs, ensuring minimum width of 6
+/// characters per tab, and distributing remaining space evenly.
+///
+/// @param columns  Total available columns
+/// @param tabcount Number of tabs to display
+/// @return Width for each tab cell
+#[inline]
+fn tabwidth_calc_impl(columns: c_int, tabcount: c_int) -> c_int {
+    if tabcount <= 0 {
+        return 0;
+    }
+    // Formula: (Columns - 1 + tabcount / 2) / tabcount, minimum 6
+    // The (tabcount / 2) part rounds to nearest rather than truncating
+    let width = (columns - 1 + tabcount / 2) / tabcount;
+    width.max(6)
+}
+
+/// FFI export: Calculate tab width for tabline.
+#[no_mangle]
+pub extern "C" fn rs_tabwidth_calc(columns: c_int, tabcount: c_int) -> c_int {
+    tabwidth_calc_impl(columns, tabcount)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_tabwidth_calc() {
+        // 80 columns with 5 tabs -> (80 - 1 + 2) / 5 = 81 / 5 = 16
+        assert_eq!(tabwidth_calc_impl(80, 5), 16);
+        // Minimum width is 6
+        assert_eq!(tabwidth_calc_impl(20, 10), 6);
+        // Edge case: 0 tabs
+        assert_eq!(tabwidth_calc_impl(80, 0), 0);
+        // Single tab
+        assert_eq!(tabwidth_calc_impl(80, 1), 79);
+    }
 
     #[test]
     fn test_col_print_same() {
