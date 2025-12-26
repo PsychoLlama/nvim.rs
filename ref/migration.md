@@ -19,7 +19,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | context      | Context stack management                           |
 | cursor_shape | Cursor mode/shape queries                          |
 | diff         | Diffopt flag queries                               |
-| drawline     | Line drawing helpers (lcs_ext, margin_columns, foldcolumn) |
+| drawline     | Line drawing helpers (lcs_ext, margin_columns, foldcolumn, rightmost_vcol) |
 | drawscreen   | Window separator drawing, connector functions      |
 | edit         | Edit mode state queries                            |
 | encoding     | Base64, SHA-256                                    |
@@ -55,7 +55,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | register     | Register name validation                           |
 | search       | Character search state, search/substitute tracking |
 | spell        | Spell check utilities                              |
-| statusline   | Status line helpers (stl_connected, fillchar_status) |
+| statusline   | Status line helpers (stl_connected, fillchar_status, col_print, tabwidth_calc) |
 | strings      | String comparison, case conversion, escape utils   |
 | tui          | Terminal UI, terminfo formatting                   |
 | typval       | VimL typval_T type checking and value extraction   |
