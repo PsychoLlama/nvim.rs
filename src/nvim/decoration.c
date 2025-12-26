@@ -1372,6 +1372,33 @@ int nvim_decor_state_get_current_end(void *state_ptr)
   return state->current_end;
 }
 
+/// Get the future_begin from decor_state.
+int nvim_decor_state_get_future_begin(void *state_ptr)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  return state->future_begin;
+}
+
+/// Get the count of ranges_i (total number of ranges).
+int nvim_decor_state_get_ranges_count(void *state_ptr)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  return (int)kv_size(state->ranges_i);
+}
+
+/// Get a DecorRange by slot index from the ranges_i/slots arrays.
+/// This accesses ranges_i[idx] to get the slot index, then returns slots[slot_idx].range.
+/// Returns NULL if index is out of bounds.
+void *nvim_decor_state_get_range_by_idx(void *state_ptr, int idx)
+{
+  DecorState *state = (DecorState *)state_ptr;
+  if (idx < 0 || idx >= (int)kv_size(state->ranges_i)) {
+    return NULL;
+  }
+  int slot_idx = kv_A(state->ranges_i, idx);
+  return &kv_A(state->slots, slot_idx).range;
+}
+
 /// Get the current attr from decor_state.
 int nvim_decor_state_get_current(void *state_ptr)
 {

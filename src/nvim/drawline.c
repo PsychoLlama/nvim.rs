@@ -158,6 +158,7 @@ extern void rs_apply_cursorline_highlight(win_T *wp, winlinevars_T *wlv);
 extern void rs_set_line_attr_for_diff(win_T *wp, winlinevars_T *wlv);
 extern void rs_handle_breakindent(win_T *wp, winlinevars_T *wlv);
 extern void rs_handle_showbreak_and_filler(win_T *wp, winlinevars_T *wlv);
+extern bool rs_has_more_inline_virt(winlinevars_T *wlv, ptrdiff_t v);
 
 // winlinevars_T accessor functions for Rust opaque handle pattern.
 // These use void* to avoid exposing the internal winlinevars_T type in headers.
@@ -546,6 +547,20 @@ void nvim_wlv_set_need_lbr(void *wlv_ptr, bool val)
   wlv->need_lbr = val;
 }
 
+/// Get the virt_inline_i from wlv.
+size_t nvim_wlv_get_virt_inline_i(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->virt_inline_i;
+}
+
+/// Get the size of virt_inline kvec from wlv.
+size_t nvim_wlv_get_virt_inline_size(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return kv_size(wlv->virt_inline);
+}
+
 /// Get the cul_attr from wlv.
 int nvim_wlv_get_cul_attr(void *wlv_ptr)
 {
@@ -907,34 +922,7 @@ static void set_line_attr_for_diff(win_T *wp, winlinevars_T *wlv)
 /// Checks if there is more inline virtual text that need to be drawn.
 static bool has_more_inline_virt(winlinevars_T *wlv, ptrdiff_t v)
 {
-  if (wlv->virt_inline_i < kv_size(wlv->virt_inline)) {
-    return true;
-  }
-
-  int const count = (int)kv_size(decor_state.ranges_i);
-  int const cur_end = decor_state.current_end;
-  int const fut_beg = decor_state.future_begin;
-  int *const indices = decor_state.ranges_i.items;
-  DecorRangeSlot *const slots = decor_state.slots.items;
-
-  int const beg_pos[] = { 0, fut_beg };
-  int const end_pos[] = { cur_end, count };
-
-  for (int pos_i = 0; pos_i < 2; pos_i++) {
-    for (int i = beg_pos[pos_i]; i < end_pos[pos_i]; i++) {
-      DecorRange *item = &slots[indices[i]].range;
-      if (item->start_row != decor_state.row
-          || item->kind != kDecorKindVirtText
-          || item->data.vt->pos != kVPosInline
-          || item->data.vt->width == 0) {
-        continue;
-      }
-      if (item->draw_col >= -1 && item->start_col >= v) {
-        return true;
-      }
-    }
-  }
-  return false;
+  return rs_has_more_inline_virt(wlv, v);
 }
 
 static void handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t v, bool selected)

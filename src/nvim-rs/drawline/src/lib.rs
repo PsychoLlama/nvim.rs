@@ -242,6 +242,8 @@ const K_DECOR_KIND_UI_WATCHED: c_int = 4;
 /// VirtTextPos constants.
 const K_VPOS_END_OF_LINE: c_int = 0;
 const K_VPOS_END_OF_LINE_RIGHT_ALIGN: c_int = 1;
+const K_VPOS_INLINE: c_int = 2;
+const K_VPOS_OVERLAY: c_int = 3;
 const K_VPOS_RIGHT_ALIGN: c_int = 4;
 const K_VPOS_WIN_COL: c_int = 5;
 
@@ -785,6 +787,15 @@ extern "C" {
     fn nvim_wlv_set_vcol_sbr(wlv: WlvHandle, val: ColnrT);
     fn nvim_win_get_fcs_diff(wp: WinHandle) -> ScharT;
     fn get_showbreak_value(wp: WinHandle) -> *const c_char;
+
+    // has_more_inline_virt accessors
+    fn nvim_wlv_get_virt_inline_i(wlv: WlvHandle) -> usize;
+    fn nvim_wlv_get_virt_inline_size(wlv: WlvHandle) -> usize;
+    fn nvim_decor_state_get_future_begin(state: *mut c_void) -> c_int;
+    fn nvim_decor_state_get_ranges_count(state: *mut c_void) -> c_int;
+    fn nvim_decor_state_get_range_by_idx(state: *mut c_void, idx: c_int) -> *mut c_void;
+    fn nvim_decor_range_get_start_col(range: *mut c_void) -> c_int;
+    // nvim_decor_virt_text_get_width already declared above
 }
 
 /// Advance wlv->color_cols past the current vcol.
@@ -1162,6 +1173,71 @@ unsafe fn handle_showbreak_and_filler_impl(wp: WinHandle, wlv: WlvHandle) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_handle_showbreak_and_filler(wp: WinHandle, wlv: WlvHandle) {
     handle_showbreak_and_filler_impl(wp, wlv);
+}
+
+/// Check if there is more inline virtual text to be drawn.
+///
+/// Returns true if there are more inline virtual text chunks to draw at or after
+/// the given column position `v`.
+unsafe fn has_more_inline_virt_impl(wlv: WlvHandle, v: isize) -> bool {
+    // Check if still inside current virt_inline
+    let virt_inline_i = nvim_wlv_get_virt_inline_i(wlv);
+    let virt_inline_size = nvim_wlv_get_virt_inline_size(wlv);
+    if virt_inline_i < virt_inline_size {
+        return true;
+    }
+
+    let state = nvim_get_decor_state();
+    let count = nvim_decor_state_get_ranges_count(state);
+    let cur_end = nvim_decor_state_get_current_end(state);
+    let fut_beg = nvim_decor_state_get_future_begin(state);
+    let state_row = nvim_decor_state_get_row(state);
+
+    // Check both ranges: [0, cur_end) and [fut_beg, count)
+    let beg_pos = [0, fut_beg];
+    let end_pos = [cur_end, count];
+
+    for pos_i in 0..2 {
+        for i in beg_pos[pos_i]..end_pos[pos_i] {
+            let range = nvim_decor_state_get_range_by_idx(state, i);
+            if range.is_null() {
+                continue;
+            }
+
+            let start_row = nvim_decor_range_get_start_row(range);
+            let kind = nvim_decor_range_get_kind(range);
+            let draw_col = nvim_decor_range_get_draw_col(range);
+            let start_col = nvim_decor_range_get_start_col(range);
+
+            if start_row != state_row || kind != K_DECOR_KIND_VIRT_TEXT {
+                continue;
+            }
+
+            // Get virt text position and width
+            let vt = nvim_decor_range_get_virt_text(range);
+            if vt.is_null() {
+                continue;
+            }
+
+            let vt_pos = nvim_decor_virt_text_get_pos(vt);
+            let vt_width = nvim_decor_virt_text_get_width(vt);
+
+            if vt_pos != K_VPOS_INLINE || vt_width == 0 {
+                continue;
+            }
+
+            if draw_col >= -1 && (start_col as isize) >= v {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// Check for more inline virtual text (FFI export).
+#[no_mangle]
+pub unsafe extern "C" fn rs_has_more_inline_virt(wlv: WlvHandle, v: isize) -> bool {
+    has_more_inline_virt_impl(wlv, v)
 }
 
 /// Fill cells with a character.

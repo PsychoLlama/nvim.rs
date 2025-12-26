@@ -164,6 +164,9 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 - `draw_col_buf` - Draw character buffer to line (rs_draw_col_buf)
 - `apply_cursorline_highlight` - Apply cursorline highlight to line (rs_apply_cursorline_highlight)
 - `set_line_attr_for_diff` - Set line attr for diff mode (rs_set_line_attr_for_diff)
+- `handle_breakindent` - Breakindent for wrapped text (rs_handle_breakindent)
+- `handle_showbreak_and_filler` - Showbreak and filler lines (rs_handle_showbreak_and_filler)
+- `has_more_inline_virt` - Check for more inline virtual text (rs_has_more_inline_virt)
 
 ### drawline.c Accessor Functions (for Rust access to winlinevars_T)
 
