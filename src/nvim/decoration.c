@@ -1711,3 +1711,34 @@ int nvim_decor_state_get_eol_right_width(void *state_ptr, int from_idx)
 
   return total_width;
 }
+
+// ============================================================================
+// Additional accessor functions for handle_inline_virtual_text migration
+// ============================================================================
+
+/// Wrapper for decor_init_draw_col for Rust FFI.
+void nvim_decor_init_draw_col(int win_col, bool hidden, void *item_ptr)
+{
+  DecorRange *item = (DecorRange *)item_ptr;
+  decor_init_draw_col(win_col, hidden, item);
+}
+
+/// Get data.vt->data.virt_text pointer from a DecorRange (for inline virtual text).
+void *nvim_decor_range_get_virt_inline_data(void *range_ptr)
+{
+  DecorRange *r = (DecorRange *)range_ptr;
+  if (r->kind == kDecorKindVirtText && r->data.vt != NULL) {
+    return &r->data.vt->data.virt_text;
+  }
+  return NULL;
+}
+
+/// Get data.vt->hl_mode from a DecorRange.
+int nvim_decor_range_get_virt_inline_hl_mode(void *range_ptr)
+{
+  DecorRange *r = (DecorRange *)range_ptr;
+  if (r->kind == kDecorKindVirtText && r->data.vt != NULL) {
+    return r->data.vt->hl_mode;
+  }
+  return 0;  // HL_MODE_UNKNOWN
+}

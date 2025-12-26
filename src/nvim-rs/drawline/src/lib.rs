@@ -207,6 +207,24 @@ extern "C" {
 
     // win_extmark_arr push
     fn nvim_win_extmark_push(ns_id: u64, mark_id: u64, win_row: c_int, win_col: c_int);
+
+    // Additional WLV accessors for handle_inline_virtual_text
+    fn nvim_wlv_set_virt_inline_i(wlv: WlvHandle, val: usize);
+    fn nvim_wlv_reset_virt_inline(wlv: WlvHandle);
+    fn nvim_wlv_get_virt_inline_ptr(wlv: WlvHandle) -> *mut c_void;
+    fn nvim_wlv_set_virt_inline(wlv: WlvHandle, vt: *mut c_void);
+    fn nvim_wlv_set_virt_inline_hl_mode(wlv: WlvHandle, val: c_int);
+    fn nvim_wlv_get_virt_inline_hl_mode(wlv: WlvHandle) -> c_int;
+
+    // Additional DecorRange accessors for handle_inline_virtual_text
+    fn nvim_decor_range_get_start_col(range: *mut c_void) -> c_int;
+    fn nvim_decor_init_draw_col(win_col: c_int, hidden: bool, item: *mut c_void);
+    fn nvim_decor_range_get_virt_inline_data(range: *mut c_void) -> *mut c_void;
+    fn nvim_decor_range_get_virt_inline_hl_mode(range: *mut c_void) -> c_int;
+
+    // Multibyte functions from mbyte crate
+    fn rs_mb_charlen(s: *const c_char) -> c_int;
+    fn rs_mb_string2cells(s: *const c_char) -> usize;
 }
 
 /// Opaque handle to buffer (buf_T).
@@ -794,8 +812,26 @@ extern "C" {
     fn nvim_decor_state_get_future_begin(state: *mut c_void) -> c_int;
     fn nvim_decor_state_get_ranges_count(state: *mut c_void) -> c_int;
     fn nvim_decor_state_get_range_by_idx(state: *mut c_void, idx: c_int) -> *mut c_void;
-    fn nvim_decor_range_get_start_col(range: *mut c_void) -> c_int;
+    // nvim_decor_range_get_start_col is declared above with handle_inline_virtual_text accessors
     // nvim_decor_virt_text_get_width already declared above
+
+    // handle_inline_virtual_text additional accessors (p_extra, sc_extra, etc.)
+    fn nvim_wlv_get_p_extra(wlv: WlvHandle) -> *mut c_char;
+    fn nvim_wlv_set_p_extra(wlv: WlvHandle, val: *mut c_char);
+    fn nvim_wlv_get_sc_extra(wlv: WlvHandle) -> ScharT;
+    fn nvim_wlv_set_sc_extra(wlv: WlvHandle, val: ScharT);
+    fn nvim_wlv_get_sc_final(wlv: WlvHandle) -> ScharT;
+    fn nvim_wlv_set_sc_final(wlv: WlvHandle, val: ScharT);
+    fn nvim_wlv_get_extra_attr(wlv: WlvHandle) -> c_int;
+    fn nvim_wlv_set_extra_attr(wlv: WlvHandle, val: c_int);
+    fn nvim_wlv_get_n_attr(wlv: WlvHandle) -> c_int;
+    fn nvim_wlv_set_n_attr(wlv: WlvHandle, val: c_int);
+    fn nvim_wlv_get_skip_cells(wlv: WlvHandle) -> c_int;
+    fn nvim_wlv_set_skip_cells(wlv: WlvHandle, val: c_int);
+    fn nvim_wlv_get_skipped_cells(wlv: WlvHandle) -> c_int;
+    fn nvim_wlv_set_skipped_cells(wlv: WlvHandle, val: c_int);
+    fn nvim_wlv_get_extra_for_extmark(wlv: WlvHandle) -> bool;
+    fn nvim_wlv_set_extra_for_extmark(wlv: WlvHandle, val: bool);
 }
 
 /// Advance wlv->color_cols past the current vcol.
@@ -1797,6 +1833,207 @@ pub unsafe extern "C" fn rs_draw_col_buf(
     inc_vcol: bool,
 ) {
     draw_col_buf_impl(wp, wlv, text, len, attr, fold_vcol, inc_vcol);
+}
+
+// ============================================================================
+// handle_inline_virtual_text - Handle inline virtual text rendering
+// ============================================================================
+
+/// INT_MIN constant for marking draw_col as processed.
+const INT_MIN: c_int = c_int::MIN;
+
+/// Handle inline virtual text processing.
+///
+/// This function iterates through decoration state to find inline virtual text
+/// at the current position, setting up wlv fields for rendering.
+///
+/// # Safety
+/// - `wp` must be a valid window handle
+/// - `wlv` must be a valid winlinevars_T handle
+/// - `v` is the current column position
+/// - `selected` indicates if the position is selected (for overlay visibility)
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cast_possible_truncation)]
+unsafe fn handle_inline_virtual_text_impl(
+    _wp: WinHandle,
+    wlv: WlvHandle,
+    v: isize,
+    selected: bool,
+) {
+    loop {
+        let n_extra = nvim_wlv_get_n_extra(wlv);
+        if n_extra != 0 {
+            break;
+        }
+
+        let virt_inline_i = nvim_wlv_get_virt_inline_i(wlv);
+        let virt_inline_size = nvim_wlv_get_virt_inline_size(wlv);
+
+        if virt_inline_i >= virt_inline_size {
+            // Need to find inline virtual text
+            nvim_wlv_reset_virt_inline(wlv);
+            nvim_wlv_set_virt_inline_i(wlv, 0);
+
+            let state = nvim_get_decor_state();
+            let end = nvim_decor_state_get_current_end(state);
+            let row = nvim_decor_state_get_row(state);
+            let off = nvim_wlv_get_off(wlv);
+
+            let mut found = false;
+            for i in 0..end {
+                let item = nvim_decor_state_get_active_range(state, i);
+                if item.is_null() {
+                    continue;
+                }
+
+                let draw_col = nvim_decor_range_get_draw_col(item);
+                if draw_col == -3 {
+                    // No more inline virtual text before this non-inline virtual text item,
+                    // so its position can be decided now.
+                    nvim_decor_init_draw_col(off, selected, item);
+                }
+
+                let start_row = nvim_decor_range_get_start_row(item);
+                let kind = nvim_decor_range_get_kind(item);
+                let vt = nvim_decor_range_get_virt_text(item);
+
+                if start_row != row || kind != K_DECOR_KIND_VIRT_TEXT || vt.is_null() {
+                    continue;
+                }
+
+                let pos = nvim_decor_virt_text_get_pos(vt);
+                let width = nvim_decor_virt_text_get_width(vt);
+
+                if pos != K_VPOS_INLINE || width == 0 {
+                    continue;
+                }
+
+                let draw_col = nvim_decor_range_get_draw_col(item);
+                let start_col = nvim_decor_range_get_start_col(item);
+
+                if draw_col >= -1 && start_col == v as c_int {
+                    // Found matching inline virtual text
+                    let virt_inline_data = nvim_decor_range_get_virt_inline_data(item);
+                    let hl_mode = nvim_decor_range_get_virt_inline_hl_mode(item);
+                    nvim_wlv_set_virt_inline(wlv, virt_inline_data);
+                    nvim_wlv_set_virt_inline_hl_mode(wlv, hl_mode);
+                    nvim_decor_range_set_draw_col(item, INT_MIN);
+                    found = true;
+                    break;
+                }
+            }
+
+            if !found {
+                // No more inline virtual text here
+                break;
+            }
+        } else {
+            // Already inside existing inline virtual text with multiple chunks
+            let virt_inline_ptr = nvim_wlv_get_virt_inline_ptr(wlv);
+            let mut pos = nvim_wlv_get_virt_inline_i(wlv);
+            let mut attr: c_int = 0;
+
+            let text = nvim_next_virt_text_chunk(virt_inline_ptr, &mut pos, &mut attr);
+            nvim_wlv_set_virt_inline_i(wlv, pos);
+
+            if text.is_null() {
+                continue;
+            }
+
+            // Calculate text length manually (no libc::strlen)
+            let mut text_len: c_int = 0;
+            {
+                let mut p = text;
+                while *p != 0 {
+                    text_len += 1;
+                    p = p.add(1);
+                }
+            }
+
+            if text_len == 0 {
+                continue;
+            }
+
+            nvim_wlv_set_p_extra(wlv, text.cast_mut());
+            nvim_wlv_set_n_extra(wlv, text_len);
+            nvim_wlv_set_sc_extra(wlv, 0); // NUL
+            nvim_wlv_set_sc_final(wlv, 0); // NUL
+            nvim_wlv_set_extra_attr(wlv, attr);
+
+            let n_attr = rs_mb_charlen(text);
+            nvim_wlv_set_n_attr(wlv, n_attr);
+
+            // If the text didn't reach until the first window column we need to skip cells.
+            let skip_cells = nvim_wlv_get_skip_cells(wlv);
+            if skip_cells > 0 {
+                let p_extra = nvim_wlv_get_p_extra(wlv);
+                #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+                let virt_text_width = rs_mb_string2cells(p_extra) as c_int;
+
+                if virt_text_width > skip_cells {
+                    let mut skip_cells_remaining = skip_cells;
+                    let mut p = p_extra;
+                    let mut n_extra_val = nvim_wlv_get_n_extra(wlv);
+                    let mut n_attr_val = nvim_wlv_get_n_attr(wlv);
+
+                    // Skip cells in the text
+                    while skip_cells_remaining > 0 {
+                        let cells = rs_utf_ptr2cells(p);
+                        if cells > skip_cells_remaining {
+                            break;
+                        }
+                        let c_len = rs_utfc_ptr2len(p);
+                        skip_cells_remaining -= cells;
+                        p = p.add(c_len as usize);
+                        n_extra_val -= c_len;
+                        n_attr_val -= 1;
+                    }
+
+                    nvim_wlv_set_p_extra(wlv, p);
+                    nvim_wlv_set_n_extra(wlv, n_extra_val);
+                    nvim_wlv_set_n_attr(wlv, n_attr_val);
+
+                    // Skipped cells needed to be accounted for in vcol
+                    let skipped_cells = nvim_wlv_get_skipped_cells(wlv);
+                    nvim_wlv_set_skipped_cells(
+                        wlv,
+                        skipped_cells + skip_cells - skip_cells_remaining,
+                    );
+                    nvim_wlv_set_skip_cells(wlv, skip_cells_remaining);
+                } else {
+                    // The whole text is left of the window, drop it and advance to the next one
+                    nvim_wlv_set_skip_cells(wlv, skip_cells - virt_text_width);
+
+                    // Skipped cells needed to be accounted for in vcol
+                    let skipped_cells = nvim_wlv_get_skipped_cells(wlv);
+                    nvim_wlv_set_skipped_cells(wlv, skipped_cells + virt_text_width);
+                    nvim_wlv_set_n_attr(wlv, 0);
+                    nvim_wlv_set_n_extra(wlv, 0);
+
+                    // Go to the start so the next virtual text chunk can be selected
+                    continue;
+                }
+            }
+
+            // Assert n_extra > 0
+            debug_assert!(nvim_wlv_get_n_extra(wlv) > 0);
+            nvim_wlv_set_extra_for_extmark(wlv, true);
+        }
+
+        // Break after successfully processing (either found new or processed existing)
+        break;
+    }
+}
+
+/// FFI export for handle_inline_virtual_text.
+#[no_mangle]
+pub unsafe extern "C" fn rs_handle_inline_virtual_text(
+    wp: WinHandle,
+    wlv: WlvHandle,
+    v: isize,
+    selected: bool,
+) {
+    handle_inline_virtual_text_impl(wp, wlv, v, selected);
 }
 
 #[cfg(test)]

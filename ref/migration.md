@@ -167,6 +167,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 - `handle_breakindent` - Breakindent for wrapped text (rs_handle_breakindent)
 - `handle_showbreak_and_filler` - Showbreak and filler lines (rs_handle_showbreak_and_filler)
 - `has_more_inline_virt` - Check for more inline virtual text (rs_has_more_inline_virt)
+- `handle_inline_virtual_text` - Inline virtual text processing (rs_handle_inline_virtual_text)
 
 ### drawline.c Accessor Functions (for Rust access to winlinevars_T)
 

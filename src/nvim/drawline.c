@@ -159,6 +159,7 @@ extern void rs_set_line_attr_for_diff(win_T *wp, winlinevars_T *wlv);
 extern void rs_handle_breakindent(win_T *wp, winlinevars_T *wlv);
 extern void rs_handle_showbreak_and_filler(win_T *wp, winlinevars_T *wlv);
 extern bool rs_has_more_inline_virt(winlinevars_T *wlv, ptrdiff_t v);
+extern void rs_handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t v, bool selected);
 
 // winlinevars_T accessor functions for Rust opaque handle pattern.
 // These use void* to avoid exposing the internal winlinevars_T type in headers.
@@ -561,6 +562,53 @@ size_t nvim_wlv_get_virt_inline_size(void *wlv_ptr)
   return kv_size(wlv->virt_inline);
 }
 
+/// Set the virt_inline_i in wlv.
+void nvim_wlv_set_virt_inline_i(void *wlv_ptr, size_t val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->virt_inline_i = val;
+}
+
+/// Set wlv->virt_inline to VIRTTEXT_EMPTY.
+void nvim_wlv_reset_virt_inline(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->virt_inline = VIRTTEXT_EMPTY;
+}
+
+/// Get the virt_inline pointer from wlv.
+void *nvim_wlv_get_virt_inline_ptr(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return &wlv->virt_inline;
+}
+
+/// Set the virt_inline from a VirtText pointer (copies the kvec).
+void nvim_wlv_set_virt_inline(void *wlv_ptr, void *vt_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  if (vt_ptr) {
+    VirtText *vt = (VirtText *)vt_ptr;
+    wlv->virt_inline = *vt;
+  } else {
+    wlv->virt_inline = VIRTTEXT_EMPTY;
+  }
+}
+
+/// Set the virt_inline_hl_mode in wlv.
+void nvim_wlv_set_virt_inline_hl_mode(void *wlv_ptr, int val)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  wlv->virt_inline_hl_mode = (HlMode)val;
+}
+
+/// Get the virt_inline_hl_mode from wlv.
+int nvim_wlv_get_virt_inline_hl_mode(void *wlv_ptr)
+{
+  winlinevars_T *wlv = (winlinevars_T *)wlv_ptr;
+  return wlv->virt_inline_hl_mode;
+}
+
 /// Get the cul_attr from wlv.
 int nvim_wlv_get_cul_attr(void *wlv_ptr)
 {
@@ -927,93 +975,7 @@ static bool has_more_inline_virt(winlinevars_T *wlv, ptrdiff_t v)
 
 static void handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t v, bool selected)
 {
-  while (wlv->n_extra == 0) {
-    if (wlv->virt_inline_i >= kv_size(wlv->virt_inline)) {
-      // need to find inline virtual text
-      wlv->virt_inline = VIRTTEXT_EMPTY;
-      wlv->virt_inline_i = 0;
-      DecorState *state = &decor_state;
-      int const end = state->current_end;
-      int *const indices = state->ranges_i.items;
-      DecorRangeSlot *const slots = state->slots.items;
-
-      for (int i = 0; i < end; i++) {
-        DecorRange *item = &slots[indices[i]].range;
-        if (item->draw_col == -3) {
-          // No more inline virtual text before this non-inline virtual text item,
-          // so its position can be decided now.
-          decor_init_draw_col(wlv->off, selected, item);
-        }
-        if (item->start_row != state->row
-            || item->kind != kDecorKindVirtText
-            || item->data.vt->pos != kVPosInline
-            || item->data.vt->width == 0) {
-          continue;
-        }
-        if (item->draw_col >= -1 && item->start_col == v) {
-          wlv->virt_inline = item->data.vt->data.virt_text;
-          wlv->virt_inline_hl_mode = item->data.vt->hl_mode;
-          item->draw_col = INT_MIN;
-          break;
-        }
-      }
-      if (!kv_size(wlv->virt_inline)) {
-        // no more inline virtual text here
-        break;
-      }
-    } else {
-      // already inside existing inline virtual text with multiple chunks
-      int attr = 0;
-      char *text = next_virt_text_chunk(wlv->virt_inline, &wlv->virt_inline_i, &attr);
-      if (text == NULL) {
-        continue;
-      }
-      wlv->p_extra = text;
-      wlv->n_extra = (int)strlen(text);
-      if (wlv->n_extra == 0) {
-        continue;
-      }
-      wlv->sc_extra = NUL;
-      wlv->sc_final = NUL;
-      wlv->extra_attr = attr;
-      wlv->n_attr = mb_charlen(text);
-      // If the text didn't reach until the first window
-      // column we need to skip cells.
-      if (wlv->skip_cells > 0) {
-        int virt_text_width = (int)mb_string2cells(wlv->p_extra);
-        if (virt_text_width > wlv->skip_cells) {
-          int skip_cells_remaining = wlv->skip_cells;
-          // Skip cells in the text.
-          while (skip_cells_remaining > 0) {
-            int cells = utf_ptr2cells(wlv->p_extra);
-            if (cells > skip_cells_remaining) {
-              break;
-            }
-            int c_len = utfc_ptr2len(wlv->p_extra);
-            skip_cells_remaining -= cells;
-            wlv->p_extra += c_len;
-            wlv->n_extra -= c_len;
-            wlv->n_attr--;
-          }
-          // Skipped cells needed to be accounted for in vcol.
-          wlv->skipped_cells += wlv->skip_cells - skip_cells_remaining;
-          wlv->skip_cells = skip_cells_remaining;
-        } else {
-          // The whole text is left of the window, drop
-          // it and advance to the next one.
-          wlv->skip_cells -= virt_text_width;
-          // Skipped cells needed to be accounted for in vcol.
-          wlv->skipped_cells += virt_text_width;
-          wlv->n_attr = 0;
-          wlv->n_extra = 0;
-          // Go to the start so the next virtual text chunk can be selected.
-          continue;
-        }
-      }
-      assert(wlv->n_extra > 0);
-      wlv->extra_for_extmark = true;
-    }
-  }
+  rs_handle_inline_virtual_text(wp, wlv, v, selected);
 }
 
 /// Start a screen line at column zero.
