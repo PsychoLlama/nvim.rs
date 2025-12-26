@@ -4039,6 +4039,12 @@ linenr_T qf_current_entry(win_T *wp)
   return qf_get_curlist(qi)->qf_index;
 }
 
+/// Accessor for qf_current_entry for Rust FFI.
+linenr_T nvim_qf_current_entry(win_T *wp)
+{
+  return qf_current_entry(wp);
+}
+
 /// Update the cursor position in the quickfix window to the current error.
 /// Return true if there is a quickfix window.
 ///

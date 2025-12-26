@@ -17,6 +17,7 @@
 use std::ffi::c_int;
 use std::ffi::c_void;
 
+use nvim_highlight::{rs_syn_attr2entry, HlAttrs};
 use nvim_window::WinHandle;
 
 /// schar_T is stored as a u32.
@@ -73,6 +74,9 @@ pub const K_OPT_CULOPT_FLAG_NUMBER: c_int = 0x04;
 
 /// Sign width constant.
 pub const SIGN_WIDTH: c_int = 2;
+
+/// Mode constants (from state_defs.h)
+const MODE_INSERT: c_int = 0x10;
 
 // C accessor functions for window
 extern "C" {
@@ -748,6 +752,11 @@ extern "C" {
 
     // Buffer handle for win
     fn nvim_win_get_w_buffer(wp: WinHandle) -> BufHandle;
+
+    // State and quickfix functions for apply_cursorline_highlight
+    fn nvim_get_state() -> c_int;
+    fn rs_bt_quickfix(buf: BufHandle) -> bool;
+    fn nvim_qf_current_entry(wp: WinHandle) -> LinenrT;
 }
 
 /// Advance wlv->color_cols past the current vcol.
@@ -896,6 +905,43 @@ pub unsafe extern "C" fn rs_fill_foldcolumn_buffer(
 #[no_mangle]
 pub extern "C" fn rs_use_cursor_line_highlight(wp: WinHandle, lnum: LinenrT) -> bool {
     use_cursor_line_highlight_impl(wp, lnum)
+}
+
+/// Apply cursorline highlight to the line attributes.
+///
+/// We make a compromise here (#7383):
+/// - low-priority CursorLine if fg is not set
+/// - high-priority ("same as Vim" priority) CursorLine if fg is set
+unsafe fn apply_cursorline_highlight_impl(wp: WinHandle, wlv: WlvHandle) {
+    let hlf_cul = nvim_get_hlf_cul();
+    let cul_attr = nvim_win_hl_attr(wp, hlf_cul);
+    nvim_wlv_set_cul_attr(wlv, cul_attr);
+
+    let ae: HlAttrs = rs_syn_attr2entry(cul_attr);
+
+    if ae.rgb_fg_color == -1 && ae.cterm_fg_color == 0 {
+        // Low-priority CursorLine when fg is not set
+        nvim_wlv_set_line_attr_lowprio(wlv, cul_attr);
+    } else {
+        // High-priority CursorLine when fg is set
+        let state = nvim_get_state();
+        let buf = nvim_win_get_w_buffer(wp);
+        let lnum = nvim_wlv_get_lnum(wlv);
+
+        if (state & MODE_INSERT) == 0 && rs_bt_quickfix(buf) && nvim_qf_current_entry(wp) == lnum {
+            // In quickfix window, combine with existing line_attr
+            let line_attr = nvim_wlv_get_line_attr(wlv);
+            nvim_wlv_set_line_attr(wlv, hl_combine_attr(cul_attr, line_attr));
+        } else {
+            nvim_wlv_set_line_attr(wlv, cul_attr);
+        }
+    }
+}
+
+/// Apply cursorline highlight (FFI export).
+#[no_mangle]
+pub unsafe extern "C" fn rs_apply_cursorline_highlight(wp: WinHandle, wlv: WlvHandle) {
+    apply_cursorline_highlight_impl(wp, wlv);
 }
 
 /// Fill cells with a character.

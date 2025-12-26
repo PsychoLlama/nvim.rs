@@ -154,6 +154,7 @@ extern void rs_win_line_start(win_T *wp, winlinevars_T *wlv);
 extern void rs_fix_for_boguscols(winlinevars_T *wlv);
 extern void rs_draw_col_buf(win_T *wp, winlinevars_T *wlv, const char *text, size_t len,
                             int attr, const colnr_T *fold_vcol, bool inc_vcol);
+extern void rs_apply_cursorline_highlight(win_T *wp, winlinevars_T *wlv);
 
 // winlinevars_T accessor functions for Rust opaque handle pattern.
 // These use void* to avoid exposing the internal winlinevars_T type in headers.
@@ -971,21 +972,7 @@ static void handle_showbreak_and_filler(win_T *wp, winlinevars_T *wlv)
 
 static void apply_cursorline_highlight(win_T *wp, winlinevars_T *wlv)
 {
-  wlv->cul_attr = win_hl_attr(wp, HLF_CUL);
-  HlAttrs ae = syn_attr2entry(wlv->cul_attr);
-  // We make a compromise here (#7383):
-  //  * low-priority CursorLine if fg is not set
-  //  * high-priority ("same as Vim" priority) CursorLine if fg is set
-  if (ae.rgb_fg_color == -1 && ae.cterm_fg_color == 0) {
-    wlv->line_attr_lowprio = wlv->cul_attr;
-  } else {
-    if (!(State & MODE_INSERT) && bt_quickfix(wp->w_buffer)
-        && qf_current_entry(wp) == wlv->lnum) {
-      wlv->line_attr = hl_combine_attr(wlv->cul_attr, wlv->line_attr);
-    } else {
-      wlv->line_attr = wlv->cul_attr;
-    }
-  }
+  rs_apply_cursorline_highlight(wp, wlv);
 }
 
 static void set_line_attr_for_diff(win_T *wp, winlinevars_T *wlv)

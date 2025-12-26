@@ -8,6 +8,7 @@ repository.workspace = true
 
 [dependencies]
 nvim-grid = { path = "../grid" }
+nvim-highlight = { path = "../highlight" }
 nvim-window = { path = "../window" }
 
 [lints]
