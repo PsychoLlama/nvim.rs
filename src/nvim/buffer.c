@@ -131,6 +131,7 @@ extern int rs_buf_valid(buf_T *buf);
 extern int rs_get_highest_fnum(void);
 extern int rs_buf_hide(buf_T *buf);
 extern int rs_bufref_valid(bufref_T *bufref);
+extern int rs_col_print(uint8_t *buf, size_t buflen, int col, int vcol);
 
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to buf_T fields from Rust code.
@@ -3460,11 +3461,7 @@ void fileinfo(int fullname, int shorthelp, bool dont_truncate)
 
 int col_print(char *buf, size_t buflen, int col, int vcol)
 {
-  if (col == vcol) {
-    return (int)vim_snprintf_safelen(buf, buflen, "%d", col);
-  }
-
-  return (int)vim_snprintf_safelen(buf, buflen, "%d-%d", col, vcol);
+  return rs_col_print((uint8_t *)buf, buflen, col, vcol);
 }
 
 static char *lasttitle = NULL;

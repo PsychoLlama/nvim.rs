@@ -54,6 +54,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | register     | Register name validation                           |
 | search       | Character search state, search/substitute tracking |
 | spell        | Spell check utilities                              |
+| statusline   | Status line helpers (stl_connected, fillchar_status) |
 | strings      | String comparison, case conversion, escape utils   |
 | tui          | Terminal UI, terminfo formatting                   |
 | typval       | VimL typval_T type checking and value extraction   |

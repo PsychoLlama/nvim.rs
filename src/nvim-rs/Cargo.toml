@@ -60,6 +60,7 @@ nvim-profile = { path = "profile" }
 nvim-register = { path = "register" }
 nvim-search = { path = "search" }
 nvim-spell = { path = "spell" }
+nvim-statusline = { path = "statusline" }
 nvim-strings = { path = "strings" }
 nvim-utf8proc = { path = "utf8proc" }
 nvim-version = { path = "version" }

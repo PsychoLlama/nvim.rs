@@ -763,6 +763,18 @@ schar_T nvim_win_get_fcs_horizup(win_T *wp)
   return wp->w_p_fcs_chars.horizup;
 }
 
+/// Get the statusline fill character (fcs_chars.stl).
+schar_T nvim_win_get_fcs_stl(win_T *wp)
+{
+  return wp->w_p_fcs_chars.stl;
+}
+
+/// Get the statusline fill character for non-current windows (fcs_chars.stlnc).
+schar_T nvim_win_get_fcs_stlnc(win_T *wp)
+{
+  return wp->w_p_fcs_chars.stlnc;
+}
+
 /// Get the highlight attribute for a window's highlight group.
 /// This wraps the inline win_hl_attr function for FFI.
 int nvim_win_hl_attr(win_T *wp, int hlf)

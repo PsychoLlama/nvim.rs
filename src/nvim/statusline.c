@@ -51,6 +51,10 @@
 #include "nvim/undo.h"
 #include "nvim/window.h"
 
+// Rust implementations
+extern int rs_stl_connected(win_T *wp);
+extern schar_T rs_fillchar_status(int *group, win_T *wp);
+
 // Determines how deeply nested %{} blocks will be evaluated in statusline.
 #define MAX_STL_EVAL_DEPTH 100
 
@@ -124,20 +128,7 @@ void get_trans_bufname(buf_T *buf)
 /// line of the window right of it.  If not, then it's a vertical separator.
 bool stl_connected(win_T *wp)
 {
-  frame_T *fr = wp->w_frame;
-  while (fr->fr_parent != NULL) {
-    if (fr->fr_parent->fr_layout == FR_COL) {
-      if (fr->fr_next != NULL) {
-        break;
-      }
-    } else {
-      if (fr->fr_next != NULL) {
-        return true;
-      }
-    }
-    fr = fr->fr_parent;
-  }
-  return false;
+  return rs_stl_connected(wp);
 }
 
 /// Clear status line, window bar or tab page line click definition table
@@ -563,13 +554,7 @@ void redraw_ruler(void)
 /// Get the character to use in a status line.  Get its attributes in "*attr".
 schar_T fillchar_status(hlf_T *group, win_T *wp)
 {
-  if (wp == curwin) {
-    *group = HLF_S;
-    return wp->w_p_fcs_chars.stl;
-  } else {
-    *group = HLF_SNC;
-    return wp->w_p_fcs_chars.stlnc;
-  }
+  return rs_fillchar_status((int *)group, wp);
 }
 
 /// Redraw the status line according to 'statusline' and take care of any
