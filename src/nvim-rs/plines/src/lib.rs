@@ -2033,6 +2033,7 @@ pub extern "C" fn rs_plines_win_col(
 
 extern "C" {
     fn nvim_win_get_skipcol(wp: WinHandle) -> c_int;
+    fn nvim_get_p_sj() -> i64;
 }
 
 /// Get the number of screen lines skipped with "wp->w_skipcol".
@@ -2101,6 +2102,39 @@ fn skipcol_from_plines_impl(wp: WinHandle, plines_off: c_int) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_skipcol_from_plines(wp: WinHandle, plines_off: c_int) -> c_int {
     skipcol_from_plines_impl(wp, plines_off)
+}
+
+// ============================================================================
+// scrolljump_value - Scroll jump calculation
+// ============================================================================
+
+/// Return the scrolljump value to use for the window "wp".
+/// When 'scrolljump' is positive use it as-is.
+/// When 'scrolljump' is negative use it as a percentage of the window height.
+#[inline]
+fn scrolljump_value_impl(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        let p_sj = nvim_get_p_sj();
+        if p_sj >= 0 {
+            p_sj as c_int
+        } else {
+            let height = nvim_win_get_view_height(wp);
+            (height * (-p_sj) as c_int) / 100
+        }
+    }
+}
+
+/// Return the scrolljump value to use for the window "wp".
+///
+/// # Safety
+/// The `wp` parameter must be a valid window handle.
+#[no_mangle]
+pub extern "C" fn rs_scrolljump_value(wp: WinHandle) -> c_int {
+    scrolljump_value_impl(wp)
 }
 
 #[cfg(test)]

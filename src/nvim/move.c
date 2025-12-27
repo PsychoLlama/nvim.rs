@@ -64,6 +64,13 @@ extern int rs_win_col_off2(win_T *wp);
 extern int rs_sms_marker_overlap(win_T *wp, int extra2);
 extern int rs_adjust_plines_for_skipcol(win_T *wp);
 extern int rs_skipcol_from_plines(win_T *wp, int plines_off);
+extern int rs_scrolljump_value(win_T *wp);
+
+// Accessor for global scrolljump option
+OptInt nvim_get_p_sj(void)
+{
+  return p_sj;
+}
 
 /// Get the number of screen lines skipped with "wp->w_skipcol".
 static int adjust_plines_for_skipcol(win_T *wp)
@@ -433,8 +440,7 @@ void update_topline(win_T *wp)
 /// When 'scrolljump' is negative use it as a percentage of the window height.
 static int scrolljump_value(win_T *wp)
 {
-  int result = p_sj >= 0 ? (int)p_sj : (wp->w_view_height * (int)(-p_sj)) / 100;
-  return result;
+  return rs_scrolljump_value(wp);
 }
 
 /// Return true when there are not 'scrolloff' lines above the cursor for window "wp".

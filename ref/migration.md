@@ -128,6 +128,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 - `sms_marker_overlap` - Migrated to Rust (rs_sms_marker_overlap)
 - `adjust_plines_for_skipcol` - Migrated to Rust (rs_adjust_plines_for_skipcol)
 - `skipcol_from_plines` - Migrated to Rust (rs_skipcol_from_plines)
+- `scrolljump_value` - Migrated to Rust (rs_scrolljump_value)
 
 ### Global State Dependencies
 
