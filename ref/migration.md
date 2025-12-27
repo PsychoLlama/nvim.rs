@@ -180,6 +180,11 @@ Added ~30 accessor functions for winlinevars_T fields:
 - `nvim_wlv_get/set_color_cols`, `nvim_wlv_get/set_line_attr`
 - And more for virtual text, skip cells, boguscols, etc.
 
+### decoration.c Migrated Functions
+
+- `decor_virt_pos` - Check if decor has virtual position (rs_decor_virt_pos)
+- `decor_virt_pos_kind` - Get virtual text position kind (rs_decor_virt_pos_kind)
+
 ### decoration.c Accessor Functions (for Rust access to DecorState)
 
 Added ~25 accessor functions for decoration system:
