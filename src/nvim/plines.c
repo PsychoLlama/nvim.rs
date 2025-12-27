@@ -45,6 +45,7 @@ extern int rs_linesize_regular(void *csarg, int vcol_arg, int len);
 extern void rs_getvcol(void *csarg, const char *line, int end_col, int cstype,
                        int pos_lnum, int pos_coladd,
                        int *start_out, int *cursor_out, int *end_out, int *pos_col_out);
+extern int rs_plines_win_nofold(void *csarg, int cstype, int first_char);
 
 // Filter for inline virtual text marks
 static const uint32_t inline_filter[kMTMetaCount] = {[kMTMetaInline] = kMTFilterSelect };
@@ -745,35 +746,7 @@ int plines_win_nofold(win_T *wp, linenr_T lnum)
   char *s = ml_get_buf(wp->w_buffer, lnum);
   CharsizeArg csarg;
   CSType const cstype = init_charsize_arg(&csarg, wp, lnum, s);
-  if (*s == NUL && csarg.virt_row < 0) {
-    return 1;  // be quick for an empty line
-  }
-
-  int64_t col;
-  if (cstype == kCharsizeFast) {
-    col = linesize_fast(&csarg, 0, MAXCOL);
-  } else {
-    col = linesize_regular(&csarg, 0, MAXCOL);
-  }
-
-  // If list mode is on, then the '$' at the end of the line may take up one
-  // extra column.
-  if (wp->w_p_list && wp->w_p_lcs_chars.eol != NUL) {
-    col += 1;
-  }
-
-  // Add column offset for 'number', 'relativenumber' and 'foldcolumn'.
-  int width = wp->w_view_width - win_col_off(wp);
-  if (width <= 0) {
-    return 32000;  // bigger than the number of screen lines
-  }
-  if (col <= width) {
-    return 1;
-  }
-  col -= width;
-  width += win_col_off2(wp);
-  const int64_t lines = (col + (width - 1)) / width + 1;
-  return (lines > 0 && lines <= INT_MAX) ? (int)lines : INT_MAX;
+  return rs_plines_win_nofold(&csarg, (int)cstype, (int)(uint8_t)*s);
 }
 
 /// Like plines_win(), but only reports the number of physical screen lines

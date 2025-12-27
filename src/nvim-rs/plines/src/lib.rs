@@ -1810,6 +1810,85 @@ pub extern "C" fn rs_getvcol(
     );
 }
 
+// ============================================================================
+// plines_win_nofold - Physical lines for a buffer line
+// ============================================================================
+
+/// Get number of window lines physical line will occupy in window.
+/// Does not care about folding, 'wrap' or filler lines.
+///
+/// This function calculates how many screen lines a buffer line will take
+/// based on the line width and window width.
+///
+/// # Arguments
+/// * `csarg` - CharsizeArg handle (must be initialized with init_charsize_arg)
+/// * `cstype` - 0 for fast path, 1 for regular path
+/// * `first_char` - First character of the line (0 for NUL/empty)
+#[inline]
+fn plines_win_nofold_impl(csarg: CharsizeArgHandle, cstype: c_int, first_char: c_int) -> c_int {
+    if csarg.is_null() {
+        return 1;
+    }
+
+    unsafe {
+        let wp = nvim_csarg_get_win(csarg);
+        let virt_row = nvim_csarg_get_virt_row(csarg);
+
+        // Empty line without virtual text
+        if first_char == 0 && virt_row < 0 {
+            return 1;
+        }
+
+        // Get line width using linesize_fast or linesize_regular
+        let col: i64 = if cstype == CSTYPE_FAST {
+            let use_tabstop = nvim_csarg_get_use_tabstop(csarg);
+            let line = nvim_csarg_get_line(csarg);
+            i64::from(rs_linesize_fast(wp, use_tabstop, line, 0, MAXCOL))
+        } else {
+            i64::from(linesize_regular_impl(csarg, 0, MAXCOL))
+        };
+
+        // If list mode is on, the '$' at the end may take up one extra column
+        let p_list = nvim_win_get_p_list(wp) != 0;
+        let lcs_eol = nvim_win_get_lcs_eol(wp);
+        let col = if p_list && lcs_eol != 0 { col + 1 } else { col };
+
+        // Add column offset for 'number', 'relativenumber' and 'foldcolumn'
+        let view_width = nvim_win_get_view_width(wp);
+        let width = view_width - rs_win_col_off(wp);
+        if width <= 0 {
+            return 32000; // bigger than the number of screen lines
+        }
+
+        if col <= i64::from(width) {
+            return 1;
+        }
+
+        let col = col - i64::from(width);
+        let width = width + rs_win_col_off2(wp);
+        let lines = (col + i64::from(width - 1)) / i64::from(width) + 1;
+
+        if lines > 0 && lines <= i64::from(c_int::MAX) {
+            lines as c_int
+        } else {
+            c_int::MAX
+        }
+    }
+}
+
+/// Get number of window lines physical line will occupy.
+///
+/// # Safety
+/// The `csarg` parameter must be a valid `CharsizeArg*` pointer.
+#[no_mangle]
+pub extern "C" fn rs_plines_win_nofold(
+    csarg: CharsizeArgHandle,
+    cstype: c_int,
+    first_char: c_int,
+) -> c_int {
+    plines_win_nofold_impl(csarg, cstype, first_char)
+}
+
 #[cfg(test)]
 mod tests {
     // Tests require FFI stubs which aren't available in pure Rust testing.

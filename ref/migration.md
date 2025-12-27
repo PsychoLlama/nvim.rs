@@ -121,6 +121,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 - `charsize_regular` - Migrated to Rust (rs_charsize_regular) - includes marktree accessor pattern
 - `linesize_regular` - Migrated to Rust (rs_linesize_regular) - includes character iteration accessors
 - `getvcol` - Migrated to Rust (rs_getvcol) - includes visual mode accessors
+- `plines_win_nofold` - Migrated to Rust (rs_plines_win_nofold)
 
 ### Global State Dependencies
 
