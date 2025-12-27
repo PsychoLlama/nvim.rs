@@ -115,8 +115,11 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 
 **plines.c** (display calculations - partially MIGRATED):
 - `win_chartabsize` - Migrated to Rust (rs_win_chartabsize)
-- `charsize_fast_impl` - Character display width (uses win_T*)
-- `in_win_border` - Window border check
+- `charsize_fast` - Migrated to Rust (rs_charsize_fast)
+- `linesize_fast` - Migrated to Rust (rs_linesize_fast)
+- `in_win_border` - Migrated to Rust (rs_in_win_border)
+- `charsize_regular` - Complex, needs marktree iteration for inline virtual text
+- `linesize_regular` - Complex, depends on charsize_regular
 
 ### Global State Dependencies
 
