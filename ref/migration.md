@@ -113,7 +113,8 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 **buffer.c**:
 - `buf_valid` - Buffer pointer validation (needs buffer list)
 
-**plines.c** (display calculations):
+**plines.c** (display calculations - partially MIGRATED):
+- `win_chartabsize` - Migrated to Rust (rs_win_chartabsize)
 - `charsize_fast_impl` - Character display width (uses win_T*)
 - `in_win_border` - Window border check
 
