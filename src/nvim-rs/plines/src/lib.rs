@@ -13,10 +13,21 @@
 #![allow(clippy::cast_possible_truncation)] // OptInt values fit in c_int for these options
 #![allow(clippy::similar_names)] // p_nu and p_rnu are standard Vim option names
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
 
 use nvim_buffer::BufHandle;
 use nvim_window::WinHandle;
+
+/// Opaque handle to a CharsizeArg structure.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct CharsizeArgHandle(*mut c_void);
+
+impl CharsizeArgHandle {
+    const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
 
 // C accessor functions
 extern "C" {
@@ -116,6 +127,41 @@ extern "C" {
 
     // Window border accessors
     fn nvim_win_get_border_adj(wp: WinHandle, idx: c_int) -> c_int;
+
+    // CharsizeArg accessor functions
+    fn nvim_csarg_get_win(csarg: CharsizeArgHandle) -> WinHandle;
+    fn nvim_csarg_get_line(csarg: CharsizeArgHandle) -> *const c_char;
+    fn nvim_csarg_get_virt_row(csarg: CharsizeArgHandle) -> c_int;
+    fn nvim_csarg_get_use_tabstop(csarg: CharsizeArgHandle) -> c_int;
+    fn nvim_csarg_get_max_head_vcol(csarg: CharsizeArgHandle) -> c_int;
+    fn nvim_csarg_get_indent_width(csarg: CharsizeArgHandle) -> c_int;
+    fn nvim_csarg_set_indent_width(csarg: CharsizeArgHandle, value: c_int);
+    fn nvim_csarg_get_cur_text_width_left(csarg: CharsizeArgHandle) -> c_int;
+    fn nvim_csarg_set_cur_text_width_left(csarg: CharsizeArgHandle, value: c_int);
+    fn nvim_csarg_get_cur_text_width_right(csarg: CharsizeArgHandle) -> c_int;
+    fn nvim_csarg_set_cur_text_width_right(csarg: CharsizeArgHandle, value: c_int);
+
+    // Marktree iterator accessors
+    fn nvim_csarg_itr_current_row(csarg: CharsizeArgHandle) -> c_int;
+    fn nvim_csarg_itr_current_col(csarg: CharsizeArgHandle) -> c_int;
+    fn nvim_csarg_itr_mark_invalid(csarg: CharsizeArgHandle) -> c_int;
+    fn nvim_csarg_itr_mark_right(csarg: CharsizeArgHandle) -> c_int;
+    fn nvim_csarg_itr_ns_in_win(csarg: CharsizeArgHandle) -> c_int;
+    fn nvim_csarg_itr_get_virt_text_widths(
+        csarg: CharsizeArgHandle,
+        left_width: *mut c_int,
+        right_width: *mut c_int,
+    );
+    fn nvim_csarg_itr_next(csarg: CharsizeArgHandle);
+
+    // Additional accessors for charsize_regular
+    fn nvim_virt_text_cursor_off(csarg: CharsizeArgHandle, on_NUL: c_int) -> c_int;
+    fn nvim_vim_strsize(s: *const c_char) -> c_int;
+    fn nvim_get_breakindent_win(wp: WinHandle, line: *const c_char) -> c_int;
+    fn nvim_vim_isbreak(c: c_int) -> c_int;
+    fn nvim_win_get_p_lbr(wp: WinHandle) -> c_int;
+    fn nvim_win_get_p_bri(wp: WinHandle) -> c_int;
+    fn nvim_win_get_lcs_eol(wp: WinHandle) -> c_int;
 }
 
 // Mode constants (matching Neovim's state.h)
@@ -1104,6 +1150,322 @@ pub extern "C" fn rs_linesize_fast(
     len: c_int,
 ) -> c_int {
     linesize_fast_impl(wp, use_tabstop != 0, line, vcol_arg, len)
+}
+
+// ============================================================================
+// charsize_regular - Full character size with virtual text, linebreak, etc.
+// ============================================================================
+
+/// INT_MIN value (for indent_width sentinel)
+const INT_MIN: c_int = c_int::MIN;
+
+/// Get the number of cells taken up on the screen for the given arguments.
+///
+/// This handles:
+/// - Normal characters, tabs, NUL
+/// - Inline virtual text (via marktree iteration)
+/// - Double-width character wrapping
+/// - 'showbreak' and 'breakindent'
+/// - 'linebreak' option
+///
+/// "csarg->cur_text_width_left" and "csarg->cur_text_width_right" are set
+/// to the extra size for inline virtual text.
+#[inline]
+#[allow(clippy::too_many_lines)]
+fn charsize_regular_impl(
+    csarg: CharsizeArgHandle,
+    cur: *const c_char,
+    vcol: c_int,
+    cur_char: i32,
+) -> CharSize {
+    if csarg.is_null() || cur.is_null() {
+        return CharSize { width: 1, head: 0 };
+    }
+
+    unsafe {
+        // Reset cur_text_width fields
+        nvim_csarg_set_cur_text_width_left(csarg, 0);
+        nvim_csarg_set_cur_text_width_right(csarg, 0);
+
+        let wp = nvim_csarg_get_win(csarg);
+        let line = nvim_csarg_get_line(csarg);
+        let use_tabstop_flag = nvim_csarg_get_use_tabstop(csarg) != 0;
+        let use_tabstop = cur_char == TAB && use_tabstop_flag;
+        let mut mb_added: c_int = 0;
+
+        // Check for 'list' and 'listchars' eol
+        let p_list = nvim_win_get_p_list(wp) != 0;
+        let lcs_eol = nvim_win_get_lcs_eol(wp);
+        let has_lcs_eol = p_list && lcs_eol != 0;
+
+        // Get buffer info for tabstop calculation
+        let buf = nvim_win_get_w_buffer(wp);
+        let ts = nvim_buf_get_p_ts(buf);
+        let vts = nvim_buf_get_p_vts_array(buf);
+
+        // First get normal size, without 'linebreak' or inline virtual text
+        let mut size: c_int;
+        let is_doublewidth: bool;
+
+        if use_tabstop {
+            size = rs_tabstop_padding(vcol, ts, vts);
+            is_doublewidth = false;
+        } else if *cur == 0 {
+            // 1 cell for EOL list char (if present), as opposed to the two cell ^@
+            // for a NUL character in the text.
+            size = c_int::from(has_lcs_eol);
+            is_doublewidth = false;
+        } else if cur_char < 0 {
+            size = K_INVALID_BYTE_CELLS;
+            is_doublewidth = false;
+        } else {
+            size = rs_ptr2cells(cur);
+            is_doublewidth = size == 2 && cur_char >= 0x80;
+        }
+
+        // Handle inline virtual text via marktree iteration
+        let virt_row = nvim_csarg_get_virt_row(csarg);
+        if virt_row >= 0 {
+            let mut tab_size = size;
+            let col = (cur as isize - line as isize) as c_int;
+
+            loop {
+                let mark_row = nvim_csarg_itr_current_row(csarg);
+                let mark_col = nvim_csarg_itr_current_col(csarg);
+
+                if mark_row != virt_row || mark_col > col {
+                    break;
+                } else if mark_col == col {
+                    let mark_invalid = nvim_csarg_itr_mark_invalid(csarg) != 0;
+                    let ns_visible = nvim_csarg_itr_ns_in_win(csarg) != 0;
+
+                    if !mark_invalid && ns_visible {
+                        let mut left_width: c_int = 0;
+                        let mut right_width: c_int = 0;
+                        nvim_csarg_itr_get_virt_text_widths(
+                            csarg,
+                            std::ptr::from_mut(&mut left_width),
+                            std::ptr::from_mut(&mut right_width),
+                        );
+
+                        // Update cur_text_width fields
+                        let mark_right = nvim_csarg_itr_mark_right(csarg) != 0;
+                        if mark_right {
+                            let cur_right = nvim_csarg_get_cur_text_width_right(csarg);
+                            nvim_csarg_set_cur_text_width_right(csarg, cur_right + right_width);
+                        } else {
+                            let cur_left = nvim_csarg_get_cur_text_width_left(csarg);
+                            nvim_csarg_set_cur_text_width_left(csarg, cur_left + left_width);
+                        }
+
+                        let total_width = left_width + right_width;
+                        size += total_width;
+
+                        if use_tabstop && total_width > 0 {
+                            // Tab size changes because of the inserted text
+                            size -= tab_size;
+                            tab_size = rs_tabstop_padding(vcol + size, ts, vts);
+                            size += tab_size;
+                        }
+                    }
+                }
+                nvim_csarg_itr_next(csarg);
+            }
+        }
+
+        // Handle double-width character wrapping
+        let p_wrap = nvim_win_get_p_wrap(wp) != 0;
+        if is_doublewidth && p_wrap && in_win_border_impl(wp, vcol + size - 2) {
+            // Count the ">" in the last column
+            size += 1;
+            mb_added = 1;
+        }
+
+        // Get showbreak value
+        let sbr = get_showbreak_value_impl(wp);
+
+        // May have to add something for 'breakindent' and/or 'showbreak'
+        // string at the start of a screen line.
+        let mut head = mb_added;
+        let p_bri = nvim_win_get_p_bri(wp) != 0;
+        let sbr_nonempty = !sbr.is_null() && *sbr != 0;
+
+        // When "size" is 0, no new screen line is started.
+        if size > 0 && p_wrap && (sbr_nonempty || p_bri) {
+            let mut col_off_prev = rs_win_col_off(wp);
+            let view_width = nvim_win_get_view_width(wp);
+            let width2 = view_width - col_off_prev + rs_win_col_off2(wp);
+            let mut wcol = vcol + col_off_prev;
+            let max_head_vcol = nvim_csarg_get_max_head_vcol(csarg);
+            let mut added: c_int = 0;
+
+            // Cells taken by 'showbreak'/'breakindent' before current char
+            let mut head_prev: c_int = 0;
+            if wcol >= view_width {
+                wcol -= view_width;
+                col_off_prev = view_width - width2;
+                if wcol >= width2 && width2 > 0 {
+                    wcol %= width2;
+                }
+                head_prev = nvim_csarg_get_indent_width(csarg);
+                if head_prev == INT_MIN {
+                    head_prev = 0;
+                    if sbr_nonempty {
+                        head_prev += nvim_vim_strsize(sbr);
+                    }
+                    if p_bri {
+                        head_prev += nvim_get_breakindent_win(wp, line);
+                    }
+                    nvim_csarg_set_indent_width(csarg, head_prev);
+                }
+                if wcol < head_prev {
+                    head_prev -= wcol;
+                    wcol += head_prev;
+                    added += head_prev;
+                    if max_head_vcol <= 0 || vcol < max_head_vcol {
+                        head += head_prev;
+                    }
+                } else {
+                    head_prev = 0;
+                }
+                wcol += col_off_prev;
+            }
+
+            if wcol + size > view_width {
+                // Cells taken by 'showbreak'/'breakindent' halfway current char
+                let mut head_mid = nvim_csarg_get_indent_width(csarg);
+                if head_mid == INT_MIN {
+                    head_mid = 0;
+                    if sbr_nonempty {
+                        head_mid += nvim_vim_strsize(sbr);
+                    }
+                    if p_bri {
+                        head_mid += nvim_get_breakindent_win(wp, line);
+                    }
+                    nvim_csarg_set_indent_width(csarg, head_mid);
+                }
+                if head_mid > 0 {
+                    // Calculate effective window width
+                    let prev_rem = view_width - wcol;
+                    let mut width = width2 - head_mid;
+
+                    if width <= 0 {
+                        width = 1;
+                    }
+                    // Divide "size - prev_rem" by "width", rounding up
+                    let cnt = (size - prev_rem + width - 1) / width;
+                    added += cnt * head_mid;
+
+                    if max_head_vcol == 0 || vcol + size + added < max_head_vcol {
+                        head += cnt * head_mid;
+                    } else if max_head_vcol > vcol + head_prev + prev_rem {
+                        head += (max_head_vcol - (vcol + head_prev + prev_rem) + width2 - 1)
+                            / width2
+                            * head_mid;
+                    } else if max_head_vcol < 0 {
+                        let on_nul = c_int::from(*cur == 0);
+                        let off = mb_added + nvim_virt_text_cursor_off(csarg, on_nul);
+                        if off >= prev_rem {
+                            if size > off {
+                                head += (1 + (off - prev_rem) / width) * head_mid;
+                            } else {
+                                head += (off - prev_rem + width - 1) / width * head_mid;
+                            }
+                        }
+                    }
+                }
+            }
+
+            size += added;
+        }
+
+        // Handle 'linebreak' option
+        let p_lbr = nvim_win_get_p_lbr(wp) != 0;
+        let view_width = nvim_win_get_view_width(wp);
+        let mut need_lbr = false;
+
+        // If 'linebreak' set check at a blank before a non-blank if the line
+        // needs a break here.
+        if p_lbr && p_wrap && view_width != 0 {
+            let cur0 = *cur as u8 as c_int;
+            let cur1 = *cur.add(1) as u8 as c_int;
+            if nvim_vim_isbreak(cur0) != 0 && nvim_vim_isbreak(cur1) == 0 {
+                // Check if we're not in leading whitespace
+                let mut t = line;
+                while nvim_vim_isbreak(*t as u8 as c_int) != 0 {
+                    t = t.add(1);
+                }
+                // 'linebreak' is only needed when not in leading whitespace
+                need_lbr = cur as usize >= t as usize;
+            }
+        }
+
+        if need_lbr {
+            let mut s = cur;
+            // Count all characters from first non-blank after a blank up to next
+            // non-blank after a blank.
+            let numberextra = rs_win_col_off(wp);
+            let col_adj = size - 1;
+            let mut colmax = view_width - numberextra - col_adj;
+            if vcol >= colmax {
+                colmax += col_adj;
+                let n = colmax + rs_win_col_off2(wp);
+                if n > 0 {
+                    colmax += (((vcol - colmax) / n) + 1) * n - col_adj;
+                }
+            }
+
+            let mut vcol2 = vcol;
+            loop {
+                let ps = s;
+                // Advance s by UTF-8 character length
+                let char_len = utf8_char_len(*s as u8);
+                s = s.add(char_len);
+
+                let c = *s as u8 as c_int;
+                let ps_byte = *ps as u8 as c_int;
+
+                // Break condition: stop if we reach end or specific break conditions
+                let continue_loop = c != 0
+                    && (nvim_vim_isbreak(c) != 0
+                        || vcol2 == vcol
+                        || nvim_vim_isbreak(ps_byte) == 0);
+
+                if !continue_loop {
+                    break;
+                }
+
+                vcol2 += rs_win_chartabsize(wp, s, vcol2);
+                if vcol2 >= colmax {
+                    // Doesn't fit
+                    size = colmax - vcol + col_adj;
+                    break;
+                }
+            }
+        }
+
+        CharSize { width: size, head }
+    }
+}
+
+/// Get the number of cells taken up on the screen for the given arguments.
+///
+/// This is the full implementation that handles:
+/// - Inline virtual text
+/// - 'linebreak', 'breakindent', 'showbreak'
+/// - Double-width character wrapping
+///
+/// # Safety
+/// The `csarg` parameter must be a valid `CharsizeArg*` pointer.
+/// The `cur` parameter must be a valid pointer to a character within the line.
+#[no_mangle]
+pub extern "C" fn rs_charsize_regular(
+    csarg: CharsizeArgHandle,
+    cur: *const c_char,
+    vcol: c_int,
+    cur_char: i32,
+) -> CharSize {
+    charsize_regular_impl(csarg, cur, vcol, cur_char)
 }
 
 #[cfg(test)]

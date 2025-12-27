@@ -40,6 +40,207 @@ extern int rs_in_win_border(win_T *wp, int vcol);
 extern int rs_win_chartabsize(win_T *wp, const char *p, int col);
 extern CharSize rs_charsize_fast(win_T *wp, const char *cur, int use_tabstop, int vcol, int32_t cur_char);
 extern int rs_linesize_fast(win_T *wp, int use_tabstop, const char *line, int vcol_arg, int len);
+extern CharSize rs_charsize_regular(void *csarg, const char *cur, int vcol, int32_t cur_char);
+
+// Filter for inline virtual text marks
+static const uint32_t inline_filter[kMTMetaCount] = {[kMTMetaInline] = kMTFilterSelect };
+
+// ============================================================================
+// CharsizeArg accessor functions for Rust
+// ============================================================================
+
+/// Get the window handle from CharsizeArg.
+win_T *nvim_csarg_get_win(CharsizeArg *csarg)
+{
+  return csarg->win;
+}
+
+/// Get the line pointer from CharsizeArg.
+char *nvim_csarg_get_line(CharsizeArg *csarg)
+{
+  return csarg->line;
+}
+
+/// Get the virt_row from CharsizeArg.
+int nvim_csarg_get_virt_row(CharsizeArg *csarg)
+{
+  return csarg->virt_row;
+}
+
+/// Get use_tabstop from CharsizeArg.
+int nvim_csarg_get_use_tabstop(CharsizeArg *csarg)
+{
+  return csarg->use_tabstop ? 1 : 0;
+}
+
+/// Get max_head_vcol from CharsizeArg.
+int nvim_csarg_get_max_head_vcol(CharsizeArg *csarg)
+{
+  return csarg->max_head_vcol;
+}
+
+/// Get indent_width from CharsizeArg.
+int nvim_csarg_get_indent_width(CharsizeArg *csarg)
+{
+  return csarg->indent_width;
+}
+
+/// Set indent_width in CharsizeArg.
+void nvim_csarg_set_indent_width(CharsizeArg *csarg, int value)
+{
+  csarg->indent_width = value;
+}
+
+/// Get cur_text_width_left from CharsizeArg.
+int nvim_csarg_get_cur_text_width_left(CharsizeArg *csarg)
+{
+  return csarg->cur_text_width_left;
+}
+
+/// Set cur_text_width_left in CharsizeArg.
+void nvim_csarg_set_cur_text_width_left(CharsizeArg *csarg, int value)
+{
+  csarg->cur_text_width_left = value;
+}
+
+/// Get cur_text_width_right from CharsizeArg.
+int nvim_csarg_get_cur_text_width_right(CharsizeArg *csarg)
+{
+  return csarg->cur_text_width_right;
+}
+
+/// Set cur_text_width_right in CharsizeArg.
+void nvim_csarg_set_cur_text_width_right(CharsizeArg *csarg, int value)
+{
+  csarg->cur_text_width_right = value;
+}
+
+// ============================================================================
+// Marktree iterator accessor functions for Rust
+// ============================================================================
+
+/// Get the current mark's row position.
+int nvim_csarg_itr_current_row(CharsizeArg *csarg)
+{
+  MTKey mark = marktree_itr_current(csarg->iter);
+  return mark.pos.row;
+}
+
+/// Get the current mark's column position.
+int nvim_csarg_itr_current_col(CharsizeArg *csarg)
+{
+  MTKey mark = marktree_itr_current(csarg->iter);
+  return mark.pos.col;
+}
+
+/// Check if the current mark is invalid.
+int nvim_csarg_itr_mark_invalid(CharsizeArg *csarg)
+{
+  MTKey mark = marktree_itr_current(csarg->iter);
+  return mt_invalid(mark) ? 1 : 0;
+}
+
+/// Check if the current mark has right gravity.
+int nvim_csarg_itr_mark_right(CharsizeArg *csarg)
+{
+  MTKey mark = marktree_itr_current(csarg->iter);
+  return mt_right(mark) ? 1 : 0;
+}
+
+/// Check if the current mark's namespace is visible in the window.
+int nvim_csarg_itr_ns_in_win(CharsizeArg *csarg)
+{
+  MTKey mark = marktree_itr_current(csarg->iter);
+  return ns_in_win(mark.ns, csarg->win) ? 1 : 0;
+}
+
+/// Get the virtual text width from the current mark (summed for all inline virt texts).
+/// Returns the left and right widths added to the output parameters.
+void nvim_csarg_itr_get_virt_text_widths(CharsizeArg *csarg, int *left_width, int *right_width)
+{
+  MTKey mark = marktree_itr_current(csarg->iter);
+  *left_width = 0;
+  *right_width = 0;
+
+  if (mt_invalid(mark) || !ns_in_win(mark.ns, csarg->win)) {
+    return;
+  }
+
+  DecorInline decor = mt_decor(mark);
+  DecorVirtText *vt = decor.ext ? decor.data.ext.vt : NULL;
+  while (vt) {
+    if (!(vt->flags & kVTIsLines) && vt->pos == kVPosInline) {
+      if (mt_right(mark)) {
+        *right_width += vt->width;
+      } else {
+        *left_width += vt->width;
+      }
+    }
+    vt = vt->next;
+  }
+}
+
+/// Advance the iterator to the next inline virtual text mark.
+void nvim_csarg_itr_next(CharsizeArg *csarg)
+{
+  marktree_itr_next_filter(csarg->win->w_buffer->b_marktree, csarg->iter,
+                           csarg->virt_row + 1, 0, inline_filter);
+}
+
+// ============================================================================
+// Additional accessor functions for charsize_regular
+// ============================================================================
+
+/// Get the cursor offset for virtual text.
+int nvim_virt_text_cursor_off(CharsizeArg *csarg, int on_NUL)
+{
+  int off = 0;
+  if (!on_NUL || !(State & MODE_NORMAL)) {
+    off += csarg->cur_text_width_left;
+  }
+  if (!on_NUL && (State & MODE_NORMAL)) {
+    off += csarg->cur_text_width_right;
+  }
+  return off;
+}
+
+/// Get the display width of a string (vim_strsize).
+int nvim_vim_strsize(const char *s)
+{
+  return vim_strsize(s);
+}
+
+/// Get breakindent for a window/line.
+int nvim_get_breakindent_win(win_T *wp, char *line)
+{
+  return get_breakindent_win(wp, line);
+}
+
+/// Check if character is in 'breakat'.
+int nvim_vim_isbreak(int c)
+{
+  return breakat_flags[(uint8_t)c] ? 1 : 0;
+}
+
+/// Get the 'linebreak' option.
+int nvim_win_get_p_lbr(win_T *wp)
+{
+  return wp->w_p_lbr ? 1 : 0;
+}
+
+// Note: nvim_win_get_p_bri is defined in window.c
+
+/// Get the 'listchars' eol character.
+int nvim_win_get_lcs_eol(win_T *wp)
+{
+  return wp->w_p_lcs_chars.eol;
+}
+
+/// Get the 'listchars' tab3 character (used for tabs).
+int nvim_win_get_lcs_tab3(win_T *wp)
+{
+  return wp->w_p_lcs_chars.tab3;
+}
 
 /// Functions calculating horizontal size of text, when displayed in a window.
 
@@ -90,8 +291,6 @@ int linetabsize_eol(win_T *wp, linenr_T lnum)
          + ((wp->w_p_list && wp->w_p_lcs_chars.eol != NUL) ? 1 : 0);
 }
 
-static const uint32_t inline_filter[kMTMetaCount] = {[kMTMetaInline] = kMTFilterSelect };
-
 /// Prepare the structure passed to charsize functions.
 ///
 /// "line" is the start of the line.
@@ -133,211 +332,7 @@ CSType init_charsize_arg(CharsizeArg *csarg, win_T *wp, linenr_T lnum, char *lin
 CharSize charsize_regular(CharsizeArg *csarg, char *const cur, colnr_T const vcol,
                           int32_t const cur_char)
 {
-  csarg->cur_text_width_left = 0;
-  csarg->cur_text_width_right = 0;
-
-  win_T *wp = csarg->win;
-  buf_T *buf = wp->w_buffer;
-  char *line = csarg->line;
-  bool const use_tabstop = cur_char == TAB && csarg->use_tabstop;
-  int mb_added = 0;
-
-  bool has_lcs_eol = wp->w_p_list && wp->w_p_lcs_chars.eol != NUL;
-
-  // First get normal size, without 'linebreak' or inline virtual text
-  int size;
-  int is_doublewidth = false;
-  if (use_tabstop) {
-    size = tabstop_padding(vcol, buf->b_p_ts, buf->b_p_vts_array);
-  } else if (*cur == NUL) {
-    // 1 cell for EOL list char (if present), as opposed to the two cell ^@
-    // for a NUL character in the text.
-    size = has_lcs_eol ? 1 : 0;
-  } else if (cur_char < 0) {
-    size = kInvalidByteCells;
-  } else {
-    size = ptr2cells(cur);
-    is_doublewidth = size == 2 && cur_char >= 0x80;
-  }
-
-  if (csarg->virt_row >= 0) {
-    int tab_size = size;
-    int col = (int)(cur - line);
-    while (true) {
-      MTKey mark = marktree_itr_current(csarg->iter);
-      if (mark.pos.row != csarg->virt_row || mark.pos.col > col) {
-        break;
-      } else if (mark.pos.col == col) {
-        if (!mt_invalid(mark) && ns_in_win(mark.ns, wp)) {
-          DecorInline decor = mt_decor(mark);
-          DecorVirtText *vt = decor.ext ? decor.data.ext.vt : NULL;
-          while (vt) {
-            if (!(vt->flags & kVTIsLines) && vt->pos == kVPosInline) {
-              if (mt_right(mark)) {
-                csarg->cur_text_width_right += vt->width;
-              } else {
-                csarg->cur_text_width_left += vt->width;
-              }
-              size += vt->width;
-              if (use_tabstop) {
-                // tab size changes because of the inserted text
-                size -= tab_size;
-                tab_size = tabstop_padding(vcol + size, buf->b_p_ts, buf->b_p_vts_array);
-                size += tab_size;
-              }
-            }
-            vt = vt->next;
-          }
-        }
-      }
-      marktree_itr_next_filter(wp->w_buffer->b_marktree, csarg->iter, csarg->virt_row + 1, 0,
-                               inline_filter);
-    }
-  }
-
-  if (is_doublewidth && wp->w_p_wrap && in_win_border(wp, vcol + size - 2)) {
-    // Count the ">" in the last column.
-    size++;
-    mb_added = 1;
-  }
-
-  char *const sbr = get_showbreak_value(wp);
-
-  // May have to add something for 'breakindent' and/or 'showbreak'
-  // string at the start of a screen line.
-  int head = mb_added;
-  // When "size" is 0, no new screen line is started.
-  if (size > 0 && wp->w_p_wrap && (*sbr != NUL || wp->w_p_bri)) {
-    int col_off_prev = win_col_off(wp);
-    int width2 = wp->w_view_width - col_off_prev + win_col_off2(wp);
-    colnr_T wcol = vcol + col_off_prev;
-    colnr_T max_head_vcol = csarg->max_head_vcol;
-    int added = 0;
-
-    // cells taken by 'showbreak'/'breakindent' before current char
-    int head_prev = 0;
-    if (wcol >= wp->w_view_width) {
-      wcol -= wp->w_view_width;
-      col_off_prev = wp->w_view_width - width2;
-      if (wcol >= width2 && width2 > 0) {
-        wcol %= width2;
-      }
-      head_prev = csarg->indent_width;
-      if (head_prev == INT_MIN) {
-        head_prev = 0;
-        if (*sbr != NUL) {
-          head_prev += vim_strsize(sbr);
-        }
-        if (wp->w_p_bri) {
-          head_prev += get_breakindent_win(wp, line);
-        }
-        csarg->indent_width = head_prev;
-      }
-      if (wcol < head_prev) {
-        head_prev -= wcol;
-        wcol += head_prev;
-        added += head_prev;
-        if (max_head_vcol <= 0 || vcol < max_head_vcol) {
-          head += head_prev;
-        }
-      } else {
-        head_prev = 0;
-      }
-      wcol += col_off_prev;
-    }
-
-    if (wcol + size > wp->w_view_width) {
-      // cells taken by 'showbreak'/'breakindent' halfway current char
-      int head_mid = csarg->indent_width;
-      if (head_mid == INT_MIN) {
-        head_mid = 0;
-        if (*sbr != NUL) {
-          head_mid += vim_strsize(sbr);
-        }
-        if (wp->w_p_bri) {
-          head_mid += get_breakindent_win(wp, line);
-        }
-        csarg->indent_width = head_mid;
-      }
-      if (head_mid > 0) {
-        // Calculate effective window width.
-        int prev_rem = wp->w_view_width - wcol;
-        int width = width2 - head_mid;
-
-        if (width <= 0) {
-          width = 1;
-        }
-        // Divide "size - prev_rem" by "width", rounding up.
-        int cnt = (size - prev_rem + width - 1) / width;
-        added += cnt * head_mid;
-
-        if (max_head_vcol == 0 || vcol + size + added < max_head_vcol) {
-          head += cnt * head_mid;
-        } else if (max_head_vcol > vcol + head_prev + prev_rem) {
-          head += (max_head_vcol - (vcol + head_prev + prev_rem)
-                   + width2 - 1) / width2 * head_mid;
-        } else if (max_head_vcol < 0) {
-          int off = mb_added + virt_text_cursor_off(csarg, *cur == NUL);
-          if (off >= prev_rem) {
-            if (size > off) {
-              head += (1 + (off - prev_rem) / width) * head_mid;
-            } else {
-              head += (off - prev_rem + width - 1) / width * head_mid;
-            }
-          }
-        }
-      }
-    }
-
-    size += added;
-  }
-
-  bool need_lbr = false;
-  // If 'linebreak' set check at a blank before a non-blank if the line
-  // needs a break here.
-  if (wp->w_p_lbr && wp->w_p_wrap && wp->w_view_width != 0
-      && vim_isbreak((uint8_t)cur[0]) && !vim_isbreak((uint8_t)cur[1])) {
-    char *t = csarg->line;
-    while (vim_isbreak((uint8_t)t[0])) {
-      t++;
-    }
-    // 'linebreak' is only needed when not in leading whitespace.
-    need_lbr = cur >= t;
-  }
-  if (need_lbr) {
-    char *s = cur;
-    // Count all characters from first non-blank after a blank up to next
-    // non-blank after a blank.
-    int numberextra = win_col_off(wp);
-    colnr_T col_adj = size - 1;
-    colnr_T colmax = (colnr_T)(wp->w_view_width - numberextra - col_adj);
-    if (vcol >= colmax) {
-      colmax += col_adj;
-      int n = colmax + win_col_off2(wp);
-      if (n > 0) {
-        colmax += (((vcol - colmax) / n) + 1) * n - col_adj;
-      }
-    }
-
-    colnr_T vcol2 = vcol;
-    while (true) {
-      char *ps = s;
-      MB_PTR_ADV(s);
-      int c = (uint8_t)(*s);
-      if (!(c != NUL
-            && (vim_isbreak(c) || vcol2 == vcol || !vim_isbreak((uint8_t)(*ps))))) {
-        break;
-      }
-
-      vcol2 += win_chartabsize(wp, s, vcol2);
-      if (vcol2 >= colmax) {  // doesn't fit
-        size = colmax - vcol + col_adj;
-        break;
-      }
-    }
-  }
-
-  return (CharSize){ .width = size, .head = head };
+  return rs_charsize_regular(csarg, cur, (int)vcol, cur_char);
 }
 
 /// Like charsize_regular(), except it doesn't handle inline virtual text,

@@ -118,8 +118,8 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 - `charsize_fast` - Migrated to Rust (rs_charsize_fast)
 - `linesize_fast` - Migrated to Rust (rs_linesize_fast)
 - `in_win_border` - Migrated to Rust (rs_in_win_border)
-- `charsize_regular` - Complex, needs marktree iteration for inline virtual text
-- `linesize_regular` - Complex, depends on charsize_regular
+- `charsize_regular` - Migrated to Rust (rs_charsize_regular) - includes marktree accessor pattern
+- `linesize_regular` - Pending, depends on charsize_regular
 
 ### Global State Dependencies
 
