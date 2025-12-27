@@ -16,6 +16,7 @@
 use std::ffi::{c_char, c_int, c_void};
 
 use nvim_buffer::BufHandle;
+use nvim_mark::PosT;
 use nvim_window::WinHandle;
 
 /// Opaque handle to a CharsizeArg structure.
@@ -175,6 +176,17 @@ extern "C" {
         value: i32,
         len_out: *mut c_int,
     ) -> i32;
+
+    // Visual mode and virtual editing accessors for getvcol
+    fn nvim_virtual_active(wp: WinHandle) -> c_int;
+    fn nvim_get_VIsual_active() -> c_int;
+    fn nvim_get_VIsual_lnum() -> c_int;
+    fn nvim_get_VIsual_col() -> c_int;
+    fn nvim_get_VIsual_coladd() -> c_int;
+    fn nvim_get_p_sel_first() -> c_char;
+
+    // Position comparison from mark crate
+    fn rs_ltoreq(a: PosT, b: PosT) -> c_int;
 }
 
 // Mode constants (matching Neovim's state.h)
@@ -1514,8 +1526,11 @@ fn linesize_regular_impl(csarg: CharsizeArgHandle, vcol_arg: c_int, len: c_int) 
         // Initialize character iteration
         let mut ptr: *const c_char = std::ptr::null();
         let mut char_len: c_int = 0;
-        let mut char_value =
-            nvim_str_char_info_init(line, std::ptr::from_mut(&mut ptr), std::ptr::from_mut(&mut char_len));
+        let mut char_value = nvim_str_char_info_init(
+            line,
+            std::ptr::from_mut(&mut ptr),
+            std::ptr::from_mut(&mut char_len),
+        );
 
         // Iterate through characters
         while (ptr as isize - line as isize) < len as isize && *ptr != 0 {
@@ -1523,8 +1538,12 @@ fn linesize_regular_impl(csarg: CharsizeArgHandle, vcol_arg: c_int, len: c_int) 
             vcol += cs.width as i64;
 
             // Advance to next character
-            char_value =
-                nvim_str_char_info_next(std::ptr::from_mut(&mut ptr), char_len, char_value, std::ptr::from_mut(&mut char_len));
+            char_value = nvim_str_char_info_next(
+                std::ptr::from_mut(&mut ptr),
+                char_len,
+                char_value,
+                std::ptr::from_mut(&mut char_len),
+            );
 
             // Check for overflow
             if vcol > MAXCOL as i64 {
@@ -1559,8 +1578,236 @@ fn linesize_regular_impl(csarg: CharsizeArgHandle, vcol_arg: c_int, len: c_int) 
 /// # Safety
 /// The `csarg` parameter must be a valid `CharsizeArg*` pointer.
 #[no_mangle]
-pub extern "C" fn rs_linesize_regular(csarg: CharsizeArgHandle, vcol_arg: c_int, len: c_int) -> c_int {
+pub extern "C" fn rs_linesize_regular(
+    csarg: CharsizeArgHandle,
+    vcol_arg: c_int,
+    len: c_int,
+) -> c_int {
     linesize_regular_impl(csarg, vcol_arg, len)
+}
+
+// ============================================================================
+// getvcol - Get virtual column of position
+// ============================================================================
+
+/// CSType enum matching C's CSType (only FAST used for comparison)
+const CSTYPE_FAST: c_int = 0;
+
+/// Get the virtual column for a position in a line.
+///
+/// This function calculates the virtual column (display position) for a given
+/// byte position in a line. It handles:
+/// - Tab expansion
+/// - Inline virtual text
+/// - Multi-byte characters
+/// - Visual mode cursor positioning for tabs
+///
+/// # Arguments
+/// * `csarg` - CharsizeArg handle (must be initialized with init_charsize_arg)
+/// * `line` - Pointer to the start of the line
+/// * `end_col` - Byte position to calculate vcol for
+/// * `cstype` - 0 for fast path, 1 for regular path
+/// * `pos_lnum` - Line number of position (for visual mode comparison)
+/// * `pos_coladd` - Virtual column add of position
+/// * `start_out` - Output: start vcol of character (NULL to skip)
+/// * `cursor_out` - Output: cursor vcol position (NULL to skip)
+/// * `end_out` - Output: end vcol of character (NULL to skip)
+/// * `pos_col_out` - Output: updated pos->col if at NUL (NULL to skip)
+#[inline]
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
+fn getvcol_impl(
+    csarg: CharsizeArgHandle,
+    line: *const c_char,
+    end_col: c_int,
+    cstype: c_int,
+    pos_lnum: c_int,
+    pos_coladd: c_int,
+    start_out: *mut c_int,
+    cursor_out: *mut c_int,
+    end_out: *mut c_int,
+    pos_col_out: *mut c_int,
+) {
+    if csarg.is_null() || line.is_null() {
+        return;
+    }
+
+    unsafe {
+        let wp = nvim_csarg_get_win(csarg);
+        let mut vcol: c_int = 0;
+        let mut char_size;
+        let mut on_nul = false;
+
+        // Initialize character iteration
+        let mut ptr: *const c_char = std::ptr::null();
+        let mut char_len: c_int = 0;
+        let mut char_value = nvim_str_char_info_init(
+            line,
+            std::ptr::from_mut(&mut ptr),
+            std::ptr::from_mut(&mut char_len),
+        );
+
+        if cstype == CSTYPE_FAST {
+            let use_tabstop = nvim_csarg_get_use_tabstop(csarg) != 0;
+            loop {
+                if *ptr == 0 {
+                    // if cursor is at NUL, it is treated like 1 cell char
+                    char_size = CharSize { width: 1, head: 0 };
+                    break;
+                }
+                char_size = charsize_fast_impl(wp, ptr, use_tabstop, vcol, char_value);
+
+                // Get next character info
+                let next_ptr = ptr;
+                let next_value = nvim_str_char_info_next(
+                    std::ptr::from_mut(&mut ptr),
+                    char_len,
+                    char_value,
+                    std::ptr::from_mut(&mut char_len),
+                );
+
+                // Check if we've passed end_col
+                if (ptr as isize - line as isize) > end_col as isize {
+                    ptr = next_ptr;
+                    char_value = next_value;
+                    break;
+                }
+                char_value = next_value;
+                vcol += char_size.width;
+            }
+        } else {
+            loop {
+                char_size = charsize_regular_impl(csarg, ptr, vcol, char_value);
+                // make sure we don't go past the end of the line
+                if *ptr == 0 {
+                    // NUL at end of line only takes one column unless there is virtual text
+                    let cur_text_left = nvim_csarg_get_cur_text_width_left(csarg);
+                    let cur_text_right = nvim_csarg_get_cur_text_width_right(csarg);
+                    char_size.width = 1 + cur_text_left + cur_text_right;
+                    on_nul = true;
+                    break;
+                }
+
+                // Get next character info
+                let next_ptr = ptr;
+                let next_value = nvim_str_char_info_next(
+                    std::ptr::from_mut(&mut ptr),
+                    char_len,
+                    char_value,
+                    std::ptr::from_mut(&mut char_len),
+                );
+
+                // Check if we've passed end_col
+                if (ptr as isize - line as isize) > end_col as isize {
+                    ptr = next_ptr;
+                    char_value = next_value;
+                    break;
+                }
+                char_value = next_value;
+                vcol += char_size.width;
+            }
+        }
+
+        // Handle pos->col update for NUL case
+        if *ptr == 0
+            && end_col < MAXCOL
+            && end_col > (ptr as isize - line as isize) as c_int
+            && !pos_col_out.is_null()
+        {
+            *pos_col_out = (ptr as isize - line as isize) as c_int;
+        }
+
+        let head = char_size.head;
+        let incr = char_size.width;
+
+        if !start_out.is_null() {
+            *start_out = vcol + head;
+        }
+
+        if !end_out.is_null() {
+            *end_out = vcol + incr - 1;
+        }
+
+        if !cursor_out.is_null() {
+            // Complex cursor logic for tabs in visual mode
+            let state = nvim_get_State();
+            let p_list = nvim_win_get_p_list(wp) != 0;
+            let virtual_active = nvim_virtual_active(wp) != 0;
+            let visual_active = nvim_get_VIsual_active() != 0;
+            let p_sel_first = nvim_get_p_sel_first();
+
+            // Check if we should position cursor at end of tab
+            // Condition: TAB, in NORMAL mode, not list mode, not virtual edit,
+            // and not in visual mode with exclusive selection or pos <= VIsual
+            let cursor_at_end = char_value == TAB
+                && (state & MODE_NORMAL) != 0
+                && !p_list
+                && !virtual_active
+                && !(visual_active && {
+                    // Check if p_sel is 'e' (exclusive) or ltoreq(pos, VIsual)
+                    if p_sel_first == b'e' as c_char {
+                        true
+                    } else {
+                        // Construct the position and compare with VIsual
+                        let pos = PosT {
+                            lnum: pos_lnum,
+                            col: end_col,
+                            coladd: pos_coladd,
+                        };
+                        let visual_pos = PosT {
+                            lnum: nvim_get_VIsual_lnum(),
+                            col: nvim_get_VIsual_col(),
+                            coladd: nvim_get_VIsual_coladd(),
+                        };
+                        rs_ltoreq(pos, visual_pos) != 0
+                    }
+                });
+
+            if cursor_at_end {
+                // cursor at end
+                *cursor_out = vcol + incr - 1;
+            } else {
+                let on_nul_flag = c_int::from(on_nul);
+                vcol += nvim_virt_text_cursor_off(csarg, on_nul_flag);
+                // cursor at start
+                *cursor_out = vcol + head;
+            }
+        }
+    }
+}
+
+/// Get the virtual column for a position.
+///
+/// This is the Rust implementation of getvcol().
+///
+/// # Safety
+/// All pointer parameters must be valid or null.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn rs_getvcol(
+    csarg: CharsizeArgHandle,
+    line: *const c_char,
+    end_col: c_int,
+    cstype: c_int,
+    pos_lnum: c_int,
+    pos_coladd: c_int,
+    start_out: *mut c_int,
+    cursor_out: *mut c_int,
+    end_out: *mut c_int,
+    pos_col_out: *mut c_int,
+) {
+    getvcol_impl(
+        csarg,
+        line,
+        end_col,
+        cstype,
+        pos_lnum,
+        pos_coladd,
+        start_out,
+        cursor_out,
+        end_out,
+        pos_col_out,
+    );
 }
 
 #[cfg(test)]

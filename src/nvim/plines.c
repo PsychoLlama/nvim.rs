@@ -42,6 +42,9 @@ extern CharSize rs_charsize_fast(win_T *wp, const char *cur, int use_tabstop, in
 extern int rs_linesize_fast(win_T *wp, int use_tabstop, const char *line, int vcol_arg, int len);
 extern CharSize rs_charsize_regular(void *csarg, const char *cur, int vcol, int32_t cur_char);
 extern int rs_linesize_regular(void *csarg, int vcol_arg, int len);
+extern void rs_getvcol(void *csarg, const char *line, int end_col, int cstype,
+                       int pos_lnum, int pos_coladd,
+                       int *start_out, int *cursor_out, int *end_out, int *pos_col_out);
 
 // Filter for inline virtual text marks
 static const uint32_t inline_filter[kMTMetaCount] = {[kMTMetaInline] = kMTFilterSelect };
@@ -242,6 +245,44 @@ int nvim_win_get_lcs_tab3(win_T *wp)
 {
   return wp->w_p_lcs_chars.tab3;
 }
+
+// Note: nvim_win_get_p_list is defined in window.c
+
+// ============================================================================
+// Visual mode and virtual editing accessors for getvcol
+// ============================================================================
+
+/// Check if virtual editing is active for a window.
+int nvim_virtual_active(win_T *wp)
+{
+  return virtual_active(wp) ? 1 : 0;
+}
+
+/// Get the VIsual_active global.
+int nvim_get_VIsual_active(void)
+{
+  return VIsual_active ? 1 : 0;
+}
+
+/// Get the VIsual position (lnum).
+int nvim_get_VIsual_lnum(void)
+{
+  return VIsual.lnum;
+}
+
+/// Get the VIsual position (col).
+int nvim_get_VIsual_col(void)
+{
+  return VIsual.col;
+}
+
+/// Get the VIsual position (coladd).
+int nvim_get_VIsual_coladd(void)
+{
+  return VIsual.coladd;
+}
+
+// Note: nvim_get_p_sel_first is defined in cursor_shape.c
 
 // ============================================================================
 // Character iteration accessors for linesize_regular
@@ -487,76 +528,32 @@ void getvcol(win_T *wp, pos_T *pos, colnr_T *start, colnr_T *cursor, colnr_T *en
   colnr_T const end_col = pos->col;
 
   CharsizeArg csarg;
-  bool on_NUL = false;
   CSType const cstype = init_charsize_arg(&csarg, wp, pos->lnum, line);
   csarg.max_head_vcol = -1;
 
-  colnr_T vcol = 0;
-  CharSize char_size;
-  StrCharInfo ci = utf_ptr2StrCharInfo(line);
-  if (cstype == kCharsizeFast) {
-    bool const use_tabstop = csarg.use_tabstop;
-    while (true) {
-      if (*ci.ptr == NUL) {
-        // if cursor is at NUL, it is treated like 1 cell char
-        char_size = (CharSize){ .width = 1 };
-        break;
-      }
-      char_size = charsize_fast_impl(wp, ci.ptr, use_tabstop, vcol, ci.chr.value);
-      StrCharInfo const next = utfc_next(ci);
-      if (next.ptr - line > end_col) {
-        break;
-      }
-      ci = next;
-      vcol += char_size.width;
-    }
-  } else {
-    while (true) {
-      char_size = charsize_regular(&csarg, ci.ptr, vcol, ci.chr.value);
-      // make sure we don't go past the end of the line
-      if (*ci.ptr == NUL) {
-        // NUL at end of line only takes one column unless there is virtual text
-        char_size.width = 1 + csarg.cur_text_width_left + csarg.cur_text_width_right;
-        on_NUL = true;
-        break;
-      }
-      StrCharInfo const next = utfc_next(ci);
-      if (next.ptr - line > end_col) {
-        break;
-      }
-      ci = next;
-      vcol += char_size.width;
-    }
-  }
+  int start_out = 0;
+  int cursor_out = 0;
+  int end_out = 0;
+  int pos_col_out = pos->col;
 
-  if (*ci.ptr == NUL && end_col < MAXCOL && end_col > ci.ptr - line) {
-    pos->col = (colnr_T)(ci.ptr - line);
-  }
+  rs_getvcol(&csarg, line, (int)end_col, (int)cstype,
+             (int)pos->lnum, (int)pos->coladd,
+             start ? &start_out : NULL,
+             cursor ? &cursor_out : NULL,
+             end ? &end_out : NULL,
+             &pos_col_out);
 
-  int head = char_size.head;
-  int incr = char_size.width;
+  // Update pos->col if it was modified (NUL case)
+  pos->col = (colnr_T)pos_col_out;
 
   if (start != NULL) {
-    *start = vcol + head;
+    *start = (colnr_T)start_out;
   }
-
-  if (end != NULL) {
-    *end = vcol + incr - 1;
-  }
-
   if (cursor != NULL) {
-    if (ci.chr.value == TAB
-        && (State & MODE_NORMAL)
-        && !wp->w_p_list
-        && !virtual_active(wp)
-        && !(VIsual_active && ((*p_sel == 'e') || ltoreq(*pos, VIsual)))) {
-      // cursor at end
-      *cursor = vcol + incr - 1;
-    } else {
-      vcol += virt_text_cursor_off(&csarg, on_NUL);
-      // cursor at start
-      *cursor = vcol + head;
-    }
+    *cursor = (colnr_T)cursor_out;
+  }
+  if (end != NULL) {
+    *end = (colnr_T)end_out;
   }
 }
 
