@@ -492,6 +492,33 @@ pub fn decor_state_get_eol_right_width(state: DecorStateHandle, from_idx: c_int)
 // FFI exports
 // ============================================================================
 
+/// Check if a DecorRange has a virtual position (virtual text or ui_watched).
+/// This is the Rust implementation of decor_virt_pos().
+#[no_mangle]
+pub extern "C" fn rs_decor_virt_pos(range: DecorRangeHandle) -> c_int {
+    if range.is_null() {
+        return 0;
+    }
+    let kind = decor_range_kind(range);
+    c_int::from(kind == Some(DecorKind::VirtText) || kind == Some(DecorKind::UIWatched))
+}
+
+/// Get the virtual text position kind from a DecorRange.
+/// This is the Rust implementation of decor_virt_pos_kind().
+/// Returns VirtTextPos enum value.
+#[no_mangle]
+pub extern "C" fn rs_decor_virt_pos_kind(range: DecorRangeHandle) -> c_int {
+    if range.is_null() {
+        return VirtTextPos::EndOfLine as c_int;
+    }
+    let kind = decor_range_kind(range);
+    if kind == Some(DecorKind::VirtText) || kind == Some(DecorKind::UIWatched) {
+        unsafe { nvim_decor_range_get_virt_pos_kind(range) }
+    } else {
+        VirtTextPos::EndOfLine as c_int
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -30,6 +30,10 @@
 
 #include "decoration.c.generated.h"
 
+// Rust implementations
+extern int rs_decor_virt_pos(void *range);
+extern int rs_decor_virt_pos_kind(void *range);
+
 uint32_t decor_freelist = UINT32_MAX;
 
 // Decorations might be requested to be deleted in a callback in the middle of redrawing.
@@ -452,18 +456,12 @@ bool decor_redraw_reset(win_T *wp, DecorState *state)
 /// @return true if decor has a virtual position (virtual text or ui_watched)
 bool decor_virt_pos(const DecorRange *decor)
 {
-  return (decor->kind == kDecorKindVirtText || decor->kind == kDecorKindUIWatched);
+  return rs_decor_virt_pos((void *)decor) != 0;
 }
 
 VirtTextPos decor_virt_pos_kind(const DecorRange *decor)
 {
-  if (decor->kind == kDecorKindVirtText) {
-    return decor->data.vt->pos;
-  }
-  if (decor->kind == kDecorKindUIWatched) {
-    return decor->data.ui.pos;
-  }
-  return kVPosEndOfLine;  // not used; return whatever
+  return rs_decor_virt_pos_kind((void *)decor);
 }
 
 bool decor_redraw_start(win_T *wp, int top_row, DecorState *state)
