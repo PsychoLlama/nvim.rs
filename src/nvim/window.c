@@ -1112,6 +1112,12 @@ int nvim_win_get_p_rl(win_T *wp)
   return wp->w_p_rl;
 }
 
+/// Get the window's grid view (for wlv_put_linebuf).
+void *nvim_win_get_w_grid(win_T *wp)
+{
+  return &wp->w_grid;
+}
+
 /// Get the window's 'briopt' sbr flag.
 bool nvim_win_get_briopt_sbr(win_T *wp)
 {

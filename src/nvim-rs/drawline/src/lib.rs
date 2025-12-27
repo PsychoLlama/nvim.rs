@@ -225,6 +225,27 @@ extern "C" {
     // Multibyte functions from mbyte crate
     fn rs_mb_charlen(s: *const c_char) -> c_int;
     fn rs_mb_string2cells(s: *const c_char) -> usize;
+
+    // wlv_put_linebuf accessors
+    fn nvim_win_get_w_grid(wp: WinHandle) -> *mut c_void;
+    fn nvim_win_get_lcs_prec(wp: WinHandle) -> u32;
+    fn rs_linebuf_mirror(firstp: *mut c_int, lastp: *mut c_int, clearp: *mut c_int, width: c_int);
+    fn get_showbreak_value(wp: WinHandle) -> *const c_char;
+    fn rs_grid_adjust(view: *mut c_void, row_off: *mut c_int, col_off: *mut c_int) -> *mut c_void;
+    fn rs_grid_put_linebuf(
+        grid: *mut c_void,
+        row: c_int,
+        coloff: c_int,
+        col: c_int,
+        endcol: c_int,
+        clear_width: c_int,
+        bg_attr: c_int,
+        clear_attr: c_int,
+        last_vcol: ColnrT,
+        flags: c_int,
+    );
+    fn nvim_get_hl_attr_active() -> *const c_int;
+    fn rs_schar_get_ascii(sc: ScharT) -> c_char;
 }
 
 /// Opaque handle to buffer (buf_T).
@@ -804,7 +825,7 @@ extern "C" {
     fn nvim_wlv_get_vcol_sbr(wlv: WlvHandle) -> ColnrT;
     fn nvim_wlv_set_vcol_sbr(wlv: WlvHandle, val: ColnrT);
     fn nvim_win_get_fcs_diff(wp: WinHandle) -> ScharT;
-    fn get_showbreak_value(wp: WinHandle) -> *const c_char;
+    // get_showbreak_value already declared above
 
     // has_more_inline_virt accessors
     fn nvim_wlv_get_virt_inline_i(wlv: WlvHandle) -> usize;
@@ -2034,6 +2055,126 @@ pub unsafe extern "C" fn rs_handle_inline_virtual_text(
     selected: bool,
 ) {
     handle_inline_virtual_text_impl(wp, wlv, v, selected);
+}
+
+// ============================================================================
+// wlv_put_linebuf - Put line buffer to screen
+// ============================================================================
+
+/// SLF_RIGHTLEFT flag from grid.h.
+const SLF_RIGHTLEFT: c_int = 1;
+
+/// Put the rendered line buffer to the screen.
+///
+/// # Safety
+/// - `wp` must be a valid window handle
+/// - `wlv` must be a valid winlinevars_T handle
+#[allow(clippy::too_many_lines)]
+unsafe fn wlv_put_linebuf_impl(
+    wp: WinHandle,
+    wlv: WlvHandle,
+    endcol: c_int,
+    clear_end: bool,
+    bg_attr: c_int,
+    flags: c_int,
+) {
+    let grid = nvim_win_get_w_grid(wp);
+    let view_width = nvim_win_get_view_width(wp);
+
+    let mut startcol: c_int = 0;
+    let mut endcol_mut = endcol;
+    let mut clear_width = if clear_end { view_width } else { endcol };
+    let mut flags_mut = flags;
+
+    // assert!(!(flags & SLF_RIGHTLEFT));
+    debug_assert!(flags & SLF_RIGHTLEFT == 0);
+
+    if nvim_win_get_p_rl(wp) != 0 {
+        rs_linebuf_mirror(&mut startcol, &mut endcol_mut, &mut clear_width, view_width);
+        flags_mut |= SLF_RIGHTLEFT;
+    }
+
+    // Take care of putting "<<<" on the first line for 'smoothscroll'.
+    let wlv_row = nvim_wlv_get_row(wlv);
+    let skipcol = nvim_win_get_skipcol(wp);
+    let showbreak = get_showbreak_value(wp);
+    let p_nu = nvim_win_get_p_nu(wp);
+    let p_rnu = nvim_win_get_p_rnu(wp);
+    let p_list = nvim_win_get_p_list(wp);
+    let lcs_prec = nvim_win_get_lcs_prec(wp);
+
+    let linebuf_char = nvim_get_linebuf_char();
+    let linebuf_attr = nvim_get_linebuf_attr();
+    let hl_attr_active = nvim_get_hl_attr_active();
+
+    if wlv_row == 0
+        && skipcol > 0
+        // do not overwrite the 'showbreak' text with "<<<"
+        && (showbreak.is_null() || *showbreak == 0)
+        // do not overwrite the 'listchars' "precedes" text with "<<<"
+        && !(p_list != 0 && lcs_prec != 0)
+    {
+        let mut off: c_int = 0;
+        if p_nu != 0 && p_rnu != 0 {
+            // do not overwrite the line number, change "123 text" to "123<<<xt".
+            while off < view_width {
+                let sc = *linebuf_char.add(off as usize);
+                let ascii_char = rs_schar_get_ascii(sc);
+                if !((ascii_char as u8).is_ascii_digit()) {
+                    break;
+                }
+                off += 1;
+            }
+        }
+
+        // Draw "<<<" characters
+        for _i in 0..3 {
+            if off >= view_width {
+                break;
+            }
+            if off + 1 < view_width && *linebuf_char.add((off + 1) as usize) == 0 {
+                // When the first half of a double-width character is
+                // overwritten, change the second half to a space.
+                *linebuf_char.add((off + 1) as usize) = rs_schar_from_char(c_int::from(b' '));
+            }
+            *linebuf_char.add(off as usize) = rs_schar_from_char(c_int::from(b'<'));
+            // HL_ATTR(HLF_AT) = hl_attr_active[HLF_AT]
+            *linebuf_attr.add(off as usize) = *hl_attr_active.add(HLF_AT as usize);
+            off += 1;
+        }
+    }
+
+    let row = wlv_row;
+    let mut row_adjusted = row;
+    let mut coloff: c_int = 0;
+    let g = rs_grid_adjust(grid, &mut row_adjusted, &mut coloff);
+
+    let vcol = nvim_wlv_get_vcol(wlv);
+    rs_grid_put_linebuf(
+        g,
+        row_adjusted,
+        coloff,
+        startcol,
+        endcol_mut,
+        clear_width,
+        bg_attr,
+        0,
+        vcol - 1,
+        flags_mut,
+    );
+}
+
+/// FFI export for wlv_put_linebuf.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_put_linebuf(
+    wp: WinHandle,
+    wlv: WlvHandle,
+    endcol: c_int,
+    clear_end: bool,
+    bg_attr: c_int,
+    flags: c_int,
+) {
+    wlv_put_linebuf_impl(wp, wlv, endcol, clear_end, bg_attr, flags);
 }
 
 #[cfg(test)]

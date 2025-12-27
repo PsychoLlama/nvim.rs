@@ -160,6 +160,8 @@ extern void rs_handle_breakindent(win_T *wp, winlinevars_T *wlv);
 extern void rs_handle_showbreak_and_filler(win_T *wp, winlinevars_T *wlv);
 extern bool rs_has_more_inline_virt(winlinevars_T *wlv, ptrdiff_t v);
 extern void rs_handle_inline_virtual_text(win_T *wp, winlinevars_T *wlv, ptrdiff_t v, bool selected);
+extern void rs_wlv_put_linebuf(win_T *wp, const winlinevars_T *wlv, int endcol, bool clear_end,
+                               int bg_attr, int flags);
 
 // winlinevars_T accessor functions for Rust opaque handle pattern.
 // These use void* to avoid exposing the internal winlinevars_T type in headers.
@@ -3137,47 +3139,7 @@ end_check:
 static void wlv_put_linebuf(win_T *wp, const winlinevars_T *wlv, int endcol, bool clear_end,
                             int bg_attr, int flags)
 {
-  GridView *grid = &wp->w_grid;
-
-  int startcol = 0;
-  int clear_width = clear_end ? wp->w_view_width : endcol;
-
-  assert(!(flags & SLF_RIGHTLEFT));
-  if (wp->w_p_rl) {
-    linebuf_mirror(&startcol, &endcol, &clear_width, wp->w_view_width);
-    flags |= SLF_RIGHTLEFT;
-  }
-
-  // Take care of putting "<<<" on the first line for 'smoothscroll'.
-  if (wlv->row == 0 && wp->w_skipcol > 0
-      // do not overwrite the 'showbreak' text with "<<<"
-      && *get_showbreak_value(wp) == NUL
-      // do not overwrite the 'listchars' "precedes" text with "<<<"
-      && !(wp->w_p_list && wp->w_p_lcs_chars.prec != 0)) {
-    int off = 0;
-    if (wp->w_p_nu && wp->w_p_rnu) {
-      // do not overwrite the line number, change "123 text" to "123<<<xt".
-      while (off < wp->w_view_width && ascii_isdigit(schar_get_ascii(linebuf_char[off]))) {
-        off++;
-      }
-    }
-
-    for (int i = 0; i < 3 && off < wp->w_view_width; i++) {
-      if (off + 1 < wp->w_view_width && linebuf_char[off + 1] == NUL) {
-        // When the first half of a double-width character is
-        // overwritten, change the second half to a space.
-        linebuf_char[off + 1] = schar_from_ascii(' ');
-      }
-      linebuf_char[off] = schar_from_ascii('<');
-      linebuf_attr[off] = HL_ATTR(HLF_AT);
-      off++;
-    }
-  }
-
-  int row = wlv->row;
-  int coloff = 0;
-  ScreenGrid *g = grid_adjust(grid, &row, &coloff);
-  grid_put_linebuf(g, row, coloff, startcol, endcol, clear_width, bg_attr, 0, wlv->vcol - 1, flags);
+  rs_wlv_put_linebuf(wp, wlv, endcol, clear_end, bg_attr, flags);
 }
 
 static int decor_providers_setup(int rows_to_draw, bool draw_from_line_start, linenr_T lnum,
