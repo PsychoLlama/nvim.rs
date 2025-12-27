@@ -37,6 +37,7 @@
 extern int rs_charsize_nowrap(buf_T *buf, const char *cur, int use_tabstop, int vcol, int32_t cur_char);
 extern int rs_win_may_fill(win_T *wp);
 extern int rs_in_win_border(win_T *wp, int vcol);
+extern int rs_win_chartabsize(win_T *wp, const char *p, int col);
 
 /// Functions calculating horizontal size of text, when displayed in a window.
 
@@ -52,11 +53,7 @@ extern int rs_in_win_border(win_T *wp, int vcol);
 /// @see charsize_nowrap()
 int win_chartabsize(win_T *wp, char *p, colnr_T col)
 {
-  buf_T *buf = wp->w_buffer;
-  if (*p == TAB && (!wp->w_p_list || wp->w_p_lcs_chars.tab1)) {
-    return tabstop_padding(col, buf->b_p_ts, buf->b_p_vts_array);
-  }
-  return ptr2cells(p);
+  return rs_win_chartabsize(wp, p, (int)col);
 }
 
 /// Like linetabsize_str(), but "s" starts at virtual column "startvcol".

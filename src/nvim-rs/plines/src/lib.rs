@@ -57,6 +57,9 @@ extern "C" {
     fn nvim_buf_get_p_ts(buf: BufHandle) -> i64;
     fn nvim_buf_get_p_vts_array(buf: BufHandle) -> *const c_int;
 
+    // Window buffer accessor
+    fn nvim_win_get_w_buffer(wp: WinHandle) -> BufHandle;
+
     // Window properties for win_may_fill
     fn nvim_win_get_p_diff(wp: WinHandle) -> c_int;
     fn nvim_win_buf_meta_total_lines(wp: WinHandle) -> c_int;
@@ -79,6 +82,8 @@ extern "C" {
     // Window properties for sms_marker_overlap
     fn nvim_win_get_p_list(wp: WinHandle) -> c_int;
     fn nvim_win_get_lcs_prec(wp: WinHandle) -> u32;
+    fn nvim_win_get_lcs_tab1(wp: WinHandle) -> u32;
+    fn nvim_win_get_w_p_list(wp: WinHandle) -> c_int;
 
     // Window properties for win_cursorline_standout
     fn nvim_win_get_p_cul(wp: WinHandle) -> c_int;
@@ -687,6 +692,37 @@ pub extern "C" fn rs_charsize_nowrap(
     cur_char: i32,
 ) -> c_int {
     charsize_nowrap_impl(buf, cur, use_tabstop != 0, vcol, cur_char)
+}
+
+/// Return number of display cells occupied by character at "p" in window "wp".
+/// A TAB is counted as the number of cells to the next tab stop.
+///
+/// # Safety
+/// The `wp` parameter must be a valid `win_T*` pointer.
+/// The `p` parameter must be a valid pointer to a character.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_chartabsize(wp: WinHandle, p: *const c_char, col: c_int) -> c_int {
+    if wp.is_null() || p.is_null() {
+        return 1;
+    }
+
+    let buf = nvim_win_get_w_buffer(wp);
+    let c = i32::from(*p as u8);
+
+    // If the char is TAB and (not list mode OR tab1 character is set),
+    // use tabstop_padding. Otherwise use ptr2cells.
+    if c == TAB {
+        let list = nvim_win_get_w_p_list(wp) != 0;
+        let tab1 = nvim_win_get_lcs_tab1(wp);
+
+        if !list || tab1 != 0 {
+            let ts = nvim_buf_get_p_ts(buf);
+            let vts = nvim_buf_get_p_vts_array(buf);
+            return rs_tabstop_padding(col, ts, vts);
+        }
+    }
+
+    rs_ptr2cells(p)
 }
 
 /// Check if there may be filler lines anywhere in window "wp".

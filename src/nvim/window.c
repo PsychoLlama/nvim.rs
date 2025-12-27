@@ -1118,6 +1118,18 @@ void *nvim_win_get_w_grid(win_T *wp)
   return &wp->w_grid;
 }
 
+/// Get the window's 'list' option.
+int nvim_win_get_w_p_list(win_T *wp)
+{
+  return wp->w_p_list;
+}
+
+/// Get the window's 'listchars' tab1 character (first tab char).
+uint32_t nvim_win_get_lcs_tab1(win_T *wp)
+{
+  return wp->w_p_lcs_chars.tab1;
+}
+
 /// Get the window's 'briopt' sbr flag.
 bool nvim_win_get_briopt_sbr(win_T *wp)
 {
