@@ -62,21 +62,13 @@ typedef struct {
 extern int rs_win_col_off(win_T *wp);
 extern int rs_win_col_off2(win_T *wp);
 extern int rs_sms_marker_overlap(win_T *wp, int extra2);
+extern int rs_adjust_plines_for_skipcol(win_T *wp);
+extern int rs_skipcol_from_plines(win_T *wp, int plines_off);
 
 /// Get the number of screen lines skipped with "wp->w_skipcol".
 static int adjust_plines_for_skipcol(win_T *wp)
 {
-  if (wp->w_skipcol == 0) {
-    return 0;
-  }
-
-  int width = wp->w_view_width - win_col_off(wp);
-  int w2 = width + win_col_off2(wp);
-  if (wp->w_skipcol >= width && w2 > 0) {
-    return (wp->w_skipcol - width) / w2 + 1;
-  }
-
-  return 0;
+  return rs_adjust_plines_for_skipcol(wp);
 }
 
 /// Return how many lines "lnum" will take on the screen, taking into account
@@ -208,16 +200,7 @@ int sms_marker_overlap(win_T *wp, int extra2)
 /// physical lines we want to scroll down.
 static int skipcol_from_plines(win_T *wp, int plines_off)
 {
-  int width1 = wp->w_view_width - win_col_off(wp);
-
-  int skipcol = 0;
-  if (plines_off > 0) {
-    skipcol += width1;
-  }
-  if (plines_off > 1) {
-    skipcol += (width1 + win_col_off2(wp)) * (plines_off - 1);
-  }
-  return skipcol;
+  return rs_skipcol_from_plines(wp, plines_off);
 }
 
 /// Set wp->w_skipcol to zero and redraw later if needed.

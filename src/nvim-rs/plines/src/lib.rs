@@ -2027,6 +2027,82 @@ pub extern "C" fn rs_plines_win_col(
     plines_win_col_impl(csarg, line, column, cstype, fill_lines)
 }
 
+// ============================================================================
+// skipcol helper functions
+// ============================================================================
+
+extern "C" {
+    fn nvim_win_get_skipcol(wp: WinHandle) -> c_int;
+}
+
+/// Get the number of screen lines skipped with "wp->w_skipcol".
+///
+/// This calculates how many screen lines are skipped when smooth scrolling
+/// is active and the window has a skipcol value.
+#[inline]
+fn adjust_plines_for_skipcol_impl(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        let skipcol = nvim_win_get_skipcol(wp);
+        if skipcol == 0 {
+            return 0;
+        }
+
+        let width = nvim_win_get_view_width(wp) - rs_win_col_off(wp);
+        let w2 = width + rs_win_col_off2(wp);
+
+        if skipcol >= width && w2 > 0 {
+            (skipcol - width) / w2 + 1
+        } else {
+            0
+        }
+    }
+}
+
+/// Get the number of screen lines skipped with "wp->w_skipcol".
+///
+/// # Safety
+/// The `wp` parameter must be a valid window handle.
+#[no_mangle]
+pub extern "C" fn rs_adjust_plines_for_skipcol(wp: WinHandle) -> c_int {
+    adjust_plines_for_skipcol_impl(wp)
+}
+
+/// Calculates the skipcol offset for window "wp" given how many
+/// physical lines we want to scroll down.
+#[inline]
+fn skipcol_from_plines_impl(wp: WinHandle, plines_off: c_int) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        let width1 = nvim_win_get_view_width(wp) - rs_win_col_off(wp);
+
+        let mut skipcol = 0;
+        if plines_off > 0 {
+            skipcol += width1;
+        }
+        if plines_off > 1 {
+            skipcol += (width1 + rs_win_col_off2(wp)) * (plines_off - 1);
+        }
+        skipcol
+    }
+}
+
+/// Calculates the skipcol offset for window "wp" given how many
+/// physical lines we want to scroll down.
+///
+/// # Safety
+/// The `wp` parameter must be a valid window handle.
+#[no_mangle]
+pub extern "C" fn rs_skipcol_from_plines(wp: WinHandle, plines_off: c_int) -> c_int {
+    skipcol_from_plines_impl(wp, plines_off)
+}
+
 #[cfg(test)]
 mod tests {
     // Tests require FFI stubs which aren't available in pure Rust testing.

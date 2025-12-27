@@ -444,6 +444,8 @@ int nvim_win_get_view_height(win_T *wp)
   return wp->w_view_height;
 }
 
+// Note: nvim_win_get_skipcol is defined later in window.c (returns colnr_T)
+
 /// Get the w_buffer field from a window.
 buf_T *nvim_win_get_w_buffer(win_T *wp)
 {

@@ -124,6 +124,11 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 - `plines_win_nofold` - Migrated to Rust (rs_plines_win_nofold)
 - `plines_win_col` - Migrated to Rust (rs_plines_win_col)
 
+**move.c** (scroll/position calculations - partially MIGRATED):
+- `sms_marker_overlap` - Migrated to Rust (rs_sms_marker_overlap)
+- `adjust_plines_for_skipcol` - Migrated to Rust (rs_adjust_plines_for_skipcol)
+- `skipcol_from_plines` - Migrated to Rust (rs_skipcol_from_plines)
+
 ### Global State Dependencies
 
 **cursor_shape.c** (shape_table global):
