@@ -46,6 +46,7 @@ extern void rs_getvcol(void *csarg, const char *line, int end_col, int cstype,
                        int pos_lnum, int pos_coladd,
                        int *start_out, int *cursor_out, int *end_out, int *pos_col_out);
 extern int rs_plines_win_nofold(void *csarg, int cstype, int first_char);
+extern int rs_plines_win_col(void *csarg, const char *line, int column, int cstype, int fill_lines);
 
 // Filter for inline virtual text marks
 static const uint32_t inline_filter[kMTMetaCount] = {[kMTMetaInline] = kMTFilterSelect };
@@ -754,57 +755,14 @@ int plines_win_nofold(win_T *wp, linenr_T lnum)
 int plines_win_col(win_T *wp, linenr_T lnum, long column)
 {
   // Check for filler lines above this buffer line.
-  int lines = win_get_fill(wp, lnum);
-
-  if (!wp->w_p_wrap) {
-    return lines + 1;
-  }
-
-  if (wp->w_view_width == 0) {
-    return lines + 1;
-  }
+  // Keep this in C as it depends on decoration and diff systems.
+  int fill_lines = win_get_fill(wp, lnum);
 
   char *line = ml_get_buf(wp->w_buffer, lnum);
-
   CharsizeArg csarg;
   CSType const cstype = init_charsize_arg(&csarg, wp, lnum, line);
 
-  colnr_T vcol = 0;
-  StrCharInfo ci = utf_ptr2StrCharInfo(line);
-  if (cstype == kCharsizeFast) {
-    bool const use_tabstop = csarg.use_tabstop;
-    while (*ci.ptr != NUL && --column >= 0) {
-      vcol += charsize_fast_impl(wp, ci.ptr, use_tabstop, vcol, ci.chr.value).width;
-      ci = utfc_next(ci);
-    }
-  } else {
-    while (*ci.ptr != NUL && --column >= 0) {
-      vcol += charsize_regular(&csarg, ci.ptr, vcol, ci.chr.value).width;
-      ci = utfc_next(ci);
-    }
-  }
-
-  // If current char is a TAB, and the TAB is not displayed as ^I, and we're not
-  // in MODE_INSERT state, then col must be adjusted so that it represents the
-  // last screen position of the TAB.  This only fixes an error when the TAB
-  // wraps from one screen line to the next (when 'columns' is not a multiple
-  // of 'ts') -- webb.
-  colnr_T col = vcol;
-  if (ci.chr.value == TAB && (State & MODE_NORMAL) && csarg.use_tabstop) {
-    col += win_charsize(cstype, col, ci.ptr, ci.chr.value, &csarg).width - 1;
-  }
-
-  // Add column offset for 'number', 'relativenumber', 'foldcolumn', etc.
-  int width = wp->w_view_width - win_col_off(wp);
-  if (width <= 0) {
-    return 9999;
-  }
-
-  lines += 1;
-  if (col > width) {
-    lines += (col - width) / (width + win_col_off2(wp)) + 1;
-  }
-  return lines;
+  return rs_plines_win_col(&csarg, line, (int)column, (int)cstype, fill_lines);
 }
 
 /// Get the number of screen lines buffer line "lnum" will take in window "wp".

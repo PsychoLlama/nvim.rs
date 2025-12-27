@@ -1889,6 +1889,144 @@ pub extern "C" fn rs_plines_win_nofold(
     plines_win_nofold_impl(csarg, cstype, first_char)
 }
 
+// ============================================================================
+// plines_win_col - Physical lines up to a column
+// ============================================================================
+
+/// Calculate physical screen lines from start of line to given column.
+///
+/// This iterates through characters up to `column`, then calculates
+/// how many screen lines that takes.
+///
+/// # Arguments
+/// * `csarg` - Character size argument handle
+/// * `line` - Pointer to the line string
+/// * `column` - Column to count up to
+/// * `cstype` - Charsize type (0 = fast, 1 = regular)
+/// * `fill_lines` - Number of filler lines (from win_get_fill)
+///
+/// # Returns
+/// Total number of screen lines including fill lines
+#[inline]
+fn plines_win_col_impl(
+    csarg: CharsizeArgHandle,
+    line: *const c_char,
+    column: c_int,
+    cstype: c_int,
+    fill_lines: c_int,
+) -> c_int {
+    if csarg.is_null() || line.is_null() {
+        return fill_lines + 1;
+    }
+
+    unsafe {
+        let wp = nvim_csarg_get_win(csarg);
+
+        // Check for wrap off or zero width
+        if nvim_win_get_p_wrap(wp) == 0 {
+            return fill_lines + 1;
+        }
+
+        let view_width = nvim_win_get_view_width(wp);
+        if view_width == 0 {
+            return fill_lines + 1;
+        }
+
+        // Iterate through characters up to column
+        let mut vcol: c_int = 0;
+        let mut col_count = column;
+
+        // Initialize character iteration
+        let mut ptr = line;
+        let mut char_len: c_int = 0;
+        let mut char_value = nvim_str_char_info_init(
+            line,
+            std::ptr::from_mut(&mut ptr),
+            std::ptr::from_mut(&mut char_len),
+        );
+
+        if cstype == CSTYPE_FAST {
+            let use_tabstop = nvim_csarg_get_use_tabstop(csarg) != 0;
+            while *ptr != 0 && {
+                col_count -= 1;
+                col_count >= 0
+            } {
+                let cs = charsize_fast_impl(wp, ptr, use_tabstop, vcol, char_value);
+                vcol += cs.width;
+
+                // Advance to next character
+                char_value = nvim_str_char_info_next(
+                    std::ptr::from_mut(&mut ptr),
+                    char_len,
+                    char_value,
+                    std::ptr::from_mut(&mut char_len),
+                );
+            }
+        } else {
+            while *ptr != 0 && {
+                col_count -= 1;
+                col_count >= 0
+            } {
+                let cs = charsize_regular_impl(csarg, ptr, vcol, char_value);
+                vcol += cs.width;
+
+                // Advance to next character
+                char_value = nvim_str_char_info_next(
+                    std::ptr::from_mut(&mut ptr),
+                    char_len,
+                    char_value,
+                    std::ptr::from_mut(&mut char_len),
+                );
+            }
+        }
+
+        // If current char is a TAB, and the TAB is not displayed as ^I, and we're not
+        // in MODE_INSERT state, then col must be adjusted so that it represents the
+        // last screen position of the TAB.
+        let mut col = vcol;
+        let state = nvim_get_State();
+        let use_tabstop = nvim_csarg_get_use_tabstop(csarg) != 0;
+
+        if char_value == TAB && (state & MODE_NORMAL) != 0 && use_tabstop {
+            // Use appropriate charsize function
+            let tab_size = if cstype == CSTYPE_FAST {
+                charsize_fast_impl(wp, ptr, true, col, char_value)
+            } else {
+                charsize_regular_impl(csarg, ptr, col, char_value)
+            };
+            col += tab_size.width - 1;
+        }
+
+        // Add column offset for 'number', 'relativenumber', 'foldcolumn', etc.
+        let width = view_width - rs_win_col_off(wp);
+        if width <= 0 {
+            return 9999;
+        }
+
+        let mut lines = fill_lines + 1;
+        if col > width {
+            lines += (col - width) / (width + rs_win_col_off2(wp)) + 1;
+        }
+        lines
+    }
+}
+
+/// Get the number of physical screen lines used from start of line to column.
+///
+/// # Safety
+/// The `csarg` parameter must be a valid `CharsizeArg*` pointer.
+/// The `line` parameter must be a valid null-terminated string pointer.
+#[no_mangle]
+pub extern "C" fn rs_plines_win_col(
+    csarg: CharsizeArgHandle,
+    line: *const c_char,
+    column: c_int,
+    cstype: c_int,
+    fill_lines: c_int,
+) -> c_int {
+    plines_win_col_impl(csarg, line, column, cstype, fill_lines)
+}
+
 #[cfg(test)]
 mod tests {
     // Tests require FFI stubs which aren't available in pure Rust testing.
