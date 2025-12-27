@@ -38,6 +38,7 @@ extern int rs_charsize_nowrap(buf_T *buf, const char *cur, int use_tabstop, int 
 extern int rs_win_may_fill(win_T *wp);
 extern int rs_in_win_border(win_T *wp, int vcol);
 extern int rs_win_chartabsize(win_T *wp, const char *p, int col);
+extern CharSize rs_charsize_fast(win_T *wp, const char *cur, int use_tabstop, int vcol, int32_t cur_char);
 
 /// Functions calculating horizontal size of text, when displayed in a window.
 
@@ -386,7 +387,7 @@ static inline CharSize charsize_fast_impl(win_T *const wp, const char *cur, bool
 CharSize charsize_fast(CharsizeArg *csarg, const char *cur, colnr_T vcol, int32_t cur_char)
   FUNC_ATTR_PURE
 {
-  return charsize_fast_impl(csarg->win, cur, csarg->use_tabstop, vcol, cur_char);
+  return rs_charsize_fast(csarg->win, cur, csarg->use_tabstop, (int)vcol, cur_char);
 }
 
 /// Get the number of cells taken up on the screen at given virtual column.

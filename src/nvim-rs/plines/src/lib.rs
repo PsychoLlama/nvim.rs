@@ -33,6 +33,7 @@ extern "C" {
     fn nvim_win_get_p_stc(wp: WinHandle) -> *const c_char;
     fn nvim_win_get_p_cocu(wp: WinHandle) -> *const c_char;
     fn nvim_win_get_minscwidth(wp: WinHandle) -> c_int;
+    fn nvim_win_get_p_wrap(wp: WinHandle) -> c_int;
 
     // Window cache fields
     fn nvim_win_get_nrwidth_line_count(wp: WinHandle) -> i64;
@@ -274,6 +275,15 @@ const TAB: i32 = 0x09;
 
 // Invalid byte display width (from mbyte.h)
 const K_INVALID_BYTE_CELLS: c_int = 4;
+
+/// CharSize struct for character size with head offset.
+/// Matches C's CharSize struct.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CharSize {
+    pub width: c_int,
+    pub head: c_int,
+}
 
 /// Get the number of cells taken up on the screen at given virtual column.
 ///
@@ -849,6 +859,72 @@ pub extern "C" fn rs_win_border_height(wp: WinHandle) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_win_border_width(wp: WinHandle) -> c_int {
     win_border_width_impl(wp)
+}
+
+// ============================================================================
+// charsize_fast - Fast character size without virtual text
+// ============================================================================
+
+/// Like charsize_regular(), except it doesn't handle inline virtual text,
+/// 'linebreak', 'breakindent' or 'showbreak'.
+/// Handles normal characters, tabs and wrapping.
+#[inline]
+fn charsize_fast_impl(
+    wp: WinHandle,
+    cur: *const c_char,
+    use_tabstop: bool,
+    vcol: c_int,
+    cur_char: i32,
+) -> CharSize {
+    if wp.is_null() {
+        return CharSize { width: 1, head: 0 };
+    }
+
+    unsafe {
+        // A tab gets expanded, depending on the current column
+        if cur_char == TAB && use_tabstop {
+            let buf = nvim_win_get_w_buffer(wp);
+            let ts = nvim_buf_get_p_ts(buf);
+            let vts = nvim_buf_get_p_vts_array(buf);
+            return CharSize {
+                width: rs_tabstop_padding(vcol, ts, vts),
+                head: 0,
+            };
+        }
+
+        let width = if cur_char < 0 {
+            K_INVALID_BYTE_CELLS
+        } else {
+            rs_ptr2cells(cur)
+        };
+
+        // If a double-width char doesn't fit at the end of a line, it wraps to the next line,
+        // and the last column displays a '>'.
+        let p_wrap = nvim_win_get_p_wrap(wp) != 0;
+        if width == 2 && cur_char >= 0x80 && p_wrap && in_win_border_impl(wp, vcol) {
+            CharSize { width: 3, head: 1 }
+        } else {
+            CharSize { width, head: 0 }
+        }
+    }
+}
+
+/// Get the character size for fast path (no virtual text, linebreak, etc.).
+///
+/// Returns CharSize struct with width and head fields.
+///
+/// # Safety
+/// The `wp` parameter must be a valid `win_T*` pointer.
+/// The `cur` parameter must be a valid pointer to a character.
+#[no_mangle]
+pub extern "C" fn rs_charsize_fast(
+    wp: WinHandle,
+    cur: *const c_char,
+    use_tabstop: c_int,
+    vcol: c_int,
+    cur_char: i32,
+) -> CharSize {
+    charsize_fast_impl(wp, cur, use_tabstop != 0, vcol, cur_char)
 }
 
 #[cfg(test)]
