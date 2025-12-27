@@ -927,6 +927,185 @@ pub extern "C" fn rs_charsize_fast(
     charsize_fast_impl(wp, cur, use_tabstop != 0, vcol, cur_char)
 }
 
+// ============================================================================
+// linesize_fast - Fast line size calculation
+// ============================================================================
+
+/// Maximum column value (from Neovim's pos_defs.h MAXCOL)
+const MAXCOL: c_int = 0x7fff_ffff;
+
+/// Calculate the display width of a line using the fast path.
+///
+/// This function iterates through the line using UTF-8 aware iteration
+/// and accumulates character widths using `charsize_fast_impl`.
+/// It doesn't handle inline virtual text, 'linebreak', 'breakindent' or 'showbreak'.
+///
+/// # Arguments
+/// * `wp` - Window handle
+/// * `use_tabstop` - Whether to use tabstop for TAB characters
+/// * `line` - Pointer to the line string
+/// * `vcol_arg` - Initial virtual column
+/// * `len` - Maximum length to process (in bytes)
+#[inline]
+fn linesize_fast_impl(
+    wp: WinHandle,
+    use_tabstop: bool,
+    line: *const c_char,
+    vcol_arg: c_int,
+    len: c_int,
+) -> c_int {
+    if wp.is_null() || line.is_null() {
+        return vcol_arg;
+    }
+
+    unsafe {
+        // Create a slice from the line pointer with the given length
+        // We need to be careful here - `len` may be MAXCOL which means "until NUL"
+        // For safety, we'll iterate byte by byte
+
+        let mut vcol: i64 = vcol_arg as i64;
+        let mut vcol_for_charsize = vcol_arg;
+        let mut offset: usize = 0;
+
+        loop {
+            // Check bounds
+            let cur_ptr = line.add(offset);
+            let cur_byte = *cur_ptr as u8;
+
+            // Stop at NUL
+            if cur_byte == 0 {
+                break;
+            }
+
+            // Stop if we've processed enough bytes
+            if offset as c_int >= len {
+                break;
+            }
+
+            // Get character info using UTF-8 decoding
+            // First determine the length of this UTF-8 character
+            let char_len = utf8_char_len(cur_byte);
+
+            // Decode the character value
+            let chr_value = decode_utf8_char(cur_ptr, char_len);
+
+            // Calculate character width using current vcol
+            let cs = charsize_fast_impl(wp, cur_ptr, use_tabstop, vcol_for_charsize, chr_value);
+            vcol += cs.width as i64;
+
+            // Move to next character (including composing characters)
+            offset += char_len;
+
+            // Check for overflow and update vcol_for_charsize
+            if vcol > MAXCOL as i64 {
+                return MAXCOL;
+            }
+            vcol_for_charsize = vcol as c_int;
+        }
+
+        vcol_for_charsize
+    }
+}
+
+/// Get the byte length of a UTF-8 character from its first byte.
+#[inline]
+const fn utf8_char_len(b: u8) -> usize {
+    if b < 0x80 {
+        1
+    } else if b < 0xC0 {
+        // Continuation byte - treat as 1 (invalid sequence)
+        1
+    } else if b < 0xE0 {
+        2
+    } else if b < 0xF0 {
+        3
+    } else if b < 0xF8 {
+        4
+    } else {
+        // Invalid - treat as 1
+        1
+    }
+}
+
+/// Decode a UTF-8 character from a pointer.
+///
+/// Returns the codepoint value, or -1 for invalid sequences.
+#[inline]
+const unsafe fn decode_utf8_char(p: *const c_char, len: usize) -> i32 {
+    let b0 = *p as u8;
+
+    // ASCII fast path
+    if b0 < 0x80 {
+        return b0 as i32;
+    }
+
+    match len {
+        2 => {
+            let b1 = *p.add(1) as u8;
+            if (b1 & 0xC0) != 0x80 {
+                return -1;
+            }
+            let code = ((b0 as i32 & 0x1F) << 6) | (b1 as i32 & 0x3F);
+            if code < 0x80 {
+                -1 // Overlong
+            } else {
+                code
+            }
+        }
+        3 => {
+            let b1 = *p.add(1) as u8;
+            let b2 = *p.add(2) as u8;
+            if (b1 & 0xC0) != 0x80 || (b2 & 0xC0) != 0x80 {
+                return -1;
+            }
+            let code = ((b0 as i32 & 0x0F) << 12) | ((b1 as i32 & 0x3F) << 6) | (b2 as i32 & 0x3F);
+            if code < 0x800 {
+                -1 // Overlong
+            } else {
+                code
+            }
+        }
+        4 => {
+            let b1 = *p.add(1) as u8;
+            let b2 = *p.add(2) as u8;
+            let b3 = *p.add(3) as u8;
+            if (b1 & 0xC0) != 0x80 || (b2 & 0xC0) != 0x80 || (b3 & 0xC0) != 0x80 {
+                return -1;
+            }
+            let code = ((b0 as i32 & 0x07) << 18)
+                | ((b1 as i32 & 0x3F) << 12)
+                | ((b2 as i32 & 0x3F) << 6)
+                | (b3 as i32 & 0x3F);
+            // Valid 4-byte UTF-8 range: U+10000 to U+10FFFF
+            #[allow(clippy::manual_range_contains)]
+            if code < 0x10000 || code > 0x0010_FFFF {
+                -1 // Invalid or overlong
+            } else {
+                code
+            }
+        }
+        _ => b0 as i32, // Treat single byte as its value
+    }
+}
+
+/// Calculate the display width of a line using the fast path.
+///
+/// Returns the virtual column after processing the line.
+///
+/// # Safety
+/// The `wp` parameter must be a valid `win_T*` pointer.
+/// The `line` parameter must be a valid pointer to a NUL-terminated string.
+#[no_mangle]
+pub extern "C" fn rs_linesize_fast(
+    wp: WinHandle,
+    use_tabstop: c_int,
+    line: *const c_char,
+    vcol_arg: c_int,
+    len: c_int,
+) -> c_int {
+    linesize_fast_impl(wp, use_tabstop != 0, line, vcol_arg, len)
+}
+
 #[cfg(test)]
 mod tests {
     // Tests require FFI stubs which aren't available in pure Rust testing.

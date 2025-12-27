@@ -39,6 +39,7 @@ extern int rs_win_may_fill(win_T *wp);
 extern int rs_in_win_border(win_T *wp, int vcol);
 extern int rs_win_chartabsize(win_T *wp, const char *p, int col);
 extern CharSize rs_charsize_fast(win_T *wp, const char *cur, int use_tabstop, int vcol, int32_t cur_char);
+extern int rs_linesize_fast(win_T *wp, int use_tabstop, const char *line, int vcol_arg, int len);
 
 /// Functions calculating horizontal size of text, when displayed in a window.
 
@@ -448,25 +449,7 @@ int linesize_regular(CharsizeArg *const csarg, int vcol_arg, colnr_T const len)
 /// @see linesize_regular
 int linesize_fast(CharsizeArg const *const csarg, int vcol_arg, colnr_T const len)
 {
-  win_T *const wp = csarg->win;
-  bool const use_tabstop = csarg->use_tabstop;
-
-  char *const line = csarg->line;
-  int64_t vcol = vcol_arg;
-
-  StrCharInfo ci = utf_ptr2StrCharInfo(line);
-  while (ci.ptr - line < len && *ci.ptr != NUL) {
-    vcol += charsize_fast_impl(wp, ci.ptr, use_tabstop, vcol_arg, ci.chr.value).width;
-    ci = utfc_next(ci);
-    if (vcol > MAXCOL) {
-      vcol_arg = MAXCOL;
-      break;
-    } else {
-      vcol_arg = (int)vcol;
-    }
-  }
-
-  return vcol_arg;
+  return rs_linesize_fast(csarg->win, csarg->use_tabstop, csarg->line, vcol_arg, (int)len);
 }
 
 /// Get how many virtual columns inline virtual text should offset the cursor.
