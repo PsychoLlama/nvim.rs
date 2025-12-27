@@ -41,6 +41,7 @@ extern int rs_win_chartabsize(win_T *wp, const char *p, int col);
 extern CharSize rs_charsize_fast(win_T *wp, const char *cur, int use_tabstop, int vcol, int32_t cur_char);
 extern int rs_linesize_fast(win_T *wp, int use_tabstop, const char *line, int vcol_arg, int len);
 extern CharSize rs_charsize_regular(void *csarg, const char *cur, int vcol, int32_t cur_char);
+extern int rs_linesize_regular(void *csarg, int vcol_arg, int len);
 
 // Filter for inline virtual text marks
 static const uint32_t inline_filter[kMTMetaCount] = {[kMTMetaInline] = kMTFilterSelect };
@@ -242,6 +243,32 @@ int nvim_win_get_lcs_tab3(win_T *wp)
   return wp->w_p_lcs_chars.tab3;
 }
 
+// ============================================================================
+// Character iteration accessors for linesize_regular
+// ============================================================================
+
+/// Initialize StrCharInfo and return the first character value.
+/// Returns the character value, and sets *ptr_out to the pointer,
+/// and *len_out to the byte length.
+int32_t nvim_str_char_info_init(const char *line, const char **ptr_out, int *len_out)
+{
+  StrCharInfo ci = utf_ptr2StrCharInfo((char *)line);
+  *ptr_out = ci.ptr;
+  *len_out = ci.chr.len;
+  return ci.chr.value;
+}
+
+/// Advance to the next character and return its value.
+/// Updates *ptr_out and *len_out.
+int32_t nvim_str_char_info_next(const char **ptr_out, int len, int32_t value, int *len_out)
+{
+  StrCharInfo cur = { .ptr = (char *)*ptr_out, .chr = { .value = value, .len = len } };
+  StrCharInfo next = utfc_next(cur);
+  *ptr_out = next.ptr;
+  *len_out = next.chr.len;
+  return next.chr.value;
+}
+
 /// Functions calculating horizontal size of text, when displayed in a window.
 
 /// Return the number of cells the first char in "p" will take on the screen,
@@ -414,29 +441,7 @@ static bool in_win_border(win_T *wp, colnr_T vcol)
 ///         or full size of the line if "len" is MAXCOL.
 int linesize_regular(CharsizeArg *const csarg, int vcol_arg, colnr_T const len)
 {
-  char *const line = csarg->line;
-  int64_t vcol = vcol_arg;
-
-  StrCharInfo ci = utf_ptr2StrCharInfo(line);
-  while (ci.ptr - line < len && *ci.ptr != NUL) {
-    vcol += charsize_regular(csarg, ci.ptr, vcol_arg, ci.chr.value).width;
-    ci = utfc_next(ci);
-    if (vcol > MAXCOL) {
-      vcol_arg = MAXCOL;
-      break;
-    } else {
-      vcol_arg = (int)vcol;
-    }
-  }
-
-  // Check for inline virtual text after the end of the line.
-  if (len == MAXCOL && csarg->virt_row >= 0 && *ci.ptr == NUL) {
-    int head = charsize_regular(csarg, ci.ptr, vcol_arg, ci.chr.value).head;
-    vcol += csarg->cur_text_width_left + csarg->cur_text_width_right + head;
-    vcol_arg = vcol > MAXCOL ? MAXCOL : (int)vcol;
-  }
-
-  return vcol_arg;
+  return rs_linesize_regular(csarg, vcol_arg, (int)len);
 }
 
 /// Like linesize_regular(), but can be used when CSType is kCharsizeFast.

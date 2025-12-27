@@ -162,6 +162,19 @@ extern "C" {
     fn nvim_win_get_p_lbr(wp: WinHandle) -> c_int;
     fn nvim_win_get_p_bri(wp: WinHandle) -> c_int;
     fn nvim_win_get_lcs_eol(wp: WinHandle) -> c_int;
+
+    // Character iteration accessors for linesize_regular
+    fn nvim_str_char_info_init(
+        line: *const c_char,
+        ptr_out: *mut *const c_char,
+        len_out: *mut c_int,
+    ) -> i32;
+    fn nvim_str_char_info_next(
+        ptr_out: *mut *const c_char,
+        len: c_int,
+        value: i32,
+        len_out: *mut c_int,
+    ) -> i32;
 }
 
 // Mode constants (matching Neovim's state.h)
@@ -1466,6 +1479,88 @@ pub extern "C" fn rs_charsize_regular(
     cur_char: i32,
 ) -> CharSize {
     charsize_regular_impl(csarg, cur, vcol, cur_char)
+}
+
+// ============================================================================
+// linesize_regular - Full line size calculation with virtual text
+// ============================================================================
+
+/// Calculate the display width of a line using the regular path.
+///
+/// This function handles inline virtual text, linebreak, breakindent, etc.
+///
+/// # Arguments
+/// * `csarg` - CharsizeArg handle (must have been initialized)
+/// * `vcol_arg` - Starting virtual column
+/// * `len` - First byte of end character, or MAXCOL
+///
+/// # Returns
+/// Virtual column before the character at "len", or full size if len is MAXCOL.
+#[inline]
+fn linesize_regular_impl(csarg: CharsizeArgHandle, vcol_arg: c_int, len: c_int) -> c_int {
+    if csarg.is_null() {
+        return vcol_arg;
+    }
+
+    unsafe {
+        let line = nvim_csarg_get_line(csarg);
+        if line.is_null() {
+            return vcol_arg;
+        }
+
+        let mut vcol: i64 = vcol_arg as i64;
+        let mut vcol_for_charsize = vcol_arg;
+
+        // Initialize character iteration
+        let mut ptr: *const c_char = std::ptr::null();
+        let mut char_len: c_int = 0;
+        let mut char_value =
+            nvim_str_char_info_init(line, std::ptr::from_mut(&mut ptr), std::ptr::from_mut(&mut char_len));
+
+        // Iterate through characters
+        while (ptr as isize - line as isize) < len as isize && *ptr != 0 {
+            let cs = charsize_regular_impl(csarg, ptr, vcol_for_charsize, char_value);
+            vcol += cs.width as i64;
+
+            // Advance to next character
+            char_value =
+                nvim_str_char_info_next(std::ptr::from_mut(&mut ptr), char_len, char_value, std::ptr::from_mut(&mut char_len));
+
+            // Check for overflow
+            if vcol > MAXCOL as i64 {
+                vcol_for_charsize = MAXCOL;
+                break;
+            }
+            vcol_for_charsize = vcol as c_int;
+        }
+
+        // Check for inline virtual text after the end of the line
+        let virt_row = nvim_csarg_get_virt_row(csarg);
+        if len == MAXCOL && virt_row >= 0 && *ptr == 0 {
+            let cs = charsize_regular_impl(csarg, ptr, vcol_for_charsize, char_value);
+            let cur_text_left = nvim_csarg_get_cur_text_width_left(csarg);
+            let cur_text_right = nvim_csarg_get_cur_text_width_right(csarg);
+            vcol += (cur_text_left + cur_text_right + cs.head) as i64;
+            vcol_for_charsize = if vcol > MAXCOL as i64 {
+                MAXCOL
+            } else {
+                vcol as c_int
+            };
+        }
+
+        vcol_for_charsize
+    }
+}
+
+/// Calculate the display width of a line using the regular path.
+///
+/// Returns the virtual column at the end of the specified length.
+///
+/// # Safety
+/// The `csarg` parameter must be a valid `CharsizeArg*` pointer.
+#[no_mangle]
+pub extern "C" fn rs_linesize_regular(csarg: CharsizeArgHandle, vcol_arg: c_int, len: c_int) -> c_int {
+    linesize_regular_impl(csarg, vcol_arg, len)
 }
 
 #[cfg(test)]
