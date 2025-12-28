@@ -1,7 +1,8 @@
 //! Terminal UI utilities for Neovim
 //!
 //! This crate provides terminfo-related functions for the terminal UI,
-//! including key modifier handling and terminfo format string processing.
+//! including key modifier handling, terminfo format string processing,
+//! and terminal output functions.
 
 #![allow(clippy::manual_c_str_literals)]
 #![allow(clippy::doc_markdown)]
@@ -12,6 +13,8 @@
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::borrow_as_ptr)]
 #![allow(clippy::collapsible_if)]
+
+pub mod output;
 
 use std::ffi::{c_char, c_int, c_long, CStr};
 use std::io::Write;

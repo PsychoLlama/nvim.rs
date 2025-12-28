@@ -190,6 +190,40 @@ extern void rs_augment_terminfo(const TermDetectContext *ctx, TerminfoState *sta
                                 TermDetectOutput *output);
 extern int rs_term_has_truecolor(const char *colorterm, int has_tc_or_rgb, const char **defs);
 
+// Rust TUI output functions
+extern bool rs_attrs_differ(int id1, int id2, bool rgb, const HlAttrs *attrs, size_t attrs_size);
+
+// ============================================================================
+// TUIData Accessor Functions for Rust
+// ============================================================================
+
+/// Get the rgb flag from TUIData
+bool nvim_tui_get_rgb(TUIData *tui)
+{
+  return tui->rgb;
+}
+
+/// Get an HlAttrs entry from the attrs kvec
+const HlAttrs *nvim_tui_get_attrs_ptr(TUIData *tui, size_t idx)
+{
+  if (idx >= kv_size(tui->attrs)) {
+    return NULL;
+  }
+  return &kv_A(tui->attrs, idx);
+}
+
+/// Get the size of the attrs kvec
+size_t nvim_tui_get_attrs_size(TUIData *tui)
+{
+  return kv_size(tui->attrs);
+}
+
+/// Get pointer to the attrs array
+const HlAttrs *nvim_tui_get_attrs_data(TUIData *tui)
+{
+  return tui->attrs.items;
+}
+
 #define TERMINFO_SEQ_LIMIT 128
 
 #define terminfo_print_num1(tui, what, num) terminfo_print_num(tui, what, num, 0, 0)
@@ -791,32 +825,11 @@ static void sigwinch_cb(SignalWatcher *watcher, int signum, void *cbdata)
   tui_guess_size(tui);
 }
 
+/// Check if two attribute IDs have different visual attributes.
+/// Rust implementation in nvim-tui crate.
 static bool attrs_differ(TUIData *tui, int id1, int id2, bool rgb)
 {
-  if (id1 == id2) {
-    return false;
-  } else if (id1 < 0 || id2 < 0) {
-    return true;
-  }
-  HlAttrs a1 = kv_A(tui->attrs, (size_t)id1);
-  HlAttrs a2 = kv_A(tui->attrs, (size_t)id2);
-
-  if (a1.url != a2.url) {
-    return true;
-  }
-
-  if (rgb) {
-    return a1.rgb_fg_color != a2.rgb_fg_color
-           || a1.rgb_bg_color != a2.rgb_bg_color
-           || a1.rgb_ae_attr != a2.rgb_ae_attr
-           || a1.rgb_sp_color != a2.rgb_sp_color;
-  } else {
-    return a1.cterm_fg_color != a2.cterm_fg_color
-           || a1.cterm_bg_color != a2.cterm_bg_color
-           || a1.cterm_ae_attr != a2.cterm_ae_attr
-           || (a1.cterm_ae_attr & HL_UNDERLINE_MASK
-               && a1.rgb_sp_color != a2.rgb_sp_color);
-  }
+  return rs_attrs_differ(id1, id2, rgb, tui->attrs.items, kv_size(tui->attrs));
 }
 
 static void update_attrs(TUIData *tui, int attr_id)
