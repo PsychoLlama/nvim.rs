@@ -103,6 +103,11 @@ int nvim_get_pum_external(void)
   return pum_external;
 }
 
+int nvim_get_pum_height(void)
+{
+  return pum_height;
+}
+
 #include "popupmenu.c.generated.h"
 #define PUM_DEF_HEIGHT 10
 
@@ -1348,19 +1353,16 @@ void pum_ext_select_item(int item, bool insert, bool finish)
   pum_want.finish = finish;
 }
 
+// Rust implementation of pum_get_height
+extern int rs_pum_get_height(void);
+
 /// Gets the height of the menu.
 ///
 /// @return the height of the popup menu, the number of entries visible.
 /// Only valid when pum_visible() returns true!
 int pum_get_height(void)
 {
-  if (pum_external) {
-    int ui_pum_height = ui_pum_get_height();
-    if (ui_pum_height) {
-      return ui_pum_height;
-    }
-  }
-  return pum_height;
+  return rs_pum_get_height();
 }
 
 /// Add size information about the pum to "dict".
