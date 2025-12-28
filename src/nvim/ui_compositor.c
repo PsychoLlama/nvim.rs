@@ -383,26 +383,12 @@ bool ui_comp_set_grid(handle_T handle)
   return rs_ui_comp_set_grid(handle) != 0;
 }
 
+// Rust implementation of ui_comp_raise_grid
+extern void rs_ui_comp_raise_grid(ScreenGrid *grid, size_t new_index);
+
 void ui_comp_raise_grid(ScreenGrid *grid, size_t new_index)
 {
-  size_t old_index = grid->comp_index;
-  for (size_t i = old_index; i < new_index; i++) {
-    kv_A(layers, i) = kv_A(layers, i + 1);
-    kv_A(layers, i)->comp_index = i;
-    kv_A(layers, i)->pending_comp_index_update = true;
-  }
-  kv_A(layers, new_index) = grid;
-  grid->comp_index = new_index;
-  grid->pending_comp_index_update = true;
-  for (size_t i = old_index; i < new_index; i++) {
-    ScreenGrid *grid2 = kv_A(layers, i);
-    int startcol = MAX(grid->comp_col, grid2->comp_col);
-    int endcol = MIN(grid->comp_col + grid->cols,
-                     grid2->comp_col + grid2->cols);
-    compose_area(MAX(grid->comp_row, grid2->comp_row),
-                 MIN(grid->comp_row + grid->rows, grid2->comp_row + grid2->rows),
-                 startcol, endcol);
-  }
+  rs_ui_comp_raise_grid(grid, new_index);
 }
 
 void ui_comp_grid_cursor_goto(Integer grid_handle, Integer r, Integer c)

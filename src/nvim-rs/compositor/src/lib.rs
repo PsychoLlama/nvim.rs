@@ -82,6 +82,11 @@ extern "C" {
     fn nvim_screengrid_get_rows(grid: ScreenGridHandle) -> c_int;
     fn nvim_screengrid_get_cols(grid: ScreenGridHandle) -> c_int;
 
+    // Grid modification accessors
+    fn nvim_layers_set(i: usize, grid: ScreenGridHandle);
+    fn nvim_screengrid_set_comp_index(grid: ScreenGridHandle, val: usize);
+    fn nvim_screengrid_set_pending_comp_index_update(grid: ScreenGridHandle, val: bool);
+
     // Composition function
     fn nvim_compose_area(startrow: c_int, endrow: c_int, startcol: c_int, endcol: c_int);
 }
@@ -216,6 +221,65 @@ fn ui_comp_compose_grid_impl(grid: ScreenGridHandle) {
 #[no_mangle]
 pub extern "C" fn rs_ui_comp_compose_grid(grid: ScreenGridHandle) {
     ui_comp_compose_grid_impl(grid);
+}
+
+/// Raise a grid to a new position in the layer stack.
+///
+/// This moves a grid from its current position to a higher position in the
+/// layer stack. Grids at higher positions are drawn on top of lower ones.
+///
+/// After moving the grid, composes the overlapping areas between the raised
+/// grid and all grids that were moved down.
+fn ui_comp_raise_grid_impl(grid: ScreenGridHandle, new_index: usize) {
+    unsafe {
+        let old_index = nvim_screengrid_get_comp_index(grid);
+
+        // Shift layers down: move each layer at position i+1 to position i
+        for i in old_index..new_index {
+            let next_grid = nvim_layers_get(i + 1);
+            nvim_layers_set(i, next_grid);
+            nvim_screengrid_set_comp_index(next_grid, i);
+            nvim_screengrid_set_pending_comp_index_update(next_grid, true);
+        }
+
+        // Place the grid at its new position
+        nvim_layers_set(new_index, grid);
+        nvim_screengrid_set_comp_index(grid, new_index);
+        nvim_screengrid_set_pending_comp_index_update(grid, true);
+
+        // Compose overlapping areas between the raised grid and grids that moved down
+        let src_row = nvim_screengrid_get_comp_row(grid);
+        let src_col = nvim_screengrid_get_comp_col(grid);
+        let src_rows = nvim_screengrid_get_rows(grid);
+        let src_cols = nvim_screengrid_get_cols(grid);
+
+        for i in old_index..new_index {
+            let other = nvim_layers_get(i);
+            let other_row = nvim_screengrid_get_comp_row(other);
+            let other_col = nvim_screengrid_get_comp_col(other);
+            let other_rows = nvim_screengrid_get_rows(other);
+            let other_cols = nvim_screengrid_get_cols(other);
+
+            // Calculate overlapping area
+            let startcol = src_col.max(other_col);
+            let endcol = (src_col + src_cols).min(other_col + other_cols);
+            let startrow = src_row.max(other_row);
+            let endrow = (src_row + src_rows).min(other_row + other_rows);
+
+            nvim_compose_area(startrow, endrow, startcol, endcol);
+        }
+    }
+}
+
+/// FFI wrapper for `ui_comp_raise_grid`.
+///
+/// Raises a grid to a new position in the layer stack.
+///
+/// # Safety
+/// This function modifies global compositor state (layer ordering).
+#[no_mangle]
+pub extern "C" fn rs_ui_comp_raise_grid(grid: ScreenGridHandle, new_index: usize) {
+    ui_comp_raise_grid_impl(grid, new_index);
 }
 
 #[cfg(test)]
