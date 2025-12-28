@@ -194,6 +194,8 @@ extern int rs_term_has_truecolor(const char *colorterm, int has_tc_or_rgb, const
 extern bool rs_attrs_differ(int id1, int id2, bool rgb, const HlAttrs *attrs, size_t attrs_size);
 extern void rs_tui_grid_cursor_goto(TUIData *tui, int64_t row, int64_t col);
 extern void rs_tui_hl_attr_define(TUIData *tui, int64_t id, HlAttrs attrs, HlAttrs cterm_attrs);
+extern void rs_tui_default_colors_set(TUIData *tui, int64_t rgb_fg, int64_t rgb_bg,
+                                      int64_t rgb_sp, int64_t cterm_fg, int64_t cterm_bg);
 
 // ============================================================================
 // TUIData Accessor Functions for Rust
@@ -254,6 +256,49 @@ void nvim_tui_set_col(TUIData *tui, int col)
 void nvim_tui_set_attrs(TUIData *tui, size_t idx, HlAttrs attrs)
 {
   kv_a(tui->attrs, idx) = attrs;
+}
+
+/// Set the clear_attrs field
+void nvim_tui_set_clear_attrs(TUIData *tui, HlAttrs attrs)
+{
+  tui->clear_attrs = attrs;
+}
+
+/// Get the clear_attrs field
+HlAttrs nvim_tui_get_clear_attrs(TUIData *tui)
+{
+  return tui->clear_attrs;
+}
+
+/// Set print_attr_id
+void nvim_tui_set_print_attr_id(TUIData *tui, int id)
+{
+  tui->print_attr_id = id;
+}
+
+/// Set set_default_colors flag
+void nvim_tui_set_default_colors_flag(TUIData *tui, bool value)
+{
+  tui->set_default_colors = value;
+}
+
+/// Get grid height
+int nvim_tui_get_grid_height(TUIData *tui)
+{
+  return tui->grid.height;
+}
+
+/// Get grid width
+int nvim_tui_get_grid_width(TUIData *tui)
+{
+  return tui->grid.width;
+}
+
+/// Invalidate a region (wrapper for invalidate function)
+void nvim_tui_invalidate(TUIData *tui, int top, int bot, int left, int right)
+{
+  Rect r = { top, bot, left, right };
+  kv_push(tui->invalid_regions, r);
 }
 
 #define TERMINFO_SEQ_LIMIT 128
@@ -1641,18 +1686,11 @@ void tui_visual_bell(TUIData *tui)
   flush_buf(tui);
 }
 
+/// Set default colors and invalidate entire grid. Rust implementation in nvim-tui crate.
 void tui_default_colors_set(TUIData *tui, Integer rgb_fg, Integer rgb_bg, Integer rgb_sp,
                             Integer cterm_fg, Integer cterm_bg)
 {
-  tui->clear_attrs.rgb_fg_color = (RgbValue)rgb_fg;
-  tui->clear_attrs.rgb_bg_color = (RgbValue)rgb_bg;
-  tui->clear_attrs.rgb_sp_color = (RgbValue)rgb_sp;
-  tui->clear_attrs.cterm_fg_color = (int16_t)cterm_fg;
-  tui->clear_attrs.cterm_bg_color = (int16_t)cterm_bg;
-
-  tui->print_attr_id = -1;
-  tui->set_default_colors = true;
-  invalidate(tui, 0, tui->grid.height, 0, tui->grid.width);
+  rs_tui_default_colors_set(tui, rgb_fg, rgb_bg, rgb_sp, cterm_fg, cterm_bg);
 }
 
 /// Writes directly to the TTY, bypassing the buffer.

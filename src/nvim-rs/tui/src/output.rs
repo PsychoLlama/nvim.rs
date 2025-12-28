@@ -104,6 +104,12 @@ extern "C" {
     fn nvim_tui_set_row(tui: *mut TuiHandle, row: c_int);
     fn nvim_tui_set_col(tui: *mut TuiHandle, col: c_int);
     fn nvim_tui_set_attrs(tui: *mut TuiHandle, idx: usize, attrs: HlAttrs);
+    fn nvim_tui_set_clear_attrs(tui: *mut TuiHandle, attrs: HlAttrs);
+    fn nvim_tui_set_print_attr_id(tui: *mut TuiHandle, id: c_int);
+    fn nvim_tui_set_default_colors_flag(tui: *mut TuiHandle, value: bool);
+    fn nvim_tui_get_grid_height(tui: *mut TuiHandle) -> c_int;
+    fn nvim_tui_get_grid_width(tui: *mut TuiHandle) -> c_int;
+    fn nvim_tui_invalidate(tui: *mut TuiHandle, top: c_int, bot: c_int, left: c_int, right: c_int);
 }
 
 /// Set cursor position for the grid.
@@ -154,6 +160,55 @@ pub unsafe extern "C" fn rs_tui_hl_attr_define(
     attrs.cterm_bg_color = cterm_attrs.cterm_bg_color;
 
     nvim_tui_set_attrs(tui, id as usize, attrs);
+}
+
+// ============================================================================
+// Default Colors
+// ============================================================================
+
+/// Set default colors and invalidate the entire grid.
+///
+/// This function sets the clear_attrs used for background clearing,
+/// resets print_attr_id to force attribute re-emission, and invalidates
+/// the entire grid so it will be redrawn with the new colors.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_default_colors_set(
+    tui: *mut TuiHandle,
+    rgb_fg: i64,
+    rgb_bg: i64,
+    rgb_sp: i64,
+    cterm_fg: i64,
+    cterm_bg: i64,
+) {
+    if tui.is_null() {
+        return;
+    }
+
+    // Build the clear_attrs struct
+    let clear_attrs = HlAttrs {
+        rgb_ae_attr: 0,
+        cterm_ae_attr: 0,
+        rgb_fg_color: rgb_fg as i32,
+        rgb_bg_color: rgb_bg as i32,
+        rgb_sp_color: rgb_sp as i32,
+        cterm_fg_color: cterm_fg as i16,
+        cterm_bg_color: cterm_bg as i16,
+        hl_blend: -1,
+        url: -1,
+    };
+
+    nvim_tui_set_clear_attrs(tui, clear_attrs);
+    nvim_tui_set_print_attr_id(tui, -1);
+    nvim_tui_set_default_colors_flag(tui, true);
+
+    // Invalidate entire grid
+    let height = nvim_tui_get_grid_height(tui);
+    let width = nvim_tui_get_grid_width(tui);
+    nvim_tui_invalidate(tui, 0, height, 0, width);
 }
 
 #[cfg(test)]
