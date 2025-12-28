@@ -325,26 +325,12 @@ void ui_comp_grid_cursor_goto(Integer grid_handle, Integer r, Integer c)
   rs_ui_comp_grid_cursor_goto(grid_handle, r, c);
 }
 
+// Rust implementation of ui_comp_mouse_focus
+extern ScreenGrid *rs_ui_comp_mouse_focus(int row, int col);
+
 ScreenGrid *ui_comp_mouse_focus(int row, int col)
 {
-  for (ssize_t i = (ssize_t)kv_size(layers) - 1; i > 0; i--) {
-    ScreenGrid *grid = kv_A(layers, i);
-    if (grid->mouse_enabled
-        && row >= grid->comp_row && row < grid->comp_row + grid->rows
-        && col >= grid->comp_col && col < grid->comp_col + grid->cols) {
-      return grid;
-    }
-  }
-  if (ui_has(kUIMultigrid)) {
-    FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-      ScreenGrid *grid = &wp->w_grid_alloc;
-      if (grid->mouse_enabled && row >= wp->w_winrow && row < wp->w_winrow + grid->rows
-          && col >= wp->w_wincol && col < wp->w_wincol + grid->cols) {
-        return grid;
-      }
-    }
-  }
-  return NULL;
+  return rs_ui_comp_mouse_focus(row, col);
 }
 
 // Rust implementation of ui_comp_get_grid_at_coord

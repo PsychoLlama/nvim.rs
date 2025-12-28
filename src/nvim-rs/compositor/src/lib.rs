@@ -128,6 +128,20 @@ extern "C" {
     fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
     fn nvim_win_get_grid_alloc(wp: WinHandle) -> ScreenGridHandle;
     fn nvim_win_get_config_hide(wp: WinHandle) -> bool;
+    fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
+    fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
+
+    // Grid mouse state
+    fn nvim_screengrid_get_mouse_enabled(grid: ScreenGridHandle) -> bool;
+
+    // UI extension check
+    fn nvim_get_ui_ext(ext: c_int) -> c_int;
+}
+
+/// UI extension constants (from ui_defs.h)
+pub mod ui_ext {
+    /// kUIMultigrid = 6 in the C enum
+    pub const MULTIGRID: i32 = 6;
 }
 
 // =============================================================================
@@ -736,6 +750,82 @@ fn ui_comp_get_grid_at_coord_impl(row: c_int, col: c_int) -> ScreenGridHandle {
 #[no_mangle]
 pub extern "C" fn rs_ui_comp_get_grid_at_coord(row: c_int, col: c_int) -> ScreenGridHandle {
     ui_comp_get_grid_at_coord_impl(row, col)
+}
+
+/// Check if a point is within a grid's bounds with mouse check.
+#[inline]
+fn point_in_grid_with_mouse(
+    row: c_int,
+    col: c_int,
+    grid: ScreenGridHandle,
+    grid_row: c_int,
+    grid_col: c_int,
+) -> bool {
+    unsafe {
+        let mouse_enabled = nvim_screengrid_get_mouse_enabled(grid);
+        if !mouse_enabled {
+            return false;
+        }
+        let grid_rows = nvim_screengrid_get_rows(grid);
+        let grid_cols = nvim_screengrid_get_cols(grid);
+
+        row >= grid_row
+            && row < grid_row + grid_rows
+            && col >= grid_col
+            && col < grid_col + grid_cols
+    }
+}
+
+/// Get the grid that should receive mouse focus at given coordinates.
+///
+/// Similar to `ui_comp_get_grid_at_coord` but:
+/// - Checks `mouse_enabled` flag on grids
+/// - Only checks window grids if multigrid UI is enabled
+/// - Uses window position instead of grid comp position for window grids
+/// - Returns null handle if no suitable grid found
+fn ui_comp_mouse_focus_impl(row: c_int, col: c_int) -> ScreenGridHandle {
+    unsafe {
+        // Check compositor layers from top to bottom (skip layer 0 which is default_grid)
+        let layers_size = nvim_layers_size();
+        if layers_size > 1 {
+            for i in (1..layers_size).rev() {
+                let grid = nvim_layers_get(i);
+                let grid_row = nvim_screengrid_get_comp_row(grid);
+                let grid_col = nvim_screengrid_get_comp_col(grid);
+                if point_in_grid_with_mouse(row, col, grid, grid_row, grid_col) {
+                    return grid;
+                }
+            }
+        }
+
+        // Check window grids only if multigrid is enabled
+        if nvim_get_ui_ext(ui_ext::MULTIGRID) != 0 {
+            let mut wp = nvim_get_firstwin();
+            while !wp.is_null() {
+                let grid = nvim_win_get_grid_alloc(wp);
+                let winrow = nvim_win_get_winrow(wp);
+                let wincol = nvim_win_get_wincol(wp);
+                if point_in_grid_with_mouse(row, col, grid, winrow, wincol) {
+                    return grid;
+                }
+                wp = nvim_win_get_next(wp);
+            }
+        }
+
+        // Return null handle if no grid found
+        ScreenGridHandle(std::ptr::null_mut())
+    }
+}
+
+/// FFI wrapper for `ui_comp_mouse_focus`.
+///
+/// Returns the grid that should receive mouse focus at the given coordinates.
+///
+/// # Safety
+/// This function accesses global compositor state and window list.
+#[no_mangle]
+pub extern "C" fn rs_ui_comp_mouse_focus(row: c_int, col: c_int) -> ScreenGridHandle {
+    ui_comp_mouse_focus_impl(row, col)
 }
 
 #[cfg(test)]
