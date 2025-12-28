@@ -108,6 +108,12 @@ int nvim_get_valid_screen(void)
   return valid_screen;
 }
 
+/// C setter for valid_screen static.
+void nvim_set_valid_screen(bool valid)
+{
+  valid_screen = valid;
+}
+
 // Layer stack accessors for Rust compositor crate
 size_t nvim_layers_size(void)
 {
@@ -626,16 +632,14 @@ void ui_comp_raw_line(Integer grid, Integer row, Integer startcol, Integer endco
 }
 
 /// The screen is invalid and will soon be cleared
+// Rust implementation of ui_comp_set_screen_valid
+extern bool rs_ui_comp_set_screen_valid(bool valid);
+
 ///
 /// Don't redraw floats until screen is cleared
 bool ui_comp_set_screen_valid(bool valid)
 {
-  bool old_val = valid_screen;
-  valid_screen = valid;
-  if (!valid) {
-    msg_sep_row = -1;
-  }
-  return old_val;
+  return rs_ui_comp_set_screen_valid(valid);
 }
 
 void ui_comp_msg_set_pos(Integer grid, Integer row, Boolean scrolled, String sep_char,

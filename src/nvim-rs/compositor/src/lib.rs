@@ -105,6 +105,10 @@ extern "C" {
     // Cursor/grid functions
     fn nvim_curgrid_is_default() -> bool;
     fn nvim_ui_composed_call_grid_cursor_goto(grid_handle: c_int, row: c_int, col: c_int);
+
+    // Screen validity
+    fn nvim_set_valid_screen(valid: bool);
+    fn nvim_set_msg_sep_row(row: c_int);
 }
 
 // =============================================================================
@@ -627,6 +631,31 @@ fn ui_comp_layers_adjust_impl(layer_idx: usize, raise: bool) {
 #[no_mangle]
 pub extern "C" fn rs_ui_comp_layers_adjust(layer_idx: usize, raise: bool) {
     ui_comp_layers_adjust_impl(layer_idx, raise);
+}
+
+/// Set screen validity and return old value.
+///
+/// When setting to invalid, also resets the message separator row.
+fn ui_comp_set_screen_valid_impl(valid: bool) -> bool {
+    unsafe {
+        let old_val = nvim_get_valid_screen() != 0;
+        nvim_set_valid_screen(valid);
+        if !valid {
+            nvim_set_msg_sep_row(-1);
+        }
+        old_val
+    }
+}
+
+/// FFI wrapper for `ui_comp_set_screen_valid`.
+///
+/// Sets the screen validity flag and returns the old value.
+///
+/// # Safety
+/// This function modifies global compositor state.
+#[no_mangle]
+pub extern "C" fn rs_ui_comp_set_screen_valid(valid: bool) -> bool {
+    ui_comp_set_screen_valid_impl(valid)
 }
 
 #[cfg(test)]
