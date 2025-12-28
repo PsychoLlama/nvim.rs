@@ -68,6 +68,7 @@ int nvim_get_version_patch(void)
 extern bool rs_has_nvim_version(const char *version_str);
 extern int rs_min_vim_version(void);
 extern int rs_highest_patch(void);
+extern int rs_has_vim_patch(int n, int major_minor_version);
 // Reproducible builds: omit compile info in Release builds. #15424
 #ifndef NDEBUG
 char *version_cflags = "Compilation: " NVIM_VERSION_CFLAGS;
@@ -4314,43 +4315,7 @@ int highest_patch(void)
 bool has_vim_patch(int n, int major_minor_version)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  int v_i;
-  if (major_minor_version > 0) {
-    if (major_minor_version < vim_versions[0]) {
-      return true;
-    }
-    const size_t size = ARRAY_SIZE(vim_versions);
-    v_i = -1;
-    for (size_t i = 0; i < size; i++) {
-      if (vim_versions[i] == major_minor_version) {
-        v_i = (int)i;
-        break;
-      }
-    }
-    if (v_i == -1) {
-      return false;
-    }
-  } else {
-    v_i = 0;
-  }
-  // Perform a binary search.
-  int l = 0;
-  int h = num_patches[v_i] - 1;
-  while (true) {
-    const int m = (l + h) / 2;
-    if (included_patchsets[v_i][m] == n) {
-      return true;
-    }
-    if (l == h) {
-      break;
-    }
-    if (included_patchsets[v_i][m] < n) {
-      h = m;
-    } else {
-      l = m + 1;
-    }
-  }
-  return false;
+  return rs_has_vim_patch(n, major_minor_version) != 0;
 }
 
 void ex_version(exarg_T *eap)
@@ -4667,4 +4632,36 @@ int nvim_get_min_vim_version(void)
 int nvim_get_highest_patch(void)
 {
   return included_patchsets[0][0];
+}
+
+size_t nvim_get_vim_versions_count(void)
+{
+  return ARRAY_SIZE(vim_versions);
+}
+
+int nvim_get_vim_version_at(size_t idx)
+{
+  if (idx >= ARRAY_SIZE(vim_versions)) {
+    return -1;
+  }
+  return vim_versions[idx];
+}
+
+int nvim_get_num_patches_at(size_t idx)
+{
+  if (idx >= ARRAY_SIZE(num_patches)) {
+    return 0;
+  }
+  return num_patches[idx];
+}
+
+int nvim_get_patch_at(size_t version_idx, int patch_idx)
+{
+  if (version_idx >= ARRAY_SIZE(included_patchsets) || patch_idx < 0) {
+    return -1;
+  }
+  if (patch_idx >= num_patches[version_idx]) {
+    return -1;
+  }
+  return included_patchsets[version_idx][patch_idx];
 }

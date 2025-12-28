@@ -22,6 +22,14 @@ extern "C" {
     fn nvim_get_min_vim_version() -> c_int;
     /// Get the highest patch number for the minimum Vim version
     fn nvim_get_highest_patch() -> c_int;
+    /// Get the number of Vim versions in the `vim_versions` array
+    fn nvim_get_vim_versions_count() -> usize;
+    /// Get the Vim version at the given index
+    fn nvim_get_vim_version_at(idx: usize) -> c_int;
+    /// Get the number of patches for a given version index
+    fn nvim_get_num_patches_at(idx: usize) -> c_int;
+    /// Get a patch number at the given indices
+    fn nvim_get_patch_at(version_idx: usize, patch_idx: c_int) -> c_int;
 }
 
 /// Get the current Neovim version as (major, minor, patch)
@@ -181,6 +189,83 @@ pub unsafe extern "C" fn rs_min_vim_version() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_highest_patch() -> c_int {
     nvim_get_highest_patch()
+}
+
+/// Checks whether a Vim patch has been included.
+///
+/// Performs a binary search in the `included_patchsets` array for the given
+/// patch number. The patches are sorted in descending order.
+///
+/// # Arguments
+/// * `n` - Patch number to check
+/// * `major_minor_version` - (major * 100 + minor) Vim version, or 0 for default
+///
+/// # Returns
+/// `true` if patch `n` has been included
+#[inline]
+fn has_vim_patch_impl(n: c_int, major_minor_version: c_int) -> bool {
+    unsafe {
+        let count = nvim_get_vim_versions_count();
+
+        // Handle the version index
+        let v_i: usize = if major_minor_version > 0 {
+            let first_version = nvim_get_vim_version_at(0);
+            if major_minor_version < first_version {
+                // Older than our minimum version - all patches included
+                return true;
+            }
+
+            // Find the version index
+            let mut found_idx: Option<usize> = None;
+            for i in 0..count {
+                if nvim_get_vim_version_at(i) == major_minor_version {
+                    found_idx = Some(i);
+                    break;
+                }
+            }
+            match found_idx {
+                Some(idx) => idx,
+                None => return false, // Version not found
+            }
+        } else {
+            0 // Use minimum version
+        };
+
+        // Perform binary search (patches are in descending order)
+        let num_patches = nvim_get_num_patches_at(v_i);
+        if num_patches <= 0 {
+            return false;
+        }
+
+        let mut l = 0;
+        let mut h = num_patches - 1;
+        loop {
+            let m = i32::midpoint(l, h);
+            let patch = nvim_get_patch_at(v_i, m);
+            if patch == n {
+                return true;
+            }
+            if l == h {
+                break;
+            }
+            // Patches are in descending order, so if patch < n, search lower (higher indices)
+            if patch < n {
+                h = m;
+            } else {
+                l = m + 1;
+            }
+        }
+        false
+    }
+}
+
+/// FFI wrapper for `has_vim_patch`.
+///
+/// # Safety
+/// Calls external C functions to access static arrays.
+#[no_mangle]
+pub extern "C" fn rs_has_vim_patch(n: c_int, major_minor_version: c_int) -> c_int {
+    c_int::from(has_vim_patch_impl(n, major_minor_version))
 }
 
 #[cfg(test)]
