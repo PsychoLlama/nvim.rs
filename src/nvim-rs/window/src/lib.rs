@@ -2105,6 +2105,65 @@ pub extern "C" fn rs_frame_fix_height(wp: WinHandle) {
     frame_fix_height_impl(wp);
 }
 
+// =============================================================================
+// Status Line Redraw Functions
+// =============================================================================
+
+/// Redraw all status lines at the bottom of a frame tree.
+///
+/// This is the Rust equivalent of `win_redraw_last_status()` in drawscreen.c.
+/// It marks windows for status line redraw by setting `w_redr_status = true`.
+///
+/// - For FR_LEAF frames: mark the window for status redraw
+/// - For FR_ROW frames: recursively process all children
+/// - For FR_COL frames: find the last child and recursively process it
+fn win_redraw_last_status_impl(frp: *const Frame) {
+    if frp.is_null() {
+        return;
+    }
+
+    // SAFETY: frp is checked for null above, and we trust the C frame tree structure
+    unsafe {
+        let frame = &*frp;
+
+        if frame.is_leaf() {
+            // Leaf frame - mark the window for status redraw
+            let wp = frame.fr_win;
+            if !wp.is_null() {
+                nvim_win_set_redr_status(wp, 1);
+            }
+        } else if frame.is_row() {
+            // Row layout - process all children
+            let mut child = frame.fr_child;
+            while !child.is_null() {
+                win_redraw_last_status_impl(child);
+                child = (*child).fr_next;
+            }
+        } else {
+            // Column layout - find and process the last child
+            debug_assert!(frame.is_col());
+            let mut child = frame.fr_child;
+            if !child.is_null() {
+                while !(*child).fr_next.is_null() {
+                    child = (*child).fr_next;
+                }
+                win_redraw_last_status_impl(child);
+            }
+        }
+    }
+}
+
+/// FFI wrapper for `win_redraw_last_status`.
+///
+/// Marks all status lines at the bottom of a frame tree for redraw.
+///
+/// # Safety
+/// `frp` must be a valid frame pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_win_redraw_last_status(frp: *const Frame) {
+    win_redraw_last_status_impl(frp);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

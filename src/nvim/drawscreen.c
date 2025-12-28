@@ -2590,24 +2590,14 @@ void redraw_statuslines(void)
   }
 }
 
+// Rust implementation of win_redraw_last_status
+extern void rs_win_redraw_last_status(const frame_T *frp);
+
 /// Redraw all status lines at the bottom of frame "frp".
 void win_redraw_last_status(const frame_T *frp)
   FUNC_ATTR_NONNULL_ARG(1)
 {
-  if (frp->fr_layout == FR_LEAF) {
-    frp->fr_win->w_redr_status = true;
-  } else if (frp->fr_layout == FR_ROW) {
-    FOR_ALL_FRAMES(frp, frp->fr_child) {
-      win_redraw_last_status(frp);
-    }
-  } else {
-    assert(frp->fr_layout == FR_COL);
-    frp = frp->fr_child;
-    while (frp->fr_next != NULL) {
-      frp = frp->fr_next;
-    }
-    win_redraw_last_status(frp);
-  }
+  rs_win_redraw_last_status(frp);
 }
 
 /// Return true if the cursor line in window "wp" may be concealed, according
