@@ -16,6 +16,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | cmdhist      | History type conversion                            |
 | cmdline      | Command line state queries                         |
 | collections  | Data structures (garray, hashtab)                  |
+| compositor   | Grid compositor for multi-grid UI layering         |
 | context      | Context stack management                           |
 | cursor_shape | Cursor mode/shape queries                          |
 | decoration   | Decoration/virtual text system, DecorState access  |

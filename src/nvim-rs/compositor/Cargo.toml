@@ -1,0 +1,13 @@
+[package]
+name = "nvim-compositor"
+description = "Grid compositor for Neovim multi-grid UI"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+nvim-grid = { path = "../grid" }
+
+[lints]
+workspace = true

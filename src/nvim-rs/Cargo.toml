@@ -30,6 +30,7 @@ nvim-drawscreen = { path = "drawscreen" }
 nvim-edit = { path = "edit" }
 nvim-eval = { path = "eval" }
 nvim-collections = { path = "collections" }
+nvim-compositor = { path = "compositor" }
 nvim-context = { path = "context" }
 nvim-encoding = { path = "encoding" }
 nvim-event = { path = "event" }

@@ -108,6 +108,122 @@ int nvim_get_valid_screen(void)
   return valid_screen;
 }
 
+// Layer stack accessors for Rust compositor crate
+size_t nvim_layers_size(void)
+{
+  return kv_size(layers);
+}
+
+ScreenGrid *nvim_layers_get(size_t i)
+{
+  if (i < kv_size(layers)) {
+    return kv_A(layers, i);
+  }
+  return NULL;
+}
+
+void nvim_layers_set(size_t i, ScreenGrid *grid)
+{
+  if (i < kv_size(layers)) {
+    kv_A(layers, i) = grid;
+  }
+}
+
+void nvim_layers_push(ScreenGrid *grid)
+{
+  kv_push(layers, grid);
+}
+
+void nvim_layers_insert(size_t i, ScreenGrid *grid)
+{
+  if (i <= kv_size(layers)) {
+    kv_push(layers, NULL);  // Make space
+    // Shift elements right
+    for (size_t j = kv_size(layers) - 1; j > i; j--) {
+      kv_A(layers, j) = kv_A(layers, j - 1);
+    }
+    kv_A(layers, i) = grid;
+  }
+}
+
+void nvim_layers_remove(size_t i)
+{
+  if (i < kv_size(layers)) {
+    // Shift elements left
+    for (size_t j = i; j < kv_size(layers) - 1; j++) {
+      kv_A(layers, j) = kv_A(layers, j + 1);
+    }
+    kv_pop(layers);
+  }
+}
+
+// Compositor buffer accessors
+schar_T *nvim_comp_get_linebuf_char(void)
+{
+  return linebuf;
+}
+
+sattr_T *nvim_comp_get_linebuf_attr(void)
+{
+  return attrbuf;
+}
+
+size_t nvim_comp_get_linebuf_size(void)
+{
+  return bufsize;
+}
+
+// Compositor state accessors
+ScreenGrid *nvim_get_curgrid(void)
+{
+  return curgrid;
+}
+
+void nvim_set_curgrid(ScreenGrid *grid)
+{
+  curgrid = grid;
+}
+
+int nvim_get_msg_sep_row(void)
+{
+  return msg_sep_row;
+}
+
+void nvim_set_msg_sep_row(int row)
+{
+  msg_sep_row = row;
+}
+
+schar_T nvim_get_msg_sep_char(void)
+{
+  return msg_sep_char;
+}
+
+void nvim_set_msg_sep_char(schar_T c)
+{
+  msg_sep_char = c;
+}
+
+int nvim_get_msg_current_row(void)
+{
+  return msg_current_row;
+}
+
+void nvim_set_msg_current_row(int row)
+{
+  msg_current_row = row;
+}
+
+bool nvim_get_msg_was_scrolled(void)
+{
+  return msg_was_scrolled;
+}
+
+void nvim_set_msg_was_scrolled(bool scrolled)
+{
+  msg_was_scrolled = scrolled;
+}
+
 bool ui_comp_should_draw(void)
 {
   return rs_ui_comp_should_draw() != 0;

@@ -952,6 +952,82 @@ int nvim_win_get_endrow(win_T *wp)
   return W_ENDROW(wp);
 }
 
+// Statusline accessors for Rust statusline crate
+char *nvim_win_get_p_stl(win_T *wp)
+{
+  return wp ? wp->w_p_stl : NULL;
+}
+
+StlClickDefinition *nvim_win_get_status_click_defs(win_T *wp)
+{
+  return wp ? wp->w_status_click_defs : NULL;
+}
+
+size_t nvim_win_get_status_click_defs_size(win_T *wp)
+{
+  return wp ? wp->w_status_click_defs_size : 0;
+}
+
+void nvim_win_set_status_click_defs(win_T *wp, StlClickDefinition *cd)
+{
+  if (wp) {
+    wp->w_status_click_defs = cd;
+  }
+}
+
+void nvim_win_set_status_click_defs_size(win_T *wp, size_t sz)
+{
+  if (wp) {
+    wp->w_status_click_defs_size = sz;
+  }
+}
+
+StlClickDefinition *nvim_win_get_winbar_click_defs(win_T *wp)
+{
+  return wp ? wp->w_winbar_click_defs : NULL;
+}
+
+size_t nvim_win_get_winbar_click_defs_size(win_T *wp)
+{
+  return wp ? wp->w_winbar_click_defs_size : 0;
+}
+
+int nvim_win_get_redr_status(win_T *wp)
+{
+  return wp ? wp->w_redr_status : 0;
+}
+
+// Global statusline/tabline accessors
+char *nvim_get_p_tal(void)
+{
+  return p_tal;
+}
+
+char *nvim_get_p_stl(void)
+{
+  return p_stl;
+}
+
+StlClickDefinition *nvim_get_tab_page_click_defs(void)
+{
+  return tab_page_click_defs;
+}
+
+size_t nvim_get_tab_page_click_defs_size(void)
+{
+  return tab_page_click_defs_size;
+}
+
+void nvim_set_tab_page_click_defs(StlClickDefinition *cd)
+{
+  tab_page_click_defs = cd;
+}
+
+void nvim_set_tab_page_click_defs_size(size_t sz)
+{
+  tab_page_click_defs_size = sz;
+}
+
 /// Get W_ENDCOL(wp) - the column after the window content.
 int nvim_win_get_endcol(win_T *wp)
 {

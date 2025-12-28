@@ -374,6 +374,106 @@ bool nvim_screengrid_get_throttled(ScreenGrid *grid)
   return grid ? grid->throttled : false;
 }
 
+// ScreenGrid compositor field accessors (for Rust compositor crate)
+int nvim_screengrid_get_comp_row(ScreenGrid *grid)
+{
+  return grid ? grid->comp_row : 0;
+}
+
+void nvim_screengrid_set_comp_row(ScreenGrid *grid, int val)
+{
+  if (grid) {
+    grid->comp_row = val;
+  }
+}
+
+int nvim_screengrid_get_comp_col(ScreenGrid *grid)
+{
+  return grid ? grid->comp_col : 0;
+}
+
+void nvim_screengrid_set_comp_col(ScreenGrid *grid, int val)
+{
+  if (grid) {
+    grid->comp_col = val;
+  }
+}
+
+int nvim_screengrid_get_comp_width(ScreenGrid *grid)
+{
+  return grid ? grid->comp_width : 0;
+}
+
+void nvim_screengrid_set_comp_width(ScreenGrid *grid, int val)
+{
+  if (grid) {
+    grid->comp_width = val;
+  }
+}
+
+int nvim_screengrid_get_comp_height(ScreenGrid *grid)
+{
+  return grid ? grid->comp_height : 0;
+}
+
+void nvim_screengrid_set_comp_height(ScreenGrid *grid, int val)
+{
+  if (grid) {
+    grid->comp_height = val;
+  }
+}
+
+size_t nvim_screengrid_get_comp_index(ScreenGrid *grid)
+{
+  return grid ? grid->comp_index : 0;
+}
+
+void nvim_screengrid_set_comp_index(ScreenGrid *grid, size_t val)
+{
+  if (grid) {
+    grid->comp_index = val;
+  }
+}
+
+int nvim_screengrid_get_zindex(ScreenGrid *grid)
+{
+  return grid ? grid->zindex : 0;
+}
+
+bool nvim_screengrid_get_blending(ScreenGrid *grid)
+{
+  return grid ? grid->blending : false;
+}
+
+bool nvim_screengrid_get_comp_disabled(ScreenGrid *grid)
+{
+  return grid ? grid->comp_disabled : false;
+}
+
+void nvim_screengrid_set_comp_disabled(ScreenGrid *grid, bool val)
+{
+  if (grid) {
+    grid->comp_disabled = val;
+  }
+}
+
+bool nvim_screengrid_get_pending_comp_index_update(ScreenGrid *grid)
+{
+  return grid ? grid->pending_comp_index_update : false;
+}
+
+void nvim_screengrid_set_pending_comp_index_update(ScreenGrid *grid, bool val)
+{
+  if (grid) {
+    grid->pending_comp_index_update = val;
+  }
+}
+
+bool nvim_screengrid_get_mouse_enabled(ScreenGrid *grid)
+{
+  return grid ? grid->mouse_enabled : false;
+}
+
 // Global accessors
 ScreenGrid *nvim_get_default_grid(void)
 {

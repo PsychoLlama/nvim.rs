@@ -5,14 +5,99 @@
 
 #![allow(unsafe_code)]
 #![allow(clippy::doc_markdown)]
+#![allow(clippy::must_use_candidate)]
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int, c_void};
 use std::io::Write;
 
 use nvim_window::{Frame, WinHandle, FR_COL};
 
 /// schar_T is stored as a u32 in Rust.
 type ScharT = u32;
+
+// =============================================================================
+// Data Structures for Status Line Click Handling
+// =============================================================================
+
+/// Status line click type enumeration
+///
+/// Matches the C enum in statusline_defs.h
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StlClickType {
+    /// Clicks to this area are ignored
+    Disabled = 0,
+    /// Switch to the given tab
+    TabSwitch = 1,
+    /// Close given tab
+    TabClose = 2,
+    /// Run user function
+    FuncRun = 3,
+}
+
+/// Status line click definition
+///
+/// Matches the C struct StlClickDefinition in statusline_defs.h
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct StlClickDefinition {
+    /// Type of the click
+    pub click_type: StlClickType,
+    /// Tab page number
+    pub tabnr: c_int,
+    /// Function to run (C string pointer, may be null)
+    pub func: *mut c_char,
+}
+
+impl StlClickDefinition {
+    /// Create a new disabled click definition
+    pub const fn disabled() -> Self {
+        Self {
+            click_type: StlClickType::Disabled,
+            tabnr: 0,
+            func: std::ptr::null_mut(),
+        }
+    }
+
+    /// Check if this click definition is disabled
+    pub const fn is_disabled(&self) -> bool {
+        matches!(self.click_type, StlClickType::Disabled)
+    }
+}
+
+/// Status line click record (used for tabline clicks)
+///
+/// Matches the C struct StlClickRecord in statusline_defs.h
+#[repr(C)]
+pub struct StlClickRecord {
+    /// Click definition
+    pub def: StlClickDefinition,
+    /// Location where region starts (C string pointer)
+    pub start: *const c_char,
+}
+
+// =============================================================================
+// Tabpage Handle
+// =============================================================================
+
+/// Opaque handle to C's tabpage_T
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct TabpageHandle(*mut c_void);
+
+impl TabpageHandle {
+    /// Check if the handle is null
+    #[inline]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+
+    /// Create a null handle
+    #[inline]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+}
 
 /// Highlight group for StatusLine (current window).
 pub const HLF_S: c_int = 27;
