@@ -60,7 +60,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | statusline   | Status line rendering helpers                      |
 | strings      | String comparison, case conversion, escape utils   |
 | textformat   | Text formatting options, format queries            |
-| tui          | Terminal UI, terminfo formatting                   |
+| tui          | Terminal UI, terminfo formatting, TUI output       |
 | typval       | VimL typval_T type checking and value extraction   |
 | ugrid        | Unicode grid (UGrid) operations for TUI            |
 | unpacker     | MessagePack unpacking                              |
@@ -285,6 +285,18 @@ Functions blocked on missing accessor infrastructure:
 - `changed_line_abv_curs_win` - Migrated to Rust (rs_changed_line_abv_curs_win) - clears validity flags on window
 - `changed_window_setting` - Migrated to Rust (rs_changed_window_setting) - handles window setting changes
 - `changed_window_setting_all` - Migrated to Rust (rs_changed_window_setting_all) - iterates all tabpages/windows
+
+**tui.c** (TUI output functions - MIGRATED):
+- `attrs_differ` - Migrated to Rust (rs_attrs_differ) - compares highlight attributes
+- `tui_grid_cursor_goto` - Migrated to Rust (rs_tui_grid_cursor_goto) - sets cursor position
+- `tui_hl_attr_define` - Migrated to Rust (rs_tui_hl_attr_define) - stores highlight attrs
+- `tui_default_colors_set` - Migrated to Rust (rs_tui_default_colors_set) - sets default colors
+
+TUIData accessor functions added for opaque handle pattern:
+- nvim_tui_get/set_rgb, nvim_tui_get/set_row, nvim_tui_get/set_col
+- nvim_tui_get/set_attrs, nvim_tui_get/set_clear_attrs
+- nvim_tui_set_print_attr_id, nvim_tui_set_default_colors_flag
+- nvim_tui_get_grid_height/width, nvim_tui_invalidate
 
 ### Complex Memory/Buffer Operations
 Functions involving memory management or buffer content access:
