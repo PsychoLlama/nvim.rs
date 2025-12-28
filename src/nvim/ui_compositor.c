@@ -669,16 +669,22 @@ static void compose_area(Integer startrow, Integer endrow, Integer startcol, Int
   }
 }
 
+// Non-static wrapper for compose_area callable from Rust
+void nvim_compose_area(int startrow, int endrow, int startcol, int endcol)
+{
+  compose_area(startrow, endrow, startcol, endcol);
+}
+
+// Rust implementation of ui_comp_compose_grid
+extern void rs_ui_comp_compose_grid(ScreenGrid *grid);
+
 /// compose the area under the grid.
 ///
 /// This is needed when some option affecting composition is changed,
 /// such as 'pumblend' for popupmenu grid.
 void ui_comp_compose_grid(ScreenGrid *grid)
 {
-  if (ui_comp_should_draw()) {
-    compose_area(grid->comp_row, grid->comp_row + grid->rows,
-                 grid->comp_col, grid->comp_col + grid->cols);
-  }
+  rs_ui_comp_compose_grid(grid);
 }
 
 void ui_comp_raw_line(Integer grid, Integer row, Integer startcol, Integer endcol, Integer clearcol,

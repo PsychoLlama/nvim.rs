@@ -108,11 +108,13 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 - `get_corner_sep_connector` - Migrated to Rust
 - `draw_sep_connectors_win` - Migrated to Rust
 - `win_redraw_last_status` - Migrated to Rust (rs_win_redraw_last_status) - Frame tree traversal for status line redraw
+- `status_redraw_all` - Migrated to Rust (rs_status_redraw_all) - Mark all windows for status redraw
 
 **ui_compositor.c** (compositor functions - MIGRATED):
 - `ui_comp_should_draw` - Migrated to Rust (rs_ui_comp_should_draw)
 - `curgrid_covered_above` - Migrated to Rust (rs_curgrid_covered_above) - Layer check for cursor grid
 - `ui_comp_set_grid` - Migrated to Rust (rs_ui_comp_set_grid) - Set current grid by handle
+- `ui_comp_compose_grid` - Migrated to Rust (rs_ui_comp_compose_grid) - Compose a grid's area onto the screen
 
 **window.c** (remaining):
 - `tabpage_win_valid` - Window in tabpage validation

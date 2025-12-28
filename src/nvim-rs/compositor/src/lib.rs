@@ -75,6 +75,15 @@ extern "C" {
     fn nvim_set_curgrid(grid: ScreenGridHandle);
     fn nvim_screengrid_get_comp_index(grid: ScreenGridHandle) -> usize;
     fn nvim_screengrid_get_handle(grid: ScreenGridHandle) -> HandleT;
+
+    // Grid dimension accessors
+    fn nvim_screengrid_get_comp_row(grid: ScreenGridHandle) -> c_int;
+    fn nvim_screengrid_get_comp_col(grid: ScreenGridHandle) -> c_int;
+    fn nvim_screengrid_get_rows(grid: ScreenGridHandle) -> c_int;
+    fn nvim_screengrid_get_cols(grid: ScreenGridHandle) -> c_int;
+
+    // Composition function
+    fn nvim_compose_area(startrow: c_int, endrow: c_int, startcol: c_int, endcol: c_int);
 }
 
 // =============================================================================
@@ -179,6 +188,34 @@ fn ui_comp_set_grid_impl(handle: HandleT) -> bool {
 #[no_mangle]
 pub extern "C" fn rs_ui_comp_set_grid(handle: HandleT) -> c_int {
     c_int::from(ui_comp_set_grid_impl(handle))
+}
+
+/// Compose a grid's area onto the screen.
+///
+/// This triggers composition of the entire grid area if compositor
+/// drawing is enabled.
+fn ui_comp_compose_grid_impl(grid: ScreenGridHandle) {
+    if !ui_comp_should_draw_impl() {
+        return;
+    }
+    unsafe {
+        let comp_row = nvim_screengrid_get_comp_row(grid);
+        let comp_col = nvim_screengrid_get_comp_col(grid);
+        let rows = nvim_screengrid_get_rows(grid);
+        let cols = nvim_screengrid_get_cols(grid);
+        nvim_compose_area(comp_row, comp_row + rows, comp_col, comp_col + cols);
+    }
+}
+
+/// FFI wrapper for `ui_comp_compose_grid`.
+///
+/// Composes the given grid's area onto the screen.
+///
+/// # Safety
+/// This function accesses global compositor state and grid dimensions.
+#[no_mangle]
+pub extern "C" fn rs_ui_comp_compose_grid(grid: ScreenGridHandle) {
+    ui_comp_compose_grid_impl(grid);
 }
 
 #[cfg(test)]
