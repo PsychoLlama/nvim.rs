@@ -57,6 +57,19 @@ extern "C" {
     // Compositor state accessors
     fn nvim_get_composed_uis() -> c_int;
     fn nvim_get_valid_screen() -> c_int;
+
+    // Layer stack accessors
+    fn nvim_layers_size() -> usize;
+    fn nvim_layers_get(i: usize) -> ScreenGridHandle;
+
+    // Message grid accessors
+    fn nvim_get_msg_grid() -> ScreenGridHandle;
+    fn nvim_get_msg_current_row() -> c_int;
+    fn nvim_get_msg_was_scrolled() -> bool;
+
+    // Current grid accessors
+    fn nvim_get_curgrid() -> ScreenGridHandle;
+    fn nvim_screengrid_get_comp_index(grid: ScreenGridHandle) -> usize;
 }
 
 // =============================================================================
@@ -70,6 +83,41 @@ fn ui_comp_should_draw_impl() -> bool {
     unsafe { nvim_get_composed_uis() != 0 && nvim_get_valid_screen() != 0 }
 }
 
+/// Check if curgrid is covered on row or above.
+///
+/// This checks if there are layers above the current grid that would cover
+/// the given row. Currently only handles the message row case.
+///
+/// Returns true if curgrid is covered at or above the given row.
+fn curgrid_covered_above_impl(row: c_int) -> bool {
+    unsafe {
+        let layers_size = nvim_layers_size();
+        if layers_size == 0 {
+            return false;
+        }
+
+        let curgrid = nvim_get_curgrid();
+        if curgrid.is_null() {
+            return false;
+        }
+
+        let last_layer = nvim_layers_get(layers_size - 1);
+        let msg_grid = nvim_get_msg_grid();
+
+        // Check if we're above the message row
+        let above_msg = last_layer.0 == msg_grid.0 && {
+            let msg_current_row = nvim_get_msg_current_row();
+            let msg_was_scrolled = nvim_get_msg_was_scrolled();
+            row < msg_current_row - c_int::from(msg_was_scrolled)
+        };
+
+        let curgrid_index = nvim_screengrid_get_comp_index(curgrid);
+        let effective_layers = layers_size - usize::from(above_msg);
+
+        effective_layers > curgrid_index + 1
+    }
+}
+
 // =============================================================================
 // FFI Exports
 // =============================================================================
@@ -81,6 +129,15 @@ fn ui_comp_should_draw_impl() -> bool {
 #[no_mangle]
 pub extern "C" fn rs_ui_comp_should_draw() -> c_int {
     c_int::from(ui_comp_should_draw_impl())
+}
+
+/// Check if curgrid is covered on row or above.
+///
+/// # Safety
+/// This function accesses global compositor state (layers, curgrid, msg_grid).
+#[no_mangle]
+pub extern "C" fn rs_curgrid_covered_above(row: c_int) -> bool {
+    curgrid_covered_above_impl(row)
 }
 
 #[cfg(test)]

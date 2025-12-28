@@ -2293,23 +2293,6 @@ pub unsafe extern "C" fn rs_redirecting() -> c_int {
     )
 }
 
-// UI compositor accessors
-extern "C" {
-    fn nvim_get_composed_uis() -> c_int;
-    fn nvim_get_valid_screen() -> c_int;
-}
-
-/// Check if the compositor should draw.
-///
-/// Returns true if there are composed UIs and the screen is valid.
-///
-/// # Safety
-/// Calls C accessor functions for compositor state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_ui_comp_should_draw() -> c_int {
-    c_int::from(nvim_get_composed_uis() != 0 && nvim_get_valid_screen() != 0)
-}
-
 // UI cursor position accessors
 extern "C" {
     fn nvim_get_ui_cursor_row() -> c_int;

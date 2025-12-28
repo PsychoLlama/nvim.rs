@@ -224,6 +224,14 @@ void nvim_set_msg_was_scrolled(bool scrolled)
   msg_was_scrolled = scrolled;
 }
 
+ScreenGrid *nvim_get_msg_grid(void)
+{
+  return &msg_grid;
+}
+
+// Rust implementation of curgrid_covered_above
+extern bool rs_curgrid_covered_above(int row);
+
 bool ui_comp_should_draw(void)
 {
   return rs_ui_comp_should_draw() != 0;
@@ -792,9 +800,7 @@ void ui_comp_msg_set_pos(Integer grid, Integer row, Boolean scrolled, String sep
 /// TODO(bfredl): currently this only handles message row
 static bool curgrid_covered_above(int row)
 {
-  bool above_msg = (kv_A(layers, kv_size(layers) - 1) == &msg_grid
-                    && row < msg_current_row - (msg_was_scrolled ? 1 : 0));
-  return kv_size(layers) - (above_msg ? 1 : 0) > curgrid->comp_index + 1;
+  return rs_curgrid_covered_above(row);
 }
 
 void ui_comp_grid_scroll(Integer grid, Integer top, Integer bot, Integer left, Integer right,
