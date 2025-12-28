@@ -144,6 +144,18 @@ int nvim_get_p_fic(void)
   return p_fic;
 }
 
+/// Get the magic_overruled global value.
+int nvim_get_magic_overruled(void)
+{
+  return (int)magic_overruled;
+}
+
+/// Get the p_magic global value.
+int nvim_get_p_magic(void)
+{
+  return p_magic;
+}
+
 static const char e_unknown_option[]
   = N_("E518: Unknown option");
 static const char e_not_allowed_in_modeline[]
@@ -6028,18 +6040,13 @@ int fill_culopt_flags(char *val, win_T *wp)
   return OK;
 }
 
+// Rust implementation of magic_isset
+extern int rs_magic_isset(void);
+
 /// Get the value of 'magic' taking "magic_overruled" into account.
 bool magic_isset(void)
 {
-  switch (magic_overruled) {
-  case OPTION_MAGIC_ON:
-    return true;
-  case OPTION_MAGIC_OFF:
-    return false;
-  case OPTION_MAGIC_NOT_SET:
-    break;
-  }
-  return p_magic;
+  return rs_magic_isset() != 0;
 }
 
 /// Set the callback function value for an option that accepts a function name,

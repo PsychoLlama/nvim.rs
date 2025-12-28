@@ -25,10 +25,22 @@ extern "C" {
 
     /// Get the `had_eol` static variable from regexp.c.
     fn nvim_get_regexp_had_eol() -> c_int;
+
+    /// Get the `magic_overruled` global value.
+    fn nvim_get_magic_overruled() -> c_int;
+
+    /// Get the `p_magic` global value.
+    fn nvim_get_p_magic() -> c_int;
 }
 
 /// Direction constant for FORWARD.
 const FORWARD: c_int = 1;
+
+/// optmagic_T values from regexp_defs.h
+#[allow(dead_code)]
+const OPTION_MAGIC_NOT_SET: c_int = 0;
+const OPTION_MAGIC_ON: c_int = 1;
+const OPTION_MAGIC_OFF: c_int = 2;
 
 /// Check if last character search direction was forward.
 ///
@@ -100,6 +112,31 @@ pub extern "C" fn rs_search_was_last_used() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_vim_regcomp_had_eol() -> c_int {
     nvim_get_regexp_had_eol()
+}
+
+/// Get the value of 'magic' taking "magic_overruled" into account.
+///
+/// This is the Rust equivalent of `magic_isset()` in option.c.
+///
+/// # Safety
+/// Calls C accessor functions for global variables.
+#[inline]
+fn magic_isset_impl() -> bool {
+    unsafe {
+        match nvim_get_magic_overruled() {
+            OPTION_MAGIC_ON => true,
+            OPTION_MAGIC_OFF => false,
+            _ => nvim_get_p_magic() != 0,
+        }
+    }
+}
+
+/// FFI wrapper for `magic_isset`.
+///
+/// Returns non-zero if magic is set.
+#[no_mangle]
+pub extern "C" fn rs_magic_isset() -> c_int {
+    c_int::from(magic_isset_impl())
 }
 
 #[cfg(test)]
