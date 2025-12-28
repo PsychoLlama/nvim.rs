@@ -375,23 +375,12 @@ void ui_comp_remove_grid(ScreenGrid *grid)
   ui_comp_compose_grid(grid);
 }
 
+// Rust implementation of ui_comp_set_grid
+extern int rs_ui_comp_set_grid(handle_T handle);
+
 bool ui_comp_set_grid(handle_T handle)
 {
-  if (curgrid->handle == handle) {
-    return true;
-  }
-  ScreenGrid *grid = NULL;
-  for (size_t i = 0; i < kv_size(layers); i++) {
-    if (kv_A(layers, i)->handle == handle) {
-      grid = kv_A(layers, i);
-      break;
-    }
-  }
-  if (grid != NULL) {
-    curgrid = grid;
-    return true;
-  }
-  return false;
+  return rs_ui_comp_set_grid(handle) != 0;
 }
 
 void ui_comp_raise_grid(ScreenGrid *grid, size_t new_index)

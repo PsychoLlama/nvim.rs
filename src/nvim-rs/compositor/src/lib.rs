@@ -53,6 +53,9 @@ pub mod zindex {
 // C Accessor Functions
 // =============================================================================
 
+/// Handle type for grids (matches C's `handle_T` which is `int`).
+pub type HandleT = c_int;
+
 extern "C" {
     // Compositor state accessors
     fn nvim_get_composed_uis() -> c_int;
@@ -69,7 +72,9 @@ extern "C" {
 
     // Current grid accessors
     fn nvim_get_curgrid() -> ScreenGridHandle;
+    fn nvim_set_curgrid(grid: ScreenGridHandle);
     fn nvim_screengrid_get_comp_index(grid: ScreenGridHandle) -> usize;
+    fn nvim_screengrid_get_handle(grid: ScreenGridHandle) -> HandleT;
 }
 
 // =============================================================================
@@ -138,6 +143,42 @@ pub extern "C" fn rs_ui_comp_should_draw() -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_curgrid_covered_above(row: c_int) -> bool {
     curgrid_covered_above_impl(row)
+}
+
+/// Set the current grid for compositor operations.
+///
+/// Searches through the layer stack for a grid with the given handle
+/// and sets it as the current grid.
+///
+/// Returns true if a grid with the handle was found and set.
+fn ui_comp_set_grid_impl(handle: HandleT) -> bool {
+    unsafe {
+        let curgrid = nvim_get_curgrid();
+        if !curgrid.is_null() && nvim_screengrid_get_handle(curgrid) == handle {
+            return true;
+        }
+
+        let layers_size = nvim_layers_size();
+        for i in 0..layers_size {
+            let grid = nvim_layers_get(i);
+            if !grid.is_null() && nvim_screengrid_get_handle(grid) == handle {
+                nvim_set_curgrid(grid);
+                return true;
+            }
+        }
+        false
+    }
+}
+
+/// FFI wrapper for `ui_comp_set_grid`.
+///
+/// Sets the current grid for compositor operations by handle.
+///
+/// # Safety
+/// This function accesses global compositor state.
+#[no_mangle]
+pub extern "C" fn rs_ui_comp_set_grid(handle: HandleT) -> c_int {
+    c_int::from(ui_comp_set_grid_impl(handle))
 }
 
 #[cfg(test)]
