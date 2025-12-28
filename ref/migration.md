@@ -124,9 +124,12 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 - `ui_comp_layers_adjust` - Migrated to Rust (rs_ui_comp_layers_adjust) - Adjust layer position by z-index
 - `ui_comp_set_screen_valid` - Migrated to Rust (rs_ui_comp_set_screen_valid) - Set screen validity flag
 
-**window.c** (remaining):
-- `tabpage_win_valid` - Window in tabpage validation
-- `win_valid_any_tab` - Window validation across tabs
+**window.c** (validation functions - MIGRATED):
+- `win_valid` - Migrated to Rust (rs_win_valid) - Window pointer validation
+- `tabpage_win_valid` - Migrated to Rust (rs_tabpage_win_valid) - Window in tabpage validation
+- `win_valid_any_tab` - Migrated to Rust (rs_win_valid_any_tab) - Window validation across tabs
+- `win_find_by_handle` - Migrated to Rust (rs_win_find_by_handle) - Find window by handle
+- `win_count` - Migrated to Rust (rs_win_count) - Count windows
 
 **buffer.c**:
 - `buf_valid` - Buffer pointer validation (needs buffer list)
