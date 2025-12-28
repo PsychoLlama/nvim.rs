@@ -58,6 +58,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | spell        | Spell check utilities                              |
 | statusline   | Status line rendering helpers                      |
 | strings      | String comparison, case conversion, escape utils   |
+| textformat   | Text formatting options, format queries            |
 | tui          | Terminal UI, terminfo formatting                   |
 | typval       | VimL typval_T type checking and value extraction   |
 | ugrid        | Unicode grid (UGrid) operations for TUI            |
@@ -140,8 +141,8 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 **version.c** (static version arrays):
 - `min_vim_version`, `highest_patch`, `has_vim_patch` - need vim_versions/included_patchsets arrays
 
-**textformat.c**:
-- `has_format_option` - Uses p_paste and curbuf->b_p_fo
+**textformat.c** (MIGRATED):
+- `has_format_option` - Migrated to Rust (rs_has_format_option)
 
 ### Static Data Tables
 

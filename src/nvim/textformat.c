@@ -44,6 +44,15 @@
 
 #include "textformat.c.generated.h"
 
+// Rust implementation
+extern int rs_has_format_option(int x);
+
+/// C accessor for curbuf->b_p_fo (formatoptions).
+char *nvim_get_curbuf_b_p_fo(void)
+{
+  return curbuf->b_p_fo;
+}
+
 static bool did_add_space = false;  ///< auto_format() added an extra space
                                     ///< under the cursor
 
@@ -55,10 +64,7 @@ static bool did_add_space = false;  ///< auto_format() added an extra space
 bool has_format_option(int x)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (p_paste) {
-    return false;
-  }
-  return vim_strchr(curbuf->b_p_fo, x) != NULL;
+  return rs_has_format_option(x) != 0;
 }
 
 /// Format text at the current insert position.
