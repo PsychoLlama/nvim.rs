@@ -436,6 +436,24 @@ int nvim_win_folds_empty(win_T *wp)
   return GA_EMPTY(&wp->w_folds);
 }
 
+/// Get the w_valid field from a window.
+int nvim_win_get_valid(win_T *wp)
+{
+  return wp->w_valid;
+}
+
+/// Set the w_valid field of a window.
+void nvim_win_set_valid(win_T *wp, int val)
+{
+  wp->w_valid = val;
+}
+
+/// Clear specific bits from the w_valid field.
+void nvim_win_clear_valid_bits(win_T *wp, int bits)
+{
+  wp->w_valid &= ~bits;
+}
+
 // Accessors for plines.c migration (Phase 3: display calculations)
 
 /// Get the w_view_width field from a window.

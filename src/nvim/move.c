@@ -595,15 +595,19 @@ void validate_botline(win_T *wp)
   }
 }
 
+// Rust implementations of botline validation functions
+extern void rs_invalidate_botline(win_T *wp);
+extern void rs_approximate_botline_win(win_T *wp);
+
 // Mark wp->w_botline as invalid (because of some change in the buffer).
 void invalidate_botline(win_T *wp)
 {
-  wp->w_valid &= ~(VALID_BOTLINE|VALID_BOTLINE_AP);
+  rs_invalidate_botline(wp);
 }
 
 void approximate_botline_win(win_T *wp)
 {
-  wp->w_valid &= ~VALID_BOTLINE;
+  rs_approximate_botline_win(wp);
 }
 
 // Return true if wp->w_wrow and wp->w_wcol are valid.

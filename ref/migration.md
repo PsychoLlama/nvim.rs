@@ -275,8 +275,11 @@ Functions that call multiple other C functions and would require making those fu
 
 ### Functions Requiring New Accessors
 Functions blocked on missing accessor infrastructure:
-- `invalidate_botline`, `approximate_botline_win` - need `nvim_win_get/set_valid` accessors for w_valid field
-- `cursor_valid`, `validate_cursor` - need w_valid field accessors plus check_cursor_moved callable
+- `cursor_valid`, `validate_cursor` - need check_cursor_moved callable from Rust
+
+**move.c** (window validity functions - MIGRATED):
+- `invalidate_botline` - Migrated to Rust (rs_invalidate_botline) - clears VALID_BOTLINE and VALID_BOTLINE_AP
+- `approximate_botline_win` - Migrated to Rust (rs_approximate_botline_win) - clears only VALID_BOTLINE
 
 ### Complex Memory/Buffer Operations
 Functions involving memory management or buffer content access:

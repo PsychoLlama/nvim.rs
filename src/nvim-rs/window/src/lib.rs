@@ -2164,6 +2164,82 @@ pub extern "C" fn rs_win_redraw_last_status(frp: *const Frame) {
     win_redraw_last_status_impl(frp);
 }
 
+// =============================================================================
+// Window Validity Flags (w_valid)
+// =============================================================================
+
+// Window validity flag constants (from buffer_defs.h)
+/// w_wrow (window row) is valid
+const VALID_WROW: c_int = 0x01;
+/// w_wcol (window col) is valid
+const VALID_WCOL: c_int = 0x02;
+/// w_virtcol (file col) is valid
+const VALID_VIRTCOL: c_int = 0x04;
+/// w_cline_height and w_cline_folded valid
+const VALID_CHEIGHT: c_int = 0x08;
+/// w_cline_row is valid
+const VALID_CROW: c_int = 0x10;
+/// w_botline and w_empty_rows are valid
+const VALID_BOTLINE: c_int = 0x20;
+/// w_botline is approximated
+const VALID_BOTLINE_AP: c_int = 0x40;
+/// w_topline is valid (for cursor position)
+const VALID_TOPLINE: c_int = 0x80;
+
+// C accessor for w_valid field
+extern "C" {
+    /// Get the w_valid field from a window.
+    fn nvim_win_get_valid(wp: WinHandle) -> c_int;
+
+    /// Clear specific bits from the w_valid field.
+    fn nvim_win_clear_valid_bits(wp: WinHandle, bits: c_int);
+}
+
+/// Invalidate the bottom line position and approximation flags.
+///
+/// This is the Rust equivalent of `invalidate_botline()` in move.c.
+/// Clears both VALID_BOTLINE and VALID_BOTLINE_AP flags from w_valid.
+#[inline]
+fn invalidate_botline_impl(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+    unsafe {
+        nvim_win_clear_valid_bits(wp, VALID_BOTLINE | VALID_BOTLINE_AP);
+    }
+}
+
+/// FFI wrapper for `invalidate_botline`.
+///
+/// Clears the VALID_BOTLINE and VALID_BOTLINE_AP flags from the window.
+#[no_mangle]
+pub extern "C" fn rs_invalidate_botline(wp: WinHandle) {
+    invalidate_botline_impl(wp);
+}
+
+/// Clear the VALID_BOTLINE flag but keep VALID_BOTLINE_AP.
+///
+/// This is the Rust equivalent of `approximate_botline_win()` in move.c.
+/// Used when the bottom line is no longer exactly known but is still
+/// approximately valid.
+#[inline]
+fn approximate_botline_win_impl(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+    unsafe {
+        nvim_win_clear_valid_bits(wp, VALID_BOTLINE);
+    }
+}
+
+/// FFI wrapper for `approximate_botline_win`.
+///
+/// Clears only the VALID_BOTLINE flag (keeps VALID_BOTLINE_AP).
+#[no_mangle]
+pub extern "C" fn rs_approximate_botline_win(wp: WinHandle) {
+    approximate_botline_win_impl(wp);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
