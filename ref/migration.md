@@ -291,12 +291,28 @@ Functions blocked on missing accessor infrastructure:
 - `tui_grid_cursor_goto` - Migrated to Rust (rs_tui_grid_cursor_goto) - sets cursor position
 - `tui_hl_attr_define` - Migrated to Rust (rs_tui_hl_attr_define) - stores highlight attrs
 - `tui_default_colors_set` - Migrated to Rust (rs_tui_default_colors_set) - sets default colors
+- `tui_grid_resize` - Migrated to Rust (rs_tui_grid_resize) - resizes grid and clips invalid regions
+- `tui_grid_clear` - Migrated to Rust (rs_tui_grid_clear) - clears grid and screen region
 
 TUIData accessor functions added for opaque handle pattern:
 - nvim_tui_get/set_rgb, nvim_tui_get/set_row, nvim_tui_get/set_col
 - nvim_tui_get/set_attrs, nvim_tui_get/set_clear_attrs
 - nvim_tui_set_print_attr_id, nvim_tui_set_default_colors_flag
 - nvim_tui_get_grid_height/width, nvim_tui_invalidate
+- nvim_tui_get_is_starting, nvim_tui_get/set_pending_resize_events
+- nvim_tui_get_invalid_regions_size, nvim_tui_clear_invalid_regions
+- nvim_tui_clip_invalid_region, nvim_tui_get_grid
+- nvim_tui_invalidate_grid_cursor, nvim_tui_get_width/height
+- nvim_tui_out_resize, nvim_tui_clear_region
+
+Terminfo output infrastructure for Rust:
+- nvim_tui_out, nvim_tui_terminfo_out, nvim_tui_terminfo_print_num1/2
+- nvim_tui_get_grid_row/col, nvim_tui_get/set_url
+- nvim_tui_get_print_attr_id, nvim_tui_get_immediate_wrap
+- nvim_tui_cursor_goto, nvim_tui_update_attrs
+- nvim_tui_get_can_clear_attr, nvim_tui_get_can_erase_chars
+- nvim_tui_get_set_default_colors, nvim_tui_cheap_to_print
+- nvim_tui_get_default_attr
 
 ### Complex Memory/Buffer Operations
 Functions involving memory management or buffer content access:
