@@ -2530,8 +2530,16 @@ void redraw_buf_status_later(buf_T *buf)
   }
 }
 
-// Rust implementation of status_redraw_all
+// Accessor for p_ru option (ruler)
+int nvim_get_p_ru(void)
+{
+  return p_ru;
+}
+
+// Rust implementations
 extern void rs_status_redraw_all(void);
+extern void rs_status_redraw_curbuf(void);
+extern void rs_status_redraw_buf(buf_T *buf);
 
 /// Mark all status lines and window bars for redraw; used after first :cd
 void status_redraw_all(void)
@@ -2542,26 +2550,13 @@ void status_redraw_all(void)
 /// Marks all status lines and window bars of the current buffer for redraw.
 void status_redraw_curbuf(void)
 {
-  status_redraw_buf(curbuf);
+  rs_status_redraw_curbuf();
 }
 
 /// Marks all status lines and window bars of the given buffer for redraw.
 void status_redraw_buf(buf_T *buf)
 {
-  bool is_stl_global = global_stl_height() != 0;
-
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp->w_buffer == buf && ((!is_stl_global && wp->w_status_height)
-                                || (is_stl_global && wp == curwin) || wp->w_winbar_height)) {
-      wp->w_redr_status = true;
-      redraw_later(wp, UPD_VALID);
-    }
-  }
-  // Redraw the ruler if it is in the command line and was not marked for redraw above
-  if (p_ru && !curwin->w_status_height && !curwin->w_redr_status) {
-    redraw_cmdline = true;
-    redraw_later(curwin, UPD_VALID);
-  }
+  rs_status_redraw_buf(buf);
 }
 
 /// Redraw all status lines that need to be redrawn.

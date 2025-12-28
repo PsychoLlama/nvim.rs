@@ -6,10 +6,24 @@
 #![allow(unsafe_code)]
 #![allow(dead_code)] // Some extern functions are pre-declared for future use
 #![allow(clippy::doc_markdown)]
+#![allow(clippy::must_use_candidate)]
 
 use std::ffi::{c_int, c_void};
 
 use nvim_window::{rs_frame2win, Frame, WinHandle, FR_COL, FR_LEAF, FR_ROW};
+
+/// Opaque handle to C's buf_T.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct BufHandle(*mut c_void);
+
+impl BufHandle {
+    /// Check if the handle is null.
+    #[inline]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
 
 /// schar_T is stored as a u32 in Rust (matches grid crate).
 type ScharT = u32;
@@ -60,10 +74,17 @@ extern "C" {
     fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
     fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
     fn nvim_win_set_redr_status(wp: WinHandle, val: c_int);
+    fn nvim_win_get_redr_status(wp: WinHandle) -> c_int;
+    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
     fn redraw_later(wp: WinHandle, redraw_type: c_int);
+
+    // Buffer accessors
+    fn nvim_get_curbuf() -> BufHandle;
 
     // Global functions
     fn global_stl_height() -> c_int;
+    fn nvim_get_p_ru() -> c_int;
+    fn nvim_set_redraw_cmdline(val: bool);
     fn nvim_get_default_gridview() -> GridViewHandle;
 
     // Grid functions (already in Rust, called via FFI)
@@ -478,6 +499,82 @@ fn status_redraw_all_impl() {
 #[no_mangle]
 pub extern "C" fn rs_status_redraw_all() {
     status_redraw_all_impl();
+}
+
+/// Mark status lines and window bars for a specific buffer.
+///
+/// This is the Rust equivalent of `status_redraw_buf()` in drawscreen.c.
+/// Marks windows that display the given buffer for status line redraw.
+///
+/// Also handles ruler redraw if:
+/// - The ruler option is enabled
+/// - Current window has no status height
+/// - Current window wasn't already marked for redraw
+fn status_redraw_buf_impl(buf: BufHandle) {
+    unsafe {
+        let is_stl_global = global_stl_height() != 0;
+        let curwin = nvim_get_curwin();
+
+        // FOR_ALL_WINDOWS_IN_TAB(wp, curtab)
+        let mut wp = nvim_get_firstwin();
+        while !wp.is_null() {
+            let win_buf = nvim_win_get_buffer(wp);
+
+            // Only process windows showing this buffer
+            if win_buf == buf {
+                let status_h = nvim_win_get_status_height(wp);
+                let winbar_h = nvim_win_get_winbar_height(wp);
+
+                // Mark for redraw if:
+                // 1. Local statusline (not global) and window has status height, OR
+                // 2. Global statusline and this is the current window, OR
+                // 3. Window has a winbar
+                if (!is_stl_global && status_h > 0)
+                    || (is_stl_global && wp == curwin)
+                    || winbar_h > 0
+                {
+                    nvim_win_set_redr_status(wp, 1);
+                    redraw_later(wp, UPD_VALID);
+                }
+            }
+            wp = nvim_win_get_next(wp);
+        }
+
+        // Redraw the ruler if it is in the command line and was not marked for redraw above
+        let curwin_status_h = nvim_win_get_status_height(curwin);
+        let curwin_redr_status = nvim_win_get_redr_status(curwin);
+        if nvim_get_p_ru() != 0 && curwin_status_h == 0 && curwin_redr_status == 0 {
+            nvim_set_redraw_cmdline(true);
+            redraw_later(curwin, UPD_VALID);
+        }
+    }
+}
+
+/// FFI wrapper for `status_redraw_buf`.
+///
+/// Marks status lines and window bars of the given buffer for redraw.
+#[no_mangle]
+pub extern "C" fn rs_status_redraw_buf(buf: BufHandle) {
+    status_redraw_buf_impl(buf);
+}
+
+/// Mark status lines and window bars for the current buffer.
+///
+/// This is the Rust equivalent of `status_redraw_curbuf()` in drawscreen.c.
+/// Simply calls `status_redraw_buf` with the current buffer.
+fn status_redraw_curbuf_impl() {
+    unsafe {
+        let curbuf = nvim_get_curbuf();
+        status_redraw_buf_impl(curbuf);
+    }
+}
+
+/// FFI wrapper for `status_redraw_curbuf`.
+///
+/// Marks status lines and window bars of the current buffer for redraw.
+#[no_mangle]
+pub extern "C" fn rs_status_redraw_curbuf() {
+    status_redraw_curbuf_impl();
 }
 
 #[cfg(test)]

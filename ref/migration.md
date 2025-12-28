@@ -109,6 +109,8 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 - `draw_sep_connectors_win` - Migrated to Rust
 - `win_redraw_last_status` - Migrated to Rust (rs_win_redraw_last_status) - Frame tree traversal for status line redraw
 - `status_redraw_all` - Migrated to Rust (rs_status_redraw_all) - Mark all windows for status redraw
+- `status_redraw_curbuf` - Migrated to Rust (rs_status_redraw_curbuf) - Mark current buffer windows for redraw
+- `status_redraw_buf` - Migrated to Rust (rs_status_redraw_buf) - Mark windows of given buffer for redraw
 
 **ui_compositor.c** (compositor functions - MIGRATED):
 - `ui_comp_should_draw` - Migrated to Rust (rs_ui_comp_should_draw)
