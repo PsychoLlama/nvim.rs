@@ -454,6 +454,12 @@ void nvim_win_clear_valid_bits(win_T *wp, int bits)
   wp->w_valid &= ~bits;
 }
 
+/// Set the w_lines_valid field (number of valid w_lines entries).
+void nvim_win_set_lines_valid(win_T *wp, int val)
+{
+  wp->w_lines_valid = val;
+}
+
 // Accessors for plines.c migration (Phase 3: display calculations)
 
 /// Get the w_view_width field from a window.

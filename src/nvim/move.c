@@ -522,23 +522,22 @@ void check_cursor_moved(win_T *wp)
   }
 }
 
+// Rust implementations of window setting functions
+extern void rs_changed_window_setting(win_T *wp);
+extern void rs_changed_window_setting_all(void);
+
 // Call this function when some window settings have changed, which require
 // the cursor position, botline and topline to be recomputed and the window to
 // be redrawn.  E.g, when changing the 'wrap' option or folding.
 void changed_window_setting(win_T *wp)
 {
-  wp->w_lines_valid = 0;
-  changed_line_abv_curs_win(wp);
-  wp->w_valid &= ~(VALID_BOTLINE|VALID_BOTLINE_AP|VALID_TOPLINE);
-  redraw_later(wp, UPD_NOT_VALID);
+  rs_changed_window_setting(wp);
 }
 
 /// Call changed_window_setting() for every window.
 void changed_window_setting_all(void)
 {
-  FOR_ALL_TAB_WINDOWS(tp, wp) {
-    changed_window_setting(wp);
-  }
+  rs_changed_window_setting_all();
 }
 
 // Set wp->w_topline to a certain number.

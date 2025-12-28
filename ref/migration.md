@@ -283,6 +283,8 @@ Functions blocked on missing accessor infrastructure:
 - `changed_cline_bef_curs` - Migrated to Rust (rs_changed_cline_bef_curs) - clears cursor line validity flags
 - `changed_line_abv_curs` - Migrated to Rust (rs_changed_line_abv_curs) - clears validity flags on curwin
 - `changed_line_abv_curs_win` - Migrated to Rust (rs_changed_line_abv_curs_win) - clears validity flags on window
+- `changed_window_setting` - Migrated to Rust (rs_changed_window_setting) - handles window setting changes
+- `changed_window_setting_all` - Migrated to Rust (rs_changed_window_setting_all) - iterates all tabpages/windows
 
 ### Complex Memory/Buffer Operations
 Functions involving memory management or buffer content access:

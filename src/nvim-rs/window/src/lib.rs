@@ -2319,6 +2319,75 @@ pub extern "C" fn rs_changed_line_abv_curs_win(wp: WinHandle) {
     changed_line_abv_curs_win_impl(wp);
 }
 
+// =============================================================================
+// Window Setting Change Functions
+// =============================================================================
+
+// C accessor for w_lines_valid
+extern "C" {
+    /// Set the w_lines_valid field (number of valid w_lines entries).
+    fn nvim_win_set_lines_valid(wp: WinHandle, val: c_int);
+}
+
+/// Handle window setting changes that require recomputation.
+///
+/// This is the Rust equivalent of `changed_window_setting()` in move.c.
+/// Invalidates line cache, clears validity flags, and schedules redraw.
+///
+/// Called when window settings change (e.g., 'wrap' option or folding).
+#[inline]
+fn changed_window_setting_impl(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+    unsafe {
+        // Invalidate all line cache entries
+        nvim_win_set_lines_valid(wp, 0);
+        // Clear validity flags for lines above cursor
+        changed_line_abv_curs_win_impl(wp);
+        // Clear botline and topline validity
+        nvim_win_clear_valid_bits(wp, VALID_BOTLINE | VALID_BOTLINE_AP | VALID_TOPLINE);
+        // Schedule complete redraw
+        redraw_later(wp, UPD_NOT_VALID);
+    }
+}
+
+/// FFI wrapper for `changed_window_setting`.
+///
+/// Handles window setting changes that require recomputation.
+#[no_mangle]
+pub extern "C" fn rs_changed_window_setting(wp: WinHandle) {
+    changed_window_setting_impl(wp);
+}
+
+/// Call `changed_window_setting` for every window in all tabpages.
+///
+/// This is the Rust equivalent of `changed_window_setting_all()` in move.c.
+/// Iterates through all tabpages and all windows within each tabpage.
+#[inline]
+fn changed_window_setting_all_impl() {
+    unsafe {
+        // FOR_ALL_TAB_WINDOWS(tp, wp) - iterate all tabs and windows
+        let mut tp = nvim_get_first_tabpage();
+        while !tp.is_null() {
+            let mut wp = nvim_tabpage_get_firstwin(tp);
+            while !wp.is_null() {
+                changed_window_setting_impl(wp);
+                wp = nvim_win_get_next(wp);
+            }
+            tp = nvim_tabpage_get_next(tp);
+        }
+    }
+}
+
+/// FFI wrapper for `changed_window_setting_all`.
+///
+/// Calls `changed_window_setting` for every window in all tabpages.
+#[no_mangle]
+pub extern "C" fn rs_changed_window_setting_all() {
+    changed_window_setting_all_impl();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
