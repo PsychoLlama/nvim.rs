@@ -910,6 +910,18 @@ void nvim_win_set_redr_status(win_T *wp, int val)
   wp->w_redr_status = val;
 }
 
+/// Get the w_grid_alloc field from a window.
+ScreenGrid *nvim_win_get_grid_alloc(win_T *wp)
+{
+  return &wp->w_grid_alloc;
+}
+
+/// Get the w_config.hide field from a window.
+bool nvim_win_get_config_hide(win_T *wp)
+{
+  return wp->w_config.hide;
+}
+
 /// Set the w_pos_changed field of a window.
 void nvim_win_set_pos_changed(win_T *wp, int val)
 {

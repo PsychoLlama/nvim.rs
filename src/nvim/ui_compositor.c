@@ -347,26 +347,13 @@ ScreenGrid *ui_comp_mouse_focus(int row, int col)
   return NULL;
 }
 
+// Rust implementation of ui_comp_get_grid_at_coord
+extern ScreenGrid *rs_ui_comp_get_grid_at_coord(int row, int col);
+
 /// Compute which grid is on top at supplied screen coordinates
 ScreenGrid *ui_comp_get_grid_at_coord(int row, int col)
 {
-  for (ssize_t i = (ssize_t)kv_size(layers) - 1; i > 0; i--) {
-    ScreenGrid *grid = kv_A(layers, i);
-    if (row >= grid->comp_row && row < grid->comp_row + grid->rows
-        && col >= grid->comp_col && col < grid->comp_col + grid->cols) {
-      return grid;
-    }
-  }
-
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    ScreenGrid *grid = &wp->w_grid_alloc;
-    if (row >= grid->comp_row && row < grid->comp_row + grid->rows
-        && col >= grid->comp_col && col < grid->comp_col + grid->cols
-        && !wp->w_config.hide) {
-      return grid;
-    }
-  }
-  return &default_grid;
+  return rs_ui_comp_get_grid_at_coord(row, col);
 }
 
 /// Baseline implementation. This is always correct, but we can sometimes

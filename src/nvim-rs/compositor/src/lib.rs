@@ -56,6 +56,19 @@ pub mod zindex {
 /// Handle type for grids (matches C's `handle_T` which is `int`).
 pub type HandleT = c_int;
 
+/// Opaque handle to C's win_T.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct WinHandle(*mut c_void);
+
+impl WinHandle {
+    /// Check if the handle is null
+    #[inline]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
 extern "C" {
     // Compositor state accessors
     fn nvim_get_composed_uis() -> c_int;
@@ -109,6 +122,12 @@ extern "C" {
     // Screen validity
     fn nvim_set_valid_screen(valid: bool);
     fn nvim_set_msg_sep_row(row: c_int);
+
+    // Window iteration accessors
+    fn nvim_get_firstwin() -> WinHandle;
+    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
+    fn nvim_win_get_grid_alloc(wp: WinHandle) -> ScreenGridHandle;
+    fn nvim_win_get_config_hide(wp: WinHandle) -> bool;
 }
 
 // =============================================================================
@@ -656,6 +675,67 @@ fn ui_comp_set_screen_valid_impl(valid: bool) -> bool {
 #[no_mangle]
 pub extern "C" fn rs_ui_comp_set_screen_valid(valid: bool) -> bool {
     ui_comp_set_screen_valid_impl(valid)
+}
+
+/// Check if a point (row, col) is within a grid's bounds.
+#[inline]
+fn point_in_grid(row: c_int, col: c_int, grid: ScreenGridHandle) -> bool {
+    unsafe {
+        let grid_row = nvim_screengrid_get_comp_row(grid);
+        let grid_col = nvim_screengrid_get_comp_col(grid);
+        let grid_rows = nvim_screengrid_get_rows(grid);
+        let grid_cols = nvim_screengrid_get_cols(grid);
+
+        row >= grid_row
+            && row < grid_row + grid_rows
+            && col >= grid_col
+            && col < grid_col + grid_cols
+    }
+}
+
+/// Get the topmost grid at given screen coordinates.
+///
+/// This function first checks the compositor layers (floating windows, etc.)
+/// from top to bottom, then falls back to checking window grids in the
+/// current tab, and finally returns the default grid if no match is found.
+fn ui_comp_get_grid_at_coord_impl(row: c_int, col: c_int) -> ScreenGridHandle {
+    unsafe {
+        // Check compositor layers from top to bottom (skip layer 0 which is default_grid)
+        let layers_size = nvim_layers_size();
+        if layers_size > 1 {
+            for i in (1..layers_size).rev() {
+                let grid = nvim_layers_get(i);
+                if point_in_grid(row, col, grid) {
+                    return grid;
+                }
+            }
+        }
+
+        // Check window grids in current tab
+        let mut wp = nvim_get_firstwin();
+        while !wp.is_null() {
+            let grid = nvim_win_get_grid_alloc(wp);
+            let is_hidden = nvim_win_get_config_hide(wp);
+            if point_in_grid(row, col, grid) && !is_hidden {
+                return grid;
+            }
+            wp = nvim_win_get_next(wp);
+        }
+
+        // Fall back to default grid
+        nvim_get_default_grid()
+    }
+}
+
+/// FFI wrapper for `ui_comp_get_grid_at_coord`.
+///
+/// Returns the topmost grid at the given screen coordinates.
+///
+/// # Safety
+/// This function accesses global compositor state and window list.
+#[no_mangle]
+pub extern "C" fn rs_ui_comp_get_grid_at_coord(row: c_int, col: c_int) -> ScreenGridHandle {
+    ui_comp_get_grid_at_coord_impl(row, col)
 }
 
 #[cfg(test)]
