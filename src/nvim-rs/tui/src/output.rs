@@ -90,6 +90,72 @@ unsafe fn attrs_differ_impl(
     }
 }
 
+// ============================================================================
+// Grid Cursor Position
+// ============================================================================
+
+/// Opaque handle to TUIData struct in C
+#[repr(C)]
+pub struct TuiHandle {
+    _private: [u8; 0],
+}
+
+extern "C" {
+    fn nvim_tui_set_row(tui: *mut TuiHandle, row: c_int);
+    fn nvim_tui_set_col(tui: *mut TuiHandle, col: c_int);
+    fn nvim_tui_set_attrs(tui: *mut TuiHandle, idx: usize, attrs: HlAttrs);
+}
+
+/// Set cursor position for the grid.
+///
+/// This function stores the cursor row and column position in the TUIData struct.
+/// The actual cursor movement happens during tui_flush.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_grid_cursor_goto(tui: *mut TuiHandle, row: i64, col: i64) {
+    if tui.is_null() {
+        return;
+    }
+
+    // cursor position is validated in tui_flush
+    nvim_tui_set_row(tui, row as c_int);
+    nvim_tui_set_col(tui, col as c_int);
+}
+
+// ============================================================================
+// Highlight Attribute Definition
+// ============================================================================
+
+/// Store highlight attributes in the TUI attributes array.
+///
+/// This function merges RGB and cterm attributes and stores them at the
+/// specified index in the TUI's highlight attribute array.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_hl_attr_define(
+    tui: *mut TuiHandle,
+    id: i64,
+    mut attrs: HlAttrs,
+    cterm_attrs: HlAttrs,
+) {
+    if tui.is_null() {
+        return;
+    }
+
+    // Merge cterm attributes into the main attrs struct
+    attrs.cterm_ae_attr = cterm_attrs.cterm_ae_attr;
+    attrs.cterm_fg_color = cterm_attrs.cterm_fg_color;
+    attrs.cterm_bg_color = cterm_attrs.cterm_bg_color;
+
+    nvim_tui_set_attrs(tui, id as usize, attrs);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

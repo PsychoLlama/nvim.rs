@@ -192,6 +192,8 @@ extern int rs_term_has_truecolor(const char *colorterm, int has_tc_or_rgb, const
 
 // Rust TUI output functions
 extern bool rs_attrs_differ(int id1, int id2, bool rgb, const HlAttrs *attrs, size_t attrs_size);
+extern void rs_tui_grid_cursor_goto(TUIData *tui, int64_t row, int64_t col);
+extern void rs_tui_hl_attr_define(TUIData *tui, int64_t id, HlAttrs attrs, HlAttrs cterm_attrs);
 
 // ============================================================================
 // TUIData Accessor Functions for Rust
@@ -222,6 +224,36 @@ size_t nvim_tui_get_attrs_size(TUIData *tui)
 const HlAttrs *nvim_tui_get_attrs_data(TUIData *tui)
 {
   return tui->attrs.items;
+}
+
+/// Get cursor row position
+int nvim_tui_get_row(TUIData *tui)
+{
+  return tui->row;
+}
+
+/// Set cursor row position
+void nvim_tui_set_row(TUIData *tui, int row)
+{
+  tui->row = row;
+}
+
+/// Get cursor col position
+int nvim_tui_get_col(TUIData *tui)
+{
+  return tui->col;
+}
+
+/// Set cursor col position
+void nvim_tui_set_col(TUIData *tui, int col)
+{
+  tui->col = col;
+}
+
+/// Set an HlAttrs entry in the attrs kvec (resizes if needed)
+void nvim_tui_set_attrs(TUIData *tui, size_t idx, HlAttrs attrs)
+{
+  kv_a(tui->attrs, idx) = attrs;
 }
 
 #define TERMINFO_SEQ_LIMIT 128
@@ -1329,11 +1361,10 @@ void tui_grid_clear(TUIData *tui, Integer g)
   clear_region(tui, 0, tui->height, 0, tui->width, 0);
 }
 
+/// Set cursor position for the grid. Rust implementation in nvim-tui crate.
 void tui_grid_cursor_goto(TUIData *tui, Integer grid, Integer row, Integer col)
 {
-  // cursor position is validated in tui_flush
-  tui->row = (int)row;
-  tui->col = (int)col;
+  rs_tui_grid_cursor_goto(tui, row, col);
 }
 
 static CursorShape tui_cursor_decode_shape(const char *shape_str)
@@ -1584,13 +1615,10 @@ int32_t tui_add_url(TUIData *tui, const char *url)
   return (int32_t)k;
 }
 
+/// Store highlight attributes. Rust implementation in nvim-tui crate.
 void tui_hl_attr_define(TUIData *tui, Integer id, HlAttrs attrs, HlAttrs cterm_attrs, Array info)
 {
-  attrs.cterm_ae_attr = cterm_attrs.cterm_ae_attr;
-  attrs.cterm_fg_color = cterm_attrs.cterm_fg_color;
-  attrs.cterm_bg_color = cterm_attrs.cterm_bg_color;
-
-  kv_a(tui->attrs, (size_t)id) = attrs;
+  rs_tui_hl_attr_define(tui, id, attrs, cterm_attrs);
 }
 
 void tui_bell(TUIData *tui)
