@@ -256,6 +256,9 @@ bool ui_comp_should_draw(void)
   return rs_ui_comp_should_draw() != 0;
 }
 
+// Rust implementation of ui_comp_layers_adjust
+extern void rs_ui_comp_layers_adjust(size_t layer_idx, bool raise);
+
 /// Raises or lowers the layer, syncing comp_index with zindex.
 ///
 /// This function adjusts the position of a layer in the layers array
@@ -265,27 +268,7 @@ bool ui_comp_should_draw(void)
 /// @param[in]  raise      Raise the layer if true, else lower it.
 void ui_comp_layers_adjust(size_t layer_idx, bool raise)
 {
-  size_t size = layers.size;
-  ScreenGrid *layer = layers.items[layer_idx];
-
-  if (raise) {
-    while (layer_idx < size - 1 && layer->zindex > layers.items[layer_idx + 1]->zindex) {
-      layers.items[layer_idx] = layers.items[layer_idx + 1];
-      layers.items[layer_idx]->comp_index = layer_idx;
-      layers.items[layer_idx]->pending_comp_index_update = true;
-      layer_idx++;
-    }
-  } else {
-    while (layer_idx > 0 && layer->zindex < layers.items[layer_idx - 1]->zindex) {
-      layers.items[layer_idx] = layers.items[layer_idx - 1];
-      layers.items[layer_idx]->comp_index = layer_idx;
-      layers.items[layer_idx]->pending_comp_index_update = true;
-      layer_idx--;
-    }
-  }
-  layers.items[layer_idx] = layer;
-  layer->comp_index = layer_idx;
-  layer->pending_comp_index_update = true;
+  rs_ui_comp_layers_adjust(layer_idx, raise);
 }
 
 /// Places `grid` at (col,row) position with (width * height) size.

@@ -569,6 +569,66 @@ pub extern "C" fn rs_ui_comp_grid_cursor_goto(grid_handle: i64, r: i64, c: i64) 
     ui_comp_grid_cursor_goto_impl(grid_handle as HandleT, r, c);
 }
 
+/// Adjust a layer's position in the stack based on z-index.
+///
+/// This function moves a layer up (raise=true) or down (raise=false) in the
+/// layer stack to maintain z-index ordering. Layers are swapped one position
+/// at a time until the layer is in the correct position.
+fn ui_comp_layers_adjust_impl(layer_idx: usize, raise: bool) {
+    unsafe {
+        let size = nvim_layers_size();
+        let layer = nvim_layers_get(layer_idx);
+        let layer_zindex = nvim_screengrid_get_zindex(layer);
+        let mut idx = layer_idx;
+
+        if raise {
+            // Move layer up (towards higher indices) while its zindex > next layer's zindex
+            while idx < size - 1 {
+                let next_layer = nvim_layers_get(idx + 1);
+                let next_zindex = nvim_screengrid_get_zindex(next_layer);
+                if layer_zindex <= next_zindex {
+                    break;
+                }
+                // Swap: move next_layer down to current position
+                nvim_layers_set(idx, next_layer);
+                nvim_screengrid_set_comp_index(next_layer, idx);
+                nvim_screengrid_set_pending_comp_index_update(next_layer, true);
+                idx += 1;
+            }
+        } else {
+            // Move layer down (towards lower indices) while its zindex < prev layer's zindex
+            while idx > 0 {
+                let prev_layer = nvim_layers_get(idx - 1);
+                let prev_zindex = nvim_screengrid_get_zindex(prev_layer);
+                if layer_zindex >= prev_zindex {
+                    break;
+                }
+                // Swap: move prev_layer up to current position
+                nvim_layers_set(idx, prev_layer);
+                nvim_screengrid_set_comp_index(prev_layer, idx);
+                nvim_screengrid_set_pending_comp_index_update(prev_layer, true);
+                idx -= 1;
+            }
+        }
+
+        // Place the layer at its final position
+        nvim_layers_set(idx, layer);
+        nvim_screengrid_set_comp_index(layer, idx);
+        nvim_screengrid_set_pending_comp_index_update(layer, true);
+    }
+}
+
+/// FFI wrapper for `ui_comp_layers_adjust`.
+///
+/// Adjusts a layer's position in the stack based on z-index ordering.
+///
+/// # Safety
+/// This function modifies global compositor state.
+#[no_mangle]
+pub extern "C" fn rs_ui_comp_layers_adjust(layer_idx: usize, raise: bool) {
+    ui_comp_layers_adjust_impl(layer_idx, raise);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
