@@ -133,13 +133,14 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 
 ### Global State Dependencies
 
-**cursor_shape.c** (shape_table global):
-- `cursor_is_block_during_visual`
-- `cursor_mode_uses_syn_id`
-- `cursor_get_mode_idx`
+**cursor_shape.c** (shape_table global - MIGRATED):
+- `cursor_is_block_during_visual` - Migrated to Rust (rs_cursor_is_block_during_visual)
+- `cursor_mode_uses_syn_id` - Migrated to Rust (rs_cursor_mode_uses_syn_id)
+- `cursor_get_mode_idx` - Migrated to Rust (rs_cursor_get_mode_idx)
+- Uses accessor functions for shape_table global
 
-**version.c** (static version arrays):
-- `min_vim_version`, `highest_patch`, `has_vim_patch` - need vim_versions/included_patchsets arrays
+**version.c** (static version arrays - MIGRATED):
+- `min_vim_version`, `highest_patch`, `has_vim_patch` - Migrated to Rust via accessor functions for vim_versions/included_patchsets arrays
 
 **textformat.c** (MIGRATED):
 - `has_format_option` - Migrated to Rust (rs_has_format_option)
@@ -152,8 +153,8 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 **keycodes.c**:
 - `get_special_key_code` - Uses key_names_table static array
 
-**autocmd.c**:
-- `event_nr2name` - Uses event_names static array
+**autocmd.c** (MIGRATED):
+- `event_nr2name` - Migrated to Rust (rs_event_nr2name) - Uses event_names static array via accessor
 
 ### Blocked OS Functions
 
