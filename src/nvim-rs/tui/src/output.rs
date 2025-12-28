@@ -151,7 +151,7 @@ extern "C" {
     fn schar_cache_clear_if_full() -> bool;
 }
 
-// Terminfo output infrastructure - these will be used in Phase 3
+// Terminfo output infrastructure - these will be used in Phase 3/4
 #[allow(dead_code)]
 extern "C" {
     fn nvim_tui_out(tui: *mut TuiHandle, str: *const u8, len: usize);
@@ -169,6 +169,8 @@ extern "C" {
     fn nvim_tui_get_can_clear_attr(tui: *mut TuiHandle) -> bool;
     fn nvim_tui_get_can_erase_chars(tui: *mut TuiHandle) -> bool;
     fn nvim_tui_get_set_default_colors(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_cheap_to_print(tui: *mut TuiHandle, row: c_int, col: c_int, next: c_int) -> bool;
+    fn nvim_tui_get_default_attr(tui: *mut TuiHandle) -> bool;
 
     // UGrid goto (already in Rust ugrid crate, called via C wrapper)
     fn ugrid_goto(grid: *mut UGridHandle, row: c_int, col: c_int);

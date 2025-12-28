@@ -485,6 +485,21 @@ bool nvim_tui_get_set_default_colors(TUIData *tui)
   return tui->set_default_colors;
 }
 
+// Forward declaration for cheap_to_print
+static bool cheap_to_print(TUIData *tui, int row, int col, int next);
+
+/// Wrapper for cheap_to_print callable from Rust
+bool nvim_tui_cheap_to_print(TUIData *tui, int row, int col, int next)
+{
+  return cheap_to_print(tui, row, col, next);
+}
+
+/// Get default_attr flag
+bool nvim_tui_get_default_attr(TUIData *tui)
+{
+  return tui->default_attr;
+}
+
 #define TERMINFO_SEQ_LIMIT 128
 
 #define terminfo_print_num1(tui, what, num) terminfo_print_num(tui, what, num, 0, 0)
