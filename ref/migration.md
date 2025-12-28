@@ -22,7 +22,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | diff         | Diffopt flag queries                               |
 | drawline     | Line drawing and rendering helpers                 |
 | drawscreen   | Window separator drawing, connector functions      |
-| edit         | Edit mode state queries                            |
+| edit         | Edit mode state queries, prompt text functions     |
 | encoding     | Base64, SHA-256                                    |
 | eval         | VimL name validation, tristate                     |
 | event        | Event loop, libuv wrappers, multiqueue             |
