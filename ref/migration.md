@@ -16,7 +16,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | cmdhist      | History type conversion                            |
 | cmdline      | Command line state queries                         |
 | collections  | Data structures (garray, hashtab)                  |
-| compositor   | Grid compositor for multi-grid UI layering         |
+| compositor   | Grid compositor for multi-grid UI: layer management, grid selection |
 | context      | Context stack management                           |
 | cursor_shape | Cursor mode/shape queries                          |
 | decoration   | Decoration/virtual text system, DecorState access  |
@@ -102,11 +102,17 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 - `frame_add_hsep` - Migrated to Rust (rs_frame_add_hsep)
 - `frame_fix_width/height` - Migrated to Rust (rs_frame_fix_width, rs_frame_fix_height)
 
-**drawscreen.c** (separator functions - MIGRATED):
+**drawscreen.c** (separator and status functions - MIGRATED):
 - `hsep_connected/vsep_connected` - Migrated to Rust
 - `draw_vsep_win/draw_hsep_win` - Migrated to Rust
 - `get_corner_sep_connector` - Migrated to Rust
 - `draw_sep_connectors_win` - Migrated to Rust
+- `win_redraw_last_status` - Migrated to Rust (rs_win_redraw_last_status) - Frame tree traversal for status line redraw
+
+**ui_compositor.c** (compositor functions - MIGRATED):
+- `ui_comp_should_draw` - Migrated to Rust (rs_ui_comp_should_draw)
+- `curgrid_covered_above` - Migrated to Rust (rs_curgrid_covered_above) - Layer check for cursor grid
+- `ui_comp_set_grid` - Migrated to Rust (rs_ui_comp_set_grid) - Set current grid by handle
 
 **window.c** (remaining):
 - `tabpage_win_valid` - Window in tabpage validation
