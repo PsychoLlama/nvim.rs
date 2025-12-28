@@ -157,6 +157,13 @@ void nvim_layers_remove(size_t i)
   }
 }
 
+void nvim_layers_pop(void)
+{
+  if (kv_size(layers) > 0) {
+    kv_pop(layers);
+  }
+}
+
 // Compositor buffer accessors
 schar_T *nvim_comp_get_linebuf_char(void)
 {
@@ -349,30 +356,12 @@ bool ui_comp_put_grid(ScreenGrid *grid, int row, int col, int height, int width,
   return moved;
 }
 
+// Rust implementation of ui_comp_remove_grid
+extern void rs_ui_comp_remove_grid(ScreenGrid *grid);
+
 void ui_comp_remove_grid(ScreenGrid *grid)
 {
-  assert(grid != &default_grid);
-  if (grid->comp_index == 0) {
-    // grid wasn't present
-    return;
-  }
-
-  if (curgrid == grid) {
-    curgrid = &default_grid;
-  }
-
-  for (size_t i = grid->comp_index; i < kv_size(layers) - 1; i++) {
-    kv_A(layers, i) = kv_A(layers, i + 1);
-    kv_A(layers, i)->comp_index = i;
-    kv_A(layers, i)->pending_comp_index_update = true;
-  }
-  (void)kv_pop(layers);
-  grid->comp_index = 0;
-  grid->pending_comp_index_update = true;
-
-  // recompose the area under the grid
-  // inefficient when being overlapped: only draw up to grid->comp_index
-  ui_comp_compose_grid(grid);
+  rs_ui_comp_remove_grid(grid);
 }
 
 // Rust implementation of ui_comp_set_grid

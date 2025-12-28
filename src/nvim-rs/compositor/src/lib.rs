@@ -84,8 +84,12 @@ extern "C" {
 
     // Grid modification accessors
     fn nvim_layers_set(i: usize, grid: ScreenGridHandle);
+    fn nvim_layers_pop();
     fn nvim_screengrid_set_comp_index(grid: ScreenGridHandle, val: usize);
     fn nvim_screengrid_set_pending_comp_index_update(grid: ScreenGridHandle, val: bool);
+
+    // Default grid accessor
+    fn nvim_get_default_grid() -> ScreenGridHandle;
 
     // Composition function
     fn nvim_compose_area(startrow: c_int, endrow: c_int, startcol: c_int, endcol: c_int);
@@ -280,6 +284,58 @@ fn ui_comp_raise_grid_impl(grid: ScreenGridHandle, new_index: usize) {
 #[no_mangle]
 pub extern "C" fn rs_ui_comp_raise_grid(grid: ScreenGridHandle, new_index: usize) {
     ui_comp_raise_grid_impl(grid, new_index);
+}
+
+/// Remove a grid from the layer stack.
+///
+/// This removes a grid from the compositor layers, shifts remaining layers
+/// down to fill the gap, and recomposes the area that was covered.
+fn ui_comp_remove_grid_impl(grid: ScreenGridHandle) {
+    unsafe {
+        let comp_index = nvim_screengrid_get_comp_index(grid);
+
+        // Grid wasn't present (comp_index == 0 means not in layers)
+        if comp_index == 0 {
+            return;
+        }
+
+        // If curgrid == grid, reset to default grid
+        let curgrid = nvim_get_curgrid();
+        if curgrid.0 == grid.0 {
+            let default_grid = nvim_get_default_grid();
+            nvim_set_curgrid(default_grid);
+        }
+
+        // Shift layers down
+        let layers_size = nvim_layers_size();
+        for i in comp_index..(layers_size - 1) {
+            let next_grid = nvim_layers_get(i + 1);
+            nvim_layers_set(i, next_grid);
+            nvim_screengrid_set_comp_index(next_grid, i);
+            nvim_screengrid_set_pending_comp_index_update(next_grid, true);
+        }
+
+        // Pop the last element
+        nvim_layers_pop();
+
+        // Reset grid's comp_index
+        nvim_screengrid_set_comp_index(grid, 0);
+        nvim_screengrid_set_pending_comp_index_update(grid, true);
+
+        // Recompose the area under the removed grid
+        ui_comp_compose_grid_impl(grid);
+    }
+}
+
+/// FFI wrapper for `ui_comp_remove_grid`.
+///
+/// Removes a grid from the compositor layer stack.
+///
+/// # Safety
+/// This function modifies global compositor state.
+#[no_mangle]
+pub extern "C" fn rs_ui_comp_remove_grid(grid: ScreenGridHandle) {
+    ui_comp_remove_grid_impl(grid);
 }
 
 #[cfg(test)]
