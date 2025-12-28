@@ -100,6 +100,12 @@ pub struct TuiHandle {
     _private: [u8; 0],
 }
 
+/// Opaque handle to UGrid struct in C
+#[repr(C)]
+pub struct UGridHandle {
+    _private: [u8; 0],
+}
+
 extern "C" {
     fn nvim_tui_set_row(tui: *mut TuiHandle, row: c_int);
     fn nvim_tui_set_col(tui: *mut TuiHandle, col: c_int);
@@ -110,6 +116,39 @@ extern "C" {
     fn nvim_tui_get_grid_height(tui: *mut TuiHandle) -> c_int;
     fn nvim_tui_get_grid_width(tui: *mut TuiHandle) -> c_int;
     fn nvim_tui_invalidate(tui: *mut TuiHandle, top: c_int, bot: c_int, left: c_int, right: c_int);
+
+    // Grid resize/clear accessors
+    fn nvim_tui_get_is_starting(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_get_pending_resize_events(tui: *mut TuiHandle) -> c_int;
+    fn nvim_tui_set_pending_resize_events(tui: *mut TuiHandle, val: c_int);
+    fn nvim_tui_get_invalid_regions_size(tui: *mut TuiHandle) -> usize;
+    fn nvim_tui_clear_invalid_regions(tui: *mut TuiHandle);
+    fn nvim_tui_clip_invalid_region(
+        tui: *mut TuiHandle,
+        idx: usize,
+        max_height: c_int,
+        max_width: c_int,
+    );
+    fn nvim_tui_get_grid(tui: *mut TuiHandle) -> *mut UGridHandle;
+    fn nvim_tui_invalidate_grid_cursor(tui: *mut TuiHandle);
+    fn nvim_tui_get_width(tui: *mut TuiHandle) -> c_int;
+    fn nvim_tui_get_height(tui: *mut TuiHandle) -> c_int;
+    fn nvim_tui_out_resize(tui: *mut TuiHandle, height: c_int, width: c_int);
+    fn nvim_tui_clear_region(
+        tui: *mut TuiHandle,
+        top: c_int,
+        bot: c_int,
+        left: c_int,
+        right: c_int,
+        attr_id: c_int,
+    );
+
+    // UGrid functions (already in Rust ugrid crate, called via C wrappers)
+    fn ugrid_resize(grid: *mut UGridHandle, width: c_int, height: c_int);
+    fn ugrid_clear(grid: *mut UGridHandle);
+
+    // schar cache function
+    fn schar_cache_clear_if_full() -> bool;
 }
 
 /// Set cursor position for the grid.
@@ -209,6 +248,84 @@ pub unsafe extern "C" fn rs_tui_default_colors_set(
     let height = nvim_tui_get_grid_height(tui);
     let width = nvim_tui_get_grid_width(tui);
     nvim_tui_invalidate(tui, 0, height, 0, width);
+}
+
+// ============================================================================
+// Grid Resize
+// ============================================================================
+
+/// Resize the TUI grid.
+///
+/// This function resizes the internal grid and clips any invalid regions to the
+/// new bounds. If this is not a startup resize and there are no pending resize
+/// events, it sends an escape sequence to resize the host terminal.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_grid_resize(tui: *mut TuiHandle, _g: i64, width: i64, height: i64) {
+    if tui.is_null() {
+        return;
+    }
+
+    let grid = nvim_tui_get_grid(tui);
+    ugrid_resize(grid, width as c_int, height as c_int);
+
+    // Get new grid dimensions (ugrid_resize updates these)
+    let grid_height = nvim_tui_get_grid_height(tui);
+    let grid_width = nvim_tui_get_grid_width(tui);
+
+    // resize might not always be followed by a clear before flush
+    // so clip the invalid regions
+    let num_regions = nvim_tui_get_invalid_regions_size(tui);
+    for i in 0..num_regions {
+        nvim_tui_clip_invalid_region(tui, i, grid_height, grid_width);
+    }
+
+    let pending = nvim_tui_get_pending_resize_events(tui);
+    let is_starting = nvim_tui_get_is_starting(tui);
+
+    if pending == 0 && !is_starting {
+        // Resize the _host_ terminal
+        nvim_tui_out_resize(tui, height as c_int, width as c_int);
+    } else {
+        // Already handled the resize; avoid double-resize
+        let new_pending = if pending > 0 { pending - 1 } else { 0 };
+        nvim_tui_set_pending_resize_events(tui, new_pending);
+        nvim_tui_invalidate_grid_cursor(tui);
+    }
+}
+
+// ============================================================================
+// Grid Clear
+// ============================================================================
+
+/// Clear the TUI grid.
+///
+/// This function clears the internal grid data, clears the schar cache if full,
+/// removes all invalid regions, and clears the entire screen region.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_grid_clear(tui: *mut TuiHandle, _g: i64) {
+    if tui.is_null() {
+        return;
+    }
+
+    let grid = nvim_tui_get_grid(tui);
+    ugrid_clear(grid);
+
+    // safe to clear cache at this point
+    schar_cache_clear_if_full();
+
+    nvim_tui_clear_invalid_regions(tui);
+
+    let height = nvim_tui_get_height(tui);
+    let width = nvim_tui_get_width(tui);
+    nvim_tui_clear_region(tui, 0, height, 0, width, 0);
 }
 
 #[cfg(test)]

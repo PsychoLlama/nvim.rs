@@ -196,6 +196,8 @@ extern void rs_tui_grid_cursor_goto(TUIData *tui, int64_t row, int64_t col);
 extern void rs_tui_hl_attr_define(TUIData *tui, int64_t id, HlAttrs attrs, HlAttrs cterm_attrs);
 extern void rs_tui_default_colors_set(TUIData *tui, int64_t rgb_fg, int64_t rgb_bg,
                                       int64_t rgb_sp, int64_t cterm_fg, int64_t cterm_bg);
+extern void rs_tui_grid_resize(TUIData *tui, int64_t g, int64_t width, int64_t height);
+extern void rs_tui_grid_clear(TUIData *tui, int64_t g);
 
 // ============================================================================
 // TUIData Accessor Functions for Rust
@@ -299,6 +301,87 @@ void nvim_tui_invalidate(TUIData *tui, int top, int bot, int left, int right)
 {
   Rect r = { top, bot, left, right };
   kv_push(tui->invalid_regions, r);
+}
+
+/// Get is_starting flag
+bool nvim_tui_get_is_starting(TUIData *tui)
+{
+  return tui->is_starting;
+}
+
+/// Get pending_resize_events count
+int nvim_tui_get_pending_resize_events(TUIData *tui)
+{
+  return tui->pending_resize_events;
+}
+
+/// Set pending_resize_events count
+void nvim_tui_set_pending_resize_events(TUIData *tui, int val)
+{
+  tui->pending_resize_events = val;
+}
+
+/// Get the number of invalid regions
+size_t nvim_tui_get_invalid_regions_size(TUIData *tui)
+{
+  return kv_size(tui->invalid_regions);
+}
+
+/// Clear all invalid regions
+void nvim_tui_clear_invalid_regions(TUIData *tui)
+{
+  kv_size(tui->invalid_regions) = 0;
+}
+
+/// Clip an invalid region to grid bounds
+void nvim_tui_clip_invalid_region(TUIData *tui, size_t idx, int max_height, int max_width)
+{
+  if (idx < kv_size(tui->invalid_regions)) {
+    Rect *r = &kv_A(tui->invalid_regions, idx);
+    r->bot = MIN(r->bot, max_height);
+    r->right = MIN(r->right, max_width);
+  }
+}
+
+/// Get pointer to UGrid
+UGrid *nvim_tui_get_grid(TUIData *tui)
+{
+  return &tui->grid;
+}
+
+/// Set grid row to -1 (invalidate cursor position)
+void nvim_tui_invalidate_grid_cursor(TUIData *tui)
+{
+  tui->grid.row = -1;
+}
+
+/// Get TUI width
+int nvim_tui_get_width(TUIData *tui)
+{
+  return tui->width;
+}
+
+/// Get TUI height
+int nvim_tui_get_height(TUIData *tui)
+{
+  return tui->height;
+}
+
+// Forward declaration for clear_region
+static void clear_region(TUIData *tui, int top, int bot, int left, int right, int attr_id);
+
+/// Wrapper for clear_region callable from Rust
+void nvim_tui_clear_region(TUIData *tui, int top, int bot, int left, int right, int attr_id)
+{
+  clear_region(tui, top, bot, left, right, attr_id);
+}
+
+/// Output resize escape sequence (wrapper for out_printf for resize)
+void nvim_tui_out_resize(TUIData *tui, int height, int width)
+{
+  // Forward declaration - out_printf is defined later in this file
+  extern void out_printf(TUIData *tui, size_t limit, const char *fmt, ...);
+  out_printf(tui, 64, "\x1b[8;%d;%dt", height, width);
 }
 
 #define TERMINFO_SEQ_LIMIT 128
@@ -1373,37 +1456,16 @@ static void reset_scroll_region(TUIData *tui, bool fullwidth)
   grid->row = -1;
 }
 
+/// Resize the TUI grid. Rust implementation in nvim-tui crate.
 void tui_grid_resize(TUIData *tui, Integer g, Integer width, Integer height)
 {
-  UGrid *grid = &tui->grid;
-  ugrid_resize(grid, (int)width, (int)height);
-
-  // resize might not always be followed by a clear before flush
-  // so clip the invalid region
-  for (size_t i = 0; i < kv_size(tui->invalid_regions); i++) {
-    Rect *r = &kv_A(tui->invalid_regions, i);
-    r->bot = MIN(r->bot, grid->height);
-    r->right = MIN(r->right, grid->width);
-  }
-
-  if (tui->pending_resize_events == 0 && !tui->is_starting) {
-    // Resize the _host_ terminal.
-    out_printf(tui, 64, "\x1b[8;%d;%dt", (int)height, (int)width);
-  } else {  // Already handled the resize; avoid double-resize.
-    tui->pending_resize_events = tui->pending_resize_events >
-                                 0 ? tui->pending_resize_events - 1 : 0;
-    grid->row = -1;
-  }
+  rs_tui_grid_resize(tui, g, width, height);
 }
 
+/// Clear the TUI grid. Rust implementation in nvim-tui crate.
 void tui_grid_clear(TUIData *tui, Integer g)
 {
-  UGrid *grid = &tui->grid;
-  ugrid_clear(grid);
-  // safe to clear cache at this point
-  schar_cache_clear_if_full();
-  kv_size(tui->invalid_regions) = 0;
-  clear_region(tui, 0, tui->height, 0, tui->width, 0);
+  rs_tui_grid_clear(tui, g);
 }
 
 /// Set cursor position for the grid. Rust implementation in nvim-tui crate.
