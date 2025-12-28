@@ -258,7 +258,28 @@ Added ~25 accessor functions for decoration system:
 **drawscreen.c:**
 - `showmode` - Mode indicator display (message system integration)
 - `update_screen` - Screen orchestration (large, many side effects)
+- `redraw_statuslines` - Orchestration function, needs win_check_ns_hl, win_redr_winbar, win_redr_status, draw_tabline, maketitle callable
 
 **statusline.c:**
 - `win_redr_status` - Status line redraw
 - `draw_tabline` - Tab line rendering
+
+## Migration Status Summary
+
+Most simple state-checking and utility functions across all crates have been migrated. The remaining functions fall into these categories:
+
+### Orchestration Functions (Need Callable Dependencies)
+Functions that call multiple other C functions and would require making those functions extern:
+- `redraw_statuslines` - calls win_check_ns_hl, win_redr_winbar, win_redr_status, draw_tabline, maketitle
+- `update_screen` - complex screen orchestration with many subsystem calls
+
+### Functions Requiring New Accessors
+Functions blocked on missing accessor infrastructure:
+- `invalidate_botline`, `approximate_botline_win` - need `nvim_win_get/set_valid` accessors for w_valid field
+- `cursor_valid`, `validate_cursor` - need w_valid field accessors plus check_cursor_moved callable
+
+### Complex Memory/Buffer Operations
+Functions involving memory management or buffer content access:
+- `buf_is_empty` - needs ml_get_buf for buffer line access
+- `op_delete`, `op_change` - complex editing operations modifying buffer content
+- `compose_line`, `compose_area`, `ui_comp_raw_line` - grid memory array access
