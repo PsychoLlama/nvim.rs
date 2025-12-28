@@ -141,6 +141,8 @@ static bool ins_need_undo;              // call u_save() before inserting a
 // Rust FFI declarations
 extern int rs_ins_need_undo_get(void);
 extern int rs_get_can_cindent(void);
+extern char *rs_buf_prompt_text(const buf_T *buf);
+extern char *rs_prompt_text(void);
 
 /// Get the ins_need_undo static variable (accessor for Rust).
 int nvim_get_ins_need_undo(void)
@@ -152,6 +154,12 @@ int nvim_get_ins_need_undo(void)
 int nvim_get_can_cindent(void)
 {
   return can_cindent;
+}
+
+/// Get buf->b_prompt_text (accessor for Rust).
+char *nvim_buf_get_b_prompt_text(const buf_T *buf)
+{
+  return buf->b_prompt_text;
 }
 
 static TriState dont_sync_undo = kFalse;  // CTRL-G U prevents syncing undo
@@ -1589,17 +1597,14 @@ void edit_putchar(int c, bool highlight)
 char *buf_prompt_text(const buf_T *const buf)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
-  if (buf->b_prompt_text == NULL) {
-    return "% ";
-  }
-  return buf->b_prompt_text;
+  return rs_buf_prompt_text(buf);
 }
 
 /// @return  the effective prompt for the current buffer.
 char *prompt_text(void)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
-  return buf_prompt_text(curbuf);
+  return rs_prompt_text();
 }
 
 // Prepare for prompt mode: Make sure the last line has the prompt text.
