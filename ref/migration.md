@@ -280,6 +280,9 @@ Functions blocked on missing accessor infrastructure:
 **move.c** (window validity functions - MIGRATED):
 - `invalidate_botline` - Migrated to Rust (rs_invalidate_botline) - clears VALID_BOTLINE and VALID_BOTLINE_AP
 - `approximate_botline_win` - Migrated to Rust (rs_approximate_botline_win) - clears only VALID_BOTLINE
+- `changed_cline_bef_curs` - Migrated to Rust (rs_changed_cline_bef_curs) - clears cursor line validity flags
+- `changed_line_abv_curs` - Migrated to Rust (rs_changed_line_abv_curs) - clears validity flags on curwin
+- `changed_line_abv_curs_win` - Migrated to Rust (rs_changed_line_abv_curs_win) - clears validity flags on window
 
 ### Complex Memory/Buffer Operations
 Functions involving memory management or buffer content access:

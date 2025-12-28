@@ -561,6 +561,13 @@ void set_topline(win_T *wp, linenr_T lnum)
   redraw_later(wp, UPD_VALID);
 }
 
+// Rust implementations of validity flag functions
+extern void rs_invalidate_botline(win_T *wp);
+extern void rs_approximate_botline_win(win_T *wp);
+extern void rs_changed_cline_bef_curs(win_T *wp);
+extern void rs_changed_line_abv_curs(void);
+extern void rs_changed_line_abv_curs_win(win_T *wp);
+
 /// Call this function when the length of the cursor line (in screen
 /// characters) has changed, and the change is before the cursor.
 /// If the line length changed the number of screen lines might change,
@@ -568,8 +575,7 @@ void set_topline(win_T *wp, linenr_T lnum)
 /// Need to take care of w_botline separately!
 void changed_cline_bef_curs(win_T *wp)
 {
-  wp->w_valid &= ~(VALID_WROW|VALID_WCOL|VALID_VIRTCOL|VALID_CROW
-                   |VALID_CHEIGHT|VALID_TOPLINE);
+  rs_changed_cline_bef_curs(wp);
 }
 
 // Call this function when the length of a line (in screen characters) above
@@ -577,14 +583,12 @@ void changed_cline_bef_curs(win_T *wp)
 // Need to take care of w_botline separately!
 void changed_line_abv_curs(void)
 {
-  curwin->w_valid &= ~(VALID_WROW|VALID_WCOL|VALID_VIRTCOL|VALID_CROW
-                       |VALID_CHEIGHT|VALID_TOPLINE);
+  rs_changed_line_abv_curs();
 }
 
 void changed_line_abv_curs_win(win_T *wp)
 {
-  wp->w_valid &= ~(VALID_WROW|VALID_WCOL|VALID_VIRTCOL|VALID_CROW
-                   |VALID_CHEIGHT|VALID_TOPLINE);
+  rs_changed_line_abv_curs_win(wp);
 }
 
 // Make sure the value of wp->w_botline is valid.
@@ -594,10 +598,6 @@ void validate_botline(win_T *wp)
     comp_botline(wp);
   }
 }
-
-// Rust implementations of botline validation functions
-extern void rs_invalidate_botline(win_T *wp);
-extern void rs_approximate_botline_win(win_T *wp);
 
 // Mark wp->w_botline as invalid (because of some change in the buffer).
 void invalidate_botline(win_T *wp)

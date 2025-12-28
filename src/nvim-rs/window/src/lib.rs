@@ -2240,6 +2240,85 @@ pub extern "C" fn rs_approximate_botline_win(wp: WinHandle) {
     approximate_botline_win_impl(wp);
 }
 
+/// Clear validity flags when cursor line length changed before cursor.
+///
+/// This is the Rust equivalent of `changed_cline_bef_curs()` in move.c.
+/// Clears VALID_WROW, VALID_WCOL, VALID_VIRTCOL, VALID_CROW, VALID_CHEIGHT, VALID_TOPLINE.
+#[inline]
+fn changed_cline_bef_curs_impl(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+    unsafe {
+        nvim_win_clear_valid_bits(
+            wp,
+            VALID_WROW | VALID_WCOL | VALID_VIRTCOL | VALID_CROW | VALID_CHEIGHT | VALID_TOPLINE,
+        );
+    }
+}
+
+/// FFI wrapper for `changed_cline_bef_curs`.
+///
+/// Clears validity flags when cursor line length changed before cursor.
+#[no_mangle]
+pub extern "C" fn rs_changed_cline_bef_curs(wp: WinHandle) {
+    changed_cline_bef_curs_impl(wp);
+}
+
+/// Clear validity flags when a line above cursor changed.
+///
+/// This is the Rust equivalent of `changed_line_abv_curs()` in move.c.
+/// Operates on curwin.
+#[inline]
+fn changed_line_abv_curs_impl() {
+    unsafe {
+        let curwin = nvim_get_curwin();
+        if !curwin.is_null() {
+            nvim_win_clear_valid_bits(
+                curwin,
+                VALID_WROW
+                    | VALID_WCOL
+                    | VALID_VIRTCOL
+                    | VALID_CROW
+                    | VALID_CHEIGHT
+                    | VALID_TOPLINE,
+            );
+        }
+    }
+}
+
+/// FFI wrapper for `changed_line_abv_curs`.
+///
+/// Clears validity flags on curwin when a line above cursor changed.
+#[no_mangle]
+pub extern "C" fn rs_changed_line_abv_curs() {
+    changed_line_abv_curs_impl();
+}
+
+/// Clear validity flags when a line above cursor changed (window parameter version).
+///
+/// This is the Rust equivalent of `changed_line_abv_curs_win()` in move.c.
+#[inline]
+fn changed_line_abv_curs_win_impl(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+    unsafe {
+        nvim_win_clear_valid_bits(
+            wp,
+            VALID_WROW | VALID_WCOL | VALID_VIRTCOL | VALID_CROW | VALID_CHEIGHT | VALID_TOPLINE,
+        );
+    }
+}
+
+/// FFI wrapper for `changed_line_abv_curs_win`.
+///
+/// Clears validity flags on the given window when a line above cursor changed.
+#[no_mangle]
+pub extern "C" fn rs_changed_line_abv_curs_win(wp: WinHandle) {
+    changed_line_abv_curs_win_impl(wp);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
