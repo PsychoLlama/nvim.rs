@@ -101,6 +101,10 @@ extern "C" {
 
     // Composition function
     fn nvim_compose_area(startrow: c_int, endrow: c_int, startcol: c_int, endcol: c_int);
+
+    // Cursor/grid functions
+    fn nvim_curgrid_is_default() -> bool;
+    fn nvim_ui_composed_call_grid_cursor_goto(grid_handle: c_int, row: c_int, col: c_int);
 }
 
 // =============================================================================
@@ -408,7 +412,12 @@ fn ui_comp_put_grid_impl(
                 }
 
                 // Bottom area (below new position)
-                nvim_compose_area(row + height, old_row + grid_rows, old_col, old_col + grid_cols);
+                nvim_compose_area(
+                    row + height,
+                    old_row + grid_rows,
+                    old_col,
+                    old_col + grid_cols,
+                );
 
                 nvim_screengrid_set_comp_disabled(grid, false);
             }
@@ -465,7 +474,12 @@ fn ui_comp_put_grid_impl(
             let grid_cols = nvim_screengrid_get_cols(grid);
             let comp_row = nvim_screengrid_get_comp_row(grid);
             let comp_col = nvim_screengrid_get_comp_col(grid);
-            nvim_compose_area(comp_row, comp_row + grid_rows, comp_col, comp_col + grid_cols);
+            nvim_compose_area(
+                comp_row,
+                comp_row + grid_rows,
+                comp_col,
+                comp_col + grid_cols,
+            );
         }
 
         moved
@@ -489,6 +503,70 @@ pub extern "C" fn rs_ui_comp_put_grid(
     on_top: bool,
 ) -> bool {
     ui_comp_put_grid_impl(grid, row, col, height, width, valid, on_top)
+}
+
+/// Handle cursor positioning for grid compositor.
+///
+/// This sets the current grid by handle, computes the absolute cursor position,
+/// optionally raises the grid in the layer stack, and sends the cursor position
+/// to composed UIs.
+fn ui_comp_grid_cursor_goto_impl(grid_handle: HandleT, r: i64, c: i64) {
+    unsafe {
+        // Set the current grid; if not found, bail out
+        if !ui_comp_set_grid_impl(grid_handle) {
+            return;
+        }
+
+        let curgrid = nvim_get_curgrid();
+        let cursor_row = nvim_screengrid_get_comp_row(curgrid) + r as c_int;
+        let cursor_col = nvim_screengrid_get_comp_col(curgrid) + c as c_int;
+
+        // Raise the grid in layer stack if it's not the default grid
+        // This ensures the focused grid is drawn on top of others with same/lower z-index
+        if !nvim_curgrid_is_default() {
+            let layers_size = nvim_layers_size();
+            let mut new_index = layers_size.saturating_sub(1);
+            let curgrid_zindex = nvim_screengrid_get_zindex(curgrid);
+
+            // Find the appropriate position based on z-index
+            while new_index > 1 {
+                let layer = nvim_layers_get(new_index);
+                if nvim_screengrid_get_zindex(layer) <= curgrid_zindex {
+                    break;
+                }
+                new_index -= 1;
+            }
+
+            let comp_index = nvim_screengrid_get_comp_index(curgrid);
+            if comp_index < new_index {
+                ui_comp_raise_grid_impl(curgrid, new_index);
+            }
+        }
+
+        // Bounds check: cursor must be within the default grid
+        let default_grid = nvim_get_default_grid();
+        let default_cols = nvim_screengrid_get_cols(default_grid);
+        let default_rows = nvim_screengrid_get_rows(default_grid);
+
+        if cursor_col >= default_cols || cursor_row >= default_rows {
+            return;
+        }
+
+        // Send cursor position to composed UIs (grid handle 1 = default/composed)
+        nvim_ui_composed_call_grid_cursor_goto(1, cursor_row, cursor_col);
+    }
+}
+
+/// FFI wrapper for `ui_comp_grid_cursor_goto`.
+///
+/// Handles cursor positioning for grid compositor, including raising
+/// the grid in the layer stack if needed.
+///
+/// # Safety
+/// This function accesses global compositor state.
+#[no_mangle]
+pub extern "C" fn rs_ui_comp_grid_cursor_goto(grid_handle: i64, r: i64, c: i64) {
+    ui_comp_grid_cursor_goto_impl(grid_handle as HandleT, r, c);
 }
 
 #[cfg(test)]

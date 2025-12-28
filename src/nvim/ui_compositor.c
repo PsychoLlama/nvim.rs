@@ -236,6 +236,18 @@ ScreenGrid *nvim_get_msg_grid(void)
   return &msg_grid;
 }
 
+/// Check if curgrid is the default grid
+bool nvim_curgrid_is_default(void)
+{
+  return curgrid == &default_grid;
+}
+
+/// C wrapper for ui_composed_call_grid_cursor_goto (generated function)
+void nvim_ui_composed_call_grid_cursor_goto(int grid_handle, int row, int col)
+{
+  ui_composed_call_grid_cursor_goto(grid_handle, row, col);
+}
+
 // Rust implementation of curgrid_covered_above
 extern bool rs_curgrid_covered_above(int row);
 
@@ -316,34 +328,12 @@ void ui_comp_raise_grid(ScreenGrid *grid, size_t new_index)
   rs_ui_comp_raise_grid(grid, new_index);
 }
 
+// Rust implementation of ui_comp_grid_cursor_goto
+extern void rs_ui_comp_grid_cursor_goto(Integer grid_handle, Integer r, Integer c);
+
 void ui_comp_grid_cursor_goto(Integer grid_handle, Integer r, Integer c)
 {
-  if (!ui_comp_set_grid((int)grid_handle)) {
-    return;
-  }
-  int cursor_row = curgrid->comp_row + (int)r;
-  int cursor_col = curgrid->comp_col + (int)c;
-
-  // TODO(bfredl): maybe not the best time to do this, for efficiency we
-  // should configure all grids before entering win_update()
-  if (curgrid != &default_grid) {
-    size_t new_index = kv_size(layers) - 1;
-
-    while (new_index > 1 && kv_A(layers, new_index)->zindex > curgrid->zindex) {
-      new_index--;
-    }
-
-    if (curgrid->comp_index < new_index) {
-      ui_comp_raise_grid(curgrid, new_index);
-    }
-  }
-
-  if (cursor_col >= default_grid.cols || cursor_row >= default_grid.rows) {
-    // TODO(bfredl): this happens with 'writedelay', refactor?
-    // abort();
-    return;
-  }
-  ui_composed_call_grid_cursor_goto(1, cursor_row, cursor_col);
+  rs_ui_comp_grid_cursor_goto(grid_handle, r, c);
 }
 
 ScreenGrid *ui_comp_mouse_focus(int row, int col)
