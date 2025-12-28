@@ -2530,18 +2530,13 @@ void redraw_buf_status_later(buf_T *buf)
   }
 }
 
+// Rust implementation of status_redraw_all
+extern void rs_status_redraw_all(void);
+
 /// Mark all status lines and window bars for redraw; used after first :cd
 void status_redraw_all(void)
 {
-  bool is_stl_global = global_stl_height() != 0;
-
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if ((!is_stl_global && wp->w_status_height) || wp == curwin
-        || wp->w_winbar_height) {
-      wp->w_redr_status = true;
-      redraw_later(wp, UPD_VALID);
-    }
-  }
+  rs_status_redraw_all();
 }
 
 /// Marks all status lines and window bars of the current buffer for redraw.

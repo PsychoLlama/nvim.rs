@@ -30,6 +30,9 @@ pub enum WindowCorner {
 /// Highlight group for WinSeparator (HLF_C in C).
 pub const HLF_C: c_int = 39;
 
+/// UPD_VALID constant from screen.h - redraw when scrolled or text changed
+const UPD_VALID: c_int = 20;
+
 // C accessor functions for window fields
 extern "C" {
     fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
@@ -49,6 +52,15 @@ extern "C" {
     fn nvim_win_get_fcs_horizup(wp: WinHandle) -> ScharT;
     fn nvim_win_get_fcs_horizdown(wp: WinHandle) -> ScharT;
     fn nvim_win_hl_attr(wp: WinHandle, hlf: c_int) -> c_int;
+
+    // Window iteration accessors
+    fn nvim_get_firstwin() -> WinHandle;
+    fn nvim_get_curwin() -> WinHandle;
+    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
+    fn nvim_win_get_status_height(wp: WinHandle) -> c_int;
+    fn nvim_win_get_winbar_height(wp: WinHandle) -> c_int;
+    fn nvim_win_set_redr_status(wp: WinHandle, val: c_int);
+    fn redraw_later(wp: WinHandle, redraw_type: c_int);
 
     // Global functions
     fn global_stl_height() -> c_int;
@@ -420,6 +432,52 @@ fn draw_sep_connectors_win_impl(wp: WinHandle) {
 #[no_mangle]
 pub extern "C" fn rs_draw_sep_connectors_win(wp: WinHandle) {
     draw_sep_connectors_win_impl(wp);
+}
+
+// =============================================================================
+// Status Line Redraw Functions
+// =============================================================================
+
+/// Mark all status lines and window bars for redraw.
+///
+/// This is the Rust equivalent of `status_redraw_all()` in drawscreen.c.
+/// Used after first :cd or when global statusline configuration changes.
+///
+/// Iterates through all windows in the current tab and marks them for
+/// status line redraw if:
+/// - The window has a local statusline (!is_stl_global && has status height), OR
+/// - The window is the current window, OR
+/// - The window has a winbar
+fn status_redraw_all_impl() {
+    unsafe {
+        let is_stl_global = global_stl_height() != 0;
+        let curwin = nvim_get_curwin();
+
+        // FOR_ALL_WINDOWS_IN_TAB(wp, curtab) - iterate windows in current tab
+        let mut wp = nvim_get_firstwin();
+        while !wp.is_null() {
+            let status_h = nvim_win_get_status_height(wp);
+            let winbar_h = nvim_win_get_winbar_height(wp);
+
+            // Mark for redraw if:
+            // 1. Local statusline (not global) and window has status height, OR
+            // 2. This is the current window (for global statusline), OR
+            // 3. Window has a winbar
+            if (!is_stl_global && status_h > 0) || wp == curwin || winbar_h > 0 {
+                nvim_win_set_redr_status(wp, 1);
+                redraw_later(wp, UPD_VALID);
+            }
+            wp = nvim_win_get_next(wp);
+        }
+    }
+}
+
+/// FFI wrapper for `status_redraw_all`.
+///
+/// Marks all status lines and window bars in the current tab for redraw.
+#[no_mangle]
+pub extern "C" fn rs_status_redraw_all() {
+    status_redraw_all_impl();
 }
 
 #[cfg(test)]
