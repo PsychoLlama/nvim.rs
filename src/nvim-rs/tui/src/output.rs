@@ -151,6 +151,29 @@ extern "C" {
     fn schar_cache_clear_if_full() -> bool;
 }
 
+// Terminfo output infrastructure - these will be used in Phase 3
+#[allow(dead_code)]
+extern "C" {
+    fn nvim_tui_out(tui: *mut TuiHandle, str: *const u8, len: usize);
+    fn nvim_tui_terminfo_out(tui: *mut TuiHandle, what: c_int);
+    fn nvim_tui_terminfo_print_num1(tui: *mut TuiHandle, what: c_int, num1: c_int);
+    fn nvim_tui_terminfo_print_num2(tui: *mut TuiHandle, what: c_int, num1: c_int, num2: c_int);
+    fn nvim_tui_get_grid_row(tui: *mut TuiHandle) -> c_int;
+    fn nvim_tui_get_grid_col(tui: *mut TuiHandle) -> c_int;
+    fn nvim_tui_get_url(tui: *mut TuiHandle) -> c_int;
+    fn nvim_tui_set_url(tui: *mut TuiHandle, url: c_int);
+    fn nvim_tui_get_print_attr_id(tui: *mut TuiHandle) -> c_int;
+    fn nvim_tui_get_immediate_wrap(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_cursor_goto(tui: *mut TuiHandle, row: c_int, col: c_int);
+    fn nvim_tui_update_attrs(tui: *mut TuiHandle, attr_id: c_int);
+    fn nvim_tui_get_can_clear_attr(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_get_can_erase_chars(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_get_set_default_colors(tui: *mut TuiHandle) -> bool;
+
+    // UGrid goto (already in Rust ugrid crate, called via C wrapper)
+    fn ugrid_goto(grid: *mut UGridHandle, row: c_int, col: c_int);
+}
+
 /// Set cursor position for the grid.
 ///
 /// This function stores the cursor row and column position in the TUIData struct.

@@ -384,6 +384,107 @@ void nvim_tui_out_resize(TUIData *tui, int height, int width)
   out_printf(tui, 64, "\x1b[8;%d;%dt", height, width);
 }
 
+// ============================================================================
+// Terminfo Output Infrastructure for Rust
+// ============================================================================
+
+// Forward declarations for output functions defined later
+static void out(TUIData *tui, const char *str, size_t len);
+static void terminfo_out(TUIData *tui, TerminfoDef what);
+static void terminfo_print_num(TUIData *tui, TerminfoDef what, int num1, int num2, int num3);
+static void cursor_goto(TUIData *tui, int row, int col);
+static void update_attrs(TUIData *tui, int attr_id);
+
+/// Write raw bytes to output buffer
+void nvim_tui_out(TUIData *tui, const char *str, size_t len)
+{
+  out(tui, str, len);
+}
+
+/// Output a terminfo escape sequence
+void nvim_tui_terminfo_out(TUIData *tui, int what)
+{
+  terminfo_out(tui, (TerminfoDef)what);
+}
+
+/// Output a terminfo escape sequence with 1 parameter
+void nvim_tui_terminfo_print_num1(TUIData *tui, int what, int num1)
+{
+  terminfo_print_num(tui, (TerminfoDef)what, num1, 0, 0);
+}
+
+/// Output a terminfo escape sequence with 2 parameters
+void nvim_tui_terminfo_print_num2(TUIData *tui, int what, int num1, int num2)
+{
+  terminfo_print_num(tui, (TerminfoDef)what, num1, num2, 0);
+}
+
+/// Get grid row position
+int nvim_tui_get_grid_row(TUIData *tui)
+{
+  return tui->grid.row;
+}
+
+/// Get grid col position
+int nvim_tui_get_grid_col(TUIData *tui)
+{
+  return tui->grid.col;
+}
+
+/// Get url index
+int nvim_tui_get_url(TUIData *tui)
+{
+  return tui->url;
+}
+
+/// Set url index
+void nvim_tui_set_url(TUIData *tui, int url)
+{
+  tui->url = url;
+}
+
+/// Get print_attr_id
+int nvim_tui_get_print_attr_id(TUIData *tui)
+{
+  return tui->print_attr_id;
+}
+
+/// Get immediate_wrap_after_last_column flag
+bool nvim_tui_get_immediate_wrap(TUIData *tui)
+{
+  return tui->immediate_wrap_after_last_column;
+}
+
+/// Wrapper for cursor_goto callable from Rust
+void nvim_tui_cursor_goto(TUIData *tui, int row, int col)
+{
+  cursor_goto(tui, row, col);
+}
+
+/// Wrapper for update_attrs callable from Rust
+void nvim_tui_update_attrs(TUIData *tui, int attr_id)
+{
+  update_attrs(tui, attr_id);
+}
+
+/// Get can_clear_attr flag
+bool nvim_tui_get_can_clear_attr(TUIData *tui)
+{
+  return tui->can_clear_attr;
+}
+
+/// Get can_erase_chars flag
+bool nvim_tui_get_can_erase_chars(TUIData *tui)
+{
+  return tui->can_erase_chars;
+}
+
+/// Get set_default_colors flag
+bool nvim_tui_get_set_default_colors(TUIData *tui)
+{
+  return tui->set_default_colors;
+}
+
 #define TERMINFO_SEQ_LIMIT 128
 
 #define terminfo_print_num1(tui, what, num) terminfo_print_num(tui, what, num, 0, 0)
