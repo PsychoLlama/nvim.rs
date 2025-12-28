@@ -287,6 +287,12 @@ win_T *nvim_get_curwin(void)
   return curwin;
 }
 
+/// Get the current window's grid_alloc (accessor for Rust).
+ScreenGrid *nvim_get_curwin_grid_alloc(void)
+{
+  return curwin ? &curwin->w_grid_alloc : NULL;
+}
+
 /// Get the first window in the current tab (accessor for Rust).
 win_T *nvim_get_firstwin(void)
 {

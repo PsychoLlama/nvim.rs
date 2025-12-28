@@ -85,11 +85,19 @@ extern "C" {
     // Grid modification accessors
     fn nvim_layers_set(i: usize, grid: ScreenGridHandle);
     fn nvim_layers_pop();
+    fn nvim_layers_push(grid: ScreenGridHandle);
     fn nvim_screengrid_set_comp_index(grid: ScreenGridHandle, val: usize);
     fn nvim_screengrid_set_pending_comp_index_update(grid: ScreenGridHandle, val: bool);
+    fn nvim_screengrid_set_comp_row(grid: ScreenGridHandle, val: c_int);
+    fn nvim_screengrid_set_comp_col(grid: ScreenGridHandle, val: c_int);
+    fn nvim_screengrid_set_comp_width(grid: ScreenGridHandle, val: c_int);
+    fn nvim_screengrid_set_comp_height(grid: ScreenGridHandle, val: c_int);
+    fn nvim_screengrid_set_comp_disabled(grid: ScreenGridHandle, val: bool);
+    fn nvim_screengrid_get_zindex(grid: ScreenGridHandle) -> c_int;
 
-    // Default grid accessor
+    // Default grid and curwin grid accessors
     fn nvim_get_default_grid() -> ScreenGridHandle;
+    fn nvim_get_curwin_grid_alloc() -> ScreenGridHandle;
 
     // Composition function
     fn nvim_compose_area(startrow: c_int, endrow: c_int, startcol: c_int, endcol: c_int);
@@ -336,6 +344,151 @@ fn ui_comp_remove_grid_impl(grid: ScreenGridHandle) {
 #[no_mangle]
 pub extern "C" fn rs_ui_comp_remove_grid(grid: ScreenGridHandle) {
     ui_comp_remove_grid_impl(grid);
+}
+
+/// Put a grid at a specific position in the compositor.
+///
+/// If the grid is already in the layer stack, it will be moved to the new position.
+/// If the grid is new, it will be inserted at the appropriate z-index position.
+///
+/// Returns true if the grid position changed.
+#[allow(clippy::too_many_arguments)]
+fn ui_comp_put_grid_impl(
+    grid: ScreenGridHandle,
+    row: c_int,
+    col: c_int,
+    height: c_int,
+    width: c_int,
+    valid: bool,
+    on_top: bool,
+) -> bool {
+    unsafe {
+        nvim_screengrid_set_pending_comp_index_update(grid, true);
+        nvim_screengrid_set_comp_height(grid, height);
+        nvim_screengrid_set_comp_width(grid, width);
+
+        let comp_index = nvim_screengrid_get_comp_index(grid);
+        let moved: bool;
+
+        if comp_index != 0 {
+            // Grid is already in layers - check if it moved
+            let old_row = nvim_screengrid_get_comp_row(grid);
+            let old_col = nvim_screengrid_get_comp_col(grid);
+            moved = row != old_row || col != old_col;
+
+            if ui_comp_should_draw_impl() {
+                // Redraw the area covered by the old position that is not covered
+                // by the new position. Disable the grid so compose_area won't use it.
+                let grid_rows = nvim_screengrid_get_rows(grid);
+                let grid_cols = nvim_screengrid_get_cols(grid);
+
+                nvim_screengrid_set_comp_disabled(grid, true);
+
+                // Top area (above new position)
+                nvim_compose_area(old_row, row, old_col, old_col + grid_cols);
+
+                // Left area (between old and new, vertically overlapping)
+                if old_col < col {
+                    nvim_compose_area(
+                        row.max(old_row),
+                        (row + height).min(old_row + grid_rows),
+                        old_col,
+                        col,
+                    );
+                }
+
+                // Right area (between old and new, vertically overlapping)
+                if col + width < old_col + grid_cols {
+                    nvim_compose_area(
+                        row.max(old_row),
+                        (row + height).min(old_row + grid_rows),
+                        col + width,
+                        old_col + grid_cols,
+                    );
+                }
+
+                // Bottom area (below new position)
+                nvim_compose_area(row + height, old_row + grid_rows, old_col, old_col + grid_cols);
+
+                nvim_screengrid_set_comp_disabled(grid, false);
+            }
+
+            nvim_screengrid_set_comp_row(grid, row);
+            nvim_screengrid_set_comp_col(grid, col);
+        } else {
+            // New grid - find insertion point based on z-index
+            moved = true;
+            let layers_size = nvim_layers_size();
+            let mut insert_at = layers_size;
+            let grid_zindex = nvim_screengrid_get_zindex(grid);
+
+            // Find the right position based on z-index
+            while insert_at > 0 {
+                let prev_grid = nvim_layers_get(insert_at - 1);
+                let prev_zindex = nvim_screengrid_get_zindex(prev_grid);
+                if prev_zindex <= grid_zindex {
+                    break;
+                }
+                insert_at -= 1;
+            }
+
+            // Special case: if inserting after curwin's grid with same z-index and not on_top
+            let curwin_grid = nvim_get_curwin_grid_alloc();
+            if !curwin_grid.is_null() && insert_at > 0 {
+                let prev_grid = nvim_layers_get(insert_at - 1);
+                let prev_zindex = nvim_screengrid_get_zindex(prev_grid);
+                if prev_grid.0 == curwin_grid.0 && prev_zindex == grid_zindex && !on_top {
+                    insert_at -= 1;
+                }
+            }
+
+            // Push a new slot and shift grids to make room
+            nvim_layers_push(grid); // This just adds space
+            let new_size = nvim_layers_size();
+            for i in (insert_at + 1..new_size).rev() {
+                let prev = nvim_layers_get(i - 1);
+                nvim_layers_set(i, prev);
+                nvim_screengrid_set_comp_index(prev, i);
+                nvim_screengrid_set_pending_comp_index_update(prev, true);
+            }
+            nvim_layers_set(insert_at, grid);
+
+            nvim_screengrid_set_comp_row(grid, row);
+            nvim_screengrid_set_comp_col(grid, col);
+            nvim_screengrid_set_comp_index(grid, insert_at);
+            nvim_screengrid_set_pending_comp_index_update(grid, true);
+        }
+
+        // Compose the new grid area if it moved and is valid
+        if moved && valid && ui_comp_should_draw_impl() {
+            let grid_rows = nvim_screengrid_get_rows(grid);
+            let grid_cols = nvim_screengrid_get_cols(grid);
+            let comp_row = nvim_screengrid_get_comp_row(grid);
+            let comp_col = nvim_screengrid_get_comp_col(grid);
+            nvim_compose_area(comp_row, comp_row + grid_rows, comp_col, comp_col + grid_cols);
+        }
+
+        moved
+    }
+}
+
+/// FFI wrapper for `ui_comp_put_grid`.
+///
+/// Puts a grid at a specific position in the compositor.
+///
+/// # Safety
+/// This function modifies global compositor state.
+#[no_mangle]
+pub extern "C" fn rs_ui_comp_put_grid(
+    grid: ScreenGridHandle,
+    row: c_int,
+    col: c_int,
+    height: c_int,
+    width: c_int,
+    valid: bool,
+    on_top: bool,
+) -> bool {
+    ui_comp_put_grid_impl(grid, row, col, height, width, valid, on_top)
 }
 
 #[cfg(test)]

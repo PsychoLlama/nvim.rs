@@ -119,6 +119,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 - `ui_comp_compose_grid` - Migrated to Rust (rs_ui_comp_compose_grid) - Compose a grid's area onto the screen
 - `ui_comp_raise_grid` - Migrated to Rust (rs_ui_comp_raise_grid) - Raise grid in layer stack
 - `ui_comp_remove_grid` - Migrated to Rust (rs_ui_comp_remove_grid) - Remove grid from layer stack
+- `ui_comp_put_grid` - Migrated to Rust (rs_ui_comp_put_grid) - Place grid at position in compositor
 
 **window.c** (remaining):
 - `tabpage_win_valid` - Window in tabpage validation

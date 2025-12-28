@@ -280,80 +280,16 @@ void ui_comp_layers_adjust(size_t layer_idx, bool raise)
 /// Adds `grid` as the top layer if it is a new layer.
 ///
 /// TODO(bfredl): later on the compositor should just use win_float_pos events,
+// Rust implementation of ui_comp_put_grid
+extern bool rs_ui_comp_put_grid(ScreenGrid *grid, int row, int col, int height, int width,
+                                bool valid, bool on_top);
+
 /// though that will require slight event order adjustment: emit the win_pos
 /// events in the beginning of update_screen(), rather than in ui_flush()
 bool ui_comp_put_grid(ScreenGrid *grid, int row, int col, int height, int width, bool valid,
                       bool on_top)
 {
-  bool moved;
-  grid->pending_comp_index_update = true;
-
-  grid->comp_height = height;
-  grid->comp_width = width;
-  if (grid->comp_index != 0) {
-    moved = (row != grid->comp_row) || (col != grid->comp_col);
-    if (ui_comp_should_draw()) {
-      // Redraw the area covered by the old position, and is not covered
-      // by the new position. Disable the grid so that compose_area() will not
-      // use it.
-      grid->comp_disabled = true;
-      compose_area(grid->comp_row, row,
-                   grid->comp_col, grid->comp_col + grid->cols);
-      if (grid->comp_col < col) {
-        compose_area(MAX(row, grid->comp_row),
-                     MIN(row + height, grid->comp_row + grid->rows),
-                     grid->comp_col, col);
-      }
-      if (col + width < grid->comp_col + grid->cols) {
-        compose_area(MAX(row, grid->comp_row),
-                     MIN(row + height, grid->comp_row + grid->rows),
-                     col + width, grid->comp_col + grid->cols);
-      }
-      compose_area(row + height, grid->comp_row + grid->rows,
-                   grid->comp_col, grid->comp_col + grid->cols);
-      grid->comp_disabled = false;
-    }
-    grid->comp_row = row;
-    grid->comp_col = col;
-  } else {
-    moved = true;
-#ifndef NDEBUG
-    for (size_t i = 0; i < kv_size(layers); i++) {
-      if (kv_A(layers, i) == grid) {
-        abort();
-      }
-    }
-#endif
-
-    size_t insert_at = kv_size(layers);
-    while (insert_at > 0 && kv_A(layers, insert_at - 1)->zindex > grid->zindex) {
-      insert_at--;
-    }
-
-    if (curwin && kv_A(layers, insert_at - 1) == &curwin->w_grid_alloc
-        && kv_A(layers, insert_at - 1)->zindex == grid->zindex
-        && !on_top) {
-      insert_at--;
-    }
-    // not found: new grid
-    kv_pushp(layers);
-    for (size_t i = kv_size(layers) - 1; i > insert_at; i--) {
-      kv_A(layers, i) = kv_A(layers, i - 1);
-      kv_A(layers, i)->comp_index = i;
-      kv_A(layers, i)->pending_comp_index_update = true;
-    }
-    kv_A(layers, insert_at) = grid;
-
-    grid->comp_row = row;
-    grid->comp_col = col;
-    grid->comp_index = insert_at;
-    grid->pending_comp_index_update = true;
-  }
-  if (moved && valid && ui_comp_should_draw()) {
-    compose_area(grid->comp_row, grid->comp_row + grid->rows,
-                 grid->comp_col, grid->comp_col + grid->cols);
-  }
-  return moved;
+  return rs_ui_comp_put_grid(grid, row, col, height, width, valid, on_top);
 }
 
 // Rust implementation of ui_comp_remove_grid
