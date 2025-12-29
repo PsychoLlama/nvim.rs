@@ -315,6 +315,10 @@ Functions blocked on missing accessor infrastructure:
 - `qf_stack_empty` - Migrated to Rust (rs_qf_stack_empty) - checks if quickfix stack is empty
 - `qf_list_empty` - Migrated to Rust (rs_qf_list_empty) - checks if quickfix list is empty
 - `qf_list_has_valid_entries` - Migrated to Rust (rs_qf_list_has_valid_entries) - checks for valid entries
+- `qf_entry_after_pos` - Migrated to Rust (rs_qf_entry_after_pos) - checks if entry is after position
+- `qf_entry_before_pos` - Migrated to Rust (rs_qf_entry_before_pos) - checks if entry is before position
+- `qf_entry_on_or_after_pos` - Migrated to Rust (rs_qf_entry_on_or_after_pos) - checks if entry is on or after position
+- `qf_entry_on_or_before_pos` - Migrated to Rust (rs_qf_entry_on_or_before_pos) - checks if entry is on or before position
 
 **ex_eval.c** (exception handling functions):
 - `aborted_in_try` - Migrated to Rust (rs_aborted_in_try) - checks force_abort flag
