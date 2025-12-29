@@ -8,10 +8,17 @@ use std::ffi::{c_int, c_void};
 // External C accessor functions
 // =============================================================================
 
+/// Line number type (matches `linenr_T` in Neovim)
+type LinenrT = i32;
+
 extern "C" {
     fn nvim_qf_get_listcount(qi: *const c_void) -> c_int;
     fn nvim_qf_get_count(qfl: *const c_void) -> c_int;
     fn nvim_qf_get_nonevalid(qfl: *const c_void) -> bool;
+    fn nvim_qfline_get_lnum(qfp: *const c_void) -> LinenrT;
+    fn nvim_qfline_get_col(qfp: *const c_void) -> c_int;
+    fn nvim_pos_get_lnum(pos: *const c_void) -> LinenrT;
+    fn nvim_pos_get_col(pos: *const c_void) -> c_int;
 }
 
 // =============================================================================
@@ -69,6 +76,122 @@ pub unsafe extern "C" fn rs_qf_list_has_valid_entries(qfl: *const c_void) -> boo
     }
     // Has valid entries if list is not empty and not marked as nonevalid
     !rs_qf_list_empty(qfl) && !nvim_qf_get_nonevalid(qfl)
+}
+
+// =============================================================================
+// Quickfix Entry Position Functions
+// =============================================================================
+
+/// Returns true if the specified quickfix entry is after the given position.
+///
+/// If `linewise` is true, compares only line numbers.
+/// Otherwise, compares both line and column.
+///
+/// # Safety
+///
+/// - `qfp` must be a valid pointer to a `qfline_T` struct
+/// - `pos` must be a valid pointer to a `pos_T` struct
+#[no_mangle]
+#[allow(clippy::suspicious_operation_groupings)]
+pub unsafe extern "C" fn rs_qf_entry_after_pos(
+    qfp: *const c_void,
+    pos: *const c_void,
+    linewise: bool,
+) -> bool {
+    let qf_lnum = nvim_qfline_get_lnum(qfp);
+    let pos_lnum = nvim_pos_get_lnum(pos);
+
+    if linewise {
+        return qf_lnum > pos_lnum;
+    }
+
+    let qf_col = nvim_qfline_get_col(qfp);
+    let pos_col = nvim_pos_get_col(pos);
+    qf_lnum > pos_lnum || (qf_lnum == pos_lnum && qf_col > pos_col)
+}
+
+/// Returns true if the specified quickfix entry is before the given position.
+///
+/// If `linewise` is true, compares only line numbers.
+/// Otherwise, compares both line and column.
+///
+/// # Safety
+///
+/// - `qfp` must be a valid pointer to a `qfline_T` struct
+/// - `pos` must be a valid pointer to a `pos_T` struct
+#[no_mangle]
+#[allow(clippy::suspicious_operation_groupings)]
+pub unsafe extern "C" fn rs_qf_entry_before_pos(
+    qfp: *const c_void,
+    pos: *const c_void,
+    linewise: bool,
+) -> bool {
+    let qf_lnum = nvim_qfline_get_lnum(qfp);
+    let pos_lnum = nvim_pos_get_lnum(pos);
+
+    if linewise {
+        return qf_lnum < pos_lnum;
+    }
+
+    let qf_col = nvim_qfline_get_col(qfp);
+    let pos_col = nvim_pos_get_col(pos);
+    qf_lnum < pos_lnum || (qf_lnum == pos_lnum && qf_col < pos_col)
+}
+
+/// Returns true if the specified quickfix entry is on or after the given position.
+///
+/// If `linewise` is true, compares only line numbers.
+/// Otherwise, compares both line and column.
+///
+/// # Safety
+///
+/// - `qfp` must be a valid pointer to a `qfline_T` struct
+/// - `pos` must be a valid pointer to a `pos_T` struct
+#[no_mangle]
+#[allow(clippy::suspicious_operation_groupings)]
+pub unsafe extern "C" fn rs_qf_entry_on_or_after_pos(
+    qfp: *const c_void,
+    pos: *const c_void,
+    linewise: bool,
+) -> bool {
+    let qf_lnum = nvim_qfline_get_lnum(qfp);
+    let pos_lnum = nvim_pos_get_lnum(pos);
+
+    if linewise {
+        return qf_lnum >= pos_lnum;
+    }
+
+    let qf_col = nvim_qfline_get_col(qfp);
+    let pos_col = nvim_pos_get_col(pos);
+    qf_lnum > pos_lnum || (qf_lnum == pos_lnum && qf_col >= pos_col)
+}
+
+/// Returns true if the specified quickfix entry is on or before the given position.
+///
+/// If `linewise` is true, compares only line numbers.
+/// Otherwise, compares both line and column.
+///
+/// # Safety
+///
+/// - `qfp` must be a valid pointer to a `qfline_T` struct
+/// - `pos` must be a valid pointer to a `pos_T` struct
+#[no_mangle]
+#[allow(clippy::suspicious_operation_groupings)]
+pub unsafe extern "C" fn rs_qf_entry_on_or_before_pos(
+    qfp: *const c_void,
+    pos: *const c_void,
+    linewise: bool,
+) -> bool {
+    let qf_lnum = nvim_qfline_get_lnum(qfp);
+    let pos_lnum = nvim_pos_get_lnum(pos);
+
+    if linewise {
+        return qf_lnum <= pos_lnum;
+    }
+
+    let qf_col = nvim_qfline_get_col(qfp);
+    let pos_col = nvim_pos_get_col(pos);
+    qf_lnum < pos_lnum || (qf_lnum == pos_lnum && qf_col <= pos_col)
 }
 
 #[cfg(test)]

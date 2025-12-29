@@ -195,7 +195,39 @@ bool nvim_qf_get_nonevalid(const void *qfl_void)
   return qfl->qf_nonevalid;
 }
 
+/// Get line number from qfline_T for Rust
+linenr_T nvim_qfline_get_lnum(const void *qfp_void)
+{
+  const qfline_T *qfp = (const qfline_T *)qfp_void;
+  return qfp->qf_lnum;
+}
+
+/// Get column from qfline_T for Rust
+int nvim_qfline_get_col(const void *qfp_void)
+{
+  const qfline_T *qfp = (const qfline_T *)qfp_void;
+  return qfp->qf_col;
+}
+
+/// Get line number from pos_T for Rust
+linenr_T nvim_pos_get_lnum(const void *pos_void)
+{
+  const pos_T *pos = (const pos_T *)pos_void;
+  return pos->lnum;
+}
+
+/// Get column from pos_T for Rust
+int nvim_pos_get_col(const void *pos_void)
+{
+  const pos_T *pos = (const pos_T *)pos_void;
+  return pos->col;
+}
+
 extern bool rs_qf_list_has_valid_entries(const void *qfl);
+extern bool rs_qf_entry_after_pos(const void *qfp, const void *pos, bool linewise);
+extern bool rs_qf_entry_before_pos(const void *qfp, const void *pos, bool linewise);
+extern bool rs_qf_entry_on_or_after_pos(const void *qfp, const void *pos, bool linewise);
+extern bool rs_qf_entry_on_or_before_pos(const void *qfp, const void *pos, bool linewise);
 
 #define FMT_PATTERNS 14           // maximum number of % recognized
 
@@ -5048,11 +5080,7 @@ static qfline_T *qf_find_last_entry_on_line(qfline_T *entry, int *errornr)
 static bool qf_entry_after_pos(const qfline_T *qfp, const pos_T *pos, bool linewise)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (linewise) {
-    return qfp->qf_lnum > pos->lnum;
-  }
-  return qfp->qf_lnum > pos->lnum
-         || (qfp->qf_lnum == pos->lnum && qfp->qf_col > pos->col);
+  return rs_qf_entry_after_pos(qfp, pos, linewise);
 }
 
 // Returns true if the specified quickfix entry is
@@ -5061,11 +5089,7 @@ static bool qf_entry_after_pos(const qfline_T *qfp, const pos_T *pos, bool linew
 static bool qf_entry_before_pos(const qfline_T *qfp, const pos_T *pos, bool linewise)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (linewise) {
-    return qfp->qf_lnum < pos->lnum;
-  }
-  return qfp->qf_lnum < pos->lnum
-         || (qfp->qf_lnum == pos->lnum && qfp->qf_col < pos->col);
+  return rs_qf_entry_before_pos(qfp, pos, linewise);
 }
 
 // Returns true if the specified quickfix entry is
@@ -5074,11 +5098,7 @@ static bool qf_entry_before_pos(const qfline_T *qfp, const pos_T *pos, bool line
 static bool qf_entry_on_or_after_pos(const qfline_T *qfp, const pos_T *pos, bool linewise)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (linewise) {
-    return qfp->qf_lnum >= pos->lnum;
-  }
-  return qfp->qf_lnum > pos->lnum
-         || (qfp->qf_lnum == pos->lnum && qfp->qf_col >= pos->col);
+  return rs_qf_entry_on_or_after_pos(qfp, pos, linewise);
 }
 
 // Returns true if the specified quickfix entry is
@@ -5087,11 +5107,7 @@ static bool qf_entry_on_or_after_pos(const qfline_T *qfp, const pos_T *pos, bool
 static bool qf_entry_on_or_before_pos(const qfline_T *qfp, const pos_T *pos, bool linewise)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (linewise) {
-    return qfp->qf_lnum <= pos->lnum;
-  }
-  return qfp->qf_lnum < pos->lnum
-         || (qfp->qf_lnum == pos->lnum && qfp->qf_col <= pos->col);
+  return rs_qf_entry_on_or_before_pos(qfp, pos, linewise);
 }
 
 /// Find the first quickfix entry after position 'pos' in buffer 'bnr'.
