@@ -92,6 +92,7 @@ extern bool rs_eval_isdictc(int c);
 extern const char *rs_skip_luafunc_name(const char *p);
 extern int rs_check_luafunc_name(const char *str, bool paren);
 extern var_flavour_T rs_var_flavour(const char *varname);
+extern int rs_eval_expr_valid_arg(const typval_T *tv);
 
 // Rust implementation in nvim-event crate
 extern MultiQueue *rs_loop_get_events(Loop *loop);
@@ -304,8 +305,7 @@ static int eval1_emsg(char **arg, typval_T *rettv, exarg_T *eap)
 bool eval_expr_valid_arg(const typval_T *const tv)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_CONST
 {
-  return tv->v_type != VAR_UNKNOWN
-         && (tv->v_type != VAR_STRING || (tv->vval.v_string != NULL && *tv->vval.v_string != NUL));
+  return rs_eval_expr_valid_arg(tv) != 0;
 }
 
 /// Evaluate a partial.

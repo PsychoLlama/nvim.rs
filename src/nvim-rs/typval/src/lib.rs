@@ -1674,6 +1674,43 @@ pub extern "C" fn rs_tv_check_str_or_nr(tv: TypevalHandle) -> bool {
     tv_check_str_or_nr_impl(tv)
 }
 
+// =============================================================================
+// Expression validity checking
+// =============================================================================
+
+/// Check if a typval is a valid expression to pass to eval_expr_typval()
+/// or eval_expr_to_bool(). An empty string returns false.
+///
+/// Returns true if:
+/// - v_type is not VAR_UNKNOWN AND
+/// - Either v_type is not VAR_STRING, OR the string is non-NULL and non-empty
+#[inline]
+fn eval_expr_valid_arg_impl(tv: TypevalHandle) -> bool {
+    if tv.is_null() {
+        return false;
+    }
+    let t = tv_type_impl(tv);
+    if t == VarType::Unknown {
+        return false;
+    }
+    if t != VarType::String {
+        return true;
+    }
+    // For strings, check that it's non-NULL and non-empty
+    let s = unsafe { nvim_tv_get_string_ptr(tv) };
+    if s.is_null() {
+        return false;
+    }
+    // Check first byte is not NUL (empty string)
+    unsafe { *s != 0 }
+}
+
+/// FFI wrapper: check if typval is a valid expression argument.
+#[no_mangle]
+pub extern "C" fn rs_eval_expr_valid_arg(tv: TypevalHandle) -> c_int {
+    c_int::from(eval_expr_valid_arg_impl(tv))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
