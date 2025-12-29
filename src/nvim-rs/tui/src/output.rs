@@ -225,6 +225,10 @@ extern "C" {
     fn nvim_tui_get_title_enabled(tui: *mut TuiHandle) -> bool;
     fn nvim_tui_set_title_enabled(tui: *mut TuiHandle, enabled: bool);
     fn nvim_tui_get_buf_space(tui: *mut TuiHandle) -> usize;
+
+    // Extended underline accessors
+    fn nvim_tui_set_can_set_underline_color(tui: *mut TuiHandle, val: bool);
+    fn nvim_tui_terminfo_set_underline_style(tui: *mut TuiHandle);
 }
 
 /// Set cursor position for the grid.
@@ -902,6 +906,31 @@ pub unsafe extern "C" fn rs_tui_set_title(tui: *mut TuiHandle, data: *const u8, 
         nvim_tui_out(tui, restore_seq.as_ptr(), restore_seq.len());
         nvim_tui_set_title_enabled(tui, false);
     }
+}
+
+// ============================================================================
+// Extended Underline Support
+// ============================================================================
+
+/// Enable extended underline support.
+///
+/// Sets up the terminal to use extended underline styles (wavy, dotted, etc.)
+/// and enables underline color support.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_enable_extended_underline(tui: *mut TuiHandle) {
+    if tui.is_null() {
+        return;
+    }
+
+    // Set the underline style terminfo capability if not already set
+    nvim_tui_terminfo_set_underline_style(tui);
+
+    // Enable underline color support
+    nvim_tui_set_can_set_underline_color(tui, true);
 }
 
 #[cfg(test)]

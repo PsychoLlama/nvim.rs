@@ -214,6 +214,7 @@ extern void rs_tui_grid_scroll(TUIData *tui, int64_t g, int64_t startrow, int64_
                                int64_t startcol, int64_t endcol, int64_t rows, int64_t cols);
 extern bool rs_tui_is_stopped(TUIData *tui);
 extern void rs_tui_set_title(TUIData *tui, const char *data, size_t size);
+extern void rs_tui_enable_extended_underline(TUIData *tui);
 
 // ============================================================================
 // TUIData Accessor Functions for Rust
@@ -637,6 +638,18 @@ size_t nvim_tui_get_buf_space(TUIData *tui)
   return sizeof(tui->buf) - tui->bufpos;
 }
 
+/// Set can_set_underline_color flag
+void nvim_tui_set_can_set_underline_color(TUIData *tui, bool val)
+{
+  tui->can_set_underline_color = val;
+}
+
+/// Wrapper for terminfo_set_if_empty (set underline style)
+void nvim_tui_terminfo_set_underline_style(TUIData *tui)
+{
+  terminfo_set_if_empty(tui, kTerm_set_underline_style, "\x1b[4:%p1%dm");
+}
+
 // Forward declaration for flush_buf
 static void flush_buf(TUIData *tui);
 
@@ -803,10 +816,10 @@ static void tui_query_extended_underline(TUIData *tui)
   tui->print_attr_id = -1;
 }
 
+/// Enable extended underline support. Rust implementation.
 void tui_enable_extended_underline(TUIData *tui)
 {
-  terminfo_set_if_empty(tui, kTerm_set_underline_style, "\x1b[4:%p1%dm");
-  tui->can_set_underline_color = true;
+  rs_tui_enable_extended_underline(tui);
 }
 
 /// Query the terminal emulator to see if it supports Kitty's keyboard protocol.
