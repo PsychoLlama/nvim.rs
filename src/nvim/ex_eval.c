@@ -39,6 +39,7 @@
 extern int rs_aborted_in_try(void);
 extern int rs_aborting(void);
 extern int rs_should_abort(int retcode);
+extern void rs_update_force_abort(void);
 
 static const char e_multiple_else[] = N_("E583: Multiple :else");
 static const char e_multiple_finally[] = N_("E607: Multiple :finally");
@@ -122,11 +123,10 @@ bool aborting(void)
 /// during an expression evaluation, and "cause_abort" is used instead.  It might
 /// be necessary to restore "force_abort" even before the throw point for the
 /// error message has been reached.  update_force_abort() should be called then.
+/// Update force_abort if cause_abort is set. Rust implementation.
 void update_force_abort(void)
 {
-  if (cause_abort) {
-    force_abort = true;
-  }
+  rs_update_force_abort();
 }
 
 /// @return  true if a command with a subcommand resulting in "retcode" should
@@ -2069,4 +2069,16 @@ int nvim_get_trylevel(void)
 int nvim_get_emsg_silent(void)
 {
   return emsg_silent;
+}
+
+/// C accessor for the global cause_abort variable (used by Rust FFI).
+int nvim_get_cause_abort(void)
+{
+  return cause_abort ? 1 : 0;
+}
+
+/// C setter for the global force_abort variable (used by Rust FFI).
+void nvim_set_force_abort(int val)
+{
+  force_abort = val != 0;
 }

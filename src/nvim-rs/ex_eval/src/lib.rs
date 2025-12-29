@@ -18,6 +18,8 @@ extern "C" {
     fn nvim_get_did_throw() -> c_int;
     fn nvim_get_trylevel() -> c_int;
     fn nvim_get_emsg_silent() -> c_int;
+    fn nvim_get_cause_abort() -> c_int;
+    fn nvim_set_force_abort(val: c_int);
 }
 
 /// FAIL constant from vim_defs.h
@@ -67,6 +69,17 @@ pub unsafe extern "C" fn rs_should_abort(retcode: c_int) -> c_int {
     let aborting = rs_aborting() != 0;
 
     c_int::from(fail_condition || aborting)
+}
+
+/// Update `force_abort` if `cause_abort` is set.
+///
+/// This is necessary to restore "force_abort" even before the throw point
+/// for the error message has been reached.
+#[no_mangle]
+pub unsafe extern "C" fn rs_update_force_abort() {
+    if nvim_get_cause_abort() != 0 {
+        nvim_set_force_abort(1);
+    }
 }
 
 #[cfg(test)]
