@@ -226,6 +226,7 @@ static int cedit_key = -1;  ///< key value of 'cedit' option
 extern int rs_cmdline_overstrike(void);
 extern int rs_cmdline_at_end(void);
 extern int rs_is_in_cmdwin(void);
+extern int rs_text_locked(void);
 
 static handle_T cmdpreview_bufnr = 0;
 static int cmdpreview_ns = 0;
@@ -3067,13 +3068,7 @@ int check_opt_wim(void)
 /// another window or buffer.  True when editing the command line etc.
 bool text_locked(void)
 {
-  if (cmdwin_type != 0) {
-    return true;
-  }
-  if (expr_map_locked()) {
-    return true;
-  }
-  return textlock != 0;
+  return rs_text_locked() != 0;
 }
 
 // Give an error message for a command that isn't allowed while the cmdline
@@ -5048,4 +5043,10 @@ int nvim_get_cmdwin_type(void)
 int nvim_get_cmdline_type(void)
 {
   return get_cmdline_type();
+}
+
+// C accessor for textlock global
+int nvim_get_textlock(void)
+{
+  return textlock;
 }

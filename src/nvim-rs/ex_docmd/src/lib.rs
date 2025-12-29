@@ -20,6 +20,8 @@ extern "C" {
     fn nvim_get_ex_pressedreturn() -> c_int;
     fn nvim_get_expr_map_lock() -> c_int;
     fn nvim_curbuf_is_dummy() -> c_int;
+    fn nvim_get_cmdwin_type() -> c_int;
+    fn nvim_get_textlock() -> c_int;
 }
 
 /// Check if character ends an Ex command.
@@ -191,6 +193,32 @@ pub unsafe extern "C" fn rs_expr_map_locked() -> c_int {
     let lock = nvim_get_expr_map_lock();
     let is_dummy = nvim_curbuf_is_dummy();
     c_int::from(lock > 0 && is_dummy == 0)
+}
+
+/// Check if text is locked.
+///
+/// Returns true when the text must not be changed and we can't switch to
+/// another window or buffer. True when editing the command line, etc.
+///
+/// This returns true if:
+/// - cmdwin_type != 0 (in command-line window)
+/// - expr_map_locked() is true (running expression mapping)
+/// - textlock != 0 (text editing is locked)
+///
+/// # Safety
+///
+/// Calls external C functions to access global variables.
+#[no_mangle]
+pub unsafe extern "C" fn rs_text_locked() -> c_int {
+    let cmdwin_type = nvim_get_cmdwin_type();
+    if cmdwin_type != 0 {
+        return 1;
+    }
+    if rs_expr_map_locked() != 0 {
+        return 1;
+    }
+    let textlock = nvim_get_textlock();
+    c_int::from(textlock != 0)
 }
 
 #[cfg(test)]

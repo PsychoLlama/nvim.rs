@@ -783,7 +783,8 @@ pub unsafe extern "C" fn rs_tui_grid_scroll(
     nvim_tui_ugrid_scroll(tui, top, bot, left, right, rows as c_int);
 
     // Check if we can use terminal scroll capabilities
-    let has_lr_margins = nvim_tui_get_has_lr_margin_mode(tui) && nvim_tui_get_can_set_lr_margin(tui);
+    let has_lr_margins =
+        nvim_tui_get_has_lr_margin_mode(tui) && nvim_tui_get_can_set_lr_margin(tui);
     let can_scroll = nvim_tui_get_can_scroll(tui)
         && (full_screen_scroll
             || (nvim_tui_get_can_change_scroll_region(tui)
@@ -820,7 +821,13 @@ pub unsafe extern "C" fn rs_tui_grid_scroll(
         } else {
             ((startrow - rows) as c_int, endrow as c_int)
         };
-        nvim_tui_invalidate_region(tui, inv_startrow, inv_endrow, startcol as c_int, endcol as c_int);
+        nvim_tui_invalidate_region(
+            tui,
+            inv_startrow,
+            inv_endrow,
+            startcol as c_int,
+            endcol as c_int,
+        );
     }
 }
 
