@@ -205,6 +205,7 @@ extern void rs_tui_set_icon(TUIData *tui);
 extern void rs_tui_mouse_on(TUIData *tui);
 extern void rs_tui_mouse_off(TUIData *tui);
 extern void rs_tui_update_menu(TUIData *tui);
+extern void rs_final_column_wrap(TUIData *tui);
 
 // ============================================================================
 // TUIData Accessor Functions for Rust
@@ -1338,15 +1339,10 @@ static void update_attrs(TUIData *tui, int attr_id)
                         && !strikethrough && (tui->bce || bg == -1);
 }
 
+/// Handle cursor wrapping at the final column. Rust implementation.
 static void final_column_wrap(TUIData *tui)
 {
-  UGrid *grid = &tui->grid;
-  if (grid->row != -1 && grid->col == tui->width) {
-    grid->col = 0;
-    if (grid->row < MIN(tui->height, grid->height - 1)) {
-      grid->row++;
-    }
-  }
+  rs_final_column_wrap(tui);
 }
 
 /// It is undocumented, but in the majority of terminals and terminal emulators

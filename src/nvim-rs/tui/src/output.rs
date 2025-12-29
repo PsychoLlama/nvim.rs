@@ -494,6 +494,39 @@ pub unsafe extern "C" fn rs_tui_mouse_off(tui: *mut TuiHandle) {
     }
 }
 
+// ============================================================================
+// Final Column Wrap
+// ============================================================================
+
+/// Handle cursor wrapping at the final column.
+///
+/// When printing at the right margin, the cursor stays in place until the
+/// next character is printed (in most terminals). This function handles the
+/// wrap when we're at the final column.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_final_column_wrap(tui: *mut TuiHandle) {
+    if tui.is_null() {
+        return;
+    }
+
+    let row = nvim_tui_get_grid_row(tui);
+    let col = nvim_tui_get_grid_col(tui);
+    let width = nvim_tui_get_width(tui);
+
+    if row != -1 && col == width {
+        let grid = nvim_tui_get_grid(tui);
+        let height = nvim_tui_get_height(tui);
+        let grid_height = nvim_tui_get_grid_height(tui);
+        let max_row = std::cmp::min(height, grid_height - 1);
+        let new_row = if row < max_row { row + 1 } else { row };
+        ugrid_goto(grid, new_row, 0);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
