@@ -188,6 +188,15 @@ int nvim_qf_get_count(const void *qfl_void)
   return qfl->qf_count;
 }
 
+/// Get nonevalid flag from qf_list_T for Rust (using void* to avoid type visibility issues)
+bool nvim_qf_get_nonevalid(const void *qfl_void)
+{
+  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
+  return qfl->qf_nonevalid;
+}
+
+extern bool rs_qf_list_has_valid_entries(const void *qfl);
+
 #define FMT_PATTERNS 14           // maximum number of % recognized
 
 // Structure used to hold the info of one part of 'errorformat'
@@ -955,10 +964,10 @@ static bool qf_list_empty(qf_list_T *qfl)
 }
 
 /// Returns true if the specified quickfix/location list is not empty and
-/// has valid entries.
+/// has valid entries. Rust implementation.
 static bool qf_list_has_valid_entries(qf_list_T *qfl)
 {
-  return !qf_list_empty(qfl) && !qfl->qf_nonevalid;
+  return rs_qf_list_has_valid_entries(qfl);
 }
 
 /// Return a pointer to a list in the specified quickfix stack

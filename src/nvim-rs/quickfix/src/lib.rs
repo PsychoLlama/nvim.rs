@@ -11,6 +11,7 @@ use std::ffi::{c_int, c_void};
 extern "C" {
     fn nvim_qf_get_listcount(qi: *const c_void) -> c_int;
     fn nvim_qf_get_count(qfl: *const c_void) -> c_int;
+    fn nvim_qf_get_nonevalid(qfl: *const c_void) -> bool;
 }
 
 // =============================================================================
@@ -51,6 +52,23 @@ pub unsafe extern "C" fn rs_qf_list_empty(qfl: *const c_void) -> bool {
         return true;
     }
     nvim_qf_get_count(qfl) <= 0
+}
+
+/// Returns true if the specified quickfix/location list has valid entries.
+///
+/// A list has valid entries if it is not empty and `qf_nonevalid` is false.
+///
+/// # Safety
+///
+/// - `qfl` may be null (in which case it returns false - no valid entries)
+/// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_list_has_valid_entries(qfl: *const c_void) -> bool {
+    if qfl.is_null() {
+        return false;
+    }
+    // Has valid entries if list is not empty and not marked as nonevalid
+    !rs_qf_list_empty(qfl) && !nvim_qf_get_nonevalid(qfl)
 }
 
 #[cfg(test)]
