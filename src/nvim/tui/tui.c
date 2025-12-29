@@ -212,6 +212,8 @@ extern void rs_print_cell(TUIData *tui, char *buf, sattr_T attr);
 extern void rs_tui_visual_bell(TUIData *tui);
 extern void rs_tui_grid_scroll(TUIData *tui, int64_t g, int64_t startrow, int64_t endrow,
                                int64_t startcol, int64_t endcol, int64_t rows, int64_t cols);
+extern bool rs_tui_is_stopped(TUIData *tui);
+extern void rs_tui_set_title(TUIData *tui, const char *data, size_t size);
 
 // ============================================================================
 // TUIData Accessor Functions for Rust
@@ -603,6 +605,36 @@ bool nvim_tui_get_has_lr_margin_mode(TUIData *tui)
 bool nvim_tui_get_can_set_lr_margin(TUIData *tui)
 {
   return tui->can_set_lr_margin;
+}
+
+/// Get stopped flag
+bool nvim_tui_get_stopped(TUIData *tui)
+{
+  return tui->stopped;
+}
+
+/// Get can_set_title flag
+bool nvim_tui_get_can_set_title(TUIData *tui)
+{
+  return tui->can_set_title;
+}
+
+/// Get title_enabled flag
+bool nvim_tui_get_title_enabled(TUIData *tui)
+{
+  return tui->title_enabled;
+}
+
+/// Set title_enabled flag
+void nvim_tui_set_title_enabled(TUIData *tui, bool enabled)
+{
+  tui->title_enabled = enabled;
+}
+
+/// Get available buffer space for title
+size_t nvim_tui_get_buf_space(TUIData *tui)
+{
+  return sizeof(tui->buf) - tui->bufpos;
 }
 
 // Forward declaration for flush_buf
@@ -1209,9 +1241,10 @@ static void tui_terminal_stop(TUIData *tui)
 }
 
 /// Returns true if UI `ui` is stopped.
+/// Check if TUI has been stopped. Rust implementation.
 bool tui_is_stopped(TUIData *tui)
 {
-  return tui->stopped;
+  return rs_tui_is_stopped(tui);
 }
 
 #ifdef EXITFREE
@@ -2032,36 +2065,10 @@ static void tui_suspend_cb(TUIData *tui)
 }
 #endif
 
+/// Set terminal title. Rust implementation.
 void tui_set_title(TUIData *tui, String title)
 {
-  if (!tui->can_set_title) {
-    return;
-  }
-
-  bool too_long = (title.size > 4096);  // should be enough
-  if (too_long) {
-    ELOG("set_title: title string too long!");
-  }
-  if (title.size > 0 && !too_long) {
-    if (!tui->title_enabled) {
-      // Save title/icon to the "stack". #4063
-      out(tui, S_LEN("\x1b[22;0t"));
-      tui->title_enabled = true;
-    }
-
-    if ((sizeof tui->buf - tui->bufpos) < title.size + 2 * TERMINFO_SEQ_LIMIT) {
-      // The sequence to set title, is usually an OSC sequence that cannot be cut in half.
-      // flush buffer prior to printing to avoid this
-      flush_buf(tui);
-    }
-    terminfo_out(tui, kTerm_to_status_line);
-    out(tui, title.data, title.size);
-    terminfo_out(tui, kTerm_from_status_line);
-  } else if (tui->title_enabled) {
-    // Restore title/icon from the "stack". #4063
-    out(tui, S_LEN("\x1b[23;0t"));
-    tui->title_enabled = false;
-  }
+  rs_tui_set_title(tui, title.data, title.size);
 }
 
 /// Set icon (stub - not implemented). Rust implementation.

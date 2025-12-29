@@ -218,6 +218,13 @@ extern "C" {
         right: c_int,
         rows: c_int,
     );
+
+    // Stopped and title accessors
+    fn nvim_tui_get_stopped(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_get_can_set_title(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_get_title_enabled(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_set_title_enabled(tui: *mut TuiHandle, enabled: bool);
+    fn nvim_tui_get_buf_space(tui: *mut TuiHandle) -> usize;
 }
 
 /// Set cursor position for the grid.
@@ -810,6 +817,90 @@ pub unsafe extern "C" fn rs_tui_grid_scroll(
             ((startrow - rows) as c_int, endrow as c_int)
         };
         nvim_tui_invalidate_region(tui, inv_startrow, inv_endrow, startcol as c_int, endcol as c_int);
+    }
+}
+
+// ============================================================================
+// TUI State Queries
+// ============================================================================
+
+/// Check if TUI has been stopped.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_is_stopped(tui: *mut TuiHandle) -> bool {
+    if tui.is_null() {
+        return true; // Null TUI is considered stopped
+    }
+    nvim_tui_get_stopped(tui)
+}
+
+// ============================================================================
+// Terminal Title
+// ============================================================================
+
+// Terminfo definition constants for title
+const TERM_TO_STATUS_LINE: c_int = 55; // kTerm_to_status_line
+const TERM_FROM_STATUS_LINE: c_int = 19; // kTerm_from_status_line
+
+// TERMINFO_SEQ_LIMIT from tui.c
+const TERMINFO_SEQ_LIMIT: usize = 128;
+
+/// Set terminal title.
+///
+/// This function sets the terminal title to the given string. If the terminal
+/// doesn't support title setting, this is a no-op. If the title is too long
+/// (>4096 bytes), it's ignored.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+/// - `data` must be a valid pointer to `size` bytes (or null if size is 0)
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_set_title(tui: *mut TuiHandle, data: *const u8, size: usize) {
+    if tui.is_null() {
+        return;
+    }
+
+    // Check if terminal supports setting title
+    if !nvim_tui_get_can_set_title(tui) {
+        return;
+    }
+
+    // Check for too long title (> 4096 bytes)
+    let too_long = size > 4096;
+    if too_long {
+        // In C this logs: ELOG("set_title: title string too long!");
+        // We skip logging in Rust and just return
+        return;
+    }
+
+    if size > 0 && !data.is_null() {
+        // If title was not enabled, save current title to the "stack"
+        if !nvim_tui_get_title_enabled(tui) {
+            let save_seq = b"\x1b[22;0t";
+            nvim_tui_out(tui, save_seq.as_ptr(), save_seq.len());
+            nvim_tui_set_title_enabled(tui, true);
+        }
+
+        // Check if we need to flush buffer before writing title
+        // Title sequence cannot be cut in half
+        let buf_space = nvim_tui_get_buf_space(tui);
+        if buf_space < size + 2 * TERMINFO_SEQ_LIMIT {
+            nvim_tui_flush_buf(tui);
+        }
+
+        // Output: to_status_line + title + from_status_line
+        nvim_tui_terminfo_out(tui, TERM_TO_STATUS_LINE);
+        nvim_tui_out(tui, data, size);
+        nvim_tui_terminfo_out(tui, TERM_FROM_STATUS_LINE);
+    } else if nvim_tui_get_title_enabled(tui) {
+        // Restore title from the "stack"
+        let restore_seq = b"\x1b[23;0t";
+        nvim_tui_out(tui, restore_seq.as_ptr(), restore_seq.len());
+        nvim_tui_set_title_enabled(tui, false);
     }
 }
 
