@@ -316,6 +316,12 @@ Functions blocked on missing accessor infrastructure:
 - `qf_list_empty` - Migrated to Rust (rs_qf_list_empty) - checks if quickfix list is empty
 - `qf_list_has_valid_entries` - Migrated to Rust (rs_qf_list_has_valid_entries) - checks for valid entries
 
+**ex_eval.c** (exception handling functions):
+- `aborted_in_try` - Migrated to Rust (rs_aborted_in_try) - checks force_abort flag
+- `aborting` - Migrated to Rust (rs_aborting) - checks if execution should abort
+- `should_abort` - Migrated to Rust (rs_should_abort) - checks if command should abort
+- `update_force_abort` - Migrated to Rust (rs_update_force_abort) - updates force_abort from cause_abort
+
 TUIData accessor functions added for opaque handle pattern:
 - nvim_tui_get/set_rgb, nvim_tui_get/set_row, nvim_tui_get/set_col
 - nvim_tui_get/set_attrs, nvim_tui_get/set_clear_attrs
