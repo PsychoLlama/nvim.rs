@@ -299,6 +299,7 @@ Functions blocked on missing accessor infrastructure:
 - `tui_set_icon` - Migrated to Rust (rs_tui_set_icon) - stub (not implemented)
 - `tui_mouse_on` - Migrated to Rust (rs_tui_mouse_on) - enables mouse tracking
 - `tui_mouse_off` - Migrated to Rust (rs_tui_mouse_off) - disables mouse tracking
+- `tui_update_menu` - Migrated to Rust (rs_tui_update_menu) - stub (menus are GUI only)
 
 TUIData accessor functions added for opaque handle pattern:
 - nvim_tui_get/set_rgb, nvim_tui_get/set_row, nvim_tui_get/set_col
