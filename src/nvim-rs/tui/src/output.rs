@@ -163,7 +163,7 @@ extern "C" {
     fn nvim_tui_set_term_mode(tui: *mut TuiHandle, mode: c_int, set: bool);
 }
 
-// Terminfo output infrastructure - these will be used in Phase 3/4
+// Terminfo output infrastructure - some functions reserved for future use
 #[allow(dead_code)]
 extern "C" {
     fn nvim_tui_terminfo_out(tui: *mut TuiHandle, what: c_int);
@@ -492,6 +492,51 @@ pub unsafe extern "C" fn rs_tui_mouse_off(tui: *mut TuiHandle) {
         nvim_tui_set_term_mode(tui, TERM_MODE_MOUSE_SGR_EXT, false);
         nvim_tui_set_mouse_enabled(tui, false);
     }
+}
+
+// ============================================================================
+// Scroll Region Functions
+// ============================================================================
+
+// Terminfo definition constants
+const TERM_CHANGE_SCROLL_REGION: c_int = 1; // kTerm_change_scroll_region
+const TERM_SET_LR_MARGIN: c_int = 42; // kTerm_set_lr_margin
+
+// Terminal mode constants for scroll regions
+const TERM_MODE_LEFT_RIGHT_MARGINS: c_int = 69; // kTermModeLeftAndRightMargins
+
+/// Set the scroll region for the terminal.
+///
+/// This sets both the vertical scroll region (top/bot) and optionally
+/// the horizontal margins (left/right) if they differ from full width.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_scroll_region(
+    tui: *mut TuiHandle,
+    top: c_int,
+    bot: c_int,
+    left: c_int,
+    right: c_int,
+) {
+    if tui.is_null() {
+        return;
+    }
+
+    // Set vertical scroll region
+    nvim_tui_terminfo_print_num2(tui, TERM_CHANGE_SCROLL_REGION, top, bot);
+
+    // Set horizontal margins if not full width
+    let width = nvim_tui_get_width(tui);
+    if left != 0 || right != width - 1 {
+        nvim_tui_set_term_mode(tui, TERM_MODE_LEFT_RIGHT_MARGINS, true);
+        nvim_tui_terminfo_print_num2(tui, TERM_SET_LR_MARGIN, left, right);
+    }
+
+    // Invalidate cursor position
+    nvim_tui_invalidate_grid_cursor(tui);
 }
 
 // ============================================================================

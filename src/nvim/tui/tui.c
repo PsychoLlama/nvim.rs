@@ -206,6 +206,7 @@ extern void rs_tui_mouse_on(TUIData *tui);
 extern void rs_tui_mouse_off(TUIData *tui);
 extern void rs_tui_update_menu(TUIData *tui);
 extern void rs_final_column_wrap(TUIData *tui);
+extern void rs_set_scroll_region(TUIData *tui, int top, int bot, int left, int right);
 
 // ============================================================================
 // TUIData Accessor Functions for Rust
@@ -1598,16 +1599,10 @@ static void clear_region(TUIData *tui, int top, int bot, int left, int right, in
   }
 }
 
+/// Set scroll region for scrolling operations. Rust implementation.
 static void set_scroll_region(TUIData *tui, int top, int bot, int left, int right)
 {
-  UGrid *grid = &tui->grid;
-
-  terminfo_print_num2(tui, kTerm_change_scroll_region, top, bot);
-  if (left != 0 || right != tui->width - 1) {
-    tui_set_term_mode(tui, kTermModeLeftAndRightMargins, true);
-    terminfo_print_num2(tui, kTerm_set_lr_margin, left, right);
-  }
-  grid->row = -1;
+  rs_set_scroll_region(tui, top, bot, left, right);
 }
 
 static void reset_scroll_region(TUIData *tui, bool fullwidth)
