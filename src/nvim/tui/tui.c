@@ -202,6 +202,8 @@ extern void rs_tui_busy_start(TUIData *tui);
 extern void rs_tui_busy_stop(TUIData *tui);
 extern void rs_tui_bell(TUIData *tui);
 extern void rs_tui_set_icon(TUIData *tui);
+extern void rs_tui_mouse_on(TUIData *tui);
+extern void rs_tui_mouse_off(TUIData *tui);
 
 // ============================================================================
 // TUIData Accessor Functions for Rust
@@ -514,6 +516,45 @@ bool nvim_tui_get_busy(TUIData *tui)
 void nvim_tui_set_busy(TUIData *tui, bool busy)
 {
   tui->busy = busy;
+}
+
+/// Get mouse_enabled flag
+bool nvim_tui_get_mouse_enabled(TUIData *tui)
+{
+  return tui->mouse_enabled;
+}
+
+/// Set mouse_enabled flag
+void nvim_tui_set_mouse_enabled(TUIData *tui, bool enabled)
+{
+  tui->mouse_enabled = enabled;
+}
+
+/// Get mouse_move_enabled flag
+bool nvim_tui_get_mouse_move_enabled(TUIData *tui)
+{
+  return tui->mouse_move_enabled;
+}
+
+/// Get screen_or_tmux flag
+bool nvim_tui_get_screen_or_tmux(TUIData *tui)
+{
+  return tui->screen_or_tmux;
+}
+
+// Forward declaration for flush_buf
+static void flush_buf(TUIData *tui);
+
+/// Wrapper for flush_buf callable from Rust
+void nvim_tui_flush_buf(TUIData *tui)
+{
+  flush_buf(tui);
+}
+
+/// Wrapper for tui_set_term_mode callable from Rust
+void nvim_tui_set_term_mode(TUIData *tui, int mode, bool set)
+{
+  tui_set_term_mode(tui, (TermMode)mode, set);
 }
 
 #define TERMINFO_SEQ_LIMIT 128
@@ -1679,28 +1720,16 @@ void tui_busy_stop(TUIData *tui)
   rs_tui_busy_stop(tui);
 }
 
+/// Enable mouse tracking. Rust implementation.
 void tui_mouse_on(TUIData *tui)
 {
-  if (!tui->mouse_enabled) {
-    tui_set_term_mode(tui, kTermModeMouseButtonEvent, true);
-    tui_set_term_mode(tui, kTermModeMouseSGRExt, true);
-    if (tui->mouse_move_enabled) {
-      tui_set_term_mode(tui, kTermModeMouseAnyEvent, true);
-    }
-    tui->mouse_enabled = true;
-  }
+  rs_tui_mouse_on(tui);
 }
 
+/// Disable mouse tracking. Rust implementation.
 void tui_mouse_off(TUIData *tui)
 {
-  if (tui->mouse_enabled) {
-    if (tui->mouse_move_enabled) {
-      tui_set_term_mode(tui, kTermModeMouseAnyEvent, false);
-    }
-    tui_set_term_mode(tui, kTermModeMouseButtonEvent, false);
-    tui_set_term_mode(tui, kTermModeMouseSGRExt, false);
-    tui->mouse_enabled = false;
-  }
+  rs_tui_mouse_off(tui);
 }
 
 static void tui_set_mode(TUIData *tui, ModeShape mode)

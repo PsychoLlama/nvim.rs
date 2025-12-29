@@ -155,6 +155,12 @@ extern "C" {
 
     // Output function for bell
     fn nvim_tui_out(tui: *mut TuiHandle, str: *const u8, len: usize);
+
+    // Mouse accessors
+    fn nvim_tui_get_mouse_enabled(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_set_mouse_enabled(tui: *mut TuiHandle, enabled: bool);
+    fn nvim_tui_get_mouse_move_enabled(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_set_term_mode(tui: *mut TuiHandle, mode: c_int, set: bool);
 }
 
 // Terminfo output infrastructure - these will be used in Phase 3/4
@@ -419,6 +425,63 @@ pub unsafe extern "C" fn rs_tui_bell(tui: *mut TuiHandle) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_tui_set_icon(_tui: *mut TuiHandle) {
     // Icon setting is not implemented in TUI - intentionally empty
+}
+
+// ============================================================================
+// Mouse Control
+// ============================================================================
+
+// Terminal mode constants
+const TERM_MODE_MOUSE_BUTTON_EVENT: c_int = 1002;
+const TERM_MODE_MOUSE_ANY_EVENT: c_int = 1003;
+const TERM_MODE_MOUSE_SGR_EXT: c_int = 1006;
+
+/// Enable mouse tracking.
+///
+/// This function enables mouse button and SGR extended mode escape sequences.
+/// If mouse move tracking is also enabled, it enables mouse any event mode.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_mouse_on(tui: *mut TuiHandle) {
+    if tui.is_null() {
+        return;
+    }
+
+    if !nvim_tui_get_mouse_enabled(tui) {
+        nvim_tui_set_term_mode(tui, TERM_MODE_MOUSE_BUTTON_EVENT, true);
+        nvim_tui_set_term_mode(tui, TERM_MODE_MOUSE_SGR_EXT, true);
+        if nvim_tui_get_mouse_move_enabled(tui) {
+            nvim_tui_set_term_mode(tui, TERM_MODE_MOUSE_ANY_EVENT, true);
+        }
+        nvim_tui_set_mouse_enabled(tui, true);
+    }
+}
+
+/// Disable mouse tracking.
+///
+/// This function disables mouse button and SGR extended mode escape sequences.
+/// If mouse move tracking is enabled, it also disables mouse any event mode.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_mouse_off(tui: *mut TuiHandle) {
+    if tui.is_null() {
+        return;
+    }
+
+    if nvim_tui_get_mouse_enabled(tui) {
+        if nvim_tui_get_mouse_move_enabled(tui) {
+            nvim_tui_set_term_mode(tui, TERM_MODE_MOUSE_ANY_EVENT, false);
+        }
+        nvim_tui_set_term_mode(tui, TERM_MODE_MOUSE_BUTTON_EVENT, false);
+        nvim_tui_set_term_mode(tui, TERM_MODE_MOUSE_SGR_EXT, false);
+        nvim_tui_set_mouse_enabled(tui, false);
+    }
 }
 
 #[cfg(test)]
