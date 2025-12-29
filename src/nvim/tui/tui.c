@@ -198,6 +198,10 @@ extern void rs_tui_default_colors_set(TUIData *tui, int64_t rgb_fg, int64_t rgb_
                                       int64_t rgb_sp, int64_t cterm_fg, int64_t cterm_bg);
 extern void rs_tui_grid_resize(TUIData *tui, int64_t g, int64_t width, int64_t height);
 extern void rs_tui_grid_clear(TUIData *tui, int64_t g);
+extern void rs_tui_busy_start(TUIData *tui);
+extern void rs_tui_busy_stop(TUIData *tui);
+extern void rs_tui_bell(TUIData *tui);
+extern void rs_tui_set_icon(TUIData *tui);
 
 // ============================================================================
 // TUIData Accessor Functions for Rust
@@ -498,6 +502,18 @@ bool nvim_tui_cheap_to_print(TUIData *tui, int row, int col, int next)
 bool nvim_tui_get_default_attr(TUIData *tui)
 {
   return tui->default_attr;
+}
+
+/// Get busy flag
+bool nvim_tui_get_busy(TUIData *tui)
+{
+  return tui->busy;
+}
+
+/// Set busy flag
+void nvim_tui_set_busy(TUIData *tui, bool busy)
+{
+  tui->busy = busy;
 }
 
 #define TERMINFO_SEQ_LIMIT 128
@@ -1651,14 +1667,16 @@ void tui_update_menu(TUIData *tui)
   // Do nothing; menus are for GUI only
 }
 
+/// Mark TUI as busy. Rust implementation.
 void tui_busy_start(TUIData *tui)
 {
-  tui->busy = true;
+  rs_tui_busy_start(tui);
 }
 
+/// Mark TUI as not busy. Rust implementation.
 void tui_busy_stop(TUIData *tui)
 {
-  tui->busy = false;
+  rs_tui_busy_stop(tui);
 }
 
 void tui_mouse_on(TUIData *tui)
@@ -1844,9 +1862,10 @@ void tui_hl_attr_define(TUIData *tui, Integer id, HlAttrs attrs, HlAttrs cterm_a
   rs_tui_hl_attr_define(tui, id, attrs, cterm_attrs);
 }
 
+/// Ring the terminal bell. Rust implementation.
 void tui_bell(TUIData *tui)
 {
-  out(tui, S_LEN("\a"));
+  rs_tui_bell(tui);
 }
 
 void tui_visual_bell(TUIData *tui)
@@ -2023,8 +2042,10 @@ void tui_set_title(TUIData *tui, String title)
   }
 }
 
+/// Set icon (stub - not implemented). Rust implementation.
 void tui_set_icon(TUIData *tui, String icon)
 {
+  rs_tui_set_icon(tui);
 }
 
 void tui_screenshot(TUIData *tui, String path)

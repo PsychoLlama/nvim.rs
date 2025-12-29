@@ -149,12 +149,17 @@ extern "C" {
 
     // schar cache function
     fn schar_cache_clear_if_full() -> bool;
+
+    // Busy state accessors
+    fn nvim_tui_set_busy(tui: *mut TuiHandle, busy: bool);
+
+    // Output function for bell
+    fn nvim_tui_out(tui: *mut TuiHandle, str: *const u8, len: usize);
 }
 
 // Terminfo output infrastructure - these will be used in Phase 3/4
 #[allow(dead_code)]
 extern "C" {
-    fn nvim_tui_out(tui: *mut TuiHandle, str: *const u8, len: usize);
     fn nvim_tui_terminfo_out(tui: *mut TuiHandle, what: c_int);
     fn nvim_tui_terminfo_print_num1(tui: *mut TuiHandle, what: c_int, num1: c_int);
     fn nvim_tui_terminfo_print_num2(tui: *mut TuiHandle, what: c_int, num1: c_int, num2: c_int);
@@ -351,6 +356,69 @@ pub unsafe extern "C" fn rs_tui_grid_clear(tui: *mut TuiHandle, _g: i64) {
     let height = nvim_tui_get_height(tui);
     let width = nvim_tui_get_width(tui);
     nvim_tui_clear_region(tui, 0, height, 0, width, 0);
+}
+
+// ============================================================================
+// Busy State
+// ============================================================================
+
+/// Mark TUI as busy (cursor hidden during output).
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_busy_start(tui: *mut TuiHandle) {
+    if tui.is_null() {
+        return;
+    }
+    nvim_tui_set_busy(tui, true);
+}
+
+/// Mark TUI as not busy (cursor can be shown).
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_busy_stop(tui: *mut TuiHandle) {
+    if tui.is_null() {
+        return;
+    }
+    nvim_tui_set_busy(tui, false);
+}
+
+// ============================================================================
+// Bell
+// ============================================================================
+
+/// Ring the terminal bell (output '\a').
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_bell(tui: *mut TuiHandle) {
+    if tui.is_null() {
+        return;
+    }
+    // Bell character: '\a' = 0x07
+    let bell: [u8; 1] = [0x07];
+    nvim_tui_out(tui, bell.as_ptr(), 1);
+}
+
+// ============================================================================
+// Icon (stub)
+// ============================================================================
+
+/// Set terminal icon (stub - not implemented).
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_set_icon(_tui: *mut TuiHandle) {
+    // Icon setting is not implemented in TUI - intentionally empty
 }
 
 #[cfg(test)]
