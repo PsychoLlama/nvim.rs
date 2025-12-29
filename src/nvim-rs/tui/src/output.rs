@@ -163,6 +163,9 @@ extern "C" {
     fn nvim_tui_set_term_mode(tui: *mut TuiHandle, mode: c_int, set: bool);
     fn nvim_tui_get_reset_scroll_region(tui: *mut TuiHandle) -> *const u8;
     fn nvim_tui_out_len(tui: *mut TuiHandle, str: *const u8);
+    fn nvim_tui_get_screen_or_tmux(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_flush_buf(tui: *mut TuiHandle);
+    fn nvim_tui_uv_sleep(ms: u64);
 }
 
 // Terminfo output infrastructure - some functions reserved for future use
@@ -652,6 +655,43 @@ pub unsafe extern "C" fn rs_print_cell(tui: *mut TuiHandle, buf: *const u8, attr
         // Printing at the right margin immediately advances the cursor.
         rs_final_column_wrap(tui);
     }
+}
+
+// ============================================================================
+// Visual Bell
+// ============================================================================
+
+/// Trigger a visual bell effect.
+///
+/// For screen/tmux terminals, outputs the screen flash escape sequence.
+/// For other terminals, temporarily inverts the video mode for 100ms.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_visual_bell(tui: *mut TuiHandle) {
+    if tui.is_null() {
+        return;
+    }
+
+    if nvim_tui_get_screen_or_tmux(tui) {
+        // Screen/tmux: use the g (visual bell) sequence
+        let seq = b"\x1bg";
+        nvim_tui_out(tui, seq.as_ptr(), seq.len());
+    } else {
+        // Other terminals: invert video mode briefly
+        let start_seq = b"\x1b[?5h";
+        nvim_tui_out(tui, start_seq.as_ptr(), start_seq.len());
+
+        nvim_tui_flush_buf(tui);
+        nvim_tui_uv_sleep(100); // typically 100 or 200 in terminfo
+
+        let end_seq = b"\x1b[?5l";
+        nvim_tui_out(tui, end_seq.as_ptr(), end_seq.len());
+    }
+
+    nvim_tui_flush_buf(tui);
 }
 
 #[cfg(test)]

@@ -209,6 +209,7 @@ extern void rs_final_column_wrap(TUIData *tui);
 extern void rs_set_scroll_region(TUIData *tui, int top, int bot, int left, int right);
 extern void rs_reset_scroll_region(TUIData *tui, bool fullwidth);
 extern void rs_print_cell(TUIData *tui, char *buf, sattr_T attr);
+extern void rs_tui_visual_bell(TUIData *tui);
 
 // ============================================================================
 // TUIData Accessor Functions for Rust
@@ -560,6 +561,12 @@ static void flush_buf(TUIData *tui);
 void nvim_tui_flush_buf(TUIData *tui)
 {
   flush_buf(tui);
+}
+
+/// Wrapper for uv_sleep callable from Rust
+void nvim_tui_uv_sleep(uint64_t ms)
+{
+  uv_sleep(ms);
 }
 
 /// Wrapper for tui_set_term_mode callable from Rust
@@ -1892,19 +1899,10 @@ void tui_bell(TUIData *tui)
   rs_tui_bell(tui);
 }
 
+/// Visual bell - inverts screen briefly or uses screen/tmux bell. Rust implementation.
 void tui_visual_bell(TUIData *tui)
 {
-  if (tui->screen_or_tmux) {
-    out(tui, S_LEN("\x1bg"));
-  } else {
-    out(tui, S_LEN("\x1b[?5h"));
-
-    flush_buf(tui);
-    uv_sleep(100);  // typically either 100 or 200 in terminfo. 100 seems enough
-
-    out(tui, S_LEN("\x1b[?5l"));
-  }
-  flush_buf(tui);
+  rs_tui_visual_bell(tui);
 }
 
 /// Set default colors and invalidate entire grid. Rust implementation in nvim-tui crate.
