@@ -67,6 +67,7 @@ typedef struct {
 } TabstopFromtoResult;
 extern TabstopFromtoResult rs_tabstop_fromto(int start_col, int end_col, int ts, const int *vts);
 extern int rs_get_sw_value_col(buf_T *buf, int col, bool left);
+extern bool rs_may_do_si(void);
 
 /// Set the integer values corresponding to the string setting of 'vartabstop'.
 /// "array" will be set, caller must free it if needed.
@@ -894,7 +895,7 @@ bool preprocs_left(void)
 /// @return  true if the conditions are OK for smart indenting.
 bool may_do_si(void)
 {
-  return curbuf->b_p_si && !curbuf->b_p_cin && *curbuf->b_p_inde == NUL && !p_paste;
+  return rs_may_do_si();
 }
 
 // Try to do some very smart auto-indenting.

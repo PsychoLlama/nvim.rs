@@ -50,6 +50,12 @@ int nvim_curbuf_get_inde_nonempty(void)
   return *curbuf->b_p_inde != NUL;
 }
 
+/// C accessor for curbuf->b_p_si (smartindent option).
+int nvim_curbuf_get_p_si(void)
+{
+  return curbuf->b_p_si;
+}
+
 // Find result cache for cpp_baseclass
 typedef struct {
   int found;
