@@ -168,7 +168,7 @@ extern "C" {
     fn nvim_tui_uv_sleep(ms: u64);
 }
 
-// Terminfo output infrastructure - some functions reserved for future use
+// Terminfo output infrastructure
 #[allow(dead_code)]
 extern "C" {
     fn nvim_tui_terminfo_out(tui: *mut TuiHandle, what: c_int);
@@ -193,6 +193,31 @@ extern "C" {
 
     // Grid col increment
     fn nvim_tui_inc_grid_col(tui: *mut TuiHandle);
+
+    // Scroll capability accessors
+    fn nvim_tui_get_can_scroll(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_get_can_change_scroll_region(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_get_has_lr_margin_mode(tui: *mut TuiHandle) -> bool;
+    fn nvim_tui_get_can_set_lr_margin(tui: *mut TuiHandle) -> bool;
+
+    // Internal function wrappers for scroll
+    fn nvim_tui_cursor_goto_internal(tui: *mut TuiHandle, row: c_int, col: c_int);
+    fn nvim_tui_update_attrs_internal(tui: *mut TuiHandle, attr_id: c_int);
+    fn nvim_tui_invalidate_region(
+        tui: *mut TuiHandle,
+        top: c_int,
+        bot: c_int,
+        left: c_int,
+        right: c_int,
+    );
+    fn nvim_tui_ugrid_scroll(
+        tui: *mut TuiHandle,
+        top: c_int,
+        bot: c_int,
+        left: c_int,
+        right: c_int,
+        rows: c_int,
+    );
 }
 
 /// Set cursor position for the grid.
@@ -692,6 +717,100 @@ pub unsafe extern "C" fn rs_tui_visual_bell(tui: *mut TuiHandle) {
     }
 
     nvim_tui_flush_buf(tui);
+}
+
+// ============================================================================
+// Grid Scroll
+// ============================================================================
+
+// Terminfo definition constants for scroll
+const TERM_DELETE_LINE: c_int = 13; // kTerm_delete_line
+const TERM_INSERT_LINE: c_int = 24; // kTerm_insert_line
+const TERM_PARM_DELETE_LINE: c_int = 27; // kTerm_parm_delete_line
+const TERM_PARM_INSERT_LINE: c_int = 29; // kTerm_parm_insert_line
+
+/// Scroll a region of the TUI grid.
+///
+/// This function scrolls a rectangular region of the grid by the specified
+/// number of rows. Positive `rows` scrolls up (deletes lines), negative
+/// scrolls down (inserts lines).
+///
+/// If the terminal supports scrolling, it uses efficient terminal scroll
+/// sequences. Otherwise, it marks the affected region as invalid for
+/// later redrawing.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_grid_scroll(
+    tui: *mut TuiHandle,
+    _g: i64,
+    startrow: i64,
+    endrow: i64,
+    startcol: i64,
+    endcol: i64,
+    rows: i64,
+    _cols: i64,
+) {
+    if tui.is_null() {
+        return;
+    }
+
+    let top = startrow as c_int;
+    let bot = (endrow - 1) as c_int;
+    let left = startcol as c_int;
+    let right = (endcol - 1) as c_int;
+
+    let width = nvim_tui_get_width(tui);
+    let height = nvim_tui_get_height(tui);
+
+    let fullwidth = left == 0 && right == width - 1;
+    let full_screen_scroll = fullwidth && top == 0 && bot == height - 1;
+
+    // Scroll the grid data
+    nvim_tui_ugrid_scroll(tui, top, bot, left, right, rows as c_int);
+
+    // Check if we can use terminal scroll capabilities
+    let has_lr_margins = nvim_tui_get_has_lr_margin_mode(tui) && nvim_tui_get_can_set_lr_margin(tui);
+    let can_scroll = nvim_tui_get_can_scroll(tui)
+        && (full_screen_scroll
+            || (nvim_tui_get_can_change_scroll_region(tui)
+                && ((left == 0 && right == width - 1) || has_lr_margins)));
+
+    if can_scroll {
+        // Change terminal scroll region and move cursor to the top
+        if !full_screen_scroll {
+            rs_set_scroll_region(tui, top, bot, left, right);
+        }
+        nvim_tui_cursor_goto_internal(tui, top, left);
+        nvim_tui_update_attrs_internal(tui, 0);
+
+        if rows > 0 {
+            if rows == 1 {
+                nvim_tui_terminfo_out(tui, TERM_DELETE_LINE);
+            } else {
+                nvim_tui_terminfo_print_num1(tui, TERM_PARM_DELETE_LINE, rows as c_int);
+            }
+        } else if rows == -1 {
+            nvim_tui_terminfo_out(tui, TERM_INSERT_LINE);
+        } else {
+            nvim_tui_terminfo_print_num1(tui, TERM_PARM_INSERT_LINE, (-rows) as c_int);
+        }
+
+        // Restore terminal scroll region and cursor
+        if !full_screen_scroll {
+            rs_reset_scroll_region(tui, fullwidth);
+        }
+    } else {
+        // Mark the moved region as invalid for redrawing later
+        let (inv_startrow, inv_endrow) = if rows > 0 {
+            (startrow as c_int, (endrow - rows) as c_int)
+        } else {
+            ((startrow - rows) as c_int, endrow as c_int)
+        };
+        nvim_tui_invalidate_region(tui, inv_startrow, inv_endrow, startcol as c_int, endcol as c_int);
+    }
 }
 
 #[cfg(test)]

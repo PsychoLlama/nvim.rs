@@ -210,6 +210,8 @@ extern void rs_set_scroll_region(TUIData *tui, int top, int bot, int left, int r
 extern void rs_reset_scroll_region(TUIData *tui, bool fullwidth);
 extern void rs_print_cell(TUIData *tui, char *buf, sattr_T attr);
 extern void rs_tui_visual_bell(TUIData *tui);
+extern void rs_tui_grid_scroll(TUIData *tui, int64_t g, int64_t startrow, int64_t endrow,
+                               int64_t startcol, int64_t endcol, int64_t rows, int64_t cols);
 
 // ============================================================================
 // TUIData Accessor Functions for Rust
@@ -406,6 +408,31 @@ static void terminfo_out(TUIData *tui, TerminfoDef what);
 static void terminfo_print_num(TUIData *tui, TerminfoDef what, int num1, int num2, int num3);
 static void cursor_goto(TUIData *tui, int row, int col);
 static void update_attrs(TUIData *tui, int attr_id);
+static void invalidate(TUIData *tui, int top, int bot, int left, int right);
+
+/// Wrapper for cursor_goto callable from Rust
+void nvim_tui_cursor_goto_internal(TUIData *tui, int row, int col)
+{
+  cursor_goto(tui, row, col);
+}
+
+/// Wrapper for update_attrs callable from Rust
+void nvim_tui_update_attrs_internal(TUIData *tui, int attr_id)
+{
+  update_attrs(tui, attr_id);
+}
+
+/// Wrapper for invalidate callable from Rust
+void nvim_tui_invalidate_region(TUIData *tui, int top, int bot, int left, int right)
+{
+  invalidate(tui, top, bot, left, right);
+}
+
+/// Wrapper for ugrid_scroll callable from Rust
+void nvim_tui_ugrid_scroll(TUIData *tui, int top, int bot, int left, int right, int rows)
+{
+  ugrid_scroll(&tui->grid, top, bot, left, right, rows);
+}
 
 /// Write raw bytes to output buffer
 void nvim_tui_out(TUIData *tui, const char *str, size_t len)
@@ -552,6 +579,30 @@ bool nvim_tui_get_mouse_move_enabled(TUIData *tui)
 bool nvim_tui_get_screen_or_tmux(TUIData *tui)
 {
   return tui->screen_or_tmux;
+}
+
+/// Get can_scroll flag
+bool nvim_tui_get_can_scroll(TUIData *tui)
+{
+  return tui->can_scroll;
+}
+
+/// Get can_change_scroll_region flag
+bool nvim_tui_get_can_change_scroll_region(TUIData *tui)
+{
+  return tui->can_change_scroll_region;
+}
+
+/// Get has_left_and_right_margin_mode flag
+bool nvim_tui_get_has_lr_margin_mode(TUIData *tui)
+{
+  return tui->has_left_and_right_margin_mode;
+}
+
+/// Get can_set_lr_margin flag
+bool nvim_tui_get_can_set_lr_margin(TUIData *tui)
+{
+  return tui->can_set_lr_margin;
 }
 
 // Forward declaration for flush_buf
@@ -1809,62 +1860,11 @@ void tui_mode_change(TUIData *tui, String mode, Integer mode_idx)
   tui->showing_mode = (ModeShape)mode_idx;
 }
 
+/// Scroll a region of the grid. Rust implementation.
 void tui_grid_scroll(TUIData *tui, Integer g, Integer startrow, Integer endrow, Integer startcol,
                      Integer endcol, Integer rows, Integer cols FUNC_ATTR_UNUSED)
 {
-  UGrid *grid = &tui->grid;
-  int top = (int)startrow;
-  int bot = (int)endrow - 1;
-  int left = (int)startcol;
-  int right = (int)endcol - 1;
-
-  bool fullwidth = left == 0 && right == tui->width - 1;
-  bool full_screen_scroll = fullwidth && top == 0 && bot == tui->height - 1;
-
-  ugrid_scroll(grid, top, bot, left, right, (int)rows);
-
-  bool has_lr_margins = tui->has_left_and_right_margin_mode && tui->can_set_lr_margin;
-
-  bool can_scroll = tui->can_scroll
-                    && (full_screen_scroll
-                        || (tui->can_change_scroll_region
-                            && ((left == 0 && right == tui->width - 1) || has_lr_margins)));
-
-  if (can_scroll) {
-    // Change terminal scroll region and move cursor to the top
-    if (!full_screen_scroll) {
-      set_scroll_region(tui, top, bot, left, right);
-    }
-    cursor_goto(tui, top, left);
-    update_attrs(tui, 0);
-
-    if (rows > 0) {
-      if (rows == 1) {
-        terminfo_out(tui, kTerm_delete_line);
-      } else {
-        terminfo_print_num1(tui, kTerm_parm_delete_line, (int)rows);
-      }
-    } else {
-      if (rows == -1) {
-        terminfo_out(tui, kTerm_insert_line);
-      } else {
-        terminfo_print_num1(tui, kTerm_parm_insert_line, -(int)rows);
-      }
-    }
-
-    // Restore terminal scroll region and cursor
-    if (!full_screen_scroll) {
-      reset_scroll_region(tui, fullwidth);
-    }
-  } else {
-    // Mark the moved region as invalid for redrawing later
-    if (rows > 0) {
-      endrow = endrow - rows;
-    } else {
-      startrow = startrow - rows;
-    }
-    invalidate(tui, (int)startrow, (int)endrow, (int)startcol, (int)endcol);
-  }
+  rs_tui_grid_scroll(tui, g, startrow, endrow, startcol, endcol, rows, cols);
 }
 
 /// Add a URL to be used in an OSC 8 hyperlink.
