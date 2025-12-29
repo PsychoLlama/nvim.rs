@@ -335,6 +335,9 @@ Functions blocked on missing accessor infrastructure:
 **indent.c** (indentation functions):
 - `may_do_si` - Migrated to Rust (rs_may_do_si) - checks if conditions are OK for smart indenting
 
+**insexpand.c** (completion functions):
+- `pum_wanted` - Migrated to Rust (rs_pum_wanted) - checks if popup menu should be displayed
+
 TUIData accessor functions added for opaque handle pattern:
 - nvim_tui_get/set_rgb, nvim_tui_get/set_row, nvim_tui_get/set_col
 - nvim_tui_get/set_attrs, nvim_tui_get/set_clear_attrs
