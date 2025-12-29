@@ -332,6 +332,9 @@ Functions blocked on missing accessor infrastructure:
 **message.c** (message display functions):
 - `msg_use_printf` - Migrated to Rust (rs_msg_use_printf) - checks if messages should use printf (batch mode)
 
+**indent.c** (indentation functions):
+- `may_do_si` - Migrated to Rust (rs_may_do_si) - checks if conditions are OK for smart indenting
+
 TUIData accessor functions added for opaque handle pattern:
 - nvim_tui_get/set_rgb, nvim_tui_get/set_row, nvim_tui_get/set_col
 - nvim_tui_get/set_attrs, nvim_tui_get/set_clear_attrs
