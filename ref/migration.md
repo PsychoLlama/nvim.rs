@@ -324,6 +324,13 @@ Functions blocked on missing accessor infrastructure:
 
 **ex_getln.c** (command line state functions):
 - `text_locked` - Migrated to Rust (rs_text_locked) - checks if text editing is locked
+- `get_text_locked_msg` - Migrated to Rust (rs_get_text_locked_msg) - returns error message for text lock
+
+**eval.c** (expression evaluation):
+- `eval_expr_valid_arg` - Migrated to Rust (rs_eval_expr_valid_arg) - checks if typval is valid expression
+
+**message.c** (message display functions):
+- `msg_use_printf` - Migrated to Rust (rs_msg_use_printf) - checks if messages should use printf (batch mode)
 
 TUIData accessor functions added for opaque handle pattern:
 - nvim_tui_get/set_rgb, nvim_tui_get/set_row, nvim_tui_get/set_col

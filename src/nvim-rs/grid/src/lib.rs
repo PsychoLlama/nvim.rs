@@ -2293,6 +2293,24 @@ pub unsafe extern "C" fn rs_redirecting() -> c_int {
     )
 }
 
+// Message printf mode accessors
+extern "C" {
+    fn nvim_get_embedded_mode() -> c_int;
+    fn nvim_get_ui_active() -> c_int;
+}
+
+/// Check if messages should be printed to stdout/stderr.
+///
+/// Returns true in "batch mode" (silent mode, -es/-Es/-l) when
+/// no UI is active and not in embedded mode.
+///
+/// # Safety
+/// Calls C accessor functions for embedded mode and UI state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_use_printf() -> c_int {
+    c_int::from(nvim_get_embedded_mode() == 0 && nvim_get_ui_active() == 0)
+}
+
 // UI cursor position accessors
 extern "C" {
     fn nvim_get_ui_cursor_row() -> c_int;

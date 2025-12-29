@@ -215,9 +215,12 @@ int nvim_get_p_vfile_not_empty(void) { return *p_vfile != NUL ? 1 : 0; }
 int nvim_get_redir_reg(void) { return redir_reg; }
 int nvim_get_redir_vname(void) { return redir_vname ? 1 : 0; }
 int nvim_get_capture_ga_not_null(void) { return capture_ga != NULL ? 1 : 0; }
+int nvim_get_embedded_mode(void) { return embedded_mode ? 1 : 0; }
+int nvim_get_ui_active(void) { return ui_active() != 0 ? 1 : 0; }
 
 // Rust implementation
 extern int rs_redirecting(void);
+extern int rs_msg_use_printf(void);
 
 bool msg_use_grid(void)
 {
@@ -2897,7 +2900,7 @@ static msgchunk_T *disp_sb_line(int row, msgchunk_T *smp)
 ///          - no UI and not embedded
 int msg_use_printf(void)
 {
-  return !embedded_mode && !ui_active();
+  return rs_msg_use_printf();
 }
 
 /// Print a message when there is no valid screen.
