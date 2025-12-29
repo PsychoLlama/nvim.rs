@@ -187,6 +187,9 @@ extern "C" {
 
     // UGrid goto (already in Rust ugrid crate, called via C wrapper)
     fn ugrid_goto(grid: *mut UGridHandle, row: c_int, col: c_int);
+
+    // Grid col increment
+    fn nvim_tui_inc_grid_col(tui: *mut TuiHandle);
 }
 
 /// Set cursor position for the grid.
@@ -606,6 +609,48 @@ pub unsafe extern "C" fn rs_final_column_wrap(tui: *mut TuiHandle) {
         let max_row = std::cmp::min(height, grid_height - 1);
         let new_row = if row < max_row { row + 1 } else { row };
         ugrid_goto(grid, new_row, 0);
+    }
+}
+
+// ============================================================================
+// Print Cell
+// ============================================================================
+
+/// Print a cell to the terminal output.
+///
+/// This function handles cursor wrapping at margins depending on the terminal's
+/// immediate_wrap_after_last_column setting, updates attributes, outputs the
+/// cell content, and advances the grid column.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+/// - `buf` must be a valid null-terminated C string
+#[no_mangle]
+pub unsafe extern "C" fn rs_print_cell(tui: *mut TuiHandle, buf: *const u8, attr: i16) {
+    if tui.is_null() || buf.is_null() {
+        return;
+    }
+
+    let immediate_wrap = nvim_tui_get_immediate_wrap(tui);
+
+    if !immediate_wrap {
+        // Printing the next character finally advances the cursor.
+        rs_final_column_wrap(tui);
+    }
+
+    nvim_tui_update_attrs(tui, attr as c_int);
+
+    // Calculate string length and output
+    let len = libc::strlen(buf as *const libc::c_char);
+    nvim_tui_out(tui, buf, len);
+
+    // Advance grid column
+    nvim_tui_inc_grid_col(tui);
+
+    if immediate_wrap {
+        // Printing at the right margin immediately advances the cursor.
+        rs_final_column_wrap(tui);
     }
 }
 

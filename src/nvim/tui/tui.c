@@ -208,6 +208,7 @@ extern void rs_tui_update_menu(TUIData *tui);
 extern void rs_final_column_wrap(TUIData *tui);
 extern void rs_set_scroll_region(TUIData *tui, int top, int bot, int left, int right);
 extern void rs_reset_scroll_region(TUIData *tui, bool fullwidth);
+extern void rs_print_cell(TUIData *tui, char *buf, sattr_T attr);
 
 // ============================================================================
 // TUIData Accessor Functions for Rust
@@ -439,6 +440,12 @@ int nvim_tui_get_grid_row(TUIData *tui)
 int nvim_tui_get_grid_col(TUIData *tui)
 {
   return tui->grid.col;
+}
+
+/// Increment grid col position
+void nvim_tui_inc_grid_col(TUIData *tui)
+{
+  tui->grid.col++;
 }
 
 /// Get url index
@@ -1364,21 +1371,10 @@ static void final_column_wrap(TUIData *tui)
 
 /// It is undocumented, but in the majority of terminals and terminal emulators
 /// printing at the right margin does not cause an automatic wrap until the
-/// next character is printed, holding the cursor in place until then.
+/// next character is printed, holding the cursor in place until then. Rust implementation.
 static void print_cell(TUIData *tui, char *buf, sattr_T attr)
 {
-  UGrid *grid = &tui->grid;
-  if (!tui->immediate_wrap_after_last_column) {
-    // Printing the next character finally advances the cursor.
-    final_column_wrap(tui);
-  }
-  update_attrs(tui, attr);
-  out(tui, buf, strlen(buf));
-  grid->col++;
-  if (tui->immediate_wrap_after_last_column) {
-    // Printing at the right margin immediately advances the cursor.
-    final_column_wrap(tui);
-  }
+  rs_print_cell(tui, buf, attr);
 }
 
 static bool cheap_to_print(TUIData *tui, int row, int col, int next)
