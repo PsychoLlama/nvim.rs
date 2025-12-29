@@ -7,7 +7,7 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::doc_markdown)]
 
-use std::os::raw::c_int;
+use std::os::raw::{c_int, c_uint};
 
 // CTRL-X mode constants (from insexpand.c)
 // These must match the C enum values exactly
@@ -48,7 +48,14 @@ extern "C" {
     fn nvim_get_compl_enter_selects() -> c_int;
     fn nvim_get_compl_used_match() -> c_int;
     fn nvim_get_compl_length() -> c_int;
+    fn nvim_get_cot_flags_global() -> c_uint;
+    fn nvim_curbuf_get_b_cot_flags() -> c_uint;
+    fn nvim_get_compl_autocomplete() -> c_int;
 }
+
+// completeopt flags (from optionstr.h)
+const K_OPT_COT_FLAG_MENU: c_uint = 0x01;
+const K_OPT_COT_FLAG_MENUONE: c_uint = 0x02;
 
 /// Check if CTRL-X mode is none (0).
 #[no_mangle]
@@ -210,6 +217,30 @@ pub unsafe extern "C" fn rs_ins_compl_used_match() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_len() -> c_int {
     nvim_get_compl_length()
+}
+
+// =============================================================================
+// Popup menu functions
+// =============================================================================
+
+/// Helper function to get the effective cot_flags (buffer-local or global).
+#[inline]
+unsafe fn get_cot_flags() -> c_uint {
+    let b_cot_flags = nvim_curbuf_get_b_cot_flags();
+    if b_cot_flags != 0 {
+        b_cot_flags
+    } else {
+        nvim_get_cot_flags_global()
+    }
+}
+
+/// Check if the popup menu should be displayed.
+/// "completeopt" must contain "menu" or "menuone", or compl_autocomplete is set.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_wanted() -> c_int {
+    let cot_flags = get_cot_flags();
+    let has_menu_flag = (cot_flags & (K_OPT_COT_FLAG_MENU | K_OPT_COT_FLAG_MENUONE)) != 0;
+    c_int::from(has_menu_flag || nvim_get_compl_autocomplete() != 0)
 }
 
 #[cfg(test)]

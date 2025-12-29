@@ -1191,14 +1191,6 @@ static void ins_compl_del_pum(void)
   XFREE_CLEAR(compl_match_array);
 }
 
-/// Check if the popup menu should be displayed.
-bool pum_wanted(void)
-  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
-{
-  // "completeopt" must contain "menu" or "menuone"
-  return (get_cot_flags() & (kOptCotFlagMenu | kOptCotFlagMenuone)) != 0 || compl_autocomplete;
-}
-
 /// Check that there are two or more matches to be shown in the popup menu.
 /// One if "completopt" contains "menuone".
 static bool pum_enough_matches(void)
@@ -6528,4 +6520,31 @@ int nvim_get_compl_cont_status(void)
 int nvim_get_compl_started(void)
 {
   return compl_started;
+}
+
+/// Get the global cot_flags value (accessor for Rust).
+unsigned nvim_get_cot_flags_global(void)
+{
+  return cot_flags;
+}
+
+/// Get curbuf->b_cot_flags (accessor for Rust).
+unsigned nvim_curbuf_get_b_cot_flags(void)
+{
+  return curbuf->b_cot_flags;
+}
+
+/// Get compl_autocomplete flag (accessor for Rust).
+int nvim_get_compl_autocomplete(void)
+{
+  return compl_autocomplete ? 1 : 0;
+}
+
+extern int rs_pum_wanted(void);
+
+/// Check if the popup menu should be displayed.
+bool pum_wanted(void)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_pum_wanted() != 0;
 }
