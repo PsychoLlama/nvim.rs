@@ -215,6 +215,7 @@ extern void rs_tui_grid_scroll(TUIData *tui, int64_t g, int64_t startrow, int64_
 extern bool rs_tui_is_stopped(TUIData *tui);
 extern void rs_tui_set_title(TUIData *tui, const char *data, size_t size);
 extern void rs_tui_enable_extended_underline(TUIData *tui);
+extern void rs_tui_query_bg_color(TUIData *tui);
 
 // ============================================================================
 // TUIData Accessor Functions for Rust
@@ -876,11 +877,11 @@ static void tui_reset_key_encoding(TUIData *tui)
 ///
 /// The response will be handled by the TermResponse autocommand created in
 /// _defaults.lua.
+/// Query the terminal background color. Rust implementation.
 void tui_query_bg_color(TUIData *tui)
   FUNC_ATTR_NONNULL_ALL
 {
-  out(tui, S_LEN("\x1b]11;?\x07"));
-  flush_buf(tui);
+  rs_tui_query_bg_color(tui);
 }
 
 /// Enable the alternate screen and emit other control sequences to start the TUI.

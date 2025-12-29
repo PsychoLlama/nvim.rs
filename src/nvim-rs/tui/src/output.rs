@@ -933,6 +933,27 @@ pub unsafe extern "C" fn rs_tui_enable_extended_underline(tui: *mut TuiHandle) {
     nvim_tui_set_can_set_underline_color(tui, true);
 }
 
+/// Query the terminal background color using OSC 11 escape sequence.
+///
+/// This sends the query "\x1b]11;?\x07" to the terminal which requests
+/// the current background color. The terminal will respond with the color.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_query_bg_color(tui: *mut TuiHandle) {
+    if tui.is_null() {
+        return;
+    }
+
+    // OSC 11 query: ESC ] 11 ; ? BEL
+    // This asks the terminal for its current background color
+    const QUERY_BG_COLOR: &[u8] = b"\x1b]11;?\x07";
+    nvim_tui_out(tui, QUERY_BG_COLOR.as_ptr(), QUERY_BG_COLOR.len());
+    nvim_tui_flush_buf(tui);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
