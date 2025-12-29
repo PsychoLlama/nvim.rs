@@ -322,6 +322,9 @@ Functions blocked on missing accessor infrastructure:
 - `should_abort` - Migrated to Rust (rs_should_abort) - checks if command should abort
 - `update_force_abort` - Migrated to Rust (rs_update_force_abort) - updates force_abort from cause_abort
 
+**ex_getln.c** (command line state functions):
+- `text_locked` - Migrated to Rust (rs_text_locked) - checks if text editing is locked
+
 TUIData accessor functions added for opaque handle pattern:
 - nvim_tui_get/set_rgb, nvim_tui_get/set_row, nvim_tui_get/set_col
 - nvim_tui_get/set_attrs, nvim_tui_get/set_clear_attrs
