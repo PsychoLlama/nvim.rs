@@ -293,6 +293,12 @@ Functions blocked on missing accessor infrastructure:
 - `tui_default_colors_set` - Migrated to Rust (rs_tui_default_colors_set) - sets default colors
 - `tui_grid_resize` - Migrated to Rust (rs_tui_grid_resize) - resizes grid and clips invalid regions
 - `tui_grid_clear` - Migrated to Rust (rs_tui_grid_clear) - clears grid and screen region
+- `tui_busy_start` - Migrated to Rust (rs_tui_busy_start) - sets busy flag
+- `tui_busy_stop` - Migrated to Rust (rs_tui_busy_stop) - clears busy flag
+- `tui_bell` - Migrated to Rust (rs_tui_bell) - outputs bell character
+- `tui_set_icon` - Migrated to Rust (rs_tui_set_icon) - stub (not implemented)
+- `tui_mouse_on` - Migrated to Rust (rs_tui_mouse_on) - enables mouse tracking
+- `tui_mouse_off` - Migrated to Rust (rs_tui_mouse_off) - disables mouse tracking
 
 TUIData accessor functions added for opaque handle pattern:
 - nvim_tui_get/set_rgb, nvim_tui_get/set_row, nvim_tui_get/set_col
@@ -312,7 +318,9 @@ Terminfo output infrastructure for Rust:
 - nvim_tui_cursor_goto, nvim_tui_update_attrs
 - nvim_tui_get_can_clear_attr, nvim_tui_get_can_erase_chars
 - nvim_tui_get_set_default_colors, nvim_tui_cheap_to_print
-- nvim_tui_get_default_attr
+- nvim_tui_get_default_attr, nvim_tui_get/set_busy
+- nvim_tui_get/set_mouse_enabled, nvim_tui_get_mouse_move_enabled
+- nvim_tui_get_screen_or_tmux, nvim_tui_flush_buf, nvim_tui_set_term_mode
 
 ### Complex Memory/Buffer Operations
 Functions involving memory management or buffer content access:
