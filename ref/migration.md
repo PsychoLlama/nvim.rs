@@ -308,6 +308,13 @@ Functions blocked on missing accessor infrastructure:
 - `tui_grid_scroll` - Migrated to Rust (rs_tui_grid_scroll) - scrolls grid region
 - `tui_is_stopped` - Migrated to Rust (rs_tui_is_stopped) - checks if TUI is stopped
 - `tui_set_title` - Migrated to Rust (rs_tui_set_title) - sets terminal title
+- `tui_enable_extended_underline` - Migrated to Rust (rs_tui_enable_extended_underline) - enables extended underline support
+- `tui_query_bg_color` - Migrated to Rust (rs_tui_query_bg_color) - queries terminal background color
+
+**quickfix.c** (quickfix list functions):
+- `qf_stack_empty` - Migrated to Rust (rs_qf_stack_empty) - checks if quickfix stack is empty
+- `qf_list_empty` - Migrated to Rust (rs_qf_list_empty) - checks if quickfix list is empty
+- `qf_list_has_valid_entries` - Migrated to Rust (rs_qf_list_has_valid_entries) - checks for valid entries
 
 TUIData accessor functions added for opaque handle pattern:
 - nvim_tui_get/set_rgb, nvim_tui_get/set_row, nvim_tui_get/set_col
