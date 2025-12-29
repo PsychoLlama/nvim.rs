@@ -51,6 +51,14 @@ extern "C" {
     fn nvim_get_cot_flags_global() -> c_uint;
     fn nvim_curbuf_get_b_cot_flags() -> c_uint;
     fn nvim_get_compl_autocomplete() -> c_int;
+    fn nvim_get_compl_from_nonkeyword() -> c_int;
+    // Character checking functions from charset.c
+    fn rs_vim_isIDc(c: c_int) -> c_int;
+    fn rs_vim_isfilec(c: c_int) -> c_int;
+    fn rs_vim_ispathsep(c: c_int) -> c_int;
+    fn rs_vim_isprintc(c: c_int) -> c_int;
+    fn rs_ascii_iswhite(c: c_int) -> c_int;
+    fn rs_vim_iswordc(c: c_int) -> c_int;
 }
 
 // completeopt flags (from optionstr.h)
@@ -241,6 +249,46 @@ pub unsafe extern "C" fn rs_pum_wanted() -> c_int {
     let cot_flags = get_cot_flags();
     let has_menu_flag = (cot_flags & (K_OPT_COT_FLAG_MENU | K_OPT_COT_FLAG_MENUONE)) != 0;
     c_int::from(has_menu_flag || nvim_get_compl_autocomplete() != 0)
+}
+
+// =============================================================================
+// Completion character acceptance functions
+// =============================================================================
+
+/// Check that character "c" is part of the item currently being completed.
+/// Used to decide whether to abandon complete mode when the menu is visible.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_accept_char(c: c_int) -> c_int {
+    // If autocomplete is active and started from non-keyword, reject all chars
+    if nvim_get_compl_autocomplete() != 0 && nvim_get_compl_from_nonkeyword() != 0 {
+        return 0;
+    }
+
+    let ctrl_x_mode = nvim_get_ctrl_x_mode();
+
+    // When expanding an identifier only accept identifier chars
+    if (ctrl_x_mode & CTRL_X_WANT_IDENT) != 0 {
+        return rs_vim_isIDc(c);
+    }
+
+    match ctrl_x_mode {
+        CTRL_X_FILES => {
+            // When expanding file name only accept file name chars. But not
+            // path separators, so that "proto/<Tab>" expands files in
+            // "proto", not "proto/" as a whole
+            c_int::from(rs_vim_isfilec(c) != 0 && rs_vim_ispathsep(c) == 0)
+        }
+        CTRL_X_CMDLINE | CTRL_X_CMDLINE_CTRL_X | CTRL_X_OMNI => {
+            // Command line and Omni completion can work with just about any
+            // printable character, but do stop at white space.
+            c_int::from(rs_vim_isprintc(c) != 0 && rs_ascii_iswhite(c) == 0)
+        }
+        CTRL_X_WHOLE_LINE => {
+            // For whole line completion a space can be part of the line.
+            rs_vim_isprintc(c)
+        }
+        _ => rs_vim_iswordc(c),
+    }
 }
 
 #[cfg(test)]

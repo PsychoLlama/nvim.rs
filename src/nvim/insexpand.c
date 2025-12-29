@@ -106,6 +106,7 @@ extern int rs_compl_status_adding(void);
 extern int rs_compl_status_sol(void);
 extern int rs_compl_status_local(void);
 extern int rs_ins_compl_active(void);
+extern int rs_ins_compl_accept_char(int c);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -581,34 +582,7 @@ static void do_autocmd_completedone(int c, int mode, char *word)
 bool ins_compl_accept_char(int c)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (compl_autocomplete && compl_from_nonkeyword) {
-    return false;
-  }
-
-  if (ctrl_x_mode & CTRL_X_WANT_IDENT) {
-    // When expanding an identifier only accept identifier chars.
-    return vim_isIDc(c);
-  }
-
-  switch (ctrl_x_mode) {
-  case CTRL_X_FILES:
-    // When expanding file name only accept file name chars. But not
-    // path separators, so that "proto/<Tab>" expands files in
-    // "proto", not "proto/" as a whole
-    return vim_isfilec(c) && !vim_ispathsep(c);
-
-  case CTRL_X_CMDLINE:
-  case CTRL_X_CMDLINE_CTRL_X:
-  case CTRL_X_OMNI:
-    // Command line and Omni completion can work with just about any
-    // printable character, but do stop at white space.
-    return vim_isprintc(c) && !ascii_iswhite(c);
-
-  case CTRL_X_WHOLE_LINE:
-    // For while line completion a space can be part of the line.
-    return vim_isprintc(c);
-  }
-  return vim_iswordc(c);
+  return rs_ins_compl_accept_char(c) != 0;
 }
 
 /// Get the completed text by inferring the case of the originally typed text.
@@ -6538,6 +6512,12 @@ unsigned nvim_curbuf_get_b_cot_flags(void)
 int nvim_get_compl_autocomplete(void)
 {
   return compl_autocomplete ? 1 : 0;
+}
+
+/// Get compl_from_nonkeyword flag (accessor for Rust).
+int nvim_get_compl_from_nonkeyword(void)
+{
+  return compl_from_nonkeyword ? 1 : 0;
 }
 
 extern int rs_pum_wanted(void);
