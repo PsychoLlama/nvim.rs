@@ -60,6 +60,7 @@ nvim-path = { path = "path" }
 nvim-plines = { path = "plines" }
 nvim-popupmenu = { path = "popupmenu" }
 nvim-profile = { path = "profile" }
+nvim-quickfix = { path = "quickfix" }
 nvim-register = { path = "register" }
 nvim-search = { path = "search" }
 nvim-spell = { path = "spell" }

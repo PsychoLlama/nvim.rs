@@ -1,0 +1,17 @@
+[package]
+name = "nvim-quickfix"
+description = "Quickfix list functions for Neovim C-to-Rust migration"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+
+[dev-dependencies]

@@ -167,6 +167,27 @@ static qf_info_T ql_info_actual;  // global quickfix list
 static qf_info_T *ql_info;        // points to ql_info_actual after allocation
 static unsigned last_qf_id = 0;   // Last Used quickfix list id
 
+// ============================================================================
+// Rust FFI declarations and accessor functions
+// ============================================================================
+
+extern bool rs_qf_stack_empty(const void *qi);
+extern bool rs_qf_list_empty(const void *qfl);
+
+/// Get listcount from qf_info_T for Rust (using void* to avoid type visibility issues)
+int nvim_qf_get_listcount(const void *qi_void)
+{
+  const qf_info_T *qi = (const qf_info_T *)qi_void;
+  return qi->qf_listcount;
+}
+
+/// Get count from qf_list_T for Rust (using void* to avoid type visibility issues)
+int nvim_qf_get_count(const void *qfl_void)
+{
+  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
+  return qfl->qf_count;
+}
+
 #define FMT_PATTERNS 14           // maximum number of % recognized
 
 // Structure used to hold the info of one part of 'errorformat'
@@ -919,18 +940,18 @@ static int qf_get_nextline(qfstate_T *state)
   return QF_OK;
 }
 
-/// Returns true if the specified quickfix/location stack is empty
+/// Returns true if the specified quickfix/location stack is empty. Rust implementation.
 static bool qf_stack_empty(const qf_info_T *qi)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  return qi == NULL || qi->qf_listcount <= 0;
+  return rs_qf_stack_empty(qi);
 }
 
-/// Returns true if the specified quickfix/location list is empty.
+/// Returns true if the specified quickfix/location list is empty. Rust implementation.
 static bool qf_list_empty(qf_list_T *qfl)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  return qfl == NULL || qfl->qf_count <= 0;
+  return rs_qf_list_empty(qfl);
 }
 
 /// Returns true if the specified quickfix/location list is not empty and
