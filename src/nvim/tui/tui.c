@@ -207,6 +207,7 @@ extern void rs_tui_mouse_off(TUIData *tui);
 extern void rs_tui_update_menu(TUIData *tui);
 extern void rs_final_column_wrap(TUIData *tui);
 extern void rs_set_scroll_region(TUIData *tui, int top, int bot, int left, int right);
+extern void rs_reset_scroll_region(TUIData *tui, bool fullwidth);
 
 // ============================================================================
 // TUIData Accessor Functions for Rust
@@ -558,6 +559,21 @@ void nvim_tui_flush_buf(TUIData *tui)
 void nvim_tui_set_term_mode(TUIData *tui, int mode, bool set)
 {
   tui_set_term_mode(tui, (TermMode)mode, set);
+}
+
+// Forward declaration for out_len
+static void out_len(TUIData *tui, const char *str);
+
+/// Get reset_scroll_region string from terminfo_ext
+const char *nvim_tui_get_reset_scroll_region(TUIData *tui)
+{
+  return tui->terminfo_ext.reset_scroll_region;
+}
+
+/// Wrapper for out_len callable from Rust
+void nvim_tui_out_len(TUIData *tui, const char *str)
+{
+  out_len(tui, str);
 }
 
 #define TERMINFO_SEQ_LIMIT 128
@@ -1605,20 +1621,10 @@ static void set_scroll_region(TUIData *tui, int top, int bot, int left, int righ
   rs_set_scroll_region(tui, top, bot, left, right);
 }
 
+/// Reset scroll region to full screen. Rust implementation.
 static void reset_scroll_region(TUIData *tui, bool fullwidth)
 {
-  UGrid *grid = &tui->grid;
-
-  if (tui->terminfo_ext.reset_scroll_region) {
-    out_len(tui, tui->terminfo_ext.reset_scroll_region);
-  } else {
-    terminfo_print_num2(tui, kTerm_change_scroll_region, 0, tui->height - 1);
-  }
-  if (!fullwidth) {
-    terminfo_print_num2(tui, kTerm_set_lr_margin, 0, tui->width - 1);
-    tui_set_term_mode(tui, kTermModeLeftAndRightMargins, false);
-  }
-  grid->row = -1;
+  rs_reset_scroll_region(tui, fullwidth);
 }
 
 /// Resize the TUI grid. Rust implementation in nvim-tui crate.

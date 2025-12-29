@@ -161,6 +161,8 @@ extern "C" {
     fn nvim_tui_set_mouse_enabled(tui: *mut TuiHandle, enabled: bool);
     fn nvim_tui_get_mouse_move_enabled(tui: *mut TuiHandle) -> bool;
     fn nvim_tui_set_term_mode(tui: *mut TuiHandle, mode: c_int, set: bool);
+    fn nvim_tui_get_reset_scroll_region(tui: *mut TuiHandle) -> *const u8;
+    fn nvim_tui_out_len(tui: *mut TuiHandle, str: *const u8);
 }
 
 // Terminfo output infrastructure - some functions reserved for future use
@@ -533,6 +535,41 @@ pub unsafe extern "C" fn rs_set_scroll_region(
     if left != 0 || right != width - 1 {
         nvim_tui_set_term_mode(tui, TERM_MODE_LEFT_RIGHT_MARGINS, true);
         nvim_tui_terminfo_print_num2(tui, TERM_SET_LR_MARGIN, left, right);
+    }
+
+    // Invalidate cursor position
+    nvim_tui_invalidate_grid_cursor(tui);
+}
+
+/// Reset the scroll region to full screen.
+///
+/// This resets the scroll region after scrolling operations. If fullwidth is
+/// false, it also resets the horizontal margins.
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_reset_scroll_region(tui: *mut TuiHandle, fullwidth: bool) {
+    if tui.is_null() {
+        return;
+    }
+
+    // Check if we have a custom reset_scroll_region sequence
+    let reset_seq = nvim_tui_get_reset_scroll_region(tui);
+    if !reset_seq.is_null() {
+        nvim_tui_out_len(tui, reset_seq);
+    } else {
+        // Use standard scroll region reset: top=0, bot=height-1
+        let height = nvim_tui_get_height(tui);
+        nvim_tui_terminfo_print_num2(tui, TERM_CHANGE_SCROLL_REGION, 0, height - 1);
+    }
+
+    // Reset horizontal margins if not fullwidth
+    if !fullwidth {
+        let width = nvim_tui_get_width(tui);
+        nvim_tui_terminfo_print_num2(tui, TERM_SET_LR_MARGIN, 0, width - 1);
+        nvim_tui_set_term_mode(tui, TERM_MODE_LEFT_RIGHT_MARGINS, false);
     }
 
     // Invalidate cursor position
