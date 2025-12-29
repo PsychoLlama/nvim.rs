@@ -301,6 +301,13 @@ Functions blocked on missing accessor infrastructure:
 - `tui_mouse_on` - Migrated to Rust (rs_tui_mouse_on) - enables mouse tracking
 - `tui_mouse_off` - Migrated to Rust (rs_tui_mouse_off) - disables mouse tracking
 - `tui_update_menu` - Migrated to Rust (rs_tui_update_menu) - stub (menus are GUI only)
+- `tui_visual_bell` - Migrated to Rust (rs_tui_visual_bell) - visual bell effect
+- `set_scroll_region` - Migrated to Rust (rs_set_scroll_region) - sets terminal scroll region
+- `reset_scroll_region` - Migrated to Rust (rs_reset_scroll_region) - resets scroll region
+- `print_cell` - Migrated to Rust (rs_print_cell) - outputs a cell to terminal
+- `tui_grid_scroll` - Migrated to Rust (rs_tui_grid_scroll) - scrolls grid region
+- `tui_is_stopped` - Migrated to Rust (rs_tui_is_stopped) - checks if TUI is stopped
+- `tui_set_title` - Migrated to Rust (rs_tui_set_title) - sets terminal title
 
 TUIData accessor functions added for opaque handle pattern:
 - nvim_tui_get/set_rgb, nvim_tui_get/set_row, nvim_tui_get/set_col
@@ -323,6 +330,12 @@ Terminfo output infrastructure for Rust:
 - nvim_tui_get_default_attr, nvim_tui_get/set_busy
 - nvim_tui_get/set_mouse_enabled, nvim_tui_get_mouse_move_enabled
 - nvim_tui_get_screen_or_tmux, nvim_tui_flush_buf, nvim_tui_set_term_mode
+- nvim_tui_get_can_scroll, nvim_tui_get_can_change_scroll_region
+- nvim_tui_get_has_lr_margin_mode, nvim_tui_get_can_set_lr_margin
+- nvim_tui_cursor_goto_internal, nvim_tui_update_attrs_internal
+- nvim_tui_invalidate_region, nvim_tui_ugrid_scroll
+- nvim_tui_get_stopped, nvim_tui_get_can_set_title
+- nvim_tui_get/set_title_enabled, nvim_tui_get_buf_space
 
 ### Complex Memory/Buffer Operations
 Functions involving memory management or buffer content access:
