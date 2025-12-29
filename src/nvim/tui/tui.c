@@ -204,6 +204,7 @@ extern void rs_tui_bell(TUIData *tui);
 extern void rs_tui_set_icon(TUIData *tui);
 extern void rs_tui_mouse_on(TUIData *tui);
 extern void rs_tui_mouse_off(TUIData *tui);
+extern void rs_tui_update_menu(TUIData *tui);
 
 // ============================================================================
 // TUIData Accessor Functions for Rust
@@ -1703,9 +1704,10 @@ void tui_mode_info_set(TUIData *tui, bool guicursor_enabled, Array args)
   tui_set_mode(tui, tui->showing_mode);
 }
 
+/// Update menu (stub - menus are for GUI only). Rust implementation.
 void tui_update_menu(TUIData *tui)
 {
-  // Do nothing; menus are for GUI only
+  rs_tui_update_menu(tui);
 }
 
 /// Mark TUI as busy. Rust implementation.

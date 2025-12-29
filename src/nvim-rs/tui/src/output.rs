@@ -427,6 +427,16 @@ pub unsafe extern "C" fn rs_tui_set_icon(_tui: *mut TuiHandle) {
     // Icon setting is not implemented in TUI - intentionally empty
 }
 
+/// Update menu (stub - menus are for GUI only).
+///
+/// # Safety
+///
+/// - `tui` must be a valid pointer to a TUIData struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_tui_update_menu(_tui: *mut TuiHandle) {
+    // Menus are for GUI only - intentionally empty
+}
+
 // ============================================================================
 // Mouse Control
 // ============================================================================
