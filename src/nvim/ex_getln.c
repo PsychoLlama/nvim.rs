@@ -227,6 +227,7 @@ extern int rs_cmdline_overstrike(void);
 extern int rs_cmdline_at_end(void);
 extern int rs_is_in_cmdwin(void);
 extern int rs_text_locked(void);
+extern const char *rs_get_text_locked_msg(void);
 
 static handle_T cmdpreview_bufnr = 0;
 static int cmdpreview_ns = 0;
@@ -3080,11 +3081,7 @@ void text_locked_msg(void)
 
 const char *get_text_locked_msg(void)
 {
-  if (cmdwin_type != 0) {
-    return e_cmdwin;
-  } else {
-    return e_textlock;
-  }
+  return rs_get_text_locked_msg();
 }
 
 /// Check for text, window or buffer locked.
@@ -5049,4 +5046,16 @@ int nvim_get_cmdline_type(void)
 int nvim_get_textlock(void)
 {
   return textlock;
+}
+
+// C accessor for e_cmdwin error message
+const char *nvim_get_e_cmdwin(void)
+{
+  return e_cmdwin;
+}
+
+// C accessor for e_textlock error message
+const char *nvim_get_e_textlock(void)
+{
+  return e_textlock;
 }

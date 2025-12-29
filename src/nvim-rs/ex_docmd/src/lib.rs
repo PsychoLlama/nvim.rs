@@ -22,6 +22,8 @@ extern "C" {
     fn nvim_curbuf_is_dummy() -> c_int;
     fn nvim_get_cmdwin_type() -> c_int;
     fn nvim_get_textlock() -> c_int;
+    fn nvim_get_e_cmdwin() -> *const c_char;
+    fn nvim_get_e_textlock() -> *const c_char;
 }
 
 /// Check if character ends an Ex command.
@@ -219,6 +221,23 @@ pub unsafe extern "C" fn rs_text_locked() -> c_int {
     }
     let textlock = nvim_get_textlock();
     c_int::from(textlock != 0)
+}
+
+/// Get the appropriate error message for text being locked.
+///
+/// Returns a pointer to either e_cmdwin or e_textlock based on
+/// whether we're in a command-line window or not.
+///
+/// # Safety
+///
+/// Returns a pointer to a static C string. Caller must not free it.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_text_locked_msg() -> *const c_char {
+    if nvim_get_cmdwin_type() != 0 {
+        nvim_get_e_cmdwin()
+    } else {
+        nvim_get_e_textlock()
+    }
 }
 
 #[cfg(test)]
