@@ -119,8 +119,9 @@ char nvim_get_p_bg(void)
   return *p_bg;
 }
 
-// Rust implementation
+// Rust implementations
 extern int rs_highlight_num_groups(void);
+extern const char *rs_highlight_has_attr(int id, int flag, int modec);
 
 /// \addtogroup SG_SET
 /// @{
@@ -188,6 +189,10 @@ typedef struct {
 
   int sg_parent;                ///< parent of @nested.group
 } HlGroup;
+
+// C accessors for hl_table fields (used by Rust)
+int nvim_hl_table_get_sg_gui(int idx) { return ((HlGroup *)highlight_ga.ga_data)[idx].sg_gui; }
+int nvim_hl_table_get_sg_cterm(int idx) { return ((HlGroup *)highlight_ga.ga_data)[idx].sg_cterm; }
 
 enum {
   kColorIdxNone = -1,
@@ -1899,24 +1904,7 @@ static bool highlight_list_arg(const int id, bool didh, const int type, int iarg
 const char *highlight_has_attr(const int id, const int flag, const int modec)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_PURE
 {
-  if (id <= 0 || id > highlight_ga.ga_len) {
-    return NULL;
-  }
-
-  int attr;
-
-  if (modec == 'g') {
-    attr = hl_table[id - 1].sg_gui;
-  } else {
-    attr = hl_table[id - 1].sg_cterm;
-  }
-
-  if (flag & HL_UNDERLINE_MASK) {
-    int ul = attr & HL_UNDERLINE_MASK;
-    return ul == flag ? "1" : NULL;
-  } else {
-    return (attr & flag) ? "1" : NULL;
-  }
+  return rs_highlight_has_attr(id, flag, modec);
 }
 
 /// Return color name of the given highlight group

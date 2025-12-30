@@ -5039,12 +5039,60 @@ pub unsafe extern "C" fn rs_syn_get_sub_char() -> c_int {
 
 extern "C" {
     fn nvim_get_highlight_ga_len() -> c_int;
+    fn nvim_hl_table_get_sg_gui(idx: c_int) -> c_int;
+    fn nvim_hl_table_get_sg_cterm(idx: c_int) -> c_int;
 }
+
+/// Static string "1" for attribute return value
+static ATTR_TRUE: &[u8; 2] = b"1\0";
 
 /// Returns the number of highlight groups.
 #[no_mangle]
 pub unsafe extern "C" fn rs_highlight_num_groups() -> c_int {
     nvim_get_highlight_ga_len()
+}
+
+/// Check whether highlight group has attribute.
+///
+/// # Arguments
+/// * `id` - Highlight group ID (1-based)
+/// * `flag` - Attribute flag to check
+/// * `modec` - 'g' for GUI, 'c' for cterm
+///
+/// # Returns
+/// Pointer to "1" if attribute is set, NULL otherwise
+#[no_mangle]
+pub unsafe extern "C" fn rs_highlight_has_attr(
+    id: c_int,
+    flag: c_int,
+    modec: c_int,
+) -> *const c_char {
+    use hl_attr_flags::HL_UNDERLINE_MASK;
+    let ul_mask = c_int::from(HL_UNDERLINE_MASK);
+
+    if id <= 0 || id > nvim_get_highlight_ga_len() {
+        return std::ptr::null();
+    }
+
+    let idx = id - 1;
+    let attr = if modec == b'g' as c_int {
+        nvim_hl_table_get_sg_gui(idx)
+    } else {
+        nvim_hl_table_get_sg_cterm(idx)
+    };
+
+    if (flag & ul_mask) != 0 {
+        let ul = attr & ul_mask;
+        if ul == flag {
+            ATTR_TRUE.as_ptr().cast()
+        } else {
+            std::ptr::null()
+        }
+    } else if (attr & flag) != 0 {
+        ATTR_TRUE.as_ptr().cast()
+    } else {
+        std::ptr::null()
+    }
 }
 
 // ============================================================================
