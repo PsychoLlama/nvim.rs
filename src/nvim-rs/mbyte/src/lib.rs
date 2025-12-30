@@ -3734,6 +3734,142 @@ pub unsafe extern "C" fn rs_bomb_size() -> c_int {
     0
 }
 
+// ============================================================================
+// Encoding canon table
+// ============================================================================
+
+// Encoding property flags (from mbyte_defs.h)
+const ENC_8BIT: c_int = 0x01;
+const ENC_DBCS: c_int = 0x02;
+const ENC_UNICODE: c_int = 0x04;
+const ENC_ENDIAN_B: c_int = 0x10;
+const ENC_ENDIAN_L: c_int = 0x20;
+const ENC_2BYTE: c_int = 0x40;
+const ENC_4BYTE: c_int = 0x80;
+const ENC_2WORD: c_int = 0x100;
+const ENC_LATIN1: c_int = 0x200;
+const ENC_LATIN9: c_int = 0x400;
+const ENC_MACROMAN: c_int = 0x800;
+
+/// Canonical encoding entry
+struct EncCanonEntry {
+    name: &'static str,
+    prop: c_int,
+}
+
+/// Canonical encoding names and their properties.
+#[rustfmt::skip]
+static ENC_CANON_TABLE: &[EncCanonEntry] = &[
+    EncCanonEntry { name: "latin1",      prop: ENC_8BIT | ENC_LATIN1 },
+    EncCanonEntry { name: "iso-8859-2",  prop: ENC_8BIT },
+    EncCanonEntry { name: "iso-8859-3",  prop: ENC_8BIT },
+    EncCanonEntry { name: "iso-8859-4",  prop: ENC_8BIT },
+    EncCanonEntry { name: "iso-8859-5",  prop: ENC_8BIT },
+    EncCanonEntry { name: "iso-8859-6",  prop: ENC_8BIT },
+    EncCanonEntry { name: "iso-8859-7",  prop: ENC_8BIT },
+    EncCanonEntry { name: "iso-8859-8",  prop: ENC_8BIT },
+    EncCanonEntry { name: "iso-8859-9",  prop: ENC_8BIT },
+    EncCanonEntry { name: "iso-8859-10", prop: ENC_8BIT },
+    EncCanonEntry { name: "iso-8859-11", prop: ENC_8BIT },
+    EncCanonEntry { name: "iso-8859-13", prop: ENC_8BIT },
+    EncCanonEntry { name: "iso-8859-14", prop: ENC_8BIT },
+    EncCanonEntry { name: "iso-8859-15", prop: ENC_8BIT | ENC_LATIN9 },
+    EncCanonEntry { name: "koi8-r",      prop: ENC_8BIT },
+    EncCanonEntry { name: "koi8-u",      prop: ENC_8BIT },
+    EncCanonEntry { name: "utf-8",       prop: ENC_UNICODE },
+    EncCanonEntry { name: "ucs-2",       prop: ENC_UNICODE | ENC_ENDIAN_B | ENC_2BYTE },
+    EncCanonEntry { name: "ucs-2le",     prop: ENC_UNICODE | ENC_ENDIAN_L | ENC_2BYTE },
+    EncCanonEntry { name: "utf-16",      prop: ENC_UNICODE | ENC_ENDIAN_B | ENC_2WORD },
+    EncCanonEntry { name: "utf-16le",    prop: ENC_UNICODE | ENC_ENDIAN_L | ENC_2WORD },
+    EncCanonEntry { name: "ucs-4",       prop: ENC_UNICODE | ENC_ENDIAN_B | ENC_4BYTE },
+    EncCanonEntry { name: "ucs-4le",     prop: ENC_UNICODE | ENC_ENDIAN_L | ENC_4BYTE },
+    EncCanonEntry { name: "debug",       prop: ENC_DBCS },
+    EncCanonEntry { name: "euc-jp",      prop: ENC_DBCS },
+    EncCanonEntry { name: "sjis",        prop: ENC_DBCS },
+    EncCanonEntry { name: "euc-kr",      prop: ENC_DBCS },
+    EncCanonEntry { name: "euc-cn",      prop: ENC_DBCS },
+    EncCanonEntry { name: "euc-tw",      prop: ENC_DBCS },
+    EncCanonEntry { name: "big5",        prop: ENC_DBCS },
+    EncCanonEntry { name: "cp437",       prop: ENC_8BIT },
+    EncCanonEntry { name: "cp737",       prop: ENC_8BIT },
+    EncCanonEntry { name: "cp775",       prop: ENC_8BIT },
+    EncCanonEntry { name: "cp850",       prop: ENC_8BIT },
+    EncCanonEntry { name: "cp852",       prop: ENC_8BIT },
+    EncCanonEntry { name: "cp855",       prop: ENC_8BIT },
+    EncCanonEntry { name: "cp857",       prop: ENC_8BIT },
+    EncCanonEntry { name: "cp860",       prop: ENC_8BIT },
+    EncCanonEntry { name: "cp861",       prop: ENC_8BIT },
+    EncCanonEntry { name: "cp862",       prop: ENC_8BIT },
+    EncCanonEntry { name: "cp863",       prop: ENC_8BIT },
+    EncCanonEntry { name: "cp865",       prop: ENC_8BIT },
+    EncCanonEntry { name: "cp866",       prop: ENC_8BIT },
+    EncCanonEntry { name: "cp869",       prop: ENC_8BIT },
+    EncCanonEntry { name: "cp874",       prop: ENC_8BIT },
+    EncCanonEntry { name: "cp932",       prop: ENC_DBCS },
+    EncCanonEntry { name: "cp936",       prop: ENC_DBCS },
+    EncCanonEntry { name: "cp949",       prop: ENC_DBCS },
+    EncCanonEntry { name: "cp950",       prop: ENC_DBCS },
+    EncCanonEntry { name: "cp1250",      prop: ENC_8BIT },
+    EncCanonEntry { name: "cp1251",      prop: ENC_8BIT },
+    EncCanonEntry { name: "cp1253",      prop: ENC_8BIT },
+    EncCanonEntry { name: "cp1254",      prop: ENC_8BIT },
+    EncCanonEntry { name: "cp1255",      prop: ENC_8BIT },
+    EncCanonEntry { name: "cp1256",      prop: ENC_8BIT },
+    EncCanonEntry { name: "cp1257",      prop: ENC_8BIT },
+    EncCanonEntry { name: "cp1258",      prop: ENC_8BIT },
+    EncCanonEntry { name: "macroman",    prop: ENC_8BIT | ENC_MACROMAN },
+    EncCanonEntry { name: "hp-roman8",   prop: ENC_8BIT },
+];
+
+/// Find encoding "name" in the list of canonical encoding names.
+///
+/// Returns the index if found, -1 if not found.
+fn enc_canon_search(name: &[u8]) -> c_int {
+    // Convert name to &str for comparison
+    let name_str = match std::str::from_utf8(name) {
+        Ok(s) => s,
+        Err(_) => return -1,
+    };
+
+    for (i, entry) in ENC_CANON_TABLE.iter().enumerate() {
+        if entry.name == name_str {
+            return i as c_int;
+        }
+    }
+    -1
+}
+
+/// Find canonical encoding "name" in the list and return its properties.
+///
+/// Returns 0 if not found.
+#[no_mangle]
+pub unsafe extern "C" fn rs_enc_canon_props(name: *const c_char) -> c_int {
+    if name.is_null() {
+        return 0;
+    }
+
+    // Get the C string as bytes
+    let c_str = std::ffi::CStr::from_ptr(name);
+    let name_bytes = c_str.to_bytes();
+
+    let i = enc_canon_search(name_bytes);
+    if i >= 0 {
+        return ENC_CANON_TABLE[i as usize].prop;
+    }
+
+    // Check for "2byte-" prefix
+    if name_bytes.starts_with(b"2byte-") {
+        return ENC_DBCS;
+    }
+
+    // Check for "8bit-" or "iso-8859-" prefix
+    if name_bytes.starts_with(b"8bit-") || name_bytes.starts_with(b"iso-8859-") {
+        return ENC_8BIT;
+    }
+
+    0
+}
+
 #[cfg(test)]
 mod utfc_tests {
     use super::*;

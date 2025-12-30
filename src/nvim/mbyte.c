@@ -434,20 +434,14 @@ static int enc_canon_search(const char *name)
   return -1;
 }
 
+extern int rs_enc_canon_props(const char *name);
+
 // Find canonical encoding "name" in the list and return its properties.
 // Returns 0 if not found.
 int enc_canon_props(const char *name)
   FUNC_ATTR_PURE
 {
-  int i = enc_canon_search(name);
-  if (i >= 0) {
-    return enc_canon_table[i].prop;
-  } else if (strncmp(name, "2byte-", 6) == 0) {
-    return ENC_DBCS;
-  } else if (strncmp(name, "8bit-", 5) == 0 || strncmp(name, "iso-8859-", 9) == 0) {
-    return ENC_8BIT;
-  }
-  return 0;
+  return rs_enc_canon_props(name);
 }
 
 // Return the size of the BOM for the current buffer:
