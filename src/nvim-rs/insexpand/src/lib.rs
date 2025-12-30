@@ -74,6 +74,8 @@ extern "C" {
     fn nvim_curbuf_get_b_cot_flags() -> c_uint;
     fn nvim_get_compl_autocomplete() -> c_int;
     fn nvim_get_compl_from_nonkeyword() -> c_int;
+    fn nvim_get_compl_was_interrupted() -> c_int;
+    fn nvim_get_compl_opt_refresh_always() -> c_int;
     // Character checking functions from charset.c
     fn rs_vim_isIDc(c: c_int) -> c_int;
     fn rs_vim_isfilec(c: c_int) -> c_int;
@@ -271,6 +273,29 @@ pub unsafe extern "C" fn rs_pum_wanted() -> c_int {
     let cot_flags = get_cot_flags();
     let has_menu_flag = (cot_flags & (K_OPT_COT_FLAG_MENU | K_OPT_COT_FLAG_MENUONE)) != 0;
     c_int::from(has_menu_flag || nvim_get_compl_autocomplete() != 0)
+}
+
+// =============================================================================
+// Completion refresh functions
+// =============================================================================
+
+/// Check if the complete function returned "always" in the "refresh" dictionary item.
+/// Only applies to function and omni completion modes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_refresh_always() -> c_int {
+    let mode = nvim_get_ctrl_x_mode();
+    let is_function = mode == CTRL_X_FUNCTION;
+    let is_omni = mode == CTRL_X_OMNI;
+    c_int::from((is_function || is_omni) && nvim_get_compl_opt_refresh_always() != 0)
+}
+
+/// Check that we need to find matches again (ins_compl_restart is to be called).
+///
+/// Returns true if we didn't complete finding matches or when the
+/// "completefunc" returned "always" in the "refresh" dictionary item.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_need_restart() -> c_int {
+    c_int::from(nvim_get_compl_was_interrupted() != 0 || rs_ins_compl_refresh_always() != 0)
 }
 
 // =============================================================================

@@ -1940,6 +1940,8 @@ int nvim_get_compl_time_slice_expired(void) { return compl_time_slice_expired ? 
 int nvim_get_compl_enter_selects(void) { return compl_enter_selects ? 1 : 0; }
 int nvim_get_compl_used_match(void) { return compl_used_match ? 1 : 0; }
 int nvim_get_compl_length(void) { return compl_length; }
+int nvim_get_compl_was_interrupted(void) { return compl_was_interrupted ? 1 : 0; }
+int nvim_get_compl_opt_refresh_always(void) { return compl_opt_refresh_always ? 1 : 0; }
 
 // Rust implementations
 extern int rs_ins_compl_interrupted(void);
@@ -2051,11 +2053,14 @@ int ins_compl_bs(void)
   return NUL;
 }
 
+extern int rs_ins_compl_refresh_always(void);
+extern int rs_ins_compl_need_restart(void);
+
 /// Check if the complete function returned "always" in the "refresh" dictionary item.
 static bool ins_compl_refresh_always(void)
   FUNC_ATTR_PURE
 {
-  return (ctrl_x_mode_function() || ctrl_x_mode_omni()) && compl_opt_refresh_always;
+  return rs_ins_compl_refresh_always() != 0;
 }
 
 /// Check that we need to find matches again, ins_compl_restart() is to
@@ -2063,9 +2068,7 @@ static bool ins_compl_refresh_always(void)
 static bool ins_compl_need_restart(void)
   FUNC_ATTR_PURE
 {
-  // Return true if we didn't complete finding matches or when the
-  // "completefunc" returned "always" in the "refresh" dictionary item.
-  return compl_was_interrupted || ins_compl_refresh_always();
+  return rs_ins_compl_need_restart() != 0;
 }
 
 /// Return true if 'autocomplete' option is set
