@@ -343,6 +343,9 @@ Functions blocked on missing accessor infrastructure:
 - `pum_wanted` - Migrated to Rust (rs_pum_wanted) - checks if popup menu should be displayed
 - `ins_compl_accept_char` - Migrated to Rust (rs_ins_compl_accept_char) - checks if char is part of completion item
 
+**mbyte.c** (multibyte encoding functions):
+- `bomb_size` - Migrated to Rust (rs_bomb_size) - returns BOM size for current buffer's encoding
+
 TUIData accessor functions added for opaque handle pattern:
 - nvim_tui_get/set_rgb, nvim_tui_get/set_row, nvim_tui_get/set_col
 - nvim_tui_get/set_attrs, nvim_tui_get/set_clear_attrs
