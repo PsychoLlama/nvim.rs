@@ -3766,19 +3766,28 @@ int eval_interp_string(char **arg, typval_T *rettv, bool evaluate)
   return OK;
 }
 
+/// Get partial_T->pt_name (accessor for Rust).
+char *nvim_partial_get_pt_name(partial_T *pt)
+{
+  return pt->pt_name;
+}
+
+/// Get partial_T->pt_func->uf_name (accessor for Rust).
+char *nvim_partial_get_pt_func_uf_name(partial_T *pt)
+{
+  if (pt->pt_func != NULL) {
+    return pt->pt_func->uf_name;
+  }
+  return NULL;
+}
+
+extern char *rs_partial_name(partial_T *pt);
+
 /// @return  the function name of the partial.
 char *partial_name(partial_T *pt)
   FUNC_ATTR_PURE
 {
-  if (pt != NULL) {
-    if (pt->pt_name != NULL) {
-      return pt->pt_name;
-    }
-    if (pt->pt_func != NULL) {
-      return pt->pt_func->uf_name;
-    }
-  }
-  return "";
+  return rs_partial_name(pt);
 }
 
 static void partial_free(partial_T *pt)

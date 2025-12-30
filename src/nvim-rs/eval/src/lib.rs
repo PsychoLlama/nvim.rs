@@ -275,6 +275,52 @@ pub unsafe extern "C" fn rs_current_func_returned() -> c_int {
     nvim_get_current_funccal_fc_returned()
 }
 
+// =============================================================================
+// Partial Functions
+// =============================================================================
+
+/// Opaque handle for partial_T struct
+type PartialHandle = *const std::ffi::c_void;
+
+extern "C" {
+    fn nvim_partial_get_pt_name(pt: PartialHandle) -> *mut c_char;
+    fn nvim_partial_get_pt_func_uf_name(pt: PartialHandle) -> *mut c_char;
+}
+
+/// Default empty string for partial_name return value.
+static EMPTY_STRING: &[u8] = b"\0";
+
+/// Get the function name of a partial.
+///
+/// Returns the pt_name if set, otherwise pt_func->uf_name if set,
+/// otherwise an empty string.
+///
+/// # Safety
+///
+/// `pt` may be null (returns empty string).
+/// If non-null, `pt` must be a valid pointer to a partial_T struct.
+#[no_mangle]
+#[allow(clippy::as_ptr_cast_mut)]
+pub unsafe extern "C" fn rs_partial_name(pt: PartialHandle) -> *mut c_char {
+    if pt.is_null() {
+        // Safe: caller should not mutate the returned empty string
+        return EMPTY_STRING.as_ptr() as *mut c_char;
+    }
+
+    let pt_name = nvim_partial_get_pt_name(pt);
+    if !pt_name.is_null() {
+        return pt_name;
+    }
+
+    let func_name = nvim_partial_get_pt_func_uf_name(pt);
+    if !func_name.is_null() {
+        return func_name;
+    }
+
+    // Safe: caller should not mutate the returned empty string
+    EMPTY_STRING.as_ptr() as *mut c_char
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
