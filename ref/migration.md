@@ -77,6 +77,10 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 - `ns_get_hl` callback logic - Blocked by dict2hlattrs
 - `highlight_changed` - Calls into syntax/screen subsystems
 
+**highlight_group.c** (highlight group functions - MIGRATED):
+- `highlight_num_groups` - Migrated to Rust (rs_highlight_num_groups)
+- `highlight_has_attr` - Migrated to Rust (rs_highlight_has_attr) - Check if highlight group has specific attribute
+
 ### Grid
 
 - `grid_alloc/grid_free` - Tightly coupled to C memory management
