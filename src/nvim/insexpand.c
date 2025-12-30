@@ -109,6 +109,7 @@ extern int rs_ins_compl_active(void);
 extern int rs_ins_compl_accept_char(int c);
 extern char *rs_find_word_start(char *ptr);
 extern char *rs_find_word_end(char *ptr);
+extern char *rs_find_line_end(char *ptr);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -1888,11 +1889,7 @@ char *find_word_end(char *ptr)
 /// @return  a pointer to just after the line.
 char *find_line_end(char *ptr)
 {
-  char *s = ptr + strlen(ptr);
-  while (s > ptr && (s[-1] == CAR || s[-1] == NL)) {
-    s--;
-  }
-  return s;
+  return rs_find_line_end(ptr);
 }
 
 /// Free a completion item in the list

@@ -329,6 +329,26 @@ pub unsafe extern "C" fn rs_find_word_end(mut ptr: *mut c_char) -> *mut c_char {
     ptr
 }
 
+/// ASCII constants
+const CAR: c_char = 0x0D; // '\015' carriage return
+const NL: c_char = 0x0A; // '\012' newline
+
+/// Find the end of the line, omitting CR and NL at the end.
+/// Returns a pointer to just after the line.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_line_end(ptr: *mut c_char) -> *mut c_char {
+    // Find end of string
+    let mut s = ptr;
+    while *s != 0 {
+        s = s.add(1);
+    }
+    // Back up over trailing CR and NL
+    while s > ptr && (*s.sub(1) == CAR || *s.sub(1) == NL) {
+        s = s.sub(1);
+    }
+    s
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
