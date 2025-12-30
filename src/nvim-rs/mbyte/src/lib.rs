@@ -3668,6 +3668,72 @@ pub unsafe extern "C" fn rs_utf_head_off(base: *const c_char, p: *const c_char) 
     utf_head_off(slice, p_offset) as c_int
 }
 
+// =============================================================================
+// Buffer property accessors for BOM size calculation
+// =============================================================================
+
+extern "C" {
+    /// Check if current buffer has 'bomb' option set.
+    fn nvim_curbuf_get_b_p_bomb() -> c_int;
+    /// Check if current buffer has 'binary' option set.
+    fn nvim_curbuf_get_b_p_bin() -> c_int;
+    /// Get current buffer's 'fileencoding' option.
+    fn nvim_curbuf_get_b_p_fenc() -> *const c_char;
+}
+
+/// Return the size of the BOM for the current buffer.
+///
+/// Returns:
+/// - 0: no BOM
+/// - 2: UCS-2 or UTF-16 BOM
+/// - 3: UTF-8 BOM
+/// - 4: UCS-4 BOM
+///
+/// # Safety
+/// This function accesses global state (curbuf) through C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bomb_size() -> c_int {
+    // Check if bomb option is set and binary mode is not enabled
+    if nvim_curbuf_get_b_p_bomb() == 0 || nvim_curbuf_get_b_p_bin() != 0 {
+        return 0;
+    }
+
+    let fenc = nvim_curbuf_get_b_p_fenc();
+
+    // If fenc is null or empty, or "utf-8", return 3 (UTF-8 BOM)
+    if fenc.is_null() {
+        return 3;
+    }
+
+    let fenc_byte = *fenc as u8;
+    if fenc_byte == 0 {
+        return 3; // Empty string
+    }
+
+    // Create a slice from the C string for comparison
+    // We only need to check the first few characters
+    let fenc_slice = std::slice::from_raw_parts(fenc as *const u8, 16);
+
+    // Check for "utf-8"
+    if fenc_slice.starts_with(b"utf-8")
+        && (fenc_slice[5] == 0 || !fenc_slice[5].is_ascii_alphanumeric())
+    {
+        return 3;
+    }
+
+    // Check for "ucs-2" or "utf-16" (2-byte BOM)
+    if fenc_slice.starts_with(b"ucs-2") || fenc_slice.starts_with(b"utf-16") {
+        return 2;
+    }
+
+    // Check for "ucs-4" (4-byte BOM)
+    if fenc_slice.starts_with(b"ucs-4") {
+        return 4;
+    }
+
+    0
+}
+
 #[cfg(test)]
 mod utfc_tests {
     use super::*;

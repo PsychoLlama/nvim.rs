@@ -127,6 +127,7 @@ extern int rs_utfc_ptr2len_len(const char *p, int size);
 extern int rs_utf_head_off(const char *base, const char *p);
 extern int rs_mb_off_next(const char *base, const char *p);
 extern int32_t rs_utf_ptr2CharInfo_impl(const uint8_t *p, size_t len);
+extern int rs_bomb_size(void);
 
 // Rust struct for codepoint boundary offsets
 typedef struct {
@@ -148,6 +149,28 @@ static const char e_overlapping_ranges_for_nr[]
   = N_("E1113: Overlapping ranges for 0x%lx");
 static const char e_only_values_of_0x80_and_higher_supported[]
   = N_("E1114: Only values of 0x80 and higher supported");
+
+// =============================================================================
+// Rust accessor functions for buffer properties
+// =============================================================================
+
+/// Check if current buffer has 'bomb' option set (accessor for Rust).
+int nvim_curbuf_get_b_p_bomb(void)
+{
+  return curbuf->b_p_bomb ? 1 : 0;
+}
+
+/// Check if current buffer has 'binary' option set (accessor for Rust).
+int nvim_curbuf_get_b_p_bin(void)
+{
+  return curbuf->b_p_bin ? 1 : 0;
+}
+
+/// Get current buffer's 'fileencoding' option (accessor for Rust).
+const char *nvim_curbuf_get_b_p_fenc(void)
+{
+  return curbuf->b_p_fenc;
+}
 
 // To speed up BYTELEN(); keep a lookup table to quickly get the length in
 // bytes of a UTF-8 character from the first byte of a UTF-8 string.  Bytes
@@ -435,20 +458,7 @@ int enc_canon_props(const char *name)
 int bomb_size(void)
   FUNC_ATTR_PURE
 {
-  int n = 0;
-
-  if (curbuf->b_p_bomb && !curbuf->b_p_bin) {
-    if (*curbuf->b_p_fenc == NUL
-        || strcmp(curbuf->b_p_fenc, "utf-8") == 0) {
-      n = 3;
-    } else if (strncmp(curbuf->b_p_fenc, "ucs-2", 5) == 0
-               || strncmp(curbuf->b_p_fenc, "utf-16", 6) == 0) {
-      n = 2;
-    } else if (strncmp(curbuf->b_p_fenc, "ucs-4", 5) == 0) {
-      n = 4;
-    }
-  }
-  return n;
+  return rs_bomb_size();
 }
 
 // Remove all BOM from "s" by moving remaining text.
