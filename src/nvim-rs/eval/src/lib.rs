@@ -290,6 +290,20 @@ extern "C" {
 /// Default empty string for partial_name return value.
 static EMPTY_STRING: &[u8] = b"\0";
 
+extern "C" {
+    fn nvim_get_vlua_partial() -> PartialHandle;
+}
+
+/// Check if the given partial is the special v:lua value for calling lua functions.
+///
+/// # Safety
+///
+/// `partial` may be null (returns false).
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_luafunc(partial: PartialHandle) -> bool {
+    partial == nvim_get_vlua_partial()
+}
+
 /// Get the function name of a partial.
 ///
 /// Returns the pt_name if set, otherwise pt_func->uf_name if set,

@@ -5759,11 +5759,19 @@ void set_argv_var(char **argv, int argc)
   set_vim_var_list(VV_ARGV, l);
 }
 
+/// Get v:lua partial pointer (accessor for Rust).
+partial_T *nvim_get_vlua_partial(void)
+{
+  return get_vim_var_partial(VV_LUA);
+}
+
+extern bool rs_is_luafunc(partial_T *partial);
+
 /// check if special v:lua value for calling lua functions
 bool is_luafunc(partial_T *partial)
   FUNC_ATTR_PURE
 {
-  return partial == get_vim_var_partial(VV_LUA);
+  return rs_is_luafunc(partial);
 }
 
 /// check if special v:lua value for calling lua functions
