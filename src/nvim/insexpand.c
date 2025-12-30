@@ -107,6 +107,8 @@ extern int rs_compl_status_sol(void);
 extern int rs_compl_status_local(void);
 extern int rs_ins_compl_active(void);
 extern int rs_ins_compl_accept_char(int c);
+extern char *rs_find_word_start(char *ptr);
+extern char *rs_find_word_end(char *ptr);
 
 // Definitions used for CTRL-X submode.
 // Note: If you change CTRL-X submode, you must also maintain ctrl_x_msgs[]
@@ -1870,10 +1872,7 @@ static void ins_compl_files(int count, char **files, bool thesaurus, int flags,
 char *find_word_start(char *ptr)
   FUNC_ATTR_PURE
 {
-  while (*ptr != NUL && *ptr != '\n' && mb_get_class(ptr) <= 1) {
-    ptr += utfc_ptr2len(ptr);
-  }
-  return ptr;
+  return rs_find_word_start(ptr);
 }
 
 /// Find the end of the word.  Assumes it starts inside a word.
@@ -1881,16 +1880,7 @@ char *find_word_start(char *ptr)
 char *find_word_end(char *ptr)
   FUNC_ATTR_PURE
 {
-  const int start_class = mb_get_class(ptr);
-  if (start_class > 1) {
-    while (*ptr != NUL) {
-      ptr += utfc_ptr2len(ptr);
-      if (mb_get_class(ptr) != start_class) {
-        break;
-      }
-    }
-  }
-  return ptr;
+  return rs_find_word_end(ptr);
 }
 
 /// Find the end of the line, omitting CR and NL at the end.

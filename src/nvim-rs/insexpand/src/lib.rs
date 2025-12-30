@@ -7,7 +7,7 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::doc_markdown)]
 
-use std::os::raw::{c_int, c_uint};
+use std::os::raw::{c_char, c_int, c_uint};
 
 // CTRL-X mode constants (from insexpand.c)
 // These must match the C enum values exactly
@@ -289,6 +289,44 @@ pub unsafe extern "C" fn rs_ins_compl_accept_char(c: c_int) -> c_int {
         }
         _ => rs_vim_iswordc(c),
     }
+}
+
+// =============================================================================
+// Word boundary functions
+// =============================================================================
+
+extern "C" {
+    fn rs_mb_get_class(p: *const c_char) -> c_int;
+    fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
+}
+
+/// Find the start of the next word.
+/// Returns a pointer to the first char of the word. Also stops at a NUL.
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_find_word_start(mut ptr: *mut c_char) -> *mut c_char {
+    // while (*ptr != NUL && *ptr != '\n' && mb_get_class(ptr) <= 1)
+    while *ptr != 0 && *ptr != b'\n' as c_char && rs_mb_get_class(ptr) <= 1 {
+        ptr = ptr.add(rs_utfc_ptr2len(ptr) as usize);
+    }
+    ptr
+}
+
+/// Find the end of the word. Assumes it starts inside a word.
+/// Returns a pointer to just after the word.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_find_word_end(mut ptr: *mut c_char) -> *mut c_char {
+    let start_class = rs_mb_get_class(ptr);
+    if start_class > 1 {
+        while *ptr != 0 {
+            ptr = ptr.add(rs_utfc_ptr2len(ptr) as usize);
+            if rs_mb_get_class(ptr) != start_class {
+                break;
+            }
+        }
+    }
+    ptr
 }
 
 #[cfg(test)]
