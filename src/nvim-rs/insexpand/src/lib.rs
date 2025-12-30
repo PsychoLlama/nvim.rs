@@ -30,8 +30,30 @@ const CTRL_X_SPELL: c_int = 14;
 // const CTRL_X_LOCAL_MSG: c_int = 15; // only used in ctrl_x_msgs
 const CTRL_X_EVAL: c_int = 16;
 const CTRL_X_CMDLINE_CTRL_X: c_int = 17;
-// const CTRL_X_BUFNAMES: c_int = 18;
+const CTRL_X_BUFNAMES: c_int = 18;
 const CTRL_X_REGISTER: c_int = 19;
+
+// Control key constants (from ascii_defs.h)
+// These are ASCII control codes: Ctrl_X = 'X' - 'A' + 1
+const CTRL_D: c_int = 4;
+const CTRL_E: c_int = 5;
+const CTRL_F: c_int = 6;
+const CTRL_I: c_int = 9;
+const CTRL_K: c_int = 11;
+const CTRL_L: c_int = 12;
+const CTRL_N: c_int = 14;
+const CTRL_O: c_int = 15;
+const CTRL_P: c_int = 16;
+const CTRL_Q: c_int = 17;
+const CTRL_R: c_int = 18;
+const CTRL_S: c_int = 19;
+const CTRL_T: c_int = 20;
+const CTRL_U: c_int = 21;
+const CTRL_V: c_int = 22;
+const CTRL_X: c_int = 24;
+const CTRL_Y: c_int = 25;
+const CTRL_Z: c_int = 26;
+const CTRL_RSB: c_int = 29; // Right Square Bracket (']' - '@')
 
 // Completion status flags (from insexpand.c)
 const CONT_ADDING: c_int = 1;
@@ -347,6 +369,77 @@ pub unsafe extern "C" fn rs_find_line_end(ptr: *mut c_char) -> *mut c_char {
         s = s.sub(1);
     }
     s
+}
+
+// =============================================================================
+// CTRL-X key checking
+// =============================================================================
+
+/// Check if a character is a valid CTRL-X completion key for the current mode.
+///
+/// This determines which keys are accepted in each CTRL-X sub-mode.
+/// Always allows ^R (except in register mode) to let its results be checked.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_vim_is_ctrl_x_key(c: c_int) -> c_int {
+    let mode = nvim_get_ctrl_x_mode();
+
+    // Always allow ^R - let its results then be checked
+    if c == CTRL_R && mode != CTRL_X_REGISTER {
+        return 1;
+    }
+
+    let result = match mode {
+        0 => {
+            // Not in any CTRL-X mode
+            c == CTRL_N || c == CTRL_P || c == CTRL_X
+        }
+        m if m == CTRL_X_NOT_DEFINED_YET || m == CTRL_X_CMDLINE_CTRL_X => {
+            c == CTRL_X
+                || c == CTRL_Y
+                || c == CTRL_E
+                || c == CTRL_L
+                || c == CTRL_F
+                || c == CTRL_RSB
+                || c == CTRL_I
+                || c == CTRL_D
+                || c == CTRL_P
+                || c == CTRL_N
+                || c == CTRL_T
+                || c == CTRL_V
+                || c == CTRL_Q
+                || c == CTRL_U
+                || c == CTRL_O
+                || c == CTRL_S
+                || c == CTRL_K
+                || c == i32::from(b's')
+                || c == CTRL_Z
+                || c == CTRL_R
+        }
+        m if m == CTRL_X_SCROLL => c == CTRL_Y || c == CTRL_E,
+        m if m == CTRL_X_WHOLE_LINE => c == CTRL_L || c == CTRL_P || c == CTRL_N,
+        m if m == CTRL_X_FILES => c == CTRL_F || c == CTRL_P || c == CTRL_N,
+        m if m == CTRL_X_DICTIONARY => c == CTRL_K || c == CTRL_P || c == CTRL_N,
+        m if m == CTRL_X_THESAURUS => c == CTRL_T || c == CTRL_P || c == CTRL_N,
+        m if m == CTRL_X_TAGS => c == CTRL_RSB || c == CTRL_P || c == CTRL_N,
+        m if m == CTRL_X_PATH_PATTERNS => c == CTRL_P || c == CTRL_N,
+        m if m == CTRL_X_PATH_DEFINES => c == CTRL_D || c == CTRL_P || c == CTRL_N,
+        m if m == CTRL_X_CMDLINE => {
+            c == CTRL_V || c == CTRL_Q || c == CTRL_P || c == CTRL_N || c == CTRL_X
+        }
+        m if m == CTRL_X_FUNCTION => c == CTRL_U || c == CTRL_P || c == CTRL_N,
+        m if m == CTRL_X_OMNI => c == CTRL_O || c == CTRL_P || c == CTRL_N,
+        m if m == CTRL_X_SPELL => c == CTRL_S || c == CTRL_P || c == CTRL_N,
+        m if m == CTRL_X_EVAL => c == CTRL_P || c == CTRL_N,
+        m if m == CTRL_X_BUFNAMES => c == CTRL_P || c == CTRL_N,
+        m if m == CTRL_X_REGISTER => c == CTRL_R || c == CTRL_P || c == CTRL_N,
+        _ => {
+            // internal_error case - should not happen
+            false
+        }
+    };
+
+    c_int::from(result)
 }
 
 #[cfg(test)]
