@@ -330,8 +330,13 @@ Functions blocked on missing accessor infrastructure:
 - `text_locked` - Migrated to Rust (rs_text_locked) - checks if text editing is locked
 - `get_text_locked_msg` - Migrated to Rust (rs_get_text_locked_msg) - returns error message for text lock
 
+**edit.c** (edit mode functions):
+- `prompt_curpos_editable` - Migrated to Rust (rs_prompt_curpos_editable) - checks if cursor is in editable position of prompt line
+
 **eval.c** (expression evaluation):
 - `eval_expr_valid_arg` - Migrated to Rust (rs_eval_expr_valid_arg) - checks if typval is valid expression
+- `partial_name` - Migrated to Rust (rs_partial_name) - returns function name of a partial
+- `is_luafunc` - Migrated to Rust (rs_is_luafunc) - checks if partial is the v:lua value
 
 **message.c** (message display functions):
 - `msg_use_printf` - Migrated to Rust (rs_msg_use_printf) - checks if messages should use printf (batch mode)
