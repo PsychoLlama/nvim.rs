@@ -143,6 +143,7 @@ extern int rs_ins_need_undo_get(void);
 extern int rs_get_can_cindent(void);
 extern char *rs_buf_prompt_text(const buf_T *buf);
 extern char *rs_prompt_text(void);
+extern bool rs_prompt_curpos_editable(void);
 
 /// Get the ins_need_undo static variable (accessor for Rust).
 int nvim_get_ins_need_undo(void)
@@ -160,6 +161,24 @@ int nvim_get_can_cindent(void)
 char *nvim_buf_get_b_prompt_text(const buf_T *buf)
 {
   return buf->b_prompt_text;
+}
+
+/// Get curwin->w_cursor.lnum (accessor for Rust).
+linenr_T nvim_curwin_get_cursor_lnum(void)
+{
+  return curwin->w_cursor.lnum;
+}
+
+/// Get curwin->w_cursor.col (accessor for Rust).
+colnr_T nvim_curwin_get_cursor_col(void)
+{
+  return curwin->w_cursor.col;
+}
+
+/// Get curbuf->b_prompt_start.mark.lnum (accessor for Rust).
+linenr_T nvim_curbuf_get_b_prompt_start_lnum(void)
+{
+  return curbuf->b_prompt_start.mark.lnum;
 }
 
 static TriState dont_sync_undo = kFalse;  // CTRL-G U prevents syncing undo
@@ -1657,9 +1676,7 @@ static void init_prompt(int cmdchar_todo)
 bool prompt_curpos_editable(void)
   FUNC_ATTR_PURE
 {
-  return curwin->w_cursor.lnum > curbuf->b_prompt_start.mark.lnum
-         || (curwin->w_cursor.lnum == curbuf->b_prompt_start.mark.lnum
-             && curwin->w_cursor.col >= (int)strlen(prompt_text()));
+  return rs_prompt_curpos_editable();
 }
 
 // Undo the previous edit_putchar().

@@ -7,6 +7,12 @@
 
 use std::ffi::{c_char, c_int};
 
+/// Line number type (matches `linenr_T` in Neovim).
+type LinenrT = i32;
+
+/// Column number type (matches `colnr_T` in Neovim).
+type ColnrT = i32;
+
 // C accessor functions for edit state.
 // These are defined in edit.c and provide safe access to static variables.
 extern "C" {
@@ -18,6 +24,12 @@ extern "C" {
     fn nvim_buf_get_b_prompt_text(buf: *const std::ffi::c_void) -> *const c_char;
     /// Get curbuf handle.
     fn nvim_get_curbuf() -> *const std::ffi::c_void;
+    /// Get curwin->w_cursor.lnum.
+    fn nvim_curwin_get_cursor_lnum() -> LinenrT;
+    /// Get curwin->w_cursor.col.
+    fn nvim_curwin_get_cursor_col() -> ColnrT;
+    /// Get curbuf->b_prompt_start.mark.lnum.
+    fn nvim_curbuf_get_b_prompt_start_lnum() -> LinenrT;
 }
 
 /// Check if undo is needed for insert mode.
@@ -70,6 +82,44 @@ pub unsafe extern "C" fn rs_buf_prompt_text(buf: *const std::ffi::c_void) -> *co
 #[no_mangle]
 pub unsafe extern "C" fn rs_prompt_text() -> *const c_char {
     rs_buf_prompt_text(nvim_get_curbuf())
+}
+
+/// Check if the cursor is in the editable position of the prompt line.
+///
+/// Returns true if the cursor is past the prompt text on the prompt line.
+///
+/// # Safety
+/// Accesses curwin and curbuf globals via accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_prompt_curpos_editable() -> bool {
+    let cursor_lnum = nvim_curwin_get_cursor_lnum();
+    let prompt_start_lnum = nvim_curbuf_get_b_prompt_start_lnum();
+
+    if cursor_lnum > prompt_start_lnum {
+        return true;
+    }
+
+    if cursor_lnum == prompt_start_lnum {
+        let cursor_col = nvim_curwin_get_cursor_col();
+        let prompt = rs_prompt_text();
+        // strlen of the prompt text
+        let prompt_len = if prompt.is_null() {
+            0
+        } else {
+            let mut len = 0usize;
+            while *prompt.add(len) != 0 {
+                len += 1;
+            }
+            // Safe: prompt strings are always short (well under i32::MAX)
+            #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+            {
+                len as ColnrT
+            }
+        };
+        return cursor_col >= prompt_len;
+    }
+
+    false
 }
 
 #[cfg(test)]
