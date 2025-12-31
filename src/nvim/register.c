@@ -6,6 +6,7 @@
 
 extern bool rs_valid_yank_reg(int regname, bool writing);
 extern int rs_get_unname_register(void);
+extern void rs_format_reg_type(int reg_type, int reg_width, char *buf, size_t buf_len);
 #include "nvim/autocmd.h"
 #include "nvim/buffer.h"
 #include "nvim/buffer_defs.h"
@@ -51,6 +52,8 @@ extern int rs_get_unname_register(void);
 
 #include "register.c.generated.h"
 
+extern void rs_update_yankreg_width(yankreg_T *reg);
+
 // Keep the last expression line here, for repeating.
 static char *expr_line = NULL;
 
@@ -67,6 +70,48 @@ static const char e_search_pattern_and_expression_register_may_not_contain_two_o
 int nvim_get_y_previous_index(void)
 {
   return y_previous == NULL ? -1 : (int)(y_previous - &y_regs[0]);
+}
+
+// C accessors for yankreg_T fields (used by Rust)
+
+size_t nvim_yankreg_get_size(yankreg_T *reg)
+{
+  return reg->y_size;
+}
+
+int nvim_yankreg_get_type(yankreg_T *reg)
+{
+  return (int)reg->y_type;
+}
+
+colnr_T nvim_yankreg_get_width(yankreg_T *reg)
+{
+  return reg->y_width;
+}
+
+void nvim_yankreg_set_width(yankreg_T *reg, colnr_T width)
+{
+  reg->y_width = width;
+}
+
+const char *nvim_yankreg_get_line_data(yankreg_T *reg, size_t idx)
+{
+  return reg->y_array[idx].data;
+}
+
+size_t nvim_yankreg_get_line_size(yankreg_T *reg, size_t idx)
+{
+  return reg->y_array[idx].size;
+}
+
+bool nvim_yankreg_is_empty(yankreg_T *reg)
+{
+  return reg_empty(reg);
+}
+
+yankreg_T *nvim_get_y_regs_ptr(int idx)
+{
+  return &y_regs[idx];
 }
 
 /// @return the index of the register "" points to.
@@ -286,15 +331,7 @@ bool op_reg_set_previous(const char name)
 /// Do nothing on a non-blockwise register.
 void update_yankreg_width(yankreg_T *reg)
 {
-  if (reg->y_type == kMTBlockWise) {
-    size_t maxlen = 0;
-    for (size_t i = 0; i < reg->y_size; i++) {
-      size_t rowlen = mb_string2cells_len(reg->y_array[i].data, reg->y_array[i].size);
-      maxlen = MAX(maxlen, rowlen);
-    }
-    assert(maxlen <= INT_MAX);
-    reg->y_width = MAX(reg->y_width, (int)maxlen - 1);
-  }
+  rs_update_yankreg_width(reg);
 }
 
 /// @return yankreg_T to use, according to the value of `regname`.
@@ -1171,23 +1208,7 @@ void op_yank_reg(oparg_T *oap, bool message, yankreg_T *reg, bool append)
 void format_reg_type(MotionType reg_type, colnr_T reg_width, char *buf, size_t buf_len)
   FUNC_ATTR_NONNULL_ALL
 {
-  assert(buf_len > 1);
-  switch (reg_type) {
-  case kMTLineWise:
-    buf[0] = 'V';
-    buf[1] = NUL;
-    break;
-  case kMTCharWise:
-    buf[0] = 'v';
-    buf[1] = NUL;
-    break;
-  case kMTBlockWise:
-    snprintf(buf, buf_len, CTRL_V_STR "%" PRIdCOLNR, reg_width + 1);
-    break;
-  case kMTUnknown:
-    buf[0] = NUL;
-    break;
-  }
+  rs_format_reg_type((int)reg_type, (int)reg_width, buf, buf_len);
 }
 
 /// Execute autocommands for TextYankPost.

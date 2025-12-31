@@ -55,7 +55,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | popupmenu    | Popup menu visibility state queries                |
 | profile      | Profiling time arithmetic                          |
 | quickfix     | Quickfix/location list state queries               |
-| register     | Register name validation                           |
+| register     | Register validation, type formatting, width calc   |
 | search       | Character search state, search/substitute tracking |
 | spell        | Spell check utilities                              |
 | statusline   | Status line rendering helpers                      |
