@@ -67,6 +67,8 @@ extern bool rs_yank_register_mline(int regname, yankreg_T **reg);
 extern void rs_free_register(yankreg_T *reg);
 extern int rs_stuff_yank(int regname, char *p);
 extern yankreg_T *rs_copy_register(int name);
+extern void rs_str_to_reg(yankreg_T *y_ptr, MotionType yank_type, const char *str, size_t len,
+                          colnr_T blocklen, bool str_list);
 
 // Keep the last expression line here, for repeating.
 static char *expr_line = NULL;
@@ -359,6 +361,92 @@ void nvim_yankreg_set_additional_data(yankreg_T *reg, void *data)
 void nvim_yankreg_set_array_ptr(yankreg_T *reg, void *array)
 {
   reg->y_array = array;
+}
+
+// Phase 9 accessors: str_to_reg support
+
+/// Count occurrences of character in memory region.
+size_t nvim_memcnt(const char *str, char c, size_t len)
+{
+  return memcnt(str, c, len);
+}
+
+/// Reallocate memory.
+void *nvim_xrealloc(void *ptr, size_t size)
+{
+  return xrealloc(ptr, size);
+}
+
+/// Allocate zero-terminated memory.
+char *nvim_xmallocz(size_t size)
+{
+  return xmallocz(size);
+}
+
+/// Substitute characters in memory region.
+void nvim_memchrsub(char *data, char from, char to, size_t len)
+{
+  memchrsub(data, from, to, len);
+}
+
+/// Convert C string to String (makes a copy).
+String nvim_cstr_to_string(const char *str)
+{
+  return cstr_to_string(str);
+}
+
+/// Get display width of a string.
+size_t nvim_mb_string2cells(const char *str)
+{
+  return mb_string2cells(str);
+}
+
+/// Get display width of a character at pointer with length limit.
+int nvim_utf_ptr2cells_len(const char *p, int size)
+{
+  return utf_ptr2cells_len(p, size);
+}
+
+/// Get byte length of UTF-8 character at pointer with length limit.
+int nvim_utf_ptr2len_len(const char *p, int size)
+{
+  return utf_ptr2len_len(p, size);
+}
+
+/// Reallocate y_array to hold count entries.
+void nvim_yankreg_realloc_array(yankreg_T *reg, size_t count)
+{
+  reg->y_array = xrealloc(reg->y_array, count * sizeof(String));
+}
+
+/// Get y_array pointer.
+String *nvim_yankreg_get_array(yankreg_T *reg)
+{
+  return reg->y_array;
+}
+
+/// Set a String directly at index (for str_list mode).
+void nvim_yankreg_set_string_at(yankreg_T *reg, size_t idx, String s)
+{
+  reg->y_array[idx] = s;
+}
+
+/// Get data pointer at index.
+char *nvim_yankreg_get_data_at(yankreg_T *reg, size_t idx)
+{
+  return reg->y_array[idx].data;
+}
+
+/// Get size at index.
+size_t nvim_yankreg_get_size_at(yankreg_T *reg, size_t idx)
+{
+  return reg->y_array[idx].size;
+}
+
+/// Free data at index.
+void nvim_yankreg_free_data_at(yankreg_T *reg, size_t idx)
+{
+  xfree(reg->y_array[idx].data);
 }
 
 /// @return the index of the register "" points to.
@@ -2525,117 +2613,7 @@ static void str_to_reg(yankreg_T *y_ptr, MotionType yank_type, const char *str, 
                        colnr_T blocklen, bool str_list)
   FUNC_ATTR_NONNULL_ALL
 {
-  if (y_ptr->y_array == NULL) {  // NULL means empty register
-    y_ptr->y_size = 0;
-  }
-
-  if (yank_type == kMTUnknown) {
-    yank_type = ((str_list
-                  || (len > 0 && (str[len - 1] == NL || str[len - 1] == CAR)))
-                 ? kMTLineWise : kMTCharWise);
-  }
-
-  size_t newlines = 0;
-  bool extraline = false;  // extra line at the end
-  bool append = false;     // append to last line in register
-
-  // Count the number of lines within the string
-  if (str_list) {
-    for (char **ss = (char **)str; *ss != NULL; ss++) {
-      newlines++;
-    }
-  } else {
-    newlines = memcnt(str, '\n', len);
-    if (yank_type == kMTCharWise || len == 0 || str[len - 1] != '\n') {
-      extraline = 1;
-      newlines++;         // count extra newline at the end
-    }
-    if (y_ptr->y_size > 0 && y_ptr->y_type == kMTCharWise) {
-      append = true;
-      newlines--;         // uncount newline when appending first line
-    }
-  }
-
-  // Without any lines make the register empty.
-  if (y_ptr->y_size + newlines == 0) {
-    XFREE_CLEAR(y_ptr->y_array);
-    return;
-  }
-
-  // Grow the register array to hold the pointers to the new lines.
-  String *pp = xrealloc(y_ptr->y_array, (y_ptr->y_size + newlines) * sizeof(String));
-  y_ptr->y_array = pp;
-
-  size_t lnum = y_ptr->y_size;  // The current line number.
-
-  // If called with `blocklen < 0`, we have to update the yank reg's width.
-  size_t maxlen = 0;
-
-  // Find the end of each line and save it into the array.
-  if (str_list) {
-    for (char **ss = (char **)str; *ss != NULL; ss++, lnum++) {
-      pp[lnum] = cstr_to_string(*ss);
-      if (yank_type == kMTBlockWise) {
-        size_t charlen = mb_string2cells(*ss);
-        maxlen = MAX(maxlen, charlen);
-      }
-    }
-  } else {
-    size_t line_len;
-    for (const char *start = str, *end = str + len;
-         start < end + extraline;
-         start += line_len + 1, lnum++) {
-      int charlen = 0;
-
-      const char *line_end = start;
-      while (line_end < end) {  // find the end of the line
-        if (*line_end == '\n') {
-          break;
-        }
-        if (yank_type == kMTBlockWise) {
-          charlen += utf_ptr2cells_len(line_end, (int)(end - line_end));
-        }
-
-        if (*line_end == NUL) {
-          line_end++;  // registers can have NUL chars
-        } else {
-          line_end += utf_ptr2len_len(line_end, (int)(end - line_end));
-        }
-      }
-      assert(line_end - start >= 0);
-      line_len = (size_t)(line_end - start);
-      maxlen = MAX(maxlen, (size_t)charlen);
-
-      // When appending, copy the previous line and free it after.
-      size_t extra = append ? pp[--lnum].size : 0;
-      char *s = xmallocz(line_len + extra);
-      if (extra > 0) {
-        memcpy(s, pp[lnum].data, extra);
-      }
-      if (line_len > 0) {
-        memcpy(s + extra, start, line_len);
-      }
-      size_t s_len = extra + line_len;
-
-      if (append) {
-        xfree(pp[lnum].data);
-        append = false;  // only first line is appended
-      }
-      pp[lnum] = cbuf_as_string(s, s_len);
-
-      // Convert NULs to '\n' to prevent truncation.
-      memchrsub(pp[lnum].data, NUL, '\n', s_len);
-    }
-  }
-  y_ptr->y_type = yank_type;
-  y_ptr->y_size = lnum;
-  XFREE_CLEAR(y_ptr->additional_data);
-  y_ptr->timestamp = os_time();
-  if (yank_type == kMTBlockWise) {
-    y_ptr->y_width = (blocklen == -1 ? (colnr_T)maxlen - 1 : blocklen);
-  } else {
-    y_ptr->y_width = 0;
-  }
+  rs_str_to_reg(y_ptr, yank_type, str, len, blocklen, str_list);
 }
 
 static void finish_write_reg(int name, yankreg_T *reg, yankreg_T *old_y_previous)

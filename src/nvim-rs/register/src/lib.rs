@@ -22,6 +22,23 @@ const CTRL_V: u8 = 0x16;
 #[derive(Clone, Copy)]
 pub struct YankRegHandle(*mut std::ffi::c_void);
 
+/// String type matching C's `String` struct (data pointer + size).
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct NvimString {
+    pub data: *mut c_char,
+    pub size: usize,
+}
+
+impl Default for NvimString {
+    fn default() -> Self {
+        Self {
+            data: std::ptr::null_mut(),
+            size: 0,
+        }
+    }
+}
+
 // FFI declarations for C accessor functions
 extern "C" {
     /// Get the index of the unnamed register (y_previous - y_regs), or -1 if NULL.
@@ -86,6 +103,20 @@ extern "C" {
     fn nvim_xcalloc(count: usize, size: usize) -> *mut std::ffi::c_void;
     fn nvim_copy_yankreg_line(dst: YankRegHandle, dst_idx: usize, src: YankRegHandle, src_idx: usize);
     fn nvim_yankreg_set_array_ptr(reg: YankRegHandle, array: *mut std::ffi::c_void);
+
+    // Phase 9 accessors: str_to_reg support
+    fn nvim_memcnt(str: *const c_char, c: c_char, len: usize) -> usize;
+    fn nvim_xmallocz(size: usize) -> *mut c_char;
+    fn nvim_memchrsub(data: *mut c_char, from: c_char, to: c_char, len: usize);
+    fn nvim_cstr_to_string(str: *const c_char) -> NvimString;
+    fn nvim_mb_string2cells(str: *const c_char) -> usize;
+    fn nvim_utf_ptr2cells_len(p: *const c_char, size: c_int) -> c_int;
+    fn nvim_utf_ptr2len_len(p: *const c_char, size: c_int) -> c_int;
+    fn nvim_yankreg_realloc_array(reg: YankRegHandle, count: usize);
+    fn nvim_yankreg_set_string_at(reg: YankRegHandle, idx: usize, s: NvimString);
+    fn nvim_yankreg_get_data_at(reg: YankRegHandle, idx: usize) -> *mut c_char;
+    fn nvim_yankreg_get_size_at(reg: YankRegHandle, idx: usize) -> usize;
+    fn nvim_yankreg_free_data_at(reg: YankRegHandle, idx: usize);
 }
 
 /// Register index constants (matching `register_defs.h`).
@@ -805,6 +836,192 @@ pub unsafe extern "C" fn rs_copy_register(name: c_int) -> YankRegHandle {
     }
 
     copy
+}
+
+/// NL (newline) character.
+const NL: c_char = b'\n' as c_char;
+/// CAR (carriage return) character.
+const CAR: c_char = b'\r' as c_char;
+/// NUL character.
+const NUL_CHAR: c_char = 0;
+
+/// Convert a string to register contents.
+///
+/// This function handles two modes:
+/// - str_list=true: str is actually a char** (NULL-terminated array of C strings)
+/// - str_list=false: str is a regular string with embedded newlines
+///
+/// # Safety
+///
+/// All pointers must be valid. If str_list is true, str must be a valid char**.
+#[no_mangle]
+pub unsafe extern "C" fn rs_str_to_reg(
+    y_ptr: YankRegHandle,
+    mut yank_type: c_int,
+    str: *const c_char,
+    len: usize,
+    blocklen: c_int,
+    str_list: bool,
+) {
+    // If y_array is NULL, set y_size to 0
+    if !nvim_yankreg_has_array(y_ptr) {
+        nvim_yankreg_set_size(y_ptr, 0);
+    }
+
+    // Determine yank type if unknown
+    if yank_type == K_MT_UNKNOWN {
+        if str_list {
+            yank_type = K_MT_LINE_WISE;
+        } else if len > 0 {
+            let last_char = *str.add(len - 1);
+            if last_char == NL || last_char == CAR {
+                yank_type = K_MT_LINE_WISE;
+            } else {
+                yank_type = K_MT_CHAR_WISE;
+            }
+        } else {
+            yank_type = K_MT_CHAR_WISE;
+        }
+    }
+
+    let mut newlines: usize = 0;
+    let mut extraline = false;
+    let mut append = false;
+
+    // Count the number of lines within the string
+    if str_list {
+        // str is actually a char**
+        let mut ss = str as *const *const c_char;
+        while !(*ss).is_null() {
+            newlines += 1;
+            ss = ss.add(1);
+        }
+    } else {
+        newlines = nvim_memcnt(str, b'\n' as c_char, len);
+        if yank_type == K_MT_CHAR_WISE || len == 0 || *str.add(len - 1) != b'\n' as c_char {
+            extraline = true;
+            newlines += 1;
+        }
+        let y_size = nvim_yankreg_get_size(y_ptr);
+        let y_type = nvim_yankreg_get_type(y_ptr);
+        if y_size > 0 && y_type == K_MT_CHAR_WISE {
+            append = true;
+            newlines -= 1;
+        }
+    }
+
+    let y_size = nvim_yankreg_get_size(y_ptr);
+
+    // Without any lines make the register empty
+    if y_size + newlines == 0 {
+        nvim_yankreg_free_array(y_ptr);
+        return;
+    }
+
+    // Grow the register array to hold the pointers to the new lines
+    nvim_yankreg_realloc_array(y_ptr, y_size + newlines);
+
+    let mut lnum = y_size;
+    let mut maxlen: usize = 0;
+
+    // Find the end of each line and save it into the array
+    if str_list {
+        let mut ss = str as *const *const c_char;
+        while !(*ss).is_null() {
+            let s = nvim_cstr_to_string(*ss);
+            nvim_yankreg_set_string_at(y_ptr, lnum, s);
+            if yank_type == K_MT_BLOCK_WISE {
+                let charlen = nvim_mb_string2cells(*ss);
+                if charlen > maxlen {
+                    maxlen = charlen;
+                }
+            }
+            lnum += 1;
+            ss = ss.add(1);
+        }
+    } else {
+        let end = str.add(len);
+        let mut start = str;
+        let extraline_offset = if extraline { 1isize } else { 0isize };
+
+        while start < end.offset(extraline_offset) {
+            let mut charlen: c_int = 0;
+            let mut line_end = start;
+
+            // Find the end of the line
+            while line_end < end {
+                if *line_end == b'\n' as c_char {
+                    break;
+                }
+                if yank_type == K_MT_BLOCK_WISE {
+                    charlen += nvim_utf_ptr2cells_len(line_end, (end as isize - line_end as isize) as c_int);
+                }
+
+                if *line_end == NUL_CHAR {
+                    line_end = line_end.add(1);
+                } else {
+                    line_end = line_end.add(nvim_utf_ptr2len_len(line_end, (end as isize - line_end as isize) as c_int) as usize);
+                }
+            }
+
+            let line_len = (line_end as usize) - (start as usize);
+            if (charlen as usize) > maxlen {
+                maxlen = charlen as usize;
+            }
+
+            // When appending, copy the previous line and free it after
+            let extra = if append {
+                lnum -= 1;
+                nvim_yankreg_get_size_at(y_ptr, lnum)
+            } else {
+                0
+            };
+
+            let s = nvim_xmallocz(line_len + extra);
+            if extra > 0 {
+                let prev_data = nvim_yankreg_get_data_at(y_ptr, lnum);
+                std::ptr::copy_nonoverlapping(prev_data, s, extra);
+            }
+            if line_len > 0 {
+                std::ptr::copy_nonoverlapping(start, s.add(extra), line_len);
+            }
+            let s_len = extra + line_len;
+
+            if append {
+                nvim_yankreg_free_data_at(y_ptr, lnum);
+                append = false;
+            }
+
+            // Set the string
+            let new_string = NvimString {
+                data: s,
+                size: s_len,
+            };
+            nvim_yankreg_set_string_at(y_ptr, lnum, new_string);
+
+            // Convert NULs to '\n' to prevent truncation
+            nvim_memchrsub(s, NUL_CHAR, b'\n' as c_char, s_len);
+
+            lnum += 1;
+            start = line_end.add(1);
+        }
+    }
+
+    nvim_yankreg_set_type(y_ptr, yank_type);
+    nvim_yankreg_set_size(y_ptr, lnum);
+    nvim_yankreg_free_additional_data(y_ptr);
+    nvim_yankreg_set_timestamp(y_ptr, nvim_os_time());
+
+    if yank_type == K_MT_BLOCK_WISE {
+        let width = if blocklen == -1 {
+            (maxlen as c_int) - 1
+        } else {
+            blocklen
+        };
+        nvim_yankreg_set_width(y_ptr, width);
+    } else {
+        nvim_yankreg_set_width(y_ptr, 0);
+    }
 }
 
 #[cfg(test)]
