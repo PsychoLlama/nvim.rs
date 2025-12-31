@@ -476,6 +476,53 @@ const CTRL_P: c_int = 16;
 const CTRL_W: c_int = 23;
 const NUL: c_int = 0;
 
+/// Check if the current yank register has kMTLineWise register type.
+///
+/// For valid, non-blackhole registers also provides pointer to the register
+/// structure prepared for pasting.
+///
+/// # Arguments
+///
+/// * `regname` - The name of the register used or 0 for the unnamed register.
+/// * `reg` - Output pointer to store the register handle.
+///
+/// # Returns
+///
+/// True if the register is linewise, false otherwise.
+/// Sets `*reg` to the register handle, or NULL for invalid/blackhole registers.
+///
+/// # Safety
+///
+/// The `reg` output pointer must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_yank_register_mline(regname: c_int, reg: *mut YankRegHandle) -> bool {
+    // Set output to NULL initially
+    if !reg.is_null() {
+        *reg = YankRegHandle(std::ptr::null_mut());
+    }
+
+    // Validate register name (0 is allowed for unnamed register)
+    if regname != 0 && !rs_valid_yank_reg(regname, false) {
+        return false;
+    }
+
+    // Black hole register is always empty
+    if regname == c_int::from(b'_') {
+        return false;
+    }
+
+    // Get the register for pasting
+    let yankreg = nvim_get_yank_register_for_paste(regname);
+
+    // Set output register pointer
+    if !reg.is_null() {
+        *reg = yankreg;
+    }
+
+    // Return whether it's linewise
+    nvim_yankreg_get_type(yankreg) == K_MT_LINE_WISE
+}
+
 /// Get the type of a register.
 ///
 /// Used for getregtype().

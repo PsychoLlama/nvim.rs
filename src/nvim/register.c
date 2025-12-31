@@ -63,6 +63,7 @@ extern char *rs_get_expr_line(void);
 extern yankreg_T *rs_init_write_reg(int name, yankreg_T **old_y_previous, bool must_append);
 extern void rs_finish_write_reg(int name, yankreg_T *reg, yankreg_T *old_y_previous);
 extern MotionType rs_get_reg_type(int regname, colnr_T *reg_width);
+extern bool rs_yank_register_mline(int regname, yankreg_T **reg);
 
 // Keep the last expression line here, for repeating.
 static char *expr_line = NULL;
@@ -455,15 +456,7 @@ yankreg_T *get_yank_register(int regname, int mode)
 ///        set to NULL for invalid or blackhole registers.
 bool yank_register_mline(int regname, yankreg_T **reg)
 {
-  *reg = NULL;
-  if (regname != 0 && !valid_yank_reg(regname, false)) {
-    return false;
-  }
-  if (regname == '_') {  // black hole is always empty
-    return false;
-  }
-  *reg = get_yank_register(regname, YREG_PASTE);
-  return (*reg)->y_type == kMTLineWise;
+  return rs_yank_register_mline(regname, reg);
 }
 
 /// @return  a copy of contents in register `name` for use in do_put. Should be
