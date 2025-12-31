@@ -3922,6 +3922,8 @@ bool func_equal(typval_T *tv1, typval_T *tv2, bool ic)
   return true;
 }
 
+extern int rs_get_copyID(void);
+
 /// Get next (unique) copy ID
 ///
 /// Used for traversing nested structures e.g. when serializing them or garbage
@@ -3929,13 +3931,7 @@ bool func_equal(typval_T *tv1, typval_T *tv2, bool ic)
 int get_copyID(void)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  // CopyID for recursively traversing lists and dicts
-  //
-  // This value is needed to avoid endless recursiveness. Last bit is used for
-  // previous_funccal and normally ignored when comparing.
-  static int current_copyID = 0;
-  current_copyID += COPYID_INC;
-  return current_copyID;
+  return rs_get_copyID();
 }
 
 /// Garbage collection for lists and dictionaries.

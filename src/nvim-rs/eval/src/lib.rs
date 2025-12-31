@@ -8,6 +8,28 @@
 #![allow(clippy::missing_const_for_fn)]
 
 use std::ffi::c_int;
+use std::sync::atomic::{AtomicI32, Ordering};
+
+// =============================================================================
+// CopyID for recursive traversal
+// =============================================================================
+
+/// Increment value for copy IDs (last bit is reserved for previous_funccal).
+const COPYID_INC: i32 = 2;
+
+/// Current copy ID for traversing lists and dicts.
+/// This is used to avoid endless recursiveness when serializing or garbage collecting.
+static CURRENT_COPY_ID: AtomicI32 = AtomicI32::new(0);
+
+/// Get the next (unique) copy ID.
+///
+/// Used for traversing nested structures (e.g., when serializing them or
+/// garbage collecting). Increments by 2 because the last bit is used for
+/// `previous_funccal` and normally ignored when comparing.
+#[no_mangle]
+pub extern "C" fn rs_get_copyID() -> c_int {
+    CURRENT_COPY_ID.fetch_add(COPYID_INC, Ordering::Relaxed) + COPYID_INC
+}
 
 // =============================================================================
 // TriState type and conversions
@@ -538,5 +560,16 @@ mod tests {
         // kNone -> default
         assert!(!rs_tristate_to_bool(K_NONE, false));
         assert!(rs_tristate_to_bool(K_NONE, true));
+    }
+
+    #[test]
+    fn test_get_copyid() {
+        // Each call should return a value 2 greater than the last
+        let first = rs_get_copyID();
+        let second = rs_get_copyID();
+        let third = rs_get_copyID();
+
+        assert_eq!(second - first, 2);
+        assert_eq!(third - second, 2);
     }
 }
