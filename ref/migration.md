@@ -385,7 +385,7 @@ Terminfo output infrastructure for Rust:
 
 ### Register Module (register.c - PARTIALLY MIGRATED)
 
-**Migrated Functions (22 rs_* functions):**
+**Migrated Functions (23 rs_* functions):**
 - `rs_valid_yank_reg` - Register name validation
 - `rs_get_unname_register` - Get unnamed register index
 - `rs_is_literal_register` - Check if literal register (clipboard)
@@ -406,20 +406,20 @@ Terminfo output infrastructure for Rust:
 - `rs_free_register` - Free register contents
 - `rs_stuff_yank` - Store string in register
 - `rs_copy_register` - Deep copy a register
+- `rs_str_to_reg` - Convert string/list to register (UTF-8 aware)
 
-**Accessor Functions (~30):**
+**Accessor Functions (~45):**
 - yankreg_T field getters/setters (size, type, width, timestamp, array)
-- Memory allocation wrappers (xmalloc, xcalloc, xfree)
-- String/line manipulation helpers
+- Memory allocation wrappers (xmalloc, xcalloc, xmallocz, xfree)
+- String/line manipulation helpers (memcnt, memchrsub, cstr_to_string)
+- UTF-8 functions (mb_string2cells, utf_ptr2cells_len, utf_ptr2len_len)
 
 **Remaining Functions (complex, need extensive infrastructure):**
-- `str_to_reg` (~115 lines) - String parsing with UTF-8, needs memcnt, xrealloc, memchrsub
 - `do_put` (~789 lines) - Buffer operations, undo, extmarks
 - `do_record`, `do_execreg` - Macro recording/execution, typeahead
 - `ex_display` - Register display, message system
 - `insert_reg`, `get_spec_reg` - Special register handling
 - `op_yank_reg` - Yank operations with block_def struct
-- `write_reg_contents_ex/lst` - Wrappers around str_to_reg
 
 ### Complex Memory/Buffer Operations
 Functions involving memory management or buffer content access:
