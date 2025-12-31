@@ -60,6 +60,8 @@ extern void rs_shift_delete_registers(bool y_append);
 extern void rs_set_expr_line(char *new_line);
 extern char *rs_get_expr_line_src(void);
 extern char *rs_get_expr_line(void);
+extern yankreg_T *rs_init_write_reg(int name, yankreg_T **old_y_previous, bool must_append);
+extern void rs_finish_write_reg(int name, yankreg_T *reg, yankreg_T *old_y_previous);
 
 // Keep the last expression line here, for repeating.
 static char *expr_line = NULL;
@@ -171,6 +173,38 @@ char *nvim_eval_to_string(const char *expr, bool want_retval, bool in_sandbox)
 {
   // Need to cast away const since eval_to_string takes char*
   return eval_to_string((char *)expr, want_retval, in_sandbox);
+}
+
+// Phase 4 accessors: init_write_reg / finish_write_reg support
+
+/// Get the yank register for writing (YREG_YANK mode).
+yankreg_T *nvim_get_yank_register_for_write(int regname)
+{
+  return get_yank_register(regname, YREG_YANK);
+}
+
+/// Emit "Invalid register name" error message.
+void nvim_emsg_invreg(int name)
+{
+  emsg_invreg(name);
+}
+
+/// Get current y_previous pointer.
+yankreg_T *nvim_get_y_previous(void)
+{
+  return y_previous;
+}
+
+/// Set y_previous to a specific register pointer.
+void nvim_set_y_previous(yankreg_T *reg)
+{
+  y_previous = reg;
+}
+
+/// Send register to clipboard.
+void nvim_set_clipboard(int name, yankreg_T *reg)
+{
+  set_clipboard(name, reg);
 }
 
 /// @return the index of the register "" points to.
@@ -2406,19 +2440,7 @@ void *get_reg_contents(int regname, int flags)
 
 static yankreg_T *init_write_reg(int name, yankreg_T **old_y_previous, bool must_append)
 {
-  if (!valid_yank_reg(name, true)) {  // check for valid reg name
-    emsg_invreg(name);
-    return NULL;
-  }
-
-  // Don't want to change the current (unnamed) register.
-  *old_y_previous = y_previous;
-
-  yankreg_T *reg = get_yank_register(name, YREG_YANK);
-  if (!is_append_register(name) && !must_append) {
-    free_register(reg);
-  }
-  return reg;
+  return rs_init_write_reg(name, old_y_previous, must_append);
 }
 
 /// str_to_reg - Put a string into a register.
@@ -2550,13 +2572,7 @@ static void str_to_reg(yankreg_T *y_ptr, MotionType yank_type, const char *str, 
 
 static void finish_write_reg(int name, yankreg_T *reg, yankreg_T *old_y_previous)
 {
-  // Send text of clipboard register to the clipboard.
-  set_clipboard(name, reg);
-
-  // ':let @" = "val"' should change the meaning of the "" register
-  if (name != '"') {
-    y_previous = old_y_previous;
-  }
+  rs_finish_write_reg(name, reg, old_y_previous);
 }
 
 /// store `str` in register `name`

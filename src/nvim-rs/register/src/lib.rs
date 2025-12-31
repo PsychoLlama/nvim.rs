@@ -53,6 +53,13 @@ extern "C" {
     fn nvim_xstrdup(str: *const c_char) -> *mut c_char;
     fn nvim_eval_to_string(expr: *const c_char, want_retval: bool, in_sandbox: bool)
         -> *mut c_char;
+
+    // Phase 4 accessors: init_write_reg / finish_write_reg support
+    fn nvim_get_yank_register_for_write(regname: c_int) -> YankRegHandle;
+    fn nvim_emsg_invreg(name: c_int);
+    fn nvim_get_y_previous() -> YankRegHandle;
+    fn nvim_set_y_previous(reg: YankRegHandle);
+    fn nvim_set_clipboard(name: c_int, reg: YankRegHandle);
 }
 
 /// Register index constants (matching `register_defs.h`).
@@ -383,6 +390,80 @@ pub unsafe extern "C" fn rs_get_expr_line() -> *mut c_char {
     NESTED -= 1;
     nvim_xfree(expr_copy as *mut std::ffi::c_void);
     rv
+}
+
+/// Initialize a register for writing.
+///
+/// Validates the register name, saves the old y_previous, gets the register,
+/// and optionally frees it if not appending.
+///
+/// # Arguments
+///
+/// * `name` - Register name character.
+/// * `old_y_previous` - Output pointer to save the old y_previous.
+/// * `must_append` - If true, don't free the register even for non-append registers.
+///
+/// # Returns
+///
+/// Pointer to the register, or NULL if the register name is invalid.
+///
+/// # Safety
+///
+/// The `old_y_previous` pointer must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_init_write_reg(
+    name: c_int,
+    old_y_previous: *mut YankRegHandle,
+    must_append: bool,
+) -> YankRegHandle {
+    // Check for valid register name
+    if !rs_valid_yank_reg(name, true) {
+        nvim_emsg_invreg(name);
+        return YankRegHandle(std::ptr::null_mut());
+    }
+
+    // Save old y_previous - don't want to change the current (unnamed) register
+    if !old_y_previous.is_null() {
+        *old_y_previous = nvim_get_y_previous();
+    }
+
+    // Get the register for writing
+    let reg = nvim_get_yank_register_for_write(name);
+
+    // Free the register if not appending
+    if rs_is_append_register(name) == 0 && !must_append {
+        nvim_free_register(reg);
+    }
+
+    reg
+}
+
+/// Finalize a register write operation.
+///
+/// Sends the register to the clipboard and restores y_previous if needed.
+///
+/// # Arguments
+///
+/// * `name` - Register name character.
+/// * `reg` - The register that was written.
+/// * `old_y_previous` - The saved y_previous to restore.
+///
+/// # Safety
+///
+/// The `reg` handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_finish_write_reg(
+    name: c_int,
+    reg: YankRegHandle,
+    old_y_previous: YankRegHandle,
+) {
+    // Send text of clipboard register to the clipboard
+    nvim_set_clipboard(name, reg);
+
+    // ':let @" = "val"' should change the meaning of the "" register
+    if name != c_int::from(b'"') {
+        nvim_set_y_previous(old_y_previous);
+    }
 }
 
 /// Format the register type as a string.
