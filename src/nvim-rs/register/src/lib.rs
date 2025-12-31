@@ -80,6 +80,12 @@ extern "C" {
     fn nvim_yankreg_get_last_line_data(reg: YankRegHandle) -> *const c_char;
     fn nvim_yankreg_get_last_line_size(reg: YankRegHandle) -> usize;
     fn nvim_yankreg_replace_last_line(reg: YankRegHandle, data: *mut c_char, len: usize);
+
+    // Phase 8 accessors: copy_register support
+    fn nvim_alloc_yankreg() -> YankRegHandle;
+    fn nvim_xcalloc(count: usize, size: usize) -> *mut std::ffi::c_void;
+    fn nvim_copy_yankreg_line(dst: YankRegHandle, dst_idx: usize, src: YankRegHandle, src_idx: usize);
+    fn nvim_yankreg_set_array_ptr(reg: YankRegHandle, array: *mut std::ffi::c_void);
 }
 
 /// Register index constants (matching `register_defs.h`).
@@ -752,6 +758,53 @@ pub unsafe extern "C" fn rs_stuff_yank(regname: c_int, p: *mut c_char) -> c_int 
 
     nvim_yankreg_set_timestamp(reg, nvim_os_time());
     OK
+}
+
+/// Size of the String struct (data pointer + size_t).
+const STRING_SIZE: usize = std::mem::size_of::<usize>() * 2;
+
+/// Copy a register and return a pointer to a newly allocated register.
+///
+/// # Arguments
+///
+/// * `name` - Register name character.
+///
+/// # Returns
+///
+/// Pointer to the newly allocated copy.
+///
+/// # Safety
+///
+/// The returned register must be freed by the caller.
+#[no_mangle]
+pub unsafe extern "C" fn rs_copy_register(name: c_int) -> YankRegHandle {
+    // Get the source register
+    let src = nvim_get_yank_register_for_paste(name);
+
+    // Allocate a new register
+    let copy = nvim_alloc_yankreg();
+
+    // Shallow copy all fields using nvim_copy_yankreg
+    nvim_copy_yankreg(copy, src);
+
+    // Get the size
+    let size = nvim_yankreg_get_size(copy);
+
+    if size == 0 {
+        // Set y_array to NULL
+        nvim_yankreg_set_array_ptr(copy, std::ptr::null_mut());
+    } else {
+        // Allocate new array
+        let array = nvim_xcalloc(size, STRING_SIZE);
+        nvim_yankreg_set_array_ptr(copy, array);
+
+        // Deep copy each string
+        for i in 0..size {
+            nvim_copy_yankreg_line(copy, i, src, i);
+        }
+    }
+
+    copy
 }
 
 #[cfg(test)]

@@ -66,6 +66,7 @@ extern MotionType rs_get_reg_type(int regname, colnr_T *reg_width);
 extern bool rs_yank_register_mline(int regname, yankreg_T **reg);
 extern void rs_free_register(yankreg_T *reg);
 extern int rs_stuff_yank(int regname, char *p);
+extern yankreg_T *rs_copy_register(int name);
 
 // Keep the last expression line here, for repeating.
 static char *expr_line = NULL;
@@ -314,6 +315,50 @@ void nvim_yankreg_replace_last_line(yankreg_T *reg, char *data, size_t len)
 {
   xfree(reg->y_array[reg->y_size - 1].data);
   reg->y_array[reg->y_size - 1] = cbuf_as_string(data, len);
+}
+
+// Phase 8 accessors: copy_register support
+
+/// Allocate a new yankreg_T.
+yankreg_T *nvim_alloc_yankreg(void)
+{
+  return xmalloc(sizeof(yankreg_T));
+}
+
+/// Allocate zeroed memory.
+void *nvim_xcalloc(size_t count, size_t size)
+{
+  return xcalloc(count, size);
+}
+
+/// Copy a string from src register at src_idx to dst register at dst_idx.
+void nvim_copy_yankreg_line(yankreg_T *dst, size_t dst_idx, yankreg_T *src, size_t src_idx)
+{
+  dst->y_array[dst_idx] = copy_string(src->y_array[src_idx], NULL);
+}
+
+/// Get the timestamp of a register.
+Timestamp nvim_yankreg_get_timestamp(yankreg_T *reg)
+{
+  return reg->timestamp;
+}
+
+/// Get additional_data pointer (for shallow copy).
+void *nvim_yankreg_get_additional_data(yankreg_T *reg)
+{
+  return reg->additional_data;
+}
+
+/// Set additional_data pointer.
+void nvim_yankreg_set_additional_data(yankreg_T *reg, void *data)
+{
+  reg->additional_data = data;
+}
+
+/// Set y_array pointer directly.
+void nvim_yankreg_set_array_ptr(yankreg_T *reg, void *array)
+{
+  reg->y_array = array;
 }
 
 /// @return the index of the register "" points to.
@@ -565,19 +610,7 @@ bool yank_register_mline(int regname, yankreg_T **reg)
 yankreg_T *copy_register(int name)
   FUNC_ATTR_NONNULL_RET
 {
-  yankreg_T *reg = get_yank_register(name, YREG_PASTE);
-
-  yankreg_T *copy = xmalloc(sizeof(yankreg_T));
-  *copy = *reg;
-  if (copy->y_size == 0) {
-    copy->y_array = NULL;
-  } else {
-    copy->y_array = xcalloc(copy->y_size, sizeof(String));
-    for (size_t i = 0; i < copy->y_size; i++) {
-      copy->y_array[i] = copy_string(reg->y_array[i], NULL);
-    }
-  }
-  return copy;
+  return rs_copy_register(name);
 }
 
 /// Stuff string "p" into yank register "regname" as a single line (append if
