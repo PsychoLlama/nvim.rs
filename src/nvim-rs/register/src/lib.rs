@@ -60,6 +60,9 @@ extern "C" {
     fn nvim_get_y_previous() -> YankRegHandle;
     fn nvim_set_y_previous(reg: YankRegHandle);
     fn nvim_set_clipboard(name: c_int, reg: YankRegHandle);
+
+    // Phase 5 accessors: get_reg_type support
+    fn nvim_get_yank_register_for_paste(regname: c_int) -> YankRegHandle;
 }
 
 /// Register index constants (matching `register_defs.h`).
@@ -464,6 +467,70 @@ pub unsafe extern "C" fn rs_finish_write_reg(
     if name != c_int::from(b'"') {
         nvim_set_y_previous(old_y_previous);
     }
+}
+
+// Control key constants from ascii_defs.h
+const CTRL_A: c_int = 1;
+const CTRL_F: c_int = 6;
+const CTRL_P: c_int = 16;
+const CTRL_W: c_int = 23;
+const NUL: c_int = 0;
+
+/// Get the type of a register.
+///
+/// Used for getregtype().
+///
+/// # Arguments
+///
+/// * `regname` - The register name character.
+/// * `reg_width` - Output pointer for block width (only set for blockwise registers).
+///
+/// # Returns
+///
+/// The MotionType of the register, or kMTUnknown for error.
+///
+/// # Safety
+///
+/// The `reg_width` pointer must be valid or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_reg_type(regname: c_int, reg_width: *mut c_int) -> c_int {
+    // Special registers that are always character-wise
+    match regname {
+        r if r == c_int::from(b'%') => return K_MT_CHAR_WISE, // file name
+        r if r == c_int::from(b'#') => return K_MT_CHAR_WISE, // alternate file name
+        r if r == c_int::from(b'=') => return K_MT_CHAR_WISE, // expression
+        r if r == c_int::from(b':') => return K_MT_CHAR_WISE, // last command line
+        r if r == c_int::from(b'/') => return K_MT_CHAR_WISE, // last search-pattern
+        r if r == c_int::from(b'.') => return K_MT_CHAR_WISE, // last inserted text
+        r if r == CTRL_F => return K_MT_CHAR_WISE,            // Filename under cursor
+        r if r == CTRL_P => return K_MT_CHAR_WISE,            // Path under cursor
+        r if r == CTRL_W => return K_MT_CHAR_WISE,            // word under cursor
+        r if r == CTRL_A => return K_MT_CHAR_WISE,            // WORD under cursor
+        r if r == c_int::from(b'_') => return K_MT_CHAR_WISE, // black hole: always empty
+        _ => {}
+    }
+
+    // Check for valid register name
+    if regname != NUL && !rs_valid_yank_reg(regname, false) {
+        return K_MT_UNKNOWN;
+    }
+
+    // Get the register for pasting
+    let reg = nvim_get_yank_register_for_paste(regname);
+
+    // Check if register has content
+    if nvim_yankreg_is_empty(reg) {
+        return K_MT_UNKNOWN;
+    }
+
+    let reg_type = nvim_yankreg_get_type(reg);
+
+    // Set width for blockwise registers
+    if !reg_width.is_null() && reg_type == K_MT_BLOCK_WISE {
+        *reg_width = nvim_yankreg_get_width(reg);
+    }
+
+    reg_type
 }
 
 /// Format the register type as a string.

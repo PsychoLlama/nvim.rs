@@ -62,6 +62,7 @@ extern char *rs_get_expr_line_src(void);
 extern char *rs_get_expr_line(void);
 extern yankreg_T *rs_init_write_reg(int name, yankreg_T **old_y_previous, bool must_append);
 extern void rs_finish_write_reg(int name, yankreg_T *reg, yankreg_T *old_y_previous);
+extern MotionType rs_get_reg_type(int regname, colnr_T *reg_width);
 
 // Keep the last expression line here, for repeating.
 static char *expr_line = NULL;
@@ -205,6 +206,12 @@ void nvim_set_y_previous(yankreg_T *reg)
 void nvim_set_clipboard(int name, yankreg_T *reg)
 {
   set_clipboard(name, reg);
+}
+
+/// Get the yank register for pasting (YREG_PASTE mode).
+yankreg_T *nvim_get_yank_register_for_paste(int regname)
+{
+  return get_yank_register(regname, YREG_PASTE);
 }
 
 /// @return the index of the register "" points to.
@@ -2309,34 +2316,7 @@ void ex_display(exarg_T *eap)
 ///          kMTUnknown for error.
 MotionType get_reg_type(int regname, colnr_T *reg_width)
 {
-  switch (regname) {
-  case '%':     // file name
-  case '#':     // alternate file name
-  case '=':     // expression
-  case ':':     // last command line
-  case '/':     // last search-pattern
-  case '.':     // last inserted text
-  case Ctrl_F:  // Filename under cursor
-  case Ctrl_P:  // Path under cursor, expand via "path"
-  case Ctrl_W:  // word under cursor
-  case Ctrl_A:  // WORD (mnemonic All) under cursor
-  case '_':     // black hole: always empty
-    return kMTCharWise;
-  }
-
-  if (regname != NUL && !valid_yank_reg(regname, false)) {
-    return kMTUnknown;
-  }
-
-  yankreg_T *reg = get_yank_register(regname, YREG_PASTE);
-
-  if (reg->y_array != NULL) {
-    if (reg_width != NULL && reg->y_type == kMTBlockWise) {
-      *reg_width = reg->y_width;
-    }
-    return reg->y_type;
-  }
-  return kMTUnknown;
+  return (MotionType)rs_get_reg_type(regname, reg_width);
 }
 
 /// When `flags` has `kGRegList` return a list with text `s`.
