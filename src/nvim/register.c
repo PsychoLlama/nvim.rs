@@ -64,6 +64,8 @@ extern yankreg_T *rs_init_write_reg(int name, yankreg_T **old_y_previous, bool m
 extern void rs_finish_write_reg(int name, yankreg_T *reg, yankreg_T *old_y_previous);
 extern MotionType rs_get_reg_type(int regname, colnr_T *reg_width);
 extern bool rs_yank_register_mline(int regname, yankreg_T **reg);
+extern void rs_free_register(yankreg_T *reg);
+extern int rs_stuff_yank(int regname, char *p);
 
 // Keep the last expression line here, for repeating.
 static char *expr_line = NULL;
@@ -213,6 +215,105 @@ void nvim_set_clipboard(int name, yankreg_T *reg)
 yankreg_T *nvim_get_yank_register_for_paste(int regname)
 {
   return get_yank_register(regname, YREG_PASTE);
+}
+
+// Phase 7/8 accessors: free_register and stuff_yank support
+
+/// Allocate memory (wrapper for xmalloc).
+void *nvim_xmalloc(size_t size)
+{
+  return xmalloc(size);
+}
+
+/// Get the current timestamp.
+Timestamp nvim_os_time(void)
+{
+  return os_time();
+}
+
+/// Check if yankreg has an array (y_array != NULL).
+bool nvim_yankreg_has_array(yankreg_T *reg)
+{
+  return reg->y_array != NULL;
+}
+
+/// Check if yankreg has additional_data (additional_data != NULL).
+bool nvim_yankreg_has_additional_data(yankreg_T *reg)
+{
+  return reg->additional_data != NULL;
+}
+
+/// Free additional_data and set to NULL.
+void nvim_yankreg_free_additional_data(yankreg_T *reg)
+{
+  XFREE_CLEAR(reg->additional_data);
+}
+
+/// Clear (free) a String at the given index in y_array.
+void nvim_yankreg_clear_string_at(yankreg_T *reg, size_t idx)
+{
+  API_CLEAR_STRING(reg->y_array[idx]);
+}
+
+/// Free y_array and set to NULL.
+void nvim_yankreg_free_array(yankreg_T *reg)
+{
+  XFREE_CLEAR(reg->y_array);
+}
+
+/// Set y_size.
+void nvim_yankreg_set_size(yankreg_T *reg, size_t size)
+{
+  reg->y_size = size;
+}
+
+/// Set y_type.
+void nvim_yankreg_set_type(yankreg_T *reg, int type)
+{
+  reg->y_type = (MotionType)type;
+}
+
+/// Set timestamp.
+void nvim_yankreg_set_timestamp(yankreg_T *reg, Timestamp ts)
+{
+  reg->timestamp = ts;
+}
+
+/// Set y_array to NULL (for clearing without freeing).
+void nvim_yankreg_null_additional_data(yankreg_T *reg)
+{
+  reg->additional_data = NULL;
+}
+
+/// Allocate y_array with given count of String entries.
+void nvim_yankreg_alloc_array(yankreg_T *reg, size_t count)
+{
+  reg->y_array = xmalloc(count * sizeof(String));
+}
+
+/// Set a line in y_array from a char* and length (takes ownership of data).
+void nvim_yankreg_set_line(yankreg_T *reg, size_t idx, char *data, size_t len)
+{
+  reg->y_array[idx] = cbuf_as_string(data, len);
+}
+
+/// Get pointer to y_array[idx].data for reading.
+const char *nvim_yankreg_get_last_line_data(yankreg_T *reg)
+{
+  return reg->y_array[reg->y_size - 1].data;
+}
+
+/// Get y_array[y_size-1].size.
+size_t nvim_yankreg_get_last_line_size(yankreg_T *reg)
+{
+  return reg->y_array[reg->y_size - 1].size;
+}
+
+/// Free and replace the last line in y_array.
+void nvim_yankreg_replace_last_line(yankreg_T *reg, char *data, size_t len)
+{
+  xfree(reg->y_array[reg->y_size - 1].data);
+  reg->y_array[reg->y_size - 1] = cbuf_as_string(data, len);
 }
 
 /// @return the index of the register "" points to.
@@ -485,38 +586,7 @@ yankreg_T *copy_register(int name)
 /// @return  FAIL for failure, OK otherwise
 static int stuff_yank(int regname, char *p)
 {
-  // check for read-only register
-  if (regname != 0 && !valid_yank_reg(regname, true)) {
-    xfree(p);
-    return FAIL;
-  }
-  if (regname == '_') {             // black hole: don't do anything
-    xfree(p);
-    return OK;
-  }
-
-  const size_t plen = strlen(p);
-  yankreg_T *reg = get_yank_register(regname, YREG_YANK);
-  if (is_append_register(regname) && reg->y_array != NULL) {
-    String *pp = &(reg->y_array[reg->y_size - 1]);
-    const size_t tmplen = pp->size + plen;
-    char *tmp = xmalloc(tmplen + 1);
-    memcpy(tmp, pp->data, pp->size);
-    memcpy(tmp + pp->size, p, plen);
-    *(tmp + tmplen) = NUL;
-    xfree(p);
-    xfree(pp->data);
-    *pp = cbuf_as_string(tmp, tmplen);
-  } else {
-    free_register(reg);
-    reg->additional_data = NULL;
-    reg->y_array = xmalloc(sizeof(String));
-    reg->y_array[0] = cbuf_as_string(p, plen);
-    reg->y_size = 1;
-    reg->y_type = kMTCharWise;
-  }
-  reg->timestamp = os_time();
-  return OK;
+  return rs_stuff_yank(regname, p);
 }
 
 /// Start or stop recording into a yank register.
@@ -1041,15 +1111,7 @@ void clear_registers(void)
 void free_register(yankreg_T *reg)
   FUNC_ATTR_NONNULL_ALL
 {
-  XFREE_CLEAR(reg->additional_data);
-  if (reg->y_array == NULL) {
-    return;
-  }
-
-  for (size_t i = reg->y_size; i-- > 0;) {  // from y_size - 1 to 0 included
-    API_CLEAR_STRING(reg->y_array[i]);
-  }
-  XFREE_CLEAR(reg->y_array);
+  rs_free_register(reg);
 }
 
 /// Copy a block range into a register.

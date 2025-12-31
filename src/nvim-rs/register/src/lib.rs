@@ -63,6 +63,23 @@ extern "C" {
 
     // Phase 5 accessors: get_reg_type support
     fn nvim_get_yank_register_for_paste(regname: c_int) -> YankRegHandle;
+
+    // Phase 7/8 accessors: free_register and stuff_yank support
+    fn nvim_xmalloc(size: usize) -> *mut std::ffi::c_void;
+    fn nvim_os_time() -> u64;
+    fn nvim_yankreg_has_array(reg: YankRegHandle) -> bool;
+    fn nvim_yankreg_free_additional_data(reg: YankRegHandle);
+    fn nvim_yankreg_clear_string_at(reg: YankRegHandle, idx: usize);
+    fn nvim_yankreg_free_array(reg: YankRegHandle);
+    fn nvim_yankreg_set_size(reg: YankRegHandle, size: usize);
+    fn nvim_yankreg_set_type(reg: YankRegHandle, reg_type: c_int);
+    fn nvim_yankreg_set_timestamp(reg: YankRegHandle, ts: u64);
+    fn nvim_yankreg_null_additional_data(reg: YankRegHandle);
+    fn nvim_yankreg_alloc_array(reg: YankRegHandle, count: usize);
+    fn nvim_yankreg_set_line(reg: YankRegHandle, idx: usize, data: *mut c_char, len: usize);
+    fn nvim_yankreg_get_last_line_data(reg: YankRegHandle) -> *const c_char;
+    fn nvim_yankreg_get_last_line_size(reg: YankRegHandle) -> usize;
+    fn nvim_yankreg_replace_last_line(reg: YankRegHandle, data: *mut c_char, len: usize);
 }
 
 /// Register index constants (matching `register_defs.h`).
@@ -630,6 +647,111 @@ pub unsafe extern "C" fn rs_format_reg_type(
             buf_slice[0] = 0;
         }
     }
+}
+
+/// Return values matching nvim/vim_defs.h
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+
+/// Free a yankreg_T register's contents.
+///
+/// Frees additional_data and all lines in y_array.
+///
+/// # Safety
+///
+/// The `reg` handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_free_register(reg: YankRegHandle) {
+    // Free additional_data
+    nvim_yankreg_free_additional_data(reg);
+
+    // If y_array is NULL, nothing more to do
+    if !nvim_yankreg_has_array(reg) {
+        return;
+    }
+
+    // Free each line from y_size - 1 to 0
+    let size = nvim_yankreg_get_size(reg);
+    for i in (0..size).rev() {
+        nvim_yankreg_clear_string_at(reg, i);
+    }
+
+    // Free the array itself
+    nvim_yankreg_free_array(reg);
+}
+
+/// Stuff string `p` in a yank register.
+///
+/// Used by the `setreg()` function to store data.
+/// If the `'<` or `'>` register is written to, the text is inserted in the
+/// buffer instead.
+///
+/// # Arguments
+///
+/// * `regname` - Register name character.
+/// * `p` - String to store (takes ownership, will be freed).
+///
+/// # Returns
+///
+/// OK on success, FAIL on error.
+///
+/// # Safety
+///
+/// The `p` pointer must be valid and point to a C string allocated with xmalloc.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stuff_yank(regname: c_int, p: *mut c_char) -> c_int {
+    // Check for read-only register
+    if regname != 0 && !rs_valid_yank_reg(regname, true) {
+        nvim_xfree(p as *mut std::ffi::c_void);
+        return FAIL;
+    }
+
+    // Black hole register: don't do anything
+    if regname == c_int::from(b'_') {
+        nvim_xfree(p as *mut std::ffi::c_void);
+        return OK;
+    }
+
+    // Calculate string length
+    let plen = libc::strlen(p as *const _);
+
+    // Get the register for writing
+    let reg = nvim_get_yank_register_for_write(regname);
+
+    // Check if we should append
+    if rs_is_append_register(regname) != 0 && nvim_yankreg_has_array(reg) {
+        // Append to last line
+        let last_data = nvim_yankreg_get_last_line_data(reg);
+        let last_size = nvim_yankreg_get_last_line_size(reg);
+        let tmplen = last_size + plen;
+
+        // Allocate new buffer
+        let tmp = nvim_xmalloc(tmplen + 1) as *mut c_char;
+
+        // Copy existing data
+        std::ptr::copy_nonoverlapping(last_data, tmp, last_size);
+        // Copy new data
+        std::ptr::copy_nonoverlapping(p, tmp.add(last_size), plen);
+        // Null-terminate
+        *tmp.add(tmplen) = 0;
+
+        // Free p since we took ownership
+        nvim_xfree(p as *mut std::ffi::c_void);
+
+        // Replace the last line (this frees the old data)
+        nvim_yankreg_replace_last_line(reg, tmp, tmplen);
+    } else {
+        // Replace register contents
+        rs_free_register(reg);
+        nvim_yankreg_null_additional_data(reg);
+        nvim_yankreg_alloc_array(reg, 1);
+        nvim_yankreg_set_line(reg, 0, p, plen);
+        nvim_yankreg_set_size(reg, 1);
+        nvim_yankreg_set_type(reg, K_MT_CHAR_WISE);
+    }
+
+    nvim_yankreg_set_timestamp(reg, nvim_os_time());
+    OK
 }
 
 #[cfg(test)]
