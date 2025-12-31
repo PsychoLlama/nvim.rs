@@ -53,6 +53,10 @@ extern void rs_format_reg_type(int reg_type, int reg_width, char *buf, size_t bu
 #include "register.c.generated.h"
 
 extern void rs_update_yankreg_width(yankreg_T *reg);
+extern size_t rs_op_reg_amount(void);
+extern yankreg_T *rs_op_reg_get(char name);
+extern bool rs_op_reg_set_previous(char name);
+extern void rs_shift_delete_registers(bool y_append);
 
 // Keep the last expression line here, for repeating.
 static char *expr_line = NULL;
@@ -112,6 +116,30 @@ bool nvim_yankreg_is_empty(yankreg_T *reg)
 yankreg_T *nvim_get_y_regs_ptr(int idx)
 {
   return &y_regs[idx];
+}
+
+void nvim_set_y_previous_by_index(int idx)
+{
+  if (idx >= 0 && idx < NUM_REGISTERS) {
+    y_previous = &y_regs[idx];
+  } else {
+    y_previous = NULL;
+  }
+}
+
+void nvim_free_register(yankreg_T *reg)
+{
+  free_register(reg);
+}
+
+void nvim_copy_yankreg(yankreg_T *dst, const yankreg_T *src)
+{
+  *dst = *src;
+}
+
+void nvim_clear_yankreg_array(yankreg_T *reg)
+{
+  reg->y_array = NULL;
 }
 
 /// @return the index of the register "" points to.
@@ -266,13 +294,7 @@ const void *op_global_reg_iter(const void *const iter, char *const name, yankreg
 size_t op_reg_amount(void)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  size_t ret = 0;
-  for (size_t i = 0; i < NUM_SAVED_REGISTERS; i++) {
-    if (!reg_empty(y_regs + i)) {
-      ret++;
-    }
-  }
-  return ret;
+  return rs_op_reg_amount();
 }
 
 /// Set register to a given value
@@ -304,11 +326,7 @@ bool op_reg_set(const char name, const yankreg_T reg, bool is_unnamed)
 /// @return Pointer to the register contents or NULL.
 const yankreg_T *op_reg_get(const char name)
 {
-  int i = op_reg_index(name);
-  if (i == -1) {
-    return NULL;
-  }
-  return &y_regs[i];
+  return rs_op_reg_get(name);
 }
 
 /// Set the previous yank register
@@ -318,13 +336,7 @@ const yankreg_T *op_reg_get(const char name)
 /// @return true on success, false on failure.
 bool op_reg_set_previous(const char name)
 {
-  int i = op_reg_index(name);
-  if (i == -1) {
-    return false;
-  }
-
-  y_previous = &y_regs[i];
-  return true;
+  return rs_op_reg_set_previous(name);
 }
 
 /// Updates the "y_width" of a blockwise register based on its contents.
@@ -969,14 +981,7 @@ bool cmdline_paste_reg(int regname, bool literally_arg, bool remcr)
 /// Shift the delete registers: "9 is cleared, "8 becomes "9, etc.
 void shift_delete_registers(bool y_append)
 {
-  free_register(&y_regs[9]);  // free register "9
-  for (int n = 9; n > 1; n--) {
-    y_regs[n] = y_regs[n - 1];
-  }
-  if (!y_append) {
-    y_previous = &y_regs[1];
-  }
-  y_regs[1].y_array = NULL;  // set register "1 to empty
+  rs_shift_delete_registers(y_append);
 }
 
 #if defined(EXITFREE)

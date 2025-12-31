@@ -34,6 +34,14 @@ extern "C" {
     fn nvim_yankreg_set_width(reg: YankRegHandle, width: c_int);
     fn nvim_yankreg_get_line_data(reg: YankRegHandle, idx: usize) -> *const c_char;
     fn nvim_yankreg_get_line_size(reg: YankRegHandle, idx: usize) -> usize;
+    fn nvim_yankreg_is_empty(reg: YankRegHandle) -> bool;
+
+    // Global register array accessors
+    fn nvim_get_y_regs_ptr(idx: c_int) -> YankRegHandle;
+    fn nvim_set_y_previous_by_index(idx: c_int);
+    fn nvim_free_register(reg: YankRegHandle);
+    fn nvim_copy_yankreg(dst: YankRegHandle, src: YankRegHandle);
+    fn nvim_clear_yankreg_array(reg: YankRegHandle);
 
     // mbyte function for calculating string width
     fn rs_mb_string2cells_len(str: *const c_char, size: usize) -> usize;
@@ -41,8 +49,10 @@ extern "C" {
 
 /// Register index constants (matching `register_defs.h`).
 pub const DELETION_REGISTER: c_int = 36;
+pub const NUM_SAVED_REGISTERS: c_int = 37;
 pub const STAR_REGISTER: c_int = 37;
 pub const PLUS_REGISTER: c_int = 38;
+pub const NUM_REGISTERS: c_int = 39;
 
 /// Check if a character is an ASCII alphanumeric character (A-Z, a-z, 0-9).
 #[inline]
@@ -220,6 +230,84 @@ pub unsafe extern "C" fn rs_update_yankreg_width(reg: YankRegHandle) {
     // maxlen - 1, but maxlen can be 0
     let new_width = if maxlen > 0 { (maxlen - 1) as c_int } else { 0 };
     nvim_yankreg_set_width(reg, current_width.max(new_width));
+}
+
+/// Get the number of non-empty registers.
+///
+/// # Safety
+///
+/// Accesses global register state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_op_reg_amount() -> usize {
+    let mut count: usize = 0;
+    for i in 0..NUM_SAVED_REGISTERS {
+        let reg = nvim_get_y_regs_ptr(i);
+        if !nvim_yankreg_is_empty(reg) {
+            count += 1;
+        }
+    }
+    count
+}
+
+/// Get register with the given name.
+///
+/// Returns a pointer to the register contents, or NULL if the register name is invalid.
+///
+/// # Safety
+///
+/// Accesses global register state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_op_reg_get(name: c_char) -> YankRegHandle {
+    let i = rs_op_reg_index(c_int::from(name));
+    if i == -1 {
+        return YankRegHandle(std::ptr::null_mut());
+    }
+    nvim_get_y_regs_ptr(i)
+}
+
+/// Set the previous yank register.
+///
+/// Returns true on success, false if the register name is invalid.
+///
+/// # Safety
+///
+/// Modifies global register state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_op_reg_set_previous(name: c_char) -> bool {
+    let i = rs_op_reg_index(c_int::from(name));
+    if i == -1 {
+        return false;
+    }
+    nvim_set_y_previous_by_index(i);
+    true
+}
+
+/// Shift the delete registers: "9 is cleared, "8 becomes "9, etc.
+///
+/// # Safety
+///
+/// Modifies global register state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_shift_delete_registers(y_append: bool) {
+    // Free register "9
+    let reg9 = nvim_get_y_regs_ptr(9);
+    nvim_free_register(reg9);
+
+    // Shift registers: 9 <- 8 <- 7 <- ... <- 2 <- 1
+    for n in (2..=9).rev() {
+        let dst = nvim_get_y_regs_ptr(n);
+        let src = nvim_get_y_regs_ptr(n - 1);
+        nvim_copy_yankreg(dst, src);
+    }
+
+    // Set y_previous to register "1 if not appending
+    if !y_append {
+        nvim_set_y_previous_by_index(1);
+    }
+
+    // Set register "1 to empty
+    let reg1 = nvim_get_y_regs_ptr(1);
+    nvim_clear_yankreg_array(reg1);
 }
 
 /// Format the register type as a string.
