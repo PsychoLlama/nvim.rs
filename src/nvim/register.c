@@ -57,6 +57,9 @@ extern size_t rs_op_reg_amount(void);
 extern yankreg_T *rs_op_reg_get(char name);
 extern bool rs_op_reg_set_previous(char name);
 extern void rs_shift_delete_registers(bool y_append);
+extern void rs_set_expr_line(char *new_line);
+extern char *rs_get_expr_line_src(void);
+extern char *rs_get_expr_line(void);
 
 // Keep the last expression line here, for repeating.
 static char *expr_line = NULL;
@@ -142,6 +145,34 @@ void nvim_clear_yankreg_array(yankreg_T *reg)
   reg->y_array = NULL;
 }
 
+// Expression register accessors for Rust
+
+const char *nvim_get_expr_line(void)
+{
+  return expr_line;
+}
+
+void nvim_set_expr_line_ptr(char *new_line)
+{
+  expr_line = new_line;
+}
+
+void nvim_xfree(void *ptr)
+{
+  xfree(ptr);
+}
+
+char *nvim_xstrdup(const char *str)
+{
+  return xstrdup(str);
+}
+
+char *nvim_eval_to_string(const char *expr, bool want_retval, bool in_sandbox)
+{
+  // Need to cast away const since eval_to_string takes char*
+  return eval_to_string((char *)expr, want_retval, in_sandbox);
+}
+
 /// @return the index of the register "" points to.
 int get_unname_register(void)
 {
@@ -180,8 +211,7 @@ int get_expr_register(void)
 /// Argument must be an allocated string.
 void set_expr_line(char *new_line)
 {
-  xfree(expr_line);
-  expr_line = new_line;
+  rs_set_expr_line(new_line);
 }
 
 /// Get the result of the '=' register expression.
@@ -189,36 +219,13 @@ void set_expr_line(char *new_line)
 /// @return  a pointer to allocated memory, or NULL for failure.
 char *get_expr_line(void)
 {
-  static int nested = 0;
-
-  if (expr_line == NULL) {
-    return NULL;
-  }
-
-  // Make a copy of the expression, because evaluating it may cause it to be
-  // changed.
-  char *expr_copy = xstrdup(expr_line);
-
-  // When we are invoked recursively limit the evaluation to 10 levels.
-  // Then return the string as-is.
-  if (nested >= 10) {
-    return expr_copy;
-  }
-
-  nested++;
-  char *rv = eval_to_string(expr_copy, true, false);
-  nested--;
-  xfree(expr_copy);
-  return rv;
+  return rs_get_expr_line();
 }
 
 /// Get the '=' register expression itself, without evaluating it.
 char *get_expr_line_src(void)
 {
-  if (expr_line == NULL) {
-    return NULL;
-  }
-  return xstrdup(expr_line);
+  return rs_get_expr_line_src();
 }
 
 /// @return  whether `regname` is a valid name of a yank register.

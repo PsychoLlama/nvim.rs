@@ -45,6 +45,14 @@ extern "C" {
 
     // mbyte function for calculating string width
     fn rs_mb_string2cells_len(str: *const c_char, size: usize) -> usize;
+
+    // Expression register accessors
+    fn nvim_get_expr_line() -> *const c_char;
+    fn nvim_set_expr_line_ptr(new_line: *mut c_char);
+    fn nvim_xfree(ptr: *mut std::ffi::c_void);
+    fn nvim_xstrdup(str: *const c_char) -> *mut c_char;
+    fn nvim_eval_to_string(expr: *const c_char, want_retval: bool, in_sandbox: bool)
+        -> *mut c_char;
 }
 
 /// Register index constants (matching `register_defs.h`).
@@ -308,6 +316,73 @@ pub unsafe extern "C" fn rs_shift_delete_registers(y_append: bool) {
     // Set register "1 to empty
     let reg1 = nvim_get_y_regs_ptr(1);
     nvim_clear_yankreg_array(reg1);
+}
+
+/// Set the expression for the '=' register.
+/// Argument must be a C-allocated string (takes ownership).
+///
+/// # Safety
+///
+/// The `new_line` pointer must be a valid C-allocated string or NULL.
+/// This function takes ownership of the string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_expr_line(new_line: *mut c_char) {
+    // Free the old expression line
+    let old_line = nvim_get_expr_line();
+    if !old_line.is_null() {
+        nvim_xfree(old_line as *mut std::ffi::c_void);
+    }
+    // Set the new expression line
+    nvim_set_expr_line_ptr(new_line);
+}
+
+/// Get the '=' register expression itself, without evaluating it.
+/// Returns a newly allocated copy, or NULL if no expression is set.
+///
+/// # Safety
+///
+/// Returns a C-allocated string that must be freed by the caller.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_expr_line_src() -> *mut c_char {
+    let expr_line = nvim_get_expr_line();
+    if expr_line.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_xstrdup(expr_line)
+}
+
+/// Get the result of the '=' register expression.
+/// Returns a newly allocated string with the evaluated result, or NULL for failure.
+///
+/// When invoked recursively (more than 10 levels), returns the expression as-is.
+///
+/// # Safety
+///
+/// Returns a C-allocated string that must be freed by the caller.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_expr_line() -> *mut c_char {
+    // Use a static counter for recursion depth
+    static mut NESTED: i32 = 0;
+
+    let expr_line = nvim_get_expr_line();
+    if expr_line.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    // Make a copy of the expression, because evaluating it may cause it to be changed
+    let expr_copy = nvim_xstrdup(expr_line);
+
+    // When we are invoked recursively limit the evaluation to 10 levels
+    // Then return the string as-is
+    if NESTED >= 10 {
+        return expr_copy;
+    }
+
+    NESTED += 1;
+    let rv = nvim_eval_to_string(expr_copy, true, false);
+    NESTED -= 1;
+    nvim_xfree(expr_copy as *mut std::ffi::c_void);
+    rv
 }
 
 /// Format the register type as a string.
