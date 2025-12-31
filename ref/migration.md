@@ -383,6 +383,44 @@ Terminfo output infrastructure for Rust:
 - nvim_tui_get_stopped, nvim_tui_get_can_set_title
 - nvim_tui_get/set_title_enabled, nvim_tui_get_buf_space
 
+### Register Module (register.c - PARTIALLY MIGRATED)
+
+**Migrated Functions (22 rs_* functions):**
+- `rs_valid_yank_reg` - Register name validation
+- `rs_get_unname_register` - Get unnamed register index
+- `rs_is_literal_register` - Check if literal register (clipboard)
+- `rs_op_reg_index` - Convert register name to index
+- `rs_is_append_register` - Check if uppercase (append mode)
+- `rs_get_register_name` - Get register name from index
+- `rs_format_reg_type` - Format register type string
+- `rs_update_yankreg_width` - Update blockwise register width
+- `rs_op_reg_amount` - Get register count
+- `rs_shift_delete_registers` - Shift numbered registers
+- `rs_set_expr_line` - Set expression register
+- `rs_get_expr_line_src` - Get expression source
+- `rs_get_expr_line` - Evaluate and get expression result
+- `rs_init_write_reg` - Initialize register for writing
+- `rs_finish_write_reg` - Finalize register write
+- `rs_get_reg_type` - Get register motion type
+- `rs_yank_register_mline` - Check if register is linewise
+- `rs_free_register` - Free register contents
+- `rs_stuff_yank` - Store string in register
+- `rs_copy_register` - Deep copy a register
+
+**Accessor Functions (~30):**
+- yankreg_T field getters/setters (size, type, width, timestamp, array)
+- Memory allocation wrappers (xmalloc, xcalloc, xfree)
+- String/line manipulation helpers
+
+**Remaining Functions (complex, need extensive infrastructure):**
+- `str_to_reg` (~115 lines) - String parsing with UTF-8, needs memcnt, xrealloc, memchrsub
+- `do_put` (~789 lines) - Buffer operations, undo, extmarks
+- `do_record`, `do_execreg` - Macro recording/execution, typeahead
+- `ex_display` - Register display, message system
+- `insert_reg`, `get_spec_reg` - Special register handling
+- `op_yank_reg` - Yank operations with block_def struct
+- `write_reg_contents_ex/lst` - Wrappers around str_to_reg
+
 ### Complex Memory/Buffer Operations
 Functions involving memory management or buffer content access:
 - `buf_is_empty` - needs ml_get_buf for buffer line access
