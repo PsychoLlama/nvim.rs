@@ -69,6 +69,7 @@ rust-test:
       -p nvim-decoration \
       -p nvim-diff \
       -p nvim-drawline \
+      -p nvim-edit \
       -p nvim-encoding \
       -p nvim-eval \
       -p nvim-event \
@@ -83,6 +84,7 @@ rust-test:
       -p nvim-insexpand \
       -p nvim-keycodes \
       -p nvim-linematch \
+      -p nvim-lua \
       -p nvim-mark \
       -p nvim-math \
       -p nvim-memory \
