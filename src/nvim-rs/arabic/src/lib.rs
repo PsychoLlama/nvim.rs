@@ -445,4 +445,161 @@ mod tests {
         assert!(a_is_valid(A_LAM));
         assert!(!a_is_valid(A_HAMZA)); // HAMZA is excluded
     }
+
+    #[test]
+    fn test_achars_sorted() {
+        // Binary search requires the table to be sorted by 'c'
+        for i in 1..ACHARS.len() {
+            assert!(
+                ACHARS[i - 1].c < ACHARS[i].c,
+                "ACHARS not sorted at index {i}: {} >= {}",
+                ACHARS[i - 1].c,
+                ACHARS[i].c
+            );
+        }
+    }
+
+    #[test]
+    fn test_achars_table_size() {
+        // Table should have exactly 54 entries
+        assert_eq!(ACHARS.len(), 54);
+    }
+
+    #[test]
+    fn test_find_achar_all_entries() {
+        // Verify all entries in ACHARS can be found
+        for entry in &ACHARS {
+            let found = find_achar(entry.c as c_int);
+            assert!(found.is_some(), "Failed to find char 0x{:04x}", entry.c);
+            assert_eq!(found.unwrap().c, entry.c);
+        }
+    }
+
+    #[test]
+    fn test_lam_alef_ligatures_isolated() {
+        // Test all LAM-ALEF isolated forms
+        assert_eq!(chg_c_laa2i(A_ALEF_MADDA), A_S_LAM_ALEF_MADDA_ABOVE);
+        assert_eq!(chg_c_laa2i(A_ALEF_HAMZA_ABOVE), A_S_LAM_ALEF_HAMZA_ABOVE);
+        assert_eq!(chg_c_laa2i(A_ALEF_HAMZA_BELOW), A_S_LAM_ALEF_HAMZA_BELOW);
+        assert_eq!(chg_c_laa2i(A_ALEF), A_S_LAM_ALEF);
+        // Non-alef characters should return 0
+        assert_eq!(chg_c_laa2i(A_BEH), 0);
+        assert_eq!(chg_c_laa2i(A_LAM), 0);
+    }
+
+    #[test]
+    fn test_lam_alef_ligatures_final() {
+        // Test all LAM-ALEF final forms
+        assert_eq!(chg_c_laa2f(A_ALEF_MADDA), A_F_LAM_ALEF_MADDA_ABOVE);
+        assert_eq!(chg_c_laa2f(A_ALEF_HAMZA_ABOVE), A_F_LAM_ALEF_HAMZA_ABOVE);
+        assert_eq!(chg_c_laa2f(A_ALEF_HAMZA_BELOW), A_F_LAM_ALEF_HAMZA_BELOW);
+        assert_eq!(chg_c_laa2f(A_ALEF), A_F_LAM_ALEF);
+        // Non-alef characters should return 0
+        assert_eq!(chg_c_laa2f(A_BEH), 0);
+        assert_eq!(chg_c_laa2f(A_LAM), 0);
+    }
+
+    #[test]
+    fn test_lam_alef_ligature_unicode_range() {
+        // Isolated LAM-ALEF ligatures should be in 0xFEF5-0xFEFC range
+        let s_lam_alef = A_S_LAM_ALEF;
+        let f_lam_alef = A_F_LAM_ALEF;
+        assert!(s_lam_alef >= 0xFEF5);
+        assert!(s_lam_alef <= 0xFEFC);
+        assert!(f_lam_alef >= 0xFEF5);
+        assert!(f_lam_alef <= 0xFEFC);
+    }
+
+    #[test]
+    fn test_can_join_non_joining_chars() {
+        // DAL, THAL, REH, ZAIN, WAW only have final forms (no initial/medial)
+        assert!(!can_join(A_DAL, A_BEH));
+        assert!(!can_join(A_REH, A_BEH));
+        assert!(!can_join(A_ZAIN, A_BEH));
+        assert!(!can_join(A_WAW, A_BEH));
+        // But they can be joined FROM (as second character)
+        assert!(can_join(A_BEH, A_DAL));
+        assert!(can_join(A_BEH, A_REH));
+    }
+
+    #[test]
+    fn test_can_join_dual_joining_chars() {
+        // Characters with all forms can join in both directions
+        assert!(can_join(A_BEH, A_TEH));
+        assert!(can_join(A_TEH, A_BEH));
+        assert!(can_join(A_SEEN, A_SHEEN));
+        assert!(can_join(A_LAM, A_MEEM));
+    }
+
+    #[test]
+    fn test_can_join_non_arabic() {
+        // Non-Arabic characters cannot join
+        assert!(!can_join(0x41, A_BEH)); // 'A'
+        assert!(!can_join(A_BEH, 0x41));
+        assert!(!can_join(0, 0));
+    }
+
+    #[test]
+    fn test_a_is_iso_arabic_letters() {
+        // Test Arabic letter range 0x0621-0x064A
+        for c in [A_HAMZA, A_ALEF, A_BEH, A_TEH, A_LAM, A_MEEM, A_NOON, A_YEH] {
+            assert!(a_is_iso(c), "0x{c:04x} should be ISO Arabic");
+        }
+    }
+
+    #[test]
+    fn test_a_is_iso_diacritics() {
+        // Test Arabic diacritics (tashkeel)
+        for c in [
+            A_FATHATAN, A_DAMMATAN, A_KASRATAN, A_FATHA, A_DAMMA, A_KASRA, A_SHADDA, A_SUKUN,
+        ] {
+            assert!(a_is_iso(c), "Diacritic 0x{c:04x} should be ISO Arabic");
+        }
+    }
+
+    #[test]
+    fn test_a_is_ok_bom() {
+        // Byte Order Mark should be OK but not ISO
+        assert!(a_is_ok(A_BYTE_ORDER_MARK));
+        assert!(!a_is_iso(A_BYTE_ORDER_MARK));
+    }
+
+    #[test]
+    fn test_a_is_valid_excludes_hamza() {
+        // HAMZA is OK and ISO but not valid for shaping
+        assert!(a_is_ok(A_HAMZA));
+        assert!(a_is_iso(A_HAMZA));
+        assert!(!a_is_valid(A_HAMZA));
+    }
+
+    #[test]
+    fn test_achar_presentation_forms() {
+        // Test that BEH has all four presentation forms
+        let beh = find_achar(A_BEH).unwrap();
+        assert_ne!(beh.isolated, 0, "BEH should have isolated form");
+        assert_ne!(beh.initial, 0, "BEH should have initial form");
+        assert_ne!(beh.medial, 0, "BEH should have medial form");
+        assert_ne!(beh.fin, 0, "BEH should have final form");
+    }
+
+    #[test]
+    fn test_achar_right_joining_only() {
+        // DAL only has isolated and final forms (right-joining only)
+        let dal = find_achar(A_DAL).unwrap();
+        assert_ne!(dal.isolated, 0, "DAL should have isolated form");
+        assert_eq!(dal.initial, 0, "DAL should NOT have initial form");
+        assert_eq!(dal.medial, 0, "DAL should NOT have medial form");
+        assert_ne!(dal.fin, 0, "DAL should have final form");
+    }
+
+    #[test]
+    fn test_farsi_characters() {
+        // Test Farsi/Persian specific characters
+        let peh = find_achar(A_PEH);
+        assert!(peh.is_some(), "PEH should be in table");
+        let tcheh = find_achar(A_TCHEH);
+        assert!(tcheh.is_some(), "TCHEH should be in table");
+        let gaf = find_achar(A_GAF);
+        assert!(gaf.is_some(), "GAF should be in table");
+    }
 }
