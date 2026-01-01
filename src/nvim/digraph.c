@@ -54,6 +54,11 @@ static const char e_digraph_setlist_argument_must_be_list_of_lists_with_two_item
   = N_("E1216: digraph_setlist() argument must be a list of lists with two items");
 
 #include "digraph.c.generated.h"
+
+// Rust implementations
+extern int rs_digraph_get(int char1, int char2, int meta_char);
+extern int rs_getexactdigraph(int char1, int char2, int meta_char);
+
 // digraphs added by the user
 static garray_T user_digraphs = { 0, 0, (int)sizeof(digr_T), 10, NULL };
 
@@ -1463,6 +1468,34 @@ static digr_T digraphdefault[] =
   { NUL, NUL, NUL }
 };
 
+// =============================================================================
+// Accessor functions for Rust FFI
+// =============================================================================
+
+/// Get pointer to user digraphs array data (opaque for Rust).
+void *nvim_get_user_digraphs_data(void)
+{
+  return user_digraphs.ga_data;
+}
+
+/// Get length of user digraphs array.
+int nvim_get_user_digraphs_len(void)
+{
+  return user_digraphs.ga_len;
+}
+
+/// Get pointer to default digraphs array (opaque for Rust).
+const void *nvim_get_digraphdefault(void)
+{
+  return digraphdefault;
+}
+
+/// Get length of default digraphs array (count of entries before NUL terminator).
+int nvim_get_digraphdefault_len(void)
+{
+  return (int)(ARRAY_SIZE(digraphdefault));
+}
+
 /// handle digraphs after typing a character
 ///
 /// @param c
@@ -1570,44 +1603,7 @@ int get_digraph(bool cmdline)
 static int getexactdigraph(int char1, int char2, bool meta_char)
   FUNC_ATTR_PURE
 {
-  int retval = 0;
-
-  if (IS_SPECIAL(char1) || IS_SPECIAL(char2)) {
-    return char2;
-  }
-
-  // Search user digraphs first.
-  const digr_T *dp = (const digr_T *)user_digraphs.ga_data;
-  for (int i = 0; i < user_digraphs.ga_len; i++) {
-    if (((int)dp->char1 == char1) && ((int)dp->char2 == char2)) {
-      retval = dp->result;
-      break;
-    }
-    dp++;
-  }
-
-  // Search default digraphs.
-  if (retval == 0) {
-    dp = digraphdefault;
-
-    while (dp->char1 != 0) {
-      if (((int)dp->char1 == char1) && ((int)dp->char2 == char2)) {
-        retval = dp->result;
-        break;
-      }
-      dp++;
-    }
-  }
-
-  if (retval == 0) {
-    // digraph deleted or not found
-    if ((char1 == ' ') && meta_char) {
-      // <space> <char> --> meta-char
-      return char2 | 0x80;
-    }
-    return char2;
-  }
-  return retval;
+  return rs_getexactdigraph(char1, char2, meta_char ? 1 : 0);
 }
 
 /// Get digraph.
@@ -1621,15 +1617,7 @@ static int getexactdigraph(int char1, int char2, bool meta_char)
 int digraph_get(int char1, int char2, bool meta_char)
   FUNC_ATTR_PURE
 {
-  int retval;
-
-  if (((retval = getexactdigraph(char1, char2, meta_char)) == char2)
-      && (char1 != char2)
-      && ((retval = getexactdigraph(char2, char1, meta_char))
-          == char1)) {
-    return char2;
-  }
-  return retval;
+  return rs_digraph_get(char1, char2, meta_char ? 1 : 0);
 }
 
 /// Add a digraph to the digraph table.
