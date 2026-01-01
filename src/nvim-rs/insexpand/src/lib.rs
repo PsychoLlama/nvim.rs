@@ -551,4 +551,51 @@ mod tests {
         assert_eq!(K_OPT_COT_FLAG_MENU, 0x01);
         assert_eq!(K_OPT_COT_FLAG_MENUONE, 0x02);
     }
+
+    #[test]
+    fn test_ascii_constants() {
+        // CAR and NL should match standard ASCII values
+        assert_eq!(CAR, 0x0D); // Carriage Return
+        assert_eq!(NL, 0x0A); // Newline / Line Feed
+    }
+
+    #[test]
+    fn test_ctrl_keys_formula() {
+        // Verify control keys follow the formula: Ctrl_X = X - 'A' + 1
+        let check_ctrl = |key: u8, expected: c_int| {
+            let calculated = c_int::from(key - b'A' + 1);
+            assert_eq!(
+                calculated, expected,
+                "Ctrl-{} should be {}",
+                key as char, expected
+            );
+        };
+
+        check_ctrl(b'D', CTRL_D);
+        check_ctrl(b'E', CTRL_E);
+        check_ctrl(b'F', CTRL_F);
+        check_ctrl(b'I', CTRL_I);
+        check_ctrl(b'K', CTRL_K);
+        check_ctrl(b'L', CTRL_L);
+        check_ctrl(b'N', CTRL_N);
+        check_ctrl(b'O', CTRL_O);
+        check_ctrl(b'P', CTRL_P);
+        check_ctrl(b'Q', CTRL_Q);
+        check_ctrl(b'R', CTRL_R);
+        check_ctrl(b'S', CTRL_S);
+        check_ctrl(b'T', CTRL_T);
+        check_ctrl(b'U', CTRL_U);
+        check_ctrl(b'V', CTRL_V);
+        check_ctrl(b'X', CTRL_X);
+        check_ctrl(b'Y', CTRL_Y);
+        check_ctrl(b'Z', CTRL_Z);
+    }
+
+    #[test]
+    fn test_completion_flags_distinct() {
+        // Completion flags should not overlap
+        assert_eq!(CONT_ADDING & CONT_SOL, 0);
+        assert_eq!(CONT_ADDING & CONT_LOCAL, 0);
+        assert_eq!(CONT_SOL & CONT_LOCAL, 0);
+    }
 }
