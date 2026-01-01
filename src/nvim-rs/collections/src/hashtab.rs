@@ -594,4 +594,11 @@ mod tests {
         // Full hash should be different
         assert_ne!(hash_full, hash_hello);
     }
+
+    #[test]
+    fn test_ht_init_size_constant() {
+        // Verify HT_INIT_SIZE matches C definition (must be power of 2)
+        assert_eq!(HT_INIT_SIZE, 16);
+        assert!(HT_INIT_SIZE.is_power_of_two());
+    }
 }
