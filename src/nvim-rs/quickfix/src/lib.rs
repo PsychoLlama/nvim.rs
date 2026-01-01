@@ -225,4 +225,26 @@ mod tests {
         // LinenrT should be i32 (4 bytes)
         assert_eq!(std::mem::size_of::<LinenrT>(), 4);
     }
+
+    #[test]
+    fn test_linenr_range() {
+        // LinenrT should be able to hold reasonable line numbers
+        let max_lines: LinenrT = 1_000_000_000;
+        assert!(max_lines > 0);
+        // Minimum valid line number is 1
+        let min_valid: LinenrT = 1;
+        assert!(min_valid > 0);
+    }
+
+    #[test]
+    fn test_null_pointers_safe() {
+        // All null pointer cases should be safe
+        unsafe {
+            // Stack functions
+            assert!(rs_qf_stack_empty(std::ptr::null()));
+            // List functions
+            assert!(rs_qf_list_empty(std::ptr::null()));
+            assert!(!rs_qf_list_has_valid_entries(std::ptr::null()));
+        }
+    }
 }

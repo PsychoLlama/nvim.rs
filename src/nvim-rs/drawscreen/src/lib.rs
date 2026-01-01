@@ -625,4 +625,31 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_window_corner_sequential() {
+        // Corner values should be sequential 0-3
+        assert_eq!(WindowCorner::TopLeft as c_int, 0);
+        assert_eq!(
+            WindowCorner::TopRight as c_int,
+            WindowCorner::TopLeft as c_int + 1
+        );
+        assert_eq!(
+            WindowCorner::BottomLeft as c_int,
+            WindowCorner::TopRight as c_int + 1
+        );
+        assert_eq!(
+            WindowCorner::BottomRight as c_int,
+            WindowCorner::BottomLeft as c_int + 1
+        );
+    }
+
+    #[test]
+    fn test_window_corner_size() {
+        // WindowCorner enum should be c_int sized
+        assert_eq!(
+            std::mem::size_of::<WindowCorner>(),
+            std::mem::size_of::<c_int>()
+        );
+    }
 }
