@@ -1532,4 +1532,77 @@ mod tests {
         assert!(!ri_digit(256));
         assert!(!ri_digit(-1));
     }
+
+    #[test]
+    fn test_re_flags() {
+        // Test that flag constants are defined correctly
+        // These match the values in regexp_defs.h
+        assert_eq!(re_flags::RE_MAGIC, 1);
+        assert_eq!(re_flags::RE_NOCASE, 2);
+        assert_eq!(re_flags::RE_HASNL, 4);
+    }
+
+    #[test]
+    fn test_regmatch_raw_default() {
+        let rmp = RegmatchRaw::default();
+
+        // Check that default initializes correctly
+        assert!(rmp.regprog.is_null());
+        assert_eq!(rmp.rm_matchcol, 0);
+        assert!(!rmp.rm_ic);
+
+        // All pointers should be null
+        for startp in &rmp.startp {
+            assert!(startp.is_null());
+        }
+        for endp in &rmp.endp {
+            assert!(endp.is_null());
+        }
+    }
+
+    #[test]
+    fn test_match_result_methods() {
+        // Create a mock MatchResult
+        let mut submatches = [None; NSUBEXP];
+        submatches[0] = Some((5, 10)); // Full match at positions 5-10
+        submatches[1] = Some((6, 8)); // Submatch 1 at positions 6-8
+        submatches[2] = Some((8, 9)); // Submatch 2 at positions 8-9
+
+        let result = MatchResult {
+            start: 5,
+            end: 10,
+            match_col: 5,
+            submatches,
+        };
+
+        // Test len
+        assert_eq!(result.len(), 5);
+
+        // Test is_empty
+        assert!(!result.is_empty());
+
+        // Test submatch
+        assert_eq!(result.submatch(0), Some((5, 10)));
+        assert_eq!(result.submatch(1), Some((6, 8)));
+        assert_eq!(result.submatch(2), Some((8, 9)));
+        assert_eq!(result.submatch(3), None);
+        assert_eq!(result.submatch(100), None); // Out of bounds
+
+        // Test empty match
+        let empty_submatches = [None; NSUBEXP];
+        let empty_result = MatchResult {
+            start: 0,
+            end: 0,
+            match_col: 0,
+            submatches: empty_submatches,
+        };
+        assert!(empty_result.is_empty());
+        assert_eq!(empty_result.len(), 0);
+    }
+
+    #[test]
+    fn test_nsubexp_constant() {
+        // NSUBEXP should be 10 (matches C definition)
+        assert_eq!(NSUBEXP, 10);
+    }
 }
