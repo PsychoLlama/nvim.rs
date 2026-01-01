@@ -934,6 +934,36 @@ mod tests {
             assert_eq!(unknown.to_str().unwrap(), "Unknown");
         }
     }
+
+    #[test]
+    fn test_object_type_enum_values() {
+        // Verify ObjectType enum values match C definitions
+        assert_eq!(ObjectType::Nil as i32, 0);
+        assert_eq!(ObjectType::Boolean as i32, 1);
+        assert_eq!(ObjectType::Integer as i32, 2);
+        assert_eq!(ObjectType::Float as i32, 3);
+        assert_eq!(ObjectType::String as i32, 4);
+        assert_eq!(ObjectType::Array as i32, 5);
+        assert_eq!(ObjectType::Dict as i32, 6);
+        assert_eq!(ObjectType::LuaRef as i32, 7);
+        assert_eq!(ObjectType::Buffer as i32, 8);
+        assert_eq!(ObjectType::Window as i32, 9);
+        assert_eq!(ObjectType::Tabpage as i32, 10);
+    }
+
+    #[test]
+    fn test_error_type_enum_values() {
+        // Verify ErrorType enum values match C definitions
+        assert_eq!(ErrorType::None as i32, -1);
+        assert_eq!(ErrorType::Exception as i32, 0);
+        assert_eq!(ErrorType::Validation as i32, 1);
+    }
+
+    #[test]
+    fn test_internal_call_mask() {
+        // Verify INTERNAL_CALL_MASK has bit 63 set
+        assert_eq!(INTERNAL_CALL_MASK, 1u64 << 63);
+    }
 }
 
 // =============================================================================
