@@ -63,7 +63,7 @@ const REGEXP_ABBR: &[u8] = b"nrtebdoxuU";
 
 /// Opaque handle to regprog_T (compiled regular expression program).
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RegprogHandle(*mut std::ffi::c_void);
 
 impl RegprogHandle {
@@ -88,7 +88,7 @@ impl RegprogHandle {
 
 /// Opaque handle to regmatch_T (single-line match result).
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RegmatchHandle(*mut std::ffi::c_void);
 
 impl RegmatchHandle {
@@ -110,7 +110,7 @@ impl RegmatchHandle {
 
 /// Opaque handle to regmmatch_T (multi-line match result).
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RegmmatchHandle(*mut std::ffi::c_void);
 
 impl RegmmatchHandle {
@@ -132,7 +132,7 @@ impl RegmmatchHandle {
 
 /// Opaque handle to win_T (window).
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WinHandle(*mut std::ffi::c_void);
 
 impl WinHandle {
@@ -154,7 +154,7 @@ impl WinHandle {
 
 /// Opaque handle to buf_T (buffer).
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BufHandle(*mut std::ffi::c_void);
 
 impl BufHandle {
@@ -176,7 +176,7 @@ impl BufHandle {
 
 /// Opaque handle to lpos_T (line/column position).
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LposHandle(*mut std::ffi::c_void);
 
 impl LposHandle {
@@ -1604,5 +1604,295 @@ mod tests {
     fn test_nsubexp_constant() {
         // NSUBEXP should be 10 (matches C definition)
         assert_eq!(NSUBEXP, 10);
+    }
+
+    #[test]
+    fn test_magic_constants() {
+        // Test magic mode constants
+        assert_eq!(MAGIC_NONE, 1); // \V very nomagic
+        assert_eq!(MAGIC_OFF, 2); // \M or magic off
+        assert_eq!(MAGIC_ON, 3); // \m or magic (default)
+        assert_eq!(MAGIC_ALL, 4); // \v very magic
+
+        // Magic offset
+        assert_eq!(MAGIC_OFFSET, 256);
+    }
+
+    #[test]
+    fn test_multi_type_constants() {
+        assert_eq!(NOT_MULTI, 0);
+        assert_eq!(MULTI_ONE, 1);
+        assert_eq!(MULTI_MULT, 2);
+    }
+
+    #[test]
+    fn test_control_char_constants() {
+        assert_eq!(CAR, 13);
+        assert_eq!(TAB, 9);
+        assert_eq!(ESC, 27);
+        assert_eq!(BS, 8);
+    }
+
+    #[test]
+    fn test_magic_un_magic_roundtrip() {
+        // Any character should roundtrip through magic/un_magic
+        for c in 0..256 {
+            let magic_c = magic(c);
+            let back = un_magic(magic_c);
+            assert_eq!(back, c, "Roundtrip failed for {c}");
+        }
+    }
+
+    #[test]
+    fn test_magic_produces_negative() {
+        // magic() should always produce negative values for ASCII
+        for c in 0..=127 {
+            let m = magic(c);
+            assert!(m < 0, "magic({c}) = {m} should be negative");
+        }
+    }
+
+    #[test]
+    fn test_is_magic_matches_magic_function() {
+        // Characters produced by magic() should test as is_magic()
+        for c in 0..256 {
+            let m = magic(c);
+            assert!(is_magic(m), "is_magic(magic({c})) should be true");
+        }
+
+        // Regular positive characters should not be magic
+        for c in 0..256 {
+            assert!(!is_magic(c), "is_magic({c}) should be false");
+        }
+    }
+
+    #[test]
+    fn test_regprog_handle() {
+        use std::ptr;
+
+        // Test null handle
+        let null_handle = RegprogHandle::from_ptr(ptr::null_mut());
+        assert!(null_handle.is_null());
+        assert_eq!(null_handle.as_ptr(), ptr::null_mut());
+
+        // Test non-null handle
+        let mut dummy: i32 = 42;
+        let ptr = (&mut dummy as *mut i32).cast::<c_void>();
+        let handle = RegprogHandle::from_ptr(ptr);
+        assert!(!handle.is_null());
+        assert_eq!(handle.as_ptr(), ptr);
+
+        // Test equality
+        let handle2 = RegprogHandle::from_ptr(ptr);
+        assert_eq!(handle, handle2);
+    }
+
+    #[test]
+    fn test_regmatch_handle() {
+        use std::ptr;
+
+        let null_handle = RegmatchHandle::from_ptr(ptr::null_mut());
+        assert!(null_handle.is_null());
+
+        let mut dummy: i32 = 42;
+        let ptr = (&mut dummy as *mut i32).cast::<c_void>();
+        let handle = RegmatchHandle::from_ptr(ptr);
+        assert!(!handle.is_null());
+        assert_eq!(handle.as_ptr(), ptr);
+    }
+
+    #[test]
+    fn test_regmmatch_handle() {
+        use std::ptr;
+
+        let null_handle = RegmmatchHandle::from_ptr(ptr::null_mut());
+        assert!(null_handle.is_null());
+
+        let mut dummy: i32 = 42;
+        let ptr = (&mut dummy as *mut i32).cast::<c_void>();
+        let handle = RegmmatchHandle::from_ptr(ptr);
+        assert!(!handle.is_null());
+    }
+
+    #[test]
+    fn test_win_handle() {
+        use std::ptr;
+
+        let null_handle = WinHandle::from_ptr(ptr::null_mut());
+        assert!(null_handle.is_null());
+
+        let mut dummy: i32 = 42;
+        let ptr = (&mut dummy as *mut i32).cast::<c_void>();
+        let handle = WinHandle::from_ptr(ptr);
+        assert!(!handle.is_null());
+        assert_eq!(handle.as_ptr(), ptr);
+    }
+
+    #[test]
+    fn test_buf_handle() {
+        use std::ptr;
+
+        let null_handle = BufHandle::from_ptr(ptr::null_mut());
+        assert!(null_handle.is_null());
+
+        let mut dummy: i32 = 42;
+        let ptr = (&mut dummy as *mut i32).cast::<c_void>();
+        let handle = BufHandle::from_ptr(ptr);
+        assert!(!handle.is_null());
+    }
+
+    #[test]
+    fn test_lpos_handle() {
+        use std::ptr;
+
+        let null_handle = LposHandle::from_ptr(ptr::null_mut());
+        assert!(null_handle.is_null());
+
+        let mut dummy: i32 = 42;
+        let ptr = (&mut dummy as *mut i32).cast::<c_void>();
+        let handle = LposHandle::from_ptr(ptr);
+        assert!(!handle.is_null());
+        assert_eq!(handle.as_ptr(), ptr);
+    }
+
+    #[test]
+    fn test_byte_in_slice() {
+        assert!(byte_in_slice(b'a', b"abc"));
+        assert!(byte_in_slice(b'b', b"abc"));
+        assert!(byte_in_slice(b'c', b"abc"));
+        assert!(!byte_in_slice(b'd', b"abc"));
+        assert!(!byte_in_slice(b'a', b""));
+    }
+
+    #[test]
+    fn test_regexp_inrange() {
+        // REGEXP_INRANGE should contain "]^-n\\"
+        assert!(byte_in_slice(b']', REGEXP_INRANGE));
+        assert!(byte_in_slice(b'^', REGEXP_INRANGE));
+        assert!(byte_in_slice(b'-', REGEXP_INRANGE));
+        assert!(byte_in_slice(b'n', REGEXP_INRANGE));
+        assert!(byte_in_slice(b'\\', REGEXP_INRANGE));
+        assert!(!byte_in_slice(b'a', REGEXP_INRANGE));
+    }
+
+    #[test]
+    fn test_regexp_abbr() {
+        // REGEXP_ABBR should contain "nrtebdoxuU"
+        assert!(byte_in_slice(b'n', REGEXP_ABBR));
+        assert!(byte_in_slice(b'r', REGEXP_ABBR));
+        assert!(byte_in_slice(b't', REGEXP_ABBR));
+        assert!(byte_in_slice(b'e', REGEXP_ABBR));
+        assert!(byte_in_slice(b'b', REGEXP_ABBR));
+        assert!(byte_in_slice(b'd', REGEXP_ABBR));
+        assert!(byte_in_slice(b'o', REGEXP_ABBR));
+        assert!(byte_in_slice(b'x', REGEXP_ABBR));
+        assert!(byte_in_slice(b'u', REGEXP_ABBR));
+        assert!(byte_in_slice(b'U', REGEXP_ABBR));
+        assert!(!byte_in_slice(b'a', REGEXP_ABBR));
+    }
+
+    #[test]
+    fn test_class_tab_initialization() {
+        let tab = init_class_tab();
+
+        // Verify size
+        assert_eq!(tab.len(), 256);
+
+        // Check digits 0-7 have all digit flags
+        for c in b'0'..=b'7' {
+            let flags = tab[c as usize];
+            assert_ne!(
+                flags & RI_DIGIT,
+                0,
+                "Digit '{}' should have RI_DIGIT",
+                c as char
+            );
+            assert_ne!(
+                flags & RI_HEX,
+                0,
+                "Digit '{}' should have RI_HEX",
+                c as char
+            );
+            assert_ne!(
+                flags & RI_OCTAL,
+                0,
+                "Digit '{}' should have RI_OCTAL",
+                c as char
+            );
+            assert_ne!(
+                flags & RI_WORD,
+                0,
+                "Digit '{}' should have RI_WORD",
+                c as char
+            );
+        }
+
+        // Check digits 8-9 have digit but not octal
+        for c in b'8'..=b'9' {
+            let flags = tab[c as usize];
+            assert_ne!(flags & RI_DIGIT, 0);
+            assert_ne!(flags & RI_HEX, 0);
+            assert_eq!(
+                flags & RI_OCTAL,
+                0,
+                "Digit '{}' should NOT have RI_OCTAL",
+                c as char
+            );
+        }
+
+        // Check lowercase letters
+        for c in b'a'..=b'z' {
+            let flags = tab[c as usize];
+            assert_ne!(flags & RI_WORD, 0);
+            assert_ne!(flags & RI_HEAD, 0);
+            assert_ne!(flags & RI_ALPHA, 0);
+            assert_ne!(flags & RI_LOWER, 0);
+            assert_eq!(flags & RI_UPPER, 0);
+        }
+
+        // Check uppercase letters
+        for c in b'A'..=b'Z' {
+            let flags = tab[c as usize];
+            assert_ne!(flags & RI_WORD, 0);
+            assert_ne!(flags & RI_HEAD, 0);
+            assert_ne!(flags & RI_ALPHA, 0);
+            assert_ne!(flags & RI_UPPER, 0);
+            assert_eq!(flags & RI_LOWER, 0);
+        }
+
+        // Check underscore
+        let underscore_flags = tab[b'_' as usize];
+        assert_ne!(underscore_flags & RI_WORD, 0);
+        assert_ne!(underscore_flags & RI_HEAD, 0);
+        assert_eq!(underscore_flags & RI_ALPHA, 0);
+
+        // Check whitespace
+        assert_ne!(tab[b' ' as usize] & RI_WHITE, 0);
+        assert_ne!(tab[b'\t' as usize] & RI_WHITE, 0);
+        assert_eq!(tab[b'\n' as usize] & RI_WHITE, 0);
+    }
+
+    #[test]
+    fn test_class_flag_constants() {
+        // Verify flag constants are unique powers of 2
+        assert_eq!(RI_DIGIT, 0x01);
+        assert_eq!(RI_HEX, 0x02);
+        assert_eq!(RI_OCTAL, 0x04);
+        assert_eq!(RI_WORD, 0x08);
+        assert_eq!(RI_HEAD, 0x10);
+        assert_eq!(RI_ALPHA, 0x20);
+        assert_eq!(RI_LOWER, 0x40);
+        assert_eq!(RI_UPPER, 0x80);
+        assert_eq!(RI_WHITE, 0x100);
+    }
+
+    #[test]
+    fn test_maxcol_constant() {
+        assert_eq!(MAXCOL, 0x7fff_ffff);
+    }
+
+    #[test]
+    fn test_class_none_constant() {
+        assert_eq!(CLASS_NONE, 99);
     }
 }
