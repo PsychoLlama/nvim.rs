@@ -75,6 +75,7 @@ rust-test:
       -p nvim-fuzzy \
       -p nvim-grid \
       -p nvim-help \
+      -p nvim-highlight \
       -p nvim-indent \
       -p nvim-insexpand \
       -p nvim-keycodes \
@@ -87,6 +88,7 @@ rust-test:
       -p nvim-msgpack \
       -p nvim-ops \
       -p nvim-os \
+      -p nvim-plines \
       -p nvim-profile \
       -p nvim-regexp \
       -p nvim-register \
