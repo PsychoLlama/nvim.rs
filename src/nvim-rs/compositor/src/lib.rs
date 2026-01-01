@@ -892,4 +892,20 @@ mod tests {
         // Verify kUIMultigrid = 6 from ui_defs.h
         assert_eq!(ui_ext::MULTIGRID, 6);
     }
+
+    #[test]
+    fn test_zindex_gaps() {
+        // Verify there's room between z-index levels for custom windows
+        let levels = [
+            zindex::DEFAULT_GRID,
+            zindex::FLOAT_DEFAULT,
+            zindex::POPUP_MENU,
+            zindex::MESSAGES,
+            zindex::CMDLINE_POPUP_MENU,
+        ];
+        for window in levels.windows(2) {
+            let gap = window[1] - window[0];
+            assert!(gap >= 50, "Gap between z-index levels should be >= 50");
+        }
+    }
 }

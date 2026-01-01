@@ -180,4 +180,25 @@ mod tests {
         // Verify MNU_HIDDEN_CHAR matches C definition
         assert_eq!(MNU_HIDDEN_CHAR, b']');
     }
+
+    #[test]
+    fn test_menu_prefixes_are_distinct() {
+        // Verify menu prefixes are mutually exclusive (no prefix is a substring of another)
+        let prefixes = [b"WinBar".as_slice(), b"PopUp", b"ToolBar"];
+        for i in 0..prefixes.len() {
+            for j in 0..prefixes.len() {
+                if i != j {
+                    assert!(!prefixes[i].starts_with(prefixes[j]));
+                    assert!(!prefixes[j].starts_with(prefixes[i]));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_menu_hidden_is_ascii() {
+        // Hidden char should be an ASCII printable character
+        let hidden = MNU_HIDDEN_CHAR;
+        assert!((0x20..0x7f).contains(&hidden));
+    }
 }
