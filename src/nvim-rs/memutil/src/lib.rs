@@ -339,6 +339,37 @@ mod tests {
     }
 
     #[test]
+    fn test_xmemscan() {
+        unsafe {
+            let data = b"hello world";
+
+            // Find 'o' - should return pointer to first 'o'
+            let p = rs_xmemscan(data.as_ptr(), b'o' as c_char, 11);
+            assert_eq!(p.offset_from(data.as_ptr()), 4);
+
+            // Find 'z' - not found, should return pointer past end
+            let p = rs_xmemscan(data.as_ptr(), b'z' as c_char, 11);
+            assert_eq!(p.offset_from(data.as_ptr()), 11);
+
+            // Find first char
+            let p = rs_xmemscan(data.as_ptr(), b'h' as c_char, 11);
+            assert_eq!(p.offset_from(data.as_ptr()), 0);
+
+            // Find last char
+            let p = rs_xmemscan(data.as_ptr(), b'd' as c_char, 11);
+            assert_eq!(p.offset_from(data.as_ptr()), 10);
+
+            // Empty size returns addr unchanged
+            let p = rs_xmemscan(data.as_ptr(), b'h' as c_char, 0);
+            assert_eq!(p, data.as_ptr());
+
+            // Null pointer returns null
+            let p = rs_xmemscan(std::ptr::null(), b'h' as c_char, 10);
+            assert!(p.is_null());
+        }
+    }
+
+    #[test]
     fn test_strcnt() {
         unsafe {
             let s = b"hello world\0";
