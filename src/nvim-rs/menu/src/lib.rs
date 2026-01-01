@@ -174,4 +174,10 @@ mod tests {
             assert!(!rs_menu_is_separator(std::ptr::null()));
         }
     }
+
+    #[test]
+    fn test_mnu_hidden_char_constant() {
+        // Verify MNU_HIDDEN_CHAR matches C definition
+        assert_eq!(MNU_HIDDEN_CHAR, b']');
+    }
 }

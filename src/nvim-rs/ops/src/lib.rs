@@ -370,4 +370,25 @@ mod tests {
         assert_eq!(rs_get_op_type(b'g' as c_int, b'~' as c_int), OP_TILDE);
         assert_eq!(rs_get_op_type(b'r' as c_int, 0), OP_REPLACE);
     }
+
+    #[test]
+    fn test_operator_flags_constants() {
+        // Verify operator flag constants match C definitions
+        assert_eq!(OPF_LINES, 1);
+        assert_eq!(OPF_CHANGE, 2);
+    }
+
+    #[test]
+    fn test_ctrl_char_constants() {
+        // Verify control character constants
+        assert_eq!(NUL, 0);
+        assert_eq!(CTRL_A, 1);
+        assert_eq!(CTRL_X, 24);
+    }
+
+    #[test]
+    fn test_opchars_table_size() {
+        // Verify OPCHARS table has expected size (30 operators)
+        assert_eq!(OPCHARS.len(), 30);
+    }
 }
