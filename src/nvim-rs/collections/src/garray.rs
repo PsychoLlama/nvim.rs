@@ -443,4 +443,34 @@ mod tests {
         unsafe { rs_ga_set_growsize(&mut ga, 5) };
         assert_eq!(ga.ga_growsize, 5);
     }
+
+    #[test]
+    fn test_garray_default() {
+        let ga = GArray::default();
+        assert_eq!(ga.ga_len, 0);
+        assert_eq!(ga.ga_maxlen, 0);
+        assert_eq!(ga.ga_itemsize, 0);
+        assert_eq!(ga.ga_growsize, 1);
+        assert!(ga.ga_data.is_null());
+    }
+
+    #[test]
+    fn test_ga_set_growsize_negative() {
+        let mut ga = GArray::default();
+        unsafe { rs_ga_init(&mut ga, 1, 10) };
+
+        unsafe { rs_ga_set_growsize(&mut ga, -5) };
+        assert_eq!(ga.ga_growsize, 1); // Should clamp to 1
+    }
+
+    #[test]
+    fn test_ga_null_handling() {
+        // These should not crash when passed null
+        unsafe {
+            rs_ga_init(std::ptr::null_mut(), 1, 1);
+            rs_ga_set_growsize(std::ptr::null_mut(), 5);
+            // Note: rs_ga_clear not tested here as it requires xfree linker
+            assert_eq!(rs_ga_empty(std::ptr::null()), 1);
+        }
+    }
 }
