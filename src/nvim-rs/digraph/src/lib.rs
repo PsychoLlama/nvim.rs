@@ -214,4 +214,120 @@ mod tests {
         assert!(size_of::<DigrT>() >= 6); // minimum: 1 + 1 + 4
         assert!(size_of::<DigrT>() <= 12); // maximum with padding
     }
+
+    #[test]
+    fn test_digr_t_fields() {
+        // Test that DigrT can be constructed and fields accessed
+        let d = DigrT {
+            char1: b'a',
+            char2: b'b',
+            result: 0x1234,
+        };
+        assert_eq!(d.char1, b'a');
+        assert_eq!(d.char2, b'b');
+        assert_eq!(d.result, 0x1234);
+    }
+
+    #[test]
+    fn test_digr_t_copy() {
+        // DigrT should be Copy
+        let d1 = DigrT {
+            char1: b'x',
+            char2: b'y',
+            result: 42,
+        };
+        let d2 = d1;
+        assert_eq!(d1.result, d2.result);
+    }
+
+    #[test]
+    fn test_is_special_all_negative() {
+        // All negative values should be special
+        for n in [-1, -10, -100, -1000, c_int::MIN] {
+            assert!(is_special(n), "{n} should be special");
+        }
+    }
+
+    #[test]
+    fn test_is_special_all_non_negative() {
+        // All non-negative values should NOT be special
+        for n in [0, 1, 10, 100, 1000, c_int::MAX] {
+            assert!(!is_special(n), "{n} should not be special");
+        }
+    }
+
+    #[test]
+    fn test_meta_char_ascii_range() {
+        // Test meta-char for full lowercase ASCII range
+        for c in b'a'..=b'z' {
+            let result = c_int::from(c) | 0x80;
+            assert!(result >= 225); // 'a' | 0x80
+            assert!(result <= 250); // 'z' | 0x80
+        }
+    }
+
+    #[test]
+    fn test_meta_char_digits() {
+        // Test meta-char for digit range
+        for c in b'0'..=b'9' {
+            let result = c_int::from(c) | 0x80;
+            assert!(result >= 176); // '0' | 0x80
+            assert!(result <= 185); // '9' | 0x80
+        }
+    }
+
+    #[test]
+    fn test_space_is_32() {
+        // SPACE constant should be ASCII 32
+        assert_eq!(SPACE, 32);
+        assert_eq!(SPACE, c_int::from(b' '));
+    }
+
+    #[test]
+    #[allow(clippy::cast_sign_loss)]
+    fn test_char_truncation_high_values() {
+        // Test truncation for values > 255
+        let tests = [
+            (0x100, 0u8),  // 256 -> 0
+            (0x141, 0x41), // 321 -> 'A'
+            (0x1FF, 0xFF), // 511 -> 255
+            (0x200, 0x00), // 512 -> 0
+        ];
+        for (input, expected) in tests {
+            let truncated = (input & 0xFF) as u8;
+            assert_eq!(truncated, expected, "Input 0x{input:x}");
+        }
+    }
+
+    #[test]
+    fn test_char_truncation_negative() {
+        // Negative values truncate to their lower 8 bits
+        #[allow(clippy::cast_sign_loss)]
+        {
+            let neg1: c_int = -1;
+            assert_eq!((neg1 & 0xFF) as u8, 0xFF);
+
+            let neg128: c_int = -128;
+            assert_eq!((neg128 & 0xFF) as u8, 0x80);
+        }
+    }
+
+    #[test]
+    fn test_digr_t_alignment() {
+        use std::mem::align_of;
+        // DigrT should have reasonable alignment (at least 1, at most pointer-sized)
+        let align = align_of::<DigrT>();
+        assert!(align >= 1);
+        assert!(align <= std::mem::size_of::<usize>());
+    }
+
+    #[test]
+    fn test_meta_char_preserves_low_bits() {
+        // OR with 0x80 should only set bit 7, preserving lower bits
+        for c in 0u8..128 {
+            let result = c_int::from(c) | 0x80;
+            assert_eq!(result & 0x7F, c_int::from(c));
+            assert!(result >= 128);
+        }
+    }
 }
