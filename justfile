@@ -65,6 +65,7 @@ rust-test:
       -p nvim-eval \
       -p nvim-event \
       -p nvim-ex-docmd \
+      -p nvim-ex-eval \
       -p nvim-fileio \
       -p nvim-fuzzy \
       -p nvim-grid \
@@ -83,6 +84,7 @@ rust-test:
       -p nvim-profile \
       -p nvim-regexp \
       -p nvim-register \
+      -p nvim-search \
       -p nvim-spell \
       -p nvim-statusline \
       -p nvim-strings \
