@@ -60,6 +60,7 @@ rust-test:
       -p nvim-charset \
       -p nvim-cmdhist \
       -p nvim-collections \
+      -p nvim-compositor \
       -p nvim-encoding \
       -p nvim-eval \
       -p nvim-event \
@@ -83,6 +84,7 @@ rust-test:
       -p nvim-regexp \
       -p nvim-register \
       -p nvim-spell \
+      -p nvim-statusline \
       -p nvim-strings \
       -p nvim-tui \
       -p nvim-ugrid \
