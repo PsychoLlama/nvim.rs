@@ -2139,6 +2139,133 @@ pub extern "C" fn rs_scrolljump_value(wp: WinHandle) -> c_int {
 
 #[cfg(test)]
 mod tests {
-    // Tests require FFI stubs which aren't available in pure Rust testing.
-    // Integration testing is done via the full Neovim build.
+    use super::*;
+
+    // These tests cover pure Rust helper functions that don't require FFI.
+
+    #[test]
+    fn test_utf8_char_len_ascii() {
+        // ASCII characters (0x00-0x7F) are 1 byte
+        assert_eq!(utf8_char_len(0x00), 1);
+        assert_eq!(utf8_char_len(0x41), 1); // 'A'
+        assert_eq!(utf8_char_len(0x7F), 1);
+    }
+
+    #[test]
+    fn test_utf8_char_len_continuation() {
+        // Continuation bytes (0x80-0xBF) are treated as 1 (invalid sequence start)
+        assert_eq!(utf8_char_len(0x80), 1);
+        assert_eq!(utf8_char_len(0xBF), 1);
+    }
+
+    #[test]
+    fn test_utf8_char_len_2byte() {
+        // 2-byte sequences start with 0xC0-0xDF
+        assert_eq!(utf8_char_len(0xC0), 2);
+        assert_eq!(utf8_char_len(0xC2), 2); // Start of valid 2-byte range
+        assert_eq!(utf8_char_len(0xDF), 2);
+    }
+
+    #[test]
+    fn test_utf8_char_len_3byte() {
+        // 3-byte sequences start with 0xE0-0xEF
+        assert_eq!(utf8_char_len(0xE0), 3);
+        assert_eq!(utf8_char_len(0xEF), 3);
+    }
+
+    #[test]
+    fn test_utf8_char_len_4byte() {
+        // 4-byte sequences start with 0xF0-0xF7
+        assert_eq!(utf8_char_len(0xF0), 4);
+        assert_eq!(utf8_char_len(0xF4), 4); // Last valid 4-byte start
+        assert_eq!(utf8_char_len(0xF7), 4);
+    }
+
+    #[test]
+    fn test_utf8_char_len_invalid() {
+        // Invalid UTF-8 lead bytes (0xF8+) are treated as 1
+        assert_eq!(utf8_char_len(0xF8), 1);
+        assert_eq!(utf8_char_len(0xFF), 1);
+    }
+
+    #[test]
+    fn test_decode_utf8_ascii() {
+        // ASCII decoding
+        let bytes = [b'A' as c_char, 0];
+        unsafe {
+            assert_eq!(decode_utf8_char(bytes.as_ptr(), 1), 0x41);
+        }
+    }
+
+    #[test]
+    fn test_decode_utf8_2byte() {
+        // 2-byte UTF-8: ñ = U+00F1 = 0xC3 0xB1
+        let bytes = [0xC3u8 as c_char, 0xB1u8 as c_char, 0];
+        unsafe {
+            assert_eq!(decode_utf8_char(bytes.as_ptr(), 2), 0x00F1);
+        }
+    }
+
+    #[test]
+    fn test_decode_utf8_3byte() {
+        // 3-byte UTF-8: € = U+20AC = 0xE2 0x82 0xAC
+        let bytes = [0xE2u8 as c_char, 0x82u8 as c_char, 0xACu8 as c_char, 0];
+        unsafe {
+            assert_eq!(decode_utf8_char(bytes.as_ptr(), 3), 0x20AC);
+        }
+    }
+
+    #[test]
+    fn test_decode_utf8_4byte() {
+        // 4-byte UTF-8: 𝄞 (musical G clef) = U+1D11E = 0xF0 0x9D 0x84 0x9E
+        let bytes = [
+            0xF0u8 as c_char,
+            0x9Du8 as c_char,
+            0x84u8 as c_char,
+            0x9Eu8 as c_char,
+            0,
+        ];
+        unsafe {
+            assert_eq!(decode_utf8_char(bytes.as_ptr(), 4), 0x1D11E);
+        }
+    }
+
+    #[test]
+    fn test_decode_utf8_invalid_continuation() {
+        // Invalid: 2-byte sequence with wrong continuation byte
+        let bytes = [0xC3u8 as c_char, 0x41u8 as c_char, 0]; // 0x41 is not a continuation byte
+        unsafe {
+            assert_eq!(decode_utf8_char(bytes.as_ptr(), 2), -1);
+        }
+    }
+
+    #[test]
+    fn test_decode_utf8_overlong_2byte() {
+        // Overlong 2-byte encoding for ASCII (should be -1)
+        // 0xC0 0x80 would encode NUL as 2 bytes (overlong)
+        let bytes = [0xC0u8 as c_char, 0x80u8 as c_char, 0];
+        unsafe {
+            assert_eq!(decode_utf8_char(bytes.as_ptr(), 2), -1);
+        }
+    }
+
+    #[test]
+    fn test_charsize_constants() {
+        // Verify constants match expected values
+        assert_eq!(TAB, 0x09);
+        assert_eq!(K_INVALID_BYTE_CELLS, 4);
+        assert_eq!(MAXCOL, 0x7fff_ffff);
+        assert_eq!(MODE_VISUAL, 0x02);
+        assert_eq!(MODE_INSERT, 0x10);
+        assert_eq!(MODE_NORMAL, 0x01);
+        assert_eq!(MODE_CMDLINE, 0x04);
+        assert_eq!(MODE_TERMINAL, 0x1000);
+    }
+
+    #[test]
+    fn test_charsize_default() {
+        let cs = CharSize::default();
+        assert_eq!(cs.width, 0);
+        assert_eq!(cs.head, 0);
+    }
 }
