@@ -207,4 +207,24 @@ mod tests {
         // tm2 < tm1 (negative result)
         assert_eq!(rs_profile_cmp(200, 100), -1);
     }
+
+    #[test]
+    fn test_profile_divide_rounding() {
+        // Test various rounding cases (Rust uses round half away from zero)
+        assert_eq!(rs_profile_divide(10, 3), 3); // 3.33 rounds to 3
+        assert_eq!(rs_profile_divide(11, 3), 4); // 3.67 rounds to 4
+        assert_eq!(rs_profile_divide(12, 3), 4); // 4.0 exact
+        assert_eq!(rs_profile_divide(5, 2), 3); // 2.5 rounds to 3
+        assert_eq!(rs_profile_divide(7, 2), 4); // 3.5 rounds to 4
+    }
+
+    #[test]
+    fn test_profile_self_edge_cases() {
+        // Zero values
+        assert_eq!(rs_profile_self(0, 0, 0), 0);
+        assert_eq!(rs_profile_self(0, 100, 50), 50);
+
+        // Self is already non-zero
+        assert_eq!(rs_profile_self(50, 100, 50), 100); // 50 + 100 - 50 = 100
+    }
 }
