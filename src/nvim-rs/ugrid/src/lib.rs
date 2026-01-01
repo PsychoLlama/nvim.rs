@@ -304,4 +304,35 @@ mod tests {
             assert_eq!(schar_from_ascii(0), 0);
         }
     }
+
+    #[test]
+    fn test_ugrid_size() {
+        // UGrid: 4 ints (4 bytes each) + 1 pointer (8 bytes)
+        // = 16 + 8 = 24 bytes on 64-bit (with alignment)
+        let size = std::mem::size_of::<UGrid>();
+        // On 64-bit, should be 24 bytes
+        assert!(size >= 24);
+    }
+
+    #[test]
+    fn test_type_alias_sizes() {
+        // ScharT should be 4 bytes (uint32_t)
+        assert_eq!(std::mem::size_of::<ScharT>(), 4);
+        // SattrT should be 4 bytes (int32_t)
+        assert_eq!(std::mem::size_of::<SattrT>(), 4);
+    }
+
+    #[test]
+    fn test_ucell_field_offsets() {
+        // UCell.data should be at offset 0
+        // UCell.attr should be at offset 4
+        let cell = UCell { data: 0, attr: 0 };
+        let cell_ptr = std::ptr::from_ref(&cell).cast::<u8>();
+        let data_ptr = std::ptr::from_ref(&cell.data).cast::<u8>();
+        let attr_ptr = std::ptr::from_ref(&cell.attr).cast::<u8>();
+        unsafe {
+            assert_eq!(data_ptr.offset_from(cell_ptr), 0);
+            assert_eq!(attr_ptr.offset_from(cell_ptr), 4);
+        }
+    }
 }
