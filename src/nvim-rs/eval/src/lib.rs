@@ -592,4 +592,56 @@ mod tests {
         // Verify AUTOLOAD_CHAR matches C definition
         assert_eq!(AUTOLOAD_CHAR, b'#');
     }
+
+    #[test]
+    fn test_var_flavour_enum_values() {
+        // Verify VarFlavour enum values match C definition
+        assert_eq!(VarFlavour::Default as c_int, 1);
+        assert_eq!(VarFlavour::Session as c_int, 2);
+        assert_eq!(VarFlavour::Shada as c_int, 4);
+    }
+
+    #[test]
+    fn test_ascii_helpers() {
+        // Test ascii_isupper
+        for c in b'A'..=b'Z' {
+            assert!(ascii_isupper(c));
+        }
+        assert!(!ascii_isupper(b'a'));
+        assert!(!ascii_isupper(b'0'));
+
+        // Test ascii_islower
+        for c in b'a'..=b'z' {
+            assert!(ascii_islower(c));
+        }
+        assert!(!ascii_islower(b'A'));
+        assert!(!ascii_islower(b'0'));
+
+        // Test ascii_isdigit
+        for c in b'0'..=b'9' {
+            assert!(ascii_isdigit(c));
+        }
+        assert!(!ascii_isdigit(b'a'));
+
+        // Test ascii_isalpha
+        for c in b'A'..=b'Z' {
+            assert!(ascii_isalpha(c));
+        }
+        for c in b'a'..=b'z' {
+            assert!(ascii_isalpha(c));
+        }
+        assert!(!ascii_isalpha(b'0'));
+
+        // Test ascii_isalnum
+        for c in b'0'..=b'9' {
+            assert!(ascii_isalnum(c));
+        }
+        for c in b'A'..=b'Z' {
+            assert!(ascii_isalnum(c));
+        }
+        for c in b'a'..=b'z' {
+            assert!(ascii_isalnum(c));
+        }
+        assert!(!ascii_isalnum(b' '));
+    }
 }
