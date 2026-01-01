@@ -612,4 +612,68 @@ mod tests {
         // completeopt flags should not overlap
         assert_eq!(K_OPT_COT_FLAG_MENU & K_OPT_COT_FLAG_MENUONE, 0);
     }
+
+    #[test]
+    fn test_ctrl_x_modes_with_ident_base_values() {
+        // Modes with CTRL_X_WANT_IDENT should have correct base values
+        assert_eq!(CTRL_X_TAGS & !CTRL_X_WANT_IDENT, 5);
+        assert_eq!(CTRL_X_PATH_PATTERNS & !CTRL_X_WANT_IDENT, 6);
+        assert_eq!(CTRL_X_PATH_DEFINES & !CTRL_X_WANT_IDENT, 7);
+        assert_eq!(CTRL_X_DICTIONARY & !CTRL_X_WANT_IDENT, 9);
+        assert_eq!(CTRL_X_THESAURUS & !CTRL_X_WANT_IDENT, 10);
+    }
+
+    #[test]
+    fn test_ctrl_x_modes_unique() {
+        // All CTRL-X modes should have unique values
+        let modes = [
+            CTRL_X_NORMAL,
+            CTRL_X_NOT_DEFINED_YET,
+            CTRL_X_SCROLL,
+            CTRL_X_WHOLE_LINE,
+            CTRL_X_FILES,
+            CTRL_X_TAGS,
+            CTRL_X_PATH_PATTERNS,
+            CTRL_X_PATH_DEFINES,
+            CTRL_X_DICTIONARY,
+            CTRL_X_THESAURUS,
+            CTRL_X_CMDLINE,
+            CTRL_X_FUNCTION,
+            CTRL_X_OMNI,
+            CTRL_X_SPELL,
+            CTRL_X_EVAL,
+            CTRL_X_CMDLINE_CTRL_X,
+            CTRL_X_BUFNAMES,
+            CTRL_X_REGISTER,
+        ];
+
+        for i in 0..modes.len() {
+            for j in (i + 1)..modes.len() {
+                assert_ne!(modes[i], modes[j], "Modes at {i} and {j} are equal");
+            }
+        }
+    }
+
+    #[test]
+    fn test_ctrl_rsb_formula() {
+        // CTRL_RSB should be ']' - '@' = 93 - 64 = 29
+        assert_eq!(CTRL_RSB, i32::from(b']' - b'@'));
+    }
+
+    #[test]
+    #[allow(clippy::cast_sign_loss)]
+    fn test_ctrl_x_want_ident_is_high_bit() {
+        // CTRL_X_WANT_IDENT should be a high bit that doesn't overlap with mode numbers
+        let want_ident = CTRL_X_WANT_IDENT;
+        let register = CTRL_X_REGISTER;
+        assert!(
+            want_ident > register,
+            "CTRL_X_WANT_IDENT should be higher than CTRL_X_REGISTER"
+        );
+        // CTRL_X_WANT_IDENT is 0x100 which is positive, so casting to u32 is safe
+        assert!(
+            (want_ident as u32).is_power_of_two(),
+            "CTRL_X_WANT_IDENT should be a power of two"
+        );
+    }
 }
