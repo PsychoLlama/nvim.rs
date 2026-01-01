@@ -97,6 +97,7 @@ rust-test:
       -p nvim-profile \
       -p nvim-regexp \
       -p nvim-register \
+      -p nvim-rs \
       -p nvim-search \
       -p nvim-spell \
       -p nvim-statusline \
