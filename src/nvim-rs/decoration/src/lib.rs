@@ -528,6 +528,9 @@ mod tests {
         assert_eq!(VirtTextPos::EndOfLine as c_int, 0);
         assert_eq!(VirtTextPos::EndOfLineRightAlign as c_int, 1);
         assert_eq!(VirtTextPos::Inline as c_int, 2);
+        assert_eq!(VirtTextPos::Overlay as c_int, 3);
+        assert_eq!(VirtTextPos::RightAlign as c_int, 4);
+        assert_eq!(VirtTextPos::WinCol as c_int, 5);
     }
 
     #[test]
@@ -546,7 +549,11 @@ mod tests {
             Some(VirtTextPos::EndOfLineRightAlign)
         );
         assert_eq!(VirtTextPos::from_c_int(2), Some(VirtTextPos::Inline));
+        assert_eq!(VirtTextPos::from_c_int(3), Some(VirtTextPos::Overlay));
+        assert_eq!(VirtTextPos::from_c_int(4), Some(VirtTextPos::RightAlign));
+        assert_eq!(VirtTextPos::from_c_int(5), Some(VirtTextPos::WinCol));
         assert_eq!(VirtTextPos::from_c_int(100), None);
+        assert_eq!(VirtTextPos::from_c_int(-1), None);
     }
 
     #[test]
@@ -556,6 +563,7 @@ mod tests {
         assert_eq!(HlMode::from_c_int(2), Some(HlMode::Combine));
         assert_eq!(HlMode::from_c_int(3), Some(HlMode::Blend));
         assert_eq!(HlMode::from_c_int(100), None);
+        assert_eq!(HlMode::from_c_int(-1), None);
     }
 
     #[test]
@@ -563,6 +571,58 @@ mod tests {
         assert_eq!(DecorKind::from_c_int(0), Some(DecorKind::Highlight));
         assert_eq!(DecorKind::from_c_int(1), Some(DecorKind::Sign));
         assert_eq!(DecorKind::from_c_int(2), Some(DecorKind::VirtText));
+        assert_eq!(DecorKind::from_c_int(3), Some(DecorKind::VirtLines));
+        assert_eq!(DecorKind::from_c_int(4), Some(DecorKind::UIWatched));
         assert_eq!(DecorKind::from_c_int(100), None);
+        assert_eq!(DecorKind::from_c_int(-1), None);
+    }
+
+    #[test]
+    fn test_draw_col_constants() {
+        // Verify DRAW_COL constants have expected values
+        assert_eq!(DRAW_COL_UNSET, -1);
+        assert_eq!(DRAW_COL_PENDING, -3);
+        assert_eq!(DRAW_COL_JUST_ADDED, -10);
+        assert_eq!(DRAW_COL_DISABLED, c_int::MIN);
+    }
+
+    #[test]
+    fn test_kvt_flag_constants() {
+        // Verify KVT flag constants have expected bit values
+        assert_eq!(KVT_IS_LINES, 1);
+        assert_eq!(KVT_HIDE, 2);
+        assert_eq!(KVT_LINES_ABOVE, 4);
+        assert_eq!(KVT_REPEAT_LINEBREAK, 8);
+        // Flags should be distinct powers of 2
+        assert_eq!(KVT_IS_LINES & KVT_HIDE, 0);
+        assert_eq!(KVT_HIDE & KVT_LINES_ABOVE, 0);
+        assert_eq!(KVT_LINES_ABOVE & KVT_REPEAT_LINEBREAK, 0);
+    }
+
+    #[test]
+    fn test_handle_null_checks() {
+        // Test that null handle detection works
+        let null_decor = DecorStateHandle(std::ptr::null_mut());
+        let null_range = DecorRangeHandle(std::ptr::null_mut());
+        let null_virt = DecorVirtTextHandle(std::ptr::null_mut());
+        let null_vt = VirtTextHandle(std::ptr::null_mut());
+        let null_win = WinHandle(std::ptr::null_mut());
+
+        assert!(null_decor.is_null());
+        assert!(null_range.is_null());
+        assert!(null_virt.is_null());
+        assert!(null_vt.is_null());
+        assert!(null_win.is_null());
+    }
+
+    #[test]
+    fn test_handle_sizes() {
+        // All handles should be pointer-sized
+        let ptr_size = std::mem::size_of::<*mut c_void>();
+        assert_eq!(std::mem::size_of::<DecorStateHandle>(), ptr_size);
+        assert_eq!(std::mem::size_of::<DecorRangeHandle>(), ptr_size);
+        assert_eq!(std::mem::size_of::<DecorVirtTextHandle>(), ptr_size);
+        assert_eq!(std::mem::size_of::<VirtTextHandle>(), ptr_size);
+        assert_eq!(std::mem::size_of::<WinHandle>(), ptr_size);
     }
 }
