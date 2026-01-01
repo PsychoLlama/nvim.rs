@@ -346,6 +346,38 @@ const fn toupper_asc(c: c_int) -> c_int {
     }
 }
 
+// =============================================================================
+// C accessor functions for key_names_table
+// =============================================================================
+
+extern "C" {
+    /// Get the length of the `key_names_table` array.
+    fn nvim_get_key_names_table_len() -> c_int;
+
+    /// Get the key code at the specified index in `key_names_table`.
+    fn nvim_get_key_names_table_key(idx: c_int) -> c_int;
+
+    /// Get whether the entry at idx is an alternative name.
+    fn nvim_get_key_names_table_is_alt(idx: c_int) -> bool;
+}
+
+/// Try to find key "c" in the special key table.
+///
+/// # Returns
+/// The index when found, -1 when not found.
+#[no_mangle]
+pub extern "C" fn rs_find_special_key_in_table(c: c_int) -> c_int {
+    let len = unsafe { nvim_get_key_names_table_len() };
+    for i in 0..len {
+        let key = unsafe { nvim_get_key_names_table_key(i) };
+        let is_alt = unsafe { nvim_get_key_names_table_is_alt(i) };
+        if c == key && !is_alt {
+            return i;
+        }
+    }
+    -1
+}
+
 /// Return the modifier mask bit corresponding to modifier name.
 ///
 /// E.g. 'S' for shift, 'C' for ctrl, 'M' for alt/meta.

@@ -42,6 +42,53 @@ typedef struct {
 } ExtractModifiersResult;
 
 extern ExtractModifiersResult rs_extract_modifiers(int key, int *modp, bool simplify);
+extern int rs_find_special_key_in_table(int c);
+
+// =============================================================================
+// Accessor functions for key_names_table (for Rust FFI)
+// =============================================================================
+
+/// Get the length of the key_names_table array.
+int nvim_get_key_names_table_len(void)
+{
+  return (int)ARRAY_SIZE(key_names_table);
+}
+
+/// Get the key code at the specified index in key_names_table.
+int nvim_get_key_names_table_key(int idx)
+{
+  if (idx < 0 || idx >= (int)ARRAY_SIZE(key_names_table)) {
+    return 0;
+  }
+  return key_names_table[idx].key;
+}
+
+/// Get whether the entry at idx is an alternative name.
+bool nvim_get_key_names_table_is_alt(int idx)
+{
+  if (idx < 0 || idx >= (int)ARRAY_SIZE(key_names_table)) {
+    return false;
+  }
+  return key_names_table[idx].is_alt;
+}
+
+/// Get the name data pointer at the specified index.
+const char *nvim_get_key_names_table_name_data(int idx)
+{
+  if (idx < 0 || idx >= (int)ARRAY_SIZE(key_names_table)) {
+    return NULL;
+  }
+  return key_names_table[idx].name.data;
+}
+
+/// Get the name length at the specified index.
+size_t nvim_get_key_names_table_name_size(int idx)
+{
+  if (idx < 0 || idx >= (int)ARRAY_SIZE(key_names_table)) {
+    return 0;
+  }
+  return key_names_table[idx].name.size;
+}
 
 // Some useful tables.
 
@@ -470,13 +517,7 @@ static int extract_modifiers(int key, int *modp, const bool simplify, bool *cons
 /// @return  the index when found, -1 when not found.
 int find_special_key_in_table(int c)
 {
-  for (int i = 0; i < (int)ARRAY_SIZE(key_names_table); i++) {
-    if (c == key_names_table[i].key && !key_names_table[i].is_alt) {
-      return i;
-    }
-  }
-
-  return -1;
+  return rs_find_special_key_in_table(c);
 }
 
 /// Find the special key with the given name
