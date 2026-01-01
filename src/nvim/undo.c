@@ -140,6 +140,15 @@ typedef struct {
   FILE *bi_fp;
 } bufinfo_T;
 
+// Rust FFI function declarations
+extern bool rs_bufIsChanged(buf_T *buf);
+extern bool rs_anyBufIsChanged(void);
+extern void rs_u_clearall(buf_T *buf);
+extern void rs_u_clearline(buf_T *buf);
+
+// Feature flag for Rust undo functions
+#define USE_RUST_UNDO 1
+
 #include "undo.c.generated.h"
 
 static const char e_undo_list_corrupt[]
@@ -2971,11 +2980,15 @@ static void u_freeentry(u_entry_T *uep, int n)
 /// invalidate the undo buffer; called when storage has already been released
 void u_clearall(buf_T *buf)
 {
+#ifdef USE_RUST_UNDO
+  rs_u_clearall(buf);
+#else
   buf->b_u_newhead = buf->b_u_oldhead = buf->b_u_curhead = NULL;
   buf->b_u_synced = true;
   buf->b_u_numhead = 0;
   buf->b_u_line_ptr = NULL;
   buf->b_u_line_lnum = 0;
+#endif
 }
 
 /// Free all allocated memory blocks for the buffer 'buf'.
@@ -3023,12 +3036,16 @@ static void u_saveline(buf_T *buf, linenr_T lnum)
 /// (this is used externally for crossing a line while in insert mode)
 void u_clearline(buf_T *buf)
 {
+#ifdef USE_RUST_UNDO
+  rs_u_clearline(buf);
+#else
   if (buf->b_u_line_ptr == NULL) {
     return;
   }
 
   XFREE_CLEAR(buf->b_u_line_ptr);
   buf->b_u_line_lnum = 0;
+#endif
 }
 
 /// Implementation of the "U" command.
@@ -3093,22 +3110,30 @@ static char *u_save_line_buf(buf_T *buf, linenr_T lnum)
 bool bufIsChanged(buf_T *buf)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_UNDO
+  return rs_bufIsChanged(buf);
+#else
   // In a "prompt" buffer we do respect 'modified', so that we can control
   // closing the window by setting or resetting that option.
   return (!bt_dontwrite(buf) || bt_prompt(buf))
          && (buf->b_changed || file_ff_differs(buf, true));
+#endif
 }
 
 // Return true if any buffer has changes.  Also buffers that are not written.
 bool anyBufIsChanged(void)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_UNDO
+  return rs_anyBufIsChanged();
+#else
   FOR_ALL_BUFFERS(buf) {
     if (bufIsChanged(buf)) {
       return true;
     }
   }
   return false;
+#endif
 }
 
 /// @see bufIsChanged
@@ -3222,4 +3247,283 @@ u_header_T *u_force_get_undo_header(buf_T *buf)
     }
   }
   return uhp;
+}
+
+// ============================================================================
+// Rust FFI accessor functions
+// ============================================================================
+
+// Buffer undo field accessors
+u_header_T *nvim_buf_get_b_u_oldhead(buf_T *buf)
+{
+  return buf->b_u_oldhead;
+}
+
+u_header_T *nvim_buf_get_b_u_newhead(buf_T *buf)
+{
+  return buf->b_u_newhead;
+}
+
+u_header_T *nvim_buf_get_b_u_curhead(buf_T *buf)
+{
+  return buf->b_u_curhead;
+}
+
+int nvim_buf_get_b_u_numhead(buf_T *buf)
+{
+  return buf->b_u_numhead;
+}
+
+bool nvim_buf_get_b_u_synced(buf_T *buf)
+{
+  return buf->b_u_synced;
+}
+
+char *nvim_buf_get_b_u_line_ptr(buf_T *buf)
+{
+  return buf->b_u_line_ptr;
+}
+
+linenr_T nvim_buf_get_b_u_line_lnum(buf_T *buf)
+{
+  return buf->b_u_line_lnum;
+}
+
+void nvim_buf_set_b_u_oldhead(buf_T *buf, u_header_T *val)
+{
+  buf->b_u_oldhead = val;
+}
+
+void nvim_buf_set_b_u_newhead(buf_T *buf, u_header_T *val)
+{
+  buf->b_u_newhead = val;
+}
+
+void nvim_buf_set_b_u_curhead(buf_T *buf, u_header_T *val)
+{
+  buf->b_u_curhead = val;
+}
+
+void nvim_buf_set_b_u_numhead(buf_T *buf, int val)
+{
+  buf->b_u_numhead = val;
+}
+
+void nvim_buf_set_b_u_synced(buf_T *buf, bool val)
+{
+  buf->b_u_synced = val;
+}
+
+void nvim_buf_set_b_u_line_ptr(buf_T *buf, char *val)
+{
+  buf->b_u_line_ptr = val;
+}
+
+void nvim_buf_set_b_u_line_lnum(buf_T *buf, linenr_T val)
+{
+  buf->b_u_line_lnum = val;
+}
+
+// Buffer state accessors
+bool nvim_buf_get_b_changed(buf_T *buf)
+{
+  return buf->b_changed;
+}
+
+bool nvim_bt_dontwrite(buf_T *buf)
+{
+  return bt_dontwrite(buf);
+}
+
+bool nvim_bt_prompt(buf_T *buf)
+{
+  return bt_prompt(buf);
+}
+
+bool nvim_file_ff_differs(buf_T *buf, bool strict)
+{
+  return file_ff_differs(buf, strict);
+}
+
+// Global buffer iteration
+buf_T *nvim_get_firstbuf(void)
+{
+  return firstbuf;
+}
+
+buf_T *nvim_buf_get_next(buf_T *buf)
+{
+  return buf->b_next;
+}
+
+// u_header_T field accessors
+u_header_T *nvim_uhp_get_next(u_header_T *uhp)
+{
+  return uhp->uh_next.ptr;
+}
+
+u_header_T *nvim_uhp_get_prev(u_header_T *uhp)
+{
+  return uhp->uh_prev.ptr;
+}
+
+u_header_T *nvim_uhp_get_alt_next(u_header_T *uhp)
+{
+  return uhp->uh_alt_next.ptr;
+}
+
+u_header_T *nvim_uhp_get_alt_prev(u_header_T *uhp)
+{
+  return uhp->uh_alt_prev.ptr;
+}
+
+int nvim_uhp_get_seq(u_header_T *uhp)
+{
+  return uhp->uh_seq;
+}
+
+int nvim_uhp_get_walk(u_header_T *uhp)
+{
+  return uhp->uh_walk;
+}
+
+u_entry_T *nvim_uhp_get_entry(u_header_T *uhp)
+{
+  return uhp->uh_entry;
+}
+
+u_entry_T *nvim_uhp_get_getbot_entry(u_header_T *uhp)
+{
+  return uhp->uh_getbot_entry;
+}
+
+time_t nvim_uhp_get_time(u_header_T *uhp)
+{
+  return uhp->uh_time;
+}
+
+int nvim_uhp_get_flags(u_header_T *uhp)
+{
+  return uhp->uh_flags;
+}
+
+int nvim_uhp_get_save_nr(u_header_T *uhp)
+{
+  return uhp->uh_save_nr;
+}
+
+void nvim_uhp_set_next(u_header_T *uhp, u_header_T *val)
+{
+  uhp->uh_next.ptr = val;
+}
+
+void nvim_uhp_set_prev(u_header_T *uhp, u_header_T *val)
+{
+  uhp->uh_prev.ptr = val;
+}
+
+void nvim_uhp_set_alt_next(u_header_T *uhp, u_header_T *val)
+{
+  uhp->uh_alt_next.ptr = val;
+}
+
+void nvim_uhp_set_alt_prev(u_header_T *uhp, u_header_T *val)
+{
+  uhp->uh_alt_prev.ptr = val;
+}
+
+void nvim_uhp_set_seq(u_header_T *uhp, int val)
+{
+  uhp->uh_seq = val;
+}
+
+void nvim_uhp_set_walk(u_header_T *uhp, int val)
+{
+  uhp->uh_walk = val;
+}
+
+void nvim_uhp_set_entry(u_header_T *uhp, u_entry_T *val)
+{
+  uhp->uh_entry = val;
+}
+
+void nvim_uhp_set_getbot_entry(u_header_T *uhp, u_entry_T *val)
+{
+  uhp->uh_getbot_entry = val;
+}
+
+void nvim_uhp_set_time(u_header_T *uhp, time_t val)
+{
+  uhp->uh_time = val;
+}
+
+void nvim_uhp_set_flags(u_header_T *uhp, int val)
+{
+  uhp->uh_flags = val;
+}
+
+void nvim_uhp_set_save_nr(u_header_T *uhp, int val)
+{
+  uhp->uh_save_nr = val;
+}
+
+// u_entry_T field accessors
+u_entry_T *nvim_uep_get_next(u_entry_T *uep)
+{
+  return uep->ue_next;
+}
+
+linenr_T nvim_uep_get_top(u_entry_T *uep)
+{
+  return uep->ue_top;
+}
+
+linenr_T nvim_uep_get_bot(u_entry_T *uep)
+{
+  return uep->ue_bot;
+}
+
+linenr_T nvim_uep_get_lcount(u_entry_T *uep)
+{
+  return uep->ue_lcount;
+}
+
+linenr_T nvim_uep_get_size(u_entry_T *uep)
+{
+  return uep->ue_size;
+}
+
+char **nvim_uep_get_array(u_entry_T *uep)
+{
+  return uep->ue_array;
+}
+
+void nvim_uep_set_next(u_entry_T *uep, u_entry_T *val)
+{
+  uep->ue_next = val;
+}
+
+void nvim_uep_set_top(u_entry_T *uep, linenr_T val)
+{
+  uep->ue_top = val;
+}
+
+void nvim_uep_set_bot(u_entry_T *uep, linenr_T val)
+{
+  uep->ue_bot = val;
+}
+
+void nvim_uep_set_lcount(u_entry_T *uep, linenr_T val)
+{
+  uep->ue_lcount = val;
+}
+
+void nvim_uep_set_size(u_entry_T *uep, linenr_T val)
+{
+  uep->ue_size = val;
+}
+
+void nvim_uep_set_array(u_entry_T *uep, char **val)
+{
+  uep->ue_array = val;
 }

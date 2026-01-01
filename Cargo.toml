@@ -61,6 +61,7 @@ members = [
     "src/nvim-rs/tui",
     "src/nvim-rs/typval",
     "src/nvim-rs/ugrid",
+    "src/nvim-rs/undo",
 ]
 
 [workspace.package]

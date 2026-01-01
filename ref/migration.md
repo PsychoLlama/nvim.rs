@@ -66,6 +66,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | tui          | Terminal UI, terminfo formatting, TUI output       |
 | typval       | VimL typval_T type checking and value extraction   |
 | ugrid        | Unicode grid (UGrid) operations for TUI            |
+| undo         | Undo system utilities, buffer change detection     |
 | unpacker     | MessagePack unpacking                              |
 | utf8proc     | utf8proc FFI bindings                              |
 | version      | Version compatibility checks                       |
@@ -560,6 +561,60 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 - `ex_display` - Register display, message system
 - `insert_reg`, `get_spec_reg` - Special register handling
 - `op_yank_reg` - Yank operations with block_def struct
+
+### Undo Module (undo.c - PARTIALLY MIGRATED)
+
+**Migrated Functions (4 rs_* functions):**
+- `rs_bufIsChanged` - Check if buffer is modified or file format differs
+- `rs_anyBufIsChanged` - Check if any buffer has changes
+- `rs_u_clearall` - Invalidate undo buffer when storage released
+- `rs_u_clearline` - Clear line saved for "U" command
+
+**Accessor Functions (~40):**
+
+*Buffer undo field accessors:*
+- `nvim_buf_get/set_b_u_oldhead` - Oldest undo header
+- `nvim_buf_get/set_b_u_newhead` - Newest undo header
+- `nvim_buf_get/set_b_u_curhead` - Current undo header
+- `nvim_buf_get/set_b_u_numhead` - Number of headers
+- `nvim_buf_get/set_b_u_synced` - Entry lists synced flag
+- `nvim_buf_get/set_b_u_line_ptr` - Saved line for "U" command
+- `nvim_buf_get/set_b_u_line_lnum` - Line number for "U" command
+
+*Buffer state accessors:*
+- `nvim_buf_get_b_changed` - Buffer changed flag
+- `nvim_bt_dontwrite` - Buffer type doesn't write
+- `nvim_bt_prompt` - Buffer type is prompt
+- `nvim_file_ff_differs` - File format differs check
+- `nvim_get_firstbuf` - First buffer in list
+- `nvim_buf_get_next` - Next buffer in list
+
+*u_header_T field accessors:*
+- `nvim_uhp_get/set_next/prev` - Linked list pointers
+- `nvim_uhp_get/set_alt_next/alt_prev` - Alt branch pointers
+- `nvim_uhp_get/set_seq` - Sequence number
+- `nvim_uhp_get/set_walk` - Walk counter for undo_time
+- `nvim_uhp_get/set_entry` - First entry pointer
+- `nvim_uhp_get/set_getbot_entry` - Bot entry pointer
+- `nvim_uhp_get/set_time` - Timestamp
+- `nvim_uhp_get/set_flags` - Flags
+- `nvim_uhp_get/set_save_nr` - Save number
+
+*u_entry_T field accessors:*
+- `nvim_uep_get/set_next` - Next entry pointer
+- `nvim_uep_get/set_top` - Line above undo block
+- `nvim_uep_get/set_bot` - Line below undo block
+- `nvim_uep_get/set_lcount` - Line count at save
+- `nvim_uep_get/set_size` - Number of lines in array
+- `nvim_uep_get/set_array` - Lines array
+
+**Remaining Functions (complex, need extensive infrastructure):**
+- `undo_allowed` - Global state checks (MODIFIABLE, sandbox, textlock)
+- `undo_fmt_time` - Localized time formatting
+- `u_savecommon` - ~250 lines, many dependencies
+- `u_undoredo` - ~250 lines, ml_*, marks, extmarks
+- `undo_time` - ~320 lines, complex tree traversal
+- `u_write_undo`, `u_read_undo` - File I/O, security checks
 
 ### Complex Memory/Buffer Operations
 Functions involving memory management or buffer content access:
