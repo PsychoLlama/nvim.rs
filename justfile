@@ -57,12 +57,14 @@ rust-test:
     cargo test \
       -p nvim-api \
       -p nvim-ascii \
+      -p nvim-autocmd \
       -p nvim-charset \
       -p nvim-cmdhist \
       -p nvim-collections \
       -p nvim-compositor \
       -p nvim-context \
       -p nvim-cursor-shape \
+      -p nvim-decoration \
       -p nvim-diff \
       -p nvim-encoding \
       -p nvim-eval \
