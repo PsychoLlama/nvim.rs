@@ -162,4 +162,46 @@ mod tests {
             assert_eq!(t, i32::try_from(i).unwrap());
         }
     }
+
+    #[test]
+    fn test_nvim_string_size() {
+        // NvimString should be ptr + size_t = 16 bytes on 64-bit
+        assert_eq!(std::mem::size_of::<NvimString>(), 16);
+    }
+
+    #[test]
+    fn test_array_size() {
+        // Array should be 3 * size_t = 24 bytes on 64-bit
+        assert_eq!(std::mem::size_of::<Array>(), 24);
+    }
+
+    #[test]
+    fn test_dict_size() {
+        // Dict should be 3 * size_t = 24 bytes on 64-bit
+        assert_eq!(std::mem::size_of::<Dict>(), 24);
+    }
+
+    #[test]
+    fn test_nvim_string_default() {
+        // Test that we can create a null NvimString
+        let s = NvimString {
+            data: std::ptr::null_mut(),
+            size: 0,
+        };
+        assert!(s.data.is_null());
+        assert_eq!(s.size, 0);
+    }
+
+    #[test]
+    fn test_array_default() {
+        // Test that we can create an empty Array
+        let a = Array {
+            size: 0,
+            capacity: 0,
+            items: std::ptr::null_mut(),
+        };
+        assert_eq!(a.size, 0);
+        assert_eq!(a.capacity, 0);
+        assert!(a.items.is_null());
+    }
 }
