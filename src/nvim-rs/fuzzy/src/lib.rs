@@ -643,4 +643,53 @@ mod tests {
         assert_eq!(SCORE_MATCH_CAPITAL, 0.7);
         assert_eq!(SCORE_MATCH_DOT, 0.6);
     }
+
+    #[test]
+    fn test_is_word_sep() {
+        // Word separators
+        assert!(is_word_sep('-'));
+        assert!(is_word_sep('_'));
+        assert!(is_word_sep(' '));
+
+        // Not word separators
+        assert!(!is_word_sep('a'));
+        assert!(!is_word_sep('Z'));
+        assert!(!is_word_sep('0'));
+        assert!(!is_word_sep('/'));
+        assert!(!is_word_sep('.'));
+    }
+
+    #[test]
+    fn test_is_path_sep() {
+        // Path separator
+        assert!(is_path_sep('/'));
+
+        // Not path separators
+        assert!(!is_path_sep('\\'));
+        assert!(!is_path_sep('-'));
+        assert!(!is_path_sep('.'));
+    }
+
+    #[test]
+    fn test_is_dot() {
+        assert!(is_dot('.'));
+        assert!(!is_dot(','));
+        assert!(!is_dot(':'));
+    }
+
+    #[test]
+    fn test_is_word_char() {
+        // Alphanumeric and underscore are word chars
+        assert!(is_word_char('a'));
+        assert!(is_word_char('Z'));
+        assert!(is_word_char('0'));
+        assert!(is_word_char('9'));
+        assert!(is_word_char('_'));
+
+        // Non-word chars
+        assert!(!is_word_char('-'));
+        assert!(!is_word_char(' '));
+        assert!(!is_word_char('.'));
+        assert!(!is_word_char('/'));
+    }
 }

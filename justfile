@@ -61,6 +61,7 @@ rust-test:
       -p nvim-encoding \
       -p nvim-eval \
       -p nvim-fileio \
+      -p nvim-fuzzy \
       -p nvim-help \
       -p nvim-indent \
       -p nvim-keycodes \
