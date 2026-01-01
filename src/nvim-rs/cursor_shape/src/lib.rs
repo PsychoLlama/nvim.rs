@@ -195,3 +195,40 @@ pub unsafe extern "C" fn rs_cursor_mode_str2int(mode: *const c_char) -> c_int {
 
     -1
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cursor_shape_values() {
+        // Verify CursorShape enum values match C definitions
+        assert_eq!(CursorShape::Block as c_int, 0);
+        assert_eq!(CursorShape::Hor as c_int, 1);
+        assert_eq!(CursorShape::Ver as c_int, 2);
+    }
+
+    #[test]
+    fn test_mode_shape_values() {
+        // Verify key ModeShape enum values match C definitions
+        assert_eq!(ModeShape::N as c_int, 0);      // Normal
+        assert_eq!(ModeShape::V as c_int, 1);      // Visual
+        assert_eq!(ModeShape::I as c_int, 2);      // Insert
+        assert_eq!(ModeShape::R as c_int, 3);      // Replace
+        assert_eq!(ModeShape::C as c_int, 4);      // Command line Normal
+        assert_eq!(ModeShape::Term as c_int, 17);  // Terminal
+        assert_eq!(ModeShape::Count as c_int, 18); // Total modes
+    }
+
+    #[test]
+    fn test_mode_flags() {
+        // Verify mode flag constants match C definitions
+        assert_eq!(MODE_CMDLINE, 0x08);
+        assert_eq!(MODE_INSERT, 0x10);
+        assert_eq!(MODE_TERMINAL, 0x80);
+        assert_eq!(REPLACE_FLAG, 0x100);
+        assert_eq!(VREPLACE_FLAG, 0x200);
+        // MODE_SHOWMATCH should combine flags
+        assert_eq!(MODE_SHOWMATCH, 0x6000 | MODE_INSERT);
+    }
+}
