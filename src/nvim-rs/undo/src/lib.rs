@@ -113,6 +113,9 @@ extern "C" {
     // Allocation functions
     fn nvim_alloc_u_entry() -> UEntryHandle;
     fn nvim_alloc_u_header() -> UHeaderHandle;
+
+    // Extmark vector destruction
+    fn nvim_uhp_destroy_extmark(uhp: UHeaderHandle);
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed.
@@ -210,6 +213,141 @@ pub unsafe extern "C" fn rs_u_freeentry(uep: UEntryHandle, mut n: c_int) {
 
     // Free the entry struct
     nvim_xfree(uep.0);
+}
+
+/// Free all the undo entries for one header and the header itself.
+/// This means that "uhp" is invalid when returning.
+///
+/// # Safety
+///
+/// All handles must be valid pointers. uhpp may be NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_freeentries(
+    buf: BufHandle,
+    uhp: UHeaderHandle,
+    uhpp: *mut UHeaderHandle,
+) {
+    // Check for pointers to the header that become invalid now.
+    let curhead = nvim_buf_get_b_u_curhead(buf);
+    if curhead.0 == uhp.0 {
+        nvim_buf_set_b_u_curhead(buf, UHeaderHandle(std::ptr::null_mut()));
+    }
+
+    let newhead = nvim_buf_get_b_u_newhead(buf);
+    if newhead.0 == uhp.0 {
+        nvim_buf_set_b_u_newhead(buf, UHeaderHandle(std::ptr::null_mut()));
+    }
+
+    if !uhpp.is_null() && (*uhpp).0 == uhp.0 {
+        *uhpp = UHeaderHandle(std::ptr::null_mut());
+    }
+
+    // Free all entries in the list
+    let mut uep = nvim_uhp_get_entry(uhp);
+    while !uep.0.is_null() {
+        let nuep = nvim_uep_get_next(uep);
+        let size = nvim_uep_get_size(uep);
+        rs_u_freeentry(uep, size as c_int);
+        uep = nuep;
+    }
+
+    // Destroy the extmark vector
+    nvim_uhp_destroy_extmark(uhp);
+
+    // Free the header struct
+    nvim_xfree(uhp.0);
+
+    // Decrement header count
+    let numhead = nvim_buf_get_b_u_numhead(buf);
+    nvim_buf_set_b_u_numhead(buf, numhead - 1);
+}
+
+/// Free one header "uhp" and its entry list and adjust the pointers.
+///
+/// # Safety
+///
+/// All handles must be valid pointers. uhpp may be NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_freeheader(
+    buf: BufHandle,
+    uhp: UHeaderHandle,
+    uhpp: *mut UHeaderHandle,
+) {
+    // When there is an alternate redo list free that branch completely,
+    // because we can never go there.
+    let alt_next = nvim_uhp_get_alt_next(uhp);
+    if !alt_next.0.is_null() {
+        rs_u_freebranch(buf, alt_next, uhpp);
+    }
+
+    let alt_prev = nvim_uhp_get_alt_prev(uhp);
+    if !alt_prev.0.is_null() {
+        nvim_uhp_set_alt_next(alt_prev, UHeaderHandle(std::ptr::null_mut()));
+    }
+
+    // Update the links in the list to remove the header.
+    let uh_next = nvim_uhp_get_next(uhp);
+    let uh_prev = nvim_uhp_get_prev(uhp);
+
+    if uh_next.0.is_null() {
+        nvim_buf_set_b_u_oldhead(buf, uh_prev);
+    } else {
+        nvim_uhp_set_prev(uh_next, uh_prev);
+    }
+
+    if uh_prev.0.is_null() {
+        nvim_buf_set_b_u_newhead(buf, uh_next);
+    } else {
+        let mut uhap = uh_prev;
+        while !uhap.0.is_null() {
+            nvim_uhp_set_next(uhap, uh_next);
+            uhap = nvim_uhp_get_alt_next(uhap);
+        }
+    }
+
+    rs_u_freeentries(buf, uhp, uhpp);
+}
+
+/// Free an alternate branch and any following alternate branches.
+///
+/// # Safety
+///
+/// All handles must be valid pointers. uhpp may be NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_freebranch(
+    buf: BufHandle,
+    uhp: UHeaderHandle,
+    uhpp: *mut UHeaderHandle,
+) {
+    // If this is the top branch we may need to use u_freeheader() to update
+    // all the pointers.
+    let oldhead = nvim_buf_get_b_u_oldhead(buf);
+    if uhp.0 == oldhead.0 {
+        loop {
+            let current_oldhead = nvim_buf_get_b_u_oldhead(buf);
+            if current_oldhead.0.is_null() {
+                break;
+            }
+            rs_u_freeheader(buf, current_oldhead, uhpp);
+        }
+        return;
+    }
+
+    let alt_prev = nvim_uhp_get_alt_prev(uhp);
+    if !alt_prev.0.is_null() {
+        nvim_uhp_set_alt_next(alt_prev, UHeaderHandle(std::ptr::null_mut()));
+    }
+
+    let mut next = uhp;
+    while !next.0.is_null() {
+        let tofree = next;
+        let alt_next = nvim_uhp_get_alt_next(tofree);
+        if !alt_next.0.is_null() {
+            rs_u_freebranch(buf, alt_next, uhpp); // recursive
+        }
+        next = nvim_uhp_get_prev(tofree);
+        rs_u_freeentries(buf, tofree, uhpp);
+    }
 }
 
 #[cfg(test)]

@@ -147,6 +147,9 @@ extern bool rs_curbufIsChanged(void);
 extern void rs_u_clearall(buf_T *buf);
 extern void rs_u_clearline(buf_T *buf);
 extern void rs_u_freeentry(u_entry_T *uep, int n);
+extern void rs_u_freeentries(buf_T *buf, u_header_T *uhp, u_header_T **uhpp);
+extern void rs_u_freeheader(buf_T *buf, u_header_T *uhp, u_header_T **uhpp);
+extern void rs_u_freebranch(buf_T *buf, u_header_T *uhp, u_header_T **uhpp);
 
 // Feature flag for Rust undo functions
 #define USE_RUST_UNDO 1
@@ -2876,6 +2879,9 @@ static void u_getbot(buf_T *buf)
 /// @param uhpp  if not NULL reset when freeing this header
 static void u_freeheader(buf_T *buf, u_header_T *uhp, u_header_T **uhpp)
 {
+#ifdef USE_RUST_UNDO
+  rs_u_freeheader(buf, uhp, uhpp);
+#else
   // When there is an alternate redo list free that branch completely,
   // because we can never go there.
   if (uhp->uh_alt_next.ptr != NULL) {
@@ -2903,6 +2909,7 @@ static void u_freeheader(buf_T *buf, u_header_T *uhp, u_header_T **uhpp)
   }
 
   u_freeentries(buf, uhp, uhpp);
+#endif
 }
 
 /// Free an alternate branch and any following alternate branches.
@@ -2910,6 +2917,9 @@ static void u_freeheader(buf_T *buf, u_header_T *uhp, u_header_T **uhpp)
 /// @param uhpp  if not NULL reset when freeing this header
 static void u_freebranch(buf_T *buf, u_header_T *uhp, u_header_T **uhpp)
 {
+#ifdef USE_RUST_UNDO
+  rs_u_freebranch(buf, uhp, uhpp);
+#else
   // If this is the top branch we may need to use u_freeheader() to update
   // all the pointers.
   if (uhp == buf->b_u_oldhead) {
@@ -2932,6 +2942,7 @@ static void u_freebranch(buf_T *buf, u_header_T *uhp, u_header_T **uhpp)
     next = tofree->uh_prev.ptr;
     u_freeentries(buf, tofree, uhpp);
   }
+#endif
 }
 
 /// Free all the undo entries for one header and the header itself.
@@ -2940,6 +2951,9 @@ static void u_freebranch(buf_T *buf, u_header_T *uhp, u_header_T **uhpp)
 /// @param uhpp  if not NULL reset when freeing this header
 static void u_freeentries(buf_T *buf, u_header_T *uhp, u_header_T **uhpp)
 {
+#ifdef USE_RUST_UNDO
+  rs_u_freeentries(buf, uhp, uhpp);
+#else
   // Check for pointers to the header that become invalid now.
   if (buf->b_u_curhead == uhp) {
     buf->b_u_curhead = NULL;
@@ -2964,6 +2978,7 @@ static void u_freeentries(buf_T *buf, u_header_T *uhp, u_header_T **uhpp)
 #endif
   xfree(uhp);
   buf->b_u_numhead--;
+#endif
 }
 
 /// free entry 'uep' and 'n' lines in uep->ue_array[]
@@ -3557,4 +3572,10 @@ u_entry_T *nvim_alloc_u_entry(void)
 u_header_T *nvim_alloc_u_header(void)
 {
   return xcalloc(1, sizeof(u_header_T));
+}
+
+// Destroy extmark vector in u_header_T (replaces kv_destroy macro)
+void nvim_uhp_destroy_extmark(u_header_T *uhp)
+{
+  kv_destroy(uhp->uh_extmark);
 }
