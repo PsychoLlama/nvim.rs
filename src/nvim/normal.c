@@ -497,9 +497,6 @@ static oparg_T *current_oap = NULL;
 /// Check if current_oap is NULL.
 int nvim_oap_is_null(void) { return current_oap == NULL; }
 
-/// Get the finish_op global flag.
-int nvim_get_finish_op(void) { return finish_op; }
-
 /// Get current_oap->prev_opcount (returns 0 if current_oap is NULL).
 int nvim_oap_get_prev_opcount(void)
 {
