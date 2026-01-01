@@ -572,4 +572,24 @@ mod tests {
         assert_eq!(second - first, 2);
         assert_eq!(third - second, 2);
     }
+
+    #[test]
+    fn test_tristate_constants() {
+        // Verify tristate constants match C definitions
+        assert_eq!(K_NONE, -1);
+        assert_eq!(K_FALSE, 0);
+        assert_eq!(K_TRUE, 1);
+    }
+
+    #[test]
+    fn test_copyid_inc_constant() {
+        // Verify COPYID_INC matches expected value
+        assert_eq!(COPYID_INC, 2);
+    }
+
+    #[test]
+    fn test_autoload_char_constant() {
+        // Verify AUTOLOAD_CHAR matches C definition
+        assert_eq!(AUTOLOAD_CHAR, b'#');
+    }
 }

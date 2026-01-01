@@ -239,4 +239,19 @@ mod tests {
         assert!(rs_byte_in_str(s.as_ptr(), c_int::from(b't')));
         assert!(!rs_byte_in_str(s.as_ptr(), c_int::from(b'x')));
     }
+
+    #[test]
+    fn test_word_flag_constants() {
+        // Verify word flag constants match C definitions from spell_defs.h
+        assert_eq!(WF_ONECAP, 0x02);
+        assert_eq!(WF_ALLCAP, 0x04);
+        assert_eq!(WF_FIXCAP, 0x40);
+        assert_eq!(WF_KEEPCAP, 0x80);
+    }
+
+    #[test]
+    fn test_spelllang_allowed_chars() {
+        // Verify SPELLLANG_ALLOWED contains expected special characters
+        assert_eq!(SPELLLANG_ALLOWED, b".-_,@");
+    }
 }

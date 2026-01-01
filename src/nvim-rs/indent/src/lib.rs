@@ -820,4 +820,11 @@ mod tests {
             assert_eq!(result.nspcs, 0);
         }
     }
+
+    #[test]
+    fn test_whitespace_char_constants() {
+        // Verify TAB and SPACE constants match expected values
+        assert_eq!(TAB, b'\t' as c_char);
+        assert_eq!(SPACE, b' ' as c_char);
+    }
 }
