@@ -56,9 +56,11 @@ rust-build-debug:
 rust-test:
     cargo test \
       -p nvim-api \
+      -p nvim-arabic \
       -p nvim-ascii \
       -p nvim-autocmd \
       -p nvim-charset \
+      -p nvim-cmdline \
       -p nvim-cmdhist \
       -p nvim-collections \
       -p nvim-compositor \
@@ -66,6 +68,7 @@ rust-test:
       -p nvim-cursor-shape \
       -p nvim-decoration \
       -p nvim-diff \
+      -p nvim-drawline \
       -p nvim-encoding \
       -p nvim-eval \
       -p nvim-event \
