@@ -143,4 +143,34 @@ mod tests {
         assert_eq!(HIST_INPUT, 3);
         assert_eq!(HIST_DEBUG, 4);
     }
+
+    #[test]
+    fn test_history_types_sequential() {
+        // Valid history types should be sequential 0-4
+        let valid_types = [HIST_CMD, HIST_SEARCH, HIST_EXPR, HIST_INPUT, HIST_DEBUG];
+        for (i, &hist_type) in valid_types.iter().enumerate() {
+            assert_eq!(hist_type, i as c_int);
+        }
+    }
+
+    #[test]
+    fn test_special_history_types() {
+        // HIST_DEFAULT and HIST_INVALID should be distinct from valid types
+        let special_types = [HIST_DEFAULT, HIST_INVALID];
+        let valid_types = [HIST_CMD, HIST_SEARCH, HIST_EXPR, HIST_INPUT, HIST_DEBUG];
+
+        for special in special_types {
+            for valid in valid_types {
+                assert_ne!(special, valid, "Special type should differ from valid type");
+            }
+        }
+    }
+
+    #[test]
+    fn test_hist_type_count() {
+        // There should be exactly 5 valid history types (0-4)
+        let valid_types = [HIST_CMD, HIST_SEARCH, HIST_EXPR, HIST_INPUT, HIST_DEBUG];
+        assert_eq!(valid_types.len(), 5);
+        assert_eq!(HIST_DEBUG - HIST_CMD + 1, 5);
+    }
 }
