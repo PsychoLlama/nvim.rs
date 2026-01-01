@@ -564,7 +564,7 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 
 ### Undo Module (undo.c - PARTIALLY MIGRATED)
 
-**Migrated Functions (12 rs_* functions):**
+**Migrated Functions (16 rs_* functions):**
 
 *Group A - Utilities:*
 - `rs_bufIsChanged` - Check if buffer is modified or file format differs
@@ -581,6 +581,10 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 - `rs_u_get_headentry` - Get first entry in undo header
 - `rs_u_getbot` - Compute line number for previous u_save
 - `rs_u_blockfree` - Free all undo headers and entries
+- `rs_u_clearallandblockfree` - Combined blockfree and clearall
+- `rs_u_unch_branch` - Mark headers as changed (recursive)
+- `rs_u_unchanged` - Mark all headers changed after write/reload
+- `rs_u_update_save_nr` - Update save number in undo header
 
 *Group D - Save Functions:*
 - `rs_u_sync` - Stop adding to current entry list
