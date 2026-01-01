@@ -174,4 +174,44 @@ mod tests {
             assert_eq!(score, c_int::MAX);
         }
     }
+
+    #[test]
+    fn test_help_heuristic_empty_string() {
+        unsafe {
+            let score = rs_help_heuristic(test_str("").as_ptr(), 0, false);
+            // 0 letters * 100 + 0 length + 0 offset = 0
+            assert_eq!(score, 0);
+        }
+    }
+
+    #[test]
+    fn test_help_heuristic_non_alpha() {
+        unsafe {
+            // String with no alphanumeric characters
+            let score = rs_help_heuristic(test_str("---").as_ptr(), 0, false);
+            // 0 letters * 100 + 3 length + 0 offset = 3
+            assert_eq!(score, 3);
+        }
+    }
+
+    #[test]
+    fn test_ascii_isalnum() {
+        // Digits
+        for c in b'0'..=b'9' {
+            assert!(ascii_isalnum(c));
+        }
+        // Lowercase
+        for c in b'a'..=b'z' {
+            assert!(ascii_isalnum(c));
+        }
+        // Uppercase
+        for c in b'A'..=b'Z' {
+            assert!(ascii_isalnum(c));
+        }
+        // Non-alphanumeric
+        assert!(!ascii_isalnum(b' '));
+        assert!(!ascii_isalnum(b'-'));
+        assert!(!ascii_isalnum(b'_'));
+        assert!(!ascii_isalnum(b'+'));
+    }
 }
