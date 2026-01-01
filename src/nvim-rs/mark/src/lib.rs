@@ -346,4 +346,157 @@ mod tests {
         // Verify NMARKS matches C definition (26 named marks a-z)
         assert_eq!(NMARKS, 26);
     }
+
+    #[test]
+    fn test_ascii_helpers() {
+        // Test ascii_isupper
+        assert!(ascii_isupper(b'A'));
+        assert!(ascii_isupper(b'Z'));
+        assert!(ascii_isupper(b'M'));
+        assert!(!ascii_isupper(b'a'));
+        assert!(!ascii_isupper(b'z'));
+        assert!(!ascii_isupper(b'0'));
+        assert!(!ascii_isupper(b'@')); // before A
+        assert!(!ascii_isupper(b'[')); // after Z
+
+        // Test ascii_islower
+        assert!(ascii_islower(b'a'));
+        assert!(ascii_islower(b'z'));
+        assert!(ascii_islower(b'm'));
+        assert!(!ascii_islower(b'A'));
+        assert!(!ascii_islower(b'Z'));
+        assert!(!ascii_islower(b'0'));
+        assert!(!ascii_islower(b'`')); // before a
+        assert!(!ascii_islower(b'{')); // after z
+
+        // Test ascii_isdigit
+        assert!(ascii_isdigit(b'0'));
+        assert!(ascii_isdigit(b'9'));
+        assert!(ascii_isdigit(b'5'));
+        assert!(!ascii_isdigit(b'a'));
+        assert!(!ascii_isdigit(b'A'));
+        assert!(!ascii_isdigit(b'/')); // before 0
+        assert!(!ascii_isdigit(b':')); // after 9
+    }
+
+    #[test]
+    fn test_pos_t_default() {
+        // Default should be an empty position
+        let pos = PosT::default();
+        assert_eq!(pos.lnum, 0);
+        assert_eq!(pos.col, 0);
+        assert_eq!(pos.coladd, 0);
+        assert_ne!(rs_empty_pos(pos), 0);
+    }
+
+    #[test]
+    fn test_pos_t_clone_and_eq() {
+        let pos1 = PosT {
+            lnum: 10,
+            col: 5,
+            coladd: 2,
+        };
+        let pos2 = pos1;
+        assert_eq!(pos1, pos2);
+
+        let pos3 = PosT {
+            lnum: 10,
+            col: 5,
+            coladd: 3,
+        };
+        assert_ne!(pos1, pos3);
+    }
+
+    #[test]
+    fn test_pos_t_debug() {
+        let pos = PosT {
+            lnum: 10,
+            col: 5,
+            coladd: 2,
+        };
+        let debug_str = format!("{pos:?}");
+        assert!(debug_str.contains("lnum: 10"));
+        assert!(debug_str.contains("col: 5"));
+        assert!(debug_str.contains("coladd: 2"));
+    }
+
+    #[test]
+    fn test_mark_global_index_all_uppercase() {
+        // Test all uppercase letters map correctly
+        for (i, c) in (b'A'..=b'Z').enumerate() {
+            assert_eq!(
+                rs_mark_global_index(c_int::from(c)),
+                i as c_int,
+                "Failed for {}",
+                c as char
+            );
+        }
+    }
+
+    #[test]
+    fn test_mark_global_index_all_digits() {
+        // Test all digits map correctly
+        for (i, c) in (b'0'..=b'9').enumerate() {
+            assert_eq!(
+                rs_mark_global_index(c_int::from(c)),
+                NMARKS + i as c_int,
+                "Failed for {}",
+                c as char
+            );
+        }
+    }
+
+    #[test]
+    fn test_mark_local_index_all_lowercase() {
+        // Test all lowercase letters map correctly
+        for (i, c) in (b'a'..=b'z').enumerate() {
+            assert_eq!(
+                rs_mark_local_index(c_int::from(c)),
+                i as c_int,
+                "Failed for {}",
+                c as char
+            );
+        }
+    }
+
+    #[test]
+    fn test_lt_negative_values() {
+        // Test with negative values
+        let pos1 = PosT {
+            lnum: -1,
+            col: 0,
+            coladd: 0,
+        };
+        let pos2 = PosT {
+            lnum: 0,
+            col: 0,
+            coladd: 0,
+        };
+        assert_ne!(rs_lt(pos1, pos2), 0); // -1 < 0
+        assert_eq!(rs_lt(pos2, pos1), 0); // 0 > -1
+    }
+
+    #[test]
+    fn test_position_comparison_transitivity() {
+        // Test transitivity: if a < b and b < c, then a < c
+        let a = PosT {
+            lnum: 1,
+            col: 0,
+            coladd: 0,
+        };
+        let b = PosT {
+            lnum: 2,
+            col: 0,
+            coladd: 0,
+        };
+        let c = PosT {
+            lnum: 3,
+            col: 0,
+            coladd: 0,
+        };
+
+        assert_ne!(rs_lt(a, b), 0); // a < b
+        assert_ne!(rs_lt(b, c), 0); // b < c
+        assert_ne!(rs_lt(a, c), 0); // a < c (transitivity)
+    }
 }
