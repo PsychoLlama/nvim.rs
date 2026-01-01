@@ -243,4 +243,13 @@ mod tests {
             assert_ne!(rs_queue_empty(head_ptr), 0);
         }
     }
+
+    #[test]
+    fn test_queue_struct_size() {
+        // Queue should be 2 pointers (16 bytes on 64-bit)
+        assert_eq!(
+            std::mem::size_of::<Queue>(),
+            2 * std::mem::size_of::<*mut Queue>()
+        );
+    }
 }
