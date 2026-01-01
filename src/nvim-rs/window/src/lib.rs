@@ -2446,4 +2446,27 @@ mod tests {
         assert!(!valid_tabpage_impl(handle));
         assert!(!valid_tabpage_win_impl(handle));
     }
+
+    #[test]
+    fn test_win_handle_equality() {
+        let ptr1 = 0x1000 as *mut std::ffi::c_void;
+        let ptr2 = 0x1000 as *mut std::ffi::c_void;
+        let ptr3 = 0x2000 as *mut std::ffi::c_void;
+        let h1 = unsafe { WinHandle::from_ptr(ptr1) };
+        let h2 = unsafe { WinHandle::from_ptr(ptr2) };
+        let h3 = unsafe { WinHandle::from_ptr(ptr3) };
+        assert_eq!(h1, h2);
+        assert_ne!(h1, h3);
+    }
+
+    #[test]
+    fn test_handle_sizes() {
+        use std::mem::size_of;
+        // Handles should be pointer-sized
+        assert_eq!(size_of::<WinHandle>(), size_of::<*mut std::ffi::c_void>());
+        assert_eq!(
+            size_of::<TabpageHandle>(),
+            size_of::<*mut std::ffi::c_void>()
+        );
+    }
 }

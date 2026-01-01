@@ -150,5 +150,4 @@ mod tests {
         assert_eq!(NUL, 0);
         assert_eq!(NUL, c_int::from(b'\0'));
     }
-
 }

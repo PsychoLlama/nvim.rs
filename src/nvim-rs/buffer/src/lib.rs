@@ -518,4 +518,23 @@ mod tests {
         // Verify CMOD_HIDE matches C definition
         assert_eq!(CMOD_HIDE, 0x0020);
     }
+
+    #[test]
+    fn test_eol_constants_sequential() {
+        // EOL constants should be sequential
+        assert_eq!(EOL_DOS, EOL_UNIX + 1);
+        assert_eq!(EOL_MAC, EOL_DOS + 1);
+    }
+
+    #[test]
+    fn test_buf_handle_equality() {
+        let ptr1 = 0x1000 as *mut std::ffi::c_void;
+        let ptr2 = 0x1000 as *mut std::ffi::c_void;
+        let ptr3 = 0x2000 as *mut std::ffi::c_void;
+        let h1 = unsafe { BufHandle::from_ptr(ptr1) };
+        let h2 = unsafe { BufHandle::from_ptr(ptr2) };
+        let h3 = unsafe { BufHandle::from_ptr(ptr3) };
+        assert_eq!(h1, h2);
+        assert_ne!(h1, h3);
+    }
 }
