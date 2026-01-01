@@ -340,4 +340,10 @@ mod tests {
         // Null pointer should be handled gracefully
         unsafe { rs_clearpos(std::ptr::null_mut()) };
     }
+
+    #[test]
+    fn test_nmarks_constant() {
+        // Verify NMARKS matches C definition (26 named marks a-z)
+        assert_eq!(NMARKS, 26);
+    }
 }
