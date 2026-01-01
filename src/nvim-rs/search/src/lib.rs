@@ -187,4 +187,28 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_forward_backward_opposite() {
+        // FORWARD is 1, BACKWARD is -1 (opposite sign)
+        const BACKWARD: c_int = -1;
+        let forward = FORWARD;
+        let backward = BACKWARD;
+        assert_eq!(forward, -backward);
+        assert_eq!(forward + backward, 0);
+    }
+
+    #[test]
+    fn test_optmagic_sequential() {
+        // optmagic values should be sequential starting from 0
+        assert_eq!(OPTION_MAGIC_NOT_SET, 0);
+        assert_eq!(OPTION_MAGIC_ON, 1);
+        assert_eq!(OPTION_MAGIC_OFF, 2);
+        // Also verify they're in order
+        let not_set = OPTION_MAGIC_NOT_SET;
+        let on = OPTION_MAGIC_ON;
+        let off = OPTION_MAGIC_OFF;
+        assert!(not_set < on);
+        assert!(on < off);
+    }
 }

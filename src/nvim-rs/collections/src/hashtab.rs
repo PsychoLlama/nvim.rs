@@ -601,4 +601,24 @@ mod tests {
         assert_eq!(HT_INIT_SIZE, 16);
         assert!(HT_INIT_SIZE.is_power_of_two());
     }
+
+    #[test]
+    fn test_hashitem_default() {
+        let item = HashItem::default();
+        assert_eq!(item.hi_hash, 0);
+        assert!(item.hi_key.is_null());
+    }
+
+    #[test]
+    fn test_hashitem_size() {
+        // HashItem should be 2 machine words (hash + pointer)
+        let expected = 2 * std::mem::size_of::<usize>();
+        assert_eq!(std::mem::size_of::<HashItem>(), expected);
+    }
+
+    #[test]
+    fn test_perturb_shift() {
+        // PERTURB_SHIFT should match C definition
+        assert_eq!(PERTURB_SHIFT, 5);
+    }
 }

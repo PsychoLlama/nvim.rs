@@ -595,4 +595,34 @@ mod tests {
         assert!(!hsep_connected_impl(null_win, WindowCorner::TopLeft));
         assert!(!vsep_connected_impl(null_win, WindowCorner::TopLeft));
     }
+
+    #[test]
+    fn test_hlf_c_constant() {
+        // HLF_C should be 39 (WinSeparator highlight group)
+        let hlf_c = HLF_C;
+        assert_eq!(hlf_c, 39);
+    }
+
+    #[test]
+    fn test_upd_valid_constant() {
+        // UPD_VALID should be 20
+        let upd_valid = UPD_VALID;
+        assert_eq!(upd_valid, 20);
+    }
+
+    #[test]
+    fn test_window_corner_distinct() {
+        // All corner values should be distinct
+        let corners = [
+            WindowCorner::TopLeft as c_int,
+            WindowCorner::TopRight as c_int,
+            WindowCorner::BottomLeft as c_int,
+            WindowCorner::BottomRight as c_int,
+        ];
+        for i in 0..corners.len() {
+            for j in (i + 1)..corners.len() {
+                assert_ne!(corners[i], corners[j]);
+            }
+        }
+    }
 }
