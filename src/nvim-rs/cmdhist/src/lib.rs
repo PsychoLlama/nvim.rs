@@ -131,4 +131,16 @@ mod tests {
             assert_eq!(rs_hist_char2type(c), hist_type);
         }
     }
+
+    #[test]
+    fn test_history_type_constants() {
+        // Verify history type constants match C definitions
+        assert_eq!(HIST_DEFAULT, -2);
+        assert_eq!(HIST_INVALID, -1);
+        assert_eq!(HIST_CMD, 0);
+        assert_eq!(HIST_SEARCH, 1);
+        assert_eq!(HIST_EXPR, 2);
+        assert_eq!(HIST_INPUT, 3);
+        assert_eq!(HIST_DEBUG, 4);
+    }
 }
