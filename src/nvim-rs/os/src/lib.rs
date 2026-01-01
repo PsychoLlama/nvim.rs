@@ -34,3 +34,15 @@ use std::ffi::c_int;
 /// Return values matching nvim's OK/FAIL
 pub const OK: c_int = 1;
 pub const FAIL: c_int = 0;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ok_fail_constants() {
+        // Verify OK/FAIL match nvim conventions
+        assert_eq!(OK, 1);
+        assert_eq!(FAIL, 0);
+    }
+}
