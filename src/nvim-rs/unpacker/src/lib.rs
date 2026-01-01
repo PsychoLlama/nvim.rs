@@ -717,4 +717,95 @@ mod tests {
         assert_eq!(std::mem::size_of::<NvimString>(), 16); // ptr + size_t
         assert_eq!(std::mem::size_of::<KVec<Object>>(), 24); // 3 * size_t
     }
+
+    #[test]
+    fn test_object_type_enum_values() {
+        // Verify ObjectType enum matches C definition
+        assert_eq!(ObjectType::Nil as i32, 0);
+        assert_eq!(ObjectType::Boolean as i32, 1);
+        assert_eq!(ObjectType::Integer as i32, 2);
+        assert_eq!(ObjectType::Float as i32, 3);
+        assert_eq!(ObjectType::String as i32, 4);
+        assert_eq!(ObjectType::Array as i32, 5);
+        assert_eq!(ObjectType::Dict as i32, 6);
+        assert_eq!(ObjectType::LuaRef as i32, 7);
+        assert_eq!(ObjectType::Buffer as i32, 8);
+        assert_eq!(ObjectType::Window as i32, 9);
+        assert_eq!(ObjectType::Tabpage as i32, 10);
+    }
+
+    #[test]
+    fn test_error_type_enum_values() {
+        // Verify ErrorType enum matches C definition
+        assert_eq!(ErrorType::None as i32, -1);
+        assert_eq!(ErrorType::Exception as i32, 0);
+        assert_eq!(ErrorType::Validation as i32, 1);
+    }
+
+    #[test]
+    fn test_object_nil() {
+        let obj = Object::nil();
+        assert_eq!(obj.r#type, ObjectType::Nil);
+    }
+
+    #[test]
+    fn test_object_boolean() {
+        let obj_true = Object::boolean(true);
+        let obj_false = Object::boolean(false);
+        assert_eq!(obj_true.r#type, ObjectType::Boolean);
+        assert_eq!(obj_false.r#type, ObjectType::Boolean);
+        unsafe {
+            assert!(obj_true.data.boolean);
+            assert!(!obj_false.data.boolean);
+        }
+    }
+
+    #[test]
+    fn test_object_integer() {
+        let obj = Object::integer(42);
+        assert_eq!(obj.r#type, ObjectType::Integer);
+        unsafe {
+            assert_eq!(obj.data.integer, 42);
+        }
+    }
+
+    #[test]
+    fn test_object_float() {
+        let value = 1.5; // Simple non-special constant
+        let obj = Object::float(value);
+        assert_eq!(obj.r#type, ObjectType::Float);
+        unsafe {
+            assert!((obj.data.floating - value).abs() < f64::EPSILON);
+        }
+    }
+
+    #[test]
+    fn test_object_handle_types() {
+        let buf = Object::buffer(1);
+        let win = Object::window(2);
+        let tab = Object::tabpage(3);
+        assert_eq!(buf.r#type, ObjectType::Buffer);
+        assert_eq!(win.r#type, ObjectType::Window);
+        assert_eq!(tab.r#type, ObjectType::Tabpage);
+        unsafe {
+            assert_eq!(buf.data.integer, 1);
+            assert_eq!(win.data.integer, 2);
+            assert_eq!(tab.data.integer, 3);
+        }
+    }
+
+    #[test]
+    fn test_nvim_string_default() {
+        let s = NvimString::default();
+        assert!(s.data.is_null());
+        assert_eq!(s.size, 0);
+    }
+
+    #[test]
+    fn test_kvec_default() {
+        let v: KVec<Object> = KVec::default();
+        assert_eq!(v.size, 0);
+        assert_eq!(v.capacity, 0);
+        assert!(v.items.is_null());
+    }
 }
