@@ -964,6 +964,43 @@ mod tests {
         // Verify INTERNAL_CALL_MASK has bit 63 set
         assert_eq!(INTERNAL_CALL_MASK, 1u64 << 63);
     }
+
+    #[test]
+    fn test_nvim_string_size() {
+        // NvimString: ptr (8) + size_t (8) = 16 bytes on 64-bit
+        assert_eq!(std::mem::size_of::<NvimString>(), 16);
+    }
+
+    #[test]
+    fn test_array_size() {
+        // Array: 3 size_t fields = 24 bytes on 64-bit
+        assert_eq!(std::mem::size_of::<Array>(), 24);
+    }
+
+    #[test]
+    fn test_dict_size() {
+        // Dict: 3 size_t fields = 24 bytes on 64-bit
+        assert_eq!(std::mem::size_of::<Dict>(), 24);
+    }
+
+    #[test]
+    fn test_object_constants() {
+        // Verify K_OBJECT_TYPE constants match ObjectType enum
+        assert_eq!(K_OBJECT_TYPE_NIL, ObjectType::Nil as c_int);
+        assert_eq!(K_OBJECT_TYPE_BOOLEAN, ObjectType::Boolean as c_int);
+        assert_eq!(K_OBJECT_TYPE_INTEGER, ObjectType::Integer as c_int);
+        assert_eq!(K_OBJECT_TYPE_STRING, ObjectType::String as c_int);
+        assert_eq!(K_OBJECT_TYPE_ARRAY, ObjectType::Array as c_int);
+        assert_eq!(K_OBJECT_TYPE_DICT, ObjectType::Dict as c_int);
+        assert_eq!(K_OBJECT_TYPE_LUAREF, ObjectType::LuaRef as c_int);
+    }
+
+    #[test]
+    fn test_error_type_constants() {
+        // Verify K_ERROR_TYPE constants match ErrorType enum
+        assert_eq!(K_ERROR_TYPE_NONE, ErrorType::None as c_int);
+        assert_eq!(K_ERROR_TYPE_VALIDATION, ErrorType::Validation as c_int);
+    }
 }
 
 // =============================================================================
