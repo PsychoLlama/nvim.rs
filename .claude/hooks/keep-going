@@ -1,0 +1,19 @@
+#!/usr/bin/env -S nu --stdin
+
+# Tell Claude to keep going.
+export def main [] {
+  let input = $in | from json
+
+  if ($env.CLAUDE_CONTINUE? | is-empty) {
+    exit 0
+  }
+
+  let output = {
+    decision: "block"
+    reason: "Great work! Keep going. Commit as you go. Follow rules in CLAUDE.md."
+  }
+
+  $output | to json | print --stderr $in
+
+  exit 2
+}
