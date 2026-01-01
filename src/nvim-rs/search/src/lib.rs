@@ -170,4 +170,21 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_optmagic_valid_for_match() {
+        // Test that optmagic values work in match expressions
+        let test_values = [OPTION_MAGIC_NOT_SET, OPTION_MAGIC_ON, OPTION_MAGIC_OFF];
+        for val in test_values {
+            let result = match val {
+                OPTION_MAGIC_ON => true,
+                OPTION_MAGIC_OFF => false,
+                _ => false, // NOT_SET falls through
+            };
+            // OPTION_MAGIC_ON should return true, others false
+            if val == OPTION_MAGIC_ON {
+                assert!(result);
+            }
+        }
+    }
 }

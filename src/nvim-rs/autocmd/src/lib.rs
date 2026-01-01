@@ -247,4 +247,46 @@ mod tests {
             assert_eq!(rs_aupat_is_buflocal(normal.as_ptr(), 3), 0);
         }
     }
+
+    #[test]
+    fn test_aucmd_pattern_length_escaped_comma() {
+        unsafe {
+            // Escaped comma should not be treated as separator
+            let escaped = CString::new("*.\\,c,*.h").unwrap();
+            // Length should include the escaped comma
+            assert_eq!(rs_aucmd_pattern_length(escaped.as_ptr()), 5);
+        }
+    }
+
+    #[test]
+    fn test_aucmd_pattern_length_nested_braces() {
+        unsafe {
+            // Nested braces pattern
+            let nested = CString::new("*.{{a,b},{c,d}}").unwrap();
+            assert_eq!(rs_aucmd_pattern_length(nested.as_ptr()), 15);
+        }
+    }
+
+    #[test]
+    fn test_aucmd_pattern_length_null() {
+        unsafe {
+            // Null pointer should return 0
+            assert_eq!(rs_aucmd_pattern_length(std::ptr::null()), 0);
+        }
+    }
+
+    #[test]
+    fn test_aupat_is_buflocal_null() {
+        unsafe {
+            // Null pointer should return 0
+            assert_eq!(rs_aupat_is_buflocal(std::ptr::null(), 8), 0);
+        }
+    }
+
+    #[test]
+    fn test_unknown_event_string() {
+        // Verify UNKNOWN_EVENT is properly null-terminated
+        assert!(UNKNOWN_EVENT.ends_with(&[0]));
+        assert_eq!(&UNKNOWN_EVENT[..7], b"Unknown");
+    }
 }
