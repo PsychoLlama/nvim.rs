@@ -625,4 +625,29 @@ mod tests {
         assert_eq!(std::mem::size_of::<VirtTextHandle>(), ptr_size);
         assert_eq!(std::mem::size_of::<WinHandle>(), ptr_size);
     }
+
+    #[test]
+    fn test_kvt_flags_combinable() {
+        // KVT flags should be combinable
+        let combined = KVT_IS_LINES | KVT_HIDE | KVT_LINES_ABOVE | KVT_REPEAT_LINEBREAK;
+        assert_eq!(combined, 0b1111);
+        // Individual flags should be extractable
+        assert_ne!(combined & KVT_IS_LINES, 0);
+        assert_ne!(combined & KVT_HIDE, 0);
+        assert_ne!(combined & KVT_LINES_ABOVE, 0);
+        assert_ne!(combined & KVT_REPEAT_LINEBREAK, 0);
+    }
+
+    #[test]
+    fn test_draw_col_ordering() {
+        // DRAW_COL constants should have relative ordering for comparisons
+        let disabled = DRAW_COL_DISABLED;
+        let just_added = DRAW_COL_JUST_ADDED;
+        let pending = DRAW_COL_PENDING;
+        let unset = DRAW_COL_UNSET;
+        assert!(disabled < just_added);
+        assert!(just_added < pending);
+        assert!(pending < unset);
+        assert!(unset < 0);
+    }
 }

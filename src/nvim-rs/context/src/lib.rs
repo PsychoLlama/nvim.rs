@@ -204,4 +204,39 @@ mod tests {
         assert_eq!(a.capacity, 0);
         assert!(a.items.is_null());
     }
+
+    #[test]
+    fn test_object_type_distinct() {
+        // All object types should have distinct values
+        let types = [
+            K_OBJECT_TYPE_NIL,
+            K_OBJECT_TYPE_BOOLEAN,
+            K_OBJECT_TYPE_INTEGER,
+            K_OBJECT_TYPE_FLOAT,
+            K_OBJECT_TYPE_STRING,
+            K_OBJECT_TYPE_ARRAY,
+            K_OBJECT_TYPE_DICT,
+            K_OBJECT_TYPE_LUAREF,
+        ];
+        for (i, &type_a) in types.iter().enumerate() {
+            for (j, &type_b) in types.iter().enumerate() {
+                if i != j {
+                    assert_ne!(type_a, type_b);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_dict_default() {
+        // Test that we can create an empty Dict
+        let d = Dict {
+            size: 0,
+            capacity: 0,
+            items: std::ptr::null_mut(),
+        };
+        assert_eq!(d.size, 0);
+        assert_eq!(d.capacity, 0);
+        assert!(d.items.is_null());
+    }
 }
