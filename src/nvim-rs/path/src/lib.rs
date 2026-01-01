@@ -770,6 +770,21 @@ mod tests {
             assert_eq!(unsafe { rs_vim_isAbsName(std::ptr::null()) }, 0);
         }
     }
+
+    #[test]
+    fn test_url_type_constants() {
+        // Verify URL_SLASH and URL_BACKSLASH constants match C definitions
+        assert_eq!(URL_SLASH, 1);
+        assert_eq!(URL_BACKSLASH, 2);
+    }
+
+    #[test]
+    fn test_eol_type_constants() {
+        // Verify EOL_* constants match C definitions
+        assert_eq!(EOL_UNIX, 0);
+        assert_eq!(EOL_DOS, 1);
+        assert_eq!(EOL_MAC, 2);
+    }
 }
 
 // ============================================================================
