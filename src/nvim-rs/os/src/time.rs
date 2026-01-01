@@ -260,4 +260,30 @@ mod tests {
         // Year should be 2023
         assert_eq!(tm.year, 123); // 2023 - 1900
     }
+
+    #[test]
+    fn test_rstime_default() {
+        let tm = RsTime::default();
+        assert_eq!(tm.sec, 0);
+        assert_eq!(tm.min, 0);
+        assert_eq!(tm.hour, 0);
+        assert_eq!(tm.mday, 1);
+        assert_eq!(tm.mon, 0);
+        assert_eq!(tm.year, 70); // 1970
+        assert_eq!(tm.wday, 0);
+        assert_eq!(tm.yday, 0);
+        assert_eq!(tm.isdst, -1);
+    }
+
+    #[test]
+    fn test_localtime_null() {
+        let result = unsafe { rs_os_localtime(std::ptr::null_mut()) };
+        assert_eq!(result, -1);
+    }
+
+    #[test]
+    fn test_localtime_r_null() {
+        let result = unsafe { rs_os_localtime_r(0, std::ptr::null_mut()) };
+        assert_eq!(result, -1);
+    }
 }
