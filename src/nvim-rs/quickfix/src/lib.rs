@@ -211,4 +211,18 @@ mod tests {
             assert!(rs_qf_list_empty(std::ptr::null()));
         }
     }
+
+    #[test]
+    fn test_null_list_no_valid_entries() {
+        // Null list has no valid entries
+        unsafe {
+            assert!(!rs_qf_list_has_valid_entries(std::ptr::null()));
+        }
+    }
+
+    #[test]
+    fn test_linenr_type_size() {
+        // LinenrT should be i32 (4 bytes)
+        assert_eq!(std::mem::size_of::<LinenrT>(), 4);
+    }
 }

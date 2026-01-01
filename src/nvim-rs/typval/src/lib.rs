@@ -1770,4 +1770,36 @@ mod tests {
         assert_eq!(tv_list_uidx_impl(null_list, 0), -1);
         assert_eq!(tv_list_uidx_impl(null_list, -1), -1);
     }
+
+    #[test]
+    fn test_ok_fail_constants() {
+        // OK should be 0, FAIL should be -1
+        assert_eq!(OK, 0);
+        assert_eq!(FAIL, -1);
+    }
+
+    #[test]
+    fn test_vartype_enum_values() {
+        // VarType enum values should match C definitions
+        assert_eq!(VarType::Unknown as i32, 0);
+        assert_eq!(VarType::Number as i32, 1);
+        assert_eq!(VarType::String as i32, 2);
+        assert_eq!(VarType::Func as i32, 3);
+        assert_eq!(VarType::List as i32, 4);
+        assert_eq!(VarType::Dict as i32, 5);
+        assert_eq!(VarType::Float as i32, 6);
+        assert_eq!(VarType::Bool as i32, 7);
+        assert_eq!(VarType::Special as i32, 8);
+        assert_eq!(VarType::Partial as i32, 9);
+        assert_eq!(VarType::Blob as i32, 10);
+    }
+
+    #[test]
+    fn test_listitem_handle_null() {
+        let handle = ListItemHandle(std::ptr::null());
+        assert!(handle.is_null());
+        assert!(tv_listitem_next_impl(handle).is_null());
+        assert!(tv_listitem_prev_impl(handle).is_null());
+        assert!(tv_listitem_tv_impl(handle).is_null());
+    }
 }

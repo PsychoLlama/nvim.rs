@@ -150,4 +150,12 @@ mod tests {
         assert_eq!(NUL, 0);
         assert_eq!(NUL, c_int::from(b'\0'));
     }
+
+    #[test]
+    fn test_null_fuzzystr_returns_false() {
+        // Null string should not match fuzzy completion
+        unsafe {
+            assert_eq!(rs_cmdline_fuzzy_complete(std::ptr::null()), 0);
+        }
+    }
 }
