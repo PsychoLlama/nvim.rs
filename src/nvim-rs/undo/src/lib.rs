@@ -116,6 +116,13 @@ extern "C" {
 
     // Extmark vector destruction
     fn nvim_uhp_destroy_extmark(uhp: UHeaderHandle);
+
+    // Buffer memline accessor
+    fn nvim_buf_get_ml_line_count(buf: BufHandle) -> LinenrT;
+
+    // Error message wrappers
+    fn nvim_iemsg_undo_list_corrupt();
+    fn nvim_iemsg_undo_line_missing();
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed.
@@ -348,6 +355,91 @@ pub unsafe extern "C" fn rs_u_freebranch(
         next = nvim_uhp_get_prev(tofree);
         rs_u_freeentries(buf, tofree, uhpp);
     }
+}
+
+/// Get the first entry in the undo header for the buffer.
+/// Returns NULL if the undo list is corrupt.
+///
+/// # Safety
+///
+/// The `buf` handle must be a valid pointer to a buf_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_get_headentry(buf: BufHandle) -> UEntryHandle {
+    let newhead = nvim_buf_get_b_u_newhead(buf);
+    if newhead.0.is_null() {
+        nvim_iemsg_undo_list_corrupt();
+        return UEntryHandle(std::ptr::null_mut());
+    }
+
+    let entry = nvim_uhp_get_entry(newhead);
+    if entry.0.is_null() {
+        nvim_iemsg_undo_list_corrupt();
+        return UEntryHandle(std::ptr::null_mut());
+    }
+
+    entry
+}
+
+/// Compute the line number of the previous u_save.
+/// It is called only when b_u_synced is false.
+///
+/// # Safety
+///
+/// The `buf` handle must be a valid pointer to a buf_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_getbot(buf: BufHandle) {
+    // Check for corrupt undo list
+    let check = rs_u_get_headentry(buf);
+    if check.0.is_null() {
+        return;
+    }
+
+    let newhead = nvim_buf_get_b_u_newhead(buf);
+    let uep = nvim_uhp_get_getbot_entry(newhead);
+    if !uep.0.is_null() {
+        // The new ue_bot is computed from the number of lines that has been
+        // inserted (0 - deleted) since calling u_save. This is equal to the
+        // old line count subtracted from the current line count.
+        let ml_line_count = nvim_buf_get_ml_line_count(buf);
+        let ue_lcount = nvim_uep_get_lcount(uep);
+        let extra = ml_line_count - ue_lcount;
+
+        let ue_top = nvim_uep_get_top(uep);
+        let ue_size = nvim_uep_get_size(uep);
+        let mut ue_bot = ue_top + ue_size + 1 + extra;
+
+        if ue_bot < 1 || ue_bot > ml_line_count {
+            nvim_iemsg_undo_line_missing();
+            // Assume all lines deleted, will get all the old lines back
+            // without deleting the current ones
+            ue_bot = ue_top + 1;
+        }
+
+        nvim_uep_set_bot(uep, ue_bot);
+        nvim_uhp_set_getbot_entry(newhead, UEntryHandle(std::ptr::null_mut()));
+    }
+
+    nvim_buf_set_b_u_synced(buf, true);
+}
+
+/// Free all undo headers and entries for the buffer.
+///
+/// # Safety
+///
+/// The `buf` handle must be a valid pointer to a buf_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_blockfree(buf: BufHandle) {
+    loop {
+        let oldhead = nvim_buf_get_b_u_oldhead(buf);
+        if oldhead.0.is_null() {
+            break;
+        }
+        rs_u_freeheader(buf, oldhead, std::ptr::null_mut());
+    }
+
+    // Free the line saved for "U" command
+    let line_ptr = nvim_buf_get_b_u_line_ptr(buf);
+    nvim_xfree(line_ptr as *mut c_void);
 }
 
 #[cfg(test)]

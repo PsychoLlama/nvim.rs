@@ -150,6 +150,9 @@ extern void rs_u_freeentry(u_entry_T *uep, int n);
 extern void rs_u_freeentries(buf_T *buf, u_header_T *uhp, u_header_T **uhpp);
 extern void rs_u_freeheader(buf_T *buf, u_header_T *uhp, u_header_T **uhpp);
 extern void rs_u_freebranch(buf_T *buf, u_header_T *uhp, u_header_T **uhpp);
+extern u_entry_T *rs_u_get_headentry(buf_T *buf);
+extern void rs_u_getbot(buf_T *buf);
+extern void rs_u_blockfree(buf_T *buf);
 
 // Feature flag for Rust undo functions
 #define USE_RUST_UNDO 1
@@ -2837,17 +2840,24 @@ static void u_unch_branch(u_header_T *uhp)
 /// If it's not valid, give an error message and return NULL.
 static u_entry_T *u_get_headentry(buf_T *buf)
 {
+#ifdef USE_RUST_UNDO
+  return rs_u_get_headentry(buf);
+#else
   if (buf->b_u_newhead == NULL || buf->b_u_newhead->uh_entry == NULL) {
     iemsg(_(e_undo_list_corrupt));
     return NULL;
   }
   return buf->b_u_newhead->uh_entry;
+#endif
 }
 
 /// u_getbot(): compute the line number of the previous u_save
 ///              It is called only when b_u_synced is false.
 static void u_getbot(buf_T *buf)
 {
+#ifdef USE_RUST_UNDO
+  rs_u_getbot(buf);
+#else
   u_entry_T *uep = u_get_headentry(buf);  // check for corrupt undo list
   if (uep == NULL) {
     return;
@@ -2872,6 +2882,7 @@ static void u_getbot(buf_T *buf)
   }
 
   buf->b_u_synced = true;
+#endif
 }
 
 /// Free one header "uhp" and its entry list and adjust the pointers.
@@ -3015,6 +3026,9 @@ void u_clearall(buf_T *buf)
 /// Free all allocated memory blocks for the buffer 'buf'.
 void u_blockfree(buf_T *buf)
 {
+#ifdef USE_RUST_UNDO
+  rs_u_blockfree(buf);
+#else
   while (buf->b_u_oldhead != NULL) {
 #ifndef NDEBUG
     u_header_T *previous_oldhead = buf->b_u_oldhead;
@@ -3024,6 +3038,7 @@ void u_blockfree(buf_T *buf)
     assert(buf->b_u_oldhead != previous_oldhead);
   }
   xfree(buf->b_u_line_ptr);
+#endif
 }
 
 /// Free all allocated memory blocks for the buffer 'buf'.
@@ -3578,4 +3593,21 @@ u_header_T *nvim_alloc_u_header(void)
 void nvim_uhp_destroy_extmark(u_header_T *uhp)
 {
   kv_destroy(uhp->uh_extmark);
+}
+
+// Buffer memline accessor
+linenr_T nvim_buf_get_ml_line_count(buf_T *buf)
+{
+  return buf->b_ml.ml_line_count;
+}
+
+// Error message wrappers
+void nvim_iemsg_undo_list_corrupt(void)
+{
+  iemsg(_(e_undo_list_corrupt));
+}
+
+void nvim_iemsg_undo_line_missing(void)
+{
+  iemsg(_(e_undo_line_missing));
 }
