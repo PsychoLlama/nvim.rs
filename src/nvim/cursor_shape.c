@@ -370,6 +370,11 @@ int nvim_get_visual_active(void)
   return VIsual_active ? 1 : 0;
 }
 
+int nvim_get_visual_select(void)
+{
+  return VIsual_select ? 1 : 0;
+}
+
 char nvim_get_p_sel_first(void)
 {
   return *p_sel;
