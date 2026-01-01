@@ -4135,4 +4135,25 @@ mod mb_off_next_tests {
         let s = b"\xC3";
         assert!(utf_ptr2charinfo_impl(s, 2) < 0);
     }
+
+    #[test]
+    fn test_mbyte_constants() {
+        // Verify mbyte constants match C definitions
+        assert_eq!(MB_MAXBYTES, 6);
+        assert_eq!(MB_MAXCHAR, 6);
+        assert_eq!(MAXCOL, 0x7fff_ffff);
+
+        // BOM bytes for UTF-8
+        assert_eq!(BOM_0, 0xEF);
+        assert_eq!(BOM_1, 0xBB);
+        assert_eq!(BOM_2, 0xBF);
+
+        // Variation selector 16 (U+FE0F)
+        assert_eq!(VS16, [0xEF, 0xB8, 0x8F]);
+        assert_eq!(VS16_CODEPOINT, 0xFE0F);
+
+        // Encoding flags
+        assert_eq!(ENC_8BIT, 0x01);
+        assert_eq!(ENC_DBCS, 0x02);
+    }
 }
