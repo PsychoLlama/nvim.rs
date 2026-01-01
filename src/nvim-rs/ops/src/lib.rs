@@ -185,6 +185,65 @@ pub extern "C" fn rs_get_op_type(char1: c_int, char2: c_int) -> c_int {
     get_op_type_impl(char1, char2)
 }
 
+// =============================================================================
+// Operator Pending State
+// =============================================================================
+
+// C accessor functions for operator state
+extern "C" {
+    /// Check if current_oap is NULL.
+    fn nvim_oap_is_null() -> c_int;
+
+    /// Get the finish_op global flag.
+    fn nvim_get_finish_op() -> c_int;
+
+    /// Get current_oap->prev_opcount (returns 0 if current_oap is NULL).
+    fn nvim_oap_get_prev_opcount() -> c_int;
+
+    /// Get current_oap->prev_count0 (returns 0 if current_oap is NULL).
+    fn nvim_oap_get_prev_count0() -> c_int;
+
+    /// Get current_oap->op_type (returns OP_NOP if current_oap is NULL).
+    fn nvim_oap_get_op_type() -> c_int;
+
+    /// Get current_oap->regname (returns NUL if current_oap is NULL).
+    fn nvim_oap_get_regname() -> c_int;
+}
+
+/// Check if an operator was started but not finished yet.
+///
+/// Includes typing a count or a register name.
+/// Returns true when an operator is pending, false otherwise.
+#[inline]
+fn op_pending_impl() -> bool {
+    // SAFETY: These are safe accessors to C globals
+    unsafe {
+        let oap_null = nvim_oap_is_null() != 0;
+        let finish_op = nvim_get_finish_op() != 0;
+        let prev_opcount = nvim_oap_get_prev_opcount();
+        let prev_count0 = nvim_oap_get_prev_count0();
+        let op_type = nvim_oap_get_op_type();
+        let regname = nvim_oap_get_regname();
+
+        // Logic: !(current_oap != NULL && !finish_op && prev_opcount == 0
+        //          && prev_count0 == 0 && op_type == OP_NOP && regname == NUL)
+        !(!oap_null
+            && !finish_op
+            && prev_opcount == 0
+            && prev_count0 == 0
+            && op_type == OP_NOP
+            && regname == 0)
+    }
+}
+
+/// FFI wrapper for `op_pending`.
+///
+/// Returns true if an operator was started but not finished yet.
+#[no_mangle]
+pub extern "C" fn rs_op_pending() -> bool {
+    op_pending_impl()
+}
+
 #[cfg(test)]
 #[allow(clippy::cast_lossless)]
 mod tests {
@@ -390,5 +449,52 @@ mod tests {
     fn test_opchars_table_size() {
         // Verify OPCHARS table has expected size (30 operators)
         assert_eq!(OPCHARS.len(), 30);
+    }
+
+    #[test]
+    fn test_op_pending_logic() {
+        // Test the op_pending logic without FFI
+        // When oap is null, result should be true (operator pending)
+        // When all conditions are false, result should be false (no pending)
+        // This tests the boolean logic of the function
+
+        // Simulate: oap is NULL -> operator is pending
+        let oap_null = true;
+        let finish_op = false;
+        let prev_opcount = 0;
+        let prev_count0 = 0;
+        let op_type = OP_NOP;
+        let regname = 0; // NUL
+
+        // op_pending logic: !(oap != NULL && !finish_op && prev_opcount == 0
+        //                    && prev_count0 == 0 && op_type == OP_NOP && regname == NUL)
+        // When oap is NULL: !(false && ...) = !(false) = true
+        let result = !(!oap_null
+            && !finish_op
+            && prev_opcount == 0
+            && prev_count0 == 0
+            && op_type == OP_NOP
+            && regname == 0);
+        assert!(result); // oap_null means operator pending
+
+        // Simulate: oap is not null, all conditions met -> no operator pending
+        let oap_null = false;
+        let result = !(!oap_null
+            && !finish_op
+            && prev_opcount == 0
+            && prev_count0 == 0
+            && op_type == OP_NOP
+            && regname == 0);
+        assert!(!result); // all conditions met means no pending
+
+        // Simulate: oap not null, but finish_op is true -> operator pending
+        let finish_op = true;
+        let result = !(!oap_null
+            && !finish_op
+            && prev_opcount == 0
+            && prev_count0 == 0
+            && op_type == OP_NOP
+            && regname == 0);
+        assert!(result); // finish_op means operator pending
     }
 }

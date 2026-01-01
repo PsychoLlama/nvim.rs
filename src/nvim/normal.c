@@ -490,16 +490,48 @@ bool check_text_or_curbuf_locked(oparg_T *oap)
 
 static oparg_T *current_oap = NULL;
 
+// =============================================================================
+// Accessor functions for Rust FFI
+// =============================================================================
+
+/// Check if current_oap is NULL.
+int nvim_oap_is_null(void) { return current_oap == NULL; }
+
+/// Get the finish_op global flag.
+int nvim_get_finish_op(void) { return finish_op; }
+
+/// Get current_oap->prev_opcount (returns 0 if current_oap is NULL).
+int nvim_oap_get_prev_opcount(void)
+{
+  return current_oap ? current_oap->prev_opcount : 0;
+}
+
+/// Get current_oap->prev_count0 (returns 0 if current_oap is NULL).
+int nvim_oap_get_prev_count0(void)
+{
+  return current_oap ? current_oap->prev_count0 : 0;
+}
+
+/// Get current_oap->op_type (returns OP_NOP if current_oap is NULL).
+int nvim_oap_get_op_type(void)
+{
+  return current_oap ? current_oap->op_type : OP_NOP;
+}
+
+/// Get current_oap->regname (returns NUL if current_oap is NULL).
+int nvim_oap_get_regname(void)
+{
+  return current_oap ? current_oap->regname : NUL;
+}
+
+// Rust implementation
+extern bool rs_op_pending(void);
+
 /// Check if an operator was started but not finished yet.
 /// Includes typing a count or a register name.
 bool op_pending(void)
 {
-  return !(current_oap != NULL
-           && !finish_op
-           && current_oap->prev_opcount == 0
-           && current_oap->prev_count0 == 0
-           && current_oap->op_type == OP_NOP
-           && current_oap->regname == NUL);
+  return rs_op_pending();
 }
 
 /// Normal state entry point. This is called on:
