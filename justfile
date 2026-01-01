@@ -56,6 +56,7 @@ rust-build-debug:
 rust-test:
     cargo test \
       -p nvim-ascii \
+      -p nvim-charset \
       -p nvim-cmdhist \
       -p nvim-collections \
       -p nvim-encoding \
@@ -65,6 +66,7 @@ rust-test:
       -p nvim-help \
       -p nvim-indent \
       -p nvim-keycodes \
+      -p nvim-linematch \
       -p nvim-mark \
       -p nvim-math \
       -p nvim-memutil \
