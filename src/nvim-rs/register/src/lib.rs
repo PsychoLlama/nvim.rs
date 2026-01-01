@@ -1273,4 +1273,30 @@ mod tests {
         assert_eq!(PLUS_REGISTER, 38);
         assert_eq!(NUM_REGISTERS, 39);
     }
+
+    #[test]
+    fn test_ctrl_key_constants() {
+        // Verify control key constants match C definitions
+        assert_eq!(CTRL_V, 0x16);
+        assert_eq!(CTRL_A, 1);
+        assert_eq!(CTRL_F, 6);
+        assert_eq!(CTRL_P, 16);
+        assert_eq!(CTRL_W, 23);
+        assert_eq!(NUL, 0);
+    }
+
+    #[test]
+    fn test_return_value_constants() {
+        // Verify OK/FAIL constants match C definitions
+        assert_eq!(OK, 1);
+        assert_eq!(FAIL, 0);
+    }
+
+    #[test]
+    fn test_char_constants() {
+        // Verify character constants match C definitions
+        assert_eq!(NL, b'\n' as c_char);
+        assert_eq!(CAR, b'\r' as c_char);
+        assert_eq!(NUL_CHAR, 0);
+    }
 }
