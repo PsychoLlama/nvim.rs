@@ -91,4 +91,23 @@ mod tests {
         // FAIL should be 0 (matching vim_defs.h)
         assert_eq!(FAIL, 0);
     }
+
+    #[test]
+    fn test_fail_matches_c_false() {
+        // FAIL == 0 should match C FALSE semantics
+        assert_eq!(FAIL, 0);
+        assert!(FAIL == 0);
+    }
+
+    #[test]
+    fn test_fail_usable_in_conditions() {
+        // FAIL should work correctly in boolean contexts
+        let retcode = FAIL;
+        let is_failure = retcode == FAIL;
+        assert!(is_failure);
+
+        let success = 1;
+        let is_success = success != FAIL;
+        assert!(is_success);
+    }
 }

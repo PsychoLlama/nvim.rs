@@ -160,4 +160,45 @@ mod tests {
         assert_eq!(LuaRetMode::Luaref as i32, 2);
         assert_eq!(LuaRetMode::Multi as i32, 3);
     }
+
+    #[test]
+    fn test_lua_ret_mode_sequential() {
+        // Values should be sequential from 0 to 3
+        let modes = [
+            LuaRetMode::Object,
+            LuaRetMode::NilBool,
+            LuaRetMode::Luaref,
+            LuaRetMode::Multi,
+        ];
+        for (i, mode) in modes.iter().enumerate() {
+            assert_eq!(*mode as i32, i32::try_from(i).unwrap());
+        }
+    }
+
+    #[test]
+    fn test_lua_ret_mode_distinct() {
+        // All modes should have distinct values
+        let modes = [
+            LuaRetMode::Object,
+            LuaRetMode::NilBool,
+            LuaRetMode::Luaref,
+            LuaRetMode::Multi,
+        ];
+        for (i, &mode_a) in modes.iter().enumerate() {
+            for (j, &mode_b) in modes.iter().enumerate() {
+                if i != j {
+                    assert_ne!(mode_a as i32, mode_b as i32);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_lua_ret_mode_size() {
+        // Enum should be i32-sized due to #[repr(i32)]
+        assert_eq!(
+            std::mem::size_of::<LuaRetMode>(),
+            std::mem::size_of::<i32>()
+        );
+    }
 }

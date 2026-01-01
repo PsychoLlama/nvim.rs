@@ -138,4 +138,28 @@ mod tests {
         // Ensure the prompt is properly null-terminated for C interop
         assert_eq!(DEFAULT_PROMPT[DEFAULT_PROMPT.len() - 1], 0);
     }
+
+    #[test]
+    fn test_default_prompt_starts_with_percent() {
+        // Prompt should start with '%'
+        assert_eq!(DEFAULT_PROMPT[0], b'%');
+    }
+
+    #[test]
+    fn test_type_aliases_sizes() {
+        // LinenrT and ColnrT should be i32
+        assert_eq!(std::mem::size_of::<LinenrT>(), 4);
+        assert_eq!(std::mem::size_of::<ColnrT>(), 4);
+    }
+
+    #[test]
+    fn test_default_prompt_is_valid_cstr() {
+        // Should be usable as a C string (non-empty, null-terminated)
+        let prompt = DEFAULT_PROMPT;
+        // Has content before the null terminator
+        assert!(prompt.len() >= 2, "Prompt must have content plus NUL");
+        // No embedded NULs except at end
+        let without_terminator = &prompt[..prompt.len() - 1];
+        assert!(!without_terminator.contains(&0));
+    }
 }
