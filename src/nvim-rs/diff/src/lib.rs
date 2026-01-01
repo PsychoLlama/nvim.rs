@@ -61,12 +61,53 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_constants() {
-        // Verify the constants match expected values
+    fn test_diff_flag_constants() {
+        // Verify the diff flag constants match expected values from diff.c
         assert_eq!(DIFF_FILLER, 0x001);
         assert_eq!(DIFF_HORIZONTAL, 0x040);
         assert_eq!(DIFF_HIDDEN_OFF, 0x100);
         assert_eq!(DIFF_INTERNAL, 0x200);
         assert_eq!(DIFF_CLOSE_OFF, 0x400);
+    }
+
+    #[test]
+    fn test_diff_flags_are_distinct() {
+        // Ensure all flags are distinct (no overlap)
+        let flags = [
+            DIFF_FILLER,
+            DIFF_HORIZONTAL,
+            DIFF_HIDDEN_OFF,
+            DIFF_INTERNAL,
+            DIFF_CLOSE_OFF,
+        ];
+
+        for i in 0..flags.len() {
+            for j in (i + 1)..flags.len() {
+                assert_eq!(
+                    flags[i] & flags[j],
+                    0,
+                    "Flags at indices {i} and {j} overlap"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_diff_flags_are_single_bit() {
+        // Each flag should be a single bit (power of 2)
+        let flags = [
+            DIFF_FILLER,
+            DIFF_HORIZONTAL,
+            DIFF_HIDDEN_OFF,
+            DIFF_INTERNAL,
+            DIFF_CLOSE_OFF,
+        ];
+
+        for flag in flags {
+            // A power of 2 has exactly one bit set
+            // n & (n - 1) == 0 for powers of 2
+            assert_eq!(flag & (flag - 1), 0, "Flag {flag:#x} is not a power of 2");
+            assert_ne!(flag, 0, "Flag should not be zero");
+        }
     }
 }
