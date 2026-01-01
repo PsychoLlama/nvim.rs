@@ -380,4 +380,21 @@ mod tests {
         assert_eq!(OK, 1);
         assert_eq!(FAIL, 0);
     }
+
+    #[test]
+    fn test_vim_append_digit_int_null() {
+        // Null pointer should fail
+        unsafe {
+            assert_eq!(rs_vim_append_digit_int(std::ptr::null_mut(), 5), FAIL);
+        }
+    }
+
+    #[test]
+    fn test_ctz_powers_of_two() {
+        // All powers of 2 should have trailing zeros equal to the exponent
+        for exp in 0..64 {
+            let val = 1u64 << exp;
+            assert_eq!(rs_xctz(val), exp as c_int);
+        }
+    }
 }
