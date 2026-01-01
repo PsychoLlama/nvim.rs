@@ -839,6 +839,12 @@ mod tests {
     }
 
     #[test]
+    fn test_win_handle_null() {
+        let null_handle = WinHandle(std::ptr::null_mut());
+        assert!(null_handle.is_null());
+    }
+
+    #[test]
     fn test_zindex_constants() {
         // Verify z-index ordering using runtime values to avoid const optimization
         let default = zindex::DEFAULT_GRID;
@@ -851,5 +857,39 @@ mod tests {
         assert!(float < popup);
         assert!(popup < messages);
         assert!(messages < cmdline);
+    }
+
+    #[test]
+    fn test_zindex_values() {
+        // Verify specific z-index values match C definitions
+        assert_eq!(zindex::DEFAULT_GRID, 0);
+        assert_eq!(zindex::FLOAT_DEFAULT, 50);
+        assert_eq!(zindex::POPUP_MENU, 100);
+        assert_eq!(zindex::MESSAGES, 200);
+        assert_eq!(zindex::CMDLINE_POPUP_MENU, 250);
+    }
+
+    #[test]
+    fn test_type_alias_sizes() {
+        // ScharT should be 4 bytes (uint32_t)
+        assert_eq!(std::mem::size_of::<ScharT>(), 4);
+        // SattrT should be 2 bytes (int16_t)
+        assert_eq!(std::mem::size_of::<SattrT>(), 2);
+        // HandleT should be c_int size (typically 4 bytes)
+        assert_eq!(std::mem::size_of::<HandleT>(), std::mem::size_of::<c_int>());
+    }
+
+    #[test]
+    fn test_handle_sizes() {
+        // All handles should be pointer-sized
+        let ptr_size = std::mem::size_of::<*mut c_void>();
+        assert_eq!(std::mem::size_of::<ScreenGridHandle>(), ptr_size);
+        assert_eq!(std::mem::size_of::<WinHandle>(), ptr_size);
+    }
+
+    #[test]
+    fn test_ui_ext_multigrid_constant() {
+        // Verify kUIMultigrid = 6 from ui_defs.h
+        assert_eq!(ui_ext::MULTIGRID, 6);
     }
 }
