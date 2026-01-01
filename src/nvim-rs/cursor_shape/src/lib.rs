@@ -221,6 +221,30 @@ mod tests {
     }
 
     #[test]
+    fn test_mode_shape_all_values() {
+        // Verify all ModeShape enum values are sequential
+        assert_eq!(ModeShape::N as c_int, 0);
+        assert_eq!(ModeShape::V as c_int, 1);
+        assert_eq!(ModeShape::I as c_int, 2);
+        assert_eq!(ModeShape::R as c_int, 3);
+        assert_eq!(ModeShape::C as c_int, 4);
+        assert_eq!(ModeShape::Ci as c_int, 5);
+        assert_eq!(ModeShape::Cr as c_int, 6);
+        assert_eq!(ModeShape::O as c_int, 7);
+        assert_eq!(ModeShape::Ve as c_int, 8);
+        assert_eq!(ModeShape::Cline as c_int, 9);
+        assert_eq!(ModeShape::Status as c_int, 10);
+        assert_eq!(ModeShape::Sdrag as c_int, 11);
+        assert_eq!(ModeShape::Vsep as c_int, 12);
+        assert_eq!(ModeShape::Vdrag as c_int, 13);
+        assert_eq!(ModeShape::More as c_int, 14);
+        assert_eq!(ModeShape::Morel as c_int, 15);
+        assert_eq!(ModeShape::Sm as c_int, 16);
+        assert_eq!(ModeShape::Term as c_int, 17);
+        assert_eq!(ModeShape::Count as c_int, 18);
+    }
+
+    #[test]
     fn test_mode_flags() {
         // Verify mode flag constants match C definitions
         assert_eq!(MODE_CMDLINE, 0x08);
@@ -230,5 +254,27 @@ mod tests {
         assert_eq!(VREPLACE_FLAG, 0x200);
         // MODE_SHOWMATCH should combine flags
         assert_eq!(MODE_SHOWMATCH, 0x6000 | MODE_INSERT);
+    }
+
+    #[test]
+    fn test_mode_flags_distinct() {
+        // Mode flags should be distinct bit patterns
+        assert_eq!(MODE_CMDLINE & MODE_INSERT, 0);
+        assert_eq!(MODE_INSERT & MODE_TERMINAL, 0);
+        assert_eq!(MODE_TERMINAL & REPLACE_FLAG, 0);
+        assert_eq!(REPLACE_FLAG & VREPLACE_FLAG, 0);
+    }
+
+    #[test]
+    fn test_enum_sizes() {
+        // CursorShape and ModeShape should be C-compatible
+        assert_eq!(
+            std::mem::size_of::<CursorShape>(),
+            std::mem::size_of::<c_int>()
+        );
+        assert_eq!(
+            std::mem::size_of::<ModeShape>(),
+            std::mem::size_of::<c_int>()
+        );
     }
 }
