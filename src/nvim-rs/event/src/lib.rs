@@ -2328,4 +2328,13 @@ mod tests {
         assert!(MultiQueueHandle::null().is_null());
         assert!(TimeWatcherHandle::null().is_null());
     }
+
+    #[test]
+    fn test_event_handler_max_argc() {
+        // Verify EVENT_HANDLER_MAX_ARGC matches C definition
+        assert_eq!(EVENT_HANDLER_MAX_ARGC, 10);
+        // Ensure Event::argv has correct size
+        let event = Event::nil();
+        assert_eq!(event.argv.len(), EVENT_HANDLER_MAX_ARGC);
+    }
 }
