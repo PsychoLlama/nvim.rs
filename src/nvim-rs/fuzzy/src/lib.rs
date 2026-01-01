@@ -621,4 +621,26 @@ mod tests {
             assert!(!result);
         }
     }
+
+    #[test]
+    fn test_fuzzy_constants() {
+        // Verify MATCH_MAX_LEN and SCORE_NONE constants
+        assert_eq!(MATCH_MAX_LEN, 1024);
+        assert_eq!(SCORE_NONE, i32::MIN);
+    }
+
+    #[test]
+    #[allow(clippy::float_cmp)]
+    fn test_score_constants() {
+        // Verify scoring constants have expected values
+        assert_eq!(SCORE_SCALE, 1000.0);
+        assert_eq!(SCORE_GAP_LEADING, -0.005);
+        assert_eq!(SCORE_GAP_TRAILING, -0.005);
+        assert_eq!(SCORE_GAP_INNER, -0.01);
+        assert_eq!(SCORE_MATCH_CONSECUTIVE, 1.0);
+        assert_eq!(SCORE_MATCH_SLASH, 0.9);
+        assert_eq!(SCORE_MATCH_WORD, 0.8);
+        assert_eq!(SCORE_MATCH_CAPITAL, 0.7);
+        assert_eq!(SCORE_MATCH_DOT, 0.6);
+    }
 }
