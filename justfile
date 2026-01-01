@@ -62,6 +62,7 @@ rust-test:
       -p nvim-collections \
       -p nvim-encoding \
       -p nvim-eval \
+      -p nvim-event \
       -p nvim-fileio \
       -p nvim-fuzzy \
       -p nvim-help \
@@ -72,6 +73,7 @@ rust-test:
       -p nvim-math \
       -p nvim-memutil \
       -p nvim-menu \
+      -p nvim-msgpack \
       -p nvim-ops \
       -p nvim-os \
       -p nvim-profile \
