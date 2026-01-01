@@ -150,4 +150,18 @@ mod tests {
         assert_eq!(NUL, 0);
         assert_eq!(NUL, c_int::from(b'\0'));
     }
+
+    #[test]
+    fn test_fuzzy_flag_bit_position() {
+        // K_OPT_WOP_FLAG_FUZZY should be bit 0 (1 << 0)
+        assert_eq!(K_OPT_WOP_FLAG_FUZZY, 1 << 0);
+    }
+
+    #[test]
+    #[allow(clippy::cast_possible_truncation)]
+    fn test_nul_is_string_terminator() {
+        // NUL should work as C string terminator (NUL is 0, so fits in u8)
+        let nul_char = NUL as u8;
+        assert_eq!(nul_char, 0);
+    }
 }

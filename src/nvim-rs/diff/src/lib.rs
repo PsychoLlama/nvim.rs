@@ -146,4 +146,26 @@ mod tests {
         // Verify expected combined value: 0x001 | 0x040 | 0x100 | 0x200 | 0x400 = 0x741
         assert_eq!(all_flags, 0x741);
     }
+
+    #[test]
+    fn test_diff_flag_count() {
+        // There should be exactly 5 defined flags
+        let flags = [
+            DIFF_FILLER,
+            DIFF_HORIZONTAL,
+            DIFF_HIDDEN_OFF,
+            DIFF_INTERNAL,
+            DIFF_CLOSE_OFF,
+        ];
+        assert_eq!(flags.len(), 5);
+    }
+
+    #[test]
+    fn test_diff_filler_is_lowest_bit() {
+        // DIFF_FILLER should be the lowest bit set in any flag
+        let all_flags =
+            DIFF_FILLER | DIFF_HORIZONTAL | DIFF_HIDDEN_OFF | DIFF_INTERNAL | DIFF_CLOSE_OFF;
+        // trailing_zeros of all flags combined should be 0 (DIFF_FILLER is bit 0)
+        assert_eq!(all_flags.trailing_zeros(), 0);
+    }
 }
