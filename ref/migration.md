@@ -564,7 +564,7 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 
 ### Undo Module (undo.c - PARTIALLY MIGRATED)
 
-**Migrated Functions (18 rs_* functions):**
+**Migrated Functions (19 rs_* functions):**
 
 *Group A - Utilities:*
 - `rs_bufIsChanged` - Check if buffer is modified or file format differs
@@ -572,6 +572,7 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 - `rs_curbufIsChanged` - Check if current buffer has changes
 - `rs_u_clearall` - Invalidate undo buffer when storage released
 - `rs_u_clearline` - Clear line saved for "U" command
+- `rs_undo_allowed` - Check if undo is allowed (modifiable, sandbox, textlock)
 
 *Group C - Tree Management:*
 - `rs_u_freeentry` - Free undo entry and array elements
@@ -590,7 +591,7 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 *Group D - Save Functions:*
 - `rs_u_sync` - Stop adding to current entry list
 
-**Accessor Functions (44):**
+**Accessor Functions (49):**
 
 *Buffer undo field accessors:*
 - `nvim_buf_get/set_b_u_oldhead` - Oldest undo header
@@ -641,8 +642,14 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 - `nvim_iemsg_undo_list_corrupt` - Error message wrapper
 - `nvim_iemsg_undo_line_missing` - Error message wrapper
 
+*undo_allowed accessors:*
+- `nvim_buf_is_modifiable` - Check buffer modifiable flag
+- `nvim_get_sandbox` - Get global sandbox counter
+- `nvim_emsg_modifiable` - Emit modifiable error message
+- `nvim_emsg_sandbox` - Emit sandbox error message
+- `nvim_emsg_textlock` - Emit textlock error message
+
 **Remaining Functions (complex, need extensive infrastructure):**
-- `undo_allowed` - Global state checks (MODIFIABLE, sandbox, textlock)
 - `undo_fmt_time` - Localized time formatting with NGETTEXT
 - `u_savecommon` - ~250 lines, many dependencies
 - `u_undoredo` - ~250 lines, ml_*, marks, extmarks

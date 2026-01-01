@@ -135,6 +135,18 @@ extern "C" {
     fn nvim_buf_get_b_u_save_nr_last(buf: BufHandle) -> c_int;
     fn nvim_buf_set_b_u_save_nr_last(buf: BufHandle, val: c_int);
     fn nvim_buf_set_b_u_save_nr_cur(buf: BufHandle, val: c_int);
+
+    // undo_allowed accessors
+    fn nvim_buf_is_modifiable(buf: BufHandle) -> bool;
+    fn nvim_get_sandbox() -> c_int;
+    fn nvim_get_textlock() -> c_int;
+    fn nvim_get_expr_map_lock() -> c_int;
+    fn nvim_curbuf_is_dummy() -> c_int;
+
+    // undo_allowed error message wrappers
+    fn nvim_emsg_modifiable();
+    fn nvim_emsg_sandbox();
+    fn nvim_emsg_textlock();
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed.
@@ -572,6 +584,48 @@ pub unsafe extern "C" fn rs_u_free_uhp(uhp: UHeaderHandle) {
         uep = nuep;
     }
     nvim_xfree(uhp.0);
+}
+
+/// Helper function to check if expression mapping is locked.
+///
+/// # Safety
+///
+/// Calls external C functions.
+#[inline]
+unsafe fn expr_map_locked() -> bool {
+    let lock = nvim_get_expr_map_lock();
+    let is_dummy = nvim_curbuf_is_dummy();
+    lock > 0 && is_dummy == 0
+}
+
+/// Return true when undo is allowed. Otherwise print an error message and
+/// return false.
+///
+/// # Safety
+///
+/// The `buf` handle must be a valid pointer to a buf_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_undo_allowed(buf: BufHandle) -> bool {
+    // Don't allow changes when 'modifiable' is off.
+    if !nvim_buf_is_modifiable(buf) {
+        nvim_emsg_modifiable();
+        return false;
+    }
+
+    // In the sandbox it's not allowed to change the text.
+    if nvim_get_sandbox() != 0 {
+        nvim_emsg_sandbox();
+        return false;
+    }
+
+    // Don't allow changes in the buffer while editing the cmdline.
+    // The caller of getcmdline() may get confused.
+    if nvim_get_textlock() != 0 || expr_map_locked() {
+        nvim_emsg_textlock();
+        return false;
+    }
+
+    true
 }
 
 #[cfg(test)]

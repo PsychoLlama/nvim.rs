@@ -159,6 +159,7 @@ extern void rs_u_unch_branch(u_header_T *uhp);
 extern void rs_u_unchanged(buf_T *buf);
 extern void rs_u_update_save_nr(buf_T *buf);
 extern void rs_u_free_uhp(u_header_T *uhp);
+extern bool rs_undo_allowed(buf_T *buf);
 
 // Feature flag for Rust undo functions
 #define USE_RUST_UNDO 1
@@ -327,6 +328,9 @@ int u_savedel(linenr_T lnum, linenr_T nlines)
 /// @return true if undo is allowed.
 bool undo_allowed(buf_T *buf)
 {
+#ifdef USE_RUST_UNDO
+  return rs_undo_allowed(buf);
+#else
   // Don't allow changes when 'modifiable' is off.
   if (!MODIFIABLE(buf)) {
     emsg(_(e_modifiable));
@@ -347,6 +351,7 @@ bool undo_allowed(buf_T *buf)
   }
 
   return true;
+#endif
 }
 
 /// Get the 'undolevels' value for the current buffer.
@@ -3674,4 +3679,31 @@ void nvim_buf_set_b_u_save_nr_last(buf_T *buf, int val)
 void nvim_buf_set_b_u_save_nr_cur(buf_T *buf, int val)
 {
   buf->b_u_save_nr_cur = val;
+}
+
+// undo_allowed accessors
+bool nvim_buf_is_modifiable(buf_T *buf)
+{
+  return MODIFIABLE(buf);
+}
+
+int nvim_get_sandbox(void)
+{
+  return sandbox;
+}
+
+// undo_allowed error message wrappers
+void nvim_emsg_modifiable(void)
+{
+  emsg(_(e_modifiable));
+}
+
+void nvim_emsg_sandbox(void)
+{
+  emsg(_(e_sandbox));
+}
+
+void nvim_emsg_textlock(void)
+{
+  emsg(_(e_textlock));
 }
