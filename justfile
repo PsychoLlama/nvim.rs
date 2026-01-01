@@ -55,6 +55,7 @@ rust-build-debug:
 # These crates don't call into C code, only export functions to C
 rust-test:
     cargo test \
+      -p nvim-api \
       -p nvim-ascii \
       -p nvim-charset \
       -p nvim-cmdhist \
@@ -73,6 +74,7 @@ rust-test:
       -p nvim-menu \
       -p nvim-ops \
       -p nvim-os \
+      -p nvim-profile \
       -p nvim-register \
       -p nvim-spell \
       -p nvim-strings
