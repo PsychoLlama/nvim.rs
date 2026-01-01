@@ -384,11 +384,11 @@ Terminfo output infrastructure for Rust:
 - nvim_tui_get_stopped, nvim_tui_get_can_set_title
 - nvim_tui_get/set_title_enabled, nvim_tui_get_buf_space
 
-### Regexp Module (regexp.c - PHASE 1 MIGRATED)
+### Regexp Module (regexp.c - PHASE 1-2 MIGRATED)
 
 **Strategy:** Wrap C regex engines rather than replace them. Vim regex syntax has no equivalent Rust crate.
 
-**Migrated Functions (15 rs_* functions):**
+**Phase 1 - Magic Functions & Character Classes (15 rs_* functions):**
 - `rs_no_magic` - Remove magic from character
 - `rs_toggle_magic` - Toggle magic state of character
 - `rs_re_multi_type` - Classify quantifier operator type
@@ -404,17 +404,27 @@ Terminfo output infrastructure for Rust:
 - `rs_ri_upper` - Check if character is uppercase (A-Z)
 - `rs_ri_white` - Check if character is whitespace (space, tab)
 
+**Phase 2 - Pattern Parsing (5 rs_* functions):**
+- `rs_get_equi_class` - Parse equivalence class `[=a=]`
+- `rs_get_coll_element` - Parse collating element `[.a.]`
+- `rs_skip_anyof` - Skip over character class `[...]` range
+- `rs_skip_regexp` - Skip regex pattern to delimiter
+- `rs_skip_regexp_ex` - Skip regex with magic value tracking
+
 **Accessor Functions:**
 - `nvim_regprog_get_regflags` - Get regflags from regprog_T
+- `nvim_get_reg_cpo_lit` - Get reg_cpo_lit flag for 'cpoptions'
+- `nvim_get_char_class` - Wrapper for get_char_class (POSIX class parsing)
 
 **Opaque Handles:**
 - `RegprogHandle` - Opaque wrapper for regprog_T*
 - `RegmatchHandle` - Opaque wrapper for regmatch_T*
 - `RegmmatchHandle` - Opaque wrapper for regmmatch_T*
 
-**Remaining Work (Phases 2-6):**
-- Pattern parsing (skip_regexp, get_char_class)
+**Remaining Work (Phases 3-6):**
 - Substitution helpers (regtilde, case transforms)
+- Global state infrastructure (rex structure accessors)
+- Compilation helpers (parse state, char scanning)
 - API wrappers (vim_regcomp, vim_regexec, vim_regsub)
 - Note: Backtracking and NFA engines (~10K lines) remain in C
 

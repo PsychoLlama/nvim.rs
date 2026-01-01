@@ -502,6 +502,12 @@ static int get_char_class(char **pp)
   return CLASS_NONE;
 }
 
+// Non-static wrapper for Rust FFI
+int nvim_get_char_class(char **pp)
+{
+  return get_char_class(pp);
+}
+
 // Specific version of character class functions.
 // Using a table to keep this fast.
 static int16_t class_tab[256];
@@ -647,24 +653,17 @@ int re_multiline(const regprog_T *prog)
   return rs_re_multiline(prog);
 }
 
+// Rust implementations for character class parsing
+extern int rs_get_equi_class(char **pp);
+extern int rs_get_coll_element(char **pp);
+extern char *rs_skip_anyof(char *p);
+
 // Check for an equivalence class name "[=a=]".  "pp" points to the '['.
 // Returns a character representing the class. Zero means that no item was
 // recognized.  Otherwise "pp" is advanced to after the item.
 static int get_equi_class(char **pp)
 {
-  int c;
-  int l = 1;
-  char *p = *pp;
-
-  if (p[1] == '=' && p[2] != NUL) {
-    l = utfc_ptr2len(p + 2);
-    if (p[l + 2] == '=' && p[l + 3] == ']') {
-      c = utf_ptr2char(p + 2);
-      *pp += l + 4;
-      return c;
-    }
-  }
-  return 0;
+  return rs_get_equi_class(pp);
 }
 
 // Check for a collating element "[.a.]".  "pp" points to the '['.
@@ -673,19 +672,7 @@ static int get_equi_class(char **pp)
 // Currently only single characters are recognized!
 static int get_coll_element(char **pp)
 {
-  int c;
-  int l = 1;
-  char *p = *pp;
-
-  if (p[0] != NUL && p[1] == '.' && p[2] != NUL) {
-    l = utfc_ptr2len(p + 2);
-    if (p[l + 2] == '.' && p[l + 3] == ']') {
-      c = utf_ptr2char(p + 2);
-      *pp += l + 4;
-      return c;
-    }
-  }
-  return 0;
+  return rs_get_coll_element(pp);
 }
 
 static int reg_cpo_lit;  // 'cpoptions' contains 'l' flag
@@ -700,40 +687,7 @@ static void get_cpo_flags(void)
 /// The returned pointer is on the matching ']', or the terminating NUL.
 static char *skip_anyof(char *p)
 {
-  int l;
-
-  if (*p == '^') {  // Complement of range.
-    p++;
-  }
-  if (*p == ']' || *p == '-') {
-    p++;
-  }
-  while (*p != NUL && *p != ']') {
-    if ((l = utfc_ptr2len(p)) > 1) {
-      p += l;
-    } else if (*p == '-') {
-      p++;
-      if (*p != ']' && *p != NUL) {
-        MB_PTR_ADV(p);
-      }
-    } else if (*p == '\\'
-               && (vim_strchr(REGEXP_INRANGE, (uint8_t)p[1]) != NULL
-                   || (!reg_cpo_lit
-                       && vim_strchr(REGEXP_ABBR, (uint8_t)p[1]) != NULL))) {
-      p += 2;
-    } else if (*p == '[') {
-      if (get_char_class(&p) == CLASS_NONE
-          && get_equi_class(&p) == 0
-          && get_coll_element(&p) == 0
-          && *p != NUL) {
-        p++;          // It is not a class name and not NUL
-      }
-    } else {
-      p++;
-    }
-  }
-
-  return p;
+  return rs_skip_anyof(p);
 }
 
 /// Skip past regular expression.
@@ -5530,6 +5484,9 @@ int nvim_get_regexp_had_eol(void) { return had_eol; }
 
 // C accessor for regprog_T fields (used by Rust)
 int nvim_regprog_get_regflags(const regprog_T *prog) { return (int)prog->regflags; }
+
+// C accessor for reg_cpo_lit static variable (used by Rust)
+int nvim_get_reg_cpo_lit(void) { return reg_cpo_lit; }
 
 // Rust implementation
 extern int rs_vim_regcomp_had_eol(void);

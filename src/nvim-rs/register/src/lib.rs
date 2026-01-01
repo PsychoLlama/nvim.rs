@@ -101,7 +101,12 @@ extern "C" {
     // Phase 8 accessors: copy_register support
     fn nvim_alloc_yankreg() -> YankRegHandle;
     fn nvim_xcalloc(count: usize, size: usize) -> *mut std::ffi::c_void;
-    fn nvim_copy_yankreg_line(dst: YankRegHandle, dst_idx: usize, src: YankRegHandle, src_idx: usize);
+    fn nvim_copy_yankreg_line(
+        dst: YankRegHandle,
+        dst_idx: usize,
+        src: YankRegHandle,
+        src_idx: usize,
+    );
     fn nvim_yankreg_set_array_ptr(reg: YankRegHandle, array: *mut std::ffi::c_void);
 
     // Phase 9 accessors: str_to_reg support
@@ -954,13 +959,19 @@ pub unsafe extern "C" fn rs_str_to_reg(
                     break;
                 }
                 if yank_type == K_MT_BLOCK_WISE {
-                    charlen += nvim_utf_ptr2cells_len(line_end, (end as isize - line_end as isize) as c_int);
+                    charlen += nvim_utf_ptr2cells_len(
+                        line_end,
+                        (end as isize - line_end as isize) as c_int,
+                    );
                 }
 
                 if *line_end == NUL_CHAR {
                     line_end = line_end.add(1);
                 } else {
-                    line_end = line_end.add(nvim_utf_ptr2len_len(line_end, (end as isize - line_end as isize) as c_int) as usize);
+                    line_end = line_end.add(nvim_utf_ptr2len_len(
+                        line_end,
+                        (end as isize - line_end as isize) as c_int,
+                    ) as usize);
                 }
             }
 

@@ -42,6 +42,21 @@ const RI_LOWER: i16 = 0x40;
 const RI_UPPER: i16 = 0x80;
 const RI_WHITE: i16 = 0x100;
 
+/// Magic modes for regex patterns
+const MAGIC_NONE: c_int = 1; // \V very nomagic
+const MAGIC_OFF: c_int = 2; // \M or magic off
+const MAGIC_ON: c_int = 3; // \m or magic (default)
+const MAGIC_ALL: c_int = 4; // \v very magic
+
+/// CLASS_NONE - no character class recognized
+const CLASS_NONE: c_int = 99;
+
+/// Characters always special in [] range after '\'
+const REGEXP_INRANGE: &[u8] = b"]^-n\\";
+
+/// Abbreviation characters after '\'
+const REGEXP_ABBR: &[u8] = b"nrtebdoxuU";
+
 // =============================================================================
 // Opaque Handles
 // =============================================================================
@@ -122,6 +137,19 @@ impl RegmmatchHandle {
 extern "C" {
     /// Get the regflags field from a regprog_T.
     fn nvim_regprog_get_regflags(prog: RegprogHandle) -> c_int;
+
+    // UTF-8 functions
+    /// Get byte length of UTF-8 character at pointer.
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+
+    /// Get Unicode codepoint from UTF-8 pointer.
+    fn utf_ptr2char(p: *const c_char) -> c_int;
+
+    /// Get reg_cpo_lit flag (whether 'cpoptions' contains 'l').
+    fn nvim_get_reg_cpo_lit() -> c_int;
+
+    /// Get character class for POSIX class name.
+    fn nvim_get_char_class(pp: *mut *mut c_char) -> c_int;
 }
 
 // =============================================================================
@@ -308,6 +336,203 @@ unsafe fn re_multiline_impl(prog: RegprogHandle) -> bool {
 }
 
 // =============================================================================
+// Phase 2: Pattern Parsing Utilities
+// =============================================================================
+
+use std::ffi::c_char;
+
+/// Helper to check if a byte is in a byte slice.
+#[inline]
+fn byte_in_slice(b: u8, slice: &[u8]) -> bool {
+    slice.contains(&b)
+}
+
+/// Check for an equivalence class name "[=a=]". `p` points to the '['.
+/// Returns the character representing the class, or 0 if not recognized.
+/// Advances `p` past the item if recognized.
+///
+/// # Safety
+/// `p` must point to a valid null-terminated string.
+unsafe fn get_equi_class_impl(p: *mut *mut c_char) -> c_int {
+    let ptr = *p;
+
+    // Check for [= pattern
+    if *ptr.add(1) as u8 != b'=' || *ptr.add(2) == 0 {
+        return 0;
+    }
+
+    // Get the character length at position 2
+    let char_len = utfc_ptr2len(ptr.add(2)) as usize;
+
+    // Check for =] after the character
+    if *ptr.add(char_len + 2) as u8 == b'=' && *ptr.add(char_len + 3) as u8 == b']' {
+        let c = utf_ptr2char(ptr.add(2));
+        *p = ptr.add(char_len + 4);
+        return c;
+    }
+
+    0
+}
+
+/// Check for a collating element "[.a.]". `p` points to the '['.
+/// Returns the character, or 0 if not recognized.
+/// Advances `p` past the item if recognized.
+///
+/// # Safety
+/// `p` must point to a valid null-terminated string.
+unsafe fn get_coll_element_impl(p: *mut *mut c_char) -> c_int {
+    let ptr = *p;
+
+    // Check for [. pattern
+    if *ptr == 0 || *ptr.add(1) as u8 != b'.' || *ptr.add(2) == 0 {
+        return 0;
+    }
+
+    // Get the character length at position 2
+    let char_len = utfc_ptr2len(ptr.add(2)) as usize;
+
+    // Check for .] after the character
+    if *ptr.add(char_len + 2) as u8 == b'.' && *ptr.add(char_len + 3) as u8 == b']' {
+        let c = utf_ptr2char(ptr.add(2));
+        *p = ptr.add(char_len + 4);
+        return c;
+    }
+
+    0
+}
+
+/// Skip over a "[]" range. `p` must point to the character after the '['.
+/// Returns pointer to the matching ']', or the terminating NUL.
+///
+/// # Safety
+/// `p` must point to a valid null-terminated string.
+unsafe fn skip_anyof_impl(mut p: *mut c_char) -> *mut c_char {
+    let reg_cpo_lit = nvim_get_reg_cpo_lit() != 0;
+
+    // Complement of range
+    if *p as u8 == b'^' {
+        p = p.add(1);
+    }
+
+    // ] or - at start are literal
+    if *p as u8 == b']' || *p as u8 == b'-' {
+        p = p.add(1);
+    }
+
+    while *p != 0 && *p as u8 != b']' {
+        let char_len = utfc_ptr2len(p) as usize;
+
+        if char_len > 1 {
+            // Multi-byte character
+            p = p.add(char_len);
+        } else if *p as u8 == b'-' {
+            p = p.add(1);
+            if *p as u8 != b']' && *p != 0 {
+                // Skip the character after -
+                let next_len = utfc_ptr2len(p) as usize;
+                p = p.add(next_len.max(1));
+            }
+        } else if *p as u8 == b'\\' {
+            let next_byte = *p.add(1) as u8;
+            // Check if next char is in REGEXP_INRANGE or (if not cpo_lit) in REGEXP_ABBR
+            if byte_in_slice(next_byte, REGEXP_INRANGE)
+                || (!reg_cpo_lit && byte_in_slice(next_byte, REGEXP_ABBR))
+            {
+                p = p.add(2);
+            } else {
+                p = p.add(1);
+            }
+        } else if *p as u8 == b'[' {
+            // Try character class, equivalence class, or collating element
+            let mut pp = p;
+            if nvim_get_char_class(&mut pp) == CLASS_NONE
+                && get_equi_class_impl(&mut pp) == 0
+                && get_coll_element_impl(&mut pp) == 0
+                && *pp != 0
+            {
+                // Not a class, just a literal [
+                p = p.add(1);
+            } else {
+                p = pp;
+            }
+        } else {
+            p = p.add(1);
+        }
+    }
+
+    p
+}
+
+/// Skip past regular expression.
+/// Stop at end of string or where `delim` is found ('/', '?', etc).
+/// Takes care of characters with a backslash in front.
+/// Skips strings inside [ and ].
+///
+/// Returns pointer to the delimiter or end of string, and optionally
+/// the effective magic mode via `magic_val`.
+///
+/// # Safety
+/// `startp` must point to a valid null-terminated string.
+unsafe fn skip_regexp_ex_impl(
+    startp: *mut c_char,
+    dirc: c_int,
+    magic: c_int,
+    magic_val: *mut c_int,
+) -> *mut c_char {
+    let mut mymagic = if magic != 0 { MAGIC_ON } else { MAGIC_OFF };
+    let mut p = startp;
+
+    while *p != 0 {
+        let byte = *p as u8;
+
+        // Found end of regexp
+        if byte as c_int == dirc {
+            break;
+        }
+
+        // Check for character class
+        if (byte == b'[' && mymagic >= MAGIC_ON)
+            || (byte == b'\\' && *p.add(1) as u8 == b'[' && mymagic <= MAGIC_OFF)
+        {
+            p = skip_anyof_impl(p.add(1));
+            if *p == 0 {
+                break;
+            }
+        } else if byte == b'\\' && *p.add(1) != 0 {
+            // Skip backslash and next character
+            p = p.add(1);
+
+            // Track magic mode changes
+            let next = *p as u8;
+            if next == b'v' {
+                mymagic = MAGIC_ALL;
+            } else if next == b'V' {
+                mymagic = MAGIC_NONE;
+            }
+        }
+
+        // Advance to next character
+        let char_len = utfc_ptr2len(p) as usize;
+        p = p.add(char_len.max(1));
+    }
+
+    if !magic_val.is_null() {
+        *magic_val = mymagic;
+    }
+
+    p
+}
+
+/// Skip past regular expression (simple version).
+///
+/// # Safety
+/// `startp` must point to a valid null-terminated string.
+#[inline]
+unsafe fn skip_regexp_impl(startp: *mut c_char, delim: c_int, magic: c_int) -> *mut c_char {
+    skip_regexp_ex_impl(startp, delim, magic, std::ptr::null_mut())
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
 
@@ -396,6 +621,65 @@ pub extern "C" fn rs_ri_white(c: c_int) -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_re_multiline(prog: RegprogHandle) -> c_int {
     c_int::from(re_multiline_impl(prog))
+}
+
+// -----------------------------------------------------------------------------
+// Phase 2: Pattern Parsing FFI Exports
+// -----------------------------------------------------------------------------
+
+/// Check for an equivalence class name "[=a=]".
+///
+/// # Safety
+/// `pp` must point to a valid pointer to a null-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_equi_class(pp: *mut *mut c_char) -> c_int {
+    get_equi_class_impl(pp)
+}
+
+/// Check for a collating element "[.a.]".
+///
+/// # Safety
+/// `pp` must point to a valid pointer to a null-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_coll_element(pp: *mut *mut c_char) -> c_int {
+    get_coll_element_impl(pp)
+}
+
+/// Skip over a "[]" range.
+///
+/// # Safety
+/// `p` must point to a valid null-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_skip_anyof(p: *mut c_char) -> *mut c_char {
+    skip_anyof_impl(p)
+}
+
+/// Skip past regular expression to delimiter.
+///
+/// # Safety
+/// `startp` must point to a valid null-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_skip_regexp(
+    startp: *mut c_char,
+    delim: c_int,
+    magic: c_int,
+) -> *mut c_char {
+    skip_regexp_impl(startp, delim, magic)
+}
+
+/// Skip past regular expression with magic value tracking.
+///
+/// # Safety
+/// `startp` must point to a valid null-terminated string.
+/// `newp` if non-null must be valid for writes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_skip_regexp_ex(
+    startp: *mut c_char,
+    dirc: c_int,
+    magic: c_int,
+    newp: *mut c_int,
+) -> *mut c_char {
+    skip_regexp_ex_impl(startp, dirc, magic, newp)
 }
 
 // =============================================================================
