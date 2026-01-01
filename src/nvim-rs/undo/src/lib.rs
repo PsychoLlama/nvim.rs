@@ -61,6 +61,7 @@ extern "C" {
     // Global buffer iteration
     fn nvim_get_firstbuf() -> BufHandle;
     fn nvim_buf_get_next(buf: BufHandle) -> BufHandle;
+    fn nvim_get_curbuf() -> BufHandle;
 
     // Memory functions
     fn nvim_xfree(ptr: *mut c_void);
@@ -104,6 +105,14 @@ extern "C" {
     fn nvim_uep_set_lcount(uep: UEntryHandle, val: LinenrT);
     fn nvim_uep_set_size(uep: UEntryHandle, val: LinenrT);
     fn nvim_uep_set_array(uep: UEntryHandle, val: *mut *mut c_char);
+
+    // u_entry_T array element accessors
+    fn nvim_uep_get_array_element(uep: UEntryHandle, idx: LinenrT) -> *mut c_char;
+    fn nvim_uep_set_array_element(uep: UEntryHandle, idx: LinenrT, val: *mut c_char);
+
+    // Allocation functions
+    fn nvim_alloc_u_entry() -> UEntryHandle;
+    fn nvim_alloc_u_header() -> UHeaderHandle;
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed.
@@ -135,6 +144,16 @@ pub unsafe extern "C" fn rs_anyBufIsChanged() -> bool {
         buf = nvim_buf_get_next(buf);
     }
     false
+}
+
+/// Return true if the current buffer has changed.
+///
+/// # Safety
+///
+/// Accesses global curbuf via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_curbufIsChanged() -> bool {
+    rs_bufIsChanged(nvim_get_curbuf())
 }
 
 /// Invalidate the undo buffer; called when storage has already been released.
@@ -169,6 +188,28 @@ pub unsafe extern "C" fn rs_u_clearline(buf: BufHandle) {
     nvim_xfree(line_ptr as *mut c_void);
     nvim_buf_set_b_u_line_ptr(buf, std::ptr::null_mut());
     nvim_buf_set_b_u_line_lnum(buf, 0);
+}
+
+/// Free entry 'uep' and 'n' lines in uep->ue_array[].
+///
+/// # Safety
+///
+/// The `uep` handle must be a valid pointer to a u_entry_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_freeentry(uep: UEntryHandle, mut n: c_int) {
+    // Free array elements from n-1 down to 0
+    while n > 0 {
+        n -= 1;
+        let elem = nvim_uep_get_array_element(uep, LinenrT::from(n));
+        nvim_xfree(elem as *mut c_void);
+    }
+
+    // Free the array itself
+    let array = nvim_uep_get_array(uep);
+    nvim_xfree(array as *mut c_void);
+
+    // Free the entry struct
+    nvim_xfree(uep.0);
 }
 
 #[cfg(test)]

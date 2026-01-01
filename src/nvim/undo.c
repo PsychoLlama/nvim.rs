@@ -143,8 +143,10 @@ typedef struct {
 // Rust FFI function declarations
 extern bool rs_bufIsChanged(buf_T *buf);
 extern bool rs_anyBufIsChanged(void);
+extern bool rs_curbufIsChanged(void);
 extern void rs_u_clearall(buf_T *buf);
 extern void rs_u_clearline(buf_T *buf);
+extern void rs_u_freeentry(u_entry_T *uep, int n);
 
 // Feature flag for Rust undo functions
 #define USE_RUST_UNDO 1
@@ -2967,6 +2969,9 @@ static void u_freeentries(buf_T *buf, u_header_T *uhp, u_header_T **uhpp)
 /// free entry 'uep' and 'n' lines in uep->ue_array[]
 static void u_freeentry(u_entry_T *uep, int n)
 {
+#ifdef USE_RUST_UNDO
+  rs_u_freeentry(uep, n);
+#else
   while (n > 0) {
     xfree(uep->ue_array[--n]);
   }
@@ -2975,6 +2980,7 @@ static void u_freeentry(u_entry_T *uep, int n)
   uep->ue_magic = 0;
 #endif
   xfree(uep);
+#endif
 }
 
 /// invalidate the undo buffer; called when storage has already been released
@@ -3141,7 +3147,11 @@ bool anyBufIsChanged(void)
 bool curbufIsChanged(void)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {
+#ifdef USE_RUST_UNDO
+  return rs_curbufIsChanged();
+#else
   return bufIsChanged(curbuf);
+#endif
 }
 
 /// Append the list of undo blocks to a newly allocated list
@@ -3526,4 +3536,25 @@ void nvim_uep_set_size(u_entry_T *uep, linenr_T val)
 void nvim_uep_set_array(u_entry_T *uep, char **val)
 {
   uep->ue_array = val;
+}
+
+char *nvim_uep_get_array_element(u_entry_T *uep, linenr_T idx)
+{
+  return uep->ue_array[idx];
+}
+
+void nvim_uep_set_array_element(u_entry_T *uep, linenr_T idx, char *val)
+{
+  uep->ue_array[idx] = val;
+}
+
+// Memory allocation - return pointer for Rust to use with xfree
+u_entry_T *nvim_alloc_u_entry(void)
+{
+  return xcalloc(1, sizeof(u_entry_T));
+}
+
+u_header_T *nvim_alloc_u_header(void)
+{
+  return xcalloc(1, sizeof(u_header_T));
 }
