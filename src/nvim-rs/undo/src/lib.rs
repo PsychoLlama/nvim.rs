@@ -127,6 +127,9 @@ extern "C" {
     // Global state accessors
     fn nvim_get_no_u_sync() -> c_int;
     fn nvim_get_undolevel(buf: BufHandle) -> i64;
+
+    // Buffer b_did_warn accessor
+    fn nvim_buf_set_b_did_warn(buf: BufHandle, val: bool);
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed.
@@ -471,6 +474,57 @@ pub unsafe extern "C" fn rs_u_sync(force: bool) {
         rs_u_getbot(buf);
         nvim_buf_set_b_u_curhead(buf, UHeaderHandle(std::ptr::null_mut()));
     }
+}
+
+/// Free all allocated memory blocks for the buffer and invalidate the undo buffer.
+///
+/// # Safety
+///
+/// The `buf` handle must be a valid pointer to a buf_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_clearallandblockfree(buf: BufHandle) {
+    rs_u_blockfree(buf);
+    rs_u_clearall(buf);
+}
+
+/// UH_CHANGED flag value from undo_defs.h
+const UH_CHANGED: c_int = 0x01;
+
+/// Mark all headers in the branch as changed (recursive).
+///
+/// # Safety
+///
+/// The `uhp` handle must be a valid pointer to a u_header_T (or NULL).
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_unch_branch(uhp: UHeaderHandle) {
+    let mut uh = uhp;
+    while !uh.0.is_null() {
+        // Set UH_CHANGED flag
+        let flags = nvim_uhp_get_flags(uh);
+        nvim_uhp_set_flags(uh, flags | UH_CHANGED);
+
+        // Recurse into alternate branch if present
+        let alt_next = nvim_uhp_get_alt_next(uh);
+        if !alt_next.0.is_null() {
+            rs_u_unch_branch(alt_next);
+        }
+
+        // Move to previous header
+        uh = nvim_uhp_get_prev(uh);
+    }
+}
+
+/// Called after writing or reloading the file and setting b_changed to false.
+/// Now an undo means that the buffer is modified.
+///
+/// # Safety
+///
+/// The `buf` handle must be a valid pointer to a buf_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_unchanged(buf: BufHandle) {
+    let oldhead = nvim_buf_get_b_u_oldhead(buf);
+    rs_u_unch_branch(oldhead);
+    nvim_buf_set_b_did_warn(buf, false);
 }
 
 #[cfg(test)]

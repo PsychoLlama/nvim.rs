@@ -154,6 +154,9 @@ extern u_entry_T *rs_u_get_headentry(buf_T *buf);
 extern void rs_u_getbot(buf_T *buf);
 extern void rs_u_blockfree(buf_T *buf);
 extern void rs_u_sync(bool force);
+extern void rs_u_clearallandblockfree(buf_T *buf);
+extern void rs_u_unch_branch(u_header_T *uhp);
+extern void rs_u_unchanged(buf_T *buf);
 
 // Feature flag for Rust undo functions
 #define USE_RUST_UNDO 1
@@ -2779,8 +2782,12 @@ void ex_undojoin(exarg_T *eap)
 /// Now an undo means that the buffer is modified.
 void u_unchanged(buf_T *buf)
 {
+#ifdef USE_RUST_UNDO
+  rs_u_unchanged(buf);
+#else
   u_unch_branch(buf->b_u_oldhead);
   buf->b_did_warn = false;
+#endif
 }
 
 /// After reloading a buffer which was saved for 'undoreload': Find the first
@@ -2833,12 +2840,16 @@ void u_update_save_nr(buf_T *buf)
 
 static void u_unch_branch(u_header_T *uhp)
 {
+#ifdef USE_RUST_UNDO
+  rs_u_unch_branch(uhp);
+#else
   for (u_header_T *uh = uhp; uh != NULL; uh = uh->uh_prev.ptr) {
     uh->uh_flags |= UH_CHANGED;
     if (uh->uh_alt_next.ptr != NULL) {
       u_unch_branch(uh->uh_alt_next.ptr);           // recursive
     }
   }
+#endif
 }
 
 /// Get pointer to last added entry.
@@ -3050,8 +3061,12 @@ void u_blockfree(buf_T *buf)
 /// and invalidate the undo buffer
 void u_clearallandblockfree(buf_T *buf)
 {
+#ifdef USE_RUST_UNDO
+  rs_u_clearallandblockfree(buf);
+#else
   u_blockfree(buf);
   u_clearall(buf);
+#endif
 }
 
 /// Save the line "lnum" for the "U" command.
@@ -3627,4 +3642,10 @@ int nvim_get_no_u_sync(void)
 OptInt nvim_get_undolevel(buf_T *buf)
 {
   return get_undolevel(buf);
+}
+
+// Buffer b_did_warn accessor
+void nvim_buf_set_b_did_warn(buf_T *buf, bool val)
+{
+  buf->b_did_warn = val;
 }
