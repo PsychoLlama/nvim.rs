@@ -158,6 +158,7 @@ extern void rs_u_clearallandblockfree(buf_T *buf);
 extern void rs_u_unch_branch(u_header_T *uhp);
 extern void rs_u_unchanged(buf_T *buf);
 extern void rs_u_update_save_nr(buf_T *buf);
+extern void rs_u_free_uhp(u_header_T *uhp);
 
 // Feature flag for Rust undo functions
 #define USE_RUST_UNDO 1
@@ -788,6 +789,9 @@ static void corruption_error(const char *const mesg, const char *const file_name
 
 static void u_free_uhp(u_header_T *uhp)
 {
+#ifdef USE_RUST_UNDO
+  rs_u_free_uhp(uhp);
+#else
   u_entry_T *uep = uhp->uh_entry;
   while (uep != NULL) {
     u_entry_T *nuep = uep->ue_next;
@@ -795,6 +799,7 @@ static void u_free_uhp(u_header_T *uhp)
     uep = nuep;
   }
   xfree(uhp);
+#endif
 }
 
 /// Writes the undofile header.

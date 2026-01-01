@@ -556,6 +556,24 @@ pub unsafe extern "C" fn rs_u_update_save_nr(buf: BufHandle) {
     }
 }
 
+/// Free a u_header_T and all its entries.
+/// Used when reading an undo file fails.
+///
+/// # Safety
+///
+/// The `uhp` handle must be a valid pointer to a u_header_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_free_uhp(uhp: UHeaderHandle) {
+    let mut uep = nvim_uhp_get_entry(uhp);
+    while !uep.0.is_null() {
+        let nuep = nvim_uep_get_next(uep);
+        let size = nvim_uep_get_size(uep);
+        rs_u_freeentry(uep, size as c_int);
+        uep = nuep;
+    }
+    nvim_xfree(uhp.0);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
