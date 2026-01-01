@@ -47,6 +47,7 @@
           rustfmt
           rust-analyzer
           rust-cbindgen
+          cargo-nextest
         ];
 
         # Dependencies for running tests

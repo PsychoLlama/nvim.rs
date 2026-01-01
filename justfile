@@ -1,3 +1,6 @@
+_:
+  just --list
+
 # Build neovim using system dependencies from nix (with Rust implementations)
 build:
     cargo build --release
@@ -54,7 +57,10 @@ rust-build-debug:
 # Run Rust tests for pure Rust crates (no FFI linking needed)
 # These crates don't call into C code, only export functions to C
 rust-test:
-    cargo test \
+    cargo nextest run \
+      --show-progress=none \
+      --status-level=fail \
+      --cargo-quiet \
       -p nvim-api \
       -p nvim-arabic \
       -p nvim-ascii \
