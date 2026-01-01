@@ -147,6 +147,9 @@ extern "C" {
     fn nvim_emsg_modifiable();
     fn nvim_emsg_sandbox();
     fn nvim_emsg_textlock();
+
+    // ex_undojoin error message wrapper
+    fn nvim_emsg_undojoin_after_undo();
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed.
@@ -626,6 +629,42 @@ pub unsafe extern "C" fn rs_undo_allowed(buf: BufHandle) -> bool {
     }
 
     true
+}
+
+/// ":undojoin": continue adding to the last entry list
+///
+/// # Safety
+///
+/// Accesses global curbuf via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_undojoin() {
+    let buf = nvim_get_curbuf();
+
+    // Nothing changed before
+    let newhead = nvim_buf_get_b_u_newhead(buf);
+    if newhead.0.is_null() {
+        return;
+    }
+
+    // Not allowed after undo
+    let curhead = nvim_buf_get_b_u_curhead(buf);
+    if !curhead.0.is_null() {
+        nvim_emsg_undojoin_after_undo();
+        return;
+    }
+
+    // Already unsynced
+    if !nvim_buf_get_b_u_synced(buf) {
+        return;
+    }
+
+    // No entries, nothing to do
+    if nvim_get_undolevel(buf) < 0 {
+        return;
+    }
+
+    // Append next change to last entry
+    nvim_buf_set_b_u_synced(buf, false);
 }
 
 #[cfg(test)]

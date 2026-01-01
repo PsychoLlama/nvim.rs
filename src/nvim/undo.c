@@ -160,6 +160,7 @@ extern void rs_u_unchanged(buf_T *buf);
 extern void rs_u_update_save_nr(buf_T *buf);
 extern void rs_u_free_uhp(u_header_T *uhp);
 extern bool rs_undo_allowed(buf_T *buf);
+extern void rs_ex_undojoin(void);
 
 // Feature flag for Rust undo functions
 #define USE_RUST_UNDO 1
@@ -2773,6 +2774,10 @@ void ex_undolist(exarg_T *eap)
 /// ":undojoin": continue adding to the last entry list
 void ex_undojoin(exarg_T *eap)
 {
+#ifdef USE_RUST_UNDO
+  (void)eap;  // unused
+  rs_ex_undojoin();
+#else
   if (curbuf->b_u_newhead == NULL) {
     return;                 // nothing changed before
   }
@@ -2787,6 +2792,7 @@ void ex_undojoin(exarg_T *eap)
     return;                 // no entries, nothing to do
   }
   curbuf->b_u_synced = false;  // Append next change to last entry
+#endif
 }
 
 /// Called after writing or reloading the file and setting b_changed to false.
@@ -3706,4 +3712,9 @@ void nvim_emsg_sandbox(void)
 void nvim_emsg_textlock(void)
 {
   emsg(_(e_textlock));
+}
+
+void nvim_emsg_undojoin_after_undo(void)
+{
+  emsg(_("E790: undojoin is not allowed after undo"));
 }
