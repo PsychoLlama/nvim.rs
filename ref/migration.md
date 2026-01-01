@@ -180,8 +180,13 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 - `digraph_get` - Migrated to Rust (rs_digraph_get) - Bidirectional digraph lookup
 - `getexactdigraph` - Migrated to Rust (rs_getexactdigraph) - Exact order digraph lookup
 
-**keycodes.c**:
-- `get_special_key_code` - Uses key_names_table static array
+**keycodes.c** (PARTIALLY MIGRATED):
+- `find_special_key_in_table` - Migrated to Rust (rs_find_special_key_in_table) - Uses key_names_table via accessor
+- `get_special_key_code` - Uses key_names_table static array (accessor available, needs hash function migration)
+
+Accessor functions added for key_names_table:
+- `nvim_get_key_names_table_len()`, `nvim_get_key_names_table_key()`, `nvim_get_key_names_table_is_alt()`
+- `nvim_get_key_names_table_name_data()`, `nvim_get_key_names_table_name_size()`
 
 **autocmd.c** (MIGRATED):
 - `event_nr2name` - Migrated to Rust (rs_event_nr2name) - Uses event_names static array via accessor
