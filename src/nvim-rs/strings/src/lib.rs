@@ -2274,4 +2274,11 @@ mod tests {
             assert_eq!(combined.to_str().unwrap(), "hello");
         }
     }
+
+    #[test]
+    fn test_mb_maxbytes_constant() {
+        // Verify MB_MAXBYTES matches C definition (max bytes for a UTF-8 character)
+        // UTF-8 can encode up to 6 bytes per character in the original spec
+        assert_eq!(MB_MAXBYTES, 6);
+    }
 }

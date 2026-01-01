@@ -1785,4 +1785,26 @@ mod tests {
 
     // Note: vim_strsave_escape_ks allocates memory with xmalloc which
     // isn't available in pure Rust tests. Tested through C integration.
+
+    #[test]
+    fn test_mod_mask_constants() {
+        // Verify modifier mask constants match C definitions
+        assert_eq!(MOD_MASK_SHIFT, 0x02);
+        assert_eq!(MOD_MASK_CTRL, 0x04);
+        assert_eq!(MOD_MASK_ALT, 0x08);
+        assert_eq!(MOD_MASK_META, 0x10);
+        assert_eq!(MOD_MASK_2CLICK, 0x20);
+        assert_eq!(MOD_MASK_3CLICK, 0x40);
+        assert_eq!(MOD_MASK_4CLICK, 0x60);
+        assert_eq!(MOD_MASK_CMD, 0x80);
+    }
+
+    #[test]
+    fn test_special_key_constants() {
+        // Verify special key constants match C definitions
+        assert_eq!(K_SPECIAL, 0x80);
+        assert_eq!(KS_MODIFIER, 252);
+        assert_eq!(KS_EXTRA, 253);
+        assert_eq!(KS_SPECIAL, 254);
+    }
 }
