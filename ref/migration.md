@@ -384,7 +384,7 @@ Terminfo output infrastructure for Rust:
 - nvim_tui_get_stopped, nvim_tui_get_can_set_title
 - nvim_tui_get/set_title_enabled, nvim_tui_get_buf_space
 
-### Regexp Module (regexp.c - PHASE 1-4 MIGRATED)
+### Regexp Module (regexp.c - PHASE 1-5 MIGRATED)
 
 **Strategy:** Wrap C regex engines rather than replace them. Vim regex syntax has no equivalent Rust crate.
 
@@ -457,6 +457,29 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 - `BufHandle` - Opaque wrapper for buf_T*
 - `LposHandle` - Opaque wrapper for lpos_T*
 
+**Phase 5 - Parse State Infrastructure (~25 accessor functions, 3 rs_* functions):**
+
+*Number Parsing Functions:*
+- `rs_gethexchrs` - Parse hex escape (\%x20, \%u20AC, \%U12345678)
+- `rs_getdecchrs` - Parse decimal escape (\%d123)
+- `rs_getoctchrs` - Parse octal escape (\%o210)
+
+*Parse State Accessors:*
+- `nvim_parse_get/set_regparse` - Input scan pointer
+- `nvim_parse_get/set_prevchr_len` - Previous char byte length
+- `nvim_parse_get/set_curchr` - Currently parsed character
+- `nvim_parse_get/set_prevchr` - Previous character
+- `nvim_parse_get/set_prevprevchr` - Previous-previous character
+- `nvim_parse_get/set_nextchr` - Ungetchr buffer
+- `nvim_parse_get/set_at_start` - First character flag
+- `nvim_parse_get/set_prev_at_start` - Second character flag
+- `nvim_parse_get/set_regnpar` - Parenthesis count
+- `nvim_parse_get/set_reg_magic` - Magic mode
+
+*Helper Functions:*
+- `nvim_hex2nr` - Convert hex char to number
+- `nvim_ascii_isxdigit` - Check hex digit
+
 **Other Accessor Functions:**
 - `nvim_regprog_get_regflags` - Get regflags from regprog_T
 - `nvim_get_reg_cpo_lit` - Get reg_cpo_lit flag for 'cpoptions'
@@ -465,9 +488,9 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 - `nvim_get_reg_prev_sublen` - Get previous substitution length
 - `nvim_set_reg_prev_sub` - Set previous substitution (takes ownership)
 
-**Remaining Work (Phases 5-6):**
-- Compilation helpers (parse state, char scanning)
+**Remaining Work (Phase 6):**
 - API wrappers (vim_regcomp, vim_regexec, vim_regsub)
+- Character scanning functions (peekchr, skipchr, getchr, ungetchr) - complex magic handling, kept in C
 - Note: Backtracking and NFA engines (~10K lines) remain in C
 
 ### Register Module (register.c - PARTIALLY MIGRATED)

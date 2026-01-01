@@ -319,6 +319,54 @@ extern "C" {
     // rex_in_use flag
     fn nvim_rex_in_use() -> bool;
     fn nvim_rex_set_in_use(in_use: bool);
+
+    // =========================================================================
+    // Phase 5: Parse state accessors
+    // =========================================================================
+
+    // regparse - input scan pointer
+    fn nvim_parse_get_regparse() -> *mut c_char;
+    fn nvim_parse_set_regparse(p: *mut c_char);
+
+    // prevchr_len - byte length of previous char
+    fn nvim_parse_get_prevchr_len() -> c_int;
+    fn nvim_parse_set_prevchr_len(len: c_int);
+
+    // curchr - currently parsed character
+    fn nvim_parse_get_curchr() -> c_int;
+    fn nvim_parse_set_curchr(c: c_int);
+
+    // prevchr - previous character
+    fn nvim_parse_get_prevchr() -> c_int;
+    fn nvim_parse_set_prevchr(c: c_int);
+
+    // prevprevchr - previous-previous character
+    fn nvim_parse_get_prevprevchr() -> c_int;
+    fn nvim_parse_set_prevprevchr(c: c_int);
+
+    // nextchr - used for ungetchr()
+    fn nvim_parse_get_nextchr() -> c_int;
+    fn nvim_parse_set_nextchr(c: c_int);
+
+    // at_start - true when on first character
+    fn nvim_parse_get_at_start() -> c_int;
+    fn nvim_parse_set_at_start(v: c_int);
+
+    // prev_at_start - true when on second character
+    fn nvim_parse_get_prev_at_start() -> c_int;
+    fn nvim_parse_set_prev_at_start(v: c_int);
+
+    // regnpar - parenthesis count
+    fn nvim_parse_get_regnpar() -> c_int;
+    fn nvim_parse_set_regnpar(n: c_int);
+
+    // reg_magic - magicness of pattern
+    fn nvim_parse_get_reg_magic() -> c_int;
+    fn nvim_parse_set_reg_magic(m: c_int);
+
+    // Helper functions for number parsing
+    fn nvim_hex2nr(c: c_int) -> c_int;
+    fn nvim_ascii_isxdigit(c: c_int) -> c_int;
 }
 
 // MAXCOL constant - maximum column number
@@ -823,6 +871,110 @@ unsafe fn regtilde_impl(source: *mut c_char, magic: c_int, preview: bool) -> *mu
 }
 
 // =============================================================================
+// Phase 5: Number Parsing Functions
+// =============================================================================
+
+/// Get and return the value of a hex string at the current position.
+/// Returns -1 if there is no valid hex number.
+/// The regparse position is updated.
+///
+/// The parameter controls the maximum number of input characters:
+/// - 2 for \%x20 sequence
+/// - 4 for \%u20AC sequence
+/// - 8 for \%U12345678 sequence
+///
+/// # Safety
+/// regparse must point to a valid null-terminated string.
+unsafe fn gethexchrs_impl(maxinputlen: c_int) -> i64 {
+    let mut nr: i64 = 0;
+    let mut regparse = nvim_parse_get_regparse();
+
+    let mut i = 0;
+    while i < maxinputlen {
+        let c = *regparse as u8 as c_int;
+        if nvim_ascii_isxdigit(c) == 0 {
+            break;
+        }
+        nr <<= 4;
+        nr |= nvim_hex2nr(c) as i64;
+        regparse = regparse.add(1);
+        i += 1;
+    }
+
+    nvim_parse_set_regparse(regparse);
+
+    if i == 0 {
+        -1
+    } else {
+        nr
+    }
+}
+
+/// Get and return the value of a decimal string immediately after the
+/// current position. Returns -1 for invalid. Consumes all digits.
+///
+/// # Safety
+/// regparse must point to a valid null-terminated string.
+unsafe fn getdecchrs_impl() -> i64 {
+    let mut nr: i64 = 0;
+    let mut regparse = nvim_parse_get_regparse();
+
+    let mut i = 0;
+    loop {
+        let c = *regparse as u8;
+        if !c.is_ascii_digit() {
+            break;
+        }
+        nr *= 10;
+        nr += (c - b'0') as i64;
+        regparse = regparse.add(1);
+        nvim_parse_set_curchr(-1); // no longer valid
+        i += 1;
+    }
+
+    nvim_parse_set_regparse(regparse);
+
+    if i == 0 {
+        -1
+    } else {
+        nr
+    }
+}
+
+/// Get and return the value of an octal string immediately after the current
+/// position. Returns -1 for invalid, or 0-255 for valid.
+/// Smart enough to handle numbers > 377 correctly (e.g., 400 is treated as 40)
+/// and doesn't treat 8 or 9 as recognized characters.
+///
+/// # Safety
+/// regparse must point to a valid null-terminated string.
+unsafe fn getoctchrs_impl() -> i64 {
+    let mut nr: i64 = 0;
+    let mut regparse = nvim_parse_get_regparse();
+
+    // Maximum 3 octal digits, and nr < 0o40 (32 decimal) to stay <= 255
+    let mut i = 0;
+    while i < 3 && nr < 0o40 {
+        let c = *regparse as u8;
+        if !(b'0'..=b'7').contains(&c) {
+            break;
+        }
+        nr <<= 3;
+        nr |= nvim_hex2nr(c as c_int) as i64;
+        regparse = regparse.add(1);
+        i += 1;
+    }
+
+    nvim_parse_set_regparse(regparse);
+
+    if i == 0 {
+        -1
+    } else {
+        nr
+    }
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
 
@@ -990,6 +1142,37 @@ pub unsafe extern "C" fn rs_regtilde(
     preview: c_int,
 ) -> *mut c_char {
     regtilde_impl(source, magic, preview != 0)
+}
+
+// -----------------------------------------------------------------------------
+// Phase 5: Number Parsing FFI Exports
+// -----------------------------------------------------------------------------
+
+/// Get and return the value of a hex string at the current position.
+///
+/// # Safety
+/// regparse must point to a valid null-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_gethexchrs(maxinputlen: c_int) -> i64 {
+    gethexchrs_impl(maxinputlen)
+}
+
+/// Get and return the value of a decimal string at the current position.
+///
+/// # Safety
+/// regparse must point to a valid null-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_getdecchrs() -> i64 {
+    getdecchrs_impl()
+}
+
+/// Get and return the value of an octal string at the current position.
+///
+/// # Safety
+/// regparse must point to a valid null-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_getoctchrs() -> i64 {
+    getoctchrs_impl()
 }
 
 // =============================================================================

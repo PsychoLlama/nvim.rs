@@ -1023,6 +1023,11 @@ static void ungetchr(void)
   regparse -= prevchr_len;
 }
 
+// Rust implementations for number parsing
+extern int64_t rs_gethexchrs(int maxinputlen);
+extern int64_t rs_getdecchrs(void);
+extern int64_t rs_getoctchrs(void);
+
 // Get and return the value of the hex string at the current position.
 // Return -1 if there is no valid hex number.
 // The position is updated:
@@ -1032,49 +1037,14 @@ static void ungetchr(void)
 // 2 when reading a \%x20 sequence and 4 when reading a \%u20AC sequence.
 static int64_t gethexchrs(int maxinputlen)
 {
-  int64_t nr = 0;
-  int c;
-  int i;
-
-  for (i = 0; i < maxinputlen; i++) {
-    c = (uint8_t)regparse[0];
-    if (!ascii_isxdigit(c)) {
-      break;
-    }
-    nr <<= 4;
-    nr |= hex2nr(c);
-    regparse++;
-  }
-
-  if (i == 0) {
-    return -1;
-  }
-  return nr;
+  return rs_gethexchrs(maxinputlen);
 }
 
 // Get and return the value of the decimal string immediately after the
 // current position. Return -1 for invalid.  Consumes all digits.
 static int64_t getdecchrs(void)
 {
-  int64_t nr = 0;
-  int c;
-  int i;
-
-  for (i = 0;; i++) {
-    c = (uint8_t)regparse[0];
-    if (c < '0' || c > '9') {
-      break;
-    }
-    nr *= 10;
-    nr += c - '0';
-    regparse++;
-    curchr = -1;     // no longer valid
-  }
-
-  if (i == 0) {
-    return -1;
-  }
-  return nr;
+  return rs_getdecchrs();
 }
 
 // get and return the value of the octal string immediately after the current
@@ -1085,24 +1055,7 @@ static int64_t getdecchrs(void)
 //         before-^  ^-after
 static int64_t getoctchrs(void)
 {
-  int64_t nr = 0;
-  int c;
-  int i;
-
-  for (i = 0; i < 3 && nr < 040; i++) {
-    c = (uint8_t)regparse[0];
-    if (c < '0' || c > '7') {
-      break;
-    }
-    nr <<= 3;
-    nr |= hex2nr(c);
-    regparse++;
-  }
-
-  if (i == 0) {
-    return -1;
-  }
-  return nr;
+  return rs_getoctchrs();
 }
 
 // read_limits - Read two integers to be taken as a minimum and maximum.
@@ -5488,6 +5441,54 @@ void nvim_rex_set_nfa_has_zsubexpr(int v) { rex.nfa_has_zsubexpr = v; }
 // rex_in_use flag accessor
 bool nvim_rex_in_use(void) { return rex_in_use; }
 void nvim_rex_set_in_use(bool in_use) { rex_in_use = in_use; }
+
+// =============================================================================
+// Phase 5: Parse state accessors (used by Rust)
+// =============================================================================
+
+// regparse - input scan pointer
+char *nvim_parse_get_regparse(void) { return regparse; }
+void nvim_parse_set_regparse(char *p) { regparse = p; }
+
+// prevchr_len - byte length of previous char
+int nvim_parse_get_prevchr_len(void) { return prevchr_len; }
+void nvim_parse_set_prevchr_len(int len) { prevchr_len = len; }
+
+// curchr - currently parsed character
+int nvim_parse_get_curchr(void) { return curchr; }
+void nvim_parse_set_curchr(int c) { curchr = c; }
+
+// prevchr - previous character
+int nvim_parse_get_prevchr(void) { return prevchr; }
+void nvim_parse_set_prevchr(int c) { prevchr = c; }
+
+// prevprevchr - previous-previous character
+int nvim_parse_get_prevprevchr(void) { return prevprevchr; }
+void nvim_parse_set_prevprevchr(int c) { prevprevchr = c; }
+
+// nextchr - used for ungetchr()
+int nvim_parse_get_nextchr(void) { return nextchr; }
+void nvim_parse_set_nextchr(int c) { nextchr = c; }
+
+// at_start - true when on first character
+int nvim_parse_get_at_start(void) { return at_start; }
+void nvim_parse_set_at_start(int v) { at_start = v; }
+
+// prev_at_start - true when on second character
+int nvim_parse_get_prev_at_start(void) { return prev_at_start; }
+void nvim_parse_set_prev_at_start(int v) { prev_at_start = v; }
+
+// regnpar - parenthesis count
+int nvim_parse_get_regnpar(void) { return regnpar; }
+void nvim_parse_set_regnpar(int n) { regnpar = n; }
+
+// reg_magic - magicness of pattern
+int nvim_parse_get_reg_magic(void) { return (int)reg_magic; }
+void nvim_parse_set_reg_magic(int m) { reg_magic = (magic_T)m; }
+
+// Helper functions for number parsing
+int nvim_hex2nr(int c) { return hex2nr(c); }
+int nvim_ascii_isxdigit(int c) { return ascii_isxdigit(c); }
 
 // Rust implementation
 extern int rs_vim_regcomp_had_eol(void);
