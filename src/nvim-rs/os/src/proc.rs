@@ -34,3 +34,40 @@ pub extern "C" fn rs_os_proc_running(pid: c_int) -> bool {
         true
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[cfg(unix)]
+    fn test_proc_running_current_process() {
+        // Current process should be running
+        let pid = unsafe { libc::getpid() };
+        assert!(rs_os_proc_running(pid));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_proc_running_init_process() {
+        // PID 1 (init/systemd) should always be running
+        assert!(rs_os_proc_running(1));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_proc_running_nonexistent_pid() {
+        // A very high negative PID should not exist
+        // Note: PID -1 is special (broadcasts to all processes), so we use a different value
+        // PID below -1 should return ESRCH (no such process)
+        assert!(!rs_os_proc_running(-12345));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_proc_running_unlikely_pid() {
+        // A very high PID is unlikely to exist
+        // Using a PID that's likely above the max (usually 32768 or 4194304)
+        assert!(!rs_os_proc_running(999_999_999));
+    }
+}

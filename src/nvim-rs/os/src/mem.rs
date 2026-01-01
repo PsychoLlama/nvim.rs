@@ -44,3 +44,35 @@ pub extern "C" fn rs_os_get_total_mem_kib() -> u64 {
         0
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    fn test_total_mem_nonzero() {
+        // On supported platforms, total memory should be > 0
+        let mem_kib = rs_os_get_total_mem_kib();
+        assert!(mem_kib > 0, "Total memory should be greater than 0");
+    }
+
+    #[test]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    fn test_total_mem_reasonable() {
+        // Total memory should be at least 64 MiB (reasonable minimum for any system)
+        // and less than 1 PiB (petabyte, reasonable maximum)
+        let mem_kib = rs_os_get_total_mem_kib();
+        let min_kib = 64 * 1024; // 64 MiB
+        let max_kib = 1024 * 1024 * 1024 * 1024; // 1 PiB in KiB
+
+        assert!(
+            mem_kib >= min_kib,
+            "Total memory {mem_kib} KiB should be at least {min_kib} KiB"
+        );
+        assert!(
+            mem_kib <= max_kib,
+            "Total memory {mem_kib} KiB should be at most {max_kib} KiB"
+        );
+    }
+}

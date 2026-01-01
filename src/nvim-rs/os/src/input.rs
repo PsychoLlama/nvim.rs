@@ -32,3 +32,30 @@ pub extern "C" fn rs_os_isatty(fd: c_int) -> bool {
         false
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_isatty_invalid_fd() {
+        // Negative file descriptors are never terminals
+        assert!(!rs_os_isatty(-1));
+        assert!(!rs_os_isatty(-100));
+    }
+
+    #[test]
+    fn test_isatty_high_fd() {
+        // Very high file descriptors are unlikely to be open/terminals
+        assert!(!rs_os_isatty(999));
+        assert!(!rs_os_isatty(10000));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_isatty_closed_fd() {
+        // File descriptors that are not open are not terminals
+        // We use a likely-closed FD (e.g., 100)
+        assert!(!rs_os_isatty(100));
+    }
+}
