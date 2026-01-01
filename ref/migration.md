@@ -384,7 +384,7 @@ Terminfo output infrastructure for Rust:
 - nvim_tui_get_stopped, nvim_tui_get_can_set_title
 - nvim_tui_get/set_title_enabled, nvim_tui_get_buf_space
 
-### Regexp Module (regexp.c - PHASE 1-5 MIGRATED)
+### Regexp Module (regexp.c - PHASE 1-6 COMPLETE)
 
 **Strategy:** Wrap C regex engines rather than replace them. Vim regex syntax has no equivalent Rust crate.
 
@@ -488,10 +488,27 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 - `nvim_get_reg_prev_sublen` - Get previous substitution length
 - `nvim_set_reg_prev_sub` - Set previous substitution (takes ownership)
 
-**Remaining Work (Phase 6):**
-- API wrappers (vim_regcomp, vim_regexec, vim_regsub)
-- Character scanning functions (peekchr, skipchr, getchr, ungetchr) - complex magic handling, kept in C
-- Note: Backtracking and NFA engines (~10K lines) remain in C
+**Phase 6 - API Wrappers (Rust types with RAII semantics):**
+
+*Wrapper Types:*
+- `CompiledRegex` - RAII wrapper for regprog_T*, auto-frees on drop
+- `RegmatchRaw` - FFI-compatible regmatch_T structure
+- `MatchResult` - Safe Rust type for match results with submatch positions
+
+*Methods:*
+- `CompiledRegex::compile(pattern, flags)` - Compile pattern, returns Option
+- `CompiledRegex::exec(line, col, ignore_case)` - Single-line match
+- `CompiledRegex::exec_nl(line, col, ignore_case)` - Match with newline support
+- `CompiledRegex::can_match_newline()` - Check if pattern can match \n
+- `MatchResult::submatch(n)` - Get submatch positions
+
+*Constants:*
+- `NSUBEXP` - Number of subexpressions (10)
+- `re_flags::RE_MAGIC`, `RE_NOCASE`, `RE_HASNL` - Compilation flags
+
+**Remaining in C:**
+- Character scanning functions (peekchr, skipchr, getchr, ungetchr) - complex magic handling
+- Backtracking and NFA engines (~10K lines)
 
 ### Register Module (register.c - PARTIALLY MIGRATED)
 

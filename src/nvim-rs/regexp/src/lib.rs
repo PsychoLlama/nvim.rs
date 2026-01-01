@@ -1176,6 +1176,242 @@ pub unsafe extern "C" fn rs_getoctchrs() -> i64 {
 }
 
 // =============================================================================
+// Phase 6: Public API Wrappers
+// =============================================================================
+
+/// Number of subexpressions supported (matches C NSUBEXP)
+pub const NSUBEXP: usize = 10;
+
+/// Regex compilation flags
+pub mod re_flags {
+    use std::ffi::c_int;
+
+    /// Very nomagic (\V)
+    pub const RE_MAGIC: c_int = 1;
+    /// Case-insensitive
+    pub const RE_NOCASE: c_int = 2;
+    /// Pattern contains \ze
+    pub const RE_HASNL: c_int = 4;
+}
+
+// C API function declarations
+#[allow(dead_code)]
+extern "C" {
+    /// Compile a regular expression pattern.
+    fn vim_regcomp(expr: *const c_char, re_flags: c_int) -> RegprogHandle;
+
+    /// Free a compiled regular expression.
+    fn vim_regfree(prog: RegprogHandle);
+
+    /// Execute regex against a string (single-line).
+    fn vim_regexec(rmp: *mut RegmatchRaw, line: *const c_char, col: ColNr) -> bool;
+
+    /// Execute regex against a string with newline support.
+    fn vim_regexec_nl(rmp: *mut RegmatchRaw, line: *const c_char, col: ColNr) -> bool;
+}
+
+/// Raw regmatch_T structure for FFI.
+/// This matches the C regmatch_T layout.
+#[repr(C)]
+#[derive(Clone)]
+pub struct RegmatchRaw {
+    /// Compiled regex program
+    pub regprog: RegprogHandle,
+    /// Start positions for each submatch
+    pub startp: [*mut c_char; NSUBEXP],
+    /// End positions for each submatch
+    pub endp: [*mut c_char; NSUBEXP],
+    /// Match start without \zs
+    pub rm_matchcol: ColNr,
+    /// Ignore case flag
+    pub rm_ic: bool,
+}
+
+impl Default for RegmatchRaw {
+    fn default() -> Self {
+        Self {
+            regprog: RegprogHandle::from_ptr(std::ptr::null_mut()),
+            startp: [std::ptr::null_mut(); NSUBEXP],
+            endp: [std::ptr::null_mut(); NSUBEXP],
+            rm_matchcol: 0,
+            rm_ic: false,
+        }
+    }
+}
+
+/// A compiled regular expression with RAII semantics.
+///
+/// This type owns the compiled regex program and automatically
+/// frees it when dropped.
+pub struct CompiledRegex {
+    prog: RegprogHandle,
+}
+
+impl CompiledRegex {
+    /// Compile a regular expression pattern.
+    ///
+    /// Returns `None` if compilation fails (invalid pattern).
+    ///
+    /// # Safety
+    /// Must be called from a context where Neovim's memory allocator is available.
+    #[inline]
+    pub unsafe fn compile(pattern: *const c_char, flags: c_int) -> Option<Self> {
+        let prog = vim_regcomp(pattern, flags);
+        if prog.is_null() {
+            None
+        } else {
+            Some(Self { prog })
+        }
+    }
+
+    /// Get the underlying program handle.
+    #[inline]
+    pub fn handle(&self) -> RegprogHandle {
+        self.prog
+    }
+
+    /// Check if the compiled regex can match a newline.
+    ///
+    /// # Safety
+    /// The handle must be valid.
+    #[inline]
+    pub unsafe fn can_match_newline(&self) -> bool {
+        re_multiline_impl(self.prog)
+    }
+
+    /// Execute this regex against a string.
+    ///
+    /// Returns match result if successful.
+    ///
+    /// # Safety
+    /// `line` must point to a valid null-terminated string.
+    #[inline]
+    pub unsafe fn exec(
+        &mut self,
+        line: *const c_char,
+        col: ColNr,
+        ignore_case: bool,
+    ) -> Option<MatchResult> {
+        let mut rmp = RegmatchRaw {
+            regprog: self.prog,
+            rm_ic: ignore_case,
+            ..Default::default()
+        };
+
+        if vim_regexec(&mut rmp, line, col) {
+            // Update our handle in case it was reallocated
+            self.prog = rmp.regprog;
+            Some(MatchResult::from_raw(&rmp, line))
+        } else {
+            self.prog = rmp.regprog;
+            None
+        }
+    }
+
+    /// Execute this regex against a string, treating \n as line break.
+    ///
+    /// Returns match result if successful.
+    ///
+    /// # Safety
+    /// `line` must point to a valid null-terminated string.
+    #[inline]
+    pub unsafe fn exec_nl(
+        &mut self,
+        line: *const c_char,
+        col: ColNr,
+        ignore_case: bool,
+    ) -> Option<MatchResult> {
+        let mut rmp = RegmatchRaw {
+            regprog: self.prog,
+            rm_ic: ignore_case,
+            ..Default::default()
+        };
+
+        if vim_regexec_nl(&mut rmp, line, col) {
+            self.prog = rmp.regprog;
+            Some(MatchResult::from_raw(&rmp, line))
+        } else {
+            self.prog = rmp.regprog;
+            None
+        }
+    }
+}
+
+impl Drop for CompiledRegex {
+    fn drop(&mut self) {
+        if !self.prog.is_null() {
+            // SAFETY: We own this program and it's valid
+            unsafe {
+                vim_regfree(self.prog);
+            }
+        }
+    }
+}
+
+/// Result of a successful regex match.
+///
+/// Contains the start and end positions of the overall match
+/// and any captured subgroups.
+#[derive(Debug, Clone)]
+pub struct MatchResult {
+    /// Start offset of the full match (in bytes from line start)
+    pub start: usize,
+    /// End offset of the full match (in bytes from line start)
+    pub end: usize,
+    /// Start column without \zs
+    pub match_col: ColNr,
+    /// Submatch positions: (start, end) offsets, None if not matched
+    pub submatches: [Option<(usize, usize)>; NSUBEXP],
+}
+
+impl MatchResult {
+    /// Create a MatchResult from a raw regmatch_T.
+    ///
+    /// # Safety
+    /// `rmp` must contain valid pointers from a successful match,
+    /// and `line` must be the original line that was matched against.
+    unsafe fn from_raw(rmp: &RegmatchRaw, line: *const c_char) -> Self {
+        let mut submatches = [None; NSUBEXP];
+
+        for (i, submatch) in submatches.iter_mut().enumerate() {
+            if !rmp.startp[i].is_null() && !rmp.endp[i].is_null() {
+                let start = rmp.startp[i].offset_from(line) as usize;
+                let end = rmp.endp[i].offset_from(line) as usize;
+                *submatch = Some((start, end));
+            }
+        }
+
+        // The full match is submatch 0
+        let (start, end) = submatches[0].unwrap_or((0, 0));
+
+        Self {
+            start,
+            end,
+            match_col: rmp.rm_matchcol,
+            submatches,
+        }
+    }
+
+    /// Get the matched text length in bytes.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.end - self.start
+    }
+
+    /// Check if the match is empty.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.start == self.end
+    }
+
+    /// Get a specific submatch by index (0 = full match).
+    #[inline]
+    pub fn submatch(&self, n: usize) -> Option<(usize, usize)> {
+        self.submatches.get(n).copied().flatten()
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
