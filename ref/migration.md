@@ -384,7 +384,7 @@ Terminfo output infrastructure for Rust:
 - nvim_tui_get_stopped, nvim_tui_get_can_set_title
 - nvim_tui_get/set_title_enabled, nvim_tui_get_buf_space
 
-### Regexp Module (regexp.c - PHASE 1-3 MIGRATED)
+### Regexp Module (regexp.c - PHASE 1-4 MIGRATED)
 
 **Strategy:** Wrap C regex engines rather than replace them. Vim regex syntax has no equivalent Rust crate.
 
@@ -414,7 +414,50 @@ Terminfo output infrastructure for Rust:
 **Phase 3 - Substitution Helpers (1 rs_* function):**
 - `rs_regtilde` - Replace `~` in replacement pattern with previous replacement
 
-**Accessor Functions:**
+**Phase 4 - Rex Structure Accessors (~70 accessor functions):**
+Global state infrastructure for the `rex` (regexec_T) structure enabling future phases.
+
+*Current Position:*
+- `nvim_rex_get/set_lnum` - Current line number
+- `nvim_rex_get/set_line` - Current line pointer
+- `nvim_rex_get/set_input` - Current scan position
+
+*Match Results (10 submatches):*
+- `nvim_rex_get_reg_startp/endp` - Single-line match positions
+- `nvim_rex_get_reg_startpos/endpos` - Multi-line match positions
+
+*Buffer/Window Context:*
+- `nvim_rex_get/set_reg_win` - Window handle
+- `nvim_rex_get/set_reg_buf` - Buffer handle
+- `nvim_rex_get/set_reg_firstlnum` - First line number
+- `nvim_rex_get/set_reg_maxline` - Maximum lines to match
+
+*Match State:*
+- `nvim_rex_get/set_reg_match` - Single-line match structure
+- `nvim_rex_get/set_reg_mmatch` - Multi-line match structure
+- `nvim_rex_get_reg_startcol` - Starting column for match
+- `nvim_rex_get/set_reg_maxcol` - Maximum column for match
+
+*Flags:*
+- `nvim_rex_get/set_reg_ic` - Ignore case flag
+- `nvim_rex_get/set_reg_icombine` - Ignore combining flag
+- `nvim_rex_get/set_nfa_has_zend` - NFA has \ze
+- `nvim_rex_get/set_nfa_has_backref` - NFA has backreference
+- `nvim_rex_get/set_nfa_nsubexpr` - Number of subexpressions
+- `nvim_rex_get/set_nfa_listid` - List ID counter
+
+*Line Accessor:*
+- `nvim_rex_get_line_fn` - Line getter function pointer
+
+**Opaque Handles:**
+- `RegprogHandle` - Opaque wrapper for regprog_T*
+- `RegmatchHandle` - Opaque wrapper for regmatch_T*
+- `RegmmatchHandle` - Opaque wrapper for regmmatch_T*
+- `WinHandle` - Opaque wrapper for win_T*
+- `BufHandle` - Opaque wrapper for buf_T*
+- `LposHandle` - Opaque wrapper for lpos_T*
+
+**Other Accessor Functions:**
 - `nvim_regprog_get_regflags` - Get regflags from regprog_T
 - `nvim_get_reg_cpo_lit` - Get reg_cpo_lit flag for 'cpoptions'
 - `nvim_get_char_class` - Wrapper for get_char_class (POSIX class parsing)
@@ -422,13 +465,7 @@ Terminfo output infrastructure for Rust:
 - `nvim_get_reg_prev_sublen` - Get previous substitution length
 - `nvim_set_reg_prev_sub` - Set previous substitution (takes ownership)
 
-**Opaque Handles:**
-- `RegprogHandle` - Opaque wrapper for regprog_T*
-- `RegmatchHandle` - Opaque wrapper for regmatch_T*
-- `RegmmatchHandle` - Opaque wrapper for regmmatch_T*
-
-**Remaining Work (Phases 4-6):**
-- Global state infrastructure (rex structure accessors)
+**Remaining Work (Phases 5-6):**
 - Compilation helpers (parse state, char scanning)
 - API wrappers (vim_regcomp, vim_regexec, vim_regsub)
 - Note: Backtracking and NFA engines (~10K lines) remain in C

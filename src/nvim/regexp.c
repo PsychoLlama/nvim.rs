@@ -5415,6 +5415,80 @@ void nvim_set_reg_prev_sub(char *s, size_t len) {
   reg_prev_sublen = len;
 }
 
+// =============================================================================
+// Phase 4: rex structure accessors (used by Rust)
+// =============================================================================
+
+// Current position accessors
+linenr_T nvim_rex_get_lnum(void) { return rex.lnum; }
+void nvim_rex_set_lnum(linenr_T lnum) { rex.lnum = lnum; }
+uint8_t *nvim_rex_get_line(void) { return rex.line; }
+void nvim_rex_set_line(uint8_t *line) { rex.line = line; }
+uint8_t *nvim_rex_get_input(void) { return rex.input; }
+void nvim_rex_set_input(uint8_t *input) { rex.input = input; }
+
+// Match state accessors
+regmatch_T *nvim_rex_get_reg_match(void) { return rex.reg_match; }
+void nvim_rex_set_reg_match(regmatch_T *m) { rex.reg_match = m; }
+regmmatch_T *nvim_rex_get_reg_mmatch(void) { return rex.reg_mmatch; }
+void nvim_rex_set_reg_mmatch(regmmatch_T *m) { rex.reg_mmatch = m; }
+
+// Submatch position accessors
+uint8_t **nvim_rex_get_reg_startp(void) { return rex.reg_startp; }
+void nvim_rex_set_reg_startp(uint8_t **p) { rex.reg_startp = p; }
+uint8_t **nvim_rex_get_reg_endp(void) { return rex.reg_endp; }
+void nvim_rex_set_reg_endp(uint8_t **p) { rex.reg_endp = p; }
+lpos_T *nvim_rex_get_reg_startpos(void) { return rex.reg_startpos; }
+void nvim_rex_set_reg_startpos(lpos_T *p) { rex.reg_startpos = p; }
+lpos_T *nvim_rex_get_reg_endpos(void) { return rex.reg_endpos; }
+void nvim_rex_set_reg_endpos(lpos_T *p) { rex.reg_endpos = p; }
+
+// Buffer/window context accessors
+win_T *nvim_rex_get_reg_win(void) { return rex.reg_win; }
+void nvim_rex_set_reg_win(win_T *win) { rex.reg_win = win; }
+buf_T *nvim_rex_get_reg_buf(void) { return rex.reg_buf; }
+void nvim_rex_set_reg_buf(buf_T *buf) { rex.reg_buf = buf; }
+linenr_T nvim_rex_get_reg_firstlnum(void) { return rex.reg_firstlnum; }
+void nvim_rex_set_reg_firstlnum(linenr_T lnum) { rex.reg_firstlnum = lnum; }
+linenr_T nvim_rex_get_reg_maxline(void) { return rex.reg_maxline; }
+void nvim_rex_set_reg_maxline(linenr_T lnum) { rex.reg_maxline = lnum; }
+
+// Flag accessors
+bool nvim_rex_get_reg_ic(void) { return rex.reg_ic; }
+void nvim_rex_set_reg_ic(bool ic) { rex.reg_ic = ic; }
+bool nvim_rex_get_reg_icombine(void) { return rex.reg_icombine; }
+void nvim_rex_set_reg_icombine(bool ic) { rex.reg_icombine = ic; }
+bool nvim_rex_get_reg_line_lbr(void) { return rex.reg_line_lbr; }
+void nvim_rex_set_reg_line_lbr(bool lbr) { rex.reg_line_lbr = lbr; }
+bool nvim_rex_get_reg_nobreak(void) { return rex.reg_nobreak; }
+void nvim_rex_set_reg_nobreak(bool nb) { rex.reg_nobreak = nb; }
+colnr_T nvim_rex_get_reg_maxcol(void) { return rex.reg_maxcol; }
+void nvim_rex_set_reg_maxcol(colnr_T col) { rex.reg_maxcol = col; }
+
+// Subexpression clearing flags
+int nvim_rex_get_need_clear_subexpr(void) { return rex.need_clear_subexpr; }
+void nvim_rex_set_need_clear_subexpr(int v) { rex.need_clear_subexpr = v; }
+int nvim_rex_get_need_clear_zsubexpr(void) { return rex.need_clear_zsubexpr; }
+void nvim_rex_set_need_clear_zsubexpr(int v) { rex.need_clear_zsubexpr = v; }
+
+// NFA engine state accessors
+int nvim_rex_get_nfa_has_zend(void) { return rex.nfa_has_zend; }
+void nvim_rex_set_nfa_has_zend(int v) { rex.nfa_has_zend = v; }
+int nvim_rex_get_nfa_has_backref(void) { return rex.nfa_has_backref; }
+void nvim_rex_set_nfa_has_backref(int v) { rex.nfa_has_backref = v; }
+int nvim_rex_get_nfa_nsubexpr(void) { return rex.nfa_nsubexpr; }
+void nvim_rex_set_nfa_nsubexpr(int v) { rex.nfa_nsubexpr = v; }
+int nvim_rex_get_nfa_listid(void) { return rex.nfa_listid; }
+void nvim_rex_set_nfa_listid(int v) { rex.nfa_listid = v; }
+int nvim_rex_get_nfa_alt_listid(void) { return rex.nfa_alt_listid; }
+void nvim_rex_set_nfa_alt_listid(int v) { rex.nfa_alt_listid = v; }
+int nvim_rex_get_nfa_has_zsubexpr(void) { return rex.nfa_has_zsubexpr; }
+void nvim_rex_set_nfa_has_zsubexpr(int v) { rex.nfa_has_zsubexpr = v; }
+
+// rex_in_use flag accessor
+bool nvim_rex_in_use(void) { return rex_in_use; }
+void nvim_rex_set_in_use(bool in_use) { rex_in_use = in_use; }
+
 // Rust implementation
 extern int rs_vim_regcomp_had_eol(void);
 

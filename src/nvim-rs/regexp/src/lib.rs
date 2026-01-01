@@ -130,10 +130,83 @@ impl RegmmatchHandle {
     }
 }
 
+/// Opaque handle to win_T (window).
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct WinHandle(*mut std::ffi::c_void);
+
+impl WinHandle {
+    #[inline]
+    pub const fn from_ptr(ptr: *mut std::ffi::c_void) -> Self {
+        Self(ptr)
+    }
+
+    #[inline]
+    pub const fn as_ptr(self) -> *mut std::ffi::c_void {
+        self.0
+    }
+
+    #[inline]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+/// Opaque handle to buf_T (buffer).
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct BufHandle(*mut std::ffi::c_void);
+
+impl BufHandle {
+    #[inline]
+    pub const fn from_ptr(ptr: *mut std::ffi::c_void) -> Self {
+        Self(ptr)
+    }
+
+    #[inline]
+    pub const fn as_ptr(self) -> *mut std::ffi::c_void {
+        self.0
+    }
+
+    #[inline]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+/// Opaque handle to lpos_T (line/column position).
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct LposHandle(*mut std::ffi::c_void);
+
+impl LposHandle {
+    #[inline]
+    pub const fn from_ptr(ptr: *mut std::ffi::c_void) -> Self {
+        Self(ptr)
+    }
+
+    #[inline]
+    pub const fn as_ptr(self) -> *mut std::ffi::c_void {
+        self.0
+    }
+
+    #[inline]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+// Type aliases for C types
+#[allow(dead_code)]
+type LineNr = c_int; // linenr_T
+#[allow(dead_code)]
+type ColNr = c_int; // colnr_T
+
 // =============================================================================
 // FFI Declarations
 // =============================================================================
 
+#[allow(dead_code)] // Phase 4 accessors are infrastructure for future phases
 extern "C" {
     /// Get the regflags field from a regprog_T.
     fn nvim_regprog_get_regflags(prog: RegprogHandle) -> c_int;
@@ -172,6 +245,80 @@ extern "C" {
 
     /// Display error message.
     fn emsg(s: *const c_char);
+
+    // =========================================================================
+    // Phase 4: rex structure accessors
+    // =========================================================================
+
+    // Current position accessors
+    fn nvim_rex_get_lnum() -> LineNr;
+    fn nvim_rex_set_lnum(lnum: LineNr);
+    fn nvim_rex_get_line() -> *mut u8;
+    fn nvim_rex_set_line(line: *mut u8);
+    fn nvim_rex_get_input() -> *mut u8;
+    fn nvim_rex_set_input(input: *mut u8);
+
+    // Match state accessors
+    fn nvim_rex_get_reg_match() -> RegmatchHandle;
+    fn nvim_rex_set_reg_match(m: RegmatchHandle);
+    fn nvim_rex_get_reg_mmatch() -> RegmmatchHandle;
+    fn nvim_rex_set_reg_mmatch(m: RegmmatchHandle);
+
+    // Submatch position accessors
+    fn nvim_rex_get_reg_startp() -> *mut *mut u8;
+    fn nvim_rex_set_reg_startp(p: *mut *mut u8);
+    fn nvim_rex_get_reg_endp() -> *mut *mut u8;
+    fn nvim_rex_set_reg_endp(p: *mut *mut u8);
+    fn nvim_rex_get_reg_startpos() -> LposHandle;
+    fn nvim_rex_set_reg_startpos(p: LposHandle);
+    fn nvim_rex_get_reg_endpos() -> LposHandle;
+    fn nvim_rex_set_reg_endpos(p: LposHandle);
+
+    // Buffer/window context accessors
+    fn nvim_rex_get_reg_win() -> WinHandle;
+    fn nvim_rex_set_reg_win(win: WinHandle);
+    fn nvim_rex_get_reg_buf() -> BufHandle;
+    fn nvim_rex_set_reg_buf(buf: BufHandle);
+    fn nvim_rex_get_reg_firstlnum() -> LineNr;
+    fn nvim_rex_set_reg_firstlnum(lnum: LineNr);
+    fn nvim_rex_get_reg_maxline() -> LineNr;
+    fn nvim_rex_set_reg_maxline(lnum: LineNr);
+
+    // Flag accessors
+    fn nvim_rex_get_reg_ic() -> bool;
+    fn nvim_rex_set_reg_ic(ic: bool);
+    fn nvim_rex_get_reg_icombine() -> bool;
+    fn nvim_rex_set_reg_icombine(ic: bool);
+    fn nvim_rex_get_reg_line_lbr() -> bool;
+    fn nvim_rex_set_reg_line_lbr(lbr: bool);
+    fn nvim_rex_get_reg_nobreak() -> bool;
+    fn nvim_rex_set_reg_nobreak(nb: bool);
+    fn nvim_rex_get_reg_maxcol() -> ColNr;
+    fn nvim_rex_set_reg_maxcol(col: ColNr);
+
+    // Subexpression clearing flags
+    fn nvim_rex_get_need_clear_subexpr() -> c_int;
+    fn nvim_rex_set_need_clear_subexpr(v: c_int);
+    fn nvim_rex_get_need_clear_zsubexpr() -> c_int;
+    fn nvim_rex_set_need_clear_zsubexpr(v: c_int);
+
+    // NFA engine state accessors
+    fn nvim_rex_get_nfa_has_zend() -> c_int;
+    fn nvim_rex_set_nfa_has_zend(v: c_int);
+    fn nvim_rex_get_nfa_has_backref() -> c_int;
+    fn nvim_rex_set_nfa_has_backref(v: c_int);
+    fn nvim_rex_get_nfa_nsubexpr() -> c_int;
+    fn nvim_rex_set_nfa_nsubexpr(v: c_int);
+    fn nvim_rex_get_nfa_listid() -> c_int;
+    fn nvim_rex_set_nfa_listid(v: c_int);
+    fn nvim_rex_get_nfa_alt_listid() -> c_int;
+    fn nvim_rex_set_nfa_alt_listid(v: c_int);
+    fn nvim_rex_get_nfa_has_zsubexpr() -> c_int;
+    fn nvim_rex_set_nfa_has_zsubexpr(v: c_int);
+
+    // rex_in_use flag
+    fn nvim_rex_in_use() -> bool;
+    fn nvim_rex_set_in_use(in_use: bool);
 }
 
 // MAXCOL constant - maximum column number
