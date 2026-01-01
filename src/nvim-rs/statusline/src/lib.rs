@@ -308,4 +308,34 @@ mod tests {
         // Should write "10-" (truncated)
         assert!(len <= 3);
     }
+
+    #[test]
+    fn test_stl_click_type_values() {
+        // Verify enum values match C definitions
+        assert_eq!(StlClickType::Disabled as c_int, 0);
+        assert_eq!(StlClickType::TabSwitch as c_int, 1);
+        assert_eq!(StlClickType::TabClose as c_int, 2);
+        assert_eq!(StlClickType::FuncRun as c_int, 3);
+    }
+
+    #[test]
+    fn test_stl_click_definition_disabled() {
+        let def = StlClickDefinition::disabled();
+        assert!(def.is_disabled());
+        assert_eq!(def.tabnr, 0);
+        assert!(def.func.is_null());
+    }
+
+    #[test]
+    fn test_highlight_group_constants() {
+        // Verify highlight groups match C definitions
+        assert_eq!(HLF_S, 27);   // StatusLine
+        assert_eq!(HLF_SNC, 28); // StatusLineNC
+    }
+
+    #[test]
+    fn test_tabpage_handle_null() {
+        let handle = TabpageHandle::null();
+        assert!(handle.is_null());
+    }
 }

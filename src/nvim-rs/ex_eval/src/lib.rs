@@ -84,9 +84,11 @@ pub unsafe extern "C" fn rs_update_force_abort() {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
-    fn test_placeholder() {
-        // Basic test to verify compilation
-        assert!(true);
+    fn test_fail_constant() {
+        // FAIL should be 0 (matching vim_defs.h)
+        assert_eq!(FAIL, 0);
     }
 }
