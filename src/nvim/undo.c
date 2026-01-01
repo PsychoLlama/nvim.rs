@@ -153,6 +153,7 @@ extern void rs_u_freebranch(buf_T *buf, u_header_T *uhp, u_header_T **uhpp);
 extern u_entry_T *rs_u_get_headentry(buf_T *buf);
 extern void rs_u_getbot(buf_T *buf);
 extern void rs_u_blockfree(buf_T *buf);
+extern void rs_u_sync(bool force);
 
 // Feature flag for Rust undo functions
 #define USE_RUST_UNDO 1
@@ -2659,6 +2660,9 @@ void undo_fmt_time(char *buf, size_t buflen, time_t tt)
 /// @param force  if true, also sync when no_u_sync is set.
 void u_sync(bool force)
 {
+#ifdef USE_RUST_UNDO
+  rs_u_sync(force);
+#else
   // Skip it when already synced or syncing is disabled.
   if (curbuf->b_u_synced || (!force && no_u_sync > 0)) {
     return;
@@ -2670,6 +2674,7 @@ void u_sync(bool force)
     u_getbot(curbuf);  // compute ue_bot of previous u_save
     curbuf->b_u_curhead = NULL;
   }
+#endif
 }
 
 /// ":undolist": List the leafs of the undo tree
@@ -3610,4 +3615,16 @@ void nvim_iemsg_undo_list_corrupt(void)
 void nvim_iemsg_undo_line_missing(void)
 {
   iemsg(_(e_undo_line_missing));
+}
+
+// Global state accessors
+int nvim_get_no_u_sync(void)
+{
+  return no_u_sync;
+}
+
+// Wrapper for get_undolevel
+OptInt nvim_get_undolevel(buf_T *buf)
+{
+  return get_undolevel(buf);
 }

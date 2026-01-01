@@ -123,6 +123,10 @@ extern "C" {
     // Error message wrappers
     fn nvim_iemsg_undo_list_corrupt();
     fn nvim_iemsg_undo_line_missing();
+
+    // Global state accessors
+    fn nvim_get_no_u_sync() -> c_int;
+    fn nvim_get_undolevel(buf: BufHandle) -> i64;
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed.
@@ -440,6 +444,33 @@ pub unsafe extern "C" fn rs_u_blockfree(buf: BufHandle) {
     // Free the line saved for "U" command
     let line_ptr = nvim_buf_get_b_u_line_ptr(buf);
     nvim_xfree(line_ptr as *mut c_void);
+}
+
+/// Stop adding to the current entry list.
+///
+/// # Safety
+///
+/// Accesses global curbuf via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_sync(force: bool) {
+    let buf = nvim_get_curbuf();
+
+    // Skip it when already synced or syncing is disabled.
+    if nvim_buf_get_b_u_synced(buf) {
+        return;
+    }
+    if !force && nvim_get_no_u_sync() > 0 {
+        return;
+    }
+
+    if nvim_get_undolevel(buf) < 0 {
+        // No entries, nothing to do
+        nvim_buf_set_b_u_synced(buf, true);
+    } else {
+        // Compute ue_bot of previous u_save
+        rs_u_getbot(buf);
+        nvim_buf_set_b_u_curhead(buf, UHeaderHandle(std::ptr::null_mut()));
+    }
 }
 
 #[cfg(test)]
