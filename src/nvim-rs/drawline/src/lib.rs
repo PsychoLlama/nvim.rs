@@ -2193,4 +2193,57 @@ mod tests {
             std::mem::size_of::<*mut c_void>()
         );
     }
+
+    #[test]
+    fn test_highlight_group_constants() {
+        // Verify highlight group constants match C definitions
+        assert_eq!(HLF_AT, 4);   // NonText
+        assert_eq!(HLF_N, 12);   // LineNr
+        assert_eq!(HLF_LNA, 13); // LineNrAbove
+        assert_eq!(HLF_LNB, 14); // LineNrBelow
+        assert_eq!(HLF_CLN, 15); // CursorLineNr
+        assert_eq!(HLF_CLS, 16); // CursorLineSign
+        assert_eq!(HLF_CLF, 17); // CursorLineFold
+        assert_eq!(HLF_FC, 29);  // FoldColumn
+        assert_eq!(HLF_DED, 31); // DiffDelete
+        assert_eq!(HLF_SC, 35);  // SignColumn
+    }
+
+    #[test]
+    fn test_cursorlineopt_flags() {
+        // Verify cursorlineopt flags match C definitions
+        assert_eq!(K_OPT_CULOPT_FLAG_LINE, 0x01);
+        assert_eq!(K_OPT_CULOPT_FLAG_SCREENLINE, 0x02);
+        assert_eq!(K_OPT_CULOPT_FLAG_NUMBER, 0x04);
+        // Flags should be distinct powers of 2
+        let flags = [
+            K_OPT_CULOPT_FLAG_LINE,
+            K_OPT_CULOPT_FLAG_SCREENLINE,
+            K_OPT_CULOPT_FLAG_NUMBER,
+        ];
+        for (i, &a) in flags.iter().enumerate() {
+            for (j, &b) in flags.iter().enumerate() {
+                if i != j {
+                    assert_eq!(a & b, 0, "flags {i} and {j} should not overlap");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_sign_width_constant() {
+        assert_eq!(SIGN_WIDTH, 2);
+    }
+
+    #[test]
+    fn test_foldinfo_default() {
+        let fi = FoldInfo {
+            fi_lnum: 0,
+            fi_level: 0,
+            fi_low_level: 0,
+            fi_lines: 0,
+        };
+        assert_eq!(fi.fi_level, 0);
+        assert_eq!(fi.fi_lines, 0);
+    }
 }
