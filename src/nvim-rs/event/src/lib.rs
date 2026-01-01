@@ -2337,4 +2337,45 @@ mod tests {
         let event = Event::nil();
         assert_eq!(event.argv.len(), EVENT_HANDLER_MAX_ARGC);
     }
+
+    #[test]
+    fn test_all_handle_types_null() {
+        // Test all handle types have working null() and is_null() methods
+        assert!(ProcHandle::null().is_null());
+        assert!(StreamHandle::null().is_null());
+        assert!(RStreamHandle::null().is_null());
+        assert!(SignalWatcherHandle::null().is_null());
+        assert!(SocketWatcherHandle::null().is_null());
+    }
+
+    #[test]
+    fn test_handle_sizes() {
+        use std::ffi::c_void;
+        // All handles should be pointer-sized (transparent wrapper over *mut c_void)
+        let ptr_size = std::mem::size_of::<*mut c_void>();
+        assert_eq!(std::mem::size_of::<LoopHandle>(), ptr_size);
+        assert_eq!(std::mem::size_of::<MultiQueueHandle>(), ptr_size);
+        assert_eq!(std::mem::size_of::<TimeWatcherHandle>(), ptr_size);
+        assert_eq!(std::mem::size_of::<ProcHandle>(), ptr_size);
+        assert_eq!(std::mem::size_of::<StreamHandle>(), ptr_size);
+        assert_eq!(std::mem::size_of::<RStreamHandle>(), ptr_size);
+        assert_eq!(std::mem::size_of::<SignalWatcherHandle>(), ptr_size);
+        assert_eq!(std::mem::size_of::<SocketWatcherHandle>(), ptr_size);
+    }
+
+    #[test]
+    fn test_event_queue_size() {
+        // EventQueue should be 2 pointers
+        let ptr_size = std::mem::size_of::<*mut EventQueue>();
+        assert_eq!(std::mem::size_of::<EventQueue>(), 2 * ptr_size);
+    }
+
+    #[test]
+    fn test_event_structure_size() {
+        // Event should be: 1 Option<fn ptr> + 10 pointers
+        // On 64-bit: 8 + 80 = 88 bytes (but Option<fn ptr> may have alignment)
+        let event_size = std::mem::size_of::<Event>();
+        // Just verify it's reasonable (at least handler + 10 pointers)
+        assert!(event_size >= 11 * std::mem::size_of::<*mut std::ffi::c_void>());
+    }
 }

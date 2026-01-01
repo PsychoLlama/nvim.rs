@@ -110,4 +110,40 @@ mod tests {
             assert_ne!(flag, 0, "Flag should not be zero");
         }
     }
+
+    #[test]
+    fn test_diff_flag_bit_positions() {
+        // Verify exact bit positions for each flag
+        assert_eq!(DIFF_FILLER, 1 << 0); // bit 0
+        assert_eq!(DIFF_HORIZONTAL, 1 << 6); // bit 6
+        assert_eq!(DIFF_HIDDEN_OFF, 1 << 8); // bit 8
+        assert_eq!(DIFF_INTERNAL, 1 << 9); // bit 9
+        assert_eq!(DIFF_CLOSE_OFF, 1 << 10); // bit 10
+    }
+
+    #[test]
+    fn test_diff_flag_combinations() {
+        // Test that combining flags works correctly
+        let combined = DIFF_FILLER | DIFF_HORIZONTAL | DIFF_INTERNAL;
+
+        // Check each flag is set in the combination
+        assert_ne!(combined & DIFF_FILLER, 0);
+        assert_ne!(combined & DIFF_HORIZONTAL, 0);
+        assert_ne!(combined & DIFF_INTERNAL, 0);
+
+        // Check other flags are not set
+        assert_eq!(combined & DIFF_HIDDEN_OFF, 0);
+        assert_eq!(combined & DIFF_CLOSE_OFF, 0);
+    }
+
+    #[test]
+    fn test_diff_all_flags_combined() {
+        // All flags combined should produce a valid mask
+        let all_flags =
+            DIFF_FILLER | DIFF_HORIZONTAL | DIFF_HIDDEN_OFF | DIFF_INTERNAL | DIFF_CLOSE_OFF;
+        // Verify it's positive (no overflow from OR operations)
+        assert!(all_flags > 0);
+        // Verify expected combined value: 0x001 | 0x040 | 0x100 | 0x200 | 0x400 = 0x741
+        assert_eq!(all_flags, 0x741);
+    }
 }

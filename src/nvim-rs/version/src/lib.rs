@@ -291,4 +291,39 @@ mod tests {
         assert_eq!(parse_int(b""), None);
         assert_eq!(parse_int(b"12a"), None);
     }
+
+    #[test]
+    fn test_parse_version_string_large_numbers() {
+        // Test with larger version numbers
+        assert_eq!(parse_version_string(b"10.20.30"), Some((10, 20, 30)));
+        assert_eq!(parse_version_string(b"100.200.300"), Some((100, 200, 300)));
+    }
+
+    #[test]
+    fn test_parse_version_string_edge_cases() {
+        // Version with zeros
+        assert_eq!(parse_version_string(b"0.0.0"), Some((0, 0, 0)));
+        // Just zero
+        assert_eq!(parse_version_string(b"0"), Some((0, 0, 0)));
+        // Invalid: multiple dots
+        assert_eq!(parse_version_string(b"1..2"), None);
+        // Invalid: leading dot
+        assert_eq!(parse_version_string(b".1.2"), None);
+    }
+
+    #[test]
+    fn test_parse_int_edge_cases() {
+        // Single digit
+        assert_eq!(parse_int(b"5"), Some(5));
+        // Leading zeros are allowed
+        assert_eq!(parse_int(b"007"), Some(7));
+        // All digits
+        assert_eq!(parse_int(b"1234567890"), Some(1_234_567_890));
+    }
+
+    #[test]
+    fn test_parse_int_overflow() {
+        // Very large number that would overflow - should return None
+        assert!(parse_int(b"99999999999999999999").is_none());
+    }
 }
