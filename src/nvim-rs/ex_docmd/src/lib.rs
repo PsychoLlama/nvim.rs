@@ -354,4 +354,39 @@ mod tests {
         let result = unsafe { rs_check_nextcmd(ptr::null()) };
         assert!(result.is_null());
     }
+
+    #[test]
+    fn test_ends_excmd_all_terminators() {
+        // Test all four terminators explicitly
+        let terminators = [0, b'|' as i32, b'"' as i32, b'\n' as i32];
+        for term in terminators {
+            assert!(
+                ends_excmd(term),
+                "Character {} should be a terminator",
+                term
+            );
+        }
+    }
+
+    #[test]
+    fn test_find_nextcmd_first_char() {
+        // Separator as first character
+        assert_eq!(find_nextcmd(b"|rest\0"), Some(1));
+        assert_eq!(find_nextcmd(b"\nrest\0"), Some(1));
+    }
+
+    #[test]
+    fn test_check_nextcmd_only_whitespace() {
+        // Only whitespace followed by non-separator
+        assert_eq!(check_nextcmd(b"   \0"), None);
+        // Only whitespace followed by NUL (empty)
+        assert_eq!(check_nextcmd(b"\t\t\t\0"), None);
+    }
+
+    #[test]
+    fn test_check_nextcmd_mixed_whitespace() {
+        // Mix of spaces and tabs before separator
+        assert_eq!(check_nextcmd(b" \t \t|x\0"), Some(5));
+        assert_eq!(check_nextcmd(b"\t \t \nx\0"), Some(5));
+    }
 }
