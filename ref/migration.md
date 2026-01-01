@@ -564,11 +564,26 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 
 ### Undo Module (undo.c - PARTIALLY MIGRATED)
 
-**Migrated Functions (4 rs_* functions):**
+**Migrated Functions (12 rs_* functions):**
+
+*Group A - Utilities:*
 - `rs_bufIsChanged` - Check if buffer is modified or file format differs
 - `rs_anyBufIsChanged` - Check if any buffer has changes
+- `rs_curbufIsChanged` - Check if current buffer has changes
 - `rs_u_clearall` - Invalidate undo buffer when storage released
 - `rs_u_clearline` - Clear line saved for "U" command
+
+*Group C - Tree Management:*
+- `rs_u_freeentry` - Free undo entry and array elements
+- `rs_u_freeentries` - Free all entries for a header
+- `rs_u_freeheader` - Free header and adjust pointers
+- `rs_u_freebranch` - Free alternate branch recursively
+- `rs_u_get_headentry` - Get first entry in undo header
+- `rs_u_getbot` - Compute line number for previous u_save
+- `rs_u_blockfree` - Free all undo headers and entries
+
+*Group D - Save Functions:*
+- `rs_u_sync` - Stop adding to current entry list
 
 **Accessor Functions (~40):**
 
@@ -607,14 +622,28 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 - `nvim_uep_get/set_lcount` - Line count at save
 - `nvim_uep_get/set_size` - Number of lines in array
 - `nvim_uep_get/set_array` - Lines array
+- `nvim_uep_get/set_array_element` - Individual array element
+
+*Memory/allocation accessors:*
+- `nvim_alloc_u_entry` - Allocate u_entry_T
+- `nvim_alloc_u_header` - Allocate u_header_T
+- `nvim_uhp_destroy_extmark` - Free extmark vector
+
+*Additional accessors:*
+- `nvim_buf_get_ml_line_count` - Buffer line count
+- `nvim_get_no_u_sync` - Global no_u_sync counter
+- `nvim_get_undolevel` - Get buffer's undolevel
+- `nvim_iemsg_undo_list_corrupt` - Error message wrapper
+- `nvim_iemsg_undo_line_missing` - Error message wrapper
 
 **Remaining Functions (complex, need extensive infrastructure):**
 - `undo_allowed` - Global state checks (MODIFIABLE, sandbox, textlock)
-- `undo_fmt_time` - Localized time formatting
+- `undo_fmt_time` - Localized time formatting with NGETTEXT
 - `u_savecommon` - ~250 lines, many dependencies
 - `u_undoredo` - ~250 lines, ml_*, marks, extmarks
 - `undo_time` - ~320 lines, complex tree traversal
 - `u_write_undo`, `u_read_undo` - File I/O, security checks
+- `serialize_*`, `unserialize_*` - File I/O with bufinfo_T
 
 ### Complex Memory/Buffer Operations
 Functions involving memory management or buffer content access:
