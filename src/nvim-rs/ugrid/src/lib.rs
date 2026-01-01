@@ -280,4 +280,28 @@ mod tests {
     fn test_space_schar_constant() {
         assert_eq!(SPACE_SCHAR, schar_from_ascii(b' '));
     }
+
+    #[test]
+    fn test_ucell_default() {
+        let cell = UCell::default();
+        assert_eq!(cell.data, 0);
+        assert_eq!(cell.attr, 0);
+    }
+
+    #[test]
+    fn test_ucell_size() {
+        // UCell should be 8 bytes (4 for data + 4 for attr)
+        assert_eq!(std::mem::size_of::<UCell>(), 8);
+    }
+
+    #[test]
+    fn test_schar_from_ascii_range() {
+        // Test various ASCII characters
+        #[cfg(target_endian = "little")]
+        {
+            assert_eq!(schar_from_ascii(b'A'), 0x41);
+            assert_eq!(schar_from_ascii(b'0'), 0x30);
+            assert_eq!(schar_from_ascii(0), 0);
+        }
+    }
 }
