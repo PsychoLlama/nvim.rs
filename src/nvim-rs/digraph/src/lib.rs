@@ -155,6 +155,17 @@ mod tests {
     }
 
     #[test]
+    fn test_is_special_boundary() {
+        // Boundary at 0
+        assert!(!is_special(0));
+        assert!(is_special(-1));
+        // Large negative values
+        assert!(is_special(c_int::MIN));
+        // Large positive values
+        assert!(!is_special(c_int::MAX));
+    }
+
+    #[test]
     fn test_meta_char_logic() {
         // When char1 is space and meta_char is true, result should be char2 | 0x80
         let char2: c_int = 97; // 'a'
@@ -166,7 +177,41 @@ mod tests {
     }
 
     #[test]
+    fn test_meta_char_various_chars() {
+        // Test meta-char conversion for various characters
+        assert_eq!(c_int::from(b'a') | 0x80, 225);
+        assert_eq!(c_int::from(b'z') | 0x80, 250);
+        assert_eq!(c_int::from(b'A') | 0x80, 193);
+        assert_eq!(c_int::from(b'0') | 0x80, 176);
+    }
+
+    #[test]
     fn test_space_constant() {
         assert_eq!(SPACE, 32);
+        assert_eq!(SPACE, c_int::from(b' '));
+    }
+
+    #[test]
+    #[allow(clippy::cast_sign_loss)]
+    fn test_char_truncation() {
+        // Test the truncation logic used in getexactdigraph_impl
+        let char1: c_int = 0x141; // 'A' + 0x100
+        let char1_u8 = (char1 & 0xFF) as u8;
+        assert_eq!(char1_u8, b'A');
+
+        // Negative values also truncate correctly
+        let char2: c_int = -1;
+        let char2_u8 = (char2 & 0xFF) as u8;
+        assert_eq!(char2_u8, 0xFF);
+    }
+
+    #[test]
+    fn test_digr_t_size() {
+        // DigrT should be packed for FFI compatibility
+        use std::mem::size_of;
+        // char1 (1) + char2 (1) + padding (2) + result (4) = 8 bytes on most platforms
+        // The exact size depends on alignment, but it should be consistent
+        assert!(size_of::<DigrT>() >= 6); // minimum: 1 + 1 + 4
+        assert!(size_of::<DigrT>() <= 12); // maximum with padding
     }
 }
