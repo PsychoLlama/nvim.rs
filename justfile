@@ -79,7 +79,9 @@ rust-test:
       -p nvim-profile \
       -p nvim-register \
       -p nvim-spell \
-      -p nvim-strings
+      -p nvim-strings \
+      -p nvim-unpacker \
+      -p nvim-version
 
 # Run Rust linter
 rust-clippy:
