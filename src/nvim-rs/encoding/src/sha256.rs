@@ -424,4 +424,11 @@ mod tests {
             "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0"
         );
     }
+
+    #[test]
+    fn test_sha256_size_constants() {
+        // Verify SHA-256 size constants match standard
+        assert_eq!(SHA256_SUM_SIZE, 32); // 256 bits = 32 bytes
+        assert_eq!(SHA256_BUFFER_SIZE, 64); // 512 bits = 64 bytes per block
+    }
 }
