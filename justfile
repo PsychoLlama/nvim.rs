@@ -74,6 +74,7 @@ rust-test:
       -p nvim-grid \
       -p nvim-help \
       -p nvim-indent \
+      -p nvim-insexpand \
       -p nvim-keycodes \
       -p nvim-linematch \
       -p nvim-mark \
