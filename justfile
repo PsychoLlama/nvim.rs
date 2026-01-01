@@ -61,6 +61,9 @@ rust-test:
       -p nvim-cmdhist \
       -p nvim-collections \
       -p nvim-compositor \
+      -p nvim-context \
+      -p nvim-cursor-shape \
+      -p nvim-diff \
       -p nvim-encoding \
       -p nvim-eval \
       -p nvim-event \
