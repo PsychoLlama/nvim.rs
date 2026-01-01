@@ -84,6 +84,7 @@ rust-test:
       -p nvim-register \
       -p nvim-spell \
       -p nvim-strings \
+      -p nvim-tui \
       -p nvim-ugrid \
       -p nvim-unpacker \
       -p nvim-version

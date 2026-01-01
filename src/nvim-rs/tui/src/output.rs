@@ -48,14 +48,15 @@ unsafe fn attrs_differ_impl(
     attrs: *const HlAttrs,
     attrs_size: usize,
 ) -> bool {
-    // Same ID means same attributes
-    if id1 == id2 {
-        return false;
-    }
-
     // Negative IDs indicate special/missing attributes - always differ
+    // (even if both are the same negative value)
     if id1 < 0 || id2 < 0 {
         return true;
+    }
+
+    // Same ID means same attributes (only for non-negative IDs)
+    if id1 == id2 {
+        return false;
     }
 
     let idx1 = id1 as usize;
