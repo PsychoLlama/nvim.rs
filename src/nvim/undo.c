@@ -161,6 +161,8 @@ extern void rs_u_update_save_nr(buf_T *buf);
 extern void rs_u_free_uhp(u_header_T *uhp);
 extern bool rs_undo_allowed(buf_T *buf);
 extern void rs_ex_undojoin(void);
+extern void rs_u_undo(int count);
+extern void rs_u_redo(int count);
 
 // Feature flag for Rust undo functions
 #define USE_RUST_UNDO 1
@@ -1801,6 +1803,9 @@ static char *undo_read_string(bufinfo_T *bi, size_t len)
 /// If 'cpoptions' does not contain 'u': Always undo.
 void u_undo(int count)
 {
+#ifdef USE_RUST_UNDO
+  rs_u_undo(count);
+#else
   // If we get an undo command while executing a macro, we behave like the
   // original vi. If this happens twice in one macro the result will not
   // be compatible.
@@ -1815,17 +1820,22 @@ void u_undo(int count)
     undo_undoes = !undo_undoes;
   }
   u_doit(count, false, true);
+#endif
 }
 
 /// If 'cpoptions' contains 'u': Repeat the previous undo or redo.
 /// If 'cpoptions' does not contain 'u': Always redo.
 void u_redo(int count)
 {
+#ifdef USE_RUST_UNDO
+  rs_u_redo(count);
+#else
   if (vim_strchr(p_cpo, CPO_UNDO) == NULL) {
     undo_undoes = false;
   }
 
   u_doit(count, false, true);
+#endif
 }
 
 /// Undo and remove the branch from the undo tree.
@@ -3717,4 +3727,25 @@ void nvim_emsg_textlock(void)
 void nvim_emsg_undojoin_after_undo(void)
 {
   emsg(_("E790: undojoin is not allowed after undo"));
+}
+
+// u_undo/u_redo accessors
+bool nvim_has_cpo_undo(void)
+{
+  return vim_strchr(p_cpo, CPO_UNDO) != NULL;
+}
+
+bool nvim_get_undo_undoes(void)
+{
+  return undo_undoes;
+}
+
+void nvim_set_undo_undoes(bool val)
+{
+  undo_undoes = val;
+}
+
+void nvim_u_doit(int count, bool quiet, bool do_buf_event)
+{
+  u_doit(count, quiet, do_buf_event);
 }

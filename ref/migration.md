@@ -564,7 +564,7 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 
 ### Undo Module (undo.c - PARTIALLY MIGRATED)
 
-**Migrated Functions (20 rs_* functions):**
+**Migrated Functions (22 rs_* functions):**
 
 *Group A - Utilities:*
 - `rs_bufIsChanged` - Check if buffer is modified or file format differs
@@ -594,7 +594,11 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 *Ex Commands:*
 - `rs_ex_undojoin` - Continue adding to the last undo entry (:undojoin)
 
-**Accessor Functions (50):**
+*Entry Points:*
+- `rs_u_undo` - Main undo command handler (u key)
+- `rs_u_redo` - Main redo command handler (Ctrl-R key)
+
+**Accessor Functions (54):**
 
 *Buffer undo field accessors:*
 - `nvim_buf_get/set_b_u_oldhead` - Oldest undo header
@@ -652,6 +656,12 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 - `nvim_emsg_sandbox` - Emit sandbox error message
 - `nvim_emsg_textlock` - Emit textlock error message
 - `nvim_emsg_undojoin_after_undo` - Emit undojoin error message
+
+*u_undo/u_redo accessors:*
+- `nvim_has_cpo_undo` - Check if CPO_UNDO is in 'cpoptions'
+- `nvim_get_undo_undoes` - Get undo_undoes static variable
+- `nvim_set_undo_undoes` - Set undo_undoes static variable
+- `nvim_u_doit` - Call u_doit (complex undo/redo implementation)
 
 **Remaining Functions (complex, need extensive infrastructure):**
 - `undo_fmt_time` - Localized time formatting with NGETTEXT

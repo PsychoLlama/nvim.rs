@@ -150,6 +150,12 @@ extern "C" {
 
     // ex_undojoin error message wrapper
     fn nvim_emsg_undojoin_after_undo();
+
+    // u_undo/u_redo accessors
+    fn nvim_has_cpo_undo() -> bool;
+    fn nvim_get_undo_undoes() -> bool;
+    fn nvim_set_undo_undoes(val: bool);
+    fn nvim_u_doit(count: c_int, quiet: bool, do_buf_event: bool);
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed.
@@ -665,6 +671,48 @@ pub unsafe extern "C" fn rs_ex_undojoin() {
 
     // Append next change to last entry
     nvim_buf_set_b_u_synced(buf, false);
+}
+
+/// If 'cpoptions' contains 'u': Undo the previous undo or redo (vi compatible).
+/// If 'cpoptions' does not contain 'u': Always undo.
+///
+/// # Safety
+///
+/// Accesses global state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_undo(mut count: c_int) {
+    let buf = nvim_get_curbuf();
+
+    // If we get an undo command while executing a macro, we behave like the
+    // original vi. If this happens twice in one macro the result will not
+    // be compatible.
+    if !nvim_buf_get_b_u_synced(buf) {
+        rs_u_sync(true);
+        count = 1;
+    }
+
+    if !nvim_has_cpo_undo() {
+        nvim_set_undo_undoes(true);
+    } else {
+        nvim_set_undo_undoes(!nvim_get_undo_undoes());
+    }
+
+    nvim_u_doit(count, false, true);
+}
+
+/// If 'cpoptions' contains 'u': Repeat the previous undo or redo.
+/// If 'cpoptions' does not contain 'u': Always redo.
+///
+/// # Safety
+///
+/// Accesses global state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_redo(count: c_int) {
+    if !nvim_has_cpo_undo() {
+        nvim_set_undo_undoes(false);
+    }
+
+    nvim_u_doit(count, false, true);
 }
 
 #[cfg(test)]
