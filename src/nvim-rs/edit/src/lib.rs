@@ -162,4 +162,20 @@ mod tests {
         let without_terminator = &prompt[..prompt.len() - 1];
         assert!(!without_terminator.contains(&0));
     }
+
+    #[test]
+    fn test_linenr_range() {
+        // LinenrT should be able to hold reasonable line numbers
+        let max_lines: LinenrT = 1_000_000;
+        assert!(max_lines > 0);
+        let min_lines: LinenrT = 1;
+        assert_eq!(min_lines, 1);
+    }
+
+    #[test]
+    fn test_colnr_range() {
+        // ColnrT should be able to hold reasonable column numbers
+        let max_cols: ColnrT = 100_000;
+        assert!(max_cols > 0);
+    }
 }

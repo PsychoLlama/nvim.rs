@@ -2246,4 +2246,28 @@ mod tests {
         assert_eq!(fi.fi_level, 0);
         assert_eq!(fi.fi_lines, 0);
     }
+
+    #[test]
+    fn test_wlv_handle_null() {
+        let handle = WlvHandle(std::ptr::null_mut());
+        assert!(handle.is_null());
+    }
+
+    #[test]
+    fn test_type_alias_sizes() {
+        // Verify type alias sizes match expected C types
+        assert_eq!(std::mem::size_of::<ScharT>(), 4);
+        assert_eq!(std::mem::size_of::<LinenrT>(), 8);
+        assert_eq!(std::mem::size_of::<ColnrT>(), 4);
+    }
+
+    #[test]
+    fn test_highlight_groups_sequential() {
+        // LineNr groups are sequential
+        assert_eq!(HLF_LNA, HLF_N + 1);
+        assert_eq!(HLF_LNB, HLF_N + 2);
+        // CursorLine groups are sequential
+        assert_eq!(HLF_CLS, HLF_CLN + 1);
+        assert_eq!(HLF_CLF, HLF_CLN + 2);
+    }
 }
