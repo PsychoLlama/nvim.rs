@@ -192,6 +192,7 @@ bool did_set_spelltab;
 extern bool rs_spell_valid_case(int wordflags, int treeflags);
 extern bool rs_byte_in_str(const uint8_t *str, int n);
 extern bool rs_valid_spelllang(const char *val);
+extern bool rs_valid_spellfile(const char *val);
 
 /// mode values for find_word
 enum {
@@ -3659,20 +3660,7 @@ bool valid_spelllang(const char *val)
 bool valid_spellfile(const char *val)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  char spf_name[MAXPATHL];
-  char *spf = (char *)val;
-  while (*spf != NUL) {
-    size_t l = copy_option_part(&spf, spf_name, MAXPATHL, ",");
-    if (l >= MAXPATHL - 4 || l < 4 || strcmp(spf_name + l - 4, ".add") != 0) {
-      return false;
-    }
-    for (char *s = spf_name; *s != NUL; s++) {
-      if (!vim_is_fname_char((uint8_t)(*s))) {
-        return false;
-      }
-    }
-  }
-  return true;
+  return rs_valid_spellfile(val);
 }
 
 const char *did_set_spell_option(void)

@@ -21,6 +21,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | cursor_shape | Cursor mode/shape queries                          |
 | decoration   | Decoration/virtual text system, DecorState access  |
 | diff         | Diffopt flag queries                               |
+| digraph      | Digraph lookup functions                           |
 | drawline     | Line drawing and rendering helpers                 |
 | drawscreen   | Window separator drawing, connector functions      |
 | edit         | Edit mode state queries, prompt text functions     |
@@ -58,7 +59,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | register     | Register validation, type formatting, width calc   |
 | regexp       | Regex utilities: magic chars, char classes, multiline query |
 | search       | Character search state, search/substitute tracking |
-| spell        | Spell check utilities                              |
+| spell        | Spell check utilities, option validation           |
 | statusline   | Status line rendering helpers                      |
 | strings      | String comparison, case conversion, escape utils   |
 | textformat   | Text formatting options, format queries            |
@@ -175,8 +176,9 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 
 ### Static Data Tables
 
-**digraph.c**:
-- `digraph_get`, `getexactdigraph` - Use user_digraphs global and static table
+**digraph.c** (MIGRATED):
+- `digraph_get` - Migrated to Rust (rs_digraph_get) - Bidirectional digraph lookup
+- `getexactdigraph` - Migrated to Rust (rs_getexactdigraph) - Exact order digraph lookup
 
 **keycodes.c**:
 - `get_special_key_code` - Uses key_names_table static array
@@ -345,6 +347,12 @@ Functions blocked on missing accessor infrastructure:
 
 **message.c** (message display functions):
 - `msg_use_printf` - Migrated to Rust (rs_msg_use_printf) - checks if messages should use printf (batch mode)
+
+**spell.c** (spell checking option validation):
+- `valid_spelllang` - Migrated to Rust (rs_valid_spelllang) - validates 'spelllang' option value
+- `valid_spellfile` - Migrated to Rust (rs_valid_spellfile) - validates 'spellfile' option value (comma-separated paths ending in .add)
+- `spell_valid_case` - Migrated to Rust (rs_spell_valid_case) - checks word flags match tree flags for case handling
+- `byte_in_str` - Migrated to Rust (rs_byte_in_str) - checks if byte appears in string
 
 **indent.c** (indentation functions):
 - `may_do_si` - Migrated to Rust (rs_may_do_si) - checks if conditions are OK for smart indenting

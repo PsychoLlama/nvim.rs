@@ -108,6 +108,144 @@ pub unsafe extern "C" fn rs_valid_spelllang(val: *const c_char) -> bool {
     nvim_strings::valid_name(slice, SPELLLANG_ALLOWED)
 }
 
+/// Check if a string is a valid 'spellfile' value.
+///
+/// Valid spellfile values are comma-separated file paths where each path:
+/// - Has at least 4 characters
+/// - Ends with ".add"
+/// - Contains only valid filename characters
+///
+/// # Safety
+///
+/// `val` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_valid_spellfile(val: *const c_char) -> bool {
+    if val.is_null() {
+        return true;
+    }
+
+    let val_ptr = val as *const u8;
+
+    // Convert C string to slice
+    let mut len = 0usize;
+    let mut p = val_ptr;
+    while *p != 0 {
+        len += 1;
+        p = p.add(1);
+    }
+
+    if len == 0 {
+        return true;
+    }
+
+    let slice = std::slice::from_raw_parts(val_ptr, len);
+    valid_spellfile_impl(slice)
+}
+
+/// Check if a character is a valid filename character (simplified check).
+///
+/// This is a simplified version that checks for printable ASCII characters
+/// that are commonly allowed in filenames. The full C version uses the
+/// 'isfname' option which is runtime-configurable.
+#[inline]
+const fn is_fname_char(c: u8) -> bool {
+    // Allow alphanumeric, and common path characters
+    // This matches the default 'isfname' for most systems
+    c.is_ascii_alphanumeric()
+        || c == b'_'
+        || c == b'-'
+        || c == b'.'
+        || c == b'/'
+        || c == b'\\'
+        || c == b':'
+        || c == b'~'
+        || c == b'@'
+        || c == b'!'
+        || c == b'#'
+        || c == b'$'
+        || c == b'%'
+        || c == b'&'
+        || c == b'('
+        || c == b')'
+        || c == b'+'
+        || c == b'='
+        || c == b'{'
+        || c == b'}'
+        || c == b'['
+        || c == b']'
+        || c >= 0x80 // Allow high bytes (UTF-8 continuation)
+}
+
+/// Implementation of spellfile validation.
+///
+/// Parses comma-separated file paths, handling backslash escapes.
+fn valid_spellfile_impl(val: &[u8]) -> bool {
+    let mut pos = 0;
+
+    while pos < val.len() {
+        // Skip leading whitespace (like skip_to_option_part does)
+        while pos < val.len() && (val[pos] == b' ' || val[pos] == b'\t') {
+            pos += 1;
+        }
+
+        if pos >= val.len() {
+            break;
+        }
+
+        // Extract one part (until comma or end)
+        let part_start = pos;
+        let mut part_len = 0;
+
+        while pos < val.len() && val[pos] != b',' {
+            // Handle backslash escape before comma
+            if val[pos] == b'\\' && pos + 1 < val.len() && val[pos + 1] == b',' {
+                pos += 1; // Skip backslash, include comma as part of path
+            }
+            part_len += 1;
+            pos += 1;
+        }
+
+        // Skip the comma separator
+        if pos < val.len() && val[pos] == b',' {
+            pos += 1;
+        }
+
+        // Validate the part
+        // Part must be at least 4 characters and end with ".add"
+        if part_len < 4 {
+            return false;
+        }
+
+        // Get the actual part bytes (need to re-extract handling escapes)
+        let mut part = Vec::with_capacity(part_len);
+        let mut scan = part_start;
+        while scan < part_start + part_len + (pos - part_start - part_len) && part.len() < part_len
+        {
+            if val[scan] == b'\\' && scan + 1 < val.len() && val[scan + 1] == b',' {
+                scan += 1; // Skip backslash
+            }
+            if scan < val.len() && val[scan] != b',' {
+                part.push(val[scan]);
+            }
+            scan += 1;
+        }
+
+        // Check suffix ".add"
+        if part.len() < 4 || &part[part.len() - 4..] != b".add" {
+            return false;
+        }
+
+        // Check all characters are valid filename characters
+        for &c in &part {
+            if !is_fname_char(c) {
+                return false;
+            }
+        }
+    }
+
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -253,5 +391,60 @@ mod tests {
     fn test_spelllang_allowed_chars() {
         // Verify SPELLLANG_ALLOWED contains expected special characters
         assert_eq!(SPELLLANG_ALLOWED, b".-_,@");
+    }
+
+    #[test]
+    fn test_valid_spellfile_basic() {
+        // Valid: ends with .add, >= 4 chars
+        assert!(valid_spellfile_impl(b"test.add"));
+        assert!(valid_spellfile_impl(b"a.add"));
+        assert!(valid_spellfile_impl(b".add")); // exactly 4 chars
+
+        // Invalid: too short
+        assert!(!valid_spellfile_impl(b"add"));
+        assert!(!valid_spellfile_impl(b".ad"));
+
+        // Invalid: wrong suffix
+        assert!(!valid_spellfile_impl(b"test.txt"));
+        assert!(!valid_spellfile_impl(b"test.ada"));
+    }
+
+    #[test]
+    fn test_valid_spellfile_multiple() {
+        // Multiple valid paths
+        assert!(valid_spellfile_impl(b"foo.add,bar.add"));
+        assert!(valid_spellfile_impl(b"path/to/file.add,other.add"));
+
+        // One invalid path fails all
+        assert!(!valid_spellfile_impl(b"good.add,bad"));
+        assert!(!valid_spellfile_impl(b"bad,good.add"));
+    }
+
+    #[test]
+    fn test_valid_spellfile_empty() {
+        // Empty is valid
+        assert!(valid_spellfile_impl(b""));
+    }
+
+    #[test]
+    fn test_valid_spellfile_ffi() {
+        use std::ffi::CString;
+
+        unsafe {
+            // Valid
+            let valid = CString::new("test.add").unwrap();
+            assert!(rs_valid_spellfile(valid.as_ptr()));
+
+            // Invalid suffix
+            let invalid = CString::new("test.txt").unwrap();
+            assert!(!rs_valid_spellfile(invalid.as_ptr()));
+
+            // Empty is valid
+            let empty = CString::new("").unwrap();
+            assert!(rs_valid_spellfile(empty.as_ptr()));
+
+            // Null is valid
+            assert!(rs_valid_spellfile(std::ptr::null()));
+        }
     }
 }
