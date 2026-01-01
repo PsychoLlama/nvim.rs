@@ -1254,4 +1254,23 @@ mod tests {
         }
         assert_eq!(buf[0], 0);
     }
+
+    #[test]
+    fn test_motion_type_constants() {
+        // Verify motion type constants match C definitions
+        assert_eq!(K_MT_CHAR_WISE, 0);
+        assert_eq!(K_MT_LINE_WISE, 1);
+        assert_eq!(K_MT_BLOCK_WISE, 2);
+        assert_eq!(K_MT_UNKNOWN, -1);
+    }
+
+    #[test]
+    fn test_register_index_constants() {
+        // Verify register index constants match C definitions
+        assert_eq!(DELETION_REGISTER, 36);
+        assert_eq!(NUM_SAVED_REGISTERS, 37);
+        assert_eq!(STAR_REGISTER, 37);
+        assert_eq!(PLUS_REGISTER, 38);
+        assert_eq!(NUM_REGISTERS, 39);
+    }
 }
