@@ -564,7 +564,7 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 
 ### Undo Module (undo.c - PARTIALLY MIGRATED)
 
-**Migrated Functions (17 rs_* functions):**
+**Migrated Functions (18 rs_* functions):**
 
 *Group A - Utilities:*
 - `rs_bufIsChanged` - Check if buffer is modified or file format differs
@@ -590,7 +590,7 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 *Group D - Save Functions:*
 - `rs_u_sync` - Stop adding to current entry list
 
-**Accessor Functions (~40):**
+**Accessor Functions (44):**
 
 *Buffer undo field accessors:*
 - `nvim_buf_get/set_b_u_oldhead` - Oldest undo header
