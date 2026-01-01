@@ -326,4 +326,44 @@ mod tests {
         // Very large number that would overflow - should return None
         assert!(parse_int(b"99999999999999999999").is_none());
     }
+
+    #[test]
+    fn test_parse_version_with_null_terminator() {
+        // Version string with null terminator (as from C)
+        assert_eq!(parse_version_string(b"1.2.3\0"), Some((1, 2, 3)));
+        // But the parsing stops at non-digits anyway
+        assert_eq!(parse_version_string(b"1.2.3extra"), Some((1, 2, 3)));
+    }
+
+    #[test]
+    fn test_parse_version_whitespace_handling() {
+        // Leading whitespace is skipped
+        assert_eq!(parse_version_string(b" 1.2.3"), Some((1, 2, 3)));
+        assert_eq!(parse_version_string(b"\t1.2.3"), Some((1, 2, 3)));
+        assert_eq!(parse_version_string(b"  1.2.3"), Some((1, 2, 3)));
+        // Only whitespace returns None
+        assert_eq!(parse_version_string(b"   "), None);
+    }
+
+    #[test]
+    fn test_parse_int_single_digits() {
+        // All single digits
+        for i in 0..=9 {
+            let s = [b'0' + i];
+            assert_eq!(parse_int(&s), Some(i as i32));
+        }
+    }
+
+    #[test]
+    fn test_parse_version_boundary() {
+        // i32::MAX is 2147483647
+        // Check that large but valid versions work
+        assert_eq!(
+            parse_version_string(b"2147.483.647"),
+            Some((2147, 483, 647))
+        );
+    }
+
+    // Note: has_nvim_version tests require FFI linking.
+    // Integration testing is done via the full Neovim build.
 }
