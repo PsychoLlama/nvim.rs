@@ -603,4 +603,24 @@ mod tests {
         assert_eq!(LN_DECISION_MAX, 255); // 2^8 - 1
         assert_eq!(MATCH_CHAR_MAX_LEN, 800);
     }
+
+    #[test]
+    fn test_mmfile_default() {
+        let m = MmFile::default();
+        assert!(m.ptr.is_null());
+        assert_eq!(m.size, 0);
+    }
+
+    #[test]
+    fn test_line_len_empty() {
+        let m = MmFile::default();
+        assert_eq!(line_len(&m), 0);
+    }
+
+    #[test]
+    fn test_matching_chars_no_common() {
+        let m1 = make_mmfile("abc");
+        let m2 = make_mmfile("xyz");
+        assert_eq!(matching_chars(&m1, &m2), 0);
+    }
 }
