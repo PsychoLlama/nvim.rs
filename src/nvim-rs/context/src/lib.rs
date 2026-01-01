@@ -127,3 +127,39 @@ pub unsafe extern "C" fn rs_ctx_free(ctx: *mut Context) {
     // Free the funcs array
     rs_api_free_array(std::ptr::read(&ctx.funcs));
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_object_type_constants() {
+        // Verify ObjectType constants match C definitions
+        assert_eq!(K_OBJECT_TYPE_NIL, 0);
+        assert_eq!(K_OBJECT_TYPE_BOOLEAN, 1);
+        assert_eq!(K_OBJECT_TYPE_INTEGER, 2);
+        assert_eq!(K_OBJECT_TYPE_FLOAT, 3);
+        assert_eq!(K_OBJECT_TYPE_STRING, 4);
+        assert_eq!(K_OBJECT_TYPE_ARRAY, 5);
+        assert_eq!(K_OBJECT_TYPE_DICT, 6);
+        assert_eq!(K_OBJECT_TYPE_LUAREF, 7);
+    }
+
+    #[test]
+    fn test_object_type_sequential() {
+        // Ensure types are sequential for indexing
+        let types = [
+            K_OBJECT_TYPE_NIL,
+            K_OBJECT_TYPE_BOOLEAN,
+            K_OBJECT_TYPE_INTEGER,
+            K_OBJECT_TYPE_FLOAT,
+            K_OBJECT_TYPE_STRING,
+            K_OBJECT_TYPE_ARRAY,
+            K_OBJECT_TYPE_DICT,
+            K_OBJECT_TYPE_LUAREF,
+        ];
+        for (i, &t) in types.iter().enumerate() {
+            assert_eq!(t, i32::try_from(i).unwrap());
+        }
+    }
+}

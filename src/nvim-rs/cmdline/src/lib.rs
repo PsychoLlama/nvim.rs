@@ -119,3 +119,20 @@ pub unsafe extern "C" fn rs_cmdpreview_get_ns() -> c_int {
 pub unsafe extern "C" fn rs_get_cmdline_firstc() -> c_int {
     nvim_get_ccline_cmdfirstc()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_wildoption_flag() {
+        // K_OPT_WOP_FLAG_FUZZY should be 0x01
+        assert_eq!(K_OPT_WOP_FLAG_FUZZY, 0x01);
+    }
+
+    #[test]
+    fn test_nul_constant() {
+        // NUL should be 0
+        assert_eq!(NUL, 0);
+    }
+}
