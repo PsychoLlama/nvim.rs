@@ -495,4 +495,27 @@ mod tests {
         assert!(!handle.is_null());
         assert_eq!(handle.as_ptr(), fake_ptr);
     }
+
+    #[test]
+    fn test_eol_constants() {
+        // Verify EOL constants match C definitions
+        assert_eq!(EOL_UNIX, 0);
+        assert_eq!(EOL_DOS, 1);
+        assert_eq!(EOL_MAC, 2);
+    }
+
+    #[test]
+    fn test_buf_handle_size() {
+        // BufHandle should be pointer-sized (repr(transparent))
+        assert_eq!(
+            std::mem::size_of::<BufHandle>(),
+            std::mem::size_of::<*mut std::ffi::c_void>()
+        );
+    }
+
+    #[test]
+    fn test_cmod_hide_constant() {
+        // Verify CMOD_HIDE matches C definition
+        assert_eq!(CMOD_HIDE, 0x0020);
+    }
 }
