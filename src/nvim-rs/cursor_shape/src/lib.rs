@@ -211,12 +211,12 @@ mod tests {
     #[test]
     fn test_mode_shape_values() {
         // Verify key ModeShape enum values match C definitions
-        assert_eq!(ModeShape::N as c_int, 0);      // Normal
-        assert_eq!(ModeShape::V as c_int, 1);      // Visual
-        assert_eq!(ModeShape::I as c_int, 2);      // Insert
-        assert_eq!(ModeShape::R as c_int, 3);      // Replace
-        assert_eq!(ModeShape::C as c_int, 4);      // Command line Normal
-        assert_eq!(ModeShape::Term as c_int, 17);  // Terminal
+        assert_eq!(ModeShape::N as c_int, 0); // Normal
+        assert_eq!(ModeShape::V as c_int, 1); // Visual
+        assert_eq!(ModeShape::I as c_int, 2); // Insert
+        assert_eq!(ModeShape::R as c_int, 3); // Replace
+        assert_eq!(ModeShape::C as c_int, 4); // Command line Normal
+        assert_eq!(ModeShape::Term as c_int, 17); // Terminal
         assert_eq!(ModeShape::Count as c_int, 18); // Total modes
     }
 

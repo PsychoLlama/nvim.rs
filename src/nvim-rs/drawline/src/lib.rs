@@ -2197,16 +2197,16 @@ mod tests {
     #[test]
     fn test_highlight_group_constants() {
         // Verify highlight group constants match C definitions
-        assert_eq!(HLF_AT, 4);   // NonText
-        assert_eq!(HLF_N, 12);   // LineNr
+        assert_eq!(HLF_AT, 4); // NonText
+        assert_eq!(HLF_N, 12); // LineNr
         assert_eq!(HLF_LNA, 13); // LineNrAbove
         assert_eq!(HLF_LNB, 14); // LineNrBelow
         assert_eq!(HLF_CLN, 15); // CursorLineNr
         assert_eq!(HLF_CLS, 16); // CursorLineSign
         assert_eq!(HLF_CLF, 17); // CursorLineFold
-        assert_eq!(HLF_FC, 29);  // FoldColumn
+        assert_eq!(HLF_FC, 29); // FoldColumn
         assert_eq!(HLF_DED, 31); // DiffDelete
-        assert_eq!(HLF_SC, 35);  // SignColumn
+        assert_eq!(HLF_SC, 35); // SignColumn
     }
 
     #[test]

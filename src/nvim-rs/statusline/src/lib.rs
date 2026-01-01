@@ -329,7 +329,7 @@ mod tests {
     #[test]
     fn test_highlight_group_constants() {
         // Verify highlight groups match C definitions
-        assert_eq!(HLF_S, 27);   // StatusLine
+        assert_eq!(HLF_S, 27); // StatusLine
         assert_eq!(HLF_SNC, 28); // StatusLineNC
     }
 
