@@ -595,4 +595,12 @@ mod tests {
         // 4x4 grid, index = 1*4 + 2 = 6
         assert_eq!(unwrap_indexes(&values, &diff_len, 2), 6);
     }
+
+    #[test]
+    fn test_linematch_constants() {
+        // Verify linematch constants match expected values
+        assert_eq!(LN_MAX_BUFS, 8);
+        assert_eq!(LN_DECISION_MAX, 255); // 2^8 - 1
+        assert_eq!(MATCH_CHAR_MAX_LEN, 800);
+    }
 }
