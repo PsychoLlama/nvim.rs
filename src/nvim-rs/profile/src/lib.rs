@@ -227,4 +227,26 @@ mod tests {
         // Self is already non-zero
         assert_eq!(rs_profile_self(50, 100, 50), 100); // 50 + 100 - 50 = 100
     }
+
+    #[test]
+    fn test_proftime_type_size() {
+        // Proftime should be 64-bit
+        assert_eq!(std::mem::size_of::<Proftime>(), 8);
+    }
+
+    #[test]
+    fn test_profile_add_large_values() {
+        // Large values that don't overflow
+        let large = 1_000_000_000_000u64;
+        assert_eq!(rs_profile_add(large, large), 2_000_000_000_000);
+    }
+
+    #[test]
+    fn test_profile_cmp_edge_cases() {
+        // Zero times
+        assert_eq!(rs_profile_cmp(0, 0), 0);
+        // Compare with zero
+        assert_eq!(rs_profile_cmp(0, 100), 1);
+        assert_eq!(rs_profile_cmp(100, 0), -1);
+    }
 }
