@@ -130,6 +130,11 @@ extern "C" {
 
     // Buffer b_did_warn accessor
     fn nvim_buf_set_b_did_warn(buf: BufHandle, val: bool);
+
+    // Buffer save_nr accessors
+    fn nvim_buf_get_b_u_save_nr_last(buf: BufHandle) -> c_int;
+    fn nvim_buf_set_b_u_save_nr_last(buf: BufHandle, val: c_int);
+    fn nvim_buf_set_b_u_save_nr_cur(buf: BufHandle, val: c_int);
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed.
@@ -525,6 +530,30 @@ pub unsafe extern "C" fn rs_u_unchanged(buf: BufHandle) {
     let oldhead = nvim_buf_get_b_u_oldhead(buf);
     rs_u_unch_branch(oldhead);
     nvim_buf_set_b_did_warn(buf, false);
+}
+
+/// Increase the write count, store it in the last undo header.
+/// This is what would be used for "u".
+///
+/// # Safety
+///
+/// The `buf` handle must be a valid pointer to a buf_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_update_save_nr(buf: BufHandle) {
+    let save_nr_last = nvim_buf_get_b_u_save_nr_last(buf) + 1;
+    nvim_buf_set_b_u_save_nr_last(buf, save_nr_last);
+    nvim_buf_set_b_u_save_nr_cur(buf, save_nr_last);
+
+    let curhead = nvim_buf_get_b_u_curhead(buf);
+    let uhp = if !curhead.0.is_null() {
+        nvim_uhp_get_next(curhead)
+    } else {
+        nvim_buf_get_b_u_newhead(buf)
+    };
+
+    if !uhp.0.is_null() {
+        nvim_uhp_set_save_nr(uhp, save_nr_last);
+    }
 }
 
 #[cfg(test)]

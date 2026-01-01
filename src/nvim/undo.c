@@ -157,6 +157,7 @@ extern void rs_u_sync(bool force);
 extern void rs_u_clearallandblockfree(buf_T *buf);
 extern void rs_u_unch_branch(u_header_T *uhp);
 extern void rs_u_unchanged(buf_T *buf);
+extern void rs_u_update_save_nr(buf_T *buf);
 
 // Feature flag for Rust undo functions
 #define USE_RUST_UNDO 1
@@ -2825,6 +2826,9 @@ void u_find_first_changed(void)
 /// used for "u".
 void u_update_save_nr(buf_T *buf)
 {
+#ifdef USE_RUST_UNDO
+  rs_u_update_save_nr(buf);
+#else
   buf->b_u_save_nr_last++;
   buf->b_u_save_nr_cur = buf->b_u_save_nr_last;
   u_header_T *uhp = buf->b_u_curhead;
@@ -2836,6 +2840,7 @@ void u_update_save_nr(buf_T *buf)
   if (uhp != NULL) {
     uhp->uh_save_nr = buf->b_u_save_nr_last;
   }
+#endif
 }
 
 static void u_unch_branch(u_header_T *uhp)
@@ -3648,4 +3653,20 @@ OptInt nvim_get_undolevel(buf_T *buf)
 void nvim_buf_set_b_did_warn(buf_T *buf, bool val)
 {
   buf->b_did_warn = val;
+}
+
+// Buffer save_nr accessors
+int nvim_buf_get_b_u_save_nr_last(buf_T *buf)
+{
+  return buf->b_u_save_nr_last;
+}
+
+void nvim_buf_set_b_u_save_nr_last(buf_T *buf, int val)
+{
+  buf->b_u_save_nr_last = val;
+}
+
+void nvim_buf_set_b_u_save_nr_cur(buf_T *buf, int val)
+{
+  buf->b_u_save_nr_cur = val;
 }
