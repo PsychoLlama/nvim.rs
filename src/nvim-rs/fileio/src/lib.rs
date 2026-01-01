@@ -214,4 +214,27 @@ mod tests {
         assert!(!is_dev_fd_file_impl(b"/dev/fd/5abc"));
         assert!(!is_dev_fd_file_impl(b"/dev/fd/10.txt"));
     }
+
+    #[test]
+    fn test_time_differs_zero_values() {
+        // Zero times should match
+        assert!(!time_differs(0, 0, 0, 0, false));
+        assert!(!time_differs(0, 0, 0, 0, true));
+    }
+
+    #[test]
+    fn test_time_differs_large_values() {
+        // Large timestamps should work correctly
+        let large = 1_700_000_000i64;
+        assert!(!time_differs(large, 123_456, large, 123_456, false));
+        assert!(time_differs(large, 123_456, large, 123_457, false));
+    }
+
+    #[test]
+    fn test_time_differs_negative_diff() {
+        // Negative difference within FAT tolerance
+        assert!(!time_differs(999, 0, 1000, 0, true));
+        // Negative difference outside FAT tolerance
+        assert!(time_differs(997, 0, 1000, 0, true));
+    }
 }

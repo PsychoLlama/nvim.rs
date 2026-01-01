@@ -277,4 +277,43 @@ mod tests {
             std::mem::size_of::<c_int>()
         );
     }
+
+    #[test]
+    fn test_mode_shape_count_matches_variant_count() {
+        // Count should equal the number of actual mode variants
+        let modes = [
+            ModeShape::N,
+            ModeShape::V,
+            ModeShape::I,
+            ModeShape::R,
+            ModeShape::C,
+            ModeShape::Ci,
+            ModeShape::Cr,
+            ModeShape::O,
+            ModeShape::Ve,
+            ModeShape::Cline,
+            ModeShape::Status,
+            ModeShape::Sdrag,
+            ModeShape::Vsep,
+            ModeShape::Vdrag,
+            ModeShape::More,
+            ModeShape::Morel,
+            ModeShape::Sm,
+            ModeShape::Term,
+        ];
+        assert_eq!(modes.len(), ModeShape::Count as usize);
+    }
+
+    #[test]
+    fn test_cursor_shape_distinct() {
+        // All cursor shapes should have distinct values
+        let shapes = [CursorShape::Block, CursorShape::Hor, CursorShape::Ver];
+        for (i, &shape_a) in shapes.iter().enumerate() {
+            for (j, &shape_b) in shapes.iter().enumerate() {
+                if i != j {
+                    assert_ne!(shape_a as c_int, shape_b as c_int);
+                }
+            }
+        }
+    }
 }
