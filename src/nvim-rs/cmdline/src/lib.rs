@@ -135,4 +135,19 @@ mod tests {
         // NUL should be 0
         assert_eq!(NUL, 0);
     }
+
+    #[test]
+    fn test_wildoption_flag_is_power_of_two() {
+        // Flag should be a single bit (power of 2)
+        let flag = K_OPT_WOP_FLAG_FUZZY;
+        assert_ne!(flag, 0);
+        assert_eq!(flag & (flag - 1), 0, "Flag should be a power of 2");
+    }
+
+    #[test]
+    fn test_nul_matches_ascii() {
+        // NUL constant should match ASCII NUL character
+        assert_eq!(NUL, 0);
+        assert_eq!(NUL, c_int::from(b'\0'));
+    }
 }
