@@ -2896,4 +2896,22 @@ mod tests {
             assert_eq!(un, u64::MAX);
         }
     }
+
+    #[test]
+    fn test_charset_constants() {
+        // Verify chartab flag constants match C definitions
+        assert_eq!(CT_CELL_MASK, 0x07);
+        assert_eq!(CT_PRINT_CHAR, 0x10);
+        assert_eq!(CT_ID_CHAR, 0x20);
+        assert_eq!(CT_FNAME_CHAR, 0x40);
+
+        // Verify control and EOL constants
+        assert_eq!(CTRL_V, 22);
+        assert_eq!(EOL_UNIX, 0);
+        assert_eq!(EOL_DOS, 1);
+        assert_eq!(EOL_MAC, 2);
+        assert_eq!(NL, 0x0A);
+        assert_eq!(CAR, 0x0D);
+        assert_eq!(NUL, 0x00);
+    }
 }
