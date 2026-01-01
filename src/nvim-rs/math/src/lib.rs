@@ -363,4 +363,21 @@ mod tests {
         assert_eq!(rs_calc_percentage(1, 1000), 0);
         assert_eq!(rs_calc_percentage(5, 1000), 0);
     }
+
+    #[test]
+    fn test_fpclass_constants() {
+        // Verify FP classification constants match C definitions
+        assert_eq!(FP_NAN, 0);
+        assert_eq!(FP_INFINITE, 1);
+        assert_eq!(FP_ZERO, 2);
+        assert_eq!(FP_SUBNORMAL, 3);
+        assert_eq!(FP_NORMAL, 4);
+    }
+
+    #[test]
+    fn test_ok_fail_constants() {
+        // Verify OK/FAIL match nvim conventions
+        assert_eq!(OK, 1);
+        assert_eq!(FAIL, 0);
+    }
 }
