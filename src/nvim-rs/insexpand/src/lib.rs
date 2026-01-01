@@ -598,4 +598,18 @@ mod tests {
         assert_eq!(CONT_ADDING & CONT_LOCAL, 0);
         assert_eq!(CONT_SOL & CONT_LOCAL, 0);
     }
+
+    #[test]
+    fn test_completion_flags_are_powers_of_two() {
+        // Completion flags should be powers of two for bit masking
+        assert!((CONT_ADDING as u32).is_power_of_two());
+        assert!((CONT_SOL as u32).is_power_of_two());
+        assert!((CONT_LOCAL as u32).is_power_of_two());
+    }
+
+    #[test]
+    fn test_completeopt_flags_distinct() {
+        // completeopt flags should not overlap
+        assert_eq!(K_OPT_COT_FLAG_MENU & K_OPT_COT_FLAG_MENUONE, 0);
+    }
 }

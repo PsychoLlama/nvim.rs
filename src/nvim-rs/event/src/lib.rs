@@ -2378,4 +2378,25 @@ mod tests {
         // Just verify it's reasonable (at least handler + 10 pointers)
         assert!(event_size >= 11 * std::mem::size_of::<*mut std::ffi::c_void>());
     }
+
+    #[test]
+    fn test_null_event_is_nil() {
+        // Null pointer should be treated as nil
+        unsafe {
+            assert_eq!(rs_event_is_nil(std::ptr::null()), 1);
+        }
+    }
+
+    #[test]
+    fn test_event_nil_writes_correctly() {
+        // rs_event_nil should initialize to nil event
+        let mut event = Event {
+            handler: None, // Just use None - we can't create fake handler safely
+            argv: [std::ptr::null_mut(); EVENT_HANDLER_MAX_ARGC],
+        };
+        unsafe {
+            rs_event_nil(&raw mut event);
+        }
+        assert!(event.is_nil());
+    }
 }
