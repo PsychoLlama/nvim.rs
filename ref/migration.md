@@ -384,7 +384,7 @@ Terminfo output infrastructure for Rust:
 - nvim_tui_get_stopped, nvim_tui_get_can_set_title
 - nvim_tui_get/set_title_enabled, nvim_tui_get_buf_space
 
-### Regexp Module (regexp.c - PHASE 1-2 MIGRATED)
+### Regexp Module (regexp.c - PHASE 1-3 MIGRATED)
 
 **Strategy:** Wrap C regex engines rather than replace them. Vim regex syntax has no equivalent Rust crate.
 
@@ -411,18 +411,23 @@ Terminfo output infrastructure for Rust:
 - `rs_skip_regexp` - Skip regex pattern to delimiter
 - `rs_skip_regexp_ex` - Skip regex with magic value tracking
 
+**Phase 3 - Substitution Helpers (1 rs_* function):**
+- `rs_regtilde` - Replace `~` in replacement pattern with previous replacement
+
 **Accessor Functions:**
 - `nvim_regprog_get_regflags` - Get regflags from regprog_T
 - `nvim_get_reg_cpo_lit` - Get reg_cpo_lit flag for 'cpoptions'
 - `nvim_get_char_class` - Wrapper for get_char_class (POSIX class parsing)
+- `nvim_get_reg_prev_sub` - Get previous substitution pattern
+- `nvim_get_reg_prev_sublen` - Get previous substitution length
+- `nvim_set_reg_prev_sub` - Set previous substitution (takes ownership)
 
 **Opaque Handles:**
 - `RegprogHandle` - Opaque wrapper for regprog_T*
 - `RegmatchHandle` - Opaque wrapper for regmatch_T*
 - `RegmmatchHandle` - Opaque wrapper for regmmatch_T*
 
-**Remaining Work (Phases 3-6):**
-- Substitution helpers (regtilde, case transforms)
+**Remaining Work (Phases 4-6):**
 - Global state infrastructure (rex structure accessors)
 - Compilation helpers (parse state, char scanning)
 - API wrappers (vim_regcomp, vim_regexec, vim_regsub)

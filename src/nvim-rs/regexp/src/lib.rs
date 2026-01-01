@@ -7,7 +7,7 @@
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::must_use_candidate)]
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
 use std::sync::OnceLock;
 
 // =============================================================================
@@ -150,7 +150,32 @@ extern "C" {
 
     /// Get character class for POSIX class name.
     fn nvim_get_char_class(pp: *mut *mut c_char) -> c_int;
+
+    // Phase 3: Substitution helpers
+    /// Get previous substitution pattern.
+    fn nvim_get_reg_prev_sub() -> *mut c_char;
+
+    /// Get previous substitution pattern length.
+    fn nvim_get_reg_prev_sublen() -> usize;
+
+    /// Set previous substitution pattern (takes ownership of s).
+    fn nvim_set_reg_prev_sub(s: *mut c_char, len: usize);
+
+    /// Allocate memory.
+    fn xmalloc(size: usize) -> *mut c_char;
+
+    /// Free memory.
+    fn xfree(ptr: *mut c_void);
+
+    /// Allocate and copy string (with length).
+    fn xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
+
+    /// Display error message.
+    fn emsg(s: *const c_char);
 }
+
+// MAXCOL constant - maximum column number
+const MAXCOL: usize = 0x7fff_ffff;
 
 // =============================================================================
 // Magic Functions
@@ -533,6 +558,124 @@ unsafe fn skip_regexp_impl(startp: *mut c_char, delim: c_int, magic: c_int) -> *
 }
 
 // =============================================================================
+// Phase 3: Substitution Helpers
+// =============================================================================
+
+/// Error message for text too long
+static E_RESULTING_TEXT_TOO_LONG: &[u8] = b"E1240: Resulting text too long\0";
+
+/// Replace tildes in the pattern by the old pattern.
+///
+/// The tilde stands for the previous replacement pattern. If that previous
+/// pattern also contains a ~ we should go back a step further.
+///
+/// Returns the (possibly new) source string. If a new string was allocated,
+/// it must be freed by the caller. The returned pointer equals `source` if
+/// no allocation occurred.
+///
+/// # Safety
+/// `source` must point to a valid null-terminated string.
+unsafe fn regtilde_impl(source: *mut c_char, magic: c_int, preview: bool) -> *mut c_char {
+    let mut newsub = source;
+    let mut newsublen: usize = 0;
+
+    // Tilde pattern depends on magic mode
+    let (tilde, tildelen): (&[u8], usize) = if magic != 0 {
+        (b"~\0", 1)
+    } else {
+        (b"\\~\0", 2)
+    };
+
+    let mut error = false;
+    let mut p = newsub;
+
+    while *p != 0 {
+        // Check for tilde pattern
+        let tilde_ptr = tilde.as_ptr().cast::<c_char>();
+        if libc::strncmp(p, tilde_ptr, tildelen) == 0 {
+            let prefixlen = p.offset_from(newsub) as usize;
+            let postfix = p.add(tildelen);
+
+            if newsublen == 0 {
+                newsublen = libc::strlen(newsub);
+            }
+            newsublen -= tildelen;
+            let postfixlen = newsublen - prefixlen;
+
+            let reg_prev_sub = nvim_get_reg_prev_sub();
+            let reg_prev_sublen = nvim_get_reg_prev_sublen();
+            let tmpsublen = prefixlen + reg_prev_sublen + postfixlen;
+
+            if tmpsublen > 0 && !reg_prev_sub.is_null() {
+                // Avoid making the text longer than MAXCOL
+                if tmpsublen > MAXCOL {
+                    emsg(E_RESULTING_TEXT_TOO_LONG.as_ptr().cast());
+                    error = true;
+                    break;
+                }
+
+                let tmpsub = xmalloc(tmpsublen + 1);
+                // copy prefix
+                libc::memmove(tmpsub.cast(), newsub.cast(), prefixlen);
+                // interpret tilde - insert previous substitution
+                libc::memmove(
+                    tmpsub.add(prefixlen).cast(),
+                    reg_prev_sub.cast(),
+                    reg_prev_sublen,
+                );
+                // copy postfix (including NUL)
+                libc::memmove(
+                    tmpsub.add(prefixlen + reg_prev_sublen).cast(),
+                    postfix.cast(),
+                    postfixlen + 1,
+                );
+
+                if newsub != source {
+                    // We allocated newsub before, free it
+                    xfree(newsub.cast());
+                }
+                newsub = tmpsub;
+                newsublen = tmpsublen;
+                p = newsub.add(prefixlen + reg_prev_sublen);
+            } else {
+                // No previous sub, just remove the tilde
+                libc::memmove(p.cast(), postfix.cast(), postfixlen + 1);
+            }
+            p = p.sub(1);
+        } else {
+            // Skip escaped characters
+            if *p as u8 == b'\\' && *p.add(1) != 0 {
+                p = p.add(1);
+            }
+            // Advance by UTF-8 character length
+            let char_len = utfc_ptr2len(p) as usize;
+            p = p.add(char_len.saturating_sub(1));
+        }
+        p = p.add(1);
+    }
+
+    if error {
+        if newsub != source {
+            xfree(newsub.cast());
+        }
+        return source;
+    }
+
+    // Only update reg_prev_sub when not previewing
+    if !preview {
+        newsublen = p.offset_from(newsub) as usize;
+        if newsublen == 0 {
+            nvim_set_reg_prev_sub(std::ptr::null_mut(), 0);
+        } else {
+            let new_prev = xstrnsave(newsub, newsublen);
+            nvim_set_reg_prev_sub(new_prev, newsublen);
+        }
+    }
+
+    newsub
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
 
@@ -680,6 +823,26 @@ pub unsafe extern "C" fn rs_skip_regexp_ex(
     newp: *mut c_int,
 ) -> *mut c_char {
     skip_regexp_ex_impl(startp, dirc, magic, newp)
+}
+
+// -----------------------------------------------------------------------------
+// Phase 3: Substitution FFI Exports
+// -----------------------------------------------------------------------------
+
+/// Replace tildes in the pattern by the old pattern.
+///
+/// Returns the (possibly new) source string. If a new string was allocated,
+/// it must be freed by the caller.
+///
+/// # Safety
+/// `source` must point to a valid null-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_regtilde(
+    source: *mut c_char,
+    magic: c_int,
+    preview: c_int,
+) -> *mut c_char {
+    regtilde_impl(source, magic, preview != 0)
 }
 
 // =============================================================================
