@@ -56,6 +56,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | profile      | Profiling time arithmetic                          |
 | quickfix     | Quickfix/location list state queries               |
 | register     | Register validation, type formatting, width calc   |
+| regexp       | Regex utilities: magic chars, char classes, multiline query |
 | search       | Character search state, search/substitute tracking |
 | spell        | Spell check utilities                              |
 | statusline   | Status line rendering helpers                      |
@@ -382,6 +383,40 @@ Terminfo output infrastructure for Rust:
 - nvim_tui_invalidate_region, nvim_tui_ugrid_scroll
 - nvim_tui_get_stopped, nvim_tui_get_can_set_title
 - nvim_tui_get/set_title_enabled, nvim_tui_get_buf_space
+
+### Regexp Module (regexp.c - PHASE 1 MIGRATED)
+
+**Strategy:** Wrap C regex engines rather than replace them. Vim regex syntax has no equivalent Rust crate.
+
+**Migrated Functions (15 rs_* functions):**
+- `rs_no_magic` - Remove magic from character
+- `rs_toggle_magic` - Toggle magic state of character
+- `rs_re_multi_type` - Classify quantifier operator type
+- `rs_backslash_trans` - Translate backslash escapes to control chars
+- `rs_re_multiline` - Check if compiled regex can match newline
+- `rs_ri_digit` - Check if character is digit (0-9)
+- `rs_ri_hex` - Check if character is hex digit (0-9, a-f, A-F)
+- `rs_ri_octal` - Check if character is octal digit (0-7)
+- `rs_ri_word` - Check if character is word char (a-z, A-Z, 0-9, _)
+- `rs_ri_head` - Check if character can start identifier (a-z, A-Z, _)
+- `rs_ri_alpha` - Check if character is alphabetic (a-z, A-Z)
+- `rs_ri_lower` - Check if character is lowercase (a-z)
+- `rs_ri_upper` - Check if character is uppercase (A-Z)
+- `rs_ri_white` - Check if character is whitespace (space, tab)
+
+**Accessor Functions:**
+- `nvim_regprog_get_regflags` - Get regflags from regprog_T
+
+**Opaque Handles:**
+- `RegprogHandle` - Opaque wrapper for regprog_T*
+- `RegmatchHandle` - Opaque wrapper for regmatch_T*
+- `RegmmatchHandle` - Opaque wrapper for regmmatch_T*
+
+**Remaining Work (Phases 2-6):**
+- Pattern parsing (skip_regexp, get_char_class)
+- Substitution helpers (regtilde, case transforms)
+- API wrappers (vim_regcomp, vim_regexec, vim_regsub)
+- Note: Backtracking and NFA engines (~10K lines) remain in C
 
 ### Register Module (register.c - PARTIALLY MIGRATED)
 

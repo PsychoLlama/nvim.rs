@@ -68,6 +68,7 @@ pub use nvim_plines::*;
 pub use nvim_popupmenu::*;
 pub use nvim_profile::*;
 pub use nvim_quickfix::*;
+pub use nvim_regexp::*;
 pub use nvim_register::*;
 pub use nvim_search::*;
 pub use nvim_spell::*;

@@ -300,20 +300,20 @@ typedef struct {
 
 typedef void (*fptr_T)(int *, int);
 
+// Rust implementation
+extern int rs_no_magic(int x);
+
 static int no_Magic(int x)
 {
-  if (is_Magic(x)) {
-    return un_Magic(x);
-  }
-  return x;
+  return rs_no_magic(x);
 }
+
+// Rust implementation
+extern int rs_toggle_magic(int x);
 
 static int toggle_Magic(int x)
 {
-  if (is_Magic(x)) {
-    return un_Magic(x);
-  }
-  return Magic(x);
+  return rs_toggle_magic(x);
 }
 
 // The first byte of the BT regexp internal "program" is actually this magic
@@ -381,18 +381,15 @@ static const char e_unicode_val_too_large[]
 #define RA_MATCH        4       // successful match
 #define RA_NOMATCH      5       // didn't match
 
+// Rust implementation
+extern int rs_re_multi_type(int c);
+
 /// Return NOT_MULTI if c is not a "multi" operator.
 /// Return MULTI_ONE if c is a single "multi" operator.
 /// Return MULTI_MULT if c is a multi "multi" operator.
 static int re_multi_type(int c)
 {
-  if (c == Magic('@') || c == Magic('=') || c == Magic('?')) {
-    return MULTI_ONE;
-  }
-  if (c == Magic('*') || c == Magic('+') || c == Magic('{')) {
-    return MULTI_MULT;
-  }
-  return NOT_MULTI;
+  return rs_re_multi_type(c);
 }
 
 static char *reg_prev_sub = NULL;
@@ -415,20 +412,13 @@ static size_t reg_prev_sublen = 0;
 static char REGEXP_INRANGE[] = "]^-n\\";
 static char REGEXP_ABBR[] = "nrtebdoxuU";
 
+// Rust implementation
+extern int rs_backslash_trans(int c);
+
 // Translate '\x' to its control character, except "\n", which is Magic.
 static int backslash_trans(int c)
 {
-  switch (c) {
-  case 'r':
-    return CAR;
-  case 't':
-    return TAB;
-  case 'e':
-    return ESC;
-  case 'b':
-    return BS;
-  }
-  return c;
+  return rs_backslash_trans(c);
 }
 
 enum {
@@ -647,11 +637,14 @@ static regengine_T nfa_regengine;
 
 #include "regexp.c.generated.h"
 
+// Rust implementation
+extern int rs_re_multiline(const regprog_T *prog);
+
 // Return true if compiled regular expression "prog" can match a line break.
 int re_multiline(const regprog_T *prog)
   FUNC_ATTR_NONNULL_ALL
 {
-  return prog->regflags & RF_HASNL;
+  return rs_re_multiline(prog);
 }
 
 // Check for an equivalence class name "[=a=]".  "pp" points to the '['.
@@ -5534,6 +5527,9 @@ static regprog_T *bt_regcomp(uint8_t *expr, int re_flags)
 
 // C accessor for had_eol static variable (used by Rust)
 int nvim_get_regexp_had_eol(void) { return had_eol; }
+
+// C accessor for regprog_T fields (used by Rust)
+int nvim_regprog_get_regflags(const regprog_T *prog) { return (int)prog->regflags; }
 
 // Rust implementation
 extern int rs_vim_regcomp_had_eol(void);

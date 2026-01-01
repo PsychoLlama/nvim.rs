@@ -62,6 +62,7 @@ nvim-popupmenu = { path = "popupmenu" }
 nvim-profile = { path = "profile" }
 nvim-quickfix = { path = "quickfix" }
 nvim-register = { path = "register" }
+nvim-regexp = { path = "regexp" }
 nvim-search = { path = "search" }
 nvim-spell = { path = "spell" }
 nvim-statusline = { path = "statusline" }
