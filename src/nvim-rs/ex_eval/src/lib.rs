@@ -110,4 +110,11 @@ mod tests {
         let is_success = success != FAIL;
         assert!(is_success);
     }
+
+    #[test]
+    fn test_fail_distinct_from_success() {
+        // FAIL (0) should be distinct from typical success values
+        let ok: c_int = 1;
+        assert_ne!(FAIL, ok);
+    }
 }

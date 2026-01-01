@@ -201,4 +201,23 @@ mod tests {
             std::mem::size_of::<i32>()
         );
     }
+
+    #[test]
+    fn test_lua_ret_mode_equality() {
+        // Same mode values should be equal
+        let mode1 = LuaRetMode::Object;
+        let mode2 = LuaRetMode::Object;
+        assert_eq!(mode1, mode2);
+
+        // Different modes should not be equal
+        let mode3 = LuaRetMode::NilBool;
+        assert_ne!(mode1, mode3);
+    }
+
+    #[test]
+    fn test_lua_ret_mode_last_value() {
+        // Multi should be the last mode (value 3)
+        let multi = LuaRetMode::Multi;
+        assert_eq!(multi as i32, 3);
+    }
 }
