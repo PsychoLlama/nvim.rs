@@ -472,11 +472,83 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_constants() {
-        // Verify the constants match expected values
+    fn test_ctrl_x_mode_constants() {
+        // Verify the CTRL-X mode constants match expected values
         assert_eq!(CTRL_X_NORMAL, 0);
+        assert_eq!(CTRL_X_NOT_DEFINED_YET, 1);
         assert_eq!(CTRL_X_SCROLL, 2);
-        assert_eq!(CTRL_X_TAGS, 5 + 0x100); // 261
-        assert_eq!(CTRL_X_DICTIONARY, 9 + 0x100); // 265
+        assert_eq!(CTRL_X_WHOLE_LINE, 3);
+        assert_eq!(CTRL_X_FILES, 4);
+        assert_eq!(CTRL_X_TAGS, 5 + CTRL_X_WANT_IDENT);
+        assert_eq!(CTRL_X_PATH_PATTERNS, 6 + CTRL_X_WANT_IDENT);
+        assert_eq!(CTRL_X_PATH_DEFINES, 7 + CTRL_X_WANT_IDENT);
+        assert_eq!(CTRL_X_DICTIONARY, 9 + CTRL_X_WANT_IDENT);
+        assert_eq!(CTRL_X_THESAURUS, 10 + CTRL_X_WANT_IDENT);
+        assert_eq!(CTRL_X_CMDLINE, 11);
+        assert_eq!(CTRL_X_FUNCTION, 12);
+        assert_eq!(CTRL_X_OMNI, 13);
+        assert_eq!(CTRL_X_SPELL, 14);
+        assert_eq!(CTRL_X_EVAL, 16);
+        assert_eq!(CTRL_X_CMDLINE_CTRL_X, 17);
+        assert_eq!(CTRL_X_BUFNAMES, 18);
+        assert_eq!(CTRL_X_REGISTER, 19);
+    }
+
+    #[test]
+    fn test_ctrl_x_want_ident_flag() {
+        // CTRL_X_WANT_IDENT should be 0x100
+        assert_eq!(CTRL_X_WANT_IDENT, 0x100);
+
+        // Modes with CTRL_X_WANT_IDENT should have the flag set
+        assert_ne!(CTRL_X_TAGS & CTRL_X_WANT_IDENT, 0);
+        assert_ne!(CTRL_X_PATH_PATTERNS & CTRL_X_WANT_IDENT, 0);
+        assert_ne!(CTRL_X_PATH_DEFINES & CTRL_X_WANT_IDENT, 0);
+        assert_ne!(CTRL_X_DICTIONARY & CTRL_X_WANT_IDENT, 0);
+        assert_ne!(CTRL_X_THESAURUS & CTRL_X_WANT_IDENT, 0);
+
+        // Modes without CTRL_X_WANT_IDENT should not have the flag
+        assert_eq!(CTRL_X_NORMAL & CTRL_X_WANT_IDENT, 0);
+        assert_eq!(CTRL_X_SCROLL & CTRL_X_WANT_IDENT, 0);
+        assert_eq!(CTRL_X_FILES & CTRL_X_WANT_IDENT, 0);
+        assert_eq!(CTRL_X_CMDLINE & CTRL_X_WANT_IDENT, 0);
+    }
+
+    #[test]
+    fn test_ctrl_key_constants() {
+        // Control keys are ASCII control codes: Ctrl_X = 'X' - 'A' + 1
+        assert_eq!(CTRL_D, 4); // 'D' - 'A' + 1
+        assert_eq!(CTRL_E, 5);
+        assert_eq!(CTRL_F, 6);
+        assert_eq!(CTRL_I, 9); // Tab
+        assert_eq!(CTRL_K, 11);
+        assert_eq!(CTRL_L, 12);
+        assert_eq!(CTRL_N, 14);
+        assert_eq!(CTRL_O, 15);
+        assert_eq!(CTRL_P, 16);
+        assert_eq!(CTRL_Q, 17);
+        assert_eq!(CTRL_R, 18);
+        assert_eq!(CTRL_S, 19);
+        assert_eq!(CTRL_T, 20);
+        assert_eq!(CTRL_U, 21);
+        assert_eq!(CTRL_V, 22);
+        assert_eq!(CTRL_X, 24);
+        assert_eq!(CTRL_Y, 25);
+        assert_eq!(CTRL_Z, 26);
+        assert_eq!(CTRL_RSB, 29); // ']' - '@'
+    }
+
+    #[test]
+    fn test_completion_status_flags() {
+        // Completion status flags
+        assert_eq!(CONT_ADDING, 1);
+        assert_eq!(CONT_SOL, 16);
+        assert_eq!(CONT_LOCAL, 32);
+    }
+
+    #[test]
+    fn test_completeopt_flags() {
+        // completeopt flags
+        assert_eq!(K_OPT_COT_FLAG_MENU, 0x01);
+        assert_eq!(K_OPT_COT_FLAG_MENUONE, 0x02);
     }
 }
