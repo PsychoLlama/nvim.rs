@@ -124,5 +124,18 @@ pub unsafe extern "C" fn rs_prompt_curpos_editable() -> bool {
 
 #[cfg(test)]
 mod tests {
-    // Note: Tests would need to mock the C accessor functions
+    use super::*;
+
+    #[test]
+    fn test_default_prompt_format() {
+        // Verify the default prompt is "% " with null terminator
+        assert_eq!(DEFAULT_PROMPT, b"% \0");
+        assert_eq!(DEFAULT_PROMPT.len(), 3);
+    }
+
+    #[test]
+    fn test_default_prompt_null_terminated() {
+        // Ensure the prompt is properly null-terminated for C interop
+        assert_eq!(DEFAULT_PROMPT[DEFAULT_PROMPT.len() - 1], 0);
+    }
 }

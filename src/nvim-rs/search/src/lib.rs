@@ -141,5 +141,33 @@ pub extern "C" fn rs_magic_isset() -> c_int {
 
 #[cfg(test)]
 mod tests {
-    // Note: Tests would need to mock the C accessor functions
+    use super::*;
+
+    #[test]
+    fn test_direction_constants() {
+        // FORWARD should be 1 (matches search.c)
+        assert_eq!(FORWARD, 1);
+    }
+
+    #[test]
+    fn test_optmagic_constants() {
+        // optmagic_T values from regexp_defs.h
+        assert_eq!(OPTION_MAGIC_NOT_SET, 0);
+        assert_eq!(OPTION_MAGIC_ON, 1);
+        assert_eq!(OPTION_MAGIC_OFF, 2);
+    }
+
+    #[test]
+    fn test_optmagic_distinct() {
+        // Ensure all optmagic values are distinct
+        let values = [OPTION_MAGIC_NOT_SET, OPTION_MAGIC_ON, OPTION_MAGIC_OFF];
+        for i in 0..values.len() {
+            for j in (i + 1)..values.len() {
+                assert_ne!(
+                    values[i], values[j],
+                    "optmagic values at {i} and {j} should differ"
+                );
+            }
+        }
+    }
 }
