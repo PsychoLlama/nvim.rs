@@ -340,4 +340,14 @@ mod tests {
         let decoded = decode(&encoded).unwrap();
         assert_eq!(decoded, original);
     }
+
+    #[test]
+    fn test_base64_alphabet_constant() {
+        // Verify base64 alphabet matches RFC 4648 standard
+        assert_eq!(ALPHABET.len(), 64);
+        assert_eq!(
+            ALPHABET,
+            b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+        );
+    }
 }
