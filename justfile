@@ -65,12 +65,14 @@ rust-test:
       -p nvim-event \
       -p nvim-fileio \
       -p nvim-fuzzy \
+      -p nvim-grid \
       -p nvim-help \
       -p nvim-indent \
       -p nvim-keycodes \
       -p nvim-linematch \
       -p nvim-mark \
       -p nvim-math \
+      -p nvim-memory \
       -p nvim-memutil \
       -p nvim-menu \
       -p nvim-msgpack \
