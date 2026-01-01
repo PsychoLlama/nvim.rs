@@ -37,6 +37,25 @@ extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define multiqueue_empty(mq) rs_multiqueue_empty(mq)
 #define loop_get_events(l) rs_loop_get_events(l)
 
+// =============================================================================
+// Accessor functions for Rust FFI
+// =============================================================================
+
+/// Get the current State global.
+int nvim_get_state(void) { return State; }
+
+/// Get the VIsual_active flag.
+int nvim_get_visual_active(void) { return VIsual_active; }
+
+/// Get the VIsual_select flag.
+int nvim_get_visual_select(void) { return VIsual_select; }
+
+/// Get the finish_op flag.
+int nvim_state_get_finish_op(void) { return finish_op; }
+
+// Rust implementation
+extern int rs_get_real_state(void);
+
 void state_enter(VimState *s)
   FUNC_ATTR_NONNULL_ALL
 {
@@ -166,17 +185,7 @@ bool virtual_active(win_T *wp)
 /// State.
 int get_real_state(void)
 {
-  if (State & MODE_NORMAL) {
-    if (VIsual_active) {
-      if (VIsual_select) {
-        return MODE_SELECT;
-      }
-      return MODE_VISUAL;
-    } else if (finish_op) {
-      return MODE_OP_PENDING;
-    }
-  }
-  return State;
+  return rs_get_real_state();
 }
 
 /// Returns the current mode as a string in "buf[MODE_MAX_LENGTH]", NUL

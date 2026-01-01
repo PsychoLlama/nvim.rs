@@ -2291,7 +2291,17 @@ pub unsafe extern "C" fn rs_socket_watcher_call_close_cb(watcher: SocketWatcherH
 
 extern "C" {
     fn nvim_get_was_safe() -> c_int;
+    fn nvim_get_state() -> c_int;
+    fn nvim_get_visual_active() -> c_int;
+    fn nvim_get_visual_select() -> c_int;
+    fn nvim_state_get_finish_op() -> c_int;
 }
+
+// Mode constants (from state_defs.h)
+const MODE_NORMAL: c_int = 0x01;
+const MODE_VISUAL: c_int = 0x02;
+const MODE_OP_PENDING: c_int = 0x04;
+const MODE_SELECT: c_int = 0x40;
 
 /// Get whether the editor was in a safe state.
 ///
@@ -2300,6 +2310,40 @@ extern "C" {
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_was_safe_state() -> c_int {
     nvim_get_was_safe()
+}
+
+/// Get the real state of the editor.
+///
+/// MODE_VISUAL, MODE_SELECT and MODE_OP_PENDING State are never set directly,
+/// they are equal to MODE_NORMAL State with a condition. This function returns
+/// the real State.
+#[inline]
+fn get_real_state_impl() -> c_int {
+    // SAFETY: These are safe accessors to C globals
+    unsafe {
+        let state = nvim_get_state();
+
+        if (state & MODE_NORMAL) != 0 {
+            if nvim_get_visual_active() != 0 {
+                if nvim_get_visual_select() != 0 {
+                    return MODE_SELECT;
+                }
+                return MODE_VISUAL;
+            } else if nvim_state_get_finish_op() != 0 {
+                return MODE_OP_PENDING;
+            }
+        }
+        state
+    }
+}
+
+/// FFI wrapper for get_real_state.
+///
+/// Returns the real state of the editor, accounting for virtual states like
+/// MODE_VISUAL, MODE_SELECT, and MODE_OP_PENDING.
+#[no_mangle]
+pub extern "C" fn rs_get_real_state() -> c_int {
+    get_real_state_impl()
 }
 
 #[cfg(test)]
