@@ -564,7 +564,7 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 
 ### Undo Module (undo.c - PARTIALLY MIGRATED)
 
-**Migrated Functions (23 rs_* functions):**
+**Migrated Functions (24 rs_* functions):**
 
 *Group A - Utilities:*
 - `rs_bufIsChanged` - Check if buffer is modified or file format differs
@@ -598,8 +598,9 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 - `rs_u_undo` - Main undo command handler (u key)
 - `rs_u_redo` - Main redo command handler (Ctrl-R key)
 - `rs_u_undo_and_forget` - Undo and remove branch from undo tree (API use)
+- `rs_u_doit` - Core undo/redo loop (processes count undos/redos)
 
-**Accessor Functions (58):**
+**Accessor Functions (70):**
 
 *Buffer undo field accessors:*
 - `nvim_buf_get/set_b_u_oldhead` - Oldest undo header
@@ -662,7 +663,18 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 - `nvim_has_cpo_undo` - Check if CPO_UNDO is in 'cpoptions'
 - `nvim_get_undo_undoes` - Get undo_undoes static variable
 - `nvim_set_undo_undoes` - Set undo_undoes static variable
-- `nvim_u_doit` - Call u_doit (complex undo/redo implementation)
+
+*u_doit accessors:*
+- `nvim_buf_ml_is_empty` - Check if buffer has ML_EMPTY flag
+- `nvim_get/set_u_newcount` - Static u_newcount variable
+- `nvim_get/set_u_oldcount` - Static u_oldcount variable
+- `nvim_msg_ext_set_kind_undo` - Set message kind to "undo"
+- `nvim_change_warning_curbuf` - Warn about file changes
+- `nvim_beep_flush` - Beep and flush
+- `nvim_msg_oldest_change` - "Already at oldest change" message
+- `nvim_msg_newest_change` - "Already at newest change" message
+- `nvim_u_undoredo` - Call u_undoredo (actual undo/redo work)
+- `nvim_u_undo_end` - Call u_undo_end (show result message)
 
 *u_undo_and_forget accessors:*
 - `nvim_buf_get/set_b_u_seq_cur` - Current sequence number

@@ -155,13 +155,26 @@ extern "C" {
     fn nvim_has_cpo_undo() -> bool;
     fn nvim_get_undo_undoes() -> bool;
     fn nvim_set_undo_undoes(val: bool);
-    fn nvim_u_doit(count: c_int, quiet: bool, do_buf_event: bool);
 
     // u_undo_and_forget accessors
     fn nvim_buf_get_b_u_seq_cur(buf: BufHandle) -> c_int;
     fn nvim_buf_set_b_u_seq_cur(buf: BufHandle, val: c_int);
     fn nvim_buf_get_b_u_seq_last(buf: BufHandle) -> c_int;
     fn nvim_buf_set_b_u_seq_last(buf: BufHandle, val: c_int);
+
+    // u_doit accessors
+    fn nvim_buf_ml_is_empty(buf: BufHandle) -> bool;
+    fn nvim_get_u_newcount() -> c_int;
+    fn nvim_set_u_newcount(val: c_int);
+    fn nvim_get_u_oldcount() -> c_int;
+    fn nvim_set_u_oldcount(val: c_int);
+    fn nvim_msg_ext_set_kind_undo();
+    fn nvim_change_warning_curbuf();
+    fn nvim_beep_flush();
+    fn nvim_msg_oldest_change();
+    fn nvim_msg_newest_change();
+    fn nvim_u_undoredo(undo: bool, do_buf_event: bool);
+    fn nvim_u_undo_end(did_undo: bool, absolute: bool, quiet: bool);
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed.
@@ -703,7 +716,7 @@ pub unsafe extern "C" fn rs_u_undo(mut count: c_int) {
         nvim_set_undo_undoes(!nvim_get_undo_undoes());
     }
 
-    nvim_u_doit(count, false, true);
+    rs_u_doit(count, false, true);
 }
 
 /// If 'cpoptions' contains 'u': Repeat the previous undo or redo.
@@ -718,7 +731,7 @@ pub unsafe extern "C" fn rs_u_redo(count: c_int) {
         nvim_set_undo_undoes(false);
     }
 
-    nvim_u_doit(count, false, true);
+    rs_u_doit(count, false, true);
 }
 
 /// Undo and remove the branch from the undo tree.
@@ -737,7 +750,7 @@ pub unsafe extern "C" fn rs_u_undo_and_forget(mut count: c_int, do_buf_event: bo
     }
 
     nvim_set_undo_undoes(true);
-    nvim_u_doit(count, true, do_buf_event);
+    rs_u_doit(count, true, do_buf_event);
 
     let curhead = nvim_buf_get_b_u_curhead(buf);
     if curhead.0.is_null() {
@@ -793,6 +806,94 @@ pub unsafe extern "C" fn rs_u_undo_and_forget(mut count: c_int, do_buf_event: bo
 
     rs_u_freebranch(buf, to_forget, std::ptr::null_mut());
     true
+}
+
+/// Core undo/redo loop.
+/// Performs the actual undo or redo operations based on the current state.
+///
+/// # Safety
+///
+/// Must be called with valid global state (curbuf, undo_undoes set correctly).
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_doit(startcount: c_int, quiet: bool, do_buf_event: bool) {
+    let buf = nvim_get_curbuf();
+
+    if !rs_undo_allowed(buf) {
+        return;
+    }
+
+    nvim_set_u_newcount(0);
+    nvim_set_u_oldcount(if nvim_buf_ml_is_empty(buf) { -1 } else { 0 });
+
+    nvim_msg_ext_set_kind_undo();
+    let mut count = startcount;
+
+    while count > 0 {
+        count -= 1;
+
+        // Do the change warning now, so that it triggers FileChangedRO when
+        // needed. This may cause the file to be reloaded, that must happen
+        // before we do anything, because it may change curbuf->b_u_curhead
+        // and more.
+        nvim_change_warning_curbuf();
+
+        let undo_undoes = nvim_get_undo_undoes();
+
+        if undo_undoes {
+            let curhead = nvim_buf_get_b_u_curhead(buf);
+            if curhead.0.is_null() {
+                // first undo
+                let newhead = nvim_buf_get_b_u_newhead(buf);
+                nvim_buf_set_b_u_curhead(buf, newhead);
+            } else if nvim_get_undolevel(buf) > 0 {
+                // multi level undo - get next undo
+                let next = nvim_uhp_get_next(curhead);
+                nvim_buf_set_b_u_curhead(buf, next);
+            }
+
+            // nothing to undo
+            let curhead = nvim_buf_get_b_u_curhead(buf);
+            let numhead = nvim_buf_get_b_u_numhead(buf);
+            if numhead == 0 || curhead.0.is_null() {
+                // stick curbuf->b_u_curhead at end
+                let oldhead = nvim_buf_get_b_u_oldhead(buf);
+                nvim_buf_set_b_u_curhead(buf, oldhead);
+                nvim_beep_flush();
+                if count == startcount - 1 {
+                    nvim_msg_oldest_change();
+                    return;
+                }
+                break;
+            }
+
+            nvim_u_undoredo(true, do_buf_event);
+        } else {
+            let curhead = nvim_buf_get_b_u_curhead(buf);
+            if curhead.0.is_null() || nvim_get_undolevel(buf) <= 0 {
+                // nothing to redo
+                nvim_beep_flush();
+                if count == startcount - 1 {
+                    nvim_msg_newest_change();
+                    return;
+                }
+                break;
+            }
+
+            nvim_u_undoredo(false, do_buf_event);
+
+            // Advance for next redo. Set "newhead" when at the end of the
+            // redoable changes.
+            let curhead = nvim_buf_get_b_u_curhead(buf);
+            let prev = nvim_uhp_get_prev(curhead);
+            if prev.0.is_null() {
+                nvim_buf_set_b_u_newhead(buf, curhead);
+            }
+            nvim_buf_set_b_u_curhead(buf, prev);
+        }
+    }
+
+    let undo_undoes = nvim_get_undo_undoes();
+    nvim_u_undo_end(undo_undoes, false, quiet);
 }
 
 #[cfg(test)]

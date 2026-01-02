@@ -164,6 +164,7 @@ extern void rs_ex_undojoin(void);
 extern void rs_u_undo(int count);
 extern void rs_u_redo(int count);
 extern bool rs_u_undo_and_forget(int count, bool do_buf_event);
+extern void rs_u_doit(int startcount, bool quiet, bool do_buf_event);
 
 // Feature flag for Rust undo functions
 #define USE_RUST_UNDO 1
@@ -1895,6 +1896,9 @@ bool u_undo_and_forget(int count, bool do_buf_event)
 /// @param do_buf_event If `true`, send the changedtick with the buffer updates
 static void u_doit(int startcount, bool quiet, bool do_buf_event)
 {
+#ifdef USE_RUST_UNDO
+  rs_u_doit(startcount, quiet, do_buf_event);
+#else
   if (!undo_allowed(curbuf)) {
     return;
   }
@@ -1955,6 +1959,7 @@ static void u_doit(int startcount, bool quiet, bool do_buf_event)
     }
   }
   u_undo_end(undo_undoes, false, quiet);
+#endif
 }
 
 // Undo or redo over the timeline.
@@ -3774,4 +3779,65 @@ int nvim_buf_get_b_u_seq_last(buf_T *buf)
 void nvim_buf_set_b_u_seq_last(buf_T *buf, int val)
 {
   buf->b_u_seq_last = val;
+}
+
+// u_doit accessors
+bool nvim_buf_ml_is_empty(buf_T *buf)
+{
+  return buf->b_ml.ml_flags & ML_EMPTY;
+}
+
+int nvim_get_u_newcount(void)
+{
+  return u_newcount;
+}
+
+void nvim_set_u_newcount(int val)
+{
+  u_newcount = val;
+}
+
+int nvim_get_u_oldcount(void)
+{
+  return u_oldcount;
+}
+
+void nvim_set_u_oldcount(int val)
+{
+  u_oldcount = val;
+}
+
+void nvim_msg_ext_set_kind_undo(void)
+{
+  msg_ext_set_kind("undo");
+}
+
+void nvim_change_warning_curbuf(void)
+{
+  change_warning(curbuf, 0);
+}
+
+void nvim_beep_flush(void)
+{
+  beep_flush();
+}
+
+void nvim_msg_oldest_change(void)
+{
+  msg(_("Already at oldest change"), 0);
+}
+
+void nvim_msg_newest_change(void)
+{
+  msg(_("Already at newest change"), 0);
+}
+
+void nvim_u_undoredo(bool undo, bool do_buf_event)
+{
+  u_undoredo(undo, do_buf_event);
+}
+
+void nvim_u_undo_end(bool did_undo, bool absolute, bool quiet)
+{
+  u_undo_end(did_undo, absolute, quiet);
 }
