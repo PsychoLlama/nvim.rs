@@ -9,14 +9,24 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::missing_const_for_fn)]
 
-use std::ffi::c_char;
+use std::ffi::{c_char, c_void};
 use std::os::raw::c_int;
+
+/// Opaque handle to a Neovim window (`win_T*`).
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WinHandle(*mut c_void);
 
 // C accessors for static data
 extern "C" {
     fn nvim_get_autocmd_blocked() -> c_int;
     fn nvim_get_event_name(event: c_int) -> *const c_char;
     fn nvim_get_autocmds_count(event: c_int) -> usize;
+
+    // Accessors for aucmd_win array
+    fn nvim_get_aucmd_win_count() -> c_int;
+    fn nvim_aucmd_win_used(idx: c_int) -> c_int;
+    fn nvim_aucmd_win_get_win(idx: c_int) -> WinHandle;
 }
 
 // Static "Unknown" string for invalid events
@@ -57,6 +67,23 @@ pub unsafe extern "C" fn rs_has_event(event: c_int, num_events: c_int) -> c_int 
     } else {
         0
     }
+}
+
+/// Check if "win" is an active entry in the aucmd_win array.
+///
+/// Returns 1 if the window is found in the autocmd window array and is in use, 0 otherwise.
+///
+/// # Safety
+/// The `win` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_aucmd_win(win: WinHandle) -> c_int {
+    let count = nvim_get_aucmd_win_count();
+    for i in 0..count {
+        if nvim_aucmd_win_used(i) != 0 && nvim_aucmd_win_get_win(i) == win {
+            return 1;
+        }
+    }
+    0
 }
 
 /// Returns the length of the first pattern in a comma-separated pattern list.

@@ -73,6 +73,7 @@ extern const char *rs_aucmd_next_pattern(const char *pat, size_t patlen);
 extern int rs_aupat_is_buflocal(const char *pat, int patlen);
 extern const char *rs_event_nr2name(int event, int num_events);
 extern int rs_has_event(int event, int num_events);
+extern int rs_is_aucmd_win(win_T *win);
 
 // C accessor for event_names array (used by Rust)
 const char *nvim_get_event_name(int event)
@@ -628,12 +629,7 @@ void free_all_autocmds(void)
 /// Return true if "win" is an active entry in aucmd_win[].
 bool is_aucmd_win(win_T *win)
 {
-  for (int i = 0; i < AUCMD_WIN_COUNT; i++) {
-    if (aucmd_win[i].auc_win_used && aucmd_win[i].auc_win == win) {
-      return true;
-    }
-  }
-  return false;
+  return rs_is_aucmd_win(win) != 0;
 }
 
 /// Return the event number for event name "start".
@@ -2694,4 +2690,28 @@ void do_filetype_autocmd(buf_T *buf, bool force)
 int nvim_get_autocmd_blocked(void)
 {
   return autocmd_blocked;
+}
+
+/// Get the count of aucmd_win entries (used by Rust FFI).
+int nvim_get_aucmd_win_count(void)
+{
+  return AUCMD_WIN_COUNT;
+}
+
+/// Check if aucmd_win at index is used (used by Rust FFI).
+int nvim_aucmd_win_used(int idx)
+{
+  if (idx < 0 || idx >= AUCMD_WIN_COUNT) {
+    return 0;
+  }
+  return aucmd_win[idx].auc_win_used ? 1 : 0;
+}
+
+/// Get the window pointer at aucmd_win index (used by Rust FFI).
+win_T *nvim_aucmd_win_get_win(int idx)
+{
+  if (idx < 0 || idx >= AUCMD_WIN_COUNT) {
+    return NULL;
+  }
+  return aucmd_win[idx].auc_win;
 }
