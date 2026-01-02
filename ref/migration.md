@@ -564,7 +564,7 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 
 ### Undo Module (undo.c - PARTIALLY MIGRATED)
 
-**Migrated Functions (32 rs_* functions):**
+**Migrated Functions (33 rs_* functions):**
 
 *Group A - Utilities:*
 - `rs_bufIsChanged` - Check if buffer is modified or file format differs
@@ -598,6 +598,7 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 - `rs_u_inssub` - Save for line insertion (:s command)
 - `rs_u_savedel` - Save lines for deletion
 - `rs_u_find_first_changed` - Find first changed line after reload
+- `rs_u_force_get_undo_header` - Get or create undo header for buffer
 
 *Ex Commands:*
 - `rs_ex_undojoin` - Continue adding to the last undo entry (:undojoin)

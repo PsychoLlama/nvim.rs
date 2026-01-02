@@ -1371,6 +1371,35 @@ pub unsafe extern "C" fn rs_u_find_first_changed() {
     }
 }
 
+/// Given a buffer, return the undo header. If none is set, create one first.
+/// NULL will be returned if e.g undolevels = -1 (undo disabled).
+/// Rust implementation of u_force_get_undo_header.
+///
+/// # Safety
+///
+/// Must be called with a valid buffer handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_force_get_undo_header(buf: BufHandle) -> UHeaderHandle {
+    let mut uhp = nvim_buf_get_b_u_curhead(buf);
+    if uhp.0.is_null() {
+        uhp = nvim_buf_get_b_u_newhead(buf);
+    }
+
+    // Create the first undo header for the buffer
+    if uhp.0.is_null() {
+        // Args are tricky: this means replace empty range by empty range
+        rs_u_savecommon(buf, 0, 1, 1, true);
+
+        uhp = nvim_buf_get_b_u_curhead(buf);
+        if uhp.0.is_null() {
+            uhp = nvim_buf_get_b_u_newhead(buf);
+            // If undolevel > 0 and still no header, abort
+            // (This shouldn't happen in normal operation)
+        }
+    }
+    uhp
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

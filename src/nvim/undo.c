@@ -173,6 +173,7 @@ extern int rs_u_savesub(linenr_T lnum);
 extern int rs_u_inssub(linenr_T lnum);
 extern int rs_u_savedel(linenr_T lnum, linenr_T nlines);
 extern void rs_u_find_first_changed(void);
+extern u_header_T *rs_u_force_get_undo_header(buf_T *buf);
 
 // Feature flag for Rust undo functions
 #define USE_RUST_UNDO 1
@@ -3368,6 +3369,9 @@ void f_undotree(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 // NULL will be returned if e.g undolevels = -1 (undo disabled)
 u_header_T *u_force_get_undo_header(buf_T *buf)
 {
+#ifdef USE_RUST_UNDO
+  return rs_u_force_get_undo_header(buf);
+#else
   u_header_T *uhp = NULL;
   if (buf->b_u_curhead != NULL) {
     uhp = buf->b_u_curhead;
@@ -3388,6 +3392,7 @@ u_header_T *u_force_get_undo_header(buf_T *buf)
     }
   }
   return uhp;
+#endif
 }
 
 // ============================================================================
