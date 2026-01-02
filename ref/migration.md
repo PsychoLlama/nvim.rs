@@ -141,8 +141,8 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 - `win_find_by_handle` - Migrated to Rust (rs_win_find_by_handle) - Find window by handle
 - `win_count` - Migrated to Rust (rs_win_count) - Count windows
 
-**buffer.c**:
-- `buf_valid` - Buffer pointer validation (needs buffer list)
+**buffer.c** (MIGRATED):
+- `buf_valid` - Migrated to Rust (rs_buf_valid) - Buffer pointer validation
 
 **plines.c** (display calculations - partially MIGRATED):
 - `win_chartabsize` - Migrated to Rust (rs_win_chartabsize)
