@@ -88,6 +88,7 @@
 extern int rs_win_locked(win_T *wp);
 extern int rs_win_valid(win_T *win);
 extern int rs_tabpage_win_valid(tabpage_T *tp, win_T *win);
+extern int rs_only_one_window(void);
 extern int rs_one_window(void);
 extern int rs_win_valid_any_tab(win_T *win);
 extern int rs_valid_tabpage(tabpage_T *tpc);
@@ -8294,20 +8295,7 @@ int min_rows_for_all_tabpages(void)
 /// "aucmd_win". Does not count floats unless it is current.
 bool only_one_window(void) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  // If there is another tab page there always is another window.
-  if (first_tabpage->tp_next != NULL) {
-    return false;
-  }
-
-  int count = 0;
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp->w_buffer != NULL
-        && (!((bt_help(wp->w_buffer) && !bt_help(curbuf)) || wp->w_floating
-              || wp->w_p_pvw) || wp == curwin) && !is_aucmd_win(wp)) {
-      count++;
-    }
-  }
-  return count <= 1;
+  return rs_only_one_window() != 0;
 }
 
 /// Implementation of check_lnums() and check_lnums_nested().

@@ -79,6 +79,24 @@ impl TabpageHandle {
     }
 }
 
+/// Opaque handle to a Neovim buffer (`buf_T*`).
+///
+/// This is an opaque pointer type - Rust code should not attempt to
+/// dereference or inspect the contents. All field access is done
+/// through C accessor functions.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BufHandle(*mut std::ffi::c_void);
+
+impl BufHandle {
+    /// Check if the handle is null.
+    #[inline]
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
 /// Frame layout constants (matching C defines in `buffer_defs.h`).
 pub const FR_LEAF: c_char = 0; // Frame is a leaf (contains a window)
 pub const FR_ROW: c_char = 1; // Frame with a row of windows
@@ -208,6 +226,20 @@ extern "C" {
 
     /// Get the `handle` field from a window.
     fn nvim_win_get_handle(wp: WinHandle) -> c_int;
+
+    /// Get the `w_buffer` field from a window.
+    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
+
+    /// Get the current buffer (`curbuf` global).
+    fn nvim_get_curbuf() -> BufHandle;
+
+    // Buffer type check functions (from nvim-buffer crate)
+    /// Check if buffer is a help buffer.
+    fn rs_bt_help(buf: BufHandle) -> c_int;
+
+    // Autocmd functions (from nvim-autocmd crate)
+    /// Check if window is an aucmd_win.
+    fn rs_is_aucmd_win(win: WinHandle) -> c_int;
 }
 
 /// Check if a window is locked (`w_locked` field).
@@ -367,6 +399,60 @@ fn win_float_valid_impl(win: WinHandle) -> bool {
 #[no_mangle]
 pub extern "C" fn rs_win_float_valid(win: WinHandle) -> c_int {
     c_int::from(win_float_valid_impl(win))
+}
+
+/// Check that there is only one window (and only one tab page), not counting a
+/// help or preview window, unless it is the current window. Does not count
+/// "aucmd_win". Does not count floats unless it is current.
+#[inline]
+fn only_one_window_impl() -> bool {
+    // SAFETY: All accessor functions are safe
+    unsafe {
+        // If there is another tab page there always is another window.
+        let first_tabpage = nvim_get_first_tabpage();
+        if !nvim_tabpage_get_next(first_tabpage).is_null() {
+            return false;
+        }
+
+        let curwin = nvim_get_curwin();
+        let curbuf = nvim_get_curbuf();
+        let curbuf_is_help = rs_bt_help(curbuf) != 0;
+
+        let curtab = nvim_get_curtab();
+        let mut count = 0;
+        let mut wp = get_tabpage_firstwin(curtab);
+
+        while !wp.is_null() {
+            let buf = nvim_win_get_buffer(wp);
+            if !buf.is_null() {
+                let is_help = rs_bt_help(buf) != 0;
+                let is_floating = nvim_win_get_floating(wp) != 0;
+                let is_pvw = nvim_win_get_pvw(wp) != 0;
+                let is_curwin = wp == curwin;
+                let is_aucmd = rs_is_aucmd_win(wp) != 0;
+
+                // Count if:
+                // - Not a help window (unless curbuf is also help) AND not floating AND not preview
+                //   OR it's the current window
+                // - AND not an aucmd_win
+                let should_skip = (is_help && !curbuf_is_help) || is_floating || is_pvw;
+                if (!should_skip || is_curwin) && !is_aucmd {
+                    count += 1;
+                }
+            }
+            wp = nvim_win_get_next(wp);
+        }
+
+        count <= 1
+    }
+}
+
+/// FFI wrapper for `only_one_window`.
+///
+/// Returns non-zero if there is only one relevant window.
+#[no_mangle]
+pub extern "C" fn rs_only_one_window() -> c_int {
+    c_int::from(only_one_window_impl())
 }
 
 /// Check if there is only one window in the current tabpage (excluding floating windows).
