@@ -600,7 +600,7 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 - `rs_u_undo_and_forget` - Undo and remove branch from undo tree (API use)
 - `rs_u_doit` - Core undo/redo loop (processes count undos/redos)
 
-**Accessor Functions (70):**
+**Accessor Functions (77):**
 
 *Buffer undo field accessors:*
 - `nvim_buf_get/set_b_u_oldhead` - Oldest undo header
@@ -679,6 +679,15 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 *u_undo_and_forget accessors:*
 - `nvim_buf_get/set_b_u_seq_cur` - Current sequence number
 - `nvim_buf_get/set_b_u_seq_last` - Last sequence number
+
+*Infrastructure for future migration (u_savecommon):*
+- `nvim_ml_get_buf_copy` - Get allocated copy of buffer line
+- `nvim_fast_breakcheck` - Check for user interrupt
+- `nvim_undo_got_int` - Get interrupt flag
+- `nvim_time_now` - Get current time
+- `nvim_get_curwin_cursor` - Get current window cursor position
+- `nvim_curwin_virtual_active` - Check if virtual editing active
+- `nvim_getviscol` - Get visual column
 
 **Remaining Functions (complex, need extensive infrastructure):**
 - `undo_fmt_time` - Localized time formatting with NGETTEXT

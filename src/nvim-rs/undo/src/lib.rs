@@ -32,6 +32,9 @@ pub type TimeT = i32;
 /// Type alias for linenr_T (line number type).
 pub type LinenrT = c_long;
 
+/// Type alias for colnr_T (column number type).
+pub type ColnrT = c_int;
+
 // FFI declarations for C accessor functions
 #[allow(dead_code)]
 extern "C" {
@@ -175,6 +178,15 @@ extern "C" {
     fn nvim_msg_newest_change();
     fn nvim_u_undoredo(undo: bool, do_buf_event: bool);
     fn nvim_u_undo_end(did_undo: bool, absolute: bool, quiet: bool);
+
+    // Infrastructure for future migration (u_savecommon, etc.)
+    fn nvim_ml_get_buf_copy(buf: BufHandle, lnum: LinenrT) -> *mut c_char;
+    fn nvim_fast_breakcheck();
+    fn nvim_undo_got_int() -> bool;
+    fn nvim_time_now() -> TimeT;
+    fn nvim_get_curwin_cursor(lnum: *mut LinenrT, col: *mut ColnrT, coladd: *mut ColnrT);
+    fn nvim_curwin_virtual_active() -> bool;
+    fn nvim_getviscol() -> ColnrT;
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed.

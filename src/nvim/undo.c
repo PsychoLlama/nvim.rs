@@ -3841,3 +3841,43 @@ void nvim_u_undo_end(bool did_undo, bool absolute, bool quiet)
 {
   u_undo_end(did_undo, absolute, quiet);
 }
+
+// Buffer line access (infrastructure for future migration)
+// Returns allocated copy of line - caller must free with nvim_xfree
+char *nvim_ml_get_buf_copy(buf_T *buf, linenr_T lnum)
+{
+  return xstrdup(ml_get_buf(buf, lnum));
+}
+
+void nvim_fast_breakcheck(void)
+{
+  fast_breakcheck();
+}
+
+bool nvim_undo_got_int(void)
+{
+  return got_int;
+}
+
+time_t nvim_time_now(void)
+{
+  return time(NULL);
+}
+
+// Window cursor access for undo header
+void nvim_get_curwin_cursor(linenr_T *lnum, colnr_T *col, colnr_T *coladd)
+{
+  *lnum = curwin->w_cursor.lnum;
+  *col = curwin->w_cursor.col;
+  *coladd = curwin->w_cursor.coladd;
+}
+
+bool nvim_curwin_virtual_active(void)
+{
+  return virtual_active(curwin);
+}
+
+colnr_T nvim_getviscol(void)
+{
+  return getviscol();
+}
