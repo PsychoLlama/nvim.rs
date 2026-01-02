@@ -156,6 +156,12 @@ extern "C" {
     fn nvim_get_undo_undoes() -> bool;
     fn nvim_set_undo_undoes(val: bool);
     fn nvim_u_doit(count: c_int, quiet: bool, do_buf_event: bool);
+
+    // u_undo_and_forget accessors
+    fn nvim_buf_get_b_u_seq_cur(buf: BufHandle) -> c_int;
+    fn nvim_buf_set_b_u_seq_cur(buf: BufHandle, val: c_int);
+    fn nvim_buf_get_b_u_seq_last(buf: BufHandle) -> c_int;
+    fn nvim_buf_set_b_u_seq_last(buf: BufHandle, val: c_int);
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed.
@@ -713,6 +719,80 @@ pub unsafe extern "C" fn rs_u_redo(count: c_int) {
     }
 
     nvim_u_doit(count, false, true);
+}
+
+/// Undo and remove the branch from the undo tree.
+/// Also moves the cursor (as a "normal" undo would).
+///
+/// # Safety
+///
+/// Accesses global state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_undo_and_forget(mut count: c_int, do_buf_event: bool) -> bool {
+    let buf = nvim_get_curbuf();
+
+    if !nvim_buf_get_b_u_synced(buf) {
+        rs_u_sync(true);
+        count = 1;
+    }
+
+    nvim_set_undo_undoes(true);
+    nvim_u_doit(count, true, do_buf_event);
+
+    let curhead = nvim_buf_get_b_u_curhead(buf);
+    if curhead.0.is_null() {
+        // nothing was undone
+        return false;
+    }
+
+    // Delete the current redo header
+    // set the redo header to the next alternative branch (if any)
+    // otherwise we will be in the leaf state
+    let to_forget = curhead;
+    let uh_next = nvim_uhp_get_next(to_forget);
+    nvim_buf_set_b_u_newhead(buf, uh_next);
+
+    let alt_next = nvim_uhp_get_alt_next(to_forget);
+    nvim_buf_set_b_u_curhead(buf, alt_next);
+
+    if !alt_next.0.is_null() {
+        nvim_uhp_set_alt_next(to_forget, UHeaderHandle(std::ptr::null_mut()));
+        let alt_prev = nvim_uhp_get_alt_prev(to_forget);
+        nvim_uhp_set_alt_prev(alt_next, alt_prev);
+
+        let alt_next_next = nvim_uhp_get_next(alt_next);
+        if !alt_next_next.0.is_null() {
+            nvim_buf_set_b_u_seq_cur(buf, nvim_uhp_get_seq(alt_next_next));
+        } else {
+            nvim_buf_set_b_u_seq_cur(buf, 0);
+        }
+    } else {
+        let newhead = nvim_buf_get_b_u_newhead(buf);
+        if !newhead.0.is_null() {
+            nvim_buf_set_b_u_seq_cur(buf, nvim_uhp_get_seq(newhead));
+        }
+    }
+
+    let alt_prev = nvim_uhp_get_alt_prev(to_forget);
+    if !alt_prev.0.is_null() {
+        let new_curhead = nvim_buf_get_b_u_curhead(buf);
+        nvim_uhp_set_alt_next(alt_prev, new_curhead);
+    }
+
+    let newhead = nvim_buf_get_b_u_newhead(buf);
+    if !newhead.0.is_null() {
+        let new_curhead = nvim_buf_get_b_u_curhead(buf);
+        nvim_uhp_set_prev(newhead, new_curhead);
+    }
+
+    let seq_last = nvim_buf_get_b_u_seq_last(buf);
+    let to_forget_seq = nvim_uhp_get_seq(to_forget);
+    if seq_last == to_forget_seq {
+        nvim_buf_set_b_u_seq_last(buf, seq_last - 1);
+    }
+
+    rs_u_freebranch(buf, to_forget, std::ptr::null_mut());
+    true
 }
 
 #[cfg(test)]

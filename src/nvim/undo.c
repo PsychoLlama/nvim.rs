@@ -163,6 +163,7 @@ extern bool rs_undo_allowed(buf_T *buf);
 extern void rs_ex_undojoin(void);
 extern void rs_u_undo(int count);
 extern void rs_u_redo(int count);
+extern bool rs_u_undo_and_forget(int count, bool do_buf_event);
 
 // Feature flag for Rust undo functions
 #define USE_RUST_UNDO 1
@@ -1844,6 +1845,9 @@ void u_redo(int count)
 /// @param do_buf_event If `true`, send the changedtick with the buffer updates
 bool u_undo_and_forget(int count, bool do_buf_event)
 {
+#ifdef USE_RUST_UNDO
+  return rs_u_undo_and_forget(count, do_buf_event);
+#else
   if (curbuf->b_u_synced == false) {
     u_sync(true);
     count = 1;
@@ -1881,6 +1885,7 @@ bool u_undo_and_forget(int count, bool do_buf_event)
   }
   u_freebranch(curbuf, to_forget, NULL);
   return true;
+#endif
 }
 
 /// Undo or redo, depending on `undo_undoes`, `count` times.
@@ -3748,4 +3753,25 @@ void nvim_set_undo_undoes(bool val)
 void nvim_u_doit(int count, bool quiet, bool do_buf_event)
 {
   u_doit(count, quiet, do_buf_event);
+}
+
+// u_undo_and_forget accessors
+int nvim_buf_get_b_u_seq_cur(buf_T *buf)
+{
+  return buf->b_u_seq_cur;
+}
+
+void nvim_buf_set_b_u_seq_cur(buf_T *buf, int val)
+{
+  buf->b_u_seq_cur = val;
+}
+
+int nvim_buf_get_b_u_seq_last(buf_T *buf)
+{
+  return buf->b_u_seq_last;
+}
+
+void nvim_buf_set_b_u_seq_last(buf_T *buf, int val)
+{
+  buf->b_u_seq_last = val;
 }
