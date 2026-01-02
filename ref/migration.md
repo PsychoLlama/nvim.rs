@@ -31,7 +31,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | ex_docmd     | Ex command parsing helpers                         |
 | ex_eval      | Exception state checking                           |
 | fileio       | File time comparison                               |
-| fold         | Fold method checks, fold state queries             |
+| fold         | Fold method checks, fold state queries, fold permissions |
 | fuzzy        | Fuzzy matching algorithm (fzy-based)               |
 | getchar      | Typeahead buffer state                             |
 | grid         | Screen character (schar_T) operations              |
@@ -369,6 +369,25 @@ Functions blocked on missing accessor infrastructure:
 
 **mbyte.c** (multibyte encoding functions):
 - `bomb_size` - Migrated to Rust (rs_bomb_size) - returns BOM size for current buffer's encoding
+
+**fold.c** (fold method and permission checks - MIGRATED):
+- `foldmethodIsManual` - Migrated to Rust (rs_foldmethodIsManual) - checks if foldmethod is "manual"
+- `foldmethodIsIndent` - Migrated to Rust (rs_foldmethodIsIndent) - checks if foldmethod is "indent"
+- `foldmethodIsExpr` - Migrated to Rust (rs_foldmethodIsExpr) - checks if foldmethod is "expr"
+- `foldmethodIsMarker` - Migrated to Rust (rs_foldmethodIsMarker) - checks if foldmethod is "marker"
+- `foldmethodIsSyntax` - Migrated to Rust (rs_foldmethodIsSyntax) - checks if foldmethod is "syntax"
+- `foldmethodIsDiff` - Migrated to Rust (rs_foldmethodIsDiff) - checks if foldmethod is "diff"
+- `hasAnyFolding` - Migrated to Rust (rs_hasAnyFolding) - checks if folding may occur in window
+- `foldManualAllowed` - Migrated to Rust (rs_foldManualAllowed) - checks if manual fold creation/deletion allowed
+
+Accessor functions for fold.c:
+- `nvim_win_get_fdm_char` - Get character from foldmethod string
+- `nvim_win_get_p_fen` - Get foldenable flag
+- `nvim_win_buf_has_terminal` - Check if buffer has terminal
+- `nvim_win_folds_empty` - Check if folds growarray is empty
+- `nvim_get_curwin` - Get current window
+- `nvim_emsg_fold_cannot_create` - Error message for E350
+- `nvim_emsg_fold_cannot_delete` - Error message for E351
 
 TUIData accessor functions added for opaque handle pattern:
 - nvim_tui_get/set_rgb, nvim_tui_get/set_row, nvim_tui_get/set_col

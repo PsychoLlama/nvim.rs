@@ -27,6 +27,15 @@ extern "C" {
 
     /// Check if window's folds growarray is empty.
     fn nvim_win_folds_empty(wp: WinHandle) -> c_int;
+
+    /// Get the current window.
+    fn nvim_get_curwin() -> WinHandle;
+
+    /// Emit error message for cannot create fold with current foldmethod.
+    fn nvim_emsg_fold_cannot_create();
+
+    /// Emit error message for cannot delete fold with current foldmethod.
+    fn nvim_emsg_fold_cannot_delete();
 }
 
 // ============================================================================
@@ -109,6 +118,28 @@ fn foldmethod_is_diff_impl(wp: WinHandle) -> bool {
     }
     // "diff" - check character at index 0 is 'd'
     unsafe { nvim_win_get_fdm_char(wp, 0) == b'd' as c_char }
+}
+
+// ============================================================================
+// Fold Permission Checks
+// ============================================================================
+
+/// Check if manual fold creation or deletion is allowed.
+///
+/// Returns true if foldmethod is "manual" or "marker".
+/// Otherwise, emits an error message and returns false.
+#[inline]
+fn fold_manual_allowed_impl(create: bool) -> bool {
+    let curwin = unsafe { nvim_get_curwin() };
+    if foldmethod_is_manual_impl(curwin) || foldmethod_is_marker_impl(curwin) {
+        return true;
+    }
+    if create {
+        unsafe { nvim_emsg_fold_cannot_create() };
+    } else {
+        unsafe { nvim_emsg_fold_cannot_delete() };
+    }
+    false
 }
 
 // ============================================================================
@@ -220,6 +251,18 @@ pub extern "C" fn rs_foldmethodIsDiff(wp: WinHandle) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_hasAnyFolding(win: WinHandle) -> c_int {
     c_int::from(has_any_folding_impl(win))
+}
+
+/// Check if manual fold creation or deletion is allowed.
+///
+/// Returns true if foldmethod is "manual" or "marker".
+/// Otherwise, emits an error message and returns false.
+///
+/// # Safety
+/// Requires curwin to be valid.
+#[no_mangle]
+pub extern "C" fn rs_foldManualAllowed(create: bool) -> c_int {
+    c_int::from(fold_manual_allowed_impl(create))
 }
 
 #[cfg(test)]

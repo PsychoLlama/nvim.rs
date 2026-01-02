@@ -117,6 +117,7 @@ extern int rs_foldmethodIsMarker(win_T *wp);
 extern int rs_foldmethodIsSyntax(win_T *wp);
 extern int rs_foldmethodIsDiff(win_T *wp);
 extern int rs_hasAnyFolding(win_T *win);
+extern int rs_foldManualAllowed(bool create);
 
 static const char *e_nofold = N_("E490: No fold found");
 
@@ -529,15 +530,7 @@ static bool checkCloseRec(garray_T *gap, linenr_T lnum, int level)
 ///          give an error message and return false if not.
 int foldManualAllowed(bool create)
 {
-  if (foldmethodIsManual(curwin) || foldmethodIsMarker(curwin)) {
-    return true;
-  }
-  if (create) {
-    emsg(_("E350: Cannot create fold with current 'foldmethod'"));
-  } else {
-    emsg(_("E351: Cannot delete fold with current 'foldmethod'"));
-  }
-  return false;
+  return rs_foldManualAllowed(create);
 }
 
 // foldCreate() {{{2
@@ -3306,4 +3299,20 @@ void f_foldtextresult(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   }
 
   entered = false;
+}
+
+// ============================================================================
+// Rust FFI accessor functions
+// ============================================================================
+
+/// Emit error message for cannot create fold with current foldmethod.
+void nvim_emsg_fold_cannot_create(void)
+{
+  emsg(_("E350: Cannot create fold with current 'foldmethod'"));
+}
+
+/// Emit error message for cannot delete fold with current foldmethod.
+void nvim_emsg_fold_cannot_delete(void)
+{
+  emsg(_("E351: Cannot delete fold with current 'foldmethod'"));
 }
