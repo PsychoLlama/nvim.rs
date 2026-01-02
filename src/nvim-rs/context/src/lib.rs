@@ -86,6 +86,9 @@ extern "C" {
     /// Get the size of the context stack
     fn nvim_get_ctx_stack_size() -> usize;
 
+    /// Get context at given index from top of stack (returns NULL if out of bounds)
+    fn nvim_get_ctx_at_index(index: usize) -> *mut Context;
+
     /// Free a string
     fn rs_api_free_string(value: NvimString);
 
@@ -100,6 +103,17 @@ extern "C" {
 #[no_mangle]
 pub unsafe extern "C" fn rs_ctx_size() -> usize {
     nvim_get_ctx_stack_size()
+}
+
+/// Returns pointer to Context object with given zero-based index from the top
+/// of context stack or NULL if index is out of bounds.
+///
+/// # Safety
+/// Returns a pointer to a C-owned Context struct. The caller must not
+/// free or modify the returned pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ctx_get(index: usize) -> *mut Context {
+    nvim_get_ctx_at_index(index)
 }
 
 /// Free resources used by a Context object.
@@ -238,5 +252,23 @@ mod tests {
         assert_eq!(d.size, 0);
         assert_eq!(d.capacity, 0);
         assert!(d.items.is_null());
+    }
+
+    #[test]
+    fn test_context_struct_size() {
+        // Context should be 5 fields: 4 NvimStrings (16 bytes each) + 1 Array (24 bytes)
+        // = 64 + 24 = 88 bytes on 64-bit
+        assert_eq!(std::mem::size_of::<Context>(), 88);
+    }
+
+    #[test]
+    fn test_context_field_offsets() {
+        // Verify that Context fields are properly aligned
+        use std::mem::offset_of;
+        assert_eq!(offset_of!(Context, regs), 0);
+        assert_eq!(offset_of!(Context, jumps), 16);
+        assert_eq!(offset_of!(Context, bufs), 32);
+        assert_eq!(offset_of!(Context, gvars), 48);
+        assert_eq!(offset_of!(Context, funcs), 64);
     }
 }

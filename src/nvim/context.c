@@ -29,6 +29,7 @@
 
 extern size_t rs_ctx_size(void);
 extern void rs_ctx_free(Context *ctx);
+extern Context *rs_ctx_get(size_t index);
 
 int kCtxAll = (kCtxRegs | kCtxJumps | kCtxBufs | kCtxGVars | kCtxSFuncs
                | kCtxFuncs);
@@ -56,10 +57,7 @@ size_t ctx_size(void)
 Context *ctx_get(size_t index)
   FUNC_ATTR_PURE
 {
-  if (index < kv_size(ctx_stack)) {
-    return &kv_Z(ctx_stack, index);
-  }
-  return NULL;
+  return rs_ctx_get(index);
 }
 
 /// Free resources used by Context object.
@@ -328,4 +326,14 @@ int ctx_from_dict(Dict dict, Context *ctx, Error *err)
 size_t nvim_get_ctx_stack_size(void)
 {
   return kv_size(ctx_stack);
+}
+
+/// Returns a pointer to Context at given index from the top of the stack.
+/// Returns NULL if index is out of bounds.
+Context *nvim_get_ctx_at_index(size_t index)
+{
+  if (index < kv_size(ctx_stack)) {
+    return &kv_Z(ctx_stack, index);
+  }
+  return NULL;
 }
