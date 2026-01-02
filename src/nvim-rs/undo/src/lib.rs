@@ -35,6 +35,12 @@ pub type LinenrT = c_long;
 /// Type alias for colnr_T (column number type).
 pub type ColnrT = c_int;
 
+/// Success return value (matches Neovim's OK).
+const OK: c_int = 1;
+
+/// Failure return value (matches Neovim's FAIL).
+const FAIL: c_int = 0;
+
 // FFI declarations for C accessor functions
 #[allow(dead_code)]
 extern "C" {
@@ -939,9 +945,6 @@ pub unsafe extern "C" fn rs_u_savecommon(
     newbot: LinenrT,
     reload: bool,
 ) -> c_int {
-    const OK: c_int = 1;
-    const FAIL: c_int = 0;
-
     if !reload {
         // When making changes is not allowed return FAIL
         if !rs_undo_allowed(buf) {
@@ -1129,7 +1132,8 @@ pub unsafe extern "C" fn rs_u_savecommon(
                     ue_lcount != line_count
                 };
 
-                if reuse_blocked || (ue_size > 1 && top >= ue_top && top + 2 <= ue_top + ue_size + 1)
+                if reuse_blocked
+                    || (ue_size > 1 && top >= ue_top && top + 2 <= ue_top + ue_size + 1)
                 {
                     break;
                 }
@@ -1222,6 +1226,94 @@ pub unsafe extern "C" fn rs_u_savecommon(
     nvim_set_undo_undoes_false();
 
     OK
+}
+
+/// Save the line at cursor position for undo.
+/// Rust implementation of u_save_cursor.
+///
+/// # Safety
+///
+/// Must be called from a valid Neovim context with curwin set.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_save_cursor() -> c_int {
+    let mut lnum: LinenrT = 0;
+    let mut col: ColnrT = 0;
+    let mut coladd: ColnrT = 0;
+    nvim_get_curwin_cursor(&mut lnum, &mut col, &mut coladd);
+
+    let top = if lnum > 0 { lnum - 1 } else { 0 };
+    let bot = lnum + 1;
+
+    rs_u_save(top, bot)
+}
+
+/// Save lines between top and bot for both "u" and "U" command.
+/// Rust implementation of u_save.
+///
+/// # Safety
+///
+/// Must be called with valid line numbers for curbuf.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_save(top: LinenrT, bot: LinenrT) -> c_int {
+    rs_u_save_buf(nvim_get_curbuf(), top, bot)
+}
+
+/// Save lines between top and bot for the specified buffer.
+/// Rust implementation of u_save_buf.
+///
+/// # Safety
+///
+/// Must be called with valid buffer handle and line numbers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_save_buf(buf: BufHandle, top: LinenrT, bot: LinenrT) -> c_int {
+    let line_count = nvim_buf_get_ml_line_count(buf);
+
+    if top >= bot || bot > (line_count + 1) {
+        return FAIL;
+    }
+
+    if top + 2 == bot {
+        nvim_u_saveline(buf, top + 1);
+    }
+
+    rs_u_savecommon(buf, top, bot, 0, false)
+}
+
+/// Save a line for substitution (used by ":s" and "~" command).
+/// Rust implementation of u_savesub.
+///
+/// # Safety
+///
+/// Must be called with valid line number for curbuf.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_savesub(lnum: LinenrT) -> c_int {
+    rs_u_savecommon(nvim_get_curbuf(), lnum - 1, lnum + 1, lnum + 1, false)
+}
+
+/// Save for line insertion (used by :s command).
+/// Rust implementation of u_inssub.
+///
+/// # Safety
+///
+/// Must be called with valid line number for curbuf.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_inssub(lnum: LinenrT) -> c_int {
+    rs_u_savecommon(nvim_get_curbuf(), lnum - 1, lnum, lnum + 1, false)
+}
+
+/// Save lines for deletion.
+/// Rust implementation of u_savedel.
+///
+/// # Safety
+///
+/// Must be called with valid line numbers for curbuf.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_savedel(lnum: LinenrT, nlines: LinenrT) -> c_int {
+    let buf = nvim_get_curbuf();
+    let line_count = nvim_buf_get_ml_line_count(buf);
+    let newbot = if nlines == line_count { 2 } else { lnum };
+
+    rs_u_savecommon(buf, lnum - 1, lnum + nlines, newbot, false)
 }
 
 #[cfg(test)]

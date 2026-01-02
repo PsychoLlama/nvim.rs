@@ -564,7 +564,7 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 
 ### Undo Module (undo.c - PARTIALLY MIGRATED)
 
-**Migrated Functions (25 rs_* functions):**
+**Migrated Functions (31 rs_* functions):**
 
 *Group A - Utilities:*
 - `rs_bufIsChanged` - Check if buffer is modified or file format differs
@@ -591,6 +591,12 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 *Group D - Save Functions:*
 - `rs_u_sync` - Stop adding to current entry list
 - `rs_u_savecommon` - Common code for saving text before changes (~265 lines)
+- `rs_u_save_cursor` - Save line at cursor position
+- `rs_u_save` - Save lines between top and bot (wrapper)
+- `rs_u_save_buf` - Save lines for specified buffer
+- `rs_u_savesub` - Save line for substitution (:s and ~)
+- `rs_u_inssub` - Save for line insertion (:s command)
+- `rs_u_savedel` - Save lines for deletion
 
 *Ex Commands:*
 - `rs_ex_undojoin` - Continue adding to the last undo entry (:undojoin)

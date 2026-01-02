@@ -166,6 +166,12 @@ extern void rs_u_redo(int count);
 extern bool rs_u_undo_and_forget(int count, bool do_buf_event);
 extern void rs_u_doit(int startcount, bool quiet, bool do_buf_event);
 extern int rs_u_savecommon(buf_T *buf, linenr_T top, linenr_T bot, linenr_T newbot, bool reload);
+extern int rs_u_save_cursor(void);
+extern int rs_u_save(linenr_T top, linenr_T bot);
+extern int rs_u_save_buf(buf_T *buf, linenr_T top, linenr_T bot);
+extern int rs_u_savesub(linenr_T lnum);
+extern int rs_u_inssub(linenr_T lnum);
+extern int rs_u_savedel(linenr_T lnum, linenr_T nlines);
 
 // Feature flag for Rust undo functions
 #define USE_RUST_UNDO 1
@@ -270,11 +276,15 @@ static void u_check(int newhead_may_be_NULL)
 /// Returns OK or FAIL.
 int u_save_cursor(void)
 {
+#ifdef USE_RUST_UNDO
+  return rs_u_save_cursor();
+#else
   linenr_T cur = curwin->w_cursor.lnum;
   linenr_T top = cur > 0 ? cur - 1 : 0;
   linenr_T bot = cur + 1;
 
   return u_save(top, bot);
+#endif
 }
 
 /// Save the lines between "top" and "bot" for both the "u" and "U" command.
@@ -283,11 +293,18 @@ int u_save_cursor(void)
 /// Returns FAIL when lines could not be saved, OK otherwise.
 int u_save(linenr_T top, linenr_T bot)
 {
+#ifdef USE_RUST_UNDO
+  return rs_u_save(top, bot);
+#else
   return u_save_buf(curbuf, top, bot);
+#endif
 }
 
 int u_save_buf(buf_T *buf, linenr_T top, linenr_T bot)
 {
+#ifdef USE_RUST_UNDO
+  return rs_u_save_buf(buf, top, bot);
+#else
   if (top >= bot || bot > (buf->b_ml.ml_line_count + 1)) {
     return FAIL;        // rely on caller to do error messages
   }
@@ -297,6 +314,7 @@ int u_save_buf(buf_T *buf, linenr_T top, linenr_T bot)
   }
 
   return u_savecommon(buf, top, bot, 0, false);
+#endif
 }
 
 /// Save the line "lnum" (used by ":s" and "~" command).
@@ -305,7 +323,11 @@ int u_save_buf(buf_T *buf, linenr_T top, linenr_T bot)
 /// Returns FAIL when lines could not be saved, OK otherwise.
 int u_savesub(linenr_T lnum)
 {
+#ifdef USE_RUST_UNDO
+  return rs_u_savesub(lnum);
+#else
   return u_savecommon(curbuf, lnum - 1, lnum + 1, lnum + 1, false);
+#endif
 }
 
 /// A new line is inserted before line "lnum" (used by :s command).
@@ -314,7 +336,11 @@ int u_savesub(linenr_T lnum)
 /// Returns FAIL when lines could not be saved, OK otherwise.
 int u_inssub(linenr_T lnum)
 {
+#ifdef USE_RUST_UNDO
+  return rs_u_inssub(lnum);
+#else
   return u_savecommon(curbuf, lnum - 1, lnum, lnum + 1, false);
+#endif
 }
 
 /// Save the lines "lnum" - "lnum" + nlines (used by delete command).
@@ -324,8 +350,12 @@ int u_inssub(linenr_T lnum)
 /// Returns FAIL when lines could not be saved, OK otherwise.
 int u_savedel(linenr_T lnum, linenr_T nlines)
 {
+#ifdef USE_RUST_UNDO
+  return rs_u_savedel(lnum, nlines);
+#else
   return u_savecommon(curbuf, lnum - 1, lnum + nlines,
                       nlines == curbuf->b_ml.ml_line_count ? 2 : lnum, false);
+#endif
 }
 
 /// Return true when undo is allowed. Otherwise print an error message and
