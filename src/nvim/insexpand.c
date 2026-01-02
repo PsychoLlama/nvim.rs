@@ -1947,6 +1947,7 @@ int nvim_get_compl_was_interrupted(void) { return compl_was_interrupted ? 1 : 0;
 int nvim_get_compl_opt_refresh_always(void) { return compl_opt_refresh_always ? 1 : 0; }
 win_T *nvim_get_compl_curr_win(void) { return compl_curr_win; }
 buf_T *nvim_get_compl_curr_buf(void) { return compl_curr_buf; }
+int nvim_get_compl_col(void) { return compl_col; }
 
 // Rust implementations
 extern int rs_ins_compl_interrupted(void);
@@ -1966,10 +1967,13 @@ bool ins_compl_enter_selects(void)
   return rs_ins_compl_enter_selects() != 0;
 }
 
+// Rust implementation
+extern int rs_ins_compl_col(void);
+
 /// Return the column where the text starts that is being completed
 colnr_T ins_compl_col(void)
 {
-  return compl_col;
+  return rs_ins_compl_col();
 }
 
 /// Return the length in bytes of the text being completed

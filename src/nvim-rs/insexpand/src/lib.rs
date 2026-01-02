@@ -91,6 +91,7 @@ extern "C" {
     fn nvim_get_compl_curr_win() -> WinHandle;
     fn nvim_get_compl_curr_buf() -> BufHandle;
     fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
+    fn nvim_get_compl_col() -> c_int;
 }
 
 // completeopt flags (from optionstr.h)
@@ -269,6 +270,12 @@ pub unsafe extern "C" fn rs_ins_compl_used_match() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_len() -> c_int {
     nvim_get_compl_length()
+}
+
+/// Return the column where the completion text starts.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_col() -> c_int {
+    nvim_get_compl_col()
 }
 
 // =============================================================================
