@@ -1912,10 +1912,13 @@ bool ins_compl_active(void)
   return rs_ins_compl_active() != 0;
 }
 
+// Rust implementation
+extern int rs_ins_compl_win_active(win_T *wp);
+
 /// Return true when wp is the actual completion window
 bool ins_compl_win_active(win_T *wp)
 {
-  return ins_compl_active() && wp == compl_curr_win && wp->w_buffer == compl_curr_buf;
+  return rs_ins_compl_win_active(wp) != 0;
 }
 
 // Rust implementation
@@ -1942,6 +1945,8 @@ int nvim_get_compl_used_match(void) { return compl_used_match ? 1 : 0; }
 int nvim_get_compl_length(void) { return compl_length; }
 int nvim_get_compl_was_interrupted(void) { return compl_was_interrupted ? 1 : 0; }
 int nvim_get_compl_opt_refresh_always(void) { return compl_opt_refresh_always ? 1 : 0; }
+win_T *nvim_get_compl_curr_win(void) { return compl_curr_win; }
+buf_T *nvim_get_compl_curr_buf(void) { return compl_curr_buf; }
 
 // Rust implementations
 extern int rs_ins_compl_interrupted(void);

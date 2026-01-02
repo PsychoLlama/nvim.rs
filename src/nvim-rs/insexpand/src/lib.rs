@@ -9,6 +9,9 @@
 
 use std::os::raw::{c_char, c_int, c_uint};
 
+use nvim_buffer::BufHandle;
+use nvim_window::WinHandle;
+
 // CTRL-X mode constants (from insexpand.c)
 // These must match the C enum values exactly
 const CTRL_X_WANT_IDENT: c_int = 0x100;
@@ -83,6 +86,11 @@ extern "C" {
     fn rs_vim_isprintc(c: c_int) -> c_int;
     fn rs_ascii_iswhite(c: c_int) -> c_int;
     fn rs_vim_iswordc(c: c_int) -> c_int;
+
+    // Completion window/buffer accessors
+    fn nvim_get_compl_curr_win() -> WinHandle;
+    fn nvim_get_compl_curr_buf() -> BufHandle;
+    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
 }
 
 // completeopt flags (from optionstr.h)
@@ -225,6 +233,18 @@ pub unsafe extern "C" fn rs_compl_status_local() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_ins_compl_active() -> c_int {
     nvim_get_compl_started()
+}
+
+/// Return true when wp is the actual completion window.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_win_active(wp: WinHandle) -> c_int {
+    if nvim_get_compl_started() == 0 {
+        return 0;
+    }
+    let curr_win = nvim_get_compl_curr_win();
+    let curr_buf = nvim_get_compl_curr_buf();
+    let wp_buf = nvim_win_get_buffer(wp);
+    c_int::from(wp == curr_win && wp_buf == curr_buf)
 }
 
 /// Check if completion was interrupted.

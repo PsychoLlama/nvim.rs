@@ -9,6 +9,8 @@ description = "Insert-mode completion (CTRL-X) mode checking for Neovim"
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
+nvim-window = { path = "../window" }
+nvim-buffer = { path = "../buffer" }
 
 [lints]
 workspace = true
