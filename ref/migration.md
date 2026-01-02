@@ -57,7 +57,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | profile      | Profiling time arithmetic                          |
 | quickfix     | Quickfix/location list state queries               |
 | register     | Register validation, type formatting, width calc   |
-| regexp       | Regex utilities: magic chars, char classes, multiline query |
+| regexp       | Regex utilities: magic chars, char classes, scanner, multiline query |
 | search       | Character search state, search/substitute tracking |
 | spell        | Spell check utilities, option validation           |
 | statusline   | Status line rendering helpers                      |
@@ -435,7 +435,7 @@ Terminfo output infrastructure for Rust:
 - nvim_tui_get_stopped, nvim_tui_get_can_set_title
 - nvim_tui_get/set_title_enabled, nvim_tui_get_buf_space
 
-### Regexp Module (regexp.c - PHASE 1-6 COMPLETE)
+### Regexp Module (regexp.c - PHASE 1-7 COMPLETE)
 
 **Strategy:** Wrap C regex engines rather than replace them. Vim regex syntax has no equivalent Rust crate.
 
@@ -557,8 +557,24 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 - `NSUBEXP` - Number of subexpressions (10)
 - `re_flags::RE_MAGIC`, `RE_NOCASE`, `RE_HASNL` - Compilation flags
 
+**Phase 7 - Character Scanner (6 rs_* functions):**
+
+The lexical scanner for regex patterns, handling magic characters and backslash escapes.
+
+*Scanner Functions:*
+- `rs_initchr` - Initialize parsing state at string start
+- `rs_peekchr` - Get next character without advancing (handles magic, \v, \m, etc.)
+- `rs_skipchr` - Eat one lexed character, update state
+- `rs_skipchr_keepstart` - Skip character, preserve at_start state
+- `rs_getchr` - Get next character and advance (peekchr + skipchr)
+- `rs_ungetchr` - Put character back (works only once)
+
+*Internal Data:*
+- `META_FLAGS` table - Characters that may be magic when preceded by backslash
+- Magic mode tracking (MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAGIC_ALL)
+- Position and state tracking via parse state accessors
+
 **Remaining in C:**
-- Character scanning functions (peekchr, skipchr, getchr, ungetchr) - complex magic handling
 - Backtracking and NFA engines (~10K lines)
 
 ### Register Module (register.c - PARTIALLY MIGRATED)

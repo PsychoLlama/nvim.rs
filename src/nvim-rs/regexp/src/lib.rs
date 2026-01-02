@@ -7,6 +7,11 @@
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::must_use_candidate)]
 
+pub mod scanner;
+pub use scanner::{
+    rs_getchr, rs_initchr, rs_peekchr, rs_skipchr, rs_skipchr_keepstart, rs_ungetchr,
+};
+
 use std::ffi::{c_int, c_void};
 use std::sync::OnceLock;
 
@@ -212,8 +217,11 @@ extern "C" {
     fn nvim_regprog_get_regflags(prog: RegprogHandle) -> c_int;
 
     // UTF-8 functions
-    /// Get byte length of UTF-8 character at pointer.
+    /// Get byte length of UTF-8 character at pointer (including composing chars).
     fn utfc_ptr2len(p: *const c_char) -> c_int;
+
+    /// Get byte length of UTF-8 character at pointer (base character only).
+    fn utf_ptr2len(p: *const c_char) -> c_int;
 
     /// Get Unicode codepoint from UTF-8 pointer.
     fn utf_ptr2char(p: *const c_char) -> c_int;

@@ -589,28 +589,7 @@ static int reg_string;          // matching with a string instead of a buffer
 static int reg_strict;          // "[abc" is illegal
 
 // META contains all characters that may be magic, except '^' and '$'.
-
-// uncrustify:off
-
-// META[] is used often enough to justify turning it into a table.
-static uint8_t META_flags[] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-//                 %  &     (  )  *  +        .
-    0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 0,
-//     1  2  3  4  5  6  7  8  9        <  =  >  ?
-    0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1,
-//  @  A     C  D     F     H  I     K  L  M     O
-    1, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 0, 1,
-//  P        S     U  V  W  X     Z  [           _
-    1, 0, 0, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 1,
-//     a     c  d     f     h  i     k  l  m  n  o
-    0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1,
-//  p        s     u  v  w  x     z  {  |     ~
-    1, 0, 0, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1
-};
-
-// uncrustify:on
+// Note: META_flags table is now in Rust (scanner.rs)
 
 static int curchr;              // currently parsed character
 // Previous character.  Note: prevchr is sometimes -1 when we are not at the
@@ -657,6 +636,14 @@ int re_multiline(const regprog_T *prog)
 extern int rs_get_equi_class(char **pp);
 extern int rs_get_coll_element(char **pp);
 extern char *rs_skip_anyof(char *p);
+
+// Rust implementations for scanner (Phase 7)
+extern void rs_initchr(char *str);
+extern int rs_peekchr(void);
+extern void rs_skipchr(void);
+extern void rs_skipchr_keepstart(void);
+extern int rs_getchr(void);
+extern void rs_ungetchr(void);
 
 // Check for an equivalence class name "[=a=]".  "pp" points to the '['.
 // Returns a character representing the class. Zero means that no item was
@@ -781,11 +768,7 @@ static int prev_at_start;  // True when on the second character
 // Start parsing at "str".
 static void initchr(char *str)
 {
-  regparse = str;
-  prevchr_len = 0;
-  curchr = prevprevchr = prevchr = nextchr = -1;
-  at_start = true;
-  prev_at_start = false;
+  rs_initchr(str);
 }
 
 // Save the current parse state, so that it can be restored and parsing
@@ -820,207 +803,33 @@ static void restore_parse_state(parse_state_T *ps)
 // Get the next character without advancing.
 static int peekchr(void)
 {
-  static int after_slash = false;
-
-  if (curchr != -1) {
-    return curchr;
-  }
-
-  switch (curchr = (uint8_t)regparse[0]) {
-  case '.':
-  case '[':
-  case '~':
-    // magic when 'magic' is on
-    if (reg_magic >= MAGIC_ON) {
-      curchr = Magic(curchr);
-    }
-    break;
-  case '(':
-  case ')':
-  case '{':
-  case '%':
-  case '+':
-  case '=':
-  case '?':
-  case '@':
-  case '!':
-  case '&':
-  case '|':
-  case '<':
-  case '>':
-  case '#':           // future ext.
-  case '"':           // future ext.
-  case '\'':          // future ext.
-  case ',':           // future ext.
-  case '-':           // future ext.
-  case ':':           // future ext.
-  case ';':           // future ext.
-  case '`':           // future ext.
-  case '/':           // Can't be used in / command
-    // magic only after "\v"
-    if (reg_magic == MAGIC_ALL) {
-      curchr = Magic(curchr);
-    }
-    break;
-  case '*':
-    // * is not magic as the very first character, eg "?*ptr", when
-    // after '^', eg "/^*ptr" and when after "\(", "\|", "\&".  But
-    // "\(\*" is not magic, thus must be magic if "after_slash"
-    if (reg_magic >= MAGIC_ON
-        && !at_start
-        && !(prev_at_start && prevchr == Magic('^'))
-        && (after_slash
-            || (prevchr != Magic('(')
-                && prevchr != Magic('&')
-                && prevchr != Magic('|')))) {
-      curchr = Magic('*');
-    }
-    break;
-  case '^':
-    // '^' is only magic as the very first character and if it's after
-    // "\(", "\|", "\&' or "\n"
-    if (reg_magic >= MAGIC_OFF
-        && (at_start
-            || reg_magic == MAGIC_ALL
-            || prevchr == Magic('(')
-            || prevchr == Magic('|')
-            || prevchr == Magic('&')
-            || prevchr == Magic('n')
-            || (no_Magic(prevchr) == '('
-                && prevprevchr == Magic('%')))) {
-      curchr = Magic('^');
-      at_start = true;
-      prev_at_start = false;
-    }
-    break;
-  case '$':
-    // '$' is only magic as the very last char and if it's in front of
-    // either "\|", "\)", "\&", or "\n"
-    if (reg_magic >= MAGIC_OFF) {
-      uint8_t *p = (uint8_t *)regparse + 1;
-      bool is_magic_all = (reg_magic == MAGIC_ALL);
-
-      // ignore \c \C \m \M \v \V and \Z after '$'
-      while (p[0] == '\\' && (p[1] == 'c' || p[1] == 'C'
-                              || p[1] == 'm' || p[1] == 'M'
-                              || p[1] == 'v' || p[1] == 'V'
-                              || p[1] == 'Z')) {
-        if (p[1] == 'v') {
-          is_magic_all = true;
-        } else if (p[1] == 'm' || p[1] == 'M' || p[1] == 'V') {
-          is_magic_all = false;
-        }
-        p += 2;
-      }
-      if (p[0] == NUL
-          || (p[0] == '\\'
-              && (p[1] == '|' || p[1] == '&' || p[1] == ')'
-                  || p[1] == 'n'))
-          || (is_magic_all
-              && (p[0] == '|' || p[0] == '&' || p[0] == ')'))
-          || reg_magic == MAGIC_ALL) {
-        curchr = Magic('$');
-      }
-    }
-    break;
-  case '\\': {
-    int c = (uint8_t)regparse[1];
-
-    if (c == NUL) {
-      curchr = '\\';  // trailing '\'
-    } else if (c <= '~' && META_flags[c]) {
-      // META contains everything that may be magic sometimes,
-      // except ^ and $ ("\^" and "\$" are only magic after
-      // "\V").  We now fetch the next character and toggle its
-      // magicness.  Therefore, \ is so meta-magic that it is
-      // not in META.
-      curchr = -1;
-      prev_at_start = at_start;
-      at_start = false;  // be able to say "/\*ptr"
-      regparse++;
-      after_slash++;
-      (void)peekchr();
-      regparse--;
-      after_slash--;
-      curchr = toggle_Magic(curchr);
-    } else if (vim_strchr(REGEXP_ABBR, c)) {
-      // Handle abbreviations, like "\t" for TAB -- webb
-      curchr = backslash_trans(c);
-    } else if (reg_magic == MAGIC_NONE && (c == '$' || c == '^')) {
-      curchr = toggle_Magic(c);
-    } else {
-      // Next character can never be (made) magic?
-      // Then backslashing it won't do anything.
-      curchr = utf_ptr2char(regparse + 1);
-    }
-    break;
-  }
-
-  default:
-    curchr = utf_ptr2char(regparse);
-  }
-
-  return curchr;
+  return rs_peekchr();
 }
 
 // Eat one lexed character.  Do this in a way that we can undo it.
 static void skipchr(void)
 {
-  // peekchr() eats a backslash, do the same here
-  if (*regparse == '\\') {
-    prevchr_len = 1;
-  } else {
-    prevchr_len = 0;
-  }
-  if (regparse[prevchr_len] != NUL) {
-    // Exclude composing chars that utfc_ptr2len does include.
-    prevchr_len += utf_ptr2len(regparse + prevchr_len);
-  }
-  regparse += prevchr_len;
-  prev_at_start = at_start;
-  at_start = false;
-  prevprevchr = prevchr;
-  prevchr = curchr;
-  curchr = nextchr;         // use previously unget char, or -1
-  nextchr = -1;
+  rs_skipchr();
 }
 
 // Skip a character while keeping the value of prev_at_start for at_start.
 // prevchr and prevprevchr are also kept.
 static void skipchr_keepstart(void)
 {
-  int as = prev_at_start;
-  int pr = prevchr;
-  int prpr = prevprevchr;
-
-  skipchr();
-  at_start = as;
-  prevchr = pr;
-  prevprevchr = prpr;
+  rs_skipchr_keepstart();
 }
 
 // Get the next character from the pattern. We know about magic and such, so
 // therefore we need a lexical analyzer.
 static int getchr(void)
 {
-  int chr = peekchr();
-
-  skipchr();
-  return chr;
+  return rs_getchr();
 }
 
 // put character back.  Works only once!
 static void ungetchr(void)
 {
-  nextchr = curchr;
-  curchr = prevchr;
-  prevchr = prevprevchr;
-  at_start = prev_at_start;
-  prev_at_start = false;
-
-  // Backup regparse, so that it's at the same position as before the
-  // getchr().
-  regparse -= prevchr_len;
+  rs_ungetchr();
 }
 
 // Rust implementations for number parsing
