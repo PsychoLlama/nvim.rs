@@ -140,6 +140,13 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 - `win_valid_any_tab` - Migrated to Rust (rs_win_valid_any_tab) - Window validation across tabs
 - `win_find_by_handle` - Migrated to Rust (rs_win_find_by_handle) - Find window by handle
 - `win_count` - Migrated to Rust (rs_win_count) - Count windows
+- `only_one_window` - Migrated to Rust (rs_only_one_window) - Check for single relevant window
+
+**winfloat.c** (MIGRATED):
+- `win_float_valid` - Migrated to Rust (rs_win_float_valid) - Check if window is valid floating
+
+**autocmd.c** (MIGRATED):
+- `is_aucmd_win` - Migrated to Rust (rs_is_aucmd_win) - Check if window is autocmd window
 
 **buffer.c** (MIGRATED):
 - `buf_valid` - Migrated to Rust (rs_buf_valid) - Buffer pointer validation
