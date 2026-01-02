@@ -342,6 +342,18 @@ pub unsafe extern "C" fn rs_op_reg_get(name: c_char) -> YankRegHandle {
     nvim_get_y_regs_ptr(i)
 }
 
+/// Get the previous yank register.
+///
+/// Returns the `y_previous` pointer (the register that "" points to).
+///
+/// # Safety
+///
+/// Accesses global register state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_y_previous() -> YankRegHandle {
+    nvim_get_y_previous()
+}
+
 /// Set the previous yank register.
 ///
 /// Returns true on success, false if the register name is invalid.

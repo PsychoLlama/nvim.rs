@@ -56,6 +56,7 @@ extern void rs_update_yankreg_width(yankreg_T *reg);
 extern size_t rs_op_reg_amount(void);
 extern yankreg_T *rs_op_reg_get(char name);
 extern bool rs_op_reg_set_previous(char name);
+extern yankreg_T *rs_get_y_previous(void);
 extern void rs_shift_delete_registers(bool y_append);
 extern void rs_set_expr_line(char *new_line);
 extern char *rs_get_expr_line_src(void);
@@ -463,7 +464,7 @@ yankreg_T *get_y_register(int reg)
 yankreg_T *get_y_previous(void)
   FUNC_ATTR_PURE
 {
-  return y_previous;
+  return rs_get_y_previous();
 }
 
 /// Get an expression for the "\"=expr1" or "CTRL-R =expr1"
