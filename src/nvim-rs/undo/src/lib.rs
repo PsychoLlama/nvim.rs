@@ -187,6 +187,20 @@ extern "C" {
     fn nvim_get_curwin_cursor(lnum: *mut LinenrT, col: *mut ColnrT, coladd: *mut ColnrT);
     fn nvim_curwin_virtual_active() -> bool;
     fn nvim_getviscol() -> ColnrT;
+
+    // u_savecommon infrastructure
+    fn nvim_buf_set_b_new_change(buf: BufHandle, val: bool);
+    fn nvim_buf_set_b_u_time_cur(buf: BufHandle, val: TimeT);
+    fn nvim_uhp_init_extmark(uhp: UHeaderHandle);
+    fn nvim_uhp_copy_marks_visual(buf: BufHandle, uhp: UHeaderHandle);
+    fn nvim_uhp_set_cursor(uhp: UHeaderHandle, lnum: LinenrT, col: ColnrT, coladd: ColnrT);
+    fn nvim_uhp_set_cursor_vcol(uhp: UHeaderHandle, vcol: ColnrT);
+    fn nvim_uep_alloc_array(uep: UEntryHandle, size: LinenrT);
+    fn nvim_uep_set_array_from_buf(uep: UEntryHandle, idx: LinenrT, buf: BufHandle, lnum: LinenrT);
+    fn nvim_emsg_line_count_changed();
+    fn nvim_buf_is_curbuf(buf: BufHandle) -> bool;
+    fn nvim_u_saveline(buf: BufHandle, lnum: LinenrT);
+    fn nvim_set_undo_undoes_false();
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed.
@@ -906,6 +920,308 @@ pub unsafe extern "C" fn rs_u_doit(startcount: c_int, quiet: bool, do_buf_event:
 
     let undo_undoes = nvim_get_undo_undoes();
     nvim_u_undo_end(undo_undoes, false, quiet);
+}
+
+/// Common code for various ways to save text before a change.
+/// "top" is the line above the first changed line.
+/// "bot" is the line below the last changed line.
+/// "newbot" is the new bottom line. Use zero when not known.
+/// "reload" is true when saving for a buffer reload.
+///
+/// # Safety
+///
+/// Must be called with valid buffer handle and line numbers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_savecommon(
+    buf: BufHandle,
+    top: LinenrT,
+    bot: LinenrT,
+    newbot: LinenrT,
+    reload: bool,
+) -> c_int {
+    const OK: c_int = 1;
+    const FAIL: c_int = 0;
+
+    if !reload {
+        // When making changes is not allowed return FAIL
+        if !rs_undo_allowed(buf) {
+            return FAIL;
+        }
+
+        // Saving text for undo means we are going to make a change
+        if nvim_buf_is_curbuf(buf) {
+            nvim_change_warning_curbuf();
+        }
+
+        let line_count = nvim_buf_get_ml_line_count(buf);
+        if bot > line_count + 1 {
+            nvim_emsg_line_count_changed();
+            return FAIL;
+        }
+    }
+
+    let size = bot - top - 1;
+
+    // If curbuf->b_u_synced == true make a new header
+    if nvim_buf_get_b_u_synced(buf) {
+        // Need to create new entry in b_changelist
+        nvim_buf_set_b_new_change(buf, true);
+
+        let uhp: UHeaderHandle;
+        if nvim_get_undolevel(buf) >= 0 {
+            // Make a new header entry
+            uhp = nvim_alloc_u_header();
+            nvim_uhp_init_extmark(uhp);
+        } else {
+            uhp = UHeaderHandle(std::ptr::null_mut());
+        }
+
+        // If we undid more than we redid, move the entry lists before and
+        // including curbuf->b_u_curhead to an alternate branch
+        let mut old_curhead = nvim_buf_get_b_u_curhead(buf);
+        if !old_curhead.0.is_null() {
+            let next = nvim_uhp_get_next(old_curhead);
+            nvim_buf_set_b_u_newhead(buf, next);
+            nvim_buf_set_b_u_curhead(buf, UHeaderHandle(std::ptr::null_mut()));
+        }
+
+        // Free headers to keep the size right
+        while nvim_buf_get_b_u_numhead(buf) as i64 > nvim_get_undolevel(buf) {
+            let oldhead = nvim_buf_get_b_u_oldhead(buf);
+            if oldhead.0.is_null() {
+                break;
+            }
+
+            if oldhead.0 == old_curhead.0 {
+                // Can't reconnect the branch, delete all of it
+                rs_u_freebranch(buf, oldhead, &mut old_curhead as *mut UHeaderHandle);
+            } else {
+                let alt_next = nvim_uhp_get_alt_next(oldhead);
+                if alt_next.0.is_null() {
+                    // There is no branch, only free one header
+                    rs_u_freeheader(buf, oldhead, &mut old_curhead as *mut UHeaderHandle);
+                } else {
+                    // Free the oldest alternate branch as a whole
+                    let mut uhfree = oldhead;
+                    loop {
+                        let next_alt = nvim_uhp_get_alt_next(uhfree);
+                        if next_alt.0.is_null() {
+                            break;
+                        }
+                        uhfree = next_alt;
+                    }
+                    rs_u_freebranch(buf, uhfree, &mut old_curhead as *mut UHeaderHandle);
+                }
+            }
+        }
+
+        if uhp.0.is_null() {
+            // No undo at all
+            if !old_curhead.0.is_null() {
+                rs_u_freebranch(buf, old_curhead, std::ptr::null_mut());
+            }
+            nvim_buf_set_b_u_synced(buf, false);
+            return OK;
+        }
+
+        // Set up the new header
+        nvim_uhp_set_prev(uhp, UHeaderHandle(std::ptr::null_mut()));
+        let newhead = nvim_buf_get_b_u_newhead(buf);
+        nvim_uhp_set_next(uhp, newhead);
+        nvim_uhp_set_alt_next(uhp, old_curhead);
+
+        if !old_curhead.0.is_null() {
+            let alt_prev = nvim_uhp_get_alt_prev(old_curhead);
+            nvim_uhp_set_alt_prev(uhp, alt_prev);
+
+            if !alt_prev.0.is_null() {
+                nvim_uhp_set_alt_next(alt_prev, uhp);
+            }
+
+            nvim_uhp_set_alt_prev(old_curhead, uhp);
+
+            let oldhead = nvim_buf_get_b_u_oldhead(buf);
+            if oldhead.0 == old_curhead.0 {
+                nvim_buf_set_b_u_oldhead(buf, uhp);
+            }
+        } else {
+            nvim_uhp_set_alt_prev(uhp, UHeaderHandle(std::ptr::null_mut()));
+        }
+
+        if !newhead.0.is_null() {
+            nvim_uhp_set_prev(newhead, uhp);
+        }
+
+        // Set sequence numbers and time
+        let seq_last = nvim_buf_get_b_u_seq_last(buf);
+        nvim_buf_set_b_u_seq_last(buf, seq_last + 1);
+        nvim_uhp_set_seq(uhp, seq_last + 1);
+        nvim_buf_set_b_u_seq_cur(buf, seq_last + 1);
+
+        let now = nvim_time_now();
+        nvim_uhp_set_time(uhp, now);
+        nvim_uhp_set_save_nr(uhp, 0);
+        nvim_buf_set_b_u_time_cur(buf, now + 1);
+
+        nvim_uhp_set_walk(uhp, 0);
+        nvim_uhp_set_entry(uhp, UEntryHandle(std::ptr::null_mut()));
+        nvim_uhp_set_getbot_entry(uhp, UEntryHandle(std::ptr::null_mut()));
+
+        // Save cursor position
+        let mut lnum: LinenrT = 0;
+        let mut col: ColnrT = 0;
+        let mut coladd: ColnrT = 0;
+        nvim_get_curwin_cursor(&mut lnum, &mut col, &mut coladd);
+        nvim_uhp_set_cursor(uhp, lnum, col, coladd);
+
+        if nvim_curwin_virtual_active() && coladd > 0 {
+            nvim_uhp_set_cursor_vcol(uhp, nvim_getviscol());
+        } else {
+            nvim_uhp_set_cursor_vcol(uhp, -1);
+        }
+
+        // Save changed and buffer empty flag
+        let changed = nvim_buf_get_b_changed(buf);
+        let ml_empty = nvim_buf_ml_is_empty(buf);
+        let flags = (if changed { 1 } else { 0 }) + (if ml_empty { 2 } else { 0 });
+        nvim_uhp_set_flags(uhp, flags);
+
+        // Save named marks and Visual marks
+        nvim_uhp_copy_marks_visual(buf, uhp);
+
+        nvim_buf_set_b_u_newhead(buf, uhp);
+
+        let oldhead = nvim_buf_get_b_u_oldhead(buf);
+        if oldhead.0.is_null() {
+            nvim_buf_set_b_u_oldhead(buf, uhp);
+        }
+
+        let numhead = nvim_buf_get_b_u_numhead(buf);
+        nvim_buf_set_b_u_numhead(buf, numhead + 1);
+    } else {
+        if nvim_get_undolevel(buf) < 0 {
+            // No undo at all
+            return OK;
+        }
+
+        // When saving a single line, check if we can reuse existing entry
+        if size == 1 {
+            let mut uep = rs_u_get_headentry(buf);
+            let mut prev_uep = UEntryHandle(std::ptr::null_mut());
+
+            for _ in 0..10 {
+                if uep.0.is_null() {
+                    break;
+                }
+
+                let newhead = nvim_buf_get_b_u_newhead(buf);
+                let getbot_entry = nvim_uhp_get_getbot_entry(newhead);
+                let ue_top = nvim_uep_get_top(uep);
+                let ue_size = nvim_uep_get_size(uep);
+                let ue_bot = nvim_uep_get_bot(uep);
+                let ue_lcount = nvim_uep_get_lcount(uep);
+                let line_count = nvim_buf_get_ml_line_count(buf);
+
+                // Check if lines have been inserted/deleted
+                let reuse_blocked = if getbot_entry.0 != uep.0 {
+                    ue_top + ue_size + 1 != (if ue_bot == 0 { line_count + 1 } else { ue_bot })
+                } else {
+                    ue_lcount != line_count
+                };
+
+                if reuse_blocked || (ue_size > 1 && top >= ue_top && top + 2 <= ue_top + ue_size + 1)
+                {
+                    break;
+                }
+
+                // If it's the same line we can skip saving it again
+                if ue_size == 1 && ue_top == top {
+                    if !prev_uep.0.is_null() {
+                        // Move the found entry to become the last entry
+                        rs_u_getbot(buf);
+                        nvim_buf_set_b_u_synced(buf, false);
+
+                        let uep_next = nvim_uep_get_next(uep);
+                        nvim_uep_set_next(prev_uep, uep_next);
+
+                        let newhead = nvim_buf_get_b_u_newhead(buf);
+                        let entry = nvim_uhp_get_entry(newhead);
+                        nvim_uep_set_next(uep, entry);
+                        nvim_uhp_set_entry(newhead, uep);
+                    }
+
+                    // The executed command may change the line count
+                    if newbot != 0 {
+                        nvim_uep_set_bot(uep, newbot);
+                    } else if bot > line_count {
+                        nvim_uep_set_bot(uep, 0);
+                    } else {
+                        nvim_uep_set_lcount(uep, line_count);
+                        let newhead = nvim_buf_get_b_u_newhead(buf);
+                        nvim_uhp_set_getbot_entry(newhead, uep);
+                    }
+                    return OK;
+                }
+
+                prev_uep = uep;
+                uep = nvim_uep_get_next(uep);
+            }
+        }
+
+        // Find line number for ue_bot for previous u_save()
+        rs_u_getbot(buf);
+    }
+
+    // Add lines in front of entry list
+    let uep = nvim_alloc_u_entry();
+
+    nvim_uep_set_size(uep, size);
+    nvim_uep_set_top(uep, top);
+
+    let line_count = nvim_buf_get_ml_line_count(buf);
+    if newbot != 0 {
+        nvim_uep_set_bot(uep, newbot);
+    } else if bot > line_count {
+        nvim_uep_set_bot(uep, 0);
+    } else {
+        nvim_uep_set_lcount(uep, line_count);
+        let newhead = nvim_buf_get_b_u_newhead(buf);
+        nvim_uhp_set_getbot_entry(newhead, uep);
+    }
+
+    if size > 0 {
+        nvim_uep_alloc_array(uep, size);
+        let mut lnum = top + 1;
+        for i in 0..size {
+            nvim_fast_breakcheck();
+            if nvim_undo_got_int() {
+                rs_u_freeentry(uep, i as c_int);
+                return FAIL;
+            }
+            nvim_uep_set_array_from_buf(uep, i, buf, lnum);
+            lnum += 1;
+        }
+    } else {
+        nvim_uep_set_array(uep, std::ptr::null_mut());
+    }
+
+    let newhead = nvim_buf_get_b_u_newhead(buf);
+    let entry = nvim_uhp_get_entry(newhead);
+    nvim_uep_set_next(uep, entry);
+    nvim_uhp_set_entry(newhead, uep);
+
+    if reload {
+        // Buffer was reloaded, notify text change subscribers
+        let curbuf = nvim_get_curbuf();
+        let curbuf_newhead = nvim_buf_get_b_u_newhead(curbuf);
+        let flags = nvim_uhp_get_flags(curbuf_newhead);
+        nvim_uhp_set_flags(curbuf_newhead, flags | 4); // UH_RELOAD = 4
+    }
+
+    nvim_buf_set_b_u_synced(buf, false);
+    nvim_set_undo_undoes_false();
+
+    OK
 }
 
 #[cfg(test)]

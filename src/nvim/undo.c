@@ -165,6 +165,7 @@ extern void rs_u_undo(int count);
 extern void rs_u_redo(int count);
 extern bool rs_u_undo_and_forget(int count, bool do_buf_event);
 extern void rs_u_doit(int startcount, bool quiet, bool do_buf_event);
+extern int rs_u_savecommon(buf_T *buf, linenr_T top, linenr_T bot, linenr_T newbot, bool reload);
 
 // Feature flag for Rust undo functions
 #define USE_RUST_UNDO 1
@@ -384,6 +385,9 @@ static inline void zero_fmark_additional_data(fmark_T *fmarks)
 /// Returns FAIL when lines could not be saved, OK otherwise.
 int u_savecommon(buf_T *buf, linenr_T top, linenr_T bot, linenr_T newbot, bool reload)
 {
+#ifdef USE_RUST_UNDO
+  return rs_u_savecommon(buf, top, bot, newbot, reload);
+#else
   if (!reload) {
     // When making changes is not allowed return FAIL.  It's a crude way
     // to make all change commands fail.
@@ -650,6 +654,7 @@ int u_savecommon(buf_T *buf, linenr_T top, linenr_T bot, linenr_T newbot, bool r
   u_check(false);
 #endif
   return OK;
+#endif
 }
 
 // magic at start of undofile
@@ -3880,4 +3885,77 @@ bool nvim_curwin_virtual_active(void)
 colnr_T nvim_getviscol(void)
 {
   return getviscol();
+}
+
+// u_savecommon infrastructure
+void nvim_buf_set_b_new_change(buf_T *buf, bool val)
+{
+  buf->b_new_change = val;
+}
+
+void nvim_buf_set_b_u_time_cur(buf_T *buf, time_t val)
+{
+  buf->b_u_time_cur = val;
+}
+
+// Initialize extmark vector in undo header
+void nvim_uhp_init_extmark(u_header_T *uhp)
+{
+  kv_init(uhp->uh_extmark);
+}
+
+// Copy marks and visual from buffer to undo header
+void nvim_uhp_copy_marks_visual(buf_T *buf, u_header_T *uhp)
+{
+  zero_fmark_additional_data(buf->b_namedm);
+  memmove(uhp->uh_namedm, buf->b_namedm, sizeof(buf->b_namedm[0]) * NMARKS);
+  uhp->uh_visual = buf->b_visual;
+}
+
+// Set undo header cursor position
+void nvim_uhp_set_cursor(u_header_T *uhp, linenr_T lnum, colnr_T col, colnr_T coladd)
+{
+  uhp->uh_cursor.lnum = lnum;
+  uhp->uh_cursor.col = col;
+  uhp->uh_cursor.coladd = coladd;
+}
+
+void nvim_uhp_set_cursor_vcol(u_header_T *uhp, colnr_T vcol)
+{
+  uhp->uh_cursor_vcol = vcol;
+}
+
+// Allocate and copy line array element
+void nvim_uep_alloc_array(u_entry_T *uep, linenr_T size)
+{
+  uep->ue_array = xmalloc(sizeof(char *) * (size_t)size);
+}
+
+void nvim_uep_set_array_from_buf(u_entry_T *uep, linenr_T idx, buf_T *buf, linenr_T lnum)
+{
+  uep->ue_array[idx] = xstrdup(ml_get_buf(buf, lnum));
+}
+
+// Error message wrapper
+void nvim_emsg_line_count_changed(void)
+{
+  emsg(_("E881: Line count changed unexpectedly"));
+}
+
+// Check if buf equals curbuf
+bool nvim_buf_is_curbuf(buf_T *buf)
+{
+  return buf == curbuf;
+}
+
+// u_saveline wrapper
+void nvim_u_saveline(buf_T *buf, linenr_T lnum)
+{
+  u_saveline(buf, lnum);
+}
+
+// Get/set undo_undoes global
+void nvim_set_undo_undoes_false(void)
+{
+  undo_undoes = false;
 }

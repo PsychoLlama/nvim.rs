@@ -564,7 +564,7 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 
 ### Undo Module (undo.c - PARTIALLY MIGRATED)
 
-**Migrated Functions (24 rs_* functions):**
+**Migrated Functions (25 rs_* functions):**
 
 *Group A - Utilities:*
 - `rs_bufIsChanged` - Check if buffer is modified or file format differs
@@ -590,6 +590,7 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 
 *Group D - Save Functions:*
 - `rs_u_sync` - Stop adding to current entry list
+- `rs_u_savecommon` - Common code for saving text before changes (~265 lines)
 
 *Ex Commands:*
 - `rs_ex_undojoin` - Continue adding to the last undo entry (:undojoin)
@@ -600,7 +601,7 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 - `rs_u_undo_and_forget` - Undo and remove branch from undo tree (API use)
 - `rs_u_doit` - Core undo/redo loop (processes count undos/redos)
 
-**Accessor Functions (77):**
+**Accessor Functions (89):**
 
 *Buffer undo field accessors:*
 - `nvim_buf_get/set_b_u_oldhead` - Oldest undo header
@@ -680,7 +681,7 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 - `nvim_buf_get/set_b_u_seq_cur` - Current sequence number
 - `nvim_buf_get/set_b_u_seq_last` - Last sequence number
 
-*Infrastructure for future migration (u_savecommon):*
+*Infrastructure (u_savecommon, buffer access):*
 - `nvim_ml_get_buf_copy` - Get allocated copy of buffer line
 - `nvim_fast_breakcheck` - Check for user interrupt
 - `nvim_undo_got_int` - Get interrupt flag
@@ -688,10 +689,21 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 - `nvim_get_curwin_cursor` - Get current window cursor position
 - `nvim_curwin_virtual_active` - Check if virtual editing active
 - `nvim_getviscol` - Get visual column
+- `nvim_buf_set_b_new_change` - Set new change flag
+- `nvim_buf_set_b_u_time_cur` - Set undo time cursor
+- `nvim_uhp_init_extmark` - Initialize extmark vector
+- `nvim_uhp_copy_marks_visual` - Copy marks and visual state
+- `nvim_uhp_set_cursor` - Set header cursor position
+- `nvim_uhp_set_cursor_vcol` - Set header cursor virtual column
+- `nvim_uep_alloc_array` - Allocate entry line array
+- `nvim_uep_set_array_from_buf` - Copy line from buffer to entry
+- `nvim_emsg_line_count_changed` - Error message wrapper
+- `nvim_buf_is_curbuf` - Check if buffer is current buffer
+- `nvim_u_saveline` - Save line for U command
+- `nvim_set_undo_undoes_false` - Set undo_undoes to false
 
 **Remaining Functions (complex, need extensive infrastructure):**
 - `undo_fmt_time` - Localized time formatting with NGETTEXT
-- `u_savecommon` - ~250 lines, many dependencies
 - `u_undoredo` - ~250 lines, ml_*, marks, extmarks
 - `undo_time` - ~320 lines, complex tree traversal
 - `u_write_undo`, `u_read_undo` - File I/O, security checks
