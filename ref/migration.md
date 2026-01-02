@@ -147,6 +147,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 
 **autocmd.c** (MIGRATED):
 - `is_aucmd_win` - Migrated to Rust (rs_is_aucmd_win) - Check if window is autocmd window
+- `has_cursorhold` - Migrated to Rust (rs_has_cursorhold) - Check for CursorHold/CursorHoldI autocommands
 
 **buffer.c** (MIGRATED):
 - `buf_valid` - Migrated to Rust (rs_buf_valid) - Buffer pointer validation
