@@ -564,7 +564,7 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 
 ### Undo Module (undo.c - PARTIALLY MIGRATED)
 
-**Migrated Functions (31 rs_* functions):**
+**Migrated Functions (32 rs_* functions):**
 
 *Group A - Utilities:*
 - `rs_bufIsChanged` - Check if buffer is modified or file format differs
@@ -597,6 +597,7 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 - `rs_u_savesub` - Save line for substitution (:s and ~)
 - `rs_u_inssub` - Save for line insertion (:s command)
 - `rs_u_savedel` - Save lines for deletion
+- `rs_u_find_first_changed` - Find first changed line after reload
 
 *Ex Commands:*
 - `rs_ex_undojoin` - Continue adding to the last undo entry (:undojoin)
@@ -607,7 +608,7 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 - `rs_u_undo_and_forget` - Undo and remove branch from undo tree (API use)
 - `rs_u_doit` - Core undo/redo loop (processes count undos/redos)
 
-**Accessor Functions (89):**
+**Accessor Functions (92):**
 
 *Buffer undo field accessors:*
 - `nvim_buf_get/set_b_u_oldhead` - Oldest undo header
@@ -707,6 +708,11 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 - `nvim_buf_is_curbuf` - Check if buffer is current buffer
 - `nvim_u_saveline` - Save line for U command
 - `nvim_set_undo_undoes_false` - Set undo_undoes to false
+
+*u_find_first_changed accessors:*
+- `nvim_uep_compare_line_with_array` - Compare buffer line with ue_array element
+- `nvim_uhp_clear_cursor` - Clear uh_cursor position
+- `nvim_uhp_set_cursor_lnum_only` - Set uh_cursor.lnum only
 
 **Remaining Functions (complex, need extensive infrastructure):**
 - `undo_fmt_time` - Localized time formatting with NGETTEXT

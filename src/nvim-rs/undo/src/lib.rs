@@ -207,6 +207,16 @@ extern "C" {
     fn nvim_buf_is_curbuf(buf: BufHandle) -> bool;
     fn nvim_u_saveline(buf: BufHandle, lnum: LinenrT);
     fn nvim_set_undo_undoes_false();
+
+    // u_find_first_changed infrastructure
+    fn nvim_uep_compare_line_with_array(
+        uep: UEntryHandle,
+        idx: LinenrT,
+        buf: BufHandle,
+        lnum: LinenrT,
+    ) -> bool;
+    fn nvim_uhp_clear_cursor(uhp: UHeaderHandle);
+    fn nvim_uhp_set_cursor_lnum_only(uhp: UHeaderHandle, lnum: LinenrT);
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed.
@@ -1314,6 +1324,51 @@ pub unsafe extern "C" fn rs_u_savedel(lnum: LinenrT, nlines: LinenrT) -> c_int {
     let newbot = if nlines == line_count { 2 } else { lnum };
 
     rs_u_savecommon(buf, lnum - 1, lnum + nlines, newbot, false)
+}
+
+/// Find the first line that was changed and set uh_cursor to that line.
+/// This is used after reloading a buffer.
+/// Rust implementation of u_find_first_changed.
+///
+/// # Safety
+///
+/// Must be called from a valid Neovim context.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_find_first_changed() {
+    let curbuf = nvim_get_curbuf();
+    let uhp = nvim_buf_get_b_u_newhead(curbuf);
+
+    // If curhead is set or newhead is null, return early
+    if !nvim_buf_get_b_u_curhead(curbuf).0.is_null() || uhp.0.is_null() {
+        return; // undid something in an autocmd?
+    }
+
+    // Check that the last undo block was for the whole file
+    let uep = nvim_uhp_get_entry(uhp);
+    if nvim_uep_get_top(uep) != 0 || nvim_uep_get_bot(uep) != 0 {
+        return;
+    }
+
+    let line_count = nvim_buf_get_ml_line_count(curbuf);
+    let ue_size = nvim_uep_get_size(uep);
+
+    // Find the first line that differs
+    let mut lnum: LinenrT = 1;
+    while lnum < line_count && lnum <= ue_size {
+        // Compare buffer line at lnum with ue_array[lnum - 1]
+        if nvim_uep_compare_line_with_array(uep, lnum - 1, curbuf, lnum) {
+            nvim_uhp_clear_cursor(uhp);
+            nvim_uhp_set_cursor_lnum_only(uhp, lnum);
+            return;
+        }
+        lnum += 1;
+    }
+
+    // Lines added or deleted at the end, put cursor there
+    if line_count != ue_size {
+        nvim_uhp_clear_cursor(uhp);
+        nvim_uhp_set_cursor_lnum_only(uhp, lnum);
+    }
 }
 
 #[cfg(test)]

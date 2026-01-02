@@ -172,6 +172,7 @@ extern int rs_u_save_buf(buf_T *buf, linenr_T top, linenr_T bot);
 extern int rs_u_savesub(linenr_T lnum);
 extern int rs_u_inssub(linenr_T lnum);
 extern int rs_u_savedel(linenr_T lnum, linenr_T nlines);
+extern void rs_u_find_first_changed(void);
 
 // Feature flag for Rust undo functions
 #define USE_RUST_UNDO 1
@@ -2866,6 +2867,9 @@ void u_unchanged(buf_T *buf)
 /// line that was changed and set the cursor there.
 void u_find_first_changed(void)
 {
+#ifdef USE_RUST_UNDO
+  rs_u_find_first_changed();
+#else
   u_header_T *uhp = curbuf->b_u_newhead;
 
   if (curbuf->b_u_curhead != NULL || uhp == NULL) {
@@ -2891,6 +2895,7 @@ void u_find_first_changed(void)
     clearpos(&(uhp->uh_cursor));
     uhp->uh_cursor.lnum = lnum;
   }
+#endif
 }
 
 /// Increase the write count, store it in the last undo header, what would be
@@ -3988,4 +3993,22 @@ void nvim_u_saveline(buf_T *buf, linenr_T lnum)
 void nvim_set_undo_undoes_false(void)
 {
   undo_undoes = false;
+}
+
+// Compare buffer line with ue_array element, returns true if different
+bool nvim_uep_compare_line_with_array(u_entry_T *uep, linenr_T idx, buf_T *buf, linenr_T lnum)
+{
+  return strcmp(ml_get_buf(buf, lnum), uep->ue_array[idx]) != 0;
+}
+
+// Clear uh_cursor position
+void nvim_uhp_clear_cursor(u_header_T *uhp)
+{
+  clearpos(&(uhp->uh_cursor));
+}
+
+// Set uh_cursor.lnum only
+void nvim_uhp_set_cursor_lnum_only(u_header_T *uhp, linenr_T lnum)
+{
+  uhp->uh_cursor.lnum = lnum;
 }
