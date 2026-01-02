@@ -182,6 +182,7 @@ void win_set_minimal_style(win_T *wp)
 
 extern int rs_win_border_height(win_T *wp);
 extern int rs_win_border_width(win_T *wp);
+extern int rs_win_float_valid(win_T *win);
 
 int win_border_height(win_T *wp)
 {
@@ -364,16 +365,7 @@ void win_reconfig_floats(void)
 bool win_float_valid(const win_T *win)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (win == NULL) {
-    return false;
-  }
-
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    if (wp == win) {
-      return wp->w_floating;
-    }
-  }
-  return false;
+  return rs_win_float_valid((win_T *)win) != 0;
 }
 
 win_T *win_float_find_preview(void)

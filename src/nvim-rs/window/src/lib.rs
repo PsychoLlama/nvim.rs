@@ -337,6 +337,38 @@ pub extern "C" fn rs_win_valid(win: WinHandle) -> c_int {
     c_int::from(win_valid_impl(win))
 }
 
+/// Check if "win" is a floating window in the current tabpage.
+///
+/// Iterates through all windows in the current tabpage to find the given
+/// window, then returns whether it has the floating flag set.
+#[inline]
+fn win_float_valid_impl(win: WinHandle) -> bool {
+    if win.is_null() {
+        return false;
+    }
+
+    // SAFETY: nvim_get_curtab returns a valid tabpage handle
+    let curtab = unsafe { nvim_get_curtab() };
+    let mut wp = get_tabpage_firstwin(curtab);
+    while !wp.is_null() {
+        if wp == win {
+            // SAFETY: nvim_win_get_floating is a safe field accessor
+            return unsafe { nvim_win_get_floating(wp) != 0 };
+        }
+        // SAFETY: nvim_win_get_next is a safe field accessor
+        wp = unsafe { nvim_win_get_next(wp) };
+    }
+    false
+}
+
+/// FFI wrapper for `win_float_valid`.
+///
+/// Returns non-zero if the window is a valid floating window in the current tabpage.
+#[no_mangle]
+pub extern "C" fn rs_win_float_valid(win: WinHandle) -> c_int {
+    c_int::from(win_float_valid_impl(win))
+}
+
 /// Check if there is only one window in the current tabpage (excluding floating windows).
 ///
 /// This is the Rust equivalent of the `ONE_WINDOW` macro, which checks `firstwin == lastwin`.
