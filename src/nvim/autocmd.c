@@ -75,6 +75,7 @@ extern const char *rs_event_nr2name(int event, int num_events);
 extern int rs_has_event(int event, int num_events);
 extern int rs_is_aucmd_win(win_T *win);
 extern int rs_has_cursorhold(void);
+extern int rs_trigger_cursorhold(void);
 
 // C accessor for event_names array (used by Rust)
 const char *nvim_get_event_name(int event)
@@ -1565,14 +1566,7 @@ static bool has_cursorhold(void) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 /// Return true if the CursorHold/CursorHoldI event can be triggered.
 bool trigger_cursorhold(void) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (!did_cursorhold && has_cursorhold() && reg_recording == 0
-      && typebuf.tb_len == 0 && !ins_compl_active()) {
-    int state = get_real_state();
-    if (state == MODE_NORMAL_BUSY || (state & MODE_INSERT) != 0) {
-      return true;
-    }
-  }
-  return false;
+  return rs_trigger_cursorhold() != 0;
 }
 
 /// Execute autocommands for "event" and file name "fname".
@@ -2715,4 +2709,16 @@ win_T *nvim_aucmd_win_get_win(int idx)
     return NULL;
   }
   return aucmd_win[idx].auc_win;
+}
+
+/// Get the did_cursorhold flag (used by Rust FFI).
+int nvim_get_did_cursorhold(void)
+{
+  return did_cursorhold ? 1 : 0;
+}
+
+/// Get the reg_recording value (used by Rust FFI).
+int nvim_get_reg_recording(void)
+{
+  return reg_recording;
 }

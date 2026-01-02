@@ -3433,6 +3433,11 @@ int nvim_get_typebuf_maplen(void)
   return typebuf.tb_maplen;
 }
 
+int nvim_get_typebuf_len(void)
+{
+  return typebuf.tb_len;
+}
+
 int nvim_get_curscript(void)
 {
   return curscript;

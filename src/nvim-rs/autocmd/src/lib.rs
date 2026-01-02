@@ -20,6 +20,7 @@ pub struct WinHandle(*mut c_void);
 // Mode constants from state_defs.h
 const MODE_NORMAL: c_int = 0x01;
 const MODE_NORMAL_BUSY: c_int = 0x1000 | MODE_NORMAL;
+const MODE_INSERT: c_int = 0x10;
 
 // Event constants from auevents_enum.generated.h
 const EVENT_CURSORHOLD: c_int = 37;
@@ -39,6 +40,14 @@ extern "C" {
 
     // From event crate - get the real editor state
     fn rs_get_real_state() -> c_int;
+
+    // Accessors for trigger_cursorhold
+    fn nvim_get_did_cursorhold() -> c_int;
+    fn nvim_get_reg_recording() -> c_int;
+    fn nvim_get_typebuf_len() -> c_int;
+
+    // From insexpand crate - check if completion is active
+    fn rs_ins_compl_active() -> c_int;
 }
 
 // Static "Unknown" string for invalid events
@@ -103,6 +112,30 @@ pub unsafe extern "C" fn rs_has_cursorhold() -> c_int {
         EVENT_CURSORHOLDI
     };
     c_int::from(has_event_impl(event))
+}
+
+/// Check if the CursorHold/CursorHoldI event can be triggered.
+///
+/// Returns 1 if the event can be triggered, 0 otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn rs_trigger_cursorhold() -> c_int {
+    // Check preconditions: cursorhold not yet triggered, has autocommand,
+    // not recording, type-ahead buffer empty, and completion not active
+    if nvim_get_did_cursorhold() != 0
+        || rs_has_cursorhold() == 0
+        || nvim_get_reg_recording() != 0
+        || nvim_get_typebuf_len() != 0
+        || rs_ins_compl_active() != 0
+    {
+        return 0;
+    }
+
+    // Check if we're in the right mode (normal-busy or insert)
+    let state = rs_get_real_state();
+    if state == MODE_NORMAL_BUSY || (state & MODE_INSERT) != 0 {
+        return 1;
+    }
+    0
 }
 
 /// Check if "win" is an active entry in the aucmd_win array.
@@ -358,6 +391,7 @@ mod tests {
         // Verify mode constants match expected values from state_defs.h
         assert_eq!(MODE_NORMAL, 0x01);
         assert_eq!(MODE_NORMAL_BUSY, 0x1001);
+        assert_eq!(MODE_INSERT, 0x10);
     }
 
     #[test]
@@ -365,6 +399,6 @@ mod tests {
         // Verify event constants match expected values from auevents_enum.generated.h
         assert_eq!(EVENT_CURSORHOLD, 37);
         assert_eq!(EVENT_CURSORHOLDI, 38);
-        assert!(NUM_EVENTS > EVENT_CURSORHOLDI);
+        assert_eq!(NUM_EVENTS, 141);
     }
 }
