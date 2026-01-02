@@ -74,6 +74,7 @@ extern int rs_aupat_is_buflocal(const char *pat, int patlen);
 extern const char *rs_event_nr2name(int event, int num_events);
 extern int rs_has_event(int event, int num_events);
 extern int rs_is_aucmd_win(win_T *win);
+extern int rs_has_cursorhold(void);
 
 // C accessor for event_names array (used by Rust)
 const char *nvim_get_event_name(int event)
@@ -1558,7 +1559,7 @@ bool has_event(event_T event) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 /// the current mode.
 static bool has_cursorhold(void) FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  return has_event((get_real_state() == MODE_NORMAL_BUSY ? EVENT_CURSORHOLD : EVENT_CURSORHOLDI));
+  return rs_has_cursorhold() != 0;
 }
 
 /// Return true if the CursorHold/CursorHoldI event can be triggered.

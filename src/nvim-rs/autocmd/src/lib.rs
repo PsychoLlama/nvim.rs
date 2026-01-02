@@ -17,6 +17,15 @@ use std::os::raw::c_int;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WinHandle(*mut c_void);
 
+// Mode constants from state_defs.h
+const MODE_NORMAL: c_int = 0x01;
+const MODE_NORMAL_BUSY: c_int = 0x1000 | MODE_NORMAL;
+
+// Event constants from auevents_enum.generated.h
+const EVENT_CURSORHOLD: c_int = 37;
+const EVENT_CURSORHOLDI: c_int = 38;
+const NUM_EVENTS: c_int = 141;
+
 // C accessors for static data
 extern "C" {
     fn nvim_get_autocmd_blocked() -> c_int;
@@ -27,6 +36,9 @@ extern "C" {
     fn nvim_get_aucmd_win_count() -> c_int;
     fn nvim_aucmd_win_used(idx: c_int) -> c_int;
     fn nvim_aucmd_win_get_win(idx: c_int) -> WinHandle;
+
+    // From event crate - get the real editor state
+    fn rs_get_real_state() -> c_int;
 }
 
 // Static "Unknown" string for invalid events
@@ -67,6 +79,30 @@ pub unsafe extern "C" fn rs_has_event(event: c_int, num_events: c_int) -> c_int 
     } else {
         0
     }
+}
+
+/// Internal helper to check if an event has autocommands.
+fn has_event_impl(event: c_int) -> bool {
+    if (0..NUM_EVENTS).contains(&event) {
+        unsafe { nvim_get_autocmds_count(event) > 0 }
+    } else {
+        false
+    }
+}
+
+/// Check if there is a CursorHold/CursorHoldI autocommand defined for
+/// the current mode.
+///
+/// Returns 1 if there is a cursorhold autocommand, 0 otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn rs_has_cursorhold() -> c_int {
+    let state = rs_get_real_state();
+    let event = if state == MODE_NORMAL_BUSY {
+        EVENT_CURSORHOLD
+    } else {
+        EVENT_CURSORHOLDI
+    };
+    c_int::from(has_event_impl(event))
 }
 
 /// Check if "win" is an active entry in the aucmd_win array.
@@ -315,5 +351,20 @@ mod tests {
         // Verify UNKNOWN_EVENT is properly null-terminated
         assert!(UNKNOWN_EVENT.ends_with(&[0]));
         assert_eq!(&UNKNOWN_EVENT[..7], b"Unknown");
+    }
+
+    #[test]
+    fn test_mode_constants() {
+        // Verify mode constants match expected values from state_defs.h
+        assert_eq!(MODE_NORMAL, 0x01);
+        assert_eq!(MODE_NORMAL_BUSY, 0x1001);
+    }
+
+    #[test]
+    fn test_event_constants() {
+        // Verify event constants match expected values from auevents_enum.generated.h
+        assert_eq!(EVENT_CURSORHOLD, 37);
+        assert_eq!(EVENT_CURSORHOLDI, 38);
+        assert!(NUM_EVENTS > EVENT_CURSORHOLDI);
     }
 }
