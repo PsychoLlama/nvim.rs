@@ -217,6 +217,16 @@ extern "C" {
     ) -> bool;
     fn nvim_uhp_clear_cursor(uhp: UHeaderHandle);
     fn nvim_uhp_set_cursor_lnum_only(uhp: UHeaderHandle, lnum: LinenrT);
+
+    // u_undoline accessors
+    fn nvim_buf_get_b_u_line_colnr(buf: BufHandle) -> ColnrT;
+    fn nvim_buf_set_b_u_line_colnr(buf: BufHandle, val: ColnrT);
+    fn nvim_undo_curwin_get_cursor_col() -> ColnrT;
+    fn nvim_undo_curwin_set_cursor_col(col: ColnrT);
+    fn nvim_undo_curwin_get_cursor_lnum() -> LinenrT;
+    fn nvim_undo_curwin_set_cursor_lnum(lnum: LinenrT);
+    fn nvim_check_cursor_col_curwin();
+    fn nvim_u_undoline_replace_and_swap();
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed.
@@ -1369,6 +1379,43 @@ pub unsafe extern "C" fn rs_u_find_first_changed() {
         nvim_uhp_clear_cursor(uhp);
         nvim_uhp_set_cursor_lnum_only(uhp, lnum);
     }
+}
+
+/// Restore the line saved for "U" command.
+/// Rust implementation of u_undoline.
+///
+/// # Safety
+///
+/// Must be called from a valid Neovim context.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_undoline() {
+    let curbuf = nvim_get_curbuf();
+    let line_ptr = nvim_buf_get_b_u_line_ptr(curbuf);
+    let line_lnum = nvim_buf_get_b_u_line_lnum(curbuf);
+    let line_count = nvim_buf_get_ml_line_count(curbuf);
+
+    // Check if line pointer is valid
+    if line_ptr.is_null() || line_lnum > line_count {
+        nvim_beep_flush();
+        return;
+    }
+
+    // First save the line for the 'u' command
+    if rs_u_savecommon(curbuf, line_lnum - 1, line_lnum + 1, 0, false) == FAIL {
+        return;
+    }
+
+    // Do the replacement and swap
+    nvim_u_undoline_replace_and_swap();
+
+    // Handle column position
+    let t = nvim_buf_get_b_u_line_colnr(curbuf);
+    if nvim_undo_curwin_get_cursor_lnum() == line_lnum {
+        nvim_buf_set_b_u_line_colnr(curbuf, nvim_undo_curwin_get_cursor_col());
+    }
+    nvim_undo_curwin_set_cursor_col(t);
+    nvim_undo_curwin_set_cursor_lnum(line_lnum);
+    nvim_check_cursor_col_curwin();
 }
 
 /// Given a buffer, return the undo header. If none is set, create one first.

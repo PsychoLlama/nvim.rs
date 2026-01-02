@@ -564,7 +564,7 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 
 ### Undo Module (undo.c - PARTIALLY MIGRATED)
 
-**Migrated Functions (33 rs_* functions):**
+**Migrated Functions (34 rs_* functions):**
 
 *Group A - Utilities:*
 - `rs_bufIsChanged` - Check if buffer is modified or file format differs
@@ -599,6 +599,7 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 - `rs_u_savedel` - Save lines for deletion
 - `rs_u_find_first_changed` - Find first changed line after reload
 - `rs_u_force_get_undo_header` - Get or create undo header for buffer
+- `rs_u_undoline` - Restore line saved for "U" command
 
 *Ex Commands:*
 - `rs_ex_undojoin` - Continue adding to the last undo entry (:undojoin)
@@ -609,7 +610,7 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 - `rs_u_undo_and_forget` - Undo and remove branch from undo tree (API use)
 - `rs_u_doit` - Core undo/redo loop (processes count undos/redos)
 
-**Accessor Functions (92):**
+**Accessor Functions (99):**
 
 *Buffer undo field accessors:*
 - `nvim_buf_get/set_b_u_oldhead` - Oldest undo header
@@ -714,6 +715,13 @@ Global state infrastructure for the `rex` (regexec_T) structure enabling future 
 - `nvim_uep_compare_line_with_array` - Compare buffer line with ue_array element
 - `nvim_uhp_clear_cursor` - Clear uh_cursor position
 - `nvim_uhp_set_cursor_lnum_only` - Set uh_cursor.lnum only
+
+*u_undoline accessors:*
+- `nvim_buf_get/set_b_u_line_colnr` - Column number for U command
+- `nvim_undo_curwin_get/set_cursor_col` - Get/set cursor column
+- `nvim_undo_curwin_get/set_cursor_lnum` - Get/set cursor line
+- `nvim_check_cursor_col_curwin` - Check cursor column validity
+- `nvim_u_undoline_replace_and_swap` - Replace line and swap pointers
 
 **Remaining Functions (complex, need extensive infrastructure):**
 - `undo_fmt_time` - Localized time formatting with NGETTEXT

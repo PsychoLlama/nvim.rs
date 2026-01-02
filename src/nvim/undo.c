@@ -174,6 +174,7 @@ extern int rs_u_inssub(linenr_T lnum);
 extern int rs_u_savedel(linenr_T lnum, linenr_T nlines);
 extern void rs_u_find_first_changed(void);
 extern u_header_T *rs_u_force_get_undo_header(buf_T *buf);
+extern void rs_u_undoline(void);
 
 // Feature flag for Rust undo functions
 #define USE_RUST_UNDO 1
@@ -3192,6 +3193,9 @@ void u_clearline(buf_T *buf)
 /// Careful: may trigger autocommands that reload the buffer.
 void u_undoline(void)
 {
+#ifdef USE_RUST_UNDO
+  rs_u_undoline();
+#else
   if (curbuf->b_u_line_ptr == NULL
       || curbuf->b_u_line_lnum > curbuf->b_ml.ml_line_count) {
     beep_flush();
@@ -3219,6 +3223,7 @@ void u_undoline(void)
   curwin->w_cursor.col = t;
   curwin->w_cursor.lnum = curbuf->b_u_line_lnum;
   check_cursor_col(curwin);
+#endif
 }
 
 /// Allocate memory and copy curbuf line into it.
@@ -4016,4 +4021,60 @@ void nvim_uhp_clear_cursor(u_header_T *uhp)
 void nvim_uhp_set_cursor_lnum_only(u_header_T *uhp, linenr_T lnum)
 {
   uhp->uh_cursor.lnum = lnum;
+}
+
+// Get b_u_line_colnr
+colnr_T nvim_buf_get_b_u_line_colnr(buf_T *buf)
+{
+  return buf->b_u_line_colnr;
+}
+
+// Set b_u_line_colnr
+void nvim_buf_set_b_u_line_colnr(buf_T *buf, colnr_T val)
+{
+  buf->b_u_line_colnr = val;
+}
+
+// Get curwin->w_cursor.col (undo-specific)
+colnr_T nvim_undo_curwin_get_cursor_col(void)
+{
+  return curwin->w_cursor.col;
+}
+
+// Set curwin->w_cursor.col (undo-specific)
+void nvim_undo_curwin_set_cursor_col(colnr_T col)
+{
+  curwin->w_cursor.col = col;
+}
+
+// Set curwin->w_cursor.lnum (undo-specific)
+void nvim_undo_curwin_set_cursor_lnum(linenr_T lnum)
+{
+  curwin->w_cursor.lnum = lnum;
+}
+
+// Call check_cursor_col for curwin
+void nvim_check_cursor_col_curwin(void)
+{
+  check_cursor_col(curwin);
+}
+
+// Perform the u_undoline line replacement and swap operation
+// Swaps b_u_line_ptr with the current line content
+void nvim_u_undoline_replace_and_swap(void)
+{
+  linenr_T lnum = curbuf->b_u_line_lnum;
+  char *oldp = xstrdup(ml_get_buf(curbuf, lnum));
+  ml_replace(lnum, curbuf->b_u_line_ptr, true);
+  extmark_splice_cols(curbuf, (int)lnum - 1, 0, (colnr_T)strlen(oldp),
+                      (colnr_T)strlen(curbuf->b_u_line_ptr), kExtmarkUndo);
+  changed_bytes(lnum, 0);
+  xfree(curbuf->b_u_line_ptr);
+  curbuf->b_u_line_ptr = oldp;
+}
+
+// Get curwin->w_cursor.lnum (undo-specific)
+linenr_T nvim_undo_curwin_get_cursor_lnum(void)
+{
+  return curwin->w_cursor.lnum;
 }
