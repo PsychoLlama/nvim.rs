@@ -92,6 +92,14 @@ const KE_C_RIGHT: c_int = 86;
 const KE_C_HOME: c_int = 87;
 const KE_C_END: c_int = 88;
 
+// Special event keys (from keycodes.h)
+#[allow(dead_code)]
+const KE_EVENT: c_int = 102;
+#[allow(dead_code)]
+const KE_LUA: c_int = 103;
+#[allow(dead_code)]
+const KE_COMMAND: c_int = 104;
+
 // Mouse key KE_* constants (from keycodes.h)
 const KE_LEFTMOUSE: c_int = 44;
 const KE_LEFTDRAG: c_int = 45;
@@ -145,6 +153,14 @@ const K_LEFT: c_int = termcap2key(b'k' as c_int, b'l' as c_int);
 const K_RIGHT: c_int = termcap2key(b'k' as c_int, b'r' as c_int);
 const K_HOME: c_int = termcap2key(b'k' as c_int, b'h' as c_int);
 const K_END: c_int = termcap2key(b'@' as c_int, b'7' as c_int);
+#[allow(dead_code)]
+const K_PAGEUP: c_int = termcap2key(b'k' as c_int, b'P' as c_int);
+#[allow(dead_code)]
+const K_PAGEDOWN: c_int = termcap2key(b'k' as c_int, b'N' as c_int);
+#[allow(dead_code)]
+const K_KPAGEUP: c_int = termcap2key(b'K' as c_int, b'3' as c_int);
+#[allow(dead_code)]
+const K_KPAGEDOWN: c_int = termcap2key(b'K' as c_int, b'5' as c_int);
 const K_F1: c_int = termcap2key(b'k' as c_int, b'1' as c_int);
 const K_F2: c_int = termcap2key(b'k' as c_int, b'2' as c_int);
 const K_F3: c_int = termcap2key(b'k' as c_int, b'3' as c_int);
@@ -223,6 +239,14 @@ const K_C_LEFT: c_int = termcap2key(KS_EXTRA, KE_C_LEFT);
 const K_C_RIGHT: c_int = termcap2key(KS_EXTRA, KE_C_RIGHT);
 const K_C_HOME: c_int = termcap2key(KS_EXTRA, KE_C_HOME);
 const K_C_END: c_int = termcap2key(KS_EXTRA, KE_C_END);
+
+// Special event/script keys
+#[allow(dead_code)]
+const K_EVENT: c_int = termcap2key(KS_EXTRA, KE_EVENT);
+#[allow(dead_code)]
+const K_COMMAND: c_int = termcap2key(KS_EXTRA, KE_COMMAND);
+#[allow(dead_code)]
+const K_LUA: c_int = termcap2key(KS_EXTRA, KE_LUA);
 
 // Standard function keys (F5-F10)
 const K_F5: c_int = termcap2key(b'k' as c_int, b'5' as c_int);
