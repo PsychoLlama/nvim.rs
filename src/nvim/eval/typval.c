@@ -41,11 +41,44 @@
 #include "nvim/types_defs.h"
 #include "nvim/vim_defs.h"
 
+// Enable Rust implementations for type checking functions
+#define USE_RUST_TYPVAL 1
+
+// Handle type for typval_T pointers passed to Rust
+typedef void *TypevalHandle;
+
 // Rust FFI functions
 extern listitem_T *rs_tv_list_find(list_T *l, int n);
 extern int rs_tv_list_idx_of_item(const list_T *l, const listitem_T *item);
 extern void rs_tv_list_reverse(list_T *l);
 extern bool rs_tv_blob_equal(const blob_T *b1, const blob_T *b2);
+
+// Type checking functions from Rust
+extern int rs_tv_check_for_string_arg(TypevalHandle args, int idx);
+extern int rs_tv_check_for_nonempty_string_arg(TypevalHandle args, int idx);
+extern int rs_tv_check_for_opt_string_arg(TypevalHandle args, int idx);
+extern int rs_tv_check_for_number_arg(TypevalHandle args, int idx);
+extern int rs_tv_check_for_opt_number_arg(TypevalHandle args, int idx);
+extern int rs_tv_check_for_float_or_nr_arg(TypevalHandle args, int idx);
+extern int rs_tv_check_for_bool_arg(TypevalHandle args, int idx);
+extern int rs_tv_check_for_opt_bool_arg(TypevalHandle args, int idx);
+extern int rs_tv_check_for_blob_arg(TypevalHandle args, int idx);
+extern int rs_tv_check_for_list_arg(TypevalHandle args, int idx);
+extern int rs_tv_check_for_dict_arg(TypevalHandle args, int idx);
+extern int rs_tv_check_for_nonnull_dict_arg(TypevalHandle args, int idx);
+extern int rs_tv_check_for_opt_dict_arg(TypevalHandle args, int idx);
+extern int rs_tv_check_for_string_or_number_arg(TypevalHandle args, int idx);
+extern int rs_tv_check_for_buffer_arg(TypevalHandle args, int idx);
+extern int rs_tv_check_for_lnum_arg(TypevalHandle args, int idx);
+extern int rs_tv_check_for_string_or_list_arg(TypevalHandle args, int idx);
+extern int rs_tv_check_for_opt_string_or_list_arg(TypevalHandle args, int idx);
+extern int rs_tv_check_for_string_or_list_or_blob_arg(TypevalHandle args, int idx);
+extern int rs_tv_check_for_string_or_list_or_dict_arg(TypevalHandle args, int idx);
+extern int rs_tv_check_for_string_or_func_arg(TypevalHandle args, int idx);
+extern int rs_tv_check_for_list_or_blob_arg(TypevalHandle args, int idx);
+extern bool rs_tv_check_num(TypevalHandle tv);
+extern bool rs_tv_check_str(TypevalHandle tv);
+extern bool rs_tv_check_str_or_nr(TypevalHandle tv);
 
 /// struct storing information about current sort
 typedef struct {
