@@ -2388,6 +2388,51 @@ pub extern "C" fn rs_changed_window_setting_all() {
     changed_window_setting_all_impl();
 }
 
+// ============================================================================
+// Syntax Highlighting Functions
+// ============================================================================
+
+extern "C" {
+    /// Get the number of syntax patterns defined for a window.
+    fn nvim_win_get_syn_patterns_len(win: WinHandle) -> c_int;
+
+    /// Get the number of syntax clusters defined for a window.
+    fn nvim_win_get_syn_clusters_len(win: WinHandle) -> c_int;
+
+    /// Get the number of used entries in the keyword hashtab.
+    fn nvim_win_get_keywtab_used(win: WinHandle) -> c_int;
+
+    /// Get the number of used entries in the case-insensitive keyword hashtab.
+    fn nvim_win_get_keywtab_ic_used(win: WinHandle) -> c_int;
+}
+
+/// Check if syntax highlighting is present in a window.
+///
+/// Returns true if the window has any syntax patterns, clusters, or keywords defined.
+#[inline]
+fn syntax_present_impl(win: WinHandle) -> bool {
+    if win.is_null() {
+        return false;
+    }
+    unsafe {
+        nvim_win_get_syn_patterns_len(win) != 0
+            || nvim_win_get_syn_clusters_len(win) != 0
+            || nvim_win_get_keywtab_used(win) > 0
+            || nvim_win_get_keywtab_ic_used(win) > 0
+    }
+}
+
+/// FFI wrapper for `syntax_present`.
+///
+/// Checks if syntax highlighting is present for the given window.
+///
+/// # Safety
+/// The `win` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_syntax_present(win: WinHandle) -> c_int {
+    c_int::from(syntax_present_impl(win))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

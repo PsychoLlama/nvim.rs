@@ -49,6 +49,9 @@
 #include "nvim/types_defs.h"
 #include "nvim/vim_defs.h"
 
+// Rust FFI declarations
+extern int rs_syntax_present(win_T *win);
+
 static bool did_syntax_onoff = false;
 
 // different types of offsets that are possible
@@ -5292,10 +5295,7 @@ void ex_ownsyntax(exarg_T *eap)
 
 bool syntax_present(win_T *win)
 {
-  return win->w_s->b_syn_patterns.ga_len != 0
-         || win->w_s->b_syn_clusters.ga_len != 0
-         || win->w_s->b_keywtab.ht_used > 0
-         || win->w_s->b_keywtab_ic.ht_used > 0;
+  return rs_syntax_present(win) != 0;
 }
 
 static enum {
@@ -5676,4 +5676,32 @@ static void syntime_report(void)
     msg_outnum(total_count);
     msg_puts("\n");
   }
+}
+
+// ============================================================================
+// Rust FFI accessor functions
+// ============================================================================
+
+/// Get the number of syntax patterns defined for a window.
+int nvim_win_get_syn_patterns_len(win_T *win)
+{
+  return win->w_s->b_syn_patterns.ga_len;
+}
+
+/// Get the number of syntax clusters defined for a window.
+int nvim_win_get_syn_clusters_len(win_T *win)
+{
+  return win->w_s->b_syn_clusters.ga_len;
+}
+
+/// Get the number of used entries in the keyword hashtab.
+int nvim_win_get_keywtab_used(win_T *win)
+{
+  return (int)win->w_s->b_keywtab.ht_used;
+}
+
+/// Get the number of used entries in the case-insensitive keyword hashtab.
+int nvim_win_get_keywtab_ic_used(win_T *win)
+{
+  return (int)win->w_s->b_keywtab_ic.ht_used;
 }

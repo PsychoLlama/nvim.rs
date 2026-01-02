@@ -389,6 +389,15 @@ Accessor functions for fold.c:
 - `nvim_emsg_fold_cannot_create` - Error message for E350
 - `nvim_emsg_fold_cannot_delete` - Error message for E351
 
+**syntax.c** (syntax highlighting state - MIGRATED):
+- `syntax_present` - Migrated to Rust (rs_syntax_present) - checks if syntax highlighting is present in window
+
+Accessor functions for syntax.c:
+- `nvim_win_get_syn_patterns_len` - Get number of syntax patterns
+- `nvim_win_get_syn_clusters_len` - Get number of syntax clusters
+- `nvim_win_get_keywtab_used` - Get keyword hashtab used entries
+- `nvim_win_get_keywtab_ic_used` - Get case-insensitive keyword hashtab used entries
+
 TUIData accessor functions added for opaque handle pattern:
 - nvim_tui_get/set_rgb, nvim_tui_get/set_row, nvim_tui_get/set_col
 - nvim_tui_get/set_attrs, nvim_tui_get/set_clear_attrs
