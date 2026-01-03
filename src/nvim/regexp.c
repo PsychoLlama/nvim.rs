@@ -1337,76 +1337,12 @@ static bool re_mult_next(char *what)
   return true;
 }
 
-typedef struct {
-  int a, b, c;
-} decomp_T;
-
-// 0xfb20 - 0xfb4f
-static decomp_T decomp_table[0xfb4f - 0xfb20 + 1] = {
-  { 0x5e2, 0, 0 },          // 0xfb20       alt ayin
-  { 0x5d0, 0, 0 },          // 0xfb21       alt alef
-  { 0x5d3, 0, 0 },          // 0xfb22       alt dalet
-  { 0x5d4, 0, 0 },          // 0xfb23       alt he
-  { 0x5db, 0, 0 },          // 0xfb24       alt kaf
-  { 0x5dc, 0, 0 },          // 0xfb25       alt lamed
-  { 0x5dd, 0, 0 },          // 0xfb26       alt mem-sofit
-  { 0x5e8, 0, 0 },          // 0xfb27       alt resh
-  { 0x5ea, 0, 0 },          // 0xfb28       alt tav
-  { '+', 0, 0 },            // 0xfb29       alt plus
-  { 0x5e9, 0x5c1, 0 },      // 0xfb2a       shin+shin-dot
-  { 0x5e9, 0x5c2, 0 },      // 0xfb2b       shin+sin-dot
-  { 0x5e9, 0x5c1, 0x5bc },  // 0xfb2c       shin+shin-dot+dagesh
-  { 0x5e9, 0x5c2, 0x5bc },  // 0xfb2d       shin+sin-dot+dagesh
-  { 0x5d0, 0x5b7, 0 },      // 0xfb2e       alef+patah
-  { 0x5d0, 0x5b8, 0 },      // 0xfb2f       alef+qamats
-  { 0x5d0, 0x5b4, 0 },      // 0xfb30       alef+hiriq
-  { 0x5d1, 0x5bc, 0 },      // 0xfb31       bet+dagesh
-  { 0x5d2, 0x5bc, 0 },      // 0xfb32       gimel+dagesh
-  { 0x5d3, 0x5bc, 0 },      // 0xfb33       dalet+dagesh
-  { 0x5d4, 0x5bc, 0 },      // 0xfb34       he+dagesh
-  { 0x5d5, 0x5bc, 0 },      // 0xfb35       vav+dagesh
-  { 0x5d6, 0x5bc, 0 },      // 0xfb36       zayin+dagesh
-  { 0xfb37, 0, 0 },         // 0xfb37 -- UNUSED
-  { 0x5d8, 0x5bc, 0 },      // 0xfb38       tet+dagesh
-  { 0x5d9, 0x5bc, 0 },      // 0xfb39       yud+dagesh
-  { 0x5da, 0x5bc, 0 },      // 0xfb3a       kaf sofit+dagesh
-  { 0x5db, 0x5bc, 0 },      // 0xfb3b       kaf+dagesh
-  { 0x5dc, 0x5bc, 0 },      // 0xfb3c       lamed+dagesh
-  { 0xfb3d, 0, 0 },         // 0xfb3d -- UNUSED
-  { 0x5de, 0x5bc, 0 },      // 0xfb3e       mem+dagesh
-  { 0xfb3f, 0, 0 },         // 0xfb3f -- UNUSED
-  { 0x5e0, 0x5bc, 0 },      // 0xfb40       nun+dagesh
-  { 0x5e1, 0x5bc, 0 },      // 0xfb41       samech+dagesh
-  { 0xfb42, 0, 0 },         // 0xfb42 -- UNUSED
-  { 0x5e3, 0x5bc, 0 },      // 0xfb43       pe sofit+dagesh
-  { 0x5e4, 0x5bc, 0 },      // 0xfb44       pe+dagesh
-  { 0xfb45, 0, 0 },         // 0xfb45 -- UNUSED
-  { 0x5e6, 0x5bc, 0 },      // 0xfb46       tsadi+dagesh
-  { 0x5e7, 0x5bc, 0 },      // 0xfb47       qof+dagesh
-  { 0x5e8, 0x5bc, 0 },      // 0xfb48       resh+dagesh
-  { 0x5e9, 0x5bc, 0 },      // 0xfb49       shin+dagesh
-  { 0x5ea, 0x5bc, 0 },      // 0xfb4a       tav+dagesh
-  { 0x5d5, 0x5b9, 0 },      // 0xfb4b       vav+holam
-  { 0x5d1, 0x5bf, 0 },      // 0xfb4c       bet+rafe
-  { 0x5db, 0x5bf, 0 },      // 0xfb4d       kaf+rafe
-  { 0x5e4, 0x5bf, 0 },      // 0xfb4e       pe+rafe
-  { 0x5d0, 0x5dc, 0 }       // 0xfb4f       alef-lamed
-};
+// Rust implementation for mb_decompose
+extern void rs_mb_decompose(int c, int *c1, int *c2, int *c3);
 
 static void mb_decompose(int c, int *c1, int *c2, int *c3)
 {
-  decomp_T d;
-
-  if (c >= 0xfb20 && c <= 0xfb4f) {
-    d = decomp_table[c - 0xfb20];
-    *c1 = d.a;
-    *c2 = d.b;
-    *c3 = d.c;
-  } else {
-    *c1 = c;
-    *c2 = 0;
-    *c3 = 0;
-  }
+  rs_mb_decompose(c, c1, c2, c3);
 }
 
 /// Compare two strings, ignore case if rex.reg_ic set.
