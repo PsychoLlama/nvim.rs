@@ -435,7 +435,7 @@ Terminfo output infrastructure for Rust:
 - nvim_tui_get_stopped, nvim_tui_get_can_set_title
 - nvim_tui_get/set_title_enabled, nvim_tui_get_buf_space
 
-### Regexp Module (regexp.c - PHASE 1-7 COMPLETE)
+### Regexp Module (regexp.c - PHASE 1-8 IN PROGRESS)
 
 **Strategy:** Wrap C regex engines rather than replace them. Vim regex syntax has no equivalent Rust crate.
 
@@ -573,6 +573,16 @@ The lexical scanner for regex patterns, handling magic characters and backslash 
 - `META_FLAGS` table - Characters that may be magic when preceded by backslash
 - Magic mode tracking (MAGIC_NONE, MAGIC_OFF, MAGIC_ON, MAGIC_ALL)
 - Position and state tracking via parse state accessors
+
+**Phase 8 - Parser Helpers (IN PROGRESS):**
+
+*Parser Helper Functions:*
+- `rs_read_limits` - Parse quantifier limits `\{n,m}`, handles greedy/non-greedy
+- `nvim_regexp_report_error` - Error reporting helper for Rust
+
+*Constants:*
+- `MAX_LIMIT` - Maximum quantifier limit (32767 << 16)
+- `OK`/`FAIL` - Return codes
 
 **Remaining in C:**
 - Backtracking and NFA engines (~10K lines)
