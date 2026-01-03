@@ -7,7 +7,10 @@
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::must_use_candidate)]
 
+pub mod parser;
 pub mod scanner;
+
+pub use parser::rs_read_limits;
 pub use scanner::{
     rs_getchr, rs_initchr, rs_peekchr, rs_skipchr, rs_skipchr_keepstart, rs_ungetchr,
 };

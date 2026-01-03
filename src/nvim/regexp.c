@@ -867,50 +867,16 @@ static int64_t getoctchrs(void)
   return rs_getoctchrs();
 }
 
+// Rust implementation for read_limits (Phase 8)
+extern int rs_read_limits(int *minval, int *maxval);
+
 // read_limits - Read two integers to be taken as a minimum and maximum.
 // If the first character is '-', then the range is reversed.
 // Should end with 'end'.  If minval is missing, zero is default, if maxval is
 // missing, a very big number is the default.
 static int read_limits(int *minval, int *maxval)
 {
-  int reverse = false;
-  char *first_char;
-  int tmp;
-
-  if (*regparse == '-') {
-    // Starts with '-', so reverse the range later.
-    regparse++;
-    reverse = true;
-  }
-  first_char = regparse;
-  *minval = getdigits_int(&regparse, false, 0);
-  if (*regparse == ',') {           // There is a comma.
-    if (ascii_isdigit(*++regparse)) {
-      *maxval = getdigits_int(&regparse, false, MAX_LIMIT);
-    } else {
-      *maxval = MAX_LIMIT;
-    }
-  } else if (ascii_isdigit(*first_char)) {
-    *maxval = *minval;              // It was \{n} or \{-n}
-  } else {
-    *maxval = MAX_LIMIT;            // It was \{} or \{-}
-  }
-  if (*regparse == '\\') {
-    regparse++;         // Allow either \{...} or \{...\}
-  }
-  if (*regparse != '}') {
-    EMSG2_RET_FAIL(_("E554: Syntax error in %s{...}"), reg_magic == MAGIC_ALL);
-  }
-
-  // Reverse the range if there was a '-', or make sure it is in the right
-  // order otherwise.
-  if ((!reverse && *minval > *maxval) || (reverse && *minval < *maxval)) {
-    tmp = *minval;
-    *minval = *maxval;
-    *maxval = tmp;
-  }
-  skipchr();            // let's be friends with the lexer again
-  return OK;
+  return rs_read_limits(minval, maxval);
 }
 
 // vim_regexec and friends
@@ -5298,6 +5264,20 @@ void nvim_parse_set_reg_magic(int m) { reg_magic = (magic_T)m; }
 // Helper functions for number parsing
 int nvim_hex2nr(int c) { return hex2nr(c); }
 int nvim_ascii_isxdigit(int c) { return ascii_isxdigit(c); }
+
+// Error reporting for Rust code
+void nvim_regexp_report_error(int error_id, int is_magic_all)
+{
+  switch (error_id) {
+  case 554:  // E554: Syntax error in %s{...}
+    semsg(_("E554: Syntax error in %s{...}"), is_magic_all ? "" : "\\");
+    break;
+  default:
+    semsg("Unknown regexp error: E%d", error_id);
+    break;
+  }
+  rc_did_emsg = true;
+}
 
 // Rust implementation
 extern int rs_vim_regcomp_had_eol(void);
