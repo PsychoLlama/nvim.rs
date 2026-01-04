@@ -580,6 +580,9 @@ The lexical scanner for regex patterns, handling magic characters and backslash 
 - `rs_read_limits` - Parse quantifier limits `\{n,m}`, handles greedy/non-greedy
 - `rs_mb_decompose` - Hebrew character decomposition (U+FB20 to U+FB4F)
 - `rs_use_multibytecode` - Decide MULTIBYTECODE vs EXACTLY for multibyte chars
+- `rs_nfa_re_num_cmp` - NFA numeric position comparison (\%>23l, \%<10c)
+- `rs_re_put_uint32` - Write big-endian 32-bit value for bytecode emission
+- `rs_re_get_uint32` - Read big-endian 32-bit value from bytecode
 - `nvim_regexp_report_error` - Error reporting helper for Rust
 
 *Constants:*
