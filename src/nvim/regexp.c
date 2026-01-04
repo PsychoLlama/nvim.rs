@@ -2558,13 +2558,14 @@ static void regcomp_start(uint8_t *expr, int re_flags)                        //
   had_eol = false;
 }
 
+// Rust implementation for use_multibytecode
+extern int rs_use_multibytecode(int c);
+
 // Return true if MULTIBYTECODE should be used instead of EXACTLY for
 // character "c".
 static bool use_multibytecode(int c)
 {
-  return utf_char2len(c) > 1
-         && (re_multi_type(peekchr()) != NOT_MULTI
-             || utf_iscomposing_legacy(c));
+  return rs_use_multibytecode(c) != 0;
 }
 
 // Emit (if appropriate) a byte of code

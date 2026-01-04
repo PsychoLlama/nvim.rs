@@ -4,7 +4,8 @@
 
 use std::ffi::{c_char, c_int};
 
-use crate::scanner::skipchr;
+use crate::scanner::{peekchr, skipchr};
+use crate::{re_multi_type_impl, NOT_MULTI};
 
 // =============================================================================
 // Constants
@@ -32,6 +33,10 @@ extern "C" {
 
     // Error reporting - sets rc_did_emsg and reports error
     fn nvim_regexp_report_error(error_id: c_int, is_magic_all: c_int);
+
+    // UTF-8 functions (from mbyte crate)
+    fn rs_utf_char2len(c: c_int) -> c_int;
+    fn rs_utf_iscomposing_legacy(c: c_int) -> c_int;
 }
 
 // Magic constant for very magic mode check
@@ -135,8 +140,36 @@ pub unsafe fn read_limits(minval: &mut c_int, maxval: &mut c_int) -> c_int {
 }
 
 // =============================================================================
+// Multi-byte Code Decision
+// =============================================================================
+
+/// Return true if MULTIBYTECODE should be used instead of EXACTLY for
+/// character "c".
+///
+/// Uses MULTIBYTECODE when:
+/// - The character takes more than 1 byte in UTF-8, AND
+/// - Either it's followed by a multi operator, OR it's a composing character
+///
+/// # Safety
+/// Calls peekchr() which accesses global parse state.
+#[inline]
+pub unsafe fn use_multibytecode(c: c_int) -> bool {
+    rs_utf_char2len(c) > 1
+        && (re_multi_type_impl(peekchr()) != NOT_MULTI || rs_utf_iscomposing_legacy(c) != 0)
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
+
+/// Return true if MULTIBYTECODE should be used instead of EXACTLY.
+///
+/// # Safety
+/// Calls peekchr() which accesses global parse state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_use_multibytecode(c: c_int) -> c_int {
+    c_int::from(use_multibytecode(c))
+}
 
 /// Read the limits for a `\{n,m}` quantifier.
 ///
@@ -171,4 +204,7 @@ mod tests {
         assert!(!ascii_isdigit(b' '));
         assert!(!ascii_isdigit(b'-'));
     }
+
+    // Note: use_multibytecode tests require FFI functions that are only
+    // available when linked with the full Neovim binary.
 }

@@ -18,7 +18,7 @@ parse_deps = true
 include = ["nvim-buffer", "nvim-charset", "nvim-cmdhist", "nvim-encoding", "nvim-eval", "nvim-ex-docmd", "nvim-fileio", "nvim-help", "nvim-indent", "nvim-keycodes", "nvim-math", "nvim-mbyte", "nvim-memutil", "nvim-menu", "nvim-os", "nvim-path", "nvim-profile", "nvim-regexp", "nvim-spell", "nvim-strings", "nvim-version", "nvim-window"]
 
 [export]
-include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs_getchr", "rs_ungetchr", "rs_read_limits", "rs_mb_decompose",
+include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs_getchr", "rs_ungetchr", "rs_read_limits", "rs_mb_decompose", "rs_use_multibytecode",
            "rs_xfpclassify", "rs_xisinf", "rs_xisnan", "rs_xctz", "rs_xpopcount",
            "rs_vim_append_digit_int", "rs_trim_to_int", "rs_is_power_of_two",
            "rs_num_divide", "rs_num_modulus",

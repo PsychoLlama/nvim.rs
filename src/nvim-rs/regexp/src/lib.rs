@@ -12,7 +12,7 @@ pub mod parser;
 pub mod scanner;
 
 pub use decompose::rs_mb_decompose;
-pub use parser::rs_read_limits;
+pub use parser::{rs_read_limits, rs_use_multibytecode};
 pub use scanner::{
     rs_getchr, rs_initchr, rs_peekchr, rs_skipchr, rs_skipchr_keepstart, rs_ungetchr,
 };
@@ -34,7 +34,8 @@ const BS: c_int = 8; // Backspace
 const MAGIC_OFFSET: c_int = 256;
 
 /// Return values for re_multi_type
-const NOT_MULTI: c_int = 0;
+/// Multi-operator type: not a multi operator.
+pub const NOT_MULTI: c_int = 0;
 const MULTI_ONE: c_int = 1;
 const MULTI_MULT: c_int = 2;
 
@@ -434,7 +435,7 @@ const fn toggle_magic_impl(x: c_int) -> c_int {
 /// MULTI_ONE (1) if single multi operator (@, =, ?).
 /// MULTI_MULT (2) if multi multi operator (*, +, {).
 #[inline]
-const fn re_multi_type_impl(c: c_int) -> c_int {
+pub const fn re_multi_type_impl(c: c_int) -> c_int {
     // Magic('@') = '@' - 256 = 64 - 256 = -192
     // Magic('=') = '=' - 256 = 61 - 256 = -195
     // Magic('?') = '?' - 256 = 63 - 256 = -193
