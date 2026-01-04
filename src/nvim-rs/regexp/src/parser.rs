@@ -172,6 +172,33 @@ pub unsafe fn re_get_uint32(p: *const u8) -> u32 {
         | (*p.add(3) as u32)
 }
 
+/// Write a two-byte value at the given position in big-endian format.
+///
+/// Returns a pointer to the position after the written bytes.
+/// Used for BT engine "next" pointers.
+///
+/// # Safety
+/// `p` must point to a buffer with at least 2 bytes of writable space.
+#[inline]
+pub unsafe fn re_put_uint16(p: *mut u8, val: u16) -> *mut u8 {
+    *p = ((val >> 8) & 0xff) as u8;
+    *p.add(1) = (val & 0xff) as u8;
+    p.add(2)
+}
+
+/// Read a two-byte value from the given position in big-endian format.
+///
+/// This is used to read BT engine "next" pointers.
+/// Note: The C macro `NEXT(p)` reads from p+1 and p+2, but this
+/// function reads from p+0 and p+1 for consistency with put.
+///
+/// # Safety
+/// `p` must point to a buffer with at least 2 readable bytes.
+#[inline]
+pub unsafe fn re_get_uint16(p: *const u8) -> u16 {
+    ((*p as u16) << 8) | (*p.add(1) as u16)
+}
+
 // =============================================================================
 // BT Engine Numeric Comparison
 // =============================================================================
@@ -310,6 +337,24 @@ pub unsafe extern "C" fn rs_re_get_uint32(p: *const u8) -> u32 {
 #[no_mangle]
 pub unsafe extern "C" fn rs_re_num_cmp(val: u32, scan: *const u8) -> c_int {
     c_int::from(re_num_cmp(val, scan))
+}
+
+/// Write a two-byte value in big-endian format.
+///
+/// # Safety
+/// `p` must point to a buffer with at least 2 bytes of writable space.
+#[no_mangle]
+pub unsafe extern "C" fn rs_re_put_uint16(p: *mut u8, val: u16) -> *mut u8 {
+    re_put_uint16(p, val)
+}
+
+/// Read a two-byte value in big-endian format.
+///
+/// # Safety
+/// `p` must point to a buffer with at least 2 readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_re_get_uint16(p: *const u8) -> u16 {
+    re_get_uint16(p)
 }
 
 // =============================================================================
@@ -465,6 +510,68 @@ mod tests {
             buf[7] = 0;
             assert!(re_num_cmp(10, buf.as_ptr())); // 10 == 10
             assert!(!re_num_cmp(11, buf.as_ptr())); // 11 == 10 = false
+        }
+    }
+
+    #[test]
+    fn test_re_put_uint16() {
+        let mut buf = [0u8; 4];
+        unsafe {
+            // Test writing 0x1234
+            let next = re_put_uint16(buf.as_mut_ptr(), 0x1234);
+            assert_eq!(buf[0], 0x12); // high byte first (big-endian)
+            assert_eq!(buf[1], 0x34);
+            assert_eq!(next, buf.as_mut_ptr().add(2));
+
+            // Test writing 0 at offset 2
+            let next2 = re_put_uint16(next, 0x0000);
+            assert_eq!(buf[2], 0x00);
+            assert_eq!(buf[3], 0x00);
+            assert_eq!(next2, buf.as_mut_ptr().add(4));
+
+            // Test writing max value
+            let mut buf2 = [0u8; 2];
+            re_put_uint16(buf2.as_mut_ptr(), 0xFFFF);
+            assert_eq!(buf2, [0xFF, 0xFF]);
+        }
+    }
+
+    #[test]
+    fn test_re_get_uint16() {
+        unsafe {
+            // Test reading 0x1234
+            let buf = [0x12u8, 0x34];
+            assert_eq!(re_get_uint16(buf.as_ptr()), 0x1234);
+
+            // Test reading 0
+            let buf_zero = [0u8; 2];
+            assert_eq!(re_get_uint16(buf_zero.as_ptr()), 0);
+
+            // Test reading max value
+            let buf_max = [0xFF, 0xFF];
+            assert_eq!(re_get_uint16(buf_max.as_ptr()), 0xFFFF);
+
+            // Test reading 0x00FF
+            let buf_alt = [0x00, 0xFF];
+            assert_eq!(re_get_uint16(buf_alt.as_ptr()), 0x00FF);
+        }
+    }
+
+    #[test]
+    fn test_re_put_get_uint16_roundtrip() {
+        // Test that put and get are inverses
+        unsafe {
+            let values = [0u16, 1, 255, 256, 0x1234, 0xFFFF];
+            let mut buf = [0u8; 2];
+
+            for &val in &values {
+                re_put_uint16(buf.as_mut_ptr(), val);
+                assert_eq!(
+                    re_get_uint16(buf.as_ptr()),
+                    val,
+                    "Roundtrip failed for {val:#x}"
+                );
+            }
         }
     }
 }
