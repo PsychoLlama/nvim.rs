@@ -57,7 +57,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | profile      | Profiling time arithmetic                          |
 | quickfix     | Quickfix/location list state queries               |
 | register     | Register validation, type formatting, width calc   |
-| regexp       | Regex utilities: magic chars, char classes, scanner, multiline query |
+| regexp       | Regex utilities: magic chars, char classes, scanner, bytecode ops, BT/NFA opcodes |
 | search       | Character search state, search/substitute tracking |
 | spell        | Spell check utilities, option validation           |
 | statusline   | Status line rendering helpers                      |
@@ -592,6 +592,29 @@ The lexical scanner for regex patterns, handling magic characters and backslash 
 - `OK`/`FAIL` - Return codes
 - `NOT_MULTI` - Multi-operator type constant (made public)
 - `DECOMP_TABLE` - Hebrew presentation form decomposition table (48 entries)
+
+**Phase 9 Foundation - BT Opcode Constants (bt_opcodes.rs):**
+- Core opcodes: END, BOL, EOL, BRANCH, BACK, EXACTLY, NOTHING, STAR, PLUS, etc.
+- Character class opcodes: ANY, ANYOF, ANYBUT, IDENT, DIGIT, ALPHA, LOWER, UPPER, etc.
+- Subexpression markers: MOPEN/MCLOSE (80-99), BACKREF (100-109), ZOPEN/ZCLOSE, etc.
+- Special opcodes: MULTIBYTECODE, RE_BOF, RE_EOF, CURSOR, RE_LNUM, RE_COL, etc.
+- Compilation flags: HASWIDTH, SIMPLE, SPSTART, HASNL, HASLOOKBH
+- `classcode_for_char()` helper, CLASSCHARS/CLASSCODES lookup tables
+- `with_nl()` helper for NL-variant opcodes
+
+**Phase 11 Foundation - NFA State Constants (nfa_states.rs):**
+- Core states: NFA_SPLIT (-1024), NFA_MATCH, NFA_EMPTY
+- Collection states: NFA_START_COLL, NFA_END_COLL, NFA_RANGE, etc.
+- Postfix operators: NFA_CONCAT, NFA_OR, NFA_STAR, NFA_QUEST, etc.
+- Anchor states: NFA_BOL, NFA_EOL, NFA_BOW, NFA_EOW, NFA_BOF, NFA_EOF
+- Invisible/lookaround states: NFA_START_INVISIBLE*, NFA_END_INVISIBLE*
+- Subexpression markers: NFA_MOPEN/MCLOSE (0-9), NFA_ZOPEN/ZCLOSE (0-9)
+- Backreferences: NFA_BACKREF1-9, NFA_ZREF1-9
+- Character classes: NFA_ANY through NFA_NUPPER_IC with NL variants
+- Position matching: NFA_CURSOR, NFA_LNUM, NFA_COL, NFA_VCOL, NFA_MARK
+- POSIX classes: NFA_CLASS_ALNUM through NFA_CLASS_FNAME
+- PIM states: NFA_PIM_UNUSED, NFA_PIM_TODO, NFA_PIM_MATCH, NFA_PIM_NOMATCH
+- Helper functions: nfa_with_nl(), nfa_add_nl(), nfa_mopen(), nfa_mclose(), etc.
 
 **Remaining in C:**
 - Backtracking and NFA engines (~10K lines)
