@@ -7479,18 +7479,13 @@ static int bt_regexec_multi(regmmatch_T *rmp, win_T *win, buf_T *buf, linenr_T l
   return bt_regexec_both(NULL, col, tm, timed_out);
 }
 
+// Rust implementation for re_num_cmp
+extern int rs_re_num_cmp(uint32_t val, const uint8_t *scan);
+
 // Compare a number with the operand of RE_LNUM, RE_COL or RE_VCOL.
 static int re_num_cmp(uint32_t val, const uint8_t *scan)
 {
-  uint32_t n = (uint32_t)OPERAND_MIN(scan);
-
-  if (OPERAND_CMP(scan) == '>') {
-    return val > n;
-  }
-  if (OPERAND_CMP(scan) == '<') {
-    return val < n;
-  }
-  return val == n;
+  return rs_re_num_cmp(val, scan);
 }
 
 #ifdef BT_REGEXP_DUMP

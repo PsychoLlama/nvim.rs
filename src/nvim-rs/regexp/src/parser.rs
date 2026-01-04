@@ -173,6 +173,35 @@ pub unsafe fn re_get_uint32(p: *const u8) -> u32 {
 }
 
 // =============================================================================
+// BT Engine Numeric Comparison
+// =============================================================================
+
+/// Compare a number with the operand from a BT regex instruction.
+///
+/// The bytecode layout at `scan` is:
+/// - Bytes 0-2: opcode and next pointer
+/// - Bytes 3-6: comparison value (big-endian)
+/// - Byte 7: comparison operator ('>', '<', or other for '=')
+///
+/// Used for RE_LNUM, RE_COL, RE_VCOL patterns like `\%>23l`.
+///
+/// # Safety
+/// `scan` must point to a valid bytecode instruction with at least 8 bytes.
+#[inline]
+pub unsafe fn re_num_cmp(val: u32, scan: *const u8) -> bool {
+    let n = re_get_uint32(scan.add(3));
+    let op = *scan.add(7);
+
+    if op == b'>' {
+        val > n
+    } else if op == b'<' {
+        val < n
+    } else {
+        val == n
+    }
+}
+
+// =============================================================================
 // NFA Numeric Comparison
 // =============================================================================
 
@@ -272,6 +301,15 @@ pub unsafe extern "C" fn rs_re_put_uint32(p: *mut u8, val: u32) -> *mut u8 {
 #[no_mangle]
 pub unsafe extern "C" fn rs_re_get_uint32(p: *const u8) -> u32 {
     re_get_uint32(p)
+}
+
+/// Compare a number with a BT regex bytecode operand.
+///
+/// # Safety
+/// `scan` must point to a valid bytecode instruction with at least 8 bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_re_num_cmp(val: u32, scan: *const u8) -> c_int {
+    c_int::from(re_num_cmp(val, scan))
 }
 
 // =============================================================================
@@ -390,6 +428,43 @@ mod tests {
                     "Roundtrip failed for {val:#x}"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn test_re_num_cmp() {
+        // Create a mock bytecode instruction:
+        // - Bytes 0-2: opcode and next (unused by re_num_cmp)
+        // - Bytes 3-6: comparison value (big-endian)
+        // - Byte 7: comparison operator
+        unsafe {
+            // Test greater than: val > n
+            let mut buf = [0u8; 8];
+            re_put_uint32(buf.as_mut_ptr().add(3), 10); // n = 10
+            buf[7] = b'>'; // operator = >
+
+            assert!(re_num_cmp(11, buf.as_ptr())); // 11 > 10
+            assert!(re_num_cmp(100, buf.as_ptr())); // 100 > 10
+            assert!(!re_num_cmp(10, buf.as_ptr())); // 10 > 10 = false
+            assert!(!re_num_cmp(5, buf.as_ptr())); // 5 > 10 = false
+
+            // Test less than: val < n
+            buf[7] = b'<';
+            assert!(re_num_cmp(5, buf.as_ptr())); // 5 < 10
+            assert!(re_num_cmp(0, buf.as_ptr())); // 0 < 10
+            assert!(!re_num_cmp(10, buf.as_ptr())); // 10 < 10 = false
+            assert!(!re_num_cmp(15, buf.as_ptr())); // 15 < 10 = false
+
+            // Test equals: val == n (any other operator)
+            buf[7] = b'='; // explicit equals
+            assert!(re_num_cmp(10, buf.as_ptr())); // 10 == 10
+            assert!(!re_num_cmp(11, buf.as_ptr())); // 11 == 10 = false
+            assert!(!re_num_cmp(9, buf.as_ptr())); // 9 == 10 = false
+
+            // Default operator (0) also means equals
+            buf[7] = 0;
+            assert!(re_num_cmp(10, buf.as_ptr())); // 10 == 10
+            assert!(!re_num_cmp(11, buf.as_ptr())); // 11 == 10 = false
         }
     }
 }
