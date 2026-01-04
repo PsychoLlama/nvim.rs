@@ -578,11 +578,13 @@ The lexical scanner for regex patterns, handling magic characters and backslash 
 
 *Parser Helper Functions:*
 - `rs_read_limits` - Parse quantifier limits `\{n,m}`, handles greedy/non-greedy
+- `rs_mb_decompose` - Hebrew character decomposition (U+FB20 to U+FB4F)
 - `nvim_regexp_report_error` - Error reporting helper for Rust
 
 *Constants:*
 - `MAX_LIMIT` - Maximum quantifier limit (32767 << 16)
 - `OK`/`FAIL` - Return codes
+- `DECOMP_TABLE` - Hebrew presentation form decomposition table (48 entries)
 
 **Remaining in C:**
 - Backtracking and NFA engines (~10K lines)
