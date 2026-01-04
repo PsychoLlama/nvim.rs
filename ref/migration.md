@@ -584,6 +584,7 @@ The lexical scanner for regex patterns, handling magic characters and backslash 
 - `rs_re_put_uint32` - Write big-endian 32-bit value for bytecode emission
 - `rs_re_get_uint32` - Read big-endian 32-bit value from bytecode
 - `rs_re_num_cmp` - BT engine numeric comparison from bytecode operand
+- `rs_re_put_uint16` / `rs_re_get_uint16` - 16-bit big-endian bytecode helpers
 - `nvim_regexp_report_error` - Error reporting helper for Rust
 
 *Constants:*
