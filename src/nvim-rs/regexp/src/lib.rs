@@ -12,7 +12,9 @@ pub mod parser;
 pub mod scanner;
 
 pub use decompose::rs_mb_decompose;
-pub use parser::{rs_nfa_re_num_cmp, rs_re_put_uint32, rs_read_limits, rs_use_multibytecode};
+pub use parser::{
+    rs_nfa_re_num_cmp, rs_re_get_uint32, rs_re_put_uint32, rs_read_limits, rs_use_multibytecode,
+};
 pub use scanner::{
     rs_getchr, rs_initchr, rs_peekchr, rs_skipchr, rs_skipchr_keepstart, rs_ungetchr,
 };

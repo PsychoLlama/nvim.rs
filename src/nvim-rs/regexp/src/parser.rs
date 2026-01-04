@@ -158,6 +158,20 @@ pub unsafe fn re_put_uint32(p: *mut u8, val: u32) -> *mut u8 {
     p.add(4)
 }
 
+/// Read a four-byte value from the given position in big-endian format.
+///
+/// This is the read counterpart to `re_put_uint32`.
+///
+/// # Safety
+/// `p` must point to a buffer with at least 4 readable bytes.
+#[inline]
+pub unsafe fn re_get_uint32(p: *const u8) -> u32 {
+    ((*p as u32) << 24)
+        | ((*p.add(1) as u32) << 16)
+        | ((*p.add(2) as u32) << 8)
+        | (*p.add(3) as u32)
+}
+
 // =============================================================================
 // NFA Numeric Comparison
 // =============================================================================
@@ -251,6 +265,15 @@ pub unsafe extern "C" fn rs_re_put_uint32(p: *mut u8, val: u32) -> *mut u8 {
     re_put_uint32(p, val)
 }
 
+/// Read a four-byte value in big-endian format.
+///
+/// # Safety
+/// `p` must point to a buffer with at least 4 readable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_re_get_uint32(p: *const u8) -> u32 {
+    re_get_uint32(p)
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
@@ -328,6 +351,45 @@ mod tests {
             let mut buf2 = [0u8; 4];
             re_put_uint32(buf2.as_mut_ptr(), 0xFFFFFFFF);
             assert_eq!(buf2, [0xFF, 0xFF, 0xFF, 0xFF]);
+        }
+    }
+
+    #[test]
+    fn test_re_get_uint32() {
+        unsafe {
+            // Test reading 0x12345678
+            let buf = [0x12u8, 0x34, 0x56, 0x78];
+            assert_eq!(re_get_uint32(buf.as_ptr()), 0x12345678);
+
+            // Test reading 0
+            let buf_zero = [0u8; 4];
+            assert_eq!(re_get_uint32(buf_zero.as_ptr()), 0);
+
+            // Test reading max value
+            let buf_max = [0xFF, 0xFF, 0xFF, 0xFF];
+            assert_eq!(re_get_uint32(buf_max.as_ptr()), 0xFFFFFFFF);
+
+            // Test reading 0x00FF00FF
+            let buf_alt = [0x00, 0xFF, 0x00, 0xFF];
+            assert_eq!(re_get_uint32(buf_alt.as_ptr()), 0x00FF00FF);
+        }
+    }
+
+    #[test]
+    fn test_re_put_get_roundtrip() {
+        // Test that put and get are inverses
+        unsafe {
+            let values = [0u32, 1, 255, 256, 65535, 0x12345678, 0xFFFFFFFF];
+            let mut buf = [0u8; 4];
+
+            for &val in &values {
+                re_put_uint32(buf.as_mut_ptr(), val);
+                assert_eq!(
+                    re_get_uint32(buf.as_ptr()),
+                    val,
+                    "Roundtrip failed for {val:#x}"
+                );
+            }
         }
     }
 }
