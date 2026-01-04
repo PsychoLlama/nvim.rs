@@ -9,6 +9,7 @@
 
 pub mod bt_opcodes;
 pub mod decompose;
+pub mod nfa_states;
 pub mod parser;
 pub mod scanner;
 
