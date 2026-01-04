@@ -140,6 +140,25 @@ pub unsafe fn read_limits(minval: &mut c_int, maxval: &mut c_int) -> c_int {
 }
 
 // =============================================================================
+// Bytecode Helpers
+// =============================================================================
+
+/// Write a four-byte value at the given position in big-endian format.
+///
+/// Returns a pointer to the position after the written bytes.
+///
+/// # Safety
+/// `p` must point to a buffer with at least 4 bytes of writable space.
+#[inline]
+pub unsafe fn re_put_uint32(p: *mut u8, val: u32) -> *mut u8 {
+    *p = ((val >> 24) & 0xff) as u8;
+    *p.add(1) = ((val >> 16) & 0xff) as u8;
+    *p.add(2) = ((val >> 8) & 0xff) as u8;
+    *p.add(3) = (val & 0xff) as u8;
+    p.add(4)
+}
+
+// =============================================================================
 // NFA Numeric Comparison
 // =============================================================================
 
@@ -223,6 +242,15 @@ pub extern "C" fn rs_nfa_re_num_cmp(val: u64, op: c_int, pos: u64) -> c_int {
     c_int::from(nfa_re_num_cmp(val, op, pos))
 }
 
+/// Write a four-byte value in big-endian format.
+///
+/// # Safety
+/// `p` must point to a buffer with at least 4 bytes of writable space.
+#[no_mangle]
+pub unsafe extern "C" fn rs_re_put_uint32(p: *mut u8, val: u32) -> *mut u8 {
+    re_put_uint32(p, val)
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
@@ -274,5 +302,32 @@ mod tests {
         assert!(nfa_re_num_cmp(10, cmp_op::LESS, 0));
         assert!(!nfa_re_num_cmp(10, cmp_op::LESS, 10));
         assert!(!nfa_re_num_cmp(10, cmp_op::LESS, 15));
+    }
+
+    #[test]
+    fn test_re_put_uint32() {
+        let mut buf = [0u8; 8];
+        unsafe {
+            // Test writing 0x12345678
+            let next = re_put_uint32(buf.as_mut_ptr(), 0x12345678);
+            assert_eq!(buf[0], 0x12); // high byte first (big-endian)
+            assert_eq!(buf[1], 0x34);
+            assert_eq!(buf[2], 0x56);
+            assert_eq!(buf[3], 0x78);
+            assert_eq!(next, buf.as_mut_ptr().add(4));
+
+            // Test writing 0 at offset 4
+            let next2 = re_put_uint32(next, 0x00000000);
+            assert_eq!(buf[4], 0x00);
+            assert_eq!(buf[5], 0x00);
+            assert_eq!(buf[6], 0x00);
+            assert_eq!(buf[7], 0x00);
+            assert_eq!(next2, buf.as_mut_ptr().add(8));
+
+            // Test writing max value
+            let mut buf2 = [0u8; 4];
+            re_put_uint32(buf2.as_mut_ptr(), 0xFFFFFFFF);
+            assert_eq!(buf2, [0xFF, 0xFF, 0xFF, 0xFF]);
+        }
     }
 }

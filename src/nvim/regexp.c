@@ -3576,14 +3576,13 @@ static uint8_t *regnode(int op)
   return ret;
 }
 
+// Rust implementation for re_put_uint32
+extern uint8_t *rs_re_put_uint32(uint8_t *p, uint32_t val);
+
 // Write a four bytes number at "p" and return pointer to the next char.
 static uint8_t *re_put_uint32(uint8_t *p, uint32_t val)
 {
-  *p++ = (uint8_t)((val >> 24) & 0377);
-  *p++ = (uint8_t)((val >> 16) & 0377);
-  *p++ = (uint8_t)((val >> 8) & 0377);
-  *p++ = (uint8_t)(val & 0377);
-  return p;
+  return rs_re_put_uint32(p, val);
 }
 
 // regnext - dig the "next" pointer out of a node
