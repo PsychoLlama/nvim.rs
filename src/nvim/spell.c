@@ -2250,19 +2250,12 @@ static void use_midword(slang_T *lp, win_T *wp)
 // Find the region "region[2]" in "rp" (points to "sl_regions").
 // Each region is simply stored as the two characters of its name.
 // Returns the index if found (first is 0), REGION_ALL if not found.
+// Rust implementation
+extern int rs_find_region(const char *rp, const char *region);
+
 static int find_region(const char *rp, const char *region)
 {
-  int i;
-
-  for (i = 0;; i += 2) {
-    if (rp[i] == NUL) {
-      return REGION_ALL;
-    }
-    if (rp[i] == region[0] && rp[i + 1] == region[1]) {
-      break;
-    }
-  }
-  return i / 2;
+  return rs_find_region(rp, region);
 }
 
 /// Return case type of word:

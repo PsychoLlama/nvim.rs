@@ -10,6 +10,10 @@
 
 use std::ffi::{c_char, c_int};
 
+// Region constant from spell_defs.h
+/// Word is valid in all regions.
+pub const REGION_ALL: c_int = 0xff;
+
 // Word flags from spell_defs.h
 const WF_ONECAP: c_int = 0x02; // word with one capital (or all capitals)
 const WF_ALLCAP: c_int = 0x04; // word must be all capitals
@@ -246,6 +250,69 @@ fn valid_spellfile_impl(val: &[u8]) -> bool {
     true
 }
 
+/// Find a region in the region list.
+///
+/// The region list (from `sl_regions`) stores region names as consecutive
+/// pairs of ASCII characters (e.g., "usuk" for "us" and "uk" regions).
+///
+/// # Arguments
+///
+/// * `rp` - Pointer to the region list string (NUL-terminated, pairs of chars)
+/// * `region` - Pointer to a 2-character region name to find
+///
+/// # Returns
+///
+/// The index of the region if found (0 for first region, 1 for second, etc.),
+/// or `REGION_ALL` (0xff) if not found.
+///
+/// # Safety
+///
+/// Both `rp` and `region` must be valid null-terminated C strings.
+/// `region` must point to at least 2 characters.
+#[inline]
+#[allow(clippy::cast_possible_wrap)] // index is always small and positive
+#[allow(clippy::cast_possible_truncation)] // index is always small and positive
+#[allow(clippy::missing_const_for_fn)] // requires unsafe const which has limitations
+unsafe fn find_region_impl(rp: *const c_char, region: *const c_char) -> c_int {
+    if rp.is_null() || region.is_null() {
+        return REGION_ALL;
+    }
+
+    let r0 = *region;
+    let r1 = *region.add(1);
+
+    let mut i: usize = 0;
+    loop {
+        let c0 = *rp.add(i);
+        if c0 == 0 {
+            // End of region list, not found
+            return REGION_ALL;
+        }
+        let c1 = *rp.add(i + 1);
+
+        if c0 == r0 && c1 == r1 {
+            // Found matching region
+            return (i / 2) as c_int;
+        }
+
+        i += 2;
+    }
+}
+
+/// FFI wrapper for `find_region`.
+///
+/// Find the region `region[0..2]` in the region list `rp`.
+/// Returns the index if found (first is 0), REGION_ALL (0xff) if not found.
+///
+/// # Safety
+///
+/// Both `rp` and `region` must be valid null-terminated C strings.
+/// `region` must point to at least 2 characters.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_region(rp: *const c_char, region: *const c_char) -> c_int {
+    find_region_impl(rp, region)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -446,5 +513,94 @@ mod tests {
             // Null is valid
             assert!(rs_valid_spellfile(std::ptr::null()));
         }
+    }
+
+    #[test]
+    fn test_find_region_found() {
+        // Region list: "us", "uk", "au"
+        let regions = b"usukau\0";
+        let us = b"us\0";
+        let uk = b"uk\0";
+        let au = b"au\0";
+
+        unsafe {
+            assert_eq!(
+                find_region_impl(regions.as_ptr() as *const c_char, us.as_ptr() as *const c_char),
+                0
+            );
+            assert_eq!(
+                find_region_impl(regions.as_ptr() as *const c_char, uk.as_ptr() as *const c_char),
+                1
+            );
+            assert_eq!(
+                find_region_impl(regions.as_ptr() as *const c_char, au.as_ptr() as *const c_char),
+                2
+            );
+        }
+    }
+
+    #[test]
+    fn test_find_region_not_found() {
+        let regions = b"usuk\0";
+        let de = b"de\0";
+
+        unsafe {
+            assert_eq!(
+                find_region_impl(regions.as_ptr() as *const c_char, de.as_ptr() as *const c_char),
+                REGION_ALL
+            );
+        }
+    }
+
+    #[test]
+    fn test_find_region_empty() {
+        let empty = b"\0";
+        let us = b"us\0";
+
+        unsafe {
+            assert_eq!(
+                find_region_impl(empty.as_ptr() as *const c_char, us.as_ptr() as *const c_char),
+                REGION_ALL
+            );
+        }
+    }
+
+    #[test]
+    fn test_find_region_null() {
+        let us = b"us\0";
+
+        unsafe {
+            assert_eq!(
+                find_region_impl(std::ptr::null(), us.as_ptr() as *const c_char),
+                REGION_ALL
+            );
+            assert_eq!(
+                find_region_impl(us.as_ptr() as *const c_char, std::ptr::null()),
+                REGION_ALL
+            );
+        }
+    }
+
+    #[test]
+    fn test_find_region_ffi() {
+        let regions = b"usukau\0";
+        let uk = b"uk\0";
+        let de = b"de\0";
+
+        unsafe {
+            assert_eq!(
+                rs_find_region(regions.as_ptr() as *const c_char, uk.as_ptr() as *const c_char),
+                1
+            );
+            assert_eq!(
+                rs_find_region(regions.as_ptr() as *const c_char, de.as_ptr() as *const c_char),
+                REGION_ALL
+            );
+        }
+    }
+
+    #[test]
+    fn test_region_all_constant() {
+        assert_eq!(REGION_ALL, 0xff);
     }
 }
