@@ -140,6 +140,39 @@ pub unsafe fn read_limits(minval: &mut c_int, maxval: &mut c_int) -> c_int {
 }
 
 // =============================================================================
+// NFA Numeric Comparison
+// =============================================================================
+
+/// Comparison operators for NFA numeric matching.
+pub mod cmp_op {
+    /// Greater than (pos > val)
+    pub const GREATER: i32 = 1;
+    /// Less than (pos < val)
+    pub const LESS: i32 = 2;
+    // 0 or any other value = equals (val == pos)
+}
+
+/// Compare numbers for NFA regex position matching.
+///
+/// Used to check if current position (line, column, vcol) matches a pattern
+/// constraint like `\%>23l` (line > 23) or `\%<10c` (column < 10).
+///
+/// # Arguments
+/// * `val` - The value from the pattern (e.g., 23 in `\%>23l`)
+/// * `op` - Comparison operator: 1=greater, 2=less, other=equals
+/// * `pos` - The current position to compare against
+#[inline]
+pub const fn nfa_re_num_cmp(val: u64, op: c_int, pos: u64) -> bool {
+    if op == cmp_op::GREATER {
+        pos > val
+    } else if op == cmp_op::LESS {
+        pos < val
+    } else {
+        val == pos
+    }
+}
+
+// =============================================================================
 // Multi-byte Code Decision
 // =============================================================================
 
@@ -181,6 +214,15 @@ pub unsafe extern "C" fn rs_read_limits(minval: *mut c_int, maxval: *mut c_int) 
     read_limits(&mut *minval, &mut *maxval)
 }
 
+/// Compare numbers for NFA regex position matching.
+///
+/// Used to check if current position matches pattern constraints like
+/// `\%>23l` (line > 23) or `\%<10c` (column < 10).
+#[no_mangle]
+pub extern "C" fn rs_nfa_re_num_cmp(val: u64, op: c_int, pos: u64) -> c_int {
+    c_int::from(nfa_re_num_cmp(val, op, pos))
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
@@ -207,4 +249,30 @@ mod tests {
 
     // Note: use_multibytecode tests require FFI functions that are only
     // available when linked with the full Neovim binary.
+
+    #[test]
+    fn test_nfa_re_num_cmp_equal() {
+        // Default (0) is equality comparison
+        assert!(nfa_re_num_cmp(10, 0, 10));
+        assert!(!nfa_re_num_cmp(10, 0, 11));
+        assert!(!nfa_re_num_cmp(10, 0, 9));
+    }
+
+    #[test]
+    fn test_nfa_re_num_cmp_greater() {
+        // op=1: pos > val
+        assert!(nfa_re_num_cmp(10, cmp_op::GREATER, 11));
+        assert!(nfa_re_num_cmp(10, cmp_op::GREATER, 100));
+        assert!(!nfa_re_num_cmp(10, cmp_op::GREATER, 10));
+        assert!(!nfa_re_num_cmp(10, cmp_op::GREATER, 5));
+    }
+
+    #[test]
+    fn test_nfa_re_num_cmp_less() {
+        // op=2: pos < val
+        assert!(nfa_re_num_cmp(10, cmp_op::LESS, 5));
+        assert!(nfa_re_num_cmp(10, cmp_op::LESS, 0));
+        assert!(!nfa_re_num_cmp(10, cmp_op::LESS, 10));
+        assert!(!nfa_re_num_cmp(10, cmp_op::LESS, 15));
+    }
 }

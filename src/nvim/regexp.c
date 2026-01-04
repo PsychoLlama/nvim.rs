@@ -13384,15 +13384,12 @@ static void nfa_restore_listids(nfa_regprog_T *prog, const int *list)
   }
 }
 
+// Rust implementation for nfa_re_num_cmp
+extern int rs_nfa_re_num_cmp(uint64_t val, int op, uint64_t pos);
+
 static bool nfa_re_num_cmp(uintmax_t val, int op, uintmax_t pos)
 {
-  if (op == 1) {
-    return pos > val;
-  }
-  if (op == 2) {
-    return pos < val;
-  }
-  return val == pos;
+  return rs_nfa_re_num_cmp((uint64_t)val, op, (uint64_t)pos) != 0;
 }
 
 // Recursively call nfa_regmatch()
