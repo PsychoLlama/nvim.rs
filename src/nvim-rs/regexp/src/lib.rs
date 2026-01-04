@@ -7,6 +7,7 @@
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::must_use_candidate)]
 
+pub mod bt_opcodes;
 pub mod decompose;
 pub mod parser;
 pub mod scanner;
