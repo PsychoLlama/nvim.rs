@@ -249,6 +249,20 @@ void nvim_option_set_re(OptInt value) { p_re = value; }
 // Special setter for magic_overruled
 void nvim_option_set_magic_overruled(int value) { magic_overruled = (optmagic_T)value; }
 
+// =============================================================================
+// Callback accessor functions for Rust callbacks module
+// =============================================================================
+
+// State accessors for callbacks
+int nvim_callback_get_starting(void) { return starting; }
+int nvim_callback_get_p_hls(void) { return p_hls; }
+OptInt nvim_callback_get_p_titlelen(void) { return p_titlelen; }
+int nvim_callback_get_no_hlsearch(void) { return no_hlsearch; }
+
+// State setters for callbacks
+void nvim_callback_set_need_maketitle(int value) { need_maketitle = value != 0; }
+void nvim_callback_set_redraw_tabline(int value) { redraw_tabline = value != 0; }
+
 static const char e_unknown_option[]
   = N_("E518: Unknown option");
 static const char e_not_allowed_in_modeline[]

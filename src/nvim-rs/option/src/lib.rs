@@ -11,6 +11,8 @@
 #![allow(clippy::cast_sign_loss)] // FFI with C char types
 #![allow(clippy::missing_safety_doc)] // FFI functions safety is implicit
 
+pub mod callbacks;
+
 use std::ffi::{c_char, c_int, c_uint};
 
 /// OptInt type (matches C's OptInt = int64_t)
