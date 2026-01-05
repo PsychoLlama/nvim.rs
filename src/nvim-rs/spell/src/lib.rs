@@ -292,6 +292,147 @@ pub extern "C" fn rs_clear_spell_chartab(sp: SpelltabHandle) {
     clear_spell_chartab_impl(sp);
 }
 
+// =============================================================================
+// Offset Encoding/Decoding Functions
+// =============================================================================
+
+/// Convert an offset into a minimal number of bytes.
+///
+/// Uses base-255 encoding with high bits to indicate length, similar to UTF-8
+/// but avoiding NUL bytes. Returns the number of bytes written (1-4).
+///
+/// Encoding scheme:
+/// - 1 byte:  0x01-0x7F (values 0-126)
+/// - 2 bytes: 0x80-0xBF as first byte (values 127-16510)
+/// - 3 bytes: 0xC0-0xDF as first byte (values 16511-4210942)
+/// - 4 bytes: 0xE0-0xFF as first byte (larger values)
+#[inline]
+#[must_use]
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+pub fn offset2bytes(nr: i32, buf: &mut [u8]) -> usize {
+    // Split the number in parts of base 255, avoiding NUL bytes
+    let b1 = (nr % 255 + 1) as u8;
+    let rem = nr / 255;
+    let b2 = (rem % 255 + 1) as u8;
+    let rem = rem / 255;
+    let b3 = (rem % 255 + 1) as u8;
+    let b4 = (rem / 255 + 1) as u8;
+
+    if b4 > 1 || b3 > 0x1f {
+        // 4 bytes
+        buf[0] = 0xe0 + b4;
+        buf[1] = b3;
+        buf[2] = b2;
+        buf[3] = b1;
+        4
+    } else if b3 > 1 || b2 > 0x3f {
+        // 3 bytes
+        buf[0] = 0xc0 + b3;
+        buf[1] = b2;
+        buf[2] = b1;
+        3
+    } else if b2 > 1 || b1 > 0x7f {
+        // 2 bytes
+        buf[0] = 0x80 + b2;
+        buf[1] = b1;
+        2
+    } else {
+        // 1 byte
+        buf[0] = b1;
+        1
+    }
+}
+
+/// Decode bytes back into an offset (opposite of `offset2bytes`).
+///
+/// Returns (offset, bytes_consumed).
+/// Returns None if the buffer is too short.
+#[inline]
+#[must_use]
+pub fn bytes2offset(buf: &[u8]) -> Option<(i32, usize)> {
+    if buf.is_empty() {
+        return None;
+    }
+
+    let c = buf[0];
+    if (c & 0x80) == 0x00 {
+        // 1 byte
+        let nr = i32::from(c) - 1;
+        Some((nr, 1))
+    } else if (c & 0xc0) == 0x80 {
+        // 2 bytes
+        if buf.len() < 2 {
+            return None;
+        }
+        let mut nr = i32::from(c & 0x3f) - 1;
+        nr = nr * 255 + (i32::from(buf[1]) - 1);
+        Some((nr, 2))
+    } else if (c & 0xe0) == 0xc0 {
+        // 3 bytes
+        if buf.len() < 3 {
+            return None;
+        }
+        let mut nr = i32::from(c & 0x1f) - 1;
+        nr = nr * 255 + (i32::from(buf[1]) - 1);
+        nr = nr * 255 + (i32::from(buf[2]) - 1);
+        Some((nr, 3))
+    } else {
+        // 4 bytes
+        if buf.len() < 4 {
+            return None;
+        }
+        let mut nr = i32::from(c & 0x0f) - 1;
+        nr = nr * 255 + (i32::from(buf[1]) - 1);
+        nr = nr * 255 + (i32::from(buf[2]) - 1);
+        nr = nr * 255 + (i32::from(buf[3]) - 1);
+        Some((nr, 4))
+    }
+}
+
+/// FFI wrapper for `offset2bytes`.
+///
+/// Writes the encoded offset to `buf` and returns the number of bytes written.
+///
+/// # Safety
+///
+/// `buf` must point to at least 4 bytes of valid memory.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_offset2bytes(nr: c_int, buf: *mut u8) -> c_int {
+    if buf.is_null() {
+        return 0;
+    }
+    let slice = std::slice::from_raw_parts_mut(buf, 4);
+    offset2bytes(nr, slice) as c_int
+}
+
+/// FFI wrapper for `bytes2offset`.
+///
+/// Reads the encoded offset from `*pp` and advances `*pp` past the consumed bytes.
+/// Returns the decoded offset.
+///
+/// # Safety
+///
+/// `pp` must point to a valid pointer to at least 4 bytes of data.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bytes2offset(pp: *mut *const u8) -> c_int {
+    if pp.is_null() || (*pp).is_null() {
+        return 0;
+    }
+
+    // Read up to 4 bytes
+    let p = *pp;
+    let slice = std::slice::from_raw_parts(p, 4);
+
+    match bytes2offset(slice) {
+        Some((nr, consumed)) => {
+            *pp = p.add(consumed);
+            nr
+        }
+        None => 0,
+    }
+}
+
 // Region constant from spell_defs.h
 /// Word is valid in all regions.
 pub const REGION_ALL: c_int = 0xff;
@@ -2211,5 +2352,107 @@ mod tests {
 
             assert_eq!(result, SP_FORMERROR);
         }
+    }
+
+    // =========================================================================
+    // Offset encoding/decoding tests
+    // =========================================================================
+
+    #[test]
+    fn test_offset2bytes_one_byte() {
+        // Values 0-126 use 1 byte
+        let mut buf = [0u8; 4];
+
+        assert_eq!(offset2bytes(0, &mut buf), 1);
+        assert_eq!(buf[0], 0x01); // 0 + 1
+
+        assert_eq!(offset2bytes(1, &mut buf), 1);
+        assert_eq!(buf[0], 0x02); // 1 + 1
+
+        assert_eq!(offset2bytes(126, &mut buf), 1);
+        assert_eq!(buf[0], 0x7f); // 126 + 1
+    }
+
+    #[test]
+    fn test_offset2bytes_two_bytes() {
+        // Values requiring 2 bytes
+        let mut buf = [0u8; 4];
+
+        assert_eq!(offset2bytes(127, &mut buf), 2);
+        // b1 = 127 % 255 + 1 = 128 (0x80), b2 = 127 / 255 + 1 = 1
+        assert_eq!(buf[0], 0x81); // 0x80 + 1
+        assert_eq!(buf[1], 0x80); // 128
+    }
+
+    #[test]
+    fn test_offset2bytes_roundtrip() {
+        // Test that encode/decode is reversible
+        let test_values = [0, 1, 126, 127, 254, 255, 1000, 10_000, 100_000, 1_000_000];
+
+        for &val in &test_values {
+            let mut buf = [0u8; 4];
+            let len = offset2bytes(val, &mut buf);
+
+            let result = bytes2offset(&buf[..len]);
+            assert!(result.is_some(), "Failed to decode value {val}");
+            let (decoded, consumed) = result.unwrap();
+            assert_eq!(decoded, val, "Value {val} decoded to {decoded}");
+            assert_eq!(consumed, len, "Consumed bytes mismatch for value {val}");
+        }
+    }
+
+    #[test]
+    fn test_bytes2offset_one_byte() {
+        // 1-byte encoding: 0x01-0x7F
+        assert_eq!(bytes2offset(&[0x01]), Some((0, 1)));
+        assert_eq!(bytes2offset(&[0x02]), Some((1, 1)));
+        assert_eq!(bytes2offset(&[0x7f]), Some((126, 1)));
+    }
+
+    #[test]
+    fn test_bytes2offset_two_bytes() {
+        // 2-byte encoding: first byte 0x80-0xBF
+        // Value 127: b1 = 128 (0x80), b2 = 1
+        // Encoding: 0x81, 0x80
+        let result = bytes2offset(&[0x81, 0x80]);
+        assert!(result.is_some());
+        let (val, len) = result.unwrap();
+        assert_eq!(len, 2);
+        assert_eq!(val, 127);
+    }
+
+    #[test]
+    fn test_bytes2offset_empty() {
+        assert_eq!(bytes2offset(&[]), None);
+    }
+
+    #[test]
+    fn test_bytes2offset_truncated_two() {
+        // 2-byte marker but only 1 byte
+        assert_eq!(bytes2offset(&[0x80]), None);
+    }
+
+    #[test]
+    fn test_bytes2offset_truncated_three() {
+        // 3-byte marker but only 2 bytes
+        assert_eq!(bytes2offset(&[0xc1, 0x01]), None);
+    }
+
+    #[test]
+    fn test_bytes2offset_truncated_four() {
+        // 4-byte marker but only 3 bytes
+        assert_eq!(bytes2offset(&[0xe1, 0x01, 0x01]), None);
+    }
+
+    #[test]
+    fn test_offset_encoding_boundary_values() {
+        // Test boundary values between byte widths
+        let mut buf = [0u8; 4];
+
+        // Just fits in 1 byte
+        assert_eq!(offset2bytes(126, &mut buf), 1);
+
+        // First value needing 2 bytes
+        assert_eq!(offset2bytes(127, &mut buf), 2);
     }
 }
