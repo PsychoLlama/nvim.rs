@@ -132,7 +132,9 @@ extern "C" {
     fn nvim_set_curswant(val: c_int);
     fn nvim_virtual_active() -> bool;
     fn nvim_gchar_cursor() -> c_int;
+    #[allow(dead_code)]
     fn nvim_nv_pipe(cap: CapHandle);
+    fn nvim_coladvance(col: c_int);
 
     // oparg_T motion accessors
     #[allow(dead_code)]
@@ -947,9 +949,33 @@ pub unsafe extern "C" fn rs_nv_home(cap: CapHandle) {
         rs_nv_goto(cap);
     } else {
         nvim_cap_set_count0(cap, 1);
-        nvim_nv_pipe(cap);
+        rs_nv_pipe(cap);
     }
     nvim_set_ins_at_eol(false);
+}
+
+/// Command handler for "|" command: go to column.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_pipe(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    let count0 = nvim_cap_get_count0(cap);
+
+    nvim_oap_set_motion_type(oap, K_MT_CHAR_WISE);
+    nvim_oap_set_inclusive(oap, false);
+    nvim_beginline(0);
+
+    if count0 > 0 {
+        nvim_coladvance(count0 - 1);
+        nvim_set_curswant(count0 - 1);
+    } else {
+        nvim_set_curswant(0);
+    }
+    // keep curswant at the column where we wanted to go, not where
+    // we ended; differs if line is too short
+    nvim_curwin_set_curswant(false);
 }
 
 // =============================================================================

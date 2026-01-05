@@ -402,6 +402,7 @@ extern void rs_nv_beginline(cmdarg_T *cap);
 extern void rs_nv_dollar(cmdarg_T *cap);
 extern void rs_nv_end(cmdarg_T *cap);
 extern void rs_nv_home(cmdarg_T *cap);
+extern void rs_nv_pipe(cmdarg_T *cap);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -764,6 +765,12 @@ int nvim_gchar_cursor(void)
 void nvim_nv_pipe(cmdarg_T *cap)
 {
   nv_pipe(cap);
+}
+
+/// Wrapper for coladvance.
+void nvim_coladvance(colnr_T col)
+{
+  coladvance(curwin, col);
 }
 
 // =============================================================================
@@ -6136,18 +6143,7 @@ static void nv_home(cmdarg_T *cap)
 /// "|" command.
 static void nv_pipe(cmdarg_T *cap)
 {
-  cap->oap->motion_type = kMTCharWise;
-  cap->oap->inclusive = false;
-  beginline(0);
-  if (cap->count0 > 0) {
-    coladvance(curwin, (colnr_T)(cap->count0 - 1));
-    curwin->w_curswant = (colnr_T)(cap->count0 - 1);
-  } else {
-    curwin->w_curswant = 0;
-  }
-  // keep curswant at the column where we wanted to go, not where
-  // we ended; differs if line is too short
-  curwin->w_set_curswant = false;
+  rs_nv_pipe(cap);
 }
 
 /// Handle back-word command "b" and "B".
