@@ -907,6 +907,104 @@ pub fn set_magic_overruled(value: c_int) {
 }
 
 // =============================================================================
+// Validation Utilities
+// =============================================================================
+
+/// Error codes for option validation
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ValidationError {
+    /// No error
+    Ok = 0,
+    /// Value must be positive
+    NeedPositive = 1,
+    /// Invalid argument
+    InvalidArg = 2,
+    /// Value out of range
+    OutOfRange = 3,
+}
+
+/// Validate that a numeric option value is non-negative.
+#[no_mangle]
+pub extern "C" fn rs_validate_nonnegative(value: OptInt) -> c_int {
+    if value < 0 {
+        ValidationError::NeedPositive as c_int
+    } else {
+        ValidationError::Ok as c_int
+    }
+}
+
+/// Validate that a numeric option value is positive (>= 1).
+#[no_mangle]
+pub extern "C" fn rs_validate_positive(value: OptInt) -> c_int {
+    if value < 1 {
+        ValidationError::NeedPositive as c_int
+    } else {
+        ValidationError::Ok as c_int
+    }
+}
+
+/// Validate that a numeric option value is within a range (inclusive).
+#[no_mangle]
+pub extern "C" fn rs_validate_range(value: OptInt, min: OptInt, max: OptInt) -> c_int {
+    if value < min || value > max {
+        ValidationError::OutOfRange as c_int
+    } else {
+        ValidationError::Ok as c_int
+    }
+}
+
+/// Clamp a value to a range (inclusive).
+#[no_mangle]
+pub extern "C" fn rs_clamp_value(value: OptInt, min: OptInt, max: OptInt) -> OptInt {
+    if value < min {
+        min
+    } else if value > max {
+        max
+    } else {
+        value
+    }
+}
+
+/// Validate the 'regexpengine' option value (must be 0, 1, or 2).
+#[no_mangle]
+pub extern "C" fn rs_validate_regexpengine(value: OptInt) -> c_int {
+    if (0..=2).contains(&value) {
+        ValidationError::Ok as c_int
+    } else {
+        ValidationError::InvalidArg as c_int
+    }
+}
+
+/// Validate the 'history' option value (must be 0-10000).
+#[no_mangle]
+pub extern "C" fn rs_validate_history(value: OptInt) -> c_int {
+    if value < 0 {
+        ValidationError::NeedPositive as c_int
+    } else if value > 10000 {
+        ValidationError::InvalidArg as c_int
+    } else {
+        ValidationError::Ok as c_int
+    }
+}
+
+/// Validate percentage values (must be 0-100).
+#[no_mangle]
+pub extern "C" fn rs_validate_percentage(value: OptInt) -> c_int {
+    if (0..=100).contains(&value) {
+        ValidationError::Ok as c_int
+    } else {
+        ValidationError::OutOfRange as c_int
+    }
+}
+
+/// Clamp percentage values to 0-100.
+#[no_mangle]
+pub extern "C" fn rs_clamp_percentage(value: OptInt) -> OptInt {
+    rs_clamp_value(value, 0, 100)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -958,5 +1056,105 @@ mod tests {
         assert!(flags.contains(OptionSetFlags::GLOBAL));
         assert!(flags.contains(OptionSetFlags::LOCAL));
         assert!(!flags.contains(OptionSetFlags::MODELINE));
+    }
+
+    #[test]
+    fn test_validate_nonnegative() {
+        assert_eq!(rs_validate_nonnegative(0), ValidationError::Ok as c_int);
+        assert_eq!(rs_validate_nonnegative(100), ValidationError::Ok as c_int);
+        assert_eq!(
+            rs_validate_nonnegative(-1),
+            ValidationError::NeedPositive as c_int
+        );
+    }
+
+    #[test]
+    fn test_validate_positive() {
+        assert_eq!(rs_validate_positive(1), ValidationError::Ok as c_int);
+        assert_eq!(rs_validate_positive(100), ValidationError::Ok as c_int);
+        assert_eq!(
+            rs_validate_positive(0),
+            ValidationError::NeedPositive as c_int
+        );
+        assert_eq!(
+            rs_validate_positive(-1),
+            ValidationError::NeedPositive as c_int
+        );
+    }
+
+    #[test]
+    fn test_validate_range() {
+        assert_eq!(rs_validate_range(5, 0, 10), ValidationError::Ok as c_int);
+        assert_eq!(rs_validate_range(0, 0, 10), ValidationError::Ok as c_int);
+        assert_eq!(rs_validate_range(10, 0, 10), ValidationError::Ok as c_int);
+        assert_eq!(
+            rs_validate_range(-1, 0, 10),
+            ValidationError::OutOfRange as c_int
+        );
+        assert_eq!(
+            rs_validate_range(11, 0, 10),
+            ValidationError::OutOfRange as c_int
+        );
+    }
+
+    #[test]
+    fn test_clamp_value() {
+        assert_eq!(rs_clamp_value(5, 0, 10), 5);
+        assert_eq!(rs_clamp_value(-5, 0, 10), 0);
+        assert_eq!(rs_clamp_value(15, 0, 10), 10);
+        assert_eq!(rs_clamp_value(0, 0, 10), 0);
+        assert_eq!(rs_clamp_value(10, 0, 10), 10);
+    }
+
+    #[test]
+    fn test_validate_regexpengine() {
+        assert_eq!(rs_validate_regexpengine(0), ValidationError::Ok as c_int);
+        assert_eq!(rs_validate_regexpengine(1), ValidationError::Ok as c_int);
+        assert_eq!(rs_validate_regexpengine(2), ValidationError::Ok as c_int);
+        assert_eq!(
+            rs_validate_regexpengine(-1),
+            ValidationError::InvalidArg as c_int
+        );
+        assert_eq!(
+            rs_validate_regexpengine(3),
+            ValidationError::InvalidArg as c_int
+        );
+    }
+
+    #[test]
+    fn test_validate_history() {
+        assert_eq!(rs_validate_history(0), ValidationError::Ok as c_int);
+        assert_eq!(rs_validate_history(100), ValidationError::Ok as c_int);
+        assert_eq!(rs_validate_history(10000), ValidationError::Ok as c_int);
+        assert_eq!(
+            rs_validate_history(-1),
+            ValidationError::NeedPositive as c_int
+        );
+        assert_eq!(
+            rs_validate_history(10001),
+            ValidationError::InvalidArg as c_int
+        );
+    }
+
+    #[test]
+    fn test_validate_percentage() {
+        assert_eq!(rs_validate_percentage(0), ValidationError::Ok as c_int);
+        assert_eq!(rs_validate_percentage(50), ValidationError::Ok as c_int);
+        assert_eq!(rs_validate_percentage(100), ValidationError::Ok as c_int);
+        assert_eq!(
+            rs_validate_percentage(-1),
+            ValidationError::OutOfRange as c_int
+        );
+        assert_eq!(
+            rs_validate_percentage(101),
+            ValidationError::OutOfRange as c_int
+        );
+    }
+
+    #[test]
+    fn test_clamp_percentage() {
+        assert_eq!(rs_clamp_percentage(50), 50);
+        assert_eq!(rs_clamp_percentage(-10), 0);
+        assert_eq!(rs_clamp_percentage(150), 100);
     }
 }
