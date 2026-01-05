@@ -1,55 +1,25 @@
-Plan: ~/.claude/plans/nifty-splashing-bird.md
+Plan: ~/.claude/plans/sleepy-watching-mango.md
 
-All steps are complete. Here's a summary of what was accomplished:
+## Migration Complete
 
-## Summary
+I've completed the execution of the plan at `/home/overlord/.claude/plans/sleepy-watching-mango.md`. Here's a summary of what was accomplished:
 
-Created the `nvim-tag` crate for the Rust migration of Neovim's tag navigation system. The implementation includes:
+### Commits made:
+1. `f0d47d7d91` - **Phase 1**: Created normal crate and migrated pure utility functions
+2. `b0c295dd9c` - **Phase 2 (partial)**: Migrated `get_vtopline`
+3. `ecce08d9e9` - **Phase 2**: Migrated state query functions (`clearop`, `clearopbeep`, `checkclearop`, `checkclearopq`, `check_text_locked`, `check_text_or_curbuf_locked`)
+4. `b12ce39eda` - **Phase 5**: Migrated redo preparation functions (`prep_redo`, `prep_redo_num2`)
+5. `b9a9feefad` - **Phase 6 Tier 1**: Migrated simple command handlers (`nv_ignore`, `nv_nop`, `nv_error`, `nv_help`, `nv_suspend`)
 
-### Files Created/Modified:
-- `src/nvim-rs/tag/Cargo.toml` - New crate configuration
-- `src/nvim-rs/tag/src/lib.rs` - Main implementation with 1298 lines
-- `src/nvim-rs/Cargo.toml` - Added tag crate dependency
-- `ref/crates.md` - Documented new crate
-- `src/nvim/tag.c` - Added C accessor functions for FFI
+### Functions migrated (19 total):
+- **Pure utilities**: `rs_invert_horizontal`, `rs_find_command`, `rs_unshift_special`, `rs_is_ident`, `rs_find_is_eval_item`
+- **Window functions**: `rs_get_vtopline`
+- **Operator state**: `rs_clearop`, `rs_clearopbeep`, `rs_checkclearop`, `rs_checkclearopq`, `rs_check_text_locked`, `rs_check_text_or_curbuf_locked`
+- **Redo preparation**: `rs_prep_redo`, `rs_prep_redo_num2`
+- **Command handlers**: `rs_nv_ignore`, `rs_nv_nop`, `rs_nv_error`, `rs_nv_help`, `rs_nv_suspend`
 
-### Functions Implemented (41 total):
+### Skipped (documented in plan):
+- **Phase 3 (showcmd)**: Skipped due to tight coupling with C UI and string buffer operations
+- **Phase 4 (visual mode)**: Skipped due to complex dependencies on many global states and C UI functions
 
-**Phase 1 - Stack Queries (9 functions):**
-- `rs_tag_stack_empty`, `rs_tag_stack_len`, `rs_tag_stack_idx`
-- `rs_tag_at_bottom`, `rs_tag_at_top`
-- `rs_taggy_get_cur_match`, `rs_taggy_get_cur_fnum`, `rs_taggy_has_name`
-
-**Phase 2 - Match Priority (8 functions + constants):**
-- `MT_*` constants matching C enum
-- `rs_tag_match_type_name`, `rs_tag_is_static_match`, `rs_tag_is_current_file`
-- `rs_tag_is_icase_match`, `rs_tag_is_regexp_match`, `rs_tag_match_priority`
-- `rs_tag_cmp_match_type`, `rs_tag_best_match_type`
-
-**Phase 3 - Navigation Helpers (8 functions):**
-- `rs_tag_can_pop`, `rs_tag_can_push`
-- `rs_tag_next_match_idx`, `rs_tag_prev_match_idx` (with wrapping)
-- `rs_tag_first_match_idx`, `rs_tag_last_match_idx`
-- `rs_tag_clamp_idx`, `rs_tag_stack_pos_valid`
-
-**Phase 4 - Entry Accessors (9 functions):**
-- `rs_taggy_cmp_name`, `rs_taggy_cmp_fnum`, `rs_taggy_same_tag`
-- `rs_taggy_in_buffer`, `rs_tag_fmark_valid`
-- `rs_tag_fmark_lnum`, `rs_tag_fmark_col`, `rs_tag_fmark_fnum`
-
-**Phase 5 - Search State (8 functions + constants):**
-- `TS_*` constants matching C enum
-- `rs_tag_search_is_linear`, `rs_tag_search_is_binary`, `rs_tag_search_done`
-- `rs_tag_search_match_count`, `rs_tag_search_help_only`, `rs_tag_search_has_matches`
-- `rs_tag_file_sorted`, `rs_tag_search_state_name`
-
-**Phase 6 - Command Types (8 functions + constants):**
-- `DT_*` constants matching C enum
-- `rs_tag_cmd_is_navigation`, `rs_tag_cmd_is_match_nav`, `rs_tag_cmd_uses_pattern`
-- `rs_tag_cmd_needs_tag`, `rs_tag_cmd_name`, `rs_tag_cmd_valid`
-- `rs_tag_cmd_direction`, `rs_tag_type_to_cmd`
-
-### Quality Checks Passed:
-- `just rust-fmt-check` ✓
-- `just rust-clippy` ✓
-- `just rust-test` ✓ (878 tests, all passing)
+All tests pass and the build is successful.
