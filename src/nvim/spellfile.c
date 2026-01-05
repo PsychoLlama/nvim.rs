@@ -1,4 +1,5 @@
 // spellfile.c: code for reading and writing spell files.
+#include <stdint.h>
 //
 // See spell.c for information about spell checking.
 

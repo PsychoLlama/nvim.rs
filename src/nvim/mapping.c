@@ -59,6 +59,9 @@
 #include "nvim/ui_defs.h"
 #include "nvim/vim_defs.h"
 
+// Rust FFI declarations
+extern int rs_map_to_exists_mode(const char *rhs, int mode, int abbr);
+
 /// List used for abbreviations.
 static mapblock_T *first_abbr = NULL;  // first entry in abbrlist
 
@@ -1136,39 +1139,8 @@ bool map_to_exists(const char *const str, const char *const modechars, const boo
 /// @return true if there is at least one mapping with given parameters.
 bool map_to_exists_mode(const char *const rhs, const int mode, const bool abbr)
 {
-  bool exp_buffer = false;
-
-  // Do it twice: once for global maps and once for local maps.
-  while (true) {
-    for (int hash = 0; hash < 256; hash++) {
-      mapblock_T *mp;
-      if (abbr) {
-        if (hash > 0) {  // There is only one abbr list.
-          break;
-        }
-        if (exp_buffer) {
-          mp = curbuf->b_first_abbr;
-        } else {
-          mp = first_abbr;
-        }
-      } else if (exp_buffer) {
-        mp = curbuf->b_maphash[hash];
-      } else {
-        mp = maphash[hash];
-      }
-      for (; mp; mp = mp->m_next) {
-        if ((mp->m_mode & mode) && strstr(mp->m_str, rhs) != NULL) {
-          return true;
-        }
-      }
-    }
-    if (exp_buffer) {
-      break;
-    }
-    exp_buffer = true;
-  }
-
-  return false;
+  // Delegate to Rust implementation
+  return rs_map_to_exists_mode(rhs, mode, abbr ? 1 : 0) != 0;
 }
 
 /// Used below when expanding mapping/abbreviation names.

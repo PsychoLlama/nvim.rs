@@ -862,8 +862,7 @@ mod tests {
         let null_handle = MapblockHandle(std::ptr::null_mut());
         assert!(null_handle.is_null());
 
-        let non_null =
-            unsafe { MapblockHandle::from_ptr(std::ptr::dangling_mut::<c_void>()) };
+        let non_null = unsafe { MapblockHandle::from_ptr(std::ptr::dangling_mut::<c_void>()) };
         assert!(!non_null.is_null());
         assert_eq!(non_null.as_ptr(), std::ptr::dangling_mut::<c_void>());
     }

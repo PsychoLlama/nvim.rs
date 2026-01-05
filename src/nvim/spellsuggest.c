@@ -1,5 +1,7 @@
 // spellsuggest.c: functions for spelling suggestions
 
+#include <stdint.h>
+
 // Rust implementations
 extern int rs_bytes2offset(const uint8_t **pp);
 
