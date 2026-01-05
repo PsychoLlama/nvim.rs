@@ -58,21 +58,17 @@ if(ENABLE_WASMTIME)
   target_compile_definitions(nvim_bin PRIVATE HAVE_WASMTIME)
 endif()
 
-# Rust library integration (optional, for incremental migration)
-option(USE_RUST "Use Rust implementations where available" ON)
-if(USE_RUST)
-  # Find the pre-built Rust static library
-  find_library(RUST_NVIM_LIB
-    NAMES nvim_rs libnvim_rs
-    PATHS ${CMAKE_SOURCE_DIR}/target/release
-    NO_DEFAULT_PATH
-  )
-  if(RUST_NVIM_LIB)
-    message(STATUS "Using Rust library: ${RUST_NVIM_LIB}")
-    target_link_libraries(main_lib INTERFACE ${RUST_NVIM_LIB} pthread dl m)
-  else()
-    message(WARNING "USE_RUST enabled but Rust library not found. Run 'cargo build --release' first.")
-  endif()
+# Rust library integration (required)
+find_library(RUST_NVIM_LIB
+  NAMES nvim_rs libnvim_rs
+  PATHS ${CMAKE_SOURCE_DIR}/target/release
+  NO_DEFAULT_PATH
+)
+if(RUST_NVIM_LIB)
+  message(STATUS "Using Rust library: ${RUST_NVIM_LIB}")
+  target_link_libraries(main_lib INTERFACE ${RUST_NVIM_LIB} pthread dl m)
+else()
+  message(FATAL_ERROR "Rust library not found. Run 'cargo build --release' first.")
 endif()
 
 # The unit test lib requires LuaJIT; it will be skipped if LuaJIT is missing.

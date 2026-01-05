@@ -1,10 +1,10 @@
 _:
   just --list
 
-# Build neovim using system dependencies from nix (with Rust implementations)
+# Build neovim using system dependencies from nix
 build:
     cargo build --release
-    cmake -B build -G Ninja -DUSE_BUNDLED=OFF -DUSE_RUST=ON
+    cmake -B build -G Ninja -DUSE_BUNDLED=OFF
     cmake --build build
 
 # Build with bundled dependencies (downloads deps)
@@ -12,9 +12,9 @@ build-bundled:
     cmake -B build -G Ninja
     cmake --build build
 
-# Configure only (no build, with Rust implementations)
+# Configure only (no build)
 configure:
-    cmake -B build -G Ninja -DUSE_BUNDLED=OFF -DUSE_RUST=ON
+    cmake -B build -G Ninja -DUSE_BUNDLED=OFF
 
 # Build only (after configure)
 compile:
