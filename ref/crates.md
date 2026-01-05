@@ -60,6 +60,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | spell          | Spell checking                          |
 | statusline     | Status line rendering                   |
 | strings        | String manipulation                     |
+| tag            | Tag stack and navigation                |
 | terminal       | Terminal emulator state and utilities   |
 | textformat     | Text formatting options                 |
 | tui            | Terminal UI                             |

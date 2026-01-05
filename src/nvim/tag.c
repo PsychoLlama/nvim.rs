@@ -193,6 +193,122 @@ typedef struct {
   hashtab_T ht_match[MT_COUNT];  ///< stores matches by key
 } findtags_state_T;
 
+// ============================================================================
+// Rust FFI accessor functions
+// ============================================================================
+
+/// Get tag stack length from win_T for Rust
+int nvim_win_get_tagstacklen(const void *wp_void)
+{
+  const win_T *wp = (const win_T *)wp_void;
+  return wp->w_tagstacklen;
+}
+
+/// Get tag stack index from win_T for Rust
+int nvim_win_get_tagstackidx(const void *wp_void)
+{
+  const win_T *wp = (const win_T *)wp_void;
+  return wp->w_tagstackidx;
+}
+
+/// Get tag stack entry at index from win_T for Rust
+void *nvim_win_get_tagstack_entry(const void *wp_void, int idx)
+{
+  const win_T *wp = (const win_T *)wp_void;
+  return (void *)&wp->w_tagstack[idx];
+}
+
+/// Get tagname from taggy_T for Rust
+const char *nvim_taggy_get_tagname(const void *tg_void)
+{
+  const taggy_T *tg = (const taggy_T *)tg_void;
+  return tg->tagname;
+}
+
+/// Get cur_match from taggy_T for Rust
+int nvim_taggy_get_cur_match(const void *tg_void)
+{
+  const taggy_T *tg = (const taggy_T *)tg_void;
+  return tg->cur_match;
+}
+
+/// Get cur_fnum from taggy_T for Rust
+int nvim_taggy_get_cur_fnum(const void *tg_void)
+{
+  const taggy_T *tg = (const taggy_T *)tg_void;
+  return tg->cur_fnum;
+}
+
+/// Get fmark pointer from taggy_T for Rust
+void *nvim_taggy_get_fmark(const void *tg_void)
+{
+  const taggy_T *tg = (const taggy_T *)tg_void;
+  return (void *)&tg->fmark;
+}
+
+/// Get user_data from taggy_T for Rust
+const char *nvim_taggy_get_user_data(const void *tg_void)
+{
+  const taggy_T *tg = (const taggy_T *)tg_void;
+  return tg->user_data;
+}
+
+/// Get lnum from fmark_T for Rust
+linenr_T nvim_fmark_get_lnum(const void *fm_void)
+{
+  const fmark_T *fm = (const fmark_T *)fm_void;
+  return fm->mark.lnum;
+}
+
+/// Get col from fmark_T for Rust
+int nvim_fmark_get_col(const void *fm_void)
+{
+  const fmark_T *fm = (const fmark_T *)fm_void;
+  return fm->mark.col;
+}
+
+/// Get fnum from fmark_T for Rust
+int nvim_fmark_get_fnum(const void *fm_void)
+{
+  const fmark_T *fm = (const fmark_T *)fm_void;
+  return fm->fnum;
+}
+
+/// Get state from findtags_state_T for Rust
+int nvim_findtags_get_state(const void *st_void)
+{
+  const findtags_state_T *st = (const findtags_state_T *)st_void;
+  return (int)st->state;
+}
+
+/// Get match_count from findtags_state_T for Rust
+int nvim_findtags_get_match_count(const void *st_void)
+{
+  const findtags_state_T *st = (const findtags_state_T *)st_void;
+  return st->match_count;
+}
+
+/// Get help_only flag from findtags_state_T for Rust
+bool nvim_findtags_get_help_only(const void *st_void)
+{
+  const findtags_state_T *st = (const findtags_state_T *)st_void;
+  return st->help_only;
+}
+
+/// Get linear flag from findtags_state_T for Rust
+bool nvim_findtags_get_linear(const void *st_void)
+{
+  const findtags_state_T *st = (const findtags_state_T *)st_void;
+  return st->linear;
+}
+
+/// Get tag_file_sorted from findtags_state_T for Rust
+int nvim_findtags_get_tag_file_sorted(const void *st_void)
+{
+  const findtags_state_T *st = (const findtags_state_T *)st_void;
+  return st->tag_file_sorted;
+}
+
 #include "tag.c.generated.h"
 
 static const char e_tag_stack_empty[]

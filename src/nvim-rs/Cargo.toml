@@ -68,6 +68,7 @@ nvim-search = { path = "search" }
 nvim-spell = { path = "spell" }
 nvim-statusline = { path = "statusline" }
 nvim-strings = { path = "strings" }
+nvim-tag = { path = "tag" }
 nvim-textformat = { path = "textformat" }
 nvim-utf8proc = { path = "utf8proc" }
 nvim-version = { path = "version" }
