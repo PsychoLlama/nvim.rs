@@ -28,6 +28,10 @@ fi
 description="$1"
 iteration=1
 
+if (( max_iterations == 0 )); then
+  log "WARNING: Running indefinitely (max_iterations=0)"
+fi
+
 log "Starting migration loop for: $description"
 
 while true; do
@@ -39,8 +43,8 @@ while true; do
   log "Executing..."
   "$SCRIPT_DIR/execute" "$plan_file"
 
-  # Safety limit
-  if (( iteration >= max_iterations )); then
+  # Safety limit (skip if max_iterations is 0)
+  if (( max_iterations > 0 && iteration >= max_iterations )); then
     log "Reached iteration limit ($max_iterations), stopping"
     break
   fi
