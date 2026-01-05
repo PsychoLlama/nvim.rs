@@ -3316,3 +3316,107 @@ void nvim_emsg_fold_cannot_delete(void)
 {
   emsg(_("E351: Cannot delete fold with current 'foldmethod'"));
 }
+
+/// Get the w_p_fdl (foldlevel) field from a window.
+int nvim_win_get_p_fdl(win_T *wp)
+{
+  return (int)wp->w_p_fdl;
+}
+
+/// Get the w_fold_manual field from a window.
+int nvim_win_get_w_fold_manual(win_T *wp)
+{
+  return wp->w_fold_manual;
+}
+
+/// Get a pointer to the window's folds growarray.
+garray_T *nvim_win_get_folds(win_T *wp)
+{
+  return &wp->w_folds;
+}
+
+/// Get the length of a garray.
+int nvim_ga_len(garray_T *gap)
+{
+  return gap->ga_len;
+}
+
+/// Get a fold_T pointer at index in a garray.
+/// Returns NULL if index is out of bounds.
+fold_T *nvim_ga_fold_at(garray_T *gap, int idx)
+{
+  if (idx < 0 || idx >= gap->ga_len) {
+    return NULL;
+  }
+  return &((fold_T *)gap->ga_data)[idx];
+}
+
+/// Get the fd_top field from a fold.
+linenr_T nvim_fold_get_fd_top(fold_T *fp)
+{
+  return fp->fd_top;
+}
+
+/// Get the fd_len field from a fold.
+linenr_T nvim_fold_get_fd_len(fold_T *fp)
+{
+  return fp->fd_len;
+}
+
+/// Get a pointer to the nested folds growarray.
+garray_T *nvim_fold_get_fd_nested(fold_T *fp)
+{
+  return &fp->fd_nested;
+}
+
+/// Get the fd_flags field from a fold.
+char nvim_fold_get_fd_flags(fold_T *fp)
+{
+  return fp->fd_flags;
+}
+
+/// Get the w_foldinvalid field from a window.
+bool nvim_win_get_w_foldinvalid(win_T *wp)
+{
+  return wp->w_foldinvalid;
+}
+
+/// Call checkupdate for a window.
+void nvim_checkupdate(win_T *wp)
+{
+  checkupdate(wp);
+}
+
+/// Get the w_lines_valid field from a window.
+int nvim_win_get_w_lines_valid(win_T *wp)
+{
+  return wp->w_lines_valid;
+}
+
+/// Get a wline_T pointer at index in a window's w_lines array.
+/// Returns NULL if index is out of bounds.
+wline_T *nvim_win_get_wl_entry(win_T *wp, int idx)
+{
+  if (idx < 0 || idx >= wp->w_lines_valid) {
+    return NULL;
+  }
+  return &wp->w_lines[idx];
+}
+
+/// Get the wl_lnum field from a wline_T.
+linenr_T nvim_wline_get_lnum(wline_T *wl)
+{
+  return wl->wl_lnum;
+}
+
+/// Get the wl_foldend field from a wline_T.
+linenr_T nvim_wline_get_foldend(wline_T *wl)
+{
+  return wl->wl_foldend;
+}
+
+/// Get the wl_valid field from a wline_T.
+bool nvim_wline_get_valid(wline_T *wl)
+{
+  return wl->wl_valid;
+}
