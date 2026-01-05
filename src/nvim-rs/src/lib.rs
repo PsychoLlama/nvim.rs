@@ -80,6 +80,7 @@ pub use nvim_statusline::*;
 pub use nvim_strings::*;
 pub use nvim_terminal::*;
 pub use nvim_textformat::*;
+pub use nvim_textobject::*;
 pub use nvim_tui::*;
 pub use nvim_typval::*;
 pub use nvim_ugrid::*;

@@ -29,6 +29,48 @@
 
 #include "textobject.c.generated.h"
 
+// =============================================================================
+// Rust function declarations
+// =============================================================================
+
+extern int rs_cls(bool bigword);
+extern bool rs_skip_chars(int cclass, int dir, bool bigword);
+extern void rs_back_in_line(bool bigword);
+
+// =============================================================================
+// C accessor functions for Rust
+// =============================================================================
+
+/// Get character at cursor position (accessor for Rust).
+int nvim_textobj_gchar_cursor(void)
+{
+  return gchar_cursor();
+}
+
+/// Increment cursor position (accessor for Rust).
+int nvim_textobj_inc_cursor(void)
+{
+  return inc_cursor();
+}
+
+/// Decrement cursor position (accessor for Rust).
+int nvim_textobj_dec_cursor(void)
+{
+  return dec_cursor();
+}
+
+/// Get UTF character class (accessor for Rust).
+int nvim_textobj_utf_class(int c)
+{
+  return utf_class(c);
+}
+
+/// Get current cursor column (accessor for Rust).
+int nvim_textobj_get_cursor_col(void)
+{
+  return curwin->w_cursor.col;
+}
+
 /// Find the start of the next sentence, searching in the direction specified
 /// by the "dir" argument.  The cursor is positioned on the start of the next
 /// sentence when found.  If the next sentence is found, return OK.  Return FAIL
@@ -289,18 +331,7 @@ static bool cls_bigword;  ///< true for "W", "B" or "E"
 /// boundaries are of interest.
 static int cls(void)
 {
-  int c = gchar_cursor();
-  if (c == ' ' || c == '\t' || c == NUL) {
-    return 0;
-  }
-
-  c = utf_class(c);
-
-  // If cls_bigword is true, report all non-blanks as class 1.
-  if (c != 0 && cls_bigword) {
-    return 1;
-  }
-  return c;
+  return rs_cls(cls_bigword);
 }
 
 /// fwd_word(count, type, eol) - move forward one word
@@ -524,28 +555,13 @@ int bckend_word(int count, bool bigword, bool eol)
 /// @return  true when end-of-file reached, false otherwise.
 static bool skip_chars(int cclass, int dir)
 {
-  while (cls() == cclass) {
-    if ((dir == FORWARD ? inc_cursor() : dec_cursor()) == -1) {
-      return true;
-    }
-  }
-  return false;
+  return rs_skip_chars(cclass, dir, cls_bigword);
 }
 
 /// Go back to the start of the word or the start of white space
 static void back_in_line(void)
 {
-  int sclass = cls();  // starting class
-  while (true) {
-    if (curwin->w_cursor.col == 0) {        // stop at start of line
-      break;
-    }
-    dec_cursor();
-    if (cls() != sclass) {                  // stop at start of word
-      inc_cursor();
-      break;
-    }
-  }
+  rs_back_in_line(cls_bigword);
 }
 
 static void find_first_blank(pos_T *posp)
