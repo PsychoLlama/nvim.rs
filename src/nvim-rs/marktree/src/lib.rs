@@ -367,6 +367,35 @@ extern "C" {
 
     /// Lookup node by id.
     fn nvim_marktree_id2node(b: MarkTreeHandle, id: u64) -> MTNodeHandle;
+
+    // ========================================================================
+    // Helper Functions
+    // ========================================================================
+
+    /// Compute pseudo-index for position (x, i).
+    fn nvim_pseudo_index(x: MTNodeHandle, i: c_int) -> u64;
+
+    /// Compute pseudo-index for a mark ID.
+    fn nvim_pseudo_index_for_id(b: MarkTreeHandle, id: u64, sloppy: bool) -> u64;
+
+    /// Set iterator to point at node n, index i.
+    fn nvim_marktree_itr_set_node(
+        b: MarkTreeHandle,
+        itr: MarkTreeIterHandle,
+        n: MTNodeHandle,
+        i: c_int,
+    ) -> MTKey;
+
+    /// Fix iterator position after setting node directly.
+    fn nvim_marktree_itr_fix_pos(b: MarkTreeHandle, itr: MarkTreeIterHandle);
+
+    /// Describe meta counts for a key incrementally.
+    #[allow(dead_code)]
+    fn nvim_meta_describe_key_inc(meta_inc: *mut u32, k: *mut MTKey);
+
+    /// Describe meta counts for a whole node.
+    #[allow(dead_code)]
+    fn nvim_meta_describe_node(meta_node: *mut u32, x: MTNodeHandle);
 }
 
 // ============================================================================
@@ -1391,6 +1420,128 @@ pub extern "C" fn rs_meta_describe_key(k: MTKey, meta_inc: *mut u32) {
             }
         }
     }
+}
+
+// ============================================================================
+// Phase 3: Meta and Helper Functions
+// ============================================================================
+
+/// Increment meta counts for a key.
+///
+/// This adds to existing counts rather than replacing them.
+pub fn meta_describe_key_inc(meta_inc: &mut [u32; K_MT_META_COUNT], k: &MTKey) {
+    if mt_end(k) || mt_invalid(k) {
+        return;
+    }
+
+    if k.flags & MT_FLAG_DECOR_VIRT_TEXT_INLINE != 0 {
+        meta_inc[K_MT_META_INLINE] += 1;
+    }
+    if k.flags & flags::MT_FLAG_DECOR_VIRT_LINES != 0 {
+        meta_inc[K_MT_META_LINES] += 1;
+    }
+    if k.flags & MT_FLAG_DECOR_SIGNHL != 0 {
+        meta_inc[K_MT_META_SIGN_HL] += 1;
+    }
+    if k.flags & MT_FLAG_DECOR_SIGNTEXT != 0 {
+        meta_inc[K_MT_META_SIGN_TEXT] += 1;
+    }
+    if k.flags & MT_FLAG_DECOR_CONCEAL_LINES != 0 {
+        meta_inc[K_MT_META_CONCEAL_LINES] += 1;
+    }
+}
+
+/// Exported FFI version of `meta_describe_key_inc`.
+#[no_mangle]
+pub extern "C" fn rs_meta_describe_key_inc(meta_inc: *mut u32, k: *mut MTKey) {
+    unsafe {
+        if !meta_inc.is_null() && !k.is_null() {
+            let mut meta = [0u32; K_MT_META_COUNT];
+            for (i, m) in meta.iter_mut().enumerate() {
+                *m = *meta_inc.add(i);
+            }
+            meta_describe_key_inc(&mut meta, &*k);
+            for (i, m) in meta.iter().enumerate() {
+                *meta_inc.add(i) = *m;
+            }
+        }
+    }
+}
+
+/// Compute pseudo-index for a position in the tree.
+///
+/// Pseudo-indices allow efficient ordering comparisons between positions
+/// without traversing the tree. They encode the path from root to the position.
+#[must_use]
+pub fn pseudo_index(x: MTNodeHandle, i: i32) -> u64 {
+    unsafe { nvim_pseudo_index(x, i) }
+}
+
+/// Exported FFI version of `pseudo_index`.
+#[no_mangle]
+pub extern "C" fn rs_pseudo_index(x: MTNodeHandle, i: c_int) -> u64 {
+    pseudo_index(x, i)
+}
+
+/// Compute pseudo-index for a mark ID.
+///
+/// If `sloppy` is true, all keys in the same leaf node get the same index.
+#[must_use]
+pub fn pseudo_index_for_id(b: MarkTreeHandle, id: u64, sloppy: bool) -> u64 {
+    unsafe { nvim_pseudo_index_for_id(b, id, sloppy) }
+}
+
+/// Exported FFI version of `pseudo_index_for_id`.
+#[no_mangle]
+pub extern "C" fn rs_pseudo_index_for_id(b: MarkTreeHandle, id: u64, sloppy: bool) -> u64 {
+    pseudo_index_for_id(b, id, sloppy)
+}
+
+/// Set iterator to point at a specific node and index.
+///
+/// Returns the key with absolute position.
+#[must_use]
+pub fn marktree_itr_set_node(
+    b: MarkTreeHandle,
+    itr: MarkTreeIterHandle,
+    n: MTNodeHandle,
+    i: i32,
+) -> MTKey {
+    unsafe { nvim_marktree_itr_set_node(b, itr, n, i) }
+}
+
+/// Exported FFI version of `marktree_itr_set_node`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_itr_set_node(
+    b: MarkTreeHandle,
+    itr: MarkTreeIterHandle,
+    n: MTNodeHandle,
+    i: c_int,
+) -> MTKey {
+    marktree_itr_set_node(b, itr, n, i)
+}
+
+/// Fix iterator position after setting node directly.
+pub fn marktree_itr_fix_pos(b: MarkTreeHandle, itr: MarkTreeIterHandle) {
+    unsafe { nvim_marktree_itr_fix_pos(b, itr) }
+}
+
+/// Exported FFI version of `marktree_itr_fix_pos`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_itr_fix_pos(b: MarkTreeHandle, itr: MarkTreeIterHandle) {
+    marktree_itr_fix_pos(b, itr);
+}
+
+/// Lookup node by mark ID.
+#[must_use]
+pub fn marktree_id2node(b: MarkTreeHandle, id: u64) -> MTNodeHandle {
+    unsafe { nvim_marktree_id2node(b, id) }
+}
+
+/// Exported FFI version of `marktree_id2node`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_id2node(b: MarkTreeHandle, id: u64) -> MTNodeHandle {
+    marktree_id2node(b, id)
 }
 
 // ============================================================================

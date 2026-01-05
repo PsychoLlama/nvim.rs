@@ -2873,3 +2873,53 @@ MTNode *nvim_marktree_id2node(MarkTree *b, uint64_t id)
 {
   return id2node(b, id);
 }
+
+// ============================================================================
+// Helper Functions (for Rust FFI)
+// ============================================================================
+
+/// Compute pseudo-index for position (x, i) - for ordering comparisons.
+uint64_t nvim_pseudo_index(MTNode *x, int i)
+{
+  int off = MT_LOG2_BRANCH * x->level;
+  uint64_t index = 0;
+
+  while (x) {
+    index |= (uint64_t)(i + 1) << off;
+    off += MT_LOG2_BRANCH;
+    i = x->p_idx;
+    x = x->parent;
+  }
+
+  return index;
+}
+
+/// Compute pseudo-index for a mark ID.
+uint64_t nvim_pseudo_index_for_id(MarkTree *b, uint64_t id, bool sloppy)
+{
+  return pseudo_index_for_id(b, id, sloppy);
+}
+
+/// Set iterator to point at node n, index i, return the key with absolute position.
+MTKey nvim_marktree_itr_set_node(MarkTree *b, MarkTreeIter *itr, MTNode *n, int i)
+{
+  return marktree_itr_set_node(b, itr, n, i);
+}
+
+/// Fix iterator position after setting node directly.
+void nvim_marktree_itr_fix_pos(MarkTree *b, MarkTreeIter *itr)
+{
+  marktree_itr_fix_pos(b, itr);
+}
+
+/// Describe meta counts for a key incrementally.
+void nvim_meta_describe_key_inc(uint32_t *meta_inc, MTKey *k)
+{
+  meta_describe_key_inc(meta_inc, k);
+}
+
+/// Describe meta counts for a whole node.
+void nvim_meta_describe_node(uint32_t *meta_node, MTNode *x)
+{
+  meta_describe_node(meta_node, x);
+}
