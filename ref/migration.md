@@ -20,7 +20,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | context      | Context stack management                           |
 | cursor_shape | Cursor mode/shape queries                          |
 | decoration   | Decoration/virtual text system, DecorState access  |
-| diff         | Diffopt flag queries                               |
+| diff         | Diffopt flag queries, diff output parsing          |
 | digraph      | Digraph lookup functions                           |
 | drawline     | Line drawing and rendering helpers                 |
 | drawscreen   | Window separator drawing, connector functions      |
@@ -265,6 +265,27 @@ Added ~25 accessor functions for decoration system:
 - `nvim_decor_virt_text_get_hl_mode`, `nvim_decor_virt_text_get_pos`
 - `nvim_decor_virt_text_get_width`, `nvim_decor_virt_text_get_flags`
 - `nvim_decor_virt_text_get_chunk_count/text/hl_id`
+
+### diff.c Migrated Functions
+
+**Diffopt flag checking (all 13 flags):**
+- `diffopt_horizontal` - Migrated to Rust (rs_diffopt_horizontal)
+- `diffopt_vertical` - Migrated to Rust (rs_diffopt_vertical)
+- `diffopt_hiddenoff` - Migrated to Rust (rs_diffopt_hiddenoff)
+- `diffopt_closeoff` - Migrated to Rust (rs_diffopt_closeoff)
+- `diffopt_filler` - Migrated to Rust (rs_diffopt_filler)
+- `diff_internal` - Migrated to Rust (rs_diff_internal)
+- `diffopt_icase` - Migrated to Rust (rs_diffopt_icase)
+- `diffopt_iwhite` - Migrated to Rust (rs_diffopt_iwhite)
+- `diffopt_iwhiteall` - Migrated to Rust (rs_diffopt_iwhiteall)
+- `diffopt_iwhiteeol` - Migrated to Rust (rs_diffopt_iwhiteeol)
+- `diffopt_iblank` - Migrated to Rust (rs_diffopt_iblank)
+- `diffopt_followwrap` - Migrated to Rust (rs_diffopt_followwrap)
+- `diffopt_linematch` - Migrated to Rust (rs_diffopt_linematch)
+
+**Diff output parsing:**
+- `parse_diff_ed` - Migrated to Rust (rs_parse_diff_ed) - Parse ED-style diff format
+- `parse_diff_unified` - Migrated to Rust (rs_parse_diff_unified) - Parse unified diff format
 
 ### drawline.c Virtual Text Functions
 
