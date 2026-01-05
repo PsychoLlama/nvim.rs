@@ -17,9 +17,9 @@ if [[ -f "ref/run-result" ]]; then
   log "Found previous run result"
   previous_result="
 
-## Previous Execution Result
+## Previous Work
 
-$(cat ref/run-result)"
+@ref/run-result contains details from the most recent work."
 fi
 
 log "Running Claude in plan mode..."
