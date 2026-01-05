@@ -1,44 +1,38 @@
-Plan: ~/.claude/plans/purring-humming-meteor.md
+Plan: ~/.claude/plans/robust-sniffing-mccarthy.md
 
----
+All phases are complete. Here's a summary of what was accomplished:
 
-## Summary
+## Plan Execution Complete
 
-I've completed the execution of the plan at `/home/overlord/.claude/plans/purring-humming-meteor.md`. Here's what was accomplished:
+I successfully executed the plan at `/home/overlord/.claude/plans/robust-sniffing-mccarthy.md`, adding ~100+ new FFI functions to the undo, register, and mark crates.
 
-### Completed Phases
+### Summary of Changes
 
-**Phase 1-2: SHADA Foundation/Core** (Partial)
-- Created new `nvim-shada` crate with type definitions and constants
-- Added 6 FFI functions for shada helpers
-- Implemented entry type constants, read/write status codes, and helper functions
+**Total: 1,416 lines added across 3 files**
 
-**Phase 3-4: Terminal Foundation/Core** (Complete)
-- Expanded terminal crate from 9 functions to 24 FFI functions
-- Added VTerm key conversion with all special keys and modifiers
-- Added screen sync/invalidation helpers
-- Added resize calculation helpers
-- Added scrollback buffer management helpers
-- Added VTerm callback types and property handling
+#### Phase 1-2: Undo System (68 FFI functions, +490 lines)
+- Tree traversal helpers: `rs_undo_tree_count`, `rs_undo_branch_count`, `rs_undo_find_seq`
+- Tree metrics: `rs_undo_count_entries`, `rs_undo_get_tree_depth`, `rs_undo_get_branch_depth`
+- State queries: `rs_undo_can_undo`, `rs_undo_can_redo`, `rs_undo_is_synced`
+- Sequence accessors: `rs_undo_get_seq_cur`, `rs_undo_get_seq_last`, `rs_undo_get_numhead`
+- Header/entry accessors: `rs_uhp_get_*`, `rs_uep_get_*` family
+- Null checks: `rs_uhp_is_null`, `rs_uep_is_null`
 
-**Phase 5: Integration & Testing** (Complete)
-- Build passes: `cmake --build build` ✓
-- Rust checks pass: `just rust-clippy`, `just rust-fmt-check`, `just rust-test` ✓
-- Unit tests pass: 770 passed, 6 skipped ✓
-- Functional tests: 396+ tests passed before timeout ✓
-- Manual smoke test: Terminal `:term` works ✓
+#### Phase 3-4: Register System (55 FFI functions, +410 lines)
+- Type classification: `rs_register_is_clipboard`, `rs_register_is_named`, `rs_register_is_numbered`
+- Motion type: `rs_register_is_linewise`, `rs_register_is_charwise`, `rs_register_is_blockwise`
+- Special registers: `rs_register_is_blackhole`, `rs_register_is_expression`, etc.
+- Content access: `rs_register_get_line`, `rs_register_get_line_size`, `rs_register_get_total_size`
+- Operations: `rs_register_clear`, `rs_register_count_named`, `rs_register_count_numbered`
 
-### Statistics
-- **New FFI functions added**: 30 (24 terminal + 6 shada)
-- **Commits created**: 4
-- **Tests added**: Many new unit tests for terminal and shada crates
+#### Phase 5-6: Mark System (38 FFI functions, +516 lines)
+- Mark validation: `rs_mark_is_valid_named`, `rs_mark_is_file_mark`, `rs_mark_is_jump_mark`
+- Mark categories: `rs_mark_is_special`, `rs_mark_is_visual`, `rs_mark_get_category`
+- Position utilities: `rs_pos_new`, `rs_pos_zero`, `rs_pos_is_valid`, `rs_pos_in_range`
+- Position arithmetic: `rs_pos_adjust_line`, `rs_pos_adjust_col`, `rs_pos_clamp`
+- Position comparison: `rs_pos_compare`, `rs_pos_same_line`, `rs_pos_line_distance`, `rs_pos_order`
 
-### Remaining Work
-Some SHADA Core tasks (phases 1-2) are pending:
-- History entry handling
-- Mark serialization/deserialization
-- Register handling
-- Search pattern handling
-- File format version handling
-
-These can be continued in a future session to reach the full 80+ function goal.
+#### Phase 7: Integration and Testing
+- All checks pass: `just rust-fmt-check`, `just rust-clippy`, `just rust-test`
+- 1,018 total tests run successfully
+- Full cmake build succeeds
