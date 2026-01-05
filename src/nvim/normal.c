@@ -392,6 +392,9 @@ extern void rs_nv_nop(cmdarg_T *cap);
 extern void rs_nv_error(cmdarg_T *cap);
 extern void rs_nv_help(cmdarg_T *cap);
 extern void rs_nv_suspend(cmdarg_T *cap);
+extern void rs_nv_page(cmdarg_T *cap);
+extern void rs_nv_halfpage(cmdarg_T *cap);
+extern void rs_nv_ctrlg(cmdarg_T *cap);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -576,6 +579,54 @@ void nvim_oap_set_use_reg_one(oparg_T *oap, bool val)
 void nvim_set_motion_force(int val)
 {
   motion_force = val;
+}
+
+/// Get mod_mask global.
+int nvim_get_mod_mask(void)
+{
+  return mod_mask;
+}
+
+/// Wrapper for goto_tabpage.
+void nvim_goto_tabpage(int n)
+{
+  goto_tabpage(n);
+}
+
+/// Wrapper for pagescroll.
+void nvim_pagescroll(int dir, int count, bool half)
+{
+  pagescroll(dir, count, half);
+}
+
+/// Get VIsual_select global.
+bool nvim_get_VIsual_select(void)
+{
+  return VIsual_select;
+}
+
+/// Set VIsual_select global.
+void nvim_set_VIsual_select(bool val)
+{
+  VIsual_select = val;
+}
+
+/// Wrapper for may_trigger_modechanged.
+void nvim_may_trigger_modechanged(void)
+{
+  may_trigger_modechanged();
+}
+
+/// Wrapper for showmode.
+void nvim_showmode(void)
+{
+  showmode();
+}
+
+/// Wrapper for fileinfo.
+void nvim_fileinfo(int fullname, bool shorthelp, bool dont_truncate)
+{
+  fileinfo(fullname, shorthelp, dont_truncate);
 }
 
 // =============================================================================
@@ -2418,20 +2469,7 @@ static void nv_addsub(cmdarg_T *cap)
 /// CTRL-F, CTRL-B, etc: Scroll page up or down.
 static void nv_page(cmdarg_T *cap)
 {
-  if (checkclearop(cap->oap)) {
-    return;
-  }
-
-  if (mod_mask & MOD_MASK_CTRL) {
-    // <C-PageUp>: tab page back; <C-PageDown>: tab page forward
-    if (cap->arg == BACKWARD) {
-      goto_tabpage(-cap->count1);
-    } else {
-      goto_tabpage(cap->count0);
-    }
-  } else {
-    pagescroll(cap->arg, cap->count1, false);
-  }
+  rs_nv_page(cap);
 }
 
 /// Implementation of "gd" and "gD" command.
@@ -3318,14 +3356,7 @@ static void nv_colon(cmdarg_T *cap)
 /// Handle CTRL-G command.
 static void nv_ctrlg(cmdarg_T *cap)
 {
-  if (VIsual_active) {  // toggle Selection/Visual mode
-    VIsual_select = !VIsual_select;
-    may_trigger_modechanged();
-    showmode();
-  } else if (!checkclearop(cap->oap)) {
-    // print full name if count given or :cd used
-    fileinfo(cap->count0, false, true);
-  }
+  rs_nv_ctrlg(cap);
 }
 
 /// Handle CTRL-H <Backspace> command.
@@ -6519,9 +6550,7 @@ static void nv_at(cmdarg_T *cap)
 /// Handle the CTRL-U and CTRL-D commands.
 static void nv_halfpage(cmdarg_T *cap)
 {
-  if (!checkclearop(cap->oap)) {
-    pagescroll(cap->cmdchar == Ctrl_D ? FORWARD : BACKWARD, cap->count0, true);
-  }
+  rs_nv_halfpage(cap);
 }
 
 /// Handle "J" or "gJ" command.

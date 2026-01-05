@@ -106,6 +106,16 @@ extern "C" {
     fn AppendCharToRedobuff(c: c_int);
     fn AppendNumberToRedobuff(n: c_int);
 
+    // Modifier and scrolling functions
+    fn nvim_get_mod_mask() -> c_int;
+    fn nvim_goto_tabpage(n: c_int);
+    fn nvim_pagescroll(dir: c_int, count: c_int, half: bool);
+    fn nvim_get_VIsual_select() -> bool;
+    fn nvim_set_VIsual_select(val: bool);
+    fn nvim_may_trigger_modechanged();
+    fn nvim_showmode();
+    fn nvim_fileinfo(fullname: c_int, shorthelp: bool, dont_truncate: bool);
+
     // cmdarg_T accessors
     fn nvim_cap_get_oap(cap: CapHandle) -> OapHandle;
     #[allow(dead_code)]
@@ -113,7 +123,6 @@ extern "C" {
     #[allow(dead_code)]
     fn nvim_cap_set_retval(cap: CapHandle, val: c_int);
     fn nvim_cap_or_retval(cap: CapHandle, val: c_int);
-    #[allow(dead_code)]
     fn nvim_cap_get_cmdchar(cap: CapHandle) -> c_int;
     #[allow(dead_code)]
     fn nvim_cap_set_cmdchar(cap: CapHandle, val: c_int);
@@ -125,11 +134,9 @@ extern "C" {
     fn nvim_cap_get_extra_char(cap: CapHandle) -> c_int;
     #[allow(dead_code)]
     fn nvim_cap_set_extra_char(cap: CapHandle, val: c_int);
-    #[allow(dead_code)]
     fn nvim_cap_get_count0(cap: CapHandle) -> c_int;
     #[allow(dead_code)]
     fn nvim_cap_set_count0(cap: CapHandle, val: c_int);
-    #[allow(dead_code)]
     fn nvim_cap_get_count1(cap: CapHandle) -> c_int;
     #[allow(dead_code)]
     fn nvim_cap_set_count1(cap: CapHandle, val: c_int);
@@ -137,7 +144,6 @@ extern "C" {
     fn nvim_cap_get_opcount(cap: CapHandle) -> c_int;
     #[allow(dead_code)]
     fn nvim_cap_set_opcount(cap: CapHandle, val: c_int);
-    #[allow(dead_code)]
     fn nvim_cap_get_arg(cap: CapHandle) -> c_int;
     #[allow(dead_code)]
     fn nvim_cap_set_arg(cap: CapHandle, val: c_int);
@@ -668,6 +674,85 @@ pub unsafe extern "C" fn rs_nv_suspend(cap: CapHandle) {
         end_visual_mode();
     }
     do_cmdline_cmd(c"st".as_ptr());
+}
+
+// =============================================================================
+// Command Handlers (Tier 2 - Scrolling commands)
+// =============================================================================
+
+// Modifier mask constant
+const MOD_MASK_CTRL: c_int = 0x04;
+
+// Control character constant
+const CTRL_D: c_int = 4; // Ctrl-D
+
+/// Command handler for CTRL-F, CTRL-B, etc: Scroll page up or down.
+///
+/// Handles page scrolling and tab page navigation with Ctrl modifier.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_page(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    if rs_checkclearop(oap) {
+        return;
+    }
+
+    let arg = nvim_cap_get_arg(cap);
+    let count0 = nvim_cap_get_count0(cap);
+    let count1 = nvim_cap_get_count1(cap);
+
+    if (nvim_get_mod_mask() & MOD_MASK_CTRL) != 0 {
+        // <C-PageUp>: tab page back; <C-PageDown>: tab page forward
+        if arg == BACKWARD {
+            nvim_goto_tabpage(-count1);
+        } else {
+            nvim_goto_tabpage(count0);
+        }
+    } else {
+        nvim_pagescroll(arg, count1, false);
+    }
+}
+
+/// Command handler for CTRL-D, CTRL-U: Scroll half page.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_halfpage(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    if !rs_checkclearop(oap) {
+        let cmdchar = nvim_cap_get_cmdchar(cap);
+        let count0 = nvim_cap_get_count0(cap);
+        let dir = if cmdchar == CTRL_D { FORWARD } else { BACKWARD };
+        nvim_pagescroll(dir, count0, true);
+    }
+}
+
+/// Command handler for CTRL-G: Show file info or toggle Select/Visual mode.
+///
+/// In Visual mode, toggles between Visual and Select mode.
+/// Otherwise, shows file information.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_ctrlg(cap: CapHandle) {
+    if nvim_get_VIsual_active() != 0 {
+        // toggle Selection/Visual mode
+        let select = nvim_get_VIsual_select();
+        nvim_set_VIsual_select(!select);
+        nvim_may_trigger_modechanged();
+        nvim_showmode();
+    } else {
+        let oap = nvim_cap_get_oap(cap);
+        if !rs_checkclearop(oap) {
+            // print full name if count given or :cd used
+            let count0 = nvim_cap_get_count0(cap);
+            nvim_fileinfo(count0, false, true);
+        }
+    }
 }
 
 // =============================================================================
