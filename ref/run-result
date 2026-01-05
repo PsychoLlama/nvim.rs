@@ -1,40 +1,49 @@
-Plan: ~/.claude/plans/moonlit-painting-acorn.md
+Plan: ~/.claude/plans/piped-cooking-parasol.md
 
-All 9 phases of the text object migration plan are now complete. Let me summarize what was accomplished:
+All 8 phases of the option system migration plan have been completed. Here's a summary of what was accomplished:
 
-## Summary
+## Migration Summary
 
-Phase 9 is complete. I successfully migrated the `in_html_tag` helper function to Rust:
+### Phase 1: Crate Infrastructure ✓
+- Created `src/nvim-rs/option/` directory with Cargo.toml and lib.rs
+- Defined core types: `OptValType`, `OptScope`, `OptFlags`, `SetOp`, `SetPrefix`, `OptionSetFlags`
+- Added to workspace and ref/crates.md
 
-**Changes made:**
-1. **Rust implementation** (`src/nvim-rs/textobject/src/lib.rs`):
-   - Added `rs_in_html_tag(end_tag: bool) -> bool` function
-   - Added extern declarations for new C accessors:
-     - `nvim_textobj_mb_ptr_back` - move backward through multibyte string
-     - `nvim_textobj_mb_ptr_adv` - move forward through multibyte string  
-     - `nvim_textobj_ml_get_pos` - get character at position
-   - Added declaration for `nvim_textobj_pos_set_col`
+### Phase 2: Option Value Accessors ✓
+- Added C accessor functions in option.c for 17 string, 19 boolean, 18 numeric, and 4 flag options
+- Created FFI declarations and safe Rust wrappers
+- Examples: `get_autoindent()`, `get_tabstop()`, `get_shell()`
 
-2. **C accessors** (`src/nvim/textobject.c`):
-   - Added `nvim_textobj_get_cursor_pos_ptr()`
-   - Added `nvim_textobj_mb_ptr_back()` - wraps MB_PTR_BACK macro
-   - Added `nvim_textobj_mb_ptr_adv()` - wraps MB_PTR_ADV macro
-   - Added `nvim_textobj_ml_get_pos()` - wraps ml_get_pos()
-   - Modified `in_html_tag()` to call `rs_in_html_tag()`
+### Phase 3: Option Value Setters ✓
+- Added C setter functions in option.c for 17 boolean and 13 numeric options
+- Created Rust wrappers like `set_autoindent()`, `set_tabstop()`
+- Added `magic_overruled` accessor/setter
 
-3. **Testing:**
-   - Verified `dit` (delete inside tag) works correctly
-   - Verified `dat` (delete around tag) works correctly
+### Phase 4: Validation Logic ✓
+- Added `ValidationError` enum with Ok/NeedPositive/InvalidArg/OutOfRange
+- Implemented: `rs_validate_nonnegative`, `rs_validate_positive`, `rs_validate_range`, `rs_clamp_value`, `rs_validate_regexpengine`, `rs_validate_history`, `rs_validate_percentage`
 
-**Note:** The `current_tagblock` function was intentionally left in C because it heavily depends on `do_searchpair()` which uses complex regex pattern matching and dynamic string allocation. This matches the plan's approach of wrapping complex dependencies rather than fully migrating them.
+### Phase 5: Option Parsing ✓
+- Added prefix parsing: `rs_option_has_no_prefix`, `rs_option_has_inv_prefix`, `rs_parse_bool_prefix`
+- Added string utilities: `rs_option_chars_valid`, `rs_option_match_keyword`, `rs_option_skip_whitespace`, `rs_option_find_arg_end`
 
-All 9 phases of the text object migration are now complete:
-- ✅ Phase 1: Crate infrastructure
-- ✅ Phase 2: Character classification (cls, skip_chars, back_in_line)
-- ✅ Phase 3: Word motions (fwd_word, bck_word, end_word, bckend_word)
-- ✅ Phase 4: Quote text objects (find_next_quote, find_prev_quote)
-- ✅ Phase 5: Current word (current_word)
-- ✅ Phase 6: Paragraph functions (inmacro, startPS, findpar, current_par)
-- ✅ Phase 7: Sentence functions (findsent, find_first_blank, findsent_forward, current_sent)
-- ✅ Phase 8: Block text objects (current_block)
-- ✅ Phase 9: Tag text objects (in_html_tag)
+### Phase 6: Option Callbacks ✓
+- Created `callbacks.rs` module with `UpdateType` enum
+- Added C accessor functions for callback state (`starting`, `need_maketitle`, etc.)
+- Implemented simple callbacks: `rs_did_set_hlsearch`, `rs_did_set_ignorecase`, `rs_did_set_title_icon`, `rs_did_set_titlelen`, etc.
+
+### Phase 7: Option Completion ✓
+- Created `completion.rs` module with `OptionExpandContext` enum
+- Added string matching utilities: `rs_option_name_matches_prefix`, `rs_option_name_contains`, `rs_option_name_compare`
+- Added prefix handling: `rs_option_strip_bool_prefix`, `rs_option_has_no_completion_prefix`, `rs_option_has_inv_completion_prefix`
+- Added escaping helpers: `rs_option_char_needs_escape`, `rs_option_value_needs_escape`
+
+### Phase 8: Testing & Polish ✓
+- All 993 Rust tests pass
+- `just rust-fmt-check` passes
+- `just rust-clippy` passes
+- Full build succeeds
+- Nvim binary works correctly with option commands
+
+**Total commits:** 7 commits for the option migration
+**Tests added:** 6 additional tests (993 total in workspace)
