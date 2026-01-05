@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Run plan-execute loop until task is complete
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+log() { echo "[loop] $*" >&2; }
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: $0 <description>" >&2
+  exit 1
+fi
+
+description="$1"
+iteration=1
+
+log "Starting migration loop for: $description"
+
+while true; do
+  log "=== Iteration $iteration ==="
+
+  log "Planning..."
+  plan_file=$("$SCRIPT_DIR/plan" "$description")
+
+  log "Executing..."
+  result=$("$SCRIPT_DIR/execute" "$plan_file")
+
+  echo "$result"
+
+  # Check if Claude indicates the task is complete
+  if echo "$result" | grep -qiE '(complete|finished|done|no.*(more|further).*(steps|work)|all.*(steps|tasks).*completed)'; then
+    log "Task appears complete"
+    break
+  fi
+
+  ((iteration++))
+
+  # Safety limit
+  if [[ $iteration -gt 10 ]]; then
+    log "Reached iteration limit (10), stopping"
+    break
+  fi
+
+  log "Continuing to next iteration..."
+done
+
+log "Migration loop finished after $iteration iteration(s)"

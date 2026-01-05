@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Execute a plan using Claude Code in acceptEdits mode
+set -euo pipefail
+
+log() { echo "[execute] $*" >&2; }
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: $0 <plan-file>" >&2
+  exit 1
+fi
+
+plan_file="$1"
+
+if [[ ! -f "$plan_file" ]]; then
+  log "Error: Plan file not found: $plan_file"
+  exit 1
+fi
+
+log "Executing plan: $plan_file"
+
+# Instructions for Claude
+read -r -d '' instructions <<'EOF' || true
+## Instructions
+
+- The plan file is read-only. Do not modify it.
+- Execute each step in order.
+- Commit as you go.
+- Follow instructions in CLAUDE.md.
+- Stop and report when all steps are complete.
+EOF
+
+log "Running Claude in acceptEdits mode..."
+
+# Run Claude Code with the plan, allowing edits
+output=$(claude -p "Execute the plan at: $plan_file
+
+$instructions" \
+  --permission-mode acceptEdits \
+  --output-format json)
+
+log "Execution complete"
+
+result=$(jq -r '.result' <<< "$output")
+
+# Save result for next planning phase
+echo "$result" > ref/run-result
+log "Saved result to ref/run-result"
+
+# Commit the result
+git add ref/run-result
+git commit -m "chore: update run-result from execute phase"
+log "Committed ref/run-result"
+
+# Attach the plan as a git note
+git notes add -f -F "$plan_file" HEAD
+log "Attached plan as git note"
+
+echo "$result"
