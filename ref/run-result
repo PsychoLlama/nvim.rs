@@ -1,38 +1,50 @@
-Plan: ~/.claude/plans/robust-sniffing-mccarthy.md
+Plan: ~/.claude/plans/radiant-toasting-marshmallow.md
 
-All phases are complete. Here's a summary of what was accomplished:
+The migration is complete. Here's a summary:
 
-## Plan Execution Complete
+---
 
-I successfully executed the plan at `/home/overlord/.claude/plans/robust-sniffing-mccarthy.md`, adding ~100+ new FFI functions to the undo, register, and mark crates.
+## Command-Line Completion System (cmdexpand.c) Migration Complete
 
-### Summary of Changes
+### Summary
 
-**Total: 1,416 lines added across 3 files**
+Successfully migrated Neovim's command-line completion system to Rust across 8 phases:
 
-#### Phase 1-2: Undo System (68 FFI functions, +490 lines)
-- Tree traversal helpers: `rs_undo_tree_count`, `rs_undo_branch_count`, `rs_undo_find_seq`
-- Tree metrics: `rs_undo_count_entries`, `rs_undo_get_tree_depth`, `rs_undo_get_branch_depth`
-- State queries: `rs_undo_can_undo`, `rs_undo_can_redo`, `rs_undo_is_synced`
-- Sequence accessors: `rs_undo_get_seq_cur`, `rs_undo_get_seq_last`, `rs_undo_get_numhead`
-- Header/entry accessors: `rs_uhp_get_*`, `rs_uep_get_*` family
-- Null checks: `rs_uhp_is_null`, `rs_uep_is_null`
+| Phase | Description | Status |
+|-------|-------------|--------|
+| Phase 1 | Foundation and Constants | ✅ Completed |
+| Phase 2 | Pure Utility Functions | ✅ Completed |
+| Phase 3 | Pattern Processing | ✅ Completed |
+| Phase 4 | Context Determination | ✅ Completed |
+| Phase 5 | Core Expansion Logic | ✅ Completed |
+| Phase 6 | UI Integration | ✅ Completed |
+| Phase 7 | VimL/Lua Integration | ✅ Completed |
+| Phase 8 | Testing and Integration | ✅ Completed |
 
-#### Phase 3-4: Register System (55 FFI functions, +410 lines)
-- Type classification: `rs_register_is_clipboard`, `rs_register_is_named`, `rs_register_is_numbered`
-- Motion type: `rs_register_is_linewise`, `rs_register_is_charwise`, `rs_register_is_blockwise`
-- Special registers: `rs_register_is_blackhole`, `rs_register_is_expression`, etc.
-- Content access: `rs_register_get_line`, `rs_register_get_line_size`, `rs_register_get_total_size`
-- Operations: `rs_register_clear`, `rs_register_count_named`, `rs_register_count_numbered`
+### Code Metrics
 
-#### Phase 5-6: Mark System (38 FFI functions, +516 lines)
-- Mark validation: `rs_mark_is_valid_named`, `rs_mark_is_file_mark`, `rs_mark_is_jump_mark`
-- Mark categories: `rs_mark_is_special`, `rs_mark_is_visual`, `rs_mark_get_category`
-- Position utilities: `rs_pos_new`, `rs_pos_zero`, `rs_pos_is_valid`, `rs_pos_in_range`
-- Position arithmetic: `rs_pos_adjust_line`, `rs_pos_adjust_col`, `rs_pos_clamp`
-- Position comparison: `rs_pos_compare`, `rs_pos_same_line`, `rs_pos_line_distance`, `rs_pos_order`
+- **New Rust files**: 7 (expand.rs, context.rs, pattern.rs, completion.rs, wildmenu.rs, usercomplete.rs, lib.rs updates)
+- **Total Rust lines**: 3,843 lines
+- **FFI functions**: 39 new `rs_*` functions
+- **Unit tests**: 78 tests covering all modules
+- **All checks pass**: `rust-fmt-check`, `rust-clippy`, `rust-test`
 
-#### Phase 7: Integration and Testing
-- All checks pass: `just rust-fmt-check`, `just rust-clippy`, `just rust-test`
-- 1,018 total tests run successfully
-- Full cmake build succeeds
+### Commits (in chronological order)
+
+1. `feat(migration): add cmdexpand foundation types and C accessors` - Phase 1
+2. `feat(migration): add pure utility functions for cmdexpand` - Phase 2
+3. `feat(migration): add pattern processing for cmdexpand` - Phase 3
+4. `feat(migration): add context determination for cmdexpand` - Phase 4
+5. `feat(migration): add core expansion logic for cmdexpand` - Phase 5
+6. `feat(migration): add wildmenu UI integration for cmdexpand` - Phase 6
+7. `feat(migration): add VimL/Lua user-defined completion helpers for cmdexpand` - Phase 7
+8. `style: format Rust code with cargo fmt` - Formatting cleanup
+
+### Key Components Migrated
+
+- **ExpandContext enum**: Type-safe representation of 67 EXPAND_* context types
+- **Pattern processing**: Star appending, backslash handling, internal pattern transformation
+- **Context determination**: Command parsing, expression detection, search cmdline handling
+- **Completion navigation**: WILD_NEXT/PREV/PAGEUP/PAGEDOWN match navigation
+- **Wildmenu**: Key translation, skip character calculation, menu navigation
+- **User completion**: Type string mapping, validation, getcompletion() helpers
