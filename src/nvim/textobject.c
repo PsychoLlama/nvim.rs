@@ -43,6 +43,10 @@ extern int rs_bckend_word(int count, bool bigword, bool eol);
 extern int rs_find_next_quote(char *line, int col, int quotechar, char *escape);
 extern int rs_find_prev_quote(char *line, int col_start, int quotechar, char *escape);
 extern int rs_current_word(oparg_T *oap, int count, bool include, bool bigword);
+extern bool rs_inmacro(char *opt, const char *s);
+extern bool rs_startPS(int lnum, int para, bool both);
+extern bool rs_findpar(bool *pincl, int dir, int count, int what, bool both);
+extern int rs_current_par(oparg_T *oap, int count, bool include, int type);
 
 // =============================================================================
 // C accessor functions for Rust
@@ -330,6 +334,52 @@ void nvim_textobj_set_oap_start(oparg_T *oap, int lnum, int col)
   oap->start.col = col;
 }
 
+// =============================================================================
+// Accessors for paragraph functions
+// =============================================================================
+
+/// Get p_sections option pointer (accessor for Rust).
+char *nvim_textobj_get_p_sections(void)
+{
+  return p_sections;
+}
+
+/// Get p_para option pointer (accessor for Rust).
+char *nvim_textobj_get_p_para(void)
+{
+  return p_para;
+}
+
+/// Get line content at lnum (accessor for Rust).
+char *nvim_textobj_ml_get(int lnum)
+{
+  return ml_get(lnum);
+}
+
+/// Get line length at lnum (accessor for Rust).
+int nvim_textobj_ml_get_len(int lnum)
+{
+  return ml_get_len(lnum);
+}
+
+/// Check if line is all whitespace (accessor for Rust).
+bool nvim_textobj_linewhite(int lnum)
+{
+  return linewhite(lnum);
+}
+
+/// Call setpcmark (accessor for Rust).
+void nvim_textobj_setpcmark(void)
+{
+  setpcmark();
+}
+
+/// Call showmode (accessor for Rust).
+void nvim_textobj_showmode(void)
+{
+  showmode();
+}
+
 /// Find the start of the next sentence, searching in the direction specified
 /// by the "dir" argument.  The cursor is positioned on the start of the next
 /// sentence when found.  If the next sentence is found, return OK.  Return FAIL
@@ -469,88 +519,13 @@ found:
 /// @return       true if the next paragraph or section was found.
 bool findpar(bool *pincl, int dir, int count, int what, bool both)
 {
-  bool first;               // true on first line
-  linenr_T fold_first;      // first line of a closed fold
-  linenr_T fold_last;       // last line of a closed fold
-  bool fold_skipped;        // true if a closed fold was skipped this
-                            // iteration
-
-  linenr_T curr = curwin->w_cursor.lnum;
-
-  while (count--) {
-    bool did_skip = false;  // true after separating lines have been skipped
-    for (first = true;; first = false) {
-      if (*ml_get(curr) != NUL) {
-        did_skip = true;
-      }
-
-      // skip folded lines
-      fold_skipped = false;
-      if (first && hasFolding(curwin, curr, &fold_first, &fold_last)) {
-        curr = ((dir > 0) ? fold_last : fold_first) + dir;
-        fold_skipped = true;
-      }
-
-      if (!first && did_skip && startPS(curr, what, both)) {
-        break;
-      }
-
-      if (fold_skipped) {
-        curr -= dir;
-      }
-      if ((curr += dir) < 1 || curr > curbuf->b_ml.ml_line_count) {
-        if (count) {
-          return false;
-        }
-        curr -= dir;
-        break;
-      }
-    }
-  }
-  setpcmark();
-  if (both && *ml_get(curr) == '}') {   // include line with '}'
-    curr++;
-  }
-  curwin->w_cursor.lnum = curr;
-  if (curr == curbuf->b_ml.ml_line_count && what != '}' && dir == FORWARD) {
-    char *line = ml_get(curr);
-
-    // Put the cursor on the last character in the last line and make the
-    // motion inclusive.
-    if ((curwin->w_cursor.col = ml_get_len(curr)) != 0) {
-      curwin->w_cursor.col--;
-      curwin->w_cursor.col -= utf_head_off(line, line + curwin->w_cursor.col);
-      *pincl = true;
-    }
-  } else {
-    curwin->w_cursor.col = 0;
-  }
-  return true;
+  return rs_findpar(pincl, dir, count, what, both);
 }
 
 /// check if the string 's' is a nroff macro that is in option 'opt'
 static bool inmacro(char *opt, const char *s)
 {
-  char *macro;
-
-  for (macro = opt; macro[0]; macro++) {
-    // Accept two characters in the option being equal to two characters
-    // in the line.  A space in the option matches with a space in the
-    // line or the line having ended.
-    if ((macro[0] == s[0]
-         || (macro[0] == ' '
-             && (s[0] == NUL || s[0] == ' ')))
-        && (macro[1] == s[1]
-            || ((macro[1] == NUL || macro[1] == ' ')
-                && (s[0] == NUL || s[1] == NUL || s[1] == ' ')))) {
-      break;
-    }
-    macro++;
-    if (macro[0] == NUL) {
-      break;
-    }
-  }
-  return macro[0] != NUL;
+  return rs_inmacro(opt, s);
 }
 
 /// startPS: return true if line 'lnum' is the start of a section or paragraph.
@@ -558,15 +533,7 @@ static bool inmacro(char *opt, const char *s)
 /// If 'both' is true also stop at '}'
 bool startPS(linenr_T lnum, int para, bool both)
 {
-  char *s = ml_get(lnum);
-  if ((uint8_t)(*s) == para || *s == '\f' || (both && *s == '}')) {
-    return true;
-  }
-  if (*s == '.' && (inmacro(p_sections, s + 1)
-                    || (!para && inmacro(p_para, s + 1)))) {
-    return true;
-  }
-  return false;
+  return rs_startPS(lnum, para, both);
 }
 
 // The following routines do the word searches performed by the 'w', 'W',
@@ -1243,151 +1210,7 @@ theend:
 /// @param type     'p' for paragraph, 'S' for section
 int current_par(oparg_T *oap, int count, bool include, int type)
 {
-  int dir;
-  int retval = OK;
-  int do_white = false;
-
-  if (type == 'S') {        // not implemented yet
-    return FAIL;
-  }
-
-  linenr_T start_lnum = curwin->w_cursor.lnum;
-
-  // When visual area is more than one line: extend it.
-  if (VIsual_active && start_lnum != VIsual.lnum) {
-extend:
-    dir = start_lnum < VIsual.lnum ? BACKWARD : FORWARD;
-    for (int i = count; --i >= 0;) {
-      if (start_lnum ==
-          (dir == BACKWARD ? 1 : curbuf->b_ml.ml_line_count)) {
-        retval = FAIL;
-        break;
-      }
-
-      int prev_start_is_white = -1;
-      for (int t = 0; t < 2; t++) {
-        start_lnum += dir;
-        int start_is_white = linewhite(start_lnum);
-        if (prev_start_is_white == start_is_white) {
-          start_lnum -= dir;
-          break;
-        }
-        while (true) {
-          if (start_lnum == (dir == BACKWARD
-                             ? 1 : curbuf->b_ml.ml_line_count)) {
-            break;
-          }
-          if (start_is_white != linewhite(start_lnum + dir)
-              || (!start_is_white
-                  && startPS(start_lnum + (dir > 0
-                                           ? 1 : 0), 0, 0))) {
-            break;
-          }
-          start_lnum += dir;
-        }
-        if (!include) {
-          break;
-        }
-        if (start_lnum == (dir == BACKWARD
-                           ? 1 : curbuf->b_ml.ml_line_count)) {
-          break;
-        }
-        prev_start_is_white = start_is_white;
-      }
-    }
-    curwin->w_cursor.lnum = start_lnum;
-    curwin->w_cursor.col = 0;
-    return retval;
-  }
-
-  // First move back to the start_lnum of the paragraph or white lines
-  bool white_in_front = linewhite(start_lnum);
-  while (start_lnum > 1) {
-    if (white_in_front) {           // stop at first white line
-      if (!linewhite(start_lnum - 1)) {
-        break;
-      }
-    } else {          // stop at first non-white line of start of paragraph
-      if (linewhite(start_lnum - 1) || startPS(start_lnum, 0, 0)) {
-        break;
-      }
-    }
-    start_lnum--;
-  }
-
-  // Move past the end of any white lines.
-  linenr_T end_lnum = start_lnum;
-  while (end_lnum <= curbuf->b_ml.ml_line_count && linewhite(end_lnum)) {
-    end_lnum++;
-  }
-
-  end_lnum--;
-  int i = count;
-  if (!include && white_in_front) {
-    i--;
-  }
-  while (i--) {
-    if (end_lnum == curbuf->b_ml.ml_line_count) {
-      return FAIL;
-    }
-
-    if (!include) {
-      do_white = linewhite(end_lnum + 1);
-    }
-
-    if (include || !do_white) {
-      end_lnum++;
-      // skip to end of paragraph
-      while (end_lnum < curbuf->b_ml.ml_line_count
-             && !linewhite(end_lnum + 1)
-             && !startPS(end_lnum + 1, 0, 0)) {
-        end_lnum++;
-      }
-    }
-
-    if (i == 0 && white_in_front && include) {
-      break;
-    }
-
-    // skip to end of white lines after paragraph
-    if (include || do_white) {
-      while (end_lnum < curbuf->b_ml.ml_line_count
-             && linewhite(end_lnum + 1)) {
-        end_lnum++;
-      }
-    }
-  }
-
-  // If there are no empty lines at the end, try to find some empty lines at
-  // the start (unless that has been done already).
-  if (!white_in_front && !linewhite(end_lnum) && include) {
-    while (start_lnum > 1 && linewhite(start_lnum - 1)) {
-      start_lnum--;
-    }
-  }
-
-  if (VIsual_active) {
-    // Problem: when doing "Vipipip" nothing happens in a single white
-    // line, we get stuck there.  Trap this here.
-    if (VIsual_mode == 'V' && start_lnum == curwin->w_cursor.lnum) {
-      goto extend;
-    }
-    if (VIsual.lnum != start_lnum) {
-      VIsual.lnum = start_lnum;
-      VIsual.col = 0;
-    }
-    VIsual_mode = 'V';
-    redraw_curbuf_later(UPD_INVERTED);  // update the inversion
-    showmode();
-  } else {
-    oap->start.lnum = start_lnum;
-    oap->start.col = 0;
-    oap->motion_type = kMTLineWise;
-  }
-  curwin->w_cursor.lnum = end_lnum;
-  curwin->w_cursor.col = 0;
-
-  return OK;
+  return rs_current_par(oap, count, include, type);
 }
 
 /// Search quote char from string line[col].

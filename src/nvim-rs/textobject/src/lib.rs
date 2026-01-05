@@ -628,6 +628,9 @@ extern "C" {
     /// Get VIsual_active state.
     fn nvim_textobj_get_VIsual_active() -> bool;
 
+    /// Get VIsual position lnum.
+    fn nvim_textobj_get_VIsual_lnum() -> c_int;
+
     /// Get VIsual_mode.
     fn nvim_textobj_get_VIsual_mode() -> c_int;
 
@@ -891,6 +894,423 @@ unsafe fn current_word_finalize(oap: OapHandle, state: &CurrentWordState) {
     } else {
         nvim_textobj_set_oap_inclusive(oap, state.inclusive);
     }
+}
+
+// =============================================================================
+// Paragraph Functions
+// =============================================================================
+
+/// Motion type: line-wise (kMTLineWise = 1)
+const MT_LINE_WISE: c_int = 1;
+
+extern "C" {
+    /// Get p_sections option pointer.
+    fn nvim_textobj_get_p_sections() -> *const std::ffi::c_char;
+
+    /// Get p_para option pointer.
+    fn nvim_textobj_get_p_para() -> *const std::ffi::c_char;
+
+    /// Get line content at lnum.
+    fn nvim_textobj_ml_get(lnum: c_int) -> *const std::ffi::c_char;
+
+    /// Get line length at lnum.
+    fn nvim_textobj_ml_get_len(lnum: c_int) -> c_int;
+
+    /// Check if line is all whitespace.
+    fn nvim_textobj_linewhite(lnum: c_int) -> bool;
+
+    /// Call setpcmark.
+    fn nvim_textobj_setpcmark();
+
+    /// Call showmode.
+    fn nvim_textobj_showmode();
+}
+
+/// Check if the string 's' is a nroff macro that is in option 'opt'.
+///
+/// # Safety
+/// - `opt` must be a valid pointer to a NUL-terminated string.
+/// - `s` must be a valid pointer to a NUL-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_inmacro(
+    opt: *const std::ffi::c_char,
+    s: *const std::ffi::c_char,
+) -> bool {
+    inmacro_impl(opt, s)
+}
+
+/// Space character as c_char.
+#[allow(clippy::cast_possible_wrap)]
+const SPACE_CHAR: std::ffi::c_char = b' ' as std::ffi::c_char;
+
+/// Implementation of inmacro.
+#[allow(clippy::cast_possible_wrap)]
+unsafe fn inmacro_impl(opt: *const std::ffi::c_char, s: *const std::ffi::c_char) -> bool {
+    let mut macro_ptr = opt;
+
+    while *macro_ptr != 0 {
+        // Accept two characters in the option being equal to two characters
+        // in the line. A space in the option matches with a space in the
+        // line or the line having ended.
+        let m0 = *macro_ptr;
+        let m1 = *macro_ptr.offset(1);
+        let s0 = *s;
+        let s1 = *s.offset(1);
+
+        let match0 = m0 == s0 || (m0 == SPACE_CHAR && (s0 == 0 || s0 == SPACE_CHAR));
+        let match1 =
+            m1 == s1 || ((m1 == 0 || m1 == SPACE_CHAR) && (s0 == 0 || s1 == 0 || s1 == SPACE_CHAR));
+
+        if match0 && match1 {
+            break;
+        }
+
+        macro_ptr = macro_ptr.offset(1);
+        if *macro_ptr == 0 {
+            break;
+        }
+        macro_ptr = macro_ptr.offset(1);
+    }
+
+    *macro_ptr != 0
+}
+
+/// Check if line 'lnum' is the start of a section or paragraph.
+///
+/// If 'para' is '{' or '}' only check for sections.
+/// If 'both' is true also stop at '}'.
+///
+/// # Safety
+/// Calls C accessor functions which must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_startPS(lnum: c_int, para: c_int, both: bool) -> bool {
+    startps_impl(lnum, para, both)
+}
+
+/// Implementation of startPS.
+unsafe fn startps_impl(lnum: c_int, para: c_int, both: bool) -> bool {
+    let s = nvim_textobj_ml_get(lnum);
+    let first_char = char_to_int(*s);
+
+    // Check for paragraph/section start character
+    if first_char == para
+        || first_char == i32::from(b'\x0c')
+        || (both && first_char == i32::from(b'}'))
+    {
+        return true;
+    }
+
+    // Check for nroff macro
+    if first_char == i32::from(b'.') {
+        let s1 = s.offset(1);
+        let p_sections = nvim_textobj_get_p_sections();
+        let p_para = nvim_textobj_get_p_para();
+
+        if inmacro_impl(p_sections, s1) || (para == 0 && inmacro_impl(p_para, s1)) {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Find paragraph boundary.
+///
+/// # Safety
+/// - `pincl` must be a valid pointer.
+/// - Calls C accessor functions which must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_findpar(
+    pincl: *mut bool,
+    dir: c_int,
+    count: c_int,
+    what: c_int,
+    both: bool,
+) -> bool {
+    findpar_impl(pincl, dir, count, what, both)
+}
+
+/// Implementation of findpar.
+#[allow(clippy::too_many_lines)]
+unsafe fn findpar_impl(
+    pincl: *mut bool,
+    dir: c_int,
+    mut count: c_int,
+    what: c_int,
+    both: bool,
+) -> bool {
+    let mut curr = nvim_textobj_get_cursor_lnum();
+    let ml_line_count = nvim_textobj_get_ml_line_count();
+
+    while count > 0 {
+        count -= 1;
+        let mut did_skip = false;
+        let mut first = true;
+
+        loop {
+            let line = nvim_textobj_ml_get(curr);
+            if *line != 0 {
+                did_skip = true;
+            }
+
+            // skip folded lines
+            let mut fold_skipped = false;
+            if first {
+                let mut fold_first: c_int = 0;
+                let mut fold_last: c_int = 0;
+                if nvim_textobj_hasFolding(curr, &raw mut fold_first, &raw mut fold_last) {
+                    curr = if dir > 0 { fold_last } else { fold_first } + dir;
+                    fold_skipped = true;
+                }
+            }
+
+            if !first && did_skip && startps_impl(curr, what, both) {
+                break;
+            }
+
+            if fold_skipped {
+                curr -= dir;
+            }
+
+            curr += dir;
+            if curr < 1 || curr > ml_line_count {
+                if count > 0 {
+                    return false;
+                }
+                curr -= dir;
+                break;
+            }
+
+            first = false;
+        }
+    }
+
+    nvim_textobj_setpcmark();
+
+    // include line with '}'
+    if both {
+        let line = nvim_textobj_ml_get(curr);
+        if char_to_int(*line) == i32::from(b'}') {
+            curr += 1;
+        }
+    }
+
+    nvim_textobj_set_cursor_lnum(curr);
+
+    if curr == ml_line_count && what != i32::from(b'}') && dir == FORWARD {
+        let line = nvim_textobj_ml_get(curr);
+        let line_len = nvim_textobj_ml_get_len(curr);
+
+        // Put the cursor on the last character in the last line and make the
+        // motion inclusive.
+        if line_len != 0 {
+            let mut col = line_len - 1;
+            col -= nvim_textobj_utf_head_off(line, line.offset(col as isize));
+            nvim_textobj_set_cursor_col(col);
+            *pincl = true;
+        } else {
+            nvim_textobj_set_cursor_col(0);
+        }
+    } else {
+        nvim_textobj_set_cursor_col(0);
+    }
+
+    true
+}
+
+/// Find paragraph under cursor.
+///
+/// # Safety
+/// - `oap` must be a valid pointer.
+/// - Calls C accessor functions which must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_current_par(
+    oap: OapHandle,
+    count: c_int,
+    include: bool,
+    par_type: c_int,
+) -> c_int {
+    current_par_impl(oap, count, include, par_type)
+}
+
+/// Implementation of current_par.
+#[allow(clippy::too_many_lines)]
+unsafe fn current_par_impl(oap: OapHandle, count: c_int, include: bool, par_type: c_int) -> c_int {
+    // 'S' for sections not implemented yet
+    if par_type == i32::from(b'S') {
+        return FAIL;
+    }
+
+    let mut start_lnum = nvim_textobj_get_cursor_lnum();
+    let ml_line_count = nvim_textobj_get_ml_line_count();
+
+    // When visual area is more than one line: extend it.
+    if nvim_textobj_get_VIsual_active() && start_lnum != nvim_textobj_get_VIsual_lnum() {
+        return extend_paragraph(oap, count, include, start_lnum, ml_line_count);
+    }
+
+    // First move back to the start_lnum of the paragraph or white lines
+    let white_in_front = nvim_textobj_linewhite(start_lnum);
+    while start_lnum > 1 {
+        if white_in_front {
+            if !nvim_textobj_linewhite(start_lnum - 1) {
+                break;
+            }
+        } else if nvim_textobj_linewhite(start_lnum - 1) || startps_impl(start_lnum, 0, false) {
+            break;
+        }
+        start_lnum -= 1;
+    }
+
+    // Move past the end of any white lines.
+    let mut end_lnum = start_lnum;
+    while end_lnum <= ml_line_count && nvim_textobj_linewhite(end_lnum) {
+        end_lnum += 1;
+    }
+    end_lnum -= 1;
+
+    let mut i = count;
+    let mut do_white = false;
+
+    if !include && white_in_front {
+        i -= 1;
+    }
+
+    while i > 0 {
+        i -= 1;
+
+        if end_lnum == ml_line_count {
+            return FAIL;
+        }
+
+        if !include {
+            do_white = nvim_textobj_linewhite(end_lnum + 1);
+        }
+
+        if include || !do_white {
+            end_lnum += 1;
+            // skip to end of paragraph
+            while end_lnum < ml_line_count
+                && !nvim_textobj_linewhite(end_lnum + 1)
+                && !startps_impl(end_lnum + 1, 0, false)
+            {
+                end_lnum += 1;
+            }
+        }
+
+        if i == 0 && white_in_front && include {
+            break;
+        }
+
+        // skip to end of white lines after paragraph
+        if include || do_white {
+            while end_lnum < ml_line_count && nvim_textobj_linewhite(end_lnum + 1) {
+                end_lnum += 1;
+            }
+        }
+    }
+
+    // If there are no empty lines at the end, try to find some empty lines at
+    // the start (unless that has been done already).
+    if !white_in_front && !nvim_textobj_linewhite(end_lnum) && include {
+        while start_lnum > 1 && nvim_textobj_linewhite(start_lnum - 1) {
+            start_lnum -= 1;
+        }
+    }
+
+    finalize_paragraph(oap, start_lnum, end_lnum);
+
+    OK
+}
+
+/// Extend paragraph selection in Visual mode.
+unsafe fn extend_paragraph(
+    _oap: OapHandle,
+    count: c_int,
+    include: bool,
+    mut start_lnum: c_int,
+    ml_line_count: c_int,
+) -> c_int {
+    let mut retval = OK;
+    let dir = if start_lnum < nvim_textobj_get_VIsual_lnum() {
+        BACKWARD
+    } else {
+        FORWARD
+    };
+
+    let mut i = count;
+    while i > 0 {
+        i -= 1;
+
+        if start_lnum == if dir == BACKWARD { 1 } else { ml_line_count } {
+            retval = FAIL;
+            break;
+        }
+
+        let mut prev_start_is_white: c_int = -1;
+        for _t in 0..2 {
+            start_lnum += dir;
+            let start_is_white = c_int::from(nvim_textobj_linewhite(start_lnum));
+
+            if prev_start_is_white == start_is_white {
+                start_lnum -= dir;
+                break;
+            }
+
+            loop {
+                if start_lnum == if dir == BACKWARD { 1 } else { ml_line_count } {
+                    break;
+                }
+
+                let next_is_white = nvim_textobj_linewhite(start_lnum + dir);
+                let at_start = if dir > 0 {
+                    startps_impl(start_lnum + 1, 0, false)
+                } else {
+                    startps_impl(start_lnum, 0, false)
+                };
+
+                if (start_is_white != 0) != next_is_white || (start_is_white == 0 && at_start) {
+                    break;
+                }
+                start_lnum += dir;
+            }
+
+            if !include {
+                break;
+            }
+
+            if start_lnum == if dir == BACKWARD { 1 } else { ml_line_count } {
+                break;
+            }
+
+            prev_start_is_white = start_is_white;
+        }
+    }
+
+    nvim_textobj_set_cursor_lnum(start_lnum);
+    nvim_textobj_set_cursor_col(0);
+    retval
+}
+
+/// Finalize paragraph selection (set Visual/oap state).
+unsafe fn finalize_paragraph(oap: OapHandle, start_lnum: c_int, end_lnum: c_int) {
+    if nvim_textobj_get_VIsual_active() {
+        // Problem: when doing "Vipipip" nothing happens in a single white
+        // line, we get stuck there. Handle via extend_paragraph recursion.
+        // For now, just set the Visual area.
+        if nvim_textobj_get_VIsual_lnum() != start_lnum {
+            nvim_textobj_set_VIsual(start_lnum, 0);
+        }
+        nvim_textobj_set_VIsual_mode(i32::from(b'V'));
+        nvim_textobj_redraw_curbuf_later(UPD_INVERTED);
+        nvim_textobj_showmode();
+    } else {
+        nvim_textobj_set_oap_start(oap, start_lnum, 0);
+        nvim_textobj_set_oap_motion_type(oap, MT_LINE_WISE);
+    }
+
+    nvim_textobj_set_cursor_lnum(end_lnum);
+    nvim_textobj_set_cursor_col(0);
 }
 
 // =============================================================================
