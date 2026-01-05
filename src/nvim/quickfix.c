@@ -223,11 +223,120 @@ int nvim_pos_get_col(const void *pos_void)
   return pos->col;
 }
 
+/// Get current list from qf_info_T for Rust
+void *nvim_qf_get_curlist(const void *qi_void)
+{
+  const qf_info_T *qi = (const qf_info_T *)qi_void;
+  return (void *)&qi->qf_lists[qi->qf_curlist];
+}
+
+/// Get list by index from qf_info_T for Rust
+void *nvim_qf_get_list_at(const void *qi_void, int idx)
+{
+  const qf_info_T *qi = (const qf_info_T *)qi_void;
+  return (void *)&qi->qf_lists[idx];
+}
+
+/// Get current list index from qf_info_T for Rust
+int nvim_qf_get_curlist_idx(const void *qi_void)
+{
+  const qf_info_T *qi = (const qf_info_T *)qi_void;
+  return qi->qf_curlist;
+}
+
+/// Get current index (cursor position) from qf_list_T for Rust
+int nvim_qf_get_index(const void *qfl_void)
+{
+  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
+  return qfl->qf_index;
+}
+
+/// Get current entry pointer from qf_list_T for Rust
+void *nvim_qf_get_ptr(const void *qfl_void)
+{
+  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
+  return (void *)qfl->qf_ptr;
+}
+
+/// Get first entry pointer from qf_list_T for Rust
+void *nvim_qf_get_start(const void *qfl_void)
+{
+  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
+  return (void *)qfl->qf_start;
+}
+
+/// Get next entry pointer from qfline_T for Rust
+void *nvim_qfline_get_next(const void *qfp_void)
+{
+  const qfline_T *qfp = (const qfline_T *)qfp_void;
+  return (void *)qfp->qf_next;
+}
+
+/// Get previous entry pointer from qfline_T for Rust
+void *nvim_qfline_get_prev(const void *qfp_void)
+{
+  const qfline_T *qfp = (const qfline_T *)qfp_void;
+  return (void *)qfp->qf_prev;
+}
+
+/// Get valid flag from qfline_T for Rust
+bool nvim_qfline_get_valid(const void *qfp_void)
+{
+  const qfline_T *qfp = (const qfline_T *)qfp_void;
+  return qfp->qf_valid != 0;
+}
+
+/// Get type from qfline_T for Rust
+char nvim_qfline_get_type(const void *qfp_void)
+{
+  const qfline_T *qfp = (const qfline_T *)qfp_void;
+  return qfp->qf_type;
+}
+
+/// Get file number from qfline_T for Rust
+int nvim_qfline_get_fnum(const void *qfp_void)
+{
+  const qfline_T *qfp = (const qfline_T *)qfp_void;
+  return qfp->qf_fnum;
+}
+
+/// Get end line number from qfline_T for Rust
+linenr_T nvim_qfline_get_end_lnum(const void *qfp_void)
+{
+  const qfline_T *qfp = (const qfline_T *)qfp_void;
+  return qfp->qf_end_lnum;
+}
+
+/// Get end column from qfline_T for Rust
+int nvim_qfline_get_end_col(const void *qfp_void)
+{
+  const qfline_T *qfp = (const qfline_T *)qfp_void;
+  return qfp->qf_end_col;
+}
+
+/// Get error number from qfline_T for Rust
+int nvim_qfline_get_nr(const void *qfp_void)
+{
+  const qfline_T *qfp = (const qfline_T *)qfp_void;
+  return qfp->qf_nr;
+}
+
 extern bool rs_qf_list_has_valid_entries(const void *qfl);
 extern bool rs_qf_entry_after_pos(const void *qfp, const void *pos, bool linewise);
 extern bool rs_qf_entry_before_pos(const void *qfp, const void *pos, bool linewise);
 extern bool rs_qf_entry_on_or_after_pos(const void *qfp, const void *pos, bool linewise);
 extern bool rs_qf_entry_on_or_before_pos(const void *qfp, const void *pos, bool linewise);
+extern bool rs_qf_valid_idx(const void *qi, int idx);
+extern int rs_qf_get_size(const void *qfl);
+extern void *rs_qf_find_first_entry_in_buf(const void *qfl, int bnr, int *out_idx);
+extern void *rs_qf_find_first_entry_on_line(const void *entry, int idx, int *out_idx);
+extern void *rs_qf_find_last_entry_on_line(const void *entry, int idx, int *out_idx);
+extern void *rs_qf_find_entry_after_pos(int bnr, const void *pos, bool linewise, const void *qfp,
+                                        int *errornr);
+extern void *rs_qf_find_entry_before_pos(int bnr, const void *pos, bool linewise, const void *qfp,
+                                         int *errornr);
+extern void *rs_qf_find_closest_entry(const void *qfl, int bnr, const void *pos, int dir,
+                                      bool linewise, int *errornr);
 
 #define FMT_PATTERNS 14           // maximum number of % recognized
 
