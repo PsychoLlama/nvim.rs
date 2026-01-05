@@ -1360,8 +1360,8 @@ extern "C" {
     /// Set position lnum.
     fn nvim_textobj_pos_set_lnum(pos: PosHandle, lnum: c_int);
 
-    // Note: nvim_textobj_pos_set_col is declared but not currently used.
-    // Keeping the C accessor available for future use.
+    /// Set position col.
+    fn nvim_textobj_pos_set_col(pos: PosHandle, col: c_int);
 
     /// Check if line is empty (LINEEMPTY macro).
     fn nvim_textobj_lineempty(lnum: c_int) -> bool;
@@ -2177,6 +2177,109 @@ unsafe fn block_finalize(oap: OapHandle, state: &BlockState) {
             nvim_textobj_copy_pos(cursor, state.start_pos);
         }
     }
+}
+
+// =============================================================================
+// Tag Text Objects
+// =============================================================================
+
+extern "C" {
+    /// Move backward through multibyte string.
+    fn nvim_textobj_mb_ptr_back(base: *const std::ffi::c_char, p: *mut *mut std::ffi::c_char);
+
+    /// Move forward through multibyte string.
+    fn nvim_textobj_mb_ptr_adv(p: *mut *mut std::ffi::c_char);
+
+    /// Get ml_get_pos for a position.
+    fn nvim_textobj_ml_get_pos(pos: PosHandle) -> *const std::ffi::c_char;
+}
+
+/// Check if cursor is on an HTML tag.
+///
+/// # Arguments
+/// * `end_tag` - When true, return true if cursor is on "</aaa>".
+///
+/// # Returns
+/// True if the cursor is on a "<aaa>" tag. Ignores "<aaa/>".
+///
+/// # Safety
+/// Calls C accessor functions which must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_in_html_tag(end_tag: bool) -> bool {
+    in_html_tag_impl(end_tag)
+}
+
+/// Implementation of in_html_tag.
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+unsafe fn in_html_tag_impl(end_tag: bool) -> bool {
+    let line = nvim_textobj_get_cursor_line_ptr();
+    let cursor_col = nvim_textobj_get_cursor_col();
+
+    // Find '<' under or before cursor
+    let mut p = line.offset(cursor_col as isize).cast_mut();
+
+    // Mimic the C for loop: check '<' first, then MB_PTR_BACK, then '>'
+    loop {
+        // Check if we found '<'
+        if *p == b'<' as std::ffi::c_char {
+            break;
+        }
+        // Check loop condition
+        if p <= line.cast_mut() {
+            break;
+        }
+        // Move backward
+        nvim_textobj_mb_ptr_back(line, &raw mut p);
+        // Check if we hit '>' (meaning we went past a tag end)
+        if *p == b'>' as std::ffi::c_char {
+            break;
+        }
+    }
+
+    if *p != b'<' as std::ffi::c_char {
+        return false;
+    }
+
+    // Create position for iteration
+    let pos = nvim_textobj_alloc_pos();
+    nvim_textobj_pos_set_lnum(pos, nvim_textobj_get_cursor_lnum());
+    // Cast is safe: column offsets fit in c_int on all platforms
+    let col = (p as isize - line as isize) as c_int;
+    nvim_textobj_pos_set_col(pos, col);
+
+    // Move past '<'
+    nvim_textobj_mb_ptr_adv(&raw mut p);
+
+    if end_tag {
+        // Check that there is a '/' after the '<'
+        let result = *p == b'/' as std::ffi::c_char;
+        nvim_textobj_free_pos(pos);
+        return result;
+    }
+
+    // Check that there is no '/' after the '<'
+    if *p == b'/' as std::ffi::c_char {
+        nvim_textobj_free_pos(pos);
+        return false;
+    }
+
+    // Check that the matching '>' is not preceded by '/'
+    let mut lc: c_int = NUL;
+    loop {
+        if nvim_textobj_inc(pos) < 0 {
+            nvim_textobj_free_pos(pos);
+            return false;
+        }
+        let c_ptr = nvim_textobj_ml_get_pos(pos);
+        let c = char_to_int(*c_ptr);
+        if c == i32::from(b'>') {
+            break;
+        }
+        lc = c;
+    }
+
+    nvim_textobj_free_pos(pos);
+    lc != i32::from(b'/')
 }
 
 // =============================================================================

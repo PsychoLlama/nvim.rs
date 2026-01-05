@@ -52,6 +52,7 @@ extern void rs_find_first_blank(pos_T *posp);
 extern void rs_findsent_forward(int count, bool at_start_sent);
 extern int rs_current_sent(oparg_T *oap, int count, bool include);
 extern int rs_current_block(oparg_T *oap, int count, bool include, int what, int other);
+extern bool rs_in_html_tag(bool end_tag);
 
 // =============================================================================
 // C accessor functions for Rust
@@ -561,6 +562,34 @@ bool nvim_textobj_ltoreq_pos(pos_T *a, pos_T *b)
   return ltoreq(*a, *b);
 }
 
+// =============================================================================
+// Accessors for tag functions
+// =============================================================================
+
+/// Get pointer at cursor position (accessor for Rust).
+char *nvim_textobj_get_cursor_pos_ptr(void)
+{
+  return get_cursor_pos_ptr();
+}
+
+/// Move backward through multibyte string (accessor for Rust).
+void nvim_textobj_mb_ptr_back(const char *base, char **p)
+{
+  MB_PTR_BACK(base, *p);
+}
+
+/// Move forward through multibyte string (accessor for Rust).
+void nvim_textobj_mb_ptr_adv(char **p)
+{
+  MB_PTR_ADV(*p);
+}
+
+/// Get ml_get_pos for a position (accessor for Rust).
+char *nvim_textobj_ml_get_pos(pos_T *pos)
+{
+  return ml_get_pos(pos);
+}
+
 /// Find the start of the next sentence, searching in the direction specified
 /// by the "dir" argument.  The cursor is positioned on the start of the next
 /// sentence when found.  If the next sentence is found, return OK.  Return FAIL
@@ -738,50 +767,7 @@ int current_block(oparg_T *oap, int count, bool include, int what, int other)
 /// @return         true if the cursor is on a "<aaa>" tag.  Ignore "<aaa/>".
 static bool in_html_tag(bool end_tag)
 {
-  char *line = get_cursor_line_ptr();
-  char *p;
-  int lc = NUL;
-  pos_T pos;
-
-  for (p = line + curwin->w_cursor.col; p > line;) {
-    if (*p == '<') {           // find '<' under/before cursor
-      break;
-    }
-    MB_PTR_BACK(line, p);
-    if (*p == '>') {           // find '>' before cursor
-      break;
-    }
-  }
-  if (*p != '<') {
-    return false;
-  }
-
-  pos.lnum = curwin->w_cursor.lnum;
-  pos.col = (colnr_T)(p - line);
-
-  MB_PTR_ADV(p);
-  if (end_tag) {
-    // check that there is a '/' after the '<'
-    return *p == '/';
-  }
-
-  // check that there is no '/' after the '<'
-  if (*p == '/') {
-    return false;
-  }
-
-  // check that the matching '>' is not preceded by '/'
-  while (true) {
-    if (inc(&pos) < 0) {
-      return false;
-    }
-    int c = (uint8_t)(*ml_get_pos(&pos));
-    if (c == '>') {
-      break;
-    }
-    lc = c;
-  }
-  return lc != '/';
+  return rs_in_html_tag(end_tag);
 }
 
 /// Find tag block under the cursor, cursor at end.
