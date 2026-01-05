@@ -110,32 +110,38 @@ const SIGN_CMD_NAMES: [&str; SignCmd::COUNT] =
 
 /// Parse a sign command name and return its index.
 ///
-/// Returns the command index (0-5) or -1 if not found.
+/// Returns the command index (0-5) or SIGNCMD_LAST (6) if not found.
+/// This matches the C behavior where the loop exits when cmds[idx] == NULL.
 fn sign_cmd_idx_impl(cmd: &str) -> c_int {
     for (idx, name) in SIGN_CMD_NAMES.iter().enumerate() {
-        if cmd.starts_with(name) || name.starts_with(cmd) {
+        if cmd == *name {
             #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
             return idx as c_int;
         }
     }
-    -1
+    // Return SIGNCMD_LAST (6) for unrecognized commands
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    (SignCmd::COUNT as c_int)
 }
 
 /// Parse a sign command name from a C string.
 ///
-/// Returns the command index (0-5) or -1 if not found.
+/// Returns the command index (0-5) or SIGNCMD_LAST (6) if not found.
+/// Returns SIGNCMD_LAST for null input as well.
 ///
 /// # Safety
 /// `cmd` must be a valid null-terminated C string or null.
 #[no_mangle]
 pub unsafe extern "C" fn rs_sign_cmd_idx(cmd: *const c_char) -> c_int {
     if cmd.is_null() {
-        return -1;
+        #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+        return SignCmd::COUNT as c_int;
     }
 
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
     CStr::from_ptr(cmd)
         .to_str()
-        .map_or(-1, sign_cmd_idx_impl)
+        .map_or(SignCmd::COUNT as c_int, sign_cmd_idx_impl)
 }
 
 // =============================================================================
@@ -201,6 +207,48 @@ pub unsafe extern "C" fn rs_group_get_ns(
 #[no_mangle]
 pub extern "C" fn rs_sign_row_cmp(row1: c_int, row2: c_int) -> c_int {
     row1.cmp(&row2) as c_int
+}
+
+// =============================================================================
+// Sign Item Comparison
+// =============================================================================
+
+/// Compare two sign items for priority-based sorting.
+///
+/// Signs are compared by (all descending - higher values first):
+/// 1. Priority
+/// 2. Sign ID
+/// 3. Sign add ID (recency)
+///
+/// Returns:
+/// - positive if s1 < s2 (s2 should come first)
+/// - negative if s1 > s2 (s1 should come first)
+/// - 0 if equal
+#[no_mangle]
+pub extern "C" fn rs_sign_item_cmp(
+    priority1: c_int,
+    id1: u32,
+    add_id1: u32,
+    priority2: c_int,
+    id2: u32,
+    add_id2: u32,
+) -> c_int {
+    // Compare by priority (descending - higher priority first)
+    if priority1 != priority2 {
+        return if priority1 < priority2 { 1 } else { -1 };
+    }
+
+    // Compare by ID (descending - higher ID first)
+    if id1 != id2 {
+        return if id1 < id2 { 1 } else { -1 };
+    }
+
+    // Compare by sign_add_id (descending - more recent first)
+    if add_id1 != add_id2 {
+        return if add_id1 < add_id2 { 1 } else { -1 };
+    }
+
+    0
 }
 
 // =============================================================================
@@ -317,15 +365,17 @@ mod tests {
 
     #[test]
     fn test_sign_cmd_idx() {
+        // Valid commands (exact match)
         assert_eq!(sign_cmd_idx_impl("define"), 0);
-        assert_eq!(sign_cmd_idx_impl("def"), 0);
         assert_eq!(sign_cmd_idx_impl("undefine"), 1);
         assert_eq!(sign_cmd_idx_impl("list"), 2);
         assert_eq!(sign_cmd_idx_impl("place"), 3);
         assert_eq!(sign_cmd_idx_impl("unplace"), 4);
         assert_eq!(sign_cmd_idx_impl("jump"), 5);
-        assert_eq!(sign_cmd_idx_impl("invalid"), -1);
-        assert_eq!(sign_cmd_idx_impl(""), -1);
+        // Invalid commands return SIGNCMD_LAST (6)
+        assert_eq!(sign_cmd_idx_impl("def"), 6); // Partial match not accepted
+        assert_eq!(sign_cmd_idx_impl("invalid"), 6);
+        assert_eq!(sign_cmd_idx_impl(""), 6);
     }
 
     #[test]
@@ -333,6 +383,25 @@ mod tests {
         assert!(rs_sign_row_cmp(1, 2) < 0);
         assert!(rs_sign_row_cmp(2, 1) > 0);
         assert_eq!(rs_sign_row_cmp(1, 1), 0);
+    }
+
+    #[test]
+    fn test_sign_item_cmp() {
+        // Higher priority comes first (returns negative)
+        assert!(rs_sign_item_cmp(10, 1, 1, 5, 1, 1) < 0);
+        // Lower priority comes later (returns positive)
+        assert!(rs_sign_item_cmp(5, 1, 1, 10, 1, 1) > 0);
+
+        // Same priority, higher ID comes first
+        assert!(rs_sign_item_cmp(10, 100, 1, 10, 50, 1) < 0);
+        assert!(rs_sign_item_cmp(10, 50, 1, 10, 100, 1) > 0);
+
+        // Same priority and ID, higher add_id comes first
+        assert!(rs_sign_item_cmp(10, 1, 100, 10, 1, 50) < 0);
+        assert!(rs_sign_item_cmp(10, 1, 50, 10, 1, 100) > 0);
+
+        // All equal
+        assert_eq!(rs_sign_item_cmp(10, 1, 1, 10, 1, 1), 0);
     }
 
     #[test]
