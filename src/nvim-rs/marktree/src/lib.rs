@@ -15,6 +15,8 @@
 #![allow(clippy::fn_params_excessive_bools)] // Matching C API signatures
 #![allow(clippy::items_after_statements)] // Allow const definitions in functions
 
+pub mod intersection;
+
 use std::ffi::c_int;
 
 // ============================================================================
