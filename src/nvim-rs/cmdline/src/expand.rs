@@ -673,6 +673,158 @@ pub unsafe extern "C" fn rs_expand_uses_internal_matching(xp: *const ()) -> c_in
 }
 
 // =============================================================================
+// Expand Wildcards Flags (from path.h)
+// =============================================================================
+
+/// Flags for `expand_wildcards()`.
+pub mod ew_flags {
+    use std::os::raw::c_int;
+
+    /// Include directory names
+    pub const EW_DIR: c_int = 0x01;
+    /// Include file names
+    pub const EW_FILE: c_int = 0x02;
+    /// Include not found names
+    pub const EW_NOTFOUND: c_int = 0x04;
+    /// Append slash to directory name
+    pub const EW_ADDSLASH: c_int = 0x08;
+    /// Keep all matches
+    pub const EW_KEEPALL: c_int = 0x10;
+    /// Don't print "1 returned" from shell
+    pub const EW_SILENT: c_int = 0x20;
+    /// Executable files
+    pub const EW_EXEC: c_int = 0x40;
+    /// Search in 'path' too
+    pub const EW_PATH: c_int = 0x80;
+    /// Ignore case
+    pub const EW_ICASE: c_int = 0x100;
+    /// No error for bad regexp
+    pub const EW_NOERROR: c_int = 0x200;
+    /// Add match with literal name if exists
+    pub const EW_NOTWILD: c_int = 0x400;
+    /// Do not escape $, $var is expanded
+    pub const EW_KEEPDOLLAR: c_int = 0x800;
+    /// Also links not pointing to existing file
+    pub const EW_ALLLINKS: c_int = 0x1000;
+    /// Called from expand_shellcmd()
+    pub const EW_SHELLCMD: c_int = 0x2000;
+    /// Also files starting with a dot
+    pub const EW_DODOT: c_int = 0x4000;
+    /// No matches is not an error
+    pub const EW_EMPTYOK: c_int = 0x8000;
+    /// Do not expand environment variables
+    pub const EW_NOTENV: c_int = 0x10000;
+    /// Search in 'cdpath' too
+    pub const EW_CDPATH: c_int = 0x20000;
+    /// Do not invoke breakcheck
+    pub const EW_NOBREAK: c_int = 0x40000;
+}
+
+// =============================================================================
+// Pure Utility Functions
+// =============================================================================
+
+/// Sort function comparator for completion matches.
+///
+/// `<SNR>` functions (script-local functions starting with '<') should be
+/// sorted to the end.
+///
+/// Returns:
+/// - -1 if s1 should come before s2
+/// - 1 if s1 should come after s2
+/// - 0 or strcmp result otherwise
+#[inline]
+#[must_use]
+pub fn sort_func_compare(s1: &str, s2: &str) -> std::cmp::Ordering {
+    let p1_starts_with_lt = s1.starts_with('<');
+    let p2_starts_with_lt = s2.starts_with('<');
+
+    match (p1_starts_with_lt, p2_starts_with_lt) {
+        (false, true) => std::cmp::Ordering::Less,
+        (true, false) => std::cmp::Ordering::Greater,
+        _ => s1.cmp(s2),
+    }
+}
+
+/// FFI version of sort_func_compare for qsort.
+///
+/// # Safety
+///
+/// `s1` and `s2` must be valid pointers to `char*` pointers (i.e., `char**`).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_sort_func_compare(
+    s1: *const *const c_char,
+    s2: *const *const c_char,
+) -> c_int {
+    if s1.is_null() || s2.is_null() {
+        return 0;
+    }
+
+    let p1 = *s1;
+    let p2 = *s2;
+
+    if p1.is_null() || p2.is_null() {
+        return 0;
+    }
+
+    // Check first character for '<' (SNR function prefix)
+    let c1 = *p1;
+    let c2 = *p2;
+    #[allow(clippy::cast_possible_wrap)]
+    let lt = b'<' as c_char;
+
+    if c1 != lt && c2 == lt {
+        return -1;
+    }
+    if c1 == lt && c2 != lt {
+        return 1;
+    }
+
+    // Fall back to strcmp
+    libc::strcmp(p1, p2)
+}
+
+/// Map wild expand options to flags for `expand_wildcards()`.
+///
+/// Converts `WILD_*` option flags to `EW_*` flags used by the filesystem
+/// expansion functions.
+#[must_use]
+#[allow(clippy::wildcard_imports)]
+pub const fn map_wildopts_to_ewflags(options: c_int) -> c_int {
+    use ew_flags::*;
+    use wild_flags::*;
+
+    let mut flags = EW_DIR; // Always include directories
+
+    if (options & WILD_LIST_NOTFOUND) != 0 {
+        flags |= EW_NOTFOUND;
+    }
+    if (options & WILD_ADD_SLASH) != 0 {
+        flags |= EW_ADDSLASH;
+    }
+    if (options & WILD_KEEP_ALL) != 0 {
+        flags |= EW_KEEPALL;
+    }
+    if (options & WILD_SILENT) != 0 {
+        flags |= EW_SILENT;
+    }
+    if (options & WILD_NOERROR) != 0 {
+        flags |= EW_NOERROR;
+    }
+    if (options & WILD_ALLLINKS) != 0 {
+        flags |= EW_ALLLINKS;
+    }
+
+    flags
+}
+
+/// FFI version of map_wildopts_to_ewflags.
+#[unsafe(no_mangle)]
+pub const extern "C" fn rs_map_wildopts_to_ewflags(options: c_int) -> c_int {
+    map_wildopts_to_ewflags(options)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -832,5 +984,110 @@ mod tests {
         assert_eq!(XP_BS_ONE, 0x1);
         assert_eq!(XP_BS_THREE, 0x2);
         assert_eq!(XP_BS_COMMA, 0x4);
+    }
+
+    #[test]
+    fn test_ew_flags_constants() {
+        use ew_flags::*;
+        assert_eq!(EW_DIR, 0x01);
+        assert_eq!(EW_FILE, 0x02);
+        assert_eq!(EW_NOTFOUND, 0x04);
+        assert_eq!(EW_ADDSLASH, 0x08);
+        assert_eq!(EW_KEEPALL, 0x10);
+        assert_eq!(EW_SILENT, 0x20);
+        assert_eq!(EW_EXEC, 0x40);
+        assert_eq!(EW_PATH, 0x80);
+        assert_eq!(EW_ICASE, 0x100);
+        assert_eq!(EW_NOERROR, 0x200);
+        assert_eq!(EW_NOTWILD, 0x400);
+        assert_eq!(EW_KEEPDOLLAR, 0x800);
+        assert_eq!(EW_ALLLINKS, 0x1000);
+        assert_eq!(EW_SHELLCMD, 0x2000);
+        assert_eq!(EW_DODOT, 0x4000);
+        assert_eq!(EW_EMPTYOK, 0x8000);
+        assert_eq!(EW_NOTENV, 0x10000);
+        assert_eq!(EW_CDPATH, 0x20000);
+        assert_eq!(EW_NOBREAK, 0x40000);
+    }
+
+    #[test]
+    fn test_sort_func_compare() {
+        use std::cmp::Ordering;
+
+        // Regular strings sort normally
+        assert_eq!(sort_func_compare("abc", "def"), Ordering::Less);
+        assert_eq!(sort_func_compare("def", "abc"), Ordering::Greater);
+        assert_eq!(sort_func_compare("abc", "abc"), Ordering::Equal);
+
+        // <SNR> functions (starting with '<') sort to the end
+        assert_eq!(sort_func_compare("foo", "<SNR>bar"), Ordering::Less);
+        assert_eq!(sort_func_compare("<SNR>foo", "bar"), Ordering::Greater);
+        assert_eq!(sort_func_compare("<SNR>foo", "<SNR>bar"), Ordering::Greater); // SNRfoo > SNRbar
+
+        // Two <SNR> functions sort alphabetically
+        assert_eq!(
+            sort_func_compare("<SNR>123_abc", "<SNR>456_def"),
+            Ordering::Less
+        );
+    }
+
+    #[test]
+    fn test_map_wildopts_to_ewflags_empty() {
+        // No options should give just EW_DIR
+        let flags = map_wildopts_to_ewflags(0);
+        assert_eq!(flags, ew_flags::EW_DIR);
+    }
+
+    #[test]
+    fn test_map_wildopts_to_ewflags_single() {
+        use ew_flags::*;
+        use wild_flags::*;
+
+        // Test each flag mapping individually
+        assert_eq!(
+            map_wildopts_to_ewflags(WILD_LIST_NOTFOUND),
+            EW_DIR | EW_NOTFOUND
+        );
+        assert_eq!(
+            map_wildopts_to_ewflags(WILD_ADD_SLASH),
+            EW_DIR | EW_ADDSLASH
+        );
+        assert_eq!(map_wildopts_to_ewflags(WILD_KEEP_ALL), EW_DIR | EW_KEEPALL);
+        assert_eq!(map_wildopts_to_ewflags(WILD_SILENT), EW_DIR | EW_SILENT);
+        assert_eq!(map_wildopts_to_ewflags(WILD_NOERROR), EW_DIR | EW_NOERROR);
+        assert_eq!(map_wildopts_to_ewflags(WILD_ALLLINKS), EW_DIR | EW_ALLLINKS);
+    }
+
+    #[test]
+    fn test_map_wildopts_to_ewflags_combined() {
+        use ew_flags::*;
+        use wild_flags::*;
+
+        // Test multiple flags combined
+        let options = WILD_LIST_NOTFOUND | WILD_ADD_SLASH | WILD_SILENT;
+        let expected = EW_DIR | EW_NOTFOUND | EW_ADDSLASH | EW_SILENT;
+        assert_eq!(map_wildopts_to_ewflags(options), expected);
+
+        // All flags
+        let all_options = WILD_LIST_NOTFOUND
+            | WILD_ADD_SLASH
+            | WILD_KEEP_ALL
+            | WILD_SILENT
+            | WILD_NOERROR
+            | WILD_ALLLINKS;
+        let all_expected =
+            EW_DIR | EW_NOTFOUND | EW_ADDSLASH | EW_KEEPALL | EW_SILENT | EW_NOERROR | EW_ALLLINKS;
+        assert_eq!(map_wildopts_to_ewflags(all_options), all_expected);
+    }
+
+    #[test]
+    fn test_map_wildopts_ignores_unmapped_flags() {
+        use wild_flags::*;
+
+        // Flags that don't map to EW_* should be ignored
+        let options = WILD_HOME_REPLACE | WILD_USE_NL | WILD_ESCAPE | WILD_ICASE;
+        let flags = map_wildopts_to_ewflags(options);
+        // Should only have EW_DIR
+        assert_eq!(flags, ew_flags::EW_DIR);
     }
 }
