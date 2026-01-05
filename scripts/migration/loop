@@ -6,8 +6,22 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 log() { echo "[loop] $*" >&2; }
 
+max_iterations=10
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --max-iterations)
+      max_iterations="$2"
+      shift 2
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
 if [[ $# -lt 1 ]]; then
-  echo "Usage: $0 <description>" >&2
+  echo "Usage: $0 [--max-iterations N] <description>" >&2
   exit 1
 fi
 
@@ -25,14 +39,13 @@ while true; do
   log "Executing..."
   "$SCRIPT_DIR/execute" "$plan_file"
 
-  ((iteration++))
-
   # Safety limit
-  if [[ $iteration -gt 10 ]]; then
-    log "Reached iteration limit (10), stopping"
+  if (( iteration >= max_iterations )); then
+    log "Reached iteration limit ($max_iterations), stopping"
     break
   fi
 
+  ((iteration++))
   log "Continuing to next iteration..."
 done
 

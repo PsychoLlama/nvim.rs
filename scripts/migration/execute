@@ -59,5 +59,3 @@ log "Committed ref/run-result"
 # Attach the plan as a git note
 git notes add -f -F "$plan_file" HEAD
 log "Attached plan as git note"
-
-echo "$result"
