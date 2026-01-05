@@ -76,6 +76,14 @@ extern int rs_diffopt_hiddenoff(void);
 extern int rs_diffopt_closeoff(void);
 extern int rs_diffopt_filler(void);
 extern int rs_diff_internal(void);
+extern int rs_diffopt_vertical(void);
+extern int rs_diffopt_icase(void);
+extern int rs_diffopt_iwhite(void);
+extern int rs_diffopt_iwhiteall(void);
+extern int rs_diffopt_iwhiteeol(void);
+extern int rs_diffopt_iblank(void);
+extern int rs_diffopt_followwrap(void);
+extern int rs_diffopt_linematch(void);
 
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
@@ -2814,6 +2822,62 @@ bool diffopt_filler(void)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
   return rs_diffopt_filler() != 0;
+}
+
+// Return true if 'diffopt' contains "vertical".
+bool diffopt_vertical(void)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_diffopt_vertical() != 0;
+}
+
+// Return true if 'diffopt' contains "icase".
+bool diffopt_icase(void)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_diffopt_icase() != 0;
+}
+
+// Return true if 'diffopt' contains "iwhite".
+bool diffopt_iwhite(void)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_diffopt_iwhite() != 0;
+}
+
+// Return true if 'diffopt' contains "iwhiteall".
+bool diffopt_iwhiteall(void)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_diffopt_iwhiteall() != 0;
+}
+
+// Return true if 'diffopt' contains "iwhiteeol".
+bool diffopt_iwhiteeol(void)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_diffopt_iwhiteeol() != 0;
+}
+
+// Return true if 'diffopt' contains "iblank".
+bool diffopt_iblank(void)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_diffopt_iblank() != 0;
+}
+
+// Return true if 'diffopt' contains "followwrap".
+bool diffopt_followwrap(void)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_diffopt_followwrap() != 0;
+}
+
+// Return true if 'diffopt' contains "linematch".
+bool diffopt_linematch(void)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_diffopt_linematch() != 0;
 }
 
 /// Called when a line has been updated. Used for updating inline diff in Insert
