@@ -1,45 +1,29 @@
-Plan: ~/.claude/plans/humming-coalescing-nebula.md
+Plan: ~/.claude/plans/dreamy-orbiting-manatee.md
 
-The marktree migration plan is now complete. Let me provide a summary:
+## Summary
 
-## Marktree Migration Complete
+I have successfully executed the plan to continue the Rust migration of Neovim's spell checking system. Here's what was accomplished across three commits:
 
-All 5 phases of the migration plan have been executed successfully:
+### Commit 1: `refactor(spell): add handle types and migrate clear_spell_chartab to Rust`
+- Added opaque handle types `SlangHandle` and `SpelltabHandle` for safe FFI access to C structs
+- Created 17 C accessor functions for `slang_T` fields (word trees, compound settings, sound folding)
+- Created 5 C accessor functions for `spelltab_T` fields
+- Migrated `clear_spell_chartab()` to Rust - initializes spell character tables for ASCII
 
-### Commits Created
-1. `50d9a67133` - refactor(marktree): add Rust types and pure helpers
-2. `3af82ecf54` - refactor(marktree): migrate read-only tree operations to Rust
-3. `e0493fedce` - refactor(marktree): add iterator positioning and meta helpers
-4. `16cb26f7b0` - refactor(marktree): migrate pair/intersection management to Rust
-5. `c8a71c483f` - refactor(marktree): complete migration and update cbindgen exports
+### Commit 2: `refactor(spell): migrate offset encoding functions to Rust`
+- Migrated `offset2bytes()` from `spellfile.c` - encodes integers as variable-length bytes
+- Migrated `bytes2offset()` from `spellsuggest.c` - decodes variable-length bytes to integers
+- Added 10 new unit tests for the offset encoding roundtrip and edge cases
+- Updated C functions to be thin wrappers calling Rust
 
-### Summary of Migrated Components
+### Commit 3: `refactor(spell): add suggestion scoring constants to Rust`
+- Added all 26 suggestion scoring constants from `spellsuggest.c`
+- Constants cover: character operations, duplicate handling, composing chars, word operations, frequency bonuses, and soundfold limits
+- Updated `ref/crates.md` to reflect expanded spell crate scope
 
-**Types Created:**
-- `MTPos` - Row/col position struct
-- `MTKey` - Mark key with position, namespace, ID, flags, and decoration data
-- `MarkTreeHandle`, `MTNodeHandle`, `MarkTreeIterHandle` - Opaque handle types
+### Statistics
+- **Rust spell crate**: 2,533 lines with 19 exported FFI functions
+- **Tests**: 921 total (10 new for spell), all passing
+- **All checks pass**: `just rust-fmt-check`, `just rust-clippy`, `just rust-test`
 
-**Pure Helper Functions (31 functions):**
-- Position comparison: `pos_leq`, `pos_less`
-- Relative positioning: `relative`, `unrelative`, `compose`
-- ID lookup: `mt_lookup_id`, `mt_lookup_key`, `mt_lookup_key_side`
-- Flag checks: `mt_paired`, `mt_end`, `mt_start`, `mt_right`, `mt_no_undo`, `mt_invalidate`, `mt_invalid`, `mt_decor_any`, `mt_decor_sign`, `mt_conceal_lines`
-- Key comparison: `key_cmp`
-- Flag construction: `mt_flags`
-- Binary search: `marktree_getp_aux`
-- Meta helpers: `meta_describe_key`
-
-**Iterator Functions:**
-- `marktree_itr_valid`, `marktree_itr_pos`, `marktree_itr_current`
-- `marktree_itr_node_done`, `marktree_itr_next`, `marktree_itr_prev`, `marktree_itr_first`
-- `marktree_itr_get`, `marktree_itr_get_ext`
-
-**Lookup Functions (via C wrappers):**
-- `marktree_lookup`, `marktree_lookup_ns`
-- `marktree_get_alt`, `marktree_get_altpos`
-
-**Verification:**
-- All `just rust-fmt-check` checks pass
-- All `just rust-clippy` lints pass
-- All 911 Rust tests pass (including 14 new marktree tests)
+The spell crate now has the foundation for continued migration of the spell checking, file parsing, and suggestion algorithms.
