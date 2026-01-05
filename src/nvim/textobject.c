@@ -40,6 +40,8 @@ extern int rs_fwd_word(int count, bool bigword, bool eol);
 extern int rs_bck_word(int count, bool bigword, bool stop);
 extern int rs_end_word(int count, bool bigword, bool stop, bool empty);
 extern int rs_bckend_word(int count, bool bigword, bool eol);
+extern int rs_find_next_quote(char *line, int col, int quotechar, char *escape);
+extern int rs_find_prev_quote(char *line, int col_start, int quotechar, char *escape);
 
 // =============================================================================
 // C accessor functions for Rust
@@ -150,6 +152,24 @@ void nvim_textobj_unadjust_for_sel_if_needed(void)
   if (*p_sel == 'e' && VIsual_active && VIsual_mode == 'v' && VIsual_select_exclu_adj) {
     unadjust_for_sel();
   }
+}
+
+/// Get length of multibyte character (accessor for Rust).
+int nvim_textobj_utfc_ptr2len(const char *p)
+{
+  return utfc_ptr2len(p);
+}
+
+/// Get head offset for multibyte char (accessor for Rust).
+int nvim_textobj_utf_head_off(const char *base, const char *p)
+{
+  return utf_head_off(base, p);
+}
+
+/// Search for character in string (accessor for Rust).
+char *nvim_textobj_vim_strchr(const char *s, int c)
+{
+  return vim_strchr(s, c);
 }
 
 /// Find the start of the next sentence, searching in the direction specified
@@ -1352,21 +1372,7 @@ extend:
 /// @return        column number of "quotechar" or -1 when not found.
 static int find_next_quote(char *line, int col, int quotechar, char *escape)
 {
-  while (true) {
-    int c = (uint8_t)line[col];
-    if (c == NUL) {
-      return -1;
-    } else if (escape != NULL && vim_strchr(escape, c)) {
-      col++;
-      if (line[col] == NUL) {
-        return -1;
-      }
-    } else if (c == quotechar) {
-      break;
-    }
-    col += utfc_ptr2len(line + col);
-  }
-  return col;
+  return rs_find_next_quote(line, col, quotechar, escape);
 }
 
 /// Search backwards in "line" from column "col_start" to find "quotechar".
@@ -1378,23 +1384,7 @@ static int find_next_quote(char *line, int col, int quotechar, char *escape)
 /// @return        the found column or zero.
 static int find_prev_quote(char *line, int col_start, int quotechar, char *escape)
 {
-  while (col_start > 0) {
-    col_start--;
-    col_start -= utf_head_off(line, line + col_start);
-    int n = 0;
-    if (escape != NULL) {
-      while (col_start - n > 0 && vim_strchr(escape,
-                                             (uint8_t)line[col_start - n - 1]) != NULL) {
-        n++;
-      }
-    }
-    if (n & 1) {
-      col_start -= n;           // uneven number of escape chars, skip it
-    } else if ((uint8_t)line[col_start] == quotechar) {
-      break;
-    }
-  }
-  return col_start;
+  return rs_find_prev_quote(line, col_start, quotechar, escape);
 }
 
 /// Find quote under the cursor, cursor at end.

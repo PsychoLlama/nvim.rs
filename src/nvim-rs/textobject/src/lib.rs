@@ -514,6 +514,104 @@ extern "C" {
 
     /// Check and unadjust for exclusive selection if needed.
     fn nvim_textobj_unadjust_for_sel_if_needed();
+
+    /// Get length of multibyte character at position.
+    fn nvim_textobj_utfc_ptr2len(p: *const std::ffi::c_char) -> c_int;
+
+    /// Get head offset for multibyte char (bytes before start of char).
+    fn nvim_textobj_utf_head_off(
+        base: *const std::ffi::c_char,
+        p: *const std::ffi::c_char,
+    ) -> c_int;
+
+    /// Search for character in string (like vim_strchr).
+    fn nvim_textobj_vim_strchr(s: *const std::ffi::c_char, c: c_int) -> *const std::ffi::c_char;
+}
+
+// =============================================================================
+// Quote Text Object Helpers
+// =============================================================================
+
+/// Helper to convert a C char (i8/u8) to c_int safely.
+/// C chars are typically used as unsigned bytes for character values.
+#[inline]
+fn char_to_int(c: std::ffi::c_char) -> c_int {
+    // Cast to u8 first to treat as unsigned byte, then widen to c_int
+    #[allow(clippy::cast_sign_loss)]
+    let byte = c as u8;
+    c_int::from(byte)
+}
+
+/// Search forward for a quote character.
+///
+/// Returns column number of quote character or -1 when not found.
+///
+/// # Safety
+/// - `line` must be a valid pointer to a NUL-terminated C string.
+/// - `col` must be a valid starting index within the string.
+/// - `escape` may be null or a valid pointer to a NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_next_quote(
+    line: *const std::ffi::c_char,
+    mut col: c_int,
+    quotechar: c_int,
+    escape: *const std::ffi::c_char,
+) -> c_int {
+    loop {
+        let c = char_to_int(*line.offset(col as isize));
+        if c == NUL {
+            return -1;
+        }
+        if !escape.is_null() && !nvim_textobj_vim_strchr(escape, c).is_null() {
+            col += 1;
+            if *line.offset(col as isize) == 0 {
+                return -1;
+            }
+        } else if c == quotechar {
+            break;
+        }
+        col += nvim_textobj_utfc_ptr2len(line.offset(col as isize));
+    }
+    col
+}
+
+/// Search backward for a quote character.
+///
+/// Returns found column or zero.
+///
+/// # Safety
+/// - `line` must be a valid pointer to a NUL-terminated C string.
+/// - `col_start` must be a valid starting index within the string.
+/// - `escape` may be null or a valid pointer to a NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_prev_quote(
+    line: *const std::ffi::c_char,
+    mut col_start: c_int,
+    quotechar: c_int,
+    escape: *const std::ffi::c_char,
+) -> c_int {
+    while col_start > 0 {
+        col_start -= 1;
+        col_start -= nvim_textobj_utf_head_off(line, line.offset(col_start as isize));
+
+        let mut n: c_int = 0;
+        if !escape.is_null() {
+            while col_start - n > 0 {
+                let prev_char = char_to_int(*line.offset((col_start - n - 1) as isize));
+                if nvim_textobj_vim_strchr(escape, prev_char).is_null() {
+                    break;
+                }
+                n += 1;
+            }
+        }
+
+        if (n & 1) != 0 {
+            col_start -= n; // uneven number of escape chars, skip it
+        } else if char_to_int(*line.offset(col_start as isize)) == quotechar {
+            break;
+        }
+    }
+    col_start
 }
 
 // =============================================================================
