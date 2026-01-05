@@ -1,29 +1,42 @@
-Plan: ~/.claude/plans/dreamy-orbiting-manatee.md
+Plan: ~/.claude/plans/recursive-conjuring-turing.md
 
 ## Summary
 
-I have successfully executed the plan to continue the Rust migration of Neovim's spell checking system. Here's what was accomplished across three commits:
+I have completed executing the plan. Here's what was accomplished:
 
-### Commit 1: `refactor(spell): add handle types and migrate clear_spell_chartab to Rust`
-- Added opaque handle types `SlangHandle` and `SpelltabHandle` for safe FFI access to C structs
-- Created 17 C accessor functions for `slang_T` fields (word trees, compound settings, sound folding)
-- Created 5 C accessor functions for `spelltab_T` fields
-- Migrated `clear_spell_chartab()` to Rust - initializes spell character tables for ASCII
+### Commits Made (3 commits)
+1. **e06f211c3d** - `refactor(quickfix): expand Rust FFI with list ID and entry functions`
+2. **1b081eee7e** - `refactor(search): expand Rust FFI with search constants and utilities`  
+3. **7b2ff64c47** - `refactor(spell): add suggestion scoring and word flag functions`
 
-### Commit 2: `refactor(spell): migrate offset encoding functions to Rust`
-- Migrated `offset2bytes()` from `spellfile.c` - encodes integers as variable-length bytes
-- Migrated `bytes2offset()` from `spellsuggest.c` - decodes variable-length bytes to integers
-- Added 10 new unit tests for the offset encoding roundtrip and edge cases
-- Updated C functions to be thin wrappers calling Rust
+### FFI Function Progress
 
-### Commit 3: `refactor(spell): add suggestion scoring constants to Rust`
-- Added all 26 suggestion scoring constants from `spellsuggest.c`
-- Constants cover: character operations, duplicate handling, composing chars, word operations, frequency bonuses, and soundfold limits
-- Updated `ref/crates.md` to reflect expanded spell crate scope
+| Crate | Before | After | Change |
+|-------|--------|-------|--------|
+| Quickfix | 29 | 42 | +13 |
+| Search | 6 | 43 | +37 |
+| Spell | 19 | 56 | +37 |
 
-### Statistics
-- **Rust spell crate**: 2,533 lines with 19 exported FFI functions
-- **Tests**: 921 total (10 new for spell), all passing
-- **All checks pass**: `just rust-fmt-check`, `just rust-clippy`, `just rust-test`
+### New Functions Added
 
-The spell crate now has the foundation for continued migration of the spell checking, file parsing, and suggestion algorithms.
+**Quickfix Crate:**
+- List ID management: `get_id`, `find_list_by_id`, `id_exists`
+- List state: `get_changedtick`, `has_title`, `get_maxcount`, `stack_at_max`
+- Entry ranges: `entry_in_range`, `entry_covers_line`, `entry_covers_pos`
+- Entry counting: `count_entries_of_type`, `count_errors`, `count_warnings`
+
+**Search Crate:**
+- Search options: MSG, HIS, END, START, KEEP, FOLD, PEEK, COL flags
+- RE pattern indices: RE_SEARCH, RE_SUBST, RE_LAST, RE_BOTH
+- Direction constants: DIR_FORWARD, DIR_BACKWARD with helpers
+- Character search types: f, F, t, T command classifications  
+- VimGrep flags: VGR_GLOBAL, VGR_NOJUMP, VGR_FUZZY
+
+**Spell Crate:**
+- RESCORE/MAXSCORE: adjust scores based on soundfold similarity
+- Score constants: SWAP, SUBST, DEL, INS, SPLIT, ICASE, REGION, etc.
+- Score utilities: `is_acceptable`, `is_failed`, `combine`, `common_bonus`
+- Soundfold limits: `sfmax` functions for optimization
+- Word flag checks: `is_rare`, `is_banned`, `is_allcap`, `is_onecap`, etc.
+
+All tests pass (`just rust-fmt-check`, `just rust-clippy`, `just rust-test`).
