@@ -589,6 +589,7 @@ int re_multiline(const regprog_T *prog)
 extern int rs_get_equi_class(char **pp);
 extern int rs_get_coll_element(char **pp);
 extern char *rs_skip_anyof(char *p);
+extern int rs_check_char_class(int cls, int c);
 
 // Rust implementations for scanner (Phase 7)
 extern void rs_initchr(char *str);
@@ -13008,109 +13009,7 @@ static regsubs_T *addstate_here(nfa_list_T *l, nfa_state_T *state, regsubs_T *su
 // Check character class "class" against current character c.
 static int check_char_class(int cls, int c)
 {
-  switch (cls) {
-  case NFA_CLASS_ALNUM:
-    if (c >= 1 && c < 128 && isalnum(c)) {
-      return OK;
-    }
-    break;
-  case NFA_CLASS_ALPHA:
-    if (c >= 1 && c < 128 && isalpha(c)) {
-      return OK;
-    }
-    break;
-  case NFA_CLASS_BLANK:
-    if (c == ' ' || c == '\t') {
-      return OK;
-    }
-    break;
-  case NFA_CLASS_CNTRL:
-    if (c >= 1 && c <= 127 && iscntrl(c)) {
-      return OK;
-    }
-    break;
-  case NFA_CLASS_DIGIT:
-    if (ascii_isdigit(c)) {
-      return OK;
-    }
-    break;
-  case NFA_CLASS_GRAPH:
-    if (c >= 1 && c <= 127 && isgraph(c)) {
-      return OK;
-    }
-    break;
-  case NFA_CLASS_LOWER:
-    if (mb_islower(c) && c != 170 && c != 186) {
-      return OK;
-    }
-    break;
-  case NFA_CLASS_PRINT:
-    if (vim_isprintc(c)) {
-      return OK;
-    }
-    break;
-  case NFA_CLASS_PUNCT:
-    if (c >= 1 && c < 128 && ispunct(c)) {
-      return OK;
-    }
-    break;
-  case NFA_CLASS_SPACE:
-    if ((c >= 9 && c <= 13) || (c == ' ')) {
-      return OK;
-    }
-    break;
-  case NFA_CLASS_UPPER:
-    if (mb_isupper(c)) {
-      return OK;
-    }
-    break;
-  case NFA_CLASS_XDIGIT:
-    if (ascii_isxdigit(c)) {
-      return OK;
-    }
-    break;
-  case NFA_CLASS_TAB:
-    if (c == '\t') {
-      return OK;
-    }
-    break;
-  case NFA_CLASS_RETURN:
-    if (c == '\r') {
-      return OK;
-    }
-    break;
-  case NFA_CLASS_BACKSPACE:
-    if (c == '\b') {
-      return OK;
-    }
-    break;
-  case NFA_CLASS_ESCAPE:
-    if (c == ESC) {
-      return OK;
-    }
-    break;
-  case NFA_CLASS_IDENT:
-    if (vim_isIDc(c)) {
-      return OK;
-    }
-    break;
-  case NFA_CLASS_KEYWORD:
-    if (reg_iswordc(c)) {
-      return OK;
-    }
-    break;
-  case NFA_CLASS_FNAME:
-    if (vim_isfilec(c)) {
-      return OK;
-    }
-    break;
-
-  default:
-    // should not be here :P
-    siemsg(_(e_ill_char_class), (int64_t)cls);
-    return FAIL;
-  }
-  return FAIL;
+  return rs_check_char_class(cls, c);
 }
 
 /// Check for a match with subexpression "subidx".

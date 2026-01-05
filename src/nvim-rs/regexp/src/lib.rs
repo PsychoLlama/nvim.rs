@@ -16,7 +16,7 @@ pub mod scanner;
 
 pub use char_class::rs_get_char_class;
 pub use decompose::rs_mb_decompose;
-pub use nfa_states::rs_nfa_recognize_char_class;
+pub use nfa_states::{rs_check_char_class, rs_nfa_recognize_char_class};
 pub use parser::{
     rs_nfa_re_num_cmp, rs_re_get_uint16, rs_re_get_uint32, rs_re_num_cmp, rs_re_put_uint16,
     rs_re_put_uint32, rs_read_limits, rs_use_multibytecode,

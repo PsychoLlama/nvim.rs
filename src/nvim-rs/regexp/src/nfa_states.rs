@@ -610,6 +610,184 @@ pub unsafe extern "C" fn rs_nfa_recognize_char_class(
 }
 
 // =============================================================================
+// Character Class Membership Checking
+// =============================================================================
+
+// FFI declarations for character classification helpers
+extern "C" {
+    /// Check if character is a valid identifier character.
+    fn vim_isIDc(c: c_int) -> c_int;
+
+    /// Check if character is a keyword character for the current buffer.
+    fn vim_iswordc_buf(c: c_int, buf: *mut std::ffi::c_void) -> c_int;
+
+    /// Check if character is valid in a file name.
+    fn vim_isfilec(c: c_int) -> c_int;
+
+    /// Check if character is lowercase (multibyte aware).
+    fn mb_islower(c: c_int) -> c_int;
+
+    /// Check if character is uppercase (multibyte aware).
+    fn mb_isupper(c: c_int) -> c_int;
+
+    /// Check if character is printable.
+    fn vim_isprintc(c: c_int) -> c_int;
+
+    /// Get the current regex buffer (rex.reg_buf).
+    fn nvim_rex_get_reg_buf() -> *mut std::ffi::c_void;
+}
+
+/// Result codes
+const OK: c_int = 1;
+
+/// Escape character (ASCII 27)
+const ESC: c_int = 27;
+
+/// Check if a character is an ASCII digit (0-9).
+#[inline]
+const fn ascii_isdigit(c: c_int) -> bool {
+    c >= b'0' as c_int && c <= b'9' as c_int
+}
+
+/// Check if a character is an ASCII hex digit (0-9, a-f, A-F).
+#[inline]
+const fn ascii_isxdigit(c: c_int) -> bool {
+    ascii_isdigit(c)
+        || (c >= b'a' as c_int && c <= b'f' as c_int)
+        || (c >= b'A' as c_int && c <= b'F' as c_int)
+}
+
+/// Check if a character belongs to a POSIX character class.
+///
+/// # Arguments
+/// * `cls` - The NFA_CLASS_* constant
+/// * `c` - The character to check
+///
+/// # Returns
+/// * `OK` (1) if the character is in the class
+/// * `FAIL` (0) if not
+///
+/// # Safety
+/// For NFA_CLASS_KEYWORD, requires rex.reg_buf to be valid.
+pub unsafe fn check_char_class_impl(cls: c_int, c: c_int) -> c_int {
+    match cls {
+        NFA_CLASS_ALNUM => {
+            if (1..128).contains(&c) && libc::isalnum(c) != 0 {
+                return OK;
+            }
+        }
+        NFA_CLASS_ALPHA => {
+            if (1..128).contains(&c) && libc::isalpha(c) != 0 {
+                return OK;
+            }
+        }
+        NFA_CLASS_BLANK => {
+            if c == b' ' as c_int || c == b'\t' as c_int {
+                return OK;
+            }
+        }
+        NFA_CLASS_CNTRL => {
+            if (1..=127).contains(&c) && libc::iscntrl(c) != 0 {
+                return OK;
+            }
+        }
+        NFA_CLASS_DIGIT => {
+            if ascii_isdigit(c) {
+                return OK;
+            }
+        }
+        NFA_CLASS_GRAPH => {
+            if (1..=127).contains(&c) && libc::isgraph(c) != 0 {
+                return OK;
+            }
+        }
+        NFA_CLASS_LOWER => {
+            // Exclude special characters 170 and 186 per C implementation
+            if mb_islower(c) != 0 && c != 170 && c != 186 {
+                return OK;
+            }
+        }
+        NFA_CLASS_PRINT => {
+            if vim_isprintc(c) != 0 {
+                return OK;
+            }
+        }
+        NFA_CLASS_PUNCT => {
+            if (1..128).contains(&c) && libc::ispunct(c) != 0 {
+                return OK;
+            }
+        }
+        NFA_CLASS_SPACE => {
+            // Tab (9), newline (10), vertical tab (11), form feed (12), carriage return (13), space
+            if (9..=13).contains(&c) || c == b' ' as c_int {
+                return OK;
+            }
+        }
+        NFA_CLASS_UPPER => {
+            if mb_isupper(c) != 0 {
+                return OK;
+            }
+        }
+        NFA_CLASS_XDIGIT => {
+            if ascii_isxdigit(c) {
+                return OK;
+            }
+        }
+        NFA_CLASS_TAB => {
+            if c == b'\t' as c_int {
+                return OK;
+            }
+        }
+        NFA_CLASS_RETURN => {
+            if c == b'\r' as c_int {
+                return OK;
+            }
+        }
+        NFA_CLASS_BACKSPACE => {
+            if c == 8 {
+                // '\b' = ASCII 8
+                return OK;
+            }
+        }
+        NFA_CLASS_ESCAPE => {
+            if c == ESC {
+                return OK;
+            }
+        }
+        NFA_CLASS_IDENT => {
+            if vim_isIDc(c) != 0 {
+                return OK;
+            }
+        }
+        NFA_CLASS_KEYWORD => {
+            let buf = nvim_rex_get_reg_buf();
+            if vim_iswordc_buf(c, buf) != 0 {
+                return OK;
+            }
+        }
+        NFA_CLASS_FNAME => {
+            if vim_isfilec(c) != 0 {
+                return OK;
+            }
+        }
+        _ => {
+            // Invalid class - return FAIL
+            return FAIL;
+        }
+    }
+    FAIL
+}
+
+/// FFI export: Check if a character belongs to a POSIX character class.
+///
+/// # Safety
+/// For NFA_CLASS_KEYWORD, requires rex.reg_buf to be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_char_class(cls: c_int, c: c_int) -> c_int {
+    check_char_class_impl(cls, c)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
