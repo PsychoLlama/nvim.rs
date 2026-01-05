@@ -594,6 +594,39 @@ extern "C" {
 
     /// Clear the entire marktree.
     fn nvim_marktree_clear(b: MarkTreeHandle);
+
+    // ========================================================================
+    // Splice Operations (Phase 6)
+    // ========================================================================
+
+    /// Splice: handle text changes in buffer.
+    fn nvim_marktree_splice(
+        b: MarkTreeHandle,
+        start_line: i32,
+        start_col: c_int,
+        old_extent_line: c_int,
+        old_extent_col: c_int,
+        new_extent_line: c_int,
+        new_extent_col: c_int,
+    ) -> bool;
+
+    /// Move region: move marks within a region to a new location.
+    fn nvim_marktree_move_region(
+        b: MarkTreeHandle,
+        start_row: c_int,
+        start_col: c_int,
+        extent_row: c_int,
+        extent_col: c_int,
+        new_row: c_int,
+        new_col: c_int,
+    );
+
+    // ========================================================================
+    // Debug and Validation (Phase 8)
+    // ========================================================================
+
+    /// Check marktree invariants.
+    fn nvim_marktree_check(b: MarkTreeHandle);
 }
 
 // ============================================================================
@@ -2855,6 +2888,120 @@ pub extern "C" fn rs_marktree_free_subtree(b: MarkTreeHandle, x: MTNodeHandle) {
 #[no_mangle]
 pub extern "C" fn rs_marktree_clear(b: MarkTreeHandle) {
     marktree_clear(b);
+}
+
+// ============================================================================
+// Phase 6: Splice Operations
+// ============================================================================
+
+/// Splice: handle text changes in buffer.
+///
+/// Updates mark positions based on text change:
+/// - Marks at `start` with right gravity are moved to `new_extent`
+/// - Marks in the deleted region are moved to `start`
+/// - Marks after the deleted region are adjusted by delta
+///
+/// Returns true if any marks were moved.
+#[must_use]
+pub fn marktree_splice(
+    b: MarkTreeHandle,
+    start_line: i32,
+    start_col: i32,
+    old_extent_line: i32,
+    old_extent_col: i32,
+    new_extent_line: i32,
+    new_extent_col: i32,
+) -> bool {
+    unsafe {
+        nvim_marktree_splice(
+            b,
+            start_line,
+            start_col,
+            old_extent_line,
+            old_extent_col,
+            new_extent_line,
+            new_extent_col,
+        )
+    }
+}
+
+/// Move region: move marks within a region to a new location.
+///
+/// Moves all marks in the region [start, start+extent) to [new, new+extent).
+pub fn marktree_move_region(
+    b: MarkTreeHandle,
+    start_row: i32,
+    start_col: i32,
+    extent_row: i32,
+    extent_col: i32,
+    new_row: i32,
+    new_col: i32,
+) {
+    unsafe {
+        nvim_marktree_move_region(
+            b, start_row, start_col, extent_row, extent_col, new_row, new_col,
+        );
+    }
+}
+
+// ============================================================================
+// Phase 8: Debug and Validation
+// ============================================================================
+
+/// Check marktree invariants.
+///
+/// Validates the B-tree structure, intersection markers, and meta counts.
+/// Panics if any invariant is violated.
+pub fn marktree_check(b: MarkTreeHandle) {
+    unsafe { nvim_marktree_check(b) }
+}
+
+// ============================================================================
+// FFI Exports for Phase 6 & 8
+// ============================================================================
+
+/// Exported FFI version of `marktree_splice`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_splice(
+    b: MarkTreeHandle,
+    start_line: i32,
+    start_col: c_int,
+    old_extent_line: c_int,
+    old_extent_col: c_int,
+    new_extent_line: c_int,
+    new_extent_col: c_int,
+) -> bool {
+    marktree_splice(
+        b,
+        start_line,
+        start_col,
+        old_extent_line,
+        old_extent_col,
+        new_extent_line,
+        new_extent_col,
+    )
+}
+
+/// Exported FFI version of `marktree_move_region`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_move_region(
+    b: MarkTreeHandle,
+    start_row: c_int,
+    start_col: c_int,
+    extent_row: c_int,
+    extent_col: c_int,
+    new_row: c_int,
+    new_col: c_int,
+) {
+    marktree_move_region(
+        b, start_row, start_col, extent_row, extent_col, new_row, new_col,
+    );
+}
+
+/// Exported FFI version of `marktree_check`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_check(b: MarkTreeHandle) {
+    marktree_check(b);
 }
 
 // ============================================================================

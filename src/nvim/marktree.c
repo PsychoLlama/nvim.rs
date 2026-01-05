@@ -3231,3 +3231,34 @@ void nvim_marktree_clear(MarkTree *b)
 {
   marktree_clear(b);
 }
+
+// ============================================================================
+// Splice Operations (for Rust FFI - Phase 6)
+// ============================================================================
+
+/// Splice: handle text changes in buffer.
+bool nvim_marktree_splice(MarkTree *b, int32_t start_line, int start_col,
+                          int old_extent_line, int old_extent_col,
+                          int new_extent_line, int new_extent_col)
+{
+  return marktree_splice(b, start_line, start_col, old_extent_line, old_extent_col,
+                         new_extent_line, new_extent_col);
+}
+
+/// Move region: move marks within a region to a new location.
+void nvim_marktree_move_region(MarkTree *b, int start_row, colnr_T start_col,
+                               int extent_row, colnr_T extent_col,
+                               int new_row, colnr_T new_col)
+{
+  marktree_move_region(b, start_row, start_col, extent_row, extent_col, new_row, new_col);
+}
+
+// ============================================================================
+// Debug and Validation (for Rust FFI - Phase 8)
+// ============================================================================
+
+/// Check marktree invariants.
+void nvim_marktree_check(MarkTree *b)
+{
+  marktree_check(b);
+}
