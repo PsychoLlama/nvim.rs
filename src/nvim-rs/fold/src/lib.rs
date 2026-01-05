@@ -181,6 +181,13 @@ extern "C" {
     fn nvim_plines_win_nofold(wp: WinHandle, lnum: LineNr) -> c_int;
 
     // ========================================================================
+    // Phase 1: Foundation function accessors
+    // ========================================================================
+
+    /// Initialize the folds garray for a window.
+    fn nvim_ga_init_folds(gap: GArrayHandle);
+
+    // ========================================================================
     // Phase 2: Fold navigation accessors
     // ========================================================================
 
@@ -654,6 +661,24 @@ fn fold_reverse_order_impl(gap: GArrayHandle, start_arg: LineNr, end_arg: LineNr
 }
 
 // ============================================================================
+// Phase 1: Foundation Functions
+// ============================================================================
+
+/// Initialize the fold garray for a new window.
+fn fold_init_win_impl(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+
+    let gap = unsafe { nvim_win_get_folds(wp) };
+    if gap.is_null() {
+        return;
+    }
+
+    unsafe { nvim_ga_init_folds(gap) };
+}
+
+// ============================================================================
 // Phase 3: State Query Functions
 // ============================================================================
 
@@ -825,6 +850,19 @@ pub extern "C" fn rs_hasAnyFolding(win: WinHandle) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_foldManualAllowed(create: bool) -> c_int {
     c_int::from(fold_manual_allowed_impl(create))
+}
+
+// ============================================================================
+// Phase 1: Foundation Functions - FFI Exports
+// ============================================================================
+
+/// Initialize the fold garray for a new window.
+///
+/// # Safety
+/// The `wp` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_foldInitWin(wp: WinHandle) {
+    fold_init_win_impl(wp);
 }
 
 // ============================================================================

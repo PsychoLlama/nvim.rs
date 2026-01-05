@@ -115,6 +115,11 @@ extern void rs_checkSmall(win_T *wp, fold_T *fp, linenr_T lnum_off);
 extern int rs_check_closed(win_T *wp, fold_T *fp, bool *use_level, int level,
                            bool *maybe_small, linenr_T lnum_off);
 
+// Rust FFI declarations for Phase 1: Foundation functions
+extern void rs_foldInitWin(win_T *wp);
+extern int rs_find_wl_entry(win_T *win, linenr_T lnum);
+extern int rs_foldLevelWin(win_T *wp, linenr_T lnum);
+
 static const char *e_nofold = N_("E490: No fold found");
 
 // While updating the folds lines between invalid_top and invalid_bot have an
@@ -935,7 +940,7 @@ int foldMoveTo(const bool updown, const int dir, const int count)
 /// Init the fold info in a new window.
 void foldInitWin(win_T *new_win)
 {
-  ga_init(&new_win->w_folds, (int)sizeof(fold_T), 10);
+  rs_foldInitWin(new_win);
 }
 
 // find_wl_entry() {{{2
@@ -946,17 +951,7 @@ void foldInitWin(win_T *new_win)
 /// @return  index of entry or -1 if not found.
 int find_wl_entry(win_T *win, linenr_T lnum)
 {
-  for (int i = 0; i < win->w_lines_valid; i++) {
-    if (win->w_lines[i].wl_valid) {
-      if (lnum < win->w_lines[i].wl_lnum) {
-        return -1;
-      }
-      if (lnum <= win->w_lines[i].wl_foldend) {
-        return i;
-      }
-    }
-  }
-  return -1;
+  return rs_find_wl_entry(win, lnum);
 }
 
 // foldAdjustVisual() {{{2
@@ -1068,23 +1063,7 @@ static bool foldFind(const garray_T *gap, linenr_T lnum, fold_T **fpp)
 /// @return  fold level at line number "lnum" in window "wp".
 static int foldLevelWin(win_T *wp, linenr_T lnum)
 {
-  fold_T *fp;
-  linenr_T lnum_rel = lnum;
-  int level = 0;
-
-  // Recursively search for a fold that contains "lnum".
-  garray_T *gap = &wp->w_folds;
-  while (true) {
-    if (!foldFind(gap, lnum_rel, &fp)) {
-      break;
-    }
-    // Check nested folds.  Line number is relative to containing fold.
-    gap = &fp->fd_nested;
-    lnum_rel -= fp->fd_top;
-    level++;
-  }
-
-  return level;
+  return rs_foldLevelWin(wp, lnum);
 }
 
 // checkupdate() {{{2
@@ -3387,4 +3366,14 @@ int nvim_win_get_p_fml(win_T *wp)
 int nvim_plines_win_nofold(win_T *wp, linenr_T lnum)
 {
   return plines_win_nofold(wp, lnum);
+}
+
+// ============================================================================
+// Phase 1: Foundation function accessors
+// ============================================================================
+
+/// Initialize the folds garray for a window (called from Rust).
+void nvim_ga_init_folds(garray_T *gap)
+{
+  ga_init(gap, (int)sizeof(fold_T), 10);
 }
