@@ -2652,3 +2652,97 @@ size_t nvim_marktree_get_n_keys(MarkTree *b)
 {
   return b->n_keys;
 }
+
+/// Get the root level of a marktree.
+int nvim_marktree_get_root_level(MarkTree *b)
+{
+  return b->root ? b->root->level : 0;
+}
+
+/// Get the parent of a node.
+MTNode *nvim_mtnode_get_parent(MTNode *x)
+{
+  return x->parent;
+}
+
+/// Get the parent index of a node.
+int nvim_mtnode_get_p_idx(MTNode *x)
+{
+  return x->p_idx;
+}
+
+// ============================================================================
+// Iterator Accessor Functions
+// ============================================================================
+
+/// Get the current node from an iterator.
+MTNode *nvim_mtitr_get_x(MarkTreeIter *itr)
+{
+  return itr->x;
+}
+
+/// Get the current index from an iterator.
+int nvim_mtitr_get_i(MarkTreeIter *itr)
+{
+  return itr->i;
+}
+
+/// Get the current level from an iterator.
+int nvim_mtitr_get_lvl(MarkTreeIter *itr)
+{
+  return itr->lvl;
+}
+
+/// Get the current position from an iterator.
+MTPos nvim_mtitr_get_pos(MarkTreeIter *itr)
+{
+  return itr->pos;
+}
+
+/// Set the current node in an iterator.
+void nvim_mtitr_set_x(MarkTreeIter *itr, MTNode *x)
+{
+  itr->x = x;
+}
+
+/// Set the current index in an iterator.
+void nvim_mtitr_set_i(MarkTreeIter *itr, int i)
+{
+  itr->i = i;
+}
+
+/// Set the current level in an iterator.
+void nvim_mtitr_set_lvl(MarkTreeIter *itr, int lvl)
+{
+  itr->lvl = lvl;
+}
+
+/// Set the current position in an iterator.
+void nvim_mtitr_set_pos(MarkTreeIter *itr, MTPos pos)
+{
+  itr->pos = pos;
+}
+
+/// Get stored index at level from an iterator.
+int nvim_mtitr_get_s_i(MarkTreeIter *itr, int lvl)
+{
+  return itr->s[lvl].i;
+}
+
+/// Get stored oldcol at level from an iterator.
+int nvim_mtitr_get_s_oldcol(MarkTreeIter *itr, int lvl)
+{
+  return itr->s[lvl].oldcol;
+}
+
+/// Set stored index at level in an iterator.
+void nvim_mtitr_set_s_i(MarkTreeIter *itr, int lvl, int i)
+{
+  itr->s[lvl].i = i;
+}
+
+/// Set stored oldcol at level in an iterator.
+void nvim_mtitr_set_s_oldcol(MarkTreeIter *itr, int lvl, int oldcol)
+{
+  itr->s[lvl].oldcol = oldcol;
+}

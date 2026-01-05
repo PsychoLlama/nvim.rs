@@ -200,11 +200,29 @@ impl MTNodeHandle {
     }
 }
 
+/// Opaque handle to a MarkTreeIter (`MarkTreeIter*`).
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MarkTreeIterHandle(*mut std::ffi::c_void);
+
+impl MarkTreeIterHandle {
+    /// Check if the handle is null.
+    #[inline]
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
 // ============================================================================
 // C Accessor Functions
 // ============================================================================
 
 extern "C" {
+    // ========================================================================
+    // Node accessors
+    // ========================================================================
+
     /// Get the number of keys in a node.
     fn nvim_mtnode_get_n(x: MTNodeHandle) -> c_int;
 
@@ -217,11 +235,66 @@ extern "C" {
     /// Get a child pointer from a node by index.
     fn nvim_mtnode_get_ptr(x: MTNodeHandle, idx: c_int) -> MTNodeHandle;
 
+    /// Get the parent of a node.
+    fn nvim_mtnode_get_parent(x: MTNodeHandle) -> MTNodeHandle;
+
+    /// Get the parent index of a node.
+    #[allow(dead_code)]
+    fn nvim_mtnode_get_p_idx(x: MTNodeHandle) -> c_int;
+
+    // ========================================================================
+    // Tree accessors
+    // ========================================================================
+
     /// Get the root node of a marktree.
     fn nvim_marktree_get_root(b: MarkTreeHandle) -> MTNodeHandle;
 
     /// Get the total number of keys in a marktree.
     fn nvim_marktree_get_n_keys(b: MarkTreeHandle) -> usize;
+
+    /// Get the root level of a marktree.
+    #[allow(dead_code)]
+    fn nvim_marktree_get_root_level(b: MarkTreeHandle) -> c_int;
+
+    // ========================================================================
+    // Iterator accessors
+    // ========================================================================
+
+    /// Get the current node from an iterator.
+    fn nvim_mtitr_get_x(itr: MarkTreeIterHandle) -> MTNodeHandle;
+
+    /// Get the current index from an iterator.
+    fn nvim_mtitr_get_i(itr: MarkTreeIterHandle) -> c_int;
+
+    /// Get the current level from an iterator.
+    fn nvim_mtitr_get_lvl(itr: MarkTreeIterHandle) -> c_int;
+
+    /// Get the current position from an iterator.
+    fn nvim_mtitr_get_pos(itr: MarkTreeIterHandle) -> MTPos;
+
+    /// Set the current node in an iterator.
+    fn nvim_mtitr_set_x(itr: MarkTreeIterHandle, x: MTNodeHandle);
+
+    /// Set the current index in an iterator.
+    fn nvim_mtitr_set_i(itr: MarkTreeIterHandle, i: c_int);
+
+    /// Set the current level in an iterator.
+    fn nvim_mtitr_set_lvl(itr: MarkTreeIterHandle, lvl: c_int);
+
+    /// Set the current position in an iterator.
+    fn nvim_mtitr_set_pos(itr: MarkTreeIterHandle, pos: MTPos);
+
+    /// Get stored index at level from an iterator.
+    fn nvim_mtitr_get_s_i(itr: MarkTreeIterHandle, lvl: c_int) -> c_int;
+
+    /// Get stored oldcol at level from an iterator.
+    fn nvim_mtitr_get_s_oldcol(itr: MarkTreeIterHandle, lvl: c_int) -> c_int;
+
+    /// Set stored index at level in an iterator.
+    fn nvim_mtitr_set_s_i(itr: MarkTreeIterHandle, lvl: c_int, i: c_int);
+
+    /// Set stored oldcol at level in an iterator.
+    fn nvim_mtitr_set_s_oldcol(itr: MarkTreeIterHandle, lvl: c_int, oldcol: c_int);
 }
 
 // ============================================================================
@@ -703,6 +776,288 @@ pub extern "C" fn rs_marktree_getp_aux(x: MTNodeHandle, k: MTKey, match_out: *mu
         }
     }
     pos
+}
+
+// ============================================================================
+// Iterator Helper Functions
+// ============================================================================
+
+/// Check if an iterator is valid (points to a mark).
+#[inline]
+#[must_use]
+pub fn marktree_itr_valid(itr: MarkTreeIterHandle) -> bool {
+    !unsafe { nvim_mtitr_get_x(itr) }.is_null()
+}
+
+/// Exported FFI version of `marktree_itr_valid`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_itr_valid(itr: MarkTreeIterHandle) -> bool {
+    marktree_itr_valid(itr)
+}
+
+/// Get the raw key at the current iterator position (without position adjustment).
+#[inline]
+#[must_use]
+pub fn rawkey(itr: MarkTreeIterHandle) -> MTKey {
+    let x = unsafe { nvim_mtitr_get_x(itr) };
+    let i = unsafe { nvim_mtitr_get_i(itr) };
+    mtnode_key(x, i)
+}
+
+/// Get the absolute position of the current iterator.
+#[must_use]
+pub fn marktree_itr_pos(itr: MarkTreeIterHandle) -> MTPos {
+    let rkey = rawkey(itr);
+    let base_pos = unsafe { nvim_mtitr_get_pos(itr) };
+    let mut pos = rkey.pos;
+    unrelative(base_pos, &mut pos);
+    pos
+}
+
+/// Exported FFI version of `marktree_itr_pos`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_itr_pos(itr: MarkTreeIterHandle) -> MTPos {
+    marktree_itr_pos(itr)
+}
+
+/// Get the current mark from an iterator, with absolute position.
+#[must_use]
+pub fn marktree_itr_current(itr: MarkTreeIterHandle) -> MTKey {
+    if !marktree_itr_valid(itr) {
+        return MTKey::invalid();
+    }
+    let mut key = rawkey(itr);
+    key.pos = marktree_itr_pos(itr);
+    key
+}
+
+/// Exported FFI version of `marktree_itr_current`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_itr_current(itr: MarkTreeIterHandle) -> MTKey {
+    marktree_itr_current(itr)
+}
+
+/// Check if we're at the last key of the current node.
+#[must_use]
+pub fn marktree_itr_node_done(itr: MarkTreeIterHandle) -> bool {
+    if !marktree_itr_valid(itr) {
+        return true;
+    }
+    let x = unsafe { nvim_mtitr_get_x(itr) };
+    let i = unsafe { nvim_mtitr_get_i(itr) };
+    let n = mtnode_n(x);
+    i == n - 1
+}
+
+/// Exported FFI version of `marktree_itr_node_done`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_itr_node_done(itr: MarkTreeIterHandle) -> bool {
+    marktree_itr_node_done(itr)
+}
+
+/// Move iterator to next mark.
+///
+/// Returns true if successful, false if we've reached the end.
+#[must_use]
+pub fn marktree_itr_next(_b: MarkTreeHandle, itr: MarkTreeIterHandle) -> bool {
+    let x = unsafe { nvim_mtitr_get_x(itr) };
+    if x.is_null() {
+        return false;
+    }
+
+    let mut i = unsafe { nvim_mtitr_get_i(itr) };
+    i += 1;
+    unsafe { nvim_mtitr_set_i(itr, i) };
+
+    let level = mtnode_level(x);
+    let n = mtnode_n(x);
+
+    if level == 0 {
+        // At leaf node
+        if i < n {
+            return true;
+        }
+        // Go up until we find an internal key
+        let mut current_x = x;
+        let mut current_lvl = unsafe { nvim_mtitr_get_lvl(itr) };
+        let mut current_pos = unsafe { nvim_mtitr_get_pos(itr) };
+
+        while i >= mtnode_n(current_x) {
+            let parent = unsafe { nvim_mtnode_get_parent(current_x) };
+            if parent.is_null() {
+                unsafe { nvim_mtitr_set_x(itr, MTNodeHandle::null()) };
+                return false;
+            }
+            current_lvl -= 1;
+            i = unsafe { nvim_mtitr_get_s_i(itr, current_lvl) };
+            if i > 0 {
+                let parent_key = mtnode_key(parent, i - 1);
+                current_pos.row -= parent_key.pos.row;
+                current_pos.col = unsafe { nvim_mtitr_get_s_oldcol(itr, current_lvl) };
+            }
+            current_x = parent;
+        }
+        unsafe {
+            nvim_mtitr_set_x(itr, current_x);
+            nvim_mtitr_set_i(itr, i);
+            nvim_mtitr_set_lvl(itr, current_lvl);
+            nvim_mtitr_set_pos(itr, current_pos);
+        }
+    } else {
+        // At internal node - go down to first key
+        let mut current_x = x;
+        let mut current_i = i;
+        let mut current_lvl = unsafe { nvim_mtitr_get_lvl(itr) };
+        let mut current_pos = unsafe { nvim_mtitr_get_pos(itr) };
+
+        while mtnode_level(current_x) > 0 {
+            if current_i > 0 {
+                let oldcol = current_pos.col;
+                unsafe { nvim_mtitr_set_s_oldcol(itr, current_lvl, oldcol) };
+                let key = mtnode_key(current_x, current_i - 1);
+                compose(&mut current_pos, key.pos);
+            }
+            unsafe { nvim_mtitr_set_s_i(itr, current_lvl, current_i) };
+            current_lvl += 1;
+            current_x = mtnode_ptr(current_x, current_i);
+            current_i = 0;
+        }
+        unsafe {
+            nvim_mtitr_set_x(itr, current_x);
+            nvim_mtitr_set_i(itr, current_i);
+            nvim_mtitr_set_lvl(itr, current_lvl);
+            nvim_mtitr_set_pos(itr, current_pos);
+        }
+    }
+    true
+}
+
+/// Exported FFI version of `marktree_itr_next`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_itr_next(b: MarkTreeHandle, itr: MarkTreeIterHandle) -> bool {
+    marktree_itr_next(b, itr)
+}
+
+/// Move iterator to previous mark.
+///
+/// Returns true if successful, false if we've reached the beginning.
+#[must_use]
+pub fn marktree_itr_prev(_b: MarkTreeHandle, itr: MarkTreeIterHandle) -> bool {
+    let x = unsafe { nvim_mtitr_get_x(itr) };
+    if x.is_null() {
+        return false;
+    }
+
+    let level = mtnode_level(x);
+    let i = unsafe { nvim_mtitr_get_i(itr) };
+
+    if level == 0 {
+        // At leaf node
+        let new_i = i - 1;
+        unsafe { nvim_mtitr_set_i(itr, new_i) };
+        if new_i >= 0 {
+            return true;
+        }
+        // Go up until we find a non-internal key
+        let mut current_x = x;
+        let mut current_i = new_i;
+        let mut current_lvl = unsafe { nvim_mtitr_get_lvl(itr) };
+        let mut current_pos = unsafe { nvim_mtitr_get_pos(itr) };
+
+        while current_i < 0 {
+            let parent = unsafe { nvim_mtnode_get_parent(current_x) };
+            if parent.is_null() {
+                unsafe { nvim_mtitr_set_x(itr, MTNodeHandle::null()) };
+                return false;
+            }
+            current_lvl -= 1;
+            current_i = unsafe { nvim_mtitr_get_s_i(itr, current_lvl) } - 1;
+            if current_i >= 0 {
+                let parent_key = mtnode_key(parent, current_i);
+                current_pos.row -= parent_key.pos.row;
+                current_pos.col = unsafe { nvim_mtitr_get_s_oldcol(itr, current_lvl) };
+            }
+            current_x = parent;
+        }
+        unsafe {
+            nvim_mtitr_set_x(itr, current_x);
+            nvim_mtitr_set_i(itr, current_i);
+            nvim_mtitr_set_lvl(itr, current_lvl);
+            nvim_mtitr_set_pos(itr, current_pos);
+        }
+    } else {
+        // At internal node - go down to last key
+        let mut current_x = x;
+        let mut current_i = i;
+        let mut current_lvl = unsafe { nvim_mtitr_get_lvl(itr) };
+        let mut current_pos = unsafe { nvim_mtitr_get_pos(itr) };
+
+        while mtnode_level(current_x) > 0 {
+            if current_i > 0 {
+                let oldcol = current_pos.col;
+                unsafe { nvim_mtitr_set_s_oldcol(itr, current_lvl, oldcol) };
+                let key = mtnode_key(current_x, current_i - 1);
+                compose(&mut current_pos, key.pos);
+            }
+            unsafe { nvim_mtitr_set_s_i(itr, current_lvl, current_i) };
+            current_x = mtnode_ptr(current_x, current_i);
+            current_i = mtnode_n(current_x);
+            current_lvl += 1;
+        }
+        current_i -= 1;
+        unsafe {
+            nvim_mtitr_set_x(itr, current_x);
+            nvim_mtitr_set_i(itr, current_i);
+            nvim_mtitr_set_lvl(itr, current_lvl);
+            nvim_mtitr_set_pos(itr, current_pos);
+        }
+    }
+    true
+}
+
+/// Exported FFI version of `marktree_itr_prev`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_itr_prev(b: MarkTreeHandle, itr: MarkTreeIterHandle) -> bool {
+    marktree_itr_prev(b, itr)
+}
+
+/// Initialize iterator to the first mark in the tree.
+///
+/// Returns true if successful, false if tree is empty.
+#[must_use]
+pub fn marktree_itr_first(b: MarkTreeHandle, itr: MarkTreeIterHandle) -> bool {
+    if marktree_n_keys(b) == 0 {
+        unsafe { nvim_mtitr_set_x(itr, MTNodeHandle::null()) };
+        return false;
+    }
+
+    let mut x = marktree_root(b);
+    unsafe {
+        nvim_mtitr_set_i(itr, 0);
+        nvim_mtitr_set_lvl(itr, 0);
+        nvim_mtitr_set_pos(itr, MTPos::new(0, 0));
+    }
+
+    let mut lvl = 0;
+    while mtnode_level(x) > 0 {
+        unsafe {
+            nvim_mtitr_set_s_i(itr, lvl, 0);
+            nvim_mtitr_set_s_oldcol(itr, lvl, 0);
+        }
+        lvl += 1;
+        x = mtnode_ptr(x, 0);
+    }
+    unsafe {
+        nvim_mtitr_set_x(itr, x);
+        nvim_mtitr_set_lvl(itr, lvl);
+    }
+    true
+}
+
+/// Exported FFI version of `marktree_itr_first`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_itr_first(b: MarkTreeHandle, itr: MarkTreeIterHandle) -> bool {
+    marktree_itr_first(b, itr)
 }
 
 // ============================================================================
