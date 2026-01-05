@@ -105,6 +105,15 @@ extern "C" {
     fn ResetRedobuff();
     fn AppendCharToRedobuff(c: c_int);
     fn AppendNumberToRedobuff(n: c_int);
+
+    // cmdarg_T accessors
+    fn nvim_cap_get_oap(cap: CapHandle) -> OapHandle;
+    fn nvim_cap_or_retval(cap: CapHandle, val: c_int);
+
+    // C functions for command handlers
+    fn ex_help(eap: *mut std::ffi::c_void);
+    fn do_cmdline_cmd(cmd: *const std::ffi::c_char);
+    fn end_visual_mode();
 }
 
 // Operator type constants (must match ops.h)
@@ -113,11 +122,17 @@ const OP_NOP: c_int = 0;
 // NUL constant for motion_force
 const NUL_CHAR: c_int = 0;
 
+// Command retval constants (from normal_defs.h)
+const CA_COMMAND_BUSY: c_int = 1;
+
 /// Opaque handle to a window (win_T*).
 pub type WinHandle = *mut std::ffi::c_void;
 
 /// Opaque handle to operator arguments (oparg_T*).
 pub type OapHandle = *mut std::ffi::c_void;
+
+/// Opaque handle to command arguments (cmdarg_T*).
+pub type CapHandle = *mut std::ffi::c_void;
 
 // =============================================================================
 // Invert Horizontal Commands (for RTL mode)
@@ -549,6 +564,74 @@ pub unsafe extern "C" fn rs_prep_redo_num2(
     if cmd5 != NUL_CHAR {
         AppendCharToRedobuff(cmd5);
     }
+}
+
+// =============================================================================
+// Command Handlers (Tier 1 - Simple handlers)
+// =============================================================================
+
+/// Command handler that ignores input but keeps command busy.
+///
+/// Sets CA_COMMAND_BUSY flag to skip restarting edit() once.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_ignore(cap: CapHandle) {
+    nvim_cap_or_retval(cap, CA_COMMAND_BUSY);
+}
+
+/// Command handler that does nothing.
+///
+/// Unlike nv_ignore, this does start edit().
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer (unused).
+#[no_mangle]
+pub extern "C" fn rs_nv_nop(_cap: CapHandle) {
+    // Empty - does nothing but unlike nv_ignore does start edit()
+}
+
+/// Command handler for non-existent commands.
+///
+/// Clears any pending operator and beeps.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_error(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    rs_clearopbeep(oap);
+}
+
+/// Command handler for <Help> and <F1> commands.
+///
+/// Shows help if no operator is pending.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_help(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    if !rs_checkclearopq(oap) {
+        ex_help(std::ptr::null_mut());
+    }
+}
+
+/// Command handler for CTRL-Z (suspend).
+///
+/// Clears operator, ends visual mode if active, and executes ":st".
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_suspend(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    rs_clearop(oap);
+    if nvim_get_VIsual_active() != 0 {
+        end_visual_mode();
+    }
+    do_cmdline_cmd(c"st".as_ptr());
 }
 
 // =============================================================================

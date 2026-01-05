@@ -387,6 +387,11 @@ extern bool rs_check_text_locked(oparg_T *oap);
 extern bool rs_check_text_or_curbuf_locked(oparg_T *oap);
 extern void rs_prep_redo(int regname, int num, int cmd1, int cmd2, int cmd3, int cmd4, int cmd5);
 extern void rs_prep_redo_num2(int regname, int num1, int cmd1, int cmd2, int num2, int cmd3, int cmd4, int cmd5);
+extern void rs_nv_ignore(cmdarg_T *cap);
+extern void rs_nv_nop(cmdarg_T *cap);
+extern void rs_nv_error(cmdarg_T *cap);
+extern void rs_nv_help(cmdarg_T *cap);
+extern void rs_nv_suspend(cmdarg_T *cap);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -571,6 +576,38 @@ void nvim_oap_set_use_reg_one(oparg_T *oap, bool val)
 void nvim_set_motion_force(int val)
 {
   motion_force = val;
+}
+
+// =============================================================================
+// cmdarg_T accessors for Rust FFI
+// =============================================================================
+
+/// Get cap->oap.
+oparg_T *nvim_cap_get_oap(cmdarg_T *cap)
+{
+  return cap ? cap->oap : NULL;
+}
+
+/// Get cap->retval.
+int nvim_cap_get_retval(cmdarg_T *cap)
+{
+  return cap ? cap->retval : 0;
+}
+
+/// Set cap->retval.
+void nvim_cap_set_retval(cmdarg_T *cap, int val)
+{
+  if (cap) {
+    cap->retval = val;
+  }
+}
+
+/// OR val into cap->retval.
+void nvim_cap_or_retval(cmdarg_T *cap, int val)
+{
+  if (cap) {
+    cap->retval |= val;
+  }
 }
 
 /// Check if an operator was started but not finished yet.
@@ -2227,27 +2264,26 @@ void check_scrollbind(linenr_T vtopline_diff, int leftcol_diff)
 /// xon/xoff.
 static void nv_ignore(cmdarg_T *cap)
 {
-  cap->retval |= CA_COMMAND_BUSY;       // don't call edit() now
+  rs_nv_ignore(cap);
 }
 
 /// Command character that doesn't do anything, but unlike nv_ignore() does
 /// start edit().  Used for "startinsert" executed while starting up.
 static void nv_nop(cmdarg_T *cap)
 {
+  rs_nv_nop(cap);
 }
 
 /// Command character doesn't exist.
 static void nv_error(cmdarg_T *cap)
 {
-  clearopbeep(cap->oap);
+  rs_nv_error(cap);
 }
 
 /// <Help> and <F1> commands.
 static void nv_help(cmdarg_T *cap)
 {
-  if (!checkclearopq(cap->oap)) {
-    ex_help(NULL);
-  }
+  rs_nv_help(cap);
 }
 
 /// CTRL-A and CTRL-X: Add or subtract from letter or number under cursor.
@@ -5105,11 +5141,7 @@ static void nv_window(cmdarg_T *cap)
 /// CTRL-Z: Suspend
 static void nv_suspend(cmdarg_T *cap)
 {
-  clearop(cap->oap);
-  if (VIsual_active) {
-    end_visual_mode();                  // stop Visual mode
-  }
-  do_cmdline_cmd("st");
+  rs_nv_suspend(cap);
 }
 
 /// "gv": Reselect the previous Visual area.  If Visual already active,
