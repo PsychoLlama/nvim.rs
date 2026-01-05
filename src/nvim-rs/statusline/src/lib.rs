@@ -924,6 +924,214 @@ pub unsafe extern "C" fn rs_stl_render_percentage(
     stl_render_percentage_impl(slice, wp)
 }
 
+// =============================================================================
+// FFI Exports for Format Parsing
+// =============================================================================
+
+/// FFI export: Check if a format flag character is numeric.
+///
+/// Returns 1 if the flag produces a numeric value, 0 otherwise.
+#[no_mangle]
+pub extern "C" fn rs_stl_flag_is_numeric(flag_char: u8) -> c_int {
+    c_int::from(StlFlag::from_byte(flag_char).is_some_and(|f| f.is_numeric()))
+}
+
+/// FFI export: Check if a format flag character is a conditional flag.
+///
+/// Returns 1 if the flag is conditional (empty when condition not met), 0 otherwise.
+#[no_mangle]
+pub extern "C" fn rs_stl_flag_is_flag_item(flag_char: u8) -> c_int {
+    c_int::from(StlFlag::from_byte(flag_char).is_some_and(|f| f.is_flag_item()))
+}
+
+/// FFI export: Check if a format flag character allows fill character replacement.
+///
+/// Returns 1 if spaces can be replaced with fillchar, 0 otherwise.
+#[no_mangle]
+pub extern "C" fn rs_stl_flag_is_fillable(flag_char: u8) -> c_int {
+    c_int::from(StlFlag::from_byte(flag_char).is_some_and(|f| f.is_fillable()))
+}
+
+// =============================================================================
+// FFI Exports for Click Region Handling
+// =============================================================================
+
+/// FFI export: Determine click type from minwid value.
+///
+/// - `minwid > 0`: TabSwitch to tab number `minwid`
+/// - `minwid < 0`: TabClose tab number `-minwid`
+/// - `minwid == 0`: Disabled
+///
+/// Returns click type and sets `*tabnr` to the tab number.
+///
+/// # Safety
+/// `tabnr` must be null or a valid pointer to c_int.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_click_type_from_minwid(minwid: c_int, tabnr: *mut c_int) -> c_int {
+    let (click_type, tab) = click::click_type_from_minwid(minwid);
+    if !tabnr.is_null() {
+        *tabnr = tab;
+    }
+    click_type as c_int
+}
+
+/// FFI export: Check if a click type is valid for non-tabline use.
+///
+/// Window bar and status line only support click functions and disabled.
+/// Tab switch/close are tabline-only.
+#[no_mangle]
+pub const extern "C" fn rs_stl_click_valid_for_statusline(click_type: c_int) -> c_int {
+    let ct = match click_type {
+        0 => click::ClickType::Disabled,
+        1 => click::ClickType::TabSwitch,
+        2 => click::ClickType::TabClose,
+        3 => click::ClickType::FuncRun,
+        _ => return 0,
+    };
+    click::is_valid_for_statusline(ct) as c_int
+}
+
+// =============================================================================
+// FFI Exports for Status Column Rendering
+// =============================================================================
+
+/// FFI export: Determine line number mode from number/relativenumber options.
+///
+/// Returns:
+/// - 0: None (no line numbers)
+/// - 1: Absolute
+/// - 2: Relative
+/// - 3: Hybrid
+#[no_mangle]
+pub const extern "C" fn rs_stl_line_number_mode(number: c_int, relativenumber: c_int) -> c_int {
+    statuscol::LineNumberMode::from_options(number != 0, relativenumber != 0) as c_int
+}
+
+/// FFI export: Calculate required width for line numbers.
+///
+/// Returns the number of digits needed to display line numbers,
+/// with a minimum of 2 (matching Vim default).
+#[no_mangle]
+pub extern "C" fn rs_stl_calc_number_width(line_count: c_int) -> c_int {
+    statuscol::calc_number_width(line_count)
+}
+
+/// FFI export: Render fold column to buffer.
+///
+/// Returns the number of bytes written.
+///
+/// # Safety
+/// `buf` must be null or a valid pointer to a buffer of at least `buflen` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_render_fold_column(
+    buf: *mut u8,
+    buflen: usize,
+    fold_level: c_int,
+    is_folded: c_int,
+    max_level: c_int,
+    width: c_int,
+) -> c_int {
+    if buf.is_null() || buflen == 0 {
+        return 0;
+    }
+    let result = statuscol::render_fold_column(fold_level, is_folded != 0, max_level, width);
+    let bytes = result.as_bytes();
+    let len = bytes.len().min(buflen);
+    std::ptr::copy_nonoverlapping(bytes.as_ptr(), buf, len);
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    (len as c_int)
+}
+
+/// FFI export: Render sign column to buffer.
+///
+/// Returns the number of bytes written.
+///
+/// # Safety
+/// `buf` must be null or a valid pointer to a buffer of at least `buflen` bytes.
+/// `sign_text` must be null or a valid C string pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_render_sign_column(
+    buf: *mut u8,
+    buflen: usize,
+    sign_text: *const c_char,
+    width: c_int,
+) -> c_int {
+    if buf.is_null() || buflen == 0 {
+        return 0;
+    }
+    let sign = if sign_text.is_null() {
+        None
+    } else {
+        CStr::from_ptr(sign_text).to_str().ok()
+    };
+    let result = statuscol::render_sign_column(sign, width);
+    let bytes = result.as_bytes();
+    let len = bytes.len().min(buflen);
+    std::ptr::copy_nonoverlapping(bytes.as_ptr(), buf, len);
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    (len as c_int)
+}
+
+// =============================================================================
+// FFI Exports for Highlight Tracking
+// =============================================================================
+
+/// FFI export: Parse a highlight name and return user highlight number.
+///
+/// For "%1*" through "%9*", returns 1-9.
+/// For "%0*" or "%*", returns 0 (reset to default).
+/// For named highlights like "%#GroupName#", returns -1 (caller must look up).
+///
+/// Returns -2 on parse error.
+#[no_mangle]
+pub extern "C" fn rs_stl_parse_user_highlight(hl_char: u8) -> c_int {
+    if hl_char == b'*' || hl_char == b'0' {
+        0
+    } else if hl_char.is_ascii_digit() {
+        c_int::from(hl_char - b'0')
+    } else {
+        -2 // Invalid
+    }
+}
+
+// =============================================================================
+// FFI Exports for Tabline
+// =============================================================================
+
+/// FFI export: Calculate tab width for tabline.
+///
+/// Shortens tab labels to fit within max_width.
+/// Returns number of bytes written to buf.
+///
+/// # Safety
+/// `buf` must be null or a valid pointer to a buffer of at least `buflen` bytes.
+/// `path` must be null or a valid C string pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_shorten_tab_label(
+    buf: *mut u8,
+    buflen: usize,
+    path: *const c_char,
+    max_width: usize,
+) -> c_int {
+    if buf.is_null() || buflen == 0 {
+        return 0;
+    }
+    let path_str = if path.is_null() {
+        ""
+    } else {
+        match CStr::from_ptr(path).to_str() {
+            Ok(s) => s,
+            Err(_) => return 0,
+        }
+    };
+    let result = tabline::shorten_tab_label(path_str, max_width);
+    let bytes = result.as_bytes();
+    let len = bytes.len().min(buflen);
+    std::ptr::copy_nonoverlapping(bytes.as_ptr(), buf, len);
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    (len as c_int)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
