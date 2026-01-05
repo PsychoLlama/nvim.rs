@@ -395,6 +395,8 @@ extern void rs_nv_suspend(cmdarg_T *cap);
 extern void rs_nv_page(cmdarg_T *cap);
 extern void rs_nv_halfpage(cmdarg_T *cap);
 extern void rs_nv_ctrlg(cmdarg_T *cap);
+extern void rs_nv_scroll_line(cmdarg_T *cap);
+extern void rs_nv_kundo(cmdarg_T *cap);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -627,6 +629,24 @@ void nvim_showmode(void)
 void nvim_fileinfo(int fullname, bool shorthelp, bool dont_truncate)
 {
   fileinfo(fullname, shorthelp, dont_truncate);
+}
+
+/// Wrapper for scroll_redraw.
+void nvim_scroll_redraw(bool down, int count)
+{
+  scroll_redraw(down, count);
+}
+
+/// Wrapper for u_undo.
+void nvim_u_undo(int count)
+{
+  u_undo(count);
+}
+
+/// Set curwin->w_set_curswant.
+void nvim_curwin_set_curswant(bool val)
+{
+  curwin->w_set_curswant = val;
 }
 
 // =============================================================================
@@ -2786,9 +2806,7 @@ bool nv_screengo(oparg_T *oap, int dir, int dist, bool skip_conceal)
 /// cap->arg must be true for CTRL-E.
 void nv_scroll_line(cmdarg_T *cap)
 {
-  if (!checkclearop(cap->oap)) {
-    scroll_redraw(cap->arg, cap->count1);
-  }
+  rs_nv_scroll_line(cap);
 }
 
 /// Get the count specified after a 'z' command. Only the 'z<CR>', 'zl', 'zh',
@@ -4596,12 +4614,7 @@ static void nv_undo(cmdarg_T *cap)
 /// <Undo> command.
 static void nv_kundo(cmdarg_T *cap)
 {
-  if (checkclearopq(cap->oap)) {
-    return;
-  }
-
-  u_undo(cap->count1);
-  curwin->w_set_curswant = true;
+  rs_nv_kundo(cap);
 }
 
 /// Handle the "r" command.

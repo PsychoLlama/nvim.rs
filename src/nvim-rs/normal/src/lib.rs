@@ -115,6 +115,9 @@ extern "C" {
     fn nvim_may_trigger_modechanged();
     fn nvim_showmode();
     fn nvim_fileinfo(fullname: c_int, shorthelp: bool, dont_truncate: bool);
+    fn nvim_scroll_redraw(down: bool, count: c_int);
+    fn nvim_u_undo(count: c_int);
+    fn nvim_curwin_set_curswant(val: bool);
 
     // cmdarg_T accessors
     fn nvim_cap_get_oap(cap: CapHandle) -> OapHandle;
@@ -753,6 +756,38 @@ pub unsafe extern "C" fn rs_nv_ctrlg(cap: CapHandle) {
             nvim_fileinfo(count0, false, true);
         }
     }
+}
+
+/// Command handler for CTRL-E and CTRL-Y: scroll a line up or down.
+///
+/// cap->arg must be true (non-zero) for CTRL-E.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_scroll_line(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    if !rs_checkclearop(oap) {
+        let arg = nvim_cap_get_arg(cap);
+        let count1 = nvim_cap_get_count1(cap);
+        nvim_scroll_redraw(arg != 0, count1);
+    }
+}
+
+/// Command handler for <Undo> command.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_kundo(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    if rs_checkclearopq(oap) {
+        return;
+    }
+
+    let count1 = nvim_cap_get_count1(cap);
+    nvim_u_undo(count1);
+    nvim_curwin_set_curswant(true);
 }
 
 // =============================================================================
