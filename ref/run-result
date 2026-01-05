@@ -1,0 +1,29 @@
+Plan: ~/.claude/plans/jolly-painting-rossum.md
+
+All phases of the plan have been completed. Here's the summary:
+
+## Plan Execution Complete
+
+### Commits Made
+
+1. **`ca1e842431`** - Window layout migration: `win_vert_neighbor` and `win_horz_neighbor` functions migrated from C to Rust
+2. **`fdba1cf18e`** - Terminal crate created with accessor-based foundation
+
+### Summary by Phase
+
+| Phase | Status | Work Done |
+|-------|--------|-----------|
+| 1. Window Layout | Completed | Migrated `win_vert_neighbor` and `win_horz_neighbor` to Rust, added C accessor functions |
+| 2. MessagePack RPC | Reviewed | Already ~70% in Rust (736+ lines in msgpack, 811+ in unpacker) |
+| 3. Diff Module | Reviewed | Flag checkers already in Rust |
+| 4. Terminal Emulator | Completed | Created new `nvim-terminal` crate with accessor-based functions for cursor state, mouse forwarding, theme updates |
+| 5. Undo/Redo | Reviewed | Already has substantial Rust implementation |
+| 6. Regular Expression | Reviewed | Already has substantial Rust implementation |
+
+### Files Created/Modified
+
+- **New crate**: `src/nvim-rs/terminal/` with `Cargo.toml` and `src/lib.rs`
+- **Window navigation**: Added Rust implementations in `src/nvim-rs/window/src/lib.rs`
+- **C accessors**: Added to `src/nvim/window.c` and `src/nvim/terminal.c`
+- **Workspace**: Updated `Cargo.toml` and `src/nvim-rs/Cargo.toml`
+- **Documentation**: Updated `ref/crates.md`
