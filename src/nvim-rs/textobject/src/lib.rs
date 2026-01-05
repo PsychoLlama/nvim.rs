@@ -615,6 +615,285 @@ pub unsafe extern "C" fn rs_find_prev_quote(
 }
 
 // =============================================================================
+// Current Word Text Object
+// =============================================================================
+
+/// Motion type: character-wise
+const MT_CHAR_WISE: c_int = 0;
+
+/// Update type for redraw
+const UPD_INVERTED: c_int = 40;
+
+extern "C" {
+    /// Get VIsual_active state.
+    fn nvim_textobj_get_VIsual_active() -> bool;
+
+    /// Get VIsual_mode.
+    fn nvim_textobj_get_VIsual_mode() -> c_int;
+
+    /// Set VIsual_mode.
+    fn nvim_textobj_set_VIsual_mode(mode: c_int);
+
+    /// Set VIsual position.
+    fn nvim_textobj_set_VIsual(lnum: c_int, col: c_int);
+
+    /// Get selection option first char.
+    fn nvim_textobj_get_p_sel_first() -> c_int;
+
+    /// Check if cursor is less than VIsual.
+    fn nvim_textobj_lt_cursor_VIsual() -> bool;
+
+    /// Check if cursor equals VIsual.
+    fn nvim_textobj_equalpos_cursor_VIsual() -> bool;
+
+    /// Check if VIsual is less than cursor.
+    fn nvim_textobj_lt_VIsual_cursor() -> bool;
+
+    /// Check if VIsual is less than or equal to cursor.
+    fn nvim_textobj_ltoreq_VIsual_cursor() -> bool;
+
+    /// Set operator argument motion type.
+    fn nvim_textobj_set_oap_motion_type(oap: OapHandle, motion_type: c_int);
+
+    /// Set operator argument inclusive flag.
+    fn nvim_textobj_set_oap_inclusive(oap: OapHandle, val: bool);
+
+    /// Call oneleft().
+    fn nvim_textobj_oneleft() -> c_int;
+
+    /// Call incl on cursor.
+    fn nvim_textobj_incl_cursor() -> c_int;
+
+    /// Call decl on cursor.
+    fn nvim_textobj_decl_cursor() -> c_int;
+
+    /// Call redraw_curbuf_later.
+    fn nvim_textobj_redraw_curbuf_later(update_type: c_int);
+
+    /// Set redraw_cmdline flag.
+    fn nvim_textobj_set_redraw_cmdline(val: bool);
+
+    /// Get cursor position as lnum/col pair.
+    fn nvim_textobj_get_cursor_pos(lnum: *mut c_int, col: *mut c_int);
+
+    /// Set cursor position from lnum/col pair.
+    fn nvim_textobj_set_cursor_pos(lnum: c_int, col: c_int);
+
+    /// Set VIsual from cursor.
+    fn nvim_textobj_set_VIsual_from_cursor();
+
+    /// Set oap->start from stored position.
+    fn nvim_textobj_set_oap_start(oap: OapHandle, lnum: c_int, col: c_int);
+}
+
+/// Find the current word under the cursor.
+///
+/// Handles iw, aw, iW, aW text objects.
+///
+/// # Safety
+/// - `oap` must be a valid pointer to an oparg_T structure.
+#[no_mangle]
+pub unsafe extern "C" fn rs_current_word(
+    oap: OapHandle,
+    count: c_int,
+    include: bool,
+    bigword: bool,
+) -> c_int {
+    current_word_impl(oap, count, include, bigword)
+}
+
+/// Position stored as lnum/col pair for use across accessor calls.
+#[derive(Clone, Copy, Default)]
+struct SimplePos {
+    lnum: c_int,
+    col: c_int,
+}
+
+/// State for current_word operation.
+struct CurrentWordState {
+    start_pos: SimplePos,
+    inclusive: bool,
+    include_white: bool,
+}
+
+/// Extend word selection backward in Visual mode.
+///
+/// # Safety
+/// Calls C accessor functions which must be valid.
+unsafe fn extend_word_backward(include: bool, bigword: bool) -> c_int {
+    // In Visual mode, with cursor at start: move cursor back.
+    if nvim_textobj_decl_cursor() == -1 {
+        return FAIL;
+    }
+    // Note: cls_impl(bigword) != 0 means we're on non-whitespace
+    if include == (cls_impl(bigword) != 0) {
+        if bckend_word_impl(1, bigword, true) == FAIL {
+            return FAIL;
+        }
+        nvim_textobj_incl_cursor();
+    } else if bck_word_impl(1, bigword, true) == FAIL {
+        return FAIL;
+    }
+    OK
+}
+
+/// Extend word selection forward.
+///
+/// Returns (result, inclusive) where result is OK/FAIL.
+///
+/// # Safety
+/// Calls C accessor functions which must be valid.
+unsafe fn extend_word_forward(include: bool, bigword: bool, count: c_int) -> (c_int, bool) {
+    // Move cursor forward one word and/or white area.
+    if nvim_textobj_incl_cursor() == -1 {
+        return (FAIL, true);
+    }
+    // Note: cls_impl(bigword) == 0 means we're on whitespace
+    if include == (cls_impl(bigword) == 0) {
+        if end_word_impl(1, bigword, true, true) == FAIL {
+            return (FAIL, true);
+        }
+        (OK, true)
+    } else {
+        if fwd_word_impl(1, bigword, true) == FAIL && count > 1 {
+            return (FAIL, true);
+        }
+        // If end is just past a new-line, we don't want to include
+        // the first character on the line.
+        // Put cursor on last char of white.
+        let inclusive = nvim_textobj_oneleft() != FAIL;
+        (OK, inclusive)
+    }
+}
+
+/// Implementation of current_word.
+#[allow(clippy::too_many_lines)]
+fn current_word_impl(oap: OapHandle, mut count: c_int, include: bool, bigword: bool) -> c_int {
+    // SAFETY: All accessor functions are provided by C side
+    unsafe {
+        let mut state = CurrentWordState {
+            start_pos: SimplePos::default(),
+            inclusive: true,
+            include_white: false,
+        };
+
+        // Correct cursor when 'selection' is exclusive
+        if nvim_textobj_get_VIsual_active()
+            && nvim_textobj_get_p_sel_first() == i32::from(b'e')
+            && nvim_textobj_lt_VIsual_cursor()
+        {
+            nvim_textobj_dec_cursor();
+        }
+
+        // When Visual mode is not active, or when the VIsual area is only one
+        // character, select the word and/or white space under the cursor.
+        if !nvim_textobj_get_VIsual_active() || nvim_textobj_equalpos_cursor_VIsual() {
+            back_in_line_impl(bigword);
+            nvim_textobj_get_cursor_pos(
+                &raw mut state.start_pos.lnum,
+                &raw mut state.start_pos.col,
+            );
+
+            if (cls_impl(bigword) == 0) == include {
+                if end_word_impl(1, bigword, true, true) == FAIL {
+                    return FAIL;
+                }
+            } else {
+                fwd_word_impl(1, bigword, true);
+                if nvim_textobj_get_cursor_col() == 0 {
+                    nvim_textobj_decl_cursor();
+                } else {
+                    nvim_textobj_oneleft();
+                }
+                if include {
+                    state.include_white = true;
+                }
+            }
+
+            if nvim_textobj_get_VIsual_active() {
+                nvim_textobj_set_VIsual(state.start_pos.lnum, state.start_pos.col);
+                nvim_textobj_redraw_curbuf_later(UPD_INVERTED);
+            } else {
+                nvim_textobj_set_oap_start(oap, state.start_pos.lnum, state.start_pos.col);
+                nvim_textobj_set_oap_motion_type(oap, MT_CHAR_WISE);
+            }
+            count -= 1;
+        }
+
+        // When count is still > 0, extend with more objects.
+        while count > 0 {
+            state.inclusive = true;
+            if nvim_textobj_get_VIsual_active() && nvim_textobj_lt_cursor_VIsual() {
+                if extend_word_backward(include, bigword) == FAIL {
+                    return FAIL;
+                }
+            } else {
+                let (result, inclusive) = extend_word_forward(include, bigword, count);
+                if result == FAIL {
+                    return FAIL;
+                }
+                state.inclusive = inclusive;
+            }
+            count -= 1;
+        }
+
+        current_word_adjust_whitespace(oap, &state, bigword);
+        current_word_finalize(oap, &state);
+    }
+
+    OK
+}
+
+/// Adjust whitespace inclusion for "daw" style operations.
+///
+/// # Safety
+/// Calls C accessor functions which must be valid.
+unsafe fn current_word_adjust_whitespace(oap: OapHandle, state: &CurrentWordState, bigword: bool) {
+    if state.include_white
+        && (cls_impl(bigword) != 0 || (nvim_textobj_get_cursor_col() == 0 && !state.inclusive))
+    {
+        let mut saved_pos = SimplePos::default();
+        nvim_textobj_get_cursor_pos(&raw mut saved_pos.lnum, &raw mut saved_pos.col);
+
+        nvim_textobj_set_cursor_pos(state.start_pos.lnum, state.start_pos.col);
+        if nvim_textobj_oneleft() == OK {
+            back_in_line_impl(bigword);
+            if cls_impl(bigword) == 0 && nvim_textobj_get_cursor_col() > 0 {
+                if nvim_textobj_get_VIsual_active() {
+                    nvim_textobj_set_VIsual_from_cursor();
+                } else {
+                    let mut new_start = SimplePos::default();
+                    nvim_textobj_get_cursor_pos(&raw mut new_start.lnum, &raw mut new_start.col);
+                    nvim_textobj_set_oap_start(oap, new_start.lnum, new_start.col);
+                }
+            }
+        }
+        nvim_textobj_set_cursor_pos(saved_pos.lnum, saved_pos.col);
+    }
+}
+
+/// Finalize current_word operation (handle Visual mode and inclusive flag).
+///
+/// # Safety
+/// Calls C accessor functions which must be valid.
+unsafe fn current_word_finalize(oap: OapHandle, state: &CurrentWordState) {
+    if nvim_textobj_get_VIsual_active() {
+        if nvim_textobj_get_p_sel_first() == i32::from(b'e')
+            && state.inclusive
+            && nvim_textobj_ltoreq_VIsual_cursor()
+        {
+            nvim_textobj_inc_cursor();
+        }
+        if nvim_textobj_get_VIsual_mode() == i32::from(b'V') {
+            nvim_textobj_set_VIsual_mode(i32::from(b'v'));
+            nvim_textobj_set_redraw_cmdline(true);
+        }
+    } else {
+        nvim_textobj_set_oap_inclusive(oap, state.inclusive);
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

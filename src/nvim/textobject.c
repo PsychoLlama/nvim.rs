@@ -42,6 +42,7 @@ extern int rs_end_word(int count, bool bigword, bool stop, bool empty);
 extern int rs_bckend_word(int count, bool bigword, bool eol);
 extern int rs_find_next_quote(char *line, int col, int quotechar, char *escape);
 extern int rs_find_prev_quote(char *line, int col_start, int quotechar, char *escape);
+extern int rs_current_word(oparg_T *oap, int count, bool include, bool bigword);
 
 // =============================================================================
 // C accessor functions for Rust
@@ -170,6 +171,163 @@ int nvim_textobj_utf_head_off(const char *base, const char *p)
 char *nvim_textobj_vim_strchr(const char *s, int c)
 {
   return vim_strchr(s, c);
+}
+
+// =============================================================================
+// Accessors for current_word function
+// =============================================================================
+
+/// Get VIsual_active state (accessor for Rust).
+bool nvim_textobj_get_VIsual_active(void)
+{
+  return VIsual_active;
+}
+
+/// Get VIsual position lnum (accessor for Rust).
+int nvim_textobj_get_VIsual_lnum(void)
+{
+  return VIsual.lnum;
+}
+
+/// Get VIsual position column (accessor for Rust).
+int nvim_textobj_get_VIsual_col(void)
+{
+  return VIsual.col;
+}
+
+/// Get VIsual_mode (accessor for Rust).
+int nvim_textobj_get_VIsual_mode(void)
+{
+  return VIsual_mode;
+}
+
+/// Set VIsual_mode (accessor for Rust).
+void nvim_textobj_set_VIsual_mode(int mode)
+{
+  VIsual_mode = mode;
+}
+
+/// Set VIsual position (accessor for Rust).
+void nvim_textobj_set_VIsual(int lnum, int col)
+{
+  VIsual.lnum = lnum;
+  VIsual.col = col;
+}
+
+/// Get selection option first char (accessor for Rust).
+int nvim_textobj_get_p_sel_first(void)
+{
+  return *p_sel;
+}
+
+/// Check if cursor is less than VIsual (accessor for Rust).
+bool nvim_textobj_lt_cursor_VIsual(void)
+{
+  return lt(curwin->w_cursor, VIsual);
+}
+
+/// Check if cursor equals VIsual (accessor for Rust).
+bool nvim_textobj_equalpos_cursor_VIsual(void)
+{
+  return equalpos(curwin->w_cursor, VIsual);
+}
+
+/// Check if VIsual is less than cursor (accessor for Rust).
+bool nvim_textobj_lt_VIsual_cursor(void)
+{
+  return lt(VIsual, curwin->w_cursor);
+}
+
+/// Check if VIsual is less than or equal to cursor (accessor for Rust).
+bool nvim_textobj_ltoreq_VIsual_cursor(void)
+{
+  return ltoreq(VIsual, curwin->w_cursor);
+}
+
+/// Clear a position on the stack (accessor for Rust, uses cursor position).
+void nvim_textobj_clearpos_cursor(void)
+{
+  // This sets cursor to an invalid pos indicating no position set
+  clearpos(&curwin->w_cursor);
+}
+
+/// Set operator argument start position from cursor (accessor for Rust).
+void nvim_textobj_set_oap_start_from_cursor(oparg_T *oap)
+{
+  oap->start = curwin->w_cursor;
+}
+
+/// Set operator argument motion type (accessor for Rust).
+void nvim_textobj_set_oap_motion_type(oparg_T *oap, int type)
+{
+  oap->motion_type = type;
+}
+
+/// Set operator argument inclusive flag (accessor for Rust).
+void nvim_textobj_set_oap_inclusive(oparg_T *oap, bool val)
+{
+  oap->inclusive = val;
+}
+
+/// Call oneleft() (accessor for Rust).
+int nvim_textobj_oneleft(void)
+{
+  return oneleft();
+}
+
+/// Call incl on cursor (accessor for Rust).
+int nvim_textobj_incl_cursor(void)
+{
+  return incl(&curwin->w_cursor);
+}
+
+/// Call decl on cursor (accessor for Rust).
+int nvim_textobj_decl_cursor(void)
+{
+  return decl(&curwin->w_cursor);
+}
+
+/// Call redraw_curbuf_later (accessor for Rust).
+void nvim_textobj_redraw_curbuf_later(int type)
+{
+  redraw_curbuf_later(type);
+}
+
+/// Set redraw_cmdline flag (accessor for Rust).
+void nvim_textobj_set_redraw_cmdline(bool val)
+{
+  redraw_cmdline = val;
+}
+
+/// Save and restore cursor positions (accessor for Rust).
+/// Saves current cursor, sets cursor from oap->start, then calls
+/// back_in_line and cls. Returns position info needed.
+
+/// Get cursor position as lnum/col pair (accessor for Rust).
+void nvim_textobj_get_cursor_pos(int *lnum, int *col)
+{
+  *lnum = curwin->w_cursor.lnum;
+  *col = curwin->w_cursor.col;
+}
+
+/// Set cursor position from lnum/col pair (accessor for Rust).
+void nvim_textobj_set_cursor_pos(int lnum, int col)
+{
+  curwin->w_cursor.lnum = lnum;
+  curwin->w_cursor.col = col;
+}
+
+/// Set VIsual from cursor (accessor for Rust).
+void nvim_textobj_set_VIsual_from_cursor(void)
+{
+  VIsual = curwin->w_cursor;
+}
+
+/// Set oap->start from stored position (accessor for Rust).
+void nvim_textobj_set_oap_start(oparg_T *oap, int lnum, int col)
+{
+  oap->start.lnum = lnum;
+  oap->start.col = col;
 }
 
 /// Find the start of the next sentence, searching in the direction specified
@@ -538,139 +696,8 @@ static void findsent_forward(int count, bool at_start_sent)
 /// @param bigword  false == word, true == WORD
 int current_word(oparg_T *oap, int count, bool include, bool bigword)
 {
-  pos_T start_pos;
-  bool inclusive = true;
-  bool include_white = false;
-
   cls_bigword = bigword;
-  clearpos(&start_pos);
-
-  // Correct cursor when 'selection' is exclusive
-  if (VIsual_active && *p_sel == 'e' && lt(VIsual, curwin->w_cursor)) {
-    dec_cursor();
-  }
-
-  // When Visual mode is not active, or when the VIsual area is only one
-  // character, select the word and/or white space under the cursor.
-  if (!VIsual_active || equalpos(curwin->w_cursor, VIsual)) {
-    // Go to start of current word or white space.
-    back_in_line();
-    start_pos = curwin->w_cursor;
-
-    // If the start is on white space, and white space should be included
-    // (" word"), or start is not on white space, and white space should
-    // not be included ("word"), find end of word.
-    if ((cls() == 0) == include) {
-      if (end_word(1, bigword, true, true) == FAIL) {
-        return FAIL;
-      }
-    } else {
-      // If the start is not on white space, and white space should be
-      // included ("word   "), or start is on white space and white
-      // space should not be included ("   "), find start of word.
-      // If we end up in the first column of the next line (single char
-      // word) back up to end of the line.
-      fwd_word(1, bigword, true);
-      if (curwin->w_cursor.col == 0) {
-        decl(&curwin->w_cursor);
-      } else {
-        oneleft();
-      }
-
-      if (include) {
-        include_white = true;
-      }
-    }
-
-    if (VIsual_active) {
-      // should do something when inclusive == false !
-      VIsual = start_pos;
-      redraw_curbuf_later(UPD_INVERTED);  // update the inversion
-    } else {
-      oap->start = start_pos;
-      oap->motion_type = kMTCharWise;
-    }
-    count--;
-  }
-
-  // When count is still > 0, extend with more objects.
-  while (count > 0) {
-    inclusive = true;
-    if (VIsual_active && lt(curwin->w_cursor, VIsual)) {
-      // In Visual mode, with cursor at start: move cursor back.
-      if (decl(&curwin->w_cursor) == -1) {
-        return FAIL;
-      }
-      if (include != (cls() != 0)) {
-        if (bck_word(1, bigword, true) == FAIL) {
-          return FAIL;
-        }
-      } else {
-        if (bckend_word(1, bigword, true) == FAIL) {
-          return FAIL;
-        }
-        (void)incl(&curwin->w_cursor);
-      }
-    } else {
-      // Move cursor forward one word and/or white area.
-      if (incl(&curwin->w_cursor) == -1) {
-        return FAIL;
-      }
-      if (include != (cls() == 0)) {
-        if (fwd_word(1, bigword, true) == FAIL && count > 1) {
-          return FAIL;
-        }
-        // If end is just past a new-line, we don't want to include
-        // the first character on the line.
-        // Put cursor on last char of white.
-        if (oneleft() == FAIL) {
-          inclusive = false;
-        }
-      } else {
-        if (end_word(1, bigword, true, true) == FAIL) {
-          return FAIL;
-        }
-      }
-    }
-    count--;
-  }
-
-  if (include_white && (cls() != 0
-                        || (curwin->w_cursor.col == 0 && !inclusive))) {
-    // If we don't include white space at the end, move the start
-    // to include some white space there. This makes "daw" work
-    // better on the last word in a sentence (and "2daw" on last-but-one
-    // word).  Also when "2daw" deletes "word." at the end of the line
-    // (cursor is at start of next line).
-    // But don't delete white space at start of line (indent).
-    pos_T pos = curwin->w_cursor;     // save cursor position
-    curwin->w_cursor = start_pos;
-    if (oneleft() == OK) {
-      back_in_line();
-      if (cls() == 0 && curwin->w_cursor.col > 0) {
-        if (VIsual_active) {
-          VIsual = curwin->w_cursor;
-        } else {
-          oap->start = curwin->w_cursor;
-        }
-      }
-    }
-    curwin->w_cursor = pos;     // put cursor back at end
-  }
-
-  if (VIsual_active) {
-    if (*p_sel == 'e' && inclusive && ltoreq(VIsual, curwin->w_cursor)) {
-      inc_cursor();
-    }
-    if (VIsual_mode == 'V') {
-      VIsual_mode = 'v';
-      redraw_cmdline = true;                    // show mode later
-    }
-  } else {
-    oap->inclusive = inclusive;
-  }
-
-  return OK;
+  return rs_current_word(oap, count, include, bigword);
 }
 
 /// Find sentence(s) under the cursor, cursor at end.
