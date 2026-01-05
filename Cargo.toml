@@ -56,6 +56,7 @@ members = [
     "src/nvim-rs/shada",
     "src/nvim-rs/spell",
     "src/nvim-rs/statusline",
+    "src/nvim-rs/syntax",
     "src/nvim-rs/strings",
     "src/nvim-rs/eval",
     "src/nvim-rs/utf8proc",

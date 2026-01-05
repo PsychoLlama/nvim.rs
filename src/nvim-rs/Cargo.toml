@@ -74,6 +74,7 @@ nvim-sign = { path = "sign" }
 nvim-spell = { path = "spell" }
 nvim-statusline = { path = "statusline" }
 nvim-strings = { path = "strings" }
+nvim-syntax = { path = "syntax" }
 nvim-tag = { path = "tag" }
 nvim-textformat = { path = "textformat" }
 nvim-textobject = { path = "textobject" }

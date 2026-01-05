@@ -81,6 +81,7 @@ pub use nvim_sign::*;
 pub use nvim_spell::*;
 pub use nvim_statusline::*;
 pub use nvim_strings::*;
+pub use nvim_syntax::*;
 pub use nvim_terminal::*;
 pub use nvim_textformat::*;
 pub use nvim_textobject::*;

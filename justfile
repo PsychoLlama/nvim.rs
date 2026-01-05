@@ -113,6 +113,7 @@ rust-test:
       -p nvim-spell \
       -p nvim-statusline \
       -p nvim-strings \
+      -p nvim-syntax \
       -p nvim-tui \
       -p nvim-ugrid \
       -p nvim-unpacker \
