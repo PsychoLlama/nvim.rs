@@ -12,8 +12,10 @@ use std::io::Write;
 
 use nvim_window::{BufHandle, Frame, WinHandle, FR_COL};
 
+pub mod eval;
 pub mod format;
 
+pub use eval::{EvalContext, EvalResult, NumberBase};
 pub use format::{FormatParser, FormatSpec, StlFlag, StlFormatContext, StlItem, StlItemType};
 
 /// schar_T is stored as a u32 in Rust.

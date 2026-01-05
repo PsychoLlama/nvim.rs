@@ -30,6 +30,13 @@ impl WinHandle {
         Self(ptr)
     }
 
+    /// Create a null handle.
+    #[inline]
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+
     /// Get the raw pointer.
     #[inline]
     #[must_use]
@@ -89,6 +96,13 @@ impl TabpageHandle {
 pub struct BufHandle(*mut std::ffi::c_void);
 
 impl BufHandle {
+    /// Create a null handle.
+    #[inline]
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+
     /// Check if the handle is null.
     #[inline]
     #[must_use]
