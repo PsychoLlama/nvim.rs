@@ -1,45 +1,40 @@
-Plan: ~/.claude/plans/witty-churning-snowflake.md
+Plan: ~/.claude/plans/moonlit-painting-acorn.md
 
-Everything is committed. Let me provide a summary of the completed plan:
+All 9 phases of the text object migration plan are now complete. Let me summarize what was accomplished:
 
-## Plan Execution Complete
+## Summary
 
-The Rust mapping crate migration plan has been successfully executed. Here's the summary:
+Phase 9 is complete. I successfully migrated the `in_html_tag` helper function to Rust:
 
-### Commits Made
+**Changes made:**
+1. **Rust implementation** (`src/nvim-rs/textobject/src/lib.rs`):
+   - Added `rs_in_html_tag(end_tag: bool) -> bool` function
+   - Added extern declarations for new C accessors:
+     - `nvim_textobj_mb_ptr_back` - move backward through multibyte string
+     - `nvim_textobj_mb_ptr_adv` - move forward through multibyte string  
+     - `nvim_textobj_ml_get_pos` - get character at position
+   - Added declaration for `nvim_textobj_pos_set_col`
 
-1. **Phase 1**: `4ca71cc9f6` - Create Rust mapping crate infrastructure
-2. **Phase 2**: `96ac88473a` - Add Rust query functions for mappings
-3. **Phase 3**: `f57f6c55a7` - Delegate map_to_exists_mode to Rust
-4. **Phase 4**: `195215f5e1` - Add rs_get_map_mode_string for validated mode parsing  
-5. **Phase 5**: `7897dbaf6c` - Delegate get_map_mode_string to Rust
+2. **C accessors** (`src/nvim/textobject.c`):
+   - Added `nvim_textobj_get_cursor_pos_ptr()`
+   - Added `nvim_textobj_mb_ptr_back()` - wraps MB_PTR_BACK macro
+   - Added `nvim_textobj_mb_ptr_adv()` - wraps MB_PTR_ADV macro
+   - Added `nvim_textobj_ml_get_pos()` - wraps ml_get_pos()
+   - Modified `in_html_tag()` to call `rs_in_html_tag()`
 
-### Functions Migrated
+3. **Testing:**
+   - Verified `dit` (delete inside tag) works correctly
+   - Verified `dat` (delete around tag) works correctly
 
-**9 Rust FFI functions exported:**
-- `rs_map_hash()` - Hash key to bucket index
-- `rs_map_mode_to_chars()` - Mode bits to string
-- `rs_map_mode_from_chars()` - String to mode bits
-- `rs_get_maphash_list()` - Get hash bucket list
-- `rs_get_buf_maphash_list()` - Buffer-local bucket
-- `rs_map_to_exists()` - Check if mapping exists (by mode string)
-- `rs_map_to_exists_mode()` - Check if mapping exists (by mode bits)
-- `rs_map_count()` - Count mappings matching criteria
-- `rs_get_map_mode_string()` - Parse mode string with validation
+**Note:** The `current_tagblock` function was intentionally left in C because it heavily depends on `do_searchpair()` which uses complex regex pattern matching and dynamic string allocation. This matches the plan's approach of wrapping complex dependencies rather than fully migrating them.
 
-**2 C functions replaced with Rust calls:**
-- `map_to_exists_mode()` → delegates to `rs_map_to_exists_mode()`
-- `get_map_mode_string()` → delegates to `rs_get_map_mode_string()`
-
-### Verification
-
-- ✓ `just rust-fmt-check` passes
-- ✓ `just rust-clippy` passes
-- ✓ `just rust-test` passes (964 tests)
-- ✓ Legacy mapping tests pass (10/10)
-- ✓ `vim.keymap.set()` and `vim.keymap.del()` work correctly
-- ✓ Neovim builds and runs correctly
-
-### Note on Test Failures
-
-Some tests in `map_functions_spec.lua` fail, but these are pre-existing failures unrelated to this migration (they fail on the base branch as well).
+All 9 phases of the text object migration are now complete:
+- ✅ Phase 1: Crate infrastructure
+- ✅ Phase 2: Character classification (cls, skip_chars, back_in_line)
+- ✅ Phase 3: Word motions (fwd_word, bck_word, end_word, bckend_word)
+- ✅ Phase 4: Quote text objects (find_next_quote, find_prev_quote)
+- ✅ Phase 5: Current word (current_word)
+- ✅ Phase 6: Paragraph functions (inmacro, startPS, findpar, current_par)
+- ✅ Phase 7: Sentence functions (findsent, find_first_blank, findsent_forward, current_sent)
+- ✅ Phase 8: Block text objects (current_block)
+- ✅ Phase 9: Tag text objects (in_html_tag)
