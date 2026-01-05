@@ -1,42 +1,45 @@
-Plan: ~/.claude/plans/recursive-conjuring-turing.md
+Plan: ~/.claude/plans/witty-churning-snowflake.md
 
-## Summary
+Everything is committed. Let me provide a summary of the completed plan:
 
-I have completed executing the plan. Here's what was accomplished:
+## Plan Execution Complete
 
-### Commits Made (3 commits)
-1. **e06f211c3d** - `refactor(quickfix): expand Rust FFI with list ID and entry functions`
-2. **1b081eee7e** - `refactor(search): expand Rust FFI with search constants and utilities`  
-3. **7b2ff64c47** - `refactor(spell): add suggestion scoring and word flag functions`
+The Rust mapping crate migration plan has been successfully executed. Here's the summary:
 
-### FFI Function Progress
+### Commits Made
 
-| Crate | Before | After | Change |
-|-------|--------|-------|--------|
-| Quickfix | 29 | 42 | +13 |
-| Search | 6 | 43 | +37 |
-| Spell | 19 | 56 | +37 |
+1. **Phase 1**: `4ca71cc9f6` - Create Rust mapping crate infrastructure
+2. **Phase 2**: `96ac88473a` - Add Rust query functions for mappings
+3. **Phase 3**: `f57f6c55a7` - Delegate map_to_exists_mode to Rust
+4. **Phase 4**: `195215f5e1` - Add rs_get_map_mode_string for validated mode parsing  
+5. **Phase 5**: `7897dbaf6c` - Delegate get_map_mode_string to Rust
 
-### New Functions Added
+### Functions Migrated
 
-**Quickfix Crate:**
-- List ID management: `get_id`, `find_list_by_id`, `id_exists`
-- List state: `get_changedtick`, `has_title`, `get_maxcount`, `stack_at_max`
-- Entry ranges: `entry_in_range`, `entry_covers_line`, `entry_covers_pos`
-- Entry counting: `count_entries_of_type`, `count_errors`, `count_warnings`
+**9 Rust FFI functions exported:**
+- `rs_map_hash()` - Hash key to bucket index
+- `rs_map_mode_to_chars()` - Mode bits to string
+- `rs_map_mode_from_chars()` - String to mode bits
+- `rs_get_maphash_list()` - Get hash bucket list
+- `rs_get_buf_maphash_list()` - Buffer-local bucket
+- `rs_map_to_exists()` - Check if mapping exists (by mode string)
+- `rs_map_to_exists_mode()` - Check if mapping exists (by mode bits)
+- `rs_map_count()` - Count mappings matching criteria
+- `rs_get_map_mode_string()` - Parse mode string with validation
 
-**Search Crate:**
-- Search options: MSG, HIS, END, START, KEEP, FOLD, PEEK, COL flags
-- RE pattern indices: RE_SEARCH, RE_SUBST, RE_LAST, RE_BOTH
-- Direction constants: DIR_FORWARD, DIR_BACKWARD with helpers
-- Character search types: f, F, t, T command classifications  
-- VimGrep flags: VGR_GLOBAL, VGR_NOJUMP, VGR_FUZZY
+**2 C functions replaced with Rust calls:**
+- `map_to_exists_mode()` → delegates to `rs_map_to_exists_mode()`
+- `get_map_mode_string()` → delegates to `rs_get_map_mode_string()`
 
-**Spell Crate:**
-- RESCORE/MAXSCORE: adjust scores based on soundfold similarity
-- Score constants: SWAP, SUBST, DEL, INS, SPLIT, ICASE, REGION, etc.
-- Score utilities: `is_acceptable`, `is_failed`, `combine`, `common_bonus`
-- Soundfold limits: `sfmax` functions for optimization
-- Word flag checks: `is_rare`, `is_banned`, `is_allcap`, `is_onecap`, etc.
+### Verification
 
-All tests pass (`just rust-fmt-check`, `just rust-clippy`, `just rust-test`).
+- ✓ `just rust-fmt-check` passes
+- ✓ `just rust-clippy` passes
+- ✓ `just rust-test` passes (964 tests)
+- ✓ Legacy mapping tests pass (10/10)
+- ✓ `vim.keymap.set()` and `vim.keymap.del()` work correctly
+- ✓ Neovim builds and runs correctly
+
+### Note on Test Failures
+
+Some tests in `map_functions_spec.lua` fail, but these are pre-existing failures unrelated to this migration (they fail on the base branch as well).
