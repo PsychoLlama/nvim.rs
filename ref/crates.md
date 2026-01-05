@@ -66,6 +66,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | tag            | Tag stack and navigation                |
 | terminal       | Terminal emulator state and utilities   |
 | textformat     | Text formatting options                 |
+| textobject     | Text object selection and navigation    |
 | tui            | Terminal UI                             |
 | typval         | VimL value type handling                |
 | ugrid          | Unicode grid for TUI                    |

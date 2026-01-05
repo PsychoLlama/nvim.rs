@@ -73,6 +73,7 @@ nvim-statusline = { path = "statusline" }
 nvim-strings = { path = "strings" }
 nvim-tag = { path = "tag" }
 nvim-textformat = { path = "textformat" }
+nvim-textobject = { path = "textobject" }
 nvim-utf8proc = { path = "utf8proc" }
 nvim-version = { path = "version" }
 nvim-window = { path = "window" }
