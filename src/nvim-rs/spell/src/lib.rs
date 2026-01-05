@@ -20,6 +20,277 @@ const WF_ALLCAP: c_int = 0x04; // word must be all capitals
 const WF_FIXCAP: c_int = 0x40; // keep-case word, allcap not allowed
 const WF_KEEPCAP: c_int = 0x80; // keep-case word
 
+// =============================================================================
+// Spell File Format Constants (from spellfile.c)
+// =============================================================================
+
+/// Magic string at start of Vim spell file
+pub const VIMSPELL_MAGIC: &[u8; 8] = b"VIMspell";
+/// Length of magic string
+pub const VIMSPELL_MAGIC_LEN: usize = 8;
+/// Current spell file version
+pub const VIMSPELL_VERSION: u8 = 50;
+
+/// Section IDs for spell file format
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpellSection {
+    /// Region section
+    Region = 0,
+    /// Character flags section
+    CharFlags = 1,
+    /// Middle word characters
+    MidWord = 2,
+    /// Prefix conditions
+    PrefCond = 3,
+    /// Replacements
+    Rep = 4,
+    /// Soundalike replacements
+    RepSal = 5,
+    /// Soundalike conversion
+    Sal = 6,
+    /// Soundfold
+    SoFo = 7,
+    /// Map of similar characters
+    Map = 8,
+    /// Compound rules
+    Compound = 9,
+    /// No break
+    NoBreak = 10,
+    /// Suggestion file timestamp
+    SugFile = 11,
+    /// Don't split for suggestions
+    NoSplitSugs = 12,
+    /// Don't compound for suggestions
+    NoCompoundSugs = 13,
+    /// Common words
+    Words = 14,
+    /// Syllable info
+    Syllable = 15,
+    /// Info text
+    Info = 16,
+    /// End of sections
+    End = 255,
+}
+
+/// Section flags
+pub const SNF_REQUIRED: u8 = 1; // Section is required for correct spell checking
+
+/// Byte values used in word tree
+pub const BY_NOFLAGS: u8 = 0; // End of word without flags
+pub const BY_FLAGS: u8 = 1; // End of word, flags follow
+pub const BY_FLAGS2: u8 = 2; // End of word, flags and flags2 follow
+pub const BY_INDEX: u8 = 3; // Child is shared, index follows
+
+/// Character flags for spell file (charflags section)
+pub const CF_WORD: u8 = 0x01; // Word character
+pub const CF_UPPER: u8 = 0x02; // Upper-case character
+
+// =============================================================================
+// Binary Format Reading Functions
+// =============================================================================
+
+/// Check if a byte buffer starts with the Vim spell magic string.
+///
+/// Returns true if the first 8 bytes match "VIMspell".
+#[inline]
+#[must_use]
+pub const fn check_spell_magic(buf: &[u8]) -> bool {
+    if buf.len() < VIMSPELL_MAGIC_LEN {
+        return false;
+    }
+    buf[0] == VIMSPELL_MAGIC[0]
+        && buf[1] == VIMSPELL_MAGIC[1]
+        && buf[2] == VIMSPELL_MAGIC[2]
+        && buf[3] == VIMSPELL_MAGIC[3]
+        && buf[4] == VIMSPELL_MAGIC[4]
+        && buf[5] == VIMSPELL_MAGIC[5]
+        && buf[6] == VIMSPELL_MAGIC[6]
+        && buf[7] == VIMSPELL_MAGIC[7]
+}
+
+/// FFI wrapper to check spell magic from C buffer.
+///
+/// Returns true if the first 8 bytes match "VIMspell".
+///
+/// # Safety
+///
+/// `buf` must point to at least 8 bytes of valid memory.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub unsafe extern "C" fn rs_check_spell_magic(buf: *const u8) -> bool {
+    if buf.is_null() {
+        return false;
+    }
+    let slice = std::slice::from_raw_parts(buf, VIMSPELL_MAGIC_LEN);
+    check_spell_magic(slice)
+}
+
+/// Check if a spell file version is compatible.
+///
+/// Returns true if the version can be read (not too old or too new).
+#[inline]
+#[must_use]
+pub const fn check_spell_version(version: u8) -> bool {
+    version == VIMSPELL_VERSION
+}
+
+/// FFI wrapper to check spell version compatibility.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_check_spell_version(version: u8) -> bool {
+    check_spell_version(version)
+}
+
+/// Check if a spell file version is too old.
+#[inline]
+#[must_use]
+pub const fn spell_version_too_old(version: u8) -> bool {
+    version < VIMSPELL_VERSION
+}
+
+/// FFI wrapper to check if spell version is too old.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_spell_version_too_old(version: u8) -> bool {
+    spell_version_too_old(version)
+}
+
+/// Check if a spell file version is too new.
+#[inline]
+#[must_use]
+pub const fn spell_version_too_new(version: u8) -> bool {
+    version > VIMSPELL_VERSION
+}
+
+/// FFI wrapper to check if spell version is too new.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_spell_version_too_new(version: u8) -> bool {
+    spell_version_too_new(version)
+}
+
+/// Read a 2-byte big-endian integer from a buffer.
+///
+/// Returns the value and advances the offset by 2.
+/// Returns None if there aren't enough bytes.
+#[inline]
+#[must_use]
+pub const fn read_be_u16(buf: &[u8], offset: usize) -> Option<u16> {
+    if offset + 2 > buf.len() {
+        return None;
+    }
+    Some(((buf[offset] as u16) << 8) | (buf[offset + 1] as u16))
+}
+
+/// Read a 3-byte big-endian integer from a buffer.
+///
+/// Returns the value and advances the offset by 3.
+/// Returns None if there aren't enough bytes.
+#[inline]
+#[must_use]
+pub const fn read_be_u24(buf: &[u8], offset: usize) -> Option<u32> {
+    if offset + 3 > buf.len() {
+        return None;
+    }
+    Some(((buf[offset] as u32) << 16) | ((buf[offset + 1] as u32) << 8) | (buf[offset + 2] as u32))
+}
+
+/// Read a 4-byte big-endian integer from a buffer.
+///
+/// Returns the value and advances the offset by 4.
+/// Returns None if there aren't enough bytes.
+#[inline]
+#[must_use]
+pub const fn read_be_u32(buf: &[u8], offset: usize) -> Option<u32> {
+    if offset + 4 > buf.len() {
+        return None;
+    }
+    Some(
+        ((buf[offset] as u32) << 24)
+            | ((buf[offset + 1] as u32) << 16)
+            | ((buf[offset + 2] as u32) << 8)
+            | (buf[offset + 3] as u32),
+    )
+}
+
+/// FFI wrapper to read 2-byte big-endian integer.
+///
+/// Returns the value or -1 on error.
+///
+/// # Safety
+///
+/// `buf` must point to at least `offset + 2` bytes of valid memory.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub unsafe extern "C" fn rs_read_be_u16(buf: *const u8, len: usize, offset: usize) -> c_int {
+    if buf.is_null() || offset + 2 > len {
+        return -1;
+    }
+    let slice = std::slice::from_raw_parts(buf, len);
+    read_be_u16(slice, offset).map_or(-1, c_int::from)
+}
+
+/// FFI wrapper to read 3-byte big-endian integer.
+///
+/// Returns the value or -1 on error.
+///
+/// # Safety
+///
+/// `buf` must point to at least `offset + 3` bytes of valid memory.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_read_be_u24(buf: *const u8, len: usize, offset: usize) -> c_int {
+    if buf.is_null() || offset + 3 > len {
+        return -1;
+    }
+    let slice = std::slice::from_raw_parts(buf, len);
+    read_be_u24(slice, offset).map_or(-1, |v| v as c_int)
+}
+
+/// FFI wrapper to read 4-byte big-endian integer.
+///
+/// Returns the value or -1 on error.
+///
+/// # Safety
+///
+/// `buf` must point to at least `offset + 4` bytes of valid memory.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_read_be_u32(buf: *const u8, len: usize, offset: usize) -> c_int {
+    if buf.is_null() || offset + 4 > len {
+        return -1;
+    }
+    let slice = std::slice::from_raw_parts(buf, len);
+    read_be_u32(slice, offset).map_or(-1, |v| v as c_int)
+}
+
+/// Parse a spell section header.
+///
+/// Returns (section_id, flags, length, bytes_read) or None on error.
+/// The section header is: <sectionID:1> <sectionflags:1> <sectionlen:4>
+#[inline]
+#[must_use]
+#[allow(clippy::manual_let_else)] // const fn cannot use let...else
+pub const fn parse_section_header(buf: &[u8], offset: usize) -> Option<(u8, u8, u32, usize)> {
+    if offset + 6 > buf.len() {
+        return None;
+    }
+    let section_id = buf[offset];
+    let flags = buf[offset + 1];
+    let len = match read_be_u32(buf, offset + 2) {
+        Some(v) => v,
+        None => return None,
+    };
+    Some((section_id, flags, len, 6))
+}
+
+// =============================================================================
+// Word Flag Functions
+// =============================================================================
+
 /// Check if the word flags match the tree flags for valid case handling.
 ///
 /// Returns true if case handling is valid:
@@ -887,5 +1158,156 @@ mod tests {
         assert!(spell_mb_isword_class_impl(0x2071, false)); // just after 0x2070
         assert!(spell_mb_isword_class_impl(0x207F, false)); // just before 0x2080
         assert!(spell_mb_isword_class_impl(0x2081, false)); // just after 0x2080
+    }
+
+    // =========================================================================
+    // Spell file format tests
+    // =========================================================================
+
+    #[test]
+    fn test_spell_file_constants() {
+        assert_eq!(VIMSPELL_MAGIC, b"VIMspell");
+        assert_eq!(VIMSPELL_MAGIC_LEN, 8);
+        assert_eq!(VIMSPELL_VERSION, 50);
+    }
+
+    #[test]
+    fn test_check_spell_magic_valid() {
+        let buf = b"VIMspell\x32extra";
+        assert!(check_spell_magic(buf));
+    }
+
+    #[test]
+    fn test_check_spell_magic_invalid() {
+        let buf = b"VIMspelX"; // Wrong last char
+        assert!(!check_spell_magic(buf));
+
+        let buf = b"vimspell"; // Wrong case
+        assert!(!check_spell_magic(buf));
+    }
+
+    #[test]
+    fn test_check_spell_magic_too_short() {
+        let buf = b"VIMspel"; // Only 7 bytes
+        assert!(!check_spell_magic(buf));
+    }
+
+    #[test]
+    fn test_spell_version_checks() {
+        assert!(check_spell_version(50));
+        assert!(!check_spell_version(49));
+        assert!(!check_spell_version(51));
+
+        assert!(spell_version_too_old(49));
+        assert!(!spell_version_too_old(50));
+        assert!(!spell_version_too_old(51));
+
+        assert!(!spell_version_too_new(49));
+        assert!(!spell_version_too_new(50));
+        assert!(spell_version_too_new(51));
+    }
+
+    #[test]
+    fn test_read_be_u16() {
+        let buf = [0x12, 0x34, 0x56, 0x78];
+        assert_eq!(read_be_u16(&buf, 0), Some(0x1234));
+        assert_eq!(read_be_u16(&buf, 1), Some(0x3456));
+        assert_eq!(read_be_u16(&buf, 2), Some(0x5678));
+        assert_eq!(read_be_u16(&buf, 3), None); // Not enough bytes
+    }
+
+    #[test]
+    fn test_read_be_u24() {
+        let buf = [0x12, 0x34, 0x56, 0x78, 0x9A];
+        assert_eq!(read_be_u24(&buf, 0), Some(0x0012_3456));
+        assert_eq!(read_be_u24(&buf, 1), Some(0x0034_5678));
+        assert_eq!(read_be_u24(&buf, 2), Some(0x0056_789A));
+        assert_eq!(read_be_u24(&buf, 3), None); // Not enough bytes
+    }
+
+    #[test]
+    fn test_read_be_u32() {
+        let buf = [0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC];
+        assert_eq!(read_be_u32(&buf, 0), Some(0x1234_5678));
+        assert_eq!(read_be_u32(&buf, 1), Some(0x3456_789A));
+        assert_eq!(read_be_u32(&buf, 2), Some(0x5678_9ABC));
+        assert_eq!(read_be_u32(&buf, 3), None); // Not enough bytes
+    }
+
+    #[test]
+    fn test_parse_section_header() {
+        // Section header: id=5, flags=1, len=0x00001234
+        let buf = [0x05, 0x01, 0x00, 0x00, 0x12, 0x34, 0xFF, 0xFF];
+        let result = parse_section_header(&buf, 0);
+        assert_eq!(result, Some((5, 1, 0x1234, 6)));
+
+        // Not enough bytes
+        let short_buf = [0x05, 0x01, 0x00, 0x00, 0x12];
+        assert_eq!(parse_section_header(&short_buf, 0), None);
+    }
+
+    #[test]
+    fn test_spell_section_enum() {
+        assert_eq!(SpellSection::Region as u8, 0);
+        assert_eq!(SpellSection::CharFlags as u8, 1);
+        assert_eq!(SpellSection::End as u8, 255);
+    }
+
+    #[test]
+    fn test_section_flags() {
+        assert_eq!(SNF_REQUIRED, 1);
+    }
+
+    #[test]
+    fn test_byte_values() {
+        assert_eq!(BY_NOFLAGS, 0);
+        assert_eq!(BY_FLAGS, 1);
+        assert_eq!(BY_FLAGS2, 2);
+        assert_eq!(BY_INDEX, 3);
+    }
+
+    #[test]
+    fn test_char_flags() {
+        assert_eq!(CF_WORD, 0x01);
+        assert_eq!(CF_UPPER, 0x02);
+    }
+
+    #[test]
+    fn test_ffi_spell_magic() {
+        let valid = b"VIMspell";
+        let invalid = b"notmagic";
+
+        unsafe {
+            assert!(rs_check_spell_magic(valid.as_ptr()));
+            assert!(!rs_check_spell_magic(invalid.as_ptr()));
+            assert!(!rs_check_spell_magic(std::ptr::null()));
+        }
+    }
+
+    #[test]
+    fn test_ffi_spell_version() {
+        assert!(rs_check_spell_version(50));
+        assert!(!rs_check_spell_version(49));
+        assert!(rs_spell_version_too_old(49));
+        assert!(rs_spell_version_too_new(51));
+    }
+
+    #[test]
+    fn test_ffi_read_be() {
+        let buf = [0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC];
+
+        unsafe {
+            assert_eq!(rs_read_be_u16(buf.as_ptr(), 6, 0), 0x1234);
+            assert_eq!(rs_read_be_u24(buf.as_ptr(), 6, 0), 0x0012_3456);
+            assert_eq!(rs_read_be_u32(buf.as_ptr(), 6, 0), 0x1234_5678);
+
+            // Out of bounds
+            assert_eq!(rs_read_be_u16(buf.as_ptr(), 6, 5), -1);
+            assert_eq!(rs_read_be_u24(buf.as_ptr(), 6, 4), -1);
+            assert_eq!(rs_read_be_u32(buf.as_ptr(), 6, 3), -1);
+
+            // Null pointer
+            assert_eq!(rs_read_be_u16(std::ptr::null(), 6, 0), -1);
+        }
     }
 }
