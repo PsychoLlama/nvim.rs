@@ -7,6 +7,7 @@
 #![allow(clippy::ptr_as_ptr)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_safety_doc)]
+#![allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
 
 use std::ffi::{c_char, c_int, c_void};
 
@@ -1534,6 +1535,333 @@ pub unsafe extern "C" fn rs_read_tree_node(
     idx
 }
 
+// =============================================================================
+// Suggestion Scoring Utility Functions
+// =============================================================================
+
+/// The RESCORE macro: adjust word score based on soundfold score.
+///
+/// Used after finding suggestions to adjust scores based on how similar
+/// the sound-folded versions are. Formula: (3 * word_score + sound_score) / 4
+#[inline]
+#[must_use]
+pub const fn rescore(word_score: c_int, sound_score: c_int) -> c_int {
+    (3 * word_score + sound_score) / 4
+}
+
+/// FFI wrapper for rescore.
+#[no_mangle]
+pub extern "C" fn rs_rescore(word_score: c_int, sound_score: c_int) -> c_int {
+    rescore(word_score, sound_score)
+}
+
+/// The MAXSCORE macro: compute maximum word score from end score and sound score.
+///
+/// Inverse of RESCORE. Given a maximum end score and known sound score,
+/// compute the maximum word score that can be used.
+/// Formula: (4 * end_score - sound_score) / 3
+#[inline]
+#[must_use]
+pub const fn maxscore(end_score: c_int, sound_score: c_int) -> c_int {
+    (4 * end_score - sound_score) / 3
+}
+
+/// FFI wrapper for maxscore.
+#[no_mangle]
+pub extern "C" fn rs_maxscore(end_score: c_int, sound_score: c_int) -> c_int {
+    maxscore(end_score, sound_score)
+}
+
+/// Calculate score for a swap operation.
+///
+/// Returns `SCORE_SWAP` (75) for a simple character swap.
+#[no_mangle]
+pub extern "C" fn rs_score_swap() -> c_int {
+    SCORE_SWAP
+}
+
+/// Calculate score for a swap in three characters.
+///
+/// Returns `SCORE_SWAP3` (110) for swapping two characters over three.
+#[no_mangle]
+pub extern "C" fn rs_score_swap3() -> c_int {
+    SCORE_SWAP3
+}
+
+/// Calculate score for a substitution.
+///
+/// Returns `SCORE_SUBST` (93) for substituting a character.
+#[no_mangle]
+pub extern "C" fn rs_score_subst() -> c_int {
+    SCORE_SUBST
+}
+
+/// Calculate score for substituting a similar character.
+///
+/// Returns `SCORE_SIMILAR` (33) for substituting a similar character.
+#[no_mangle]
+pub extern "C" fn rs_score_similar() -> c_int {
+    SCORE_SIMILAR
+}
+
+/// Calculate score for deleting a character.
+///
+/// Returns `SCORE_DEL` (94) for deleting a character.
+#[no_mangle]
+pub extern "C" fn rs_score_del() -> c_int {
+    SCORE_DEL
+}
+
+/// Calculate score for deleting a duplicated character.
+///
+/// Returns `SCORE_DELDUP` (66) for deleting a duplicate.
+#[no_mangle]
+pub extern "C" fn rs_score_deldup() -> c_int {
+    SCORE_DELDUP
+}
+
+/// Calculate score for inserting a character.
+///
+/// Returns `SCORE_INS` (96) for inserting a character.
+#[no_mangle]
+pub extern "C" fn rs_score_ins() -> c_int {
+    SCORE_INS
+}
+
+/// Calculate score for inserting a duplicate character.
+///
+/// Returns `SCORE_INSDUP` (67) for inserting a duplicate.
+#[no_mangle]
+pub extern "C" fn rs_score_insdup() -> c_int {
+    SCORE_INSDUP
+}
+
+/// Calculate score for changing non-word to word character.
+///
+/// Returns `SCORE_NONWORD` (103).
+#[no_mangle]
+pub extern "C" fn rs_score_nonword() -> c_int {
+    SCORE_NONWORD
+}
+
+/// Calculate score for a word split.
+///
+/// Returns `SCORE_SPLIT` (149).
+#[no_mangle]
+pub extern "C" fn rs_score_split() -> c_int {
+    SCORE_SPLIT
+}
+
+/// Calculate score for a word split with NOSPLITSUGS.
+///
+/// Returns `SCORE_SPLIT_NO` (249).
+#[no_mangle]
+pub extern "C" fn rs_score_split_no() -> c_int {
+    SCORE_SPLIT_NO
+}
+
+/// Calculate score for slightly different case.
+///
+/// Returns `SCORE_ICASE` (52).
+#[no_mangle]
+pub extern "C" fn rs_score_icase() -> c_int {
+    SCORE_ICASE
+}
+
+/// Calculate score for word from different region.
+///
+/// Returns `SCORE_REGION` (200).
+#[no_mangle]
+pub extern "C" fn rs_score_region() -> c_int {
+    SCORE_REGION
+}
+
+/// Calculate score for rare word.
+///
+/// Returns `SCORE_RARE` (180).
+#[no_mangle]
+pub extern "C" fn rs_score_rare() -> c_int {
+    SCORE_RARE
+}
+
+/// Calculate score for REP replacement.
+///
+/// Returns `SCORE_REP` (65).
+#[no_mangle]
+pub extern "C" fn rs_score_rep() -> c_int {
+    SCORE_REP
+}
+
+/// Calculate score for suggestion from a file.
+///
+/// Returns `SCORE_FILE` (30).
+#[no_mangle]
+pub extern "C" fn rs_score_file() -> c_int {
+    SCORE_FILE
+}
+
+/// Calculate initial maximum score.
+///
+/// Returns `SCORE_MAXINIT` (350). Higher values make suggestion search slower.
+#[no_mangle]
+pub extern "C" fn rs_score_maxinit() -> c_int {
+    SCORE_MAXINIT
+}
+
+/// Check if a score is acceptable (below maximum).
+///
+/// A score is acceptable if it's less than `SCORE_MAXMAX` (999999).
+#[no_mangle]
+pub extern "C" fn rs_score_is_acceptable(score: c_int) -> bool {
+    score < SCORE_MAXMAX
+}
+
+/// Check if a score represents a complete failure (no match possible).
+///
+/// Returns true if score equals `SCORE_MAXMAX` (999999).
+#[no_mangle]
+pub extern "C" fn rs_score_is_failed(score: c_int) -> bool {
+    score >= SCORE_MAXMAX
+}
+
+/// Calculate combined score for two operations.
+///
+/// Simple addition of two scores.
+#[no_mangle]
+pub extern "C" fn rs_score_combine(score1: c_int, score2: c_int) -> c_int {
+    score1 + score2
+}
+
+/// Calculate score for common word bonus.
+///
+/// Returns the appropriate bonus based on word count threshold.
+/// - count >= SCORE_THRES3 (100): returns SCORE_COMMON3 (50)
+/// - count >= SCORE_THRES2 (10): returns SCORE_COMMON2 (40)
+/// - count >= 1: returns SCORE_COMMON1 (30)
+/// - count == 0: returns 0 (no bonus)
+#[no_mangle]
+pub extern "C" fn rs_score_common_bonus(word_count: c_int) -> c_int {
+    if word_count >= SCORE_THRES3 {
+        SCORE_COMMON3
+    } else if word_count >= SCORE_THRES2 {
+        SCORE_COMMON2
+    } else if word_count >= 1 {
+        SCORE_COMMON1
+    } else {
+        0
+    }
+}
+
+/// Apply common word bonus to a score (subtract bonus).
+///
+/// The bonus is subtracted from the score to make common words rank higher.
+#[no_mangle]
+pub extern "C" fn rs_score_apply_common_bonus(score: c_int, word_count: c_int) -> c_int {
+    let bonus = rs_score_common_bonus(word_count);
+    // Don't go negative
+    if score > bonus {
+        score - bonus
+    } else {
+        0
+    }
+}
+
+/// Get the appropriate soundfold maximum score for a try number.
+///
+/// - try_nr == 1: returns SCORE_SFMAX1 (200)
+/// - try_nr == 2: returns SCORE_SFMAX2 (300)
+/// - try_nr >= 3: returns SCORE_SFMAX3 (400)
+#[no_mangle]
+pub extern "C" fn rs_score_sfmax(try_nr: c_int) -> c_int {
+    match try_nr {
+        1 => SCORE_SFMAX1,
+        2 => SCORE_SFMAX2,
+        _ => SCORE_SFMAX3,
+    }
+}
+
+/// Check if a score is within the soundfold limit for a given try.
+#[no_mangle]
+pub extern "C" fn rs_score_within_sfmax(score: c_int, try_nr: c_int) -> bool {
+    score <= rs_score_sfmax(try_nr)
+}
+
+/// Calculate the minimum edit score (for optimization).
+///
+/// Returns `SCORE_EDIT_MIN` which equals `SCORE_SIMILAR` (33).
+#[no_mangle]
+pub extern "C" fn rs_score_edit_min() -> c_int {
+    SCORE_EDIT_MIN
+}
+
+/// Calculate a "big difference" score.
+///
+/// Returns `SCORE_BIG` which is 3 * SCORE_INS (288).
+#[no_mangle]
+pub extern "C" fn rs_score_big() -> c_int {
+    SCORE_BIG
+}
+
+/// Get the maximum score for `spell_edit_score_limit`.
+///
+/// Returns `SCORE_LIMITMAX` (350).
+#[no_mangle]
+pub extern "C" fn rs_score_limitmax() -> c_int {
+    SCORE_LIMITMAX
+}
+
+// =============================================================================
+// Spell Word Flag Utilities
+// =============================================================================
+
+/// Check if word flags indicate a rare word.
+#[no_mangle]
+pub extern "C" fn rs_wf_is_rare(flags: c_int) -> bool {
+    (flags & WF_RARE) != 0
+}
+
+/// Check if word flags indicate a banned word.
+#[no_mangle]
+pub extern "C" fn rs_wf_is_banned(flags: c_int) -> bool {
+    (flags & WF_BANNED) != 0
+}
+
+/// Check if word flags indicate an all-caps word.
+#[no_mangle]
+pub extern "C" fn rs_wf_is_allcap(flags: c_int) -> bool {
+    (flags & WF_ALLCAP_FLAG) != 0
+}
+
+/// Check if word flags indicate a one-cap word.
+#[no_mangle]
+pub extern "C" fn rs_wf_is_onecap(flags: c_int) -> bool {
+    (flags & WF_ONECAP_FLAG) != 0
+}
+
+/// Check if word flags indicate keep-case.
+#[no_mangle]
+pub extern "C" fn rs_wf_is_keepcap(flags: c_int) -> bool {
+    (flags & WF_KEEPCAP_FLAG) != 0
+}
+
+/// Check if word flags indicate fix-case.
+#[no_mangle]
+pub extern "C" fn rs_wf_is_fixcap(flags: c_int) -> bool {
+    (flags & WF_FIXCAP_FLAG) != 0
+}
+
+/// Check if word flags have region byte.
+#[no_mangle]
+pub extern "C" fn rs_wf_has_region(flags: c_int) -> bool {
+    (flags & WF_REGION) != 0
+}
+
+/// Check if word flags have affix ID.
+#[no_mangle]
+pub extern "C" fn rs_wf_has_afx(flags: c_int) -> bool {
+    (flags & WF_AFX) != 0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2529,5 +2857,181 @@ mod tests {
 
         // First value needing 2 bytes
         assert_eq!(offset2bytes(127, &mut buf), 2);
+    }
+
+    // =============================================================================
+    // Suggestion Scoring Tests
+    // =============================================================================
+
+    #[test]
+    fn test_rescore() {
+        // Formula: (3 * word_score + sound_score) / 4
+        assert_eq!(rescore(100, 100), 100);
+        assert_eq!(rescore(100, 0), 75);
+        assert_eq!(rescore(0, 100), 25);
+        assert_eq!(rescore(200, 100), 175);
+    }
+
+    #[test]
+    fn test_maxscore() {
+        // Formula: (4 * end_score - sound_score) / 3
+        // Should be inverse of rescore
+        assert_eq!(maxscore(100, 100), 100);
+        assert_eq!(maxscore(75, 0), 100);
+    }
+
+    #[test]
+    fn test_score_constants() {
+        assert_eq!(rs_score_swap(), 75);
+        assert_eq!(rs_score_swap3(), 110);
+        assert_eq!(rs_score_subst(), 93);
+        assert_eq!(rs_score_similar(), 33);
+        assert_eq!(rs_score_del(), 94);
+        assert_eq!(rs_score_deldup(), 66);
+        assert_eq!(rs_score_ins(), 96);
+        assert_eq!(rs_score_insdup(), 67);
+        assert_eq!(rs_score_nonword(), 103);
+        assert_eq!(rs_score_split(), 149);
+        assert_eq!(rs_score_split_no(), 249);
+        assert_eq!(rs_score_icase(), 52);
+        assert_eq!(rs_score_region(), 200);
+        assert_eq!(rs_score_rare(), 180);
+        assert_eq!(rs_score_rep(), 65);
+        assert_eq!(rs_score_file(), 30);
+        assert_eq!(rs_score_maxinit(), 350);
+    }
+
+    #[test]
+    fn test_score_acceptability() {
+        assert!(rs_score_is_acceptable(0));
+        assert!(rs_score_is_acceptable(100));
+        assert!(rs_score_is_acceptable(SCORE_MAXMAX - 1));
+        assert!(!rs_score_is_acceptable(SCORE_MAXMAX));
+    }
+
+    #[test]
+    fn test_score_failed() {
+        assert!(!rs_score_is_failed(0));
+        assert!(!rs_score_is_failed(SCORE_MAXMAX - 1));
+        assert!(rs_score_is_failed(SCORE_MAXMAX));
+        assert!(rs_score_is_failed(SCORE_MAXMAX + 1));
+    }
+
+    #[test]
+    fn test_score_combine() {
+        assert_eq!(rs_score_combine(50, 50), 100);
+        assert_eq!(rs_score_combine(0, 100), 100);
+        assert_eq!(rs_score_combine(SCORE_SWAP, SCORE_DEL), SCORE_SWAP + SCORE_DEL);
+    }
+
+    #[test]
+    fn test_score_common_bonus() {
+        // No bonus for count 0
+        assert_eq!(rs_score_common_bonus(0), 0);
+        // COMMON1 for count >= 1
+        assert_eq!(rs_score_common_bonus(1), SCORE_COMMON1);
+        assert_eq!(rs_score_common_bonus(9), SCORE_COMMON1);
+        // COMMON2 for count >= 10
+        assert_eq!(rs_score_common_bonus(10), SCORE_COMMON2);
+        assert_eq!(rs_score_common_bonus(99), SCORE_COMMON2);
+        // COMMON3 for count >= 100
+        assert_eq!(rs_score_common_bonus(100), SCORE_COMMON3);
+        assert_eq!(rs_score_common_bonus(1000), SCORE_COMMON3);
+    }
+
+    #[test]
+    fn test_score_apply_common_bonus() {
+        // Apply COMMON1 bonus
+        assert_eq!(rs_score_apply_common_bonus(100, 5), 100 - SCORE_COMMON1);
+        // Score less than bonus should return 0
+        assert_eq!(rs_score_apply_common_bonus(20, 5), 0);
+        // No bonus for count 0
+        assert_eq!(rs_score_apply_common_bonus(100, 0), 100);
+    }
+
+    #[test]
+    fn test_score_sfmax() {
+        assert_eq!(rs_score_sfmax(1), SCORE_SFMAX1);
+        assert_eq!(rs_score_sfmax(2), SCORE_SFMAX2);
+        assert_eq!(rs_score_sfmax(3), SCORE_SFMAX3);
+        assert_eq!(rs_score_sfmax(4), SCORE_SFMAX3);
+    }
+
+    #[test]
+    fn test_score_within_sfmax() {
+        assert!(rs_score_within_sfmax(100, 1));
+        assert!(rs_score_within_sfmax(200, 1));
+        assert!(!rs_score_within_sfmax(201, 1));
+        assert!(rs_score_within_sfmax(300, 2));
+        assert!(!rs_score_within_sfmax(301, 2));
+    }
+
+    #[test]
+    fn test_score_edit_min() {
+        assert_eq!(rs_score_edit_min(), SCORE_SIMILAR);
+    }
+
+    #[test]
+    fn test_score_big() {
+        assert_eq!(rs_score_big(), 3 * SCORE_INS);
+    }
+
+    #[test]
+    fn test_score_limitmax() {
+        assert_eq!(rs_score_limitmax(), SCORE_LIMITMAX);
+    }
+
+    // =============================================================================
+    // Word Flag Tests
+    // =============================================================================
+
+    #[test]
+    fn test_wf_is_rare() {
+        assert!(rs_wf_is_rare(WF_RARE));
+        assert!(!rs_wf_is_rare(0));
+        assert!(!rs_wf_is_rare(WF_BANNED));
+    }
+
+    #[test]
+    fn test_wf_is_banned() {
+        assert!(rs_wf_is_banned(WF_BANNED));
+        assert!(!rs_wf_is_banned(0));
+        assert!(!rs_wf_is_banned(WF_RARE));
+    }
+
+    #[test]
+    fn test_wf_is_allcap() {
+        assert!(rs_wf_is_allcap(WF_ALLCAP_FLAG));
+        assert!(!rs_wf_is_allcap(0));
+    }
+
+    #[test]
+    fn test_wf_is_onecap() {
+        assert!(rs_wf_is_onecap(WF_ONECAP_FLAG));
+        assert!(!rs_wf_is_onecap(0));
+    }
+
+    #[test]
+    fn test_wf_is_keepcap() {
+        assert!(rs_wf_is_keepcap(WF_KEEPCAP_FLAG));
+        assert!(!rs_wf_is_keepcap(0));
+    }
+
+    #[test]
+    fn test_wf_is_fixcap() {
+        assert!(rs_wf_is_fixcap(WF_FIXCAP_FLAG));
+        assert!(!rs_wf_is_fixcap(0));
+    }
+
+    #[test]
+    fn test_wf_has_region() {
+        assert!(rs_wf_has_region(WF_REGION));
+        assert!(!rs_wf_has_region(0));
+    }
+
+    #[test]
+    fn test_wf_has_afx() {
+        assert!(rs_wf_has_afx(WF_AFX));
+        assert!(!rs_wf_has_afx(0));
     }
 }
