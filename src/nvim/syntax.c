@@ -6222,3 +6222,225 @@ int nvim_syn_count_fold_items(void)
   }
   return count;
 }
+
+// ============================================================================
+// Phase 4: Pattern matching accessors
+// ============================================================================
+
+/// Get sp_prog (compiled regex program) - returns NULL if not compiled
+regprog_T *nvim_synpat_get_prog(synpat_T *pat)
+{
+  return pat->sp_prog;
+}
+
+/// Check if pattern has a compiled program
+int nvim_synpat_has_prog(synpat_T *pat)
+{
+  return pat->sp_prog != NULL;
+}
+
+/// Get sp_cont_list (contains list)
+int16_t *nvim_synpat_get_cont_list(synpat_T *pat)
+{
+  return pat->sp_cont_list;
+}
+
+/// Get sp_next_list (nextgroup list)
+int16_t *nvim_synpat_get_next_list(synpat_T *pat)
+{
+  return pat->sp_next_list;
+}
+
+/// Get sp_syn.cont_in_list (containedin list)
+int16_t *nvim_synpat_get_cont_in_list(synpat_T *pat)
+{
+  return pat->sp_syn.cont_in_list;
+}
+
+/// Check if the pattern has a contains list
+int nvim_synpat_has_cont_list(synpat_T *pat)
+{
+  return pat->sp_cont_list != NULL;
+}
+
+/// Check if the pattern has a nextgroup list
+int nvim_synpat_has_next_list(synpat_T *pat)
+{
+  return pat->sp_next_list != NULL;
+}
+
+/// Check if the pattern has a containedin list
+int nvim_synpat_has_cont_in_list(synpat_T *pat)
+{
+  return pat->sp_syn.cont_in_list != NULL;
+}
+
+// ============================================================================
+// Phase 4: Keyword hashtable accessors
+// ============================================================================
+
+/// Get the matching-case keyword hashtable from synblock
+hashtab_T *nvim_synblock_get_keywtab(synblock_T *block)
+{
+  return &block->b_keywtab;
+}
+
+/// Get the ignore-case keyword hashtable from synblock
+hashtab_T *nvim_synblock_get_keywtab_ic(synblock_T *block)
+{
+  return &block->b_keywtab_ic;
+}
+
+/// Check if the matching-case keyword hashtable has entries
+int nvim_synblock_has_keywords(synblock_T *block)
+{
+  return block->b_keywtab.ht_used > 0;
+}
+
+/// Check if the ignore-case keyword hashtable has entries
+int nvim_synblock_has_keywords_ic(synblock_T *block)
+{
+  return block->b_keywtab_ic.ht_used > 0;
+}
+
+/// Get number of entries in matching-case keyword hashtable
+size_t nvim_synblock_keywtab_count(synblock_T *block)
+{
+  return block->b_keywtab.ht_used;
+}
+
+/// Get number of entries in ignore-case keyword hashtable
+size_t nvim_synblock_keywtab_ic_count(synblock_T *block)
+{
+  return block->b_keywtab_ic.ht_used;
+}
+
+// ============================================================================
+// Phase 4: Keyentry accessors
+// ============================================================================
+
+/// Get ke_next_list (nextgroup list for keyword)
+int16_t *nvim_keyentry_get_next_list(keyentry_T *ke)
+{
+  return ke->next_list;
+}
+
+/// Get k_syn.cont_in_list (containedin list for keyword)
+int16_t *nvim_keyentry_get_cont_in_list(keyentry_T *ke)
+{
+  return ke->k_syn.cont_in_list;
+}
+
+/// Check if keyword has a nextgroup list
+int nvim_keyentry_has_next_list(keyentry_T *ke)
+{
+  return ke->next_list != NULL;
+}
+
+/// Check if keyword has a containedin list
+int nvim_keyentry_has_cont_in_list(keyentry_T *ke)
+{
+  return ke->k_syn.cont_in_list != NULL;
+}
+
+// ============================================================================
+// Phase 4: Cluster list accessors
+// ============================================================================
+
+/// Get scl_list (cluster contains list)
+int16_t *nvim_syncluster_get_list(syn_cluster_T *cluster)
+{
+  return cluster->scl_list;
+}
+
+/// Check if cluster has a list
+int nvim_syncluster_has_list(syn_cluster_T *cluster)
+{
+  return cluster->scl_list != NULL;
+}
+
+/// Get cluster ID from synblock
+int nvim_synblock_get_cluster_id(synblock_T *block, int idx)
+{
+  if (idx < 0 || idx >= block->b_syn_clusters.ga_len) {
+    return 0;
+  }
+  return SYN_CLSTR(block)[idx].scl_id;
+}
+
+// ============================================================================
+// Phase 4: ID list iteration helpers
+// ============================================================================
+
+/// Get the first item in an ID list (returns 0 if list is NULL)
+int16_t nvim_id_list_first(int16_t *list)
+{
+  if (list == NULL) {
+    return 0;
+  }
+  return *list;
+}
+
+/// Get the item at index in an ID list (no bounds checking - caller responsibility)
+int16_t nvim_id_list_get(int16_t *list, int idx)
+{
+  return list[idx];
+}
+
+/// Check if list starts with ALLBUT/TOP/CONTAINED marker
+int nvim_id_list_is_special(int16_t *list)
+{
+  if (list == NULL) {
+    return 0;
+  }
+  int16_t first = *list;
+  return first >= SYNID_ALLBUT && first < SYNID_CLUSTER;
+}
+
+/// Count items in an ID list (terminated by 0)
+int nvim_id_list_count(int16_t *list)
+{
+  if (list == NULL) {
+    return 0;
+  }
+  int count = 0;
+  while (*list != 0) {
+    count++;
+    list++;
+  }
+  return count;
+}
+
+// ============================================================================
+// Phase 4: Pattern matching state accessors
+// ============================================================================
+
+/// Get next_match_idx (index of next pattern to match)
+int nvim_syn_get_next_match_idx(void)
+{
+  return next_match_idx;
+}
+
+/// Get next_match_col (column where next match starts)
+int nvim_syn_get_next_match_col(void)
+{
+  return next_match_col;
+}
+
+/// Check if there is a pending next match
+int nvim_syn_has_next_match(void)
+{
+  return next_match_idx >= 0;
+}
+
+/// Get current_next_list (nextgroup list for current state)
+int16_t *nvim_syn_get_current_next_list(void)
+{
+  return current_next_list;
+}
+
+/// Check if there is a current nextgroup list
+int nvim_syn_has_current_next_list(void)
+{
+  return current_next_list != NULL;
+}

@@ -102,6 +102,44 @@ impl KeyEntryHandle {
     }
 }
 
+/// Opaque handle to a regprog_T (compiled regex program)
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct RegProgHandle(*mut std::ffi::c_void);
+
+impl RegProgHandle {
+    /// Check if the handle is null
+    #[must_use]
+    pub fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+
+    /// Create a null handle
+    #[must_use]
+    pub fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+}
+
+/// Opaque handle to an ID list (int16_t array terminated by 0)
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct IdListHandle(*mut i16);
+
+impl IdListHandle {
+    /// Check if the handle is null
+    #[must_use]
+    pub fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+
+    /// Create a null handle
+    #[must_use]
+    pub fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+}
+
 // =============================================================================
 // Constants - Highlight flags (HL_*)
 // =============================================================================
@@ -595,6 +633,114 @@ extern "C" {
 
     /// Count items with HL_FOLD flag in current state
     fn nvim_syn_count_fold_items() -> c_int;
+
+    // -------------------------------------------------------------------------
+    // Phase 4: Pattern matching accessors
+    // -------------------------------------------------------------------------
+
+    /// Get sp_prog (compiled regex program)
+    fn nvim_synpat_get_prog(pat: SynPatHandle) -> RegProgHandle;
+
+    /// Check if pattern has a compiled program
+    fn nvim_synpat_has_prog(pat: SynPatHandle) -> c_int;
+
+    /// Get sp_cont_list (contains list)
+    fn nvim_synpat_get_cont_list(pat: SynPatHandle) -> IdListHandle;
+
+    /// Get sp_next_list (nextgroup list)
+    fn nvim_synpat_get_next_list(pat: SynPatHandle) -> IdListHandle;
+
+    /// Get sp_syn.cont_in_list (containedin list)
+    fn nvim_synpat_get_cont_in_list(pat: SynPatHandle) -> IdListHandle;
+
+    /// Check if pattern has a contains list
+    fn nvim_synpat_has_cont_list(pat: SynPatHandle) -> c_int;
+
+    /// Check if pattern has a nextgroup list
+    fn nvim_synpat_has_next_list(pat: SynPatHandle) -> c_int;
+
+    /// Check if pattern has a containedin list
+    fn nvim_synpat_has_cont_in_list(pat: SynPatHandle) -> c_int;
+
+    // -------------------------------------------------------------------------
+    // Phase 4: Keyword hashtable accessors
+    // -------------------------------------------------------------------------
+
+    /// Check if synblock has matching-case keywords
+    fn nvim_synblock_has_keywords(block: SynBlockHandle) -> c_int;
+
+    /// Check if synblock has ignore-case keywords
+    fn nvim_synblock_has_keywords_ic(block: SynBlockHandle) -> c_int;
+
+    /// Get count of matching-case keywords
+    fn nvim_synblock_keywtab_count(block: SynBlockHandle) -> usize;
+
+    /// Get count of ignore-case keywords
+    fn nvim_synblock_keywtab_ic_count(block: SynBlockHandle) -> usize;
+
+    // -------------------------------------------------------------------------
+    // Phase 4: Keyentry list accessors
+    // -------------------------------------------------------------------------
+
+    /// Get ke_next_list (nextgroup list for keyword)
+    fn nvim_keyentry_get_next_list(ke: KeyEntryHandle) -> IdListHandle;
+
+    /// Get k_syn.cont_in_list (containedin list for keyword)
+    fn nvim_keyentry_get_cont_in_list(ke: KeyEntryHandle) -> IdListHandle;
+
+    /// Check if keyword has a nextgroup list
+    fn nvim_keyentry_has_next_list(ke: KeyEntryHandle) -> c_int;
+
+    /// Check if keyword has a containedin list
+    fn nvim_keyentry_has_cont_in_list(ke: KeyEntryHandle) -> c_int;
+
+    // -------------------------------------------------------------------------
+    // Phase 4: Cluster list accessors
+    // -------------------------------------------------------------------------
+
+    /// Get scl_list (cluster contains list)
+    fn nvim_syncluster_get_list(cluster: SynClusterHandle) -> IdListHandle;
+
+    /// Check if cluster has a list
+    fn nvim_syncluster_has_list(cluster: SynClusterHandle) -> c_int;
+
+    /// Get cluster ID from synblock at index
+    fn nvim_synblock_get_cluster_id(block: SynBlockHandle, idx: c_int) -> c_int;
+
+    // -------------------------------------------------------------------------
+    // Phase 4: ID list iteration helpers
+    // -------------------------------------------------------------------------
+
+    /// Get first item in an ID list (returns 0 if NULL)
+    fn nvim_id_list_first(list: IdListHandle) -> i16;
+
+    /// Get item at index in an ID list
+    fn nvim_id_list_get(list: IdListHandle, idx: c_int) -> i16;
+
+    /// Check if list starts with ALLBUT/TOP/CONTAINED marker
+    fn nvim_id_list_is_special(list: IdListHandle) -> c_int;
+
+    /// Count items in an ID list
+    fn nvim_id_list_count(list: IdListHandle) -> c_int;
+
+    // -------------------------------------------------------------------------
+    // Phase 4: Pattern matching state accessors
+    // -------------------------------------------------------------------------
+
+    /// Get next_match_idx
+    fn nvim_syn_get_next_match_idx() -> c_int;
+
+    /// Get next_match_col
+    fn nvim_syn_get_next_match_col() -> c_int;
+
+    /// Check if there is a pending next match
+    fn nvim_syn_has_next_match() -> c_int;
+
+    /// Get current_next_list
+    fn nvim_syn_get_current_next_list() -> IdListHandle;
+
+    /// Check if there is a current nextgroup list
+    fn nvim_syn_has_current_next_list() -> c_int;
 }
 
 // =============================================================================
@@ -937,6 +1083,303 @@ pub fn stateitem_cchar(item: StateItemHandle) -> i32 {
 }
 
 // =============================================================================
+// Phase 4: Pattern matching safe wrappers
+// =============================================================================
+
+/// Check if a pattern has a compiled regex program
+#[must_use]
+pub fn synpat_has_prog(pat: SynPatHandle) -> bool {
+    if pat.is_null() {
+        return false;
+    }
+    unsafe { nvim_synpat_has_prog(pat) != 0 }
+}
+
+/// Get the compiled regex program for a pattern
+#[must_use]
+pub fn synpat_prog(pat: SynPatHandle) -> Option<RegProgHandle> {
+    if pat.is_null() {
+        return None;
+    }
+    let prog = unsafe { nvim_synpat_get_prog(pat) };
+    if prog.is_null() {
+        None
+    } else {
+        Some(prog)
+    }
+}
+
+/// Check if a pattern has a contains list
+#[must_use]
+pub fn synpat_has_contains(pat: SynPatHandle) -> bool {
+    if pat.is_null() {
+        return false;
+    }
+    unsafe { nvim_synpat_has_cont_list(pat) != 0 }
+}
+
+/// Get the contains list for a pattern
+#[must_use]
+pub fn synpat_contains_list(pat: SynPatHandle) -> Option<IdListHandle> {
+    if pat.is_null() {
+        return None;
+    }
+    let list = unsafe { nvim_synpat_get_cont_list(pat) };
+    if list.is_null() {
+        None
+    } else {
+        Some(list)
+    }
+}
+
+/// Check if a pattern has a nextgroup list
+#[must_use]
+pub fn synpat_has_nextgroup(pat: SynPatHandle) -> bool {
+    if pat.is_null() {
+        return false;
+    }
+    unsafe { nvim_synpat_has_next_list(pat) != 0 }
+}
+
+/// Get the nextgroup list for a pattern
+#[must_use]
+pub fn synpat_nextgroup_list(pat: SynPatHandle) -> Option<IdListHandle> {
+    if pat.is_null() {
+        return None;
+    }
+    let list = unsafe { nvim_synpat_get_next_list(pat) };
+    if list.is_null() {
+        None
+    } else {
+        Some(list)
+    }
+}
+
+/// Check if a pattern has a containedin list
+#[must_use]
+pub fn synpat_has_containedin(pat: SynPatHandle) -> bool {
+    if pat.is_null() {
+        return false;
+    }
+    unsafe { nvim_synpat_has_cont_in_list(pat) != 0 }
+}
+
+/// Get the containedin list for a pattern
+#[must_use]
+pub fn synpat_containedin_list(pat: SynPatHandle) -> Option<IdListHandle> {
+    if pat.is_null() {
+        return None;
+    }
+    let list = unsafe { nvim_synpat_get_cont_in_list(pat) };
+    if list.is_null() {
+        None
+    } else {
+        Some(list)
+    }
+}
+
+// =============================================================================
+// Phase 4: Keyword safe wrappers
+// =============================================================================
+
+/// Check if a synblock has matching-case keywords
+#[must_use]
+pub fn synblock_has_keywords(block: SynBlockHandle) -> bool {
+    if block.is_null() {
+        return false;
+    }
+    unsafe { nvim_synblock_has_keywords(block) != 0 }
+}
+
+/// Check if a synblock has ignore-case keywords
+#[must_use]
+pub fn synblock_has_keywords_ic(block: SynBlockHandle) -> bool {
+    if block.is_null() {
+        return false;
+    }
+    unsafe { nvim_synblock_has_keywords_ic(block) != 0 }
+}
+
+/// Get the count of matching-case keywords
+#[must_use]
+pub fn synblock_keyword_count(block: SynBlockHandle) -> usize {
+    if block.is_null() {
+        return 0;
+    }
+    unsafe { nvim_synblock_keywtab_count(block) }
+}
+
+/// Get the count of ignore-case keywords
+#[must_use]
+pub fn synblock_keyword_count_ic(block: SynBlockHandle) -> usize {
+    if block.is_null() {
+        return 0;
+    }
+    unsafe { nvim_synblock_keywtab_ic_count(block) }
+}
+
+/// Check if a keyword entry has a nextgroup list
+#[must_use]
+pub fn keyentry_has_nextgroup(ke: KeyEntryHandle) -> bool {
+    if ke.is_null() {
+        return false;
+    }
+    unsafe { nvim_keyentry_has_next_list(ke) != 0 }
+}
+
+/// Get the nextgroup list for a keyword
+#[must_use]
+pub fn keyentry_nextgroup_list(ke: KeyEntryHandle) -> Option<IdListHandle> {
+    if ke.is_null() {
+        return None;
+    }
+    let list = unsafe { nvim_keyentry_get_next_list(ke) };
+    if list.is_null() {
+        None
+    } else {
+        Some(list)
+    }
+}
+
+/// Check if a keyword entry has a containedin list
+#[must_use]
+pub fn keyentry_has_containedin(ke: KeyEntryHandle) -> bool {
+    if ke.is_null() {
+        return false;
+    }
+    unsafe { nvim_keyentry_has_cont_in_list(ke) != 0 }
+}
+
+/// Get the containedin list for a keyword
+#[must_use]
+pub fn keyentry_containedin_list(ke: KeyEntryHandle) -> Option<IdListHandle> {
+    if ke.is_null() {
+        return None;
+    }
+    let list = unsafe { nvim_keyentry_get_cont_in_list(ke) };
+    if list.is_null() {
+        None
+    } else {
+        Some(list)
+    }
+}
+
+// =============================================================================
+// Phase 4: Cluster safe wrappers
+// =============================================================================
+
+/// Check if a cluster has a contains list
+#[must_use]
+pub fn syncluster_has_list(cluster: SynClusterHandle) -> bool {
+    if cluster.is_null() {
+        return false;
+    }
+    unsafe { nvim_syncluster_has_list(cluster) != 0 }
+}
+
+/// Get the contains list for a cluster
+#[must_use]
+pub fn syncluster_list(cluster: SynClusterHandle) -> Option<IdListHandle> {
+    if cluster.is_null() {
+        return None;
+    }
+    let list = unsafe { nvim_syncluster_get_list(cluster) };
+    if list.is_null() {
+        None
+    } else {
+        Some(list)
+    }
+}
+
+/// Get the cluster ID at an index in a synblock
+#[must_use]
+pub fn synblock_cluster_id(block: SynBlockHandle, idx: i32) -> i32 {
+    if block.is_null() {
+        return 0;
+    }
+    unsafe { nvim_synblock_get_cluster_id(block, idx) }
+}
+
+// =============================================================================
+// Phase 4: ID list safe wrappers
+// =============================================================================
+
+/// Get the first item in an ID list
+#[must_use]
+pub fn id_list_first(list: IdListHandle) -> i16 {
+    if list.is_null() {
+        return 0;
+    }
+    unsafe { nvim_id_list_first(list) }
+}
+
+/// Get an item at index in an ID list
+#[must_use]
+pub fn id_list_get(list: IdListHandle, idx: i32) -> i16 {
+    if list.is_null() {
+        return 0;
+    }
+    unsafe { nvim_id_list_get(list, idx) }
+}
+
+/// Check if an ID list starts with a special marker (ALLBUT/TOP/CONTAINED)
+#[must_use]
+pub fn id_list_is_special(list: IdListHandle) -> bool {
+    if list.is_null() {
+        return false;
+    }
+    unsafe { nvim_id_list_is_special(list) != 0 }
+}
+
+/// Count the number of items in an ID list
+#[must_use]
+pub fn id_list_count(list: IdListHandle) -> i32 {
+    if list.is_null() {
+        return 0;
+    }
+    unsafe { nvim_id_list_count(list) }
+}
+
+// =============================================================================
+// Phase 4: Pattern matching state safe wrappers
+// =============================================================================
+
+/// Get the index of the next pattern to match
+#[must_use]
+pub fn next_match_idx() -> i32 {
+    unsafe { nvim_syn_get_next_match_idx() }
+}
+
+/// Get the column where the next match starts
+#[must_use]
+pub fn next_match_col() -> i32 {
+    unsafe { nvim_syn_get_next_match_col() }
+}
+
+/// Check if there is a pending next match
+#[must_use]
+pub fn has_next_match() -> bool {
+    unsafe { nvim_syn_has_next_match() != 0 }
+}
+
+/// Get the current nextgroup list
+#[must_use]
+pub fn current_next_list() -> Option<IdListHandle> {
+    let list = unsafe { nvim_syn_get_current_next_list() };
+    if list.is_null() {
+        None
+    } else {
+        Some(list)
+    }
+}
+
+/// Check if there is a current nextgroup list
+#[must_use]
+pub fn has_current_next_list() -> bool {
+    unsafe { nvim_syn_has_current_next_list() != 0 }
+}
+
+// =============================================================================
 // FFI exports - Syntax state checking
 // =============================================================================
 
@@ -1256,6 +1699,214 @@ pub extern "C" fn rs_syn_get_state_item(idx: c_int) -> StateItemHandle {
     get_cur_state(idx).unwrap_or(StateItemHandle(std::ptr::null_mut()))
 }
 
+// =============================================================================
+// FFI exports - Phase 4: Pattern matching
+// =============================================================================
+
+/// Check if a pattern has a compiled regex program
+///
+/// # Safety
+/// `pat` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_synpat_has_prog(pat: SynPatHandle) -> c_int {
+    if synpat_has_prog(pat) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Check if a pattern has a contains list
+///
+/// # Safety
+/// `pat` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_synpat_has_contains(pat: SynPatHandle) -> c_int {
+    if synpat_has_contains(pat) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Check if a pattern has a nextgroup list
+///
+/// # Safety
+/// `pat` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_synpat_has_nextgroup(pat: SynPatHandle) -> c_int {
+    if synpat_has_nextgroup(pat) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Check if a pattern has a containedin list
+///
+/// # Safety
+/// `pat` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_synpat_has_containedin(pat: SynPatHandle) -> c_int {
+    if synpat_has_containedin(pat) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Check if a synblock has matching-case keywords
+///
+/// # Safety
+/// `block` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_synblock_has_keywords(block: SynBlockHandle) -> c_int {
+    if synblock_has_keywords(block) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Check if a synblock has ignore-case keywords
+///
+/// # Safety
+/// `block` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_synblock_has_keywords_ic(block: SynBlockHandle) -> c_int {
+    if synblock_has_keywords_ic(block) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Get the count of matching-case keywords
+///
+/// # Safety
+/// `block` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_synblock_keyword_count(block: SynBlockHandle) -> usize {
+    synblock_keyword_count(block)
+}
+
+/// Get the count of ignore-case keywords
+///
+/// # Safety
+/// `block` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_synblock_keyword_count_ic(block: SynBlockHandle) -> usize {
+    synblock_keyword_count_ic(block)
+}
+
+/// Check if a keyword entry has a nextgroup list
+///
+/// # Safety
+/// `ke` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_keyentry_has_nextgroup(ke: KeyEntryHandle) -> c_int {
+    if keyentry_has_nextgroup(ke) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Check if a keyword entry has a containedin list
+///
+/// # Safety
+/// `ke` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_keyentry_has_containedin(ke: KeyEntryHandle) -> c_int {
+    if keyentry_has_containedin(ke) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Check if a cluster has a contains list
+///
+/// # Safety
+/// `cluster` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_syncluster_has_list(cluster: SynClusterHandle) -> c_int {
+    if syncluster_has_list(cluster) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Get the cluster ID at an index in a synblock
+///
+/// # Safety
+/// `block` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_synblock_cluster_id(block: SynBlockHandle, idx: c_int) -> c_int {
+    synblock_cluster_id(block, idx)
+}
+
+/// Get the first item in an ID list
+#[no_mangle]
+pub extern "C" fn rs_id_list_first(list: IdListHandle) -> i16 {
+    id_list_first(list)
+}
+
+/// Get an item at index in an ID list
+#[no_mangle]
+pub extern "C" fn rs_id_list_get(list: IdListHandle, idx: c_int) -> i16 {
+    id_list_get(list, idx)
+}
+
+/// Check if an ID list starts with a special marker (ALLBUT/TOP/CONTAINED)
+#[no_mangle]
+pub extern "C" fn rs_id_list_is_special(list: IdListHandle) -> c_int {
+    if id_list_is_special(list) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Count the number of items in an ID list
+#[no_mangle]
+pub extern "C" fn rs_id_list_count(list: IdListHandle) -> c_int {
+    id_list_count(list)
+}
+
+/// Get the index of the next pattern to match
+#[no_mangle]
+pub extern "C" fn rs_syn_next_match_idx() -> c_int {
+    next_match_idx()
+}
+
+/// Get the column where the next match starts
+#[no_mangle]
+pub extern "C" fn rs_syn_next_match_col() -> c_int {
+    next_match_col()
+}
+
+/// Check if there is a pending next match
+#[no_mangle]
+pub extern "C" fn rs_syn_has_next_match() -> c_int {
+    if has_next_match() {
+        1
+    } else {
+        0
+    }
+}
+
+/// Check if there is a current nextgroup list
+#[no_mangle]
+pub extern "C" fn rs_syn_has_current_next_list() -> c_int {
+    if has_current_next_list() {
+        1
+    } else {
+        0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1302,6 +1953,8 @@ mod tests {
         let null_item = StateItemHandle(std::ptr::null_mut());
         let null_cluster = SynClusterHandle(std::ptr::null_mut());
         let null_key = KeyEntryHandle(std::ptr::null_mut());
+        let null_prog = RegProgHandle::null();
+        let null_idlist = IdListHandle::null();
 
         assert!(null_block.is_null());
         assert!(null_state.is_null());
@@ -1309,7 +1962,13 @@ mod tests {
         assert!(null_item.is_null());
         assert!(null_cluster.is_null());
         assert!(null_key.is_null());
+        assert!(null_prog.is_null());
+        assert!(null_idlist.is_null());
     }
+
+    // Note: test_phase4_null_safe_wrappers cannot be run in isolation because
+    // the safe wrappers call C FFI functions. These are tested via the full
+    // Neovim functional test suite instead.
 
     #[test]
     fn test_hl_flags_are_distinct() {
