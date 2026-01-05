@@ -1908,6 +1908,490 @@ unsafe fn undo_time_to_target(
     }
 }
 
+// =============================================================================
+// Phase 1: Undo Tree Traversal Helpers
+// =============================================================================
+
+/// Walk the undo tree and count the total number of undo headers.
+///
+/// # Safety
+///
+/// The `buf` handle must be a valid pointer to a buf_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_undo_tree_count(buf: BufHandle) -> c_int {
+    let mut count: c_int = 0;
+    let mut uhp = nvim_buf_get_b_u_oldhead(buf);
+
+    while !uhp.0.is_null() {
+        count += 1;
+        // Count alternate branches
+        let mut alt = nvim_uhp_get_alt_next(uhp);
+        while !alt.0.is_null() {
+            count += rs_undo_branch_count(alt);
+            alt = nvim_uhp_get_alt_next(alt);
+        }
+        uhp = nvim_uhp_get_prev(uhp);
+    }
+
+    count
+}
+
+/// Count headers in a branch (recursive helper).
+///
+/// # Safety
+///
+/// The `uhp` handle must be a valid pointer to a u_header_T or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_undo_branch_count(uhp: UHeaderHandle) -> c_int {
+    if uhp.0.is_null() {
+        return 0;
+    }
+
+    let mut count: c_int = 1;
+    let mut current = nvim_uhp_get_prev(uhp);
+
+    while !current.0.is_null() {
+        count += 1;
+        // Count alternate branches
+        let mut alt = nvim_uhp_get_alt_next(current);
+        while !alt.0.is_null() {
+            count += rs_undo_branch_count(alt);
+            alt = nvim_uhp_get_alt_next(alt);
+        }
+        current = nvim_uhp_get_prev(current);
+    }
+
+    count
+}
+
+/// Find an undo header by sequence number.
+///
+/// # Safety
+///
+/// The `buf` handle must be a valid pointer to a buf_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_undo_find_seq(buf: BufHandle, seq: c_int) -> UHeaderHandle {
+    let mut uhp = nvim_buf_get_b_u_newhead(buf);
+
+    while !uhp.0.is_null() {
+        if nvim_uhp_get_seq(uhp) == seq {
+            return uhp;
+        }
+
+        // Check alternate branches
+        let mut alt = nvim_uhp_get_alt_next(uhp);
+        while !alt.0.is_null() {
+            let found = rs_undo_find_seq_in_branch(alt, seq);
+            if !found.0.is_null() {
+                return found;
+            }
+            alt = nvim_uhp_get_alt_next(alt);
+        }
+
+        uhp = nvim_uhp_get_next(uhp);
+    }
+
+    UHeaderHandle(std::ptr::null_mut())
+}
+
+/// Find sequence number in a branch (recursive helper).
+///
+/// # Safety
+///
+/// The `uhp` handle must be a valid pointer to a u_header_T or NULL.
+unsafe fn rs_undo_find_seq_in_branch(uhp: UHeaderHandle, seq: c_int) -> UHeaderHandle {
+    if uhp.0.is_null() {
+        return UHeaderHandle(std::ptr::null_mut());
+    }
+
+    if nvim_uhp_get_seq(uhp) == seq {
+        return uhp;
+    }
+
+    let mut current = nvim_uhp_get_prev(uhp);
+    while !current.0.is_null() {
+        if nvim_uhp_get_seq(current) == seq {
+            return current;
+        }
+
+        // Check alternate branches
+        let mut alt = nvim_uhp_get_alt_next(current);
+        while !alt.0.is_null() {
+            let found = rs_undo_find_seq_in_branch(alt, seq);
+            if !found.0.is_null() {
+                return found;
+            }
+            alt = nvim_uhp_get_alt_next(alt);
+        }
+
+        current = nvim_uhp_get_prev(current);
+    }
+
+    UHeaderHandle(std::ptr::null_mut())
+}
+
+/// Count the number of undo entries in a header.
+///
+/// # Safety
+///
+/// The `uhp` handle must be a valid pointer to a u_header_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_undo_count_entries(uhp: UHeaderHandle) -> c_int {
+    if uhp.0.is_null() {
+        return 0;
+    }
+
+    let mut count: c_int = 0;
+    let mut uep = nvim_uhp_get_entry(uhp);
+
+    while !uep.0.is_null() {
+        count += 1;
+        uep = nvim_uep_get_next(uep);
+    }
+
+    count
+}
+
+/// Get the depth of the undo tree (longest path from root to leaf).
+///
+/// # Safety
+///
+/// The `buf` handle must be a valid pointer to a buf_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_undo_get_tree_depth(buf: BufHandle) -> c_int {
+    let oldhead = nvim_buf_get_b_u_oldhead(buf);
+    rs_undo_get_branch_depth(oldhead)
+}
+
+/// Get the depth of a branch (recursive helper).
+///
+/// # Safety
+///
+/// The `uhp` handle must be a valid pointer to a u_header_T or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_undo_get_branch_depth(uhp: UHeaderHandle) -> c_int {
+    if uhp.0.is_null() {
+        return 0;
+    }
+
+    let mut max_depth: c_int = 0;
+
+    // Check this branch
+    let mut current = uhp;
+    let mut depth: c_int = 0;
+    while !current.0.is_null() {
+        depth += 1;
+
+        // Check alternate branches
+        let mut alt = nvim_uhp_get_alt_next(current);
+        while !alt.0.is_null() {
+            let alt_depth = rs_undo_get_branch_depth(alt);
+            if depth + alt_depth > max_depth {
+                max_depth = depth + alt_depth;
+            }
+            alt = nvim_uhp_get_alt_next(alt);
+        }
+
+        current = nvim_uhp_get_prev(current);
+    }
+
+    if depth > max_depth {
+        depth
+    } else {
+        max_depth
+    }
+}
+
+/// Check if undo is available for the buffer.
+///
+/// # Safety
+///
+/// The `buf` handle must be a valid pointer to a buf_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_undo_can_undo(buf: BufHandle) -> bool {
+    let curhead = nvim_buf_get_b_u_curhead(buf);
+    let newhead = nvim_buf_get_b_u_newhead(buf);
+
+    // Can undo if curhead is NULL (first undo) and newhead exists
+    // or if curhead exists and has a next header
+    if curhead.0.is_null() {
+        !newhead.0.is_null()
+    } else {
+        !nvim_uhp_get_next(curhead).0.is_null()
+    }
+}
+
+/// Check if redo is available for the buffer.
+///
+/// # Safety
+///
+/// The `buf` handle must be a valid pointer to a buf_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_undo_can_redo(buf: BufHandle) -> bool {
+    let curhead = nvim_buf_get_b_u_curhead(buf);
+    // Can redo if curhead exists (there's something to redo)
+    !curhead.0.is_null()
+}
+
+/// Get the current undo sequence number.
+///
+/// # Safety
+///
+/// The `buf` handle must be a valid pointer to a buf_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_undo_get_seq_cur(buf: BufHandle) -> c_int {
+    nvim_buf_get_b_u_seq_cur(buf)
+}
+
+/// Get the last undo sequence number.
+///
+/// # Safety
+///
+/// The `buf` handle must be a valid pointer to a buf_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_undo_get_seq_last(buf: BufHandle) -> c_int {
+    nvim_buf_get_b_u_seq_last(buf)
+}
+
+/// Get the number of undo headers in the buffer.
+///
+/// # Safety
+///
+/// The `buf` handle must be a valid pointer to a buf_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_undo_get_numhead(buf: BufHandle) -> c_int {
+    nvim_buf_get_b_u_numhead(buf)
+}
+
+/// Get the current undo time.
+///
+/// # Safety
+///
+/// The `buf` handle must be a valid pointer to a buf_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_undo_get_time_cur(buf: BufHandle) -> TimeT {
+    nvim_buf_get_b_u_time_cur(buf)
+}
+
+/// Get the save number of the current header.
+///
+/// # Safety
+///
+/// The `buf` handle must be a valid pointer to a buf_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_undo_get_save_nr_cur(buf: BufHandle) -> c_int {
+    nvim_buf_get_b_u_save_nr_cur(buf)
+}
+
+/// Get the last save number.
+///
+/// # Safety
+///
+/// The `buf` handle must be a valid pointer to a buf_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_undo_get_save_nr_last(buf: BufHandle) -> c_int {
+    nvim_buf_get_b_u_save_nr_last(buf)
+}
+
+/// Check if the undo list is synced.
+///
+/// # Safety
+///
+/// The `buf` handle must be a valid pointer to a buf_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_undo_is_synced(buf: BufHandle) -> bool {
+    nvim_buf_get_b_u_synced(buf)
+}
+
+// =============================================================================
+// Phase 2: Undo Header Accessors
+// =============================================================================
+
+/// Get the sequence number from an undo header.
+///
+/// # Safety
+///
+/// The `uhp` handle must be a valid pointer to a u_header_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_uhp_get_seq(uhp: UHeaderHandle) -> c_int {
+    nvim_uhp_get_seq(uhp)
+}
+
+/// Get the time from an undo header.
+///
+/// # Safety
+///
+/// The `uhp` handle must be a valid pointer to a u_header_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_uhp_get_time(uhp: UHeaderHandle) -> TimeT {
+    nvim_uhp_get_time(uhp)
+}
+
+/// Get the flags from an undo header.
+///
+/// # Safety
+///
+/// The `uhp` handle must be a valid pointer to a u_header_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_uhp_get_flags(uhp: UHeaderHandle) -> c_int {
+    nvim_uhp_get_flags(uhp)
+}
+
+/// Get the save number from an undo header.
+///
+/// # Safety
+///
+/// The `uhp` handle must be a valid pointer to a u_header_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_uhp_get_save_nr(uhp: UHeaderHandle) -> c_int {
+    nvim_uhp_get_save_nr(uhp)
+}
+
+/// Get the next header in the list.
+///
+/// # Safety
+///
+/// The `uhp` handle must be a valid pointer to a u_header_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_uhp_get_next(uhp: UHeaderHandle) -> UHeaderHandle {
+    nvim_uhp_get_next(uhp)
+}
+
+/// Get the previous header in the list.
+///
+/// # Safety
+///
+/// The `uhp` handle must be a valid pointer to a u_header_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_uhp_get_prev(uhp: UHeaderHandle) -> UHeaderHandle {
+    nvim_uhp_get_prev(uhp)
+}
+
+/// Get the next alternate header.
+///
+/// # Safety
+///
+/// The `uhp` handle must be a valid pointer to a u_header_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_uhp_get_alt_next(uhp: UHeaderHandle) -> UHeaderHandle {
+    nvim_uhp_get_alt_next(uhp)
+}
+
+/// Get the previous alternate header.
+///
+/// # Safety
+///
+/// The `uhp` handle must be a valid pointer to a u_header_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_uhp_get_alt_prev(uhp: UHeaderHandle) -> UHeaderHandle {
+    nvim_uhp_get_alt_prev(uhp)
+}
+
+/// Get the first entry in an undo header.
+///
+/// # Safety
+///
+/// The `uhp` handle must be a valid pointer to a u_header_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_uhp_get_entry(uhp: UHeaderHandle) -> UEntryHandle {
+    nvim_uhp_get_entry(uhp)
+}
+
+/// Check if an undo header is NULL.
+#[no_mangle]
+pub extern "C" fn rs_uhp_is_null(uhp: UHeaderHandle) -> bool {
+    uhp.0.is_null()
+}
+
+/// Check if an undo entry is NULL.
+#[no_mangle]
+pub extern "C" fn rs_uep_is_null(uep: UEntryHandle) -> bool {
+    uep.0.is_null()
+}
+
+// =============================================================================
+// Phase 2: Undo Entry Accessors
+// =============================================================================
+
+/// Get the top line number from an undo entry.
+///
+/// # Safety
+///
+/// The `uep` handle must be a valid pointer to a u_entry_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_uep_get_top(uep: UEntryHandle) -> LinenrT {
+    nvim_uep_get_top(uep)
+}
+
+/// Get the bottom line number from an undo entry.
+///
+/// # Safety
+///
+/// The `uep` handle must be a valid pointer to a u_entry_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_uep_get_bot(uep: UEntryHandle) -> LinenrT {
+    nvim_uep_get_bot(uep)
+}
+
+/// Get the line count from an undo entry.
+///
+/// # Safety
+///
+/// The `uep` handle must be a valid pointer to a u_entry_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_uep_get_lcount(uep: UEntryHandle) -> LinenrT {
+    nvim_uep_get_lcount(uep)
+}
+
+/// Get the size (number of lines) from an undo entry.
+///
+/// # Safety
+///
+/// The `uep` handle must be a valid pointer to a u_entry_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_uep_get_size(uep: UEntryHandle) -> LinenrT {
+    nvim_uep_get_size(uep)
+}
+
+/// Get the next entry in the list.
+///
+/// # Safety
+///
+/// The `uep` handle must be a valid pointer to a u_entry_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_uep_get_next(uep: UEntryHandle) -> UEntryHandle {
+    nvim_uep_get_next(uep)
+}
+
+/// Get a line from the undo entry's array.
+///
+/// # Safety
+///
+/// The `uep` handle must be a valid pointer to a u_entry_T.
+/// The index must be valid (0 <= idx < size).
+#[no_mangle]
+pub unsafe extern "C" fn rs_uep_get_line(uep: UEntryHandle, idx: LinenrT) -> *const c_char {
+    nvim_uep_get_array_element(uep, idx)
+}
+
+/// Get the number of lines affected by an undo entry.
+/// This is the number of lines that will be replaced (bot - top - 1).
+///
+/// # Safety
+///
+/// The `uep` handle must be a valid pointer to a u_entry_T.
+#[no_mangle]
+pub unsafe extern "C" fn rs_uep_get_line_count(uep: UEntryHandle) -> LinenrT {
+    let top = nvim_uep_get_top(uep);
+    let bot = nvim_uep_get_bot(uep);
+    if bot == 0 {
+        // Bot of 0 means end of buffer
+        0
+    } else {
+        bot - top - 1
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1927,5 +2411,11 @@ mod tests {
             std::mem::size_of::<UEntryHandle>(),
             std::mem::size_of::<*mut c_void>()
         );
+    }
+
+    #[test]
+    fn test_null_handle_checks() {
+        assert!(rs_uhp_is_null(UHeaderHandle(std::ptr::null_mut())));
+        assert!(rs_uep_is_null(UEntryHandle(std::ptr::null_mut())));
     }
 }

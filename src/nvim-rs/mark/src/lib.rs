@@ -500,3 +500,519 @@ mod tests {
         assert_ne!(rs_lt(a, c), 0); // a < c (transitivity)
     }
 }
+
+// =============================================================================
+// Phase 5: Mark System Foundation - Additional Functions
+// =============================================================================
+
+/// Number of file marks (A-Z + 0-9)
+pub const NGLOBALMARKS: c_int = NMARKS + 10; // 36
+
+/// Check if a character is a valid named mark (a-z).
+#[no_mangle]
+pub extern "C" fn rs_mark_is_valid_named(name: c_int) -> bool {
+    let Ok(c) = u8::try_from(name) else {
+        return false;
+    };
+    ascii_islower(c)
+}
+
+/// Check if a character is a valid file mark (A-Z or 0-9).
+#[no_mangle]
+pub extern "C" fn rs_mark_is_file_mark(name: c_int) -> bool {
+    let Ok(c) = u8::try_from(name) else {
+        return false;
+    };
+    ascii_isupper(c) || ascii_isdigit(c)
+}
+
+/// Check if a mark name is a jump mark (' or `).
+#[no_mangle]
+pub extern "C" fn rs_mark_is_jump_mark(name: c_int) -> bool {
+    let Ok(c) = u8::try_from(name) else {
+        return false;
+    };
+    c == b'\'' || c == b'`'
+}
+
+/// Check if a mark name is a special mark.
+#[no_mangle]
+pub extern "C" fn rs_mark_is_special(name: c_int) -> bool {
+    let Ok(c) = u8::try_from(name) else {
+        return false;
+    };
+    matches!(c, b'"' | b'^' | b'.' | b'[' | b']' | b'<' | b'>' | b'\'' | b'`')
+}
+
+/// Check if a mark name is a visual mark (< or >).
+#[no_mangle]
+pub extern "C" fn rs_mark_is_visual(name: c_int) -> bool {
+    let Ok(c) = u8::try_from(name) else {
+        return false;
+    };
+    c == b'<' || c == b'>'
+}
+
+/// Check if a mark name is the last cursor position mark (").
+#[no_mangle]
+pub extern "C" fn rs_mark_is_last_cursor(name: c_int) -> bool {
+    name == c_int::from(b'"')
+}
+
+/// Check if a mark name is the last insert position mark (^).
+#[no_mangle]
+pub extern "C" fn rs_mark_is_last_insert(name: c_int) -> bool {
+    name == c_int::from(b'^')
+}
+
+/// Check if a mark name is the last change position mark (.).
+#[no_mangle]
+pub extern "C" fn rs_mark_is_last_change(name: c_int) -> bool {
+    name == c_int::from(b'.')
+}
+
+/// Check if a mark name is a sentence boundary mark ([ or ]).
+#[no_mangle]
+pub extern "C" fn rs_mark_is_sentence(name: c_int) -> bool {
+    let Ok(c) = u8::try_from(name) else {
+        return false;
+    };
+    c == b'[' || c == b']'
+}
+
+/// Check if a position is valid (non-zero line number).
+#[no_mangle]
+pub extern "C" fn rs_pos_is_valid(pos: PosT) -> c_int {
+    c_int::from(pos.lnum > 0)
+}
+
+/// Check if a position line is in range for a given buffer line count.
+#[no_mangle]
+pub extern "C" fn rs_pos_in_range(pos: PosT, line_count: i32) -> c_int {
+    c_int::from(pos.lnum > 0 && pos.lnum <= line_count)
+}
+
+/// Compare two positions and return -1, 0, or 1.
+#[no_mangle]
+pub extern "C" fn rs_pos_compare(a: PosT, b: PosT) -> c_int {
+    if rs_lt(a, b) != 0 {
+        -1
+    } else if rs_equalpos(a, b) != 0 {
+        0
+    } else {
+        1
+    }
+}
+
+/// Copy position from source to destination.
+///
+/// # Safety
+///
+/// Both pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pos_copy(dst: *mut PosT, src: *const PosT) {
+    if !dst.is_null() && !src.is_null() {
+        *dst = *src;
+    }
+}
+
+/// Get the line number from a position.
+#[no_mangle]
+pub extern "C" fn rs_pos_get_lnum(pos: PosT) -> i32 {
+    pos.lnum
+}
+
+/// Get the column number from a position.
+#[no_mangle]
+pub extern "C" fn rs_pos_get_col(pos: PosT) -> i32 {
+    pos.col
+}
+
+/// Get the virtual column add from a position.
+#[no_mangle]
+pub extern "C" fn rs_pos_get_coladd(pos: PosT) -> i32 {
+    pos.coladd
+}
+
+/// Set the line number in a position.
+///
+/// # Safety
+///
+/// The pointer must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pos_set_lnum(pos: *mut PosT, lnum: i32) {
+    if !pos.is_null() {
+        (*pos).lnum = lnum;
+    }
+}
+
+/// Set the column number in a position.
+///
+/// # Safety
+///
+/// The pointer must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pos_set_col(pos: *mut PosT, col: i32) {
+    if !pos.is_null() {
+        (*pos).col = col;
+    }
+}
+
+/// Set the virtual column add in a position.
+///
+/// # Safety
+///
+/// The pointer must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pos_set_coladd(pos: *mut PosT, coladd: i32) {
+    if !pos.is_null() {
+        (*pos).coladd = coladd;
+    }
+}
+
+// =============================================================================
+// Phase 6: Mark Operations - Additional Functions
+// =============================================================================
+
+/// Get the display name for a mark character.
+///
+/// # Safety
+///
+/// The `buf` pointer must be valid and point to at least `buf_len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mark_get_name(name: c_int, buf: *mut u8, buf_len: usize) {
+    if buf.is_null() || buf_len < 2 {
+        return;
+    }
+
+    let buf_slice = std::slice::from_raw_parts_mut(buf, buf_len);
+
+    if name == -1 {
+        // No mark
+        buf_slice[0] = b'-';
+        buf_slice[1] = 0;
+    } else if let Ok(c) = u8::try_from(name) {
+        buf_slice[0] = c;
+        buf_slice[1] = 0;
+    } else {
+        buf_slice[0] = b'?';
+        buf_slice[1] = 0;
+    }
+}
+
+/// Get a category string for a mark.
+/// Returns a static string identifying the mark category.
+#[no_mangle]
+pub extern "C" fn rs_mark_get_category(name: c_int) -> *const std::ffi::c_char {
+    let Ok(c) = u8::try_from(name) else {
+        return c"unknown".as_ptr();
+    };
+
+    if ascii_islower(c) {
+        c"local".as_ptr()
+    } else if ascii_isupper(c) {
+        c"file".as_ptr()
+    } else if ascii_isdigit(c) {
+        c"numbered".as_ptr()
+    } else if c == b'"' {
+        c"cursor".as_ptr()
+    } else if c == b'^' || c == b'.' {
+        c"change".as_ptr()
+    } else if c == b'[' || c == b']' {
+        c"text".as_ptr()
+    } else if c == b'<' || c == b'>' {
+        c"visual".as_ptr()
+    } else if c == b'\'' || c == b'`' {
+        c"jump".as_ptr()
+    } else {
+        c"special".as_ptr()
+    }
+}
+
+/// Check if mark name is user-settable (not automatic).
+#[no_mangle]
+pub extern "C" fn rs_mark_is_user_settable(name: c_int) -> bool {
+    let Ok(c) = u8::try_from(name) else {
+        return false;
+    };
+    // User can set named marks (a-z, A-Z) and some special marks
+    ascii_islower(c) || ascii_isupper(c) || c == b'\'' || c == b'`' || c == b'<' || c == b'>'
+}
+
+/// Check if mark should be persisted to shada.
+#[no_mangle]
+pub extern "C" fn rs_mark_is_persistent(name: c_int) -> bool {
+    let Ok(c) = u8::try_from(name) else {
+        return false;
+    };
+    // Named marks (a-z, A-Z), numbered marks (0-9), and special marks (", ^, .)
+    ascii_islower(c)
+        || ascii_isupper(c)
+        || ascii_isdigit(c)
+        || c == b'"'
+        || c == b'^'
+        || c == b'.'
+}
+
+/// Create a new position with given values.
+#[no_mangle]
+pub extern "C" fn rs_pos_new(lnum: i32, col: i32, coladd: i32) -> PosT {
+    PosT { lnum, col, coladd }
+}
+
+/// Create a zero position.
+#[no_mangle]
+pub extern "C" fn rs_pos_zero() -> PosT {
+    PosT {
+        lnum: 0,
+        col: 0,
+        coladd: 0,
+    }
+}
+
+/// Adjust position line number by delta.
+///
+/// # Safety
+///
+/// The pointer must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pos_adjust_line(pos: *mut PosT, delta: i32) {
+    if !pos.is_null() {
+        (*pos).lnum += delta;
+    }
+}
+
+/// Adjust position column by delta.
+///
+/// # Safety
+///
+/// The pointer must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pos_adjust_col(pos: *mut PosT, delta: i32) {
+    if !pos.is_null() {
+        (*pos).col += delta;
+    }
+}
+
+/// Clamp a position to valid buffer bounds.
+///
+/// # Safety
+///
+/// The pointer must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pos_clamp(pos: *mut PosT, max_lnum: i32, max_col: i32) {
+    if pos.is_null() {
+        return;
+    }
+
+    if (*pos).lnum < 1 {
+        (*pos).lnum = 1;
+    } else if (*pos).lnum > max_lnum {
+        (*pos).lnum = max_lnum;
+    }
+
+    if (*pos).col < 0 {
+        (*pos).col = 0;
+    } else if (*pos).col > max_col {
+        (*pos).col = max_col;
+    }
+
+    if (*pos).coladd < 0 {
+        (*pos).coladd = 0;
+    }
+}
+
+/// Get the distance (in lines) between two positions.
+#[no_mangle]
+pub extern "C" fn rs_pos_line_distance(a: PosT, b: PosT) -> i32 {
+    (b.lnum - a.lnum).abs()
+}
+
+/// Check if two positions are on the same line.
+#[no_mangle]
+pub extern "C" fn rs_pos_same_line(a: PosT, b: PosT) -> c_int {
+    c_int::from(a.lnum == b.lnum)
+}
+
+/// Swap two positions if a > b (ensure a <= b).
+///
+/// # Safety
+///
+/// Both pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pos_order(a: *mut PosT, b: *mut PosT) {
+    if a.is_null() || b.is_null() {
+        return;
+    }
+    if rs_lt(*b, *a) != 0 {
+        std::ptr::swap(a, b);
+    }
+}
+
+// =============================================================================
+// Phase 5 & 6 Tests
+// =============================================================================
+
+#[cfg(test)]
+mod phase56_tests {
+    use super::*;
+
+    #[test]
+    fn test_mark_validation() {
+        // Named mark validation
+        assert!(rs_mark_is_valid_named(c_int::from(b'a')));
+        assert!(rs_mark_is_valid_named(c_int::from(b'z')));
+        assert!(!rs_mark_is_valid_named(c_int::from(b'A')));
+        assert!(!rs_mark_is_valid_named(c_int::from(b'0')));
+
+        // File mark validation
+        assert!(rs_mark_is_file_mark(c_int::from(b'A')));
+        assert!(rs_mark_is_file_mark(c_int::from(b'Z')));
+        assert!(rs_mark_is_file_mark(c_int::from(b'0')));
+        assert!(!rs_mark_is_file_mark(c_int::from(b'a')));
+
+        // Jump mark validation
+        assert!(rs_mark_is_jump_mark(c_int::from(b'\'')));
+        assert!(rs_mark_is_jump_mark(c_int::from(b'`')));
+        assert!(!rs_mark_is_jump_mark(c_int::from(b'a')));
+    }
+
+    #[test]
+    fn test_mark_type_categorization() {
+        // Special marks
+        assert!(rs_mark_is_special(c_int::from(b'"')));
+        assert!(rs_mark_is_special(c_int::from(b'^')));
+        assert!(rs_mark_is_special(c_int::from(b'.')));
+        assert!(rs_mark_is_special(c_int::from(b'[')));
+        assert!(rs_mark_is_special(c_int::from(b']')));
+        assert!(rs_mark_is_special(c_int::from(b'<')));
+        assert!(rs_mark_is_special(c_int::from(b'>')));
+        assert!(!rs_mark_is_special(c_int::from(b'a')));
+
+        // Visual marks
+        assert!(rs_mark_is_visual(c_int::from(b'<')));
+        assert!(rs_mark_is_visual(c_int::from(b'>')));
+        assert!(!rs_mark_is_visual(c_int::from(b'a')));
+
+        // Sentence marks
+        assert!(rs_mark_is_sentence(c_int::from(b'[')));
+        assert!(rs_mark_is_sentence(c_int::from(b']')));
+        assert!(!rs_mark_is_sentence(c_int::from(b'a')));
+    }
+
+    #[test]
+    fn test_pos_constructors() {
+        let pos = rs_pos_new(10, 5, 2);
+        assert_eq!(pos.lnum, 10);
+        assert_eq!(pos.col, 5);
+        assert_eq!(pos.coladd, 2);
+
+        let zero = rs_pos_zero();
+        assert_eq!(zero.lnum, 0);
+        assert_eq!(zero.col, 0);
+        assert_eq!(zero.coladd, 0);
+    }
+
+    #[test]
+    fn test_pos_getters() {
+        let pos = rs_pos_new(10, 5, 2);
+        assert_eq!(rs_pos_get_lnum(pos), 10);
+        assert_eq!(rs_pos_get_col(pos), 5);
+        assert_eq!(rs_pos_get_coladd(pos), 2);
+    }
+
+    #[test]
+    fn test_pos_validity() {
+        let valid = rs_pos_new(1, 0, 0);
+        assert_ne!(rs_pos_is_valid(valid), 0);
+
+        let invalid = rs_pos_new(0, 0, 0);
+        assert_eq!(rs_pos_is_valid(invalid), 0);
+
+        let negative = rs_pos_new(-1, 0, 0);
+        assert_eq!(rs_pos_is_valid(negative), 0);
+    }
+
+    #[test]
+    fn test_pos_in_range() {
+        let pos = rs_pos_new(5, 0, 0);
+        assert_ne!(rs_pos_in_range(pos, 10), 0);
+        assert_eq!(rs_pos_in_range(pos, 4), 0);
+
+        let zero = rs_pos_zero();
+        assert_eq!(rs_pos_in_range(zero, 10), 0);
+    }
+
+    #[test]
+    fn test_pos_compare() {
+        let a = rs_pos_new(1, 0, 0);
+        let b = rs_pos_new(2, 0, 0);
+        let c = rs_pos_new(1, 0, 0);
+
+        assert_eq!(rs_pos_compare(a, b), -1);
+        assert_eq!(rs_pos_compare(b, a), 1);
+        assert_eq!(rs_pos_compare(a, c), 0);
+    }
+
+    #[test]
+    fn test_pos_same_line() {
+        let a = rs_pos_new(1, 0, 0);
+        let b = rs_pos_new(1, 5, 0);
+        let c = rs_pos_new(2, 0, 0);
+
+        assert_ne!(rs_pos_same_line(a, b), 0);
+        assert_eq!(rs_pos_same_line(a, c), 0);
+    }
+
+    #[test]
+    fn test_pos_line_distance() {
+        let a = rs_pos_new(1, 0, 0);
+        let b = rs_pos_new(5, 0, 0);
+        assert_eq!(rs_pos_line_distance(a, b), 4);
+        assert_eq!(rs_pos_line_distance(b, a), 4);
+    }
+
+    #[test]
+    fn test_mark_persistence() {
+        // Named marks (a-z) are persistent
+        assert!(rs_mark_is_persistent(c_int::from(b'a')));
+        assert!(rs_mark_is_persistent(c_int::from(b'z')));
+
+        // File marks (A-Z) are persistent
+        assert!(rs_mark_is_persistent(c_int::from(b'A')));
+        assert!(rs_mark_is_persistent(c_int::from(b'Z')));
+
+        // Numbered marks (0-9) are persistent
+        assert!(rs_mark_is_persistent(c_int::from(b'0')));
+        assert!(rs_mark_is_persistent(c_int::from(b'9')));
+
+        // Special persistent marks
+        assert!(rs_mark_is_persistent(c_int::from(b'"')));
+        assert!(rs_mark_is_persistent(c_int::from(b'^')));
+        assert!(rs_mark_is_persistent(c_int::from(b'.')));
+
+        // Non-persistent marks
+        assert!(!rs_mark_is_persistent(c_int::from(b'<')));
+        assert!(!rs_mark_is_persistent(c_int::from(b'>')));
+    }
+
+    #[test]
+    fn test_mark_user_settable() {
+        // Named marks are user-settable
+        assert!(rs_mark_is_user_settable(c_int::from(b'a')));
+        assert!(rs_mark_is_user_settable(c_int::from(b'A')));
+
+        // Jump marks are user-settable
+        assert!(rs_mark_is_user_settable(c_int::from(b'\'')));
+        assert!(rs_mark_is_user_settable(c_int::from(b'`')));
+
+        // Visual marks are user-settable
+        assert!(rs_mark_is_user_settable(c_int::from(b'<')));
+        assert!(rs_mark_is_user_settable(c_int::from(b'>')));
+
+        // Automatic marks are not user-settable
+        assert!(!rs_mark_is_user_settable(c_int::from(b'"')));
+        assert!(!rs_mark_is_user_settable(c_int::from(b'^')));
+        assert!(!rs_mark_is_user_settable(c_int::from(b'.')));
+    }
+}

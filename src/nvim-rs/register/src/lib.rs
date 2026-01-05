@@ -1047,6 +1047,364 @@ pub unsafe extern "C" fn rs_str_to_reg(
     }
 }
 
+// =============================================================================
+// Phase 3: Register System Foundation - Additional Functions
+// =============================================================================
+
+/// Get the register index for the unnamed register ("").
+/// Returns the index of y_previous, or -1 if not set.
+///
+/// # Safety
+///
+/// Accesses global register state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_unnamed_register_index() -> c_int {
+    nvim_get_y_previous_index()
+}
+
+/// Check if a register contains any text.
+///
+/// # Safety
+///
+/// Accesses global register state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_register_has_content(regname: c_int) -> bool {
+    let i = rs_op_reg_index(regname);
+    if i == -1 {
+        return false;
+    }
+    let reg = nvim_get_y_regs_ptr(i);
+    !nvim_yankreg_is_empty(reg)
+}
+
+/// Get the line count of a register.
+///
+/// # Safety
+///
+/// Accesses global register state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_register_get_line_count(regname: c_int) -> usize {
+    let i = rs_op_reg_index(regname);
+    if i == -1 {
+        return 0;
+    }
+    let reg = nvim_get_y_regs_ptr(i);
+    nvim_yankreg_get_size(reg)
+}
+
+/// Get the motion type of a register (linewise, charwise, blockwise).
+///
+/// # Safety
+///
+/// Accesses global register state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_register_get_motion_type(regname: c_int) -> c_int {
+    let i = rs_op_reg_index(regname);
+    if i == -1 {
+        return K_MT_UNKNOWN;
+    }
+    let reg = nvim_get_y_regs_ptr(i);
+    if nvim_yankreg_is_empty(reg) {
+        return K_MT_UNKNOWN;
+    }
+    nvim_yankreg_get_type(reg)
+}
+
+/// Get the block width of a register (only meaningful for blockwise).
+///
+/// # Safety
+///
+/// Accesses global register state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_register_get_block_width(regname: c_int) -> c_int {
+    let i = rs_op_reg_index(regname);
+    if i == -1 {
+        return 0;
+    }
+    let reg = nvim_get_y_regs_ptr(i);
+    nvim_yankreg_get_width(reg)
+}
+
+/// Check if a register is linewise.
+///
+/// # Safety
+///
+/// Accesses global register state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_register_is_linewise(regname: c_int) -> bool {
+    rs_register_get_motion_type(regname) == K_MT_LINE_WISE
+}
+
+/// Check if a register is charwise.
+///
+/// # Safety
+///
+/// Accesses global register state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_register_is_charwise(regname: c_int) -> bool {
+    rs_register_get_motion_type(regname) == K_MT_CHAR_WISE
+}
+
+/// Check if a register is blockwise.
+///
+/// # Safety
+///
+/// Accesses global register state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_register_is_blockwise(regname: c_int) -> bool {
+    rs_register_get_motion_type(regname) == K_MT_BLOCK_WISE
+}
+
+/// Check if a register is a clipboard register (* or +).
+#[no_mangle]
+pub extern "C" fn rs_register_is_clipboard(regname: c_int) -> bool {
+    let Ok(c) = u8::try_from(regname) else {
+        return false;
+    };
+    c == b'*' || c == b'+'
+}
+
+/// Check if a register is a special register (not alphanumeric).
+#[no_mangle]
+pub extern "C" fn rs_register_is_special(regname: c_int) -> bool {
+    let Ok(c) = u8::try_from(regname) else {
+        return false;
+    };
+    !ascii_isalnum(c)
+}
+
+/// Check if a register is a named register (a-z).
+#[no_mangle]
+pub extern "C" fn rs_register_is_named(regname: c_int) -> bool {
+    let Ok(c) = u8::try_from(regname) else {
+        return false;
+    };
+    ascii_islower(c)
+}
+
+/// Check if a register is a numbered register (0-9).
+#[no_mangle]
+pub extern "C" fn rs_register_is_numbered(regname: c_int) -> bool {
+    let Ok(c) = u8::try_from(regname) else {
+        return false;
+    };
+    ascii_isdigit(c)
+}
+
+/// Check if a register is read-only.
+#[no_mangle]
+pub extern "C" fn rs_register_is_readonly(regname: c_int) -> bool {
+    let Ok(c) = u8::try_from(regname) else {
+        return false;
+    };
+    // Read-only registers: . / % : =
+    strchr(b"/.%:=", c)
+}
+
+/// Check if a register is the black hole register (_).
+#[no_mangle]
+pub extern "C" fn rs_register_is_blackhole(regname: c_int) -> bool {
+    regname == c_int::from(b'_')
+}
+
+/// Check if a register is the expression register (=).
+#[no_mangle]
+pub extern "C" fn rs_register_is_expression(regname: c_int) -> bool {
+    regname == c_int::from(b'=')
+}
+
+/// Check if a register is the search register (/).
+#[no_mangle]
+pub extern "C" fn rs_register_is_search(regname: c_int) -> bool {
+    regname == c_int::from(b'/')
+}
+
+/// Check if a register is the command register (:).
+#[no_mangle]
+pub extern "C" fn rs_register_is_command(regname: c_int) -> bool {
+    regname == c_int::from(b':')
+}
+
+/// Check if a register is the filename register (%).
+#[no_mangle]
+pub extern "C" fn rs_register_is_filename(regname: c_int) -> bool {
+    regname == c_int::from(b'%')
+}
+
+/// Check if a register is the alternate filename register (#).
+#[no_mangle]
+pub extern "C" fn rs_register_is_altfile(regname: c_int) -> bool {
+    regname == c_int::from(b'#')
+}
+
+/// Check if a register is the insertion register (.).
+#[no_mangle]
+pub extern "C" fn rs_register_is_insertion(regname: c_int) -> bool {
+    regname == c_int::from(b'.')
+}
+
+/// Check if a register is the unnamed register (").
+#[no_mangle]
+pub extern "C" fn rs_register_is_unnamed(regname: c_int) -> bool {
+    regname == c_int::from(b'"')
+}
+
+/// Check if a register is the small delete register (-).
+#[no_mangle]
+pub extern "C" fn rs_register_is_small_delete(regname: c_int) -> bool {
+    regname == c_int::from(b'-')
+}
+
+// =============================================================================
+// Phase 4: Register Operations - Additional Functions
+// =============================================================================
+
+/// Clear a register's contents.
+///
+/// # Safety
+///
+/// Accesses global register state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_register_clear(regname: c_int) -> c_int {
+    let i = rs_op_reg_index(regname);
+    if i == -1 {
+        return FAIL;
+    }
+    let reg = nvim_get_y_regs_ptr(i);
+    nvim_free_register(reg);
+    nvim_clear_yankreg_array(reg);
+    OK
+}
+
+/// Get a line from a register by index.
+///
+/// # Safety
+///
+/// Accesses global register state via C FFI.
+/// The returned pointer is only valid while the register is unchanged.
+#[no_mangle]
+pub unsafe extern "C" fn rs_register_get_line(regname: c_int, idx: usize) -> *const c_char {
+    let i = rs_op_reg_index(regname);
+    if i == -1 {
+        return std::ptr::null();
+    }
+    let reg = nvim_get_y_regs_ptr(i);
+    let size = nvim_yankreg_get_size(reg);
+    if idx >= size {
+        return std::ptr::null();
+    }
+    nvim_yankreg_get_line_data(reg, idx)
+}
+
+/// Get the size of a line in a register.
+///
+/// # Safety
+///
+/// Accesses global register state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_register_get_line_size(regname: c_int, idx: usize) -> usize {
+    let i = rs_op_reg_index(regname);
+    if i == -1 {
+        return 0;
+    }
+    let reg = nvim_get_y_regs_ptr(i);
+    let size = nvim_yankreg_get_size(reg);
+    if idx >= size {
+        return 0;
+    }
+    nvim_yankreg_get_line_size(reg, idx)
+}
+
+/// Get the total character count of a register's contents.
+///
+/// # Safety
+///
+/// Accesses global register state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_register_get_total_size(regname: c_int) -> usize {
+    let i = rs_op_reg_index(regname);
+    if i == -1 {
+        return 0;
+    }
+    let reg = nvim_get_y_regs_ptr(i);
+    let line_count = nvim_yankreg_get_size(reg);
+
+    let mut total: usize = 0;
+    for idx in 0..line_count {
+        total += nvim_yankreg_get_line_size(reg, idx);
+        // Add 1 for newline (except for the last line in charwise mode)
+        if idx < line_count - 1 || nvim_yankreg_get_type(reg) == K_MT_LINE_WISE {
+            total += 1;
+        }
+    }
+    total
+}
+
+/// Check if a register name is valid for reading.
+#[no_mangle]
+pub extern "C" fn rs_register_valid_for_read(regname: c_int) -> bool {
+    rs_valid_yank_reg(regname, false) || regname == 0
+}
+
+/// Check if a register name is valid for writing.
+#[no_mangle]
+pub extern "C" fn rs_register_valid_for_write(regname: c_int) -> bool {
+    rs_valid_yank_reg(regname, true)
+}
+
+/// Convert register character to lowercase (for named registers).
+#[no_mangle]
+pub extern "C" fn rs_register_to_lowercase(regname: c_int) -> c_int {
+    let Ok(c) = u8::try_from(regname) else {
+        return regname;
+    };
+    if ascii_isupper(c) {
+        c_int::from(c - b'A' + b'a')
+    } else {
+        regname
+    }
+}
+
+/// Get the number of non-empty named registers (a-z).
+///
+/// # Safety
+///
+/// Accesses global register state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_register_count_named() -> c_int {
+    let mut count: c_int = 0;
+    for c in b'a'..=b'z' {
+        let i = rs_op_reg_index(c_int::from(c));
+        if i != -1 {
+            let reg = nvim_get_y_regs_ptr(i);
+            if !nvim_yankreg_is_empty(reg) {
+                count += 1;
+            }
+        }
+    }
+    count
+}
+
+/// Get the number of non-empty numbered registers (0-9).
+///
+/// # Safety
+///
+/// Accesses global register state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_register_count_numbered() -> c_int {
+    let mut count: c_int = 0;
+    for c in b'0'..=b'9' {
+        let i = rs_op_reg_index(c_int::from(c));
+        if i != -1 {
+            let reg = nvim_get_y_regs_ptr(i);
+            if !nvim_yankreg_is_empty(reg) {
+                count += 1;
+            }
+        }
+    }
+    count
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1310,5 +1668,57 @@ mod tests {
         assert_eq!(NL, b'\n' as c_char);
         assert_eq!(CAR, b'\r' as c_char);
         assert_eq!(NUL_CHAR, 0);
+    }
+
+    #[test]
+    fn test_register_type_checks() {
+        // Clipboard registers
+        assert!(rs_register_is_clipboard(c_int::from(b'*')));
+        assert!(rs_register_is_clipboard(c_int::from(b'+')));
+        assert!(!rs_register_is_clipboard(c_int::from(b'a')));
+
+        // Named registers
+        assert!(rs_register_is_named(c_int::from(b'a')));
+        assert!(rs_register_is_named(c_int::from(b'z')));
+        assert!(!rs_register_is_named(c_int::from(b'A')));
+        assert!(!rs_register_is_named(c_int::from(b'0')));
+
+        // Numbered registers
+        assert!(rs_register_is_numbered(c_int::from(b'0')));
+        assert!(rs_register_is_numbered(c_int::from(b'9')));
+        assert!(!rs_register_is_numbered(c_int::from(b'a')));
+
+        // Special registers
+        assert!(rs_register_is_blackhole(c_int::from(b'_')));
+        assert!(rs_register_is_expression(c_int::from(b'=')));
+        assert!(rs_register_is_search(c_int::from(b'/')));
+        assert!(rs_register_is_command(c_int::from(b':')));
+        assert!(rs_register_is_filename(c_int::from(b'%')));
+        assert!(rs_register_is_altfile(c_int::from(b'#')));
+        assert!(rs_register_is_insertion(c_int::from(b'.')));
+        assert!(rs_register_is_unnamed(c_int::from(b'"')));
+        assert!(rs_register_is_small_delete(c_int::from(b'-')));
+    }
+
+    #[test]
+    fn test_register_to_lowercase() {
+        assert_eq!(rs_register_to_lowercase(c_int::from(b'A')), c_int::from(b'a'));
+        assert_eq!(rs_register_to_lowercase(c_int::from(b'Z')), c_int::from(b'z'));
+        assert_eq!(rs_register_to_lowercase(c_int::from(b'a')), c_int::from(b'a'));
+        assert_eq!(rs_register_to_lowercase(c_int::from(b'0')), c_int::from(b'0'));
+    }
+
+    #[test]
+    fn test_register_validation() {
+        // Valid for reading but not writing
+        assert!(rs_register_valid_for_read(c_int::from(b'.')));
+        assert!(!rs_register_valid_for_write(c_int::from(b'.')));
+
+        // Valid for both
+        assert!(rs_register_valid_for_read(c_int::from(b'a')));
+        assert!(rs_register_valid_for_write(c_int::from(b'a')));
+
+        // Unnamed register (0) is valid for reading
+        assert!(rs_register_valid_for_read(0));
     }
 }
