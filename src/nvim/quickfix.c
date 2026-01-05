@@ -321,6 +321,41 @@ int nvim_qfline_get_nr(const void *qfp_void)
   return qfp->qf_nr;
 }
 
+/// Get text string from qfline_T for Rust
+const char *nvim_qfline_get_text(const void *qfp_void)
+{
+  const qfline_T *qfp = (const qfline_T *)qfp_void;
+  return qfp->qf_text;
+}
+
+/// Get module string from qfline_T for Rust
+const char *nvim_qfline_get_module(const void *qfp_void)
+{
+  const qfline_T *qfp = (const qfline_T *)qfp_void;
+  return qfp->qf_module;
+}
+
+/// Get pattern string from qfline_T for Rust
+const char *nvim_qfline_get_pattern(const void *qfp_void)
+{
+  const qfline_T *qfp = (const qfline_T *)qfp_void;
+  return qfp->qf_pattern;
+}
+
+/// Get cleared flag from qfline_T for Rust
+bool nvim_qfline_get_cleared(const void *qfp_void)
+{
+  const qfline_T *qfp = (const qfline_T *)qfp_void;
+  return qfp->qf_cleared != 0;
+}
+
+/// Get viscol flag from qfline_T for Rust
+bool nvim_qfline_get_viscol(const void *qfp_void)
+{
+  const qfline_T *qfp = (const qfline_T *)qfp_void;
+  return qfp->qf_viscol != 0;
+}
+
 extern bool rs_qf_list_has_valid_entries(const void *qfl);
 extern bool rs_qf_entry_after_pos(const void *qfp, const void *pos, bool linewise);
 extern bool rs_qf_entry_before_pos(const void *qfp, const void *pos, bool linewise);
