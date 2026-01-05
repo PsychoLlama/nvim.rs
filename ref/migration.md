@@ -621,6 +621,7 @@ The lexical scanner for regex patterns, handling magic characters and backslash 
 - POSIX classes: NFA_CLASS_ALNUM through NFA_CLASS_FNAME
 - PIM states: NFA_PIM_UNUSED, NFA_PIM_TODO, NFA_PIM_MATCH, NFA_PIM_NOMATCH
 - Helper functions: nfa_with_nl(), nfa_add_nl(), nfa_mopen(), nfa_mclose(), etc.
+- `rs_nfa_recognize_char_class` - Recognize expanded char class patterns [0-9], [a-zA-Z_], etc.
 
 **Remaining in C:**
 - Backtracking and NFA engines (~10K lines)
