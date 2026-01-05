@@ -397,6 +397,11 @@ extern void rs_nv_halfpage(cmdarg_T *cap);
 extern void rs_nv_ctrlg(cmdarg_T *cap);
 extern void rs_nv_scroll_line(cmdarg_T *cap);
 extern void rs_nv_kundo(cmdarg_T *cap);
+extern void rs_nv_goto(cmdarg_T *cap);
+extern void rs_nv_beginline(cmdarg_T *cap);
+extern void rs_nv_dollar(cmdarg_T *cap);
+extern void rs_nv_end(cmdarg_T *cap);
+extern void rs_nv_home(cmdarg_T *cap);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -577,6 +582,34 @@ void nvim_oap_set_use_reg_one(oparg_T *oap, bool val)
   }
 }
 
+/// Get oap->motion_type.
+int nvim_oap_get_motion_type(oparg_T *oap)
+{
+  return oap ? oap->motion_type : kMTUnknown;
+}
+
+/// Set oap->motion_type.
+void nvim_oap_set_motion_type(oparg_T *oap, int val)
+{
+  if (oap) {
+    oap->motion_type = val;
+  }
+}
+
+/// Get oap->inclusive.
+bool nvim_oap_get_inclusive(oparg_T *oap)
+{
+  return oap ? oap->inclusive : false;
+}
+
+/// Set oap->inclusive.
+void nvim_oap_set_inclusive(oparg_T *oap, bool val)
+{
+  if (oap) {
+    oap->inclusive = val;
+  }
+}
+
 /// Set global motion_force.
 void nvim_set_motion_force(int val)
 {
@@ -647,6 +680,90 @@ void nvim_u_undo(int count)
 void nvim_curwin_set_curswant(bool val)
 {
   curwin->w_set_curswant = val;
+}
+
+/// Get curbuf->b_ml.ml_line_count.
+linenr_T nvim_get_line_count(void)
+{
+  return curbuf->b_ml.ml_line_count;
+}
+
+/// Get curwin->w_cursor.lnum.
+linenr_T nvim_get_cursor_lnum(void)
+{
+  return curwin->w_cursor.lnum;
+}
+
+/// Set curwin->w_cursor.lnum.
+void nvim_set_cursor_lnum(linenr_T lnum)
+{
+  curwin->w_cursor.lnum = lnum;
+}
+
+/// Wrapper for setpcmark.
+void nvim_setpcmark(void)
+{
+  setpcmark();
+}
+
+/// Wrapper for beginline.
+void nvim_beginline(int flags)
+{
+  beginline(flags);
+}
+
+/// Wrapper for cursor_down.
+bool nvim_cursor_down(int n, bool upd_topline)
+{
+  return cursor_down(n, upd_topline);
+}
+
+/// Get KeyTyped global.
+bool nvim_get_KeyTyped(void)
+{
+  return KeyTyped;
+}
+
+/// Get fdo_flags global.
+unsigned int nvim_get_fdo_flags(void)
+{
+  return fdo_flags;
+}
+
+/// Wrapper for foldOpenCursor.
+void nvim_foldOpenCursor(void)
+{
+  foldOpenCursor();
+}
+
+/// Set ins_at_eol global.
+void nvim_set_ins_at_eol(bool val)
+{
+  ins_at_eol = val;
+}
+
+/// Set curwin->w_curswant.
+void nvim_set_curswant(colnr_T val)
+{
+  curwin->w_curswant = val;
+}
+
+/// Wrapper for virtual_active.
+bool nvim_virtual_active(void)
+{
+  return virtual_active(curwin);
+}
+
+/// Get char under cursor (gchar_cursor).
+int nvim_gchar_cursor(void)
+{
+  return gchar_cursor();
+}
+
+/// Call nv_pipe for <Home> command implementation.
+void nvim_nv_pipe(cmdarg_T *cap)
+{
+  nv_pipe(cap);
 }
 
 // =============================================================================
@@ -4065,32 +4182,13 @@ static void nv_gotofile(cmdarg_T *cap)
 /// <End> command: to end of current line or last line.
 static void nv_end(cmdarg_T *cap)
 {
-  if (cap->arg || (mod_mask & MOD_MASK_CTRL)) {  // CTRL-END = goto last line
-    cap->arg = true;
-    nv_goto(cap);
-    cap->count1 = 1;                    // to end of current line
-  }
-  nv_dollar(cap);
+  rs_nv_end(cap);
 }
 
 /// Handle the "$" command.
 static void nv_dollar(cmdarg_T *cap)
 {
-  cap->oap->motion_type = kMTCharWise;
-  cap->oap->inclusive = true;
-  // In virtual mode when off the edge of a line and an operator
-  // is pending (whew!) keep the cursor where it is.
-  // Otherwise, send it to the end of the line.
-  if (!virtual_active(curwin) || gchar_cursor() != NUL
-      || cap->oap->op_type == OP_NOP) {
-    curwin->w_curswant = MAXCOL;        // so we stay at the end
-  }
-  if (cursor_down(cap->count1 - 1,
-                  cap->oap->op_type == OP_NOP) == false) {
-    clearopbeep(cap->oap);
-  } else if ((fdo_flags & kOptFdoFlagHor) && KeyTyped && cap->oap->op_type == OP_NOP) {
-    foldOpenCursor();
-  }
+  rs_nv_dollar(cap);
 }
 
 /// Implementation of '?' and '/' commands.
@@ -6032,15 +6130,7 @@ static void nv_lineop(cmdarg_T *cap)
 /// <Home> command.
 static void nv_home(cmdarg_T *cap)
 {
-  // CTRL-HOME is like "gg"
-  if (mod_mask & MOD_MASK_CTRL) {
-    nv_goto(cap);
-  } else {
-    cap->count0 = 1;
-    nv_pipe(cap);
-  }
-  ins_at_eol = false;       // Don't move cursor past eol (only necessary in a
-                            // one-character line).
+  rs_nv_home(cap);
 }
 
 /// "|" command.
@@ -6159,14 +6249,7 @@ static void adjust_cursor(oparg_T *oap)
 /// cap->arg is the argument for beginline().
 static void nv_beginline(cmdarg_T *cap)
 {
-  cap->oap->motion_type = kMTCharWise;
-  cap->oap->inclusive = false;
-  beginline(cap->arg);
-  if ((fdo_flags & kOptFdoFlagHor) && KeyTyped && cap->oap->op_type == OP_NOP) {
-    foldOpenCursor();
-  }
-  ins_at_eol = false;       // Don't move cursor past eol (only necessary in a
-                            // one-character line).
+  rs_nv_beginline(cap);
 }
 
 /// In exclusive Visual mode, may include the last character.
@@ -6236,26 +6319,7 @@ static void nv_select(cmdarg_T *cap)
 /// cap->arg is true for "G".
 static void nv_goto(cmdarg_T *cap)
 {
-  linenr_T lnum;
-
-  if (cap->arg) {
-    lnum = curbuf->b_ml.ml_line_count;
-  } else {
-    lnum = 1;
-  }
-  cap->oap->motion_type = kMTLineWise;
-  setpcmark();
-
-  // When a count is given, use it instead of the default lnum
-  if (cap->count0 != 0) {
-    lnum = cap->count0;
-  }
-  lnum = MIN(MAX(lnum, 1), curbuf->b_ml.ml_line_count);
-  curwin->w_cursor.lnum = lnum;
-  beginline(BL_SOL | BL_FIX);
-  if ((fdo_flags & kOptFdoFlagJump) && KeyTyped && cap->oap->op_type == OP_NOP) {
-    foldOpenCursor();
-  }
+  rs_nv_goto(cap);
 }
 
 /// CTRL-\ in Normal mode.

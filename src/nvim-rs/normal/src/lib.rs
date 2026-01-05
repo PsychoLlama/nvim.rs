@@ -8,7 +8,7 @@
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_const_for_fn)]
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_uint};
 
 // =============================================================================
 // Key Constants (from keycodes.h)
@@ -118,6 +118,29 @@ extern "C" {
     fn nvim_scroll_redraw(down: bool, count: c_int);
     fn nvim_u_undo(count: c_int);
     fn nvim_curwin_set_curswant(val: bool);
+    fn nvim_get_line_count() -> c_int;
+    #[allow(dead_code)]
+    fn nvim_get_cursor_lnum() -> c_int;
+    fn nvim_set_cursor_lnum(lnum: c_int);
+    fn nvim_setpcmark();
+    fn nvim_beginline(flags: c_int);
+    fn nvim_cursor_down(n: c_int, upd_topline: bool) -> bool;
+    fn nvim_get_KeyTyped() -> bool;
+    fn nvim_get_fdo_flags() -> c_uint;
+    fn nvim_foldOpenCursor();
+    fn nvim_set_ins_at_eol(val: bool);
+    fn nvim_set_curswant(val: c_int);
+    fn nvim_virtual_active() -> bool;
+    fn nvim_gchar_cursor() -> c_int;
+    fn nvim_nv_pipe(cap: CapHandle);
+
+    // oparg_T motion accessors
+    #[allow(dead_code)]
+    fn nvim_oap_get_motion_type(oap: OapHandle) -> c_int;
+    fn nvim_oap_set_motion_type(oap: OapHandle, val: c_int);
+    #[allow(dead_code)]
+    fn nvim_oap_get_inclusive(oap: OapHandle) -> bool;
+    fn nvim_oap_set_inclusive(oap: OapHandle, val: bool);
 
     // cmdarg_T accessors
     fn nvim_cap_get_oap(cap: CapHandle) -> OapHandle;
@@ -138,17 +161,14 @@ extern "C" {
     #[allow(dead_code)]
     fn nvim_cap_set_extra_char(cap: CapHandle, val: c_int);
     fn nvim_cap_get_count0(cap: CapHandle) -> c_int;
-    #[allow(dead_code)]
     fn nvim_cap_set_count0(cap: CapHandle, val: c_int);
     fn nvim_cap_get_count1(cap: CapHandle) -> c_int;
-    #[allow(dead_code)]
     fn nvim_cap_set_count1(cap: CapHandle, val: c_int);
     #[allow(dead_code)]
     fn nvim_cap_get_opcount(cap: CapHandle) -> c_int;
     #[allow(dead_code)]
     fn nvim_cap_set_opcount(cap: CapHandle, val: c_int);
     fn nvim_cap_get_arg(cap: CapHandle) -> c_int;
-    #[allow(dead_code)]
     fn nvim_cap_set_arg(cap: CapHandle, val: c_int);
     #[allow(dead_code)]
     fn nvim_cap_get_prechar(cap: CapHandle) -> c_int;
@@ -689,6 +709,23 @@ const MOD_MASK_CTRL: c_int = 0x04;
 // Control character constant
 const CTRL_D: c_int = 4; // Ctrl-D
 
+// Motion type constants (from normal_defs.h)
+const K_MT_CHAR_WISE: c_int = 0;
+const K_MT_LINE_WISE: c_int = 1;
+#[allow(dead_code)]
+const K_MT_BLOCK_WISE: c_int = 2;
+
+// Fold option flags (kOptFdoFlag*)
+const K_OPT_FDO_FLAG_HOR: c_uint = 0x0001;
+const K_OPT_FDO_FLAG_JUMP: c_uint = 0x0040;
+
+// Beginline flags (BL_*)
+const BL_SOL: c_int = 2; // go to start of line
+const BL_FIX: c_int = 4; // fix cursor column
+
+// Maximum column value
+const MAXCOL: c_int = 0x7fff_ffff;
+
 /// Command handler for CTRL-F, CTRL-B, etc: Scroll page up or down.
 ///
 /// Handles page scrolling and tab page navigation with Ctrl modifier.
@@ -788,6 +825,131 @@ pub unsafe extern "C" fn rs_nv_kundo(cap: CapHandle) {
     let count1 = nvim_cap_get_count1(cap);
     nvim_u_undo(count1);
     nvim_curwin_set_curswant(true);
+}
+
+// =============================================================================
+// Command Handlers (Tier 3 - Motion commands)
+// =============================================================================
+
+/// Command handler for "G", "gg", CTRL-END, CTRL-HOME.
+///
+/// cap->arg is true (non-zero) for "G".
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_goto(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    let arg = nvim_cap_get_arg(cap);
+    let count0 = nvim_cap_get_count0(cap);
+
+    let line_count = nvim_get_line_count();
+    let mut lnum = if arg != 0 { line_count } else { 1 };
+
+    nvim_oap_set_motion_type(oap, K_MT_LINE_WISE);
+    nvim_setpcmark();
+
+    // When a count is given, use it instead of the default lnum
+    if count0 != 0 {
+        lnum = count0;
+    }
+    lnum = lnum.clamp(1, line_count);
+    nvim_set_cursor_lnum(lnum);
+    nvim_beginline(BL_SOL | BL_FIX);
+
+    if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_JUMP) != 0
+        && nvim_get_KeyTyped()
+        && nvim_oap_get_op_type_ptr(oap) == OP_NOP
+    {
+        nvim_foldOpenCursor();
+    }
+}
+
+/// Command handler for "0" and "^" commands.
+///
+/// cap->arg is the argument for beginline().
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_beginline(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    let arg = nvim_cap_get_arg(cap);
+
+    nvim_oap_set_motion_type(oap, K_MT_CHAR_WISE);
+    nvim_oap_set_inclusive(oap, false);
+    nvim_beginline(arg);
+
+    if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_HOR) != 0
+        && nvim_get_KeyTyped()
+        && nvim_oap_get_op_type_ptr(oap) == OP_NOP
+    {
+        nvim_foldOpenCursor();
+    }
+    nvim_set_ins_at_eol(false);
+}
+
+/// Command handler for "$" command.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_dollar(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    let count1 = nvim_cap_get_count1(cap);
+
+    nvim_oap_set_motion_type(oap, K_MT_CHAR_WISE);
+    nvim_oap_set_inclusive(oap, true);
+
+    // In virtual mode when off the edge of a line and an operator
+    // is pending (whew!) keep the cursor where it is.
+    // Otherwise, send it to the end of the line.
+    if !nvim_virtual_active() || nvim_gchar_cursor() != 0 || nvim_oap_get_op_type_ptr(oap) == OP_NOP
+    {
+        nvim_set_curswant(MAXCOL); // so we stay at the end
+    }
+
+    if !nvim_cursor_down(count1 - 1, nvim_oap_get_op_type_ptr(oap) == OP_NOP) {
+        rs_clearopbeep(oap);
+    } else if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_HOR) != 0
+        && nvim_get_KeyTyped()
+        && nvim_oap_get_op_type_ptr(oap) == OP_NOP
+    {
+        nvim_foldOpenCursor();
+    }
+}
+
+/// Command handler for <End>: to end of current line or last line.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_end(cap: CapHandle) {
+    let arg = nvim_cap_get_arg(cap);
+
+    if arg != 0 || (nvim_get_mod_mask() & MOD_MASK_CTRL) != 0 {
+        // CTRL-END = goto last line
+        nvim_cap_set_arg(cap, 1);
+        rs_nv_goto(cap);
+        nvim_cap_set_count1(cap, 1); // to end of current line
+    }
+    rs_nv_dollar(cap);
+}
+
+/// Command handler for <Home>: to column 1 or first line.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_home(cap: CapHandle) {
+    // CTRL-HOME is like "gg"
+    if (nvim_get_mod_mask() & MOD_MASK_CTRL) != 0 {
+        rs_nv_goto(cap);
+    } else {
+        nvim_cap_set_count0(cap, 1);
+        nvim_nv_pipe(cap);
+    }
+    nvim_set_ins_at_eol(false);
 }
 
 // =============================================================================
