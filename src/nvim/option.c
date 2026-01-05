@@ -128,33 +128,85 @@ extern int rs_csh_like_shell(void);
 extern int rs_fish_like_shell(void);
 extern int rs_default_fileformat(void);
 
+// =============================================================================
 // Accessor functions for Rust code
-const char *nvim_get_p_sh(void)
-{
-  return p_sh;
-}
+// =============================================================================
 
-const char *nvim_get_p_ffs(void)
-{
-  return p_ffs;
-}
+// String option accessors
+const char *nvim_option_get_sh(void) { return p_sh; }
+const char *nvim_option_get_ffs(void) { return p_ffs; }
+const char *nvim_option_get_cpo(void) { return p_cpo; }
+const char *nvim_option_get_isk(void) { return p_isk; }
+const char *nvim_option_get_isf(void) { return p_isf; }
+const char *nvim_option_get_isp(void) { return p_isp; }
+const char *nvim_option_get_isi(void) { return p_isi; }
+const char *nvim_option_get_breakat(void) { return p_breakat; }
+const char *nvim_option_get_sel(void) { return p_sel; }
+const char *nvim_option_get_enc(void) { return p_enc; }
+const char *nvim_option_get_ff(void) { return p_ff; }
+const char *nvim_option_get_fo(void) { return p_fo; }
+const char *nvim_option_get_mps(void) { return p_mps; }
+const char *nvim_option_get_nf(void) { return p_nf; }
+const char *nvim_option_get_ww(void) { return p_ww; }
+const char *nvim_option_get_mouse(void) { return p_mouse; }
+const char *nvim_option_get_shm(void) { return p_shm; }
 
-int nvim_get_p_fic(void)
-{
-  return p_fic;
-}
+// Boolean option accessors
+int nvim_option_get_ai(void) { return p_ai; }
+int nvim_option_get_et(void) { return p_et; }
+int nvim_option_get_ic(void) { return p_ic; }
+int nvim_option_get_scs(void) { return p_scs; }
+int nvim_option_get_hls(void) { return p_hls; }
+int nvim_option_get_is(void) { return p_is; }
+int nvim_option_get_magic(void) { return p_magic; }
+int nvim_option_get_fic(void) { return p_fic; }
+int nvim_option_get_ml(void) { return p_ml; }
+int nvim_option_get_mle(void) { return p_mle; }
+int nvim_option_get_paste(void) { return p_paste; }
+int nvim_option_get_ri(void) { return p_ri; }
+int nvim_option_get_ws(void) { return p_ws; }
+int nvim_option_get_gd(void) { return p_gd; }
+int nvim_option_get_ea(void) { return p_ea; }
+int nvim_option_get_hid(void) { return p_hid; }
+int nvim_option_get_sm(void) { return p_sm; }
+int nvim_option_get_lz(void) { return p_lz; }
+int nvim_option_get_to(void) { return p_to; }
 
-/// Get the magic_overruled global value.
-int nvim_get_magic_overruled(void)
-{
-  return (int)magic_overruled;
-}
+// Numeric option accessors
+OptInt nvim_option_get_sw(void) { return p_sw; }
+OptInt nvim_option_get_ts(void) { return p_ts; }
+OptInt nvim_option_get_sts(void) { return p_sts; }
+OptInt nvim_option_get_tw(void) { return p_tw; }
+OptInt nvim_option_get_wm(void) { return p_wm; }
+OptInt nvim_option_get_so(void) { return p_so; }
+OptInt nvim_option_get_siso(void) { return p_siso; }
+OptInt nvim_option_get_columns(void) { return p_columns; }
+OptInt nvim_option_get_lines(void) { return p_lines; }
+OptInt nvim_option_get_ch(void) { return p_ch; }
+OptInt nvim_option_get_report(void) { return p_report; }
+OptInt nvim_option_get_mat(void) { return p_mat; }
+OptInt nvim_option_get_ut(void) { return p_ut; }
+OptInt nvim_option_get_tm(void) { return p_tm; }
+OptInt nvim_option_get_hi(void) { return p_hi; }
+OptInt nvim_option_get_ls(void) { return p_ls; }
+OptInt nvim_option_get_stal(void) { return p_stal; }
+OptInt nvim_option_get_re(void) { return p_re; }
 
-/// Get the p_magic global value.
-int nvim_get_p_magic(void)
-{
-  return p_magic;
-}
+// Flag option accessors (unsigned)
+unsigned nvim_option_get_cot_flags(void) { return cot_flags; }
+unsigned nvim_option_get_fdo_flags(void) { return fdo_flags; }
+unsigned nvim_option_get_dy_flags(void) { return dy_flags; }
+unsigned nvim_option_get_cb_flags(void) { return cb_flags; }
+
+// Special accessors
+int nvim_option_get_magic_overruled(void) { return (int)magic_overruled; }
+
+// Legacy accessor names (for compatibility)
+const char *nvim_get_p_sh(void) { return p_sh; }
+const char *nvim_get_p_ffs(void) { return p_ffs; }
+int nvim_get_p_fic(void) { return p_fic; }
+int nvim_get_magic_overruled(void) { return (int)magic_overruled; }
+int nvim_get_p_magic(void) { return p_magic; }
 
 static const char e_unknown_option[]
   = N_("E518: Unknown option");
