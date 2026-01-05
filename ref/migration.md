@@ -370,6 +370,9 @@ Functions blocked on missing accessor infrastructure:
 - `byte_in_str` - Migrated to Rust (rs_byte_in_str) - checks if byte appears in string
 - `find_region` - Migrated to Rust (rs_find_region) - finds region code in spell language region list
 
+**spellfile.c** (spell file parsing):
+- `sal_to_bool` - Migrated to Rust (rs_sal_to_bool) - converts SAL line argument to boolean ("1" or "true" -> true)
+
 **indent.c** (indentation functions):
 - `may_do_si` - Migrated to Rust (rs_may_do_si) - checks if conditions are OK for smart indenting
 
