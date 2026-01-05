@@ -379,6 +379,12 @@ extern int rs_unshift_special(int cmdchar, int *modp);
 extern bool rs_is_ident(const char *line, int offset);
 extern bool rs_find_is_eval_item(const char *ptr, int *colp, int *bnp, int dir);
 extern int rs_get_vtopline(win_T *wp);
+extern void rs_clearop(oparg_T *oap);
+extern void rs_clearopbeep(oparg_T *oap);
+extern bool rs_checkclearop(oparg_T *oap);
+extern bool rs_checkclearopq(oparg_T *oap);
+extern bool rs_check_text_locked(oparg_T *oap);
+extern bool rs_check_text_or_curbuf_locked(oparg_T *oap);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -431,15 +437,7 @@ static int find_command(int cmdchar)
 /// message, return true.
 static bool check_text_locked(oparg_T *oap)
 {
-  if (!text_locked()) {
-    return false;
-  }
-
-  if (oap != NULL) {
-    clearopbeep(oap);
-  }
-  text_locked_msg();
-  return true;
+  return rs_check_text_locked(oap);
 }
 
 /// If text is locked, "curbuf->b_ro_locked" or "allbuf_lock" is set:
@@ -447,18 +445,7 @@ static bool check_text_locked(oparg_T *oap)
 /// "oap" may be NULL.
 bool check_text_or_curbuf_locked(oparg_T *oap)
 {
-  if (check_text_locked(oap)) {
-    return true;
-  }
-
-  if (!curbuf_locked()) {
-    return false;
-  }
-
-  if (oap != NULL) {
-    clearop(oap);
-  }
-  return true;
+  return rs_check_text_or_curbuf_locked(oap);
 }
 
 static oparg_T *current_oap = NULL;
@@ -522,6 +509,66 @@ int16_t nvim_get_nv_cmd_idx(int idx)
     return 0;
   }
   return nv_cmd_idx[idx];
+}
+
+// =============================================================================
+// oparg_T pointer accessors for Rust FFI (takes explicit oap parameter)
+// =============================================================================
+
+/// Get oap->op_type.
+int nvim_oap_get_op_type_ptr(oparg_T *oap)
+{
+  return oap ? oap->op_type : OP_NOP;
+}
+
+/// Set oap->op_type.
+void nvim_oap_set_op_type(oparg_T *oap, int val)
+{
+  if (oap) {
+    oap->op_type = val;
+  }
+}
+
+/// Get oap->regname.
+int nvim_oap_get_regname_ptr(oparg_T *oap)
+{
+  return oap ? oap->regname : NUL;
+}
+
+/// Set oap->regname.
+void nvim_oap_set_regname(oparg_T *oap, int val)
+{
+  if (oap) {
+    oap->regname = val;
+  }
+}
+
+/// Get oap->motion_force.
+int nvim_oap_get_motion_force(oparg_T *oap)
+{
+  return oap ? oap->motion_force : NUL;
+}
+
+/// Set oap->motion_force.
+void nvim_oap_set_motion_force(oparg_T *oap, int val)
+{
+  if (oap) {
+    oap->motion_force = val;
+  }
+}
+
+/// Set oap->use_reg_one.
+void nvim_oap_set_use_reg_one(oparg_T *oap, bool val)
+{
+  if (oap) {
+    oap->use_reg_one = val;
+  }
+}
+
+/// Set global motion_force.
+void nvim_set_motion_force(int val)
+{
+  motion_force = val;
 }
 
 /// Check if an operator was started but not finished yet.
@@ -1787,11 +1834,7 @@ void prep_redo_num2(int regname, int num1, int cmd1, int cmd2, int num2, int cmd
 /// Beep and return true if an operator was active.
 static bool checkclearop(oparg_T *oap)
 {
-  if (oap->op_type == OP_NOP) {
-    return false;
-  }
-  clearopbeep(oap);
-  return true;
+  return rs_checkclearop(oap);
 }
 
 /// Check for operator or Visual active.  Clear active operator.
@@ -1799,26 +1842,17 @@ static bool checkclearop(oparg_T *oap)
 /// Beep and return true if an operator or Visual was active.
 static bool checkclearopq(oparg_T *oap)
 {
-  if (oap->op_type == OP_NOP && !VIsual_active) {
-    return false;
-  }
-  clearopbeep(oap);
-  return true;
+  return rs_checkclearopq(oap);
 }
 
 void clearop(oparg_T *oap)
 {
-  oap->op_type = OP_NOP;
-  oap->regname = 0;
-  oap->motion_force = NUL;
-  oap->use_reg_one = false;
-  motion_force = NUL;
+  rs_clearop(oap);
 }
 
 void clearopbeep(oparg_T *oap)
 {
-  clearop(oap);
-  beep_flush();
+  rs_clearopbeep(oap);
 }
 
 /// Remove the shift modifier from a special key.

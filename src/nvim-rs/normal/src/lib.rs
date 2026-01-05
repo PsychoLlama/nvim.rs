@@ -79,10 +79,40 @@ extern "C" {
 
     // plines function
     fn plines_m_win_fill(wp: WinHandle, first: c_int, last: c_int) -> c_int;
+
+    // oparg_T pointer accessors (takes explicit oap parameter)
+    fn nvim_oap_get_op_type_ptr(oap: OapHandle) -> c_int;
+    fn nvim_oap_set_op_type(oap: OapHandle, val: c_int);
+    fn nvim_oap_set_regname(oap: OapHandle, val: c_int);
+    fn nvim_oap_set_motion_force(oap: OapHandle, val: c_int);
+    fn nvim_oap_set_use_reg_one(oap: OapHandle, val: bool);
+
+    // Global motion_force accessor
+    fn nvim_set_motion_force(val: c_int);
+
+    // Lock check functions (remain in C)
+    fn text_locked() -> bool;
+    fn text_locked_msg();
+    fn curbuf_locked() -> bool;
+
+    // VIsual_active global (from plines.c, returns 0 or 1)
+    fn nvim_get_VIsual_active() -> c_int;
+
+    // Beep function
+    fn beep_flush();
 }
+
+// Operator type constants (must match ops.h)
+const OP_NOP: c_int = 0;
+
+// NUL constant for motion_force
+const NUL_CHAR: c_int = 0;
 
 /// Opaque handle to a window (win_T*).
 pub type WinHandle = *mut std::ffi::c_void;
+
+/// Opaque handle to operator arguments (oparg_T*).
+pub type OapHandle = *mut std::ffi::c_void;
 
 // =============================================================================
 // Invert Horizontal Commands (for RTL mode)
@@ -333,6 +363,109 @@ pub unsafe extern "C" fn rs_get_vtopline(wp: WinHandle) -> c_int {
     let topline = nvim_win_get_topline(wp);
     let topfill = nvim_win_get_topfill(wp);
     plines_m_win_fill(wp, 1, topline) - topfill
+}
+
+// =============================================================================
+// Operator State Functions
+// =============================================================================
+
+/// Clear operator state.
+///
+/// Resets op_type, regname, motion_force, use_reg_one in the oparg_T,
+/// and clears the global motion_force.
+///
+/// # Safety
+/// `oap` must be a valid oparg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_clearop(oap: OapHandle) {
+    nvim_oap_set_op_type(oap, OP_NOP);
+    nvim_oap_set_regname(oap, 0);
+    nvim_oap_set_motion_force(oap, NUL_CHAR);
+    nvim_oap_set_use_reg_one(oap, false);
+    nvim_set_motion_force(NUL_CHAR);
+}
+
+/// Clear operator state and beep.
+///
+/// # Safety
+/// `oap` must be a valid oparg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_clearopbeep(oap: OapHandle) {
+    rs_clearop(oap);
+    beep_flush();
+}
+
+/// Check for operator pending.
+///
+/// Returns true (and beeps) if an operator is pending.
+///
+/// # Safety
+/// `oap` must be a valid oparg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_checkclearop(oap: OapHandle) -> bool {
+    if nvim_oap_get_op_type_ptr(oap) == OP_NOP {
+        return false;
+    }
+    rs_clearopbeep(oap);
+    true
+}
+
+/// Check for operator or Visual active.
+///
+/// Returns true (and beeps) if an operator is pending or Visual is active.
+///
+/// # Safety
+/// `oap` must be a valid oparg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_checkclearopq(oap: OapHandle) -> bool {
+    if nvim_oap_get_op_type_ptr(oap) == OP_NOP && nvim_get_VIsual_active() == 0 {
+        return false;
+    }
+    rs_clearopbeep(oap);
+    true
+}
+
+/// Check if text is locked.
+///
+/// If text is locked, beeps (if oap != NULL) and shows an error message.
+/// Returns true if text is locked.
+///
+/// # Safety
+/// `oap` may be NULL, otherwise must be a valid oparg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_text_locked(oap: OapHandle) -> bool {
+    if !text_locked() {
+        return false;
+    }
+
+    if !oap.is_null() {
+        rs_clearopbeep(oap);
+    }
+    text_locked_msg();
+    true
+}
+
+/// Check if text or curbuf is locked.
+///
+/// If text is locked or curbuf is locked, beeps (if oap != NULL) and
+/// shows an error message. Returns true if locked.
+///
+/// # Safety
+/// `oap` may be NULL, otherwise must be a valid oparg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_text_or_curbuf_locked(oap: OapHandle) -> bool {
+    if rs_check_text_locked(oap) {
+        return true;
+    }
+
+    if !curbuf_locked() {
+        return false;
+    }
+
+    if !oap.is_null() {
+        rs_clearop(oap);
+    }
+    true
 }
 
 // =============================================================================
