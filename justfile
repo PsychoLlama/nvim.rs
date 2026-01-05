@@ -101,6 +101,7 @@ rust-test:
       -p nvim-msgpack \
       -p nvim-normal \
       -p nvim-ops \
+      -p nvim-option \
       -p nvim-os \
       -p nvim-plines \
       -p nvim-profile \

@@ -59,6 +59,7 @@ nvim-menu = { path = "menu" }
 nvim-msgpack = { path = "msgpack" }
 nvim-normal = { path = "normal" }
 nvim-ops = { path = "ops" }
+nvim-option = { path = "option" }
 nvim-os = { path = "os" }
 nvim-path = { path = "path" }
 nvim-plines = { path = "plines" }

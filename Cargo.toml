@@ -45,6 +45,7 @@ members = [
     "src/nvim-rs/menu",
     "src/nvim-rs/normal",
     "src/nvim-rs/ops",
+    "src/nvim-rs/option",
     "src/nvim-rs/os",
     "src/nvim-rs/path",
     "src/nvim-rs/plines",

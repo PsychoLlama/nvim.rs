@@ -64,6 +64,7 @@ pub use nvim_menu::*;
 pub use nvim_msgpack::*;
 pub use nvim_normal::*;
 pub use nvim_ops::*;
+pub use nvim_option::*;
 pub use nvim_os::env::*;
 pub use nvim_os::fs::*;
 pub use nvim_os::time::*;
