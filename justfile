@@ -97,6 +97,7 @@ rust-test:
       -p nvim-memutil \
       -p nvim-menu \
       -p nvim-msgpack \
+      -p nvim-normal \
       -p nvim-ops \
       -p nvim-os \
       -p nvim-plines \

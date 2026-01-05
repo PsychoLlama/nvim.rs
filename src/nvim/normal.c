@@ -369,6 +369,16 @@ static int16_t nv_cmd_idx[NV_CMDS_SIZE];
 // nv_cmds[idx].cmd_char == nv_cmd_idx[nv_cmds[idx].cmd_char]
 static int nv_max_linear;
 
+// =============================================================================
+// Rust implementations (forward declarations)
+// =============================================================================
+extern bool rs_op_pending(void);
+extern int rs_find_command(int cmdchar);
+extern int rs_invert_horizontal(int cmdchar);
+extern int rs_unshift_special(int cmdchar, int *modp);
+extern bool rs_is_ident(const char *line, int offset);
+extern bool rs_find_is_eval_item(const char *ptr, int *colp, int *bnp, int dir);
+
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
 static int nv_compare(const void *s1, const void *s2)
@@ -413,45 +423,7 @@ void init_normal_cmds(void)
 /// @return  -1 for invalid command.
 static int find_command(int cmdchar)
 {
-  // A multi-byte character is never a command.
-  if (cmdchar >= 0x100) {
-    return -1;
-  }
-
-  // We use the absolute value of the character.  Special keys have a
-  // negative value, but are sorted on their absolute value.
-  if (cmdchar < 0) {
-    cmdchar = -cmdchar;
-  }
-
-  // If the character is in the first part: The character is the index into
-  // nv_cmd_idx[].
-  assert(nv_max_linear < (int)NV_CMDS_SIZE);
-  if (cmdchar <= nv_max_linear) {
-    return nv_cmd_idx[cmdchar];
-  }
-
-  // Perform a binary search.
-  int bot = nv_max_linear + 1;
-  int top = NV_CMDS_SIZE - 1;
-  int idx = -1;
-  while (bot <= top) {
-    int i = (top + bot) / 2;
-    int c = nv_cmds[nv_cmd_idx[i]].cmd_char;
-    if (c < 0) {
-      c = -c;
-    }
-    if (cmdchar == c) {
-      idx = nv_cmd_idx[i];
-      break;
-    }
-    if (cmdchar > c) {
-      bot = i + 1;
-    } else {
-      top = i - 1;
-    }
-  }
-  return idx;
+  return rs_find_command(cmdchar);
 }
 
 /// If currently editing a cmdline or text is locked: beep and give an error
@@ -521,8 +493,35 @@ int nvim_oap_get_regname(void)
   return current_oap ? current_oap->regname : NUL;
 }
 
-// Rust implementation
-extern bool rs_op_pending(void);
+/// Get the nv_max_linear value.
+int nvim_get_nv_max_linear(void)
+{
+  return nv_max_linear;
+}
+
+/// Get the command character at index in nv_cmds.
+int nvim_get_nv_cmd_char(int idx)
+{
+  if (idx < 0 || (size_t)idx >= NV_CMDS_SIZE) {
+    return 0;
+  }
+  return nv_cmds[idx].cmd_char;
+}
+
+/// Get the NV_CMDS_SIZE constant.
+int nvim_get_nv_cmds_size(void)
+{
+  return (int)NV_CMDS_SIZE;
+}
+
+/// Get the nv_cmd_idx value at position.
+int16_t nvim_get_nv_cmd_idx(int idx)
+{
+  if (idx < 0 || (size_t)idx >= NV_CMDS_SIZE) {
+    return 0;
+  }
+  return nv_cmd_idx[idx];
+}
 
 /// Check if an operator was started but not finished yet.
 /// Includes typing a count or a register name.
@@ -907,28 +906,7 @@ static void normal_get_additional_char(NormalState *s)
 
 static void normal_invert_horizontal(NormalState *s)
 {
-  switch (s->ca.cmdchar) {
-  case 'l':
-    s->ca.cmdchar = 'h'; break;
-  case K_RIGHT:
-    s->ca.cmdchar = K_LEFT; break;
-  case K_S_RIGHT:
-    s->ca.cmdchar = K_S_LEFT; break;
-  case K_C_RIGHT:
-    s->ca.cmdchar = K_C_LEFT; break;
-  case 'h':
-    s->ca.cmdchar = 'l'; break;
-  case K_LEFT:
-    s->ca.cmdchar = K_RIGHT; break;
-  case K_S_LEFT:
-    s->ca.cmdchar = K_S_RIGHT; break;
-  case K_C_LEFT:
-    s->ca.cmdchar = K_C_RIGHT; break;
-  case '>':
-    s->ca.cmdchar = '<'; break;
-  case '<':
-    s->ca.cmdchar = '>'; break;
-  }
+  s->ca.cmdchar = rs_invert_horizontal(s->ca.cmdchar);
   s->idx = find_command(s->ca.cmdchar);
 }
 
@@ -1620,29 +1598,7 @@ void restore_visual_mode(void)
 /// @param bnp    points to a counter for square brackets.
 static bool find_is_eval_item(const char *const ptr, int *const colp, int *const bnp, const int dir)
 {
-  // Accept everything inside [].
-  if ((*ptr == ']' && dir == BACKWARD) || (*ptr == '[' && dir == FORWARD)) {
-    *bnp += 1;
-  }
-  if (*bnp > 0) {
-    if ((*ptr == '[' && dir == BACKWARD) || (*ptr == ']' && dir == FORWARD)) {
-      *bnp -= 1;
-    }
-    return true;
-  }
-
-  // skip over "s.var"
-  if (*ptr == '.') {
-    return true;
-  }
-
-  // two-character item: s->var
-  if (ptr[dir == BACKWARD ? 0 : 1] == '>'
-      && ptr[dir == BACKWARD ? -1 : 0] == '-') {
-    *colp += dir;
-    return true;
-  }
-  return false;
+  return rs_find_is_eval_item(ptr, colp, bnp, dir);
 }
 
 /// Find the identifier under or to the right of the cursor.
@@ -1867,21 +1823,7 @@ void clearopbeep(oparg_T *oap)
 /// Remove the shift modifier from a special key.
 static void unshift_special(cmdarg_T *cap)
 {
-  switch (cap->cmdchar) {
-  case K_S_RIGHT:
-    cap->cmdchar = K_RIGHT; break;
-  case K_S_LEFT:
-    cap->cmdchar = K_LEFT; break;
-  case K_S_UP:
-    cap->cmdchar = K_UP; break;
-  case K_S_DOWN:
-    cap->cmdchar = K_DOWN; break;
-  case K_S_HOME:
-    cap->cmdchar = K_HOME; break;
-  case K_S_END:
-    cap->cmdchar = K_END; break;
-  }
-  cap->cmdchar = simplify_key(cap->cmdchar, &mod_mask);
+  cap->cmdchar = rs_unshift_special(cap->cmdchar, &mod_mask);
 }
 
 /// If the mode is currently displayed clear the command line or update the
@@ -2358,33 +2300,7 @@ static void nv_gd(oparg_T *oap, int nchar, int thisblock)
 ///         false otherwise.
 static bool is_ident(const char *line, int offset)
 {
-  bool incomment = false;
-  int instring = 0;
-  int prev = 0;
-
-  for (int i = 0; i < offset && line[i] != NUL; i++) {
-    if (instring != 0) {
-      if (prev != '\\' && (uint8_t)line[i] == instring) {
-        instring = 0;
-      }
-    } else if ((line[i] == '"' || line[i] == '\'') && !incomment) {
-      instring = (uint8_t)line[i];
-    } else {
-      if (incomment) {
-        if (prev == '*' && line[i] == '/') {
-          incomment = false;
-        }
-      } else if (prev == '/' && line[i] == '*') {
-        incomment = true;
-      } else if (prev == '/' && line[i] == '/') {
-        return false;
-      }
-    }
-
-    prev = (uint8_t)line[i];
-  }
-
-  return incomment == false && instring == 0;
+  return rs_is_ident(line, offset);
 }
 
 /// Search for variable declaration of "ptr[len]".

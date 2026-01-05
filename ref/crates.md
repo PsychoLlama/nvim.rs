@@ -47,6 +47,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | memutil        | Memory and string utilities             |
 | menu           | Menu system                             |
 | msgpack        | MessagePack serialization               |
+| normal         | Normal mode key processing and commands |
 | ops            | Operator handling                       |
 | os             | OS abstractions (env, time, fs)         |
 | path           | Path manipulation                       |

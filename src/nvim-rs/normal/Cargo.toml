@@ -1,0 +1,12 @@
+[package]
+name = "nvim-normal"
+description = "Normal mode key processing and command handling for Neovim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true
