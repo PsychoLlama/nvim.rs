@@ -16,6 +16,32 @@ use nvim_window::WinHandle;
 /// Line number type (matches linenr_T in C).
 pub type LineNr = i64;
 
+/// Result struct for hasFoldingWin.
+///
+/// This struct contains all the output values from hasFoldingWin:
+/// - has_folding: whether the line is in a closed fold
+/// - first: first line of the fold (only valid if has_folding is true)
+/// - last: last line of the fold (only valid if has_folding is true)
+/// - fi_level: fold level
+/// - fi_lnum: line number where fold starts
+/// - fi_low_level: lowest fold level that starts in the same line
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct FoldingResult {
+    /// Whether the line is in a closed fold (0 = false, non-zero = true).
+    pub has_folding: c_int,
+    /// First line of the fold (0 if not folded).
+    pub first: LineNr,
+    /// Last line of the fold (0 if not folded).
+    pub last: LineNr,
+    /// Fold level (fi_level).
+    pub fi_level: c_int,
+    /// Line number where fold starts (fi_lnum).
+    pub fi_lnum: LineNr,
+    /// Lowest fold level that starts in the same line (fi_low_level).
+    pub fi_low_level: c_int,
+}
+
 // ============================================================================
 // Opaque Handle Types
 // ============================================================================
@@ -205,6 +231,16 @@ extern "C" {
 
     /// Get the wl_valid field from a wline_T.
     fn nvim_wline_get_valid(wl: WlineHandle) -> bool;
+
+    /// Get the wl_folded field from a wline_T.
+    fn nvim_wline_get_folded(wl: WlineHandle) -> bool;
+
+    // ========================================================================
+    // Phase 2: Core query accessors
+    // ========================================================================
+
+    /// Get the line count of the window's buffer.
+    fn nvim_win_get_buf_line_count(wp: WinHandle) -> LineNr;
 }
 
 // ============================================================================
@@ -679,6 +715,130 @@ fn fold_init_win_impl(wp: WinHandle) {
 }
 
 // ============================================================================
+// Phase 2: Core Query Functions
+// ============================================================================
+
+/// Implementation of hasFoldingWin.
+///
+/// Search for folds containing `lnum` and determine if it's in a closed fold.
+/// If `cache` is true, first check the cached w_lines[] array.
+fn has_folding_win_impl(win: WinHandle, lnum: LineNr, cache: bool) -> FoldingResult {
+    if win.is_null() {
+        return FoldingResult {
+            has_folding: 0,
+            first: 0,
+            last: 0,
+            fi_level: 0,
+            fi_lnum: 0,
+            fi_low_level: 0,
+        };
+    }
+
+    // First update folds
+    unsafe { nvim_checkupdate(win) };
+
+    // Return quickly when there is no folding at all in this window.
+    if !has_any_folding_impl(win) {
+        return FoldingResult {
+            has_folding: 0,
+            first: 0,
+            last: 0,
+            fi_level: 0,
+            fi_lnum: 0,
+            fi_low_level: 0,
+        };
+    }
+
+    let mut had_folded = false;
+    let mut first: LineNr = 0;
+    let mut last: LineNr = 0;
+
+    // Check cache if requested
+    if cache {
+        let x = find_wl_entry_impl(win, lnum);
+        if x >= 0 {
+            let wl = unsafe { nvim_win_get_wl_entry(win, x) };
+            if !wl.is_null() {
+                first = unsafe { nvim_wline_get_lnum(wl) };
+                last = unsafe { nvim_wline_get_foldend(wl) };
+                had_folded = unsafe { nvim_wline_get_folded(wl) };
+            }
+        }
+    }
+
+    let mut lnum_rel = lnum;
+    let mut level: c_int = 0;
+    let mut low_level: c_int = 0;
+    let mut maybe_small = false;
+    let mut use_level = false;
+
+    if first == 0 {
+        // Recursively search for a fold that contains "lnum".
+        let mut gap = unsafe { nvim_win_get_folds(win) };
+
+        while let Some((fp, true)) = fold_find(gap, lnum_rel) {
+            let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+
+            // Remember lowest level of fold that starts in "lnum".
+            if lnum_rel == fd_top && low_level == 0 {
+                low_level = level + 1;
+            }
+
+            first += fd_top;
+            last += fd_top;
+
+            // is this fold closed?
+            had_folded = check_closed_impl(
+                win,
+                fp,
+                &mut use_level,
+                level,
+                &mut maybe_small,
+                lnum - lnum_rel,
+            );
+            if had_folded {
+                // Fold closed: Set last and quit loop.
+                let fd_len = unsafe { nvim_fold_get_fd_len(fp) };
+                last += fd_len - 1;
+                break;
+            }
+
+            // Fold found, but it's open: Check nested folds.  Line number is
+            // relative to containing fold.
+            gap = unsafe { nvim_fold_get_fd_nested(fp) };
+            lnum_rel -= fd_top;
+            level += 1;
+        }
+    }
+
+    if !had_folded {
+        return FoldingResult {
+            has_folding: 0,
+            first: 0,
+            last: 0,
+            fi_level: level,
+            fi_lnum: lnum - lnum_rel,
+            fi_low_level: if low_level == 0 { level } else { low_level },
+        };
+    }
+
+    // Clamp last to buffer line count
+    let line_count = unsafe { nvim_win_get_buf_line_count(win) };
+    if last > line_count {
+        last = line_count;
+    }
+
+    FoldingResult {
+        has_folding: 1,
+        first,
+        last,
+        fi_level: level + 1,
+        fi_lnum: first,
+        fi_low_level: if low_level == 0 { level + 1 } else { low_level },
+    }
+}
+
+// ============================================================================
 // Phase 3: State Query Functions
 // ============================================================================
 
@@ -863,6 +1023,24 @@ pub extern "C" fn rs_foldManualAllowed(create: bool) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_foldInitWin(wp: WinHandle) {
     fold_init_win_impl(wp);
+}
+
+// ============================================================================
+// Phase 2: Core Query Functions - FFI Exports
+// ============================================================================
+
+/// Check if line is in a closed fold and return fold information.
+///
+/// Returns a FoldingResult struct containing:
+/// - has_folding: whether the line is in a closed fold
+/// - first/last: fold boundaries (only valid if has_folding is true)
+/// - fi_level/fi_lnum/fi_low_level: fold info
+///
+/// # Safety
+/// The `win` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_hasFoldingWin(win: WinHandle, lnum: LineNr, cache: bool) -> FoldingResult {
+    has_folding_win_impl(win, lnum, cache)
 }
 
 // ============================================================================

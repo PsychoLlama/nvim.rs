@@ -120,6 +120,9 @@ extern void rs_foldInitWin(win_T *wp);
 extern int rs_find_wl_entry(win_T *win, linenr_T lnum);
 extern int rs_foldLevelWin(win_T *wp, linenr_T lnum);
 
+// Rust FFI declarations for Phase 2: Core query functions
+extern int rs_getDeepestNesting(win_T *wp);
+
 static const char *e_nofold = N_("E490: No fold found");
 
 // While updating the folds lines between invalid_top and invalid_bot have an
@@ -1408,21 +1411,7 @@ static void foldMarkAdjustRecurse(win_T *wp, garray_T *gap, linenr_T line1, line
 /// window `wp`.
 int getDeepestNesting(win_T *wp)
 {
-  checkupdate(wp);
-  return getDeepestNestingRecurse(&wp->w_folds);
-}
-
-static int getDeepestNestingRecurse(garray_T *gap)
-{
-  int maxlevel = 0;
-
-  fold_T *fp = (fold_T *)gap->ga_data;
-  for (int i = 0; i < gap->ga_len; i++) {
-    int level = getDeepestNestingRecurse(&fp[i].fd_nested) + 1;
-    maxlevel = MAX(maxlevel, level);
-  }
-
-  return maxlevel;
+  return rs_getDeepestNesting(wp);
 }
 
 // check_closed() {{{2
@@ -3320,6 +3309,12 @@ bool nvim_wline_get_valid(wline_T *wl)
   return wl->wl_valid;
 }
 
+/// Get the wl_folded field from a wline_T.
+bool nvim_wline_get_folded(wline_T *wl)
+{
+  return wl->wl_folded;
+}
+
 // ============================================================================
 // Phase 1: Accessors for recursive functions
 // ============================================================================
@@ -3376,4 +3371,14 @@ int nvim_plines_win_nofold(win_T *wp, linenr_T lnum)
 void nvim_ga_init_folds(garray_T *gap)
 {
   ga_init(gap, (int)sizeof(fold_T), 10);
+}
+
+// ============================================================================
+// Phase 2: Core query accessors
+// ============================================================================
+
+/// Get the line count of the window's buffer.
+linenr_T nvim_win_get_buf_line_count(win_T *wp)
+{
+  return wp->w_buffer->b_ml.ml_line_count;
 }
