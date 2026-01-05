@@ -823,7 +823,257 @@ pub unsafe extern "C" fn rs_qf_entry_has_type(qfp: QfLineHandle, type_char: c_ch
 }
 
 // =============================================================================
-// Phase 6: Entry Iteration Functions
+// Phase 6: List ID and Index Functions
+// =============================================================================
+
+#[allow(dead_code)]
+extern "C" {
+    fn nvim_qf_get_id(qfl: QfListHandle) -> u32;
+    fn nvim_qf_get_changedtick(qfl: QfListHandle) -> c_int;
+    fn nvim_qf_get_title(qfl: QfListHandle) -> *const c_char;
+    fn nvim_qf_get_maxcount(qi: QfInfoHandle) -> c_int;
+}
+
+/// Get the unique identifier for a quickfix list.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_id(qfl: QfListHandle) -> u32 {
+    if qfl.is_null() {
+        return 0;
+    }
+    nvim_qf_get_id(qfl)
+}
+
+/// Get the changedtick for a quickfix list.
+///
+/// The changedtick is incremented each time the list is modified.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_changedtick(qfl: QfListHandle) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+    nvim_qf_get_changedtick(qfl)
+}
+
+/// Check if a quickfix list has a title.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_has_title(qfl: QfListHandle) -> bool {
+    if qfl.is_null() {
+        return false;
+    }
+    !nvim_qf_get_title(qfl).is_null()
+}
+
+/// Get the maximum number of lists in a quickfix stack.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_maxcount(qi: QfInfoHandle) -> c_int {
+    if qi.is_null() {
+        return 0;
+    }
+    nvim_qf_get_maxcount(qi)
+}
+
+/// Check if the quickfix stack is at maximum capacity.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_stack_at_max(qi: QfInfoHandle) -> bool {
+    if qi.is_null() {
+        return false;
+    }
+    let listcount = nvim_qf_get_listcount(qi);
+    let maxcount = nvim_qf_get_maxcount(qi);
+    listcount >= maxcount
+}
+
+/// Find a quickfix list by its unique ID.
+///
+/// Returns the 0-based index of the list with the given ID, or -1 if not found.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_find_list_by_id(qi: QfInfoHandle, id: u32) -> c_int {
+    if qi.is_null() || id == 0 {
+        return -1;
+    }
+
+    let listcount = nvim_qf_get_listcount(qi);
+    for i in 0..listcount {
+        let qfl = nvim_qf_get_list_at(qi, i);
+        if !qfl.is_null() && nvim_qf_get_id(qfl) == id {
+            return i;
+        }
+    }
+    -1
+}
+
+/// Check if a quickfix list with the given ID exists in the stack.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_id_exists(qi: QfInfoHandle, id: u32) -> bool {
+    rs_qf_find_list_by_id(qi, id) >= 0
+}
+
+// =============================================================================
+// Entry Range Functions
+// =============================================================================
+
+/// Check if an entry is in the specified line range.
+///
+/// Returns true if the entry's line number is between `start_lnum` and `end_lnum` inclusive.
+///
+/// # Safety
+///
+/// - `qfp` must be a valid pointer to a `qfline_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_entry_in_range(
+    qfp: QfLineHandle,
+    start_lnum: LinenrT,
+    end_lnum: LinenrT,
+) -> bool {
+    if qfp.is_null() {
+        return false;
+    }
+    let lnum = nvim_qfline_get_lnum(qfp);
+    lnum >= start_lnum && lnum <= end_lnum
+}
+
+/// Check if an entry covers a specific line (for entries with `end_lnum`).
+///
+/// Returns true if the line number is within the entry's range.
+///
+/// # Safety
+///
+/// - `qfp` must be a valid pointer to a `qfline_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_entry_covers_line(qfp: QfLineHandle, lnum: LinenrT) -> bool {
+    if qfp.is_null() {
+        return false;
+    }
+    let start = nvim_qfline_get_lnum(qfp);
+    let end = nvim_qfline_get_end_lnum(qfp);
+    if end == 0 {
+        // No range, just check start line
+        lnum == start
+    } else {
+        lnum >= start && lnum <= end
+    }
+}
+
+/// Check if an entry covers a specific position (line and column).
+///
+/// Returns true if the position is within the entry's range.
+///
+/// # Safety
+///
+/// - `qfp` must be a valid pointer to a `qfline_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_entry_covers_pos(
+    qfp: QfLineHandle,
+    lnum: LinenrT,
+    col: c_int,
+) -> bool {
+    if qfp.is_null() {
+        return false;
+    }
+    let start_lnum = nvim_qfline_get_lnum(qfp);
+    let end_lnum = nvim_qfline_get_end_lnum(qfp);
+    let start_col = nvim_qfline_get_col(qfp);
+    let end_col = nvim_qfline_get_end_col(qfp);
+
+    // Check line range
+    let effective_end_lnum = if end_lnum == 0 { start_lnum } else { end_lnum };
+    if lnum < start_lnum || lnum > effective_end_lnum {
+        return false;
+    }
+
+    // If on start line, must be at or after start column
+    if lnum == start_lnum && col < start_col {
+        return false;
+    }
+
+    // If on end line and has end column, must be at or before end column
+    if lnum == effective_end_lnum && end_col > 0 && col > end_col {
+        return false;
+    }
+
+    true
+}
+
+/// Count entries in a quickfix list matching a specific type.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_count_entries_of_type(
+    qfl: QfListHandle,
+    type_char: c_char,
+) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let count = nvim_qf_get_count(qfl);
+    let mut qfp = nvim_qf_get_start(qfl);
+    let mut type_count = 0;
+    let mut idx = 0;
+
+    while !qfp.is_null() && idx < count {
+        if rs_qf_entry_has_type(qfp, type_char) {
+            type_count += 1;
+        }
+        qfp = nvim_qfline_get_next(qfp);
+        idx += 1;
+    }
+
+    type_count
+}
+
+/// Count error entries (type 'E') in a quickfix list.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_count_errors(qfl: QfListHandle) -> c_int {
+    rs_qf_count_entries_of_type(qfl, error_types::QF_TYPE_ERROR)
+}
+
+/// Count warning entries (type 'W') in a quickfix list.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_count_warnings(qfl: QfListHandle) -> c_int {
+    rs_qf_count_entries_of_type(qfl, error_types::QF_TYPE_WARNING)
+}
+
+// =============================================================================
+// Entry Iteration Functions
 // =============================================================================
 
 /// Skip to the next valid entry in the quickfix list.
@@ -1232,6 +1482,112 @@ mod tests {
             let mut idx = 99;
             let result = rs_qf_prev_valid_in_file(std::ptr::null(), 1, &raw mut idx);
             assert!(result.is_null());
+        }
+    }
+
+    // Phase 6 new tests - List ID and Index Functions
+
+    #[test]
+    fn test_null_get_id() {
+        unsafe {
+            assert_eq!(rs_qf_get_id(std::ptr::null()), 0);
+        }
+    }
+
+    #[test]
+    fn test_null_get_changedtick() {
+        unsafe {
+            assert_eq!(rs_qf_get_changedtick(std::ptr::null()), 0);
+        }
+    }
+
+    #[test]
+    fn test_null_has_title() {
+        unsafe {
+            assert!(!rs_qf_has_title(std::ptr::null()));
+        }
+    }
+
+    #[test]
+    fn test_null_get_maxcount() {
+        unsafe {
+            assert_eq!(rs_qf_get_maxcount(std::ptr::null()), 0);
+        }
+    }
+
+    #[test]
+    fn test_null_stack_at_max() {
+        unsafe {
+            assert!(!rs_qf_stack_at_max(std::ptr::null()));
+        }
+    }
+
+    #[test]
+    fn test_null_find_list_by_id() {
+        unsafe {
+            assert_eq!(rs_qf_find_list_by_id(std::ptr::null(), 1), -1);
+        }
+    }
+
+    #[test]
+    fn test_find_list_by_id_zero() {
+        unsafe {
+            // ID of 0 should always return -1
+            assert_eq!(rs_qf_find_list_by_id(std::ptr::null(), 0), -1);
+        }
+    }
+
+    #[test]
+    fn test_null_id_exists() {
+        unsafe {
+            assert!(!rs_qf_id_exists(std::ptr::null(), 1));
+        }
+    }
+
+    // Entry Range Function tests
+
+    #[test]
+    fn test_null_entry_in_range() {
+        unsafe {
+            assert!(!rs_qf_entry_in_range(std::ptr::null(), 1, 10));
+        }
+    }
+
+    #[test]
+    fn test_null_entry_covers_line() {
+        unsafe {
+            assert!(!rs_qf_entry_covers_line(std::ptr::null(), 5));
+        }
+    }
+
+    #[test]
+    fn test_null_entry_covers_pos() {
+        unsafe {
+            assert!(!rs_qf_entry_covers_pos(std::ptr::null(), 5, 10));
+        }
+    }
+
+    #[test]
+    fn test_null_count_entries_of_type() {
+        unsafe {
+            assert_eq!(
+                rs_qf_count_entries_of_type(std::ptr::null(), error_types::QF_TYPE_ERROR),
+                0
+            );
+        }
+    }
+
+    #[test]
+    fn test_null_count_errors() {
+        unsafe {
+            assert_eq!(rs_qf_count_errors(std::ptr::null()), 0);
+        }
+    }
+
+    #[test]
+    fn test_null_count_warnings() {
+        unsafe {
+            assert_eq!(rs_qf_count_warnings(std::ptr::null()), 0);
         }
     }
 }

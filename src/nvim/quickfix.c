@@ -356,6 +356,34 @@ bool nvim_qfline_get_viscol(const void *qfp_void)
   return qfp->qf_viscol != 0;
 }
 
+/// Get unique identifier from qf_list_T for Rust
+unsigned nvim_qf_get_id(const void *qfl_void)
+{
+  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
+  return qfl->qf_id;
+}
+
+/// Get changedtick from qf_list_T for Rust
+int nvim_qf_get_changedtick(const void *qfl_void)
+{
+  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
+  return qfl->qf_changedtick;
+}
+
+/// Get title from qf_list_T for Rust
+const char *nvim_qf_get_title(const void *qfl_void)
+{
+  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
+  return qfl->qf_title;
+}
+
+/// Get maxcount from qf_info_T for Rust
+int nvim_qf_get_maxcount(const void *qi_void)
+{
+  const qf_info_T *qi = (const qf_info_T *)qi_void;
+  return qi->qf_maxcount;
+}
+
 extern bool rs_qf_list_has_valid_entries(const void *qfl);
 extern bool rs_qf_entry_after_pos(const void *qfp, const void *pos, bool linewise);
 extern bool rs_qf_entry_before_pos(const void *qfp, const void *pos, bool linewise);
