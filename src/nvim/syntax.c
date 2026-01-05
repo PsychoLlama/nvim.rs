@@ -6514,3 +6514,87 @@ int nvim_stateitem_has_cont_list(stateitem_T *item)
 {
   return item->si_cont_list != NULL;
 }
+
+// ============================================================================
+// Phase 6: Command & user interface accessors
+// ============================================================================
+
+/// Get the current syntax topgrp (for :syn include)
+int nvim_syn_get_topgrp(void)
+{
+  return curwin->w_s->b_syn_topgrp;
+}
+
+/// Set the current syntax topgrp
+void nvim_syn_set_topgrp(int topgrp)
+{
+  curwin->w_s->b_syn_topgrp = topgrp;
+}
+
+/// Get the syntax block's conceal setting
+int nvim_synblock_get_conceal_setting(synblock_T *block)
+{
+  return block->b_syn_conceal;
+}
+
+/// Get the syntax block's case ignore setting
+int nvim_synblock_get_ic_setting(synblock_T *block)
+{
+  return block->b_syn_ic;
+}
+
+/// Get the number of subcommands
+int nvim_syn_get_subcommand_count(void)
+{
+  return (int)(sizeof(subcommands) / sizeof(subcommands[0]));
+}
+
+/// Get subcommand name by index
+const char *nvim_syn_get_subcommand_name(int idx)
+{
+  int count = (int)(sizeof(subcommands) / sizeof(subcommands[0]));
+  if (idx < 0 || idx >= count) {
+    return NULL;
+  }
+  return subcommands[idx].name;
+}
+
+/// Check if a pattern at index is for syncing
+int nvim_synblock_pattern_is_syncing(synblock_T *block, int idx)
+{
+  if (idx < 0 || idx >= block->b_syn_patterns.ga_len) {
+    return 0;
+  }
+  return SYN_ITEMS(block)[idx].sp_syncing;
+}
+
+/// Get the hl group name from a pattern's syn.id
+/// Note: This returns the pattern's highlight group ID minus 1
+int nvim_synpat_get_hl_group(synpat_T *pat)
+{
+  return pat->sp_syn.id - 1;
+}
+
+/// Count patterns with a specific highlight group ID
+int nvim_synblock_count_patterns_for_id(synblock_T *block, int id)
+{
+  int count = 0;
+  for (int i = 0; i < block->b_syn_patterns.ga_len; i++) {
+    if (SYN_ITEMS(block)[i].sp_syn.id == id) {
+      count++;
+    }
+  }
+  return count;
+}
+
+/// Get expand_what variable (for command completion)
+int nvim_syn_get_expand_what(void)
+{
+  return expand_what;
+}
+
+/// Set expand_what variable
+void nvim_syn_set_expand_what(int what)
+{
+  expand_what = what;
+}

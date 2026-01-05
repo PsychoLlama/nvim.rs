@@ -772,6 +772,43 @@ extern "C" {
 
     /// Check if stateitem has a containedin list
     fn nvim_stateitem_has_cont_list(item: StateItemHandle) -> c_int;
+
+    // -------------------------------------------------------------------------
+    // Phase 6: Command & user interface accessors
+    // -------------------------------------------------------------------------
+
+    /// Get the current syntax topgrp (for :syn include)
+    fn nvim_syn_get_topgrp() -> c_int;
+
+    /// Set the current syntax topgrp
+    fn nvim_syn_set_topgrp(topgrp: c_int);
+
+    /// Get the syntax block's conceal setting
+    fn nvim_synblock_get_conceal_setting(block: SynBlockHandle) -> c_int;
+
+    /// Get the syntax block's case ignore setting
+    fn nvim_synblock_get_ic_setting(block: SynBlockHandle) -> c_int;
+
+    /// Get the number of subcommands
+    fn nvim_syn_get_subcommand_count() -> c_int;
+
+    /// Get subcommand name by index
+    fn nvim_syn_get_subcommand_name(idx: c_int) -> *const c_char;
+
+    /// Check if a pattern at index is for syncing
+    fn nvim_synblock_pattern_is_syncing(block: SynBlockHandle, idx: c_int) -> c_int;
+
+    /// Get the hl group ID from a pattern (minus 1)
+    fn nvim_synpat_get_hl_group(pat: SynPatHandle) -> c_int;
+
+    /// Count patterns with a specific highlight group ID
+    fn nvim_synblock_count_patterns_for_id(block: SynBlockHandle, id: c_int) -> c_int;
+
+    /// Get expand_what variable
+    fn nvim_syn_get_expand_what() -> c_int;
+
+    /// Set expand_what variable
+    fn nvim_syn_set_expand_what(what: c_int);
 }
 
 // =============================================================================
@@ -1551,6 +1588,109 @@ impl ClusterOp {
 }
 
 // =============================================================================
+// Phase 6: Command & user interface safe wrappers
+// =============================================================================
+
+/// Get the current syntax topgrp (for :syn include)
+#[must_use]
+pub fn topgrp() -> i32 {
+    unsafe { nvim_syn_get_topgrp() }
+}
+
+/// Set the current syntax topgrp
+pub fn set_topgrp(topgrp: i32) {
+    unsafe { nvim_syn_set_topgrp(topgrp) }
+}
+
+/// Get the syntax block's conceal setting
+#[must_use]
+pub fn synblock_conceal_setting(block: SynBlockHandle) -> i32 {
+    if block.is_null() {
+        return 0;
+    }
+    unsafe { nvim_synblock_get_conceal_setting(block) }
+}
+
+/// Get the syntax block's case ignore setting
+#[must_use]
+pub fn synblock_ic_setting(block: SynBlockHandle) -> i32 {
+    if block.is_null() {
+        return 0;
+    }
+    unsafe { nvim_synblock_get_ic_setting(block) }
+}
+
+/// Get the number of syntax subcommands
+#[must_use]
+pub fn subcommand_count() -> i32 {
+    unsafe { nvim_syn_get_subcommand_count() }
+}
+
+/// Get subcommand name by index
+#[must_use]
+pub fn subcommand_name(idx: i32) -> Option<&'static str> {
+    let ptr = unsafe { nvim_syn_get_subcommand_name(idx) };
+    if ptr.is_null() {
+        return None;
+    }
+    // SAFETY: The subcommand names are static strings in C
+    unsafe { std::ffi::CStr::from_ptr(ptr).to_str().ok() }
+}
+
+/// Check if a pattern at index is for syncing
+#[must_use]
+pub fn synblock_pattern_is_syncing(block: SynBlockHandle, idx: i32) -> bool {
+    if block.is_null() {
+        return false;
+    }
+    unsafe { nvim_synblock_pattern_is_syncing(block, idx) != 0 }
+}
+
+/// Get the highlight group ID from a pattern (minus 1)
+#[must_use]
+pub fn synpat_hl_group(pat: SynPatHandle) -> i32 {
+    if pat.is_null() {
+        return -1;
+    }
+    unsafe { nvim_synpat_get_hl_group(pat) }
+}
+
+/// Count patterns with a specific highlight group ID
+#[must_use]
+pub fn synblock_count_patterns_for_id(block: SynBlockHandle, id: i32) -> i32 {
+    if block.is_null() {
+        return 0;
+    }
+    unsafe { nvim_synblock_count_patterns_for_id(block, id) }
+}
+
+/// Get the expand_what variable
+#[must_use]
+pub fn expand_what() -> i32 {
+    unsafe { nvim_syn_get_expand_what() }
+}
+
+/// Set the expand_what variable
+pub fn set_expand_what(what: i32) {
+    unsafe { nvim_syn_set_expand_what(what) }
+}
+
+/// Expansion types for command completion
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExpandWhat {
+    /// Expand subcommand names
+    Subcmd,
+    /// Expand case arguments
+    Case,
+    /// Expand spell arguments
+    Spell,
+    /// Expand sync arguments
+    Sync,
+    /// Expand cluster names
+    Cluster,
+}
+
+// =============================================================================
 // FFI exports - Syntax state checking
 // =============================================================================
 
@@ -2172,6 +2312,89 @@ pub extern "C" fn rs_stateitem_has_cont_list(item: StateItemHandle) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_syncluster_id(cluster: SynClusterHandle) -> c_int {
     syncluster_id(cluster)
+}
+
+// =============================================================================
+// FFI exports - Phase 6: Commands & user interface
+// =============================================================================
+
+/// Get the current syntax topgrp
+#[no_mangle]
+pub extern "C" fn rs_syn_topgrp() -> c_int {
+    topgrp()
+}
+
+/// Set the current syntax topgrp
+#[no_mangle]
+pub extern "C" fn rs_syn_set_topgrp(val: c_int) {
+    set_topgrp(val);
+}
+
+/// Get the conceal setting from a synblock
+///
+/// # Safety
+/// `block` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_synblock_conceal_setting(block: SynBlockHandle) -> c_int {
+    synblock_conceal_setting(block)
+}
+
+/// Get the case ignore setting from a synblock
+///
+/// # Safety
+/// `block` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_synblock_ic_setting(block: SynBlockHandle) -> c_int {
+    synblock_ic_setting(block)
+}
+
+/// Get the number of syntax subcommands
+#[no_mangle]
+pub extern "C" fn rs_syn_subcommand_count() -> c_int {
+    subcommand_count()
+}
+
+/// Check if a pattern at index is for syncing
+///
+/// # Safety
+/// `block` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_synblock_pattern_is_syncing(block: SynBlockHandle, idx: c_int) -> c_int {
+    if synblock_pattern_is_syncing(block, idx) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Get the highlight group ID from a pattern
+///
+/// # Safety
+/// `pat` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_synpat_hl_group(pat: SynPatHandle) -> c_int {
+    synpat_hl_group(pat)
+}
+
+/// Count patterns with a specific highlight group ID
+///
+/// # Safety
+/// `block` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_synblock_count_patterns_for_id(block: SynBlockHandle, id: c_int) -> c_int {
+    synblock_count_patterns_for_id(block, id)
+}
+
+/// Get the expand_what variable
+#[no_mangle]
+pub extern "C" fn rs_syn_expand_what() -> c_int {
+    expand_what()
+}
+
+/// Set the expand_what variable
+#[no_mangle]
+pub extern "C" fn rs_syn_set_expand_what(what: c_int) {
+    set_expand_what(what);
 }
 
 #[cfg(test)]
