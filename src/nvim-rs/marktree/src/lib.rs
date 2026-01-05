@@ -396,6 +396,144 @@ extern "C" {
     /// Describe meta counts for a whole node.
     #[allow(dead_code)]
     fn nvim_meta_describe_node(meta_node: *mut u32, x: MTNodeHandle);
+
+    // ========================================================================
+    // Node Mutation Functions (Phase 4)
+    // ========================================================================
+
+    /// Set the number of keys in a node.
+    fn nvim_mtnode_set_n(x: MTNodeHandle, n: c_int);
+
+    /// Set the level of a node.
+    fn nvim_mtnode_set_level(x: MTNodeHandle, level: c_int);
+
+    /// Set a key in a node at the given index.
+    fn nvim_mtnode_set_key(x: MTNodeHandle, idx: c_int, k: MTKey);
+
+    /// Set a child pointer in a node at the given index.
+    fn nvim_mtnode_set_ptr(x: MTNodeHandle, idx: c_int, ptr: MTNodeHandle);
+
+    /// Set the parent of a node.
+    fn nvim_mtnode_set_parent(x: MTNodeHandle, parent: MTNodeHandle);
+
+    /// Set the parent index of a node.
+    fn nvim_mtnode_set_p_idx(x: MTNodeHandle, p_idx: c_int);
+
+    /// Set a meta count for a node child.
+    fn nvim_mtnode_set_meta(x: MTNodeHandle, idx: c_int, m: c_int, val: u32);
+
+    /// Move keys within a node (memmove).
+    fn nvim_mtnode_memmove_keys(x: MTNodeHandle, dst: c_int, src: c_int, count: c_int);
+
+    /// Move child pointers within a node (memmove).
+    fn nvim_mtnode_memmove_ptr(x: MTNodeHandle, dst: c_int, src: c_int, count: c_int);
+
+    /// Move meta arrays within a node (memmove).
+    fn nvim_mtnode_memmove_meta(x: MTNodeHandle, dst: c_int, src: c_int, count: c_int);
+
+    /// Copy keys from one node to another.
+    fn nvim_mtnode_memcpy_keys(
+        dst: MTNodeHandle,
+        dst_idx: c_int,
+        src: MTNodeHandle,
+        src_idx: c_int,
+        count: c_int,
+    );
+
+    /// Copy child pointers from one node to another.
+    fn nvim_mtnode_memcpy_ptr(
+        dst: MTNodeHandle,
+        dst_idx: c_int,
+        src: MTNodeHandle,
+        src_idx: c_int,
+        count: c_int,
+    );
+
+    /// Copy meta arrays from one node to another.
+    fn nvim_mtnode_memcpy_meta(
+        dst: MTNodeHandle,
+        dst_idx: c_int,
+        src: MTNodeHandle,
+        src_idx: c_int,
+        count: c_int,
+    );
+
+    // ========================================================================
+    // Tree Mutation Functions (Phase 4)
+    // ========================================================================
+
+    /// Allocate a new marktree node.
+    fn nvim_marktree_alloc_node(b: MarkTreeHandle, internal: bool) -> MTNodeHandle;
+
+    /// Update id2node map for a key at given index.
+    fn nvim_marktree_refkey(b: MarkTreeHandle, x: MTNodeHandle, i: c_int);
+
+    /// Set the root node of a marktree.
+    fn nvim_marktree_set_root(b: MarkTreeHandle, root: MTNodeHandle);
+
+    /// Increment the number of keys in a marktree.
+    fn nvim_marktree_inc_n_keys(b: MarkTreeHandle);
+
+    /// Add to meta_root by index.
+    fn nvim_marktree_add_meta_root(b: MarkTreeHandle, m: c_int, val: u32);
+
+    /// Set meta_root by index.
+    #[allow(dead_code)]
+    fn nvim_marktree_set_meta_root(b: MarkTreeHandle, m: c_int, val: u32);
+
+    // ========================================================================
+    // Intersection Operations (Phase 4)
+    // ========================================================================
+
+    /// Add an intersection to a node (sorted insert).
+    fn nvim_intersect_node(b: MarkTreeHandle, x: MTNodeHandle, id: u64);
+
+    /// Remove an intersection from a node.
+    fn nvim_unintersect_node(b: MarkTreeHandle, x: MTNodeHandle, id: u64, strict: bool);
+
+    /// Copy intersections from one node to another.
+    fn nvim_kvi_copy_intersect(dst: MTNodeHandle, src: MTNodeHandle);
+
+    /// Clear intersections in a node.
+    #[allow(dead_code)]
+    fn nvim_kvi_init_intersect(x: MTNodeHandle);
+
+    /// Check if a node's intersect list contains the given ID.
+    fn nvim_intersection_has(x: MTNodeHandle, id: u64) -> bool;
+
+    // ========================================================================
+    // B-tree Operations (Phase 4)
+    // ========================================================================
+
+    /// Split a full child node during insertion.
+    fn nvim_split_node(b: MarkTreeHandle, x: MTNodeHandle, i: c_int, next: MTKey);
+
+    /// Recursive insertion helper.
+    fn nvim_marktree_putp_aux(b: MarkTreeHandle, x: MTNodeHandle, k: MTKey, meta_inc: *mut u32);
+
+    /// Insert a key into the marktree.
+    fn nvim_marktree_put_key(b: MarkTreeHandle, k: MTKey);
+
+    /// Insert a mark with optional paired end.
+    fn nvim_marktree_put(
+        b: MarkTreeHandle,
+        key: MTKey,
+        end_row: c_int,
+        end_col: c_int,
+        end_right: bool,
+    );
+
+    /// Mark intersections between paired marks.
+    fn nvim_marktree_intersect_pair(
+        b: MarkTreeHandle,
+        id: u64,
+        itr: MarkTreeIterHandle,
+        end_itr: MarkTreeIterHandle,
+        delete: bool,
+    );
+
+    /// Bubble up common intersections to parent.
+    fn nvim_bubble_up(x: MTNodeHandle);
 }
 
 // ============================================================================
@@ -2154,6 +2292,306 @@ pub extern "C" fn rs_marktree_itr_step_overlap(
         }
         marktree_itr_step_overlap(b, itr, &mut *pair)
     }
+}
+
+// ============================================================================
+// Phase 4: Tree Mutation - Insertion
+// ============================================================================
+
+/// Branch factor T for the B-tree.
+pub const T: usize = MT_BRANCH_FACTOR;
+
+// ============================================================================
+// Node Mutation Wrappers
+// ============================================================================
+
+/// Set the number of keys in a node.
+pub fn mtnode_set_n(x: MTNodeHandle, n: i32) {
+    unsafe { nvim_mtnode_set_n(x, n) }
+}
+
+/// Set the level of a node.
+pub fn mtnode_set_level(x: MTNodeHandle, level: i32) {
+    unsafe { nvim_mtnode_set_level(x, level) }
+}
+
+/// Set a key in a node at the given index.
+pub fn mtnode_set_key(x: MTNodeHandle, idx: i32, k: MTKey) {
+    unsafe { nvim_mtnode_set_key(x, idx, k) }
+}
+
+/// Set a child pointer in a node at the given index.
+pub fn mtnode_set_ptr(x: MTNodeHandle, idx: i32, ptr: MTNodeHandle) {
+    unsafe { nvim_mtnode_set_ptr(x, idx, ptr) }
+}
+
+/// Set the parent of a node.
+pub fn mtnode_set_parent(x: MTNodeHandle, parent: MTNodeHandle) {
+    unsafe { nvim_mtnode_set_parent(x, parent) }
+}
+
+/// Set the parent index of a node.
+pub fn mtnode_set_p_idx(x: MTNodeHandle, p_idx: i32) {
+    unsafe { nvim_mtnode_set_p_idx(x, p_idx) }
+}
+
+/// Set a meta count for a node child.
+pub fn mtnode_set_meta(x: MTNodeHandle, idx: i32, m: i32, val: u32) {
+    unsafe { nvim_mtnode_set_meta(x, idx, m, val) }
+}
+
+/// Move keys within a node (memmove).
+pub fn mtnode_memmove_keys(x: MTNodeHandle, dst: i32, src: i32, count: i32) {
+    unsafe { nvim_mtnode_memmove_keys(x, dst, src, count) }
+}
+
+/// Move child pointers within a node (memmove).
+pub fn mtnode_memmove_ptr(x: MTNodeHandle, dst: i32, src: i32, count: i32) {
+    unsafe { nvim_mtnode_memmove_ptr(x, dst, src, count) }
+}
+
+/// Move meta arrays within a node (memmove).
+pub fn mtnode_memmove_meta(x: MTNodeHandle, dst: i32, src: i32, count: i32) {
+    unsafe { nvim_mtnode_memmove_meta(x, dst, src, count) }
+}
+
+/// Copy keys from one node to another.
+pub fn mtnode_memcpy_keys(
+    dst: MTNodeHandle,
+    dst_idx: i32,
+    src: MTNodeHandle,
+    src_idx: i32,
+    count: i32,
+) {
+    unsafe { nvim_mtnode_memcpy_keys(dst, dst_idx, src, src_idx, count) }
+}
+
+/// Copy child pointers from one node to another.
+pub fn mtnode_memcpy_ptr(
+    dst: MTNodeHandle,
+    dst_idx: i32,
+    src: MTNodeHandle,
+    src_idx: i32,
+    count: i32,
+) {
+    unsafe { nvim_mtnode_memcpy_ptr(dst, dst_idx, src, src_idx, count) }
+}
+
+/// Copy meta arrays from one node to another.
+pub fn mtnode_memcpy_meta(
+    dst: MTNodeHandle,
+    dst_idx: i32,
+    src: MTNodeHandle,
+    src_idx: i32,
+    count: i32,
+) {
+    unsafe { nvim_mtnode_memcpy_meta(dst, dst_idx, src, src_idx, count) }
+}
+
+// ============================================================================
+// Tree Mutation Wrappers
+// ============================================================================
+
+/// Allocate a new marktree node.
+#[must_use]
+pub fn marktree_alloc_node(b: MarkTreeHandle, internal: bool) -> MTNodeHandle {
+    unsafe { nvim_marktree_alloc_node(b, internal) }
+}
+
+/// Update id2node map for a key at given index.
+pub fn marktree_refkey(b: MarkTreeHandle, x: MTNodeHandle, i: i32) {
+    unsafe { nvim_marktree_refkey(b, x, i) }
+}
+
+/// Set the root node of a marktree.
+pub fn marktree_set_root(b: MarkTreeHandle, root: MTNodeHandle) {
+    unsafe { nvim_marktree_set_root(b, root) }
+}
+
+/// Increment the number of keys in a marktree.
+pub fn marktree_inc_n_keys(b: MarkTreeHandle) {
+    unsafe { nvim_marktree_inc_n_keys(b) }
+}
+
+/// Add to meta_root by index.
+pub fn marktree_add_meta_root(b: MarkTreeHandle, m: i32, val: u32) {
+    unsafe { nvim_marktree_add_meta_root(b, m, val) }
+}
+
+// ============================================================================
+// Intersection Wrappers
+// ============================================================================
+
+/// Add an intersection to a node (sorted insert).
+pub fn intersect_node(b: MarkTreeHandle, x: MTNodeHandle, id: u64) {
+    unsafe { nvim_intersect_node(b, x, id) }
+}
+
+/// Remove an intersection from a node.
+pub fn unintersect_node(b: MarkTreeHandle, x: MTNodeHandle, id: u64, strict: bool) {
+    unsafe { nvim_unintersect_node(b, x, id, strict) }
+}
+
+/// Copy intersections from one node to another.
+pub fn kvi_copy_intersect(dst: MTNodeHandle, src: MTNodeHandle) {
+    unsafe { nvim_kvi_copy_intersect(dst, src) }
+}
+
+/// Check if a node's intersect list contains the given ID.
+#[must_use]
+pub fn intersection_has(x: MTNodeHandle, id: u64) -> bool {
+    unsafe { nvim_intersection_has(x, id) }
+}
+
+// ============================================================================
+// B-tree Operations Wrappers
+// ============================================================================
+
+/// Split a full child node during insertion.
+///
+/// x must be an internal node, which is not full.
+/// x->ptr[i] should be a full node, i.e. x->ptr[i]->n == 2*T-1.
+pub fn split_node(b: MarkTreeHandle, x: MTNodeHandle, i: i32, next: MTKey) {
+    unsafe { nvim_split_node(b, x, i, next) }
+}
+
+/// Recursive insertion helper.
+///
+/// x must not be a full node (even if there might be internal space).
+pub fn marktree_putp_aux(
+    b: MarkTreeHandle,
+    x: MTNodeHandle,
+    k: MTKey,
+    meta_inc: &mut [u32; K_MT_META_COUNT],
+) {
+    unsafe { nvim_marktree_putp_aux(b, x, k, meta_inc.as_mut_ptr()) }
+}
+
+/// Insert a key into the marktree.
+///
+/// This is the core insertion function. It handles root splitting
+/// and delegates to putp_aux for the actual insertion.
+pub fn marktree_put_key(b: MarkTreeHandle, k: MTKey) {
+    unsafe { nvim_marktree_put_key(b, k) }
+}
+
+/// Insert a mark with optional paired end.
+///
+/// If end_row >= 0, creates a paired mark with the end at (end_row, end_col).
+/// The end mark will have right gravity if end_right is true.
+pub fn marktree_put(b: MarkTreeHandle, key: MTKey, end_row: i32, end_col: i32, end_right: bool) {
+    unsafe { nvim_marktree_put(b, key, end_row, end_col, end_right) }
+}
+
+/// Mark intersections between paired marks.
+///
+/// Traverses from itr to end_itr, adding (or removing if delete=true)
+/// intersection markers for the paired mark identified by id.
+pub fn marktree_intersect_pair(
+    b: MarkTreeHandle,
+    id: u64,
+    itr: MarkTreeIterHandle,
+    end_itr: MarkTreeIterHandle,
+    delete: bool,
+) {
+    unsafe { nvim_marktree_intersect_pair(b, id, itr, end_itr, delete) }
+}
+
+/// Bubble up common intersections to parent.
+pub fn bubble_up(x: MTNodeHandle) {
+    unsafe { nvim_bubble_up(x) }
+}
+
+// ============================================================================
+// FFI Exports for Phase 4
+// ============================================================================
+
+/// Exported FFI version of `marktree_alloc_node`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_alloc_node(b: MarkTreeHandle, internal: bool) -> MTNodeHandle {
+    marktree_alloc_node(b, internal)
+}
+
+/// Exported FFI version of `marktree_refkey`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_refkey(b: MarkTreeHandle, x: MTNodeHandle, i: c_int) {
+    marktree_refkey(b, x, i);
+}
+
+/// Exported FFI version of `split_node`.
+#[no_mangle]
+pub extern "C" fn rs_split_node(b: MarkTreeHandle, x: MTNodeHandle, i: c_int, next: MTKey) {
+    split_node(b, x, i, next);
+}
+
+/// Exported FFI version of `marktree_putp_aux`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_putp_aux(
+    b: MarkTreeHandle,
+    x: MTNodeHandle,
+    k: MTKey,
+    meta_inc: *mut u32,
+) {
+    unsafe {
+        if !meta_inc.is_null() {
+            let mut meta = [0u32; K_MT_META_COUNT];
+            for (i, m) in meta.iter_mut().enumerate() {
+                *m = *meta_inc.add(i);
+            }
+            marktree_putp_aux(b, x, k, &mut meta);
+            for (i, m) in meta.iter().enumerate() {
+                *meta_inc.add(i) = *m;
+            }
+        }
+    }
+}
+
+/// Exported FFI version of `marktree_put_key`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_put_key(b: MarkTreeHandle, k: MTKey) {
+    marktree_put_key(b, k);
+}
+
+/// Exported FFI version of `marktree_put`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_put(
+    b: MarkTreeHandle,
+    key: MTKey,
+    end_row: c_int,
+    end_col: c_int,
+    end_right: bool,
+) {
+    marktree_put(b, key, end_row, end_col, end_right);
+}
+
+/// Exported FFI version of `marktree_intersect_pair`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_intersect_pair(
+    b: MarkTreeHandle,
+    id: u64,
+    itr: MarkTreeIterHandle,
+    end_itr: MarkTreeIterHandle,
+    delete: bool,
+) {
+    marktree_intersect_pair(b, id, itr, end_itr, delete);
+}
+
+/// Exported FFI version of `intersect_node`.
+#[no_mangle]
+pub extern "C" fn rs_intersect_node(b: MarkTreeHandle, x: MTNodeHandle, id: u64) {
+    intersect_node(b, x, id);
+}
+
+/// Exported FFI version of `unintersect_node`.
+#[no_mangle]
+pub extern "C" fn rs_unintersect_node(b: MarkTreeHandle, x: MTNodeHandle, id: u64, strict: bool) {
+    unintersect_node(b, x, id, strict);
+}
+
+/// Exported FFI version of `bubble_up`.
+#[no_mangle]
+pub extern "C" fn rs_bubble_up(x: MTNodeHandle) {
+    bubble_up(x);
 }
 
 // ============================================================================

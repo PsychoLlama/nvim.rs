@@ -2923,3 +2923,201 @@ void nvim_meta_describe_node(uint32_t *meta_node, MTNode *x)
 {
   meta_describe_node(meta_node, x);
 }
+
+// ============================================================================
+// Node Mutation Accessor Functions (for Rust FFI - Phase 4)
+// ============================================================================
+
+/// Set the number of keys in a node.
+void nvim_mtnode_set_n(MTNode *x, int n)
+{
+  x->n = (int32_t)n;
+}
+
+/// Set the level of a node.
+void nvim_mtnode_set_level(MTNode *x, int level)
+{
+  x->level = (int16_t)level;
+}
+
+/// Set a key in a node at the given index.
+void nvim_mtnode_set_key(MTNode *x, int idx, MTKey k)
+{
+  x->key[idx] = k;
+}
+
+/// Set a child pointer in a node at the given index.
+void nvim_mtnode_set_ptr(MTNode *x, int idx, MTNode *ptr)
+{
+  x->s[0].i_ptr[idx] = ptr;
+}
+
+/// Set the parent of a node.
+void nvim_mtnode_set_parent(MTNode *x, MTNode *parent)
+{
+  x->parent = parent;
+}
+
+/// Set the parent index of a node.
+void nvim_mtnode_set_p_idx(MTNode *x, int p_idx)
+{
+  x->p_idx = (int16_t)p_idx;
+}
+
+/// Set a meta count for a node child.
+void nvim_mtnode_set_meta(MTNode *x, int idx, int m, uint32_t val)
+{
+  x->s[0].i_meta[idx][m] = val;
+}
+
+/// Move keys within a node (memmove).
+void nvim_mtnode_memmove_keys(MTNode *x, int dst, int src, int count)
+{
+  memmove(&x->key[dst], &x->key[src], (size_t)count * sizeof(MTKey));
+}
+
+/// Move child pointers within a node (memmove).
+void nvim_mtnode_memmove_ptr(MTNode *x, int dst, int src, int count)
+{
+  memmove(&x->s[0].i_ptr[dst], &x->s[0].i_ptr[src], (size_t)count * sizeof(MTNode *));
+}
+
+/// Move meta arrays within a node (memmove).
+void nvim_mtnode_memmove_meta(MTNode *x, int dst, int src, int count)
+{
+  memmove(&x->s[0].i_meta[dst], &x->s[0].i_meta[src], (size_t)count * sizeof(x->s[0].i_meta[0]));
+}
+
+/// Copy keys from one node to another.
+void nvim_mtnode_memcpy_keys(MTNode *dst, int dst_idx, MTNode *src, int src_idx, int count)
+{
+  memcpy(&dst->key[dst_idx], &src->key[src_idx], (size_t)count * sizeof(MTKey));
+}
+
+/// Copy child pointers from one node to another.
+void nvim_mtnode_memcpy_ptr(MTNode *dst, int dst_idx, MTNode *src, int src_idx, int count)
+{
+  memcpy(&dst->s[0].i_ptr[dst_idx], &src->s[0].i_ptr[src_idx], (size_t)count * sizeof(MTNode *));
+}
+
+/// Copy meta arrays from one node to another.
+void nvim_mtnode_memcpy_meta(MTNode *dst, int dst_idx, MTNode *src, int src_idx, int count)
+{
+  memcpy(&dst->s[0].i_meta[dst_idx], &src->s[0].i_meta[src_idx],
+         (size_t)count * sizeof(dst->s[0].i_meta[0]));
+}
+
+// ============================================================================
+// Tree Mutation Functions (for Rust FFI - Phase 4)
+// ============================================================================
+
+/// Allocate a new marktree node.
+MTNode *nvim_marktree_alloc_node(MarkTree *b, bool internal)
+{
+  return marktree_alloc_node(b, internal);
+}
+
+/// Update id2node map for a key at given index.
+void nvim_marktree_refkey(MarkTree *b, MTNode *x, int i)
+{
+  refkey(b, x, i);
+}
+
+/// Set the root node of a marktree.
+void nvim_marktree_set_root(MarkTree *b, MTNode *root)
+{
+  b->root = root;
+}
+
+/// Increment the number of keys in a marktree.
+void nvim_marktree_inc_n_keys(MarkTree *b)
+{
+  b->n_keys++;
+}
+
+/// Add to meta_root by index.
+void nvim_marktree_add_meta_root(MarkTree *b, int m, uint32_t val)
+{
+  b->meta_root[m] += val;
+}
+
+/// Set meta_root by index.
+void nvim_marktree_set_meta_root(MarkTree *b, int m, uint32_t val)
+{
+  b->meta_root[m] = val;
+}
+
+// ============================================================================
+// Intersection Operations (for Rust FFI - Phase 4)
+// ============================================================================
+
+/// Add an intersection to a node (sorted insert).
+void nvim_intersect_node(MarkTree *b, MTNode *x, uint64_t id)
+{
+  intersect_node(b, x, id);
+}
+
+/// Remove an intersection from a node.
+void nvim_unintersect_node(MarkTree *b, MTNode *x, uint64_t id, bool strict)
+{
+  unintersect_node(b, x, id, strict);
+}
+
+/// Copy intersections from one node to another.
+void nvim_kvi_copy_intersect(MTNode *dst, MTNode *src)
+{
+  kvi_copy(dst->intersect, src->intersect);
+}
+
+/// Clear intersections in a node.
+void nvim_kvi_init_intersect(MTNode *x)
+{
+  kvi_init(x->intersect);
+}
+
+/// Check if a node's intersect list contains the given ID.
+bool nvim_intersection_has(MTNode *x, uint64_t id)
+{
+  return intersection_has(&x->intersect, id);
+}
+
+// ============================================================================
+// B-tree Operations (for Rust FFI - Phase 4)
+// ============================================================================
+
+/// Split a full child node during insertion.
+void nvim_split_node(MarkTree *b, MTNode *x, int i, MTKey next)
+{
+  split_node(b, x, i, next);
+}
+
+/// Recursive insertion helper.
+void nvim_marktree_putp_aux(MarkTree *b, MTNode *x, MTKey k, uint32_t *meta_inc)
+{
+  marktree_putp_aux(b, x, k, meta_inc);
+}
+
+/// Insert a key into the marktree.
+void nvim_marktree_put_key(MarkTree *b, MTKey k)
+{
+  marktree_put_key(b, k);
+}
+
+/// Insert a mark with optional paired end.
+void nvim_marktree_put(MarkTree *b, MTKey key, int end_row, int end_col, bool end_right)
+{
+  marktree_put(b, key, end_row, end_col, end_right);
+}
+
+/// Mark intersections between paired marks.
+void nvim_marktree_intersect_pair(MarkTree *b, uint64_t id, MarkTreeIter *itr,
+                                  MarkTreeIter *end_itr, bool delete)
+{
+  marktree_intersect_pair(b, id, itr, end_itr, delete);
+}
+
+/// Bubble up common intersections to parent.
+void nvim_bubble_up(MTNode *x)
+{
+  bubble_up(x);
+}
