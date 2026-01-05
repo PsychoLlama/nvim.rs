@@ -6444,3 +6444,73 @@ int nvim_syn_has_current_next_list(void)
 {
   return current_next_list != NULL;
 }
+
+// ============================================================================
+// Phase 5: Cluster & containedin logic accessors
+// ============================================================================
+
+/// Get cluster ID (scl_id) from a cluster at index
+int nvim_syncluster_get_id(syn_cluster_T *cluster)
+{
+  return cluster->scl_id;
+}
+
+/// Get the cluster at an index in a synblock
+syn_cluster_T *nvim_synblock_get_cluster(synblock_T *block, int idx)
+{
+  if (idx < 0 || idx >= block->b_syn_clusters.ga_len) {
+    return NULL;
+  }
+  return &SYN_CLSTR(block)[idx];
+}
+
+/// Get a pattern at an index in a synblock
+synpat_T *nvim_synblock_get_pattern(synblock_T *block, int idx)
+{
+  if (idx < 0 || idx >= block->b_syn_patterns.ga_len) {
+    return NULL;
+  }
+  return &SYN_ITEMS(block)[idx];
+}
+
+/// Get the current synblock from curwin->w_s
+synblock_T *nvim_syn_get_curwin_synblock(void)
+{
+  return curwin->w_s;
+}
+
+/// Get the spell cluster ID from a synblock
+int nvim_synblock_get_spell_cluster(synblock_T *block)
+{
+  return block->b_spell_cluster_id;
+}
+
+/// Get the nospell cluster ID from a synblock
+int nvim_synblock_get_nospell_cluster(synblock_T *block)
+{
+  return block->b_nospell_cluster_id;
+}
+
+/// Check if a stateitem has the HL_TRANS_CONT flag
+int nvim_stateitem_has_trans_cont(stateitem_T *item)
+{
+  return (item->si_flags & HL_TRANS_CONT) != 0;
+}
+
+/// Check if a stateitem has the HL_MATCH flag
+int nvim_stateitem_has_match(stateitem_T *item)
+{
+  return (item->si_flags & HL_MATCH) != 0;
+}
+
+/// Get si_cont_list (containedin list for state item)
+int16_t *nvim_stateitem_get_cont_list(stateitem_T *item)
+{
+  return item->si_cont_list;
+}
+
+/// Check if stateitem has a containedin list
+int nvim_stateitem_has_cont_list(stateitem_T *item)
+{
+  return item->si_cont_list != NULL;
+}

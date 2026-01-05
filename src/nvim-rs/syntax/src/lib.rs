@@ -741,6 +741,37 @@ extern "C" {
 
     /// Check if there is a current nextgroup list
     fn nvim_syn_has_current_next_list() -> c_int;
+
+    // -------------------------------------------------------------------------
+    // Phase 5: Cluster & containedin logic accessors
+    // -------------------------------------------------------------------------
+
+    /// Get cluster ID from a cluster
+    fn nvim_syncluster_get_id(cluster: SynClusterHandle) -> c_int;
+
+    // Note: nvim_synblock_get_cluster and nvim_synblock_get_pattern are already
+    // declared above in the synblock accessors section
+
+    /// Get the current synblock from curwin->w_s
+    fn nvim_syn_get_curwin_synblock() -> SynBlockHandle;
+
+    /// Get the spell cluster ID from a synblock
+    fn nvim_synblock_get_spell_cluster(block: SynBlockHandle) -> c_int;
+
+    /// Get the nospell cluster ID from a synblock
+    fn nvim_synblock_get_nospell_cluster(block: SynBlockHandle) -> c_int;
+
+    /// Check if a stateitem has the HL_TRANS_CONT flag
+    fn nvim_stateitem_has_trans_cont(item: StateItemHandle) -> c_int;
+
+    /// Check if a stateitem has the HL_MATCH flag
+    fn nvim_stateitem_has_match(item: StateItemHandle) -> c_int;
+
+    /// Get si_cont_list (containedin list for state item)
+    fn nvim_stateitem_get_cont_list(item: StateItemHandle) -> IdListHandle;
+
+    /// Check if stateitem has a containedin list
+    fn nvim_stateitem_has_cont_list(item: StateItemHandle) -> c_int;
 }
 
 // =============================================================================
@@ -1380,6 +1411,146 @@ pub fn has_current_next_list() -> bool {
 }
 
 // =============================================================================
+// Phase 5: Cluster & containedin safe wrappers
+// =============================================================================
+
+/// Get the cluster ID from a cluster
+#[must_use]
+pub fn syncluster_id(cluster: SynClusterHandle) -> i32 {
+    if cluster.is_null() {
+        return 0;
+    }
+    unsafe { nvim_syncluster_get_id(cluster) }
+}
+
+/// Get a cluster at an index from a synblock
+#[must_use]
+pub fn synblock_get_cluster(block: SynBlockHandle, idx: i32) -> Option<SynClusterHandle> {
+    if block.is_null() {
+        return None;
+    }
+    let cluster = unsafe { nvim_synblock_get_cluster(block, idx) };
+    if cluster.is_null() {
+        None
+    } else {
+        Some(cluster)
+    }
+}
+
+/// Get a pattern at an index from a synblock
+#[must_use]
+pub fn synblock_get_pattern(block: SynBlockHandle, idx: i32) -> Option<SynPatHandle> {
+    if block.is_null() {
+        return None;
+    }
+    let pat = unsafe { nvim_synblock_get_pattern(block, idx) };
+    if pat.is_null() {
+        None
+    } else {
+        Some(pat)
+    }
+}
+
+/// Get the current window's synblock
+#[must_use]
+pub fn curwin_synblock() -> SynBlockHandle {
+    unsafe { nvim_syn_get_curwin_synblock() }
+}
+
+/// Get the spell cluster ID from a synblock
+#[must_use]
+pub fn synblock_spell_cluster(block: SynBlockHandle) -> i32 {
+    if block.is_null() {
+        return 0;
+    }
+    unsafe { nvim_synblock_get_spell_cluster(block) }
+}
+
+/// Get the nospell cluster ID from a synblock
+#[must_use]
+pub fn synblock_nospell_cluster(block: SynBlockHandle) -> i32 {
+    if block.is_null() {
+        return 0;
+    }
+    unsafe { nvim_synblock_get_nospell_cluster(block) }
+}
+
+/// Check if a stateitem has the HL_TRANS_CONT flag
+#[must_use]
+pub fn stateitem_has_trans_cont(item: StateItemHandle) -> bool {
+    if item.is_null() {
+        return false;
+    }
+    unsafe { nvim_stateitem_has_trans_cont(item) != 0 }
+}
+
+/// Check if a stateitem has the HL_MATCH flag
+#[must_use]
+pub fn stateitem_has_match(item: StateItemHandle) -> bool {
+    if item.is_null() {
+        return false;
+    }
+    unsafe { nvim_stateitem_has_match(item) != 0 }
+}
+
+/// Get the containedin list for a state item
+#[must_use]
+pub fn stateitem_cont_list(item: StateItemHandle) -> Option<IdListHandle> {
+    if item.is_null() {
+        return None;
+    }
+    let list = unsafe { nvim_stateitem_get_cont_list(item) };
+    if list.is_null() {
+        None
+    } else {
+        Some(list)
+    }
+}
+
+/// Check if a stateitem has a containedin list
+#[must_use]
+pub fn stateitem_has_cont_list(item: StateItemHandle) -> bool {
+    if item.is_null() {
+        return false;
+    }
+    unsafe { nvim_stateitem_has_cont_list(item) != 0 }
+}
+
+/// Cluster operation type for combining cluster lists
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClusterOp {
+    /// Replace first list with second
+    Replace,
+    /// Add second list to first
+    Add,
+    /// Subtract second list from first
+    Subtract,
+}
+
+impl ClusterOp {
+    /// Convert from integer constant
+    #[must_use]
+    pub fn from_int(op: i32) -> Option<Self> {
+        match op {
+            CLUSTER_REPLACE => Some(Self::Replace),
+            CLUSTER_ADD => Some(Self::Add),
+            CLUSTER_SUBTRACT => Some(Self::Subtract),
+            _ => None,
+        }
+    }
+
+    /// Convert to integer constant
+    #[must_use]
+    pub fn to_int(self) -> i32 {
+        match self {
+            Self::Replace => CLUSTER_REPLACE,
+            Self::Add => CLUSTER_ADD,
+            Self::Subtract => CLUSTER_SUBTRACT,
+        }
+    }
+}
+
+// =============================================================================
 // FFI exports - Syntax state checking
 // =============================================================================
 
@@ -1907,6 +2078,102 @@ pub extern "C" fn rs_syn_has_current_next_list() -> c_int {
     }
 }
 
+// =============================================================================
+// FFI exports - Phase 5: Cluster & containedin
+// =============================================================================
+
+/// Get a cluster at an index from a synblock
+/// Returns NULL if index is out of bounds
+///
+/// # Safety
+/// `block` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_synblock_get_cluster(block: SynBlockHandle, idx: c_int) -> SynClusterHandle {
+    synblock_get_cluster(block, idx).unwrap_or(SynClusterHandle(std::ptr::null_mut()))
+}
+
+/// Get a pattern at an index from a synblock
+/// Returns NULL if index is out of bounds
+///
+/// # Safety
+/// `block` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_synblock_get_pattern(block: SynBlockHandle, idx: c_int) -> SynPatHandle {
+    synblock_get_pattern(block, idx).unwrap_or(SynPatHandle(std::ptr::null_mut()))
+}
+
+/// Get the current window's synblock
+#[no_mangle]
+pub extern "C" fn rs_curwin_synblock() -> SynBlockHandle {
+    curwin_synblock()
+}
+
+/// Get the spell cluster ID from a synblock
+///
+/// # Safety
+/// `block` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_synblock_spell_cluster(block: SynBlockHandle) -> c_int {
+    synblock_spell_cluster(block)
+}
+
+/// Get the nospell cluster ID from a synblock
+///
+/// # Safety
+/// `block` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_synblock_nospell_cluster(block: SynBlockHandle) -> c_int {
+    synblock_nospell_cluster(block)
+}
+
+/// Check if a stateitem has the HL_TRANS_CONT flag
+///
+/// # Safety
+/// `item` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_stateitem_has_trans_cont(item: StateItemHandle) -> c_int {
+    if stateitem_has_trans_cont(item) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Check if a stateitem has the HL_MATCH flag
+///
+/// # Safety
+/// `item` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_stateitem_has_match(item: StateItemHandle) -> c_int {
+    if stateitem_has_match(item) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Check if a stateitem has a containedin list
+///
+/// # Safety
+/// `item` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_stateitem_has_cont_list(item: StateItemHandle) -> c_int {
+    if stateitem_has_cont_list(item) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Get the cluster ID from a cluster handle
+///
+/// # Safety
+/// `cluster` must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_syncluster_id(cluster: SynClusterHandle) -> c_int {
+    syncluster_id(cluster)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1942,6 +2209,33 @@ mod tests {
         // Verify special indices
         assert_eq!(KEYWORD_IDX, -1);
         assert_eq!(NONE_IDX, -2);
+
+        // Verify cluster operation constants
+        assert_eq!(CLUSTER_REPLACE, 1);
+        assert_eq!(CLUSTER_ADD, 2);
+        assert_eq!(CLUSTER_SUBTRACT, 3);
+        assert!(MAX_CLUSTER_ID > 0);
+    }
+
+    #[test]
+    fn test_cluster_op_conversion() {
+        // Test ClusterOp::from_int
+        assert_eq!(
+            ClusterOp::from_int(CLUSTER_REPLACE),
+            Some(ClusterOp::Replace)
+        );
+        assert_eq!(ClusterOp::from_int(CLUSTER_ADD), Some(ClusterOp::Add));
+        assert_eq!(
+            ClusterOp::from_int(CLUSTER_SUBTRACT),
+            Some(ClusterOp::Subtract)
+        );
+        assert_eq!(ClusterOp::from_int(0), None);
+        assert_eq!(ClusterOp::from_int(4), None);
+
+        // Test ClusterOp::to_int
+        assert_eq!(ClusterOp::Replace.to_int(), CLUSTER_REPLACE);
+        assert_eq!(ClusterOp::Add.to_int(), CLUSTER_ADD);
+        assert_eq!(ClusterOp::Subtract.to_int(), CLUSTER_SUBTRACT);
     }
 
     #[test]
