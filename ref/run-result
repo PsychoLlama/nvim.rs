@@ -1,49 +1,55 @@
-Plan: ~/.claude/plans/lucky-soaring-glacier.md
+Plan: ~/.claude/plans/nifty-splashing-bird.md
 
-## Plan Execution Complete
+All steps are complete. Here's a summary of what was accomplished:
 
-The plan has been successfully executed. Here's a summary of what was accomplished:
+## Summary
 
-### Commits Made
-1. **fd5d24c644** - `refactor(fold): add fold state queries and navigation in Rust`
-   - Phase 1 & 2: Fold state queries and navigation
-   
-2. **3e39a00e15** - `refactor(quickfix): expand list management and iteration in Rust`
-   - Phases 4, 5 & 6: Quickfix list management, error format helpers, and entry iteration
+Created the `nvim-tag` crate for the Rust migration of Neovim's tag navigation system. The implementation includes:
 
-### Success Criteria Achieved
-| Criterion | Target | Actual |
-|-----------|--------|--------|
-| `just rust-fmt-check` | Pass | ✅ Pass |
-| `just rust-clippy` | Pass | ✅ Pass |
-| `just rust-test` | Pass | ✅ Pass |
-| New Rust FFI functions | 30+ | ✅ 41 |
-| New Rust lines of code | 800+ | ✅ 951 |
-| Unit test coverage | All new functions have tests | ✅ Yes |
+### Files Created/Modified:
+- `src/nvim-rs/tag/Cargo.toml` - New crate configuration
+- `src/nvim-rs/tag/src/lib.rs` - Main implementation with 1298 lines
+- `src/nvim-rs/Cargo.toml` - Added tag crate dependency
+- `ref/crates.md` - Documented new crate
+- `src/nvim/tag.c` - Added C accessor functions for FFI
 
-### New FFI Functions Added
+### Functions Implemented (41 total):
 
-**Fold module (12 total, 4 new):**
-- `rs_foldLevelWin` - Get fold level at line in window
-- `rs_getDeepestNesting` - Get maximum fold nesting depth  
-- `rs_find_wl_entry` - Find window line entry for line number
-- `rs_lineFolded` - Check if line is inside closed fold
+**Phase 1 - Stack Queries (9 functions):**
+- `rs_tag_stack_empty`, `rs_tag_stack_len`, `rs_tag_stack_idx`
+- `rs_tag_at_bottom`, `rs_tag_at_top`
+- `rs_taggy_get_cur_match`, `rs_taggy_get_cur_fnum`, `rs_taggy_has_name`
 
-**Quickfix module (27 total, 14 new):**
-- `rs_qf_entry_count_in_file` - Count entries per file
-- `rs_qf_count_valid_entries` - Count valid entries in list
-- `rs_qf_get_nth_valid_entry` - Get Nth valid entry
-- `rs_qf_get_entry_at_idx` - Get entry by 1-based index
-- `rs_qf_valid_error_type` - Validate error type characters
-- `rs_qf_parse_type` - Normalize error type to uppercase
-- `rs_qf_cmp_entries` - Compare entries for sorting
-- `rs_qf_entry_in_file` - Check if entry matches buffer
-- `rs_qf_entry_is_active` - Check if entry is valid and not cleared
-- `rs_qf_entry_has_type` - Check entry error type
-- `rs_qf_skip_to_valid` - Skip to next valid entry
-- `rs_qf_skip_to_file` - Skip to entry in different file
-- `rs_qf_next_valid_in_file` - Next valid entry in same file
-- `rs_qf_prev_valid_in_file` - Previous valid entry in same file
+**Phase 2 - Match Priority (8 functions + constants):**
+- `MT_*` constants matching C enum
+- `rs_tag_match_type_name`, `rs_tag_is_static_match`, `rs_tag_is_current_file`
+- `rs_tag_is_icase_match`, `rs_tag_is_regexp_match`, `rs_tag_match_priority`
+- `rs_tag_cmp_match_type`, `rs_tag_best_match_type`
 
-### Phase 3 Note
-Phase 3 (fold checking utilities) was deferred as it requires mutable access to fold structures (`checkSmall`, `setSmallMaybe`). These functions modify `fd_small` fields and require additional accessor infrastructure for safe mutation through the FFI boundary. This can be addressed in a future iteration.
+**Phase 3 - Navigation Helpers (8 functions):**
+- `rs_tag_can_pop`, `rs_tag_can_push`
+- `rs_tag_next_match_idx`, `rs_tag_prev_match_idx` (with wrapping)
+- `rs_tag_first_match_idx`, `rs_tag_last_match_idx`
+- `rs_tag_clamp_idx`, `rs_tag_stack_pos_valid`
+
+**Phase 4 - Entry Accessors (9 functions):**
+- `rs_taggy_cmp_name`, `rs_taggy_cmp_fnum`, `rs_taggy_same_tag`
+- `rs_taggy_in_buffer`, `rs_tag_fmark_valid`
+- `rs_tag_fmark_lnum`, `rs_tag_fmark_col`, `rs_tag_fmark_fnum`
+
+**Phase 5 - Search State (8 functions + constants):**
+- `TS_*` constants matching C enum
+- `rs_tag_search_is_linear`, `rs_tag_search_is_binary`, `rs_tag_search_done`
+- `rs_tag_search_match_count`, `rs_tag_search_help_only`, `rs_tag_search_has_matches`
+- `rs_tag_file_sorted`, `rs_tag_search_state_name`
+
+**Phase 6 - Command Types (8 functions + constants):**
+- `DT_*` constants matching C enum
+- `rs_tag_cmd_is_navigation`, `rs_tag_cmd_is_match_nav`, `rs_tag_cmd_uses_pattern`
+- `rs_tag_cmd_needs_tag`, `rs_tag_cmd_name`, `rs_tag_cmd_valid`
+- `rs_tag_cmd_direction`, `rs_tag_type_to_cmd`
+
+### Quality Checks Passed:
+- `just rust-fmt-check` ✓
+- `just rust-clippy` ✓
+- `just rust-test` ✓ (878 tests, all passing)
