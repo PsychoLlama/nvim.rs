@@ -1238,6 +1238,36 @@ linenr_T nvim_win_get_topline(win_T *wp)
   return wp->w_topline;
 }
 
+/// Get the window's botline (line below the bottom of the window).
+linenr_T nvim_win_get_botline(win_T *wp)
+{
+  return wp->w_botline;
+}
+
+/// Get the window's topfill (filler lines above topline).
+int nvim_win_get_topfill(win_T *wp)
+{
+  return wp->w_topfill;
+}
+
+/// Get the window's arg_idx (argument list index).
+int nvim_win_get_arg_idx(win_T *wp)
+{
+  return wp->w_arg_idx;
+}
+
+/// Check if the window's arg_idx is invalid.
+int nvim_win_get_arg_idx_invalid(win_T *wp)
+{
+  return wp->w_arg_idx_invalid;
+}
+
+/// Get the argument count for a window's argument list.
+int nvim_win_argcount(win_T *wp)
+{
+  return WARGCOUNT(wp);
+}
+
 /// Get the window's skipcol.
 colnr_T nvim_win_get_skipcol(win_T *wp)
 {

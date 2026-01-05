@@ -105,12 +105,23 @@ pub const HLF_S: c_int = 27;
 /// Highlight group for StatusLineNC (non-current windows).
 pub const HLF_SNC: c_int = 28;
 
+/// Line number type (linenr_T).
+type LinenrT = i32;
+
 // C accessor functions
 extern "C" {
     fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
     fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
     fn nvim_win_get_fcs_stl(wp: WinHandle) -> ScharT;
     fn nvim_win_get_fcs_stlnc(wp: WinHandle) -> ScharT;
+    fn nvim_win_get_topline(wp: WinHandle) -> LinenrT;
+    fn nvim_win_get_botline(wp: WinHandle) -> LinenrT;
+    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
+    fn nvim_win_buf_line_count(wp: WinHandle) -> LinenrT;
+    fn nvim_win_get_fill(wp: WinHandle, lnum: LinenrT) -> c_int;
+    fn nvim_win_get_arg_idx(wp: WinHandle) -> c_int;
+    fn nvim_win_get_arg_idx_invalid(wp: WinHandle) -> c_int;
+    fn nvim_win_argcount(wp: WinHandle) -> c_int;
 }
 
 /// Check if the status line of window "wp" is connected to the status
@@ -262,6 +273,295 @@ pub extern "C" fn rs_tabwidth_calc(columns: c_int, tabcount: c_int) -> c_int {
     tabwidth_calc_impl(columns, tabcount)
 }
 
+// =============================================================================
+// Relative Position String Functions
+// =============================================================================
+
+/// Relative position type for the statusline %P item.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RelativePosition {
+    /// All buffer lines are visible
+    All,
+    /// At the top of the buffer
+    Top,
+    /// At the bottom of the buffer
+    Bot,
+    /// A percentage value (0-100)
+    Percentage(u8),
+}
+
+/// Calculate the relative position in the window.
+///
+/// This determines whether we're at "Top", "Bot", "All", or a percentage.
+fn get_rel_pos_impl(wp: WinHandle) -> RelativePosition {
+    if wp.is_null() {
+        return RelativePosition::Top;
+    }
+
+    unsafe {
+        let topline = nvim_win_get_topline(wp);
+        let botline = nvim_win_get_botline(wp);
+        let line_count = nvim_win_buf_line_count(wp);
+        let topfill = nvim_win_get_topfill(wp);
+
+        // Calculate lines above the window
+        let mut above = topline - 1;
+        let fill_at_top = nvim_win_get_fill(wp, topline);
+        above += fill_at_top - topfill;
+
+        // Special case: if topline is 1 and we have filler lines visible,
+        // consider that as seeing all lines
+        if topline == 1 && topfill >= 1 {
+            above = 0;
+        }
+
+        // Calculate lines below the window
+        let below = line_count - botline + 1;
+
+        if below <= 0 {
+            // At the bottom or showing all
+            if above == 0 {
+                RelativePosition::All
+            } else {
+                RelativePosition::Bot
+            }
+        } else if above <= 0 {
+            RelativePosition::Top
+        } else {
+            // Calculate percentage
+            let total = above + below;
+            #[allow(clippy::cast_sign_loss)]
+            let perc = if total > 0 {
+                // Use the same formula as calc_percentage
+                let above_i64 = i64::from(above);
+                let total_i64 = i64::from(total);
+                let result = ((above_i64 * 100) + (total_i64 / 2)) / total_i64;
+                result.clamp(0, 100) as u8
+            } else {
+                0
+            };
+            RelativePosition::Percentage(perc)
+        }
+    }
+}
+
+/// Get relative cursor position as a string.
+///
+/// Writes one of "All", "Top", "Bot", or a percentage like " 50" into the buffer.
+/// Returns the number of bytes written.
+fn stl_get_rel_pos_impl(buf: &mut [u8], wp: WinHandle) -> c_int {
+    if buf.len() < 3 {
+        return 0;
+    }
+
+    let pos = get_rel_pos_impl(wp);
+    let mut cursor = std::io::Cursor::new(buf);
+
+    let result = match pos {
+        RelativePosition::All => write!(cursor, "All"),
+        RelativePosition::Top => write!(cursor, "Top"),
+        RelativePosition::Bot => write!(cursor, "Bot"),
+        RelativePosition::Percentage(p) => write!(cursor, "{p:>3}"),
+    };
+
+    match result {
+        #[allow(clippy::cast_possible_truncation)]
+        Ok(()) => cursor.position() as c_int,
+        Err(_) => 0,
+    }
+}
+
+/// Get relative cursor position in window into buffer.
+///
+/// Returns one of "Top", "Bot", "All", or a percentage string like " 50".
+///
+/// # Safety
+/// `buf` must be a valid pointer to a buffer of at least `buflen` bytes.
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_get_rel_pos(buf: *mut u8, buflen: c_int, wp: WinHandle) -> c_int {
+    if buf.is_null() || buflen < 3 {
+        return 0;
+    }
+    #[allow(clippy::cast_sign_loss)]
+    let slice = std::slice::from_raw_parts_mut(buf, buflen as usize);
+    stl_get_rel_pos_impl(slice, wp)
+}
+
+// =============================================================================
+// Argument List Formatting
+// =============================================================================
+
+/// Append argument number to a buffer.
+///
+/// If editing more than one file, appends " (2 of 8)" or " ((2) of 8)" if invalid.
+/// Returns the number of characters appended.
+fn stl_append_arg_number_impl(buf: &mut [u8], wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        let argcount = nvim_win_argcount(wp);
+
+        // Nothing to do if only one file
+        if argcount <= 1 {
+            return 0;
+        }
+
+        let arg_idx = nvim_win_get_arg_idx(wp);
+        let arg_idx_invalid = nvim_win_get_arg_idx_invalid(wp) != 0;
+
+        let mut cursor = std::io::Cursor::new(buf);
+        let result = if arg_idx_invalid {
+            write!(cursor, " (({}) of {})", arg_idx + 1, argcount)
+        } else {
+            write!(cursor, " ({} of {})", arg_idx + 1, argcount)
+        };
+
+        match result {
+            #[allow(clippy::cast_possible_truncation)]
+            Ok(()) => cursor.position() as c_int,
+            Err(_) => 0,
+        }
+    }
+}
+
+/// Append argument list position to a buffer.
+///
+/// If editing more than one file, appends " (2 of 8)" or " ((2) of 8)" if invalid.
+///
+/// # Safety
+/// `buf` must be a valid pointer to a buffer of at least `buflen` bytes.
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_append_arg_number(
+    buf: *mut u8,
+    buflen: usize,
+    wp: WinHandle,
+) -> c_int {
+    if buf.is_null() || buflen == 0 {
+        return 0;
+    }
+    let slice = std::slice::from_raw_parts_mut(buf, buflen);
+    stl_append_arg_number_impl(slice, wp)
+}
+
+// =============================================================================
+// Separator Fill Functions
+// =============================================================================
+
+/// Group item structure for truncation handling.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct StlGroupItem {
+    /// Start position in output buffer
+    pub start_col: c_int,
+    /// Minimum width (-1 means variable)
+    pub minwid: c_int,
+    /// Maximum width (0 means unlimited)
+    pub maxwid: c_int,
+}
+
+/// Fill the space between two separators with a fill character.
+///
+/// This is used to evenly distribute space when there are multiple
+/// separator markers (%) in a statusline.
+fn stl_fill_between_impl(
+    buf: &mut [u8],
+    sep_start: usize,
+    sep_end: usize,
+    total_width: usize,
+    content_width: usize,
+    fill_char: u8,
+) -> usize {
+    if sep_start >= sep_end || sep_end > buf.len() {
+        return 0;
+    }
+
+    // Calculate how much space we have to fill
+    let available = total_width.saturating_sub(content_width);
+    let fill_space = sep_end - sep_start;
+    let to_fill = available.min(fill_space);
+
+    // Fill with the fill character
+    for byte in buf.iter_mut().skip(sep_start).take(to_fill) {
+        *byte = fill_char;
+    }
+
+    to_fill
+}
+
+/// Calculate width of content after applying truncation.
+///
+/// Returns the width after truncation, inserting '<' marker if needed.
+const fn stl_group_truncate_impl(
+    content_width: c_int,
+    max_width: c_int,
+    has_truncate_marker: bool,
+) -> (c_int, bool) {
+    if max_width <= 0 || content_width <= max_width {
+        (content_width, false)
+    } else if has_truncate_marker {
+        // Already has marker, just truncate
+        (max_width, true)
+    } else {
+        // Need to add '<' marker, which takes 1 column
+        (max_width, true)
+    }
+}
+
+/// FFI export: Calculate truncated width with marker.
+///
+/// Returns the truncated width. Sets `needs_marker` to 1 if a '<' marker is needed.
+///
+/// # Safety
+/// `needs_marker` must be null or a valid pointer to a c_int.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_group_truncate(
+    content_width: c_int,
+    max_width: c_int,
+    has_marker: c_int,
+    needs_marker: *mut c_int,
+) -> c_int {
+    let (width, marker) = stl_group_truncate_impl(content_width, max_width, has_marker != 0);
+    if !needs_marker.is_null() {
+        *needs_marker = c_int::from(marker);
+    }
+    width
+}
+
+/// FFI export: Fill between separators with fill character.
+///
+/// Fills the buffer from `sep_start` to `sep_end` with `fill_char`.
+/// Returns the number of bytes actually filled.
+///
+/// # Safety
+/// `buf` must be null or a valid pointer to a buffer of at least `buflen` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_fill_between(
+    buf: *mut u8,
+    buflen: usize,
+    sep_start: usize,
+    sep_end: usize,
+    total_width: usize,
+    content_width: usize,
+    fill_char: u8,
+) -> usize {
+    if buf.is_null() || buflen == 0 {
+        return 0;
+    }
+    let slice = std::slice::from_raw_parts_mut(buf, buflen);
+    stl_fill_between_impl(
+        slice,
+        sep_start,
+        sep_end,
+        total_width,
+        content_width,
+        fill_char,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -337,5 +637,112 @@ mod tests {
     fn test_tabpage_handle_null() {
         let handle = TabpageHandle::null();
         assert!(handle.is_null());
+    }
+
+    // =========================================================================
+    // Relative Position Tests
+    // =========================================================================
+
+    #[test]
+    fn test_relative_position_enum() {
+        // Test that enum variants are distinct
+        assert_ne!(RelativePosition::All, RelativePosition::Top);
+        assert_ne!(RelativePosition::Top, RelativePosition::Bot);
+        assert_ne!(RelativePosition::Bot, RelativePosition::Percentage(50));
+        assert_eq!(
+            RelativePosition::Percentage(50),
+            RelativePosition::Percentage(50)
+        );
+        assert_ne!(
+            RelativePosition::Percentage(50),
+            RelativePosition::Percentage(75)
+        );
+    }
+
+    // =========================================================================
+    // Separator Fill Tests
+    // =========================================================================
+
+    #[test]
+    fn test_fill_between_basic() {
+        let mut buf = [0u8; 20];
+        let filled = stl_fill_between_impl(&mut buf, 5, 10, 20, 10, b' ');
+        assert_eq!(filled, 5);
+        // Check that bytes 5-9 are filled with spaces
+        for byte in &buf[5..10] {
+            assert_eq!(*byte, b' ');
+        }
+    }
+
+    #[test]
+    fn test_fill_between_empty_range() {
+        let mut buf = [0u8; 20];
+        let filled = stl_fill_between_impl(&mut buf, 10, 10, 20, 10, b' ');
+        assert_eq!(filled, 0);
+    }
+
+    #[test]
+    fn test_fill_between_invalid_range() {
+        let mut buf = [0u8; 20];
+        let filled = stl_fill_between_impl(&mut buf, 15, 10, 20, 10, b' ');
+        assert_eq!(filled, 0);
+    }
+
+    #[test]
+    fn test_fill_between_no_available_space() {
+        let mut buf = [0u8; 20];
+        // total_width == content_width means no space to fill
+        let filled = stl_fill_between_impl(&mut buf, 5, 10, 15, 15, b' ');
+        assert_eq!(filled, 0);
+    }
+
+    // =========================================================================
+    // Group Truncation Tests
+    // =========================================================================
+
+    #[test]
+    fn test_group_truncate_no_truncation_needed() {
+        let (width, needs_marker) = stl_group_truncate_impl(10, 20, false);
+        assert_eq!(width, 10);
+        assert!(!needs_marker);
+    }
+
+    #[test]
+    fn test_group_truncate_truncation_needed() {
+        let (width, needs_marker) = stl_group_truncate_impl(30, 20, false);
+        assert_eq!(width, 20);
+        assert!(needs_marker);
+    }
+
+    #[test]
+    fn test_group_truncate_already_has_marker() {
+        let (width, needs_marker) = stl_group_truncate_impl(30, 20, true);
+        assert_eq!(width, 20);
+        assert!(needs_marker);
+    }
+
+    #[test]
+    fn test_group_truncate_zero_max_width() {
+        // max_width <= 0 means unlimited
+        let (width, needs_marker) = stl_group_truncate_impl(30, 0, false);
+        assert_eq!(width, 30);
+        assert!(!needs_marker);
+    }
+
+    #[test]
+    fn test_group_truncate_negative_max_width() {
+        let (width, needs_marker) = stl_group_truncate_impl(30, -1, false);
+        assert_eq!(width, 30);
+        assert!(!needs_marker);
+    }
+
+    // =========================================================================
+    // Group Item Struct Tests
+    // =========================================================================
+
+    #[test]
+    fn test_stl_group_item_size() {
+        // Should be 3 * 4 = 12 bytes (3 c_int fields)
+        assert_eq!(std::mem::size_of::<StlGroupItem>(), 12);
     }
 }

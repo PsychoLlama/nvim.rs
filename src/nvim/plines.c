@@ -248,6 +248,12 @@ int nvim_win_get_lcs_tab3(win_T *wp)
   return wp->w_p_lcs_chars.tab3;
 }
 
+/// Get filler lines for a window at a given line number (FFI wrapper).
+int nvim_win_get_fill(win_T *wp, linenr_T lnum)
+{
+  return win_get_fill(wp, lnum);
+}
+
 // Note: nvim_win_get_p_list is defined in window.c
 
 // ============================================================================
