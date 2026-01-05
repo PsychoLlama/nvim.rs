@@ -24,7 +24,10 @@ fi
 
 log "Running Claude in plan mode..."
 
-# Run Claude Code in plan mode with JSON output to capture metadata
+# JSON schema to extract the plan file path
+schema='{"type":"object","properties":{"plan_path":{"type":"string","description":"Absolute path to the plan file"}},"required":["plan_path"]}'
+
+# Run Claude Code in plan mode with structured output
 output=$(claude -p "Let's create a plan. $description
 $previous_result
 
@@ -33,21 +36,23 @@ Structure the plan with:
 - Goals
 - Implementation phases (numbered)
 - Risks and mitigations
-- Success criteria" \
+- Success criteria
+
+After writing the plan, respond with the absolute path to the plan file." \
   --permission-mode plan \
-  --output-format json)
+  --output-format json \
+  --json-schema "$schema")
 
 log "Extracting plan file path..."
 
-# Extract plan file path from result text
-result=$(jq -r '.result' <<< "$output")
-plan_path=$(grep -o '/home[^`]*\.md' <<< "$result" | head -1)
+# Extract plan file path from structured output
+plan_path=$(jq -r '.structured_output.plan_path' <<< "$output")
 
-if [[ -n "$plan_path" && -f "$plan_path" ]]; then
+if [[ -n "$plan_path" && "$plan_path" != "null" && -f "$plan_path" ]]; then
   log "Plan created: $plan_path"
   echo "$plan_path"
 else
   log "Error: Could not find plan file path in output"
-  echo "$result" >&2
+  jq -r '.result // .error // .' <<< "$output" >&2
   exit 1
 fi
