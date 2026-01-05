@@ -295,6 +295,28 @@ extern "C" {
 
     /// Set stored oldcol at level in an iterator.
     fn nvim_mtitr_set_s_oldcol(itr: MarkTreeIterHandle, lvl: c_int, oldcol: c_int);
+
+    // ========================================================================
+    // Lookup and pair functions
+    // ========================================================================
+
+    /// Lookup a mark by its ID and optionally set iterator.
+    fn nvim_marktree_lookup(b: MarkTreeHandle, id: u64, itr: MarkTreeIterHandle) -> MTKey;
+
+    /// Lookup a mark by namespace and ID.
+    fn nvim_marktree_lookup_ns(
+        b: MarkTreeHandle,
+        ns: u32,
+        id: u32,
+        end: bool,
+        itr: MarkTreeIterHandle,
+    ) -> MTKey;
+
+    /// Get the alternate end of a paired mark.
+    fn nvim_marktree_get_alt(b: MarkTreeHandle, mark: MTKey, itr: MarkTreeIterHandle) -> MTKey;
+
+    /// Get the position of the alternate end of a paired mark.
+    fn nvim_marktree_get_altpos(b: MarkTreeHandle, mark: MTKey, itr: MarkTreeIterHandle) -> MTPos;
 }
 
 // ============================================================================
@@ -1175,6 +1197,92 @@ pub extern "C" fn rs_marktree_itr_get_ext(
     gravity: bool,
 ) -> bool {
     marktree_itr_get_ext(b, p, itr, last, gravity)
+}
+
+// ============================================================================
+// Lookup and Pair Functions
+// ============================================================================
+
+/// Lookup a mark by its combined lookup ID.
+///
+/// Returns the mark with absolute position, or an invalid key if not found.
+/// If `itr` is not null, positions the iterator at the found mark.
+#[must_use]
+pub fn marktree_lookup(b: MarkTreeHandle, id: u64, itr: MarkTreeIterHandle) -> MTKey {
+    unsafe { nvim_marktree_lookup(b, id, itr) }
+}
+
+/// Exported FFI version of `marktree_lookup`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_lookup(
+    b: MarkTreeHandle,
+    id: u64,
+    itr: MarkTreeIterHandle,
+) -> MTKey {
+    marktree_lookup(b, id, itr)
+}
+
+/// Lookup a mark by namespace and ID.
+///
+/// If `end` is true, looks up the end mark; otherwise the start mark.
+#[must_use]
+pub fn marktree_lookup_ns(
+    b: MarkTreeHandle,
+    ns: u32,
+    id: u32,
+    end: bool,
+    itr: MarkTreeIterHandle,
+) -> MTKey {
+    unsafe { nvim_marktree_lookup_ns(b, ns, id, end, itr) }
+}
+
+/// Exported FFI version of `marktree_lookup_ns`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_lookup_ns(
+    b: MarkTreeHandle,
+    ns: u32,
+    id: u32,
+    end: bool,
+    itr: MarkTreeIterHandle,
+) -> MTKey {
+    marktree_lookup_ns(b, ns, id, end, itr)
+}
+
+/// Get the alternate end of a paired mark.
+///
+/// For a paired mark, returns the other end (start->end or end->start).
+/// For an unpaired mark, returns the mark itself.
+#[must_use]
+pub fn marktree_get_alt(b: MarkTreeHandle, mark: MTKey, itr: MarkTreeIterHandle) -> MTKey {
+    unsafe { nvim_marktree_get_alt(b, mark, itr) }
+}
+
+/// Exported FFI version of `marktree_get_alt`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_get_alt(
+    b: MarkTreeHandle,
+    mark: MTKey,
+    itr: MarkTreeIterHandle,
+) -> MTKey {
+    marktree_get_alt(b, mark, itr)
+}
+
+/// Get the position of the alternate end of a paired mark.
+///
+/// Convenience function that just returns the position.
+#[must_use]
+pub fn marktree_get_altpos(b: MarkTreeHandle, mark: MTKey, itr: MarkTreeIterHandle) -> MTPos {
+    unsafe { nvim_marktree_get_altpos(b, mark, itr) }
+}
+
+/// Exported FFI version of `marktree_get_altpos`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_get_altpos(
+    b: MarkTreeHandle,
+    mark: MTKey,
+    itr: MarkTreeIterHandle,
+) -> MTPos {
+    marktree_get_altpos(b, mark, itr)
 }
 
 // ============================================================================

@@ -2746,3 +2746,35 @@ void nvim_mtitr_set_s_oldcol(MarkTreeIter *itr, int lvl, int oldcol)
 {
   itr->s[lvl].oldcol = oldcol;
 }
+
+// ============================================================================
+// Lookup and Pair Functions (for Rust FFI)
+// ============================================================================
+
+/// Lookup a mark by its ID and optionally set iterator.
+/// Wrapper for marktree_lookup that can be called from Rust.
+MTKey nvim_marktree_lookup(MarkTree *b, uint64_t id, MarkTreeIter *itr)
+{
+  return marktree_lookup(b, id, itr);
+}
+
+/// Lookup a mark by namespace and ID.
+/// Wrapper for marktree_lookup_ns that can be called from Rust.
+MTKey nvim_marktree_lookup_ns(MarkTree *b, uint32_t ns, uint32_t id, bool end, MarkTreeIter *itr)
+{
+  return marktree_lookup_ns(b, ns, id, end, itr);
+}
+
+/// Get the alternate end of a paired mark.
+/// Wrapper for marktree_get_alt that can be called from Rust.
+MTKey nvim_marktree_get_alt(MarkTree *b, MTKey mark, MarkTreeIter *itr)
+{
+  return marktree_get_alt(b, mark, itr);
+}
+
+/// Get the position of the alternate end of a paired mark.
+/// Wrapper for marktree_get_altpos that can be called from Rust.
+MTPos nvim_marktree_get_altpos(MarkTree *b, MTKey mark, MarkTreeIter *itr)
+{
+  return marktree_get_altpos(b, mark, itr);
+}
