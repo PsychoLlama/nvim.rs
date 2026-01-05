@@ -8397,7 +8397,10 @@ static void realloc_post_list(void)
 }
 
 // Search between "start" and "end" and try to recognize a
-// character class in expanded form. For example [0-9].
+// Rust implementation
+extern int rs_nfa_recognize_char_class(const uint8_t *start, const uint8_t *end, int extra_newl);
+
+// Recognize a character class in expanded form. For example [0-9].
 // On success, return the id the character class to be emitted.
 // On failure, return 0 (=FAIL)
 // Start points to the first char of the range, while end should point
@@ -8406,120 +8409,7 @@ static void realloc_post_list(void)
 // need to be interpreted as [a-zA-Z].
 static int nfa_recognize_char_class(uint8_t *start, const uint8_t *end, int extra_newl)
 {
-#define CLASS_not            0x80
-#define CLASS_af             0x40
-#define CLASS_AF             0x20
-#define CLASS_az             0x10
-#define CLASS_AZ             0x08
-#define CLASS_o7             0x04
-#define CLASS_o9             0x02
-#define CLASS_underscore     0x01
-
-  uint8_t *p;
-  int config = 0;
-
-  bool newl = extra_newl == true;
-
-  if (*end != ']') {
-    return FAIL;
-  }
-  p = start;
-  if (*p == '^') {
-    config |= CLASS_not;
-    p++;
-  }
-
-  while (p < end) {
-    if (p + 2 < end && *(p + 1) == '-') {
-      switch (*p) {
-      case '0':
-        if (*(p + 2) == '9') {
-          config |= CLASS_o9;
-          break;
-        } else if (*(p + 2) == '7') {
-          config |= CLASS_o7;
-          break;
-        }
-        return FAIL;
-      case 'a':
-        if (*(p + 2) == 'z') {
-          config |= CLASS_az;
-          break;
-        } else if (*(p + 2) == 'f') {
-          config |= CLASS_af;
-          break;
-        }
-        return FAIL;
-      case 'A':
-        if (*(p + 2) == 'Z') {
-          config |= CLASS_AZ;
-          break;
-        } else if (*(p + 2) == 'F') {
-          config |= CLASS_AF;
-          break;
-        }
-        return FAIL;
-      default:
-        return FAIL;
-      }
-      p += 3;
-    } else if (p + 1 < end && *p == '\\' && *(p + 1) == 'n') {
-      newl = true;
-      p += 2;
-    } else if (*p == '_') {
-      config |= CLASS_underscore;
-      p++;
-    } else if (*p == '\n') {
-      newl = true;
-      p++;
-    } else {
-      return FAIL;
-    }
-  }   // while (p < end)
-
-  if (p != end) {
-    return FAIL;
-  }
-
-  if (newl == true) {
-    extra_newl = NFA_ADD_NL;
-  }
-
-  switch (config) {
-  case CLASS_o9:
-    return extra_newl + NFA_DIGIT;
-  case CLASS_not |  CLASS_o9:
-    return extra_newl + NFA_NDIGIT;
-  case CLASS_af | CLASS_AF | CLASS_o9:
-    return extra_newl + NFA_HEX;
-  case CLASS_not | CLASS_af | CLASS_AF | CLASS_o9:
-    return extra_newl + NFA_NHEX;
-  case CLASS_o7:
-    return extra_newl + NFA_OCTAL;
-  case CLASS_not | CLASS_o7:
-    return extra_newl + NFA_NOCTAL;
-  case CLASS_az | CLASS_AZ | CLASS_o9 | CLASS_underscore:
-    return extra_newl + NFA_WORD;
-  case CLASS_not | CLASS_az | CLASS_AZ | CLASS_o9 | CLASS_underscore:
-    return extra_newl + NFA_NWORD;
-  case CLASS_az | CLASS_AZ | CLASS_underscore:
-    return extra_newl + NFA_HEAD;
-  case CLASS_not | CLASS_az | CLASS_AZ | CLASS_underscore:
-    return extra_newl + NFA_NHEAD;
-  case CLASS_az | CLASS_AZ:
-    return extra_newl + NFA_ALPHA;
-  case CLASS_not | CLASS_az | CLASS_AZ:
-    return extra_newl + NFA_NALPHA;
-  case CLASS_az:
-    return extra_newl + NFA_LOWER_IC;
-  case CLASS_not | CLASS_az:
-    return extra_newl + NFA_NLOWER_IC;
-  case CLASS_AZ:
-    return extra_newl + NFA_UPPER_IC;
-  case CLASS_not | CLASS_AZ:
-    return extra_newl + NFA_NUPPER_IC;
-  }
-  return FAIL;
+  return rs_nfa_recognize_char_class(start, end, extra_newl);
 }
 
 // Produce the bytes for equivalence class "c".

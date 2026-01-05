@@ -465,6 +465,151 @@ pub const fn is_nfa_mclose(state: c_int) -> bool {
 }
 
 // =============================================================================
+// Character Class Recognition
+// =============================================================================
+
+// Flags for nfa_recognize_char_class
+const CLASS_NOT: u8 = 0x80;
+const CLASS_AF: u8 = 0x40;
+const CLASS_AF_UPPER: u8 = 0x20;
+const CLASS_AZ: u8 = 0x10;
+const CLASS_AZ_UPPER: u8 = 0x08;
+const CLASS_O7: u8 = 0x04;
+const CLASS_O9: u8 = 0x02;
+const CLASS_UNDERSCORE: u8 = 0x01;
+
+/// FAIL value (matches vim_defs.h)
+const FAIL: c_int = 0;
+
+/// Recognize a character class in expanded form like [0-9] or [a-zA-Z_0-9].
+///
+/// On success, return the NFA state id for the character class.
+/// On failure, return FAIL (0).
+///
+/// # Arguments
+/// * `start` - Points to the first char inside the brackets (after '[')
+/// * `end` - Points to the closing bracket ']'
+/// * `extra_newl` - If true, add NFA_ADD_NL to result
+///
+/// # Safety
+/// `start` and `end` must be valid pointers within the same buffer.
+pub unsafe fn nfa_recognize_char_class_impl(
+    start: *const u8,
+    end: *const u8,
+    extra_newl: c_int,
+) -> c_int {
+    if end.is_null() || start.is_null() {
+        return FAIL;
+    }
+
+    if *end != b']' {
+        return FAIL;
+    }
+
+    let mut config: u8 = 0;
+    let mut newl = extra_newl != 0;
+    let mut p = start;
+
+    // Check for negation
+    if *p == b'^' {
+        config |= CLASS_NOT;
+        p = p.add(1);
+    }
+
+    while p < end {
+        // Check for range pattern: x-y
+        if p.add(2) < end && *p.add(1) == b'-' {
+            match *p {
+                b'0' => {
+                    let end_char = *p.add(2);
+                    if end_char == b'9' {
+                        config |= CLASS_O9;
+                    } else if end_char == b'7' {
+                        config |= CLASS_O7;
+                    } else {
+                        return FAIL;
+                    }
+                }
+                b'a' => {
+                    let end_char = *p.add(2);
+                    if end_char == b'z' {
+                        config |= CLASS_AZ;
+                    } else if end_char == b'f' {
+                        config |= CLASS_AF;
+                    } else {
+                        return FAIL;
+                    }
+                }
+                b'A' => {
+                    let end_char = *p.add(2);
+                    if end_char == b'Z' {
+                        config |= CLASS_AZ_UPPER;
+                    } else if end_char == b'F' {
+                        config |= CLASS_AF_UPPER;
+                    } else {
+                        return FAIL;
+                    }
+                }
+                _ => return FAIL,
+            }
+            p = p.add(3);
+        } else if p.add(1) < end && *p == b'\\' && *p.add(1) == b'n' {
+            newl = true;
+            p = p.add(2);
+        } else if *p == b'_' {
+            config |= CLASS_UNDERSCORE;
+            p = p.add(1);
+        } else if *p == b'\n' {
+            newl = true;
+            p = p.add(1);
+        } else {
+            return FAIL;
+        }
+    }
+
+    if p != end {
+        return FAIL;
+    }
+
+    let extra = if newl { NFA_ADD_NL } else { 0 };
+
+    match config {
+        CLASS_O9 => extra + NFA_DIGIT,
+        c if c == CLASS_NOT | CLASS_O9 => extra + NFA_NDIGIT,
+        c if c == CLASS_AF | CLASS_AF_UPPER | CLASS_O9 => extra + NFA_HEX,
+        c if c == CLASS_NOT | CLASS_AF | CLASS_AF_UPPER | CLASS_O9 => extra + NFA_NHEX,
+        CLASS_O7 => extra + NFA_OCTAL,
+        c if c == CLASS_NOT | CLASS_O7 => extra + NFA_NOCTAL,
+        c if c == CLASS_AZ | CLASS_AZ_UPPER | CLASS_O9 | CLASS_UNDERSCORE => extra + NFA_WORD,
+        c if c == CLASS_NOT | CLASS_AZ | CLASS_AZ_UPPER | CLASS_O9 | CLASS_UNDERSCORE => {
+            extra + NFA_NWORD
+        }
+        c if c == CLASS_AZ | CLASS_AZ_UPPER | CLASS_UNDERSCORE => extra + NFA_HEAD,
+        c if c == CLASS_NOT | CLASS_AZ | CLASS_AZ_UPPER | CLASS_UNDERSCORE => extra + NFA_NHEAD,
+        c if c == CLASS_AZ | CLASS_AZ_UPPER => extra + NFA_ALPHA,
+        c if c == CLASS_NOT | CLASS_AZ | CLASS_AZ_UPPER => extra + NFA_NALPHA,
+        CLASS_AZ => extra + NFA_LOWER_IC,
+        c if c == CLASS_NOT | CLASS_AZ => extra + NFA_NLOWER_IC,
+        CLASS_AZ_UPPER => extra + NFA_UPPER_IC,
+        c if c == CLASS_NOT | CLASS_AZ_UPPER => extra + NFA_NUPPER_IC,
+        _ => FAIL,
+    }
+}
+
+/// FFI export: Recognize a character class in expanded form.
+///
+/// # Safety
+/// `start` and `end` must be valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_recognize_char_class(
+    start: *const u8,
+    end: *const u8,
+    extra_newl: c_int,
+) -> c_int {
+    nfa_recognize_char_class_impl(start, end, extra_newl)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -554,5 +699,128 @@ mod tests {
         assert!(class_alnum > visual);
         assert_eq!(NFA_CLASS_ALPHA, NFA_CLASS_ALNUM + 1);
         assert_eq!(NFA_CLASS_FNAME, NFA_CLASS_KEYWORD + 1);
+    }
+
+    // =========================================================================
+    // nfa_recognize_char_class tests
+    // =========================================================================
+
+    /// Helper to test nfa_recognize_char_class with a string
+    unsafe fn test_char_class(s: &[u8], extra_newl: c_int) -> c_int {
+        if s.is_empty() {
+            return FAIL;
+        }
+        let start = s.as_ptr();
+        let end = s.as_ptr().add(s.len() - 1); // Point to ']'
+        nfa_recognize_char_class_impl(start, end, extra_newl)
+    }
+
+    #[test]
+    fn test_recognize_digit() {
+        unsafe {
+            // [0-9] -> NFA_DIGIT
+            assert_eq!(test_char_class(b"0-9]", 0), NFA_DIGIT);
+            // [^0-9] -> NFA_NDIGIT
+            assert_eq!(test_char_class(b"^0-9]", 0), NFA_NDIGIT);
+        }
+    }
+
+    #[test]
+    fn test_recognize_octal() {
+        unsafe {
+            // [0-7] -> NFA_OCTAL
+            assert_eq!(test_char_class(b"0-7]", 0), NFA_OCTAL);
+            // [^0-7] -> NFA_NOCTAL
+            assert_eq!(test_char_class(b"^0-7]", 0), NFA_NOCTAL);
+        }
+    }
+
+    #[test]
+    fn test_recognize_hex() {
+        unsafe {
+            // [0-9a-fA-F] -> NFA_HEX
+            assert_eq!(test_char_class(b"0-9a-fA-F]", 0), NFA_HEX);
+            // [^0-9a-fA-F] -> NFA_NHEX
+            assert_eq!(test_char_class(b"^0-9a-fA-F]", 0), NFA_NHEX);
+        }
+    }
+
+    #[test]
+    fn test_recognize_word() {
+        unsafe {
+            // [a-zA-Z0-9_] -> NFA_WORD
+            assert_eq!(test_char_class(b"a-zA-Z0-9_]", 0), NFA_WORD);
+            // [^a-zA-Z0-9_] -> NFA_NWORD
+            assert_eq!(test_char_class(b"^a-zA-Z0-9_]", 0), NFA_NWORD);
+        }
+    }
+
+    #[test]
+    fn test_recognize_head() {
+        unsafe {
+            // [a-zA-Z_] -> NFA_HEAD
+            assert_eq!(test_char_class(b"a-zA-Z_]", 0), NFA_HEAD);
+            // [^a-zA-Z_] -> NFA_NHEAD
+            assert_eq!(test_char_class(b"^a-zA-Z_]", 0), NFA_NHEAD);
+        }
+    }
+
+    #[test]
+    fn test_recognize_alpha() {
+        unsafe {
+            // [a-zA-Z] -> NFA_ALPHA
+            assert_eq!(test_char_class(b"a-zA-Z]", 0), NFA_ALPHA);
+            // [^a-zA-Z] -> NFA_NALPHA
+            assert_eq!(test_char_class(b"^a-zA-Z]", 0), NFA_NALPHA);
+        }
+    }
+
+    #[test]
+    fn test_recognize_lower_upper() {
+        unsafe {
+            // [a-z] -> NFA_LOWER_IC
+            assert_eq!(test_char_class(b"a-z]", 0), NFA_LOWER_IC);
+            // [^a-z] -> NFA_NLOWER_IC
+            assert_eq!(test_char_class(b"^a-z]", 0), NFA_NLOWER_IC);
+            // [A-Z] -> NFA_UPPER_IC
+            assert_eq!(test_char_class(b"A-Z]", 0), NFA_UPPER_IC);
+            // [^A-Z] -> NFA_NUPPER_IC
+            assert_eq!(test_char_class(b"^A-Z]", 0), NFA_NUPPER_IC);
+        }
+    }
+
+    #[test]
+    fn test_recognize_with_newline() {
+        unsafe {
+            // [0-9] with extra_newl = 1 -> NFA_DIGIT + NFA_ADD_NL
+            assert_eq!(test_char_class(b"0-9]", 1), NFA_DIGIT + NFA_ADD_NL);
+            // [0-9\n] -> NFA_DIGIT + NFA_ADD_NL
+            assert_eq!(test_char_class(b"0-9\\n]", 0), NFA_DIGIT + NFA_ADD_NL);
+        }
+    }
+
+    #[test]
+    fn test_recognize_invalid() {
+        unsafe {
+            // Invalid: just letters
+            assert_eq!(test_char_class(b"abc]", 0), FAIL);
+            // Invalid: no closing bracket
+            assert_eq!(test_char_class(b"0-9", 0), FAIL);
+            // Invalid: wrong range
+            assert_eq!(test_char_class(b"0-5]", 0), FAIL);
+        }
+    }
+
+    #[test]
+    fn test_recognize_char_class_flags() {
+        // Verify flag constants
+        assert_eq!(CLASS_NOT, 0x80);
+        assert_eq!(CLASS_AF, 0x40);
+        assert_eq!(CLASS_AF_UPPER, 0x20);
+        assert_eq!(CLASS_AZ, 0x10);
+        assert_eq!(CLASS_AZ_UPPER, 0x08);
+        assert_eq!(CLASS_O7, 0x04);
+        assert_eq!(CLASS_O9, 0x02);
+        assert_eq!(CLASS_UNDERSCORE, 0x01);
     }
 }
