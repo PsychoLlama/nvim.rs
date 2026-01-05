@@ -11,9 +11,9 @@
 
 ## Reference
 
-Migration documentation: `ref/migration.md` (crate structure and remaining work)
+`ref/crates.md` lists all Rust crates and their domains. Check it first to see if code belongs in an existing crate or warrants a new one.
 
-**Keep `ref/migration.md` updated**: When adding a new Rust crate, add it to the crate table.
+**Maintaining `ref/crates.md`**: Add new crates to the table. Keep purpose descriptions high-level (domain, not specific functions). No other content belongs in this file.
 
 ## Build System
 
