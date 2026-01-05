@@ -22,16 +22,8 @@ while true; do
   log "Planning..."
   plan_file=$("$SCRIPT_DIR/plan" "$description")
 
-  log "Executing: $plan_file"
-  result=$("$SCRIPT_DIR/execute" "$plan_file")
-
-  echo "$result"
-
-  # Check if Claude indicates the task is complete
-  if echo "$result" | grep -qiE '(complete|finished|done|no.*(more|further).*(steps|work)|all.*(steps|tasks).*completed)'; then
-    log "Task appears complete"
-    break
-  fi
+  log "Executing..."
+  "$SCRIPT_DIR/execute" "$plan_file"
 
   ((iteration++))
 
