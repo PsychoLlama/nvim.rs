@@ -53,6 +53,7 @@ members = [
     "src/nvim-rs/profile",
     "src/nvim-rs/register",
     "src/nvim-rs/search",
+    "src/nvim-rs/shada",
     "src/nvim-rs/spell",
     "src/nvim-rs/statusline",
     "src/nvim-rs/strings",

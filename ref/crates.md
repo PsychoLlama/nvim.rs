@@ -61,6 +61,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | regexp         | Regular expression engine               |
 | register       | Register operations                     |
 | search         | Search and substitution                 |
+| shada          | Session data persistence (ShaDa files)  |
 | sign           | Sign management and display             |
 | spell          | Spell checking, file parsing, suggestions |
 | statusline     | Status line rendering                   |

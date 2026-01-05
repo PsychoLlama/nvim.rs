@@ -69,6 +69,7 @@ nvim-quickfix = { path = "quickfix" }
 nvim-register = { path = "register" }
 nvim-regexp = { path = "regexp" }
 nvim-search = { path = "search" }
+nvim-shada = { path = "shada" }
 nvim-sign = { path = "sign" }
 nvim-spell = { path = "spell" }
 nvim-statusline = { path = "statusline" }
