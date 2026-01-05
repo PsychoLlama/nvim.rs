@@ -18,7 +18,6 @@
 ## Build System
 
 - Rust code: `src/nvim-rs/` workspace with per-domain crates
-- CMake: `USE_RUST_*` flags in `src/nvim/CMakeLists.txt`
 - `cbindgen` generates C headers from Rust
 - Static library: `target/release/libnvim_rs.a`
 
@@ -36,13 +35,13 @@ int nvim_win_get_width(win_T *wp) { return wp->w_width; }
 extern "C" { fn nvim_win_get_width(wp: WinHandle) -> c_int; }
 ```
 
-**Direct Replacement**: Replace C functions with Rust calls and delete the old C code:
+**Direct Replacement**: Replace C functions with Rust and delete the old C code:
 
 ```c
 // Before: C implementation
 int foo(int x) { return x + 1; }
 
-// After: Call Rust, delete C implementation
+// After: thin wrapper calling Rust
 int foo(int x) { return rs_foo(x); }
 ```
 
@@ -54,9 +53,6 @@ grep -rh "^#\[no_mangle\]" src/nvim-rs --include="*.rs" | wc -l
 
 # Find functions in a crate
 grep -n "pub.*extern.*fn rs_" src/nvim-rs/<crate>/src/lib.rs
-
-# Check USE_RUST flags
-grep "USE_RUST_" src/nvim/CMakeLists.txt
 
 # Find C accessor functions
 grep -rn "^[a-z].*nvim_.*get_\|^[a-z].*nvim_.*set_" src/nvim --include="*.c"
