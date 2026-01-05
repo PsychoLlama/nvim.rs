@@ -1,38 +1,25 @@
-Plan: ~/.claude/plans/quiet-sleeping-widget.md
+Plan: ~/.claude/plans/replicated-gliding-puppy.md
 
-All 8 phases of the migration plan have been completed. Here's a summary:
+## Summary
 
-## Migration Complete
+The marktree migration plan has been completed successfully. Here's a summary of what was accomplished:
 
-**Statusline System Migration from C to Rust**
+### Commits Made
+1. **Phase 1** - Iterator completion functions (marktree_itr_last, filtering, overlap iteration)
+2. **Phase 2** - Intersection management module (pure Rust intersection type with set operations)
+3. **Phase 3** - Meta and helper functions (meta_describe_key_inc, pseudo_index, etc.)
+4. **Phase 4** - B-tree insertion operations (alloc_node, split_node, putp_aux, put_key, put)
+5. **Phase 5 & 7** - Deletion and memory operations (del_itr, revise_meta, move, pivot, merge, free)
+6. **Phase 6 & 8** - Splice and validation operations (marktree_splice, move_region, check)
 
-### Commits (8 phases):
-1. `b5cdf9ce96` - Phase 1: Format string parsing infrastructure (`format.rs`)
-2. `00fe6d96ae` - Phase 2: Item evaluation module (`eval.rs`)
-3. `039fa673d8` - Phase 3: Highlight tracking module (`highlight.rs`)
-4. `bf1d89536c` - Phase 4: Click region tracking module (`click.rs`)
-5. `c3bcef3696` - Phase 5: Status column rendering module (`statuscol.rs`)
-6. `6a3e2d8680` - Phase 6: Statusline builder infrastructure (`builder.rs`)
-7. `97d67e7327` - Phase 7: Tabline and window bar rendering (`tabline.rs`)
-8. `0332390da1` - Phase 8: Integration - FFI exports for new modules
+### Statistics
+- **73 FFI exports** (`rs_*` functions) in the Rust marktree module
+- **3,544 lines** of Rust code (lib.rs + intersection.rs)
+- **C accessor functions** added for all node mutation, tree operations, and memory management
 
-### Final Statistics:
-- **8 Rust source files** in `src/nvim-rs/statusline/src/`
-- **5,185 lines** of Rust code (up from ~1,116 before migration)
-- **25 FFI exports** (`rs_*` functions callable from C)
+### Key Patterns Used
+- **Opaque handle pattern**: C pointers treated as opaque handles in Rust
+- **C accessor functions**: Field access and mutation done through C wrapper functions
+- **Thin FFI wrappers**: Rust functions wrap C implementations during transition
 
-### Modules Created:
-| Module | Purpose |
-|--------|---------|
-| `format.rs` | Format string parsing (`%f`, `%l`, `%#Hl#`, etc.) |
-| `eval.rs` | Item evaluation context and helpers |
-| `highlight.rs` | Highlight tracking during rendering |
-| `click.rs` | Click region tracking for mouse support |
-| `statuscol.rs` | Status column (line numbers, folds, signs) |
-| `builder.rs` | Statusline builder with groups/separators |
-| `tabline.rs` | Tabline and window bar rendering |
-
-All checks pass:
-- `just rust-fmt-check` ✓
-- `just rust-clippy` ✓  
-- `just rust-test` ✓ (1,201 tests passing)
+All tests pass (1206 tests), clippy passes without warnings, and formatting is correct.
