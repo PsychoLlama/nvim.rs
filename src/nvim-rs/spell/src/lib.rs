@@ -87,6 +87,41 @@ pub const CF_WORD: u8 = 0x01; // Word character
 pub const CF_UPPER: u8 = 0x02; // Upper-case character
 
 // =============================================================================
+// Spell Error Constants (from spell_defs.h)
+// =============================================================================
+
+/// Spell file truncated error
+pub const SP_TRUNCERROR: c_int = -1;
+/// Format error in spell file
+pub const SP_FORMERROR: c_int = -2;
+/// Other error while reading spell file
+pub const SP_OTHERERROR: c_int = -3;
+
+// =============================================================================
+// Word Flags (from spell_defs.h)
+// =============================================================================
+
+/// Region byte follows
+pub const WF_REGION: c_int = 0x01;
+/// Word with one capital (or all capitals)
+pub const WF_ONECAP_FLAG: c_int = 0x02;
+/// Word must be all capitals
+pub const WF_ALLCAP_FLAG: c_int = 0x04;
+/// Rare word
+pub const WF_RARE: c_int = 0x08;
+/// Bad/banned word
+pub const WF_BANNED: c_int = 0x10;
+/// Affix ID follows
+pub const WF_AFX: c_int = 0x20;
+/// Keep-case word, allcap not allowed
+pub const WF_FIXCAP_FLAG: c_int = 0x40;
+/// Keep-case word
+pub const WF_KEEPCAP_FLAG: c_int = 0x80;
+
+/// Maximum word length in bytes
+pub const MAXWLEN: usize = 254;
+
+// =============================================================================
 // Binary Format Reading Functions
 // =============================================================================
 
@@ -667,6 +702,338 @@ const fn spell_mb_isword_class_impl(cl: c_int, cjk: bool) -> bool {
 #[allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
 pub extern "C" fn rs_spell_mb_isword_class(cl: c_int, cjk: bool) -> bool {
     spell_mb_isword_class_impl(cl, cjk)
+}
+
+// =============================================================================
+// Word Tree Functions
+// =============================================================================
+
+/// Type alias for word tree index (matches C's idx_T = int)
+pub type IdxT = c_int;
+
+/// Mask for shared node index
+const SHARED_MASK: i32 = 0x0800_0000;
+
+/// Fill in the wordcount fields for a trie.
+///
+/// This function traverses the word tree and counts the number of words
+/// at each node, storing the count in the `idxs` array at the node's position.
+///
+/// The tree uses two arrays:
+/// - `byts`: stores the possible bytes at each node, preceded by count
+/// - `idxs`: stores child indexes or word counts
+///
+/// # Arguments
+///
+/// * `byts` - Pointer to the bytes array
+/// * `idxs` - Pointer to the indexes array (will be modified with word counts)
+/// * `len` - Length of both arrays
+///
+/// # Safety
+///
+/// Both `byts` and `idxs` must point to valid memory of at least `len` elements.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_tree_count_words(byts: *const u8, idxs: *mut IdxT, len: c_int) {
+    if byts.is_null() || idxs.is_null() || len <= 0 {
+        return;
+    }
+
+    let len = len as usize;
+
+    // Stack arrays for tree traversal (matching C's MAXWLEN)
+    let mut arridx = [0i32; MAXWLEN];
+    let mut curi = [0i32; MAXWLEN];
+    let mut wordcount = [0i32; MAXWLEN];
+
+    arridx[0] = 0;
+    curi[0] = 1;
+    wordcount[0] = 0;
+    let mut depth: i32 = 0;
+
+    while depth >= 0 {
+        let d = depth as usize;
+        let node_idx = arridx[d] as usize;
+
+        // Safety: bounds check
+        if node_idx >= len {
+            break;
+        }
+
+        let node_len = i32::from(*byts.add(node_idx));
+
+        if curi[d] > node_len {
+            // Done all bytes at this node, go up one level.
+            // Store the word count at this node's index position.
+            *idxs.add(node_idx) = wordcount[d];
+            if depth > 0 {
+                wordcount[d - 1] += wordcount[d];
+            }
+            depth -= 1;
+        } else {
+            // Do one more byte at this node.
+            let n = (arridx[d] + curi[d]) as usize;
+            curi[d] += 1;
+
+            // Safety: bounds check
+            if n >= len {
+                break;
+            }
+
+            let c = *byts.add(n);
+            if c == 0 {
+                // End of word, count it.
+                wordcount[d] += 1;
+
+                // Skip over any other NUL bytes (same word with different flags).
+                let mut check_n = n + 1;
+                while check_n < len && *byts.add(check_n) == 0 {
+                    curi[d] += 1;
+                    check_n += 1;
+                }
+            } else {
+                // Normal char, go one level deeper to count the words.
+                let child_idx = *idxs.add(n);
+                if child_idx < 0 || child_idx as usize >= len {
+                    // Invalid child index, skip
+                    continue;
+                }
+
+                depth += 1;
+                let new_d = depth as usize;
+                if new_d >= MAXWLEN {
+                    // Stack overflow protection
+                    depth -= 1;
+                    continue;
+                }
+                arridx[new_d] = child_idx;
+                curi[new_d] = 1;
+                wordcount[new_d] = 0;
+            }
+        }
+    }
+}
+
+/// Read a word tree node from a buffer.
+///
+/// This function parses a tree node from a spell file buffer, filling in
+/// the `byts` and `idxs` arrays. It handles:
+/// - Sibling counts
+/// - End-of-word flags
+/// - Shared node indexes
+/// - Prefix tree entries
+///
+/// # Arguments
+///
+/// * `buf` - Pointer to the spell file buffer
+/// * `buf_len` - Total length of the buffer
+/// * `buf_offset` - Current offset in the buffer (will be updated)
+/// * `byts` - Pointer to the bytes array to fill
+/// * `idxs` - Pointer to the indexes array to fill
+/// * `max_idx` - Maximum valid index in arrays
+/// * `start_idx` - Starting index for this node
+/// * `prefixtree` - True if reading prefix tree
+/// * `max_prefcondnr` - Maximum prefix condition number
+///
+/// # Returns
+///
+/// The next index after this node's siblings, or a negative SP_* error code.
+///
+/// # Safety
+///
+/// All pointers must be valid and point to sufficient memory.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_lossless)]
+pub unsafe extern "C" fn rs_read_tree_node(
+    buf: *const u8,
+    buf_len: usize,
+    buf_offset: *mut usize,
+    byts: *mut u8,
+    idxs: *mut IdxT,
+    max_idx: c_int,
+    start_idx: IdxT,
+    prefixtree: bool,
+    max_prefcondnr: c_int,
+) -> IdxT {
+    if buf.is_null() || buf_offset.is_null() || byts.is_null() || idxs.is_null() {
+        return SP_TRUNCERROR;
+    }
+
+    let mut offset = *buf_offset;
+    let max_idx_usize = max_idx as usize;
+
+    // Read sibling count
+    if offset >= buf_len {
+        return SP_TRUNCERROR;
+    }
+    let sibling_count = i32::from(*buf.add(offset));
+    offset += 1;
+
+    if sibling_count <= 0 {
+        return SP_TRUNCERROR;
+    }
+
+    let start = start_idx as usize;
+    if start + (sibling_count as usize) >= max_idx_usize {
+        return SP_FORMERROR;
+    }
+
+    let mut idx = start_idx;
+    *byts.add(idx as usize) = sibling_count as u8;
+    idx += 1;
+
+    // Read the byte values, flag/region bytes and shared indexes.
+    for _i in 1..=sibling_count {
+        if offset >= buf_len {
+            *buf_offset = offset;
+            return SP_TRUNCERROR;
+        }
+
+        let mut c = i32::from(*buf.add(offset));
+        offset += 1;
+
+        if c <= i32::from(BY_INDEX) {
+            if c == i32::from(BY_NOFLAGS) && !prefixtree {
+                // No flags, all regions.
+                *idxs.add(idx as usize) = 0;
+            } else if c != i32::from(BY_INDEX) {
+                if prefixtree {
+                    // Read the optional pflags byte, the prefix ID and the condition nr.
+                    if c == i32::from(BY_FLAGS) {
+                        if offset >= buf_len {
+                            *buf_offset = offset;
+                            return SP_TRUNCERROR;
+                        }
+                        c = i32::from(*buf.add(offset)) << 24;
+                        offset += 1;
+                    } else {
+                        c = 0;
+                    }
+
+                    // Read affixID
+                    if offset >= buf_len {
+                        *buf_offset = offset;
+                        return SP_TRUNCERROR;
+                    }
+                    c |= i32::from(*buf.add(offset));
+                    offset += 1;
+
+                    // Read prefcondnr (2 bytes, big-endian)
+                    if offset + 1 >= buf_len {
+                        *buf_offset = offset;
+                        return SP_TRUNCERROR;
+                    }
+                    let n = (i32::from(*buf.add(offset)) << 8) | i32::from(*buf.add(offset + 1));
+                    offset += 2;
+
+                    if n >= max_prefcondnr {
+                        *buf_offset = offset;
+                        return SP_FORMERROR;
+                    }
+                    c |= n << 8;
+                } else {
+                    // c is BY_FLAGS or BY_FLAGS2
+                    let c2 = c;
+                    if offset >= buf_len {
+                        *buf_offset = offset;
+                        return SP_TRUNCERROR;
+                    }
+                    c = i32::from(*buf.add(offset));
+                    offset += 1;
+
+                    if c2 == i32::from(BY_FLAGS2) {
+                        if offset >= buf_len {
+                            *buf_offset = offset;
+                            return SP_TRUNCERROR;
+                        }
+                        c += i32::from(*buf.add(offset)) << 8;
+                        offset += 1;
+                    }
+
+                    if (c & WF_REGION) != 0 {
+                        if offset >= buf_len {
+                            *buf_offset = offset;
+                            return SP_TRUNCERROR;
+                        }
+                        c += i32::from(*buf.add(offset)) << 16;
+                        offset += 1;
+                    }
+
+                    if (c & WF_AFX) != 0 {
+                        if offset >= buf_len {
+                            *buf_offset = offset;
+                            return SP_TRUNCERROR;
+                        }
+                        c += i32::from(*buf.add(offset)) << 24;
+                        offset += 1;
+                    }
+                }
+
+                *idxs.add(idx as usize) = c;
+                c = 0;
+            } else {
+                // c == BY_INDEX: read nodeidx (3 bytes) and xbyte
+                if offset + 3 >= buf_len {
+                    *buf_offset = offset;
+                    return SP_TRUNCERROR;
+                }
+                let n = (i32::from(*buf.add(offset)) << 16)
+                    | (i32::from(*buf.add(offset + 1)) << 8)
+                    | i32::from(*buf.add(offset + 2));
+                offset += 3;
+
+                if n < 0 || n >= max_idx {
+                    *buf_offset = offset;
+                    return SP_FORMERROR;
+                }
+                *idxs.add(idx as usize) = n + SHARED_MASK;
+
+                c = i32::from(*buf.add(offset));
+                offset += 1;
+            }
+        }
+        *byts.add(idx as usize) = c as u8;
+        idx += 1;
+    }
+
+    *buf_offset = offset;
+
+    // Recursively read the children for non-shared siblings.
+    for i in 1..=sibling_count {
+        let sib_idx = start + i as usize;
+        if *byts.add(sib_idx) != 0 {
+            let cur_idxs = *idxs.add(sib_idx);
+            if (cur_idxs & SHARED_MASK) != 0 {
+                // Remove shared mask
+                *idxs.add(sib_idx) = cur_idxs & !SHARED_MASK;
+            } else {
+                // Set the child index and recursively read
+                *idxs.add(sib_idx) = idx;
+                idx = rs_read_tree_node(
+                    buf,
+                    buf_len,
+                    buf_offset,
+                    byts,
+                    idxs,
+                    max_idx,
+                    idx,
+                    prefixtree,
+                    max_prefcondnr,
+                );
+                if idx < 0 {
+                    return idx;
+                }
+            }
+        }
+    }
+
+    idx
 }
 
 #[cfg(test)]
@@ -1308,6 +1675,259 @@ mod tests {
 
             // Null pointer
             assert_eq!(rs_read_be_u16(std::ptr::null(), 6, 0), -1);
+        }
+    }
+
+    // =========================================================================
+    // Spell error constants tests
+    // =========================================================================
+
+    #[test]
+    fn test_sp_error_constants() {
+        assert_eq!(SP_TRUNCERROR, -1);
+        assert_eq!(SP_FORMERROR, -2);
+        assert_eq!(SP_OTHERERROR, -3);
+    }
+
+    #[test]
+    fn test_wf_flag_constants() {
+        assert_eq!(WF_REGION, 0x01);
+        assert_eq!(WF_ONECAP_FLAG, 0x02);
+        assert_eq!(WF_ALLCAP_FLAG, 0x04);
+        assert_eq!(WF_RARE, 0x08);
+        assert_eq!(WF_BANNED, 0x10);
+        assert_eq!(WF_AFX, 0x20);
+        assert_eq!(WF_FIXCAP_FLAG, 0x40);
+        assert_eq!(WF_KEEPCAP_FLAG, 0x80);
+    }
+
+    #[test]
+    fn test_maxwlen() {
+        assert_eq!(MAXWLEN, 254);
+    }
+
+    // =========================================================================
+    // Tree count words tests
+    // =========================================================================
+
+    #[test]
+    fn test_tree_count_words_null() {
+        unsafe {
+            // Should not crash with null pointers
+            rs_tree_count_words(std::ptr::null(), std::ptr::null_mut(), 0);
+            rs_tree_count_words(std::ptr::null(), std::ptr::null_mut(), 10);
+        }
+    }
+
+    #[test]
+    fn test_tree_count_words_simple() {
+        // Tree with 2 NUL siblings = 1 word (adjacent NULs are same word with different flags)
+        // byts[0] = 2 (sibling count)
+        // byts[1] = 0 (word end)
+        // byts[2] = 0 (same word, different flags - skipped)
+        let byts: [u8; 3] = [2, 0, 0];
+        let mut idxs: [IdxT; 3] = [0, 0, 0];
+
+        unsafe {
+            rs_tree_count_words(byts.as_ptr(), idxs.as_mut_ptr(), 3);
+        }
+
+        // Adjacent NULs are treated as same word with different flags, so count = 1
+        assert_eq!(idxs[0], 1);
+    }
+
+    #[test]
+    fn test_tree_count_words_two_words() {
+        // Tree with a character 'a' followed by word end, then another char 'b' with word end
+        // Root: [2, 'a', 'b']
+        //         ^   ^    ^
+        //         |   |    +-- character 'b', child at index 5
+        //         |   +------- character 'a', child at index 3
+        //         +----------- sibling count = 2
+        // Child for 'a' at idx 3: [1, 0] = 1 sibling, word end
+        // Child for 'b' at idx 5: [1, 0] = 1 sibling, word end
+        let byts: [u8; 7] = [
+            2,    // root: 2 siblings
+            b'a', // first sibling
+            b'b', // second sibling
+            1,    // child of 'a': 1 sibling
+            0,    // word end
+            1,    // child of 'b': 1 sibling
+            0,    // word end
+        ];
+        let mut idxs: [IdxT; 7] = [
+            0, // root word count (will be set)
+            3, // 'a' points to child at idx 3
+            5, // 'b' points to child at idx 5
+            0, // child 'a' word count (will be set)
+            0, // flags for word end
+            0, // child 'b' word count (will be set)
+            0, // flags for word end
+        ];
+
+        unsafe {
+            rs_tree_count_words(byts.as_ptr(), idxs.as_mut_ptr(), 7);
+        }
+
+        // Each child should count 1 word
+        assert_eq!(idxs[3], 1); // child of 'a' has 1 word
+        assert_eq!(idxs[5], 1); // child of 'b' has 1 word
+                                // Root should have 2 words total
+        assert_eq!(idxs[0], 2);
+    }
+
+    #[test]
+    fn test_tree_count_words_empty() {
+        let byts: [u8; 1] = [0]; // Empty tree (0 siblings)
+        let mut idxs: [IdxT; 1] = [0];
+
+        unsafe {
+            rs_tree_count_words(byts.as_ptr(), idxs.as_mut_ptr(), 1);
+        }
+
+        // Should handle gracefully
+        assert_eq!(idxs[0], 0);
+    }
+
+    // =========================================================================
+    // Read tree node tests
+    // =========================================================================
+
+    #[test]
+    fn test_read_tree_node_null() {
+        unsafe {
+            // Should return error with null pointers
+            let result = rs_read_tree_node(
+                std::ptr::null(),
+                0,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                0,
+                0,
+                false,
+                0,
+            );
+            assert_eq!(result, SP_TRUNCERROR);
+        }
+    }
+
+    #[test]
+    fn test_read_tree_node_truncated() {
+        let buf: [u8; 0] = [];
+        let mut offset: usize = 0;
+        let mut byts: [u8; 10] = [0; 10];
+        let mut idxs: [IdxT; 10] = [0; 10];
+
+        unsafe {
+            let result = rs_read_tree_node(
+                buf.as_ptr(),
+                0,
+                &raw mut offset,
+                byts.as_mut_ptr(),
+                idxs.as_mut_ptr(),
+                10,
+                0,
+                false,
+                0,
+            );
+            assert_eq!(result, SP_TRUNCERROR);
+        }
+    }
+
+    #[test]
+    fn test_read_tree_node_simple() {
+        // Simple tree node: 2 siblings, both are word ends (BY_NOFLAGS)
+        let buf: [u8; 3] = [
+            2,          // sibling count
+            BY_NOFLAGS, // first sibling: word end, no flags
+            BY_NOFLAGS, // second sibling: word end, no flags
+        ];
+        let mut offset: usize = 0;
+        let mut byts: [u8; 10] = [0; 10];
+        let mut idxs: [IdxT; 10] = [0; 10];
+
+        unsafe {
+            let result = rs_read_tree_node(
+                buf.as_ptr(),
+                buf.len(),
+                &raw mut offset,
+                byts.as_mut_ptr(),
+                idxs.as_mut_ptr(),
+                10,
+                0,
+                false,
+                0,
+            );
+
+            // Should return next index (3: start=0 + 1 for count + 2 siblings)
+            assert_eq!(result, 3);
+            assert_eq!(offset, 3);
+            assert_eq!(byts[0], 2); // sibling count
+            assert_eq!(byts[1], 0); // BY_NOFLAGS -> 0
+            assert_eq!(byts[2], 0); // BY_NOFLAGS -> 0
+            assert_eq!(idxs[1], 0); // flags for first word
+            assert_eq!(idxs[2], 0); // flags for second word
+        }
+    }
+
+    #[test]
+    fn test_read_tree_node_with_flags() {
+        // Tree node with flags: 1 sibling with BY_FLAGS
+        let buf: [u8; 3] = [
+            1,        // sibling count
+            BY_FLAGS, // BY_FLAGS indicates flags follow
+            0x08,     // flags byte (WF_RARE)
+        ];
+        let mut offset: usize = 0;
+        let mut byts: [u8; 10] = [0; 10];
+        let mut idxs: [IdxT; 10] = [0; 10];
+
+        unsafe {
+            let result = rs_read_tree_node(
+                buf.as_ptr(),
+                buf.len(),
+                &raw mut offset,
+                byts.as_mut_ptr(),
+                idxs.as_mut_ptr(),
+                10,
+                0,
+                false,
+                0,
+            );
+
+            assert_eq!(result, 2); // start=0 + 1 count + 1 sibling
+            assert_eq!(byts[0], 1); // sibling count
+            assert_eq!(byts[1], 0); // word end
+            assert_eq!(idxs[1], 0x08); // flags = WF_RARE
+        }
+    }
+
+    #[test]
+    fn test_read_tree_node_format_error() {
+        // Tree node that would overflow the array
+        let buf: [u8; 2] = [
+            100, // sibling count (way too many for array size)
+            BY_NOFLAGS,
+        ];
+        let mut offset: usize = 0;
+        let mut byts: [u8; 10] = [0; 10];
+        let mut idxs: [IdxT; 10] = [0; 10];
+
+        unsafe {
+            let result = rs_read_tree_node(
+                buf.as_ptr(),
+                buf.len(),
+                &raw mut offset,
+                byts.as_mut_ptr(),
+                idxs.as_mut_ptr(),
+                10,
+                0,
+                false,
+                0,
+            );
+
+            assert_eq!(result, SP_FORMERROR);
         }
     }
 }
