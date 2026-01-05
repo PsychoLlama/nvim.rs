@@ -92,6 +92,7 @@ rust-test:
       -p nvim-linematch \
       -p nvim-lua \
       -p nvim-mark \
+      -p nvim-marktree \
       -p nvim-math \
       -p nvim-memory \
       -p nvim-memutil \

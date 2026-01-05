@@ -2612,3 +2612,43 @@ static void mt_inspect_dotfile_node(MarkTree *b, garray_T *ga, MTNode *n, MTPos 
     }
   }
 }
+
+// ============================================================================
+// Rust FFI Accessor Functions
+// ============================================================================
+
+/// Get the number of keys in a node.
+int nvim_mtnode_get_n(MTNode *x)
+{
+  return x->n;
+}
+
+/// Get the level of a node (0 for leaf).
+int nvim_mtnode_get_level(MTNode *x)
+{
+  return x->level;
+}
+
+/// Get a key from a node by index.
+MTKey nvim_mtnode_get_key(MTNode *x, int idx)
+{
+  return x->key[idx];
+}
+
+/// Get a child pointer from a node by index.
+MTNode *nvim_mtnode_get_ptr(MTNode *x, int idx)
+{
+  return x->ptr[idx];
+}
+
+/// Get the root node of a marktree.
+MTNode *nvim_marktree_get_root(MarkTree *b)
+{
+  return b->root;
+}
+
+/// Get the total number of keys in a marktree.
+size_t nvim_marktree_get_n_keys(MarkTree *b)
+{
+  return b->n_keys;
+}

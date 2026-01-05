@@ -41,6 +41,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | linematch      | Diff line alignment                     |
 | lua            | Lua integration                         |
 | mark           | Marks and positions                     |
+| marktree       | B-tree for extmarks at positions        |
 | math           | Math utilities                          |
 | mbyte          | Multibyte and UTF-8 encoding            |
 | memory         | Memory allocation wrappers              |
