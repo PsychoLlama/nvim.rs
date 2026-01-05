@@ -43,7 +43,7 @@ extern "C" {
     // Accessor for nlua_global_refs->ref_count
     fn nvim_get_nlua_global_ref_count() -> c_int;
 
-    // Lua callback invocation (USE_RUST_LUA must be enabled in build)
+    // Lua callback invocation
     fn nvim_nlua_call_ref(
         ref_: LuaRef,
         name: *const c_char,
