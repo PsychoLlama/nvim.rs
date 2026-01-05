@@ -200,6 +200,12 @@ void nvim_expand_set_selected(expand_T *xp, int selected)
   }
 }
 
+/// Check if cmdline_win is NULL (for Rust FFI).
+int nvim_get_cmdline_win_is_null(void)
+{
+  return cmdline_win == NULL;
+}
+
 #define SHOW_MATCH(m) (showtail ? showmatches_gettail(matches[m], false) : matches[m])
 
 /// Returns true if fuzzy completion is supported for a given cmdline completion
