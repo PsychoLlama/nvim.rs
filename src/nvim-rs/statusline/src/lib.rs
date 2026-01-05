@@ -14,9 +14,11 @@ use nvim_window::{BufHandle, Frame, WinHandle, FR_COL};
 
 pub mod eval;
 pub mod format;
+pub mod highlight;
 
 pub use eval::{EvalContext, EvalResult, NumberBase};
 pub use format::{FormatParser, FormatSpec, StlFlag, StlFormatContext, StlItem, StlItemType};
+pub use highlight::{HighlightTracker, StlHighlightRecord};
 
 /// schar_T is stored as a u32 in Rust.
 type ScharT = u32;
