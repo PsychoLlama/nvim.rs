@@ -601,6 +601,242 @@ pub extern "C" fn rs_terminal_is_filter_char(c: c_int) -> c_int {
     c_int::from(c == 0)
 }
 
+// =============================================================================
+// VTerm Cursor Shape Constants (from vterm.h)
+// =============================================================================
+
+/// Block cursor shape.
+pub const VTERM_PROP_CURSORSHAPE_BLOCK: c_int = 1;
+/// Underline cursor shape.
+pub const VTERM_PROP_CURSORSHAPE_UNDERLINE: c_int = 2;
+/// Vertical bar cursor shape (left side).
+pub const VTERM_PROP_CURSORSHAPE_BAR_LEFT: c_int = 3;
+
+// =============================================================================
+// Screen Damage and Invalidation Helpers
+// =============================================================================
+
+/// Result of an invalid region calculation.
+#[repr(C)]
+pub struct InvalidRegion {
+    /// Start row of the invalid region.
+    pub start_row: c_int,
+    /// End row of the invalid region (exclusive).
+    pub end_row: c_int,
+}
+
+/// Calculate the updated invalid region when damage occurs.
+///
+/// This computes the union of the current invalid region and the new damage.
+/// Pass -1 for both current values to indicate the entire screen is invalid.
+///
+/// # Arguments
+/// * `current_start` - Current invalid start row (-1 for full invalidation)
+/// * `current_end` - Current invalid end row (-1 for full invalidation)
+/// * `damage_start` - New damage start row
+/// * `damage_end` - New damage end row
+///
+/// # Returns
+/// The updated invalid region.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
+pub extern "C" fn rs_terminal_update_invalid_region(
+    current_start: c_int,
+    current_end: c_int,
+    damage_start: c_int,
+    damage_end: c_int,
+) -> InvalidRegion {
+    // If requesting full invalidation
+    if damage_start == -1 && damage_end == -1 {
+        return InvalidRegion {
+            start_row: current_start,
+            end_row: current_end,
+        };
+    }
+
+    // Compute union of regions
+    let start = if current_start == -1 || damage_start < current_start {
+        damage_start
+    } else {
+        current_start
+    };
+
+    let end = if current_end == -1 || damage_end > current_end {
+        damage_end
+    } else {
+        current_end
+    };
+
+    InvalidRegion {
+        start_row: start,
+        end_row: end,
+    }
+}
+
+/// Reset invalid region to indicate no pending damage.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
+pub extern "C" fn rs_terminal_reset_invalid_region() -> InvalidRegion {
+    InvalidRegion {
+        start_row: i32::MAX,
+        end_row: -1,
+    }
+}
+
+// =============================================================================
+// Resize Calculation Helpers
+// =============================================================================
+
+/// Result of terminal resize dimension calculation.
+#[repr(C)]
+pub struct ResizeDimensions {
+    /// Calculated width (0 if no resize needed or invalid).
+    pub width: u16,
+    /// Calculated height (0 if no resize needed or invalid).
+    pub height: u16,
+    /// Whether a resize is needed.
+    pub needs_resize: c_int,
+}
+
+/// Calculate terminal dimensions by taking the maximum of current and new values.
+///
+/// This is used when determining terminal size across multiple windows.
+///
+/// # Arguments
+/// * `current_width` - Current accumulated width
+/// * `current_height` - Current accumulated height
+/// * `new_width` - Width of the new window
+/// * `new_height` - Height of the new window
+///
+/// # Returns
+/// The maximum dimensions.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
+pub extern "C" fn rs_terminal_max_dimensions(
+    current_width: u16,
+    current_height: u16,
+    new_width: u16,
+    new_height: u16,
+) -> ResizeDimensions {
+    ResizeDimensions {
+        width: current_width.max(new_width),
+        height: current_height.max(new_height),
+        needs_resize: 0, // Not used in this context
+    }
+}
+
+/// Check if terminal needs resize based on current and target dimensions.
+///
+/// # Arguments
+/// * `cur_width` - Current terminal width
+/// * `cur_height` - Current terminal height
+/// * `target_width` - Target width
+/// * `target_height` - Target height
+///
+/// # Returns
+/// `ResizeDimensions` with `needs_resize` set to 1 if resize is needed.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
+pub extern "C" fn rs_terminal_check_resize(
+    cur_width: c_int,
+    cur_height: c_int,
+    target_width: u16,
+    target_height: u16,
+) -> ResizeDimensions {
+    // No resize needed if dimensions match or target is zero
+    if target_width == 0
+        || target_height == 0
+        || (cur_width == c_int::from(target_width) && cur_height == c_int::from(target_height))
+    {
+        return ResizeDimensions {
+            width: 0,
+            height: 0,
+            needs_resize: 0,
+        };
+    }
+
+    ResizeDimensions {
+        width: target_width,
+        height: target_height,
+        needs_resize: 1,
+    }
+}
+
+// =============================================================================
+// Scrollback Calculation Helpers
+// =============================================================================
+
+/// Maximum scrollback size constant.
+pub const TERMINAL_SB_MAX: usize = 100_000;
+
+/// Calculate the effective scrollback size.
+///
+/// If the provided size is less than 1 (typically -1 for "unlimited"),
+/// returns the maximum scrollback size.
+///
+/// # Arguments
+/// * `scrollback` - The requested scrollback size
+///
+/// # Returns
+/// The effective scrollback size.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
+pub extern "C" fn rs_terminal_effective_scrollback(scrollback: i64) -> usize {
+    if scrollback < 1 {
+        TERMINAL_SB_MAX
+    } else {
+        // Safe: we've verified scrollback >= 1 above
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let size = scrollback as usize;
+        size
+    }
+}
+
+/// Calculate how many scrollback lines to delete when reducing scrollback size.
+///
+/// # Arguments
+/// * `current_sb` - Current number of scrollback lines
+/// * `new_size` - New scrollback size limit
+///
+/// # Returns
+/// Number of lines to delete (0 if none needed).
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
+pub extern "C" fn rs_terminal_scrollback_lines_to_delete(
+    current_sb: usize,
+    new_size: usize,
+) -> usize {
+    current_sb.saturating_sub(new_size)
+}
+
+/// Check if scrollback buffer is full and needs to wrap.
+///
+/// # Arguments
+/// * `current_sb` - Current number of scrollback lines
+/// * `sb_size` - Maximum scrollback size
+///
+/// # Returns
+/// 1 if scrollback is full, 0 otherwise.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
+pub extern "C" fn rs_terminal_scrollback_is_full(current_sb: usize, sb_size: usize) -> c_int {
+    c_int::from(current_sb == sb_size)
+}
+
+/// Calculate the buffer index for inserting a scrollback line.
+///
+/// # Arguments
+/// * `line_count` - Total lines in buffer
+/// * `height` - Terminal height
+///
+/// # Returns
+/// The buffer index where the scrollback line should be inserted.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
+pub extern "C" fn rs_terminal_scrollback_insert_index(line_count: c_int, height: c_int) -> c_int {
+    line_count - height
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -742,5 +978,110 @@ mod tests {
         assert_eq!(VTERM_KEY_KP_0, 16);
         assert_eq!(VTERM_KEY_KP_9, 25);
         assert_eq!(VTERM_KEY_MAX, 36);
+    }
+
+    #[test]
+    fn test_cursor_shape_constants() {
+        assert_eq!(VTERM_PROP_CURSORSHAPE_BLOCK, 1);
+        assert_eq!(VTERM_PROP_CURSORSHAPE_UNDERLINE, 2);
+        assert_eq!(VTERM_PROP_CURSORSHAPE_BAR_LEFT, 3);
+    }
+
+    #[test]
+    fn test_update_invalid_region() {
+        // First damage - use large initial values
+        let region = rs_terminal_update_invalid_region(i32::MAX, -1, 5, 10);
+        assert_eq!(region.start_row, 5);
+        assert_eq!(region.end_row, 10);
+
+        // Extend region with larger damage
+        let region = rs_terminal_update_invalid_region(5, 10, 3, 15);
+        assert_eq!(region.start_row, 3);
+        assert_eq!(region.end_row, 15);
+
+        // Damage within existing region
+        let region = rs_terminal_update_invalid_region(3, 15, 5, 10);
+        assert_eq!(region.start_row, 3);
+        assert_eq!(region.end_row, 15);
+
+        // Full invalidation request
+        let region = rs_terminal_update_invalid_region(3, 15, -1, -1);
+        assert_eq!(region.start_row, 3);
+        assert_eq!(region.end_row, 15);
+    }
+
+    #[test]
+    fn test_reset_invalid_region() {
+        let region = rs_terminal_reset_invalid_region();
+        assert_eq!(region.start_row, i32::MAX);
+        assert_eq!(region.end_row, -1);
+    }
+
+    #[test]
+    fn test_max_dimensions() {
+        let dims = rs_terminal_max_dimensions(80, 24, 120, 30);
+        assert_eq!(dims.width, 120);
+        assert_eq!(dims.height, 30);
+
+        let dims = rs_terminal_max_dimensions(120, 30, 80, 24);
+        assert_eq!(dims.width, 120);
+        assert_eq!(dims.height, 30);
+
+        let dims = rs_terminal_max_dimensions(0, 0, 80, 24);
+        assert_eq!(dims.width, 80);
+        assert_eq!(dims.height, 24);
+    }
+
+    #[test]
+    fn test_check_resize() {
+        // Need resize - different dimensions
+        let dims = rs_terminal_check_resize(80, 24, 120, 30);
+        assert_eq!(dims.needs_resize, 1);
+        assert_eq!(dims.width, 120);
+        assert_eq!(dims.height, 30);
+
+        // No resize needed - same dimensions
+        let dims = rs_terminal_check_resize(80, 24, 80, 24);
+        assert_eq!(dims.needs_resize, 0);
+
+        // No resize - zero target
+        let dims = rs_terminal_check_resize(80, 24, 0, 30);
+        assert_eq!(dims.needs_resize, 0);
+
+        let dims = rs_terminal_check_resize(80, 24, 80, 0);
+        assert_eq!(dims.needs_resize, 0);
+    }
+
+    #[test]
+    fn test_effective_scrollback() {
+        assert_eq!(rs_terminal_effective_scrollback(-1), TERMINAL_SB_MAX);
+        assert_eq!(rs_terminal_effective_scrollback(0), TERMINAL_SB_MAX);
+        assert_eq!(rs_terminal_effective_scrollback(1000), 1000);
+        assert_eq!(rs_terminal_effective_scrollback(50000), 50000);
+    }
+
+    #[test]
+    fn test_scrollback_lines_to_delete() {
+        // Need to delete lines
+        assert_eq!(rs_terminal_scrollback_lines_to_delete(1000, 500), 500);
+        assert_eq!(rs_terminal_scrollback_lines_to_delete(100, 50), 50);
+
+        // No deletion needed
+        assert_eq!(rs_terminal_scrollback_lines_to_delete(500, 1000), 0);
+        assert_eq!(rs_terminal_scrollback_lines_to_delete(500, 500), 0);
+    }
+
+    #[test]
+    fn test_scrollback_is_full() {
+        assert_eq!(rs_terminal_scrollback_is_full(1000, 1000), 1);
+        assert_eq!(rs_terminal_scrollback_is_full(500, 1000), 0);
+        assert_eq!(rs_terminal_scrollback_is_full(0, 1000), 0);
+    }
+
+    #[test]
+    fn test_scrollback_insert_index() {
+        assert_eq!(rs_terminal_scrollback_insert_index(100, 24), 76);
+        assert_eq!(rs_terminal_scrollback_insert_index(50, 24), 26);
+        assert_eq!(rs_terminal_scrollback_insert_index(24, 24), 0);
     }
 }
