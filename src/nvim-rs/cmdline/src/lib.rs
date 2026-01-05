@@ -6,6 +6,7 @@
 #![allow(clippy::doc_markdown)]
 
 pub mod expand;
+pub mod pattern;
 
 use std::ffi::c_char;
 use std::os::raw::c_int;
