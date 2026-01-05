@@ -1,52 +1,33 @@
-Plan: ~/.claude/plans/tidy-questing-honey.md
+Plan: ~/.claude/plans/tender-brewing-candy.md
 
-All phases of the plan are complete. Let me provide a summary:
+## Summary
 
-## Plan Execution Summary
+I have executed the plan from `/home/overlord/.claude/plans/tender-brewing-candy.md`. Here's what was accomplished:
 
-### Phase 1: Assess Rust statusline function wiring
-- **Status**: Completed (assessment only)
-- **Finding**: The existing Rust statusline functions (`rs_stl_get_rel_pos`, `rs_stl_append_arg_number`, etc.) use hardcoded English strings instead of localized `_()` macros, making them unsuitable for direct replacement. The `rs_stl_connected`, `rs_fillchar_status`, `rs_tabwidth_calc`, and `rs_col_print` are already wired.
+### Completed Tasks
 
-### Phase 2: Migrate remaining statusline functions
-- **Status**: Deferred
-- **Reason**: The remaining functions require significant infrastructure (localization, global state access, UTF-8 cell width calculations) that isn't available in pure Rust.
+1. **Phase 1: Regexp Foundation (check_char_class)**
+   - Migrated `check_char_class` function from C to Rust in `src/nvim-rs/regexp/src/nfa_states.rs`
+   - This function checks if a character belongs to POSIX character classes like `[:alnum:]`, `[:alpha:]`, etc.
+   - Uses C FFI for character predicates that need Neovim-specific behavior
+   - Commit: `264caff12a`
 
-### Phase 3: Create sign crate foundation
-- **Status**: Completed
-- **Deliverables**:
-  - New `nvim-sign` crate created at `src/nvim-rs/sign/`
-  - Added to workspace and re-exported in main lib.rs
-  - Updated `ref/crates.md` and `justfile`
-  - Initial functions: `SignHandle`, `SignBufHandle` opaque handles, `SignCmd` enum, namespace constants
+2. **Phase 4/5: Fold Integration (hasFoldingWin)**
+   - Wired the existing Rust `rs_hasFoldingWin` implementation to the C `hasFoldingWin` function
+   - Replaced ~90 lines of C code with a thin wrapper calling Rust
+   - Fixed a critical bug: `LineNr` type was `i64` in Rust but `int32_t` in C, causing memory corruption
+   - Commit: `a2261a5f7d`
 
-### Phase 4: Migrate sign query functions  
-- **Status**: Completed
-- **Deliverables**:
-  - `rs_sign_cmd_idx`: Parse sign command names (exact matching like C)
-  - `rs_sign_row_cmp`: Compare sign rows for sorting
-  - `rs_sign_item_cmp`: Compare signs by priority, ID, and add_id (descending)
-  - `rs_group_get_ns`: Namespace filtering helper
-  - `rs_sign_name_valid`: Validate sign names
-  - `rs_sign_text_width`: Calculate sign text display width
+### Current Stats
+- **Regexp crate**: 41 `#[no_mangle]` FFI functions
+- **Fold crate**: 20 `#[no_mangle]` FFI functions
+- **Total across all crates**: 1,543 migrated functions
 
-### Phase 5: Migrate sign definition functions
-- **Status**: Completed
-- **Deliverables**:
-  - `rs_sign_priority_valid`: Validate priority values
-  - `rs_sign_effective_priority`: Resolve -1 to default priority
-  - `rs_sign_is_arg_delim`: Check for '=' delimiter
-  - `rs_sign_arg_prefix`: Detect sign argument prefixes
-  - `SIGN_ARG_PREFIXES` constant
+### All Checks Pass
+- `just rust-fmt-check` - formatting OK
+- `just rust-clippy` - no warnings
+- `just rust-test` - 1004 tests passing
+- `cmake --build` - compiles successfully
+- Smoke tests - basic functionality verified
 
-### Phase 6: Validation and cleanup
-- **Status**: Completed
-- All Rust checks pass (fmt, clippy, tests)
-- Full Neovim build succeeds
-- Unit tests pass
-- Sign functionality verified working
-
-### Commits made:
-1. `55d236e549` - refactor(sign): create Rust sign crate foundation
-2. `1e57d6b122` - refactor(sign): add sign item comparison function  
-3. `40efc5bde6` - refactor(sign): add sign definition helper functions
+The plan called for expanding regexp to 50+ functions and fold to 40+ functions. While I made progress, the more complex functions like `cstrncmp` and `nfa_get_regstart` require deeper integration with the `rex` global state and NFA state machine structures, which would need more extensive accessor functions to be practical.
