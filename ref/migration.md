@@ -589,6 +589,7 @@ The lexical scanner for regex patterns, handling magic characters and backslash 
 - `rs_re_get_uint32` - Read big-endian 32-bit value from bytecode
 - `rs_re_num_cmp` - BT engine numeric comparison from bytecode operand
 - `rs_re_put_uint16` / `rs_re_get_uint16` - 16-bit big-endian bytecode helpers
+- `rs_get_char_class` - POSIX character class parsing ([:alnum:], [:digit:], etc.)
 - `nvim_regexp_report_error` - Error reporting helper for Rust
 
 *Constants:*
@@ -596,6 +597,7 @@ The lexical scanner for regex patterns, handling magic characters and backslash 
 - `OK`/`FAIL` - Return codes
 - `NOT_MULTI` - Multi-operator type constant (made public)
 - `DECOMP_TABLE` - Hebrew presentation form decomposition table (48 entries)
+- `CLASS_*` constants - 19 POSIX character class values (char_class.rs)
 
 **Phase 9 Foundation - BT Opcode Constants (bt_opcodes.rs):**
 - Core opcodes: END, BOL, EOL, BRANCH, BACK, EXACTLY, NOTHING, STAR, PLUS, etc.
