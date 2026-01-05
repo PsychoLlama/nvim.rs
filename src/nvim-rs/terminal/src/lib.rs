@@ -837,6 +837,178 @@ pub extern "C" fn rs_terminal_scrollback_insert_index(line_count: c_int, height:
     line_count - height
 }
 
+// =============================================================================
+// VTerm Callback Helper Types
+// =============================================================================
+
+/// `VTerm` rectangle structure (matches `VTermRect` from libvterm).
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct VTermRect {
+    /// Start row (inclusive).
+    pub start_row: c_int,
+    /// End row (exclusive).
+    pub end_row: c_int,
+    /// Start column (inclusive).
+    pub start_col: c_int,
+    /// End column (exclusive).
+    pub end_col: c_int,
+}
+
+/// `VTerm` position structure (matches `VTermPos` from libvterm).
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct VTermPos {
+    /// Row position.
+    pub row: c_int,
+    /// Column position.
+    pub col: c_int,
+}
+
+/// `VTerm` property constants.
+pub const VTERM_PROP_ALTSCREEN: c_int = 1;
+/// Cursor visible property.
+pub const VTERM_PROP_CURSORVISIBLE: c_int = 2;
+/// Title property.
+pub const VTERM_PROP_TITLE: c_int = 3;
+/// Icon name property.
+pub const VTERM_PROP_ICONNAME: c_int = 4;
+/// Reverse property.
+pub const VTERM_PROP_REVERSE: c_int = 5;
+/// Cursor shape property.
+pub const VTERM_PROP_CURSORSHAPE: c_int = 6;
+/// Mouse property.
+pub const VTERM_PROP_MOUSE: c_int = 7;
+/// Cursor blink property.
+pub const VTERM_PROP_CURSORBLINK: c_int = 8;
+
+// =============================================================================
+// VTerm Callback Helpers
+// =============================================================================
+
+/// Calculate combined damage region from two rectangles.
+///
+/// Used in `term_moverect` callback to compute the union of source and
+/// destination rectangles.
+///
+/// # Arguments
+/// * `dest` - Destination rectangle
+/// * `src` - Source rectangle
+///
+/// # Returns
+/// The combined damage region (`start_row`, `end_row`).
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
+pub extern "C" fn rs_terminal_moverect_damage(dest: VTermRect, src: VTermRect) -> InvalidRegion {
+    let start = dest.start_row.min(src.start_row);
+    let end = dest.end_row.max(src.end_row);
+    InvalidRegion {
+        start_row: start,
+        end_row: end,
+    }
+}
+
+/// Result of processing a `VTerm` property change.
+#[repr(C)]
+pub struct VTermPropResult {
+    /// Whether the property was handled.
+    pub handled: c_int,
+    /// Whether the terminal should be invalidated.
+    pub invalidate: c_int,
+    /// Whether cursor pending flag should be set.
+    pub cursor_pending: c_int,
+}
+
+/// Check if a `VTerm` property change requires terminal invalidation.
+///
+/// # Arguments
+/// * `prop` - The `VTerm` property that changed
+///
+/// # Returns
+/// A `VTermPropResult` indicating how to handle the property change.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
+pub extern "C" fn rs_terminal_prop_needs_invalidate(prop: c_int) -> VTermPropResult {
+    match prop {
+        // Properties that are handled but don't need invalidation
+        VTERM_PROP_ALTSCREEN | VTERM_PROP_TITLE | VTERM_PROP_ICONNAME | VTERM_PROP_MOUSE => {
+            VTermPropResult {
+                handled: 1,
+                invalidate: 0,
+                cursor_pending: 0,
+            }
+        }
+        // Cursor visibility needs invalidation but no cursor pending
+        VTERM_PROP_CURSORVISIBLE => VTermPropResult {
+            handled: 1,
+            invalidate: 1,
+            cursor_pending: 0,
+        },
+        // Cursor shape/blink needs both invalidation and cursor pending
+        VTERM_PROP_CURSORBLINK | VTERM_PROP_CURSORSHAPE => VTermPropResult {
+            handled: 1,
+            invalidate: 1,
+            cursor_pending: 1,
+        },
+        // Unknown properties
+        _ => VTermPropResult {
+            handled: 0,
+            invalidate: 0,
+            cursor_pending: 0,
+        },
+    }
+}
+
+/// Process a cursor move event from `VTerm`.
+///
+/// # Arguments
+/// * `new_row` - New cursor row
+/// * `new_col` - New cursor column
+/// * `old_row` - Previous cursor row
+/// * `old_col` - Previous cursor column
+///
+/// # Returns
+/// 1 to indicate the callback was handled.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
+pub extern "C" fn rs_terminal_movecursor_handled(
+    _new_row: c_int,
+    _new_col: c_int,
+    _old_row: c_int,
+    _old_col: c_int,
+) -> c_int {
+    // The actual cursor update is done in C by writing to term->cursor.row/col
+    // This function just provides a hook point for potential future logic
+    1
+}
+
+/// Calculate the number of columns to copy when popping scrollback.
+///
+/// # Arguments
+/// * `requested_cols` - Number of columns requested
+/// * `available_cols` - Number of columns available in scrollback row
+///
+/// # Returns
+/// The number of columns to actually copy.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
+pub extern "C" fn rs_terminal_sb_pop_cols(requested_cols: usize, available_cols: usize) -> usize {
+    requested_cols.min(available_cols)
+}
+
+/// Check if dark theme should be reported to `VTerm`.
+///
+/// # Arguments
+/// * `bg_char` - The background option character ('d' for dark, 'l' for light)
+///
+/// # Returns
+/// 1 if dark theme, 0 if light theme.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
+pub extern "C" fn rs_terminal_is_dark_theme(bg_char: u8) -> c_int {
+    c_int::from(bg_char == b'd')
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1083,5 +1255,125 @@ mod tests {
         assert_eq!(rs_terminal_scrollback_insert_index(100, 24), 76);
         assert_eq!(rs_terminal_scrollback_insert_index(50, 24), 26);
         assert_eq!(rs_terminal_scrollback_insert_index(24, 24), 0);
+    }
+
+    #[test]
+    fn test_vterm_rect_default() {
+        let rect = VTermRect::default();
+        assert_eq!(rect.start_row, 0);
+        assert_eq!(rect.end_row, 0);
+        assert_eq!(rect.start_col, 0);
+        assert_eq!(rect.end_col, 0);
+    }
+
+    #[test]
+    fn test_vterm_pos_default() {
+        let pos = VTermPos::default();
+        assert_eq!(pos.row, 0);
+        assert_eq!(pos.col, 0);
+    }
+
+    #[test]
+    fn test_moverect_damage() {
+        // Destination before source
+        let dest = VTermRect {
+            start_row: 0,
+            end_row: 5,
+            start_col: 0,
+            end_col: 80,
+        };
+        let src = VTermRect {
+            start_row: 5,
+            end_row: 10,
+            start_col: 0,
+            end_col: 80,
+        };
+        let region = rs_terminal_moverect_damage(dest, src);
+        assert_eq!(region.start_row, 0);
+        assert_eq!(region.end_row, 10);
+
+        // Source before destination
+        let dest = VTermRect {
+            start_row: 10,
+            end_row: 20,
+            start_col: 0,
+            end_col: 80,
+        };
+        let src = VTermRect {
+            start_row: 5,
+            end_row: 15,
+            start_col: 0,
+            end_col: 80,
+        };
+        let region = rs_terminal_moverect_damage(dest, src);
+        assert_eq!(region.start_row, 5);
+        assert_eq!(region.end_row, 20);
+    }
+
+    #[test]
+    fn test_prop_needs_invalidate() {
+        // Altscreen - handled but no invalidation
+        let result = rs_terminal_prop_needs_invalidate(VTERM_PROP_ALTSCREEN);
+        assert_eq!(result.handled, 1);
+        assert_eq!(result.invalidate, 0);
+        assert_eq!(result.cursor_pending, 0);
+
+        // Cursor visible - invalidates
+        let result = rs_terminal_prop_needs_invalidate(VTERM_PROP_CURSORVISIBLE);
+        assert_eq!(result.handled, 1);
+        assert_eq!(result.invalidate, 1);
+        assert_eq!(result.cursor_pending, 0);
+
+        // Cursor blink - invalidates and sets cursor pending
+        let result = rs_terminal_prop_needs_invalidate(VTERM_PROP_CURSORBLINK);
+        assert_eq!(result.handled, 1);
+        assert_eq!(result.invalidate, 1);
+        assert_eq!(result.cursor_pending, 1);
+
+        // Cursor shape - invalidates and sets cursor pending
+        let result = rs_terminal_prop_needs_invalidate(VTERM_PROP_CURSORSHAPE);
+        assert_eq!(result.handled, 1);
+        assert_eq!(result.invalidate, 1);
+        assert_eq!(result.cursor_pending, 1);
+
+        // Title - handled but no invalidation
+        let result = rs_terminal_prop_needs_invalidate(VTERM_PROP_TITLE);
+        assert_eq!(result.handled, 1);
+        assert_eq!(result.invalidate, 0);
+
+        // Unknown property
+        let result = rs_terminal_prop_needs_invalidate(99);
+        assert_eq!(result.handled, 0);
+        assert_eq!(result.invalidate, 0);
+    }
+
+    #[test]
+    fn test_movecursor_handled() {
+        assert_eq!(rs_terminal_movecursor_handled(5, 10, 0, 0), 1);
+        assert_eq!(rs_terminal_movecursor_handled(0, 0, 5, 10), 1);
+    }
+
+    #[test]
+    fn test_sb_pop_cols() {
+        assert_eq!(rs_terminal_sb_pop_cols(80, 100), 80);
+        assert_eq!(rs_terminal_sb_pop_cols(100, 80), 80);
+        assert_eq!(rs_terminal_sb_pop_cols(80, 80), 80);
+    }
+
+    #[test]
+    fn test_is_dark_theme() {
+        assert_eq!(rs_terminal_is_dark_theme(b'd'), 1);
+        assert_eq!(rs_terminal_is_dark_theme(b'l'), 0);
+        assert_eq!(rs_terminal_is_dark_theme(b'x'), 0);
+    }
+
+    #[test]
+    fn test_vterm_prop_constants() {
+        assert_eq!(VTERM_PROP_ALTSCREEN, 1);
+        assert_eq!(VTERM_PROP_CURSORVISIBLE, 2);
+        assert_eq!(VTERM_PROP_TITLE, 3);
+        assert_eq!(VTERM_PROP_CURSORSHAPE, 6);
+        assert_eq!(VTERM_PROP_MOUSE, 7);
+        assert_eq!(VTERM_PROP_CURSORBLINK, 8);
     }
 }
