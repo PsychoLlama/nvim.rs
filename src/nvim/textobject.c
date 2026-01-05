@@ -51,6 +51,7 @@ extern int rs_findsent(int dir, int count);
 extern void rs_find_first_blank(pos_T *posp);
 extern void rs_findsent_forward(int count, bool at_start_sent);
 extern int rs_current_sent(oparg_T *oap, int count, bool include);
+extern int rs_current_block(oparg_T *oap, int count, bool include, int what, int other);
 
 // =============================================================================
 // C accessor functions for Rust
@@ -500,6 +501,66 @@ void nvim_textobj_set_cursor_from_pos(pos_T *pos)
   curwin->w_cursor = *pos;
 }
 
+/// Find matching bracket (accessor for Rust).
+pos_T *nvim_textobj_findmatch(int what)
+{
+  return findmatch(NULL, what);
+}
+
+/// Find matching bracket with limit (accessor for Rust).
+pos_T *nvim_textobj_findmatchlimit(int what, int flags, int64_t maxtravel)
+{
+  return findmatchlimit(NULL, what, flags, maxtravel);
+}
+
+/// Check if cursor is in indent (accessor for Rust).
+bool nvim_textobj_inindent(void)
+{
+  return inindent(1);
+}
+
+/// Increment cursor with inc_cursor (accessor for Rust).
+int nvim_textobj_inc_cursor_int(void)
+{
+  return inc_cursor();
+}
+
+/// Increment position with inc (accessor for Rust).
+int nvim_textobj_inc(pos_T *pos)
+{
+  return inc(pos);
+}
+
+static char *saved_p_cpo = NULL;
+
+/// Set p_cpo temporarily (accessor for Rust).
+void nvim_textobj_set_p_cpo_temp(const char *val)
+{
+  saved_p_cpo = p_cpo;
+  p_cpo = (char *)val;
+}
+
+/// Restore p_cpo (accessor for Rust).
+void nvim_textobj_restore_p_cpo(void)
+{
+  if (saved_p_cpo != NULL) {
+    p_cpo = saved_p_cpo;
+    saved_p_cpo = NULL;
+  }
+}
+
+/// Check if cpo contains MATCHBSL (accessor for Rust).
+bool nvim_textobj_cpo_has_matchbsl(void)
+{
+  return vim_strchr(p_cpo, CPO_MATCHBSL) != NULL;
+}
+
+/// Check if position a <= position b (accessor for Rust).
+bool nvim_textobj_ltoreq_pos(pos_T *a, pos_T *b)
+{
+  return ltoreq(*a, *b);
+}
+
 /// Find the start of the next sentence, searching in the direction specified
 /// by the "dir" argument.  The cursor is positioned on the start of the next
 /// sentence when found.  If the next sentence is found, return OK.  Return FAIL
@@ -669,143 +730,7 @@ int current_sent(oparg_T *oap, int count, bool include)
 /// @param other    ')', '}', etc.
 int current_block(oparg_T *oap, int count, bool include, int what, int other)
 {
-  pos_T *pos = NULL;
-  pos_T start_pos;
-  pos_T *end_pos;
-  bool sol = false;                      // '{' at start of line
-
-  pos_T old_pos = curwin->w_cursor;
-  pos_T old_end = curwin->w_cursor;           // remember where we started
-  pos_T old_start = old_end;
-
-  // If we start on '(', '{', ')', '}', etc., use the whole block inclusive.
-  if (!VIsual_active || equalpos(VIsual, curwin->w_cursor)) {
-    setpcmark();
-    if (what == '{') {                  // ignore indent
-      while (inindent(1)) {
-        if (inc_cursor() != 0) {
-          break;
-        }
-      }
-    }
-    if (gchar_cursor() == what) {
-      // cursor on '(' or '{', move cursor just after it
-      curwin->w_cursor.col++;
-    }
-  } else if (lt(VIsual, curwin->w_cursor)) {
-    old_start = VIsual;
-    curwin->w_cursor = VIsual;              // cursor at low end of Visual
-  } else {
-    old_end = VIsual;
-  }
-
-  // Search backwards for unclosed '(', '{', etc..
-  // Put this position in start_pos.
-  // Ignore quotes here.  Keep the "M" flag in 'cpo', as that is what the
-  // user wants.
-  char *save_cpo = p_cpo;
-  p_cpo = vim_strchr(p_cpo, CPO_MATCHBSL) != NULL ? "%M" : "%";
-  if ((pos = findmatch(NULL, what)) != NULL) {
-    while (count-- > 0) {
-      if ((pos = findmatch(NULL, what)) == NULL) {
-        break;
-      }
-      curwin->w_cursor = *pos;
-      start_pos = *pos;   // the findmatch for end_pos will overwrite *pos
-    }
-  } else {
-    while (count-- > 0) {
-      if ((pos = findmatchlimit(NULL, what, FM_FORWARD, 0)) == NULL) {
-        break;
-      }
-      curwin->w_cursor = *pos;
-      start_pos = *pos;   // the findmatch for end_pos will overwrite *pos
-    }
-  }
-  p_cpo = save_cpo;
-
-  // Search for matching ')', '}', etc.
-  // Put this position in curwin->w_cursor.
-  if (pos == NULL || (end_pos = findmatch(NULL, other)) == NULL) {
-    curwin->w_cursor = old_pos;
-    return FAIL;
-  }
-  curwin->w_cursor = *end_pos;
-
-  // Try to exclude the '(', '{', ')', '}', etc. when "include" is false.
-  // If the ending '}', ')' or ']' is only preceded by indent, skip that
-  // indent. But only if the resulting area is not smaller than what we
-  // started with.
-  while (!include) {
-    incl(&start_pos);
-    sol = (curwin->w_cursor.col == 0);
-    decl(&curwin->w_cursor);
-    while (inindent(1)) {
-      sol = true;
-      if (decl(&curwin->w_cursor) != 0) {
-        break;
-      }
-    }
-
-    // In Visual mode, when resulting area is empty
-    // i.e. there is no inner block to select, abort.
-    if (equalpos(start_pos, *end_pos) && VIsual_active) {
-      curwin->w_cursor = old_pos;
-      return FAIL;
-    }
-
-    // In Visual mode, when the resulting area is not bigger than what we
-    // started with, extend it to the next block, and then exclude again.
-    // Don't try to expand the area if the area is empty.
-    if (!lt(start_pos, old_start) && !lt(old_end, curwin->w_cursor)
-        && !equalpos(start_pos, curwin->w_cursor)
-        && VIsual_active) {
-      curwin->w_cursor = old_start;
-      decl(&curwin->w_cursor);
-      if ((pos = findmatch(NULL, what)) == NULL) {
-        curwin->w_cursor = old_pos;
-        return FAIL;
-      }
-      start_pos = *pos;
-      curwin->w_cursor = *pos;
-      if ((end_pos = findmatch(NULL, other)) == NULL) {
-        curwin->w_cursor = old_pos;
-        return FAIL;
-      }
-      curwin->w_cursor = *end_pos;
-    } else {
-      break;
-    }
-  }
-
-  if (VIsual_active) {
-    if (*p_sel == 'e') {
-      inc(&curwin->w_cursor);
-    }
-    if (sol && gchar_cursor() != NUL) {
-      inc(&curwin->w_cursor);  // include the line break
-    }
-    VIsual = start_pos;
-    VIsual_mode = 'v';
-    redraw_curbuf_later(UPD_INVERTED);  // update the inversion
-    showmode();
-  } else {
-    oap->start = start_pos;
-    oap->motion_type = kMTCharWise;
-    oap->inclusive = false;
-    if (sol) {
-      incl(&curwin->w_cursor);
-    } else if (ltoreq(start_pos, curwin->w_cursor)) {
-      // Include the character under the cursor.
-      oap->inclusive = true;
-    } else {
-      // End is before the start (no text in between <>, [], etc.): don't
-      // operate on any text.
-      curwin->w_cursor = start_pos;
-    }
-  }
-
-  return OK;
+  return rs_current_block(oap, count, include, what, other);
 }
 
 /// @param end_tag  when true, return true if the cursor is on "</aaa>".

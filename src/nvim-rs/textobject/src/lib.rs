@@ -1889,6 +1889,297 @@ unsafe fn current_sent_extend(
 }
 
 // =============================================================================
+// Block Text Objects
+// =============================================================================
+
+/// FM_FORWARD flag for findmatchlimit
+const FM_FORWARD: c_int = 0x20;
+
+// Note: CPO_MATCHBSL constant not needed - using C accessor instead.
+
+extern "C" {
+    /// Find matching bracket. Returns pos_T* or NULL.
+    fn nvim_textobj_findmatch(what: c_int) -> PosHandle;
+
+    /// Find matching bracket with limit. Returns pos_T* or NULL.
+    fn nvim_textobj_findmatchlimit(what: c_int, flags: c_int, maxtravel: i64) -> PosHandle;
+
+    /// Check if cursor is in indent.
+    fn nvim_textobj_inindent() -> bool;
+
+    /// Increment cursor position. Returns 0 on success.
+    fn nvim_textobj_inc_cursor_int() -> c_int;
+
+    /// Increment position with inc.
+    fn nvim_textobj_inc(pos: PosHandle) -> c_int;
+
+    /// Set p_cpo temporarily.
+    fn nvim_textobj_set_p_cpo_temp(val: *const std::ffi::c_char);
+
+    /// Restore p_cpo.
+    fn nvim_textobj_restore_p_cpo();
+
+    /// Check if cpo contains MATCHBSL.
+    fn nvim_textobj_cpo_has_matchbsl() -> bool;
+
+    /// Check if position a <= position b.
+    fn nvim_textobj_ltoreq_pos(a: PosHandle, b: PosHandle) -> bool;
+}
+
+/// Find block under cursor.
+///
+/// # Safety
+/// - `oap` must be a valid oparg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_current_block(
+    oap: OapHandle,
+    count: c_int,
+    include: bool,
+    what: c_int,
+    other: c_int,
+) -> c_int {
+    current_block_impl(oap, count, include, what, other)
+}
+
+/// Block selection state.
+struct BlockState {
+    start_pos: PosHandle,
+    old_pos: PosHandle,
+    old_end: PosHandle,
+    old_start: PosHandle,
+    sol: bool,
+}
+
+impl BlockState {
+    unsafe fn new() -> Self {
+        let cursor = nvim_textobj_get_cursor_ptr();
+        let old_pos = nvim_textobj_alloc_pos();
+        let old_end = nvim_textobj_alloc_pos();
+        let old_start = nvim_textobj_alloc_pos();
+        let start_pos = nvim_textobj_alloc_pos();
+
+        nvim_textobj_copy_pos(old_pos, cursor);
+        nvim_textobj_copy_pos(old_end, cursor);
+        nvim_textobj_copy_pos(old_start, cursor);
+
+        Self {
+            start_pos,
+            old_pos,
+            old_end,
+            old_start,
+            sol: false,
+        }
+    }
+
+    unsafe fn free(self) {
+        nvim_textobj_free_pos(self.start_pos);
+        nvim_textobj_free_pos(self.old_pos);
+        nvim_textobj_free_pos(self.old_end);
+        nvim_textobj_free_pos(self.old_start);
+    }
+
+    unsafe fn restore_and_fail(self) -> c_int {
+        let cursor = nvim_textobj_get_cursor_ptr();
+        nvim_textobj_copy_pos(cursor, self.old_pos);
+        self.free();
+        FAIL
+    }
+}
+
+/// Implementation of current_block.
+#[allow(clippy::too_many_lines)]
+unsafe fn current_block_impl(
+    oap: OapHandle,
+    mut count: c_int,
+    include: bool,
+    what: c_int,
+    other: c_int,
+) -> c_int {
+    let cursor = nvim_textobj_get_cursor_ptr();
+    let visual = nvim_textobj_get_VIsual_ptr();
+    let mut state = BlockState::new();
+    let mut pos: PosHandle;
+
+    // If we start on '(', '{', ')', '}', etc., use the whole block inclusive.
+    if !nvim_textobj_get_VIsual_active() || nvim_textobj_equalpos(visual, cursor) {
+        nvim_textobj_setpcmark();
+        if what == i32::from(b'{') {
+            // ignore indent
+            while nvim_textobj_inindent() {
+                if nvim_textobj_inc_cursor_int() != 0 {
+                    break;
+                }
+            }
+        }
+        if nvim_textobj_gchar_cursor() == what {
+            // cursor on '(' or '{', move cursor just after it
+            nvim_textobj_set_cursor_col(nvim_textobj_get_cursor_col() + 1);
+        }
+    } else if nvim_textobj_lt_pos(visual, cursor) {
+        nvim_textobj_copy_pos(state.old_start, visual);
+        nvim_textobj_copy_pos(cursor, visual); // cursor at low end of Visual
+    } else {
+        nvim_textobj_copy_pos(state.old_end, visual);
+    }
+
+    // Set temporary p_cpo
+    let cpo_temp = if nvim_textobj_cpo_has_matchbsl() {
+        c"%M".as_ptr()
+    } else {
+        c"%".as_ptr()
+    };
+    nvim_textobj_set_p_cpo_temp(cpo_temp);
+
+    // Search backwards for unclosed '(', '{', etc.
+    pos = nvim_textobj_findmatch(what);
+    if pos.is_null() {
+        while count > 0 {
+            count -= 1;
+            pos = nvim_textobj_findmatchlimit(what, FM_FORWARD, 0);
+            if pos.is_null() {
+                break;
+            }
+            nvim_textobj_copy_pos(cursor, pos);
+            nvim_textobj_copy_pos(state.start_pos, pos);
+        }
+    } else {
+        while count > 0 {
+            count -= 1;
+            pos = nvim_textobj_findmatch(what);
+            if pos.is_null() {
+                break;
+            }
+            nvim_textobj_copy_pos(cursor, pos);
+            nvim_textobj_copy_pos(state.start_pos, pos);
+        }
+    }
+
+    nvim_textobj_restore_p_cpo();
+
+    // Search for matching ')', '}', etc.
+    if pos.is_null() {
+        return state.restore_and_fail();
+    }
+
+    let end_pos = nvim_textobj_findmatch(other);
+    if end_pos.is_null() {
+        return state.restore_and_fail();
+    }
+    nvim_textobj_copy_pos(cursor, end_pos);
+
+    // Try to exclude the brackets when include is false
+    if !include {
+        let result = block_exclude_brackets(oap, &mut state, what, other);
+        if result == FAIL {
+            return state.restore_and_fail();
+        }
+    }
+
+    block_finalize(oap, &state);
+    state.free();
+    OK
+}
+
+/// Exclude brackets from block selection.
+#[allow(clippy::too_many_lines)]
+unsafe fn block_exclude_brackets(
+    _oap: OapHandle,
+    state: &mut BlockState,
+    what: c_int,
+    other: c_int,
+) -> c_int {
+    let cursor = nvim_textobj_get_cursor_ptr();
+
+    loop {
+        nvim_textobj_incl_pos(state.start_pos);
+        state.sol = nvim_textobj_get_cursor_col() == 0;
+        nvim_textobj_decl_pos(cursor);
+
+        while nvim_textobj_inindent() {
+            state.sol = true;
+            if nvim_textobj_decl_pos(cursor) != 0 {
+                break;
+            }
+        }
+
+        // In Visual mode, when resulting area is empty, abort.
+        let end_pos = nvim_textobj_alloc_pos();
+        nvim_textobj_copy_pos(end_pos, cursor);
+        nvim_textobj_incl_pos(end_pos); // Get what would be end_pos
+
+        if nvim_textobj_equalpos(state.start_pos, end_pos) && nvim_textobj_get_VIsual_active() {
+            nvim_textobj_free_pos(end_pos);
+            return FAIL;
+        }
+        nvim_textobj_free_pos(end_pos);
+
+        // In Visual mode, when the resulting area is not bigger than what we
+        // started with, extend it to the next block, and then exclude again.
+        if !nvim_textobj_lt_pos(state.start_pos, state.old_start)
+            && !nvim_textobj_lt_pos(state.old_end, cursor)
+            && !nvim_textobj_equalpos(state.start_pos, cursor)
+            && nvim_textobj_get_VIsual_active()
+        {
+            nvim_textobj_copy_pos(cursor, state.old_start);
+            nvim_textobj_decl_pos(cursor);
+
+            let pos = nvim_textobj_findmatch(what);
+            if pos.is_null() {
+                return FAIL;
+            }
+            nvim_textobj_copy_pos(state.start_pos, pos);
+            nvim_textobj_copy_pos(cursor, pos);
+
+            let end_pos = nvim_textobj_findmatch(other);
+            if end_pos.is_null() {
+                return FAIL;
+            }
+            nvim_textobj_copy_pos(cursor, end_pos);
+        } else {
+            break;
+        }
+    }
+
+    OK
+}
+
+/// Finalize block selection (set Visual/oap state).
+unsafe fn block_finalize(oap: OapHandle, state: &BlockState) {
+    let cursor = nvim_textobj_get_cursor_ptr();
+
+    if nvim_textobj_get_VIsual_active() {
+        if nvim_textobj_get_p_sel_first() == i32::from(b'e') {
+            nvim_textobj_inc(cursor);
+        }
+        if state.sol && nvim_textobj_gchar_cursor() != NUL {
+            nvim_textobj_inc(cursor); // include the line break
+        }
+        let start_lnum = nvim_textobj_pos_get_lnum(state.start_pos);
+        let start_col = nvim_textobj_pos_get_col(state.start_pos);
+        nvim_textobj_set_VIsual(start_lnum, start_col);
+        nvim_textobj_set_VIsual_mode(i32::from(b'v'));
+        nvim_textobj_redraw_curbuf_later(UPD_INVERTED);
+        nvim_textobj_showmode();
+    } else {
+        let start_lnum = nvim_textobj_pos_get_lnum(state.start_pos);
+        let start_col = nvim_textobj_pos_get_col(state.start_pos);
+        nvim_textobj_set_oap_start(oap, start_lnum, start_col);
+        nvim_textobj_set_oap_motion_type(oap, MT_CHAR_WISE);
+        nvim_textobj_set_oap_inclusive(oap, false);
+
+        if state.sol {
+            nvim_textobj_incl_pos(cursor);
+        } else if nvim_textobj_ltoreq_pos(state.start_pos, cursor) {
+            // Include the character under the cursor.
+            nvim_textobj_set_oap_inclusive(oap, true);
+        } else {
+            // End is before the start (no text in between)
+            nvim_textobj_copy_pos(cursor, state.start_pos);
+        }
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
