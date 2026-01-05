@@ -1,50 +1,38 @@
-Plan: ~/.claude/plans/radiant-toasting-marshmallow.md
+Plan: ~/.claude/plans/quiet-sleeping-widget.md
 
-The migration is complete. Here's a summary:
+All 8 phases of the migration plan have been completed. Here's a summary:
 
----
+## Migration Complete
 
-## Command-Line Completion System (cmdexpand.c) Migration Complete
+**Statusline System Migration from C to Rust**
 
-### Summary
+### Commits (8 phases):
+1. `b5cdf9ce96` - Phase 1: Format string parsing infrastructure (`format.rs`)
+2. `00fe6d96ae` - Phase 2: Item evaluation module (`eval.rs`)
+3. `039fa673d8` - Phase 3: Highlight tracking module (`highlight.rs`)
+4. `bf1d89536c` - Phase 4: Click region tracking module (`click.rs`)
+5. `c3bcef3696` - Phase 5: Status column rendering module (`statuscol.rs`)
+6. `6a3e2d8680` - Phase 6: Statusline builder infrastructure (`builder.rs`)
+7. `97d67e7327` - Phase 7: Tabline and window bar rendering (`tabline.rs`)
+8. `0332390da1` - Phase 8: Integration - FFI exports for new modules
 
-Successfully migrated Neovim's command-line completion system to Rust across 8 phases:
+### Final Statistics:
+- **8 Rust source files** in `src/nvim-rs/statusline/src/`
+- **5,185 lines** of Rust code (up from ~1,116 before migration)
+- **25 FFI exports** (`rs_*` functions callable from C)
 
-| Phase | Description | Status |
-|-------|-------------|--------|
-| Phase 1 | Foundation and Constants | ✅ Completed |
-| Phase 2 | Pure Utility Functions | ✅ Completed |
-| Phase 3 | Pattern Processing | ✅ Completed |
-| Phase 4 | Context Determination | ✅ Completed |
-| Phase 5 | Core Expansion Logic | ✅ Completed |
-| Phase 6 | UI Integration | ✅ Completed |
-| Phase 7 | VimL/Lua Integration | ✅ Completed |
-| Phase 8 | Testing and Integration | ✅ Completed |
+### Modules Created:
+| Module | Purpose |
+|--------|---------|
+| `format.rs` | Format string parsing (`%f`, `%l`, `%#Hl#`, etc.) |
+| `eval.rs` | Item evaluation context and helpers |
+| `highlight.rs` | Highlight tracking during rendering |
+| `click.rs` | Click region tracking for mouse support |
+| `statuscol.rs` | Status column (line numbers, folds, signs) |
+| `builder.rs` | Statusline builder with groups/separators |
+| `tabline.rs` | Tabline and window bar rendering |
 
-### Code Metrics
-
-- **New Rust files**: 7 (expand.rs, context.rs, pattern.rs, completion.rs, wildmenu.rs, usercomplete.rs, lib.rs updates)
-- **Total Rust lines**: 3,843 lines
-- **FFI functions**: 39 new `rs_*` functions
-- **Unit tests**: 78 tests covering all modules
-- **All checks pass**: `rust-fmt-check`, `rust-clippy`, `rust-test`
-
-### Commits (in chronological order)
-
-1. `feat(migration): add cmdexpand foundation types and C accessors` - Phase 1
-2. `feat(migration): add pure utility functions for cmdexpand` - Phase 2
-3. `feat(migration): add pattern processing for cmdexpand` - Phase 3
-4. `feat(migration): add context determination for cmdexpand` - Phase 4
-5. `feat(migration): add core expansion logic for cmdexpand` - Phase 5
-6. `feat(migration): add wildmenu UI integration for cmdexpand` - Phase 6
-7. `feat(migration): add VimL/Lua user-defined completion helpers for cmdexpand` - Phase 7
-8. `style: format Rust code with cargo fmt` - Formatting cleanup
-
-### Key Components Migrated
-
-- **ExpandContext enum**: Type-safe representation of 67 EXPAND_* context types
-- **Pattern processing**: Star appending, backslash handling, internal pattern transformation
-- **Context determination**: Command parsing, expression detection, search cmdline handling
-- **Completion navigation**: WILD_NEXT/PREV/PAGEUP/PAGEDOWN match navigation
-- **Wildmenu**: Key translation, skip character calculation, menu navigation
-- **User completion**: Type string mapping, validation, getcompletion() helpers
+All checks pass:
+- `just rust-fmt-check` ✓
+- `just rust-clippy` ✓  
+- `just rust-test` ✓ (1,201 tests passing)
