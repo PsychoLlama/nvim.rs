@@ -359,6 +359,45 @@ pub unsafe extern "C" fn rs_sal_to_bool(s: *const c_char) -> bool {
     sal_to_bool_impl(s)
 }
 
+// =============================================================================
+// Word class checking
+// =============================================================================
+
+/// Check if a word class indicates a word character.
+///
+/// Only for characters above 255 (multibyte characters).
+/// Unicode subscript and superscript are not considered word characters.
+/// See also `utf_class()` in mbyte.c.
+///
+/// # Arguments
+///
+/// * `cl` - The character class from `utf_class()` or `mb_get_class()`
+/// * `cjk` - True if CJK mode is enabled (East Asian characters not word chars)
+///
+/// # Returns
+///
+/// True if the character class indicates a word character.
+#[inline]
+const fn spell_mb_isword_class_impl(cl: c_int, cjk: bool) -> bool {
+    if cjk {
+        // East Asian characters are not considered word characters.
+        // Only class 2 (word char) and 0x2800 (Braille) are valid.
+        cl == 2 || cl == 0x2800
+    } else {
+        // Normal mode: class >= 2 but not subscript (0x2070), superscript (0x2080), or 3
+        cl >= 2 && cl != 0x2070 && cl != 0x2080 && cl != 3
+    }
+}
+
+/// FFI wrapper for `spell_mb_isword_class`.
+///
+/// Check if a word class indicates a word character (for multibyte chars).
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
+pub extern "C" fn rs_spell_mb_isword_class(cl: c_int, cjk: bool) -> bool {
+    spell_mb_isword_class_impl(cl, cjk)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -759,5 +798,94 @@ mod tests {
             assert!(!rs_sal_to_bool(f.as_ptr() as *const c_char));
             assert!(!rs_sal_to_bool(std::ptr::null()));
         }
+    }
+
+    // =========================================================================
+    // spell_mb_isword_class tests
+    // =========================================================================
+
+    #[test]
+    fn test_spell_mb_isword_class_normal_mode() {
+        // Class 2 is word character
+        assert!(spell_mb_isword_class_impl(2, false));
+
+        // Classes >= 2 are word chars (except specific exclusions)
+        assert!(spell_mb_isword_class_impl(4, false));
+        assert!(spell_mb_isword_class_impl(10, false));
+        assert!(spell_mb_isword_class_impl(100, false));
+
+        // Class 0 and 1 are not word characters
+        assert!(!spell_mb_isword_class_impl(0, false));
+        assert!(!spell_mb_isword_class_impl(1, false));
+
+        // Class 3 is explicitly excluded
+        assert!(!spell_mb_isword_class_impl(3, false));
+
+        // Subscript (0x2070) and superscript (0x2080) are excluded
+        assert!(!spell_mb_isword_class_impl(0x2070, false));
+        assert!(!spell_mb_isword_class_impl(0x2080, false));
+
+        // Braille (0x2800) is valid in normal mode (>= 2 and not excluded)
+        assert!(spell_mb_isword_class_impl(0x2800, false));
+    }
+
+    #[test]
+    fn test_spell_mb_isword_class_cjk_mode() {
+        // In CJK mode, only class 2 and 0x2800 are valid
+
+        // Class 2 is valid
+        assert!(spell_mb_isword_class_impl(2, true));
+
+        // Braille (0x2800) is valid
+        assert!(spell_mb_isword_class_impl(0x2800, true));
+
+        // Other classes are not valid in CJK mode
+        assert!(!spell_mb_isword_class_impl(0, true));
+        assert!(!spell_mb_isword_class_impl(1, true));
+        assert!(!spell_mb_isword_class_impl(3, true));
+        assert!(!spell_mb_isword_class_impl(4, true));
+        assert!(!spell_mb_isword_class_impl(10, true));
+
+        // Even classes that are valid in normal mode are not valid in CJK
+        assert!(!spell_mb_isword_class_impl(5, true));
+        assert!(!spell_mb_isword_class_impl(100, true));
+    }
+
+    #[test]
+    fn test_spell_mb_isword_class_boundary_values() {
+        // Test at class boundary
+        assert!(!spell_mb_isword_class_impl(1, false)); // just below 2
+        assert!(spell_mb_isword_class_impl(2, false)); // exactly 2
+        assert!(!spell_mb_isword_class_impl(3, false)); // excluded
+        assert!(spell_mb_isword_class_impl(4, false)); // just above 3
+
+        // Negative values
+        assert!(!spell_mb_isword_class_impl(-1, false));
+        assert!(!spell_mb_isword_class_impl(-1, true));
+    }
+
+    #[test]
+    fn test_spell_mb_isword_class_ffi() {
+        // Test FFI wrapper
+        assert!(rs_spell_mb_isword_class(2, false));
+        assert!(rs_spell_mb_isword_class(2, true));
+        assert!(rs_spell_mb_isword_class(0x2800, true));
+        assert!(!rs_spell_mb_isword_class(1, false));
+        assert!(!rs_spell_mb_isword_class(4, true));
+    }
+
+    #[test]
+    fn test_spell_mb_isword_class_special_classes() {
+        // Test the specific exclusion values
+        // 0x2070 = Unicode subscript block marker
+        // 0x2080 = Unicode superscript block marker
+        assert!(!spell_mb_isword_class_impl(0x2070, false));
+        assert!(!spell_mb_isword_class_impl(0x2080, false));
+
+        // Values around these should still work (if >= 2)
+        assert!(spell_mb_isword_class_impl(0x206F, false)); // just before 0x2070
+        assert!(spell_mb_isword_class_impl(0x2071, false)); // just after 0x2070
+        assert!(spell_mb_isword_class_impl(0x207F, false)); // just before 0x2080
+        assert!(spell_mb_isword_class_impl(0x2081, false)); // just after 0x2080
     }
 }

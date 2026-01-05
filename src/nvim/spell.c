@@ -193,6 +193,13 @@ extern bool rs_spell_valid_case(int wordflags, int treeflags);
 extern bool rs_byte_in_str(const uint8_t *str, int n);
 extern bool rs_valid_spelllang(const char *val);
 extern bool rs_valid_spellfile(const char *val);
+extern bool rs_spell_mb_isword_class(int cl, bool cjk);
+
+// Accessor for Rust: get the b_cjk flag from the window's synblock
+int nvim_win_get_b_cjk(win_T *wp)
+{
+  return wp->w_s->b_cjk;
+}
 
 /// mode values for find_word
 enum {
@@ -2500,11 +2507,7 @@ bool spell_iswordp_nmw(const char *p, win_T *wp)
 static bool spell_mb_isword_class(int cl, const win_T *wp)
   FUNC_ATTR_PURE FUNC_ATTR_NONNULL_ALL FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (wp->w_s->b_cjk) {
-    // East Asian characters are not considered word characters.
-    return cl == 2 || cl == 0x2800;
-  }
-  return cl >= 2 && cl != 0x2070 && cl != 0x2080 && cl != 3;
+  return rs_spell_mb_isword_class(cl, wp->w_s->b_cjk != 0);
 }
 
 // Returns true if "p" points to a word character.

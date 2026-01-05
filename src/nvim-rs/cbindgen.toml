@@ -60,7 +60,7 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_min_vim_version", "rs_highest_patch",
            "rs_var_flavour", "VarFlavour",
            "rs_tristate_from_int", "rs_tristate_to_bool",
-           "rs_valid_spelllang", "rs_spell_valid_case", "rs_byte_in_str", "rs_find_region", "rs_sal_to_bool",
+           "rs_valid_spelllang", "rs_spell_valid_case", "rs_spell_mb_isword_class", "rs_byte_in_str", "rs_find_region", "rs_sal_to_bool",
            "rs_win_locked", "WinHandle",
            "rs_bt_prompt", "rs_bt_normal", "rs_bt_quickfix", "rs_bt_terminal",
            "rs_bt_nofile", "rs_bt_help", "rs_bt_nofilename", "rs_bt_dontwrite", "BufHandle",
