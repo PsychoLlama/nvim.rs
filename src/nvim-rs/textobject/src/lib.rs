@@ -67,6 +67,31 @@ extern "C" {
 
     /// Get current cursor column.
     fn nvim_textobj_get_cursor_col() -> c_int;
+
+    /// Get current cursor line number.
+    fn nvim_textobj_get_cursor_lnum() -> c_int;
+
+    /// Get total line count in current buffer.
+    fn nvim_textobj_get_ml_line_count() -> c_int;
+
+    /// Check if a line is empty (only has NUL).
+    fn nvim_textobj_is_lineempty(lnum: c_int) -> bool;
+
+    /// Get pointer to cursor line content.
+    fn nvim_textobj_get_cursor_line_ptr() -> *const std::ffi::c_char;
+
+    /// Set cursor coladd to 0.
+    fn nvim_textobj_set_cursor_coladd_zero();
+
+    /// Check for folding at line, get first/last lines of fold.
+    /// Returns true if line is folded.
+    fn nvim_textobj_hasFolding(lnum: c_int, first: *mut c_int, last: *mut c_int) -> bool;
+
+    /// Move cursor to given column (MAXCOL for end of line).
+    fn nvim_textobj_coladvance(col: c_int);
+
+    /// Adjust skipcol after cursor movement.
+    fn nvim_textobj_adjust_skipcol();
 }
 
 // =============================================================================
@@ -176,6 +201,319 @@ fn back_in_line_impl(bigword: bool) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_back_in_line(bigword: bool) {
     back_in_line_impl(bigword);
+}
+
+// =============================================================================
+// Word Motion Functions
+// =============================================================================
+
+/// MAXCOL constant for moving to end of line.
+const MAXCOL: c_int = 0x7FFF_FFFF;
+
+/// Move forward one word.
+///
+/// Returns FAIL if the cursor was already at the end of the file.
+/// If `eol` is true, last word stops at end of line (for operators).
+///
+/// # Safety
+/// Calls into C accessor functions which must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_fwd_word(count: c_int, bigword: bool, eol: bool) -> c_int {
+    fwd_word_impl(count, bigword, eol)
+}
+
+fn fwd_word_impl(mut count: c_int, bigword: bool, eol: bool) -> c_int {
+    // SAFETY: All accessor functions are provided by C side
+    unsafe {
+        nvim_textobj_set_cursor_coladd_zero();
+
+        while count > 0 {
+            count -= 1;
+
+            // When inside a range of folded lines, move to the last char of the
+            // last line.
+            let mut last_lnum: c_int = 0;
+            if nvim_textobj_hasFolding(
+                nvim_textobj_get_cursor_lnum(),
+                std::ptr::null_mut(),
+                &raw mut last_lnum,
+            ) {
+                // Note: In C code, this sets cursor.lnum to last_lnum then calls coladvance
+                // We need an accessor that does both, or set lnum separately
+                nvim_textobj_set_cursor_lnum(last_lnum);
+                nvim_textobj_coladvance(MAXCOL);
+            }
+
+            let sclass = cls_impl(bigword); // starting class
+
+            // We always move at least one character, unless on the last
+            // character in the buffer.
+            let last_line = nvim_textobj_get_cursor_lnum() == nvim_textobj_get_ml_line_count();
+            let i = nvim_textobj_inc_cursor();
+            if i == -1 || (i >= 1 && last_line) {
+                // started at last char in file
+                return FAIL;
+            }
+            if i >= 1 && eol && count == 0 {
+                // started at last char in line
+                return OK;
+            }
+
+            // Go one char past end of current word (if any)
+            if sclass != 0 {
+                loop {
+                    if cls_impl(bigword) != sclass {
+                        break;
+                    }
+                    let i = nvim_textobj_inc_cursor();
+                    if i == -1 || (i >= 1 && eol && count == 0) {
+                        return OK;
+                    }
+                }
+            }
+
+            // go to next non-white
+            while cls_impl(bigword) == 0 {
+                // We'll stop if we land on a blank line
+                if nvim_textobj_get_cursor_col() == 0 && *nvim_textobj_get_cursor_line_ptr() == 0 {
+                    break;
+                }
+
+                let i = nvim_textobj_inc_cursor();
+                if i == -1 || (i >= 1 && eol && count == 0) {
+                    return OK;
+                }
+            }
+        }
+    }
+    OK
+}
+
+/// Move backward count words.
+///
+/// If `stop` is true and we are already on the start of a word, move one less.
+///
+/// Returns FAIL if top of the file was reached.
+///
+/// # Safety
+/// Calls into C accessor functions which must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bck_word(count: c_int, bigword: bool, stop: bool) -> c_int {
+    bck_word_impl(count, bigword, stop)
+}
+
+fn bck_word_impl(mut count: c_int, bigword: bool, mut stop: bool) -> c_int {
+    // SAFETY: All accessor functions are provided by C side
+    unsafe {
+        nvim_textobj_set_cursor_coladd_zero();
+
+        'outer: while count > 0 {
+            count -= 1;
+
+            // When inside a range of folded lines, move to the first char of the
+            // first line.
+            let mut first_lnum: c_int = 0;
+            if nvim_textobj_hasFolding(
+                nvim_textobj_get_cursor_lnum(),
+                &raw mut first_lnum,
+                std::ptr::null_mut(),
+            ) {
+                nvim_textobj_set_cursor_lnum(first_lnum);
+                nvim_textobj_set_cursor_col(0);
+            }
+
+            let sclass = cls_impl(bigword);
+            if nvim_textobj_dec_cursor() == -1 {
+                // started at start of file
+                return FAIL;
+            }
+
+            if !stop || cls_impl(bigword) == sclass || sclass == 0 {
+                // Skip white space before the word.
+                // Stop on an empty line.
+                while cls_impl(bigword) == 0 {
+                    if nvim_textobj_get_cursor_col() == 0
+                        && nvim_textobj_is_lineempty(nvim_textobj_get_cursor_lnum())
+                    {
+                        // goto finished - skip to next iteration
+                        stop = false;
+                        continue 'outer;
+                    }
+                    if nvim_textobj_dec_cursor() == -1 {
+                        // hit start of file, stop here
+                        return OK;
+                    }
+                }
+
+                // Move backward to start of this word.
+                if skip_chars_impl(cls_impl(bigword), BACKWARD, bigword) {
+                    return OK;
+                }
+            }
+
+            nvim_textobj_inc_cursor(); // overshot - forward one
+            stop = false;
+        }
+        nvim_textobj_adjust_skipcol();
+    }
+    OK
+}
+
+/// Move to the end of the word.
+///
+/// Returns FAIL if end of the file was reached.
+///
+/// If `stop` is true and we are already on the end of a word, move one less.
+/// If `empty` is true stop on an empty line.
+///
+/// # Safety
+/// Calls into C accessor functions which must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_end_word(
+    count: c_int,
+    bigword: bool,
+    stop: bool,
+    empty: bool,
+) -> c_int {
+    end_word_impl(count, bigword, stop, empty)
+}
+
+fn end_word_impl(mut count: c_int, bigword: bool, mut stop: bool, empty: bool) -> c_int {
+    // SAFETY: All accessor functions are provided by C side
+    unsafe {
+        nvim_textobj_set_cursor_coladd_zero();
+
+        // If adjusted cursor position previously, unadjust it.
+        // This requires visual mode state - delegate to C for now
+        nvim_textobj_unadjust_for_sel_if_needed();
+
+        'outer: while count > 0 {
+            count -= 1;
+
+            // When inside a range of folded lines, move to the last char of the
+            // last line.
+            let mut last_lnum: c_int = 0;
+            if nvim_textobj_hasFolding(
+                nvim_textobj_get_cursor_lnum(),
+                std::ptr::null_mut(),
+                &raw mut last_lnum,
+            ) {
+                nvim_textobj_set_cursor_lnum(last_lnum);
+                nvim_textobj_coladvance(MAXCOL);
+            }
+
+            let sclass = cls_impl(bigword);
+            if nvim_textobj_inc_cursor() == -1 {
+                return FAIL;
+            }
+
+            // If we're in the middle of a word, we just have to move to the end
+            // of it.
+            if cls_impl(bigword) == sclass && sclass != 0 {
+                // Move forward to end of the current word
+                if skip_chars_impl(sclass, FORWARD, bigword) {
+                    return FAIL;
+                }
+            } else if !stop || sclass == 0 {
+                // We were at the end of a word. Go to the end of the next word.
+                // First skip white space, if 'empty' is true, stop at empty line.
+                while cls_impl(bigword) == 0 {
+                    if empty
+                        && nvim_textobj_get_cursor_col() == 0
+                        && nvim_textobj_is_lineempty(nvim_textobj_get_cursor_lnum())
+                    {
+                        // goto finished - skip dec_cursor and move to next iteration
+                        stop = false;
+                        continue 'outer;
+                    }
+                    if nvim_textobj_inc_cursor() == -1 {
+                        // hit end of file, stop here
+                        return FAIL;
+                    }
+                }
+
+                // Move forward to the end of this word.
+                if skip_chars_impl(cls_impl(bigword), FORWARD, bigword) {
+                    return FAIL;
+                }
+            }
+
+            nvim_textobj_dec_cursor(); // overshot - one char backward
+            stop = false; // we move only one word less
+        }
+    }
+    OK
+}
+
+/// Move back to the end of the word.
+///
+/// Returns FAIL if start of the file was reached.
+///
+/// # Safety
+/// Calls into C accessor functions which must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bckend_word(count: c_int, bigword: bool, eol: bool) -> c_int {
+    bckend_word_impl(count, bigword, eol)
+}
+
+fn bckend_word_impl(mut count: c_int, bigword: bool, eol: bool) -> c_int {
+    // SAFETY: All accessor functions are provided by C side
+    unsafe {
+        nvim_textobj_set_cursor_coladd_zero();
+
+        while count > 0 {
+            count -= 1;
+
+            let sclass = cls_impl(bigword); // starting class
+            let i = nvim_textobj_dec_cursor();
+            if i == -1 {
+                return FAIL;
+            }
+            if eol && i == 1 {
+                return OK;
+            }
+
+            // Move backward to before the start of this word.
+            if sclass != 0 {
+                loop {
+                    if cls_impl(bigword) != sclass {
+                        break;
+                    }
+                    let i = nvim_textobj_dec_cursor();
+                    if i == -1 || (eol && i == 1) {
+                        return OK;
+                    }
+                }
+            }
+
+            // Move backward to end of the previous word
+            while cls_impl(bigword) == 0 {
+                if nvim_textobj_get_cursor_col() == 0
+                    && nvim_textobj_is_lineempty(nvim_textobj_get_cursor_lnum())
+                {
+                    break;
+                }
+                let i = nvim_textobj_dec_cursor();
+                if i == -1 || (eol && i == 1) {
+                    return OK;
+                }
+            }
+        }
+        nvim_textobj_adjust_skipcol();
+    }
+    OK
+}
+
+// Additional extern declarations for word motion functions
+extern "C" {
+    /// Set cursor line number.
+    fn nvim_textobj_set_cursor_lnum(lnum: c_int);
+
+    /// Set cursor column.
+    fn nvim_textobj_set_cursor_col(col: c_int);
+
+    /// Check and unadjust for exclusive selection if needed.
+    fn nvim_textobj_unadjust_for_sel_if_needed();
 }
 
 // =============================================================================

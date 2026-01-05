@@ -36,6 +36,10 @@
 extern int rs_cls(bool bigword);
 extern bool rs_skip_chars(int cclass, int dir, bool bigword);
 extern void rs_back_in_line(bool bigword);
+extern int rs_fwd_word(int count, bool bigword, bool eol);
+extern int rs_bck_word(int count, bool bigword, bool stop);
+extern int rs_end_word(int count, bool bigword, bool stop, bool empty);
+extern int rs_bckend_word(int count, bool bigword, bool eol);
 
 // =============================================================================
 // C accessor functions for Rust
@@ -69,6 +73,83 @@ int nvim_textobj_utf_class(int c)
 int nvim_textobj_get_cursor_col(void)
 {
   return curwin->w_cursor.col;
+}
+
+/// Get current cursor line number (accessor for Rust).
+int nvim_textobj_get_cursor_lnum(void)
+{
+  return curwin->w_cursor.lnum;
+}
+
+/// Get total line count in current buffer (accessor for Rust).
+int nvim_textobj_get_ml_line_count(void)
+{
+  return curbuf->b_ml.ml_line_count;
+}
+
+/// Check if a line is empty (accessor for Rust).
+bool nvim_textobj_is_lineempty(int lnum)
+{
+  return LINEEMPTY(lnum);
+}
+
+/// Get pointer to cursor line content (accessor for Rust).
+char *nvim_textobj_get_cursor_line_ptr(void)
+{
+  return get_cursor_line_ptr();
+}
+
+/// Set cursor coladd to 0 (accessor for Rust).
+void nvim_textobj_set_cursor_coladd_zero(void)
+{
+  curwin->w_cursor.coladd = 0;
+}
+
+/// Check for folding at line (accessor for Rust).
+bool nvim_textobj_hasFolding(int lnum, int *first, int *last)
+{
+  linenr_T first_lnum = 0;
+  linenr_T last_lnum = 0;
+  bool result = hasFolding(curwin, lnum, first ? &first_lnum : NULL, last ? &last_lnum : NULL);
+  if (first) {
+    *first = first_lnum;
+  }
+  if (last) {
+    *last = last_lnum;
+  }
+  return result;
+}
+
+/// Move cursor to given column (accessor for Rust).
+void nvim_textobj_coladvance(int col)
+{
+  coladvance(curwin, col);
+}
+
+/// Adjust skipcol after cursor movement (accessor for Rust).
+void nvim_textobj_adjust_skipcol(void)
+{
+  adjust_skipcol();
+}
+
+/// Set cursor line number (accessor for Rust).
+void nvim_textobj_set_cursor_lnum(int lnum)
+{
+  curwin->w_cursor.lnum = lnum;
+}
+
+/// Set cursor column (accessor for Rust).
+void nvim_textobj_set_cursor_col(int col)
+{
+  curwin->w_cursor.col = col;
+}
+
+/// Unadjust for exclusive selection if needed (accessor for Rust).
+void nvim_textobj_unadjust_for_sel_if_needed(void)
+{
+  if (*p_sel == 'e' && VIsual_active && VIsual_mode == 'v' && VIsual_select_exclu_adj) {
+    unadjust_for_sel();
+  }
 }
 
 /// Find the start of the next sentence, searching in the direction specified
@@ -342,51 +423,8 @@ static int cls(void)
 /// @param bigword  "W", "E" or "B"
 int fwd_word(int count, bool bigword, bool eol)
 {
-  curwin->w_cursor.coladd = 0;
   cls_bigword = bigword;
-  while (--count >= 0) {
-    // When inside a range of folded lines, move to the last char of the
-    // last line.
-    if (hasFolding(curwin, curwin->w_cursor.lnum, NULL, &curwin->w_cursor.lnum)) {
-      coladvance(curwin, MAXCOL);
-    }
-    int sclass = cls();  // starting class
-
-    // We always move at least one character, unless on the last
-    // character in the buffer.
-    int last_line = (curwin->w_cursor.lnum == curbuf->b_ml.ml_line_count);
-    int i = inc_cursor();
-    if (i == -1 || (i >= 1 && last_line)) {   // started at last char in file
-      return FAIL;
-    }
-    if (i >= 1 && eol && count == 0) {        // started at last char in line
-      return OK;
-    }
-
-    // Go one char past end of current word (if any)
-    if (sclass != 0) {
-      while (cls() == sclass) {
-        i = inc_cursor();
-        if (i == -1 || (i >= 1 && eol && count == 0)) {
-          return OK;
-        }
-      }
-    }
-
-    // go to next non-white
-    while (cls() == 0) {
-      // We'll stop if we land on a blank line
-      if (curwin->w_cursor.col == 0 && *get_cursor_line_ptr() == NUL) {
-        break;
-      }
-
-      i = inc_cursor();
-      if (i == -1 || (i >= 1 && eol && count == 0)) {
-        return OK;
-      }
-    }
-  }
-  return OK;
+  return rs_fwd_word(count, bigword, eol);
 }
 
 /// bck_word() - move backward 'count' words
@@ -396,46 +434,8 @@ int fwd_word(int count, bool bigword, bool eol)
 /// Returns FAIL if top of the file was reached.
 int bck_word(int count, bool bigword, bool stop)
 {
-  int sclass;               // starting class
-
-  curwin->w_cursor.coladd = 0;
   cls_bigword = bigword;
-  while (--count >= 0) {
-    // When inside a range of folded lines, move to the first char of the
-    // first line.
-    if (hasFolding(curwin, curwin->w_cursor.lnum, &curwin->w_cursor.lnum, NULL)) {
-      curwin->w_cursor.col = 0;
-    }
-    sclass = cls();
-    if (dec_cursor() == -1) {           // started at start of file
-      return FAIL;
-    }
-
-    if (!stop || sclass == cls() || sclass == 0) {
-      // Skip white space before the word.
-      // Stop on an empty line.
-      while (cls() == 0) {
-        if (curwin->w_cursor.col == 0
-            && LINEEMPTY(curwin->w_cursor.lnum)) {
-          goto finished;
-        }
-        if (dec_cursor() == -1) {       // hit start of file, stop here
-          return OK;
-        }
-      }
-
-      // Move backward to start of this word.
-      if (skip_chars(cls(), BACKWARD)) {
-        return OK;
-      }
-    }
-
-    inc_cursor();                       // overshot - forward one
-finished:
-    stop = false;
-  }
-  adjust_skipcol();
-  return OK;
+  return rs_bck_word(count, bigword, stop);
 }
 
 /// end_word() - move to the end of the word
@@ -453,58 +453,8 @@ finished:
 /// If empty is true stop on an empty line.
 int end_word(int count, bool bigword, bool stop, bool empty)
 {
-  int sclass;               // starting class
-
-  curwin->w_cursor.coladd = 0;
   cls_bigword = bigword;
-
-  // If adjusted cursor position previously, unadjust it.
-  if (*p_sel == 'e' && VIsual_active && VIsual_mode == 'v'
-      && VIsual_select_exclu_adj) {
-    unadjust_for_sel();
-  }
-
-  while (--count >= 0) {
-    // When inside a range of folded lines, move to the last char of the
-    // last line.
-    if (hasFolding(curwin, curwin->w_cursor.lnum, NULL, &curwin->w_cursor.lnum)) {
-      coladvance(curwin, MAXCOL);
-    }
-    sclass = cls();
-    if (inc_cursor() == -1) {
-      return FAIL;
-    }
-
-    // If we're in the middle of a word, we just have to move to the end
-    // of it.
-    if (cls() == sclass && sclass != 0) {
-      // Move forward to end of the current word
-      if (skip_chars(sclass, FORWARD)) {
-        return FAIL;
-      }
-    } else if (!stop || sclass == 0) {
-      // We were at the end of a word. Go to the end of the next word.
-      // First skip white space, if 'empty' is true, stop at empty line.
-      while (cls() == 0) {
-        if (empty && curwin->w_cursor.col == 0
-            && LINEEMPTY(curwin->w_cursor.lnum)) {
-          goto finished;
-        }
-        if (inc_cursor() == -1) {           // hit end of file, stop here
-          return FAIL;
-        }
-      }
-
-      // Move forward to the end of this word.
-      if (skip_chars(cls(), FORWARD)) {
-        return FAIL;
-      }
-    }
-    dec_cursor();                       // overshot - one char backward
-finished:
-    stop = false;                       // we move only one word less
-  }
-  return OK;
+  return rs_end_word(count, bigword, stop, empty);
 }
 
 /// Move back to the end of the word.
@@ -515,39 +465,8 @@ finished:
 /// @return         FAIL if start of the file was reached.
 int bckend_word(int count, bool bigword, bool eol)
 {
-  curwin->w_cursor.coladd = 0;
   cls_bigword = bigword;
-  while (--count >= 0) {
-    int i;
-    int sclass = cls();  // starting class
-    if ((i = dec_cursor()) == -1) {
-      return FAIL;
-    }
-    if (eol && i == 1) {
-      return OK;
-    }
-
-    // Move backward to before the start of this word.
-    if (sclass != 0) {
-      while (cls() == sclass) {
-        if ((i = dec_cursor()) == -1 || (eol && i == 1)) {
-          return OK;
-        }
-      }
-    }
-
-    // Move backward to end of the previous word
-    while (cls() == 0) {
-      if (curwin->w_cursor.col == 0 && LINEEMPTY(curwin->w_cursor.lnum)) {
-        break;
-      }
-      if ((i = dec_cursor()) == -1 || (eol && i == 1)) {
-        return OK;
-      }
-    }
-  }
-  adjust_skipcol();
-  return OK;
+  return rs_bckend_word(count, bigword, eol);
 }
 
 /// Skip a row of characters of the same class.
