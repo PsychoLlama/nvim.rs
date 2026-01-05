@@ -110,6 +110,11 @@ extern void rs_foldOpenNested(fold_T *fp);
 extern void rs_setSmallMaybe(garray_T *gap);
 extern void rs_foldReverseOrder(garray_T *gap, linenr_T start, linenr_T end);
 
+// Rust FFI declarations for Phase 3: State query functions
+extern void rs_checkSmall(win_T *wp, fold_T *fp, linenr_T lnum_off);
+extern int rs_check_closed(win_T *wp, fold_T *fp, bool *use_level, int level,
+                           bool *maybe_small, linenr_T lnum_off);
+
 static const char *e_nofold = N_("E490: No fold found");
 
 // While updating the folds lines between invalid_top and invalid_bot have an
@@ -1453,33 +1458,7 @@ static int getDeepestNestingRecurse(garray_T *gap)
 static bool check_closed(win_T *const wp, fold_T *const fp, bool *const use_levelp, const int level,
                          bool *const maybe_smallp, const linenr_T lnum_off)
 {
-  bool closed = false;
-
-  // Check if this fold is closed.  If the flag is FD_LEVEL this
-  // fold and all folds it contains depend on 'foldlevel'.
-  if (*use_levelp || fp->fd_flags == FD_LEVEL) {
-    *use_levelp = true;
-    if (level >= wp->w_p_fdl) {
-      closed = true;
-    }
-  } else if (fp->fd_flags == FD_CLOSED) {
-    closed = true;
-  }
-
-  // Small fold isn't closed anyway.
-  if (fp->fd_small == kNone) {
-    *maybe_smallp = true;
-  }
-  if (closed) {
-    if (*maybe_smallp) {
-      fp->fd_small = kNone;
-    }
-    checkSmall(wp, fp, lnum_off);
-    if (fp->fd_small == kTrue) {
-      closed = false;
-    }
-  }
-  return closed;
+  return rs_check_closed(wp, fp, use_levelp, level, maybe_smallp, lnum_off) != 0;
 }
 
 // checkSmall() {{{2
@@ -1488,26 +1467,7 @@ static bool check_closed(win_T *const wp, fold_T *const fp, bool *const use_leve
 /// @param lnum_off  offset for fp->fd_top
 static void checkSmall(win_T *const wp, fold_T *const fp, const linenr_T lnum_off)
 {
-  if (fp->fd_small != kNone) {
-    return;
-  }
-
-  // Mark any nested folds to maybe-small
-  setSmallMaybe(&fp->fd_nested);
-
-  if (fp->fd_len > wp->w_p_fml) {
-    fp->fd_small = kFalse;
-  } else {
-    int count = 0;
-    for (int n = 0; n < fp->fd_len; n++) {
-      count += plines_win_nofold(wp, fp->fd_top + lnum_off + n);
-      if (count > wp->w_p_fml) {
-        fp->fd_small = kFalse;
-        return;
-      }
-    }
-    fp->fd_small = kTrue;
-  }
+  rs_checkSmall(wp, fp, lnum_off);
 }
 
 // setSmallMaybe() {{{2
@@ -3411,4 +3371,20 @@ void nvim_fold_swap(garray_T *gap, int idx1, int idx2)
   fold_T tmp = data[idx1];
   data[idx1] = data[idx2];
   data[idx2] = tmp;
+}
+
+// ============================================================================
+// Phase 3: State query accessors
+// ============================================================================
+
+/// Get the w_p_fml (foldminlines) field from a window.
+int nvim_win_get_p_fml(win_T *wp)
+{
+  return (int)wp->w_p_fml;
+}
+
+/// Get the number of screen lines for a physical line (no fold consideration).
+int nvim_plines_win_nofold(win_T *wp, linenr_T lnum)
+{
+  return plines_win_nofold(wp, lnum);
 }

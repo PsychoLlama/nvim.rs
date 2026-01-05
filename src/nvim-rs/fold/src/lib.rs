@@ -171,6 +171,16 @@ extern "C" {
     fn nvim_fold_swap(gap: GArrayHandle, idx1: c_int, idx2: c_int);
 
     // ========================================================================
+    // Phase 3: State query accessors
+    // ========================================================================
+
+    /// Get the w_p_fml (foldminlines) field from a window.
+    fn nvim_win_get_p_fml(wp: WinHandle) -> c_int;
+
+    /// Get the number of screen lines for a physical line (no fold consideration).
+    fn nvim_plines_win_nofold(wp: WinHandle, lnum: LineNr) -> c_int;
+
+    // ========================================================================
     // Phase 2: Fold navigation accessors
     // ========================================================================
 
@@ -644,6 +654,98 @@ fn fold_reverse_order_impl(gap: GArrayHandle, start_arg: LineNr, end_arg: LineNr
 }
 
 // ============================================================================
+// Phase 3: State Query Functions
+// ============================================================================
+
+/// Update fd_small field of fold "fp".
+///
+/// Checks if a fold is "small" based on foldminlines setting.
+/// A fold is small if its total screen lines <= foldminlines.
+fn check_small_impl(wp: WinHandle, fp: FoldHandle, lnum_off: LineNr) {
+    if wp.is_null() || fp.is_null() {
+        return;
+    }
+
+    let fd_small = unsafe { nvim_fold_get_fd_small(fp) };
+    if fd_small != tristate::K_NONE {
+        return;
+    }
+
+    // Mark any nested folds to maybe-small
+    let nested = unsafe { nvim_fold_get_fd_nested(fp) };
+    set_small_maybe_impl(nested);
+
+    let fd_len = unsafe { nvim_fold_get_fd_len(fp) };
+    let fml = unsafe { nvim_win_get_p_fml(wp) };
+
+    if fd_len > LineNr::from(fml) {
+        unsafe { nvim_fold_set_fd_small(fp, tristate::K_FALSE) };
+    } else {
+        let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+        let mut count: c_int = 0;
+        for n in 0..fd_len {
+            count += unsafe { nvim_plines_win_nofold(wp, fd_top + lnum_off + n) };
+            if count > fml {
+                unsafe { nvim_fold_set_fd_small(fp, tristate::K_FALSE) };
+                return;
+            }
+        }
+        unsafe { nvim_fold_set_fd_small(fp, tristate::K_TRUE) };
+    }
+}
+
+/// Check if a fold is closed and update info needed for nested fold checks.
+///
+/// Returns true if the fold is closed.
+/// Updates use_level and maybe_small for tracking state across nested folds.
+fn check_closed_impl(
+    wp: WinHandle,
+    fp: FoldHandle,
+    use_level: &mut bool,
+    level: c_int,
+    maybe_small: &mut bool,
+    lnum_off: LineNr,
+) -> bool {
+    if wp.is_null() || fp.is_null() {
+        return false;
+    }
+
+    let fdl = unsafe { nvim_win_get_p_fdl(wp) };
+    let flags = unsafe { nvim_fold_get_fd_flags(fp) };
+    let mut closed = false;
+
+    // Check if this fold is closed. If flag is FD_LEVEL, this fold
+    // and all folds it contains depend on 'foldlevel'.
+    if *use_level || flags == fold_flags::FD_LEVEL {
+        *use_level = true;
+        if level >= fdl {
+            closed = true;
+        }
+    } else if flags == fold_flags::FD_CLOSED {
+        closed = true;
+    }
+
+    // Small fold isn't closed anyway.
+    let fd_small = unsafe { nvim_fold_get_fd_small(fp) };
+    if fd_small == tristate::K_NONE {
+        *maybe_small = true;
+    }
+
+    if closed {
+        if *maybe_small {
+            unsafe { nvim_fold_set_fd_small(fp, tristate::K_NONE) };
+        }
+        check_small_impl(wp, fp, lnum_off);
+        let fd_small_after = unsafe { nvim_fold_get_fd_small(fp) };
+        if fd_small_after == tristate::K_TRUE {
+            closed = false;
+        }
+    }
+
+    closed
+}
+
+// ============================================================================
 // FFI Exports
 // ============================================================================
 
@@ -812,6 +914,52 @@ pub extern "C" fn rs_setSmallMaybe(gap: GArrayHandle) {
 #[no_mangle]
 pub extern "C" fn rs_foldReverseOrder(gap: GArrayHandle, start: LineNr, end: LineNr) {
     fold_reverse_order_impl(gap, start, end);
+}
+
+// ============================================================================
+// Phase 3: State Query Functions - FFI Exports
+// ============================================================================
+
+/// Update fd_small field of fold "fp".
+///
+/// Checks if a fold is "small" based on foldminlines setting.
+///
+/// # Safety
+/// The `wp` and `fp` parameters must be valid pointers or null.
+#[no_mangle]
+pub extern "C" fn rs_checkSmall(wp: WinHandle, fp: FoldHandle, lnum_off: LineNr) {
+    check_small_impl(wp, fp, lnum_off);
+}
+
+/// Check if a fold is closed and update info needed for nested fold checks.
+///
+/// Returns true if the fold is closed.
+///
+/// # Safety
+/// The `wp` and `fp` parameters must be valid pointers or null.
+/// The `use_level` and `maybe_small` pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_closed(
+    wp: WinHandle,
+    fp: FoldHandle,
+    use_level: *mut bool,
+    level: c_int,
+    maybe_small: *mut bool,
+    lnum_off: LineNr,
+) -> c_int {
+    if use_level.is_null() || maybe_small.is_null() {
+        return 0;
+    }
+    let use_level_ref = &mut *use_level;
+    let maybe_small_ref = &mut *maybe_small;
+    c_int::from(check_closed_impl(
+        wp,
+        fp,
+        use_level_ref,
+        level,
+        maybe_small_ref,
+        lnum_off,
+    ))
 }
 
 #[cfg(test)]
