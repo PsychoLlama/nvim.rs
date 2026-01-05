@@ -2778,3 +2778,98 @@ MTPos nvim_marktree_get_altpos(MarkTree *b, MTKey mark, MarkTreeIter *itr)
 {
   return marktree_get_altpos(b, mark, itr);
 }
+
+// ============================================================================
+// Iterator Overlap Accessor Functions (for Rust FFI)
+// ============================================================================
+
+/// Get intersect_pos from an iterator.
+MTPos nvim_mtitr_get_intersect_pos(MarkTreeIter *itr)
+{
+  return itr->intersect_pos;
+}
+
+/// Set intersect_pos in an iterator.
+void nvim_mtitr_set_intersect_pos(MarkTreeIter *itr, MTPos pos)
+{
+  itr->intersect_pos = pos;
+}
+
+/// Get intersect_pos_x from an iterator.
+MTPos nvim_mtitr_get_intersect_pos_x(MarkTreeIter *itr)
+{
+  return itr->intersect_pos_x;
+}
+
+/// Set intersect_pos_x in an iterator.
+void nvim_mtitr_set_intersect_pos_x(MarkTreeIter *itr, MTPos pos)
+{
+  itr->intersect_pos_x = pos;
+}
+
+/// Get intersect_idx from an iterator.
+size_t nvim_mtitr_get_intersect_idx(MarkTreeIter *itr)
+{
+  return itr->intersect_idx;
+}
+
+/// Set intersect_idx in an iterator.
+void nvim_mtitr_set_intersect_idx(MarkTreeIter *itr, size_t idx)
+{
+  itr->intersect_idx = idx;
+}
+
+// ============================================================================
+// Node Intersection Accessor Functions (for Rust FFI)
+// ============================================================================
+
+/// Get the size of the intersect array in a node.
+size_t nvim_mtnode_get_intersect_size(MTNode *x)
+{
+  return kv_size(x->intersect);
+}
+
+/// Get an element from the intersect array in a node.
+uint64_t nvim_mtnode_get_intersect_elem(MTNode *x, size_t idx)
+{
+  return kv_A(x->intersect, idx);
+}
+
+/// Get a meta count from a node (for internal nodes only).
+uint32_t nvim_mtnode_get_meta(MTNode *x, int idx, int m)
+{
+  return x->s[0].i_meta[idx][m];
+}
+
+/// Get the meta_root array from a marktree.
+void nvim_marktree_get_meta_root(MarkTree *b, uint32_t *meta_out)
+{
+  for (int m = 0; m < kMTMetaCount; m++) {
+    meta_out[m] = b->meta_root[m];
+  }
+}
+
+/// Check if meta filter matches (helper for Rust).
+bool nvim_meta_has(const uint32_t *meta_count, const uint32_t *meta_filter)
+{
+  uint32_t count = 0;
+  for (int m = 0; m < kMTMetaCount; m++) {
+    count += meta_count[m] & meta_filter[m];
+  }
+  return count > 0;
+}
+
+/// Get the id for lookup from a node's intersect (helper for Rust overlap).
+uint64_t nvim_mtnode_intersect_id(MTNode *x, size_t idx)
+{
+  if (idx < kv_size(x->intersect)) {
+    return kv_A(x->intersect, idx);
+  }
+  return 0;
+}
+
+/// Wrapper for id2node lookup from Rust.
+MTNode *nvim_marktree_id2node(MarkTree *b, uint64_t id)
+{
+  return id2node(b, id);
+}

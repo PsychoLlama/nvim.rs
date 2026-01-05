@@ -317,6 +317,54 @@ extern "C" {
 
     /// Get the position of the alternate end of a paired mark.
     fn nvim_marktree_get_altpos(b: MarkTreeHandle, mark: MTKey, itr: MarkTreeIterHandle) -> MTPos;
+
+    // ========================================================================
+    // Iterator Overlap Accessors
+    // ========================================================================
+
+    /// Get intersect_pos from an iterator.
+    fn nvim_mtitr_get_intersect_pos(itr: MarkTreeIterHandle) -> MTPos;
+
+    /// Set intersect_pos in an iterator.
+    fn nvim_mtitr_set_intersect_pos(itr: MarkTreeIterHandle, pos: MTPos);
+
+    /// Get intersect_pos_x from an iterator.
+    fn nvim_mtitr_get_intersect_pos_x(itr: MarkTreeIterHandle) -> MTPos;
+
+    /// Set intersect_pos_x in an iterator.
+    fn nvim_mtitr_set_intersect_pos_x(itr: MarkTreeIterHandle, pos: MTPos);
+
+    /// Get intersect_idx from an iterator.
+    fn nvim_mtitr_get_intersect_idx(itr: MarkTreeIterHandle) -> usize;
+
+    /// Set intersect_idx in an iterator.
+    fn nvim_mtitr_set_intersect_idx(itr: MarkTreeIterHandle, idx: usize);
+
+    // ========================================================================
+    // Node Intersection Accessors
+    // ========================================================================
+
+    /// Get the size of the intersect array in a node.
+    fn nvim_mtnode_get_intersect_size(x: MTNodeHandle) -> usize;
+
+    /// Get an element from the intersect array in a node.
+    fn nvim_mtnode_get_intersect_elem(x: MTNodeHandle, idx: usize) -> u64;
+
+    /// Get a meta count from a node (for internal nodes only).
+    fn nvim_mtnode_get_meta(x: MTNodeHandle, idx: c_int, m: c_int) -> u32;
+
+    /// Get the meta_root array from a marktree.
+    fn nvim_marktree_get_meta_root(b: MarkTreeHandle, meta_out: *mut u32);
+
+    /// Check if meta filter matches.
+    fn nvim_meta_has(meta_count: *const u32, meta_filter: *const u32) -> bool;
+
+    /// Get the id for lookup from a node's intersect.
+    #[allow(dead_code)]
+    fn nvim_mtnode_intersect_id(x: MTNodeHandle, idx: usize) -> u64;
+
+    /// Lookup node by id.
+    fn nvim_marktree_id2node(b: MarkTreeHandle, id: u64) -> MTNodeHandle;
 }
 
 // ============================================================================
@@ -1340,6 +1388,618 @@ pub extern "C" fn rs_meta_describe_key(k: MTKey, meta_inc: *mut u32) {
                 *meta_inc.add(i) = val;
             }
         }
+    }
+}
+
+// ============================================================================
+// MTPair Type for Overlap Iteration
+// ============================================================================
+
+/// A pair of marks (start and end).
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct MTPair {
+    pub start: MTKey,
+    pub end_pos: MTPos,
+    pub end_right_gravity: bool,
+}
+
+impl MTPair {
+    /// Create a pair from start and end keys.
+    #[inline]
+    #[must_use]
+    pub fn from_keys(start: MTKey, end: MTKey) -> Self {
+        Self {
+            start,
+            end_pos: end.pos,
+            end_right_gravity: mt_right(&end),
+        }
+    }
+}
+
+// ============================================================================
+// Phase 1: Iterator Completion Functions
+// ============================================================================
+
+/// Initialize iterator to the last mark in the tree.
+///
+/// Returns true if successful, false if tree is empty.
+#[must_use]
+pub fn marktree_itr_last(b: MarkTreeHandle, itr: MarkTreeIterHandle) -> bool {
+    if marktree_n_keys(b) == 0 {
+        unsafe { nvim_mtitr_set_x(itr, MTNodeHandle::null()) };
+        return false;
+    }
+
+    let mut x = marktree_root(b);
+    unsafe {
+        nvim_mtitr_set_pos(itr, MTPos::new(0, 0));
+        nvim_mtitr_set_lvl(itr, 0);
+    }
+
+    let mut lvl = 0;
+    let mut current_pos = MTPos::new(0, 0);
+
+    loop {
+        let n = mtnode_n(x);
+        unsafe { nvim_mtitr_set_i(itr, n) };
+
+        if mtnode_level(x) == 0 {
+            break;
+        }
+
+        unsafe {
+            nvim_mtitr_set_s_i(itr, lvl, n);
+            nvim_mtitr_set_s_oldcol(itr, lvl, current_pos.col);
+        }
+
+        // i > 0 always since n > 0 for non-empty tree
+        let key = mtnode_key(x, n - 1);
+        compose(&mut current_pos, key.pos);
+
+        x = mtnode_ptr(x, n);
+        lvl += 1;
+    }
+
+    let i = unsafe { nvim_mtitr_get_i(itr) };
+    unsafe {
+        nvim_mtitr_set_i(itr, i - 1);
+        nvim_mtitr_set_x(itr, x);
+        nvim_mtitr_set_lvl(itr, lvl);
+        nvim_mtitr_set_pos(itr, current_pos);
+    }
+    true
+}
+
+/// Exported FFI version of `marktree_itr_last`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_itr_last(b: MarkTreeHandle, itr: MarkTreeIterHandle) -> bool {
+    marktree_itr_last(b, itr)
+}
+
+/// Helper type for meta filter (array of 5 u32s).
+pub type MetaFilter = *const u32;
+
+/// Check if meta counts match the filter.
+#[inline]
+#[must_use]
+pub fn meta_has(meta_count: &[u32; K_MT_META_COUNT], meta_filter: MetaFilter) -> bool {
+    if meta_filter.is_null() {
+        return true;
+    }
+    unsafe { nvim_meta_has(meta_count.as_ptr(), meta_filter) }
+}
+
+/// Get meta counts from a node at a given index.
+#[inline]
+#[must_use]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+pub fn mtnode_meta(x: MTNodeHandle, idx: i32) -> [u32; K_MT_META_COUNT] {
+    let mut meta = [0u32; K_MT_META_COUNT];
+    for (m, meta_item) in meta.iter_mut().enumerate() {
+        *meta_item = unsafe { nvim_mtnode_get_meta(x, idx, m as c_int) };
+    }
+    meta
+}
+
+/// Get meta_root from a marktree.
+#[inline]
+#[must_use]
+pub fn marktree_meta_root(b: MarkTreeHandle) -> [u32; K_MT_META_COUNT] {
+    let mut meta = [0u32; K_MT_META_COUNT];
+    unsafe { nvim_marktree_get_meta_root(b, meta.as_mut_ptr()) };
+    meta
+}
+
+/// Internal advance with skip and meta filtering.
+///
+/// If `skip` is true, skips the subtree rooted at current position.
+/// If `meta_filter` is non-null, uses it to filter which subtrees to enter.
+#[allow(clippy::many_single_char_names)]
+#[allow(clippy::branches_sharing_code)] // Different branches have different control flow
+#[must_use]
+pub fn marktree_itr_next_skip(
+    _b: MarkTreeHandle,
+    itr: MarkTreeIterHandle,
+    mut skip: bool,
+    preload: bool,
+    meta_filter: MetaFilter,
+) -> bool {
+    let x = unsafe { nvim_mtitr_get_x(itr) };
+    if x.is_null() {
+        return false;
+    }
+
+    let mut i = unsafe { nvim_mtitr_get_i(itr) };
+    i += 1;
+    unsafe { nvim_mtitr_set_i(itr, i) };
+
+    let level = mtnode_level(x);
+
+    // Check meta filter for internal nodes
+    if !meta_filter.is_null() && level > 0 {
+        let meta = mtnode_meta(x, i);
+        if !meta_has(&meta, meta_filter) {
+            skip = true;
+        }
+    }
+
+    if level == 0 || skip {
+        let mut current_x = x;
+        let mut current_i = i;
+        let n = mtnode_n(current_x);
+
+        if preload && level == 0 && skip {
+            // Skip rest of this leaf node
+            current_i = n;
+            unsafe { nvim_mtitr_set_i(itr, current_i) };
+        } else if current_i < n {
+            return true;
+        }
+
+        // Go up until we find an internal key
+        let mut current_lvl = unsafe { nvim_mtitr_get_lvl(itr) };
+        let mut current_pos = unsafe { nvim_mtitr_get_pos(itr) };
+
+        while current_i >= mtnode_n(current_x) {
+            let parent = unsafe { nvim_mtnode_get_parent(current_x) };
+            if parent.is_null() {
+                unsafe { nvim_mtitr_set_x(itr, MTNodeHandle::null()) };
+                return false;
+            }
+            current_lvl -= 1;
+            current_i = unsafe { nvim_mtitr_get_s_i(itr, current_lvl) };
+            if current_i > 0 {
+                let parent_key = mtnode_key(parent, current_i - 1);
+                current_pos.row -= parent_key.pos.row;
+                current_pos.col = unsafe { nvim_mtitr_get_s_oldcol(itr, current_lvl) };
+            }
+            current_x = parent;
+        }
+        unsafe {
+            nvim_mtitr_set_x(itr, current_x);
+            nvim_mtitr_set_i(itr, current_i);
+            nvim_mtitr_set_lvl(itr, current_lvl);
+            nvim_mtitr_set_pos(itr, current_pos);
+        }
+    } else {
+        // At internal node - go down to first key
+        let mut current_x = x;
+        let mut current_i = i;
+        let mut current_lvl = unsafe { nvim_mtitr_get_lvl(itr) };
+        let mut current_pos = unsafe { nvim_mtitr_get_pos(itr) };
+
+        while mtnode_level(current_x) > 0 {
+            if current_i > 0 {
+                let oldcol = current_pos.col;
+                unsafe { nvim_mtitr_set_s_oldcol(itr, current_lvl, oldcol) };
+                let key = mtnode_key(current_x, current_i - 1);
+                compose(&mut current_pos, key.pos);
+            }
+            unsafe { nvim_mtitr_set_s_i(itr, current_lvl, current_i) };
+            current_lvl += 1;
+            current_x = mtnode_ptr(current_x, current_i);
+
+            if preload && mtnode_level(current_x) > 0 {
+                current_i = -1;
+                break;
+            }
+            current_i = 0;
+
+            // Check meta filter
+            if !meta_filter.is_null() && mtnode_level(current_x) > 0 {
+                let meta = mtnode_meta(current_x, 0);
+                if !meta_has(&meta, meta_filter) {
+                    break;
+                }
+            }
+        }
+        unsafe {
+            nvim_mtitr_set_x(itr, current_x);
+            nvim_mtitr_set_i(itr, current_i);
+            nvim_mtitr_set_lvl(itr, current_lvl);
+            nvim_mtitr_set_pos(itr, current_pos);
+        }
+    }
+    true
+}
+
+/// Meta map for converting meta index to flag.
+const META_MAP: [u32; K_MT_META_COUNT] = [
+    MT_FLAG_DECOR_VIRT_TEXT_INLINE as u32,
+    MT_FLAG_DECOR_VIRT_LINES as u32,
+    MT_FLAG_DECOR_SIGNHL as u32,
+    MT_FLAG_DECOR_SIGNTEXT as u32,
+    MT_FLAG_DECOR_CONCEAL_LINES as u32,
+];
+
+/// Check if iterator position matches filter and is within bounds.
+fn marktree_itr_check_filter(
+    b: MarkTreeHandle,
+    itr: MarkTreeIterHandle,
+    stop_row: i32,
+    stop_col: i32,
+    meta_filter: MetaFilter,
+) -> bool {
+    let stop_pos = MTPos::new(stop_row, stop_col);
+
+    // Build key filter from meta filter
+    let mut key_filter: u32 = 0;
+    if !meta_filter.is_null() {
+        for (m, &flag) in META_MAP.iter().enumerate() {
+            let filter_val = unsafe { *meta_filter.add(m) };
+            key_filter |= flag & filter_val;
+        }
+    }
+
+    loop {
+        if pos_leq(stop_pos, marktree_itr_pos(itr)) {
+            unsafe { nvim_mtitr_set_x(itr, MTNodeHandle::null()) };
+            return false;
+        }
+
+        let k = rawkey(itr);
+        if !mt_end(&k) && (u32::from(k.flags) & key_filter) != 0 {
+            return true;
+        }
+
+        // Skip subtrees but not keys
+        if !marktree_itr_next_skip(b, itr, false, false, meta_filter) {
+            return false;
+        }
+    }
+}
+
+/// Position iterator at a given position with meta filtering.
+///
+/// Returns true if a matching mark was found before the stop position.
+#[must_use]
+pub fn marktree_itr_get_filter(
+    b: MarkTreeHandle,
+    row: i32,
+    col: i32,
+    stop_row: i32,
+    stop_col: i32,
+    meta_filter: MetaFilter,
+    itr: MarkTreeIterHandle,
+) -> bool {
+    // Check if tree has any matching marks
+    let meta_root = marktree_meta_root(b);
+    if !meta_has(&meta_root, meta_filter) {
+        return false;
+    }
+
+    if !marktree_itr_get_ext(b, MTPos::new(row, col), itr, false, false) {
+        return false;
+    }
+
+    marktree_itr_check_filter(b, itr, stop_row, stop_col, meta_filter)
+}
+
+/// Exported FFI version of `marktree_itr_get_filter`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_itr_get_filter(
+    b: MarkTreeHandle,
+    row: i32,
+    col: i32,
+    stop_row: i32,
+    stop_col: i32,
+    meta_filter: MetaFilter,
+    itr: MarkTreeIterHandle,
+) -> bool {
+    marktree_itr_get_filter(b, row, col, stop_row, stop_col, meta_filter, itr)
+}
+
+/// Move to next filtered mark.
+///
+/// Returns true if a matching mark was found before the stop position.
+#[must_use]
+pub fn marktree_itr_next_filter(
+    b: MarkTreeHandle,
+    itr: MarkTreeIterHandle,
+    stop_row: i32,
+    stop_col: i32,
+    meta_filter: MetaFilter,
+) -> bool {
+    if !marktree_itr_next_skip(b, itr, false, false, meta_filter) {
+        return false;
+    }
+
+    marktree_itr_check_filter(b, itr, stop_row, stop_col, meta_filter)
+}
+
+/// Exported FFI version of `marktree_itr_next_filter`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_itr_next_filter(
+    b: MarkTreeHandle,
+    itr: MarkTreeIterHandle,
+    stop_row: i32,
+    stop_col: i32,
+    meta_filter: MetaFilter,
+) -> bool {
+    marktree_itr_next_filter(b, itr, stop_row, stop_col, meta_filter)
+}
+
+/// Step out to parent that has matching filter.
+///
+/// Used after `marktree_itr_get_overlap()` to continue in filtered fashion.
+#[must_use]
+pub fn marktree_itr_step_out_filter(
+    b: MarkTreeHandle,
+    itr: MarkTreeIterHandle,
+    meta_filter: MetaFilter,
+) -> bool {
+    let meta_root = marktree_meta_root(b);
+    if !meta_has(&meta_root, meta_filter) {
+        unsafe { nvim_mtitr_set_x(itr, MTNodeHandle::null()) };
+        return false;
+    }
+
+    loop {
+        let x = unsafe { nvim_mtitr_get_x(itr) };
+        if x.is_null() {
+            break;
+        }
+
+        let parent = unsafe { nvim_mtnode_get_parent(x) };
+        if parent.is_null() {
+            break;
+        }
+
+        let p_idx = unsafe { nvim_mtnode_get_p_idx(x) };
+        let parent_meta = mtnode_meta(parent, p_idx);
+        if meta_has(&parent_meta, meta_filter) {
+            return true;
+        }
+
+        let n = mtnode_n(x);
+        unsafe { nvim_mtitr_set_i(itr, n) };
+
+        // Step to parent
+        let _ = marktree_itr_next_skip(b, itr, true, false, std::ptr::null());
+    }
+
+    let x = unsafe { nvim_mtitr_get_x(itr) };
+    !x.is_null()
+}
+
+/// Exported FFI version of `marktree_itr_step_out_filter`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_itr_step_out_filter(
+    b: MarkTreeHandle,
+    itr: MarkTreeIterHandle,
+    meta_filter: MetaFilter,
+) -> bool {
+    marktree_itr_step_out_filter(b, itr, meta_filter)
+}
+
+// ============================================================================
+// Overlap Iteration
+// ============================================================================
+
+/// Initialize iterator for overlap queries at a position.
+///
+/// After calling this, use `marktree_itr_step_overlap` to iterate through
+/// all marks that overlap the given position.
+#[must_use]
+pub fn marktree_itr_get_overlap(
+    b: MarkTreeHandle,
+    row: i32,
+    col: i32,
+    itr: MarkTreeIterHandle,
+) -> bool {
+    if marktree_n_keys(b) == 0 {
+        unsafe { nvim_mtitr_set_x(itr, MTNodeHandle::null()) };
+        return false;
+    }
+
+    let root = marktree_root(b);
+    unsafe {
+        nvim_mtitr_set_x(itr, root);
+        nvim_mtitr_set_i(itr, -1);
+        nvim_mtitr_set_lvl(itr, 0);
+        nvim_mtitr_set_pos(itr, MTPos::new(0, 0));
+        nvim_mtitr_set_intersect_pos(itr, MTPos::new(row, col));
+        nvim_mtitr_set_intersect_pos_x(itr, MTPos::new(row, col));
+        nvim_mtitr_set_intersect_idx(itr, 0);
+    }
+    true
+}
+
+/// Exported FFI version of `marktree_itr_get_overlap`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_itr_get_overlap(
+    b: MarkTreeHandle,
+    row: i32,
+    col: i32,
+    itr: MarkTreeIterHandle,
+) -> bool {
+    marktree_itr_get_overlap(b, row, col, itr)
+}
+
+/// Step through overlapping mark pairs.
+///
+/// Returns true if a valid pair was found. When all overlapping pairs
+/// have been found, returns false and the iterator becomes a normal
+/// iterator at the queried position.
+#[allow(clippy::many_single_char_names)] // Matching C code naming conventions
+#[allow(clippy::too_many_lines)] // Complex algorithm matching C implementation
+#[must_use]
+pub fn marktree_itr_step_overlap(
+    b: MarkTreeHandle,
+    itr: MarkTreeIterHandle,
+    pair: &mut MTPair,
+) -> bool {
+    let mut i = unsafe { nvim_mtitr_get_i(itr) };
+    let mut x = unsafe { nvim_mtitr_get_x(itr) };
+    let mut lvl = unsafe { nvim_mtitr_get_lvl(itr) };
+    let mut pos = unsafe { nvim_mtitr_get_pos(itr) };
+    let intersect_pos = unsafe { nvim_mtitr_get_intersect_pos(itr) };
+    let mut intersect_pos_x = unsafe { nvim_mtitr_get_intersect_pos_x(itr) };
+    let mut intersect_idx = unsafe { nvim_mtitr_get_intersect_idx(itr) };
+
+    // Phase 1: Walk down from root, returning intersections at each ancestor node
+    while i == -1 {
+        let intersect_size = unsafe { nvim_mtnode_get_intersect_size(x) };
+        if intersect_idx < intersect_size {
+            let id = unsafe { nvim_mtnode_get_intersect_elem(x, intersect_idx) };
+            intersect_idx += 1;
+            unsafe { nvim_mtitr_set_intersect_idx(itr, intersect_idx) };
+
+            let start = marktree_lookup(b, id, MarkTreeIterHandle(std::ptr::null_mut()));
+            let end = marktree_lookup(
+                b,
+                id | MARKTREE_END_FLAG,
+                MarkTreeIterHandle(std::ptr::null_mut()),
+            );
+            *pair = MTPair::from_keys(start, end);
+            return true;
+        }
+
+        if mtnode_level(x) == 0 {
+            unsafe {
+                nvim_mtitr_set_s_i(itr, lvl, 0);
+                nvim_mtitr_set_i(itr, 0);
+            }
+            i = 0;
+            break;
+        }
+
+        // Find position in this node
+        let k = MTKey {
+            pos: intersect_pos_x,
+            ns: 0,
+            id: 0,
+            flags: 0,
+            decor_data: 0,
+        };
+        let (found_i, _) = marktree_getp_aux(x, &k);
+        i = found_i + 1;
+
+        unsafe {
+            nvim_mtitr_set_s_i(itr, lvl, i);
+            nvim_mtitr_set_s_oldcol(itr, lvl, pos.col);
+        }
+
+        if i > 0 {
+            let key_pos = mtnode_key(x, i - 1).pos;
+            compose(&mut pos, key_pos);
+            relative(key_pos, &mut intersect_pos_x);
+        }
+
+        x = mtnode_ptr(x, i);
+        lvl += 1;
+        i = -1;
+        intersect_idx = 0;
+
+        unsafe {
+            nvim_mtitr_set_x(itr, x);
+            nvim_mtitr_set_i(itr, i);
+            nvim_mtitr_set_lvl(itr, lvl);
+            nvim_mtitr_set_pos(itr, pos);
+            nvim_mtitr_set_intersect_pos_x(itr, intersect_pos_x);
+            nvim_mtitr_set_intersect_idx(itr, intersect_idx);
+        }
+    }
+
+    // Phase 2: Consider start marks before the queried position
+    let n = mtnode_n(x);
+    while i < n {
+        let key_pos = mtnode_key(x, i).pos;
+        if !pos_less(key_pos, intersect_pos_x) {
+            break;
+        }
+
+        let k = mtnode_key(x, i);
+        i += 1;
+        unsafe {
+            nvim_mtitr_set_i(itr, i);
+            nvim_mtitr_set_s_i(itr, lvl, i);
+        }
+
+        if mt_start(&k) {
+            let end_id = mt_lookup_id(k.ns, k.id, true);
+            let end = marktree_lookup(b, end_id, MarkTreeIterHandle(std::ptr::null_mut()));
+            if pos_less(end.pos, intersect_pos) {
+                continue;
+            }
+
+            let mut start = k;
+            unrelative(pos, &mut start.pos);
+            *pair = MTPair::from_keys(start, end);
+            return true;
+        }
+    }
+
+    // Phase 2B: Consider end marks that might close ranges overlapping the position
+    while i < n {
+        let k = mtnode_key(x, i);
+        i += 1;
+        unsafe { nvim_mtitr_set_i(itr, i) };
+
+        if mt_end(&k) {
+            let start_id = mt_lookup_id(k.ns, k.id, false);
+            let start_node = unsafe { nvim_marktree_id2node(b, start_id) };
+            if start_node == x {
+                continue;
+            }
+
+            let mut end = k;
+            unrelative(pos, &mut end.pos);
+
+            let start = marktree_lookup(b, start_id, MarkTreeIterHandle(std::ptr::null_mut()));
+            if pos_leq(intersect_pos, start.pos) {
+                continue;
+            }
+
+            *pair = MTPair::from_keys(start, end);
+            return true;
+        }
+    }
+
+    // Restore iterator to queried position
+    let saved_i = unsafe { nvim_mtitr_get_s_i(itr, lvl) };
+    unsafe { nvim_mtitr_set_i(itr, saved_i) };
+
+    if saved_i >= n {
+        let _ = marktree_itr_next(b, itr);
+    }
+
+    false
+}
+
+/// Exported FFI version of `marktree_itr_step_overlap`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_itr_step_overlap(
+    b: MarkTreeHandle,
+    itr: MarkTreeIterHandle,
+    pair: *mut MTPair,
+) -> bool {
+    unsafe {
+        if pair.is_null() {
+            return false;
+        }
+        marktree_itr_step_overlap(b, itr, &mut *pair)
     }
 }
 
