@@ -4188,106 +4188,25 @@ linenr_T diff_lnum_win(linenr_T lnum, win_T *wp)
   return MIN(n, dp->df_lnum[i] + dp->df_count[i]);
 }
 
+// Rust implementation for ED style diff parsing
+extern int rs_parse_diff_ed(const char *line, diffhunk_T *hunk);
+
 /// Handle an ED style diff line.
 ///
 /// @return  FAIL if the line does not contain diff info.
 static int parse_diff_ed(char *line, diffhunk_T *hunk)
 {
-  int l1, l2;
-
-  // The line must be one of three formats:
-  // change: {first}[,{last}]c{first}[,{last}]
-  // append: {first}a{first}[,{last}]
-  // delete: {first}[,{last}]d{first}
-  char *p = line;
-  linenr_T f1 = getdigits_int32(&p, true, 0);
-  if (*p == ',') {
-    p++;
-    l1 = getdigits_int(&p, true, 0);
-  } else {
-    l1 = f1;
-  }
-  if (*p != 'a' && *p != 'c' && *p != 'd') {
-    return FAIL;        // invalid diff format
-  }
-  int difftype = (uint8_t)(*p++);
-  int f2 = getdigits_int(&p, true, 0);
-  if (*p == ',') {
-    p++;
-    l2 = getdigits_int(&p, true, 0);
-  } else {
-    l2 = f2;
-  }
-  if (l1 < f1 || l2 < f2) {
-    return FAIL;
-  }
-
-  if (difftype == 'a') {
-    hunk->lnum_orig = f1 + 1;
-    hunk->count_orig = 0;
-  } else {
-    hunk->lnum_orig = f1;
-    hunk->count_orig = l1 - f1 + 1;
-  }
-  if (difftype == 'd') {
-    hunk->lnum_new = (linenr_T)f2 + 1;
-    hunk->count_new = 0;
-  } else {
-    hunk->lnum_new = (linenr_T)f2;
-    hunk->count_new = l2 - f2 + 1;
-  }
-  return OK;
+  return rs_parse_diff_ed(line, hunk);
 }
+
+// Rust implementation for unified diff parsing
+extern int rs_parse_diff_unified(const char *line, diffhunk_T *hunk);
 
 /// Parses unified diff with zero(!) context lines.
 /// Return FAIL if there is no diff information in "line".
 static int parse_diff_unified(char *line, diffhunk_T *hunk)
 {
-  // Parse unified diff hunk header:
-  // @@ -oldline,oldcount +newline,newcount @@
-  char *p = line;
-  if (*p++ == '@' && *p++ == '@' && *p++ == ' ' && *p++ == '-') {
-    int oldcount;
-    linenr_T newline;
-    int newcount;
-    linenr_T oldline = getdigits_int32(&p, true, 0);
-    if (*p == ',') {
-      p++;
-      oldcount = getdigits_int(&p, true, 0);
-    } else {
-      oldcount = 1;
-    }
-    if (*p++ == ' ' && *p++ == '+') {
-      newline = getdigits_int(&p, true, 0);
-      if (*p == ',') {
-        p++;
-        newcount = getdigits_int(&p, true, 0);
-      } else {
-        newcount = 1;
-      }
-    } else {
-      return FAIL;  // invalid diff format
-    }
-
-    if (oldcount == 0) {
-      oldline += 1;
-    }
-    if (newcount == 0) {
-      newline += 1;
-    }
-    if (newline == 0) {
-      newline = 1;
-    }
-
-    hunk->lnum_orig = oldline;
-    hunk->count_orig = oldcount;
-    hunk->lnum_new = newline;
-    hunk->count_new = newcount;
-
-    return OK;
-  }
-
-  return FAIL;
+  return rs_parse_diff_unified(line, hunk);
 }
 
 /// Callback function for the xdl_diff() function.
