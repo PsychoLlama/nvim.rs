@@ -344,6 +344,79 @@ pub unsafe extern "C" fn rs_sign_text_width(text: *const c_char) -> c_int {
 }
 
 // =============================================================================
+// Sign Priority Utilities
+// =============================================================================
+
+/// Check if a priority value is valid.
+///
+/// Priority must be non-negative. -1 is special (use SIGN_DEF_PRIO default).
+#[no_mangle]
+pub extern "C" fn rs_sign_priority_valid(prio: c_int) -> c_int {
+    c_int::from(prio >= -1)
+}
+
+/// Get the effective priority for a sign.
+///
+/// If prio is -1, returns the default priority (SIGN_DEF_PRIO).
+/// Otherwise returns the given priority.
+#[no_mangle]
+pub extern "C" fn rs_sign_effective_priority(prio: c_int) -> c_int {
+    if prio == -1 {
+        SIGN_DEF_PRIO
+    } else {
+        prio
+    }
+}
+
+// =============================================================================
+// Sign Argument Parsing Helpers
+// =============================================================================
+
+/// Check if a character is a valid sign argument delimiter.
+///
+/// Returns true for '=' (key=value separator).
+#[no_mangle]
+pub extern "C" fn rs_sign_is_arg_delim(c: c_int) -> c_int {
+    c_int::from(c == i32::from(b'='))
+}
+
+/// Sign argument prefixes
+const SIGN_ARG_PREFIXES: [&[u8]; 6] = [
+    b"line=",
+    b"name=",
+    b"group=",
+    b"priority=",
+    b"file=",
+    b"buffer=",
+];
+
+/// Check if a string starts with a sign argument prefix.
+///
+/// Valid prefixes: "line=", "name=", "group=", "priority=", "file=", "buffer="
+/// Returns 1-6 for the prefix index (1-based), 0 if no match.
+///
+/// # Safety
+/// `s` must be null or a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_arg_prefix(s: *const c_char) -> c_int {
+    if s.is_null() {
+        return 0;
+    }
+
+    let cstr = CStr::from_ptr(s);
+    let bytes = cstr.to_bytes();
+
+    for (idx, prefix) in SIGN_ARG_PREFIXES.iter().enumerate() {
+        if bytes.starts_with(prefix) {
+            #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+            return (idx + 1) as c_int;
+        }
+    }
+
+    0 // No recognized prefix
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -433,5 +506,28 @@ mod tests {
         assert_eq!(SIGN_SHOW_MAX, 9);
         assert_eq!(SIGN_DEF_PRIO, 10);
         assert_eq!(SIGN_WIDTH, 2);
+    }
+
+    #[test]
+    fn test_sign_priority_valid() {
+        assert_eq!(rs_sign_priority_valid(-1), 1); // -1 is valid (default)
+        assert_eq!(rs_sign_priority_valid(0), 1);
+        assert_eq!(rs_sign_priority_valid(10), 1);
+        assert_eq!(rs_sign_priority_valid(-2), 0); // Invalid
+    }
+
+    #[test]
+    fn test_sign_effective_priority() {
+        assert_eq!(rs_sign_effective_priority(-1), SIGN_DEF_PRIO);
+        assert_eq!(rs_sign_effective_priority(0), 0);
+        assert_eq!(rs_sign_effective_priority(5), 5);
+        assert_eq!(rs_sign_effective_priority(100), 100);
+    }
+
+    #[test]
+    fn test_sign_is_arg_delim() {
+        assert_eq!(rs_sign_is_arg_delim(c_int::from(b'=')), 1);
+        assert_eq!(rs_sign_is_arg_delim(c_int::from(b' ')), 0);
+        assert_eq!(rs_sign_is_arg_delim(c_int::from(b':')), 0);
     }
 }
