@@ -444,6 +444,81 @@ const WF_FIXCAP: c_int = 0x40; // keep-case word, allcap not allowed
 const WF_KEEPCAP: c_int = 0x80; // keep-case word
 
 // =============================================================================
+// Spell Suggestion Scoring Constants (from spellsuggest.c)
+// =============================================================================
+
+/// Score for splitting a word
+pub const SCORE_SPLIT: c_int = 149;
+/// Score for splitting with NOSPLITSUGS
+pub const SCORE_SPLIT_NO: c_int = 249;
+/// Score for slightly different case
+pub const SCORE_ICASE: c_int = 52;
+/// Score for word in different region
+pub const SCORE_REGION: c_int = 200;
+/// Score for rare word
+pub const SCORE_RARE: c_int = 180;
+/// Score for swapping two characters
+pub const SCORE_SWAP: c_int = 75;
+/// Score for swap in three characters
+pub const SCORE_SWAP3: c_int = 110;
+/// Score for REP replacement
+pub const SCORE_REP: c_int = 65;
+/// Score for character substitution
+pub const SCORE_SUBST: c_int = 93;
+/// Score for similar character substitution
+pub const SCORE_SIMILAR: c_int = 33;
+/// Score for composing character substitution
+pub const SCORE_SUBCOMP: c_int = 33;
+/// Score for deleting a character
+pub const SCORE_DEL: c_int = 94;
+/// Score for deleting a duplicate character
+pub const SCORE_DELDUP: c_int = 66;
+/// Score for deleting a composing character
+pub const SCORE_DELCOMP: c_int = 28;
+/// Score for inserting a character
+pub const SCORE_INS: c_int = 96;
+/// Score for inserting a duplicate character
+pub const SCORE_INSDUP: c_int = 67;
+/// Score for inserting a composing character
+pub const SCORE_INSCOMP: c_int = 30;
+/// Score for changing non-word to word char
+pub const SCORE_NONWORD: c_int = 103;
+
+/// Score for suggestion from a file
+pub const SCORE_FILE: c_int = 30;
+/// Initial maximum score (higher = slower)
+pub const SCORE_MAXINIT: c_int = 350;
+
+/// Score subtracted for words seen before
+pub const SCORE_COMMON1: c_int = 30;
+/// Score subtracted for words often seen
+pub const SCORE_COMMON2: c_int = 40;
+/// Score subtracted for words very often seen
+pub const SCORE_COMMON3: c_int = 50;
+/// Word count threshold for COMMON2
+pub const SCORE_THRES2: c_int = 10;
+/// Word count threshold for COMMON3
+pub const SCORE_THRES3: c_int = 100;
+
+/// Maximum score for first soundfold try
+pub const SCORE_SFMAX1: c_int = 200;
+/// Maximum score for second soundfold try
+pub const SCORE_SFMAX2: c_int = 300;
+/// Maximum score for third soundfold try
+pub const SCORE_SFMAX3: c_int = 400;
+
+/// Accept any score (very large value)
+pub const SCORE_MAXMAX: c_int = 999_999;
+/// Maximum for spell_edit_score_limit
+pub const SCORE_LIMITMAX: c_int = 350;
+
+/// Minimum edit score (used for optimization)
+pub const SCORE_EDIT_MIN: c_int = SCORE_SIMILAR;
+
+/// Big difference score (3x insert)
+pub const SCORE_BIG: c_int = SCORE_INS * 3;
+
+// =============================================================================
 // Spell File Format Constants (from spellfile.c)
 // =============================================================================
 

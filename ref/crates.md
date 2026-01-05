@@ -59,7 +59,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | regexp         | Regular expression engine               |
 | register       | Register operations                     |
 | search         | Search and substitution                 |
-| spell          | Spell checking                          |
+| spell          | Spell checking, file parsing, suggestions |
 | statusline     | Status line rendering                   |
 | strings        | String manipulation                     |
 | tag            | Tag stack and navigation                |
