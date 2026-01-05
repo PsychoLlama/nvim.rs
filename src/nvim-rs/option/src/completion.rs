@@ -1,0 +1,356 @@
+//! Option completion utilities
+//!
+//! This module provides helper functions for option name and value completion
+//! used by the command-line expansion code in `:set` command handling.
+
+#![allow(clippy::missing_safety_doc)] // FFI functions safety is implicit
+#![allow(clippy::cast_possible_wrap)] // FFI with C char types
+
+use std::ffi::{c_char, c_int};
+
+// =============================================================================
+// Completion Context Types
+// =============================================================================
+
+/// Option completion context type.
+/// Corresponds to expansion context values in cmdexpand.h.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OptionExpandContext {
+    /// Expand option names
+    Settings = 37,
+    /// Expand boolean option names only
+    BoolSettings = 38,
+    /// Expand option values
+    SettingValue = 39,
+}
+
+// =============================================================================
+// String Matching Utilities
+// =============================================================================
+
+/// Check if an option name matches a prefix (case-insensitive).
+/// Returns 1 if the name starts with the prefix, 0 otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn rs_option_name_matches_prefix(
+    name: *const c_char,
+    prefix: *const c_char,
+) -> c_int {
+    if name.is_null() || prefix.is_null() {
+        return 0;
+    }
+
+    let mut n = name;
+    let mut p = prefix;
+
+    while *p != 0 {
+        let nc = (*n as u8).to_ascii_lowercase();
+        let pc = (*p as u8).to_ascii_lowercase();
+
+        if nc != pc {
+            return 0;
+        }
+
+        n = n.add(1);
+        p = p.add(1);
+    }
+
+    1
+}
+
+/// Check if an option name contains a substring (case-insensitive).
+/// Returns 1 if found, 0 otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn rs_option_name_contains(
+    name: *const c_char,
+    substr: *const c_char,
+) -> c_int {
+    if name.is_null() || substr.is_null() {
+        return 0;
+    }
+
+    // Get substring length
+    let mut substr_len: usize = 0;
+    let mut s = substr;
+    while *s != 0 {
+        substr_len += 1;
+        s = s.add(1);
+    }
+
+    if substr_len == 0 {
+        return 1; // Empty substring always matches
+    }
+
+    let mut n = name;
+    while *n != 0 {
+        // Try to match substring starting at this position
+        let mut matched = true;
+        let mut ni = n;
+        let mut si = substr;
+
+        for _ in 0..substr_len {
+            if *ni == 0 {
+                matched = false;
+                break;
+            }
+            let nc = (*ni as u8).to_ascii_lowercase();
+            let sc = (*si as u8).to_ascii_lowercase();
+            if nc != sc {
+                matched = false;
+                break;
+            }
+            ni = ni.add(1);
+            si = si.add(1);
+        }
+
+        if matched {
+            return 1;
+        }
+
+        n = n.add(1);
+    }
+
+    0
+}
+
+/// Get the length of an option name string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_option_name_len(name: *const c_char) -> usize {
+    if name.is_null() {
+        return 0;
+    }
+
+    let mut len: usize = 0;
+    let mut p = name;
+    while *p != 0 {
+        len += 1;
+        p = p.add(1);
+    }
+    len
+}
+
+/// Compare two option names for sorting (case-insensitive).
+/// Returns: -1 if a < b, 0 if a == b, 1 if a > b
+#[no_mangle]
+pub unsafe extern "C" fn rs_option_name_compare(a: *const c_char, b: *const c_char) -> c_int {
+    if a.is_null() && b.is_null() {
+        return 0;
+    }
+    if a.is_null() {
+        return -1;
+    }
+    if b.is_null() {
+        return 1;
+    }
+
+    let mut pa = a;
+    let mut pb = b;
+
+    loop {
+        let ca = (*pa as u8).to_ascii_lowercase();
+        let cb = (*pb as u8).to_ascii_lowercase();
+
+        if ca < cb {
+            return -1;
+        }
+        if ca > cb {
+            return 1;
+        }
+        if ca == 0 {
+            return 0; // Both ended at same time
+        }
+
+        pa = pa.add(1);
+        pb = pb.add(1);
+    }
+}
+
+// =============================================================================
+// Prefix Handling for Boolean Options
+// =============================================================================
+
+/// Get the base option name, stripping any "no" or "inv" prefix.
+/// Returns a pointer to the start of the base name within the original string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_option_strip_bool_prefix(name: *const c_char) -> *const c_char {
+    if name.is_null() {
+        return name;
+    }
+
+    let b0 = *name as u8;
+    let b1 = *name.add(1) as u8;
+
+    // Check for "no" prefix
+    if b0 == b'n' && b1 == b'o' {
+        return name.add(2);
+    }
+
+    // Check for "inv" prefix
+    let b2 = *name.add(2) as u8;
+    if b0 == b'i' && b1 == b'n' && b2 == b'v' {
+        return name.add(3);
+    }
+
+    name
+}
+
+/// Check if a name starts with "no" and the rest matches an option.
+/// This is useful for completing "no<option>" for boolean options.
+/// Returns 1 if name starts with "no", 0 otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn rs_option_has_no_completion_prefix(name: *const c_char) -> c_int {
+    if name.is_null() {
+        return 0;
+    }
+
+    let b0 = *name as u8;
+    let b1 = *name.add(1) as u8;
+
+    c_int::from(b0 == b'n' && b1 == b'o' && *name.add(2) != 0)
+}
+
+/// Check if a name starts with "inv" and the rest matches an option.
+/// Returns 1 if name starts with "inv", 0 otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn rs_option_has_inv_completion_prefix(name: *const c_char) -> c_int {
+    if name.is_null() {
+        return 0;
+    }
+
+    let b0 = *name as u8;
+    let b1 = *name.add(1) as u8;
+    let b2 = *name.add(2) as u8;
+
+    c_int::from(b0 == b'i' && b1 == b'n' && b2 == b'v' && *name.add(3) != 0)
+}
+
+// =============================================================================
+// Value Completion Helpers
+// =============================================================================
+
+/// Check if a character is valid in an option value (for :set).
+/// Some characters need escaping in option values.
+#[no_mangle]
+pub extern "C" fn rs_option_char_needs_escape(ch: c_char) -> c_int {
+    let c = ch as u8;
+    // Characters that need escaping in option values
+    c_int::from(c == b'\\' || c == b' ' || c == b'\t' || c == b'|' || c == b'"' || c == b'#')
+}
+
+/// Check if a string contains characters that need escaping for :set.
+/// Returns 1 if escaping is needed, 0 otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn rs_option_value_needs_escape(value: *const c_char) -> c_int {
+    if value.is_null() {
+        return 0;
+    }
+
+    let mut p = value;
+    while *p != 0 {
+        if rs_option_char_needs_escape(*p) != 0 {
+            return 1;
+        }
+        p = p.add(1);
+    }
+    0
+}
+
+// =============================================================================
+// Tests
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ffi::CString;
+
+    #[test]
+    fn test_option_name_matches_prefix() {
+        unsafe {
+            let name = CString::new("autoindent").unwrap();
+            let prefix1 = CString::new("auto").unwrap();
+            let prefix2 = CString::new("AUTO").unwrap();
+            let prefix3 = CString::new("indent").unwrap();
+
+            assert_eq!(
+                rs_option_name_matches_prefix(name.as_ptr(), prefix1.as_ptr()),
+                1
+            );
+            assert_eq!(
+                rs_option_name_matches_prefix(name.as_ptr(), prefix2.as_ptr()),
+                1
+            );
+            assert_eq!(
+                rs_option_name_matches_prefix(name.as_ptr(), prefix3.as_ptr()),
+                0
+            );
+        }
+    }
+
+    #[test]
+    fn test_option_name_contains() {
+        unsafe {
+            let name = CString::new("autoindent").unwrap();
+            let sub1 = CString::new("ind").unwrap();
+            let sub2 = CString::new("xyz").unwrap();
+            let empty = CString::new("").unwrap();
+
+            assert_eq!(rs_option_name_contains(name.as_ptr(), sub1.as_ptr()), 1);
+            assert_eq!(rs_option_name_contains(name.as_ptr(), sub2.as_ptr()), 0);
+            assert_eq!(rs_option_name_contains(name.as_ptr(), empty.as_ptr()), 1);
+        }
+    }
+
+    #[test]
+    fn test_option_name_compare() {
+        unsafe {
+            let a = CString::new("autoindent").unwrap();
+            let b = CString::new("expandtab").unwrap();
+            let c = CString::new("AUTOINDENT").unwrap();
+
+            assert!(rs_option_name_compare(a.as_ptr(), b.as_ptr()) < 0);
+            assert!(rs_option_name_compare(b.as_ptr(), a.as_ptr()) > 0);
+            assert_eq!(rs_option_name_compare(a.as_ptr(), c.as_ptr()), 0);
+        }
+    }
+
+    #[test]
+    fn test_option_strip_bool_prefix() {
+        unsafe {
+            let no_number = CString::new("nonumber").unwrap();
+            let inv_number = CString::new("invnumber").unwrap();
+            let number = CString::new("number").unwrap();
+
+            let stripped_no = rs_option_strip_bool_prefix(no_number.as_ptr());
+            let stripped_inv = rs_option_strip_bool_prefix(inv_number.as_ptr());
+            let stripped_plain = rs_option_strip_bool_prefix(number.as_ptr());
+
+            assert_eq!(*stripped_no as u8, b'n');
+            assert_eq!(*stripped_no.add(1) as u8, b'u');
+            assert_eq!(*stripped_inv as u8, b'n');
+            assert_eq!(*stripped_plain as u8, b'n');
+        }
+    }
+
+    #[test]
+    fn test_option_char_needs_escape() {
+        assert_eq!(rs_option_char_needs_escape(b'\\' as c_char), 1);
+        assert_eq!(rs_option_char_needs_escape(b' ' as c_char), 1);
+        assert_eq!(rs_option_char_needs_escape(b'|' as c_char), 1);
+        assert_eq!(rs_option_char_needs_escape(b'a' as c_char), 0);
+        assert_eq!(rs_option_char_needs_escape(b'z' as c_char), 0);
+    }
+
+    #[test]
+    fn test_option_value_needs_escape() {
+        unsafe {
+            let needs = CString::new("some value").unwrap();
+            let no_needs = CString::new("value").unwrap();
+            let with_pipe = CString::new("a|b").unwrap();
+
+            assert_eq!(rs_option_value_needs_escape(needs.as_ptr()), 1);
+            assert_eq!(rs_option_value_needs_escape(no_needs.as_ptr()), 0);
+            assert_eq!(rs_option_value_needs_escape(with_pipe.as_ptr()), 1);
+        }
+    }
+}

@@ -12,6 +12,7 @@
 #![allow(clippy::missing_safety_doc)] // FFI functions safety is implicit
 
 pub mod callbacks;
+pub mod completion;
 
 use std::ffi::{c_char, c_int, c_uint};
 
