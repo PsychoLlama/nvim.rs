@@ -6107,3 +6107,118 @@ char *nvim_keyentry_get_keyword(keyentry_T *ke)
 {
   return ke->keyword;
 }
+
+// ============================================================================
+// Syntax state global accessors (for Rust interop)
+// ============================================================================
+
+/// Get the current line number being processed
+int nvim_syn_get_current_lnum(void)
+{
+  return (int)current_lnum;
+}
+
+/// Get the current column being processed
+int nvim_syn_get_current_col(void)
+{
+  return (int)current_col;
+}
+
+/// Check if the current line has been finished
+int nvim_syn_is_current_finished(void)
+{
+  return current_finished ? 1 : 0;
+}
+
+/// Check if the current state has been stored
+int nvim_syn_is_current_state_stored(void)
+{
+  return current_state_stored ? 1 : 0;
+}
+
+/// Get the current state stack size (number of state items)
+int nvim_syn_get_current_state_len(void)
+{
+  return current_state.ga_len;
+}
+
+/// Check if the current state is valid
+int nvim_syn_is_current_state_valid(void)
+{
+  return VALID_STATE(&current_state) ? 1 : 0;
+}
+
+/// Get the current highlight ID
+int nvim_syn_get_current_id(void)
+{
+  return current_id;
+}
+
+/// Get the current transparent ID
+int nvim_syn_get_current_trans_id(void)
+{
+  return current_trans_id;
+}
+
+/// Get the current attribute
+int nvim_syn_get_current_attr(void)
+{
+  return current_attr;
+}
+
+/// Get the current flags
+int nvim_syn_get_current_flags(void)
+{
+  return current_flags;
+}
+
+/// Get the current sequence number
+int nvim_syn_get_current_seqnr(void)
+{
+  return current_seqnr;
+}
+
+/// Get the current substitution character
+int nvim_syn_get_current_sub_char(void)
+{
+  return current_sub_char;
+}
+
+/// Get the current next flags
+int nvim_syn_get_current_next_flags(void)
+{
+  return current_next_flags;
+}
+
+/// Get the keepend level
+int nvim_syn_get_keepend_level(void)
+{
+  return keepend_level;
+}
+
+/// Get state item at index (NULL if out of bounds)
+stateitem_T *nvim_syn_get_cur_state(int idx)
+{
+  if (idx < 0 || idx >= current_state.ga_len) {
+    return NULL;
+  }
+  return &CUR_STATE(idx);
+}
+
+/// Get the current synblock
+synblock_T *nvim_syn_get_synblock(void)
+{
+  return syn_block;
+}
+
+/// Count items with HL_FOLD flag in current state
+int nvim_syn_count_fold_items(void)
+{
+  int count = 0;
+  for (int i = 0; i < current_state.ga_len; i++) {
+    if (CUR_STATE(i).si_flags & HL_FOLD) {
+      count++;
+    }
+  }
+  return count;
+}

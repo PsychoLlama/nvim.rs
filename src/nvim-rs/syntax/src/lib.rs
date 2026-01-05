@@ -540,6 +540,177 @@ extern "C" {
 
     /// Get keyword string
     fn nvim_keyentry_get_keyword(ke: KeyEntryHandle) -> *const c_char;
+
+    // -------------------------------------------------------------------------
+    // Syntax state global accessors
+    // -------------------------------------------------------------------------
+
+    /// Get the current line number being processed
+    fn nvim_syn_get_current_lnum() -> c_int;
+
+    /// Get the current column being processed
+    fn nvim_syn_get_current_col() -> c_int;
+
+    /// Check if the current line has been finished
+    fn nvim_syn_is_current_finished() -> c_int;
+
+    /// Check if the current state has been stored
+    fn nvim_syn_is_current_state_stored() -> c_int;
+
+    /// Get the current state stack size
+    fn nvim_syn_get_current_state_len() -> c_int;
+
+    /// Check if the current state is valid
+    fn nvim_syn_is_current_state_valid() -> c_int;
+
+    /// Get the current highlight ID
+    fn nvim_syn_get_current_id() -> c_int;
+
+    /// Get the current transparent ID
+    fn nvim_syn_get_current_trans_id() -> c_int;
+
+    /// Get the current attribute
+    fn nvim_syn_get_current_attr() -> c_int;
+
+    /// Get the current flags
+    fn nvim_syn_get_current_flags() -> c_int;
+
+    /// Get the current sequence number
+    fn nvim_syn_get_current_seqnr() -> c_int;
+
+    /// Get the current substitution character
+    fn nvim_syn_get_current_sub_char() -> c_int;
+
+    /// Get the current next flags
+    fn nvim_syn_get_current_next_flags() -> c_int;
+
+    /// Get the keepend level
+    fn nvim_syn_get_keepend_level() -> c_int;
+
+    /// Get state item at index (NULL if out of bounds)
+    fn nvim_syn_get_cur_state(idx: c_int) -> StateItemHandle;
+
+    /// Get the current synblock
+    fn nvim_syn_get_synblock() -> SynBlockHandle;
+
+    /// Count items with HL_FOLD flag in current state
+    fn nvim_syn_count_fold_items() -> c_int;
+}
+
+// =============================================================================
+// Syntax state accessors (safe wrappers)
+// =============================================================================
+
+/// Get the current line number being processed
+#[must_use]
+pub fn current_lnum() -> i32 {
+    unsafe { nvim_syn_get_current_lnum() }
+}
+
+/// Get the current column being processed
+#[must_use]
+pub fn current_col() -> i32 {
+    unsafe { nvim_syn_get_current_col() }
+}
+
+/// Check if the current line has been finished
+#[must_use]
+pub fn is_current_finished() -> bool {
+    unsafe { nvim_syn_is_current_finished() != 0 }
+}
+
+/// Check if the current state has been stored
+#[must_use]
+pub fn is_current_state_stored() -> bool {
+    unsafe { nvim_syn_is_current_state_stored() != 0 }
+}
+
+/// Get the current state stack size
+#[must_use]
+pub fn current_state_len() -> i32 {
+    unsafe { nvim_syn_get_current_state_len() }
+}
+
+/// Check if the current state is valid
+#[must_use]
+pub fn is_current_state_valid() -> bool {
+    unsafe { nvim_syn_is_current_state_valid() != 0 }
+}
+
+/// Get the current highlight ID
+#[must_use]
+pub fn current_id() -> i32 {
+    unsafe { nvim_syn_get_current_id() }
+}
+
+/// Get the current transparent ID
+#[must_use]
+pub fn current_trans_id() -> i32 {
+    unsafe { nvim_syn_get_current_trans_id() }
+}
+
+/// Get the current attribute
+#[must_use]
+pub fn current_attr() -> i32 {
+    unsafe { nvim_syn_get_current_attr() }
+}
+
+/// Get the current flags
+#[must_use]
+pub fn current_flags() -> i32 {
+    unsafe { nvim_syn_get_current_flags() }
+}
+
+/// Get the current sequence number
+#[must_use]
+pub fn current_seqnr() -> i32 {
+    unsafe { nvim_syn_get_current_seqnr() }
+}
+
+/// Get the current substitution character
+#[must_use]
+pub fn current_sub_char() -> i32 {
+    unsafe { nvim_syn_get_current_sub_char() }
+}
+
+/// Get the current next flags
+#[must_use]
+pub fn current_next_flags() -> i32 {
+    unsafe { nvim_syn_get_current_next_flags() }
+}
+
+/// Get the keepend level (-1 if no keepend on stack)
+#[must_use]
+pub fn keepend_level() -> i32 {
+    unsafe { nvim_syn_get_keepend_level() }
+}
+
+/// Get state item at index (None if out of bounds or state invalid)
+#[must_use]
+pub fn get_cur_state(idx: i32) -> Option<StateItemHandle> {
+    let handle = unsafe { nvim_syn_get_cur_state(idx) };
+    if handle.is_null() {
+        None
+    } else {
+        Some(handle)
+    }
+}
+
+/// Get the current synblock (None if not set)
+#[must_use]
+pub fn get_synblock() -> Option<SynBlockHandle> {
+    let handle = unsafe { nvim_syn_get_synblock() };
+    if handle.is_null() {
+        None
+    } else {
+        Some(handle)
+    }
+}
+
+/// Count items with HL_FOLD flag in current state
+#[must_use]
+pub fn count_fold_items() -> i32 {
+    unsafe { nvim_syn_count_fold_items() }
 }
 
 // =============================================================================
@@ -997,6 +1168,92 @@ pub extern "C" fn rs_synid_type(id: i16) -> c_int {
         SynIdType::Contained => 3,
         SynIdType::Cluster => 4,
     }
+}
+
+// =============================================================================
+// FFI exports - Syntax state machine accessors
+// =============================================================================
+
+/// Get the current line number being processed
+#[no_mangle]
+pub extern "C" fn rs_syn_current_lnum() -> c_int {
+    current_lnum()
+}
+
+/// Get the current column being processed
+#[no_mangle]
+pub extern "C" fn rs_syn_current_col() -> c_int {
+    current_col()
+}
+
+/// Check if the current line has been finished
+#[no_mangle]
+pub extern "C" fn rs_syn_is_finished() -> c_int {
+    if is_current_finished() {
+        1
+    } else {
+        0
+    }
+}
+
+/// Check if the current state is valid
+#[no_mangle]
+pub extern "C" fn rs_syn_is_state_valid() -> c_int {
+    if is_current_state_valid() {
+        1
+    } else {
+        0
+    }
+}
+
+/// Get the current state stack size
+#[no_mangle]
+pub extern "C" fn rs_syn_state_len() -> c_int {
+    current_state_len()
+}
+
+/// Get the current highlight ID
+#[no_mangle]
+pub extern "C" fn rs_syn_current_id() -> c_int {
+    current_id()
+}
+
+/// Get the current transparent ID
+#[no_mangle]
+pub extern "C" fn rs_syn_current_trans_id() -> c_int {
+    current_trans_id()
+}
+
+/// Get the current attribute
+#[no_mangle]
+pub extern "C" fn rs_syn_current_attr() -> c_int {
+    current_attr()
+}
+
+/// Get the current flags
+#[no_mangle]
+pub extern "C" fn rs_syn_current_flags() -> c_int {
+    current_flags()
+}
+
+/// Get the keepend level (-1 if none)
+#[no_mangle]
+pub extern "C" fn rs_syn_keepend_level() -> c_int {
+    keepend_level()
+}
+
+/// Count items with HL_FOLD flag in current state
+/// This implements the logic of syn_cur_foldlevel() in Rust
+#[no_mangle]
+pub extern "C" fn rs_syn_cur_foldlevel() -> c_int {
+    count_fold_items()
+}
+
+/// Get a state item from the current state stack
+/// Returns NULL if index is out of bounds
+#[no_mangle]
+pub extern "C" fn rs_syn_get_state_item(idx: c_int) -> StateItemHandle {
+    get_cur_state(idx).unwrap_or(StateItemHandle(std::ptr::null_mut()))
 }
 
 #[cfg(test)]
