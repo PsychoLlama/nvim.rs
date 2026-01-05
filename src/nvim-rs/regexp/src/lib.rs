@@ -8,11 +8,13 @@
 #![allow(clippy::must_use_candidate)]
 
 pub mod bt_opcodes;
+pub mod char_class;
 pub mod decompose;
 pub mod nfa_states;
 pub mod parser;
 pub mod scanner;
 
+pub use char_class::rs_get_char_class;
 pub use decompose::rs_mb_decompose;
 pub use parser::{
     rs_nfa_re_num_cmp, rs_re_get_uint16, rs_re_get_uint32, rs_re_num_cmp, rs_re_put_uint16,
@@ -64,8 +66,8 @@ const MAGIC_OFF: c_int = 2; // \M or magic off
 const MAGIC_ON: c_int = 3; // \m or magic (default)
 const MAGIC_ALL: c_int = 4; // \v very magic
 
-/// CLASS_NONE - no character class recognized
-const CLASS_NONE: c_int = 99;
+// Re-export CLASS_NONE for use within this module
+use char_class::CLASS_NONE;
 
 /// Characters always special in [] range after '\'
 const REGEXP_INRANGE: &[u8] = b"]^-n\\";

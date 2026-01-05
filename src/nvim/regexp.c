@@ -444,68 +444,21 @@ enum {
   CLASS_NONE = 99,
 };
 
+// Rust implementation
+extern int rs_get_char_class(char **pp);
+
 /// Check for a character class name "[:name:]".  "pp" points to the '['.
 /// Returns one of the CLASS_ items. CLASS_NONE means that no item was
 /// recognized.  Otherwise "pp" is advanced to after the item.
 static int get_char_class(char **pp)
 {
-  // must be sorted by the 'value' field because it is used by bsearch()!
-  static keyvalue_T char_class_tab[] = {
-    KEYVALUE_ENTRY(CLASS_ALNUM, "alnum:]"),
-    KEYVALUE_ENTRY(CLASS_ALPHA, "alpha:]"),
-    KEYVALUE_ENTRY(CLASS_BACKSPACE, "backspace:]"),
-    KEYVALUE_ENTRY(CLASS_BLANK, "blank:]"),
-    KEYVALUE_ENTRY(CLASS_CNTRL, "cntrl:]"),
-    KEYVALUE_ENTRY(CLASS_DIGIT, "digit:]"),
-    KEYVALUE_ENTRY(CLASS_ESCAPE, "escape:]"),
-    KEYVALUE_ENTRY(CLASS_FNAME, "fname:]"),
-    KEYVALUE_ENTRY(CLASS_GRAPH, "graph:]"),
-    KEYVALUE_ENTRY(CLASS_IDENT, "ident:]"),
-    KEYVALUE_ENTRY(CLASS_KEYWORD, "keyword:]"),
-    KEYVALUE_ENTRY(CLASS_LOWER, "lower:]"),
-    KEYVALUE_ENTRY(CLASS_PRINT, "print:]"),
-    KEYVALUE_ENTRY(CLASS_PUNCT, "punct:]"),
-    KEYVALUE_ENTRY(CLASS_RETURN, "return:]"),
-    KEYVALUE_ENTRY(CLASS_SPACE, "space:]"),
-    KEYVALUE_ENTRY(CLASS_TAB, "tab:]"),
-    KEYVALUE_ENTRY(CLASS_UPPER, "upper:]"),
-    KEYVALUE_ENTRY(CLASS_XDIGIT, "xdigit:]")
-  };
-
-  // check that the value of "pp" has a chance of matching
-  if ((*pp)[1] == ':' && ASCII_ISLOWER((*pp)[2])
-      && ASCII_ISLOWER((*pp)[3]) && ASCII_ISLOWER((*pp)[4])) {
-    // this function can be called repeatedly with the same value for "pp"
-    // so we cache the last found entry.
-    static keyvalue_T *last_entry = NULL;
-
-    keyvalue_T target = {
-      .key = 0,
-      .value = *pp + 2,
-      .length = 0,  // not used, see cmp_keyvalue_value_n()
-    };
-
-    keyvalue_T *entry;
-    if (last_entry != NULL && cmp_keyvalue_value_n(&target, last_entry) == 0) {
-      entry = last_entry;
-    } else {
-      entry = (keyvalue_T *)bsearch(&target, &char_class_tab,
-                                    ARRAY_SIZE(char_class_tab),
-                                    sizeof(char_class_tab[0]), cmp_keyvalue_value_n);
-    }
-    if (entry != NULL) {
-      last_entry = entry;
-      *pp += entry->length + 2;
-      return entry->key;
-    }
-  }
-  return CLASS_NONE;
+  return rs_get_char_class(pp);
 }
 
-// Non-static wrapper for Rust FFI
+// Non-static wrapper for other C code
 int nvim_get_char_class(char **pp)
 {
-  return get_char_class(pp);
+  return rs_get_char_class(pp);
 }
 
 // Specific version of character class functions.
