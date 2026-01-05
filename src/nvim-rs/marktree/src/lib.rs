@@ -534,6 +534,66 @@ extern "C" {
 
     /// Bubble up common intersections to parent.
     fn nvim_bubble_up(x: MTNodeHandle);
+
+    // ========================================================================
+    // B-tree Deletion Operations (Phase 5)
+    // ========================================================================
+
+    /// Delete mark at iterator position.
+    fn nvim_marktree_del_itr(b: MarkTreeHandle, itr: MarkTreeIterHandle, rev: bool) -> u64;
+
+    /// Revise meta counts after key modification.
+    fn nvim_marktree_revise_meta(b: MarkTreeHandle, itr: MarkTreeIterHandle, old_key: MTKey);
+
+    /// Move mark to a new position.
+    fn nvim_marktree_move(b: MarkTreeHandle, itr: MarkTreeIterHandle, row: c_int, col: c_int);
+
+    /// Restore pair after move.
+    fn nvim_marktree_restore_pair(b: MarkTreeHandle, key: MTKey);
+
+    /// Pivot right (steal from left sibling).
+    fn nvim_pivot_right(b: MarkTreeHandle, p_pos: MTPos, p: MTNodeHandle, i: c_int);
+
+    /// Pivot left (steal from right sibling).
+    fn nvim_pivot_left(b: MarkTreeHandle, p_pos: MTPos, p: MTNodeHandle, i: c_int);
+
+    /// Merge two nodes.
+    fn nvim_merge_node(b: MarkTreeHandle, p: MTNodeHandle, i: c_int) -> MTNodeHandle;
+
+    /// Delete key from id2node map.
+    fn nvim_marktree_del_id(b: MarkTreeHandle, id: u64);
+
+    /// Decrement the number of keys in a marktree.
+    fn nvim_marktree_dec_n_keys(b: MarkTreeHandle);
+
+    /// Subtract from meta_root by index.
+    fn nvim_marktree_sub_meta_root(b: MarkTreeHandle, m: c_int, val: u32);
+
+    /// Get the raw key at iterator position.
+    #[allow(dead_code)]
+    fn nvim_rawkey(itr: MarkTreeIterHandle) -> MTKey;
+
+    /// Set flags on the raw key at iterator position.
+    fn nvim_rawkey_set_flags(itr: MarkTreeIterHandle, flags: u16);
+
+    /// OR flags on the raw key at iterator position.
+    fn nvim_rawkey_or_flags(itr: MarkTreeIterHandle, flags: u16);
+
+    /// AND-NOT flags on the raw key at iterator position.
+    fn nvim_rawkey_clear_flags(itr: MarkTreeIterHandle, flags: u16);
+
+    // ========================================================================
+    // Memory Management Operations (Phase 7)
+    // ========================================================================
+
+    /// Free a single node.
+    fn nvim_marktree_free_node(b: MarkTreeHandle, x: MTNodeHandle);
+
+    /// Free an entire subtree.
+    fn nvim_marktree_free_subtree(b: MarkTreeHandle, x: MTNodeHandle);
+
+    /// Clear the entire marktree.
+    fn nvim_marktree_clear(b: MarkTreeHandle);
 }
 
 // ============================================================================
@@ -2592,6 +2652,209 @@ pub extern "C" fn rs_unintersect_node(b: MarkTreeHandle, x: MTNodeHandle, id: u6
 #[no_mangle]
 pub extern "C" fn rs_bubble_up(x: MTNodeHandle) {
     bubble_up(x);
+}
+
+// ============================================================================
+// Phase 5: Tree Mutation - Deletion
+// ============================================================================
+
+// ============================================================================
+// Deletion Wrappers
+// ============================================================================
+
+/// Delete mark at iterator position.
+///
+/// Returns the ID of the paired end mark (if any), or 0 if unpaired.
+/// The iterator is updated to point at the key after the deleted one.
+#[must_use]
+pub fn marktree_del_itr(b: MarkTreeHandle, itr: MarkTreeIterHandle, rev: bool) -> u64 {
+    unsafe { nvim_marktree_del_itr(b, itr, rev) }
+}
+
+/// Revise meta counts after modifying a key's flags.
+///
+/// Call this after changing decoration flags on a key.
+pub fn marktree_revise_meta(b: MarkTreeHandle, itr: MarkTreeIterHandle, old_key: MTKey) {
+    unsafe { nvim_marktree_revise_meta(b, itr, old_key) }
+}
+
+/// Move mark to a new position.
+///
+/// If the new position is within the same leaf node, an optimized
+/// path is taken. Otherwise, delete and re-insert.
+pub fn marktree_move(b: MarkTreeHandle, itr: MarkTreeIterHandle, row: i32, col: i32) {
+    unsafe { nvim_marktree_move(b, itr, row, col) }
+}
+
+/// Restore pair after move.
+///
+/// Re-establishes intersection markers for a paired mark.
+pub fn marktree_restore_pair(b: MarkTreeHandle, key: MTKey) {
+    unsafe { nvim_marktree_restore_pair(b, key) }
+}
+
+/// Pivot right (steal from left sibling).
+pub fn pivot_right(b: MarkTreeHandle, p_pos: MTPos, p: MTNodeHandle, i: i32) {
+    unsafe { nvim_pivot_right(b, p_pos, p, i) }
+}
+
+/// Pivot left (steal from right sibling).
+pub fn pivot_left(b: MarkTreeHandle, p_pos: MTPos, p: MTNodeHandle, i: i32) {
+    unsafe { nvim_pivot_left(b, p_pos, p, i) }
+}
+
+/// Merge two nodes.
+#[must_use]
+pub fn merge_node(b: MarkTreeHandle, p: MTNodeHandle, i: i32) -> MTNodeHandle {
+    unsafe { nvim_merge_node(b, p, i) }
+}
+
+/// Delete key from id2node map.
+pub fn marktree_del_id(b: MarkTreeHandle, id: u64) {
+    unsafe { nvim_marktree_del_id(b, id) }
+}
+
+/// Decrement the number of keys in a marktree.
+pub fn marktree_dec_n_keys(b: MarkTreeHandle) {
+    unsafe { nvim_marktree_dec_n_keys(b) }
+}
+
+/// Subtract from meta_root by index.
+pub fn marktree_sub_meta_root(b: MarkTreeHandle, m: i32, val: u32) {
+    unsafe { nvim_marktree_sub_meta_root(b, m, val) }
+}
+
+// Note: rawkey() already defined above using mtnode_key()
+
+/// Set flags on the raw key at iterator position.
+pub fn rawkey_set_flags(itr: MarkTreeIterHandle, flags: u16) {
+    unsafe { nvim_rawkey_set_flags(itr, flags) }
+}
+
+/// OR flags on the raw key at iterator position.
+pub fn rawkey_or_flags(itr: MarkTreeIterHandle, flags: u16) {
+    unsafe { nvim_rawkey_or_flags(itr, flags) }
+}
+
+/// AND-NOT flags on the raw key at iterator position.
+pub fn rawkey_clear_flags(itr: MarkTreeIterHandle, flags: u16) {
+    unsafe { nvim_rawkey_clear_flags(itr, flags) }
+}
+
+// ============================================================================
+// Phase 7: Memory Management
+// ============================================================================
+
+/// Free a single node.
+pub fn marktree_free_node(b: MarkTreeHandle, x: MTNodeHandle) {
+    unsafe { nvim_marktree_free_node(b, x) }
+}
+
+/// Free an entire subtree.
+pub fn marktree_free_subtree(b: MarkTreeHandle, x: MTNodeHandle) {
+    unsafe { nvim_marktree_free_subtree(b, x) }
+}
+
+/// Clear the entire marktree.
+pub fn marktree_clear(b: MarkTreeHandle) {
+    unsafe { nvim_marktree_clear(b) }
+}
+
+// ============================================================================
+// FFI Exports for Phase 5 & 7
+// ============================================================================
+
+/// Exported FFI version of `marktree_del_itr`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_del_itr(
+    b: MarkTreeHandle,
+    itr: MarkTreeIterHandle,
+    rev: bool,
+) -> u64 {
+    marktree_del_itr(b, itr, rev)
+}
+
+/// Exported FFI version of `marktree_revise_meta`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_revise_meta(
+    b: MarkTreeHandle,
+    itr: MarkTreeIterHandle,
+    old_key: MTKey,
+) {
+    marktree_revise_meta(b, itr, old_key);
+}
+
+/// Exported FFI version of `marktree_move`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_move(
+    b: MarkTreeHandle,
+    itr: MarkTreeIterHandle,
+    row: c_int,
+    col: c_int,
+) {
+    marktree_move(b, itr, row, col);
+}
+
+/// Exported FFI version of `marktree_restore_pair`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_restore_pair(b: MarkTreeHandle, key: MTKey) {
+    marktree_restore_pair(b, key);
+}
+
+/// Exported FFI version of `pivot_right`.
+#[no_mangle]
+pub extern "C" fn rs_pivot_right(b: MarkTreeHandle, p_pos: MTPos, p: MTNodeHandle, i: c_int) {
+    pivot_right(b, p_pos, p, i);
+}
+
+/// Exported FFI version of `pivot_left`.
+#[no_mangle]
+pub extern "C" fn rs_pivot_left(b: MarkTreeHandle, p_pos: MTPos, p: MTNodeHandle, i: c_int) {
+    pivot_left(b, p_pos, p, i);
+}
+
+/// Exported FFI version of `merge_node`.
+#[no_mangle]
+pub extern "C" fn rs_merge_node(b: MarkTreeHandle, p: MTNodeHandle, i: c_int) -> MTNodeHandle {
+    merge_node(b, p, i)
+}
+
+// Note: rs_rawkey already uses the existing rawkey() which calls mtnode_key()
+
+/// Exported FFI version of `rawkey_set_flags`.
+#[no_mangle]
+pub extern "C" fn rs_rawkey_set_flags(itr: MarkTreeIterHandle, flags: u16) {
+    rawkey_set_flags(itr, flags);
+}
+
+/// Exported FFI version of `rawkey_or_flags`.
+#[no_mangle]
+pub extern "C" fn rs_rawkey_or_flags(itr: MarkTreeIterHandle, flags: u16) {
+    rawkey_or_flags(itr, flags);
+}
+
+/// Exported FFI version of `rawkey_clear_flags`.
+#[no_mangle]
+pub extern "C" fn rs_rawkey_clear_flags(itr: MarkTreeIterHandle, flags: u16) {
+    rawkey_clear_flags(itr, flags);
+}
+
+/// Exported FFI version of `marktree_free_node`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_free_node(b: MarkTreeHandle, x: MTNodeHandle) {
+    marktree_free_node(b, x);
+}
+
+/// Exported FFI version of `marktree_free_subtree`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_free_subtree(b: MarkTreeHandle, x: MTNodeHandle) {
+    marktree_free_subtree(b, x);
+}
+
+/// Exported FFI version of `marktree_clear`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_clear(b: MarkTreeHandle) {
+    marktree_clear(b);
 }
 
 // ============================================================================

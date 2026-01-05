@@ -3121,3 +3121,113 @@ void nvim_bubble_up(MTNode *x)
 {
   bubble_up(x);
 }
+
+// ============================================================================
+// B-tree Deletion Operations (for Rust FFI - Phase 5)
+// ============================================================================
+
+/// Delete mark at iterator position.
+uint64_t nvim_marktree_del_itr(MarkTree *b, MarkTreeIter *itr, bool rev)
+{
+  return marktree_del_itr(b, itr, rev);
+}
+
+/// Revise meta counts after key modification.
+void nvim_marktree_revise_meta(MarkTree *b, MarkTreeIter *itr, MTKey old_key)
+{
+  marktree_revise_meta(b, itr, old_key);
+}
+
+/// Move mark to a new position.
+void nvim_marktree_move(MarkTree *b, MarkTreeIter *itr, int row, int col)
+{
+  marktree_move(b, itr, row, col);
+}
+
+/// Restore pair after move.
+void nvim_marktree_restore_pair(MarkTree *b, MTKey key)
+{
+  marktree_restore_pair(b, key);
+}
+
+/// Pivot right (steal from left sibling).
+void nvim_pivot_right(MarkTree *b, MTPos p_pos, MTNode *p, int i)
+{
+  pivot_right(b, p_pos, p, i);
+}
+
+/// Pivot left (steal from right sibling).
+void nvim_pivot_left(MarkTree *b, MTPos p_pos, MTNode *p, int i)
+{
+  pivot_left(b, p_pos, p, i);
+}
+
+/// Merge two nodes.
+MTNode *nvim_merge_node(MarkTree *b, MTNode *p, int i)
+{
+  return merge_node(b, p, i);
+}
+
+/// Delete key from id2node map.
+void nvim_marktree_del_id(MarkTree *b, uint64_t id)
+{
+  pmap_del(uint64_t)(b->id2node, id, NULL);
+}
+
+/// Decrement the number of keys in a marktree.
+void nvim_marktree_dec_n_keys(MarkTree *b)
+{
+  b->n_keys--;
+}
+
+/// Subtract from meta_root by index.
+void nvim_marktree_sub_meta_root(MarkTree *b, int m, uint32_t val)
+{
+  b->meta_root[m] -= val;
+}
+
+/// Get the raw key at iterator position (for modification).
+MTKey nvim_rawkey(MarkTreeIter *itr)
+{
+  return rawkey(itr);
+}
+
+/// Set flags on the raw key at iterator position.
+void nvim_rawkey_set_flags(MarkTreeIter *itr, uint16_t flags)
+{
+  rawkey(itr).flags = flags;
+}
+
+/// OR flags on the raw key at iterator position.
+void nvim_rawkey_or_flags(MarkTreeIter *itr, uint16_t flags)
+{
+  rawkey(itr).flags |= flags;
+}
+
+/// AND-NOT flags on the raw key at iterator position.
+void nvim_rawkey_clear_flags(MarkTreeIter *itr, uint16_t flags)
+{
+  rawkey(itr).flags &= (uint16_t)~flags;
+}
+
+// ============================================================================
+// Memory Management Operations (for Rust FFI - Phase 7)
+// ============================================================================
+
+/// Free a single node.
+void nvim_marktree_free_node(MarkTree *b, MTNode *x)
+{
+  marktree_free_node(b, x);
+}
+
+/// Free an entire subtree.
+void nvim_marktree_free_subtree(MarkTree *b, MTNode *x)
+{
+  marktree_free_subtree(b, x);
+}
+
+/// Clear the entire marktree.
+void nvim_marktree_clear(MarkTree *b)
+{
+  marktree_clear(b);
+}
