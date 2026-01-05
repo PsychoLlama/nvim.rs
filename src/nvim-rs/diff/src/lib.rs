@@ -552,6 +552,204 @@ pub extern "C" fn rs_diff_get_filler_lines(buf_idx: c_int, lnum: LinenrT) -> c_i
     diff_get_filler_lines_impl(buf_idx, lnum)
 }
 
+// =============================================================================
+// Diff Hunk Navigation
+// =============================================================================
+
+/// Find the next diff hunk after a given line number.
+///
+/// Returns the line number of the next hunk's start, or 0 if not found.
+fn diff_find_next_hunk_impl(buf_idx: c_int, lnum: LinenrT) -> LinenrT {
+    if !(0..DB_COUNT).contains(&buf_idx) {
+        return 0;
+    }
+
+    unsafe {
+        let mut dp = nvim_get_diff_first_block();
+        while !dp.is_null() {
+            let block_lnum = nvim_diffblock_get_lnum(dp, buf_idx);
+            let block_count = nvim_diffblock_get_count(dp, buf_idx);
+
+            // If this block starts after our line, it's the next hunk
+            if block_lnum > lnum {
+                return block_lnum;
+            }
+
+            // If we're inside this block, find the next one
+            let block_end = block_lnum + block_count.max(1) - 1;
+            if lnum >= block_lnum && lnum <= block_end {
+                // We're inside this hunk, find the next one
+                let next_dp = nvim_diffblock_get_next(dp);
+                if !next_dp.is_null() {
+                    return nvim_diffblock_get_lnum(next_dp, buf_idx);
+                }
+                return 0;
+            }
+
+            dp = nvim_diffblock_get_next(dp);
+        }
+        0
+    }
+}
+
+/// Find the previous diff hunk before a given line number.
+///
+/// Returns the line number of the previous hunk's start, or 0 if not found.
+fn diff_find_prev_hunk_impl(buf_idx: c_int, lnum: LinenrT) -> LinenrT {
+    if !(0..DB_COUNT).contains(&buf_idx) {
+        return 0;
+    }
+
+    unsafe {
+        let mut prev_lnum: LinenrT = 0;
+        let mut dp = nvim_get_diff_first_block();
+
+        while !dp.is_null() {
+            let block_lnum = nvim_diffblock_get_lnum(dp, buf_idx);
+            let block_count = nvim_diffblock_get_count(dp, buf_idx);
+
+            // If this block starts at or after our line, return the previous one
+            if block_lnum >= lnum {
+                return prev_lnum;
+            }
+
+            // If we're inside this block, return the previous one
+            let block_end = block_lnum + block_count.max(1) - 1;
+            if lnum <= block_end {
+                return prev_lnum;
+            }
+
+            prev_lnum = block_lnum;
+            dp = nvim_diffblock_get_next(dp);
+        }
+
+        // If we've gone through all blocks and lnum is after them, return the last one
+        prev_lnum
+    }
+}
+
+/// Check if a line is inside a diff hunk.
+///
+/// Returns true if the line is within a diff block, false otherwise.
+fn diff_lnum_in_hunk_impl(buf_idx: c_int, lnum: LinenrT) -> bool {
+    if !(0..DB_COUNT).contains(&buf_idx) {
+        return false;
+    }
+
+    unsafe {
+        let mut dp = nvim_get_diff_first_block();
+        while !dp.is_null() {
+            let block_lnum = nvim_diffblock_get_lnum(dp, buf_idx);
+            let block_count = nvim_diffblock_get_count(dp, buf_idx);
+
+            // If this block is past our line, stop searching
+            if block_lnum > lnum {
+                return false;
+            }
+
+            // Check if we're in this block
+            let block_end = block_lnum + block_count.max(1) - 1;
+            if lnum >= block_lnum && lnum <= block_end {
+                return true;
+            }
+
+            dp = nvim_diffblock_get_next(dp);
+        }
+        false
+    }
+}
+
+/// Hunk boundaries result structure.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct DiffHunkBounds {
+    /// Start line of the hunk (inclusive)
+    pub start_lnum: LinenrT,
+    /// End line of the hunk (inclusive)
+    pub end_lnum: LinenrT,
+    /// Whether a hunk was found
+    pub found: c_int,
+}
+
+impl DiffHunkBounds {
+    /// Create an empty (not found) result.
+    #[must_use]
+    pub const fn not_found() -> Self {
+        Self {
+            start_lnum: 0,
+            end_lnum: 0,
+            found: 0,
+        }
+    }
+}
+
+/// Get the start and end lines of the hunk at a given position.
+///
+/// If the line is not in a hunk, returns a not_found result.
+fn diff_hunk_start_end_impl(buf_idx: c_int, lnum: LinenrT) -> DiffHunkBounds {
+    if !(0..DB_COUNT).contains(&buf_idx) {
+        return DiffHunkBounds::not_found();
+    }
+
+    unsafe {
+        let mut dp = nvim_get_diff_first_block();
+        while !dp.is_null() {
+            let block_lnum = nvim_diffblock_get_lnum(dp, buf_idx);
+            let block_count = nvim_diffblock_get_count(dp, buf_idx);
+
+            // If this block is past our line, stop searching
+            if block_lnum > lnum {
+                return DiffHunkBounds::not_found();
+            }
+
+            // Check if we're in this block
+            let block_end = block_lnum + block_count.max(1) - 1;
+            if lnum >= block_lnum && lnum <= block_end {
+                return DiffHunkBounds {
+                    start_lnum: block_lnum,
+                    end_lnum: block_end,
+                    found: 1,
+                };
+            }
+
+            dp = nvim_diffblock_get_next(dp);
+        }
+        DiffHunkBounds::not_found()
+    }
+}
+
+/// FFI export: Find next diff hunk.
+///
+/// Returns the line number of the next hunk's start, or 0 if not found.
+#[no_mangle]
+pub extern "C" fn rs_diff_find_next_hunk(buf_idx: c_int, lnum: LinenrT) -> LinenrT {
+    diff_find_next_hunk_impl(buf_idx, lnum)
+}
+
+/// FFI export: Find previous diff hunk.
+///
+/// Returns the line number of the previous hunk's start, or 0 if not found.
+#[no_mangle]
+pub extern "C" fn rs_diff_find_prev_hunk(buf_idx: c_int, lnum: LinenrT) -> LinenrT {
+    diff_find_prev_hunk_impl(buf_idx, lnum)
+}
+
+/// FFI export: Check if line is in a hunk.
+///
+/// Returns 1 if the line is in a diff hunk, 0 otherwise.
+#[no_mangle]
+pub extern "C" fn rs_diff_lnum_in_hunk(buf_idx: c_int, lnum: LinenrT) -> c_int {
+    c_int::from(diff_lnum_in_hunk_impl(buf_idx, lnum))
+}
+
+/// FFI export: Get hunk boundaries at a position.
+///
+/// Returns a DiffHunkBounds struct with start/end lines and found flag.
+#[no_mangle]
+pub extern "C" fn rs_diff_hunk_start_end(buf_idx: c_int, lnum: LinenrT) -> DiffHunkBounds {
+    diff_hunk_start_end_impl(buf_idx, lnum)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -955,4 +1153,27 @@ mod tests {
             std::mem::size_of::<*mut c_void>()
         );
     }
+
+    // =========================================================================
+    // Diff Hunk Navigation Tests
+    // =========================================================================
+
+    #[test]
+    fn test_diff_hunk_bounds_not_found() {
+        let bounds = DiffHunkBounds::not_found();
+        assert_eq!(bounds.start_lnum, 0);
+        assert_eq!(bounds.end_lnum, 0);
+        assert_eq!(bounds.found, 0);
+    }
+
+    #[test]
+    fn test_diff_hunk_bounds_size() {
+        // Should be 3 * 4 = 12 bytes (2 LinenrT + 1 c_int)
+        assert_eq!(std::mem::size_of::<DiffHunkBounds>(), 12);
+    }
+
+    // Note: Tests for diff_find_next_hunk_impl, diff_find_prev_hunk_impl,
+    // diff_lnum_in_hunk_impl, and diff_hunk_start_end_impl
+    // are not included here because they require C FFI calls that are
+    // only available when linked with the full Neovim binary.
 }
