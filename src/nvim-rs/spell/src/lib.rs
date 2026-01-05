@@ -8,7 +8,289 @@
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_safety_doc)]
 
-use std::ffi::{c_char, c_int};
+use std::ffi::{c_char, c_int, c_void};
+
+// =============================================================================
+// Opaque Handle Types
+// =============================================================================
+
+/// Opaque handle to a spell language (slang_T)
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct SlangHandle(*mut c_void);
+
+impl SlangHandle {
+    /// Creates a null handle
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+
+    /// Returns true if this handle is null
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+/// Opaque handle to spell table (spelltab_T)
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct SpelltabHandle(*mut c_void);
+
+impl SpelltabHandle {
+    /// Creates a null handle
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+
+    /// Returns true if this handle is null
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+/// Type for SAL first lookup table entry
+pub type SalfirstT = c_int;
+
+// =============================================================================
+// C Accessor Declarations
+// =============================================================================
+
+extern "C" {
+    // slang_T word tree accessors
+    fn nvim_slang_get_fbyts(slang: SlangHandle) -> *mut u8;
+    fn nvim_slang_get_fidxs(slang: SlangHandle) -> *mut IdxT;
+    fn nvim_slang_get_kbyts(slang: SlangHandle) -> *mut u8;
+    fn nvim_slang_get_kidxs(slang: SlangHandle) -> *mut IdxT;
+    fn nvim_slang_get_pbyts(slang: SlangHandle) -> *mut u8;
+    fn nvim_slang_get_pidxs(slang: SlangHandle) -> *mut IdxT;
+
+    // slang_T compound word settings
+    fn nvim_slang_get_compmax(slang: SlangHandle) -> c_int;
+    fn nvim_slang_get_compminlen(slang: SlangHandle) -> c_int;
+    fn nvim_slang_get_compsylmax(slang: SlangHandle) -> c_int;
+    fn nvim_slang_get_nobreak(slang: SlangHandle) -> bool;
+
+    // slang_T sound folding settings
+    fn nvim_slang_get_sofo(slang: SlangHandle) -> bool;
+    fn nvim_slang_get_rem_accents(slang: SlangHandle) -> bool;
+    fn nvim_slang_get_followup(slang: SlangHandle) -> bool;
+    fn nvim_slang_get_collapse(slang: SlangHandle) -> bool;
+    fn nvim_slang_get_sal_first(slang: SlangHandle) -> *mut SalfirstT;
+    fn nvim_slang_get_regions(slang: SlangHandle) -> *const c_char;
+
+    // spelltab_T accessors
+    fn nvim_get_spelltab() -> SpelltabHandle;
+    fn nvim_spelltab_get_isw(sp: SpelltabHandle) -> *mut bool;
+    fn nvim_spelltab_get_isu(sp: SpelltabHandle) -> *mut bool;
+    fn nvim_spelltab_get_fold(sp: SpelltabHandle) -> *mut u8;
+    fn nvim_spelltab_get_upper(sp: SpelltabHandle) -> *mut u8;
+}
+
+// =============================================================================
+// Safe Wrappers for slang_T Accessors
+// =============================================================================
+
+impl SlangHandle {
+    /// Get case-folded word bytes array
+    #[must_use]
+    pub fn fbyts(self) -> *mut u8 {
+        unsafe { nvim_slang_get_fbyts(self) }
+    }
+
+    /// Get case-folded word indexes array
+    #[must_use]
+    pub fn fidxs(self) -> *mut IdxT {
+        unsafe { nvim_slang_get_fidxs(self) }
+    }
+
+    /// Get keep-case word bytes array
+    #[must_use]
+    pub fn kbyts(self) -> *mut u8 {
+        unsafe { nvim_slang_get_kbyts(self) }
+    }
+
+    /// Get keep-case word indexes array
+    #[must_use]
+    pub fn kidxs(self) -> *mut IdxT {
+        unsafe { nvim_slang_get_kidxs(self) }
+    }
+
+    /// Get prefix tree bytes array
+    #[must_use]
+    pub fn pbyts(self) -> *mut u8 {
+        unsafe { nvim_slang_get_pbyts(self) }
+    }
+
+    /// Get prefix tree indexes array
+    #[must_use]
+    pub fn pidxs(self) -> *mut IdxT {
+        unsafe { nvim_slang_get_pidxs(self) }
+    }
+
+    /// Get maximum compound word count
+    #[must_use]
+    pub fn compmax(self) -> c_int {
+        unsafe { nvim_slang_get_compmax(self) }
+    }
+
+    /// Get minimum compound word length
+    #[must_use]
+    pub fn compminlen(self) -> c_int {
+        unsafe { nvim_slang_get_compminlen(self) }
+    }
+
+    /// Get maximum compound syllables
+    #[must_use]
+    pub fn compsylmax(self) -> c_int {
+        unsafe { nvim_slang_get_compsylmax(self) }
+    }
+
+    /// Get nobreak flag (no spaces between words)
+    #[must_use]
+    pub fn nobreak(self) -> bool {
+        unsafe { nvim_slang_get_nobreak(self) }
+    }
+
+    /// Get SOFOFROM/SOFOTO mode flag
+    #[must_use]
+    pub fn sofo(self) -> bool {
+        unsafe { nvim_slang_get_sofo(self) }
+    }
+
+    /// Get remove accents flag
+    #[must_use]
+    pub fn rem_accents(self) -> bool {
+        unsafe { nvim_slang_get_rem_accents(self) }
+    }
+
+    /// Get SAL followup flag
+    #[must_use]
+    pub fn followup(self) -> bool {
+        unsafe { nvim_slang_get_followup(self) }
+    }
+
+    /// Get SAL collapse flag
+    #[must_use]
+    pub fn collapse(self) -> bool {
+        unsafe { nvim_slang_get_collapse(self) }
+    }
+
+    /// Get SAL first lookup table
+    #[must_use]
+    pub fn sal_first(self) -> *mut SalfirstT {
+        unsafe { nvim_slang_get_sal_first(self) }
+    }
+
+    /// Get regions string
+    #[must_use]
+    pub fn regions(self) -> *const c_char {
+        unsafe { nvim_slang_get_regions(self) }
+    }
+}
+
+// =============================================================================
+// Safe Wrappers for spelltab_T Accessors
+// =============================================================================
+
+impl SpelltabHandle {
+    /// Get the global spelltab
+    #[must_use]
+    pub fn global() -> Self {
+        unsafe { nvim_get_spelltab() }
+    }
+
+    /// Get is-word flags array (256 entries)
+    #[must_use]
+    pub fn isw(self) -> *mut bool {
+        unsafe { nvim_spelltab_get_isw(self) }
+    }
+
+    /// Get is-uppercase flags array (256 entries)
+    #[must_use]
+    pub fn isu(self) -> *mut bool {
+        unsafe { nvim_spelltab_get_isu(self) }
+    }
+
+    /// Get fold (lowercase) mapping array (256 entries)
+    #[must_use]
+    pub fn fold(self) -> *mut u8 {
+        unsafe { nvim_spelltab_get_fold(self) }
+    }
+
+    /// Get uppercase mapping array (256 entries)
+    #[must_use]
+    pub fn upper(self) -> *mut u8 {
+        unsafe { nvim_spelltab_get_upper(self) }
+    }
+}
+
+// =============================================================================
+// Spell Chartab Functions
+// =============================================================================
+
+/// Initialize the chartab used for spelling for ASCII.
+///
+/// Sets up the spell character tables with default ASCII values:
+/// - Digits 0-9 are word characters
+/// - Letters A-Z are word characters and uppercase
+/// - Letters a-z are word characters
+/// - Case folding maps A-Z to a-z
+/// - Uppercase mapping maps a-z to A-Z
+///
+/// # Safety
+///
+/// `sp` must be a valid `SpelltabHandle` pointing to a valid `spelltab_T`.
+fn clear_spell_chartab_impl(sp: SpelltabHandle) {
+    unsafe {
+        let isw = sp.isw();
+        let isu = sp.isu();
+        let fold = sp.fold();
+        let upper = sp.upper();
+
+        // Init everything to false/identity
+        for i in 0..256 {
+            *isw.add(i) = false;
+            *isu.add(i) = false;
+            #[allow(clippy::cast_possible_truncation)]
+            {
+                *fold.add(i) = i as u8;
+                *upper.add(i) = i as u8;
+            }
+        }
+
+        // Digits are word characters
+        for i in b'0'..=b'9' {
+            *isw.add(usize::from(i)) = true;
+        }
+
+        // Uppercase letters
+        for i in b'A'..=b'Z' {
+            let idx = usize::from(i);
+            *isw.add(idx) = true;
+            *isu.add(idx) = true;
+            *fold.add(idx) = i + 0x20; // A-Z -> a-z
+        }
+
+        // Lowercase letters
+        for i in b'a'..=b'z' {
+            let idx = usize::from(i);
+            *isw.add(idx) = true;
+            *upper.add(idx) = i - 0x20; // a-z -> A-Z
+        }
+    }
+}
+
+/// FFI wrapper for `clear_spell_chartab`.
+///
+/// Initialize the chartab used for spelling for ASCII.
+#[no_mangle]
+pub extern "C" fn rs_clear_spell_chartab(sp: SpelltabHandle) {
+    clear_spell_chartab_impl(sp);
+}
 
 // Region constant from spell_defs.h
 /// Word is valid in all regions.

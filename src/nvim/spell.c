@@ -194,11 +194,138 @@ extern bool rs_byte_in_str(const uint8_t *str, int n);
 extern bool rs_valid_spelllang(const char *val);
 extern bool rs_valid_spellfile(const char *val);
 extern bool rs_spell_mb_isword_class(int cl, bool cjk);
+extern void rs_clear_spell_chartab(spelltab_T *sp);
 
 // Accessor for Rust: get the b_cjk flag from the window's synblock
 int nvim_win_get_b_cjk(win_T *wp)
 {
   return wp->w_s->b_cjk;
+}
+
+// =============================================================================
+// slang_T accessors for Rust
+// =============================================================================
+
+// Word tree accessors
+uint8_t *nvim_slang_get_fbyts(slang_T *slang)
+{
+  return slang->sl_fbyts;
+}
+
+idx_T *nvim_slang_get_fidxs(slang_T *slang)
+{
+  return slang->sl_fidxs;
+}
+
+uint8_t *nvim_slang_get_kbyts(slang_T *slang)
+{
+  return slang->sl_kbyts;
+}
+
+idx_T *nvim_slang_get_kidxs(slang_T *slang)
+{
+  return slang->sl_kidxs;
+}
+
+uint8_t *nvim_slang_get_pbyts(slang_T *slang)
+{
+  return slang->sl_pbyts;
+}
+
+idx_T *nvim_slang_get_pidxs(slang_T *slang)
+{
+  return slang->sl_pidxs;
+}
+
+// Compound word settings accessors
+int nvim_slang_get_compmax(slang_T *slang)
+{
+  return slang->sl_compmax;
+}
+
+int nvim_slang_get_compminlen(slang_T *slang)
+{
+  return slang->sl_compminlen;
+}
+
+int nvim_slang_get_compsylmax(slang_T *slang)
+{
+  return slang->sl_compsylmax;
+}
+
+bool nvim_slang_get_nobreak(slang_T *slang)
+{
+  return slang->sl_nobreak;
+}
+
+// Sound folding accessors
+bool nvim_slang_get_sofo(slang_T *slang)
+{
+  return slang->sl_sofo;
+}
+
+bool nvim_slang_get_rem_accents(slang_T *slang)
+{
+  return slang->sl_rem_accents;
+}
+
+bool nvim_slang_get_followup(slang_T *slang)
+{
+  return slang->sl_followup;
+}
+
+bool nvim_slang_get_collapse(slang_T *slang)
+{
+  return slang->sl_collapse;
+}
+
+// SAL array accessor - returns pointer to garray_T
+garray_T *nvim_slang_get_sal(slang_T *slang)
+{
+  return &slang->sl_sal;
+}
+
+// SAL first lookup table accessor
+salfirst_T *nvim_slang_get_sal_first(slang_T *slang)
+{
+  return slang->sl_sal_first;
+}
+
+// Region string accessor
+const char *nvim_slang_get_regions(slang_T *slang)
+{
+  return slang->sl_regions;
+}
+
+// =============================================================================
+// spelltab_T accessors for Rust
+// =============================================================================
+
+// Get pointer to global spelltab
+spelltab_T *nvim_get_spelltab(void)
+{
+  return &spelltab;
+}
+
+// Access spelltab arrays
+bool *nvim_spelltab_get_isw(spelltab_T *sp)
+{
+  return sp->st_isw;
+}
+
+bool *nvim_spelltab_get_isu(spelltab_T *sp)
+{
+  return sp->st_isu;
+}
+
+uint8_t *nvim_spelltab_get_fold(spelltab_T *sp)
+{
+  return sp->st_fold;
+}
+
+uint8_t *nvim_spelltab_get_upper(spelltab_T *sp)
+{
+  return sp->st_upper;
 }
 
 /// mode values for find_word
@@ -2409,29 +2536,7 @@ void close_spellbuf(buf_T *buf)
 // Init the chartab used for spelling for ASCII.
 void clear_spell_chartab(spelltab_T *sp)
 {
-  // Init everything to false (zero).
-  CLEAR_FIELD(sp->st_isw);
-  CLEAR_FIELD(sp->st_isu);
-
-  for (int i = 0; i < 256; i++) {
-    sp->st_fold[i] = (uint8_t)i;
-    sp->st_upper[i] = (uint8_t)i;
-  }
-
-  // We include digits. A word shouldn't start with a digit, but handling
-  // that is done separately.
-  for (int i = '0'; i <= '9'; i++) {
-    sp->st_isw[i] = true;
-  }
-  for (int i = 'A'; i <= 'Z'; i++) {
-    sp->st_isw[i] = true;
-    sp->st_isu[i] = true;
-    sp->st_fold[i] = (uint8_t)(i + 0x20);
-  }
-  for (int i = 'a'; i <= 'z'; i++) {
-    sp->st_isw[i] = true;
-    sp->st_upper[i] = (uint8_t)(i - 0x20);
-  }
+  rs_clear_spell_chartab(sp);
 }
 
 // Init the chartab used for spelling. Called once while starting up.
