@@ -126,6 +126,8 @@ extern void rs_frame_set_vsep(const frame_T *frp, int add);
 extern void rs_frame_add_hsep(const frame_T *frp);
 extern void rs_frame_fix_width(win_T *wp);
 extern void rs_frame_fix_height(win_T *wp);
+extern win_T *rs_win_vert_neighbor(tabpage_T *tp, win_T *wp, int up, int count);
+extern win_T *rs_win_horz_neighbor(tabpage_T *tp, win_T *wp, int left, int count);
 
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to win_T fields from Rust code.
@@ -984,6 +986,30 @@ int nvim_win_get_hsep_height(win_T *wp)
 int nvim_win_get_vsep_width(win_T *wp)
 {
   return wp->w_vsep_width;
+}
+
+/// Get the w_wcol field from a window (cursor column in window).
+int nvim_win_get_wcol(win_T *wp)
+{
+  return wp->w_wcol;
+}
+
+/// Get the w_wrow field from a window (cursor row in window).
+int nvim_win_get_wrow(win_T *wp)
+{
+  return wp->w_wrow;
+}
+
+/// Get the tp_topframe field from a tabpage (accessor for Rust).
+frame_T *nvim_tabpage_get_topframe(tabpage_T *tp)
+{
+  return tp->tp_topframe;
+}
+
+/// Get the prevwin global (accessor for Rust).
+win_T *nvim_get_prevwin(void)
+{
+  return prevwin;
 }
 
 /// Get W_ENDROW(wp) - the row after the window content.
@@ -5785,57 +5811,7 @@ tabpage_T *win_find_tabpage(win_T *win)
 /// @return       found window
 win_T *win_vert_neighbor(tabpage_T *tp, win_T *wp, bool up, int count)
 {
-  frame_T *foundfr = wp->w_frame;
-
-  if (wp->w_floating) {
-    return win_valid(prevwin) && !prevwin->w_floating ? prevwin : firstwin;
-  }
-
-  while (count--) {
-    frame_T *nfr;
-    // First go upwards in the tree of frames until we find an upwards or
-    // downwards neighbor.
-    frame_T *fr = foundfr;
-    while (true) {
-      if (fr == tp->tp_topframe) {
-        goto end;
-      }
-      if (up) {
-        nfr = fr->fr_prev;
-      } else {
-        nfr = fr->fr_next;
-      }
-      if (fr->fr_parent->fr_layout == FR_COL && nfr != NULL) {
-        break;
-      }
-      fr = fr->fr_parent;
-    }
-
-    // Now go downwards to find the bottom or top frame in it.
-    while (true) {
-      if (nfr->fr_layout == FR_LEAF) {
-        foundfr = nfr;
-        break;
-      }
-      fr = nfr->fr_child;
-      if (nfr->fr_layout == FR_ROW) {
-        // Find the frame at the cursor row.
-        while (fr->fr_next != NULL
-               && frame2win(fr)->w_wincol + fr->fr_width
-               <= wp->w_wincol + wp->w_wcol) {
-          fr = fr->fr_next;
-        }
-      }
-      if (nfr->fr_layout == FR_COL && up) {
-        while (fr->fr_next != NULL) {
-          fr = fr->fr_next;
-        }
-      }
-      nfr = fr;
-    }
-  }
-end:
-  return foundfr != NULL ? foundfr->fr_win : NULL;
+  return rs_win_vert_neighbor(tp, wp, up ? 1 : 0, count);
 }
 
 /// Move to window above or below "count" times.
@@ -5861,57 +5837,7 @@ static void win_goto_ver(bool up, int count)
 /// @return      found window
 win_T *win_horz_neighbor(tabpage_T *tp, win_T *wp, bool left, int count)
 {
-  frame_T *foundfr = wp->w_frame;
-
-  if (wp->w_floating) {
-    return win_valid(prevwin) && !prevwin->w_floating ? prevwin : firstwin;
-  }
-
-  while (count--) {
-    frame_T *nfr;
-    // First go upwards in the tree of frames until we find a left or
-    // right neighbor.
-    frame_T *fr = foundfr;
-    while (true) {
-      if (fr == tp->tp_topframe) {
-        goto end;
-      }
-      if (left) {
-        nfr = fr->fr_prev;
-      } else {
-        nfr = fr->fr_next;
-      }
-      if (fr->fr_parent->fr_layout == FR_ROW && nfr != NULL) {
-        break;
-      }
-      fr = fr->fr_parent;
-    }
-
-    // Now go downwards to find the leftmost or rightmost frame in it.
-    while (true) {
-      if (nfr->fr_layout == FR_LEAF) {
-        foundfr = nfr;
-        break;
-      }
-      fr = nfr->fr_child;
-      if (nfr->fr_layout == FR_COL) {
-        // Find the frame at the cursor row.
-        while (fr->fr_next != NULL
-               && frame2win(fr)->w_winrow + fr->fr_height
-               <= wp->w_winrow + wp->w_wrow) {
-          fr = fr->fr_next;
-        }
-      }
-      if (nfr->fr_layout == FR_ROW && left) {
-        while (fr->fr_next != NULL) {
-          fr = fr->fr_next;
-        }
-      }
-      nfr = fr;
-    }
-  }
-end:
-  return foundfr != NULL ? foundfr->fr_win : NULL;
+  return rs_win_horz_neighbor(tp, wp, left ? 1 : 0, count);
 }
 
 /// Move to left or right window.
