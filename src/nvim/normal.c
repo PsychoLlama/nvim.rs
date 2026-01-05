@@ -378,6 +378,7 @@ extern int rs_invert_horizontal(int cmdchar);
 extern int rs_unshift_special(int cmdchar, int *modp);
 extern bool rs_is_ident(const char *line, int offset);
 extern bool rs_find_is_eval_item(const char *ptr, int *colp, int *bnp, int dir);
+extern int rs_get_vtopline(win_T *wp);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -2090,7 +2091,7 @@ static void display_showcmd(void)
 
 int get_vtopline(win_T *wp)
 {
-  return plines_m_win_fill(wp, 1, wp->w_topline) - wp->w_topfill;
+  return rs_get_vtopline(wp);
 }
 
 /// When "check" is false, prepare for commands that scroll the window.

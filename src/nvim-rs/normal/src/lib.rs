@@ -72,7 +72,17 @@ extern "C" {
 
     /// Call the C simplify_key function.
     fn simplify_key(key: c_int, modp: *mut c_int) -> c_int;
+
+    // Window accessors
+    fn nvim_win_get_topline(wp: WinHandle) -> c_int;
+    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
+
+    // plines function
+    fn plines_m_win_fill(wp: WinHandle, first: c_int, last: c_int) -> c_int;
 }
+
+/// Opaque handle to a window (win_T*).
+pub type WinHandle = *mut std::ffi::c_void;
 
 // =============================================================================
 // Invert Horizontal Commands (for RTL mode)
@@ -305,6 +315,24 @@ pub unsafe extern "C" fn rs_find_is_eval_item(
     }
 
     false
+}
+
+// =============================================================================
+// Window Functions
+// =============================================================================
+
+/// Get the virtual top line of a window.
+///
+/// Returns the number of physical lines from line 1 to the top of the window,
+/// accounting for folds and virtual lines.
+///
+/// # Safety
+/// `wp` must be a valid window pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_vtopline(wp: WinHandle) -> c_int {
+    let topline = nvim_win_get_topline(wp);
+    let topfill = nvim_win_get_topfill(wp);
+    plines_m_win_fill(wp, 1, topline) - topfill
 }
 
 // =============================================================================
