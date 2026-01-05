@@ -368,6 +368,7 @@ Functions blocked on missing accessor infrastructure:
 - `valid_spellfile` - Migrated to Rust (rs_valid_spellfile) - validates 'spellfile' option value (comma-separated paths ending in .add)
 - `spell_valid_case` - Migrated to Rust (rs_spell_valid_case) - checks word flags match tree flags for case handling
 - `byte_in_str` - Migrated to Rust (rs_byte_in_str) - checks if byte appears in string
+- `find_region` - Migrated to Rust (rs_find_region) - finds region code in spell language region list
 
 **indent.c** (indentation functions):
 - `may_do_si` - Migrated to Rust (rs_may_do_si) - checks if conditions are OK for smart indenting
