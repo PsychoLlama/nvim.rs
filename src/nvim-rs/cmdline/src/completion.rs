@@ -9,9 +9,7 @@
 
 use std::ffi::{c_char, c_int};
 
-use crate::expand::wild_mode::{
-    WILD_NEXT, WILD_PAGEDOWN, WILD_PAGEUP, WILD_PREV, WILD_PUM_WANT,
-};
+use crate::expand::wild_mode::{WILD_NEXT, WILD_PAGEDOWN, WILD_PAGEUP, WILD_PREV, WILD_PUM_WANT};
 use crate::expand::{ew_flags, ExpandContext};
 
 // =============================================================================
@@ -535,10 +533,7 @@ mod tests {
         assert_eq!(calculate_next_match_index(WILD_NEXT, -1, 5, true, 10, 0), 0);
 
         // Next at end wraps to original if has_orig
-        assert_eq!(
-            calculate_next_match_index(WILD_NEXT, 4, 5, true, 10, 0),
-            -1
-        );
+        assert_eq!(calculate_next_match_index(WILD_NEXT, 4, 5, true, 10, 0), -1);
 
         // Next at end wraps to 0 if no orig
         assert_eq!(calculate_next_match_index(WILD_NEXT, 4, 5, false, 10, 0), 0);
@@ -551,10 +546,7 @@ mod tests {
         assert_eq!(calculate_next_match_index(WILD_PREV, 1, 5, true, 10, 0), 0);
 
         // Prev at first entry wraps to original if has_orig
-        assert_eq!(
-            calculate_next_match_index(WILD_PREV, 0, 5, true, 10, 0),
-            -1
-        );
+        assert_eq!(calculate_next_match_index(WILD_PREV, 0, 5, true, 10, 0), -1);
 
         // Prev at first entry wraps to last if no orig
         assert_eq!(calculate_next_match_index(WILD_PREV, 0, 5, false, 10, 0), 4);

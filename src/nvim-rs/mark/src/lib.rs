@@ -541,7 +541,10 @@ pub extern "C" fn rs_mark_is_special(name: c_int) -> bool {
     let Ok(c) = u8::try_from(name) else {
         return false;
     };
-    matches!(c, b'"' | b'^' | b'.' | b'[' | b']' | b'<' | b'>' | b'\'' | b'`')
+    matches!(
+        c,
+        b'"' | b'^' | b'.' | b'[' | b']' | b'<' | b'>' | b'\'' | b'`'
+    )
 }
 
 /// Check if a mark name is a visual mark (< or >).
@@ -746,12 +749,7 @@ pub extern "C" fn rs_mark_is_persistent(name: c_int) -> bool {
         return false;
     };
     // Named marks (a-z, A-Z), numbered marks (0-9), and special marks (", ^, .)
-    ascii_islower(c)
-        || ascii_isupper(c)
-        || ascii_isdigit(c)
-        || c == b'"'
-        || c == b'^'
-        || c == b'.'
+    ascii_islower(c) || ascii_isupper(c) || ascii_isdigit(c) || c == b'"' || c == b'^' || c == b'.'
 }
 
 /// Create a new position with given values.

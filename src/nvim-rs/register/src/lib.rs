@@ -1702,10 +1702,22 @@ mod tests {
 
     #[test]
     fn test_register_to_lowercase() {
-        assert_eq!(rs_register_to_lowercase(c_int::from(b'A')), c_int::from(b'a'));
-        assert_eq!(rs_register_to_lowercase(c_int::from(b'Z')), c_int::from(b'z'));
-        assert_eq!(rs_register_to_lowercase(c_int::from(b'a')), c_int::from(b'a'));
-        assert_eq!(rs_register_to_lowercase(c_int::from(b'0')), c_int::from(b'0'));
+        assert_eq!(
+            rs_register_to_lowercase(c_int::from(b'A')),
+            c_int::from(b'a')
+        );
+        assert_eq!(
+            rs_register_to_lowercase(c_int::from(b'Z')),
+            c_int::from(b'z')
+        );
+        assert_eq!(
+            rs_register_to_lowercase(c_int::from(b'a')),
+            c_int::from(b'a')
+        );
+        assert_eq!(
+            rs_register_to_lowercase(c_int::from(b'0')),
+            c_int::from(b'0')
+        );
     }
 
     #[test]

@@ -135,9 +135,7 @@ pub fn should_complete_submenu(
     // Check for "Name." pattern (not "\.") and Enter/CR key
     let is_dot = cmdbuff.get(cmdpos - 1) == Some(&b'.');
     let not_escaped = cmdbuff.get(cmdpos - 2) != Some(&b'\\');
-    let is_enter = key == c_int::from(b'\n')
-        || key == c_int::from(b'\r')
-        || key == keys::K_KENTER;
+    let is_enter = key == c_int::from(b'\n') || key == c_int::from(b'\r') || key == keys::K_KENTER;
 
     is_dot && not_escaped && is_enter
 }
@@ -189,8 +187,7 @@ pub fn calculate_skip_count(
     is_csh_like: bool,
 ) -> usize {
     // Check for escapable backslash (not in help or pattern contexts)
-    if is_backslash_escape
-        && !matches!(context, ExpandContext::Help | ExpandContext::PatternInBuf)
+    if is_backslash_escape && !matches!(context, ExpandContext::Help | ExpandContext::PatternInBuf)
     {
         // Special case for csh-like shell: skip 2 for "\\!"
         if is_shell && is_csh_like && second_char == Some(b'\\') {
@@ -240,7 +237,11 @@ pub unsafe extern "C" fn rs_skip_wildmenu_char(xp: *const (), s: *const c_char) 
 
     let second_char = {
         let next = *s.add(1) as u8;
-        if next == 0 { None } else { Some(next) }
+        if next == 0 {
+            None
+        } else {
+            Some(next)
+        }
     };
 
     let is_backslash_escape = rem_backslash(s) != 0;
