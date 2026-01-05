@@ -22,7 +22,7 @@ while true; do
   log "Planning..."
   plan_file=$("$SCRIPT_DIR/plan" "$description")
 
-  log "Executing..."
+  log "Executing: $plan_file"
   result=$("$SCRIPT_DIR/execute" "$plan_file")
 
   echo "$result"
