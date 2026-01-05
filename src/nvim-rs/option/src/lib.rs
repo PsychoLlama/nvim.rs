@@ -319,6 +319,43 @@ extern "C" {
 
     // Special accessors
     fn nvim_option_get_magic_overruled() -> c_int;
+
+    // Boolean option setters
+    fn nvim_option_set_ai(value: c_int);
+    fn nvim_option_set_et(value: c_int);
+    fn nvim_option_set_ic(value: c_int);
+    fn nvim_option_set_scs(value: c_int);
+    fn nvim_option_set_hls(value: c_int);
+    fn nvim_option_set_is(value: c_int);
+    fn nvim_option_set_magic(value: c_int);
+    fn nvim_option_set_ml(value: c_int);
+    fn nvim_option_set_paste(value: c_int);
+    fn nvim_option_set_ri(value: c_int);
+    fn nvim_option_set_ws(value: c_int);
+    fn nvim_option_set_gd(value: c_int);
+    fn nvim_option_set_ea(value: c_int);
+    fn nvim_option_set_hid(value: c_int);
+    fn nvim_option_set_sm(value: c_int);
+    fn nvim_option_set_lz(value: c_int);
+    fn nvim_option_set_to(value: c_int);
+
+    // Numeric option setters
+    fn nvim_option_set_sw(value: OptInt);
+    fn nvim_option_set_ts(value: OptInt);
+    fn nvim_option_set_sts(value: OptInt);
+    fn nvim_option_set_tw(value: OptInt);
+    fn nvim_option_set_wm(value: OptInt);
+    fn nvim_option_set_so(value: OptInt);
+    fn nvim_option_set_siso(value: OptInt);
+    fn nvim_option_set_report(value: OptInt);
+    fn nvim_option_set_mat(value: OptInt);
+    fn nvim_option_set_ut(value: OptInt);
+    fn nvim_option_set_tm(value: OptInt);
+    fn nvim_option_set_hi(value: OptInt);
+    fn nvim_option_set_re(value: OptInt);
+
+    // Special setter
+    fn nvim_option_set_magic_overruled(value: c_int);
 }
 
 // =============================================================================
@@ -677,6 +714,196 @@ pub fn get_clipboard_flags() -> c_uint {
 #[inline]
 pub fn get_magic_overruled() -> c_int {
     unsafe { nvim_option_get_magic_overruled() }
+}
+
+// =============================================================================
+// Safe Rust Wrappers for Option Setting
+// =============================================================================
+
+/// Set the 'autoindent' option value.
+#[inline]
+pub fn set_autoindent(value: bool) {
+    unsafe { nvim_option_set_ai(c_int::from(value)) }
+}
+
+/// Set the 'expandtab' option value.
+#[inline]
+pub fn set_expandtab(value: bool) {
+    unsafe { nvim_option_set_et(c_int::from(value)) }
+}
+
+/// Set the 'ignorecase' option value.
+#[inline]
+pub fn set_ignorecase(value: bool) {
+    unsafe { nvim_option_set_ic(c_int::from(value)) }
+}
+
+/// Set the 'smartcase' option value.
+#[inline]
+pub fn set_smartcase(value: bool) {
+    unsafe { nvim_option_set_scs(c_int::from(value)) }
+}
+
+/// Set the 'hlsearch' option value.
+#[inline]
+pub fn set_hlsearch(value: bool) {
+    unsafe { nvim_option_set_hls(c_int::from(value)) }
+}
+
+/// Set the 'incsearch' option value.
+#[inline]
+pub fn set_incsearch(value: bool) {
+    unsafe { nvim_option_set_is(c_int::from(value)) }
+}
+
+/// Set the 'magic' option value.
+#[inline]
+pub fn set_magic(value: bool) {
+    unsafe { nvim_option_set_magic(c_int::from(value)) }
+}
+
+/// Set the 'modeline' option value.
+#[inline]
+pub fn set_modeline(value: bool) {
+    unsafe { nvim_option_set_ml(c_int::from(value)) }
+}
+
+/// Set the 'paste' option value.
+#[inline]
+pub fn set_paste(value: bool) {
+    unsafe { nvim_option_set_paste(c_int::from(value)) }
+}
+
+/// Set the 'revins' option value.
+#[inline]
+pub fn set_revins(value: bool) {
+    unsafe { nvim_option_set_ri(c_int::from(value)) }
+}
+
+/// Set the 'wrapscan' option value.
+#[inline]
+pub fn set_wrapscan(value: bool) {
+    unsafe { nvim_option_set_ws(c_int::from(value)) }
+}
+
+/// Set the 'gdefault' option value.
+#[inline]
+pub fn set_gdefault(value: bool) {
+    unsafe { nvim_option_set_gd(c_int::from(value)) }
+}
+
+/// Set the 'equalalways' option value.
+#[inline]
+pub fn set_equalalways(value: bool) {
+    unsafe { nvim_option_set_ea(c_int::from(value)) }
+}
+
+/// Set the 'hidden' option value.
+#[inline]
+pub fn set_hidden(value: bool) {
+    unsafe { nvim_option_set_hid(c_int::from(value)) }
+}
+
+/// Set the 'showmatch' option value.
+#[inline]
+pub fn set_showmatch(value: bool) {
+    unsafe { nvim_option_set_sm(c_int::from(value)) }
+}
+
+/// Set the 'lazyredraw' option value.
+#[inline]
+pub fn set_lazyredraw(value: bool) {
+    unsafe { nvim_option_set_lz(c_int::from(value)) }
+}
+
+/// Set the 'tildeop' option value.
+#[inline]
+pub fn set_tildeop(value: bool) {
+    unsafe { nvim_option_set_to(c_int::from(value)) }
+}
+
+/// Set the 'shiftwidth' option value.
+#[inline]
+pub fn set_shiftwidth(value: OptInt) {
+    unsafe { nvim_option_set_sw(value) }
+}
+
+/// Set the 'tabstop' option value.
+#[inline]
+pub fn set_tabstop(value: OptInt) {
+    unsafe { nvim_option_set_ts(value) }
+}
+
+/// Set the 'softtabstop' option value.
+#[inline]
+pub fn set_softtabstop(value: OptInt) {
+    unsafe { nvim_option_set_sts(value) }
+}
+
+/// Set the 'textwidth' option value.
+#[inline]
+pub fn set_textwidth(value: OptInt) {
+    unsafe { nvim_option_set_tw(value) }
+}
+
+/// Set the 'wrapmargin' option value.
+#[inline]
+pub fn set_wrapmargin(value: OptInt) {
+    unsafe { nvim_option_set_wm(value) }
+}
+
+/// Set the 'scrolloff' option value.
+#[inline]
+pub fn set_scrolloff(value: OptInt) {
+    unsafe { nvim_option_set_so(value) }
+}
+
+/// Set the 'sidescrolloff' option value.
+#[inline]
+pub fn set_sidescrolloff(value: OptInt) {
+    unsafe { nvim_option_set_siso(value) }
+}
+
+/// Set the 'report' option value.
+#[inline]
+pub fn set_report(value: OptInt) {
+    unsafe { nvim_option_set_report(value) }
+}
+
+/// Set the 'matchtime' option value.
+#[inline]
+pub fn set_matchtime(value: OptInt) {
+    unsafe { nvim_option_set_mat(value) }
+}
+
+/// Set the 'updatetime' option value.
+#[inline]
+pub fn set_updatetime(value: OptInt) {
+    unsafe { nvim_option_set_ut(value) }
+}
+
+/// Set the 'timeoutlen' option value.
+#[inline]
+pub fn set_timeoutlen(value: OptInt) {
+    unsafe { nvim_option_set_tm(value) }
+}
+
+/// Set the 'history' option value.
+#[inline]
+pub fn set_history(value: OptInt) {
+    unsafe { nvim_option_set_hi(value) }
+}
+
+/// Set the 'regexpengine' option value.
+#[inline]
+pub fn set_regexpengine(value: OptInt) {
+    unsafe { nvim_option_set_re(value) }
+}
+
+/// Set the magic_overruled value.
+#[inline]
+pub fn set_magic_overruled(value: c_int) {
+    unsafe { nvim_option_set_magic_overruled(value) }
 }
 
 // =============================================================================

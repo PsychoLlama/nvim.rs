@@ -208,6 +208,47 @@ int nvim_get_p_fic(void) { return p_fic; }
 int nvim_get_magic_overruled(void) { return (int)magic_overruled; }
 int nvim_get_p_magic(void) { return p_magic; }
 
+// =============================================================================
+// Setter functions for Rust code
+// =============================================================================
+
+// Boolean option setters (direct assignment for simple options)
+void nvim_option_set_ai(int value) { p_ai = value; }
+void nvim_option_set_et(int value) { p_et = value; }
+void nvim_option_set_ic(int value) { p_ic = value; }
+void nvim_option_set_scs(int value) { p_scs = value; }
+void nvim_option_set_hls(int value) { p_hls = value; }
+void nvim_option_set_is(int value) { p_is = value; }
+void nvim_option_set_magic(int value) { p_magic = value; }
+void nvim_option_set_ml(int value) { p_ml = value; }
+void nvim_option_set_paste(int value) { p_paste = value; }
+void nvim_option_set_ri(int value) { p_ri = value; }
+void nvim_option_set_ws(int value) { p_ws = value; }
+void nvim_option_set_gd(int value) { p_gd = value; }
+void nvim_option_set_ea(int value) { p_ea = value; }
+void nvim_option_set_hid(int value) { p_hid = value; }
+void nvim_option_set_sm(int value) { p_sm = value; }
+void nvim_option_set_lz(int value) { p_lz = value; }
+void nvim_option_set_to(int value) { p_to = value; }
+
+// Numeric option setters (direct assignment for simple options)
+void nvim_option_set_sw(OptInt value) { p_sw = value; }
+void nvim_option_set_ts(OptInt value) { p_ts = value; }
+void nvim_option_set_sts(OptInt value) { p_sts = value; }
+void nvim_option_set_tw(OptInt value) { p_tw = value; }
+void nvim_option_set_wm(OptInt value) { p_wm = value; }
+void nvim_option_set_so(OptInt value) { p_so = value; }
+void nvim_option_set_siso(OptInt value) { p_siso = value; }
+void nvim_option_set_report(OptInt value) { p_report = value; }
+void nvim_option_set_mat(OptInt value) { p_mat = value; }
+void nvim_option_set_ut(OptInt value) { p_ut = value; }
+void nvim_option_set_tm(OptInt value) { p_tm = value; }
+void nvim_option_set_hi(OptInt value) { p_hi = value; }
+void nvim_option_set_re(OptInt value) { p_re = value; }
+
+// Special setter for magic_overruled
+void nvim_option_set_magic_overruled(int value) { magic_overruled = (optmagic_T)value; }
+
 static const char e_unknown_option[]
   = N_("E518: Unknown option");
 static const char e_not_allowed_in_modeline[]
