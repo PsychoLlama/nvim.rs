@@ -766,6 +766,91 @@ unsafe fn count_mappings_in_list(start: MapblockHandle, mode: c_int) -> c_int {
 }
 
 // =============================================================================
+// Mode String Validation (for mapset)
+// =============================================================================
+
+/// Mode bitmask for visual + select modes.
+const MASK_V: c_int = MODE_VISUAL | MODE_SELECT;
+
+/// Mode bitmask for normal map modes (n/v/s/o).
+const MASK_MAP: c_int = MODE_NORMAL | MODE_VISUAL | MODE_SELECT | MODE_OP_PENDING;
+
+/// Mode bitmask for insert + cmdline (bang) modes.
+const MASK_BANG: c_int = MODE_INSERT | MODE_CMDLINE;
+
+/// Get mode bits from a mode string with validation.
+///
+/// This function is used by `mapset()` and validates that the mode string
+/// is valid for either a mapping or an abbreviation.
+///
+/// # Arguments
+/// * `mode_string` - NUL-terminated string of mode characters
+/// * `abbr` - true for abbreviations, false for mappings
+///
+/// # Returns
+/// The mode bits, or 0 if the mode string is invalid.
+///
+/// # Safety
+/// `mode_string` must be a valid NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_map_mode_string(mode_string: *const c_char, abbr: c_int) -> c_int {
+    if mode_string.is_null() {
+        return 0;
+    }
+
+    let mut p = mode_string;
+
+    // Compatibility: empty string is treated as " " (all normal-like modes)
+    if *p == 0 {
+        p = c" ".as_ptr();
+    }
+
+    let mut mode: c_int = 0;
+
+    while *p != 0 {
+        let c = *p as u8;
+        let tmode = match c {
+            b'i' => MODE_INSERT,
+            b'l' => MODE_LANGMAP,
+            b'c' => MODE_CMDLINE,
+            b'n' => MODE_NORMAL,
+            b'x' => MODE_VISUAL,
+            b's' => MODE_SELECT,
+            b'o' => MODE_OP_PENDING,
+            b't' => MODE_TERMINAL,
+            b'v' => MASK_V,
+            b'!' => MASK_BANG,
+            b' ' => MASK_MAP,
+            _ => return 0, // Unknown mode character
+        };
+        mode |= tmode;
+        p = p.add(1);
+    }
+
+    // Validation
+    let is_abbr = abbr != 0;
+    if is_abbr {
+        // Abbreviations can only use insert and/or cmdline modes
+        if (mode & !MASK_BANG) != 0 {
+            return 0;
+        }
+    } else {
+        // For mappings, if multiple bits are set, they must form a valid combination
+        let has_multiple_bits = (mode & (mode - 1)) != 0;
+        if has_multiple_bits {
+            // Check if mode is fully contained in one of the allowed masks
+            let in_bang = (mode & MASK_BANG) != 0 && (mode & !MASK_BANG) == 0;
+            let in_map = (mode & MASK_MAP) != 0 && (mode & !MASK_MAP) == 0;
+            if !in_bang && !in_map {
+                return 0;
+            }
+        }
+    }
+
+    mode
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -914,6 +999,69 @@ mod tests {
 
             // Needle longer than haystack
             assert!(!c_strstr(c"hi".as_ptr(), c"hello".as_ptr()));
+        }
+    }
+
+    #[test]
+    fn test_get_map_mode_string_mappings() {
+        unsafe {
+            // Single modes for mappings
+            assert_eq!(rs_get_map_mode_string(c"n".as_ptr(), 0), MODE_NORMAL);
+            assert_eq!(rs_get_map_mode_string(c"i".as_ptr(), 0), MODE_INSERT);
+            assert_eq!(rs_get_map_mode_string(c"c".as_ptr(), 0), MODE_CMDLINE);
+            assert_eq!(rs_get_map_mode_string(c"x".as_ptr(), 0), MODE_VISUAL);
+            assert_eq!(rs_get_map_mode_string(c"s".as_ptr(), 0), MODE_SELECT);
+            assert_eq!(rs_get_map_mode_string(c"o".as_ptr(), 0), MODE_OP_PENDING);
+            assert_eq!(rs_get_map_mode_string(c"t".as_ptr(), 0), MODE_TERMINAL);
+            assert_eq!(rs_get_map_mode_string(c"l".as_ptr(), 0), MODE_LANGMAP);
+
+            // Combined modes
+            assert_eq!(
+                rs_get_map_mode_string(c"v".as_ptr(), 0),
+                MODE_VISUAL | MODE_SELECT
+            );
+            assert_eq!(
+                rs_get_map_mode_string(c"!".as_ptr(), 0),
+                MODE_INSERT | MODE_CMDLINE
+            );
+            assert_eq!(
+                rs_get_map_mode_string(c" ".as_ptr(), 0),
+                MODE_NORMAL | MODE_VISUAL | MODE_SELECT | MODE_OP_PENDING
+            );
+
+            // Empty string = " "
+            assert_eq!(
+                rs_get_map_mode_string(c"".as_ptr(), 0),
+                MODE_NORMAL | MODE_VISUAL | MODE_SELECT | MODE_OP_PENDING
+            );
+
+            // Invalid mode character
+            assert_eq!(rs_get_map_mode_string(c"z".as_ptr(), 0), 0);
+
+            // Invalid combination (normal + insert, not in same mask)
+            assert_eq!(rs_get_map_mode_string(c"ni".as_ptr(), 0), 0);
+        }
+    }
+
+    #[test]
+    fn test_get_map_mode_string_abbreviations() {
+        unsafe {
+            // Abbreviations can only use insert and/or cmdline modes
+            assert_eq!(rs_get_map_mode_string(c"i".as_ptr(), 1), MODE_INSERT);
+            assert_eq!(rs_get_map_mode_string(c"c".as_ptr(), 1), MODE_CMDLINE);
+            assert_eq!(
+                rs_get_map_mode_string(c"!".as_ptr(), 1),
+                MODE_INSERT | MODE_CMDLINE
+            );
+            assert_eq!(
+                rs_get_map_mode_string(c"ic".as_ptr(), 1),
+                MODE_INSERT | MODE_CMDLINE
+            );
+
+            // Normal mode is invalid for abbreviations
+            assert_eq!(rs_get_map_mode_string(c"n".as_ptr(), 1), 0);
+            assert_eq!(rs_get_map_mode_string(c"x".as_ptr(), 1), 0);
+            assert_eq!(rs_get_map_mode_string(c" ".as_ptr(), 1), 0);
         }
     }
 }
