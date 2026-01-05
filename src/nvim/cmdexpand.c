@@ -224,6 +224,12 @@ int nvim_get_pum_want_item(void)
   return pum_want.item;
 }
 
+/// Get wild_menu_showing (for Rust FFI).
+int nvim_get_wild_menu_showing(void)
+{
+  return wild_menu_showing;
+}
+
 #define SHOW_MATCH(m) (showtail ? showmatches_gettail(matches[m], false) : matches[m])
 
 /// Returns true if fuzzy completion is supported for a given cmdline completion

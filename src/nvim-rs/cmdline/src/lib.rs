@@ -9,6 +9,7 @@ pub mod completion;
 pub mod context;
 pub mod expand;
 pub mod pattern;
+pub mod wildmenu;
 
 use std::ffi::c_char;
 use std::os::raw::c_int;
