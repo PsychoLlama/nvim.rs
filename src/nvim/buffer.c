@@ -234,6 +234,42 @@ char nvim_buf_get_bufhidden(buf_T *buf)
   return buf->b_p_bh[0];
 }
 
+/// Get the b_fname field from a buffer (short filename).
+const char *nvim_buf_get_b_fname(buf_T *buf)
+{
+  return buf->b_fname;
+}
+
+/// Get the b_ffname field from a buffer (full filename).
+const char *nvim_buf_get_b_ffname(buf_T *buf)
+{
+  return buf->b_ffname;
+}
+
+/// Get the b_sfname field from a buffer (short filename for display).
+const char *nvim_buf_get_b_sfname(buf_T *buf)
+{
+  return buf->b_sfname;
+}
+
+/// Get the b_p_ro (readonly option) field from a buffer.
+int nvim_buf_get_b_p_ro(buf_T *buf)
+{
+  return buf->b_p_ro;
+}
+
+/// Get the b_p_ft (filetype option) field from a buffer.
+const char *nvim_buf_get_b_p_ft(buf_T *buf)
+{
+  return buf->b_p_ft;
+}
+
+/// Get the b_p_ma (modifiable option) field from a buffer.
+int nvim_buf_get_b_p_ma(buf_T *buf)
+{
+  return buf->b_p_ma;
+}
+
 /// Get the global p_hid option (hidden buffers).
 int nvim_get_p_hid(void)
 {

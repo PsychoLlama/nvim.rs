@@ -7,10 +7,10 @@
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::must_use_candidate)]
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_int, c_void, CStr};
 use std::io::Write;
 
-use nvim_window::{Frame, WinHandle, FR_COL};
+use nvim_window::{BufHandle, Frame, WinHandle, FR_COL};
 
 /// schar_T is stored as a u32 in Rust.
 type ScharT = u32;
@@ -122,6 +122,16 @@ extern "C" {
     fn nvim_win_get_arg_idx(wp: WinHandle) -> c_int;
     fn nvim_win_get_arg_idx_invalid(wp: WinHandle) -> c_int;
     fn nvim_win_argcount(wp: WinHandle) -> c_int;
+    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
+    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> LinenrT;
+
+    // Buffer accessors for statusline rendering
+    fn nvim_buf_get_b_fname(buf: BufHandle) -> *const c_char;
+    fn nvim_buf_get_b_ffname(buf: BufHandle) -> *const c_char;
+    fn nvim_buf_get_b_p_ro(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_b_p_ft(buf: BufHandle) -> *const c_char;
+    fn nvim_buf_get_b_p_ma(buf: BufHandle) -> c_int;
+    fn nvim_buf_get_b_changed(buf: BufHandle) -> bool;
 }
 
 /// Check if the status line of window "wp" is connected to the status
@@ -562,6 +572,342 @@ pub unsafe extern "C" fn rs_stl_fill_between(
     )
 }
 
+// =============================================================================
+// Statusline Item Renderers
+// =============================================================================
+
+/// Filename item types for rendering.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StlFilenameType {
+    /// Short filename (%f, %t)
+    Short = 0,
+    /// Full path filename (%F)
+    FullPath = 1,
+    /// Tail only (just the filename without path)
+    Tail = 2,
+}
+
+/// Render the filename for statusline.
+///
+/// Returns the length of the rendered string (not including NUL).
+#[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+fn stl_render_filename_impl(buf: &mut [u8], wp: WinHandle, ftype: StlFilenameType) -> c_int {
+    if buf.is_empty() || wp.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        let buf_handle = nvim_win_get_buffer(wp);
+        if buf_handle.is_null() {
+            return 0;
+        }
+
+        let fname_ptr = match ftype {
+            StlFilenameType::FullPath => nvim_buf_get_b_ffname(buf_handle),
+            StlFilenameType::Short | StlFilenameType::Tail => nvim_buf_get_b_fname(buf_handle),
+        };
+
+        if fname_ptr.is_null() {
+            // No name, return "[No Name]"
+            let no_name = b"[No Name]";
+            let len = no_name.len().min(buf.len());
+            buf[..len].copy_from_slice(&no_name[..len]);
+            return len as c_int;
+        }
+
+        let Ok(fname) = CStr::from_ptr(fname_ptr).to_str() else {
+            return 0;
+        };
+
+        // For tail type, get just the filename
+        let output = if ftype == StlFilenameType::Tail {
+            fname.rsplit('/').next().unwrap_or(fname)
+        } else {
+            fname
+        };
+
+        let len = output.len().min(buf.len());
+        buf[..len].copy_from_slice(output.as_bytes());
+        len as c_int
+    }
+}
+
+/// Render the modified flag for statusline.
+///
+/// Returns "[+]" if modified, "[-]" if not modifiable, or empty string.
+#[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+fn stl_render_modified_impl(buf: &mut [u8], wp: WinHandle, short: bool) -> c_int {
+    if buf.len() < 3 || wp.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        let buf_handle = nvim_win_get_buffer(wp);
+        if buf_handle.is_null() {
+            return 0;
+        }
+
+        let changed = nvim_buf_get_b_changed(buf_handle);
+        let modifiable = nvim_buf_get_b_p_ma(buf_handle) != 0;
+
+        if changed {
+            let marker: &[u8] = if short { b"+" } else { b"[+]" };
+            let len = marker.len().min(buf.len());
+            buf[..len].copy_from_slice(&marker[..len]);
+            len as c_int
+        } else if !modifiable {
+            let marker: &[u8] = if short { b"-" } else { b"[-]" };
+            let len = marker.len().min(buf.len());
+            buf[..len].copy_from_slice(&marker[..len]);
+            len as c_int
+        } else {
+            0
+        }
+    }
+}
+
+/// Render the readonly flag for statusline.
+///
+/// Returns "[RO]" if readonly, empty string otherwise.
+#[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+fn stl_render_readonly_impl(buf: &mut [u8], wp: WinHandle, short: bool) -> c_int {
+    if buf.len() < 4 || wp.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        let buf_handle = nvim_win_get_buffer(wp);
+        if buf_handle.is_null() {
+            return 0;
+        }
+
+        let readonly = nvim_buf_get_b_p_ro(buf_handle) != 0;
+
+        if readonly {
+            let marker: &[u8] = if short { b"RO" } else { b"[RO]" };
+            let len = marker.len().min(buf.len());
+            buf[..len].copy_from_slice(&marker[..len]);
+            len as c_int
+        } else {
+            0
+        }
+    }
+}
+
+/// Render the filetype for statusline.
+///
+/// Returns "[filetype]" or ",filetype" depending on format.
+fn stl_render_filetype_impl(buf: &mut [u8], wp: WinHandle, bracketed: bool) -> c_int {
+    if buf.is_empty() || wp.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        let buf_handle = nvim_win_get_buffer(wp);
+        if buf_handle.is_null() {
+            return 0;
+        }
+
+        let ft_ptr = nvim_buf_get_b_p_ft(buf_handle);
+        if ft_ptr.is_null() {
+            return 0;
+        }
+
+        let ft = match CStr::from_ptr(ft_ptr).to_str() {
+            Ok(s) if !s.is_empty() => s,
+            _ => return 0,
+        };
+
+        let mut cursor = std::io::Cursor::new(buf);
+        let result = if bracketed {
+            write!(cursor, "[{ft}]")
+        } else {
+            write!(cursor, ",{ft}")
+        };
+
+        match result {
+            #[allow(clippy::cast_possible_truncation)]
+            Ok(()) => cursor.position() as c_int,
+            Err(_) => 0,
+        }
+    }
+}
+
+/// Render line/column position for statusline.
+///
+/// Returns formatted string like "10" or "10/100" depending on format.
+fn stl_render_line_col_impl(buf: &mut [u8], wp: WinHandle, show_total: bool) -> c_int {
+    if buf.is_empty() || wp.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        let lnum = nvim_win_get_cursor_lnum(wp);
+        let line_count = nvim_win_buf_line_count(wp);
+
+        let mut cursor = std::io::Cursor::new(buf);
+        let result = if show_total {
+            write!(cursor, "{lnum}/{line_count}")
+        } else {
+            write!(cursor, "{lnum}")
+        };
+
+        match result {
+            #[allow(clippy::cast_possible_truncation)]
+            Ok(()) => cursor.position() as c_int,
+            Err(_) => 0,
+        }
+    }
+}
+
+/// Render percentage for statusline (%p item).
+///
+/// Returns a percentage string like "50".
+#[allow(clippy::cast_sign_loss)]
+fn stl_render_percentage_impl(buf: &mut [u8], wp: WinHandle) -> c_int {
+    if buf.is_empty() || wp.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        let lnum = nvim_win_get_cursor_lnum(wp);
+        let line_count = nvim_win_buf_line_count(wp);
+
+        // Calculate percentage using the same formula as calc_percentage
+        let perc = if line_count > 0 {
+            let lnum_i64 = i64::from(lnum);
+            let count_i64 = i64::from(line_count);
+            let result = ((lnum_i64 * 100) + (count_i64 / 2)) / count_i64;
+            result.clamp(0, 100) as u8
+        } else {
+            0
+        };
+
+        let mut cursor = std::io::Cursor::new(buf);
+        let result = write!(cursor, "{perc}");
+
+        match result {
+            #[allow(clippy::cast_possible_truncation)]
+            Ok(()) => cursor.position() as c_int,
+            Err(_) => 0,
+        }
+    }
+}
+
+/// FFI export: Render filename for statusline.
+///
+/// # Safety
+/// `buf` must be null or valid pointer to buffer of `buflen` bytes.
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_render_filename(
+    buf: *mut u8,
+    buflen: usize,
+    wp: WinHandle,
+    ftype: StlFilenameType,
+) -> c_int {
+    if buf.is_null() || buflen == 0 {
+        return 0;
+    }
+    let slice = std::slice::from_raw_parts_mut(buf, buflen);
+    stl_render_filename_impl(slice, wp, ftype)
+}
+
+/// FFI export: Render modified flag for statusline.
+///
+/// # Safety
+/// `buf` must be null or valid pointer to buffer of `buflen` bytes.
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_render_modified(
+    buf: *mut u8,
+    buflen: usize,
+    wp: WinHandle,
+    short: c_int,
+) -> c_int {
+    if buf.is_null() || buflen == 0 {
+        return 0;
+    }
+    let slice = std::slice::from_raw_parts_mut(buf, buflen);
+    stl_render_modified_impl(slice, wp, short != 0)
+}
+
+/// FFI export: Render readonly flag for statusline.
+///
+/// # Safety
+/// `buf` must be null or valid pointer to buffer of `buflen` bytes.
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_render_readonly(
+    buf: *mut u8,
+    buflen: usize,
+    wp: WinHandle,
+    short: c_int,
+) -> c_int {
+    if buf.is_null() || buflen == 0 {
+        return 0;
+    }
+    let slice = std::slice::from_raw_parts_mut(buf, buflen);
+    stl_render_readonly_impl(slice, wp, short != 0)
+}
+
+/// FFI export: Render filetype for statusline.
+///
+/// # Safety
+/// `buf` must be null or valid pointer to buffer of `buflen` bytes.
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_render_filetype(
+    buf: *mut u8,
+    buflen: usize,
+    wp: WinHandle,
+    bracketed: c_int,
+) -> c_int {
+    if buf.is_null() || buflen == 0 {
+        return 0;
+    }
+    let slice = std::slice::from_raw_parts_mut(buf, buflen);
+    stl_render_filetype_impl(slice, wp, bracketed != 0)
+}
+
+/// FFI export: Render line/column for statusline.
+///
+/// # Safety
+/// `buf` must be null or valid pointer to buffer of `buflen` bytes.
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_render_line_col(
+    buf: *mut u8,
+    buflen: usize,
+    wp: WinHandle,
+    show_total: c_int,
+) -> c_int {
+    if buf.is_null() || buflen == 0 {
+        return 0;
+    }
+    let slice = std::slice::from_raw_parts_mut(buf, buflen);
+    stl_render_line_col_impl(slice, wp, show_total != 0)
+}
+
+/// FFI export: Render percentage for statusline.
+///
+/// # Safety
+/// `buf` must be null or valid pointer to buffer of `buflen` bytes.
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_render_percentage(
+    buf: *mut u8,
+    buflen: usize,
+    wp: WinHandle,
+) -> c_int {
+    if buf.is_null() || buflen == 0 {
+        return 0;
+    }
+    let slice = std::slice::from_raw_parts_mut(buf, buflen);
+    stl_render_percentage_impl(slice, wp)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -745,4 +1091,25 @@ mod tests {
         // Should be 3 * 4 = 12 bytes (3 c_int fields)
         assert_eq!(std::mem::size_of::<StlGroupItem>(), 12);
     }
+
+    // =========================================================================
+    // Statusline Renderer Tests
+    // =========================================================================
+
+    #[test]
+    fn test_stl_filename_type_values() {
+        // Verify enum values
+        assert_eq!(StlFilenameType::Short as c_int, 0);
+        assert_eq!(StlFilenameType::FullPath as c_int, 1);
+        assert_eq!(StlFilenameType::Tail as c_int, 2);
+    }
+
+    #[test]
+    fn test_stl_filename_type_size() {
+        // Should be 4 bytes (c_int sized)
+        assert_eq!(std::mem::size_of::<StlFilenameType>(), 4);
+    }
+
+    // Note: Tests for stl_render_* functions require C FFI calls
+    // and are tested through integration tests.
 }
