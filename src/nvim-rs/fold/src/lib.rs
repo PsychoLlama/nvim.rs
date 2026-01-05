@@ -86,6 +86,18 @@ pub mod fold_flags {
     use std::ffi::c_char;
 }
 
+/// TriState values (matching C enum in `types_defs.h`).
+pub mod tristate {
+    use std::ffi::c_int;
+
+    /// kNone - undefined/unknown state.
+    pub const K_NONE: c_int = -1;
+    /// kFalse - false state.
+    pub const K_FALSE: c_int = 0;
+    /// kTrue - true state.
+    pub const K_TRUE: c_int = 1;
+}
+
 // C accessor functions
 extern "C" {
     /// Get a character from the window's foldmethod string at the given index.
@@ -144,6 +156,19 @@ extern "C" {
 
     /// Call checkupdate for a window.
     fn nvim_checkupdate(wp: WinHandle);
+
+    /// Set the fd_flags field of a fold.
+    fn nvim_fold_set_fd_flags(fp: FoldHandle, flags: c_char);
+
+    /// Get the fd_small field from a fold.
+    #[allow(dead_code)]
+    fn nvim_fold_get_fd_small(fp: FoldHandle) -> c_int;
+
+    /// Set the fd_small field of a fold.
+    fn nvim_fold_set_fd_small(fp: FoldHandle, small: c_int);
+
+    /// Swap two fold entries in a garray.
+    fn nvim_fold_swap(gap: GArrayHandle, idx1: c_int, idx2: c_int);
 
     // ========================================================================
     // Phase 2: Fold navigation accessors
@@ -507,6 +532,118 @@ fn line_folded_impl(win: WinHandle, lnum: LineNr) -> bool {
 }
 
 // ============================================================================
+// Phase 1: Pure Recursive Functions
+// ============================================================================
+
+/// Check if folds should close recursively based on foldlevel.
+///
+/// Only manually opened folds (FD_OPEN) may need to be closed.
+/// If level <= 0 and lnum is outside the fold, reset to FD_LEVEL.
+/// Otherwise recurse into nested folds.
+fn check_close_rec_impl(gap: GArrayHandle, lnum: LineNr, level: c_int) -> bool {
+    if gap.is_null() {
+        return false;
+    }
+
+    let len = unsafe { nvim_ga_len(gap) };
+    let mut retval = false;
+
+    for i in 0..len {
+        let fp = unsafe { nvim_ga_fold_at(gap, i) };
+        if fp.is_null() {
+            continue;
+        }
+
+        let flags = unsafe { nvim_fold_get_fd_flags(fp) };
+
+        // Only manually opened folds may need to be closed.
+        if flags == fold_flags::FD_OPEN {
+            let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+            let fd_len = unsafe { nvim_fold_get_fd_len(fp) };
+
+            if level <= 0 && (lnum < fd_top || lnum >= fd_top + fd_len) {
+                // lnum is outside this fold, reset to FD_LEVEL
+                unsafe { nvim_fold_set_fd_flags(fp, fold_flags::FD_LEVEL) };
+                retval = true;
+            } else {
+                // Check nested folds (lnum relative to containing fold)
+                let nested = unsafe { nvim_fold_get_fd_nested(fp) };
+                retval |= check_close_rec_impl(nested, lnum - fd_top, level - 1);
+            }
+        }
+    }
+
+    retval
+}
+
+/// Open all nested folds in a fold recursively.
+///
+/// Sets FD_OPEN flag on all nested folds.
+fn fold_open_nested_impl(fp: FoldHandle) {
+    if fp.is_null() {
+        return;
+    }
+
+    let nested = unsafe { nvim_fold_get_fd_nested(fp) };
+    if nested.is_null() {
+        return;
+    }
+
+    let len = unsafe { nvim_ga_len(nested) };
+    for i in 0..len {
+        let nested_fp = unsafe { nvim_ga_fold_at(nested, i) };
+        if nested_fp.is_null() {
+            continue;
+        }
+
+        // First recurse into this fold's nested folds
+        fold_open_nested_impl(nested_fp);
+
+        // Then set this fold to open
+        unsafe { nvim_fold_set_fd_flags(nested_fp, fold_flags::FD_OPEN) };
+    }
+}
+
+/// Set small flags in a fold array to kNone.
+///
+/// This resets the fd_small field so it will be recalculated.
+fn set_small_maybe_impl(gap: GArrayHandle) {
+    if gap.is_null() {
+        return;
+    }
+
+    let len = unsafe { nvim_ga_len(gap) };
+    for i in 0..len {
+        let fp = unsafe { nvim_ga_fold_at(gap, i) };
+        if fp.is_null() {
+            continue;
+        }
+
+        unsafe { nvim_fold_set_fd_small(fp, tristate::K_NONE) };
+    }
+}
+
+/// Reverse the order of fold entries in a garray.
+///
+/// Reverses entries from start_arg to end_arg (inclusive).
+#[allow(clippy::cast_possible_truncation)]
+fn fold_reverse_order_impl(gap: GArrayHandle, start_arg: LineNr, end_arg: LineNr) {
+    if gap.is_null() {
+        return;
+    }
+
+    let mut start = start_arg;
+    let mut end = end_arg;
+
+    // Indices are bounded by garray length, which fits in c_int
+    while start < end {
+        unsafe { nvim_fold_swap(gap, start as c_int, end as c_int) };
+        start += 1;
+        end -= 1;
+    }
+}
+
+// ============================================================================
 // FFI Exports
 // ============================================================================
 
@@ -628,6 +765,53 @@ pub extern "C" fn rs_find_wl_entry(win: WinHandle, lnum: LineNr) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_lineFolded(win: WinHandle, lnum: LineNr) -> c_int {
     c_int::from(line_folded_impl(win, lnum))
+}
+
+// ============================================================================
+// Phase 1: Pure Recursive Functions - FFI Exports
+// ============================================================================
+
+/// Check if folds should close recursively based on foldlevel.
+///
+/// Returns true if any fold was changed.
+///
+/// # Safety
+/// The `gap` parameter must be a valid `garray_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_checkCloseRec(gap: GArrayHandle, lnum: LineNr, level: c_int) -> c_int {
+    c_int::from(check_close_rec_impl(gap, lnum, level))
+}
+
+/// Open all nested folds in a fold recursively.
+///
+/// Sets FD_OPEN flag on all nested folds.
+///
+/// # Safety
+/// The `fp` parameter must be a valid `fold_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_foldOpenNested(fp: FoldHandle) {
+    fold_open_nested_impl(fp);
+}
+
+/// Set small flags in a fold array to kNone.
+///
+/// # Safety
+/// The `gap` parameter must be a valid `garray_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_setSmallMaybe(gap: GArrayHandle) {
+    set_small_maybe_impl(gap);
+}
+
+/// Reverse the order of fold entries in a garray.
+///
+/// Reverses entries from start to end (inclusive).
+///
+/// # Safety
+/// The `gap` parameter must be a valid `garray_T*` pointer or null.
+/// Start and end must be valid indices.
+#[no_mangle]
+pub extern "C" fn rs_foldReverseOrder(gap: GArrayHandle, start: LineNr, end: LineNr) {
+    fold_reverse_order_impl(gap, start, end);
 }
 
 #[cfg(test)]

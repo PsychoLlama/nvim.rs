@@ -104,6 +104,12 @@ extern int rs_foldmethodIsDiff(win_T *wp);
 extern int rs_hasAnyFolding(win_T *win);
 extern int rs_foldManualAllowed(bool create);
 
+// Rust FFI declarations for Phase 1: Pure recursive functions
+extern int rs_checkCloseRec(garray_T *gap, linenr_T lnum, int level);
+extern void rs_foldOpenNested(fold_T *fp);
+extern void rs_setSmallMaybe(garray_T *gap);
+extern void rs_foldReverseOrder(garray_T *gap, linenr_T start, linenr_T end);
+
 static const char *e_nofold = N_("E490: No fold found");
 
 // While updating the folds lines between invalid_top and invalid_bot have an
@@ -491,23 +497,7 @@ void foldCheckClose(void)
 // checkCloseRec() {{{2
 static bool checkCloseRec(garray_T *gap, linenr_T lnum, int level)
 {
-  bool retval = false;
-
-  fold_T *fp = (fold_T *)gap->ga_data;
-  for (int i = 0; i < gap->ga_len; i++) {
-    // Only manually opened folds may need to be closed.
-    if (fp[i].fd_flags == FD_OPEN) {
-      if (level <= 0 && (lnum < fp[i].fd_top
-                         || lnum >= fp[i].fd_top + fp[i].fd_len)) {
-        fp[i].fd_flags = FD_LEVEL;
-        retval = true;
-      } else {
-        retval |= checkCloseRec(&fp[i].fd_nested, lnum - fp[i].fd_top,
-                                level - 1);
-      }
-    }
-  }
-  return retval;
+  return rs_checkCloseRec(gap, lnum, level) != 0;
 }
 
 // foldManualAllowed() {{{2
@@ -1254,11 +1244,7 @@ static linenr_T setManualFoldWin(win_T *wp, linenr_T lnum, bool opening, bool re
 /// Open all nested folds in fold "fpr" recursively.
 static void foldOpenNested(fold_T *fpr)
 {
-  fold_T *fp = (fold_T *)fpr->fd_nested.ga_data;
-  for (int i = 0; i < fpr->fd_nested.ga_len; i++) {
-    foldOpenNested(&fp[i]);
-    fp[i].fd_flags = FD_OPEN;
-  }
+  rs_foldOpenNested(fpr);
 }
 
 // deleteFoldEntry() {{{2
@@ -1528,10 +1514,7 @@ static void checkSmall(win_T *const wp, fold_T *const fp, const linenr_T lnum_of
 /// Set small flags in "gap" to kNone.
 static void setSmallMaybe(garray_T *gap)
 {
-  fold_T *fp = (fold_T *)gap->ga_data;
-  for (int i = 0; i < gap->ga_len; i++) {
-    fp[i].fd_small = kNone;
-  }
+  rs_setSmallMaybe(gap);
 }
 
 // foldCreateMarkers() {{{2
@@ -2633,15 +2616,7 @@ static void foldRemove(win_T *const wp, garray_T *gap, linenr_T top, linenr_T bo
 // foldReverseOrder() {{{2
 static void foldReverseOrder(garray_T *gap, const linenr_T start_arg, const linenr_T end_arg)
 {
-  linenr_T start = start_arg;
-  linenr_T end = end_arg;
-  for (; start < end; start++, end--) {
-    fold_T *left = (fold_T *)gap->ga_data + start;
-    fold_T *right = (fold_T *)gap->ga_data + end;
-    fold_T tmp = *left;
-    *left = *right;
-    *right = tmp;
-  }
+  rs_foldReverseOrder(gap, start_arg, end_arg);
 }
 
 // foldMoveRange() {{{2
@@ -3404,4 +3379,36 @@ linenr_T nvim_wline_get_foldend(wline_T *wl)
 bool nvim_wline_get_valid(wline_T *wl)
 {
   return wl->wl_valid;
+}
+
+// ============================================================================
+// Phase 1: Accessors for recursive functions
+// ============================================================================
+
+/// Set the fd_flags field of a fold.
+void nvim_fold_set_fd_flags(fold_T *fp, char flags)
+{
+  fp->fd_flags = flags;
+}
+
+/// Get the fd_small field from a fold.
+int nvim_fold_get_fd_small(fold_T *fp)
+{
+  return (int)fp->fd_small;
+}
+
+/// Set the fd_small field of a fold.
+void nvim_fold_set_fd_small(fold_T *fp, int small)
+{
+  fp->fd_small = (TriState)small;
+}
+
+/// Swap two fold entries in a garray.
+/// idx1 and idx2 must be valid indices.
+void nvim_fold_swap(garray_T *gap, int idx1, int idx2)
+{
+  fold_T *data = (fold_T *)gap->ga_data;
+  fold_T tmp = data[idx1];
+  data[idx1] = data[idx2];
+  data[idx2] = tmp;
 }
