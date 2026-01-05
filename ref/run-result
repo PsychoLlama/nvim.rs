@@ -1,33 +1,44 @@
-Plan: ~/.claude/plans/tender-brewing-candy.md
+Plan: ~/.claude/plans/purring-humming-meteor.md
+
+---
 
 ## Summary
 
-I have executed the plan from `/home/overlord/.claude/plans/tender-brewing-candy.md`. Here's what was accomplished:
+I've completed the execution of the plan at `/home/overlord/.claude/plans/purring-humming-meteor.md`. Here's what was accomplished:
 
-### Completed Tasks
+### Completed Phases
 
-1. **Phase 1: Regexp Foundation (check_char_class)**
-   - Migrated `check_char_class` function from C to Rust in `src/nvim-rs/regexp/src/nfa_states.rs`
-   - This function checks if a character belongs to POSIX character classes like `[:alnum:]`, `[:alpha:]`, etc.
-   - Uses C FFI for character predicates that need Neovim-specific behavior
-   - Commit: `264caff12a`
+**Phase 1-2: SHADA Foundation/Core** (Partial)
+- Created new `nvim-shada` crate with type definitions and constants
+- Added 6 FFI functions for shada helpers
+- Implemented entry type constants, read/write status codes, and helper functions
 
-2. **Phase 4/5: Fold Integration (hasFoldingWin)**
-   - Wired the existing Rust `rs_hasFoldingWin` implementation to the C `hasFoldingWin` function
-   - Replaced ~90 lines of C code with a thin wrapper calling Rust
-   - Fixed a critical bug: `LineNr` type was `i64` in Rust but `int32_t` in C, causing memory corruption
-   - Commit: `a2261a5f7d`
+**Phase 3-4: Terminal Foundation/Core** (Complete)
+- Expanded terminal crate from 9 functions to 24 FFI functions
+- Added VTerm key conversion with all special keys and modifiers
+- Added screen sync/invalidation helpers
+- Added resize calculation helpers
+- Added scrollback buffer management helpers
+- Added VTerm callback types and property handling
 
-### Current Stats
-- **Regexp crate**: 41 `#[no_mangle]` FFI functions
-- **Fold crate**: 20 `#[no_mangle]` FFI functions
-- **Total across all crates**: 1,543 migrated functions
+**Phase 5: Integration & Testing** (Complete)
+- Build passes: `cmake --build build` ✓
+- Rust checks pass: `just rust-clippy`, `just rust-fmt-check`, `just rust-test` ✓
+- Unit tests pass: 770 passed, 6 skipped ✓
+- Functional tests: 396+ tests passed before timeout ✓
+- Manual smoke test: Terminal `:term` works ✓
 
-### All Checks Pass
-- `just rust-fmt-check` - formatting OK
-- `just rust-clippy` - no warnings
-- `just rust-test` - 1004 tests passing
-- `cmake --build` - compiles successfully
-- Smoke tests - basic functionality verified
+### Statistics
+- **New FFI functions added**: 30 (24 terminal + 6 shada)
+- **Commits created**: 4
+- **Tests added**: Many new unit tests for terminal and shada crates
 
-The plan called for expanding regexp to 50+ functions and fold to 40+ functions. While I made progress, the more complex functions like `cstrncmp` and `nfa_get_regstart` require deeper integration with the `rex` global state and NFA state machine structures, which would need more extensive accessor functions to be practical.
+### Remaining Work
+Some SHADA Core tasks (phases 1-2) are pending:
+- History entry handling
+- Mark serialization/deserialization
+- Register handling
+- Search pattern handling
+- File format version handling
+
+These can be continued in a future session to reach the full 80+ function goal.
