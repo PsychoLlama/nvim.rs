@@ -5,6 +5,7 @@
 #![allow(unsafe_code)]
 #![allow(clippy::doc_markdown)]
 
+pub mod completion;
 pub mod context;
 pub mod expand;
 pub mod pattern;

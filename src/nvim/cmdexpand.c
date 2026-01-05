@@ -206,6 +206,24 @@ int nvim_get_cmdline_win_is_null(void)
   return cmdline_win == NULL;
 }
 
+/// Check if xp->xp_orig is not NULL (for Rust FFI).
+int nvim_expand_get_orig_not_null(const expand_T *xp)
+{
+  return xp && xp->xp_orig != NULL;
+}
+
+/// Get pum_want.active (for Rust FFI).
+int nvim_get_pum_want_active(void)
+{
+  return pum_want.active;
+}
+
+/// Get pum_want.item (for Rust FFI).
+int nvim_get_pum_want_item(void)
+{
+  return pum_want.item;
+}
+
 #define SHOW_MATCH(m) (showtail ? showmatches_gettail(matches[m], false) : matches[m])
 
 /// Returns true if fuzzy completion is supported for a given cmdline completion
