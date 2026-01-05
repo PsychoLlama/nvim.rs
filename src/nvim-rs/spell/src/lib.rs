@@ -313,6 +313,52 @@ pub unsafe extern "C" fn rs_find_region(rp: *const c_char, region: *const c_char
     find_region_impl(rp, region)
 }
 
+/// Convert a SAL line argument to boolean.
+///
+/// Returns true if the string is "1" or "true", false otherwise.
+///
+/// # Safety
+///
+/// `s` must be a valid null-terminated C string.
+#[inline]
+#[allow(clippy::missing_const_for_fn)] // unsafe blocks prevent const
+#[allow(clippy::cast_possible_wrap)] // ASCII chars are always valid in both u8 and i8
+unsafe fn sal_to_bool_impl(s: *const c_char) -> bool {
+    if s.is_null() {
+        return false;
+    }
+
+    // Check for "1"
+    if *s == b'1' as c_char && *s.add(1) == 0 {
+        return true;
+    }
+
+    // Check for "true"
+    if *s == b't' as c_char
+        && *s.add(1) == b'r' as c_char
+        && *s.add(2) == b'u' as c_char
+        && *s.add(3) == b'e' as c_char
+        && *s.add(4) == 0
+    {
+        return true;
+    }
+
+    false
+}
+
+/// FFI wrapper for `sal_to_bool`.
+///
+/// Converts a boolean argument in a SAL line to true or false.
+/// Returns true if the string is "1" or "true", false otherwise.
+///
+/// # Safety
+///
+/// `s` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sal_to_bool(s: *const c_char) -> bool {
+    sal_to_bool_impl(s)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -525,15 +571,24 @@ mod tests {
 
         unsafe {
             assert_eq!(
-                find_region_impl(regions.as_ptr() as *const c_char, us.as_ptr() as *const c_char),
+                find_region_impl(
+                    regions.as_ptr() as *const c_char,
+                    us.as_ptr() as *const c_char
+                ),
                 0
             );
             assert_eq!(
-                find_region_impl(regions.as_ptr() as *const c_char, uk.as_ptr() as *const c_char),
+                find_region_impl(
+                    regions.as_ptr() as *const c_char,
+                    uk.as_ptr() as *const c_char
+                ),
                 1
             );
             assert_eq!(
-                find_region_impl(regions.as_ptr() as *const c_char, au.as_ptr() as *const c_char),
+                find_region_impl(
+                    regions.as_ptr() as *const c_char,
+                    au.as_ptr() as *const c_char
+                ),
                 2
             );
         }
@@ -546,7 +601,10 @@ mod tests {
 
         unsafe {
             assert_eq!(
-                find_region_impl(regions.as_ptr() as *const c_char, de.as_ptr() as *const c_char),
+                find_region_impl(
+                    regions.as_ptr() as *const c_char,
+                    de.as_ptr() as *const c_char
+                ),
                 REGION_ALL
             );
         }
@@ -559,7 +617,10 @@ mod tests {
 
         unsafe {
             assert_eq!(
-                find_region_impl(empty.as_ptr() as *const c_char, us.as_ptr() as *const c_char),
+                find_region_impl(
+                    empty.as_ptr() as *const c_char,
+                    us.as_ptr() as *const c_char
+                ),
                 REGION_ALL
             );
         }
@@ -589,11 +650,17 @@ mod tests {
 
         unsafe {
             assert_eq!(
-                rs_find_region(regions.as_ptr() as *const c_char, uk.as_ptr() as *const c_char),
+                rs_find_region(
+                    regions.as_ptr() as *const c_char,
+                    uk.as_ptr() as *const c_char
+                ),
                 1
             );
             assert_eq!(
-                rs_find_region(regions.as_ptr() as *const c_char, de.as_ptr() as *const c_char),
+                rs_find_region(
+                    regions.as_ptr() as *const c_char,
+                    de.as_ptr() as *const c_char
+                ),
                 REGION_ALL
             );
         }
@@ -602,5 +669,95 @@ mod tests {
     #[test]
     fn test_region_all_constant() {
         assert_eq!(REGION_ALL, 0xff);
+    }
+
+    #[test]
+    fn test_sal_to_bool_one() {
+        let one = b"1\0";
+        unsafe {
+            assert!(sal_to_bool_impl(one.as_ptr() as *const c_char));
+        }
+    }
+
+    #[test]
+    fn test_sal_to_bool_true() {
+        let t = b"true\0";
+        unsafe {
+            assert!(sal_to_bool_impl(t.as_ptr() as *const c_char));
+        }
+    }
+
+    #[test]
+    fn test_sal_to_bool_false() {
+        let f = b"false\0";
+        unsafe {
+            assert!(!sal_to_bool_impl(f.as_ptr() as *const c_char));
+        }
+    }
+
+    #[test]
+    fn test_sal_to_bool_zero() {
+        let zero = b"0\0";
+        unsafe {
+            assert!(!sal_to_bool_impl(zero.as_ptr() as *const c_char));
+        }
+    }
+
+    #[test]
+    fn test_sal_to_bool_empty() {
+        let empty = b"\0";
+        unsafe {
+            assert!(!sal_to_bool_impl(empty.as_ptr() as *const c_char));
+        }
+    }
+
+    #[test]
+    fn test_sal_to_bool_null() {
+        unsafe {
+            assert!(!sal_to_bool_impl(std::ptr::null()));
+        }
+    }
+
+    #[test]
+    fn test_sal_to_bool_true_uppercase() {
+        // "TRUE" should return false (case-sensitive)
+        let t = b"TRUE\0";
+        unsafe {
+            assert!(!sal_to_bool_impl(t.as_ptr() as *const c_char));
+        }
+    }
+
+    #[test]
+    fn test_sal_to_bool_partial_matches() {
+        // "true1" should return false
+        let t1 = b"true1\0";
+        unsafe {
+            assert!(!sal_to_bool_impl(t1.as_ptr() as *const c_char));
+        }
+
+        // "1true" should return false
+        let one_true = b"1true\0";
+        unsafe {
+            assert!(!sal_to_bool_impl(one_true.as_ptr() as *const c_char));
+        }
+
+        // "tru" should return false
+        let tru = b"tru\0";
+        unsafe {
+            assert!(!sal_to_bool_impl(tru.as_ptr() as *const c_char));
+        }
+    }
+
+    #[test]
+    fn test_sal_to_bool_ffi() {
+        let one = b"1\0";
+        let t = b"true\0";
+        let f = b"false\0";
+        unsafe {
+            assert!(rs_sal_to_bool(one.as_ptr() as *const c_char));
+            assert!(rs_sal_to_bool(t.as_ptr() as *const c_char));
+            assert!(!rs_sal_to_bool(f.as_ptr() as *const c_char));
+            assert!(!rs_sal_to_bool(std::ptr::null()));
+        }
     }
 }

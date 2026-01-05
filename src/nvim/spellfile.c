@@ -2982,10 +2982,13 @@ static void add_fromto(spellinfo_T *spin, garray_T *gap, char *from, char *to)
   ftp->ft_to = getroom_save(spin, word);
 }
 
+// Rust implementation
+extern bool rs_sal_to_bool(const char *s);
+
 /// Converts a boolean argument in a SAL line to true or false;
 static bool sal_to_bool(char *s)
 {
-  return strcmp(s, "1") == 0 || strcmp(s, "true") == 0;
+  return rs_sal_to_bool(s);
 }
 
 // Free the structure filled by spell_read_aff().
