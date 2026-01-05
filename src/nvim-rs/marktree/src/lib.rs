@@ -1214,11 +1214,7 @@ pub fn marktree_lookup(b: MarkTreeHandle, id: u64, itr: MarkTreeIterHandle) -> M
 
 /// Exported FFI version of `marktree_lookup`.
 #[no_mangle]
-pub extern "C" fn rs_marktree_lookup(
-    b: MarkTreeHandle,
-    id: u64,
-    itr: MarkTreeIterHandle,
-) -> MTKey {
+pub extern "C" fn rs_marktree_lookup(b: MarkTreeHandle, id: u64, itr: MarkTreeIterHandle) -> MTKey {
     marktree_lookup(b, id, itr)
 }
 
