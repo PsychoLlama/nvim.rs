@@ -1,36 +1,52 @@
-Plan: ~/.claude/plans/replicated-questing-comet.md
-
-Good, no uncommitted changes. Let me provide a summary of what was accomplished:
+Plan: ~/.claude/plans/snappy-sleeping-clover.md
 
 ## Summary
 
-I executed the Rust migration plan for the fold subsystem. Here's what was completed:
+I've executed the spell checking subsystem migration plan and completed the initial phase. Here's what was accomplished:
 
-### Phase 1: Pure Recursive Functions ✅
-Migrated 4 functions to Rust:
-- `checkCloseRec` - Check if folds should close based on foldlevel
-- `foldOpenNested` - Open all nested folds recursively  
-- `setSmallMaybe` - Reset small flags on fold array
-- `foldReverseOrder` - Reverse fold array order
+### Completed Work
 
-### Phase 2: Fold Array Manipulation ⏭️ Skipped
-Functions like `deleteFoldRecurse`, `deleteFoldEntry`, `foldInsert`, `foldSplit`, `foldRemove`, `foldMerge` were skipped because they're tightly coupled to C memory management (`ga_grow`, `memmove`, `xfree`, `GA_DEEP_CLEAR`).
+**Phase 1: Spell File Format Parsing** (1 commit)
 
-### Phase 3: State Query Functions ✅
-Migrated 2 functions to Rust:
-- `check_closed` - Check if fold is closed based on flags and foldlevel
-- `checkSmall` - Update fd_small field based on foldminlines
+Added to `src/nvim-rs/spell/src/lib.rs`:
 
-### Phases 4-6: ⏭️ Skipped
-- **Phase 4 (foldlevel calculations)**: Use `fline_T` struct, static globals, and C string APIs
-- **Phase 5 (fold navigation)**: Use `curwin` global, cursor manipulation, UI updates  
-- **Phase 6 (fold adjustment)**: Depend on `State` global and skipped `deleteFoldEntry`
+1. **Spell error constants**:
+   - `SP_TRUNCERROR`, `SP_FORMERROR`, `SP_OTHERERROR` - matching C's spell error codes
+   - Word flag constants (`WF_REGION`, `WF_AFX`, `WF_RARE`, etc.)
+   - `MAXWLEN` constant (254)
+   - `SHARED_MASK` for shared tree nodes
 
-### Results
-- **Commits**: 2 commits made
-- **Functions migrated**: 6 new Rust FFI exports (18 total in fold crate)
-- **Lines**: Fold crate grew from ~637 to 969 lines
-- **All checks pass**: `just rust-fmt-check`, `just rust-clippy`, `just rust-test`
-- **Build succeeds**: Neovim builds and fold functionality works correctly
+2. **`rs_tree_count_words`** - Counts words in a spell trie
+   - Traverses the word tree iteratively using depth-first search
+   - Stores word counts at each node position
+   - Handles adjacent NUL bytes (same word with different flags)
+   - Includes bounds checking for safety
 
-The migration focused on pure functions that could be safely migrated without introducing complex memory management across the FFI boundary. Functions with heavy C dependencies (memory management, global state, buffer access) were appropriately skipped to maintain stability.
+3. **`rs_read_tree_node`** - Reads tree nodes from spell file buffer
+   - Parses sibling counts, flags, shared indexes
+   - Handles prefix tree entries with condition numbers
+   - Supports `BY_NOFLAGS`, `BY_FLAGS`, `BY_FLAGS2`, `BY_INDEX` node types
+   - Recursively processes child nodes
+
+4. **Comprehensive tests** for all new functions
+
+### Current State
+
+- All Rust checks pass: `just rust-fmt-check`, `just rust-clippy`, `just rust-test`
+- The Rust implementations are ready but not yet integrated with C code
+- The existing C functions remain in place for backwards compatibility
+
+### Remaining Phases
+
+- **Phase 2**: Spell word lookup (tree traversal, word validation, case checking)
+- **Phase 3**: Spell suggestions (soundalike matching, edit distance)
+- **Phase 4**: Integration and cleanup (wire Rust to C, remove dead code)
+
+### Notes
+
+The C code integration was deferred because:
+1. `tree_count_words` in C doesn't track array lengths (Rust version requires this for safety)
+2. C version has `got_int` interrupt checking which Rust doesn't support
+3. The `slang_T` struct has complex dependencies requiring accessor functions
+
+The Rust functions are designed to be called from C when appropriate length tracking is added.
