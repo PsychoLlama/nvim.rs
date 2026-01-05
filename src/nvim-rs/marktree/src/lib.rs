@@ -1060,6 +1060,185 @@ pub extern "C" fn rs_marktree_itr_first(b: MarkTreeHandle, itr: MarkTreeIterHand
     marktree_itr_first(b, itr)
 }
 
+/// Position iterator at a given row/col.
+///
+/// Returns true if successful, false if tree is empty.
+/// The iterator will point to the first mark at or after the given position.
+#[must_use]
+pub fn marktree_itr_get(b: MarkTreeHandle, row: i32, col: i32, itr: MarkTreeIterHandle) -> bool {
+    marktree_itr_get_ext(b, MTPos::new(row, col), itr, false, false)
+}
+
+/// Exported FFI version of `marktree_itr_get`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_itr_get(
+    b: MarkTreeHandle,
+    row: i32,
+    col: i32,
+    itr: MarkTreeIterHandle,
+) -> bool {
+    marktree_itr_get(b, row, col, itr)
+}
+
+/// Extended version of iterator positioning.
+///
+/// If `last` is true, position at the last key <= position.
+/// If `gravity` is true, consider right gravity when positioning.
+#[allow(clippy::many_single_char_names)] // Matching C code naming conventions
+#[must_use]
+pub fn marktree_itr_get_ext(
+    b: MarkTreeHandle,
+    p: MTPos,
+    itr: MarkTreeIterHandle,
+    last: bool,
+    gravity: bool,
+) -> bool {
+    if marktree_n_keys(b) == 0 {
+        unsafe { nvim_mtitr_set_x(itr, MTNodeHandle::null()) };
+        return false;
+    }
+
+    // Create search key with appropriate flags
+    let flags = if gravity {
+        MT_FLAG_RIGHT_GRAVITY
+    } else if last {
+        MT_FLAG_LAST
+    } else {
+        0
+    };
+    let mut k = MTKey {
+        pos: p,
+        ns: 0,
+        id: 0,
+        flags,
+        decor_data: 0,
+    };
+
+    unsafe {
+        nvim_mtitr_set_pos(itr, MTPos::new(0, 0));
+        nvim_mtitr_set_lvl(itr, 0);
+    }
+
+    let mut x = marktree_root(b);
+    let mut current_pos = MTPos::new(0, 0);
+    let mut lvl = 0;
+
+    loop {
+        let (i, _) = marktree_getp_aux(x, &k);
+        let i = i + 1; // marktree_getp_aux returns position before, we want after
+
+        if mtnode_level(x) == 0 {
+            unsafe {
+                nvim_mtitr_set_x(itr, x);
+                nvim_mtitr_set_i(itr, i);
+                nvim_mtitr_set_lvl(itr, lvl);
+                nvim_mtitr_set_pos(itr, current_pos);
+            }
+            break;
+        }
+
+        unsafe {
+            nvim_mtitr_set_s_i(itr, lvl, i);
+            nvim_mtitr_set_s_oldcol(itr, lvl, current_pos.col);
+        }
+
+        if i > 0 {
+            let key_pos = mtnode_key(x, i - 1).pos;
+            compose(&mut current_pos, key_pos);
+            relative(key_pos, &mut k.pos);
+        }
+        x = mtnode_ptr(x, i);
+        lvl += 1;
+    }
+
+    if last {
+        marktree_itr_prev(b, itr)
+    } else {
+        let i = unsafe { nvim_mtitr_get_i(itr) };
+        let x = unsafe { nvim_mtitr_get_x(itr) };
+        if i >= mtnode_n(x) {
+            // Need to go to next internal key
+            marktree_itr_next(b, itr)
+        } else {
+            true
+        }
+    }
+}
+
+/// Exported FFI version of `marktree_itr_get_ext`.
+#[no_mangle]
+pub extern "C" fn rs_marktree_itr_get_ext(
+    b: MarkTreeHandle,
+    p: MTPos,
+    itr: MarkTreeIterHandle,
+    last: bool,
+    gravity: bool,
+) -> bool {
+    marktree_itr_get_ext(b, p, itr, last, gravity)
+}
+
+// ============================================================================
+// Meta Count Helpers
+// ============================================================================
+
+/// Meta index values (matching C MetaIndex enum).
+pub mod meta_index {
+    pub const K_MT_META_INLINE: usize = 0;
+    pub const K_MT_META_LINES: usize = 1;
+    pub const K_MT_META_SIGN_HL: usize = 2;
+    pub const K_MT_META_SIGN_TEXT: usize = 3;
+    pub const K_MT_META_CONCEAL_LINES: usize = 4;
+    pub const K_MT_META_COUNT: usize = 5;
+}
+
+use meta_index::*;
+
+/// Compute the meta flags for a key.
+///
+/// Returns an array of counts (0 or 1) for each meta category.
+#[must_use]
+pub fn meta_describe_key(k: &MTKey) -> [u32; K_MT_META_COUNT] {
+    let mut meta_inc = [0u32; K_MT_META_COUNT];
+
+    // Don't count end keys or invalid keys
+    if mt_end(k) || mt_invalid(k) {
+        return meta_inc;
+    }
+
+    if k.flags & MT_FLAG_DECOR_VIRT_TEXT_INLINE != 0 {
+        meta_inc[K_MT_META_INLINE] = 1;
+    }
+    if k.flags & flags::MT_FLAG_DECOR_VIRT_LINES != 0 {
+        meta_inc[K_MT_META_LINES] = 1;
+    }
+    if k.flags & MT_FLAG_DECOR_SIGNHL != 0 {
+        meta_inc[K_MT_META_SIGN_HL] = 1;
+    }
+    if k.flags & MT_FLAG_DECOR_SIGNTEXT != 0 {
+        meta_inc[K_MT_META_SIGN_TEXT] = 1;
+    }
+    if k.flags & MT_FLAG_DECOR_CONCEAL_LINES != 0 {
+        meta_inc[K_MT_META_CONCEAL_LINES] = 1;
+    }
+
+    meta_inc
+}
+
+/// Exported FFI version of `meta_describe_key`.
+///
+/// Writes the meta counts to the provided array.
+#[no_mangle]
+pub extern "C" fn rs_meta_describe_key(k: MTKey, meta_inc: *mut u32) {
+    let result = meta_describe_key(&k);
+    unsafe {
+        if !meta_inc.is_null() {
+            for (i, &val) in result.iter().enumerate() {
+                *meta_inc.add(i) = val;
+            }
+        }
+    }
+}
+
 // ============================================================================
 // Tests
 // ============================================================================
@@ -1219,5 +1398,47 @@ mod tests {
             mt_flags(true, true, true, true),
             MT_FLAG_RIGHT_GRAVITY | MT_FLAG_NO_UNDO | MT_FLAG_INVALIDATE | MT_FLAG_DECOR_EXT
         );
+    }
+
+    #[test]
+    fn test_meta_describe_key() {
+        // Empty key - no decoration
+        let key = MTKey::default();
+        let meta = meta_describe_key(&key);
+        assert_eq!(meta, [0, 0, 0, 0, 0]);
+
+        // Key with inline virt text
+        let key_inline = MTKey {
+            flags: flags::MT_FLAG_DECOR_VIRT_TEXT_INLINE,
+            ..Default::default()
+        };
+        let meta_inline = meta_describe_key(&key_inline);
+        assert_eq!(meta_inline[K_MT_META_INLINE], 1);
+        assert_eq!(meta_inline[K_MT_META_LINES], 0);
+
+        // Key with virt lines
+        let key_lines = MTKey {
+            flags: flags::MT_FLAG_DECOR_VIRT_LINES,
+            ..Default::default()
+        };
+        let meta_lines = meta_describe_key(&key_lines);
+        assert_eq!(meta_lines[K_MT_META_LINES], 1);
+        assert_eq!(meta_lines[K_MT_META_INLINE], 0);
+
+        // End key - should not count
+        let key_end = MTKey {
+            flags: flags::MT_FLAG_DECOR_VIRT_TEXT_INLINE | MT_FLAG_END,
+            ..Default::default()
+        };
+        let meta_end = meta_describe_key(&key_end);
+        assert_eq!(meta_end, [0, 0, 0, 0, 0]);
+
+        // Invalid key - should not count
+        let key_invalid = MTKey {
+            flags: flags::MT_FLAG_DECOR_VIRT_TEXT_INLINE | MT_FLAG_INVALID,
+            ..Default::default()
+        };
+        let meta_invalid = meta_describe_key(&key_invalid);
+        assert_eq!(meta_invalid, [0, 0, 0, 0, 0]);
     }
 }
