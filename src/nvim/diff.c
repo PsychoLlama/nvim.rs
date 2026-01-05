@@ -4328,3 +4328,65 @@ bool nvim_is_diffexpr_empty(void)
 {
   return *p_dex == NUL;
 }
+
+/// Get a diff buffer from the current tab's diff list.
+/// @param idx  Buffer index (0 to DB_COUNT-1)
+/// @return  Buffer pointer or NULL if invalid index
+buf_T *nvim_get_curtab_diffbuf(int idx)
+{
+  if (idx < 0 || idx >= DB_COUNT) {
+    return NULL;
+  }
+  return curtab->tp_diffbuf[idx];
+}
+
+/// Check if the current tab's diff list is invalid (needs update).
+int nvim_get_curtab_diff_invalid(void)
+{
+  return curtab->tp_diff_invalid;
+}
+
+/// Get the first diff block in the current tab.
+diff_T *nvim_get_diff_first_block(void)
+{
+  return curtab->tp_first_diff;
+}
+
+/// Get the next diff block in the linked list.
+diff_T *nvim_diffblock_get_next(diff_T *dp)
+{
+  if (dp == NULL) {
+    return NULL;
+  }
+  return dp->df_next;
+}
+
+/// Get the line number for a buffer in a diff block.
+/// @param dp   Diff block pointer
+/// @param idx  Buffer index (0 to DB_COUNT-1)
+/// @return  Line number or 0 if invalid
+linenr_T nvim_diffblock_get_lnum(diff_T *dp, int idx)
+{
+  if (dp == NULL || idx < 0 || idx >= DB_COUNT) {
+    return 0;
+  }
+  return dp->df_lnum[idx];
+}
+
+/// Get the line count for a buffer in a diff block.
+/// @param dp   Diff block pointer
+/// @param idx  Buffer index (0 to DB_COUNT-1)
+/// @return  Line count or 0 if invalid
+linenr_T nvim_diffblock_get_count(diff_T *dp, int idx)
+{
+  if (dp == NULL || idx < 0 || idx >= DB_COUNT) {
+    return 0;
+  }
+  return dp->df_count[idx];
+}
+
+/// Get DB_COUNT constant for Rust FFI.
+int nvim_get_db_count(void)
+{
+  return DB_COUNT;
+}

@@ -33,10 +33,63 @@ const DIFF_CLOSE_OFF: c_int = 0x400;
 const DIFF_FOLLOWWRAP: c_int = 0x800;
 const DIFF_LINEMATCH: c_int = 0x1000;
 
+use std::ffi::c_void;
+
+/// Maximum number of diff buffers (matches DB_COUNT in C).
+pub const DB_COUNT: c_int = 8;
+
+/// Opaque handle to a diff block (diff_T).
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct DiffBlockHandle(*mut c_void);
+
+impl DiffBlockHandle {
+    /// Check if the handle is null.
+    #[inline]
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+
+    /// Create a null handle.
+    #[inline]
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+}
+
+/// Opaque handle to a buffer (buf_T).
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct BufHandle(*mut c_void);
+
+impl BufHandle {
+    /// Check if the handle is null.
+    #[inline]
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+
+    /// Create a null handle.
+    #[inline]
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+}
+
 // C accessor for the static diff_flags variable
 extern "C" {
     fn nvim_get_diff_flags() -> c_int;
     fn nvim_is_diffexpr_empty() -> bool;
+    fn nvim_get_curtab_diffbuf(idx: c_int) -> BufHandle;
+    fn nvim_get_curtab_diff_invalid() -> c_int;
+    fn nvim_get_diff_first_block() -> DiffBlockHandle;
+    fn nvim_diffblock_get_next(dp: DiffBlockHandle) -> DiffBlockHandle;
+    fn nvim_diffblock_get_lnum(dp: DiffBlockHandle, idx: c_int) -> LinenrT;
+    fn nvim_diffblock_get_count(dp: DiffBlockHandle, idx: c_int) -> LinenrT;
 }
 
 /// Check if 'diffopt' contains "horizontal".
@@ -334,6 +387,169 @@ pub unsafe extern "C" fn rs_parse_diff_unified(line: *const c_char, hunk: *mut D
         return FAIL;
     }
     parse_diff_unified_impl(line.cast::<u8>(), &mut *hunk)
+}
+
+// =============================================================================
+// Diff Buffer State Queries
+// =============================================================================
+
+/// Find the index of a buffer in the diff list.
+///
+/// Returns the buffer index (0 to DB_COUNT-1) or -1 if not found.
+fn diff_buf_idx_impl(buf: BufHandle) -> c_int {
+    if buf.is_null() {
+        return -1;
+    }
+
+    unsafe {
+        for i in 0..DB_COUNT {
+            let diffbuf = nvim_get_curtab_diffbuf(i);
+            if !diffbuf.is_null() && diffbuf.0 == buf.0 {
+                return i;
+            }
+        }
+        -1
+    }
+}
+
+/// Check if the diff list is invalid (needs update).
+fn diff_check_invalid_impl() -> bool {
+    unsafe { nvim_get_curtab_diff_invalid() != 0 }
+}
+
+/// Count the number of active diff buffers.
+fn diff_count_buffers_impl() -> c_int {
+    unsafe {
+        let mut count = 0;
+        for i in 0..DB_COUNT {
+            if !nvim_get_curtab_diffbuf(i).is_null() {
+                count += 1;
+            }
+        }
+        count
+    }
+}
+
+/// Check if a buffer is in diff mode.
+fn diff_buf_is_diffed_impl(buf: BufHandle) -> bool {
+    diff_buf_idx_impl(buf) >= 0
+}
+
+/// Find the diff block that contains a given line number.
+///
+/// Returns the diff block handle or null if not found.
+fn diff_find_block_for_line_impl(buf_idx: c_int, lnum: LinenrT) -> DiffBlockHandle {
+    if !(0..DB_COUNT).contains(&buf_idx) {
+        return DiffBlockHandle::null();
+    }
+
+    unsafe {
+        let mut dp = nvim_get_diff_first_block();
+        while !dp.is_null() {
+            let block_lnum = nvim_diffblock_get_lnum(dp, buf_idx);
+            let block_count = nvim_diffblock_get_count(dp, buf_idx);
+
+            // Check if lnum is within this block
+            if lnum >= block_lnum && lnum < block_lnum + block_count.max(1) {
+                return dp;
+            }
+
+            // If we've passed the line, stop searching
+            if block_lnum > lnum {
+                break;
+            }
+
+            dp = nvim_diffblock_get_next(dp);
+        }
+        DiffBlockHandle::null()
+    }
+}
+
+/// Calculate the number of filler lines at a given line.
+///
+/// Filler lines are displayed to align diff blocks between buffers.
+fn diff_get_filler_lines_impl(buf_idx: c_int, lnum: LinenrT) -> c_int {
+    if !(0..DB_COUNT).contains(&buf_idx) {
+        return 0;
+    }
+
+    unsafe {
+        let mut dp = nvim_get_diff_first_block();
+        while !dp.is_null() {
+            let block_lnum = nvim_diffblock_get_lnum(dp, buf_idx);
+            let block_count = nvim_diffblock_get_count(dp, buf_idx);
+
+            // Filler lines appear above the diff block
+            if lnum == block_lnum && block_count == 0 {
+                // This is a pure insertion in other buffer(s)
+                // Count max lines in other buffers
+                let mut max_count = 0;
+                for i in 0..DB_COUNT {
+                    if i != buf_idx && !nvim_get_curtab_diffbuf(i).is_null() {
+                        let count = nvim_diffblock_get_count(dp, i);
+                        max_count = max_count.max(count);
+                    }
+                }
+                return max_count;
+            }
+
+            // If we've passed the line, stop searching
+            if block_lnum > lnum {
+                break;
+            }
+
+            dp = nvim_diffblock_get_next(dp);
+        }
+        0
+    }
+}
+
+/// FFI export: Find buffer index in diff list.
+///
+/// # Safety
+/// `buf` must be a valid buffer handle or null.
+#[no_mangle]
+pub extern "C" fn rs_diff_buf_idx(buf: BufHandle) -> c_int {
+    diff_buf_idx_impl(buf)
+}
+
+/// FFI export: Check if diff list needs update.
+#[no_mangle]
+pub extern "C" fn rs_diff_check_invalid() -> c_int {
+    c_int::from(diff_check_invalid_impl())
+}
+
+/// FFI export: Count active diff buffers.
+#[no_mangle]
+pub extern "C" fn rs_diff_count_buffers() -> c_int {
+    diff_count_buffers_impl()
+}
+
+/// FFI export: Check if buffer is in diff mode.
+///
+/// # Safety
+/// `buf` must be a valid buffer handle or null.
+#[no_mangle]
+pub extern "C" fn rs_diff_buf_is_diffed(buf: BufHandle) -> c_int {
+    c_int::from(diff_buf_is_diffed_impl(buf))
+}
+
+/// FFI export: Find diff block containing a line.
+///
+/// # Safety
+/// `buf_idx` must be a valid buffer index (0 to DB_COUNT-1).
+#[no_mangle]
+pub extern "C" fn rs_diff_find_block_for_line(buf_idx: c_int, lnum: LinenrT) -> DiffBlockHandle {
+    diff_find_block_for_line_impl(buf_idx, lnum)
+}
+
+/// FFI export: Get filler lines at a line number.
+///
+/// # Safety
+/// `buf_idx` must be a valid buffer index (0 to DB_COUNT-1).
+#[no_mangle]
+pub extern "C" fn rs_diff_get_filler_lines(buf_idx: c_int, lnum: LinenrT) -> c_int {
+    diff_get_filler_lines_impl(buf_idx, lnum)
 }
 
 #[cfg(test)]
@@ -692,5 +908,51 @@ mod tests {
         // Verify the struct is properly sized for C interop
         // Should be 4 fields * 4 bytes = 16 bytes
         assert_eq!(std::mem::size_of::<DiffHunk>(), 16);
+    }
+
+    // =========================================================================
+    // Diff Buffer State Tests
+    // =========================================================================
+
+    #[test]
+    fn test_db_count_constant() {
+        // DB_COUNT should be 8
+        assert_eq!(DB_COUNT, 8);
+    }
+
+    #[test]
+    fn test_diff_block_handle_null() {
+        let handle = DiffBlockHandle::null();
+        assert!(handle.is_null());
+    }
+
+    #[test]
+    fn test_buf_handle_null() {
+        let handle = BufHandle::null();
+        assert!(handle.is_null());
+    }
+
+    // Note: Tests for diff_buf_idx_impl, diff_buf_is_diffed_impl,
+    // diff_find_block_for_line_impl, and diff_get_filler_lines_impl
+    // are not included here because they require C FFI calls that are
+    // only available when linked with the full Neovim binary.
+    // These functions are tested through integration tests.
+
+    #[test]
+    fn test_diff_block_handle_size() {
+        // Should be pointer-sized
+        assert_eq!(
+            std::mem::size_of::<DiffBlockHandle>(),
+            std::mem::size_of::<*mut c_void>()
+        );
+    }
+
+    #[test]
+    fn test_buf_handle_size() {
+        // Should be pointer-sized
+        assert_eq!(
+            std::mem::size_of::<BufHandle>(),
+            std::mem::size_of::<*mut c_void>()
+        );
     }
 }
