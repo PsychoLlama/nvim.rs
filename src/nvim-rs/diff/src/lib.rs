@@ -33,6 +33,18 @@ const DIFF_CLOSE_OFF: c_int = 0x400;
 const DIFF_FOLLOWWRAP: c_int = 0x800;
 const DIFF_LINEMATCH: c_int = 0x1000;
 
+// Extended diff flags (inline highlighting and anchors)
+const DIFF_INLINE_NONE: c_int = 0x2000;
+const DIFF_INLINE_SIMPLE: c_int = 0x4000;
+const DIFF_INLINE_CHAR: c_int = 0x8000;
+const DIFF_INLINE_WORD: c_int = 0x10000;
+const DIFF_ANCHOR: c_int = 0x20000;
+
+// Combination masks for inline highlighting modes
+const ALL_INLINE: c_int =
+    DIFF_INLINE_NONE | DIFF_INLINE_SIMPLE | DIFF_INLINE_CHAR | DIFF_INLINE_WORD;
+const ALL_INLINE_DIFF: c_int = DIFF_INLINE_CHAR | DIFF_INLINE_WORD;
+
 use std::ffi::c_void;
 
 /// Maximum number of diff buffers (matches DB_COUNT in C).
@@ -171,6 +183,87 @@ pub unsafe extern "C" fn rs_diffopt_followwrap() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_diffopt_linematch() -> c_int {
     c_int::from((nvim_get_diff_flags() & DIFF_LINEMATCH) != 0)
+}
+
+// =============================================================================
+// Extended Diff Flags (Inline Highlighting and Anchors)
+// =============================================================================
+
+/// Check if 'diffopt' contains "inline:none" (disable inline highlight).
+#[no_mangle]
+pub unsafe extern "C" fn rs_diffopt_inline_none() -> c_int {
+    c_int::from((nvim_get_diff_flags() & DIFF_INLINE_NONE) != 0)
+}
+
+/// Check if 'diffopt' contains "inline:simple" (simple inline highlight).
+#[no_mangle]
+pub unsafe extern "C" fn rs_diffopt_inline_simple() -> c_int {
+    c_int::from((nvim_get_diff_flags() & DIFF_INLINE_SIMPLE) != 0)
+}
+
+/// Check if 'diffopt' contains "inline:char" (character diff inline highlight).
+#[no_mangle]
+pub unsafe extern "C" fn rs_diffopt_inline_char() -> c_int {
+    c_int::from((nvim_get_diff_flags() & DIFF_INLINE_CHAR) != 0)
+}
+
+/// Check if 'diffopt' contains "inline:word" (word diff inline highlight).
+#[no_mangle]
+pub unsafe extern "C" fn rs_diffopt_inline_word() -> c_int {
+    c_int::from((nvim_get_diff_flags() & DIFF_INLINE_WORD) != 0)
+}
+
+/// Check if 'diffopt' contains "anchor" (use diff anchors).
+#[no_mangle]
+pub unsafe extern "C" fn rs_diffopt_anchor() -> c_int {
+    c_int::from((nvim_get_diff_flags() & DIFF_ANCHOR) != 0)
+}
+
+/// Check if any inline highlighting mode is set.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diffopt_inline_any() -> c_int {
+    c_int::from((nvim_get_diff_flags() & ALL_INLINE) != 0)
+}
+
+/// Check if actual inline diff computation is enabled (char or word mode).
+#[no_mangle]
+pub unsafe extern "C" fn rs_diffopt_inline_diff() -> c_int {
+    c_int::from((nvim_get_diff_flags() & ALL_INLINE_DIFF) != 0)
+}
+
+/// Inline highlight mode enumeration.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiffInlineMode {
+    /// No inline highlighting
+    None = 0,
+    /// Simple inline highlighting (just highlight changed region)
+    Simple = 1,
+    /// Character-level diff
+    Char = 2,
+    /// Word-level diff
+    Word = 3,
+}
+
+/// Get the current inline highlighting mode.
+///
+/// Returns the DiffInlineMode enum value based on diff_flags.
+/// Priority: word > char > simple > none.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diffopt_get_inline_mode() -> DiffInlineMode {
+    let flags = nvim_get_diff_flags();
+    if (flags & DIFF_INLINE_WORD) != 0 {
+        DiffInlineMode::Word
+    } else if (flags & DIFF_INLINE_CHAR) != 0 {
+        DiffInlineMode::Char
+    } else if (flags & DIFF_INLINE_SIMPLE) != 0 {
+        DiffInlineMode::Simple
+    } else if (flags & DIFF_INLINE_NONE) != 0 {
+        DiffInlineMode::None
+    } else {
+        // Default to Char if no inline mode is explicitly set
+        DiffInlineMode::Char
+    }
 }
 
 // =============================================================================
@@ -770,6 +863,12 @@ mod tests {
         assert_eq!(DIFF_CLOSE_OFF, 0x400);
         assert_eq!(DIFF_FOLLOWWRAP, 0x800);
         assert_eq!(DIFF_LINEMATCH, 0x1000);
+        // Extended flags
+        assert_eq!(DIFF_INLINE_NONE, 0x2000);
+        assert_eq!(DIFF_INLINE_SIMPLE, 0x4000);
+        assert_eq!(DIFF_INLINE_CHAR, 0x8000);
+        assert_eq!(DIFF_INLINE_WORD, 0x10000);
+        assert_eq!(DIFF_ANCHOR, 0x20000);
     }
 
     #[test]
@@ -789,6 +888,11 @@ mod tests {
             DIFF_CLOSE_OFF,
             DIFF_FOLLOWWRAP,
             DIFF_LINEMATCH,
+            DIFF_INLINE_NONE,
+            DIFF_INLINE_SIMPLE,
+            DIFF_INLINE_CHAR,
+            DIFF_INLINE_WORD,
+            DIFF_ANCHOR,
         ];
 
         for i in 0..flags.len() {
@@ -819,6 +923,11 @@ mod tests {
             DIFF_CLOSE_OFF,
             DIFF_FOLLOWWRAP,
             DIFF_LINEMATCH,
+            DIFF_INLINE_NONE,
+            DIFF_INLINE_SIMPLE,
+            DIFF_INLINE_CHAR,
+            DIFF_INLINE_WORD,
+            DIFF_ANCHOR,
         ];
 
         for flag in flags {
@@ -845,6 +954,12 @@ mod tests {
         assert_eq!(DIFF_CLOSE_OFF, 1 << 10); // bit 10
         assert_eq!(DIFF_FOLLOWWRAP, 1 << 11); // bit 11
         assert_eq!(DIFF_LINEMATCH, 1 << 12); // bit 12
+                                             // Extended flags
+        assert_eq!(DIFF_INLINE_NONE, 1 << 13); // bit 13
+        assert_eq!(DIFF_INLINE_SIMPLE, 1 << 14); // bit 14
+        assert_eq!(DIFF_INLINE_CHAR, 1 << 15); // bit 15
+        assert_eq!(DIFF_INLINE_WORD, 1 << 16); // bit 16
+        assert_eq!(DIFF_ANCHOR, 1 << 17); // bit 17
     }
 
     #[test]
@@ -879,16 +994,21 @@ mod tests {
             | DIFF_INTERNAL
             | DIFF_CLOSE_OFF
             | DIFF_FOLLOWWRAP
-            | DIFF_LINEMATCH;
+            | DIFF_LINEMATCH
+            | DIFF_INLINE_NONE
+            | DIFF_INLINE_SIMPLE
+            | DIFF_INLINE_CHAR
+            | DIFF_INLINE_WORD
+            | DIFF_ANCHOR;
         // Verify it's positive (no overflow from OR operations)
         assert!(all_flags > 0);
-        // Verify expected combined value: all bits 0-12 set = 0x1FFF
-        assert_eq!(all_flags, 0x1FFF);
+        // Verify expected combined value: all bits 0-17 set = 0x3FFFF
+        assert_eq!(all_flags, 0x3FFFF);
     }
 
     #[test]
     fn test_diff_flag_count() {
-        // There should be exactly 13 defined flags
+        // There should be exactly 18 defined flags
         let flags = [
             DIFF_FILLER,
             DIFF_IBLANK,
@@ -903,8 +1023,13 @@ mod tests {
             DIFF_CLOSE_OFF,
             DIFF_FOLLOWWRAP,
             DIFF_LINEMATCH,
+            DIFF_INLINE_NONE,
+            DIFF_INLINE_SIMPLE,
+            DIFF_INLINE_CHAR,
+            DIFF_INLINE_WORD,
+            DIFF_ANCHOR,
         ];
-        assert_eq!(flags.len(), 13);
+        assert_eq!(flags.len(), 18);
     }
 
     #[test]
@@ -922,7 +1047,12 @@ mod tests {
             | DIFF_INTERNAL
             | DIFF_CLOSE_OFF
             | DIFF_FOLLOWWRAP
-            | DIFF_LINEMATCH;
+            | DIFF_LINEMATCH
+            | DIFF_INLINE_NONE
+            | DIFF_INLINE_SIMPLE
+            | DIFF_INLINE_CHAR
+            | DIFF_INLINE_WORD
+            | DIFF_ANCHOR;
         // trailing_zeros of all flags combined should be 0 (DIFF_FILLER is bit 0)
         assert_eq!(all_flags.trailing_zeros(), 0);
     }
@@ -932,6 +1062,41 @@ mod tests {
         // Test the ALL_WHITE_DIFF group
         let all_white = DIFF_IWHITE | DIFF_IWHITEALL | DIFF_IWHITEEOL;
         assert_eq!(all_white, 0x038); // bits 3, 4, 5
+    }
+
+    #[test]
+    fn test_inline_flags_group() {
+        // Test the ALL_INLINE group
+        assert_eq!(
+            ALL_INLINE,
+            DIFF_INLINE_NONE | DIFF_INLINE_SIMPLE | DIFF_INLINE_CHAR | DIFF_INLINE_WORD
+        );
+        assert_eq!(ALL_INLINE, 0x1E000); // bits 13-16
+    }
+
+    #[test]
+    fn test_inline_diff_flags_group() {
+        // Test the ALL_INLINE_DIFF group (only char and word modes)
+        assert_eq!(ALL_INLINE_DIFF, DIFF_INLINE_CHAR | DIFF_INLINE_WORD);
+        assert_eq!(ALL_INLINE_DIFF, 0x18000); // bits 15-16
+    }
+
+    #[test]
+    fn test_diff_inline_mode_enum() {
+        // Test DiffInlineMode enum values
+        assert_eq!(DiffInlineMode::None as i32, 0);
+        assert_eq!(DiffInlineMode::Simple as i32, 1);
+        assert_eq!(DiffInlineMode::Char as i32, 2);
+        assert_eq!(DiffInlineMode::Word as i32, 3);
+    }
+
+    #[test]
+    fn test_diff_inline_mode_size() {
+        // Enum should be the size of a c_int for FFI
+        assert_eq!(
+            std::mem::size_of::<DiffInlineMode>(),
+            std::mem::size_of::<c_int>()
+        );
     }
 
     // =========================================================================
