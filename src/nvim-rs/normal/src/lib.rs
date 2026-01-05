@@ -108,7 +108,43 @@ extern "C" {
 
     // cmdarg_T accessors
     fn nvim_cap_get_oap(cap: CapHandle) -> OapHandle;
+    #[allow(dead_code)]
+    fn nvim_cap_get_retval(cap: CapHandle) -> c_int;
+    #[allow(dead_code)]
+    fn nvim_cap_set_retval(cap: CapHandle, val: c_int);
     fn nvim_cap_or_retval(cap: CapHandle, val: c_int);
+    #[allow(dead_code)]
+    fn nvim_cap_get_cmdchar(cap: CapHandle) -> c_int;
+    #[allow(dead_code)]
+    fn nvim_cap_set_cmdchar(cap: CapHandle, val: c_int);
+    #[allow(dead_code)]
+    fn nvim_cap_get_nchar(cap: CapHandle) -> c_int;
+    #[allow(dead_code)]
+    fn nvim_cap_set_nchar(cap: CapHandle, val: c_int);
+    #[allow(dead_code)]
+    fn nvim_cap_get_extra_char(cap: CapHandle) -> c_int;
+    #[allow(dead_code)]
+    fn nvim_cap_set_extra_char(cap: CapHandle, val: c_int);
+    #[allow(dead_code)]
+    fn nvim_cap_get_count0(cap: CapHandle) -> c_int;
+    #[allow(dead_code)]
+    fn nvim_cap_set_count0(cap: CapHandle, val: c_int);
+    #[allow(dead_code)]
+    fn nvim_cap_get_count1(cap: CapHandle) -> c_int;
+    #[allow(dead_code)]
+    fn nvim_cap_set_count1(cap: CapHandle, val: c_int);
+    #[allow(dead_code)]
+    fn nvim_cap_get_opcount(cap: CapHandle) -> c_int;
+    #[allow(dead_code)]
+    fn nvim_cap_set_opcount(cap: CapHandle, val: c_int);
+    #[allow(dead_code)]
+    fn nvim_cap_get_arg(cap: CapHandle) -> c_int;
+    #[allow(dead_code)]
+    fn nvim_cap_set_arg(cap: CapHandle, val: c_int);
+    #[allow(dead_code)]
+    fn nvim_cap_get_prechar(cap: CapHandle) -> c_int;
+    #[allow(dead_code)]
+    fn nvim_cap_set_prechar(cap: CapHandle, val: c_int);
 
     // C functions for command handlers
     fn ex_help(eap: *mut std::ffi::c_void);

@@ -610,6 +610,118 @@ void nvim_cap_or_retval(cmdarg_T *cap, int val)
   }
 }
 
+/// Get cap->cmdchar.
+int nvim_cap_get_cmdchar(cmdarg_T *cap)
+{
+  return cap ? cap->cmdchar : 0;
+}
+
+/// Set cap->cmdchar.
+void nvim_cap_set_cmdchar(cmdarg_T *cap, int val)
+{
+  if (cap) {
+    cap->cmdchar = val;
+  }
+}
+
+/// Get cap->nchar.
+int nvim_cap_get_nchar(cmdarg_T *cap)
+{
+  return cap ? cap->nchar : 0;
+}
+
+/// Set cap->nchar.
+void nvim_cap_set_nchar(cmdarg_T *cap, int val)
+{
+  if (cap) {
+    cap->nchar = val;
+  }
+}
+
+/// Get cap->extra_char.
+int nvim_cap_get_extra_char(cmdarg_T *cap)
+{
+  return cap ? cap->extra_char : 0;
+}
+
+/// Set cap->extra_char.
+void nvim_cap_set_extra_char(cmdarg_T *cap, int val)
+{
+  if (cap) {
+    cap->extra_char = val;
+  }
+}
+
+/// Get cap->count0.
+int nvim_cap_get_count0(cmdarg_T *cap)
+{
+  return cap ? cap->count0 : 0;
+}
+
+/// Set cap->count0.
+void nvim_cap_set_count0(cmdarg_T *cap, int val)
+{
+  if (cap) {
+    cap->count0 = val;
+  }
+}
+
+/// Get cap->count1.
+int nvim_cap_get_count1(cmdarg_T *cap)
+{
+  return cap ? cap->count1 : 0;
+}
+
+/// Set cap->count1.
+void nvim_cap_set_count1(cmdarg_T *cap, int val)
+{
+  if (cap) {
+    cap->count1 = val;
+  }
+}
+
+/// Get cap->opcount.
+int nvim_cap_get_opcount(cmdarg_T *cap)
+{
+  return cap ? cap->opcount : 0;
+}
+
+/// Set cap->opcount.
+void nvim_cap_set_opcount(cmdarg_T *cap, int val)
+{
+  if (cap) {
+    cap->opcount = val;
+  }
+}
+
+/// Get cap->arg.
+int nvim_cap_get_arg(cmdarg_T *cap)
+{
+  return cap ? cap->arg : 0;
+}
+
+/// Set cap->arg.
+void nvim_cap_set_arg(cmdarg_T *cap, int val)
+{
+  if (cap) {
+    cap->arg = val;
+  }
+}
+
+/// Get cap->prechar.
+int nvim_cap_get_prechar(cmdarg_T *cap)
+{
+  return cap ? cap->prechar : 0;
+}
+
+/// Set cap->prechar.
+void nvim_cap_set_prechar(cmdarg_T *cap, int val)
+{
+  if (cap) {
+    cap->prechar = val;
+  }
+}
+
 /// Check if an operator was started but not finished yet.
 /// Includes typing a count or a register name.
 bool op_pending(void)
