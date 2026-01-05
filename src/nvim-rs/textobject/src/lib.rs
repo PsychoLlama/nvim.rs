@@ -1314,6 +1314,581 @@ unsafe fn finalize_paragraph(oap: OapHandle, start_lnum: c_int, end_lnum: c_int)
 }
 
 // =============================================================================
+// Sentence Functions
+// =============================================================================
+
+/// CPO_ENDOFSENT character ('J') - need 2 spaces after sentence ending
+const CPO_ENDOFSENT: c_int = i32::from_be_bytes([0, 0, 0, b'J']);
+
+extern "C" {
+    /// Get character at position.
+    fn nvim_textobj_gchar_pos(pos: PosHandle) -> c_int;
+
+    /// Increment position (like incl but works on any pos_T*).
+    fn nvim_textobj_incl_pos(pos: PosHandle) -> c_int;
+
+    /// Decrement position (like decl but works on any pos_T*).
+    fn nvim_textobj_decl_pos(pos: PosHandle) -> c_int;
+
+    /// Increment position (inc, not incl - doesn't skip NUL at EOL).
+    fn nvim_textobj_inc_pos(pos: PosHandle) -> c_int;
+
+    /// Check if two positions are equal.
+    fn nvim_textobj_equalpos(a: PosHandle, b: PosHandle) -> bool;
+
+    /// Check if position a is less than position b.
+    fn nvim_textobj_lt_pos(a: PosHandle, b: PosHandle) -> bool;
+
+    /// Get p_cpo option string.
+    fn nvim_textobj_get_p_cpo() -> *const std::ffi::c_char;
+
+    /// Get cursor as pos_T*.
+    fn nvim_textobj_get_cursor_ptr() -> PosHandle;
+
+    /// Get VIsual as pos_T*.
+    fn nvim_textobj_get_VIsual_ptr() -> PosHandle;
+
+    /// Copy position from src to dst.
+    fn nvim_textobj_copy_pos(dst: PosHandle, src: PosHandle);
+
+    /// Get position lnum.
+    fn nvim_textobj_pos_get_lnum(pos: PosHandle) -> c_int;
+
+    /// Get position col.
+    fn nvim_textobj_pos_get_col(pos: PosHandle) -> c_int;
+
+    /// Set position lnum.
+    fn nvim_textobj_pos_set_lnum(pos: PosHandle, lnum: c_int);
+
+    // Note: nvim_textobj_pos_set_col is declared but not currently used.
+    // Keeping the C accessor available for future use.
+
+    /// Check if line is empty (LINEEMPTY macro).
+    fn nvim_textobj_lineempty(lnum: c_int) -> bool;
+
+    /// Check if character is ASCII whitespace.
+    fn nvim_textobj_ascii_iswhite(c: c_int) -> bool;
+
+    /// Allocate a temporary pos_T on C side.
+    fn nvim_textobj_alloc_pos() -> PosHandle;
+
+    /// Free a temporary pos_T.
+    fn nvim_textobj_free_pos(pos: PosHandle);
+
+    /// Set cursor from position.
+    fn nvim_textobj_set_cursor_from_pos(pos: PosHandle);
+}
+
+/// Find sentence boundary.
+///
+/// # Safety
+/// Calls C accessor functions which must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_findsent(dir: c_int, count: c_int) -> c_int {
+    findsent_impl(dir, count)
+}
+
+/// Check if character is a sentence-ending character.
+#[inline]
+fn is_sentence_end(c: c_int) -> bool {
+    c == i32::from(b'.') || c == i32::from(b'!') || c == i32::from(b'?')
+}
+
+/// Check if character is a trailing sentence character.
+#[inline]
+fn is_sentence_trail(c: c_int) -> bool {
+    c == i32::from(b')') || c == i32::from(b']') || c == i32::from(b'"') || c == i32::from(b'\'')
+}
+
+/// Implementation of findsent.
+#[allow(clippy::too_many_lines)]
+unsafe fn findsent_impl(dir: c_int, mut count: c_int) -> c_int {
+    // Allocate position on C side
+    let pos = nvim_textobj_alloc_pos();
+    let cursor = nvim_textobj_get_cursor_ptr();
+    nvim_textobj_copy_pos(pos, cursor);
+
+    let mut noskip = false;
+
+    while count > 0 {
+        count -= 1;
+
+        // Save previous position
+        let prev_pos = nvim_textobj_alloc_pos();
+        nvim_textobj_copy_pos(prev_pos, pos);
+
+        // if on an empty line, skip up to a non-empty line
+        if nvim_textobj_gchar_pos(pos) == NUL {
+            loop {
+                let result = if dir == FORWARD {
+                    nvim_textobj_incl_pos(pos)
+                } else {
+                    nvim_textobj_decl_pos(pos)
+                };
+                if result == -1 {
+                    break;
+                }
+                if nvim_textobj_gchar_pos(pos) != NUL {
+                    break;
+                }
+            }
+            if dir == FORWARD {
+                nvim_textobj_free_pos(prev_pos);
+                // Skip whitespace after finding
+                findsent_skip_white(pos, &noskip);
+                if nvim_textobj_equalpos(prev_pos, pos)
+                    && findsent_retry(pos, dir, &mut count) == FAIL
+                {
+                    nvim_textobj_free_pos(pos);
+                    return FAIL;
+                }
+                continue;
+            }
+        } else if dir == FORWARD
+            && nvim_textobj_pos_get_col(pos) == 0
+            && startps_impl(nvim_textobj_pos_get_lnum(pos), NUL, false)
+        {
+            // on the start of a paragraph or section when searching forward
+            let lnum = nvim_textobj_pos_get_lnum(pos);
+            if lnum == nvim_textobj_get_ml_line_count() {
+                nvim_textobj_free_pos(prev_pos);
+                nvim_textobj_free_pos(pos);
+                return FAIL;
+            }
+            nvim_textobj_pos_set_lnum(pos, lnum + 1);
+            nvim_textobj_free_pos(prev_pos);
+            findsent_skip_white(pos, &noskip);
+            continue;
+        } else if dir == BACKWARD {
+            nvim_textobj_decl_pos(pos);
+        }
+
+        // go back to the previous non-white non-punctuation character
+        let mut found_dot = false;
+        loop {
+            let c = nvim_textobj_gchar_pos(pos);
+            if !nvim_textobj_ascii_iswhite(c) && !is_sentence_end(c) && !is_sentence_trail(c) {
+                break;
+            }
+
+            let tpos = nvim_textobj_alloc_pos();
+            nvim_textobj_copy_pos(tpos, pos);
+
+            let dec_result = nvim_textobj_decl_pos(tpos);
+            let is_lineempty =
+                nvim_textobj_lineempty(nvim_textobj_pos_get_lnum(tpos)) && dir == FORWARD;
+
+            if dec_result == -1 || is_lineempty {
+                nvim_textobj_free_pos(tpos);
+                break;
+            }
+
+            if found_dot {
+                nvim_textobj_free_pos(tpos);
+                break;
+            }
+
+            if is_sentence_end(c) {
+                found_dot = true;
+            }
+
+            if is_sentence_trail(c) {
+                let tc = nvim_textobj_gchar_pos(tpos);
+                if !is_sentence_end(tc) && !is_sentence_trail(tc) {
+                    nvim_textobj_free_pos(tpos);
+                    break;
+                }
+            }
+
+            nvim_textobj_free_pos(tpos);
+            nvim_textobj_decl_pos(pos);
+        }
+
+        // remember the line where the search started
+        let startlnum = nvim_textobj_pos_get_lnum(pos);
+        let cpo_j = !nvim_textobj_vim_strchr(nvim_textobj_get_p_cpo(), CPO_ENDOFSENT).is_null();
+
+        // find end of sentence
+        loop {
+            let c = nvim_textobj_gchar_pos(pos);
+
+            if c == NUL
+                || (nvim_textobj_pos_get_col(pos) == 0
+                    && startps_impl(nvim_textobj_pos_get_lnum(pos), NUL, false))
+            {
+                if dir == BACKWARD && nvim_textobj_pos_get_lnum(pos) != startlnum {
+                    nvim_textobj_pos_set_lnum(pos, nvim_textobj_pos_get_lnum(pos) + 1);
+                }
+                break;
+            }
+
+            if is_sentence_end(c) {
+                let tpos = nvim_textobj_alloc_pos();
+                nvim_textobj_copy_pos(tpos, pos);
+
+                // skip trailing characters
+                loop {
+                    let inc_result = nvim_textobj_inc_pos(tpos);
+                    if inc_result == -1 {
+                        break;
+                    }
+                    let tc = nvim_textobj_gchar_pos(tpos);
+                    if !is_sentence_trail(tc) {
+                        break;
+                    }
+                }
+
+                let tc = nvim_textobj_gchar_pos(tpos);
+                let is_space = tc == i32::from(b' ') || tc == i32::from(b'\t');
+                let is_end = tc == -1 || tc == NUL;
+
+                // Check for sentence end condition
+                let sentence_ended = is_end
+                    || (!cpo_j && is_space)
+                    || (cpo_j && tc == i32::from(b' ') && {
+                        let inc_result = nvim_textobj_inc_pos(tpos);
+                        inc_result >= 0 && nvim_textobj_gchar_pos(tpos) == i32::from(b' ')
+                    });
+
+                if sentence_ended {
+                    nvim_textobj_copy_pos(pos, tpos);
+                    if nvim_textobj_gchar_pos(pos) == NUL {
+                        nvim_textobj_inc_pos(pos);
+                    }
+                    nvim_textobj_free_pos(tpos);
+                    break;
+                }
+
+                nvim_textobj_free_pos(tpos);
+            }
+
+            let func_result = if dir == FORWARD {
+                nvim_textobj_incl_pos(pos)
+            } else {
+                nvim_textobj_decl_pos(pos)
+            };
+
+            if func_result == -1 {
+                if count > 0 {
+                    nvim_textobj_free_pos(prev_pos);
+                    nvim_textobj_free_pos(pos);
+                    return FAIL;
+                }
+                noskip = true;
+                break;
+            }
+        }
+
+        // skip white space
+        findsent_skip_white(pos, &noskip);
+
+        if nvim_textobj_equalpos(prev_pos, pos) {
+            // didn't actually move, advance one character and try again
+            if findsent_retry(pos, dir, &mut count) == FAIL {
+                nvim_textobj_free_pos(prev_pos);
+                nvim_textobj_free_pos(pos);
+                return FAIL;
+            }
+        }
+
+        nvim_textobj_free_pos(prev_pos);
+    }
+
+    nvim_textobj_setpcmark();
+    nvim_textobj_set_cursor_from_pos(pos);
+    nvim_textobj_free_pos(pos);
+
+    OK
+}
+
+/// Skip whitespace after finding sentence boundary.
+unsafe fn findsent_skip_white(pos: PosHandle, noskip: &bool) {
+    if *noskip {
+        return;
+    }
+    loop {
+        let c = nvim_textobj_gchar_pos(pos);
+        if c != i32::from(b' ') && c != i32::from(b'\t') {
+            break;
+        }
+        if nvim_textobj_incl_pos(pos) == -1 {
+            break;
+        }
+    }
+}
+
+/// Retry sentence search when stuck.
+unsafe fn findsent_retry(pos: PosHandle, dir: c_int, count: &mut c_int) -> c_int {
+    let func_result = if dir == FORWARD {
+        nvim_textobj_incl_pos(pos)
+    } else {
+        nvim_textobj_decl_pos(pos)
+    };
+
+    if func_result == -1 {
+        if *count > 0 {
+            return FAIL;
+        }
+    } else {
+        *count += 1;
+    }
+    OK
+}
+
+/// Find first blank backward from position.
+///
+/// # Safety
+/// - `posp` must be a valid pos_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_first_blank(posp: PosHandle) {
+    find_first_blank_impl(posp);
+}
+
+/// Implementation of find_first_blank.
+unsafe fn find_first_blank_impl(posp: PosHandle) {
+    while nvim_textobj_decl_pos(posp) != -1 {
+        let c = nvim_textobj_gchar_pos(posp);
+        if !nvim_textobj_ascii_iswhite(c) {
+            nvim_textobj_incl_pos(posp);
+            break;
+        }
+    }
+}
+
+/// Skip count/2 sentences and count/2 separating white spaces.
+///
+/// # Safety
+/// Calls C accessor functions which must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_findsent_forward(count: c_int, at_start_sent: bool) {
+    findsent_forward_impl(count, at_start_sent);
+}
+
+/// Implementation of findsent_forward.
+unsafe fn findsent_forward_impl(mut count: c_int, mut at_start_sent: bool) {
+    let cursor = nvim_textobj_get_cursor_ptr();
+
+    while count > 0 {
+        count -= 1;
+
+        findsent_impl(FORWARD, 1);
+
+        if at_start_sent {
+            find_first_blank_impl(cursor);
+        }
+
+        if count == 0 || at_start_sent {
+            nvim_textobj_decl_pos(cursor);
+        }
+
+        at_start_sent = !at_start_sent;
+    }
+}
+
+/// Select sentence text object (as/is).
+///
+/// # Safety
+/// - `oap` must be a valid oparg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_current_sent(oap: OapHandle, count: c_int, include: bool) -> c_int {
+    current_sent_impl(oap, count, include)
+}
+
+/// Implementation of current_sent.
+#[allow(clippy::too_many_lines)]
+unsafe fn current_sent_impl(oap: OapHandle, count: c_int, include: bool) -> c_int {
+    let cursor = nvim_textobj_get_cursor_ptr();
+
+    // Save start position
+    let start_pos = nvim_textobj_alloc_pos();
+    nvim_textobj_copy_pos(start_pos, cursor);
+
+    // Position for checking
+    let pos = nvim_textobj_alloc_pos();
+    nvim_textobj_copy_pos(pos, start_pos);
+
+    // Find start of next sentence
+    findsent_impl(FORWARD, 1);
+
+    // When the Visual area is bigger than one character: extend it.
+    let visual = nvim_textobj_get_VIsual_ptr();
+    if nvim_textobj_get_VIsual_active() && !nvim_textobj_equalpos(start_pos, visual) {
+        let result = current_sent_extend(count, include, start_pos, pos);
+        nvim_textobj_free_pos(start_pos);
+        nvim_textobj_free_pos(pos);
+        return result;
+    }
+
+    // Check if cursor started on a blank
+    while nvim_textobj_ascii_iswhite(nvim_textobj_gchar_pos(pos)) {
+        nvim_textobj_incl_pos(pos);
+    }
+
+    let start_blank;
+    if nvim_textobj_equalpos(pos, cursor) {
+        start_blank = true;
+        find_first_blank_impl(start_pos); // go back to first blank
+    } else {
+        start_blank = false;
+        findsent_impl(BACKWARD, 1);
+        nvim_textobj_copy_pos(start_pos, cursor);
+    }
+
+    let ncount = if include {
+        count * 2
+    } else {
+        let mut n = count;
+        if start_blank {
+            n -= 1;
+        }
+        n
+    };
+
+    if ncount > 0 {
+        findsent_forward_impl(ncount, true);
+    } else {
+        nvim_textobj_decl_pos(cursor);
+    }
+
+    if include {
+        // If the blank in front of the sentence is included, exclude the
+        // blanks at the end of the sentence, go back to the first blank.
+        // If there are no trailing blanks, try to include leading blanks.
+        if start_blank {
+            find_first_blank_impl(cursor);
+            let c = nvim_textobj_gchar_pos(cursor);
+            if nvim_textobj_ascii_iswhite(c) {
+                nvim_textobj_decl_pos(cursor);
+            }
+        } else {
+            let c = nvim_textobj_gchar_cursor();
+            if !nvim_textobj_ascii_iswhite(c) {
+                find_first_blank_impl(start_pos);
+            }
+        }
+    }
+
+    if nvim_textobj_get_VIsual_active() {
+        // Avoid getting stuck with "is" on a single space before a sentence.
+        if nvim_textobj_equalpos(start_pos, cursor) {
+            let result = current_sent_extend(count, include, start_pos, pos);
+            nvim_textobj_free_pos(start_pos);
+            nvim_textobj_free_pos(pos);
+            return result;
+        }
+        if nvim_textobj_get_p_sel_first() == i32::from(b'e') {
+            nvim_textobj_inc_cursor();
+        }
+        let start_lnum = nvim_textobj_pos_get_lnum(start_pos);
+        let start_col = nvim_textobj_pos_get_col(start_pos);
+        nvim_textobj_set_VIsual(start_lnum, start_col);
+        nvim_textobj_set_VIsual_mode(i32::from(b'v'));
+        nvim_textobj_set_redraw_cmdline(true);
+        nvim_textobj_redraw_curbuf_later(UPD_INVERTED);
+    } else {
+        // include a newline after the sentence, if there is one
+        if nvim_textobj_incl_pos(cursor) == -1 {
+            nvim_textobj_set_oap_inclusive(oap, true);
+        } else {
+            nvim_textobj_set_oap_inclusive(oap, false);
+        }
+        let start_lnum = nvim_textobj_pos_get_lnum(start_pos);
+        let start_col = nvim_textobj_pos_get_col(start_pos);
+        nvim_textobj_set_oap_start(oap, start_lnum, start_col);
+        nvim_textobj_set_oap_motion_type(oap, MT_CHAR_WISE);
+    }
+
+    nvim_textobj_free_pos(start_pos);
+    nvim_textobj_free_pos(pos);
+    OK
+}
+
+/// Extend sentence selection in Visual mode.
+#[allow(clippy::too_many_lines)]
+unsafe fn current_sent_extend(
+    mut count: c_int,
+    include: bool,
+    start_pos: PosHandle,
+    pos: PosHandle,
+) -> c_int {
+    let cursor = nvim_textobj_get_cursor_ptr();
+    let visual = nvim_textobj_get_VIsual_ptr();
+
+    if nvim_textobj_lt_pos(start_pos, visual) {
+        // Cursor at start of Visual area - move backward
+        nvim_textobj_decl_pos(pos);
+        let mut at_start_sent = true;
+
+        while nvim_textobj_lt_pos(pos, cursor) {
+            let c = nvim_textobj_gchar_pos(pos);
+            if !nvim_textobj_ascii_iswhite(c) {
+                at_start_sent = false;
+                break;
+            }
+            nvim_textobj_incl_pos(pos);
+        }
+
+        if !at_start_sent {
+            findsent_impl(BACKWARD, 1);
+            if nvim_textobj_equalpos(cursor, start_pos) {
+                at_start_sent = true;
+            } else {
+                findsent_impl(FORWARD, 1);
+            }
+        }
+
+        if include {
+            count *= 2;
+        }
+
+        while count > 0 {
+            count -= 1;
+            if at_start_sent {
+                find_first_blank_impl(cursor);
+            }
+            let c = nvim_textobj_gchar_cursor();
+            if !at_start_sent || (!include && !nvim_textobj_ascii_iswhite(c)) {
+                findsent_impl(BACKWARD, 1);
+            }
+            at_start_sent = !at_start_sent;
+        }
+    } else {
+        // Cursor at end of Visual area - move forward
+        nvim_textobj_incl_pos(pos);
+        let mut at_start_sent = true;
+
+        if !nvim_textobj_equalpos(pos, cursor) {
+            at_start_sent = false;
+            while nvim_textobj_lt_pos(pos, cursor) {
+                let c = nvim_textobj_gchar_pos(pos);
+                if !nvim_textobj_ascii_iswhite(c) {
+                    at_start_sent = true;
+                    break;
+                }
+                nvim_textobj_incl_pos(pos);
+            }
+
+            if at_start_sent {
+                findsent_impl(BACKWARD, 1);
+            } else {
+                nvim_textobj_copy_pos(cursor, start_pos);
+            }
+        }
+
+        if include {
+            count *= 2;
+        }
+        findsent_forward_impl(count, at_start_sent);
+
+        if nvim_textobj_get_p_sel_first() == i32::from(b'e') {
+            nvim_textobj_inc_cursor();
+        }
+    }
+
+    OK
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

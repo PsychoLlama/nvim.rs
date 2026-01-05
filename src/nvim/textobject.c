@@ -47,6 +47,10 @@ extern bool rs_inmacro(char *opt, const char *s);
 extern bool rs_startPS(int lnum, int para, bool both);
 extern bool rs_findpar(bool *pincl, int dir, int count, int what, bool both);
 extern int rs_current_par(oparg_T *oap, int count, bool include, int type);
+extern int rs_findsent(int dir, int count);
+extern void rs_find_first_blank(pos_T *posp);
+extern void rs_findsent_forward(int count, bool at_start_sent);
+extern int rs_current_sent(oparg_T *oap, int count, bool include);
 
 // =============================================================================
 // C accessor functions for Rust
@@ -380,6 +384,122 @@ void nvim_textobj_showmode(void)
   showmode();
 }
 
+/// Get character at position (accessor for Rust).
+int nvim_textobj_gchar_pos(pos_T *pos)
+{
+  return gchar_pos(pos);
+}
+
+/// Increment position with incl (accessor for Rust).
+int nvim_textobj_incl_pos(pos_T *pos)
+{
+  return incl(pos);
+}
+
+/// Decrement position with decl (accessor for Rust).
+int nvim_textobj_decl_pos(pos_T *pos)
+{
+  return decl(pos);
+}
+
+/// Increment position with inc (accessor for Rust).
+int nvim_textobj_inc_pos(pos_T *pos)
+{
+  return inc(pos);
+}
+
+/// Check if two positions are equal (accessor for Rust).
+bool nvim_textobj_equalpos(pos_T *a, pos_T *b)
+{
+  return equalpos(*a, *b);
+}
+
+/// Check if position a is less than position b (accessor for Rust).
+bool nvim_textobj_lt_pos(pos_T *a, pos_T *b)
+{
+  return lt(*a, *b);
+}
+
+/// Get p_cpo option string (accessor for Rust).
+char *nvim_textobj_get_p_cpo(void)
+{
+  return p_cpo;
+}
+
+/// Get cursor as pos_T pointer (accessor for Rust).
+pos_T *nvim_textobj_get_cursor_ptr(void)
+{
+  return &curwin->w_cursor;
+}
+
+/// Get VIsual as pos_T pointer (accessor for Rust).
+pos_T *nvim_textobj_get_VIsual_ptr(void)
+{
+  return &VIsual;
+}
+
+/// Copy position from src to dst (accessor for Rust).
+void nvim_textobj_copy_pos(pos_T *dst, pos_T *src)
+{
+  *dst = *src;
+}
+
+/// Get position lnum (accessor for Rust).
+int nvim_textobj_pos_get_lnum(pos_T *pos)
+{
+  return (int)pos->lnum;
+}
+
+/// Get position col (accessor for Rust).
+int nvim_textobj_pos_get_col(pos_T *pos)
+{
+  return pos->col;
+}
+
+/// Set position lnum (accessor for Rust).
+void nvim_textobj_pos_set_lnum(pos_T *pos, int lnum)
+{
+  pos->lnum = lnum;
+}
+
+/// Set position col (accessor for Rust).
+void nvim_textobj_pos_set_col(pos_T *pos, int col)
+{
+  pos->col = col;
+}
+
+/// Check if line is empty using LINEEMPTY macro (accessor for Rust).
+bool nvim_textobj_lineempty(int lnum)
+{
+  return LINEEMPTY(lnum);
+}
+
+/// Check if character is ASCII whitespace (accessor for Rust).
+bool nvim_textobj_ascii_iswhite(int c)
+{
+  return ascii_iswhite(c);
+}
+
+/// Allocate a temporary pos_T on the C side (accessor for Rust).
+pos_T *nvim_textobj_alloc_pos(void)
+{
+  pos_T *p = xmalloc(sizeof(pos_T));
+  clearpos(p);
+  return p;
+}
+
+/// Free a temporary pos_T (accessor for Rust).
+void nvim_textobj_free_pos(pos_T *pos)
+{
+  xfree(pos);
+}
+
+/// Set cursor from position (accessor for Rust).
+void nvim_textobj_set_cursor_from_pos(pos_T *pos)
+{
+  curwin->w_cursor = *pos;
+}
+
 /// Find the start of the next sentence, searching in the direction specified
 /// by the "dir" argument.  The cursor is positioned on the start of the next
 /// sentence when found.  If the next sentence is found, return OK.  Return FAIL
@@ -387,125 +507,7 @@ void nvim_textobj_showmode(void)
 /// text object.
 int findsent(Direction dir, int count)
 {
-  int c;
-  int (*func)(pos_T *);
-  bool noskip = false;              // do not skip blanks
-
-  pos_T pos = curwin->w_cursor;
-  if (dir == FORWARD) {
-    func = incl;
-  } else {
-    func = decl;
-  }
-
-  while (count--) {
-    const pos_T prev_pos = pos;
-
-    // if on an empty line, skip up to a non-empty line
-    if (gchar_pos(&pos) == NUL) {
-      do {
-        if ((*func)(&pos) == -1) {
-          break;
-        }
-      } while (gchar_pos(&pos) == NUL);
-      if (dir == FORWARD) {
-        goto found;
-      }
-      // if on the start of a paragraph or a section and searching forward,
-      // go to the next line
-    } else if (dir == FORWARD && pos.col == 0
-               && startPS(pos.lnum, NUL, false)) {
-      if (pos.lnum == curbuf->b_ml.ml_line_count) {
-        return FAIL;
-      }
-      pos.lnum++;
-      goto found;
-    } else if (dir == BACKWARD) {
-      decl(&pos);
-    }
-
-    // go back to the previous non-white non-punctuation character
-    bool found_dot = false;
-    while (c = gchar_pos(&pos), ascii_iswhite(c)
-           || vim_strchr(".!?)]\"'", c) != NULL) {
-      pos_T tpos = pos;
-      if (decl(&tpos) == -1 || (LINEEMPTY(tpos.lnum) && dir == FORWARD)) {
-        break;
-      }
-      if (found_dot) {
-        break;
-      }
-      if (vim_strchr(".!?", c) != NULL) {
-        found_dot = true;
-      }
-      if (vim_strchr(")]\"'", c) != NULL
-          && vim_strchr(".!?)]\"'", gchar_pos(&tpos)) == NULL) {
-        break;
-      }
-      decl(&pos);
-    }
-
-    // remember the line where the search started
-    const int startlnum = pos.lnum;
-    const bool cpo_J = vim_strchr(p_cpo, CPO_ENDOFSENT) != NULL;
-
-    while (true) {              // find end of sentence
-      c = gchar_pos(&pos);
-      if (c == NUL || (pos.col == 0 && startPS(pos.lnum, NUL, false))) {
-        if (dir == BACKWARD && pos.lnum != startlnum) {
-          pos.lnum++;
-        }
-        break;
-      }
-      if (c == '.' || c == '!' || c == '?') {
-        pos_T tpos = pos;
-        do {
-          if ((c = inc(&tpos)) == -1) {
-            break;
-          }
-        } while (vim_strchr(")]\"'", c = gchar_pos(&tpos))
-                 != NULL);
-        if (c == -1 || (!cpo_J && (c == ' ' || c == '\t')) || c == NUL
-            || (cpo_J && (c == ' ' && inc(&tpos) >= 0
-                          && gchar_pos(&tpos) == ' '))) {
-          pos = tpos;
-          if (gchar_pos(&pos) == NUL) {         // skip NUL at EOL
-            inc(&pos);
-          }
-          break;
-        }
-      }
-      if ((*func)(&pos) == -1) {
-        if (count) {
-          return FAIL;
-        }
-        noskip = true;
-        break;
-      }
-    }
-found:
-    // skip white space
-    while (!noskip && ((c = gchar_pos(&pos)) == ' ' || c == '\t')) {
-      if (incl(&pos) == -1) {
-        break;
-      }
-    }
-
-    if (equalpos(prev_pos, pos)) {
-      // didn't actually move, advance one character and try again
-      if ((*func)(&pos) == -1) {
-        if (count) {
-          return FAIL;
-        }
-        break;
-      }
-      count++;
-    }
-  }
-
-  setpcmark();
-  curwin->w_cursor = pos;
-  return OK;
+  return rs_findsent(dir, count);
 }
 
 /// Find the next paragraph or section in direction 'dir'.
@@ -630,13 +632,7 @@ static void back_in_line(void)
 
 static void find_first_blank(pos_T *posp)
 {
-  while (decl(posp) != -1) {
-    int c = gchar_pos(posp);
-    if (!ascii_iswhite(c)) {
-      incl(posp);
-      break;
-    }
-  }
+  rs_find_first_blank(posp);
 }
 
 /// Skip count/2 sentences and count/2 separating white spaces.
@@ -644,16 +640,7 @@ static void find_first_blank(pos_T *posp)
 /// @param at_start_sent  cursor is at start of sentence
 static void findsent_forward(int count, bool at_start_sent)
 {
-  while (count--) {
-    findsent(FORWARD, 1);
-    if (at_start_sent) {
-      find_first_blank(&curwin->w_cursor);
-    }
-    if (count == 0 || at_start_sent) {
-      decl(&curwin->w_cursor);
-    }
-    at_start_sent = !at_start_sent;
-  }
+  rs_findsent_forward(count, at_start_sent);
 }
 
 /// Find word under cursor, cursor at end.
@@ -671,157 +658,7 @@ int current_word(oparg_T *oap, int count, bool include, bool bigword)
 /// When Visual active, extend it by one or more sentences.
 int current_sent(oparg_T *oap, int count, bool include)
 {
-  bool start_blank;
-  int c;
-  bool at_start_sent;
-  int ncount;
-
-  pos_T start_pos = curwin->w_cursor;
-  pos_T pos = start_pos;
-  findsent(FORWARD, 1);        // Find start of next sentence.
-
-  // When the Visual area is bigger than one character: Extend it.
-  if (VIsual_active && !equalpos(start_pos, VIsual)) {
-extend:
-    if (lt(start_pos, VIsual)) {
-      // Cursor at start of Visual area.
-      // Find out where we are:
-      // - in the white space before a sentence
-      // - in a sentence or just after it
-      // - at the start of a sentence
-      at_start_sent = true;
-      decl(&pos);
-      while (lt(pos, curwin->w_cursor)) {
-        c = gchar_pos(&pos);
-        if (!ascii_iswhite(c)) {
-          at_start_sent = false;
-          break;
-        }
-        incl(&pos);
-      }
-      if (!at_start_sent) {
-        findsent(BACKWARD, 1);
-        if (equalpos(curwin->w_cursor, start_pos)) {
-          at_start_sent = true;            // exactly at start of sentence
-        } else {
-          // inside a sentence, go to its end (start of next)
-          findsent(FORWARD, 1);
-        }
-      }
-      if (include) {            // "as" gets twice as much as "is"
-        count *= 2;
-      }
-      while (count--) {
-        if (at_start_sent) {
-          find_first_blank(&curwin->w_cursor);
-        }
-        c = gchar_cursor();
-        if (!at_start_sent || (!include && !ascii_iswhite(c))) {
-          findsent(BACKWARD, 1);
-        }
-        at_start_sent = !at_start_sent;
-      }
-    } else {
-      // Cursor at end of Visual area.
-      // Find out where we are:
-      // - just before a sentence
-      // - just before or in the white space before a sentence
-      // - in a sentence
-      incl(&pos);
-      at_start_sent = true;
-      if (!equalpos(pos, curwin->w_cursor)) {     // not just before a sentence
-        at_start_sent = false;
-        while (lt(pos, curwin->w_cursor)) {
-          c = gchar_pos(&pos);
-          if (!ascii_iswhite(c)) {
-            at_start_sent = true;
-            break;
-          }
-          incl(&pos);
-        }
-        if (at_start_sent) {            // in the sentence
-          findsent(BACKWARD, 1);
-        } else {  // in/before white before a sentence
-          curwin->w_cursor = start_pos;
-        }
-      }
-
-      if (include) {            // "as" gets twice as much as "is"
-        count *= 2;
-      }
-      findsent_forward(count, at_start_sent);
-      if (*p_sel == 'e') {
-        curwin->w_cursor.col++;
-      }
-    }
-    return OK;
-  }
-
-  // If the cursor started on a blank, check if it is just before the start
-  // of the next sentence.
-  while (c = gchar_pos(&pos), ascii_iswhite(c)) {
-    incl(&pos);
-  }
-  if (equalpos(pos, curwin->w_cursor)) {
-    start_blank = true;
-    find_first_blank(&start_pos);       // go back to first blank
-  } else {
-    start_blank = false;
-    findsent(BACKWARD, 1);
-    start_pos = curwin->w_cursor;
-  }
-  if (include) {
-    ncount = count * 2;
-  } else {
-    ncount = count;
-    if (start_blank) {
-      ncount--;
-    }
-  }
-  if (ncount > 0) {
-    findsent_forward(ncount, true);
-  } else {
-    decl(&curwin->w_cursor);
-  }
-
-  if (include) {
-    // If the blank in front of the sentence is included, exclude the
-    // blanks at the end of the sentence, go back to the first blank.
-    // If there are no trailing blanks, try to include leading blanks.
-    if (start_blank) {
-      find_first_blank(&curwin->w_cursor);
-      c = gchar_pos(&curwin->w_cursor);
-      if (ascii_iswhite(c)) {
-        decl(&curwin->w_cursor);
-      }
-    } else if (c = gchar_cursor(), !ascii_iswhite(c)) {
-      find_first_blank(&start_pos);
-    }
-  }
-
-  if (VIsual_active) {
-    // Avoid getting stuck with "is" on a single space before a sentence.
-    if (equalpos(start_pos, curwin->w_cursor)) {
-      goto extend;
-    }
-    if (*p_sel == 'e') {
-      curwin->w_cursor.col++;
-    }
-    VIsual = start_pos;
-    VIsual_mode = 'v';
-    redraw_cmdline = true;    // show mode later
-    redraw_curbuf_later(UPD_INVERTED);  // update the inversion
-  } else {
-    // include a newline after the sentence, if there is one
-    if (incl(&curwin->w_cursor) == -1) {
-      oap->inclusive = true;
-    } else {
-      oap->inclusive = false;
-    }
-    oap->start = start_pos;
-    oap->motion_type = kMTCharWise;
-  }
-  return OK;
+  return rs_current_sent(oap, count, include);
 }
 
 /// Find block under the cursor, cursor at end.
