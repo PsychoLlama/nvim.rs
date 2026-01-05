@@ -385,6 +385,8 @@ extern bool rs_checkclearop(oparg_T *oap);
 extern bool rs_checkclearopq(oparg_T *oap);
 extern bool rs_check_text_locked(oparg_T *oap);
 extern bool rs_check_text_or_curbuf_locked(oparg_T *oap);
+extern void rs_prep_redo(int regname, int num, int cmd1, int cmd2, int cmd3, int cmd4, int cmd5);
+extern void rs_prep_redo_num2(int regname, int num1, int cmd1, int cmd2, int num2, int cmd3, int cmd4, int cmd5);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -1794,39 +1796,14 @@ static void prep_redo_cmd(cmdarg_T *cap)
 /// Note that only the last argument can be a multi-byte char.
 void prep_redo(int regname, int num, int cmd1, int cmd2, int cmd3, int cmd4, int cmd5)
 {
-  prep_redo_num2(regname, num, cmd1, cmd2, 0, cmd3, cmd4, cmd5);
+  rs_prep_redo(regname, num, cmd1, cmd2, cmd3, cmd4, cmd5);
 }
 
 /// Prepare for redo of any command with extra count after "cmd2".
 void prep_redo_num2(int regname, int num1, int cmd1, int cmd2, int num2, int cmd3, int cmd4,
                     int cmd5)
 {
-  ResetRedobuff();
-  if (regname != 0) {   // yank from specified buffer
-    AppendCharToRedobuff('"');
-    AppendCharToRedobuff(regname);
-  }
-  if (num1 != 0) {
-    AppendNumberToRedobuff(num1);
-  }
-  if (cmd1 != NUL) {
-    AppendCharToRedobuff(cmd1);
-  }
-  if (cmd2 != NUL) {
-    AppendCharToRedobuff(cmd2);
-  }
-  if (num2 != 0) {
-    AppendNumberToRedobuff(num2);
-  }
-  if (cmd3 != NUL) {
-    AppendCharToRedobuff(cmd3);
-  }
-  if (cmd4 != NUL) {
-    AppendCharToRedobuff(cmd4);
-  }
-  if (cmd5 != NUL) {
-    AppendCharToRedobuff(cmd5);
-  }
+  rs_prep_redo_num2(regname, num1, cmd1, cmd2, num2, cmd3, cmd4, cmd5);
 }
 
 /// Check for operator active and clear it.

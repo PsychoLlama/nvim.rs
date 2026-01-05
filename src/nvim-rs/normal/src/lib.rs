@@ -100,6 +100,11 @@ extern "C" {
 
     // Beep function
     fn beep_flush();
+
+    // Redo buffer functions (from getchar.c)
+    fn ResetRedobuff();
+    fn AppendCharToRedobuff(c: c_int);
+    fn AppendNumberToRedobuff(n: c_int);
 }
 
 // Operator type constants (must match ops.h)
@@ -466,6 +471,84 @@ pub unsafe extern "C" fn rs_check_text_or_curbuf_locked(oap: OapHandle) -> bool 
         rs_clearop(oap);
     }
     true
+}
+
+// =============================================================================
+// Redo Preparation Functions
+// =============================================================================
+
+/// Prepare for redo of any command.
+///
+/// Builds the redo buffer with the given register, count, and command characters.
+///
+/// # Safety
+/// Calls into C redo buffer functions which must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_prep_redo(
+    regname: c_int,
+    num: c_int,
+    cmd1: c_int,
+    cmd2: c_int,
+    cmd3: c_int,
+    cmd4: c_int,
+    cmd5: c_int,
+) {
+    rs_prep_redo_num2(regname, num, cmd1, cmd2, 0, cmd3, cmd4, cmd5);
+}
+
+/// Prepare for redo of any command with extra count after cmd2.
+///
+/// Builds the redo buffer with the given register, counts, and command characters.
+///
+/// # Safety
+/// Calls into C redo buffer functions which must be valid.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn rs_prep_redo_num2(
+    regname: c_int,
+    num1: c_int,
+    cmd1: c_int,
+    cmd2: c_int,
+    num2: c_int,
+    cmd3: c_int,
+    cmd4: c_int,
+    cmd5: c_int,
+) {
+    ResetRedobuff();
+
+    // Yank from specified buffer
+    if regname != 0 {
+        AppendCharToRedobuff(c_int::from(b'"'));
+        AppendCharToRedobuff(regname);
+    }
+
+    if num1 != 0 {
+        AppendNumberToRedobuff(num1);
+    }
+
+    if cmd1 != NUL_CHAR {
+        AppendCharToRedobuff(cmd1);
+    }
+
+    if cmd2 != NUL_CHAR {
+        AppendCharToRedobuff(cmd2);
+    }
+
+    if num2 != 0 {
+        AppendNumberToRedobuff(num2);
+    }
+
+    if cmd3 != NUL_CHAR {
+        AppendCharToRedobuff(cmd3);
+    }
+
+    if cmd4 != NUL_CHAR {
+        AppendCharToRedobuff(cmd4);
+    }
+
+    if cmd5 != NUL_CHAR {
+        AppendCharToRedobuff(cmd5);
+    }
 }
 
 // =============================================================================
