@@ -8,6 +8,8 @@
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::must_use_candidate)] // Getters don't need #[must_use]
 #![allow(clippy::missing_const_for_fn)] // FFI functions can't be const
+#![allow(clippy::cast_sign_loss)] // FFI with C char types
+#![allow(clippy::missing_safety_doc)] // FFI functions safety is implicit
 
 use std::ffi::{c_char, c_int, c_uint};
 
@@ -1005,6 +1007,149 @@ pub extern "C" fn rs_clamp_percentage(value: OptInt) -> OptInt {
 }
 
 // =============================================================================
+// Option Parsing Utilities
+// =============================================================================
+
+/// Check if a string starts with "no" prefix (for boolean options).
+/// Returns the length of the prefix (2) if found, 0 otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn rs_option_has_no_prefix(s: *const c_char) -> c_int {
+    if s.is_null() {
+        return 0;
+    }
+    let b0 = *s as u8;
+    let b1 = *s.add(1) as u8;
+    if b0 == b'n' && b1 == b'o' {
+        2
+    } else {
+        0
+    }
+}
+
+/// Check if a string starts with "inv" prefix (for boolean options).
+/// Returns the length of the prefix (3) if found, 0 otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn rs_option_has_inv_prefix(s: *const c_char) -> c_int {
+    if s.is_null() {
+        return 0;
+    }
+    let b0 = *s as u8;
+    let b1 = *s.add(1) as u8;
+    let b2 = *s.add(2) as u8;
+    if b0 == b'i' && b1 == b'n' && b2 == b'v' {
+        3
+    } else {
+        0
+    }
+}
+
+/// Parse the boolean prefix from an option name.
+/// Returns: 0 = no prefix, 1 = "no" prefix, 2 = "inv" prefix
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_bool_prefix(s: *const c_char) -> c_int {
+    if s.is_null() {
+        return SetPrefix::None as c_int;
+    }
+    if rs_option_has_no_prefix(s) > 0 {
+        SetPrefix::No as c_int
+    } else if rs_option_has_inv_prefix(s) > 0 {
+        SetPrefix::Inv as c_int
+    } else {
+        SetPrefix::None as c_int
+    }
+}
+
+/// Check if a string contains only characters from an allowed set.
+/// Returns 1 if valid, 0 if invalid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_option_chars_valid(s: *const c_char, allowed: *const c_char) -> c_int {
+    if s.is_null() || allowed.is_null() {
+        return 1;
+    }
+
+    let mut p = s;
+    while *p != 0 {
+        let ch = *p as u8;
+
+        // Check if character is in allowed set
+        let mut found = false;
+        let mut a = allowed;
+        while *a != 0 {
+            if *a as u8 == ch {
+                found = true;
+                break;
+            }
+            a = a.add(1);
+        }
+
+        if !found {
+            return 0;
+        }
+        p = p.add(1);
+    }
+    1
+}
+
+/// Check if a string matches a specific keyword (case-sensitive).
+/// Returns 1 if matches, 0 otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn rs_option_match_keyword(
+    s: *const c_char,
+    keyword: *const c_char,
+    len: usize,
+) -> c_int {
+    if s.is_null() || keyword.is_null() || len == 0 {
+        return 0;
+    }
+
+    for i in 0..len {
+        let sc = *s.add(i) as u8;
+        let kc = *keyword.add(i) as u8;
+        if sc != kc {
+            return 0;
+        }
+    }
+
+    // Check that there's no more alphanumeric characters after
+    let next = *s.add(len) as u8;
+    if next.is_ascii_alphanumeric() || next == b'_' {
+        return 0;
+    }
+
+    1
+}
+
+/// Skip leading whitespace in an option argument.
+#[no_mangle]
+pub unsafe extern "C" fn rs_option_skip_whitespace(s: *const c_char) -> *const c_char {
+    if s.is_null() {
+        return s;
+    }
+    let mut p = s;
+    while (*p as u8) == b' ' || (*p as u8) == b'\t' {
+        p = p.add(1);
+    }
+    p
+}
+
+/// Find the end of an option argument (stops at whitespace or delimiter).
+#[no_mangle]
+pub unsafe extern "C" fn rs_option_find_arg_end(s: *const c_char) -> *const c_char {
+    if s.is_null() {
+        return s;
+    }
+    let mut p = s;
+    while *p != 0 {
+        let ch = *p as u8;
+        if ch == b' ' || ch == b'\t' || ch == b',' || ch == b':' {
+            break;
+        }
+        p = p.add(1);
+    }
+    p
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -1156,5 +1301,137 @@ mod tests {
         assert_eq!(rs_clamp_percentage(50), 50);
         assert_eq!(rs_clamp_percentage(-10), 0);
         assert_eq!(rs_clamp_percentage(150), 100);
+    }
+
+    #[test]
+    fn test_option_has_no_prefix() {
+        use std::ffi::CString;
+
+        unsafe {
+            let no_number = CString::new("nonumber").unwrap();
+            let number = CString::new("number").unwrap();
+            let inv_number = CString::new("invnumber").unwrap();
+
+            assert_eq!(rs_option_has_no_prefix(no_number.as_ptr()), 2);
+            assert_eq!(rs_option_has_no_prefix(number.as_ptr()), 0);
+            assert_eq!(rs_option_has_no_prefix(inv_number.as_ptr()), 0);
+            assert_eq!(rs_option_has_no_prefix(std::ptr::null()), 0);
+        }
+    }
+
+    #[test]
+    fn test_option_has_inv_prefix() {
+        use std::ffi::CString;
+
+        unsafe {
+            let inv_number = CString::new("invnumber").unwrap();
+            let no_number = CString::new("nonumber").unwrap();
+            let number = CString::new("number").unwrap();
+
+            assert_eq!(rs_option_has_inv_prefix(inv_number.as_ptr()), 3);
+            assert_eq!(rs_option_has_inv_prefix(no_number.as_ptr()), 0);
+            assert_eq!(rs_option_has_inv_prefix(number.as_ptr()), 0);
+            assert_eq!(rs_option_has_inv_prefix(std::ptr::null()), 0);
+        }
+    }
+
+    #[test]
+    fn test_parse_bool_prefix() {
+        use std::ffi::CString;
+
+        unsafe {
+            let no_number = CString::new("nonumber").unwrap();
+            let inv_number = CString::new("invnumber").unwrap();
+            let number = CString::new("number").unwrap();
+
+            assert_eq!(
+                rs_parse_bool_prefix(no_number.as_ptr()),
+                SetPrefix::No as c_int
+            );
+            assert_eq!(
+                rs_parse_bool_prefix(inv_number.as_ptr()),
+                SetPrefix::Inv as c_int
+            );
+            assert_eq!(
+                rs_parse_bool_prefix(number.as_ptr()),
+                SetPrefix::None as c_int
+            );
+        }
+    }
+
+    #[test]
+    fn test_option_chars_valid() {
+        use std::ffi::CString;
+
+        unsafe {
+            let flags = CString::new("abc").unwrap();
+            let allowed = CString::new("abcdef").unwrap();
+            let invalid = CString::new("xyz").unwrap();
+
+            assert_eq!(rs_option_chars_valid(flags.as_ptr(), allowed.as_ptr()), 1);
+            assert_eq!(rs_option_chars_valid(invalid.as_ptr(), allowed.as_ptr()), 0);
+        }
+    }
+
+    #[test]
+    fn test_option_match_keyword() {
+        use std::ffi::CString;
+
+        unsafe {
+            let all = CString::new("all").unwrap();
+            let all_more = CString::new("all:test").unwrap();
+            let all_continued = CString::new("allmore").unwrap();
+            let keyword = CString::new("all").unwrap();
+
+            assert_eq!(
+                rs_option_match_keyword(all.as_ptr(), keyword.as_ptr(), 3),
+                1
+            );
+            assert_eq!(
+                rs_option_match_keyword(all_more.as_ptr(), keyword.as_ptr(), 3),
+                1
+            );
+            // "allmore" doesn't match because there's more alphanumeric after
+            assert_eq!(
+                rs_option_match_keyword(all_continued.as_ptr(), keyword.as_ptr(), 3),
+                0
+            );
+        }
+    }
+
+    #[test]
+    fn test_option_skip_whitespace() {
+        use std::ffi::CString;
+
+        unsafe {
+            let with_spaces = CString::new("  \t  test").unwrap();
+            let no_spaces = CString::new("test").unwrap();
+
+            let result = rs_option_skip_whitespace(with_spaces.as_ptr());
+            assert_eq!(*result as u8, b't');
+
+            let result = rs_option_skip_whitespace(no_spaces.as_ptr());
+            assert_eq!(*result as u8, b't');
+        }
+    }
+
+    #[test]
+    fn test_option_find_arg_end() {
+        use std::ffi::CString;
+
+        unsafe {
+            let with_space = CString::new("arg1 arg2").unwrap();
+            let with_comma = CString::new("arg1,arg2").unwrap();
+            let no_delim = CString::new("arg1").unwrap();
+
+            let result = rs_option_find_arg_end(with_space.as_ptr());
+            assert_eq!(result.offset_from(with_space.as_ptr()), 4);
+
+            let result = rs_option_find_arg_end(with_comma.as_ptr());
+            assert_eq!(result.offset_from(with_comma.as_ptr()), 4);
+
+            let result = rs_option_find_arg_end(no_delim.as_ptr());
+            assert_eq!(*result, 0); // points to NUL
+        }
     }
 }
