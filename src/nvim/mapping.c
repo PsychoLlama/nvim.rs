@@ -2904,3 +2904,112 @@ ArrayOf(Dict) keymap_array(String mode, buf_T *buf, Arena *arena)
 
   return arena_take_arraybuilder(arena, &mappings);
 }
+
+// =============================================================================
+// Rust FFI accessor functions
+// =============================================================================
+
+// Field accessors for mapblock_T (used by Rust via FFI)
+
+mapblock_T *nvim_mapblock_get_next(mapblock_T *mp)
+{
+  return mp ? mp->m_next : NULL;
+}
+
+mapblock_T *nvim_mapblock_get_alt(mapblock_T *mp)
+{
+  return mp ? mp->m_alt : NULL;
+}
+
+const char *nvim_mapblock_get_keys(mapblock_T *mp)
+{
+  return mp ? mp->m_keys : NULL;
+}
+
+const char *nvim_mapblock_get_str(mapblock_T *mp)
+{
+  return mp ? mp->m_str : NULL;
+}
+
+const char *nvim_mapblock_get_orig_str(mapblock_T *mp)
+{
+  return mp ? mp->m_orig_str : NULL;
+}
+
+int nvim_mapblock_get_keylen(mapblock_T *mp)
+{
+  return mp ? mp->m_keylen : 0;
+}
+
+int nvim_mapblock_get_mode(mapblock_T *mp)
+{
+  return mp ? mp->m_mode : 0;
+}
+
+int nvim_mapblock_get_simplified(mapblock_T *mp)
+{
+  return mp ? mp->m_simplified : 0;
+}
+
+int nvim_mapblock_get_noremap(mapblock_T *mp)
+{
+  return mp ? mp->m_noremap : 0;
+}
+
+int nvim_mapblock_is_silent(mapblock_T *mp)
+{
+  return mp ? mp->m_silent : 0;
+}
+
+int nvim_mapblock_is_nowait(mapblock_T *mp)
+{
+  return mp ? mp->m_nowait : 0;
+}
+
+int nvim_mapblock_is_expr(mapblock_T *mp)
+{
+  return mp ? mp->m_expr : 0;
+}
+
+LuaRef nvim_mapblock_get_luaref(mapblock_T *mp)
+{
+  return mp ? mp->m_luaref : LUA_NOREF;
+}
+
+const char *nvim_mapblock_get_desc(mapblock_T *mp)
+{
+  return mp ? mp->m_desc : NULL;
+}
+
+int nvim_mapblock_get_replace_keycodes(mapblock_T *mp)
+{
+  return mp ? mp->m_replace_keycodes : 0;
+}
+
+// Hash table accessors
+
+mapblock_T *nvim_get_maphash_entry(int index)
+{
+  if (index < 0 || index >= MAX_MAPHASH) {
+    return NULL;
+  }
+  return maphash[index];
+}
+
+mapblock_T *nvim_get_first_abbr(void)
+{
+  return first_abbr;
+}
+
+mapblock_T *nvim_buf_get_maphash_entry(buf_T *buf, int index)
+{
+  if (!buf || index < 0 || index >= MAX_MAPHASH) {
+    return NULL;
+  }
+  return buf->b_maphash[index];
+}
+
+mapblock_T *nvim_buf_get_first_abbr(buf_T *buf)
+{
+  return buf ? buf->b_first_abbr : NULL;
+}

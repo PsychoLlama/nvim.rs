@@ -2921,7 +2921,10 @@ mod tests {
     fn test_score_combine() {
         assert_eq!(rs_score_combine(50, 50), 100);
         assert_eq!(rs_score_combine(0, 100), 100);
-        assert_eq!(rs_score_combine(SCORE_SWAP, SCORE_DEL), SCORE_SWAP + SCORE_DEL);
+        assert_eq!(
+            rs_score_combine(SCORE_SWAP, SCORE_DEL),
+            SCORE_SWAP + SCORE_DEL
+        );
     }
 
     #[test]

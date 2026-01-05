@@ -35,6 +35,7 @@ members = [
     "src/nvim-rs/keycodes",
     "src/nvim-rs/linematch",
     "src/nvim-rs/lua",
+    "src/nvim-rs/mapping",
     "src/nvim-rs/mark",
     "src/nvim-rs/math",
     "src/nvim-rs/mbyte",

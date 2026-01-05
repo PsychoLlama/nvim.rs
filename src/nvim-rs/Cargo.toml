@@ -49,6 +49,7 @@ nvim-indent = { path = "indent" }
 nvim-keycodes = { path = "keycodes" }
 nvim-linematch = { path = "linematch" }
 nvim-lua = { path = "lua" }
+nvim-mapping = { path = "mapping" }
 nvim-mark = { path = "mark" }
 nvim-marktree = { path = "marktree" }
 nvim-math = { path = "math" }

@@ -15,7 +15,7 @@ rename_variants = "ScreamingSnakeCase"
 
 [parse]
 parse_deps = true
-include = ["nvim-buffer", "nvim-charset", "nvim-cmdhist", "nvim-diff", "nvim-encoding", "nvim-eval", "nvim-ex-docmd", "nvim-fileio", "nvim-help", "nvim-indent", "nvim-keycodes", "nvim-marktree", "nvim-math", "nvim-mbyte", "nvim-memutil", "nvim-menu", "nvim-os", "nvim-path", "nvim-profile", "nvim-regexp", "nvim-spell", "nvim-strings", "nvim-version", "nvim-window"]
+include = ["nvim-buffer", "nvim-charset", "nvim-cmdhist", "nvim-diff", "nvim-encoding", "nvim-eval", "nvim-ex-docmd", "nvim-fileio", "nvim-help", "nvim-indent", "nvim-keycodes", "nvim-mapping", "nvim-marktree", "nvim-math", "nvim-mbyte", "nvim-memutil", "nvim-menu", "nvim-os", "nvim-path", "nvim-profile", "nvim-regexp", "nvim-spell", "nvim-strings", "nvim-version", "nvim-window"]
 
 [export]
 include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs_getchr", "rs_ungetchr", "rs_read_limits", "rs_mb_decompose", "rs_use_multibytecode", "rs_nfa_re_num_cmp", "rs_re_put_uint32", "rs_re_get_uint32", "rs_re_put_uint16", "rs_re_get_uint16", "rs_re_num_cmp", "rs_get_char_class", "rs_nfa_recognize_char_class",
@@ -80,4 +80,7 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_marktree_lookup", "rs_marktree_lookup_ns", "rs_marktree_get_alt", "rs_marktree_get_altpos",
            "rs_meta_describe_key",
            "MTPos", "MTKey", "MarkTreeHandle", "MTNodeHandle", "MarkTreeIterHandle",
+           "rs_map_hash", "rs_map_mode_to_chars", "rs_map_mode_from_chars",
+           "rs_get_maphash_list", "rs_get_buf_maphash_list", "rs_map_to_exists",
+           "MapblockHandle",
            "nvim_rs_version"]
