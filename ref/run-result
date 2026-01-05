@@ -1,52 +1,45 @@
-Plan: ~/.claude/plans/snappy-sleeping-clover.md
+Plan: ~/.claude/plans/humming-coalescing-nebula.md
 
-## Summary
+The marktree migration plan is now complete. Let me provide a summary:
 
-I've executed the spell checking subsystem migration plan and completed the initial phase. Here's what was accomplished:
+## Marktree Migration Complete
 
-### Completed Work
+All 5 phases of the migration plan have been executed successfully:
 
-**Phase 1: Spell File Format Parsing** (1 commit)
+### Commits Created
+1. `50d9a67133` - refactor(marktree): add Rust types and pure helpers
+2. `3af82ecf54` - refactor(marktree): migrate read-only tree operations to Rust
+3. `e0493fedce` - refactor(marktree): add iterator positioning and meta helpers
+4. `16cb26f7b0` - refactor(marktree): migrate pair/intersection management to Rust
+5. `c8a71c483f` - refactor(marktree): complete migration and update cbindgen exports
 
-Added to `src/nvim-rs/spell/src/lib.rs`:
+### Summary of Migrated Components
 
-1. **Spell error constants**:
-   - `SP_TRUNCERROR`, `SP_FORMERROR`, `SP_OTHERERROR` - matching C's spell error codes
-   - Word flag constants (`WF_REGION`, `WF_AFX`, `WF_RARE`, etc.)
-   - `MAXWLEN` constant (254)
-   - `SHARED_MASK` for shared tree nodes
+**Types Created:**
+- `MTPos` - Row/col position struct
+- `MTKey` - Mark key with position, namespace, ID, flags, and decoration data
+- `MarkTreeHandle`, `MTNodeHandle`, `MarkTreeIterHandle` - Opaque handle types
 
-2. **`rs_tree_count_words`** - Counts words in a spell trie
-   - Traverses the word tree iteratively using depth-first search
-   - Stores word counts at each node position
-   - Handles adjacent NUL bytes (same word with different flags)
-   - Includes bounds checking for safety
+**Pure Helper Functions (31 functions):**
+- Position comparison: `pos_leq`, `pos_less`
+- Relative positioning: `relative`, `unrelative`, `compose`
+- ID lookup: `mt_lookup_id`, `mt_lookup_key`, `mt_lookup_key_side`
+- Flag checks: `mt_paired`, `mt_end`, `mt_start`, `mt_right`, `mt_no_undo`, `mt_invalidate`, `mt_invalid`, `mt_decor_any`, `mt_decor_sign`, `mt_conceal_lines`
+- Key comparison: `key_cmp`
+- Flag construction: `mt_flags`
+- Binary search: `marktree_getp_aux`
+- Meta helpers: `meta_describe_key`
 
-3. **`rs_read_tree_node`** - Reads tree nodes from spell file buffer
-   - Parses sibling counts, flags, shared indexes
-   - Handles prefix tree entries with condition numbers
-   - Supports `BY_NOFLAGS`, `BY_FLAGS`, `BY_FLAGS2`, `BY_INDEX` node types
-   - Recursively processes child nodes
+**Iterator Functions:**
+- `marktree_itr_valid`, `marktree_itr_pos`, `marktree_itr_current`
+- `marktree_itr_node_done`, `marktree_itr_next`, `marktree_itr_prev`, `marktree_itr_first`
+- `marktree_itr_get`, `marktree_itr_get_ext`
 
-4. **Comprehensive tests** for all new functions
+**Lookup Functions (via C wrappers):**
+- `marktree_lookup`, `marktree_lookup_ns`
+- `marktree_get_alt`, `marktree_get_altpos`
 
-### Current State
-
-- All Rust checks pass: `just rust-fmt-check`, `just rust-clippy`, `just rust-test`
-- The Rust implementations are ready but not yet integrated with C code
-- The existing C functions remain in place for backwards compatibility
-
-### Remaining Phases
-
-- **Phase 2**: Spell word lookup (tree traversal, word validation, case checking)
-- **Phase 3**: Spell suggestions (soundalike matching, edit distance)
-- **Phase 4**: Integration and cleanup (wire Rust to C, remove dead code)
-
-### Notes
-
-The C code integration was deferred because:
-1. `tree_count_words` in C doesn't track array lengths (Rust version requires this for safety)
-2. C version has `got_int` interrupt checking which Rust doesn't support
-3. The `slang_T` struct has complex dependencies requiring accessor functions
-
-The Rust functions are designed to be called from C when appropriate length tracking is added.
+**Verification:**
+- All `just rust-fmt-check` checks pass
+- All `just rust-clippy` lints pass
+- All 911 Rust tests pass (including 14 new marktree tests)
