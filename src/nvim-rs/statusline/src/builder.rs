@@ -239,7 +239,11 @@ impl StatuslineBuilder {
     /// End the current group.
     ///
     /// Returns true if a group was ended, false if not in a group.
-    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    #[allow(
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap
+    )]
     pub fn end_group(&mut self) -> bool {
         let Some(group) = self.groups.pop() else {
             return false;
