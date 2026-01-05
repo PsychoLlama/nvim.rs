@@ -109,6 +109,7 @@ rust-test:
       -p nvim-register \
       -p nvim-rs \
       -p nvim-search \
+      -p nvim-sign \
       -p nvim-spell \
       -p nvim-statusline \
       -p nvim-strings \

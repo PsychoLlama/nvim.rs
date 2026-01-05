@@ -76,6 +76,7 @@ pub use nvim_quickfix::*;
 pub use nvim_regexp::*;
 pub use nvim_register::*;
 pub use nvim_search::*;
+pub use nvim_sign::*;
 pub use nvim_spell::*;
 pub use nvim_statusline::*;
 pub use nvim_strings::*;
