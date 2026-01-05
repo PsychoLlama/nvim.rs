@@ -1,25 +1,36 @@
-Plan: ~/.claude/plans/sleepy-watching-mango.md
+Plan: ~/.claude/plans/replicated-questing-comet.md
 
-## Migration Complete
+Good, no uncommitted changes. Let me provide a summary of what was accomplished:
 
-I've completed the execution of the plan at `/home/overlord/.claude/plans/sleepy-watching-mango.md`. Here's a summary of what was accomplished:
+## Summary
 
-### Commits made:
-1. `f0d47d7d91` - **Phase 1**: Created normal crate and migrated pure utility functions
-2. `b0c295dd9c` - **Phase 2 (partial)**: Migrated `get_vtopline`
-3. `ecce08d9e9` - **Phase 2**: Migrated state query functions (`clearop`, `clearopbeep`, `checkclearop`, `checkclearopq`, `check_text_locked`, `check_text_or_curbuf_locked`)
-4. `b12ce39eda` - **Phase 5**: Migrated redo preparation functions (`prep_redo`, `prep_redo_num2`)
-5. `b9a9feefad` - **Phase 6 Tier 1**: Migrated simple command handlers (`nv_ignore`, `nv_nop`, `nv_error`, `nv_help`, `nv_suspend`)
+I executed the Rust migration plan for the fold subsystem. Here's what was completed:
 
-### Functions migrated (19 total):
-- **Pure utilities**: `rs_invert_horizontal`, `rs_find_command`, `rs_unshift_special`, `rs_is_ident`, `rs_find_is_eval_item`
-- **Window functions**: `rs_get_vtopline`
-- **Operator state**: `rs_clearop`, `rs_clearopbeep`, `rs_checkclearop`, `rs_checkclearopq`, `rs_check_text_locked`, `rs_check_text_or_curbuf_locked`
-- **Redo preparation**: `rs_prep_redo`, `rs_prep_redo_num2`
-- **Command handlers**: `rs_nv_ignore`, `rs_nv_nop`, `rs_nv_error`, `rs_nv_help`, `rs_nv_suspend`
+### Phase 1: Pure Recursive Functions ✅
+Migrated 4 functions to Rust:
+- `checkCloseRec` - Check if folds should close based on foldlevel
+- `foldOpenNested` - Open all nested folds recursively  
+- `setSmallMaybe` - Reset small flags on fold array
+- `foldReverseOrder` - Reverse fold array order
 
-### Skipped (documented in plan):
-- **Phase 3 (showcmd)**: Skipped due to tight coupling with C UI and string buffer operations
-- **Phase 4 (visual mode)**: Skipped due to complex dependencies on many global states and C UI functions
+### Phase 2: Fold Array Manipulation ⏭️ Skipped
+Functions like `deleteFoldRecurse`, `deleteFoldEntry`, `foldInsert`, `foldSplit`, `foldRemove`, `foldMerge` were skipped because they're tightly coupled to C memory management (`ga_grow`, `memmove`, `xfree`, `GA_DEEP_CLEAR`).
 
-All tests pass and the build is successful.
+### Phase 3: State Query Functions ✅
+Migrated 2 functions to Rust:
+- `check_closed` - Check if fold is closed based on flags and foldlevel
+- `checkSmall` - Update fd_small field based on foldminlines
+
+### Phases 4-6: ⏭️ Skipped
+- **Phase 4 (foldlevel calculations)**: Use `fline_T` struct, static globals, and C string APIs
+- **Phase 5 (fold navigation)**: Use `curwin` global, cursor manipulation, UI updates  
+- **Phase 6 (fold adjustment)**: Depend on `State` global and skipped `deleteFoldEntry`
+
+### Results
+- **Commits**: 2 commits made
+- **Functions migrated**: 6 new Rust FFI exports (18 total in fold crate)
+- **Lines**: Fold crate grew from ~637 to 969 lines
+- **All checks pass**: `just rust-fmt-check`, `just rust-clippy`, `just rust-test`
+- **Build succeeds**: Neovim builds and fold functionality works correctly
+
+The migration focused on pure functions that could be safely migrated without introducing complex memory management across the FFI boundary. Functions with heavy C dependencies (memory management, global state, buffer access) were appropriately skipped to maintain stability.
