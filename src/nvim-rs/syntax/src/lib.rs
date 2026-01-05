@@ -236,6 +236,97 @@ pub const NONE_IDX: c_int = -2;
 pub const MAXKEYWLEN: c_int = 80;
 
 // =============================================================================
+// Syntax ID helper functions
+// =============================================================================
+
+/// Represents the type of a syntax ID
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SynIdType {
+    /// Normal syntax group (0 - 19999)
+    Normal,
+    /// ALLBUT indicator (20000 - 20999, with inc_tag)
+    AllBut,
+    /// TOP indicator (21000 - 21999, with inc_tag)
+    Top,
+    /// CONTAINED indicator (22000 - 22999, with inc_tag)
+    Contained,
+    /// Cluster reference (23000 - 32767)
+    Cluster,
+}
+
+/// Classify a syntax ID into its type
+#[must_use]
+pub const fn synid_type(id: i16) -> SynIdType {
+    let id = id as c_int;
+    if id >= SYNID_CLUSTER {
+        SynIdType::Cluster
+    } else if id >= SYNID_CONTAINED {
+        SynIdType::Contained
+    } else if id >= SYNID_TOP {
+        SynIdType::Top
+    } else if id >= SYNID_ALLBUT {
+        SynIdType::AllBut
+    } else {
+        SynIdType::Normal
+    }
+}
+
+/// Check if an ID is a cluster reference
+#[must_use]
+pub const fn is_cluster_id(id: i16) -> bool {
+    (id as c_int) >= SYNID_CLUSTER
+}
+
+/// Check if an ID is a special group (ALLBUT, TOP, CONTAINED, or Cluster)
+#[must_use]
+pub const fn is_special_id(id: i16) -> bool {
+    (id as c_int) >= SYNID_ALLBUT
+}
+
+/// Check if an ID is a normal syntax group
+#[must_use]
+pub const fn is_normal_id(id: i16) -> bool {
+    (id as c_int) > 0 && (id as c_int) < SYNID_ALLBUT
+}
+
+/// Extract the cluster index from a cluster ID
+/// Returns None if not a cluster ID
+#[must_use]
+pub const fn cluster_index(id: i16) -> Option<i16> {
+    let id_int = id as c_int;
+    if id_int >= SYNID_CLUSTER {
+        Some((id_int - SYNID_CLUSTER) as i16)
+    } else {
+        None
+    }
+}
+
+/// Create a cluster ID from a cluster index
+#[must_use]
+pub const fn make_cluster_id(index: i16) -> i16 {
+    (SYNID_CLUSTER + index as c_int) as i16
+}
+
+/// Extract the include tag from an ALLBUT/TOP/CONTAINED ID
+/// Returns None if not an ALLBUT/TOP/CONTAINED ID
+#[must_use]
+pub const fn extract_inc_tag(id: i16) -> Option<i16> {
+    let id_int = id as c_int;
+    if id_int >= SYNID_ALLBUT && id_int < SYNID_CLUSTER {
+        // The inc_tag is encoded in the lower bits
+        if id_int >= SYNID_CONTAINED {
+            Some((id_int - SYNID_CONTAINED) as i16)
+        } else if id_int >= SYNID_TOP {
+            Some((id_int - SYNID_TOP) as i16)
+        } else {
+            Some((id_int - SYNID_ALLBUT) as i16)
+        }
+    } else {
+        None
+    }
+}
+
+// =============================================================================
 // C accessor function declarations
 // =============================================================================
 
@@ -848,6 +939,66 @@ pub extern "C" fn rs_stateitem_get_cchar(item: StateItemHandle) -> c_int {
     stateitem_cchar(item)
 }
 
+// =============================================================================
+// FFI exports - Syntax ID helpers
+// =============================================================================
+
+/// Check if a syntax ID is a cluster reference
+#[no_mangle]
+pub extern "C" fn rs_is_cluster_id(id: i16) -> c_int {
+    if is_cluster_id(id) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Check if a syntax ID is a special group (ALLBUT, TOP, CONTAINED, or Cluster)
+#[no_mangle]
+pub extern "C" fn rs_is_special_id(id: i16) -> c_int {
+    if is_special_id(id) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Check if a syntax ID is a normal syntax group
+#[no_mangle]
+pub extern "C" fn rs_is_normal_id(id: i16) -> c_int {
+    if is_normal_id(id) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Get the cluster index from a cluster ID
+/// Returns -1 if not a cluster ID
+#[no_mangle]
+pub extern "C" fn rs_get_cluster_index(id: i16) -> c_int {
+    cluster_index(id).map_or(-1, c_int::from)
+}
+
+/// Create a cluster ID from a cluster index
+#[no_mangle]
+pub extern "C" fn rs_make_cluster_id(index: i16) -> i16 {
+    make_cluster_id(index)
+}
+
+/// Get the syntax ID type as an integer
+/// 0 = Normal, 1 = AllBut, 2 = Top, 3 = Contained, 4 = Cluster
+#[no_mangle]
+pub extern "C" fn rs_synid_type(id: i16) -> c_int {
+    match synid_type(id) {
+        SynIdType::Normal => 0,
+        SynIdType::AllBut => 1,
+        SynIdType::Top => 2,
+        SynIdType::Contained => 3,
+        SynIdType::Cluster => 4,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -942,5 +1093,109 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn test_synid_type_classification() {
+        // Normal IDs (0 - 19999)
+        assert_eq!(synid_type(0), SynIdType::Normal);
+        assert_eq!(synid_type(1), SynIdType::Normal);
+        assert_eq!(synid_type(100), SynIdType::Normal);
+        assert_eq!(synid_type(19999), SynIdType::Normal);
+
+        // ALLBUT IDs (20000 - 20999)
+        assert_eq!(synid_type(20000), SynIdType::AllBut);
+        assert_eq!(synid_type(20500), SynIdType::AllBut);
+        assert_eq!(synid_type(20999), SynIdType::AllBut);
+
+        // TOP IDs (21000 - 21999)
+        assert_eq!(synid_type(21000), SynIdType::Top);
+        assert_eq!(synid_type(21500), SynIdType::Top);
+        assert_eq!(synid_type(21999), SynIdType::Top);
+
+        // CONTAINED IDs (22000 - 22999)
+        assert_eq!(synid_type(22000), SynIdType::Contained);
+        assert_eq!(synid_type(22500), SynIdType::Contained);
+        assert_eq!(synid_type(22999), SynIdType::Contained);
+
+        // Cluster IDs (23000+)
+        assert_eq!(synid_type(23000), SynIdType::Cluster);
+        assert_eq!(synid_type(25000), SynIdType::Cluster);
+        assert_eq!(synid_type(32767), SynIdType::Cluster);
+    }
+
+    #[test]
+    fn test_id_classification_helpers() {
+        // Test is_cluster_id
+        assert!(!is_cluster_id(100));
+        assert!(!is_cluster_id(20000));
+        assert!(!is_cluster_id(22000));
+        assert!(is_cluster_id(23000));
+        assert!(is_cluster_id(25000));
+
+        // Test is_special_id
+        assert!(!is_special_id(100));
+        assert!(!is_special_id(19999));
+        assert!(is_special_id(20000)); // ALLBUT
+        assert!(is_special_id(21000)); // TOP
+        assert!(is_special_id(22000)); // CONTAINED
+        assert!(is_special_id(23000)); // Cluster
+
+        // Test is_normal_id
+        assert!(!is_normal_id(0)); // 0 is not a valid group
+        assert!(is_normal_id(1));
+        assert!(is_normal_id(100));
+        assert!(is_normal_id(19999));
+        assert!(!is_normal_id(20000));
+    }
+
+    #[test]
+    fn test_cluster_index_extraction() {
+        // Non-cluster IDs return None
+        assert_eq!(cluster_index(100), None);
+        assert_eq!(cluster_index(22000), None);
+
+        // Cluster IDs return the index
+        assert_eq!(cluster_index(23000), Some(0));
+        assert_eq!(cluster_index(23001), Some(1));
+        assert_eq!(cluster_index(23100), Some(100));
+        assert_eq!(cluster_index(32767), Some(32767 - 23000));
+    }
+
+    #[test]
+    fn test_make_cluster_id() {
+        assert_eq!(make_cluster_id(0), 23000);
+        assert_eq!(make_cluster_id(1), 23001);
+        assert_eq!(make_cluster_id(100), 23100);
+
+        // Round-trip test
+        for i in 0i16..100 {
+            let cluster_id = make_cluster_id(i);
+            assert_eq!(cluster_index(cluster_id), Some(i));
+        }
+    }
+
+    #[test]
+    fn test_extract_inc_tag() {
+        // Normal IDs return None
+        assert_eq!(extract_inc_tag(100), None);
+
+        // Cluster IDs return None
+        assert_eq!(extract_inc_tag(23000), None);
+
+        // ALLBUT IDs
+        assert_eq!(extract_inc_tag(20000), Some(0));
+        assert_eq!(extract_inc_tag(20001), Some(1));
+        assert_eq!(extract_inc_tag(20100), Some(100));
+
+        // TOP IDs
+        assert_eq!(extract_inc_tag(21000), Some(0));
+        assert_eq!(extract_inc_tag(21001), Some(1));
+        assert_eq!(extract_inc_tag(21100), Some(100));
+
+        // CONTAINED IDs
+        assert_eq!(extract_inc_tag(22000), Some(0));
+        assert_eq!(extract_inc_tag(22001), Some(1));
+        assert_eq!(extract_inc_tag(22100), Some(100));
     }
 }
