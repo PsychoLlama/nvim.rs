@@ -113,6 +113,93 @@ int nvim_get_compl_match_array_not_null(void)
   return compl_match_array != NULL;
 }
 
+// =============================================================================
+// C accessors for expand_T fields (Rust FFI)
+// =============================================================================
+
+/// Get the expansion context type.
+int nvim_expand_get_context(const expand_T *xp)
+{
+  return xp ? xp->xp_context : EXPAND_NOTHING;
+}
+
+/// Get the expansion pattern pointer.
+const char *nvim_expand_get_pattern(const expand_T *xp)
+{
+  return xp ? xp->xp_pattern : NULL;
+}
+
+/// Get the expansion pattern length.
+size_t nvim_expand_get_pattern_len(const expand_T *xp)
+{
+  return xp ? xp->xp_pattern_len : 0;
+}
+
+/// Get the backslash flags.
+int nvim_expand_get_backslash(const expand_T *xp)
+{
+  return xp ? xp->xp_backslash : XP_BS_NONE;
+}
+
+/// Get the number of files.
+int nvim_expand_get_numfiles(const expand_T *xp)
+{
+  return xp ? xp->xp_numfiles : -1;
+}
+
+/// Get the selected index.
+int nvim_expand_get_selected(const expand_T *xp)
+{
+  return xp ? xp->xp_selected : -1;
+}
+
+/// Get the column position.
+int nvim_expand_get_col(const expand_T *xp)
+{
+  return xp ? xp->xp_col : 0;
+}
+
+/// Get the prefix type.
+int nvim_expand_get_prefix(const expand_T *xp)
+{
+  return xp ? (int)xp->xp_prefix : 0;
+}
+
+/// Get the shell flag.
+int nvim_expand_get_shell(const expand_T *xp)
+{
+#ifndef BACKSLASH_IN_FILENAME
+  return xp ? xp->xp_shell : 0;
+#else
+  (void)xp;
+  return 0;
+#endif
+}
+
+/// Set the expansion context type.
+void nvim_expand_set_context(expand_T *xp, int context)
+{
+  if (xp) {
+    xp->xp_context = context;
+  }
+}
+
+/// Set the backslash flags.
+void nvim_expand_set_backslash(expand_T *xp, int backslash)
+{
+  if (xp) {
+    xp->xp_backslash = backslash;
+  }
+}
+
+/// Set the selected index.
+void nvim_expand_set_selected(expand_T *xp, int selected)
+{
+  if (xp) {
+    xp->xp_selected = selected;
+  }
+}
+
 #define SHOW_MATCH(m) (showtail ? showmatches_gettail(matches[m], false) : matches[m])
 
 /// Returns true if fuzzy completion is supported for a given cmdline completion

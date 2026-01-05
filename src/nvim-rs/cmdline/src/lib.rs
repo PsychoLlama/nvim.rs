@@ -5,6 +5,8 @@
 #![allow(unsafe_code)]
 #![allow(clippy::doc_markdown)]
 
+pub mod expand;
+
 use std::ffi::c_char;
 use std::os::raw::c_int;
 use std::os::raw::c_uint;
