@@ -227,6 +227,16 @@ extern "C" {
     fn nvim_undo_curwin_set_cursor_lnum(lnum: LinenrT);
     fn nvim_check_cursor_col_curwin();
     fn nvim_u_undoline_replace_and_swap();
+
+    // undo_time accessors
+    fn nvim_buf_get_b_u_time_cur(buf: BufHandle) -> TimeT;
+    fn nvim_buf_get_b_u_save_nr_cur(buf: BufHandle) -> c_int;
+    fn nvim_text_locked() -> bool;
+    fn nvim_text_locked_msg();
+    fn nvim_undo_os_time() -> TimeT;
+    fn nvim_inc_lastmark() -> c_int;
+    fn nvim_internal_error_undo_time();
+    fn nvim_semsg_undo_number_not_found(step: i64);
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed.
@@ -1445,6 +1455,457 @@ pub unsafe extern "C" fn rs_u_force_get_undo_header(buf: BufHandle) -> UHeaderHa
         }
     }
     uhp
+}
+
+/// Navigate the undo tree to a specific time, sequence number, or file save state.
+///
+/// This is the core implementation for `:earlier`, `:later`, and `:undo N` commands.
+///
+/// # Arguments
+///
+/// * `step` - Number of steps to go (negative for undo/earlier, positive for redo/later)
+/// * `sec` - If true, step is in seconds
+/// * `file` - If true, step is by file writes
+/// * `absolute` - If true, step is an absolute sequence number (`:undo N`)
+///
+/// # Safety
+///
+/// Accesses global state via C FFI. Must be called with valid global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_undo_time(step: c_int, sec: bool, file: bool, absolute: bool) {
+    // Check text lock first
+    if nvim_text_locked() {
+        nvim_text_locked_msg();
+        return;
+    }
+
+    let buf = nvim_get_curbuf();
+
+    // First make sure the current undoable change is synced.
+    if !nvim_buf_get_b_u_synced(buf) {
+        rs_u_sync(true);
+    }
+
+    nvim_set_u_newcount(0);
+    nvim_set_u_oldcount(if nvim_buf_ml_is_empty(buf) { -1 } else { 0 });
+
+    let mut dosec = sec;
+    let mut dofile = file;
+    let mut above = false;
+    let mut did_undo = true;
+
+    // "target" is the node below which we want to be.
+    // Init "closest" to a value we can't reach.
+    let (mut target, mut closest): (c_int, c_int) = if absolute {
+        (step, -1)
+    } else if dosec {
+        (
+            (nvim_buf_get_b_u_time_cur(buf) as c_int) + step,
+            if step < 0 {
+                -1
+            } else {
+                (nvim_undo_os_time() + 1) as c_int
+            },
+        )
+    } else if dofile {
+        let save_nr_cur = nvim_buf_get_b_u_save_nr_cur(buf);
+        let mut t: c_int;
+
+        if step < 0 {
+            // Going back to a previous write. If there were changes after
+            // the last write, count that as moving one file-write, so
+            // that ":earlier 1f" undoes all changes since the last save.
+            let curhead = nvim_buf_get_b_u_curhead(buf);
+            let uhp = if !curhead.0.is_null() {
+                nvim_uhp_get_next(curhead)
+            } else {
+                nvim_buf_get_b_u_newhead(buf)
+            };
+
+            if !uhp.0.is_null() && nvim_uhp_get_save_nr(uhp) != 0 {
+                // "uh_save_nr" was set in the last block, that means
+                // there were no changes since the last write
+                t = save_nr_cur + step;
+            } else {
+                // count the changes since the last write as one step
+                t = save_nr_cur + step + 1;
+            }
+
+            if t <= 0 {
+                // Go to before first write: before the oldest change. Use
+                // the sequence number for that.
+                dofile = false;
+                t = 0; // Will be adjusted below
+            }
+            (
+                t,
+                if step < 0 && dofile {
+                    -1
+                } else if dofile {
+                    nvim_buf_get_b_u_save_nr_last(buf) + 2
+                } else {
+                    nvim_buf_get_b_u_seq_last(buf) + 2
+                },
+            )
+        } else {
+            // Moving forward to a newer write.
+            t = save_nr_cur + step;
+            let save_nr_last = nvim_buf_get_b_u_save_nr_last(buf);
+            if t > save_nr_last {
+                // Go to after last write: after the latest change. Use
+                // the sequence number for that.
+                t = nvim_buf_get_b_u_seq_last(buf) + 1;
+                dofile = false;
+            }
+            (t, save_nr_last + 2)
+        }
+    } else {
+        (
+            nvim_buf_get_b_u_seq_cur(buf) + step,
+            if step < 0 {
+                -1
+            } else {
+                nvim_buf_get_b_u_seq_last(buf) + 2
+            },
+        )
+    };
+
+    // Adjust target and closest for step direction
+    if !absolute {
+        if step < 0 {
+            if target < 0 {
+                target = 0;
+            }
+            closest = -1;
+        } else {
+            // Recalculate closest for positive step
+            closest = if dosec {
+                (nvim_undo_os_time() + 1) as c_int
+            } else if dofile {
+                nvim_buf_get_b_u_save_nr_last(buf) + 2
+            } else {
+                nvim_buf_get_b_u_seq_last(buf) + 2
+            };
+            if target >= closest {
+                target = closest - 1;
+            }
+        }
+    }
+
+    let closest_start = closest;
+    let mut closest_seq = nvim_buf_get_b_u_seq_cur(buf);
+
+    // When "target" is 0; Back to origin.
+    if target == 0 {
+        undo_time_to_target(buf, target, 0, 0, above, &mut did_undo);
+        nvim_u_undo_end(did_undo, absolute, false);
+        return;
+    }
+
+    // May do this twice:
+    // 1. Search for "target", update "closest" to the best match found.
+    // 2. If "target" not found search for "closest".
+    //
+    // When using the closest time we use the sequence number in the second
+    // round, because there may be several entries with the same time.
+    for round in 1..=2 {
+        // Find the path from the current state to where we want to go. The
+        // desired state can be anywhere in the undo tree, need to go all over
+        // it. We put "nomark" in uh_walk where we have been without success,
+        // "mark" where it could possibly be.
+        let mark = nvim_inc_lastmark();
+        let nomark = nvim_inc_lastmark();
+
+        let curhead = nvim_buf_get_b_u_curhead(buf);
+        let mut uhp = if curhead.0.is_null() {
+            // at leaf of the tree
+            nvim_buf_get_b_u_newhead(buf)
+        } else {
+            curhead
+        };
+
+        while !uhp.0.is_null() {
+            nvim_uhp_set_walk(uhp, mark);
+            let val = if dosec {
+                nvim_uhp_get_time(uhp) as c_int
+            } else if dofile {
+                nvim_uhp_get_save_nr(uhp)
+            } else {
+                nvim_uhp_get_seq(uhp)
+            };
+
+            if round == 1 && !(dofile && val == 0) {
+                // Remember the header that is closest to the target.
+                // It must be at least in the right direction (checked with
+                // "b_u_seq_cur"). When the timestamp is equal find the
+                // highest/lowest sequence number.
+                let uh_seq = nvim_uhp_get_seq(uhp);
+                let seq_cur = nvim_buf_get_b_u_seq_cur(buf);
+                let in_right_direction = if step < 0 {
+                    uh_seq <= seq_cur
+                } else {
+                    uh_seq > seq_cur
+                };
+
+                if in_right_direction {
+                    let is_closer = if dosec && val == closest {
+                        if step < 0 {
+                            uh_seq < closest_seq
+                        } else {
+                            uh_seq > closest_seq
+                        }
+                    } else if closest == closest_start {
+                        true
+                    } else if val > target {
+                        if closest > target {
+                            val - target <= closest - target
+                        } else {
+                            val - target <= target - closest
+                        }
+                    } else {
+                        // val <= target
+                        if closest > target {
+                            target - val <= closest - target
+                        } else {
+                            target - val <= target - closest
+                        }
+                    };
+
+                    if is_closer {
+                        closest = val;
+                        closest_seq = uh_seq;
+                    }
+                }
+            }
+
+            // Quit searching when we found a match. But when searching for a
+            // time we need to continue looking for the best uh_seq.
+            if target == val && !dosec {
+                target = nvim_uhp_get_seq(uhp);
+                break;
+            }
+
+            // go down in the tree if we haven't been there
+            let prev = nvim_uhp_get_prev(uhp);
+            if !prev.0.is_null()
+                && nvim_uhp_get_walk(prev) != nomark
+                && nvim_uhp_get_walk(prev) != mark
+            {
+                uhp = prev;
+            } else {
+                let alt_next = nvim_uhp_get_alt_next(uhp);
+                if !alt_next.0.is_null()
+                    && nvim_uhp_get_walk(alt_next) != nomark
+                    && nvim_uhp_get_walk(alt_next) != mark
+                {
+                    // go to alternate branch if we haven't been there
+                    uhp = alt_next;
+                } else {
+                    let next = nvim_uhp_get_next(uhp);
+                    let alt_prev = nvim_uhp_get_alt_prev(uhp);
+                    if !next.0.is_null()
+                        && alt_prev.0.is_null()
+                        && nvim_uhp_get_walk(next) != nomark
+                        && nvim_uhp_get_walk(next) != mark
+                    {
+                        // go up in the tree if we haven't been there and we are at the
+                        // start of alternate branches
+                        // If still at the start we don't go through this change.
+                        let curhead = nvim_buf_get_b_u_curhead(buf);
+                        if uhp.0 == curhead.0 {
+                            nvim_uhp_set_walk(uhp, nomark);
+                        }
+                        uhp = next;
+                    } else {
+                        // need to backtrack; mark this node as useless
+                        nvim_uhp_set_walk(uhp, nomark);
+                        if !alt_prev.0.is_null() {
+                            uhp = alt_prev;
+                        } else {
+                            uhp = nvim_uhp_get_next(uhp);
+                        }
+                    }
+                }
+            }
+        }
+
+        if !uhp.0.is_null() {
+            // found it
+            break;
+        }
+
+        if absolute {
+            nvim_semsg_undo_number_not_found(i64::from(step));
+            return;
+        }
+
+        if closest == closest_start {
+            if step < 0 {
+                nvim_msg_oldest_change();
+            } else {
+                nvim_msg_newest_change();
+            }
+            return;
+        }
+
+        target = closest_seq;
+        dosec = false;
+        dofile = false;
+        if step < 0 {
+            above = true; // stop above the header
+        }
+    }
+
+    // If we found it: Follow the path to go to where we want to be.
+    undo_time_to_target(
+        buf,
+        target,
+        nvim_inc_lastmark() - 2,
+        nvim_inc_lastmark() - 2,
+        above,
+        &mut did_undo,
+    );
+    nvim_u_undo_end(did_undo, absolute, false);
+}
+
+/// Helper function to walk to target in undo tree.
+/// This follows the path from the current state to the target state.
+///
+/// # Safety
+///
+/// Must be called with valid buffer handle and mark values.
+unsafe fn undo_time_to_target(
+    buf: BufHandle,
+    target: c_int,
+    mark: c_int,
+    nomark: c_int,
+    above: bool,
+    did_undo: &mut bool,
+) {
+    // First go up the tree as much as needed.
+    while !nvim_undo_got_int() {
+        // Do the change warning now, for the same reason as above.
+        nvim_change_warning_curbuf();
+
+        let curhead = nvim_buf_get_b_u_curhead(buf);
+        let uhp = if curhead.0.is_null() {
+            nvim_buf_get_b_u_newhead(buf)
+        } else {
+            nvim_uhp_get_next(curhead)
+        };
+
+        if uhp.0.is_null()
+            || (target > 0 && nvim_uhp_get_walk(uhp) != mark)
+            || (nvim_uhp_get_seq(uhp) == target && !above)
+        {
+            break;
+        }
+
+        nvim_buf_set_b_u_curhead(buf, uhp);
+        nvim_u_undoredo(true, true);
+        if target > 0 {
+            nvim_uhp_set_walk(uhp, nomark); // don't go back down here
+        }
+    }
+
+    // When back to origin, redo is not needed.
+    if target > 0 {
+        // And now go down the tree (redo), branching off where needed.
+        while !nvim_undo_got_int() {
+            // Do the change warning now, for the same reason as above.
+            nvim_change_warning_curbuf();
+
+            let mut uhp = nvim_buf_get_b_u_curhead(buf);
+            if uhp.0.is_null() {
+                break;
+            }
+
+            // Go back to the first branch with a mark.
+            let mut alt_prev = nvim_uhp_get_alt_prev(uhp);
+            while !alt_prev.0.is_null() && nvim_uhp_get_walk(alt_prev) == mark {
+                uhp = alt_prev;
+                alt_prev = nvim_uhp_get_alt_prev(uhp);
+            }
+
+            // Find the last branch with a mark, that's the one.
+            let mut last = uhp;
+            let mut alt_next = nvim_uhp_get_alt_next(last);
+            while !alt_next.0.is_null() && nvim_uhp_get_walk(alt_next) == mark {
+                last = alt_next;
+                alt_next = nvim_uhp_get_alt_next(last);
+            }
+
+            if last.0 != uhp.0 {
+                // Make the used branch the first entry in the list of
+                // alternatives to make "u" and CTRL-R take this branch.
+                let mut first = uhp;
+                let mut first_alt_prev = nvim_uhp_get_alt_prev(first);
+                while !first_alt_prev.0.is_null() {
+                    first = first_alt_prev;
+                    first_alt_prev = nvim_uhp_get_alt_prev(first);
+                }
+
+                let last_alt_next = nvim_uhp_get_alt_next(last);
+                if !last_alt_next.0.is_null() {
+                    let last_alt_prev = nvim_uhp_get_alt_prev(last);
+                    nvim_uhp_set_alt_prev(last_alt_next, last_alt_prev);
+                }
+
+                let last_alt_prev = nvim_uhp_get_alt_prev(last);
+                nvim_uhp_set_alt_next(last_alt_prev, nvim_uhp_get_alt_next(last));
+                nvim_uhp_set_alt_prev(last, UHeaderHandle(std::ptr::null_mut()));
+                nvim_uhp_set_alt_next(last, first);
+                nvim_uhp_set_alt_prev(first, last);
+
+                let oldhead = nvim_buf_get_b_u_oldhead(buf);
+                if oldhead.0 == first.0 {
+                    nvim_buf_set_b_u_oldhead(buf, last);
+                }
+
+                uhp = last;
+                let next = nvim_uhp_get_next(uhp);
+                if !next.0.is_null() {
+                    nvim_uhp_set_prev(next, uhp);
+                }
+            }
+
+            nvim_buf_set_b_u_curhead(buf, uhp);
+
+            if nvim_uhp_get_walk(uhp) != mark {
+                break; // must have reached the target
+            }
+
+            // Stop when going backwards in time and didn't find the exact
+            // header we were looking for.
+            if nvim_uhp_get_seq(uhp) == target && above {
+                nvim_buf_set_b_u_seq_cur(buf, target - 1);
+                break;
+            }
+
+            nvim_u_undoredo(false, true);
+
+            // Advance "curhead" to below the header we last used. If it
+            // becomes NULL then we need to set "newhead" to this leaf.
+            let prev = nvim_uhp_get_prev(uhp);
+            if prev.0.is_null() {
+                nvim_buf_set_b_u_newhead(buf, uhp);
+            }
+            nvim_buf_set_b_u_curhead(buf, prev);
+            *did_undo = false;
+
+            if nvim_uhp_get_seq(uhp) == target {
+                // found it!
+                break;
+            }
+
+            let prev = nvim_uhp_get_prev(uhp);
+            if prev.0.is_null() || nvim_uhp_get_walk(prev) != mark {
+                // Need to redo more but can't find it...
+                nvim_internal_error_undo_time();
+                break;
+            }
+        }
+    }
 }
 
 #[cfg(test)]

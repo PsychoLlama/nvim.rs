@@ -175,6 +175,7 @@ extern int rs_u_savedel(linenr_T lnum, linenr_T nlines);
 extern void rs_u_find_first_changed(void);
 extern u_header_T *rs_u_force_get_undo_header(buf_T *buf);
 extern void rs_u_undoline(void);
+extern void rs_undo_time(int step, bool sec, bool file, bool absolute);
 
 #include "undo.c.generated.h"
 
@@ -1539,6 +1540,14 @@ static void u_doit(int startcount, bool quiet, bool do_buf_event)
 // "sec" must be false then.
 void undo_time(int step, bool sec, bool file, bool absolute)
 {
+  // Call the Rust implementation
+  rs_undo_time(step, sec, file, absolute);
+}
+
+#ifdef USE_RUST_UNDO_TIME
+// Original C implementation preserved for reference during migration
+static void c_undo_time(int step, bool sec, bool file, bool absolute)
+{
   if (text_locked()) {
     text_locked_msg();
     return;
@@ -1858,6 +1867,7 @@ target_zero:
   }
   u_undo_end(did_undo, absolute, false);
 }
+#endif  // USE_RUST_UNDO_TIME
 
 /// u_undoredo: common code for undo and redo
 ///
@@ -3285,4 +3295,50 @@ void nvim_u_undoline_replace_and_swap(void)
 linenr_T nvim_undo_curwin_get_cursor_lnum(void)
 {
   return curwin->w_cursor.lnum;
+}
+
+// undo_time accessors
+time_t nvim_buf_get_b_u_time_cur(buf_T *buf)
+{
+  return buf->b_u_time_cur;
+}
+
+int nvim_buf_get_b_u_save_nr_cur(buf_T *buf)
+{
+  return buf->b_u_save_nr_cur;
+}
+
+bool nvim_text_locked(void)
+{
+  return text_locked();
+}
+
+void nvim_text_locked_msg(void)
+{
+  text_locked_msg();
+}
+
+time_t nvim_undo_os_time(void)
+{
+  return os_time();
+}
+
+int nvim_get_lastmark(void)
+{
+  return lastmark;
+}
+
+int nvim_inc_lastmark(void)
+{
+  return ++lastmark;
+}
+
+void nvim_internal_error_undo_time(void)
+{
+  internal_error("undo_time()");
+}
+
+void nvim_semsg_undo_number_not_found(int64_t step)
+{
+  semsg(_("E830: Undo number %" PRId64 " not found"), step);
 }
