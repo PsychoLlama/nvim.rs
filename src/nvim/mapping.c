@@ -61,6 +61,7 @@
 
 // Rust FFI declarations
 extern int rs_map_to_exists_mode(const char *rhs, int mode, int abbr);
+extern int rs_get_map_mode_string(const char *mode_string, int abbr);
 
 /// List used for abbreviations.
 static mapblock_T *first_abbr = NULL;  // first entry in abbrlist
@@ -2196,57 +2197,8 @@ static void get_maparg(typval_T *argvars, typval_T *rettv, int exact)
 /// Return 0 if there is an error.
 static int get_map_mode_string(const char *const mode_string, const bool abbr)
 {
-  const char *p = mode_string;
-  const int MASK_V = MODE_VISUAL | MODE_SELECT;
-  const int MASK_MAP = MODE_VISUAL | MODE_SELECT | MODE_NORMAL | MODE_OP_PENDING;
-  const int MASK_BANG = MODE_INSERT | MODE_CMDLINE;
-
-  if (*p == NUL) {
-    p = " ";  // compatibility
-  }
-  int mode = 0;
-  int modec;
-  while ((modec = (uint8_t)(*p++))) {
-    int tmode;
-    switch (modec) {
-    case 'i':
-      tmode = MODE_INSERT; break;
-    case 'l':
-      tmode = MODE_LANGMAP; break;
-    case 'c':
-      tmode = MODE_CMDLINE; break;
-    case 'n':
-      tmode = MODE_NORMAL; break;
-    case 'x':
-      tmode = MODE_VISUAL; break;
-    case 's':
-      tmode = MODE_SELECT; break;
-    case 'o':
-      tmode = MODE_OP_PENDING; break;
-    case 't':
-      tmode = MODE_TERMINAL; break;
-    case 'v':
-      tmode = MASK_V; break;
-    case '!':
-      tmode = MASK_BANG; break;
-    case ' ':
-      tmode = MASK_MAP; break;
-    default:
-      return 0;  // error, unknown mode character
-    }
-    mode |= tmode;
-  }
-  if ((abbr && (mode & ~MASK_BANG) != 0)
-      || (!abbr && (mode & (mode - 1)) != 0  // more than one bit set
-          && (
-              // false if multiple bits set in mode and mode is fully
-              // contained in one mask
-              !(((mode & MASK_BANG) != 0 && (mode & ~MASK_BANG) == 0)
-                || ((mode & MASK_MAP) != 0 && (mode & ~MASK_MAP) == 0))))) {
-    return 0;
-  }
-
-  return mode;
+  // Delegate to Rust implementation
+  return rs_get_map_mode_string(mode_string, abbr ? 1 : 0);
 }
 
 /// "mapset()" function
