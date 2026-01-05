@@ -14,7 +14,7 @@ use std::ffi::{c_char, c_int};
 use nvim_window::WinHandle;
 
 /// Line number type (matches linenr_T in C).
-pub type LineNr = i64;
+pub type LineNr = i32;
 
 /// Result struct for hasFoldingWin.
 ///

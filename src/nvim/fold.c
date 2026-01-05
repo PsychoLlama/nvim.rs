@@ -123,6 +123,18 @@ extern int rs_foldLevelWin(win_T *wp, linenr_T lnum);
 // Rust FFI declarations for Phase 2: Core query functions
 extern int rs_getDeepestNesting(win_T *wp);
 
+// Struct returned by rs_hasFoldingWin
+typedef struct {
+  int has_folding;
+  linenr_T first;
+  linenr_T last;
+  int fi_level;
+  linenr_T fi_lnum;
+  int fi_low_level;
+} FoldingResult;
+
+extern FoldingResult rs_hasFoldingWin(win_T *win, linenr_T lnum, bool cache);
+
 static const char *e_nofold = N_("E490: No fold found");
 
 // While updating the folds lines between invalid_top and invalid_bot have an
@@ -186,93 +198,25 @@ bool hasFolding(win_T *win, linenr_T lnum, linenr_T *firstp, linenr_T *lastp)
 bool hasFoldingWin(win_T *const win, const linenr_T lnum, linenr_T *const firstp,
                    linenr_T *const lastp, const bool cache, foldinfo_T *const infop)
 {
-  checkupdate(win);
+  FoldingResult result = rs_hasFoldingWin(win, lnum, cache);
 
-  // Return quickly when there is no folding at all in this window.
-  if (!hasAnyFolding(win)) {
-    if (infop != NULL) {
-      infop->fi_level = 0;
-    }
-    return false;
-  }
-
-  bool had_folded = false;
-  linenr_T first = 0;
-  linenr_T last = 0;
-
-  if (cache) {
-    // First look in cached info for displayed lines.  This is probably
-    // the fastest, but it can only be used if the entry is still valid.
-    const int x = find_wl_entry(win, lnum);
-    if (x >= 0) {
-      first = win->w_lines[x].wl_lnum;
-      last = win->w_lines[x].wl_foldend;
-      had_folded = win->w_lines[x].wl_folded;
-    }
-  }
-
-  linenr_T lnum_rel = lnum;
-  int level = 0;
-  int low_level = 0;
-  fold_T *fp;
-  bool maybe_small = false;
-  bool use_level = false;
-
-  if (first == 0) {
-    // Recursively search for a fold that contains "lnum".
-    garray_T *gap = &win->w_folds;
-    while (true) {
-      if (!foldFind(gap, lnum_rel, &fp)) {
-        break;
-      }
-
-      // Remember lowest level of fold that starts in "lnum".
-      if (lnum_rel == fp->fd_top && low_level == 0) {
-        low_level = level + 1;
-      }
-
-      first += fp->fd_top;
-      last += fp->fd_top;
-
-      // is this fold closed?
-      had_folded = check_closed(win, fp, &use_level, level,
-                                &maybe_small, lnum - lnum_rel);
-      if (had_folded) {
-        // Fold closed: Set last and quit loop.
-        last += fp->fd_len - 1;
-        break;
-      }
-
-      // Fold found, but it's open: Check nested folds.  Line number is
-      // relative to containing fold.
-      gap = &fp->fd_nested;
-      lnum_rel -= fp->fd_top;
-      level++;
-    }
-  }
-
-  if (!had_folded) {
-    if (infop != NULL) {
-      infop->fi_level = level;
-      infop->fi_lnum = lnum - lnum_rel;
-      infop->fi_low_level = low_level == 0 ? level : low_level;
-    }
-    return false;
-  }
-
-  last = MIN(last, win->w_buffer->b_ml.ml_line_count);
-  if (lastp != NULL) {
-    *lastp = last;
-  }
-  if (firstp != NULL) {
-    *firstp = first;
-  }
   if (infop != NULL) {
-    infop->fi_level = level + 1;
-    infop->fi_lnum = first;
-    infop->fi_low_level = low_level == 0 ? level + 1 : low_level;
+    infop->fi_level = result.fi_level;
+    infop->fi_lnum = result.fi_lnum;
+    infop->fi_low_level = result.fi_low_level;
   }
-  return true;
+
+  if (result.has_folding) {
+    if (lastp != NULL) {
+      *lastp = result.last;
+    }
+    if (firstp != NULL) {
+      *firstp = result.first;
+    }
+    return true;
+  }
+
+  return false;
 }
 
 // foldLevel() {{{2
