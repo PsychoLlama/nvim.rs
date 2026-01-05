@@ -587,6 +587,184 @@ unsafe fn check_mapping_list_for_rhs(
     false
 }
 
+/// Check if a substring exists in a C string.
+///
+/// # Safety
+/// Both pointers must be valid, non-null, NUL-terminated C strings.
+#[inline]
+unsafe fn c_strstr(haystack: *const c_char, needle: *const c_char) -> bool {
+    if *needle == 0 {
+        return true; // Empty needle always matches
+    }
+
+    let mut h = haystack;
+    while *h != 0 {
+        let mut n = needle;
+        let mut temp = h;
+        while *n != 0 && *temp != 0 && *n == *temp {
+            n = n.add(1);
+            temp = temp.add(1);
+        }
+        if *n == 0 {
+            return true; // Found the needle
+        }
+        h = h.add(1);
+    }
+    false
+}
+
+/// Check if a mapping exists with the given RHS substring (hasmapto support).
+///
+/// This implements the core logic of map_to_exists_mode - checking if any
+/// mapping has an RHS that contains the given string.
+///
+/// # Arguments
+/// * `rhs` - The RHS substring to search for
+/// * `mode` - The mode bits to check
+/// * `abbr` - True to check abbreviations, false for mappings
+///
+/// # Returns
+/// True if a mapping with matching RHS substring exists, false otherwise.
+///
+/// # Safety
+/// `rhs` must be a valid NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_map_to_exists_mode(
+    rhs: *const c_char,
+    mode: c_int,
+    abbr: c_int,
+) -> c_int {
+    if rhs.is_null() {
+        return 0;
+    }
+
+    let is_abbr = abbr != 0;
+
+    // Check global mappings
+    if map_to_exists_mode_impl(rhs, mode, is_abbr, BufHandle(std::ptr::null_mut())) {
+        return 1;
+    }
+
+    // Check buffer-local mappings
+    let curbuf = nvim_get_curbuf();
+    if map_to_exists_mode_impl(rhs, mode, is_abbr, curbuf) {
+        return 1;
+    }
+
+    0
+}
+
+/// Internal implementation of map_to_exists_mode.
+unsafe fn map_to_exists_mode_impl(
+    rhs: *const c_char,
+    mode: c_int,
+    is_abbr: bool,
+    buf: BufHandle,
+) -> bool {
+    let is_buffer_local = !buf.is_null();
+
+    if is_abbr {
+        // Only one abbreviation list
+        let mp = if is_buffer_local {
+            nvim_buf_get_first_abbr(buf)
+        } else {
+            nvim_get_first_abbr()
+        };
+        return check_mapping_list_for_rhs_substring(mp, rhs, mode);
+    }
+
+    // Check all hash buckets
+    for hash in 0..MAX_MAPHASH {
+        let mp = if is_buffer_local {
+            nvim_buf_get_maphash_entry(buf, hash)
+        } else {
+            nvim_get_maphash_entry(hash)
+        };
+        if check_mapping_list_for_rhs_substring(mp, rhs, mode) {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Check a mapping list for an RHS that contains the given substring.
+unsafe fn check_mapping_list_for_rhs_substring(
+    start: MapblockHandle,
+    rhs_substr: *const c_char,
+    mode: c_int,
+) -> bool {
+    let mut mp = start;
+    while !mp.is_null() {
+        // Check if mode matches
+        if (mapblock_mode(mp) & mode) != 0 {
+            // Check if RHS contains the substring
+            let mp_rhs = mapblock_str(mp);
+            if !mp_rhs.is_null() && c_strstr(mp_rhs, rhs_substr) {
+                return true;
+            }
+        }
+        mp = mapblock_next(mp);
+    }
+    false
+}
+
+/// Count the number of mappings for a given mode.
+///
+/// # Arguments
+/// * `mode` - The mode bits to count
+/// * `abbr` - True to count abbreviations, false for mappings
+/// * `local` - True to count buffer-local mappings only
+///
+/// # Returns
+/// The number of mappings matching the criteria.
+///
+/// # Safety
+/// This function accesses global state through FFI. It is safe to call
+/// as long as the calling C code has properly initialized the mapping tables.
+#[no_mangle]
+pub unsafe extern "C" fn rs_map_count(mode: c_int, abbr: c_int, local: c_int) -> c_int {
+    let is_abbr = abbr != 0;
+    let is_local = local != 0;
+    let mut count: c_int = 0;
+
+    if is_abbr {
+        // Only one abbreviation list
+        let mp = if is_local {
+            nvim_buf_get_first_abbr(nvim_get_curbuf())
+        } else {
+            nvim_get_first_abbr()
+        };
+        count += count_mappings_in_list(mp, mode);
+    } else {
+        // Check all hash buckets
+        for hash in 0..MAX_MAPHASH {
+            let mp = if is_local {
+                nvim_buf_get_maphash_entry(nvim_get_curbuf(), hash)
+            } else {
+                nvim_get_maphash_entry(hash)
+            };
+            count += count_mappings_in_list(mp, mode);
+        }
+    }
+
+    count
+}
+
+/// Count mappings in a list that match the given mode.
+unsafe fn count_mappings_in_list(start: MapblockHandle, mode: c_int) -> c_int {
+    let mut count: c_int = 0;
+    let mut mp = start;
+    while !mp.is_null() {
+        // Count if mode matches and not simplified
+        if (mapblock_mode(mp) & mode) != 0 && !mapblock_simplified(mp) {
+            count += 1;
+        }
+        mp = mapblock_next(mp);
+    }
+    count
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
@@ -684,9 +862,10 @@ mod tests {
         let null_handle = MapblockHandle(std::ptr::null_mut());
         assert!(null_handle.is_null());
 
-        let non_null = unsafe { MapblockHandle::from_ptr(1 as *mut c_void) };
+        let non_null =
+            unsafe { MapblockHandle::from_ptr(std::ptr::dangling_mut::<c_void>()) };
         assert!(!non_null.is_null());
-        assert_eq!(non_null.as_ptr(), 1 as *mut c_void);
+        assert_eq!(non_null.as_ptr(), std::ptr::dangling_mut::<c_void>());
     }
 
     #[test]
@@ -694,7 +873,7 @@ mod tests {
         let null_handle = BufHandle(std::ptr::null_mut());
         assert!(null_handle.is_null());
 
-        let non_null = BufHandle(1 as *mut c_void);
+        let non_null = BufHandle(std::ptr::dangling_mut::<c_void>());
         assert!(!non_null.is_null());
     }
 
@@ -709,6 +888,33 @@ mod tests {
             assert!(!c_str_eq(c"hello".as_ptr(), c"world".as_ptr()));
             assert!(!c_str_eq(c"hello".as_ptr(), c"hell".as_ptr()));
             assert!(!c_str_eq(c"hell".as_ptr(), c"hello".as_ptr()));
+        }
+    }
+
+    #[test]
+    fn test_c_strstr() {
+        unsafe {
+            // Empty needle always matches
+            assert!(c_strstr(c"hello".as_ptr(), c"".as_ptr()));
+            assert!(c_strstr(c"".as_ptr(), c"".as_ptr()));
+
+            // Substring at start
+            assert!(c_strstr(c"hello world".as_ptr(), c"hello".as_ptr()));
+
+            // Substring in middle
+            assert!(c_strstr(c"hello world".as_ptr(), c"lo wo".as_ptr()));
+
+            // Substring at end
+            assert!(c_strstr(c"hello world".as_ptr(), c"world".as_ptr()));
+
+            // Exact match
+            assert!(c_strstr(c"hello".as_ptr(), c"hello".as_ptr()));
+
+            // No match
+            assert!(!c_strstr(c"hello".as_ptr(), c"xyz".as_ptr()));
+
+            // Needle longer than haystack
+            assert!(!c_strstr(c"hi".as_ptr(), c"hello".as_ptr()));
         }
     }
 }
