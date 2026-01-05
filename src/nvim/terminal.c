@@ -2399,4 +2399,62 @@ static char *get_config_string(char *key)
 
 // }}}
 
+// =============================================================================
+// Rust accessor functions for opaque handle pattern
+// =============================================================================
+
+/// Get the `closed` field from a Terminal (accessor for Rust).
+int nvim_terminal_get_closed(Terminal *term)
+{
+  return term ? term->closed : 0;
+}
+
+/// Get the `buf_handle` field from a Terminal (accessor for Rust).
+int nvim_terminal_get_buf_handle(Terminal *term)
+{
+  return term ? term->buf_handle : 0;
+}
+
+/// Get the `theme_updates` field from a Terminal (accessor for Rust).
+int nvim_terminal_get_theme_updates(Terminal *term)
+{
+  return term ? term->theme_updates : 0;
+}
+
+/// Get the `forward_mouse` field from a Terminal (accessor for Rust).
+int nvim_terminal_get_forward_mouse(Terminal *term)
+{
+  return term ? term->forward_mouse : 0;
+}
+
+/// Get the cursor row from a Terminal (accessor for Rust).
+int nvim_terminal_get_cursor_row(Terminal *term)
+{
+  return term ? term->cursor.row : 0;
+}
+
+/// Get the cursor col from a Terminal (accessor for Rust).
+int nvim_terminal_get_cursor_col(Terminal *term)
+{
+  return term ? term->cursor.col : 0;
+}
+
+/// Get the cursor visible flag from a Terminal (accessor for Rust).
+int nvim_terminal_get_cursor_visible(Terminal *term)
+{
+  return term ? term->cursor.visible : 0;
+}
+
+/// Get the cursor shape from a Terminal (accessor for Rust).
+int nvim_terminal_get_cursor_shape(Terminal *term)
+{
+  return term ? term->cursor.shape : 0;
+}
+
+/// Get the cursor blink flag from a Terminal (accessor for Rust).
+int nvim_terminal_get_cursor_blink(Terminal *term)
+{
+  return term ? term->cursor.blink : 0;
+}
+
 // vim: foldmethod=marker

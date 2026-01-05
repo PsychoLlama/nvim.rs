@@ -75,6 +75,7 @@ pub use nvim_search::*;
 pub use nvim_spell::*;
 pub use nvim_statusline::*;
 pub use nvim_strings::*;
+pub use nvim_terminal::*;
 pub use nvim_textformat::*;
 pub use nvim_tui::*;
 pub use nvim_typval::*;

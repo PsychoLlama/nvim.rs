@@ -57,6 +57,7 @@ members = [
     "src/nvim-rs/utf8proc",
     "src/nvim-rs/version",
     "src/nvim-rs/window",
+    "src/nvim-rs/terminal",
     "src/nvim-rs/unpacker",
     "src/nvim-rs/tui",
     "src/nvim-rs/typval",
