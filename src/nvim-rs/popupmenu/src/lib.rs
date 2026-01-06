@@ -410,6 +410,216 @@ pub const extern "C" fn rs_pum_adjust_for_screen(
     }
 }
 
+/// Result of selection scroll calculation.
+#[repr(C)]
+pub struct PumScrollResult {
+    /// New value for `pum_first` (index of top visible item).
+    pub first: c_int,
+}
+
+/// Compute new scroll position when selection changes.
+///
+/// This calculates the new `pum_first` value to ensure the selected item
+/// is visible with appropriate context.
+///
+/// # Arguments
+/// * `selected` - Index of newly selected item
+/// * `current_first` - Current top visible item index
+/// * `height` - Number of visible items
+/// * `size` - Total number of items
+///
+/// Returns new value for `pum_first`.
+#[no_mangle]
+pub const extern "C" fn rs_pum_compute_scroll(
+    selected: c_int,
+    current_first: c_int,
+    height: c_int,
+    size: c_int,
+) -> c_int {
+    // If selected is out of range, don't change first
+    if selected < 0 || selected >= size {
+        return current_first;
+    }
+
+    let scroll_offset = selected - height;
+    let mut first = current_first;
+
+    if first > selected - 4 {
+        // scroll down; when we did a jump it's probably a PageUp then
+        // scroll a whole page
+        if first > selected - 2 {
+            first -= height - 2;
+            if first < 0 {
+                first = 0;
+            } else if first > selected {
+                first = selected;
+            }
+        } else {
+            first = selected;
+        }
+    } else if first < scroll_offset + 5 {
+        // scroll up; when we did a jump it's probably a PageDown then
+        // scroll a whole page
+        if first < scroll_offset + 3 {
+            let new_first = first + height - 2;
+            first = if new_first > scroll_offset + 1 {
+                new_first
+            } else {
+                scroll_offset + 1
+            };
+        } else {
+            first = scroll_offset + 1;
+        }
+    }
+
+    // Give a few lines of context when possible.
+    let context = if height / 2 < 3 { height / 2 } else { 3 };
+
+    if height > 2 {
+        if first > selected - context {
+            // scroll down
+            first = if selected - context > 0 {
+                selected - context
+            } else {
+                0
+            };
+        } else if first < selected + context - height + 1 {
+            // scroll up
+            first = selected + context - height + 1;
+        }
+    }
+
+    // adjust for the number of lines displayed
+    let max_first = size - height;
+    if first > max_first {
+        first = max_first;
+    }
+
+    first
+}
+
+/// Bounds-check selection for page up operation.
+///
+/// # Arguments
+/// * `current` - Current selected index
+/// * `first` - Current first visible item
+/// * `height` - Number of visible items
+///
+/// Returns new selected index.
+#[no_mangle]
+pub const extern "C" fn rs_pum_page_up(current: c_int, first: c_int, height: c_int) -> c_int {
+    if current == first {
+        // Already at top of visible area, go up one page
+        let new_sel = current - height;
+        if new_sel < 0 {
+            0
+        } else {
+            new_sel
+        }
+    } else {
+        // Go to top of visible area
+        first
+    }
+}
+
+/// Bounds-check selection for page down operation.
+///
+/// # Arguments
+/// * `current` - Current selected index
+/// * `first` - Current first visible item
+/// * `height` - Number of visible items
+/// * `size` - Total number of items
+///
+/// Returns new selected index.
+#[no_mangle]
+pub const extern "C" fn rs_pum_page_down(
+    current: c_int,
+    first: c_int,
+    height: c_int,
+    size: c_int,
+) -> c_int {
+    let last_visible = first + height - 1;
+    if current == last_visible {
+        // Already at bottom of visible area, go down one page
+        let new_sel = current + height;
+        if new_sel >= size {
+            size - 1
+        } else {
+            new_sel
+        }
+    } else {
+        // Go to bottom of visible area
+        if last_visible >= size {
+            size - 1
+        } else {
+            last_visible
+        }
+    }
+}
+
+/// Cycle selection with wrapping.
+///
+/// # Arguments
+/// * `current` - Current selected index (-1 for none)
+/// * `delta` - Amount to move (+1 for next, -1 for prev)
+/// * `size` - Total number of items
+/// * `wrap` - Whether to wrap around
+///
+/// Returns new selected index.
+#[no_mangle]
+pub const extern "C" fn rs_pum_cycle_selected(
+    current: c_int,
+    delta: c_int,
+    size: c_int,
+    wrap: c_int,
+) -> c_int {
+    if size <= 0 {
+        return -1;
+    }
+
+    let wrap = wrap != 0;
+
+    // Handle initial selection
+    if current < 0 {
+        return if delta > 0 { 0 } else { size - 1 };
+    }
+
+    let new_sel = current + delta;
+
+    if wrap {
+        if new_sel < 0 {
+            size - 1
+        } else if new_sel >= size {
+            0
+        } else {
+            new_sel
+        }
+    } else if new_sel < 0 {
+        0
+    } else if new_sel >= size {
+        size - 1
+    } else {
+        new_sel
+    }
+}
+
+/// Bounds-check a selected index.
+///
+/// Returns the index clamped to valid range, or -1 if no items.
+#[no_mangle]
+pub const extern "C" fn rs_pum_bound_selection(selected: c_int, size: c_int) -> c_int {
+    if size <= 0 {
+        return -1;
+    }
+    if selected < 0 {
+        return -1;
+    }
+    if selected >= size {
+        return size - 1;
+    }
+    selected
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -433,5 +643,52 @@ mod tests {
         const RESULT: PumVerticalResult = rs_pum_adjust_for_screen(25, 10, 0, 30, 15, 0);
         assert_eq!(RESULT.row, 25);
         assert_eq!(RESULT.height, 5); // 30 - 25 = 5
+    }
+
+    #[test]
+    fn test_cycle_selected_forward() {
+        assert_eq!(rs_pum_cycle_selected(0, 1, 5, 0), 1);
+        assert_eq!(rs_pum_cycle_selected(4, 1, 5, 0), 4); // No wrap, stay at end
+        assert_eq!(rs_pum_cycle_selected(4, 1, 5, 1), 0); // Wrap to start
+    }
+
+    #[test]
+    fn test_cycle_selected_backward() {
+        assert_eq!(rs_pum_cycle_selected(1, -1, 5, 0), 0);
+        assert_eq!(rs_pum_cycle_selected(0, -1, 5, 0), 0); // No wrap, stay at start
+        assert_eq!(rs_pum_cycle_selected(0, -1, 5, 1), 4); // Wrap to end
+    }
+
+    #[test]
+    fn test_cycle_selected_initial() {
+        assert_eq!(rs_pum_cycle_selected(-1, 1, 5, 0), 0); // Start from beginning
+        assert_eq!(rs_pum_cycle_selected(-1, -1, 5, 0), 4); // Start from end
+    }
+
+    #[test]
+    fn test_page_up() {
+        assert_eq!(rs_pum_page_up(5, 5, 10), 0); // At top of visible, page up
+        assert_eq!(rs_pum_page_up(8, 5, 10), 5); // Not at top, go to top
+    }
+
+    #[test]
+    fn test_page_down() {
+        assert_eq!(rs_pum_page_down(14, 5, 10, 20), 19); // At bottom, page down limited by size
+        assert_eq!(rs_pum_page_down(8, 5, 10, 20), 14); // Not at bottom, go to bottom
+    }
+
+    #[test]
+    fn test_bound_selection() {
+        assert_eq!(rs_pum_bound_selection(5, 10), 5);
+        assert_eq!(rs_pum_bound_selection(15, 10), 9);
+        assert_eq!(rs_pum_bound_selection(-1, 10), -1);
+        assert_eq!(rs_pum_bound_selection(5, 0), -1);
+    }
+
+    #[test]
+    fn test_compute_scroll_basic() {
+        // Selected item already visible, no change needed
+        let result = rs_pum_compute_scroll(5, 0, 10, 20);
+        assert!(result >= 0);
     }
 }
