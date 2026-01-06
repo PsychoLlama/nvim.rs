@@ -1502,6 +1502,466 @@ pub unsafe extern "C" fn rs_qf_prev_valid_in_file(
     std::ptr::null()
 }
 
+// =============================================================================
+// Phase 5: List Management (expanded)
+// =============================================================================
+
+/// Mutable handle types for write operations
+type QfInfoHandleMut = *mut c_void;
+type QfListHandleMut = *mut c_void;
+
+#[allow(dead_code)]
+extern "C" {
+    // Phase 5: Setters for list management
+    fn nvim_qf_set_curlist_idx(qi: QfInfoHandleMut, idx: c_int);
+    fn nvim_qf_set_listcount(qi: QfInfoHandleMut, count: c_int);
+    fn nvim_qf_set_index(qfl: QfListHandleMut, idx: c_int);
+    fn nvim_qf_set_ptr(qfl: QfListHandleMut, ptr: QfLineHandle);
+
+    // Phase 5: Additional getters
+    fn nvim_qf_get_qfl_type(qfl: QfListHandle) -> c_int;
+    fn nvim_qf_get_qi_type(qi: QfInfoHandle) -> c_int;
+    fn nvim_qf_get_last(qfl: QfListHandle) -> QfLineHandle;
+    fn nvim_qfline_get_fname(qfp: QfLineHandle) -> *const c_char;
+    fn nvim_qf_get_has_user_data(qfl: QfListHandle) -> bool;
+
+    // Phase 5: List lifecycle wrappers (call C functions)
+    fn nvim_qf_new_list(qi: QfInfoHandleMut, title: *const c_char);
+    fn nvim_qf_free_list(qfl: QfListHandleMut);
+    fn nvim_qf_free_items(qfl: QfListHandleMut);
+    fn nvim_qf_store_title(qfl: QfListHandleMut, title: *const c_char);
+    fn nvim_get_ql_info() -> QfInfoHandleMut;
+}
+
+/// `QFL_TYPE` values from C code
+#[allow(dead_code)]
+pub mod qfl_types {
+    use std::ffi::c_int;
+
+    /// Quickfix list type
+    pub const QFLT_QUICKFIX: c_int = 0;
+    /// Location list type
+    pub const QFLT_LOCATION: c_int = 1;
+    /// Internal type
+    pub const QFLT_INTERNAL: c_int = 2;
+}
+
+/// Get the last entry in a quickfix list.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_last(qfl: QfListHandle) -> QfLineHandle {
+    if qfl.is_null() {
+        return std::ptr::null();
+    }
+    nvim_qf_get_last(qfl)
+}
+
+/// Get the file name from a quickfix entry.
+///
+/// Returns NULL if the entry has no file name or if qfp is null.
+///
+/// # Safety
+///
+/// - `qfp` must be a valid pointer to a `qfline_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qfline_get_fname(qfp: QfLineHandle) -> *const c_char {
+    if qfp.is_null() {
+        return std::ptr::null();
+    }
+    nvim_qfline_get_fname(qfp)
+}
+
+/// Get the quickfix list type.
+///
+/// Returns `QFLT_QUICKFIX`, `QFLT_LOCATION`, or `QFLT_INTERNAL`.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_qfl_type(qfl: QfListHandle) -> c_int {
+    if qfl.is_null() {
+        return qfl_types::QFLT_QUICKFIX;
+    }
+    nvim_qf_get_qfl_type(qfl)
+}
+
+/// Check if a list is a quickfix list (not location list).
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_is_qf_list(qfl: QfListHandle) -> bool {
+    rs_qf_get_qfl_type(qfl) == qfl_types::QFLT_QUICKFIX
+}
+
+/// Check if a list is a location list.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_is_ll_list(qfl: QfListHandle) -> bool {
+    rs_qf_get_qfl_type(qfl) == qfl_types::QFLT_LOCATION
+}
+
+/// Check if a quickfix list has user data.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_has_user_data(qfl: QfListHandle) -> bool {
+    if qfl.is_null() {
+        return false;
+    }
+    nvim_qf_get_has_user_data(qfl)
+}
+
+/// Get the global quickfix stack.
+///
+/// Returns the pointer to the global `ql_info` quickfix stack.
+///
+/// # Safety
+///
+/// The returned pointer is only valid while Neovim is running and
+/// the quickfix system is initialized.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_ql_info() -> QfInfoHandleMut {
+    nvim_get_ql_info()
+}
+
+/// Create a new quickfix list in the stack.
+///
+/// This creates a new list, potentially removing older lists if the stack is full.
+/// The new list becomes the current list.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+/// - `title` may be NULL
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_new_list(qi: QfInfoHandleMut, title: *const c_char) {
+    if qi.is_null() {
+        return;
+    }
+    nvim_qf_new_list(qi, title);
+}
+
+/// Free all resources of a quickfix list.
+///
+/// This frees all entries, the title, context, and other resources.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - After calling this, the list structure should not be used
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_free_list(qfl: QfListHandleMut) {
+    if qfl.is_null() {
+        return;
+    }
+    nvim_qf_free_list(qfl);
+}
+
+/// Free only the entries in a quickfix list.
+///
+/// This frees all entry items but preserves the list structure.
+/// Used when repopulating a list with new content.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_free_items(qfl: QfListHandleMut) {
+    if qfl.is_null() {
+        return;
+    }
+    nvim_qf_free_items(qfl);
+}
+
+/// Set the title of a quickfix list.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - `title` may be NULL to clear the title
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_store_title(qfl: QfListHandleMut, title: *const c_char) {
+    if qfl.is_null() {
+        return;
+    }
+    nvim_qf_store_title(qfl, title);
+}
+
+/// Set the current list index in a quickfix stack.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+/// - `idx` should be in range [0, listcount)
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_set_curlist_idx(qi: QfInfoHandleMut, idx: c_int) {
+    if qi.is_null() {
+        return;
+    }
+    nvim_qf_set_curlist_idx(qi, idx);
+}
+
+/// Set the current entry index (cursor position) in a quickfix list.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_set_index(qfl: QfListHandleMut, idx: c_int) {
+    if qfl.is_null() {
+        return;
+    }
+    nvim_qf_set_index(qfl, idx);
+}
+
+/// Set the current entry pointer in a quickfix list.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - `ptr` should be a valid entry in the list or NULL
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_set_ptr(qfl: QfListHandleMut, ptr: QfLineHandle) {
+    if qfl.is_null() {
+        return;
+    }
+    nvim_qf_set_ptr(qfl, ptr);
+}
+
+/// Move to the next quickfix list in the stack.
+///
+/// Returns the new list index, or -1 if already at the last list.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_next_list(qi: QfInfoHandleMut) -> c_int {
+    if qi.is_null() {
+        return -1;
+    }
+
+    let current = nvim_qf_get_curlist_idx(qi);
+    let count = nvim_qf_get_listcount(qi);
+
+    if current + 1 >= count {
+        return -1; // Already at the last list
+    }
+
+    let new_idx = current + 1;
+    nvim_qf_set_curlist_idx(qi, new_idx);
+    new_idx
+}
+
+/// Move to the previous quickfix list in the stack.
+///
+/// Returns the new list index, or -1 if already at the first list.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_prev_list(qi: QfInfoHandleMut) -> c_int {
+    if qi.is_null() {
+        return -1;
+    }
+
+    let current = nvim_qf_get_curlist_idx(qi);
+
+    if current <= 0 {
+        return -1; // Already at the first list
+    }
+
+    let new_idx = current - 1;
+    nvim_qf_set_curlist_idx(qi, new_idx);
+    new_idx
+}
+
+/// Move to a specific list in the quickfix stack.
+///
+/// Returns true if the index was valid and the list was selected,
+/// false otherwise.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_goto_list(qi: QfInfoHandleMut, idx: c_int) -> bool {
+    if qi.is_null() {
+        return false;
+    }
+
+    if !rs_qf_valid_idx(qi, idx) {
+        return false;
+    }
+
+    nvim_qf_set_curlist_idx(qi, idx);
+    true
+}
+
+/// Update the current entry position in the quickfix list.
+///
+/// This sets both the index and the pointer to the entry at that index.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - `idx` should be a valid 1-based index in the list
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_set_cur_entry(qfl: QfListHandleMut, idx: c_int) {
+    if qfl.is_null() || idx <= 0 {
+        return;
+    }
+
+    let qfp = rs_qf_get_entry_at_idx(qfl, idx);
+    if !qfp.is_null() {
+        nvim_qf_set_index(qfl, idx);
+        nvim_qf_set_ptr(qfl, qfp);
+    }
+}
+
+/// Move to the next valid entry in the quickfix list.
+///
+/// Returns the new 1-based index, or 0 if no next valid entry exists.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_next_valid_entry(qfl: QfListHandleMut) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let current_ptr = nvim_qf_get_ptr(qfl);
+    if current_ptr.is_null() {
+        return 0;
+    }
+
+    let current_idx = nvim_qf_get_index(qfl);
+    let count = nvim_qf_get_count(qfl);
+    let mut qfp = nvim_qfline_get_next(current_ptr);
+    let mut idx = current_idx + 1;
+
+    while !qfp.is_null() && idx <= count {
+        if nvim_qfline_get_valid(qfp) {
+            nvim_qf_set_index(qfl, idx);
+            nvim_qf_set_ptr(qfl, qfp);
+            return idx;
+        }
+        qfp = nvim_qfline_get_next(qfp);
+        idx += 1;
+    }
+
+    0 // No next valid entry
+}
+
+/// Move to the previous valid entry in the quickfix list.
+///
+/// Returns the new 1-based index, or 0 if no previous valid entry exists.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_prev_valid_entry(qfl: QfListHandleMut) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let current_ptr = nvim_qf_get_ptr(qfl);
+    if current_ptr.is_null() {
+        return 0;
+    }
+
+    let current_idx = nvim_qf_get_index(qfl);
+    let mut qfp = nvim_qfline_get_prev(current_ptr);
+    let mut idx = current_idx - 1;
+
+    while !qfp.is_null() && idx >= 1 {
+        if nvim_qfline_get_valid(qfp) {
+            nvim_qf_set_index(qfl, idx);
+            nvim_qf_set_ptr(qfl, qfp);
+            return idx;
+        }
+        qfp = nvim_qfline_get_prev(qfp);
+        idx -= 1;
+    }
+
+    0 // No previous valid entry
+}
+
+/// Move to the first valid entry in the quickfix list.
+///
+/// Returns the 1-based index of the entry, or 0 if none found.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_first_valid_entry(qfl: QfListHandleMut) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let count = nvim_qf_get_count(qfl);
+    let mut qfp = nvim_qf_get_start(qfl);
+    let mut idx = 1;
+
+    while !qfp.is_null() && idx <= count {
+        if nvim_qfline_get_valid(qfp) {
+            nvim_qf_set_index(qfl, idx);
+            nvim_qf_set_ptr(qfl, qfp);
+            return idx;
+        }
+        qfp = nvim_qfline_get_next(qfp);
+        idx += 1;
+    }
+
+    0 // No valid entries
+}
+
+/// Move to the last valid entry in the quickfix list.
+///
+/// Returns the 1-based index of the entry, or 0 if none found.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_last_valid_entry(qfl: QfListHandleMut) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let count = nvim_qf_get_count(qfl);
+    let mut qfp = nvim_qf_get_last(qfl);
+    let mut idx = count;
+
+    while !qfp.is_null() && idx >= 1 {
+        if nvim_qfline_get_valid(qfp) {
+            nvim_qf_set_index(qfl, idx);
+            nvim_qf_set_ptr(qfl, qfp);
+            return idx;
+        }
+        qfp = nvim_qfline_get_prev(qfp);
+        idx -= 1;
+    }
+
+    0 // No valid entries
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

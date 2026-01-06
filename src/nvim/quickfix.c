@@ -401,6 +401,113 @@ extern void *rs_qf_find_entry_before_pos(int bnr, const void *pos, bool linewise
 extern void *rs_qf_find_closest_entry(const void *qfl, int bnr, const void *pos, int dir,
                                       bool linewise, int *errornr);
 
+// =============================================================================
+// Phase 5: List management setters and wrappers for Rust
+// =============================================================================
+
+/// Set the current list index in qf_info_T for Rust
+void nvim_qf_set_curlist_idx(void *qi_void, int idx)
+{
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  qi->qf_curlist = idx;
+}
+
+/// Set the listcount in qf_info_T for Rust
+void nvim_qf_set_listcount(void *qi_void, int count)
+{
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  qi->qf_listcount = count;
+}
+
+/// Set the current index (cursor position) in qf_list_T for Rust
+void nvim_qf_set_index(void *qfl_void, int idx)
+{
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  qfl->qf_index = idx;
+}
+
+/// Set the current entry pointer in qf_list_T for Rust
+void nvim_qf_set_ptr(void *qfl_void, void *ptr)
+{
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  qfl->qf_ptr = (qfline_T *)ptr;
+}
+
+/// Get the qfl_type from qf_list_T for Rust
+int nvim_qf_get_qfl_type(const void *qfl_void)
+{
+  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
+  return qfl->qfl_type;
+}
+
+/// Get the qfl_type from qf_info_T for Rust
+int nvim_qf_get_qi_type(const void *qi_void)
+{
+  const qf_info_T *qi = (const qf_info_T *)qi_void;
+  return qi->qfl_type;
+}
+
+/// Get last entry pointer from qf_list_T for Rust
+void *nvim_qf_get_last(const void *qfl_void)
+{
+  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
+  return (void *)qfl->qf_last;
+}
+
+/// Get fname string from qfline_T for Rust
+const char *nvim_qfline_get_fname(const void *qfp_void)
+{
+  const qfline_T *qfp = (const qfline_T *)qfp_void;
+  return qfp->qf_fname;
+}
+
+/// Check if list has user data
+bool nvim_qf_get_has_user_data(const void *qfl_void)
+{
+  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
+  return qfl->qf_has_user_data;
+}
+
+// Forward declarations for static functions that will be wrapped
+static void qf_new_list(qf_info_T *qi, const char *qf_title);
+static void qf_free(qf_list_T *qfl);
+static void qf_free_items(qf_list_T *qfl);
+static void qf_store_title(qf_list_T *qfl, const char *title);
+
+/// Wrapper for qf_new_list - callable from Rust
+void nvim_qf_new_list(void *qi_void, const char *title)
+{
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  qf_new_list(qi, title);
+}
+
+/// Wrapper for qf_free - callable from Rust
+void nvim_qf_free_list(void *qfl_void)
+{
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  qf_free(qfl);
+}
+
+/// Wrapper for qf_free_items - callable from Rust
+void nvim_qf_free_items(void *qfl_void)
+{
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  qf_free_items(qfl);
+}
+
+/// Wrapper for qf_store_title - callable from Rust
+void nvim_qf_store_title(void *qfl_void, const char *title)
+{
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  qf_store_title(qfl, title);
+}
+
+/// Get global quickfix stack for Rust
+void *nvim_get_ql_info(void)
+{
+  return (void *)ql_info;
+}
+
 #define FMT_PATTERNS 14           // maximum number of % recognized
 
 // Structure used to hold the info of one part of 'errorformat'
