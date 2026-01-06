@@ -200,6 +200,7 @@ unsigned nvim_option_get_cb_flags(void) { return cb_flags; }
 
 // Special accessors
 int nvim_option_get_magic_overruled(void) { return (int)magic_overruled; }
+int nvim_option_get_secure(void) { return secure; }
 
 // Legacy accessor names (for compatibility)
 const char *nvim_get_p_sh(void) { return p_sh; }

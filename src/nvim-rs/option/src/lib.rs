@@ -13,6 +13,7 @@
 
 pub mod callbacks;
 pub mod completion;
+pub mod parsing;
 
 use std::ffi::{c_char, c_int, c_uint};
 
