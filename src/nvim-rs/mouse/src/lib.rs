@@ -127,6 +127,51 @@ use nvim_charset::rs_vim_iswordc;
 use nvim_mbyte::{rs_mb_get_class, rs_utf_ptr2len};
 
 // =============================================================================
+// Type aliases for C types
+// =============================================================================
+
+/// Line number type (from `pos_defs.h`)
+#[allow(non_camel_case_types)]
+pub type linenr_T = i64;
+
+/// Opaque handle for window pointer
+pub type WinHandle = *mut std::ffi::c_void;
+
+// =============================================================================
+// C accessors for mouse state
+// =============================================================================
+
+#[allow(dead_code)]
+extern "C" {
+    /// Get the original topline for double-click detection.
+    fn nvim_get_orig_topline() -> linenr_T;
+
+    /// Set the original topline for double-click detection.
+    fn nvim_set_orig_topline(val: linenr_T);
+
+    /// Get the original topfill for double-click detection.
+    fn nvim_get_orig_topfill() -> c_int;
+
+    /// Set the original topfill for double-click detection.
+    fn nvim_set_orig_topfill(val: c_int);
+
+    /// Get whether a click was received.
+    fn nvim_get_got_click() -> bool;
+
+    /// Set whether a click was received.
+    fn nvim_set_got_click(val: bool);
+
+    /// Get the window being dragged.
+    fn nvim_get_dragwin() -> WinHandle;
+
+    /// Set the window being dragged.
+    fn nvim_set_dragwin(wp: WinHandle);
+
+    /// Check if a window is being dragged.
+    fn nvim_is_dragging() -> bool;
+}
+
+// =============================================================================
 // Character Classification Functions
 // =============================================================================
 

@@ -60,6 +60,34 @@ extern bool rs_mouse_model_popup(const char *p_mousem);
 static linenr_T orig_topline = 0;
 static int orig_topfill = 0;
 
+// =============================================================================
+// C accessors for Rust (mouse state)
+// =============================================================================
+
+/// Get the original topline for double-click detection.
+linenr_T nvim_get_orig_topline(void)
+{
+  return orig_topline;
+}
+
+/// Set the original topline for double-click detection.
+void nvim_set_orig_topline(linenr_T val)
+{
+  orig_topline = val;
+}
+
+/// Get the original topfill for double-click detection.
+int nvim_get_orig_topfill(void)
+{
+  return orig_topfill;
+}
+
+/// Set the original topfill for double-click detection.
+void nvim_set_orig_topfill(int val)
+{
+  orig_topfill = val;
+}
+
 /// Get class of a character for selection: same class means same word.
 /// 0: blank
 /// 1: punctuation groups
@@ -143,6 +171,18 @@ static void mouse_tab_close(int c1)
 }
 
 static bool got_click = false;  // got a click some time back
+
+/// Get whether a click was received.
+bool nvim_get_got_click(void)
+{
+  return got_click;
+}
+
+/// Set whether a click was received.
+void nvim_set_got_click(bool val)
+{
+  got_click = val;
+}
 
 /// Call click definition function for column "col" in the "click_defs" array for button
 /// "which_button".
@@ -1127,6 +1167,24 @@ static bool mouse_model_popup(void)
 }
 
 static win_T *dragwin = NULL;  ///< window being dragged
+
+/// Get the window being dragged.
+win_T *nvim_get_dragwin(void)
+{
+  return dragwin;
+}
+
+/// Set the window being dragged.
+void nvim_set_dragwin(win_T *wp)
+{
+  dragwin = wp;
+}
+
+/// Check if a window is being dragged.
+bool nvim_is_dragging(void)
+{
+  return dragwin != NULL;
+}
 
 /// Reset the window being dragged.  To be called when switching tab page.
 void reset_dragwin(void)
