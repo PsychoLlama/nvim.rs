@@ -1990,6 +1990,9 @@ colnr_T nvim_pos_get_col(const pos_T *pos) { return pos->col; }
 // Constants
 colnr_T nvim_get_maxcol(void) { return MAXCOL; }
 
+// Validation helpers
+int nvim_buf_has_ml_mfp(buf_T *buf) { return buf->b_ml.ml_mfp != NULL; }
+
 // Rust implementation
 extern int rs_ml_line_alloced(void);
 

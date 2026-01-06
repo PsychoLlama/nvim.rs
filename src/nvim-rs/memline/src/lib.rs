@@ -17,6 +17,7 @@
 //!
 //! - [`types`]: Core data structures, constants, and opaque handles
 //! - [`access`]: Line access functions
+//! - [`modify`]: Line modification functions (append, delete, replace)
 //!
 //! # Note
 //!
@@ -30,10 +31,12 @@
 #![allow(unsafe_code)]
 
 pub mod access;
+pub mod modify;
 pub mod types;
 
 // Re-export all public items for FFI
 pub use access::*;
+pub use modify::*;
 pub use types::*;
 
 use std::ffi::c_int;
