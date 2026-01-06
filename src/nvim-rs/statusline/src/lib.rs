@@ -1462,6 +1462,247 @@ pub const extern "C" fn rs_stl_number_width(num: c_int, base: c_int) -> c_int {
     width
 }
 
+// =============================================================================
+// FFI Exports for StatuslineBuilder Operations
+// =============================================================================
+
+/// Opaque handle to a Rust StatuslineBuilder.
+#[repr(C)]
+pub struct StlBuilderHandle(*mut StatuslineBuilder);
+
+impl StlBuilderHandle {
+    /// Check if the handle is null.
+    #[inline]
+    pub const fn is_null(&self) -> bool {
+        self.0.is_null()
+    }
+}
+
+/// Create a new statusline builder.
+///
+/// Returns an opaque handle to a newly allocated builder.
+/// Must be freed with `rs_stl_builder_free`.
+#[no_mangle]
+pub extern "C" fn rs_stl_builder_new(max_width: c_int) -> StlBuilderHandle {
+    #[allow(clippy::cast_sign_loss)]
+    let builder = Box::new(StatuslineBuilder::new(max_width.max(0) as usize));
+    StlBuilderHandle(Box::into_raw(builder))
+}
+
+/// Free a statusline builder.
+///
+/// # Safety
+/// `handle` must be a valid handle from `rs_stl_builder_new`, or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_builder_free(handle: StlBuilderHandle) {
+    if !handle.is_null() {
+        drop(Box::from_raw(handle.0));
+    }
+}
+
+/// Clear the builder for reuse.
+///
+/// # Safety
+/// `handle` must be a valid builder handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_builder_clear(handle: StlBuilderHandle) {
+    if !handle.is_null() {
+        (*handle.0).clear();
+    }
+}
+
+/// Get current output position in the builder.
+///
+/// # Safety
+/// `handle` must be a valid builder handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_builder_position(handle: StlBuilderHandle) -> c_int {
+    if handle.is_null() {
+        return 0;
+    }
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    ((*handle.0).position() as c_int)
+}
+
+/// Append literal text to the builder.
+///
+/// # Safety
+/// `handle` must be a valid builder handle.
+/// `text` must be a valid C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_builder_append(
+    handle: StlBuilderHandle,
+    text: *const c_char,
+    len: c_int,
+) {
+    if handle.is_null() || text.is_null() {
+        return;
+    }
+    #[allow(clippy::cast_sign_loss)]
+    let slice = std::slice::from_raw_parts(text.cast::<u8>(), len.max(0) as usize);
+    if let Ok(s) = std::str::from_utf8(slice) {
+        (*handle.0).append_literal(s);
+    }
+}
+
+/// Append a single byte to the builder.
+///
+/// # Safety
+/// `handle` must be a valid builder handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_builder_append_byte(handle: StlBuilderHandle, byte: u8) {
+    if !handle.is_null() {
+        (*handle.0).append_byte(byte);
+    }
+}
+
+/// Start a group in the builder.
+///
+/// # Safety
+/// `handle` must be a valid builder handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_builder_start_group(
+    handle: StlBuilderHandle,
+    minwid: c_int,
+    maxwid: c_int,
+) {
+    if !handle.is_null() {
+        (*handle.0).start_group(minwid, maxwid);
+    }
+}
+
+/// End the current group in the builder.
+///
+/// Returns 1 if a group was ended, 0 if not in a group.
+///
+/// # Safety
+/// `handle` must be a valid builder handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_builder_end_group(handle: StlBuilderHandle) -> c_int {
+    if handle.is_null() {
+        return 0;
+    }
+    c_int::from((*handle.0).end_group())
+}
+
+/// Check if builder is inside a group.
+///
+/// # Safety
+/// `handle` must be a valid builder handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_builder_in_group(handle: StlBuilderHandle) -> c_int {
+    if handle.is_null() {
+        return 0;
+    }
+    c_int::from((*handle.0).in_group())
+}
+
+/// Add a separator marker.
+///
+/// # Safety
+/// `handle` must be a valid builder handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_builder_add_separator(handle: StlBuilderHandle) {
+    if !handle.is_null() {
+        (*handle.0).add_separator();
+    }
+}
+
+/// Add a truncation marker.
+///
+/// # Safety
+/// `handle` must be a valid builder handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_builder_add_truncation(handle: StlBuilderHandle) {
+    if !handle.is_null() {
+        (*handle.0).add_truncation_marker();
+    }
+}
+
+/// Set highlight at current position.
+///
+/// # Safety
+/// `handle` must be a valid builder handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_builder_set_highlight(handle: StlBuilderHandle, userhl: c_int) {
+    if !handle.is_null() {
+        (*handle.0).set_highlight(userhl);
+    }
+}
+
+/// Reset highlight to default.
+///
+/// # Safety
+/// `handle` must be a valid builder handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_builder_reset_highlight(handle: StlBuilderHandle) {
+    if !handle.is_null() {
+        (*handle.0).reset_highlight();
+    }
+}
+
+/// Add a tab page click region.
+///
+/// # Safety
+/// `handle` must be a valid builder handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_builder_add_tab_page(handle: StlBuilderHandle, tabnr: c_int) {
+    if !handle.is_null() {
+        (*handle.0).add_tab_page(tabnr);
+    }
+}
+
+/// Finalize the builder with separator filling.
+///
+/// # Safety
+/// `handle` must be a valid builder handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_builder_finalize(handle: StlBuilderHandle, target_width: c_int) {
+    if !handle.is_null() {
+        #[allow(clippy::cast_sign_loss)]
+        (*handle.0).finalize(target_width.max(0) as usize);
+    }
+}
+
+/// Copy builder output to a C buffer.
+///
+/// Returns the number of bytes copied.
+///
+/// # Safety
+/// `handle` must be a valid builder handle.
+/// `buf` must be a valid pointer to a buffer of at least `buflen` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_builder_get_output(
+    handle: StlBuilderHandle,
+    buf: *mut u8,
+    buflen: usize,
+) -> c_int {
+    if handle.is_null() || buf.is_null() || buflen == 0 {
+        return 0;
+    }
+
+    let output = (*handle.0).output();
+    let len = output.len().min(buflen - 1); // Leave room for NUL
+    std::ptr::copy_nonoverlapping(output.as_ptr(), buf, len);
+    *buf.add(len) = 0; // NUL terminate
+
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    (len as c_int)
+}
+
+/// Get the number of items in the builder.
+///
+/// # Safety
+/// `handle` must be a valid builder handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_builder_item_count(handle: StlBuilderHandle) -> c_int {
+    if handle.is_null() {
+        return 0;
+    }
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    ((*handle.0).item_count() as c_int)
+}
+
 /// FFI export: Calculate tab width for tabline.
 ///
 /// Shortens tab labels to fit within max_width.
