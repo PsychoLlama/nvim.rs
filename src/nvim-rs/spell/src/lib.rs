@@ -9,6 +9,8 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
 
+pub mod spellfile;
+
 use std::ffi::{c_char, c_int, c_void};
 
 // =============================================================================
