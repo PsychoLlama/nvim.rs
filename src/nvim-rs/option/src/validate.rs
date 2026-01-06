@@ -1,0 +1,729 @@
+//! Option value validation functions
+//!
+//! This module provides validation functions for option values. These functions
+//! check if a given value is valid for a particular option, without modifying
+//! any state.
+
+use std::ffi::{c_char, c_int};
+
+// =============================================================================
+// External C Functions (only used when not testing)
+// =============================================================================
+
+// Note: rs_vim_strchr is not currently used, but may be needed for future
+// validation functions. It's declared here for completeness.
+
+#[cfg(not(test))]
+extern "C" {
+    fn illegal_char(errbuf: *mut c_char, errbuflen: usize, c: c_int) -> *mut c_char;
+}
+
+// =============================================================================
+// Test Stubs
+// =============================================================================
+
+#[cfg(test)]
+#[allow(clippy::cast_possible_truncation, dead_code)]
+unsafe fn rs_vim_strchr(s: *const c_char, c: c_int) -> *const c_char {
+    if s.is_null() {
+        return std::ptr::null();
+    }
+    let target = c as u8;
+    let mut p = s;
+    while *p != 0 {
+        if (*p as u8) == target {
+            return p;
+        }
+        p = p.add(1);
+    }
+    std::ptr::null()
+}
+
+// =============================================================================
+// Constants - Statusline Format Characters (only used when not testing)
+// =============================================================================
+
+/// Separation between alignment sections
+#[cfg(not(test))]
+const STL_SEPARATE: u8 = b'=';
+/// Truncation mark if line is too long
+#[cfg(not(test))]
+const STL_TRUNCMARK: u8 = b'<';
+/// Highlight from (User)1..9 or 0
+#[cfg(not(test))]
+const STL_USER_HL: u8 = b'*';
+/// Start of expression to substitute
+#[cfg(not(test))]
+const STL_VIM_EXPR: u8 = b'{';
+
+/// All valid statusline format characters
+#[cfg(not(test))]
+const STL_ALL: &[u8] = b"fFtcvVlLnkoObBrRhHyYwWmMqpPaNSCs{=<*#TX@";
+
+// =============================================================================
+// Error Messages
+// =============================================================================
+
+/// Error message for unclosed expression sequence
+#[cfg(not(test))]
+const E_UNCLOSED_EXPRESSION: &[u8] = b"E540: Unclosed expression sequence\0";
+
+/// Error message for unbalanced groups
+#[cfg(not(test))]
+const E_UNBALANCED_GROUPS: &[u8] = b"E542: unbalanced groups\0";
+
+// =============================================================================
+// Statusline Format Validation
+// =============================================================================
+
+/// Check validity of options with the 'statusline' format.
+///
+/// This validates format strings for 'statusline', 'tabline', 'winbar',
+/// 'statuscolumn', 'rulerformat', and 'titlestring'.
+///
+/// # Arguments
+///
+/// * `s` - The format string to validate
+/// * `errbuf` - Buffer to write error messages to (if validation fails)
+/// * `errbuflen` - Size of the error buffer
+///
+/// # Returns
+///
+/// NULL on success, or a pointer to an error message on failure.
+///
+/// # Safety
+///
+/// `s` must be a valid null-terminated C string. `errbuf` must be a valid
+/// buffer of at least `errbuflen` bytes, or NULL.
+#[cfg(not(test))]
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_stl_option(
+    s: *const c_char,
+    errbuf: *mut c_char,
+    errbuflen: usize,
+) -> *const c_char {
+    if s.is_null() {
+        return std::ptr::null();
+    }
+
+    let mut p = s;
+    let mut groupdepth: i32 = 0;
+
+    while *p != 0 {
+        // Skip non-% characters
+        while *p != 0 && (*p as u8) != b'%' {
+            p = p.add(1);
+        }
+        if *p == 0 {
+            break;
+        }
+        p = p.add(1); // Skip the '%'
+
+        let c = *p as u8;
+
+        // Check for %%, %<, or %=
+        if c == b'%' || c == STL_TRUNCMARK || c == STL_SEPARATE {
+            p = p.add(1);
+            continue;
+        }
+
+        // Check for %)
+        if c == b')' {
+            p = p.add(1);
+            groupdepth -= 1;
+            if groupdepth < 0 {
+                break;
+            }
+            continue;
+        }
+
+        // Skip optional - for right alignment
+        if c == b'-' {
+            p = p.add(1);
+        }
+
+        // Skip width digits
+        while *p != 0 && (*p as u8).is_ascii_digit() {
+            p = p.add(1);
+        }
+
+        // Check for %*
+        if (*p as u8) == STL_USER_HL {
+            continue;
+        }
+
+        // Skip precision
+        if (*p as u8) == b'.' {
+            p = p.add(1);
+            while *p != 0 && (*p as u8).is_ascii_digit() {
+                p = p.add(1);
+            }
+        }
+
+        // Check for %(
+        if (*p as u8) == b'(' {
+            groupdepth += 1;
+            continue;
+        }
+
+        // Check if character is in STL_ALL
+        let current_char = *p as u8;
+        if !STL_ALL.contains(&current_char) {
+            return illegal_char(errbuf, errbuflen, c_int::from(current_char));
+        }
+
+        // Handle %{ expression
+        if current_char == STL_VIM_EXPR {
+            p = p.add(1);
+            let reevaluate = (*p as u8) == b'%';
+
+            if reevaluate {
+                p = p.add(1);
+                if (*p as u8) == b'}' {
+                    // "}" is not allowed immediately after "%{%"
+                    return illegal_char(errbuf, errbuflen, c_int::from(b'}'));
+                }
+            }
+
+            // Find closing }
+            while *p != 0 {
+                let curr = *p as u8;
+                if curr == b'}' && (!reevaluate || (*p.sub(1) as u8) == b'%') {
+                    break;
+                }
+                p = p.add(1);
+            }
+
+            if (*p as u8) != b'}' {
+                return E_UNCLOSED_EXPRESSION.as_ptr().cast();
+            }
+        }
+    }
+
+    if groupdepth != 0 {
+        return E_UNBALANCED_GROUPS.as_ptr().cast();
+    }
+
+    std::ptr::null()
+}
+
+// =============================================================================
+// Signcolumn Validation
+// =============================================================================
+
+/// Signcolumn width constants
+const SCL_NO: i32 = -1;
+const SCL_NUM: i32 = -2;
+
+/// Parsed signcolumn result
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct SigncolumnResult {
+    /// Minimum width (0 for auto, -1 for no, -2 for number)
+    pub min_width: c_int,
+    /// Maximum width
+    pub max_width: c_int,
+    /// Whether the value is valid
+    pub valid: c_int,
+}
+
+/// Valid signcolumn option values (simple ones)
+const OPT_SCL_VALUES: &[&[u8]] = &[
+    b"no\0",
+    b"yes\0",
+    b"auto\0",
+    b"number\0",
+    b"yes:1\0",
+    b"yes:2\0",
+    b"yes:3\0",
+    b"yes:4\0",
+    b"yes:5\0",
+    b"yes:6\0",
+    b"yes:7\0",
+    b"yes:8\0",
+    b"yes:9\0",
+    b"auto:1\0",
+    b"auto:2\0",
+    b"auto:3\0",
+    b"auto:4\0",
+    b"auto:5\0",
+    b"auto:6\0",
+    b"auto:7\0",
+    b"auto:8\0",
+    b"auto:9\0",
+];
+
+/// Parse and validate a signcolumn option value.
+///
+/// Valid values are:
+/// - "no" - no sign column
+/// - "yes" or "yes:N" - always show, width N (1-9)
+/// - "auto" or "auto:N" - auto show, max width N (1-9)
+/// - "auto:M-N" - auto show, min width M, max width N
+/// - "number" - show in number column
+///
+/// # Arguments
+///
+/// * `val` - The signcolumn value to parse
+///
+/// # Returns
+///
+/// A SigncolumnResult with the parsed min/max widths and validity flag.
+///
+/// # Safety
+///
+/// `val` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_signcolumn(val: *const c_char) -> SigncolumnResult {
+    let invalid = SigncolumnResult {
+        min_width: 0,
+        max_width: 0,
+        valid: 0,
+    };
+
+    if val.is_null() || *val == 0 {
+        return invalid;
+    }
+
+    // Check if it's one of the simple values by checking for exact matches
+    for opt_val in OPT_SCL_VALUES {
+        if streq_cstr(val, opt_val) {
+            // Parse based on prefix
+            let c0 = *val as u8;
+            let c1 = if *val != 0 { *val.add(1) as u8 } else { 0 };
+
+            if c0 == b'n' && c1 == b'o' {
+                // "no"
+                return SigncolumnResult {
+                    min_width: SCL_NO,
+                    max_width: SCL_NO,
+                    valid: 1,
+                };
+            } else if c0 == b'n' && c1 == b'u' {
+                // "number"
+                return SigncolumnResult {
+                    min_width: SCL_NUM,
+                    max_width: SCL_NUM,
+                    valid: 1,
+                };
+            } else if c0 == b'y' && c1 == b'e' {
+                // "yes" or "yes:N"
+                let c4 = *val.add(4) as u8;
+                let width = if c4 == 0 { 1 } else { i32::from(c4 - b'0') };
+                return SigncolumnResult {
+                    min_width: width,
+                    max_width: width,
+                    valid: 1,
+                };
+            } else if c0 == b'a' && c1 == b'u' {
+                // "auto" or "auto:N"
+                let c5 = *val.add(5) as u8;
+                let max = if c5 == 0 { 1 } else { i32::from(c5 - b'0') };
+                return SigncolumnResult {
+                    min_width: 0,
+                    max_width: max,
+                    valid: 1,
+                };
+            }
+        }
+    }
+
+    // Check for "auto:M-N" format (must be exactly 8 characters)
+    let mut len = 0;
+    let mut p = val;
+    while *p != 0 {
+        len += 1;
+        p = p.add(1);
+    }
+
+    if len != 8 {
+        return invalid;
+    }
+
+    if !strequal_prefix(val, b"auto:\0") {
+        return invalid;
+    }
+
+    let c5 = *val.add(5) as u8;
+    let c6 = *val.add(6) as u8;
+    let c7 = *val.add(7) as u8;
+
+    if !c5.is_ascii_digit() || c6 != b'-' || !c7.is_ascii_digit() {
+        return invalid;
+    }
+
+    let min = i32::from(c5 - b'0');
+    let max = i32::from(c7 - b'0');
+
+    if min < 1 || max < 2 || min > 8 || min >= max {
+        return invalid;
+    }
+
+    SigncolumnResult {
+        min_width: min,
+        max_width: max,
+        valid: 1,
+    }
+}
+
+/// Check if a C string equals a null-terminated byte slice.
+#[inline]
+unsafe fn streq_cstr(s: *const c_char, bytes: &[u8]) -> bool {
+    let mut p = s;
+    for &c in bytes {
+        if c == 0 {
+            return *p == 0; // Both should end at the same point
+        }
+        if *p == 0 || (*p as u8) != c {
+            return false;
+        }
+        p = p.add(1);
+    }
+    true
+}
+
+/// Check if a C string starts with a given prefix.
+#[inline]
+unsafe fn strequal_prefix(s: *const c_char, prefix: &[u8]) -> bool {
+    let mut p = s;
+    for &c in prefix {
+        if c == 0 {
+            return true;
+        }
+        if *p == 0 || (*p as u8) != c {
+            return false;
+        }
+        p = p.add(1);
+    }
+    true
+}
+
+// =============================================================================
+// Generic Option String Validation
+// =============================================================================
+
+/// Validate that a string option value matches one of the allowed values.
+///
+/// This is used for options that have a fixed set of valid values (like
+/// 'selection', 'selectmode', etc.).
+///
+/// # Arguments
+///
+/// * `val` - The value to validate
+/// * `values` - NULL-terminated array of valid values
+/// * `is_list` - If true, val can contain comma-separated items from values
+///
+/// # Returns
+///
+/// 1 if valid, 0 if invalid.
+///
+/// # Safety
+///
+/// `val` must be a valid null-terminated C string. `values` must be a valid
+/// NULL-terminated array of C strings.
+#[no_mangle]
+pub unsafe extern "C" fn rs_validate_string_option(
+    val: *const c_char,
+    values: *const *const c_char,
+    is_list: c_int,
+) -> c_int {
+    if val.is_null() || values.is_null() {
+        return 0;
+    }
+
+    if is_list != 0 {
+        // For comma-separated lists, validate each item
+        let mut p = val;
+        while *p != 0 {
+            // Skip leading separators
+            while *p != 0 && ((*p as u8) == b',' || (*p as u8) == b' ') {
+                p = p.add(1);
+            }
+            if *p == 0 {
+                break;
+            }
+
+            // Find end of current item
+            let item_start = p;
+            while *p != 0 && (*p as u8) != b',' {
+                p = p.add(1);
+            }
+            let item_len = p.offset_from(item_start) as usize;
+
+            // Check if this item is valid
+            if !is_valid_item(item_start, item_len, values) {
+                return 0;
+            }
+        }
+        1
+    } else {
+        // Simple case: val must exactly match one of the values
+        let mut i = 0;
+        loop {
+            let v = *values.add(i);
+            if v.is_null() {
+                break;
+            }
+            if streq(val, v) {
+                return 1;
+            }
+            i += 1;
+        }
+        0
+    }
+}
+
+/// Check if an item matches any of the allowed values.
+#[inline]
+unsafe fn is_valid_item(item: *const c_char, len: usize, values: *const *const c_char) -> bool {
+    let mut i = 0;
+    loop {
+        let v = *values.add(i);
+        if v.is_null() {
+            break;
+        }
+        if strneq(item, v, len) && *v.add(len) == 0 {
+            return true;
+        }
+        i += 1;
+    }
+    false
+}
+
+/// Compare two null-terminated strings for equality.
+#[inline]
+unsafe fn streq(s1: *const c_char, s2: *const c_char) -> bool {
+    let mut p1 = s1;
+    let mut p2 = s2;
+    loop {
+        if *p1 != *p2 {
+            return false;
+        }
+        if *p1 == 0 {
+            return true;
+        }
+        p1 = p1.add(1);
+        p2 = p2.add(1);
+    }
+}
+
+/// Compare n bytes of two strings for equality.
+#[inline]
+unsafe fn strneq(s1: *const c_char, s2: *const c_char, n: usize) -> bool {
+    for i in 0..n {
+        if *s1.add(i) != *s2.add(i) {
+            return false;
+        }
+    }
+    true
+}
+
+// =============================================================================
+// Blending Validation
+// =============================================================================
+
+/// Check if blend values for window are valid.
+///
+/// This validates that winblend/pumblend values are in the valid range [0, 100].
+///
+/// # Arguments
+///
+/// * `value` - The blend value to check
+///
+/// # Returns
+///
+/// 1 if valid (0-100), 0 if invalid.
+#[no_mangle]
+pub extern "C" fn rs_validate_blend(value: c_int) -> c_int {
+    c_int::from((0..=100).contains(&value))
+}
+
+// =============================================================================
+// Tests
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ffi::CString;
+
+    #[test]
+    fn test_parse_signcolumn_simple() {
+        unsafe {
+            // Test "no"
+            let no = CString::new("no").unwrap();
+            let result = rs_parse_signcolumn(no.as_ptr());
+            assert_eq!(result.valid, 1);
+            assert_eq!(result.min_width, SCL_NO);
+            assert_eq!(result.max_width, SCL_NO);
+
+            // Test "yes"
+            let yes = CString::new("yes").unwrap();
+            let result = rs_parse_signcolumn(yes.as_ptr());
+            assert_eq!(result.valid, 1);
+            assert_eq!(result.min_width, 1);
+            assert_eq!(result.max_width, 1);
+
+            // Test "yes:3"
+            let yes3 = CString::new("yes:3").unwrap();
+            let result = rs_parse_signcolumn(yes3.as_ptr());
+            assert_eq!(result.valid, 1);
+            assert_eq!(result.min_width, 3);
+            assert_eq!(result.max_width, 3);
+
+            // Test "auto"
+            let auto = CString::new("auto").unwrap();
+            let result = rs_parse_signcolumn(auto.as_ptr());
+            assert_eq!(result.valid, 1);
+            assert_eq!(result.min_width, 0);
+            assert_eq!(result.max_width, 1);
+
+            // Test "auto:5"
+            let auto5 = CString::new("auto:5").unwrap();
+            let result = rs_parse_signcolumn(auto5.as_ptr());
+            assert_eq!(result.valid, 1);
+            assert_eq!(result.min_width, 0);
+            assert_eq!(result.max_width, 5);
+
+            // Test "number"
+            let number = CString::new("number").unwrap();
+            let result = rs_parse_signcolumn(number.as_ptr());
+            assert_eq!(result.valid, 1);
+            assert_eq!(result.min_width, SCL_NUM);
+            assert_eq!(result.max_width, SCL_NUM);
+        }
+    }
+
+    #[test]
+    fn test_parse_signcolumn_range() {
+        unsafe {
+            // Test "auto:2-5"
+            let auto_range = CString::new("auto:2-5").unwrap();
+            let result = rs_parse_signcolumn(auto_range.as_ptr());
+            assert_eq!(result.valid, 1);
+            assert_eq!(result.min_width, 2);
+            assert_eq!(result.max_width, 5);
+
+            // Test "auto:1-9"
+            let auto_range2 = CString::new("auto:1-9").unwrap();
+            let result = rs_parse_signcolumn(auto_range2.as_ptr());
+            assert_eq!(result.valid, 1);
+            assert_eq!(result.min_width, 1);
+            assert_eq!(result.max_width, 9);
+        }
+    }
+
+    #[test]
+    fn test_parse_signcolumn_invalid() {
+        unsafe {
+            // Invalid: empty
+            let empty = CString::new("").unwrap();
+            let result = rs_parse_signcolumn(empty.as_ptr());
+            assert_eq!(result.valid, 0);
+
+            // Invalid: unknown value
+            let unknown = CString::new("invalid").unwrap();
+            let result = rs_parse_signcolumn(unknown.as_ptr());
+            assert_eq!(result.valid, 0);
+
+            // Invalid: min >= max
+            let invalid_range = CString::new("auto:5-5").unwrap();
+            let result = rs_parse_signcolumn(invalid_range.as_ptr());
+            assert_eq!(result.valid, 0);
+
+            // Invalid: min > max
+            let invalid_range2 = CString::new("auto:5-3").unwrap();
+            let result = rs_parse_signcolumn(invalid_range2.as_ptr());
+            assert_eq!(result.valid, 0);
+
+            // Invalid: wrong format
+            let wrong_format = CString::new("auto:5-").unwrap();
+            let result = rs_parse_signcolumn(wrong_format.as_ptr());
+            assert_eq!(result.valid, 0);
+
+            // NULL
+            let result = rs_parse_signcolumn(std::ptr::null());
+            assert_eq!(result.valid, 0);
+        }
+    }
+
+    #[test]
+    fn test_validate_blend() {
+        // Valid values
+        assert_eq!(rs_validate_blend(0), 1);
+        assert_eq!(rs_validate_blend(50), 1);
+        assert_eq!(rs_validate_blend(100), 1);
+
+        // Invalid values
+        assert_eq!(rs_validate_blend(-1), 0);
+        assert_eq!(rs_validate_blend(101), 0);
+        assert_eq!(rs_validate_blend(200), 0);
+    }
+
+    #[test]
+    fn test_validate_string_option_simple() {
+        unsafe {
+            let val1 = CString::new("value1").unwrap();
+            let val2 = CString::new("value2").unwrap();
+            let val3 = CString::new("value3").unwrap();
+
+            let values: [*const c_char; 4] = [
+                val1.as_ptr(),
+                val2.as_ptr(),
+                val3.as_ptr(),
+                std::ptr::null(),
+            ];
+
+            // Valid value
+            let test_val = CString::new("value2").unwrap();
+            assert_eq!(
+                rs_validate_string_option(test_val.as_ptr(), values.as_ptr(), 0),
+                1
+            );
+
+            // Invalid value
+            let invalid = CString::new("invalid").unwrap();
+            assert_eq!(
+                rs_validate_string_option(invalid.as_ptr(), values.as_ptr(), 0),
+                0
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_string_option_list() {
+        unsafe {
+            let val1 = CString::new("one").unwrap();
+            let val2 = CString::new("two").unwrap();
+            let val3 = CString::new("three").unwrap();
+
+            let values: [*const c_char; 4] = [
+                val1.as_ptr(),
+                val2.as_ptr(),
+                val3.as_ptr(),
+                std::ptr::null(),
+            ];
+
+            // Valid list
+            let test_list = CString::new("one,two").unwrap();
+            assert_eq!(
+                rs_validate_string_option(test_list.as_ptr(), values.as_ptr(), 1),
+                1
+            );
+
+            // Valid list with spaces
+            let test_list2 = CString::new("one, two, three").unwrap();
+            assert_eq!(
+                rs_validate_string_option(test_list2.as_ptr(), values.as_ptr(), 1),
+                1
+            );
+
+            // Invalid item in list
+            let invalid_list = CString::new("one,invalid,two").unwrap();
+            assert_eq!(
+                rs_validate_string_option(invalid_list.as_ptr(), values.as_ptr(), 1),
+                0
+            );
+        }
+    }
+}

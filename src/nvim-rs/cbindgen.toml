@@ -134,4 +134,7 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            # Option parsing utilities (Phase 1)
            "rs_illegal_char", "rs_illegal_char_after", "rs_valid_filetype",
            "rs_check_illegal_path_names", "rs_find_dup_item",
-           "rs_copy_option_part"]
+           "rs_copy_option_part",
+           # Option validation (Phase 2)
+           "rs_check_stl_option", "rs_parse_signcolumn", "SigncolumnResult",
+           "rs_validate_string_option", "rs_validate_blend"]
