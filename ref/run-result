@@ -1,41 +1,36 @@
-Plan: ~/.claude/plans/toasty-booping-liskov.md
+Plan: ~/.claude/plans/glowing-marinating-thunder.md
 
-The message system migration is complete. Here's a summary:
+The memline migration plan has been completed successfully. Here's a summary:
 
-## Migration Complete: Message System
+## Migration Complete: memline crate
 
-All 6 phases have been successfully completed:
+### Summary
 
-### Summary Statistics
-
-| Metric | Target | Actual |
-|--------|--------|--------|
-| Lines of Rust | 2,500+ | 2,222 |
-| FFI exports | 30-40 | 129 |
-| Commits | 1 per phase | 5 commits |
-| Quality gates | All pass | ✓ |
+| Metric | Result |
+|--------|--------|
+| **Lines of Rust** | 2,824 |
+| **FFI exports** | 119 |
+| **Commits** | 6 (one per phase) |
+| **Quality gates** | All pass |
 
 ### Files Created
-- `src/nvim-rs/message/Cargo.toml`
-- `src/nvim-rs/message/src/lib.rs`
-- `src/nvim-rs/message/src/history.rs` - Message history linked list
-- `src/nvim-rs/message/src/chunk.rs` - Scrollback chunks
-- `src/nvim-rs/message/src/format.rs` - Message formatting
-- `src/nvim-rs/message/src/output.rs` - Output state management
-- `src/nvim-rs/message/src/attr.rs` - Highlight attributes
-- `src/nvim-rs/message/src/scrollback.rs` - Scrollback buffer
-- `src/nvim-rs/message/src/dialog.rs` - Dialog/confirmation
-- `src/nvim-rs/message/src/error.rs` - Error message state
 
-### Files Modified
-- `Cargo.toml` (workspace)
-- `src/nvim-rs/Cargo.toml`
-- `src/nvim-rs/src/lib.rs`
-- `src/nvim/message.c` (C accessor functions)
-- `ref/crates.md`
+| File | Purpose |
+|------|---------|
+| `src/nvim-rs/memline/Cargo.toml` | Crate manifest |
+| `src/nvim-rs/memline/src/lib.rs` | Module root, re-exports, constant accessors |
+| `src/nvim-rs/memline/src/types.rs` | Data structures and constants |
+| `src/nvim-rs/memline/src/access.rs` | Line access functions |
+| `src/nvim-rs/memline/src/modify.rs` | Line modification functions |
+| `src/nvim-rs/memline/src/navigate.rs` | Navigation and byte offset functions |
+| `src/nvim-rs/memline/src/swap.rs` | Swap file management |
+| `src/nvim-rs/memline/src/recovery.rs` | Recovery and attention handling |
 
-### Quality Verification
-- `just rust-fmt-check` ✓
-- `just rust-clippy` ✓
-- `just rust-test` ✓ (1351 tests pass)
-- `just rust-build` ✓
+### Commits
+
+1. `da448fb` - Phase 1: Core data structures and constants
+2. `f4140e5` - Phase 2: Line access functions
+3. `61d6dea` - Phase 3: Line modification functions
+4. `d9b3a5f` - Phase 4: Navigation and byte offset functions
+5. `a740508` - Phase 5: Swap file management
+6. `9ec88f6` - Phase 6: Recovery and attention handling
