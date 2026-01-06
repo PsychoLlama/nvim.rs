@@ -55,6 +55,7 @@ nvim-mark = { path = "mark" }
 nvim-marktree = { path = "marktree" }
 nvim-math = { path = "math" }
 nvim-mbyte = { path = "mbyte" }
+nvim-memline = { path = "memline" }
 nvim-memutil = { path = "memutil" }
 nvim-menu = { path = "menu" }
 nvim-message = { path = "message" }

@@ -60,6 +60,7 @@ pub use nvim_mark::*;
 pub use nvim_marktree::*;
 pub use nvim_math::*;
 pub use nvim_mbyte::*;
+pub use nvim_memline::*;
 pub use nvim_memutil::*;
 pub use nvim_menu::*;
 pub use nvim_message::*;

@@ -1963,11 +1963,23 @@ errorret:
   return buf->b_ml.ml_line_ptr;
 }
 
-// C accessor for curbuf->b_ml.ml_flags (used by Rust)
+// =============================================================================
+// C accessors for Rust FFI (memline crate)
+// =============================================================================
+
+// Current buffer accessor
 int nvim_curbuf_get_ml_flags(void) { return curbuf->b_ml.ml_flags; }
 
-// ML_LINE_DIRTY constant accessor for Rust
+// ML_LINE_DIRTY constant accessor
 int nvim_get_ml_line_dirty(void) { return ML_LINE_DIRTY; }
+
+// Buffer memline field accessors
+memfile_T *nvim_buf_get_ml_mfp(buf_T *buf) { return buf->b_ml.ml_mfp; }
+int nvim_buf_get_ml_flags(buf_T *buf) { return buf->b_ml.ml_flags; }
+void nvim_buf_set_ml_flags(buf_T *buf, int flags) { buf->b_ml.ml_flags = flags; }
+linenr_T nvim_buf_get_ml_line_lnum(buf_T *buf) { return buf->b_ml.ml_line_lnum; }
+colnr_T nvim_buf_get_ml_line_len(buf_T *buf) { return buf->b_ml.ml_line_len; }
+char *nvim_buf_get_ml_line_ptr(buf_T *buf) { return buf->b_ml.ml_line_ptr; }
 
 // Rust implementation
 extern int rs_ml_line_alloced(void);

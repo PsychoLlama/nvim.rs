@@ -39,6 +39,7 @@ members = [
     "src/nvim-rs/mark",
     "src/nvim-rs/math",
     "src/nvim-rs/mbyte",
+    "src/nvim-rs/memline",
     "src/nvim-rs/memory",
     "src/nvim-rs/memutil",
     "src/nvim-rs/menu",
