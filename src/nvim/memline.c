@@ -1978,8 +1978,17 @@ memfile_T *nvim_buf_get_ml_mfp(buf_T *buf) { return buf->b_ml.ml_mfp; }
 int nvim_buf_get_ml_flags(buf_T *buf) { return buf->b_ml.ml_flags; }
 void nvim_buf_set_ml_flags(buf_T *buf, int flags) { buf->b_ml.ml_flags = flags; }
 linenr_T nvim_buf_get_ml_line_lnum(buf_T *buf) { return buf->b_ml.ml_line_lnum; }
+linenr_T nvim_buf_get_ml_line_count(buf_T *buf) { return buf->b_ml.ml_line_count; }
 colnr_T nvim_buf_get_ml_line_len(buf_T *buf) { return buf->b_ml.ml_line_len; }
+void nvim_buf_set_ml_line_len(buf_T *buf, colnr_T len) { buf->b_ml.ml_line_len = len; }
 char *nvim_buf_get_ml_line_ptr(buf_T *buf) { return buf->b_ml.ml_line_ptr; }
+
+// Position accessors
+linenr_T nvim_pos_get_lnum(const pos_T *pos) { return pos->lnum; }
+colnr_T nvim_pos_get_col(const pos_T *pos) { return pos->col; }
+
+// Constants
+colnr_T nvim_get_maxcol(void) { return MAXCOL; }
 
 // Rust implementation
 extern int rs_ml_line_alloced(void);

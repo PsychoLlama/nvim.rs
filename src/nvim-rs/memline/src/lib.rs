@@ -16,6 +16,7 @@
 //! # Modules
 //!
 //! - [`types`]: Core data structures, constants, and opaque handles
+//! - [`access`]: Line access functions
 //!
 //! # Note
 //!
@@ -28,9 +29,11 @@
 #![allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
 #![allow(unsafe_code)]
 
+pub mod access;
 pub mod types;
 
 // Re-export all public items for FFI
+pub use access::*;
 pub use types::*;
 
 use std::ffi::c_int;
