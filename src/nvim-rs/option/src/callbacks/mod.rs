@@ -6,6 +6,8 @@
 
 #![allow(clippy::missing_safety_doc)] // FFI functions safety is implicit
 
+pub mod string;
+
 use std::ffi::{c_char, c_int};
 use std::ptr;
 

@@ -137,4 +137,10 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_copy_option_part",
            # Option validation (Phase 2)
            "rs_check_stl_option", "rs_parse_signcolumn", "SigncolumnResult",
-           "rs_validate_string_option", "rs_validate_blend"]
+           "rs_validate_string_option", "rs_validate_blend",
+           # String option callbacks (Phase 3)
+           "rs_validate_concealcursor", "rs_validate_cpoptions", "rs_validate_formatoptions",
+           "rs_validate_mouse", "rs_validate_shortmess", "rs_validate_whichwrap",
+           "rs_validate_comments", "rs_validate_commentstring", "rs_validate_complete",
+           "rs_validate_matchpairs", "rs_validate_backspace", "rs_validate_foldmarker",
+           "rs_validate_lispoptions", "rs_validate_breakindentopt", "rs_validate_spelloptions"]
