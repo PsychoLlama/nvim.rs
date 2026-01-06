@@ -1038,6 +1038,10 @@ extern "C" {
 
     // Visual mode functions
     fn nvim_nv_visual_impl(cap: CapHandle);
+
+    // Window command functions
+    fn nvim_do_window(nchar: c_int, count: c_int, xchar: c_int);
+    fn nvim_nv_colon(cap: CapHandle);
 }
 
 /// Opaque handle to fmark_T*.
@@ -1457,6 +1461,33 @@ pub unsafe extern "C" fn rs_nv_pcmark(cap: CapHandle) {
 pub unsafe extern "C" fn rs_nv_visual(cap: CapHandle) {
     // Delegate to C implementation which handles the complex visual mode logic
     nvim_nv_visual_impl(cap);
+}
+
+// =============================================================================
+// Window Command Handlers
+// =============================================================================
+
+/// Command handler for CTRL-W commands.
+///
+/// "CTRL-W :" is the same as typing ":"; useful in a terminal window.
+/// Otherwise, delegate to do_window() for window operations.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_window(cap: CapHandle) {
+    let nchar = nvim_cap_get_nchar(cap);
+    let oap = nvim_cap_get_oap(cap);
+
+    if nchar == c_int::from(b':') {
+        // "CTRL-W :" is the same as typing ":"
+        nvim_cap_set_cmdchar(cap, c_int::from(b':'));
+        nvim_cap_set_nchar(cap, c_int::from(NUL));
+        nvim_nv_colon(cap);
+    } else if !rs_checkclearop(oap) {
+        let count0 = nvim_cap_get_count0(cap);
+        nvim_do_window(nchar, count0, c_int::from(NUL));
+    }
 }
 
 // =============================================================================

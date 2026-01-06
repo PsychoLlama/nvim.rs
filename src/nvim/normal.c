@@ -414,6 +414,7 @@ extern void rs_nv_pcmark(cmdarg_T *cap);
 extern void rs_nv_regname(cmdarg_T *cap);
 extern void rs_nv_put(cmdarg_T *cap);
 extern void rs_nv_visual(cmdarg_T *cap);
+extern void rs_nv_window(cmdarg_T *cap);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -1435,6 +1436,22 @@ static void nv_visual_impl(cmdarg_T *cap);
 void nvim_nv_visual_impl(cmdarg_T *cap)
 {
   nv_visual_impl(cap);
+}
+
+// =============================================================================
+// Window command accessors for Rust FFI
+// =============================================================================
+
+/// Wrapper for do_window.
+void nvim_do_window(int nchar, int count, int xchar)
+{
+  do_window(nchar, count, xchar);
+}
+
+/// Wrapper for nv_colon.
+void nvim_nv_colon(cmdarg_T *cap)
+{
+  nv_colon(cap);
 }
 
 /// Check if an operator was started but not finished yet.
@@ -5758,14 +5775,7 @@ static void n_start_visual_mode(int c)
 /// CTRL-W: Window commands
 static void nv_window(cmdarg_T *cap)
 {
-  if (cap->nchar == ':') {
-    // "CTRL-W :" is the same as typing ":"; useful in a terminal window
-    cap->cmdchar = ':';
-    cap->nchar = NUL;
-    nv_colon(cap);
-  } else if (!checkclearop(cap->oap)) {
-    do_window(cap->nchar, cap->count0, NUL);  // everything is in window.c
-  }
+  rs_nv_window(cap);
 }
 
 /// CTRL-Z: Suspend
