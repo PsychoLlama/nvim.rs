@@ -172,4 +172,8 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_expand_shortmess_flags", "rs_expand_whichwrap_flags",
            "rs_flag_in_value", "rs_count_missing_flags", "rs_get_missing_flag",
            "ExpandListResult", "rs_expand_next_item", "rs_item_in_list",
-           "rs_find_last_item_start", "rs_ends_with_comma"]
+           "rs_find_last_item_start", "rs_ends_with_comma",
+           # Option get/set core (Phase 7)
+           "rs_get_op", "rs_get_option_prefix", "CopyValueResult",
+           "rs_stropt_copy_value", "rs_stropt_concat_with_comma",
+           "rs_stropt_remove_val", "rs_stropt_remove_dupflags"]

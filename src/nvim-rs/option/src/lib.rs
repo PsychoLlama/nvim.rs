@@ -13,6 +13,7 @@
 
 pub mod callbacks;
 pub mod completion;
+pub mod getset;
 pub mod parsing;
 pub mod validate;
 
