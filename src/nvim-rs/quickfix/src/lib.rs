@@ -1730,6 +1730,16 @@ extern "C" {
     fn nvim_qf_set_bufnr(qi: QfInfoHandleMut, bufnr: c_int);
     fn nvim_win_is_qf_win(win: WinHandle) -> bool;
     fn nvim_win_get_llist_ref(win: WinHandle) -> QfInfoHandle;
+
+    // Phase 8: Ex Commands and API Functions accessors
+    // (nvim_qf_get_title and nvim_qf_get_changedtick already declared above)
+    fn nvim_qf_is_qf_stack(qi: QfInfoHandle) -> bool;
+    fn nvim_qf_is_ll_stack(qi: QfInfoHandle) -> bool;
+    fn nvim_qf_get_refcount(qi: QfInfoHandle) -> c_int;
+    fn nvim_qf_incr_refcount(qi: QfInfoHandleMut);
+    fn nvim_qf_decr_refcount(qi: QfInfoHandleMut);
+    fn nvim_qf_get_ctx(qfl: QfListHandle) -> *mut c_void;
+    fn nvim_qf_incr_changedtick(qfl: QfListHandleMut);
 }
 
 /// Opaque handle to buffer (Phase 7)
@@ -2718,6 +2728,126 @@ pub unsafe extern "C" fn rs_win_get_llist_ref(win: WinHandle) -> QfInfoHandle {
         return std::ptr::null();
     }
     nvim_win_get_llist_ref(win)
+}
+
+// =============================================================================
+// Phase 8: Ex Commands and API Functions
+// =============================================================================
+
+/// Get the title of a quickfix list.
+///
+/// Returns the title string, or null if not set.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_title(qfl: QfListHandle) -> *const c_char {
+    if qfl.is_null() {
+        return std::ptr::null();
+    }
+    nvim_qf_get_title(qfl)
+}
+
+/// Check if a quickfix stack is the global quickfix list.
+///
+/// Returns true if this is the global quickfix list, false if it's a location list.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_is_qf_stack(qi: QfInfoHandle) -> bool {
+    if qi.is_null() {
+        return false;
+    }
+    nvim_qf_is_qf_stack(qi)
+}
+
+/// Check if a quickfix stack is a location list.
+///
+/// Returns true if this is a location list, false if it's the global quickfix list.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_is_ll_stack(qi: QfInfoHandle) -> bool {
+    if qi.is_null() {
+        return false;
+    }
+    nvim_qf_is_ll_stack(qi)
+}
+
+/// Get the reference count of a quickfix info struct.
+///
+/// Used for location lists to track window references.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_refcount(qi: QfInfoHandle) -> c_int {
+    if qi.is_null() {
+        return 0;
+    }
+    nvim_qf_get_refcount(qi)
+}
+
+/// Increment the reference count of a quickfix info struct.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_incr_refcount(qi: QfInfoHandleMut) {
+    if qi.is_null() {
+        return;
+    }
+    nvim_qf_incr_refcount(qi);
+}
+
+/// Decrement the reference count of a quickfix info struct.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_decr_refcount(qi: QfInfoHandleMut) {
+    if qi.is_null() {
+        return;
+    }
+    nvim_qf_decr_refcount(qi);
+}
+
+/// Get the context of a quickfix list.
+///
+/// Returns the context typval pointer, or null if not set.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_ctx(qfl: QfListHandle) -> *mut c_void {
+    if qfl.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_qf_get_ctx(qfl)
+}
+
+/// Increment the changedtick of a quickfix list.
+///
+/// Should be called whenever the list is modified.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_incr_changedtick(qfl: QfListHandleMut) {
+    if qfl.is_null() {
+        return;
+    }
+    nvim_qf_incr_changedtick(qfl);
 }
 
 /// Set the current list index in a quickfix stack.

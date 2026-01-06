@@ -1334,6 +1334,108 @@ void *nvim_win_get_llist_ref(const void *win_void)
   return ((const win_T *)win_void)->w_llist_ref;
 }
 
+// =============================================================================
+// Phase 8: Ex Commands and API Functions accessor functions for Rust
+// Forward declarations
+// =============================================================================
+
+static int qf_add_entries(qf_info_T *qi, int qf_idx, list_T *list, char *title, int action);
+static int qf_set_properties(qf_info_T *qi, const dict_T *what, int action, char *title);
+static int qf_get_properties(win_T *wp, dict_T *what, dict_T *retdict);
+
+/// Get the title of a quickfix list
+const char *nvim_qf_get_title(const void *qfl_void)
+{
+  if (qfl_void == NULL) {
+    return NULL;
+  }
+  return ((const qf_list_T *)qfl_void)->qf_title;
+}
+
+/// Check if the quickfix stack is for the global quickfix list
+bool nvim_qf_is_qf_stack(const void *qi_void)
+{
+  if (qi_void == NULL) {
+    return false;
+  }
+  return qi_void == ql_info;
+}
+
+/// Check if the quickfix stack is for a location list
+bool nvim_qf_is_ll_stack(const void *qi_void)
+{
+  if (qi_void == NULL) {
+    return false;
+  }
+  return qi_void != ql_info;
+}
+
+/// Get the reference count of a quickfix info struct
+int nvim_qf_get_refcount(const void *qi_void)
+{
+  if (qi_void == NULL) {
+    return 0;
+  }
+  return ((const qf_info_T *)qi_void)->qf_refcount;
+}
+
+/// Increment the reference count of a quickfix info struct
+void nvim_qf_incr_refcount(void *qi_void)
+{
+  if (qi_void == NULL) {
+    return;
+  }
+  ((qf_info_T *)qi_void)->qf_refcount++;
+}
+
+/// Decrement the reference count of a quickfix info struct
+void nvim_qf_decr_refcount(void *qi_void)
+{
+  if (qi_void == NULL) {
+    return;
+  }
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  if (qi->qf_refcount > 0) {
+    qi->qf_refcount--;
+  }
+}
+
+/// Get the context of a quickfix list
+void *nvim_qf_get_ctx(const void *qfl_void)
+{
+  if (qfl_void == NULL) {
+    return NULL;
+  }
+  return ((const qf_list_T *)qfl_void)->qf_ctx;
+}
+
+/// Check if a quickfix list has user data
+bool nvim_qf_has_user_data(const void *qfl_void)
+{
+  if (qfl_void == NULL) {
+    return false;
+  }
+  return ((const qf_list_T *)qfl_void)->qf_has_user_data;
+}
+
+/// Get the changedtick of a quickfix list
+int nvim_qf_get_changedtick(const void *qfl_void)
+{
+  if (qfl_void == NULL) {
+    return 0;
+  }
+  return ((const qf_list_T *)qfl_void)->qf_changedtick;
+}
+
+/// Increment the changedtick of a quickfix list
+void nvim_qf_incr_changedtick(void *qfl_void)
+{
+  if (qfl_void == NULL) {
+    return;
+  }
+  ((qf_list_T *)qfl_void)->qf_changedtick++;
+}
+
 // Looking up a buffer can be slow if there are many.  Remember the last one
 // to make this a lot faster if there are multiple matches in the same file.
 static char *qf_last_bufname = NULL;
