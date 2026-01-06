@@ -3547,3 +3547,23 @@ void nvim_set_mod_mask(int val)
 {
   mod_mask = val;
 }
+
+int nvim_get_typebuf_silent(void)
+{
+  return typebuf.tb_silent;
+}
+
+int nvim_get_typebuf_no_abbr_cnt(void)
+{
+  return typebuf.tb_no_abbr_cnt;
+}
+
+int nvim_get_cmd_silent(void)
+{
+  return cmd_silent ? 1 : 0;
+}
+
+void nvim_set_cmd_silent(int val)
+{
+  cmd_silent = val != 0;
+}

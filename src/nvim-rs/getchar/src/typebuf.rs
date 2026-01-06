@@ -469,9 +469,28 @@ impl TypeaheadBuffer {
 // C FFI Accessor Functions
 // =============================================================================
 
+#[allow(dead_code)]
 extern "C" {
     fn nvim_get_typebuf_change_cnt() -> c_int;
     fn nvim_get_typebuf_was_filled() -> c_int;
+    fn nvim_set_typebuf_was_filled(val: c_int);
+    fn nvim_get_typebuf_buf() -> *mut u8;
+    fn nvim_get_typebuf_noremap() -> *mut u8;
+    fn nvim_get_typebuf_buflen() -> c_int;
+    fn nvim_get_typebuf_off() -> c_int;
+    fn nvim_get_typebuf_len() -> c_int;
+    fn nvim_get_typebuf_maplen() -> c_int;
+    fn nvim_get_typebuf_silent() -> c_int;
+    fn nvim_get_typebuf_no_abbr_cnt() -> c_int;
+    fn nvim_set_typebuf_off(val: c_int);
+    fn nvim_set_typebuf_len(val: c_int);
+    fn nvim_set_typebuf_maplen(val: c_int);
+    fn nvim_set_typebuf_silent(val: c_int);
+    fn nvim_set_typebuf_no_abbr_cnt(val: c_int);
+    fn nvim_set_typebuf_change_cnt(val: c_int);
+    // nvim_get_maxmaplen already declared at module level
+    fn nvim_get_cmd_silent() -> c_int;
+    fn nvim_set_cmd_silent(val: c_int);
 }
 
 /// Check if a typeahead change has occurred.
@@ -490,6 +509,228 @@ pub unsafe extern "C" fn rs_typebuf_was_changed(old_change_cnt: c_int) -> c_int 
     let was_filled = nvim_get_typebuf_was_filled();
 
     c_int::from(current != old_change_cnt || was_filled != 0)
+}
+
+/// Increment the typeahead buffer change counter.
+///
+/// # Safety
+/// Calls C accessor functions.
+unsafe fn increment_typebuf_change_cnt() {
+    let mut cnt = nvim_get_typebuf_change_cnt().wrapping_add(1);
+    if cnt == 0 {
+        cnt = 1;
+    }
+    nvim_set_typebuf_change_cnt(cnt);
+}
+
+/// Delete characters from the typeahead buffer.
+///
+/// Removes `len` characters starting at `offset` from `typebuf.tb_off`.
+///
+/// # Safety
+/// Calls C accessor functions and performs pointer operations.
+#[no_mangle]
+pub unsafe extern "C" fn rs_del_typebuf(len: c_int, offset: c_int) {
+    if len == 0 {
+        return;
+    }
+
+    let maxmaplen = nvim_get_maxmaplen();
+    let mut tb_off = nvim_get_typebuf_off();
+    let tb_len = nvim_get_typebuf_len() - len;
+    let tb_buflen = nvim_get_typebuf_buflen();
+
+    nvim_set_typebuf_len(tb_len);
+
+    // Easy case: just increase tb_off
+    if offset == 0 && tb_buflen - (tb_off + len) >= 3 * maxmaplen + 3 {
+        nvim_set_typebuf_off(tb_off + len);
+    } else {
+        // Need to move characters
+        let tb_buf = nvim_get_typebuf_buf();
+        let tb_noremap = nvim_get_typebuf_noremap();
+        let i = tb_off + offset;
+
+        // Leave some extra room at the end
+        if tb_off > maxmaplen {
+            // Move content before deletion point to new position
+            std::ptr::copy(
+                tb_buf.offset(tb_off as isize),
+                tb_buf.offset(maxmaplen as isize),
+                offset as usize,
+            );
+            std::ptr::copy(
+                tb_noremap.offset(tb_off as isize),
+                tb_noremap.offset(maxmaplen as isize),
+                offset as usize,
+            );
+            tb_off = maxmaplen;
+            nvim_set_typebuf_off(tb_off);
+        }
+
+        // Move content after deletion point (including NUL)
+        let bytes = (tb_len - offset + 1) as usize;
+        std::ptr::copy(
+            tb_buf.offset((i + len) as isize),
+            tb_buf.offset((tb_off + offset) as isize),
+            bytes,
+        );
+        // Move noremap flags
+        let noremap_bytes = (tb_len - offset) as usize;
+        std::ptr::copy(
+            tb_noremap.offset((i + len) as isize),
+            tb_noremap.offset((tb_off + offset) as isize),
+            noremap_bytes,
+        );
+    }
+
+    // Adjust maplen
+    let mut tb_maplen = nvim_get_typebuf_maplen();
+    if tb_maplen > offset {
+        if tb_maplen < offset + len {
+            tb_maplen = offset;
+        } else {
+            tb_maplen -= len;
+        }
+        nvim_set_typebuf_maplen(tb_maplen);
+    }
+
+    // Adjust silent
+    let mut tb_silent = nvim_get_typebuf_silent();
+    if tb_silent > offset {
+        if tb_silent < offset + len {
+            tb_silent = offset;
+        } else {
+            tb_silent -= len;
+        }
+        nvim_set_typebuf_silent(tb_silent);
+    }
+
+    // Adjust no_abbr_cnt
+    let mut tb_no_abbr_cnt = nvim_get_typebuf_no_abbr_cnt();
+    if tb_no_abbr_cnt > offset {
+        if tb_no_abbr_cnt < offset + len {
+            tb_no_abbr_cnt = offset;
+        } else {
+            tb_no_abbr_cnt -= len;
+        }
+        nvim_set_typebuf_no_abbr_cnt(tb_no_abbr_cnt);
+    }
+
+    // Reset typebuf_was_filled flag
+    nvim_set_typebuf_was_filled(0);
+    increment_typebuf_change_cnt();
+}
+
+/// Flush mapped characters from the typeahead buffer (minimal flush).
+///
+/// Removes only the mapped characters at the start of the buffer,
+/// leaving typed characters intact.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_flush_typebuf_mapped() {
+    let tb_maplen = nvim_get_typebuf_maplen();
+    let tb_off = nvim_get_typebuf_off();
+    let tb_len = nvim_get_typebuf_len();
+
+    nvim_set_typebuf_off(tb_off + tb_maplen);
+    nvim_set_typebuf_len(tb_len - tb_maplen);
+    nvim_set_typebuf_maplen(0);
+    nvim_set_typebuf_silent(0);
+    nvim_set_cmd_silent(0);
+    nvim_set_typebuf_no_abbr_cnt(0);
+    increment_typebuf_change_cnt();
+}
+
+/// Clear all typeahead.
+///
+/// Resets the typeahead buffer to empty state.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_clear_typebuf() {
+    let maxmaplen = nvim_get_maxmaplen();
+
+    nvim_set_typebuf_off(maxmaplen);
+    nvim_set_typebuf_len(0);
+    nvim_set_typebuf_maplen(0);
+    nvim_set_typebuf_silent(0);
+    nvim_set_typebuf_no_abbr_cnt(0);
+    nvim_set_typebuf_was_filled(0);
+    increment_typebuf_change_cnt();
+}
+
+/// Get a byte from the typeahead buffer at the given offset.
+///
+/// # Safety
+/// Calls C accessor functions and performs pointer operations.
+#[no_mangle]
+pub unsafe extern "C" fn rs_typebuf_get_byte(offset: c_int) -> c_int {
+    let tb_off = nvim_get_typebuf_off();
+    let tb_len = nvim_get_typebuf_len();
+
+    if offset < 0 || offset >= tb_len {
+        return -1;
+    }
+
+    let tb_buf = nvim_get_typebuf_buf();
+    c_int::from(*tb_buf.offset((tb_off + offset) as isize))
+}
+
+/// Get the remap flag at the given offset in the typeahead buffer.
+///
+/// # Safety
+/// Calls C accessor functions and performs pointer operations.
+#[no_mangle]
+pub unsafe extern "C" fn rs_typebuf_get_noremap(offset: c_int) -> c_int {
+    let tb_off = nvim_get_typebuf_off();
+    let tb_len = nvim_get_typebuf_len();
+
+    if offset < 0 || offset >= tb_len {
+        return RemapFlag::Yes as c_int;
+    }
+
+    let tb_noremap = nvim_get_typebuf_noremap();
+    c_int::from(*tb_noremap.offset((tb_off + offset) as isize))
+}
+
+/// Get the current typeahead buffer length.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_typebuf_len() -> c_int {
+    nvim_get_typebuf_len()
+}
+
+/// Get the current typeahead buffer offset.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_typebuf_off() -> c_int {
+    nvim_get_typebuf_off()
+}
+
+/// Check if the typeahead buffer is empty.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_typebuf_is_empty() -> c_int {
+    c_int::from(nvim_get_typebuf_len() == 0)
+}
+
+/// Check if the first character in the typeahead should use silent mode.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_typebuf_is_silent() -> c_int {
+    c_int::from(nvim_get_typebuf_silent() > 0)
 }
 
 #[cfg(test)]
