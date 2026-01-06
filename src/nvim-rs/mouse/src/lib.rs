@@ -473,6 +473,74 @@ pub const extern "C" fn rs_is_double_click(mod_mask: c_int) -> bool {
 }
 
 // =============================================================================
+// Scroll Computation
+// =============================================================================
+
+/// Column number type
+#[allow(non_camel_case_types)]
+pub type colnr_T = c_int;
+
+/// Compute the new left column for horizontal scrolling.
+///
+/// # Arguments
+/// * `current_leftcol` - Current left column of the window
+/// * `scroll_dir` - Scroll direction (`MSCR_LEFT` or `MSCR_RIGHT`)
+/// * `step` - Number of columns to scroll
+///
+/// # Returns
+/// The new left column value, clamped to >= 0
+#[no_mangle]
+pub const extern "C" fn rs_compute_horiz_scroll(
+    current_leftcol: colnr_T,
+    scroll_dir: c_int,
+    step: c_int,
+) -> colnr_T {
+    let delta = if scroll_dir == MSCR_RIGHT {
+        -step
+    } else {
+        step
+    };
+
+    let new_col = current_leftcol + delta;
+    if new_col < 0 { 0 } else { new_col }
+}
+
+/// Compute the scroll line count for mouse wheel scrolling.
+///
+/// # Arguments
+/// * `shift_or_ctrl` - Whether shift or ctrl is pressed
+/// * `visible_lines` - Number of visible lines (`w_botline` - `w_topline`)
+/// * `default_scroll` - Default scroll amount from `p_mousescroll_vert`
+///
+/// # Returns
+/// The number of lines to scroll
+#[no_mangle]
+pub const extern "C" fn rs_compute_scroll_lines(
+    shift_or_ctrl: bool,
+    visible_lines: c_int,
+    default_scroll: c_int,
+) -> c_int {
+    if shift_or_ctrl {
+        // Scroll whole page
+        visible_lines
+    } else {
+        default_scroll
+    }
+}
+
+/// Check if scroll direction is vertical (up or down).
+#[no_mangle]
+pub const extern "C" fn rs_is_vertical_scroll(scroll_dir: c_int) -> bool {
+    scroll_dir == MSCR_UP || scroll_dir == MSCR_DOWN
+}
+
+/// Check if scroll direction is horizontal (left or right).
+#[no_mangle]
+pub const extern "C" fn rs_is_horizontal_scroll(scroll_dir: c_int) -> bool {
+    scroll_dir == MSCR_LEFT || scroll_dir == MSCR_RIGHT
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -652,5 +720,56 @@ mod tests {
         assert!(rs_is_double_click(MOD_MASK_2CLICK));
         assert!(!rs_is_double_click(MOD_MASK_3CLICK));
         assert!(!rs_is_double_click(MOD_MASK_4CLICK));
+    }
+
+    #[test]
+    fn test_horiz_scroll_left() {
+        // Scrolling left increases leftcol
+        let result = rs_compute_horiz_scroll(10, MSCR_LEFT, 5);
+        assert_eq!(result, 15);
+    }
+
+    #[test]
+    fn test_horiz_scroll_right() {
+        // Scrolling right decreases leftcol
+        let result = rs_compute_horiz_scroll(10, MSCR_RIGHT, 5);
+        assert_eq!(result, 5);
+    }
+
+    #[test]
+    fn test_horiz_scroll_clamp_to_zero() {
+        // Cannot go below 0
+        let result = rs_compute_horiz_scroll(3, MSCR_RIGHT, 10);
+        assert_eq!(result, 0);
+    }
+
+    #[test]
+    fn test_scroll_lines_with_modifier() {
+        // With shift/ctrl, scroll whole page
+        let result = rs_compute_scroll_lines(true, 25, 3);
+        assert_eq!(result, 25);
+    }
+
+    #[test]
+    fn test_scroll_lines_without_modifier() {
+        // Without modifier, use default
+        let result = rs_compute_scroll_lines(false, 25, 3);
+        assert_eq!(result, 3);
+    }
+
+    #[test]
+    fn test_is_vertical_scroll() {
+        assert!(rs_is_vertical_scroll(MSCR_UP));
+        assert!(rs_is_vertical_scroll(MSCR_DOWN));
+        assert!(!rs_is_vertical_scroll(MSCR_LEFT));
+        assert!(!rs_is_vertical_scroll(MSCR_RIGHT));
+    }
+
+    #[test]
+    fn test_is_horizontal_scroll() {
+        assert!(!rs_is_horizontal_scroll(MSCR_UP));
+        assert!(!rs_is_horizontal_scroll(MSCR_DOWN));
+        assert!(rs_is_horizontal_scroll(MSCR_LEFT));
+        assert!(rs_is_horizontal_scroll(MSCR_RIGHT));
     }
 }
