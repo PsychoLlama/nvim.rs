@@ -1992,6 +1992,12 @@ colnr_T nvim_get_maxcol(void) { return MAXCOL; }
 
 // Validation helpers
 int nvim_buf_has_ml_mfp(buf_T *buf) { return buf->b_ml.ml_mfp != NULL; }
+int nvim_buf_get_ml_usedchunks(buf_T *buf) { return buf->b_ml.ml_usedchunks; }
+
+// Position setters
+void nvim_pos_set_lnum(pos_T *pos, linenr_T lnum) { pos->lnum = lnum; }
+void nvim_pos_set_col(pos_T *pos, colnr_T col) { pos->col = col; }
+void nvim_pos_set_coladd(pos_T *pos, colnr_T coladd) { pos->coladd = coladd; }
 
 // Rust implementation
 extern int rs_ml_line_alloced(void);
