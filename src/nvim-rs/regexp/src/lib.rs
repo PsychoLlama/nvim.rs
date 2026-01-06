@@ -10,12 +10,18 @@
 pub mod bt_opcodes;
 pub mod char_class;
 pub mod decompose;
+pub mod nfa_compile;
 pub mod nfa_states;
 pub mod parser;
 pub mod scanner;
 
 pub use char_class::rs_get_char_class;
 pub use decompose::rs_mb_decompose;
+pub use nfa_compile::{
+    rs_alloc_state, rs_append, rs_frag_new, rs_frag_stack_free, rs_frag_stack_new,
+    rs_frag_stack_pop, rs_frag_stack_push, rs_list1, rs_patch, rs_state_allocator_count,
+    rs_state_allocator_free, rs_state_allocator_new, rs_state_allocator_reset,
+};
 pub use nfa_states::{
     rs_check_char_class, rs_nfa_get_subexpr_idx, rs_nfa_is_char_class, rs_nfa_is_position_match,
     rs_nfa_is_posix_class, rs_nfa_list_clear, rs_nfa_list_count, rs_nfa_list_free, rs_nfa_list_get,
