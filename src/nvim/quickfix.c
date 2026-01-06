@@ -1025,6 +1025,122 @@ int nvim_qf_get_fnum(void *qfl_void, char *directory, char *fname)
   return qf_get_fnum((qf_list_T *)qfl_void, directory, fname);
 }
 
+// =============================================================================
+// Phase 5: Error Format Parsing accessor functions for Rust
+// Forward declarations
+// =============================================================================
+
+static efm_T *parse_efm_option(char *efm);
+static void free_efm_list(efm_T **efm_first);
+static int qf_parse_line(qf_list_T *qfl, char *linebuf, size_t linelen, efm_T *fmt_first,
+                         qffields_T *fields);
+
+/// Opaque handle to efm_T (errorformat pattern list)
+typedef void *EfmHandle;
+
+/// Parse the errorformat option string and return a handle to the pattern list
+/// The returned handle must be freed with nvim_qf_free_efm_list
+EfmHandle nvim_qf_parse_efm_option(char *efm)
+{
+  if (efm == NULL) {
+    return NULL;
+  }
+  return parse_efm_option(efm);
+}
+
+/// Free an errorformat pattern list
+void nvim_qf_free_efm_list(EfmHandle efm_first)
+{
+  efm_T *efm = (efm_T *)efm_first;
+  free_efm_list(&efm);
+}
+
+/// Get the next pattern in the errorformat list
+EfmHandle nvim_efm_get_next(EfmHandle efm)
+{
+  if (efm == NULL) {
+    return NULL;
+  }
+  return ((efm_T *)efm)->next;
+}
+
+/// Get the prefix character of an errorformat pattern
+char nvim_efm_get_prefix(EfmHandle efm)
+{
+  if (efm == NULL) {
+    return '\0';
+  }
+  return ((efm_T *)efm)->prefix;
+}
+
+/// Get the flags character of an errorformat pattern
+char nvim_efm_get_flags(EfmHandle efm)
+{
+  if (efm == NULL) {
+    return '\0';
+  }
+  return ((efm_T *)efm)->flags;
+}
+
+/// Check if an errorformat pattern has a conthere marker (%>)
+int nvim_efm_get_conthere(EfmHandle efm)
+{
+  if (efm == NULL) {
+    return 0;
+  }
+  return ((efm_T *)efm)->conthere;
+}
+
+/// Get the address array entry for a pattern index
+/// Returns the capture group number (1-based) or 0 if not used
+char nvim_efm_get_addr(EfmHandle efm, int idx)
+{
+  if (efm == NULL || idx < 0 || idx >= FMT_PATTERNS) {
+    return 0;
+  }
+  return ((efm_T *)efm)->addr[idx];
+}
+
+/// Get the multiline flag from a quickfix list
+bool nvim_qf_get_multiline(const void *qfl_void)
+{
+  if (qfl_void == NULL) {
+    return false;
+  }
+  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
+  return qfl->qf_multiline;
+}
+
+/// Set the multiline flag for a quickfix list
+void nvim_qf_set_multiline(void *qfl_void, bool multiline)
+{
+  if (qfl_void == NULL) {
+    return;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  qfl->qf_multiline = multiline;
+}
+
+/// Get the multiignore flag from a quickfix list
+bool nvim_qf_get_multiignore(const void *qfl_void)
+{
+  if (qfl_void == NULL) {
+    return false;
+  }
+  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
+  return qfl->qf_multiignore;
+}
+
+/// Set the multiignore flag for a quickfix list
+void nvim_qf_set_multiignore(void *qfl_void, bool multiignore)
+{
+  if (qfl_void == NULL) {
+    return;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  qfl->qf_multiignore = multiignore;
+}
+
 // Looking up a buffer can be slow if there are many.  Remember the last one
 // to make this a lot faster if there are multiple matches in the same file.
 static char *qf_last_bufname = NULL;

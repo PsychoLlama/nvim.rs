@@ -1686,7 +1686,23 @@ extern "C" {
     fn nvim_qf_clean_dir_stack(qfl: QfListHandleMut, is_file_stack: bool);
     fn nvim_qf_guess_filepath(qfl: QfListHandleMut, filename: *mut c_char) -> *const c_char;
     fn nvim_qf_get_fnum(qfl: QfListHandleMut, directory: *mut c_char, fname: *mut c_char) -> c_int;
+
+    // Phase 5: Error Format Parsing accessors
+    fn nvim_qf_parse_efm_option(efm: *mut c_char) -> EfmHandle;
+    fn nvim_qf_free_efm_list(efm_first: EfmHandle);
+    fn nvim_efm_get_next(efm: EfmHandle) -> EfmHandle;
+    fn nvim_efm_get_prefix(efm: EfmHandle) -> c_char;
+    fn nvim_efm_get_flags(efm: EfmHandle) -> c_char;
+    fn nvim_efm_get_conthere(efm: EfmHandle) -> c_int;
+    fn nvim_efm_get_addr(efm: EfmHandle, idx: c_int) -> c_char;
+    fn nvim_qf_get_multiline(qfl: QfListHandle) -> bool;
+    fn nvim_qf_set_multiline(qfl: QfListHandleMut, multiline: bool);
+    fn nvim_qf_get_multiignore(qfl: QfListHandle) -> bool;
+    fn nvim_qf_set_multiignore(qfl: QfListHandleMut, multiignore: bool);
 }
+
+/// Opaque handle to errorformat pattern list (`efm_T`)
+type EfmHandle = *mut c_void;
 
 /// `QFL_TYPE` values from C code
 #[allow(dead_code)]
@@ -2178,6 +2194,187 @@ pub unsafe extern "C" fn rs_qf_get_fnum(
         return 0;
     }
     nvim_qf_get_fnum(qfl, directory, fname)
+}
+
+// =============================================================================
+// Phase 5: Error Format Parsing
+// =============================================================================
+
+/// Parse the errorformat option string and return a handle to the pattern list.
+///
+/// The returned handle must be freed with `rs_qf_free_efm_list` when done.
+/// Returns null if parsing fails.
+///
+/// # Safety
+///
+/// - `efm` must be a valid null-terminated C string
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_parse_efm_option(efm: *mut c_char) -> EfmHandle {
+    if efm.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_qf_parse_efm_option(efm)
+}
+
+/// Free an errorformat pattern list.
+///
+/// # Safety
+///
+/// - `efm_first` must be a valid errorformat handle or null
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_free_efm_list(efm_first: EfmHandle) {
+    if efm_first.is_null() {
+        return;
+    }
+    nvim_qf_free_efm_list(efm_first);
+}
+
+/// Get the next pattern in the errorformat list.
+///
+/// Returns null when there are no more patterns.
+///
+/// # Safety
+///
+/// - `efm` must be a valid errorformat handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_efm_get_next(efm: EfmHandle) -> EfmHandle {
+    if efm.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_efm_get_next(efm)
+}
+
+/// Get the prefix character of an errorformat pattern.
+///
+/// Prefix characters indicate the type of line:
+/// - 'D': enter directory
+/// - 'X': leave directory
+/// - 'A': start of multi-line message
+/// - 'E': error message
+/// - 'W': warning message
+/// - 'I': informational message
+/// - 'N': note message
+/// - 'C': continuation line
+/// - 'Z': end of multi-line message
+/// - 'G': general, unspecific message
+/// - 'P': push file (partial) message
+/// - 'Q': pop/quit file (partial) message
+/// - 'O': overread (partial) message
+///
+/// # Safety
+///
+/// - `efm` must be a valid errorformat handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_efm_get_prefix(efm: EfmHandle) -> c_char {
+    if efm.is_null() {
+        return 0;
+    }
+    nvim_efm_get_prefix(efm)
+}
+
+/// Get the flags character of an errorformat pattern.
+///
+/// Flags modify behavior:
+/// - '-': do not include this line
+/// - '+': include whole line in message
+///
+/// # Safety
+///
+/// - `efm` must be a valid errorformat handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_efm_get_flags(efm: EfmHandle) -> c_char {
+    if efm.is_null() {
+        return 0;
+    }
+    nvim_efm_get_flags(efm)
+}
+
+/// Check if an errorformat pattern has a conthere marker (%>).
+///
+/// Returns non-zero if the pattern uses %> (continue here).
+///
+/// # Safety
+///
+/// - `efm` must be a valid errorformat handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_efm_get_conthere(efm: EfmHandle) -> c_int {
+    if efm.is_null() {
+        return 0;
+    }
+    nvim_efm_get_conthere(efm)
+}
+
+/// Get the address array entry for a pattern index.
+///
+/// Returns the capture group number (1-based) or 0 if the pattern is not used.
+/// Index values 0-13 correspond to format specifiers: f, n, l, e, c, k, t, m, r, p, v, s, o, b.
+///
+/// # Safety
+///
+/// - `efm` must be a valid errorformat handle
+/// - `idx` should be in range [0, 14)
+#[no_mangle]
+pub unsafe extern "C" fn rs_efm_get_addr(efm: EfmHandle, idx: c_int) -> c_char {
+    if efm.is_null() {
+        return 0;
+    }
+    nvim_efm_get_addr(efm, idx)
+}
+
+/// Get the multiline flag from a quickfix list.
+///
+/// Returns true if currently parsing a multi-line error message.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_multiline(qfl: QfListHandle) -> bool {
+    if qfl.is_null() {
+        return false;
+    }
+    nvim_qf_get_multiline(qfl)
+}
+
+/// Set the multiline flag for a quickfix list.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_set_multiline(qfl: QfListHandleMut, multiline: bool) {
+    if qfl.is_null() {
+        return;
+    }
+    nvim_qf_set_multiline(qfl, multiline);
+}
+
+/// Get the multiignore flag from a quickfix list.
+///
+/// Returns true if ignoring lines until end of multi-line message.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_multiignore(qfl: QfListHandle) -> bool {
+    if qfl.is_null() {
+        return false;
+    }
+    nvim_qf_get_multiignore(qfl)
+}
+
+/// Set the multiignore flag for a quickfix list.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_set_multiignore(qfl: QfListHandleMut, multiignore: bool) {
+    if qfl.is_null() {
+        return;
+    }
+    nvim_qf_set_multiignore(qfl, multiignore);
 }
 
 /// Set the current list index in a quickfix stack.
@@ -2762,11 +2959,7 @@ pub mod efm_prefix {
 
 #[allow(dead_code)]
 extern "C" {
-    // Phase 6: Multiline state accessors
-    fn nvim_qf_get_multiline(qfl: QfListHandle) -> bool;
-    fn nvim_qf_set_multiline(qfl: QfListHandleMut, multiline: bool);
-    fn nvim_qf_get_multiignore(qfl: QfListHandle) -> bool;
-    fn nvim_qf_set_multiignore(qfl: QfListHandleMut, multiignore: bool);
+    // Phase 6: Multiline state accessors (multiline/multiignore already declared in Phase 5)
     fn nvim_qf_get_multiscan(qfl: QfListHandle) -> bool;
     fn nvim_qf_set_multiscan(qfl: QfListHandleMut, multiscan: bool);
 }
