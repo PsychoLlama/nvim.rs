@@ -24,13 +24,6 @@ use crate::types::{BufHandle, UB_FNAME, UB_SAME_DIR};
 
 extern "C" {
     // -------------------------------------------------------------------------
-    // Global State
-    // -------------------------------------------------------------------------
-
-    /// Get the current buffer (`curbuf`)
-    fn nvim_get_curbuf() -> *mut BufHandle;
-
-    // -------------------------------------------------------------------------
     // Buffer Accessors
     // -------------------------------------------------------------------------
 
@@ -78,18 +71,16 @@ extern "C" {
     fn ml_setflags(buf: *mut BufHandle);
 
     /// Make swap file name
+    #[allow(clippy::similar_names)]
     fn makeswapname(
         fname: *mut c_char,
-        ffname: *mut c_char,
+        full_fname: *mut c_char,
         buf: *mut BufHandle,
         dir_name: *mut c_char,
     ) -> *mut c_char;
 
     /// Get file name for swap/backup in a directory
     fn get_file_in_dir(fname: *mut c_char, dname: *mut c_char) -> *mut c_char;
-
-    /// Write swap file info to a dictionary
-    fn swapfile_dict(fname: *const c_char, d: *mut std::ffi::c_void);
 }
 
 // =============================================================================
@@ -271,7 +262,7 @@ pub unsafe extern "C" fn rs_ml_setflags(buf: *mut BufHandle) {
 ///
 /// # Arguments
 /// * `fname` - The file name
-/// * `ffname` - The full file name
+/// * `full_fname` - The full file name
 /// * `buf` - The buffer
 /// * `dir_name` - The directory name
 ///
@@ -282,16 +273,17 @@ pub unsafe extern "C" fn rs_ml_setflags(buf: *mut BufHandle) {
 /// - All pointers must be valid C strings or NULL
 /// - The returned pointer must be freed by the caller
 #[no_mangle]
+#[allow(clippy::similar_names)]
 pub unsafe extern "C" fn rs_makeswapname(
     fname: *mut c_char,
-    ffname: *mut c_char,
+    full_fname: *mut c_char,
     buf: *mut BufHandle,
     dir_name: *mut c_char,
 ) -> *mut c_char {
     if fname.is_null() || dir_name.is_null() {
         return std::ptr::null_mut();
     }
-    makeswapname(fname, ffname, buf, dir_name)
+    makeswapname(fname, full_fname, buf, dir_name)
 }
 
 /// Get the swap/backup file name in a directory.

@@ -1999,6 +1999,16 @@ void nvim_pos_set_lnum(pos_T *pos, linenr_T lnum) { pos->lnum = lnum; }
 void nvim_pos_set_col(pos_T *pos, colnr_T col) { pos->col = col; }
 void nvim_pos_set_coladd(pos_T *pos, colnr_T coladd) { pos->coladd = coladd; }
 
+// Block 0 validation wrappers for Rust (static functions need wrappers)
+int ml_check_b0_id_c(ZeroBlock *b0p) { return ml_check_b0_id(b0p) ? 0 : 1; }
+int ml_check_b0_strings_c(ZeroBlock *b0p) { return ml_check_b0_strings(b0p) ? 0 : 1; }
+int b0_magic_wrong_c(ZeroBlock *b0p) { return b0_magic_wrong(b0p); }
+bool fnamecmp_ino_c(char *fname_c, char *fname_s, long ino_block0) {
+  return fnamecmp_ino(fname_c, fname_s, ino_block0);
+}
+void long_to_char_c(long n, char *s) { long_to_char(n, s); }
+long char_to_long_c(const char *s) { return char_to_long(s); }
+
 // Rust implementation
 extern int rs_ml_line_alloced(void);
 

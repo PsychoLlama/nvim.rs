@@ -20,6 +20,7 @@
 //! - [`modify`]: Line modification functions (append, delete, replace)
 //! - [`navigate`]: Cursor navigation and byte offset functions
 //! - [`swap`]: Swap file management
+//! - [`recovery`]: Recovery and attention file handling
 //!
 //! # Note
 //!
@@ -35,12 +36,16 @@
 pub mod access;
 pub mod modify;
 pub mod navigate;
+pub mod recovery;
+pub mod swap;
 pub mod types;
 
 // Re-export all public items for FFI
 pub use access::*;
 pub use modify::*;
 pub use navigate::*;
+pub use recovery::*;
+pub use swap::*;
 pub use types::*;
 
 use std::ffi::c_int;
