@@ -236,6 +236,70 @@ pub unsafe extern "C" fn rs_qf_entry_on_or_before_pos(
 // List Index Validation Functions
 // =============================================================================
 
+/// Get the number of quickfix lists in the stack.
+///
+/// Returns 0 if the stack is null.
+///
+/// # Safety
+///
+/// - `qi` may be null (in which case 0 is returned)
+/// - If non-null, `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_listcount(qi: QfInfoHandle) -> c_int {
+    if qi.is_null() {
+        return 0;
+    }
+    nvim_qf_get_listcount(qi)
+}
+
+/// Get the current quickfix list index (0-based).
+///
+/// Returns -1 if the stack is null or empty.
+///
+/// # Safety
+///
+/// - `qi` may be null (in which case -1 is returned)
+/// - If non-null, `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_curlist_idx(qi: QfInfoHandle) -> c_int {
+    if qi.is_null() {
+        return -1;
+    }
+    nvim_qf_get_curlist_idx(qi)
+}
+
+/// Get the current quickfix list.
+///
+/// Returns null if the stack is null or empty.
+///
+/// # Safety
+///
+/// - `qi` may be null (in which case null is returned)
+/// - If non-null, `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_curlist(qi: QfInfoHandle) -> QfListHandle {
+    if qi.is_null() {
+        return std::ptr::null();
+    }
+    nvim_qf_get_curlist(qi)
+}
+
+/// Get a quickfix list at the specified index.
+///
+/// Returns null if the index is out of bounds.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+/// - `idx` must be in range [0, listcount)
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_list_at(qi: QfInfoHandle, idx: c_int) -> QfListHandle {
+    if qi.is_null() || !rs_qf_valid_idx(qi, idx) {
+        return std::ptr::null();
+    }
+    nvim_qf_get_list_at(qi, idx)
+}
+
 /// Validates that the given index is valid for the quickfix stack.
 ///
 /// Returns true if `idx` is in range [0, listcount).
@@ -677,6 +741,215 @@ pub unsafe extern "C" fn rs_qf_get_entry_at_idx(qfl: QfListHandle, idx: c_int) -
     }
 
     qfp
+}
+
+// =============================================================================
+// Phase 4: Iterator Infrastructure
+// =============================================================================
+
+/// Iterator state for quickfix list traversal.
+///
+/// This structure maintains the state for iterating over quickfix entries.
+/// It's designed to be used from C code via the `rs_qf_iter_*` functions.
+#[repr(C)]
+pub struct QfIterator {
+    /// Current entry pointer
+    current: QfLineHandle,
+    /// Current 1-based index
+    idx: c_int,
+    /// Total count of entries
+    count: c_int,
+}
+
+/// Initialize a new iterator for the quickfix list.
+///
+/// Returns an iterator starting at the first entry.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_iter_init(qfl: QfListHandle) -> QfIterator {
+    if qfl.is_null() {
+        return QfIterator {
+            current: std::ptr::null(),
+            idx: 0,
+            count: 0,
+        };
+    }
+
+    QfIterator {
+        current: nvim_qf_get_start(qfl),
+        idx: 1,
+        count: nvim_qf_get_count(qfl),
+    }
+}
+
+/// Check if the iterator has more entries.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" cannot be const
+pub extern "C" fn rs_qf_iter_has_next(iter: &QfIterator) -> bool {
+    !iter.current.is_null() && iter.idx <= iter.count
+}
+
+/// Get the current entry from the iterator.
+///
+/// Returns null if the iterator is exhausted.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" cannot be const
+pub extern "C" fn rs_qf_iter_current(iter: &QfIterator) -> QfLineHandle {
+    iter.current
+}
+
+/// Get the current 1-based index from the iterator.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" cannot be const
+pub extern "C" fn rs_qf_iter_idx(iter: &QfIterator) -> c_int {
+    iter.idx
+}
+
+/// Advance the iterator to the next entry.
+///
+/// # Safety
+///
+/// - `iter` must be a valid iterator obtained from `rs_qf_iter_init`
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_iter_next(iter: &mut QfIterator) {
+    if !iter.current.is_null() {
+        iter.current = nvim_qfline_get_next(iter.current);
+        iter.idx += 1;
+    }
+}
+
+/// Advance the iterator to the next valid entry.
+///
+/// Returns the found valid entry or null if none.
+///
+/// # Safety
+///
+/// - `iter` must be a valid iterator obtained from `rs_qf_iter_init`
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_iter_next_valid(iter: &mut QfIterator) -> QfLineHandle {
+    while !iter.current.is_null() && iter.idx <= iter.count {
+        if nvim_qfline_get_valid(iter.current) {
+            let result = iter.current;
+            rs_qf_iter_next(iter);
+            return result;
+        }
+        rs_qf_iter_next(iter);
+    }
+    std::ptr::null()
+}
+
+/// Advance the iterator to the next entry in a specific file.
+///
+/// Returns the found entry or null if none in the file.
+///
+/// # Safety
+///
+/// - `iter` must be a valid iterator obtained from `rs_qf_iter_init`
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_iter_next_in_file(
+    iter: &mut QfIterator,
+    bnr: c_int,
+) -> QfLineHandle {
+    while !iter.current.is_null() && iter.idx <= iter.count {
+        if nvim_qfline_get_fnum(iter.current) == bnr {
+            let result = iter.current;
+            rs_qf_iter_next(iter);
+            return result;
+        }
+        rs_qf_iter_next(iter);
+    }
+    std::ptr::null()
+}
+
+/// Reset the iterator to the beginning of the list.
+///
+/// # Safety
+///
+/// - `iter` must be a valid iterator obtained from `rs_qf_iter_init`
+/// - `qfl` must be the same list used to create the iterator
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_iter_reset(iter: &mut QfIterator, qfl: QfListHandle) {
+    if qfl.is_null() {
+        iter.current = std::ptr::null();
+        iter.idx = 0;
+        iter.count = 0;
+    } else {
+        iter.current = nvim_qf_get_start(qfl);
+        iter.idx = 1;
+        iter.count = nvim_qf_get_count(qfl);
+    }
+}
+
+/// Get the first entry of a specific type.
+///
+/// Returns the entry and sets `out_idx` to its 1-based index.
+/// Returns NULL if no entry of that type is found.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - `out_idx` must be a valid pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_find_first_of_type(
+    qfl: QfListHandle,
+    type_char: c_char,
+    out_idx: *mut c_int,
+) -> QfLineHandle {
+    if qfl.is_null() || out_idx.is_null() {
+        return std::ptr::null();
+    }
+
+    let mut iter = rs_qf_iter_init(qfl);
+    while rs_qf_iter_has_next(&iter) {
+        let qfp = rs_qf_iter_current(&iter);
+        if nvim_qfline_get_type(qfp) == type_char {
+            *out_idx = rs_qf_iter_idx(&iter);
+            return qfp;
+        }
+        rs_qf_iter_next(&mut iter);
+    }
+
+    *out_idx = 0;
+    std::ptr::null()
+}
+
+/// Get the last entry of a specific type.
+///
+/// Returns the entry and sets `out_idx` to its 1-based index.
+/// Returns NULL if no entry of that type is found.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - `out_idx` must be a valid pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_find_last_of_type(
+    qfl: QfListHandle,
+    type_char: c_char,
+    out_idx: *mut c_int,
+) -> QfLineHandle {
+    if qfl.is_null() || out_idx.is_null() {
+        return std::ptr::null();
+    }
+
+    let mut iter = rs_qf_iter_init(qfl);
+    let mut last_qfp: QfLineHandle = std::ptr::null();
+    let mut last_idx: c_int = 0;
+
+    while rs_qf_iter_has_next(&iter) {
+        let qfp = rs_qf_iter_current(&iter);
+        if nvim_qfline_get_type(qfp) == type_char {
+            last_qfp = qfp;
+            last_idx = rs_qf_iter_idx(&iter);
+        }
+        rs_qf_iter_next(&mut iter);
+    }
+
+    *out_idx = last_idx;
+    last_qfp
 }
 
 // =============================================================================
