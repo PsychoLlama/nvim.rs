@@ -329,6 +329,71 @@ pub unsafe extern "C" fn rs_find_end_of_word(
 }
 
 // =============================================================================
+// Fold Column Click Detection
+// =============================================================================
+
+/// Virtual column value indicating a fold open marker was clicked.
+pub const VCOL_FOLD_OPEN: c_int = -2;
+
+/// Virtual column value indicating a fold close marker was clicked.
+pub const VCOL_FOLD_CLOSE: c_int = -3;
+
+/// Result of checking a click for fold column interaction.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FoldClickResult {
+    /// The flags to add based on the click (e.g., `MOUSE_FOLD_OPEN` or `MOUSE_FOLD_CLOSE`)
+    pub flags: c_int,
+    /// Whether to use the vcol value
+    pub use_vcol: bool,
+}
+
+/// Check if a virtual column value indicates a fold column click.
+///
+/// Returns fold flags to add and whether to use the vcol value for cursor positioning.
+/// - If vcol >= 0: use the value for cursor positioning
+/// - If vcol == -2: fold open marker clicked
+/// - If vcol == -3: fold close marker clicked
+/// - Otherwise: no special handling
+#[no_mangle]
+pub const extern "C" fn rs_check_fold_click(vcol: c_int) -> FoldClickResult {
+    match vcol {
+        x if x >= 0 => FoldClickResult {
+            flags: 0,
+            use_vcol: true,
+        },
+        VCOL_FOLD_OPEN => FoldClickResult {
+            flags: MOUSE_FOLD_OPEN,
+            use_vcol: false,
+        },
+        VCOL_FOLD_CLOSE => FoldClickResult {
+            flags: MOUSE_FOLD_CLOSE,
+            use_vcol: false,
+        },
+        _ => FoldClickResult {
+            flags: 0,
+            use_vcol: false,
+        },
+    }
+}
+
+// =============================================================================
+// Mouse Button Parsing
+// =============================================================================
+
+/// Result of parsing a mouse button event.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MouseButtonResult {
+    /// The button that was pressed (`MOUSE_LEFT`, `MOUSE_MIDDLE`, `MOUSE_RIGHT`, etc.)
+    pub button: c_int,
+    /// Whether this is a click event (vs drag or release)
+    pub is_click: bool,
+    /// Whether this is a drag event
+    pub is_drag: bool,
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -406,5 +471,46 @@ mod tests {
         unsafe {
             assert!(!rs_mouse_model_popup(extend.as_ptr().cast()));
         }
+    }
+
+    #[test]
+    fn test_fold_click_result_positive_vcol() {
+        let result = rs_check_fold_click(10);
+        assert_eq!(result.flags, 0);
+        assert!(result.use_vcol);
+    }
+
+    #[test]
+    fn test_fold_click_result_zero_vcol() {
+        let result = rs_check_fold_click(0);
+        assert_eq!(result.flags, 0);
+        assert!(result.use_vcol);
+    }
+
+    #[test]
+    fn test_fold_click_result_fold_open() {
+        let result = rs_check_fold_click(VCOL_FOLD_OPEN);
+        assert_eq!(result.flags, MOUSE_FOLD_OPEN);
+        assert!(!result.use_vcol);
+    }
+
+    #[test]
+    fn test_fold_click_result_fold_close() {
+        let result = rs_check_fold_click(VCOL_FOLD_CLOSE);
+        assert_eq!(result.flags, MOUSE_FOLD_CLOSE);
+        assert!(!result.use_vcol);
+    }
+
+    #[test]
+    fn test_fold_click_result_other_negative() {
+        let result = rs_check_fold_click(-1);
+        assert_eq!(result.flags, 0);
+        assert!(!result.use_vcol);
+    }
+
+    #[test]
+    fn test_fold_vcol_constants() {
+        assert_eq!(VCOL_FOLD_OPEN, -2);
+        assert_eq!(VCOL_FOLD_CLOSE, -3);
     }
 }
