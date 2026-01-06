@@ -3,8 +3,19 @@
 //! This module defines the state types used by the NFA regex engine.
 //! The NFA engine uses a parallel state tracking approach rather than
 //! the backtracking used by the BT engine.
+//!
+//! # Architecture
+//!
+//! The NFA engine uses Thompson's construction for pattern compilation and
+//! simulated NFA execution for matching. Key structures:
+//!
+//! - [`NfaState`]: A single NFA state with character and transitions
+//! - [`NfaThread`]: Execution thread tracking state and submatches
+//! - [`NfaList`]: List of active threads for parallel execution
+//! - [`NfaPim`]: Postponed Invisible Match for lookahead/lookbehind
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
+use std::ptr;
 
 // =============================================================================
 // NFA State Constants
@@ -330,8 +341,9 @@ pub const NFA_FIRST_NL: c_int = NFA_ANY + NFA_ADD_NL;
 pub const NFA_LAST_NL: c_int = NFA_NUPPER_IC + NFA_ADD_NL;
 
 // Position matching
+// Note: These come after NFA_LAST_NL in the C enum, not after NFA_NUPPER_IC
 /// Match cursor position.
-pub const NFA_CURSOR: c_int = NFA_NUPPER_IC + 1;
+pub const NFA_CURSOR: c_int = NFA_LAST_NL + 1;
 /// Match line number.
 pub const NFA_LNUM: c_int = NFA_CURSOR + 1;
 /// Match > line number.
@@ -462,6 +474,683 @@ pub const fn is_nfa_mopen(state: c_int) -> bool {
 #[inline]
 pub const fn is_nfa_mclose(state: c_int) -> bool {
     state >= NFA_MCLOSE && state <= NFA_MCLOSE9
+}
+
+/// Check if state is a ZOPEN state (0-9).
+#[inline]
+pub const fn is_nfa_zopen(state: c_int) -> bool {
+    state >= NFA_ZOPEN && state <= NFA_ZOPEN9
+}
+
+/// Check if state is a ZCLOSE state (0-9).
+#[inline]
+pub const fn is_nfa_zclose(state: c_int) -> bool {
+    state >= NFA_ZCLOSE && state <= NFA_ZCLOSE9
+}
+
+/// Get the subexpression number from an MOPEN/MCLOSE state.
+#[inline]
+pub const fn nfa_get_subexpr_num(state: c_int) -> c_int {
+    if is_nfa_mopen(state) {
+        state - NFA_MOPEN
+    } else if is_nfa_mclose(state) {
+        state - NFA_MCLOSE
+    } else if is_nfa_zopen(state) {
+        state - NFA_ZOPEN
+    } else if is_nfa_zclose(state) {
+        state - NFA_ZCLOSE
+    } else {
+        -1
+    }
+}
+
+// =============================================================================
+// NFA State Machine Structures
+// =============================================================================
+
+/// Number of subexpressions supported.
+pub const NSUBEXP: usize = 10;
+
+/// Line number type (matches linenr_T in C).
+pub type LineNr = c_int;
+
+/// Column number type (matches colnr_T in C).
+pub type ColNr = c_int;
+
+/// Opaque handle to an NFA state (nfa_state_T*).
+///
+/// This is used for FFI calls to C code that manages the actual state memory.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NfaStateHandle(*mut c_void);
+
+impl NfaStateHandle {
+    /// Create a handle from a raw pointer.
+    #[inline]
+    pub const fn from_ptr(ptr: *mut c_void) -> Self {
+        Self(ptr)
+    }
+
+    /// Get the raw pointer.
+    #[inline]
+    pub const fn as_ptr(self) -> *mut c_void {
+        self.0
+    }
+
+    /// Create a null handle.
+    #[inline]
+    pub const fn null() -> Self {
+        Self(ptr::null_mut())
+    }
+
+    /// Check if the handle is null.
+    #[inline]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+impl Default for NfaStateHandle {
+    fn default() -> Self {
+        Self::null()
+    }
+}
+
+/// NFA state structure matching the C nfa_state_T.
+///
+/// Represents a single state in the NFA. An NFA state may have:
+/// - No outgoing edges (when c == NFA_MATCH, matching state)
+/// - One unlabeled edge to `out` (when c == NFA_EMPTY or character match)
+/// - Two unlabeled edges to `out` and `out1` (when c == NFA_SPLIT)
+#[repr(C)]
+#[derive(Debug)]
+pub struct NfaState {
+    /// Character/opcode for this state.
+    /// - If c >= 0: labeled edge matching character c
+    /// - If c == NFA_SPLIT: split state with edges to out and out1
+    /// - If c == NFA_MATCH: accepting state (no edges)
+    /// - Other negative values: special opcodes (see NFA_* constants)
+    pub c: c_int,
+    /// Primary outgoing edge (may be NULL).
+    pub out: *mut NfaState,
+    /// Secondary outgoing edge for split states (may be NULL).
+    pub out1: *mut NfaState,
+    /// State ID (for debugging and state tracking).
+    pub id: c_int,
+    /// Last list ID this state was added to.
+    /// Index 0: normal matching, Index 1: recursive matching.
+    pub lastlist: [c_int; 2],
+    /// Value storage for the state (context-dependent).
+    pub val: c_int,
+}
+
+impl NfaState {
+    /// Check if this is a match (accepting) state.
+    #[inline]
+    pub fn is_match(&self) -> bool {
+        self.c == NFA_MATCH
+    }
+
+    /// Check if this is a split state.
+    #[inline]
+    pub fn is_split(&self) -> bool {
+        self.c == NFA_SPLIT
+    }
+
+    /// Check if this is an empty transition state.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.c == NFA_EMPTY
+    }
+
+    /// Check if this state matches a literal character.
+    #[inline]
+    pub fn is_char(&self) -> bool {
+        self.c >= 0
+    }
+
+    /// Check if this state was already visited in the given list.
+    #[inline]
+    pub fn in_list(&self, listid: c_int, recursive: bool) -> bool {
+        let idx = if recursive { 1 } else { 0 };
+        self.lastlist[idx] == listid
+    }
+
+    /// Mark this state as visited in the given list.
+    #[inline]
+    pub fn mark_in_list(&mut self, listid: c_int, recursive: bool) {
+        let idx = if recursive { 1 } else { 0 };
+        self.lastlist[idx] = listid;
+    }
+}
+
+/// Line position structure (matches lpos_T in C).
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct LPos {
+    /// Line number (1-based).
+    pub lnum: LineNr,
+    /// Column number (0-based byte offset).
+    pub col: ColNr,
+}
+
+impl LPos {
+    /// Create a new line position.
+    #[inline]
+    pub const fn new(lnum: LineNr, col: ColNr) -> Self {
+        Self { lnum, col }
+    }
+
+    /// Check if this position is before another.
+    #[inline]
+    pub fn is_before(&self, other: &LPos) -> bool {
+        self.lnum < other.lnum || (self.lnum == other.lnum && self.col < other.col)
+    }
+
+    /// Check if this position is after another.
+    #[inline]
+    pub fn is_after(&self, other: &LPos) -> bool {
+        self.lnum > other.lnum || (self.lnum == other.lnum && self.col > other.col)
+    }
+}
+
+/// Multi-line submatch position.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MultiPos {
+    /// Start line number.
+    pub start_lnum: LineNr,
+    /// End line number.
+    pub end_lnum: LineNr,
+    /// Start column.
+    pub start_col: ColNr,
+    /// End column.
+    pub end_col: ColNr,
+}
+
+/// Single-line submatch position.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct LinePos {
+    /// Start pointer.
+    pub start: *mut u8,
+    /// End pointer.
+    pub end: *mut u8,
+}
+
+/// Submatch positions union (multi-line or single-line).
+#[repr(C)]
+pub union SubPos {
+    /// Multi-line positions.
+    pub multi: [MultiPos; NSUBEXP],
+    /// Single-line positions.
+    pub line: [LinePos; NSUBEXP],
+}
+
+/// Submatch tracking structure.
+#[repr(C)]
+pub struct RegSub {
+    /// Number of subexpressions with useful info.
+    pub in_use: c_int,
+    /// Submatch positions (multi-line or single-line).
+    pub list: SubPos,
+    /// Original start column without \zs adjustment.
+    pub orig_start_col: ColNr,
+}
+
+impl Default for RegSub {
+    fn default() -> Self {
+        Self {
+            in_use: 0,
+            list: SubPos {
+                multi: [MultiPos::default(); NSUBEXP],
+            },
+            orig_start_col: 0,
+        }
+    }
+}
+
+/// Combined submatch structures for normal and syntax subexpressions.
+#[repr(C)]
+#[derive(Default)]
+pub struct RegSubs {
+    /// Normal \( .. \) matches.
+    pub norm: RegSub,
+    /// Syntax \z( .. \) matches.
+    pub synt: RegSub,
+}
+
+/// Postponed Invisible Match position union.
+#[repr(C)]
+pub union PimEnd {
+    /// Position for multi-line matching.
+    pub pos: LPos,
+    /// Pointer for single-line matching.
+    pub ptr: *mut u8,
+}
+
+/// Postponed Invisible Match (PIM) structure.
+///
+/// Used for lookahead and lookbehind assertions that need to be
+/// evaluated after the main match has progressed.
+#[repr(C)]
+pub struct NfaPim {
+    /// Result of the PIM: NFA_PIM_UNUSED, NFA_PIM_TODO, NFA_PIM_MATCH, or NFA_PIM_NOMATCH.
+    pub result: c_int,
+    /// The invisible match start state.
+    pub state: *mut NfaState,
+    /// Submatch info (partially used).
+    pub subs: RegSubs,
+    /// Where the match must end.
+    pub end: PimEnd,
+}
+
+impl Default for NfaPim {
+    fn default() -> Self {
+        Self {
+            result: NFA_PIM_UNUSED,
+            state: ptr::null_mut(),
+            subs: RegSubs::default(),
+            end: PimEnd {
+                ptr: ptr::null_mut(),
+            },
+        }
+    }
+}
+
+impl NfaPim {
+    /// Check if this PIM is in use.
+    #[inline]
+    pub fn is_used(&self) -> bool {
+        self.result != NFA_PIM_UNUSED
+    }
+
+    /// Check if this PIM needs to be executed.
+    #[inline]
+    pub fn is_todo(&self) -> bool {
+        self.result == NFA_PIM_TODO
+    }
+
+    /// Check if this PIM has matched.
+    #[inline]
+    pub fn has_matched(&self) -> bool {
+        self.result == NFA_PIM_MATCH
+    }
+
+    /// Mark this PIM as unused.
+    #[inline]
+    pub fn clear(&mut self) {
+        self.result = NFA_PIM_UNUSED;
+        self.state = ptr::null_mut();
+    }
+}
+
+/// NFA execution thread.
+///
+/// Contains the state and submatch info for one path through the NFA
+/// during parallel simulation.
+#[repr(C)]
+pub struct NfaThread {
+    /// Current NFA state.
+    pub state: *mut NfaState,
+    /// Visit count (for cycle detection).
+    pub count: c_int,
+    /// Postponed invisible match (if result != NFA_PIM_UNUSED).
+    pub pim: NfaPim,
+    /// Submatch info (partially used).
+    pub subs: RegSubs,
+}
+
+impl Default for NfaThread {
+    fn default() -> Self {
+        Self {
+            state: ptr::null_mut(),
+            count: 0,
+            pim: NfaPim::default(),
+            subs: RegSubs::default(),
+        }
+    }
+}
+
+/// List of NFA execution threads.
+///
+/// The NFA engine maintains two lists: one for the current input position
+/// and one for the next position. States are added to the "next" list
+/// when they can consume the current character.
+#[repr(C)]
+pub struct NfaList {
+    /// Allocated array of threads.
+    pub t: *mut NfaThread,
+    /// Number of threads currently in the list.
+    pub n: c_int,
+    /// Maximum capacity of the thread array.
+    pub len: c_int,
+    /// List ID (incremented to track visited states).
+    pub id: c_int,
+    /// True if any thread has a PIM.
+    pub has_pim: c_int,
+}
+
+impl NfaList {
+    /// Check if the list is empty.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.n == 0
+    }
+
+    /// Check if the list is full.
+    #[inline]
+    pub fn is_full(&self) -> bool {
+        self.n >= self.len
+    }
+
+    /// Get the number of threads in the list.
+    #[inline]
+    pub fn count(&self) -> c_int {
+        self.n
+    }
+
+    /// Clear the list (set count to 0, keep capacity).
+    #[inline]
+    pub fn clear(&mut self) {
+        self.n = 0;
+        self.has_pim = 0;
+    }
+}
+
+// =============================================================================
+// NFA Fragment for Pattern Compilation
+// =============================================================================
+
+/// Pointer list for patching NFA fragments.
+///
+/// During NFA construction, we maintain lists of outgoing pointers
+/// that need to be patched to point to subsequent states.
+#[repr(C)]
+pub union Ptrlist {
+    /// Next pointer in the list.
+    pub next: *mut Ptrlist,
+    /// State pointer (when list element is used).
+    pub s: *mut NfaState,
+}
+
+/// A partially built NFA fragment.
+///
+/// Frag.start points to the start state.
+/// Frag.out is a list of places that need to be connected
+/// to the next state for this fragment.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Frag {
+    /// Start state of the fragment.
+    pub start: *mut NfaState,
+    /// List of outgoing pointers to patch.
+    pub out: *mut Ptrlist,
+}
+
+impl Frag {
+    /// Create a new fragment.
+    #[inline]
+    pub const fn new(start: *mut NfaState, out: *mut Ptrlist) -> Self {
+        Self { start, out }
+    }
+
+    /// Create an empty fragment.
+    #[inline]
+    pub const fn empty() -> Self {
+        Self {
+            start: ptr::null_mut(),
+            out: ptr::null_mut(),
+        }
+    }
+
+    /// Check if this fragment is empty/invalid.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.start.is_null()
+    }
+}
+
+impl Default for Frag {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
+// =============================================================================
+// FFI Declarations for C Accessors
+// =============================================================================
+
+use std::ffi::c_char;
+
+extern "C" {
+    /// Allocate memory using Neovim's allocator.
+    /// Note: Returns *mut c_char to match existing declaration in lib.rs.
+    fn xmalloc(size: usize) -> *mut c_char;
+
+    /// Reallocate memory using Neovim's allocator.
+    fn xrealloc(ptr: *mut c_char, size: usize) -> *mut c_char;
+
+    /// Free memory using Neovim's allocator.
+    fn xfree(ptr: *mut c_void);
+}
+
+// =============================================================================
+// NFA List Management Functions
+// =============================================================================
+
+/// Initialize an NFA list with the given capacity.
+///
+/// # Safety
+/// The returned list must be freed with `nfa_list_free`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_list_init(capacity: c_int) -> *mut NfaList {
+    let list = xmalloc(std::mem::size_of::<NfaList>()).cast::<NfaList>();
+    if list.is_null() {
+        return ptr::null_mut();
+    }
+
+    let t = if capacity > 0 {
+        xmalloc(std::mem::size_of::<NfaThread>() * capacity as usize).cast::<NfaThread>()
+    } else {
+        ptr::null_mut()
+    };
+
+    (*list).t = t;
+    (*list).n = 0;
+    (*list).len = if t.is_null() && capacity > 0 {
+        0
+    } else {
+        capacity
+    };
+    (*list).id = 1;
+    (*list).has_pim = 0;
+
+    list
+}
+
+/// Free an NFA list and its thread array.
+///
+/// # Safety
+/// `list` must be a valid pointer returned by `rs_nfa_list_init`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_list_free(list: *mut NfaList) {
+    if !list.is_null() {
+        if !(*list).t.is_null() {
+            xfree((*list).t.cast::<c_void>());
+        }
+        xfree(list.cast::<c_void>());
+    }
+}
+
+/// Clear an NFA list (reset count, keep capacity).
+///
+/// # Safety
+/// `list` must be a valid NfaList pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_list_clear(list: *mut NfaList) {
+    if !list.is_null() {
+        (*list).n = 0;
+        (*list).has_pim = 0;
+    }
+}
+
+/// Grow an NFA list to accommodate more threads.
+///
+/// Returns true on success, false on allocation failure.
+///
+/// # Safety
+/// `list` must be a valid NfaList pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_list_grow(list: *mut NfaList, min_capacity: c_int) -> c_int {
+    if list.is_null() {
+        return 0;
+    }
+
+    if (*list).len >= min_capacity {
+        return 1; // Already big enough
+    }
+
+    // Grow by doubling or to min_capacity, whichever is larger
+    let new_len = std::cmp::max((*list).len * 2, min_capacity);
+    let new_size = std::mem::size_of::<NfaThread>() * new_len as usize;
+
+    let new_t = if (*list).t.is_null() {
+        xmalloc(new_size).cast::<NfaThread>()
+    } else {
+        xrealloc((*list).t.cast::<c_char>(), new_size).cast::<NfaThread>()
+    };
+
+    if new_t.is_null() {
+        return 0;
+    }
+
+    (*list).t = new_t;
+    (*list).len = new_len;
+    1
+}
+
+/// Get the current count of threads in a list.
+///
+/// # Safety
+/// `list` must be a valid NfaList pointer or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_list_count(list: *const NfaList) -> c_int {
+    if list.is_null() {
+        0
+    } else {
+        (*list).n
+    }
+}
+
+/// Get a thread from the list by index.
+///
+/// # Safety
+/// `list` must be a valid NfaList pointer and `index` must be < n.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_list_get(list: *mut NfaList, index: c_int) -> *mut NfaThread {
+    if list.is_null() || index < 0 || index >= (*list).n {
+        return ptr::null_mut();
+    }
+    (*list).t.add(index as usize)
+}
+
+/// Increment the list ID (used to track visited states).
+///
+/// # Safety
+/// `list` must be a valid NfaList pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_list_next_id(list: *mut NfaList) -> c_int {
+    if list.is_null() {
+        return 0;
+    }
+    (*list).id += 1;
+    (*list).id
+}
+
+// =============================================================================
+// Ptrlist Operations for NFA Construction
+// =============================================================================
+
+/// Create a singleton pointer list containing just one output pointer.
+///
+/// # Safety
+/// `outp` must be a valid pointer to a state pointer field.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ptrlist_single(outp: *mut *mut NfaState) -> *mut Ptrlist {
+    let l = outp.cast::<Ptrlist>();
+    (*l).next = ptr::null_mut();
+    l
+}
+
+/// Patch all pointers in the list to point to the given state.
+///
+/// # Safety
+/// `l` must be a valid Ptrlist or null. `s` must be a valid state pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ptrlist_patch(mut l: *mut Ptrlist, s: *mut NfaState) {
+    while !l.is_null() {
+        let next = (*l).next;
+        (*l).s = s;
+        l = next;
+    }
+}
+
+/// Append two pointer lists, returning the combined list.
+///
+/// # Safety
+/// Both `l1` and `l2` must be valid Ptrlist pointers or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ptrlist_append(l1: *mut Ptrlist, l2: *mut Ptrlist) -> *mut Ptrlist {
+    if l1.is_null() {
+        return l2;
+    }
+    if l2.is_null() {
+        return l1;
+    }
+
+    // Find the end of l1
+    let mut end = l1;
+    while !(*end).next.is_null() {
+        end = (*end).next;
+    }
+    (*end).next = l2;
+    l1
+}
+
+// =============================================================================
+// NFA State Helpers
+// =============================================================================
+
+/// Check if an NFA state is a character class state (includes NL variants).
+#[no_mangle]
+pub extern "C" fn rs_nfa_is_char_class(c: c_int) -> c_int {
+    let base = if (NFA_FIRST_NL..=NFA_LAST_NL).contains(&c) {
+        c - NFA_ADD_NL
+    } else {
+        c
+    };
+
+    c_int::from((NFA_ANY..=NFA_NUPPER_IC).contains(&base))
+}
+
+/// Check if an NFA state is a position match state (line/column/mark).
+#[no_mangle]
+pub extern "C" fn rs_nfa_is_position_match(c: c_int) -> c_int {
+    c_int::from((NFA_CURSOR..=NFA_VISUAL).contains(&c))
+}
+
+/// Check if an NFA state is a POSIX character class state.
+#[no_mangle]
+pub extern "C" fn rs_nfa_is_posix_class(c: c_int) -> c_int {
+    c_int::from((NFA_CLASS_ALNUM..=NFA_CLASS_FNAME).contains(&c))
+}
+
+/// Get the subexpression index from an MOPEN/MCLOSE/ZOPEN/ZCLOSE state.
+/// Returns -1 if not a subexpression state.
+#[no_mangle]
+pub extern "C" fn rs_nfa_get_subexpr_idx(state: c_int) -> c_int {
+    nfa_get_subexpr_num(state)
 }
 
 // =============================================================================
@@ -1000,5 +1689,164 @@ mod tests {
         assert_eq!(CLASS_O7, 0x04);
         assert_eq!(CLASS_O9, 0x02);
         assert_eq!(CLASS_UNDERSCORE, 0x01);
+    }
+
+    // =========================================================================
+    // NFA State Machine Structure Tests
+    // =========================================================================
+
+    #[test]
+    fn test_nsubexp_constant() {
+        assert_eq!(NSUBEXP, 10);
+    }
+
+    #[test]
+    fn test_nfa_state_handle() {
+        let null_handle = NfaStateHandle::null();
+        assert!(null_handle.is_null());
+        assert_eq!(null_handle, NfaStateHandle::default());
+
+        let mut dummy: i32 = 42;
+        let ptr = (&mut dummy as *mut i32).cast::<c_void>();
+        let handle = NfaStateHandle::from_ptr(ptr);
+        assert!(!handle.is_null());
+        assert_eq!(handle.as_ptr(), ptr);
+    }
+
+    #[test]
+    fn test_lpos_methods() {
+        let pos1 = LPos::new(1, 5);
+        let pos2 = LPos::new(1, 10);
+        let pos3 = LPos::new(2, 0);
+
+        assert!(pos1.is_before(&pos2));
+        assert!(pos2.is_before(&pos3));
+        assert!(!pos2.is_before(&pos1));
+
+        assert!(pos2.is_after(&pos1));
+        assert!(pos3.is_after(&pos2));
+        assert!(!pos1.is_after(&pos2));
+
+        // Same position
+        let pos4 = LPos::new(1, 5);
+        assert!(!pos1.is_before(&pos4));
+        assert!(!pos1.is_after(&pos4));
+    }
+
+    #[test]
+    fn test_nfa_pim_methods() {
+        let mut pim = NfaPim::default();
+        assert!(!pim.is_used());
+        assert!(!pim.is_todo());
+        assert!(!pim.has_matched());
+
+        pim.result = NFA_PIM_TODO;
+        assert!(pim.is_used());
+        assert!(pim.is_todo());
+        assert!(!pim.has_matched());
+
+        pim.result = NFA_PIM_MATCH;
+        assert!(pim.is_used());
+        assert!(!pim.is_todo());
+        assert!(pim.has_matched());
+
+        pim.clear();
+        assert!(!pim.is_used());
+        assert!(pim.state.is_null());
+    }
+
+    #[test]
+    fn test_frag_methods() {
+        let empty = Frag::empty();
+        assert!(empty.is_empty());
+        assert!(empty.start.is_null());
+        assert!(empty.out.is_null());
+
+        let default = Frag::default();
+        assert!(default.is_empty());
+    }
+
+    #[test]
+    fn test_is_nfa_zopen_zclose() {
+        assert!(is_nfa_zopen(NFA_ZOPEN));
+        assert!(is_nfa_zopen(NFA_ZOPEN5));
+        assert!(is_nfa_zopen(NFA_ZOPEN9));
+        assert!(!is_nfa_zopen(NFA_MOPEN));
+        assert!(!is_nfa_zopen(NFA_ZCLOSE));
+
+        assert!(is_nfa_zclose(NFA_ZCLOSE));
+        assert!(is_nfa_zclose(NFA_ZCLOSE5));
+        assert!(is_nfa_zclose(NFA_ZCLOSE9));
+        assert!(!is_nfa_zclose(NFA_MCLOSE));
+        assert!(!is_nfa_zclose(NFA_ZOPEN));
+    }
+
+    #[test]
+    fn test_nfa_get_subexpr_num() {
+        // MOPEN states
+        assert_eq!(nfa_get_subexpr_num(NFA_MOPEN), 0);
+        assert_eq!(nfa_get_subexpr_num(NFA_MOPEN1), 1);
+        assert_eq!(nfa_get_subexpr_num(NFA_MOPEN9), 9);
+
+        // MCLOSE states
+        assert_eq!(nfa_get_subexpr_num(NFA_MCLOSE), 0);
+        assert_eq!(nfa_get_subexpr_num(NFA_MCLOSE5), 5);
+        assert_eq!(nfa_get_subexpr_num(NFA_MCLOSE9), 9);
+
+        // ZOPEN states
+        assert_eq!(nfa_get_subexpr_num(NFA_ZOPEN), 0);
+        assert_eq!(nfa_get_subexpr_num(NFA_ZOPEN3), 3);
+
+        // ZCLOSE states
+        assert_eq!(nfa_get_subexpr_num(NFA_ZCLOSE), 0);
+        assert_eq!(nfa_get_subexpr_num(NFA_ZCLOSE7), 7);
+
+        // Non-subexpr state
+        assert_eq!(nfa_get_subexpr_num(NFA_SPLIT), -1);
+        assert_eq!(nfa_get_subexpr_num(NFA_ANY), -1);
+    }
+
+    #[test]
+    fn test_rs_nfa_is_char_class() {
+        // Basic char classes
+        assert_eq!(rs_nfa_is_char_class(NFA_ANY), 1);
+        assert_eq!(rs_nfa_is_char_class(NFA_DIGIT), 1);
+        assert_eq!(rs_nfa_is_char_class(NFA_WORD), 1);
+        assert_eq!(rs_nfa_is_char_class(NFA_NUPPER_IC), 1);
+
+        // NL variants
+        assert_eq!(rs_nfa_is_char_class(NFA_ANY + NFA_ADD_NL), 1);
+        assert_eq!(rs_nfa_is_char_class(NFA_DIGIT + NFA_ADD_NL), 1);
+
+        // Non-char class states
+        assert_eq!(rs_nfa_is_char_class(NFA_SPLIT), 0);
+        assert_eq!(rs_nfa_is_char_class(NFA_MATCH), 0);
+        assert_eq!(rs_nfa_is_char_class(NFA_CURSOR), 0);
+    }
+
+    #[test]
+    fn test_rs_nfa_is_position_match() {
+        assert_eq!(rs_nfa_is_position_match(NFA_CURSOR), 1);
+        assert_eq!(rs_nfa_is_position_match(NFA_LNUM), 1);
+        assert_eq!(rs_nfa_is_position_match(NFA_COL), 1);
+        assert_eq!(rs_nfa_is_position_match(NFA_VCOL), 1);
+        assert_eq!(rs_nfa_is_position_match(NFA_MARK), 1);
+        assert_eq!(rs_nfa_is_position_match(NFA_VISUAL), 1);
+
+        // Non-position states
+        assert_eq!(rs_nfa_is_position_match(NFA_ANY), 0);
+        assert_eq!(rs_nfa_is_position_match(NFA_SPLIT), 0);
+    }
+
+    #[test]
+    fn test_rs_nfa_is_posix_class() {
+        assert_eq!(rs_nfa_is_posix_class(NFA_CLASS_ALNUM), 1);
+        assert_eq!(rs_nfa_is_posix_class(NFA_CLASS_DIGIT), 1);
+        assert_eq!(rs_nfa_is_posix_class(NFA_CLASS_SPACE), 1);
+        assert_eq!(rs_nfa_is_posix_class(NFA_CLASS_FNAME), 1);
+
+        // Non-POSIX states
+        assert_eq!(rs_nfa_is_posix_class(NFA_ANY), 0);
+        assert_eq!(rs_nfa_is_posix_class(NFA_DIGIT), 0);
     }
 }

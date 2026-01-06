@@ -16,7 +16,12 @@ pub mod scanner;
 
 pub use char_class::rs_get_char_class;
 pub use decompose::rs_mb_decompose;
-pub use nfa_states::{rs_check_char_class, rs_nfa_recognize_char_class};
+pub use nfa_states::{
+    rs_check_char_class, rs_nfa_get_subexpr_idx, rs_nfa_is_char_class, rs_nfa_is_position_match,
+    rs_nfa_is_posix_class, rs_nfa_list_clear, rs_nfa_list_count, rs_nfa_list_free, rs_nfa_list_get,
+    rs_nfa_list_grow, rs_nfa_list_init, rs_nfa_list_next_id, rs_nfa_recognize_char_class,
+    rs_ptrlist_append, rs_ptrlist_patch, rs_ptrlist_single,
+};
 pub use parser::{
     rs_nfa_re_num_cmp, rs_re_get_uint16, rs_re_get_uint32, rs_re_num_cmp, rs_re_put_uint16,
     rs_re_put_uint32, rs_read_limits, rs_use_multibytecode,
