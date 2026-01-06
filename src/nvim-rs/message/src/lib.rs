@@ -12,6 +12,7 @@
 //! - [`output`]: Message output state management
 //! - [`attr`]: Message attribute handling
 //! - [`scrollback`]: Scrollback buffer management
+//! - [`dialog`]: Dialog and confirmation handling
 //!
 //! # Note
 //!
@@ -26,6 +27,7 @@
 
 pub mod attr;
 pub mod chunk;
+pub mod dialog;
 pub mod format;
 pub mod history;
 pub mod output;
@@ -34,6 +36,7 @@ pub mod scrollback;
 // Re-export FFI functions for the static library
 pub use attr::*;
 pub use chunk::*;
+pub use dialog::*;
 pub use format::*;
 pub use history::*;
 pub use output::*;

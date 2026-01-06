@@ -2833,6 +2833,15 @@ static sb_clear_T do_clear_sb_text = SB_CLEAR_NONE;
 int nvim_get_do_clear_sb_text(void) { return (int)do_clear_sb_text; }
 void nvim_set_do_clear_sb_text(int val) { do_clear_sb_text = (sb_clear_T)val; }
 
+// C accessors for dialog state (used by Rust)
+const char *nvim_get_confirm_msg(void) { return confirm_msg; }
+void nvim_set_confirm_msg(const char *msg) { confirm_msg = (char *)msg; }
+int nvim_get_confirm_msg_used(void) { return confirm_msg_used; }
+void nvim_set_confirm_msg_used(int val) { confirm_msg_used = val; }
+const char *nvim_get_confirm_buttons(void) { return confirm_buttons; }
+void nvim_set_confirm_buttons(const char *buttons) { confirm_buttons = (char *)buttons; }
+int nvim_get_silent_mode(void) { return (int)silent_mode; }
+
 /// Store part of a printed message for displaying when scrolling back.
 ///
 /// @param sb_str  start of string
