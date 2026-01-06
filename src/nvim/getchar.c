@@ -3457,3 +3457,63 @@ int nvim_get_rm_script(void)
 {
   return RM_SCRIPT;
 }
+
+int nvim_get_maxmaplen(void)
+{
+  return MAXMAPLEN;
+}
+
+uint8_t *nvim_get_typebuf_buf(void)
+{
+  return typebuf.tb_buf;
+}
+
+uint8_t *nvim_get_typebuf_noremap(void)
+{
+  return typebuf.tb_noremap;
+}
+
+int nvim_get_typebuf_buflen(void)
+{
+  return typebuf.tb_buflen;
+}
+
+int nvim_get_typebuf_off(void)
+{
+  return typebuf.tb_off;
+}
+
+void nvim_set_typebuf_off(int val)
+{
+  typebuf.tb_off = val;
+}
+
+void nvim_set_typebuf_len(int val)
+{
+  typebuf.tb_len = val;
+}
+
+void nvim_set_typebuf_maplen(int val)
+{
+  typebuf.tb_maplen = val;
+}
+
+void nvim_set_typebuf_silent(int val)
+{
+  typebuf.tb_silent = val;
+}
+
+void nvim_set_typebuf_no_abbr_cnt(int val)
+{
+  typebuf.tb_no_abbr_cnt = val;
+}
+
+void nvim_set_typebuf_change_cnt(int val)
+{
+  typebuf.tb_change_cnt = val;
+}
+
+void nvim_set_typebuf_was_filled(int val)
+{
+  typebuf_was_filled = val != 0;
+}

@@ -1,11 +1,19 @@
 //! Character input handling for Neovim
 //!
 //! Provides Rust implementations of typeahead buffer and input functions.
+//!
+//! # Modules
+//!
+//! - [`typebuf`]: Typeahead buffer data structures and manipulation
+//! - [`buffheader`]: Buffer header for stuff/redo/recording buffers
 
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::doc_markdown)]
 #![allow(unsafe_code)]
+
+pub mod buffheader;
+pub mod typebuf;
 
 use std::ffi::c_int;
 
