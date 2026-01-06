@@ -411,6 +411,8 @@ extern void rs_nv_csearch(cmdarg_T *cap);
 extern void rs_nv_mark(cmdarg_T *cap);
 extern void rs_nv_gomark(cmdarg_T *cap);
 extern void rs_nv_pcmark(cmdarg_T *cap);
+extern void rs_nv_regname(cmdarg_T *cap);
+extern void rs_nv_put(cmdarg_T *cap);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -1200,6 +1202,34 @@ const char *nvim_get_e_start_of_changelist(void)
 const char *nvim_get_e_end_of_changelist(void)
 {
   return _("E663: At end of changelist");
+}
+
+// =============================================================================
+// Register command accessors for Rust FFI
+// =============================================================================
+
+/// Wrapper for get_expr_register.
+int nvim_get_expr_register(void)
+{
+  return get_expr_register();
+}
+
+/// Wrapper for valid_yank_reg.
+bool nvim_valid_yank_reg(int regname, bool writing)
+{
+  return valid_yank_reg(regname, writing);
+}
+
+/// Wrapper for set_reg_var.
+void nvim_set_reg_var(int regname)
+{
+  set_reg_var(regname);
+}
+
+/// Wrapper for nv_put_opt.
+void nvim_nv_put_opt(cmdarg_T *cap, bool fix_indent)
+{
+  nv_put_opt(cap, fix_indent);
 }
 
 /// Check if an operator was started but not finished yet.
@@ -5354,19 +5384,7 @@ static void nv_pcmark(cmdarg_T *cap)
 /// Handle '"' command.
 static void nv_regname(cmdarg_T *cap)
 {
-  if (checkclearop(cap->oap)) {
-    return;
-  }
-  if (cap->nchar == '=') {
-    cap->nchar = get_expr_register();
-  }
-  if (cap->nchar != NUL && valid_yank_reg(cap->nchar, false)) {
-    cap->oap->regname = cap->nchar;
-    cap->opcount = cap->count0;         // remember count before '"'
-    set_reg_var(cap->oap->regname);
-  } else {
-    clearopbeep(cap->oap);
-  }
+  rs_nv_regname(cap);
 }
 
 /// Handle "v", "V" and "CTRL-V" commands.
@@ -6737,7 +6755,7 @@ static void nv_join(cmdarg_T *cap)
 /// "P", "gP", "p" and "gp" commands.
 static void nv_put(cmdarg_T *cap)
 {
-  nv_put_opt(cap, false);
+  rs_nv_put(cap);
 }
 
 /// "P", "gP", "p" and "gp" commands.

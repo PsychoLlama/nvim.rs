@@ -1029,6 +1029,12 @@ extern "C" {
     fn nvim_get_e_changelist_is_empty() -> *const std::ffi::c_char;
     fn nvim_get_e_start_of_changelist() -> *const std::ffi::c_char;
     fn nvim_get_e_end_of_changelist() -> *const std::ffi::c_char;
+
+    // Register command functions
+    fn nvim_get_expr_register() -> c_int;
+    fn nvim_valid_yank_reg(regname: c_int, writing: bool) -> bool;
+    fn nvim_set_reg_var(regname: c_int);
+    fn nvim_nv_put_opt(cap: CapHandle, fix_indent: bool);
 }
 
 /// Opaque handle to fmark_T*.
@@ -1431,6 +1437,45 @@ pub unsafe extern "C" fn rs_nv_pcmark(cap: CapHandle) {
     {
         nvim_foldOpenCursor();
     }
+}
+
+// =============================================================================
+// Register Command Handlers
+// =============================================================================
+
+/// Command handler for '"' command: Select register for next command.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_regname(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    if rs_checkclearop(oap) {
+        return;
+    }
+
+    let mut nchar = nvim_cap_get_nchar(cap);
+    let eq_char = c_int::from(b'=');
+    if nchar == eq_char {
+        nchar = nvim_get_expr_register();
+    }
+    if nchar != NUL_CHAR && nvim_valid_yank_reg(nchar, false) {
+        nvim_oap_set_regname(oap, nchar);
+        let count0 = nvim_cap_get_count0(cap);
+        nvim_cap_set_opcount(cap, count0); // remember count before '"'
+        nvim_set_reg_var(nchar);
+    } else {
+        rs_clearopbeep(oap);
+    }
+}
+
+/// Command handler for "p" command.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_put(cap: CapHandle) {
+    nvim_nv_put_opt(cap, false);
 }
 
 // =============================================================================
