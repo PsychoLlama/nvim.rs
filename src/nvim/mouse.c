@@ -56,6 +56,8 @@
 // Rust implementations
 extern int rs_get_mouse_class(const char *p);
 extern bool rs_mouse_model_popup(const char *p_mousem);
+extern int rs_find_start_of_word(const char *line, int col);
+extern int rs_find_end_of_word(const char *line, int col, bool sel_exclusive);
 
 static linenr_T orig_topline = 0;
 static int orig_topfill = 0;
@@ -102,16 +104,7 @@ static int get_mouse_class(char *p)
 static void find_start_of_word(pos_T *pos)
 {
   char *line = ml_get(pos->lnum);
-  int cclass = get_mouse_class(line + pos->col);
-
-  while (pos->col > 0) {
-    int col = pos->col - 1;
-    col -= utf_head_off(line, line + col);
-    if (get_mouse_class(line + col) != cclass) {
-      break;
-    }
-    pos->col = col;
-  }
+  pos->col = rs_find_start_of_word(line, pos->col);
 }
 
 /// Move "pos" forward to the end of the word it's in.
@@ -119,21 +112,7 @@ static void find_start_of_word(pos_T *pos)
 static void find_end_of_word(pos_T *pos)
 {
   char *line = ml_get(pos->lnum);
-  if (*p_sel == 'e' && pos->col > 0) {
-    pos->col--;
-    pos->col -= utf_head_off(line, line + pos->col);
-  }
-  int cclass = get_mouse_class(line + pos->col);
-  while (line[pos->col] != NUL) {
-    int col = pos->col + utfc_ptr2len(line + pos->col);
-    if (get_mouse_class(line + col) != cclass) {
-      if (*p_sel == 'e') {
-        pos->col = col;
-      }
-      break;
-    }
-    pos->col = col;
-  }
+  pos->col = rs_find_end_of_word(line, pos->col, *p_sel == 'e');
 }
 
 /// Move the current tab to tab in same column as mouse or to end of the

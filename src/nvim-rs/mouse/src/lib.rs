@@ -233,6 +233,102 @@ pub unsafe extern "C" fn rs_mouse_model_popup(p_mousem: *const c_char) -> bool {
 }
 
 // =============================================================================
+// External UTF-8 helpers from mbyte crate
+// =============================================================================
+
+extern "C" {
+    /// Get length of UTF-8 character at pointer
+    fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
+
+    /// Get offset to start of UTF-8 character
+    fn rs_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
+}
+
+// =============================================================================
+// Word Boundary Detection Functions
+// =============================================================================
+
+/// Find the start of the word at the given column.
+///
+/// Given a line and starting column, returns the column position of the
+/// start of the word that contains the starting column position.
+///
+/// # Safety
+/// - `line` must be a valid pointer to a NUL-terminated string.
+/// - `col` must be a valid byte offset within the line.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_find_start_of_word(line: *const c_char, col: c_int) -> c_int {
+    if line.is_null() || col <= 0 {
+        return 0;
+    }
+
+    let mut pos_col = col;
+    let cclass = rs_get_mouse_class(line.add(pos_col as usize));
+
+    while pos_col > 0 {
+        // Move back one character
+        let mut new_col = pos_col - 1;
+        // Adjust for multi-byte character start
+        new_col -= rs_utf_head_off(line, line.add(new_col as usize));
+
+        // Check if character class changed
+        if rs_get_mouse_class(line.add(new_col as usize)) != cclass {
+            break;
+        }
+        pos_col = new_col;
+    }
+
+    pos_col
+}
+
+/// Find the end of the word at the given column.
+///
+/// Given a line and starting column, returns the column position of the
+/// end of the word that contains the starting column position.
+/// If `sel_exclusive` is true, the position is just after the word (for exclusive selection).
+///
+/// # Safety
+/// - `line` must be a valid pointer to a NUL-terminated string.
+/// - `col` must be a valid byte offset within the line.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_find_end_of_word(
+    line: *const c_char,
+    col: c_int,
+    sel_exclusive: bool,
+) -> c_int {
+    if line.is_null() {
+        return col;
+    }
+
+    let mut pos_col = col;
+
+    // For exclusive selection, adjust start position if col > 0
+    if sel_exclusive && pos_col > 0 {
+        pos_col -= 1;
+        pos_col -= rs_utf_head_off(line, line.add(pos_col as usize));
+    }
+
+    let cclass = rs_get_mouse_class(line.add(pos_col as usize));
+
+    // Scan forward while same character class
+    while *line.add(pos_col as usize) != 0 {
+        let next_col = pos_col + rs_utfc_ptr2len(line.add(pos_col as usize));
+        if rs_get_mouse_class(line.add(next_col as usize)) != cclass {
+            // For exclusive selection, move past the last character
+            if sel_exclusive {
+                return next_col;
+            }
+            break;
+        }
+        pos_col = next_col;
+    }
+
+    pos_col
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
