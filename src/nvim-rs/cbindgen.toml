@@ -165,4 +165,11 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_validate_foldnestmax", "rs_validate_foldcolumn", "rs_validate_conceallevel",
            "rs_validate_iminsert", "rs_validate_verbose",
            "rs_validate_undolevels", "rs_validate_synmaxcol", "rs_validate_colorcolumn_value",
-           "rs_parse_int", "ParseIntResult", "rs_error_number_required"]
+           "rs_parse_int", "ParseIntResult", "rs_error_number_required",
+           # Option expansion/completion (Phase 6)
+           "rs_expand_concealcursor_flags", "rs_expand_cpoptions_flags",
+           "rs_expand_formatoptions_flags", "rs_expand_mouse_flags",
+           "rs_expand_shortmess_flags", "rs_expand_whichwrap_flags",
+           "rs_flag_in_value", "rs_count_missing_flags", "rs_get_missing_flag",
+           "ExpandListResult", "rs_expand_next_item", "rs_item_in_list",
+           "rs_find_last_item_start", "rs_ends_with_comma"]

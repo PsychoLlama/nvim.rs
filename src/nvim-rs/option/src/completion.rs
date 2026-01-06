@@ -256,6 +256,256 @@ pub unsafe extern "C" fn rs_option_value_needs_escape(value: *const c_char) -> c
 }
 
 // =============================================================================
+// List Flag Expansion Helpers
+// =============================================================================
+
+/// Get the list of valid flags for an option as a null-terminated string.
+/// Used by expand_set_opt_listflag in C.
+/// Get valid flags for 'concealcursor' option.
+#[no_mangle]
+pub extern "C" fn rs_expand_concealcursor_flags() -> *const c_char {
+    c"nvic".as_ptr()
+}
+
+/// Get valid flags for 'cpoptions' option.
+#[no_mangle]
+pub extern "C" fn rs_expand_cpoptions_flags() -> *const c_char {
+    c"aAbBcCdDeEfFiIJKlLmMnoOpPqrRsStuvWxXyZ$!%+>;~_".as_ptr()
+}
+
+/// Get valid flags for 'formatoptions' option.
+#[no_mangle]
+pub extern "C" fn rs_expand_formatoptions_flags() -> *const c_char {
+    c"tcro/q2vlb1mMBn,aw]jp".as_ptr()
+}
+
+/// Get valid flags for 'mouse' option.
+#[no_mangle]
+pub extern "C" fn rs_expand_mouse_flags() -> *const c_char {
+    c"anvichr".as_ptr()
+}
+
+/// Get valid flags for 'shortmess' option.
+#[no_mangle]
+pub extern "C" fn rs_expand_shortmess_flags() -> *const c_char {
+    c"rwoOstTWIcCqaAFnlxfiS".as_ptr()
+}
+
+/// Get valid flags for 'whichwrap' option.
+#[no_mangle]
+pub extern "C" fn rs_expand_whichwrap_flags() -> *const c_char {
+    c"bshl<>[]~".as_ptr()
+}
+
+// =============================================================================
+// Flag Expansion Utilities
+// =============================================================================
+
+/// Check if a flag character is in the current option value.
+/// Used to filter out already-set flags during completion.
+/// Returns 1 if flag is present, 0 otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn rs_flag_in_value(value: *const c_char, flag: c_char) -> c_int {
+    if value.is_null() {
+        return 0;
+    }
+
+    let mut p = value;
+    while *p != 0 {
+        if *p == flag {
+            return 1;
+        }
+        p = p.add(1);
+    }
+    0
+}
+
+/// Count how many flags from the allowed set are NOT in the current value.
+/// Used to allocate the correct size for expansion results.
+#[no_mangle]
+pub unsafe extern "C" fn rs_count_missing_flags(
+    value: *const c_char,
+    allowed: *const c_char,
+) -> usize {
+    if allowed.is_null() {
+        return 0;
+    }
+
+    let mut count: usize = 0;
+    let mut p = allowed;
+
+    while *p != 0 {
+        if rs_flag_in_value(value, *p) == 0 {
+            count += 1;
+        }
+        p = p.add(1);
+    }
+
+    count
+}
+
+/// Get the Nth missing flag from the allowed set.
+/// Returns the flag character, or 0 if idx is out of range.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_missing_flag(
+    value: *const c_char,
+    allowed: *const c_char,
+    idx: usize,
+) -> c_char {
+    if allowed.is_null() {
+        return 0;
+    }
+
+    let mut found: usize = 0;
+    let mut p = allowed;
+
+    while *p != 0 {
+        if rs_flag_in_value(value, *p) == 0 {
+            if found == idx {
+                return *p;
+            }
+            found += 1;
+        }
+        p = p.add(1);
+    }
+
+    0
+}
+
+// =============================================================================
+// Value List Expansion
+// =============================================================================
+
+/// Result of parsing a comma-separated list for expansion.
+#[repr(C)]
+pub struct ExpandListResult {
+    /// Pointer to the start of the current item
+    pub item_start: *const c_char,
+    /// Length of the current item
+    pub item_len: usize,
+    /// Pointer to the next item (after comma) or NULL if end
+    pub next: *const c_char,
+}
+
+/// Parse the next item from a comma-separated list.
+/// Used for expanding values like 'backspace=indent,eol,start'.
+#[no_mangle]
+pub unsafe extern "C" fn rs_expand_next_item(s: *const c_char) -> ExpandListResult {
+    let mut result = ExpandListResult {
+        item_start: s,
+        item_len: 0,
+        next: std::ptr::null(),
+    };
+
+    if s.is_null() || *s == 0 {
+        return result;
+    }
+
+    let mut p = s;
+
+    // Find end of item (comma or end of string)
+    while *p != 0 && *p as u8 != b',' {
+        // Handle backslash escapes
+        if *p as u8 == b'\\' && *p.add(1) != 0 {
+            p = p.add(1);
+            result.item_len += 1;
+        }
+        p = p.add(1);
+        result.item_len += 1;
+    }
+
+    // Set next pointer
+    if *p as u8 == b',' {
+        result.next = p.add(1);
+    }
+
+    result
+}
+
+/// Check if an item is in a comma-separated list.
+/// Returns 1 if found, 0 otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn rs_item_in_list(
+    list: *const c_char,
+    item: *const c_char,
+    item_len: usize,
+) -> c_int {
+    if list.is_null() || item.is_null() || item_len == 0 {
+        return 0;
+    }
+
+    let mut s = list;
+
+    while *s != 0 {
+        let result = rs_expand_next_item(s);
+
+        if result.item_len == item_len {
+            // Compare items
+            let mut matches = true;
+            for i in 0..item_len {
+                if *result.item_start.add(i) != *item.add(i) {
+                    matches = false;
+                    break;
+                }
+            }
+            if matches {
+                return 1;
+            }
+        }
+
+        if result.next.is_null() {
+            break;
+        }
+        s = result.next;
+    }
+
+    0
+}
+
+// =============================================================================
+// Prefix/Suffix Handling for Completion
+// =============================================================================
+
+/// Find the start of the last item in a comma-separated list.
+/// Useful for completing after 'set opt+=value1,'.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_last_item_start(s: *const c_char) -> *const c_char {
+    if s.is_null() || *s == 0 {
+        return s;
+    }
+
+    let mut last_start = s;
+    let mut p = s;
+
+    while *p != 0 {
+        if *p as u8 == b',' && *p.add(1) != 0 {
+            last_start = p.add(1);
+        }
+        p = p.add(1);
+    }
+
+    last_start
+}
+
+/// Check if the string ends with a comma (ready for new item).
+#[no_mangle]
+pub unsafe extern "C" fn rs_ends_with_comma(s: *const c_char) -> c_int {
+    if s.is_null() || *s == 0 {
+        return 0;
+    }
+
+    let mut p = s;
+    let mut last: c_char = 0;
+
+    while *p != 0 {
+        last = *p;
+        p = p.add(1);
+    }
+
+    c_int::from(last as u8 == b',')
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -351,6 +601,173 @@ mod tests {
             assert_eq!(rs_option_value_needs_escape(needs.as_ptr()), 1);
             assert_eq!(rs_option_value_needs_escape(no_needs.as_ptr()), 0);
             assert_eq!(rs_option_value_needs_escape(with_pipe.as_ptr()), 1);
+        }
+    }
+
+    // =========================================================================
+    // Flag Expansion Tests
+    // =========================================================================
+
+    #[test]
+    fn test_expand_flags_returns_valid_strings() {
+        unsafe {
+            // Just check that the pointers are non-null and the first char is valid
+            let cocu = rs_expand_concealcursor_flags();
+            assert!(!cocu.is_null());
+            assert_eq!(*cocu as u8, b'n');
+
+            let cpo = rs_expand_cpoptions_flags();
+            assert!(!cpo.is_null());
+            assert_eq!(*cpo as u8, b'a');
+
+            let fo = rs_expand_formatoptions_flags();
+            assert!(!fo.is_null());
+            assert_eq!(*fo as u8, b't');
+
+            let mouse = rs_expand_mouse_flags();
+            assert!(!mouse.is_null());
+            assert_eq!(*mouse as u8, b'a');
+
+            let shm = rs_expand_shortmess_flags();
+            assert!(!shm.is_null());
+            assert_eq!(*shm as u8, b'r');
+
+            let ww = rs_expand_whichwrap_flags();
+            assert!(!ww.is_null());
+            assert_eq!(*ww as u8, b'b');
+        }
+    }
+
+    #[test]
+    fn test_flag_in_value() {
+        unsafe {
+            let value = CString::new("nvic").unwrap();
+
+            assert_eq!(rs_flag_in_value(value.as_ptr(), b'n' as c_char), 1);
+            assert_eq!(rs_flag_in_value(value.as_ptr(), b'v' as c_char), 1);
+            assert_eq!(rs_flag_in_value(value.as_ptr(), b'i' as c_char), 1);
+            assert_eq!(rs_flag_in_value(value.as_ptr(), b'c' as c_char), 1);
+            assert_eq!(rs_flag_in_value(value.as_ptr(), b'x' as c_char), 0);
+            assert_eq!(rs_flag_in_value(std::ptr::null(), b'n' as c_char), 0);
+        }
+    }
+
+    #[test]
+    fn test_count_missing_flags() {
+        unsafe {
+            let value = CString::new("ac").unwrap();
+            let allowed = CString::new("abcd").unwrap();
+
+            // 'a' and 'c' are present, 'b' and 'd' are missing
+            assert_eq!(rs_count_missing_flags(value.as_ptr(), allowed.as_ptr()), 2);
+
+            // Empty value - all flags are missing
+            let empty = CString::new("").unwrap();
+            assert_eq!(rs_count_missing_flags(empty.as_ptr(), allowed.as_ptr()), 4);
+
+            // All flags present
+            let full = CString::new("abcd").unwrap();
+            assert_eq!(rs_count_missing_flags(full.as_ptr(), allowed.as_ptr()), 0);
+        }
+    }
+
+    #[test]
+    fn test_get_missing_flag() {
+        unsafe {
+            let value = CString::new("ac").unwrap();
+            let allowed = CString::new("abcd").unwrap();
+
+            // Missing flags are 'b' (idx 0) and 'd' (idx 1)
+            assert_eq!(
+                rs_get_missing_flag(value.as_ptr(), allowed.as_ptr(), 0) as u8,
+                b'b'
+            );
+            assert_eq!(
+                rs_get_missing_flag(value.as_ptr(), allowed.as_ptr(), 1) as u8,
+                b'd'
+            );
+            // Out of range
+            assert_eq!(rs_get_missing_flag(value.as_ptr(), allowed.as_ptr(), 2), 0);
+        }
+    }
+
+    // =========================================================================
+    // List Expansion Tests
+    // =========================================================================
+
+    #[test]
+    fn test_expand_next_item() {
+        unsafe {
+            // Simple comma-separated list
+            let list = CString::new("indent,eol,start").unwrap();
+
+            let r1 = rs_expand_next_item(list.as_ptr());
+            assert_eq!(r1.item_len, 6); // "indent"
+            assert!(!r1.next.is_null());
+
+            let r2 = rs_expand_next_item(r1.next);
+            assert_eq!(r2.item_len, 3); // "eol"
+            assert!(!r2.next.is_null());
+
+            let r3 = rs_expand_next_item(r2.next);
+            assert_eq!(r3.item_len, 5); // "start"
+            assert!(r3.next.is_null());
+        }
+    }
+
+    #[test]
+    fn test_expand_next_item_with_escape() {
+        unsafe {
+            // Item with escaped comma
+            let list = CString::new("a\\,b,c").unwrap();
+
+            let r1 = rs_expand_next_item(list.as_ptr());
+            assert_eq!(r1.item_len, 4); // "a\\,b" (escaped comma is part of item)
+            assert!(!r1.next.is_null());
+
+            let r2 = rs_expand_next_item(r1.next);
+            assert_eq!(r2.item_len, 1); // "c"
+            assert!(r2.next.is_null());
+        }
+    }
+
+    #[test]
+    fn test_item_in_list() {
+        unsafe {
+            let list = CString::new("indent,eol,start").unwrap();
+            let indent = CString::new("indent").unwrap();
+            let eol = CString::new("eol").unwrap();
+            let missing = CString::new("nostop").unwrap();
+
+            assert_eq!(rs_item_in_list(list.as_ptr(), indent.as_ptr(), 6), 1);
+            assert_eq!(rs_item_in_list(list.as_ptr(), eol.as_ptr(), 3), 1);
+            assert_eq!(rs_item_in_list(list.as_ptr(), missing.as_ptr(), 6), 0);
+        }
+    }
+
+    #[test]
+    fn test_find_last_item_start() {
+        unsafe {
+            let items = CString::new("a,b,c").unwrap();
+            let last_ptr = rs_find_last_item_start(items.as_ptr());
+            assert_eq!(*last_ptr as u8, b'c');
+
+            let single = CString::new("only").unwrap();
+            let single_ptr = rs_find_last_item_start(single.as_ptr());
+            assert_eq!(*single_ptr as u8, b'o');
+        }
+    }
+
+    #[test]
+    fn test_ends_with_comma() {
+        unsafe {
+            let with_comma = CString::new("a,b,").unwrap();
+            let without = CString::new("a,b,c").unwrap();
+            let empty = CString::new("").unwrap();
+
+            assert_eq!(rs_ends_with_comma(with_comma.as_ptr()), 1);
+            assert_eq!(rs_ends_with_comma(without.as_ptr()), 0);
+            assert_eq!(rs_ends_with_comma(empty.as_ptr()), 0);
         }
     }
 }
