@@ -1009,6 +1009,217 @@ pub extern "C" fn rs_terminal_is_dark_theme(bg_char: u8) -> c_int {
     c_int::from(bg_char == b'd')
 }
 
+// =============================================================================
+// Row/Line Number Conversion
+// =============================================================================
+
+/// Convert a terminal row number to a buffer line number.
+///
+/// Formula: `linenr = row + sb_current + 1`
+///
+/// The terminal has a scrollback buffer at the top of the nvim buffer.
+/// Row 0 of the terminal is at line `sb_current + 1` in the buffer.
+///
+/// # Arguments
+/// * `row` - Terminal row (0-based, can be negative for scrollback)
+/// * `sb_current` - Current scrollback buffer size
+///
+/// # Returns
+/// Buffer line number (1-based).
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_terminal_row_to_linenr(row: c_int, sb_current: usize) -> c_int {
+    if row == i32::MAX {
+        return i32::MAX;
+    }
+    // Safe cast: sb_current is typically small (max ~100000)
+    #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+    let sb = sb_current as c_int;
+    row + sb + 1
+}
+
+/// Convert a buffer line number to a terminal row number.
+///
+/// Formula: `row = linenr - sb_current - 1`
+///
+/// # Arguments
+/// * `linenr` - Buffer line number (1-based)
+/// * `sb_current` - Current scrollback buffer size
+///
+/// # Returns
+/// Terminal row (0-based, negative for scrollback lines).
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_terminal_linenr_to_row(linenr: c_int, sb_current: usize) -> c_int {
+    #[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+    let sb = sb_current as c_int;
+    linenr - sb - 1
+}
+
+// =============================================================================
+// Mouse Button Conversion
+// =============================================================================
+
+// Mouse key constants (from keycodes.h)
+const K_LEFTMOUSE: c_int = termcap2key(KS_EXTRA, 39);
+const K_LEFTDRAG: c_int = termcap2key(KS_EXTRA, 40);
+const K_LEFTRELEASE: c_int = termcap2key(KS_EXTRA, 41);
+const K_MIDDLEMOUSE: c_int = termcap2key(KS_EXTRA, 42);
+const K_MIDDLEDRAG: c_int = termcap2key(KS_EXTRA, 43);
+const K_MIDDLERELEASE: c_int = termcap2key(KS_EXTRA, 44);
+const K_RIGHTMOUSE: c_int = termcap2key(KS_EXTRA, 45);
+const K_RIGHTDRAG: c_int = termcap2key(KS_EXTRA, 46);
+const K_RIGHTRELEASE: c_int = termcap2key(KS_EXTRA, 47);
+const K_MOUSEDOWN: c_int = termcap2key(KS_EXTRA, 54);
+const K_MOUSEUP: c_int = termcap2key(KS_EXTRA, 55);
+const K_MOUSELEFT: c_int = termcap2key(KS_EXTRA, 56);
+const K_MOUSERIGHT: c_int = termcap2key(KS_EXTRA, 57);
+const K_MOUSEMOVE: c_int = termcap2key(KS_EXTRA, 74);
+const K_X1MOUSE: c_int = termcap2key(KS_EXTRA, 75);
+const K_X1DRAG: c_int = termcap2key(KS_EXTRA, 76);
+const K_X1RELEASE: c_int = termcap2key(KS_EXTRA, 77);
+const K_X2MOUSE: c_int = termcap2key(KS_EXTRA, 78);
+const K_X2DRAG: c_int = termcap2key(KS_EXTRA, 79);
+const K_X2RELEASE: c_int = termcap2key(KS_EXTRA, 80);
+
+/// Result of mouse button conversion.
+#[repr(C)]
+pub struct MouseButtonResult {
+    /// Button number (1=left, 2=middle, 3=right, 4=scroll down, 5=scroll up, etc.)
+    /// -1 if unknown key
+    pub button: c_int,
+    /// 1 if pressed/dragging, 0 if released
+    pub pressed: c_int,
+}
+
+/// Convert a Neovim mouse key code to a `VTerm` button number.
+///
+/// This handles the conversion of mouse events for forwarding to the terminal.
+///
+/// # Arguments
+/// * `key` - Neovim key code (`K_LEFTMOUSE`, `K_RIGHTDRAG`, etc.)
+///
+/// # Returns
+/// `MouseButtonResult` with button number and pressed state.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_terminal_convert_mouse_button(key: c_int) -> MouseButtonResult {
+    match key {
+        K_LEFTDRAG | K_LEFTMOUSE => MouseButtonResult {
+            button: 1,
+            pressed: 1,
+        },
+        K_LEFTRELEASE => MouseButtonResult {
+            button: 1,
+            pressed: 0,
+        },
+        K_MIDDLEDRAG | K_MIDDLEMOUSE => MouseButtonResult {
+            button: 2,
+            pressed: 1,
+        },
+        K_MIDDLERELEASE => MouseButtonResult {
+            button: 2,
+            pressed: 0,
+        },
+        K_RIGHTDRAG | K_RIGHTMOUSE => MouseButtonResult {
+            button: 3,
+            pressed: 1,
+        },
+        K_RIGHTRELEASE => MouseButtonResult {
+            button: 3,
+            pressed: 0,
+        },
+        K_X1DRAG | K_X1MOUSE => MouseButtonResult {
+            button: 8,
+            pressed: 1,
+        },
+        K_X1RELEASE => MouseButtonResult {
+            button: 8,
+            pressed: 0,
+        },
+        K_X2DRAG | K_X2MOUSE => MouseButtonResult {
+            button: 9,
+            pressed: 1,
+        },
+        K_X2RELEASE => MouseButtonResult {
+            button: 9,
+            pressed: 0,
+        },
+        K_MOUSEDOWN => MouseButtonResult {
+            button: 4,
+            pressed: 1,
+        },
+        K_MOUSEUP => MouseButtonResult {
+            button: 5,
+            pressed: 1,
+        },
+        K_MOUSELEFT => MouseButtonResult {
+            button: 7,
+            pressed: 1,
+        },
+        K_MOUSERIGHT => MouseButtonResult {
+            button: 6,
+            pressed: 1,
+        },
+        K_MOUSEMOVE => MouseButtonResult {
+            button: 0,
+            pressed: 0,
+        },
+        _ => MouseButtonResult {
+            button: -1,
+            pressed: 0,
+        },
+    }
+}
+
+// =============================================================================
+// Terminal Paste Filter (TPF) Flags
+// =============================================================================
+
+/// Filter backspace characters (0x08)
+pub const TPF_BS: c_int = 0x001;
+/// Filter horizontal tab characters (0x09)
+pub const TPF_HT: c_int = 0x002;
+/// Filter form feed characters (0x0C)
+pub const TPF_FF: c_int = 0x004;
+/// Filter escape characters (0x1B)
+pub const TPF_ESC: c_int = 0x008;
+/// Filter DEL characters (0x7F)
+pub const TPF_DEL: c_int = 0x010;
+/// Filter C0 control characters (0x01-0x1F, except specific ones)
+pub const TPF_C0: c_int = 0x020;
+/// Filter C1 control characters (0x80-0x9F)
+pub const TPF_C1: c_int = 0x040;
+
+/// Check if a character should be filtered when pasting to terminal.
+///
+/// This implements the 'termpastefilter' option logic. Certain control
+/// characters can be filtered out when pasting to prevent security issues.
+///
+/// # Arguments
+/// * `c` - Character to check
+/// * `tpf_flags` - Current 'termpastefilter' flag settings
+///
+/// # Returns
+/// 1 if the character should be filtered, 0 otherwise.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_terminal_should_filter_char(c: c_int, tpf_flags: c_int) -> c_int {
+    let flag = match c {
+        0x08 => TPF_BS,
+        0x09 => TPF_HT,
+        // 0x0A (LF) and 0x0D (CR) are never filtered
+        0x0A | 0x0D => return 0,
+        0x0C => TPF_FF,
+        0x1B => TPF_ESC,
+        0x7F => TPF_DEL,
+        _ if c > 0 && c < 0x20 => TPF_C0,
+        _ if (0x80..=0x9F).contains(&c) => TPF_C1,
+        _ => return 0,
+    };
+    c_int::from((tpf_flags & flag) != 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1375,5 +1586,98 @@ mod tests {
         assert_eq!(VTERM_PROP_CURSORSHAPE, 6);
         assert_eq!(VTERM_PROP_MOUSE, 7);
         assert_eq!(VTERM_PROP_CURSORBLINK, 8);
+    }
+
+    #[test]
+    fn test_row_to_linenr() {
+        // sb_current = 10, row = 0 => linenr = 11
+        assert_eq!(rs_terminal_row_to_linenr(0, 10), 11);
+        // sb_current = 0, row = 0 => linenr = 1
+        assert_eq!(rs_terminal_row_to_linenr(0, 0), 1);
+        // sb_current = 5, row = 3 => linenr = 9
+        assert_eq!(rs_terminal_row_to_linenr(3, 5), 9);
+        // INT_MAX stays INT_MAX
+        assert_eq!(rs_terminal_row_to_linenr(i32::MAX, 10), i32::MAX);
+    }
+
+    #[test]
+    fn test_linenr_to_row() {
+        // sb_current = 10, linenr = 11 => row = 0
+        assert_eq!(rs_terminal_linenr_to_row(11, 10), 0);
+        // sb_current = 0, linenr = 1 => row = 0
+        assert_eq!(rs_terminal_linenr_to_row(1, 0), 0);
+        // sb_current = 5, linenr = 9 => row = 3
+        assert_eq!(rs_terminal_linenr_to_row(9, 5), 3);
+    }
+
+    #[test]
+    fn test_mouse_button_conversion() {
+        // Left mouse
+        let result = rs_terminal_convert_mouse_button(K_LEFTMOUSE);
+        assert_eq!(result.button, 1);
+        assert_eq!(result.pressed, 1);
+
+        let result = rs_terminal_convert_mouse_button(K_LEFTRELEASE);
+        assert_eq!(result.button, 1);
+        assert_eq!(result.pressed, 0);
+
+        let result = rs_terminal_convert_mouse_button(K_LEFTDRAG);
+        assert_eq!(result.button, 1);
+        assert_eq!(result.pressed, 1);
+
+        // Middle mouse
+        let result = rs_terminal_convert_mouse_button(K_MIDDLEMOUSE);
+        assert_eq!(result.button, 2);
+        assert_eq!(result.pressed, 1);
+
+        // Right mouse
+        let result = rs_terminal_convert_mouse_button(K_RIGHTMOUSE);
+        assert_eq!(result.button, 3);
+        assert_eq!(result.pressed, 1);
+
+        // Scroll
+        let result = rs_terminal_convert_mouse_button(K_MOUSEDOWN);
+        assert_eq!(result.button, 4);
+        assert_eq!(result.pressed, 1);
+
+        let result = rs_terminal_convert_mouse_button(K_MOUSEUP);
+        assert_eq!(result.button, 5);
+        assert_eq!(result.pressed, 1);
+
+        // Mouse move
+        let result = rs_terminal_convert_mouse_button(K_MOUSEMOVE);
+        assert_eq!(result.button, 0);
+        assert_eq!(result.pressed, 0);
+
+        // Unknown key
+        let result = rs_terminal_convert_mouse_button(0);
+        assert_eq!(result.button, -1);
+    }
+
+    #[test]
+    fn test_filter_char_detailed() {
+        // Test various filter flags
+        assert_eq!(rs_terminal_should_filter_char(0x08, TPF_BS), 1); // Backspace
+        assert_eq!(rs_terminal_should_filter_char(0x08, 0), 0); // Backspace without flag
+        assert_eq!(rs_terminal_should_filter_char(0x09, TPF_HT), 1); // Tab
+        assert_eq!(rs_terminal_should_filter_char(0x0C, TPF_FF), 1); // Form feed
+        assert_eq!(rs_terminal_should_filter_char(0x1B, TPF_ESC), 1); // Escape
+        assert_eq!(rs_terminal_should_filter_char(0x7F, TPF_DEL), 1); // DEL
+
+        // C0 control characters (0x01-0x1F excluding specific ones)
+        assert_eq!(rs_terminal_should_filter_char(0x01, TPF_C0), 1);
+        assert_eq!(rs_terminal_should_filter_char(0x1F, TPF_C0), 1);
+
+        // C1 control characters (0x80-0x9F)
+        assert_eq!(rs_terminal_should_filter_char(0x80, TPF_C1), 1);
+        assert_eq!(rs_terminal_should_filter_char(0x9F, TPF_C1), 1);
+
+        // Normal characters shouldn't be filtered
+        assert_eq!(rs_terminal_should_filter_char(c_int::from(b'a'), 0xFFFF), 0);
+        assert_eq!(rs_terminal_should_filter_char(c_int::from(b' '), 0xFFFF), 0);
+
+        // Newline and carriage return are never filtered
+        assert_eq!(rs_terminal_should_filter_char(0x0A, 0xFFFF), 0);
+        assert_eq!(rs_terminal_should_filter_char(0x0D, 0xFFFF), 0);
     }
 }
