@@ -8,6 +8,9 @@
 //!
 //! - [`history`]: Message history linked list management
 //! - [`chunk`]: Scrollback buffer message chunks
+//! - [`format`]: Message formatting utilities
+//! - [`output`]: Message output state management
+//! - [`attr`]: Message attribute handling
 //!
 //! # Note
 //!
@@ -20,12 +23,18 @@
 #![allow(clippy::doc_markdown)]
 #![allow(unsafe_code)]
 
+pub mod attr;
 pub mod chunk;
+pub mod format;
 pub mod history;
+pub mod output;
 
 // Re-export FFI functions for the static library
+pub use attr::*;
 pub use chunk::*;
+pub use format::*;
 pub use history::*;
+pub use output::*;
 
 #[cfg(test)]
 mod tests {

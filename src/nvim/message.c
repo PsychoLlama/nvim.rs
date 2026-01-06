@@ -290,6 +290,45 @@ int nvim_get_rows(void) { return Rows; }
 unsigned int nvim_get_p_rdb(void) { return p_rdb; }
 int nvim_ui_has_messages(void) { return ui_has(kUIMessages) ? 1 : 0; }
 
+// C accessors for message formatting (used by Rust)
+int nvim_get_msg_col(void) { return msg_col; }
+void nvim_set_msg_col(int col) { msg_col = col; }
+int nvim_get_msg_row(void) { return msg_row; }
+void nvim_set_msg_row(int row) { msg_row = row; }
+int nvim_get_columns(void) { return Columns; }
+int nvim_get_sc_col(void) { return sc_col; }
+int nvim_get_msg_scroll(void) { return msg_scroll ? 1 : 0; }
+int nvim_get_need_wait_return(void) { return need_wait_return ? 1 : 0; }
+void nvim_set_need_wait_return(int val) { need_wait_return = (val != 0); }
+int nvim_shortmess(int flag) { return shortmess(flag) ? 1 : 0; }
+int nvim_get_exmode_active(void) { return exmode_active ? 1 : 0; }
+int nvim_vim_strsize(const char *s) { return vim_strsize(s); }
+int nvim_mb_trunc_len(const char *s, int width)
+{
+  return (int)mb_charlen2bytelen(s, (size_t)width);
+}
+
+// C accessors for message output state (used by Rust)
+int nvim_get_msg_didany(void) { return msg_didany ? 1 : 0; }
+void nvim_set_msg_didany(int val) { msg_didany = (val != 0); }
+int nvim_get_msg_didout(void) { return msg_didout ? 1 : 0; }
+void nvim_set_msg_didout(int val) { msg_didout = (val != 0); }
+int nvim_get_msg_nowait(void) { return msg_nowait ? 1 : 0; }
+void nvim_set_msg_nowait(int val) { msg_nowait = (val != 0); }
+int nvim_get_msg_no_more(void) { return msg_no_more ? 1 : 0; }
+int nvim_get_lines_left(void) { return lines_left; }
+void nvim_set_lines_left(int val) { lines_left = val; }
+int nvim_get_msg_scrolled_ign(void) { return msg_scrolled_ign ? 1 : 0; }
+int nvim_get_emsg_on_display(void) { return emsg_on_display ? 1 : 0; }
+void nvim_set_emsg_on_display(int val) { emsg_on_display = (val != 0); }
+int nvim_get_need_fileinfo(void) { return need_fileinfo ? 1 : 0; }
+void nvim_set_need_fileinfo(int val) { need_fileinfo = (val != 0); }
+
+// C accessors for attribute functions (used by Rust)
+int nvim_syn_id2attr(int hl_id) { return syn_id2attr(hl_id); }
+int nvim_hl_combine_attr(int a, int b) { return hl_combine_attr(a, b); }
+int nvim_hl_attr(int hlf) { return HL_ATTR((HlAttrNames)hlf); }
+
 // Rust implementation
 extern int rs_redirecting(void);
 extern int rs_msg_use_printf(void);
