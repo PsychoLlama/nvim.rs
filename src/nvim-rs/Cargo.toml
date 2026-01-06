@@ -22,6 +22,7 @@ nvim-buffer-updates = { path = "buffer_updates" }
 nvim-charset = { path = "charset" }
 nvim-cmdline = { path = "cmdline" }
 nvim-cmdhist = { path = "cmdhist" }
+nvim-cursor = { path = "cursor" }
 nvim-cursor-shape = { path = "cursor_shape" }
 nvim-decoration = { path = "decoration" }
 nvim-diff = { path = "diff" }

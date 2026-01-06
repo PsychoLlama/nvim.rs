@@ -16,6 +16,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | collections    | Data structures (garray, hashtab)       |
 | compositor     | Multi-grid compositing                  |
 | context        | Context stack management                |
+| cursor         | Cursor positioning and validation       |
 | cursor_shape   | Cursor mode and shape                   |
 | decoration     | Virtual text and decorations            |
 | diff           | Diff mode and output parsing            |

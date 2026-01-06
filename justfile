@@ -71,6 +71,7 @@ rust-test:
       -p nvim-collections \
       -p nvim-compositor \
       -p nvim-context \
+      -p nvim-cursor \
       -p nvim-cursor-shape \
       -p nvim-decoration \
       -p nvim-diff \
