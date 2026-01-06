@@ -2686,6 +2686,315 @@ pub unsafe extern "C" fn rs_qf_current_file_idx(qfl: QfListHandle) -> c_int {
     file_idx
 }
 
+// =============================================================================
+// Phase 8: Command Infrastructure
+// =============================================================================
+
+/// Command types for quickfix operations.
+#[allow(dead_code)]
+pub mod qf_cmd {
+    use std::ffi::c_int;
+
+    /// :colder / :lolder - go to older list
+    pub const CMD_OLDER: c_int = 1;
+    /// :cnewer / :lnewer - go to newer list
+    pub const CMD_NEWER: c_int = 2;
+    /// :chistory / :lhistory - show list history
+    pub const CMD_HISTORY: c_int = 3;
+}
+
+/// Format an entry for display in :clist output.
+///
+/// Returns a formatted string like "  1 src/main.c|10| error: msg"
+/// The caller must free the returned string.
+///
+/// # Safety
+///
+/// - `qfp` must be a valid pointer to a `qfline_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_format_entry(
+    qfp: QfLineHandle,
+    idx: c_int,
+    is_current: bool,
+) -> *mut c_char {
+    if qfp.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let marker = if is_current { ">" } else { " " };
+    let lnum = nvim_qfline_get_lnum(qfp);
+    let col = nvim_qfline_get_col(qfp);
+    let type_char = nvim_qfline_get_type(qfp);
+    let valid = nvim_qfline_get_valid(qfp);
+
+    // Get text, handling null
+    let text_ptr = nvim_qfline_get_text(qfp);
+    let text = if text_ptr.is_null() {
+        ""
+    } else {
+        std::ffi::CStr::from_ptr(text_ptr)
+            .to_str()
+            .unwrap_or_default()
+    };
+
+    // Build type indicator
+    // type_char is a signed char from C, cast to u8 for matching ASCII values
+    #[allow(clippy::cast_sign_loss)]
+    let type_str = match type_char as u8 {
+        b'E' => "error",
+        b'W' => "warning",
+        b'I' => "info",
+        b'N' => "note",
+        _ => "",
+    };
+
+    // Format the entry
+    let formatted = if valid {
+        if col > 0 && !type_str.is_empty() {
+            format!("{marker}{idx:3}|{lnum}:{col}: {type_str}: {text}")
+        } else if col > 0 {
+            format!("{marker}{idx:3}|{lnum}:{col}: {text}")
+        } else if !type_str.is_empty() {
+            format!("{marker}{idx:3}|{lnum}: {type_str}: {text}")
+        } else {
+            format!("{marker}{idx:3}|{lnum}: {text}")
+        }
+    } else {
+        format!("{marker}{idx:3}|| {text}")
+    };
+
+    // Convert to C string and return (caller must free)
+    std::ffi::CString::new(formatted).map_or(std::ptr::null_mut(), std::ffi::CString::into_raw)
+}
+
+/// Free a string returned by `rs_qf_format_entry`.
+///
+/// # Safety
+///
+/// - `ptr` must be a pointer returned by `rs_qf_format_entry` or null
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_free_string(ptr: *mut c_char) {
+    if !ptr.is_null() {
+        drop(std::ffi::CString::from_raw(ptr));
+    }
+}
+
+/// Get a summary string for a quickfix list.
+///
+/// Returns something like "(3 of 10): :make" or "(empty)" for empty lists.
+/// The caller must free the returned string.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct or null
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_list_summary(qfl: QfListHandle) -> *mut c_char {
+    if qfl.is_null() {
+        let cstr = std::ffi::CString::new("(null)").unwrap_or_default();
+        return cstr.into_raw();
+    }
+
+    let count = nvim_qf_get_count(qfl);
+    if count == 0 {
+        let cstr = std::ffi::CString::new("(empty)").unwrap_or_default();
+        return cstr.into_raw();
+    }
+
+    let idx = nvim_qf_get_index(qfl);
+    let title_ptr = nvim_qf_get_title(qfl);
+    let title = if title_ptr.is_null() {
+        String::new()
+    } else {
+        std::ffi::CStr::from_ptr(title_ptr)
+            .to_str()
+            .map_or_else(|_| String::new(), |s| format!(": {s}"))
+    };
+
+    let summary = format!("({idx} of {count}){title}");
+
+    std::ffi::CString::new(summary).map_or(std::ptr::null_mut(), std::ffi::CString::into_raw)
+}
+
+/// Get statistics for a quickfix list.
+///
+/// Returns total count, valid count, and error/warning counts.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - All out parameters must be valid pointers
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_stats(
+    qfl: QfListHandle,
+    out_total: *mut c_int,
+    out_valid: *mut c_int,
+    out_errors: *mut c_int,
+    out_warnings: *mut c_int,
+) {
+    if qfl.is_null()
+        || out_total.is_null()
+        || out_valid.is_null()
+        || out_errors.is_null()
+        || out_warnings.is_null()
+    {
+        return;
+    }
+
+    let count = nvim_qf_get_count(qfl);
+    let mut total: c_int = 0;
+    let mut valid: c_int = 0;
+    let mut errors: c_int = 0;
+    let mut warnings: c_int = 0;
+
+    let mut qfp = nvim_qf_get_start(qfl);
+    let mut idx = 1;
+
+    while !qfp.is_null() && idx <= count {
+        total += 1;
+        if nvim_qfline_get_valid(qfp) {
+            valid += 1;
+        }
+        // type_char is a signed char from C, cast to u8 for matching ASCII values
+        #[allow(clippy::cast_sign_loss)]
+        match nvim_qfline_get_type(qfp) as u8 {
+            b'E' => errors += 1,
+            b'W' => warnings += 1,
+            _ => {}
+        }
+        qfp = nvim_qfline_get_next(qfp);
+        idx += 1;
+    }
+
+    *out_total = total;
+    *out_valid = valid;
+    *out_errors = errors;
+    *out_warnings = warnings;
+}
+
+/// Check if a quickfix list operation should be aborted.
+///
+/// This checks various conditions that would make continuing the operation
+/// pointless, such as an empty list or no valid entries.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct or null
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_should_abort(qfl: QfListHandle) -> bool {
+    qfl.is_null() || rs_qf_list_empty(qfl)
+}
+
+/// Get the range of entries to display for :clist command.
+///
+/// If `all` is true, returns 1 to count.
+/// Otherwise, returns a range around the current entry.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - `out_start` and `out_end` must be valid pointers
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_display_range(
+    qfl: QfListHandle,
+    all: bool,
+    out_start: *mut c_int,
+    out_end: *mut c_int,
+) {
+    if qfl.is_null() || out_start.is_null() || out_end.is_null() {
+        return;
+    }
+
+    let count = nvim_qf_get_count(qfl);
+    if count == 0 {
+        *out_start = 0;
+        *out_end = 0;
+        return;
+    }
+
+    if all {
+        *out_start = 1;
+        *out_end = count;
+        return;
+    }
+
+    // Default: show entries around current position
+    let current = nvim_qf_get_index(qfl);
+    let context = 5; // Show 5 entries before and after
+
+    let start = if current > context {
+        current - context
+    } else {
+        1
+    };
+    let end = if current + context <= count {
+        current + context
+    } else {
+        count
+    };
+
+    *out_start = start;
+    *out_end = end;
+}
+
+/// Parse a :cc / :ll style argument to get the entry number.
+///
+/// Returns the entry number (1-based), or 0 if no number specified,
+/// or -1 on error.
+///
+/// # Safety
+///
+/// - `arg` may be null (returns 0)
+/// - If non-null, must point to a valid C string
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_parse_cc_arg(arg: *const c_char) -> c_int {
+    if arg.is_null() {
+        return 0;
+    }
+
+    let Ok(c_str) = std::ffi::CStr::from_ptr(arg).to_str() else {
+        return -1;
+    };
+
+    let trimmed = c_str.trim();
+    if trimmed.is_empty() {
+        return 0;
+    }
+
+    match trimmed.parse::<c_int>() {
+        Ok(n) if n >= 1 => n,
+        _ => -1,
+    }
+}
+
+/// Parse a count argument for :cnext/:cprev style commands.
+///
+/// Returns the count (default 1), or -1 on error.
+///
+/// # Safety
+///
+/// - `arg` may be null (returns 1)
+/// - If non-null, must point to a valid C string
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_parse_count_arg(arg: *const c_char) -> c_int {
+    if arg.is_null() {
+        return 1;
+    }
+
+    let Ok(c_str) = std::ffi::CStr::from_ptr(arg).to_str() else {
+        return -1;
+    };
+
+    let trimmed = c_str.trim();
+    if trimmed.is_empty() {
+        return 1;
+    }
+
+    match trimmed.parse::<c_int>() {
+        Ok(n) if n >= 1 => n,
+        _ => -1,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
