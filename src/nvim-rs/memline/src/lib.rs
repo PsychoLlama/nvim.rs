@@ -19,6 +19,7 @@
 //! - [`access`]: Line access functions
 //! - [`modify`]: Line modification functions (append, delete, replace)
 //! - [`navigate`]: Cursor navigation and byte offset functions
+//! - [`swap`]: Swap file management
 //!
 //! # Note
 //!
