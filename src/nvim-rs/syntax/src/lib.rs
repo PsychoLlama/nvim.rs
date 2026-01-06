@@ -2397,6 +2397,90 @@ pub extern "C" fn rs_syn_set_expand_what(what: c_int) {
     set_expand_what(what);
 }
 
+// =============================================================================
+// Pattern Flag Analysis Helpers
+// =============================================================================
+
+/// Describes the flags present in a syntax pattern.
+#[repr(C)]
+pub struct SynPatFlagsInfo {
+    /// Pattern is contained (used inside other patterns)
+    pub contained: c_int,
+    /// Pattern is transparent (inherits highlighting)
+    pub transparent: c_int,
+    /// Match within one line only
+    pub oneline: c_int,
+    /// Uses keepend flag
+    pub keepend: c_int,
+    /// Uses extend flag
+    pub extend: c_int,
+    /// Pattern can be concealed
+    pub conceal: c_int,
+    /// Ends can be concealed
+    pub conceal_ends: c_int,
+    /// Defines a fold
+    pub fold: c_int,
+    /// Display-only (not for syncing)
+    pub display: c_int,
+}
+
+/// Analyze a pattern's flags and return a structured description.
+/// This is useful for debugging and introspection of syntax patterns.
+#[no_mangle]
+pub extern "C" fn rs_analyze_syn_pat_flags(flags: c_int) -> SynPatFlagsInfo {
+    SynPatFlagsInfo {
+        contained: c_int::from((flags & HL_CONTAINED) != 0),
+        transparent: c_int::from((flags & HL_TRANSP) != 0),
+        oneline: c_int::from((flags & HL_ONELINE) != 0),
+        keepend: c_int::from((flags & HL_KEEPEND) != 0),
+        extend: c_int::from((flags & HL_EXTEND) != 0),
+        conceal: c_int::from((flags & HL_CONCEAL) != 0),
+        conceal_ends: c_int::from((flags & HL_CONCEALENDS) != 0),
+        fold: c_int::from((flags & HL_FOLD) != 0),
+        display: c_int::from((flags & HL_DISPLAY) != 0),
+    }
+}
+
+/// Check if pattern flags contain any skip-related flags.
+/// Returns a bitmask of (SKIPNL, SKIPWHITE, SKIPEMPTY) flags that are set.
+#[no_mangle]
+pub extern "C" fn rs_syn_pat_skip_flags(flags: c_int) -> c_int {
+    flags & (HL_SKIPNL | HL_SKIPWHITE | HL_SKIPEMPTY)
+}
+
+/// Check if pattern flags indicate a sync-related pattern.
+#[no_mangle]
+pub extern "C" fn rs_syn_pat_is_sync_related(flags: c_int) -> c_int {
+    c_int::from((flags & (HL_SYNC_HERE | HL_SYNC_THERE)) != 0)
+}
+
+/// Get the effective visibility flags from pattern flags.
+/// Returns 1 if the pattern should be visible (not transparent, not display-only for sync).
+#[no_mangle]
+pub extern "C" fn rs_syn_pat_is_visible(flags: c_int) -> c_int {
+    c_int::from((flags & HL_TRANSP) == 0)
+}
+
+/// Convert a pattern type integer to its name.
+/// Returns a static string pointer for the pattern type name.
+#[no_mangle]
+pub extern "C" fn rs_sptype_name(sptype: c_int) -> *const c_char {
+    static MATCH_STR: &[u8] = b"MATCH\0";
+    static START_STR: &[u8] = b"START\0";
+    static END_STR: &[u8] = b"END\0";
+    static SKIP_STR: &[u8] = b"SKIP\0";
+    static UNKNOWN_STR: &[u8] = b"UNKNOWN\0";
+
+    let s = match sptype {
+        SPTYPE_MATCH => MATCH_STR,
+        SPTYPE_START => START_STR,
+        SPTYPE_END => END_STR,
+        SPTYPE_SKIP => SKIP_STR,
+        _ => UNKNOWN_STR,
+    };
+    s.as_ptr() as *const c_char
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2630,5 +2714,90 @@ mod tests {
         assert_eq!(extract_inc_tag(22000), Some(0));
         assert_eq!(extract_inc_tag(22001), Some(1));
         assert_eq!(extract_inc_tag(22100), Some(100));
+    }
+
+    #[test]
+    fn test_analyze_syn_pat_flags() {
+        // Test with no flags
+        let info = rs_analyze_syn_pat_flags(0);
+        assert_eq!(info.contained, 0);
+        assert_eq!(info.transparent, 0);
+        assert_eq!(info.conceal, 0);
+        assert_eq!(info.fold, 0);
+
+        // Test with contained flag
+        let info = rs_analyze_syn_pat_flags(HL_CONTAINED);
+        assert_eq!(info.contained, 1);
+        assert_eq!(info.transparent, 0);
+
+        // Test with multiple flags
+        let flags = HL_CONTAINED | HL_TRANSP | HL_KEEPEND | HL_FOLD;
+        let info = rs_analyze_syn_pat_flags(flags);
+        assert_eq!(info.contained, 1);
+        assert_eq!(info.transparent, 1);
+        assert_eq!(info.keepend, 1);
+        assert_eq!(info.fold, 1);
+        assert_eq!(info.oneline, 0);
+        assert_eq!(info.conceal, 0);
+
+        // Test conceal flags
+        let info = rs_analyze_syn_pat_flags(HL_CONCEAL | HL_CONCEALENDS);
+        assert_eq!(info.conceal, 1);
+        assert_eq!(info.conceal_ends, 1);
+    }
+
+    #[test]
+    fn test_syn_pat_skip_flags() {
+        assert_eq!(rs_syn_pat_skip_flags(0), 0);
+        assert_eq!(rs_syn_pat_skip_flags(HL_SKIPNL), HL_SKIPNL);
+        assert_eq!(rs_syn_pat_skip_flags(HL_SKIPWHITE), HL_SKIPWHITE);
+        assert_eq!(rs_syn_pat_skip_flags(HL_SKIPEMPTY), HL_SKIPEMPTY);
+
+        // Combined
+        let flags = HL_SKIPNL | HL_SKIPWHITE | HL_SKIPEMPTY;
+        assert_eq!(rs_syn_pat_skip_flags(flags), flags);
+
+        // With other flags mixed in
+        let flags = HL_CONTAINED | HL_SKIPNL | HL_FOLD;
+        assert_eq!(rs_syn_pat_skip_flags(flags), HL_SKIPNL);
+    }
+
+    #[test]
+    fn test_syn_pat_is_sync_related() {
+        assert_eq!(rs_syn_pat_is_sync_related(0), 0);
+        assert_eq!(rs_syn_pat_is_sync_related(HL_CONTAINED), 0);
+        assert_eq!(rs_syn_pat_is_sync_related(HL_SYNC_HERE), 1);
+        assert_eq!(rs_syn_pat_is_sync_related(HL_SYNC_THERE), 1);
+        assert_eq!(rs_syn_pat_is_sync_related(HL_SYNC_HERE | HL_SYNC_THERE), 1);
+    }
+
+    #[test]
+    fn test_syn_pat_is_visible() {
+        assert_eq!(rs_syn_pat_is_visible(0), 1); // No flags = visible
+        assert_eq!(rs_syn_pat_is_visible(HL_CONTAINED), 1);
+        assert_eq!(rs_syn_pat_is_visible(HL_TRANSP), 0); // Transparent = not visible
+        assert_eq!(rs_syn_pat_is_visible(HL_TRANSP | HL_FOLD), 0);
+    }
+
+    #[test]
+    fn test_sptype_name() {
+        use std::ffi::CStr;
+
+        unsafe {
+            let match_name = CStr::from_ptr(rs_sptype_name(SPTYPE_MATCH));
+            assert_eq!(match_name.to_str().unwrap(), "MATCH");
+
+            let start_name = CStr::from_ptr(rs_sptype_name(SPTYPE_START));
+            assert_eq!(start_name.to_str().unwrap(), "START");
+
+            let end_name = CStr::from_ptr(rs_sptype_name(SPTYPE_END));
+            assert_eq!(end_name.to_str().unwrap(), "END");
+
+            let skip_name = CStr::from_ptr(rs_sptype_name(SPTYPE_SKIP));
+            assert_eq!(skip_name.to_str().unwrap(), "SKIP");
+
+            let unknown = CStr::from_ptr(rs_sptype_name(99));
+            assert_eq!(unknown.to_str().unwrap(), "UNKNOWN");
+        }
     }
 }
