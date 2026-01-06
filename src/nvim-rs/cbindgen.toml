@@ -143,4 +143,9 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_validate_mouse", "rs_validate_shortmess", "rs_validate_whichwrap",
            "rs_validate_comments", "rs_validate_commentstring", "rs_validate_complete",
            "rs_validate_matchpairs", "rs_validate_backspace", "rs_validate_foldmarker",
-           "rs_validate_lispoptions", "rs_validate_breakindentopt", "rs_validate_spelloptions"]
+           "rs_validate_lispoptions", "rs_validate_breakindentopt", "rs_validate_spelloptions",
+           # Complex string option callbacks (Phase 4)
+           "rs_validate_helplang", "rs_validate_shada", "rs_validate_mousescroll",
+           "MouseScrollResult", "rs_validate_colorcolumn", "rs_validate_vartabs",
+           "rs_validate_eventignore_item", "rs_validate_wildmode", "rs_validate_mkspellmem",
+           "rs_validate_keymodel", "rs_validate_messagesopt"]
