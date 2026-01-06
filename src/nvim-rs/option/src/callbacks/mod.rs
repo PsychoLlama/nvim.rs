@@ -7,6 +7,7 @@
 #![allow(clippy::missing_safety_doc)] // FFI functions safety is implicit
 
 pub mod complex;
+pub mod numeric;
 pub mod string;
 
 use std::ffi::{c_char, c_int};
