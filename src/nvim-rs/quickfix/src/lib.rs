@@ -2085,6 +2085,251 @@ pub unsafe extern "C" fn rs_qf_last_valid_entry(qfl: QfListHandleMut) -> c_int {
     0 // No valid entries
 }
 
+/// Get the next valid entry in a specific direction.
+///
+/// This is a lower-level function that doesn't modify the list state.
+/// It returns the entry pointer and updates `out_idx` with the new index.
+///
+/// - `dir` == `FORWARD` or `FORWARD_FILE`: search forward
+/// - `dir` == `BACKWARD` or `BACKWARD_FILE`: search backward
+/// - For `FORWARD_FILE`/`BACKWARD_FILE`, skips to a different file
+///
+/// Returns the entry pointer, or NULL if not found.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - `qfp` must be a valid pointer to a `qfline_T` struct
+/// - `qf_index` must be a valid pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_next_valid_entry_dir(
+    qfl: QfListHandle,
+    qfp: QfLineHandle,
+    qf_index: *mut c_int,
+    dir: c_int,
+) -> QfLineHandle {
+    if qfl.is_null() || qfp.is_null() || qf_index.is_null() {
+        return std::ptr::null();
+    }
+
+    let nonevalid = nvim_qf_get_nonevalid(qfl);
+    let count = nvim_qf_get_count(qfl);
+    let old_fnum = nvim_qfline_get_fnum(qfp);
+    let mut idx = *qf_index;
+    let mut current = nvim_qfline_get_next(qfp);
+
+    loop {
+        if idx == count || current.is_null() {
+            return std::ptr::null();
+        }
+        idx += 1;
+
+        let valid = nvim_qfline_get_valid(current);
+        let fnum = nvim_qfline_get_fnum(current);
+
+        // Skip invalid entries (unless all are invalid)
+        // Skip same-file entries if dir is FORWARD_FILE
+        if (nonevalid || valid) && (dir != direction::FORWARD_FILE || fnum != old_fnum) {
+            *qf_index = idx;
+            return current;
+        }
+
+        current = nvim_qfline_get_next(current);
+    }
+}
+
+/// Get the previous valid entry in a specific direction.
+///
+/// This is a lower-level function that doesn't modify the list state.
+/// It returns the entry pointer and updates `out_idx` with the new index.
+///
+/// - `dir` == `BACKWARD`: search backward
+/// - `dir` == `BACKWARD_FILE`: search backward to a different file
+///
+/// Returns the entry pointer, or NULL if not found.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - `qfp` must be a valid pointer to a `qfline_T` struct
+/// - `qf_index` must be a valid pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_prev_valid_entry_dir(
+    qfl: QfListHandle,
+    qfp: QfLineHandle,
+    qf_index: *mut c_int,
+    dir: c_int,
+) -> QfLineHandle {
+    if qfl.is_null() || qfp.is_null() || qf_index.is_null() {
+        return std::ptr::null();
+    }
+
+    let nonevalid = nvim_qf_get_nonevalid(qfl);
+    let old_fnum = nvim_qfline_get_fnum(qfp);
+    let mut idx = *qf_index;
+    let mut current = nvim_qfline_get_prev(qfp);
+
+    loop {
+        if idx == 1 || current.is_null() {
+            return std::ptr::null();
+        }
+        idx -= 1;
+
+        let valid = nvim_qfline_get_valid(current);
+        let fnum = nvim_qfline_get_fnum(current);
+
+        // Skip invalid entries (unless all are invalid)
+        // Skip same-file entries if dir is BACKWARD_FILE
+        if (nonevalid || valid) && (dir != direction::BACKWARD_FILE || fnum != old_fnum) {
+            *qf_index = idx;
+            return current;
+        }
+
+        current = nvim_qfline_get_prev(current);
+    }
+}
+
+/// Get the n'th valid entry in the specified direction from the current entry.
+///
+/// This is equivalent to the C function `get_nth_valid_entry()`.
+///
+/// - `errornr`: number of valid entries to skip
+/// - `dir`: `FORWARD`/`BACKWARD`/`FORWARD_FILE`/`BACKWARD_FILE`
+///
+/// Returns the entry pointer and sets `new_qfidx` to the new index.
+/// Returns NULL on failure.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - `new_qfidx` must be a valid pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_nth_valid_entry_dir(
+    qfl: QfListHandle,
+    errornr: c_int,
+    dir: c_int,
+    new_qfidx: *mut c_int,
+) -> QfLineHandle {
+    if qfl.is_null() || new_qfidx.is_null() || errornr <= 0 {
+        return std::ptr::null();
+    }
+
+    let mut qf_ptr = nvim_qf_get_ptr(qfl);
+    let mut qf_idx = nvim_qf_get_index(qfl);
+
+    let mut remaining = errornr;
+    while remaining > 0 {
+        let prev_ptr = qf_ptr;
+        let prev_idx = qf_idx;
+
+        qf_ptr = if dir == direction::FORWARD || dir == direction::FORWARD_FILE {
+            rs_qf_get_next_valid_entry_dir(qfl, qf_ptr, &raw mut qf_idx, dir)
+        } else {
+            rs_qf_get_prev_valid_entry_dir(qfl, qf_ptr, &raw mut qf_idx, dir)
+        };
+
+        if qf_ptr.is_null() {
+            // Can't move further, return previous position
+            *new_qfidx = prev_idx;
+            return prev_ptr;
+        }
+
+        remaining -= 1;
+    }
+
+    *new_qfidx = qf_idx;
+    qf_ptr
+}
+
+/// Get an entry by index or direction-based navigation.
+///
+/// This is equivalent to the C function `qf_get_entry()`.
+///
+/// - If `dir` != 0: navigate to nth valid entry in direction
+/// - If `errornr` != 0: navigate to specific entry number
+/// - Otherwise: return current entry
+///
+/// Returns the entry pointer and sets `new_qfidx` to the new index.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - `new_qfidx` must be a valid pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_entry(
+    qfl: QfListHandle,
+    errornr: c_int,
+    dir: c_int,
+    new_qfidx: *mut c_int,
+) -> QfLineHandle {
+    if qfl.is_null() || new_qfidx.is_null() {
+        return std::ptr::null();
+    }
+
+    let mut qf_ptr = nvim_qf_get_ptr(qfl);
+    let mut qfidx = nvim_qf_get_index(qfl);
+
+    if dir != 0 {
+        // next/prev valid entry in direction
+        qf_ptr = rs_qf_get_nth_valid_entry_dir(qfl, errornr.max(1), dir, &raw mut qfidx);
+    } else if errornr != 0 {
+        // go to specified entry number
+        qf_ptr = rs_qf_get_nth_entry(qfl, errornr, &raw mut qfidx);
+    }
+
+    *new_qfidx = qfidx;
+    qf_ptr
+}
+
+/// Get the nth entry (by absolute index) from the current entry.
+///
+/// This is equivalent to the C function `get_nth_entry()`.
+/// Navigates forward or backward to reach the specified entry number.
+///
+/// Returns the entry pointer and sets `new_qfidx` to the new index.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - `new_qfidx` must be a valid pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_nth_entry(
+    qfl: QfListHandle,
+    errornr: c_int,
+    new_qfidx: *mut c_int,
+) -> QfLineHandle {
+    if qfl.is_null() || new_qfidx.is_null() {
+        return std::ptr::null();
+    }
+
+    let mut qf_ptr = nvim_qf_get_ptr(qfl);
+    let mut qf_idx = nvim_qf_get_index(qfl);
+    let count = nvim_qf_get_count(qfl);
+
+    // Navigate backward if errornr < qf_idx
+    while errornr < qf_idx && qf_idx > 1 {
+        let prev = nvim_qfline_get_prev(qf_ptr);
+        if prev.is_null() {
+            break;
+        }
+        qf_idx -= 1;
+        qf_ptr = prev;
+    }
+
+    // Navigate forward if errornr > qf_idx
+    while errornr > qf_idx && qf_idx < count {
+        let next = nvim_qfline_get_next(qf_ptr);
+        if next.is_null() {
+            break;
+        }
+        qf_idx += 1;
+        qf_ptr = next;
+    }
+
+    *new_qfidx = qf_idx;
+    qf_ptr
+}
+
 // =============================================================================
 // Phase 6: Parsing Infrastructure
 // =============================================================================
