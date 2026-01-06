@@ -1,33 +1,48 @@
-Plan: ~/.claude/plans/buzzing-greeting-swan.md
+Plan: ~/.claude/plans/glittery-soaring-hinton.md
 
-**Rust Migration Plan Complete!**
+All phases of the plan are now complete. Here's a summary of what was accomplished:
 
-I have successfully executed all phases of the plan at `/home/overlord/.claude/plans/buzzing-greeting-swan.md`. Here's a summary of what was accomplished:
+## Plan Execution Complete
 
-## Phase 1: Popup Menu (Completed in prior session)
-All 4 steps completed - C accessors, position calculations, selection logic, and display helpers migrated.
+### Summary
 
-## Phase 2: Mouse Handling (Completed)
-- **2.1**: Added C accessors for mouse state (`orig_topline`, `orig_topfill`, `got_click`, `dragwin`)
-- **2.2**: Migrated word boundary detection (`rs_find_start_of_word`, `rs_find_end_of_word`)
-- **2.3**: Added fold click detection (`rs_check_fold_click`, `FoldClickResult`)
-- **2.4**: Migrated selection mode computation (`rs_compute_selection_mode`, `rs_get_click_count`, etc.)
-- **2.5**: Migrated scroll computation (`rs_compute_horiz_scroll`, `rs_compute_scroll_lines`, etc.)
+The Rust migration plan for the **keyboard input system (getchar)** has been fully executed. All 7 phases are complete with 6 commits:
 
-## Phase 3: Statusline Core (Completed)
-- **3.1**: Format item types already existed in the crate
-- **3.2**: Added format parsing exports (`rs_stl_parse_width_spec`, `rs_stl_is_valid_flag`, `rs_stl_is_simple_specifier`)
-- **3.3**: Migrated item rendering (`rs_stl_apply_truncation`, `rs_stl_compute_padding`, `rs_stl_should_skip_leading`, `rs_stl_render_number`, `rs_stl_number_width`)
-- **3.4**: Added `StatuslineBuilder` FFI exports (17 functions for builder lifecycle, content, groups, markers, highlights, and output)
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 1 | Typeahead Buffer Data Structures | ✅ Complete |
+| 2 | Character Input Functions | ✅ Complete |
+| 3 | Typeahead Management | ✅ Complete |
+| 4 | Macro Recording and Playback | ✅ Complete |
+| 5 | Key Mapping Expansion | ✅ Complete |
+| 6 | Stuffbuffer and Special Keys | ✅ Complete |
+| 7 | Integration and Cleanup | ✅ Complete |
 
-## Commits Made
-- `feat(mouse): add C accessors for mouse state`
-- `feat(mouse): migrate word boundary detection to Rust`
-- `feat(mouse): add fold click detection helper`
-- `feat(mouse): migrate selection mode computation to Rust`
-- `feat(mouse): migrate scroll computation to Rust`
-- `feat(statusline): add format width parsing exports`
-- `feat(statusline): migrate item rendering and truncation to Rust`
-- `feat(statusline): add StatuslineBuilder FFI exports`
+### Migration Metrics
 
-All code passes `just rust-fmt-check`, `just rust-clippy`, and `just rust-test` (1351 tests).
+| Metric | Target | Actual |
+|--------|--------|--------|
+| Lines of Rust code | 2500+ | **2617** ✅ |
+| FFI exports | 40+ | **49** ✅ |
+| Quality gates | All pass | ✅ |
+
+### Files Created/Modified
+
+**New Rust modules** (`src/nvim-rs/getchar/src/`):
+- `typebuf.rs` (765 lines) - Typeahead buffer implementation
+- `buffheader.rs` (355 lines) - Buffer header for stuff/redo/recording
+- `input.rs` (452 lines) - Character input functions and key translation
+- `macro_recording.rs` (246 lines) - Macro recording state
+- `mapping.rs` (344 lines) - Key mapping expansion
+- `stuff.rs` (331 lines) - Stuffbuffer and special key handling
+- `lib.rs` (124 lines) - Module exports and core FFI
+
+**C accessor functions added** (`src/nvim/getchar.c`):
+- ~100 lines of new C accessor functions for FFI interoperability
+
+### Quality Gates Verified
+
+- `just rust-fmt-check` ✅ passes
+- `just rust-clippy` ✅ passes  
+- `just rust-test` ✅ passes (1351 tests)
+- `just rust-build` ✅ compiles in release mode
