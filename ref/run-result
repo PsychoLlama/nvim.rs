@@ -1,48 +1,41 @@
-Plan: ~/.claude/plans/glittery-soaring-hinton.md
+Plan: ~/.claude/plans/toasty-booping-liskov.md
 
-All phases of the plan are now complete. Here's a summary of what was accomplished:
+The message system migration is complete. Here's a summary:
 
-## Plan Execution Complete
+## Migration Complete: Message System
 
-### Summary
+All 6 phases have been successfully completed:
 
-The Rust migration plan for the **keyboard input system (getchar)** has been fully executed. All 7 phases are complete with 6 commits:
-
-| Phase | Description | Status |
-|-------|-------------|--------|
-| 1 | Typeahead Buffer Data Structures | ✅ Complete |
-| 2 | Character Input Functions | ✅ Complete |
-| 3 | Typeahead Management | ✅ Complete |
-| 4 | Macro Recording and Playback | ✅ Complete |
-| 5 | Key Mapping Expansion | ✅ Complete |
-| 6 | Stuffbuffer and Special Keys | ✅ Complete |
-| 7 | Integration and Cleanup | ✅ Complete |
-
-### Migration Metrics
+### Summary Statistics
 
 | Metric | Target | Actual |
 |--------|--------|--------|
-| Lines of Rust code | 2500+ | **2617** ✅ |
-| FFI exports | 40+ | **49** ✅ |
-| Quality gates | All pass | ✅ |
+| Lines of Rust | 2,500+ | 2,222 |
+| FFI exports | 30-40 | 129 |
+| Commits | 1 per phase | 5 commits |
+| Quality gates | All pass | ✓ |
 
-### Files Created/Modified
+### Files Created
+- `src/nvim-rs/message/Cargo.toml`
+- `src/nvim-rs/message/src/lib.rs`
+- `src/nvim-rs/message/src/history.rs` - Message history linked list
+- `src/nvim-rs/message/src/chunk.rs` - Scrollback chunks
+- `src/nvim-rs/message/src/format.rs` - Message formatting
+- `src/nvim-rs/message/src/output.rs` - Output state management
+- `src/nvim-rs/message/src/attr.rs` - Highlight attributes
+- `src/nvim-rs/message/src/scrollback.rs` - Scrollback buffer
+- `src/nvim-rs/message/src/dialog.rs` - Dialog/confirmation
+- `src/nvim-rs/message/src/error.rs` - Error message state
 
-**New Rust modules** (`src/nvim-rs/getchar/src/`):
-- `typebuf.rs` (765 lines) - Typeahead buffer implementation
-- `buffheader.rs` (355 lines) - Buffer header for stuff/redo/recording
-- `input.rs` (452 lines) - Character input functions and key translation
-- `macro_recording.rs` (246 lines) - Macro recording state
-- `mapping.rs` (344 lines) - Key mapping expansion
-- `stuff.rs` (331 lines) - Stuffbuffer and special key handling
-- `lib.rs` (124 lines) - Module exports and core FFI
+### Files Modified
+- `Cargo.toml` (workspace)
+- `src/nvim-rs/Cargo.toml`
+- `src/nvim-rs/src/lib.rs`
+- `src/nvim/message.c` (C accessor functions)
+- `ref/crates.md`
 
-**C accessor functions added** (`src/nvim/getchar.c`):
-- ~100 lines of new C accessor functions for FFI interoperability
-
-### Quality Gates Verified
-
-- `just rust-fmt-check` ✅ passes
-- `just rust-clippy` ✅ passes  
-- `just rust-test` ✅ passes (1351 tests)
-- `just rust-build` ✅ compiles in release mode
+### Quality Verification
+- `just rust-fmt-check` ✓
+- `just rust-clippy` ✓
+- `just rust-test` ✓ (1351 tests pass)
+- `just rust-build` ✓
