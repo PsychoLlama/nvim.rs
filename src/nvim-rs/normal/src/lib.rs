@@ -979,6 +979,263 @@ pub unsafe extern "C" fn rs_nv_pipe(cap: CapHandle) {
 }
 
 // =============================================================================
+// Word Motion Accessors
+// =============================================================================
+
+extern "C" {
+    // Word motion functions
+    fn nvim_curwin_set_set_curswant(val: bool);
+    fn nvim_fwd_word(count: c_int, bigword: bool, eol: bool) -> c_int;
+    fn nvim_bck_word(count: c_int, bigword: bool, stop: bool) -> c_int;
+    fn nvim_end_word(count: c_int, bigword: bool, stop: bool, empty: bool) -> c_int;
+    #[allow(dead_code)]
+    fn nvim_bckend_word(count: c_int, bigword: bool, eol: bool) -> c_int;
+    fn nvim_findsent(dir: c_int, count: c_int) -> c_int;
+    fn nvim_findpar(pincl: *mut bool, dir: c_int, count: c_int, what: c_int, both: bool) -> bool;
+    fn nvim_get_cursor_col() -> c_int;
+    fn nvim_set_cursor_col(col: c_int);
+    fn nvim_set_cursor_coladd_zero();
+    fn nvim_gchar_cursor_call() -> c_int;
+    fn nvim_inc_cursor() -> c_int;
+    fn nvim_mb_adjust_cursor();
+    fn nvim_cpo_has_changew() -> bool;
+    fn nvim_ascii_iswhite(c: c_int) -> bool;
+    fn nvim_get_p_sel_first() -> std::ffi::c_char;
+    fn nvim_lt_VIsual_cursor() -> bool;
+    fn nvim_lt_pos_cursor(lnum: c_int, col: c_int) -> bool;
+    fn nvim_set_VIsual_select_exclu_adj(val: bool);
+    fn nvim_get_ve_flags() -> c_uint;
+}
+
+// Operator type constant for OP_CHANGE
+const OP_CHANGE: c_int = 5;
+
+// Fold option flag for block
+const K_OPT_FDO_FLAG_BLOCK: c_uint = 0x0002;
+
+// Virtual edit flag for onemore
+const K_OPT_VE_FLAG_ONEMORE: c_uint = 0x0004;
+
+// FAIL return value
+const FAIL: c_int = 0;
+
+// =============================================================================
+// Word Motion Command Handlers
+// =============================================================================
+
+/// Used after a movement command: If the cursor ends up on the NUL after the
+/// end of the line, may move it back to the last character and make the motion
+/// inclusive.
+///
+/// # Safety
+/// `oap` must be a valid oparg_T pointer.
+#[inline]
+unsafe fn adjust_cursor(oap: OapHandle) {
+    // The cursor cannot remain on the NUL when:
+    // - the column is > 0
+    // - not in Visual mode or 'selection' is "o"
+    // - 'virtualedit' is not "all" and not "onemore".
+    #[allow(clippy::cast_possible_wrap)]
+    let sel_o = b'o' as std::ffi::c_char;
+    if nvim_get_cursor_col() > 0
+        && nvim_gchar_cursor_call() == NUL_CHAR
+        && (nvim_get_VIsual_active() == 0 || nvim_get_p_sel_first() == sel_o)
+        && !nvim_virtual_active()
+        && (nvim_get_ve_flags() & K_OPT_VE_FLAG_ONEMORE) == 0
+    {
+        nvim_set_cursor_col(nvim_get_cursor_col() - 1);
+        // prevent cursor from moving on the trail byte
+        nvim_mb_adjust_cursor();
+        nvim_oap_set_inclusive(oap, true);
+    }
+}
+
+/// In exclusive Visual mode, may include the last character.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[inline]
+unsafe fn adjust_for_sel(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    #[allow(clippy::cast_possible_wrap)]
+    let sel_e = b'e' as std::ffi::c_char;
+    if nvim_get_VIsual_active() != 0
+        && nvim_oap_get_inclusive(oap)
+        && nvim_get_p_sel_first() == sel_e
+        && nvim_gchar_cursor_call() != NUL_CHAR
+        && nvim_lt_VIsual_cursor()
+    {
+        nvim_inc_cursor();
+        nvim_oap_set_inclusive(oap, false);
+        nvim_set_VIsual_select_exclu_adj(true);
+    }
+}
+
+/// Command handler for "b" and "B" commands.
+///
+/// cap->arg is 1 for "B".
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_bck_word(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    let count1 = nvim_cap_get_count1(cap);
+    let arg = nvim_cap_get_arg(cap);
+
+    nvim_oap_set_motion_type(oap, K_MT_CHAR_WISE);
+    nvim_oap_set_inclusive(oap, false);
+    nvim_curwin_set_set_curswant(true);
+
+    if nvim_bck_word(count1, arg != 0, false) == FAIL {
+        rs_clearopbeep(oap);
+    } else if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_HOR) != 0
+        && nvim_get_KeyTyped()
+        && nvim_oap_get_op_type_ptr(oap) == OP_NOP
+    {
+        nvim_foldOpenCursor();
+    }
+}
+
+/// Command handler for "e", "E", "w" and "W" commands.
+///
+/// cap->arg is true (non-zero) for "E" and "W".
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_wordcmd(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    let count1 = nvim_cap_get_count1(cap);
+    let arg = nvim_cap_get_arg(cap);
+    let cmdchar = nvim_cap_get_cmdchar(cap);
+
+    // Save starting position for later comparison
+    let start_lnum = nvim_get_cursor_lnum();
+    let start_col = nvim_get_cursor_col();
+
+    // Set inclusive for the "E" and "e" command.
+    let mut word_end = cmdchar == c_int::from(b'e') || cmdchar == c_int::from(b'E');
+    nvim_oap_set_inclusive(oap, word_end);
+
+    let mut flag = false;
+
+    // "cw" and "cW" are a special case.
+    if !word_end && nvim_oap_get_op_type_ptr(oap) == OP_CHANGE {
+        let n = nvim_gchar_cursor_call();
+        if n != NUL_CHAR && !nvim_ascii_iswhite(n) {
+            // This is a little strange. To match what the real Vi does, we
+            // effectively map "cw" to "ce", and "cW" to "cE", provided that we are
+            // not on a space or a TAB. This seems impolite at first, but it's
+            // really more what we mean when we say "cw".
+            //
+            // Another strangeness: When standing on the end of a word "ce" will
+            // change until the end of the next word, but "cw" will change only one
+            // character! This is done by setting "flag".
+            if nvim_cpo_has_changew() {
+                nvim_oap_set_inclusive(oap, true);
+                word_end = true;
+            }
+            flag = true;
+        }
+    }
+
+    nvim_oap_set_motion_type(oap, K_MT_CHAR_WISE);
+    nvim_curwin_set_set_curswant(true);
+
+    let n = if word_end {
+        nvim_end_word(count1, arg != 0, flag, false)
+    } else {
+        nvim_fwd_word(count1, arg != 0, nvim_oap_get_op_type_ptr(oap) != OP_NOP)
+    };
+
+    // Don't leave the cursor on the NUL past the end of line. Unless we
+    // didn't move it forward.
+    if nvim_lt_pos_cursor(start_lnum, start_col) {
+        adjust_cursor(oap);
+    }
+
+    if n == FAIL && nvim_oap_get_op_type_ptr(oap) == OP_NOP {
+        rs_clearopbeep(oap);
+    } else {
+        adjust_for_sel(cap);
+        if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_HOR) != 0
+            && nvim_get_KeyTyped()
+            && nvim_oap_get_op_type_ptr(oap) == OP_NOP
+        {
+            nvim_foldOpenCursor();
+        }
+    }
+}
+
+/// Command handler for "{" and "}" commands.
+///
+/// cap->arg is BACKWARD for "{" and FORWARD for "}".
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_findpar(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    let arg = nvim_cap_get_arg(cap);
+    let count1 = nvim_cap_get_count1(cap);
+
+    nvim_oap_set_motion_type(oap, K_MT_CHAR_WISE);
+    nvim_oap_set_inclusive(oap, false);
+    nvim_oap_set_use_reg_one(oap, true);
+    nvim_curwin_set_set_curswant(true);
+
+    let mut inclusive = false;
+    if !nvim_findpar(&raw mut inclusive, arg, count1, NUL_CHAR, false) {
+        rs_clearopbeep(oap);
+        return;
+    }
+    nvim_oap_set_inclusive(oap, inclusive);
+
+    nvim_set_cursor_coladd_zero();
+    if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_BLOCK) != 0
+        && nvim_get_KeyTyped()
+        && nvim_oap_get_op_type_ptr(oap) == OP_NOP
+    {
+        nvim_foldOpenCursor();
+    }
+}
+
+/// Command handler for "(" and ")" commands.
+///
+/// cap->arg is BACKWARD for "(" and FORWARD for ")".
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_brace(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    let arg = nvim_cap_get_arg(cap);
+    let count1 = nvim_cap_get_count1(cap);
+
+    nvim_oap_set_motion_type(oap, K_MT_CHAR_WISE);
+    nvim_oap_set_use_reg_one(oap, true);
+    // The motion used to be inclusive for "(", but that is not what Vi does.
+    nvim_oap_set_inclusive(oap, false);
+    nvim_curwin_set_set_curswant(true);
+
+    if nvim_findsent(arg, count1) == FAIL {
+        rs_clearopbeep(oap);
+        return;
+    }
+
+    // Don't leave the cursor on the NUL past end of line.
+    adjust_cursor(oap);
+    nvim_set_cursor_coladd_zero();
+    if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_BLOCK) != 0
+        && nvim_get_KeyTyped()
+        && nvim_oap_get_op_type_ptr(oap) == OP_NOP
+    {
+        nvim_foldOpenCursor();
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

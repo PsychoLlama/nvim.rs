@@ -403,6 +403,10 @@ extern void rs_nv_dollar(cmdarg_T *cap);
 extern void rs_nv_end(cmdarg_T *cap);
 extern void rs_nv_home(cmdarg_T *cap);
 extern void rs_nv_pipe(cmdarg_T *cap);
+extern void rs_nv_wordcmd(cmdarg_T *cap);
+extern void rs_nv_bck_word(cmdarg_T *cap);
+extern void rs_nv_findpar(cmdarg_T *cap);
+extern void rs_nv_brace(cmdarg_T *cap);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -915,6 +919,143 @@ void nvim_cap_set_prechar(cmdarg_T *cap, int val)
   if (cap) {
     cap->prechar = val;
   }
+}
+
+// =============================================================================
+// Word motion accessors for Rust FFI
+// =============================================================================
+
+/// Set curwin->w_set_curswant.
+void nvim_curwin_set_set_curswant(bool val)
+{
+  curwin->w_set_curswant = val;
+}
+
+/// Wrapper for fwd_word (word motion forward).
+int nvim_fwd_word(int count, bool bigword, bool eol)
+{
+  return fwd_word(count, bigword, eol);
+}
+
+/// Wrapper for bck_word (word motion backward).
+int nvim_bck_word(int count, bool bigword, bool stop)
+{
+  return bck_word(count, bigword, stop);
+}
+
+/// Wrapper for end_word (word end motion).
+int nvim_end_word(int count, bool bigword, bool stop, bool empty)
+{
+  return end_word(count, bigword, stop, empty);
+}
+
+/// Wrapper for bckend_word (backward word end motion - ge/gE).
+int nvim_bckend_word(int count, bool bigword, bool eol)
+{
+  return bckend_word(count, bigword, eol);
+}
+
+/// Wrapper for findsent (sentence motion).
+int nvim_findsent(int dir, int count)
+{
+  return findsent(dir, count);
+}
+
+/// Wrapper for findpar (paragraph motion).
+bool nvim_findpar(bool *pincl, int dir, int count, int what, bool both)
+{
+  return findpar(pincl, dir, count, what, both);
+}
+
+/// Get cursor column.
+int nvim_get_cursor_col(void)
+{
+  return curwin->w_cursor.col;
+}
+
+/// Set cursor column.
+void nvim_set_cursor_col(int col)
+{
+  curwin->w_cursor.col = col;
+}
+
+/// Set cursor coladd to 0.
+void nvim_set_cursor_coladd_zero(void)
+{
+  curwin->w_cursor.coladd = 0;
+}
+
+/// Wrapper for gchar_cursor.
+int nvim_gchar_cursor_call(void)
+{
+  return gchar_cursor();
+}
+
+/// Wrapper for inc_cursor.
+int nvim_inc_cursor(void)
+{
+  return inc_cursor();
+}
+
+/// Wrapper for mb_adjust_cursor.
+void nvim_mb_adjust_cursor(void)
+{
+  mb_adjust_cursor();
+}
+
+/// Check if 'cpo' contains CPO_CHANGEW.
+bool nvim_cpo_has_changew(void)
+{
+  return vim_strchr(p_cpo, CPO_CHANGEW) != NULL;
+}
+
+/// Check if character is whitespace.
+bool nvim_ascii_iswhite(int c)
+{
+  return ascii_iswhite(c);
+}
+
+/// Get p_sel value (pointer to 'selection' option string).
+char nvim_get_p_sel_first(void)
+{
+  return *p_sel;
+}
+
+/// Get VIsual position lnum.
+int nvim_get_VIsual_lnum(void)
+{
+  return VIsual.lnum;
+}
+
+/// Get VIsual position col.
+int nvim_get_VIsual_col(void)
+{
+  return VIsual.col;
+}
+
+/// Compare positions: return true if VIsual < curwin->w_cursor.
+bool nvim_lt_VIsual_cursor(void)
+{
+  return lt(VIsual, curwin->w_cursor);
+}
+
+/// Compare startpos < cursor (for word motion).
+bool nvim_lt_pos_cursor(int lnum, int col)
+{
+  pos_T startpos = { lnum, col, 0 };
+  return lt(startpos, curwin->w_cursor);
+}
+
+/// Set VIsual_select_exclu_adj.
+void nvim_set_VIsual_select_exclu_adj(bool val)
+{
+  VIsual_select_exclu_adj = val;
+}
+
+/// Wrapper for get_ve_flags.
+unsigned int nvim_get_ve_flags(void)
+{
+  return get_ve_flags(curwin);
 }
 
 /// Check if an operator was started but not finished yet.
@@ -4652,23 +4793,7 @@ static void nv_percent(cmdarg_T *cap)
 /// cap->arg is BACKWARD for "(" and FORWARD for ")".
 static void nv_brace(cmdarg_T *cap)
 {
-  cap->oap->motion_type = kMTCharWise;
-  cap->oap->use_reg_one = true;
-  // The motion used to be inclusive for "(", but that is not what Vi does.
-  cap->oap->inclusive = false;
-  curwin->w_set_curswant = true;
-
-  if (findsent(cap->arg, cap->count1) == FAIL) {
-    clearopbeep(cap->oap);
-    return;
-  }
-
-  // Don't leave the cursor on the NUL past end of line.
-  adjust_cursor(cap->oap);
-  curwin->w_cursor.coladd = 0;
-  if ((fdo_flags & kOptFdoFlagBlock) && KeyTyped && cap->oap->op_type == OP_NOP) {
-    foldOpenCursor();
-  }
+  rs_nv_brace(cap);
 }
 
 /// "m" command: Mark a position.
@@ -4687,19 +4812,7 @@ static void nv_mark(cmdarg_T *cap)
 /// cmd->arg is BACKWARD for "{" and FORWARD for "}".
 static void nv_findpar(cmdarg_T *cap)
 {
-  cap->oap->motion_type = kMTCharWise;
-  cap->oap->inclusive = false;
-  cap->oap->use_reg_one = true;
-  curwin->w_set_curswant = true;
-  if (!findpar(&cap->oap->inclusive, cap->arg, cap->count1, NUL, false)) {
-    clearopbeep(cap->oap);
-    return;
-  }
-
-  curwin->w_cursor.coladd = 0;
-  if ((fdo_flags & kOptFdoFlagBlock) && KeyTyped && cap->oap->op_type == OP_NOP) {
-    foldOpenCursor();
-  }
+  rs_nv_findpar(cap);
 }
 
 /// "u" command: Undo or make lower case.
@@ -6150,75 +6263,14 @@ static void nv_pipe(cmdarg_T *cap)
 /// cap->arg is 1 for "B"
 static void nv_bck_word(cmdarg_T *cap)
 {
-  cap->oap->motion_type = kMTCharWise;
-  cap->oap->inclusive = false;
-  curwin->w_set_curswant = true;
-  if (bck_word(cap->count1, cap->arg, false) == false) {
-    clearopbeep(cap->oap);
-  } else if ((fdo_flags & kOptFdoFlagHor) && KeyTyped && cap->oap->op_type == OP_NOP) {
-    foldOpenCursor();
-  }
+  rs_nv_bck_word(cap);
 }
 
 /// Handle word motion commands "e", "E", "w" and "W".
 /// cap->arg is true for "E" and "W".
 static void nv_wordcmd(cmdarg_T *cap)
 {
-  int n;
-  bool word_end;
-  bool flag = false;
-  pos_T startpos = curwin->w_cursor;
-
-  // Set inclusive for the "E" and "e" command.
-  if (cap->cmdchar == 'e' || cap->cmdchar == 'E') {
-    word_end = true;
-  } else {
-    word_end = false;
-  }
-  cap->oap->inclusive = word_end;
-
-  // "cw" and "cW" are a special case.
-  if (!word_end && cap->oap->op_type == OP_CHANGE) {
-    n = gchar_cursor();
-    if (n != NUL && !ascii_iswhite(n)) {
-      // This is a little strange.  To match what the real Vi does, we
-      // effectively map "cw" to "ce", and "cW" to "cE", provided that we are
-      // not on a space or a TAB.  This seems impolite at first, but it's
-      // really more what we mean when we say "cw".
-      //
-      // Another strangeness: When standing on the end of a word "ce" will
-      // change until the end of the next word, but "cw" will change only one
-      // character!  This is done by setting "flag".
-      if (vim_strchr(p_cpo, CPO_CHANGEW) != NULL) {
-        cap->oap->inclusive = true;
-        word_end = true;
-      }
-      flag = true;
-    }
-  }
-
-  cap->oap->motion_type = kMTCharWise;
-  curwin->w_set_curswant = true;
-  if (word_end) {
-    n = end_word(cap->count1, cap->arg, flag, false);
-  } else {
-    n = fwd_word(cap->count1, cap->arg, cap->oap->op_type != OP_NOP);
-  }
-
-  // Don't leave the cursor on the NUL past the end of line. Unless we
-  // didn't move it forward.
-  if (lt(startpos, curwin->w_cursor)) {
-    adjust_cursor(cap->oap);
-  }
-
-  if (n == false && cap->oap->op_type == OP_NOP) {
-    clearopbeep(cap->oap);
-  } else {
-    adjust_for_sel(cap);
-    if ((fdo_flags & kOptFdoFlagHor) && KeyTyped && cap->oap->op_type == OP_NOP) {
-      foldOpenCursor();
-    }
-  }
+  rs_nv_wordcmd(cap);
 }
 
 /// Used after a movement command: If the cursor ends up on the NUL after the
