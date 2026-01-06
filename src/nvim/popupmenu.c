@@ -108,6 +108,126 @@ int nvim_get_pum_height(void)
   return pum_height;
 }
 
+int nvim_get_pum_size(void)
+{
+  return pum_size;
+}
+
+int nvim_get_pum_selected(void)
+{
+  return pum_selected;
+}
+
+void nvim_set_pum_selected(int val)
+{
+  pum_selected = val;
+}
+
+int nvim_get_pum_first(void)
+{
+  return pum_first;
+}
+
+void nvim_set_pum_first(int val)
+{
+  pum_first = val;
+}
+
+int nvim_get_pum_width(void)
+{
+  return pum_width;
+}
+
+void nvim_set_pum_width(int val)
+{
+  pum_width = val;
+}
+
+int nvim_get_pum_row(void)
+{
+  return pum_row;
+}
+
+void nvim_set_pum_row(int val)
+{
+  pum_row = val;
+}
+
+int nvim_get_pum_col(void)
+{
+  return pum_col;
+}
+
+void nvim_set_pum_col(int val)
+{
+  pum_col = val;
+}
+
+int nvim_get_pum_scrollbar(void)
+{
+  return pum_scrollbar;
+}
+
+void nvim_set_pum_scrollbar(int val)
+{
+  pum_scrollbar = val;
+}
+
+int nvim_get_pum_base_width(void)
+{
+  return pum_base_width;
+}
+
+void nvim_set_pum_base_width(int val)
+{
+  pum_base_width = val;
+}
+
+int nvim_get_pum_kind_width(void)
+{
+  return pum_kind_width;
+}
+
+void nvim_set_pum_kind_width(int val)
+{
+  pum_kind_width = val;
+}
+
+int nvim_get_pum_extra_width(void)
+{
+  return pum_extra_width;
+}
+
+void nvim_set_pum_extra_width(int val)
+{
+  pum_extra_width = val;
+}
+
+int nvim_get_pum_above(void)
+{
+  return pum_above;
+}
+
+void nvim_set_pum_above(int val)
+{
+  pum_above = val != 0;
+}
+
+int nvim_get_pum_rl(void)
+{
+  return pum_rl;
+}
+
+void nvim_set_pum_rl(int val)
+{
+  pum_rl = val != 0;
+}
+
+void nvim_set_pum_height(int val)
+{
+  pum_height = val;
+}
+
 #include "popupmenu.c.generated.h"
 #define PUM_DEF_HEIGHT 10
 

@@ -8,6 +8,7 @@
 use std::ffi::c_int;
 
 // C accessor functions for popup menu state.
+#[allow(dead_code)]
 extern "C" {
     /// Get the `pum_is_visible` static variable.
     fn nvim_get_pum_is_visible() -> c_int;
@@ -15,8 +16,56 @@ extern "C" {
     fn nvim_get_pum_external() -> c_int;
     /// Get the `pum_height` static variable.
     fn nvim_get_pum_height() -> c_int;
+    /// Set the `pum_height` static variable.
+    fn nvim_set_pum_height(val: c_int);
     /// Get the UI popup menu height (iterates over UIs).
     fn ui_pum_get_height() -> c_int;
+    /// Get the `pum_size` static variable (number of items).
+    fn nvim_get_pum_size() -> c_int;
+    /// Get the `pum_selected` static variable (selected index or -1).
+    fn nvim_get_pum_selected() -> c_int;
+    /// Set the `pum_selected` static variable.
+    fn nvim_set_pum_selected(val: c_int);
+    /// Get the `pum_first` static variable (index of top item).
+    fn nvim_get_pum_first() -> c_int;
+    /// Set the `pum_first` static variable.
+    fn nvim_set_pum_first(val: c_int);
+    /// Get the `pum_width` static variable.
+    fn nvim_get_pum_width() -> c_int;
+    /// Set the `pum_width` static variable.
+    fn nvim_set_pum_width(val: c_int);
+    /// Get the `pum_row` static variable.
+    fn nvim_get_pum_row() -> c_int;
+    /// Set the `pum_row` static variable.
+    fn nvim_set_pum_row(val: c_int);
+    /// Get the `pum_col` static variable.
+    fn nvim_get_pum_col() -> c_int;
+    /// Set the `pum_col` static variable.
+    fn nvim_set_pum_col(val: c_int);
+    /// Get the `pum_scrollbar` static variable.
+    fn nvim_get_pum_scrollbar() -> c_int;
+    /// Set the `pum_scrollbar` static variable.
+    fn nvim_set_pum_scrollbar(val: c_int);
+    /// Get the `pum_base_width` static variable.
+    fn nvim_get_pum_base_width() -> c_int;
+    /// Set the `pum_base_width` static variable.
+    fn nvim_set_pum_base_width(val: c_int);
+    /// Get the `pum_kind_width` static variable.
+    fn nvim_get_pum_kind_width() -> c_int;
+    /// Set the `pum_kind_width` static variable.
+    fn nvim_set_pum_kind_width(val: c_int);
+    /// Get the `pum_extra_width` static variable.
+    fn nvim_get_pum_extra_width() -> c_int;
+    /// Set the `pum_extra_width` static variable.
+    fn nvim_set_pum_extra_width(val: c_int);
+    /// Get the `pum_above` static variable.
+    fn nvim_get_pum_above() -> c_int;
+    /// Set the `pum_above` static variable.
+    fn nvim_set_pum_above(val: c_int);
+    /// Get the `pum_rl` static variable (right-to-left).
+    fn nvim_get_pum_rl() -> c_int;
+    /// Set the `pum_rl` static variable.
+    fn nvim_set_pum_rl(val: c_int);
 }
 
 /// Check if the popup menu is displayed.
