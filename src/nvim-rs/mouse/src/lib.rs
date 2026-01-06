@@ -394,6 +394,85 @@ pub struct MouseButtonResult {
 }
 
 // =============================================================================
+// Visual Mode Selection Type
+// =============================================================================
+
+/// Visual mode character selection ('v')
+pub const VISUAL_CHAR: c_int = b'v' as c_int;
+
+/// Visual mode line selection ('V')
+pub const VISUAL_LINE: c_int = b'V' as c_int;
+
+/// Visual mode block selection (Ctrl-V = 0x16)
+pub const VISUAL_BLOCK: c_int = 0x16;
+
+/// Multi-click mask bits
+pub const MOD_MASK_MULTI_CLICK: c_int = 0x700;
+
+/// Double-click mask
+pub const MOD_MASK_2CLICK: c_int = 0x100;
+
+/// Triple-click mask
+pub const MOD_MASK_3CLICK: c_int = 0x200;
+
+/// Quadruple-click mask
+pub const MOD_MASK_4CLICK: c_int = 0x300;
+
+/// Alt modifier mask
+pub const MOD_MASK_ALT: c_int = 0x08;
+
+/// Determine the visual selection mode based on multi-click count and modifiers.
+///
+/// - Double-click: character-wise ('v'), or block-wise (Ctrl-V) if ALT is pressed
+/// - Triple-click: line-wise ('V')
+/// - Quadruple-click: block-wise (Ctrl-V)
+///
+/// Returns 0 if the click count doesn't correspond to a selection mode change.
+#[no_mangle]
+pub const extern "C" fn rs_compute_selection_mode(mod_mask: c_int) -> c_int {
+    let multi_click = mod_mask & MOD_MASK_MULTI_CLICK;
+    let alt_pressed = (mod_mask & MOD_MASK_ALT) != 0;
+
+    match multi_click {
+        MOD_MASK_2CLICK => {
+            if alt_pressed {
+                VISUAL_BLOCK
+            } else {
+                VISUAL_CHAR
+            }
+        }
+        MOD_MASK_3CLICK => VISUAL_LINE,
+        MOD_MASK_4CLICK => VISUAL_BLOCK,
+        _ => 0, // No selection mode change
+    }
+}
+
+/// Get the click count from a modifier mask (1, 2, 3, or 4).
+#[no_mangle]
+pub const extern "C" fn rs_get_click_count(mod_mask: c_int) -> c_int {
+    let multi_click = mod_mask & MOD_MASK_MULTI_CLICK;
+
+    match multi_click {
+        MOD_MASK_4CLICK => 4,
+        MOD_MASK_3CLICK => 3,
+        MOD_MASK_2CLICK => 2,
+        _ => 1,
+    }
+}
+
+/// Check if this is a multi-click (double, triple, or quadruple click).
+#[no_mangle]
+pub const extern "C" fn rs_is_multi_click(mod_mask: c_int) -> bool {
+    (mod_mask & MOD_MASK_MULTI_CLICK) != 0
+}
+
+/// Check if this is specifically a double-click.
+#[no_mangle]
+pub const extern "C" fn rs_is_double_click(mod_mask: c_int) -> bool {
+    (mod_mask & MOD_MASK_MULTI_CLICK) == MOD_MASK_2CLICK
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -512,5 +591,66 @@ mod tests {
     fn test_fold_vcol_constants() {
         assert_eq!(VCOL_FOLD_OPEN, -2);
         assert_eq!(VCOL_FOLD_CLOSE, -3);
+    }
+
+    #[test]
+    fn test_visual_mode_constants() {
+        assert_eq!(VISUAL_CHAR, c_int::from(b'v'));
+        assert_eq!(VISUAL_LINE, c_int::from(b'V'));
+        assert_eq!(VISUAL_BLOCK, 0x16);
+    }
+
+    #[test]
+    fn test_selection_mode_double_click() {
+        let mode = rs_compute_selection_mode(MOD_MASK_2CLICK);
+        assert_eq!(mode, VISUAL_CHAR);
+    }
+
+    #[test]
+    fn test_selection_mode_double_click_with_alt() {
+        let mode = rs_compute_selection_mode(MOD_MASK_2CLICK | MOD_MASK_ALT);
+        assert_eq!(mode, VISUAL_BLOCK);
+    }
+
+    #[test]
+    fn test_selection_mode_triple_click() {
+        let mode = rs_compute_selection_mode(MOD_MASK_3CLICK);
+        assert_eq!(mode, VISUAL_LINE);
+    }
+
+    #[test]
+    fn test_selection_mode_quadruple_click() {
+        let mode = rs_compute_selection_mode(MOD_MASK_4CLICK);
+        assert_eq!(mode, VISUAL_BLOCK);
+    }
+
+    #[test]
+    fn test_selection_mode_single_click() {
+        let mode = rs_compute_selection_mode(0);
+        assert_eq!(mode, 0);
+    }
+
+    #[test]
+    fn test_click_count() {
+        assert_eq!(rs_get_click_count(0), 1);
+        assert_eq!(rs_get_click_count(MOD_MASK_2CLICK), 2);
+        assert_eq!(rs_get_click_count(MOD_MASK_3CLICK), 3);
+        assert_eq!(rs_get_click_count(MOD_MASK_4CLICK), 4);
+    }
+
+    #[test]
+    fn test_is_multi_click() {
+        assert!(!rs_is_multi_click(0));
+        assert!(rs_is_multi_click(MOD_MASK_2CLICK));
+        assert!(rs_is_multi_click(MOD_MASK_3CLICK));
+        assert!(rs_is_multi_click(MOD_MASK_4CLICK));
+    }
+
+    #[test]
+    fn test_is_double_click() {
+        assert!(!rs_is_double_click(0));
+        assert!(rs_is_double_click(MOD_MASK_2CLICK));
+        assert!(!rs_is_double_click(MOD_MASK_3CLICK));
+        assert!(!rs_is_double_click(MOD_MASK_4CLICK));
     }
 }
