@@ -1141,6 +1141,110 @@ void nvim_qf_set_multiignore(void *qfl_void, bool multiignore)
   qfl->qf_multiignore = multiignore;
 }
 
+// =============================================================================
+// Phase 6: Input Sources and Buffer Operations accessor functions for Rust
+// Forward declarations
+// =============================================================================
+
+static int qf_get_nextline(qfstate_T *state);
+static int qf_setup_state(qfstate_T *pstate, char *restrict enc, const char *restrict efile,
+                          typval_T *tv, buf_T *buf, linenr_T lnumfirst, linenr_T lnumlast);
+static void qf_cleanup_state(qfstate_T *pstate);
+
+/// Opaque handle to qfstate_T (parser state)
+typedef void *QfStateHandle;
+
+/// Allocate a new parser state object
+QfStateHandle nvim_qf_state_alloc(void)
+{
+  return xcalloc(1, sizeof(qfstate_T));
+}
+
+/// Free a parser state object
+void nvim_qf_state_free(QfStateHandle state)
+{
+  if (state != NULL) {
+    qf_cleanup_state((qfstate_T *)state);
+    xfree(state);
+  }
+}
+
+/// Setup the parser state for reading from a file
+/// Returns OK on success, FAIL on error
+int nvim_qf_state_setup_file(QfStateHandle state, char *enc, const char *efile)
+{
+  if (state == NULL) {
+    return FAIL;
+  }
+  return qf_setup_state((qfstate_T *)state, enc, efile, NULL, NULL, 0, 0);
+}
+
+/// Setup the parser state for reading from a buffer
+/// Returns OK on success, FAIL on error
+int nvim_qf_state_setup_buffer(QfStateHandle state, void *buf, int lnumfirst, int lnumlast)
+{
+  if (state == NULL || buf == NULL) {
+    return FAIL;
+  }
+  return qf_setup_state((qfstate_T *)state, NULL, NULL, NULL,
+                        (buf_T *)buf, lnumfirst, lnumlast);
+}
+
+/// Get the next line from the input source
+/// Returns QF_OK, QF_END_OF_INPUT, or QF_FAIL
+int nvim_qf_state_get_nextline(QfStateHandle state)
+{
+  if (state == NULL) {
+    return QF_FAIL;
+  }
+  return qf_get_nextline((qfstate_T *)state);
+}
+
+/// Get the current line buffer from the parser state
+const char *nvim_qf_state_get_linebuf(QfStateHandle state)
+{
+  if (state == NULL) {
+    return NULL;
+  }
+  return ((qfstate_T *)state)->linebuf;
+}
+
+/// Get the current line length from the parser state
+size_t nvim_qf_state_get_linelen(QfStateHandle state)
+{
+  if (state == NULL) {
+    return 0;
+  }
+  return ((qfstate_T *)state)->linelen;
+}
+
+/// Check if the parser state has a file handle
+bool nvim_qf_state_has_fd(QfStateHandle state)
+{
+  if (state == NULL) {
+    return false;
+  }
+  return ((qfstate_T *)state)->fd != NULL;
+}
+
+/// Check if the parser state has a typval
+bool nvim_qf_state_has_tv(QfStateHandle state)
+{
+  if (state == NULL) {
+    return false;
+  }
+  return ((qfstate_T *)state)->tv != NULL;
+}
+
+/// Check if the parser state has a buffer
+bool nvim_qf_state_has_buf(QfStateHandle state)
+{
+  if (state == NULL) {
+    return false;
+  }
+  return ((qfstate_T *)state)->buf != NULL;
+}
+
 // Looking up a buffer can be slow if there are many.  Remember the last one
 // to make this a lot faster if there are multiple matches in the same file.
 static char *qf_last_bufname = NULL;

@@ -1699,10 +1699,34 @@ extern "C" {
     fn nvim_qf_set_multiline(qfl: QfListHandleMut, multiline: bool);
     fn nvim_qf_get_multiignore(qfl: QfListHandle) -> bool;
     fn nvim_qf_set_multiignore(qfl: QfListHandleMut, multiignore: bool);
+
+    // Phase 6: Input Sources and Buffer Operations accessors
+    fn nvim_qf_state_alloc() -> QfStateHandle;
+    fn nvim_qf_state_free(state: QfStateHandle);
+    fn nvim_qf_state_setup_file(
+        state: QfStateHandle,
+        enc: *mut c_char,
+        efile: *const c_char,
+    ) -> c_int;
+    fn nvim_qf_state_setup_buffer(
+        state: QfStateHandle,
+        buf: *mut c_void,
+        lnumfirst: c_int,
+        lnumlast: c_int,
+    ) -> c_int;
+    fn nvim_qf_state_get_nextline(state: QfStateHandle) -> c_int;
+    fn nvim_qf_state_get_linebuf(state: QfStateHandle) -> *const c_char;
+    fn nvim_qf_state_get_linelen(state: QfStateHandle) -> usize;
+    fn nvim_qf_state_has_fd(state: QfStateHandle) -> bool;
+    fn nvim_qf_state_has_tv(state: QfStateHandle) -> bool;
+    fn nvim_qf_state_has_buf(state: QfStateHandle) -> bool;
 }
 
 /// Opaque handle to errorformat pattern list (`efm_T`)
 type EfmHandle = *mut c_void;
+
+/// Opaque handle to parser state (`qfstate_T`)
+type QfStateHandle = *mut c_void;
 
 /// `QFL_TYPE` values from C code
 #[allow(dead_code)]
@@ -2375,6 +2399,186 @@ pub unsafe extern "C" fn rs_qf_set_multiignore(qfl: QfListHandleMut, multiignore
         return;
     }
     nvim_qf_set_multiignore(qfl, multiignore);
+}
+
+// =============================================================================
+// Phase 6: Input Sources and Buffer Operations
+// =============================================================================
+
+/// Result codes for quickfix parsing operations.
+#[allow(dead_code)]
+pub mod qf_result {
+    use std::ffi::c_int;
+
+    /// Operation failed
+    pub const QF_FAIL: c_int = 0;
+    /// Operation succeeded
+    pub const QF_OK: c_int = 1;
+    /// End of input reached
+    pub const QF_END_OF_INPUT: c_int = 2;
+    /// Out of memory
+    pub const QF_NOMEM: c_int = 3;
+    /// Line should be ignored
+    pub const QF_IGNORE_LINE: c_int = 4;
+    /// Multi-scan mode active
+    pub const QF_MULTISCAN: c_int = 5;
+    /// Parsing aborted
+    pub const QF_ABORT: c_int = 6;
+}
+
+/// Allocate a new parser state object.
+///
+/// The returned handle must be freed with `rs_qf_state_free` when done.
+///
+/// # Safety
+///
+/// This function allocates memory and returns a valid handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_state_alloc() -> QfStateHandle {
+    nvim_qf_state_alloc()
+}
+
+/// Free a parser state object.
+///
+/// This also cleans up any resources held by the state (file handles, etc).
+///
+/// # Safety
+///
+/// - `state` must be a valid parser state handle or null
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_state_free(state: QfStateHandle) {
+    if state.is_null() {
+        return;
+    }
+    nvim_qf_state_free(state);
+}
+
+/// Setup the parser state for reading from a file.
+///
+/// Returns OK (1) on success, FAIL (0) on error (e.g., file not found).
+///
+/// # Safety
+///
+/// - `state` must be a valid parser state handle
+/// - `enc` can be null or a valid encoding string
+/// - `efile` must be a valid file path or "-" for stdin
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_state_setup_file(
+    state: QfStateHandle,
+    enc: *mut c_char,
+    efile: *const c_char,
+) -> c_int {
+    if state.is_null() {
+        return 0; // FAIL
+    }
+    nvim_qf_state_setup_file(state, enc, efile)
+}
+
+/// Setup the parser state for reading from a buffer.
+///
+/// Returns OK (1) on success, FAIL (0) on error.
+///
+/// # Safety
+///
+/// - `state` must be a valid parser state handle
+/// - `buf` must be a valid buffer pointer
+/// - `lnumfirst` and `lnumlast` define the line range to read
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_state_setup_buffer(
+    state: QfStateHandle,
+    buf: *mut c_void,
+    lnumfirst: c_int,
+    lnumlast: c_int,
+) -> c_int {
+    if state.is_null() || buf.is_null() {
+        return 0; // FAIL
+    }
+    nvim_qf_state_setup_buffer(state, buf, lnumfirst, lnumlast)
+}
+
+/// Get the next line from the input source.
+///
+/// Returns `QF_OK` on success, `QF_END_OF_INPUT` when done, or `QF_FAIL` on error.
+/// After calling, use `rs_qf_state_get_linebuf` to access the line content.
+///
+/// # Safety
+///
+/// - `state` must be a valid parser state handle that has been set up
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_state_get_nextline(state: QfStateHandle) -> c_int {
+    if state.is_null() {
+        return qf_result::QF_FAIL;
+    }
+    nvim_qf_state_get_nextline(state)
+}
+
+/// Get the current line buffer from the parser state.
+///
+/// Returns the line content read by the last `get_nextline` call, or null.
+///
+/// # Safety
+///
+/// - `state` must be a valid parser state handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_state_get_linebuf(state: QfStateHandle) -> *const c_char {
+    if state.is_null() {
+        return std::ptr::null();
+    }
+    nvim_qf_state_get_linebuf(state)
+}
+
+/// Get the current line length from the parser state.
+///
+/// Returns the length of the line read by the last `get_nextline` call, or 0.
+///
+/// # Safety
+///
+/// - `state` must be a valid parser state handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_state_get_linelen(state: QfStateHandle) -> usize {
+    if state.is_null() {
+        return 0;
+    }
+    nvim_qf_state_get_linelen(state)
+}
+
+/// Check if the parser state is reading from a file.
+///
+/// # Safety
+///
+/// - `state` must be a valid parser state handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_state_has_fd(state: QfStateHandle) -> bool {
+    if state.is_null() {
+        return false;
+    }
+    nvim_qf_state_has_fd(state)
+}
+
+/// Check if the parser state has a typval (string or list input).
+///
+/// # Safety
+///
+/// - `state` must be a valid parser state handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_state_has_tv(state: QfStateHandle) -> bool {
+    if state.is_null() {
+        return false;
+    }
+    nvim_qf_state_has_tv(state)
+}
+
+/// Check if the parser state is reading from a buffer.
+///
+/// # Safety
+///
+/// - `state` must be a valid parser state handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_state_has_buf(state: QfStateHandle) -> bool {
+    if state.is_null() {
+        return false;
+    }
+    nvim_qf_state_has_buf(state)
 }
 
 /// Set the current list index in a quickfix stack.
