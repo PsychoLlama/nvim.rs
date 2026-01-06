@@ -502,7 +502,11 @@ pub const extern "C" fn rs_compute_horiz_scroll(
     };
 
     let new_col = current_leftcol + delta;
-    if new_col < 0 { 0 } else { new_col }
+    if new_col < 0 {
+        0
+    } else {
+        new_col
+    }
 }
 
 /// Compute the scroll line count for mouse wheel scrolling.

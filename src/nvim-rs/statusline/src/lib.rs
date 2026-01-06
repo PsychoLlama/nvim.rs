@@ -1156,7 +1156,9 @@ pub unsafe extern "C" fn rs_stl_parse_width_spec(fmt: *const c_char) -> StlWidth
         if !c.is_ascii_digit() {
             break;
         }
-        minwid = minwid.saturating_mul(10).saturating_add(c_int::from(c - b'0'));
+        minwid = minwid
+            .saturating_mul(10)
+            .saturating_add(c_int::from(c - b'0'));
         pos += 1;
     }
 
@@ -1177,7 +1179,11 @@ pub unsafe extern "C" fn rs_stl_parse_width_spec(fmt: *const c_char) -> StlWidth
             w = w.saturating_mul(10).saturating_add(c_int::from(c - b'0'));
             pos += 1;
         }
-        if w == 0 { 50 } else { w }
+        if w == 0 {
+            50
+        } else {
+            w
+        }
     } else {
         9999
     };
@@ -1213,6 +1219,247 @@ pub const extern "C" fn rs_stl_is_simple_specifier(c: u8) -> c_int {
         b'%' | b'=' | b'<' | b')' | b'}' => 1,
         _ => 0,
     }
+}
+
+// =============================================================================
+// FFI Exports for Item Rendering and Truncation
+// =============================================================================
+
+/// Result of applying truncation to a string.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StlTruncResult {
+    /// Number of bytes after truncation
+    pub truncated_len: c_int,
+    /// Number of display cells after truncation
+    pub truncated_width: c_int,
+    /// Whether truncation was applied
+    pub was_truncated: bool,
+}
+
+/// Apply truncation to a string from the beginning.
+///
+/// If the string width exceeds `max_width`, truncates from the beginning
+/// and prepends a '<' marker.
+///
+/// Returns the result with the new length and width.
+#[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+fn apply_truncation_impl(buf: &mut [u8], content_len: usize, max_width: c_int) -> StlTruncResult {
+    if max_width <= 0 || content_len == 0 || buf.is_empty() {
+        return StlTruncResult {
+            truncated_len: content_len as c_int,
+            truncated_width: content_len as c_int, // Simplified: assume 1 byte = 1 cell
+            was_truncated: false,
+        };
+    }
+
+    // Simplified width calculation: count bytes (proper impl would use vim_strsize)
+    let width = content_len as c_int;
+
+    if width <= max_width {
+        return StlTruncResult {
+            truncated_len: content_len as c_int,
+            truncated_width: width,
+            was_truncated: false,
+        };
+    }
+
+    // Calculate how many bytes to remove
+    #[allow(clippy::cast_sign_loss)]
+    let excess = (width - max_width + 1) as usize; // +1 for '<' marker
+
+    if excess >= content_len {
+        // Content is completely truncated
+        if !buf.is_empty() {
+            buf[0] = b'<';
+        }
+        return StlTruncResult {
+            truncated_len: 1,
+            truncated_width: 1,
+            was_truncated: true,
+        };
+    }
+
+    // Shift content and prepend '<'
+    let new_len = content_len - excess + 1;
+    buf.copy_within(excess..content_len, 1);
+    buf[0] = b'<';
+
+    StlTruncResult {
+        truncated_len: new_len as c_int,
+        truncated_width: max_width,
+        was_truncated: true,
+    }
+}
+
+/// FFI export: Apply truncation to a string buffer.
+///
+/// Truncates from the beginning if the string exceeds `max_width`,
+/// prepending a '<' marker.
+///
+/// # Safety
+/// `buf` must be null or a valid pointer to a buffer of at least `buflen` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_apply_truncation(
+    buf: *mut u8,
+    buflen: usize,
+    content_len: usize,
+    max_width: c_int,
+) -> StlTruncResult {
+    if buf.is_null() || buflen == 0 {
+        return StlTruncResult {
+            truncated_len: 0,
+            truncated_width: 0,
+            was_truncated: false,
+        };
+    }
+    let slice = std::slice::from_raw_parts_mut(buf, buflen);
+    apply_truncation_impl(slice, content_len.min(buflen), max_width)
+}
+
+/// Apply padding to content based on minimum width.
+///
+/// Returns the number of fill characters needed and whether to pad on the left.
+const fn compute_padding_impl(content_width: c_int, minwid: c_int) -> (c_int, bool) {
+    if minwid == 0 {
+        return (0, false);
+    }
+
+    let abs_minwid = minwid.abs();
+    let pad_left = minwid > 0; // Positive = right-aligned = pad left
+
+    if content_width >= abs_minwid {
+        (0, pad_left)
+    } else {
+        (abs_minwid - content_width, pad_left)
+    }
+}
+
+/// FFI export: Compute padding needed for an item.
+///
+/// Returns the number of fill characters needed.
+/// Sets `*pad_left` to 1 if padding should be on the left (right-aligned).
+///
+/// # Safety
+/// `pad_left` must be null or a valid pointer to a c_int.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_compute_padding(
+    content_width: c_int,
+    minwid: c_int,
+    pad_left: *mut c_int,
+) -> c_int {
+    let (padding, left) = compute_padding_impl(content_width, minwid);
+    if !pad_left.is_null() {
+        *pad_left = c_int::from(left);
+    }
+    padding
+}
+
+/// Check if an item should be skipped based on flag state.
+///
+/// For flag items like readonly or modified, the leading separator
+/// may need to be skipped based on context.
+#[no_mangle]
+pub extern "C" fn rs_stl_should_skip_leading(
+    first_char: u8,
+    prevchar_isflag: c_int,
+    prevchar_isitem: c_int,
+) -> c_int {
+    // Skip leading comma if not preceded by an item
+    // Skip leading space if preceded by a flag
+    let skip = (first_char == b',' && prevchar_isitem == 0)
+        || (first_char == b' ' && prevchar_isflag != 0);
+    c_int::from(skip)
+}
+
+/// Render a number item with optional formatting.
+///
+/// Writes the number to the buffer with the specified formatting options.
+/// Returns the number of bytes written.
+fn render_number_impl(
+    buf: &mut [u8],
+    num: c_int,
+    base: c_int,
+    minwid: c_int,
+    zeropad: bool,
+) -> c_int {
+    if buf.is_empty() {
+        return 0;
+    }
+
+    let mut cursor = std::io::Cursor::new(buf);
+
+    // Determine formatting
+    let left_align = minwid < 0;
+    let width = minwid.unsigned_abs() as usize;
+
+    let result = if base == 16 {
+        if zeropad && width > 0 && !left_align {
+            write!(cursor, "{num:0>width$X}")
+        } else if width > 0 && left_align {
+            write!(cursor, "{num:<width$X}")
+        } else if width > 0 {
+            write!(cursor, "{num:>width$X}")
+        } else {
+            write!(cursor, "{num:X}")
+        }
+    } else if zeropad && width > 0 && !left_align {
+        write!(cursor, "{num:0>width$}")
+    } else if width > 0 && left_align {
+        write!(cursor, "{num:<width$}")
+    } else if width > 0 {
+        write!(cursor, "{num:>width$}")
+    } else {
+        write!(cursor, "{num}")
+    };
+
+    match result {
+        #[allow(clippy::cast_possible_truncation)]
+        Ok(()) => cursor.position() as c_int,
+        Err(_) => 0,
+    }
+}
+
+/// FFI export: Render a number with formatting.
+///
+/// Writes the number to buffer with the specified base (10 or 16),
+/// minimum width, and zero-padding.
+///
+/// # Safety
+/// `buf` must be null or a valid pointer to a buffer of at least `buflen` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_render_number(
+    buf: *mut u8,
+    buflen: usize,
+    num: c_int,
+    base: c_int,
+    minwid: c_int,
+    zeropad: c_int,
+) -> c_int {
+    if buf.is_null() || buflen == 0 {
+        return 0;
+    }
+    let slice = std::slice::from_raw_parts_mut(buf, buflen);
+    render_number_impl(slice, num, base, minwid, zeropad != 0)
+}
+
+/// Calculate the display width of a number in a given base.
+#[no_mangle]
+pub const extern "C" fn rs_stl_number_width(num: c_int, base: c_int) -> c_int {
+    if num == 0 {
+        return 1;
+    }
+
+    let abs_num = num.unsigned_abs();
+    let b = if base == 16 { 16_u32 } else { 10_u32 };
+
+    let mut n = abs_num;
+    let mut width = 0;
+    while n > 0 {
+        width += 1;
+        n /= b;
+    }
+    width
 }
 
 /// FFI export: Calculate tab width for tabline.
@@ -1453,4 +1700,134 @@ mod tests {
 
     // Note: Tests for stl_render_* functions require C FFI calls
     // and are tested through integration tests.
+
+    // =========================================================================
+    // Truncation and Padding Tests
+    // =========================================================================
+
+    #[test]
+    fn test_apply_truncation_no_truncation() {
+        let mut buf = *b"hello world";
+        let result = apply_truncation_impl(&mut buf, 11, 20);
+        assert_eq!(result.truncated_len, 11);
+        assert!(!result.was_truncated);
+    }
+
+    #[test]
+    fn test_apply_truncation_with_truncation() {
+        let mut buf = *b"hello world";
+        let result = apply_truncation_impl(&mut buf, 11, 5);
+        assert!(result.was_truncated);
+        assert_eq!(result.truncated_len, 5);
+        assert_eq!(buf[0], b'<');
+    }
+
+    #[test]
+    fn test_apply_truncation_empty() {
+        let mut buf = [0u8; 10];
+        let result = apply_truncation_impl(&mut buf, 0, 5);
+        assert!(!result.was_truncated);
+        assert_eq!(result.truncated_len, 0);
+    }
+
+    #[test]
+    fn test_compute_padding_right_align() {
+        let (padding, pad_left) = compute_padding_impl(5, 10);
+        assert_eq!(padding, 5);
+        assert!(pad_left);
+    }
+
+    #[test]
+    fn test_compute_padding_left_align() {
+        let (padding, pad_left) = compute_padding_impl(5, -10);
+        assert_eq!(padding, 5);
+        assert!(!pad_left);
+    }
+
+    #[test]
+    fn test_compute_padding_no_padding() {
+        let (padding, _) = compute_padding_impl(10, 5);
+        assert_eq!(padding, 0);
+    }
+
+    #[test]
+    fn test_compute_padding_zero_minwid() {
+        let (padding, _) = compute_padding_impl(5, 0);
+        assert_eq!(padding, 0);
+    }
+
+    #[test]
+    fn test_should_skip_leading_comma() {
+        // Skip comma if prevchar_isitem is 0
+        assert_eq!(rs_stl_should_skip_leading(b',', 0, 0), 1);
+        // Don't skip comma if prevchar_isitem is 1
+        assert_eq!(rs_stl_should_skip_leading(b',', 0, 1), 0);
+    }
+
+    #[test]
+    fn test_should_skip_leading_space() {
+        // Skip space if prevchar_isflag is 1
+        assert_eq!(rs_stl_should_skip_leading(b' ', 1, 0), 1);
+        // Don't skip space if prevchar_isflag is 0
+        assert_eq!(rs_stl_should_skip_leading(b' ', 0, 0), 0);
+    }
+
+    #[test]
+    fn test_render_number_decimal() {
+        let mut buf = [0u8; 32];
+        let len = render_number_impl(&mut buf, 42, 10, 0, false);
+        assert_eq!(len, 2);
+        assert_eq!(&buf[..2], b"42");
+    }
+
+    #[test]
+    fn test_render_number_hex() {
+        let mut buf = [0u8; 32];
+        let len = render_number_impl(&mut buf, 255, 16, 0, false);
+        assert_eq!(len, 2);
+        assert_eq!(&buf[..2], b"FF");
+    }
+
+    #[test]
+    fn test_render_number_with_width() {
+        let mut buf = [0u8; 32];
+        let len = render_number_impl(&mut buf, 42, 10, 5, false);
+        assert_eq!(len, 5);
+        assert_eq!(&buf[..5], b"   42");
+    }
+
+    #[test]
+    fn test_render_number_left_align() {
+        let mut buf = [0u8; 32];
+        let len = render_number_impl(&mut buf, 42, 10, -5, false);
+        assert_eq!(len, 5);
+        assert_eq!(&buf[..5], b"42   ");
+    }
+
+    #[test]
+    fn test_render_number_zeropad() {
+        let mut buf = [0u8; 32];
+        let len = render_number_impl(&mut buf, 42, 10, 5, true);
+        assert_eq!(len, 5);
+        assert_eq!(&buf[..5], b"00042");
+    }
+
+    #[test]
+    fn test_number_width_decimal() {
+        assert_eq!(rs_stl_number_width(0, 10), 1);
+        assert_eq!(rs_stl_number_width(9, 10), 1);
+        assert_eq!(rs_stl_number_width(10, 10), 2);
+        assert_eq!(rs_stl_number_width(99, 10), 2);
+        assert_eq!(rs_stl_number_width(100, 10), 3);
+        assert_eq!(rs_stl_number_width(12345, 10), 5);
+    }
+
+    #[test]
+    fn test_number_width_hex() {
+        assert_eq!(rs_stl_number_width(0, 16), 1);
+        assert_eq!(rs_stl_number_width(15, 16), 1);
+        assert_eq!(rs_stl_number_width(16, 16), 2);
+        assert_eq!(rs_stl_number_width(255, 16), 2);
+        assert_eq!(rs_stl_number_width(256, 16), 3);
+    }
 }
