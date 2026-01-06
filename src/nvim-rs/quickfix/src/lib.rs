@@ -1720,7 +1720,20 @@ extern "C" {
     fn nvim_qf_state_has_fd(state: QfStateHandle) -> bool;
     fn nvim_qf_state_has_tv(state: QfStateHandle) -> bool;
     fn nvim_qf_state_has_buf(state: QfStateHandle) -> bool;
+
+    // Phase 7: Window and Display Management accessors
+    fn nvim_qf_find_win_for_stack(qi: QfInfoHandle) -> WinHandle;
+    fn nvim_qf_find_buf_for_stack(qi: QfInfoHandleMut) -> BufHandle;
+    fn nvim_qf_win_pos_update(qi: QfInfoHandleMut, old_qf_index: c_int) -> bool;
+    fn nvim_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLineHandle);
+    fn nvim_qf_get_bufnr(qi: QfInfoHandle) -> c_int;
+    fn nvim_qf_set_bufnr(qi: QfInfoHandleMut, bufnr: c_int);
+    fn nvim_win_is_qf_win(win: WinHandle) -> bool;
+    fn nvim_win_get_llist_ref(win: WinHandle) -> QfInfoHandle;
 }
+
+/// Opaque handle to buffer (Phase 7)
+type BufHandle = *mut c_void;
 
 /// Opaque handle to errorformat pattern list (`efm_T`)
 type EfmHandle = *mut c_void;
@@ -2579,6 +2592,132 @@ pub unsafe extern "C" fn rs_qf_state_has_buf(state: QfStateHandle) -> bool {
         return false;
     }
     nvim_qf_state_has_buf(state)
+}
+
+// =============================================================================
+// Phase 7: Window and Display Management
+// =============================================================================
+
+/// Find the quickfix window for a given quickfix stack.
+///
+/// Returns the window handle, or null if no window is displaying this stack.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_find_win_for_stack(qi: QfInfoHandle) -> WinHandle {
+    if qi.is_null() {
+        return std::ptr::null();
+    }
+    nvim_qf_find_win_for_stack(qi)
+}
+
+/// Find the quickfix buffer for a given quickfix stack.
+///
+/// Returns the buffer handle, or null if no buffer exists for this stack.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_find_buf_for_stack(qi: QfInfoHandleMut) -> BufHandle {
+    if qi.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_qf_find_buf_for_stack(qi)
+}
+
+/// Update the cursor position in the quickfix window.
+///
+/// Moves the cursor to the current error entry and updates the redraw range.
+/// Returns true if there is a quickfix window.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_win_pos_update(qi: QfInfoHandleMut, old_qf_index: c_int) -> bool {
+    if qi.is_null() {
+        return false;
+    }
+    nvim_qf_win_pos_update(qi, old_qf_index)
+}
+
+/// Update the quickfix buffer contents.
+///
+/// Refreshes the buffer to reflect changes to the quickfix list.
+/// Pass `old_last` to only update entries added after that point.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+/// - `old_last` can be null to refresh the entire list
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_update_buffer(qi: QfInfoHandleMut, old_last: QfLineHandle) {
+    if qi.is_null() {
+        return;
+    }
+    nvim_qf_update_buffer(qi, old_last);
+}
+
+/// Get the buffer number from a quickfix info struct.
+///
+/// Returns the buffer number, or -1 (`INVALID_QFBUFNR`) if not set.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_bufnr(qi: QfInfoHandle) -> c_int {
+    if qi.is_null() {
+        return -1;
+    }
+    nvim_qf_get_bufnr(qi)
+}
+
+/// Set the buffer number in a quickfix info struct.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_set_bufnr(qi: QfInfoHandleMut, bufnr: c_int) {
+    if qi.is_null() {
+        return;
+    }
+    nvim_qf_set_bufnr(qi, bufnr);
+}
+
+/// Check if a window is a quickfix window.
+///
+/// Returns true if the window is displaying a quickfix or location list buffer.
+///
+/// # Safety
+///
+/// - `win` must be a valid pointer to a window struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_is_qf_win(win: WinHandle) -> bool {
+    if win.is_null() {
+        return false;
+    }
+    nvim_win_is_qf_win(win)
+}
+
+/// Get the location list reference from a window.
+///
+/// Returns the location list handle, or null if the window is displaying
+/// the global quickfix list (not a location list).
+///
+/// # Safety
+///
+/// - `win` must be a valid pointer to a window struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_get_llist_ref(win: WinHandle) -> QfInfoHandle {
+    if win.is_null() {
+        return std::ptr::null();
+    }
+    nvim_win_get_llist_ref(win)
 }
 
 /// Set the current list index in a quickfix stack.

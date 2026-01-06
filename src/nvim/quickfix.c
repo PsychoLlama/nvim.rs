@@ -1245,6 +1245,95 @@ bool nvim_qf_state_has_buf(QfStateHandle state)
   return ((qfstate_T *)state)->buf != NULL;
 }
 
+// =============================================================================
+// Phase 7: Window and Display Management accessor functions for Rust
+// Forward declarations
+// =============================================================================
+
+static win_T *qf_find_win(const qf_info_T *qi);
+static buf_T *qf_find_buf(qf_info_T *qi);
+static bool qf_win_pos_update(qf_info_T *qi, int old_qf_index);
+static void qf_update_buffer(qf_info_T *qi, qfline_T *old_last);
+
+/// Find the quickfix window for a given quickfix stack
+/// Returns the window handle or NULL if not found
+void *nvim_qf_find_win_for_stack(const void *qi_void)
+{
+  if (qi_void == NULL) {
+    return NULL;
+  }
+  return qf_find_win((const qf_info_T *)qi_void);
+}
+
+/// Find the quickfix buffer for a given quickfix stack
+/// Returns the buffer handle or NULL if not found
+void *nvim_qf_find_buf_for_stack(void *qi_void)
+{
+  if (qi_void == NULL) {
+    return NULL;
+  }
+  return qf_find_buf((qf_info_T *)qi_void);
+}
+
+/// Update the cursor position in the quickfix window
+/// Returns true if there is a quickfix window
+bool nvim_qf_win_pos_update(void *qi_void, int old_qf_index)
+{
+  if (qi_void == NULL) {
+    return false;
+  }
+  return qf_win_pos_update((qf_info_T *)qi_void, old_qf_index);
+}
+
+/// Update the quickfix buffer contents
+void nvim_qf_update_buffer(void *qi_void, void *old_last)
+{
+  if (qi_void == NULL) {
+    return;
+  }
+  qf_update_buffer((qf_info_T *)qi_void, (qfline_T *)old_last);
+}
+
+/// Get the buffer number from a quickfix info struct
+int nvim_qf_get_bufnr(const void *qi_void)
+{
+  if (qi_void == NULL) {
+    return -1;  // INVALID_QFBUFNR
+  }
+  return ((const qf_info_T *)qi_void)->qf_bufnr;
+}
+
+/// Set the buffer number in a quickfix info struct
+void nvim_qf_set_bufnr(void *qi_void, int bufnr)
+{
+  if (qi_void == NULL) {
+    return;
+  }
+  ((qf_info_T *)qi_void)->qf_bufnr = bufnr;
+}
+
+/// Check if a window is a quickfix window
+bool nvim_win_is_qf_win(const void *win_void)
+{
+  if (win_void == NULL) {
+    return false;
+  }
+  const win_T *win = (const win_T *)win_void;
+  if (!buf_valid(win->w_buffer)) {
+    return false;
+  }
+  return bt_quickfix(win->w_buffer);
+}
+
+/// Get the w_llist_ref field from a window (location list reference)
+void *nvim_win_get_llist_ref(const void *win_void)
+{
+  if (win_void == NULL) {
+    return NULL;
+  }
+  return ((const win_T *)win_void)->w_llist_ref;
+}
+
 // Looking up a buffer can be slow if there are many.  Remember the last one
 // to make this a lot faster if there are multiple matches in the same file.
 static char *qf_last_bufname = NULL;
