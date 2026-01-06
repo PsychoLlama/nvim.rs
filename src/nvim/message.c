@@ -2829,6 +2829,10 @@ typedef enum {
 // When to clear text on next msg.
 static sb_clear_T do_clear_sb_text = SB_CLEAR_NONE;
 
+// C accessors for scrollback state (used by Rust)
+int nvim_get_do_clear_sb_text(void) { return (int)do_clear_sb_text; }
+void nvim_set_do_clear_sb_text(int val) { do_clear_sb_text = (sb_clear_T)val; }
+
 /// Store part of a printed message for displaying when scrolling back.
 ///
 /// @param sb_str  start of string

@@ -11,6 +11,7 @@
 //! - [`format`]: Message formatting utilities
 //! - [`output`]: Message output state management
 //! - [`attr`]: Message attribute handling
+//! - [`scrollback`]: Scrollback buffer management
 //!
 //! # Note
 //!
@@ -28,6 +29,7 @@ pub mod chunk;
 pub mod format;
 pub mod history;
 pub mod output;
+pub mod scrollback;
 
 // Re-export FFI functions for the static library
 pub use attr::*;
@@ -35,6 +37,7 @@ pub use chunk::*;
 pub use format::*;
 pub use history::*;
 pub use output::*;
+pub use scrollback::*;
 
 #[cfg(test)]
 mod tests {

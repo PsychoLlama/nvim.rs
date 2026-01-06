@@ -1,0 +1,308 @@
+//! Scrollback buffer management
+//!
+//! Implements scrollback storage for the "more" and "hit-enter" prompts.
+//! Text is stored in a linked list of chunks that can be displayed when
+//! scrolling back through message history.
+
+use std::ffi::c_int;
+use std::ptr;
+
+use crate::chunk::MsgChunkHandle;
+
+// C accessor declarations
+extern "C" {
+    /// Get `last_msgchunk` pointer
+    fn nvim_get_last_msgchunk() -> *mut MsgChunkHandle;
+    /// Set `last_msgchunk` pointer
+    fn nvim_set_last_msgchunk(chunk: *mut MsgChunkHandle);
+    /// Get chunk->sb_next
+    fn nvim_msgchunk_get_next(chunk: *mut MsgChunkHandle) -> *mut MsgChunkHandle;
+    /// Set chunk->sb_next
+    fn nvim_msgchunk_set_next(chunk: *mut MsgChunkHandle, next: *mut MsgChunkHandle);
+    /// Get chunk->sb_prev
+    fn nvim_msgchunk_get_prev(chunk: *mut MsgChunkHandle) -> *mut MsgChunkHandle;
+    /// Get chunk->sb_eol
+    fn nvim_msgchunk_get_eol(chunk: *mut MsgChunkHandle) -> c_int;
+    /// Set chunk->sb_eol
+    fn nvim_msgchunk_set_eol(chunk: *mut MsgChunkHandle, eol: c_int);
+    /// Get `do_clear_sb_text` state
+    fn nvim_get_do_clear_sb_text() -> c_int;
+    /// Set `do_clear_sb_text` state
+    fn nvim_set_do_clear_sb_text(val: c_int);
+    /// xfree wrapper
+    fn xfree(ptr: *mut std::ffi::c_void);
+}
+
+/// Scrollback clear state (mirrors sb_clear_T in C)
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SbClearState(pub c_int);
+
+impl SbClearState {
+    /// Don't clear anything
+    pub const NONE: Self = Self(0);
+    /// Clear all scrollback text
+    pub const ALL: Self = Self(1);
+    /// Command line is busy, don't clear yet
+    pub const CMDLINE_BUSY: Self = Self(2);
+    /// Command line done, clear on next message
+    pub const CMDLINE_DONE: Self = Self(3);
+}
+
+/// Get the current scrollback clear state.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sb_clear_state() -> c_int {
+    nvim_get_do_clear_sb_text()
+}
+
+/// Set the scrollback clear state.
+///
+/// # Safety
+/// Calls C mutator function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_sb_clear_state(state: c_int) {
+    nvim_set_do_clear_sb_text(state);
+}
+
+/// Check if scrollback should be cleared on next message.
+///
+/// Returns true if clear state is ALL or CMDLINE_DONE.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sb_should_clear() -> c_int {
+    let state = nvim_get_do_clear_sb_text();
+    c_int::from(state == SbClearState::ALL.0 || state == SbClearState::CMDLINE_DONE.0)
+}
+
+/// Check if in command line busy state.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sb_cmdline_busy() -> c_int {
+    c_int::from(nvim_get_do_clear_sb_text() == SbClearState::CMDLINE_BUSY.0)
+}
+
+/// Get the start of a screen line in the scrollback buffer.
+///
+/// Walks backwards through chunks until finding one where the previous
+/// chunk has sb_eol set (or there is no previous chunk).
+///
+/// # Safety
+/// Calls C accessor functions.
+fn msg_sb_start(mps: *mut MsgChunkHandle) -> *mut MsgChunkHandle {
+    if mps.is_null() {
+        return ptr::null_mut();
+    }
+
+    let mut mp = mps;
+    unsafe {
+        loop {
+            let prev = nvim_msgchunk_get_prev(mp);
+            if prev.is_null() {
+                break;
+            }
+            if nvim_msgchunk_get_eol(prev) != 0 {
+                break;
+            }
+            mp = prev;
+        }
+    }
+    mp
+}
+
+/// Mark the end of a line in scrollback.
+///
+/// # Safety
+/// Calls C accessor and mutator functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sb_mark_eol() {
+    let last = nvim_get_last_msgchunk();
+    if !last.is_null() {
+        nvim_msgchunk_set_eol(last, 1);
+    }
+}
+
+/// Start entering a command line - prepare scrollback state.
+///
+/// If already in busy state (nested command line), clears the last
+/// unfinished line. Otherwise marks current position and sets busy state.
+///
+/// # Safety
+/// Calls C accessor and mutator functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sb_start_cmdline() {
+    let state = nvim_get_do_clear_sb_text();
+
+    if state == SbClearState::CMDLINE_BUSY.0 {
+        // Recursive command line: clear last unfinished line
+        rs_sb_restart_cmdline();
+    } else {
+        rs_sb_mark_eol();
+        nvim_set_do_clear_sb_text(SbClearState::CMDLINE_BUSY.0);
+    }
+}
+
+/// Restart command line - clear last unfinished line.
+///
+/// Called when redrawing the command line.
+///
+/// # Safety
+/// Calls C accessor and mutator functions, frees memory.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sb_restart_cmdline() {
+    nvim_set_do_clear_sb_text(SbClearState::CMDLINE_BUSY.0);
+
+    let last = nvim_get_last_msgchunk();
+    if last.is_null() || nvim_msgchunk_get_eol(last) != 0 {
+        // No unfinished line
+        return;
+    }
+
+    // Find start of the unfinished line and free it
+    let tofree = msg_sb_start(last);
+    if !tofree.is_null() {
+        let prev = nvim_msgchunk_get_prev(tofree);
+        nvim_set_last_msgchunk(prev);
+
+        if !prev.is_null() {
+            nvim_msgchunk_set_next(prev, ptr::null_mut());
+        }
+
+        // Free all chunks in this line
+        let mut current = tofree;
+        while !current.is_null() {
+            let next = nvim_msgchunk_get_next(current);
+            xfree(current.cast());
+            current = next;
+        }
+    }
+}
+
+/// End command line - schedule cleanup of old lines.
+///
+/// # Safety
+/// Calls C mutator function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sb_end_cmdline() {
+    nvim_set_do_clear_sb_text(SbClearState::CMDLINE_DONE.0);
+}
+
+/// Schedule clearing all scrollback text.
+///
+/// Called when done showing messages and screen will be redrawn.
+///
+/// # Safety
+/// Calls C mutator function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sb_schedule_clear() {
+    nvim_set_do_clear_sb_text(SbClearState::ALL.0);
+}
+
+/// Clear scrollback text.
+///
+/// If `all` is true (non-zero), clears all text.
+/// If `all` is false (zero), keeps the last line.
+///
+/// # Safety
+/// Calls C accessor and mutator functions, frees memory.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sb_clear(all: c_int) {
+    let last = nvim_get_last_msgchunk();
+
+    if all != 0 {
+        // Clear everything
+        let mut current = last;
+        while !current.is_null() {
+            let prev = nvim_msgchunk_get_prev(current);
+            xfree(current.cast());
+            current = prev;
+        }
+        nvim_set_last_msgchunk(ptr::null_mut());
+    } else {
+        // Keep the last line, clear everything before it
+        if last.is_null() {
+            return;
+        }
+
+        let line_start = msg_sb_start(last);
+        if line_start.is_null() {
+            return;
+        }
+
+        let before_start = nvim_msgchunk_get_prev(line_start);
+        if before_start.is_null() {
+            // Only one line, nothing to clear
+            return;
+        }
+
+        // Clear everything before the last line
+        let mut current = before_start;
+        while !current.is_null() {
+            let prev = nvim_msgchunk_get_prev(current);
+            xfree(current.cast());
+            current = prev;
+        }
+
+        // Note: line_start's prev is now invalid, but we don't need to update it
+        // since we iterate from last_msgchunk going backwards
+    }
+}
+
+/// Count the number of lines in scrollback.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sb_line_count() -> c_int {
+    let last = nvim_get_last_msgchunk();
+    if last.is_null() {
+        return 0;
+    }
+
+    let mut count = 1;
+    let mut mp = msg_sb_start(last);
+
+    while !mp.is_null() {
+        let prev = nvim_msgchunk_get_prev(mp);
+        if prev.is_null() {
+            break;
+        }
+        mp = msg_sb_start(prev);
+        count += 1;
+    }
+
+    count
+}
+
+/// Check if there is content in scrollback that can be shown.
+///
+/// Returns true if there is more than one line (single line looks weird).
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sb_has_content() -> c_int {
+    let last = nvim_get_last_msgchunk();
+    if last.is_null() {
+        return 0;
+    }
+
+    let start = msg_sb_start(last);
+    if start.is_null() {
+        return 0;
+    }
+
+    let prev = nvim_msgchunk_get_prev(start);
+    c_int::from(!prev.is_null())
+}
+
+#[cfg(test)]
+mod tests {
+    // Integration tests would require mocking C functions
+}
