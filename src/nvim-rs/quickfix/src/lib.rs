@@ -1962,6 +1962,337 @@ pub unsafe extern "C" fn rs_qf_last_valid_entry(qfl: QfListHandleMut) -> c_int {
     0 // No valid entries
 }
 
+// =============================================================================
+// Phase 6: Parsing Infrastructure
+// =============================================================================
+
+/// Parse status codes returned by quickfix parsing functions.
+#[allow(dead_code)]
+pub mod qf_status {
+    use std::ffi::c_int;
+
+    /// Parse failed
+    pub const QF_FAIL: c_int = 0;
+    /// Parse succeeded
+    pub const QF_OK: c_int = 1;
+    /// End of input reached
+    pub const QF_END_OF_INPUT: c_int = 2;
+    /// Out of memory
+    pub const QF_NOMEM: c_int = 3;
+    /// Line should be ignored
+    pub const QF_IGNORE_LINE: c_int = 4;
+    /// Multi-scan mode (restart pattern matching)
+    pub const QF_MULTISCAN: c_int = 5;
+    /// Abort parsing
+    pub const QF_ABORT: c_int = 6;
+}
+
+/// Error format prefix characters for multiline message handling.
+#[allow(dead_code)]
+pub mod efm_prefix {
+    use std::ffi::c_char;
+
+    /// Enter directory
+    #[allow(clippy::cast_possible_wrap)]
+    pub const EFM_D: c_char = b'D' as c_char;
+    /// Leave directory
+    #[allow(clippy::cast_possible_wrap)]
+    pub const EFM_X: c_char = b'X' as c_char;
+    /// Start of multi-line message (first line)
+    #[allow(clippy::cast_possible_wrap)]
+    pub const EFM_A: c_char = b'A' as c_char;
+    /// Error message
+    #[allow(clippy::cast_possible_wrap)]
+    pub const EFM_E: c_char = b'E' as c_char;
+    /// Warning message
+    #[allow(clippy::cast_possible_wrap)]
+    pub const EFM_W: c_char = b'W' as c_char;
+    /// Info message
+    #[allow(clippy::cast_possible_wrap)]
+    pub const EFM_I: c_char = b'I' as c_char;
+    /// Note message
+    #[allow(clippy::cast_possible_wrap)]
+    pub const EFM_N: c_char = b'N' as c_char;
+    /// Continuation line
+    #[allow(clippy::cast_possible_wrap)]
+    pub const EFM_C: c_char = b'C' as c_char;
+    /// End of multi-line message
+    #[allow(clippy::cast_possible_wrap)]
+    pub const EFM_Z: c_char = b'Z' as c_char;
+    /// General, unspecific message
+    #[allow(clippy::cast_possible_wrap)]
+    pub const EFM_G: c_char = b'G' as c_char;
+    /// Push file (partial) message
+    #[allow(clippy::cast_possible_wrap)]
+    pub const EFM_P: c_char = b'P' as c_char;
+    /// Pop/quit file (partial) message
+    #[allow(clippy::cast_possible_wrap)]
+    pub const EFM_Q: c_char = b'Q' as c_char;
+    /// Overread (partial) message
+    #[allow(clippy::cast_possible_wrap)]
+    pub const EFM_O: c_char = b'O' as c_char;
+}
+
+#[allow(dead_code)]
+extern "C" {
+    // Phase 6: Multiline state accessors
+    fn nvim_qf_get_multiline(qfl: QfListHandle) -> bool;
+    fn nvim_qf_set_multiline(qfl: QfListHandleMut, multiline: bool);
+    fn nvim_qf_get_multiignore(qfl: QfListHandle) -> bool;
+    fn nvim_qf_set_multiignore(qfl: QfListHandleMut, multiignore: bool);
+    fn nvim_qf_get_multiscan(qfl: QfListHandle) -> bool;
+    fn nvim_qf_set_multiscan(qfl: QfListHandleMut, multiscan: bool);
+}
+
+/// Check if an error format prefix starts a multiline message.
+///
+/// Returns true for 'A', 'E', 'W', 'I', 'N' prefixes.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" fn cannot be const
+pub extern "C" fn rs_efm_is_multiline_start(prefix: c_char) -> bool {
+    matches!(
+        prefix,
+        efm_prefix::EFM_A
+            | efm_prefix::EFM_E
+            | efm_prefix::EFM_W
+            | efm_prefix::EFM_I
+            | efm_prefix::EFM_N
+    )
+}
+
+/// Check if an error format prefix is a continuation line.
+///
+/// Returns true for 'C', 'Z' prefixes.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" fn cannot be const
+pub extern "C" fn rs_efm_is_continuation(prefix: c_char) -> bool {
+    matches!(prefix, efm_prefix::EFM_C | efm_prefix::EFM_Z)
+}
+
+/// Check if an error format prefix is a directory specifier.
+///
+/// Returns true for 'D', 'X' prefixes.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" fn cannot be const
+pub extern "C" fn rs_efm_is_directory(prefix: c_char) -> bool {
+    matches!(prefix, efm_prefix::EFM_D | efm_prefix::EFM_X)
+}
+
+/// Check if an error format prefix is a global file specifier.
+///
+/// Returns true for 'O', 'P', 'Q' prefixes.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" fn cannot be const
+pub extern "C" fn rs_efm_is_global_file(prefix: c_char) -> bool {
+    matches!(
+        prefix,
+        efm_prefix::EFM_O | efm_prefix::EFM_P | efm_prefix::EFM_Q
+    )
+}
+
+/// Get the error type character for an error format prefix.
+///
+/// Returns 'E' for `EFM_E`, 'W' for `EFM_W`, 'I' for `EFM_I`, 'N' for `EFM_N`,
+/// or 0 for other prefixes.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" fn cannot be const
+pub extern "C" fn rs_efm_prefix_to_type(prefix: c_char) -> c_char {
+    match prefix {
+        efm_prefix::EFM_E => error_types::QF_TYPE_ERROR,
+        efm_prefix::EFM_W => error_types::QF_TYPE_WARNING,
+        efm_prefix::EFM_I => error_types::QF_TYPE_INFO,
+        efm_prefix::EFM_N => error_types::QF_TYPE_NOTE,
+        _ => error_types::QF_TYPE_NONE,
+    }
+}
+
+/// Parse a string as a line number.
+///
+/// Returns the parsed line number or 0 if the input is invalid.
+/// This is a safe wrapper around C's atol that handles null pointers.
+///
+/// # Safety
+///
+/// - `str_ptr` may be null (returns 0)
+/// - If non-null, must point to a valid C string
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_parse_lnum(str_ptr: *const c_char) -> LinenrT {
+    if str_ptr.is_null() {
+        return 0;
+    }
+
+    // Use std::ffi::CStr for safe parsing
+    let Ok(c_str) = std::ffi::CStr::from_ptr(str_ptr).to_str() else {
+        return 0;
+    };
+
+    // Parse leading digits only (like atol)
+    let trimmed = c_str.trim_start();
+    let (negative, start) = if trimmed.starts_with('-') {
+        (true, 1)
+    } else if trimmed.starts_with('+') {
+        (false, 1)
+    } else {
+        (false, 0)
+    };
+
+    let digits: String = trimmed
+        .chars()
+        .skip(start)
+        .take_while(char::is_ascii_digit)
+        .collect();
+
+    if digits.is_empty() {
+        return 0;
+    }
+
+    digits
+        .parse::<LinenrT>()
+        .map_or(0, |n| if negative { -n } else { n })
+}
+
+/// Parse a string as a column number.
+///
+/// Returns the parsed column number or 0 if the input is invalid.
+///
+/// # Safety
+///
+/// - `str_ptr` may be null (returns 0)
+/// - If non-null, must point to a valid C string
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_parse_col(str_ptr: *const c_char) -> c_int {
+    rs_qf_parse_lnum(str_ptr)
+}
+
+/// Calculate the visual column from a string position.
+///
+/// When 'viscol' is set in errorformat, the column represents
+/// screen column, not byte offset. This helper converts between them.
+///
+/// Returns the visual column (1-based) for the given string and position.
+///
+/// # Safety
+///
+/// - `str_ptr` may be null (returns col as-is)
+/// - If non-null, must point to a valid C string
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_col_to_vcol(
+    str_ptr: *const c_char,
+    str_len: usize,
+    col: c_int,
+) -> c_int {
+    if str_ptr.is_null() || col <= 0 {
+        return col;
+    }
+
+    // For simple ASCII text, column == visual column
+    // This is a simplified implementation; full implementation would
+    // need to handle tabs and multibyte characters
+    let bytes = std::slice::from_raw_parts(str_ptr.cast::<u8>(), str_len);
+
+    // Count visual columns up to the byte position
+    #[allow(clippy::cast_sign_loss)] // col > 0 verified above
+    let target_byte = (col - 1) as usize;
+    let mut vcol: c_int = 1;
+
+    for (i, &byte) in bytes.iter().enumerate() {
+        if i >= target_byte {
+            break;
+        }
+        if byte == b'\t' {
+            // Tab expands to next tabstop (assume 8)
+            vcol = ((vcol - 1) / 8 + 1) * 8 + 1;
+        } else if byte >= 0x80 {
+            // Multibyte character - count as 1-2 columns depending on width
+            // Simplified: count as 1 column
+            vcol += 1;
+        } else {
+            vcol += 1;
+        }
+    }
+
+    vcol
+}
+
+/// Trim leading whitespace from a string and return the offset.
+///
+/// Returns the number of leading whitespace bytes.
+///
+/// # Safety
+///
+/// - `str_ptr` may be null (returns 0)
+/// - If non-null, must point to a valid C string of at least `str_len` bytes
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_skip_whitespace(str_ptr: *const c_char, str_len: usize) -> usize {
+    if str_ptr.is_null() || str_len == 0 {
+        return 0;
+    }
+
+    let bytes = std::slice::from_raw_parts(str_ptr.cast::<u8>(), str_len);
+
+    bytes
+        .iter()
+        .take_while(|&&b| b == b' ' || b == b'\t')
+        .count()
+}
+
+/// Check if a line appears to be an error/warning message.
+///
+/// This is a heuristic check for lines that look like compiler output.
+/// Looks for common patterns like "error:", "warning:", `file:line:col`, etc.
+///
+/// # Safety
+///
+/// - `str_ptr` may be null (returns false)
+/// - If non-null, must point to a valid C string of at least `str_len` bytes
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_looks_like_error(str_ptr: *const c_char, str_len: usize) -> bool {
+    if str_ptr.is_null() || str_len == 0 {
+        return false;
+    }
+
+    let bytes = std::slice::from_raw_parts(str_ptr.cast::<u8>(), str_len);
+    let Ok(s) = std::str::from_utf8(bytes) else {
+        return false;
+    };
+    let line = s.to_lowercase();
+
+    // Common error/warning patterns
+    line.contains("error:")
+        || line.contains("error[")
+        || line.contains("warning:")
+        || line.contains("warning[")
+        || line.contains(": fatal error")
+        || line.contains(": error:")
+        || line.contains(": warning:")
+        // GCC/Clang style: "file.c:123:45: error:"
+        || (line.contains(':')
+            && line.split(':').take(2).all(|p| !p.is_empty())
+            && line
+                .split(':')
+                .nth(1)
+                .is_some_and(|p| p.chars().all(|c| c.is_ascii_digit())))
+}
+
+/// Validate a line number is reasonable.
+///
+/// Returns true if the line number is in a valid range (1 to 2^30).
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" fn cannot be const
+pub extern "C" fn rs_qf_valid_lnum(lnum: LinenrT) -> bool {
+    (1..=(1 << 30)).contains(&lnum)
+}
+
+/// Validate a column number is reasonable.
+///
+/// Returns true if the column number is in a valid range (0 to 2^20).
+/// Column 0 is valid (means "no column specified").
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" fn cannot be const
+pub extern "C" fn rs_qf_valid_col(col: c_int) -> bool {
+    (0..=(1 << 20)).contains(&col)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

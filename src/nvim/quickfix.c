@@ -508,6 +508,52 @@ void *nvim_get_ql_info(void)
   return (void *)ql_info;
 }
 
+// =============================================================================
+// Phase 6: Multiline state accessors for Rust
+// =============================================================================
+
+/// Get multiline flag from qf_list_T for Rust
+bool nvim_qf_get_multiline(const void *qfl_void)
+{
+  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
+  return qfl->qf_multiline;
+}
+
+/// Set multiline flag in qf_list_T for Rust
+void nvim_qf_set_multiline(void *qfl_void, bool multiline)
+{
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  qfl->qf_multiline = multiline;
+}
+
+/// Get multiignore flag from qf_list_T for Rust
+bool nvim_qf_get_multiignore(const void *qfl_void)
+{
+  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
+  return qfl->qf_multiignore;
+}
+
+/// Set multiignore flag in qf_list_T for Rust
+void nvim_qf_set_multiignore(void *qfl_void, bool multiignore)
+{
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  qfl->qf_multiignore = multiignore;
+}
+
+/// Get multiscan flag from qf_list_T for Rust
+bool nvim_qf_get_multiscan(const void *qfl_void)
+{
+  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
+  return qfl->qf_multiscan;
+}
+
+/// Set multiscan flag in qf_list_T for Rust
+void nvim_qf_set_multiscan(void *qfl_void, bool multiscan)
+{
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  qfl->qf_multiscan = multiscan;
+}
+
 #define FMT_PATTERNS 14           // maximum number of % recognized
 
 // Structure used to hold the info of one part of 'errorformat'
