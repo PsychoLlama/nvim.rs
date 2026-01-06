@@ -1,14 +1,15 @@
-//! Spell file reading utilities.
+//! Spell file reading and writing utilities.
 //!
-//! This module provides helper functions for reading .spl spell files.
-//! The main spell file loading is coordinated from C, but these functions
-//! handle the binary parsing of individual sections.
+//! This module provides helper functions for reading and writing .spl spell files.
+//! The main spell file loading/saving is coordinated from C, but these functions
+//! handle the binary parsing and serialization of individual sections.
 
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::missing_errors_doc)]
 #![allow(clippy::cast_lossless)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::range_plus_one)]
+#![allow(clippy::option_if_let_else)]
 
 use std::ffi::c_int;
 
@@ -772,6 +773,502 @@ pub unsafe extern "C" fn rs_parse_tree_nodecount(
 }
 
 // =============================================================================
+// Binary Writing Utilities
+// =============================================================================
+
+/// Write a big-endian u16 to buffer.
+///
+/// Returns the number of bytes written (2).
+#[inline]
+pub fn write_be_u16(buf: &mut [u8], val: u16) -> Option<usize> {
+    if buf.len() < 2 {
+        return None;
+    }
+    let bytes = val.to_be_bytes();
+    buf[0] = bytes[0];
+    buf[1] = bytes[1];
+    Some(2)
+}
+
+/// Write a big-endian u24 to buffer.
+///
+/// Returns the number of bytes written (3).
+#[inline]
+pub fn write_be_u24(buf: &mut [u8], val: u32) -> Option<usize> {
+    if buf.len() < 3 {
+        return None;
+    }
+    buf[0] = ((val >> 16) & 0xFF) as u8;
+    buf[1] = ((val >> 8) & 0xFF) as u8;
+    buf[2] = (val & 0xFF) as u8;
+    Some(3)
+}
+
+/// Write a big-endian u32 to buffer.
+///
+/// Returns the number of bytes written (4).
+#[inline]
+pub fn write_be_u32(buf: &mut [u8], val: u32) -> Option<usize> {
+    if buf.len() < 4 {
+        return None;
+    }
+    let bytes = val.to_be_bytes();
+    buf[..4].copy_from_slice(&bytes);
+    Some(4)
+}
+
+/// Write a big-endian u64 to buffer.
+///
+/// Returns the number of bytes written (8).
+#[inline]
+pub fn write_be_u64(buf: &mut [u8], val: u64) -> Option<usize> {
+    if buf.len() < 8 {
+        return None;
+    }
+    let bytes = val.to_be_bytes();
+    buf[..8].copy_from_slice(&bytes);
+    Some(8)
+}
+
+/// Write a length-prefixed string (1-byte length prefix).
+///
+/// Returns the number of bytes written.
+pub fn write_cnt_string_1(buf: &mut [u8], s: &[u8]) -> Option<usize> {
+    if s.len() > 255 {
+        return None;
+    }
+    let total = 1 + s.len();
+    if buf.len() < total {
+        return None;
+    }
+    buf[0] = s.len() as u8;
+    buf[1..total].copy_from_slice(s);
+    Some(total)
+}
+
+/// Write a length-prefixed string (2-byte length prefix, BE).
+///
+/// Returns the number of bytes written.
+pub fn write_cnt_string_2(buf: &mut [u8], s: &[u8]) -> Option<usize> {
+    if s.len() > 65535 {
+        return None;
+    }
+    let total = 2 + s.len();
+    if buf.len() < total {
+        return None;
+    }
+    let len_bytes = (s.len() as u16).to_be_bytes();
+    buf[0] = len_bytes[0];
+    buf[1] = len_bytes[1];
+    buf[2..total].copy_from_slice(s);
+    Some(total)
+}
+
+// =============================================================================
+// Section Header Writing
+// =============================================================================
+
+/// Write a section header to buffer.
+///
+/// Returns the number of bytes written (6 for normal section, 1 for end marker).
+pub fn write_section_header(buf: &mut [u8], header: &SectionHeader) -> Option<usize> {
+    if header.section_id == 255 {
+        // Section end marker
+        if buf.is_empty() {
+            return None;
+        }
+        buf[0] = 255;
+        return Some(1);
+    }
+
+    // Normal section: id (1) + flags (1) + len (4) = 6 bytes
+    if buf.len() < 6 {
+        return None;
+    }
+
+    buf[0] = header.section_id;
+    buf[1] = header.flags;
+    let len_bytes = header.len.to_be_bytes();
+    buf[2..6].copy_from_slice(&len_bytes);
+    Some(6)
+}
+
+/// FFI wrapper for writing section header.
+///
+/// # Safety
+/// `buf` must point to valid writable memory of at least `buf_len` bytes.
+/// `header` must point to a valid SectionHeader.
+/// `written_out` must point to valid memory for a usize.
+#[no_mangle]
+pub unsafe extern "C" fn rs_write_section_header(
+    buf: *mut u8,
+    buf_len: usize,
+    header: *const SectionHeader,
+    written_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || header.is_null() || written_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let slice = std::slice::from_raw_parts_mut(buf, buf_len);
+    match write_section_header(slice, &*header) {
+        Some(written) => {
+            *written_out = written;
+            0
+        }
+        None => SP_TRUNCERROR,
+    }
+}
+
+// =============================================================================
+// Replacement Item Writing
+// =============================================================================
+
+/// Write a replacement item to buffer.
+///
+/// Format: <fromlen (1 byte)> <from (N bytes)> <tolen (1 byte)> <to (N bytes)>
+pub fn write_rep_item(buf: &mut [u8], item: &FromTo) -> Option<usize> {
+    let from_len = item.from_len as usize;
+    let to_len = item.to_len as usize;
+    let total = 1 + from_len + 1 + to_len;
+
+    if buf.len() < total {
+        return None;
+    }
+
+    let mut offset = 0;
+
+    // Write from
+    buf[offset] = item.from_len;
+    offset += 1;
+    buf[offset..offset + from_len].copy_from_slice(&item.from[..from_len]);
+    offset += from_len;
+
+    // Write to
+    buf[offset] = item.to_len;
+    offset += 1;
+    buf[offset..offset + to_len].copy_from_slice(&item.to[..to_len]);
+    offset += to_len;
+
+    Some(offset)
+}
+
+/// FFI wrapper for writing a replacement item.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_write_rep_item(
+    buf: *mut u8,
+    buf_len: usize,
+    item: *const FromTo,
+    written_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || item.is_null() || written_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let slice = std::slice::from_raw_parts_mut(buf, buf_len);
+    match write_rep_item(slice, &*item) {
+        Some(written) => {
+            *written_out = written;
+            0
+        }
+        None => SP_TRUNCERROR,
+    }
+}
+
+// =============================================================================
+// Character Flags Section Writing
+// =============================================================================
+
+/// Write character flags section to buffer.
+///
+/// Format: <charflagslen (1 byte)> <charflags (N bytes)>
+///         <folcharslen (2 bytes BE)> <folchars (N bytes)>
+pub fn write_charflags_section(buf: &mut [u8], section: &CharFlagsSection) -> Option<usize> {
+    let flags_len = section.flags_len;
+    let fol_len = section.folchars_len;
+    let total = 1 + flags_len + 2 + fol_len;
+
+    if buf.len() < total {
+        return None;
+    }
+
+    let mut offset = 0;
+
+    // Write flags
+    buf[offset] = flags_len as u8;
+    offset += 1;
+    buf[offset..offset + flags_len].copy_from_slice(&section.flags[..flags_len]);
+    offset += flags_len;
+
+    // Write folchars
+    let fol_len_bytes = (fol_len as u16).to_be_bytes();
+    buf[offset] = fol_len_bytes[0];
+    buf[offset + 1] = fol_len_bytes[1];
+    offset += 2;
+    buf[offset..offset + fol_len].copy_from_slice(&section.folchars[..fol_len]);
+    offset += fol_len;
+
+    Some(offset)
+}
+
+/// FFI wrapper for writing character flags section.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_write_charflags_section(
+    buf: *mut u8,
+    buf_len: usize,
+    section: *const CharFlagsSection,
+    written_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || section.is_null() || written_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let slice = std::slice::from_raw_parts_mut(buf, buf_len);
+    match write_charflags_section(slice, &*section) {
+        Some(written) => {
+            *written_out = written;
+            0
+        }
+        None => SP_TRUNCERROR,
+    }
+}
+
+// =============================================================================
+// Soundfold Section Writing
+// =============================================================================
+
+/// Write soundfold section to buffer.
+///
+/// Format: <sofofromlen (2 bytes BE)> <sofofrom (N bytes)>
+///         <sofotolen (2 bytes BE)> <sofoto (N bytes)>
+pub fn write_sofo_section(buf: &mut [u8], section: &SofoSection) -> Option<usize> {
+    let from_len = section.from_len as usize;
+    let to_len = section.to_len as usize;
+    let total = 2 + from_len + 2 + to_len;
+
+    if buf.len() < total {
+        return None;
+    }
+
+    let mut offset = 0;
+
+    // Write from
+    let from_len_bytes = section.from_len.to_be_bytes();
+    buf[offset] = from_len_bytes[0];
+    buf[offset + 1] = from_len_bytes[1];
+    offset += 2;
+    buf[offset..offset + from_len].copy_from_slice(&section.from[..from_len]);
+    offset += from_len;
+
+    // Write to
+    let to_len_bytes = section.to_len.to_be_bytes();
+    buf[offset] = to_len_bytes[0];
+    buf[offset + 1] = to_len_bytes[1];
+    offset += 2;
+    buf[offset..offset + to_len].copy_from_slice(&section.to[..to_len]);
+    offset += to_len;
+
+    Some(offset)
+}
+
+/// FFI wrapper for writing soundfold section.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_write_sofo_section(
+    buf: *mut u8,
+    buf_len: usize,
+    section: *const SofoSection,
+    written_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || section.is_null() || written_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let slice = std::slice::from_raw_parts_mut(buf, buf_len);
+    match write_sofo_section(slice, &*section) {
+        Some(written) => {
+            *written_out = written;
+            0
+        }
+        None => SP_TRUNCERROR,
+    }
+}
+
+// =============================================================================
+// Soundalike Header Writing
+// =============================================================================
+
+/// Write soundalike header to buffer.
+///
+/// Format: <salflags (1 byte)> <salcount (2 bytes BE)>
+pub fn write_sal_header(buf: &mut [u8], header: &SalHeader) -> Option<usize> {
+    if buf.len() < 3 {
+        return None;
+    }
+
+    buf[0] = header.flags;
+    let count_bytes = header.count.to_be_bytes();
+    buf[1] = count_bytes[0];
+    buf[2] = count_bytes[1];
+    Some(3)
+}
+
+/// FFI wrapper for writing SAL header.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_write_sal_header(
+    buf: *mut u8,
+    buf_len: usize,
+    header: *const SalHeader,
+    written_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || header.is_null() || written_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let slice = std::slice::from_raw_parts_mut(buf, buf_len);
+    match write_sal_header(slice, &*header) {
+        Some(written) => {
+            *written_out = written;
+            0
+        }
+        None => SP_TRUNCERROR,
+    }
+}
+
+// =============================================================================
+// Compound Header Writing
+// =============================================================================
+
+/// Write compound header to buffer.
+///
+/// Format: <compmax> <compminlen> <compsylmax> <compoptions (2 bytes BE)>
+///         <comppatcount (2 bytes BE)>
+pub fn write_compound_header(buf: &mut [u8], header: &CompoundHeader) -> Option<usize> {
+    if buf.len() < 7 {
+        return None;
+    }
+
+    buf[0] = header.compmax;
+    buf[1] = header.compminlen;
+    buf[2] = header.compsylmax;
+    let opts_bytes = header.compoptions.to_be_bytes();
+    buf[3] = opts_bytes[0];
+    buf[4] = opts_bytes[1];
+    let count_bytes = header.comppatcount.to_be_bytes();
+    buf[5] = count_bytes[0];
+    buf[6] = count_bytes[1];
+    Some(7)
+}
+
+/// FFI wrapper for writing compound header.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_write_compound_header(
+    buf: *mut u8,
+    buf_len: usize,
+    header: *const CompoundHeader,
+    written_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || header.is_null() || written_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let slice = std::slice::from_raw_parts_mut(buf, buf_len);
+    match write_compound_header(slice, &*header) {
+        Some(written) => {
+            *written_out = written;
+            0
+        }
+        None => SP_TRUNCERROR,
+    }
+}
+
+// =============================================================================
+// Tree Node Count Writing
+// =============================================================================
+
+/// Write tree node count to buffer.
+///
+/// Format: <nodecount (4 bytes BE)>
+pub fn write_tree_nodecount(buf: &mut [u8], count: u32) -> Option<usize> {
+    write_be_u32(buf, count)
+}
+
+/// FFI wrapper for writing tree node count.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_write_tree_nodecount(
+    buf: *mut u8,
+    buf_len: usize,
+    count: u32,
+    written_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || written_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let slice = std::slice::from_raw_parts_mut(buf, buf_len);
+    match write_tree_nodecount(slice, count) {
+        Some(written) => {
+            *written_out = written;
+            0
+        }
+        None => SP_TRUNCERROR,
+    }
+}
+
+// =============================================================================
+// Timestamp Writing
+// =============================================================================
+
+/// Write timestamp to buffer.
+///
+/// Format: <timestamp (8 bytes BE)>
+pub fn write_timestamp(buf: &mut [u8], timestamp: u64) -> Option<usize> {
+    write_be_u64(buf, timestamp)
+}
+
+/// FFI wrapper for writing timestamp.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_write_timestamp(
+    buf: *mut u8,
+    buf_len: usize,
+    timestamp: u64,
+    written_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || written_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let slice = std::slice::from_raw_parts_mut(buf, buf_len);
+    match write_timestamp(slice, timestamp) {
+        Some(written) => {
+            *written_out = written;
+            0
+        }
+        None => SP_TRUNCERROR,
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -915,5 +1412,169 @@ mod tests {
         let (count, consumed) = parse_tree_nodecount(&buf).unwrap();
         assert_eq!(count, 0x0001_0000);
         assert_eq!(consumed, 4);
+    }
+
+    // Writing tests
+
+    #[test]
+    fn test_write_be() {
+        let mut buf = [0u8; 8];
+
+        assert_eq!(write_be_u16(&mut buf, 0x0102), Some(2));
+        assert_eq!(&buf[..2], &[0x01, 0x02]);
+
+        assert_eq!(write_be_u24(&mut buf, 0x0001_0203), Some(3));
+        assert_eq!(&buf[..3], &[0x01, 0x02, 0x03]);
+
+        assert_eq!(write_be_u32(&mut buf, 0x0102_0304), Some(4));
+        assert_eq!(&buf[..4], &[0x01, 0x02, 0x03, 0x04]);
+
+        assert_eq!(write_be_u64(&mut buf, 0x0102_0304_0506_0708), Some(8));
+        assert_eq!(&buf, &[0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
+    }
+
+    #[test]
+    fn test_write_cnt_string() {
+        let mut buf = [0u8; 10];
+
+        // 1-byte prefix
+        let written = write_cnt_string_1(&mut buf, b"abc").unwrap();
+        assert_eq!(written, 4);
+        assert_eq!(&buf[..4], &[3, b'a', b'b', b'c']);
+
+        // 2-byte prefix
+        let written = write_cnt_string_2(&mut buf, b"abc").unwrap();
+        assert_eq!(written, 5);
+        assert_eq!(&buf[..5], &[0, 3, b'a', b'b', b'c']);
+
+        // Empty
+        let written = write_cnt_string_1(&mut buf, b"").unwrap();
+        assert_eq!(written, 1);
+        assert_eq!(buf[0], 0);
+    }
+
+    #[test]
+    fn test_write_section_header() {
+        let mut buf = [0u8; 10];
+
+        // Normal section
+        let header = SectionHeader {
+            section_id: 1,
+            flags: SNF_REQUIRED,
+            len: 256,
+        };
+        let written = write_section_header(&mut buf, &header).unwrap();
+        assert_eq!(written, 6);
+        assert_eq!(&buf[..6], &[0x01, SNF_REQUIRED, 0x00, 0x00, 0x01, 0x00]);
+
+        // End marker
+        let header = SectionHeader {
+            section_id: 255,
+            flags: 0,
+            len: 0,
+        };
+        let written = write_section_header(&mut buf, &header).unwrap();
+        assert_eq!(written, 1);
+        assert_eq!(buf[0], 255);
+    }
+
+    #[test]
+    fn test_write_rep_item() {
+        let mut buf = [0u8; 20];
+
+        let mut item = FromTo::default();
+        item.from[..3].copy_from_slice(b"abc");
+        item.from_len = 3;
+        item.to[..3].copy_from_slice(b"xyz");
+        item.to_len = 3;
+
+        let written = write_rep_item(&mut buf, &item).unwrap();
+        assert_eq!(written, 8);
+        assert_eq!(&buf[..8], &[3, b'a', b'b', b'c', 3, b'x', b'y', b'z']);
+    }
+
+    #[test]
+    fn test_write_sal_header() {
+        let mut buf = [0u8; 10];
+
+        let header = SalHeader {
+            flags: SAL_F0LLOWUP | SAL_COLLAPSE,
+            count: 16,
+        };
+        let written = write_sal_header(&mut buf, &header).unwrap();
+        assert_eq!(written, 3);
+        assert_eq!(&buf[..3], &[SAL_F0LLOWUP | SAL_COLLAPSE, 0x00, 0x10]);
+    }
+
+    #[test]
+    fn test_write_compound_header() {
+        let mut buf = [0u8; 10];
+
+        let header = CompoundHeader {
+            compmax: 3,
+            compminlen: 2,
+            compsylmax: 4,
+            compoptions: 5,
+            comppatcount: 3,
+        };
+        let written = write_compound_header(&mut buf, &header).unwrap();
+        assert_eq!(written, 7);
+        assert_eq!(&buf[..7], &[3, 2, 4, 0x00, 0x05, 0x00, 0x03]);
+    }
+
+    #[test]
+    fn test_write_tree_nodecount() {
+        let mut buf = [0u8; 10];
+
+        let written = write_tree_nodecount(&mut buf, 0x0001_0000).unwrap();
+        assert_eq!(written, 4);
+        assert_eq!(&buf[..4], &[0x00, 0x01, 0x00, 0x00]);
+    }
+
+    #[test]
+    fn test_write_timestamp() {
+        let mut buf = [0u8; 10];
+
+        let written = write_timestamp(&mut buf, 0x0102_0304_0506_0708).unwrap();
+        assert_eq!(written, 8);
+        assert_eq!(&buf[..8], &[0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08]);
+    }
+
+    #[test]
+    fn test_roundtrip_section_header() {
+        let mut buf = [0u8; 10];
+
+        let original = SectionHeader {
+            section_id: 5,
+            flags: SNF_REQUIRED,
+            len: 1234,
+        };
+        let written = write_section_header(&mut buf, &original).unwrap();
+        let (parsed, consumed) = parse_section_header(&buf).unwrap();
+
+        assert_eq!(written, consumed);
+        assert_eq!(parsed.section_id, original.section_id);
+        assert_eq!(parsed.flags, original.flags);
+        assert_eq!(parsed.len, original.len);
+    }
+
+    #[test]
+    fn test_roundtrip_rep_item() {
+        let mut buf = [0u8; 520];
+
+        let mut original = FromTo::default();
+        original.from[..5].copy_from_slice(b"hello");
+        original.from_len = 5;
+        original.to[..5].copy_from_slice(b"world");
+        original.to_len = 5;
+
+        let written = write_rep_item(&mut buf, &original).unwrap();
+        let (parsed, consumed) = parse_rep_item(&buf).unwrap();
+
+        assert_eq!(written, consumed);
+        assert_eq!(parsed.from_len, original.from_len);
+        assert_eq!(parsed.to_len, original.to_len);
+        assert_eq!(&parsed.from[..5], b"hello");
+        assert_eq!(&parsed.to[..5], b"world");
     }
 }
