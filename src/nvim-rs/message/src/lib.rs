@@ -13,6 +13,7 @@
 //! - [`attr`]: Message attribute handling
 //! - [`scrollback`]: Scrollback buffer management
 //! - [`dialog`]: Dialog and confirmation handling
+//! - [`error`]: Error and warning message state
 //!
 //! # Note
 //!
@@ -28,6 +29,7 @@
 pub mod attr;
 pub mod chunk;
 pub mod dialog;
+pub mod error;
 pub mod format;
 pub mod history;
 pub mod output;
@@ -37,6 +39,7 @@ pub mod scrollback;
 pub use attr::*;
 pub use chunk::*;
 pub use dialog::*;
+pub use error::*;
 pub use format::*;
 pub use history::*;
 pub use output::*;
