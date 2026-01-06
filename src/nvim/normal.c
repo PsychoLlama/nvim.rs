@@ -413,6 +413,7 @@ extern void rs_nv_gomark(cmdarg_T *cap);
 extern void rs_nv_pcmark(cmdarg_T *cap);
 extern void rs_nv_regname(cmdarg_T *cap);
 extern void rs_nv_put(cmdarg_T *cap);
+extern void rs_nv_visual(cmdarg_T *cap);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -1230,6 +1231,210 @@ void nvim_set_reg_var(int regname)
 void nvim_nv_put_opt(cmdarg_T *cap, bool fix_indent)
 {
   nv_put_opt(cap, fix_indent);
+}
+
+// =============================================================================
+// Visual mode accessors for Rust FFI
+// =============================================================================
+
+/// Get Ctrl_Q constant.
+int nvim_get_Ctrl_Q(void)
+{
+  return Ctrl_Q;
+}
+
+/// Get Ctrl_V constant.
+int nvim_get_Ctrl_V(void)
+{
+  return Ctrl_V;
+}
+
+/// Set cap->cmdchar.
+void nvim_cap_set_cmdchar_call(cmdarg_T *cap, int val)
+{
+  if (cap) {
+    cap->cmdchar = val;
+  }
+}
+
+/// Set motion_force global.
+void nvim_set_motion_force(int val)
+{
+  motion_force = val;
+}
+
+/// Get motion_force global.
+int nvim_get_motion_force(void)
+{
+  return motion_force;
+}
+
+/// Set finish_op global.
+void nvim_set_finish_op(bool val)
+{
+  finish_op = val;
+}
+
+/// Wrapper for end_visual_mode.
+void nvim_end_visual_mode(void)
+{
+  end_visual_mode();
+}
+
+/// Set VIsual_mode global.
+void nvim_set_VIsual_mode(int val)
+{
+  VIsual_mode = val;
+}
+
+/// Wrapper for redraw_curbuf_later with UPD_INVERTED.
+void nvim_redraw_curbuf_inverted(void)
+{
+  redraw_curbuf_later(UPD_INVERTED);
+}
+
+/// Get resel_VIsual_mode.
+int nvim_get_resel_VIsual_mode(void)
+{
+  return resel_VIsual_mode;
+}
+
+/// Get resel_VIsual_line_count.
+int nvim_get_resel_VIsual_line_count(void)
+{
+  return resel_VIsual_line_count;
+}
+
+/// Get resel_VIsual_vcol.
+int nvim_get_resel_VIsual_vcol(void)
+{
+  return resel_VIsual_vcol;
+}
+
+/// Set VIsual lnum.
+void nvim_set_VIsual_lnum(int lnum)
+{
+  VIsual.lnum = lnum;
+}
+
+/// Set VIsual col.
+void nvim_set_VIsual_col(int col)
+{
+  VIsual.col = col;
+}
+
+/// Set VIsual coladd.
+void nvim_set_VIsual_coladd(int coladd)
+{
+  VIsual.coladd = coladd;
+}
+
+/// Set VIsual_active global.
+void nvim_set_VIsual_active(bool val)
+{
+  VIsual_active = val;
+}
+
+/// Set VIsual_reselect global.
+void nvim_set_VIsual_reselect(bool val)
+{
+  VIsual_reselect = val;
+}
+
+/// Wrapper for may_start_select.
+void nvim_may_start_select(int val)
+{
+  may_start_select(val);
+}
+
+/// Wrapper for setmouse.
+void nvim_setmouse(void)
+{
+  setmouse();
+}
+
+/// Get p_smd global.
+int nvim_get_p_smd(void)
+{
+  return p_smd;
+}
+
+/// Get msg_silent global.
+int nvim_get_msg_silent(void)
+{
+  return msg_silent;
+}
+
+/// Set redraw_cmdline global.
+void nvim_set_redraw_cmdline(bool val)
+{
+  redraw_cmdline = val;
+}
+
+/// Wrapper for check_cursor.
+void nvim_check_cursor(void)
+{
+  check_cursor(curwin);
+}
+
+/// Wrapper for update_curswant_force.
+void nvim_update_curswant_force(void)
+{
+  update_curswant_force();
+}
+
+/// Get curwin->w_curswant.
+int nvim_get_curswant(void)
+{
+  return curwin->w_curswant;
+}
+
+/// Set curwin->w_curswant.
+void nvim_set_curswant(int val)
+{
+  curwin->w_curswant = val;
+}
+
+/// Get MAXCOL constant.
+int nvim_get_MAXCOL(void)
+{
+  return MAXCOL;
+}
+
+/// Wrapper for n_start_visual_mode.
+void nvim_n_start_visual_mode(int cmdchar)
+{
+  n_start_visual_mode(cmdchar);
+}
+
+/// Cap count1 decrement and access.
+int nvim_cap_dec_count1(cmdarg_T *cap)
+{
+  if (cap) {
+    return --cap->count1;
+  }
+  return 0;
+}
+
+/// Wrapper for nv_right.
+void nvim_nv_right(cmdarg_T *cap)
+{
+  nv_right(cap);
+}
+
+/// Wrapper for nv_down.
+void nvim_nv_down(cmdarg_T *cap)
+{
+  nv_down(cap);
+}
+
+/// Internal nv_visual implementation (full C logic).
+static void nv_visual_impl(cmdarg_T *cap);
+
+/// Wrapper for nv_visual_impl (used by Rust).
+void nvim_nv_visual_impl(cmdarg_T *cap)
+{
+  nv_visual_impl(cap);
 }
 
 /// Check if an operator was started but not finished yet.
@@ -5392,6 +5597,12 @@ static void nv_regname(cmdarg_T *cap)
 /// is true.
 /// Handle CTRL-Q just like CTRL-V.
 static void nv_visual(cmdarg_T *cap)
+{
+  rs_nv_visual(cap);
+}
+
+/// Internal implementation of nv_visual.
+static void nv_visual_impl(cmdarg_T *cap)
 {
   if (cap->cmdchar == Ctrl_Q) {
     cap->cmdchar = Ctrl_V;

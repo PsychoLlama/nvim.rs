@@ -1035,6 +1035,9 @@ extern "C" {
     fn nvim_valid_yank_reg(regname: c_int, writing: bool) -> bool;
     fn nvim_set_reg_var(regname: c_int);
     fn nvim_nv_put_opt(cap: CapHandle, fix_indent: bool);
+
+    // Visual mode functions
+    fn nvim_nv_visual_impl(cap: CapHandle);
 }
 
 /// Opaque handle to fmark_T*.
@@ -1437,6 +1440,23 @@ pub unsafe extern "C" fn rs_nv_pcmark(cap: CapHandle) {
     {
         nvim_foldOpenCursor();
     }
+}
+
+// =============================================================================
+// Visual Mode Command Handlers
+// =============================================================================
+
+/// Command handler for "v", "V" and "CTRL-V" commands.
+///
+/// Also for "gh", "gH" and "g^H" commands: Always start Select mode, cap->arg
+/// is true. Handle CTRL-Q just like CTRL-V.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_visual(cap: CapHandle) {
+    // Delegate to C implementation which handles the complex visual mode logic
+    nvim_nv_visual_impl(cap);
 }
 
 // =============================================================================
