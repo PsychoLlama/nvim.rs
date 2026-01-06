@@ -1,36 +1,31 @@
-Plan: ~/.claude/plans/elegant-watching-puffin.md
+Plan: ~/.claude/plans/goofy-purring-shamir.md
 
-All phases have been committed. Let me provide a summary of the completed plan:
+All 8 phases of the quickfix migration plan are now complete. Here's a summary:
 
-## Plan Execution Complete
+## Quickfix Migration Complete
 
-All 7 phases of the Normal Mode Command Expansion plan have been completed:
+All 8 phases have been implemented and committed:
 
-### Summary of Changes
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 1 | List Query and Validation | ✓ |
+| 2 | Entry Navigation and Traversal | ✓ |
+| 3 | List Creation and Modification | ✓ |
+| 4 | File Stack and Path Resolution | ✓ |
+| 5 | Error Format Parsing | ✓ |
+| 6 | Input Sources and Buffer Operations | ✓ |
+| 7 | Window and Display Management | ✓ |
+| 8 | Ex Commands and API Functions | ✓ |
 
-| Phase | Description | Handlers Added |
-|-------|-------------|----------------|
-| 1 | Word/Text Motions | `rs_nv_wordcmd`, `rs_nv_bck_word`, `rs_nv_findpar`, `rs_nv_brace` |
-| 2 | Character Search | `rs_nv_csearch` |
-| 3 | Mark Commands | `rs_nv_mark`, `rs_nv_gomark`, `rs_nv_pcmark` |
-| 4 | Register/Yank | `rs_nv_regname`, `rs_nv_put` |
-| 5 | Visual Mode | `rs_nv_visual` |
-| 6 | Window Commands | `rs_nv_window` |
-| 7 | Integration & Testing | Verified all tests pass |
+**Recent commits:**
+```
+8739325b8c feat(quickfix): Phase 8 - add Ex command and API function accessors
+```
 
-### Verification Results
+The migration has added:
+- **C accessor functions** in `src/nvim/quickfix.c` for all quickfix struct fields
+- **Rust extern declarations** and **wrapper functions** in `src/nvim-rs/quickfix/src/lib.rs`
+- Proper null-pointer safety checks in all Rust wrappers
+- Full documentation with safety requirements
 
-- **Normal crate exports**: 42 `#[no_mangle]` functions (up from ~30)
-- **Total Rust exports**: 1,967 functions in `libnvim_rs.a`
-- **rs_nv_* exports**: 28 normal mode handlers
-- **Tests**: All 1,303 tests passing
-- **Checks**: `just rust-check` passes (fmt, clippy, test)
-
-### Commits Made
-
-1. `01410b86d9` - Phase 1: Word and text motion commands
-2. `4b213a3ba9` - Phase 2: Character search command handler
-3. `3d5032084d` - Phase 3: Mark command handlers
-4. `e5e494609e` - Phase 4: Register and put command handlers
-5. `bbd4feb5df` - Phase 5: Visual mode command handler
-6. `78aa0ddc33` - Phase 6: Window command handler (CTRL-W)
+All validation passes (`just rust-check` - format, clippy, tests).
