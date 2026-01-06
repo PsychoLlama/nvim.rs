@@ -678,6 +678,98 @@ enum { QF_WINHEIGHT = 10, };  ///< default height for quickfix window
        !got_int && (i) <= (qfl)->qf_count && (qfp) != NULL; \
        (i)++, (qfp) = (qfp)->qf_next)
 
+// =============================================================================
+// Phase 1: Validation accessor functions for Rust
+// Forward declarations of static functions we need
+// =============================================================================
+
+static char *qf_types(int c, int nr);
+static win_T *qf_find_win(const qf_info_T *qi);
+
+/// Check if a window pointer is still valid for Rust
+/// This wraps win_valid() from window.c
+bool nvim_win_valid(const void *wp_void)
+{
+  if (wp_void == NULL) {
+    return false;
+  }
+  return win_valid((win_T *)wp_void);
+}
+
+/// Get the location list for a window for Rust
+/// Returns the location list (w_llist or w_llist_ref) or NULL
+void *nvim_win_get_loclist(const void *wp_void)
+{
+  if (wp_void == NULL) {
+    return NULL;
+  }
+  win_T *wp = (win_T *)wp_void;
+  return (void *)GET_LOC_LIST(wp);
+}
+
+/// Find the quickfix window for a quickfix stack for Rust
+/// Returns the window pointer or NULL
+void *nvim_qf_find_win_handle(const void *qi_void)
+{
+  if (qi_void == NULL) {
+    return NULL;
+  }
+  return (void *)qf_find_win((const qf_info_T *)qi_void);
+}
+
+/// Get the window handle from a window pointer for Rust quickfix
+int nvim_qf_win_get_handle(const void *wp_void)
+{
+  if (wp_void == NULL) {
+    return 0;
+  }
+  return ((win_T *)wp_void)->handle;
+}
+
+/// Check if a quickfix list with the given ID exists in the stack for Rust
+/// This is equivalent to qflist_valid() but works with a quickfix stack pointer
+bool nvim_qflist_valid(const void *qi_void, unsigned qf_id)
+{
+  if (qi_void == NULL) {
+    return false;
+  }
+  const qf_info_T *qi = (const qf_info_T *)qi_void;
+  for (int i = 0; i < qi->qf_listcount; i++) {
+    if (qi->qf_lists[i].qf_id == qf_id) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Check if an entry is present in a quickfix list for Rust
+/// This is equivalent to is_qf_entry_present()
+bool nvim_qf_entry_present(const void *qfl_void, const void *qf_ptr_void)
+{
+  if (qfl_void == NULL || qf_ptr_void == NULL) {
+    return false;
+  }
+  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
+  const qfline_T *target = (const qfline_T *)qf_ptr_void;
+
+  qfline_T *qfp;
+  int i;
+  FOR_ALL_QFL_ITEMS(qfl, qfp, i) {
+    if (qfp == target) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Get the error type string for display for Rust
+/// Returns a pointer to a static string (like " error", " warning", etc.)
+/// The caller must not free this string.
+const char *nvim_qf_types(int c, int nr)
+{
+  return qf_types(c, nr);
+}
+
 // Looking up a buffer can be slow if there are many.  Remember the last one
 // to make this a lot faster if there are multiple matches in the same file.
 static char *qf_last_bufname = NULL;

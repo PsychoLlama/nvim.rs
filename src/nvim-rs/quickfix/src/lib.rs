@@ -57,6 +57,15 @@ extern "C" {
     // Position accessors
     fn nvim_pos_get_lnum(pos: PosHandle) -> LinenrT;
     fn nvim_pos_get_col(pos: PosHandle) -> c_int;
+
+    // Phase 1: Validation accessors
+    fn nvim_win_valid(wp: *const c_void) -> bool;
+    fn nvim_win_get_loclist(wp: *const c_void) -> QfInfoHandle;
+    fn nvim_qf_find_win_handle(qi: QfInfoHandle) -> *const c_void;
+    fn nvim_qf_win_get_handle(wp: *const c_void) -> c_int;
+    fn nvim_qflist_valid(qi: QfInfoHandle, qf_id: u32) -> bool;
+    fn nvim_qf_entry_present(qfl: QfListHandle, qf_ptr: QfLineHandle) -> bool;
+    fn nvim_qf_types(c: c_int, nr: c_int) -> *const c_char;
 }
 
 // =============================================================================
@@ -330,6 +339,120 @@ pub unsafe extern "C" fn rs_qf_get_size(qfl: QfListHandle) -> c_int {
         return 0;
     }
     nvim_qf_get_count(qfl)
+}
+
+// =============================================================================
+// Phase 1: List Query and Validation Functions
+// =============================================================================
+
+/// Opaque handle to `win_T` (window)
+type WinHandle = *const c_void;
+
+/// Check if a quickfix/location list with the given identifier exists.
+///
+/// For quickfix lists (`wp` is NULL), checks the global quickfix stack.
+/// For location lists (`wp` is non-NULL), checks the window's location list.
+///
+/// Returns true if the list with the given ID exists in the stack.
+///
+/// # Safety
+///
+/// - `wp` may be null (checks global quickfix stack)
+/// - If non-null, `wp` must be a valid pointer to a `win_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qflist_valid(wp: WinHandle, qf_id: u32) -> bool {
+    // Get the appropriate quickfix stack
+    let qi = if wp.is_null() {
+        // Use global quickfix stack
+        nvim_get_ql_info()
+    } else {
+        // Check if window is valid first
+        if !nvim_win_valid(wp) {
+            return false;
+        }
+        // Get location list for window
+        nvim_win_get_loclist(wp)
+    };
+
+    if qi.is_null() {
+        return false;
+    }
+
+    nvim_qflist_valid(qi, qf_id)
+}
+
+/// Check if a quickfix entry is present in the quickfix list.
+///
+/// When loading a file from the quickfix, autocommands may modify it.
+/// This may invalidate the current quickfix entry. This function checks
+/// whether an entry is still present in the quickfix list.
+///
+/// Returns true if the entry pointer is found in the list.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - `qf_ptr` must be a valid pointer to a `qfline_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_entry_present(qfl: QfListHandle, qf_ptr: QfLineHandle) -> bool {
+    if qfl.is_null() || qf_ptr.is_null() {
+        return false;
+    }
+    nvim_qf_entry_present(qfl, qf_ptr)
+}
+
+/// Convert a quickfix list ID to its index in the stack.
+///
+/// Returns the 0-based index of the list with the given ID, or -1 if not found.
+/// This is equivalent to the C function `qf_id2nr()`.
+///
+/// # Safety
+///
+/// - `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_id2nr(qi: QfInfoHandle, qf_id: u32) -> c_int {
+    // Use the existing rs_qf_find_list_by_id which does the same thing
+    rs_qf_find_list_by_id(qi, qf_id)
+}
+
+/// Get the error type string for display.
+///
+/// Returns a formatted string like " error", " warning", " info", " note",
+/// or a custom type string. The nr parameter adds a number suffix if > 0.
+///
+/// The returned pointer points to a static buffer in C and must not be freed.
+///
+/// # Safety
+///
+/// - The returned pointer is only valid until the next call to this function
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_types(c: c_int, nr: c_int) -> *const c_char {
+    nvim_qf_types(c, nr)
+}
+
+/// Get the quickfix/location list window ID.
+///
+/// Returns the window handle (ID) of the quickfix window displaying the
+/// specified quickfix stack, or 0 if no window is found.
+///
+/// # Safety
+///
+/// - `qi` may be null (returns 0)
+/// - If non-null, `qi` must be a valid pointer to a `qf_info_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_winid(qi: QfInfoHandle) -> c_int {
+    // The quickfix window can be opened even if the quickfix list is not set
+    // using ":copen". This is not true for location lists.
+    if qi.is_null() {
+        return 0;
+    }
+
+    let win = nvim_qf_find_win_handle(qi);
+    if win.is_null() {
+        return 0;
+    }
+
+    nvim_qf_win_get_handle(win)
 }
 
 // =============================================================================
