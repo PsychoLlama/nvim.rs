@@ -1153,6 +1153,134 @@ pub unsafe extern "C" fn rs_option_find_arg_end(s: *const c_char) -> *const c_ch
 }
 
 // =============================================================================
+// Option Name Validation
+// =============================================================================
+
+/// Check if a character is valid as the first character of an option name.
+/// Option names must start with a letter or underscore.
+#[inline]
+#[must_use]
+pub const fn is_valid_option_name_start(c: u8) -> bool {
+    c.is_ascii_alphabetic() || c == b'_'
+}
+
+/// Check if a character is valid in an option name (after first character).
+/// Option names can contain letters, digits, and underscores.
+#[inline]
+#[must_use]
+pub const fn is_valid_option_name_char(c: u8) -> bool {
+    c.is_ascii_alphanumeric() || c == b'_'
+}
+
+/// Validate an option name string.
+/// Returns 1 if the name is valid, 0 otherwise.
+///
+/// A valid option name:
+/// - Is not empty
+/// - Starts with a letter or underscore
+/// - Contains only letters, digits, and underscores
+#[no_mangle]
+pub unsafe extern "C" fn rs_validate_option_name(name: *const c_char) -> c_int {
+    if name.is_null() {
+        return 0;
+    }
+
+    let first = *name as u8;
+    if first == 0 || !is_valid_option_name_start(first) {
+        return 0;
+    }
+
+    let mut p = name.add(1);
+    while *p != 0 {
+        if !is_valid_option_name_char(*p as u8) {
+            return 0;
+        }
+        p = p.add(1);
+    }
+
+    1
+}
+
+/// Get the length of an option name starting at the given pointer.
+/// Stops at the first invalid character.
+#[no_mangle]
+pub unsafe extern "C" fn rs_option_name_length(s: *const c_char) -> usize {
+    if s.is_null() {
+        return 0;
+    }
+
+    let first = *s as u8;
+    if !is_valid_option_name_start(first) {
+        return 0;
+    }
+
+    let mut len: usize = 1;
+    let mut p = s.add(1);
+    while *p != 0 && is_valid_option_name_char(*p as u8) {
+        len += 1;
+        p = p.add(1);
+    }
+
+    len
+}
+
+/// Parse a :set operator from a string.
+/// Returns the operator type and updates the pointer past the operator.
+///
+/// Operators:
+/// - '=' or ':' -> SetOp::None (simple assignment)
+/// - '+=' -> SetOp::Adding
+/// - '^=' -> SetOp::Prepending
+/// - '-=' -> SetOp::Removing
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_set_operator(p: *mut *const c_char) -> c_int {
+    if p.is_null() || (*p).is_null() {
+        return SetOp::None as c_int;
+    }
+
+    let mut s = *p;
+    let c = *s as u8;
+
+    let op = match c {
+        b'+' => {
+            s = s.add(1);
+            if *s as u8 == b'=' {
+                s = s.add(1);
+                SetOp::Adding
+            } else {
+                SetOp::None
+            }
+        }
+        b'^' => {
+            s = s.add(1);
+            if *s as u8 == b'=' {
+                s = s.add(1);
+                SetOp::Prepending
+            } else {
+                SetOp::None
+            }
+        }
+        b'-' => {
+            s = s.add(1);
+            if *s as u8 == b'=' {
+                s = s.add(1);
+                SetOp::Removing
+            } else {
+                SetOp::None
+            }
+        }
+        b'=' | b':' => {
+            s = s.add(1);
+            SetOp::None
+        }
+        _ => SetOp::None,
+    };
+
+    *p = s;
+    op as c_int
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -1435,6 +1563,129 @@ mod tests {
 
             let result = rs_option_find_arg_end(no_delim.as_ptr());
             assert_eq!(*result, 0); // points to NUL
+        }
+    }
+
+    #[test]
+    fn test_is_valid_option_name_start() {
+        // Valid start characters
+        assert!(is_valid_option_name_start(b'a'));
+        assert!(is_valid_option_name_start(b'z'));
+        assert!(is_valid_option_name_start(b'A'));
+        assert!(is_valid_option_name_start(b'Z'));
+        assert!(is_valid_option_name_start(b'_'));
+
+        // Invalid start characters
+        assert!(!is_valid_option_name_start(b'0'));
+        assert!(!is_valid_option_name_start(b'9'));
+        assert!(!is_valid_option_name_start(b'-'));
+        assert!(!is_valid_option_name_start(b' '));
+    }
+
+    #[test]
+    fn test_is_valid_option_name_char() {
+        // Valid characters
+        assert!(is_valid_option_name_char(b'a'));
+        assert!(is_valid_option_name_char(b'z'));
+        assert!(is_valid_option_name_char(b'A'));
+        assert!(is_valid_option_name_char(b'Z'));
+        assert!(is_valid_option_name_char(b'0'));
+        assert!(is_valid_option_name_char(b'9'));
+        assert!(is_valid_option_name_char(b'_'));
+
+        // Invalid characters
+        assert!(!is_valid_option_name_char(b'-'));
+        assert!(!is_valid_option_name_char(b' '));
+        assert!(!is_valid_option_name_char(b'.'));
+    }
+
+    #[test]
+    fn test_validate_option_name() {
+        use std::ffi::CString;
+
+        unsafe {
+            // Valid names
+            let valid1 = CString::new("autoindent").unwrap();
+            let valid2 = CString::new("_private").unwrap();
+            let valid3 = CString::new("opt123").unwrap();
+            let valid4 = CString::new("a").unwrap();
+
+            assert_eq!(rs_validate_option_name(valid1.as_ptr()), 1);
+            assert_eq!(rs_validate_option_name(valid2.as_ptr()), 1);
+            assert_eq!(rs_validate_option_name(valid3.as_ptr()), 1);
+            assert_eq!(rs_validate_option_name(valid4.as_ptr()), 1);
+
+            // Invalid names
+            let invalid1 = CString::new("123abc").unwrap(); // starts with digit
+            let invalid2 = CString::new("-opt").unwrap(); // starts with hyphen
+            let invalid3 = CString::new("opt-name").unwrap(); // contains hyphen
+            let empty = CString::new("").unwrap();
+
+            assert_eq!(rs_validate_option_name(invalid1.as_ptr()), 0);
+            assert_eq!(rs_validate_option_name(invalid2.as_ptr()), 0);
+            assert_eq!(rs_validate_option_name(invalid3.as_ptr()), 0);
+            assert_eq!(rs_validate_option_name(empty.as_ptr()), 0);
+            assert_eq!(rs_validate_option_name(std::ptr::null()), 0);
+        }
+    }
+
+    #[test]
+    fn test_option_name_length() {
+        use std::ffi::CString;
+
+        unsafe {
+            let full = CString::new("autoindent").unwrap();
+            let with_extra = CString::new("option=value").unwrap();
+            let with_space = CString::new("opt ion").unwrap();
+            let digit_start = CString::new("123abc").unwrap();
+
+            assert_eq!(rs_option_name_length(full.as_ptr()), 10);
+            assert_eq!(rs_option_name_length(with_extra.as_ptr()), 6);
+            assert_eq!(rs_option_name_length(with_space.as_ptr()), 3);
+            assert_eq!(rs_option_name_length(digit_start.as_ptr()), 0);
+            assert_eq!(rs_option_name_length(std::ptr::null()), 0);
+        }
+    }
+
+    #[test]
+    fn test_parse_set_operator() {
+        use std::ffi::CString;
+
+        unsafe {
+            // Test += (Adding)
+            let adding = CString::new("+=value").unwrap();
+            let mut p = adding.as_ptr();
+            let op = rs_parse_set_operator(&raw mut p);
+            assert_eq!(op, SetOp::Adding as c_int);
+            assert_eq!(*p as u8, b'v');
+
+            // Test ^= (Prepending)
+            let prepending = CString::new("^=value").unwrap();
+            let mut p = prepending.as_ptr();
+            let op = rs_parse_set_operator(&raw mut p);
+            assert_eq!(op, SetOp::Prepending as c_int);
+            assert_eq!(*p as u8, b'v');
+
+            // Test -= (Removing)
+            let removing = CString::new("-=value").unwrap();
+            let mut p = removing.as_ptr();
+            let op = rs_parse_set_operator(&raw mut p);
+            assert_eq!(op, SetOp::Removing as c_int);
+            assert_eq!(*p as u8, b'v');
+
+            // Test = (None - assignment)
+            let assign = CString::new("=value").unwrap();
+            let mut p = assign.as_ptr();
+            let op = rs_parse_set_operator(&raw mut p);
+            assert_eq!(op, SetOp::None as c_int);
+            assert_eq!(*p as u8, b'v');
+
+            // Test : (None - assignment alternative)
+            let colon = CString::new(":value").unwrap();
+            let mut p = colon.as_ptr();
+            let op = rs_parse_set_operator(&raw mut p);
+            assert_eq!(op, SetOp::None as c_int);
+            assert_eq!(*p as u8, b'v');
         }
     }
 }
