@@ -82,6 +82,7 @@ nvim-textformat = { path = "textformat" }
 nvim-textobject = { path = "textobject" }
 nvim-utf8proc = { path = "utf8proc" }
 nvim-version = { path = "version" }
+nvim-viewport = { path = "viewport" }
 nvim-window = { path = "window" }
 nvim-terminal = { path = "terminal" }
 nvim-unpacker = { path = "unpacker" }

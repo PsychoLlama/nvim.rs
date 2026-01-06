@@ -80,4 +80,5 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | unpacker       | MessagePack unpacking                   |
 | utf8proc       | utf8proc bindings                       |
 | version        | Version checks                          |
+| viewport       | Viewport and scroll management          |
 | window         | Window state and layout                 |

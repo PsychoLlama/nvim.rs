@@ -119,7 +119,8 @@ rust-test:
       -p nvim-tui \
       -p nvim-ugrid \
       -p nvim-unpacker \
-      -p nvim-version
+      -p nvim-version \
+      -p nvim-viewport
 
 # Run Rust linter
 rust-clippy:

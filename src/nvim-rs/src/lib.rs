@@ -94,6 +94,7 @@ pub use nvim_undo::*;
 pub use nvim_unpacker::*;
 pub use nvim_utf8proc::*;
 pub use nvim_version::*;
+pub use nvim_viewport::*;
 pub use nvim_window::*;
 
 /// FFI-safe result type for operations that can fail
