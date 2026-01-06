@@ -770,6 +770,115 @@ const char *nvim_qf_types(int c, int nr)
   return qf_types(c, nr);
 }
 
+// =============================================================================
+// Phase 3: List modification accessor functions for Rust
+// Forward declaration
+// =============================================================================
+
+static void qf_pop_stack(qf_info_T *qi, bool adjust);
+
+/// Pop the oldest list from the quickfix stack for Rust
+/// @param adjust If true, adjust listcount and curlist
+void nvim_qf_pop_stack(void *qi_void, bool adjust)
+{
+  if (qi_void == NULL) {
+    return;
+  }
+  qf_pop_stack((qf_info_T *)qi_void, adjust);
+}
+
+/// Increment the list count after adding a list
+void nvim_qf_increment_listcount(void *qi_void)
+{
+  if (qi_void == NULL) {
+    return;
+  }
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  qi->qf_listcount++;
+}
+
+/// Decrement the list count after removing a list
+void nvim_qf_decrement_listcount(void *qi_void)
+{
+  if (qi_void == NULL) {
+    return;
+  }
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  if (qi->qf_listcount > 0) {
+    qi->qf_listcount--;
+  }
+}
+
+/// Set the start pointer for a quickfix list
+void nvim_qf_set_start(void *qfl_void, void *start)
+{
+  if (qfl_void == NULL) {
+    return;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  qfl->qf_start = (qfline_T *)start;
+}
+
+/// Set the last pointer for a quickfix list
+void nvim_qf_set_last(void *qfl_void, void *last)
+{
+  if (qfl_void == NULL) {
+    return;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  qfl->qf_last = (qfline_T *)last;
+}
+
+/// Set the entry count for a quickfix list
+void nvim_qf_set_count(void *qfl_void, int count)
+{
+  if (qfl_void == NULL) {
+    return;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  qfl->qf_count = count;
+}
+
+/// Increment the entry count
+void nvim_qf_increment_count(void *qfl_void)
+{
+  if (qfl_void == NULL) {
+    return;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  qfl->qf_count++;
+}
+
+/// Set the nonevalid flag for a quickfix list
+void nvim_qf_set_nonevalid(void *qfl_void, bool nonevalid)
+{
+  if (qfl_void == NULL) {
+    return;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  qfl->qf_nonevalid = nonevalid;
+}
+
+/// Set the next pointer for a quickfix entry
+void nvim_qfline_set_next(void *qfp_void, void *next)
+{
+  if (qfp_void == NULL) {
+    return;
+  }
+  qfline_T *qfp = (qfline_T *)qfp_void;
+  qfp->qf_next = (qfline_T *)next;
+}
+
+/// Set the prev pointer for a quickfix entry
+void nvim_qfline_set_prev(void *qfp_void, void *prev)
+{
+  if (qfp_void == NULL) {
+    return;
+  }
+  qfline_T *qfp = (qfline_T *)qfp_void;
+  qfp->qf_prev = (qfline_T *)prev;
+}
+
 // Looking up a buffer can be slow if there are many.  Remember the last one
 // to make this a lot faster if there are multiple matches in the same file.
 static char *qf_last_bufname = NULL;
