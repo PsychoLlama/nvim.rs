@@ -120,6 +120,9 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            # Cursor handling (Phase 9)
            "rs_cursor_pos_cmp", "rs_cursor_pos_equal", "rs_cursor_pos_less", "rs_cursor_pos_leq",
            "rs_cursor_get_line_count", "rs_cursor_clamp_lnum", "rs_cursor_valid_lnum",
+           "rs_cursor_can_move_up", "rs_cursor_can_move_down", "rs_cursor_line_up", "rs_cursor_line_down",
+           "rs_cursor_clamp_col", "rs_cursor_one_more", "rs_cursor_at_eol", "rs_cursor_at_bol",
+           "rs_cursor_at_first_line", "rs_cursor_at_last_line",
            "CursorPos",
            # Viewport handling (Phase 10)
            "rs_viewport_get_topline", "rs_viewport_get_botline", "rs_viewport_get_topfill",

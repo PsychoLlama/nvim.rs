@@ -248,6 +248,159 @@ pub unsafe extern "C" fn rs_cursor_valid_lnum(win: WinHandle, lnum: i64) -> bool
 }
 
 // =============================================================================
+// Cursor Movement Helpers
+// =============================================================================
+
+/// Check if cursor can move up from current line.
+///
+/// # Safety
+/// `win` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cursor_can_move_up(_win: WinHandle, lnum: i64) -> bool {
+    lnum > 1
+}
+
+/// Check if cursor can move down from current line.
+///
+/// # Safety
+/// `win` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cursor_can_move_down(win: WinHandle, lnum: i64) -> bool {
+    let line_count = rs_cursor_get_line_count(win);
+    lnum < line_count
+}
+
+/// Calculate the target line number when moving up by count lines.
+/// Clamps to line 1 if count exceeds available lines.
+///
+/// # Safety
+/// `win` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cursor_line_up(_win: WinHandle, lnum: i64, count: i64) -> i64 {
+    let target = lnum - count;
+    if target < 1 {
+        1
+    } else {
+        target
+    }
+}
+
+/// Calculate the target line number when moving down by count lines.
+/// Clamps to last line if count exceeds available lines.
+///
+/// # Safety
+/// `win` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cursor_line_down(win: WinHandle, lnum: i64, count: i64) -> i64 {
+    let line_count = rs_cursor_get_line_count(win);
+    let target = lnum + count;
+    if target > line_count {
+        line_count.max(1)
+    } else {
+        target
+    }
+}
+
+/// Get the clamped column position for a line.
+/// Returns the minimum of col and `line_len` - 1 (or 0 for empty lines).
+/// When `allow_past_end` is true, allows col == `line_len`.
+///
+/// # Safety
+/// `win` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cursor_clamp_col(
+    win: WinHandle,
+    lnum: i64,
+    col: i32,
+    allow_past_end: bool,
+) -> i32 {
+    let buf = nvim_win_get_buffer(win);
+    if buf.is_null() {
+        return 0;
+    }
+    let line_len = nvim_buf_get_line_len(buf, lnum);
+    if line_len == 0 {
+        return 0;
+    }
+
+    let max_col = if allow_past_end {
+        line_len
+    } else {
+        (line_len - 1).max(0)
+    };
+
+    if col < 0 {
+        0
+    } else if col > max_col {
+        max_col
+    } else {
+        col
+    }
+}
+
+/// Check if the `one_more` condition is true.
+/// This allows cursor to be past end of line when:
+/// - In Insert mode
+/// - In Terminal mode
+/// - Insert mode restart is pending
+/// - Visual mode is active with 'selection' != "old"
+/// - 'virtualedit' has onemore flag
+///
+/// # Safety
+/// `win` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cursor_one_more(win: WinHandle) -> bool {
+    let state = nvim_get_state();
+    let ve_flags = nvim_get_ve_flags(win);
+    let restart_edit = nvim_get_restart_edit();
+    let visual_active = nvim_get_visual_active();
+    let sel_first = nvim_get_p_sel_first();
+
+    // Check each condition
+    (state & MODE_INSERT) != 0
+        || (state & MODE_TERMINAL) != 0
+        || restart_edit != 0
+        || (visual_active && sel_first != i32::from(b'o'))
+        || (ve_flags & VE_ONEMORE) != 0
+}
+
+/// Check if position is at end of line (on the NUL byte).
+///
+/// # Safety
+/// `win` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cursor_at_eol(win: WinHandle, lnum: i64, col: i32) -> bool {
+    let buf = nvim_win_get_buffer(win);
+    if buf.is_null() {
+        return true;
+    }
+    let line_len = nvim_buf_get_line_len(buf, lnum);
+    col >= line_len
+}
+
+/// Check if position is at beginning of line.
+#[no_mangle]
+pub extern "C" fn rs_cursor_at_bol(col: i32) -> bool {
+    col == 0
+}
+
+/// Check if position is at first line of buffer.
+#[no_mangle]
+pub extern "C" fn rs_cursor_at_first_line(lnum: i64) -> bool {
+    lnum <= 1
+}
+
+/// Check if position is at last line of buffer.
+///
+/// # Safety
+/// `win` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cursor_at_last_line(win: WinHandle, lnum: i64) -> bool {
+    let line_count = rs_cursor_get_line_count(win);
+    lnum >= line_count
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -355,5 +508,20 @@ mod tests {
     fn test_mode_flags() {
         assert_eq!(MODE_INSERT, 0x10);
         assert_eq!(MODE_TERMINAL, 0x2000);
+    }
+
+    #[test]
+    fn test_cursor_at_bol() {
+        assert!(rs_cursor_at_bol(0));
+        assert!(!rs_cursor_at_bol(1));
+        assert!(!rs_cursor_at_bol(-1));
+    }
+
+    #[test]
+    fn test_cursor_at_first_line() {
+        assert!(rs_cursor_at_first_line(1));
+        assert!(rs_cursor_at_first_line(0));
+        assert!(rs_cursor_at_first_line(-1));
+        assert!(!rs_cursor_at_first_line(2));
     }
 }
