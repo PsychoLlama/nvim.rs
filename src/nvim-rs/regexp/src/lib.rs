@@ -11,6 +11,7 @@ pub mod bt_opcodes;
 pub mod char_class;
 pub mod decompose;
 pub mod nfa_compile;
+pub mod nfa_match;
 pub mod nfa_states;
 pub mod parser;
 pub mod scanner;
@@ -21,6 +22,12 @@ pub use nfa_compile::{
     rs_alloc_state, rs_append, rs_frag_new, rs_frag_stack_free, rs_frag_stack_new,
     rs_frag_stack_pop, rs_frag_stack_push, rs_list1, rs_patch, rs_state_allocator_count,
     rs_state_allocator_free, rs_state_allocator_new, rs_state_allocator_reset,
+};
+pub use nfa_match::{
+    rs_clear_subs, rs_copy_pim, rs_copy_subs, rs_init_thread, rs_is_match_state, rs_is_split_state,
+    rs_list_has_match, rs_mark_state_in_list, rs_match_context_advance, rs_match_context_at_eol,
+    rs_match_context_current_byte, rs_match_context_new, rs_match_context_new_multi,
+    rs_pim_matched, rs_pim_needs_exec, rs_set_pim_matched, rs_set_pim_nomatch, rs_state_in_list,
 };
 pub use nfa_states::{
     rs_check_char_class, rs_nfa_get_subexpr_idx, rs_nfa_is_char_class, rs_nfa_is_position_match,
