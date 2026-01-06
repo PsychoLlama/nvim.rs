@@ -14,6 +14,7 @@ pub mod nfa_compile;
 pub mod nfa_match;
 pub mod nfa_states;
 pub mod parser;
+pub mod regsub;
 pub mod scanner;
 
 pub use char_class::rs_get_char_class;
@@ -38,6 +39,11 @@ pub use nfa_states::{
 pub use parser::{
     rs_nfa_re_num_cmp, rs_re_get_uint16, rs_re_get_uint32, rs_re_num_cmp, rs_re_put_uint16,
     rs_re_put_uint32, rs_read_limits, rs_use_multibytecode,
+};
+pub use regsub::{
+    rs_do_lower, rs_do_upper, rs_is_k_special, rs_sub_context_has_room, rs_sub_context_new,
+    rs_sub_context_output_len, rs_utf8_char2bytes, rs_utf8_char2len, rs_utf8_char_len,
+    rs_utf8_ptr2char,
 };
 pub use scanner::{
     rs_getchr, rs_initchr, rs_peekchr, rs_skipchr, rs_skipchr_keepstart, rs_ungetchr,
