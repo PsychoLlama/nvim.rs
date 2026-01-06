@@ -1,12 +1,20 @@
 //! Undo system utilities for Neovim
 //!
 //! This crate provides functions for Neovim's multi-level undo/redo system.
+//!
+//! ## File I/O Infrastructure
+//!
+//! This module includes types and helpers for undo file persistence:
+//! - Magic bytes and version constants for file format
+//! - Serialization/deserialization helpers for undo headers and entries
+//! - File I/O wrappers for reading/writing undo files
 
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::must_use_candidate)]
 
-use std::ffi::{c_char, c_int, c_long, c_void};
+use std::ffi::{c_char, c_int, c_long, c_uchar, c_void};
+use std::ptr;
 
 /// Opaque handle to buf_T.
 #[repr(transparent)]
@@ -40,6 +48,59 @@ const OK: c_int = 1;
 
 /// Failure return value (matches Neovim's FAIL).
 const FAIL: c_int = 0;
+
+// =============================================================================
+// Undo File Format Constants
+// =============================================================================
+
+/// Magic bytes at the start of undo file: "Vim\237UnDo\345"
+pub const UF_START_MAGIC: &[u8; 9] = b"Vim\x9fUnDo\xe5";
+/// Length of the start magic bytes.
+pub const UF_START_MAGIC_LEN: usize = 9;
+
+/// Magic at start of header.
+pub const UF_HEADER_MAGIC: u16 = 0x5fd0;
+/// Magic after last header.
+pub const UF_HEADER_END_MAGIC: u16 = 0xe7aa;
+/// Magic at start of entry.
+pub const UF_ENTRY_MAGIC: u16 = 0xf518;
+/// Magic after last entry.
+pub const UF_ENTRY_END_MAGIC: u16 = 0x3581;
+
+/// 2-byte undofile version number.
+pub const UF_VERSION: u16 = 3;
+
+/// Extra field identifier for last save number in header.
+pub const UF_LAST_SAVE_NR: u8 = 1;
+
+/// Extra field identifier for save number in uhp.
+pub const UHP_SAVE_NR: u8 = 1;
+
+/// Size of SHA-256 hash used in undo files.
+pub const UNDO_HASH_SIZE: usize = 32;
+
+// =============================================================================
+// Undo File I/O Handle
+// =============================================================================
+
+/// Opaque handle to FILE* for undo file operations.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct FileHandle(*mut c_void);
+
+impl FileHandle {
+    /// Create a null file handle.
+    #[inline]
+    pub fn null() -> Self {
+        FileHandle(ptr::null_mut())
+    }
+
+    /// Check if the handle is null.
+    #[inline]
+    pub fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
 
 // FFI declarations for C accessor functions
 #[allow(dead_code)]
@@ -237,6 +298,113 @@ extern "C" {
     fn nvim_inc_lastmark() -> c_int;
     fn nvim_internal_error_undo_time();
     fn nvim_semsg_undo_number_not_found(step: i64);
+
+    // ==========================================================================
+    // Undo File I/O FFI Functions
+    // ==========================================================================
+
+    // File operations
+    fn nvim_undo_fopen(path: *const c_char, mode: *const c_char) -> FileHandle;
+    fn nvim_undo_fclose(fp: FileHandle) -> c_int;
+    fn nvim_undo_fwrite(ptr: *const c_void, size: usize, count: usize, fp: FileHandle) -> usize;
+    fn nvim_undo_fread(ptr: *mut c_void, size: usize, count: usize, fp: FileHandle) -> usize;
+    fn nvim_undo_fflush(fp: FileHandle) -> c_int;
+    fn nvim_undo_fgetc(fp: FileHandle) -> c_int;
+
+    // File I/O helpers (reading from C file handle)
+    fn nvim_undo_get2c(fp: FileHandle) -> c_int;
+    fn nvim_undo_get4c(fp: FileHandle) -> c_int;
+    fn nvim_undo_get8ctime(fp: FileHandle) -> TimeT;
+
+    // Buffer file path accessors
+    fn nvim_buf_get_b_ffname(buf: BufHandle) -> *const c_char;
+
+    // Undo file path helper
+    fn nvim_u_get_undo_file_name(ffname: *const c_char, reading: bool) -> *mut c_char;
+
+    // File system operations
+    fn nvim_os_path_exists(path: *const c_char) -> bool;
+    fn nvim_os_remove(path: *const c_char) -> c_int;
+    fn nvim_os_open(path: *const c_char, flags: c_int, mode: c_int) -> c_int;
+    fn nvim_os_close(fd: c_int) -> c_int;
+    fn nvim_os_getperm(path: *const c_char) -> c_int;
+    fn nvim_os_setperm(path: *const c_char, perm: c_int) -> c_int;
+    fn nvim_os_fsync(fd: c_int) -> c_int;
+    fn nvim_fdopen(fd: c_int, mode: *const c_char) -> FileHandle;
+    fn nvim_fileno(fp: FileHandle) -> c_int;
+
+    // Message functions for undo file I/O
+    fn nvim_undo_verbose_enter();
+    fn nvim_undo_verbose_leave();
+    fn nvim_undo_smsg(msg: *const c_char, arg: *const c_char);
+    fn nvim_undo_semsg(msg: *const c_char, arg: *const c_char);
+    fn nvim_undo_give_warning(msg: *const c_char, serious: bool);
+    fn nvim_undo_verb_msg(msg: *const c_char);
+
+    // Option accessors
+    fn nvim_get_p_verbose() -> c_int;
+    fn nvim_get_p_fs() -> bool;
+
+    // u_sync wrapper
+    fn nvim_u_sync(force: bool);
+
+    // Buffer line count and line accessors for hash computation
+    fn nvim_buf_get_b_ml_line_count(buf: BufHandle) -> LinenrT;
+    fn nvim_ml_get_buf_line(buf: BufHandle, lnum: LinenrT) -> *const c_char;
+
+    // ACL operations (Unix)
+    fn nvim_os_get_acl(path: *const c_char) -> *mut c_void;
+    fn nvim_os_set_acl(path: *const c_char, acl: *mut c_void);
+    fn nvim_os_free_acl(acl: *mut c_void);
+
+    // Hash computation
+    fn nvim_u_compute_hash(buf: BufHandle, hash: *mut c_uchar);
+
+    // File info for Unix ownership checks
+    fn nvim_undo_check_file_owner(orig_path: *const c_char, undo_path: *const c_char) -> bool;
+    fn nvim_undo_set_file_group(
+        fd: c_int,
+        orig_path: *const c_char,
+        undo_path: *const c_char,
+        perm: c_int,
+    ) -> c_int;
+
+    // Read helper for errno handling
+    fn nvim_read_eintr(fd: c_int, buf: *mut c_void, count: usize) -> isize;
+
+    // Extmark serialization
+    fn nvim_uhp_get_extmark_count(uhp: UHeaderHandle) -> usize;
+    fn nvim_uhp_get_extmark_type(uhp: UHeaderHandle, idx: usize) -> c_int;
+    fn nvim_uhp_get_extmark_data(uhp: UHeaderHandle, idx: usize, buf: *mut c_uchar, size: usize);
+
+    // Named mark and visual info serialization
+    fn nvim_uhp_get_namedm_lnum(uhp: UHeaderHandle, idx: c_int) -> LinenrT;
+    fn nvim_uhp_get_namedm_col(uhp: UHeaderHandle, idx: c_int) -> ColnrT;
+    fn nvim_uhp_get_namedm_coladd(uhp: UHeaderHandle, idx: c_int) -> ColnrT;
+    fn nvim_uhp_get_visual_start_lnum(uhp: UHeaderHandle) -> LinenrT;
+    fn nvim_uhp_get_visual_start_col(uhp: UHeaderHandle) -> ColnrT;
+    fn nvim_uhp_get_visual_start_coladd(uhp: UHeaderHandle) -> ColnrT;
+    fn nvim_uhp_get_visual_end_lnum(uhp: UHeaderHandle) -> LinenrT;
+    fn nvim_uhp_get_visual_end_col(uhp: UHeaderHandle) -> ColnrT;
+    fn nvim_uhp_get_visual_end_coladd(uhp: UHeaderHandle) -> ColnrT;
+    fn nvim_uhp_get_visual_mode(uhp: UHeaderHandle) -> c_int;
+    fn nvim_uhp_get_visual_curswant(uhp: UHeaderHandle) -> ColnrT;
+
+    // Cursor position from header
+    fn nvim_uhp_get_cursor_lnum(uhp: UHeaderHandle) -> LinenrT;
+    fn nvim_uhp_get_cursor_col(uhp: UHeaderHandle) -> ColnrT;
+    fn nvim_uhp_get_cursor_coladd(uhp: UHeaderHandle) -> ColnrT;
+    fn nvim_uhp_get_cursor_vcol(uhp: UHeaderHandle) -> ColnrT;
+
+    // Sequence number accessors for serialization
+    fn nvim_uhp_get_next_seq(uhp: UHeaderHandle) -> c_int;
+    fn nvim_uhp_get_prev_seq(uhp: UHeaderHandle) -> c_int;
+    fn nvim_uhp_get_alt_next_seq(uhp: UHeaderHandle) -> c_int;
+    fn nvim_uhp_get_alt_prev_seq(uhp: UHeaderHandle) -> c_int;
+
+    // Global lastmark accessor
+    fn nvim_get_lastmark() -> c_int;
+    fn nvim_set_lastmark(val: c_int);
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed.
@@ -2390,6 +2558,252 @@ pub unsafe extern "C" fn rs_uep_get_line_count(uep: UEntryHandle) -> LinenrT {
     } else {
         bot - top - 1
     }
+}
+
+// =============================================================================
+// Phase 1: Undo File I/O Helper Functions
+// =============================================================================
+//
+// These helper functions are infrastructure for Phase 2 (u_write_undo) and
+// Phase 3 (u_read_undo). They are intentionally marked allow(dead_code) until
+// those phases are implemented.
+
+// Additional C functions needed for string allocation
+extern "C" {
+    fn nvim_xmallocz(size: usize) -> *mut c_void;
+}
+
+/// Number of named marks (NMARKS from mark_defs.h).
+#[allow(dead_code)]
+const NMARKS: usize = 26;
+
+/// Write bytes to the undo file.
+///
+/// Wrapper around fwrite for undo file operations.
+///
+/// # Safety
+///
+/// - `fp` must be a valid file handle
+/// - `ptr` must point to valid memory of at least `len` bytes
+#[allow(dead_code)]
+#[inline]
+unsafe fn undo_write(fp: FileHandle, ptr: *const u8, len: usize) -> bool {
+    if fp.is_null() || len == 0 {
+        return len == 0;
+    }
+    nvim_undo_fwrite(ptr as *const c_void, len, 1, fp) == 1
+}
+
+/// Write a number in big-endian format with the specified number of bytes.
+///
+/// # Safety
+///
+/// - `fp` must be a valid file handle
+/// - `len` must be between 1 and 8
+#[allow(dead_code)]
+#[inline]
+unsafe fn undo_write_bytes(fp: FileHandle, nr: u64, len: usize) -> bool {
+    debug_assert!(len > 0 && len <= 8);
+    let mut buf = [0u8; 8];
+    for (i, byte) in buf.iter_mut().enumerate().take(len) {
+        *byte = ((nr >> ((len - 1 - i) * 8)) & 0xff) as u8;
+    }
+    undo_write(fp, buf.as_ptr(), len)
+}
+
+/// Write a 4-byte integer in big-endian format.
+///
+/// # Safety
+///
+/// - `fp` must be a valid file handle
+#[allow(dead_code)]
+#[inline]
+unsafe fn undo_write_4(fp: FileHandle, val: i32) -> bool {
+    undo_write_bytes(fp, val as u64, 4)
+}
+
+/// Write a 2-byte integer in big-endian format.
+///
+/// # Safety
+///
+/// - `fp` must be a valid file handle
+#[allow(dead_code)]
+#[inline]
+unsafe fn undo_write_2(fp: FileHandle, val: u16) -> bool {
+    undo_write_bytes(fp, u64::from(val), 2)
+}
+
+/// Write a time_t value (8 bytes).
+///
+/// # Safety
+///
+/// - `fp` must be a valid file handle
+#[allow(dead_code)]
+#[inline]
+unsafe fn undo_write_time(fp: FileHandle, time: TimeT) -> bool {
+    undo_write_bytes(fp, time as u64, 8)
+}
+
+/// Read bytes from the undo file.
+///
+/// # Safety
+///
+/// - `fp` must be a valid file handle
+/// - `buf` must point to valid memory of at least `size` bytes
+#[allow(dead_code)]
+#[inline]
+unsafe fn undo_read(fp: FileHandle, buf: *mut u8, size: usize) -> bool {
+    if fp.is_null() || size == 0 {
+        return size == 0;
+    }
+    let result = nvim_undo_fread(buf as *mut c_void, size, 1, fp) == 1;
+    if !result {
+        // Fill with zeros on error
+        ptr::write_bytes(buf, 0, size);
+    }
+    result
+}
+
+/// Read a 4-byte integer in big-endian format.
+///
+/// # Safety
+///
+/// - `fp` must be a valid file handle
+#[allow(dead_code)]
+#[inline]
+unsafe fn undo_read_4c(fp: FileHandle) -> c_int {
+    nvim_undo_get4c(fp)
+}
+
+/// Read a 2-byte integer in big-endian format.
+///
+/// # Safety
+///
+/// - `fp` must be a valid file handle
+#[allow(dead_code)]
+#[inline]
+unsafe fn undo_read_2c(fp: FileHandle) -> c_int {
+    nvim_undo_get2c(fp)
+}
+
+/// Read a single byte from the undo file.
+///
+/// # Safety
+///
+/// - `fp` must be a valid file handle
+#[allow(dead_code)]
+#[inline]
+unsafe fn undo_read_byte(fp: FileHandle) -> c_int {
+    nvim_undo_fgetc(fp)
+}
+
+/// Read a time_t value (8 bytes).
+///
+/// # Safety
+///
+/// - `fp` must be a valid file handle
+#[allow(dead_code)]
+#[inline]
+unsafe fn undo_read_time(fp: FileHandle) -> TimeT {
+    nvim_undo_get8ctime(fp)
+}
+
+/// Read a string of specified length from the undo file.
+///
+/// Allocates memory for the string and appends a null terminator.
+/// Returns null on error.
+///
+/// # Safety
+///
+/// - `fp` must be a valid file handle
+/// - Caller is responsible for freeing the returned memory
+#[allow(dead_code)]
+#[inline]
+unsafe fn undo_read_string(fp: FileHandle, len: usize) -> *mut c_char {
+    if len == 0 {
+        // Allocate empty string
+        let ptr = nvim_xmallocz(0);
+        return ptr as *mut c_char;
+    }
+
+    let ptr = nvim_xmallocz(len);
+    if !undo_read(fp, ptr as *mut u8, len) {
+        nvim_xfree(ptr);
+        return ptr::null_mut();
+    }
+    ptr as *mut c_char
+}
+
+/// Serialize a position (lnum, col, coladd) to the undo file.
+///
+/// # Safety
+///
+/// - `fp` must be a valid file handle
+#[allow(dead_code)]
+#[inline]
+unsafe fn serialize_pos(fp: FileHandle, lnum: LinenrT, col: ColnrT, coladd: ColnrT) -> bool {
+    undo_write_4(fp, lnum as i32) && undo_write_4(fp, col) && undo_write_4(fp, coladd)
+}
+
+/// Serialize visual info to the undo file.
+///
+/// # Safety
+///
+/// - `fp` must be a valid file handle
+/// - `uhp` must be a valid undo header handle
+#[allow(dead_code)]
+#[inline]
+unsafe fn serialize_visualinfo(fp: FileHandle, uhp: UHeaderHandle) -> bool {
+    // vi_start
+    serialize_pos(
+        fp,
+        nvim_uhp_get_visual_start_lnum(uhp),
+        nvim_uhp_get_visual_start_col(uhp),
+        nvim_uhp_get_visual_start_coladd(uhp),
+    ) &&
+    // vi_end
+    serialize_pos(
+        fp,
+        nvim_uhp_get_visual_end_lnum(uhp),
+        nvim_uhp_get_visual_end_col(uhp),
+        nvim_uhp_get_visual_end_coladd(uhp),
+    ) &&
+    // vi_mode
+    undo_write_4(fp, nvim_uhp_get_visual_mode(uhp)) &&
+    // vi_curswant
+    undo_write_4(fp, nvim_uhp_get_visual_curswant(uhp))
+}
+
+/// Write the header pointer as a sequence number.
+///
+/// When writing pointers, we use the sequence number instead.
+/// This is converted back to pointers when reading.
+///
+/// # Safety
+///
+/// - `fp` must be a valid file handle
+/// - `uhp` may be null (writes 0)
+#[allow(dead_code)]
+#[inline]
+unsafe fn put_header_ptr(fp: FileHandle, uhp: UHeaderHandle) -> bool {
+    let seq = if uhp.0.is_null() {
+        0
+    } else {
+        nvim_uhp_get_seq(uhp) as u64
+    };
+    undo_write_bytes(fp, seq, 4)
+}
+
+/// Write the header pointer using the stored sequence number.
+///
+/// # Safety
+///
+/// - `fp` must be a valid file handle
+#[allow(dead_code)]
+#[inline]
+unsafe fn put_header_ptr_by_seq(fp: FileHandle, seq: c_int) -> bool {
+    let val = if seq < 0 { 0 } else { seq as u64 };
+    undo_write_bytes(fp, val, 4)
 }
 
 #[cfg(test)]

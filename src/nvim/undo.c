@@ -3342,3 +3342,395 @@ void nvim_semsg_undo_number_not_found(int64_t step)
 {
   semsg(_("E830: Undo number %" PRId64 " not found"), step);
 }
+
+void nvim_set_lastmark(int val)
+{
+  lastmark = val;
+}
+
+// ============================================================================
+// Undo File I/O FFI Functions
+// ============================================================================
+
+// File operations
+FILE *nvim_undo_fopen(const char *path, const char *mode)
+{
+  return os_fopen(path, mode);
+}
+
+int nvim_undo_fclose(FILE *fp)
+{
+  return fclose(fp);
+}
+
+size_t nvim_undo_fwrite(const void *ptr, size_t size, size_t count, FILE *fp)
+{
+  return fwrite(ptr, size, count, fp);
+}
+
+size_t nvim_undo_fread(void *ptr, size_t size, size_t count, FILE *fp)
+{
+  return fread(ptr, size, count, fp);
+}
+
+int nvim_undo_fflush(FILE *fp)
+{
+  return fflush(fp);
+}
+
+int nvim_undo_fgetc(FILE *fp)
+{
+  return getc(fp);
+}
+
+// File I/O helpers (reading from C file handle)
+int nvim_undo_get2c(FILE *fp)
+{
+  return get2c(fp);
+}
+
+int nvim_undo_get4c(FILE *fp)
+{
+  return get4c(fp);
+}
+
+time_t nvim_undo_get8ctime(FILE *fp)
+{
+  return get8ctime(fp);
+}
+
+// Buffer file path accessors
+const char *nvim_buf_get_b_ffname(buf_T *buf)
+{
+  return buf->b_ffname;
+}
+
+// Undo file path helper
+char *nvim_u_get_undo_file_name(const char *ffname, bool reading)
+{
+  return u_get_undo_file_name(ffname, reading);
+}
+
+// File system operations
+bool nvim_os_path_exists(const char *path)
+{
+  return os_path_exists(path);
+}
+
+int nvim_os_remove(const char *path)
+{
+  return os_remove(path);
+}
+
+int nvim_os_open(const char *path, int flags, int mode)
+{
+  return os_open(path, flags, mode);
+}
+
+int nvim_os_close(int fd)
+{
+  return os_close(fd);
+}
+
+int nvim_os_getperm(const char *path)
+{
+  return os_getperm(path);
+}
+
+int nvim_os_setperm(const char *path, int perm)
+{
+  return os_setperm(path, perm);
+}
+
+int nvim_os_fsync(int fd)
+{
+  return os_fsync(fd);
+}
+
+FILE *nvim_fdopen(int fd, const char *mode)
+{
+  return fdopen(fd, mode);
+}
+
+int nvim_fileno(FILE *fp)
+{
+  return fileno(fp);
+}
+
+// Message functions for undo file I/O
+void nvim_undo_verbose_enter(void)
+{
+  verbose_enter();
+}
+
+void nvim_undo_verbose_leave(void)
+{
+  verbose_leave();
+}
+
+void nvim_undo_smsg(const char *msg, const char *arg)
+{
+  smsg(0, msg, arg);
+}
+
+void nvim_undo_semsg(const char *msg, const char *arg)
+{
+  semsg(msg, arg);
+}
+
+void nvim_undo_give_warning(const char *msg, bool serious)
+{
+  give_warning(msg, serious);
+}
+
+void nvim_undo_verb_msg(const char *msg)
+{
+  verb_msg(msg);
+}
+
+// Option accessors
+int nvim_get_p_verbose(void)
+{
+  return p_verbose;
+}
+
+bool nvim_get_p_fs(void)
+{
+  return p_fs;
+}
+
+// u_sync wrapper
+void nvim_u_sync(bool force)
+{
+  u_sync(force);
+}
+
+// Buffer line count and line accessors for hash computation
+linenr_T nvim_buf_get_b_ml_line_count(buf_T *buf)
+{
+  return buf->b_ml.ml_line_count;
+}
+
+const char *nvim_ml_get_buf_line(buf_T *buf, linenr_T lnum)
+{
+  return ml_get_buf(buf, lnum);
+}
+
+// ACL operations (Unix)
+vim_acl_T nvim_os_get_acl(const char *path)
+{
+  return os_get_acl(path);
+}
+
+void nvim_os_set_acl(const char *path, vim_acl_T acl)
+{
+  os_set_acl(path, acl);
+}
+
+void nvim_os_free_acl(vim_acl_T acl)
+{
+  os_free_acl(acl);
+}
+
+// Hash computation wrapper
+void nvim_u_compute_hash(buf_T *buf, uint8_t *hash)
+{
+  u_compute_hash(buf, hash);
+}
+
+// File info for Unix ownership checks
+#ifdef UNIX
+bool nvim_undo_check_file_owner(const char *orig_path, const char *undo_path)
+{
+  FileInfo file_info_orig;
+  FileInfo file_info_undo;
+  if (os_fileinfo(orig_path, &file_info_orig)
+      && os_fileinfo(undo_path, &file_info_undo)
+      && file_info_orig.stat.st_uid != file_info_undo.stat.st_uid
+      && file_info_undo.stat.st_uid != getuid()) {
+    return false;  // Owner mismatch, not safe
+  }
+  return true;  // Safe to read
+}
+
+int nvim_undo_set_file_group(int fd, const char *orig_path, const char *undo_path, int perm)
+{
+  FileInfo file_info_old;
+  FileInfo file_info_new;
+  if (orig_path != NULL
+      && os_fileinfo(orig_path, &file_info_old)
+      && os_fileinfo(undo_path, &file_info_new)
+      && file_info_old.stat.st_gid != file_info_new.stat.st_gid
+      && os_fchown(fd, (uv_uid_t)-1, (uv_gid_t)file_info_old.stat.st_gid)) {
+    // Group change failed, adjust permissions
+    return (perm & 0707) | ((perm & 07) << 3);
+  }
+  return perm;
+}
+#else
+bool nvim_undo_check_file_owner(const char *orig_path, const char *undo_path)
+{
+  (void)orig_path;
+  (void)undo_path;
+  return true;  // Always safe on non-Unix
+}
+
+int nvim_undo_set_file_group(int fd, const char *orig_path, const char *undo_path, int perm)
+{
+  (void)fd;
+  (void)orig_path;
+  (void)undo_path;
+  return perm;
+}
+#endif
+
+// Read helper for errno handling
+ssize_t nvim_read_eintr(int fd, void *buf, size_t count)
+{
+  return read_eintr(fd, buf, count);
+}
+
+// Extmark serialization
+size_t nvim_uhp_get_extmark_count(u_header_T *uhp)
+{
+  return kv_size(uhp->uh_extmark);
+}
+
+int nvim_uhp_get_extmark_type(u_header_T *uhp, size_t idx)
+{
+  if (idx >= kv_size(uhp->uh_extmark)) {
+    return -1;
+  }
+  return (int)kv_A(uhp->uh_extmark, idx).type;
+}
+
+void nvim_uhp_get_extmark_data(u_header_T *uhp, size_t idx, uint8_t *buf, size_t size)
+{
+  if (idx >= kv_size(uhp->uh_extmark)) {
+    memset(buf, 0, size);
+    return;
+  }
+  ExtmarkUndoObject *extup = &kv_A(uhp->uh_extmark, idx);
+  if (extup->type == kExtmarkSplice) {
+    size_t copy_size = MIN(size, sizeof(ExtmarkSplice));
+    memcpy(buf, &extup->data.splice, copy_size);
+  } else if (extup->type == kExtmarkMove) {
+    size_t copy_size = MIN(size, sizeof(ExtmarkMove));
+    memcpy(buf, &extup->data.move, copy_size);
+  } else {
+    memset(buf, 0, size);
+  }
+}
+
+// Named mark and visual info serialization
+linenr_T nvim_uhp_get_namedm_lnum(u_header_T *uhp, int idx)
+{
+  if (idx < 0 || idx >= NMARKS) {
+    return 0;
+  }
+  return uhp->uh_namedm[idx].mark.lnum;
+}
+
+colnr_T nvim_uhp_get_namedm_col(u_header_T *uhp, int idx)
+{
+  if (idx < 0 || idx >= NMARKS) {
+    return 0;
+  }
+  return uhp->uh_namedm[idx].mark.col;
+}
+
+colnr_T nvim_uhp_get_namedm_coladd(u_header_T *uhp, int idx)
+{
+  if (idx < 0 || idx >= NMARKS) {
+    return 0;
+  }
+  return uhp->uh_namedm[idx].mark.coladd;
+}
+
+linenr_T nvim_uhp_get_visual_start_lnum(u_header_T *uhp)
+{
+  return uhp->uh_visual.vi_start.lnum;
+}
+
+colnr_T nvim_uhp_get_visual_start_col(u_header_T *uhp)
+{
+  return uhp->uh_visual.vi_start.col;
+}
+
+colnr_T nvim_uhp_get_visual_start_coladd(u_header_T *uhp)
+{
+  return uhp->uh_visual.vi_start.coladd;
+}
+
+linenr_T nvim_uhp_get_visual_end_lnum(u_header_T *uhp)
+{
+  return uhp->uh_visual.vi_end.lnum;
+}
+
+colnr_T nvim_uhp_get_visual_end_col(u_header_T *uhp)
+{
+  return uhp->uh_visual.vi_end.col;
+}
+
+colnr_T nvim_uhp_get_visual_end_coladd(u_header_T *uhp)
+{
+  return uhp->uh_visual.vi_end.coladd;
+}
+
+int nvim_uhp_get_visual_mode(u_header_T *uhp)
+{
+  return uhp->uh_visual.vi_mode;
+}
+
+colnr_T nvim_uhp_get_visual_curswant(u_header_T *uhp)
+{
+  return uhp->uh_visual.vi_curswant;
+}
+
+// Cursor position from header
+linenr_T nvim_uhp_get_cursor_lnum(u_header_T *uhp)
+{
+  return uhp->uh_cursor.lnum;
+}
+
+colnr_T nvim_uhp_get_cursor_col(u_header_T *uhp)
+{
+  return uhp->uh_cursor.col;
+}
+
+colnr_T nvim_uhp_get_cursor_coladd(u_header_T *uhp)
+{
+  return uhp->uh_cursor.coladd;
+}
+
+colnr_T nvim_uhp_get_cursor_vcol(u_header_T *uhp)
+{
+  return uhp->uh_cursor_vcol;
+}
+
+// Sequence number accessors for serialization
+int nvim_uhp_get_next_seq(u_header_T *uhp)
+{
+  return uhp->uh_next.ptr ? uhp->uh_next.ptr->uh_seq : 0;
+}
+
+int nvim_uhp_get_prev_seq(u_header_T *uhp)
+{
+  return uhp->uh_prev.ptr ? uhp->uh_prev.ptr->uh_seq : 0;
+}
+
+int nvim_uhp_get_alt_next_seq(u_header_T *uhp)
+{
+  return uhp->uh_alt_next.ptr ? uhp->uh_alt_next.ptr->uh_seq : 0;
+}
+
+int nvim_uhp_get_alt_prev_seq(u_header_T *uhp)
+{
+  return uhp->uh_alt_prev.ptr ? uhp->uh_alt_prev.ptr->uh_seq : 0;
+}
+
+// Allocate memory with zero terminator
+void *nvim_xmallocz(size_t size)
+{
+  return xmallocz(size);
+}
