@@ -85,4 +85,33 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_map_to_exists", "rs_map_to_exists_mode", "rs_map_count",
            "rs_get_map_mode_string",
            "MapblockHandle",
-           "nvim_rs_version"]
+           "nvim_rs_version",
+           # NFA state machine infrastructure (Phase 1-3)
+           "rs_state_allocator_new", "rs_state_allocator_free", "rs_alloc_state",
+           "rs_state_allocator_reset", "rs_state_allocator_count",
+           "rs_frag_stack_new", "rs_frag_stack_free", "rs_frag_stack_push",
+           "rs_frag_stack_pop", "rs_frag_new", "rs_list1", "rs_patch", "rs_append",
+           "rs_match_context_new", "rs_match_context_new_multi",
+           "rs_match_context_current_byte", "rs_match_context_at_eol", "rs_match_context_advance",
+           "rs_state_in_list", "rs_mark_state_in_list", "rs_init_thread",
+           "rs_copy_subs", "rs_copy_pim", "rs_clear_subs", "rs_list_has_match",
+           "rs_is_match_state", "rs_is_split_state", "rs_pim_needs_exec", "rs_pim_matched",
+           "rs_set_pim_matched", "rs_set_pim_nomatch",
+           "rs_nfa_list_init", "rs_nfa_list_free", "rs_nfa_list_clear",
+           "rs_nfa_list_grow", "rs_nfa_list_count", "rs_nfa_list_get", "rs_nfa_list_next_id",
+           "rs_ptrlist_single", "rs_ptrlist_patch", "rs_ptrlist_append",
+           "rs_nfa_is_char_class", "rs_nfa_is_position_match", "rs_nfa_is_posix_class",
+           "rs_nfa_get_subexpr_idx", "rs_check_char_class",
+           # Regex substitution engine (Phase 4)
+           "rs_sub_context_new", "rs_sub_context_has_room", "rs_sub_context_output_len",
+           "rs_do_upper", "rs_do_lower", "rs_utf8_char_len", "rs_utf8_ptr2char",
+           "rs_utf8_char2bytes", "rs_utf8_char2len", "rs_is_k_special",
+           # Spell file reading/writing (Phase 5-6)
+           "rs_parse_section_header", "rs_parse_region_section", "rs_parse_charflags_section",
+           "rs_parse_rep_item", "rs_parse_sal_header", "rs_parse_sofo_section",
+           "rs_parse_compound_header", "rs_parse_sugfile_timestamp", "rs_parse_tree_nodecount",
+           "rs_write_section_header", "rs_write_rep_item", "rs_write_charflags_section",
+           "rs_write_sofo_section", "rs_write_sal_header", "rs_write_compound_header",
+           "rs_write_tree_nodecount", "rs_write_timestamp",
+           # Spell suggestion algorithms (Phase 7)
+           "rs_spell_edit_score", "rs_spell_edit_score_limit", "rs_soundalike_score"]
