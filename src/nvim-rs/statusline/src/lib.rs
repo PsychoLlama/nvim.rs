@@ -1098,6 +1098,123 @@ pub extern "C" fn rs_stl_parse_user_highlight(hl_char: u8) -> c_int {
 // FFI Exports for Tabline
 // =============================================================================
 
+// =============================================================================
+// Format Width Parsing Helpers
+// =============================================================================
+
+/// Result of parsing a width specifier from a format string.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StlWidthSpec {
+    /// Minimum width (negative if left-aligned)
+    pub minwid: c_int,
+    /// Maximum width
+    pub maxwid: c_int,
+    /// Whether to zero-pad numeric items
+    pub zeropad: bool,
+    /// Whether item is left-aligned
+    pub left_align: bool,
+    /// Number of bytes consumed from input
+    pub consumed: c_int,
+}
+
+/// Parse width specifier flags and numbers from format string.
+///
+/// Parses: [-][0][minwid][.maxwid]
+///
+/// # Safety
+/// `fmt` must be a valid pointer to a NUL-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_parse_width_spec(fmt: *const c_char) -> StlWidthSpec {
+    if fmt.is_null() {
+        return StlWidthSpec {
+            minwid: 0,
+            maxwid: 9999,
+            zeropad: false,
+            left_align: false,
+            consumed: 0,
+        };
+    }
+
+    let bytes = std::ffi::CStr::from_ptr(fmt).to_bytes();
+    let mut pos = 0;
+
+    // Parse flags
+    let zeropad = bytes.get(pos) == Some(&b'0');
+    if zeropad {
+        pos += 1;
+    }
+
+    let left_align = bytes.get(pos) == Some(&b'-');
+    if left_align {
+        pos += 1;
+    }
+
+    // Parse minimum width
+    let mut minwid: c_int = 0;
+    while let Some(&c) = bytes.get(pos) {
+        if !c.is_ascii_digit() {
+            break;
+        }
+        minwid = minwid.saturating_mul(10).saturating_add(c_int::from(c - b'0'));
+        pos += 1;
+    }
+
+    // Clamp to 50
+    minwid = minwid.min(50);
+    if left_align {
+        minwid = -minwid;
+    }
+
+    // Parse max width if present
+    let maxwid = if bytes.get(pos) == Some(&b'.') {
+        pos += 1;
+        let mut w: c_int = 0;
+        while let Some(&c) = bytes.get(pos) {
+            if !c.is_ascii_digit() {
+                break;
+            }
+            w = w.saturating_mul(10).saturating_add(c_int::from(c - b'0'));
+            pos += 1;
+        }
+        if w == 0 { 50 } else { w }
+    } else {
+        9999
+    };
+
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    StlWidthSpec {
+        minwid,
+        maxwid,
+        zeropad,
+        left_align,
+        consumed: pos as c_int,
+    }
+}
+
+/// Check if a character is a valid statusline format flag.
+///
+/// Returns 1 if the character is a valid flag (f, F, t, l, c, etc.), 0 otherwise.
+#[no_mangle]
+pub const extern "C" fn rs_stl_is_valid_flag(c: u8) -> c_int {
+    if format::StlFlag::from_byte(c).is_some() {
+        1
+    } else {
+        0
+    }
+}
+
+/// Check if a character is a simple format specifier (%, =, <, ), }).
+///
+/// Returns 1 if the character is a simple specifier, 0 otherwise.
+#[no_mangle]
+pub const extern "C" fn rs_stl_is_simple_specifier(c: u8) -> c_int {
+    match c {
+        b'%' | b'=' | b'<' | b')' | b'}' => 1,
+        _ => 0,
+    }
+}
+
 /// FFI export: Calculate tab width for tabline.
 ///
 /// Shortens tab labels to fit within max_width.
