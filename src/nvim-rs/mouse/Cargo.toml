@@ -1,0 +1,14 @@
+[package]
+name = "nvim-mouse"
+description = "Mouse event handling and position computation for Neovim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+nvim-mbyte = { path = "../mbyte" }
+nvim-charset = { path = "../charset" }
+
+[lints]
+workspace = true

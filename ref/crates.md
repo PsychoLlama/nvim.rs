@@ -48,6 +48,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | memory         | Memory allocation wrappers              |
 | memutil        | Memory and string utilities             |
 | menu           | Menu system                             |
+| mouse          | Mouse event handling and selection      |
 | msgpack        | MessagePack serialization               |
 | normal         | Normal mode key processing and commands |
 | ops            | Operator handling                       |

@@ -53,6 +53,10 @@
 
 #include "mouse.c.generated.h"
 
+// Rust implementations
+extern int rs_get_mouse_class(const char *p);
+extern bool rs_mouse_model_popup(const char *p_mousem);
+
 static linenr_T orig_topline = 0;
 static int orig_topfill = 0;
 
@@ -63,26 +67,7 @@ static int orig_topfill = 0;
 /// >2: multi-byte word character.
 static int get_mouse_class(char *p)
 {
-  if (MB_BYTE2LEN((uint8_t)p[0]) > 1) {
-    return mb_get_class(p);
-  }
-
-  const int c = (uint8_t)(*p);
-  if (c == ' ' || c == '\t') {
-    return 0;
-  }
-  if (vim_iswordc(c)) {
-    return 2;
-  }
-
-  // There are a few special cases where we want certain combinations of
-  // characters to be considered as a single word.  These are things like
-  // "->", "/ *", "*=", "+=", "&=", "<=", ">=", "!=" etc.  Otherwise, each
-  // character is in its own class.
-  if (c != NUL && vim_strchr("-+*/%<>&|^!=", c) != NULL) {
-    return 1;
-  }
-  return c;
+  return rs_get_mouse_class(p);
 }
 
 /// Move "pos" back to the start of the word it's in.
@@ -1138,7 +1123,7 @@ bool is_mouse_key(int c)
 /// @return  true when 'mousemodel' is set to "popup" or "popup_setpos".
 static bool mouse_model_popup(void)
 {
-  return p_mousem[0] == 'p';
+  return rs_mouse_model_popup((const char *)p_mousem);
 }
 
 static win_T *dragwin = NULL;  ///< window being dragged

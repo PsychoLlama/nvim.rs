@@ -98,6 +98,7 @@ rust-test:
       -p nvim-memory \
       -p nvim-memutil \
       -p nvim-menu \
+      -p nvim-mouse \
       -p nvim-msgpack \
       -p nvim-normal \
       -p nvim-ops \

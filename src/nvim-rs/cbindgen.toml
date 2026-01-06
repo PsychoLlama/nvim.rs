@@ -15,7 +15,7 @@ rename_variants = "ScreamingSnakeCase"
 
 [parse]
 parse_deps = true
-include = ["nvim-buffer", "nvim-charset", "nvim-cmdhist", "nvim-diff", "nvim-encoding", "nvim-eval", "nvim-ex-docmd", "nvim-fileio", "nvim-help", "nvim-indent", "nvim-keycodes", "nvim-mapping", "nvim-marktree", "nvim-math", "nvim-mbyte", "nvim-memutil", "nvim-menu", "nvim-os", "nvim-path", "nvim-profile", "nvim-regexp", "nvim-spell", "nvim-strings", "nvim-version", "nvim-window"]
+include = ["nvim-buffer", "nvim-charset", "nvim-cmdhist", "nvim-diff", "nvim-encoding", "nvim-eval", "nvim-ex-docmd", "nvim-fileio", "nvim-help", "nvim-indent", "nvim-keycodes", "nvim-mapping", "nvim-marktree", "nvim-math", "nvim-mbyte", "nvim-memutil", "nvim-menu", "nvim-mouse", "nvim-os", "nvim-path", "nvim-profile", "nvim-regexp", "nvim-spell", "nvim-strings", "nvim-version", "nvim-window"]
 
 [export]
 include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs_getchr", "rs_ungetchr", "rs_read_limits", "rs_mb_decompose", "rs_use_multibytecode", "rs_nfa_re_num_cmp", "rs_re_put_uint32", "rs_re_get_uint32", "rs_re_put_uint16", "rs_re_get_uint16", "rs_re_num_cmp", "rs_get_char_class", "rs_nfa_recognize_char_class",
@@ -114,4 +114,6 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_write_sofo_section", "rs_write_sal_header", "rs_write_compound_header",
            "rs_write_tree_nodecount", "rs_write_timestamp",
            # Spell suggestion algorithms (Phase 7)
-           "rs_spell_edit_score", "rs_spell_edit_score_limit", "rs_soundalike_score"]
+           "rs_spell_edit_score", "rs_spell_edit_score_limit", "rs_soundalike_score",
+           # Mouse handling (Phase 8)
+           "rs_get_mouse_class", "rs_mouse_model_popup"]
