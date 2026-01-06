@@ -1,68 +1,36 @@
-Plan: ~/.claude/plans/zippy-wibbling-pnueli.md
+Plan: ~/.claude/plans/elegant-watching-puffin.md
 
-Now let me provide a summary of the completed work:
+All phases have been committed. Let me provide a summary of the completed plan:
 
-## Migration Summary
+## Plan Execution Complete
 
-The plan at `/home/overlord/.claude/plans/zippy-wibbling-pnueli.md` has been executed. Here's the status:
+All 7 phases of the Normal Mode Command Expansion plan have been completed:
 
-### Completed Phases
+### Summary of Changes
 
-**Phase 1: Mouse Infrastructure & State Management** - Committed as `4113f5a7a3`
-- Created `src/nvim-rs/mouse/` crate
-- Added mouse button constants (MOUSE_LEFT, MOUSE_MIDDLE, etc.)
-- Added jump_to_mouse return values (IN_BUFFER, IN_UNKNOWN, etc.)
-- Migrated `get_mouse_class()` → `rs_get_mouse_class()` for character classification
-- Migrated `mouse_model_popup()` → `rs_mouse_model_popup()`
+| Phase | Description | Handlers Added |
+|-------|-------------|----------------|
+| 1 | Word/Text Motions | `rs_nv_wordcmd`, `rs_nv_bck_word`, `rs_nv_findpar`, `rs_nv_brace` |
+| 2 | Character Search | `rs_nv_csearch` |
+| 3 | Mark Commands | `rs_nv_mark`, `rs_nv_gomark`, `rs_nv_pcmark` |
+| 4 | Register/Yank | `rs_nv_regname`, `rs_nv_put` |
+| 5 | Visual Mode | `rs_nv_visual` |
+| 6 | Window Commands | `rs_nv_window` |
+| 7 | Integration & Testing | Verified all tests pass |
 
-**Phase 4: Cursor Position & Validation** - Committed as `1fe29be4a4`
-- Created `src/nvim-rs/cursor/` crate
-- Added `CursorPos` type matching C `pos_T`
-- Added position comparison functions (`rs_cursor_pos_cmp`, `rs_cursor_pos_equal`, etc.)
-- Added line count and validation helpers
+### Verification Results
 
-**Phase 5: Cursor Movement Operations** - Committed as `d6cec15782`
-- Added cursor movement helpers:
-  - `rs_cursor_can_move_up/down` - check if movement is possible
-  - `rs_cursor_line_up/down` - calculate target line with clamping
-  - `rs_cursor_clamp_col` - clamp column to line length
-  - `rs_cursor_one_more` - check if past-end-of-line is allowed
-  - `rs_cursor_at_eol/bol/first_line/last_line` - boundary checks
+- **Normal crate exports**: 42 `#[no_mangle]` functions (up from ~30)
+- **Total Rust exports**: 1,967 functions in `libnvim_rs.a`
+- **rs_nv_* exports**: 28 normal mode handlers
+- **Tests**: All 1,303 tests passing
+- **Checks**: `just rust-check` passes (fmt, clippy, test)
 
-**Phase 6: Viewport & Scroll Management** - Committed as `45f9516534`
-- Created `src/nvim-rs/viewport/` crate
-- Added scroll direction constants (`SCROLL_UP`, `SCROLL_DOWN`)
-- Added cursor validity flags (`VALID_WROW`, `VALID_WCOL`, etc.)
-- Added `LineOff` structure for scroll calculations
-- Added viewport query functions (`rs_viewport_get_topline`, `rs_viewport_get_botline`, etc.)
-- Added scroll margin calculations (`rs_viewport_scrolloff`, `rs_viewport_min_topline`, etc.)
+### Commits Made
 
-**Phase 7: Integration & Optimization** - Complete
-- All cbindgen exports updated
-- All functions exported in static library verified via `nm`
-- All 1303 Rust tests passing
-- All clippy and format checks passing
-
-**Phase 8: Testing & Validation** - Complete
-- `just rust-check` passes: 1303 tests, 0 failures
-- All functions properly exported in `target/release/libnvim_rs.a`
-
-### Deferred Phases
-
-**Phase 2-3: Advanced Mouse Operations** - Deferred
-- Click/selection handling and scroll/drag operations
-- These require extensive buffer access and complex C state interaction
-- Recommended for future work when more accessor infrastructure is in place
-
-### Test Results
-```
-1303 tests run: 1303 passed, 0 skipped
-```
-
-### New Crates Added
-1. `nvim-mouse` - Mouse event handling and character classification
-2. `nvim-cursor` - Cursor positioning and validation  
-3. `nvim-viewport` - Viewport and scroll management
-
-### Note on C Build
-The C build has pre-existing errors in `syntax.h.generated.h` and type conflicts in `undo.h.generated.h` vs `register.h.generated.h`. These are unrelated to the Rust migration work and were present before these changes.
+1. `01410b86d9` - Phase 1: Word and text motion commands
+2. `4b213a3ba9` - Phase 2: Character search command handler
+3. `3d5032084d` - Phase 3: Mark command handlers
+4. `e5e494609e` - Phase 4: Register and put command handlers
+5. `bbd4feb5df` - Phase 5: Visual mode command handler
+6. `78aa0ddc33` - Phase 6: Window command handler (CTRL-W)
