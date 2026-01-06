@@ -2293,6 +2293,399 @@ pub extern "C" fn rs_qf_valid_col(col: c_int) -> bool {
     (0..=(1 << 20)).contains(&col)
 }
 
+// =============================================================================
+// Phase 7: Navigation Infrastructure
+// =============================================================================
+
+/// Direction constants for quickfix navigation.
+#[allow(dead_code)]
+pub mod direction {
+    use std::ffi::c_int;
+
+    /// Move forward (next entry)
+    pub const FORWARD: c_int = 1;
+    /// Move backward (previous entry)
+    pub const BACKWARD: c_int = -1;
+    /// Move forward to next file
+    pub const FORWARD_FILE: c_int = 3;
+    /// Move backward to previous file
+    pub const BACKWARD_FILE: c_int = -3;
+}
+
+/// Navigate to the nth valid entry from the current position.
+///
+/// If `count` is positive, moves forward; if negative, moves backward.
+/// Returns the new 1-based index, or 0 if navigation failed.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_goto_nth_valid(qfl: QfListHandleMut, count: c_int) -> c_int {
+    if qfl.is_null() || count == 0 {
+        return 0;
+    }
+
+    let mut remaining = count.unsigned_abs() as usize;
+    let forward = count > 0;
+
+    while remaining > 0 {
+        let new_idx = if forward {
+            rs_qf_next_valid_entry(qfl)
+        } else {
+            rs_qf_prev_valid_entry(qfl)
+        };
+
+        if new_idx == 0 {
+            // Can't move further, return current position
+            return nvim_qf_get_index(qfl);
+        }
+
+        remaining -= 1;
+    }
+
+    nvim_qf_get_index(qfl)
+}
+
+/// Navigate to the nth entry (valid or invalid) from the current position.
+///
+/// This is a direct jump by index, not searching for valid entries.
+/// Returns the new 1-based index, or 0 if the index is out of range.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_goto_entry(qfl: QfListHandleMut, target_idx: c_int) -> c_int {
+    if qfl.is_null() || target_idx <= 0 {
+        return 0;
+    }
+
+    let count = nvim_qf_get_count(qfl);
+    if target_idx > count {
+        return 0;
+    }
+
+    let qfp = rs_qf_get_entry_at_idx(qfl, target_idx);
+    if qfp.is_null() {
+        return 0;
+    }
+
+    nvim_qf_set_index(qfl, target_idx);
+    nvim_qf_set_ptr(qfl, qfp);
+    target_idx
+}
+
+/// Navigate to the next entry in the same file.
+///
+/// Returns the new 1-based index, or 0 if no more entries in this file.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_next_entry_in_file(qfl: QfListHandleMut) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let current_ptr = nvim_qf_get_ptr(qfl);
+    if current_ptr.is_null() {
+        return 0;
+    }
+
+    let current_fnum = nvim_qfline_get_fnum(current_ptr);
+    let current_idx = nvim_qf_get_index(qfl);
+    let count = nvim_qf_get_count(qfl);
+
+    let qfp = nvim_qfline_get_next(current_ptr);
+    let idx = current_idx + 1;
+
+    // Check if next entry exists and is in the same file
+    if !qfp.is_null() && idx <= count && nvim_qfline_get_fnum(qfp) == current_fnum {
+        nvim_qf_set_index(qfl, idx);
+        nvim_qf_set_ptr(qfl, qfp);
+        return idx;
+    }
+
+    0 // No more entries in this file
+}
+
+/// Navigate to the previous entry in the same file.
+///
+/// Returns the new 1-based index, or 0 if no more entries in this file.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_prev_entry_in_file(qfl: QfListHandleMut) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let current_ptr = nvim_qf_get_ptr(qfl);
+    if current_ptr.is_null() {
+        return 0;
+    }
+
+    let current_fnum = nvim_qfline_get_fnum(current_ptr);
+    let current_idx = nvim_qf_get_index(qfl);
+
+    let qfp = nvim_qfline_get_prev(current_ptr);
+    let idx = current_idx - 1;
+
+    // Check if previous entry exists and is in the same file
+    if !qfp.is_null() && idx >= 1 && nvim_qfline_get_fnum(qfp) == current_fnum {
+        nvim_qf_set_index(qfl, idx);
+        nvim_qf_set_ptr(qfl, qfp);
+        return idx;
+    }
+
+    0 // No more entries in this file
+}
+
+/// Navigate to the first entry in the next file.
+///
+/// Returns the new 1-based index, or 0 if already at the last file.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_next_file(qfl: QfListHandleMut) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let current_ptr = nvim_qf_get_ptr(qfl);
+    if current_ptr.is_null() {
+        return 0;
+    }
+
+    let current_fnum = nvim_qfline_get_fnum(current_ptr);
+    let current_idx = nvim_qf_get_index(qfl);
+    let count = nvim_qf_get_count(qfl);
+
+    let mut qfp = nvim_qfline_get_next(current_ptr);
+    let mut idx = current_idx + 1;
+
+    // Skip entries in the current file
+    while !qfp.is_null() && idx <= count {
+        if nvim_qfline_get_fnum(qfp) != current_fnum {
+            nvim_qf_set_index(qfl, idx);
+            nvim_qf_set_ptr(qfl, qfp);
+            return idx;
+        }
+        qfp = nvim_qfline_get_next(qfp);
+        idx += 1;
+    }
+
+    0 // No more files
+}
+
+/// Navigate to the first entry in the previous file.
+///
+/// Returns the new 1-based index, or 0 if already at the first file.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_prev_file(qfl: QfListHandleMut) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let current_ptr = nvim_qf_get_ptr(qfl);
+    if current_ptr.is_null() {
+        return 0;
+    }
+
+    let current_fnum = nvim_qfline_get_fnum(current_ptr);
+    let current_idx = nvim_qf_get_index(qfl);
+
+    let mut qfp = nvim_qfline_get_prev(current_ptr);
+    let mut idx = current_idx - 1;
+
+    // Skip entries in the current file
+    while !qfp.is_null() && idx >= 1 {
+        if nvim_qfline_get_fnum(qfp) != current_fnum {
+            // Found entry in previous file, now find the first entry in that file
+            let new_fnum = nvim_qfline_get_fnum(qfp);
+
+            // Keep going back to find the first entry of this file
+            let mut first_qfp = qfp;
+            let mut first_idx = idx;
+
+            let mut prev = nvim_qfline_get_prev(qfp);
+            while !prev.is_null() && (first_idx - 1) >= 1 {
+                if nvim_qfline_get_fnum(prev) != new_fnum {
+                    break;
+                }
+                first_qfp = prev;
+                first_idx -= 1;
+                prev = nvim_qfline_get_prev(first_qfp);
+            }
+
+            nvim_qf_set_index(qfl, first_idx);
+            nvim_qf_set_ptr(qfl, first_qfp);
+            return first_idx;
+        }
+        qfp = nvim_qfline_get_prev(qfp);
+        idx -= 1;
+    }
+
+    0 // No previous files
+}
+
+/// Count entries in the current file.
+///
+/// Returns the number of entries with the same file number as the current entry.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_count_entries_in_file(qfl: QfListHandle) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let current_ptr = nvim_qf_get_ptr(qfl);
+    if current_ptr.is_null() {
+        return 0;
+    }
+
+    let current_fnum = nvim_qfline_get_fnum(current_ptr);
+    let count = nvim_qf_get_count(qfl);
+    let mut qfp = nvim_qf_get_start(qfl);
+    let mut file_count: c_int = 0;
+    let mut idx = 1;
+
+    while !qfp.is_null() && idx <= count {
+        if nvim_qfline_get_fnum(qfp) == current_fnum {
+            file_count += 1;
+        }
+        qfp = nvim_qfline_get_next(qfp);
+        idx += 1;
+    }
+
+    file_count
+}
+
+/// Count valid entries in the current file.
+///
+/// Returns the number of valid entries with the same file number as the current entry.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_count_valid_in_file(qfl: QfListHandle) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let current_ptr = nvim_qf_get_ptr(qfl);
+    if current_ptr.is_null() {
+        return 0;
+    }
+
+    let current_fnum = nvim_qfline_get_fnum(current_ptr);
+    let count = nvim_qf_get_count(qfl);
+    let mut qfp = nvim_qf_get_start(qfl);
+    let mut valid_count: c_int = 0;
+    let mut idx = 1;
+
+    while !qfp.is_null() && idx <= count {
+        if nvim_qfline_get_fnum(qfp) == current_fnum && nvim_qfline_get_valid(qfp) {
+            valid_count += 1;
+        }
+        qfp = nvim_qfline_get_next(qfp);
+        idx += 1;
+    }
+
+    valid_count
+}
+
+/// Get the number of unique files in the quickfix list.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_file_count(qfl: QfListHandle) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let count = nvim_qf_get_count(qfl);
+    if count == 0 {
+        return 0;
+    }
+
+    let mut qfp = nvim_qf_get_start(qfl);
+    let mut file_count: c_int = 0;
+    let mut last_fnum: c_int = -1;
+    let mut idx = 1;
+
+    while !qfp.is_null() && idx <= count {
+        let fnum = nvim_qfline_get_fnum(qfp);
+        if fnum != last_fnum {
+            file_count += 1;
+            last_fnum = fnum;
+        }
+        qfp = nvim_qfline_get_next(qfp);
+        idx += 1;
+    }
+
+    file_count
+}
+
+/// Get the current file's index (1-based) among files in the quickfix list.
+///
+/// For example, if the list has errors in files A, B, C and we're in B,
+/// this returns 2.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_current_file_idx(qfl: QfListHandle) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let current_ptr = nvim_qf_get_ptr(qfl);
+    if current_ptr.is_null() {
+        return 0;
+    }
+
+    let current_fnum = nvim_qfline_get_fnum(current_ptr);
+    let current_idx = nvim_qf_get_index(qfl);
+
+    let mut qfp = nvim_qf_get_start(qfl);
+    let mut file_idx: c_int = 0;
+    let mut last_fnum: c_int = -1;
+    let mut idx = 1;
+
+    while !qfp.is_null() && idx <= current_idx {
+        let fnum = nvim_qfline_get_fnum(qfp);
+        if fnum != last_fnum {
+            file_idx += 1;
+            last_fnum = fnum;
+        }
+        if fnum == current_fnum {
+            return file_idx;
+        }
+        qfp = nvim_qfline_get_next(qfp);
+        idx += 1;
+    }
+
+    file_idx
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
