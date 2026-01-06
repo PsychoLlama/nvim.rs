@@ -299,10 +299,7 @@ pub unsafe extern "C" fn rs_makeswapname(
 /// - All pointers must be valid C strings or NULL
 /// - The returned pointer must be freed by the caller
 #[no_mangle]
-pub unsafe extern "C" fn rs_get_file_in_dir(
-    fname: *mut c_char,
-    dname: *mut c_char,
-) -> *mut c_char {
+pub unsafe extern "C" fn rs_get_file_in_dir(fname: *mut c_char, dname: *mut c_char) -> *mut c_char {
     if fname.is_null() || dname.is_null() {
         return std::ptr::null_mut();
     }

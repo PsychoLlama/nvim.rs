@@ -16,8 +16,10 @@
 
 use std::ffi::{c_char, c_int};
 
-use crate::types::{BufHandle, ColNr, LineNr, ML_ALLOCATED, ML_APPEND_MARK, ML_APPEND_NEW,
-                   ML_DEL_MESSAGE, ML_EMPTY, ML_LINE_DIRTY};
+use crate::types::{
+    BufHandle, ColNr, LineNr, ML_ALLOCATED, ML_APPEND_MARK, ML_APPEND_NEW, ML_DEL_MESSAGE,
+    ML_EMPTY, ML_LINE_DIRTY,
+};
 
 // =============================================================================
 // C Accessor Declarations

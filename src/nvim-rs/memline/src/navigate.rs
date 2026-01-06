@@ -221,7 +221,11 @@ pub unsafe extern "C" fn rs_ml_byte2line(
         *col_out = offset;
     }
 
-    if result < 0 { 0 } else { result.into() }
+    if result < 0 {
+        0
+    } else {
+        result.into()
+    }
 }
 
 /// Go to a byte position in the current buffer.
