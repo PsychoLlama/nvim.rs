@@ -3517,3 +3517,33 @@ void nvim_set_typebuf_was_filled(int val)
 {
   typebuf_was_filled = val != 0;
 }
+
+int nvim_get_old_char(void)
+{
+  return old_char;
+}
+
+void nvim_set_old_char(int val)
+{
+  old_char = val;
+}
+
+int nvim_get_old_mod_mask(void)
+{
+  return old_mod_mask;
+}
+
+void nvim_set_old_mod_mask(int val)
+{
+  old_mod_mask = val;
+}
+
+int nvim_get_mod_mask(void)
+{
+  return mod_mask;
+}
+
+void nvim_set_mod_mask(int val)
+{
+  mod_mask = val;
+}

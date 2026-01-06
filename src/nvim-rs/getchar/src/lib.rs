@@ -6,6 +6,7 @@
 //!
 //! - [`typebuf`]: Typeahead buffer data structures and manipulation
 //! - [`buffheader`]: Buffer header for stuff/redo/recording buffers
+//! - [`input`]: Character input functions and key translation
 
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 #![allow(clippy::missing_safety_doc)]
@@ -13,6 +14,7 @@
 #![allow(unsafe_code)]
 
 pub mod buffheader;
+pub mod input;
 pub mod typebuf;
 
 use std::ffi::c_int;
