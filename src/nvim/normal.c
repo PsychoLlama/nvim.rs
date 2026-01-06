@@ -408,6 +408,9 @@ extern void rs_nv_bck_word(cmdarg_T *cap);
 extern void rs_nv_findpar(cmdarg_T *cap);
 extern void rs_nv_brace(cmdarg_T *cap);
 extern void rs_nv_csearch(cmdarg_T *cap);
+extern void rs_nv_mark(cmdarg_T *cap);
+extern void rs_nv_gomark(cmdarg_T *cap);
+extern void rs_nv_pcmark(cmdarg_T *cap);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -1109,6 +1112,94 @@ void nvim_set_cursor_coladd(int val)
 int nvim_get_TAB(void)
 {
   return TAB;
+}
+
+// =============================================================================
+// Mark command accessors for Rust FFI
+// =============================================================================
+
+/// Wrapper for setmark.
+bool nvim_setmark(int name)
+{
+  return setmark(name);
+}
+
+/// Get cap->nchar.
+int nvim_cap_get_nchar_call(cmdarg_T *cap)
+{
+  return cap ? cap->nchar : 0;
+}
+
+/// Get cap->extra_char.
+int nvim_cap_get_extra_char_call(cmdarg_T *cap)
+{
+  return cap ? cap->extra_char : 0;
+}
+
+/// Get jop_flags.
+unsigned int nvim_get_jop_flags(void)
+{
+  return jop_flags;
+}
+
+/// Wrapper for mark_get.
+fmark_T *nvim_mark_get(int name)
+{
+  return mark_get(curbuf, curwin, NULL, kMarkAll, name);
+}
+
+/// Wrapper for nv_mark_move_to.
+int nvim_nv_mark_move_to(cmdarg_T *cap, int flags, fmark_T *fm)
+{
+  return nv_mark_move_to(cap, flags, fm);
+}
+
+/// Wrapper for get_changelist.
+fmark_T *nvim_get_changelist(int count1)
+{
+  return get_changelist(curbuf, curwin, count1);
+}
+
+/// Wrapper for get_jumplist.
+fmark_T *nvim_get_jumplist(int count1)
+{
+  return get_jumplist(curwin, count1);
+}
+
+/// Wrapper for goto_tabpage_lastused.
+bool nvim_goto_tabpage_lastused(void)
+{
+  return goto_tabpage_lastused();
+}
+
+/// Get changelist length.
+int nvim_get_changelistlen(void)
+{
+  return curbuf->b_changelistlen;
+}
+
+/// Wrapper for emsg.
+void nvim_emsg(const char *msg)
+{
+  emsg(msg);
+}
+
+/// Get translated error strings.
+const char *nvim_get_e_changelist_is_empty(void)
+{
+  return _(e_changelist_is_empty);
+}
+
+/// Get translated error string for start of changelist.
+const char *nvim_get_e_start_of_changelist(void)
+{
+  return _("E662: At start of changelist");
+}
+
+/// Get translated error string for end of changelist.
+const char *nvim_get_e_end_of_changelist(void)
+{
+  return _("E663: At end of changelist");
 }
 
 /// Check if an operator was started but not finished yet.
@@ -4817,13 +4908,7 @@ static void nv_brace(cmdarg_T *cap)
 /// "m" command: Mark a position.
 static void nv_mark(cmdarg_T *cap)
 {
-  if (checkclearop(cap->oap)) {
-    return;
-  }
-
-  if (setmark(cap->nchar) == false) {
-    clearopbeep(cap->oap);
-  }
+  rs_nv_mark(cap);
 }
 
 /// "{" and "}" commands.
@@ -5256,90 +5341,14 @@ static void nv_optrans(cmdarg_T *cap)
 /// cap->arg is true for "'" and "g'".
 static void nv_gomark(cmdarg_T *cap)
 {
-  int name;
-  MarkMove flags = jop_flags & kOptJopFlagView ? kMarkSetView : 0;  // flags for moving to the mark
-  if (cap->oap->op_type != OP_NOP) {
-    // When there is a pending operator, do not restore the view as this is usually unexpected.
-    flags = 0;
-  }
-  MarkMoveRes move_res = 0;  // Result from moving to the mark
-  const bool old_KeyTyped = KeyTyped;  // getting file may reset it
-
-  if (cap->cmdchar == 'g') {
-    name = cap->extra_char;
-    flags |= KMarkNoContext;
-  } else {
-    name = cap->nchar;
-    flags |= kMarkContext;
-  }
-  flags |= cap->arg ? kMarkBeginLine : 0;
-  flags |= cap->count0 ? kMarkSetView : 0;
-
-  fmark_T *fm = mark_get(curbuf, curwin, NULL, kMarkAll, name);
-  move_res = nv_mark_move_to(cap, flags, fm);
-
-  // May need to clear the coladd that a mark includes.
-  if (!virtual_active(curwin)) {
-    curwin->w_cursor.coladd = 0;
-  }
-
-  if (cap->oap->op_type == OP_NOP
-      && move_res & kMarkMoveSuccess
-      && (move_res & kMarkSwitchedBuf || move_res & kMarkChangedCursor)
-      && (fdo_flags & kOptFdoFlagMark)
-      && old_KeyTyped) {
-    foldOpenCursor();
-  }
+  rs_nv_gomark(cap);
 }
 
 /// Handle CTRL-O, CTRL-I, "g;", "g,", and "CTRL-Tab" commands.
 /// Movement in the jumplist and changelist.
 static void nv_pcmark(cmdarg_T *cap)
 {
-  fmark_T *fm = NULL;
-  MarkMove flags = jop_flags & kOptJopFlagView ? kMarkSetView : 0;  // flags for moving to the mark
-  MarkMoveRes move_res = 0;  // Result from moving to the mark
-  const bool old_KeyTyped = KeyTyped;  // getting file may reset it.
-
-  if (checkclearopq(cap->oap)) {
-    return;
-  }
-
-  if (cap->cmdchar == TAB && mod_mask == MOD_MASK_CTRL) {
-    if (!goto_tabpage_lastused()) {
-      clearopbeep(cap->oap);
-    }
-    return;
-  }
-
-  if (cap->cmdchar == 'g') {
-    fm = get_changelist(curbuf, curwin, cap->count1);
-  } else {
-    fm = get_jumplist(curwin, cap->count1);
-    flags |= KMarkNoContext | kMarkJumpList;
-  }
-  // Changelist and jumplist have their own error messages. Therefore avoid
-  // calling nv_mark_move_to() when not found to avoid incorrect error
-  // messages.
-  if (fm != NULL) {
-    move_res = nv_mark_move_to(cap, flags, fm);
-  } else if (cap->cmdchar == 'g') {
-    if (curbuf->b_changelistlen == 0) {
-      emsg(_(e_changelist_is_empty));
-    } else if (cap->count1 < 0) {
-      emsg(_("E662: At start of changelist"));
-    } else {
-      emsg(_("E663: At end of changelist"));
-    }
-  } else {
-    clearopbeep(cap->oap);
-  }
-  if (cap->oap->op_type == OP_NOP
-      && (move_res & kMarkSwitchedBuf || move_res & kMarkChangedLine)
-      && (fdo_flags & kOptFdoFlagMark)
-      && old_KeyTyped) {
-    foldOpenCursor();
-  }
+  rs_nv_pcmark(cap);
 }
 
 /// Handle '"' command.

@@ -1015,7 +1015,24 @@ extern "C" {
     fn nvim_getvcol_cursor(scol: *mut c_int, ecol: *mut c_int);
     fn nvim_set_cursor_coladd(val: c_int);
     fn nvim_get_TAB() -> c_int;
+
+    // Mark command functions
+    fn nvim_setmark(name: c_int) -> bool;
+    fn nvim_get_jop_flags() -> c_uint;
+    fn nvim_mark_get(name: c_int) -> FmarkHandle;
+    fn nvim_nv_mark_move_to(cap: CapHandle, flags: c_int, fm: FmarkHandle) -> c_int;
+    fn nvim_get_changelist(count1: c_int) -> FmarkHandle;
+    fn nvim_get_jumplist(count1: c_int) -> FmarkHandle;
+    fn nvim_goto_tabpage_lastused() -> bool;
+    fn nvim_get_changelistlen() -> c_int;
+    fn nvim_emsg(msg: *const std::ffi::c_char);
+    fn nvim_get_e_changelist_is_empty() -> *const std::ffi::c_char;
+    fn nvim_get_e_start_of_changelist() -> *const std::ffi::c_char;
+    fn nvim_get_e_end_of_changelist() -> *const std::ffi::c_char;
 }
+
+/// Opaque handle to fmark_T*.
+pub type FmarkHandle = *mut std::ffi::c_void;
 
 // Operator type constant for OP_CHANGE
 const OP_CHANGE: c_int = 5;
@@ -1240,6 +1257,177 @@ pub unsafe extern "C" fn rs_nv_brace(cap: CapHandle) {
     if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_BLOCK) != 0
         && nvim_get_KeyTyped()
         && nvim_oap_get_op_type_ptr(oap) == OP_NOP
+    {
+        nvim_foldOpenCursor();
+    }
+}
+
+// Mark move flags (from mark_defs.h)
+const K_MARK_SET_VIEW: c_int = 0x01;
+const K_MARK_NO_CONTEXT: c_int = 0x02;
+const K_MARK_CONTEXT: c_int = 0x04;
+const K_MARK_BEGIN_LINE: c_int = 0x08;
+const K_MARK_JUMP_LIST: c_int = 0x10;
+
+// Mark move result flags
+const K_MARK_MOVE_SUCCESS: c_int = 0x01;
+const K_MARK_SWITCHED_BUF: c_int = 0x02;
+const K_MARK_CHANGED_CURSOR: c_int = 0x04;
+const K_MARK_CHANGED_LINE: c_int = 0x08;
+
+// Jop flag for view
+const K_OPT_JOP_FLAG_VIEW: c_uint = 0x0004;
+
+// Fold flag for mark
+const K_OPT_FDO_FLAG_MARK: c_uint = 0x0080;
+
+// MOD_MASK_CTRL
+const MOD_MASK_CTRL_VALUE: c_int = 0x04;
+
+// TAB character
+const TAB_CHAR: c_int = 9;
+
+// =============================================================================
+// Mark Command Handlers
+// =============================================================================
+
+/// Command handler for "m" command: Mark a position.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_mark(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    if rs_checkclearop(oap) {
+        return;
+    }
+
+    let nchar = nvim_cap_get_nchar(cap);
+    if !nvim_setmark(nchar) {
+        rs_clearopbeep(oap);
+    }
+}
+
+/// Command handler for "'" and "`" commands. Also for "g'" and "g`".
+///
+/// cap->arg is true for "'" and "g'".
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_gomark(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    let cmdchar = nvim_cap_get_cmdchar(cap);
+    let arg = nvim_cap_get_arg(cap);
+    let count0 = nvim_cap_get_count0(cap);
+
+    // flags for moving to the mark
+    // When there is a pending operator, do not restore the view as this is usually unexpected.
+    let mut flags: c_int = if nvim_oap_get_op_type_ptr(oap) != OP_NOP {
+        0
+    } else if (nvim_get_jop_flags() & K_OPT_JOP_FLAG_VIEW) != 0 {
+        K_MARK_SET_VIEW
+    } else {
+        0
+    };
+    let old_key_typed = nvim_get_KeyTyped();
+
+    let name: c_int;
+    if cmdchar == c_int::from(b'g') {
+        let extra_char = nvim_cap_get_extra_char(cap);
+        name = extra_char;
+        flags |= K_MARK_NO_CONTEXT;
+    } else {
+        name = nvim_cap_get_nchar(cap);
+        flags |= K_MARK_CONTEXT;
+    }
+    if arg != 0 {
+        flags |= K_MARK_BEGIN_LINE;
+    }
+    if count0 != 0 {
+        flags |= K_MARK_SET_VIEW;
+    }
+
+    let fm = nvim_mark_get(name);
+    let move_res = nvim_nv_mark_move_to(cap, flags, fm);
+
+    // May need to clear the coladd that a mark includes.
+    if !nvim_virtual_active() {
+        nvim_set_cursor_coladd(0);
+    }
+
+    if nvim_oap_get_op_type_ptr(oap) == OP_NOP
+        && (move_res & K_MARK_MOVE_SUCCESS) != 0
+        && ((move_res & K_MARK_SWITCHED_BUF) != 0 || (move_res & K_MARK_CHANGED_CURSOR) != 0)
+        && (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_MARK) != 0
+        && old_key_typed
+    {
+        nvim_foldOpenCursor();
+    }
+}
+
+/// Command handler for CTRL-O, CTRL-I, "g;", "g,", and "CTRL-Tab" commands.
+///
+/// Movement in the jumplist and changelist.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_pcmark(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    let cmdchar = nvim_cap_get_cmdchar(cap);
+    let count1 = nvim_cap_get_count1(cap);
+
+    // flags for moving to the mark
+    let mut flags: c_int = if (nvim_get_jop_flags() & K_OPT_JOP_FLAG_VIEW) != 0 {
+        K_MARK_SET_VIEW
+    } else {
+        0
+    };
+    let old_key_typed = nvim_get_KeyTyped();
+
+    if rs_checkclearopq(oap) {
+        return;
+    }
+
+    if cmdchar == TAB_CHAR && nvim_get_mod_mask() == MOD_MASK_CTRL_VALUE {
+        if !nvim_goto_tabpage_lastused() {
+            rs_clearopbeep(oap);
+        }
+        return;
+    }
+
+    let fm: FmarkHandle;
+    if cmdchar == c_int::from(b'g') {
+        fm = nvim_get_changelist(count1);
+    } else {
+        fm = nvim_get_jumplist(count1);
+        flags |= K_MARK_NO_CONTEXT | K_MARK_JUMP_LIST;
+    }
+
+    // Changelist and jumplist have their own error messages. Therefore avoid
+    // calling nv_mark_move_to() when not found to avoid incorrect error messages.
+    let move_res: c_int;
+    if !fm.is_null() {
+        move_res = nvim_nv_mark_move_to(cap, flags, fm);
+    } else if cmdchar == c_int::from(b'g') {
+        if nvim_get_changelistlen() == 0 {
+            nvim_emsg(nvim_get_e_changelist_is_empty());
+        } else if count1 < 0 {
+            nvim_emsg(nvim_get_e_start_of_changelist());
+        } else {
+            nvim_emsg(nvim_get_e_end_of_changelist());
+        }
+        return;
+    } else {
+        rs_clearopbeep(oap);
+        return;
+    }
+
+    if nvim_oap_get_op_type_ptr(oap) == OP_NOP
+        && ((move_res & K_MARK_SWITCHED_BUF) != 0 || (move_res & K_MARK_CHANGED_LINE) != 0)
+        && (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_MARK) != 0
+        && old_key_typed
     {
         nvim_foldOpenCursor();
     }
