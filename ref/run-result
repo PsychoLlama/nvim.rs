@@ -1,39 +1,33 @@
-Plan: ~/.claude/plans/snoopy-yawning-avalanche.md
+Plan: ~/.claude/plans/buzzing-greeting-swan.md
 
-The plan execution is complete. Here's a summary of what was accomplished:
+**Rust Migration Plan Complete!**
 
-## Summary
+I have successfully executed all phases of the plan at `/home/overlord/.claude/plans/buzzing-greeting-swan.md`. Here's a summary of what was accomplished:
 
-I executed the plan at `/home/overlord/.claude/plans/snoopy-yawning-avalanche.md` which outlined migrating three major Neovim components to Rust: Terminal Emulation, Options System, and Syntax Highlighting.
+## Phase 1: Popup Menu (Completed in prior session)
+All 4 steps completed - C accessors, position calculations, selection logic, and display helpers migrated.
 
-### Key Findings
+## Phase 2: Mouse Handling (Completed)
+- **2.1**: Added C accessors for mouse state (`orig_topline`, `orig_topfill`, `got_click`, `dragwin`)
+- **2.2**: Migrated word boundary detection (`rs_find_start_of_word`, `rs_find_end_of_word`)
+- **2.3**: Added fold click detection (`rs_check_fold_click`, `FoldClickResult`)
+- **2.4**: Migrated selection mode computation (`rs_compute_selection_mode`, `rs_get_click_count`, etc.)
+- **2.5**: Migrated scroll computation (`rs_compute_horiz_scroll`, `rs_compute_scroll_lines`, etc.)
 
-All three crates (`terminal`, `option`, `syntax`) already had substantial implementations from prior work. I extended each with additional functionality:
+## Phase 3: Statusline Core (Completed)
+- **3.1**: Format item types already existed in the crate
+- **3.2**: Added format parsing exports (`rs_stl_parse_width_spec`, `rs_stl_is_valid_flag`, `rs_stl_is_simple_specifier`)
+- **3.3**: Migrated item rendering (`rs_stl_apply_truncation`, `rs_stl_compute_padding`, `rs_stl_should_skip_leading`, `rs_stl_render_number`, `rs_stl_number_width`)
+- **3.4**: Added `StatuslineBuilder` FFI exports (17 functions for builder lifecycle, content, groups, markers, highlights, and output)
 
-### Commits Made
+## Commits Made
+- `feat(mouse): add C accessors for mouse state`
+- `feat(mouse): migrate word boundary detection to Rust`
+- `feat(mouse): add fold click detection helper`
+- `feat(mouse): migrate selection mode computation to Rust`
+- `feat(mouse): migrate scroll computation to Rust`
+- `feat(statusline): add format width parsing exports`
+- `feat(statusline): migrate item rendering and truncation to Rust`
+- `feat(statusline): add StatuslineBuilder FFI exports`
 
-1. **`c274f84f20` - feat(terminal): add row/linenr conversion and mouse button helpers**
-   - `rs_terminal_row_to_linenr` / `rs_terminal_linenr_to_row`: coordinate conversions
-   - `rs_terminal_convert_mouse_button`: VTerm button conversion for mouse events
-   - `rs_terminal_should_filter_char`: termpastefilter flag checking
-   - +304 lines
-
-2. **`8f4af75024` - feat(option): add option name validation and operator parsing**
-   - `rs_validate_option_name`: validate option name strings
-   - `rs_option_name_length`: extract option name from string
-   - `rs_parse_set_operator`: parse `:set` operators (`+=`, `^=`, `-=`, `=`, `:`)
-   - +251 lines
-
-3. **`654d2bad52` - feat(syntax): add pattern flag analysis helpers**
-   - `SynPatFlagsInfo` struct: structured flag decomposition
-   - `rs_analyze_syn_pat_flags`: analyze pattern flags
-   - `rs_syn_pat_skip_flags` / `rs_syn_pat_is_sync_related` / `rs_syn_pat_is_visible`: flag queries
-   - `rs_sptype_name`: pattern type to name conversion
-   - +169 lines
-
-### Verification
-
-All changes pass:
-- `just rust-fmt-check` ✓
-- `just rust-clippy` ✓  
-- `just rust-test` ✓ (1313 tests)
+All code passes `just rust-fmt-check`, `just rust-clippy`, and `just rust-test` (1351 tests).
