@@ -620,6 +620,267 @@ pub const extern "C" fn rs_pum_bound_selection(selected: c_int, size: c_int) -> 
     selected
 }
 
+/// Completion item type constants.
+pub const CPT_ABBR: c_int = 0;
+pub const CPT_KIND: c_int = 1;
+pub const CPT_MENU: c_int = 2;
+
+/// Result of column layout calculation.
+#[repr(C)]
+pub struct PumColumnLayout {
+    /// Width allocated for the first column (abbr).
+    pub first_width: c_int,
+    /// Width allocated for the second column (kind).
+    pub second_width: c_int,
+    /// Width allocated for the third column (menu/extra).
+    pub third_width: c_int,
+    /// Total width used.
+    pub total_width: c_int,
+}
+
+/// Result of align order parsing.
+#[repr(C)]
+pub struct PumAlignOrder {
+    /// First column type.
+    pub first: c_int,
+    /// Second column type.
+    pub second: c_int,
+    /// Third column type.
+    pub third: c_int,
+}
+
+/// Parse the completion item align flags into column order.
+///
+/// # Arguments
+/// * `cia_flags` - The completion item align flags (0 for default)
+///
+/// Returns struct with [first, second, third] column types.
+#[no_mangle]
+pub const extern "C" fn rs_pum_get_align_order(cia_flags: c_int) -> PumAlignOrder {
+    if cia_flags == 0 {
+        // Default order: abbr, kind, menu
+        PumAlignOrder {
+            first: CPT_ABBR,
+            second: CPT_KIND,
+            third: CPT_MENU,
+        }
+    } else {
+        // Parse flags: hundreds = first, tens = second, units = third
+        PumAlignOrder {
+            first: cia_flags / 100,
+            second: (cia_flags / 10) % 10,
+            third: cia_flags % 10,
+        }
+    }
+}
+
+/// Compute column widths for popup menu layout.
+///
+/// # Arguments
+/// * `available_width` - Total available width
+/// * `base_width` - Width of text/abbr column
+/// * `kind_width` - Width of kind column
+/// * `extra_width` - Width of extra/menu column
+/// * `scrollbar` - Whether scrollbar is present
+///
+/// Returns column layout with widths.
+#[no_mangle]
+pub const extern "C" fn rs_pum_compute_column_widths(
+    available_width: c_int,
+    base_width: c_int,
+    kind_width: c_int,
+    extra_width: c_int,
+    scrollbar: c_int,
+) -> PumColumnLayout {
+    let scrollbar_width = if scrollbar != 0 { 1 } else { 0 };
+    let content_width = available_width - scrollbar_width;
+
+    let total_needed = base_width + kind_width + extra_width;
+
+    if total_needed <= content_width {
+        // All columns fit
+        PumColumnLayout {
+            first_width: base_width,
+            second_width: kind_width,
+            third_width: extra_width,
+            total_width: total_needed,
+        }
+    } else {
+        // Need to truncate - prioritize base_width, then kind, then extra
+        let mut remaining = content_width;
+
+        let first = if base_width <= remaining {
+            remaining -= base_width;
+            base_width
+        } else {
+            let w = remaining;
+            remaining = 0;
+            w
+        };
+
+        let second = if kind_width <= remaining {
+            remaining -= kind_width;
+            kind_width
+        } else {
+            let w = remaining;
+            remaining = 0;
+            w
+        };
+
+        let third = if extra_width <= remaining {
+            extra_width
+        } else {
+            remaining
+        };
+
+        PumColumnLayout {
+            first_width: first,
+            second_width: second,
+            third_width: third,
+            total_width: first + second + third,
+        }
+    }
+}
+
+/// Result of thumb calculation.
+#[repr(C)]
+pub struct PumThumbResult {
+    /// Position of thumb (row index).
+    pub pos: c_int,
+    /// Height of thumb in rows.
+    pub height: c_int,
+}
+
+/// Calculate thumb (scrollbar indicator) position and height.
+///
+/// # Arguments
+/// * `pum_first` - Index of first visible item
+/// * `pum_height` - Number of visible items
+/// * `pum_size` - Total number of items
+///
+/// Returns thumb position and height.
+#[no_mangle]
+pub const extern "C" fn rs_pum_compute_thumb(
+    pum_first: c_int,
+    pum_height: c_int,
+    pum_size: c_int,
+) -> PumThumbResult {
+    if pum_size <= pum_height {
+        // No scrollbar needed
+        return PumThumbResult {
+            pos: 0,
+            height: pum_height,
+        };
+    }
+
+    let scroll_range = pum_size - pum_height;
+
+    // Calculate thumb height (proportional to visible/total)
+    let mut thumb_height = pum_height * pum_height / pum_size;
+    if thumb_height == 0 {
+        thumb_height = 1;
+    }
+
+    // Calculate thumb position
+    let thumb_pos = (pum_first * (pum_height - thumb_height) + scroll_range / 2) / scroll_range;
+
+    PumThumbResult {
+        pos: thumb_pos,
+        height: thumb_height,
+    }
+}
+
+/// Check if a row is within the scrollbar thumb area.
+///
+/// # Arguments
+/// * `row` - Row index to check
+/// * `thumb_pos` - Start position of thumb
+/// * `thumb_height` - Height of thumb
+///
+/// Returns 1 if row is in thumb, 0 otherwise.
+#[no_mangle]
+pub const extern "C" fn rs_pum_is_thumb_row(
+    row: c_int,
+    thumb_pos: c_int,
+    thumb_height: c_int,
+) -> c_int {
+    (row >= thumb_pos && row < thumb_pos + thumb_height) as c_int
+}
+
+/// Compute the width needed for text truncation indicator.
+///
+/// Returns 1 if truncation indicator takes one column.
+#[no_mangle]
+pub const extern "C" fn rs_pum_truncation_width() -> c_int {
+    1 // The truncation indicator (< or >) takes 1 column
+}
+
+/// Result of grid offset calculation.
+#[repr(C)]
+pub struct PumGridOffset {
+    /// Total grid width.
+    pub grid_width: c_int,
+    /// Column offset for content.
+    pub col_offset: c_int,
+    /// Whether extra space is added (0 or 1).
+    pub extra_space: c_int,
+}
+
+/// Calculate grid column offset for right-to-left display.
+///
+/// # Arguments
+/// * `pum_width` - Width of popup menu
+/// * `pum_col` - Column position
+/// * `pum_scrollbar` - Whether scrollbar present
+/// * `is_rl` - Whether right-to-left mode
+///
+/// Returns grid width, column offset, and extra space flag.
+#[no_mangle]
+pub const extern "C" fn rs_pum_compute_grid_offset(
+    pum_width: c_int,
+    pum_col: c_int,
+    pum_scrollbar: c_int,
+    is_rl: c_int,
+) -> PumGridOffset {
+    let is_rl = is_rl != 0;
+    let has_scrollbar = pum_scrollbar != 0;
+
+    if is_rl {
+        // Right-to-left: col_off is at right side
+        let col_off = pum_width - 1;
+        // Check if there's room for extra space on right
+        let extra_space = 1; // Assume yes for RTL
+        let mut grid_width = pum_width;
+        if extra_space != 0 {
+            grid_width += 1;
+        }
+        if has_scrollbar {
+            grid_width += 1;
+        }
+        PumGridOffset {
+            grid_width,
+            col_offset: col_off + has_scrollbar as c_int,
+            extra_space,
+        }
+    } else {
+        // Left-to-right: col_off depends on position
+        let extra_space = (pum_col > 0) as c_int;
+        let col_off = extra_space;
+        let mut grid_width = pum_width;
+        if extra_space != 0 {
+            grid_width += 1;
+        }
+        if has_scrollbar {
+            grid_width += 1;
+        }
+        PumGridOffset {
+            grid_width,
+            col_offset: col_off,
+            extra_space,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -690,5 +951,70 @@ mod tests {
         // Selected item already visible, no change needed
         let result = rs_pum_compute_scroll(5, 0, 10, 20);
         assert!(result >= 0);
+    }
+
+    #[test]
+    fn test_get_align_order_default() {
+        let order = rs_pum_get_align_order(0);
+        assert_eq!(order.first, CPT_ABBR);
+        assert_eq!(order.second, CPT_KIND);
+        assert_eq!(order.third, CPT_MENU);
+    }
+
+    #[test]
+    fn test_get_align_order_custom() {
+        // flags = 210 means abbr=2, kind=1, menu=0
+        let order = rs_pum_get_align_order(210);
+        assert_eq!(order.first, 2);
+        assert_eq!(order.second, 1);
+        assert_eq!(order.third, 0);
+    }
+
+    #[test]
+    fn test_compute_column_widths_all_fit() {
+        let layout = rs_pum_compute_column_widths(50, 20, 10, 15, 0);
+        assert_eq!(layout.first_width, 20);
+        assert_eq!(layout.second_width, 10);
+        assert_eq!(layout.third_width, 15);
+        assert_eq!(layout.total_width, 45);
+    }
+
+    #[test]
+    fn test_compute_column_widths_truncate() {
+        let layout = rs_pum_compute_column_widths(30, 20, 10, 15, 0);
+        assert_eq!(layout.first_width, 20);
+        assert_eq!(layout.second_width, 10);
+        assert_eq!(layout.third_width, 0);
+    }
+
+    #[test]
+    fn test_compute_thumb() {
+        let result = rs_pum_compute_thumb(0, 10, 20);
+        assert!(result.height >= 1);
+        assert!(result.pos >= 0);
+        assert!(result.pos + result.height <= 10);
+    }
+
+    #[test]
+    fn test_is_thumb_row() {
+        assert_eq!(rs_pum_is_thumb_row(5, 4, 3), 1); // 5 is in [4, 7)
+        assert_eq!(rs_pum_is_thumb_row(3, 4, 3), 0); // 3 is not in [4, 7)
+        assert_eq!(rs_pum_is_thumb_row(7, 4, 3), 0); // 7 is not in [4, 7)
+    }
+
+    #[test]
+    fn test_compute_grid_offset_ltr() {
+        let result = rs_pum_compute_grid_offset(20, 5, 1, 0);
+        assert!(result.grid_width >= 20);
+        assert_eq!(result.extra_space, 1); // col > 0, so extra space
+        assert_eq!(result.col_offset, 1);
+    }
+
+    #[test]
+    fn test_compute_grid_offset_rtl() {
+        let result = rs_pum_compute_grid_offset(20, 5, 0, 1);
+        assert!(result.grid_width >= 20);
+        assert_eq!(result.extra_space, 1);
+        assert_eq!(result.col_offset, 19); // pum_width - 1
     }
 }
