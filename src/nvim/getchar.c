@@ -3659,3 +3659,13 @@ void nvim_set_keynoremap(int val)
 {
   KeyNoremap = val;
 }
+
+int nvim_get_typeahead_char(void)
+{
+  return typeahead_char;
+}
+
+void nvim_set_typeahead_char(int val)
+{
+  typeahead_char = val;
+}

@@ -9,6 +9,7 @@
 //! - [`input`]: Character input functions and key translation
 //! - [`macro_recording`]: Macro recording and playback
 //! - [`mapping`]: Key mapping expansion
+//! - [`stuff`]: Stuffbuffer and special key handling
 
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 #![allow(clippy::missing_safety_doc)]
@@ -19,6 +20,7 @@ pub mod buffheader;
 pub mod input;
 pub mod macro_recording;
 pub mod mapping;
+pub mod stuff;
 pub mod typebuf;
 
 use std::ffi::c_int;
