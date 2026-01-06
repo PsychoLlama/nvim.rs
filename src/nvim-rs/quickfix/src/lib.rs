@@ -1667,6 +1667,25 @@ extern "C" {
     fn nvim_qf_set_nonevalid(qfl: QfListHandleMut, nonevalid: bool);
     fn nvim_qfline_set_next(qfp: QfLineHandleMut, next: QfLineHandle);
     fn nvim_qfline_set_prev(qfp: QfLineHandleMut, prev: QfLineHandle);
+
+    // Phase 4: File Stack and Path Resolution accessors
+    fn nvim_qf_get_dir_stack(qfl: QfListHandle) -> *mut c_void;
+    fn nvim_qf_set_dir_stack(qfl: QfListHandleMut, stack: *mut c_void);
+    fn nvim_qf_get_file_stack(qfl: QfListHandle) -> *mut c_void;
+    fn nvim_qf_set_file_stack(qfl: QfListHandleMut, stack: *mut c_void);
+    fn nvim_qf_get_directory(qfl: QfListHandle) -> *const c_char;
+    fn nvim_qf_set_directory(qfl: QfListHandleMut, dir: *mut c_char);
+    fn nvim_qf_get_currfile(qfl: QfListHandle) -> *const c_char;
+    fn nvim_qf_set_currfile(qfl: QfListHandleMut, file: *mut c_char);
+    fn nvim_qf_push_dir(
+        qfl: QfListHandleMut,
+        dirbuf: *mut c_char,
+        is_file_stack: bool,
+    ) -> *const c_char;
+    fn nvim_qf_pop_dir(qfl: QfListHandleMut, is_file_stack: bool) -> *const c_char;
+    fn nvim_qf_clean_dir_stack(qfl: QfListHandleMut, is_file_stack: bool);
+    fn nvim_qf_guess_filepath(qfl: QfListHandleMut, filename: *mut c_char) -> *const c_char;
+    fn nvim_qf_get_fnum(qfl: QfListHandleMut, directory: *mut c_char, fname: *mut c_char) -> c_int;
 }
 
 /// `QFL_TYPE` values from C code
@@ -1942,6 +1961,223 @@ pub unsafe extern "C" fn rs_qfline_set_prev(qfp: QfLineHandleMut, prev: QfLineHa
         return;
     }
     nvim_qfline_set_prev(qfp, prev);
+}
+
+// =============================================================================
+// Phase 4: File Stack and Path Resolution
+// =============================================================================
+
+/// Get the directory stack pointer from a quickfix list.
+///
+/// Returns an opaque handle to the directory stack, or null if not set.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_dir_stack(qfl: QfListHandle) -> *mut c_void {
+    if qfl.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_qf_get_dir_stack(qfl)
+}
+
+/// Set the directory stack pointer for a quickfix list.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - `stack` must be a valid `dir_stack_T` pointer or null
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_set_dir_stack(qfl: QfListHandleMut, stack: *mut c_void) {
+    if qfl.is_null() {
+        return;
+    }
+    nvim_qf_set_dir_stack(qfl, stack);
+}
+
+/// Get the file stack pointer from a quickfix list.
+///
+/// Returns an opaque handle to the file stack, or null if not set.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_file_stack(qfl: QfListHandle) -> *mut c_void {
+    if qfl.is_null() {
+        return std::ptr::null_mut();
+    }
+    nvim_qf_get_file_stack(qfl)
+}
+
+/// Set the file stack pointer for a quickfix list.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - `stack` must be a valid `dir_stack_T` pointer or null
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_set_file_stack(qfl: QfListHandleMut, stack: *mut c_void) {
+    if qfl.is_null() {
+        return;
+    }
+    nvim_qf_set_file_stack(qfl, stack);
+}
+
+/// Get the current directory string from a quickfix list.
+///
+/// Returns the directory path used for relative path resolution, or null.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_directory(qfl: QfListHandle) -> *const c_char {
+    if qfl.is_null() {
+        return std::ptr::null();
+    }
+    nvim_qf_get_directory(qfl)
+}
+
+/// Set the current directory string for a quickfix list.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - `dir` must be a valid C string pointer or null
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_set_directory(qfl: QfListHandleMut, dir: *mut c_char) {
+    if qfl.is_null() {
+        return;
+    }
+    nvim_qf_set_directory(qfl, dir);
+}
+
+/// Get the current file string from a quickfix list.
+///
+/// Returns the current file path being parsed, or null.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_currfile(qfl: QfListHandle) -> *const c_char {
+    if qfl.is_null() {
+        return std::ptr::null();
+    }
+    nvim_qf_get_currfile(qfl)
+}
+
+/// Set the current file string for a quickfix list.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - `file` must be a valid C string pointer or null
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_set_currfile(qfl: QfListHandleMut, file: *mut c_char) {
+    if qfl.is_null() {
+        return;
+    }
+    nvim_qf_set_currfile(qfl, file);
+}
+
+/// Push a directory onto the directory or file stack.
+///
+/// Returns the actual directory name stored on the stack, or null on error.
+/// The `is_file_stack` parameter selects which stack to use.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - `dirbuf` must be a valid C string
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_push_dir(
+    qfl: QfListHandleMut,
+    dirbuf: *mut c_char,
+    is_file_stack: bool,
+) -> *const c_char {
+    if qfl.is_null() || dirbuf.is_null() {
+        return std::ptr::null();
+    }
+    nvim_qf_push_dir(qfl, dirbuf, is_file_stack)
+}
+
+/// Pop a directory from the directory or file stack.
+///
+/// Returns the new top directory name, or null if the stack is empty.
+/// The `is_file_stack` parameter selects which stack to use.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_pop_dir(qfl: QfListHandleMut, is_file_stack: bool) -> *const c_char {
+    if qfl.is_null() {
+        return std::ptr::null();
+    }
+    nvim_qf_pop_dir(qfl, is_file_stack)
+}
+
+/// Clean up a directory or file stack, freeing all entries.
+///
+/// The `is_file_stack` parameter selects which stack to clean.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_clean_dir_stack(qfl: QfListHandleMut, is_file_stack: bool) {
+    if qfl.is_null() {
+        return;
+    }
+    nvim_qf_clean_dir_stack(qfl, is_file_stack);
+}
+
+/// Guess the filepath by searching the directory stack.
+///
+/// Searches the directory stack for a directory containing the given file.
+/// Returns the directory where the file was found, or null if not found.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - `filename` must be a valid C string
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_guess_filepath(
+    qfl: QfListHandleMut,
+    filename: *mut c_char,
+) -> *const c_char {
+    if qfl.is_null() || filename.is_null() {
+        return std::ptr::null();
+    }
+    nvim_qf_guess_filepath(qfl, filename)
+}
+
+/// Get the buffer number for a file, creating the buffer if needed.
+///
+/// Resolves the file path using the given directory (or the directory stack
+/// if the path is relative) and returns the buffer number. Creates the
+/// buffer if it doesn't exist.
+///
+/// Returns the buffer number, or 0 if the file couldn't be found/created.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - `directory` can be null or a valid C string
+/// - `fname` must be a valid C string
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_get_fnum(
+    qfl: QfListHandleMut,
+    directory: *mut c_char,
+    fname: *mut c_char,
+) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+    nvim_qf_get_fnum(qfl, directory, fname)
 }
 
 /// Set the current list index in a quickfix stack.

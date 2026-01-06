@@ -879,6 +879,152 @@ void nvim_qfline_set_prev(void *qfp_void, void *prev)
   qfp->qf_prev = (qfline_T *)prev;
 }
 
+// =============================================================================
+// Phase 4: File Stack and Path Resolution accessor functions for Rust
+// Forward declarations
+// =============================================================================
+
+static char *qf_push_dir(char *dirbuf, struct dir_stack_T **stackptr, bool is_file_stack);
+static char *qf_pop_dir(struct dir_stack_T **stackptr);
+static void qf_clean_dir_stack(struct dir_stack_T **stackptr);
+static char *qf_guess_filepath(qf_list_T *qfl, char *filename);
+static int qf_get_fnum(qf_list_T *qfl, char *directory, char *fname);
+
+/// Get the directory stack pointer from a quickfix list
+void *nvim_qf_get_dir_stack(const void *qfl_void)
+{
+  if (qfl_void == NULL) {
+    return NULL;
+  }
+  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
+  return qfl->qf_dir_stack;
+}
+
+/// Set the directory stack pointer for a quickfix list
+void nvim_qf_set_dir_stack(void *qfl_void, void *stack)
+{
+  if (qfl_void == NULL) {
+    return;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  qfl->qf_dir_stack = (struct dir_stack_T *)stack;
+}
+
+/// Get the file stack pointer from a quickfix list
+void *nvim_qf_get_file_stack(const void *qfl_void)
+{
+  if (qfl_void == NULL) {
+    return NULL;
+  }
+  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
+  return qfl->qf_file_stack;
+}
+
+/// Set the file stack pointer for a quickfix list
+void nvim_qf_set_file_stack(void *qfl_void, void *stack)
+{
+  if (qfl_void == NULL) {
+    return;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  qfl->qf_file_stack = (struct dir_stack_T *)stack;
+}
+
+/// Get the current directory string from a quickfix list
+const char *nvim_qf_get_directory(const void *qfl_void)
+{
+  if (qfl_void == NULL) {
+    return NULL;
+  }
+  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
+  return qfl->qf_directory;
+}
+
+/// Set the current directory string for a quickfix list
+void nvim_qf_set_directory(void *qfl_void, char *dir)
+{
+  if (qfl_void == NULL) {
+    return;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  qfl->qf_directory = dir;
+}
+
+/// Get the current file string from a quickfix list
+const char *nvim_qf_get_currfile(const void *qfl_void)
+{
+  if (qfl_void == NULL) {
+    return NULL;
+  }
+  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
+  return qfl->qf_currfile;
+}
+
+/// Set the current file string for a quickfix list
+void nvim_qf_set_currfile(void *qfl_void, char *file)
+{
+  if (qfl_void == NULL) {
+    return;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  qfl->qf_currfile = file;
+}
+
+/// Push a directory onto the directory stack
+/// Returns pointer to the actual directory name or NULL on error
+const char *nvim_qf_push_dir(void *qfl_void, char *dirbuf, bool is_file_stack)
+{
+  if (qfl_void == NULL || dirbuf == NULL) {
+    return NULL;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  struct dir_stack_T **stackptr = is_file_stack ? &qfl->qf_file_stack : &qfl->qf_dir_stack;
+  return qf_push_dir(dirbuf, stackptr, is_file_stack);
+}
+
+/// Pop a directory from the directory stack
+/// Returns the new top directory or NULL if stack is empty
+const char *nvim_qf_pop_dir(void *qfl_void, bool is_file_stack)
+{
+  if (qfl_void == NULL) {
+    return NULL;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  struct dir_stack_T **stackptr = is_file_stack ? &qfl->qf_file_stack : &qfl->qf_dir_stack;
+  return qf_pop_dir(stackptr);
+}
+
+/// Clean up a directory stack
+void nvim_qf_clean_dir_stack(void *qfl_void, bool is_file_stack)
+{
+  if (qfl_void == NULL) {
+    return;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  struct dir_stack_T **stackptr = is_file_stack ? &qfl->qf_file_stack : &qfl->qf_dir_stack;
+  qf_clean_dir_stack(stackptr);
+}
+
+/// Guess the filepath by searching the directory stack
+/// Returns the directory where the file can be found or NULL
+const char *nvim_qf_guess_filepath(void *qfl_void, char *filename)
+{
+  if (qfl_void == NULL || filename == NULL) {
+    return NULL;
+  }
+  return qf_guess_filepath((qf_list_T *)qfl_void, filename);
+}
+
+/// Get the buffer number for a file, creating the buffer if needed
+/// Returns the buffer number or 0 if not found/created
+int nvim_qf_get_fnum(void *qfl_void, char *directory, char *fname)
+{
+  if (qfl_void == NULL) {
+    return 0;
+  }
+  return qf_get_fnum((qf_list_T *)qfl_void, directory, fname);
+}
+
 // Looking up a buffer can be slow if there are many.  Remember the last one
 // to make this a lot faster if there are multiple matches in the same file.
 static char *qf_last_bufname = NULL;
