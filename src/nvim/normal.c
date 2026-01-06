@@ -407,6 +407,7 @@ extern void rs_nv_wordcmd(cmdarg_T *cap);
 extern void rs_nv_bck_word(cmdarg_T *cap);
 extern void rs_nv_findpar(cmdarg_T *cap);
 extern void rs_nv_brace(cmdarg_T *cap);
+extern void rs_nv_csearch(cmdarg_T *cap);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -1056,6 +1057,58 @@ void nvim_set_VIsual_select_exclu_adj(bool val)
 unsigned int nvim_get_ve_flags(void)
 {
   return get_ve_flags(curwin);
+}
+
+// =============================================================================
+// Character search accessors for Rust FFI
+// =============================================================================
+
+/// Get VIsual_mode global.
+int nvim_get_VIsual_mode(void)
+{
+  return VIsual_mode;
+}
+
+/// Get VIsual_select_exclu_adj global.
+bool nvim_get_VIsual_select_exclu_adj(void)
+{
+  return VIsual_select_exclu_adj;
+}
+
+/// Wrapper for unadjust_for_sel.
+bool nvim_unadjust_for_sel(void)
+{
+  return unadjust_for_sel();
+}
+
+/// Wrapper for searchc.
+int nvim_searchc(cmdarg_T *cap, bool t_cmd)
+{
+  return searchc(cap, t_cmd);
+}
+
+/// Check if key is special (IS_SPECIAL macro).
+bool nvim_is_special(int key)
+{
+  return IS_SPECIAL(key);
+}
+
+/// Wrapper for getvcol to get scol and ecol.
+void nvim_getvcol_cursor(int *scol, int *ecol)
+{
+  getvcol(curwin, &curwin->w_cursor, scol, NULL, ecol);
+}
+
+/// Set curwin->w_cursor.coladd.
+void nvim_set_cursor_coladd(int val)
+{
+  curwin->w_cursor.coladd = val;
+}
+
+/// Get TAB constant.
+int nvim_get_TAB(void)
+{
+  return TAB;
 }
 
 /// Check if an operator was started but not finished yet.
@@ -4444,42 +4497,7 @@ static int normal_search(cmdarg_T *cap, int dir, char *pat, size_t patlen, int o
 /// cap->nchar is NUL for ',' and ';' (repeat the search)
 static void nv_csearch(cmdarg_T *cap)
 {
-  bool cursor_dec = false;
-
-  // If adjusted cursor position previously, unadjust it.
-  if (*p_sel == 'e' && VIsual_active && VIsual_mode == 'v'
-      && VIsual_select_exclu_adj) {
-    unadjust_for_sel();
-    cursor_dec = true;
-  }
-
-  bool t_cmd = cap->cmdchar == 't' || cap->cmdchar == 'T';
-
-  cap->oap->motion_type = kMTCharWise;
-  if (IS_SPECIAL(cap->nchar) || searchc(cap, t_cmd) == false) {
-    clearopbeep(cap->oap);
-    // Revert unadjust when failed.
-    if (cursor_dec) {
-      adjust_for_sel(cap);
-    }
-    return;
-  }
-
-  curwin->w_set_curswant = true;
-  // Include a Tab for "tx" and for "dfx".
-  if (gchar_cursor() == TAB && virtual_active(curwin) && cap->arg == FORWARD
-      && (t_cmd || cap->oap->op_type != OP_NOP)) {
-    colnr_T scol, ecol;
-
-    getvcol(curwin, &curwin->w_cursor, &scol, NULL, &ecol);
-    curwin->w_cursor.coladd = ecol - scol;
-  } else {
-    curwin->w_cursor.coladd = 0;
-  }
-  adjust_for_sel(cap);
-  if ((fdo_flags & kOptFdoFlagHor) && KeyTyped && cap->oap->op_type == OP_NOP) {
-    foldOpenCursor();
-  }
+  rs_nv_csearch(cap);
 }
 
 /// "[{", "[(", "]}" or "])": go to Nth unclosed '{', '(', '}' or ')'

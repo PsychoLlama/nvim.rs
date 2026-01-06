@@ -1005,6 +1005,16 @@ extern "C" {
     fn nvim_lt_pos_cursor(lnum: c_int, col: c_int) -> bool;
     fn nvim_set_VIsual_select_exclu_adj(val: bool);
     fn nvim_get_ve_flags() -> c_uint;
+
+    // Character search functions
+    fn nvim_get_VIsual_mode() -> c_int;
+    fn nvim_get_VIsual_select_exclu_adj() -> bool;
+    fn nvim_unadjust_for_sel() -> bool;
+    fn nvim_searchc(cap: CapHandle, t_cmd: bool) -> c_int;
+    fn nvim_is_special(key: c_int) -> bool;
+    fn nvim_getvcol_cursor(scol: *mut c_int, ecol: *mut c_int);
+    fn nvim_set_cursor_coladd(val: c_int);
+    fn nvim_get_TAB() -> c_int;
 }
 
 // Operator type constant for OP_CHANGE
@@ -1228,6 +1238,75 @@ pub unsafe extern "C" fn rs_nv_brace(cap: CapHandle) {
     adjust_cursor(oap);
     nvim_set_cursor_coladd_zero();
     if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_BLOCK) != 0
+        && nvim_get_KeyTyped()
+        && nvim_oap_get_op_type_ptr(oap) == OP_NOP
+    {
+        nvim_foldOpenCursor();
+    }
+}
+
+// =============================================================================
+// Character Search Command Handlers
+// =============================================================================
+
+/// Command handler for f, F, t, T, ; and , commands.
+///
+/// cap->arg is BACKWARD for 'F' and 'T', FORWARD for 'f' and 't', true for
+/// ',' and false for ';'.
+/// cap->nchar is NUL for ',' and ';' (repeat the search)
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_csearch(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    let cmdchar = nvim_cap_get_cmdchar(cap);
+    let nchar = nvim_cap_get_nchar(cap);
+    let arg = nvim_cap_get_arg(cap);
+
+    let mut cursor_dec = false;
+
+    // If adjusted cursor position previously, unadjust it.
+    #[allow(clippy::cast_possible_wrap)]
+    let sel_e = b'e' as std::ffi::c_char;
+    let visual_v = c_int::from(b'v');
+    if nvim_get_p_sel_first() == sel_e
+        && nvim_get_VIsual_active() != 0
+        && nvim_get_VIsual_mode() == visual_v
+        && nvim_get_VIsual_select_exclu_adj()
+    {
+        nvim_unadjust_for_sel();
+        cursor_dec = true;
+    }
+
+    let t_cmd = cmdchar == c_int::from(b't') || cmdchar == c_int::from(b'T');
+
+    nvim_oap_set_motion_type(oap, K_MT_CHAR_WISE);
+    if nvim_is_special(nchar) || nvim_searchc(cap, t_cmd) == FAIL {
+        rs_clearopbeep(oap);
+        // Revert unadjust when failed.
+        if cursor_dec {
+            adjust_for_sel(cap);
+        }
+        return;
+    }
+
+    nvim_curwin_set_set_curswant(true);
+    // Include a Tab for "tx" and for "dfx".
+    if nvim_gchar_cursor_call() == nvim_get_TAB()
+        && nvim_virtual_active()
+        && arg == FORWARD
+        && (t_cmd || nvim_oap_get_op_type_ptr(oap) != OP_NOP)
+    {
+        let mut scol: c_int = 0;
+        let mut ecol: c_int = 0;
+        nvim_getvcol_cursor(&raw mut scol, &raw mut ecol);
+        nvim_set_cursor_coladd(ecol - scol);
+    } else {
+        nvim_set_cursor_coladd(0);
+    }
+    adjust_for_sel(cap);
+    if (nvim_get_fdo_flags() & K_OPT_FDO_FLAG_HOR) != 0
         && nvim_get_KeyTyped()
         && nvim_oap_get_op_type_ptr(oap) == OP_NOP
     {
