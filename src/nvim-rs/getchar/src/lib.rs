@@ -8,6 +8,7 @@
 //! - [`buffheader`]: Buffer header for stuff/redo/recording buffers
 //! - [`input`]: Character input functions and key translation
 //! - [`macro_recording`]: Macro recording and playback
+//! - [`mapping`]: Key mapping expansion
 
 #![warn(clippy::all, clippy::pedantic, clippy::nursery)]
 #![allow(clippy::missing_safety_doc)]
@@ -17,6 +18,7 @@
 pub mod buffheader;
 pub mod input;
 pub mod macro_recording;
+pub mod mapping;
 pub mod typebuf;
 
 use std::ffi::c_int;

@@ -3587,3 +3587,75 @@ int nvim_get_block_redo(void)
 {
   return block_redo ? 1 : 0;
 }
+
+int nvim_get_no_mapping(void)
+{
+  return no_mapping;
+}
+
+void nvim_set_no_mapping(int val)
+{
+  no_mapping = val;
+}
+
+int nvim_get_allow_keys(void)
+{
+  return allow_keys;
+}
+
+int nvim_get_keytyped(void)
+{
+  return KeyTyped ? 1 : 0;
+}
+
+void nvim_set_keytyped(int val)
+{
+  KeyTyped = val != 0;
+}
+
+int nvim_get_keystuffed(void)
+{
+  return KeyStuffed;
+}
+
+void nvim_set_keystuffed(int val)
+{
+  KeyStuffed = val;
+}
+
+int nvim_get_vgetc_busy(void)
+{
+  return vgetc_busy;
+}
+
+void nvim_inc_vgetc_busy(void)
+{
+  vgetc_busy++;
+}
+
+void nvim_dec_vgetc_busy(void)
+{
+  if (vgetc_busy > 0) {
+    vgetc_busy--;
+  }
+}
+
+int nvim_get_ex_normal_busy(void)
+{
+  return ex_normal_busy;
+}
+
+int nvim_get_maptick(void)
+{
+  return maptick;
+}
+
+void nvim_inc_maptick(void)
+{
+  maptick++;
+}
+
+void nvim_set_keynoremap(int val)
+{
+  KeyNoremap = val;
+}
