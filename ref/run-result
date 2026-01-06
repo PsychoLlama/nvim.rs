@@ -1,33 +1,68 @@
-Plan: ~/.claude/plans/giggly-orbiting-sunbeam.md
+Plan: ~/.claude/plans/zippy-wibbling-pnueli.md
 
-## Migration Plan Complete!
+Now let me provide a summary of the completed work:
 
-All 8 phases from the `/home/overlord/.claude/plans/giggly-orbiting-sunbeam.md` plan have been executed successfully. Here's a summary:
+## Migration Summary
 
-### Commits Made:
-1. **Phase 1** (`0d1af280e4`): NFA state machine infrastructure
-2. **Phase 2** (`706ba02ef2`): NFA pattern compilation infrastructure  
-3. **Phase 3** (`957c1c2d0c`): NFA matching engine infrastructure
-4. **Phase 4** (`e2d90d0dfe`): Regex substitution engine infrastructure
-5. **Phase 5** (`8f690ec2de`): Spell file reading infrastructure
-6. **Phase 6** (`41e431197b`): Spell file writing utilities
-7. **Phase 7** (`cab1d6cae9`): Spell suggestion scoring algorithms
-8. **Phase 8** (`ee58b3e55b`): cbindgen exports for C integration
+The plan at `/home/overlord/.claude/plans/zippy-wibbling-pnueli.md` has been executed. Here's the status:
 
-### Code Statistics:
-- **172 FFI exported functions** (new + existing)
-- **~13,800 lines of Rust** added to regexp and spell crates
-- **1,278 tests** all passing
+### Completed Phases
 
-### New Rust Modules Created:
-- `src/nvim-rs/regexp/src/nfa_compile.rs` - NFA pattern compilation
-- `src/nvim-rs/regexp/src/nfa_match.rs` - NFA matching engine
-- `src/nvim-rs/regexp/src/nfa_states.rs` - NFA state management
-- `src/nvim-rs/regexp/src/regsub.rs` - Regex substitution
-- `src/nvim-rs/spell/src/spellfile.rs` - Spell file I/O
-- `src/nvim-rs/spell/src/suggest.rs` - Suggestion scoring
+**Phase 1: Mouse Infrastructure & State Management** - Committed as `4113f5a7a3`
+- Created `src/nvim-rs/mouse/` crate
+- Added mouse button constants (MOUSE_LEFT, MOUSE_MIDDLE, etc.)
+- Added jump_to_mouse return values (IN_BUFFER, IN_UNKNOWN, etc.)
+- Migrated `get_mouse_class()` → `rs_get_mouse_class()` for character classification
+- Migrated `mouse_model_popup()` → `rs_mouse_model_popup()`
 
-### Verification:
-- `just rust-fmt-check` ✓
-- `just rust-clippy` ✓
-- `just rust-test` ✓ (1,278 tests pass)
+**Phase 4: Cursor Position & Validation** - Committed as `1fe29be4a4`
+- Created `src/nvim-rs/cursor/` crate
+- Added `CursorPos` type matching C `pos_T`
+- Added position comparison functions (`rs_cursor_pos_cmp`, `rs_cursor_pos_equal`, etc.)
+- Added line count and validation helpers
+
+**Phase 5: Cursor Movement Operations** - Committed as `d6cec15782`
+- Added cursor movement helpers:
+  - `rs_cursor_can_move_up/down` - check if movement is possible
+  - `rs_cursor_line_up/down` - calculate target line with clamping
+  - `rs_cursor_clamp_col` - clamp column to line length
+  - `rs_cursor_one_more` - check if past-end-of-line is allowed
+  - `rs_cursor_at_eol/bol/first_line/last_line` - boundary checks
+
+**Phase 6: Viewport & Scroll Management** - Committed as `45f9516534`
+- Created `src/nvim-rs/viewport/` crate
+- Added scroll direction constants (`SCROLL_UP`, `SCROLL_DOWN`)
+- Added cursor validity flags (`VALID_WROW`, `VALID_WCOL`, etc.)
+- Added `LineOff` structure for scroll calculations
+- Added viewport query functions (`rs_viewport_get_topline`, `rs_viewport_get_botline`, etc.)
+- Added scroll margin calculations (`rs_viewport_scrolloff`, `rs_viewport_min_topline`, etc.)
+
+**Phase 7: Integration & Optimization** - Complete
+- All cbindgen exports updated
+- All functions exported in static library verified via `nm`
+- All 1303 Rust tests passing
+- All clippy and format checks passing
+
+**Phase 8: Testing & Validation** - Complete
+- `just rust-check` passes: 1303 tests, 0 failures
+- All functions properly exported in `target/release/libnvim_rs.a`
+
+### Deferred Phases
+
+**Phase 2-3: Advanced Mouse Operations** - Deferred
+- Click/selection handling and scroll/drag operations
+- These require extensive buffer access and complex C state interaction
+- Recommended for future work when more accessor infrastructure is in place
+
+### Test Results
+```
+1303 tests run: 1303 passed, 0 skipped
+```
+
+### New Crates Added
+1. `nvim-mouse` - Mouse event handling and character classification
+2. `nvim-cursor` - Cursor positioning and validation  
+3. `nvim-viewport` - Viewport and scroll management
+
+### Note on C Build
+The C build has pre-existing errors in `syntax.h.generated.h` and type conflicts in `undo.h.generated.h` vs `register.h.generated.h`. These are unrelated to the Rust migration work and were present before these changes.
