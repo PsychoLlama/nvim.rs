@@ -3567,3 +3567,23 @@ void nvim_set_cmd_silent(int val)
 {
   cmd_silent = val != 0;
 }
+
+size_t nvim_get_last_recorded_len(void)
+{
+  return last_recorded_len;
+}
+
+void nvim_set_last_recorded_len(size_t val)
+{
+  last_recorded_len = val;
+}
+
+void nvim_add_last_recorded_len(size_t val)
+{
+  last_recorded_len += val;
+}
+
+int nvim_get_block_redo(void)
+{
+  return block_redo ? 1 : 0;
+}
