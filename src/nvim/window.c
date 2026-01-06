@@ -764,6 +764,30 @@ int nvim_get_real_state(void)
   return get_real_state();
 }
 
+/// Get the global cmdline_row value.
+int nvim_get_cmdline_row(void)
+{
+  return cmdline_row;
+}
+
+/// Get the 'pumheight' option value.
+int64_t nvim_get_p_ph(void)
+{
+  return p_ph;
+}
+
+/// Get the 'pumwidth' option value.
+int64_t nvim_get_p_pw(void)
+{
+  return p_pw;
+}
+
+/// Get the 'pummaxwidth' option value.
+int64_t nvim_get_p_pmw(void)
+{
+  return p_pmw;
+}
+
 /// Wrapper for vim_strchr.
 char *nvim_vim_strchr(const char *s, int c)
 {
