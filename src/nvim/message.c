@@ -218,6 +218,78 @@ int nvim_get_capture_ga_not_null(void) { return capture_ga != NULL ? 1 : 0; }
 int nvim_get_embedded_mode(void) { return embedded_mode ? 1 : 0; }
 int nvim_get_ui_active(void) { return ui_active() != 0 ? 1 : 0; }
 
+// C accessors for message history (used by Rust)
+MessageHistoryEntry *nvim_get_msg_hist_first(void) { return msg_hist_first; }
+MessageHistoryEntry *nvim_get_msg_hist_last(void) { return msg_hist_last; }
+int nvim_get_msg_hist_len(void) { return msg_hist_len; }
+void nvim_set_msg_hist_len(int len) { msg_hist_len = len; }
+int nvim_get_msg_hist_max(void) { return msg_hist_max; }
+int nvim_get_msg_hist_off(void) { return msg_hist_off; }
+int nvim_get_msg_silent(void) { return msg_silent; }
+MessageHistoryEntry *nvim_get_msg_hist_temp(void) { return msg_hist_temp; }
+void nvim_set_msg_hist_temp(MessageHistoryEntry *entry) { msg_hist_temp = entry; }
+void nvim_set_msg_hist_first(MessageHistoryEntry *entry) { msg_hist_first = entry; }
+void nvim_set_msg_hist_last(MessageHistoryEntry *entry) { msg_hist_last = entry; }
+
+// C accessors for message history entry fields (used by Rust)
+MessageHistoryEntry *nvim_msg_hist_entry_get_next(MessageHistoryEntry *entry)
+{
+  return entry->next;
+}
+
+MessageHistoryEntry *nvim_msg_hist_entry_get_prev(MessageHistoryEntry *entry)
+{
+  return entry->prev;
+}
+
+int nvim_msg_hist_entry_get_temp(MessageHistoryEntry *entry)
+{
+  return entry->temp ? 1 : 0;
+}
+
+const char *nvim_msg_hist_entry_get_kind(MessageHistoryEntry *entry)
+{
+  return entry->kind;
+}
+
+int nvim_msg_hist_entry_get_append(MessageHistoryEntry *entry)
+{
+  return entry->append ? 1 : 0;
+}
+
+void nvim_msg_hist_entry_set_next(MessageHistoryEntry *entry, MessageHistoryEntry *next)
+{
+  entry->next = next;
+}
+
+void nvim_msg_hist_entry_set_prev(MessageHistoryEntry *entry, MessageHistoryEntry *prev)
+{
+  entry->prev = prev;
+}
+
+void nvim_hl_msg_free(MessageHistoryEntry *entry)
+{
+  hl_msg_free(entry->msg);
+}
+
+// C accessors for scrollback chunks (used by Rust)
+msgchunk_T *nvim_get_last_msgchunk(void) { return last_msgchunk; }
+void nvim_set_last_msgchunk(msgchunk_T *chunk) { last_msgchunk = chunk; }
+msgchunk_T *nvim_msgchunk_get_next(msgchunk_T *chunk) { return chunk->sb_next; }
+void nvim_msgchunk_set_next(msgchunk_T *chunk, msgchunk_T *next) { chunk->sb_next = next; }
+msgchunk_T *nvim_msgchunk_get_prev(msgchunk_T *chunk) { return chunk->sb_prev; }
+void nvim_msgchunk_set_prev(msgchunk_T *chunk, msgchunk_T *prev) { chunk->sb_prev = prev; }
+int nvim_msgchunk_get_eol(msgchunk_T *chunk) { return chunk->sb_eol ? 1 : 0; }
+void nvim_msgchunk_set_eol(msgchunk_T *chunk, int eol) { chunk->sb_eol = (char)eol; }
+int nvim_msgchunk_get_msg_col(msgchunk_T *chunk) { return chunk->sb_msg_col; }
+int nvim_msgchunk_get_hl_id(msgchunk_T *chunk) { return chunk->sb_hl_id; }
+const char *nvim_msgchunk_get_text(msgchunk_T *chunk) { return chunk->sb_text; }
+
+// Additional C accessors for message system (used by Rust)
+int nvim_get_rows(void) { return Rows; }
+unsigned int nvim_get_p_rdb(void) { return p_rdb; }
+int nvim_ui_has_messages(void) { return ui_has(kUIMessages) ? 1 : 0; }
+
 // Rust implementation
 extern int rs_redirecting(void);
 extern int rs_msg_use_printf(void);

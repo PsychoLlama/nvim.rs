@@ -1,0 +1,277 @@
+//! Message history management
+//!
+//! Implements the message history linked list for `:messages` command.
+//! The history stores highlighted message chunks and supports iteration
+//! for display and clearing.
+
+use std::ffi::{c_char, c_int};
+use std::ptr;
+
+// C accessor declarations
+extern "C" {
+    /// Get `msg_hist_first` pointer
+    fn nvim_get_msg_hist_first() -> *mut MessageHistoryEntryHandle;
+    /// Get `msg_hist_last` pointer
+    fn nvim_get_msg_hist_last() -> *mut MessageHistoryEntryHandle;
+    /// Get `msg_hist_len`
+    fn nvim_get_msg_hist_len() -> c_int;
+    /// Set `msg_hist_len`
+    fn nvim_set_msg_hist_len(len: c_int);
+    /// Get `msg_hist_max`
+    fn nvim_get_msg_hist_max() -> c_int;
+    /// Get `msg_hist_off`
+    fn nvim_get_msg_hist_off() -> c_int;
+    /// Get `msg_silent`
+    fn nvim_get_msg_silent() -> c_int;
+    /// Get entry->next pointer
+    fn nvim_msg_hist_entry_get_next(
+        entry: *mut MessageHistoryEntryHandle,
+    ) -> *mut MessageHistoryEntryHandle;
+    /// Get entry->prev pointer
+    fn nvim_msg_hist_entry_get_prev(
+        entry: *mut MessageHistoryEntryHandle,
+    ) -> *mut MessageHistoryEntryHandle;
+    /// Get entry->temp flag
+    fn nvim_msg_hist_entry_get_temp(entry: *mut MessageHistoryEntryHandle) -> c_int;
+    /// Get entry->kind pointer
+    fn nvim_msg_hist_entry_get_kind(entry: *mut MessageHistoryEntryHandle) -> *const c_char;
+    /// Get entry->append flag
+    fn nvim_msg_hist_entry_get_append(entry: *mut MessageHistoryEntryHandle) -> c_int;
+    /// Free an HlMessage
+    fn nvim_hl_msg_free(entry: *mut MessageHistoryEntryHandle);
+    /// xfree wrapper
+    fn xfree(ptr: *mut std::ffi::c_void);
+    /// Set entry->next
+    fn nvim_msg_hist_entry_set_next(
+        entry: *mut MessageHistoryEntryHandle,
+        next: *mut MessageHistoryEntryHandle,
+    );
+    /// Set entry->prev
+    fn nvim_msg_hist_entry_set_prev(
+        entry: *mut MessageHistoryEntryHandle,
+        prev: *mut MessageHistoryEntryHandle,
+    );
+    /// Set msg_hist_first
+    fn nvim_set_msg_hist_first(entry: *mut MessageHistoryEntryHandle);
+    /// Set msg_hist_last
+    fn nvim_set_msg_hist_last(entry: *mut MessageHistoryEntryHandle);
+    /// Get msg_hist_temp
+    fn nvim_get_msg_hist_temp() -> *mut MessageHistoryEntryHandle;
+    /// Set msg_hist_temp
+    fn nvim_set_msg_hist_temp(entry: *mut MessageHistoryEntryHandle);
+}
+
+/// Opaque handle to `MessageHistoryEntry` in C.
+///
+/// This type is never instantiated in Rust; it exists only to provide
+/// type safety for pointers passed across the FFI boundary.
+#[repr(C)]
+pub struct MessageHistoryEntryHandle {
+    _private: [u8; 0],
+}
+
+/// Get the length of the message history.
+///
+/// # Safety
+/// Calls C accessor function for `msg_hist_len`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_len() -> c_int {
+    nvim_get_msg_hist_len()
+}
+
+/// Get the maximum message history length.
+///
+/// # Safety
+/// Calls C accessor function for `msg_hist_max`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_max() -> c_int {
+    nvim_get_msg_hist_max()
+}
+
+/// Get the first entry in the message history.
+///
+/// # Safety
+/// Calls C accessor function for `msg_hist_first`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_first() -> *mut MessageHistoryEntryHandle {
+    nvim_get_msg_hist_first()
+}
+
+/// Get the last entry in the message history.
+///
+/// # Safety
+/// Calls C accessor function for `msg_hist_last`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_last() -> *mut MessageHistoryEntryHandle {
+    nvim_get_msg_hist_last()
+}
+
+/// Get the next entry in the message history.
+///
+/// # Safety
+/// Calls C accessor function for entry->next.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_next(
+    entry: *mut MessageHistoryEntryHandle,
+) -> *mut MessageHistoryEntryHandle {
+    if entry.is_null() {
+        return ptr::null_mut();
+    }
+    nvim_msg_hist_entry_get_next(entry)
+}
+
+/// Get the previous entry in the message history.
+///
+/// # Safety
+/// Calls C accessor function for entry->prev.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_prev(
+    entry: *mut MessageHistoryEntryHandle,
+) -> *mut MessageHistoryEntryHandle {
+    if entry.is_null() {
+        return ptr::null_mut();
+    }
+    nvim_msg_hist_entry_get_prev(entry)
+}
+
+/// Check if an entry is temporary.
+///
+/// # Safety
+/// Calls C accessor function for entry->temp.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_entry_is_temp(entry: *mut MessageHistoryEntryHandle) -> c_int {
+    if entry.is_null() {
+        return 0;
+    }
+    nvim_msg_hist_entry_get_temp(entry)
+}
+
+/// Check if an entry should be appended to the previous message.
+///
+/// # Safety
+/// Calls C accessor function for entry->append.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_entry_is_append(
+    entry: *mut MessageHistoryEntryHandle,
+) -> c_int {
+    if entry.is_null() {
+        return 0;
+    }
+    nvim_msg_hist_entry_get_append(entry)
+}
+
+/// Get the message kind for an entry.
+///
+/// # Safety
+/// Calls C accessor function for entry->kind.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_entry_kind(
+    entry: *mut MessageHistoryEntryHandle,
+) -> *const c_char {
+    if entry.is_null() {
+        return ptr::null();
+    }
+    nvim_msg_hist_entry_get_kind(entry)
+}
+
+/// Free a single message history entry, unlinking it from the list.
+///
+/// # Safety
+/// - `entry` must be a valid pointer or NULL.
+/// - After this call, the entry is freed and must not be used.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_free_entry(entry: *mut MessageHistoryEntryHandle) {
+    if entry.is_null() {
+        return;
+    }
+
+    let next = nvim_msg_hist_entry_get_next(entry);
+    let prev = nvim_msg_hist_entry_get_prev(entry);
+
+    // Update next's prev pointer
+    if next.is_null() {
+        nvim_set_msg_hist_last(prev);
+    } else {
+        nvim_msg_hist_entry_set_prev(next, prev);
+    }
+
+    // Update prev's next pointer
+    if prev.is_null() {
+        nvim_set_msg_hist_first(next);
+    } else {
+        nvim_msg_hist_entry_set_next(prev, next);
+    }
+
+    // Update msg_hist_temp if needed
+    let temp = nvim_get_msg_hist_temp();
+    if entry == temp {
+        nvim_set_msg_hist_temp(next);
+    }
+
+    // Free the message content and entry
+    nvim_hl_msg_free(entry);
+    xfree(entry.cast());
+}
+
+/// Clear the oldest messages from the history until there are `keep` messages.
+///
+/// # Safety
+/// Calls C accessor and mutator functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_clear(keep: c_int) {
+    loop {
+        let first = nvim_get_msg_hist_first();
+        let len = nvim_get_msg_hist_len();
+
+        // Stop if we've reduced to desired length
+        if len <= keep && (keep != 0 || first.is_null()) {
+            break;
+        }
+
+        // Decrement length if not temporary
+        if !first.is_null() && nvim_msg_hist_entry_get_temp(first) == 0 {
+            nvim_set_msg_hist_len(len - 1);
+        }
+
+        rs_msg_hist_free_entry(first);
+    }
+}
+
+/// Clear all temporary messages from the history.
+///
+/// # Safety
+/// Calls C accessor and mutator functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_clear_temp() {
+    let mut current = nvim_get_msg_hist_temp();
+
+    while !current.is_null() {
+        let next = nvim_msg_hist_entry_get_next(current);
+
+        if nvim_msg_hist_entry_get_temp(current) != 0 {
+            rs_msg_hist_free_entry(current);
+        }
+
+        current = next;
+    }
+
+    // Reset temp marker since we've processed all temp entries
+    nvim_set_msg_hist_temp(ptr::null_mut());
+}
+
+/// Check if message history recording is disabled.
+///
+/// Returns true if `msg_hist_off` is set or `msg_silent` is non-zero.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_disabled() -> c_int {
+    c_int::from(nvim_get_msg_hist_off() != 0 || nvim_get_msg_silent() != 0)
+}
+
+#[cfg(test)]
+mod tests {
+    // Integration tests would require mocking C functions
+    // Unit tests for pure Rust logic go here
+}
