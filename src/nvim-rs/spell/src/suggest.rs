@@ -1,0 +1,832 @@
+//! Spell suggestion algorithms for Neovim
+//!
+//! This module provides scoring algorithms used to generate and rank
+//! spelling suggestions, including edit distance (Levenshtein) and
+//! sound-alike scoring.
+
+#![allow(clippy::option_if_let_else)]
+#![allow(clippy::too_many_lines)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_sign_loss)]
+
+use std::ffi::{c_char, c_int};
+
+use crate::SlangHandle;
+
+// =============================================================================
+// Score Constants
+// =============================================================================
+
+/// Score for various edit operations
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ScoreValues {
+    pub split: c_int,
+    pub split_no: c_int,
+    pub icase: c_int,
+    pub region: c_int,
+    pub rare: c_int,
+    pub swap: c_int,
+    pub swap3: c_int,
+    pub rep: c_int,
+    pub subst: c_int,
+    pub similar: c_int,
+    pub subcomp: c_int,
+    pub del: c_int,
+    pub deldup: c_int,
+    pub delcomp: c_int,
+    pub ins: c_int,
+    pub insdup: c_int,
+    pub inscomp: c_int,
+    pub nonword: c_int,
+}
+
+impl Default for ScoreValues {
+    fn default() -> Self {
+        SCORES
+    }
+}
+
+/// Default score values matching C code
+pub const SCORES: ScoreValues = ScoreValues {
+    split: 149,
+    split_no: 249,
+    icase: 52,
+    region: 200,
+    rare: 180,
+    swap: 75,
+    swap3: 110,
+    rep: 65,
+    subst: 93,
+    similar: 33,
+    subcomp: 33,
+    del: 94,
+    deldup: 66,
+    delcomp: 28,
+    ins: 96,
+    insdup: 67,
+    inscomp: 30,
+    nonword: 103,
+};
+
+/// Maximum score value (accept any score)
+pub const SCORE_MAXMAX: c_int = 999_999;
+
+/// Score limit for spell_edit_score_limit()
+pub const SCORE_LIMITMAX: c_int = 350;
+
+/// Minimum edit score for quick checks
+pub const SCORE_EDIT_MIN: c_int = SCORES.similar;
+
+/// Maximum word length
+pub const MAXWLEN: usize = 254;
+
+// =============================================================================
+// External C Functions
+// =============================================================================
+
+extern "C" {
+    // Character classification from spellfile
+    fn nvim_slang_has_map(slang: SlangHandle) -> bool;
+
+    // Similar character check - uses slang's MAP data
+    fn nvim_similar_chars(slang: SlangHandle, c1: c_int, c2: c_int) -> bool;
+
+    // UTF-8 to character conversion
+    fn utf_ptr2char(p: *const c_char) -> c_int;
+    fn utf_ptr2len(p: *const c_char) -> c_int;
+
+    // Case folding for spell checking
+    fn spell_tofold(c: c_int) -> c_int;
+}
+
+// =============================================================================
+// Edit Distance Scoring
+// =============================================================================
+
+/// Computes the edit distance score between two words.
+///
+/// The score is based on the number of edits (deletes, inserts, substitutes, swaps)
+/// needed to transform `badword` into `goodword`. Lower scores are better.
+///
+/// Uses the Du and Chang (1992) algorithm as implemented in Aspell.
+///
+/// # Safety
+///
+/// Both `badword` and `goodword` must be valid null-terminated UTF-8 strings.
+/// `slang` may be null if similar character checking is not needed.
+#[no_mangle]
+pub unsafe extern "C" fn rs_spell_edit_score(
+    slang: SlangHandle,
+    badword: *const c_char,
+    goodword: *const c_char,
+) -> c_int {
+    if badword.is_null() || goodword.is_null() {
+        return SCORE_MAXMAX;
+    }
+
+    // Convert multi-byte strings to code point arrays
+    let mut wbadword = [0i32; MAXWLEN];
+    let mut wgoodword = [0i32; MAXWLEN];
+
+    let badlen = utf8_to_codepoints(badword, &mut wbadword);
+    let goodlen = utf8_to_codepoints(goodword, &mut wgoodword);
+
+    // Add terminating NUL equivalent
+    let badlen = badlen + 1;
+    let goodlen = goodlen + 1;
+
+    // Check for similar characters if slang has MAP data
+    let has_map = !slang.is_null() && nvim_slang_has_map(slang);
+
+    spell_edit_score_impl(slang, &wbadword, badlen, &wgoodword, goodlen, has_map)
+}
+
+/// Internal edit distance calculation using code point arrays.
+fn spell_edit_score_impl(
+    slang: SlangHandle,
+    wbadword: &[i32; MAXWLEN],
+    badlen: usize,
+    wgoodword: &[i32; MAXWLEN],
+    goodlen: usize,
+    has_map: bool,
+) -> c_int {
+    // Allocate the dynamic programming table
+    // CNT(i, j) = cnt[i + j * (badlen + 1)]
+    let table_size = (badlen + 1) * (goodlen + 1);
+    let mut cnt = vec![0i32; table_size];
+
+    let cnt_idx = |i: usize, j: usize| -> usize { i + j * (badlen + 1) };
+
+    // Initialize first row and column
+    cnt[cnt_idx(0, 0)] = 0;
+    for j in 1..=goodlen {
+        cnt[cnt_idx(0, j)] = cnt[cnt_idx(0, j - 1)] + SCORES.ins;
+    }
+
+    for i in 1..=badlen {
+        cnt[cnt_idx(i, 0)] = cnt[cnt_idx(i - 1, 0)] + SCORES.del;
+
+        for j in 1..=goodlen {
+            let bc = wbadword[i - 1];
+            let gc = wgoodword[j - 1];
+
+            if bc == gc {
+                // Characters match
+                cnt[cnt_idx(i, j)] = cnt[cnt_idx(i - 1, j - 1)];
+            } else {
+                // Characters differ
+                let subst_score = if unsafe { spell_tofold(bc) == spell_tofold(gc) } {
+                    // Only case difference
+                    SCORES.icase
+                } else if has_map && unsafe { nvim_similar_chars(slang, gc, bc) } {
+                    // Similar characters according to MAP
+                    SCORES.similar
+                } else {
+                    // Full substitution
+                    SCORES.subst
+                };
+
+                cnt[cnt_idx(i, j)] = subst_score + cnt[cnt_idx(i - 1, j - 1)];
+
+                // Check for swap
+                if i > 1 && j > 1 {
+                    let pbc = wbadword[i - 2];
+                    let pgc = wgoodword[j - 2];
+                    if bc == pgc && pbc == gc {
+                        let swap_score = SCORES.swap + cnt[cnt_idx(i - 2, j - 2)];
+                        cnt[cnt_idx(i, j)] = cnt[cnt_idx(i, j)].min(swap_score);
+                    }
+                }
+
+                // Check deletion
+                let del_score = SCORES.del + cnt[cnt_idx(i - 1, j)];
+                cnt[cnt_idx(i, j)] = cnt[cnt_idx(i, j)].min(del_score);
+
+                // Check insertion
+                let ins_score = SCORES.ins + cnt[cnt_idx(i, j - 1)];
+                cnt[cnt_idx(i, j)] = cnt[cnt_idx(i, j)].min(ins_score);
+            }
+        }
+    }
+
+    cnt[cnt_idx(badlen - 1, goodlen - 1)]
+}
+
+/// Computes the edit distance score with an early termination limit.
+///
+/// Returns `SCORE_MAXMAX` if the score would exceed `limit`, allowing
+/// faster rejection of poor matches.
+///
+/// # Safety
+///
+/// Both `badword` and `goodword` must be valid null-terminated UTF-8 strings.
+/// `slang` may be null if similar character checking is not needed.
+#[no_mangle]
+pub unsafe extern "C" fn rs_spell_edit_score_limit(
+    slang: SlangHandle,
+    badword: *const c_char,
+    goodword: *const c_char,
+    limit: c_int,
+) -> c_int {
+    if badword.is_null() || goodword.is_null() {
+        return SCORE_MAXMAX;
+    }
+
+    // Convert multi-byte strings to code point arrays
+    let mut wbadword = [0i32; MAXWLEN];
+    let mut wgoodword = [0i32; MAXWLEN];
+
+    let badlen = utf8_to_codepoints(badword, &mut wbadword);
+    let goodlen = utf8_to_codepoints(goodword, &mut wgoodword);
+
+    // Add terminating NUL equivalent
+    wbadword[badlen] = 0;
+    wgoodword[goodlen] = 0;
+
+    let has_map = !slang.is_null() && nvim_slang_has_map(slang);
+
+    spell_edit_score_limit_impl(slang, &wbadword, &wgoodword, limit, has_map)
+}
+
+/// Stack entry for the limited edit distance algorithm
+#[derive(Clone, Copy, Default)]
+struct LimitScore {
+    badi: usize,
+    goodi: usize,
+    score: c_int,
+}
+
+/// Internal limited edit distance calculation.
+///
+/// Uses a stack-based approach from Aspell's leditdist.cpp.
+fn spell_edit_score_limit_impl(
+    slang: SlangHandle,
+    wbadword: &[i32; MAXWLEN],
+    wgoodword: &[i32; MAXWLEN],
+    limit: c_int,
+    has_map: bool,
+) -> c_int {
+    let mut stack = [LimitScore::default(); 10]; // Allow for over 3*2 edits
+    let mut stackidx = 0usize;
+
+    let mut bi = 0usize;
+    let mut gi = 0usize;
+    let mut score = 0;
+    let mut minscore = limit + 1;
+
+    loop {
+        // Skip over equal characters
+        loop {
+            let bc = wbadword[bi];
+            let gc = wgoodword[gi];
+
+            if bc != gc {
+                break;
+            }
+            if bc == 0 {
+                // Both words end
+                if score < minscore {
+                    minscore = score;
+                }
+                // Pop next alternative
+                if stackidx == 0 {
+                    return if minscore > limit {
+                        SCORE_MAXMAX
+                    } else {
+                        minscore
+                    };
+                }
+                stackidx -= 1;
+                bi = stack[stackidx].badi;
+                gi = stack[stackidx].goodi;
+                score = stack[stackidx].score;
+                continue;
+            }
+            bi += 1;
+            gi += 1;
+        }
+
+        let bc = wbadword[bi];
+        let gc = wgoodword[gi];
+
+        if gc == 0 {
+            // Goodword ends, delete remaining badword chars
+            loop {
+                score += SCORES.del;
+                if score >= minscore {
+                    break;
+                }
+                bi += 1;
+                if wbadword[bi] == 0 {
+                    minscore = score;
+                    break;
+                }
+            }
+        } else if bc == 0 {
+            // Badword ends, insert remaining goodword chars
+            loop {
+                score += SCORES.ins;
+                if score >= minscore {
+                    break;
+                }
+                gi += 1;
+                if wgoodword[gi] == 0 {
+                    minscore = score;
+                    break;
+                }
+            }
+        } else {
+            // Both words continue - try different edits
+            // Round 0: try deleting from badword
+            // Round 1: try inserting in badword
+            for round in 0..=1 {
+                let score_off = score + if round == 0 { SCORES.del } else { SCORES.ins };
+
+                if score_off < minscore {
+                    if score_off + SCORE_EDIT_MIN >= minscore {
+                        // Near limit - rest must match exactly
+                        let mut bi2 = bi + 1 - round;
+                        let mut gi2 = gi + round;
+
+                        while wgoodword[gi2] == wbadword[bi2] {
+                            if wgoodword[gi2] == 0 {
+                                minscore = score_off;
+                                break;
+                            }
+                            bi2 += 1;
+                            gi2 += 1;
+                        }
+                    } else if stackidx < stack.len() {
+                        // Push alternative onto stack
+                        stack[stackidx].badi = bi + 1 - round;
+                        stack[stackidx].goodi = gi + round;
+                        stack[stackidx].score = score_off;
+                        stackidx += 1;
+                    }
+                }
+            }
+
+            // Try substitution or swap
+            if wbadword[bi] == wgoodword[gi + 1] && wbadword[bi + 1] == wgoodword[gi] {
+                // Swap is possible
+                let score_off = score + SCORES.swap;
+                if score_off < minscore {
+                    if score_off + SCORE_EDIT_MIN >= minscore {
+                        // Near limit - check if rest matches
+                        let mut bi2 = bi + 2;
+                        let mut gi2 = gi + 2;
+                        while wgoodword[gi2] == wbadword[bi2] {
+                            if wgoodword[gi2] == 0 {
+                                minscore = score_off;
+                                break;
+                            }
+                            bi2 += 1;
+                            gi2 += 1;
+                        }
+                    } else if stackidx < stack.len() {
+                        stack[stackidx].badi = bi + 2;
+                        stack[stackidx].goodi = gi + 2;
+                        stack[stackidx].score = score_off;
+                        stackidx += 1;
+                    }
+                }
+            }
+
+            // Substitution
+            let bc = wbadword[bi];
+            let gc = wgoodword[gi];
+            let subst_score = if unsafe { spell_tofold(bc) == spell_tofold(gc) } {
+                SCORES.icase
+            } else if has_map && unsafe { nvim_similar_chars(slang, gc, bc) } {
+                SCORES.similar
+            } else {
+                SCORES.subst
+            };
+
+            score += subst_score;
+            bi += 1;
+            gi += 1;
+        }
+
+        // Check if we should pop
+        if score >= minscore {
+            if stackidx == 0 {
+                return if minscore > limit {
+                    SCORE_MAXMAX
+                } else {
+                    minscore
+                };
+            }
+            stackidx -= 1;
+            bi = stack[stackidx].badi;
+            gi = stack[stackidx].goodi;
+            score = stack[stackidx].score;
+        }
+    }
+}
+
+// =============================================================================
+// Sound-alike Scoring
+// =============================================================================
+
+/// Computes a score for two sound-alike (phonetically folded) words.
+///
+/// This permits up to two edits to keep things fast. Instead of a generic
+/// loop, specific cases are checked explicitly.
+///
+/// # Safety
+///
+/// Both `goodsound` and `badsound` must be valid null-terminated strings.
+#[no_mangle]
+pub unsafe extern "C" fn rs_soundalike_score(
+    goodstart: *const c_char,
+    badstart: *const c_char,
+) -> c_int {
+    if goodstart.is_null() || badstart.is_null() {
+        return SCORE_MAXMAX;
+    }
+
+    let goodsound = std::ffi::CStr::from_ptr(goodstart).to_bytes();
+    let badsound = std::ffi::CStr::from_ptr(badstart).to_bytes();
+
+    soundalike_score_impl(goodsound, badsound)
+}
+
+/// Helper to compare slices without taking references
+fn slices_equal(a: &[u8], b: &[u8]) -> bool {
+    a == b
+}
+
+/// Internal sound-alike scoring implementation.
+fn soundalike_score_impl(goodstart: &[u8], badstart: &[u8]) -> c_int {
+    let mut goodsound = goodstart;
+    let mut badsound = badstart;
+    let mut score = 0;
+
+    // Handle leading '*' (vowel indicator)
+    let good_star = !goodsound.is_empty() && goodsound[0] == b'*';
+    let bad_star = !badsound.is_empty() && badsound[0] == b'*';
+
+    if (bad_star || good_star) && goodsound.first() != badsound.first() {
+        let good_empty = goodsound.is_empty();
+        let bad_empty = badsound.is_empty();
+        let good_one = goodsound.len() == 1;
+        let bad_one = badsound.len() == 1;
+
+        if (bad_empty && good_one) || (good_empty && bad_one) {
+            return SCORES.del;
+        }
+        if bad_empty || good_empty {
+            return SCORE_MAXMAX;
+        }
+
+        let same_second = goodsound.len() > 1 && badsound.len() > 1 && goodsound[1] == badsound[1];
+        let same_third = goodsound.len() > 2 && badsound.len() > 2 && goodsound[2] == badsound[2];
+
+        if !same_second && !same_third {
+            score = 2 * SCORES.del / 3;
+            if bad_star {
+                badsound = &badsound[1..];
+            } else {
+                goodsound = &goodsound[1..];
+            }
+        }
+    }
+
+    let goodlen = goodsound.len() as i32;
+    let badlen = badsound.len() as i32;
+
+    // Quick length check - max 2 edits possible
+    let n = goodlen - badlen;
+    if !(-2..=2).contains(&n) {
+        return SCORE_MAXMAX;
+    }
+
+    // pl = longer string, ps = shorter string
+    let (pl, ps) = if n > 0 {
+        (goodsound, badsound)
+    } else {
+        (badsound, goodsound)
+    };
+
+    // Skip identical prefix
+    let mut pli = 0usize;
+    let mut psi = 0usize;
+    while pli < pl.len() && psi < ps.len() && pl[pli] == ps[psi] {
+        pli += 1;
+        psi += 1;
+    }
+
+    match n {
+        -2 | 2 => soundalike_case_two_diff(pl, ps, pli, psi, score),
+        -1 | 1 => soundalike_case_one_diff(pl, ps, pli, psi, score),
+        0 => soundalike_case_equal_len(pl, ps, pli, psi, score),
+        _ => SCORE_MAXMAX,
+    }
+}
+
+/// Handle soundalike scoring when length difference is 2
+fn soundalike_case_two_diff(
+    pl: &[u8],
+    ps: &[u8],
+    mut pli: usize,
+    mut psi: usize,
+    score: c_int,
+) -> c_int {
+    // Must delete two characters from longer string
+    pli += 1; // First delete
+    while pli < pl.len() && psi < ps.len() && pl[pli] == ps[psi] {
+        pli += 1;
+        psi += 1;
+    }
+    // Check if rest matches after second delete
+    if pli < pl.len() && slices_equal(&pl[pli + 1..], &ps[psi..]) {
+        score + SCORES.del * 2
+    } else {
+        SCORE_MAXMAX
+    }
+}
+
+/// Handle soundalike scoring when length difference is 1
+fn soundalike_case_one_diff(pl: &[u8], ps: &[u8], pli: usize, psi: usize, score: c_int) -> c_int {
+    // Case 1: single delete
+    let mut pl2 = pli + 1;
+    let mut ps2 = psi;
+    while pl2 < pl.len() && ps2 < ps.len() && pl[pl2] == ps[ps2] {
+        if pl2 >= pl.len() - 1 && ps2 >= ps.len() - 1 {
+            return score + SCORES.del;
+        }
+        pl2 += 1;
+        ps2 += 1;
+    }
+    if pl2 >= pl.len() && ps2 >= ps.len() {
+        return score + SCORES.del;
+    }
+
+    // Case 2: delete then swap
+    if pl2 + 1 < pl.len()
+        && ps2 + 1 < ps.len()
+        && pl[pl2] == ps[ps2 + 1]
+        && pl[pl2 + 1] == ps[ps2]
+        && (pl2 + 2 >= pl.len() || slices_equal(&pl[pl2 + 2..], &ps[ps2 + 2..]))
+    {
+        return score + SCORES.del + SCORES.swap;
+    }
+
+    // Case 3: delete then substitute
+    if pl2 + 1 < pl.len() && ps2 + 1 < ps.len() && slices_equal(&pl[pl2 + 1..], &ps[ps2 + 1..]) {
+        return score + SCORES.del + SCORES.subst;
+    }
+
+    // Case 4: swap then delete
+    if pli + 1 < pl.len() && psi + 1 < ps.len() && pl[pli] == ps[psi + 1] && pl[pli + 1] == ps[psi]
+    {
+        let mut pl3 = pli + 2;
+        let mut ps3 = psi + 2;
+        while pl3 < pl.len() && ps3 < ps.len() && pl[pl3] == ps[ps3] {
+            pl3 += 1;
+            ps3 += 1;
+        }
+        if pl3 < pl.len() && slices_equal(&pl[pl3 + 1..], &ps[ps3..]) {
+            return score + SCORES.swap + SCORES.del;
+        }
+    }
+
+    // Case 5: substitute then delete
+    let mut pl4 = pli + 1;
+    let mut ps4 = psi + 1;
+    while pl4 < pl.len() && ps4 < ps.len() && pl[pl4] == ps[ps4] {
+        pl4 += 1;
+        ps4 += 1;
+    }
+    if pl4 < pl.len() && slices_equal(&pl[pl4 + 1..], &ps[ps4..]) {
+        return score + SCORES.subst + SCORES.del;
+    }
+
+    SCORE_MAXMAX
+}
+
+/// Handle soundalike scoring when lengths are equal
+fn soundalike_case_equal_len(pl: &[u8], ps: &[u8], pli: usize, psi: usize, score: c_int) -> c_int {
+    // Case 1: already identical
+    if pli >= pl.len() {
+        return score;
+    }
+
+    // Case 2: swap
+    if pli + 1 < pl.len() && psi + 1 < ps.len() && pl[pli] == ps[psi + 1] && pl[pli + 1] == ps[psi]
+    {
+        let mut pl2 = pli + 2;
+        let mut ps2 = psi + 2;
+        while pl2 < pl.len() && ps2 < ps.len() && pl[pl2] == ps[ps2] {
+            if pl2 >= pl.len() - 1 {
+                return score + SCORES.swap;
+            }
+            pl2 += 1;
+            ps2 += 1;
+        }
+        if pl2 >= pl.len() && ps2 >= ps.len() {
+            return score + SCORES.swap;
+        }
+
+        // Case 3: swap and swap again
+        if pl2 + 1 < pl.len()
+            && ps2 + 1 < ps.len()
+            && pl[pl2] == ps[ps2 + 1]
+            && pl[pl2 + 1] == ps[ps2]
+            && slices_equal(&pl[pl2 + 2..], &ps[ps2 + 2..])
+        {
+            return score + SCORES.swap + SCORES.swap;
+        }
+
+        // Case 4: swap and substitute
+        if pl2 + 1 < pl.len() && ps2 + 1 < ps.len() && slices_equal(&pl[pl2 + 1..], &ps[ps2 + 1..])
+        {
+            return score + SCORES.swap + SCORES.subst;
+        }
+    }
+
+    // Case 5: substitute
+    let mut pl5 = pli + 1;
+    let mut ps5 = psi + 1;
+    while pl5 < pl.len() && ps5 < ps.len() && pl[pl5] == ps[ps5] {
+        if pl5 >= pl.len() - 1 {
+            return score + SCORES.subst;
+        }
+        pl5 += 1;
+        ps5 += 1;
+    }
+    if pl5 >= pl.len() && ps5 >= ps.len() {
+        return score + SCORES.subst;
+    }
+
+    // Case 6: substitute and swap
+    if pl5 + 1 < pl.len()
+        && ps5 + 1 < ps.len()
+        && pl[pl5] == ps[ps5 + 1]
+        && pl[pl5 + 1] == ps[ps5]
+        && slices_equal(&pl[pl5 + 2..], &ps[ps5 + 2..])
+    {
+        return score + SCORES.subst + SCORES.swap;
+    }
+
+    // Case 7: substitute and substitute
+    if pl5 + 1 < pl.len() && ps5 + 1 < ps.len() && slices_equal(&pl[pl5 + 1..], &ps[ps5 + 1..]) {
+        return score + SCORES.subst + SCORES.subst;
+    }
+
+    // Case 8: insert then delete
+    let mut pl8 = pli;
+    let mut ps8 = psi + 1;
+    while pl8 < pl.len() && ps8 < ps.len() && pl[pl8] == ps[ps8] {
+        pl8 += 1;
+        ps8 += 1;
+    }
+    if pl8 < pl.len() && slices_equal(&pl[pl8 + 1..], &ps[ps8..]) {
+        return score + SCORES.ins + SCORES.del;
+    }
+
+    // Case 9: delete then insert
+    let mut pl9 = pli + 1;
+    let mut ps9 = psi;
+    while pl9 < pl.len() && ps9 < ps.len() && pl[pl9] == ps[ps9] {
+        pl9 += 1;
+        ps9 += 1;
+    }
+    if ps9 < ps.len() && slices_equal(&pl[pl9..], &ps[ps9 + 1..]) {
+        return score + SCORES.ins + SCORES.del;
+    }
+
+    SCORE_MAXMAX
+}
+
+// =============================================================================
+// Utility Functions
+// =============================================================================
+
+/// Converts a UTF-8 string to an array of code points.
+///
+/// Returns the number of code points written (excluding any terminator).
+///
+/// # Safety
+///
+/// `src` must be a valid null-terminated UTF-8 string.
+unsafe fn utf8_to_codepoints(src: *const c_char, dest: &mut [i32; MAXWLEN]) -> usize {
+    let mut p = src;
+    let mut i = 0usize;
+
+    while *p != 0 && i < MAXWLEN - 1 {
+        let c = utf_ptr2char(p);
+        dest[i] = c;
+        i += 1;
+        let len = utf_ptr2len(p);
+        p = p.add(len as usize);
+    }
+
+    i
+}
+
+/// Rescore a suggestion by combining word and sound scores.
+///
+/// This is used to adjust the score after finding suggestions, based on
+/// the suggested word sounding like the bad word.
+///
+/// Formula: (3 * word_score + sound_score) / 4
+///
+/// Note: FFI export is in lib.rs as `rs_rescore`
+#[must_use]
+pub fn rescore(word_score: c_int, sound_score: c_int) -> c_int {
+    (3 * word_score + sound_score) / 4
+}
+
+/// Compute the maximum word score that can achieve a given final score.
+///
+/// Given the maximum acceptable rescore and a known sound score, compute
+/// the maximum word score that would still be acceptable.
+///
+/// Formula: (4 * max_score - sound_score) / 3
+///
+/// Note: FFI export is in lib.rs as `rs_maxscore`
+#[must_use]
+pub fn maxscore(max_score: c_int, sound_score: c_int) -> c_int {
+    (4 * max_score - sound_score) / 3
+}
+
+// =============================================================================
+// Tests
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_scores_default() {
+        let scores = ScoreValues::default();
+        assert_eq!(scores.del, 94);
+        assert_eq!(scores.ins, 96);
+        assert_eq!(scores.subst, 93);
+        assert_eq!(scores.swap, 75);
+        assert_eq!(scores.icase, 52);
+        assert_eq!(scores.similar, 33);
+    }
+
+    #[test]
+    fn test_rescore() {
+        // (3 * 100 + 50) / 4 = 350 / 4 = 87
+        assert_eq!(rescore(100, 50), 87);
+        // (3 * 200 + 100) / 4 = 700 / 4 = 175
+        assert_eq!(rescore(200, 100), 175);
+    }
+
+    #[test]
+    fn test_maxscore() {
+        // (4 * 100 - 50) / 3 = 350 / 3 = 116
+        assert_eq!(maxscore(100, 50), 116);
+        // (4 * 200 - 100) / 3 = 700 / 3 = 233
+        assert_eq!(maxscore(200, 100), 233);
+    }
+
+    #[test]
+    fn test_soundalike_identical() {
+        let result = soundalike_score_impl(b"hello", b"hello");
+        assert_eq!(result, 0);
+    }
+
+    #[test]
+    fn test_soundalike_one_subst() {
+        // "hallo" vs "hello" - one substitution
+        let result = soundalike_score_impl(b"hallo", b"hello");
+        assert_eq!(result, SCORES.subst);
+    }
+
+    #[test]
+    fn test_soundalike_one_swap() {
+        // "ehllo" vs "hello" - swap 'e' and 'h'
+        let result = soundalike_score_impl(b"ehllo", b"hello");
+        assert_eq!(result, SCORES.swap);
+    }
+
+    #[test]
+    fn test_soundalike_one_delete() {
+        // "helo" vs "hello" - one delete
+        let result = soundalike_score_impl(b"helo", b"hello");
+        assert_eq!(result, SCORES.del);
+    }
+
+    #[test]
+    fn test_soundalike_two_deletes() {
+        // "heo" vs "hello" - two deletes
+        let result = soundalike_score_impl(b"heo", b"hello");
+        assert_eq!(result, SCORES.del * 2);
+    }
+
+    #[test]
+    fn test_soundalike_too_different() {
+        // Length difference > 2
+        let result = soundalike_score_impl(b"hi", b"hello");
+        assert_eq!(result, SCORE_MAXMAX);
+    }
+}
