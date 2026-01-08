@@ -82,6 +82,12 @@ pub const SCORE_EDIT_MIN: c_int = SCORES.similar;
 /// Maximum word length
 pub const MAXWLEN: usize = 254;
 
+/// Maximum number of suggestions to generate
+pub const MAXSUG: usize = 25;
+
+/// Big score for compound penalty
+pub const SCORE_BIG: c_int = 3 * SCORES.ins;
+
 // =============================================================================
 // External C Functions
 // =============================================================================
@@ -752,6 +758,36 @@ pub fn rescore(word_score: c_int, sound_score: c_int) -> c_int {
 #[must_use]
 pub fn maxscore(max_score: c_int, sound_score: c_int) -> c_int {
     (4 * max_score - sound_score) / 3
+}
+
+/// FFI wrapper for rescore function.
+#[no_mangle]
+pub extern "C" fn rs_rescore_suggestion(word_score: c_int, sound_score: c_int) -> c_int {
+    rescore(word_score, sound_score)
+}
+
+/// FFI wrapper for maxscore function.
+#[no_mangle]
+pub extern "C" fn rs_maxscore_for_suggestion(max_score: c_int, sound_score: c_int) -> c_int {
+    maxscore(max_score, sound_score)
+}
+
+/// Get the SCORE_MAXMAX constant value.
+#[no_mangle]
+pub extern "C" fn rs_score_maxmax() -> c_int {
+    SCORE_MAXMAX
+}
+
+/// Get the SCORE_BIG constant value.
+#[no_mangle]
+pub extern "C" fn rs_score_big_suggest() -> c_int {
+    SCORE_BIG
+}
+
+/// Get the MAXSUG constant value.
+#[no_mangle]
+pub extern "C" fn rs_maxsug() -> usize {
+    MAXSUG
 }
 
 // =============================================================================
