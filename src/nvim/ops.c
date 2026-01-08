@@ -264,6 +264,22 @@ static int get_vts_sum(const int *vts_array, int index)
   return sum;
 }
 
+// =============================================================================
+// Rust FFI accessor functions for variable tabstops
+// =============================================================================
+
+/// FFI wrapper for get_vts - used by Rust shift module.
+int nvim_get_vts(const int *vts_array, int index)
+{
+  return get_vts(vts_array, index);
+}
+
+/// FFI wrapper for get_vts_sum - used by Rust shift module.
+int nvim_get_vts_sum(const int *vts_array, int index)
+{
+  return get_vts_sum(vts_array, index);
+}
+
 /// @param left    true if shift is to the left
 /// @param count   true if new indent is to be to a tabstop
 /// @param amount  number of shifts
