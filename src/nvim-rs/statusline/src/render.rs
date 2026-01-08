@@ -181,7 +181,10 @@ pub fn build_stl_str(fmt: &str, ctx: &mut RenderContext) -> BuildResult {
     BuildResult {
         output: builder.output().to_vec(),
         highlights: highlights.into_records(),
-        clicks: clicks.iter().map(|(s, t, n, f)| (s, t, n, f.map(String::from))).collect(),
+        clicks: clicks
+            .iter()
+            .map(|(s, t, n, f)| (s, t, n, f.map(String::from)))
+            .collect(),
         separator_count: 0, // Would track from builder
         truncated: false,
     }
@@ -304,7 +307,14 @@ fn process_spec(
             left_align,
         } => {
             render_item(
-                *flag, *minwid, *maxwid, *zeropad, *left_align, ctx, builder, highlights,
+                *flag,
+                *minwid,
+                *maxwid,
+                *zeropad,
+                *left_align,
+                ctx,
+                builder,
+                highlights,
             );
         }
     }
@@ -376,9 +386,13 @@ fn render_item(
                 return;
             }
             // Append the trimmed content
-            append_with_width(content, minwid, maxwid, zeropad, left_align, is_numeric, ctx, builder);
+            append_with_width(
+                content, minwid, maxwid, zeropad, left_align, is_numeric, ctx, builder,
+            );
         } else {
-            append_with_width(&content, minwid, maxwid, zeropad, left_align, is_numeric, ctx, builder);
+            append_with_width(
+                &content, minwid, maxwid, zeropad, left_align, is_numeric, ctx, builder,
+            );
         }
     }
 
