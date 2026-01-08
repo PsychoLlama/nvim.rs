@@ -83,7 +83,8 @@ static const char e_trailing_char_after_rsb_str_str[]
 // and for the actually highlighted text (_h_start and _h_end).
 //
 // Note that ordering of members is optimized to reduce padding.
-typedef struct {
+// synpat_T is forward-declared in syntax_defs.h
+struct synpat_S {
   char sp_type;                         // see SPTYPE_ defines below
   bool sp_syncing;                      // this item used for syncing
   int16_t sp_syn_match_id;              // highlight group ID of pattern
@@ -101,18 +102,20 @@ typedef struct {
   char *sp_pattern;                     // regexp to match, pattern
   regprog_T *sp_prog;                   // regexp to match, program
   syn_time_T sp_time;
-} synpat_T;
+};
 
-typedef struct {
+// syn_cluster_T is forward-declared in syntax_defs.h
+struct syn_cluster_S {
   char *scl_name;           // syntax cluster name
   char *scl_name_u;         // uppercase of scl_name
   int16_t *scl_list;        // IDs in this syntax cluster
-} syn_cluster_T;
+};
 
 // For the current state we need to remember more than just the idx.
 // When si_m_endpos.lnum is 0, the items other than si_idx are unknown.
 // (The end positions have the column number of the next char)
-typedef struct {
+// stateitem_T is forward-declared in syntax_defs.h
+struct stateitem_S {
   int si_idx;                           // index of syntax pattern or
                                         // KEYWORD_IDX
   int si_id;                            // highlight group ID for keywords
@@ -134,7 +137,7 @@ typedef struct {
   int16_t *si_next_list;                // nextgroup IDs after this item ends
   reg_extmatch_T *si_extmatch;          // \z(...\) matches from start
                                         // pattern
-} stateitem_T;
+};
 
 // Struct to reduce the number of arguments to get_syn_options(), it's used
 // very often.

@@ -7,6 +7,10 @@
 #include "nvim/pos_defs.h"  // IWYU pragma: keep
 #include "nvim/types_defs.h"  // IWYU pragma: keep
 
+// Opaque handles for quickfix state (for Rust FFI)
+typedef void *QfStateHandle;
+typedef void *EfmHandle;
+
 /// flags for skip_vimgrep_pat()
 enum {
   VGR_GLOBAL = 1,

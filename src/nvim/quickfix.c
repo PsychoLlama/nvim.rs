@@ -209,15 +209,15 @@ int nvim_qfline_get_col(const void *qfp_void)
   return qfp->qf_col;
 }
 
-/// Get line number from pos_T for Rust
-linenr_T nvim_pos_get_lnum(const void *pos_void)
+/// Get line number from pos_T for Rust (via opaque pointer)
+linenr_T nvim_qf_pos_get_lnum(const void *pos_void)
 {
   const pos_T *pos = (const pos_T *)pos_void;
   return pos->lnum;
 }
 
-/// Get column from pos_T for Rust
-int nvim_pos_get_col(const void *pos_void)
+/// Get column from pos_T for Rust (via opaque pointer)
+int nvim_qf_pos_get_col(const void *pos_void)
 {
   const pos_T *pos = (const pos_T *)pos_void;
   return pos->col;
@@ -1036,7 +1036,7 @@ static int qf_parse_line(qf_list_T *qfl, char *linebuf, size_t linelen, efm_T *f
                          qffields_T *fields);
 
 /// Opaque handle to efm_T (errorformat pattern list)
-typedef void *EfmHandle;
+// EfmHandle is now defined in quickfix.h
 
 /// Parse the errorformat option string and return a handle to the pattern list
 /// The returned handle must be freed with nvim_qf_free_efm_list
@@ -1151,8 +1151,7 @@ static int qf_setup_state(qfstate_T *pstate, char *restrict enc, const char *res
                           typval_T *tv, buf_T *buf, linenr_T lnumfirst, linenr_T lnumlast);
 static void qf_cleanup_state(qfstate_T *pstate);
 
-/// Opaque handle to qfstate_T (parser state)
-typedef void *QfStateHandle;
+// QfStateHandle is now defined in quickfix.h
 
 /// Allocate a new parser state object
 QfStateHandle nvim_qf_state_alloc(void)

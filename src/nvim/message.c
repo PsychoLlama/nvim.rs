@@ -73,17 +73,7 @@
 #include "nvim/ui_defs.h"
 #include "nvim/vim_defs.h"
 
-// To be able to scroll back at the "more" and "hit-enter" prompts we need to
-// store the displayed text and remember where screen lines start.
-typedef struct msgchunk_S msgchunk_T;
-struct msgchunk_S {
-  msgchunk_T *sb_next;
-  msgchunk_T *sb_prev;
-  char sb_eol;                  // true when line ends after this text
-  int sb_msg_col;               // column in which text starts
-  int sb_hl_id;                 // text highlight id
-  char sb_text[];               // text to be displayed
-};
+// msgchunk_T is now defined in message_defs.h
 
 // Magic chars used in confirm dialog strings
 enum {
@@ -272,6 +262,9 @@ void nvim_hl_msg_free(MessageHistoryEntry *entry)
   hl_msg_free(entry->msg);
 }
 
+// Static variable for scrollback chunks (used by accessors below and functions later in file)
+static msgchunk_T *last_msgchunk = NULL;
+
 // C accessors for scrollback chunks (used by Rust)
 msgchunk_T *nvim_get_last_msgchunk(void) { return last_msgchunk; }
 void nvim_set_last_msgchunk(msgchunk_T *chunk) { last_msgchunk = chunk; }
@@ -301,7 +294,7 @@ int nvim_get_msg_scroll(void) { return msg_scroll ? 1 : 0; }
 int nvim_get_need_wait_return(void) { return need_wait_return ? 1 : 0; }
 void nvim_set_need_wait_return(int val) { need_wait_return = (val != 0); }
 int nvim_shortmess(int flag) { return shortmess(flag) ? 1 : 0; }
-int nvim_get_exmode_active(void) { return exmode_active ? 1 : 0; }
+// nvim_get_exmode_active is defined in grid.c
 int nvim_vim_strsize(const char *s) { return vim_strsize(s); }
 int nvim_mb_trunc_len(const char *s, int width)
 {
@@ -2834,7 +2827,7 @@ static void inc_msg_scrolled(void)
   set_must_redraw(UPD_VALID);
 }
 
-static msgchunk_T *last_msgchunk = NULL;  // last displayed text
+// last_msgchunk is forward-declared earlier in the file
 
 typedef enum {
   SB_CLEAR_NONE = 0,

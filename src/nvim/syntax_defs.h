@@ -2,6 +2,11 @@
 
 #include "nvim/buffer_defs.h"
 
+// Forward declarations for types used by accessor functions (defined in syntax.c)
+typedef struct synpat_S synpat_T;
+typedef struct syn_cluster_S syn_cluster_T;
+typedef struct stateitem_S stateitem_T;
+
 #define SST_MIN_ENTRIES 150    // minimal size for state stack array
 #define SST_MAX_ENTRIES 1000   // maximal size for state stack array
 #define SST_FIX_STATES  7      // size of sst_stack[].

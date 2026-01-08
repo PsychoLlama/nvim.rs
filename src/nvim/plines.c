@@ -261,7 +261,7 @@ int nvim_win_get_fill(win_T *wp, linenr_T lnum)
 // ============================================================================
 
 /// Check if virtual editing is active for a window.
-int nvim_virtual_active(win_T *wp)
+int nvim_win_virtual_active(win_T *wp)
 {
   return virtual_active(wp) ? 1 : 0;
 }

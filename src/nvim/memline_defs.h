@@ -1,7 +1,34 @@
 #pragma once
 
+#include <stdint.h>
+
 #include "nvim/memfile_defs.h"
 #include "nvim/pos_defs.h"
+
+// Block 0 constants (for ZeroBlock)
+enum {
+  B0_FNAME_SIZE_ORG = 900,      // what it was in older versions
+  B0_UNAME_SIZE = 40,
+  B0_HNAME_SIZE = 40,
+};
+
+/// Block zero holds all info about the swapfile.
+/// NOTE: DEFINITION OF BLOCK 0 SHOULD NOT CHANGE! It would make all existing swapfiles unusable!
+typedef struct {
+  char b0_id[2];                     ///< ID for block 0: BLOCK0_ID0 and BLOCK0_ID1.
+  char b0_version[10];               ///< Vim version string
+  char b0_page_size[4];              ///< number of bytes per page
+  char b0_mtime[4];                  ///< last modification time of file
+  char b0_ino[4];                    ///< inode of b0_fname
+  char b0_pid[4];                    ///< process id of creator (or 0)
+  char b0_uname[B0_UNAME_SIZE];      ///< name of user (uid if no name)
+  char b0_hname[B0_HNAME_SIZE];      ///< host name (if it has a name)
+  char b0_fname[B0_FNAME_SIZE_ORG];  ///< name of file being edited
+  long b0_magic_long;                ///< check for byte order of long
+  int b0_magic_int;                  ///< check for byte order of int
+  int16_t b0_magic_short;            ///< check for byte order of short
+  char b0_magic_char;                ///< check for last char
+} ZeroBlock;
 
 ///
 /// When searching for a specific line, we remember what blocks in the tree

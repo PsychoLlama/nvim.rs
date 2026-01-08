@@ -4,6 +4,17 @@
 
 #include "nvim/api/private/defs.h"
 
+// Message chunk for scrollback buffer
+typedef struct msgchunk_S msgchunk_T;
+struct msgchunk_S {
+  msgchunk_T *sb_next;
+  msgchunk_T *sb_prev;
+  char sb_eol;                  // true when line ends after this text
+  int sb_msg_col;               // column in which text starts
+  int sb_hl_id;                 // text highlight id
+  char sb_text[];               // text to be displayed
+};
+
 typedef struct {
   String text;
   int hl_id;

@@ -3730,7 +3730,7 @@ int nvim_uhp_get_alt_prev_seq(u_header_T *uhp)
 }
 
 // Allocate memory with zero terminator
-void *nvim_xmallocz(size_t size)
+void *nvim_undo_xmallocz(size_t size)
 {
   return xmallocz(size);
 }
