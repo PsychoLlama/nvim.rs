@@ -302,7 +302,65 @@ pub unsafe extern "C" fn rs_sb_has_content() -> c_int {
     c_int::from(!prev.is_null())
 }
 
+/// Check if scrollback buffer is empty.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sb_empty() -> c_int {
+    c_int::from(nvim_get_last_msgchunk().is_null())
+}
+
+/// Get the SB_CLEAR_NONE constant.
+#[no_mangle]
+pub const extern "C" fn rs_sb_clear_none() -> c_int {
+    SbClearState::NONE.0
+}
+
+/// Get the SB_CLEAR_ALL constant.
+#[no_mangle]
+pub const extern "C" fn rs_sb_clear_all() -> c_int {
+    SbClearState::ALL.0
+}
+
+/// Get the SB_CLEAR_CMDLINE_BUSY constant.
+#[no_mangle]
+pub const extern "C" fn rs_sb_clear_cmdline_busy() -> c_int {
+    SbClearState::CMDLINE_BUSY.0
+}
+
+/// Get the SB_CLEAR_CMDLINE_DONE constant.
+#[no_mangle]
+pub const extern "C" fn rs_sb_clear_cmdline_done() -> c_int {
+    SbClearState::CMDLINE_DONE.0
+}
+
+/// Reset scrollback clear state to NONE.
+///
+/// # Safety
+/// Calls C mutator function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sb_reset_clear_state() {
+    nvim_set_do_clear_sb_text(SbClearState::NONE.0);
+}
+
 #[cfg(test)]
 mod tests {
-    // Integration tests would require mocking C functions
+    use super::*;
+
+    #[test]
+    fn test_sb_clear_state_constants() {
+        assert_eq!(SbClearState::NONE.0, 0);
+        assert_eq!(SbClearState::ALL.0, 1);
+        assert_eq!(SbClearState::CMDLINE_BUSY.0, 2);
+        assert_eq!(SbClearState::CMDLINE_DONE.0, 3);
+    }
+
+    #[test]
+    fn test_sb_clear_state_exports() {
+        assert_eq!(rs_sb_clear_none(), 0);
+        assert_eq!(rs_sb_clear_all(), 1);
+        assert_eq!(rs_sb_clear_cmdline_busy(), 2);
+        assert_eq!(rs_sb_clear_cmdline_done(), 3);
+    }
 }
