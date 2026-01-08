@@ -2419,6 +2419,138 @@ pub extern "C" fn rs_shada_get_read_flags(want_info: bool, want_marks: bool) -> 
 }
 
 // =============================================================================
+// Phase 7: Encoding/Decoding API
+// =============================================================================
+
+/// String structure matching Neovim's String type.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct NvimString {
+    /// Pointer to string data.
+    pub data: *mut c_char,
+    /// Length of string (not including null terminator).
+    pub size: usize,
+}
+
+impl Default for NvimString {
+    fn default() -> Self {
+        Self {
+            data: std::ptr::null_mut(),
+            size: 0,
+        }
+    }
+}
+
+// C accessor functions for encoding/decoding
+extern "C" {
+    /// Encode registers to string (calls C implementation).
+    fn nvim_shada_encode_regs() -> NvimString;
+    /// Encode jump list to string (calls C implementation).
+    fn nvim_shada_encode_jumps() -> NvimString;
+    /// Encode buffer list to string (calls C implementation).
+    fn nvim_shada_encode_buflist() -> NvimString;
+    /// Encode global variables to string (calls C implementation).
+    fn nvim_shada_encode_gvars() -> NvimString;
+    /// Read ShaDa from string (calls C implementation).
+    fn nvim_shada_read_string(string: NvimString, flags: c_int);
+}
+
+/// Encode registers to a ShaDa-format string.
+///
+/// Returns a newly allocated string containing all register entries
+/// in MessagePack format suitable for ShaDa storage.
+#[no_mangle]
+pub unsafe extern "C" fn rs_shada_encode_regs() -> NvimString {
+    nvim_shada_encode_regs()
+}
+
+/// Encode jump list to a ShaDa-format string.
+///
+/// Returns a newly allocated string containing jump list entries
+/// in MessagePack format suitable for ShaDa storage.
+#[no_mangle]
+pub unsafe extern "C" fn rs_shada_encode_jumps() -> NvimString {
+    nvim_shada_encode_jumps()
+}
+
+/// Encode buffer list to a ShaDa-format string.
+///
+/// Returns a newly allocated string containing the buffer list entry
+/// in MessagePack format suitable for ShaDa storage.
+#[no_mangle]
+pub unsafe extern "C" fn rs_shada_encode_buflist() -> NvimString {
+    nvim_shada_encode_buflist()
+}
+
+/// Encode global variables to a ShaDa-format string.
+///
+/// Returns a newly allocated string containing global variable entries
+/// in MessagePack format suitable for ShaDa storage.
+#[no_mangle]
+pub unsafe extern "C" fn rs_shada_encode_gvars() -> NvimString {
+    nvim_shada_encode_gvars()
+}
+
+/// Read ShaDa entries from a string.
+///
+/// Parses the given MessagePack-formatted string and applies the ShaDa
+/// entries to Neovim's state according to the specified flags.
+///
+/// # Safety
+///
+/// `string` must contain valid MessagePack-formatted ShaDa data.
+#[no_mangle]
+pub unsafe extern "C" fn rs_shada_read_string(string: NvimString, flags: c_int) {
+    if string.data.is_null() || string.size == 0 {
+        return;
+    }
+    nvim_shada_read_string(string, flags);
+}
+
+/// Create an empty NvimString.
+#[no_mangle]
+pub extern "C" fn rs_nvim_string_empty() -> NvimString {
+    NvimString::default()
+}
+
+/// Check if an NvimString is empty.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref, clippy::missing_const_for_fn)]
+pub unsafe extern "C" fn rs_nvim_string_is_empty(s: *const NvimString) -> c_int {
+    if s.is_null() {
+        return 1;
+    }
+    c_int::from((*s).data.is_null() || (*s).size == 0)
+}
+
+/// Get the size of an NvimString.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref, clippy::missing_const_for_fn)]
+pub unsafe extern "C" fn rs_nvim_string_size(s: *const NvimString) -> usize {
+    if s.is_null() {
+        return 0;
+    }
+    (*s).size
+}
+
+/// Free an NvimString's data.
+///
+/// # Safety
+///
+/// The string must have been allocated by Neovim's allocator.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nvim_string_free(s: *mut NvimString) {
+    if s.is_null() {
+        return;
+    }
+    if !(*s).data.is_null() {
+        nvim_xfree((*s).data.cast::<c_void>());
+    }
+    (*s).data = std::ptr::null_mut();
+    (*s).size = 0;
+}
+
+// =============================================================================
 // File Marks Structure
 // =============================================================================
 
