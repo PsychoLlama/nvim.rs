@@ -435,6 +435,9 @@ extern void rs_nv_undo(cmdarg_T *cap);
 extern void rs_nv_Undo(cmdarg_T *cap);
 extern void rs_nv_dot(cmdarg_T *cap);
 extern void rs_nv_redo_or_register(cmdarg_T *cap);
+extern void rs_nv_replace(cmdarg_T *cap);
+extern void rs_nv_Replace(cmdarg_T *cap);
+extern void rs_nv_vreplace(cmdarg_T *cap);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -1769,6 +1772,33 @@ void nvim_nv_dot_impl(cmdarg_T *cap)
 void nvim_nv_redo_or_register_impl(cmdarg_T *cap)
 {
   nv_redo_or_register_impl(cap);
+}
+
+// =============================================================================
+// Phase 6 command accessors for Rust FFI (Insert mode entry handlers)
+// =============================================================================
+
+// Forward declarations for insert mode entry handlers
+static void nv_replace_impl(cmdarg_T *cap);
+static void nv_Replace_impl(cmdarg_T *cap);
+static void nv_vreplace_impl(cmdarg_T *cap);
+
+/// Wrapper for nv_replace C implementation.
+void nvim_nv_replace_impl(cmdarg_T *cap)
+{
+  nv_replace_impl(cap);
+}
+
+/// Wrapper for nv_Replace C implementation.
+void nvim_nv_Replace_impl(cmdarg_T *cap)
+{
+  nv_Replace_impl(cap);
+}
+
+/// Wrapper for nv_vreplace C implementation.
+void nvim_nv_vreplace_impl(cmdarg_T *cap)
+{
+  nv_vreplace_impl(cap);
 }
 
 // =============================================================================
@@ -5522,6 +5552,12 @@ static void nv_kundo(cmdarg_T *cap)
 /// Handle the "r" command.
 static void nv_replace(cmdarg_T *cap)
 {
+  rs_nv_replace(cap);
+}
+
+/// Handle the "r" command (implementation).
+static void nv_replace_impl(cmdarg_T *cap)
+{
   int had_ctrl_v;
 
   if (checkclearop(cap->oap)) {
@@ -5714,6 +5750,12 @@ static void v_swap_corners(int cmdchar)
 /// "R" (cap->arg is false) and "gR" (cap->arg is true).
 static void nv_Replace(cmdarg_T *cap)
 {
+  rs_nv_Replace(cap);
+}
+
+/// "R" (cap->arg is false) and "gR" (cap->arg is true) (implementation).
+static void nv_Replace_impl(cmdarg_T *cap)
+{
   if (VIsual_active) {          // "R" is replace lines
     cap->cmdchar = 'c';
     cap->nchar = NUL;
@@ -5739,6 +5781,12 @@ static void nv_Replace(cmdarg_T *cap)
 
 /// "gr".
 static void nv_vreplace(cmdarg_T *cap)
+{
+  rs_nv_vreplace(cap);
+}
+
+/// "gr" (implementation).
+static void nv_vreplace_impl(cmdarg_T *cap)
 {
   if (VIsual_active) {
     cap->cmdchar = 'r';

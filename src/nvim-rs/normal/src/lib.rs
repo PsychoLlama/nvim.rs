@@ -1929,6 +1929,52 @@ pub unsafe extern "C" fn rs_nv_redo_or_register(cap: CapHandle) {
 }
 
 // =============================================================================
+// Phase 6: Insert mode entry handlers
+// =============================================================================
+
+extern "C" {
+    fn nvim_nv_replace_impl(cap: CapHandle);
+    fn nvim_nv_Replace_impl(cap: CapHandle);
+    fn nvim_nv_vreplace_impl(cap: CapHandle);
+}
+
+/// Command handler for "r" single-character replace.
+///
+/// Replaces character(s) under the cursor with the typed character.
+/// In Visual mode, delegates to the operator system.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_replace(cap: CapHandle) {
+    nvim_nv_replace_impl(cap);
+}
+
+/// Command handler for "R" and "gR" replace mode.
+///
+/// "R" enters replace mode, "gR" enters virtual replace mode.
+/// In Visual mode, acts as line-wise change operation.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_Replace(cap: CapHandle) {
+    nvim_nv_Replace_impl(cap);
+}
+
+/// Command handler for "gr" virtual replace.
+///
+/// Replaces a single character visually (handles virtual columns).
+/// In Visual mode, delegates to `nv_replace`.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_vreplace(cap: CapHandle) {
+    nvim_nv_vreplace_impl(cap);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
