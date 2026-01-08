@@ -16,6 +16,7 @@
 #![allow(clippy::items_after_statements)] // Allow const definitions in functions
 
 pub mod intersection;
+pub mod iter;
 pub mod node;
 
 use std::ffi::c_int;
