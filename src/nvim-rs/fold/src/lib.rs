@@ -2217,6 +2217,150 @@ pub extern "C" fn rs_newFoldLevel() {
     new_fold_level_impl();
 }
 
+// ============================================================================
+// Phase 3: Fold Creation and Deletion
+// ============================================================================
+
+extern "C" {
+    /// Initialize a garray with specified itemsize and growsize.
+    fn nvim_ga_init_folds_ex(gap: GArrayHandle, itemsize: c_int, growsize: c_int);
+
+    /// Get the ga_itemsize field from a garray.
+    fn nvim_ga_get_itemsize(gap: GArrayHandle) -> c_int;
+
+    /// Get the ga_growsize field from a garray.
+    fn nvim_ga_get_growsize(gap: GArrayHandle) -> c_int;
+
+    /// Check if a garray is empty.
+    fn nvim_ga_is_empty(gap: GArrayHandle) -> bool;
+
+    /// Get the w_folds field from a window.
+    fn nvim_win_get_w_folds(wp: WinHandle) -> GArrayHandle;
+
+    /// Set the w_foldinvalid field in a window.
+    fn nvim_win_set_w_foldinvalid(wp: WinHandle, val: bool);
+
+    /// Call deleteFoldRecurse (C implementation).
+    fn nvim_deleteFoldRecurse_c(buf: BufHandle, gap: GArrayHandle);
+}
+
+/// Deep copy a garray of folds.
+///
+/// This recursively clones all folds and their nested folds.
+fn clone_fold_grow_array_impl(from: GArrayHandle, to: GArrayHandle) {
+    if from.is_null() || to.is_null() {
+        return;
+    }
+
+    unsafe {
+        let itemsize = nvim_ga_get_itemsize(from);
+        let growsize = nvim_ga_get_growsize(from);
+        nvim_ga_init_folds_ex(to, itemsize, growsize);
+
+        if nvim_ga_is_empty(from) {
+            return;
+        }
+
+        let from_len = nvim_ga_len(from);
+        nvim_ga_grow_folds(to, from_len);
+
+        for i in 0..from_len {
+            let from_fp = nvim_ga_fold_at(from, i);
+            let to_fp = nvim_ga_fold_at(to, i);
+            if from_fp.is_null() || to_fp.is_null() {
+                continue;
+            }
+
+            // Copy basic fields
+            let fd_top = nvim_fold_get_fd_top(from_fp);
+            let fd_len = nvim_fold_get_fd_len(from_fp);
+            let fd_flags = nvim_fold_get_fd_flags(from_fp);
+            let fd_small = nvim_fold_get_fd_small(from_fp);
+
+            nvim_fold_set_fd_top(to_fp, fd_top);
+            nvim_fold_set_fd_len(to_fp, fd_len);
+            nvim_fold_set_fd_flags(to_fp, fd_flags);
+            nvim_fold_set_fd_small(to_fp, fd_small);
+
+            // Recursively clone nested folds
+            let from_nested = nvim_fold_get_fd_nested(from_fp);
+            let to_nested = nvim_fold_get_fd_nested(to_fp);
+            clone_fold_grow_array_impl(from_nested, to_nested);
+
+            // Increment ga_len
+            let to_len = nvim_ga_len(to);
+            nvim_ga_set_len(to, to_len + 1);
+        }
+    }
+}
+
+/// Copy folding state from one window to another.
+fn copy_folding_state_impl(wp_from: WinHandle, wp_to: WinHandle) {
+    if wp_from.is_null() || wp_to.is_null() {
+        return;
+    }
+
+    unsafe {
+        // Copy w_fold_manual
+        let fold_manual = nvim_win_get_w_fold_manual(wp_from);
+        nvim_win_set_w_fold_manual(wp_to, fold_manual != 0);
+
+        // Copy w_foldinvalid
+        let foldinvalid = nvim_win_get_w_foldinvalid(wp_from);
+        nvim_win_set_w_foldinvalid(wp_to, foldinvalid);
+
+        // Clone the folds
+        let from_folds = nvim_win_get_w_folds(wp_from);
+        let to_folds = nvim_win_get_w_folds(wp_to);
+        clone_fold_grow_array_impl(from_folds, to_folds);
+    }
+}
+
+/// Remove all folding for a window.
+fn clear_folding_impl(win: WinHandle) {
+    if win.is_null() {
+        return;
+    }
+
+    unsafe {
+        let buf = nvim_win_get_buffer(win);
+        let folds = nvim_win_get_w_folds(win);
+        nvim_deleteFoldRecurse_c(buf, folds);
+        nvim_win_set_w_foldinvalid(win, false);
+    }
+}
+
+// ============================================================================
+// Phase 3: FFI Exports
+// ============================================================================
+
+/// Deep copy a garray of folds.
+///
+/// # Safety
+/// The `from` and `to` parameters must be valid `garray_T*` pointers or null.
+#[no_mangle]
+pub extern "C" fn rs_cloneFoldGrowArray(from: GArrayHandle, to: GArrayHandle) {
+    clone_fold_grow_array_impl(from, to);
+}
+
+/// Copy folding state from one window to another.
+///
+/// # Safety
+/// The `wp_from` and `wp_to` parameters must be valid `win_T*` pointers or null.
+#[no_mangle]
+pub extern "C" fn rs_copyFoldingState(wp_from: WinHandle, wp_to: WinHandle) {
+    copy_folding_state_impl(wp_from, wp_to);
+}
+
+/// Remove all folding for a window.
+///
+/// # Safety
+/// The `win` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_clearFolding(win: WinHandle) {
+    clear_folding_impl(win);
+}
+
 #[cfg(test)]
 mod tests {
     // Tests require FFI stubs which aren't available in pure Rust testing.

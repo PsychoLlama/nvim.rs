@@ -140,6 +140,11 @@ extern void rs_setFoldRepeat(linenr_T lnum, int count, bool do_open);
 extern void rs_newFoldLevelWin(win_T *wp);
 extern void rs_newFoldLevel(void);
 
+// Rust FFI declarations for Phase 3: Fold Creation and Deletion
+extern void rs_cloneFoldGrowArray(garray_T *from, garray_T *to);
+extern void rs_copyFoldingState(win_T *wp_from, win_T *wp_to);
+extern void rs_clearFolding(win_T *win);
+
 // Struct returned by rs_hasFoldingWin
 typedef struct {
   int has_folding;
@@ -181,9 +186,7 @@ static size_t foldendmarkerlen;
 /// Copy that folding state from window "wp_from" to window "wp_to".
 void copyFoldingState(win_T *wp_from, win_T *wp_to)
 {
-  wp_to->w_fold_manual = wp_from->w_fold_manual;
-  wp_to->w_foldinvalid = wp_from->w_foldinvalid;
-  cloneFoldGrowArray(&wp_from->w_folds, &wp_to->w_folds);
+  rs_copyFoldingState(wp_from, wp_to);
 }
 
 // hasAnyFolding() {{{2
@@ -691,8 +694,7 @@ void deleteFold(win_T *const wp, const linenr_T start, const linenr_T end, const
 /// Remove all folding for window "win".
 void clearFolding(win_T *win)
 {
-  deleteFoldRecurse(win->w_buffer, &win->w_folds);
-  win->w_foldinvalid = false;
+  rs_clearFolding(win);
 }
 
 // foldUpdate() {{{2
@@ -948,27 +950,7 @@ void foldAdjustCursor(win_T *wp)
 /// Will "clone" (i.e deep copy) a garray_T of folds.
 void cloneFoldGrowArray(garray_T *from, garray_T *to)
 {
-  ga_init(to, from->ga_itemsize, from->ga_growsize);
-
-  if (GA_EMPTY(from)) {
-    return;
-  }
-
-  ga_grow(to, from->ga_len);
-
-  fold_T *from_p = (fold_T *)from->ga_data;
-  fold_T *to_p = (fold_T *)to->ga_data;
-
-  for (int i = 0; i < from->ga_len; i++) {
-    to_p->fd_top = from_p->fd_top;
-    to_p->fd_len = from_p->fd_len;
-    to_p->fd_flags = from_p->fd_flags;
-    to_p->fd_small = from_p->fd_small;
-    cloneFoldGrowArray(&from_p->fd_nested, &to_p->fd_nested);
-    to->ga_len++;
-    from_p++;
-    to_p++;
-  }
+  rs_cloneFoldGrowArray(from, to);
 }
 
 // foldFind() {{{2
@@ -3254,4 +3236,56 @@ linenr_T nvim_diff_lnum_win(linenr_T lnum, win_T *wp)
 void nvim_win_set_p_fdl(win_T *wp, int fdl)
 {
   wp->w_p_fdl = fdl;
+}
+
+// ============================================================================
+// Phase 3: Fold Creation and Deletion accessors
+// ============================================================================
+
+/// Initialize a garray with specified itemsize and growsize.
+void nvim_ga_init_folds_ex(garray_T *gap, int itemsize, int growsize)
+{
+  ga_init(gap, itemsize, growsize);
+}
+
+/// Get the ga_itemsize field from a garray.
+int nvim_ga_get_itemsize(garray_T *gap)
+{
+  return gap->ga_itemsize;
+}
+
+/// Get the ga_growsize field from a garray.
+int nvim_ga_get_growsize(garray_T *gap)
+{
+  return gap->ga_growsize;
+}
+
+/// Check if a garray is empty.
+bool nvim_ga_is_empty(garray_T *gap)
+{
+  return GA_EMPTY(gap);
+}
+
+/// Get the w_folds field from a window.
+garray_T *nvim_win_get_w_folds(win_T *wp)
+{
+  return &wp->w_folds;
+}
+
+/// Set the w_foldinvalid field in a window.
+void nvim_win_set_w_foldinvalid(win_T *wp, bool val)
+{
+  wp->w_foldinvalid = val;
+}
+
+/// Get the w_foldinvalid field from a window.
+bool nvim_win_get_w_foldinvalid(win_T *wp)
+{
+  return wp->w_foldinvalid;
+}
+
+/// Wrapper for deleteFoldRecurse for Rust.
+void nvim_deleteFoldRecurse_c(buf_T *buf, garray_T *gap)
+{
+  deleteFoldRecurse(buf, gap);
 }
