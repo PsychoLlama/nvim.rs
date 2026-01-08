@@ -376,42 +376,8 @@ pub unsafe extern "C" fn rs_emsg_restore_state(state: c_int) {
 
 // Additional C accessor declarations for warning functionality
 extern "C" {
-    /// Get `did_emsg_def` counter (errors in :def function)
-    fn nvim_get_did_emsg_def() -> c_int;
-    /// Set `did_emsg_def` counter
-    fn nvim_set_did_emsg_def(val: c_int);
     /// Get `did_emsg_syntax` flag
     fn nvim_get_did_emsg_syntax() -> c_int;
-}
-
-/// Get the did_emsg_def counter.
-///
-/// Incremented when an error is given for a :def function.
-///
-/// # Safety
-/// Calls C accessor function.
-#[no_mangle]
-pub unsafe extern "C" fn rs_did_emsg_def() -> c_int {
-    nvim_get_did_emsg_def()
-}
-
-/// Set the did_emsg_def counter.
-///
-/// # Safety
-/// Calls C mutator function.
-#[no_mangle]
-pub unsafe extern "C" fn rs_set_did_emsg_def(val: c_int) {
-    nvim_set_did_emsg_def(val);
-}
-
-/// Increment did_emsg_def.
-///
-/// # Safety
-/// Calls C accessor function.
-#[no_mangle]
-pub unsafe extern "C" fn rs_inc_did_emsg_def() {
-    let val = nvim_get_did_emsg_def();
-    nvim_set_did_emsg_def(val + 1);
 }
 
 /// Check if did_emsg was set because of a syntax error.
