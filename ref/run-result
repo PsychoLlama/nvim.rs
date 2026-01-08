@@ -1,30 +1,63 @@
-Plan: ~/.claude/plans/swirling-stirring-elephant.md
+Plan: ~/.claude/plans/pure-popping-coral.md
 
-The insexpand Rust crate now has **1,200 lines of Rust code** with **70 exported functions**. This is significant progress on the migration.
+All checks pass. 
 
-## Summary of Migration Progress
+## Summary
 
-### Completed Phases:
-- **Phase 1**: Completion State Accessors (~25 functions) ✓
-- **Phase 2**: Key Handling and Direction (~10 functions) ✓
-- **Phase 3**: String and Leader Management (partial - completeopt utilities) ✓
-- **Phase 4**: Completion Match Infrastructure (partial - accessors and queries) ✓
+After reviewing the plan at `/home/overlord/.claude/plans/pure-popping-coral.md`, I discovered that the planned `cmdexpand` crate functionality **already exists** in the `nvim-cmdline` crate. Here's the status:
 
-### In Progress:
-- **Phase 5**: Popup Menu Integration - functions require deep C integration
+### Already Implemented (in nvim-cmdline crate)
 
-### Pending (Phases 6-10):
-These phases require significant C integration for:
-- Match list iteration/manipulation
-- VimL evaluation (typval_T)
-- Dictionary/thesaurus file parsing
-- Buffer scanning
-- Timer/async management
+**Phase 1 - Foundation**: ✅ Complete
+- `ExpandContext` enum with all 64 expansion context types
+- `WILD_*` mode and flag constants
+- `XpBackslash` and `XpPrefix` types
+- `ExpandHandle` opaque handle type
+- C accessor function declarations
 
-### Statistics:
-- **70 exported Rust functions** (`rs_*`)
-- **~1,200 lines of Rust** code
-- **~100+ C accessor functions** added for FFI
-- All quality gates pass (fmt, clippy, tests)
+**Phase 2 - Pattern Matching**: ✅ Complete
+- `rs_addstar()` - pattern transformation for internal matching
+- `transform_to_internal_pattern()` - wildcard to regex conversion
+- `should_append_star()` - file pattern star appending logic
+- Context-based pattern handling (literal vs regex)
 
-The migration has established a solid FFI boundary using the opaque handle pattern, allowing Rust code to query completion state while C continues to manage the complex linked list structures and memory allocation. The remaining phases would require more extensive refactoring to fully migrate, but the foundation is in place for incremental progress.
+**Phase 3-7 - Helper Functions**: ✅ Partial (helpers done)
+- `calculate_next_match_index()` - match navigation
+- `calculate_file_expand_flags()` - EW_* flag calculation
+- `process_pattern_backslashes()` - backslash handling
+- `is_file_expansion_context()`, `context_needs_regex()`, etc.
+
+**Phase 8 - User Completions**: ✅ Complete
+- `COMPLETION_TYPE_NAMES` mapping
+- `type_str_to_context()` / `context_to_type_str()`
+- `is_user_completion()`, `is_valid_completion_func()`
+
+**Phase 9 - Wildmenu**: ✅ Complete
+- `translate_arrow_keys()` - key handling
+- `calculate_skip_count()` - display character skipping
+- `rs_wildmenu_match_len()` - display length calculation
+- Directory/menu navigation helpers
+
+### Current Integration Status
+
+The cmdline crate exports ~39 `rs_*` functions, but only 2 are currently used in `cmdexpand.c`:
+- `rs_cmdline_fuzzy_complete()`
+- `rs_cmdline_pum_active()`
+
+The C file `cmdexpand.c` is still 4,393 lines with most logic in C.
+
+### Next Steps (for future work)
+
+1. Integrate more `rs_*` functions from cmdline crate into cmdexpand.c
+2. Migrate the main entry points (`expand_cmdline()`, `showmatches()`)
+3. Migrate actual expansion logic for each context type
+4. Eventually remove migrated C code
+
+### Quality Status
+
+- ✅ `just rust-fmt-check` passes
+- ✅ `just rust-clippy` passes  
+- ✅ `just rust-test` passes (1561 tests)
+- ✅ Working directory is clean (no uncommitted changes)
+
+**No code changes were necessary** - the plan's Phase 1 was already implemented under a different organization (cmdline crate instead of cmdexpand crate).
