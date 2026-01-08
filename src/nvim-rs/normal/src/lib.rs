@@ -2065,6 +2065,74 @@ pub unsafe extern "C" fn rs_nv_down(cap: CapHandle) {
 }
 
 // =============================================================================
+// Phase 8: Miscellaneous handlers
+// =============================================================================
+
+extern "C" {
+    fn nvim_nv_g_cmd_impl(cap: CapHandle);
+    fn nvim_nv_at_impl(cap: CapHandle);
+    fn nvim_nv_join_impl(cap: CapHandle);
+    fn nvim_nv_open_impl(cap: CapHandle);
+}
+
+/// Command handler for "g" prefix commands.
+///
+/// Handles a large number of g-prefixed commands:
+/// - g0, g^, g$, gm, gM: screen column movement
+/// - gj, gk: display line movement
+/// - ge, gE: backward end of word
+/// - gg: go to line (default first)
+/// - gd, gD: go to definition
+/// - gf, gF: go to file under cursor
+/// - gi: go to Insert position
+/// - And many more...
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_g_cmd(cap: CapHandle) {
+    nvim_nv_g_cmd_impl(cap);
+}
+
+/// Command handler for "@" macro execution command.
+///
+/// Executes the contents of a register as normal mode commands.
+/// - @{a-z}: execute register a-z
+/// - @@: execute the last used register
+/// - @:: repeat last command-line
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_at(cap: CapHandle) {
+    nvim_nv_at_impl(cap);
+}
+
+/// Command handler for "J" and "gJ" join commands.
+///
+/// - J: Join lines with space, adjusting whitespace
+/// - gJ: Join lines without adjusting whitespace
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_join(cap: CapHandle) {
+    nvim_nv_join_impl(cap);
+}
+
+/// Command handler for "o" and "O" open line commands.
+///
+/// - o: Open a new line below the cursor and enter Insert mode
+/// - O: Open a new line above the cursor and enter Insert mode
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_open(cap: CapHandle) {
+    nvim_nv_open_impl(cap);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

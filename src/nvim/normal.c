@@ -444,6 +444,10 @@ extern void rs_nv_right(cmdarg_T *cap);
 extern void rs_nv_left(cmdarg_T *cap);
 extern void rs_nv_up(cmdarg_T *cap);
 extern void rs_nv_down(cmdarg_T *cap);
+extern void rs_nv_g_cmd(cmdarg_T *cap);
+extern void rs_nv_at(cmdarg_T *cap);
+extern void rs_nv_join(cmdarg_T *cap);
+extern void rs_nv_open(cmdarg_T *cap);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -1853,6 +1857,40 @@ void nvim_nv_up_impl(cmdarg_T *cap)
 void nvim_nv_down_impl(cmdarg_T *cap)
 {
   nv_down_impl(cap);
+}
+
+// =============================================================================
+// Phase 8 command accessors for Rust FFI (Miscellaneous handlers)
+// =============================================================================
+
+// Forward declarations for miscellaneous handlers
+static void nv_g_cmd_impl(cmdarg_T *cap);
+static void nv_at_impl(cmdarg_T *cap);
+static void nv_join_impl(cmdarg_T *cap);
+static void nv_open_impl(cmdarg_T *cap);
+
+/// Wrapper for nv_g_cmd C implementation.
+void nvim_nv_g_cmd_impl(cmdarg_T *cap)
+{
+  nv_g_cmd_impl(cap);
+}
+
+/// Wrapper for nv_at C implementation.
+void nvim_nv_at_impl(cmdarg_T *cap)
+{
+  nv_at_impl(cap);
+}
+
+/// Wrapper for nv_join C implementation.
+void nvim_nv_join_impl(cmdarg_T *cap)
+{
+  nv_join_impl(cap);
+}
+
+/// Wrapper for nv_open C implementation.
+void nvim_nv_open_impl(cmdarg_T *cap)
+{
+  nv_open_impl(cap);
 }
 
 // =============================================================================
@@ -6491,6 +6529,12 @@ static void nv_gi_cmd(cmdarg_T *cap)
 /// Commands starting with "g".
 static void nv_g_cmd(cmdarg_T *cap)
 {
+  rs_nv_g_cmd(cap);
+}
+
+/// Commands starting with "g" (implementation).
+static void nv_g_cmd_impl(cmdarg_T *cap)
+{
   oparg_T *oap = cap->oap;
   int i;
 
@@ -7354,6 +7398,12 @@ static void nv_record(cmdarg_T *cap)
 /// Handle the "@r" command.
 static void nv_at(cmdarg_T *cap)
 {
+  rs_nv_at(cap);
+}
+
+/// Handle the "@r" command (implementation).
+static void nv_at_impl(cmdarg_T *cap)
+{
   if (checkclearop(cap->oap)) {
     return;
   }
@@ -7379,6 +7429,12 @@ static void nv_halfpage(cmdarg_T *cap)
 
 /// Handle "J" or "gJ" command.
 static void nv_join(cmdarg_T *cap)
+{
+  rs_nv_join(cap);
+}
+
+/// Handle "J" or "gJ" command (implementation).
+static void nv_join_impl(cmdarg_T *cap)
 {
   if (VIsual_active) {  // join the visual lines
     nv_operator(cap);
@@ -7567,6 +7623,12 @@ static void nv_put_opt(cmdarg_T *cap, bool fix_indent)
 
 /// "o" and "O" commands.
 static void nv_open(cmdarg_T *cap)
+{
+  rs_nv_open(cap);
+}
+
+/// "o" and "O" commands (implementation).
+static void nv_open_impl(cmdarg_T *cap)
 {
   // "do" is ":diffget"
   if (cap->oap->op_type == OP_DELETE && cap->cmdchar == 'o') {
