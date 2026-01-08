@@ -1870,6 +1870,65 @@ pub unsafe extern "C" fn rs_nv_brackets(cap: CapHandle) {
 }
 
 // =============================================================================
+// Phase 5: Undo/Redo handlers
+// =============================================================================
+
+extern "C" {
+    fn nvim_nv_undo_impl(cap: CapHandle);
+    fn nvim_nv_Undo_impl(cap: CapHandle);
+    fn nvim_nv_dot_impl(cap: CapHandle);
+    fn nvim_nv_redo_or_register_impl(cap: CapHandle);
+}
+
+/// Command handler for "u" undo command.
+///
+/// In Visual mode or when `op_type` is `OP_LOWER`, translates to `gu` command.
+/// Otherwise performs undo via `nv_kundo`.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_undo(cap: CapHandle) {
+    nvim_nv_undo_impl(cap);
+}
+
+/// Command handler for "U" line undo command.
+///
+/// In Visual mode or when `op_type` is `OP_UPPER`, translates to `gU` command.
+/// Otherwise performs line undo via `u_undoline`.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_Undo(cap: CapHandle) {
+    nvim_nv_Undo_impl(cap);
+}
+
+/// Command handler for "." repeat command.
+///
+/// Repeats the last change. If `restart_edit` is true, repeats the last but one
+/// command instead (used for CTRL-O <.> in insert mode).
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_dot(cap: CapHandle) {
+    nvim_nv_dot_impl(cap);
+}
+
+/// Command handler for CTRL-R (redo or register selection).
+///
+/// In Visual select mode, selects a register for the next operation.
+/// Otherwise, performs redo via `u_redo`.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_redo_or_register(cap: CapHandle) {
+    nvim_nv_redo_or_register_impl(cap);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

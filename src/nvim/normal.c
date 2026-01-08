@@ -431,6 +431,10 @@ extern void rs_nv_subst(cmdarg_T *cap);
 extern void rs_nv_object(cmdarg_T *cap);
 extern void rs_nv_select(cmdarg_T *cap);
 extern void rs_nv_brackets(cmdarg_T *cap);
+extern void rs_nv_undo(cmdarg_T *cap);
+extern void rs_nv_Undo(cmdarg_T *cap);
+extern void rs_nv_dot(cmdarg_T *cap);
+extern void rs_nv_redo_or_register(cmdarg_T *cap);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -1731,6 +1735,40 @@ void nvim_nv_select_impl(cmdarg_T *cap)
 void nvim_nv_brackets_impl(cmdarg_T *cap)
 {
   nv_brackets_impl(cap);
+}
+
+// =============================================================================
+// Phase 5 command accessors for Rust FFI (Undo/Redo handlers)
+// =============================================================================
+
+// Forward declarations for undo/redo handlers
+static void nv_undo_impl(cmdarg_T *cap);
+static void nv_Undo_impl(cmdarg_T *cap);
+static void nv_dot_impl(cmdarg_T *cap);
+static void nv_redo_or_register_impl(cmdarg_T *cap);
+
+/// Wrapper for nv_undo C implementation.
+void nvim_nv_undo_impl(cmdarg_T *cap)
+{
+  nv_undo_impl(cap);
+}
+
+/// Wrapper for nv_Undo C implementation.
+void nvim_nv_Undo_impl(cmdarg_T *cap)
+{
+  nv_Undo_impl(cap);
+}
+
+/// Wrapper for nv_dot C implementation.
+void nvim_nv_dot_impl(cmdarg_T *cap)
+{
+  nv_dot_impl(cap);
+}
+
+/// Wrapper for nv_redo_or_register C implementation.
+void nvim_nv_redo_or_register_impl(cmdarg_T *cap)
+{
+  nv_redo_or_register_impl(cap);
 }
 
 // =============================================================================
@@ -5458,6 +5496,12 @@ static void nv_findpar(cmdarg_T *cap)
 /// "u" command: Undo or make lower case.
 static void nv_undo(cmdarg_T *cap)
 {
+  rs_nv_undo(cap);
+}
+
+/// "u" command: Undo or make lower case (implementation).
+static void nv_undo_impl(cmdarg_T *cap)
+{
   if (cap->oap->op_type == OP_LOWER
       || VIsual_active) {
     // translate "<Visual>u" to "<Visual>gu" and "guu" to "gugu"
@@ -6671,6 +6715,12 @@ static void n_opencmd(cmdarg_T *cap)
 /// "." command: redo last change.
 static void nv_dot(cmdarg_T *cap)
 {
+  rs_nv_dot(cap);
+}
+
+/// "." command: redo last change (implementation).
+static void nv_dot_impl(cmdarg_T *cap)
+{
   if (checkclearopq(cap->oap)) {
     return;
   }
@@ -6685,6 +6735,12 @@ static void nv_dot(cmdarg_T *cap)
 
 /// CTRL-R: undo undo or specify register in select mode
 static void nv_redo_or_register(cmdarg_T *cap)
+{
+  rs_nv_redo_or_register(cap);
+}
+
+/// CTRL-R: undo undo or specify register in select mode (implementation)
+static void nv_redo_or_register_impl(cmdarg_T *cap)
 {
   if (VIsual_select && VIsual_active) {
     // Get register name
@@ -6712,6 +6768,12 @@ static void nv_redo_or_register(cmdarg_T *cap)
 
 /// Handle "U" command.
 static void nv_Undo(cmdarg_T *cap)
+{
+  rs_nv_Undo(cap);
+}
+
+/// Handle "U" command (implementation).
+static void nv_Undo_impl(cmdarg_T *cap)
 {
   // In Visual mode and typing "gUU" triggers an operator
   if (cap->oap->op_type == OP_UPPER || VIsual_active) {
