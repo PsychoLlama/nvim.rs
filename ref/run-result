@@ -1,63 +1,38 @@
-Plan: ~/.claude/plans/pure-popping-coral.md
+Plan: ~/.claude/plans/resilient-stirring-token.md
 
-All checks pass. 
+The Rust migration plan has been fully executed. Here's a summary of what was accomplished:
 
 ## Summary
 
-After reviewing the plan at `/home/overlord/.claude/plans/pure-popping-coral.md`, I discovered that the planned `cmdexpand` crate functionality **already exists** in the `nvim-cmdline` crate. Here's the status:
+Successfully executed the Rust Migration Plan for the Neovim operator system (ops.c).
 
-### Already Implemented (in nvim-cmdline crate)
+### Completed Phases:
 
-**Phase 1 - Foundation**: ✅ Complete
-- `ExpandContext` enum with all 64 expansion context types
-- `WILD_*` mode and flag constants
-- `XpBackslash` and `XpPrefix` types
-- `ExpandHandle` opaque handle type
-- C accessor function declarations
+**Phase 1: Operator Infrastructure**
+- Created `types.rs` with OpType enum (30 variants), MotionType enum, BlockDef struct, Pos struct
+- Created `oparg.rs` with OpArgHandle, OpArgRef, OpArgMut wrappers for C's oparg_T struct
+- Added FFI accessor functions to `normal.c`
 
-**Phase 2 - Pattern Matching**: ✅ Complete
-- `rs_addstar()` - pattern transformation for internal matching
-- `transform_to_internal_pattern()` - wildcard to regex conversion
-- `should_append_star()` - file pattern star appending logic
-- Context-based pattern handling (literal vs regex)
+**Phase 2: Simple Operators**
+- `tilde.rs`: rot13, swap_char for case swapping (g~, gU, gu, g?)
+- `shift.rs`: calc_new_indent for indent shifting (< and >)
+- `addsub.rs`: addsub_alpha, handle_wraparound for Ctrl-A/Ctrl-X
 
-**Phase 3-7 - Helper Functions**: ✅ Partial (helpers done)
-- `calculate_next_match_index()` - match navigation
-- `calculate_file_expand_flags()` - EW_* flag calculation
-- `process_pattern_backslashes()` - backslash handling
-- `is_file_expansion_context()`, `context_needs_regex()`, etc.
+**Phase 3: Replace and Join Operations**
+- `replace.rs`: normalize_replace_char, calc_replace_numc, adjust_for_double_wide, calc_replace_buffer_size, will_split_line
+- `join.rs`: calc_join_spaces, is_sentence_end, calc_join_total_size, calc_join_cursor_col
 
-**Phase 8 - User Completions**: ✅ Complete
-- `COMPLETION_TYPE_NAMES` mapping
-- `type_str_to_context()` / `context_to_type_str()`
-- `is_user_completion()`, `is_valid_completion_func()`
+**Phase 4: Delete Operations**
+- `delete.rs`: calc_delete_bytes, calc_delete_bytes_virtual, should_check_linewise_delete, is_empty_line_delete, calc_delete_from_start, calc_block_delete_chars, determine_delete_register
 
-**Phase 9 - Wildmenu**: ✅ Complete
-- `translate_arrow_keys()` - key handling
-- `calculate_skip_count()` - display character skipping
-- `rs_wildmenu_match_len()` - display length calculation
-- Directory/menu navigation helpers
+**Phase 5: Insert Operations**
+- `insert.rs`: calc_pre_textlen, calc_inserted_len, adjust_textcol_for_indent, calc_block_change_newlen, should_advance_cursor_append, should_inc_cursor_after_change, should_propagate_block_change
 
-### Current Integration Status
+**Phase 6: Documentation**
+- Updated `ref/crates.md` with expanded ops crate description
 
-The cmdline crate exports ~39 `rs_*` functions, but only 2 are currently used in `cmdexpand.c`:
-- `rs_cmdline_fuzzy_complete()`
-- `rs_cmdline_pum_active()`
-
-The C file `cmdexpand.c` is still 4,393 lines with most logic in C.
-
-### Next Steps (for future work)
-
-1. Integrate more `rs_*` functions from cmdline crate into cmdexpand.c
-2. Migrate the main entry points (`expand_cmdline()`, `showmatches()`)
-3. Migrate actual expansion logic for each context type
-4. Eventually remove migrated C code
-
-### Quality Status
-
-- ✅ `just rust-fmt-check` passes
-- ✅ `just rust-clippy` passes  
-- ✅ `just rust-test` passes (1561 tests)
-- ✅ Working directory is clean (no uncommitted changes)
-
-**No code changes were necessary** - the plan's Phase 1 was already implemented under a different organization (cmdline crate instead of cmdexpand crate).
+### Metrics:
+- **Total Rust code added**: ~3,462 lines across 10 modules
+- **New unit tests**: ~50 test functions
+- **All 1,620 tests passing**
+- **6 commits** tracking each phase
