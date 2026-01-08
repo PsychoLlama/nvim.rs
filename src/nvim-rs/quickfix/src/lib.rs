@@ -8,6 +8,7 @@ use std::ffi::{c_char, c_int, c_void};
 // Submodules
 // =============================================================================
 
+pub mod filter;
 pub mod list;
 pub mod navigate;
 pub mod parse;
