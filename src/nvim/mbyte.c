@@ -1350,6 +1350,12 @@ void mb_adjust_cursor(void)
   mark_mb_adjustpos(curbuf, &curwin->w_cursor);
 }
 
+/// C accessor for mb_adjust_cursor (for Rust FFI).
+void nvim_mb_adjust_cursor(void)
+{
+  mb_adjust_cursor();
+}
+
 /// Checks and adjusts cursor column. Not mode-dependent.
 /// @see check_cursor_col
 ///

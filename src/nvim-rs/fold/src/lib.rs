@@ -2484,6 +2484,166 @@ pub extern "C" fn rs_foldMarkAdjust(
     fold_mark_adjust_impl(wp, line1, line2, amount, amount_after);
 }
 
+// ============================================================================
+// Phase 5: Navigation and Display
+// ============================================================================
+
+extern "C" {
+    /// Get the VIsual_active global.
+    fn nvim_get_VIsual_active() -> c_int;
+
+    /// Get VIsual position lnum.
+    fn nvim_get_VIsual_lnum() -> c_int;
+
+    /// Set VIsual lnum.
+    fn nvim_set_VIsual_lnum(lnum: c_int);
+
+    /// Set VIsual col.
+    fn nvim_set_VIsual_col(col: c_int);
+
+    /// Set cursor lnum in window.
+    fn nvim_win_set_cursor_lnum(wp: WinHandle, lnum: LineNr);
+
+    /// Set cursor col in window.
+    fn nvim_win_set_cursor_col(wp: WinHandle, col: ColNr);
+
+    /// Get length of line.
+    fn ml_get_len(lnum: LineNr) -> ColNr;
+
+    /// Get p_sel option first char ('o' for old, 'e' for exclusive).
+    fn nvim_get_p_sel_first() -> c_char;
+
+    /// Call mb_adjust_cursor().
+    fn nvim_mb_adjust_cursor();
+
+    /// Check if fold at lnum is closed and get first/last line.
+    fn nvim_hasFolding(
+        wp: WinHandle,
+        lnum: LineNr,
+        firstp: *mut LineNr,
+        lastp: *mut LineNr,
+    ) -> c_int;
+}
+
+/// Column number type.
+type ColNr = c_int;
+
+/// Move the cursor to the first line of a closed fold.
+fn fold_adjust_cursor_impl(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+
+    let cursor_lnum = unsafe { nvim_win_get_cursor_lnum(wp) };
+    let mut first_lnum: LineNr = 0;
+    let result =
+        unsafe { nvim_hasFolding(wp, cursor_lnum, &raw mut first_lnum, std::ptr::null_mut()) };
+    if result != 0 {
+        unsafe { nvim_win_set_cursor_lnum(wp, first_lnum) };
+    }
+}
+
+/// Adjust the Visual area to include any fold at the start or end completely.
+fn fold_adjust_visual_impl() {
+    let curwin = unsafe { nvim_get_curwin() };
+
+    // Check VIsual_active and hasAnyFolding
+    if unsafe { nvim_get_VIsual_active() } == 0 || !has_any_folding_impl(curwin) {
+        return;
+    }
+
+    // Determine start and end positions
+    let visual_lnum = LineNr::from(unsafe { nvim_get_VIsual_lnum() });
+    let cursor_lnum = unsafe { nvim_win_get_cursor_lnum(curwin) };
+
+    // Check which is start vs end (ltoreq comparison)
+    let (start_lnum, end_lnum, start_is_visual) = if visual_lnum <= cursor_lnum {
+        (visual_lnum, cursor_lnum, true)
+    } else {
+        (cursor_lnum, visual_lnum, false)
+    };
+
+    // Adjust start position
+    let mut first_lnum: LineNr = 0;
+    if unsafe {
+        nvim_hasFolding(
+            curwin,
+            start_lnum,
+            &raw mut first_lnum,
+            std::ptr::null_mut(),
+        )
+    } != 0
+    {
+        if start_is_visual {
+            #[allow(clippy::cast_possible_truncation)]
+            unsafe {
+                nvim_set_VIsual_lnum(first_lnum as c_int);
+                nvim_set_VIsual_col(0);
+            }
+        } else {
+            unsafe {
+                nvim_win_set_cursor_lnum(curwin, first_lnum);
+                nvim_win_set_cursor_col(curwin, 0);
+            }
+        }
+    }
+
+    // Adjust end position
+    let mut last_lnum: LineNr = 0;
+    if unsafe { nvim_hasFolding(curwin, end_lnum, std::ptr::null_mut(), &raw mut last_lnum) } == 0 {
+        return;
+    }
+
+    let line_len = unsafe { ml_get_len(last_lnum) };
+    let mut end_col = line_len;
+    if end_col > 0 {
+        let p_sel = unsafe { nvim_get_p_sel_first() };
+        if p_sel == b'o' as c_char {
+            end_col -= 1;
+        }
+    }
+
+    if start_is_visual {
+        // end is cursor
+        unsafe {
+            nvim_win_set_cursor_lnum(curwin, last_lnum);
+            nvim_win_set_cursor_col(curwin, end_col);
+        }
+    } else {
+        // end is VIsual
+        #[allow(clippy::cast_possible_truncation)]
+        unsafe {
+            nvim_set_VIsual_lnum(last_lnum as c_int);
+            nvim_set_VIsual_col(end_col);
+        }
+    }
+
+    // Prevent cursor from moving on the trail byte
+    unsafe { nvim_mb_adjust_cursor() };
+}
+
+// ============================================================================
+// Phase 5: FFI Exports
+// ============================================================================
+
+/// Move the cursor to the first line of a closed fold.
+///
+/// # Safety
+/// The `wp` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_foldAdjustCursor(wp: WinHandle) {
+    fold_adjust_cursor_impl(wp);
+}
+
+/// Adjust the Visual area to include any fold at the start or end completely.
+///
+/// # Safety
+/// This function is safe to call from C.
+#[no_mangle]
+pub extern "C" fn rs_foldAdjustVisual() {
+    fold_adjust_visual_impl();
+}
+
 #[cfg(test)]
 mod tests {
     // Tests require FFI stubs which aren't available in pure Rust testing.

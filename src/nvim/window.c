@@ -1325,6 +1325,18 @@ colnr_T nvim_win_get_cursor_col(win_T *wp)
   return wp->w_cursor.col;
 }
 
+/// Set the cursor line number.
+void nvim_win_set_cursor_lnum(win_T *wp, linenr_T lnum)
+{
+  wp->w_cursor.lnum = lnum;
+}
+
+/// Set the cursor column.
+void nvim_win_set_cursor_col(win_T *wp, colnr_T col)
+{
+  wp->w_cursor.col = col;
+}
+
 /// Get the cursor coladd.
 colnr_T nvim_win_get_cursor_coladd(win_T *wp)
 {

@@ -151,6 +151,10 @@ extern void rs_foldUpdateAfterInsert(void);
 extern void rs_foldMarkAdjust(win_T *wp, linenr_T line1, linenr_T line2,
                               linenr_T amount, linenr_T amount_after);
 
+// Rust FFI declarations for Phase 5: Navigation and Display
+extern void rs_foldAdjustCursor(win_T *wp);
+extern void rs_foldAdjustVisual(void);
+
 // Struct returned by rs_hasFoldingWin
 typedef struct {
   int has_folding;
@@ -914,40 +918,14 @@ int find_wl_entry(win_T *win, linenr_T lnum)
 /// Adjust the Visual area to include any fold at the start or end completely.
 void foldAdjustVisual(void)
 {
-  if (!VIsual_active || !hasAnyFolding(curwin)) {
-    return;
-  }
-
-  pos_T *start, *end;
-
-  if (ltoreq(VIsual, curwin->w_cursor)) {
-    start = &VIsual;
-    end = &curwin->w_cursor;
-  } else {
-    start = &curwin->w_cursor;
-    end = &VIsual;
-  }
-  if (hasFolding(curwin, start->lnum, &start->lnum, NULL)) {
-    start->col = 0;
-  }
-
-  if (!hasFolding(curwin, end->lnum, NULL, &end->lnum)) {
-    return;
-  }
-
-  end->col = ml_get_len(end->lnum);
-  if (end->col > 0 && *p_sel == 'o') {
-    end->col--;
-  }
-  // prevent cursor from moving on the trail byte
-  mb_adjust_cursor();
+  rs_foldAdjustVisual();
 }
 
 // foldAdjustCursor() {{{2
 /// Move the cursor to the first line of a closed fold.
 void foldAdjustCursor(win_T *wp)
 {
-  hasFolding(wp, wp->w_cursor.lnum, &wp->w_cursor.lnum, NULL);
+  rs_foldAdjustCursor(wp);
 }
 
 // Internal functions for "fold_T" {{{1
