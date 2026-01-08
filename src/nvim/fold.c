@@ -132,6 +132,14 @@ extern void rs_foldMerge(win_T *wp, int fp1_idx, garray_T *gap, int fp2_idx);
 extern void rs_foldMarkAdjustRecurse(win_T *wp, garray_T *gap, linenr_T line1,
                                      linenr_T line2, linenr_T amount, linenr_T amount_after);
 
+// Rust FFI declarations for Phase 2: Fold State Management
+extern linenr_T rs_setManualFoldWin(win_T *wp, linenr_T lnum, bool opening,
+                                    bool recurse, int *donep);
+extern linenr_T rs_setManualFold(linenr_T lnum, bool opening, bool recurse, int *donep);
+extern void rs_setFoldRepeat(linenr_T lnum, int count, bool do_open);
+extern void rs_newFoldLevelWin(win_T *wp);
+extern void rs_newFoldLevel(void);
+
 // Struct returned by rs_hasFoldingWin
 typedef struct {
   int has_folding;
@@ -421,33 +429,12 @@ void foldOpenCursor(void)
 /// Set new foldlevel for current window.
 void newFoldLevel(void)
 {
-  newFoldLevelWin(curwin);
-
-  if (foldmethodIsDiff(curwin) && curwin->w_p_scb) {
-    // Set the same foldlevel in other windows in diff mode.
-    FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-      if (wp != curwin && foldmethodIsDiff(wp) && wp->w_p_scb) {
-        wp->w_p_fdl = curwin->w_p_fdl;
-        newFoldLevelWin(wp);
-      }
-    }
-  }
+  rs_newFoldLevel();
 }
 
 static void newFoldLevelWin(win_T *wp)
 {
-  checkupdate(wp);
-  if (wp->w_fold_manual) {
-    // Set all flags for the first level of folds to FD_LEVEL.  Following
-    // manual open/close will then change the flags to FD_OPEN or
-    // FD_CLOSED for those folds that don't use 'foldlevel'.
-    fold_T *fp = (fold_T *)wp->w_folds.ga_data;
-    for (int i = 0; i < wp->w_folds.ga_len; i++) {
-      fp[i].fd_flags = FD_LEVEL;
-    }
-    wp->w_fold_manual = false;
-  }
-  changed_window_setting(wp);
+  rs_newFoldLevelWin(wp);
 }
 
 // foldCheckClose() {{{2
@@ -1045,17 +1032,7 @@ static void checkupdate(win_T *wp)
 /// Repeat "count" times.
 static void setFoldRepeat(pos_T pos, int count, int do_open)
 {
-  for (int n = 0; n < count; n++) {
-    int done = DONE_NOTHING;
-    setManualFold(pos, do_open, false, &done);
-    if (!(done & DONE_ACTION)) {
-      // Only give an error message when no fold could be opened.
-      if (n == 0 && !(done & DONE_FOLD)) {
-        emsg(_(e_nofold));
-      }
-      break;
-    }
-  }
+  rs_setFoldRepeat(pos.lnum, count, do_open);
 }
 
 // setManualFold() {{{2
@@ -1066,22 +1043,7 @@ static void setFoldRepeat(pos_T pos, int count, int do_open)
 /// @param recurse  true when closing/opening recursive
 static linenr_T setManualFold(pos_T pos, bool opening, bool recurse, int *donep)
 {
-  if (foldmethodIsDiff(curwin) && curwin->w_p_scb) {
-    linenr_T dlnum;
-
-    // Do the same operation in other windows in diff mode.  Calculate the
-    // line number from the diffs.
-    FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-      if (wp != curwin && foldmethodIsDiff(wp) && wp->w_p_scb) {
-        dlnum = diff_lnum_win(curwin->w_cursor.lnum, wp);
-        if (dlnum != 0) {
-          setManualFoldWin(wp, dlnum, opening, recurse, NULL);
-        }
-      }
-    }
-  }
-
-  return setManualFoldWin(curwin, pos.lnum, opening, recurse, donep);
+  return rs_setManualFold(pos.lnum, opening, recurse, donep);
 }
 
 // setManualFoldWin() {{{2
@@ -1098,92 +1060,7 @@ static linenr_T setManualFold(pos_T pos, bool opening, bool recurse, int *donep)
 ///                 It's only valid when "opening" is true!
 static linenr_T setManualFoldWin(win_T *wp, linenr_T lnum, bool opening, bool recurse, int *donep)
 {
-  fold_T *fp;
-  fold_T *fp2;
-  fold_T *found = NULL;
-  int level = 0;
-  bool use_level = false;
-  bool found_fold = false;
-  linenr_T next = MAXLNUM;
-  linenr_T off = 0;
-  int done = 0;
-
-  checkupdate(wp);
-
-  // Find the fold, open or close it.
-  garray_T *gap = &wp->w_folds;
-  while (true) {
-    if (!foldFind(gap, lnum, &fp)) {
-      // If there is a following fold, continue there next time.
-      if (fp != NULL && fp < (fold_T *)gap->ga_data + gap->ga_len) {
-        next = fp->fd_top + off;
-      }
-      break;
-    }
-
-    // lnum is inside this fold
-    found_fold = true;
-
-    // If there is a following fold, continue there next time.
-    if (fp + 1 < (fold_T *)gap->ga_data + gap->ga_len) {
-      next = fp[1].fd_top + off;
-    }
-
-    // Change from level-dependent folding to manual.
-    if (use_level || fp->fd_flags == FD_LEVEL) {
-      use_level = true;
-      fp->fd_flags = level >= wp->w_p_fdl ? FD_CLOSED : FD_OPEN;
-      fp2 = (fold_T *)fp->fd_nested.ga_data;
-      for (int j = 0; j < fp->fd_nested.ga_len; j++) {
-        fp2[j].fd_flags = FD_LEVEL;
-      }
-    }
-
-    // Simple case: Close recursively means closing the fold.
-    if (!opening && recurse) {
-      if (fp->fd_flags != FD_CLOSED) {
-        done |= DONE_ACTION;
-        fp->fd_flags = FD_CLOSED;
-      }
-    } else if (fp->fd_flags == FD_CLOSED) {
-      // When opening, open topmost closed fold.
-      if (opening) {
-        fp->fd_flags = FD_OPEN;
-        done |= DONE_ACTION;
-        if (recurse) {
-          foldOpenNested(fp);
-        }
-      }
-      break;
-    }
-
-    // fold is open, check nested folds
-    found = fp;
-    gap = &fp->fd_nested;
-    lnum -= fp->fd_top;
-    off += fp->fd_top;
-    level++;
-  }
-  if (found_fold) {
-    // When closing and not recurse, close deepest open fold.
-    if (!opening && found != NULL) {
-      found->fd_flags = FD_CLOSED;
-      done |= DONE_ACTION;
-    }
-    wp->w_fold_manual = true;
-    if (done & DONE_ACTION) {
-      changed_window_setting(wp);
-    }
-    done |= DONE_FOLD;
-  } else if (donep == NULL && wp == curwin) {
-    emsg(_(e_nofold));
-  }
-
-  if (donep != NULL) {
-    *donep |= done;
-  }
-
-  return next;
+  return rs_setManualFoldWin(wp, lnum, opening, recurse, donep);
 }
 
 // foldOpenNested() {{{2
@@ -3307,12 +3184,6 @@ void nvim_fold_copy(fold_T *dst, const fold_T *src)
   *dst = *src;
 }
 
-/// Get the buffer from a window.
-buf_T *nvim_win_get_buffer(win_T *wp)
-{
-  return wp->w_buffer;
-}
-
 /// Call deleteFoldRecurse from Rust (to recursively free nested fold memory).
 void nvim_deleteFoldRecurse(buf_T *buf, garray_T *gap)
 {
@@ -3337,4 +3208,50 @@ void nvim_set_fold_changed(bool changed)
 bool nvim_get_fold_changed(void)
 {
   return fold_changed;
+}
+
+// ============================================================================
+// Phase 2: Fold State Management accessors
+// ============================================================================
+
+/// Set the w_fold_manual field in a window.
+void nvim_win_set_w_fold_manual(win_T *wp, bool val)
+{
+  wp->w_fold_manual = val;
+}
+
+/// Call changed_window_setting for a window.
+void nvim_changed_window_setting(win_T *wp)
+{
+  changed_window_setting(wp);
+}
+
+/// Emit the "no fold found" error message.
+void nvim_emsg_nofold(void)
+{
+  emsg(_(e_nofold));
+}
+
+/// Get the w_p_scb (scrollbind) field from a window.
+bool nvim_win_get_p_scb(win_T *wp)
+{
+  return wp->w_p_scb;
+}
+
+/// Get the first window in the current tab.
+win_T *nvim_get_first_win_in_tab(void)
+{
+  return curtab->tp_firstwin;
+}
+
+/// Wrapper for diff_lnum_win.
+linenr_T nvim_diff_lnum_win(linenr_T lnum, win_T *wp)
+{
+  return diff_lnum_win(lnum, wp);
+}
+
+/// Set the w_p_fdl (foldlevel) field in a window.
+void nvim_win_set_p_fdl(win_T *wp, int fdl)
+{
+  wp->w_p_fdl = fdl;
 }

@@ -286,6 +286,40 @@ extern "C" {
     /// Get the fold_changed flag.
     #[allow(dead_code)]
     fn nvim_get_fold_changed() -> bool;
+
+    // ========================================================================
+    // Phase 2: Fold State Management accessors
+    // ========================================================================
+
+    /// Get the w_fold_manual field from a window.
+    fn nvim_win_get_w_fold_manual(wp: WinHandle) -> c_int;
+
+    /// Set the w_fold_manual field in a window.
+    fn nvim_win_set_w_fold_manual(wp: WinHandle, val: bool);
+
+    /// Call changed_window_setting for a window.
+    fn nvim_changed_window_setting(wp: WinHandle);
+
+    /// Emit the "no fold found" error message.
+    fn nvim_emsg_nofold();
+
+    /// Get the w_p_scb (scrollbind) field from a window.
+    fn nvim_win_get_p_scb(wp: WinHandle) -> bool;
+
+    /// Get the cursor lnum from a window.
+    fn nvim_win_get_cursor_lnum(wp: WinHandle) -> LineNr;
+
+    /// Get the first window in the current tab.
+    fn nvim_get_first_win_in_tab() -> WinHandle;
+
+    /// Get the next window in a tab (from w_next).
+    fn nvim_win_get_next(wp: WinHandle) -> WinHandle;
+
+    /// Wrapper for diff_lnum_win.
+    fn nvim_diff_lnum_win(lnum: LineNr, wp: WinHandle) -> LineNr;
+
+    /// Set the w_p_fdl (foldlevel) field in a window.
+    fn nvim_win_set_p_fdl(wp: WinHandle, fdl: c_int);
 }
 
 // ============================================================================
@@ -1842,6 +1876,345 @@ pub extern "C" fn rs_foldMarkAdjustRecurse(
     amount_after: LineNr,
 ) {
     fold_mark_adjust_recurse_impl(wp, gap, line1, line2, amount, amount_after);
+}
+
+// ============================================================================
+// Phase 2: Fold State Management Functions
+// ============================================================================
+
+/// Flags for open/close done state.
+mod done_flags {
+    use std::ffi::c_int;
+
+    /// No action taken.
+    pub const DONE_NOTHING: c_int = 0;
+    /// Found a fold.
+    pub const DONE_FOLD: c_int = 1;
+    /// Opened or closed a fold.
+    pub const DONE_ACTION: c_int = 2;
+}
+
+/// Maximum line number constant.
+const MAXLNUM: LineNr = LineNr::MAX;
+
+/// Open or close the fold in window "wp" which contains "lnum".
+///
+/// "donep", when not NULL, points to flag that is set to DONE_FOLD when some
+/// fold was found and to DONE_ACTION when some fold was opened or closed.
+/// When "donep" is NULL give an error message when no fold was found for
+/// "lnum", but only if "wp" is "curwin".
+///
+/// Returns the line number of the next line that could be closed.
+/// It's only valid when "opening" is true!
+#[allow(clippy::too_many_lines)]
+fn set_manual_fold_win_impl(
+    wp: WinHandle,
+    lnum: LineNr,
+    opening: bool,
+    recurse: bool,
+    done_out: *mut c_int,
+) -> LineNr {
+    if wp.is_null() {
+        return MAXLNUM;
+    }
+
+    // checkupdate(wp)
+    unsafe { nvim_checkupdate(wp) };
+
+    let mut level = 0;
+    let mut use_level = false;
+    let mut found_fold = false;
+    let mut next = MAXLNUM;
+    let mut off: LineNr = 0;
+    let mut done: c_int = done_flags::DONE_NOTHING;
+    let mut found_idx: Option<(GArrayHandle, c_int)> = None;
+    let mut lnum = lnum;
+
+    // Find the fold, open or close it.
+    let mut gap = unsafe { nvim_win_get_folds(wp) };
+
+    loop {
+        // Find fold containing lnum
+        let Some((found, fp_idx)) = fold_find_with_idx(gap, lnum) else {
+            // No fold found at all
+            break;
+        };
+
+        if !found {
+            // If there is a following fold, continue there next time.
+            let len = unsafe { nvim_ga_len(gap) };
+            if fp_idx < len {
+                let fp = unsafe { nvim_ga_fold_at(gap, fp_idx) };
+                if !fp.is_null() {
+                    let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+                    next = fd_top + off;
+                }
+            }
+            break;
+        }
+
+        let fp = unsafe { nvim_ga_fold_at(gap, fp_idx) };
+        if fp.is_null() {
+            break;
+        }
+
+        // lnum is inside this fold
+        found_fold = true;
+
+        let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+        let fd_flags = unsafe { nvim_fold_get_fd_flags(fp) };
+        let nested = unsafe { nvim_fold_get_fd_nested(fp) };
+
+        // If there is a following fold, continue there next time.
+        let len = unsafe { nvim_ga_len(gap) };
+        if fp_idx + 1 < len {
+            let fp_next = unsafe { nvim_ga_fold_at(gap, fp_idx + 1) };
+            if !fp_next.is_null() {
+                let next_top = unsafe { nvim_fold_get_fd_top(fp_next) };
+                next = next_top + off;
+            }
+        }
+
+        let fdl = unsafe { nvim_win_get_p_fdl(wp) };
+
+        // Change from level-dependent folding to manual.
+        if use_level || fd_flags == fold_flags::FD_LEVEL {
+            use_level = true;
+            let new_flags = if level >= fdl {
+                fold_flags::FD_CLOSED
+            } else {
+                fold_flags::FD_OPEN
+            };
+            unsafe { nvim_fold_set_fd_flags(fp, new_flags) };
+
+            // Set nested folds to FD_LEVEL
+            if !nested.is_null() {
+                unsafe {
+                    let nested_len = nvim_ga_len(nested);
+                    for j in 0..nested_len {
+                        let nfp = nvim_ga_fold_at(nested, j);
+                        if !nfp.is_null() {
+                            nvim_fold_set_fd_flags(nfp, fold_flags::FD_LEVEL);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Re-read fd_flags since we may have changed it
+        let fd_flags = unsafe { nvim_fold_get_fd_flags(fp) };
+
+        // Simple case: Close recursively means closing the fold.
+        if !opening && recurse {
+            if fd_flags != fold_flags::FD_CLOSED {
+                done |= done_flags::DONE_ACTION;
+                unsafe { nvim_fold_set_fd_flags(fp, fold_flags::FD_CLOSED) };
+            }
+        } else if fd_flags == fold_flags::FD_CLOSED {
+            // When opening, open topmost closed fold.
+            if opening {
+                unsafe { nvim_fold_set_fd_flags(fp, fold_flags::FD_OPEN) };
+                done |= done_flags::DONE_ACTION;
+                if recurse {
+                    fold_open_nested_impl(fp);
+                }
+            }
+            break;
+        }
+
+        // fold is open, check nested folds
+        found_idx = Some((gap, fp_idx));
+        gap = nested;
+        lnum -= fd_top;
+        off += fd_top;
+        level += 1;
+    }
+
+    if found_fold {
+        // When closing and not recurse, close deepest open fold.
+        if !opening {
+            if let Some((saved_gap, saved_idx)) = found_idx {
+                let found_fp = unsafe { nvim_ga_fold_at(saved_gap, saved_idx) };
+                if !found_fp.is_null() {
+                    unsafe { nvim_fold_set_fd_flags(found_fp, fold_flags::FD_CLOSED) };
+                    done |= done_flags::DONE_ACTION;
+                }
+            }
+        }
+        unsafe { nvim_win_set_w_fold_manual(wp, true) };
+        if done & done_flags::DONE_ACTION != 0 {
+            unsafe { nvim_changed_window_setting(wp) };
+        }
+        done |= done_flags::DONE_FOLD;
+    } else if done_out.is_null() {
+        // Emit error if donep is NULL and this is curwin
+        let curwin = unsafe { nvim_get_curwin() };
+        if wp == curwin {
+            unsafe { nvim_emsg_nofold() };
+        }
+    }
+
+    if !done_out.is_null() {
+        unsafe { *done_out |= done };
+    }
+
+    next
+}
+
+/// Open or close fold for current window at position `pos`.
+/// Repeat "count" times.
+fn set_fold_repeat_impl(lnum: LineNr, count: c_int, do_open: bool) {
+    let curwin = unsafe { nvim_get_curwin() };
+
+    for n in 0..count {
+        let mut done: c_int = done_flags::DONE_NOTHING;
+        set_manual_fold_win_impl(curwin, lnum, do_open, false, &raw mut done);
+        if done & done_flags::DONE_ACTION == 0 {
+            // Only give an error message when no fold could be opened.
+            if n == 0 && done & done_flags::DONE_FOLD == 0 {
+                unsafe { nvim_emsg_nofold() };
+            }
+            break;
+        }
+    }
+}
+
+/// Open or close the fold in the current window which contains "lnum".
+/// Also does this for other windows in diff mode when needed.
+fn set_manual_fold_impl(
+    lnum: LineNr,
+    opening: bool,
+    recurse: bool,
+    done_out: *mut c_int,
+) -> LineNr {
+    let curwin = unsafe { nvim_get_curwin() };
+
+    // Check if in diff mode with scrollbind
+    if foldmethod_is_diff_impl(curwin) && unsafe { nvim_win_get_p_scb(curwin) } {
+        let cursor_lnum = unsafe { nvim_win_get_cursor_lnum(curwin) };
+
+        // Do the same operation in other windows in diff mode.
+        let mut wp = unsafe { nvim_get_first_win_in_tab() };
+        while !wp.is_null() {
+            if wp != curwin && foldmethod_is_diff_impl(wp) && unsafe { nvim_win_get_p_scb(wp) } {
+                let dlnum = unsafe { nvim_diff_lnum_win(cursor_lnum, wp) };
+                if dlnum != 0 {
+                    set_manual_fold_win_impl(wp, dlnum, opening, recurse, std::ptr::null_mut());
+                }
+            }
+            wp = unsafe { nvim_win_get_next(wp) };
+        }
+    }
+
+    set_manual_fold_win_impl(curwin, lnum, opening, recurse, done_out)
+}
+
+/// Set new foldlevel for a window.
+fn new_fold_level_win_impl(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+
+    unsafe { nvim_checkupdate(wp) };
+
+    let w_fold_manual = unsafe { nvim_win_get_w_fold_manual(wp) };
+    if w_fold_manual != 0 {
+        // Set all flags for the first level of folds to FD_LEVEL.
+        unsafe {
+            let gap = nvim_win_get_folds(wp);
+            let len = nvim_ga_len(gap);
+            for i in 0..len {
+                let fp = nvim_ga_fold_at(gap, i);
+                if !fp.is_null() {
+                    nvim_fold_set_fd_flags(fp, fold_flags::FD_LEVEL);
+                }
+            }
+            nvim_win_set_w_fold_manual(wp, false);
+        }
+    }
+
+    unsafe { nvim_changed_window_setting(wp) };
+}
+
+/// Set new foldlevel for current window.
+fn new_fold_level_impl() {
+    let curwin = unsafe { nvim_get_curwin() };
+    new_fold_level_win_impl(curwin);
+
+    // If in diff mode with scrollbind, set the same foldlevel in other windows
+    if foldmethod_is_diff_impl(curwin) && unsafe { nvim_win_get_p_scb(curwin) } {
+        let fdl = unsafe { nvim_win_get_p_fdl(curwin) };
+
+        let mut wp = unsafe { nvim_get_first_win_in_tab() };
+        while !wp.is_null() {
+            if wp != curwin && foldmethod_is_diff_impl(wp) && unsafe { nvim_win_get_p_scb(wp) } {
+                // Set w_p_fdl
+                unsafe { nvim_win_set_p_fdl(wp, fdl) };
+                new_fold_level_win_impl(wp);
+            }
+            wp = unsafe { nvim_win_get_next(wp) };
+        }
+    }
+}
+
+// ============================================================================
+// Phase 2: Fold State Management FFI Exports
+// ============================================================================
+
+/// Open or close fold in a specific window.
+///
+/// # Safety
+/// The `wp` and `donep` parameters must be valid pointers or null.
+#[no_mangle]
+pub extern "C" fn rs_setManualFoldWin(
+    wp: WinHandle,
+    lnum: LineNr,
+    opening: bool,
+    recurse: bool,
+    donep: *mut c_int,
+) -> LineNr {
+    set_manual_fold_win_impl(wp, lnum, opening, recurse, donep)
+}
+
+/// Open or close fold for current window, with diff mode handling.
+///
+/// # Safety
+/// The `donep` parameter must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_setManualFold(
+    lnum: LineNr,
+    opening: bool,
+    recurse: bool,
+    donep: *mut c_int,
+) -> LineNr {
+    set_manual_fold_impl(lnum, opening, recurse, donep)
+}
+
+/// Open or close fold repeatedly.
+///
+/// # Safety
+/// This function is safe to call from C.
+#[no_mangle]
+pub extern "C" fn rs_setFoldRepeat(lnum: LineNr, count: c_int, do_open: bool) {
+    set_fold_repeat_impl(lnum, count, do_open);
+}
+
+/// Set new foldlevel for a window.
+///
+/// # Safety
+/// The `wp` parameter must be a valid pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_newFoldLevelWin(wp: WinHandle) {
+    new_fold_level_win_impl(wp);
+}
+
+/// Set new foldlevel for current window.
+///
+/// # Safety
+/// This function is safe to call from C.
+#[no_mangle]
+pub extern "C" fn rs_newFoldLevel() {
+    new_fold_level_impl();
 }
 
 #[cfg(test)]
