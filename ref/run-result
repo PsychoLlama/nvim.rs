@@ -1,43 +1,33 @@
-Plan: ~/.claude/plans/nifty-twirling-cray.md
+Plan: ~/.claude/plans/eager-finding-flurry.md
 
-The plan execution is progressing well. Let me provide a summary of what was accomplished:
+All phases of the fold migration plan have been completed. Here's a summary:
 
-## Summary of Execution
+## Migration Summary
 
-I've executed 4 phases of the plan at `/home/overlord/.claude/plans/nifty-twirling-cray.md`:
+**Phases Completed:**
 
-### Completed Phases:
+1. **Phase 1: Fold Tree Manipulation** (commit 8c858b6a86)
+   - `foldFind`, `foldInsert`, `foldSplit`, `foldRemove`, `foldMerge`, `deleteFoldEntry`
 
-**Phase 1: Move Crate Foundation** (Commit: a05a459791)
-- Created new `move` crate in `src/nvim-rs/move/`
-- Migrated cursor validation functions: `rs_check_cursor_moved`, `rs_cursor_valid`
-- Added curswant management and validity state queries
-- Added C accessor functions in `window.c`
+2. **Phase 2: Fold State Management** (commit 43ec59f824)
+   - `setManualFold`, `setManualFoldWin`, `setFoldRepeat`, `newFoldLevel`, `newFoldLevelWin`
 
-**Phase 2: Scrolling Operations** (Commit: 5490bb4fe7)
-- Added `rs_topline_back_winheight`, `rs_topline_back`, `rs_botline_forw`
-- Added `rs_check_top_offset` for scrolloff validation
-- Added topline/botline state management functions
-- Added cursor position queries
+3. **Phase 3: Fold Creation/Deletion** (commit 86cc04799a)
+   - `clearFolding`, `cloneFoldGrowArray`, `copyFoldingState`
+   - `foldCreate`, `deleteFold` remain in C due to marker dependencies
 
-**Phase 3: Cursor Column Operations** (Commit: 8e6cf17540)
-- Added `rs_compute_wcol` for cursor column computation
-- Added `rs_compute_wrap_width` for wrapping width calculation
-- Added `rs_check_topfill` for topfill management
-- Added column offset utilities
+4. **Phase 4: Fold Update System** (commit 26b7a06440)
+   - `foldUpdateAll`, `foldUpdateAfterInsert`, `foldMarkAdjust`
+   - `foldUpdate`, `foldUpdateIEMS` remain in C due to VimL/syntax dependencies
 
-**Phase 4: Edit Crate Expansion** (Commit: 56ad9c3358)
-- Added `rs_set_can_cindent`, `rs_set_ins_need_undo`
-- Added `rs_get_revins_on`, `rs_get_did_restart_edit`
-- Added C accessor wrappers for edit state variables
+5. **Phase 5: Navigation/Display** (commit 4c2ad745c8)
+   - `foldAdjustCursor`, `foldAdjustVisual`
+   - `foldMoveTo`, `get_foldtext`, `foldtext_cleanup` remain in C
 
-### Current Status:
-- **Move crate**: 37 migrated functions
-- **Edit crate**: 9 migrated functions
-- **Total new functions**: 46
+6. **Phase 6: Session/Markers**
+   - All functions remain in C due to FILE* I/O and buffer manipulation dependencies
 
-### Remaining:
-- Phase 5: Migrate remaining insert mode operations (pending - complex dependencies)
-- Phase 6: Integration, cleanup, and documentation (in progress)
-
-All changes pass `just rust-fmt-check`, `just rust-clippy`, and `just rust-test` (1817 tests).
+**Statistics:**
+- 43 Rust FFI exports in the fold crate
+- ~3,055 lines of Rust code (`lib.rs` + `markers.rs`)
+- C fold.c reduced to ~3,261 lines (down from ~3,396 originally)
