@@ -18,6 +18,7 @@ pub mod execute;
 pub mod lookup;
 pub mod modifiers;
 pub mod source;
+pub mod table;
 
 use std::ffi::{c_char, c_int};
 use std::ptr;
@@ -29,6 +30,7 @@ pub use execute::*;
 pub use lookup::*;
 pub use modifiers::*;
 pub use source::*;
+pub use table::*;
 
 // =============================================================================
 // Vimgrep flags
