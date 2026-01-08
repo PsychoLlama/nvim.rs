@@ -428,6 +428,9 @@ extern void rs_nv_operator(cmdarg_T *cap);
 extern void rs_nv_optrans(cmdarg_T *cap);
 extern void rs_nv_tilde(cmdarg_T *cap);
 extern void rs_nv_subst(cmdarg_T *cap);
+extern void rs_nv_object(cmdarg_T *cap);
+extern void rs_nv_select(cmdarg_T *cap);
+extern void rs_nv_brackets(cmdarg_T *cap);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -1701,6 +1704,33 @@ void nvim_nv_tilde_impl(cmdarg_T *cap)
 void nvim_nv_subst_impl(cmdarg_T *cap)
 {
   nv_subst_impl(cap);
+}
+
+// =============================================================================
+// Phase 4 command accessors for Rust FFI (Text object handlers)
+// =============================================================================
+
+// Forward declarations for text object handlers
+static void nv_object_impl(cmdarg_T *cap);
+static void nv_select_impl(cmdarg_T *cap);
+static void nv_brackets_impl(cmdarg_T *cap);
+
+/// Wrapper for nv_object C implementation.
+void nvim_nv_object_impl(cmdarg_T *cap)
+{
+  nv_object_impl(cap);
+}
+
+/// Wrapper for nv_select C implementation.
+void nvim_nv_select_impl(cmdarg_T *cap)
+{
+  nv_select_impl(cap);
+}
+
+/// Wrapper for nv_brackets C implementation.
+void nvim_nv_brackets_impl(cmdarg_T *cap)
+{
+  nv_brackets_impl(cap);
 }
 
 // =============================================================================
@@ -5213,6 +5243,13 @@ static void nv_bracket_block(cmdarg_T *cap, const pos_T *old_pos)
 /// cap->arg is BACKWARD for "[" and FORWARD for "]".
 static void nv_brackets(cmdarg_T *cap)
 {
+  rs_nv_brackets(cap);
+}
+
+/// "[" and "]" commands implementation.
+/// cap->arg is BACKWARD for "[" and FORWARD for "]".
+static void nv_brackets_impl(cmdarg_T *cap)
+{
   int flag;
   int n;
 
@@ -6891,6 +6928,12 @@ bool unadjust_for_sel_inner(pos_T *pp)
 /// SELECT key in Normal or Visual mode: end of Select mode mapping.
 static void nv_select(cmdarg_T *cap)
 {
+  rs_nv_select(cap);
+}
+
+/// SELECT key in Normal or Visual mode: end of Select mode mapping (implementation).
+static void nv_select_impl(cmdarg_T *cap)
+{
   if (VIsual_active) {
     VIsual_select = true;
     VIsual_select_reg = 0;
@@ -6993,6 +7036,12 @@ static void invoke_edit(cmdarg_T *cap, int repl, int cmd, int startln)
 
 /// "a" or "i" while an operator is pending or in Visual mode: object motion.
 static void nv_object(cmdarg_T *cap)
+{
+  rs_nv_object(cap);
+}
+
+/// "a" or "i" while an operator is pending or in Visual mode: object motion (implementation).
+static void nv_object_impl(cmdarg_T *cap)
 {
   bool flag;
   bool include;

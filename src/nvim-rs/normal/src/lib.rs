@@ -1817,6 +1817,59 @@ pub unsafe extern "C" fn rs_nv_subst(cap: CapHandle) {
 }
 
 // =============================================================================
+// Phase 4: Text object handlers
+// =============================================================================
+
+extern "C" {
+    fn nvim_nv_object_impl(cap: CapHandle);
+    fn nvim_nv_select_impl(cap: CapHandle);
+    fn nvim_nv_brackets_impl(cap: CapHandle);
+}
+
+/// Command handler for "a" or "i" text objects.
+///
+/// Handles text object selection when an operator is pending or in Visual mode.
+/// Examples: "aw" (a word), "iw" (inner word), "a(" (a parentheses block), etc.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_object(cap: CapHandle) {
+    nvim_nv_object_impl(cap);
+}
+
+/// Command handler for SELECT key in Normal or Visual mode.
+///
+/// In Visual mode, switches to Select mode.
+/// Otherwise, if VIsual_reselect is set, fakes a "gv" command.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_select(cap: CapHandle) {
+    nvim_nv_select_impl(cap);
+}
+
+/// Command handler for `[` and `]` bracket commands.
+///
+/// Handles various bracket-related motions and commands:
+/// - `[f` / `]f`: Edit file under cursor (same as `gf`)
+/// - `[i` / `]i`: Find identifier under cursor
+/// - `[{` / `]}`: Go to unclosed brace
+/// - `[[` / `]]`: Move to start/end of function
+/// - `[p` / `]p`: Put with indent adjustment
+/// - And many more...
+///
+/// `cap->arg` is BACKWARD for `[` and FORWARD for `]`.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_brackets(cap: CapHandle) {
+    nvim_nv_brackets_impl(cap);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
