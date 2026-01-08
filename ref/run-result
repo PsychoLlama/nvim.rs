@@ -1,39 +1,58 @@
-Plan: ~/.claude/plans/harmonic-zooming-spring.md
+Plan: ~/.claude/plans/floofy-jumping-valley.md
 
-All 8 phases are complete! Let me provide a summary of what was accomplished:
+All phases of the Ex Commands System Migration Plan are complete. Here's a summary of what was implemented:
 
-## Plan Execution Complete
+## Summary
 
-All 8 phases of the Spell Checking System migration plan have been completed:
+All 9 phases of the ex_docmd migration plan have been completed:
 
-### Commits Made:
-1. **Phase 1**: `feat(spell): add LangpHandle and slang_T metadata accessors`
-2. **Phase 2**: `feat(spell): add wordtree.rs module for word tree traversal`
-3. **Phase 3**: `feat(spell): add file header parsing and section IDs`
-4. **Phase 4**: `feat(spell): add suggestion FFI wrappers and constants`
-5. **Phase 5**: `feat(spell): add UI integration types and constants`
-6. **Phase 6**: `feat(spell): add tree node writing and section utilities`
-7. **Phase 7**: `test(spell): add comprehensive validation tests`
-8. **Phase 8**: `chore(spell): update documentation and cbindgen exports`
+### Phase 1: Skip Functions and String Utilities
+- Added `rs_skip_vimgrep_pat` for vimgrep pattern parsing
+- VGR_* constants for vimgrep flags
 
-### Summary of Changes:
-- **1496 tests** across 61 binaries (all passing)
-- **lib.rs**: ~3700+ LOC with opaque handles, FFI wrappers, spell state types, UI integration
-- **wordtree.rs**: Word tree traversal, binary search, word flags, compound word utilities
-- **spellfile.rs**: ~2400+ LOC with file format parsing/writing, section handling, tree node encoding
-- **suggest.rs**: ~950 LOC with suggestion scoring algorithms
+### Phase 2: Command Modifiers (`modifiers.rs`)
+- CMOD_* constants for command modifier flags (sandbox, silent, noautocmd, etc.)
+- WSP_* constants for window split flags
+- Flag checking utilities
 
-### Key Features Added:
-- `SlangHandle`, `LangpHandle`, `SpelltabHandle` opaque types
-- Word tree traversal with binary search
-- Spell file header/section parsing and writing
-- Tree node flag and index encoding
-- Suggestion scoring (edit distance, sound-alike)
-- UI integration types (`SpellAddType`, `SpellMoveType`, `SpellAddFlags`)
-- Spell suggest timeout validation
-- Comprehensive unit tests
+### Phase 3: Address/Range Parsing (`address.rs`)
+- `AddrType` enum for address types (Lines, Windows, Buffers, Tabs, etc.)
+- ADDR_* constants for C compatibility
+- Type classification helpers
 
-All checks pass:
-- `just rust-fmt-check` ✓
-- `just rust-clippy` ✓
-- `just rust-test` ✓ (1496 tests)
+### Phase 4: Command Name Lookup (`lookup.rs`)
+- One-letter command detection (k, s)
+- Command name character classification
+- Python command prefix detection
+- User command detection
+
+### Phase 5: Argument Parsing (`args.rs`)
+- FORCE_BIN_* constants for ++bin/++nobin options
+- ++opt detection with `starts_with_plus_plus()`
+- Count parsing with `parse_count()`
+- Register validation utilities
+- Filename expansion detection
+
+### Phase 6: Command Execution Infrastructure (`execute.rs`)
+- EXFLAG_* constants for output flags
+- Security checks: `rs_in_sandbox()`, `rs_is_secure()`, `rs_check_secure()`
+- Command state utilities: force, skip mode, range validation
+
+### Phase 7: Error Handling and Messages (`errors.rs`)
+- Error code constants (E_INVARG, E_INVRANGE, etc.)
+- Error string accessors
+- Error emission utilities
+- Range and argument validation with error emission
+
+### Phase 8: Source File Processing (`source.rs`)
+- Sourcing state accessors
+- Path classification (autoload, script extensions)
+- DIP_* flags for do_source()
+- Line parsing utilities (continuation lines, comments)
+
+### Phase 9: Command Table and Documentation (`table.rs`)
+- EX_* constants for all command attribute flags
+- Flag checking functions for range, bang, extra args, sandbox, etc.
+- `CompletionType` enum for command completion
+
+**Total: 1554 unit tests passing, all formatting and linting checks pass.**
