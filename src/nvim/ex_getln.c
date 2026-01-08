@@ -5059,3 +5059,60 @@ const char *nvim_get_e_textlock(void)
 {
   return e_textlock;
 }
+
+// Additional C accessors for Rust cmdline state management
+int nvim_get_ccline_cmdspos(void)
+{
+  return ccline.cmdspos;
+}
+
+int nvim_get_ccline_cmdindent(void)
+{
+  return ccline.cmdindent;
+}
+
+unsigned int nvim_get_ccline_prompt_id(void)
+{
+  return ccline.prompt_id;
+}
+
+int nvim_get_ccline_level(void)
+{
+  return ccline.level;
+}
+
+int nvim_get_ccline_input_fn(void)
+{
+  return ccline.input_fn;
+}
+
+char *nvim_get_ccline_cmdbuff(void)
+{
+  return ccline.cmdbuff;
+}
+
+int nvim_get_ccline_cmdbufflen(void)
+{
+  return ccline.cmdbufflen;
+}
+
+// Setters for Rust to update ccline state
+void nvim_set_ccline_cmdpos(int pos)
+{
+  ccline.cmdpos = pos;
+}
+
+void nvim_set_ccline_cmdlen(int len)
+{
+  ccline.cmdlen = len;
+}
+
+void nvim_set_ccline_cmdspos(int spos)
+{
+  ccline.cmdspos = spos;
+}
+
+void nvim_set_ccline_overstrike(int overstrike)
+{
+  ccline.overstrike = overstrike;
+}

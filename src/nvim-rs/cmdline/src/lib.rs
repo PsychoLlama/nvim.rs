@@ -7,8 +7,10 @@
 
 pub mod completion;
 pub mod context;
+pub mod edit;
 pub mod expand;
 pub mod pattern;
+pub mod state;
 pub mod usercomplete;
 pub mod wildmenu;
 
