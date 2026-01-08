@@ -7933,6 +7933,80 @@ int nvim_curbuf_is_dummy(void)
   return (curbuf->b_flags & BF_DUMMY) != 0;
 }
 
+// C accessors for Rust error string access
+const char *nvim_get_e_invarg(void)
+{
+  return e_invarg;
+}
+
+const char *nvim_get_e_invarg2(void)
+{
+  return e_invarg2;
+}
+
+const char *nvim_get_e_invargval(void)
+{
+  return e_invargval;
+}
+
+const char *nvim_get_e_invrange(void)
+{
+  return e_invrange;
+}
+
+const char *nvim_get_e_norange(void)
+{
+  return e_norange;
+}
+
+const char *nvim_get_e_trailing_arg(void)
+{
+  return e_trailing_arg;
+}
+
+const char *nvim_get_e_curdir(void)
+{
+  return e_curdir;
+}
+
+const char *nvim_get_e_sandbox(void)
+{
+  return e_sandbox;
+}
+
+// C accessors for Rust secure mode access
+int nvim_get_secure(void)
+{
+  return secure;
+}
+
+void nvim_set_secure(int val)
+{
+  secure = val;
+}
+
+// C accessors for Rust sourcing info access
+const char *nvim_get_sourcing_name(void)
+{
+  if (exestack.ga_data == NULL || exestack.ga_len == 0) {
+    return NULL;
+  }
+  return SOURCING_NAME;
+}
+
+int nvim_get_sourcing_lnum(void)
+{
+  if (exestack.ga_data == NULL || exestack.ga_len == 0) {
+    return 0;
+  }
+  return (int)SOURCING_LNUM;
+}
+
+int nvim_get_exestack_len(void)
+{
+  return exestack.ga_len;
+}
+
 /// ":checkhealth [plugins]"
 static void ex_checkhealth(exarg_T *eap)
 {
