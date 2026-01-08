@@ -421,6 +421,9 @@ extern void rs_nv_hat(cmdarg_T *cap);
 extern void rs_nv_Zet(cmdarg_T *cap);
 extern void rs_nv_esc(cmdarg_T *cap);
 extern void rs_nv_edit(cmdarg_T *cap);
+extern void rs_nv_search(cmdarg_T *cap);
+extern void rs_nv_next(cmdarg_T *cap);
+extern void rs_nv_ident(cmdarg_T *cap);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -1612,6 +1615,53 @@ void nvim_nv_edit_impl(cmdarg_T *cap)
     }
 
     invoke_edit(cap, false, cap->cmdchar, false);
+  }
+}
+
+// =============================================================================
+// Phase 2 command accessors for Rust FFI (Search handlers)
+// =============================================================================
+
+// Forward declarations for search handlers
+static void nv_search_impl(cmdarg_T *cap);
+static void nv_next_impl(cmdarg_T *cap);
+static void nv_ident_impl(cmdarg_T *cap);
+
+/// Wrapper for nv_search C implementation.
+void nvim_nv_search_impl(cmdarg_T *cap)
+{
+  nv_search_impl(cap);
+}
+
+/// Wrapper for nv_next C implementation.
+void nvim_nv_next_impl(cmdarg_T *cap)
+{
+  nv_next_impl(cap);
+}
+
+/// Wrapper for nv_ident C implementation (handles *, #, K, etc.).
+void nvim_nv_ident_impl(cmdarg_T *cap)
+{
+  nv_ident_impl(cap);
+}
+
+/// Wrapper for nv_gd C implementation (go to definition).
+void nvim_nv_gd_impl(oparg_T *oap, int nchar, int thisblock)
+{
+  size_t len;
+  char *ptr;
+  if ((len = find_ident_under_cursor(&ptr, FIND_IDENT)) == 0
+      || !find_decl(ptr, len, nchar == 'd', thisblock, SEARCH_START)) {
+    clearopbeep(oap);
+    return;
+  }
+
+  if ((fdo_flags & kOptFdoFlagSearch) && KeyTyped && oap->op_type == OP_NOP) {
+    foldOpenCursor();
+  }
+  // clear any search statistics
+  if (messaging() && !msg_silent && !shortmess(SHM_SEARCHCOUNT)) {
+    clear_cmdline = true;
   }
 }
 
@@ -4336,6 +4386,12 @@ static size_t nv_K_getcmd(cmdarg_T *cap, char *kp, bool kp_help, bool kp_ex, cha
 ///  g  ']'      :tselect for current identifier
 static void nv_ident(cmdarg_T *cap)
 {
+  rs_nv_ident(cap);
+}
+
+/// Implementation of nv_ident.
+static void nv_ident_impl(cmdarg_T *cap)
+{
   char *ptr = NULL;
   char *p;
   size_t n = 0;                 // init for GCC
@@ -4875,9 +4931,16 @@ static void nv_dollar(cmdarg_T *cap)
   rs_nv_dollar(cap);
 }
 
-/// Implementation of '?' and '/' commands.
+/// Handle '?' and '/' commands.
 /// If cap->arg is true don't set PC mark.
 static void nv_search(cmdarg_T *cap)
+{
+  rs_nv_search(cap);
+}
+
+/// Implementation of '?' and '/' commands.
+/// If cap->arg is true don't set PC mark.
+static void nv_search_impl(cmdarg_T *cap)
 {
   oparg_T *oap = cap->oap;
   pos_T save_cursor = curwin->w_cursor;
@@ -4907,6 +4970,13 @@ static void nv_search(cmdarg_T *cap)
 /// Handle "N" and "n" commands.
 /// cap->arg is SEARCH_REV for "N", 0 for "n".
 static void nv_next(cmdarg_T *cap)
+{
+  rs_nv_next(cap);
+}
+
+/// Implementation of "N" and "n" commands.
+/// cap->arg is SEARCH_REV for "N", 0 for "n".
+static void nv_next_impl(cmdarg_T *cap)
 {
   pos_T old = curwin->w_cursor;
   int wrapped = false;

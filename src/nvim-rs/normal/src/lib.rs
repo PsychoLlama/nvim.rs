@@ -1712,6 +1712,53 @@ pub unsafe extern "C" fn rs_nv_edit(cap: CapHandle) {
 }
 
 // =============================================================================
+// Phase 2 Command Handlers (Search)
+// =============================================================================
+
+extern "C" {
+    // Phase 2 accessor functions
+    fn nvim_nv_search_impl(cap: CapHandle);
+    fn nvim_nv_next_impl(cap: CapHandle);
+    fn nvim_nv_ident_impl(cap: CapHandle);
+}
+
+/// Command handler for "/" and "?" commands: Search forward/backward.
+///
+/// cap->arg is true to not set PC mark.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_search(cap: CapHandle) {
+    // Delegate to C implementation which handles command-line input
+    nvim_nv_search_impl(cap);
+}
+
+/// Command handler for "n" and "N" commands: Repeat search.
+///
+/// cap->arg is SEARCH_REV for "N", 0 for "n".
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_next(cap: CapHandle) {
+    // Delegate to C implementation which handles search state
+    nvim_nv_next_impl(cap);
+}
+
+/// Command handler for identifier commands: *, #, K, CTRL-], g], g*.
+///
+/// Handles searching for the word under cursor and related operations.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_ident(cap: CapHandle) {
+    // Delegate to C implementation which handles string manipulation
+    nvim_nv_ident_impl(cap);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
