@@ -1853,6 +1853,397 @@ impl Default for HistoryMergerState {
 }
 
 // =============================================================================
+// Phase 5: History Merging Functions
+// =============================================================================
+
+// C accessor functions for history operations
+extern "C" {
+    /// Get next history entry from Neovim.
+    fn nvim_shada_hist_iter(
+        iter: *const c_void,
+        history_type: u8,
+        reading: bool,
+        entry: *mut ShadaEntry,
+    ) -> *const c_void;
+    /// Free ShaDa entry contents.
+    fn nvim_shada_free_shada_entry(entry: *mut ShadaEntry);
+    /// Create contained entries map.
+    fn nvim_hmll_map_init() -> *mut c_void;
+    /// Destroy contained entries map.
+    fn nvim_hmll_map_destroy(map: *mut c_void);
+    /// Get entry from map by string key.
+    fn nvim_hmll_map_get(map: *mut c_void, key: *const c_char) -> *mut HMLListEntry;
+    /// Put entry into map by string key.
+    fn nvim_hmll_map_put(map: *mut c_void, key: *const c_char, entry: *mut HMLListEntry);
+    /// Remove entry from map by string key.
+    fn nvim_hmll_map_del(map: *mut c_void, key: *const c_char);
+}
+
+/// Initialize an HML linked list.
+///
+/// # Safety
+///
+/// `hmll` must be a valid pointer to an uninitialized HMLList.
+#[no_mangle]
+pub unsafe extern "C" fn rs_hmll_init(hmll: *mut HMLList, size: usize) {
+    if hmll.is_null() || size == 0 {
+        return;
+    }
+
+    let entries = nvim_xcalloc(size, std::mem::size_of::<HMLListEntry>()).cast::<HMLListEntry>();
+
+    (*hmll) = HMLList {
+        entries,
+        first: std::ptr::null_mut(),
+        last: std::ptr::null_mut(),
+        free_entry: std::ptr::null_mut(),
+        last_free_entry: entries,
+        size,
+        num_entries: 0,
+        contained_entries: nvim_hmll_map_init(),
+    };
+}
+
+/// Remove an entry from the HML linked list.
+///
+/// # Safety
+///
+/// - `hmll` must be a valid pointer to an initialized HMLList
+/// - `hmll_entry` must be a valid entry in the list
+#[no_mangle]
+pub unsafe extern "C" fn rs_hmll_remove(hmll: *mut HMLList, hmll_entry: *mut HMLListEntry) {
+    if hmll.is_null() || hmll_entry.is_null() {
+        return;
+    }
+
+    let list = &mut *hmll;
+    let entry = &mut *hmll_entry;
+
+    // Update free entry tracking
+    if hmll_entry == list.last_free_entry.sub(1) {
+        list.last_free_entry = list.last_free_entry.sub(1);
+    } else {
+        list.free_entry = hmll_entry;
+    }
+
+    // Remove from the contained entries map
+    let key = entry.data.data.history_item.string;
+    if !key.is_null() {
+        nvim_hmll_map_del(list.contained_entries, key);
+    }
+
+    // Update linked list pointers
+    if entry.next.is_null() {
+        list.last = entry.prev;
+    } else {
+        (*entry.next).prev = entry.prev;
+    }
+
+    if entry.prev.is_null() {
+        list.first = entry.next;
+    } else {
+        (*entry.prev).next = entry.next;
+    }
+
+    list.num_entries -= 1;
+
+    // Free the entry data
+    nvim_shada_free_shada_entry(&raw mut entry.data);
+}
+
+/// Insert an entry into the HML linked list.
+///
+/// # Safety
+///
+/// - `hmll` must be a valid pointer to an initialized HMLList
+/// - `hmll_entry` is the entry to insert after (can be null to insert at front)
+/// - `data` is the data to insert
+#[no_mangle]
+pub unsafe extern "C" fn rs_hmll_insert(
+    hmll: *mut HMLList,
+    hmll_entry: *mut HMLListEntry,
+    data: ShadaEntry,
+) {
+    if hmll.is_null() {
+        return;
+    }
+
+    let list = &mut *hmll;
+    let mut insert_after = hmll_entry;
+
+    // If list is full, remove the first (oldest) entry
+    if list.num_entries == list.size {
+        if insert_after == list.first {
+            insert_after = std::ptr::null_mut();
+        }
+        rs_hmll_remove(hmll, list.first);
+    }
+
+    // Get the target entry slot
+    let target_entry: *mut HMLListEntry;
+    if list.free_entry.is_null() {
+        target_entry = list.last_free_entry;
+        list.last_free_entry = list.last_free_entry.add(1);
+    } else {
+        target_entry = list.free_entry;
+        list.free_entry = std::ptr::null_mut();
+    }
+
+    // Get the key before moving data
+    let key = data.data.history_item.string;
+
+    // Set the entry data
+    (*target_entry).data = data;
+
+    // Add to the contained entries map
+    if !key.is_null() {
+        nvim_hmll_map_put(list.contained_entries, key, target_entry);
+    }
+
+    list.num_entries += 1;
+
+    // Update linked list pointers
+    (*target_entry).prev = insert_after;
+    if insert_after.is_null() {
+        (*target_entry).next = list.first;
+        list.first = target_entry;
+    } else {
+        (*target_entry).next = (*insert_after).next;
+        (*insert_after).next = target_entry;
+    }
+
+    if (*target_entry).next.is_null() {
+        list.last = target_entry;
+    } else {
+        (*(*target_entry).next).prev = target_entry;
+    }
+}
+
+/// Free an HML linked list.
+///
+/// # Safety
+///
+/// `hmll` must be a valid pointer to an initialized HMLList.
+#[no_mangle]
+pub unsafe extern "C" fn rs_hmll_dealloc(hmll: *mut HMLList) {
+    if hmll.is_null() {
+        return;
+    }
+
+    let list = &mut *hmll;
+
+    // Destroy the map
+    if !list.contained_entries.is_null() {
+        nvim_hmll_map_destroy(list.contained_entries);
+    }
+
+    // Free the entries array
+    if !list.entries.is_null() {
+        nvim_xfree(list.entries.cast::<c_void>());
+    }
+
+    // Reset the struct
+    *list = HMLList::default();
+}
+
+/// Initialize history merger state.
+///
+/// # Safety
+///
+/// `hms_p` must be a valid pointer to an uninitialized HistoryMergerState.
+#[no_mangle]
+pub unsafe extern "C" fn rs_hms_init(
+    hms_p: *mut HistoryMergerState,
+    history_type: u8,
+    num_elements: usize,
+    do_merge: bool,
+    reading: bool,
+) {
+    if hms_p.is_null() {
+        return;
+    }
+
+    let hms = &mut *hms_p;
+
+    rs_hmll_init(&raw mut hms.hmll, num_elements);
+    hms.do_merge = do_merge;
+    hms.reading = reading;
+    hms.history_type = history_type;
+
+    // Initialize iterator and get first history entry
+    hms.iter = nvim_shada_hist_iter(
+        std::ptr::null(),
+        history_type,
+        reading,
+        &raw mut hms.last_hist_entry,
+    );
+}
+
+/// Insert an entry into the history merger.
+///
+/// # Safety
+///
+/// - `hms_p` must be a valid pointer to an initialized HistoryMergerState
+/// - `entry` must be a valid ShadaEntry
+#[no_mangle]
+pub unsafe extern "C" fn rs_hms_insert(
+    hms_p: *mut HistoryMergerState,
+    entry: ShadaEntry,
+    do_iter: bool,
+) {
+    if hms_p.is_null() {
+        return;
+    }
+
+    let hms = &mut *hms_p;
+
+    // If do_iter, first insert entries from Neovim history that are older
+    if do_iter {
+        while hms.last_hist_entry.entry_type != ShadaEntryType::Missing
+            && hms.last_hist_entry.timestamp < entry.timestamp
+        {
+            let hist_entry = hms.last_hist_entry.clone();
+            rs_hms_insert(hms_p, hist_entry, false);
+
+            if hms.iter.is_null() {
+                hms.last_hist_entry.entry_type = ShadaEntryType::Missing;
+                break;
+            }
+            hms.iter = nvim_shada_hist_iter(
+                hms.iter,
+                hms.history_type,
+                hms.reading,
+                &raw mut hms.last_hist_entry,
+            );
+        }
+    }
+
+    let hmll = &raw mut hms.hmll;
+    let key = entry.data.history_item.string;
+
+    // Check if entry already exists
+    let existing = if key.is_null() {
+        std::ptr::null_mut()
+    } else {
+        nvim_hmll_map_get((*hmll).contained_entries, key)
+    };
+
+    if !existing.is_null() {
+        let existing_entry = &mut *existing;
+        if entry.timestamp > existing_entry.data.timestamp {
+            // New entry is newer, remove the old one
+            rs_hmll_remove(hmll, existing);
+        } else if !do_iter && entry.timestamp == existing_entry.data.timestamp {
+            // Same timestamp, prefer current Neovim instance entry
+            nvim_shada_free_shada_entry(&raw mut existing_entry.data);
+            existing_entry.data = entry;
+            return;
+        } else {
+            // Existing entry is newer or same timestamp from file, skip
+            return;
+        }
+    }
+
+    // Find insertion point (iterate backwards to find where to insert)
+    let mut insert_after = (*hmll).last;
+    while !insert_after.is_null() {
+        if (*insert_after).data.timestamp <= entry.timestamp {
+            break;
+        }
+        insert_after = (*insert_after).prev;
+    }
+
+    rs_hmll_insert(hmll, insert_after, entry);
+}
+
+/// Insert all remaining Neovim history entries into the merger.
+///
+/// # Safety
+///
+/// `hms_p` must be a valid pointer to an initialized HistoryMergerState.
+#[no_mangle]
+pub unsafe extern "C" fn rs_hms_insert_whole_neovim_history(hms_p: *mut HistoryMergerState) {
+    if hms_p.is_null() {
+        return;
+    }
+
+    let hms = &mut *hms_p;
+
+    while hms.last_hist_entry.entry_type != ShadaEntryType::Missing {
+        let hist_entry = hms.last_hist_entry.clone();
+        rs_hms_insert(hms_p, hist_entry, false);
+
+        if hms.iter.is_null() {
+            break;
+        }
+        hms.iter = nvim_shada_hist_iter(
+            hms.iter,
+            hms.history_type,
+            hms.reading,
+            &raw mut hms.last_hist_entry,
+        );
+    }
+}
+
+/// Free history merger state.
+///
+/// # Safety
+///
+/// `hms_p` must be a valid pointer to an initialized HistoryMergerState.
+#[no_mangle]
+pub unsafe extern "C" fn rs_hms_dealloc(hms_p: *mut HistoryMergerState) {
+    if hms_p.is_null() {
+        return;
+    }
+
+    rs_hmll_dealloc(&raw mut (*hms_p).hmll);
+}
+
+/// Get the number of entries in the history merger.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref, clippy::missing_const_for_fn)]
+pub unsafe extern "C" fn rs_hms_get_num_entries(hms_p: *const HistoryMergerState) -> usize {
+    if hms_p.is_null() {
+        return 0;
+    }
+    (*hms_p).hmll.num_entries
+}
+
+/// Get the first entry in the HML list.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref, clippy::missing_const_for_fn)]
+pub unsafe extern "C" fn rs_hmll_get_first(hmll: *const HMLList) -> *mut HMLListEntry {
+    if hmll.is_null() {
+        return std::ptr::null_mut();
+    }
+    (*hmll).first
+}
+
+/// Get the next entry in the HML list iteration.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref, clippy::missing_const_for_fn)]
+pub unsafe extern "C" fn rs_hmll_entry_get_next(entry: *const HMLListEntry) -> *mut HMLListEntry {
+    if entry.is_null() {
+        return std::ptr::null_mut();
+    }
+    (*entry).next
+}
+
+/// Get the data from an HML list entry.
+#[no_mangle]
+#[allow(
+    clippy::not_unsafe_ptr_arg_deref,
+    clippy::missing_const_for_fn,
+    clippy::borrow_as_ptr
+)]
+pub unsafe extern "C" fn rs_hmll_entry_get_data(entry: *const HMLListEntry) -> *const ShadaEntry {
+    if entry.is_null() {
+        return std::ptr::null();
+    }
+    &raw const (*entry).data
+}
+
+// =============================================================================
 // File Marks Structure
 // =============================================================================
 
