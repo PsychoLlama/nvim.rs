@@ -287,10 +287,7 @@ pub unsafe fn get_cmdbuff_slice() -> Option<&'static [u8]> {
     if len < 0 {
         return None;
     }
-    Some(std::slice::from_raw_parts(
-        ptr.cast::<u8>(),
-        len as usize,
-    ))
+    Some(std::slice::from_raw_parts(ptr.cast::<u8>(), len as usize))
 }
 
 /// Get a mutable slice of the current command buffer.

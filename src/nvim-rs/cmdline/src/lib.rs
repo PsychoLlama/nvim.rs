@@ -9,6 +9,7 @@ pub mod completion;
 pub mod context;
 pub mod edit;
 pub mod expand;
+pub mod history;
 pub mod pattern;
 pub mod state;
 pub mod usercomplete;

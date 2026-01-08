@@ -595,7 +595,11 @@ pub unsafe fn cursor_word_left() -> EditResult {
         }
     }
 
-    #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    #[allow(
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap
+    )]
     {
         let new_pos = p.offset_from(buf_ptr) as usize;
         nvim_set_ccline_cmdpos(new_pos as c_int);
