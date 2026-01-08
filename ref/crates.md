@@ -11,6 +11,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | buffer         | Buffer state and validation             |
 | buffer_updates | Buffer change tracking                  |
 | charset        | Character classification and conversion |
+| cmdexpand      | Command-line completion and expansion   |
 | cmdhist        | Command history                         |
 | cmdline        | Command line state                      |
 | collections    | Data structures (garray, hashtab)       |

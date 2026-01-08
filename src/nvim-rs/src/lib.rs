@@ -21,6 +21,7 @@ pub use nvim_autocmd::*;
 pub use nvim_buffer::*;
 pub use nvim_buffer_updates::*;
 pub use nvim_charset::*;
+pub use nvim_cmdexpand::*;
 pub use nvim_cmdhist::*;
 pub use nvim_cmdline::*;
 pub use nvim_collections::garray::*;

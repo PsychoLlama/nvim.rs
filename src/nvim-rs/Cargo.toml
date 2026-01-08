@@ -20,6 +20,7 @@ nvim-autocmd = { path = "autocmd" }
 nvim-buffer = { path = "buffer" }
 nvim-buffer-updates = { path = "buffer_updates" }
 nvim-charset = { path = "charset" }
+nvim-cmdexpand = { path = "cmdexpand" }
 nvim-cmdline = { path = "cmdline" }
 nvim-cmdhist = { path = "cmdhist" }
 nvim-cursor = { path = "cursor" }
