@@ -87,6 +87,18 @@ extern int rs_diffopt_linematch(void);
 extern int rs_diff_cmp(const char *s1, const char *s2);
 extern void rs_diff_copy_entry(diff_T *dprev, diff_T *dp, int idx_orig, int idx_new);
 
+/// Result of parsing diffopt string from Rust.
+typedef struct {
+  int diff_flags;
+  int diff_algorithm;
+  int diff_context;
+  int diff_foldcolumn;
+  int linematch_lines;
+  int result;
+} DiffoptResult;
+
+extern DiffoptResult rs_diffopt_parse(const char *p_dip);
+
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
 
@@ -2603,142 +2615,25 @@ int diffanchors_changed(bool buflocal)
 /// @return
 int diffopt_changed(void)
 {
-  int diff_context_new = 6;
-  int linematch_lines_new = 0;
-  int diff_flags_new = 0;
-  int diff_foldcolumn_new = 2;
-  int diff_algorithm_new = 0;
-  int diff_indent_heuristic = 0;
-
-  char *p = p_dip;
-  while (*p != NUL) {
-    // Note: Keep this in sync with opt_dip_values.
-    if (strncmp(p, "filler", 6) == 0) {
-      p += 6;
-      diff_flags_new |= DIFF_FILLER;
-    } else if (strncmp(p, "anchor", 6) == 0) {
-      p += 6;
-      diff_flags_new |= DIFF_ANCHOR;
-    } else if ((strncmp(p, "context:", 8) == 0) && ascii_isdigit(p[8])) {
-      p += 8;
-      diff_context_new = getdigits_int(&p, false, diff_context_new);
-    } else if (strncmp(p, "iblank", 6) == 0) {
-      p += 6;
-      diff_flags_new |= DIFF_IBLANK;
-    } else if (strncmp(p, "icase", 5) == 0) {
-      p += 5;
-      diff_flags_new |= DIFF_ICASE;
-    } else if (strncmp(p, "iwhiteall", 9) == 0) {
-      p += 9;
-      diff_flags_new |= DIFF_IWHITEALL;
-    } else if (strncmp(p, "iwhiteeol", 9) == 0) {
-      p += 9;
-      diff_flags_new |= DIFF_IWHITEEOL;
-    } else if (strncmp(p, "iwhite", 6) == 0) {
-      p += 6;
-      diff_flags_new |= DIFF_IWHITE;
-    } else if (strncmp(p, "horizontal", 10) == 0) {
-      p += 10;
-      diff_flags_new |= DIFF_HORIZONTAL;
-    } else if (strncmp(p, "vertical", 8) == 0) {
-      p += 8;
-      diff_flags_new |= DIFF_VERTICAL;
-    } else if ((strncmp(p, "foldcolumn:", 11) == 0) && ascii_isdigit(p[11])) {
-      p += 11;
-      diff_foldcolumn_new = getdigits_int(&p, false, diff_foldcolumn_new);
-    } else if (strncmp(p, "hiddenoff", 9) == 0) {
-      p += 9;
-      diff_flags_new |= DIFF_HIDDEN_OFF;
-    } else if (strncmp(p, "closeoff", 8) == 0) {
-      p += 8;
-      diff_flags_new |= DIFF_CLOSE_OFF;
-    } else if (strncmp(p, "followwrap", 10) == 0) {
-      p += 10;
-      diff_flags_new |= DIFF_FOLLOWWRAP;
-    } else if (strncmp(p, "indent-heuristic", 16) == 0) {
-      p += 16;
-      diff_indent_heuristic = XDF_INDENT_HEURISTIC;
-    } else if (strncmp(p, "internal", 8) == 0) {
-      p += 8;
-      diff_flags_new |= DIFF_INTERNAL;
-    } else if (strncmp(p, "algorithm:", 10) == 0) {
-      // Note: Keep this in sync with opt_dip_algorithm_values.
-      p += 10;
-      if (strncmp(p, "myers", 5) == 0) {
-        p += 5;
-        diff_algorithm_new = 0;
-      } else if (strncmp(p, "minimal", 7) == 0) {
-        p += 7;
-        diff_algorithm_new = XDF_NEED_MINIMAL;
-      } else if (strncmp(p, "patience", 8) == 0) {
-        p += 8;
-        diff_algorithm_new = XDF_PATIENCE_DIFF;
-      } else if (strncmp(p, "histogram", 9) == 0) {
-        p += 9;
-        diff_algorithm_new = XDF_HISTOGRAM_DIFF;
-      } else {
-        return FAIL;
-      }
-    } else if (strncmp(p, "inline:", 7) == 0) {
-      // Note: Keep this in sync with opt_dip_inline_values.
-      p += 7;
-      if (strncmp(p, "none", 4) == 0) {
-        p += 4;
-        diff_flags_new &= ~(ALL_INLINE);
-        diff_flags_new |= DIFF_INLINE_NONE;
-      } else if (strncmp(p, "simple", 6) == 0) {
-        p += 6;
-        diff_flags_new &= ~(ALL_INLINE);
-        diff_flags_new |= DIFF_INLINE_SIMPLE;
-      } else if (strncmp(p, "char", 4) == 0) {
-        p += 4;
-        diff_flags_new &= ~(ALL_INLINE);
-        diff_flags_new |= DIFF_INLINE_CHAR;
-      } else if (strncmp(p, "word", 4) == 0) {
-        p += 4;
-        diff_flags_new &= ~(ALL_INLINE);
-        diff_flags_new |= DIFF_INLINE_WORD;
-      } else {
-        return FAIL;
-      }
-    } else if ((strncmp(p, "linematch:", 10) == 0) && ascii_isdigit(p[10])) {
-      p += 10;
-      linematch_lines_new = getdigits_int(&p, false, linematch_lines_new);
-      diff_flags_new |= DIFF_LINEMATCH;
-
-      // linematch does not make sense without filler set
-      diff_flags_new |= DIFF_FILLER;
-    }
-
-    if ((*p != ',') && (*p != NUL)) {
-      return FAIL;
-    }
-
-    if (*p == ',') {
-      p++;
-    }
-  }
-
-  diff_algorithm_new |= diff_indent_heuristic;
-
-  // Can't have both "horizontal" and "vertical".
-  if ((diff_flags_new & DIFF_HORIZONTAL) && (diff_flags_new & DIFF_VERTICAL)) {
+  // Parse the diffopt string using Rust
+  DiffoptResult parsed = rs_diffopt_parse(p_dip);
+  if (parsed.result == FAIL) {
     return FAIL;
   }
 
   // If flags were added or removed, or the algorithm was changed, need to
   // update the diff.
-  if (diff_flags != diff_flags_new || diff_algorithm != diff_algorithm_new) {
+  if (diff_flags != parsed.diff_flags || diff_algorithm != parsed.diff_algorithm) {
     FOR_ALL_TABS(tp) {
       tp->tp_diff_invalid = true;
     }
   }
 
-  diff_flags = diff_flags_new;
-  diff_context = diff_context_new == 0 ? 1 : diff_context_new;
-  linematch_lines = linematch_lines_new;
-  diff_foldcolumn = diff_foldcolumn_new;
-  diff_algorithm = diff_algorithm_new;
+  diff_flags = parsed.diff_flags;
+  diff_context = parsed.diff_context;
+  linematch_lines = parsed.linematch_lines;
+  diff_foldcolumn = parsed.diff_foldcolumn;
+  diff_algorithm = parsed.diff_algorithm;
 
   diff_redraw(true);
 

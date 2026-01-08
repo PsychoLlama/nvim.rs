@@ -48,6 +48,12 @@ const ALL_INLINE_DIFF: c_int = DIFF_INLINE_CHAR | DIFF_INLINE_WORD;
 // Combination mask for all whitespace diff flags
 const ALL_WHITE_DIFF: c_int = DIFF_IWHITE | DIFF_IWHITEALL | DIFF_IWHITEEOL;
 
+// XDiff algorithm flags (from xdiff.h)
+const XDF_NEED_MINIMAL: c_int = 1 << 0;
+const XDF_PATIENCE_DIFF: c_int = 1 << 14;
+const XDF_HISTOGRAM_DIFF: c_int = 1 << 15;
+const XDF_INDENT_HEURISTIC: c_int = 1 << 23;
+
 use std::ffi::c_void;
 
 /// Maximum number of diff buffers (matches DB_COUNT in C).
@@ -1077,6 +1083,240 @@ pub extern "C" fn rs_diff_copy_entry(
     diff_copy_entry_impl(dprev, dp, idx_orig, idx_new);
 }
 
+// =============================================================================
+// Diffopt Parsing
+// =============================================================================
+
+/// Result of parsing diffopt string.
+/// This struct holds all the values that need to be set after parsing.
+#[repr(C)]
+pub struct DiffoptResult {
+    /// Parsed diff flags
+    pub diff_flags: c_int,
+    /// Parsed diff algorithm
+    pub diff_algorithm: c_int,
+    /// Parsed context lines
+    pub diff_context: c_int,
+    /// Parsed fold column width
+    pub diff_foldcolumn: c_int,
+    /// Parsed linematch lines
+    pub linematch_lines: c_int,
+    /// Whether parsing succeeded (OK or FAIL)
+    pub result: c_int,
+}
+
+impl DiffoptResult {
+    /// Create a failed result
+    const fn fail() -> Self {
+        Self {
+            diff_flags: 0,
+            diff_algorithm: 0,
+            diff_context: 6,
+            diff_foldcolumn: 2,
+            linematch_lines: 0,
+            result: FAIL,
+        }
+    }
+}
+
+/// Check if byte is an ASCII digit
+#[inline]
+const fn ascii_isdigit(c: u8) -> bool {
+    c >= b'0' && c <= b'9'
+}
+
+/// Parse digits from a pointer, advancing it past the digits.
+/// Returns the parsed integer value.
+unsafe fn getdigits(pp: &mut *const u8) -> c_int {
+    let mut result: c_int = 0;
+    while ascii_isdigit(**pp) {
+        result = result
+            .saturating_mul(10)
+            .saturating_add(c_int::from(**pp - b'0'));
+        *pp = pp.add(1);
+    }
+    result
+}
+
+/// Check if string starts with a given prefix
+unsafe fn starts_with(s: *const u8, prefix: &[u8]) -> bool {
+    for (i, &b) in prefix.iter().enumerate() {
+        if *s.add(i) != b {
+            return false;
+        }
+    }
+    true
+}
+
+/// Parse the diffopt string and return the parsed values.
+///
+/// This function parses the comma-separated diffopt string and extracts
+/// all flag values, algorithm settings, context/foldcolumn numbers, etc.
+#[allow(clippy::too_many_lines)]
+fn diffopt_parse_impl(p_dip: *const c_char) -> DiffoptResult {
+    if p_dip.is_null() {
+        return DiffoptResult::fail();
+    }
+
+    let mut diff_context_new: c_int = 6;
+    let mut linematch_lines_new: c_int = 0;
+    let mut diff_flags_new: c_int = 0;
+    let mut diff_foldcolumn_new: c_int = 2;
+    let mut diff_algorithm_new: c_int = 0;
+    let mut diff_indent_heuristic: c_int = 0;
+
+    unsafe {
+        let mut p = p_dip.cast::<u8>();
+
+        while *p != 0 {
+            // Note: Keep this in sync with opt_dip_values
+            if starts_with(p, b"filler") {
+                p = p.add(6);
+                diff_flags_new |= DIFF_FILLER;
+            } else if starts_with(p, b"anchor") {
+                p = p.add(6);
+                diff_flags_new |= DIFF_ANCHOR;
+            } else if starts_with(p, b"context:") && ascii_isdigit(*p.add(8)) {
+                p = p.add(8);
+                diff_context_new = getdigits(&mut p);
+            } else if starts_with(p, b"iblank") {
+                p = p.add(6);
+                diff_flags_new |= DIFF_IBLANK;
+            } else if starts_with(p, b"icase") {
+                p = p.add(5);
+                diff_flags_new |= DIFF_ICASE;
+            } else if starts_with(p, b"iwhiteall") {
+                p = p.add(9);
+                diff_flags_new |= DIFF_IWHITEALL;
+            } else if starts_with(p, b"iwhiteeol") {
+                p = p.add(9);
+                diff_flags_new |= DIFF_IWHITEEOL;
+            } else if starts_with(p, b"iwhite") {
+                p = p.add(6);
+                diff_flags_new |= DIFF_IWHITE;
+            } else if starts_with(p, b"horizontal") {
+                p = p.add(10);
+                diff_flags_new |= DIFF_HORIZONTAL;
+            } else if starts_with(p, b"vertical") {
+                p = p.add(8);
+                diff_flags_new |= DIFF_VERTICAL;
+            } else if starts_with(p, b"foldcolumn:") && ascii_isdigit(*p.add(11)) {
+                p = p.add(11);
+                diff_foldcolumn_new = getdigits(&mut p);
+            } else if starts_with(p, b"hiddenoff") {
+                p = p.add(9);
+                diff_flags_new |= DIFF_HIDDEN_OFF;
+            } else if starts_with(p, b"closeoff") {
+                p = p.add(8);
+                diff_flags_new |= DIFF_CLOSE_OFF;
+            } else if starts_with(p, b"followwrap") {
+                p = p.add(10);
+                diff_flags_new |= DIFF_FOLLOWWRAP;
+            } else if starts_with(p, b"indent-heuristic") {
+                p = p.add(16);
+                diff_indent_heuristic = XDF_INDENT_HEURISTIC;
+            } else if starts_with(p, b"internal") {
+                p = p.add(8);
+                diff_flags_new |= DIFF_INTERNAL;
+            } else if starts_with(p, b"algorithm:") {
+                // Note: Keep this in sync with opt_dip_algorithm_values
+                p = p.add(10);
+                if starts_with(p, b"myers") {
+                    p = p.add(5);
+                    diff_algorithm_new = 0;
+                } else if starts_with(p, b"minimal") {
+                    p = p.add(7);
+                    diff_algorithm_new = XDF_NEED_MINIMAL;
+                } else if starts_with(p, b"patience") {
+                    p = p.add(8);
+                    diff_algorithm_new = XDF_PATIENCE_DIFF;
+                } else if starts_with(p, b"histogram") {
+                    p = p.add(9);
+                    diff_algorithm_new = XDF_HISTOGRAM_DIFF;
+                } else {
+                    return DiffoptResult::fail();
+                }
+            } else if starts_with(p, b"inline:") {
+                // Note: Keep this in sync with opt_dip_inline_values
+                p = p.add(7);
+                if starts_with(p, b"none") {
+                    p = p.add(4);
+                    diff_flags_new &= !ALL_INLINE;
+                    diff_flags_new |= DIFF_INLINE_NONE;
+                } else if starts_with(p, b"simple") {
+                    p = p.add(6);
+                    diff_flags_new &= !ALL_INLINE;
+                    diff_flags_new |= DIFF_INLINE_SIMPLE;
+                } else if starts_with(p, b"char") {
+                    p = p.add(4);
+                    diff_flags_new &= !ALL_INLINE;
+                    diff_flags_new |= DIFF_INLINE_CHAR;
+                } else if starts_with(p, b"word") {
+                    p = p.add(4);
+                    diff_flags_new &= !ALL_INLINE;
+                    diff_flags_new |= DIFF_INLINE_WORD;
+                } else {
+                    return DiffoptResult::fail();
+                }
+            } else if starts_with(p, b"linematch:") && ascii_isdigit(*p.add(10)) {
+                p = p.add(10);
+                linematch_lines_new = getdigits(&mut p);
+                diff_flags_new |= DIFF_LINEMATCH;
+                // linematch does not make sense without filler set
+                diff_flags_new |= DIFF_FILLER;
+            } else {
+                // Unknown option or end of string
+                if *p != b',' && *p != 0 {
+                    return DiffoptResult::fail();
+                }
+            }
+
+            // Check for separator
+            if *p != b',' && *p != 0 {
+                return DiffoptResult::fail();
+            }
+
+            if *p == b',' {
+                p = p.add(1);
+            }
+        }
+    }
+
+    // Combine algorithm with indent heuristic
+    diff_algorithm_new |= diff_indent_heuristic;
+
+    // Can't have both "horizontal" and "vertical"
+    if (diff_flags_new & DIFF_HORIZONTAL) != 0 && (diff_flags_new & DIFF_VERTICAL) != 0 {
+        return DiffoptResult::fail();
+    }
+
+    // Ensure diff_context is at least 1 (0 means use 1)
+    if diff_context_new == 0 {
+        diff_context_new = 1;
+    }
+
+    DiffoptResult {
+        diff_flags: diff_flags_new,
+        diff_algorithm: diff_algorithm_new,
+        diff_context: diff_context_new,
+        diff_foldcolumn: diff_foldcolumn_new,
+        linematch_lines: linematch_lines_new,
+        result: OK,
+    }
+}
+
+/// FFI export: Parse the diffopt string.
+///
+/// Returns a DiffoptResult struct with all parsed values and a result code.
+///
+/// # Safety
+///
+/// `p_dip` must be a valid null-terminated string or null.
+#[no_mangle]
+pub extern "C" fn rs_diffopt_parse(p_dip: *const c_char) -> DiffoptResult {
+    diffopt_parse_impl(p_dip)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1602,4 +1842,270 @@ mod tests {
     // Note: Tests for diff_cmp_impl and diff_copy_entry_impl
     // are not included here because they require C FFI calls that are
     // only available when linked with the full Neovim binary.
+
+    // =========================================================================
+    // XDF Algorithm Constants Tests
+    // =========================================================================
+
+    #[test]
+    fn test_xdf_constants() {
+        assert_eq!(XDF_NEED_MINIMAL, 1 << 0);
+        assert_eq!(XDF_PATIENCE_DIFF, 1 << 14);
+        assert_eq!(XDF_HISTOGRAM_DIFF, 1 << 15);
+        assert_eq!(XDF_INDENT_HEURISTIC, 1 << 23);
+    }
+
+    // =========================================================================
+    // Diffopt Parsing Tests
+    // =========================================================================
+
+    #[test]
+    fn test_ascii_isdigit() {
+        for c in b'0'..=b'9' {
+            assert!(ascii_isdigit(c));
+        }
+        assert!(!ascii_isdigit(b'a'));
+        assert!(!ascii_isdigit(b' '));
+        assert!(!ascii_isdigit(0));
+    }
+
+    #[test]
+    fn test_diffopt_result_size() {
+        // 6 * 4 bytes = 24 bytes
+        assert_eq!(std::mem::size_of::<DiffoptResult>(), 24);
+    }
+
+    #[test]
+    fn test_diffopt_parse_empty() {
+        let opt = b"\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, OK);
+        assert_eq!(result.diff_flags, 0);
+        assert_eq!(result.diff_algorithm, 0);
+        assert_eq!(result.diff_context, 6);
+        assert_eq!(result.diff_foldcolumn, 2);
+        assert_eq!(result.linematch_lines, 0);
+    }
+
+    #[test]
+    fn test_diffopt_parse_filler() {
+        let opt = b"filler\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, OK);
+        assert_ne!(result.diff_flags & DIFF_FILLER, 0);
+    }
+
+    #[test]
+    fn test_diffopt_parse_multiple() {
+        let opt = b"filler,internal,icase\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, OK);
+        assert_ne!(result.diff_flags & DIFF_FILLER, 0);
+        assert_ne!(result.diff_flags & DIFF_INTERNAL, 0);
+        assert_ne!(result.diff_flags & DIFF_ICASE, 0);
+    }
+
+    #[test]
+    fn test_diffopt_parse_context() {
+        let opt = b"context:10\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, OK);
+        assert_eq!(result.diff_context, 10);
+    }
+
+    #[test]
+    fn test_diffopt_parse_context_zero() {
+        let opt = b"context:0\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, OK);
+        assert_eq!(result.diff_context, 1); // 0 becomes 1
+    }
+
+    #[test]
+    fn test_diffopt_parse_foldcolumn() {
+        let opt = b"foldcolumn:5\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, OK);
+        assert_eq!(result.diff_foldcolumn, 5);
+    }
+
+    #[test]
+    fn test_diffopt_parse_horizontal() {
+        let opt = b"horizontal\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, OK);
+        assert_ne!(result.diff_flags & DIFF_HORIZONTAL, 0);
+    }
+
+    #[test]
+    fn test_diffopt_parse_vertical() {
+        let opt = b"vertical\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, OK);
+        assert_ne!(result.diff_flags & DIFF_VERTICAL, 0);
+    }
+
+    #[test]
+    fn test_diffopt_parse_horizontal_vertical_fail() {
+        let opt = b"horizontal,vertical\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, FAIL); // Can't have both
+    }
+
+    #[test]
+    fn test_diffopt_parse_algorithm_myers() {
+        let opt = b"algorithm:myers\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, OK);
+        assert_eq!(result.diff_algorithm, 0);
+    }
+
+    #[test]
+    fn test_diffopt_parse_algorithm_minimal() {
+        let opt = b"algorithm:minimal\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, OK);
+        assert_eq!(result.diff_algorithm, XDF_NEED_MINIMAL);
+    }
+
+    #[test]
+    fn test_diffopt_parse_algorithm_patience() {
+        let opt = b"algorithm:patience\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, OK);
+        assert_eq!(result.diff_algorithm, XDF_PATIENCE_DIFF);
+    }
+
+    #[test]
+    fn test_diffopt_parse_algorithm_histogram() {
+        let opt = b"algorithm:histogram\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, OK);
+        assert_eq!(result.diff_algorithm, XDF_HISTOGRAM_DIFF);
+    }
+
+    #[test]
+    fn test_diffopt_parse_algorithm_invalid() {
+        let opt = b"algorithm:unknown\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, FAIL);
+    }
+
+    #[test]
+    fn test_diffopt_parse_indent_heuristic() {
+        let opt = b"indent-heuristic\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, OK);
+        assert_ne!(result.diff_algorithm & XDF_INDENT_HEURISTIC, 0);
+    }
+
+    #[test]
+    fn test_diffopt_parse_algorithm_with_indent() {
+        let opt = b"algorithm:patience,indent-heuristic\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, OK);
+        assert_eq!(
+            result.diff_algorithm,
+            XDF_PATIENCE_DIFF | XDF_INDENT_HEURISTIC
+        );
+    }
+
+    #[test]
+    fn test_diffopt_parse_inline_none() {
+        let opt = b"inline:none\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, OK);
+        assert_ne!(result.diff_flags & DIFF_INLINE_NONE, 0);
+        assert_eq!(result.diff_flags & ALL_INLINE, DIFF_INLINE_NONE);
+    }
+
+    #[test]
+    fn test_diffopt_parse_inline_simple() {
+        let opt = b"inline:simple\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, OK);
+        assert_ne!(result.diff_flags & DIFF_INLINE_SIMPLE, 0);
+    }
+
+    #[test]
+    fn test_diffopt_parse_inline_char() {
+        let opt = b"inline:char\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, OK);
+        assert_ne!(result.diff_flags & DIFF_INLINE_CHAR, 0);
+    }
+
+    #[test]
+    fn test_diffopt_parse_inline_word() {
+        let opt = b"inline:word\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, OK);
+        assert_ne!(result.diff_flags & DIFF_INLINE_WORD, 0);
+    }
+
+    #[test]
+    fn test_diffopt_parse_inline_invalid() {
+        let opt = b"inline:unknown\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, FAIL);
+    }
+
+    #[test]
+    fn test_diffopt_parse_linematch() {
+        let opt = b"linematch:100\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, OK);
+        assert_eq!(result.linematch_lines, 100);
+        assert_ne!(result.diff_flags & DIFF_LINEMATCH, 0);
+        assert_ne!(result.diff_flags & DIFF_FILLER, 0); // FILLER is always set with linematch
+    }
+
+    #[test]
+    fn test_diffopt_parse_whitespace_flags() {
+        let opt = b"iwhite,iwhiteall,iwhiteeol,iblank\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, OK);
+        assert_ne!(result.diff_flags & DIFF_IWHITE, 0);
+        assert_ne!(result.diff_flags & DIFF_IWHITEALL, 0);
+        assert_ne!(result.diff_flags & DIFF_IWHITEEOL, 0);
+        assert_ne!(result.diff_flags & DIFF_IBLANK, 0);
+    }
+
+    #[test]
+    fn test_diffopt_parse_other_flags() {
+        let opt = b"hiddenoff,closeoff,followwrap,anchor\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, OK);
+        assert_ne!(result.diff_flags & DIFF_HIDDEN_OFF, 0);
+        assert_ne!(result.diff_flags & DIFF_CLOSE_OFF, 0);
+        assert_ne!(result.diff_flags & DIFF_FOLLOWWRAP, 0);
+        assert_ne!(result.diff_flags & DIFF_ANCHOR, 0);
+    }
+
+    #[test]
+    fn test_diffopt_parse_invalid_option() {
+        let opt = b"unknownoption\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, FAIL);
+    }
+
+    #[test]
+    fn test_diffopt_parse_null() {
+        let result = diffopt_parse_impl(std::ptr::null());
+        assert_eq!(result.result, FAIL);
+    }
+
+    #[test]
+    fn test_diffopt_parse_complex() {
+        // Test a realistic diffopt string
+        let opt = b"internal,filler,closeoff,algorithm:histogram,context:3,inline:char\0";
+        let result = diffopt_parse_impl(opt.as_ptr().cast::<c_char>());
+        assert_eq!(result.result, OK);
+        assert_ne!(result.diff_flags & DIFF_INTERNAL, 0);
+        assert_ne!(result.diff_flags & DIFF_FILLER, 0);
+        assert_ne!(result.diff_flags & DIFF_CLOSE_OFF, 0);
+        assert_ne!(result.diff_flags & DIFF_INLINE_CHAR, 0);
+        assert_eq!(result.diff_algorithm, XDF_HISTOGRAM_DIFF);
+        assert_eq!(result.diff_context, 3);
+    }
 }
