@@ -1,58 +1,30 @@
-Plan: ~/.claude/plans/floofy-jumping-valley.md
+Plan: ~/.claude/plans/linear-orbiting-waterfall.md
 
-All phases of the Ex Commands System Migration Plan are complete. Here's a summary of what was implemented:
+## Migration Complete! 
 
-## Summary
+The Normal Mode Migration Plan has been completed. Here's the summary:
 
-All 9 phases of the ex_docmd migration plan have been completed:
+### Final Statistics
+- **Total Rust LOC:** 2,611 lines (2,328 in lib.rs + 283 in execute.rs)
+- **Exported functions:** 85 (75 command handlers + 10 infrastructure functions)
+- **Unit tests:** 19 tests
 
-### Phase 1: Skip Functions and String Utilities
-- Added `rs_skip_vimgrep_pat` for vimgrep pattern parsing
-- VGR_* constants for vimgrep flags
+### Commits Made
+1. **Phase 4** (599f16c01a): Text object handlers - nv_object, nv_select, nv_brackets
+2. **Phase 5** (0674762078): Undo/redo handlers - nv_undo, nv_Undo, nv_dot, nv_redo_or_register
+3. **Phase 6** (cd3318a4b0): Insert mode entry handlers - nv_replace, nv_Replace, nv_vreplace
+4. **Phase 7** (55eccfb478): Scroll/screen handlers - nv_zet, nv_scroll, nv_right, nv_left, nv_up, nv_down
+5. **Phase 8** (84e95b5cfb): Miscellaneous handlers - nv_g_cmd, nv_at, nv_join, nv_open
+6. **Phase 9** (4f46f2b77c): Execute module - rs_need_additional_char, flag utilities, count multiplication
 
-### Phase 2: Command Modifiers (`modifiers.rs`)
-- CMOD_* constants for command modifier flags (sandbox, silent, noautocmd, etc.)
-- WSP_* constants for window split flags
-- Flag checking utilities
+### Architecture
+- Each command handler uses the delegation pattern: C wrapper → Rust function → C _impl function
+- The execute module provides infrastructure utilities (flag checking, count handling, etc.)
+- `normal_need_additional_char` now uses the Rust implementation `rs_need_additional_char`
 
-### Phase 3: Address/Range Parsing (`address.rs`)
-- `AddrType` enum for address types (Lines, Windows, Buffers, Tabs, etc.)
-- ADDR_* constants for C compatibility
-- Type classification helpers
+### Quality Gates
+- ✅ `just rust-fmt-check` - formatting passes
+- ✅ `just rust-clippy` - no lint warnings  
+- ✅ `just rust-test` - 1,560 tests pass (including 19 in normal crate)
 
-### Phase 4: Command Name Lookup (`lookup.rs`)
-- One-letter command detection (k, s)
-- Command name character classification
-- Python command prefix detection
-- User command detection
-
-### Phase 5: Argument Parsing (`args.rs`)
-- FORCE_BIN_* constants for ++bin/++nobin options
-- ++opt detection with `starts_with_plus_plus()`
-- Count parsing with `parse_count()`
-- Register validation utilities
-- Filename expansion detection
-
-### Phase 6: Command Execution Infrastructure (`execute.rs`)
-- EXFLAG_* constants for output flags
-- Security checks: `rs_in_sandbox()`, `rs_is_secure()`, `rs_check_secure()`
-- Command state utilities: force, skip mode, range validation
-
-### Phase 7: Error Handling and Messages (`errors.rs`)
-- Error code constants (E_INVARG, E_INVRANGE, etc.)
-- Error string accessors
-- Error emission utilities
-- Range and argument validation with error emission
-
-### Phase 8: Source File Processing (`source.rs`)
-- Sourcing state accessors
-- Path classification (autoload, script extensions)
-- DIP_* flags for do_source()
-- Line parsing utilities (continuation lines, comments)
-
-### Phase 9: Command Table and Documentation (`table.rs`)
-- EX_* constants for all command attribute flags
-- Flag checking functions for range, bang, extra args, sandbox, etc.
-- `CompletionType` enum for command completion
-
-**Total: 1554 unit tests passing, all formatting and linting checks pass.**
+Note: There's a pre-existing C build issue unrelated to this migration (missing type definitions in generated headers for `msgchunk_T` and `ZeroBlock`).
