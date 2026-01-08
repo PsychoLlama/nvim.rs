@@ -11,6 +11,7 @@ pub mod edit;
 pub mod expand;
 pub mod history;
 pub mod pattern;
+pub mod sources;
 pub mod state;
 pub mod usercomplete;
 pub mod wildmenu;
