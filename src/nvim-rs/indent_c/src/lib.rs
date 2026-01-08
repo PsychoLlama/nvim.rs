@@ -1544,6 +1544,350 @@ pub unsafe extern "C" fn rs_cin_isunion(p: *const c_char) -> bool {
 }
 
 // ============================================================================
+// Indentation calculation helpers
+// ============================================================================
+
+/// Cindent options structure.
+///
+/// Mirrors the `b_ind_*` fields in `buf_T` for cindent settings.
+/// Used to pass indentation options from C to Rust.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CindentOptions {
+    /// Indent for each block level (default: shiftwidth).
+    pub ind_level: c_int,
+    /// Extra indent for open brace at end of line.
+    pub ind_open_imag: c_int,
+    /// Indent for line without opening brace.
+    pub ind_no_brace: c_int,
+    /// First open brace column (for function definitions).
+    pub ind_first_open: c_int,
+    /// Extra indent for open brace.
+    pub ind_open_extra: c_int,
+    /// Extra indent for close brace.
+    pub ind_close_extra: c_int,
+    /// Imaginary indent for open brace in column 0.
+    pub ind_open_left_imag: c_int,
+    /// Jump label indent (-1 means column 1).
+    pub ind_jump_label: c_int,
+    /// Indent for case labels.
+    pub ind_case: c_int,
+    /// Indent for code after case label.
+    pub ind_case_code: c_int,
+    /// Break lineup with case.
+    pub ind_case_break: c_int,
+    /// Scope declaration indent (public:, etc).
+    pub ind_scopedecl: c_int,
+    /// Code after scope declaration.
+    pub ind_scopedecl_code: c_int,
+    /// K&R style parameter indent.
+    pub ind_param: c_int,
+    /// Function type spec indent.
+    pub ind_func_type: c_int,
+    /// C++ base class indent.
+    pub ind_cpp_baseclass: c_int,
+    /// Continuation line indent.
+    pub ind_continuation: c_int,
+    /// Unclosed parenthesis indent.
+    pub ind_unclosed: c_int,
+    /// Second unclosed parenthesis indent.
+    pub ind_unclosed2: c_int,
+    /// Don't ignore unclosed paren indent.
+    pub ind_unclosed_noignore: c_int,
+    /// Wrapped unclosed paren indent.
+    pub ind_unclosed_wrapped: c_int,
+    /// Allow whitespace in unclosed paren lineup.
+    pub ind_unclosed_whiteok: c_int,
+    /// Match paren lineup.
+    pub ind_matching_paren: c_int,
+    /// Previous line paren indent.
+    pub ind_paren_prev: c_int,
+    /// Extra indent for comments.
+    pub ind_comment: c_int,
+    /// Inside comment indent.
+    pub ind_in_comment: c_int,
+    /// Force inside comment indent.
+    pub ind_in_comment2: c_int,
+    /// Max lines to search for paren.
+    pub ind_maxparen: c_int,
+    /// Max lines to search for comment.
+    pub ind_maxcomment: c_int,
+    /// Java brace handling.
+    pub ind_java: c_int,
+    /// JavaScript mode.
+    pub ind_js: c_int,
+    /// Keep case label indent.
+    pub ind_keep_case_label: c_int,
+    /// C++ namespace indent.
+    pub ind_cpp_namespace: c_int,
+    /// if/for/while continuation indent.
+    pub ind_if_for_while: c_int,
+    /// Hash comment indent.
+    pub ind_hash_comment: c_int,
+    /// C++ extern "C" indent.
+    pub ind_cpp_extern_c: c_int,
+    /// Pragma indent.
+    pub ind_pragma: c_int,
+}
+
+/// Result of analyzing indentation context.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct IndentContext {
+    /// Recommended base indent amount.
+    pub base_indent: c_int,
+    /// Additional indent adjustment.
+    pub adjustment: c_int,
+    /// Type of construct determining indent.
+    pub context_type: c_int,
+    /// Line number providing context.
+    pub context_lnum: i64,
+}
+
+/// Context types for indent decisions.
+pub const INDENT_CTX_NONE: c_int = 0;
+pub const INDENT_CTX_BLOCK: c_int = 1;
+pub const INDENT_CTX_CASE: c_int = 2;
+pub const INDENT_CTX_PAREN: c_int = 3;
+pub const INDENT_CTX_COMMENT: c_int = 4;
+pub const INDENT_CTX_STRING: c_int = 5;
+pub const INDENT_CTX_PREPROC: c_int = 6;
+pub const INDENT_CTX_CONTINUATION: c_int = 7;
+
+/// Check if a line ends with a backslash (continuation).
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_ends_in_backslash(s: *const c_char) -> bool {
+    if s.is_null() {
+        return false;
+    }
+
+    // Find end of string
+    let mut p = s;
+    let mut last_non_nul = p;
+    while !is_nul(*p) {
+        if !is_nul(*p) {
+            last_non_nul = p;
+        }
+        p = p.add(1);
+    }
+
+    // Check if last character is backslash
+    if last_non_nul == s && is_nul(*s) {
+        return false;
+    }
+    *last_non_nul == b'\\' as c_char
+}
+
+/// Check if a line is blank (only whitespace or empty).
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_linewhite(s: *const c_char) -> bool {
+    if s.is_null() {
+        return true;
+    }
+
+    let p = skip_whitespace(s);
+    is_nul(*p)
+}
+
+/// Calculate indent for a label line.
+///
+/// Returns the appropriate indent based on whether this is a
+/// case label, default label, or regular label.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_get_label_indent(
+    s: *const c_char,
+    opts: *const CindentOptions,
+    base_indent: c_int,
+) -> c_int {
+    if s.is_null() || opts.is_null() {
+        return base_indent;
+    }
+
+    let opts = &*opts;
+    let p = rs_cin_skipcomment(s);
+
+    // Check for case or default
+    if rs_cin_iscase(p, false) {
+        return base_indent + opts.ind_case;
+    }
+
+    // Check for scope declaration (public:, etc)
+    // Note: We can't fully implement cin_isscopedecl without access to
+    // curbuf->b_p_cinsd, so we check for common ones
+    let p_skip = rs_cin_skipcomment(p);
+    if rs_cin_ispublic(p_skip) || rs_cin_isprotected(p_skip) || rs_cin_isprivate(p_skip) {
+        // Check for trailing colon
+        let mut check = p_skip;
+        while vim_isIDc(i32::from(*check as u8)) != 0 {
+            check = check.add(1);
+        }
+        check = rs_cin_skipcomment(check);
+        if *check == b':' as c_char && *check.add(1) != b':' as c_char {
+            return base_indent + opts.ind_scopedecl;
+        }
+    }
+
+    // Regular label - use jump_label setting
+    if opts.ind_jump_label < 0 {
+        0 // Column 0
+    } else {
+        base_indent + opts.ind_jump_label
+    }
+}
+
+/// Determine if line looks like a function declaration.
+///
+/// Basic heuristic: has '(' but no ';' before it, and ends with ')' or '){'
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_looks_like_funcdecl(s: *const c_char) -> bool {
+    if s.is_null() {
+        return false;
+    }
+
+    // Skip preprocessor
+    if rs_cin_ispreproc(s) {
+        return false;
+    }
+
+    let mut has_paren = false;
+    let mut p = s;
+
+    while !is_nul(*p) {
+        // Skip comments and strings
+        if rs_cin_iscomment(p) {
+            p = rs_cin_skipcomment(p);
+            continue;
+        }
+
+        let new_p = rs_skip_string(p);
+        if new_p != p {
+            p = new_p;
+            continue;
+        }
+
+        // Semicolon before paren means not a function decl
+        if *p == b';' as c_char && !has_paren {
+            return false;
+        }
+
+        if *p == b'(' as c_char {
+            has_paren = true;
+        }
+
+        // Check for ')' followed by optional whitespace/comment and '{' or EOL
+        if *p == b')' as c_char {
+            let after = rs_cin_skipcomment(p.add(1));
+            if is_nul(*after) || *after == b'{' as c_char {
+                return has_paren;
+            }
+        }
+
+        p = p.add(1);
+    }
+
+    false
+}
+
+/// Check if line appears to be starting a K&R style parameter list.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_is_kr_param(s: *const c_char) -> bool {
+    if s.is_null() {
+        return false;
+    }
+
+    let p = rs_cin_skipcomment(s);
+
+    // K&R params are type declarations
+    // e.g., "int x;" after function header "foo(x)"
+
+    // Skip any storage class
+    let mut check = p;
+    if rs_cin_isstatic(check) {
+        check = rs_cin_skipcomment(check.add(6));
+    }
+
+    // Look for type followed by identifier and semicolon
+    // This is a simplified check
+    if !vim_isIDc(i32::from(*check as u8)) == 0 {
+        return false;
+    }
+
+    // Skip type name
+    while vim_isIDc(i32::from(*check as u8)) != 0 {
+        check = check.add(1);
+    }
+    check = rs_cin_skipcomment(check);
+
+    // Check for pointer indicator
+    while *check == b'*' as c_char {
+        check = rs_cin_skipcomment(check.add(1));
+    }
+
+    // Skip variable name
+    if vim_isIDc(i32::from(*check as u8)) == 0 {
+        return false;
+    }
+    while vim_isIDc(i32::from(*check as u8)) != 0 {
+        check = check.add(1);
+    }
+    check = rs_cin_skipcomment(check);
+
+    // Should end with semicolon
+    *check == b';' as c_char
+}
+
+/// Calculate the effective indent for unclosed parentheses.
+///
+/// # Arguments
+/// * `base_indent` - The base indent level
+/// * `paren_col` - Column of the opening parenthesis
+/// * `opts` - Cindent options
+/// * `is_first_paren` - True if this is the first unclosed paren
+///
+/// # Returns
+/// The calculated indent amount.
+///
+/// # Safety
+/// The `opts` pointer must be valid or null.
+#[no_mangle]
+pub const unsafe extern "C" fn rs_calc_paren_indent(
+    base_indent: c_int,
+    paren_col: c_int,
+    opts: *const CindentOptions,
+    is_first_paren: bool,
+) -> c_int {
+    if opts.is_null() {
+        return paren_col + 1;
+    }
+
+    let opts = &*opts;
+
+    if opts.ind_unclosed == 0 {
+        // Line up with the character after the paren
+        paren_col + 1
+    } else if is_first_paren {
+        base_indent + opts.ind_unclosed
+    } else {
+        base_indent + opts.ind_unclosed2
+    }
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
