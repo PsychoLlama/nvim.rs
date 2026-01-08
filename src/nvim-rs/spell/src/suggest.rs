@@ -1159,6 +1159,245 @@ pub unsafe extern "C" fn rs_go_deeper(stack: *mut TryState, depth: usize, score_
     next.delidx = current.delidx;
 }
 
+// =============================================================================
+// Word Transformation Helpers
+// =============================================================================
+
+/// Swap two adjacent bytes in a word.
+///
+/// # Arguments
+/// * `word` - The word buffer to modify
+/// * `pos` - Position of the first byte to swap
+///
+/// # Returns
+/// True if the swap was performed, false if out of bounds
+#[must_use]
+pub fn swap_bytes(word: &mut [u8], pos: usize) -> bool {
+    if pos + 1 >= word.len() {
+        return false;
+    }
+    word.swap(pos, pos + 1);
+    true
+}
+
+/// FFI wrapper for swap_bytes.
+///
+/// # Safety
+/// `word` must be valid for `word_len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_swap_bytes(word: *mut u8, word_len: usize, pos: usize) -> bool {
+    if word.is_null() || pos + 1 >= word_len {
+        return false;
+    }
+    let slice = std::slice::from_raw_parts_mut(word, word_len);
+    swap_bytes(slice, pos)
+}
+
+/// Swap two bytes over three positions (abc -> cba).
+///
+/// # Arguments
+/// * `word` - The word buffer to modify
+/// * `pos` - Position of the first byte
+///
+/// # Returns
+/// True if the swap was performed, false if out of bounds
+#[must_use]
+pub fn swap3_bytes(word: &mut [u8], pos: usize) -> bool {
+    if pos + 2 >= word.len() {
+        return false;
+    }
+    word.swap(pos, pos + 2);
+    true
+}
+
+/// FFI wrapper for swap3_bytes.
+///
+/// # Safety
+/// `word` must be valid for `word_len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_swap3_bytes(word: *mut u8, word_len: usize, pos: usize) -> bool {
+    if word.is_null() || pos + 2 >= word_len {
+        return false;
+    }
+    let slice = std::slice::from_raw_parts_mut(word, word_len);
+    swap3_bytes(slice, pos)
+}
+
+/// Rotate three bytes left (abc -> bca).
+///
+/// # Arguments
+/// * `word` - The word buffer to modify
+/// * `pos` - Position of the first byte
+///
+/// # Returns
+/// True if the rotation was performed, false if out of bounds
+#[must_use]
+pub fn rotate3_left(word: &mut [u8], pos: usize) -> bool {
+    if pos + 2 >= word.len() {
+        return false;
+    }
+    let a = word[pos];
+    word[pos] = word[pos + 1];
+    word[pos + 1] = word[pos + 2];
+    word[pos + 2] = a;
+    true
+}
+
+/// FFI wrapper for rotate3_left.
+///
+/// # Safety
+/// `word` must be valid for `word_len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_rotate3_left(word: *mut u8, word_len: usize, pos: usize) -> bool {
+    if word.is_null() || pos + 2 >= word_len {
+        return false;
+    }
+    let slice = std::slice::from_raw_parts_mut(word, word_len);
+    rotate3_left(slice, pos)
+}
+
+/// Rotate three bytes right (abc -> cab).
+///
+/// # Arguments
+/// * `word` - The word buffer to modify
+/// * `pos` - Position of the first byte
+///
+/// # Returns
+/// True if the rotation was performed, false if out of bounds
+#[must_use]
+pub fn rotate3_right(word: &mut [u8], pos: usize) -> bool {
+    if pos + 2 >= word.len() {
+        return false;
+    }
+    let c = word[pos + 2];
+    word[pos + 2] = word[pos + 1];
+    word[pos + 1] = word[pos];
+    word[pos] = c;
+    true
+}
+
+/// FFI wrapper for rotate3_right.
+///
+/// # Safety
+/// `word` must be valid for `word_len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_rotate3_right(word: *mut u8, word_len: usize, pos: usize) -> bool {
+    if word.is_null() || pos + 2 >= word_len {
+        return false;
+    }
+    let slice = std::slice::from_raw_parts_mut(word, word_len);
+    rotate3_right(slice, pos)
+}
+
+/// Delete a byte from a word, shifting remaining bytes left.
+///
+/// # Arguments
+/// * `word` - The word buffer to modify
+/// * `word_len` - Current length of the word
+/// * `pos` - Position of byte to delete
+///
+/// # Returns
+/// New length of the word, or original length if out of bounds
+#[must_use]
+pub fn delete_byte(word: &mut [u8], word_len: usize, pos: usize) -> usize {
+    if pos >= word_len {
+        return word_len;
+    }
+    // Shift bytes left
+    word.copy_within(pos + 1..word_len, pos);
+    word_len - 1
+}
+
+/// FFI wrapper for delete_byte.
+///
+/// # Safety
+/// `word` must be valid for at least `word_len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_delete_byte(word: *mut u8, word_len: usize, pos: usize) -> usize {
+    if word.is_null() || pos >= word_len {
+        return word_len;
+    }
+    let slice = std::slice::from_raw_parts_mut(word, word_len);
+    delete_byte(slice, word_len, pos)
+}
+
+/// Insert a byte into a word, shifting remaining bytes right.
+///
+/// # Arguments
+/// * `word` - The word buffer to modify (must have room for one more byte)
+/// * `word_len` - Current length of the word
+/// * `pos` - Position where to insert
+/// * `byte` - The byte to insert
+///
+/// # Returns
+/// New length of the word
+#[must_use]
+pub fn insert_byte(word: &mut [u8], word_len: usize, pos: usize, byte: u8) -> usize {
+    if pos > word_len || word_len + 1 >= word.len() {
+        return word_len;
+    }
+    // Shift bytes right
+    word.copy_within(pos..word_len, pos + 1);
+    word[pos] = byte;
+    word_len + 1
+}
+
+/// FFI wrapper for insert_byte.
+///
+/// # Safety
+/// `word` must be valid for at least `word_len + 1` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_insert_byte(
+    word: *mut u8,
+    buffer_len: usize,
+    word_len: usize,
+    pos: usize,
+    byte: u8,
+) -> usize {
+    if word.is_null() || pos > word_len || word_len + 1 >= buffer_len {
+        return word_len;
+    }
+    let slice = std::slice::from_raw_parts_mut(word, buffer_len);
+    insert_byte(slice, word_len, pos, byte)
+}
+
+/// Substitute a byte in a word.
+///
+/// # Arguments
+/// * `word` - The word buffer to modify
+/// * `pos` - Position of byte to substitute
+/// * `byte` - The new byte value
+///
+/// # Returns
+/// The old byte value, or 0 if out of bounds
+#[must_use]
+pub fn substitute_byte(word: &mut [u8], pos: usize, byte: u8) -> u8 {
+    if pos >= word.len() {
+        return 0;
+    }
+    let old = word[pos];
+    word[pos] = byte;
+    old
+}
+
+/// FFI wrapper for substitute_byte.
+///
+/// # Safety
+/// `word` must be valid for `word_len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_substitute_byte(
+    word: *mut u8,
+    word_len: usize,
+    pos: usize,
+    byte: u8,
+) -> u8 {
+    if word.is_null() || pos >= word_len {
+        return 0;
+    }
+    let slice = std::slice::from_raw_parts_mut(word, word_len);
+    substitute_byte(slice, pos, byte)
+}
+
 /// Compare two suggestions for sorting (lower score = better)
 #[must_use]
 pub fn compare_suggestions(a: &Suggestion, b: &Suggestion) -> std::cmp::Ordering {
@@ -1703,5 +1942,120 @@ mod tests {
 
         ts.flags = try_state_flags::TSF_DIDDEL;
         assert!(ts.did_del());
+    }
+
+    // =========================================================================
+    // Word Transformation Tests
+    // =========================================================================
+
+    #[test]
+    fn test_swap_bytes() {
+        let mut word = *b"hello";
+        assert!(swap_bytes(&mut word, 0));
+        assert_eq!(&word, b"ehllo");
+
+        let mut word = *b"abcde";
+        assert!(swap_bytes(&mut word, 2));
+        assert_eq!(&word, b"abdce"); // c<->d swapped
+
+        // Out of bounds
+        let mut word = *b"hello";
+        assert!(!swap_bytes(&mut word, 4));
+        assert_eq!(&word, b"hello");
+    }
+
+    #[test]
+    fn test_swap3_bytes() {
+        let mut word = *b"abcde";
+        assert!(swap3_bytes(&mut word, 0));
+        assert_eq!(&word, b"cbade"); // a<->c swapped
+
+        let mut word = *b"abcde";
+        assert!(swap3_bytes(&mut word, 1));
+        assert_eq!(&word, b"adcbe"); // b<->d swapped
+
+        // Out of bounds
+        let mut word = *b"abc";
+        assert!(!swap3_bytes(&mut word, 1));
+        assert_eq!(&word, b"abc");
+    }
+
+    #[test]
+    fn test_rotate3_left() {
+        let mut word = *b"abcde";
+        assert!(rotate3_left(&mut word, 0));
+        assert_eq!(&word, b"bcade"); // abc -> bca
+
+        let mut word = *b"abcde";
+        assert!(rotate3_left(&mut word, 1));
+        assert_eq!(&word, b"acdbe"); // bcd -> cdb
+
+        // Out of bounds
+        let mut word = *b"abc";
+        assert!(!rotate3_left(&mut word, 1));
+    }
+
+    #[test]
+    fn test_rotate3_right() {
+        let mut word = *b"abcde";
+        assert!(rotate3_right(&mut word, 0));
+        assert_eq!(&word, b"cabde"); // abc -> cab
+
+        let mut word = *b"abcde";
+        assert!(rotate3_right(&mut word, 1));
+        assert_eq!(&word, b"adbce"); // bcd -> dbc
+
+        // Out of bounds
+        let mut word = *b"abc";
+        assert!(!rotate3_right(&mut word, 1));
+    }
+
+    #[test]
+    fn test_delete_byte() {
+        let mut word = [b'h', b'e', b'l', b'l', b'o', 0, 0];
+        let new_len = delete_byte(&mut word, 5, 0);
+        assert_eq!(new_len, 4);
+        assert_eq!(&word[..4], b"ello");
+
+        let mut word = [b'h', b'e', b'l', b'l', b'o', 0, 0];
+        let new_len = delete_byte(&mut word, 5, 2);
+        assert_eq!(new_len, 4);
+        assert_eq!(&word[..4], b"helo");
+
+        // Out of bounds
+        let mut word = [b'h', b'e', b'l', b'l', b'o', 0, 0];
+        let new_len = delete_byte(&mut word, 5, 5);
+        assert_eq!(new_len, 5);
+    }
+
+    #[test]
+    fn test_insert_byte() {
+        let mut word = [b'h', b'e', b'l', b'o', 0, 0, 0];
+        let new_len = insert_byte(&mut word, 4, 2, b'l');
+        assert_eq!(new_len, 5);
+        assert_eq!(&word[..5], b"hello");
+
+        let mut word = [b'e', b'l', b'l', b'o', 0, 0, 0];
+        let new_len = insert_byte(&mut word, 4, 0, b'h');
+        assert_eq!(new_len, 5);
+        assert_eq!(&word[..5], b"hello");
+    }
+
+    #[test]
+    fn test_substitute_byte() {
+        let mut word = *b"hello";
+        let old = substitute_byte(&mut word, 0, b'j');
+        assert_eq!(old, b'h');
+        assert_eq!(&word, b"jello");
+
+        let mut word = *b"hello";
+        let old = substitute_byte(&mut word, 4, b'a');
+        assert_eq!(old, b'o');
+        assert_eq!(&word, b"hella");
+
+        // Out of bounds
+        let mut word = *b"hello";
+        let old = substitute_byte(&mut word, 5, b'x');
+        assert_eq!(old, 0);
     }
 }
