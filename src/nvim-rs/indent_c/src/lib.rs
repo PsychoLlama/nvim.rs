@@ -1067,6 +1067,483 @@ pub unsafe extern "C" fn rs_cin_iscomment_pos(line: *const c_char, col: c_int) -
 }
 
 // ============================================================================
+// Statement analysis utilities
+// ============================================================================
+
+/// Check if a line is terminated with a statement terminator.
+///
+/// Recognizes lines that start with '{' or '}', or end with ';', ',', '{' or '}'.
+/// Does not consider "} else" a terminated line.
+///
+/// # Arguments
+/// * `s` - The line to check
+/// * `incl_open` - Include '{' at the end as terminator
+/// * `incl_comma` - Recognize a trailing comma
+///
+/// # Returns
+/// The terminating character, or '\0' if not terminated.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_isterminated(
+    s: *const c_char,
+    incl_open: bool,
+    incl_comma: bool,
+) -> c_char {
+    if s.is_null() {
+        return NUL;
+    }
+
+    let mut found_start: c_char = 0;
+    let mut n_open: c_int = 0;
+    let mut is_else = false;
+
+    let mut p = rs_cin_skipcomment(s);
+
+    // Check for '{' or '}' at start (but not "} else")
+    if *p == b'{' as c_char || (*p == b'}' as c_char && !rs_cin_iselse(p)) {
+        found_start = *p;
+    }
+
+    if found_start == 0 {
+        is_else = rs_cin_iselse(p);
+    }
+
+    while !is_nul(*p) {
+        // Skip over comments, strings and characters
+        p = rs_skip_string(rs_cin_skipcomment(p));
+
+        if is_nul(*p) {
+            break;
+        }
+
+        if *p == b'}' as c_char && n_open > 0 {
+            n_open -= 1;
+        }
+
+        if (!is_else || n_open == 0)
+            && (*p == b';' as c_char
+                || *p == b'}' as c_char
+                || (incl_comma && *p == b',' as c_char))
+            && rs_cin_nocode(p.add(1))
+        {
+            return *p;
+        } else if *p == b'{' as c_char {
+            if incl_open && rs_cin_nocode(p.add(1)) {
+                return *p;
+            }
+            n_open += 1;
+        }
+
+        if !is_nul(*p) {
+            p = p.add(1);
+        }
+    }
+
+    found_start
+}
+
+/// Check if a line is terminated.
+///
+/// Convenience wrapper that returns true if the line ends with a statement
+/// terminator.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_is_terminated(s: *const c_char) -> bool {
+    rs_cin_isterminated(s, false, false) != NUL
+}
+
+/// Check if line starts with "while" keyword.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_iswhile(p: *const c_char) -> bool {
+    if p.is_null() {
+        return false;
+    }
+    *p == b'w' as c_char
+        && *p.add(1) == b'h' as c_char
+        && *p.add(2) == b'i' as c_char
+        && *p.add(3) == b'l' as c_char
+        && *p.add(4) == b'e' as c_char
+        && vim_isIDc(i32::from(*p.add(5) as u8)) == 0
+}
+
+/// Check if line starts with "for" keyword.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_isfor(p: *const c_char) -> bool {
+    if p.is_null() {
+        return false;
+    }
+    *p == b'f' as c_char
+        && *p.add(1) == b'o' as c_char
+        && *p.add(2) == b'r' as c_char
+        && vim_isIDc(i32::from(*p.add(3) as u8)) == 0
+}
+
+/// Check if line starts with "return" keyword.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_isreturn(p: *const c_char) -> bool {
+    if p.is_null() {
+        return false;
+    }
+    *p == b'r' as c_char
+        && *p.add(1) == b'e' as c_char
+        && *p.add(2) == b't' as c_char
+        && *p.add(3) == b'u' as c_char
+        && *p.add(4) == b'r' as c_char
+        && *p.add(5) == b'n' as c_char
+        && vim_isIDc(i32::from(*p.add(6) as u8)) == 0
+}
+
+/// Check if line starts with "continue" keyword.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_iscontinue(p: *const c_char) -> bool {
+    if p.is_null() {
+        return false;
+    }
+    *p == b'c' as c_char
+        && *p.add(1) == b'o' as c_char
+        && *p.add(2) == b'n' as c_char
+        && *p.add(3) == b't' as c_char
+        && *p.add(4) == b'i' as c_char
+        && *p.add(5) == b'n' as c_char
+        && *p.add(6) == b'u' as c_char
+        && *p.add(7) == b'e' as c_char
+        && vim_isIDc(i32::from(*p.add(8) as u8)) == 0
+}
+
+/// Check if line starts with "goto" keyword.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_isgoto(p: *const c_char) -> bool {
+    if p.is_null() {
+        return false;
+    }
+    *p == b'g' as c_char
+        && *p.add(1) == b'o' as c_char
+        && *p.add(2) == b't' as c_char
+        && *p.add(3) == b'o' as c_char
+        && vim_isIDc(i32::from(*p.add(4) as u8)) == 0
+}
+
+/// Check if line starts with "switch" keyword.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_isswitch(p: *const c_char) -> bool {
+    if p.is_null() {
+        return false;
+    }
+    *p == b's' as c_char
+        && *p.add(1) == b'w' as c_char
+        && *p.add(2) == b'i' as c_char
+        && *p.add(3) == b't' as c_char
+        && *p.add(4) == b'c' as c_char
+        && *p.add(5) == b'h' as c_char
+        && vim_isIDc(i32::from(*p.add(6) as u8)) == 0
+}
+
+/// Find an '=' character in the line, skipping strings and comments.
+///
+/// Returns the column of the '=' or -1 if not found.
+/// Stops at ';', '{', '}', single/double quotes.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_find_equal(s: *const c_char) -> c_int {
+    if s.is_null() {
+        return -1;
+    }
+
+    let mut p = s;
+    while !is_nul(*p) {
+        // Check for characters that stop the search
+        if *p == b';' as c_char
+            || *p == b'{' as c_char
+            || *p == b'}' as c_char
+            || *p == b'\'' as c_char
+            || *p == b'"' as c_char
+        {
+            return -1;
+        }
+
+        // Skip comments
+        if rs_cin_iscomment(p) {
+            p = rs_cin_skipcomment(p);
+            continue;
+        }
+
+        // Found '='
+        if *p == b'=' as c_char {
+            return p.offset_from(s) as c_int;
+        }
+
+        p = p.add(1);
+    }
+
+    -1
+}
+
+/// Check if line contains an assignment or return with initialization.
+///
+/// Returns true if line has '=' or 'return' followed by initializer-like content.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_is_compound_init(s: *const c_char) -> bool {
+    if s.is_null() {
+        return false;
+    }
+
+    let mut p = rs_cin_skipcomment(s);
+    let mut r: *const c_char = std::ptr::null();
+
+    // Look for '=' or "return"
+    while !is_nul(*p) {
+        if *p == b'=' as c_char {
+            r = rs_cin_skipcomment(p.add(1));
+            p = r;
+        } else if rs_cin_isreturn(p) {
+            r = rs_cin_skipcomment(p.add(6));
+            p = r;
+        } else {
+            p = rs_cin_skip_comment_and_string(p.add(1));
+        }
+
+        // If we found '=' or "return", r is now set
+        if !r.is_null() {
+            break;
+        }
+    }
+
+    if r.is_null() {
+        return false;
+    }
+
+    // p now points after '=' or "return"
+    if rs_cin_nocode(p) {
+        return true;
+    }
+
+    // Skip '&' if present
+    if *p == b'&' as c_char {
+        p = rs_cin_skipcomment(p.add(1));
+    }
+
+    // Skip a typecast (...)
+    if *p == b'(' as c_char {
+        let mut open_count: c_int = 1;
+        loop {
+            p = rs_cin_skip_comment_and_string(p.add(1));
+            if rs_cin_nocode(p) {
+                return true;
+            }
+            if *p == b'(' as c_char {
+                open_count += 1;
+            } else if *p == b')' as c_char {
+                open_count -= 1;
+            }
+            if open_count == 0 {
+                break;
+            }
+        }
+        p = rs_cin_skipcomment(p.add(1));
+        if rs_cin_nocode(p) {
+            return true;
+        }
+    }
+
+    // Skip opening braces
+    while *p == b'{' as c_char {
+        p = rs_cin_skipcomment(p.add(1));
+    }
+
+    rs_cin_nocode(p)
+}
+
+/// Check if line starts with "typedef" keyword.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_istypedef(p: *const c_char) -> bool {
+    if p.is_null() {
+        return false;
+    }
+    *p == b't' as c_char
+        && *p.add(1) == b'y' as c_char
+        && *p.add(2) == b'p' as c_char
+        && *p.add(3) == b'e' as c_char
+        && *p.add(4) == b'd' as c_char
+        && *p.add(5) == b'e' as c_char
+        && *p.add(6) == b'f' as c_char
+        && vim_isIDc(i32::from(*p.add(7) as u8)) == 0
+}
+
+/// Check if line starts with "static" keyword.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_isstatic(p: *const c_char) -> bool {
+    if p.is_null() {
+        return false;
+    }
+    *p == b's' as c_char
+        && *p.add(1) == b't' as c_char
+        && *p.add(2) == b'a' as c_char
+        && *p.add(3) == b't' as c_char
+        && *p.add(4) == b'i' as c_char
+        && *p.add(5) == b'c' as c_char
+        && vim_isIDc(i32::from(*p.add(6) as u8)) == 0
+}
+
+/// Check if line starts with "public" keyword.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_ispublic(p: *const c_char) -> bool {
+    if p.is_null() {
+        return false;
+    }
+    *p == b'p' as c_char
+        && *p.add(1) == b'u' as c_char
+        && *p.add(2) == b'b' as c_char
+        && *p.add(3) == b'l' as c_char
+        && *p.add(4) == b'i' as c_char
+        && *p.add(5) == b'c' as c_char
+        && vim_isIDc(i32::from(*p.add(6) as u8)) == 0
+}
+
+/// Check if line starts with "protected" keyword.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_isprotected(p: *const c_char) -> bool {
+    if p.is_null() {
+        return false;
+    }
+    *p == b'p' as c_char
+        && *p.add(1) == b'r' as c_char
+        && *p.add(2) == b'o' as c_char
+        && *p.add(3) == b't' as c_char
+        && *p.add(4) == b'e' as c_char
+        && *p.add(5) == b'c' as c_char
+        && *p.add(6) == b't' as c_char
+        && *p.add(7) == b'e' as c_char
+        && *p.add(8) == b'd' as c_char
+        && vim_isIDc(i32::from(*p.add(9) as u8)) == 0
+}
+
+/// Check if line starts with "private" keyword.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_isprivate(p: *const c_char) -> bool {
+    if p.is_null() {
+        return false;
+    }
+    *p == b'p' as c_char
+        && *p.add(1) == b'r' as c_char
+        && *p.add(2) == b'i' as c_char
+        && *p.add(3) == b'v' as c_char
+        && *p.add(4) == b'a' as c_char
+        && *p.add(5) == b't' as c_char
+        && *p.add(6) == b'e' as c_char
+        && vim_isIDc(i32::from(*p.add(7) as u8)) == 0
+}
+
+/// Check if line starts with "enum" keyword.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_isenum(p: *const c_char) -> bool {
+    if p.is_null() {
+        return false;
+    }
+    *p == b'e' as c_char
+        && *p.add(1) == b'n' as c_char
+        && *p.add(2) == b'u' as c_char
+        && *p.add(3) == b'm' as c_char
+        && vim_isIDc(i32::from(*p.add(4) as u8)) == 0
+}
+
+/// Check if line starts with "struct" keyword.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_isstruct(p: *const c_char) -> bool {
+    if p.is_null() {
+        return false;
+    }
+    *p == b's' as c_char
+        && *p.add(1) == b't' as c_char
+        && *p.add(2) == b'r' as c_char
+        && *p.add(3) == b'u' as c_char
+        && *p.add(4) == b'c' as c_char
+        && *p.add(5) == b't' as c_char
+        && vim_isIDc(i32::from(*p.add(6) as u8)) == 0
+}
+
+/// Check if line starts with "class" keyword.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_isclass(p: *const c_char) -> bool {
+    if p.is_null() {
+        return false;
+    }
+    *p == b'c' as c_char
+        && *p.add(1) == b'l' as c_char
+        && *p.add(2) == b'a' as c_char
+        && *p.add(3) == b's' as c_char
+        && *p.add(4) == b's' as c_char
+        && vim_isIDc(i32::from(*p.add(5) as u8)) == 0
+}
+
+/// Check if line starts with "union" keyword.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_isunion(p: *const c_char) -> bool {
+    if p.is_null() {
+        return false;
+    }
+    *p == b'u' as c_char
+        && *p.add(1) == b'n' as c_char
+        && *p.add(2) == b'i' as c_char
+        && *p.add(3) == b'o' as c_char
+        && *p.add(4) == b'n' as c_char
+        && vim_isIDc(i32::from(*p.add(5) as u8)) == 0
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
