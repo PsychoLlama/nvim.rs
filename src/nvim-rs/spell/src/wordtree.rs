@@ -345,7 +345,10 @@ pub fn compound_flag_allowed(allowed_flags: &[u8], flag: u8) -> bool {
     if flag == 0 {
         return false;
     }
-    allowed_flags.iter().take_while(|&&c| c != 0).any(|&c| c == flag)
+    allowed_flags
+        .iter()
+        .take_while(|&&c| c != 0)
+        .any(|&c| c == flag)
 }
 
 /// Gets all flags for a word that may have multiple flag/region combinations.

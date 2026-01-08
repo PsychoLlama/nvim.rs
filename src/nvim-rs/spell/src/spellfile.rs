@@ -1512,7 +1512,10 @@ mod tests {
             magic: *b"BADMAGIC",
             version: VIMSPELLVERSION,
         };
-        assert_eq!(validate_spellfile_header(&header), HeaderValidation::BadMagic);
+        assert_eq!(
+            validate_spellfile_header(&header),
+            HeaderValidation::BadMagic
+        );
 
         // Old version
         let header = SpellFileHeader {

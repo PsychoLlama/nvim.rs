@@ -2081,6 +2081,300 @@ pub extern "C" fn rs_langp_is_null(langp: LangpHandle) -> bool {
     langp.is_null()
 }
 
+// =============================================================================
+// Spell UI Integration Types (Phase 5)
+// =============================================================================
+
+/// Type of word to add to spell file.
+///
+/// Used by `spell_add_word()` and `zg`, `zw`, `zG`, `zW` commands.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpellAddType {
+    /// Add as good word
+    Good = 0,
+    /// Add as bad/wrong word
+    Bad = 1,
+    /// Add as rare word
+    Rare = 2,
+}
+
+impl SpellAddType {
+    /// Convert from C integer to SpellAddType.
+    #[must_use]
+    pub const fn from_c_int(value: c_int) -> Option<Self> {
+        match value {
+            0 => Some(Self::Good),
+            1 => Some(Self::Bad),
+            2 => Some(Self::Rare),
+            _ => None,
+        }
+    }
+}
+
+/// FFI wrapper to convert integer to SpellAddType.
+///
+/// Returns 0 (Good) if invalid.
+#[no_mangle]
+pub extern "C" fn rs_spell_add_type_from_int(value: c_int) -> c_int {
+    SpellAddType::from_c_int(value).map_or(SpellAddType::Good as c_int, |t| t as c_int)
+}
+
+/// Type of spell word movement.
+///
+/// Used by `]s`, `[s`, `]S`, `[S` navigation commands.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SpellMoveType {
+    /// Move to any misspelled word (all types)
+    All = 0,
+    /// Move to bad (wrong) words only
+    Bad = 1,
+    /// Move to rare words only
+    Rare = 2,
+}
+
+impl SpellMoveType {
+    /// Convert from C integer to SpellMoveType.
+    #[must_use]
+    pub const fn from_c_int(value: c_int) -> Option<Self> {
+        match value {
+            0 => Some(Self::All),
+            1 => Some(Self::Bad),
+            2 => Some(Self::Rare),
+            _ => None,
+        }
+    }
+}
+
+/// FFI wrapper to convert integer to SpellMoveType.
+///
+/// Returns 0 (All) if invalid.
+#[no_mangle]
+pub extern "C" fn rs_spell_move_type_from_int(value: c_int) -> c_int {
+    SpellMoveType::from_c_int(value).map_or(SpellMoveType::All as c_int, |t| t as c_int)
+}
+
+// =============================================================================
+// Spell Suggest Timeout Constants (Phase 5)
+// =============================================================================
+
+/// Default timeout for spell suggestions in milliseconds.
+///
+/// This is the default value for `spell_suggest_timeout` in spellsuggest.c.
+/// The timeout can be changed via the 'timeout:' option in 'spellsuggest'.
+pub const SPELL_SUGGEST_TIMEOUT_DEFAULT: c_int = 5000;
+
+/// FFI wrapper to get the default spell suggest timeout.
+#[no_mangle]
+pub extern "C" fn rs_spell_suggest_timeout_default() -> c_int {
+    SPELL_SUGGEST_TIMEOUT_DEFAULT
+}
+
+/// Minimum reasonable spell suggest timeout (100ms).
+pub const SPELL_SUGGEST_TIMEOUT_MIN: c_int = 100;
+
+/// Maximum reasonable spell suggest timeout (60 seconds).
+pub const SPELL_SUGGEST_TIMEOUT_MAX: c_int = 60000;
+
+/// Validate a spell suggest timeout value.
+///
+/// Returns true if the value is within reasonable bounds.
+#[must_use]
+pub const fn validate_spell_suggest_timeout(timeout: c_int) -> bool {
+    timeout >= SPELL_SUGGEST_TIMEOUT_MIN && timeout <= SPELL_SUGGEST_TIMEOUT_MAX
+}
+
+/// FFI wrapper to validate spell suggest timeout.
+#[no_mangle]
+pub extern "C" fn rs_validate_spell_suggest_timeout(timeout: c_int) -> bool {
+    validate_spell_suggest_timeout(timeout)
+}
+
+/// Clamp a spell suggest timeout to valid bounds.
+///
+/// Returns the timeout clamped to [SPELL_SUGGEST_TIMEOUT_MIN, SPELL_SUGGEST_TIMEOUT_MAX].
+#[must_use]
+pub const fn clamp_spell_suggest_timeout(timeout: c_int) -> c_int {
+    if timeout < SPELL_SUGGEST_TIMEOUT_MIN {
+        SPELL_SUGGEST_TIMEOUT_MIN
+    } else if timeout > SPELL_SUGGEST_TIMEOUT_MAX {
+        SPELL_SUGGEST_TIMEOUT_MAX
+    } else {
+        timeout
+    }
+}
+
+/// FFI wrapper to clamp spell suggest timeout.
+#[no_mangle]
+pub extern "C" fn rs_clamp_spell_suggest_timeout(timeout: c_int) -> c_int {
+    clamp_spell_suggest_timeout(timeout)
+}
+
+// =============================================================================
+// Spell Word Validation (Phase 5)
+// =============================================================================
+
+/// Check if a word contains only valid spell word characters.
+///
+/// A valid spell word contains only word characters (letters, digits for some
+/// languages) without any control characters or other problematic bytes.
+///
+/// # Arguments
+///
+/// * `word` - Pointer to the start of the word
+/// * `end` - Pointer to end of the word (exclusive)
+///
+/// # Safety
+///
+/// Both pointers must be valid and `word <= end`.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub unsafe extern "C" fn rs_valid_spell_word(word: *const u8, end: *const u8) -> bool {
+    if word.is_null() || end.is_null() {
+        return false;
+    }
+
+    if word > end {
+        return false;
+    }
+
+    // Empty words are not valid
+    if word == end {
+        return false;
+    }
+
+    let mut p = word;
+    while p < end {
+        let c = *p;
+        // Control characters (0x00-0x1F, 0x7F) are not allowed
+        if c < 0x20 || c == 0x7F {
+            return false;
+        }
+        p = p.add(1);
+    }
+
+    true
+}
+
+/// Check if a character is valid at the start of a spell word.
+///
+/// The first character must be a letter (not a digit or punctuation).
+#[must_use]
+pub const fn is_valid_spell_word_start(c: u8) -> bool {
+    c.is_ascii_alphabetic() || c >= 0x80 // ASCII letter or high byte (UTF-8)
+}
+
+/// FFI wrapper for is_valid_spell_word_start.
+#[no_mangle]
+pub extern "C" fn rs_is_valid_spell_word_start(c: u8) -> bool {
+    is_valid_spell_word_start(c)
+}
+
+// =============================================================================
+// Undo Support for Spell Commands (Phase 5)
+// =============================================================================
+
+/// Flags for spell add operations with undo support.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SpellAddFlags {
+    /// The type of word to add
+    pub add_type: c_int,
+    /// Index into 'spellfile' option (1-based, 0 for internal list)
+    pub spellfile_idx: c_int,
+    /// Whether this operation is undoable
+    pub undoable: bool,
+}
+
+impl SpellAddFlags {
+    /// Create new spell add flags.
+    #[must_use]
+    pub const fn new(add_type: SpellAddType, spellfile_idx: c_int, undoable: bool) -> Self {
+        Self {
+            add_type: add_type as c_int,
+            spellfile_idx,
+            undoable,
+        }
+    }
+
+    /// Create flags for adding a good word (zg command).
+    #[must_use]
+    pub const fn good(spellfile_idx: c_int) -> Self {
+        Self::new(SpellAddType::Good, spellfile_idx, true)
+    }
+
+    /// Create flags for adding a bad word (zw command).
+    #[must_use]
+    pub const fn bad(spellfile_idx: c_int) -> Self {
+        Self::new(SpellAddType::Bad, spellfile_idx, true)
+    }
+
+    /// Create flags for adding a rare word.
+    #[must_use]
+    pub const fn rare(spellfile_idx: c_int) -> Self {
+        Self::new(SpellAddType::Rare, spellfile_idx, true)
+    }
+
+    /// Check if this is an undo operation (removing a word).
+    #[must_use]
+    pub const fn is_undo(&self) -> bool {
+        self.undoable && self.add_type == SpellAddType::Bad as c_int
+    }
+}
+
+/// FFI wrapper to create SpellAddFlags for a good word.
+#[no_mangle]
+pub extern "C" fn rs_spell_add_flags_good(spellfile_idx: c_int) -> SpellAddFlags {
+    SpellAddFlags::good(spellfile_idx)
+}
+
+/// FFI wrapper to create SpellAddFlags for a bad word.
+#[no_mangle]
+pub extern "C" fn rs_spell_add_flags_bad(spellfile_idx: c_int) -> SpellAddFlags {
+    SpellAddFlags::bad(spellfile_idx)
+}
+
+/// FFI wrapper to create SpellAddFlags for a rare word.
+#[no_mangle]
+pub extern "C" fn rs_spell_add_flags_rare(spellfile_idx: c_int) -> SpellAddFlags {
+    SpellAddFlags::rare(spellfile_idx)
+}
+
+// =============================================================================
+// Spell Suggestion Display Constants (Phase 5)
+// =============================================================================
+
+/// Maximum number of suggestions to display in z= menu.
+pub const SPELL_SUGGEST_DISPLAY_MAX: c_int = 25;
+
+/// FFI wrapper to get max suggestions to display.
+#[no_mangle]
+pub extern "C" fn rs_spell_suggest_display_max() -> c_int {
+    SPELL_SUGGEST_DISPLAY_MAX
+}
+
+/// Default number of suggestions to show initially.
+pub const SPELL_SUGGEST_DISPLAY_DEFAULT: c_int = 5;
+
+/// FFI wrapper to get default number of suggestions to display.
+#[no_mangle]
+pub extern "C" fn rs_spell_suggest_display_default() -> c_int {
+    SPELL_SUGGEST_DISPLAY_DEFAULT
+}
+
+/// Minimum score difference to show another suggestion.
+///
+/// If the next suggestion's score is more than this much worse
+/// than the previous, it may be omitted.
+pub const SPELL_SUGGEST_SCORE_THRESHOLD: c_int = 200;
+
+/// FFI wrapper to get suggestion score threshold.
+#[no_mangle]
+pub extern "C" fn rs_spell_suggest_score_threshold() -> c_int {
+    SPELL_SUGGEST_SCORE_THRESHOLD
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3290,5 +3584,165 @@ mod tests {
     fn test_wf_has_afx() {
         assert!(rs_wf_has_afx(WF_AFX));
         assert!(!rs_wf_has_afx(0));
+    }
+
+    // =========================================================================
+    // Phase 5: Spell UI Integration Tests
+    // =========================================================================
+
+    #[test]
+    fn test_spell_add_type() {
+        assert_eq!(SpellAddType::Good as c_int, 0);
+        assert_eq!(SpellAddType::Bad as c_int, 1);
+        assert_eq!(SpellAddType::Rare as c_int, 2);
+
+        assert_eq!(SpellAddType::from_c_int(0), Some(SpellAddType::Good));
+        assert_eq!(SpellAddType::from_c_int(1), Some(SpellAddType::Bad));
+        assert_eq!(SpellAddType::from_c_int(2), Some(SpellAddType::Rare));
+        assert_eq!(SpellAddType::from_c_int(3), None);
+        assert_eq!(SpellAddType::from_c_int(-1), None);
+    }
+
+    #[test]
+    fn test_spell_move_type() {
+        assert_eq!(SpellMoveType::All as c_int, 0);
+        assert_eq!(SpellMoveType::Bad as c_int, 1);
+        assert_eq!(SpellMoveType::Rare as c_int, 2);
+
+        assert_eq!(SpellMoveType::from_c_int(0), Some(SpellMoveType::All));
+        assert_eq!(SpellMoveType::from_c_int(1), Some(SpellMoveType::Bad));
+        assert_eq!(SpellMoveType::from_c_int(2), Some(SpellMoveType::Rare));
+        assert_eq!(SpellMoveType::from_c_int(3), None);
+    }
+
+    #[test]
+    fn test_spell_add_type_ffi() {
+        assert_eq!(rs_spell_add_type_from_int(0), 0);
+        assert_eq!(rs_spell_add_type_from_int(1), 1);
+        assert_eq!(rs_spell_add_type_from_int(2), 2);
+        // Invalid values return Good (0)
+        assert_eq!(rs_spell_add_type_from_int(3), 0);
+        assert_eq!(rs_spell_add_type_from_int(-1), 0);
+    }
+
+    #[test]
+    fn test_spell_move_type_ffi() {
+        assert_eq!(rs_spell_move_type_from_int(0), 0);
+        assert_eq!(rs_spell_move_type_from_int(1), 1);
+        assert_eq!(rs_spell_move_type_from_int(2), 2);
+        // Invalid values return All (0)
+        assert_eq!(rs_spell_move_type_from_int(3), 0);
+    }
+
+    #[test]
+    fn test_spell_suggest_timeout_constants() {
+        assert_eq!(rs_spell_suggest_timeout_default(), 5000);
+        assert_eq!(SPELL_SUGGEST_TIMEOUT_MIN, 100);
+        assert_eq!(SPELL_SUGGEST_TIMEOUT_MAX, 60000);
+    }
+
+    #[test]
+    fn test_validate_spell_suggest_timeout() {
+        assert!(validate_spell_suggest_timeout(5000));
+        assert!(validate_spell_suggest_timeout(100));
+        assert!(validate_spell_suggest_timeout(60000));
+        assert!(!validate_spell_suggest_timeout(99));
+        assert!(!validate_spell_suggest_timeout(60001));
+        assert!(!validate_spell_suggest_timeout(0));
+        assert!(!validate_spell_suggest_timeout(-1));
+    }
+
+    #[test]
+    fn test_clamp_spell_suggest_timeout() {
+        assert_eq!(clamp_spell_suggest_timeout(5000), 5000);
+        assert_eq!(clamp_spell_suggest_timeout(50), SPELL_SUGGEST_TIMEOUT_MIN);
+        assert_eq!(
+            clamp_spell_suggest_timeout(100_000),
+            SPELL_SUGGEST_TIMEOUT_MAX
+        );
+        assert_eq!(clamp_spell_suggest_timeout(0), SPELL_SUGGEST_TIMEOUT_MIN);
+    }
+
+    #[test]
+    fn test_valid_spell_word_start() {
+        // ASCII letters
+        assert!(is_valid_spell_word_start(b'a'));
+        assert!(is_valid_spell_word_start(b'z'));
+        assert!(is_valid_spell_word_start(b'A'));
+        assert!(is_valid_spell_word_start(b'Z'));
+        // High bytes (UTF-8 continuation)
+        assert!(is_valid_spell_word_start(0x80));
+        assert!(is_valid_spell_word_start(0xFF));
+        // Digits are not valid word starts
+        assert!(!is_valid_spell_word_start(b'0'));
+        assert!(!is_valid_spell_word_start(b'9'));
+        // Punctuation
+        assert!(!is_valid_spell_word_start(b'.'));
+        assert!(!is_valid_spell_word_start(b' '));
+    }
+
+    #[test]
+    fn test_spell_add_flags() {
+        let good = SpellAddFlags::good(1);
+        assert_eq!(good.add_type, SpellAddType::Good as c_int);
+        assert_eq!(good.spellfile_idx, 1);
+        assert!(good.undoable);
+
+        let bad = SpellAddFlags::bad(2);
+        assert_eq!(bad.add_type, SpellAddType::Bad as c_int);
+        assert_eq!(bad.spellfile_idx, 2);
+        assert!(bad.undoable);
+        assert!(bad.is_undo());
+
+        let rare = SpellAddFlags::rare(0);
+        assert_eq!(rare.add_type, SpellAddType::Rare as c_int);
+        assert_eq!(rare.spellfile_idx, 0);
+        assert!(rare.undoable);
+        assert!(!rare.is_undo());
+    }
+
+    #[test]
+    fn test_spell_suggest_display_constants() {
+        assert_eq!(rs_spell_suggest_display_max(), 25);
+        assert_eq!(rs_spell_suggest_display_default(), 5);
+        assert_eq!(rs_spell_suggest_score_threshold(), 200);
+    }
+
+    #[test]
+    fn test_valid_spell_word() {
+        // Valid words
+        let word = b"hello";
+        unsafe {
+            assert!(rs_valid_spell_word(word.as_ptr(), word.as_ptr().add(5)));
+        }
+
+        // Empty word
+        let empty = b"";
+        unsafe {
+            assert!(!rs_valid_spell_word(empty.as_ptr(), empty.as_ptr()));
+        }
+
+        // Word with control char
+        let with_ctrl = b"hel\x01lo";
+        unsafe {
+            assert!(!rs_valid_spell_word(
+                with_ctrl.as_ptr(),
+                with_ctrl.as_ptr().add(6)
+            ));
+        }
+
+        // Word with NUL
+        let with_nul = b"hel\x00lo";
+        unsafe {
+            assert!(!rs_valid_spell_word(
+                with_nul.as_ptr(),
+                with_nul.as_ptr().add(6)
+            ));
+        }
+
+        // Null pointers
+        unsafe {
+            assert!(!rs_valid_spell_word(std::ptr::null(), std::ptr::null()));
+        }
     }
 }
