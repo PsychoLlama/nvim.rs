@@ -17,6 +17,54 @@ use std::ffi::c_int;
 // Constants
 // =============================================================================
 
+// =============================================================================
+// File Format Constants
+// =============================================================================
+
+/// Magic string at start of Vim spell file
+pub const VIMSPELLMAGIC: &[u8; 8] = b"VIMspell";
+
+/// Current spell file version
+pub const VIMSPELLVERSION: u8 = 50;
+
+// Section IDs (matches spellfile.c enum)
+/// Region section ID
+pub const SN_REGION: u8 = 0;
+/// Character flags section ID
+pub const SN_CHARFLAGS: u8 = 1;
+/// Midword characters section ID
+pub const SN_MIDWORD: u8 = 2;
+/// Prefix conditions section ID
+pub const SN_PREFCOND: u8 = 3;
+/// REP items section ID
+pub const SN_REP: u8 = 4;
+/// SAL (soundalike) items section ID
+pub const SN_SAL: u8 = 5;
+/// Soundfolding section ID
+pub const SN_SOFO: u8 = 6;
+/// MAP items section ID
+pub const SN_MAP: u8 = 7;
+/// Compound words section ID
+pub const SN_COMPOUND: u8 = 8;
+/// Syllable section ID
+pub const SN_SYLLABLE: u8 = 9;
+/// NOBREAK section ID
+pub const SN_NOBREAK: u8 = 10;
+/// Suggestion file timestamp section ID
+pub const SN_SUGFILE: u8 = 11;
+/// REPSAL items section ID
+pub const SN_REPSAL: u8 = 12;
+/// Common words section ID
+pub const SN_WORDS: u8 = 13;
+/// Don't split word for suggestions section ID
+pub const SN_NOSPLITSUGS: u8 = 14;
+/// Info section ID
+pub const SN_INFO: u8 = 15;
+/// Don't compound for suggestions section ID
+pub const SN_NOCOMPOUNDSUGS: u8 = 16;
+/// End of sections marker
+pub const SN_END: u8 = 255;
+
 /// Maximum length of a region name in bytes.
 pub const REGION_NAME_LEN: usize = 2;
 
@@ -35,6 +83,163 @@ pub const SP_TRUNCERROR: c_int = -1;
 pub const SP_FORMERROR: c_int = -2;
 /// Error: other error.
 pub const SP_OTHERERROR: c_int = -3;
+
+// =============================================================================
+// File Header Parsing
+// =============================================================================
+
+/// Spell file header information.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct SpellFileHeader {
+    /// Magic bytes (should be VIMSPELLMAGIC)
+    pub magic: [u8; 8],
+    /// File version number
+    pub version: u8,
+}
+
+impl Default for SpellFileHeader {
+    fn default() -> Self {
+        Self {
+            magic: *VIMSPELLMAGIC,
+            version: VIMSPELLVERSION,
+        }
+    }
+}
+
+/// Result of validating a spell file header.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HeaderValidation {
+    /// Header is valid
+    Valid = 0,
+    /// Magic bytes don't match
+    BadMagic = 1,
+    /// Version is older than supported
+    OldVersion = 2,
+    /// Version is newer than supported
+    NewVersion = 3,
+    /// Buffer too short
+    TooShort = 4,
+}
+
+/// Parse a spell file header from buffer.
+///
+/// Returns the header and the number of bytes consumed (9 bytes total).
+/// Returns None if the buffer is too short.
+#[must_use]
+pub fn parse_spellfile_header(buf: &[u8]) -> Option<(SpellFileHeader, usize)> {
+    if buf.len() < 9 {
+        return None;
+    }
+
+    let mut magic = [0u8; 8];
+    magic.copy_from_slice(&buf[0..8]);
+
+    Some((
+        SpellFileHeader {
+            magic,
+            version: buf[8],
+        },
+        9,
+    ))
+}
+
+/// Validate a spell file header.
+#[must_use]
+pub fn validate_spellfile_header(header: &SpellFileHeader) -> HeaderValidation {
+    if header.magic != *VIMSPELLMAGIC {
+        return HeaderValidation::BadMagic;
+    }
+
+    if header.version < VIMSPELLVERSION {
+        return HeaderValidation::OldVersion;
+    }
+
+    if header.version > VIMSPELLVERSION {
+        return HeaderValidation::NewVersion;
+    }
+
+    HeaderValidation::Valid
+}
+
+/// FFI wrapper for parsing spell file header.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_spellfile_header(
+    buf: *const u8,
+    buf_len: usize,
+    header_out: *mut SpellFileHeader,
+    consumed_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || header_out.is_null() || consumed_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let slice = std::slice::from_raw_parts(buf, buf_len);
+    match parse_spellfile_header(slice) {
+        Some((header, consumed)) => {
+            *header_out = header;
+            *consumed_out = consumed;
+            0
+        }
+        None => SP_TRUNCERROR,
+    }
+}
+
+/// FFI wrapper for validating spell file header.
+///
+/// # Safety
+/// `header` must point to a valid SpellFileHeader.
+#[no_mangle]
+pub unsafe extern "C" fn rs_validate_spellfile_header(header: *const SpellFileHeader) -> c_int {
+    if header.is_null() {
+        return HeaderValidation::TooShort as c_int;
+    }
+
+    validate_spellfile_header(&*header) as c_int
+}
+
+/// Write spell file header to buffer.
+///
+/// Returns the number of bytes written (9).
+#[must_use]
+pub fn write_spellfile_header(buf: &mut [u8], header: &SpellFileHeader) -> Option<usize> {
+    if buf.len() < 9 {
+        return None;
+    }
+
+    buf[0..8].copy_from_slice(&header.magic);
+    buf[8] = header.version;
+    Some(9)
+}
+
+/// FFI wrapper for writing spell file header.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_write_spellfile_header(
+    buf: *mut u8,
+    buf_len: usize,
+    header: *const SpellFileHeader,
+    written_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || header.is_null() || written_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let slice = std::slice::from_raw_parts_mut(buf, buf_len);
+    match write_spellfile_header(slice, &*header) {
+        Some(written) => {
+            *written_out = written;
+            0
+        }
+        None => SP_TRUNCERROR,
+    }
+}
 
 // =============================================================================
 // Section Header Parsing
@@ -1275,6 +1480,111 @@ pub unsafe extern "C" fn rs_write_timestamp(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // =========================================================================
+    // File Header Tests
+    // =========================================================================
+
+    #[test]
+    fn test_parse_spellfile_header() {
+        // Valid header
+        let mut buf = [0u8; 10];
+        buf[0..8].copy_from_slice(VIMSPELLMAGIC);
+        buf[8] = VIMSPELLVERSION;
+
+        let (header, consumed) = parse_spellfile_header(&buf).unwrap();
+        assert_eq!(header.magic, *VIMSPELLMAGIC);
+        assert_eq!(header.version, VIMSPELLVERSION);
+        assert_eq!(consumed, 9);
+
+        // Too short
+        assert!(parse_spellfile_header(&[0; 8]).is_none());
+    }
+
+    #[test]
+    fn test_validate_spellfile_header() {
+        // Valid header
+        let header = SpellFileHeader::default();
+        assert_eq!(validate_spellfile_header(&header), HeaderValidation::Valid);
+
+        // Bad magic
+        let header = SpellFileHeader {
+            magic: *b"BADMAGIC",
+            version: VIMSPELLVERSION,
+        };
+        assert_eq!(validate_spellfile_header(&header), HeaderValidation::BadMagic);
+
+        // Old version
+        let header = SpellFileHeader {
+            magic: *VIMSPELLMAGIC,
+            version: VIMSPELLVERSION - 1,
+        };
+        assert_eq!(
+            validate_spellfile_header(&header),
+            HeaderValidation::OldVersion
+        );
+
+        // New version
+        let header = SpellFileHeader {
+            magic: *VIMSPELLMAGIC,
+            version: VIMSPELLVERSION + 1,
+        };
+        assert_eq!(
+            validate_spellfile_header(&header),
+            HeaderValidation::NewVersion
+        );
+    }
+
+    #[test]
+    fn test_write_spellfile_header() {
+        let mut buf = [0u8; 20];
+        let header = SpellFileHeader::default();
+
+        let written = write_spellfile_header(&mut buf, &header).unwrap();
+        assert_eq!(written, 9);
+        assert_eq!(&buf[0..8], VIMSPELLMAGIC);
+        assert_eq!(buf[8], VIMSPELLVERSION);
+    }
+
+    #[test]
+    fn test_roundtrip_spellfile_header() {
+        let mut buf = [0u8; 20];
+        let original = SpellFileHeader::default();
+
+        let written = write_spellfile_header(&mut buf, &original).unwrap();
+        let (parsed, consumed) = parse_spellfile_header(&buf).unwrap();
+
+        assert_eq!(written, consumed);
+        assert_eq!(parsed.magic, original.magic);
+        assert_eq!(parsed.version, original.version);
+    }
+
+    #[test]
+    fn test_section_ids() {
+        // Verify section IDs match expected values
+        assert_eq!(SN_REGION, 0);
+        assert_eq!(SN_CHARFLAGS, 1);
+        assert_eq!(SN_MIDWORD, 2);
+        assert_eq!(SN_PREFCOND, 3);
+        assert_eq!(SN_REP, 4);
+        assert_eq!(SN_SAL, 5);
+        assert_eq!(SN_SOFO, 6);
+        assert_eq!(SN_MAP, 7);
+        assert_eq!(SN_COMPOUND, 8);
+        assert_eq!(SN_SYLLABLE, 9);
+        assert_eq!(SN_NOBREAK, 10);
+        assert_eq!(SN_SUGFILE, 11);
+        assert_eq!(SN_REPSAL, 12);
+        assert_eq!(SN_WORDS, 13);
+        assert_eq!(SN_NOSPLITSUGS, 14);
+        assert_eq!(SN_INFO, 15);
+        assert_eq!(SN_NOCOMPOUNDSUGS, 16);
+        assert_eq!(SN_END, 255);
+    }
+
+    // =========================================================================
+    // Section Header Tests
+    // =========================================================================
 
     #[test]
     fn test_parse_section_header() {
