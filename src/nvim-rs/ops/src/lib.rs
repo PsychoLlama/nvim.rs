@@ -12,12 +12,14 @@
 //! - [`addsub`]: Number/character increment/decrement (Ctrl-A, Ctrl-X)
 //! - [`replace`]: Character replacement calculations (r)
 //! - [`join`]: Line join calculations (J, gJ)
+//! - [`delete`]: Delete operation calculations (d, x, D)
 
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_const_for_fn)]
 
 pub mod addsub;
+pub mod delete;
 pub mod join;
 pub mod oparg;
 pub mod replace;
