@@ -135,6 +135,13 @@ extern "C" {
     fn nvim_compl_shown_match_str_size() -> usize;
     fn nvim_compl_shown_match_has_newline() -> c_int;
 
+    // Match list accessors (Phase 4)
+    fn nvim_compl_first_match_is_null() -> c_int;
+    fn nvim_compl_curr_match_is_null() -> c_int;
+    fn nvim_compl_curr_match_at_original_text() -> c_int;
+    fn nvim_get_compl_matches() -> c_int;
+    fn nvim_compl_curr_match_has_str() -> c_int;
+
     // Popup menu and selection accessors
     fn nvim_get_compl_selected_item() -> c_int;
     fn nvim_get_pum_want_item() -> c_int;
@@ -935,6 +942,40 @@ pub unsafe extern "C" fn rs_get_compl_len() -> c_int {
     } else {
         off
     }
+}
+
+// =============================================================================
+// Match list queries (Phase 4)
+// =============================================================================
+
+/// Check if the match list has any matches (compl_first_match != NULL).
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_has_matches() -> c_int {
+    c_int::from(nvim_compl_first_match_is_null() == 0)
+}
+
+/// Get the number of matches in the completion list.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_match_count() -> c_int {
+    nvim_get_compl_matches()
+}
+
+/// Check if there's a current match selected (compl_curr_match != NULL).
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_has_curr_match() -> c_int {
+    c_int::from(nvim_compl_curr_match_is_null() == 0)
+}
+
+/// Check if the current match is at original text position.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_at_original() -> c_int {
+    nvim_compl_curr_match_at_original_text()
+}
+
+/// Check if the current match has valid string data.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_curr_has_str() -> c_int {
+    nvim_compl_curr_match_has_str()
 }
 
 #[cfg(test)]

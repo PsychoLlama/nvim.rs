@@ -6591,6 +6591,46 @@ int nvim_pum_get_height(void)
   return pum_get_height();
 }
 
+// =============================================================================
+// Match list accessors for Rust (Phase 4)
+// =============================================================================
+
+/// Check if compl_first_match is NULL for Rust.
+int nvim_compl_first_match_is_null(void)
+{
+  return compl_first_match == NULL ? 1 : 0;
+}
+
+/// Check if compl_curr_match is NULL for Rust.
+int nvim_compl_curr_match_is_null(void)
+{
+  return compl_curr_match == NULL ? 1 : 0;
+}
+
+/// Check if compl_curr_match exists and has original text flag for Rust.
+int nvim_compl_curr_match_at_original_text(void)
+{
+  if (compl_curr_match == NULL) {
+    return 0;
+  }
+  return (compl_curr_match->cp_flags & CP_ORIGINAL_TEXT) ? 1 : 0;
+}
+
+/// Get compl_matches count for Rust.
+int nvim_get_compl_matches(void)
+{
+  return compl_matches;
+}
+
+/// Check if compl_curr_match->cp_str.data is not NULL for Rust.
+int nvim_compl_curr_match_has_str(void)
+{
+  if (compl_curr_match == NULL) {
+    return 0;
+  }
+  return compl_curr_match->cp_str.data != NULL ? 1 : 0;
+}
+
 extern int rs_pum_wanted(void);
 
 /// Check if the popup menu should be displayed.
