@@ -1015,6 +1015,12 @@ int nvim_win_get_wcol(win_T *wp)
   return wp->w_wcol;
 }
 
+/// Set the w_wcol field in a window (cursor column in window).
+void nvim_win_set_wcol(win_T *wp, int val)
+{
+  wp->w_wcol = val;
+}
+
 /// Get the w_wrow field from a window (cursor row in window).
 int nvim_win_get_wrow(win_T *wp)
 {
@@ -1259,6 +1265,12 @@ linenr_T nvim_win_get_topline(win_T *wp)
   return wp->w_topline;
 }
 
+/// Set the window's topline.
+void nvim_win_set_topline(win_T *wp, linenr_T val)
+{
+  wp->w_topline = val;
+}
+
 /// Get the window's botline (line below the bottom of the window).
 linenr_T nvim_win_get_botline(win_T *wp)
 {
@@ -1269,6 +1281,12 @@ linenr_T nvim_win_get_botline(win_T *wp)
 int nvim_win_get_topfill(win_T *wp)
 {
   return wp->w_topfill;
+}
+
+/// Set the window's topfill (filler lines above topline).
+void nvim_win_set_topfill(win_T *wp, int val)
+{
+  wp->w_topfill = val;
 }
 
 /// Get the window's arg_idx (argument list index).

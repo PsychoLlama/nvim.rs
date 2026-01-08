@@ -67,6 +67,8 @@ extern int rs_skipcol_from_plines(win_T *wp, int plines_off);
 extern int rs_scrolljump_value(win_T *wp);
 extern int rs_check_top_offset(win_T *wp);
 extern void rs_reset_skipcol(win_T *wp);
+extern void rs_compute_wcol(win_T *wp);
+extern void rs_check_topfill(win_T *wp, int down);
 
 // Accessor for global scrolljump option
 OptInt nvim_get_p_sj(void)
@@ -678,29 +680,7 @@ void validate_cheight(win_T *wp)
 void validate_cursor_col(win_T *wp)
 {
   validate_virtcol(wp);
-
-  if (wp->w_valid & VALID_WCOL) {
-    return;
-  }
-
-  colnr_T col = wp->w_virtcol;
-  colnr_T off = win_col_off(wp);
-  col += off;
-  int width = wp->w_view_width - off + win_col_off2(wp);
-
-  // long line wrapping, adjust wp->w_wrow
-  if (wp->w_p_wrap && col >= (colnr_T)wp->w_view_width && width > 0) {
-    // use same formula as what is used in curs_columns()
-    col -= ((col - wp->w_view_width) / width + 1) * width;
-  }
-  if (col > (int)wp->w_leftcol) {
-    col -= wp->w_leftcol;
-  } else {
-    col = 0;
-  }
-  wp->w_wcol = col;
-
-  wp->w_valid |= VALID_WCOL;
+  rs_compute_wcol(wp);
 }
 
 // Compute offset of a window, occupied by absolute or relative line number,
@@ -1547,19 +1527,7 @@ void adjust_skipcol(void)
 /// @param down  when true scroll down when not enough space
 void check_topfill(win_T *wp, bool down)
 {
-  if (wp->w_topfill > 0) {
-    int n = plines_win_nofill(wp, wp->w_topline, true);
-    if (wp->w_topfill + n > wp->w_view_height) {
-      if (down && wp->w_topline > 1) {
-        wp->w_topline--;
-        wp->w_topfill = 0;
-      } else {
-        wp->w_topfill = wp->w_view_height - n;
-        wp->w_topfill = MAX(wp->w_topfill, 0);
-      }
-    }
-  }
-  win_check_anchored_floats(wp);
+  rs_check_topfill(wp, down ? 1 : 0);
 }
 
 // Scroll the screen one line down, but don't do it if it would move the

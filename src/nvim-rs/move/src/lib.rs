@@ -811,6 +811,186 @@ pub unsafe extern "C" fn rs_reset_skipcol(wp: WinHandle) {
 }
 
 // =============================================================================
+// Cursor Column Operations
+// =============================================================================
+
+extern "C" {
+    // Column offsets (from plines crate)
+    fn rs_win_col_off(wp: WinHandle) -> c_int;
+    fn rs_win_col_off2(wp: WinHandle) -> c_int;
+
+    // Window accessors for column operations
+    fn nvim_win_get_wcol(wp: WinHandle) -> c_int;
+    fn nvim_win_set_wcol(wp: WinHandle, val: c_int);
+    fn nvim_win_get_view_width(wp: WinHandle) -> c_int;
+}
+
+/// Compute `w_wcol` from `w_virtcol`.
+///
+/// This performs the column computation part of `validate_cursor_col`.
+/// Note: `validate_virtcol` must be called first to ensure `w_virtcol` is valid.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compute_wcol(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+
+    // If already valid, nothing to do
+    let valid = nvim_win_get_valid(wp);
+    if (valid & VALID_WCOL) != 0 {
+        return;
+    }
+
+    let virtcol = nvim_win_get_virtcol(wp);
+    let off = rs_win_col_off(wp);
+    let mut col = virtcol + off;
+    let view_width = nvim_win_get_view_width(wp);
+    let width = view_width - off + rs_win_col_off2(wp);
+    let p_wrap = nvim_win_get_p_wrap(wp);
+    let leftcol = nvim_win_get_leftcol(wp);
+
+    // long line wrapping, adjust
+    if p_wrap != 0 && col >= view_width && width > 0 {
+        // use same formula as what is used in curs_columns()
+        col -= ((col - view_width) / width + 1) * width;
+    }
+
+    if col > leftcol {
+        col -= leftcol;
+    } else {
+        col = 0;
+    }
+
+    nvim_win_set_wcol(wp, col);
+    nvim_win_set_valid(wp, valid | VALID_WCOL);
+}
+
+/// Get the computed window column.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_wcol(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    nvim_win_get_wcol(wp)
+}
+
+/// Get the window column offset (number/sign column width).
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_col_off(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    rs_win_col_off(wp)
+}
+
+/// Get the additional column offset for wrapped lines.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_col_off2(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    rs_win_col_off2(wp)
+}
+
+/// Compute the wrapping width for a window.
+///
+/// Returns the effective width for line wrapping calculations.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compute_wrap_width(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    let view_width = nvim_win_get_view_width(wp);
+    let off = rs_win_col_off(wp);
+    view_width - off + rs_win_col_off2(wp)
+}
+
+// =============================================================================
+// Topfill Management
+// =============================================================================
+
+extern "C" {
+    // Topline/topfill setters
+    fn nvim_win_set_topline(wp: WinHandle, val: LinenrT);
+    fn nvim_win_set_topfill(wp: WinHandle, val: c_int);
+
+    // Float window management
+    fn nvim_win_check_anchored_floats(wp: WinHandle);
+}
+
+/// Ensure topfill doesn't use too many window lines.
+///
+/// If the filler lines plus the first line would exceed the window height,
+/// adjust topfill or topline accordingly.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_topfill(wp: WinHandle, down: c_int) {
+    if wp.is_null() {
+        return;
+    }
+
+    let topfill = nvim_win_get_topfill(wp);
+    if topfill > 0 {
+        let topline = nvim_win_get_topline(wp);
+        let n = nvim_plines_win_nofill(wp, topline, 1);
+        let view_height = nvim_win_get_view_height(wp);
+
+        if topfill + n > view_height {
+            if down != 0 && topline > 1 {
+                nvim_win_set_topline(wp, topline - 1);
+                nvim_win_set_topfill(wp, 0);
+            } else {
+                let new_topfill = (view_height - n).max(0);
+                nvim_win_set_topfill(wp, new_topfill);
+            }
+        }
+    }
+
+    nvim_win_check_anchored_floats(wp);
+}
+
+/// Get the topfill value for a window.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_topfill(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    nvim_win_get_topfill(wp)
+}
+
+/// Set the topfill value for a window.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_topfill(wp: WinHandle, val: c_int) {
+    if wp.is_null() {
+        return;
+    }
+    nvim_win_set_topfill(wp, val);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

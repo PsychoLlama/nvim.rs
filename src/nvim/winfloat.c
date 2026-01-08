@@ -332,6 +332,12 @@ void win_check_anchored_floats(win_T *win)
   }
 }
 
+/// Wrapper for win_check_anchored_floats for Rust FFI.
+void nvim_win_check_anchored_floats(win_T *win)
+{
+  win_check_anchored_floats(win);
+}
+
 void win_float_update_statusline(void)
 {
   for (win_T *wp = lastwin; wp && wp->w_floating; wp = wp->w_prev) {
