@@ -865,4 +865,96 @@ mod tests {
         let result = soundalike_score_impl(b"hi", b"hello");
         assert_eq!(result, SCORE_MAXMAX);
     }
+
+    // =========================================================================
+    // Phase 7: Additional Validation Tests
+    // =========================================================================
+
+    #[test]
+    #[allow(clippy::assertions_on_constants)]
+    fn test_score_constants() {
+        // Verify all score constants are positive
+        assert!(SCORES.split > 0);
+        assert!(SCORES.split_no > 0);
+        assert!(SCORES.icase > 0);
+        assert!(SCORES.region > 0);
+        assert!(SCORES.rare > 0);
+        assert!(SCORES.swap > 0);
+        assert!(SCORES.swap3 > 0);
+        assert!(SCORES.rep > 0);
+        assert!(SCORES.subst > 0);
+        assert!(SCORES.similar > 0);
+        assert!(SCORES.del > 0);
+        assert!(SCORES.ins > 0);
+        assert!(SCORES.nonword > 0);
+    }
+
+    #[test]
+    #[allow(clippy::assertions_on_constants)]
+    fn test_score_relationships() {
+        // swap should be cheaper than two subst
+        assert!(SCORES.swap < SCORES.subst * 2);
+        // duplicate operations should be cheaper than regular
+        assert!(SCORES.deldup < SCORES.del);
+        assert!(SCORES.insdup < SCORES.ins);
+        // similar should be cheapest subst
+        assert!(SCORES.similar < SCORES.subst);
+    }
+
+    #[test]
+    fn test_soundalike_empty() {
+        // Empty strings - both empty means no difference
+        let result = soundalike_score_impl(b"", b"");
+        assert_eq!(result, 0);
+    }
+
+    #[test]
+    fn test_soundalike_one_empty_too_different() {
+        // One empty string, other has 3+ chars - length difference > 2
+        let result = soundalike_score_impl(b"", b"abc");
+        assert_eq!(result, SCORE_MAXMAX);
+    }
+
+    #[test]
+    fn test_soundalike_length_diff_within_bounds() {
+        // Length difference of 2 (within bounds)
+        let result = soundalike_score_impl(b"ab", b"abcd");
+        // After "ab" matches, need to delete "cd" - that's 2 deletes
+        assert_eq!(result, SCORES.del * 2);
+    }
+
+    #[test]
+    fn test_soundalike_swap_at_end() {
+        // "abdc" vs "abcd" with swapped last chars
+        let result = soundalike_score_impl(b"abdc", b"abcd");
+        assert_eq!(result, SCORES.swap);
+    }
+
+    #[test]
+    fn test_rescore_boundary() {
+        // Edge cases
+        assert_eq!(rescore(0, 0), 0);
+        assert_eq!(rescore(1, 0), 0); // (3*1 + 0) / 4 = 0
+        assert_eq!(rescore(2, 0), 1); // (3*2 + 0) / 4 = 1
+    }
+
+    #[test]
+    fn test_maxscore_boundary() {
+        assert_eq!(maxscore(0, 0), 0);
+    }
+
+    #[test]
+    fn test_score_big_constant() {
+        assert_eq!(SCORE_BIG, 3 * SCORES.ins);
+    }
+
+    #[test]
+    fn test_score_limitmax() {
+        assert_eq!(SCORE_LIMITMAX, 350);
+    }
+
+    #[test]
+    fn test_maxsug_constant() {
+        assert_eq!(MAXSUG, 25);
+    }
 }

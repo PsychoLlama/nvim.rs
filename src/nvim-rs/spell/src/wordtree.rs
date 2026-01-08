@@ -811,4 +811,97 @@ mod tests {
         assert!(!compound_flag_allowed(empty, b'a'));
         assert!(!compound_flag_allowed(empty, 0));
     }
+
+    // =========================================================================
+    // Phase 7: Additional Validation Tests
+    // =========================================================================
+
+    #[test]
+    fn test_maxwlen_constant() {
+        assert_eq!(MAXWLEN, 254);
+    }
+
+    #[test]
+    fn test_word_flag_constant_values() {
+        // Verify flags are distinct powers of 2
+        assert_eq!(WF_REGION, 0x01);
+        assert_eq!(WF_ONECAP, 0x02);
+        assert_eq!(WF_ALLCAP, 0x04);
+        assert_eq!(WF_RARE, 0x08);
+        assert_eq!(WF_BANNED, 0x10);
+        assert_eq!(WF_AFX, 0x20);
+        assert_eq!(WF_FIXCAP, 0x40);
+        assert_eq!(WF_KEEPCAP, 0x80);
+    }
+
+    #[test]
+    fn test_compound_flag_constant_values() {
+        assert_eq!(WF_NEEDCOMP, 0x100);
+        assert_eq!(WF_NOCOMPBEF, 0x200);
+        assert_eq!(WF_NOCOMPAFT, 0x400);
+        assert_eq!(WF_COMPROOT, 0x800);
+        assert_eq!(WF_RAREPFX, 0x1000);
+    }
+
+    #[test]
+    fn test_compound_flag_mask() {
+        assert_eq!(WF_COMPFLAG_MASK, 0xFF00_0000);
+    }
+
+    #[test]
+    fn test_get_compound_flag_values() {
+        assert_eq!(get_compound_flag(0x0000_0000), 0);
+        assert_eq!(get_compound_flag(0x0100_0000), 1);
+        assert_eq!(get_compound_flag(0xFF00_0000), 255);
+        assert_eq!(get_compound_flag(0xAB00_0000), 0xAB);
+        // Lower bits should not affect compound flag
+        assert_eq!(get_compound_flag(0xFF00_FFFF), 255);
+    }
+
+    #[test]
+    fn test_combined_flags() {
+        // Test combining multiple flags
+        let flags = WF_RARE | WF_REGION | WF_ONECAP;
+        assert!(is_rare(flags));
+        assert!((flags & WF_REGION) != 0);
+        assert!((flags & WF_ONECAP) != 0);
+        assert!(!is_banned(flags));
+    }
+
+    #[test]
+    fn test_tree_search_result_equality() {
+        let found1 = TreeSearchResult::Found {
+            word_len: 5,
+            end_idx: 10,
+        };
+        let found2 = TreeSearchResult::Found {
+            word_len: 5,
+            end_idx: 10,
+        };
+        let found3 = TreeSearchResult::Found {
+            word_len: 6,
+            end_idx: 10,
+        };
+
+        assert_eq!(found1, found2);
+        assert_ne!(found1, found3);
+        assert_eq!(TreeSearchResult::NotFound, TreeSearchResult::NotFound);
+        assert_eq!(TreeSearchResult::Empty, TreeSearchResult::Empty);
+        assert_ne!(TreeSearchResult::NotFound, TreeSearchResult::Empty);
+    }
+
+    #[test]
+    fn test_binary_search_boundaries() {
+        let byts = [b'a', b'b', b'c', b'd', b'e'];
+
+        // Search at exact boundaries
+        assert_eq!(tree_binary_search(&byts, 0, 4, b'a'), Some(0)); // first
+        assert_eq!(tree_binary_search(&byts, 0, 4, b'e'), Some(4)); // last
+
+        // Search in subranges
+        assert_eq!(tree_binary_search(&byts, 1, 3, b'b'), Some(1));
+        assert_eq!(tree_binary_search(&byts, 1, 3, b'd'), Some(3));
+        assert_eq!(tree_binary_search(&byts, 1, 3, b'a'), None); // out of range
+        assert_eq!(tree_binary_search(&byts, 1, 3, b'e'), None); // out of range
+    }
 }
