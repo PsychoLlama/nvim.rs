@@ -7,6 +7,7 @@
 //!
 //! Functions are organized by domain:
 //! - `math`: Pure math functions (abs, sin, cos, sqrt, etc.)
+//! - `bitwise`: Bitwise operations (and, or, xor, invert)
 //! - `types`: Type inspection and conversion (type, typename, etc.)
 //! - `string`: String manipulation (split, join, tolower, etc.)
 //! - `list`: List operations (add, insert, remove, etc.)
@@ -24,6 +25,7 @@
 //!
 //! The C wrapper in funcs.c calls these Rust implementations directly.
 
+pub mod bitwise;
 mod dispatch;
 pub mod math;
 

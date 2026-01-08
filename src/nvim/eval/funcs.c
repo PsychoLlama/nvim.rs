@@ -175,6 +175,12 @@ extern void rs_f_float2nr(typval_T *argvars, typval_T *rettv);
 extern void rs_f_isnan(typval_T *argvars, typval_T *rettv);
 extern void rs_f_isinf(typval_T *argvars, typval_T *rettv);
 
+// Rust implementations of bitwise functions (from nvim-rs/eval/src/funcs/bitwise.rs)
+extern void rs_f_and(typval_T *argvars, typval_T *rettv);
+extern void rs_f_or(typval_T *argvars, typval_T *rettv);
+extern void rs_f_xor(typval_T *argvars, typval_T *rettv);
+extern void rs_f_invert(typval_T *argvars, typval_T *rettv);
+
 #ifdef _MSC_VER
 // This prevents MSVC from replacing the functions with intrinsics,
 // and causing errors when trying to get their addresses in funcs.generated.h
@@ -522,8 +528,7 @@ static void f_abs(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// "and(expr, expr)" function
 static void f_and(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  rettv->vval.v_number = tv_get_number_chk(&argvars[0], NULL)
-                         & tv_get_number_chk(&argvars[1], NULL);
+  rs_f_and(argvars, rettv);
 }
 
 /// "api_info()" function
@@ -3298,7 +3303,7 @@ static void f_interrupt(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// "invert(expr)" function
 static void f_invert(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  rettv->vval.v_number = ~tv_get_number_chk(&argvars[0], NULL);
+  rs_f_invert(argvars, rettv);
 }
 
 /// "islocked()" function
@@ -4863,8 +4868,7 @@ static void f_nr2char(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// "or(expr, expr)" function
 static void f_or(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  rettv->vval.v_number = tv_get_number_chk(&argvars[0], NULL)
-                         | tv_get_number_chk(&argvars[1], NULL);
+  rs_f_or(argvars, rettv);
 }
 
 /// "pow()" function
@@ -7842,6 +7846,5 @@ static void f_wordcount(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// "xor(expr, expr)" function
 static void f_xor(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  rettv->vval.v_number = tv_get_number_chk(&argvars[0], NULL)
-                         ^ tv_get_number_chk(&argvars[1], NULL);
+  rs_f_xor(argvars, rettv);
 }
