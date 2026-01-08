@@ -1,38 +1,36 @@
-Plan: ~/.claude/plans/typed-splashing-hedgehog.md
+Plan: ~/.claude/plans/eventual-twirling-crystal.md
 
-Let me provide a summary of what was accomplished:
+I have successfully completed the plan execution. Here's a summary:
 
 ## Summary
 
-I have completed the execution of the plan at `/home/overlord/.claude/plans/typed-splashing-hedgehog.md`. Here's what was accomplished:
+### Plan Execution Results
 
-### Phase 1: File I/O Foundation (COMPLETED)
-Successfully migrated BOM (Byte Order Mark) detection to Rust:
+I analyzed all three candidates from the plan:
 
-**New functionality in `src/nvim-rs/fileio/src/lib.rs`:**
-- Added FIO encoding flag constants (`FIO_LATIN1`, `FIO_UTF8`, `FIO_UCS2`, `FIO_UCS4`, `FIO_UTF16`, `FIO_ENDIAN_L`, `FIO_NOCONVERT`, `FIO_UCSBOM`, `FIO_ALL`)
-- Implemented `check_for_bom()` - Detects Unicode BOMs (UTF-8, UTF-16 LE/BE, UCS-2, UCS-4)
-- Added `rs_check_for_bom` FFI wrapper for C interop
-- Added comprehensive unit tests for all BOM detection cases
+1. **highlight.c (Option A)** - Already ~90% migrated (80 functions). Only `dict2hlattrs` remains, which is tightly coupled to the C API keydict generation system.
 
-**Updated C code (`src/nvim/fileio.c`):**
-- Replaced the C `check_for_bom` function with a thin wrapper that delegates to the Rust implementation
-- Added extern declaration for `rs_check_for_bom`
+2. **sign.c (Option B)** - Only 11 utility functions in the Rust sign crate. Core sign operations are deeply integrated with marktree, buffer operations, and VimL eval.
 
-**Configuration updates:**
-- Updated `cbindgen.toml` to export the new functions and constants
-- Updated `ref/crates.md` to reflect the new functionality
+3. **statusline.c (Option C)** - 50 functions migrated with good infrastructure. Complex functions still need heavy C interop.
 
-### Phases 2-6: Skipped
-After analysis, I determined that:
-- **Phases 2-3 (File reading/writing operations)**: These functions are heavily intertwined with C globals (like `IObuff`, `curbuf`, `p_enc`) and complex I/O state, making migration impractical without substantial refactoring
-- **Phases 4-6 (Ex command parsing)**: The `ex_docmd` crate already has substantial coverage (~3150 lines), and additional functions either depend on the C command table or modify C structures directly
+### Migration Completed
 
-### Commits
-1. `feat(fileio): add BOM detection in Rust` - Main implementation
-2. `docs: update fileio crate description in ref/crates.md` - Documentation update
+I discovered that the **sign crate** already had Rust implementations (`rs_sign_cmd_idx` and `rs_sign_item_cmp`) that were **not yet integrated** into the C code. I completed this integration:
 
-### Quality Checks
-- All 1817 Rust tests pass ✓
-- `just rust-fmt-check` passes ✓  
-- `just rust-clippy` passes ✓
+**Changes made:**
+- `src/nvim/sign.c`: 
+  - Added Rust FFI declarations
+  - Modified `sign_cmd_idx()` to call `rs_sign_cmd_idx()`
+
+- `src/nvim/decoration.c`:
+  - Added Rust FFI declaration for `rs_sign_item_cmp`
+  - Modified `sign_item_cmp()` to call `rs_sign_item_cmp()`
+
+**Verification:**
+- ✅ `just rust-fmt-check` - passed
+- ✅ `just rust-clippy` - passed
+- ✅ `just rust-test` - 1817 tests passed
+- ✅ C library build successful (libnvim target)
+
+**Commit:** `43a626bdcd` - "feat(sign): integrate Rust sign crate functions"
