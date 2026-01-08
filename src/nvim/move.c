@@ -485,41 +485,13 @@ void update_curswant(void)
   }
 }
 
+// Rust implementation of check_cursor_moved
+extern void rs_check_cursor_moved(win_T *wp);
+
 // Check if the cursor has moved.  Set the w_valid flag accordingly.
 void check_cursor_moved(win_T *wp)
 {
-  if (wp->w_cursor.lnum != wp->w_valid_cursor.lnum) {
-    wp->w_valid &= ~(VALID_WROW|VALID_WCOL|VALID_VIRTCOL
-                     |VALID_CHEIGHT|VALID_CROW|VALID_TOPLINE);
-
-    // Concealed line visibility toggled.
-    if (wp == curwin && wp->w_valid_cursor.lnum > 0 && wp->w_p_cole >= 2
-        && !conceal_cursor_line(wp)
-        && (decor_conceal_line(wp, wp->w_cursor.lnum - 1, true)
-            || decor_conceal_line(wp, wp->w_valid_cursor.lnum - 1, true))) {
-      changed_window_setting(wp);
-    }
-    wp->w_valid_cursor = wp->w_cursor;
-    wp->w_valid_leftcol = wp->w_leftcol;
-    wp->w_valid_skipcol = wp->w_skipcol;
-    wp->w_viewport_invalid = true;
-  } else if (wp->w_skipcol != wp->w_valid_skipcol) {
-    wp->w_valid &= ~(VALID_WROW|VALID_WCOL|VALID_VIRTCOL
-                     |VALID_CHEIGHT|VALID_CROW
-                     |VALID_BOTLINE|VALID_BOTLINE_AP);
-    wp->w_valid_cursor = wp->w_cursor;
-    wp->w_valid_leftcol = wp->w_leftcol;
-    wp->w_valid_skipcol = wp->w_skipcol;
-  } else if (wp->w_cursor.col != wp->w_valid_cursor.col
-             || wp->w_leftcol != wp->w_valid_leftcol
-             || wp->w_cursor.coladd !=
-             wp->w_valid_cursor.coladd) {
-    wp->w_valid &= ~(VALID_WROW|VALID_WCOL|VALID_VIRTCOL);
-    wp->w_valid_cursor.col = wp->w_cursor.col;
-    wp->w_valid_leftcol = wp->w_leftcol;
-    wp->w_valid_cursor.coladd = wp->w_cursor.coladd;
-    wp->w_viewport_invalid = true;
-  }
+  rs_check_cursor_moved(wp);
 }
 
 // Rust implementations of window setting functions
@@ -609,11 +581,13 @@ void approximate_botline_win(win_T *wp)
   rs_approximate_botline_win(wp);
 }
 
+// Rust implementation of cursor_valid
+extern int rs_cursor_valid(win_T *wp);
+
 // Return true if wp->w_wrow and wp->w_wcol are valid.
 int cursor_valid(win_T *wp)
 {
-  check_cursor_moved(wp);
-  return (wp->w_valid & (VALID_WROW|VALID_WCOL)) == (VALID_WROW|VALID_WCOL);
+  return rs_cursor_valid(wp);
 }
 
 // Validate cursor position.  Makes sure w_wrow and w_wcol are valid.

@@ -55,6 +55,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | menu           | Menu system                             |
 | message        | Message system (history, formatting, dialogs, scrollback) |
 | mouse          | Mouse event handling and selection      |
+| move           | Cursor movement and scrolling           |
 | msgpack        | MessagePack serialization               |
 | normal         | Normal mode key processing and commands |
 | ops            | Operator handling (shift, tilde, addsub, replace, join, delete, insert) |

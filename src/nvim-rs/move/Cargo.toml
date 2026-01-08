@@ -1,0 +1,16 @@
+[package]
+name = "nvim-move"
+description = "Cursor movement and scrolling for Neovim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+nvim-window = { path = "../window" }
+nvim-buffer = { path = "../buffer" }
+nvim-plines = { path = "../plines" }
+nvim-viewport = { path = "../viewport" }
+
+[lints]
+workspace = true

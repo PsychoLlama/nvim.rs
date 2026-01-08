@@ -63,6 +63,7 @@ nvim-memutil = { path = "memutil" }
 nvim-menu = { path = "menu" }
 nvim-message = { path = "message" }
 nvim-mouse = { path = "mouse" }
+nvim-move = { path = "move" }
 nvim-msgpack = { path = "msgpack" }
 nvim-normal = { path = "normal" }
 nvim-ops = { path = "ops" }

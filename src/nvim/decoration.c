@@ -902,6 +902,12 @@ bool decor_conceal_line(win_T *wp, int row, bool check_cursor)
   return decor_providers_invoke_conceal_line(wp, row);
 }
 
+/// Wrapper for decor_conceal_line for Rust FFI.
+int nvim_decor_conceal_line(win_T *wp, int row, int check_cursor)
+{
+  return decor_conceal_line(wp, row, check_cursor != 0) ? 1 : 0;
+}
+
 /// @return whether a window may have folded or concealed lines
 bool win_lines_concealed(win_T *wp)
 {

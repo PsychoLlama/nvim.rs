@@ -1295,6 +1295,158 @@ colnr_T nvim_win_get_skipcol(win_T *wp)
   return wp->w_skipcol;
 }
 
+/// Get the cursor column.
+colnr_T nvim_win_get_cursor_col(win_T *wp)
+{
+  return wp->w_cursor.col;
+}
+
+/// Get the cursor coladd.
+colnr_T nvim_win_get_cursor_coladd(win_T *wp)
+{
+  return wp->w_cursor.coladd;
+}
+
+/// Get the valid cursor line number.
+linenr_T nvim_win_get_valid_cursor_lnum(win_T *wp)
+{
+  return wp->w_valid_cursor.lnum;
+}
+
+/// Get the valid cursor column.
+colnr_T nvim_win_get_valid_cursor_col(win_T *wp)
+{
+  return wp->w_valid_cursor.col;
+}
+
+/// Get the valid cursor coladd.
+colnr_T nvim_win_get_valid_cursor_coladd(win_T *wp)
+{
+  return wp->w_valid_cursor.coladd;
+}
+
+/// Set the valid cursor position (all fields).
+void nvim_win_set_valid_cursor(win_T *wp, linenr_T lnum, colnr_T col, colnr_T coladd)
+{
+  wp->w_valid_cursor.lnum = lnum;
+  wp->w_valid_cursor.col = col;
+  wp->w_valid_cursor.coladd = coladd;
+}
+
+/// Set just the valid cursor column.
+void nvim_win_set_valid_cursor_col(win_T *wp, colnr_T col)
+{
+  wp->w_valid_cursor.col = col;
+}
+
+/// Set just the valid cursor coladd.
+void nvim_win_set_valid_cursor_coladd(win_T *wp, colnr_T coladd)
+{
+  wp->w_valid_cursor.coladd = coladd;
+}
+
+/// Get the leftcol (horizontal scroll position).
+colnr_T nvim_win_get_leftcol(win_T *wp)
+{
+  return wp->w_leftcol;
+}
+
+/// Get the valid leftcol.
+colnr_T nvim_win_get_valid_leftcol(win_T *wp)
+{
+  return wp->w_valid_leftcol;
+}
+
+/// Set the valid leftcol.
+void nvim_win_set_valid_leftcol(win_T *wp, colnr_T val)
+{
+  wp->w_valid_leftcol = val;
+}
+
+/// Get the valid skipcol.
+colnr_T nvim_win_get_valid_skipcol(win_T *wp)
+{
+  return wp->w_valid_skipcol;
+}
+
+/// Set the valid skipcol.
+void nvim_win_set_valid_skipcol(win_T *wp, colnr_T val)
+{
+  wp->w_valid_skipcol = val;
+}
+
+/// Get the viewport_invalid flag.
+int nvim_win_get_viewport_invalid(win_T *wp)
+{
+  return wp->w_viewport_invalid ? 1 : 0;
+}
+
+/// Set the viewport_invalid flag.
+void nvim_win_set_viewport_invalid(win_T *wp, int val)
+{
+  wp->w_viewport_invalid = val != 0;
+}
+
+/// Get w_cline_row.
+int nvim_win_get_cline_row(win_T *wp)
+{
+  return wp->w_cline_row;
+}
+
+/// Set w_cline_row.
+void nvim_win_set_cline_row(win_T *wp, int val)
+{
+  wp->w_cline_row = val;
+}
+
+/// Get w_cline_height.
+int nvim_win_get_cline_height(win_T *wp)
+{
+  return wp->w_cline_height;
+}
+
+/// Set w_cline_height.
+void nvim_win_set_cline_height(win_T *wp, int val)
+{
+  wp->w_cline_height = val;
+}
+
+/// Get w_cline_folded.
+int nvim_win_get_cline_folded(win_T *wp)
+{
+  return wp->w_cline_folded ? 1 : 0;
+}
+
+/// Set w_cline_folded.
+void nvim_win_set_cline_folded(win_T *wp, int val)
+{
+  wp->w_cline_folded = val != 0;
+}
+
+/// Get w_curswant.
+colnr_T nvim_win_get_curswant(win_T *wp)
+{
+  return wp->w_curswant;
+}
+
+/// Set w_curswant.
+void nvim_win_set_curswant(win_T *wp, colnr_T val)
+{
+  wp->w_curswant = val;
+}
+
+/// Get w_set_curswant flag.
+int nvim_win_get_set_curswant(win_T *wp)
+{
+  return wp->w_set_curswant ? 1 : 0;
+}
+
+/// Set w_set_curswant flag.
+void nvim_win_set_set_curswant(win_T *wp, int val)
+{
+  wp->w_set_curswant = val != 0;
+}
+
 /// Get the window's 'breakindent' option.
 int nvim_win_get_p_bri(win_T *wp)
 {
