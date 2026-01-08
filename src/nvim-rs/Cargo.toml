@@ -36,6 +36,7 @@ nvim-compositor = { path = "compositor" }
 nvim-context = { path = "context" }
 nvim-encoding = { path = "encoding" }
 nvim-event = { path = "event" }
+nvim-extmark = { path = "extmark" }
 nvim-ex-docmd = { path = "ex_docmd" }
 nvim-ex-eval = { path = "ex_eval" }
 nvim-fileio = { path = "fileio" }

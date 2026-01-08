@@ -1,0 +1,20 @@
+[package]
+name = "nvim-extmark"
+description = "Extended marks for plugins"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+nvim-buffer = { path = "../buffer" }
+nvim-marktree = { path = "../marktree" }
+nvim-decoration = { path = "../decoration" }
+
+[dev-dependencies]

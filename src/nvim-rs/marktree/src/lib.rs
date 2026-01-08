@@ -225,6 +225,30 @@ impl MarkTreeIterHandle {
     pub const fn is_null(self) -> bool {
         self.0.is_null()
     }
+
+    /// Create a null handle.
+    #[inline]
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+
+    /// Create a handle from a raw pointer.
+    ///
+    /// # Safety
+    /// The pointer must be a valid `MarkTreeIter*` or null.
+    #[inline]
+    #[must_use]
+    pub const unsafe fn from_ptr(ptr: *mut std::ffi::c_void) -> Self {
+        Self(ptr)
+    }
+
+    /// Get the raw pointer.
+    #[inline]
+    #[must_use]
+    pub const fn as_ptr(self) -> *mut std::ffi::c_void {
+        self.0
+    }
 }
 
 // ============================================================================
