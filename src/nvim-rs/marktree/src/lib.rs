@@ -22,6 +22,7 @@ pub mod iter;
 pub mod node;
 pub mod overlap;
 pub mod splice;
+pub mod validate;
 
 use std::ffi::c_int;
 

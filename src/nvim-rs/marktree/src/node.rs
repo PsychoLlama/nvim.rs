@@ -406,9 +406,8 @@ impl MarkTree {
         let node_memory = (leaf_nodes * node_size) + (internal_nodes * (node_size + children_size));
 
         // HashMap overhead (approximate)
-        let hashmap_overhead = self.id2node.len() * (std::mem::size_of::<u64>()
-            + std::mem::size_of::<NonNull<MTNode>>()
-            + 8); // bucket overhead estimate
+        let hashmap_overhead = self.id2node.len()
+            * (std::mem::size_of::<u64>() + std::mem::size_of::<NonNull<MTNode>>() + 8); // bucket overhead estimate
 
         base_size + node_memory + hashmap_overhead
     }
