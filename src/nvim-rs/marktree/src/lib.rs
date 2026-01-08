@@ -21,6 +21,7 @@ pub mod intersection;
 pub mod iter;
 pub mod node;
 pub mod overlap;
+pub mod splice;
 
 use std::ffi::c_int;
 
