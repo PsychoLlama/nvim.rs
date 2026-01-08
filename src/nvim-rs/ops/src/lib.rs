@@ -13,6 +13,7 @@
 //! - [`replace`]: Character replacement calculations (r)
 //! - [`join`]: Line join calculations (J, gJ)
 //! - [`delete`]: Delete operation calculations (d, x, D)
+//! - [`insert`]: Insert/change operation calculations (I, A, c)
 
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(clippy::doc_markdown)]
@@ -20,6 +21,7 @@
 
 pub mod addsub;
 pub mod delete;
+pub mod insert;
 pub mod join;
 pub mod oparg;
 pub mod replace;
