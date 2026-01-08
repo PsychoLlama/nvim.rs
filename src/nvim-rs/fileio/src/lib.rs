@@ -1,10 +1,37 @@
 //! File I/O utilities for Neovim
 //!
-//! Provides utility functions for file operations.
+//! Provides utility functions for file operations including:
+//! - File time comparison with FAT filesystem tolerance
+//! - Device file detection (/dev/fd/N)
+//! - BOM (Byte Order Mark) detection for Unicode files
+//! - File encoding flags and conversion helpers
 
 #![allow(unsafe_code)]
 
 use std::ffi::{c_char, c_int, CStr};
+
+// =============================================================================
+// File I/O Encoding Flags
+// =============================================================================
+
+/// Convert Latin1 encoding
+pub const FIO_LATIN1: c_int = 0x01;
+/// Convert UTF-8 encoding
+pub const FIO_UTF8: c_int = 0x02;
+/// Convert UCS-2 encoding
+pub const FIO_UCS2: c_int = 0x04;
+/// Convert UCS-4 encoding
+pub const FIO_UCS4: c_int = 0x08;
+/// Convert UTF-16 encoding
+pub const FIO_UTF16: c_int = 0x10;
+/// Little endian byte order
+pub const FIO_ENDIAN_L: c_int = 0x80;
+/// Skip encoding conversion
+pub const FIO_NOCONVERT: c_int = 0x2000;
+/// Check for BOM at start of file
+pub const FIO_UCSBOM: c_int = 0x4000;
+/// Allow all formats (for BOM detection)
+pub const FIO_ALL: c_int = -1;
 
 /// Check if file times differ.
 ///
@@ -133,6 +160,172 @@ pub unsafe extern "C" fn rs_is_dev_fd_file(fname: *const c_char) -> bool {
     is_dev_fd_file_impl(c_str.to_bytes())
 }
 
+// =============================================================================
+// BOM (Byte Order Mark) Detection
+// =============================================================================
+
+/// Result of BOM detection, containing the encoding name and BOM length.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BomResult {
+    /// The encoding name (e.g., "utf-8", "utf-16le")
+    pub encoding: &'static str,
+    /// Length of the BOM in bytes
+    pub len: usize,
+}
+
+/// Check for a Unicode BOM (Byte Order Mark) at the start of a byte buffer.
+///
+/// Detects the following BOMs:
+/// - UTF-8: EF BB BF (3 bytes)
+/// - UTF-16 LE: FF FE (2 bytes)
+/// - UTF-16 BE: FE FF (2 bytes)
+/// - UCS-4 LE: FF FE 00 00 (4 bytes)
+/// - UCS-4 BE: 00 00 FE FF (4 bytes)
+///
+/// # Arguments
+/// * `data` - Byte slice to check (must be at least 2 bytes)
+/// * `flags` - FIO_* flags indicating which encodings to check for
+///
+/// # Returns
+/// `Some(BomResult)` with encoding name and BOM length, or `None` if no BOM found.
+pub fn check_for_bom(data: &[u8], flags: c_int) -> Option<BomResult> {
+    if data.len() < 2 {
+        return None;
+    }
+
+    // UTF-8 BOM: EF BB BF
+    if data.len() >= 3
+        && data[0] == 0xef
+        && data[1] == 0xbb
+        && data[2] == 0xbf
+        && (flags == FIO_ALL || flags == FIO_UTF8 || flags == 0)
+    {
+        return Some(BomResult {
+            encoding: "utf-8",
+            len: 3,
+        });
+    }
+
+    // Check FF FE prefix (UTF-16 LE or UCS-4 LE)
+    if data[0] == 0xff && data[1] == 0xfe {
+        // UCS-4 LE: FF FE 00 00
+        if data.len() >= 4
+            && data[2] == 0
+            && data[3] == 0
+            && (flags == FIO_ALL || flags == (FIO_UCS4 | FIO_ENDIAN_L))
+        {
+            return Some(BomResult {
+                encoding: "ucs-4le",
+                len: 4,
+            });
+        }
+
+        // UCS-2 LE: FF FE
+        if flags == (FIO_UCS2 | FIO_ENDIAN_L) {
+            return Some(BomResult {
+                encoding: "ucs-2le",
+                len: 2,
+            });
+        }
+
+        // UTF-16 LE (preferred, also works for UCS-2 LE): FF FE
+        if flags == FIO_ALL || flags == (FIO_UTF16 | FIO_ENDIAN_L) {
+            return Some(BomResult {
+                encoding: "utf-16le",
+                len: 2,
+            });
+        }
+    }
+
+    // UTF-16 BE or UCS-2 BE: FE FF
+    if data[0] == 0xfe
+        && data[1] == 0xff
+        && (flags == FIO_ALL || flags == FIO_UCS2 || flags == FIO_UTF16)
+    {
+        // Default to utf-16, it works also for ucs-2 text
+        if flags == FIO_UCS2 {
+            return Some(BomResult {
+                encoding: "ucs-2",
+                len: 2,
+            });
+        }
+        return Some(BomResult {
+            encoding: "utf-16",
+            len: 2,
+        });
+    }
+
+    // UCS-4 BE: 00 00 FE FF
+    if data.len() >= 4
+        && data[0] == 0
+        && data[1] == 0
+        && data[2] == 0xfe
+        && data[3] == 0xff
+        && (flags == FIO_ALL || flags == FIO_UCS4)
+    {
+        return Some(BomResult {
+            encoding: "ucs-4",
+            len: 4,
+        });
+    }
+
+    None
+}
+
+/// FFI wrapper for `check_for_bom`.
+///
+/// Checks for a Unicode BOM at the start of the given byte buffer.
+///
+/// # Arguments
+/// * `data` - Pointer to the byte buffer
+/// * `size` - Size of the buffer in bytes (must be >= 2)
+/// * `lenp` - Output pointer for BOM length
+/// * `flags` - FIO_* flags indicating which encodings to check
+///
+/// # Returns
+/// Pointer to a static encoding name string, or NULL if no BOM found.
+///
+/// # Safety
+/// - `data` must point to a valid buffer of at least `size` bytes
+/// - `lenp` must be a valid pointer for writing
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_for_bom(
+    data: *const u8,
+    size: c_int,
+    lenp: *mut c_int,
+    flags: c_int,
+) -> *const c_char {
+    if data.is_null() || size < 2 || lenp.is_null() {
+        if !lenp.is_null() {
+            *lenp = 2; // Default length as in C code
+        }
+        return std::ptr::null();
+    }
+
+    let slice = std::slice::from_raw_parts(data, size as usize);
+
+    match check_for_bom(slice, flags) {
+        Some(result) => {
+            *lenp = result.len as c_int;
+            // Return pointer to static string
+            match result.encoding {
+                "utf-8" => c"utf-8".as_ptr(),
+                "utf-16" => c"utf-16".as_ptr(),
+                "utf-16le" => c"utf-16le".as_ptr(),
+                "ucs-2" => c"ucs-2".as_ptr(),
+                "ucs-2le" => c"ucs-2le".as_ptr(),
+                "ucs-4" => c"ucs-4".as_ptr(),
+                "ucs-4le" => c"ucs-4le".as_ptr(),
+                _ => std::ptr::null(),
+            }
+        }
+        None => {
+            *lenp = 2; // Default length as in C code
+            std::ptr::null()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -236,5 +429,212 @@ mod tests {
         assert!(!time_differs(999, 0, 1000, 0, true));
         // Negative difference outside FAT tolerance
         assert!(time_differs(997, 0, 1000, 0, true));
+    }
+
+    // =========================================================================
+    // BOM Detection Tests
+    // =========================================================================
+
+    #[test]
+    fn test_check_for_bom_utf8() {
+        // UTF-8 BOM: EF BB BF
+        let data = [0xef, 0xbb, 0xbf, 0x68, 0x65, 0x6c, 0x6c, 0x6f];
+        let result = check_for_bom(&data, FIO_ALL);
+        assert_eq!(
+            result,
+            Some(BomResult {
+                encoding: "utf-8",
+                len: 3
+            })
+        );
+
+        // Also works with FIO_UTF8 flag
+        let result = check_for_bom(&data, FIO_UTF8);
+        assert_eq!(
+            result,
+            Some(BomResult {
+                encoding: "utf-8",
+                len: 3
+            })
+        );
+
+        // Also works with flags == 0
+        let result = check_for_bom(&data, 0);
+        assert_eq!(
+            result,
+            Some(BomResult {
+                encoding: "utf-8",
+                len: 3
+            })
+        );
+    }
+
+    #[test]
+    fn test_check_for_bom_utf16le() {
+        // UTF-16 LE BOM: FF FE
+        let data = [0xff, 0xfe, 0x68, 0x00];
+        let result = check_for_bom(&data, FIO_ALL);
+        assert_eq!(
+            result,
+            Some(BomResult {
+                encoding: "utf-16le",
+                len: 2
+            })
+        );
+
+        let result = check_for_bom(&data, FIO_UTF16 | FIO_ENDIAN_L);
+        assert_eq!(
+            result,
+            Some(BomResult {
+                encoding: "utf-16le",
+                len: 2
+            })
+        );
+    }
+
+    #[test]
+    fn test_check_for_bom_utf16be() {
+        // UTF-16 BE BOM: FE FF
+        let data = [0xfe, 0xff, 0x00, 0x68];
+        let result = check_for_bom(&data, FIO_ALL);
+        assert_eq!(
+            result,
+            Some(BomResult {
+                encoding: "utf-16",
+                len: 2
+            })
+        );
+
+        let result = check_for_bom(&data, FIO_UTF16);
+        assert_eq!(
+            result,
+            Some(BomResult {
+                encoding: "utf-16",
+                len: 2
+            })
+        );
+    }
+
+    #[test]
+    fn test_check_for_bom_ucs2() {
+        // UCS-2 LE: FF FE (with UCS2 flag)
+        let data = [0xff, 0xfe, 0x68, 0x00];
+        let result = check_for_bom(&data, FIO_UCS2 | FIO_ENDIAN_L);
+        assert_eq!(
+            result,
+            Some(BomResult {
+                encoding: "ucs-2le",
+                len: 2
+            })
+        );
+
+        // UCS-2 BE: FE FF (with UCS2 flag)
+        let data = [0xfe, 0xff, 0x00, 0x68];
+        let result = check_for_bom(&data, FIO_UCS2);
+        assert_eq!(
+            result,
+            Some(BomResult {
+                encoding: "ucs-2",
+                len: 2
+            })
+        );
+    }
+
+    #[test]
+    fn test_check_for_bom_ucs4le() {
+        // UCS-4 LE BOM: FF FE 00 00
+        let data = [0xff, 0xfe, 0x00, 0x00, 0x68, 0x00, 0x00, 0x00];
+        let result = check_for_bom(&data, FIO_ALL);
+        assert_eq!(
+            result,
+            Some(BomResult {
+                encoding: "ucs-4le",
+                len: 4
+            })
+        );
+
+        let result = check_for_bom(&data, FIO_UCS4 | FIO_ENDIAN_L);
+        assert_eq!(
+            result,
+            Some(BomResult {
+                encoding: "ucs-4le",
+                len: 4
+            })
+        );
+    }
+
+    #[test]
+    fn test_check_for_bom_ucs4be() {
+        // UCS-4 BE BOM: 00 00 FE FF
+        let data = [0x00, 0x00, 0xfe, 0xff, 0x00, 0x00, 0x00, 0x68];
+        let result = check_for_bom(&data, FIO_ALL);
+        assert_eq!(
+            result,
+            Some(BomResult {
+                encoding: "ucs-4",
+                len: 4
+            })
+        );
+
+        let result = check_for_bom(&data, FIO_UCS4);
+        assert_eq!(
+            result,
+            Some(BomResult {
+                encoding: "ucs-4",
+                len: 4
+            })
+        );
+    }
+
+    #[test]
+    fn test_check_for_bom_no_bom() {
+        // Regular ASCII text, no BOM
+        let data = b"Hello, world!";
+        let result = check_for_bom(data, FIO_ALL);
+        assert_eq!(result, None);
+
+        // Empty slice
+        let result = check_for_bom(&[], FIO_ALL);
+        assert_eq!(result, None);
+
+        // Single byte (too short)
+        let result = check_for_bom(&[0xef], FIO_ALL);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_check_for_bom_wrong_flags() {
+        // UTF-8 BOM with wrong flags should not match
+        let data = [0xef, 0xbb, 0xbf, 0x68];
+        let result = check_for_bom(&data, FIO_UTF16);
+        assert_eq!(result, None);
+
+        // UTF-16 LE BOM with UTF-8 flag should not match
+        let data = [0xff, 0xfe, 0x68, 0x00];
+        let result = check_for_bom(&data, FIO_UTF8);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_check_for_bom_ffi() {
+        // Test FFI wrapper with UTF-8 BOM
+        let data = [0xef_u8, 0xbb, 0xbf, 0x68];
+        let mut len: c_int = 0;
+        let result = unsafe { rs_check_for_bom(data.as_ptr(), 4, &mut len, FIO_ALL) };
+        assert!(!result.is_null());
+        assert_eq!(len, 3);
+
+        // Test with no BOM
+        let data = b"Hello";
+        let mut len: c_int = 0;
+        let result = unsafe { rs_check_for_bom(data.as_ptr(), 5, &mut len, FIO_ALL) };
+        assert!(result.is_null());
+        assert_eq!(len, 2); // Default length
+
+        // Test with null pointer
+        let mut len: c_int = 0;
+        let result = unsafe { rs_check_for_bom(std::ptr::null(), 5, &mut len, FIO_ALL) };
+        assert!(result.is_null());
+        assert_eq!(len, 2);
     }
 }

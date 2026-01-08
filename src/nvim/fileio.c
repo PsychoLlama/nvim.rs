@@ -97,6 +97,7 @@
 extern int rs_time_differs(int64_t file_sec, int64_t file_nsec, int64_t mtime, int64_t mtime_ns,
                            int fat_tolerance);
 extern bool rs_is_dev_fd_file(const char *fname);
+extern const char *rs_check_for_bom(const uint8_t *data, int size, int *lenp, int flags);
 
 #include "fileio.c.generated.h"
 
@@ -2251,43 +2252,8 @@ int get_fio_flags(const char *name)
 ///          NULL when no BOM found.
 static char *check_for_bom(const char *p_in, int size, int *lenp, int flags)
 {
-  const uint8_t *p = (const uint8_t *)p_in;
-  char *name = NULL;
-  int len = 2;
-
-  if (p[0] == 0xef && p[1] == 0xbb && size >= 3 && p[2] == 0xbf
-      && (flags == FIO_ALL || flags == FIO_UTF8 || flags == 0)) {
-    name = "utf-8";             // EF BB BF
-    len = 3;
-  } else if (p[0] == 0xff && p[1] == 0xfe) {
-    if (size >= 4 && p[2] == 0 && p[3] == 0
-        && (flags == FIO_ALL || flags == (FIO_UCS4 | FIO_ENDIAN_L))) {
-      name = "ucs-4le";         // FF FE 00 00
-      len = 4;
-    } else if (flags == (FIO_UCS2 | FIO_ENDIAN_L)) {
-      name = "ucs-2le";         // FF FE
-    } else if (flags == FIO_ALL
-               || flags == (FIO_UTF16 | FIO_ENDIAN_L)) {
-      // utf-16le is preferred, it also works for ucs-2le text
-      name = "utf-16le";        // FF FE
-    }
-  } else if (p[0] == 0xfe && p[1] == 0xff
-             && (flags == FIO_ALL || flags == FIO_UCS2 || flags ==
-                 FIO_UTF16)) {
-    // Default to utf-16, it works also for ucs-2 text.
-    if (flags == FIO_UCS2) {
-      name = "ucs-2";           // FE FF
-    } else {
-      name = "utf-16";          // FE FF
-    }
-  } else if (size >= 4 && p[0] == 0 && p[1] == 0 && p[2] == 0xfe
-             && p[3] == 0xff && (flags == FIO_ALL || flags == FIO_UCS4)) {
-    name = "ucs-4";             // 00 00 FE FF
-    len = 4;
-  }
-
-  *lenp = len;
-  return name;
+  // Delegate to Rust implementation
+  return (char *)rs_check_for_bom((const uint8_t *)p_in, size, lenp, flags);
 }
 
 /// Shorten filename of a buffer.
