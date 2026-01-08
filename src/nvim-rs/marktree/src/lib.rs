@@ -16,8 +16,12 @@
 #![allow(clippy::items_after_statements)] // Allow const definitions in functions
 
 pub mod intersection;
+pub mod node;
 
 use std::ffi::c_int;
+
+// Re-export native types for external use
+pub use node::{MTNode, MarkTree, MarkTreeIter, MetaIndex};
 
 // ============================================================================
 // Constants
