@@ -436,22 +436,27 @@ void compl_status_clear(void)
   compl_cont_status = 0;
 }
 
+// Rust direction function declarations
+extern int rs_compl_dir_forward(void);
+extern int rs_compl_shows_dir_forward(void);
+extern int rs_compl_shows_dir_backward(void);
+
 /// @return  true if completion is using the forward direction matches
 static bool compl_dir_forward(void)
 {
-  return compl_direction == FORWARD;
+  return rs_compl_dir_forward() != 0;
 }
 
 /// @return  true if currently showing forward completion matches
 static bool compl_shows_dir_forward(void)
 {
-  return compl_shows_dir == FORWARD;
+  return rs_compl_shows_dir_forward() != 0;
 }
 
 /// @return  true if currently showing backward completion matches
 static bool compl_shows_dir_backward(void)
 {
-  return compl_shows_dir == BACKWARD;
+  return rs_compl_shows_dir_backward() != 0;
 }
 
 /// Check that the 'dictionary' or 'thesaurus' option can be used.
@@ -726,13 +731,13 @@ bool ins_compl_is_match_selected(void)
   return compl_shown_match != NULL && !is_first_match(compl_shown_match);
 }
 
+extern int rs_ins_compl_preinsert_longest(void);
+
 /// Returns true if autocomplete is active and the pre-insert effect targets the
 /// longest prefix.
 bool ins_compl_preinsert_longest(void)
 {
-  return compl_autocomplete
-         && (get_cot_flags() & (kOptCotFlagLongest | kOptCotFlagPreinsert | kOptCotFlagFuzzy))
-         == kOptCotFlagLongest;
+  return rs_ins_compl_preinsert_longest() != 0;
 }
 
 /// Add a match to the list of matches
@@ -1982,30 +1987,21 @@ int ins_compl_len(void)
   return rs_ins_compl_len();
 }
 
+extern int rs_ins_compl_has_preinsert(void);
+extern int rs_ins_compl_preinsert_effect(void);
+
 /// Return true when the 'completeopt' "preinsert" flag is in effect,
 /// otherwise return false.
 bool ins_compl_has_preinsert(void)
 {
-  unsigned cur_cot_flags = get_cot_flags();
-  if (compl_autocomplete && p_ic && !p_inf) {
-    return false;
-  }
-  return (!compl_autocomplete
-          ? (cur_cot_flags & (kOptCotFlagPreinsert|kOptCotFlagFuzzy|kOptCotFlagMenuone))
-          == (kOptCotFlagPreinsert|kOptCotFlagMenuone)
-          : (cur_cot_flags & (kOptCotFlagPreinsert|kOptCotFlagFuzzy))
-          == kOptCotFlagPreinsert);
+  return rs_ins_compl_has_preinsert() != 0;
 }
 
 /// Returns true if the pre-insert effect is valid and the cursor is within
 /// the `compl_ins_end_col` range.
 bool ins_compl_preinsert_effect(void)
 {
-  if (!ins_compl_has_preinsert() && !ins_compl_preinsert_longest()) {
-    return false;
-  }
-
-  return curwin->w_cursor.col < compl_ins_end_col;
+  return rs_ins_compl_preinsert_effect() != 0;
 }
 
 /// Delete one character before the cursor and show the subset of the matches
@@ -2080,11 +2076,12 @@ static bool ins_compl_need_restart(void)
   return rs_ins_compl_need_restart() != 0;
 }
 
+extern int rs_ins_compl_has_autocomplete(void);
+
 /// Return true if 'autocomplete' option is set
 bool ins_compl_has_autocomplete(void)
 {
-  // Use buffer-local setting if defined (>= 0), otherwise use global
-  return curbuf->b_p_ac >= 0 ? curbuf->b_p_ac : p_ac;
+  return rs_ins_compl_has_autocomplete() != 0;
 }
 
 /// Calculate fuzzy score and sort completion matches unless sorting is disabled.
@@ -6469,6 +6466,54 @@ int nvim_get_compl_autocomplete(void)
 int nvim_get_compl_from_nonkeyword(void)
 {
   return compl_from_nonkeyword ? 1 : 0;
+}
+
+/// Get compl_direction (accessor for Rust).
+int nvim_get_compl_direction(void)
+{
+  return compl_direction;
+}
+
+/// Get compl_shows_dir (accessor for Rust).
+int nvim_get_compl_shows_dir(void)
+{
+  return compl_shows_dir;
+}
+
+/// Get p_ic (ignorecase option) for Rust.
+int nvim_get_p_ic(void)
+{
+  return p_ic ? 1 : 0;
+}
+
+/// Get p_inf (infercase option) for Rust.
+int nvim_get_p_inf(void)
+{
+  return curbuf->b_p_inf ? 1 : 0;
+}
+
+/// Get compl_ins_end_col for Rust.
+int nvim_get_compl_ins_end_col(void)
+{
+  return compl_ins_end_col;
+}
+
+/// Get cursor column for Rust.
+int nvim_get_cursor_col(void)
+{
+  return curwin->w_cursor.col;
+}
+
+/// Get p_ac (autocomplete global option) for Rust.
+int nvim_get_p_ac(void)
+{
+  return p_ac ? 1 : 0;
+}
+
+/// Get curbuf->b_p_ac (buffer-local autocomplete option) for Rust.
+int nvim_curbuf_get_b_p_ac(void)
+{
+  return curbuf->b_p_ac;
 }
 
 extern int rs_pum_wanted(void);

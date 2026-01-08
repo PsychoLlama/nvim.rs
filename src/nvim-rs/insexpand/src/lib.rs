@@ -92,11 +92,36 @@ extern "C" {
     fn nvim_get_compl_curr_buf() -> BufHandle;
     fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
     fn nvim_get_compl_col() -> c_int;
+
+    // Direction and state accessors
+    fn nvim_get_compl_direction() -> c_int;
+    fn nvim_get_compl_shows_dir() -> c_int;
+
+    // Option accessors
+    fn nvim_get_p_ic() -> c_int;
+    fn nvim_get_p_inf() -> c_int;
+    fn nvim_get_p_ac() -> c_int;
+    fn nvim_curbuf_get_b_p_ac() -> c_int;
+    fn nvim_get_compl_ins_end_col() -> c_int;
+    fn nvim_get_cursor_col() -> c_int;
 }
 
-// completeopt flags (from optionstr.h)
+// completeopt flags (from optionstr.h - generated)
 const K_OPT_COT_FLAG_MENU: c_uint = 0x01;
 const K_OPT_COT_FLAG_MENUONE: c_uint = 0x02;
+const K_OPT_COT_FLAG_LONGEST: c_uint = 0x04;
+// const K_OPT_COT_FLAG_PREVIEW: c_uint = 0x08;
+// const K_OPT_COT_FLAG_POPUP: c_uint = 0x10;
+// const K_OPT_COT_FLAG_NOINSERT: c_uint = 0x20;
+// const K_OPT_COT_FLAG_NOSELECT: c_uint = 0x40;
+const K_OPT_COT_FLAG_FUZZY: c_uint = 0x80;
+// const K_OPT_COT_FLAG_NOSORT: c_uint = 0x100;
+const K_OPT_COT_FLAG_PREINSERT: c_uint = 0x200;
+// const K_OPT_COT_FLAG_NEAREST: c_uint = 0x400;
+
+// Direction constants
+const FORWARD: c_int = 1;
+const BACKWARD: c_int = -1;
 
 /// Check if CTRL-X mode is none (0).
 #[no_mangle]
@@ -494,6 +519,96 @@ pub unsafe extern "C" fn rs_vim_is_ctrl_x_key(c: c_int) -> c_int {
     c_int::from(result)
 }
 
+// =============================================================================
+// Direction functions
+// =============================================================================
+
+/// Return true if completion is using the forward direction matches.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compl_dir_forward() -> c_int {
+    c_int::from(nvim_get_compl_direction() == FORWARD)
+}
+
+/// Return true if currently showing forward completion matches.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compl_shows_dir_forward() -> c_int {
+    c_int::from(nvim_get_compl_shows_dir() == FORWARD)
+}
+
+/// Return true if currently showing backward completion matches.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compl_shows_dir_backward() -> c_int {
+    c_int::from(nvim_get_compl_shows_dir() == BACKWARD)
+}
+
+// =============================================================================
+// Preinsert functions
+// =============================================================================
+
+/// Return true when the 'completeopt' "preinsert" flag is in effect.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_has_preinsert() -> c_int {
+    let cur_cot_flags = get_cot_flags();
+
+    // If autocomplete is active and ignorecase is set but infercase is not, disable preinsert
+    if nvim_get_compl_autocomplete() != 0 && nvim_get_p_ic() != 0 && nvim_get_p_inf() == 0 {
+        return 0;
+    }
+
+    // When not in autocomplete mode:
+    //   preinsert is active if (preinsert|fuzzy|menuone) == (preinsert|menuone)
+    //   i.e., preinsert and menuone are set, but fuzzy is NOT set
+    // When in autocomplete mode:
+    //   preinsert is active if (preinsert|fuzzy) == preinsert
+    //   i.e., preinsert is set but fuzzy is NOT set
+    let result = if nvim_get_compl_autocomplete() == 0 {
+        (cur_cot_flags & (K_OPT_COT_FLAG_PREINSERT | K_OPT_COT_FLAG_FUZZY | K_OPT_COT_FLAG_MENUONE))
+            == (K_OPT_COT_FLAG_PREINSERT | K_OPT_COT_FLAG_MENUONE)
+    } else {
+        (cur_cot_flags & (K_OPT_COT_FLAG_PREINSERT | K_OPT_COT_FLAG_FUZZY))
+            == K_OPT_COT_FLAG_PREINSERT
+    };
+    c_int::from(result)
+}
+
+/// Returns true if autocomplete is active and the pre-insert effect targets the
+/// longest prefix.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_preinsert_longest() -> c_int {
+    let cur_cot_flags = get_cot_flags();
+    let result = nvim_get_compl_autocomplete() != 0
+        && (cur_cot_flags
+            & (K_OPT_COT_FLAG_LONGEST | K_OPT_COT_FLAG_PREINSERT | K_OPT_COT_FLAG_FUZZY))
+            == K_OPT_COT_FLAG_LONGEST;
+    c_int::from(result)
+}
+
+/// Returns true if the pre-insert effect is valid and the cursor is within
+/// the `compl_ins_end_col` range.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_preinsert_effect() -> c_int {
+    if rs_ins_compl_has_preinsert() == 0 && rs_ins_compl_preinsert_longest() == 0 {
+        return 0;
+    }
+    c_int::from(nvim_get_cursor_col() < nvim_get_compl_ins_end_col())
+}
+
+// =============================================================================
+// Autocomplete functions
+// =============================================================================
+
+/// Return true if 'autocomplete' option is set
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_has_autocomplete() -> c_int {
+    // Use buffer-local setting if defined (>= 0), otherwise use global
+    let b_p_ac = nvim_curbuf_get_b_p_ac();
+    if b_p_ac >= 0 {
+        c_int::from(b_p_ac != 0)
+    } else {
+        c_int::from(nvim_get_p_ac() != 0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -577,6 +692,16 @@ mod tests {
         // completeopt flags
         assert_eq!(K_OPT_COT_FLAG_MENU, 0x01);
         assert_eq!(K_OPT_COT_FLAG_MENUONE, 0x02);
+        assert_eq!(K_OPT_COT_FLAG_LONGEST, 0x04);
+        assert_eq!(K_OPT_COT_FLAG_FUZZY, 0x80);
+        assert_eq!(K_OPT_COT_FLAG_PREINSERT, 0x200);
+    }
+
+    #[test]
+    fn test_direction_constants() {
+        // Direction constants
+        assert_eq!(FORWARD, 1);
+        assert_eq!(BACKWARD, -1);
     }
 
     #[test]
