@@ -1740,6 +1740,32 @@ extern "C" {
     fn nvim_qf_decr_refcount(qi: QfInfoHandleMut);
     fn nvim_qf_get_ctx(qfl: QfListHandle) -> *mut c_void;
     fn nvim_qf_incr_changedtick(qfl: QfListHandleMut);
+
+    // Phase 3 Extension: qfline_T allocation and field-setting
+    fn nvim_qfline_alloc() -> QfLineHandleMut;
+    fn nvim_qfline_free(qfp: QfLineHandleMut);
+    fn nvim_qfline_set_fnum(qfp: QfLineHandleMut, fnum: c_int);
+    fn nvim_qfline_set_lnum(qfp: QfLineHandleMut, lnum: LinenrT);
+    fn nvim_qfline_set_end_lnum(qfp: QfLineHandleMut, end_lnum: LinenrT);
+    fn nvim_qfline_set_col(qfp: QfLineHandleMut, col: c_int);
+    fn nvim_qfline_set_end_col(qfp: QfLineHandleMut, end_col: c_int);
+    fn nvim_qfline_set_nr(qfp: QfLineHandleMut, nr: c_int);
+    fn nvim_qfline_set_type(qfp: QfLineHandleMut, type_char: c_char);
+    fn nvim_qfline_set_viscol(qfp: QfLineHandleMut, viscol: c_char);
+    fn nvim_qfline_set_valid(qfp: QfLineHandleMut, valid: c_char);
+    fn nvim_qfline_set_cleared(qfp: QfLineHandleMut, cleared: c_char);
+    fn nvim_qfline_set_text(qfp: QfLineHandleMut, text: *const c_char);
+    fn nvim_qfline_set_module(qfp: QfLineHandleMut, module: *const c_char);
+    fn nvim_qfline_set_fname(qfp: QfLineHandleMut, fname: *const c_char);
+    fn nvim_qfline_set_pattern(qfp: QfLineHandleMut, pattern: *const c_char);
+    fn nvim_qf_mark_buf_has_entry(bufnum: c_int, is_location_list: bool);
+    fn nvim_qf_get_fnum_for_entry(
+        qfl: QfListHandleMut,
+        directory: *mut c_char,
+        fname: *mut c_char,
+    ) -> c_int;
+    fn nvim_qf_fix_fname(fname: *const c_char, bufnum: c_int) -> *mut c_char;
+    fn nvim_qf_is_printc(c: c_int) -> bool;
 }
 
 /// Opaque handle to buffer (Phase 7)
@@ -2024,6 +2050,163 @@ pub unsafe extern "C" fn rs_qfline_set_prev(qfp: QfLineHandleMut, prev: QfLineHa
         return;
     }
     nvim_qfline_set_prev(qfp, prev);
+}
+
+// =============================================================================
+// Phase 3 Extension: Entry Creation (qf_add_entry migration)
+// =============================================================================
+
+extern "C" {
+    fn xfree(ptr: *mut c_void);
+}
+
+/// `QF_OK` constant for success
+pub const QF_OK: c_int = 1;
+/// `QF_FAIL` constant for failure
+pub const QF_FAIL: c_int = 0;
+
+/// Add a new entry to a quickfix list.
+///
+/// This is the Rust implementation of `qf_add_entry()`. It creates a new
+/// quickfix entry with the specified properties and links it into the list.
+///
+/// # Arguments
+///
+/// * `qfl` - Handle to the quickfix list
+/// * `dir` - Directory for filename resolution (may be NULL)
+/// * `fname` - Filename (may be NULL if bufnum is provided)
+/// * `module` - Module name (may be NULL)
+/// * `bufnum` - Buffer number (0 to resolve from fname)
+/// * `mesg` - Error message text
+/// * `lnum` - Line number
+/// * `end_lnum` - End line number (0 if not a range)
+/// * `col` - Column number
+/// * `end_col` - End column number (0 if not a range)
+/// * `vis_col` - True if col/end\_col are screen columns
+/// * `pattern` - Search pattern (may be NULL)
+/// * `nr` - Error number
+/// * `type_char` - Error type character ('E', 'W', etc.)
+/// * `valid` - Whether this is a valid entry
+///
+/// # Returns
+///
+/// `QF_OK` on success, `QF_FAIL` on failure.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+/// - String parameters must be valid C strings or NULL
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_add_entry(
+    qfl: QfListHandleMut,
+    dir: *mut c_char,
+    fname: *const c_char,
+    module: *const c_char,
+    bufnum: c_int,
+    mesg: *const c_char,
+    lnum: LinenrT,
+    end_lnum: LinenrT,
+    col: c_int,
+    end_col: c_int,
+    vis_col: c_char,
+    pattern: *const c_char,
+    nr: c_int,
+    type_char: c_char,
+    valid: c_char,
+) -> c_int {
+    if qfl.is_null() {
+        return QF_FAIL;
+    }
+
+    // Allocate a new quickfix entry
+    let qfp = nvim_qfline_alloc();
+    if qfp.is_null() {
+        return QF_FAIL;
+    }
+
+    // Determine buffer number
+    let fnum: c_int;
+    if bufnum != 0 {
+        fnum = bufnum;
+        nvim_qfline_set_fnum(qfp, fnum);
+        // Mark the buffer as having a quickfix entry
+        let is_location_list = rs_qf_get_qfl_type(qfl) == qfl_types::QFLT_LOCATION;
+        nvim_qf_mark_buf_has_entry(fnum, is_location_list);
+    } else {
+        fnum = nvim_qf_get_fnum_for_entry(qfl, dir, fname.cast_mut());
+        nvim_qfline_set_fnum(qfp, fnum);
+    }
+
+    // Set the filename if it differs from buffer name
+    if !fname.is_null() {
+        let fixed_fname = nvim_qf_fix_fname(fname, fnum);
+        if !fixed_fname.is_null() {
+            nvim_qfline_set_fname(qfp, fixed_fname);
+            // The C function duplicates the string, but nvim_qf_fix_fname
+            // returns an allocated string that we need to handle properly.
+            // Since set_fname duplicates it, we need to free the original.
+            xfree(fixed_fname.cast());
+        }
+    }
+
+    // Set the error message
+    nvim_qfline_set_text(qfp, mesg);
+
+    // Set position fields
+    nvim_qfline_set_lnum(qfp, lnum);
+    nvim_qfline_set_end_lnum(qfp, end_lnum);
+    nvim_qfline_set_col(qfp, col);
+    nvim_qfline_set_end_col(qfp, end_col);
+    nvim_qfline_set_viscol(qfp, vis_col);
+
+    // Set module and pattern
+    nvim_qfline_set_module(qfp, module);
+    nvim_qfline_set_pattern(qfp, pattern);
+
+    // Set error number
+    nvim_qfline_set_nr(qfp, nr);
+
+    // Validate and set type character
+    #[allow(clippy::cast_sign_loss)]
+    let final_type = if type_char != 1 && !nvim_qf_is_printc(c_int::from(type_char as u8)) {
+        0
+    } else {
+        type_char
+    };
+    nvim_qfline_set_type(qfp, final_type);
+
+    // Set valid flag
+    nvim_qfline_set_valid(qfp, valid);
+
+    // Set cleared to false
+    nvim_qfline_set_cleared(qfp, 0);
+
+    // Link the entry into the list
+    let last = nvim_qf_get_last(qfl);
+    if rs_qf_list_empty(qfl) {
+        // First element in the list
+        nvim_qf_set_start(qfl, qfp);
+        nvim_qf_set_ptr(qfl, qfp);
+        nvim_qf_set_index(qfl, 0);
+        nvim_qfline_set_prev(qfp, std::ptr::null());
+    } else {
+        // Append to the end
+        nvim_qfline_set_prev(qfp, last);
+        nvim_qfline_set_next(last.cast_mut(), qfp);
+    }
+    nvim_qfline_set_next(qfp, std::ptr::null());
+    nvim_qf_set_last(qfl, qfp);
+    nvim_qf_increment_count(qfl);
+
+    // If this is the first valid entry, update the current pointer
+    let count = nvim_qf_get_count(qfl);
+    let index = nvim_qf_get_index(qfl);
+    if index == 0 && valid != 0 {
+        nvim_qf_set_index(qfl, count);
+        nvim_qf_set_ptr(qfl, qfp);
+    }
+
+    QF_OK
 }
 
 // =============================================================================

@@ -880,6 +880,229 @@ void nvim_qfline_set_prev(void *qfp_void, void *prev)
 }
 
 // =============================================================================
+// Phase 3 Extension: qfline_T allocation and field-setting accessors for Rust
+// =============================================================================
+
+/// Allocate a new qfline_T structure, zero-initialized
+void *nvim_qfline_alloc(void)
+{
+  return xcalloc(1, sizeof(qfline_T));
+}
+
+/// Free a qfline_T structure and its string fields
+void nvim_qfline_free(void *qfp_void)
+{
+  if (qfp_void == NULL) {
+    return;
+  }
+  qfline_T *qfp = (qfline_T *)qfp_void;
+  xfree(qfp->qf_module);
+  xfree(qfp->qf_fname);
+  xfree(qfp->qf_pattern);
+  xfree(qfp->qf_text);
+  tv_clear(&qfp->qf_user_data);
+  xfree(qfp);
+}
+
+/// Set qf_fnum field
+void nvim_qfline_set_fnum(void *qfp_void, int fnum)
+{
+  if (qfp_void == NULL) {
+    return;
+  }
+  qfline_T *qfp = (qfline_T *)qfp_void;
+  qfp->qf_fnum = fnum;
+}
+
+/// Set qf_lnum field
+void nvim_qfline_set_lnum(void *qfp_void, linenr_T lnum)
+{
+  if (qfp_void == NULL) {
+    return;
+  }
+  qfline_T *qfp = (qfline_T *)qfp_void;
+  qfp->qf_lnum = lnum;
+}
+
+/// Set qf_end_lnum field
+void nvim_qfline_set_end_lnum(void *qfp_void, linenr_T end_lnum)
+{
+  if (qfp_void == NULL) {
+    return;
+  }
+  qfline_T *qfp = (qfline_T *)qfp_void;
+  qfp->qf_end_lnum = end_lnum;
+}
+
+/// Set qf_col field
+void nvim_qfline_set_col(void *qfp_void, int col)
+{
+  if (qfp_void == NULL) {
+    return;
+  }
+  qfline_T *qfp = (qfline_T *)qfp_void;
+  qfp->qf_col = col;
+}
+
+/// Set qf_end_col field
+void nvim_qfline_set_end_col(void *qfp_void, int end_col)
+{
+  if (qfp_void == NULL) {
+    return;
+  }
+  qfline_T *qfp = (qfline_T *)qfp_void;
+  qfp->qf_end_col = end_col;
+}
+
+/// Set qf_nr field
+void nvim_qfline_set_nr(void *qfp_void, int nr)
+{
+  if (qfp_void == NULL) {
+    return;
+  }
+  qfline_T *qfp = (qfline_T *)qfp_void;
+  qfp->qf_nr = nr;
+}
+
+/// Set qf_type field
+void nvim_qfline_set_type(void *qfp_void, char type)
+{
+  if (qfp_void == NULL) {
+    return;
+  }
+  qfline_T *qfp = (qfline_T *)qfp_void;
+  qfp->qf_type = type;
+}
+
+/// Set qf_viscol field
+void nvim_qfline_set_viscol(void *qfp_void, char viscol)
+{
+  if (qfp_void == NULL) {
+    return;
+  }
+  qfline_T *qfp = (qfline_T *)qfp_void;
+  qfp->qf_viscol = viscol;
+}
+
+/// Set qf_valid field
+void nvim_qfline_set_valid(void *qfp_void, char valid)
+{
+  if (qfp_void == NULL) {
+    return;
+  }
+  qfline_T *qfp = (qfline_T *)qfp_void;
+  qfp->qf_valid = valid;
+}
+
+/// Set qf_cleared field
+void nvim_qfline_set_cleared(void *qfp_void, char cleared)
+{
+  if (qfp_void == NULL) {
+    return;
+  }
+  qfline_T *qfp = (qfline_T *)qfp_void;
+  qfp->qf_cleared = cleared;
+}
+
+/// Set qf_text field (duplicates the string)
+void nvim_qfline_set_text(void *qfp_void, const char *text)
+{
+  if (qfp_void == NULL) {
+    return;
+  }
+  qfline_T *qfp = (qfline_T *)qfp_void;
+  xfree(qfp->qf_text);
+  qfp->qf_text = (text != NULL) ? xstrdup(text) : NULL;
+}
+
+/// Set qf_module field (duplicates the string)
+void nvim_qfline_set_module(void *qfp_void, const char *module)
+{
+  if (qfp_void == NULL) {
+    return;
+  }
+  qfline_T *qfp = (qfline_T *)qfp_void;
+  xfree(qfp->qf_module);
+  qfp->qf_module = (module != NULL && *module != NUL) ? xstrdup(module) : NULL;
+}
+
+/// Set qf_fname field (duplicates the string)
+void nvim_qfline_set_fname(void *qfp_void, const char *fname)
+{
+  if (qfp_void == NULL) {
+    return;
+  }
+  qfline_T *qfp = (qfline_T *)qfp_void;
+  xfree(qfp->qf_fname);
+  qfp->qf_fname = (fname != NULL && *fname != NUL) ? xstrdup(fname) : NULL;
+}
+
+/// Set qf_pattern field (duplicates the string)
+void nvim_qfline_set_pattern(void *qfp_void, const char *pattern)
+{
+  if (qfp_void == NULL) {
+    return;
+  }
+  qfline_T *qfp = (qfline_T *)qfp_void;
+  xfree(qfp->qf_pattern);
+  qfp->qf_pattern = (pattern != NULL && *pattern != NUL) ? xstrdup(pattern) : NULL;
+}
+
+/// Mark buffer as having quickfix/location list entry
+void nvim_qf_mark_buf_has_entry(int bufnum, bool is_location_list)
+{
+  buf_T *buf = buflist_findnr(bufnum);
+  if (buf != NULL) {
+    buf->b_has_qf_entry |= is_location_list ? BUF_HAS_LL_ENTRY : BUF_HAS_QF_ENTRY;
+  }
+}
+
+/// Get buffer number for a file in quickfix context
+int nvim_qf_get_fnum_for_entry(void *qfl_void, char *directory, char *fname)
+{
+  if (qfl_void == NULL) {
+    return 0;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  return qf_get_fnum(qfl, directory, fname);
+}
+
+/// Fix filename and get shortened path if buffer has different name
+/// Returns allocated string or NULL (caller must free)
+char *nvim_qf_fix_fname(const char *fname, int bufnum)
+{
+  if (fname == NULL) {
+    return NULL;
+  }
+
+  char *fullname = fix_fname((char *)fname);
+  if (fullname == NULL) {
+    return NULL;
+  }
+
+  buf_T *buf = buflist_findnr(bufnum);
+  if (buf != NULL && buf->b_ffname != NULL) {
+    if (path_fnamecmp(fullname, buf->b_ffname) != 0) {
+      char *p = path_try_shorten_fname(fullname);
+      if (p != NULL) {
+        char *result = xstrdup(p);
+        xfree(fullname);
+        return result;
+      }
+    }
+  }
+
+  xfree(fullname);
+  return NULL;
+}
+
+/// Check if a character is printable (for type validation)
+bool nvim_qf_is_printc(int c)
+{
+  return vim_isprintc(c);
+}
+
+// =============================================================================
 // Phase 4: File Stack and Path Resolution accessor functions for Rust
 // Forward declarations
 // =============================================================================
