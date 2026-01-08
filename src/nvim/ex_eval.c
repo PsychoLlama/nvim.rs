@@ -2041,12 +2041,6 @@ int nvim_get_force_abort(void)
   return force_abort ? 1 : 0;
 }
 
-/// C accessor for the global did_emsg variable (used by Rust FFI).
-int nvim_get_did_emsg(void)
-{
-  return did_emsg;
-}
-
 /// C accessor for the global got_int variable (used by Rust FFI).
 int nvim_get_got_int(void)
 {
@@ -2065,11 +2059,6 @@ int nvim_get_trylevel(void)
   return trylevel;
 }
 
-/// C accessor for the global emsg_silent variable (used by Rust FFI).
-int nvim_get_emsg_silent(void)
-{
-  return emsg_silent;
-}
 
 /// C accessor for the global cause_abort variable (used by Rust FFI).
 int nvim_get_cause_abort(void)

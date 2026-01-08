@@ -2924,12 +2924,6 @@ void nvim_uhp_destroy_extmark(u_header_T *uhp)
   kv_destroy(uhp->uh_extmark);
 }
 
-// Buffer memline accessor
-linenr_T nvim_buf_get_ml_line_count(buf_T *buf)
-{
-  return buf->b_ml.ml_line_count;
-}
-
 // Error message wrappers
 void nvim_iemsg_undo_list_corrupt(void)
 {
@@ -3397,12 +3391,6 @@ int nvim_undo_get4c(FILE *fp)
 time_t nvim_undo_get8ctime(FILE *fp)
 {
   return get8ctime(fp);
-}
-
-// Buffer file path accessors
-const char *nvim_buf_get_b_ffname(buf_T *buf)
-{
-  return buf->b_ffname;
 }
 
 // Undo file path helper

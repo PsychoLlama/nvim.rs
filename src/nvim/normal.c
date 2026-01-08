@@ -692,12 +692,6 @@ void nvim_set_motion_force(int val)
   motion_force = val;
 }
 
-/// Get mod_mask global.
-int nvim_get_mod_mask(void)
-{
-  return mod_mask;
-}
-
 /// Wrapper for goto_tabpage.
 void nvim_goto_tabpage(int n)
 {
@@ -1086,24 +1080,6 @@ bool nvim_ascii_iswhite(int c)
   return ascii_iswhite(c);
 }
 
-/// Get p_sel value (pointer to 'selection' option string).
-char nvim_get_p_sel_first(void)
-{
-  return *p_sel;
-}
-
-/// Get VIsual position lnum.
-int nvim_get_VIsual_lnum(void)
-{
-  return VIsual.lnum;
-}
-
-/// Get VIsual position col.
-int nvim_get_VIsual_col(void)
-{
-  return VIsual.col;
-}
-
 /// Compare positions: return true if VIsual < curwin->w_cursor.
 bool nvim_lt_VIsual_cursor(void)
 {
@@ -1415,18 +1391,6 @@ void nvim_setmouse(void)
 int nvim_get_p_smd(void)
 {
   return p_smd;
-}
-
-/// Get msg_silent global.
-int nvim_get_msg_silent(void)
-{
-  return msg_silent;
-}
-
-/// Set redraw_cmdline global.
-void nvim_set_redraw_cmdline(bool val)
-{
-  redraw_cmdline = val;
 }
 
 /// Wrapper for check_cursor.

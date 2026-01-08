@@ -734,12 +734,6 @@ int64_t nvim_get_window_p_ch(void)
   return p_ch;
 }
 
-/// Set the global redraw_cmdline flag.
-void nvim_set_redraw_cmdline(bool val)
-{
-  redraw_cmdline = val;
-}
-
 /// Get the w_winbar_height field from a window.
 int nvim_win_get_winbar_height(win_T *wp)
 {
@@ -786,12 +780,6 @@ int64_t nvim_get_p_pw(void)
 int64_t nvim_get_p_pmw(void)
 {
   return p_pmw;
-}
-
-/// Wrapper for vim_strchr.
-char *nvim_vim_strchr(const char *s, int c)
-{
-  return vim_strchr(s, c);
 }
 
 /// Get the 'diff' option value for a window.

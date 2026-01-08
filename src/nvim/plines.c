@@ -210,12 +210,6 @@ int nvim_virt_text_cursor_off(CharsizeArg *csarg, int on_NUL)
   return off;
 }
 
-/// Get the display width of a string (vim_strsize).
-int nvim_vim_strsize(const char *s)
-{
-  return vim_strsize(s);
-}
-
 /// Get breakindent for a window/line.
 int nvim_get_breakindent_win(win_T *wp, char *line)
 {

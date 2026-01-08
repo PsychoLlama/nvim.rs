@@ -6498,12 +6498,6 @@ int nvim_get_compl_ins_end_col(void)
   return compl_ins_end_col;
 }
 
-/// Get cursor column for Rust.
-int nvim_get_cursor_col(void)
-{
-  return curwin->w_cursor.col;
-}
-
 /// Get p_ac (autocomplete global option) for Rust.
 int nvim_get_p_ac(void)
 {
