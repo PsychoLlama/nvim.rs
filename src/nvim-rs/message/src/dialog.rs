@@ -33,6 +33,24 @@ pub const DLG_BUTTON_SEP: c_int = b'\n' as c_int;
 /// Dialog hotkey marker character (as c_int for comparison)
 pub const DLG_HOTKEY_CHAR: c_int = b'&' as c_int;
 
+/// Dialog type values (matches VIM_* in C)
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DialogType(pub c_int);
+
+impl DialogType {
+    /// Generic dialog
+    pub const GENERIC: Self = Self(0);
+    /// Error dialog
+    pub const ERROR: Self = Self(1);
+    /// Warning dialog
+    pub const WARNING: Self = Self(2);
+    /// Info dialog
+    pub const INFO: Self = Self(3);
+    /// Question dialog
+    pub const QUESTION: Self = Self(4);
+}
+
 /// Dialog response values (matches VIM_* in C)
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -296,6 +314,46 @@ pub unsafe extern "C" fn rs_find_dialog_button(buttons: *const c_char, n: c_int)
     ptr::null()
 }
 
+/// Get the VIM_GENERIC dialog type value.
+#[no_mangle]
+pub const extern "C" fn rs_dialog_type_generic() -> c_int {
+    DialogType::GENERIC.0
+}
+
+/// Get the VIM_ERROR dialog type value.
+#[no_mangle]
+pub const extern "C" fn rs_dialog_type_error() -> c_int {
+    DialogType::ERROR.0
+}
+
+/// Get the VIM_WARNING dialog type value.
+#[no_mangle]
+pub const extern "C" fn rs_dialog_type_warning() -> c_int {
+    DialogType::WARNING.0
+}
+
+/// Get the VIM_INFO dialog type value.
+#[no_mangle]
+pub const extern "C" fn rs_dialog_type_info() -> c_int {
+    DialogType::INFO.0
+}
+
+/// Get the VIM_QUESTION dialog type value.
+#[no_mangle]
+pub const extern "C" fn rs_dialog_type_question() -> c_int {
+    DialogType::QUESTION.0
+}
+
+/// Check if a dialog type is an error or warning.
+#[no_mangle]
+pub const extern "C" fn rs_dialog_is_error_or_warning(dialog_type: c_int) -> c_int {
+    if dialog_type == DialogType::ERROR.0 || dialog_type == DialogType::WARNING.0 {
+        1
+    } else {
+        0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -304,6 +362,15 @@ mod tests {
     fn test_dialog_constants() {
         assert_eq!(DLG_BUTTON_SEP, c_int::from(b'\n'));
         assert_eq!(DLG_HOTKEY_CHAR, c_int::from(b'&'));
+    }
+
+    #[test]
+    fn test_dialog_type_values() {
+        assert_eq!(DialogType::GENERIC.0, 0);
+        assert_eq!(DialogType::ERROR.0, 1);
+        assert_eq!(DialogType::WARNING.0, 2);
+        assert_eq!(DialogType::INFO.0, 3);
+        assert_eq!(DialogType::QUESTION.0, 4);
     }
 
     #[test]
