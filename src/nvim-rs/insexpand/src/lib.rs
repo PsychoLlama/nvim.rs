@@ -104,6 +104,23 @@ extern "C" {
     fn nvim_curbuf_get_b_p_ac() -> c_int;
     fn nvim_get_compl_ins_end_col() -> c_int;
     fn nvim_get_cursor_col() -> c_int;
+
+    // Line/column accessors
+    fn nvim_get_compl_lnum() -> c_int;
+    fn nvim_get_curwin_cursor_lnum() -> c_int;
+
+    // Leader accessors
+    fn nvim_get_compl_leader_data() -> *const c_char;
+    fn nvim_get_compl_leader_size() -> usize;
+    fn nvim_get_compl_orig_text_data() -> *const c_char;
+    fn nvim_get_compl_orig_text_size() -> usize;
+
+    // Shown match accessors
+    fn nvim_compl_shown_match_exists() -> c_int;
+    fn nvim_compl_shown_match_is_singular() -> c_int;
+    fn nvim_compl_shown_match_is_first() -> c_int;
+    fn nvim_compl_shown_match_str_size() -> usize;
+    fn nvim_compl_shown_match_has_newline() -> c_int;
 }
 
 // completeopt flags (from optionstr.h - generated)
@@ -607,6 +624,99 @@ pub unsafe extern "C" fn rs_ins_compl_has_autocomplete() -> c_int {
     } else {
         c_int::from(nvim_get_p_ac() != 0)
     }
+}
+
+// =============================================================================
+// Leader string functions
+// =============================================================================
+
+/// Get the completion leader string data pointer.
+///
+/// Returns compl_leader.data if set, otherwise compl_orig_text.data.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_leader() -> *const c_char {
+    let leader_data = nvim_get_compl_leader_data();
+    if leader_data.is_null() {
+        nvim_get_compl_orig_text_data()
+    } else {
+        leader_data
+    }
+}
+
+/// Get the length of the completion leader.
+///
+/// Returns compl_leader.size if leader is set, otherwise compl_orig_text.size.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_leader_len() -> usize {
+    let leader_data = nvim_get_compl_leader_data();
+    if leader_data.is_null() {
+        nvim_get_compl_orig_text_size()
+    } else {
+        nvim_get_compl_leader_size()
+    }
+}
+
+// =============================================================================
+// Match state functions
+// =============================================================================
+
+/// Return true if a match is selected (even if it is not inserted).
+/// Returns true if compl_shown_match is not NULL and is not the first match
+/// (the original text entry).
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_is_match_selected() -> c_int {
+    c_int::from(nvim_compl_shown_match_exists() != 0 && nvim_compl_shown_match_is_first() == 0)
+}
+
+/// Return whether there currently is a shown match.
+/// Returns true if compl_shown_match is NULL or is not singular.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_has_shown_match() -> c_int {
+    c_int::from(nvim_compl_shown_match_exists() == 0 || nvim_compl_shown_match_is_singular() == 0)
+}
+
+/// Return whether the shown match is long enough.
+///
+/// Returns true if the shown match text length is greater than (cursor_col - compl_col).
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_ins_compl_long_shown_match() -> c_int {
+    if nvim_compl_shown_match_exists() == 0 {
+        return 0;
+    }
+    let str_size = nvim_compl_shown_match_str_size();
+    if str_size == 0 {
+        return 0;
+    }
+    let cursor_col = nvim_get_cursor_col();
+    let compl_col = nvim_get_compl_col();
+    c_int::from(str_size > (cursor_col - compl_col) as usize)
+}
+
+// =============================================================================
+// Multi-line completion functions
+// =============================================================================
+
+/// Check if the current completion contains newline characters (multi-line).
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_has_multiple() -> c_int {
+    nvim_compl_shown_match_has_newline()
+}
+
+/// Check if line is in multi-line completion range.
+///
+/// Returns true if the given line number falls within the range of a multi-line
+/// completion, i.e. between compl_lnum and current cursor line.
+/// Always returns false for single-line completions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_lnum_in_range(lnum: c_int) -> c_int {
+    // First check if it's a multi-line completion
+    if rs_ins_compl_has_multiple() == 0 {
+        return 0;
+    }
+    let compl_lnum = nvim_get_compl_lnum();
+    let cursor_lnum = nvim_get_curwin_cursor_lnum();
+    c_int::from(lnum >= compl_lnum && lnum <= cursor_lnum)
 }
 
 #[cfg(test)]

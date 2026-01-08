@@ -725,10 +725,12 @@ static bool is_nearest_active(void)
          && !cot_fuzzy();
 }
 
+extern int rs_ins_compl_is_match_selected(void);
+
 /// True if a match is selected (even if it is not inserted).
 bool ins_compl_is_match_selected(void)
 {
-  return compl_shown_match != NULL && !is_first_match(compl_shown_match);
+  return rs_ins_compl_is_match_selected() != 0;
 }
 
 extern int rs_ins_compl_preinsert_longest(void);
@@ -941,16 +943,20 @@ static void ins_compl_insert_bytes(char *p, int len)
   compl_ins_end_col = curwin->w_cursor.col;
 }
 
+extern const char *rs_ins_compl_leader(void);
+extern size_t rs_ins_compl_leader_len(void);
+
 /// Get current completion leader
 char *ins_compl_leader(void)
 {
-  return compl_leader.data != NULL ? compl_leader.data : compl_orig_text.data;
+  // Cast is safe: Rust returns pointer to C-owned data
+  return (char *)rs_ins_compl_leader();
 }
 
 /// Get current completion leader length
 static size_t ins_compl_leader_len(void)
 {
-  return compl_leader.data != NULL ? compl_leader.size : compl_orig_text.size;
+  return rs_ins_compl_leader_len();
 }
 
 /// Checks if the column is within the currently inserted completion text
@@ -982,11 +988,14 @@ int ins_compl_col_range_attr(linenr_T lnum, int col)
   return -1;
 }
 
+extern int rs_ins_compl_has_multiple(void);
+extern int rs_ins_compl_lnum_in_range(int lnum);
+
 /// Returns true if the current completion string contains newline characters,
 /// indicating it's a multi-line completion.
 static bool ins_compl_has_multiple(void)
 {
-  return vim_strchr(compl_shown_match->cp_str.data, '\n') != NULL;
+  return rs_ins_compl_has_multiple() != 0;
 }
 
 /// Returns true if the given line number falls within the range of a multi-line
@@ -994,10 +1003,7 @@ static bool ins_compl_has_multiple(void)
 /// line. Always returns false for single-line completions.
 bool ins_compl_lnum_in_range(linenr_T lnum)
 {
-  if (!ins_compl_has_multiple()) {
-    return false;
-  }
-  return lnum >= compl_lnum && lnum <= curwin->w_cursor.lnum;
+  return rs_ins_compl_lnum_in_range((int)lnum) != 0;
 }
 
 /// Reduce the longest common string for match "match".
@@ -1095,17 +1101,19 @@ static int ins_compl_make_cyclic(void)
   return count;
 }
 
+extern int rs_ins_compl_has_shown_match(void);
+extern int rs_ins_compl_long_shown_match(void);
+
 /// Return whether there currently is a shown match.
 bool ins_compl_has_shown_match(void)
 {
-  return compl_shown_match == NULL || compl_shown_match != compl_shown_match->cp_next;
+  return rs_ins_compl_has_shown_match() != 0;
 }
 
 /// Return whether the shown match is long enough.
 bool ins_compl_long_shown_match(void)
 {
-  return compl_shown_match != NULL && compl_shown_match->cp_str.data != NULL
-         && (colnr_T)compl_shown_match->cp_str.size > curwin->w_cursor.col - compl_col;
+  return rs_ins_compl_long_shown_match() != 0;
 }
 
 /// Get the local or global value of 'completeopt' flags.
@@ -6508,6 +6516,84 @@ int nvim_get_p_ac(void)
 int nvim_curbuf_get_b_p_ac(void)
 {
   return curbuf->b_p_ac;
+}
+
+/// Get compl_lnum (line where completion started) for Rust.
+int nvim_get_compl_lnum(void)
+{
+  return (int)compl_lnum;
+}
+
+/// Get current window cursor line number for Rust.
+int nvim_get_curwin_cursor_lnum(void)
+{
+  return (int)curwin->w_cursor.lnum;
+}
+
+/// Get compl_leader data pointer for Rust.
+const char *nvim_get_compl_leader_data(void)
+{
+  return compl_leader.data;
+}
+
+/// Get compl_leader size for Rust.
+size_t nvim_get_compl_leader_size(void)
+{
+  return compl_leader.size;
+}
+
+/// Get compl_orig_text data pointer for Rust.
+const char *nvim_get_compl_orig_text_data(void)
+{
+  return compl_orig_text.data;
+}
+
+/// Get compl_orig_text size for Rust.
+size_t nvim_get_compl_orig_text_size(void)
+{
+  return compl_orig_text.size;
+}
+
+/// Check if compl_shown_match is not NULL for Rust.
+int nvim_compl_shown_match_exists(void)
+{
+  return compl_shown_match != NULL ? 1 : 0;
+}
+
+/// Check if compl_shown_match equals its cp_next (singular list check) for Rust.
+int nvim_compl_shown_match_is_singular(void)
+{
+  if (compl_shown_match == NULL) {
+    return 0;
+  }
+  return compl_shown_match == compl_shown_match->cp_next ? 1 : 0;
+}
+
+/// Check if compl_shown_match is the first match (original text) for Rust.
+int nvim_compl_shown_match_is_first(void)
+{
+  if (compl_shown_match == NULL) {
+    return 0;
+  }
+  return is_first_match(compl_shown_match) ? 1 : 0;
+}
+
+/// Get compl_shown_match->cp_str.size for Rust.
+size_t nvim_compl_shown_match_str_size(void)
+{
+  if (compl_shown_match == NULL || compl_shown_match->cp_str.data == NULL) {
+    return 0;
+  }
+  return compl_shown_match->cp_str.size;
+}
+
+/// Check if compl_shown_match->cp_str.data contains newline for Rust.
+int nvim_compl_shown_match_has_newline(void)
+{
+  if (compl_shown_match == NULL || compl_shown_match->cp_str.data == NULL) {
+    return 0;
+  }
+  return vim_strchr(compl_shown_match->cp_str.data, '\n') != NULL ? 1 : 0;
 }
 
 extern int rs_pum_wanted(void);
