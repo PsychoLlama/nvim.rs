@@ -14,6 +14,17 @@
 use std::ffi::{c_char, c_int};
 use std::ptr;
 
+// =============================================================================
+// Vimgrep flags
+// =============================================================================
+
+/// Vimgrep flag: Match globally (all matches on a line, not just first)
+pub const VGR_GLOBAL: c_int = 1;
+/// Vimgrep flag: Don't jump to first match
+pub const VGR_NOJUMP: c_int = 2;
+/// Vimgrep flag: Use fuzzy matching
+pub const VGR_FUZZY: c_int = 4;
+
 // FFI declarations for C helper functions
 extern "C" {
     fn cmdname_first_char(cmdidx: c_int) -> c_int;
@@ -24,6 +35,13 @@ extern "C" {
     fn nvim_get_textlock() -> c_int;
     fn nvim_get_e_cmdwin() -> *const c_char;
     fn nvim_get_e_textlock() -> *const c_char;
+
+    // Character classification from charset crate
+    fn rs_vim_isIDc(c: c_int) -> c_int;
+    fn rs_skiptowhite(p: *const c_char) -> *const c_char;
+
+    // Regex skipping from regexp crate
+    fn rs_skip_regexp(startp: *mut c_char, delim: c_int, magic: c_int) -> *mut c_char;
 }
 
 /// Check if character ends an Ex command.
@@ -238,6 +256,102 @@ pub unsafe extern "C" fn rs_get_text_locked_msg() -> *const c_char {
     } else {
         nvim_get_e_textlock()
     }
+}
+
+// =============================================================================
+// Skip functions for vimgrep patterns
+// =============================================================================
+
+/// Skip over a vimgrep pattern.
+///
+/// Handles both forms:
+/// - `:vimgrep pattern fname` - pattern is an identifier
+/// - `:vimgrep /pattern/[g][j][f] fname` - pattern is delimited
+///
+/// # Arguments
+///
+/// * `p` - Pointer to the start of the pattern
+/// * `s` - If not NULL, points to the start of the pattern string (will be NUL-terminated)
+/// * `flags` - If not NULL, receives the flags: VGR_GLOBAL, VGR_NOJUMP, VGR_FUZZY
+///
+/// # Returns
+///
+/// A pointer to the character just past the pattern plus flags, or NULL on error.
+///
+/// # Safety
+///
+/// `p` must be a valid pointer to a null-terminated C string.
+/// `s` and `flags` must be valid for writes if non-NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_skip_vimgrep_pat(
+    p: *mut c_char,
+    s: *mut *mut c_char,
+    flags: *mut c_int,
+) -> *mut c_char {
+    if p.is_null() {
+        return ptr::null_mut();
+    }
+
+    let first_char = *p as u8;
+
+    // Check if the first character is an identifier character
+    if rs_vim_isIDc(first_char as c_int) != 0 {
+        // ":vimgrep pattern fname"
+        if !s.is_null() {
+            *s = p;
+        }
+        let end = rs_skiptowhite(p as *const c_char) as *mut c_char;
+        if !s.is_null() && *end != 0 {
+            *end = 0;
+            return end.add(1);
+        }
+        return end;
+    }
+
+    // ":vimgrep /pattern/[g][j][f] fname"
+    if !s.is_null() {
+        *s = p.add(1);
+    }
+
+    let delim = first_char as c_int;
+    let mut ptr = rs_skip_regexp(p.add(1), delim, 1);
+
+    // Check if we found the closing delimiter
+    if *ptr as u8 != first_char {
+        return ptr::null_mut();
+    }
+
+    // Truncate the pattern (NUL-terminate it)
+    if !s.is_null() {
+        *ptr = 0;
+    }
+    ptr = ptr.add(1);
+
+    // Find the flags
+    loop {
+        let c = *ptr as u8;
+        match c {
+            b'g' => {
+                if !flags.is_null() {
+                    *flags |= VGR_GLOBAL;
+                }
+            }
+            b'j' => {
+                if !flags.is_null() {
+                    *flags |= VGR_NOJUMP;
+                }
+            }
+            b'f' => {
+                if !flags.is_null() {
+                    *flags |= VGR_FUZZY;
+                }
+            }
+            _ => break,
+        }
+        ptr = ptr.add(1);
+    }
+
+    ptr
 }
 
 #[cfg(test)]

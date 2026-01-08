@@ -99,6 +99,9 @@
 #include "nvim/vim_defs.h"
 #include "nvim/window.h"
 
+// Rust implementations
+extern char *rs_skip_vimgrep_pat(char *p, char **s, int *flags);
+
 /// Case matching style to use for :substitute
 typedef enum {
   kSubHonorOptions = 0,  ///< Honor the user's 'ignorecase'/'smartcase' options
@@ -4984,47 +4987,7 @@ int ex_substitute_preview(exarg_T *eap, int cmdpreview_ns, handle_T cmdpreview_b
 /// @return  a pointer to the char just past the pattern plus flags.
 char *skip_vimgrep_pat(char *p, char **s, int *flags)
 {
-  if (vim_isIDc((uint8_t)(*p))) {
-    // ":vimgrep pattern fname"
-    if (s != NULL) {
-      *s = p;
-    }
-    p = skiptowhite(p);
-    if (s != NULL && *p != NUL) {
-      *p++ = NUL;
-    }
-  } else {
-    // ":vimgrep /pattern/[g][j] fname"
-    if (s != NULL) {
-      *s = p + 1;
-    }
-    int c = (uint8_t)(*p);
-    p = skip_regexp(p + 1, c, true);
-    if (*p != c) {
-      return NULL;
-    }
-
-    // Truncate the pattern.
-    if (s != NULL) {
-      *p = NUL;
-    }
-    p++;
-
-    // Find the flags
-    while (*p == 'g' || *p == 'j' || *p == 'f') {
-      if (flags != NULL) {
-        if (*p == 'g') {
-          *flags |= VGR_GLOBAL;
-        } else if (*p == 'j') {
-          *flags |= VGR_NOJUMP;
-        } else {
-          *flags |= VGR_FUZZY;
-        }
-      }
-      p++;
-    }
-  }
-  return p;
+  return rs_skip_vimgrep_pat(p, s, flags);
 }
 
 /// List v:oldfiles in a nice way.
