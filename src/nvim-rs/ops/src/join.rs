@@ -188,6 +188,163 @@ pub extern "C" fn rs_calc_join_cursor_col(
     calc_join_cursor_col(sumsize, currsize, last_spaces, cpo_joincol != 0)
 }
 
+// =============================================================================
+// Additional Join Helpers
+// =============================================================================
+
+/// Determine if we should use gJ behavior (no space insertion).
+///
+/// The `gJ` command joins lines without inserting or removing any spaces.
+///
+/// # Arguments
+/// * `use_formatoptions` - Whether to respect 'formatoptions'
+///
+/// # Returns
+/// true if gJ behavior should be used (no space manipulation)
+#[must_use]
+#[inline]
+pub const fn is_gj_mode(use_formatoptions: bool) -> bool {
+    !use_formatoptions
+}
+
+/// Calculate the size of whitespace to skip at the start of a line.
+///
+/// When joining lines, leading whitespace on the second line is typically
+/// removed (unless using `gJ`).
+///
+/// # Arguments
+/// * `skip_whitespace` - Whether to skip leading whitespace
+/// * `leading_space_count` - Number of leading spaces/tabs
+///
+/// # Returns
+/// Number of characters to skip (0 if not skipping)
+#[must_use]
+#[inline]
+pub const fn calc_skip_whitespace(skip_whitespace: bool, leading_space_count: c_int) -> c_int {
+    if skip_whitespace {
+        leading_space_count
+    } else {
+        0
+    }
+}
+
+/// Calculate the new line size after joining.
+///
+/// # Arguments
+/// * `first_line_len` - Length of first line (without newline)
+/// * `second_line_len` - Length of second line (without leading whitespace to skip)
+/// * `spaces_to_insert` - Number of spaces to insert between lines
+/// * `skip_ws` - Number of whitespace characters to skip on second line
+///
+/// # Returns
+/// Total size needed for the joined line
+#[must_use]
+#[inline]
+pub const fn calc_joined_line_size(
+    first_line_len: c_int,
+    second_line_len: c_int,
+    spaces_to_insert: c_int,
+    skip_ws: c_int,
+) -> c_int {
+    let result = first_line_len + spaces_to_insert + (second_line_len - skip_ws);
+    if result < 0 {
+        0
+    } else {
+        result
+    }
+}
+
+/// Space character
+const SPACE: c_int = b' ' as c_int;
+
+/// Check if character is whitespace for join purposes.
+///
+/// Space and tab are considered whitespace.
+#[must_use]
+#[inline]
+pub const fn is_join_whitespace(c: c_int) -> bool {
+    c == SPACE || c == TAB
+}
+
+/// Determine if joining would create a line that's too long.
+///
+/// # Arguments
+/// * `current_size` - Current line size
+/// * `add_size` - Size to add
+/// * `max_line_len` - Maximum allowed line length (MAXCOL in C)
+///
+/// # Returns
+/// true if the join would exceed the maximum line length
+#[must_use]
+#[inline]
+pub const fn would_exceed_line_limit(
+    current_size: c_int,
+    add_size: c_int,
+    max_line_len: c_int,
+) -> bool {
+    // Check for overflow
+    if current_size > max_line_len - add_size {
+        return true;
+    }
+    current_size + add_size > max_line_len
+}
+
+// =============================================================================
+// FFI Wrappers for Additional Helpers
+// =============================================================================
+
+/// FFI wrapper for is_gj_mode.
+#[no_mangle]
+pub extern "C" fn rs_is_gj_mode(use_formatoptions: c_int) -> c_int {
+    c_int::from(is_gj_mode(use_formatoptions != 0))
+}
+
+/// FFI wrapper for calc_skip_whitespace.
+#[no_mangle]
+pub extern "C" fn rs_calc_skip_whitespace(
+    skip_whitespace: c_int,
+    leading_space_count: c_int,
+) -> c_int {
+    calc_skip_whitespace(skip_whitespace != 0, leading_space_count)
+}
+
+/// FFI wrapper for calc_joined_line_size.
+#[no_mangle]
+pub extern "C" fn rs_calc_joined_line_size(
+    first_line_len: c_int,
+    second_line_len: c_int,
+    spaces_to_insert: c_int,
+    skip_ws: c_int,
+) -> c_int {
+    calc_joined_line_size(first_line_len, second_line_len, spaces_to_insert, skip_ws)
+}
+
+/// FFI wrapper for is_join_whitespace.
+#[no_mangle]
+pub extern "C" fn rs_is_join_whitespace(c: c_int) -> c_int {
+    c_int::from(is_join_whitespace(c))
+}
+
+/// FFI wrapper for would_exceed_line_limit.
+#[no_mangle]
+pub extern "C" fn rs_would_exceed_line_limit(
+    current_size: c_int,
+    add_size: c_int,
+    max_line_len: c_int,
+) -> c_int {
+    c_int::from(would_exceed_line_limit(
+        current_size,
+        add_size,
+        max_line_len,
+    ))
+}
+
+/// FFI wrapper for is_wide_char.
+#[no_mangle]
+pub extern "C" fn rs_is_wide_char(c: c_int) -> c_int {
+    c_int::from(is_wide_char(c))
+}
+
 #[cfg(test)]
 #[allow(clippy::cast_lossless)]
 mod tests {
@@ -420,5 +577,95 @@ mod tests {
 
         assert_eq!(rs_calc_join_cursor_col(100, 20, 1, 0), 79);
         assert_eq!(rs_calc_join_cursor_col(100, 20, 1, 1), 20);
+    }
+
+    // =========================================================================
+    // Additional Helper Function Tests
+    // =========================================================================
+
+    #[test]
+    fn test_is_gj_mode() {
+        // gJ mode is when NOT using formatoptions
+        assert!(is_gj_mode(false));
+        assert!(!is_gj_mode(true));
+    }
+
+    #[test]
+    fn test_calc_skip_whitespace() {
+        // When skipping, return the count
+        assert_eq!(calc_skip_whitespace(true, 5), 5);
+        assert_eq!(calc_skip_whitespace(true, 0), 0);
+
+        // When not skipping, always return 0
+        assert_eq!(calc_skip_whitespace(false, 5), 0);
+        assert_eq!(calc_skip_whitespace(false, 100), 0);
+    }
+
+    #[test]
+    fn test_calc_joined_line_size() {
+        // Normal case: 10 + 20 + 1 space - 2 skipped = 29
+        assert_eq!(calc_joined_line_size(10, 20, 1, 2), 29);
+
+        // No spaces inserted, no whitespace skipped
+        assert_eq!(calc_joined_line_size(10, 20, 0, 0), 30);
+
+        // All whitespace skipped
+        assert_eq!(calc_joined_line_size(10, 5, 1, 5), 11);
+
+        // Edge case: negative result clamped to 0
+        assert_eq!(calc_joined_line_size(0, 0, 0, 10), 0);
+    }
+
+    #[test]
+    fn test_is_join_whitespace() {
+        assert!(is_join_whitespace(b' ' as c_int));
+        assert!(is_join_whitespace(TAB));
+        assert!(!is_join_whitespace(b'a' as c_int));
+        assert!(!is_join_whitespace(b'\n' as c_int));
+        assert!(!is_join_whitespace(0));
+    }
+
+    #[test]
+    fn test_would_exceed_line_limit() {
+        // Normal case: within limit
+        assert!(!would_exceed_line_limit(50, 30, 100));
+
+        // Exactly at limit
+        assert!(!would_exceed_line_limit(50, 50, 100));
+
+        // Exceeds limit
+        assert!(would_exceed_line_limit(50, 51, 100));
+
+        // Already at limit
+        assert!(would_exceed_line_limit(100, 1, 100));
+
+        // Overflow protection: large values
+        assert!(would_exceed_line_limit(i32::MAX - 10, 20, i32::MAX));
+    }
+
+    #[test]
+    fn test_additional_ffi_wrappers() {
+        // rs_is_gj_mode
+        assert_eq!(rs_is_gj_mode(0), 1); // false -> gJ mode
+        assert_eq!(rs_is_gj_mode(1), 0); // true -> not gJ mode
+
+        // rs_calc_skip_whitespace
+        assert_eq!(rs_calc_skip_whitespace(1, 5), 5);
+        assert_eq!(rs_calc_skip_whitespace(0, 5), 0);
+
+        // rs_calc_joined_line_size
+        assert_eq!(rs_calc_joined_line_size(10, 20, 1, 2), 29);
+
+        // rs_is_join_whitespace
+        assert_eq!(rs_is_join_whitespace(b' ' as c_int), 1);
+        assert_eq!(rs_is_join_whitespace(b'a' as c_int), 0);
+
+        // rs_would_exceed_line_limit
+        assert_eq!(rs_would_exceed_line_limit(50, 30, 100), 0);
+        assert_eq!(rs_would_exceed_line_limit(50, 51, 100), 1);
+
+        // rs_is_wide_char
+        assert_eq!(rs_is_wide_char(b'a' as c_int), 0);
+        assert_eq!(rs_is_wide_char(0x100), 1);
     }
 }
