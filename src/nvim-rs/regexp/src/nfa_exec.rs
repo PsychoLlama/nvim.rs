@@ -391,6 +391,41 @@ pub unsafe fn addstate_here(
 }
 
 // =============================================================================
+// State List Helpers
+// =============================================================================
+
+/// Check if a state is already in the list.
+///
+/// This is used to avoid adding duplicate states.
+///
+/// # Safety
+/// All pointers must be valid.
+pub unsafe fn state_in_list(
+    list: *const NfaList,
+    state: *const NfaState,
+    subs: *const RegSubs,
+) -> bool {
+    if list.is_null() || state.is_null() {
+        return false;
+    }
+
+    let nfa_ll_index = nvim_rex_get_nfa_ll_index() as usize;
+
+    // Check if state was added in current iteration
+    if (*state).lastlist[nfa_ll_index] == (*list).id {
+        // If no backreferences, simple check is enough
+        if nvim_rex_get_nfa_has_backref() == 0 {
+            return true;
+        }
+        // With backreferences, need to check positions match
+        if has_state_with_pos(list, state, subs, ptr::null()) {
+            return true;
+        }
+    }
+    false
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
 
@@ -422,6 +457,21 @@ pub unsafe extern "C" fn rs_addstate_here(
     listidx: c_int,
 ) -> *mut RegSubs {
     addstate_here(list, state, subs, pim, listidx)
+}
+
+/// Check if a state is already in the list, checking submatches.
+///
+/// This is the full version that checks backref positions.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_state_in_list_with_subs(
+    list: *const NfaList,
+    state: *const NfaState,
+    subs: *const RegSubs,
+) -> bool {
+    state_in_list(list, state, subs)
 }
 
 // =============================================================================

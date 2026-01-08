@@ -30,6 +30,15 @@ use crate::nfa_states::{
 };
 
 // =============================================================================
+// FFI declarations for C functions
+// =============================================================================
+
+extern "C" {
+    fn nvim_rex_is_multi() -> c_int;
+    fn nvim_rex_get_nfa_has_zend() -> c_int;
+}
+
+// =============================================================================
 // Match Constants
 // =============================================================================
 
@@ -316,6 +325,73 @@ pub unsafe fn clear_subs(subs: *mut RegSubs) {
     }
     clear_sub(&mut (*subs).norm);
     clear_sub(&mut (*subs).synt);
+}
+
+/// Copy submatch positions from one RegSub to another, excluding the main match (index 0).
+///
+/// This is used when we want to preserve only the submatches (\1-\9) without
+/// affecting the overall match position.
+///
+/// # Safety
+/// Both pointers must be valid.
+pub unsafe fn copy_sub_off(
+    to: *mut crate::nfa_states::RegSub,
+    from: *const crate::nfa_states::RegSub,
+) {
+    if to.is_null() || from.is_null() {
+        return;
+    }
+    // Update in_use if from has more
+    if (*to).in_use < (*from).in_use {
+        (*to).in_use = (*from).in_use;
+    }
+    if (*from).in_use <= 1 {
+        return;
+    }
+    // Copy submatch positions 1..in_use, not 0 (main match)
+    let count = ((*from).in_use - 1) as usize;
+    let is_multi = nvim_rex_is_multi() != 0;
+    if is_multi {
+        ptr::copy_nonoverlapping(
+            (*from).list.multi.as_ptr().add(1),
+            (*to).list.multi.as_mut_ptr().add(1),
+            count,
+        );
+    } else {
+        ptr::copy_nonoverlapping(
+            (*from).list.line.as_ptr().add(1),
+            (*to).list.line.as_mut_ptr().add(1),
+            count,
+        );
+    }
+}
+
+/// Copy the end position of the main match if \ze was used.
+///
+/// This copies only the end position of submatch 0 if nfa_has_zend is set
+/// and the from position is valid.
+///
+/// # Safety
+/// Both pointers must be valid.
+pub unsafe fn copy_ze_off(
+    to: *mut crate::nfa_states::RegSub,
+    from: *const crate::nfa_states::RegSub,
+) {
+    if to.is_null() || from.is_null() {
+        return;
+    }
+    if nvim_rex_get_nfa_has_zend() == 0 {
+        return;
+    }
+    let is_multi = nvim_rex_is_multi() != 0;
+    if is_multi {
+        if (*from).list.multi[0].end_lnum >= 0 {
+            (*to).list.multi[0].end_lnum = (*from).list.multi[0].end_lnum;
+            (*to).list.multi[0].end_col = (*from).list.multi[0].end_col;
+        }
+    } else if !(*from).list.line[0].end.is_null() {
+        (*to).list.line[0].end = (*from).list.line[0].end;
+    }
 }
 
 // =============================================================================
@@ -671,6 +747,30 @@ pub unsafe extern "C" fn rs_set_pim_matched(pim: *mut NfaPim) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_set_pim_nomatch(pim: *mut NfaPim) {
     set_pim_nomatch(pim);
+}
+
+/// Copy submatch positions, excluding main match (index 0).
+///
+/// # Safety
+/// Both pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_copy_sub_off(
+    to: *mut crate::nfa_states::RegSub,
+    from: *const crate::nfa_states::RegSub,
+) {
+    copy_sub_off(to, from);
+}
+
+/// Copy end position of main match if \ze was used.
+///
+/// # Safety
+/// Both pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_copy_ze_off(
+    to: *mut crate::nfa_states::RegSub,
+    from: *const crate::nfa_states::RegSub,
+) {
+    copy_ze_off(to, from);
 }
 
 // =============================================================================
