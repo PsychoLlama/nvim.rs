@@ -31,7 +31,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | extmark        | Extended marks for plugins              |
 | ex_docmd       | Ex command parsing                      |
 | ex_eval        | Exception handling state                |
-| fileio         | File I/O utilities                      |
+| fileio         | File I/O utilities (time, BOM detection)|
 | fold           | Folding state and methods               |
 | fuzzy          | Fuzzy matching                          |
 | getchar        | Typeahead and input buffer              |
