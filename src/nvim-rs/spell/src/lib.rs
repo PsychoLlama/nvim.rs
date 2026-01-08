@@ -9,6 +9,7 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
 
+pub mod check;
 pub mod spellfile;
 pub mod suggest;
 pub mod wordtree;
