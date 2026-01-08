@@ -25,7 +25,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | drawscreen     | Screen drawing and separators           |
 | edit           | Edit mode state                         |
 | encoding       | Text encoding (base64, hashing)         |
-| eval           | VimL expression evaluation helpers      |
+| eval           | VimL built-in functions (math, bitwise, type, random) |
 | event          | Event loop and libuv integration        |
 | ex_docmd       | Ex command parsing                      |
 | ex_eval        | Exception handling state                |
