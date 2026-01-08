@@ -1,0 +1,18 @@
+[package]
+name = "nvim-indent-c"
+description = "C/C++/Java indentation (cindent) for Neovim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+nvim-buffer = { path = "../buffer" }
+nvim-window = { path = "../window" }
+nvim-charset = { path = "../charset" }
+
+[lints]
+workspace = true

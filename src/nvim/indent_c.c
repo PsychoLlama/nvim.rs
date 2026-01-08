@@ -56,6 +56,12 @@ int nvim_curbuf_get_p_si(void)
   return curbuf->b_p_si;
 }
 
+/// C accessor for curbuf->b_ind_hash_comment (# comment indentation).
+int nvim_curbuf_get_ind_hash_comment(void)
+{
+  return curbuf->b_ind_hash_comment;
+}
+
 // Find result cache for cpp_baseclass
 typedef struct {
   int found;

@@ -47,6 +47,7 @@ nvim-help = { path = "help" }
 nvim-highlight = { path = "highlight" }
 nvim-insexpand = { path = "insexpand" }
 nvim-indent = { path = "indent" }
+nvim-indent-c = { path = "indent_c" }
 nvim-keycodes = { path = "keycodes" }
 nvim-linematch = { path = "linematch" }
 nvim-lua = { path = "lua" }
