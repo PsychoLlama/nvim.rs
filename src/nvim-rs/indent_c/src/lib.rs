@@ -1888,6 +1888,413 @@ pub const unsafe extern "C" fn rs_calc_paren_indent(
 }
 
 // ============================================================================
+// Special cases and edge handling
+// ============================================================================
+
+/// Check if line contains a C++ lambda expression start.
+///
+/// Looks for `[` followed by capture clause patterns like `[=]`, `[&]`, `[this]`.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_is_cpp_lambda(s: *const c_char) -> bool {
+    if s.is_null() {
+        return false;
+    }
+
+    let mut p = rs_cin_skipcomment(s);
+
+    // Skip over statements until we find '[' not in a string/comment
+    while !is_nul(*p) {
+        if rs_cin_iscomment(p) {
+            p = rs_cin_skipcomment(p);
+            continue;
+        }
+
+        let new_p = rs_skip_string(p);
+        if new_p != p {
+            p = new_p;
+            continue;
+        }
+
+        // Found potential lambda start
+        if *p == b'[' as c_char {
+            let next = rs_cin_skipcomment(p.add(1));
+
+            // Check for common capture patterns
+            // [=], [&], [this], [=, ...], [&, ...], []
+            if *next == b']' as c_char
+                || *next == b'=' as c_char
+                || *next == b'&' as c_char
+                || (*next == b't' as c_char
+                    && *next.add(1) == b'h' as c_char
+                    && *next.add(2) == b'i' as c_char
+                    && *next.add(3) == b's' as c_char)
+            {
+                return true;
+            }
+
+            // Could also be [identifier, ...] capture
+            if vim_isIDc(i32::from(*next as u8)) != 0 {
+                // Skip identifier
+                let mut check = next;
+                while vim_isIDc(i32::from(*check as u8)) != 0 {
+                    check = check.add(1);
+                }
+                check = rs_cin_skipcomment(check);
+                // If followed by ']' or ',' it's likely a lambda
+                if *check == b']' as c_char || *check == b',' as c_char {
+                    return true;
+                }
+            }
+        }
+
+        p = p.add(1);
+    }
+
+    false
+}
+
+/// Check if line contains a C++ template declaration.
+///
+/// Looks for `template` followed by `<`.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_is_template_decl(s: *const c_char) -> bool {
+    if s.is_null() {
+        return false;
+    }
+
+    let p = rs_cin_skipcomment(s);
+
+    // Check for "template"
+    if *p != b't' as c_char
+        || *p.add(1) != b'e' as c_char
+        || *p.add(2) != b'm' as c_char
+        || *p.add(3) != b'p' as c_char
+        || *p.add(4) != b'l' as c_char
+        || *p.add(5) != b'a' as c_char
+        || *p.add(6) != b't' as c_char
+        || *p.add(7) != b'e' as c_char
+    {
+        return false;
+    }
+
+    if vim_isIDc(i32::from(*p.add(8) as u8)) != 0 {
+        return false;
+    }
+
+    // Look for '<' after template
+    let after = rs_cin_skipcomment(p.add(8));
+    *after == b'<' as c_char
+}
+
+/// Check if line contains an extern "C" block.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_is_extern_c(s: *const c_char) -> bool {
+    if s.is_null() {
+        return false;
+    }
+
+    let p = rs_cin_skipcomment(s);
+
+    // Check for "extern"
+    if *p != b'e' as c_char
+        || *p.add(1) != b'x' as c_char
+        || *p.add(2) != b't' as c_char
+        || *p.add(3) != b'e' as c_char
+        || *p.add(4) != b'r' as c_char
+        || *p.add(5) != b'n' as c_char
+    {
+        return false;
+    }
+
+    if vim_isIDc(i32::from(*p.add(6) as u8)) != 0 {
+        return false;
+    }
+
+    // Look for "C" or "C++"
+    let after = rs_cin_skipcomment(p.add(6));
+    if *after == b'"' as c_char {
+        let inside = after.add(1);
+        // Check for "C" or "C++"
+        if *inside == b'C' as c_char {
+            let next = inside.add(1);
+            // "C" alone or "C++"
+            if *next == b'"' as c_char
+                || (*next == b'+' as c_char
+                    && *next.add(1) == b'+' as c_char
+                    && *next.add(2) == b'"' as c_char)
+            {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+/// Check if the line starts a multi-line comment.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_starts_multiline_comment(s: *const c_char) -> bool {
+    if s.is_null() {
+        return false;
+    }
+
+    let p = skip_whitespace(s);
+
+    // Look for /* not followed by */
+    if *p == b'/' as c_char && *p.add(1) == b'*' as c_char {
+        // Check if it closes on the same line
+        let mut check = p.add(2);
+        while !is_nul(*check) {
+            if *check == b'*' as c_char && *check.add(1) == b'/' as c_char {
+                return false; // Closes on same line
+            }
+            check = check.add(1);
+        }
+        return true;
+    }
+
+    false
+}
+
+/// Check if line is inside a multi-line comment (starts with * but not //).
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_inside_multiline_comment(s: *const c_char) -> bool {
+    if s.is_null() {
+        return false;
+    }
+
+    let p = skip_whitespace(s);
+
+    // Common pattern: line starting with * (continuation of comment)
+    // But not if it's "* /" which closes the comment
+    if *p == b'*' as c_char {
+        let next = p.add(1);
+        // If next is '/' then this closes the comment
+        if *next == b'/' as c_char {
+            return false;
+        }
+        return true;
+    }
+
+    false
+}
+
+/// Check if line closes a multi-line comment.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub const unsafe extern "C" fn rs_cin_ends_multiline_comment(s: *const c_char) -> bool {
+    if s.is_null() {
+        return false;
+    }
+
+    // Look for */ in the line
+    let mut p = s;
+    while !is_nul(*p) {
+        if *p == b'*' as c_char && *p.add(1) == b'/' as c_char {
+            return true;
+        }
+        p = p.add(1);
+    }
+
+    false
+}
+
+/// Check if line contains only a closing brace.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_is_closing_brace_line(s: *const c_char) -> bool {
+    if s.is_null() {
+        return false;
+    }
+
+    let p = rs_cin_skipcomment(s);
+
+    // Must be just '}' possibly followed by whitespace/comments
+    if *p != b'}' as c_char {
+        return false;
+    }
+
+    rs_cin_nocode(p.add(1))
+}
+
+/// Check if line contains only an opening brace.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_is_opening_brace_line(s: *const c_char) -> bool {
+    if s.is_null() {
+        return false;
+    }
+
+    let p = rs_cin_skipcomment(s);
+
+    // Must be just '{' possibly followed by whitespace/comments
+    if *p != b'{' as c_char {
+        return false;
+    }
+
+    rs_cin_nocode(p.add(1))
+}
+
+/// Check if line is a continuation of a ternary operator.
+///
+/// Looks for `?` or `:` that might be part of `? :` expression.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_is_ternary_continuation(s: *const c_char) -> bool {
+    if s.is_null() {
+        return false;
+    }
+
+    let p = rs_cin_skipcomment(s);
+
+    // Line starting with ':' (not ::) or '?' might be ternary continuation
+    if *p == b':' as c_char && *p.add(1) != b':' as c_char {
+        return true;
+    }
+
+    if *p == b'?' as c_char {
+        return true;
+    }
+
+    false
+}
+
+/// Check if line is a continuation of a boolean expression.
+///
+/// Looks for lines starting with `&&`, `||`, `and`, `or`.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_is_bool_continuation(s: *const c_char) -> bool {
+    if s.is_null() {
+        return false;
+    }
+
+    let p = rs_cin_skipcomment(s);
+
+    // Check for && or ||
+    if (*p == b'&' as c_char && *p.add(1) == b'&' as c_char)
+        || (*p == b'|' as c_char && *p.add(1) == b'|' as c_char)
+    {
+        return true;
+    }
+
+    // Check for "and" or "or" (C++ alternative operators)
+    if *p == b'a' as c_char
+        && *p.add(1) == b'n' as c_char
+        && *p.add(2) == b'd' as c_char
+        && vim_isIDc(i32::from(*p.add(3) as u8)) == 0
+    {
+        return true;
+    }
+
+    if *p == b'o' as c_char
+        && *p.add(1) == b'r' as c_char
+        && vim_isIDc(i32::from(*p.add(2) as u8)) == 0
+    {
+        return true;
+    }
+
+    false
+}
+
+/// Determine brace position type.
+///
+/// # Arguments
+/// * `line` - The line containing the brace
+/// * `brace_col` - Column of the brace
+///
+/// # Returns
+/// One of `BRACE_IN_COL0`, `BRACE_AT_START`, or `BRACE_AT_END`.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_brace_position(line: *const c_char, brace_col: c_int) -> c_int {
+    if line.is_null() || brace_col < 0 {
+        return BRACE_AT_END;
+    }
+
+    // Check if at column 0
+    if brace_col == 0 {
+        return BRACE_IN_COL0;
+    }
+
+    // Check if at start of line (after whitespace)
+    let p = skip_whitespace(line);
+    if p.offset_from(line) as c_int == brace_col {
+        return BRACE_AT_START;
+    }
+
+    BRACE_AT_END
+}
+
+/// Check if line starts with an arithmetic/assignment operator.
+///
+/// Looks for `+`, `-`, `*`, `/`, `%`, `=`, etc. at start of line.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_is_operator_continuation(s: *const c_char) -> bool {
+    if s.is_null() {
+        return false;
+    }
+
+    let p = rs_cin_skipcomment(s);
+    let c = *p;
+
+    // Check for common operators that might start continuation lines
+    if c == b'+' as c_char
+        || c == b'-' as c_char
+        || c == b'*' as c_char
+        || c == b'/' as c_char
+        || c == b'%' as c_char
+        || c == b'=' as c_char
+        || c == b'<' as c_char
+        || c == b'>' as c_char
+        || c == b'^' as c_char
+        || c == b'~' as c_char
+    {
+        return true;
+    }
+
+    // Check for . or -> member access
+    if c == b'.' as c_char {
+        return true;
+    }
+    if c == b'-' as c_char && *p.add(1) == b'>' as c_char {
+        return true;
+    }
+
+    false
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
