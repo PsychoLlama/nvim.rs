@@ -11,6 +11,7 @@
 
 pub mod spellfile;
 pub mod suggest;
+pub mod wordtree;
 
 use std::ffi::{c_char, c_int, c_void};
 
