@@ -13,6 +13,7 @@
 
 pub mod address;
 pub mod args;
+pub mod errors;
 pub mod execute;
 pub mod lookup;
 pub mod modifiers;
@@ -22,6 +23,7 @@ use std::ptr;
 
 pub use address::*;
 pub use args::*;
+pub use errors::*;
 pub use execute::*;
 pub use lookup::*;
 pub use modifiers::*;
