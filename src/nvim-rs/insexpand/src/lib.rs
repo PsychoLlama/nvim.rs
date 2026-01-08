@@ -121,6 +121,14 @@ extern "C" {
     fn nvim_compl_shown_match_is_first() -> c_int;
     fn nvim_compl_shown_match_str_size() -> usize;
     fn nvim_compl_shown_match_has_newline() -> c_int;
+
+    // Popup menu and selection accessors
+    fn nvim_get_compl_selected_item() -> c_int;
+    fn nvim_get_pum_want_item() -> c_int;
+    fn nvim_get_pum_want_active() -> c_int;
+    fn nvim_get_pum_want_insert() -> c_int;
+    fn nvim_pum_visible() -> c_int;
+    fn nvim_pum_get_height() -> c_int;
 }
 
 // completeopt flags (from optionstr.h - generated)
@@ -139,6 +147,38 @@ const K_OPT_COT_FLAG_PREINSERT: c_uint = 0x200;
 // Direction constants
 const FORWARD: c_int = 1;
 const BACKWARD: c_int = -1;
+
+// =============================================================================
+// Key code constants (from keycodes.h)
+// =============================================================================
+
+/// Convert termcap codes to internal key representation.
+const fn termcap2key(a: c_int, b: c_int) -> c_int {
+    -((a) + (b << 8))
+}
+
+/// KS_EXTRA is used for keys that have no termcap name.
+const KS_EXTRA: c_int = 253;
+
+// Key extra codes for special keys
+const KE_S_UP: c_int = 4;
+const KE_S_DOWN: c_int = 5;
+const KE_EVENT: c_int = 102;
+const KE_COMMAND: c_int = 104;
+const KE_LUA: c_int = 107;
+
+// Standard key codes
+const K_UP: c_int = termcap2key(b'k' as c_int, b'u' as c_int);
+const K_DOWN: c_int = termcap2key(b'k' as c_int, b'd' as c_int);
+const K_PAGEUP: c_int = termcap2key(b'k' as c_int, b'P' as c_int);
+const K_PAGEDOWN: c_int = termcap2key(b'k' as c_int, b'N' as c_int);
+const K_KPAGEUP: c_int = termcap2key(b'K' as c_int, b'3' as c_int);
+const K_KPAGEDOWN: c_int = termcap2key(b'K' as c_int, b'5' as c_int);
+const K_S_UP: c_int = termcap2key(KS_EXTRA, KE_S_UP);
+const K_S_DOWN: c_int = termcap2key(KS_EXTRA, KE_S_DOWN);
+const K_EVENT: c_int = termcap2key(KS_EXTRA, KE_EVENT);
+const K_COMMAND: c_int = termcap2key(KS_EXTRA, KE_COMMAND);
+const K_LUA: c_int = termcap2key(KS_EXTRA, KE_LUA);
 
 /// Check if CTRL-X mode is none (0).
 #[no_mangle]
@@ -717,6 +757,90 @@ pub unsafe extern "C" fn rs_ins_compl_lnum_in_range(lnum: c_int) -> c_int {
     let compl_lnum = nvim_get_compl_lnum();
     let cursor_lnum = nvim_get_curwin_cursor_lnum();
     c_int::from(lnum >= compl_lnum && lnum <= cursor_lnum)
+}
+
+// =============================================================================
+// Phase 2: Key Handling and Direction
+// =============================================================================
+
+/// Decide the direction of Insert mode complete from the key typed.
+///
+/// Returns BACKWARD or FORWARD based on the key.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_key2dir(c: c_int) -> c_int {
+    // For event/command/lua keys, compare pum_want.item with compl_selected_item
+    if c == K_EVENT || c == K_COMMAND || c == K_LUA {
+        let pum_want_item = nvim_get_pum_want_item();
+        let selected = nvim_get_compl_selected_item();
+        return if pum_want_item < selected {
+            BACKWARD
+        } else {
+            FORWARD
+        };
+    }
+
+    // CTRL-P, CTRL-L, pageup keys, shift-up, up all go backward
+    if c == CTRL_P || c == CTRL_L || c == K_PAGEUP || c == K_KPAGEUP || c == K_S_UP || c == K_UP {
+        return BACKWARD;
+    }
+
+    FORWARD
+}
+
+/// Check that "c" is a valid completion key only while the popup menu is shown.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_pum_key(c: c_int) -> c_int {
+    if nvim_pum_visible() == 0 {
+        return 0;
+    }
+
+    c_int::from(
+        c == K_PAGEUP
+            || c == K_KPAGEUP
+            || c == K_S_UP
+            || c == K_PAGEDOWN
+            || c == K_KPAGEDOWN
+            || c == K_S_DOWN
+            || c == K_UP
+            || c == K_DOWN,
+    )
+}
+
+/// Decide the number of completions to move forward.
+///
+/// Returns 1 for most keys, height of the popup menu for page-up/down keys.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_key2count(c: c_int) -> c_int {
+    // For event/command/lua keys, return absolute offset
+    if c == K_EVENT || c == K_COMMAND || c == K_LUA {
+        let offset = nvim_get_pum_want_item() - nvim_get_compl_selected_item();
+        return offset.abs();
+    }
+
+    // For page keys (except plain up/down), return popup height minus context
+    if rs_ins_compl_pum_key(c) != 0 && c != K_UP && c != K_DOWN {
+        let mut h = nvim_pum_get_height();
+        if h > 3 {
+            h -= 2; // keep some context
+        }
+        return h;
+    }
+
+    1
+}
+
+/// Check that completion with "c" should insert the match.
+///
+/// Returns false if only to change the currently selected completion.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_compl_use_match(c: c_int) -> c_int {
+    match c {
+        K_UP | K_DOWN | K_PAGEDOWN | K_KPAGEDOWN | K_S_DOWN | K_PAGEUP | K_KPAGEUP | K_S_UP => 0,
+        K_EVENT | K_COMMAND | K_LUA => {
+            c_int::from(nvim_get_pum_want_active() != 0 && nvim_get_pum_want_insert() != 0)
+        }
+        _ => 1,
+    }
 }
 
 #[cfg(test)]

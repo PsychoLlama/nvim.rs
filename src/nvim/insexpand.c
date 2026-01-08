@@ -5341,19 +5341,16 @@ void ins_compl_check_keys(int frequency, bool in_compl_func)
   }
 }
 
+extern int rs_ins_compl_key2dir(int c);
+extern int rs_ins_compl_pum_key(int c);
+extern int rs_ins_compl_key2count(int c);
+extern int rs_ins_compl_use_match(int c);
+
 /// Decide the direction of Insert mode complete from the key typed.
 /// Returns BACKWARD or FORWARD.
 static int ins_compl_key2dir(int c)
 {
-  if (c == K_EVENT || c == K_COMMAND || c == K_LUA) {
-    return pum_want.item < compl_selected_item ? BACKWARD : FORWARD;
-  }
-  if (c == Ctrl_P || c == Ctrl_L
-      || c == K_PAGEUP || c == K_KPAGEUP
-      || c == K_S_UP || c == K_UP) {
-    return BACKWARD;
-  }
-  return FORWARD;
+  return rs_ins_compl_key2dir(c);
 }
 
 /// Check that "c" is a valid completion key only while the popup menu is shown
@@ -5362,28 +5359,14 @@ static int ins_compl_key2dir(int c)
 static bool ins_compl_pum_key(int c)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  return pum_visible() && (c == K_PAGEUP || c == K_KPAGEUP || c == K_S_UP
-                           || c == K_PAGEDOWN || c == K_KPAGEDOWN
-                           || c == K_S_DOWN || c == K_UP || c == K_DOWN);
+  return rs_ins_compl_pum_key(c) != 0;
 }
 
 /// Decide the number of completions to move forward.
 /// Returns 1 for most keys, height of the popup menu for page-up/down keys.
 static int ins_compl_key2count(int c)
 {
-  if (c == K_EVENT || c == K_COMMAND || c == K_LUA) {
-    int offset = pum_want.item - compl_selected_item;
-    return abs(offset);
-  }
-
-  if (ins_compl_pum_key(c) && c != K_UP && c != K_DOWN) {
-    int h = pum_get_height();
-    if (h > 3) {
-      h -= 2;       // keep some context
-    }
-    return h;
-  }
-  return 1;
+  return rs_ins_compl_key2count(c);
 }
 
 /// Check that completion with "c" should insert the match, false if only
@@ -5393,22 +5376,7 @@ static int ins_compl_key2count(int c)
 static bool ins_compl_use_match(int c)
   FUNC_ATTR_CONST FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  switch (c) {
-  case K_UP:
-  case K_DOWN:
-  case K_PAGEDOWN:
-  case K_KPAGEDOWN:
-  case K_S_DOWN:
-  case K_PAGEUP:
-  case K_KPAGEUP:
-  case K_S_UP:
-    return false;
-  case K_EVENT:
-  case K_COMMAND:
-  case K_LUA:
-    return pum_want.active && pum_want.insert;
-  }
-  return true;
+  return rs_ins_compl_use_match(c) != 0;
 }
 
 /// Get the pattern, column and length for normal completion (CTRL-N CTRL-P
@@ -6594,6 +6562,30 @@ int nvim_compl_shown_match_has_newline(void)
     return 0;
   }
   return vim_strchr(compl_shown_match->cp_str.data, '\n') != NULL ? 1 : 0;
+}
+
+/// Get compl_selected_item for Rust.
+int nvim_get_compl_selected_item(void)
+{
+  return compl_selected_item;
+}
+
+/// Get pum_want.insert for Rust.
+int nvim_get_pum_want_insert(void)
+{
+  return pum_want.insert ? 1 : 0;
+}
+
+/// Check if popup menu is visible for Rust.
+int nvim_pum_visible(void)
+{
+  return pum_visible() ? 1 : 0;
+}
+
+/// Get popup menu height for Rust.
+int nvim_pum_get_height(void)
+{
+  return pum_get_height();
 }
 
 extern int rs_pum_wanted(void);

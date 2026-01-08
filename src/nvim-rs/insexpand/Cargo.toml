@@ -11,6 +11,7 @@ crate-type = ["staticlib", "rlib"]
 [dependencies]
 nvim-window = { path = "../window" }
 nvim-buffer = { path = "../buffer" }
+nvim-keycodes = { path = "../keycodes" }
 
 [lints]
 workspace = true
