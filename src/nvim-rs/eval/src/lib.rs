@@ -3,9 +3,15 @@
 //! This crate provides functions for evaluating VimL/Lua expressions,
 //! including character validation for variable and function names,
 //! and type conversion utilities.
+//!
+//! ## Modules
+//!
+//! - [`funcs`]: VimL built-in functions (abs, sin, split, join, etc.)
 
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_const_for_fn)]
+
+pub mod funcs;
 
 use std::ffi::c_int;
 use std::sync::atomic::{AtomicI32, Ordering};

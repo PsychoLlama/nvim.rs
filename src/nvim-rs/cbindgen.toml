@@ -294,4 +294,11 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            # Completion sources - user command
            "rs_is_valid_usercmd_name", "rs_usercmd_matches_prefix", "rs_parse_usercmd_complete",
            # Completion sources - command
-           "rs_could_be_user_command"]
+           "rs_could_be_user_command",
+           # VimL built-in functions (funcs.c migration)
+           "rs_f_abs", "rs_f_sin", "rs_f_cos", "rs_f_tan",
+           "rs_f_asin", "rs_f_acos", "rs_f_atan", "rs_f_atan2",
+           "rs_f_sinh", "rs_f_cosh", "rs_f_tanh",
+           "rs_f_exp", "rs_f_log", "rs_f_log10", "rs_f_sqrt", "rs_f_pow", "rs_f_fmod",
+           "rs_f_ceil", "rs_f_floor", "rs_f_round", "rs_f_trunc",
+           "rs_f_float2nr", "rs_f_isnan", "rs_f_isinf"]

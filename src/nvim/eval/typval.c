@@ -4747,6 +4747,42 @@ blob_T *nvim_tv_get_blob(const typval_T *tv)
 }
 
 // =============================================================================
+// Typval setter functions for Rust
+// =============================================================================
+
+/// Set v_type to VAR_NUMBER and v_number (setter for Rust).
+void nvim_tv_set_number(typval_T *tv, int64_t n)
+{
+  tv->v_type = VAR_NUMBER;
+  tv->vval.v_number = (varnumber_T)n;
+}
+
+/// Set v_type to VAR_FLOAT and v_float (setter for Rust).
+void nvim_tv_set_float(typval_T *tv, double f)
+{
+  tv->v_type = VAR_FLOAT;
+  tv->vval.v_float = f;
+}
+
+/// Get number from typval with error checking (accessor for Rust).
+/// This wrapper calls tv_get_number_chk and updates the error pointer.
+int64_t nvim_tv_get_number_chk(const typval_T *tv, bool *error)
+{
+  return tv_get_number_chk(tv, error);
+}
+
+/// Get float from typval with error checking (accessor for Rust).
+/// Returns true on success and stores result in *ret.
+/// Returns false and sets *ret to 0.0 on error.
+bool nvim_tv_get_float_chk(const typval_T *tv, double *ret)
+{
+  float_T f;
+  bool ok = tv_get_float_chk(tv, &f);
+  *ret = ok ? f : 0.0;
+  return ok;
+}
+
+// =============================================================================
 // List accessor functions for Rust
 // =============================================================================
 
