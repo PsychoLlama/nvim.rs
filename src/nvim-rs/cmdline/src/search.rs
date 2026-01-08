@@ -1,0 +1,553 @@
+//! Search pattern handling for command-line mode
+//!
+//! This module provides utilities for handling search patterns in command-line
+//! mode, including incremental search (incsearch), pattern parsing, and
+//! search direction detection.
+
+#![allow(unsafe_code)]
+#![allow(clippy::doc_markdown)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::missing_const_for_fn)]
+
+use std::ffi::{c_char, c_int};
+
+// =============================================================================
+// Search Direction
+// =============================================================================
+
+/// Direction for search operations.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SearchDirection {
+    /// Search forward (/)
+    #[default]
+    Forward,
+    /// Search backward (?)
+    Backward,
+}
+
+impl SearchDirection {
+    /// Get the character representing this direction.
+    #[must_use]
+    pub const fn to_char(self) -> u8 {
+        match self {
+            Self::Forward => b'/',
+            Self::Backward => b'?',
+        }
+    }
+
+    /// Parse from a character.
+    #[must_use]
+    pub const fn from_char(c: u8) -> Option<Self> {
+        match c {
+            b'/' => Some(Self::Forward),
+            b'?' => Some(Self::Backward),
+            _ => None,
+        }
+    }
+
+    /// Check if a firstc character represents a search prompt.
+    #[must_use]
+    pub const fn is_search_firstc(firstc: u8) -> bool {
+        firstc == b'/' || firstc == b'?'
+    }
+
+    /// Get the opposite direction.
+    #[must_use]
+    pub const fn reverse(self) -> Self {
+        match self {
+            Self::Forward => Self::Backward,
+            Self::Backward => Self::Forward,
+        }
+    }
+}
+
+// =============================================================================
+// Search Delimiter
+// =============================================================================
+
+/// Parse the search delimiter from a pattern.
+///
+/// The delimiter is the first character of the pattern (/ or ?),
+/// or the first character after a command prefix.
+#[must_use]
+pub fn parse_search_delimiter(pattern: &[u8]) -> Option<u8> {
+    if pattern.is_empty() {
+        return None;
+    }
+
+    let first = pattern[0];
+    if first == b'/' || first == b'?' {
+        return Some(first);
+    }
+
+    None
+}
+
+/// Find the end of a search pattern.
+///
+/// Returns the index after the closing delimiter, or pattern length if not found.
+#[must_use]
+pub fn find_pattern_end(pattern: &[u8], delimiter: u8) -> usize {
+    if pattern.is_empty() {
+        return 0;
+    }
+
+    // Skip the opening delimiter
+    let start = usize::from(pattern[0] == delimiter);
+
+    let mut i = start;
+    while i < pattern.len() {
+        if pattern[i] == delimiter && (i == 0 || pattern[i - 1] != b'\\') {
+            return i + 1;
+        }
+        i += 1;
+    }
+
+    pattern.len()
+}
+
+/// Extract the search pattern from a command line.
+///
+/// Returns the pattern without delimiters.
+#[must_use]
+pub fn extract_pattern(cmdline: &[u8], delimiter: u8) -> Option<&[u8]> {
+    if cmdline.is_empty() {
+        return None;
+    }
+
+    // Skip opening delimiter
+    let start = usize::from(cmdline[0] == delimiter);
+
+    // Find closing delimiter
+    let mut end = start;
+    while end < cmdline.len() {
+        if cmdline[end] == delimiter && (end == 0 || cmdline[end - 1] != b'\\') {
+            break;
+        }
+        end += 1;
+    }
+
+    if start < end {
+        Some(&cmdline[start..end])
+    } else {
+        None
+    }
+}
+
+// =============================================================================
+// Incsearch State
+// =============================================================================
+
+/// State for incremental search.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct IncsearchState {
+    /// Whether incremental search is currently active.
+    pub active: bool,
+    /// Whether incsearch highlighting has been done.
+    pub did_incsearch: bool,
+    /// Whether incsearch is postponed (e.g., pattern too short).
+    pub postponed: bool,
+    /// The search direction.
+    pub direction: SearchDirection,
+    /// Search count (for n pattern).
+    pub count: i32,
+}
+
+impl IncsearchState {
+    /// Create a new incsearch state.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            active: false,
+            did_incsearch: false,
+            postponed: false,
+            direction: SearchDirection::Forward,
+            count: 0,
+        }
+    }
+
+    /// Initialize for a new search.
+    pub fn init(&mut self, firstc: u8) {
+        self.active = SearchDirection::is_search_firstc(firstc);
+        self.did_incsearch = false;
+        self.postponed = false;
+        self.direction = SearchDirection::from_char(firstc).unwrap_or_default();
+        self.count = 0;
+    }
+
+    /// Reset the state.
+    pub fn reset(&mut self) {
+        *self = Self::new();
+    }
+
+    /// Mark incsearch as done.
+    pub fn mark_done(&mut self) {
+        self.did_incsearch = true;
+    }
+
+    /// Mark incsearch as postponed.
+    pub fn postpone(&mut self) {
+        self.postponed = true;
+    }
+}
+
+// =============================================================================
+// Pattern Validation
+// =============================================================================
+
+/// Check if a pattern is valid for searching.
+///
+/// Empty patterns are invalid unless the previous search pattern should be used.
+#[must_use]
+pub const fn is_valid_search_pattern(pattern: &[u8]) -> bool {
+    !pattern.is_empty()
+}
+
+/// Check if a pattern is a magic pattern (starts with \v or \m).
+#[must_use]
+pub fn is_magic_pattern(pattern: &[u8]) -> Option<bool> {
+    if pattern.len() < 2 || pattern[0] != b'\\' {
+        return None;
+    }
+
+    match pattern[1] {
+        b'v' | b'm' => Some(true),  // very magic / magic
+        b'M' | b'V' => Some(false), // nomagic / very nomagic
+        _ => None,
+    }
+}
+
+/// Check if a pattern contains only basic characters (no regex).
+#[must_use]
+pub fn is_literal_pattern(pattern: &[u8]) -> bool {
+    for &c in pattern {
+        match c {
+            // Regex special characters
+            b'.' | b'*' | b'+' | b'?' | b'[' | b']' | b'^' | b'$' | b'\\' | b'|' => {
+                return false;
+            }
+            _ => {}
+        }
+    }
+    true
+}
+
+// =============================================================================
+// Search Command Parsing
+// =============================================================================
+
+/// Types of search-related commands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SearchCommandType {
+    /// Simple search (/, ?)
+    Search,
+    /// Global command (:g/pattern/)
+    Global,
+    /// Substitute command (:s/pattern/replace/)
+    Substitute,
+    /// Vimgrep command (:vimgrep /pattern/)
+    Vimgrep,
+}
+
+/// Parse the offset from after a search pattern.
+///
+/// Offsets are like `/pattern/+2` or `/pattern/e`.
+#[must_use]
+pub fn parse_search_offset(cmdline: &[u8], pattern_end: usize) -> Option<&[u8]> {
+    if pattern_end >= cmdline.len() {
+        return None;
+    }
+
+    Some(&cmdline[pattern_end..])
+}
+
+/// Check if a search command uses word boundary markers.
+///
+/// Patterns like \<word\> use word boundaries.
+#[must_use]
+pub fn has_word_boundary(pattern: &[u8]) -> bool {
+    if pattern.len() < 2 {
+        return false;
+    }
+
+    let mut i = 0;
+    while i < pattern.len() - 1 {
+        if pattern[i] == b'\\' && (pattern[i + 1] == b'<' || pattern[i + 1] == b'>') {
+            return true;
+        }
+        i += 1;
+    }
+
+    false
+}
+
+// =============================================================================
+// Incremental Search Highlighting
+// =============================================================================
+
+/// Result of incremental search highlighting decision.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IncsearchHighlight {
+    /// Perform highlighting.
+    Highlight,
+    /// Skip highlighting (pattern too short or invalid).
+    Skip,
+    /// Postpone highlighting.
+    Postpone,
+}
+
+/// Check if incsearch highlighting should be done.
+///
+/// Returns the highlighting decision based on pattern and settings.
+#[must_use]
+pub fn should_do_incsearch_highlighting(
+    pattern: &[u8],
+    incsearch_enabled: bool,
+    min_pattern_len: usize,
+) -> IncsearchHighlight {
+    if !incsearch_enabled {
+        return IncsearchHighlight::Skip;
+    }
+
+    // Check for valid pattern first (empty pattern is invalid, not postponed)
+    if !is_valid_search_pattern(pattern) {
+        return IncsearchHighlight::Skip;
+    }
+
+    // Postpone if pattern is too short (but not empty)
+    if pattern.len() < min_pattern_len {
+        return IncsearchHighlight::Postpone;
+    }
+
+    IncsearchHighlight::Highlight
+}
+
+// =============================================================================
+// FFI Functions
+// =============================================================================
+
+/// Check if a firstc is a search prompt (FFI).
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_is_search_firstc(firstc: c_int) -> c_int {
+    if !(0..=255).contains(&firstc) {
+        return 0;
+    }
+    c_int::from(SearchDirection::is_search_firstc(firstc as u8))
+}
+
+/// Get the search direction from firstc (FFI).
+///
+/// Returns 1 for forward, -1 for backward, 0 for not a search.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_get_search_direction(firstc: c_int) -> c_int {
+    if !(0..=255).contains(&firstc) {
+        return 0;
+    }
+
+    match SearchDirection::from_char(firstc as u8) {
+        Some(SearchDirection::Forward) => 1,
+        Some(SearchDirection::Backward) => -1,
+        None => 0,
+    }
+}
+
+/// Parse search delimiter from pattern (FFI).
+///
+/// # Safety
+///
+/// `pattern` must be a valid pointer to a string of at least `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_parse_search_delimiter(pattern: *const c_char, len: usize) -> c_int {
+    if pattern.is_null() || len == 0 {
+        return 0;
+    }
+
+    let bytes = std::slice::from_raw_parts(pattern.cast::<u8>(), len);
+    parse_search_delimiter(bytes).map_or(0, c_int::from)
+}
+
+/// Find end of search pattern (FFI).
+///
+/// # Safety
+///
+/// `pattern` must be a valid pointer to a string of at least `len` bytes.
+#[unsafe(no_mangle)]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_find_pattern_end(
+    pattern: *const c_char,
+    len: usize,
+    delimiter: c_int,
+) -> c_int {
+    if pattern.is_null() || len == 0 || !(0..=255).contains(&delimiter) {
+        return 0;
+    }
+
+    let bytes = std::slice::from_raw_parts(pattern.cast::<u8>(), len);
+    find_pattern_end(bytes, delimiter as u8) as c_int
+}
+
+/// Check if pattern is literal (no regex) (FFI).
+///
+/// # Safety
+///
+/// `pattern` must be a valid pointer to a string of at least `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_is_literal_pattern(pattern: *const c_char, len: usize) -> c_int {
+    if pattern.is_null() || len == 0 {
+        return 1; // Empty is literal
+    }
+
+    let bytes = std::slice::from_raw_parts(pattern.cast::<u8>(), len);
+    c_int::from(is_literal_pattern(bytes))
+}
+
+/// Check if pattern has word boundary markers (FFI).
+///
+/// # Safety
+///
+/// `pattern` must be a valid pointer to a string of at least `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_has_word_boundary(pattern: *const c_char, len: usize) -> c_int {
+    if pattern.is_null() || len == 0 {
+        return 0;
+    }
+
+    let bytes = std::slice::from_raw_parts(pattern.cast::<u8>(), len);
+    c_int::from(has_word_boundary(bytes))
+}
+
+// =============================================================================
+// Tests
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_search_direction() {
+        assert_eq!(SearchDirection::Forward.to_char(), b'/');
+        assert_eq!(SearchDirection::Backward.to_char(), b'?');
+
+        assert_eq!(
+            SearchDirection::from_char(b'/'),
+            Some(SearchDirection::Forward)
+        );
+        assert_eq!(
+            SearchDirection::from_char(b'?'),
+            Some(SearchDirection::Backward)
+        );
+        assert_eq!(SearchDirection::from_char(b':'), None);
+
+        assert!(SearchDirection::is_search_firstc(b'/'));
+        assert!(SearchDirection::is_search_firstc(b'?'));
+        assert!(!SearchDirection::is_search_firstc(b':'));
+
+        assert_eq!(
+            SearchDirection::Forward.reverse(),
+            SearchDirection::Backward
+        );
+        assert_eq!(
+            SearchDirection::Backward.reverse(),
+            SearchDirection::Forward
+        );
+    }
+
+    #[test]
+    fn test_parse_search_delimiter() {
+        assert_eq!(parse_search_delimiter(b"/pattern"), Some(b'/'));
+        assert_eq!(parse_search_delimiter(b"?pattern"), Some(b'?'));
+        assert_eq!(parse_search_delimiter(b"pattern"), None);
+        assert_eq!(parse_search_delimiter(b""), None);
+    }
+
+    #[test]
+    fn test_find_pattern_end() {
+        assert_eq!(find_pattern_end(b"/foo/bar", b'/'), 5);
+        assert_eq!(find_pattern_end(b"/foo", b'/'), 4);
+        assert_eq!(find_pattern_end(b"/foo\\/bar/x", b'/'), 10);
+        assert_eq!(find_pattern_end(b"", b'/'), 0);
+    }
+
+    #[test]
+    fn test_extract_pattern() {
+        assert_eq!(extract_pattern(b"/foo/bar", b'/'), Some(b"foo".as_slice()));
+        assert_eq!(extract_pattern(b"/foo", b'/'), Some(b"foo".as_slice()));
+        assert_eq!(extract_pattern(b"//", b'/'), None);
+        assert_eq!(extract_pattern(b"", b'/'), None);
+    }
+
+    #[test]
+    fn test_incsearch_state() {
+        let mut state = IncsearchState::new();
+        assert!(!state.active);
+        assert!(!state.did_incsearch);
+
+        state.init(b'/');
+        assert!(state.active);
+        assert_eq!(state.direction, SearchDirection::Forward);
+
+        state.init(b'?');
+        assert!(state.active);
+        assert_eq!(state.direction, SearchDirection::Backward);
+
+        state.init(b':');
+        assert!(!state.active);
+    }
+
+    #[test]
+    fn test_is_valid_search_pattern() {
+        assert!(is_valid_search_pattern(b"foo"));
+        assert!(!is_valid_search_pattern(b""));
+    }
+
+    #[test]
+    fn test_is_magic_pattern() {
+        assert_eq!(is_magic_pattern(b"\\vfoo"), Some(true));
+        assert_eq!(is_magic_pattern(b"\\mfoo"), Some(true));
+        assert_eq!(is_magic_pattern(b"\\Mfoo"), Some(false));
+        assert_eq!(is_magic_pattern(b"\\Vfoo"), Some(false));
+        assert_eq!(is_magic_pattern(b"foo"), None);
+        assert_eq!(is_magic_pattern(b"\\x"), None);
+    }
+
+    #[test]
+    fn test_is_literal_pattern() {
+        assert!(is_literal_pattern(b"foo"));
+        assert!(is_literal_pattern(b"foo bar"));
+        assert!(!is_literal_pattern(b"foo.*"));
+        assert!(!is_literal_pattern(b"^foo"));
+        assert!(!is_literal_pattern(b"foo$"));
+        assert!(!is_literal_pattern(b"[abc]"));
+    }
+
+    #[test]
+    fn test_has_word_boundary() {
+        assert!(has_word_boundary(b"\\<word\\>"));
+        assert!(has_word_boundary(b"\\<word"));
+        assert!(has_word_boundary(b"word\\>"));
+        assert!(!has_word_boundary(b"word"));
+        assert!(!has_word_boundary(b"<word>"));
+    }
+
+    #[test]
+    fn test_should_do_incsearch_highlighting() {
+        assert_eq!(
+            should_do_incsearch_highlighting(b"foo", true, 1),
+            IncsearchHighlight::Highlight
+        );
+        assert_eq!(
+            should_do_incsearch_highlighting(b"", true, 1),
+            IncsearchHighlight::Skip
+        );
+        assert_eq!(
+            should_do_incsearch_highlighting(b"f", true, 2),
+            IncsearchHighlight::Postpone
+        );
+        assert_eq!(
+            should_do_incsearch_highlighting(b"foo", false, 1),
+            IncsearchHighlight::Skip
+        );
+    }
+}
