@@ -186,6 +186,12 @@ bool hasFolding(win_T *win, linenr_T lnum, linenr_T *firstp, linenr_T *lastp)
   return hasFoldingWin(win, lnum, firstp, lastp, true, NULL);
 }
 
+/// Wrapper for hasFolding for Rust FFI.
+int nvim_hasFolding(win_T *wp, linenr_T lnum, linenr_T *firstp, linenr_T *lastp)
+{
+  return hasFolding(wp, lnum, firstp, lastp) ? 1 : 0;
+}
+
 // hasFoldingWin() {{{2
 /// Search folds starting at lnum
 /// @param lnum first line to search

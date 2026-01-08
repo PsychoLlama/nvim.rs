@@ -914,6 +914,12 @@ bool win_lines_concealed(win_T *wp)
   return hasAnyFolding(wp) || wp->w_p_cole >= 2;
 }
 
+/// Wrapper for win_lines_concealed for Rust FFI.
+int nvim_win_lines_concealed(win_T *wp)
+{
+  return win_lines_concealed(wp) ? 1 : 0;
+}
+
 int sign_item_cmp(const void *p1, const void *p2)
 {
   const SignItem *s1 = (SignItem *)p1;

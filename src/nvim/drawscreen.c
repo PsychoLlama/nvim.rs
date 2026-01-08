@@ -2428,6 +2428,12 @@ void redraw_later(win_T *wp, int type)
   }
 }
 
+/// Wrapper for redraw_later for Rust FFI.
+void nvim_redraw_later(win_T *wp, int type)
+{
+  redraw_later(wp, type);
+}
+
 /// Mark all windows to be redrawn later.
 void redraw_all_later(int type)
 {

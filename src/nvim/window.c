@@ -1295,6 +1295,12 @@ colnr_T nvim_win_get_skipcol(win_T *wp)
   return wp->w_skipcol;
 }
 
+/// Set the window's skipcol.
+void nvim_win_set_skipcol(win_T *wp, colnr_T val)
+{
+  wp->w_skipcol = val;
+}
+
 /// Get the cursor column.
 colnr_T nvim_win_get_cursor_col(win_T *wp)
 {

@@ -248,6 +248,13 @@ int nvim_win_get_fill(win_T *wp, linenr_T lnum)
   return win_get_fill(wp, lnum);
 }
 
+/// Get screen lines for a buffer line without filler lines (FFI wrapper).
+/// @param winheight When non-zero, limit to window height.
+int nvim_plines_win_nofill(win_T *wp, linenr_T lnum, int winheight)
+{
+  return plines_win_nofill(wp, lnum, winheight != 0);
+}
+
 // Note: nvim_win_get_p_list is defined in window.c
 
 // ============================================================================

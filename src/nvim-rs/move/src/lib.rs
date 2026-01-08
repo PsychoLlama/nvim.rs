@@ -444,6 +444,373 @@ pub unsafe extern "C" fn rs_mark_wcol_wrow_valid(wp: WinHandle) {
 }
 
 // =============================================================================
+// LineOff Structure for Scroll Calculations
+// =============================================================================
+
+/// Line offset structure for scroll calculations.
+///
+/// This matches the C `lineoff_T` structure and is used to track
+/// position during scroll operations.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LineOff {
+    /// Line number
+    pub lnum: LinenrT,
+    /// Filler lines
+    pub fill: c_int,
+    /// Height of added line
+    pub height: c_int,
+}
+
+impl LineOff {
+    /// Create a new line offset for a line number.
+    #[inline]
+    #[must_use]
+    pub const fn new(lnum: LinenrT) -> Self {
+        Self {
+            lnum,
+            fill: 0,
+            height: 0,
+        }
+    }
+}
+
+// =============================================================================
+// Additional C Accessor Functions for Scrolling
+// =============================================================================
+
+extern "C" {
+    // Filler lines
+    fn nvim_win_get_fill(wp: WinHandle, lnum: LinenrT) -> c_int;
+
+    // Folding
+    fn nvim_hasFolding(
+        wp: WinHandle,
+        lnum: LinenrT,
+        first: *mut LinenrT,
+        last: *mut LinenrT,
+    ) -> c_int;
+
+    // Buffer info
+    fn nvim_win_buf_line_count(wp: WinHandle) -> LinenrT;
+
+    // Physical lines
+    fn nvim_plines_win_nofill(wp: WinHandle, lnum: LinenrT, winheight: c_int) -> c_int;
+
+    // Scrolloff value
+    fn rs_get_scrolloff_value(wp: WinHandle) -> c_int;
+
+    // Lines concealed detection
+    fn nvim_win_lines_concealed(wp: WinHandle) -> c_int;
+}
+
+/// Maximum column value (for scroll calculation end markers).
+const MAXCOL: c_int = i32::MAX;
+
+// =============================================================================
+// Topline/Botline Navigation
+// =============================================================================
+
+/// Move one line up from the current position in `loff`.
+///
+/// This adds either a filler line or moves to the previous line.
+/// The height of the added line is stored in `loff->height`.
+/// Lines above line 1 have height `MAXCOL` (impossibly high).
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+/// `loff` must be a valid pointer to a `LineOff` struct.
+#[no_mangle]
+pub unsafe extern "C" fn rs_topline_back_winheight(
+    wp: WinHandle,
+    loff: *mut LineOff,
+    winheight: c_int,
+) {
+    if wp.is_null() || loff.is_null() {
+        return;
+    }
+    let loff = &mut *loff;
+
+    let fill = nvim_win_get_fill(wp, loff.lnum);
+    if loff.fill < fill {
+        // Add a filler line
+        loff.fill += 1;
+        loff.height = 1;
+    } else {
+        loff.lnum -= 1;
+        loff.fill = 0;
+        if loff.lnum < 1 {
+            loff.height = MAXCOL;
+        } else {
+            let mut first_lnum = loff.lnum;
+            if nvim_hasFolding(
+                wp,
+                loff.lnum,
+                std::ptr::addr_of_mut!(first_lnum),
+                std::ptr::null_mut(),
+            ) != 0
+            {
+                // Add a closed fold unless concealed
+                loff.lnum = first_lnum;
+                loff.height = i32::from(nvim_decor_conceal_line(wp, loff.lnum - 1, 0) == 0);
+            } else {
+                loff.height = nvim_plines_win_nofill(wp, loff.lnum, winheight);
+            }
+        }
+    }
+}
+
+/// Move one line up from the current position (with window height limit).
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+/// `loff` must be a valid pointer to a `LineOff` struct.
+#[no_mangle]
+pub unsafe extern "C" fn rs_topline_back(wp: WinHandle, loff: *mut LineOff) {
+    rs_topline_back_winheight(wp, loff, 1);
+}
+
+/// Move one line down from the current position in `loff`.
+///
+/// This adds either a filler line or moves to the next line.
+/// The height of the added line is stored in `loff->height`.
+/// Lines below the last line have height `MAXCOL` (impossibly high).
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+/// `loff` must be a valid pointer to a `LineOff` struct.
+#[no_mangle]
+pub unsafe extern "C" fn rs_botline_forw(wp: WinHandle, loff: *mut LineOff) {
+    if wp.is_null() || loff.is_null() {
+        return;
+    }
+    let loff = &mut *loff;
+
+    let fill = nvim_win_get_fill(wp, loff.lnum + 1);
+    if loff.fill < fill {
+        // Add a filler line
+        loff.fill += 1;
+        loff.height = 1;
+    } else {
+        loff.lnum += 1;
+        loff.fill = 0;
+        let line_count = nvim_win_buf_line_count(wp);
+        if loff.lnum > line_count {
+            loff.height = MAXCOL;
+        } else {
+            let mut last_lnum = loff.lnum;
+            if nvim_hasFolding(
+                wp,
+                loff.lnum,
+                std::ptr::null_mut(),
+                std::ptr::addr_of_mut!(last_lnum),
+            ) != 0
+            {
+                // Add a closed fold unless concealed
+                loff.lnum = last_lnum;
+                loff.height = i32::from(nvim_decor_conceal_line(wp, loff.lnum - 1, 0) == 0);
+            } else {
+                loff.height = nvim_plines_win_nofill(wp, loff.lnum, 1);
+            }
+        }
+    }
+}
+
+// =============================================================================
+// Topline/Botline State Management
+// =============================================================================
+
+/// Mark the botline as valid.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mark_botline_valid(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+    let valid = nvim_win_get_valid(wp);
+    nvim_win_set_valid(wp, valid | VALID_BOTLINE);
+}
+
+/// Mark botline as approximately valid.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mark_botline_approximate(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+    let valid = nvim_win_get_valid(wp);
+    nvim_win_set_valid(wp, valid | VALID_BOTLINE_AP);
+}
+
+/// Clear the topline validity flag.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_invalidate_topline(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+    nvim_win_clear_valid_bits(wp, VALID_TOPLINE);
+}
+
+/// Clear botline and topline validity flags.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_invalidate_botline_topline(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+    nvim_win_clear_valid_bits(wp, VALID_BOTLINE | VALID_BOTLINE_AP | VALID_TOPLINE);
+}
+
+// =============================================================================
+// Scroll Position Queries
+// =============================================================================
+
+/// Get the number of filler lines above a line in the window.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_get_fill(wp: WinHandle, lnum: LinenrT) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    nvim_win_get_fill(wp, lnum)
+}
+
+/// Check if cursor is at or above topline.
+///
+/// Returns true if the cursor line is less than or equal to topline.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cursor_at_or_above_topline(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+    let topline = nvim_win_get_topline(wp);
+    c_int::from(cursor_lnum <= topline)
+}
+
+/// Check if cursor is at or below botline.
+///
+/// Returns true if the cursor line is greater than or equal to botline - 1.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cursor_at_or_below_botline(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+    let botline = nvim_win_get_botline(wp);
+    c_int::from(cursor_lnum >= botline - 1)
+}
+
+// =============================================================================
+// Scroll Offset Checking
+// =============================================================================
+
+/// Check if there are not 'scrolloff' lines above the cursor.
+///
+/// Returns true when there are not 'scrolloff' lines above the cursor,
+/// which means the view might need to scroll.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_top_offset(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    let so = rs_get_scrolloff_value(wp);
+    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+    let topline = nvim_win_get_topline(wp);
+    let topfill = nvim_win_get_topfill(wp);
+
+    if cursor_lnum < topline + so || nvim_win_lines_concealed(wp) != 0 {
+        let mut loff = LineOff {
+            lnum: cursor_lnum,
+            fill: 0,
+            height: 0,
+        };
+        let mut n = topfill; // always have this context
+
+        // Count the visible screen lines above the cursor line.
+        while n < so {
+            rs_topline_back(wp, std::ptr::addr_of_mut!(loff));
+            // Stop when included a line above the window.
+            if loff.lnum < topline || (loff.lnum == topline && loff.fill > 0) {
+                break;
+            }
+            n += loff.height;
+        }
+
+        if n < so {
+            return 1;
+        }
+    }
+
+    0
+}
+
+// =============================================================================
+// Skipcol Management
+// =============================================================================
+
+/// Redraw type constants (from drawscreen.h).
+#[allow(dead_code)]
+mod upd {
+    use std::ffi::c_int;
+    pub const VALID: c_int = 10;
+    pub const SOME_VALID: c_int = 35;
+    pub const NOT_VALID: c_int = 40;
+}
+
+extern "C" {
+    // Skipcol setter
+    fn nvim_win_set_skipcol(wp: WinHandle, val: ColnrT);
+
+    // Redraw functions
+    fn nvim_redraw_later(wp: WinHandle, type_: c_int);
+}
+
+/// Set skipcol to zero and redraw later if needed.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reset_skipcol(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+
+    let skipcol = nvim_win_get_skipcol(wp);
+    if skipcol == 0 {
+        return;
+    }
+
+    nvim_win_set_skipcol(wp, 0);
+
+    // Should use the least expensive way that displays all that changed.
+    // UPD_NOT_VALID is too expensive, UPD_REDRAW_TOP does not redraw
+    // enough when the top line gets another screen line.
+    nvim_redraw_later(wp, upd::SOME_VALID);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -486,5 +853,26 @@ mod tests {
         // But not row-related flags
         assert_eq!(VALID_COL_CHANGE & VALID_CROW, 0);
         assert_eq!(VALID_COL_CHANGE & VALID_CHEIGHT, 0);
+    }
+
+    #[test]
+    fn test_lineoff_new() {
+        let loff = LineOff::new(10);
+        assert_eq!(loff.lnum, 10);
+        assert_eq!(loff.fill, 0);
+        assert_eq!(loff.height, 0);
+    }
+
+    #[test]
+    fn test_lineoff_default() {
+        let loff = LineOff::default();
+        assert_eq!(loff.lnum, 0);
+        assert_eq!(loff.fill, 0);
+        assert_eq!(loff.height, 0);
+    }
+
+    #[test]
+    fn test_maxcol() {
+        assert_eq!(MAXCOL, i32::MAX);
     }
 }

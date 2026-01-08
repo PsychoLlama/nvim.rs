@@ -65,6 +65,8 @@ extern int rs_sms_marker_overlap(win_T *wp, int extra2);
 extern int rs_adjust_plines_for_skipcol(win_T *wp);
 extern int rs_skipcol_from_plines(win_T *wp, int plines_off);
 extern int rs_scrolljump_value(win_T *wp);
+extern int rs_check_top_offset(win_T *wp);
+extern void rs_reset_skipcol(win_T *wp);
 
 // Accessor for global scrolljump option
 OptInt nvim_get_p_sj(void)
@@ -213,16 +215,7 @@ static int skipcol_from_plines(win_T *wp, int plines_off)
 /// Set wp->w_skipcol to zero and redraw later if needed.
 static void reset_skipcol(win_T *wp)
 {
-  if (wp->w_skipcol == 0) {
-    return;
-  }
-
-  wp->w_skipcol = 0;
-
-  // Should use the least expensive way that displays all that changed.
-  // UPD_NOT_VALID is too expensive, UPD_REDRAW_TOP does not redraw
-  // enough when the top line gets another screen line.
-  redraw_later(wp, UPD_SOME_VALID);
+  rs_reset_skipcol(wp);
 }
 
 // Update wp->w_topline to move the cursor onto the screen.
@@ -446,27 +439,7 @@ static int scrolljump_value(win_T *wp)
 /// Return true when there are not 'scrolloff' lines above the cursor for window "wp".
 static bool check_top_offset(win_T *wp)
 {
-  int so = get_scrolloff_value(wp);
-  if (wp->w_cursor.lnum < wp->w_topline + so || win_lines_concealed(wp)) {
-    lineoff_T loff;
-    loff.lnum = wp->w_cursor.lnum;
-    loff.fill = 0;
-    int n = wp->w_topfill;  // always have this context
-    // Count the visible screen lines above the cursor line.
-    while (n < so) {
-      topline_back(wp, &loff);
-      // Stop when included a line above the window.
-      if (loff.lnum < wp->w_topline
-          || (loff.lnum == wp->w_topline && loff.fill > 0)) {
-        break;
-      }
-      n += loff.height;
-    }
-    if (n < so) {
-      return true;
-    }
-  }
-  return false;
+  return rs_check_top_offset(wp) != 0;
 }
 
 /// Update w_curswant.
