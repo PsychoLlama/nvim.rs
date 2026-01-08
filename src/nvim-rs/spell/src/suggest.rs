@@ -791,6 +791,272 @@ pub extern "C" fn rs_maxsug() -> usize {
 }
 
 // =============================================================================
+// Suggestion List Management
+// =============================================================================
+
+/// A single spelling suggestion
+#[repr(C)]
+#[derive(Debug, Clone)]
+pub struct Suggestion {
+    /// Suggested word (UTF-8, NUL-terminated in buffer)
+    pub word: [u8; MAXWLEN],
+    /// Length of the word
+    pub word_len: usize,
+    /// Length of the original (bad) word that this replaces
+    pub org_len: usize,
+    /// Score - lower is better
+    pub score: c_int,
+    /// Alternative score for tie-breaking
+    pub alt_score: c_int,
+    /// Whether score is based on sound-alike comparison
+    pub sal_score: bool,
+    /// Whether bonus has been applied to score
+    pub had_bonus: bool,
+}
+
+impl Default for Suggestion {
+    fn default() -> Self {
+        Self {
+            word: [0; MAXWLEN],
+            word_len: 0,
+            org_len: 0,
+            score: SCORE_MAXMAX,
+            alt_score: 0,
+            sal_score: false,
+            had_bonus: false,
+        }
+    }
+}
+
+impl Suggestion {
+    /// Create a new suggestion with the given word and score.
+    #[must_use]
+    pub fn new(word: &[u8], org_len: usize, score: c_int) -> Self {
+        let mut s = Self::default();
+        let copy_len = word.len().min(MAXWLEN - 1);
+        s.word[..copy_len].copy_from_slice(&word[..copy_len]);
+        s.word_len = copy_len;
+        s.org_len = org_len;
+        s.score = score;
+        s
+    }
+
+    /// Get the word as a byte slice (without trailing NUL)
+    #[must_use]
+    pub fn word_bytes(&self) -> &[u8] {
+        &self.word[..self.word_len]
+    }
+}
+
+/// Additional score constants for suggestion generation
+pub const SCORE_FILE: c_int = 30; // suggestion from a file
+pub const SCORE_MAXINIT: c_int = 350; // Initial maximum score
+pub const SCORE_COMMON1: c_int = 30; // subtracted for words seen before
+pub const SCORE_COMMON2: c_int = 40; // subtracted for words often seen
+pub const SCORE_COMMON3: c_int = 50; // subtracted for very common words
+
+/// Number of suggestions to keep after cleanup
+pub const SUG_CLEAN_COUNT_BASE: usize = 150;
+
+/// Compare two suggestions for sorting (lower score = better)
+#[must_use]
+pub fn compare_suggestions(a: &Suggestion, b: &Suggestion) -> std::cmp::Ordering {
+    // Primary sort by score
+    match a.score.cmp(&b.score) {
+        std::cmp::Ordering::Equal => {
+            // Secondary sort by alt_score
+            a.alt_score.cmp(&b.alt_score)
+        }
+        other => other,
+    }
+}
+
+/// FFI wrapper to create a new suggestion.
+///
+/// # Safety
+/// `word` must be a valid pointer to a NUL-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_suggestion_new(
+    word: *const u8,
+    word_len: usize,
+    org_len: usize,
+    score: c_int,
+    sug_out: *mut Suggestion,
+) {
+    if word.is_null() || sug_out.is_null() {
+        return;
+    }
+
+    let word_slice = std::slice::from_raw_parts(word, word_len);
+    *sug_out = Suggestion::new(word_slice, org_len, score);
+}
+
+/// FFI wrapper to compare two suggestions for sorting.
+///
+/// Returns:
+/// - negative if a < b (a is better)
+/// - 0 if a == b
+/// - positive if a > b (b is better)
+///
+/// # Safety
+/// Both pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_suggestion_compare(
+    a: *const Suggestion,
+    b: *const Suggestion,
+) -> c_int {
+    if a.is_null() || b.is_null() {
+        return 0;
+    }
+
+    match compare_suggestions(&*a, &*b) {
+        std::cmp::Ordering::Less => -1,
+        std::cmp::Ordering::Equal => 0,
+        std::cmp::Ordering::Greater => 1,
+    }
+}
+
+/// Check if two suggestions have the same word.
+///
+/// # Safety
+/// Both pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_suggestion_same_word(
+    a: *const Suggestion,
+    b: *const Suggestion,
+) -> bool {
+    if a.is_null() || b.is_null() {
+        return false;
+    }
+
+    let sug_a = &*a;
+    let sug_b = &*b;
+
+    sug_a.word_len == sug_b.word_len && sug_a.word_bytes() == sug_b.word_bytes()
+}
+
+// =============================================================================
+// REP Item Application
+// =============================================================================
+
+/// Check if a REP item can be applied at a given position in the word.
+///
+/// # Arguments
+/// * `word` - The word to check
+/// * `pos` - Position in the word to start checking
+/// * `rep_from` - The "from" pattern of the REP item
+/// * `rep_from_len` - Length of the "from" pattern
+///
+/// # Returns
+/// True if the REP item's "from" pattern matches at the position
+#[must_use]
+pub fn rep_matches_at(word: &[u8], pos: usize, rep_from: &[u8], rep_from_len: usize) -> bool {
+    if pos + rep_from_len > word.len() {
+        return false;
+    }
+
+    word[pos..pos + rep_from_len] == rep_from[..rep_from_len]
+}
+
+/// FFI wrapper for rep_matches_at.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_rep_matches_at(
+    word: *const u8,
+    word_len: usize,
+    pos: usize,
+    rep_from: *const u8,
+    rep_from_len: usize,
+) -> bool {
+    if word.is_null() || rep_from.is_null() {
+        return false;
+    }
+
+    let word_slice = std::slice::from_raw_parts(word, word_len);
+    let from_slice = std::slice::from_raw_parts(rep_from, rep_from_len);
+
+    rep_matches_at(word_slice, pos, from_slice, rep_from_len)
+}
+
+/// Apply a REP substitution to a word.
+///
+/// # Arguments
+/// * `word` - The word to modify
+/// * `pos` - Position where the "from" pattern starts
+/// * `rep_from_len` - Length of the "from" pattern being replaced
+/// * `rep_to` - The "to" replacement pattern
+/// * `rep_to_len` - Length of the "to" pattern
+/// * `output` - Buffer to write the result
+///
+/// # Returns
+/// Length of the result, or 0 on error
+pub fn apply_rep(
+    word: &[u8],
+    pos: usize,
+    rep_from_len: usize,
+    rep_to: &[u8],
+    rep_to_len: usize,
+    output: &mut [u8],
+) -> usize {
+    // Calculate output length
+    let new_len = word.len() - rep_from_len + rep_to_len;
+    if new_len >= output.len() {
+        return 0;
+    }
+
+    // Copy prefix
+    output[..pos].copy_from_slice(&word[..pos]);
+
+    // Copy replacement
+    output[pos..pos + rep_to_len].copy_from_slice(&rep_to[..rep_to_len]);
+
+    // Copy suffix
+    let suffix_start = pos + rep_from_len;
+    let suffix_len = word.len() - suffix_start;
+    output[pos + rep_to_len..pos + rep_to_len + suffix_len].copy_from_slice(&word[suffix_start..]);
+
+    // NUL-terminate
+    output[new_len] = 0;
+
+    new_len
+}
+
+/// FFI wrapper for apply_rep.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_apply_rep(
+    word: *const u8,
+    word_len: usize,
+    pos: usize,
+    rep_from_len: usize,
+    rep_to: *const u8,
+    rep_to_len: usize,
+    output: *mut u8,
+    output_len: usize,
+) -> usize {
+    if word.is_null() || rep_to.is_null() || output.is_null() {
+        return 0;
+    }
+
+    let word_slice = std::slice::from_raw_parts(word, word_len);
+    let to_slice = std::slice::from_raw_parts(rep_to, rep_to_len);
+    let output_slice = std::slice::from_raw_parts_mut(output, output_len);
+
+    apply_rep(
+        word_slice,
+        pos,
+        rep_from_len,
+        to_slice,
+        rep_to_len,
+        output_slice,
+    )
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -956,5 +1222,97 @@ mod tests {
     #[test]
     fn test_maxsug_constant() {
         assert_eq!(MAXSUG, 25);
+    }
+
+    // =========================================================================
+    // Suggestion Management Tests
+    // =========================================================================
+
+    #[test]
+    fn test_suggestion_default() {
+        let sug = Suggestion::default();
+        assert_eq!(sug.word_len, 0);
+        assert_eq!(sug.org_len, 0);
+        assert_eq!(sug.score, SCORE_MAXMAX);
+        assert!(!sug.sal_score);
+        assert!(!sug.had_bonus);
+    }
+
+    #[test]
+    fn test_suggestion_new() {
+        let sug = Suggestion::new(b"hello", 5, 100);
+        assert_eq!(sug.word_len, 5);
+        assert_eq!(sug.org_len, 5);
+        assert_eq!(sug.score, 100);
+        assert_eq!(sug.word_bytes(), b"hello");
+    }
+
+    #[test]
+    fn test_compare_suggestions_by_score() {
+        let sug1 = Suggestion::new(b"hello", 5, 100);
+        let sug2 = Suggestion::new(b"world", 5, 200);
+
+        assert_eq!(compare_suggestions(&sug1, &sug2), std::cmp::Ordering::Less);
+        assert_eq!(
+            compare_suggestions(&sug2, &sug1),
+            std::cmp::Ordering::Greater
+        );
+    }
+
+    #[test]
+    fn test_compare_suggestions_equal_score() {
+        let mut sug1 = Suggestion::new(b"hello", 5, 100);
+        let mut sug2 = Suggestion::new(b"world", 5, 100);
+
+        sug1.alt_score = 10;
+        sug2.alt_score = 20;
+
+        assert_eq!(compare_suggestions(&sug1, &sug2), std::cmp::Ordering::Less);
+    }
+
+    // =========================================================================
+    // REP Application Tests
+    // =========================================================================
+
+    #[test]
+    fn test_rep_matches_at() {
+        assert!(rep_matches_at(b"hello", 0, b"he", 2));
+        assert!(rep_matches_at(b"hello", 2, b"ll", 2));
+        assert!(!rep_matches_at(b"hello", 0, b"wo", 2));
+        assert!(!rep_matches_at(b"hello", 4, b"lo", 2)); // out of bounds
+    }
+
+    #[test]
+    fn test_apply_rep_simple() {
+        let mut output = [0u8; 20];
+        let len = apply_rep(b"hello", 0, 2, b"wo", 2, &mut output);
+        assert_eq!(len, 5);
+        assert_eq!(&output[..5], b"wollo");
+    }
+
+    #[test]
+    fn test_apply_rep_middle() {
+        let mut output = [0u8; 20];
+        let len = apply_rep(b"hello", 2, 2, b"pp", 2, &mut output);
+        assert_eq!(len, 5);
+        assert_eq!(&output[..5], b"heppo");
+    }
+
+    #[test]
+    fn test_apply_rep_expansion() {
+        let mut output = [0u8; 20];
+        // Replace "l" with "ll" (makes word longer)
+        let len = apply_rep(b"helo", 2, 1, b"ll", 2, &mut output);
+        assert_eq!(len, 5);
+        assert_eq!(&output[..5], b"hello");
+    }
+
+    #[test]
+    fn test_apply_rep_contraction() {
+        let mut output = [0u8; 20];
+        // Replace "ll" with "l" (makes word shorter)
+        let len = apply_rep(b"hello", 2, 2, b"l", 1, &mut output);
+        assert_eq!(len, 4);
+        assert_eq!(&output[..4], b"helo");
     }
 }
