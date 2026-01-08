@@ -128,6 +128,9 @@ extern void rs_frame_fix_width(win_T *wp);
 extern void rs_frame_fix_height(win_T *wp);
 extern win_T *rs_win_vert_neighbor(tabpage_T *tp, win_T *wp, int up, int count);
 extern win_T *rs_win_horz_neighbor(tabpage_T *tp, win_T *wp, int left, int count);
+extern void rs_frame_append(frame_T *after, frame_T *frp);
+extern void rs_frame_insert(frame_T *before, frame_T *frp);
+extern void rs_frame_remove(frame_T *frp);
 
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to win_T fields from Rust code.
@@ -6397,38 +6400,19 @@ void win_remove(win_T *wp, tabpage_T *tp)
 // Append frame "frp" in a frame list after frame "after".
 static void frame_append(frame_T *after, frame_T *frp)
 {
-  frp->fr_next = after->fr_next;
-  after->fr_next = frp;
-  if (frp->fr_next != NULL) {
-    frp->fr_next->fr_prev = frp;
-  }
-  frp->fr_prev = after;
+  rs_frame_append(after, frp);
 }
 
 // Insert frame "frp" in a frame list before frame "before".
 static void frame_insert(frame_T *before, frame_T *frp)
 {
-  frp->fr_next = before;
-  frp->fr_prev = before->fr_prev;
-  before->fr_prev = frp;
-  if (frp->fr_prev != NULL) {
-    frp->fr_prev->fr_next = frp;
-  } else {
-    frp->fr_parent->fr_child = frp;
-  }
+  rs_frame_insert(before, frp);
 }
 
 // Remove a frame from a frame list.
 static void frame_remove(frame_T *frp)
 {
-  if (frp->fr_prev != NULL) {
-    frp->fr_prev->fr_next = frp->fr_next;
-  } else {
-    frp->fr_parent->fr_child = frp->fr_next;
-  }
-  if (frp->fr_next != NULL) {
-    frp->fr_next->fr_prev = frp->fr_prev;
-  }
+  rs_frame_remove(frp);
 }
 
 void win_new_screensize(void)

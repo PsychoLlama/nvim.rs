@@ -2795,6 +2795,134 @@ pub extern "C" fn rs_win_horz_neighbor(
     win_horz_neighbor_impl(tp, wp, left != 0, count)
 }
 
+// =============================================================================
+// Frame List Operations
+// =============================================================================
+
+/// Append frame "frp" in a frame list after frame "after".
+///
+/// This is the Rust equivalent of `frame_append()` in window.c.
+///
+/// # Safety
+/// Both `after` and `frp` must be valid, non-null frame pointers.
+/// The caller is responsible for ensuring proper frame tree structure.
+#[inline]
+unsafe fn frame_append_impl(after: *mut Frame, frp: *mut Frame) {
+    debug_assert!(!after.is_null());
+    debug_assert!(!frp.is_null());
+
+    (*frp).fr_next = (*after).fr_next;
+    (*after).fr_next = frp;
+    if !(*frp).fr_next.is_null() {
+        (*(*frp).fr_next).fr_prev = frp;
+    }
+    (*frp).fr_prev = after;
+}
+
+/// FFI wrapper for `frame_append`.
+///
+/// Appends frame `frp` after frame `after` in a frame list.
+///
+/// # Safety
+/// Both `after` and `frp` must be valid, non-null frame pointers.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn rs_frame_append(after: *mut Frame, frp: *mut Frame) {
+    if after.is_null() || frp.is_null() {
+        return;
+    }
+    // SAFETY: We verified both pointers are non-null.
+    // The caller must ensure they point to valid Frame structures.
+    unsafe { frame_append_impl(after, frp) }
+}
+
+/// Insert frame "frp" in a frame list before frame "before".
+///
+/// This is the Rust equivalent of `frame_insert()` in window.c.
+///
+/// # Safety
+/// Both `before` and `frp` must be valid, non-null frame pointers.
+/// The caller is responsible for ensuring proper frame tree structure.
+#[inline]
+unsafe fn frame_insert_impl(before: *mut Frame, frp: *mut Frame) {
+    debug_assert!(!before.is_null());
+    debug_assert!(!frp.is_null());
+
+    (*frp).fr_next = before;
+    (*frp).fr_prev = (*before).fr_prev;
+    (*before).fr_prev = frp;
+    if (*frp).fr_prev.is_null() {
+        // frp becomes the first child of the parent
+        let parent = (*frp).fr_parent;
+        if !parent.is_null() {
+            (*parent).fr_child = frp;
+        }
+    } else {
+        (*(*frp).fr_prev).fr_next = frp;
+    }
+}
+
+/// FFI wrapper for `frame_insert`.
+///
+/// Inserts frame `frp` before frame `before` in a frame list.
+///
+/// # Safety
+/// Both `before` and `frp` must be valid, non-null frame pointers.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn rs_frame_insert(before: *mut Frame, frp: *mut Frame) {
+    if before.is_null() || frp.is_null() {
+        return;
+    }
+    // SAFETY: We verified both pointers are non-null.
+    // The caller must ensure they point to valid Frame structures.
+    unsafe { frame_insert_impl(before, frp) }
+}
+
+/// Remove a frame from a frame list.
+///
+/// This is the Rust equivalent of `frame_remove()` in window.c.
+/// Note: This only removes the frame from the list, it does NOT free the frame.
+///
+/// # Safety
+/// `frp` must be a valid, non-null frame pointer.
+/// The caller is responsible for ensuring proper frame tree structure.
+#[inline]
+unsafe fn frame_remove_impl(frp: *mut Frame) {
+    debug_assert!(!frp.is_null());
+
+    if (*frp).fr_prev.is_null() {
+        // frp was the first child, update parent's fr_child
+        let parent = (*frp).fr_parent;
+        if !parent.is_null() {
+            (*parent).fr_child = (*frp).fr_next;
+        }
+    } else {
+        (*(*frp).fr_prev).fr_next = (*frp).fr_next;
+    }
+    if !(*frp).fr_next.is_null() {
+        (*(*frp).fr_next).fr_prev = (*frp).fr_prev;
+    }
+}
+
+/// FFI wrapper for `frame_remove`.
+///
+/// Removes frame `frp` from its frame list.
+/// Note: This only removes the frame from the list, it does NOT free the frame.
+///
+/// # Safety
+/// `frp` must be a valid, non-null frame pointer.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn rs_frame_remove(frp: *mut Frame) {
+    if frp.is_null() {
+        return;
+    }
+    // SAFETY: We verified the pointer is non-null.
+    // The caller must ensure it points to a valid Frame structure.
+    unsafe { frame_remove_impl(frp) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2875,5 +3003,197 @@ mod tests {
             size_of::<TabpageHandle>(),
             size_of::<*mut std::ffi::c_void>()
         );
+    }
+
+    // =========================================================================
+    // Frame List Operations Tests
+    // =========================================================================
+
+    /// Create a test frame with specified layout and null pointers
+    fn make_test_frame(layout: c_char) -> Frame {
+        Frame {
+            fr_layout: layout,
+            fr_width: 80,
+            fr_newwidth: 0,
+            fr_height: 24,
+            fr_newheight: 0,
+            fr_parent: std::ptr::null_mut(),
+            fr_next: std::ptr::null_mut(),
+            fr_prev: std::ptr::null_mut(),
+            fr_child: std::ptr::null_mut(),
+            fr_win: WinHandle::null(),
+        }
+    }
+
+    #[test]
+    fn test_frame_append_basic() {
+        let mut frame1 = make_test_frame(FR_LEAF);
+        let mut frame2 = make_test_frame(FR_LEAF);
+
+        let p1 = std::ptr::addr_of_mut!(frame1);
+        let p2 = std::ptr::addr_of_mut!(frame2);
+
+        unsafe {
+            frame_append_impl(p1, p2);
+        }
+
+        // After append: frame1 -> frame2
+        assert_eq!(frame1.fr_next, p2);
+        assert!(frame1.fr_prev.is_null());
+        assert_eq!(frame2.fr_prev, p1);
+        assert!(frame2.fr_next.is_null());
+    }
+
+    #[test]
+    fn test_frame_append_chain() {
+        let mut frame1 = make_test_frame(FR_LEAF);
+        let mut frame2 = make_test_frame(FR_LEAF);
+        let mut frame3 = make_test_frame(FR_LEAF);
+
+        let p1 = std::ptr::addr_of_mut!(frame1);
+        let p2 = std::ptr::addr_of_mut!(frame2);
+        let p3 = std::ptr::addr_of_mut!(frame3);
+
+        unsafe {
+            frame_append_impl(p1, p2);
+            frame_append_impl(p2, p3);
+        }
+
+        // After appends: frame1 -> frame2 -> frame3
+        assert_eq!(frame1.fr_next, p2);
+        assert!(frame1.fr_prev.is_null());
+
+        assert_eq!(frame2.fr_prev, p1);
+        assert_eq!(frame2.fr_next, p3);
+
+        assert_eq!(frame3.fr_prev, p2);
+        assert!(frame3.fr_next.is_null());
+    }
+
+    #[test]
+    fn test_frame_insert_at_start() {
+        let mut parent = make_test_frame(FR_COL);
+        let mut frame1 = make_test_frame(FR_LEAF);
+        let mut frame2 = make_test_frame(FR_LEAF);
+
+        let pp = std::ptr::addr_of_mut!(parent);
+        let p1 = std::ptr::addr_of_mut!(frame1);
+        let p2 = std::ptr::addr_of_mut!(frame2);
+
+        // Set up frame1 as first child
+        parent.fr_child = p1;
+        frame1.fr_parent = pp;
+
+        unsafe {
+            // Insert frame2 before frame1
+            frame2.fr_parent = pp;
+            frame_insert_impl(p1, p2);
+        }
+
+        // After insert: parent -> frame2 -> frame1
+        assert_eq!(parent.fr_child, p2);
+        assert!(frame2.fr_prev.is_null());
+        assert_eq!(frame2.fr_next, p1);
+        assert_eq!(frame1.fr_prev, p2);
+    }
+
+    #[test]
+    fn test_frame_insert_middle() {
+        let mut frame1 = make_test_frame(FR_LEAF);
+        let mut frame2 = make_test_frame(FR_LEAF);
+        let mut frame3 = make_test_frame(FR_LEAF);
+
+        let p1 = std::ptr::addr_of_mut!(frame1);
+        let p2 = std::ptr::addr_of_mut!(frame2);
+        let p3 = std::ptr::addr_of_mut!(frame3);
+
+        // Set up chain: frame1 -> frame3
+        frame1.fr_next = p3;
+        frame3.fr_prev = p1;
+
+        unsafe {
+            // Insert frame2 before frame3
+            frame_insert_impl(p3, p2);
+        }
+
+        // After insert: frame1 -> frame2 -> frame3
+        assert_eq!(frame1.fr_next, p2);
+        assert_eq!(frame2.fr_prev, p1);
+        assert_eq!(frame2.fr_next, p3);
+        assert_eq!(frame3.fr_prev, p2);
+    }
+
+    #[test]
+    fn test_frame_remove_middle() {
+        let mut frame1 = make_test_frame(FR_LEAF);
+        let mut frame2 = make_test_frame(FR_LEAF);
+        let mut frame3 = make_test_frame(FR_LEAF);
+
+        let p1 = std::ptr::addr_of_mut!(frame1);
+        let p2 = std::ptr::addr_of_mut!(frame2);
+        let p3 = std::ptr::addr_of_mut!(frame3);
+
+        // Set up chain: frame1 -> frame2 -> frame3
+        frame1.fr_next = p2;
+        frame2.fr_prev = p1;
+        frame2.fr_next = p3;
+        frame3.fr_prev = p2;
+
+        unsafe {
+            // Remove frame2
+            frame_remove_impl(p2);
+        }
+
+        // After remove: frame1 -> frame3
+        assert_eq!(frame1.fr_next, p3);
+        assert_eq!(frame3.fr_prev, p1);
+    }
+
+    #[test]
+    fn test_frame_remove_first() {
+        let mut parent = make_test_frame(FR_COL);
+        let mut frame1 = make_test_frame(FR_LEAF);
+        let mut frame2 = make_test_frame(FR_LEAF);
+
+        let pp = std::ptr::addr_of_mut!(parent);
+        let p1 = std::ptr::addr_of_mut!(frame1);
+        let p2 = std::ptr::addr_of_mut!(frame2);
+
+        // Set up: parent -> frame1 -> frame2
+        parent.fr_child = p1;
+        frame1.fr_parent = pp;
+        frame1.fr_next = p2;
+        frame2.fr_prev = p1;
+        frame2.fr_parent = pp;
+
+        unsafe {
+            // Remove frame1
+            frame_remove_impl(p1);
+        }
+
+        // After remove: parent -> frame2
+        assert_eq!(parent.fr_child, p2);
+        assert!(frame2.fr_prev.is_null());
+    }
+
+    #[test]
+    fn test_frame_remove_last() {
+        let mut frame1 = make_test_frame(FR_LEAF);
+        let mut frame2 = make_test_frame(FR_LEAF);
+
+        let p1 = std::ptr::addr_of_mut!(frame1);
+        let p2 = std::ptr::addr_of_mut!(frame2);
+
+        // Set up: frame1 -> frame2
+        frame1.fr_next = p2;
+        frame2.fr_prev = p1;
+
+        unsafe {
+            // Remove frame2
+            frame_remove_impl(p2);
+        }
+
+        // After remove: just frame1
+        assert!(frame1.fr_next.is_null());
     }
 }
