@@ -9,6 +9,8 @@
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::cast_possible_wrap)] // Character literals are safe ASCII values
 
+pub mod markers;
+
 use std::ffi::{c_char, c_int};
 
 use nvim_window::WinHandle;

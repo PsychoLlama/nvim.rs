@@ -3326,3 +3326,25 @@ linenr_T nvim_win_get_buf_line_count(win_T *wp)
 {
   return wp->w_buffer->b_ml.ml_line_count;
 }
+
+// ============================================================================
+// Phase 1: Fold Markers accessors
+// ============================================================================
+
+/// Get the w_p_fmr (foldmarker option) field from a window.
+char *nvim_win_get_p_fmr(win_T *wp)
+{
+  return wp->w_p_fmr;
+}
+
+/// Get the buffer from a window.
+buf_T *nvim_win_get_buffer(win_T *wp)
+{
+  return wp->w_buffer;
+}
+
+/// Get a line from a buffer (wrapper for ml_get_buf).
+char *nvim_ml_get_buf(buf_T *buf, linenr_T lnum)
+{
+  return ml_get_buf(buf, lnum);
+}
