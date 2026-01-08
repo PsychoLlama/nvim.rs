@@ -54,7 +54,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | mouse          | Mouse event handling and selection      |
 | msgpack        | MessagePack serialization               |
 | normal         | Normal mode key processing and commands |
-| ops            | Operator handling                       |
+| ops            | Operator handling (shift, tilde, addsub, replace, join, delete, insert) |
 | option         | Option system and configuration         |
 | os             | OS abstractions (env, time, fs)         |
 | path           | Path manipulation                       |
