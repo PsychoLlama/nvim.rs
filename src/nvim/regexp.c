@@ -5107,6 +5107,24 @@ void nvim_rex_set_nfa_has_zsubexpr(int v) { rex.nfa_has_zsubexpr = v; }
 bool nvim_rex_in_use(void) { return rex_in_use; }
 void nvim_rex_set_in_use(bool in_use) { rex_in_use = in_use; }
 
+// NFA ll_index and endp accessors
+int nvim_rex_get_nfa_ll_index(void) { return nfa_ll_index; }
+void nvim_rex_set_nfa_ll_index(int v) { nfa_ll_index = v; }
+save_se_T *nvim_rex_get_nfa_endp(void) { return nfa_endp; }
+void nvim_rex_set_nfa_endp(save_se_T *p) { nfa_endp = p; }
+
+// REG_MULTI check
+int nvim_rex_is_multi(void) { return rex.reg_match == NULL; }
+
+// Memory limit (p_mmp)
+int64_t nvim_get_p_mmp(void) { return p_mmp; }
+
+// Error for max memory pattern
+void nvim_regexp_emsg_maxmempattern(void)
+{
+  emsg(_(e_pattern_uses_more_memory_than_maxmempattern));
+}
+
 // wants_nfa - pattern requires NFA engine (for BT-only patterns like [[:upper:]])
 int nvim_parse_get_wants_nfa(void) { return wants_nfa; }
 void nvim_parse_set_wants_nfa(int v) { wants_nfa = v; }
