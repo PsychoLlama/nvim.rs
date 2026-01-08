@@ -16,6 +16,7 @@
 #![allow(clippy::items_after_statements)] // Allow const definitions in functions
 
 pub mod delete;
+pub mod ffi;
 pub mod insert;
 pub mod intersection;
 pub mod iter;
