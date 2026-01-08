@@ -293,6 +293,261 @@ pub extern "C" fn rs_calc_block_delete_chars(
     calc_block_delete_chars(textlen, startspaces, endspaces)
 }
 
+// =============================================================================
+// Additional Delete Helpers
+// =============================================================================
+
+/// Calculate new cursor column after block delete.
+///
+/// In block delete, cursor moves to textcol + startspaces.
+///
+/// # Arguments
+/// * `textcol` - Column where block starts
+/// * `startspaces` - Number of start spaces
+///
+/// # Returns
+/// New cursor column
+#[must_use]
+#[inline]
+pub const fn calc_block_delete_cursor_col(textcol: c_int, startspaces: c_int) -> c_int {
+    textcol + startspaces
+}
+
+/// Check if block delete should skip this line (nothing to delete).
+///
+/// # Arguments
+/// * `textlen` - Length of text in block on this line
+///
+/// # Returns
+/// true if this line should be skipped
+#[must_use]
+#[inline]
+pub const fn should_skip_block_delete_line(textlen: c_int) -> bool {
+    textlen == 0
+}
+
+/// Calculate size for block delete replacement buffer.
+///
+/// # Arguments
+/// * `old_len` - Original line length
+/// * `delete_chars` - Number of characters being deleted (textlen - startspaces - endspaces)
+///
+/// # Returns
+/// Size of new buffer needed
+#[must_use]
+#[inline]
+pub const fn calc_block_delete_buffer_size(old_len: usize, delete_chars: usize) -> usize {
+    // ml_get_len(lnum) - n + 1 where n = delete_chars
+    old_len.saturating_sub(delete_chars) + 1
+}
+
+/// Check if a multi-line charwise delete should be converted to linewise.
+///
+/// This is a Vi-compatible behavior where if the delete spans multiple lines
+/// and results in a blank line, it becomes linewise.
+///
+/// # Arguments
+/// * `motion_type` - Motion type
+/// * `is_visual` - Whether in visual mode
+/// * `line_count` - Number of lines affected
+/// * `motion_force` - Motion force character
+/// * `op_type` - Operator type
+///
+/// # Returns
+/// true if we should check for linewise conversion
+#[must_use]
+#[inline]
+pub const fn should_convert_to_linewise(
+    motion_type: MotionType,
+    is_visual: bool,
+    line_count: c_int,
+    motion_force: c_int,
+    op_type: OpType,
+) -> bool {
+    // Same as should_check_linewise_delete, but clearer naming
+    should_check_linewise_delete(motion_type, is_visual, line_count, motion_force, op_type)
+}
+
+/// Calculate the dollar display position for change operator.
+///
+/// When 'cpoptions' contains '$', we display '$' at end of change.
+///
+/// # Arguments
+/// * `end_col` - End column
+/// * `inclusive` - Whether motion is inclusive
+///
+/// # Returns
+/// Column for dollar display
+#[must_use]
+#[inline]
+pub const fn calc_dollar_display_col(end_col: c_int, inclusive: bool) -> c_int {
+    let adjustment = if inclusive { 0 } else { 1 };
+    end_col - adjustment
+}
+
+/// Check if the delete should use the black hole register.
+///
+/// The black hole register '_' discards deleted text.
+///
+/// # Arguments
+/// * `regname` - Register name
+///
+/// # Returns
+/// true if using black hole register
+#[must_use]
+#[inline]
+pub const fn is_black_hole_register(regname: c_int) -> bool {
+    regname == b'_' as c_int
+}
+
+/// Calculate operation end column for block mode.
+///
+/// In block mode, op_end.col is set to op_start.col.
+///
+/// # Arguments
+/// * `start_col` - Start column
+///
+/// # Returns
+/// End column for marks
+#[must_use]
+#[inline]
+pub const fn calc_block_op_end_col(start_col: c_int) -> c_int {
+    start_col
+}
+
+/// Check if cursor is at end of line for virtual edit adjustments.
+///
+/// # Arguments
+/// * `col` - Current column
+/// * `line_len` - Line length
+///
+/// # Returns
+/// true if cursor is at or past end of line
+#[must_use]
+#[inline]
+pub const fn is_at_line_end(col: c_int, line_len: c_int) -> bool {
+    let threshold = if line_len > 1 { line_len - 1 } else { 0 };
+    col >= threshold
+}
+
+/// Calculate bytes to delete in multi-line charwise delete (last line).
+///
+/// # Arguments
+/// * `end_col` - End column
+/// * `inclusive` - Whether motion is inclusive
+///
+/// # Returns
+/// Number of bytes to delete from start of last line
+#[must_use]
+#[inline]
+pub const fn calc_multiline_delete_last_line(end_col: c_int, inclusive: bool) -> c_int {
+    // int n = (oap->end.col + 1 - !oap->inclusive);
+    calc_delete_from_start(end_col, inclusive)
+}
+
+// =============================================================================
+// FFI Wrappers for Additional Helpers
+// =============================================================================
+
+/// FFI wrapper for calc_block_delete_cursor_col.
+#[no_mangle]
+pub extern "C" fn rs_calc_block_delete_cursor_col(textcol: c_int, startspaces: c_int) -> c_int {
+    calc_block_delete_cursor_col(textcol, startspaces)
+}
+
+/// FFI wrapper for should_skip_block_delete_line.
+#[no_mangle]
+pub extern "C" fn rs_should_skip_block_delete_line(textlen: c_int) -> c_int {
+    c_int::from(should_skip_block_delete_line(textlen))
+}
+
+/// FFI wrapper for calc_dollar_display_col.
+#[no_mangle]
+pub extern "C" fn rs_calc_dollar_display_col(end_col: c_int, inclusive: c_int) -> c_int {
+    calc_dollar_display_col(end_col, inclusive != 0)
+}
+
+/// FFI wrapper for is_black_hole_register.
+#[no_mangle]
+pub extern "C" fn rs_is_black_hole_register(regname: c_int) -> c_int {
+    c_int::from(is_black_hole_register(regname))
+}
+
+/// FFI wrapper for calc_block_op_end_col.
+#[no_mangle]
+pub extern "C" fn rs_calc_block_op_end_col(start_col: c_int) -> c_int {
+    calc_block_op_end_col(start_col)
+}
+
+/// FFI wrapper for is_at_line_end.
+#[no_mangle]
+pub extern "C" fn rs_is_at_line_end(col: c_int, line_len: c_int) -> c_int {
+    c_int::from(is_at_line_end(col, line_len))
+}
+
+/// FFI wrapper for should_check_linewise_delete.
+#[no_mangle]
+pub extern "C" fn rs_should_check_linewise_delete(
+    motion_type: c_int,
+    is_visual: c_int,
+    line_count: c_int,
+    motion_force: c_int,
+    op_type: c_int,
+) -> c_int {
+    let mt = MotionType::from_raw(motion_type);
+    let op = OpType::from_raw(op_type).unwrap_or(OpType::Nop);
+    c_int::from(should_check_linewise_delete(
+        mt,
+        is_visual != 0,
+        line_count,
+        motion_force,
+        op,
+    ))
+}
+
+/// FFI wrapper for is_empty_line_delete.
+#[no_mangle]
+pub extern "C" fn rs_is_empty_line_delete(
+    motion_type: c_int,
+    line_count: c_int,
+    op_type: c_int,
+    line_is_empty: c_int,
+) -> c_int {
+    let mt = MotionType::from_raw(motion_type);
+    let op = OpType::from_raw(op_type).unwrap_or(OpType::Nop);
+    c_int::from(is_empty_line_delete(mt, line_count, op, line_is_empty != 0))
+}
+
+/// FFI wrapper for determine_delete_register.
+///
+/// # Safety
+/// `use_numbered_out` and `use_small_delete_out` must be valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_determine_delete_register(
+    regname: c_int,
+    motion_type: c_int,
+    line_count: c_int,
+    use_reg_one: c_int,
+    use_numbered_out: *mut c_int,
+    use_small_delete_out: *mut c_int,
+) {
+    let mt = MotionType::from_raw(motion_type);
+    let (use_numbered, use_small_delete) =
+        determine_delete_register(regname, mt, line_count, use_reg_one != 0);
+
+    // SAFETY: Caller guarantees pointer validity
+    if !use_numbered_out.is_null() {
+        unsafe {
+            *use_numbered_out = c_int::from(use_numbered);
+        }
+    }
+    if !use_small_delete_out.is_null() {
+        unsafe {
+            *use_small_delete_out = c_int::from(use_small_delete);
+        }
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::cast_lossless)]
 mod tests {
@@ -494,5 +749,118 @@ mod tests {
             determine_delete_register(b'a' as c_int, MotionType::CharWise, 1, false);
         assert!(!numbered);
         assert!(!small);
+    }
+
+    // =========================================================================
+    // Additional Helper Function Tests
+    // =========================================================================
+
+    #[test]
+    fn test_calc_block_delete_cursor_col() {
+        assert_eq!(calc_block_delete_cursor_col(10, 0), 10);
+        assert_eq!(calc_block_delete_cursor_col(10, 5), 15);
+        assert_eq!(calc_block_delete_cursor_col(0, 3), 3);
+    }
+
+    #[test]
+    fn test_should_skip_block_delete_line() {
+        assert!(should_skip_block_delete_line(0));
+        assert!(!should_skip_block_delete_line(1));
+        assert!(!should_skip_block_delete_line(10));
+    }
+
+    #[test]
+    fn test_calc_block_delete_buffer_size() {
+        // Simple case: old_len=100, delete_chars=10
+        assert_eq!(calc_block_delete_buffer_size(100, 10), 91);
+
+        // Underflow protection
+        assert_eq!(calc_block_delete_buffer_size(5, 10), 1);
+
+        // No deletion
+        assert_eq!(calc_block_delete_buffer_size(50, 0), 51);
+    }
+
+    #[test]
+    fn test_calc_dollar_display_col() {
+        // Inclusive: no adjustment
+        assert_eq!(calc_dollar_display_col(10, true), 10);
+
+        // Non-inclusive: subtract 1
+        assert_eq!(calc_dollar_display_col(10, false), 9);
+
+        // Edge case
+        assert_eq!(calc_dollar_display_col(0, true), 0);
+        assert_eq!(calc_dollar_display_col(0, false), -1);
+    }
+
+    #[test]
+    fn test_is_black_hole_register() {
+        assert!(is_black_hole_register(b'_' as c_int));
+        assert!(!is_black_hole_register(b'a' as c_int));
+        assert!(!is_black_hole_register(0));
+        assert!(!is_black_hole_register(b'"' as c_int));
+    }
+
+    #[test]
+    fn test_calc_block_op_end_col() {
+        assert_eq!(calc_block_op_end_col(10), 10);
+        assert_eq!(calc_block_op_end_col(0), 0);
+        assert_eq!(calc_block_op_end_col(50), 50);
+    }
+
+    #[test]
+    fn test_is_at_line_end() {
+        // At end
+        assert!(is_at_line_end(9, 10));
+        assert!(is_at_line_end(10, 10)); // Past end
+
+        // Not at end
+        assert!(!is_at_line_end(5, 10));
+        assert!(!is_at_line_end(0, 10));
+
+        // Empty line
+        assert!(is_at_line_end(0, 0));
+        assert!(is_at_line_end(0, 1));
+    }
+
+    #[test]
+    fn test_calc_multiline_delete_last_line() {
+        // Same as calc_delete_from_start
+        assert_eq!(calc_multiline_delete_last_line(9, true), 10);
+        assert_eq!(calc_multiline_delete_last_line(9, false), 9);
+    }
+
+    #[test]
+    fn test_additional_ffi_wrappers() {
+        // rs_calc_block_delete_cursor_col
+        assert_eq!(rs_calc_block_delete_cursor_col(10, 5), 15);
+
+        // rs_should_skip_block_delete_line
+        assert_eq!(rs_should_skip_block_delete_line(0), 1);
+        assert_eq!(rs_should_skip_block_delete_line(5), 0);
+
+        // rs_calc_dollar_display_col
+        assert_eq!(rs_calc_dollar_display_col(10, 1), 10);
+        assert_eq!(rs_calc_dollar_display_col(10, 0), 9);
+
+        // rs_is_black_hole_register
+        assert_eq!(rs_is_black_hole_register(b'_' as c_int), 1);
+        assert_eq!(rs_is_black_hole_register(b'a' as c_int), 0);
+
+        // rs_calc_block_op_end_col
+        assert_eq!(rs_calc_block_op_end_col(10), 10);
+
+        // rs_is_at_line_end
+        assert_eq!(rs_is_at_line_end(9, 10), 1);
+        assert_eq!(rs_is_at_line_end(5, 10), 0);
+
+        // rs_should_check_linewise_delete (charwise=0, delete=1)
+        assert_eq!(rs_should_check_linewise_delete(0, 0, 2, 0, 1), 1);
+        assert_eq!(rs_should_check_linewise_delete(0, 1, 2, 0, 1), 0); // visual
+
+        // rs_is_empty_line_delete (charwise=0, delete=1)
+        assert_eq!(rs_is_empty_line_delete(0, 1, 1, 1), 1);
+        assert_eq!(rs_is_empty_line_delete(0, 1, 1, 0), 0); // not empty
     }
 }
