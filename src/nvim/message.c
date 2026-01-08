@@ -329,6 +329,12 @@ void nvim_set_called_emsg(int val) { called_emsg = val; }
 int nvim_get_need_fileinfo(void) { return need_fileinfo ? 1 : 0; }
 void nvim_set_need_fileinfo(int val) { need_fileinfo = (val != 0); }
 
+// C accessors for msg_scroll and msg_hist_off (used by Rust)
+void nvim_set_msg_scroll(int val) { msg_scroll = (val != 0); }
+int nvim_get_msg_hist_off(void) { return msg_hist_off ? 1 : 0; }
+void nvim_set_msg_hist_off(int val) { msg_hist_off = (val != 0); }
+int nvim_get_keep_msg_more(void) { return keep_msg_more ? 1 : 0; }
+
 // C accessors for attribute functions (used by Rust)
 int nvim_syn_id2attr(int hl_id) { return syn_id2attr(hl_id); }
 int nvim_hl_combine_attr(int a, int b) { return hl_combine_attr(a, b); }

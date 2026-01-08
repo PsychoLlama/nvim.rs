@@ -127,20 +127,11 @@ mod tests {
         // Basic increment
         assert_eq!(addsub_alpha(b'a' as c_int, OpType::NrAdd, 1), b'b' as c_int);
         assert_eq!(addsub_alpha(b'A' as c_int, OpType::NrAdd, 1), b'B' as c_int);
-        assert_eq!(
-            addsub_alpha(b'm' as c_int, OpType::NrAdd, 5),
-            b'r' as c_int
-        );
+        assert_eq!(addsub_alpha(b'm' as c_int, OpType::NrAdd, 5), b'r' as c_int);
 
         // Clamp at z/Z
-        assert_eq!(
-            addsub_alpha(b'y' as c_int, OpType::NrAdd, 5),
-            b'z' as c_int
-        );
-        assert_eq!(
-            addsub_alpha(b'z' as c_int, OpType::NrAdd, 1),
-            b'z' as c_int
-        );
+        assert_eq!(addsub_alpha(b'y' as c_int, OpType::NrAdd, 5), b'z' as c_int);
+        assert_eq!(addsub_alpha(b'z' as c_int, OpType::NrAdd, 1), b'z' as c_int);
         assert_eq!(
             addsub_alpha(b'Z' as c_int, OpType::NrAdd, 100),
             b'Z' as c_int
@@ -152,20 +143,11 @@ mod tests {
         // Basic decrement
         assert_eq!(addsub_alpha(b'b' as c_int, OpType::NrSub, 1), b'a' as c_int);
         assert_eq!(addsub_alpha(b'B' as c_int, OpType::NrSub, 1), b'A' as c_int);
-        assert_eq!(
-            addsub_alpha(b'n' as c_int, OpType::NrSub, 5),
-            b'i' as c_int
-        );
+        assert_eq!(addsub_alpha(b'n' as c_int, OpType::NrSub, 5), b'i' as c_int);
 
         // Clamp at a/A
-        assert_eq!(
-            addsub_alpha(b'c' as c_int, OpType::NrSub, 5),
-            b'a' as c_int
-        );
-        assert_eq!(
-            addsub_alpha(b'a' as c_int, OpType::NrSub, 1),
-            b'a' as c_int
-        );
+        assert_eq!(addsub_alpha(b'c' as c_int, OpType::NrSub, 5), b'a' as c_int);
+        assert_eq!(addsub_alpha(b'a' as c_int, OpType::NrSub, 1), b'a' as c_int);
         assert_eq!(
             addsub_alpha(b'A' as c_int, OpType::NrSub, 100),
             b'A' as c_int

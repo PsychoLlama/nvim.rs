@@ -23,7 +23,11 @@ use crate::types::{MotionType, OpType};
 pub const fn calc_delete_bytes(start_col: c_int, end_col: c_int, inclusive: bool) -> c_int {
     let adjustment = if inclusive { 0 } else { 1 };
     let n = end_col - start_col + 1 - adjustment;
-    if n < 0 { 0 } else { n }
+    if n < 0 {
+        0
+    } else {
+        n
+    }
 }
 
 /// Calculate delete bytes with virtual edit adjustments.
@@ -154,7 +158,11 @@ pub const fn calc_delete_from_start(end_col: c_int, inclusive: bool) -> c_int {
     // int n = (oap->end.col + 1 - !oap->inclusive);
     let adjustment = if inclusive { 0 } else { 1 };
     let n = end_col + 1 - adjustment;
-    if n < 0 { 0 } else { n }
+    if n < 0 {
+        0
+    } else {
+        n
+    }
 }
 
 /// Calculate size of block delete replacement.
@@ -227,17 +235,14 @@ pub const fn determine_delete_register(
     // - linewise motion, OR
     // - line_count > 1, OR
     // - use_reg_one flag is set
-    let use_numbered = matches!(motion_type, MotionType::LineWise)
-        || line_count > 1
-        || use_reg_one;
+    let use_numbered = matches!(motion_type, MotionType::LineWise) || line_count > 1 || use_reg_one;
 
     // Use small delete register (-) if:
     // - no named register specified (regname == 0)
     // - not linewise
     // - single line
-    let use_small_delete = regname == 0
-        && !matches!(motion_type, MotionType::LineWise)
-        && line_count == 1;
+    let use_small_delete =
+        regname == 0 && !matches!(motion_type, MotionType::LineWise) && line_count == 1;
 
     (use_numbered, use_small_delete)
 }
@@ -465,52 +470,28 @@ mod tests {
     #[test]
     fn test_determine_delete_register() {
         // Linewise: use numbered
-        let (numbered, small) = determine_delete_register(
-            0,
-            MotionType::LineWise,
-            1,
-            false,
-        );
+        let (numbered, small) = determine_delete_register(0, MotionType::LineWise, 1, false);
         assert!(numbered);
         assert!(!small);
 
         // Multi-line: use numbered
-        let (numbered, small) = determine_delete_register(
-            0,
-            MotionType::CharWise,
-            2,
-            false,
-        );
+        let (numbered, small) = determine_delete_register(0, MotionType::CharWise, 2, false);
         assert!(numbered);
         assert!(!small);
 
         // use_reg_one: use numbered (but also small for single line charwise)
-        let (numbered, small) = determine_delete_register(
-            0,
-            MotionType::CharWise,
-            1,
-            true,
-        );
+        let (numbered, small) = determine_delete_register(0, MotionType::CharWise, 1, true);
         assert!(numbered);
         assert!(small); // Both can be true - they're independent checks
 
         // Single line charwise with no register: use small delete
-        let (numbered, small) = determine_delete_register(
-            0,
-            MotionType::CharWise,
-            1,
-            false,
-        );
+        let (numbered, small) = determine_delete_register(0, MotionType::CharWise, 1, false);
         assert!(!numbered);
         assert!(small);
 
         // Named register: neither numbered nor small
-        let (numbered, small) = determine_delete_register(
-            b'a' as c_int,
-            MotionType::CharWise,
-            1,
-            false,
-        );
+        let (numbered, small) =
+            determine_delete_register(b'a' as c_int, MotionType::CharWise, 1, false);
         assert!(!numbered);
         assert!(!small);
     }

@@ -58,7 +58,11 @@ pub const fn calc_pre_textlen(
 pub const fn calc_inserted_len(new_line_len: c_int, pre_textlen: c_int) -> c_int {
     // ins_len = ml_get_len(oap->start.lnum) - pre_textlen;
     let ins_len = new_line_len - pre_textlen;
-    if ins_len < 0 { 0 } else { ins_len }
+    if ins_len < 0 {
+        0
+    } else {
+        ins_len
+    }
 }
 
 /// Adjust block position for indent changes.
@@ -358,16 +362,41 @@ mod tests {
     #[test]
     fn test_should_propagate_block_change() {
         // Block mode, different lines, no interrupt
-        assert!(should_propagate_block_change(MotionType::BlockWise, 1, 5, false));
+        assert!(should_propagate_block_change(
+            MotionType::BlockWise,
+            1,
+            5,
+            false
+        ));
 
         // Same line
-        assert!(!should_propagate_block_change(MotionType::BlockWise, 1, 1, false));
+        assert!(!should_propagate_block_change(
+            MotionType::BlockWise,
+            1,
+            1,
+            false
+        ));
 
         // Got interrupt
-        assert!(!should_propagate_block_change(MotionType::BlockWise, 1, 5, true));
+        assert!(!should_propagate_block_change(
+            MotionType::BlockWise,
+            1,
+            5,
+            true
+        ));
 
         // Not block mode
-        assert!(!should_propagate_block_change(MotionType::CharWise, 1, 5, false));
-        assert!(!should_propagate_block_change(MotionType::LineWise, 1, 5, false));
+        assert!(!should_propagate_block_change(
+            MotionType::CharWise,
+            1,
+            5,
+            false
+        ));
+        assert!(!should_propagate_block_change(
+            MotionType::LineWise,
+            1,
+            5,
+            false
+        ));
     }
 }
