@@ -1,52 +1,15 @@
-Plan: ~/.claude/plans/federated-churning-sparrow.md
+Plan: ~/.claude/plans/lazy-foraging-pillow.md
 
-## Summary of Completed Work
+The plan execution has made good progress. Three commits have been created implementing:
 
-I have successfully completed **Phases 1-3** of the Rust Spell Checking Migration Plan:
+1. **NFA Pattern Parser** - Complete pattern-to-postfix conversion for the NFA regex compiler
+2. **NFA addstate() Engine** - Core state addition function with thread list management  
+3. **NFA Execution Helpers** - Additional helper functions for state tracking and submatch copying
 
-### Phase 1: Complete Spell File Loading ✓
-- Extended `spellfile.rs` with section parsing for:
-  - Prefix conditions
-  - REP/REPSAL sections
-  - SAL sections
-  - Midword and MAP sections
-  - Words sections
-  - Tree node count reading
-- Added `SpellLoadState` struct for incremental file loading
+The foundation for the regexp Rust migration is substantially expanded. The remaining work includes:
+- The massive `nfa_regmatch()` main loop (Phase 2b)
+- Backtracking engine (Phase 3)
+- Substitution completion (Phase 4)
+- Integration and C removal (Phase 5)
 
-### Phase 2: Core Spell Checking ✓
-- Created new `check.rs` module (~803 lines)
-- Implemented:
-  - `SpellResult` and `CaseType` enums
-  - Case folding functions (`spell_fold_char`, `spell_is_upper`, `spell_is_word_char`, `spell_casefold`)
-  - Case type detection (`get_case_type`)
-  - Case validity checking (`spell_valid_case`)
-  - Region matching (`region_matches`)
-  - Word lookup (`lookup_word`, `WordLookupResult`)
-  - Compound word checking (`can_compound`, `compound_flag_in_set`)
-- 10 FFI exports for C interop
-
-### Phase 3: Suggestion Generation ✓
-Extended `suggest.rs` (~2,061 lines) with:
-- `Suggestion` struct for suggestion list management
-- Trie walk state machine types:
-  - `TrieWalkState` enum (18 states)
-  - `TryState` struct for search state tracking
-  - `DiffType` enum and flags
-  - `go_deeper()` function for trie traversal
-- Word transformation helpers:
-  - `swap_bytes`, `swap3_bytes`
-  - `rotate3_left`, `rotate3_right`
-  - `delete_byte`, `insert_byte`, `substitute_byte`
-- REP item application functions
-- 24 FFI exports
-
-### Metrics
-- Total spell crate: **~10,800 lines of Rust**
-- Total FFI exports: **156 functions**
-- New modules: `check.rs`
-- 5 commits with passing tests
-
-### Remaining Work (Phases 4-5)
-- **Phase 4**: Spell file writing (`:mkspell`) - requires .aff file parsing, word tree building
-- **Phase 5**: Integration and C code removal - replace C implementations with Rust calls
+All commits pass formatting, linting, and tests. The work is ready to continue in future sessions.
