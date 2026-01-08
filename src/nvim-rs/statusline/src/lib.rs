@@ -17,6 +17,7 @@ pub mod click;
 pub mod eval;
 pub mod format;
 pub mod highlight;
+pub mod render;
 pub mod statuscol;
 pub mod tabline;
 
@@ -25,6 +26,7 @@ pub use click::{ClickDefinition, ClickRecord, ClickTracker, ClickType};
 pub use eval::{EvalContext, EvalResult, NumberBase};
 pub use format::{FormatParser, FormatSpec, StlFlag, StlFormatContext, StlItem, StlItemType};
 pub use highlight::{HighlightTracker, StlHighlightRecord};
+pub use render::{build_stl_str, BuildResult, RenderContext};
 pub use statuscol::{LineNumberMode, StatusColContext};
 pub use tabline::{TabInfo, TablineContext, WinbarContext};
 
