@@ -588,10 +588,1054 @@ pub extern "C" fn rs_vim_htobe64(host_64_bits: u64) -> u64 {
 // are provided by the nvim-mark crate.
 
 // =============================================================================
+// ShaDa Entry Type Enum (Rust representation)
+// =============================================================================
+
+/// ShaDa entry type enum matching C's ShadaEntryType.
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ShadaEntryType {
+    /// Unknown item type (used for unrecognized entries).
+    Unknown = SD_ITEM_UNKNOWN,
+    /// Missing value. Should never appear in a file.
+    #[default]
+    Missing = SD_ITEM_MISSING,
+    /// Header. Present for debugging purposes.
+    Header = SD_ITEM_HEADER,
+    /// Last search pattern (not history item).
+    SearchPattern = SD_ITEM_SEARCH_PATTERN,
+    /// Last substitute replacement string.
+    SubString = SD_ITEM_SUB_STRING,
+    /// History item.
+    HistoryEntry = SD_ITEM_HISTORY_ENTRY,
+    /// Register.
+    Register = SD_ITEM_REGISTER,
+    /// Global variable.
+    Variable = SD_ITEM_VARIABLE,
+    /// Global mark definition.
+    GlobalMark = SD_ITEM_GLOBAL_MARK,
+    /// Item from jump list.
+    Jump = SD_ITEM_JUMP,
+    /// Buffer list.
+    BufferList = SD_ITEM_BUFFER_LIST,
+    /// Buffer-local mark.
+    LocalMark = SD_ITEM_LOCAL_MARK,
+    /// Item from buffer change list.
+    Change = SD_ITEM_CHANGE,
+}
+
+impl ShadaEntryType {
+    /// Convert from raw i32 value.
+    pub const fn from_raw(value: i32) -> Self {
+        match value {
+            SD_ITEM_MISSING => Self::Missing,
+            SD_ITEM_HEADER => Self::Header,
+            SD_ITEM_SEARCH_PATTERN => Self::SearchPattern,
+            SD_ITEM_SUB_STRING => Self::SubString,
+            SD_ITEM_HISTORY_ENTRY => Self::HistoryEntry,
+            SD_ITEM_REGISTER => Self::Register,
+            SD_ITEM_VARIABLE => Self::Variable,
+            SD_ITEM_GLOBAL_MARK => Self::GlobalMark,
+            SD_ITEM_JUMP => Self::Jump,
+            SD_ITEM_BUFFER_LIST => Self::BufferList,
+            SD_ITEM_LOCAL_MARK => Self::LocalMark,
+            SD_ITEM_CHANGE => Self::Change,
+            _ => Self::Unknown,
+        }
+    }
+
+    /// Convert to raw i32 value.
+    pub const fn as_raw(self) -> i32 {
+        self as i32
+    }
+}
+
+// =============================================================================
+// Search Pattern Data
+// =============================================================================
+
+/// Search pattern entry data.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct SearchPatternData {
+    /// Whether magic mode is enabled.
+    pub magic: bool,
+    /// Whether smartcase is enabled.
+    pub smartcase: bool,
+    /// Whether has line offset.
+    pub has_line_offset: bool,
+    /// Whether cursor should be placed at end.
+    pub place_cursor_at_end: bool,
+    /// Line offset value.
+    pub offset: i64,
+    /// Whether this is the last used pattern.
+    pub is_last_used: bool,
+    /// Whether this is a substitute pattern (from :s).
+    pub is_substitute_pattern: bool,
+    /// Whether pattern is highlighted.
+    pub highlighted: bool,
+    /// Whether search is backward.
+    pub search_backward: bool,
+    /// The pattern string (owned).
+    pub pat: *mut c_char,
+    /// Length of pattern string.
+    pub pat_len: usize,
+}
+
+impl Default for SearchPatternData {
+    fn default() -> Self {
+        Self {
+            magic: true,
+            smartcase: false,
+            has_line_offset: false,
+            place_cursor_at_end: false,
+            offset: 0,
+            is_last_used: true,
+            is_substitute_pattern: false,
+            highlighted: false,
+            search_backward: false,
+            pat: std::ptr::null_mut(),
+            pat_len: 0,
+        }
+    }
+}
+
+// =============================================================================
+// Filemark Data (for marks, jumps, changes)
+// =============================================================================
+
+/// Filemark entry data for marks, jumps, and changes.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct FilemarkData {
+    /// Mark name character.
+    pub name: c_char,
+    /// Position (line number, column, coladd).
+    pub mark: Position,
+    /// File name (owned).
+    pub fname: *mut c_char,
+}
+
+impl Default for FilemarkData {
+    #[allow(clippy::cast_possible_wrap)]
+    fn default() -> Self {
+        Self {
+            name: b'"' as c_char,
+            mark: Position::DEFAULT,
+            fname: std::ptr::null_mut(),
+        }
+    }
+}
+
+// =============================================================================
+// History Item Data
+// =============================================================================
+
+/// History item entry data.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct HistoryItemData {
+    /// History type (HIST_CMD, HIST_SEARCH, etc.).
+    pub histtype: u8,
+    /// History string (owned).
+    pub string: *mut c_char,
+    /// Separator character (for search history).
+    pub sep: c_char,
+}
+
+impl Default for HistoryItemData {
+    fn default() -> Self {
+        Self {
+            histtype: HIST_CMD,
+            string: std::ptr::null_mut(),
+            sep: 0,
+        }
+    }
+}
+
+// =============================================================================
+// Register Data
+// =============================================================================
+
+/// Register entry data.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct RegisterData {
+    /// Register name character.
+    pub name: c_char,
+    /// Motion type (character-wise, line-wise, block-wise).
+    pub reg_type: c_int,
+    /// Register contents (array of strings).
+    pub contents: *mut *mut c_char,
+    /// Number of strings in contents.
+    pub contents_size: usize,
+    /// Whether this is the unnamed register.
+    pub is_unnamed: bool,
+    /// Block width (for block-wise registers).
+    pub width: usize,
+}
+
+impl Default for RegisterData {
+    fn default() -> Self {
+        Self {
+            name: 0,
+            reg_type: MT_CHAR_WISE,
+            contents: std::ptr::null_mut(),
+            contents_size: 0,
+            is_unnamed: false,
+            width: 0,
+        }
+    }
+}
+
+// =============================================================================
+// Global Variable Data
+// =============================================================================
+
+/// Global variable entry data.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct GlobalVarData {
+    /// Variable name (owned).
+    pub name: *mut c_char,
+    /// Variable value (typval_T equivalent - opaque for now).
+    pub value: *mut c_void,
+}
+
+impl Default for GlobalVarData {
+    fn default() -> Self {
+        Self {
+            name: std::ptr::null_mut(),
+            value: std::ptr::null_mut(),
+        }
+    }
+}
+
+// =============================================================================
+// Unknown Item Data
+// =============================================================================
+
+/// Unknown item entry data (for forward compatibility).
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct UnknownItemData {
+    /// Entry type number.
+    pub type_num: u64,
+    /// Raw contents (owned).
+    pub contents: *mut c_char,
+    /// Size of contents.
+    pub size: usize,
+}
+
+impl Default for UnknownItemData {
+    fn default() -> Self {
+        Self {
+            type_num: 0,
+            contents: std::ptr::null_mut(),
+            size: 0,
+        }
+    }
+}
+
+// =============================================================================
+// Substitute String Data
+// =============================================================================
+
+/// Substitute string entry data.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct SubStringData {
+    /// Substitute string (owned).
+    pub sub: *mut c_char,
+}
+
+impl Default for SubStringData {
+    fn default() -> Self {
+        Self {
+            sub: std::ptr::null_mut(),
+        }
+    }
+}
+
+// =============================================================================
+// Buffer List Buffer Entry
+// =============================================================================
+
+/// Single buffer in buffer list.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct BufferListBuffer {
+    /// Cursor position in buffer.
+    pub pos: Position,
+    /// File name (owned).
+    pub fname: *mut c_char,
+    /// Additional data (msgpack dict).
+    pub additional_data: *mut c_void,
+}
+
+impl Default for BufferListBuffer {
+    fn default() -> Self {
+        Self {
+            pos: Position::DEFAULT,
+            fname: std::ptr::null_mut(),
+            additional_data: std::ptr::null_mut(),
+        }
+    }
+}
+
+// =============================================================================
+// Buffer List Data
+// =============================================================================
+
+/// Buffer list entry data.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct BufferListData {
+    /// Number of buffers.
+    pub size: usize,
+    /// Array of buffers (owned).
+    pub buffers: *mut BufferListBuffer,
+}
+
+impl Default for BufferListData {
+    fn default() -> Self {
+        Self {
+            size: 0,
+            buffers: std::ptr::null_mut(),
+        }
+    }
+}
+
+// =============================================================================
+// Header Data
+// =============================================================================
+
+/// Header entry data (msgpack dict).
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct HeaderData {
+    /// Header dictionary (opaque for now).
+    pub dict: *mut c_void,
+    /// Number of entries in dict.
+    pub size: usize,
+}
+
+impl Default for HeaderData {
+    fn default() -> Self {
+        Self {
+            dict: std::ptr::null_mut(),
+            size: 0,
+        }
+    }
+}
+
+// =============================================================================
+// ShaDa Entry Data Union
+// =============================================================================
+
+/// Union of all possible entry data types.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union ShadaEntryData {
+    pub header: std::mem::ManuallyDrop<HeaderData>,
+    pub filemark: std::mem::ManuallyDrop<FilemarkData>,
+    pub search_pattern: std::mem::ManuallyDrop<SearchPatternData>,
+    pub history_item: std::mem::ManuallyDrop<HistoryItemData>,
+    pub reg: std::mem::ManuallyDrop<RegisterData>,
+    pub global_var: std::mem::ManuallyDrop<GlobalVarData>,
+    pub unknown_item: std::mem::ManuallyDrop<UnknownItemData>,
+    pub sub_string: std::mem::ManuallyDrop<SubStringData>,
+    pub buffer_list: std::mem::ManuallyDrop<BufferListData>,
+}
+
+impl Default for ShadaEntryData {
+    fn default() -> Self {
+        // Default to zero-initialized header (safest option)
+        Self {
+            header: std::mem::ManuallyDrop::new(HeaderData::default()),
+        }
+    }
+}
+
+// =============================================================================
+// ShaDa Entry Structure
+// =============================================================================
+
+/// Complete ShaDa entry matching C's ShadaEntry struct.
+#[repr(C)]
+#[derive(Clone)]
+pub struct ShadaEntry {
+    /// Entry type.
+    pub entry_type: ShadaEntryType,
+    /// Whether the entry's string data can be freed.
+    pub can_free_entry: bool,
+    /// Entry timestamp (Unix epoch seconds).
+    pub timestamp: Timestamp,
+    /// Entry data (union based on entry_type).
+    pub data: ShadaEntryData,
+    /// Additional data dictionary (for forward compatibility).
+    pub additional_data: *mut c_void,
+}
+
+impl Default for ShadaEntry {
+    fn default() -> Self {
+        Self {
+            entry_type: ShadaEntryType::Missing,
+            can_free_entry: false,
+            timestamp: 0,
+            data: ShadaEntryData::default(),
+            additional_data: std::ptr::null_mut(),
+        }
+    }
+}
+
+impl ShadaEntry {
+    /// Create a new missing entry.
+    pub const fn missing() -> Self {
+        Self {
+            entry_type: ShadaEntryType::Missing,
+            can_free_entry: false,
+            timestamp: 0,
+            data: ShadaEntryData {
+                header: std::mem::ManuallyDrop::new(HeaderData {
+                    dict: std::ptr::null_mut(),
+                    size: 0,
+                }),
+            },
+            additional_data: std::ptr::null_mut(),
+        }
+    }
+}
+
+// =============================================================================
+// HML List Entry (for history merging)
+// =============================================================================
+
+/// One entry in the sized linked list for history merging.
+#[repr(C)]
+#[derive(Clone)]
+pub struct HMLListEntry {
+    /// Entry data.
+    pub data: ShadaEntry,
+    /// Pointer to next entry or NULL.
+    pub next: *mut HMLListEntry,
+    /// Pointer to previous entry or NULL.
+    pub prev: *mut HMLListEntry,
+}
+
+impl Default for HMLListEntry {
+    fn default() -> Self {
+        Self {
+            data: ShadaEntry::default(),
+            next: std::ptr::null_mut(),
+            prev: std::ptr::null_mut(),
+        }
+    }
+}
+
+// =============================================================================
+// HML List (Hash Map-backed Linked List)
+// =============================================================================
+
+/// Sized linked list structure for history merging.
+///
+/// This is a C-compatible representation. The actual map operations
+/// will be performed through C accessor functions.
+#[repr(C)]
+pub struct HMLList {
+    /// Pointer to the start of the allocated array of entries.
+    pub entries: *mut HMLListEntry,
+    /// First entry in the list (not necessarily start of array) or NULL.
+    pub first: *mut HMLListEntry,
+    /// Last entry in the list or NULL.
+    pub last: *mut HMLListEntry,
+    /// Last free entry removed by hmll_remove.
+    pub free_entry: *mut HMLListEntry,
+    /// Last unused element in entries array.
+    pub last_free_entry: *mut HMLListEntry,
+    /// Number of allocated entries.
+    pub size: usize,
+    /// Number of entries already used.
+    pub num_entries: usize,
+    /// Map of history strings to entry pointers (opaque - handled by C).
+    pub contained_entries: *mut c_void,
+}
+
+impl Default for HMLList {
+    fn default() -> Self {
+        Self {
+            entries: std::ptr::null_mut(),
+            first: std::ptr::null_mut(),
+            last: std::ptr::null_mut(),
+            free_entry: std::ptr::null_mut(),
+            last_free_entry: std::ptr::null_mut(),
+            size: 0,
+            num_entries: 0,
+            contained_entries: std::ptr::null_mut(),
+        }
+    }
+}
+
+// =============================================================================
+// History Merger State
+// =============================================================================
+
+/// State structure for history merging.
+#[repr(C)]
+pub struct HistoryMergerState {
+    /// The HML list for merging.
+    pub hmll: HMLList,
+    /// Whether to do merging.
+    pub do_merge: bool,
+    /// Whether currently reading.
+    pub reading: bool,
+    /// Iterator state (opaque pointer to C iterator).
+    pub iter: *const c_void,
+    /// Last history entry read from Neovim.
+    pub last_hist_entry: ShadaEntry,
+    /// History type (HIST_CMD, etc.).
+    pub history_type: u8,
+}
+
+impl Default for HistoryMergerState {
+    fn default() -> Self {
+        Self {
+            hmll: HMLList::default(),
+            do_merge: false,
+            reading: false,
+            iter: std::ptr::null(),
+            last_hist_entry: ShadaEntry::default(),
+            history_type: HIST_CMD,
+        }
+    }
+}
+
+// =============================================================================
+// File Marks Structure
+// =============================================================================
+
+/// Structure that holds one file's marks.
+#[repr(C)]
+pub struct FileMarks {
+    /// All file marks (a-z).
+    pub marks: [ShadaEntry; NLOCALMARKS],
+    /// All file changes.
+    pub changes: [ShadaEntry; JUMPLISTSIZE],
+    /// Number of changes occupied.
+    pub changes_size: usize,
+    /// All marks with unknown names (dynamically allocated).
+    pub additional_marks: *mut ShadaEntry,
+    /// Size of the additional_marks array.
+    pub additional_marks_size: usize,
+    /// Greatest timestamp among marks.
+    pub greatest_timestamp: Timestamp,
+}
+
+// FileMarks needs a custom Default because it contains arrays
+impl Default for FileMarks {
+    fn default() -> Self {
+        // Use MaybeUninit to safely initialize arrays
+        let marks = std::array::from_fn(|_| ShadaEntry::default());
+        let changes = std::array::from_fn(|_| ShadaEntry::default());
+        Self {
+            marks,
+            changes,
+            changes_size: 0,
+            additional_marks: std::ptr::null_mut(),
+            additional_marks_size: 0,
+            greatest_timestamp: 0,
+        }
+    }
+}
+
+// =============================================================================
+// Write Merger State
+// =============================================================================
+
+/// State structure used by shada_write.
+///
+/// Before actually writing, most of the data is read to this structure.
+#[repr(C)]
+pub struct WriteMergerState {
+    /// Structures for history merging.
+    pub hms: [HistoryMergerState; HIST_COUNT],
+    /// Named global marks (A-Z).
+    pub global_marks: [ShadaEntry; NMARKS],
+    /// Numbered marks (0-9).
+    pub numbered_marks: [ShadaEntry; EXTRA_MARKS],
+    /// All registers.
+    pub registers: [ShadaEntry; NUM_SAVED_REGISTERS],
+    /// All dumped jumps.
+    pub jumps: [ShadaEntry; JUMPLISTSIZE],
+    /// Number of jumps occupied.
+    pub jumps_size: usize,
+    /// Last search pattern.
+    pub search_pattern: ShadaEntry,
+    /// Last s/ search pattern.
+    pub sub_search_pattern: ShadaEntry,
+    /// Last s// replacement string.
+    pub replacement: ShadaEntry,
+    /// Names of already dumped variables (opaque - handled by C).
+    pub dumped_variables: *mut c_void,
+    /// All file marks (opaque - handled by C).
+    pub file_marks: *mut c_void,
+}
+
+// WriteMergerState needs a custom Default
+impl Default for WriteMergerState {
+    fn default() -> Self {
+        let hms = std::array::from_fn(|_| HistoryMergerState::default());
+        let global_marks = std::array::from_fn(|_| ShadaEntry::default());
+        let numbered_marks = std::array::from_fn(|_| ShadaEntry::default());
+        let registers = std::array::from_fn(|_| ShadaEntry::default());
+        let jumps = std::array::from_fn(|_| ShadaEntry::default());
+        Self {
+            hms,
+            global_marks,
+            numbered_marks,
+            registers,
+            jumps,
+            jumps_size: 0,
+            search_pattern: ShadaEntry::default(),
+            sub_search_pattern: ShadaEntry::default(),
+            replacement: ShadaEntry::default(),
+            dumped_variables: std::ptr::null_mut(),
+            file_marks: std::ptr::null_mut(),
+        }
+    }
+}
+
+// =============================================================================
+// Entry Constructors (FFI exports)
+// =============================================================================
+
+/// Create a new missing entry.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_shada_entry_missing() -> ShadaEntry {
+    ShadaEntry::missing()
+}
+
+/// Create a new header entry.
+#[no_mangle]
+pub extern "C" fn rs_shada_entry_header(timestamp: Timestamp) -> ShadaEntry {
+    ShadaEntry {
+        entry_type: ShadaEntryType::Header,
+        can_free_entry: true,
+        timestamp,
+        data: ShadaEntryData {
+            header: std::mem::ManuallyDrop::new(HeaderData::default()),
+        },
+        additional_data: std::ptr::null_mut(),
+    }
+}
+
+/// Create a new search pattern entry.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_shada_entry_search_pattern(
+    timestamp: Timestamp,
+    pat: *mut c_char,
+    pat_len: usize,
+    magic: bool,
+    smartcase: bool,
+    is_substitute: bool,
+    is_last_used: bool,
+    search_backward: bool,
+) -> ShadaEntry {
+    ShadaEntry {
+        entry_type: ShadaEntryType::SearchPattern,
+        can_free_entry: true,
+        timestamp,
+        data: ShadaEntryData {
+            search_pattern: std::mem::ManuallyDrop::new(SearchPatternData {
+                magic,
+                smartcase,
+                has_line_offset: false,
+                place_cursor_at_end: false,
+                offset: 0,
+                is_last_used,
+                is_substitute_pattern: is_substitute,
+                highlighted: false,
+                search_backward,
+                pat,
+                pat_len,
+            }),
+        },
+        additional_data: std::ptr::null_mut(),
+    }
+}
+
+/// Create a new substitute string entry.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_shada_entry_sub_string(timestamp: Timestamp, sub: *mut c_char) -> ShadaEntry {
+    ShadaEntry {
+        entry_type: ShadaEntryType::SubString,
+        can_free_entry: true,
+        timestamp,
+        data: ShadaEntryData {
+            sub_string: std::mem::ManuallyDrop::new(SubStringData { sub }),
+        },
+        additional_data: std::ptr::null_mut(),
+    }
+}
+
+/// Create a new history entry.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_shada_entry_history(
+    timestamp: Timestamp,
+    histtype: u8,
+    string: *mut c_char,
+    sep: c_char,
+) -> ShadaEntry {
+    ShadaEntry {
+        entry_type: ShadaEntryType::HistoryEntry,
+        can_free_entry: true,
+        timestamp,
+        data: ShadaEntryData {
+            history_item: std::mem::ManuallyDrop::new(HistoryItemData {
+                histtype,
+                string,
+                sep,
+            }),
+        },
+        additional_data: std::ptr::null_mut(),
+    }
+}
+
+/// Create a new register entry.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_shada_entry_register(
+    timestamp: Timestamp,
+    name: c_char,
+    reg_type: c_int,
+    contents: *mut *mut c_char,
+    contents_size: usize,
+    is_unnamed: bool,
+    width: usize,
+) -> ShadaEntry {
+    ShadaEntry {
+        entry_type: ShadaEntryType::Register,
+        can_free_entry: true,
+        timestamp,
+        data: ShadaEntryData {
+            reg: std::mem::ManuallyDrop::new(RegisterData {
+                name,
+                reg_type,
+                contents,
+                contents_size,
+                is_unnamed,
+                width,
+            }),
+        },
+        additional_data: std::ptr::null_mut(),
+    }
+}
+
+/// Create a new global mark entry.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_shada_entry_global_mark(
+    timestamp: Timestamp,
+    name: c_char,
+    lnum: i64,
+    col: i32,
+    fname: *mut c_char,
+) -> ShadaEntry {
+    ShadaEntry {
+        entry_type: ShadaEntryType::GlobalMark,
+        can_free_entry: true,
+        timestamp,
+        data: ShadaEntryData {
+            filemark: std::mem::ManuallyDrop::new(FilemarkData {
+                name,
+                mark: Position::new(lnum, col, 0),
+                fname,
+            }),
+        },
+        additional_data: std::ptr::null_mut(),
+    }
+}
+
+/// Create a new local mark entry.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_shada_entry_local_mark(
+    timestamp: Timestamp,
+    name: c_char,
+    lnum: i64,
+    col: i32,
+    fname: *mut c_char,
+) -> ShadaEntry {
+    ShadaEntry {
+        entry_type: ShadaEntryType::LocalMark,
+        can_free_entry: true,
+        timestamp,
+        data: ShadaEntryData {
+            filemark: std::mem::ManuallyDrop::new(FilemarkData {
+                name,
+                mark: Position::new(lnum, col, 0),
+                fname,
+            }),
+        },
+        additional_data: std::ptr::null_mut(),
+    }
+}
+
+/// Create a new jump entry.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_shada_entry_jump(
+    timestamp: Timestamp,
+    lnum: i64,
+    col: i32,
+    fname: *mut c_char,
+) -> ShadaEntry {
+    ShadaEntry {
+        entry_type: ShadaEntryType::Jump,
+        can_free_entry: true,
+        timestamp,
+        data: ShadaEntryData {
+            filemark: std::mem::ManuallyDrop::new(FilemarkData {
+                name: 0,
+                mark: Position::new(lnum, col, 0),
+                fname,
+            }),
+        },
+        additional_data: std::ptr::null_mut(),
+    }
+}
+
+/// Create a new change entry.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_shada_entry_change(
+    timestamp: Timestamp,
+    lnum: i64,
+    col: i32,
+    fname: *mut c_char,
+) -> ShadaEntry {
+    ShadaEntry {
+        entry_type: ShadaEntryType::Change,
+        can_free_entry: true,
+        timestamp,
+        data: ShadaEntryData {
+            filemark: std::mem::ManuallyDrop::new(FilemarkData {
+                name: 0,
+                mark: Position::new(lnum, col, 0),
+                fname,
+            }),
+        },
+        additional_data: std::ptr::null_mut(),
+    }
+}
+
+/// Create a new buffer list entry.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_shada_entry_buffer_list(
+    timestamp: Timestamp,
+    buffers: *mut BufferListBuffer,
+    size: usize,
+) -> ShadaEntry {
+    ShadaEntry {
+        entry_type: ShadaEntryType::BufferList,
+        can_free_entry: true,
+        timestamp,
+        data: ShadaEntryData {
+            buffer_list: std::mem::ManuallyDrop::new(BufferListData { size, buffers }),
+        },
+        additional_data: std::ptr::null_mut(),
+    }
+}
+
+// =============================================================================
+// Entry Type Accessors
+// =============================================================================
+
+/// Get the entry type as raw i32.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_shada_entry_get_type(entry: *const ShadaEntry) -> c_int {
+    if entry.is_null() {
+        return SD_ITEM_MISSING;
+    }
+    unsafe { (*entry).entry_type.as_raw() }
+}
+
+/// Set the entry type from raw i32.
+#[no_mangle]
+pub unsafe extern "C" fn rs_shada_entry_set_type(entry: *mut ShadaEntry, entry_type: c_int) {
+    if !entry.is_null() {
+        (*entry).entry_type = ShadaEntryType::from_raw(entry_type);
+    }
+}
+
+/// Get the entry timestamp.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_shada_entry_get_timestamp(entry: *const ShadaEntry) -> Timestamp {
+    if entry.is_null() {
+        return 0;
+    }
+    unsafe { (*entry).timestamp }
+}
+
+/// Set the entry timestamp.
+#[no_mangle]
+pub unsafe extern "C" fn rs_shada_entry_set_timestamp(
+    entry: *mut ShadaEntry,
+    timestamp: Timestamp,
+) {
+    if !entry.is_null() {
+        (*entry).timestamp = timestamp;
+    }
+}
+
+/// Check if entry is missing type.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn rs_shada_entry_is_missing(entry: *const ShadaEntry) -> c_int {
+    if entry.is_null() {
+        return 1;
+    }
+    c_int::from(unsafe { (*entry).entry_type == ShadaEntryType::Missing })
+}
+
+// =============================================================================
+// Entry Comparison Functions
+// =============================================================================
+
+/// Compare two entries by timestamp.
+///
+/// Returns -1 if a < b, 0 if equal, 1 if a > b.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub extern "C" fn rs_shada_entry_compare_timestamp(
+    a: *const ShadaEntry,
+    b: *const ShadaEntry,
+) -> c_int {
+    if a.is_null() || b.is_null() {
+        return 0;
+    }
+    let ts_a = unsafe { (*a).timestamp };
+    let ts_b = unsafe { (*b).timestamp };
+    match ts_a.cmp(&ts_b) {
+        std::cmp::Ordering::Less => -1,
+        std::cmp::Ordering::Equal => 0,
+        std::cmp::Ordering::Greater => 1,
+    }
+}
+
+// =============================================================================
+// Memory Management
+// =============================================================================
+
+/// Free a ShaDa entry's resources.
+///
+/// This frees any allocated strings or data within the entry.
+/// Does NOT free the entry struct itself.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub unsafe extern "C" fn rs_shada_free_entry_contents(entry: *mut ShadaEntry) {
+    if entry.is_null() || !(*entry).can_free_entry {
+        return;
+    }
+
+    // Helper to read from ManuallyDrop union fields safely
+    macro_rules! read_union_field {
+        ($entry:expr, $field:ident, $inner:ident) => {{
+            let data_ptr = std::ptr::addr_of!((*$entry).data.$field);
+            let inner_ptr: *const _ = std::ptr::addr_of!((**data_ptr).$inner);
+            std::ptr::read(inner_ptr)
+        }};
+    }
+
+    match (*entry).entry_type {
+        ShadaEntryType::Missing | ShadaEntryType::Unknown | ShadaEntryType::Header => {
+            // Header dict is handled by C
+        }
+        ShadaEntryType::SearchPattern => {
+            let pat = read_union_field!(entry, search_pattern, pat);
+            if !pat.is_null() {
+                nvim_xfree(pat.cast());
+            }
+        }
+        ShadaEntryType::SubString => {
+            let sub = read_union_field!(entry, sub_string, sub);
+            if !sub.is_null() {
+                nvim_xfree(sub.cast());
+            }
+        }
+        ShadaEntryType::HistoryEntry => {
+            let string = read_union_field!(entry, history_item, string);
+            if !string.is_null() {
+                nvim_xfree(string.cast());
+            }
+        }
+        ShadaEntryType::Register => {
+            let contents = read_union_field!(entry, reg, contents);
+            let contents_size = read_union_field!(entry, reg, contents_size);
+            if !contents.is_null() {
+                for i in 0..contents_size {
+                    let s = *contents.add(i);
+                    if !s.is_null() {
+                        nvim_xfree(s.cast());
+                    }
+                }
+                nvim_xfree(contents.cast());
+            }
+        }
+        ShadaEntryType::Variable => {
+            let name = read_union_field!(entry, global_var, name);
+            if !name.is_null() {
+                nvim_xfree(name.cast());
+            }
+            // Value is handled by C (typval_T)
+        }
+        ShadaEntryType::GlobalMark
+        | ShadaEntryType::LocalMark
+        | ShadaEntryType::Jump
+        | ShadaEntryType::Change => {
+            let fname = read_union_field!(entry, filemark, fname);
+            if !fname.is_null() {
+                nvim_xfree(fname.cast());
+            }
+        }
+        ShadaEntryType::BufferList => {
+            let buffers = read_union_field!(entry, buffer_list, buffers);
+            let size = read_union_field!(entry, buffer_list, size);
+            if !buffers.is_null() {
+                for i in 0..size {
+                    let buf = buffers.add(i);
+                    if !(*buf).fname.is_null() {
+                        nvim_xfree((*buf).fname.cast());
+                    }
+                    // additional_data handled by C
+                }
+                nvim_xfree(buffers.cast());
+            }
+        }
+    }
+
+    // Free additional_data if present (handled by C)
+    // Reset entry to missing state
+    (*entry).entry_type = ShadaEntryType::Missing;
+    (*entry).can_free_entry = false;
+}
+
+// =============================================================================
 // Unit Tests
 // =============================================================================
 
 #[cfg(test)]
+#[allow(clippy::borrow_as_ptr)]
+#[allow(clippy::cast_possible_wrap)]
 mod tests {
     use super::*;
 
@@ -718,5 +1762,258 @@ mod tests {
         assert_eq!(MT_CHAR_WISE, 0);
         assert_eq!(MT_LINE_WISE, 1);
         assert_eq!(MT_BLOCK_WISE, 2);
+    }
+
+    // =============================================================================
+    // Entry Type Tests
+    // =============================================================================
+
+    #[test]
+    fn test_entry_type_enum() {
+        assert_eq!(ShadaEntryType::Unknown.as_raw(), SD_ITEM_UNKNOWN);
+        assert_eq!(ShadaEntryType::Missing.as_raw(), SD_ITEM_MISSING);
+        assert_eq!(ShadaEntryType::Header.as_raw(), SD_ITEM_HEADER);
+        assert_eq!(
+            ShadaEntryType::SearchPattern.as_raw(),
+            SD_ITEM_SEARCH_PATTERN
+        );
+        assert_eq!(ShadaEntryType::SubString.as_raw(), SD_ITEM_SUB_STRING);
+        assert_eq!(ShadaEntryType::HistoryEntry.as_raw(), SD_ITEM_HISTORY_ENTRY);
+        assert_eq!(ShadaEntryType::Register.as_raw(), SD_ITEM_REGISTER);
+        assert_eq!(ShadaEntryType::Variable.as_raw(), SD_ITEM_VARIABLE);
+        assert_eq!(ShadaEntryType::GlobalMark.as_raw(), SD_ITEM_GLOBAL_MARK);
+        assert_eq!(ShadaEntryType::Jump.as_raw(), SD_ITEM_JUMP);
+        assert_eq!(ShadaEntryType::BufferList.as_raw(), SD_ITEM_BUFFER_LIST);
+        assert_eq!(ShadaEntryType::LocalMark.as_raw(), SD_ITEM_LOCAL_MARK);
+        assert_eq!(ShadaEntryType::Change.as_raw(), SD_ITEM_CHANGE);
+    }
+
+    #[test]
+    fn test_entry_type_from_raw() {
+        assert_eq!(
+            ShadaEntryType::from_raw(SD_ITEM_MISSING),
+            ShadaEntryType::Missing
+        );
+        assert_eq!(
+            ShadaEntryType::from_raw(SD_ITEM_HEADER),
+            ShadaEntryType::Header
+        );
+        assert_eq!(
+            ShadaEntryType::from_raw(SD_ITEM_CHANGE),
+            ShadaEntryType::Change
+        );
+        assert_eq!(ShadaEntryType::from_raw(100), ShadaEntryType::Unknown);
+        assert_eq!(ShadaEntryType::from_raw(-5), ShadaEntryType::Unknown);
+    }
+
+    #[test]
+    fn test_entry_type_roundtrip() {
+        let types = [
+            ShadaEntryType::Missing,
+            ShadaEntryType::Header,
+            ShadaEntryType::SearchPattern,
+            ShadaEntryType::SubString,
+            ShadaEntryType::HistoryEntry,
+            ShadaEntryType::Register,
+            ShadaEntryType::Variable,
+            ShadaEntryType::GlobalMark,
+            ShadaEntryType::Jump,
+            ShadaEntryType::BufferList,
+            ShadaEntryType::LocalMark,
+            ShadaEntryType::Change,
+        ];
+        for typ in types {
+            assert_eq!(ShadaEntryType::from_raw(typ.as_raw()), typ);
+        }
+    }
+
+    // =============================================================================
+    // Entry Structure Tests
+    // =============================================================================
+
+    #[test]
+    fn test_shada_entry_default() {
+        let entry = ShadaEntry::default();
+        assert_eq!(entry.entry_type, ShadaEntryType::Missing);
+        assert!(!entry.can_free_entry);
+        assert_eq!(entry.timestamp, 0);
+        assert!(entry.additional_data.is_null());
+    }
+
+    #[test]
+    fn test_shada_entry_missing() {
+        let entry = ShadaEntry::missing();
+        assert_eq!(entry.entry_type, ShadaEntryType::Missing);
+        assert!(!entry.can_free_entry);
+        assert_eq!(entry.timestamp, 0);
+    }
+
+    #[test]
+    fn test_shada_entry_header() {
+        let entry = rs_shada_entry_header(12345);
+        assert_eq!(entry.entry_type, ShadaEntryType::Header);
+        assert!(entry.can_free_entry);
+        assert_eq!(entry.timestamp, 12345);
+    }
+
+    #[test]
+    fn test_shada_entry_get_type() {
+        let entry = ShadaEntry::default();
+        assert_eq!(rs_shada_entry_get_type(&entry), SD_ITEM_MISSING);
+
+        let header = rs_shada_entry_header(0);
+        assert_eq!(rs_shada_entry_get_type(&header), SD_ITEM_HEADER);
+    }
+
+    #[test]
+    fn test_shada_entry_get_type_null() {
+        assert_eq!(rs_shada_entry_get_type(std::ptr::null()), SD_ITEM_MISSING);
+    }
+
+    #[test]
+    fn test_shada_entry_get_timestamp() {
+        let entry = rs_shada_entry_header(54321);
+        assert_eq!(rs_shada_entry_get_timestamp(&entry), 54321);
+    }
+
+    #[test]
+    fn test_shada_entry_get_timestamp_null() {
+        assert_eq!(rs_shada_entry_get_timestamp(std::ptr::null()), 0);
+    }
+
+    #[test]
+    fn test_shada_entry_is_missing() {
+        let missing = ShadaEntry::missing();
+        assert_ne!(rs_shada_entry_is_missing(&missing), 0);
+
+        let header = rs_shada_entry_header(0);
+        assert_eq!(rs_shada_entry_is_missing(&header), 0);
+    }
+
+    #[test]
+    fn test_shada_entry_is_missing_null() {
+        assert_ne!(rs_shada_entry_is_missing(std::ptr::null()), 0);
+    }
+
+    #[test]
+    fn test_shada_entry_compare_timestamp() {
+        let entry1 = rs_shada_entry_header(100);
+        let entry2 = rs_shada_entry_header(200);
+        let entry3 = rs_shada_entry_header(100);
+
+        assert_eq!(rs_shada_entry_compare_timestamp(&entry1, &entry2), -1);
+        assert_eq!(rs_shada_entry_compare_timestamp(&entry2, &entry1), 1);
+        assert_eq!(rs_shada_entry_compare_timestamp(&entry1, &entry3), 0);
+    }
+
+    // =============================================================================
+    // Data Structure Tests
+    // =============================================================================
+
+    #[test]
+    fn test_search_pattern_data_default() {
+        let data = SearchPatternData::default();
+        assert!(data.magic);
+        assert!(!data.smartcase);
+        assert!(!data.has_line_offset);
+        assert!(!data.place_cursor_at_end);
+        assert_eq!(data.offset, 0);
+        assert!(data.is_last_used);
+        assert!(!data.is_substitute_pattern);
+        assert!(!data.highlighted);
+        assert!(!data.search_backward);
+        assert!(data.pat.is_null());
+        assert_eq!(data.pat_len, 0);
+    }
+
+    #[test]
+    fn test_filemark_data_default() {
+        let data = FilemarkData::default();
+        assert_eq!(data.name, b'"' as c_char);
+        assert_eq!(data.mark.lnum, 1);
+        assert_eq!(data.mark.col, 0);
+        assert!(data.fname.is_null());
+    }
+
+    #[test]
+    fn test_history_item_data_default() {
+        let data = HistoryItemData::default();
+        assert_eq!(data.histtype, HIST_CMD);
+        assert!(data.string.is_null());
+        assert_eq!(data.sep, 0);
+    }
+
+    #[test]
+    fn test_register_data_default() {
+        let data = RegisterData::default();
+        assert_eq!(data.name, 0);
+        assert_eq!(data.reg_type, MT_CHAR_WISE);
+        assert!(data.contents.is_null());
+        assert_eq!(data.contents_size, 0);
+        assert!(!data.is_unnamed);
+        assert_eq!(data.width, 0);
+    }
+
+    #[test]
+    fn test_buffer_list_data_default() {
+        let data = BufferListData::default();
+        assert_eq!(data.size, 0);
+        assert!(data.buffers.is_null());
+    }
+
+    // =============================================================================
+    // Linked List Tests
+    // =============================================================================
+
+    #[test]
+    fn test_hml_list_entry_default() {
+        let entry = HMLListEntry::default();
+        assert_eq!(entry.data.entry_type, ShadaEntryType::Missing);
+        assert!(entry.next.is_null());
+        assert!(entry.prev.is_null());
+    }
+
+    #[test]
+    fn test_hml_list_default() {
+        let list = HMLList::default();
+        assert!(list.entries.is_null());
+        assert!(list.first.is_null());
+        assert!(list.last.is_null());
+        assert!(list.free_entry.is_null());
+        assert!(list.last_free_entry.is_null());
+        assert_eq!(list.size, 0);
+        assert_eq!(list.num_entries, 0);
+        assert!(list.contained_entries.is_null());
+    }
+
+    #[test]
+    fn test_history_merger_state_default() {
+        let state = HistoryMergerState::default();
+        assert!(!state.do_merge);
+        assert!(!state.reading);
+        assert!(state.iter.is_null());
+        assert_eq!(state.last_hist_entry.entry_type, ShadaEntryType::Missing);
+        assert_eq!(state.history_type, HIST_CMD);
+    }
+
+    // =============================================================================
+    // Size and Alignment Tests (important for FFI compatibility)
+    // =============================================================================
+
+    #[test]
+    fn test_position_size() {
+        // Position should be 16 bytes: 8 (lnum) + 4 (col) + 4 (coladd)
+        assert_eq!(std::mem::size_of::<Position>(), 16);
+    }
+
+    #[test]
+    fn test_array_constants() {
+        // Verify array sizes match expected values
+        assert_eq!(NLOCALMARKS, 26);
+        assert_eq!(JUMPLISTSIZE, 100);
+        assert_eq!(NMARKS, 26);
+        assert_eq!(EXTRA_MARKS, 10);
+        assert_eq!(NUM_SAVED_REGISTERS, 37);
+        assert_eq!(HIST_COUNT, 5);
     }
 }
