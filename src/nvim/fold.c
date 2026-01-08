@@ -123,6 +123,15 @@ extern int rs_foldLevelWin(win_T *wp, linenr_T lnum);
 // Rust FFI declarations for Phase 2: Core query functions
 extern int rs_getDeepestNesting(win_T *wp);
 
+// Rust FFI declarations for Phase 1: Fold Tree Manipulation
+extern void rs_foldInsert(garray_T *gap, int i);
+extern void rs_deleteFoldEntry(win_T *wp, garray_T *gap, int idx, bool recursive);
+extern void rs_foldSplit(buf_T *buf, garray_T *gap, int i, linenr_T top, linenr_T bot);
+extern void rs_foldRemove(win_T *wp, garray_T *gap, linenr_T top, linenr_T bot);
+extern void rs_foldMerge(win_T *wp, int fp1_idx, garray_T *gap, int fp2_idx);
+extern void rs_foldMarkAdjustRecurse(win_T *wp, garray_T *gap, linenr_T line1,
+                                     linenr_T line2, linenr_T amount, linenr_T amount_after);
+
 // Struct returned by rs_hasFoldingWin
 typedef struct {
   int has_folding;
@@ -1192,46 +1201,7 @@ static void foldOpenNested(fold_T *fpr)
 static void deleteFoldEntry(win_T *const wp, garray_T *const gap, const int idx,
                             const bool recursive)
 {
-  fold_T *fp = (fold_T *)gap->ga_data + idx;
-  if (recursive || GA_EMPTY(&fp->fd_nested)) {
-    // recursively delete the contained folds
-    deleteFoldRecurse(wp->w_buffer, &fp->fd_nested);
-    gap->ga_len--;
-    if (idx < gap->ga_len) {
-      memmove(fp, fp + 1, sizeof(*fp) * (size_t)(gap->ga_len - idx));
-    }
-  } else {
-    // Move nested folds one level up, to overwrite the fold that is
-    // deleted.
-    int moved = fp->fd_nested.ga_len;
-    ga_grow(gap, moved - 1);
-    {
-      // Get "fp" again, the array may have been reallocated.
-      fp = (fold_T *)gap->ga_data + idx;
-
-      // adjust fd_top and fd_flags for the moved folds
-      fold_T *nfp = (fold_T *)fp->fd_nested.ga_data;
-      for (int i = 0; i < moved; i++) {
-        nfp[i].fd_top += fp->fd_top;
-        if (fp->fd_flags == FD_LEVEL) {
-          nfp[i].fd_flags = FD_LEVEL;
-        }
-        if (fp->fd_small == kNone) {
-          nfp[i].fd_small = kNone;
-        }
-      }
-
-      // move the existing folds down to make room
-      if (idx + 1 < gap->ga_len) {
-        memmove(fp + moved, fp + 1,
-                sizeof(*fp) * (size_t)(gap->ga_len - (idx + 1)));
-      }
-      // move the contained folds one level up
-      memmove(fp, nfp, sizeof(*fp) * (size_t)moved);
-      xfree(nfp);
-      gap->ga_len += moved - 1;
-    }
-  }
+  rs_deleteFoldEntry(wp, gap, idx, recursive);
 }
 
 // deleteFoldRecurse() {{{2
@@ -2370,14 +2340,7 @@ static linenr_T foldUpdateIEMSRecurse(garray_T *const gap, const int level,
 /// Insert a new fold in "gap" at position "i".
 static void foldInsert(garray_T *gap, int i)
 {
-  ga_grow(gap, 1);
-
-  fold_T *fp = (fold_T *)gap->ga_data + i;
-  if (gap->ga_len > 0 && i < gap->ga_len) {
-    memmove(fp + 1, fp, sizeof(fold_T) * (size_t)(gap->ga_len - i));
-  }
-  gap->ga_len++;
-  ga_init(&fp->fd_nested, (int)sizeof(fold_T), 10);
+  rs_foldInsert(gap, i);
 }
 
 // foldSplit() {{{2
@@ -2389,40 +2352,7 @@ static void foldInsert(garray_T *gap, int i)
 static void foldSplit(buf_T *buf, garray_T *const gap, const int i, const linenr_T top,
                       const linenr_T bot)
 {
-  fold_T *fp2;
-
-  // The fold continues below bot, need to split it.
-  foldInsert(gap, i + 1);
-
-  fold_T *const fp = (fold_T *)gap->ga_data + i;
-  fp[1].fd_top = bot + 1;
-  // check for wrap around (MAXLNUM, and 32bit)
-  assert(fp[1].fd_top > bot);
-  fp[1].fd_len = fp->fd_len - (fp[1].fd_top - fp->fd_top);
-  fp[1].fd_flags = fp->fd_flags;
-  fp[1].fd_small = kNone;
-  fp->fd_small = kNone;
-
-  // Move nested folds below bot to new fold.  There can't be
-  // any between top and bot, they have been removed by the caller.
-  garray_T *const gap1 = &fp->fd_nested;
-  garray_T *const gap2 = &fp[1].fd_nested;
-  foldFind(gap1, bot + 1 - fp->fd_top, &fp2);
-  if (fp2 != NULL) {
-    const int len = (int)((fold_T *)gap1->ga_data + gap1->ga_len - fp2);
-    if (len > 0) {
-      ga_grow(gap2, len);
-      for (int idx = 0; idx < len; idx++) {
-        ((fold_T *)gap2->ga_data)[idx] = fp2[idx];
-        ((fold_T *)gap2->ga_data)[idx].fd_top
-          -= fp[1].fd_top - fp->fd_top;
-      }
-      gap2->ga_len = len;
-      gap1->ga_len -= len;
-    }
-  }
-  fp->fd_len = top - fp->fd_top;
-  fold_changed = true;
+  rs_foldSplit(buf, gap, i, top, bot);
 }
 
 // foldRemove() {{{2
@@ -2444,51 +2374,7 @@ static void foldSplit(buf_T *buf, garray_T *const gap, const int i, const linenr
 /// 6: not changed
 static void foldRemove(win_T *const wp, garray_T *gap, linenr_T top, linenr_T bot)
 {
-  if (bot < top) {
-    return;             // nothing to do
-  }
-
-  fold_T *fp = NULL;
-
-  while (gap->ga_len > 0) {
-    // Find fold that includes top or a following one.
-    if (foldFind(gap, top, &fp) && fp->fd_top < top) {
-      // 2: or 3: need to delete nested folds
-      foldRemove(wp, &fp->fd_nested, top - fp->fd_top, bot - fp->fd_top);
-      if (fp->fd_top + fp->fd_len - 1 > bot) {
-        // 3: need to split it.
-        foldSplit(wp->w_buffer, gap,
-                  (int)(fp - (fold_T *)gap->ga_data), top, bot);
-      } else {
-        // 2: truncate fold at "top".
-        fp->fd_len = top - fp->fd_top;
-      }
-      fold_changed = true;
-      continue;
-    }
-    if (gap->ga_data == NULL
-        || fp >= (fold_T *)(gap->ga_data) + gap->ga_len
-        || fp->fd_top > bot) {
-      // 6: Found a fold below bot, can stop looking.
-      break;
-    }
-    if (fp->fd_top >= top) {
-      // Found an entry below top.
-      fold_changed = true;
-      if (fp->fd_top + fp->fd_len - 1 > bot) {
-        // 5: Make fold that includes bot start below bot.
-        foldMarkAdjustRecurse(wp, &fp->fd_nested,
-                              0, (bot - fp->fd_top),
-                              (linenr_T)MAXLNUM, (fp->fd_top - bot - 1));
-        fp->fd_len -= bot - fp->fd_top + 1;
-        fp->fd_top = bot + 1;
-        break;
-      }
-
-      // 4: Delete completely contained fold.
-      deleteFoldEntry(wp, gap, (int)(fp - (fold_T *)gap->ga_data), true);
-    }
-  }
+  rs_foldRemove(wp, gap, top, bot);
 }
 
 // foldReverseOrder() {{{2
@@ -2649,32 +2535,10 @@ void foldMoveRange(win_T *const wp, garray_T *gap, const linenr_T line1, const l
 /// Fold entry "fp2" in "gap" is deleted.
 static void foldMerge(win_T *const wp, fold_T *fp1, garray_T *gap, fold_T *fp2)
 {
-  fold_T *fp3;
-  fold_T *fp4;
-  garray_T *gap1 = &fp1->fd_nested;
-  garray_T *gap2 = &fp2->fd_nested;
-
-  // If the last nested fold in fp1 touches the first nested fold in fp2,
-  // merge them recursively.
-  if (foldFind(gap1, fp1->fd_len - 1, &fp3) && foldFind(gap2, 0, &fp4)) {
-    foldMerge(wp, fp3, gap2, fp4);
-  }
-
-  // Move nested folds in fp2 to the end of fp1.
-  if (!GA_EMPTY(gap2)) {
-    ga_grow(gap1, gap2->ga_len);
-    for (int idx = 0; idx < gap2->ga_len; idx++) {
-      ((fold_T *)gap1->ga_data)[gap1->ga_len]
-        = ((fold_T *)gap2->ga_data)[idx];
-      ((fold_T *)gap1->ga_data)[gap1->ga_len].fd_top += fp1->fd_len;
-      gap1->ga_len++;
-    }
-    gap2->ga_len = 0;
-  }
-
-  fp1->fd_len += fp2->fd_len;
-  deleteFoldEntry(wp, gap, (int)(fp2 - (fold_T *)gap->ga_data), true);
-  fold_changed = true;
+  // Convert pointers to indices for Rust FFI
+  int fp1_idx = (int)(fp1 - (fold_T *)gap->ga_data);
+  int fp2_idx = (int)(fp2 - (fold_T *)gap->ga_data);
+  rs_foldMerge(wp, fp1_idx, gap, fp2_idx);
 }
 
 // foldlevelIndent() {{{2
@@ -3393,4 +3257,84 @@ char *nvim_skipwhite(const char *s)
 char *nvim_vim_strchr(const char *s, int c)
 {
   return vim_strchr(s, c);
+}
+
+// ============================================================================
+// Phase 1: Fold Tree Manipulation accessors
+// ============================================================================
+
+/// Grow a garray to hold at least n more fold_T entries.
+void nvim_ga_grow_folds(garray_T *gap, int n)
+{
+  ga_grow(gap, n);
+}
+
+/// Set the fd_top field of a fold.
+void nvim_fold_set_fd_top(fold_T *fp, linenr_T top)
+{
+  fp->fd_top = top;
+}
+
+/// Set the fd_len field of a fold.
+void nvim_fold_set_fd_len(fold_T *fp, linenr_T len)
+{
+  fp->fd_len = len;
+}
+
+/// Get the ga_data pointer from a garray (as fold_T*).
+fold_T *nvim_ga_get_fold_data(garray_T *gap)
+{
+  return (fold_T *)gap->ga_data;
+}
+
+/// Set the ga_len field of a garray.
+void nvim_ga_set_len(garray_T *gap, int len)
+{
+  gap->ga_len = len;
+}
+
+/// Move fold entries within a garray.
+/// Moves `count` entries from src_idx to dst_idx.
+void nvim_fold_memmove(garray_T *gap, int dst_idx, int src_idx, int count)
+{
+  fold_T *data = (fold_T *)gap->ga_data;
+  memmove(&data[dst_idx], &data[src_idx], sizeof(fold_T) * (size_t)count);
+}
+
+/// Copy a fold entry from one location to another.
+void nvim_fold_copy(fold_T *dst, const fold_T *src)
+{
+  *dst = *src;
+}
+
+/// Get the buffer from a window.
+buf_T *nvim_win_get_buffer(win_T *wp)
+{
+  return wp->w_buffer;
+}
+
+/// Call deleteFoldRecurse from Rust (to recursively free nested fold memory).
+void nvim_deleteFoldRecurse(buf_T *buf, garray_T *gap)
+{
+  deleteFoldRecurse(buf, gap);
+}
+
+/// Free the ga_data pointer of a garray (for nested folds).
+void nvim_ga_free_data(garray_T *gap)
+{
+  xfree(gap->ga_data);
+  gap->ga_data = NULL;
+  gap->ga_len = 0;
+}
+
+/// Set the fold_changed flag.
+void nvim_set_fold_changed(bool changed)
+{
+  fold_changed = changed;
+}
+
+/// Get the fold_changed flag.
+bool nvim_get_fold_changed(void)
+{
+  return fold_changed;
 }

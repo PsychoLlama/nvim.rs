@@ -14,6 +14,7 @@ pub mod markers;
 
 use std::ffi::{c_char, c_int};
 
+use nvim_buffer::BufHandle;
 use nvim_window::WinHandle;
 
 /// Line number type (matches linenr_T in C).
@@ -244,6 +245,47 @@ extern "C" {
 
     /// Get the line count of the window's buffer.
     fn nvim_win_get_buf_line_count(wp: WinHandle) -> LineNr;
+
+    // ========================================================================
+    // Phase 1: Fold Tree Manipulation accessors
+    // ========================================================================
+
+    /// Grow a garray to hold at least n more fold_T entries.
+    fn nvim_ga_grow_folds(gap: GArrayHandle, n: c_int);
+
+    /// Set the fd_top field of a fold.
+    fn nvim_fold_set_fd_top(fp: FoldHandle, top: LineNr);
+
+    /// Set the fd_len field of a fold.
+    fn nvim_fold_set_fd_len(fp: FoldHandle, len: LineNr);
+
+    /// Get the ga_data pointer from a garray (as fold_T*).
+    fn nvim_ga_get_fold_data(gap: GArrayHandle) -> FoldHandle;
+
+    /// Set the ga_len field of a garray.
+    fn nvim_ga_set_len(gap: GArrayHandle, len: c_int);
+
+    /// Move fold entries within a garray.
+    fn nvim_fold_memmove(gap: GArrayHandle, dst_idx: c_int, src_idx: c_int, count: c_int);
+
+    /// Copy a fold entry from one location to another.
+    fn nvim_fold_copy(dst: FoldHandle, src: FoldHandle);
+
+    /// Get the buffer from a window.
+    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
+
+    /// Call deleteFoldRecurse from Rust (to recursively free nested fold memory).
+    fn nvim_deleteFoldRecurse(buf: BufHandle, gap: GArrayHandle);
+
+    /// Free the ga_data pointer of a garray (for nested folds).
+    fn nvim_ga_free_data(gap: GArrayHandle);
+
+    /// Set the fold_changed flag.
+    fn nvim_set_fold_changed(changed: bool);
+
+    /// Get the fold_changed flag.
+    #[allow(dead_code)]
+    fn nvim_get_fold_changed() -> bool;
 }
 
 // ============================================================================
@@ -1179,6 +1221,627 @@ pub unsafe extern "C" fn rs_check_closed(
         maybe_small_ref,
         lnum_off,
     ))
+}
+
+// ============================================================================
+// Phase 1: Fold Tree Manipulation Functions
+// ============================================================================
+
+/// Insert a new fold in "gap" at position "i".
+///
+/// Grows the array if needed, shifts existing folds, and initializes the new fold's
+/// nested garray.
+fn fold_insert_impl(gap: GArrayHandle, i: c_int) {
+    if gap.is_null() || i < 0 {
+        return;
+    }
+
+    // Grow array by 1
+    unsafe { nvim_ga_grow_folds(gap, 1) };
+
+    let len = unsafe { nvim_ga_len(gap) };
+
+    // Shift existing folds if inserting in middle
+    if len > 0 && i < len {
+        unsafe { nvim_fold_memmove(gap, i + 1, i, len - i) };
+    }
+
+    // Increment length
+    unsafe { nvim_ga_set_len(gap, len + 1) };
+
+    // Initialize the nested garray for the new fold
+    let fp = unsafe { nvim_ga_fold_at(gap, i) };
+    if !fp.is_null() {
+        let nested = unsafe { nvim_fold_get_fd_nested(fp) };
+        if !nested.is_null() {
+            unsafe { nvim_ga_init_folds(nested) };
+        }
+    }
+}
+
+/// Delete fold "idx" from growarray "gap".
+///
+/// When `recursive` is true, also delete all the folds contained in it.
+/// When `recursive` is false, contained folds are moved one level up.
+fn delete_fold_entry_impl(wp: WinHandle, gap: GArrayHandle, idx: c_int, recursive: bool) {
+    if wp.is_null() || gap.is_null() || idx < 0 {
+        return;
+    }
+
+    let len = unsafe { nvim_ga_len(gap) };
+    if idx >= len {
+        return;
+    }
+
+    let fp = unsafe { nvim_ga_fold_at(gap, idx) };
+    if fp.is_null() {
+        return;
+    }
+
+    let nested = unsafe { nvim_fold_get_fd_nested(fp) };
+    let nested_len = if nested.is_null() {
+        0
+    } else {
+        unsafe { nvim_ga_len(nested) }
+    };
+
+    let buf = unsafe { nvim_win_get_buffer(wp) };
+
+    if recursive || nested_len == 0 {
+        // Recursively delete the contained folds
+        if !nested.is_null() {
+            unsafe { nvim_deleteFoldRecurse(buf, nested) };
+        }
+
+        // Shift remaining folds down
+        if idx < len - 1 {
+            unsafe { nvim_fold_memmove(gap, idx, idx + 1, len - idx - 1) };
+        }
+
+        // Decrement length
+        unsafe { nvim_ga_set_len(gap, len - 1) };
+    } else {
+        // Move nested folds one level up
+        // Need to grow gap to hold (nested_len - 1) more entries
+        unsafe { nvim_ga_grow_folds(gap, nested_len - 1) };
+
+        // Re-fetch fp after potential realloc
+        let fp = unsafe { nvim_ga_fold_at(gap, idx) };
+        if fp.is_null() {
+            return;
+        }
+        let nested = unsafe { nvim_fold_get_fd_nested(fp) };
+        if nested.is_null() {
+            return;
+        }
+
+        let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+        let fd_flags = unsafe { nvim_fold_get_fd_flags(fp) };
+        let fd_small = unsafe { nvim_fold_get_fd_small(fp) };
+
+        // Adjust fd_top and fd_flags for the nested folds
+        for i in 0..nested_len {
+            let nfp = unsafe { nvim_ga_fold_at(nested, i) };
+            if nfp.is_null() {
+                continue;
+            }
+            let nfp_top = unsafe { nvim_fold_get_fd_top(nfp) };
+            unsafe { nvim_fold_set_fd_top(nfp, nfp_top + fd_top) };
+            if fd_flags == fold_flags::FD_LEVEL {
+                unsafe { nvim_fold_set_fd_flags(nfp, fold_flags::FD_LEVEL) };
+            }
+            if fd_small == tristate::K_NONE {
+                unsafe { nvim_fold_set_fd_small(nfp, tristate::K_NONE) };
+            }
+        }
+
+        // Move existing folds down to make room
+        let new_len = len + nested_len - 1;
+        if idx + 1 < len {
+            unsafe {
+                nvim_fold_memmove(gap, idx + nested_len, idx + 1, len - (idx + 1));
+            }
+        }
+
+        // Copy nested folds to gap starting at idx
+        for i in 0..nested_len {
+            let nfp = unsafe { nvim_ga_fold_at(nested, i) };
+            let dst = unsafe { nvim_ga_fold_at(gap, idx + i) };
+            if !nfp.is_null() && !dst.is_null() {
+                unsafe { nvim_fold_copy(dst, nfp) };
+            }
+        }
+
+        // Free the nested array data (but not the folds, they're now in gap)
+        unsafe { nvim_ga_free_data(nested) };
+
+        // Set new length
+        unsafe { nvim_ga_set_len(gap, new_len) };
+    }
+}
+
+/// Split the "i"th fold in "gap", which starts before "top" and ends below
+/// "bot" in two pieces, one ending above "top" and the other starting below "bot".
+///
+/// The caller must first have taken care of any nested folds from "top" to "bot"!
+fn fold_split_impl(buf: BufHandle, gap: GArrayHandle, i: c_int, top: LineNr, bot: LineNr) {
+    if buf.is_null() || gap.is_null() || i < 0 {
+        return;
+    }
+
+    // The fold continues below bot, need to split it.
+    fold_insert_impl(gap, i + 1);
+
+    // After insert, refetch the fold pointer (array may have moved)
+    let fp = unsafe { nvim_ga_fold_at(gap, i) };
+    let fp1 = unsafe { nvim_ga_fold_at(gap, i + 1) };
+    if fp.is_null() || fp1.is_null() {
+        return;
+    }
+
+    let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+    let fd_len = unsafe { nvim_fold_get_fd_len(fp) };
+    let fd_flags = unsafe { nvim_fold_get_fd_flags(fp) };
+
+    // Set up the new fold (below bot)
+    let new_top = bot + 1;
+    // Check for wrap around
+    debug_assert!(new_top > bot);
+    let new_len = fd_len - (new_top - fd_top);
+
+    unsafe {
+        nvim_fold_set_fd_top(fp1, new_top);
+        nvim_fold_set_fd_len(fp1, new_len);
+        nvim_fold_set_fd_flags(fp1, fd_flags);
+        nvim_fold_set_fd_small(fp1, tristate::K_NONE);
+        nvim_fold_set_fd_small(fp, tristate::K_NONE);
+    }
+
+    // Move nested folds below bot to new fold.
+    // There can't be any between top and bot, they have been removed by the caller.
+    let gap1 = unsafe { nvim_fold_get_fd_nested(fp) };
+    let gap2 = unsafe { nvim_fold_get_fd_nested(fp1) };
+
+    if !gap1.is_null() && !gap2.is_null() {
+        // Find first nested fold at or below (bot + 1 - fd_top)
+        let split_lnum = bot + 1 - fd_top;
+        if let Some((_, found_idx)) = fold_find_with_idx(gap1, split_lnum) {
+            let gap1_len = unsafe { nvim_ga_len(gap1) };
+            let move_count = gap1_len - found_idx;
+
+            if move_count > 0 {
+                unsafe {
+                    nvim_ga_grow_folds(gap2, move_count);
+
+                    // Copy folds to gap2 and adjust their fd_top
+                    let top_offset = new_top - fd_top;
+                    for j in 0..move_count {
+                        let src = nvim_ga_fold_at(gap1, found_idx + j);
+                        let dst = nvim_ga_fold_at(gap2, j);
+                        if !src.is_null() && !dst.is_null() {
+                            nvim_fold_copy(dst, src);
+                            let src_top = nvim_fold_get_fd_top(dst);
+                            nvim_fold_set_fd_top(dst, src_top - top_offset);
+                        }
+                    }
+
+                    nvim_ga_set_len(gap2, move_count);
+                    nvim_ga_set_len(gap1, found_idx);
+                }
+            }
+        }
+    }
+
+    // Truncate original fold
+    unsafe {
+        nvim_fold_set_fd_len(fp, top - fd_top);
+        nvim_set_fold_changed(true);
+    }
+}
+
+/// Remove folds within the range "top" to and including "bot".
+///
+/// Check for these situations:
+///      1  2  3
+///      1  2  3
+/// top     2  3  4  5
+///     2  3  4  5
+/// bot     2  3  4  5
+///        3     5  6
+///        3     5  6
+///
+/// 1: not changed
+/// 2: truncate to stop above "top"
+/// 3: split in two parts, one stops above "top", other starts below "bot".
+/// 4: deleted
+/// 5: made to start below "bot".
+/// 6: not changed
+fn fold_remove_impl(wp: WinHandle, gap: GArrayHandle, top: LineNr, bot: LineNr) {
+    if wp.is_null() || gap.is_null() || bot < top {
+        return;
+    }
+
+    let buf = unsafe { nvim_win_get_buffer(wp) };
+
+    loop {
+        let len = unsafe { nvim_ga_len(gap) };
+        if len == 0 {
+            break;
+        }
+
+        // Find fold that includes top or a following one.
+        let (found, fp_idx) = match fold_find_with_idx(gap, top) {
+            Some((true, idx)) => (true, idx),
+            Some((false, idx)) => (false, idx),
+            None => break,
+        };
+
+        let fp = unsafe { nvim_ga_fold_at(gap, fp_idx) };
+        if fp.is_null() {
+            break;
+        }
+
+        let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+        let fd_len = unsafe { nvim_fold_get_fd_len(fp) };
+
+        if found && fd_top < top {
+            // 2: or 3: need to delete nested folds
+            let nested = unsafe { nvim_fold_get_fd_nested(fp) };
+            fold_remove_impl(wp, nested, top - fd_top, bot - fd_top);
+
+            if fd_top + fd_len - 1 > bot {
+                // 3: need to split it.
+                fold_split_impl(buf, gap, fp_idx, top, bot);
+            } else {
+                // 2: truncate fold at "top".
+                unsafe { nvim_fold_set_fd_len(fp, top - fd_top) };
+            }
+            unsafe { nvim_set_fold_changed(true) };
+            continue;
+        }
+
+        let data = unsafe { nvim_ga_get_fold_data(gap) };
+        let len = unsafe { nvim_ga_len(gap) };
+        if data.is_null() || fp_idx >= len || fd_top > bot {
+            // 6: Found a fold below bot, can stop looking.
+            break;
+        }
+
+        if fd_top >= top {
+            // Found an entry below top.
+            unsafe { nvim_set_fold_changed(true) };
+
+            if fd_top + fd_len - 1 > bot {
+                // 5: Make fold that includes bot start below bot.
+                let nested = unsafe { nvim_fold_get_fd_nested(fp) };
+                fold_mark_adjust_recurse_impl(
+                    wp,
+                    nested,
+                    0,
+                    bot - fd_top,
+                    LineNr::MAX,
+                    fd_top - bot - 1,
+                );
+                unsafe {
+                    nvim_fold_set_fd_len(fp, fd_len - (bot - fd_top + 1));
+                    nvim_fold_set_fd_top(fp, bot + 1);
+                }
+                break;
+            }
+
+            // 4: Delete completely contained fold.
+            delete_fold_entry_impl(wp, gap, fp_idx, true);
+        }
+    }
+}
+
+/// Merge two adjacent folds (and the nested ones in them).
+///
+/// This only works correctly when the folds are really adjacent! Thus "fp1"
+/// must end just above "fp2".
+/// The resulting fold is "fp1", nested folds are moved from "fp2" to "fp1".
+/// Fold entry "fp2" in "gap" is deleted.
+fn fold_merge_impl(wp: WinHandle, fp1_idx: c_int, gap: GArrayHandle, fp2_idx: c_int) {
+    if wp.is_null() || gap.is_null() {
+        return;
+    }
+
+    let fp1 = unsafe { nvim_ga_fold_at(gap, fp1_idx) };
+    let fp2 = unsafe { nvim_ga_fold_at(gap, fp2_idx) };
+    if fp1.is_null() || fp2.is_null() {
+        return;
+    }
+
+    let fp1_len = unsafe { nvim_fold_get_fd_len(fp1) };
+    let gap1 = unsafe { nvim_fold_get_fd_nested(fp1) };
+    let gap2 = unsafe { nvim_fold_get_fd_nested(fp2) };
+
+    // If the last nested fold in fp1 touches the first nested fold in fp2,
+    // merge them recursively.
+    if !gap1.is_null() && !gap2.is_null() {
+        let gap1_len = unsafe { nvim_ga_len(gap1) };
+        let gap2_len = unsafe { nvim_ga_len(gap2) };
+
+        if gap1_len > 0 && gap2_len > 0 {
+            // Check if last of gap1 touches first of gap2
+            if let Some((true, fp3_idx)) = fold_find_with_idx(gap1, fp1_len - 1) {
+                if let Some((true, _)) = fold_find_with_idx(gap2, 0) {
+                    fold_merge_impl(wp, fp3_idx, gap2, 0);
+                }
+            }
+        }
+    }
+
+    // Move nested folds in fp2 to the end of fp1.
+    if !gap2.is_null() {
+        let gap2_len = unsafe { nvim_ga_len(gap2) };
+        if gap2_len > 0 && !gap1.is_null() {
+            unsafe { nvim_ga_grow_folds(gap1, gap2_len) };
+
+            let gap1_len = unsafe { nvim_ga_len(gap1) };
+            for j in 0..gap2_len {
+                let src = unsafe { nvim_ga_fold_at(gap2, j) };
+                let dst = unsafe { nvim_ga_fold_at(gap1, gap1_len + j) };
+                if !src.is_null() && !dst.is_null() {
+                    unsafe {
+                        nvim_fold_copy(dst, src);
+                        // Adjust fd_top
+                        let src_top = nvim_fold_get_fd_top(dst);
+                        nvim_fold_set_fd_top(dst, src_top + fp1_len);
+                    }
+                }
+            }
+
+            unsafe {
+                nvim_ga_set_len(gap1, gap1_len + gap2_len);
+                nvim_ga_set_len(gap2, 0);
+            }
+        }
+    }
+
+    // Refetch fp1 and fp2 (may have changed due to nested operations)
+    let fp1 = unsafe { nvim_ga_fold_at(gap, fp1_idx) };
+    let fp2 = unsafe { nvim_ga_fold_at(gap, fp2_idx) };
+    if !fp1.is_null() && !fp2.is_null() {
+        let fp1_len = unsafe { nvim_fold_get_fd_len(fp1) };
+        let fp2_len = unsafe { nvim_fold_get_fd_len(fp2) };
+        unsafe { nvim_fold_set_fd_len(fp1, fp1_len + fp2_len) };
+    }
+
+    delete_fold_entry_impl(wp, gap, fp2_idx, true);
+    unsafe { nvim_set_fold_changed(true) };
+}
+
+/// Helper function that returns both found status and index.
+fn fold_find_with_idx(gap: GArrayHandle, lnum: LineNr) -> Option<(bool, c_int)> {
+    if gap.is_null() {
+        return None;
+    }
+
+    let len = unsafe { nvim_ga_len(gap) };
+    if len == 0 {
+        return None;
+    }
+
+    // Binary search
+    let mut low: c_int = 0;
+    let mut high: c_int = len - 1;
+
+    while low <= high {
+        let mid = c_int::midpoint(low, high);
+        let fp = unsafe { nvim_ga_fold_at(gap, mid) };
+        if fp.is_null() {
+            return None;
+        }
+
+        let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+        let fd_len = unsafe { nvim_fold_get_fd_len(fp) };
+
+        if fd_top > lnum {
+            high = mid - 1;
+        } else if fd_top + fd_len <= lnum {
+            low = mid + 1;
+        } else {
+            // lnum is inside this fold
+            return Some((true, mid));
+        }
+    }
+
+    // Return fold at `low` index (first fold below lnum)
+    Some((false, low))
+}
+
+/// Update line numbers of folds in a garray for inserted/deleted lines.
+///
+/// Recursive helper used by foldMarkAdjust.
+fn fold_mark_adjust_recurse_impl(
+    wp: WinHandle,
+    gap: GArrayHandle,
+    line1: LineNr,
+    line2: LineNr,
+    amount: LineNr,
+    amount_after: LineNr,
+) {
+    if wp.is_null() || gap.is_null() {
+        return;
+    }
+
+    let len = unsafe { nvim_ga_len(gap) };
+    if len == 0 {
+        return;
+    }
+
+    // Determine top boundary
+    // In Insert mode an inserted line at the top of a fold is considered part
+    // of the fold, otherwise it isn't.
+    // Note: We don't have access to State here, so we use simpler logic.
+    // The C code checks (State & MODE_INSERT) && amount == 1 && line2 == MAXLNUM
+    // For now, we use line1 as the top.
+    let top = line1;
+
+    // Find the fold containing or just below line1
+    let Some((_, start_idx)) = fold_find_with_idx(gap, line1) else {
+        return;
+    };
+
+    // Adjust all folds at or below "line1" that are affected.
+    let mut i = start_idx;
+    while i < unsafe { nvim_ga_len(gap) } {
+        let fp = unsafe { nvim_ga_fold_at(gap, i) };
+        if fp.is_null() {
+            break;
+        }
+
+        let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+        let fd_len = unsafe { nvim_fold_get_fd_len(fp) };
+        let last = fd_top + fd_len - 1;
+
+        // 1. fold completely above line1: nothing to do
+        if last < line1 {
+            i += 1;
+            continue;
+        }
+
+        // 6. fold below line2: only adjust for amount_after
+        if fd_top > line2 {
+            if amount_after == 0 {
+                break;
+            }
+            unsafe { nvim_fold_set_fd_top(fp, fd_top + amount_after) };
+        } else if fd_top >= top && last <= line2 {
+            // 4. fold completely contained in range
+            if amount == LineNr::MAX {
+                // Deleting lines: delete the fold completely
+                delete_fold_entry_impl(wp, gap, i, true);
+                // Don't increment i, the next fold is now at this index
+                continue;
+            }
+            unsafe { nvim_fold_set_fd_top(fp, fd_top + amount) };
+        } else if fd_top < top {
+            // 2 or 3: need to correct nested folds too
+            let nested = unsafe { nvim_fold_get_fd_nested(fp) };
+            fold_mark_adjust_recurse_impl(
+                wp,
+                nested,
+                line1 - fd_top,
+                line2 - fd_top,
+                amount,
+                amount_after,
+            );
+
+            if last <= line2 {
+                // 2. fold contains line1, line2 is below fold
+                if amount == LineNr::MAX {
+                    unsafe { nvim_fold_set_fd_len(fp, line1 - fd_top) };
+                } else {
+                    unsafe { nvim_fold_set_fd_len(fp, fd_len + amount) };
+                }
+            } else {
+                // 3. fold contains both line1 and line2
+                unsafe { nvim_fold_set_fd_len(fp, fd_len + amount_after) };
+            }
+        } else {
+            // 5. line1 is inside fold, line2 is below fold end
+            if amount == LineNr::MAX {
+                // Move nested folds
+                let nested = unsafe { nvim_fold_get_fd_nested(fp) };
+                fold_mark_adjust_recurse_impl(
+                    wp,
+                    nested,
+                    0,
+                    line2 - fd_top,
+                    LineNr::MAX,
+                    fd_top - line2 - 1,
+                );
+                unsafe {
+                    nvim_fold_set_fd_len(fp, fd_len - (line2 - fd_top + 1));
+                    nvim_fold_set_fd_top(fp, line2 + 1 + amount_after);
+                }
+            } else {
+                unsafe { nvim_fold_set_fd_top(fp, fd_top + amount) };
+            }
+        }
+        i += 1;
+    }
+}
+
+// ============================================================================
+// Phase 1: Fold Tree Manipulation FFI Exports
+// ============================================================================
+
+/// Insert a new fold in "gap" at position "i".
+///
+/// # Safety
+/// The `gap` parameter must be a valid `garray_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_foldInsert(gap: GArrayHandle, i: c_int) {
+    fold_insert_impl(gap, i);
+}
+
+/// Delete fold "idx" from growarray "gap".
+///
+/// When `recursive` is true, also delete all the folds contained in it.
+/// When `recursive` is false, contained folds are moved one level up.
+///
+/// # Safety
+/// The `wp` and `gap` parameters must be valid pointers or null.
+#[no_mangle]
+pub extern "C" fn rs_deleteFoldEntry(
+    wp: WinHandle,
+    gap: GArrayHandle,
+    idx: c_int,
+    recursive: bool,
+) {
+    delete_fold_entry_impl(wp, gap, idx, recursive);
+}
+
+/// Split the "i"th fold in "gap".
+///
+/// # Safety
+/// The `buf` and `gap` parameters must be valid pointers or null.
+#[no_mangle]
+pub extern "C" fn rs_foldSplit(
+    buf: BufHandle,
+    gap: GArrayHandle,
+    i: c_int,
+    top: LineNr,
+    bot: LineNr,
+) {
+    fold_split_impl(buf, gap, i, top, bot);
+}
+
+/// Remove folds within the range "top" to and including "bot".
+///
+/// # Safety
+/// The `wp` and `gap` parameters must be valid pointers or null.
+#[no_mangle]
+pub extern "C" fn rs_foldRemove(wp: WinHandle, gap: GArrayHandle, top: LineNr, bot: LineNr) {
+    fold_remove_impl(wp, gap, top, bot);
+}
+
+/// Merge two adjacent folds.
+///
+/// # Safety
+/// The `wp` and `gap` parameters must be valid pointers or null.
+#[no_mangle]
+pub extern "C" fn rs_foldMerge(wp: WinHandle, fp1_idx: c_int, gap: GArrayHandle, fp2_idx: c_int) {
+    fold_merge_impl(wp, fp1_idx, gap, fp2_idx);
+}
+
+/// Update line numbers of folds for inserted/deleted lines (recursive).
+///
+/// # Safety
+/// The `wp` and `gap` parameters must be valid pointers or null.
+#[no_mangle]
+pub extern "C" fn rs_foldMarkAdjustRecurse(
+    wp: WinHandle,
+    gap: GArrayHandle,
+    line1: LineNr,
+    line2: LineNr,
+    amount: LineNr,
+    amount_after: LineNr,
+) {
+    fold_mark_adjust_recurse_impl(wp, gap, line1, line2, amount, amount_after);
 }
 
 #[cfg(test)]
