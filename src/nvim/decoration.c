@@ -33,6 +33,8 @@
 // Rust implementations
 extern int rs_decor_virt_pos(void *range);
 extern int rs_decor_virt_pos_kind(void *range);
+extern int rs_sign_item_cmp(int priority1, uint32_t id1, uint32_t add_id1,
+                            int priority2, uint32_t id2, uint32_t add_id2);
 
 uint32_t decor_freelist = UINT32_MAX;
 
@@ -910,20 +912,8 @@ int sign_item_cmp(const void *p1, const void *p2)
 {
   const SignItem *s1 = (SignItem *)p1;
   const SignItem *s2 = (SignItem *)p2;
-
-  if (s1->sh->priority != s2->sh->priority) {
-    return s1->sh->priority < s2->sh->priority ? 1 : -1;
-  }
-
-  if (s1->id != s2->id) {
-    return s1->id < s2->id ? 1 : -1;
-  }
-
-  if (s1->sh->sign_add_id != s2->sh->sign_add_id) {
-    return s1->sh->sign_add_id < s2->sh->sign_add_id ? 1 : -1;
-  }
-
-  return 0;
+  return rs_sign_item_cmp(s1->sh->priority, s1->id, s1->sh->sign_add_id,
+                          s2->sh->priority, s2->id, s2->sh->sign_add_id);
 }
 
 static const uint32_t sign_filter[kMTMetaCount] = {[kMTMetaSignText] = kMTFilterSelect,

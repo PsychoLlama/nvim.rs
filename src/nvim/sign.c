@@ -51,6 +51,11 @@
 
 #include "sign.c.generated.h"
 
+// Rust FFI declarations
+extern int rs_sign_cmd_idx(const char *cmd);
+extern int rs_sign_item_cmp(int priority1, uint32_t id1, uint32_t add_id1,
+                            int priority2, uint32_t id2, uint32_t add_id2);
+
 static PMap(cstr_t) sign_map = MAP_INIT;
 static kvec_t(Integer) sign_ns = KV_INITIAL_VALUE;
 
@@ -321,15 +326,9 @@ static void sign_list_placed(buf_T *rbuf, char *group)
 /// @param end_cmd  just after sign subcmd
 static int sign_cmd_idx(char *begin_cmd, char *end_cmd)
 {
-  int idx;
   char save = *end_cmd;
-
   *end_cmd = NUL;
-  for (idx = 0;; idx++) {
-    if (cmds[idx] == NULL || strcmp(begin_cmd, cmds[idx]) == 0) {
-      break;
-    }
-  }
+  int idx = rs_sign_cmd_idx(begin_cmd);
   *end_cmd = save;
   return idx;
 }
