@@ -270,6 +270,111 @@ pub unsafe extern "C" fn rs_msg_hist_disabled() -> c_int {
     c_int::from(nvim_get_msg_hist_off() != 0 || nvim_get_msg_silent() != 0)
 }
 
+/// Check if history is at capacity.
+///
+/// Returns true if the history is at or over the maximum length.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_at_capacity() -> c_int {
+    let len = nvim_get_msg_hist_len();
+    let max = nvim_get_msg_hist_max();
+    c_int::from(len >= max)
+}
+
+/// Check if the history is empty.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_empty() -> c_int {
+    c_int::from(nvim_get_msg_hist_first().is_null())
+}
+
+/// Count the number of entries in history (including temp).
+///
+/// This is useful for debugging or when the exact count is needed.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_count() -> c_int {
+    let mut count = 0;
+    let mut entry = nvim_get_msg_hist_first();
+    while !entry.is_null() {
+        count += 1;
+        entry = nvim_msg_hist_entry_get_next(entry);
+    }
+    count
+}
+
+/// Count temporary entries in the history.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_temp_count() -> c_int {
+    let mut count = 0;
+    let mut entry = nvim_get_msg_hist_temp();
+    while !entry.is_null() {
+        if nvim_msg_hist_entry_get_temp(entry) != 0 {
+            count += 1;
+        }
+        entry = nvim_msg_hist_entry_get_next(entry);
+    }
+    count
+}
+
+/// Get the first temporary entry in the history.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_temp() -> *mut MessageHistoryEntryHandle {
+    nvim_get_msg_hist_temp()
+}
+
+/// Set the first temporary entry in the history.
+///
+/// # Safety
+/// Calls C mutator function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_msg_hist_temp(entry: *mut MessageHistoryEntryHandle) {
+    nvim_set_msg_hist_temp(entry);
+}
+
+/// Set the history length.
+///
+/// # Safety
+/// Calls C mutator function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_msg_hist_len(len: c_int) {
+    nvim_set_msg_hist_len(len);
+}
+
+/// Increment history length.
+///
+/// # Safety
+/// Calls C accessor/mutator functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_inc_msg_hist_len() {
+    let len = nvim_get_msg_hist_len();
+    nvim_set_msg_hist_len(len + 1);
+}
+
+/// Decrement history length.
+///
+/// # Safety
+/// Calls C accessor/mutator functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_dec_msg_hist_len() {
+    let len = nvim_get_msg_hist_len();
+    if len > 0 {
+        nvim_set_msg_hist_len(len - 1);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     // Integration tests would require mocking C functions
