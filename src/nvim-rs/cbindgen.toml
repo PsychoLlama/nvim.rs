@@ -106,13 +106,24 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_sub_context_new", "rs_sub_context_has_room", "rs_sub_context_output_len",
            "rs_do_upper", "rs_do_lower", "rs_utf8_char_len", "rs_utf8_ptr2char",
            "rs_utf8_char2bytes", "rs_utf8_char2len", "rs_is_k_special",
-           # Spell file reading/writing (Phase 5-6)
+           # Spell file reading/writing (Phase 3-6)
            "rs_parse_section_header", "rs_parse_region_section", "rs_parse_charflags_section",
            "rs_parse_rep_item", "rs_parse_sal_header", "rs_parse_sofo_section",
            "rs_parse_compound_header", "rs_parse_sugfile_timestamp", "rs_parse_tree_nodecount",
            "rs_write_section_header", "rs_write_rep_item", "rs_write_charflags_section",
            "rs_write_sofo_section", "rs_write_sal_header", "rs_write_compound_header",
            "rs_write_tree_nodecount", "rs_write_timestamp",
+           "rs_write_tree_node_flags", "rs_write_tree_sibling_byte", "rs_write_tree_child_index",
+           "rs_write_region_section", "rs_write_end_section",
+           "TreeNodeFlags", "SpellFileWriteInfo",
+           # Spell UI integration (Phase 5)
+           "rs_spell_add_type_from_int", "rs_spell_move_type_from_int",
+           "rs_spell_suggest_timeout_default", "rs_validate_spell_suggest_timeout",
+           "rs_clamp_spell_suggest_timeout", "rs_is_valid_spell_word_start",
+           "rs_valid_spell_word", "rs_spell_add_flags_good", "rs_spell_add_flags_bad",
+           "rs_spell_add_flags_rare", "rs_spell_suggest_display_max",
+           "rs_spell_suggest_display_default", "rs_spell_suggest_score_threshold",
+           "SpellAddType", "SpellMoveType", "SpellAddFlags",
            # Spell suggestion algorithms (Phase 7)
            "rs_spell_edit_score", "rs_spell_edit_score_limit", "rs_soundalike_score",
            # Mouse handling (Phase 8)
