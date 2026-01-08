@@ -723,6 +723,162 @@ pub unsafe extern "C" fn rs_sd_reader_skip_bytes(fd: FileDescriptorHandle, offse
 }
 
 // =============================================================================
+// ShaDa File Reading Infrastructure
+// =============================================================================
+
+/// Entry header information read from a ShaDa file.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ShadaEntryHeader {
+    /// Entry type (one of SD_ITEM_* constants)
+    pub entry_type: u64,
+    /// Entry timestamp (Unix epoch seconds)
+    pub timestamp: u64,
+    /// Length of entry data in bytes
+    pub length: u64,
+}
+
+/// Read the header of a ShaDa entry (type, timestamp, length).
+///
+/// This is the first step in reading a ShaDa entry. After reading the header,
+/// the caller can decide whether to read or skip the entry data.
+///
+/// # Safety
+///
+/// - `fd` must be a valid file descriptor handle
+/// - `header` must be a valid pointer to write the header
+#[no_mangle]
+pub unsafe extern "C" fn rs_shada_read_entry_header(
+    fd: FileDescriptorHandle,
+    header: *mut ShadaEntryHeader,
+    allow_eof: bool,
+) -> c_int {
+    if fd.is_null() || header.is_null() {
+        return SD_READ_STATUS_READ_ERROR;
+    }
+
+    let mut entry_type: u64 = SD_ITEM_MISSING as u64;
+    let mut timestamp: u64 = 0;
+    let mut length: u64 = 0;
+
+    // Read entry type
+    let mut status = rs_msgpack_read_uint64(fd, allow_eof, &raw mut entry_type);
+    if status != SD_READ_STATUS_SUCCESS {
+        return status;
+    }
+
+    // Read timestamp
+    status = rs_msgpack_read_uint64(fd, false, &raw mut timestamp);
+    if status != SD_READ_STATUS_SUCCESS {
+        return status;
+    }
+
+    // Read length
+    status = rs_msgpack_read_uint64(fd, false, &raw mut length);
+    if status != SD_READ_STATUS_SUCCESS {
+        return status;
+    }
+
+    // Write to output
+    (*header).entry_type = entry_type;
+    (*header).timestamp = timestamp;
+    (*header).length = length;
+
+    SD_READ_STATUS_SUCCESS
+}
+
+/// Check if a ShaDa entry header is valid.
+///
+/// Validates that:
+/// - Entry type is not kSDItemMissing (0)
+/// - Length is within reasonable bounds
+///
+/// # Safety
+///
+/// `header` must be a valid pointer
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub unsafe extern "C" fn rs_shada_validate_entry_header(header: *const ShadaEntryHeader) -> c_int {
+    if header.is_null() {
+        return SD_READ_STATUS_NOT_SHADA;
+    }
+
+    let entry_type = (*header).entry_type;
+    let length = (*header).length;
+
+    // Entry type 0 (kSDItemMissing) should never appear in a file
+    if entry_type == 0 {
+        return SD_READ_STATUS_NOT_SHADA;
+    }
+
+    // Check for unreasonably large entries (PTRDIFF_MAX equivalent)
+    if length > isize::MAX as u64 {
+        return SD_READ_STATUS_NOT_SHADA;
+    }
+
+    SD_READ_STATUS_SUCCESS
+}
+
+/// Check if we should read an entry based on flags and type.
+///
+/// Returns true if the entry should be read, false if it should be skipped.
+///
+/// # Safety
+///
+/// `header` must be a valid pointer
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub unsafe extern "C" fn rs_shada_should_read_entry(
+    header: *const ShadaEntryHeader,
+    flags: u32,
+    max_kbyte: usize,
+) -> c_int {
+    if header.is_null() {
+        return 0;
+    }
+
+    let entry_type = (*header).entry_type;
+    let length = (*header).length as usize;
+
+    // Check max size constraint
+    if max_kbyte > 0 && length > max_kbyte * 1024 {
+        return 0;
+    }
+
+    // Unknown entry types
+    if entry_type > SHADA_LAST_ENTRY {
+        // Check if unknown entries are requested
+        return c_int::from((flags & SD_READ_UNKNOWN) != 0);
+    }
+
+    // Known entry types - check if this type is in the flags
+    let type_flag = 1u32 << (entry_type as u32);
+    c_int::from((flags & type_flag) != 0)
+}
+
+/// Convert a raw entry type number to ShadaEntryType.
+///
+/// Types greater than SHADA_LAST_ENTRY are converted to Unknown.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_shada_entry_type_from_raw(raw_type: u64) -> c_int {
+    if raw_type > SHADA_LAST_ENTRY {
+        return SD_ITEM_UNKNOWN;
+    }
+    raw_type as c_int
+}
+
+/// Check if an entry type is unknown (future version compatibility).
+#[no_mangle]
+pub const extern "C" fn rs_shada_is_unknown_entry(entry_type: u64) -> c_int {
+    if entry_type > SHADA_LAST_ENTRY {
+        1
+    } else {
+        0
+    }
+}
+
+// =============================================================================
 // MessagePack Writing Utilities for ShaDa
 // =============================================================================
 
