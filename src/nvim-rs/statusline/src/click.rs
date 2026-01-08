@@ -311,6 +311,167 @@ pub const fn is_valid_for_statusline(click_type: ClickType) -> bool {
     matches!(click_type, ClickType::Disabled | ClickType::FuncRun)
 }
 
+// =============================================================================
+// FFI Exports for Click Definitions
+// =============================================================================
+
+extern "C" {
+    fn xfree(ptr: *mut std::ffi::c_void);
+    fn vim_strnsize(s: *const c_char, len: c_int) -> c_int;
+}
+
+/// Clear status line, window bar or tab page line click definition table.
+///
+/// # Safety
+/// - `click_defs` must be a valid pointer or null.
+/// - `click_defs_size` must be the actual size of the array.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_clear_click_defs(
+    click_defs: *mut ClickDefinition,
+    click_defs_size: usize,
+) {
+    if click_defs.is_null() {
+        return;
+    }
+
+    let defs = std::slice::from_raw_parts_mut(click_defs, click_defs_size);
+
+    for i in 0..click_defs_size {
+        // Only free if this is the first occurrence of this func pointer
+        // (consecutive entries may share the same pointer)
+        if (i == 0 || defs[i].func != defs[i - 1].func) && !defs[i].func.is_null() {
+            xfree(defs[i].func.cast());
+        }
+        defs[i] = ClickDefinition::disabled();
+    }
+}
+
+/// Allocate or resize the click definitions array if needed.
+///
+/// # Safety
+/// - `cdp` must be a valid pointer allocated by xmalloc/xcalloc, or null.
+/// - `size` must be a valid pointer to a size_t.
+///
+/// # Panics
+/// May panic if the allocation layout overflows.
+#[no_mangle]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_ptr_alignment
+)]
+pub unsafe extern "C" fn rs_stl_alloc_click_defs(
+    cdp: *mut ClickDefinition,
+    width: c_int,
+    size: *mut usize,
+) -> *mut ClickDefinition {
+    if size.is_null() {
+        return cdp;
+    }
+
+    let current_size = *size;
+    let needed_size = width as usize;
+
+    if current_size < needed_size {
+        if !cdp.is_null() {
+            xfree(cdp.cast());
+        }
+        *size = needed_size;
+
+        // Allocate new array
+        let layout = std::alloc::Layout::array::<ClickDefinition>(needed_size).unwrap();
+        let ptr = std::alloc::alloc_zeroed(layout).cast::<ClickDefinition>();
+
+        // Initialize all entries to disabled
+        if !ptr.is_null() {
+            for i in 0..needed_size {
+                std::ptr::write(ptr.add(i), ClickDefinition::disabled());
+            }
+        }
+        ptr
+    } else {
+        cdp
+    }
+}
+
+/// Fill the click definitions array based on click records.
+///
+/// # Safety
+/// - `click_defs` must be a valid pointer with at least `width` elements, or null.
+/// - `click_recs` must be a valid null-terminated array of click records.
+/// - `buf` must be a valid C string.
+///
+/// # Panics
+/// Panics if `len` exceeds `width` (internal consistency check).
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_stl_fill_click_defs(
+    click_defs: *mut ClickDefinition,
+    click_recs: *const ClickRecord,
+    buf: *const c_char,
+    width: c_int,
+    tabline: bool,
+) {
+    if click_defs.is_null() || click_recs.is_null() || buf.is_null() {
+        return;
+    }
+
+    let defs = std::slice::from_raw_parts_mut(click_defs, width as usize);
+    let mut col = 0usize;
+    let mut len: c_int = 0;
+    let mut buf_ptr = buf;
+    let mut cur_click_def = ClickDefinition::disabled();
+
+    // Iterate through click records until we find a null start pointer
+    let mut i = 0;
+    loop {
+        let rec = &*click_recs.add(i);
+        if rec.start.is_null() {
+            break;
+        }
+
+        // Calculate width from buf_ptr to rec.start
+        let segment_len = rec.start.offset_from(buf_ptr) as c_int;
+        len += vim_strnsize(buf_ptr, segment_len);
+
+        assert!(len as usize <= width as usize);
+
+        // Fill columns with current definition
+        if col < len as usize {
+            while col < len as usize {
+                defs[col] = cur_click_def;
+                col += 1;
+            }
+        } else if !cur_click_def.func.is_null() {
+            // Free function pointer if we're not using it
+            xfree(cur_click_def.func.cast());
+        }
+
+        buf_ptr = rec.start;
+        cur_click_def = rec.def;
+
+        // For non-tabline, only FuncRun and Disabled are valid
+        if !(tabline
+            || cur_click_def.click_type == ClickType::Disabled
+            || cur_click_def.click_type == ClickType::FuncRun)
+        {
+            cur_click_def.click_type = ClickType::Disabled;
+        }
+
+        i += 1;
+    }
+
+    // Fill remaining columns
+    if col < width as usize {
+        while col < width as usize {
+            defs[col] = cur_click_def;
+            col += 1;
+        }
+    } else if !cur_click_def.func.is_null() {
+        xfree(cur_click_def.func.cast());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
