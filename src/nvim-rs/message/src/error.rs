@@ -374,6 +374,94 @@ pub unsafe extern "C" fn rs_emsg_restore_state(state: c_int) {
     nvim_set_emsg_silent(silent);
 }
 
+// Additional C accessor declarations for warning functionality
+extern "C" {
+    /// Get `did_emsg_def` counter (errors in :def function)
+    fn nvim_get_did_emsg_def() -> c_int;
+    /// Set `did_emsg_def` counter
+    fn nvim_set_did_emsg_def(val: c_int);
+    /// Get `did_emsg_syntax` flag
+    fn nvim_get_did_emsg_syntax() -> c_int;
+}
+
+/// Get the did_emsg_def counter.
+///
+/// Incremented when an error is given for a :def function.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_emsg_def() -> c_int {
+    nvim_get_did_emsg_def()
+}
+
+/// Set the did_emsg_def counter.
+///
+/// # Safety
+/// Calls C mutator function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_did_emsg_def(val: c_int) {
+    nvim_set_did_emsg_def(val);
+}
+
+/// Increment did_emsg_def.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_inc_did_emsg_def() {
+    let val = nvim_get_did_emsg_def();
+    nvim_set_did_emsg_def(val + 1);
+}
+
+/// Check if did_emsg was set because of a syntax error.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_emsg_syntax() -> c_int {
+    nvim_get_did_emsg_syntax()
+}
+
+/// Check if error should be output now.
+///
+/// Returns false (0) if error messages should not be shown because:
+/// - emsg_off is set OR
+/// - emsg_skip is set
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_emsg_now() -> c_int {
+    let off = nvim_get_emsg_off();
+    let skip = nvim_get_emsg_skip();
+    c_int::from(off == 0 && skip == 0)
+}
+
+/// Reset error counters for a fresh start.
+///
+/// Clears did_emsg, called_emsg, and emsg_on_display.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_emsg_reset_counters() {
+    nvim_set_did_emsg(0);
+    nvim_set_called_emsg(0);
+    nvim_set_emsg_on_display(0);
+}
+
+/// Combined check for all error suppression.
+///
+/// Returns the total "depth" of error suppression (sum of counters).
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_emsg_suppression_depth() -> c_int {
+    nvim_get_emsg_off() + nvim_get_emsg_skip() + nvim_get_emsg_silent()
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -386,5 +474,25 @@ mod tests {
         assert_eq!(packed & 0x3FF, 5);
         assert_eq!((packed >> 10) & 0x3FF, 3);
         assert_eq!((packed >> 20) & 0x3FF, 7);
+    }
+
+    #[test]
+    fn test_max_packed_values() {
+        // Test edge cases for packing - max values
+        let off = 1023; // 0x3FF
+        let skip = 1023;
+        let silent = 1023;
+        let packed = off | (skip << 10) | (silent << 20);
+        assert_eq!(packed & 0x3FF, 1023);
+        assert_eq!((packed >> 10) & 0x3FF, 1023);
+        assert_eq!((packed >> 20) & 0x3FF, 1023);
+    }
+
+    #[test]
+    fn test_zero_packed_values() {
+        let packed = 0;
+        assert_eq!(packed & 0x3FF, 0);
+        assert_eq!((packed >> 10) & 0x3FF, 0);
+        assert_eq!((packed >> 20) & 0x3FF, 0);
     }
 }
