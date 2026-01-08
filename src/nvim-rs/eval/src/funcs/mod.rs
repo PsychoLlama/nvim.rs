@@ -28,6 +28,7 @@
 pub mod bitwise;
 mod dispatch;
 pub mod math;
+pub mod random;
 pub mod types;
 
 pub use dispatch::*;

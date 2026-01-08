@@ -184,6 +184,10 @@ extern void rs_f_invert(typval_T *argvars, typval_T *rettv);
 // Rust implementations of type functions (from nvim-rs/eval/src/funcs/types.rs)
 extern void rs_f_type(typval_T *argvars, typval_T *rettv);
 
+// Rust implementations of random functions (from nvim-rs/eval/src/funcs/random.rs)
+extern uint32_t rs_splitmix32(uint32_t *x);
+extern uint32_t rs_shuffle_xoshiro128starstar(uint32_t *x, uint32_t *y, uint32_t *z, uint32_t *w);
+
 #ifdef _MSC_VER
 // This prevents MSVC from replacing the functions with intrinsics,
 // and causing errors when trying to get their addresses in funcs.generated.h
@@ -4999,27 +5003,14 @@ static void init_srand(uint32_t *const x)
 static inline uint32_t splitmix32(uint32_t *const x)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_ALWAYS_INLINE
 {
-  uint32_t z = (*x += 0x9e3779b9);
-  z = (z ^ (z >> 16)) * 0x85ebca6b;
-  z = (z ^ (z >> 13)) * 0xc2b2ae35;
-  return z ^ (z >> 16);
+  return rs_splitmix32(x);
 }
 
 static inline uint32_t shuffle_xoshiro128starstar(uint32_t *const x, uint32_t *const y,
                                                   uint32_t *const z, uint32_t *const w)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_ALWAYS_INLINE
 {
-#define ROTL(x, k) (((x) << (k)) | ((x) >> (32 - (k))))
-  const uint32_t result = ROTL(*y * 5, 7) * 9;
-  const uint32_t t = *y << 9;
-  *z ^= *x;
-  *w ^= *y;
-  *y ^= *z;
-  *x ^= *w;
-  *z ^= t;
-  *w = ROTL(*w, 11);
-#undef ROTL
-  return result;
+  return rs_shuffle_xoshiro128starstar(x, y, z, w);
 }
 
 /// "rand()" function
