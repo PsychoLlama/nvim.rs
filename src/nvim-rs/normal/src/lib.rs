@@ -8,6 +8,8 @@
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_const_for_fn)]
 
+pub mod execute;
+
 use std::ffi::{c_int, c_uint};
 
 // =============================================================================

@@ -2722,3 +2722,9 @@ int nvim_get_reg_recording(void)
 {
   return reg_recording;
 }
+
+/// Get the reg_executing value (used by Rust FFI).
+int nvim_get_reg_executing(void)
+{
+  return reg_executing;
+}

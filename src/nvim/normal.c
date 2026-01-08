@@ -449,6 +449,18 @@ extern void rs_nv_at(cmdarg_T *cap);
 extern void rs_nv_join(cmdarg_T *cap);
 extern void rs_nv_open(cmdarg_T *cap);
 
+// Execute module functions
+extern bool rs_need_additional_char(int idx, int cmdchar, bool pending_op);
+extern bool rs_cmd_has_lang_flag(int idx);
+extern bool rs_cmd_has_ncw_flag(int idx);
+extern bool rs_cmd_has_rl_flag(int idx);
+extern bool rs_cmd_has_keepreg_flag(int idx);
+extern bool rs_cmd_has_ss_flag(int idx);
+extern bool rs_cmd_has_sss_flag(int idx);
+extern bool rs_cmd_has_sts_flag(int idx);
+extern int rs_multiply_counts(int opcount, int count0);
+extern bool rs_is_operator_pending(oparg_T *oap);
+
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
 static int nv_compare(const void *s1, const void *s2)
@@ -572,6 +584,24 @@ int16_t nvim_get_nv_cmd_idx(int idx)
     return 0;
   }
   return nv_cmd_idx[idx];
+}
+
+/// Get the command flags at index in nv_cmds.
+unsigned int nvim_get_nv_cmd_flags(int idx)
+{
+  if (idx < 0 || (size_t)idx >= NV_CMDS_SIZE) {
+    return 0;
+  }
+  return nv_cmds[idx].cmd_flags;
+}
+
+/// Get the command arg at index in nv_cmds.
+int nvim_get_nv_cmd_arg(int idx)
+{
+  if (idx < 0 || (size_t)idx >= NV_CMDS_SIZE) {
+    return 0;
+  }
+  return nv_cmds[idx].cmd_arg;
 }
 
 // =============================================================================
@@ -2016,33 +2046,8 @@ static bool normal_handle_special_visual_command(NormalState *s)
 
 static bool normal_need_additional_char(NormalState *s)
 {
-  int flags = nv_cmds[s->idx].cmd_flags;
   bool pending_op = s->oa.op_type != OP_NOP;
-  int cmdchar = s->ca.cmdchar;
-  // without NV_NCH we never need to check for an additional char
-  return flags & NV_NCH && (
-                            // NV_NCH_NOP is set and no operator is pending, get a second char
-                            ((flags & NV_NCH_NOP) == NV_NCH_NOP && !pending_op)
-                            // NV_NCH_ALW is set, always get a second char
-                            || (flags & NV_NCH_ALW) == NV_NCH_ALW
-                            // 'q' without a pending operator, recording or executing a register,
-                            // needs to be followed by a second char, examples:
-                            // - qc => record using register c
-                            // - q: => open command-line window
-                            || (cmdchar == 'q'
-                                && !pending_op
-                                && reg_recording == 0
-                                && reg_executing == 0)
-                            // 'a' or 'i' after an operator is a text object, examples:
-                            // - ciw => change inside word
-                            // - da( => delete parenthesis and everything inside.
-                            // Also, don't do anything when these keys are received in visual mode
-                            // so just get another char.
-                            //
-                            // TODO(tarruda): Visual state needs to be refactored into a
-                            // separate state that "inherits" from normal state.
-                            || ((cmdchar == 'a' || cmdchar == 'i')
-                                && (pending_op || VIsual_active)));
+  return rs_need_additional_char(s->idx, s->ca.cmdchar, pending_op);
 }
 
 static bool normal_need_redraw_mode_message(NormalState *s)
