@@ -76,7 +76,7 @@ M.funcs = {
       <	2.094395
 
     ]=],
-    float_func = 'acos',
+    func = 'f_acos',
     name = 'acos',
     params = { { 'expr', 'number' } },
     returns = 'number',
@@ -276,7 +276,7 @@ M.funcs = {
       <	-0.523599
 
     ]=],
-    float_func = 'asin',
+    func = 'f_asin',
     name = 'asin',
     params = { { 'expr', 'any' } },
     returns = 'number',
@@ -567,7 +567,7 @@ M.funcs = {
       <	-1.326405
 
     ]=],
-    float_func = 'atan',
+    func = 'f_atan',
     name = 'atan',
     params = { { 'expr', 'number' } },
     returns = 'number',
@@ -1020,7 +1020,7 @@ M.funcs = {
       Returns 0.0 if {expr} is not a |Float| or a |Number|.
 
     ]=],
-    float_func = 'ceil',
+    func = 'f_ceil',
     name = 'ceil',
     params = { { 'expr', 'number' } },
     returns = 'number',
@@ -1593,7 +1593,7 @@ M.funcs = {
       <	-0.646043
 
     ]=],
-    float_func = 'cos',
+    func = 'f_cos',
     name = 'cos',
     params = { { 'expr', 'number' } },
     returns = 'number',
@@ -1614,7 +1614,7 @@ M.funcs = {
       <	-1.127626
 
     ]=],
-    float_func = 'cosh',
+    func = 'f_cosh',
     name = 'cosh',
     params = { { 'expr', 'number' } },
     returns = 'number',
@@ -2346,7 +2346,7 @@ M.funcs = {
       <	0.367879
 
     ]=],
-    float_func = 'exp',
+    func = 'f_exp',
     name = 'exp',
     params = { { 'expr', 'number' } },
     signature = 'exp({expr})',
@@ -2871,7 +2871,7 @@ M.funcs = {
       <	4.0
 
     ]=],
-    float_func = 'floor',
+    func = 'f_floor',
     name = 'floor',
     params = { { 'expr', 'number' } },
     signature = 'floor({expr})',
@@ -6561,7 +6561,7 @@ M.funcs = {
       <	5.0
 
     ]=],
-    float_func = 'log',
+    func = 'f_log',
     name = 'log',
     params = { { 'expr', 'number' } },
     returns = 'number',
@@ -6581,7 +6581,7 @@ M.funcs = {
       <	-2.0
 
     ]=],
-    float_func = 'log10',
+    func = 'f_log10',
     name = 'log10',
     params = { { 'expr', 'number' } },
     returns = 'number',
@@ -9017,7 +9017,7 @@ M.funcs = {
       <	-5.0
 
     ]=],
-    float_func = 'round',
+    func = 'f_round',
     name = 'round',
     params = { { 'expr', 'number' } },
     returns = 'number',
@@ -10999,7 +10999,7 @@ M.funcs = {
       <	0.763301
 
     ]=],
-    float_func = 'sin',
+    func = 'f_sin',
     name = 'sin',
     params = { { 'expr', 'number' } },
     returns = 'number',
@@ -11020,7 +11020,7 @@ M.funcs = {
       <	-1.026517
 
     ]=],
-    float_func = 'sinh',
+    func = 'f_sinh',
     name = 'sinh',
     params = { { 'expr', 'number' } },
     signature = 'sinh({expr})',
@@ -11287,7 +11287,7 @@ M.funcs = {
       NaN may be different, it depends on system libraries.
 
     ]=],
-    float_func = 'sqrt',
+    func = 'f_sqrt',
     name = 'sqrt',
     params = { { 'expr', 'number' } },
     signature = 'sqrt({expr})',
@@ -12463,7 +12463,7 @@ M.funcs = {
       <	-1.181502
 
     ]=],
-    float_func = 'tan',
+    func = 'f_tan',
     name = 'tan',
     params = { { 'expr', 'number' } },
     returns = 'number',
@@ -12484,7 +12484,7 @@ M.funcs = {
       <	-0.761594
 
     ]=],
-    float_func = 'tanh',
+    func = 'f_tanh',
     name = 'tanh',
     params = { { 'expr', 'number' } },
     returns = 'number',
@@ -12748,7 +12748,7 @@ M.funcs = {
       <	4.0
 
     ]=],
-    float_func = 'trunc',
+    func = 'f_trunc',
     name = 'trunc',
     params = { { 'expr', 'number' } },
     returns = 'integer',

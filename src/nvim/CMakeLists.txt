@@ -66,7 +66,15 @@ find_library(RUST_NVIM_LIB
 )
 if(RUST_NVIM_LIB)
   message(STATUS "Using Rust library: ${RUST_NVIM_LIB}")
-  target_link_libraries(main_lib INTERFACE ${RUST_NVIM_LIB} pthread dl m)
+  # Use --whole-archive to include all Rust symbols even if not immediately referenced.
+  # This is needed because of circular C<->Rust dependencies: funcs.c -> rs_f_*, Rust -> nvim_*
+  if(NOT MSVC AND NOT APPLE)
+    target_link_libraries(main_lib INTERFACE -Wl,--whole-archive ${RUST_NVIM_LIB} -Wl,--no-whole-archive pthread dl m)
+  elseif(APPLE)
+    target_link_libraries(main_lib INTERFACE -Wl,-force_load,${RUST_NVIM_LIB} pthread dl m)
+  else()
+    target_link_libraries(main_lib INTERFACE ${RUST_NVIM_LIB} pthread dl m)
+  endif()
 else()
   message(FATAL_ERROR "Rust library not found. Run 'cargo build --release' first.")
 endif()

@@ -149,6 +149,32 @@ typedef enum {
 
 #include "eval/funcs.c.generated.h"
 
+// Rust implementations of math functions (from nvim-rs/eval/src/funcs/math.rs)
+extern void rs_f_abs(typval_T *argvars, typval_T *rettv);
+extern void rs_f_sin(typval_T *argvars, typval_T *rettv);
+extern void rs_f_cos(typval_T *argvars, typval_T *rettv);
+extern void rs_f_tan(typval_T *argvars, typval_T *rettv);
+extern void rs_f_asin(typval_T *argvars, typval_T *rettv);
+extern void rs_f_acos(typval_T *argvars, typval_T *rettv);
+extern void rs_f_atan(typval_T *argvars, typval_T *rettv);
+extern void rs_f_atan2(typval_T *argvars, typval_T *rettv);
+extern void rs_f_sinh(typval_T *argvars, typval_T *rettv);
+extern void rs_f_cosh(typval_T *argvars, typval_T *rettv);
+extern void rs_f_tanh(typval_T *argvars, typval_T *rettv);
+extern void rs_f_exp(typval_T *argvars, typval_T *rettv);
+extern void rs_f_log(typval_T *argvars, typval_T *rettv);
+extern void rs_f_log10(typval_T *argvars, typval_T *rettv);
+extern void rs_f_sqrt(typval_T *argvars, typval_T *rettv);
+extern void rs_f_pow(typval_T *argvars, typval_T *rettv);
+extern void rs_f_fmod(typval_T *argvars, typval_T *rettv);
+extern void rs_f_ceil(typval_T *argvars, typval_T *rettv);
+extern void rs_f_floor(typval_T *argvars, typval_T *rettv);
+extern void rs_f_round(typval_T *argvars, typval_T *rettv);
+extern void rs_f_trunc(typval_T *argvars, typval_T *rettv);
+extern void rs_f_float2nr(typval_T *argvars, typval_T *rettv);
+extern void rs_f_isnan(typval_T *argvars, typval_T *rettv);
+extern void rs_f_isinf(typval_T *argvars, typval_T *rettv);
+
 #ifdef _MSC_VER
 // This prevents MSVC from replacing the functions with intrinsics,
 // and causing errors when trying to get their addresses in funcs.generated.h
@@ -348,6 +374,112 @@ static void float_op_wrapper(typval_T *argvars, typval_T *rettv, EvalFuncData fp
   }
 }
 
+// =============================================================================
+// Single-argument float function wrappers (call Rust implementations)
+// =============================================================================
+
+/// "acos()" function
+static void f_acos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rs_f_acos(argvars, rettv);
+}
+
+/// "asin()" function
+static void f_asin(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rs_f_asin(argvars, rettv);
+}
+
+/// "atan()" function
+static void f_atan(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rs_f_atan(argvars, rettv);
+}
+
+/// "ceil()" function
+static void f_ceil(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rs_f_ceil(argvars, rettv);
+}
+
+/// "cos()" function
+static void f_cos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rs_f_cos(argvars, rettv);
+}
+
+/// "cosh()" function
+static void f_cosh(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rs_f_cosh(argvars, rettv);
+}
+
+/// "exp()" function
+static void f_exp(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rs_f_exp(argvars, rettv);
+}
+
+/// "floor()" function
+static void f_floor(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rs_f_floor(argvars, rettv);
+}
+
+/// "log()" function
+static void f_log(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rs_f_log(argvars, rettv);
+}
+
+/// "log10()" function
+static void f_log10(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rs_f_log10(argvars, rettv);
+}
+
+/// "round()" function
+static void f_round(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rs_f_round(argvars, rettv);
+}
+
+/// "sin()" function
+static void f_sin(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rs_f_sin(argvars, rettv);
+}
+
+/// "sinh()" function
+static void f_sinh(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rs_f_sinh(argvars, rettv);
+}
+
+/// "sqrt()" function
+static void f_sqrt(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rs_f_sqrt(argvars, rettv);
+}
+
+/// "tan()" function
+static void f_tan(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rs_f_tan(argvars, rettv);
+}
+
+/// "tanh()" function
+static void f_tanh(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rs_f_tanh(argvars, rettv);
+}
+
+/// "trunc()" function
+static void f_trunc(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
+{
+  rs_f_trunc(argvars, rettv);
+}
+
 static void api_wrapper(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
   if (check_secure()) {
@@ -384,20 +516,7 @@ end:
 /// "abs(expr)" function
 static void f_abs(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  if (argvars[0].v_type == VAR_FLOAT) {
-    float_op_wrapper(argvars, rettv, (EvalFuncData){ .float_func = &fabs });
-  } else {
-    bool error = false;
-
-    varnumber_T n = tv_get_number_chk(&argvars[0], &error);
-    if (error) {
-      rettv->vval.v_number = -1;
-    } else if (n > 0) {
-      rettv->vval.v_number = n;
-    } else {
-      rettv->vval.v_number = -n;
-    }
-  }
+  rs_f_abs(argvars, rettv);
 }
 
 /// "and(expr, expr)" function
@@ -416,15 +535,7 @@ static void f_api_info(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// "atan2()" function
 static void f_atan2(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  float_T fx;
-  float_T fy;
-
-  rettv->v_type = VAR_FLOAT;
-  if (tv_get_float_chk(argvars, &fx) && tv_get_float_chk(&argvars[1], &fy)) {
-    rettv->vval.v_float = atan2(fx, fy);
-  } else {
-    rettv->vval.v_float = 0.0;
-  }
+  rs_f_atan2(argvars, rettv);
 }
 
 /// Get buffer by number or pattern.
@@ -1623,33 +1734,13 @@ static void f_feedkeys(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// "float2nr({float})" function
 static void f_float2nr(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  float_T f;
-
-  if (!tv_get_float_chk(argvars, &f)) {
-    return;
-  }
-
-  if (f <= (float_T)(-VARNUMBER_MAX) + DBL_EPSILON) {
-    rettv->vval.v_number = -VARNUMBER_MAX;
-  } else if (f >= (float_T)VARNUMBER_MAX - DBL_EPSILON) {
-    rettv->vval.v_number = VARNUMBER_MAX;
-  } else {
-    rettv->vval.v_number = (varnumber_T)f;
-  }
+  rs_f_float2nr(argvars, rettv);
 }
 
 /// "fmod()" function
 static void f_fmod(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  float_T fx;
-  float_T fy;
-
-  rettv->v_type = VAR_FLOAT;
-  if (tv_get_float_chk(argvars, &fx) && tv_get_float_chk(&argvars[1], &fy)) {
-    rettv->vval.v_float = fmod(fx, fy);
-  } else {
-    rettv->vval.v_float = 0.0;
-  }
+  rs_f_fmod(argvars, rettv);
 }
 
 /// "fnameescape({string})" function
@@ -3255,17 +3346,13 @@ static void f_islocked(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// "isinf()" function
 static void f_isinf(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  if (argvars[0].v_type == VAR_FLOAT
-      && xisinf(argvars[0].vval.v_float)) {
-    rettv->vval.v_number = argvars[0].vval.v_float > 0.0 ? 1 : -1;
-  }
+  rs_f_isinf(argvars, rettv);
 }
 
 /// "isnan()" function
 static void f_isnan(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  rettv->vval.v_number = argvars[0].v_type == VAR_FLOAT
-                         && xisnan(argvars[0].vval.v_float);
+  rs_f_isnan(argvars, rettv);
 }
 
 /// "id()" function
@@ -4783,15 +4870,7 @@ static void f_or(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// "pow()" function
 static void f_pow(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  float_T fx;
-  float_T fy;
-
-  rettv->v_type = VAR_FLOAT;
-  if (tv_get_float_chk(argvars, &fx) && tv_get_float_chk(&argvars[1], &fy)) {
-    rettv->vval.v_float = pow(fx, fy);
-  } else {
-    rettv->vval.v_float = 0.0;
-  }
+  rs_f_pow(argvars, rettv);
 }
 
 /// "prevnonblank()" function
