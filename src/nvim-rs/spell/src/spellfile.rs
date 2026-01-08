@@ -1889,6 +1889,647 @@ pub unsafe extern "C" fn rs_write_end_section(
 }
 
 // =============================================================================
+// Prefix Condition Section Parsing
+// =============================================================================
+
+/// Maximum number of prefix conditions
+pub const MAX_PREFCOND: usize = 65535;
+
+/// A single prefix condition entry.
+///
+/// In C, prefix conditions are compiled into regex programs. Here we store
+/// the raw condition string which can be passed to C for regex compilation.
+#[repr(C)]
+#[derive(Debug, Clone)]
+pub struct PrefixCondition {
+    /// The condition pattern (NUL-terminated)
+    pub pattern: [u8; 256],
+    /// Length of the pattern
+    pub pattern_len: u8,
+}
+
+impl Default for PrefixCondition {
+    fn default() -> Self {
+        Self {
+            pattern: [0; 256],
+            pattern_len: 0,
+        }
+    }
+}
+
+/// Parse a single prefix condition from buffer.
+///
+/// Format: <condlen (1 byte)> <condstr (N bytes)>
+///
+/// Returns (condition, bytes_consumed) or error.
+pub fn parse_prefcond(buf: &[u8]) -> Result<(PrefixCondition, usize), c_int> {
+    if buf.is_empty() {
+        return Err(SP_TRUNCERROR);
+    }
+
+    let condlen = buf[0] as usize;
+    if condlen >= 254 {
+        // Condition too long (MAXWLEN limit)
+        return Err(SP_FORMERROR);
+    }
+
+    if buf.len() < 1 + condlen {
+        return Err(SP_TRUNCERROR);
+    }
+
+    let mut cond = PrefixCondition::default();
+
+    if condlen > 0 {
+        // Check for NUL bytes in condition (invalid)
+        let cond_bytes = &buf[1..1 + condlen];
+        if cond_bytes.contains(&0) {
+            return Err(SP_FORMERROR);
+        }
+
+        let copy_len = condlen.min(255);
+        cond.pattern[..copy_len].copy_from_slice(&buf[1..1 + copy_len]);
+        cond.pattern_len = copy_len as u8;
+    }
+
+    Ok((cond, 1 + condlen))
+}
+
+/// FFI wrapper for parsing a prefix condition.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_prefcond(
+    buf: *const u8,
+    buf_len: usize,
+    cond_out: *mut PrefixCondition,
+    consumed_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || cond_out.is_null() || consumed_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let slice = std::slice::from_raw_parts(buf, buf_len);
+    match parse_prefcond(slice) {
+        Ok((cond, consumed)) => {
+            *cond_out = cond;
+            *consumed_out = consumed;
+            0
+        }
+        Err(e) => e,
+    }
+}
+
+/// Parse prefix conditions section header.
+///
+/// Format: <prefcondcnt (2 bytes BE)>
+///
+/// Returns the count of prefix conditions.
+pub fn parse_prefcond_count(buf: &[u8]) -> Result<(u16, usize), c_int> {
+    let count = read_be_u16(buf).ok_or(SP_TRUNCERROR)?;
+    if count == 0 {
+        return Err(SP_FORMERROR);
+    }
+    Ok((count, 2))
+}
+
+/// FFI wrapper for parsing prefix condition count.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_prefcond_count(
+    buf: *const u8,
+    buf_len: usize,
+    count_out: *mut u16,
+    consumed_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || count_out.is_null() || consumed_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let slice = std::slice::from_raw_parts(buf, buf_len);
+    match parse_prefcond_count(slice) {
+        Ok((count, consumed)) => {
+            *count_out = count;
+            *consumed_out = consumed;
+            0
+        }
+        Err(e) => e,
+    }
+}
+
+// =============================================================================
+// REP/REPSAL Section Parsing
+// =============================================================================
+
+/// Parse REP/REPSAL section header.
+///
+/// Format: <repcount (2 bytes BE)>
+///
+/// Returns the count of replacement items.
+pub fn parse_rep_count(buf: &[u8]) -> Result<(u16, usize), c_int> {
+    let count = read_be_u16(buf).ok_or(SP_TRUNCERROR)?;
+    Ok((count, 2))
+}
+
+/// FFI wrapper for parsing REP count.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_rep_count(
+    buf: *const u8,
+    buf_len: usize,
+    count_out: *mut u16,
+    consumed_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || count_out.is_null() || consumed_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let slice = std::slice::from_raw_parts(buf, buf_len);
+    match parse_rep_count(slice) {
+        Ok((count, consumed)) => {
+            *count_out = count;
+            *consumed_out = consumed;
+            0
+        }
+        Err(e) => e,
+    }
+}
+
+/// Build the first-index table for REP items.
+///
+/// For each byte value 0-255, stores the index of the first REP item
+/// that starts with that byte, or -1 if none.
+///
+/// # Arguments
+/// * `items` - Array of FromTo items
+/// * `count` - Number of items
+/// * `first` - Output array of 256 i16 values
+///
+/// # Safety
+/// All pointers must be valid. `items` must have at least `count` elements.
+/// `first` must have at least 256 elements.
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_build_rep_first_table(
+    items: *const FromTo,
+    count: usize,
+    first: *mut i16,
+) {
+    if items.is_null() || first.is_null() {
+        return;
+    }
+
+    // Initialize all to -1
+    for i in 0..256 {
+        *first.add(i) = -1;
+    }
+
+    // Fill in first indexes
+    for i in 0..count {
+        let item = &*items.add(i);
+        if item.from_len > 0 {
+            let byte_val = item.from[0] as usize;
+            if *first.add(byte_val) == -1 {
+                *first.add(byte_val) = i as i16;
+            }
+        }
+    }
+}
+
+// =============================================================================
+// SAL Section Parsing
+// =============================================================================
+
+/// A soundalike item parsed from the spell file.
+///
+/// This is a simplified version that stores the raw data. The full
+/// splitting into sm_lead/sm_oneof/sm_rules is done in C.
+#[repr(C)]
+#[derive(Debug, Clone)]
+pub struct SalItem {
+    /// "From" pattern (raw, includes lead/oneof/rules)
+    pub from: [u8; 256],
+    /// Length of from pattern
+    pub from_len: u8,
+    /// "To" replacement
+    pub to: [u8; 256],
+    /// Length of to string
+    pub to_len: u8,
+}
+
+impl Default for SalItem {
+    fn default() -> Self {
+        Self {
+            from: [0; 256],
+            from_len: 0,
+            to: [0; 256],
+            to_len: 0,
+        }
+    }
+}
+
+/// Parse a single SAL item from buffer.
+///
+/// Format: <salfromlen (1 byte)> <salfrom (N bytes)>
+///         <saltolen (1 byte)> <salto (N bytes)>
+///
+/// Returns (item, bytes_consumed) or error.
+pub fn parse_sal_item(buf: &[u8]) -> Result<(SalItem, usize), c_int> {
+    let mut offset = 0;
+
+    // Read from pattern
+    if buf.is_empty() {
+        return Err(SP_TRUNCERROR);
+    }
+    let from_len = buf[0] as usize;
+    offset += 1;
+
+    if offset + from_len >= buf.len() {
+        return Err(SP_TRUNCERROR);
+    }
+
+    let mut item = SalItem::default();
+
+    if from_len > 0 {
+        let copy_len = from_len.min(255);
+        item.from[..copy_len].copy_from_slice(&buf[offset..offset + copy_len]);
+        item.from_len = copy_len as u8;
+    }
+    offset += from_len;
+
+    // Read to string
+    if offset >= buf.len() {
+        return Err(SP_TRUNCERROR);
+    }
+    let to_len = buf[offset] as usize;
+    offset += 1;
+
+    if offset + to_len > buf.len() {
+        return Err(SP_TRUNCERROR);
+    }
+
+    if to_len > 0 {
+        let copy_len = to_len.min(255);
+        item.to[..copy_len].copy_from_slice(&buf[offset..offset + copy_len]);
+        item.to_len = copy_len as u8;
+    }
+    offset += to_len;
+
+    Ok((item, offset))
+}
+
+/// FFI wrapper for parsing a SAL item.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_sal_item(
+    buf: *const u8,
+    buf_len: usize,
+    item_out: *mut SalItem,
+    consumed_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || item_out.is_null() || consumed_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let slice = std::slice::from_raw_parts(buf, buf_len);
+    match parse_sal_item(slice) {
+        Ok((item, consumed)) => {
+            *item_out = item;
+            *consumed_out = consumed;
+            0
+        }
+        Err(e) => e,
+    }
+}
+
+/// Parse SAL section count.
+///
+/// Format: <salcount (2 bytes BE)>
+///
+/// Returns the count of SAL items.
+pub fn parse_sal_count(buf: &[u8]) -> Result<(u16, usize), c_int> {
+    let count = read_be_u16(buf).ok_or(SP_TRUNCERROR)?;
+    Ok((count, 2))
+}
+
+/// FFI wrapper for parsing SAL count.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_sal_count(
+    buf: *const u8,
+    buf_len: usize,
+    count_out: *mut u16,
+    consumed_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || count_out.is_null() || consumed_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let slice = std::slice::from_raw_parts(buf, buf_len);
+    match parse_sal_count(slice) {
+        Ok((count, consumed)) => {
+            *count_out = count;
+            *consumed_out = consumed;
+            0
+        }
+        Err(e) => e,
+    }
+}
+
+// =============================================================================
+// Midword Section Parsing
+// =============================================================================
+
+/// Parse midword section.
+///
+/// The midword section is just a string of characters that can appear
+/// in the middle of a word but not at the start or end.
+///
+/// Format: <midword string (len bytes)>
+pub fn parse_midword_section(buf: &[u8], output: &mut [u8]) -> Result<usize, c_int> {
+    // Check for NUL bytes (invalid)
+    if buf.contains(&0) {
+        return Err(SP_FORMERROR);
+    }
+
+    let copy_len = buf.len().min(output.len().saturating_sub(1));
+    output[..copy_len].copy_from_slice(&buf[..copy_len]);
+    // NUL-terminate
+    if copy_len < output.len() {
+        output[copy_len] = 0;
+    }
+
+    Ok(copy_len)
+}
+
+/// FFI wrapper for parsing midword section.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_midword_section(
+    buf: *const u8,
+    buf_len: usize,
+    output: *mut u8,
+    output_len: usize,
+    written_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || output.is_null() || written_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let in_slice = std::slice::from_raw_parts(buf, buf_len);
+    let out_slice = std::slice::from_raw_parts_mut(output, output_len);
+
+    match parse_midword_section(in_slice, out_slice) {
+        Ok(written) => {
+            *written_out = written;
+            0
+        }
+        Err(e) => e,
+    }
+}
+
+// =============================================================================
+// MAP Section Parsing
+// =============================================================================
+
+/// Parse MAP section string.
+///
+/// The MAP section contains groups of similar characters separated by '/'.
+/// Each group starts with a character count prefix.
+///
+/// Format: <mapstr (len bytes)>
+pub fn parse_map_section(buf: &[u8], output: &mut [u8]) -> Result<usize, c_int> {
+    // Check for NUL bytes (invalid)
+    if buf.contains(&0) {
+        return Err(SP_FORMERROR);
+    }
+
+    let copy_len = buf.len().min(output.len().saturating_sub(1));
+    output[..copy_len].copy_from_slice(&buf[..copy_len]);
+    // NUL-terminate
+    if copy_len < output.len() {
+        output[copy_len] = 0;
+    }
+
+    Ok(copy_len)
+}
+
+/// FFI wrapper for parsing MAP section.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_map_section(
+    buf: *const u8,
+    buf_len: usize,
+    output: *mut u8,
+    output_len: usize,
+    written_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || output.is_null() || written_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let in_slice = std::slice::from_raw_parts(buf, buf_len);
+    let out_slice = std::slice::from_raw_parts_mut(output, output_len);
+
+    match parse_map_section(in_slice, out_slice) {
+        Ok(written) => {
+            *written_out = written;
+            0
+        }
+        Err(e) => e,
+    }
+}
+
+// =============================================================================
+// WORDS Section Parsing
+// =============================================================================
+
+/// Parse a single word from the WORDS section.
+///
+/// Words are NUL-terminated in the section.
+///
+/// Returns (word_slice, bytes_consumed) or error.
+pub fn parse_words_entry(buf: &[u8]) -> Result<(&[u8], usize), c_int> {
+    // Find NUL terminator
+    let nul_pos = buf.iter().position(|&b| b == 0).ok_or(SP_TRUNCERROR)?;
+
+    Ok((&buf[..nul_pos], nul_pos + 1))
+}
+
+/// FFI wrapper for parsing a word entry.
+///
+/// Returns the length of the word (not including NUL), or a negative error code.
+/// Copies the word to `output` (NUL-terminated).
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap)]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_parse_words_entry(
+    buf: *const u8,
+    buf_len: usize,
+    output: *mut u8,
+    output_len: usize,
+    consumed_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || output.is_null() || consumed_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let slice = std::slice::from_raw_parts(buf, buf_len);
+    match parse_words_entry(slice) {
+        Ok((word, consumed)) => {
+            let copy_len = word.len().min(output_len.saturating_sub(1));
+            std::ptr::copy_nonoverlapping(word.as_ptr(), output, copy_len);
+            *output.add(copy_len) = 0; // NUL-terminate
+            *consumed_out = consumed;
+            copy_len as c_int
+        }
+        Err(e) => e,
+    }
+}
+
+// =============================================================================
+// Tree Reading Orchestration
+// =============================================================================
+
+/// Result of reading a word tree from a buffer.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TreeReadResult {
+    /// Number of bytes consumed from input buffer
+    pub bytes_consumed: usize,
+    /// Total number of nodes in the tree
+    pub node_count: u32,
+    /// Error code (0 = success)
+    pub error: c_int,
+}
+
+/// Read tree node count from buffer.
+///
+/// This reads the 4-byte node count that precedes the tree data.
+///
+/// Returns (node_count, bytes_consumed) or error.
+pub fn read_tree_node_count(buf: &[u8]) -> Result<(u32, usize), c_int> {
+    let count = read_be_u32(buf).ok_or(SP_TRUNCERROR)?;
+    Ok((count, 4))
+}
+
+/// FFI wrapper for reading tree node count.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_read_tree_node_count(
+    buf: *const u8,
+    buf_len: usize,
+    count_out: *mut u32,
+    consumed_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || count_out.is_null() || consumed_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let slice = std::slice::from_raw_parts(buf, buf_len);
+    match read_tree_node_count(slice) {
+        Ok((count, consumed)) => {
+            *count_out = count;
+            *consumed_out = consumed;
+            0
+        }
+        Err(e) => e,
+    }
+}
+
+// =============================================================================
+// Spell File Loader State
+// =============================================================================
+
+/// State for spell file loading.
+///
+/// This struct tracks progress while loading a spell file, allowing
+/// incremental parsing of sections.
+#[repr(C)]
+#[derive(Debug, Clone, Default)]
+pub struct SpellLoadState {
+    /// Current offset in the file buffer
+    pub offset: usize,
+    /// Total buffer length
+    pub buf_len: usize,
+    /// Number of regions found
+    pub region_count: u8,
+    /// Flags from sections
+    pub flags: u32,
+    /// Error code (0 = no error)
+    pub error: c_int,
+    /// Whether we've seen the end section marker
+    pub sections_done: bool,
+}
+
+impl SpellLoadState {
+    /// Create a new load state for a buffer.
+    pub const fn new(buf_len: usize) -> Self {
+        Self {
+            offset: 0,
+            buf_len,
+            region_count: 0,
+            flags: 0,
+            error: 0,
+            sections_done: false,
+        }
+    }
+
+    /// Check if there are more bytes to read.
+    pub const fn has_more(&self) -> bool {
+        self.offset < self.buf_len && self.error == 0
+    }
+}
+
+/// FFI function to create a new spell load state.
+#[no_mangle]
+pub extern "C" fn rs_spell_load_state_new(buf_len: usize) -> SpellLoadState {
+    SpellLoadState::new(buf_len)
+}
+
+/// FFI function to check if a load state has an error.
+///
+/// # Safety
+/// `state` must be a valid pointer to a `SpellLoadState`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_spell_load_state_has_error(state: *const SpellLoadState) -> bool {
+    if state.is_null() {
+        return true;
+    }
+    (*state).error != 0
+}
+
+/// FFI function to get the error code from a load state.
+///
+/// # Safety
+/// `state` must be a valid pointer to a `SpellLoadState`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_spell_load_state_get_error(state: *const SpellLoadState) -> c_int {
+    if state.is_null() {
+        return SP_OTHERERROR;
+    }
+    (*state).error
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -2460,5 +3101,179 @@ mod tests {
         let mut info2 = info;
         info2.region_count = 3;
         assert!(info2.has_regions());
+    }
+
+    // =========================================================================
+    // Prefix Condition Parsing Tests
+    // =========================================================================
+
+    #[test]
+    fn test_parse_prefcond_empty() {
+        // Empty condition
+        let buf = [0u8; 1]; // condlen = 0
+        let (cond, consumed) = parse_prefcond(&buf).unwrap();
+        assert_eq!(consumed, 1);
+        assert_eq!(cond.pattern_len, 0);
+    }
+
+    #[test]
+    fn test_parse_prefcond_with_pattern() {
+        // Condition with pattern "abc"
+        let buf = [3, b'a', b'b', b'c'];
+        let (cond, consumed) = parse_prefcond(&buf).unwrap();
+        assert_eq!(consumed, 4);
+        assert_eq!(cond.pattern_len, 3);
+        assert_eq!(&cond.pattern[..3], b"abc");
+    }
+
+    #[test]
+    fn test_parse_prefcond_truncated() {
+        // Buffer too short
+        let buf = [3, b'a']; // Says 3 bytes but only 1
+        assert_eq!(parse_prefcond(&buf).unwrap_err(), SP_TRUNCERROR);
+    }
+
+    #[test]
+    fn test_parse_prefcond_count() {
+        let buf = [0x00, 0x05]; // 5 conditions
+        let (count, consumed) = parse_prefcond_count(&buf).unwrap();
+        assert_eq!(count, 5);
+        assert_eq!(consumed, 2);
+    }
+
+    // =========================================================================
+    // REP Section Parsing Tests
+    // =========================================================================
+
+    #[test]
+    fn test_parse_rep_count() {
+        let buf = [0x00, 0x0A]; // 10 items
+        let (count, consumed) = parse_rep_count(&buf).unwrap();
+        assert_eq!(count, 10);
+        assert_eq!(consumed, 2);
+    }
+
+    // =========================================================================
+    // SAL Section Parsing Tests
+    // =========================================================================
+
+    #[test]
+    fn test_parse_sal_item_basic() {
+        // Simple SAL item: "a" -> "b"
+        let buf = [1, b'a', 1, b'b'];
+        let (item, consumed) = parse_sal_item(&buf).unwrap();
+        assert_eq!(consumed, 4);
+        assert_eq!(item.from_len, 1);
+        assert_eq!(item.from[0], b'a');
+        assert_eq!(item.to_len, 1);
+        assert_eq!(item.to[0], b'b');
+    }
+
+    #[test]
+    fn test_parse_sal_item_empty_to() {
+        // SAL item with empty "to": "abc" -> ""
+        let buf = [3, b'a', b'b', b'c', 0];
+        let (item, consumed) = parse_sal_item(&buf).unwrap();
+        assert_eq!(consumed, 5);
+        assert_eq!(item.from_len, 3);
+        assert_eq!(item.to_len, 0);
+    }
+
+    #[test]
+    fn test_parse_sal_count() {
+        let buf = [0x00, 0x14]; // 20 items
+        let (count, consumed) = parse_sal_count(&buf).unwrap();
+        assert_eq!(count, 20);
+        assert_eq!(consumed, 2);
+    }
+
+    // =========================================================================
+    // Midword Section Tests
+    // =========================================================================
+
+    #[test]
+    fn test_parse_midword_section() {
+        let input = b"'-";
+        let mut output = [0u8; 10];
+        let len = parse_midword_section(input, &mut output).unwrap();
+        assert_eq!(len, 2);
+        assert_eq!(&output[..2], b"'-");
+        assert_eq!(output[2], 0); // NUL-terminated
+    }
+
+    // =========================================================================
+    // MAP Section Tests
+    // =========================================================================
+
+    #[test]
+    fn test_parse_map_section() {
+        let input = b"aA/eE/iI";
+        let mut output = [0u8; 20];
+        let len = parse_map_section(input, &mut output).unwrap();
+        assert_eq!(len, 8);
+        assert_eq!(&output[..8], b"aA/eE/iI");
+    }
+
+    // =========================================================================
+    // Words Section Tests
+    // =========================================================================
+
+    #[test]
+    fn test_parse_words_entry() {
+        let buf = b"hello\0world\0";
+        let (word, consumed) = parse_words_entry(buf).unwrap();
+        assert_eq!(word, b"hello");
+        assert_eq!(consumed, 6); // "hello" + NUL
+    }
+
+    #[test]
+    fn test_parse_words_entry_truncated() {
+        let buf = b"hello"; // No NUL terminator
+        assert_eq!(parse_words_entry(buf).unwrap_err(), SP_TRUNCERROR);
+    }
+
+    // =========================================================================
+    // Tree Node Count Tests
+    // =========================================================================
+
+    #[test]
+    fn test_read_tree_node_count() {
+        let buf = [0x00, 0x01, 0x00, 0x00]; // 65536
+        let (count, consumed) = read_tree_node_count(&buf).unwrap();
+        assert_eq!(count, 0x0001_0000);
+        assert_eq!(consumed, 4);
+    }
+
+    #[test]
+    fn test_read_tree_node_count_truncated() {
+        let buf = [0x00, 0x01]; // Only 2 bytes
+        assert_eq!(read_tree_node_count(&buf).unwrap_err(), SP_TRUNCERROR);
+    }
+
+    // =========================================================================
+    // Spell Load State Tests
+    // =========================================================================
+
+    #[test]
+    fn test_spell_load_state_new() {
+        let state = SpellLoadState::new(1024);
+        assert_eq!(state.offset, 0);
+        assert_eq!(state.buf_len, 1024);
+        assert_eq!(state.error, 0);
+        assert!(!state.sections_done);
+        assert!(state.has_more());
+    }
+
+    #[test]
+    fn test_spell_load_state_has_more() {
+        let mut state = SpellLoadState::new(100);
+        assert!(state.has_more());
+
+        state.offset = 100;
+        assert!(!state.has_more());
+
+        state.offset = 50;
+        state.error = SP_FORMERROR;
+        assert!(!state.has_more()); // Error stops further reading
     }
 }
