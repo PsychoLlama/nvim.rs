@@ -37,6 +37,28 @@ impl SlangHandle {
     }
 }
 
+/// Opaque handle to a language pointer entry (langp_T)
+///
+/// Used for entries in the buffer's b_langp array which maps
+/// spell languages to slang_T structures.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct LangpHandle(*mut c_void);
+
+impl LangpHandle {
+    /// Creates a null handle
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+
+    /// Returns true if this handle is null
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
 /// Opaque handle to spell table (spelltab_T)
 #[repr(transparent)]
 #[derive(Clone, Copy)]
@@ -85,6 +107,21 @@ extern "C" {
     fn nvim_slang_get_collapse(slang: SlangHandle) -> bool;
     fn nvim_slang_get_sal_first(slang: SlangHandle) -> *mut SalfirstT;
     fn nvim_slang_get_regions(slang: SlangHandle) -> *const c_char;
+
+    // slang_T metadata accessors
+    fn nvim_slang_get_name(slang: SlangHandle) -> *const c_char;
+    fn nvim_slang_get_fname(slang: SlangHandle) -> *const c_char;
+    fn nvim_slang_get_add(slang: SlangHandle) -> bool;
+    fn nvim_slang_get_next(slang: SlangHandle) -> SlangHandle;
+
+    // slang_T list accessors
+    fn nvim_get_first_lang() -> SlangHandle;
+
+    // langp_T accessors
+    fn nvim_langp_get_slang(langp: LangpHandle) -> SlangHandle;
+    fn nvim_langp_get_sallang(langp: LangpHandle) -> SlangHandle;
+    fn nvim_langp_get_replang(langp: LangpHandle) -> SlangHandle;
+    fn nvim_langp_get_region(langp: LangpHandle) -> c_int;
 
     // spelltab_T accessors
     fn nvim_get_spelltab() -> SpelltabHandle;
@@ -193,6 +230,66 @@ impl SlangHandle {
     #[must_use]
     pub fn regions(self) -> *const c_char {
         unsafe { nvim_slang_get_regions(self) }
+    }
+
+    /// Get language name (e.g., "en", "en.rare", "nl")
+    #[must_use]
+    pub fn name(self) -> *const c_char {
+        unsafe { nvim_slang_get_name(self) }
+    }
+
+    /// Get file name of the .spl file
+    #[must_use]
+    pub fn fname(self) -> *const c_char {
+        unsafe { nvim_slang_get_fname(self) }
+    }
+
+    /// Get whether this is an .add file
+    #[must_use]
+    pub fn is_add(self) -> bool {
+        unsafe { nvim_slang_get_add(self) }
+    }
+
+    /// Get next language in the linked list
+    #[must_use]
+    pub fn next(self) -> Self {
+        unsafe { nvim_slang_get_next(self) }
+    }
+
+    /// Get the first loaded spell language
+    #[must_use]
+    pub fn first() -> Self {
+        unsafe { nvim_get_first_lang() }
+    }
+}
+
+// =============================================================================
+// Safe Wrappers for langp_T Accessors
+// =============================================================================
+
+impl LangpHandle {
+    /// Get the associated slang_T handle
+    #[must_use]
+    pub fn slang(self) -> SlangHandle {
+        unsafe { nvim_langp_get_slang(self) }
+    }
+
+    /// Get the sound-alike language for this entry
+    #[must_use]
+    pub fn sallang(self) -> SlangHandle {
+        unsafe { nvim_langp_get_sallang(self) }
+    }
+
+    /// Get the REP items language for this entry
+    #[must_use]
+    pub fn replang(self) -> SlangHandle {
+        unsafe { nvim_langp_get_replang(self) }
+    }
+
+    /// Get the region bitmask (or REGION_ALL)
+    #[must_use]
+    pub fn region(self) -> c_int {
+        unsafe { nvim_langp_get_region(self) }
     }
 }
 
@@ -1865,9 +1962,162 @@ pub extern "C" fn rs_wf_has_afx(flags: c_int) -> bool {
     (flags & WF_AFX) != 0
 }
 
+// =============================================================================
+// Spell Language List FFI Functions
+// =============================================================================
+
+/// Get the first loaded spell language.
+///
+/// Returns null handle if no languages are loaded.
+#[no_mangle]
+pub extern "C" fn rs_get_first_lang() -> SlangHandle {
+    SlangHandle::first()
+}
+
+/// Get the next language in the linked list.
+///
+/// Returns null handle if this is the last language.
+#[no_mangle]
+pub extern "C" fn rs_slang_next(slang: SlangHandle) -> SlangHandle {
+    if slang.is_null() {
+        SlangHandle::null()
+    } else {
+        slang.next()
+    }
+}
+
+/// Get the language name from a slang handle.
+///
+/// Returns null if handle is null.
+#[no_mangle]
+pub extern "C" fn rs_slang_name(slang: SlangHandle) -> *const c_char {
+    if slang.is_null() {
+        std::ptr::null()
+    } else {
+        slang.name()
+    }
+}
+
+/// Get the file name from a slang handle.
+///
+/// Returns null if handle is null.
+#[no_mangle]
+pub extern "C" fn rs_slang_fname(slang: SlangHandle) -> *const c_char {
+    if slang.is_null() {
+        std::ptr::null()
+    } else {
+        slang.fname()
+    }
+}
+
+/// Check if a slang is an .add file.
+///
+/// Returns false if handle is null.
+#[no_mangle]
+pub extern "C" fn rs_slang_is_add(slang: SlangHandle) -> bool {
+    if slang.is_null() {
+        false
+    } else {
+        slang.is_add()
+    }
+}
+
+/// Check if a slang handle is null.
+#[no_mangle]
+pub extern "C" fn rs_slang_is_null(slang: SlangHandle) -> bool {
+    slang.is_null()
+}
+
+// =============================================================================
+// Language Pointer (langp_T) FFI Functions
+// =============================================================================
+
+/// Get the slang handle from a langp entry.
+#[no_mangle]
+pub extern "C" fn rs_langp_slang(langp: LangpHandle) -> SlangHandle {
+    if langp.is_null() {
+        SlangHandle::null()
+    } else {
+        langp.slang()
+    }
+}
+
+/// Get the sound-alike language from a langp entry.
+#[no_mangle]
+pub extern "C" fn rs_langp_sallang(langp: LangpHandle) -> SlangHandle {
+    if langp.is_null() {
+        SlangHandle::null()
+    } else {
+        langp.sallang()
+    }
+}
+
+/// Get the REP items language from a langp entry.
+#[no_mangle]
+pub extern "C" fn rs_langp_replang(langp: LangpHandle) -> SlangHandle {
+    if langp.is_null() {
+        SlangHandle::null()
+    } else {
+        langp.replang()
+    }
+}
+
+/// Get the region bitmask from a langp entry.
+///
+/// Returns REGION_ALL (0xff) if handle is null.
+#[no_mangle]
+pub extern "C" fn rs_langp_region(langp: LangpHandle) -> c_int {
+    if langp.is_null() {
+        REGION_ALL
+    } else {
+        langp.region()
+    }
+}
+
+/// Check if a langp handle is null.
+#[no_mangle]
+pub extern "C" fn rs_langp_is_null(langp: LangpHandle) -> bool {
+    langp.is_null()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // =========================================================================
+    // Opaque handle tests
+    // =========================================================================
+
+    #[test]
+    fn test_slang_handle_null() {
+        let handle = SlangHandle::null();
+        assert!(handle.is_null());
+        // rs_slang_is_null just checks the handle directly, no FFI call
+        assert!(rs_slang_is_null(handle));
+    }
+
+    #[test]
+    fn test_langp_handle_null() {
+        let handle = LangpHandle::null();
+        assert!(handle.is_null());
+        // rs_langp_is_null just checks the handle directly, no FFI call
+        assert!(rs_langp_is_null(handle));
+    }
+
+    #[test]
+    fn test_spelltab_handle_null() {
+        let handle = SpelltabHandle::null();
+        assert!(handle.is_null());
+    }
+
+    #[test]
+    fn test_handle_sizes() {
+        // Ensure handles are pointer-sized for FFI compatibility
+        use std::mem::size_of;
+        assert_eq!(size_of::<SlangHandle>(), size_of::<*mut c_void>());
+        assert_eq!(size_of::<LangpHandle>(), size_of::<*mut c_void>());
+        assert_eq!(size_of::<SpelltabHandle>(), size_of::<*mut c_void>());
+    }
 
     #[test]
     fn test_valid_spelllang() {

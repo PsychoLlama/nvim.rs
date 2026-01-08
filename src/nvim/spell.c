@@ -297,6 +297,57 @@ const char *nvim_slang_get_regions(slang_T *slang)
   return slang->sl_regions;
 }
 
+// slang_T metadata accessors
+const char *nvim_slang_get_name(slang_T *slang)
+{
+  return slang->sl_name;
+}
+
+const char *nvim_slang_get_fname(slang_T *slang)
+{
+  return slang->sl_fname;
+}
+
+bool nvim_slang_get_add(slang_T *slang)
+{
+  return slang->sl_add;
+}
+
+slang_T *nvim_slang_get_next(slang_T *slang)
+{
+  return slang->sl_next;
+}
+
+// Global spell language list accessor
+slang_T *nvim_get_first_lang(void)
+{
+  return first_lang;
+}
+
+// =============================================================================
+// langp_T accessors for Rust
+// =============================================================================
+
+slang_T *nvim_langp_get_slang(langp_T *langp)
+{
+  return langp->lp_slang;
+}
+
+slang_T *nvim_langp_get_sallang(langp_T *langp)
+{
+  return langp->lp_sallang;
+}
+
+slang_T *nvim_langp_get_replang(langp_T *langp)
+{
+  return langp->lp_replang;
+}
+
+int nvim_langp_get_region(langp_T *langp)
+{
+  return langp->lp_region;
+}
+
 // =============================================================================
 // spelltab_T accessors for Rust
 // =============================================================================
