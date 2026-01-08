@@ -13,6 +13,7 @@
 //! - [`replace`]: Character replacement calculations (r)
 //! - [`join`]: Line join calculations (J, gJ)
 //! - [`delete`]: Delete operation calculations (d, x, D)
+//! - [`yank`]: Yank operation calculations (y)
 //! - [`insert`]: Insert/change operation calculations (I, A, c)
 
 #![allow(unsafe_code)] // FFI requires unsafe
@@ -28,6 +29,7 @@ pub mod replace;
 pub mod shift;
 pub mod tilde;
 pub mod types;
+pub mod yank;
 
 pub use oparg::{OpArgHandle, OpArgMut, OpArgRef};
 pub use types::{BlockDef, MotionType, OpType, Pos};
