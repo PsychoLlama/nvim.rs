@@ -438,6 +438,12 @@ extern void rs_nv_redo_or_register(cmdarg_T *cap);
 extern void rs_nv_replace(cmdarg_T *cap);
 extern void rs_nv_Replace(cmdarg_T *cap);
 extern void rs_nv_vreplace(cmdarg_T *cap);
+extern void rs_nv_zet(cmdarg_T *cap);
+extern void rs_nv_scroll(cmdarg_T *cap);
+extern void rs_nv_right(cmdarg_T *cap);
+extern void rs_nv_left(cmdarg_T *cap);
+extern void rs_nv_up(cmdarg_T *cap);
+extern void rs_nv_down(cmdarg_T *cap);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -1799,6 +1805,54 @@ void nvim_nv_Replace_impl(cmdarg_T *cap)
 void nvim_nv_vreplace_impl(cmdarg_T *cap)
 {
   nv_vreplace_impl(cap);
+}
+
+// =============================================================================
+// Phase 7 command accessors for Rust FFI (Scroll and screen handlers)
+// =============================================================================
+
+// Forward declarations for scroll/screen handlers
+static void nv_zet_impl(cmdarg_T *cap);
+static void nv_scroll_impl(cmdarg_T *cap);
+static void nv_right_impl(cmdarg_T *cap);
+static void nv_left_impl(cmdarg_T *cap);
+static void nv_up_impl(cmdarg_T *cap);
+static void nv_down_impl(cmdarg_T *cap);
+
+/// Wrapper for nv_zet C implementation.
+void nvim_nv_zet_impl(cmdarg_T *cap)
+{
+  nv_zet_impl(cap);
+}
+
+/// Wrapper for nv_scroll C implementation.
+void nvim_nv_scroll_impl(cmdarg_T *cap)
+{
+  nv_scroll_impl(cap);
+}
+
+/// Wrapper for nv_right C implementation.
+void nvim_nv_right_impl(cmdarg_T *cap)
+{
+  nv_right_impl(cap);
+}
+
+/// Wrapper for nv_left C implementation.
+void nvim_nv_left_impl(cmdarg_T *cap)
+{
+  nv_left_impl(cap);
+}
+
+/// Wrapper for nv_up C implementation.
+void nvim_nv_up_impl(cmdarg_T *cap)
+{
+  nv_up_impl(cap);
+}
+
+/// Wrapper for nv_down C implementation.
+void nvim_nv_down_impl(cmdarg_T *cap)
+{
+  nv_down_impl(cap);
 }
 
 // =============================================================================
@@ -3944,6 +3998,12 @@ static int nv_zg_zw(cmdarg_T *cap, int nchar)
 /// Commands that start with "z".
 static void nv_zet(cmdarg_T *cap)
 {
+  rs_nv_zet(cap);
+}
+
+/// Commands that start with "z" (implementation).
+static void nv_zet_impl(cmdarg_T *cap)
+{
   colnr_T col;
   int nchar = cap->nchar;
   int old_fdl = (int)curwin->w_p_fdl;
@@ -4761,6 +4821,12 @@ static void nv_tagpop(cmdarg_T *cap)
 /// Handle scrolling command 'H', 'L' and 'M'.
 static void nv_scroll(cmdarg_T *cap)
 {
+  rs_nv_scroll(cap);
+}
+
+/// Handle scrolling command 'H', 'L' and 'M' (implementation).
+static void nv_scroll_impl(cmdarg_T *cap)
+{
   int n;
   linenr_T lnum;
 
@@ -4836,6 +4902,12 @@ static void nv_scroll(cmdarg_T *cap)
 
 /// Cursor right commands.
 static void nv_right(cmdarg_T *cap)
+{
+  rs_nv_right(cap);
+}
+
+/// Cursor right commands (implementation).
+static void nv_right_impl(cmdarg_T *cap)
 {
   int n;
 
@@ -4915,6 +4987,14 @@ static void nv_right(cmdarg_T *cap)
 /// @return  true when operator end should not be adjusted.
 static void nv_left(cmdarg_T *cap)
 {
+  rs_nv_left(cap);
+}
+
+/// Cursor left commands (implementation).
+///
+/// @return  true when operator end should not be adjusted.
+static void nv_left_impl(cmdarg_T *cap)
+{
   int n;
 
   if (mod_mask & (MOD_MASK_SHIFT | MOD_MASK_CTRL)) {
@@ -4973,6 +5053,13 @@ static void nv_left(cmdarg_T *cap)
 /// cap->arg is true for "-": Move cursor to first non-blank.
 static void nv_up(cmdarg_T *cap)
 {
+  rs_nv_up(cap);
+}
+
+/// Cursor up commands (implementation).
+/// cap->arg is true for "-": Move cursor to first non-blank.
+static void nv_up_impl(cmdarg_T *cap)
+{
   if (mod_mask & MOD_MASK_SHIFT) {
     // <S-Up> is page up
     cap->arg = BACKWARD;
@@ -4991,6 +5078,13 @@ static void nv_up(cmdarg_T *cap)
 /// Cursor down commands.
 /// cap->arg is true for CR and "+": Move cursor to first non-blank.
 static void nv_down(cmdarg_T *cap)
+{
+  rs_nv_down(cap);
+}
+
+/// Cursor down commands (implementation).
+/// cap->arg is true for CR and "+": Move cursor to first non-blank.
+static void nv_down_impl(cmdarg_T *cap)
 {
   if (mod_mask & MOD_MASK_SHIFT) {
     // <S-Down> is page down

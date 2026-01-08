@@ -1975,6 +1975,96 @@ pub unsafe extern "C" fn rs_nv_vreplace(cap: CapHandle) {
 }
 
 // =============================================================================
+// Phase 7: Scroll and screen handlers
+// =============================================================================
+
+extern "C" {
+    fn nvim_nv_zet_impl(cap: CapHandle);
+    fn nvim_nv_scroll_impl(cap: CapHandle);
+    fn nvim_nv_right_impl(cap: CapHandle);
+    fn nvim_nv_left_impl(cap: CapHandle);
+    fn nvim_nv_up_impl(cap: CapHandle);
+    fn nvim_nv_down_impl(cap: CapHandle);
+}
+
+/// Command handler for "z" commands.
+///
+/// Handles various z-prefix commands for scrolling, folding, and window management:
+/// - zt, zz, zb: scroll line to top/center/bottom
+/// - zo, zc, za: fold open/close/toggle
+/// - zf, zd: create/delete fold
+/// - And many more...
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_zet(cap: CapHandle) {
+    nvim_nv_zet_impl(cap);
+}
+
+/// Command handler for 'H', 'L' and 'M' scrolling commands.
+///
+/// - H: Move cursor to top of window
+/// - M: Move cursor to middle of window
+/// - L: Move cursor to bottom of window
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_scroll(cap: CapHandle) {
+    nvim_nv_scroll_impl(cap);
+}
+
+/// Command handler for cursor right commands.
+///
+/// Handles 'l', space, and right arrow key movement.
+/// With Shift/Ctrl modifiers, moves by word instead.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_right(cap: CapHandle) {
+    nvim_nv_right_impl(cap);
+}
+
+/// Command handler for cursor left commands.
+///
+/// Handles 'h', backspace, and left arrow key movement.
+/// With Shift/Ctrl modifiers, moves by word instead.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_left(cap: CapHandle) {
+    nvim_nv_left_impl(cap);
+}
+
+/// Command handler for cursor up commands.
+///
+/// Handles 'k', '-', and up arrow key movement.
+/// With Shift modifier, acts as page up.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_up(cap: CapHandle) {
+    nvim_nv_up_impl(cap);
+}
+
+/// Command handler for cursor down commands.
+///
+/// Handles 'j', '+', CR, and down arrow key movement.
+/// With Shift modifier, acts as page down.
+/// In quickfix window, CR views the result.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_down(cap: CapHandle) {
+    nvim_nv_down_impl(cap);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
