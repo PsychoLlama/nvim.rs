@@ -858,6 +858,307 @@ pub const SCORE_COMMON3: c_int = 50; // subtracted for very common words
 /// Number of suggestions to keep after cleanup
 pub const SUG_CLEAN_COUNT_BASE: usize = 150;
 
+// =============================================================================
+// Trie Walk State Machine
+// =============================================================================
+
+/// State for the trie walk suggestion algorithm.
+///
+/// At each node in the spelling tree, these states are tried in order to
+/// generate suggestions. The state machine explores the tree by trying
+/// various transformations (deletions, insertions, swaps, etc.) to convert
+/// the bad word into a valid dictionary word.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TrieWalkState {
+    /// At start of node - check for NUL bytes (goodword ends);
+    /// if badword ends there is a match, otherwise try splitting word.
+    #[default]
+    Start = 0,
+    /// Try without prefix first
+    NoPrefix = 1,
+    /// Undo splitting
+    SplitUndo = 2,
+    /// Past NUL bytes at start of the node
+    EndNul = 3,
+    /// Use each byte of the node
+    Plain = 4,
+    /// Delete a byte from the bad word
+    Del = 5,
+    /// Prepare for inserting bytes
+    InsPrep = 6,
+    /// Insert a byte in the bad word
+    Ins = 7,
+    /// Swap two bytes
+    Swap = 8,
+    /// Undo swap two characters
+    Unswap = 9,
+    /// Swap two characters over three
+    Swap3 = 10,
+    /// Undo swap two characters over three
+    Unswap3 = 11,
+    /// Undo rotate three characters left
+    Unrot3L = 12,
+    /// Undo rotate three characters right
+    Unrot3R = 13,
+    /// Prepare for using REP items
+    RepIni = 14,
+    /// Use matching REP items from the .aff file
+    Rep = 15,
+    /// Undo a REP item replacement
+    RepUndo = 16,
+    /// End of this node
+    Final = 17,
+}
+
+/// Values for ts_isdiff field in TryState
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DiffType {
+    /// No different byte (yet)
+    #[default]
+    None = 0,
+    /// Different byte found
+    Yes = 1,
+    /// Inserting character
+    Insert = 2,
+}
+
+/// Flags for ts_flags field in TryState
+pub mod try_state_flags {
+    /// Already checked that prefix is OK
+    pub const TSF_PREFIXOK: u8 = 1;
+    /// Tried split at this point
+    pub const TSF_DIDSPLIT: u8 = 2;
+    /// Did a delete, ts_delidx has index
+    pub const TSF_DIDDEL: u8 = 4;
+}
+
+/// Special values for ts_prefixdepth
+pub mod prefix_depth {
+    /// Not using prefixes
+    pub const PFD_NOPREFIX: u8 = 0xff;
+    /// Walking through the prefix tree
+    pub const PFD_PREFIXTREE: u8 = 0xfe;
+    /// Highest value that's not special
+    pub const PFD_NOTSPECIAL: u8 = 0xfd;
+}
+
+/// State at each level in the trie walk suggestion search.
+///
+/// This struct tracks the state of the search at each depth level of the
+/// spelling trie. The search uses a stack of these states to explore
+/// different transformation paths.
+#[repr(C)]
+#[derive(Debug, Clone)]
+pub struct TryState {
+    /// State at this level
+    pub state: TrieWalkState,
+    /// Score accumulated so far
+    pub score: c_int,
+    /// Index in tree array, start of node
+    pub arridx: u32,
+    /// Index in list of child nodes
+    pub curi: i16,
+    /// Index in fword[], case-folded bad word
+    pub fidx: u8,
+    /// ts_fidx at which bytes may be changed
+    pub fidxtry: u8,
+    /// Valid length of tword[]
+    pub twordlen: u8,
+    /// Stack depth for end of prefix or PFD_PREFIXTREE or PFD_NOPREFIX
+    pub prefixdepth: u8,
+    /// TSF_ flags
+    pub flags: u8,
+    /// Number of bytes in tword character
+    pub tcharlen: u8,
+    /// Current byte index in tword character
+    pub tcharidx: u8,
+    /// DIFF_ values
+    pub isdiff: DiffType,
+    /// Index in fword where badword char started
+    pub fcharstart: u8,
+    /// Length of word in "preword[]"
+    pub prewordlen: u8,
+    /// Index in "tword" after last split
+    pub splitoff: u8,
+    /// "ts_fidx" at word split
+    pub splitfidx: u8,
+    /// Number of compound words used
+    pub complen: u8,
+    /// Index for "compflags" where word was split
+    pub compsplit: u8,
+    /// su_badflags saved here
+    pub save_badflags: u8,
+    /// Index in fword for char that was deleted, valid when flags has TSF_DIDDEL
+    pub delidx: u8,
+}
+
+impl Default for TryState {
+    fn default() -> Self {
+        Self {
+            state: TrieWalkState::Start,
+            score: 0,
+            arridx: 0,
+            curi: 1, // Start at 1 to skip the length byte
+            fidx: 0,
+            fidxtry: 0,
+            twordlen: 0,
+            prefixdepth: prefix_depth::PFD_NOPREFIX,
+            flags: 0,
+            tcharlen: 0,
+            tcharidx: 0,
+            isdiff: DiffType::None,
+            fcharstart: 0,
+            prewordlen: 0,
+            splitoff: 0,
+            splitfidx: 0,
+            complen: 0,
+            compsplit: 0,
+            save_badflags: 0,
+            delidx: 0,
+        }
+    }
+}
+
+impl TryState {
+    /// Create a new TryState initialized for starting a search
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Check if we're in the prefix tree
+    #[must_use]
+    pub const fn in_prefix_tree(&self) -> bool {
+        self.prefixdepth == prefix_depth::PFD_PREFIXTREE
+    }
+
+    /// Check if we're not using prefixes
+    #[must_use]
+    pub const fn no_prefix(&self) -> bool {
+        self.prefixdepth == prefix_depth::PFD_NOPREFIX
+    }
+
+    /// Check if prefix is OK (flag is set)
+    #[must_use]
+    pub const fn prefix_ok(&self) -> bool {
+        self.flags & try_state_flags::TSF_PREFIXOK != 0
+    }
+
+    /// Check if split was tried at this point
+    #[must_use]
+    pub const fn did_split(&self) -> bool {
+        self.flags & try_state_flags::TSF_DIDSPLIT != 0
+    }
+
+    /// Check if a delete was done
+    #[must_use]
+    pub const fn did_del(&self) -> bool {
+        self.flags & try_state_flags::TSF_DIDDEL != 0
+    }
+}
+
+/// FFI wrapper to create a new TryState.
+///
+/// # Safety
+/// `out` must be a valid pointer to a TryState.
+#[no_mangle]
+pub unsafe extern "C" fn rs_trystate_new(out: *mut TryState) {
+    if out.is_null() {
+        return;
+    }
+    *out = TryState::new();
+}
+
+/// FFI wrapper to get the state from a TryState.
+///
+/// # Safety
+/// `ts` must be a valid pointer to a TryState.
+#[no_mangle]
+pub unsafe extern "C" fn rs_trystate_get_state(ts: *const TryState) -> c_int {
+    if ts.is_null() {
+        return 0;
+    }
+    (*ts).state as c_int
+}
+
+/// FFI wrapper to set the state in a TryState.
+///
+/// # Safety
+/// `ts` must be a valid pointer to a TryState.
+#[no_mangle]
+pub unsafe extern "C" fn rs_trystate_set_state(ts: *mut TryState, state: c_int) {
+    if ts.is_null() {
+        return;
+    }
+    let state = match state {
+        1 => TrieWalkState::NoPrefix,
+        2 => TrieWalkState::SplitUndo,
+        3 => TrieWalkState::EndNul,
+        4 => TrieWalkState::Plain,
+        5 => TrieWalkState::Del,
+        6 => TrieWalkState::InsPrep,
+        7 => TrieWalkState::Ins,
+        8 => TrieWalkState::Swap,
+        9 => TrieWalkState::Unswap,
+        10 => TrieWalkState::Swap3,
+        11 => TrieWalkState::Unswap3,
+        12 => TrieWalkState::Unrot3L,
+        13 => TrieWalkState::Unrot3R,
+        14 => TrieWalkState::RepIni,
+        15 => TrieWalkState::Rep,
+        16 => TrieWalkState::RepUndo,
+        17 => TrieWalkState::Final,
+        // 0 and any other value defaults to Start
+        _ => TrieWalkState::Start,
+    };
+    (*ts).state = state;
+}
+
+/// Go one level deeper in the trie walk, copying state.
+///
+/// This is called when we want to try a different path at the current
+/// node by going deeper into the tree.
+///
+/// # Arguments
+/// * `stack` - Pointer to the stack array
+/// * `depth` - Current depth in the stack
+/// * `score_add` - Score to add for this step
+///
+/// # Safety
+/// Caller must ensure stack has at least depth+2 valid elements.
+#[no_mangle]
+pub unsafe extern "C" fn rs_go_deeper(stack: *mut TryState, depth: usize, score_add: c_int) {
+    if stack.is_null() || depth + 1 >= MAXWLEN {
+        return;
+    }
+
+    let current = &*stack.add(depth);
+    let next = &mut *stack.add(depth + 1);
+
+    // Copy relevant fields from current to next level
+    next.state = TrieWalkState::Start;
+    next.score = current.score + score_add;
+    next.curi = 1;
+    next.fidx = current.fidx;
+    next.fidxtry = current.fidxtry;
+    next.twordlen = current.twordlen;
+    next.prefixdepth = current.prefixdepth;
+    next.flags = 0;
+    next.tcharlen = 0;
+    next.tcharidx = 0;
+    next.isdiff = current.isdiff;
+    next.fcharstart = current.fcharstart;
+    next.prewordlen = current.prewordlen;
+    next.splitoff = current.splitoff;
+    next.splitfidx = current.splitfidx;
+    next.complen = current.complen;
+    next.compsplit = current.compsplit;
+    next.save_badflags = current.save_badflags;
+    next.delidx = current.delidx;
+}
+
 /// Compare two suggestions for sorting (lower score = better)
 #[must_use]
 pub fn compare_suggestions(a: &Suggestion, b: &Suggestion) -> std::cmp::Ordering {
@@ -1314,5 +1615,93 @@ mod tests {
         let len = apply_rep(b"hello", 2, 2, b"l", 1, &mut output);
         assert_eq!(len, 4);
         assert_eq!(&output[..4], b"helo");
+    }
+
+    // =========================================================================
+    // Trie Walk State Machine Tests
+    // =========================================================================
+
+    #[test]
+    fn test_trie_walk_state_values() {
+        assert_eq!(TrieWalkState::Start as c_int, 0);
+        assert_eq!(TrieWalkState::NoPrefix as c_int, 1);
+        assert_eq!(TrieWalkState::SplitUndo as c_int, 2);
+        assert_eq!(TrieWalkState::EndNul as c_int, 3);
+        assert_eq!(TrieWalkState::Plain as c_int, 4);
+        assert_eq!(TrieWalkState::Del as c_int, 5);
+        assert_eq!(TrieWalkState::InsPrep as c_int, 6);
+        assert_eq!(TrieWalkState::Ins as c_int, 7);
+        assert_eq!(TrieWalkState::Swap as c_int, 8);
+        assert_eq!(TrieWalkState::Unswap as c_int, 9);
+        assert_eq!(TrieWalkState::Swap3 as c_int, 10);
+        assert_eq!(TrieWalkState::Unswap3 as c_int, 11);
+        assert_eq!(TrieWalkState::Unrot3L as c_int, 12);
+        assert_eq!(TrieWalkState::Unrot3R as c_int, 13);
+        assert_eq!(TrieWalkState::RepIni as c_int, 14);
+        assert_eq!(TrieWalkState::Rep as c_int, 15);
+        assert_eq!(TrieWalkState::RepUndo as c_int, 16);
+        assert_eq!(TrieWalkState::Final as c_int, 17);
+    }
+
+    #[test]
+    fn test_diff_type_values() {
+        assert_eq!(DiffType::None as u8, 0);
+        assert_eq!(DiffType::Yes as u8, 1);
+        assert_eq!(DiffType::Insert as u8, 2);
+    }
+
+    #[test]
+    fn test_try_state_flags() {
+        assert_eq!(try_state_flags::TSF_PREFIXOK, 1);
+        assert_eq!(try_state_flags::TSF_DIDSPLIT, 2);
+        assert_eq!(try_state_flags::TSF_DIDDEL, 4);
+    }
+
+    #[test]
+    fn test_prefix_depth_values() {
+        assert_eq!(prefix_depth::PFD_NOPREFIX, 0xff);
+        assert_eq!(prefix_depth::PFD_PREFIXTREE, 0xfe);
+        assert_eq!(prefix_depth::PFD_NOTSPECIAL, 0xfd);
+    }
+
+    #[test]
+    fn test_try_state_default() {
+        let ts = TryState::default();
+        assert_eq!(ts.state, TrieWalkState::Start);
+        assert_eq!(ts.score, 0);
+        assert_eq!(ts.arridx, 0);
+        assert_eq!(ts.curi, 1);
+        assert_eq!(ts.fidx, 0);
+        assert_eq!(ts.prefixdepth, prefix_depth::PFD_NOPREFIX);
+        assert_eq!(ts.flags, 0);
+        assert_eq!(ts.isdiff, DiffType::None);
+    }
+
+    #[test]
+    fn test_try_state_helper_methods() {
+        let mut ts = TryState::default();
+
+        // Test no_prefix
+        assert!(ts.no_prefix());
+
+        // Test in_prefix_tree
+        ts.prefixdepth = prefix_depth::PFD_PREFIXTREE;
+        assert!(ts.in_prefix_tree());
+        assert!(!ts.no_prefix());
+
+        // Test flag methods
+        ts.flags = 0;
+        assert!(!ts.prefix_ok());
+        assert!(!ts.did_split());
+        assert!(!ts.did_del());
+
+        ts.flags = try_state_flags::TSF_PREFIXOK;
+        assert!(ts.prefix_ok());
+
+        ts.flags = try_state_flags::TSF_DIDSPLIT;
+        assert!(ts.did_split());
+
+        ts.flags = try_state_flags::TSF_DIDDEL;
+        assert!(ts.did_del());
     }
 }
