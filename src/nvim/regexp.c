@@ -5107,6 +5107,14 @@ void nvim_rex_set_nfa_has_zsubexpr(int v) { rex.nfa_has_zsubexpr = v; }
 bool nvim_rex_in_use(void) { return rex_in_use; }
 void nvim_rex_set_in_use(bool in_use) { rex_in_use = in_use; }
 
+// wants_nfa - pattern requires NFA engine (for BT-only patterns like [[:upper:]])
+int nvim_parse_get_wants_nfa(void) { return wants_nfa; }
+void nvim_parse_set_wants_nfa(int v) { wants_nfa = v; }
+
+// nfa_re_flags - re_flags passed to NFA compilation
+int nvim_parse_get_nfa_re_flags(void) { return nfa_re_flags; }
+void nvim_parse_set_nfa_re_flags(int f) { nfa_re_flags = f; }
+
 // =============================================================================
 // Phase 5: Parse state accessors (used by Rust)
 // =============================================================================
@@ -5146,6 +5154,27 @@ void nvim_parse_set_prev_at_start(int v) { prev_at_start = v; }
 // regnpar - parenthesis count
 int nvim_parse_get_regnpar(void) { return regnpar; }
 void nvim_parse_set_regnpar(int n) { regnpar = n; }
+
+// regnzpar - external subexpression count
+int nvim_parse_get_regnzpar(void) { return regnzpar; }
+void nvim_parse_set_regnzpar(int n) { regnzpar = n; }
+
+// had_endbrace - flags for closed parentheses
+int nvim_parse_get_had_endbrace(int i) { return i >= 0 && i < NSUBEXP ? had_endbrace[i] : 0; }
+void nvim_parse_set_had_endbrace(int i, int v) { if (i >= 0 && i < NSUBEXP) had_endbrace[i] = (uint8_t)v; }
+
+// regflags - RF_ flags for compiled program
+int nvim_parse_get_regflags(void) { return (int)regflags; }
+void nvim_parse_set_regflags(int f) { regflags = (unsigned)f; }
+
+// reg_string - matching with string vs buffer
+int nvim_parse_get_reg_string(void) { return reg_string; }
+
+// reg_strict - whether "[abc" is illegal
+int nvim_parse_get_reg_strict(void) { return reg_strict; }
+
+// reg_cpo_lit - cpoptions 'l' flag
+int nvim_parse_get_reg_cpo_lit(void) { return reg_cpo_lit; }
 
 // reg_magic - magicness of pattern
 int nvim_parse_get_reg_magic(void) { return (int)reg_magic; }

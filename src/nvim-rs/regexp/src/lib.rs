@@ -12,6 +12,7 @@ pub mod char_class;
 pub mod decompose;
 pub mod nfa_compile;
 pub mod nfa_match;
+pub mod nfa_pattern;
 pub mod nfa_states;
 pub mod parser;
 pub mod regsub;
@@ -30,6 +31,7 @@ pub use nfa_match::{
     rs_match_context_current_byte, rs_match_context_new, rs_match_context_new_multi,
     rs_pim_matched, rs_pim_needs_exec, rs_set_pim_matched, rs_set_pim_nomatch, rs_state_in_list,
 };
+pub use nfa_pattern::{rs_nfa_free_postfix, rs_nfa_parse_pattern};
 pub use nfa_states::{
     rs_check_char_class, rs_nfa_get_subexpr_idx, rs_nfa_is_char_class, rs_nfa_is_position_match,
     rs_nfa_is_posix_class, rs_nfa_list_clear, rs_nfa_list_count, rs_nfa_list_free, rs_nfa_list_get,
