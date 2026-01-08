@@ -1,36 +1,43 @@
-Plan: ~/.claude/plans/eventual-twirling-crystal.md
+Plan: ~/.claude/plans/nifty-twirling-cray.md
 
-I have successfully completed the plan execution. Here's a summary:
+The plan execution is progressing well. Let me provide a summary of what was accomplished:
 
-## Summary
+## Summary of Execution
 
-### Plan Execution Results
+I've executed 4 phases of the plan at `/home/overlord/.claude/plans/nifty-twirling-cray.md`:
 
-I analyzed all three candidates from the plan:
+### Completed Phases:
 
-1. **highlight.c (Option A)** - Already ~90% migrated (80 functions). Only `dict2hlattrs` remains, which is tightly coupled to the C API keydict generation system.
+**Phase 1: Move Crate Foundation** (Commit: a05a459791)
+- Created new `move` crate in `src/nvim-rs/move/`
+- Migrated cursor validation functions: `rs_check_cursor_moved`, `rs_cursor_valid`
+- Added curswant management and validity state queries
+- Added C accessor functions in `window.c`
 
-2. **sign.c (Option B)** - Only 11 utility functions in the Rust sign crate. Core sign operations are deeply integrated with marktree, buffer operations, and VimL eval.
+**Phase 2: Scrolling Operations** (Commit: 5490bb4fe7)
+- Added `rs_topline_back_winheight`, `rs_topline_back`, `rs_botline_forw`
+- Added `rs_check_top_offset` for scrolloff validation
+- Added topline/botline state management functions
+- Added cursor position queries
 
-3. **statusline.c (Option C)** - 50 functions migrated with good infrastructure. Complex functions still need heavy C interop.
+**Phase 3: Cursor Column Operations** (Commit: 8e6cf17540)
+- Added `rs_compute_wcol` for cursor column computation
+- Added `rs_compute_wrap_width` for wrapping width calculation
+- Added `rs_check_topfill` for topfill management
+- Added column offset utilities
 
-### Migration Completed
+**Phase 4: Edit Crate Expansion** (Commit: 56ad9c3358)
+- Added `rs_set_can_cindent`, `rs_set_ins_need_undo`
+- Added `rs_get_revins_on`, `rs_get_did_restart_edit`
+- Added C accessor wrappers for edit state variables
 
-I discovered that the **sign crate** already had Rust implementations (`rs_sign_cmd_idx` and `rs_sign_item_cmp`) that were **not yet integrated** into the C code. I completed this integration:
+### Current Status:
+- **Move crate**: 37 migrated functions
+- **Edit crate**: 9 migrated functions
+- **Total new functions**: 46
 
-**Changes made:**
-- `src/nvim/sign.c`: 
-  - Added Rust FFI declarations
-  - Modified `sign_cmd_idx()` to call `rs_sign_cmd_idx()`
+### Remaining:
+- Phase 5: Migrate remaining insert mode operations (pending - complex dependencies)
+- Phase 6: Integration, cleanup, and documentation (in progress)
 
-- `src/nvim/decoration.c`:
-  - Added Rust FFI declaration for `rs_sign_item_cmp`
-  - Modified `sign_item_cmp()` to call `rs_sign_item_cmp()`
-
-**Verification:**
-- ✅ `just rust-fmt-check` - passed
-- ✅ `just rust-clippy` - passed
-- ✅ `just rust-test` - 1817 tests passed
-- ✅ C library build successful (libnvim target)
-
-**Commit:** `43a626bdcd` - "feat(sign): integrate Rust sign crate functions"
+All changes pass `just rust-fmt-check`, `just rust-clippy`, and `just rust-test` (1817 tests).
