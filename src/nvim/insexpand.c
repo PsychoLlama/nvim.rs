@@ -712,17 +712,19 @@ static inline void free_cptext(char *const *const cptext)
   }
 }
 
+extern int rs_cot_fuzzy(void);
+extern int rs_is_nearest_active(void);
+
 /// Check if fuzzy matching is enabled
 static bool cot_fuzzy(void)
 {
-  return (get_cot_flags() & kOptCotFlagFuzzy) != 0;
+  return rs_cot_fuzzy() != 0;
 }
 
 /// Returns true if matches should be sorted based on proximity to the cursor.
 static bool is_nearest_active(void)
 {
-  return (compl_autocomplete || (get_cot_flags() & kOptCotFlagNearest))
-         && !cot_fuzzy();
+  return rs_is_nearest_active() != 0;
 }
 
 extern int rs_ins_compl_is_match_selected(void);
@@ -2174,12 +2176,13 @@ static void ins_compl_new_leader(void)
   }
 }
 
+extern int rs_get_compl_len(void);
+
 /// Return the length of the completion, from the completion start column to
 /// the cursor column.  Making sure it never goes below zero.
 static int get_compl_len(void)
 {
-  int off = (int)curwin->w_cursor.col - (int)compl_col;
-  return MAX(0, off);
+  return rs_get_compl_len();
 }
 
 /// Append one character to the match leader.  May reduce the number of

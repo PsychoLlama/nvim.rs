@@ -63,6 +63,19 @@ const CONT_ADDING: c_int = 1;
 const CONT_SOL: c_int = 16;
 const CONT_LOCAL: c_int = 32;
 
+// Completeopt flags (from option_vars.generated.h)
+const K_OPT_COT_FLAG_MENU: c_uint = 0x01;
+const K_OPT_COT_FLAG_MENUONE: c_uint = 0x02;
+const K_OPT_COT_FLAG_LONGEST: c_uint = 0x04;
+const K_OPT_COT_FLAG_PREVIEW: c_uint = 0x08;
+const K_OPT_COT_FLAG_POPUP: c_uint = 0x10;
+const K_OPT_COT_FLAG_NOINSERT: c_uint = 0x20;
+const K_OPT_COT_FLAG_NOSELECT: c_uint = 0x40;
+const K_OPT_COT_FLAG_FUZZY: c_uint = 0x80;
+const K_OPT_COT_FLAG_NOSORT: c_uint = 0x100;
+const K_OPT_COT_FLAG_PREINSERT: c_uint = 0x200;
+const K_OPT_COT_FLAG_NEAREST: c_uint = 0x400;
+
 // C accessors for static variables
 extern "C" {
     fn nvim_get_ctrl_x_mode() -> c_int;
@@ -130,19 +143,6 @@ extern "C" {
     fn nvim_pum_visible() -> c_int;
     fn nvim_pum_get_height() -> c_int;
 }
-
-// completeopt flags (from optionstr.h - generated)
-const K_OPT_COT_FLAG_MENU: c_uint = 0x01;
-const K_OPT_COT_FLAG_MENUONE: c_uint = 0x02;
-const K_OPT_COT_FLAG_LONGEST: c_uint = 0x04;
-// const K_OPT_COT_FLAG_PREVIEW: c_uint = 0x08;
-// const K_OPT_COT_FLAG_POPUP: c_uint = 0x10;
-// const K_OPT_COT_FLAG_NOINSERT: c_uint = 0x20;
-// const K_OPT_COT_FLAG_NOSELECT: c_uint = 0x40;
-const K_OPT_COT_FLAG_FUZZY: c_uint = 0x80;
-// const K_OPT_COT_FLAG_NOSORT: c_uint = 0x100;
-const K_OPT_COT_FLAG_PREINSERT: c_uint = 0x200;
-// const K_OPT_COT_FLAG_NEAREST: c_uint = 0x400;
 
 // Direction constants
 const FORWARD: c_int = 1;
@@ -840,6 +840,100 @@ pub unsafe extern "C" fn rs_ins_compl_use_match(c: c_int) -> c_int {
             c_int::from(nvim_get_pum_want_active() != 0 && nvim_get_pum_want_insert() != 0)
         }
         _ => 1,
+    }
+}
+
+// =============================================================================
+// Completeopt flag utilities (Phase 3)
+// =============================================================================
+
+/// Check if fuzzy matching is enabled in completeopt.
+#[inline]
+const fn cot_fuzzy_impl(flags: c_uint) -> bool {
+    (flags & K_OPT_COT_FLAG_FUZZY) != 0
+}
+
+/// Check if fuzzy matching is enabled.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cot_fuzzy() -> c_int {
+    c_int::from(cot_fuzzy_impl(get_cot_flags()))
+}
+
+/// Check if "nearest" sorting should be active.
+///
+/// Returns true if matches should be sorted based on proximity to the cursor.
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_nearest_active() -> c_int {
+    let flags = get_cot_flags();
+    let autocomplete = nvim_get_compl_autocomplete() != 0;
+    let nearest_flag = (flags & K_OPT_COT_FLAG_NEAREST) != 0;
+    c_int::from((autocomplete || nearest_flag) && !cot_fuzzy_impl(flags))
+}
+
+/// Check if "longest" option is enabled in completeopt.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cot_longest() -> c_int {
+    c_int::from((get_cot_flags() & K_OPT_COT_FLAG_LONGEST) != 0)
+}
+
+/// Check if "noinsert" option is enabled in completeopt.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cot_noinsert() -> c_int {
+    c_int::from((get_cot_flags() & K_OPT_COT_FLAG_NOINSERT) != 0)
+}
+
+/// Check if "noselect" option is enabled in completeopt.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cot_noselect() -> c_int {
+    c_int::from((get_cot_flags() & K_OPT_COT_FLAG_NOSELECT) != 0)
+}
+
+/// Check if "nosort" option is enabled in completeopt.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cot_nosort() -> c_int {
+    c_int::from((get_cot_flags() & K_OPT_COT_FLAG_NOSORT) != 0)
+}
+
+/// Check if "menuone" option is enabled in completeopt.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cot_menuone() -> c_int {
+    c_int::from((get_cot_flags() & K_OPT_COT_FLAG_MENUONE) != 0)
+}
+
+/// Check if "popup" option is enabled in completeopt.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cot_popup() -> c_int {
+    c_int::from((get_cot_flags() & K_OPT_COT_FLAG_POPUP) != 0)
+}
+
+/// Check if "preview" option is enabled in completeopt.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cot_preview() -> c_int {
+    c_int::from((get_cot_flags() & K_OPT_COT_FLAG_PREVIEW) != 0)
+}
+
+/// Get the raw completeopt flags.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_cot_flags() -> c_uint {
+    get_cot_flags()
+}
+
+// =============================================================================
+// Completion length utilities
+// =============================================================================
+
+/// Get the length of the completion from start column to cursor column.
+///
+/// Returns the number of characters typed in the completion, clamped to >= 0.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_compl_len() -> c_int {
+    let cursor_col = nvim_get_cursor_col();
+    let compl_col = nvim_get_compl_col();
+    let off = cursor_col - compl_col;
+    if off < 0 {
+        0
+    } else {
+        off
     }
 }
 
