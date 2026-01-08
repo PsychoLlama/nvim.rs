@@ -15,7 +15,7 @@ rename_variants = "ScreamingSnakeCase"
 
 [parse]
 parse_deps = true
-include = ["nvim-buffer", "nvim-charset", "nvim-cmdhist", "nvim-cursor", "nvim-diff", "nvim-encoding", "nvim-eval", "nvim-ex-docmd", "nvim-fileio", "nvim-help", "nvim-indent", "nvim-keycodes", "nvim-mapping", "nvim-marktree", "nvim-math", "nvim-mbyte", "nvim-memutil", "nvim-menu", "nvim-mouse", "nvim-option", "nvim-os", "nvim-path", "nvim-profile", "nvim-regexp", "nvim-spell", "nvim-strings", "nvim-version", "nvim-viewport", "nvim-window"]
+include = ["nvim-buffer", "nvim-charset", "nvim-cmdline", "nvim-cmdhist", "nvim-cursor", "nvim-diff", "nvim-encoding", "nvim-eval", "nvim-ex-docmd", "nvim-fileio", "nvim-help", "nvim-indent", "nvim-keycodes", "nvim-mapping", "nvim-marktree", "nvim-math", "nvim-mbyte", "nvim-memutil", "nvim-menu", "nvim-mouse", "nvim-option", "nvim-os", "nvim-path", "nvim-profile", "nvim-regexp", "nvim-spell", "nvim-strings", "nvim-version", "nvim-viewport", "nvim-window"]
 
 [export]
 include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs_getchr", "rs_ungetchr", "rs_read_limits", "rs_mb_decompose", "rs_use_multibytecode", "rs_nfa_re_num_cmp", "rs_re_put_uint32", "rs_re_get_uint32", "rs_re_put_uint16", "rs_re_get_uint16", "rs_re_num_cmp", "rs_get_char_class", "rs_nfa_recognize_char_class",
@@ -238,4 +238,60 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_shell_needs_quoting", "rs_quoted_shell_len",
            "rs_cdpath_converted_len", "rs_convert_cdpath",
            "rs_valid_backupskip_path", "rs_has_trailing_pathsep",
-           "rs_make_backupskip_pattern", "rs_is_unix", "rs_default_tmpdir"]
+           "rs_make_backupskip_pattern", "rs_is_unix", "rs_default_tmpdir",
+           # Command line subsystem (Phase 1-5)
+           "rs_cmdline_overstrike", "rs_cmdline_at_end", "rs_cmdline_fuzzy_complete",
+           "rs_is_in_cmdwin", "rs_cmdline_pum_active", "rs_cmdpreview_get_ns",
+           "rs_get_cmdline_firstc",
+           # Command line state
+           "rs_cmdline_get_cmdpos", "rs_cmdline_get_cmdlen", "rs_cmdline_get_level",
+           "rs_cmdline_set_cmdpos", "rs_cmdline_at_max_level",
+           "rs_cmdline_state_is_empty", "rs_cmdline_state_at_end", "rs_cmdline_state_overstrike",
+           "rs_cmdline_state_is_search", "rs_cmdline_state_is_ex_cmd",
+           "rs_is_valid_cmdline_firstc", "rs_is_ex_cmdline", "rs_is_search_cmdline",
+           # Command line edit operations
+           "rs_cmdline_insert_char", "rs_cmdline_insert_str",
+           "rs_cmdline_delete_char_before", "rs_cmdline_delete_char_at",
+           "rs_cmdline_delete_to_start", "rs_cmdline_delete_word_before",
+           "rs_cmdline_cursor_left", "rs_cmdline_cursor_right",
+           "rs_cmdline_cursor_home", "rs_cmdline_cursor_end",
+           "rs_cmdline_cursor_word_left", "rs_cmdline_cursor_word_right",
+           # Completion context
+           "rs_expand_get_context", "rs_expand_is_file_context",
+           "rs_is_file_expansion_context", "rs_is_table_dispatched_context",
+           "rs_is_valid_completion_context", "rs_is_user_completion",
+           "rs_completion_type_needs_special_handling", "rs_expand_uses_internal_matching",
+           "rs_context_needs_command_parsing", "rs_context_needs_regex",
+           "rs_context_has_menu_navigation", "rs_context_has_directory_navigation",
+           # Completion engine
+           "rs_cmdcomplete_str_to_type", "rs_completion_info_available",
+           "rs_cmdline_fuzzy_completion_supported", "rs_cmdline_compl_use_pum",
+           "rs_calculate_next_match_index", "rs_count_non_suffix_matches", "rs_sort_func_compare",
+           # History navigation
+           "rs_key_to_history_direction", "rs_key_uses_prefix_match",
+           "rs_direction_forward", "rs_direction_backward",
+           # Pattern processing
+           "rs_process_pattern_backslashes", "rs_addstar", "rs_calculate_file_expand_flags",
+           "rs_map_wildopts_to_ewflags", "rs_file_completion_case_sensitive",
+           # Wildmenu
+           "rs_skip_wildmenu_char", "rs_wildmenu_match_len", "rs_wildmenu_translate_arrow_keys",
+           # User completion
+           "rs_is_valid_completion_func",
+           # Search mode
+           "rs_is_search_firstc", "rs_get_search_direction", "rs_parse_search_delimiter",
+           "rs_find_pattern_end", "rs_is_literal_pattern", "rs_has_word_boundary",
+           # Expression mode
+           "rs_is_expr_firstc", "rs_check_bracket_balance", "rs_is_expr_likely_complete",
+           "rs_find_last_token_start", "rs_is_expr_ident_char", "rs_is_input_func_prompt",
+           # Completion sources - file
+           "rs_is_path_sep", "rs_path_tail_index", "rs_is_absolute_path", "rs_has_wildcards",
+           # Completion sources - buffer
+           "rs_buffer_name_matches", "rs_parse_buffer_number", "rs_is_buffer_number_ref",
+           # Completion sources - help
+           "rs_is_valid_help_tag", "rs_help_tag_matches", "rs_help_topic_type",
+           # Completion sources - option
+           "rs_parse_option_prefix", "rs_option_prefix_len", "rs_is_valid_option_name",
+           # Completion sources - user command
+           "rs_is_valid_usercmd_name", "rs_usercmd_matches_prefix", "rs_parse_usercmd_complete",
+           # Completion sources - command
+           "rs_could_be_user_command"]
