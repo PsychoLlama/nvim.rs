@@ -2947,9 +2947,9 @@ void nvim_mtnode_set_key(MTNode *x, int idx, MTKey k)
 }
 
 /// Set a child pointer in a node at the given index.
-void nvim_mtnode_set_ptr(MTNode *x, int idx, MTNode *ptr)
+void nvim_mtnode_set_ptr(MTNode *x, int idx, MTNode *child)
 {
-  x->s[0].i_ptr[idx] = ptr;
+  x->s[0].i_ptr[idx] = child;
 }
 
 /// Set the parent of a node.

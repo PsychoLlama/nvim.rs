@@ -1101,45 +1101,6 @@ char nvim_efm_get_addr(EfmHandle efm, int idx)
   return ((efm_T *)efm)->addr[idx];
 }
 
-/// Get the multiline flag from a quickfix list
-bool nvim_qf_get_multiline(const void *qfl_void)
-{
-  if (qfl_void == NULL) {
-    return false;
-  }
-  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
-  return qfl->qf_multiline;
-}
-
-/// Set the multiline flag for a quickfix list
-void nvim_qf_set_multiline(void *qfl_void, bool multiline)
-{
-  if (qfl_void == NULL) {
-    return;
-  }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  qfl->qf_multiline = multiline;
-}
-
-/// Get the multiignore flag from a quickfix list
-bool nvim_qf_get_multiignore(const void *qfl_void)
-{
-  if (qfl_void == NULL) {
-    return false;
-  }
-  const qf_list_T *qfl = (const qf_list_T *)qfl_void;
-  return qfl->qf_multiignore;
-}
-
-/// Set the multiignore flag for a quickfix list
-void nvim_qf_set_multiignore(void *qfl_void, bool multiignore)
-{
-  if (qfl_void == NULL) {
-    return;
-  }
-  qf_list_T *qfl = (qf_list_T *)qfl_void;
-  qfl->qf_multiignore = multiignore;
-}
 
 // =============================================================================
 // Phase 6: Input Sources and Buffer Operations accessor functions for Rust
@@ -1342,15 +1303,6 @@ static int qf_add_entries(qf_info_T *qi, int qf_idx, list_T *list, char *title, 
 static int qf_set_properties(qf_info_T *qi, const dict_T *what, int action, char *title);
 static int qf_get_properties(win_T *wp, dict_T *what, dict_T *retdict);
 
-/// Get the title of a quickfix list
-const char *nvim_qf_get_title(const void *qfl_void)
-{
-  if (qfl_void == NULL) {
-    return NULL;
-  }
-  return ((const qf_list_T *)qfl_void)->qf_title;
-}
-
 /// Check if the quickfix stack is for the global quickfix list
 bool nvim_qf_is_qf_stack(const void *qi_void)
 {
@@ -1417,14 +1369,6 @@ bool nvim_qf_has_user_data(const void *qfl_void)
   return ((const qf_list_T *)qfl_void)->qf_has_user_data;
 }
 
-/// Get the changedtick of a quickfix list
-int nvim_qf_get_changedtick(const void *qfl_void)
-{
-  if (qfl_void == NULL) {
-    return 0;
-  }
-  return ((const qf_list_T *)qfl_void)->qf_changedtick;
-}
 
 /// Increment the changedtick of a quickfix list
 void nvim_qf_incr_changedtick(void *qfl_void)

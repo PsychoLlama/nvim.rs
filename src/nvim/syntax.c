@@ -6362,15 +6362,6 @@ int nvim_syncluster_has_list(syn_cluster_T *cluster)
   return cluster->scl_list != NULL;
 }
 
-/// Get cluster ID from synblock
-int nvim_synblock_get_cluster_id(synblock_T *block, int idx)
-{
-  if (idx < 0 || idx >= block->b_syn_clusters.ga_len) {
-    return 0;
-  }
-  return SYN_CLSTR(block)[idx].scl_id;
-}
-
 // ============================================================================
 // Phase 4: ID list iteration helpers
 // ============================================================================
@@ -6452,29 +6443,6 @@ int nvim_syn_has_current_next_list(void)
 // Phase 5: Cluster & containedin logic accessors
 // ============================================================================
 
-/// Get cluster ID (scl_id) from a cluster at index
-int nvim_syncluster_get_id(syn_cluster_T *cluster)
-{
-  return cluster->scl_id;
-}
-
-/// Get the cluster at an index in a synblock
-syn_cluster_T *nvim_synblock_get_cluster(synblock_T *block, int idx)
-{
-  if (idx < 0 || idx >= block->b_syn_clusters.ga_len) {
-    return NULL;
-  }
-  return &SYN_CLSTR(block)[idx];
-}
-
-/// Get a pattern at an index in a synblock
-synpat_T *nvim_synblock_get_pattern(synblock_T *block, int idx)
-{
-  if (idx < 0 || idx >= block->b_syn_patterns.ga_len) {
-    return NULL;
-  }
-  return &SYN_ITEMS(block)[idx];
-}
 
 /// Get the current synblock from curwin->w_s
 synblock_T *nvim_syn_get_curwin_synblock(void)

@@ -280,7 +280,6 @@ const char *nvim_msgchunk_get_text(msgchunk_T *chunk) { return chunk->sb_text; }
 
 // Additional C accessors for message system (used by Rust)
 int nvim_get_rows(void) { return Rows; }
-unsigned int nvim_get_p_rdb(void) { return p_rdb; }
 int nvim_ui_has_messages(void) { return ui_has(kUIMessages) ? 1 : 0; }
 
 // C accessors for message formatting (used by Rust)
@@ -296,10 +295,6 @@ void nvim_set_need_wait_return(int val) { need_wait_return = (val != 0); }
 int nvim_shortmess(int flag) { return shortmess(flag) ? 1 : 0; }
 // nvim_get_exmode_active is defined in grid.c
 int nvim_vim_strsize(const char *s) { return vim_strsize(s); }
-int nvim_mb_trunc_len(const char *s, int width)
-{
-  return (int)mb_charlen2bytelen(s, (size_t)width);
-}
 
 // C accessors for message output state (used by Rust)
 int nvim_get_msg_didany(void) { return msg_didany ? 1 : 0; }
@@ -337,7 +332,7 @@ void nvim_set_need_fileinfo(int val) { need_fileinfo = (val != 0); }
 // C accessors for attribute functions (used by Rust)
 int nvim_syn_id2attr(int hl_id) { return syn_id2attr(hl_id); }
 int nvim_hl_combine_attr(int a, int b) { return hl_combine_attr(a, b); }
-int nvim_hl_attr(int hlf) { return HL_ATTR((HlAttrNames)hlf); }
+int nvim_hl_attr(int hlf) { return hl_attr_active[hlf]; }
 
 // Rust implementation
 extern int rs_redirecting(void);

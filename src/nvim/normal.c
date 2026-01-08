@@ -1321,12 +1321,6 @@ void nvim_cap_set_cmdchar_call(cmdarg_T *cap, int val)
   }
 }
 
-/// Set motion_force global.
-void nvim_set_motion_force(int val)
-{
-  motion_force = val;
-}
-
 /// Get motion_force global.
 int nvim_get_motion_force(void)
 {
@@ -1451,12 +1445,6 @@ void nvim_update_curswant_force(void)
 int nvim_get_curswant(void)
 {
   return curwin->w_curswant;
-}
-
-/// Set curwin->w_curswant.
-void nvim_set_curswant(int val)
-{
-  curwin->w_curswant = val;
 }
 
 /// Get MAXCOL constant.
