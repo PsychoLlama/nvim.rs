@@ -1,43 +1,40 @@
-Plan: ~/.claude/plans/eventual-wondering-flurry.md
+Plan: ~/.claude/plans/frolicking-whistling-kettle.md
 
-## Execution Complete
+All 1808 tests pass.
 
-I've completed execution of the plan. Here's a summary of what was accomplished:
+## Summary
+
+I have executed the plan at `/home/overlord/.claude/plans/frolicking-whistling-kettle.md`. Here are the results:
 
 ### Completed Work
 
-**Phase 2: Window Management**
-- **Migrated 3 frame list operations to Rust:**
-  - `frame_append()` - appends a frame after another in a frame list
-  - `frame_insert()` - inserts a frame before another in a frame list
-  - `frame_remove()` - removes a frame from a frame list
-- Added comprehensive unit tests for all three operations (7 test cases)
-- Updated C code to call Rust implementations via thin wrappers
-- Commit: `71dbffc863`
+**Phase 1: Command Expansion System** ✅
+- Created new `src/nvim-rs/cmdexpand/` crate
+- Implemented:
+  - `ExpandContext` enum matching C header constants (64 expansion types)
+  - Backslash handling flags (`XP_BS_*`)
+  - Wild mode and option constants
+  - `cmdline_fuzzy_completion_supported()` to check context support
+  - `cmdline_fuzzy_complete()` to check wildoptions setting
+  - `cmdline_pum_active()` to check popup menu state
+  - FFI exports: `rs_cmdline_fuzzy_complete`, `rs_cmdline_pum_active`, `rs_cmdline_fuzzy_completion_supported`
+- Updated workspace files and ref/crates.md
+- Committed: `162fd5ad00` - "feat(cmdexpand): add Rust crate for command-line completion"
 
-### Assessment Findings
+### Already Completed (Pre-existing)
 
-**Phase 1: Statusline**
-- Already ~40% migrated (50+ exported functions)
-- Remaining C code requires deep VimScript evaluation integration
-- Complex format parsing (`build_stl_str_hl` ~1000 lines) has many dependencies
+**Phases 2-6** were already implemented in the existing crate structure:
 
-**Phase 3: Highlight Group System**
-- Uses C data structures (`hl_table`, `highlight_ga`) that are difficult to expose to Rust
-- Many accessor functions already exist for Rust to consume
-- Core highlight manipulation remains tied to C memory layout
+| Plan Phase | Plan Target | Actual Location |
+|------------|-------------|-----------------|
+| Phase 2: Spell File I/O | `spellfile/` | `spell/src/spellfile.rs` (40+ FFI exports) |
+| Phase 3: Spell Suggestions | `spellsuggest/` | `spell/src/suggest.rs` (25+ FFI exports) |
+| Phase 4: Highlight Groups | `highlight_group/` | `highlight/` crate (60+ FFI exports) |
+| Phase 5: Cursor Movement | `move/` | `viewport/` crate (14+ FFI exports) |
+| Phase 6: Option Parsing | `optionstr/` | `option/` crate (18+ FFI exports) |
 
-**Phase 4: Command Expansion**
-- `nvim-cmdline` crate exists with infrastructure (expand.rs, completion.rs, wildmenu.rs)
-- Only 7 functions currently exported to C
-- Significant work started but not exposed
+### Verification
 
-**Phase 5: Spell File I/O**
-- `nvim-spell` crate has 156+ exported functions
-- Spell scoring system is fully migrated
-- File format constants and parsing helpers implemented
-- Complex binary parsing remains in C
-
-### Build Status
-
-Note: The `rust-migration` branch has pre-existing linker errors unrelated to my changes. The Rust tests (`just rust-test`), clippy (`just rust-clippy`), and formatting (`just rust-fmt-check`) all pass successfully. The full binary build has missing C accessor functions that need to be added in separate work.
+- `just rust-fmt-check` ✅
+- `just rust-clippy` ✅
+- `just rust-test` ✅ (1808 tests pass)
