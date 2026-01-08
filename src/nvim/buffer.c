@@ -4394,3 +4394,58 @@ void read_buffer_into(buf_T *buf, linenr_T start, linenr_T end, StringBuilder *s
     }
   }
 }
+
+// ============================================================================
+// Extmark Accessor Functions (for Rust FFI - extmark crate)
+// ============================================================================
+
+/// Get the marktree pointer from a buffer.
+MarkTree *nvim_buf_get_marktree(buf_T *buf)
+{
+  return buf->b_marktree;
+}
+
+/// Get the deleted_bytes2 field from a buffer.
+bcount_t nvim_buf_get_deleted_bytes2(buf_T *buf)
+{
+  return buf->deleted_bytes2;
+}
+
+/// Set the deleted_bytes2 field in a buffer.
+void nvim_buf_set_deleted_bytes2(buf_T *buf, bcount_t val)
+{
+  buf->deleted_bytes2 = val;
+}
+
+/// Get the b_ml.ml_line_count field from a buffer.
+linenr_T nvim_buf_get_ml_line_count(buf_T *buf)
+{
+  return buf->b_ml.ml_line_count;
+}
+
+/// Get the b_prev_line_count field from a buffer (for extmark adjust).
+int nvim_buf_get_prev_line_count(buf_T *buf)
+{
+  return buf->b_prev_line_count;
+}
+
+/// Set the b_prev_line_count field in a buffer.
+void nvim_buf_set_prev_line_count(buf_T *buf, int val)
+{
+  buf->b_prev_line_count = val;
+}
+
+/// Get the autom field from b_signcols.
+bool nvim_buf_signcols_get_autom(buf_T *buf)
+{
+  return buf->b_signcols.autom;
+}
+
+/// Clear the b_signcols structure.
+void nvim_buf_signcols_clear(buf_T *buf)
+{
+  buf->b_signcols.max = 0;
+  buf->b_signcols.count[0] = 0;
+  buf->b_signcols.count[1] = 0;
+  buf->b_signcols.count[2] = 0;
+}

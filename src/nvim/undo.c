@@ -3722,3 +3722,19 @@ void *nvim_undo_xmallocz(size_t size)
 {
   return xmallocz(size);
 }
+
+// ============================================================================
+// Extmark Accessor Functions (for Rust FFI - extmark crate)
+// ============================================================================
+
+/// Force get undo header for current operation (wrapper for Rust FFI).
+u_header_T *nvim_u_force_get_undo_header(buf_T *buf)
+{
+  return u_force_get_undo_header(buf);
+}
+
+/// Get extmark undo vector pointer from undo header.
+extmark_undo_vec_t *nvim_uhp_get_extmark(u_header_T *uhp)
+{
+  return &uhp->uh_extmark;
+}

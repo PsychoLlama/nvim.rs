@@ -4268,3 +4268,13 @@ int decl(pos_T *lp)
   }
   return r;
 }
+
+// ============================================================================
+// Extmark Accessor Functions (for Rust FFI - extmark crate)
+// ============================================================================
+
+/// Find line or byte offset (wrapper for Rust FFI).
+bcount_t nvim_ml_find_line_or_offset(buf_T *buf, linenr_T lnum, int *offp, bool no_ff)
+{
+  return ml_find_line_or_offset(buf, lnum, offp, no_ff);
+}

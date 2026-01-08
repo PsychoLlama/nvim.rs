@@ -431,3 +431,17 @@ void buffer_update_callbacks_free(BufUpdateCallbacks cb)
   api_free_luaref(cb.on_reload);
   api_free_luaref(cb.on_detach);
 }
+
+// ============================================================================
+// Extmark Accessor Functions (for Rust FFI - extmark crate)
+// ============================================================================
+
+/// Send splice event (wrapper for Rust FFI).
+void nvim_buf_updates_send_splice(buf_T *buf, int start_row, colnr_T start_col,
+                                  bcount_t start_byte, int old_row, colnr_T old_col,
+                                  bcount_t old_byte, int new_row, colnr_T new_col,
+                                  bcount_t new_byte)
+{
+  buf_updates_send_splice(buf, start_row, start_col, start_byte, old_row, old_col, old_byte,
+                          new_row, new_col, new_byte);
+}

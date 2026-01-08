@@ -696,3 +696,70 @@ void extmark_move_region(buf_T *buf, int start_row, colnr_T start_col, bcount_t 
                                   .data.move = move }));
   }
 }
+
+// ============================================================================
+// Global Accessor Functions (for Rust FFI)
+// ============================================================================
+
+/// Get the curbuf_splice_pending global.
+int nvim_get_curbuf_splice_pending(void)
+{
+  return curbuf_splice_pending;
+}
+
+// ============================================================================
+// Extmark Namespace Map Accessor Functions (for Rust FFI)
+// ============================================================================
+
+/// Get the size of the extmark namespace map.
+size_t nvim_extmark_ns_map_size(buf_T *buf)
+{
+  return map_size(buf->b_extmark_ns);
+}
+
+/// Get a pointer to a namespace ID in the extmark namespace map.
+/// Returns NULL if not found. Used for incrementing the ID counter.
+uint32_t *nvim_extmark_ns_get_ref(buf_T *buf, uint32_t ns_id)
+{
+  return map_ref(uint32_t, uint32_t)(buf->b_extmark_ns, ns_id, NULL);
+}
+
+/// Delete a namespace ID from the extmark namespace map.
+void nvim_extmark_ns_del(buf_T *buf, uint32_t ns_id)
+{
+  map_del(uint32_t, uint32_t)(buf->b_extmark_ns, ns_id, NULL);
+}
+
+/// Destroy and reinitialize the extmark namespace map.
+void nvim_extmark_ns_destroy(buf_T *buf)
+{
+  map_destroy(uint32_t, buf->b_extmark_ns);
+  *buf->b_extmark_ns = (Map(uint32_t, uint32_t)) MAP_INIT;
+}
+
+// ============================================================================
+// Extmark Undo Vector Accessor Functions (for Rust FFI)
+// ============================================================================
+
+/// Get the size of an extmark undo vector.
+size_t nvim_extmark_undo_vec_size(extmark_undo_vec_t *uvp)
+{
+  return uvp ? kv_size(*uvp) : 0;
+}
+
+/// Push an undo object onto an extmark undo vector.
+void nvim_extmark_undo_vec_push(extmark_undo_vec_t *uvp, ExtmarkUndoObject obj)
+{
+  if (uvp) {
+    kv_push(*uvp, obj);
+  }
+}
+
+/// Get a pointer to the last element of an extmark undo vector.
+ExtmarkUndoObject *nvim_extmark_undo_vec_last(extmark_undo_vec_t *uvp)
+{
+  if (!uvp || kv_size(*uvp) == 0) {
+    return NULL;
+  }
+  return &kv_last(*uvp);
+}

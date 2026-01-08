@@ -2780,6 +2780,58 @@ MTPos nvim_marktree_get_altpos(MarkTree *b, MTKey mark, MarkTreeIter *itr)
 }
 
 // ============================================================================
+// Iterator Allocation Functions (for Rust FFI - extmark crate)
+// ============================================================================
+
+/// Allocate a new iterator on the heap.
+MarkTreeIter *nvim_marktree_itr_alloc(void)
+{
+  return xcalloc(1, sizeof(MarkTreeIter));
+}
+
+/// Free a heap-allocated iterator.
+void nvim_marktree_itr_free(MarkTreeIter *itr)
+{
+  xfree(itr);
+}
+
+/// Copy one iterator to another.
+void nvim_marktree_itr_copy(MarkTreeIter *dst, MarkTreeIter *src)
+{
+  *dst = *src;
+}
+
+/// Get iterator at a position.
+void nvim_marktree_itr_get(MarkTree *b, int row, int col, MarkTreeIter *itr)
+{
+  marktree_itr_get(b, row, col, itr);
+}
+
+/// Move iterator to next mark.
+bool nvim_marktree_itr_next(MarkTree *b, MarkTreeIter *itr)
+{
+  return marktree_itr_next(b, itr);
+}
+
+/// Get current key at iterator position.
+MTKey nvim_marktree_itr_current(MarkTreeIter *itr)
+{
+  return marktree_itr_current(itr);
+}
+
+/// Get flags from rawkey at iterator position.
+uint16_t nvim_mt_itr_rawkey_get_flags(MarkTreeIter *itr)
+{
+  return rawkey(itr).flags;
+}
+
+/// Set flags on rawkey at iterator position.
+void nvim_mt_itr_rawkey_set_flags(MarkTreeIter *itr, uint16_t flags)
+{
+  rawkey(itr).flags = flags;
+}
+
+// ============================================================================
 // Iterator Overlap Accessor Functions (for Rust FFI)
 // ============================================================================
 
