@@ -1474,6 +1474,421 @@ pub unsafe extern "C" fn rs_write_timestamp(
 }
 
 // =============================================================================
+// Tree Node Writing (Phase 6)
+// =============================================================================
+
+/// Byte values used in spell file tree.
+///
+/// Values 0x00-0xFB are regular character bytes.
+/// Values 0xFC-0xFF have special meanings.
+pub mod tree_bytes {
+    /// End of word, no flags.
+    pub const BY_NOFLAGS: u8 = 0;
+    /// End of word, flags byte follows.
+    pub const BY_FLAGS: u8 = 1;
+    /// End of word, flags and 1-byte index follow.
+    pub const BY_FLAGS2: u8 = 2;
+    /// Sibling with index and character.
+    pub const BY_INDEX: u8 = 3;
+    /// Special byte value - start of special range.
+    pub const BY_SPECIAL: u8 = 0xFC;
+}
+
+/// Tree node flags for spell file writing.
+///
+/// These are the flag values used when writing word nodes to spell files.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TreeNodeFlags {
+    /// Word flags (WF_* values)
+    pub word_flags: u8,
+    /// Region bitmask
+    pub region: u8,
+    /// Affix ID (0 if none)
+    pub affixid: u8,
+    /// Prefix ID (0 if none)
+    pub prefixid: u8,
+}
+
+impl TreeNodeFlags {
+    /// Create new tree node flags.
+    pub const fn new() -> Self {
+        Self {
+            word_flags: 0,
+            region: 0,
+            affixid: 0,
+            prefixid: 0,
+        }
+    }
+
+    /// Check if any flags are set.
+    pub const fn has_flags(&self) -> bool {
+        self.word_flags != 0 || self.region != 0 || self.affixid != 0 || self.prefixid != 0
+    }
+
+    /// Count the number of bytes needed to encode these flags.
+    pub const fn encoded_len(&self) -> usize {
+        if !self.has_flags() {
+            return 1; // Just BY_NOFLAGS
+        }
+        // BY_FLAGS + flags byte (+ optional region, affixid, prefixid)
+        let mut len = 2;
+        if self.region != 0 {
+            len += 1;
+        }
+        if self.affixid != 0 {
+            len += 1;
+        }
+        if self.prefixid != 0 {
+            len += 1;
+        }
+        len
+    }
+}
+
+/// Write tree node end-of-word marker and flags to buffer.
+///
+/// Returns the number of bytes written, or None if buffer is too small.
+pub fn write_tree_node_flags(buf: &mut [u8], flags: &TreeNodeFlags) -> Option<usize> {
+    if !flags.has_flags() {
+        // No flags - just write BY_NOFLAGS
+        if buf.is_empty() {
+            return None;
+        }
+        buf[0] = tree_bytes::BY_NOFLAGS;
+        return Some(1);
+    }
+
+    // Calculate required length
+    let required = flags.encoded_len();
+    if buf.len() < required {
+        return None;
+    }
+
+    let mut offset = 0;
+
+    // Write BY_FLAGS marker
+    buf[offset] = tree_bytes::BY_FLAGS;
+    offset += 1;
+
+    // Build flags byte
+    // Bits 0-2: basic flags (rare, region present, affix present)
+    // Bit 3: prefix ID present
+    // Bits 4-7: more flags
+    let mut flags_byte = flags.word_flags;
+    if flags.region != 0 {
+        flags_byte |= 0x02; // WF_REGION
+    }
+    if flags.affixid != 0 {
+        flags_byte |= 0x04; // WF_AFX
+    }
+    if flags.prefixid != 0 {
+        flags_byte |= 0x08; // WF_PFX
+    }
+    buf[offset] = flags_byte;
+    offset += 1;
+
+    // Write optional bytes
+    if flags.region != 0 {
+        buf[offset] = flags.region;
+        offset += 1;
+    }
+    if flags.affixid != 0 {
+        buf[offset] = flags.affixid;
+        offset += 1;
+    }
+    if flags.prefixid != 0 {
+        buf[offset] = flags.prefixid;
+        offset += 1;
+    }
+
+    Some(offset)
+}
+
+/// FFI wrapper for writing tree node flags.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_write_tree_node_flags(
+    buf: *mut u8,
+    buf_len: usize,
+    flags: *const TreeNodeFlags,
+    written_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || flags.is_null() || written_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let slice = std::slice::from_raw_parts_mut(buf, buf_len);
+    match write_tree_node_flags(slice, &*flags) {
+        Some(written) => {
+            *written_out = written;
+            0
+        }
+        None => SP_TRUNCERROR,
+    }
+}
+
+/// Write a tree node sibling byte to buffer.
+///
+/// Handles encoding of character bytes, distinguishing between regular
+/// characters (0x00-0xFB) and special values (0xFC-0xFF).
+///
+/// Returns bytes written or None if buffer too small.
+pub fn write_tree_sibling_byte(buf: &mut [u8], byte: u8) -> Option<usize> {
+    if byte < tree_bytes::BY_SPECIAL {
+        // Regular character byte
+        if buf.is_empty() {
+            return None;
+        }
+        buf[0] = byte;
+        Some(1)
+    } else {
+        // Special byte - needs escape sequence
+        if buf.len() < 2 {
+            return None;
+        }
+        buf[0] = tree_bytes::BY_SPECIAL;
+        buf[1] = byte - tree_bytes::BY_SPECIAL;
+        Some(2)
+    }
+}
+
+/// FFI wrapper for writing tree sibling byte.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_write_tree_sibling_byte(
+    buf: *mut u8,
+    buf_len: usize,
+    byte: u8,
+    written_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || written_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let slice = std::slice::from_raw_parts_mut(buf, buf_len);
+    match write_tree_sibling_byte(slice, byte) {
+        Some(written) => {
+            *written_out = written;
+            0
+        }
+        None => SP_TRUNCERROR,
+    }
+}
+
+/// Write a tree node child index to buffer.
+///
+/// The index is written as a variable-length integer:
+/// - 0x00-0x7F: 1 byte
+/// - 0x80-0x7FFF: 2 bytes (first byte | 0x80)
+/// - 0x8000-0x7FFFFF: 3 bytes (first byte | 0xC0)
+/// - 0x800000-0x7FFFFFFF: 4 bytes (first byte | 0xE0)
+///
+/// Returns bytes written or None if buffer too small or index too large.
+pub fn write_tree_child_index(buf: &mut [u8], index: u32) -> Option<usize> {
+    if index <= 0x7F {
+        // 1 byte
+        if buf.is_empty() {
+            return None;
+        }
+        buf[0] = index as u8;
+        Some(1)
+    } else if index <= 0x7FFF {
+        // 2 bytes
+        if buf.len() < 2 {
+            return None;
+        }
+        buf[0] = ((index >> 8) as u8) | 0x80;
+        buf[1] = index as u8;
+        Some(2)
+    } else if index <= 0x7F_FFFF {
+        // 3 bytes
+        if buf.len() < 3 {
+            return None;
+        }
+        buf[0] = ((index >> 16) as u8) | 0xC0;
+        buf[1] = (index >> 8) as u8;
+        buf[2] = index as u8;
+        Some(3)
+    } else if index <= 0x7FFF_FFFF {
+        // 4 bytes
+        if buf.len() < 4 {
+            return None;
+        }
+        buf[0] = ((index >> 24) as u8) | 0xE0;
+        buf[1] = (index >> 16) as u8;
+        buf[2] = (index >> 8) as u8;
+        buf[3] = index as u8;
+        Some(4)
+    } else {
+        // Index too large
+        None
+    }
+}
+
+/// FFI wrapper for writing tree child index.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_write_tree_child_index(
+    buf: *mut u8,
+    buf_len: usize,
+    index: u32,
+    written_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || written_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let slice = std::slice::from_raw_parts_mut(buf, buf_len);
+    match write_tree_child_index(slice, index) {
+        Some(written) => {
+            *written_out = written;
+            0
+        }
+        None => SP_TRUNCERROR,
+    }
+}
+
+/// Information about a spell file being written.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SpellFileWriteInfo {
+    /// Number of regions in the spell file.
+    pub region_count: u8,
+    /// Whether this is an addition file.
+    pub is_addition: bool,
+    /// Region mask (which regions are present).
+    pub region_mask: u8,
+    /// Flags for the file.
+    pub file_flags: u8,
+}
+
+impl SpellFileWriteInfo {
+    /// Create new write info with default values.
+    pub const fn new() -> Self {
+        Self {
+            region_count: 0,
+            is_addition: false,
+            region_mask: 0,
+            file_flags: 0,
+        }
+    }
+
+    /// Check if regions should be written.
+    pub const fn has_regions(&self) -> bool {
+        self.region_count > 0
+    }
+}
+
+/// FFI function to create a new SpellFileWriteInfo.
+#[no_mangle]
+pub extern "C" fn rs_spell_file_write_info_new() -> SpellFileWriteInfo {
+    SpellFileWriteInfo::new()
+}
+
+/// Write region section to buffer.
+///
+/// Format: <section_id><flags><length><regions...>
+/// Each region is 2 bytes (e.g., "en", "us").
+pub fn write_region_section(buf: &mut [u8], regions: &[u8]) -> Option<usize> {
+    // Validate regions (must be pairs of ASCII chars)
+    if !regions.len().is_multiple_of(REGION_NAME_LEN) || regions.len() > MAX_REGION_STR_LEN {
+        return None;
+    }
+
+    let section_len = regions.len();
+    let header = SectionHeader {
+        section_id: SN_REGION,
+        flags: 0,
+        len: section_len as u32,
+    };
+
+    let header_len = write_section_header(buf, &header)?;
+    if buf.len() < header_len + section_len {
+        return None;
+    }
+
+    buf[header_len..header_len + section_len].copy_from_slice(regions);
+    Some(header_len + section_len)
+}
+
+/// FFI wrapper for writing region section.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_write_region_section(
+    buf: *mut u8,
+    buf_len: usize,
+    regions: *const u8,
+    regions_len: usize,
+    written_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || written_out.is_null() {
+        return SP_OTHERERROR;
+    }
+    if regions.is_null() && regions_len > 0 {
+        return SP_OTHERERROR;
+    }
+
+    let buf_slice = std::slice::from_raw_parts_mut(buf, buf_len);
+    let regions_slice = if regions.is_null() {
+        &[]
+    } else {
+        std::slice::from_raw_parts(regions, regions_len)
+    };
+
+    match write_region_section(buf_slice, regions_slice) {
+        Some(written) => {
+            *written_out = written;
+            0
+        }
+        None => SP_TRUNCERROR,
+    }
+}
+
+/// Write end section marker to buffer.
+///
+/// Format: <SN_END (0xFF)>
+pub fn write_end_section(buf: &mut [u8]) -> Option<usize> {
+    if buf.is_empty() {
+        return None;
+    }
+    buf[0] = SN_END;
+    Some(1)
+}
+
+/// FFI wrapper for writing end section marker.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_write_end_section(
+    buf: *mut u8,
+    buf_len: usize,
+    written_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || written_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let slice = std::slice::from_raw_parts_mut(buf, buf_len);
+    match write_end_section(slice) {
+        Some(written) => {
+            *written_out = written;
+            0
+        }
+        None => SP_TRUNCERROR,
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -1889,5 +2304,161 @@ mod tests {
         assert_eq!(parsed.to_len, original.to_len);
         assert_eq!(&parsed.from[..5], b"hello");
         assert_eq!(&parsed.to[..5], b"world");
+    }
+
+    // =========================================================================
+    // Phase 6: Tree Node Writing Tests
+    // =========================================================================
+
+    #[test]
+    fn test_tree_node_flags_default() {
+        let flags = TreeNodeFlags::new();
+        assert!(!flags.has_flags());
+        assert_eq!(flags.encoded_len(), 1);
+    }
+
+    #[test]
+    fn test_tree_node_flags_with_region() {
+        let mut flags = TreeNodeFlags::new();
+        flags.region = 0x05;
+        assert!(flags.has_flags());
+        assert_eq!(flags.encoded_len(), 3); // BY_FLAGS + flags_byte + region
+    }
+
+    #[test]
+    fn test_write_tree_node_flags_no_flags() {
+        let mut buf = [0u8; 10];
+        let flags = TreeNodeFlags::new();
+        let written = write_tree_node_flags(&mut buf, &flags).unwrap();
+        assert_eq!(written, 1);
+        assert_eq!(buf[0], tree_bytes::BY_NOFLAGS);
+    }
+
+    #[test]
+    fn test_write_tree_node_flags_with_region() {
+        let mut buf = [0u8; 10];
+        let mut flags = TreeNodeFlags::new();
+        flags.region = 0x05;
+        let written = write_tree_node_flags(&mut buf, &flags).unwrap();
+        assert_eq!(written, 3);
+        assert_eq!(buf[0], tree_bytes::BY_FLAGS);
+        assert_eq!(buf[1] & 0x02, 0x02); // WF_REGION set
+        assert_eq!(buf[2], 0x05);
+    }
+
+    #[test]
+    fn test_write_tree_sibling_byte_regular() {
+        let mut buf = [0u8; 5];
+
+        // Regular byte (< 0xFC)
+        let written = write_tree_sibling_byte(&mut buf, b'a').unwrap();
+        assert_eq!(written, 1);
+        assert_eq!(buf[0], b'a');
+    }
+
+    #[test]
+    fn test_write_tree_sibling_byte_special() {
+        let mut buf = [0u8; 5];
+
+        // Special byte (>= 0xFC)
+        let written = write_tree_sibling_byte(&mut buf, 0xFE).unwrap();
+        assert_eq!(written, 2);
+        assert_eq!(buf[0], tree_bytes::BY_SPECIAL);
+        assert_eq!(buf[1], 0xFE - tree_bytes::BY_SPECIAL);
+    }
+
+    #[test]
+    fn test_write_tree_child_index_one_byte() {
+        let mut buf = [0u8; 10];
+
+        let written = write_tree_child_index(&mut buf, 0x7F).unwrap();
+        assert_eq!(written, 1);
+        assert_eq!(buf[0], 0x7F);
+
+        let written = write_tree_child_index(&mut buf, 0x00).unwrap();
+        assert_eq!(written, 1);
+        assert_eq!(buf[0], 0x00);
+    }
+
+    #[test]
+    fn test_write_tree_child_index_two_bytes() {
+        let mut buf = [0u8; 10];
+
+        let written = write_tree_child_index(&mut buf, 0x80).unwrap();
+        assert_eq!(written, 2);
+        assert_eq!(buf[0] & 0x80, 0x80); // High bit set
+
+        let written = write_tree_child_index(&mut buf, 0x7FFF).unwrap();
+        assert_eq!(written, 2);
+    }
+
+    #[test]
+    fn test_write_tree_child_index_three_bytes() {
+        let mut buf = [0u8; 10];
+
+        let written = write_tree_child_index(&mut buf, 0x8000).unwrap();
+        assert_eq!(written, 3);
+        assert_eq!(buf[0] & 0xC0, 0xC0); // 3-byte marker
+    }
+
+    #[test]
+    fn test_write_tree_child_index_four_bytes() {
+        let mut buf = [0u8; 10];
+
+        let written = write_tree_child_index(&mut buf, 0x80_0000).unwrap();
+        assert_eq!(written, 4);
+        assert_eq!(buf[0] & 0xE0, 0xE0); // 4-byte marker
+    }
+
+    #[test]
+    fn test_write_tree_child_index_too_large() {
+        let mut buf = [0u8; 10];
+
+        // Index > 0x7FFFFFFF should fail
+        assert!(write_tree_child_index(&mut buf, 0x8000_0000).is_none());
+    }
+
+    #[test]
+    fn test_write_region_section() {
+        let mut buf = [0u8; 20];
+        let regions = b"enus";
+
+        let written = write_region_section(&mut buf, regions).unwrap();
+        assert!(written > 4);
+        // First byte should be section ID
+        assert_eq!(buf[0], SN_REGION);
+    }
+
+    #[test]
+    fn test_write_region_section_invalid() {
+        let mut buf = [0u8; 20];
+
+        // Odd length (not pairs)
+        assert!(write_region_section(&mut buf, b"abc").is_none());
+
+        // Too long
+        let long_regions = b"enusgbdefritesfrptplnl"; // 22 bytes > 16
+        assert!(write_region_section(&mut buf, long_regions).is_none());
+    }
+
+    #[test]
+    fn test_write_end_section() {
+        let mut buf = [0u8; 5];
+
+        let written = write_end_section(&mut buf).unwrap();
+        assert_eq!(written, 1);
+        assert_eq!(buf[0], SN_END);
+    }
+
+    #[test]
+    fn test_spell_file_write_info() {
+        let info = SpellFileWriteInfo::new();
+        assert_eq!(info.region_count, 0);
+        assert!(!info.is_addition);
+        assert!(!info.has_regions());
+
+        let mut info2 = info;
+        info2.region_count = 3;
+        assert!(info2.has_regions());
     }
 }
