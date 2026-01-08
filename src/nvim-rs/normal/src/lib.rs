@@ -1759,6 +1759,64 @@ pub unsafe extern "C" fn rs_nv_ident(cap: CapHandle) {
 }
 
 // =============================================================================
+// Phase 3 Command Handlers (Operators)
+// =============================================================================
+
+extern "C" {
+    // Phase 3 accessor functions
+    fn nvim_nv_operator_impl(cap: CapHandle);
+    fn nvim_nv_optrans_impl(cap: CapHandle);
+    fn nvim_nv_tilde_impl(cap: CapHandle);
+    fn nvim_nv_subst_impl(cap: CapHandle);
+}
+
+/// Command handler for operator commands (d, c, y, >, <, !, =, gq, gw, g?, etc.).
+///
+/// Sets up the operator state; actual work is done by do_pending_operator().
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_operator(cap: CapHandle) {
+    nvim_nv_operator_impl(cap);
+}
+
+/// Command handler for abbreviated commands (x, X, D, C, s, S, Y, &).
+///
+/// Translates these commands to their full equivalents.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_optrans(cap: CapHandle) {
+    nvim_nv_optrans_impl(cap);
+}
+
+/// Command handler for '~' command: Toggle case.
+///
+/// If tilde is not an operator and Visual is off, swaps case of a single character.
+/// Otherwise, acts as an operator.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_tilde(cap: CapHandle) {
+    nvim_nv_tilde_impl(cap);
+}
+
+/// Command handler for "s" and "S" substitute commands.
+///
+/// In Visual mode, "vs" and "vS" are the same as "vc".
+/// Otherwise, translates to the equivalent command.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_subst(cap: CapHandle) {
+    nvim_nv_subst_impl(cap);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

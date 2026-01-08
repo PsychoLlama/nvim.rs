@@ -424,6 +424,10 @@ extern void rs_nv_edit(cmdarg_T *cap);
 extern void rs_nv_search(cmdarg_T *cap);
 extern void rs_nv_next(cmdarg_T *cap);
 extern void rs_nv_ident(cmdarg_T *cap);
+extern void rs_nv_operator(cmdarg_T *cap);
+extern void rs_nv_optrans(cmdarg_T *cap);
+extern void rs_nv_tilde(cmdarg_T *cap);
+extern void rs_nv_subst(cmdarg_T *cap);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -1663,6 +1667,40 @@ void nvim_nv_gd_impl(oparg_T *oap, int nchar, int thisblock)
   if (messaging() && !msg_silent && !shortmess(SHM_SEARCHCOUNT)) {
     clear_cmdline = true;
   }
+}
+
+// =============================================================================
+// Phase 3 command accessors for Rust FFI (Operator handlers)
+// =============================================================================
+
+// Forward declarations for operator handlers
+static void nv_operator_impl(cmdarg_T *cap);
+static void nv_optrans_impl(cmdarg_T *cap);
+static void nv_tilde_impl(cmdarg_T *cap);
+static void nv_subst_impl(cmdarg_T *cap);
+
+/// Wrapper for nv_operator C implementation.
+void nvim_nv_operator_impl(cmdarg_T *cap)
+{
+  nv_operator_impl(cap);
+}
+
+/// Wrapper for nv_optrans C implementation.
+void nvim_nv_optrans_impl(cmdarg_T *cap)
+{
+  nv_optrans_impl(cap);
+}
+
+/// Wrapper for nv_tilde C implementation.
+void nvim_nv_tilde_impl(cmdarg_T *cap)
+{
+  nv_tilde_impl(cap);
+}
+
+/// Wrapper for nv_subst C implementation.
+void nvim_nv_subst_impl(cmdarg_T *cap)
+{
+  nv_subst_impl(cap);
 }
 
 // =============================================================================
@@ -5753,6 +5791,12 @@ static void v_visop(cmdarg_T *cap)
 /// "s" and "S" commands.
 static void nv_subst(cmdarg_T *cap)
 {
+  rs_nv_subst(cap);
+}
+
+/// Implementation of "s" and "S" commands.
+static void nv_subst_impl(cmdarg_T *cap)
+{
   if (bt_prompt(curbuf) && !prompt_curpos_editable()) {
     clearopbeep(cap->oap);
     return;
@@ -5763,9 +5807,9 @@ static void nv_subst(cmdarg_T *cap)
       VIsual_mode = 'V';
     }
     cap->cmdchar = 'c';
-    nv_operator(cap);
+    nv_operator_impl(cap);
   } else {
-    nv_optrans(cap);
+    nv_optrans_impl(cap);
   }
 }
 
@@ -5779,12 +5823,18 @@ static void nv_abbrev(cmdarg_T *cap)
   if (VIsual_active) {
     v_visop(cap);
   } else {
-    nv_optrans(cap);
+    nv_optrans_impl(cap);
   }
 }
 
 /// Translate a command into another command.
 static void nv_optrans(cmdarg_T *cap)
+{
+  rs_nv_optrans(cap);
+}
+
+/// Implementation of command translation.
+static void nv_optrans_impl(cmdarg_T *cap)
 {
   static const char *(ar[]) = { "dl", "dh", "d$", "c$", "cl", "cc", "yy",
                                 ":s\r" };
@@ -6647,6 +6697,12 @@ static void nv_Undo(cmdarg_T *cap)
 /// single character.
 static void nv_tilde(cmdarg_T *cap)
 {
+  rs_nv_tilde(cap);
+}
+
+/// Implementation of '~' command.
+static void nv_tilde_impl(cmdarg_T *cap)
+{
   if (!p_to && !VIsual_active && cap->oap->op_type != OP_TILDE) {
     if (bt_prompt(curbuf) && !prompt_curpos_editable()) {
       clearopbeep(cap->oap);
@@ -6654,13 +6710,19 @@ static void nv_tilde(cmdarg_T *cap)
     }
     n_swapchar(cap);
   } else {
-    nv_operator(cap);
+    nv_operator_impl(cap);
   }
 }
 
 /// Handle an operator command.
 /// The actual work is done by do_pending_operator().
 static void nv_operator(cmdarg_T *cap)
+{
+  rs_nv_operator(cap);
+}
+
+/// Implementation of operator command.
+static void nv_operator_impl(cmdarg_T *cap)
 {
   int op_type = get_op_type(cap->cmdchar, cap->nchar);
 
