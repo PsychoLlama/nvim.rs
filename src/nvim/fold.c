@@ -3248,12 +3248,6 @@ void nvim_win_set_w_foldinvalid(win_T *wp, bool val)
   wp->w_foldinvalid = val;
 }
 
-/// Get the w_foldinvalid field from a window.
-bool nvim_win_get_w_foldinvalid(win_T *wp)
-{
-  return wp->w_foldinvalid;
-}
-
 /// Wrapper for deleteFoldRecurse for Rust.
 void nvim_deleteFoldRecurse_c(buf_T *buf, garray_T *gap)
 {

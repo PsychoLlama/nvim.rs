@@ -84,6 +84,8 @@ extern int rs_diffopt_iwhiteeol(void);
 extern int rs_diffopt_iblank(void);
 extern int rs_diffopt_followwrap(void);
 extern int rs_diffopt_linematch(void);
+extern int rs_diff_cmp(const char *s1, const char *s2);
+extern void rs_diff_copy_entry(diff_T *dprev, diff_T *dp, int idx_orig, int idx_new);
 
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
@@ -1918,16 +1920,7 @@ static void diff_read(int idx_orig, int idx_new, diffio_T *dio)
 /// @param idx_new
 static void diff_copy_entry(diff_T *dprev, diff_T *dp, int idx_orig, int idx_new)
 {
-  linenr_T off;
-
-  if (dprev == NULL) {
-    off = 0;
-  } else {
-    off = (dprev->df_lnum[idx_orig] + dprev->df_count[idx_orig])
-          - (dprev->df_lnum[idx_new] + dprev->df_count[idx_new]);
-  }
-  dp->df_lnum[idx_new] = dp->df_lnum[idx_orig] - off;
-  dp->df_count[idx_new] = dp->df_count[idx_orig];
+  rs_diff_copy_entry(dprev, dp, idx_orig, idx_new);
 }
 
 /// Clear the list of diffblocks for tab page "tp".
@@ -2431,48 +2424,7 @@ static bool diff_equal_char(const char *const p1, const char *const p2, int *con
 /// @return on-zero if the two strings are different.
 static int diff_cmp(char *s1, char *s2)
 {
-  if ((diff_flags & DIFF_IBLANK)
-      && (*skipwhite(s1) == NUL || *skipwhite(s2) == NUL)) {
-    return 0;
-  }
-
-  if ((diff_flags & (DIFF_ICASE | ALL_WHITE_DIFF)) == 0) {
-    return strcmp(s1, s2);
-  }
-
-  if ((diff_flags & DIFF_ICASE) && !(diff_flags & ALL_WHITE_DIFF)) {
-    return mb_stricmp(s1, s2);
-  }
-
-  char *p1 = s1;
-  char *p2 = s2;
-
-  // Ignore white space changes and possibly ignore case.
-  while (*p1 != NUL && *p2 != NUL) {
-    if (((diff_flags & DIFF_IWHITE)
-         && ascii_iswhite(*p1) && ascii_iswhite(*p2))
-        || ((diff_flags & DIFF_IWHITEALL)
-            && (ascii_iswhite(*p1) || ascii_iswhite(*p2)))) {
-      p1 = skipwhite(p1);
-      p2 = skipwhite(p2);
-    } else {
-      int l;
-      if (!diff_equal_char(p1, p2, &l)) {
-        break;
-      }
-      p1 += l;
-      p2 += l;
-    }
-  }
-
-  // Ignore trailing white space.
-  p1 = skipwhite(p1);
-  p2 = skipwhite(p2);
-
-  if ((*p1 != NUL) || (*p2 != NUL)) {
-    return 1;
-  }
-  return 0;
+  return rs_diff_cmp(s1, s2);
 }
 
 /// Set the topline of "towin" to match the position in "fromwin", so that they
@@ -4383,6 +4335,30 @@ linenr_T nvim_diffblock_get_count(diff_T *dp, int idx)
     return 0;
   }
   return dp->df_count[idx];
+}
+
+/// Set line number for a diff block at buffer index.
+/// @param dp   Diff block pointer
+/// @param idx  Buffer index (0 to DB_COUNT-1)
+/// @param lnum Line number to set
+void nvim_diffblock_set_lnum(diff_T *dp, int idx, linenr_T lnum)
+{
+  if (dp == NULL || idx < 0 || idx >= DB_COUNT) {
+    return;
+  }
+  dp->df_lnum[idx] = lnum;
+}
+
+/// Set line count for a diff block at buffer index.
+/// @param dp    Diff block pointer
+/// @param idx   Buffer index (0 to DB_COUNT-1)
+/// @param count Line count to set
+void nvim_diffblock_set_count(diff_T *dp, int idx, linenr_T count)
+{
+  if (dp == NULL || idx < 0 || idx >= DB_COUNT) {
+    return;
+  }
+  dp->df_count[idx] = count;
 }
 
 /// Get DB_COUNT constant for Rust FFI.

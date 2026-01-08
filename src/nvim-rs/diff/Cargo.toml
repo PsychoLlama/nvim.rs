@@ -9,6 +9,7 @@ description = "Diff option checking for Neovim"
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
+libc = "0.2"
 
 [lints]
 workspace = true

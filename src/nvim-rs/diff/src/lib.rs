@@ -45,6 +45,9 @@ const ALL_INLINE: c_int =
     DIFF_INLINE_NONE | DIFF_INLINE_SIMPLE | DIFF_INLINE_CHAR | DIFF_INLINE_WORD;
 const ALL_INLINE_DIFF: c_int = DIFF_INLINE_CHAR | DIFF_INLINE_WORD;
 
+// Combination mask for all whitespace diff flags
+const ALL_WHITE_DIFF: c_int = DIFF_IWHITE | DIFF_IWHITEALL | DIFF_IWHITEEOL;
+
 use std::ffi::c_void;
 
 /// Maximum number of diff buffers (matches DB_COUNT in C).
@@ -102,6 +105,18 @@ extern "C" {
     fn nvim_diffblock_get_next(dp: DiffBlockHandle) -> DiffBlockHandle;
     fn nvim_diffblock_get_lnum(dp: DiffBlockHandle, idx: c_int) -> LinenrT;
     fn nvim_diffblock_get_count(dp: DiffBlockHandle, idx: c_int) -> LinenrT;
+
+    // UTF-8 functions for diff_cmp
+    fn utfc_ptr2len(p: *const c_char) -> c_int;
+    fn utf_fold(c: c_int) -> c_int;
+    fn utf_ptr2char(p: *const c_char) -> c_int;
+
+    // Multibyte string comparison (case-insensitive)
+    fn mb_stricmp(s1: *const c_char, s2: *const c_char) -> c_int;
+
+    // Diff block setters for diff_copy_entry
+    fn nvim_diffblock_set_lnum(dp: DiffBlockHandle, idx: c_int, lnum: LinenrT);
+    fn nvim_diffblock_set_count(dp: DiffBlockHandle, idx: c_int, count: LinenrT);
 }
 
 /// Check if 'diffopt' contains "horizontal".
@@ -843,6 +858,225 @@ pub extern "C" fn rs_diff_hunk_start_end(buf_idx: c_int, lnum: LinenrT) -> DiffH
     diff_hunk_start_end_impl(buf_idx, lnum)
 }
 
+// =============================================================================
+// Diff String Comparison
+// =============================================================================
+
+/// Check if character is ASCII whitespace (space or tab).
+#[inline]
+const fn ascii_iswhite(c: u8) -> bool {
+    c == b' ' || c == b'\t'
+}
+
+/// Skip leading whitespace in a string.
+///
+/// Returns pointer to first non-whitespace character.
+#[inline]
+#[allow(clippy::missing_const_for_fn)]
+unsafe fn skipwhite(p: *const c_char) -> *const c_char {
+    let mut ptr = p;
+    #[allow(clippy::cast_sign_loss)]
+    while ascii_iswhite(*ptr as u8) {
+        ptr = ptr.add(1);
+    }
+    ptr
+}
+
+/// Compare two characters for equality, possibly ignoring case.
+///
+/// If characters are equal (possibly after case folding), returns the byte
+/// length of the character. Otherwise returns 0.
+///
+/// This handles multibyte UTF-8 characters correctly.
+#[allow(clippy::cast_sign_loss)]
+unsafe fn diff_equal_char(p1: *const c_char, p2: *const c_char, diff_flags: c_int) -> c_int {
+    let l = utfc_ptr2len(p1);
+
+    // Characters must have the same byte length
+    if l != utfc_ptr2len(p2) {
+        return 0;
+    }
+
+    if l > 1 {
+        // Multibyte character: compare bytes first
+        if libc::strncmp(p1, p2, l as usize) != 0 {
+            // Bytes differ, check if case-insensitive comparison matches
+            if (diff_flags & DIFF_ICASE) == 0 {
+                return 0;
+            }
+            // Compare case-folded characters
+            if utf_fold(utf_ptr2char(p1)) != utf_fold(utf_ptr2char(p2)) {
+                return 0;
+            }
+        }
+    } else {
+        // Single-byte character
+        let c1 = *p1 as u8;
+        let c2 = *p2 as u8;
+        if c1 != c2 {
+            if (diff_flags & DIFF_ICASE) == 0 {
+                return 0;
+            }
+            // Compare lowercase versions
+            let l1 = if c1.is_ascii_uppercase() {
+                c1 + (b'a' - b'A')
+            } else {
+                c1
+            };
+            let l2 = if c2.is_ascii_uppercase() {
+                c2 + (b'a' - b'A')
+            } else {
+                c2
+            };
+            if l1 != l2 {
+                return 0;
+            }
+        }
+    }
+
+    l
+}
+
+/// Compare two strings according to 'diffopt'.
+///
+/// Returns non-zero when the strings are different.
+///
+/// This function handles:
+/// - DIFF_IBLANK: Treat lines with only whitespace as equal
+/// - DIFF_ICASE: Case-insensitive comparison
+/// - DIFF_IWHITE: Ignore changes in whitespace amount
+/// - DIFF_IWHITEALL: Ignore all whitespace
+/// - DIFF_IWHITEEOL: Ignore trailing whitespace
+#[allow(clippy::cast_sign_loss)]
+fn diff_cmp_impl(s1: *const c_char, s2: *const c_char, diff_flags: c_int) -> c_int {
+    if s1.is_null() || s2.is_null() {
+        return c_int::from(s1 != s2);
+    }
+
+    unsafe {
+        // DIFF_IBLANK: If one of the lines contains only whitespace, treat as equal
+        if (diff_flags & DIFF_IBLANK) != 0 && (*skipwhite(s1) == 0 || *skipwhite(s2) == 0) {
+            return 0;
+        }
+
+        // No special flags: use simple strcmp
+        if (diff_flags & (DIFF_ICASE | ALL_WHITE_DIFF)) == 0 {
+            return libc::strcmp(s1, s2);
+        }
+
+        // Case-insensitive only (no whitespace handling): use mb_stricmp
+        if (diff_flags & DIFF_ICASE) != 0 && (diff_flags & ALL_WHITE_DIFF) == 0 {
+            return mb_stricmp(s1, s2);
+        }
+
+        // Complex comparison: handle whitespace and possibly case
+        let mut p1 = s1;
+        let mut p2 = s2;
+
+        while *p1 != 0 && *p2 != 0 {
+            let c1 = *p1 as u8;
+            let c2 = *p2 as u8;
+
+            // DIFF_IWHITE: Both chars are whitespace, skip all whitespace
+            if (diff_flags & DIFF_IWHITE) != 0 && ascii_iswhite(c1) && ascii_iswhite(c2) {
+                p1 = skipwhite(p1);
+                p2 = skipwhite(p2);
+            // DIFF_IWHITEALL: Either char is whitespace, skip all whitespace
+            } else if (diff_flags & DIFF_IWHITEALL) != 0 && (ascii_iswhite(c1) || ascii_iswhite(c2))
+            {
+                p1 = skipwhite(p1);
+                p2 = skipwhite(p2);
+            } else {
+                // Compare characters
+                let l = diff_equal_char(p1, p2, diff_flags);
+                if l == 0 {
+                    break;
+                }
+                p1 = p1.add(l as usize);
+                p2 = p2.add(l as usize);
+            }
+        }
+
+        // Ignore trailing whitespace (always, due to DIFF_IWHITEEOL or cleanup)
+        p1 = skipwhite(p1);
+        p2 = skipwhite(p2);
+
+        // If both strings are exhausted, they're equal
+        c_int::from(*p1 != 0 || *p2 != 0)
+    }
+}
+
+/// FFI export: Compare two strings according to 'diffopt'.
+///
+/// Returns non-zero when the strings are different.
+///
+/// # Safety
+///
+/// - `s1` and `s2` must be valid null-terminated strings or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_cmp(s1: *const c_char, s2: *const c_char) -> c_int {
+    diff_cmp_impl(s1, s2, nvim_get_diff_flags())
+}
+
+// =============================================================================
+// Diff Block Copying
+// =============================================================================
+
+/// Copy diff block entry from one buffer index to another.
+///
+/// This computes the line number for `idx_new` based on the offset between
+/// the two buffers from the previous diff block.
+///
+/// # Arguments
+///
+/// * `dprev` - The previous diff block (for computing offset), or null
+/// * `dp` - The current diff block to update
+/// * `idx_orig` - The source buffer index
+/// * `idx_new` - The destination buffer index
+fn diff_copy_entry_impl(
+    dprev: DiffBlockHandle,
+    dp: DiffBlockHandle,
+    idx_orig: c_int,
+    idx_new: c_int,
+) {
+    if dp.is_null() {
+        return;
+    }
+
+    unsafe {
+        let off = if dprev.is_null() {
+            0
+        } else {
+            // Calculate offset: (prev_lnum_orig + prev_count_orig) - (prev_lnum_new + prev_count_new)
+            (nvim_diffblock_get_lnum(dprev, idx_orig) + nvim_diffblock_get_count(dprev, idx_orig))
+                - (nvim_diffblock_get_lnum(dprev, idx_new)
+                    + nvim_diffblock_get_count(dprev, idx_new))
+        };
+
+        // dp->df_lnum[idx_new] = dp->df_lnum[idx_orig] - off
+        nvim_diffblock_set_lnum(dp, idx_new, nvim_diffblock_get_lnum(dp, idx_orig) - off);
+        // dp->df_count[idx_new] = dp->df_count[idx_orig]
+        nvim_diffblock_set_count(dp, idx_new, nvim_diffblock_get_count(dp, idx_orig));
+    }
+}
+
+/// FFI export: Copy diff block entry from one buffer index to another.
+///
+/// # Safety
+///
+/// - `dprev` must be a valid diff block handle or null.
+/// - `dp` must be a valid diff block handle or null.
+/// - `idx_orig` and `idx_new` must be valid buffer indices (0 to DB_COUNT-1).
+#[no_mangle]
+pub extern "C" fn rs_diff_copy_entry(
+    dprev: DiffBlockHandle,
+    dp: DiffBlockHandle,
+    idx_orig: c_int,
+    idx_new: c_int,
+) {
+    diff_copy_entry_impl(dprev, dp, idx_orig, idx_new);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1339,6 +1573,33 @@ mod tests {
 
     // Note: Tests for diff_find_next_hunk_impl, diff_find_prev_hunk_impl,
     // diff_lnum_in_hunk_impl, and diff_hunk_start_end_impl
+    // are not included here because they require C FFI calls that are
+    // only available when linked with the full Neovim binary.
+
+    // =========================================================================
+    // Diff String Comparison Tests
+    // =========================================================================
+
+    #[test]
+    fn test_ascii_iswhite() {
+        assert!(ascii_iswhite(b' '));
+        assert!(ascii_iswhite(b'\t'));
+        assert!(!ascii_iswhite(b'a'));
+        assert!(!ascii_iswhite(b'\n'));
+        assert!(!ascii_iswhite(0));
+    }
+
+    #[test]
+    fn test_all_white_diff_constant() {
+        // ALL_WHITE_DIFF should be the combination of IWHITE, IWHITEALL, IWHITEEOL
+        assert_eq!(
+            ALL_WHITE_DIFF,
+            DIFF_IWHITE | DIFF_IWHITEALL | DIFF_IWHITEEOL
+        );
+        assert_eq!(ALL_WHITE_DIFF, 0x038);
+    }
+
+    // Note: Tests for diff_cmp_impl and diff_copy_entry_impl
     // are not included here because they require C FFI calls that are
     // only available when linked with the full Neovim binary.
 }
