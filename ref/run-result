@@ -1,38 +1,43 @@
-Plan: ~/.claude/plans/resilient-stirring-token.md
+Plan: ~/.claude/plans/parsed-mixing-yao.md
 
-The Rust migration plan has been fully executed. Here's a summary of what was accomplished:
+All phases are complete! Here's a summary:
 
-## Summary
+## Plan Execution Complete
 
-Successfully executed the Rust Migration Plan for the Neovim operator system (ops.c).
+I have successfully executed the plan to expand the message crate. Here's what was accomplished:
 
-### Completed Phases:
+### Commits Made (7 total):
+1. **Phase 1**: Added message kind constants and core state accessors
+2. **Phase 2**: Added message formatting utilities (truncation, shortmess flags)
+3. **Phase 3**: Extended error and warning state management
+4. **Phase 4**: Added message history utility functions
+5. **Phase 5**: Added dialog type constants and utilities
+6. **Phase 6**: Added scrollback utilities and state constants
+7. **Phase 7**: Updated documentation in ref/crates.md
 
-**Phase 1: Operator Infrastructure**
-- Created `types.rs` with OpType enum (30 variants), MotionType enum, BlockDef struct, Pos struct
-- Created `oparg.rs` with OpArgHandle, OpArgRef, OpArgMut wrappers for C's oparg_T struct
-- Added FFI accessor functions to `normal.c`
+### Key Additions:
+- **176 total FFI exports** across the message crate modules
+- **18 unit tests** in the message crate
+- **Message kind constants** (emsg, echo, wmsg, confirm, etc.)
+- **Shortmess flag constants** (SHM_TRUNCALL, SHM_TRUNC, etc.)
+- **DialogType enum** (GENERIC, ERROR, WARNING, INFO, QUESTION)
+- **DialogResponse enum** (YES, NO, CANCEL, ALL, DISCARD_ALL)
+- **SbClearState enum** for scrollback management
+- Extensive error state management utilities
+- History capacity and counting functions
+- Scrollback buffer management utilities
 
-**Phase 2: Simple Operators**
-- `tilde.rs`: rot13, swap_char for case swapping (g~, gU, gu, g?)
-- `shift.rs`: calc_new_indent for indent shifting (< and >)
-- `addsub.rs`: addsub_alpha, handle_wraparound for Ctrl-A/Ctrl-X
+### Module Summary:
+| Module | Exports |
+|--------|---------|
+| attr.rs | 9 |
+| chunk.rs | 12 |
+| dialog.rs | 29 |
+| error.rs | 38 |
+| format.rs | 24 |
+| history.rs | 22 |
+| lib.rs | 6 |
+| output.rs | 18 |
+| scrollback.rs | 18 |
 
-**Phase 3: Replace and Join Operations**
-- `replace.rs`: normalize_replace_char, calc_replace_numc, adjust_for_double_wide, calc_replace_buffer_size, will_split_line
-- `join.rs`: calc_join_spaces, is_sentence_end, calc_join_total_size, calc_join_cursor_col
-
-**Phase 4: Delete Operations**
-- `delete.rs`: calc_delete_bytes, calc_delete_bytes_virtual, should_check_linewise_delete, is_empty_line_delete, calc_delete_from_start, calc_block_delete_chars, determine_delete_register
-
-**Phase 5: Insert Operations**
-- `insert.rs`: calc_pre_textlen, calc_inserted_len, adjust_textcol_for_indent, calc_block_change_newlen, should_advance_cursor_append, should_inc_cursor_after_change, should_propagate_block_change
-
-**Phase 6: Documentation**
-- Updated `ref/crates.md` with expanded ops crate description
-
-### Metrics:
-- **Total Rust code added**: ~3,462 lines across 10 modules
-- **New unit tests**: ~50 test functions
-- **All 1,620 tests passing**
-- **6 commits** tracking each phase
+All checks pass: formatting, clippy, and 1620 tests (including 18 in the message crate).
