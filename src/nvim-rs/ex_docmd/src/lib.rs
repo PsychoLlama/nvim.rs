@@ -12,6 +12,7 @@
 #![allow(clippy::cast_possible_truncation)]
 
 pub mod address;
+pub mod args;
 pub mod lookup;
 pub mod modifiers;
 
@@ -19,6 +20,7 @@ use std::ffi::{c_char, c_int};
 use std::ptr;
 
 pub use address::*;
+pub use args::*;
 pub use lookup::*;
 pub use modifiers::*;
 
