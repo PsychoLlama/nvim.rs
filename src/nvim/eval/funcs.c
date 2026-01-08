@@ -181,6 +181,9 @@ extern void rs_f_or(typval_T *argvars, typval_T *rettv);
 extern void rs_f_xor(typval_T *argvars, typval_T *rettv);
 extern void rs_f_invert(typval_T *argvars, typval_T *rettv);
 
+// Rust implementations of type functions (from nvim-rs/eval/src/funcs/types.rs)
+extern void rs_f_type(typval_T *argvars, typval_T *rettv);
+
 #ifdef _MSC_VER
 // This prevents MSVC from replacing the functions with intrinsics,
 // and causing errors when trying to get their addresses in funcs.generated.h
@@ -7720,33 +7723,7 @@ static void f_timer_stopall(typval_T *argvars, typval_T *unused, EvalFuncData fp
 /// "type(expr)" function
 static void f_type(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  int n = -1;
-
-  switch (argvars[0].v_type) {
-  case VAR_NUMBER:
-    n = VAR_TYPE_NUMBER; break;
-  case VAR_STRING:
-    n = VAR_TYPE_STRING; break;
-  case VAR_PARTIAL:
-  case VAR_FUNC:
-    n = VAR_TYPE_FUNC; break;
-  case VAR_LIST:
-    n = VAR_TYPE_LIST; break;
-  case VAR_DICT:
-    n = VAR_TYPE_DICT; break;
-  case VAR_FLOAT:
-    n = VAR_TYPE_FLOAT; break;
-  case VAR_BOOL:
-    n = VAR_TYPE_BOOL; break;
-  case VAR_SPECIAL:
-    n = VAR_TYPE_SPECIAL; break;
-  case VAR_BLOB:
-    n = VAR_TYPE_BLOB; break;
-  case VAR_UNKNOWN:
-    internal_error("f_type(UNKNOWN)");
-    break;
-  }
-  rettv->vval.v_number = n;
+  rs_f_type(argvars, rettv);
 }
 
 /// "virtcol({expr}, [, {list} [, {winid}]])" function

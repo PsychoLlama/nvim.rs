@@ -28,5 +28,6 @@
 pub mod bitwise;
 mod dispatch;
 pub mod math;
+pub mod types;
 
 pub use dispatch::*;
