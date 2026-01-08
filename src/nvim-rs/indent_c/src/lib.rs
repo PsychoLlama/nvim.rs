@@ -571,6 +571,287 @@ pub unsafe extern "C" fn rs_cin_isdefault(s: *const c_char) -> bool {
 }
 
 // ============================================================================
+// Case and switch label detection
+// ============================================================================
+
+/// Recognize a switch label: "case .*:" or "default:".
+///
+/// # Arguments
+/// * `s` - The string to check
+/// * `strict` - If true, stop at strings (for C/C++); if false, allow strings (for JS)
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_iscase(s: *const c_char, strict: bool) -> bool {
+    if s.is_null() {
+        return false;
+    }
+
+    let mut p = rs_cin_skipcomment(s);
+
+    // Check for "case"
+    if rs_cin_starts_with(p, c"case".as_ptr()) {
+        p = p.add(4);
+        while !is_nul(*p) {
+            p = rs_cin_skipcomment(p);
+            if is_nul(*p) {
+                break;
+            }
+            if *p == b':' as c_char {
+                if *p.add(1) == b':' as c_char {
+                    // skip over "::" for C++
+                    p = p.add(1);
+                } else {
+                    return true;
+                }
+            }
+            if *p == b'\'' as c_char && !is_nul(*p.add(1)) && *p.add(2) == b'\'' as c_char {
+                // skip over ':'
+                p = p.add(2);
+            } else if *p == b'/' as c_char
+                && (*p.add(1) == b'*' as c_char || *p.add(1) == b'/' as c_char)
+            {
+                // stop at comment
+                return false;
+            } else if *p == b'"' as c_char {
+                // JS etc.
+                if strict {
+                    return false; // stop at string
+                }
+                return true;
+            }
+            if !is_nul(*p) {
+                p = p.add(1);
+            }
+        }
+        return false;
+    }
+
+    // Check for "default:"
+    rs_cin_isdefault(p)
+}
+
+// ============================================================================
+// JavaScript key detection
+// ============================================================================
+
+/// Checks if `text` starts with "key:".
+///
+/// Used for JavaScript object property detection.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_has_js_key(text: *const c_char) -> bool {
+    if text.is_null() {
+        return false;
+    }
+
+    let mut s = skip_whitespace(text);
+
+    let mut quote: c_char = 0;
+    if *s == b'\'' as c_char || *s == b'"' as c_char {
+        // can be 'key': or "key":
+        quote = *s;
+        s = s.add(1);
+    }
+
+    // need at least one ID character
+    if vim_isIDc(i32::from(*s as u8)) == 0 {
+        return false;
+    }
+
+    while vim_isIDc(i32::from(*s as u8)) != 0 {
+        s = s.add(1);
+    }
+
+    if !is_nul(*s) && *s == quote {
+        s = s.add(1);
+    }
+
+    s = rs_cin_skipcomment(s);
+
+    // "::" is not a label, it's C++
+    *s == b':' as c_char && *s.add(1) != b':' as c_char
+}
+
+// ============================================================================
+// C++ namespace detection
+// ============================================================================
+
+/// Recognize a "namespace" scope declaration.
+///
+/// Handles:
+/// - `namespace foo {`
+/// - `inline namespace foo {`
+/// - `export namespace foo {`
+/// - `namespace foo::bar {` (C++17 nested namespaces)
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_is_cpp_namespace(s: *const c_char) -> bool {
+    if s.is_null() {
+        return false;
+    }
+
+    let mut p = rs_cin_skipcomment(s);
+
+    // skip over "inline" and "export" in any order
+    loop {
+        let is_inline = *p == b'i' as c_char
+            && *p.add(1) == b'n' as c_char
+            && *p.add(2) == b'l' as c_char
+            && *p.add(3) == b'i' as c_char
+            && *p.add(4) == b'n' as c_char
+            && *p.add(5) == b'e' as c_char
+            && (is_nul(*p.add(6)) || vim_iswordc(i32::from(*p.add(6) as u8)) == 0);
+
+        let is_export = *p == b'e' as c_char
+            && *p.add(1) == b'x' as c_char
+            && *p.add(2) == b'p' as c_char
+            && *p.add(3) == b'o' as c_char
+            && *p.add(4) == b'r' as c_char
+            && *p.add(5) == b't' as c_char
+            && (is_nul(*p.add(6)) || vim_iswordc(i32::from(*p.add(6) as u8)) == 0);
+
+        if is_inline || is_export {
+            p = rs_cin_skipcomment(skip_whitespace(p.add(6)));
+        } else {
+            break;
+        }
+    }
+
+    // Check for "namespace"
+    if *p != b'n' as c_char
+        || *p.add(1) != b'a' as c_char
+        || *p.add(2) != b'm' as c_char
+        || *p.add(3) != b'e' as c_char
+        || *p.add(4) != b's' as c_char
+        || *p.add(5) != b'p' as c_char
+        || *p.add(6) != b'a' as c_char
+        || *p.add(7) != b'c' as c_char
+        || *p.add(8) != b'e' as c_char
+    {
+        return false;
+    }
+    if !is_nul(*p.add(9)) && vim_iswordc(i32::from(*p.add(9) as u8)) != 0 {
+        return false;
+    }
+
+    p = rs_cin_skipcomment(skip_whitespace(p.add(9)));
+
+    let mut has_name = false;
+    let mut has_name_start = false;
+
+    while !is_nul(*p) {
+        if ascii_iswhite(i32::from(*p as u8)) != 0 {
+            has_name = true; // found end of a name
+            p = rs_cin_skipcomment(skip_whitespace(p));
+        } else if *p == b'{' as c_char {
+            break;
+        } else if vim_iswordc(i32::from(*p as u8)) != 0 {
+            has_name_start = true;
+            if has_name {
+                return false; // word character after skipping past name
+            }
+            p = p.add(1);
+        } else if *p == b':' as c_char
+            && *p.add(1) == b':' as c_char
+            && vim_iswordc(i32::from(*p.add(2) as u8)) != 0
+        {
+            if !has_name_start || has_name {
+                return false;
+            }
+            // C++ 17 nested namespace
+            p = p.add(3);
+        } else {
+            return false;
+        }
+    }
+
+    true
+}
+
+// ============================================================================
+// String ending detection
+// ============================================================================
+
+/// Return true if string "s" ends with the string "find", possibly followed by
+/// white space and comments. Skip strings and comments while searching.
+///
+/// # Safety
+/// Both pointers must point to valid null-terminated C strings.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_ends_in(s: *const c_char, find: *const c_char) -> bool {
+    if s.is_null() || find.is_null() {
+        return false;
+    }
+
+    // Calculate find length
+    let mut find_len: usize = 0;
+    while !is_nul(*find.add(find_len)) {
+        find_len += 1;
+    }
+
+    let mut p = s;
+
+    while !is_nul(*p) {
+        p = rs_cin_skipcomment(p);
+
+        // Check if we found the string
+        let mut matches = true;
+        for i in 0..find_len {
+            if *p.add(i) != *find.add(i) {
+                matches = false;
+                break;
+            }
+        }
+
+        if matches {
+            let r = skip_whitespace(p.add(find_len));
+            if rs_cin_nocode(r) {
+                return true;
+            }
+        }
+
+        if !is_nul(*p) {
+            p = p.add(1);
+        }
+    }
+
+    false
+}
+
+/// Skip over strings, comments, and concatenated strings/comments.
+///
+/// # Safety
+/// The pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_skip_comment_and_string(s: *const c_char) -> *const c_char {
+    if s.is_null() {
+        return s;
+    }
+
+    let mut r: *const c_char;
+    let mut p = s;
+
+    loop {
+        r = p;
+        p = rs_cin_skipcomment(p);
+        if !is_nul(*p) {
+            p = rs_skip_string(p);
+        }
+        if p == r {
+            break;
+        }
+    }
+
+    p
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
