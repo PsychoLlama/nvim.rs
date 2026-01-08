@@ -380,6 +380,95 @@ impl MarkTree {
     pub fn lookup_node(&self, id: u64) -> Option<NonNull<MTNode>> {
         self.id2node.get(&id).copied()
     }
+
+    // ========================================================================
+    // Memory Management
+    // ========================================================================
+
+    /// Get approximate memory usage of the tree in bytes.
+    ///
+    /// This includes:
+    /// - Size of MarkTree struct
+    /// - Size of all MTNode structs
+    /// - Size of MTNodeChildren for internal nodes
+    /// - HashMap overhead for id2node
+    #[must_use]
+    pub fn memory_usage(&self) -> usize {
+        let base_size = std::mem::size_of::<Self>();
+        let node_size = std::mem::size_of::<MTNode>();
+        let children_size = std::mem::size_of::<MTNodeChildren>();
+
+        // Count internal vs leaf nodes
+        let internal_nodes = self.count_internal_nodes();
+        let leaf_nodes = self.n_nodes.saturating_sub(internal_nodes);
+
+        // Node memory: leaf nodes have just MTNode, internal have MTNode + MTNodeChildren
+        let node_memory = (leaf_nodes * node_size) + (internal_nodes * (node_size + children_size));
+
+        // HashMap overhead (approximate)
+        let hashmap_overhead = self.id2node.len() * (std::mem::size_of::<u64>()
+            + std::mem::size_of::<NonNull<MTNode>>()
+            + 8); // bucket overhead estimate
+
+        base_size + node_memory + hashmap_overhead
+    }
+
+    /// Count internal (non-leaf) nodes in the tree.
+    fn count_internal_nodes(&self) -> usize {
+        fn count_internal(node: &MTNode) -> usize {
+            if node.is_leaf() {
+                0
+            } else {
+                let mut count = 1;
+                if let Some(ref children) = node.children {
+                    for i in 0..=node.n as usize {
+                        if let Some(ref child) = children.ptr[i] {
+                            count += count_internal(child);
+                        }
+                    }
+                }
+                count
+            }
+        }
+
+        self.root.as_ref().map_or(0, |r| count_internal(r))
+    }
+
+    /// Get memory statistics for debugging.
+    #[must_use]
+    pub fn memory_stats(&self) -> MemoryStats {
+        let internal_nodes = self.count_internal_nodes();
+        let leaf_nodes = self.n_nodes.saturating_sub(internal_nodes);
+
+        MemoryStats {
+            total_nodes: self.n_nodes,
+            internal_nodes,
+            leaf_nodes,
+            total_keys: self.n_keys,
+            id2node_entries: self.id2node.len(),
+            tree_depth: self.level() as usize,
+            estimated_bytes: self.memory_usage(),
+        }
+    }
+}
+
+/// Memory statistics for a marktree.
+#[derive(Debug, Clone, Copy)]
+pub struct MemoryStats {
+    /// Total number of nodes.
+    pub total_nodes: usize,
+    /// Number of internal (non-leaf) nodes.
+    pub internal_nodes: usize,
+    /// Number of leaf nodes.
+    pub leaf_nodes: usize,
+    /// Total number of keys.
+    pub total_keys: usize,
+    /// Number of entries in id2node map.
+    pub id2node_entries: usize,
+    /// Depth of the tree.
+    pub tree_depth: usize,
+    /// Estimated memory usage in bytes.
+    pub estimated_bytes: usize,
 }
 
 impl Drop for MarkTree {
