@@ -852,6 +852,221 @@ pub unsafe extern "C" fn rs_cin_skip_comment_and_string(s: *const c_char) -> *co
 }
 
 // ============================================================================
+// Bracket and brace matching utilities
+// ============================================================================
+
+/// Result of finding an unmatched bracket in a line.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct BracketMatch {
+    /// Whether an unmatched bracket was found.
+    pub found: bool,
+    /// Column (0-based) of the last unmatched bracket, if found.
+    pub col: c_int,
+}
+
+/// Find the position of the last unmatched closing bracket in a line.
+///
+/// Searches for the last unmatched ')' or '}' (depending on `start` and `end`).
+/// Ignores brackets in comments and strings.
+///
+/// # Arguments
+/// * `line` - The line to search
+/// * `start` - The opening bracket character (e.g., '(' or '{')
+/// * `end` - The closing bracket character (e.g., ')' or '}')
+///
+/// # Returns
+/// A `BracketMatch` with `found=true` and the column if an unmatched bracket
+/// was found, otherwise `found=false`.
+///
+/// # Safety
+/// The `line` pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_last_paren(
+    line: *const c_char,
+    start: c_char,
+    end: c_char,
+) -> BracketMatch {
+    if line.is_null() {
+        return BracketMatch {
+            found: false,
+            col: 0,
+        };
+    }
+
+    let mut col: c_int = 0;
+    let mut found = false;
+    let mut open_count: c_int = 0;
+    let mut i: c_int = 0;
+
+    while !is_nul(*line.add(i as usize)) {
+        // Skip comments
+        let after_comment = rs_cin_skipcomment(line.add(i as usize));
+        i = after_comment.offset_from(line) as c_int;
+
+        // Skip strings
+        let after_string = rs_skip_string(line.add(i as usize));
+        i = after_string.offset_from(line) as c_int;
+
+        if is_nul(*line.add(i as usize)) {
+            break;
+        }
+
+        let c = *line.add(i as usize);
+        if c == start {
+            open_count += 1;
+        } else if c == end {
+            if open_count > 0 {
+                open_count -= 1;
+            } else {
+                col = i;
+                found = true;
+            }
+        }
+
+        i += 1;
+    }
+
+    BracketMatch { found, col }
+}
+
+/// Count unmatched opening brackets in a line up to a given column.
+///
+/// Returns the nesting level (number of unmatched opening brackets).
+/// Ignores brackets in comments and strings.
+///
+/// # Arguments
+/// * `line` - The line to search
+/// * `start` - The opening bracket character (e.g., '(' or '{')
+/// * `end` - The closing bracket character (e.g., ')' or '}')
+/// * `max_col` - Maximum column to search (exclusive), or -1 for entire line
+///
+/// # Safety
+/// The `line` pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_count_unmatched_open(
+    line: *const c_char,
+    start: c_char,
+    end: c_char,
+    max_col: c_int,
+) -> c_int {
+    if line.is_null() {
+        return 0;
+    }
+
+    let mut count: c_int = 0;
+    let mut i: c_int = 0;
+
+    while !is_nul(*line.add(i as usize)) {
+        if max_col >= 0 && i >= max_col {
+            break;
+        }
+
+        // Skip comments
+        let after_comment = rs_cin_skipcomment(line.add(i as usize));
+        let new_i = after_comment.offset_from(line) as c_int;
+        if new_i != i {
+            i = new_i;
+            continue;
+        }
+
+        // Skip strings
+        let after_string = rs_skip_string(line.add(i as usize));
+        let new_i = after_string.offset_from(line) as c_int;
+        if new_i != i {
+            i = new_i;
+            continue;
+        }
+
+        if is_nul(*line.add(i as usize)) {
+            break;
+        }
+
+        let c = *line.add(i as usize);
+        if c == start {
+            count += 1;
+        } else if c == end && count > 0 {
+            count -= 1;
+        }
+
+        i += 1;
+    }
+
+    count
+}
+
+/// Check if a position is inside parentheses/brackets.
+///
+/// Returns true if position `col` is inside unmatched parentheses.
+///
+/// # Arguments
+/// * `line` - The line to check
+/// * `col` - The column position to check
+/// * `start` - The opening bracket character (e.g., '(' or '{')
+/// * `end` - The closing bracket character (e.g., ')' or '}')
+///
+/// # Safety
+/// The `line` pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_inside_brackets(
+    line: *const c_char,
+    col: c_int,
+    start: c_char,
+    end: c_char,
+) -> bool {
+    if line.is_null() {
+        return false;
+    }
+
+    let count = rs_count_unmatched_open(line, start, end, col);
+    count > 0
+}
+
+/// Skip over the contents of a C string at position `col` in `line`.
+///
+/// If position is at a quote character, returns the position after the
+/// closing quote. Otherwise returns the original column.
+///
+/// # Safety
+/// The `line` pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_skip2pos_col(line: *const c_char, col: c_int) -> c_int {
+    if line.is_null() || col < 0 {
+        return col;
+    }
+
+    let mut p = line;
+    while !is_nul(*p) && (p.offset_from(line) as c_int) < col {
+        if rs_cin_iscomment(p) {
+            p = rs_cin_skipcomment(p);
+        } else {
+            let new_p = rs_skip_string(p);
+            if new_p == p {
+                p = p.add(1);
+            } else {
+                p = new_p;
+            }
+        }
+    }
+
+    p.offset_from(line) as c_int
+}
+
+/// Check if the character at position is in a comment (not a string).
+///
+/// # Safety
+/// The `line` pointer must point to a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cin_iscomment_pos(line: *const c_char, col: c_int) -> bool {
+    if line.is_null() || col < 0 {
+        return false;
+    }
+
+    let skipped_col = rs_cin_skip2pos_col(line, col);
+    skipped_col > col
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
