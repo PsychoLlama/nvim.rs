@@ -18,8 +18,16 @@ type ColnrT = i32;
 extern "C" {
     /// Get the `ins_need_undo` static variable.
     fn nvim_get_ins_need_undo() -> c_int;
+    /// Set the `ins_need_undo` static variable.
+    fn nvim_set_ins_need_undo(val: c_int);
     /// Get the `can_cindent` static variable.
     fn nvim_get_can_cindent() -> c_int;
+    /// Set the `can_cindent` static variable.
+    fn nvim_set_can_cindent(val: c_int);
+    /// Get the `revins_on` static variable.
+    fn nvim_get_revins_on() -> c_int;
+    /// Get the `did_restart_edit` static variable.
+    fn nvim_get_did_restart_edit() -> c_int;
     /// Get buf->b_prompt_text for a buffer.
     fn nvim_buf_get_b_prompt_text(buf: *const std::ffi::c_void) -> *const c_char;
     /// Get curbuf handle.
@@ -54,6 +62,46 @@ pub extern "C" fn rs_ins_need_undo_get() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_get_can_cindent() -> c_int {
     nvim_get_can_cindent()
+}
+
+/// Set whether cindenting may be done on this line.
+///
+/// # Safety
+/// Calls C accessor function for `can_cindent` static.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_can_cindent(val: c_int) {
+    nvim_set_can_cindent(val);
+}
+
+/// Set whether undo is needed for the next insert.
+///
+/// # Safety
+/// Calls C accessor function for `ins_need_undo` static.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_ins_need_undo(val: c_int) {
+    nvim_set_ins_need_undo(val);
+}
+
+/// Check if reverse insert mode is on.
+///
+/// Returns true if `revins_on` is true (reverse insert mode).
+///
+/// # Safety
+/// Calls C accessor function for `revins_on` static.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_revins_on() -> c_int {
+    nvim_get_revins_on()
+}
+
+/// Check if edit was restarted.
+///
+/// Returns the value of `did_restart_edit`.
+///
+/// # Safety
+/// Calls C accessor function for `did_restart_edit` static.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_did_restart_edit() -> c_int {
+    nvim_get_did_restart_edit()
 }
 
 /// Default prompt text used when buffer has no custom prompt.

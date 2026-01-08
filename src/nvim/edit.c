@@ -151,10 +151,34 @@ int nvim_get_ins_need_undo(void)
   return ins_need_undo;
 }
 
+/// Set the ins_need_undo static variable (accessor for Rust).
+void nvim_set_ins_need_undo(int val)
+{
+  ins_need_undo = val != 0;
+}
+
 /// Get the can_cindent static variable (accessor for Rust).
 int nvim_get_can_cindent(void)
 {
   return can_cindent;
+}
+
+/// Set the can_cindent static variable (accessor for Rust).
+void nvim_set_can_cindent(int val)
+{
+  can_cindent = val != 0;
+}
+
+/// Get the revins_on static variable (accessor for Rust).
+int nvim_get_revins_on(void)
+{
+  return revins_on;
+}
+
+/// Get the did_restart_edit static variable (accessor for Rust).
+int nvim_get_did_restart_edit(void)
+{
+  return did_restart_edit;
 }
 
 /// Get buf->b_prompt_text (accessor for Rust).
