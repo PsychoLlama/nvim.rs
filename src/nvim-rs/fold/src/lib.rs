@@ -2361,6 +2361,129 @@ pub extern "C" fn rs_clearFolding(win: WinHandle) {
     clear_folding_impl(win);
 }
 
+// ============================================================================
+// Phase 4: Fold Update System
+// ============================================================================
+
+extern "C" {
+    /// Get the state variable (MODE_INSERT, etc.).
+    fn nvim_get_state() -> c_int;
+
+    /// Redraw later with specified type.
+    fn nvim_redraw_later(wp: WinHandle, redraw_type: c_int);
+
+    /// Call foldUpdateAll in C.
+    fn nvim_foldUpdateAll_c(win: WinHandle);
+
+    /// Call foldOpenCursor in C.
+    fn nvim_foldOpenCursor();
+}
+
+/// UPD_NOT_VALID redraw type.
+const UPD_NOT_VALID: c_int = 40;
+
+/// MODE_INSERT state flag.
+const MODE_INSERT: c_int = 0x10;
+
+/// Update all lines in a window for folding.
+fn fold_update_all_impl(win: WinHandle) {
+    if win.is_null() {
+        return;
+    }
+
+    unsafe {
+        nvim_win_set_w_foldinvalid(win, true);
+        nvim_redraw_later(win, UPD_NOT_VALID);
+    }
+}
+
+/// Updates folds when leaving insert-mode.
+fn fold_update_after_insert_impl() {
+    let curwin = unsafe { nvim_get_curwin() };
+
+    // foldmethod=manual: No need to update.
+    // These foldmethods are too slow, do not auto-update on insert-leave.
+    if foldmethod_is_manual_impl(curwin)
+        || foldmethod_is_syntax_impl(curwin)
+        || foldmethod_is_expr_impl(curwin)
+    {
+        return;
+    }
+
+    unsafe {
+        nvim_foldUpdateAll_c(curwin);
+        nvim_foldOpenCursor();
+    }
+}
+
+/// Update line numbers of folds for inserted/deleted lines.
+fn fold_mark_adjust_impl(
+    wp: WinHandle,
+    mut line1: LineNr,
+    mut line2: LineNr,
+    amount: LineNr,
+    amount_after: LineNr,
+) {
+    if wp.is_null() {
+        return;
+    }
+
+    // If deleting marks from line1 to line2, but not deleting all those
+    // lines, set line2 so that only deleted lines have their folds removed.
+    if amount == MAXLNUM && line2 >= line1 && line2 - line1 >= -amount_after {
+        line2 = line1 - amount_after - 1;
+    }
+    if line2 < line1 {
+        line2 = line1;
+    }
+    // If appending a line in Insert mode, it should be included in the fold
+    // just above the line.
+    let state = unsafe { nvim_get_state() };
+    if (state & MODE_INSERT) != 0 && amount == 1 && line2 == MAXLNUM {
+        line1 -= 1;
+    }
+
+    let gap = unsafe { nvim_win_get_folds(wp) };
+    fold_mark_adjust_recurse_impl(wp, gap, line1, line2, amount, amount_after);
+}
+
+// ============================================================================
+// Phase 4: FFI Exports
+// ============================================================================
+
+/// Update all lines in a window for folding.
+///
+/// # Safety
+/// The `win` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_foldUpdateAll(win: WinHandle) {
+    fold_update_all_impl(win);
+}
+
+/// Updates folds when leaving insert-mode.
+///
+/// # Safety
+/// This function is safe to call from C.
+#[no_mangle]
+pub extern "C" fn rs_foldUpdateAfterInsert() {
+    fold_update_after_insert_impl();
+}
+
+/// Update line numbers of folds for inserted/deleted lines.
+///
+/// # Safety
+/// The `wp` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_foldMarkAdjust(
+    wp: WinHandle,
+    line1: LineNr,
+    line2: LineNr,
+    amount: LineNr,
+    amount_after: LineNr,
+) {
+    fold_mark_adjust_impl(wp, line1, line2, amount, amount_after);
+}
+
 #[cfg(test)]
 mod tests {
     // Tests require FFI stubs which aren't available in pure Rust testing.

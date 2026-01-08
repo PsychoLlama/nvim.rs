@@ -145,6 +145,12 @@ extern void rs_cloneFoldGrowArray(garray_T *from, garray_T *to);
 extern void rs_copyFoldingState(win_T *wp_from, win_T *wp_to);
 extern void rs_clearFolding(win_T *win);
 
+// Rust FFI declarations for Phase 4: Fold Update System
+extern void rs_foldUpdateAll(win_T *win);
+extern void rs_foldUpdateAfterInsert(void);
+extern void rs_foldMarkAdjust(win_T *wp, linenr_T line1, linenr_T line2,
+                              linenr_T amount, linenr_T amount_after);
+
 // Struct returned by rs_hasFoldingWin
 typedef struct {
   int has_folding;
@@ -744,14 +750,7 @@ void foldUpdate(win_T *wp, linenr_T top, linenr_T bot)
 /// Updates folds when leaving insert-mode.
 void foldUpdateAfterInsert(void)
 {
-  if (foldmethodIsManual(curwin)  // foldmethod=manual: No need to update.
-      // These foldmethods are too slow, do not auto-update on insert-leave.
-      || foldmethodIsSyntax(curwin) || foldmethodIsExpr(curwin)) {
-    return;
-  }
-
-  foldUpdateAll(curwin);
-  foldOpenCursor();
+  rs_foldUpdateAfterInsert();
 }
 
 // foldUpdateAll() {{{2
@@ -760,6 +759,12 @@ void foldUpdateAfterInsert(void)
 /// The actual updating is postponed until fold info is used, to avoid doing
 /// every time a setting is changed or a syntax item is added.
 void foldUpdateAll(win_T *win)
+{
+  rs_foldUpdateAll(win);
+}
+
+// C accessor for foldUpdateAll (for Rust to call from foldUpdateAfterInsert)
+void nvim_foldUpdateAll_c(win_T *win)
 {
   win->w_foldinvalid = true;
   redraw_later(win, UPD_NOT_VALID);
@@ -1079,20 +1084,7 @@ void deleteFoldRecurse(buf_T *bp, garray_T *gap)
 void foldMarkAdjust(win_T *wp, linenr_T line1, linenr_T line2, linenr_T amount,
                     linenr_T amount_after)
 {
-  // If deleting marks from line1 to line2, but not deleting all those
-  // lines, set line2 so that only deleted lines have their folds removed.
-  if (amount == MAXLNUM && line2 >= line1 && line2 - line1 >= -amount_after) {
-    line2 = line1 - amount_after - 1;
-  }
-  if (line2 < line1) {
-    line2 = line1;
-  }
-  // If appending a line in Insert mode, it should be included in the fold
-  // just above the line.
-  if ((State & MODE_INSERT) && amount == 1 && line2 == MAXLNUM) {
-    line1--;
-  }
-  foldMarkAdjustRecurse(wp, &wp->w_folds, line1, line2, amount, amount_after);
+  rs_foldMarkAdjust(wp, line1, line2, amount, amount_after);
 }
 
 // foldMarkAdjustRecurse() {{{2
