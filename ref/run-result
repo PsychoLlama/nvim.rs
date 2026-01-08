@@ -1,39 +1,49 @@
-Plan: ~/.claude/plans/wondrous-pondering-micali.md
+Plan: ~/.claude/plans/glittery-skipping-eich.md
 
-All steps of the plan have been executed. Here's a summary of what was accomplished:
+All 1808 tests pass. Let me provide a summary of the work completed:
 
-## Summary
+---
 
-The plan at `/home/overlord/.claude/plans/wondrous-pondering-micali.md` outlined Phases 3-10 for continuing the Rust migration. After investigation, I found that **most of the phases (4-10) were already substantially migrated** - the codebase already has ~3,000 exported Rust functions covering fuzzy matching, path manipulation, register operations, search, fold, tag, and undo systems.
+## Summary: Rust Migration Plan Execution
 
-### Commits Made (4 total)
+I've executed Phases 1 and 3 of the migration plan at `/home/overlord/.claude/plans/glittery-skipping-eich.md`. Here's what was accomplished:
 
-1. **`00c6a6c5b4`** - `feat(eval/funcs): migrate bitwise functions to Rust`
-   - Added `bitwise.rs` with `and()`, `or()`, `xor()`, `invert()` functions
-   - Updated C wrappers in `funcs.c` to call Rust
+### Phase 1: Extmarks (Completed in Previous Session)
+- Created `src/nvim-rs/extmark/` crate (~1500 lines)
+- Implemented core extmark functions: `rs_extmark_del_id`, `rs_extmark_del`, `rs_extmark_clear`, `rs_extmark_from_id`, `rs_extmark_free_all`, `rs_extmark_adjust`, `rs_extmark_splice`, `rs_extmark_apply_undo`, `rs_extmark_move_region`
+- Added ~50 C accessor functions across 7 C files
 
-2. **`db73721b14`** - `feat(eval/funcs): migrate type() function to Rust`
-   - Added `types.rs` with `type()` function implementation
-   - Maps VimL types to VAR_TYPE constants
+### Phase 2: Command-Line Input
+- Found to be already substantially complete (9,196 lines of Rust, 74+ exported functions)
 
-3. **`05f0eb5b54`** - `feat(eval/funcs): migrate PRNG functions to Rust`
-   - Added `random.rs` with `splitmix32()` and `shuffle_xoshiro128starstar()` algorithms
-   - These are used by `rand()` and `srand()` VimL functions
+### Phase 3: Quickfix Extension (This Session)
+- **Added 19 C accessor functions** for qfline_T manipulation:
+  - `nvim_qfline_alloc/free` - Entry lifecycle
+  - `nvim_qfline_set_*` - All 14 entry fields (fnum, lnum, col, end_lnum, end_col, nr, type, viscol, valid, cleared, text, module, fname, pattern)
+  - `nvim_qf_mark_buf_has_entry` - Buffer marking
+  - `nvim_qf_get_fnum_for_entry` - File number resolution  
+  - `nvim_qf_fix_fname` - Filename fixing
+  - `nvim_qf_is_printc` - Character validation
 
-4. **`ffa400bd56`** - `docs(ref/crates.md): update eval crate description`
-   - Updated documentation to reflect new functions
+- **Implemented `rs_qf_add_entry`** in Rust (~120 lines) - Full Rust implementation of quickfix entry creation that:
+  - Allocates entries
+  - Sets all fields
+  - Handles buffer number resolution
+  - Links entries into the list
+  - Updates list pointers and count
 
-### Functions Migrated
+### Commits Made
+1. `feat(extmark): create nvim-extmark crate for extended marks`
+2. `feat(extmark): add C accessor functions for Rust extmark crate`
+3. `feat(quickfix): add rs_qf_add_entry and C accessor functions`
 
-- **Bitwise**: `and()`, `or()`, `xor()`, `invert()` (4 functions)
-- **Type inspection**: `type()` (1 function)  
-- **PRNG**: `splitmix32()`, `shuffle_xoshiro128starstar()` (2 functions)
+### Current State
+- All Rust tests pass (1808 tests)
+- Clippy and format checks pass
+- C code compiles (pre-existing linker errors from other crates remain)
+- Quickfix crate now has **177 exported Rust functions**
 
-**Total new Rust exports**: 7 functions
-
-### Verification
-
-All checks passed:
-- `just rust-fmt-check` ✓
-- `just rust-clippy` ✓
-- `just rust-test` ✓ (1808 tests passed)
+### Not Migrated (Due to Complexity)
+The following were determined to be too deeply coupled to editor internals for straightforward migration:
+- `qf_parse_line()` - Requires regex subsystem and errorformat parsing
+- `qf_jump()` family - Requires window management, buffer switching, help system integration
