@@ -1,0 +1,183 @@
+//! Fold level calculation functions for different fold methods.
+//!
+//! This module implements fold level calculation for indent and diff methods.
+//! The expr and syntax methods require complex VimL evaluation and syntax
+//! highlighting integration, so they remain in C.
+
+use std::ffi::{c_char, c_int};
+
+use nvim_buffer::BufHandle;
+use nvim_window::WinHandle;
+
+use crate::LineNr;
+
+// C accessor functions
+extern "C" {
+    /// Get the buffer from a window.
+    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
+
+    /// Get a line from a buffer.
+    fn nvim_ml_get_buf(buf: BufHandle, lnum: LineNr) -> *const c_char;
+
+    /// Get the line count of the window's buffer.
+    fn nvim_win_get_buf_line_count(wp: WinHandle) -> LineNr;
+
+    /// Get the w_p_fdi (foldignore option) field from a window.
+    fn nvim_win_get_p_fdi(wp: WinHandle) -> *const c_char;
+
+    /// Get the w_p_fdn (foldnestmax option) field from a window.
+    fn nvim_win_get_p_fdn(wp: WinHandle) -> c_int;
+
+    /// Get the indentation of a buffer line.
+    fn nvim_get_indent_buf(buf: BufHandle, lnum: LineNr) -> c_int;
+
+    /// Get the shiftwidth value for a buffer.
+    fn nvim_get_sw_value(buf: BufHandle) -> c_int;
+
+    /// Check if a line is in a diff fold.
+    fn nvim_diff_infold(wp: WinHandle, lnum: LineNr) -> c_int;
+
+    /// Skip whitespace at the beginning of a string.
+    fn nvim_skipwhite(s: *const c_char) -> *const c_char;
+
+    /// Find a character in a string (like vim_strchr).
+    fn nvim_vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
+}
+
+/// Result of fold level calculation for a line.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FoldLevelResult {
+    /// Current fold level (-1 means depends on surrounding lines).
+    pub lvl: c_int,
+    /// Fold level for the next line.
+    pub lvl_next: c_int,
+    /// Number of folds that start at this line.
+    pub start: c_int,
+}
+
+/// Calculate fold level using the "indent" method.
+///
+/// Returns -1 if the fold level depends on surrounding lines (empty lines or
+/// lines starting with a character in 'foldignore').
+///
+/// # Arguments
+/// * `wp` - Window handle
+/// * `lnum` - Line number to check (1-based)
+/// * `off` - Offset to add to lnum for actual buffer line
+///
+/// # Returns
+/// Fold level for the line, or -1 if it depends on surrounding lines.
+fn foldlevel_indent_impl(wp: WinHandle, lnum: LineNr, off: LineNr) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    let actual_lnum = lnum + off;
+
+    let buf = unsafe { nvim_win_get_buffer(wp) };
+    if buf.is_null() {
+        return 0;
+    }
+
+    let line_ptr = unsafe { nvim_ml_get_buf(buf, actual_lnum) };
+    if line_ptr.is_null() {
+        return 0;
+    }
+
+    // Skip whitespace to check if line is empty or starts with foldignore char
+    let s = unsafe { nvim_skipwhite(line_ptr) };
+
+    let lvl = unsafe {
+        // Empty line check - first char is NUL
+        if *s == 0 {
+            // First and last line can't be undefined, use level 0
+            let line_count = nvim_win_get_buf_line_count(wp);
+            if actual_lnum == 1 || actual_lnum == line_count {
+                0
+            } else {
+                -1 // Depends on surrounding lines
+            }
+        } else {
+            // Check if line starts with a character in 'foldignore'
+            let fdi = nvim_win_get_p_fdi(wp);
+            // Cast c_char to c_int for vim_strchr - this is safe as we're just
+            // looking up the character value
+            #[allow(clippy::cast_sign_loss)]
+            let char_val = c_int::from(*s as u8);
+            if !fdi.is_null() && !nvim_vim_strchr(fdi, char_val).is_null() {
+                // First and last line can't be undefined, use level 0
+                let line_count = nvim_win_get_buf_line_count(wp);
+                if actual_lnum == 1 || actual_lnum == line_count {
+                    0
+                } else {
+                    -1 // Depends on surrounding lines
+                }
+            } else {
+                // Calculate level from indentation
+                let indent = nvim_get_indent_buf(buf, actual_lnum);
+                let sw = nvim_get_sw_value(buf);
+                if sw > 0 {
+                    indent / sw
+                } else {
+                    0
+                }
+            }
+        }
+    };
+
+    // Clamp to foldnestmax
+    let fdn = unsafe { nvim_win_get_p_fdn(wp) };
+    let max_level = if fdn > 0 { fdn } else { 0 };
+    lvl.min(max_level)
+}
+
+/// Calculate fold level using the "diff" method.
+///
+/// Lines in a diff fold get level 1, others get level 0.
+///
+/// # Arguments
+/// * `wp` - Window handle
+/// * `lnum` - Line number to check (1-based)
+/// * `off` - Offset to add to lnum for actual buffer line
+///
+/// # Returns
+/// 1 if the line is in a diff fold, 0 otherwise.
+fn foldlevel_diff_impl(wp: WinHandle, lnum: LineNr, off: LineNr) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    let actual_lnum = lnum + off;
+
+    let in_fold = unsafe { nvim_diff_infold(wp, actual_lnum) };
+    c_int::from(in_fold != 0)
+}
+
+// ============================================================================
+// FFI Exports
+// ============================================================================
+
+/// Calculate fold level for a line using the "indent" method.
+///
+/// # Safety
+/// The `wp` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_foldlevelIndent(wp: WinHandle, lnum: LineNr, off: LineNr) -> c_int {
+    foldlevel_indent_impl(wp, lnum, off)
+}
+
+/// Calculate fold level for a line using the "diff" method.
+///
+/// # Safety
+/// The `wp` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_foldlevelDiff(wp: WinHandle, lnum: LineNr, off: LineNr) -> c_int {
+    foldlevel_diff_impl(wp, lnum, off)
+}
+
+#[cfg(test)]
+mod tests {
+    // Note: Most testing requires FFI integration with C code.
+    // Unit tests here would need mock implementations of the extern "C" functions.
+}

@@ -3348,3 +3348,49 @@ char *nvim_ml_get_buf(buf_T *buf, linenr_T lnum)
 {
   return ml_get_buf(buf, lnum);
 }
+
+// ============================================================================
+// Phase 2: Fold Level Calculation accessors
+// ============================================================================
+
+/// Get the w_p_fdi (foldignore option) field from a window.
+char *nvim_win_get_p_fdi(win_T *wp)
+{
+  return wp->w_p_fdi;
+}
+
+/// Get the w_p_fdn (foldnestmax option) field from a window.
+int nvim_win_get_p_fdn(win_T *wp)
+{
+  return (int)wp->w_p_fdn;
+}
+
+/// Get the indentation of a buffer line (wrapper for get_indent_buf).
+int nvim_get_indent_buf(buf_T *buf, linenr_T lnum)
+{
+  return get_indent_buf(buf, lnum);
+}
+
+/// Get the shiftwidth value for a buffer (wrapper for get_sw_value).
+int nvim_get_sw_value(buf_T *buf)
+{
+  return (int)get_sw_value(buf);
+}
+
+/// Check if a line is in a diff fold (wrapper for diff_infold).
+int nvim_diff_infold(win_T *wp, linenr_T lnum)
+{
+  return diff_infold(wp, lnum);
+}
+
+/// Skip whitespace at the beginning of a string (wrapper for skipwhite).
+char *nvim_skipwhite(const char *s)
+{
+  return skipwhite(s);
+}
+
+/// Find a character in a string (wrapper for vim_strchr).
+char *nvim_vim_strchr(const char *s, int c)
+{
+  return vim_strchr(s, c);
+}
