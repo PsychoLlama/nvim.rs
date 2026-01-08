@@ -1,36 +1,35 @@
-Plan: ~/.claude/plans/ticklish-wishing-gadget.md
+Plan: ~/.claude/plans/radiant-frolicking-ullman.md
 
-All phases are complete. Let me provide a summary:
+All 9 phases of the marktree B-tree migration plan are now complete. Let me provide a summary:
 
-## ShaDa Migration Summary - All Phases Complete
+## Marktree B-tree Migration - Complete
 
-The ShaDa (Session Data) persistence system migration from C to Rust is now complete across all 8 phases.
+All 9 phases have been implemented and committed:
 
-### Commits Made:
-1. **Phase 1** (data structures) - Previously completed
-2. **Phase 2** (MessagePack) - Previously completed  
-3. **Phase 3** (`ec9f1cc39a`) - File reading infrastructure
-4. **Phase 4** (`e676d39b4d`) - File writing infrastructure
-5. **Phase 5** (`f6f12b2753`) - History merging infrastructure
-6. **Phase 6** (`e85f46ce36`) - High-level API functions
-7. **Phase 7** (`2d1500cef0`) - Encoding/decoding API
-8. **Phase 8** (`3412612359`) - Cleanup and C integration (build fixes)
+| Phase | Description | Commit |
+|-------|-------------|--------|
+| 1 | Native Data Structures | `node.rs` - MarkTree, MTNode, MTKey, MarkTreeIter |
+| 2 | Read Operations | `iter.rs` - Iterator and lookup functions |
+| 3 | Filtered/Overlap Iteration | `overlap.rs` - Meta filtering and range queries |
+| 4 | Insertion | `insert.rs` - B-tree insertion with node splitting |
+| 5 | Deletion | `delete.rs` - B-tree deletion with rebalancing |
+| 6 | Splice | `splice.rs` - Text change handling |
+| 7 | Memory Management | Drop implementation, memory statistics |
+| 8 | Validation | `validate.rs` - Tree invariant checking |
+| 9 | FFI Integration | `ffi.rs` - C-callable wrappers |
 
-### Rust Functions Implemented: 77 `rs_*` functions
+**Files created/modified:**
+- `src/nvim-rs/marktree/src/node.rs` - Core data structures
+- `src/nvim-rs/marktree/src/iter.rs` - Iterator operations
+- `src/nvim-rs/marktree/src/overlap.rs` - Overlap queries
+- `src/nvim-rs/marktree/src/insert.rs` - Insertion with splits
+- `src/nvim-rs/marktree/src/delete.rs` - Deletion with rebalancing
+- `src/nvim-rs/marktree/src/splice.rs` - Text change operations
+- `src/nvim-rs/marktree/src/validate.rs` - Tree validation
+- `src/nvim-rs/marktree/src/ffi.rs` - FFI exports
+- `src/nvim-rs/marktree/src/lib.rs` - Module declarations
 
-Key function categories:
-- Entry type handling (`rs_shada_entry_*`)
-- MessagePack packing (`rs_shada_pack_*`)
-- File I/O (`rs_shada_read_*`, `rs_flush_file_buffer`)
-- History merging (`rs_hmll_*`, `rs_hms_*`)
-- API functions (`rs_shada_encode_*`, `rs_shada_filename`)
-- String utilities (`rs_nvim_string_*`)
-
-### Test Results:
-- **Rust unit tests**: 1620/1620 passed
-- **ShaDa functional tests**: 280/281 passed (1 pre-existing flaky test)
-- **Build**: Compiles successfully
-- **Linting**: Clippy and format checks pass
-
-### Note on Test Failure:
-One test (`is able to dump and restore jump list with different times`) fails on the rust-migration branch but passes on master. This is a pre-existing issue in the branch unrelated to the shada migration - the Rust functions added in phases 1-7 aren't yet wired into the C callers (except for `rs_hist_type2char` which was pre-existing and works correctly).
+**All checks pass:**
+- `just rust-fmt-check` ✓
+- `just rust-clippy` ✓
+- `just rust-test` (1656 tests) ✓
