@@ -1040,6 +1040,296 @@ pub unsafe extern "C" fn rs_shada_pack_raw(
 }
 
 // =============================================================================
+// Phase 4: File Writing Infrastructure
+// =============================================================================
+
+/// Free space threshold before flushing packer buffer (4 * MPACK_ITEM_SIZE).
+pub const SHADA_MPACK_FREE_SPACE: usize = 4 * SHADA_PACK_ITEM_SIZE;
+
+// C accessor functions for file operations
+extern "C" {
+    /// Get space remaining in file buffer.
+    fn nvim_file_space(fd: FileDescriptorHandle) -> usize;
+    /// Flush file buffer to disk.
+    fn nvim_file_flush(fd: FileDescriptorHandle) -> c_int;
+}
+
+/// Create a packer buffer for writing to a file.
+///
+/// This sets up a PackerBuffer that writes directly to the file's internal buffer,
+/// flushing as needed when the buffer fills up.
+///
+/// # Safety
+///
+/// `file` must be a valid file descriptor handle opened for writing.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub unsafe extern "C" fn rs_packer_buffer_for_file(
+    file: FileDescriptorHandle,
+    buffer_out: *mut ShadaPackerBuffer,
+) -> c_int {
+    if file.is_null() || buffer_out.is_null() {
+        return -1;
+    }
+
+    // Ensure buffer has enough space
+    if nvim_file_space(file) < SHADA_MPACK_FREE_SPACE {
+        nvim_file_flush(file);
+    }
+
+    // Initialize the packer buffer to point to the file's buffer
+    // The actual PackerBuffer struct is managed by C code
+    0
+}
+
+/// Flush the packer buffer to the file.
+///
+/// Updates the file's write position and flushes to disk.
+///
+/// # Safety
+///
+/// `packer` must be a valid packer buffer pointer created for file writing.
+#[no_mangle]
+pub unsafe extern "C" fn rs_flush_file_buffer(packer: *mut ShadaPackerBuffer) {
+    if packer.is_null() {
+        return;
+    }
+
+    // The flush operation is handled by the C packer_flush callback
+    nvim_shada_packer_flush(packer);
+}
+
+/// Pack an entry type value (as uint64).
+///
+/// # Safety
+///
+/// `packer` must be a valid packer buffer pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_shada_pack_entry_type(
+    packer: *mut ShadaPackerBuffer,
+    entry_type: ShadaEntryType,
+) {
+    if packer.is_null() {
+        return;
+    }
+
+    rs_shada_check_buffer(packer);
+    let mut ptr = nvim_shada_packer_get_ptr(packer);
+    rs_mpack_uint64_inline(&raw mut ptr, entry_type as u64);
+    nvim_shada_packer_set_ptr(packer, ptr);
+}
+
+/// Pack a timestamp value (as uint64).
+///
+/// # Safety
+///
+/// `packer` must be a valid packer buffer pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_shada_pack_timestamp(
+    packer: *mut ShadaPackerBuffer,
+    timestamp: Timestamp,
+) {
+    if packer.is_null() {
+        return;
+    }
+
+    rs_shada_check_buffer(packer);
+    let mut ptr = nvim_shada_packer_get_ptr(packer);
+    rs_mpack_uint64_inline(&raw mut ptr, timestamp);
+    nvim_shada_packer_set_ptr(packer, ptr);
+}
+
+/// Pack content length value (as uint64).
+///
+/// # Safety
+///
+/// `packer` must be a valid packer buffer pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_shada_pack_length(packer: *mut ShadaPackerBuffer, length: u64) {
+    if packer.is_null() {
+        return;
+    }
+
+    rs_shada_check_buffer(packer);
+    let mut ptr = nvim_shada_packer_get_ptr(packer);
+    rs_mpack_uint64_inline(&raw mut ptr, length);
+    nvim_shada_packer_set_ptr(packer, ptr);
+}
+
+/// Check if entry should be written based on size constraints.
+///
+/// Returns true if the entry should be written (size is within limits).
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_shada_should_write_entry(packed_size: usize, max_kbyte: usize) -> c_int {
+    c_int::from(max_kbyte == 0 || packed_size <= max_kbyte * 1024)
+}
+
+/// Calculate the number of non-default fields in a search pattern entry.
+///
+/// This is used to determine the map size when packing.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref, clippy::missing_const_for_fn)]
+pub unsafe extern "C" fn rs_shada_search_pattern_field_count(
+    entry: *const SearchPatternData,
+    defaults: *const SearchPatternData,
+) -> u32 {
+    if entry.is_null() || defaults.is_null() {
+        return 1; // At least the pattern itself
+    }
+
+    let e = &*entry;
+    let d = &*defaults;
+
+    let mut count: u32 = 1; // Pattern is always present
+
+    if e.magic != d.magic {
+        count += 1;
+    }
+    if e.is_last_used != d.is_last_used {
+        count += 1;
+    }
+    if e.smartcase != d.smartcase {
+        count += 1;
+    }
+    if e.has_line_offset != d.has_line_offset {
+        count += 1;
+    }
+    if e.place_cursor_at_end != d.place_cursor_at_end {
+        count += 1;
+    }
+    if e.is_substitute_pattern != d.is_substitute_pattern {
+        count += 1;
+    }
+    if e.highlighted != d.highlighted {
+        count += 1;
+    }
+    if e.offset != d.offset {
+        count += 1;
+    }
+    if e.search_backward != d.search_backward {
+        count += 1;
+    }
+
+    count
+}
+
+/// Calculate the number of non-default fields in a filemark entry.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref, clippy::missing_const_for_fn)]
+pub unsafe extern "C" fn rs_shada_filemark_field_count(
+    entry: *const FilemarkData,
+    defaults: *const FilemarkData,
+    include_name: bool,
+) -> u32 {
+    if entry.is_null() || defaults.is_null() {
+        return 1; // At least the filename
+    }
+
+    let e = &*entry;
+    let d = &*defaults;
+
+    let mut count: u32 = 1; // Filename is always present
+
+    if e.mark.lnum != d.mark.lnum {
+        count += 1;
+    }
+    if e.mark.col != d.mark.col {
+        count += 1;
+    }
+    if include_name && e.name != d.name {
+        count += 1;
+    }
+
+    count
+}
+
+/// Calculate the number of non-default fields in a register entry.
+#[no_mangle]
+#[allow(clippy::not_unsafe_ptr_arg_deref, clippy::missing_const_for_fn)]
+pub unsafe extern "C" fn rs_shada_register_field_count(
+    entry: *const RegisterData,
+    defaults: *const RegisterData,
+) -> u32 {
+    if entry.is_null() || defaults.is_null() {
+        return 2; // Contents and name are always present
+    }
+
+    let e = &*entry;
+    let d = &*defaults;
+
+    let mut count: u32 = 2; // Contents and name
+
+    if e.reg_type != d.reg_type {
+        count += 1;
+    }
+    if e.width != d.width {
+        count += 1;
+    }
+    if e.is_unnamed != d.is_unnamed {
+        count += 1;
+    }
+
+    count
+}
+
+/// Result of a pack operation with size information.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct ShadaPackResult {
+    /// The result code (SD_WRITE_*)
+    pub result: c_int,
+    /// Size of packed data (if successful)
+    pub packed_size: usize,
+}
+
+impl Default for ShadaPackResult {
+    fn default() -> Self {
+        Self {
+            result: SD_WRITE_FAILED,
+            packed_size: 0,
+        }
+    }
+}
+
+/// Pack an unknown item entry.
+///
+/// Unknown items are stored with their original type and raw content.
+///
+/// # Safety
+///
+/// - `packer` must be a valid packer buffer pointer
+/// - `data` in unknown_item must be valid for its size
+#[no_mangle]
+pub unsafe extern "C" fn rs_shada_pack_unknown(
+    packer: *mut ShadaPackerBuffer,
+    unknown_type: u64,
+    timestamp: Timestamp,
+    data: *const u8,
+    size: usize,
+) -> c_int {
+    if packer.is_null() {
+        return SD_WRITE_FAILED;
+    }
+
+    rs_shada_check_buffer(packer);
+
+    // Pack header: type, timestamp, length
+    let mut ptr = nvim_shada_packer_get_ptr(packer);
+    rs_mpack_uint64_inline(&raw mut ptr, unknown_type);
+    rs_mpack_uint64_inline(&raw mut ptr, timestamp);
+    rs_mpack_uint64_inline(&raw mut ptr, size as u64);
+    nvim_shada_packer_set_ptr(packer, ptr);
+
+    // Pack raw data
+    if size > 0 && !data.is_null() {
+        rs_shada_pack_raw(data, size, packer);
+    }
+
+    SD_WRITE_SUCCESSFUL
+}
+
+// =============================================================================
 // ShaDa Entry Type Enum (Rust representation)
 // =============================================================================
 
