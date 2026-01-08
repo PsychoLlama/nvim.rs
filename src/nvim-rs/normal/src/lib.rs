@@ -1599,6 +1599,119 @@ pub unsafe extern "C" fn rs_nv_csearch(cap: CapHandle) {
 }
 
 // =============================================================================
+// Phase 1 Command Handlers
+// =============================================================================
+
+extern "C" {
+    // Phase 1 accessor functions
+    fn nvim_nv_clear_impl();
+    #[allow(dead_code)]
+    fn nvim_get_restart_VIsual_select() -> c_int;
+    fn nvim_set_restart_VIsual_select(val: c_int);
+    fn nvim_buflist_getfile(n: c_int, lnum: c_int, flags: c_int, setpm: bool);
+    fn nvim_get_GETF_SETMARK() -> c_int;
+    fn nvim_get_GETF_ALT() -> c_int;
+    fn nvim_nv_Zet_impl(cap: CapHandle);
+    fn nvim_nv_esc_impl(cap: CapHandle);
+    fn nvim_nv_edit_impl(cap: CapHandle);
+}
+
+/// Command handler for CTRL-L: Clear and redraw screen.
+///
+/// Clears all syntax states to force resyncing and redraws the screen.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_clear(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    if rs_checkclearop(oap) {
+        return;
+    }
+    nvim_nv_clear_impl();
+}
+
+/// Command handler for CTRL-O: Switch to Visual mode for one command or go to older pcmark.
+///
+/// In Select mode: switch to Visual mode for one command.
+/// Otherwise: Go to older pcmark (calls nv_pcmark with negated count).
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_ctrlo(cap: CapHandle) {
+    if nvim_get_VIsual_active() != 0 && nvim_get_VIsual_select() {
+        nvim_set_VIsual_select(false);
+        nvim_may_trigger_modechanged();
+        nvim_showmode();
+        nvim_set_restart_VIsual_select(2); // restart Select mode later
+    } else {
+        // Negate count1 for backward jump
+        let count1 = nvim_cap_get_count1(cap);
+        nvim_cap_set_count1(cap, -count1);
+        rs_nv_pcmark(cap);
+    }
+}
+
+/// Command handler for CTRL-^: Edit alternate file.
+///
+/// Short for ":e #". Works even when the alternate buffer is not named.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_hat(cap: CapHandle) {
+    let oap = nvim_cap_get_oap(cap);
+    if !rs_checkclearopq(oap) {
+        let count0 = nvim_cap_get_count0(cap);
+        let flags = nvim_get_GETF_SETMARK() | nvim_get_GETF_ALT();
+        nvim_buflist_getfile(count0, 0, flags, false);
+    }
+}
+
+/// Command handler for "Z" commands (ZZ, ZQ).
+///
+/// ZZ: equivalent to ":x" (save and quit).
+/// ZQ: equivalent to ":q!" (quit without saving).
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_Zet(cap: CapHandle) {
+    // Delegate to C implementation which handles the switch logic
+    nvim_nv_Zet_impl(cap);
+}
+
+/// Command handler for <Esc> and CTRL-C.
+///
+/// Handles escape from various modes, clears operators, and may show exit messages.
+/// cap->arg is true for CTRL-C.
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_esc(cap: CapHandle) {
+    // Delegate to C implementation which handles complex logic
+    nvim_nv_esc_impl(cap);
+}
+
+/// Command handler for "A", "a", "I", "i" and <Insert> commands.
+///
+/// Handles entering insert mode with various cursor positioning:
+/// - A: Append after the line
+/// - a: Append after cursor
+/// - I: Insert before first non-blank
+/// - i: Insert before cursor
+///
+/// # Safety
+/// `cap` must be a valid cmdarg_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nv_edit(cap: CapHandle) {
+    // Delegate to C implementation which handles complex logic
+    nvim_nv_edit_impl(cap);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

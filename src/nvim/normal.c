@@ -415,6 +415,12 @@ extern void rs_nv_regname(cmdarg_T *cap);
 extern void rs_nv_put(cmdarg_T *cap);
 extern void rs_nv_visual(cmdarg_T *cap);
 extern void rs_nv_window(cmdarg_T *cap);
+extern void rs_nv_clear(cmdarg_T *cap);
+extern void rs_nv_ctrlo(cmdarg_T *cap);
+extern void rs_nv_hat(cmdarg_T *cap);
+extern void rs_nv_Zet(cmdarg_T *cap);
+extern void rs_nv_esc(cmdarg_T *cap);
+extern void rs_nv_edit(cmdarg_T *cap);
 
 /// Compare functions for qsort() below, that checks the command character
 /// through the index in nv_cmd_idx[].
@@ -1436,6 +1442,177 @@ static void nv_visual_impl(cmdarg_T *cap);
 void nvim_nv_visual_impl(cmdarg_T *cap)
 {
   nv_visual_impl(cap);
+}
+
+// =============================================================================
+// Phase 1 command accessors for Rust FFI
+// =============================================================================
+
+/// Clear all syntax states and redraw for nv_clear.
+void nvim_nv_clear_impl(void)
+{
+  syn_stack_free_all(curwin->w_s);
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    wp->w_s->b_syn_slow = false;
+  }
+  redraw_later(curwin, UPD_CLEAR);
+}
+
+/// Get restart_VIsual_select global.
+int nvim_get_restart_VIsual_select(void)
+{
+  return restart_VIsual_select;
+}
+
+/// Set restart_VIsual_select global.
+void nvim_set_restart_VIsual_select(int val)
+{
+  restart_VIsual_select = val;
+}
+
+/// Wrapper for buflist_getfile (nv_hat).
+void nvim_buflist_getfile(int n, int lnum, int flags, bool setpm)
+{
+  buflist_getfile(n, lnum, flags, setpm);
+}
+
+/// Get GETF_SETMARK constant.
+int nvim_get_GETF_SETMARK(void)
+{
+  return GETF_SETMARK;
+}
+
+/// Get GETF_ALT constant.
+int nvim_get_GETF_ALT(void)
+{
+  return GETF_ALT;
+}
+
+/// Wrapper for nv_Zet C implementation.
+void nvim_nv_Zet_impl(cmdarg_T *cap)
+{
+  if (checkclearopq(cap->oap)) {
+    return;
+  }
+
+  switch (cap->nchar) {
+  // "ZZ": equivalent to ":x".
+  case 'Z':
+    do_cmdline_cmd("x");
+    break;
+
+  // "ZQ": equivalent to ":q!" (Elvis compatible).
+  case 'Q':
+    do_cmdline_cmd("q!");
+    break;
+
+  default:
+    clearopbeep(cap->oap);
+  }
+}
+
+/// Wrapper for nv_esc C implementation.
+void nvim_nv_esc_impl(cmdarg_T *cap)
+{
+  bool no_reason = (cap->oap->op_type == OP_NOP
+                    && cap->opcount == 0
+                    && cap->count0 == 0
+                    && cap->oap->regname == 0);
+
+  if (cap->arg) {               // true for CTRL-C
+    if (restart_edit == 0 && cmdwin_type == 0 && !VIsual_active && no_reason) {
+      if (anyBufIsChanged()) {
+        msg(_("Type  :qa!  and press <Enter> to abandon all changes"
+              " and exit Nvim"), 0);
+      } else {
+        msg(_("Type  :qa  and press <Enter> to exit Nvim"), 0);
+      }
+    }
+
+    if (restart_edit != 0) {
+      redraw_mode = true;  // remove "-- (insert) --"
+    }
+
+    restart_edit = 0;
+
+    if (cmdwin_type != 0) {
+      cmdwin_result = K_IGNORE;
+      got_int = false;          // don't stop executing autocommands et al.
+      return;
+    }
+  } else if (cmdwin_type != 0 && ex_normal_busy && typebuf_was_empty) {
+    // When :normal runs out of characters while in the command line window
+    // vgetorpeek() will repeatedly return ESC.  Exit the cmdline window to
+    // break the loop.
+    cmdwin_result = K_IGNORE;
+    return;
+  }
+
+  if (VIsual_active) {
+    end_visual_mode();          // stop Visual
+    check_cursor_col(curwin);         // make sure cursor is not beyond EOL
+    curwin->w_set_curswant = true;
+    redraw_curbuf_later(UPD_INVERTED);
+  } else if (no_reason) {
+    vim_beep(kOptBoFlagEsc);
+  }
+  clearop(cap->oap);
+}
+
+/// Wrapper for nv_edit C implementation.
+void nvim_nv_edit_impl(cmdarg_T *cap)
+{
+  // <Insert> is equal to "i"
+  if (cap->cmdchar == K_INS || cap->cmdchar == K_KINS) {
+    cap->cmdchar = 'i';
+  }
+
+  // in Visual mode "A" and "I" are an operator
+  if (VIsual_active && (cap->cmdchar == 'A' || cap->cmdchar == 'I')) {
+    v_visop(cap);
+    // in Visual mode and after an operator "a" and "i" are for text objects
+  } else if ((cap->cmdchar == 'a' || cap->cmdchar == 'i')
+             && (cap->oap->op_type != OP_NOP || VIsual_active)) {
+    nv_object(cap);
+  } else if (!curbuf->b_p_ma && !curbuf->terminal) {
+    emsg(_(e_modifiable));
+    clearop(cap->oap);
+  } else if (!checkclearopq(cap->oap)) {
+    switch (cap->cmdchar) {
+    case 'A':           // "A"ppend after the line
+      set_cursor_for_append_to_line();
+      break;
+
+    case 'I':           // "I"nsert before the first non-blank
+      beginline(BL_WHITE);
+      break;
+
+    case 'a':           // "a"ppend is like "i"nsert on the next character.
+      // increment coladd when in virtual space, increment the
+      // column otherwise, also to append after an unprintable char
+      if (virtual_active(curwin)
+          && (curwin->w_cursor.coladd > 0
+              || *get_cursor_pos_ptr() == NUL
+              || *get_cursor_pos_ptr() == TAB)) {
+        curwin->w_cursor.coladd++;
+      } else if (*get_cursor_pos_ptr() != NUL) {
+        inc_cursor();
+      }
+      break;
+    }
+
+    if (curwin->w_cursor.coladd && cap->cmdchar != 'A') {
+      int save_State = State;
+
+      // Pretend Insert mode here to allow the cursor on the
+      // character past the end of the line
+      State = MODE_INSERT;
+      coladvance(curwin, getviscol());
+      State = save_State;
+    }
+
+    invoke_edit(cap, false, cap->cmdchar, false);
+  }
 }
 
 // =============================================================================
@@ -4052,64 +4229,27 @@ static void nv_ctrlh(cmdarg_T *cap)
 /// CTRL-L: clear screen and redraw.
 static void nv_clear(cmdarg_T *cap)
 {
-  if (checkclearop(cap->oap)) {
-    return;
-  }
-
-  // Clear all syntax states to force resyncing.
-  syn_stack_free_all(curwin->w_s);
-  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-    wp->w_s->b_syn_slow = false;
-  }
-  redraw_later(curwin, UPD_CLEAR);
+  rs_nv_clear(cap);
 }
 
 /// CTRL-O: In Select mode: switch to Visual mode for one command.
 /// Otherwise: Go to older pcmark.
 static void nv_ctrlo(cmdarg_T *cap)
 {
-  if (VIsual_active && VIsual_select) {
-    VIsual_select = false;
-    may_trigger_modechanged();
-    showmode();
-    restart_VIsual_select = 2;          // restart Select mode later
-  } else {
-    cap->count1 = -cap->count1;
-    nv_pcmark(cap);
-  }
+  rs_nv_ctrlo(cap);
 }
 
 /// CTRL-^ command, short for ":e #".  Works even when the alternate buffer is
 /// not named.
 static void nv_hat(cmdarg_T *cap)
 {
-  if (!checkclearopq(cap->oap)) {
-    buflist_getfile(cap->count0, 0,
-                    GETF_SETMARK|GETF_ALT, false);
-  }
+  rs_nv_hat(cap);
 }
 
 /// "Z" commands.
 static void nv_Zet(cmdarg_T *cap)
 {
-  if (checkclearopq(cap->oap)) {
-    return;
-  }
-
-  switch (cap->nchar) {
-  // "ZZ": equivalent to ":x".
-  case 'Z':
-    do_cmdline_cmd("x");
-    break;
-
-  // "ZQ": equivalent to ":q!" (Elvis compatible).
-  case 'Q':
-    do_cmdline_cmd("q!");
-    break;
-
-  default:
-    clearopbeep(cap->oap);
-  }
+  rs_nv_Zet(cap);
 }
 
 /// Call nv_ident() as if "c1" was used, with "c2" as next character.
@@ -6661,49 +6801,7 @@ static void nv_normal(cmdarg_T *cap)
 /// Don't even beep if we are canceling a command.
 static void nv_esc(cmdarg_T *cap)
 {
-  bool no_reason = (cap->oap->op_type == OP_NOP
-                    && cap->opcount == 0
-                    && cap->count0 == 0
-                    && cap->oap->regname == 0);
-
-  if (cap->arg) {               // true for CTRL-C
-    if (restart_edit == 0 && cmdwin_type == 0 && !VIsual_active && no_reason) {
-      if (anyBufIsChanged()) {
-        msg(_("Type  :qa!  and press <Enter> to abandon all changes"
-              " and exit Nvim"), 0);
-      } else {
-        msg(_("Type  :qa  and press <Enter> to exit Nvim"), 0);
-      }
-    }
-
-    if (restart_edit != 0) {
-      redraw_mode = true;  // remove "-- (insert) --"
-    }
-
-    restart_edit = 0;
-
-    if (cmdwin_type != 0) {
-      cmdwin_result = K_IGNORE;
-      got_int = false;          // don't stop executing autocommands et al.
-      return;
-    }
-  } else if (cmdwin_type != 0 && ex_normal_busy && typebuf_was_empty) {
-    // When :normal runs out of characters while in the command line window
-    // vgetorpeek() will repeatedly return ESC.  Exit the cmdline window to
-    // break the loop.
-    cmdwin_result = K_IGNORE;
-    return;
-  }
-
-  if (VIsual_active) {
-    end_visual_mode();          // stop Visual
-    check_cursor_col(curwin);         // make sure cursor is not beyond EOL
-    curwin->w_set_curswant = true;
-    redraw_curbuf_later(UPD_INVERTED);
-  } else if (no_reason) {
-    vim_beep(kOptBoFlagEsc);
-  }
-  clearop(cap->oap);
+  rs_nv_esc(cap);
 }
 
 /// Move the cursor for the "A" command.
@@ -6725,57 +6823,7 @@ void set_cursor_for_append_to_line(void)
 /// Handle "A", "a", "I", "i" and <Insert> commands.
 static void nv_edit(cmdarg_T *cap)
 {
-  // <Insert> is equal to "i"
-  if (cap->cmdchar == K_INS || cap->cmdchar == K_KINS) {
-    cap->cmdchar = 'i';
-  }
-
-  // in Visual mode "A" and "I" are an operator
-  if (VIsual_active && (cap->cmdchar == 'A' || cap->cmdchar == 'I')) {
-    v_visop(cap);
-    // in Visual mode and after an operator "a" and "i" are for text objects
-  } else if ((cap->cmdchar == 'a' || cap->cmdchar == 'i')
-             && (cap->oap->op_type != OP_NOP || VIsual_active)) {
-    nv_object(cap);
-  } else if (!curbuf->b_p_ma && !curbuf->terminal) {
-    emsg(_(e_modifiable));
-    clearop(cap->oap);
-  } else if (!checkclearopq(cap->oap)) {
-    switch (cap->cmdchar) {
-    case 'A':           // "A"ppend after the line
-      set_cursor_for_append_to_line();
-      break;
-
-    case 'I':           // "I"nsert before the first non-blank
-      beginline(BL_WHITE);
-      break;
-
-    case 'a':           // "a"ppend is like "i"nsert on the next character.
-      // increment coladd when in virtual space, increment the
-      // column otherwise, also to append after an unprintable char
-      if (virtual_active(curwin)
-          && (curwin->w_cursor.coladd > 0
-              || *get_cursor_pos_ptr() == NUL
-              || *get_cursor_pos_ptr() == TAB)) {
-        curwin->w_cursor.coladd++;
-      } else if (*get_cursor_pos_ptr() != NUL) {
-        inc_cursor();
-      }
-      break;
-    }
-
-    if (curwin->w_cursor.coladd && cap->cmdchar != 'A') {
-      int save_State = State;
-
-      // Pretend Insert mode here to allow the cursor on the
-      // character past the end of the line
-      State = MODE_INSERT;
-      coladvance(curwin, getviscol());
-      State = save_State;
-    }
-
-    invoke_edit(cap, false, cap->cmdchar, false);
-  }
+  rs_nv_edit(cap);
 }
 
 /// Invoke edit() and take care of "restart_edit" and the return value.
