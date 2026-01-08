@@ -686,6 +686,122 @@ void nvim_oap_set_inclusive(oparg_T *oap, bool val)
   }
 }
 
+// =============================================================================
+// Additional oparg_T accessors for Rust ops crate
+// =============================================================================
+
+/// Get oap->op_type (raw pointer version).
+int nvim_oap_get_op_type_raw(oparg_T *oap)
+{
+  return oap ? oap->op_type : OP_NOP;
+}
+
+/// Get oap->regname (raw pointer version).
+int nvim_oap_get_regname_raw(oparg_T *oap)
+{
+  return oap ? oap->regname : NUL;
+}
+
+/// Get oap->motion_type (raw pointer version).
+int nvim_oap_get_motion_type_raw(oparg_T *oap)
+{
+  return oap ? oap->motion_type : kMTUnknown;
+}
+
+/// Get oap->use_reg_one.
+int nvim_oap_get_use_reg_one(oparg_T *oap)
+{
+  return oap ? oap->use_reg_one : false;
+}
+
+/// Get oap->line_count.
+int nvim_oap_get_line_count(oparg_T *oap)
+{
+  return oap ? oap->line_count : 0;
+}
+
+/// Set oap->line_count.
+void nvim_oap_set_line_count(oparg_T *oap, int val)
+{
+  if (oap) {
+    oap->line_count = val;
+  }
+}
+
+/// Get oap->empty.
+int nvim_oap_get_empty(oparg_T *oap)
+{
+  return oap ? oap->empty : false;
+}
+
+/// Set oap->empty.
+void nvim_oap_set_empty(oparg_T *oap, int val)
+{
+  if (oap) {
+    oap->empty = val != 0;
+  }
+}
+
+/// Get oap->is_VIsual.
+int nvim_oap_get_is_visual(oparg_T *oap)
+{
+  return oap ? oap->is_VIsual : false;
+}
+
+/// Get oap->excl_tr_ws.
+int nvim_oap_get_excl_tr_ws(oparg_T *oap)
+{
+  return oap ? oap->excl_tr_ws : false;
+}
+
+/// Get oap->start.lnum.
+int nvim_oap_get_start_lnum(oparg_T *oap)
+{
+  return oap ? oap->start.lnum : 0;
+}
+
+/// Get oap->start.col.
+int nvim_oap_get_start_col(oparg_T *oap)
+{
+  return oap ? oap->start.col : 0;
+}
+
+/// Get oap->start.coladd.
+int nvim_oap_get_start_coladd(oparg_T *oap)
+{
+  return oap ? oap->start.coladd : 0;
+}
+
+/// Get oap->end.lnum.
+int nvim_oap_get_end_lnum(oparg_T *oap)
+{
+  return oap ? oap->end.lnum : 0;
+}
+
+/// Get oap->end.col.
+int nvim_oap_get_end_col(oparg_T *oap)
+{
+  return oap ? oap->end.col : 0;
+}
+
+/// Get oap->end.coladd.
+int nvim_oap_get_end_coladd(oparg_T *oap)
+{
+  return oap ? oap->end.coladd : 0;
+}
+
+/// Get oap->start_vcol.
+int nvim_oap_get_start_vcol(oparg_T *oap)
+{
+  return oap ? oap->start_vcol : 0;
+}
+
+/// Get oap->end_vcol.
+int nvim_oap_get_end_vcol(oparg_T *oap)
+{
+  return oap ? oap->end_vcol : 0;
+}
+
 /// Set global motion_force.
 void nvim_set_motion_force(int val)
 {

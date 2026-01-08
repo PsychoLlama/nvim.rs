@@ -2,10 +2,21 @@
 //!
 //! This crate provides Rust implementations of operator-related functions
 //! from `src/nvim/ops.c`.
+//!
+//! ## Module Structure
+//!
+//! - [`types`]: Core type definitions (OpType, MotionType, BlockDef, Pos)
+//! - [`oparg`]: Wrapper for operator arguments (oparg_T)
 
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_const_for_fn)]
+
+pub mod oparg;
+pub mod types;
+
+pub use oparg::{OpArgHandle, OpArgMut, OpArgRef};
+pub use types::{BlockDef, MotionType, OpType, Pos};
 
 use std::ffi::c_int;
 
