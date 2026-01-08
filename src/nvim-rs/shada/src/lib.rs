@@ -588,6 +588,302 @@ pub extern "C" fn rs_vim_htobe64(host_64_bits: u64) -> u64 {
 // are provided by the nvim-mark crate.
 
 // =============================================================================
+// MessagePack Reading Utilities
+// =============================================================================
+
+// C accessor functions for file reading
+extern "C" {
+    fn nvim_file_read(fd: FileDescriptorHandle, buf: *mut c_char, size: usize) -> isize;
+}
+
+/// Read exactly `len` bytes from a file descriptor.
+///
+/// Returns the read status.
+///
+/// # Safety
+///
+/// - `fd` must be a valid file descriptor handle
+/// - `buf` must be valid for `len` bytes
+#[no_mangle]
+pub unsafe extern "C" fn rs_fread_len(
+    fd: FileDescriptorHandle,
+    buf: *mut c_char,
+    len: usize,
+) -> c_int {
+    if fd.is_null() || buf.is_null() {
+        return SD_READ_STATUS_READ_ERROR;
+    }
+
+    let bytes_read = nvim_file_read(fd, buf, len);
+
+    if bytes_read < 0 {
+        return SD_READ_STATUS_READ_ERROR;
+    }
+
+    if (bytes_read as usize) != len {
+        return SD_READ_STATUS_NOT_SHADA;
+    }
+
+    SD_READ_STATUS_SUCCESS
+}
+
+/// Read a MessagePack unsigned 64-bit integer from a file.
+///
+/// This reads the MessagePack format for positive integers:
+/// - 0x00-0x7f: positive fixint (value is the byte itself)
+/// - 0xcc: uint8 (1 additional byte)
+/// - 0xcd: uint16 (2 additional bytes, big-endian)
+/// - 0xce: uint32 (4 additional bytes, big-endian)
+/// - 0xcf: uint64 (8 additional bytes, big-endian)
+///
+/// # Safety
+///
+/// - `fd` must be a valid file descriptor handle
+/// - `result` must be a valid pointer to write the result
+#[no_mangle]
+pub unsafe extern "C" fn rs_msgpack_read_uint64(
+    fd: FileDescriptorHandle,
+    allow_eof: bool,
+    result: *mut u64,
+) -> c_int {
+    if fd.is_null() || result.is_null() {
+        return SD_READ_STATUS_READ_ERROR;
+    }
+
+    // Read the first byte
+    let mut first_byte: u8 = 0;
+    let bytes_read = nvim_file_read(fd, std::ptr::addr_of_mut!(first_byte).cast(), 1);
+
+    if bytes_read < 0 {
+        return SD_READ_STATUS_READ_ERROR;
+    }
+
+    if bytes_read == 0 {
+        if allow_eof && nvim_file_eof(fd) != 0 {
+            return SD_READ_STATUS_FINISHED;
+        }
+        return SD_READ_STATUS_NOT_SHADA;
+    }
+
+    // Check for positive fixint (0x00-0x7f)
+    if (first_byte & 0x80) == 0 {
+        *result = u64::from(first_byte);
+        return SD_READ_STATUS_SUCCESS;
+    }
+
+    // Determine the length based on format byte
+    let length: usize = match first_byte {
+        0xcc => 1, // uint8
+        0xcd => 2, // uint16
+        0xce => 4, // uint32
+        0xcf => 8, // uint64
+        _ => return SD_READ_STATUS_NOT_SHADA,
+    };
+
+    // Read the value bytes into a buffer
+    let mut buf: u64 = 0;
+    let buf_ptr = std::ptr::addr_of_mut!(buf).cast::<u8>();
+
+    // Read into the high bytes for big-endian conversion
+    let offset = 8 - length;
+    let read_status = rs_fread_len(fd, buf_ptr.add(offset).cast(), length);
+    if read_status != SD_READ_STATUS_SUCCESS {
+        return read_status;
+    }
+
+    // Convert from big-endian
+    *result = u64::from_be(buf);
+
+    SD_READ_STATUS_SUCCESS
+}
+
+/// Skip bytes in a ShaDa file using the file skip function.
+///
+/// This is used to skip over entries we don't want to read.
+///
+/// # Safety
+///
+/// - `fd` must be a valid file descriptor handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_sd_reader_skip_bytes(fd: FileDescriptorHandle, offset: usize) -> c_int {
+    if fd.is_null() {
+        return SD_READ_STATUS_READ_ERROR;
+    }
+
+    let result = nvim_file_skip(fd, offset);
+    if result < 0 {
+        return SD_READ_STATUS_READ_ERROR;
+    }
+
+    if (result as usize) != offset {
+        return SD_READ_STATUS_NOT_SHADA;
+    }
+
+    SD_READ_STATUS_SUCCESS
+}
+
+// =============================================================================
+// MessagePack Writing Utilities for ShaDa
+// =============================================================================
+
+/// ShaDa packing buffer - wraps PackerBuffer from msgpack crate
+#[repr(C)]
+pub struct ShadaPackerBuffer {
+    _opaque: [u8; 0],
+}
+
+// C accessor functions for packer buffer
+extern "C" {
+    fn nvim_shada_packer_get_ptr(packer: *mut ShadaPackerBuffer) -> *mut u8;
+    fn nvim_shada_packer_set_ptr(packer: *mut ShadaPackerBuffer, ptr: *mut u8);
+    fn nvim_shada_packer_get_endptr(packer: *mut ShadaPackerBuffer) -> *mut u8;
+    fn nvim_shada_packer_flush(packer: *mut ShadaPackerBuffer);
+}
+
+/// Minimum buffer size for packing items
+pub const SHADA_PACK_ITEM_SIZE: usize = 9;
+
+/// Ensure the packer buffer has enough space.
+///
+/// # Safety
+///
+/// `packer` must be a valid packer buffer pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_shada_check_buffer(packer: *mut ShadaPackerBuffer) {
+    if packer.is_null() {
+        return;
+    }
+
+    let ptr = nvim_shada_packer_get_ptr(packer);
+    let endptr = nvim_shada_packer_get_endptr(packer);
+    let remaining = (endptr as usize).saturating_sub(ptr as usize);
+
+    if remaining < 2 * SHADA_PACK_ITEM_SIZE {
+        nvim_shada_packer_flush(packer);
+    }
+}
+
+/// Write a ShaDa entry header (type, timestamp, length).
+///
+/// The header consists of three msgpack unsigned integers:
+/// 1. Entry type
+/// 2. Timestamp
+/// 3. Content length
+///
+/// # Safety
+///
+/// `packer` must be a valid packer buffer pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_shada_pack_header(
+    packer: *mut ShadaPackerBuffer,
+    entry_type: u64,
+    timestamp: u64,
+    length: u64,
+) {
+    if packer.is_null() {
+        return;
+    }
+
+    rs_shada_check_buffer(packer);
+
+    let mut ptr = nvim_shada_packer_get_ptr(packer);
+
+    // Pack entry type
+    rs_mpack_uint64_inline(&raw mut ptr, entry_type);
+    // Pack timestamp
+    rs_mpack_uint64_inline(&raw mut ptr, timestamp);
+    // Pack length
+    rs_mpack_uint64_inline(&raw mut ptr, length);
+
+    nvim_shada_packer_set_ptr(packer, ptr);
+}
+
+/// Pack a 64-bit unsigned integer in MessagePack format (inline version).
+///
+/// Uses the most compact representation possible.
+unsafe fn rs_mpack_uint64_inline(ptr: *mut *mut u8, val: u64) {
+    if ptr.is_null() || (*ptr).is_null() {
+        return;
+    }
+
+    if val <= 0x7f {
+        // Positive fixint
+        **ptr = val as u8;
+        *ptr = (*ptr).add(1);
+    } else if val <= 0xff {
+        // uint8
+        **ptr = 0xcc;
+        *ptr = (*ptr).add(1);
+        **ptr = val as u8;
+        *ptr = (*ptr).add(1);
+    } else if val <= 0xffff {
+        // uint16
+        **ptr = 0xcd;
+        *ptr = (*ptr).add(1);
+        let bytes = (val as u16).to_be_bytes();
+        **ptr = bytes[0];
+        *ptr = (*ptr).add(1);
+        **ptr = bytes[1];
+        *ptr = (*ptr).add(1);
+    } else if val <= 0xffff_ffff {
+        // uint32
+        **ptr = 0xce;
+        *ptr = (*ptr).add(1);
+        let bytes = (val as u32).to_be_bytes();
+        for byte in bytes {
+            **ptr = byte;
+            *ptr = (*ptr).add(1);
+        }
+    } else {
+        // uint64
+        **ptr = 0xcf;
+        *ptr = (*ptr).add(1);
+        let bytes = val.to_be_bytes();
+        for byte in bytes {
+            **ptr = byte;
+            *ptr = (*ptr).add(1);
+        }
+    }
+}
+
+/// Pack raw bytes into the ShaDa packer buffer.
+///
+/// # Safety
+///
+/// - `data` must be valid for `len` bytes
+/// - `packer` must be a valid packer buffer pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_shada_pack_raw(
+    data: *const u8,
+    len: usize,
+    packer: *mut ShadaPackerBuffer,
+) {
+    if packer.is_null() || (data.is_null() && len > 0) {
+        return;
+    }
+
+    let mut pos: usize = 0;
+    while pos < len {
+        let ptr = nvim_shada_packer_get_ptr(packer);
+        let endptr = nvim_shada_packer_get_endptr(packer);
+        let remaining = (endptr as usize).saturating_sub(ptr as usize);
+        let to_copy = (len - pos).min(remaining);
+
+        if to_copy > 0 {
+            std::ptr::copy_nonoverlapping(data.add(pos), ptr, to_copy);
+            nvim_shada_packer_set_ptr(packer, ptr.add(to_copy));
+        }
+        pos += to_copy;
+
+        if pos < len {
+            nvim_shada_packer_flush(packer);
+        }
+    }
+
+    rs_shada_check_buffer(packer);
+}
+
+// =============================================================================
 // ShaDa Entry Type Enum (Rust representation)
 // =============================================================================
 
