@@ -7,6 +7,7 @@
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::must_use_candidate)]
 
+pub mod api;
 pub mod bt_compile;
 pub mod bt_exec;
 pub mod bt_opcodes;
@@ -22,6 +23,13 @@ pub mod parser;
 pub mod regsub;
 pub mod scanner;
 
+pub use api::{
+    rs_engine_to_int, rs_get_regflags, rs_int_to_engine, rs_is_bt_prog, rs_is_nfa_prog,
+    rs_prog_in_use, rs_regmatch_get_endp, rs_regmatch_get_startp, rs_regmatch_set_endp,
+    rs_regmatch_set_startp, rs_regmmatch_get_end_col, rs_regmmatch_get_end_lnum,
+    rs_regmmatch_get_start_col, rs_regmmatch_get_start_lnum, rs_regprog_get_engine,
+    rs_set_prog_in_use,
+};
 pub use bt_compile::{
     rs_bt_chain, rs_bt_compiler_free, rs_bt_compiler_is_too_long, rs_bt_compiler_new,
     rs_bt_compiler_size, rs_bt_compiler_start, rs_bt_emit_byte, rs_bt_emit_node,
