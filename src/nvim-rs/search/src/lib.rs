@@ -6,6 +6,7 @@
 
 #![allow(unsafe_code)] // FFI requires unsafe
 
+pub mod commands;
 pub mod core;
 pub mod direction;
 pub mod helpers;
