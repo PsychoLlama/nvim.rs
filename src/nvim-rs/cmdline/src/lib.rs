@@ -13,6 +13,7 @@ pub mod expand;
 pub mod expr;
 pub mod history;
 pub mod pattern;
+pub mod screen;
 pub mod search;
 pub mod sources;
 pub mod state;
