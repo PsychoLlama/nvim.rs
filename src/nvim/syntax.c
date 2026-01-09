@@ -6931,3 +6931,338 @@ reg_extmatch_T *nvim_stateitem_get_extmatch(stateitem_T *item)
   }
   return item->si_extmatch;
 }
+
+// ============================================================================
+// Phase 24.2: Core Pattern Matching Helpers (for Rust FFI)
+// ============================================================================
+
+/// Get si_m_endpos.lnum from stateitem
+int nvim_stateitem_get_m_endpos_lnum(stateitem_T *item)
+{
+  return item ? (int)item->si_m_endpos.lnum : 0;
+}
+
+/// Get si_m_endpos.col from stateitem
+int nvim_stateitem_get_m_endpos_col(stateitem_T *item)
+{
+  return item ? (int)item->si_m_endpos.col : 0;
+}
+
+/// Get si_h_startpos.lnum from stateitem
+int nvim_stateitem_get_h_startpos_lnum(stateitem_T *item)
+{
+  return item ? (int)item->si_h_startpos.lnum : 0;
+}
+
+/// Get si_h_startpos.col from stateitem
+int nvim_stateitem_get_h_startpos_col(stateitem_T *item)
+{
+  return item ? (int)item->si_h_startpos.col : 0;
+}
+
+/// Get si_h_endpos.lnum from stateitem
+int nvim_stateitem_get_h_endpos_lnum(stateitem_T *item)
+{
+  return item ? (int)item->si_h_endpos.lnum : 0;
+}
+
+/// Get si_h_endpos.col from stateitem
+int nvim_stateitem_get_h_endpos_col(stateitem_T *item)
+{
+  return item ? (int)item->si_h_endpos.col : 0;
+}
+
+/// Get si_eoe_pos.lnum from stateitem
+int nvim_stateitem_get_eoe_pos_lnum(stateitem_T *item)
+{
+  return item ? (int)item->si_eoe_pos.lnum : 0;
+}
+
+/// Get si_eoe_pos.col from stateitem
+int nvim_stateitem_get_eoe_pos_col(stateitem_T *item)
+{
+  return item ? (int)item->si_eoe_pos.col : 0;
+}
+
+/// Set si_m_endpos
+void nvim_stateitem_set_m_endpos(stateitem_T *item, int lnum, int col)
+{
+  if (item) {
+    item->si_m_endpos.lnum = (linenr_T)lnum;
+    item->si_m_endpos.col = (colnr_T)col;
+  }
+}
+
+/// Set si_h_endpos
+void nvim_stateitem_set_h_endpos(stateitem_T *item, int lnum, int col)
+{
+  if (item) {
+    item->si_h_endpos.lnum = (linenr_T)lnum;
+    item->si_h_endpos.col = (colnr_T)col;
+  }
+}
+
+/// Set si_eoe_pos
+void nvim_stateitem_set_eoe_pos(stateitem_T *item, int lnum, int col)
+{
+  if (item) {
+    item->si_eoe_pos.lnum = (linenr_T)lnum;
+    item->si_eoe_pos.col = (colnr_T)col;
+  }
+}
+
+/// Set si_idx
+void nvim_stateitem_set_idx(stateitem_T *item, int idx)
+{
+  if (item) {
+    item->si_idx = idx;
+  }
+}
+
+/// Set si_end_idx
+void nvim_stateitem_set_end_idx(stateitem_T *item, int end_idx)
+{
+  if (item) {
+    item->si_end_idx = end_idx;
+  }
+}
+
+/// Set si_flags
+void nvim_stateitem_set_flags(stateitem_T *item, int flags)
+{
+  if (item) {
+    item->si_flags = flags;
+  }
+}
+
+/// Add flags to si_flags
+void nvim_stateitem_add_flags(stateitem_T *item, int flags)
+{
+  if (item) {
+    item->si_flags |= flags;
+  }
+}
+
+/// Set si_seqnr
+void nvim_stateitem_set_seqnr(stateitem_T *item, int seqnr)
+{
+  if (item) {
+    item->si_seqnr = seqnr;
+  }
+}
+
+/// Set si_ends
+void nvim_stateitem_set_ends(stateitem_T *item, int ends)
+{
+  if (item) {
+    item->si_ends = ends ? 1 : 0;
+  }
+}
+
+/// Set si_id
+void nvim_stateitem_set_id(stateitem_T *item, int id)
+{
+  if (item) {
+    item->si_id = id;
+  }
+}
+
+/// Set si_trans_id
+void nvim_stateitem_set_trans_id(stateitem_T *item, int trans_id)
+{
+  if (item) {
+    item->si_trans_id = trans_id;
+  }
+}
+
+/// Set si_attr
+void nvim_stateitem_set_attr(stateitem_T *item, int attr)
+{
+  if (item) {
+    item->si_attr = attr;
+  }
+}
+
+/// Set si_cont_list
+void nvim_stateitem_set_cont_list(stateitem_T *item, int16_t *list)
+{
+  if (item) {
+    item->si_cont_list = list;
+  }
+}
+
+/// Get next_seqnr and increment it
+int nvim_syn_next_seqnr(void)
+{
+  return next_seqnr++;
+}
+
+/// Get next_match_idx
+int nvim_syn_get_next_match_idx_value(void)
+{
+  return next_match_idx;
+}
+
+/// Set next_match_idx
+void nvim_syn_set_next_match_idx(int idx)
+{
+  next_match_idx = idx;
+}
+
+/// Set next_match_col
+void nvim_syn_set_next_match_col(int col)
+{
+  next_match_col = col;
+}
+
+/// Set current_next_list
+void nvim_syn_set_current_next_list_ptr(int16_t *list)
+{
+  current_next_list = list;
+}
+
+/// Get current_next_list
+int16_t *nvim_syn_get_current_next_list_ptr(void)
+{
+  return current_next_list;
+}
+
+/// Call check_state_ends
+void nvim_syn_check_state_ends(void)
+{
+  check_state_ends();
+}
+
+/// Call update_si_attr
+void nvim_syn_call_update_si_attr(int idx)
+{
+  update_si_attr(idx);
+}
+
+/// Call check_keepend
+void nvim_syn_check_keepend(void)
+{
+  check_keepend();
+}
+
+/// Call pop_current_state
+void nvim_syn_pop_current_state(void)
+{
+  pop_current_state();
+}
+
+/// Call push_current_state
+void nvim_syn_push_current_state(int idx)
+{
+  push_current_state(idx);
+}
+
+/// Get the current line at the current column
+char nvim_syn_getcurline_at_col(void)
+{
+  return syn_getcurline()[current_col];
+}
+
+/// Check if current_state is empty
+int nvim_syn_current_state_is_empty(void)
+{
+  return GA_EMPTY(&current_state) ? 1 : 0;
+}
+
+/// Set current_finished
+void nvim_syn_set_current_finished(int finished)
+{
+  current_finished = finished ? true : false;
+}
+
+/// Get synpat_T sp_type for pattern at index
+int nvim_synblock_pattern_type(int idx)
+{
+  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
+    return 0;
+  }
+  return SYN_ITEMS(syn_block)[idx].sp_type;
+}
+
+/// Get synpat_T sp_flags for pattern at index
+int nvim_synblock_pattern_flags(int idx)
+{
+  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
+    return 0;
+  }
+  return SYN_ITEMS(syn_block)[idx].sp_flags;
+}
+
+/// Get synpat_T sp_syn.id for pattern at index
+int nvim_synblock_pattern_syn_id(int idx)
+{
+  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
+    return 0;
+  }
+  return SYN_ITEMS(syn_block)[idx].sp_syn.id;
+}
+
+/// Get synpat_T sp_syn_match_id for pattern at index
+int nvim_synblock_pattern_match_id(int idx)
+{
+  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
+    return 0;
+  }
+  return SYN_ITEMS(syn_block)[idx].sp_syn_match_id;
+}
+
+/// Get synpat_T sp_cont_list for pattern at index
+int16_t *nvim_synblock_pattern_cont_list(int idx)
+{
+  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
+    return NULL;
+  }
+  return SYN_ITEMS(syn_block)[idx].sp_cont_list;
+}
+
+/// Get synpat_T sp_next_list for pattern at index
+int16_t *nvim_synblock_pattern_next_list(int idx)
+{
+  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
+    return NULL;
+  }
+  return SYN_ITEMS(syn_block)[idx].sp_next_list;
+}
+
+/// Call syn_id2attr (from highlight_group.c)
+int nvim_syn_id2attr_wrapper(int syn_id)
+{
+  return syn_id2attr(syn_id);
+}
+
+/// Call syn_update_ends
+void nvim_syn_call_syn_update_ends(int syncing)
+{
+  syn_update_ends(syncing ? true : false);
+}
+
+/// Get si_next_list from stateitem
+int16_t *nvim_stateitem_get_next_list(stateitem_T *item)
+{
+  return item ? item->si_next_list : NULL;
+}
+
+/// Set si_next_list for stateitem
+void nvim_stateitem_set_next_list(stateitem_T *item, int16_t *list)
+{
+  if (item) {
+    item->si_next_list = list;
+  }
+}
+
+/// Check if the ID_LIST_ALL constant matches a pointer
+int nvim_syn_is_id_list_all(int16_t *list)
+{
+  return list == ID_LIST_ALL ? 1 : 0;
+}
+
+/// Get the ID_LIST_ALL pointer
+int16_t *nvim_syn_get_id_list_all(void)
+{
+  return ID_LIST_ALL;
+}

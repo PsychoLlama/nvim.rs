@@ -950,6 +950,151 @@ extern "C" {
 
     /// Get si_extmatch from a stateitem
     fn nvim_stateitem_get_extmatch(item: StateItemHandle) -> ExtMatchHandle;
+
+    // -------------------------------------------------------------------------
+    // Phase 24.2: Core Pattern Matching Helpers
+    // -------------------------------------------------------------------------
+
+    /// Get si_m_endpos.lnum from stateitem
+    fn nvim_stateitem_get_m_endpos_lnum(item: StateItemHandle) -> c_int;
+
+    /// Get si_m_endpos.col from stateitem
+    fn nvim_stateitem_get_m_endpos_col(item: StateItemHandle) -> c_int;
+
+    /// Get si_h_startpos.lnum from stateitem
+    fn nvim_stateitem_get_h_startpos_lnum(item: StateItemHandle) -> c_int;
+
+    /// Get si_h_startpos.col from stateitem
+    fn nvim_stateitem_get_h_startpos_col(item: StateItemHandle) -> c_int;
+
+    /// Get si_h_endpos.lnum from stateitem
+    fn nvim_stateitem_get_h_endpos_lnum(item: StateItemHandle) -> c_int;
+
+    /// Get si_h_endpos.col from stateitem
+    fn nvim_stateitem_get_h_endpos_col(item: StateItemHandle) -> c_int;
+
+    /// Get si_eoe_pos.lnum from stateitem
+    fn nvim_stateitem_get_eoe_pos_lnum(item: StateItemHandle) -> c_int;
+
+    /// Get si_eoe_pos.col from stateitem
+    fn nvim_stateitem_get_eoe_pos_col(item: StateItemHandle) -> c_int;
+
+    /// Set si_m_endpos
+    fn nvim_stateitem_set_m_endpos(item: StateItemHandle, lnum: c_int, col: c_int);
+
+    /// Set si_h_endpos
+    fn nvim_stateitem_set_h_endpos(item: StateItemHandle, lnum: c_int, col: c_int);
+
+    /// Set si_eoe_pos
+    fn nvim_stateitem_set_eoe_pos(item: StateItemHandle, lnum: c_int, col: c_int);
+
+    /// Set si_idx
+    fn nvim_stateitem_set_idx(item: StateItemHandle, idx: c_int);
+
+    /// Set si_end_idx
+    fn nvim_stateitem_set_end_idx(item: StateItemHandle, end_idx: c_int);
+
+    /// Set si_flags
+    fn nvim_stateitem_set_flags(item: StateItemHandle, flags: c_int);
+
+    /// Add flags to si_flags
+    fn nvim_stateitem_add_flags(item: StateItemHandle, flags: c_int);
+
+    /// Set si_seqnr
+    fn nvim_stateitem_set_seqnr(item: StateItemHandle, seqnr: c_int);
+
+    /// Set si_ends
+    fn nvim_stateitem_set_ends(item: StateItemHandle, ends: c_int);
+
+    /// Set si_id
+    fn nvim_stateitem_set_id(item: StateItemHandle, id: c_int);
+
+    /// Set si_trans_id
+    fn nvim_stateitem_set_trans_id(item: StateItemHandle, trans_id: c_int);
+
+    /// Set si_attr
+    fn nvim_stateitem_set_attr(item: StateItemHandle, attr: c_int);
+
+    /// Set si_cont_list
+    fn nvim_stateitem_set_cont_list(item: StateItemHandle, list: IdListHandle);
+
+    /// Get next_seqnr and increment it
+    fn nvim_syn_next_seqnr() -> c_int;
+
+    /// Get next_match_idx
+    fn nvim_syn_get_next_match_idx_value() -> c_int;
+
+    /// Set next_match_idx
+    fn nvim_syn_set_next_match_idx(idx: c_int);
+
+    /// Set next_match_col
+    fn nvim_syn_set_next_match_col(col: c_int);
+
+    /// Set current_next_list
+    fn nvim_syn_set_current_next_list_ptr(list: IdListHandle);
+
+    /// Get current_next_list
+    fn nvim_syn_get_current_next_list_ptr() -> IdListHandle;
+
+    /// Call check_state_ends
+    fn nvim_syn_check_state_ends();
+
+    /// Call update_si_attr
+    fn nvim_syn_call_update_si_attr(idx: c_int);
+
+    /// Call check_keepend
+    fn nvim_syn_check_keepend();
+
+    /// Call pop_current_state
+    fn nvim_syn_pop_current_state();
+
+    /// Call push_current_state
+    fn nvim_syn_push_current_state(idx: c_int);
+
+    /// Get the current line at the current column
+    fn nvim_syn_getcurline_at_col() -> c_char;
+
+    /// Check if current_state is empty
+    fn nvim_syn_current_state_is_empty() -> c_int;
+
+    /// Set current_finished
+    fn nvim_syn_set_current_finished(finished: c_int);
+
+    /// Get synpat_T sp_type for pattern at index
+    fn nvim_synblock_pattern_type(idx: c_int) -> c_int;
+
+    /// Get synpat_T sp_flags for pattern at index
+    fn nvim_synblock_pattern_flags(idx: c_int) -> c_int;
+
+    /// Get synpat_T sp_syn.id for pattern at index
+    fn nvim_synblock_pattern_syn_id(idx: c_int) -> c_int;
+
+    /// Get synpat_T sp_syn_match_id for pattern at index
+    fn nvim_synblock_pattern_match_id(idx: c_int) -> c_int;
+
+    /// Get synpat_T sp_cont_list for pattern at index
+    fn nvim_synblock_pattern_cont_list(idx: c_int) -> IdListHandle;
+
+    /// Get synpat_T sp_next_list for pattern at index
+    fn nvim_synblock_pattern_next_list(idx: c_int) -> IdListHandle;
+
+    /// Call syn_id2attr
+    fn nvim_syn_id2attr_wrapper(syn_id: c_int) -> c_int;
+
+    /// Call syn_update_ends
+    fn nvim_syn_call_syn_update_ends(syncing: c_int);
+
+    /// Get si_next_list from stateitem
+    fn nvim_stateitem_get_next_list(item: StateItemHandle) -> IdListHandle;
+
+    /// Set si_next_list for stateitem
+    fn nvim_stateitem_set_next_list(item: StateItemHandle, list: IdListHandle);
+
+    /// Check if the ID_LIST_ALL constant matches a pointer
+    fn nvim_syn_is_id_list_all(list: IdListHandle) -> c_int;
+
+    /// Get the ID_LIST_ALL pointer
+    fn nvim_syn_get_id_list_all() -> IdListHandle;
 }
 
 // =============================================================================
@@ -2822,6 +2967,352 @@ pub unsafe extern "C" fn rs_invalidate_current_state() {
 #[no_mangle]
 pub unsafe extern "C" fn rs_clear_current_state() {
     nvim_syn_clear_current_state();
+}
+
+// =============================================================================
+// Phase 24.2: Core Pattern Matching Functions (FFI exports)
+// =============================================================================
+
+/// Check for end of current state (and the states before it).
+/// This is a Rust wrapper that delegates to the C implementation.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_state_ends() {
+    nvim_syn_check_state_ends();
+}
+
+/// Update an entry in the current_state stack for a match or region.
+/// This fills in si_attr, si_next_list and si_cont_list.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_update_si_attr(idx: c_int) {
+    nvim_syn_call_update_si_attr(idx);
+}
+
+/// Check the current stack for patterns with "keepend" flag.
+/// Propagate the match-end to contained items, until a "skipend" item is found.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_keepend() {
+    nvim_syn_check_keepend();
+}
+
+/// Pop the current state from the stack.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pop_current_state() {
+    nvim_syn_pop_current_state();
+}
+
+/// Push a new state onto the stack with the given pattern index.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_push_current_state(idx: c_int) {
+    nvim_syn_push_current_state(idx);
+}
+
+/// Get the next sequence number and increment it.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_next_seqnr() -> c_int {
+    nvim_syn_next_seqnr()
+}
+
+/// Get the attribute for a syntax ID (syntax crate version).
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syntax_id2attr(syn_id: c_int) -> c_int {
+    nvim_syn_id2attr_wrapper(syn_id)
+}
+
+/// Check if the current state stack is empty.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_state_is_empty() -> c_int {
+    nvim_syn_current_state_is_empty()
+}
+
+/// Get the character at the current column.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_getcurline_at_col() -> c_char {
+    nvim_syn_getcurline_at_col()
+}
+
+/// Set the current_finished flag.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_set_finished(finished: c_int) {
+    nvim_syn_set_current_finished(finished);
+}
+
+/// Call syn_update_ends.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_update_ends(syncing: c_int) {
+    nvim_syn_call_syn_update_ends(syncing);
+}
+
+/// Set the next_match_idx value.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_next_match_idx(idx: c_int) {
+    nvim_syn_set_next_match_idx(idx);
+}
+
+/// Set the next_match_col value.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_next_match_col(col: c_int) {
+    nvim_syn_set_next_match_col(col);
+}
+
+/// Set the current_next_list pointer.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_current_next_list(list: IdListHandle) {
+    nvim_syn_set_current_next_list_ptr(list);
+}
+
+/// Get the current_next_list pointer.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_current_next_list() -> IdListHandle {
+    nvim_syn_get_current_next_list_ptr()
+}
+
+/// Check if a list is ID_LIST_ALL.
+///
+/// # Safety
+/// This function is safe to call.
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_id_list_all(list: IdListHandle) -> c_int {
+    nvim_syn_is_id_list_all(list)
+}
+
+/// Get the ID_LIST_ALL constant.
+///
+/// # Safety
+/// This function is safe to call.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_id_list_all() -> IdListHandle {
+    nvim_syn_get_id_list_all()
+}
+
+// =============================================================================
+// Stateitem position accessors (safe wrappers)
+// =============================================================================
+
+/// Get match end position lnum from a state item.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_m_endpos_lnum(item: StateItemHandle) -> c_int {
+    nvim_stateitem_get_m_endpos_lnum(item)
+}
+
+/// Get match end position col from a state item.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_m_endpos_col(item: StateItemHandle) -> c_int {
+    nvim_stateitem_get_m_endpos_col(item)
+}
+
+/// Get highlight start position lnum from a state item.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_h_startpos_lnum(item: StateItemHandle) -> c_int {
+    nvim_stateitem_get_h_startpos_lnum(item)
+}
+
+/// Get highlight start position col from a state item.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_h_startpos_col(item: StateItemHandle) -> c_int {
+    nvim_stateitem_get_h_startpos_col(item)
+}
+
+/// Get highlight end position lnum from a state item.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_h_endpos_lnum(item: StateItemHandle) -> c_int {
+    nvim_stateitem_get_h_endpos_lnum(item)
+}
+
+/// Get highlight end position col from a state item.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_h_endpos_col(item: StateItemHandle) -> c_int {
+    nvim_stateitem_get_h_endpos_col(item)
+}
+
+/// Get end-of-end position lnum from a state item.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_eoe_pos_lnum(item: StateItemHandle) -> c_int {
+    nvim_stateitem_get_eoe_pos_lnum(item)
+}
+
+/// Get end-of-end position col from a state item.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_eoe_pos_col(item: StateItemHandle) -> c_int {
+    nvim_stateitem_get_eoe_pos_col(item)
+}
+
+/// Set match end position for a state item.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_set_m_endpos(item: StateItemHandle, lnum: c_int, col: c_int) {
+    nvim_stateitem_set_m_endpos(item, lnum, col);
+}
+
+/// Set highlight end position for a state item.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_set_h_endpos(item: StateItemHandle, lnum: c_int, col: c_int) {
+    nvim_stateitem_set_h_endpos(item, lnum, col);
+}
+
+/// Set end-of-end position for a state item.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_set_eoe_pos(item: StateItemHandle, lnum: c_int, col: c_int) {
+    nvim_stateitem_set_eoe_pos(item, lnum, col);
+}
+
+// =============================================================================
+// Stateitem field setters (safe wrappers)
+// =============================================================================
+
+/// Set the pattern index for a state item.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_set_idx(item: StateItemHandle, idx: c_int) {
+    nvim_stateitem_set_idx(item, idx);
+}
+
+/// Set the end pattern index for a state item.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_set_end_idx(item: StateItemHandle, end_idx: c_int) {
+    nvim_stateitem_set_end_idx(item, end_idx);
+}
+
+/// Set flags for a state item.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_set_flags(item: StateItemHandle, flags: c_int) {
+    nvim_stateitem_set_flags(item, flags);
+}
+
+/// Add flags to a state item.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_add_flags(item: StateItemHandle, flags: c_int) {
+    nvim_stateitem_add_flags(item, flags);
+}
+
+/// Set sequence number for a state item.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_set_seqnr(item: StateItemHandle, seqnr: c_int) {
+    nvim_stateitem_set_seqnr(item, seqnr);
+}
+
+/// Set ends flag for a state item.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_set_ends(item: StateItemHandle, ends: c_int) {
+    nvim_stateitem_set_ends(item, ends);
+}
+
+/// Set ID for a state item.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_set_id(item: StateItemHandle, id: c_int) {
+    nvim_stateitem_set_id(item, id);
+}
+
+/// Set trans_id for a state item.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_set_trans_id(item: StateItemHandle, trans_id: c_int) {
+    nvim_stateitem_set_trans_id(item, trans_id);
+}
+
+/// Set attr for a state item.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_set_attr(item: StateItemHandle, attr: c_int) {
+    nvim_stateitem_set_attr(item, attr);
+}
+
+/// Set cont_list for a state item.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_set_cont_list(item: StateItemHandle, list: IdListHandle) {
+    nvim_stateitem_set_cont_list(item, list);
+}
+
+/// Set next_list for a state item.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_set_next_list(item: StateItemHandle, list: IdListHandle) {
+    nvim_stateitem_set_next_list(item, list);
+}
+
+/// Get next_list from a state item.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_get_next_list(item: StateItemHandle) -> IdListHandle {
+    nvim_stateitem_get_next_list(item)
+}
+
+// =============================================================================
+// Pattern accessors (safe wrappers)
+// =============================================================================
+
+/// Get the pattern type for a pattern at index.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_pattern_type(idx: c_int) -> c_int {
+    nvim_synblock_pattern_type(idx)
+}
+
+/// Get the pattern flags for a pattern at index.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_pattern_flags(idx: c_int) -> c_int {
+    nvim_synblock_pattern_flags(idx)
+}
+
+/// Get the syntax ID for a pattern at index.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_pattern_syn_id(idx: c_int) -> c_int {
+    nvim_synblock_pattern_syn_id(idx)
+}
+
+/// Get the match ID for a pattern at index.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_pattern_match_id(idx: c_int) -> c_int {
+    nvim_synblock_pattern_match_id(idx)
+}
+
+/// Get the cont_list for a pattern at index.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_pattern_cont_list(idx: c_int) -> IdListHandle {
+    nvim_synblock_pattern_cont_list(idx)
+}
+
+/// Get the next_list for a pattern at index.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_pattern_next_list(idx: c_int) -> IdListHandle {
+    nvim_synblock_pattern_next_list(idx)
 }
 
 #[cfg(test)]
