@@ -5116,3 +5116,85 @@ void nvim_set_ccline_overstrike(int overstrike)
 {
   ccline.overstrike = overstrike;
 }
+
+// Additional accessors for Phase 13.1
+
+int nvim_get_ccline_redraw_state(void)
+{
+  return (int)ccline.redraw_state;
+}
+
+void nvim_set_ccline_redraw_state(int state)
+{
+  ccline.redraw_state = (CmdRedraw)state;
+}
+
+int nvim_get_ccline_special_char(void)
+{
+  return ccline.special_char;
+}
+
+void nvim_set_ccline_special_char(int c)
+{
+  ccline.special_char = (char)c;
+}
+
+int nvim_get_ccline_special_shift(void)
+{
+  return ccline.special_shift;
+}
+
+void nvim_set_ccline_special_shift(int shift)
+{
+  ccline.special_shift = shift;
+}
+
+int nvim_get_ccline_one_key(void)
+{
+  return ccline.one_key;
+}
+
+void nvim_set_ccline_one_key(int one_key)
+{
+  ccline.one_key = one_key;
+}
+
+int nvim_get_ccline_hl_id(void)
+{
+  return ccline.hl_id;
+}
+
+void nvim_set_ccline_hl_id(int hl_id)
+{
+  ccline.hl_id = hl_id;
+}
+
+int nvim_get_ccline_xp_context(void)
+{
+  return ccline.xp_context;
+}
+
+void nvim_set_ccline_xp_context(int context)
+{
+  ccline.xp_context = context;
+}
+
+char *nvim_get_ccline_cmdprompt(void)
+{
+  return ccline.cmdprompt;
+}
+
+void nvim_set_ccline_cmdprompt(char *prompt)
+{
+  ccline.cmdprompt = prompt;
+}
+
+void nvim_set_ccline_cmdindent(int indent)
+{
+  ccline.cmdindent = indent;
+}
+
+void nvim_set_ccline_cmdfirstc(int firstc)
+{
+  ccline.cmdfirstc = firstc;
+}

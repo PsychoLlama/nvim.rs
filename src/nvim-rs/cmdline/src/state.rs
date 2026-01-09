@@ -207,6 +207,7 @@ impl CmdlineState {
 // C Function Declarations
 // =============================================================================
 
+#[allow(dead_code)]
 extern "C" {
     // Current ccline accessors
     fn nvim_get_ccline_cmdpos() -> c_int;
@@ -218,11 +219,27 @@ extern "C" {
     fn nvim_get_ccline_prompt_id() -> c_uint;
     fn nvim_get_ccline_level() -> c_int;
     fn nvim_get_ccline_input_fn() -> c_int;
+    fn nvim_get_ccline_redraw_state() -> c_int;
+    fn nvim_get_ccline_one_key() -> c_int;
+    fn nvim_get_ccline_special_char() -> c_int;
+    fn nvim_get_ccline_special_shift() -> c_int;
+    fn nvim_get_ccline_hl_id() -> c_int;
+    fn nvim_get_ccline_xp_context() -> c_int;
+    fn nvim_get_ccline_cmdprompt() -> *mut c_char;
 
     fn nvim_set_ccline_cmdpos(pos: c_int);
     fn nvim_set_ccline_cmdlen(len: c_int);
     fn nvim_set_ccline_cmdspos(spos: c_int);
     fn nvim_set_ccline_overstrike(overstrike: c_int);
+    fn nvim_set_ccline_redraw_state(state: c_int);
+    fn nvim_set_ccline_one_key(one_key: c_int);
+    fn nvim_set_ccline_special_char(c: c_int);
+    fn nvim_set_ccline_special_shift(shift: c_int);
+    fn nvim_set_ccline_hl_id(hl_id: c_int);
+    fn nvim_set_ccline_xp_context(context: c_int);
+    fn nvim_set_ccline_cmdprompt(prompt: *mut c_char);
+    fn nvim_set_ccline_cmdindent(indent: c_int);
+    fn nvim_set_ccline_cmdfirstc(firstc: c_int);
 
     // Buffer access
     fn nvim_get_ccline_cmdbuff() -> *mut c_char;
@@ -250,9 +267,9 @@ pub unsafe fn get_current_state() -> CmdlineState {
         overstrike: nvim_get_ccline_overstrike() != 0,
         prompt_id: nvim_get_ccline_prompt_id(),
         level: nvim_get_ccline_level(),
-        redraw_state: CmdRedraw::None, // Not accessible from C
+        redraw_state: CmdRedraw::from_raw(nvim_get_ccline_redraw_state()).unwrap_or_default(),
         input_fn: nvim_get_ccline_input_fn() != 0,
-        one_key: false, // Would need accessor
+        one_key: nvim_get_ccline_one_key() != 0,
     }
 }
 
@@ -268,6 +285,10 @@ pub unsafe fn set_current_state(state: &CmdlineState) {
         nvim_set_ccline_cmdlen(state.cmdlen as c_int);
         nvim_set_ccline_cmdspos(state.cmdspos as c_int);
         nvim_set_ccline_overstrike(c_int::from(state.overstrike));
+        nvim_set_ccline_redraw_state(state.redraw_state.to_raw());
+        nvim_set_ccline_one_key(c_int::from(state.one_key));
+        nvim_set_ccline_cmdindent(state.cmdindent as c_int);
+        nvim_set_ccline_cmdfirstc(c_int::from(state.cmdfirstc));
     }
 }
 
@@ -420,6 +441,166 @@ pub unsafe extern "C" fn rs_cmdline_get_cmdlen() -> c_int {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn rs_cmdline_set_cmdpos(pos: c_int) {
     nvim_set_ccline_cmdpos(pos);
+}
+
+/// Get the current redraw state.
+///
+/// # Safety
+///
+/// Calls external C function to access static variable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_cmdline_get_redraw_state() -> c_int {
+    nvim_get_ccline_redraw_state()
+}
+
+/// Set the redraw state.
+///
+/// # Safety
+///
+/// Calls external C function to modify static variable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_cmdline_set_redraw_state(state: c_int) {
+    nvim_set_ccline_redraw_state(state);
+}
+
+/// Get the one_key flag.
+///
+/// # Safety
+///
+/// Calls external C function to access static variable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_cmdline_get_one_key() -> c_int {
+    nvim_get_ccline_one_key()
+}
+
+/// Set the one_key flag.
+///
+/// # Safety
+///
+/// Calls external C function to modify static variable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_cmdline_set_one_key(one_key: c_int) {
+    nvim_set_ccline_one_key(one_key);
+}
+
+/// Get the highlight ID for the command line prompt.
+///
+/// # Safety
+///
+/// Calls external C function to access static variable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_cmdline_get_hl_id() -> c_int {
+    nvim_get_ccline_hl_id()
+}
+
+/// Set the highlight ID for the command line prompt.
+///
+/// # Safety
+///
+/// Calls external C function to modify static variable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_cmdline_set_hl_id(hl_id: c_int) {
+    nvim_set_ccline_hl_id(hl_id);
+}
+
+/// Get the expansion context type.
+///
+/// # Safety
+///
+/// Calls external C function to access static variable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_cmdline_get_xp_context() -> c_int {
+    nvim_get_ccline_xp_context()
+}
+
+/// Set the expansion context type.
+///
+/// # Safety
+///
+/// Calls external C function to modify static variable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_cmdline_set_xp_context(context: c_int) {
+    nvim_set_ccline_xp_context(context);
+}
+
+/// Get the special character for redraws.
+///
+/// # Safety
+///
+/// Calls external C function to access static variable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_cmdline_get_special_char() -> c_int {
+    nvim_get_ccline_special_char()
+}
+
+/// Set the special character for redraws.
+///
+/// # Safety
+///
+/// Calls external C function to modify static variable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_cmdline_set_special_char(c: c_int) {
+    nvim_set_ccline_special_char(c);
+}
+
+/// Get the special shift flag.
+///
+/// # Safety
+///
+/// Calls external C function to access static variable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_cmdline_get_special_shift() -> c_int {
+    nvim_get_ccline_special_shift()
+}
+
+/// Set the special shift flag.
+///
+/// # Safety
+///
+/// Calls external C function to modify static variable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_cmdline_set_special_shift(shift: c_int) {
+    nvim_set_ccline_special_shift(shift);
+}
+
+/// Get the command line indent.
+///
+/// # Safety
+///
+/// Calls external C function to access static variable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_cmdline_get_cmdindent() -> c_int {
+    nvim_get_ccline_cmdindent()
+}
+
+/// Set the command line indent.
+///
+/// # Safety
+///
+/// Calls external C function to modify static variable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_cmdline_set_cmdindent(indent: c_int) {
+    nvim_set_ccline_cmdindent(indent);
+}
+
+/// Get the first character of the command line.
+///
+/// # Safety
+///
+/// Calls external C function to access static variable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_cmdline_get_cmdfirstc() -> c_int {
+    nvim_get_ccline_cmdfirstc()
+}
+
+/// Set the first character of the command line.
+///
+/// # Safety
+///
+/// Calls external C function to modify static variable.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_cmdline_set_cmdfirstc(firstc: c_int) {
+    nvim_set_ccline_cmdfirstc(firstc);
 }
 
 // =============================================================================
