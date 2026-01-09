@@ -9,6 +9,7 @@
 
 pub mod add;
 pub mod match_list;
+pub mod pum;
 pub mod sort;
 
 use std::os::raw::{c_char, c_int, c_uint};

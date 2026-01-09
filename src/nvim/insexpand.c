@@ -2006,6 +2006,7 @@ void nvim_compl_clear_pattern(void) { API_CLEAR_STRING(compl_pattern); }
 void nvim_compl_clear_leader(void) { API_CLEAR_STRING(compl_leader); }
 void nvim_ins_compl_del_pum(void) { ins_compl_del_pum(); }
 void nvim_pum_clear(void) { pum_clear(); }
+int nvim_get_compl_match_array_exists(void) { return compl_match_array != NULL ? 1 : 0; }
 
 // Rust implementations
 extern int rs_ins_compl_interrupted(void);
