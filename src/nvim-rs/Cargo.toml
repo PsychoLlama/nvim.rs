@@ -48,6 +48,7 @@ nvim-getchar = { path = "getchar" }
 nvim-grid = { path = "grid" }
 nvim-help = { path = "help" }
 nvim-highlight = { path = "highlight" }
+nvim-highlight-group = { path = "highlight_group" }
 nvim-insexpand = { path = "insexpand" }
 nvim-indent = { path = "indent" }
 nvim-indent-c = { path = "indent_c" }

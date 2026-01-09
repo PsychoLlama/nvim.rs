@@ -1,0 +1,8 @@
+[package]
+name = "nvim-highlight-group"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+nvim-api = { path = "../api" }
+nvim-highlight = { path = "../highlight" }
