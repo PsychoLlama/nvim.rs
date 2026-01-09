@@ -1,50 +1,38 @@
-Plan: ~/.claude/plans/atomic-moseying-map.md
+Plan: ~/.claude/plans/abundant-scribbling-valiant.md
+
+All phases are complete. Let me provide a summary of the work done:
 
 ## Summary
 
-I've executed the Phase 34 plan for the Spell System Completion migration. Here's what I found and accomplished:
+I've completed the Phase 35 execution for the statusline and drawline module enhancement. Here's what was accomplished:
 
-### Analysis Results
+### Changes Made
 
-The plan described creating spell file and suggestion modules in Rust. Upon investigation, I discovered that **significant work had already been completed**:
+1. **Verified existing infrastructure** - The fillchar_status function was already properly migrated to Rust (`rs_fillchar_status` in statusline crate).
 
-1. **`spellfile.rs`** (3,279 lines, 39 FFI exports): Complete spell file format parsing and writing infrastructure
-2. **`suggest.rs`** (2,061 lines, 24 FFI exports): Edit distance scoring, suggestion generation primitives  
-3. **`wordtree.rs`** (907 lines): Word tree traversal algorithms
-4. **`check.rs`** (803 lines, 10 FFI exports): Spell checking core functions
-5. **`lib.rs`** (3,752 lines, 80 FFI exports): Integration layer and additional utilities
+2. **Added printable character conversion functions** (`src/nvim-rs/statusline/src/lib.rs`):
+   - `make_printable_impl()` - Internal function to convert a single byte to printable form
+   - `rs_stl_make_printable()` - FFI export for single byte conversion
+   - `transstr_impl()` - Internal function similar to C's `transstr_buf`
+   - `rs_stl_transstr()` - FFI export for string-to-printable conversion
 
-**Total: 10,802 lines of Rust code with 143+ FFI exports** in the spell crate.
+3. **Added tabline helper functions**:
+   - `rs_stl_is_tab_separator()` - Check if character ends a tab display
+   - `rs_stl_wincount_width()` - Calculate display width of window count
+   - `rs_stl_format_wincount()` - Format window count with modified indicator for tabline
 
-### Migration Completed
+4. **Added comprehensive unit tests** for all new functions.
 
-I replaced the C `soundalike_score` function (205 lines) with a thin wrapper calling the existing Rust `rs_soundalike_score` implementation:
-
-```c
-// Before: 205 lines of complex C code
-static int soundalike_score(char *goodstart, char *badstart) {
-  // ... complex scoring algorithm ...
-}
-
-// After: 3 lines calling Rust
-static int soundalike_score(char *goodstart, char *badstart) {
-  return rs_soundalike_score(goodstart, badstart);
-}
-```
-
-### Current Integration State
-
-The C spell files now call 14 unique Rust functions:
-- `rs_byte_in_str`, `rs_bytes2offset`, `rs_clear_spell_chartab`
-- `rs_find_region`, `rs_offset2bytes`, `rs_sal_to_bool`
-- `rs_soundalike_score`, `rs_spell_edit_score`, `rs_spell_edit_score_limit`
-- `rs_spell_mb_isword_class`, `rs_spell_valid_case`
-- `rs_valid_spellfile`, `rs_valid_spelllang`
+5. **Updated documentation** (`ref/crates.md`) to reflect the statusline crate's full scope.
 
 ### Verification
+- All 2583 Rust tests pass
+- Rust formatting check passes
+- Clippy linting passes
+- Full build with linking succeeds
 
-All checks pass:
-- ✅ `just build` - compiles successfully
-- ✅ `just rust-test` - 2573 tests pass
-- ✅ `just rust-clippy` - no warnings
-- ✅ `just rust-fmt-check` - formatting correct
+### Commits
+1. `feat(statusline): add printable char conversion and tabline helpers` - Main feature commit
+2. `docs: update crates.md statusline description` - Documentation update
+
+The statusline crate now has a more comprehensive set of helpers that can be used to incrementally migrate `draw_statuscol` and `draw_tabline` from C to Rust. The new `rs_stl_transstr` function provides a Rust equivalent to `transstr_buf` which is needed for status column rendering.
