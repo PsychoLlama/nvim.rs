@@ -15,6 +15,7 @@ pub mod bt_parse;
 pub mod bt_state;
 pub mod char_class;
 pub mod decompose;
+pub mod errors;
 pub mod exec_state;
 pub mod line_fetch;
 pub mod multiline;
@@ -54,6 +55,10 @@ pub use bt_state::{
 };
 pub use char_class::rs_get_char_class;
 pub use decompose::rs_mb_decompose;
+pub use errors::{
+    rs_evaluate_complexity, rs_regex_check_abort, rs_regex_error_message, rs_regex_report_error,
+    rs_regex_should_abort,
+};
 pub use exec_state::{
     rs_exec_state_advance, rs_exec_state_at_bol, rs_exec_state_at_eol, rs_exec_state_current_byte,
     rs_exec_state_free, rs_exec_state_init_multi, rs_exec_state_init_single,
