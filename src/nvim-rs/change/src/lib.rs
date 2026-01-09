@@ -22,8 +22,10 @@
 use std::ffi::{c_char, c_int, c_long, c_void};
 
 pub mod flags;
+pub mod recording;
 
 pub use flags::OpenlineFlags;
+pub use recording::{rs_change_warning, rs_changed, rs_changed_internal};
 
 // =============================================================================
 // Opaque Handle Types
