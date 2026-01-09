@@ -85,7 +85,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | spell          | Spell checking (word tree traversal, edit distance, suggestion scoring, .spl file I/O) |
 | statusline     | Status line rendering                   |
 | strings        | String manipulation                     |
-| syntax         | Syntax pattern matching and state machine |
+| syntax         | Syntax highlighting (patterns, state, clusters, groups, buffer attachment, Ex commands) |
 | tag            | Tag stack and navigation                |
 | terminal       | Terminal emulator state and utilities   |
 | vterm          | VTerm terminal emulation core           |
