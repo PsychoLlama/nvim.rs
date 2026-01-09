@@ -4442,6 +4442,89 @@ pub unsafe extern "C" fn rs_get_syntax_id(
     group::get_syntax_id(wp, lnum, col, trans != 0, keep_state != 0)
 }
 
+// =============================================================================
+// Phase 32.3: Cluster operations exports
+// =============================================================================
+
+/// Lookup a cluster by name and return its ID.
+///
+/// # Safety
+/// The name pointer must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cluster_name_to_id(name: *const c_char) -> c_int {
+    cluster::cluster_name_to_id(name)
+}
+
+/// Check if the synblock has any containedin items.
+///
+/// # Safety
+/// The synblock handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_has_containedin(block: SynBlockHandle) -> c_int {
+    if cluster::synblock_has_containedin(block) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Get the pattern count for a synblock.
+///
+/// # Safety
+/// The synblock handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_pattern_count(block: SynBlockHandle) -> c_int {
+    cluster::synblock_pattern_count(block)
+}
+
+/// Get the inc_tag from a pattern.
+///
+/// # Safety
+/// The pattern handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synpat_inc_tag(pat: SynPatHandle) -> c_int {
+    cluster::synpat_inc_tag(pat)
+}
+
+/// Check if a cluster ID is the @Spell cluster.
+///
+/// # Safety
+/// The synblock handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_spell_cluster(block: SynBlockHandle, id: c_int) -> c_int {
+    if cluster::is_spell_cluster(block, id) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Check if a cluster ID is the @NoSpell cluster.
+///
+/// # Safety
+/// The synblock handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_nospell_cluster(block: SynBlockHandle, id: c_int) -> c_int {
+    if cluster::is_nospell_cluster(block, id) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Check if an ID is a special spell-related cluster.
+///
+/// # Safety
+/// The synblock handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_spell_related_cluster(block: SynBlockHandle, id: c_int) -> c_int {
+    if cluster::is_spell_related_cluster(block, id) {
+        1
+    } else {
+        0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

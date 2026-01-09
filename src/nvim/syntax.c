@@ -8022,3 +8022,46 @@ int nvim_synstate_next_list_eq(synstate_T *a, synstate_T *b)
 {
   return a->sst_next_list == b->sst_next_list;
 }
+
+// =============================================================================
+// Rust-callable wrappers for cluster operations (Phase 32.3)
+// =============================================================================
+
+/// Forward declaration for syn_scl_name2id
+static int syn_scl_name2id(char *name);
+
+/// Lookup a cluster by name and return its ID.
+/// Returns 0 if not found.
+int nvim_syn_cluster_name2id(const char *name)
+{
+  return syn_scl_name2id((char *)name);
+}
+
+/// Check if the synblock has containedin items.
+int nvim_synblock_has_containedin(synblock_T *block)
+{
+  return block->b_syn_containedin ? 1 : 0;
+}
+
+/// Get the pattern count for synblock.
+int nvim_synblock_pattern_count(synblock_T *block)
+{
+  return block->b_syn_patterns.ga_len;
+}
+
+/// Get the inc_tag from a pattern.
+int nvim_synpat_get_inc_tag(synpat_T *pat)
+{
+  return pat ? pat->sp_syn.inc_tag : 0;
+}
+
+/// Check if this is a spell/nospell cluster.
+int nvim_synblock_is_spell_cluster(synblock_T *block, int id)
+{
+  return id == block->b_spell_cluster_id;
+}
+
+int nvim_synblock_is_nospell_cluster(synblock_T *block, int id)
+{
+  return id == block->b_nospell_cluster_id;
+}

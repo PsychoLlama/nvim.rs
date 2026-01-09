@@ -38,6 +38,14 @@ extern "C" {
     fn nvim_id_list_get(list: IdListHandle, idx: c_int) -> i16;
     fn nvim_id_list_is_special(list: IdListHandle) -> c_int;
     fn nvim_id_list_count(list: IdListHandle) -> c_int;
+
+    // Phase 32.3: Cluster lookup and containedin
+    fn nvim_syn_cluster_name2id(name: *const c_char) -> c_int;
+    fn nvim_synblock_has_containedin(block: SynBlockHandle) -> c_int;
+    fn nvim_synblock_pattern_count(block: SynBlockHandle) -> c_int;
+    fn nvim_synpat_get_inc_tag(pat: crate::types::SynPatHandle) -> c_int;
+    fn nvim_synblock_is_spell_cluster(block: SynBlockHandle, id: c_int) -> c_int;
+    fn nvim_synblock_is_nospell_cluster(block: SynBlockHandle, id: c_int) -> c_int;
 }
 
 // =============================================================================
@@ -318,6 +326,85 @@ pub const ALLBUT_MARKER: i16 = SYNID_ALLBUT as i16;
 
 /// The SYNID_CLUSTER base value.
 pub const CLUSTER_BASE: i32 = SYNID_CLUSTER;
+
+// =============================================================================
+// Phase 32.3: Cluster lookup and containedin
+// =============================================================================
+
+/// Lookup a cluster by name and return its ID.
+/// Returns 0 if not found.
+///
+/// # Safety
+/// The name pointer must be a valid null-terminated C string.
+#[must_use]
+pub unsafe fn cluster_name_to_id(name: *const c_char) -> i32 {
+    if name.is_null() {
+        return 0;
+    }
+    nvim_syn_cluster_name2id(name)
+}
+
+/// Lookup a cluster by name (Rust string version).
+/// Returns 0 if not found.
+#[must_use]
+pub fn cluster_lookup(name: &str) -> i32 {
+    use std::ffi::CString;
+    let Ok(cname) = CString::new(name) else {
+        return 0;
+    };
+    unsafe { nvim_syn_cluster_name2id(cname.as_ptr()) }
+}
+
+/// Check if the synblock has any containedin items.
+#[must_use]
+pub fn synblock_has_containedin(block: SynBlockHandle) -> bool {
+    if block.is_null() {
+        return false;
+    }
+    unsafe { nvim_synblock_has_containedin(block) != 0 }
+}
+
+/// Get the pattern count for a synblock.
+#[must_use]
+pub fn synblock_pattern_count(block: SynBlockHandle) -> i32 {
+    if block.is_null() {
+        return 0;
+    }
+    unsafe { nvim_synblock_pattern_count(block) }
+}
+
+/// Get the inc_tag from a pattern.
+#[must_use]
+pub fn synpat_inc_tag(pat: crate::types::SynPatHandle) -> i32 {
+    if pat.is_null() {
+        return 0;
+    }
+    unsafe { nvim_synpat_get_inc_tag(pat) }
+}
+
+/// Check if a cluster ID is the @Spell cluster.
+#[must_use]
+pub fn is_spell_cluster(block: SynBlockHandle, id: i32) -> bool {
+    if block.is_null() {
+        return false;
+    }
+    unsafe { nvim_synblock_is_spell_cluster(block, id) != 0 }
+}
+
+/// Check if a cluster ID is the @NoSpell cluster.
+#[must_use]
+pub fn is_nospell_cluster(block: SynBlockHandle, id: i32) -> bool {
+    if block.is_null() {
+        return false;
+    }
+    unsafe { nvim_synblock_is_nospell_cluster(block, id) != 0 }
+}
+
+/// Check if an ID is a special spell-related cluster.
+#[must_use]
+pub fn is_spell_related_cluster(block: SynBlockHandle, id: i32) -> bool {
+    is_spell_cluster(block, id) || is_nospell_cluster(block, id)
+}
 
 #[cfg(test)]
 mod tests {
