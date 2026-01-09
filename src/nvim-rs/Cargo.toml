@@ -93,6 +93,7 @@ nvim-version = { path = "version" }
 nvim-viewport = { path = "viewport" }
 nvim-window = { path = "window" }
 nvim-terminal = { path = "terminal" }
+nvim-vterm = { path = "vterm" }
 nvim-unpacker = { path = "unpacker" }
 nvim-tui = { path = "tui" }
 nvim-typval = { path = "typval" }

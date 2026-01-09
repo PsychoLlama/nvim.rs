@@ -79,6 +79,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | syntax         | Syntax pattern matching and state machine |
 | tag            | Tag stack and navigation                |
 | terminal       | Terminal emulator state and utilities   |
+| vterm          | VTerm terminal emulation core           |
 | textformat     | Text formatting options                 |
 | textobject     | Text object selection and navigation    |
 | tui            | Terminal UI                             |
