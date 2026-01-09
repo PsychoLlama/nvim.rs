@@ -2457,4 +2457,181 @@ int nvim_terminal_get_cursor_blink(Terminal *term)
   return term ? term->cursor.blink : 0;
 }
 
+/// Get the VTerm handle from a Terminal (accessor for Rust).
+VTerm *nvim_terminal_get_vterm(Terminal *term)
+{
+  return term ? term->vt : NULL;
+}
+
+/// Get the VTermScreen handle from a Terminal (accessor for Rust).
+VTermScreen *nvim_terminal_get_vterm_screen(Terminal *term)
+{
+  return term ? term->vts : NULL;
+}
+
+/// Get the scrollback current count from a Terminal (accessor for Rust).
+size_t nvim_terminal_get_sb_current(Terminal *term)
+{
+  return term ? term->sb_current : 0;
+}
+
+/// Get the scrollback size (capacity) from a Terminal (accessor for Rust).
+size_t nvim_terminal_get_sb_size(Terminal *term)
+{
+  return term ? term->sb_size : 0;
+}
+
+/// Get the scrollback pending count from a Terminal (accessor for Rust).
+int nvim_terminal_get_sb_pending(Terminal *term)
+{
+  return term ? term->sb_pending : 0;
+}
+
+/// Get the scrollback deleted count from a Terminal (accessor for Rust).
+size_t nvim_terminal_get_sb_deleted(Terminal *term)
+{
+  return term ? term->sb_deleted : 0;
+}
+
+/// Get the invalid_start field from a Terminal (accessor for Rust).
+int nvim_terminal_get_invalid_start(Terminal *term)
+{
+  return term ? term->invalid_start : 0;
+}
+
+/// Get the invalid_end field from a Terminal (accessor for Rust).
+int nvim_terminal_get_invalid_end(Terminal *term)
+{
+  return term ? term->invalid_end : 0;
+}
+
+/// Get the pending.resize flag from a Terminal (accessor for Rust).
+int nvim_terminal_get_pending_resize(Terminal *term)
+{
+  return term ? term->pending.resize : 0;
+}
+
+/// Get the pending.cursor flag from a Terminal (accessor for Rust).
+int nvim_terminal_get_pending_cursor(Terminal *term)
+{
+  return term ? term->pending.cursor : 0;
+}
+
+/// Get the destroy flag from a Terminal (accessor for Rust).
+int nvim_terminal_get_destroy(Terminal *term)
+{
+  return term ? term->destroy : 0;
+}
+
+/// Get the refcount from a Terminal (accessor for Rust).
+size_t nvim_terminal_get_refcount(Terminal *term)
+{
+  return term ? term->refcount : 0;
+}
+
+/// Set the closed flag on a Terminal (mutator for Rust).
+void nvim_terminal_set_closed(Terminal *term, int closed)
+{
+  if (term) {
+    term->closed = closed != 0;
+  }
+}
+
+/// Set the forward_mouse flag on a Terminal (mutator for Rust).
+void nvim_terminal_set_forward_mouse(Terminal *term, int forward)
+{
+  if (term) {
+    term->forward_mouse = forward != 0;
+  }
+}
+
+/// Set the cursor row on a Terminal (mutator for Rust).
+void nvim_terminal_set_cursor_row(Terminal *term, int row)
+{
+  if (term) {
+    term->cursor.row = row;
+  }
+}
+
+/// Set the cursor col on a Terminal (mutator for Rust).
+void nvim_terminal_set_cursor_col(Terminal *term, int col)
+{
+  if (term) {
+    term->cursor.col = col;
+  }
+}
+
+/// Set the cursor visible flag on a Terminal (mutator for Rust).
+void nvim_terminal_set_cursor_visible(Terminal *term, int visible)
+{
+  if (term) {
+    term->cursor.visible = visible != 0;
+  }
+}
+
+/// Set the cursor shape on a Terminal (mutator for Rust).
+void nvim_terminal_set_cursor_shape(Terminal *term, int shape)
+{
+  if (term) {
+    term->cursor.shape = shape;
+  }
+}
+
+/// Set the cursor blink flag on a Terminal (mutator for Rust).
+void nvim_terminal_set_cursor_blink(Terminal *term, int blink)
+{
+  if (term) {
+    term->cursor.blink = blink != 0;
+  }
+}
+
+/// Set the invalid region on a Terminal (mutator for Rust).
+void nvim_terminal_set_invalid_region(Terminal *term, int start, int end)
+{
+  if (term) {
+    term->invalid_start = start;
+    term->invalid_end = end;
+  }
+}
+
+/// Set the pending.resize flag on a Terminal (mutator for Rust).
+void nvim_terminal_set_pending_resize(Terminal *term, int resize)
+{
+  if (term) {
+    term->pending.resize = resize != 0;
+  }
+}
+
+/// Set the pending.cursor flag on a Terminal (mutator for Rust).
+void nvim_terminal_set_pending_cursor(Terminal *term, int cursor)
+{
+  if (term) {
+    term->pending.cursor = cursor != 0;
+  }
+}
+
+/// Set the sb_pending count on a Terminal (mutator for Rust).
+void nvim_terminal_set_sb_pending(Terminal *term, int pending)
+{
+  if (term) {
+    term->sb_pending = pending;
+  }
+}
+
+/// Increment the refcount on a Terminal (mutator for Rust).
+void nvim_terminal_inc_refcount(Terminal *term)
+{
+  if (term) {
+    term->refcount++;
+  }
+}
+
+/// Decrement the refcount on a Terminal (mutator for Rust).
+void nvim_terminal_dec_refcount(Terminal *term)
+{
+  if (term && term->refcount > 0) {
+    term->refcount--;
+  }
+}
+
 // vim: foldmethod=marker

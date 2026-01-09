@@ -122,6 +122,81 @@ extern "C" {
 
     /// Get the cursor blink flag from a Terminal.
     fn nvim_terminal_get_cursor_blink(term: TerminalHandle) -> c_int;
+
+    /// Get the `VTerm` handle from a Terminal.
+    fn nvim_terminal_get_vterm(term: TerminalHandle) -> *mut c_void;
+
+    /// Get the `VTermScreen` handle from a Terminal.
+    fn nvim_terminal_get_vterm_screen(term: TerminalHandle) -> *mut c_void;
+
+    /// Get the scrollback current count from a Terminal.
+    fn nvim_terminal_get_sb_current(term: TerminalHandle) -> usize;
+
+    /// Get the scrollback size (capacity) from a Terminal.
+    fn nvim_terminal_get_sb_size(term: TerminalHandle) -> usize;
+
+    /// Get the scrollback pending count from a Terminal.
+    fn nvim_terminal_get_sb_pending(term: TerminalHandle) -> c_int;
+
+    /// Get the scrollback deleted count from a Terminal.
+    fn nvim_terminal_get_sb_deleted(term: TerminalHandle) -> usize;
+
+    /// Get the `invalid_start` field from a Terminal.
+    fn nvim_terminal_get_invalid_start(term: TerminalHandle) -> c_int;
+
+    /// Get the `invalid_end` field from a Terminal.
+    fn nvim_terminal_get_invalid_end(term: TerminalHandle) -> c_int;
+
+    /// Get the pending.resize flag from a Terminal.
+    fn nvim_terminal_get_pending_resize(term: TerminalHandle) -> c_int;
+
+    /// Get the pending.cursor flag from a Terminal.
+    fn nvim_terminal_get_pending_cursor(term: TerminalHandle) -> c_int;
+
+    /// Get the destroy flag from a Terminal.
+    fn nvim_terminal_get_destroy(term: TerminalHandle) -> c_int;
+
+    /// Get the refcount from a Terminal.
+    fn nvim_terminal_get_refcount(term: TerminalHandle) -> usize;
+
+    /// Set the closed flag on a Terminal.
+    fn nvim_terminal_set_closed(term: TerminalHandle, closed: c_int);
+
+    /// Set the `forward_mouse` flag on a Terminal.
+    fn nvim_terminal_set_forward_mouse(term: TerminalHandle, forward: c_int);
+
+    /// Set the cursor row on a Terminal.
+    fn nvim_terminal_set_cursor_row(term: TerminalHandle, row: c_int);
+
+    /// Set the cursor col on a Terminal.
+    fn nvim_terminal_set_cursor_col(term: TerminalHandle, col: c_int);
+
+    /// Set the cursor visible flag on a Terminal.
+    fn nvim_terminal_set_cursor_visible(term: TerminalHandle, visible: c_int);
+
+    /// Set the cursor shape on a Terminal.
+    fn nvim_terminal_set_cursor_shape(term: TerminalHandle, shape: c_int);
+
+    /// Set the cursor blink flag on a Terminal.
+    fn nvim_terminal_set_cursor_blink(term: TerminalHandle, blink: c_int);
+
+    /// Set the invalid region on a Terminal.
+    fn nvim_terminal_set_invalid_region(term: TerminalHandle, start: c_int, end: c_int);
+
+    /// Set the pending.resize flag on a Terminal.
+    fn nvim_terminal_set_pending_resize(term: TerminalHandle, resize: c_int);
+
+    /// Set the pending.cursor flag on a Terminal.
+    fn nvim_terminal_set_pending_cursor(term: TerminalHandle, cursor: c_int);
+
+    /// Set the `sb_pending` count on a Terminal.
+    fn nvim_terminal_set_sb_pending(term: TerminalHandle, pending: c_int);
+
+    /// Increment the refcount on a Terminal.
+    fn nvim_terminal_inc_refcount(term: TerminalHandle);
+
+    /// Decrement the refcount on a Terminal.
+    fn nvim_terminal_dec_refcount(term: TerminalHandle);
 }
 
 // =============================================================================
@@ -279,6 +354,242 @@ fn terminal_theme_updates_impl(term: TerminalHandle) -> bool {
 #[no_mangle]
 pub extern "C" fn rs_terminal_theme_updates(term: TerminalHandle) -> c_int {
     c_int::from(terminal_theme_updates_impl(term))
+}
+
+// =============================================================================
+// VTerm Handle Accessors
+// =============================================================================
+
+/// Get the `VTerm` handle from a Terminal.
+#[no_mangle]
+pub extern "C" fn rs_terminal_get_vterm(term: TerminalHandle) -> *mut c_void {
+    if term.is_null() {
+        return std::ptr::null_mut();
+    }
+    unsafe { nvim_terminal_get_vterm(term) }
+}
+
+/// Get the `VTermScreen` handle from a Terminal.
+#[no_mangle]
+pub extern "C" fn rs_terminal_get_vterm_screen(term: TerminalHandle) -> *mut c_void {
+    if term.is_null() {
+        return std::ptr::null_mut();
+    }
+    unsafe { nvim_terminal_get_vterm_screen(term) }
+}
+
+// =============================================================================
+// Scrollback Accessors
+// =============================================================================
+
+/// Get the scrollback current count.
+#[no_mangle]
+pub extern "C" fn rs_terminal_get_sb_current(term: TerminalHandle) -> usize {
+    if term.is_null() {
+        return 0;
+    }
+    unsafe { nvim_terminal_get_sb_current(term) }
+}
+
+/// Get the scrollback size (capacity).
+#[no_mangle]
+pub extern "C" fn rs_terminal_get_sb_size(term: TerminalHandle) -> usize {
+    if term.is_null() {
+        return 0;
+    }
+    unsafe { nvim_terminal_get_sb_size(term) }
+}
+
+/// Get the scrollback pending count.
+#[no_mangle]
+pub extern "C" fn rs_terminal_get_sb_pending(term: TerminalHandle) -> c_int {
+    if term.is_null() {
+        return 0;
+    }
+    unsafe { nvim_terminal_get_sb_pending(term) }
+}
+
+/// Get the scrollback deleted count.
+#[no_mangle]
+pub extern "C" fn rs_terminal_get_sb_deleted(term: TerminalHandle) -> usize {
+    if term.is_null() {
+        return 0;
+    }
+    unsafe { nvim_terminal_get_sb_deleted(term) }
+}
+
+// =============================================================================
+// Invalid Region Accessors
+// =============================================================================
+
+/// Get the invalid start row.
+#[no_mangle]
+pub extern "C" fn rs_terminal_get_invalid_start(term: TerminalHandle) -> c_int {
+    if term.is_null() {
+        return 0;
+    }
+    unsafe { nvim_terminal_get_invalid_start(term) }
+}
+
+/// Get the invalid end row.
+#[no_mangle]
+pub extern "C" fn rs_terminal_get_invalid_end(term: TerminalHandle) -> c_int {
+    if term.is_null() {
+        return 0;
+    }
+    unsafe { nvim_terminal_get_invalid_end(term) }
+}
+
+// =============================================================================
+// Pending State Accessors
+// =============================================================================
+
+/// Check if terminal has pending resize.
+#[no_mangle]
+pub extern "C" fn rs_terminal_get_pending_resize(term: TerminalHandle) -> c_int {
+    if term.is_null() {
+        return 0;
+    }
+    unsafe { nvim_terminal_get_pending_resize(term) }
+}
+
+/// Check if terminal has pending cursor update.
+#[no_mangle]
+pub extern "C" fn rs_terminal_get_pending_cursor(term: TerminalHandle) -> c_int {
+    if term.is_null() {
+        return 0;
+    }
+    unsafe { nvim_terminal_get_pending_cursor(term) }
+}
+
+// =============================================================================
+// Lifecycle State Accessors
+// =============================================================================
+
+/// Check if terminal is marked for destruction.
+#[no_mangle]
+pub extern "C" fn rs_terminal_get_destroy(term: TerminalHandle) -> c_int {
+    if term.is_null() {
+        return 0;
+    }
+    unsafe { nvim_terminal_get_destroy(term) }
+}
+
+/// Get the terminal refcount.
+#[no_mangle]
+pub extern "C" fn rs_terminal_get_refcount(term: TerminalHandle) -> usize {
+    if term.is_null() {
+        return 0;
+    }
+    unsafe { nvim_terminal_get_refcount(term) }
+}
+
+// =============================================================================
+// Terminal Mutators
+// =============================================================================
+
+/// Set the terminal closed flag.
+#[no_mangle]
+pub extern "C" fn rs_terminal_set_closed(term: TerminalHandle, closed: c_int) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_set_closed(term, closed) }
+    }
+}
+
+/// Set the terminal `forward_mouse` flag.
+#[no_mangle]
+pub extern "C" fn rs_terminal_set_forward_mouse(term: TerminalHandle, forward: c_int) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_set_forward_mouse(term, forward) }
+    }
+}
+
+/// Set the cursor row.
+#[no_mangle]
+pub extern "C" fn rs_terminal_set_cursor_row(term: TerminalHandle, row: c_int) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_set_cursor_row(term, row) }
+    }
+}
+
+/// Set the cursor column.
+#[no_mangle]
+pub extern "C" fn rs_terminal_set_cursor_col(term: TerminalHandle, col: c_int) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_set_cursor_col(term, col) }
+    }
+}
+
+/// Set the cursor visible flag.
+#[no_mangle]
+pub extern "C" fn rs_terminal_set_cursor_visible(term: TerminalHandle, visible: c_int) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_set_cursor_visible(term, visible) }
+    }
+}
+
+/// Set the cursor shape.
+#[no_mangle]
+pub extern "C" fn rs_terminal_set_cursor_shape(term: TerminalHandle, shape: c_int) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_set_cursor_shape(term, shape) }
+    }
+}
+
+/// Set the cursor blink flag.
+#[no_mangle]
+pub extern "C" fn rs_terminal_set_cursor_blink(term: TerminalHandle, blink: c_int) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_set_cursor_blink(term, blink) }
+    }
+}
+
+/// Set the invalid region.
+#[no_mangle]
+pub extern "C" fn rs_terminal_set_invalid_region(term: TerminalHandle, start: c_int, end: c_int) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_set_invalid_region(term, start, end) }
+    }
+}
+
+/// Set the pending resize flag.
+#[no_mangle]
+pub extern "C" fn rs_terminal_set_pending_resize(term: TerminalHandle, resize: c_int) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_set_pending_resize(term, resize) }
+    }
+}
+
+/// Set the pending cursor flag.
+#[no_mangle]
+pub extern "C" fn rs_terminal_set_pending_cursor(term: TerminalHandle, cursor: c_int) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_set_pending_cursor(term, cursor) }
+    }
+}
+
+/// Set the scrollback pending count.
+#[no_mangle]
+pub extern "C" fn rs_terminal_set_sb_pending(term: TerminalHandle, pending: c_int) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_set_sb_pending(term, pending) }
+    }
+}
+
+/// Increment the terminal refcount.
+#[no_mangle]
+pub extern "C" fn rs_terminal_inc_refcount(term: TerminalHandle) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_inc_refcount(term) }
+    }
+}
+
+/// Decrement the terminal refcount.
+#[no_mangle]
+pub extern "C" fn rs_terminal_dec_refcount(term: TerminalHandle) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_dec_refcount(term) }
+    }
 }
 
 // =============================================================================
