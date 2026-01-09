@@ -33,14 +33,24 @@ extern "C" {
     /// Skip over decimal digits
     fn skipdigits(p: *const c_char) -> *mut c_char;
 
-    /// Check if character is ASCII alpha
-    fn ascii_isalpha(c: c_int) -> bool;
-
-    /// Check if character is ASCII digit
-    fn ascii_isdigit(c: c_int) -> bool;
-
     /// Get length of UTF-8 character
     fn utfc_ptr2len(p: *const c_char) -> c_int;
+}
+
+// =============================================================================
+// Inline ASCII character classification (avoids linking to C macros)
+// =============================================================================
+
+/// Check if character is ASCII alpha
+#[inline]
+const fn ascii_isalpha(c: u8) -> bool {
+    c.is_ascii_alphabetic()
+}
+
+/// Check if character is ASCII digit
+#[inline]
+const fn ascii_isdigit(c: u8) -> bool {
+    c.is_ascii_digit()
 }
 
 // =============================================================================
@@ -190,7 +200,7 @@ pub unsafe extern "C" fn rs_find_extra(pp: *mut *mut c_char) -> c_int {
 
     // Repeat for addresses separated with ';'
     loop {
-        if ascii_isdigit(*str as c_int) {
+        if ascii_isdigit(*str as u8) {
             str = skipdigits(str.add(1));
         } else if *str == b'/' as c_char || *str == b'?' as c_char {
             str = skip_regexp(str.add(1), *str as c_int, false);
@@ -210,7 +220,7 @@ pub unsafe extern "C" fn rs_find_extra(pp: *mut *mut c_char) -> c_int {
 
         if str.is_null()
             || *str != b';' as c_char
-            || !(ascii_isdigit(*str.add(1) as c_int)
+            || !(ascii_isdigit(*str.add(1) as u8)
                 || *str.add(1) == b'/' as c_char
                 || *str.add(1) == b'?' as c_char)
         {
@@ -318,7 +328,7 @@ pub unsafe extern "C" fn rs_parse_match(lbuf: *mut c_char, tagp: *mut TagPtrs) -
         if *p == TAB as c_char {
             p = p.add(1);
             // Parse extended fields
-            while ascii_isalpha(*p as c_int) || utfc_ptr2len(p) > 1 {
+            while ascii_isalpha(*p as u8) || utfc_ptr2len(p) > 1 {
                 if starts_with(p, c"kind:".as_ptr().cast()) {
                     tagp.tagkind = p.add(5);
                 } else if starts_with(p, c"user_data:".as_ptr().cast()) {

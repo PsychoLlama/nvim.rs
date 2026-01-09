@@ -15,7 +15,7 @@ rename_variants = "ScreamingSnakeCase"
 
 [parse]
 parse_deps = true
-include = ["nvim-buffer", "nvim-charset", "nvim-cmdline", "nvim-cmdhist", "nvim-cursor", "nvim-diff", "nvim-encoding", "nvim-eval", "nvim-ex-docmd", "nvim-fileio", "nvim-help", "nvim-indent", "nvim-insexpand", "nvim-keycodes", "nvim-lua", "nvim-mapping", "nvim-marktree", "nvim-math", "nvim-mbyte", "nvim-memutil", "nvim-menu", "nvim-mouse", "nvim-option", "nvim-os", "nvim-path", "nvim-profile", "nvim-regexp", "nvim-search", "nvim-spell", "nvim-strings", "nvim-version", "nvim-viewport", "nvim-window"]
+include = ["nvim-buffer", "nvim-charset", "nvim-cmdline", "nvim-cmdhist", "nvim-cursor", "nvim-diff", "nvim-encoding", "nvim-eval", "nvim-ex-docmd", "nvim-fileio", "nvim-help", "nvim-indent", "nvim-insexpand", "nvim-keycodes", "nvim-lua", "nvim-mapping", "nvim-marktree", "nvim-math", "nvim-mbyte", "nvim-memutil", "nvim-menu", "nvim-mouse", "nvim-option", "nvim-os", "nvim-path", "nvim-profile", "nvim-regexp", "nvim-search", "nvim-spell", "nvim-strings", "nvim-tag", "nvim-version", "nvim-viewport", "nvim-window"]
 
 [export]
 include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs_getchr", "rs_ungetchr", "rs_read_limits", "rs_mb_decompose", "rs_use_multibytecode", "rs_nfa_re_num_cmp", "rs_re_put_uint32", "rs_re_get_uint32", "rs_re_put_uint16", "rs_re_get_uint16", "rs_re_num_cmp", "rs_get_char_class", "rs_nfa_recognize_char_class",
@@ -337,4 +337,71 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_nlua_get_nil_ref", "rs_nlua_get_empty_dict_ref",
            "rs_nlua_ref_is_function", "rs_nlua_call_ref", "rs_nlua_call_ref_ctx",
            "rs_typval_exec_lua_callable", "rs_nlua_is_deferred_safe", "rs_nlua_get_global_ref_count",
-           "LuaType", "NluaRefState", "KeySetLink"]
+           "LuaType", "NluaRefState", "KeySetLink",
+           # Tag navigation system (Phase 21)
+           "TagPtrs", "TagPattern", "RegMatch", "TagSearchState", "TagsReadStatus",
+           "TagMatchStatus", "TagSearchInfo", "FindTagsMatchArgs", "FindTagsStateCore",
+           "MatchStorage", "PreviewTagState", "JumpTarget",
+           # Tag lib.rs exports
+           "rs_tag_stack_empty", "rs_tag_stack_len", "rs_tag_stack_idx",
+           "rs_tag_at_bottom", "rs_tag_at_top",
+           "rs_taggy_get_cur_match", "rs_taggy_get_cur_fnum", "rs_taggy_has_name",
+           "rs_tag_match_type_name", "rs_tag_is_static_match", "rs_tag_is_current_file",
+           "rs_tag_is_icase_match", "rs_tag_is_regexp_match", "rs_tag_match_priority",
+           "rs_tag_cmp_match_type", "rs_tag_best_match_type",
+           "rs_tag_can_pop", "rs_tag_can_push",
+           "rs_tag_next_match_idx", "rs_tag_prev_match_idx",
+           "rs_tag_first_match_idx", "rs_tag_last_match_idx", "rs_tag_clamp_idx",
+           "rs_tag_stack_pos_valid", "rs_taggy_cmp_name", "rs_taggy_cmp_fnum",
+           "rs_taggy_same_tag", "rs_taggy_in_buffer",
+           "rs_tag_fmark_valid", "rs_tag_fmark_lnum", "rs_tag_fmark_col", "rs_tag_fmark_fnum",
+           "rs_tag_search_is_linear", "rs_tag_search_is_binary", "rs_tag_search_done",
+           "rs_tag_search_match_count", "rs_tag_search_help_only", "rs_tag_search_has_matches",
+           "rs_tag_file_sorted", "rs_tag_search_state_name",
+           "rs_tag_cmd_is_navigation", "rs_tag_cmd_is_match_nav", "rs_tag_cmd_uses_pattern",
+           "rs_tag_cmd_needs_tag", "rs_tag_cmd_name", "rs_tag_cmd_valid",
+           "rs_tag_cmd_direction", "rs_tag_type_to_cmd",
+           # Tag parse.rs exports
+           "rs_parse_tag_line", "rs_find_extra", "rs_parse_match", "rs_test_for_static",
+           "rs_matching_line_len", "rs_tagptrs_get_tagname", "rs_tagptrs_tagname_len",
+           "rs_tagptrs_get_fname", "rs_tagptrs_fname_len",
+           # Tag pattern.rs exports
+           "rs_prepare_pats", "rs_free_pats", "rs_tag_pattern_matches", "rs_tag_head_matches",
+           "rs_tag_pattern_new", "rs_tag_pattern_free", "rs_tag_pattern_init",
+           "rs_tag_pattern_get_pat", "rs_tag_pattern_get_len",
+           "rs_tag_pattern_get_head", "rs_tag_pattern_get_headlen",
+           "rs_tag_pattern_has_regexp", "rs_tag_pattern_set_ic", "rs_tag_pattern_get_ic",
+           "rs_is_pattern_meta", "rs_pattern_head_len",
+           # Tag search.rs exports
+           "rs_search_state_new", "rs_search_state_free",
+           # Tag matches.rs exports
+           "rs_get_match_type", "rs_match_display_priority", "rs_compare_match_types",
+           "rs_match_storage_new", "rs_match_storage_free", "rs_match_storage_init",
+           "rs_match_storage_add", "rs_match_storage_count", "rs_match_storage_has_matches",
+           "rs_match_storage_best_type", "rs_make_match_key", "rs_match_exists",
+           "rs_format_match_info", "rs_compare_matches",
+           "rs_match_bucket_for_index", "rs_match_offset_in_bucket",
+           # Tag stack.rs exports
+           "rs_tagstack_clear_entry", "rs_tagstack_copy_entry", "rs_tagstack_zero_entry",
+           "rs_tagstack_clear", "rs_tagstack_shift", "rs_tagstack_push", "rs_tagstack_pop",
+           "rs_tagstack_len", "rs_tagstack_idx", "rs_tagstack_set_idx",
+           "rs_tagstack_get_entry", "rs_tagstack_current_entry", "rs_tagstack_truncate",
+           "rs_tagstack_can_pop", "rs_tagstack_can_push_nav", "rs_tagstack_empty", "rs_tagstack_full",
+           "rs_tagstack_go_older", "rs_tagstack_go_newer",
+           "rs_tagstack_entry_tagname", "rs_tagstack_entry_match", "rs_tagstack_entry_fnum",
+           "rs_tagstack_entry_user_data", "rs_tagstack_entry_mark_lnum",
+           "rs_tagstack_entry_mark_col", "rs_tagstack_entry_mark_fnum", "rs_tagstack_entry_has_name",
+           # Tag commands.rs exports
+           "rs_tag_cmd_needs_search", "rs_tag_cmd_uses_matches", "rs_tag_cmd_shows_select",
+           "rs_tag_cmd_is_help", "rs_tag_cmd_is_ltag", "rs_tag_cmd_pushes_stack",
+           "rs_tag_arg_valid", "rs_tag_arg_len", "rs_tag_arg_matches",
+           "rs_tag_validate_pop", "rs_tag_calc_pop_idx",
+           "rs_tag_validate_newer", "rs_tag_calc_newer_idx",
+           "rs_tag_calc_match_idx", "rs_tag_match_would_wrap",
+           "rs_tag_at_first_match", "rs_tag_at_last_match",
+           "rs_tag_calc_push_len", "rs_tag_needs_shift", "rs_tag_calc_push_idx",
+           "rs_preview_state_new", "rs_preview_state_free", "rs_preview_state_reset",
+           "rs_preview_state_set", "rs_preview_state_active",
+           "rs_preview_state_match", "rs_preview_state_fnum",
+           "rs_jump_target_new", "rs_jump_target_free", "rs_jump_target_set",
+           "rs_jump_target_valid", "rs_jump_target_needs_file_change"]
