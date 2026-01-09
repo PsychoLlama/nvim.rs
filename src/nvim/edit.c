@@ -187,6 +187,19 @@ extern int rs_is_whitespace(int c);
 extern int rs_is_newline(int c);
 extern colnr_T rs_insert_cursor_col(void);
 extern linenr_T rs_insert_cursor_lnum(void);
+// Keys module exports (edit_ prefix to avoid cmdline conflicts)
+extern int rs_edit_is_arrow_key(int key);
+extern int rs_edit_is_navigation_key(int key);
+extern int rs_edit_is_delete_key(int key);
+extern int rs_edit_is_backspace_key(int key);
+extern int rs_edit_is_enter_key(int key);
+extern int rs_edit_is_tab_key(int key);
+extern int rs_edit_is_ctrl_key(int key);
+extern int rs_edit_is_escape_key(int key);
+extern int rs_edit_is_printable_ascii(int key);
+extern int rs_edit_is_special_key(int key);
+extern int rs_edit_get_nav_direction(int key);
+extern int rs_edit_classify_key(int key);
 
 /// Get the ins_need_undo static variable (accessor for Rust).
 int nvim_get_ins_need_undo(void)
