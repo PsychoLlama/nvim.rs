@@ -1,23 +1,67 @@
-Plan: ~/.claude/plans/effervescent-plotting-grove.md
+Plan: ~/.claude/plans/joyful-painting-wozniak.md
 
-The plan has been fully executed. Here's a summary of what was completed:
+All phases are complete. Let me provide a final summary:
 
 ## Plan Execution Complete
 
-### Signs Crate (Extended)
-- **Phase 1**: Extended `nvim-sign` with core types, opaque handles (`DecorSignHighlightHandle`, `MarkTreeIterHandle`, `MTKeyHandle`, `SignBufHandle`), namespace constants, and C accessor declarations
-- **Phases 2-3**: Added `define.rs` (sign definition management) and `place.rs` (sign placement operations)
-- **Phases 4-5**: Added `remove.rs` (sign removal) and `query.rs` (sign querying/listing)
-- **Phase 6**: Added `commands.rs` (Ex command handlers)
+All 9 phases of the File I/O Rust migration plan have been completed successfully.
 
-### Runtime Crate (Created New)
-- **Phase 1**: Created new `nvim-runtime` crate with core types (`EstackHandle`, `ScriptItemHandle`, `SourceCookieHandle`), execution stack entry types (`EtypeT`), and DIP/DOSO flags
-- **Phases 2-3**: Added `search.rs` (runtime path searching) and `path.rs` (path manipulation)
-- **Phases 4-5**: Added `source.rs` (script sourcing operations) and `package.rs` (plugin management)
-- **Phases 6-8**: Added `commands.rs` (Ex command handlers), `script.rs` (script item management), and `defaults.rs` (default file loading)
+### Summary of Work Done
 
-### Commits
-1. `feat(sign): Phase 1 - extend sign crate with core types & modules`
-2. `feat(runtime): add new runtime crate for script sourcing`
+**Phase 1: Core Types & Constants** (committed)
+- Added opaque handles: `FileInfoHandle`, `BufferHandle`, `Sha256ContextHandle`, `ExArgHandle`
+- Added `FileFormat` enum (Unix/Dos/Mac/Unknown)
+- Added `ReadFlags`, `WriteFlags`, `FioFlags` bitflags types
+- Added `ConvType`, `BadCharBehavior` enums
 
-All checks pass (`just rust-fmt-check`, `just rust-clippy`, `just rust-test`).
+**Phase 2: Encoding Detection & Conversion** (committed)
+- Created `encoding.rs` with encoding property constants
+- Added `get_fio_flags_from_props()`, `need_conversion_flags()`
+- Added encoding detection heuristics (`looks_like_utf8`, `utf16_likelihood`, `looks_like_latin1`)
+
+**Phase 3: File Reading Infrastructure** (committed)
+- Created `read.rs` with EINTR-safe read operations
+- Added buffer size calculation, line extraction utilities
+- Added `ReadInfo` struct for tracking statistics
+
+**Phase 4: Modeline Parsing** (committed)
+- Created `modeline.rs` with `ModelinePrefix` enum
+- Added modeline detection and parsing (`detect_modeline`, `extract_modeline_content`)
+- Added security checks (`is_modeline_forbidden`, `requires_modelineexpr`)
+
+**Phase 5: File Writing Infrastructure** (committed)
+- Created `write.rs` with EINTR-safe write operations
+- Added Unicode encoding functions (UCS-2/4, UTF-16 with surrogate pairs)
+- Added BOM generation and `WriteInfo` statistics tracking
+
+**Phase 6: Backup Management** (committed)
+- Created `backup.rs` with `BackupStrategy` and `BackupCopyFlags`
+- Added backup file naming functions and directory parsing
+- Added patchmode (.orig) file handling
+
+**Phase 7: Buffer Synchronization** (committed)
+- Created `sync.rs` with `ChangeReason`, `FileStatus` enums
+- Added `FileInfo`, `BufferFileInfo` structs for change detection
+- Added `TimestampCheckState` for managing check timing
+- Added FFI exports for auto-reload decision logic
+
+**Phase 8: High-Level Operations** (committed)
+- Created `operations.rs` with `ReadResult`, `WriteResult` structs
+- Added `FileMessageInfo` for message formatting
+- Added `ReadState`, `WriteState` for operation state management
+- Added `ShortmessFlags` for 'shortmess' option handling
+
+**Phase 9: Integration & Cleanup** (committed)
+- Updated `ref/crates.md` with expanded fileio description
+
+### Test Results
+- All 1987 Rust tests pass
+- `just rust-fmt-check` passes
+- `just rust-clippy` passes
+
+### New FFI Exports Added
+- `rs_get_fio_flags` (encoding.rs)
+- `rs_make_backup_name` (backup.rs)
+- `rs_determine_change_reason` (sync.rs)
+- `rs_should_auto_reload` (sync.rs)
+- `rs_format_file_message` (operations.rs)
