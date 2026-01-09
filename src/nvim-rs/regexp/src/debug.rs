@@ -255,9 +255,7 @@ pub unsafe fn get_profile_counters() -> &'static ProfileCounters {
 #[inline]
 pub unsafe fn get_profile_counters_mut() -> &'static mut ProfileCounters {
     // SAFETY: Caller guarantees single-threaded access
-    std::ptr::addr_of_mut!(PROFILE_COUNTERS)
-        .as_mut()
-        .unwrap()
+    std::ptr::addr_of_mut!(PROFILE_COUNTERS).as_mut().unwrap()
 }
 
 /// Reset profile counters.
