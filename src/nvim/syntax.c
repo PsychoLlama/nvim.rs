@@ -7381,3 +7381,326 @@ void *nvim_syn_get_buf(void)
 {
   return syn_buf;
 }
+
+// ============================================================================
+// Phase 24.4: Pattern Stack Operations Helpers (for Rust interop)
+// Note: push/pop_current_state, get/set_next_match_idx, get/set_keepend_level
+// are already defined earlier in Phase 24.2
+// ============================================================================
+
+/// Get the current_state garray length
+int nvim_syn_current_state_len(void)
+{
+  return current_state.ga_len;
+}
+
+/// Get a stateitem from current_state by index
+stateitem_T *nvim_syn_get_stateitem(int index)
+{
+  if (index < 0 || index >= current_state.ga_len) {
+    return NULL;
+  }
+  return &CUR_STATE(index);
+}
+
+/// Get top stateitem from current_state
+stateitem_T *nvim_syn_get_top_stateitem(void)
+{
+  if (current_state.ga_len == 0) {
+    return NULL;
+  }
+  return &CUR_STATE(current_state.ga_len - 1);
+}
+
+/// Get next_seqnr global
+int nvim_syn_get_next_seqnr(void)
+{
+  return next_seqnr;
+}
+
+/// Set next_seqnr global
+void nvim_syn_set_next_seqnr(int seqnr)
+{
+  next_seqnr = seqnr;
+}
+
+/// Increment and get next_seqnr global
+int nvim_syn_incr_next_seqnr(void)
+{
+  return next_seqnr++;
+}
+
+/// Get next_match_h_startpos
+void nvim_syn_get_next_match_h_startpos(int *lnum, int *col)
+{
+  if (lnum) {
+    *lnum = next_match_h_startpos.lnum;
+  }
+  if (col) {
+    *col = next_match_h_startpos.col;
+  }
+}
+
+/// Get next_match_m_endpos
+void nvim_syn_get_next_match_m_endpos(int *lnum, int *col)
+{
+  if (lnum) {
+    *lnum = next_match_m_endpos.lnum;
+  }
+  if (col) {
+    *col = next_match_m_endpos.col;
+  }
+}
+
+/// Get next_match_h_endpos
+void nvim_syn_get_next_match_h_endpos(int *lnum, int *col)
+{
+  if (lnum) {
+    *lnum = next_match_h_endpos.lnum;
+  }
+  if (col) {
+    *col = next_match_h_endpos.col;
+  }
+}
+
+/// Get next_match_eos_pos
+void nvim_syn_get_next_match_eos_pos(int *lnum, int *col)
+{
+  if (lnum) {
+    *lnum = next_match_eos_pos.lnum;
+  }
+  if (col) {
+    *col = next_match_eos_pos.col;
+  }
+}
+
+/// Get next_match_eoe_pos
+void nvim_syn_get_next_match_eoe_pos(int *lnum, int *col)
+{
+  if (lnum) {
+    *lnum = next_match_eoe_pos.lnum;
+  }
+  if (col) {
+    *col = next_match_eoe_pos.col;
+  }
+}
+
+/// Get next_match_flags
+int nvim_syn_get_next_match_flags(void)
+{
+  return next_match_flags;
+}
+
+/// Get next_match_end_idx
+int nvim_syn_get_next_match_end_idx(void)
+{
+  return next_match_end_idx;
+}
+
+/// Get next_match_extmatch
+reg_extmatch_T *nvim_syn_get_next_match_extmatch(void)
+{
+  return next_match_extmatch;
+}
+
+/// Call ref_extmatch
+reg_extmatch_T *nvim_syn_ref_extmatch(reg_extmatch_T *em)
+{
+  return ref_extmatch(em);
+}
+
+/// Call unref_extmatch
+void nvim_syn_unref_extmatch(reg_extmatch_T *em)
+{
+  unref_extmatch(em);
+}
+
+/// Call update_si_end from Rust
+void nvim_syn_update_si_end(stateitem_T *sip, int startcol, int force)
+{
+  update_si_end(sip, startcol, force != 0);
+}
+
+/// Call push_next_match from Rust
+stateitem_T *nvim_syn_push_next_match(void)
+{
+  return push_next_match();
+}
+
+/// Call find_endpos from Rust
+void nvim_syn_find_endpos(int idx, int start_lnum, int start_col,
+                          int *m_end_lnum, int *m_end_col,
+                          int *hl_end_lnum, int *hl_end_col,
+                          int *flagsp, int *end_end_lnum, int *end_end_col,
+                          int *end_idx, reg_extmatch_T *start_ext)
+{
+  lpos_T startpos = { .lnum = start_lnum, .col = start_col };
+  lpos_T m_endpos = { 0 };
+  lpos_T hl_endpos = { 0 };
+  lpos_T end_endpos = { 0 };
+  int flags = 0;
+  int eidx = 0;
+
+  find_endpos(idx, &startpos, &m_endpos, &hl_endpos, &flags, &end_endpos, &eidx, start_ext);
+
+  if (m_end_lnum) {
+    *m_end_lnum = m_endpos.lnum;
+  }
+  if (m_end_col) {
+    *m_end_col = m_endpos.col;
+  }
+  if (hl_end_lnum) {
+    *hl_end_lnum = hl_endpos.lnum;
+  }
+  if (hl_end_col) {
+    *hl_end_col = hl_endpos.col;
+  }
+  if (flagsp) {
+    *flagsp = flags;
+  }
+  if (end_end_lnum) {
+    *end_end_lnum = end_endpos.lnum;
+  }
+  if (end_end_col) {
+    *end_end_col = end_endpos.col;
+  }
+  if (end_idx) {
+    *end_idx = eidx;
+  }
+}
+
+/// Get synpat sp_flags by index
+int nvim_syn_get_pattern_flags(int idx)
+{
+  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
+    return 0;
+  }
+  return SYN_ITEMS(syn_block)[idx].sp_flags;
+}
+
+/// Get synpat sp_cchar by index
+int nvim_syn_get_pattern_cchar(int idx)
+{
+  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
+    return 0;
+  }
+  return SYN_ITEMS(syn_block)[idx].sp_cchar;
+}
+
+/// Get synpat sp_next_list by index
+int16_t *nvim_syn_get_pattern_next_list(int idx)
+{
+  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
+    return NULL;
+  }
+  return SYN_ITEMS(syn_block)[idx].sp_next_list;
+}
+
+/// Get synpat sp_type by index
+int nvim_syn_get_pattern_type(int idx)
+{
+  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
+    return 0;
+  }
+  return SYN_ITEMS(syn_block)[idx].sp_type;
+}
+
+/// Get synpat sp_syn_match_id by index
+int nvim_syn_get_pattern_syn_match_id(int idx)
+{
+  if (syn_block == NULL || idx < 0 || idx >= syn_block->b_syn_patterns.ga_len) {
+    return 0;
+  }
+  return SYN_ITEMS(syn_block)[idx].sp_syn_match_id;
+}
+
+/// Get GA_EMPTY(&current_state) check (Phase 24.4 - new name to avoid conflict)
+int nvim_syn_is_current_state_empty(void)
+{
+  return GA_EMPTY(&current_state) ? 1 : 0;
+}
+
+/// Set si_h_startpos
+void nvim_stateitem_set_h_startpos(stateitem_T *item, int lnum, int col)
+{
+  if (item) {
+    item->si_h_startpos.lnum = lnum;
+    item->si_h_startpos.col = col;
+  }
+}
+
+/// Set si_m_startcol
+void nvim_stateitem_set_m_startcol(stateitem_T *item, int col)
+{
+  if (item) {
+    item->si_m_startcol = col;
+  }
+}
+
+/// Set si_m_lnum
+void nvim_stateitem_set_m_lnum(stateitem_T *item, int lnum)
+{
+  if (item) {
+    item->si_m_lnum = lnum;
+  }
+}
+
+/// Or si_flags with a value
+void nvim_stateitem_or_flags(stateitem_T *item, int flags)
+{
+  if (item) {
+    item->si_flags |= flags;
+  }
+}
+
+/// Set si_cchar
+void nvim_stateitem_set_cchar(stateitem_T *item, int cchar)
+{
+  if (item) {
+    item->si_cchar = cchar;
+  }
+}
+
+/// Set si_extmatch
+void nvim_stateitem_set_extmatch(stateitem_T *item, reg_extmatch_T *em)
+{
+  if (item) {
+    item->si_extmatch = em;
+  }
+}
+
+/// Get SPTYPE_START constant
+int nvim_syn_get_sptype_start(void)
+{
+  return SPTYPE_START;
+}
+
+/// Get HL_ONELINE constant
+int nvim_syn_get_hl_oneline(void)
+{
+  return HL_ONELINE;
+}
+
+/// Get HL_KEEPEND constant
+int nvim_syn_get_hl_keepend(void)
+{
+  return HL_KEEPEND;
+}
+
+/// Get HL_MATCH constant
+int nvim_syn_get_hl_match(void)
+{
+  return HL_MATCH;
+}
+
+/// Get HL_CONCEAL constant
+int nvim_syn_get_hl_conceal(void)
+{
+  return HL_CONCEAL;
+}
+
+/// Get HL_CONCEALENDS constant
+int nvim_syn_get_hl_concealends(void)
+{
+  return HL_CONCEALENDS;
+}
