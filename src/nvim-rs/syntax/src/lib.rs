@@ -22,6 +22,7 @@ pub mod api;
 pub mod buffer;
 pub mod cache;
 pub mod cluster;
+pub mod commands;
 pub mod containment;
 pub mod group;
 pub mod highlight;
@@ -4731,6 +4732,101 @@ pub unsafe extern "C" fn rs_current_foldlevel() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_can_compute_folds(block: SynBlockHandle) -> c_int {
     if buffer::can_compute_folds(block) {
+        1
+    } else {
+        0
+    }
+}
+
+// =============================================================================
+// Phase 32.6: Ex commands exports
+// =============================================================================
+
+/// Get the command line pointer.
+///
+/// # Safety
+/// Must be called during command execution.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_cmdlinep() -> *mut *mut c_char {
+    commands::cmdlinep()
+}
+
+// Note: rs_curwin_synblock already defined at line ~2543
+
+/// Get current window handle.
+///
+/// # Safety
+/// Must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_curwin() -> WinHandle {
+    commands::curwin()
+}
+
+/// Get include_link flag for completion.
+#[no_mangle]
+pub extern "C" fn rs_syn_include_link() -> c_int {
+    if commands::include_link() {
+        1
+    } else {
+        0
+    }
+}
+
+/// Get include_default flag for completion.
+#[no_mangle]
+pub extern "C" fn rs_syn_include_default() -> c_int {
+    if commands::include_default() {
+        1
+    } else {
+        0
+    }
+}
+
+/// Get include_none flag for completion.
+#[no_mangle]
+pub extern "C" fn rs_syn_include_none() -> c_int {
+    if commands::include_none() {
+        1
+    } else {
+        0
+    }
+}
+
+/// Get running include tag.
+#[no_mangle]
+pub extern "C" fn rs_syn_running_inc_tag() -> c_int {
+    commands::running_inc_tag()
+}
+
+/// Set running include tag.
+///
+/// # Safety
+/// Must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_set_running_inc_tag(tag: c_int) {
+    commands::set_running_inc_tag(tag);
+}
+
+/// Get conceal setting for synblock.
+///
+/// # Safety
+/// The synblock handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_conceal_setting(block: SynBlockHandle) -> c_int {
+    if commands::synblock_conceal_setting(block) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Get case-insensitive setting for synblock.
+///
+/// # Safety
+/// The synblock handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_ic_setting(block: SynBlockHandle) -> c_int {
+    if commands::synblock_ic_setting(block) {
         1
     } else {
         0

@@ -8164,3 +8164,63 @@ int nvim_syn_cur_foldlevel(void)
 {
   return syn_cur_foldlevel();
 }
+
+// =============================================================================
+// Rust-callable wrappers for Ex commands (Phase 32.6)
+// =============================================================================
+
+/// Get the command line pointer
+char **nvim_syn_get_cmdlinep(void)
+{
+  return syn_cmdlinep;
+}
+
+/// Get current window's synblock
+synblock_T *nvim_get_curwin_synblock(void)
+{
+  return curwin->w_s;
+}
+
+// nvim_get_curwin already defined in window.c
+
+/// Get include_link flag
+int nvim_syn_get_include_link(void)
+{
+  return include_link;
+}
+
+/// Get include_default flag
+int nvim_syn_get_include_default(void)
+{
+  return include_default;
+}
+
+/// Get include_none flag
+int nvim_syn_get_include_none(void)
+{
+  return include_none;
+}
+
+/// Get running_syn_inc_tag
+int nvim_syn_get_running_inc_tag(void)
+{
+  return running_syn_inc_tag;
+}
+
+/// Set running_syn_inc_tag
+void nvim_syn_set_running_inc_tag(int tag)
+{
+  running_syn_inc_tag = tag;
+}
+
+/// Get the conceal setting for a synblock
+int nvim_syn_get_conceal_setting(synblock_T *block)
+{
+  return block->b_syn_conceal;
+}
+
+/// Get the case-insensitive setting for a synblock
+int nvim_syn_get_ic_setting(synblock_T *block)
+{
+  return block->b_syn_ic;
+}
