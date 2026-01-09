@@ -29,6 +29,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | edit           | Edit mode state                         |
 | encoding       | Text encoding (base64, hashing)         |
 | eval           | VimL built-in functions (math, bitwise, type, random) |
+| eval_exec      | VimL expression evaluation (operators, comparisons) |
 | event          | Event loop and libuv integration        |
 | extmark        | Extended marks for plugins              |
 | ex_cmds        | Ex command implementations (read, write, substitute, global, sort, lines, display, shell, format) |

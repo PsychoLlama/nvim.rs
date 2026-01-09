@@ -34,6 +34,7 @@ nvim-drawline = { path = "drawline" }
 nvim-drawscreen = { path = "drawscreen" }
 nvim-edit = { path = "edit" }
 nvim-eval = { path = "eval" }
+nvim-eval-exec = { path = "eval_exec" }
 nvim-collections = { path = "collections" }
 nvim-compositor = { path = "compositor" }
 nvim-context = { path = "context" }

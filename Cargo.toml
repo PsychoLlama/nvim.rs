@@ -79,6 +79,7 @@ members = [
     "src/nvim-rs/textformat",
     "src/nvim-rs/textobject",
     "src/nvim-rs/eval",
+    "src/nvim-rs/eval_exec",
     "src/nvim-rs/ex_cmds",
     "src/nvim-rs/utf8proc",
     "src/nvim-rs/version",
