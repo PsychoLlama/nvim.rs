@@ -11,6 +11,8 @@ pub mod add;
 pub mod buffer;
 pub mod cmdline;
 pub mod dict;
+pub mod entry;
+pub mod extmark;
 pub mod file;
 pub mod insert;
 pub mod keys;
@@ -19,12 +21,15 @@ pub mod leader;
 pub mod match_list;
 pub mod navigate;
 pub mod pum;
+pub mod refresh;
 pub mod sort;
 pub mod source;
 pub mod spell;
 pub mod state;
 pub mod tag;
+pub mod ui;
 pub mod userfunc;
+pub mod viml;
 
 use std::os::raw::{c_char, c_int, c_uint};
 
