@@ -1964,6 +1964,46 @@ win_T *nvim_get_compl_curr_win(void) { return compl_curr_win; }
 buf_T *nvim_get_compl_curr_buf(void) { return compl_curr_buf; }
 int nvim_get_compl_col(void) { return compl_col; }
 
+// Match list accessors for Rust (using void* since compl_T is static)
+void *nvim_compl_get_first_match(void) { return compl_first_match; }
+void nvim_compl_set_first_match(void *m) { compl_first_match = (compl_T *)m; }
+void *nvim_compl_get_curr_match(void) { return compl_curr_match; }
+void nvim_compl_set_curr_match(void *m) { compl_curr_match = (compl_T *)m; }
+void *nvim_compl_get_shown_match(void) { return compl_shown_match; }
+void nvim_compl_set_shown_match(void *m) { compl_shown_match = (compl_T *)m; }
+void *nvim_compl_get_old_match(void) { return compl_old_match; }
+void nvim_compl_set_old_match(void *m) { compl_old_match = (compl_T *)m; }
+
+// Match node accessors for Rust (using void* since compl_T is static)
+void *nvim_compl_match_get_next(void *m) {
+  return m ? ((compl_T *)m)->cp_next : NULL;
+}
+void nvim_compl_match_set_next(void *m, void *next) {
+  if (m) ((compl_T *)m)->cp_next = (compl_T *)next;
+}
+void *nvim_compl_match_get_prev(void *m) {
+  return m ? ((compl_T *)m)->cp_prev : NULL;
+}
+void nvim_compl_match_set_prev(void *m, void *prev) {
+  if (m) ((compl_T *)m)->cp_prev = (compl_T *)prev;
+}
+int nvim_compl_match_get_flags(void *m) {
+  return m ? ((compl_T *)m)->cp_flags : 0;
+}
+int nvim_compl_is_first_match(void *m) {
+  return m == compl_first_match ? 1 : 0;
+}
+int nvim_compl_match_at_original_text(void *m) {
+  return (m && (((compl_T *)m)->cp_flags & CP_ORIGINAL_TEXT)) ? 1 : 0;
+}
+
+// Memory operations for Rust
+void nvim_compl_item_free(void *m) { if (m) ins_compl_item_free((compl_T *)m); }
+void nvim_compl_clear_pattern(void) { API_CLEAR_STRING(compl_pattern); }
+void nvim_compl_clear_leader(void) { API_CLEAR_STRING(compl_leader); }
+void nvim_ins_compl_del_pum(void) { ins_compl_del_pum(); }
+void nvim_pum_clear(void) { pum_clear(); }
+
 // Rust implementations
 extern int rs_ins_compl_interrupted(void);
 extern int rs_ins_compl_enter_selects(void);

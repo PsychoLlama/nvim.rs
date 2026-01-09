@@ -7,6 +7,8 @@
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::doc_markdown)]
 
+pub mod match_list;
+
 use std::os::raw::{c_char, c_int, c_uint};
 
 use nvim_buffer::BufHandle;
