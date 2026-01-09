@@ -18,6 +18,7 @@ members = [
     "src/nvim-rs/compositor",
     "src/nvim-rs/context",
     "src/nvim-rs/decoration",
+    "src/nvim-rs/dict",
     "src/nvim-rs/diff",
     "src/nvim-rs/digraph",
     "src/nvim-rs/drawline",

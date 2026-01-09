@@ -27,6 +27,7 @@ nvim-cmdhist = { path = "cmdhist" }
 nvim-cursor = { path = "cursor" }
 nvim-cursor-shape = { path = "cursor_shape" }
 nvim-decoration = { path = "decoration" }
+nvim-dict = { path = "dict" }
 nvim-diff = { path = "diff" }
 nvim-digraph = { path = "digraph" }
 nvim-drawline = { path = "drawline" }
