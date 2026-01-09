@@ -24,6 +24,7 @@ use std::ffi::{c_char, c_int, c_long, c_void};
 pub mod comment;
 pub mod editing;
 pub mod events;
+pub mod file_format;
 pub mod flags;
 pub mod invalidation;
 pub mod lines;
@@ -39,6 +40,7 @@ pub use events::{
     rs_changed_lines, rs_changed_lines_redraw_buf, rs_deleted_lines, rs_deleted_lines_buf,
     rs_deleted_lines_mark, rs_inserted_bytes,
 };
+pub use file_format::{rs_file_ff_differs, rs_save_file_ff, rs_unchanged};
 pub use flags::OpenlineFlags;
 pub use invalidation::rs_changed_lines_invalidate_buf;
 pub use lines::{rs_del_lines, rs_truncate_line};
