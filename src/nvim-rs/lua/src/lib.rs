@@ -5,6 +5,7 @@
 //! ## Modules
 //!
 //! - [`state`]: Lua state accessors and callback infrastructure
+//! - [`types`]: Lua type constants and conversion utilities
 
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(clippy::missing_safety_doc)]
@@ -13,6 +14,7 @@
 #![allow(clippy::cast_possible_wrap)]
 
 pub mod state;
+pub mod types;
 
 use std::ffi::{c_char, c_int};
 
@@ -20,6 +22,8 @@ use std::ffi::{c_char, c_int};
 pub use nvim_api::{Arena, Array, Error, LuaRef, NvimString, Object};
 // Re-export state module types
 pub use state::LuaState;
+// Re-export type module items
+pub use types::{LuaType, LUA_TBOOLEAN, LUA_TFUNCTION, LUA_TNIL, LUA_TNONE, LUA_TNUMBER};
 
 // =============================================================================
 // LuaRetMode enum (matches C definition in executor.h)
