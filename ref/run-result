@@ -1,30 +1,37 @@
-Plan: ~/.claude/plans/keen-scribbling-finch.md
+Plan: ~/.claude/plans/greedy-cuddling-sutherland.md
 
-**Phase 28: VimL Evaluation Engine Migration - Complete**
+Phase 29 is now complete. Let me provide a summary:
 
-All 12 sub-phases have been successfully completed:
+## Phase 29 Complete - Regexp Execution and Substitution Migration
 
-| Phase | Description | Status |
-|-------|-------------|--------|
-| 28.1 | Type Value Foundation - typval crate expansion | ✓ |
-| 28.2 | Variable Storage System - vars crate | ✓ |
-| 28.3 | List Operations - list crate | ✓ |
-| 28.4 | Dictionary Operations - dict crate | ✓ |
-| 28.5 | Expression Executor - eval_exec crate | ✓ |
-| 28.6 | Function Call Infrastructure - funcall crate | ✓ |
-| 28.7 | Built-in Functions Part 1 - Core functions | ✓ |
-| 28.8 | Built-in Functions Part 2 - Extended functions | ✓ |
-| 28.9 | Built-in Functions Part 3 - Completion | ✓ |
-| 28.10 | User-Defined Functions - userfunc crate | ✓ |
-| 28.11 | Encode/Decode - eval_codec crate | ✓ |
-| 28.12 | Integration & Cleanup | ✓ |
+All 12 phases have been completed successfully:
 
-**Summary:**
-- Created 5 new crates: `vars`, `dict`, `eval_exec`, `funcall`, `userfunc`, `eval_codec`
-- Expanded existing crates: `typval`, `list`, `eval`
-- Added 100+ FFI exports for VimL evaluation engine
-- Updated `cbindgen.toml` with all new crates and exports
-- All builds passing (`just build`)
-- All formatting passing (`just rust-fmt-check`)
-- All lints passing (`just rust-clippy`)
-- All 2477 tests passing (`just rust-test`)
+### Summary of Work Done:
+
+**Phase 29.1-29.2**: Created execution state infrastructure
+- `exec_state.rs` - Unified execution state for BT/NFA engines
+- `line_fetch.rs` - Buffer line access layer with caching
+
+**Phase 29.3-29.4**: Enhanced execution engines
+- `bt_exec.rs` - Added backref, look-around, and special opcodes
+- `nfa_exec.rs` - Added NFA step function and state management
+
+**Phase 29.5-29.6**: Completed substitution and API
+- `regsub.rs` - vim_regsub_both with full submatch handling
+- `api.rs` - Pattern helpers and match utilities
+
+**Phase 29.7-29.9**: Added special features and infrastructure
+- `special.rs` - Cursor, line, column, mark, visual matching
+- `errors.rs` - Error handling with RegexError enum
+- `debug.rs` - Debug levels and profiling counters
+
+**Phase 29.10-29.12**: Integration and cleanup
+- Verified 235 FFI exports
+- All 2518 tests pass
+- Updated ref/crates.md
+
+### Commits Made:
+1. `feat(regexp): Phase 29.7 - special position matching`
+2. `feat(regexp): Phase 29.8 - error handling and messages`
+3. `feat(regexp): Phase 29.9 - debug and profiling support`
+4. `chore: Phase 29.10-29.12 - integration, testing, and documentation`
