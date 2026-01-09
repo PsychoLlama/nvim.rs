@@ -1,67 +1,42 @@
-Plan: ~/.claude/plans/joyful-painting-wozniak.md
+Plan: ~/.claude/plans/staged-moseying-dragon.md
 
-All phases are complete. Let me provide a final summary:
+The plan has been fully executed. Here's a summary of what was accomplished:
 
 ## Plan Execution Complete
 
-All 9 phases of the File I/O Rust migration plan have been completed successfully.
+All 12 phases of the Ex commands migration plan have been successfully completed:
 
-### Summary of Work Done
+### Summary of Created Files
 
-**Phase 1: Core Types & Constants** (committed)
-- Added opaque handles: `FileInfoHandle`, `BufferHandle`, `Sha256ContextHandle`, `ExArgHandle`
-- Added `FileFormat` enum (Unix/Dos/Mac/Unknown)
-- Added `ReadFlags`, `WriteFlags`, `FioFlags` bitflags types
-- Added `ConvType`, `BadCharBehavior` enums
+**New crate: `src/nvim-rs/ex_cmds/`**
+- `Cargo.toml` - Crate manifest with bitflags dependency
+- `src/lib.rs` - Core types (opaque handles, CommandFlags, AddressType, etc.)
+- `src/range.rs` - Line range types and utilities
+- `src/read.rs` - `:read` command types
+- `src/write.rs` - `:write`, `:update`, `:saveas` command types
+- `src/substitute.rs` - `:substitute` command types and flag parsing
+- `src/global.rs` - `:global` and `:vglobal` command types
+- `src/sort.rs` - `:sort` command types with all numeric modes
+- `src/lines.rs` - Line manipulation commands (`:copy`, `:move`, `:delete`, `:yank`, `:put`, `:join`)
+- `src/display.rs` - Display commands (`:print`, `:number`, `:list`, `:=`)
+- `src/shell.rs` - Shell integration (`:!`, `:shell`, filter commands)
+- `src/format.rs` - Text formatting (`:retab`, `:left`, `:center`, `:right`)
 
-**Phase 2: Encoding Detection & Conversion** (committed)
-- Created `encoding.rs` with encoding property constants
-- Added `get_fio_flags_from_props()`, `need_conversion_flags()`
-- Added encoding detection heuristics (`looks_like_utf8`, `utf16_likelihood`, `looks_like_latin1`)
+### FFI Exports
 
-**Phase 3: File Reading Infrastructure** (committed)
-- Created `read.rs` with EINTR-safe read operations
-- Added buffer size calculation, line extraction utilities
-- Added `ReadInfo` struct for tracking statistics
-
-**Phase 4: Modeline Parsing** (committed)
-- Created `modeline.rs` with `ModelinePrefix` enum
-- Added modeline detection and parsing (`detect_modeline`, `extract_modeline_content`)
-- Added security checks (`is_modeline_forbidden`, `requires_modelineexpr`)
-
-**Phase 5: File Writing Infrastructure** (committed)
-- Created `write.rs` with EINTR-safe write operations
-- Added Unicode encoding functions (UCS-2/4, UTF-16 with surrogate pairs)
-- Added BOM generation and `WriteInfo` statistics tracking
-
-**Phase 6: Backup Management** (committed)
-- Created `backup.rs` with `BackupStrategy` and `BackupCopyFlags`
-- Added backup file naming functions and directory parsing
-- Added patchmode (.orig) file handling
-
-**Phase 7: Buffer Synchronization** (committed)
-- Created `sync.rs` with `ChangeReason`, `FileStatus` enums
-- Added `FileInfo`, `BufferFileInfo` structs for change detection
-- Added `TimestampCheckState` for managing check timing
-- Added FFI exports for auto-reload decision logic
-
-**Phase 8: High-Level Operations** (committed)
-- Created `operations.rs` with `ReadResult`, `WriteResult` structs
-- Added `FileMessageInfo` for message formatting
-- Added `ReadState`, `WriteState` for operation state management
-- Added `ShortmessFlags` for 'shortmess' option handling
-
-**Phase 9: Integration & Cleanup** (committed)
-- Updated `ref/crates.md` with expanded fileio description
+Each module exports Rust functions callable from C via `#[no_mangle] pub extern "C"`:
+- `rs_line_range_*` - Range operations
+- `rs_validate_read_position` - Read validation
+- `rs_validate_write_range`, `rs_should_write_update` - Write validation
+- `rs_parse_sub_flags`, `rs_is_valid_delimiter` - Substitution
+- `rs_global_type_*` - Global command
+- `rs_parse_sort_flags`, `rs_sort_numeric_*` - Sort command
+- `rs_validate_copy`, `rs_validate_move`, `rs_adjust_line_after_move` - Line ops
+- `rs_display_mode_from_flags`, `rs_line_number_width` - Display
+- `rs_shell_flags_from_c`, `rs_find_unescaped_bang`, `rs_needs_shell_escape` - Shell
+- `rs_alignment_*`, `rs_calculate_alignment_indent`, `rs_tabstop_padding` - Formatting
 
 ### Test Results
-- All 1987 Rust tests pass
-- `just rust-fmt-check` passes
-- `just rust-clippy` passes
-
-### New FFI Exports Added
-- `rs_get_fio_flags` (encoding.rs)
-- `rs_make_backup_name` (backup.rs)
-- `rs_determine_change_reason` (sync.rs)
-- `rs_should_auto_reload` (sync.rs)
-- `rs_format_file_message` (operations.rs)
+- **2132 tests** across 61 binaries - all passing
+- Clippy: no warnings
+- Formatting: clean
