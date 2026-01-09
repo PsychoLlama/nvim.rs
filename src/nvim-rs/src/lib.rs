@@ -20,6 +20,7 @@ pub use nvim_ascii::*;
 pub use nvim_autocmd::*;
 pub use nvim_buffer::*;
 pub use nvim_buffer_updates::*;
+pub use nvim_channel::*;
 pub use nvim_charset::*;
 pub use nvim_cmdexpand::*;
 pub use nvim_cmdhist::*;

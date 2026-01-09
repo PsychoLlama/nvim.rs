@@ -1098,3 +1098,175 @@ void f_prompt_setprompt(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   xfree(buf->b_prompt_text);
   buf->b_prompt_text = xstrdup(text);
 }
+
+// =============================================================================
+// Accessor functions for Rust FFI (nvim-channel crate)
+// =============================================================================
+
+/// Get channel ID
+uint64_t nvim_channel_get_id(Channel *chan)
+{
+  return chan->id;
+}
+
+/// Get channel reference count
+size_t nvim_channel_get_refcount(Channel *chan)
+{
+  return chan->refcount;
+}
+
+/// Get channel stream type
+int nvim_channel_get_streamtype(Channel *chan)
+{
+  return (int)chan->streamtype;
+}
+
+/// Check if channel uses RPC
+int nvim_channel_is_rpc(Channel *chan)
+{
+  return chan->is_rpc ? 1 : 0;
+}
+
+/// Get detach flag
+int nvim_channel_get_detach(Channel *chan)
+{
+  return chan->detach ? 1 : 0;
+}
+
+/// Set detach flag
+void nvim_channel_set_detach(Channel *chan, int detach)
+{
+  chan->detach = detach != 0;
+}
+
+/// Get exit status
+int nvim_channel_get_exit_status(Channel *chan)
+{
+  return chan->exit_status;
+}
+
+/// Set exit status
+void nvim_channel_set_exit_status(Channel *chan, int status)
+{
+  chan->exit_status = status;
+}
+
+/// Get callback_busy flag
+int nvim_channel_get_callback_busy(Channel *chan)
+{
+  return chan->callback_busy ? 1 : 0;
+}
+
+/// Set callback_busy flag
+void nvim_channel_set_callback_busy(Channel *chan, int busy)
+{
+  chan->callback_busy = busy != 0;
+}
+
+/// Get callback_scheduled flag
+int nvim_channel_get_callback_scheduled(Channel *chan)
+{
+  return chan->callback_scheduled ? 1 : 0;
+}
+
+/// Set callback_scheduled flag
+void nvim_channel_set_callback_scheduled(Channel *chan, int scheduled)
+{
+  chan->callback_scheduled = scheduled != 0;
+}
+
+/// Find channel by ID (accessor wrapper)
+Channel *nvim_find_channel(uint64_t id)
+{
+  return find_channel(id);
+}
+
+/// Increment channel refcount (accessor wrapper)
+void nvim_channel_incref(Channel *chan)
+{
+  channel_incref(chan);
+}
+
+/// Decrement channel refcount (accessor wrapper)
+void nvim_channel_decref(Channel *chan)
+{
+  channel_decref(chan);
+}
+
+/// Get events queue from channel
+MultiQueue *nvim_channel_get_events(Channel *chan)
+{
+  return chan->events;
+}
+
+/// Get RPC state closed flag
+int nvim_rpc_state_is_closed(RpcState *rpc)
+{
+  return rpc->closed ? 1 : 0;
+}
+
+/// Set RPC state closed flag
+void nvim_rpc_state_set_closed(RpcState *rpc, int closed)
+{
+  rpc->closed = closed != 0;
+}
+
+/// Get next request ID from RPC state
+uint32_t nvim_rpc_state_get_next_request_id(RpcState *rpc)
+{
+  return rpc->next_request_id;
+}
+
+/// Set next request ID in RPC state
+void nvim_rpc_state_set_next_request_id(RpcState *rpc, uint32_t id)
+{
+  rpc->next_request_id = id;
+}
+
+/// Get client type from RPC state
+int nvim_rpc_state_get_client_type(RpcState *rpc)
+{
+  return (int)rpc->client_type;
+}
+
+/// Set client type in RPC state
+void nvim_rpc_state_set_client_type(RpcState *rpc, int client_type)
+{
+  rpc->client_type = (ClientType)client_type;
+}
+
+/// Check if callback reader is set
+int nvim_callback_reader_is_set(CallbackReader *reader)
+{
+  return callback_reader_set(*reader) ? 1 : 0;
+}
+
+/// Get EOF flag from callback reader
+int nvim_callback_reader_get_eof(CallbackReader *reader)
+{
+  return reader->eof ? 1 : 0;
+}
+
+/// Set EOF flag on callback reader
+void nvim_callback_reader_set_eof(CallbackReader *reader, int eof)
+{
+  reader->eof = eof != 0;
+}
+
+/// Get buffered flag from callback reader
+int nvim_callback_reader_get_buffered(CallbackReader *reader)
+{
+  return reader->buffered ? 1 : 0;
+}
+
+/// Get fwd_err flag from callback reader
+int nvim_callback_reader_get_fwd_err(CallbackReader *reader)
+{
+  return reader->fwd_err ? 1 : 0;
+}
+
+/// Get type string from callback reader
+const char *nvim_callback_reader_get_type(CallbackReader *reader)
+{
+  return reader->type;
+}
