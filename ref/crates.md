@@ -27,7 +27,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | digraph        | Digraph lookup                          |
 | drawline       | Line rendering                          |
 | drawscreen     | Screen drawing and separators           |
-| edit           | Edit mode state                         |
+| edit           | Edit mode (state, insert, keys, abbreviations, completion) |
 | encoding       | Text encoding (base64, hashing)         |
 | eval           | VimL built-in functions (math, bitwise, type, random) |
 | eval_codec     | VimL value encoding/decoding (JSON, blob, escape)   |
