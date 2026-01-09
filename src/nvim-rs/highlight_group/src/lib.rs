@@ -13,6 +13,7 @@
 
 #![allow(clippy::missing_safety_doc)]
 
+pub mod api;
 pub mod color;
 pub mod command;
 pub mod complete;
