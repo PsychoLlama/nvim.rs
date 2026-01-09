@@ -6,6 +6,8 @@
 
 #![allow(unsafe_code)] // FFI requires unsafe
 
+pub mod direction;
+pub mod pattern;
 pub mod state;
 
 use std::ffi::{c_char, c_int};

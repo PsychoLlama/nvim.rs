@@ -221,6 +221,15 @@ const char *nvim_get_spat_pat(int idx)
   return NULL;
 }
 
+/// Check if the pattern at given index is NULL (accessor for Rust).
+int nvim_spat_pat_is_null(int idx)
+{
+  if (idx >= 0 && idx < 2) {
+    return spats[idx].pat == NULL;
+  }
+  return 1;
+}
+
 /// Get the pattern length from spats array (accessor for Rust).
 size_t nvim_get_spat_patlen(int idx)
 {
@@ -282,6 +291,44 @@ int64_t nvim_get_spat_off_off(int idx)
     return spats[idx].off.off;
   }
   return 0;
+}
+
+/// Set the search direction in spats array (setter for Rust).
+void nvim_set_spat_off_dir(int idx, char dir)
+{
+  if (idx >= 0 && idx < 2) {
+    spats[idx].off.dir = dir;
+  }
+}
+
+/// Set the line offset flag in spats array (setter for Rust).
+void nvim_set_spat_off_line(int idx, int line)
+{
+  if (idx >= 0 && idx < 2) {
+    spats[idx].off.line = line;
+  }
+}
+
+/// Set the end offset flag in spats array (setter for Rust).
+void nvim_set_spat_off_end(int idx, int end)
+{
+  if (idx >= 0 && idx < 2) {
+    spats[idx].off.end = end;
+  }
+}
+
+/// Set the offset value in spats array (setter for Rust).
+void nvim_set_spat_off_off(int idx, int64_t off)
+{
+  if (idx >= 0 && idx < 2) {
+    spats[idx].off.off = off;
+  }
+}
+
+/// Call set_vv_searchforward (wrapper for Rust).
+void nvim_call_set_vv_searchforward(void)
+{
+  set_vv_searchforward();
 }
 
 // Type used by find_pattern_in_path() to remember which included files have
