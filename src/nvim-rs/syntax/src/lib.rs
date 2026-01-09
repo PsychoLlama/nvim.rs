@@ -22,6 +22,7 @@ pub mod cache;
 pub mod cluster;
 pub mod keyword;
 pub mod pattern;
+pub mod region;
 pub mod state;
 pub mod types;
 
