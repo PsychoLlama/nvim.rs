@@ -62,7 +62,7 @@ extern "C" {
     fn nvim_win_get_handle(wp: WinHandle) -> c_int;
 
     /// Get the `w_frame` field from a window (returns Frame pointer).
-    fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
+    pub(crate) fn nvim_win_get_frame(wp: WinHandle) -> *mut Frame;
 
     /// Get the `last_win_id` global.
     fn nvim_get_last_win_id() -> c_int;

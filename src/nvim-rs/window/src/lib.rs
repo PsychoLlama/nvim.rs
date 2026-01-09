@@ -7,6 +7,9 @@
 //!
 //! # Modules
 //!
+//! - [`alloc`]: Window allocation functions (placeholder)
+//! - [`focus`]: Window focus and navigation functions
+//! - [`frame`]: Frame tree operations
 //! - [`list`]: Window list traversal and initialization functions
 //! - [`tabpage`]: Tab page management operations
 
@@ -15,6 +18,9 @@
 #![allow(clippy::doc_markdown)]
 
 // Domain-specific modules
+pub mod alloc;
+pub mod focus;
+pub mod frame;
 pub mod list;
 pub mod tabpage;
 
