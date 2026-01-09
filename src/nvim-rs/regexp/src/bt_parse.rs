@@ -523,6 +523,72 @@ impl<'a> PatternParser<'a> {
 }
 
 // =============================================================================
+// Assertion Type Parsing
+// =============================================================================
+
+/// Parse the assertion type after `\@`.
+///
+/// Returns the appropriate opcode:
+/// - `=` → MATCH (positive lookahead)
+/// - `!` → NOMATCH (negative lookahead)
+/// - `>` → SUBPAT (atomic grouping)
+/// - `<=` → BEHIND (positive lookbehind)
+/// - `<!` → NOBEHIND (negative lookbehind)
+/// - Otherwise → END (invalid)
+fn parse_assertion_type(parser: &mut PatternParser) -> c_int {
+    let c = parser.peekchr();
+
+    // Handle magic or literal character
+    let ch = if is_magic(c) {
+        un_magic(c) as u8
+    } else if c > 0 && c < 256 {
+        c as u8
+    } else {
+        return END;
+    };
+
+    match ch {
+        b'=' => {
+            parser.skipchr();
+            MATCH // \@= positive lookahead
+        }
+        b'!' => {
+            parser.skipchr();
+            NOMATCH // \@! negative lookahead
+        }
+        b'>' => {
+            parser.skipchr();
+            SUBPAT // \@> atomic grouping
+        }
+        b'<' => {
+            // Need to look at next character for \@<= or \@<!
+            parser.skipchr();
+            let next = parser.peekchr();
+            let next_ch = if is_magic(next) {
+                un_magic(next) as u8
+            } else if next > 0 && next < 256 {
+                next as u8
+            } else {
+                return END;
+            };
+
+            match next_ch {
+                b'=' => {
+                    parser.skipchr();
+                    BEHIND // \@<= positive lookbehind
+                }
+                b'!' => {
+                    parser.skipchr();
+                    NOBEHIND // \@<! negative lookbehind
+                }
+                _ => END,
+            }
+        }
+        _ => END,
+    }
+}
+
+// =============================================================================
 // Parsing Functions - Main Compiler Interface
 // =============================================================================
 
@@ -790,6 +856,32 @@ unsafe fn parse_piece(
     }
 
     let op_char = un_magic(op) as u8;
+
+    // Handle assertion operators (\@=, \@!, \@>, \@<=, \@<!)
+    if op_char == b'@' {
+        parser.skipchr(); // consume '@'
+        let lop = parse_assertion_type(parser);
+        if lop == END {
+            parser.set_error("E869: Invalid character after \\@");
+            return ptr::null_mut();
+        }
+
+        // Look behind assertions set HASLOOKBH flag
+        if lop == BEHIND || lop == NOBEHIND {
+            (*compiler).chain(ret, (*compiler).emit_node(BHPOS));
+            *flagp |= HASLOOKBH;
+        }
+
+        // Terminate the operand with END
+        (*compiler).chain(ret, (*compiler).emit_node(END));
+
+        // Insert the assertion opcode before the operand
+        (*compiler).insert_node(lop, ret);
+
+        // Assertions are zero-width, so no HASWIDTH flag
+        *flagp = WORST | (flags & (HASNL | HASLOOKBH));
+        return ret;
+    }
 
     if !matches!(op_char, b'*' | b'+' | b'?' | b'{' | b'=') {
         *flagp = flags;
@@ -1378,5 +1470,58 @@ mod tests {
         // 'e' is literal - parse_atom checks for this and handles \ze
         let c = parser.peekchr();
         assert_eq!(c, b'e' as c_int);
+    }
+
+    #[test]
+    fn test_parse_assertion_type() {
+        // Test \@= (positive lookahead)
+        let pattern = b"=rest";
+        let mut parser = PatternParser::new(pattern, 0);
+        assert_eq!(parse_assertion_type(&mut parser), MATCH);
+        assert_eq!(parser.peekchr(), b'r' as c_int);
+
+        // Test \@! (negative lookahead)
+        let pattern = b"!rest";
+        let mut parser = PatternParser::new(pattern, 0);
+        assert_eq!(parse_assertion_type(&mut parser), NOMATCH);
+
+        // Test \@> (atomic grouping)
+        let pattern = b">rest";
+        let mut parser = PatternParser::new(pattern, 0);
+        assert_eq!(parse_assertion_type(&mut parser), SUBPAT);
+
+        // Test \@<= (positive lookbehind)
+        let pattern = b"<=rest";
+        let mut parser = PatternParser::new(pattern, 0);
+        assert_eq!(parse_assertion_type(&mut parser), BEHIND);
+        assert_eq!(parser.peekchr(), b'r' as c_int);
+
+        // Test \@<! (negative lookbehind)
+        let pattern = b"<!rest";
+        let mut parser = PatternParser::new(pattern, 0);
+        assert_eq!(parse_assertion_type(&mut parser), NOBEHIND);
+
+        // Test invalid character
+        let pattern = b"xrest";
+        let mut parser = PatternParser::new(pattern, 0);
+        assert_eq!(parse_assertion_type(&mut parser), END);
+        // Parser shouldn't have consumed any characters on failure
+        assert_eq!(parser.peekchr(), b'x' as c_int);
+    }
+
+    #[test]
+    fn test_at_prefix_parsing() {
+        // Test \@ is recognized as magic '@'
+        let pattern = b"\\@=";
+        let mut parser = PatternParser::new(pattern, 0);
+
+        // '\@' produces magic '@'
+        let c = parser.peekchr();
+        assert!(is_magic(c));
+        assert_eq!(un_magic(c), b'@' as c_int);
+        parser.skipchr();
+
+        // '=' is literal
+        assert_eq!(parser.peekchr(), b'=' as c_int);
     }
 }
