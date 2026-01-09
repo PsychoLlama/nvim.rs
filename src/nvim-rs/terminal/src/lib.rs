@@ -222,6 +222,31 @@ extern "C" {
 
     /// Get the opts.height from a Terminal.
     fn nvim_terminal_get_opts_height(term: TerminalHandle) -> c_int;
+
+    // -------------------------------------------------------------------------
+    // Display and Refresh Accessors (Phase 12.5)
+    // -------------------------------------------------------------------------
+
+    /// Get the `sb_deleted_last` field from a Terminal.
+    fn nvim_terminal_get_sb_deleted_last(term: TerminalHandle) -> usize;
+
+    /// Set the `sb_deleted_last` field on a Terminal.
+    fn nvim_terminal_set_sb_deleted_last(term: TerminalHandle, value: usize);
+
+    /// Set the `sb_current` field on a Terminal.
+    fn nvim_terminal_set_sb_current(term: TerminalHandle, value: usize);
+
+    /// Get the title from a Terminal.
+    fn nvim_terminal_get_title(term: TerminalHandle) -> *const i8;
+
+    /// Get the title length from a Terminal.
+    fn nvim_terminal_get_title_len(term: TerminalHandle) -> usize;
+
+    /// Get the textbuf pointer from a Terminal.
+    fn nvim_terminal_get_textbuf(term: TerminalHandle) -> *mut i8;
+
+    /// Get the textbuf size constant.
+    fn nvim_terminal_get_textbuf_size() -> usize;
 }
 
 // =============================================================================
@@ -738,6 +763,140 @@ pub extern "C" fn rs_terminal_mark_for_destruction(term: TerminalHandle) {
 }
 
 // =============================================================================
+// Display and Refresh Functions (Phase 12.5)
+// =============================================================================
+
+/// Get the `sb_deleted_last` field from a terminal.
+#[no_mangle]
+pub extern "C" fn rs_terminal_get_sb_deleted_last(term: TerminalHandle) -> usize {
+    if term.is_null() {
+        return 0;
+    }
+    unsafe { nvim_terminal_get_sb_deleted_last(term) }
+}
+
+/// Set the `sb_deleted_last` field on a terminal.
+#[no_mangle]
+pub extern "C" fn rs_terminal_set_sb_deleted_last(term: TerminalHandle, value: usize) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_set_sb_deleted_last(term, value) }
+    }
+}
+
+/// Set the `sb_current` field on a terminal.
+#[no_mangle]
+pub extern "C" fn rs_terminal_set_sb_current(term: TerminalHandle, value: usize) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_set_sb_current(term, value) }
+    }
+}
+
+/// Get the title from a terminal.
+///
+/// Returns a pointer to the title string, or null if the terminal is invalid.
+#[no_mangle]
+pub extern "C" fn rs_terminal_get_title(term: TerminalHandle) -> *const i8 {
+    if term.is_null() {
+        return std::ptr::null();
+    }
+    unsafe { nvim_terminal_get_title(term) }
+}
+
+/// Get the title length from a terminal.
+#[no_mangle]
+pub extern "C" fn rs_terminal_get_title_len(term: TerminalHandle) -> usize {
+    if term.is_null() {
+        return 0;
+    }
+    unsafe { nvim_terminal_get_title_len(term) }
+}
+
+/// Get the textbuf pointer from a terminal.
+///
+/// Returns a pointer to the internal text buffer used for conversions.
+#[no_mangle]
+pub extern "C" fn rs_terminal_get_textbuf(term: TerminalHandle) -> *mut i8 {
+    if term.is_null() {
+        return std::ptr::null_mut();
+    }
+    unsafe { nvim_terminal_get_textbuf(term) }
+}
+
+/// Get the textbuf size constant.
+///
+/// Returns the size of the terminal's internal text buffer (0x1fff).
+#[no_mangle]
+pub extern "C" fn rs_terminal_get_textbuf_size() -> usize {
+    unsafe { nvim_terminal_get_textbuf_size() }
+}
+
+/// Invalidate a region of the terminal screen.
+///
+/// Updates the `invalid_start` and `invalid_end` fields to encompass the specified
+/// region. Use -1, -1 to invalidate the entire screen without changing the region.
+#[no_mangle]
+pub extern "C" fn rs_terminal_invalidate_region(term: TerminalHandle, start: c_int, end: c_int) {
+    if term.is_null() {
+        return;
+    }
+    unsafe {
+        if start != -1 && end != -1 {
+            let cur_start = nvim_terminal_get_invalid_start(term);
+            let cur_end = nvim_terminal_get_invalid_end(term);
+            let new_start = if start < cur_start { start } else { cur_start };
+            let new_end = if end > cur_end { end } else { cur_end };
+            nvim_terminal_set_invalid_region(term, new_start, new_end);
+        }
+    }
+}
+
+/// Reset the invalid region to cover the full screen height.
+///
+/// Sets `invalid_start` to 0 and `invalid_end` to the current terminal height.
+#[no_mangle]
+pub extern "C" fn rs_terminal_invalidate_all(term: TerminalHandle) {
+    if term.is_null() {
+        return;
+    }
+    unsafe {
+        let vt = nvim_terminal_get_vterm(term);
+        if !vt.is_null() {
+            // Use the vterm crate's size function
+            let size = rs_vterm_get_size(vt);
+            nvim_terminal_set_invalid_region(term, 0, size.rows);
+        }
+    }
+}
+
+/// Sync the `sb_deleted_last` field with `sb_deleted`.
+///
+/// Useful after processing scrollback changes.
+#[no_mangle]
+pub extern "C" fn rs_terminal_sync_sb_deleted(term: TerminalHandle) {
+    if term.is_null() {
+        return;
+    }
+    unsafe {
+        let deleted = nvim_terminal_get_sb_deleted(term);
+        nvim_terminal_set_sb_deleted_last(term, deleted);
+    }
+}
+
+// =============================================================================
+// VTerm Size Types
+// =============================================================================
+
+/// Size of a `VTerm` instance (rows and columns).
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct VTermSize {
+    /// Number of rows
+    pub rows: c_int,
+    /// Number of columns
+    pub cols: c_int,
+}
+
+// =============================================================================
 // Terminal I/O Operations
 // =============================================================================
 
@@ -750,6 +909,9 @@ extern "C" {
     fn rs_vterm_keyboard_start_paste(vt: *mut c_void);
     fn rs_vterm_keyboard_end_paste(vt: *mut c_void);
     fn rs_vterm_screen_flush_damage(vts: *mut c_void);
+
+    // VTerm size function (defined in vterm crate)
+    fn rs_vterm_get_size(vt: *mut c_void) -> VTermSize;
 }
 
 /// Write input data to a terminal's `VTerm` instance.

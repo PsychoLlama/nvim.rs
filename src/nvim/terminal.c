@@ -2684,4 +2684,54 @@ int nvim_terminal_get_opts_height(Terminal *term)
   return term ? term->opts.height : 0;
 }
 
+// =============================================================================
+// Display and Refresh Accessors for Rust (Phase 12.5)
+// =============================================================================
+
+/// Get the sb_deleted_last field from a Terminal.
+size_t nvim_terminal_get_sb_deleted_last(Terminal *term)
+{
+  return term ? term->sb_deleted_last : 0;
+}
+
+/// Set the sb_deleted_last field on a Terminal.
+void nvim_terminal_set_sb_deleted_last(Terminal *term, size_t value)
+{
+  if (term) {
+    term->sb_deleted_last = value;
+  }
+}
+
+/// Get the sb_current field from a Terminal.
+void nvim_terminal_set_sb_current(Terminal *term, size_t value)
+{
+  if (term) {
+    term->sb_current = value;
+  }
+}
+
+/// Get the title from a Terminal.
+const char *nvim_terminal_get_title(Terminal *term)
+{
+  return term ? term->title : NULL;
+}
+
+/// Get the title length from a Terminal.
+size_t nvim_terminal_get_title_len(Terminal *term)
+{
+  return term ? term->title_len : 0;
+}
+
+/// Get the textbuf pointer from a Terminal.
+char *nvim_terminal_get_textbuf(Terminal *term)
+{
+  return term ? term->textbuf : NULL;
+}
+
+/// Get the textbuf size constant.
+size_t nvim_terminal_get_textbuf_size(void)
+{
+  return TEXTBUF_SIZE;
+}
+
 // vim: foldmethod=marker
