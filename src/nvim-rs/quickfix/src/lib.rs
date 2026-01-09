@@ -9,6 +9,7 @@ use std::ffi::{c_char, c_int, c_void};
 // =============================================================================
 
 pub mod commands;
+pub mod external;
 pub mod filter;
 pub mod list;
 pub mod loclist;
