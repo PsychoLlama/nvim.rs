@@ -12,6 +12,7 @@ pub mod edit;
 pub mod expand;
 pub mod expr;
 pub mod history;
+pub mod keys;
 pub mod pattern;
 pub mod screen;
 pub mod search;

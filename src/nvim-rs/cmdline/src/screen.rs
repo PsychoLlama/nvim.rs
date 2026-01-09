@@ -227,10 +227,18 @@ pub unsafe fn cmd_screencol(bytepos: c_int) -> c_int {
             let wwidth = nvim_cmdline_win_width();
             let wheight = nvim_cmdline_win_height();
             let product = wwidth.saturating_mul(wheight);
-            if product < 0 { MAXCOL } else { product }
+            if product < 0 {
+                MAXCOL
+            } else {
+                product
+            }
         } else {
             let product = columns.saturating_mul(rows);
-            if product < 0 { MAXCOL } else { product }
+            if product < 0 {
+                MAXCOL
+            } else {
+                product
+            }
         }
     } else {
         MAXCOL
