@@ -13,6 +13,7 @@
 
 use std::ffi::{c_char, c_int, CStr};
 
+pub mod backup;
 pub mod encoding;
 pub mod modeline;
 pub mod read;
