@@ -21,9 +21,15 @@
 
 use std::ffi::{c_char, c_int, c_long, c_void};
 
+pub mod events;
 pub mod flags;
 pub mod recording;
 
+pub use events::{
+    rs_appended_lines, rs_appended_lines_buf, rs_appended_lines_mark, rs_changed_bytes,
+    rs_changed_lines, rs_changed_lines_redraw_buf, rs_deleted_lines, rs_deleted_lines_buf,
+    rs_deleted_lines_mark, rs_inserted_bytes,
+};
 pub use flags::OpenlineFlags;
 pub use recording::{rs_change_warning, rs_changed, rs_changed_internal};
 
