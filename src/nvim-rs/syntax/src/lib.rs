@@ -19,6 +19,7 @@ use std::ffi::{c_char, c_int};
 // =============================================================================
 
 pub mod api;
+pub mod buffer;
 pub mod cache;
 pub mod cluster;
 pub mod containment;
@@ -4598,6 +4599,143 @@ pub unsafe extern "C" fn rs_syn_ensure_current_state_valid() {
 // Note: rs_syn_current_col, rs_syn_is_finished, rs_syn_is_state_valid,
 // rs_syn_next_match_idx, rs_syn_next_match_col, rs_syn_has_next_match
 // are already defined earlier in this file.
+
+// =============================================================================
+// Phase 32.5: Buffer attachment exports
+// =============================================================================
+
+// Note: rs_syntax_start already defined at line ~3893
+// Note: rs_buf_mod_top, rs_buf_mod_bot, rs_buf_mod_xlines already defined at lines ~4329-4347
+
+/// Check if synblock has an error.
+///
+/// # Safety
+/// The synblock handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_has_error(block: SynBlockHandle) -> c_int {
+    if buffer::synblock_has_error(block) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Check if synblock is running slowly.
+///
+/// # Safety
+/// The synblock handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_is_slow(block: SynBlockHandle) -> c_int {
+    if buffer::synblock_is_slow(block) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Check if syntax highlighting is active.
+///
+/// # Safety
+/// The synblock handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_is_active(block: SynBlockHandle) -> c_int {
+    if buffer::synblock_is_active(block) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Get number of fold items.
+///
+/// # Safety
+/// The synblock handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_folditems(block: SynBlockHandle) -> c_int {
+    buffer::synblock_folditems(block)
+}
+
+/// Get fold level mode.
+///
+/// # Safety
+/// The synblock handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_foldlevel_mode(block: SynBlockHandle) -> c_int {
+    buffer::synblock_foldlevel_mode(block).to_raw()
+}
+
+/// Check if concealing is enabled.
+///
+/// # Safety
+/// The synblock handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_conceal_enabled(block: SynBlockHandle) -> c_int {
+    if buffer::synblock_conceal_enabled(block) {
+        1
+    } else {
+        0
+    }
+}
+
+// rs_buf_mod_top, rs_buf_mod_bot, rs_buf_mod_xlines already defined above
+
+/// Apply buffer changes to syntax state.
+///
+/// # Safety
+/// The buffer handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_apply_buffer_changes(buf: BufHandle) {
+    buffer::apply_buffer_changes(buf);
+}
+
+/// Get the current syntax buffer.
+///
+/// # Safety
+/// Must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_current_syn_buf() -> BufHandle {
+    buffer::current_syn_buf()
+}
+
+/// Get the current synblock.
+///
+/// # Safety
+/// Must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_current_syn_block() -> SynBlockHandle {
+    buffer::current_syn_block()
+}
+
+/// Get the current syntax window.
+///
+/// # Safety
+/// Must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_current_syn_win() -> WinHandle {
+    buffer::current_syn_win()
+}
+
+/// Get current fold level from syntax state.
+///
+/// # Safety
+/// Must be called during syntax highlighting.
+#[no_mangle]
+pub unsafe extern "C" fn rs_current_foldlevel() -> c_int {
+    buffer::current_foldlevel()
+}
+
+/// Check if syntax-based folding is available.
+///
+/// # Safety
+/// The synblock handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_can_compute_folds(block: SynBlockHandle) -> c_int {
+    if buffer::can_compute_folds(block) {
+        1
+    } else {
+        0
+    }
+}
 
 #[cfg(test)]
 mod tests {

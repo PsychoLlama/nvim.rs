@@ -8142,3 +8142,25 @@ int nvim_syn_get_next_match_attr(void)
 
 // nvim_syn_get_next_match_idx already defined at line ~6413
 // nvim_syn_get_next_match_col already defined at line ~6419
+
+// =============================================================================
+// Rust-callable wrappers for buffer attachment (Phase 32.5)
+// =============================================================================
+
+/// Get the current syn_block
+synblock_T *nvim_syn_get_block(void)
+{
+  return syn_block;
+}
+
+/// Get the current syn_win
+win_T *nvim_syn_get_win(void)
+{
+  return syn_win;
+}
+
+/// Get the current fold level from syntax state
+int nvim_syn_cur_foldlevel(void)
+{
+  return syn_cur_foldlevel();
+}
