@@ -7704,3 +7704,269 @@ int nvim_syn_get_hl_concealends(void)
 {
   return HL_CONCEALENDS;
 }
+
+// =============================================================================
+// Phase 24.5: Sync and Line Operations Helpers
+// =============================================================================
+
+/// Call syn_start_line from Rust
+void nvim_syn_start_line(void)
+{
+  syn_start_line();
+}
+
+/// Call syn_finish_line from Rust
+int nvim_syn_finish_line(int syncing)
+{
+  return syn_finish_line(syncing != 0) ? 1 : 0;
+}
+
+/// Call syn_update_ends from Rust
+void nvim_syn_update_ends(int startofline)
+{
+  syn_update_ends(startofline != 0);
+}
+
+/// Call syn_sync from Rust
+void nvim_syn_sync(void *wp, int start_lnum, void *last_valid)
+{
+  syn_sync((win_T *)wp, (linenr_T)start_lnum, (synstate_T *)last_valid);
+}
+
+/// Call syntax_start from Rust
+void nvim_syntax_start(void *wp, int lnum)
+{
+  syntax_start((win_T *)wp, (linenr_T)lnum);
+}
+
+/// Call clear_syn_state from Rust
+void nvim_syn_clear_syn_state(void *p)
+{
+  clear_syn_state((synstate_T *)p);
+}
+
+/// Get current_line_id global
+int nvim_syn_get_current_line_id(void)
+{
+  return (int)current_line_id;
+}
+
+/// Increment current_line_id global
+void nvim_syn_incr_current_line_id(void)
+{
+  current_line_id++;
+}
+
+/// Get syn_block pointer
+void *nvim_syn_get_syn_block(void)
+{
+  return syn_block;
+}
+
+/// Set syn_block pointer
+void nvim_syn_set_syn_block(void *block)
+{
+  syn_block = (synblock_T *)block;
+}
+
+/// Get syn_win pointer
+void *nvim_syn_get_syn_win(void)
+{
+  return syn_win;
+}
+
+/// Set syn_win pointer
+void nvim_syn_set_syn_win(void *win)
+{
+  syn_win = (win_T *)win;
+}
+
+/// Get b_syn_sync_minlines from syn_block
+int nvim_syn_get_sync_minlines(void)
+{
+  return syn_block ? (int)syn_block->b_syn_sync_minlines : 0;
+}
+
+/// Get b_syn_sync_maxlines from syn_block
+int nvim_syn_get_sync_maxlines(void)
+{
+  return syn_block ? (int)syn_block->b_syn_sync_maxlines : 0;
+}
+
+/// Get b_syn_sync_flags from syn_block
+int nvim_syn_get_sync_flags(void)
+{
+  return syn_block ? syn_block->b_syn_sync_flags : 0;
+}
+
+/// Get b_syn_sync_id from syn_block
+int nvim_syn_get_sync_id(void)
+{
+  return syn_block ? syn_block->b_syn_sync_id : 0;
+}
+
+/// Get b_sst_first from syn_block (first in valid state list)
+void *nvim_syn_get_sst_first(void)
+{
+  return syn_block ? syn_block->b_sst_first : NULL;
+}
+
+/// Get b_sst_array from syn_block
+void *nvim_syn_get_sst_array(void)
+{
+  return syn_block ? syn_block->b_sst_array : NULL;
+}
+
+/// Get b_sst_len from syn_block
+int nvim_syn_get_sst_len(void)
+{
+  return syn_block ? syn_block->b_sst_len : 0;
+}
+
+/// Get synstate sst_next (Phase 24.5 void* version for Rust FFI)
+void *nvim_syn_synstate_get_next_ptr(synstate_T *p)
+{
+  return p ? p->sst_next : NULL;
+}
+
+/// Set synstate sst_change_lnum
+void nvim_synstate_set_change_lnum(synstate_T *p, int lnum)
+{
+  if (p) {
+    p->sst_change_lnum = (linenr_T)lnum;
+  }
+}
+
+/// Set current_id global
+void nvim_syn_set_current_id(int id)
+{
+  current_id = (int16_t)id;
+}
+
+/// Set current_trans_id global
+void nvim_syn_set_current_trans_id(int id)
+{
+  current_trans_id = (int16_t)id;
+}
+
+/// Set current_flags global
+void nvim_syn_set_current_flags(int flags)
+{
+  current_flags = (int16_t)flags;
+}
+
+/// Set current_seqnr global
+void nvim_syn_set_current_seqnr(int seqnr)
+{
+  current_seqnr = seqnr;
+}
+
+/// Get HL_MATCHCONT constant
+int nvim_syn_get_hl_matchcont(void)
+{
+  return HL_MATCHCONT;
+}
+
+/// Get HL_EXTEND constant
+int nvim_syn_get_hl_extend(void)
+{
+  return HL_EXTEND;
+}
+
+/// Get SF_CCOMMENT constant
+int nvim_syn_get_sf_ccomment(void)
+{
+  return SF_CCOMMENT;
+}
+
+/// Get SF_MATCH constant
+int nvim_syn_get_sf_match(void)
+{
+  return SF_MATCH;
+}
+
+/// Get HL_SYNC_HERE constant
+int nvim_syn_get_hl_sync_here(void)
+{
+  return HL_SYNC_HERE;
+}
+
+/// Get HL_SYNC_THERE constant
+int nvim_syn_get_hl_sync_there(void)
+{
+  return HL_SYNC_THERE;
+}
+
+/// Get SPTYPE_MATCH constant
+int nvim_syn_get_sptype_match(void)
+{
+  return SPTYPE_MATCH;
+}
+
+/// Call syn_stack_alloc from Rust
+void nvim_syn_stack_alloc(void)
+{
+  syn_stack_alloc();
+}
+
+/// Call syn_stack_find_entry from Rust (void* return for FFI)
+void *nvim_syn_stack_find_entry_ptr(int lnum)
+{
+  return syn_stack_find_entry((linenr_T)lnum);
+}
+
+/// Get w_s from window (synblock)
+void *nvim_win_get_synblock(void *wp)
+{
+  return wp ? ((win_T *)wp)->w_s : NULL;
+}
+
+/// Get w_buffer from window (void* return for FFI)
+void *nvim_syn_win_get_buffer_ptr(void *wp)
+{
+  return wp ? ((win_T *)wp)->w_buffer : NULL;
+}
+
+/// Get ml_line_count from buffer (void* input for FFI)
+int nvim_syn_buf_get_line_count(void *buf)
+{
+  return buf ? (int)((buf_T *)buf)->b_ml.ml_line_count : 0;
+}
+
+/// Call buf_get_changedtick from Rust (void* input for FFI)
+int nvim_syn_buf_get_changed_tick(void *buf)
+{
+  return buf ? (int)buf_get_changedtick((buf_T *)buf) : 0;
+}
+
+/// Set b_sst_lasttick in syn_block
+void nvim_syn_set_sst_lasttick(int tick)
+{
+  if (syn_block) {
+    syn_block->b_sst_lasttick = (disptick_T)tick;
+  }
+}
+
+/// Get display_tick global
+int nvim_syn_get_display_tick(void)
+{
+  return (int)display_tick;
+}
+
+/// Call line_breakcheck from Rust
+void nvim_syn_line_breakcheck(void)
+{
+  line_breakcheck();
+}
+
+/// Get got_int global
+int nvim_syn_get_got_int(void)
+{
+  return got_int;
+}
+
+/// Get Rows global
+int nvim_syn_get_rows(void)
+{
+  return (int)Rows;
+}
