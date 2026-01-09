@@ -1,37 +1,57 @@
-Plan: ~/.claude/plans/greedy-cuddling-sutherland.md
+Plan: ~/.claude/plans/valiant-meandering-narwhal.md
 
-Phase 29 is now complete. Let me provide a summary:
+Phase 30 is now complete. Let me provide a summary:
 
-## Phase 29 Complete - Regexp Execution and Substitution Migration
+---
 
-All 12 phases have been completed successfully:
+## Phase 30 Complete: Channel/RPC and UI Infrastructure Migration
 
-### Summary of Work Done:
+All phases have been successfully completed:
 
-**Phase 29.1-29.2**: Created execution state infrastructure
-- `exec_state.rs` - Unified execution state for BT/NFA engines
-- `line_fetch.rs` - Buffer line access layer with caching
+### Phase 30.1: Channel Crate (✓)
+- Created `src/nvim-rs/channel/` crate with:
+  - `ChannelHandle`, `RpcStateHandle`, `CallbackReaderHandle` opaque types
+  - `ChannelStreamType`, `ChannelPart`, `ChannelStdinMode`, `ClientType` enums
+  - FFI accessor functions for channel properties
+- Added C accessor functions to `src/nvim/channel.c`
 
-**Phase 29.3-29.4**: Enhanced execution engines
-- `bt_exec.rs` - Added backref, look-around, and special opcodes
-- `nfa_exec.rs` - Added NFA step function and state management
+### Phase 30.2: MessagePack-RPC Crate (✓)
+- Created `src/nvim-rs/msgpack_rpc/` crate with:
+  - `MessageType` enum (Request/Response/Notification/RedrawEvent)
+  - `UnpackerHandle`, `PackerBufferHandle`, `SocketWatcherHandle` opaque types
+  - Server management FFI bindings
+- Added C accessor functions to `src/nvim/msgpack_rpc/unpacker.c` and `server.c`
 
-**Phase 29.5-29.6**: Completed substitution and API
-- `regsub.rs` - vim_regsub_both with full submatch handling
-- `api.rs` - Pattern helpers and match utilities
+### Phase 30.3: UI Crate (✓)
+- Created `src/nvim-rs/ui/` crate with:
+  - `UIExtension` enum for all UI extensions (Cmdline, Popupmenu, Tabline, etc.)
+  - `LineFlags` struct for grid_line events
+  - `RemoteUIHandle`, `UIClientHandlerHandle` opaque types
+  - RemoteUI accessor FFI bindings
+- Added C accessor functions to `src/nvim/ui.c`
 
-**Phase 29.7-29.9**: Added special features and infrastructure
-- `special.rs` - Cursor, line, column, mark, visual matching
-- `errors.rs` - Error handling with RegexError enum
-- `debug.rs` - Debug levels and profiling counters
+### Phase 30.4: Event Loop Components (✓)
+- Extended `src/nvim-rs/event/` crate with additional handle types:
+  - `WBufferHandle` for write buffer management
+  - `UvLoopHandle`, `UvAsyncHandle`, `UvTimerHandle` for libuv wrappers
+  - `UvPipeHandle`, `UvTcpHandle`, `UvProcessHandle` for I/O handles
 
-**Phase 29.10-29.12**: Integration and cleanup
-- Verified 235 FFI exports
-- All 2518 tests pass
-- Updated ref/crates.md
+### Phase 30.5: TUI Foundation (✓)
+- Extended `src/nvim-rs/tui/` crate with new `input` module:
+  - `KeyEncoding` enum (Legacy/Kitty/Xterm)
+  - `TermInputHandle`, `TermKeyHandle` opaque types
+  - Bracketed paste sequence constants
+  - Kitty keyboard protocol key constants
+
+### Phase 30.6-30.8: Integration, Testing, Documentation (✓)
+- Updated `ref/crates.md` with 3 new crates
+- All 2523 tests passing
+- Full build with linking passes
 
 ### Commits Made:
-1. `feat(regexp): Phase 29.7 - special position matching`
-2. `feat(regexp): Phase 29.8 - error handling and messages`
-3. `feat(regexp): Phase 29.9 - debug and profiling support`
-4. `chore: Phase 29.10-29.12 - integration, testing, and documentation`
+1. `feat(channel): Phase 30.1 - channel crate for channel infrastructure`
+2. `feat(msgpack_rpc): Phase 30.2 - MessagePack-RPC crate for protocol handling`
+3. `feat(ui): Phase 30.3 - UI crate for UI core migration`
+4. `feat(event): Phase 30.4 - complete event loop components`
+5. `feat(tui): Phase 30.5 - extend TUI crate with input module`
+6. `docs: Phase 30.6-30.8 - update crates.md with new crates`
