@@ -11,6 +11,7 @@ pub mod completion;
 pub mod constants;
 pub mod context;
 pub mod edit;
+pub mod entry;
 pub mod expand;
 pub mod expr;
 pub mod history;
