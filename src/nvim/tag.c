@@ -309,6 +309,12 @@ int nvim_findtags_get_tag_file_sorted(const void *st_void)
   return st->tag_file_sorted;
 }
 
+/// Get the 'taglength' option value for Rust
+int64_t nvim_get_p_tl(void)
+{
+  return p_tl;
+}
+
 #include "tag.c.generated.h"
 
 static const char e_tag_stack_empty[]
