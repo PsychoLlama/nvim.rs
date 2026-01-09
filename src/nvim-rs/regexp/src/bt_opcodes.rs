@@ -304,6 +304,317 @@ pub fn classcode_for_char(c: u8) -> Option<c_int> {
 }
 
 // =============================================================================
+// Magic Character Handling
+// =============================================================================
+
+/// Magic value to distinguish special chars from literal bytes.
+/// Magic characters are stored as negative values: Magic(x) = x - 256.
+pub const MAGIC_OFFSET: c_int = 256;
+
+/// Convert a character to its "magic" form.
+/// This is used to distinguish metacharacters from literals in the pattern.
+#[inline]
+pub const fn magic(x: c_int) -> c_int {
+    x - MAGIC_OFFSET
+}
+
+/// Convert a "magic" value back to the original character.
+#[inline]
+pub const fn un_magic(x: c_int) -> c_int {
+    x + MAGIC_OFFSET
+}
+
+/// Check if a value is a "magic" (special) character.
+#[inline]
+pub const fn is_magic(x: c_int) -> bool {
+    x < 0
+}
+
+/// Magic byte used to identify compiled regexp programs.
+pub const REGMAGIC: u8 = 0o234;
+
+// =============================================================================
+// Opcode Range Checking
+// =============================================================================
+
+/// Check if opcode is an MOPEN (0-9).
+#[inline]
+pub const fn is_mopen(op: c_int) -> bool {
+    op >= MOPEN && op < MOPEN + 10
+}
+
+/// Check if opcode is an MCLOSE (0-9).
+#[inline]
+pub const fn is_mclose(op: c_int) -> bool {
+    op >= MCLOSE && op < MCLOSE + 10
+}
+
+/// Check if opcode is a BACKREF (1-9).
+#[inline]
+pub const fn is_backref(op: c_int) -> bool {
+    op > BACKREF && op < BACKREF + 10
+}
+
+/// Check if opcode is a ZOPEN (0-9).
+#[inline]
+pub const fn is_zopen(op: c_int) -> bool {
+    op >= ZOPEN && op < ZOPEN + 10
+}
+
+/// Check if opcode is a ZCLOSE (0-9).
+#[inline]
+pub const fn is_zclose(op: c_int) -> bool {
+    op >= ZCLOSE && op < ZCLOSE + 10
+}
+
+/// Check if opcode is a ZREF (1-9).
+#[inline]
+pub const fn is_zref(op: c_int) -> bool {
+    op > ZREF && op < ZREF + 10
+}
+
+/// Check if opcode is a BRACE_COMPLEX (0-9).
+#[inline]
+pub const fn is_brace_complex(op: c_int) -> bool {
+    op >= BRACE_COMPLEX && op < BRACE_COMPLEX + 10
+}
+
+/// Get the subexpr number from an MOPEN opcode.
+#[inline]
+pub const fn get_mopen_num(op: c_int) -> c_int {
+    op - MOPEN
+}
+
+/// Get the subexpr number from an MCLOSE opcode.
+#[inline]
+pub const fn get_mclose_num(op: c_int) -> c_int {
+    op - MCLOSE
+}
+
+/// Get the backref number from a BACKREF opcode.
+#[inline]
+pub const fn get_backref_num(op: c_int) -> c_int {
+    op - BACKREF
+}
+
+/// Get the subexpr number from a ZOPEN opcode.
+#[inline]
+pub const fn get_zopen_num(op: c_int) -> c_int {
+    op - ZOPEN
+}
+
+/// Get the subexpr number from a ZCLOSE opcode.
+#[inline]
+pub const fn get_zclose_num(op: c_int) -> c_int {
+    op - ZCLOSE
+}
+
+/// Get the brace number from a BRACE_COMPLEX opcode.
+#[inline]
+pub const fn get_brace_complex_num(op: c_int) -> c_int {
+    op - BRACE_COMPLEX
+}
+
+// =============================================================================
+// Bytecode Access Functions
+// =============================================================================
+
+/// Get the opcode at a bytecode position.
+///
+/// # Safety
+/// Pointer must be valid and point to valid bytecode.
+#[inline]
+pub unsafe fn op(p: *const u8) -> c_int {
+    *p as c_int
+}
+
+/// Get the "next" pointer offset from a bytecode position.
+/// The offset is stored as a big-endian 16-bit value at p+1 and p+2.
+///
+/// # Safety
+/// Pointer must be valid and point to at least 3 bytes of valid bytecode.
+#[inline]
+pub unsafe fn next(p: *const u8) -> c_int {
+    ((*p.add(1) as c_int & 0o377) << 8) + (*p.add(2) as c_int & 0o377)
+}
+
+/// Get a pointer to the operand of a bytecode instruction.
+/// The operand starts at p+3 (after opcode and next pointer).
+///
+/// # Safety
+/// Pointer must be valid and point to at least 3 bytes of valid bytecode.
+#[inline]
+pub unsafe fn operand(p: *const u8) -> *const u8 {
+    p.add(3)
+}
+
+/// Get a mutable pointer to the operand of a bytecode instruction.
+///
+/// # Safety
+/// Pointer must be valid and point to at least 3 bytes of valid bytecode.
+#[inline]
+pub unsafe fn operand_mut(p: *mut u8) -> *mut u8 {
+    p.add(3)
+}
+
+/// Read a 64-bit minimum value from BRACE_LIMITS operand.
+/// Format: 4 bytes at operand position (big-endian).
+///
+/// # Safety
+/// Pointer must point to valid BRACE_LIMITS bytecode.
+#[inline]
+pub unsafe fn operand_min(p: *const u8) -> i64 {
+    let op = operand(p);
+    (((*op) as i64) << 24)
+        + (((*op.add(1)) as i64) << 16)
+        + (((*op.add(2)) as i64) << 8)
+        + ((*op.add(3)) as i64)
+}
+
+/// Read a 64-bit maximum value from BRACE_LIMITS operand.
+/// The max comes after the min (4 bytes later).
+///
+/// # Safety
+/// Pointer must point to valid BRACE_LIMITS bytecode.
+#[inline]
+pub unsafe fn operand_max(p: *const u8) -> i64 {
+    operand_min(p.add(4))
+}
+
+/// Read the comparison operator from position operand (RE_LNUM, RE_COL, etc.).
+///
+/// # Safety
+/// Pointer must point to valid position comparison bytecode.
+#[inline]
+pub unsafe fn operand_cmp(p: *const u8) -> u8 {
+    *p.add(7)
+}
+
+// =============================================================================
+// Register Parens Constants
+// =============================================================================
+
+/// REG_NOPAREN - toplevel reg() (no parens).
+pub const REG_NOPAREN: c_int = 0;
+
+/// REG_PAREN - \(\) capturing group.
+pub const REG_PAREN: c_int = 1;
+
+/// REG_ZPAREN - \z(\) external capturing group.
+pub const REG_ZPAREN: c_int = 2;
+
+/// REG_NPAREN - \%(\) non-capturing group.
+pub const REG_NPAREN: c_int = 3;
+
+// =============================================================================
+// Regex Flags (RF_*)
+// =============================================================================
+
+/// Ignore case during matching.
+pub const RF_ICASE: c_int = 1;
+
+/// Don't ignore case (explicit).
+pub const RF_NOICASE: c_int = 2;
+
+/// Pattern can match a newline.
+pub const RF_HASNL: c_int = 4;
+
+/// Ignore combining characters.
+pub const RF_ICOMBINE: c_int = 8;
+
+/// Uses `\@<=` or `\@<!`.
+pub const RF_LOOKBH: c_int = 16;
+
+// =============================================================================
+// Multi-line Matching Constants
+// =============================================================================
+
+/// Not a multi-line quantifier.
+pub const NOT_MULTI: c_int = 0;
+
+/// Multi-line quantifier matching one.
+pub const MULTI_ONE: c_int = 1;
+
+/// Multi-line quantifier matching multiple.
+pub const MULTI_MULT: c_int = 2;
+
+// =============================================================================
+// Regmatch Return Codes
+// =============================================================================
+
+/// Regmatch: something failed, abort.
+pub const RA_FAIL: c_int = 1;
+
+/// Regmatch: continue in inner loop.
+pub const RA_CONT: c_int = 2;
+
+/// Regmatch: break inner loop.
+pub const RA_BREAK: c_int = 3;
+
+/// Regmatch: successful match.
+pub const RA_MATCH: c_int = 4;
+
+/// Regmatch: didn't match.
+pub const RA_NOMATCH: c_int = 5;
+
+// =============================================================================
+// FFI Exports
+// =============================================================================
+//
+// Note: Some FFI exports (rs_bt_op, rs_bt_next, rs_bt_operand) are defined in
+// bt_compile.rs to avoid duplication. These functions remain as internal Rust
+// functions here.
+
+/// Check if opcode includes newline matching.
+#[no_mangle]
+pub extern "C" fn rs_bt_with_nl(op: c_int) -> c_int {
+    c_int::from(with_nl(op))
+}
+
+/// Check if opcode is an MOPEN.
+#[no_mangle]
+pub extern "C" fn rs_bt_is_mopen(op: c_int) -> c_int {
+    c_int::from(is_mopen(op))
+}
+
+/// Check if opcode is an MCLOSE.
+#[no_mangle]
+pub extern "C" fn rs_bt_is_mclose(op: c_int) -> c_int {
+    c_int::from(is_mclose(op))
+}
+
+/// Check if opcode is a BACKREF.
+#[no_mangle]
+pub extern "C" fn rs_bt_is_backref(op: c_int) -> c_int {
+    c_int::from(is_backref(op))
+}
+
+/// Get the character class opcode for a specifier character.
+/// Returns -1 if not a valid specifier.
+#[no_mangle]
+pub extern "C" fn rs_bt_classcode_for_char(c: u8) -> c_int {
+    classcode_for_char(c).unwrap_or(-1)
+}
+
+/// Convert character to magic form.
+#[no_mangle]
+pub extern "C" fn rs_bt_magic(x: c_int) -> c_int {
+    magic(x)
+}
+
+/// Convert magic form back to character.
+#[no_mangle]
+pub extern "C" fn rs_bt_un_magic(x: c_int) -> c_int {
+    un_magic(x)
+}
+
+/// Check if value is a magic character.
+#[no_mangle]
+pub extern "C" fn rs_bt_is_magic(x: c_int) -> c_int {
+    c_int::from(is_magic(x))
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -429,5 +740,121 @@ mod tests {
     fn test_stack_sizes() {
         assert_eq!(REGSTACK_INITIAL, 2048);
         assert_eq!(BACKPOS_INITIAL, 64);
+    }
+
+    #[test]
+    fn test_opcode_ranges() {
+        // Verify MOPEN/MCLOSE ranges
+        assert!(is_mopen(MOPEN));
+        assert!(is_mopen(MOPEN + 9));
+        assert!(!is_mopen(MOPEN - 1));
+        assert!(!is_mopen(MOPEN + 10));
+
+        assert!(is_mclose(MCLOSE));
+        assert!(is_mclose(MCLOSE + 9));
+        assert!(!is_mclose(MCLOSE - 1));
+        assert!(!is_mclose(MCLOSE + 10));
+    }
+
+    #[test]
+    fn test_backref_range() {
+        assert!(is_backref(BACKREF + 1));
+        assert!(is_backref(BACKREF + 9));
+        assert!(!is_backref(BACKREF));
+        assert!(!is_backref(BACKREF + 10));
+    }
+
+    #[test]
+    fn test_zopen_zclose_ranges() {
+        assert!(is_zopen(ZOPEN));
+        assert!(is_zopen(ZOPEN + 9));
+        assert!(!is_zopen(ZOPEN - 1));
+        assert!(!is_zopen(ZOPEN + 10));
+
+        assert!(is_zclose(ZCLOSE));
+        assert!(is_zclose(ZCLOSE + 9));
+        assert!(!is_zclose(ZCLOSE - 1));
+        assert!(!is_zclose(ZCLOSE + 10));
+    }
+
+    #[test]
+    fn test_brace_complex_range() {
+        assert!(is_brace_complex(BRACE_COMPLEX));
+        assert!(is_brace_complex(BRACE_COMPLEX + 9));
+        assert!(!is_brace_complex(BRACE_COMPLEX - 1));
+        assert!(!is_brace_complex(BRACE_COMPLEX + 10));
+    }
+
+    #[test]
+    fn test_get_subexpr_num() {
+        assert_eq!(get_mopen_num(MOPEN), 0);
+        assert_eq!(get_mopen_num(MOPEN + 5), 5);
+        assert_eq!(get_mopen_num(MOPEN + 9), 9);
+
+        assert_eq!(get_mclose_num(MCLOSE), 0);
+        assert_eq!(get_mclose_num(MCLOSE + 3), 3);
+    }
+
+    #[test]
+    fn test_magic_conversion() {
+        // '*' = 42, magic(42) = 42 - 256 = -214
+        assert_eq!(magic(b'*' as c_int), -214);
+        assert!(is_magic(-214));
+        assert!(!is_magic(b'*' as c_int));
+        assert_eq!(un_magic(-214), b'*' as c_int);
+    }
+
+    #[test]
+    fn test_operand_access() {
+        // Simulate a bytecode sequence: opcode at [0], next at [1,2], operand at [3+]
+        let bytecode: [u8; 10] = [
+            EXACTLY as u8, // opcode
+            0x01,          // next high byte
+            0x20,          // next low byte
+            b'h',          // operand bytes
+            b'e',
+            b'l',
+            b'l',
+            b'o',
+            0,
+            0,
+        ];
+        let ptr = bytecode.as_ptr();
+        unsafe {
+            assert_eq!(op(ptr), EXACTLY);
+            assert_eq!(next(ptr), 0x0120); // big-endian
+            assert_eq!(*operand(ptr), b'h');
+        }
+    }
+
+    #[test]
+    fn test_regmagic() {
+        assert_eq!(REGMAGIC, 0o234);
+    }
+
+    #[test]
+    fn test_reg_paren_constants() {
+        assert_eq!(REG_NOPAREN, 0);
+        assert_eq!(REG_PAREN, 1);
+        assert_eq!(REG_ZPAREN, 2);
+        assert_eq!(REG_NPAREN, 3);
+    }
+
+    #[test]
+    fn test_rf_flags() {
+        assert_eq!(RF_ICASE, 1);
+        assert_eq!(RF_NOICASE, 2);
+        assert_eq!(RF_HASNL, 4);
+        assert_eq!(RF_ICOMBINE, 8);
+        assert_eq!(RF_LOOKBH, 16);
+    }
+
+    #[test]
+    fn test_ra_codes() {
+        assert_eq!(RA_FAIL, 1);
+        assert_eq!(RA_CONT, 2);
+        assert_eq!(RA_BREAK, 3);
+        assert_eq!(RA_MATCH, 4);
+        assert_eq!(RA_NOMATCH, 5);
     }
 }
