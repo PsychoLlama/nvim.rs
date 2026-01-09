@@ -46,7 +46,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | insexpand      | Insert-mode completion                  |
 | keycodes       | Key code parsing                        |
 | linematch      | Diff line alignment                     |
-| lua            | Lua integration                         |
+| lua            | Lua integration (state, types, conversion, stdlib, callbacks) |
 | mapping        | Key mappings and abbreviations          |
 | mark           | Marks and positions                     |
 | marktree       | B-tree for extmarks at positions        |

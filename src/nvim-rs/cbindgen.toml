@@ -15,7 +15,7 @@ rename_variants = "ScreamingSnakeCase"
 
 [parse]
 parse_deps = true
-include = ["nvim-buffer", "nvim-charset", "nvim-cmdline", "nvim-cmdhist", "nvim-cursor", "nvim-diff", "nvim-encoding", "nvim-eval", "nvim-ex-docmd", "nvim-fileio", "nvim-help", "nvim-indent", "nvim-insexpand", "nvim-keycodes", "nvim-mapping", "nvim-marktree", "nvim-math", "nvim-mbyte", "nvim-memutil", "nvim-menu", "nvim-mouse", "nvim-option", "nvim-os", "nvim-path", "nvim-profile", "nvim-regexp", "nvim-search", "nvim-spell", "nvim-strings", "nvim-version", "nvim-viewport", "nvim-window"]
+include = ["nvim-buffer", "nvim-charset", "nvim-cmdline", "nvim-cmdhist", "nvim-cursor", "nvim-diff", "nvim-encoding", "nvim-eval", "nvim-ex-docmd", "nvim-fileio", "nvim-help", "nvim-indent", "nvim-insexpand", "nvim-keycodes", "nvim-lua", "nvim-mapping", "nvim-marktree", "nvim-math", "nvim-mbyte", "nvim-memutil", "nvim-menu", "nvim-mouse", "nvim-option", "nvim-os", "nvim-path", "nvim-profile", "nvim-regexp", "nvim-search", "nvim-spell", "nvim-strings", "nvim-version", "nvim-viewport", "nvim-window"]
 
 [export]
 include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs_getchr", "rs_ungetchr", "rs_read_limits", "rs_mb_decompose", "rs_use_multibytecode", "rs_nfa_re_num_cmp", "rs_re_put_uint32", "rs_re_get_uint32", "rs_re_put_uint16", "rs_re_get_uint16", "rs_re_num_cmp", "rs_get_char_class", "rs_nfa_recognize_char_class",
@@ -307,4 +307,34 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            # Search system (Phase 19)
            "IncsearchState", "CharSearchState", "SubstituteFlags", "SubstitutionCount",
            "SearchLoopState", "SearchMsgOptions", "SearchBehavior", "SearchOffset",
-           "SearchitArg"]
+           "SearchitArg",
+           # Lua integration (Phase 20)
+           "rs_lua_get_state", "rs_lua_is_initialized", "rs_lua_callback_depth",
+           "rs_lua_in_fast_callback", "rs_lua_get_ref_count",
+           "rs_lua_type_name", "rs_lua_typename_to_idx",
+           "rs_nlua_push_integer", "rs_nlua_push_float", "rs_nlua_push_boolean",
+           "rs_nlua_push_string", "rs_nlua_push_array", "rs_nlua_push_dict",
+           "rs_nlua_push_object", "rs_nlua_push_handle",
+           "rs_lua_pushnil", "rs_lua_pushnumber", "rs_lua_pushboolean", "rs_lua_pushlstring",
+           "rs_nlua_pop_integer", "rs_nlua_pop_float", "rs_nlua_pop_boolean",
+           "rs_nlua_pop_boolean_strict", "rs_nlua_pop_string", "rs_nlua_pop_array",
+           "rs_nlua_pop_dict", "rs_nlua_pop_object", "rs_nlua_pop_typval",
+           "rs_lua_tonumber", "rs_lua_toboolean", "rs_lua_tolstring",
+           "rs_lua_type", "rs_lua_pop", "rs_lua_gettop",
+           "rs_nlua_error", "rs_nlua_pcall", "rs_nlua_push_errstr",
+           "rs_lua_gettop_stdlib", "rs_lua_settop", "rs_lua_pushvalue",
+           "rs_lua_remove", "rs_lua_insert", "rs_lua_checkstack", "rs_lua_concat",
+           "rs_luaL_checkinteger", "rs_luaL_checknumber", "rs_luaL_checkstring",
+           "rs_luaL_checklstring", "rs_luaL_checktype", "rs_luaL_optinteger",
+           "rs_luaL_ref", "rs_luaL_unref", "rs_luaL_where",
+           "rs_lua_createtable", "rs_lua_getfield", "rs_lua_setfield",
+           "rs_lua_getglobal", "rs_lua_setglobal",
+           "rs_nlua_push_typval", "rs_nlua_pop_luaref", "rs_nlua_pop_handle",
+           "rs_nlua_init_types", "rs_nlua_pop_keydict", "rs_nlua_push_keydict",
+           "rs_nlua_pop_buffer", "rs_nlua_pop_window", "rs_nlua_pop_tabpage",
+           "rs_nlua_ref", "rs_nlua_ref_global", "rs_nlua_unref", "rs_nlua_unref_global",
+           "rs_api_free_luaref", "rs_api_new_luaref", "rs_nlua_pushref",
+           "rs_nlua_get_nil_ref", "rs_nlua_get_empty_dict_ref",
+           "rs_nlua_ref_is_function", "rs_nlua_call_ref", "rs_nlua_call_ref_ctx",
+           "rs_typval_exec_lua_callable", "rs_nlua_is_deferred_safe", "rs_nlua_get_global_ref_count",
+           "LuaType", "NluaRefState", "KeySetLink"]
