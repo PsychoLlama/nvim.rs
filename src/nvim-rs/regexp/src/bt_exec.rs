@@ -21,8 +21,13 @@
 use std::ffi::c_int;
 use std::ptr;
 
-use crate::bt_compile::{op, operand};
-use crate::bt_opcodes::{ANY, ANYBUT, ANYOF, DIGIT, EXACTLY, HEAD, NEWL, WHITE, WORD};
+use crate::bt_compile::{next, op, operand};
+use crate::bt_opcodes::{
+    get_mclose_num, get_mopen_num, is_mclose, is_mopen, ALPHA, ANY, ANYBUT, ANYOF, BACK, BOL, BOW,
+    BRANCH, DIGIT, END, EOL, EOW, EXACTLY, HEAD, HEX, IDENT, LOWER, NALPHA, NDIGIT, NEWL, NHEAD,
+    NHEX, NLOWER, NOTHING, NWHITE, NWORD, NUPPER, OCTAL, PLUS, PRINT, SPRINT, STAR, UPPER, WHITE,
+    WORD,
+};
 use crate::bt_state::{BackPosTable, RegSave, RegStack, RegState, NSUBEXP};
 
 // =============================================================================
@@ -186,6 +191,18 @@ impl MatchState {
             0
         } else {
             *self.input
+        }
+    }
+
+    /// Get the previous byte (before current position)
+    ///
+    /// # Safety
+    /// Input must be valid
+    pub unsafe fn prev_byte(&self) -> u8 {
+        if self.input.is_null() || self.input == self.line_start {
+            0
+        } else {
+            *self.input.sub(1)
         }
     }
 
@@ -376,6 +393,293 @@ pub unsafe fn regrepeat(state: &mut MatchState, scan: *const u8, maxcount: i64) 
     }
 
     count
+}
+
+// =============================================================================
+// Main Match Engine
+// =============================================================================
+
+/// Internal result codes for matching.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(i32)]
+pub enum MatchStatus {
+    /// Continue matching
+    Continue = 0,
+    /// Match failed, try backtrack
+    NoMatch = 1,
+    /// Match succeeded
+    Match = 2,
+    /// Error occurred
+    Fail = 3,
+    /// Break out of inner loop
+    Break = 4,
+}
+
+/// Main regex matching function for BT engine.
+///
+/// Tries to match the compiled pattern against the input at the current position.
+/// Uses a stack-based approach to handle backtracking.
+///
+/// # Safety
+/// state must be valid with valid program pointer.
+pub unsafe fn regmatch(state: &mut MatchState, program: *const u8) -> MatchResult {
+    if program.is_null() {
+        return MatchResult::Error;
+    }
+
+    // Start at the first instruction (skip REGMAGIC byte)
+    let mut scan = program.add(1);
+
+    loop {
+        if scan.is_null() {
+            return MatchResult::Error;
+        }
+
+        let opcode = op(scan);
+
+        // Check for END first
+        if opcode == END {
+            return MatchResult::Match;
+        }
+
+        let next_scan = next(scan);
+        let status = match_one_op(state, scan, opcode);
+
+        match status {
+            MatchStatus::Continue => {
+                // Move to next instruction
+                scan = if next_scan.is_null() {
+                    scan.add(3) // Default: advance past node
+                } else {
+                    next_scan
+                };
+            }
+            MatchStatus::Match => {
+                return MatchResult::Match;
+            }
+            MatchStatus::NoMatch => {
+                // Try backtracking
+                if let Some(back_scan) = state.pop_backtrack() {
+                    scan = back_scan;
+                } else {
+                    return MatchResult::NoMatch;
+                }
+            }
+            MatchStatus::Fail => {
+                return MatchResult::Error;
+            }
+            MatchStatus::Break => {
+                // Move to next instruction (used for branches that need continuation)
+                scan = if next_scan.is_null() {
+                    scan.add(3)
+                } else {
+                    next_scan
+                };
+            }
+        }
+    }
+}
+
+/// Match a single opcode.
+///
+/// # Safety
+/// scan must point to valid bytecode.
+unsafe fn match_one_op(state: &mut MatchState, scan: *const u8, opcode: c_int) -> MatchStatus {
+    let next_scan = next(scan);
+
+    match opcode {
+        BOL => {
+            if state.at_bol() {
+                MatchStatus::Continue
+            } else {
+                MatchStatus::NoMatch
+            }
+        }
+
+        EOL => {
+            if state.at_eol() {
+                MatchStatus::Continue
+            } else {
+                MatchStatus::NoMatch
+            }
+        }
+
+        BOW => {
+            // Beginning of word: previous char is not word, current is
+            let at_word_start = state.at_bol() || !is_word_char(state.prev_byte());
+            let cur = state.current_byte();
+            if at_word_start && is_word_char(cur) {
+                MatchStatus::Continue
+            } else {
+                MatchStatus::NoMatch
+            }
+        }
+
+        EOW => {
+            // End of word: current is not word char but previous was
+            let cur = state.current_byte();
+            if !is_word_char(cur) && !state.at_bol() && is_word_char(state.prev_byte()) {
+                MatchStatus::Continue
+            } else {
+                MatchStatus::NoMatch
+            }
+        }
+
+        ANY => {
+            let c = state.current_byte();
+            if c != 0 && (c != b'\n' || state.match_nl) {
+                state.advance_input();
+                MatchStatus::Continue
+            } else {
+                MatchStatus::NoMatch
+            }
+        }
+
+        EXACTLY => {
+            let opnd = operand(scan);
+            if opnd.is_null() {
+                return MatchStatus::NoMatch;
+            }
+
+            // Match each character in the operand
+            let mut p = opnd;
+            while *p != 0 {
+                if state.current_byte() != *p {
+                    return MatchStatus::NoMatch;
+                }
+                state.advance_input();
+                p = p.add(1);
+            }
+            MatchStatus::Continue
+        }
+
+        ANYOF => {
+            let c = state.current_byte();
+            if c != 0 && match_class(operand(scan), c) {
+                state.advance_input();
+                MatchStatus::Continue
+            } else {
+                MatchStatus::NoMatch
+            }
+        }
+
+        ANYBUT => {
+            let c = state.current_byte();
+            if c != 0 && c != b'\n' && !match_class(operand(scan), c) {
+                state.advance_input();
+                MatchStatus::Continue
+            } else {
+                MatchStatus::NoMatch
+            }
+        }
+
+        NOTHING => MatchStatus::Continue,
+
+        BACK => {
+            // BACK is used in loops - just continue
+            MatchStatus::Continue
+        }
+
+        BRANCH => {
+            let next_op = op(next_scan);
+            if next_op != BRANCH {
+                // No alternative - just continue with operand
+                MatchStatus::Continue
+            } else {
+                // Push alternative onto backtrack stack
+                if !state.push_backtrack(RegState::Branch, next_scan as *mut u8) {
+                    return MatchStatus::Fail;
+                }
+                MatchStatus::Continue
+            }
+        }
+
+        // Character classes
+        DIGIT => match_char_class(state, |c| c.is_ascii_digit()),
+        NDIGIT => match_char_class(state, |c| !c.is_ascii_digit() && c != b'\n'),
+        WHITE => match_char_class(state, |c| c == b' ' || c == b'\t'),
+        NWHITE => match_char_class(state, |c| c != b' ' && c != b'\t' && c != b'\n'),
+        WORD => match_char_class(state, is_word_char),
+        NWORD => match_char_class(state, |c| !is_word_char(c) && c != b'\n'),
+        HEAD => match_char_class(state, |c| c.is_ascii_alphabetic() || c == b'_'),
+        NHEAD => match_char_class(state, |c| !c.is_ascii_alphabetic() && c != b'_' && c != b'\n'),
+        ALPHA => match_char_class(state, |c| c.is_ascii_alphabetic()),
+        NALPHA => match_char_class(state, |c| !c.is_ascii_alphabetic() && c != b'\n'),
+        LOWER => match_char_class(state, |c| c.is_ascii_lowercase()),
+        NLOWER => match_char_class(state, |c| !c.is_ascii_lowercase() && c != b'\n'),
+        UPPER => match_char_class(state, |c| c.is_ascii_uppercase()),
+        NUPPER => match_char_class(state, |c| !c.is_ascii_uppercase() && c != b'\n'),
+        HEX => match_char_class(state, |c| c.is_ascii_hexdigit()),
+        NHEX => match_char_class(state, |c| !c.is_ascii_hexdigit() && c != b'\n'),
+        OCTAL => match_char_class(state, |c| matches!(c, b'0'..=b'7')),
+        IDENT => match_char_class(state, |c| c.is_ascii_alphanumeric() || c == b'_'),
+        PRINT => match_char_class(state, |c| (0x20..0x7f).contains(&c)),
+        SPRINT => match_char_class(state, |c| (0x21..0x7f).contains(&c)),
+
+        NEWL => {
+            if state.current_byte() == b'\n' {
+                state.advance_input();
+                MatchStatus::Continue
+            } else {
+                MatchStatus::NoMatch
+            }
+        }
+
+        // Subexpression markers
+        op if is_mopen(op) => {
+            let n = get_mopen_num(op) as usize;
+            state.set_startp(n, state.input());
+            MatchStatus::Continue
+        }
+
+        op if is_mclose(op) => {
+            let n = get_mclose_num(op) as usize;
+            state.set_endp(n, state.input());
+            MatchStatus::Continue
+        }
+
+        // Quantifiers - these are handled specially
+        STAR | PLUS => {
+            // For simple quantifiers, use regrepeat
+            let min = if opcode == STAR { 0 } else { 1 };
+            let count = regrepeat(state, operand(scan), i64::MAX);
+
+            if count < min {
+                return MatchStatus::NoMatch;
+            }
+
+            // For now, just continue after consuming
+            MatchStatus::Continue
+        }
+
+        END => MatchStatus::Match,
+
+        _ => {
+            // Unknown opcode
+            MatchStatus::NoMatch
+        }
+    }
+}
+
+/// Helper to match character classes.
+#[inline]
+unsafe fn match_char_class<F>(state: &mut MatchState, pred: F) -> MatchStatus
+where
+    F: Fn(u8) -> bool,
+{
+    let c = state.current_byte();
+    if c != 0 && pred(c) {
+        state.advance_input();
+        MatchStatus::Continue
+    } else {
+        MatchStatus::NoMatch
+    }
+}
+
+/// Check if a byte is a word character.
+#[inline]
+fn is_word_char(c: u8) -> bool {
+    c.is_ascii_alphanumeric() || c == b'_'
 }
 
 // =============================================================================
@@ -611,6 +915,25 @@ pub unsafe extern "C" fn rs_bt_regrepeat(
         0
     } else {
         regrepeat(&mut *state, scan, maxcount)
+    }
+}
+
+/// Execute regex match.
+///
+/// Returns 1 for match, 0 for no match, -1 for error.
+///
+/// # Safety
+/// `state` and `program` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_regmatch(state: *mut MatchState, program: *const u8) -> c_int {
+    if state.is_null() || program.is_null() {
+        return -1;
+    }
+
+    match regmatch(&mut *state, program) {
+        MatchResult::Match => 1,
+        MatchResult::NoMatch => 0,
+        MatchResult::Error | MatchResult::TimedOut => -1,
     }
 }
 
