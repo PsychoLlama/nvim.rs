@@ -15,6 +15,8 @@ pub mod bt_parse;
 pub mod bt_state;
 pub mod char_class;
 pub mod decompose;
+pub mod exec_state;
+pub mod line_fetch;
 pub mod multiline;
 pub mod nfa_compile;
 pub mod nfa_exec;
@@ -51,6 +53,17 @@ pub use bt_state::{
 };
 pub use char_class::rs_get_char_class;
 pub use decompose::rs_mb_decompose;
+pub use exec_state::{
+    rs_exec_state_advance, rs_exec_state_at_bol, rs_exec_state_at_eol,
+    rs_exec_state_current_byte, rs_exec_state_free, rs_exec_state_init_multi,
+    rs_exec_state_init_single, rs_exec_state_load_from_rex, rs_exec_state_save_to_rex,
+    rs_rex_in_use, rs_rex_set_in_use,
+};
+pub use line_fetch::{
+    rs_line_cache_free, rs_line_cache_invalidate, rs_line_cache_new, rs_line_fetcher_free,
+    rs_line_fetcher_from_rex, rs_line_fetcher_get_len, rs_line_fetcher_get_line,
+    rs_line_fetcher_invalidate, rs_line_fetcher_new, rs_reg_getline, rs_reg_getline_len,
+};
 pub use multiline::{
     rs_multi_match_context_free, rs_multi_match_context_new, rs_multi_match_context_set_fetcher,
     rs_multi_match_context_set_prog, rs_multi_match_context_set_start,
