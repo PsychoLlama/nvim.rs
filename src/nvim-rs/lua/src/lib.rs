@@ -7,6 +7,7 @@
 //! - [`state`]: Lua state accessors and callback infrastructure
 //! - [`types`]: Lua type constants and conversion utilities
 //! - [`to_lua`]: Typval to Lua conversion helpers
+//! - [`from_lua`]: Lua to Typval conversion helpers
 
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(clippy::missing_safety_doc)]
@@ -14,6 +15,7 @@
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::cast_possible_wrap)]
 
+pub mod from_lua;
 pub mod state;
 pub mod to_lua;
 pub mod types;
