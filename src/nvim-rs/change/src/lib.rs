@@ -23,6 +23,7 @@ use std::ffi::{c_char, c_int, c_long, c_void};
 
 pub mod events;
 pub mod flags;
+pub mod invalidation;
 pub mod recording;
 
 pub use events::{
@@ -31,6 +32,7 @@ pub use events::{
     rs_deleted_lines_mark, rs_inserted_bytes,
 };
 pub use flags::OpenlineFlags;
+pub use invalidation::rs_changed_lines_invalidate_buf;
 pub use recording::{rs_change_warning, rs_changed, rs_changed_internal};
 
 // =============================================================================
