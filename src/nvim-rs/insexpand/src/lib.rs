@@ -8,6 +8,7 @@
 #![allow(clippy::doc_markdown)]
 
 pub mod add;
+pub mod leader;
 pub mod match_list;
 pub mod pum;
 pub mod sort;
