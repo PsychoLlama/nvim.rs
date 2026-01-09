@@ -14,6 +14,7 @@
 //! - [`sort`] - `:sort` command implementation
 //! - [`lines`] - Line manipulation commands (`:copy`, `:move`, `:delete`, `:yank`, `:put`, `:join`)
 //! - [`display`] - Display commands (`:print`, `:number`, `:list`, `:=`)
+//! - [`shell`] - Shell integration (`:!`, `:shell`, filter commands)
 //!
 //! ## Opaque Handles
 //!
@@ -29,6 +30,7 @@ pub mod global;
 pub mod lines;
 pub mod range;
 pub mod read;
+pub mod shell;
 pub mod sort;
 pub mod substitute;
 pub mod write;
