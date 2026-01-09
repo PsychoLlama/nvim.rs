@@ -1,26 +1,18 @@
-Plan: ~/.claude/plans/typed-imagining-kahn.md
+Plan: ~/.claude/plans/purring-painting-scone.md
 
-All 8 phases of the ops migration plan are now complete. Here's a summary of what was accomplished:
+The Quickfix migration plan is **complete**. All 8 phases have been successfully implemented and committed:
 
-## Migration Summary
+| Phase | Module | Description | Functions |
+|-------|--------|-------------|-----------|
+| 1 | `parse.rs` | Entry parsing and validation | 13 |
+| 2 | `list.rs` | List management operations | 19 |
+| 3 | `navigate.rs` | Navigation and positioning | 14 |
+| 4 | `filter.rs` | Filtering and search | 18 |
+| 5 | `window.rs` | Window integration | 11 |
+| 6 | `commands.rs` | Command handlers | 17 |
+| 7 | `loclist.rs` | Location list specifics | 13 |
+| 8 | `external.rs` | External integration | 10 |
 
-All 8 phases have been completed and committed:
+The quickfix crate now contains 292 exported `rs_` functions across all modules (177 in lib.rs + 115 in the 8 new modules).
 
-| Phase | Module | Description | Commit |
-|-------|--------|-------------|--------|
-| 1 | shift.rs | Shift operators (op_shift, shift_line, shift_block) | ✅ |
-| 2 | tilde.rs | Case operators (op_tilde, swapchar) | ✅ |
-| 3 | addsub.rs | Add/subtract operator (do_addsub) | ✅ |
-| 4 | join.rs | Join lines operator (do_join) | ✅ |
-| 5 | replace.rs | Replace character operator (op_replace) | ✅ |
-| 6 | delete.rs | Delete operator (op_delete) | ✅ |
-| 7 | yank.rs | Yank operator (op_yank) - new file | ✅ |
-| 8 | insert.rs | Insert operator (op_insert) | ✅ |
-
-Each phase added:
-- Pure Rust helper functions for calculation logic
-- FFI wrappers with `#[no_mangle] pub extern "C"` for C interoperability
-- Comprehensive unit tests
-- Proper documentation
-
-The migration follows the "Opaque Handle" pattern from CLAUDE.md - calculation logic is in Rust while buffer manipulation remains in C, with data passed via accessor functions.
+All tests pass (1923 tests), clippy is clean, and code is formatted.
