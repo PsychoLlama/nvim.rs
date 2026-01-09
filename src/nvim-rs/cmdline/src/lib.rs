@@ -16,6 +16,7 @@ pub mod expand;
 pub mod expr;
 pub mod fname;
 pub mod history;
+pub mod input;
 pub mod keys;
 pub mod pattern;
 pub mod preview;
