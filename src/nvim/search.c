@@ -533,6 +533,54 @@ int nvim_get_did_save_last_search_spat(void)
   return did_save_last_search_spat;
 }
 
+/// Get the search_match_lines global (accessor for Rust).
+int nvim_get_search_match_lines(void)
+{
+  return (int)search_match_lines;
+}
+
+/// Get the search_match_endcol global (accessor for Rust).
+int nvim_get_search_match_endcol(void)
+{
+  return (int)search_match_endcol;
+}
+
+/// Get the no_hlsearch global (accessor for Rust).
+int nvim_get_no_hlsearch(void)
+{
+  return no_hlsearch ? 1 : 0;
+}
+
+/// Get the no_smartcase global (accessor for Rust).
+int nvim_get_no_smartcase(void)
+{
+  return no_smartcase ? 1 : 0;
+}
+
+/// Set the no_smartcase global (setter for Rust).
+void nvim_set_no_smartcase(int val)
+{
+  no_smartcase = val != 0;
+}
+
+/// Get the p_scs option (smartcase) for Rust.
+int nvim_get_p_scs(void)
+{
+  return p_scs ? 1 : 0;
+}
+
+/// Get the p_ws option (wrapscan) for Rust.
+int nvim_get_p_ws(void)
+{
+  return p_ws ? 1 : 0;
+}
+
+/// Get the p_hls option (hlsearch) for Rust.
+int nvim_get_p_hls(void)
+{
+  return p_hls ? 1 : 0;
+}
+
 /// Save and restore the search pattern for incremental highlight search
 /// feature.
 ///
