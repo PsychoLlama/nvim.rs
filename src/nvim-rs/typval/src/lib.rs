@@ -4,6 +4,22 @@
 //! from `src/nvim/eval/typval.c`. It uses an opaque handle pattern where
 //! `typval_T*` pointers are treated as opaque handles, with field access
 //! done through C accessor functions.
+//!
+//! ## Phase 28.1: Type Value Foundation
+//!
+//! This module provides:
+//! - Complete `TypeVal` enum with all VimL types (Number, Float, String, List, Dict, Func, Special, Blob, Partial)
+//! - Type conversion traits (`From`, `TryFrom`) between Rust and VimL types
+//! - Reference counting infrastructure for compound types
+//! - FFI exports for type creation and inspection
+//!
+//! ## Architecture
+//!
+//! The typval system uses a two-layer approach:
+//! 1. **Opaque handles** (`TypevalHandle`, `ListHandle`, etc.) for C interop
+//! 2. **Native Rust types** (`TypeVal`, `VimList`, etc.) for pure Rust operations
+//!
+//! Most operations go through C accessors to avoid struct layout dependencies.
 
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(clippy::doc_markdown)]
@@ -20,8 +36,10 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::if_not_else)]
 #![allow(clippy::manual_midpoint)]
+#![allow(clippy::module_name_repetitions)]
 
 use std::ffi::{c_char, c_int};
+use std::fmt;
 
 /// VarType enum values (matching C's VarType in typval_defs.h).
 #[repr(i32)]
@@ -59,7 +77,434 @@ impl VarType {
             _ => None,
         }
     }
+
+    /// Get a human-readable name for this type.
+    #[inline]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Unknown => "unknown",
+            Self::Number => "Number",
+            Self::String => "String",
+            Self::Func => "Funcref",
+            Self::List => "List",
+            Self::Dict => "Dict",
+            Self::Float => "Float",
+            Self::Bool => "Boolean",
+            Self::Special => "Special",
+            Self::Partial => "Partial",
+            Self::Blob => "Blob",
+        }
+    }
 }
+
+impl fmt::Display for VarType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
+// =============================================================================
+// Bool and Special value types (matching C enums)
+// =============================================================================
+
+/// Bool variable values (matching C's BoolVarValue).
+#[repr(i32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BoolVarValue {
+    /// v:false
+    False = 0,
+    /// v:true
+    True = 1,
+}
+
+impl BoolVarValue {
+    /// Convert to a Rust bool.
+    #[inline]
+    pub const fn as_bool(self) -> bool {
+        match self {
+            Self::False => false,
+            Self::True => true,
+        }
+    }
+}
+
+impl From<bool> for BoolVarValue {
+    #[inline]
+    fn from(b: bool) -> Self {
+        if b {
+            Self::True
+        } else {
+            Self::False
+        }
+    }
+}
+
+impl From<BoolVarValue> for bool {
+    #[inline]
+    fn from(b: BoolVarValue) -> Self {
+        b.as_bool()
+    }
+}
+
+/// Special variable values (matching C's SpecialVarValue).
+#[repr(i32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SpecialVarValue {
+    /// v:null
+    Null = 0,
+}
+
+// =============================================================================
+// Variable lock status (matching C's VarLockStatus)
+// =============================================================================
+
+/// Variable lock status for typval_T.v_lock.
+#[repr(i32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum VarLockStatus {
+    /// Not locked.
+    Unlocked = 0,
+    /// User lock, can be unlocked.
+    Locked = 1,
+    /// Locked forever.
+    Fixed = 2,
+}
+
+impl VarLockStatus {
+    /// Convert from C integer.
+    #[inline]
+    pub const fn from_c_int(v: c_int) -> Option<Self> {
+        match v {
+            0 => Some(Self::Unlocked),
+            1 => Some(Self::Locked),
+            2 => Some(Self::Fixed),
+            _ => None,
+        }
+    }
+
+    /// Check if the variable is locked (Locked or Fixed).
+    #[inline]
+    pub const fn is_locked(self) -> bool {
+        !matches!(self, Self::Unlocked)
+    }
+}
+
+// =============================================================================
+// Type constants for type() function return values
+// =============================================================================
+
+/// Type values for the VimL `type()` function.
+/// These differ from VarType - they're the values returned by type().
+#[repr(i64)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TypeFuncValue {
+    /// Number type (0)
+    Number = 0,
+    /// String type (1)
+    String = 1,
+    /// Funcref type (2) - covers both VAR_FUNC and VAR_PARTIAL
+    Func = 2,
+    /// List type (3)
+    List = 3,
+    /// Dict type (4)
+    Dict = 4,
+    /// Float type (5)
+    Float = 5,
+    /// Boolean type (6)
+    Bool = 6,
+    /// Special type (7) - v:null
+    Special = 7,
+    /// Blob type (10) - note: not contiguous!
+    Blob = 10,
+}
+
+impl TypeFuncValue {
+    /// Convert from VarType to the type() function return value.
+    #[inline]
+    pub const fn from_var_type(vt: VarType) -> Option<Self> {
+        match vt {
+            VarType::Unknown => None,
+            VarType::Number => Some(Self::Number),
+            VarType::String => Some(Self::String),
+            VarType::Func | VarType::Partial => Some(Self::Func),
+            VarType::List => Some(Self::List),
+            VarType::Dict => Some(Self::Dict),
+            VarType::Float => Some(Self::Float),
+            VarType::Bool => Some(Self::Bool),
+            VarType::Special => Some(Self::Special),
+            VarType::Blob => Some(Self::Blob),
+        }
+    }
+
+    /// Convert to i64 for FFI.
+    #[inline]
+    pub const fn as_i64(self) -> i64 {
+        self as i64
+    }
+}
+
+// =============================================================================
+// TypeVal - Native Rust representation of VimL values
+// =============================================================================
+
+/// A VimL value represented in native Rust types.
+///
+/// This enum provides a safe, native Rust interface to VimL values.
+/// For FFI, use the handle types (`TypevalHandle`, etc.) instead.
+///
+/// Note: List, Dict, Blob, Func, and Partial variants hold opaque handles
+/// because these are reference-counted types managed by the C runtime.
+#[derive(Debug, Clone)]
+pub enum TypeVal {
+    /// Unknown/uninitialized value
+    Unknown,
+    /// Integer number (varnumber_T / i64)
+    Number(i64),
+    /// Floating-point number
+    Float(f64),
+    /// String value (owned)
+    String(std::string::String),
+    /// Boolean value (v:true / v:false)
+    Bool(BoolVarValue),
+    /// Special value (v:null)
+    Special(SpecialVarValue),
+    /// List (opaque handle - reference counted in C)
+    List(ListHandle),
+    /// Dictionary (opaque handle - reference counted in C)
+    Dict(DictHandle),
+    /// Blob (opaque handle - reference counted in C)
+    Blob(BlobHandle),
+    /// Function reference (name only)
+    Func(std::string::String),
+    /// Partial function (opaque handle - reference counted in C)
+    Partial(PartialHandle),
+}
+
+impl TypeVal {
+    /// Get the VarType for this value.
+    #[inline]
+    pub const fn var_type(&self) -> VarType {
+        match self {
+            Self::Unknown => VarType::Unknown,
+            Self::Number(_) => VarType::Number,
+            Self::Float(_) => VarType::Float,
+            Self::String(_) => VarType::String,
+            Self::Bool(_) => VarType::Bool,
+            Self::Special(_) => VarType::Special,
+            Self::List(_) => VarType::List,
+            Self::Dict(_) => VarType::Dict,
+            Self::Blob(_) => VarType::Blob,
+            Self::Func(_) => VarType::Func,
+            Self::Partial(_) => VarType::Partial,
+        }
+    }
+
+    /// Get the type() function return value for this value.
+    #[inline]
+    pub fn type_func_value(&self) -> TypeFuncValue {
+        TypeFuncValue::from_var_type(self.var_type()).unwrap_or(TypeFuncValue::Special)
+    }
+
+    /// Check if this value is "empty" (falsy in VimScript terms).
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Unknown => true,
+            Self::Number(n) => *n == 0,
+            Self::Float(f) => *f == 0.0,
+            Self::String(s) => s.is_empty(),
+            Self::Bool(b) => !b.as_bool(),
+            Self::Special(_) => true, // v:null is always empty
+            Self::List(l) => l.is_null(),
+            Self::Dict(d) => d.is_null(),
+            Self::Blob(b) => b.is_null(),
+            Self::Func(s) => s.is_empty(),
+            Self::Partial(p) => p.is_null(),
+        }
+    }
+
+    /// Check if this value is "truthy" (non-empty in VimScript terms).
+    #[inline]
+    pub fn is_truthy(&self) -> bool {
+        !self.is_empty()
+    }
+
+    /// Try to convert to a number, returning 0 for incompatible types.
+    #[inline]
+    pub fn to_number(&self) -> i64 {
+        match self {
+            Self::Number(n) => *n,
+            Self::Bool(b) => i64::from(b.as_bool()),
+            Self::Float(f) => *f as i64,
+            Self::String(s) => s.parse().unwrap_or(0),
+            _ => 0,
+        }
+    }
+
+    /// Try to convert to a float, returning 0.0 for incompatible types.
+    #[inline]
+    pub fn to_float(&self) -> f64 {
+        match self {
+            Self::Float(f) => *f,
+            Self::Number(n) => *n as f64,
+            Self::String(s) => s.parse().unwrap_or(0.0),
+            _ => 0.0,
+        }
+    }
+
+    /// Create an unknown value.
+    #[inline]
+    pub const fn unknown() -> Self {
+        Self::Unknown
+    }
+
+    /// Create a number value.
+    #[inline]
+    pub const fn number(n: i64) -> Self {
+        Self::Number(n)
+    }
+
+    /// Create a float value.
+    #[inline]
+    pub const fn float(f: f64) -> Self {
+        Self::Float(f)
+    }
+
+    /// Create a boolean value.
+    #[inline]
+    pub const fn bool(b: bool) -> Self {
+        Self::Bool(if b {
+            BoolVarValue::True
+        } else {
+            BoolVarValue::False
+        })
+    }
+
+    /// Create a v:true value.
+    #[inline]
+    pub const fn vim_true() -> Self {
+        Self::Bool(BoolVarValue::True)
+    }
+
+    /// Create a v:false value.
+    #[inline]
+    pub const fn vim_false() -> Self {
+        Self::Bool(BoolVarValue::False)
+    }
+
+    /// Create a v:null value.
+    #[inline]
+    pub const fn vim_null() -> Self {
+        Self::Special(SpecialVarValue::Null)
+    }
+
+    /// Create a string value.
+    #[inline]
+    pub fn string(s: impl Into<std::string::String>) -> Self {
+        Self::String(s.into())
+    }
+}
+
+impl Default for TypeVal {
+    #[inline]
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+
+impl From<i64> for TypeVal {
+    #[inline]
+    fn from(n: i64) -> Self {
+        Self::Number(n)
+    }
+}
+
+impl From<i32> for TypeVal {
+    #[inline]
+    fn from(n: i32) -> Self {
+        Self::Number(i64::from(n))
+    }
+}
+
+impl From<f64> for TypeVal {
+    #[inline]
+    fn from(f: f64) -> Self {
+        Self::Float(f)
+    }
+}
+
+impl From<bool> for TypeVal {
+    #[inline]
+    fn from(b: bool) -> Self {
+        Self::bool(b)
+    }
+}
+
+impl From<std::string::String> for TypeVal {
+    #[inline]
+    fn from(s: std::string::String) -> Self {
+        Self::String(s)
+    }
+}
+
+impl From<&str> for TypeVal {
+    #[inline]
+    fn from(s: &str) -> Self {
+        Self::String(s.to_string())
+    }
+}
+
+impl fmt::Display for TypeVal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Unknown => write!(f, "<unknown>"),
+            Self::Number(n) => write!(f, "{n}"),
+            Self::Float(fl) => write!(f, "{fl}"),
+            Self::String(s) => write!(f, "'{s}'"),
+            Self::Bool(b) => write!(f, "{}", if b.as_bool() { "v:true" } else { "v:false" }),
+            Self::Special(SpecialVarValue::Null) => write!(f, "v:null"),
+            Self::List(_) => write!(f, "[...]"),
+            Self::Dict(_) => write!(f, "{{...}}"),
+            Self::Blob(_) => write!(f, "0z..."),
+            Self::Func(name) => write!(f, "function('{name}')"),
+            Self::Partial(_) => write!(f, "<partial>"),
+        }
+    }
+}
+
+// =============================================================================
+// Opaque handle to a partial_T
+// =============================================================================
+
+/// Opaque handle to a Vimscript partial (`partial_T*`).
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PartialHandle(*const std::ffi::c_void);
+
+impl PartialHandle {
+    /// Create a new partial handle from a raw pointer.
+    #[inline]
+    pub const unsafe fn from_ptr(ptr: *const std::ffi::c_void) -> Self {
+        Self(ptr)
+    }
+
+    /// Get the raw pointer.
+    #[inline]
+    pub const fn as_ptr(self) -> *const std::ffi::c_void {
+        self.0
+    }
+
+    /// Check if the handle is null.
+    #[inline]
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+// =============================================================================
+// Opaque Handles (existing code follows)
+// =============================================================================
 
 /// Opaque handle to a Vimscript typval (`typval_T*`).
 ///
@@ -1801,5 +2246,214 @@ mod tests {
         assert!(tv_listitem_next_impl(handle).is_null());
         assert!(tv_listitem_prev_impl(handle).is_null());
         assert!(tv_listitem_tv_impl(handle).is_null());
+    }
+
+    // =============================================================================
+    // Phase 28.1 new tests
+    // =============================================================================
+
+    #[test]
+    fn test_vartype_name() {
+        assert_eq!(VarType::Unknown.name(), "unknown");
+        assert_eq!(VarType::Number.name(), "Number");
+        assert_eq!(VarType::String.name(), "String");
+        assert_eq!(VarType::Func.name(), "Funcref");
+        assert_eq!(VarType::List.name(), "List");
+        assert_eq!(VarType::Dict.name(), "Dict");
+        assert_eq!(VarType::Float.name(), "Float");
+        assert_eq!(VarType::Bool.name(), "Boolean");
+        assert_eq!(VarType::Special.name(), "Special");
+        assert_eq!(VarType::Partial.name(), "Partial");
+        assert_eq!(VarType::Blob.name(), "Blob");
+    }
+
+    #[test]
+    fn test_vartype_display() {
+        assert_eq!(format!("{}", VarType::Number), "Number");
+        assert_eq!(format!("{}", VarType::String), "String");
+    }
+
+    #[test]
+    fn test_bool_var_value() {
+        assert!(!BoolVarValue::False.as_bool());
+        assert!(BoolVarValue::True.as_bool());
+
+        let true_val: BoolVarValue = true.into();
+        let false_val: BoolVarValue = false.into();
+        assert_eq!(true_val, BoolVarValue::True);
+        assert_eq!(false_val, BoolVarValue::False);
+
+        let b: bool = BoolVarValue::True.into();
+        assert!(b);
+        let b: bool = BoolVarValue::False.into();
+        assert!(!b);
+    }
+
+    #[test]
+    fn test_special_var_value() {
+        assert_eq!(SpecialVarValue::Null as i32, 0);
+    }
+
+    #[test]
+    fn test_var_lock_status() {
+        assert_eq!(VarLockStatus::from_c_int(0), Some(VarLockStatus::Unlocked));
+        assert_eq!(VarLockStatus::from_c_int(1), Some(VarLockStatus::Locked));
+        assert_eq!(VarLockStatus::from_c_int(2), Some(VarLockStatus::Fixed));
+        assert_eq!(VarLockStatus::from_c_int(99), None);
+
+        assert!(!VarLockStatus::Unlocked.is_locked());
+        assert!(VarLockStatus::Locked.is_locked());
+        assert!(VarLockStatus::Fixed.is_locked());
+    }
+
+    #[test]
+    fn test_type_func_value() {
+        assert_eq!(TypeFuncValue::Number.as_i64(), 0);
+        assert_eq!(TypeFuncValue::String.as_i64(), 1);
+        assert_eq!(TypeFuncValue::Func.as_i64(), 2);
+        assert_eq!(TypeFuncValue::List.as_i64(), 3);
+        assert_eq!(TypeFuncValue::Dict.as_i64(), 4);
+        assert_eq!(TypeFuncValue::Float.as_i64(), 5);
+        assert_eq!(TypeFuncValue::Bool.as_i64(), 6);
+        assert_eq!(TypeFuncValue::Special.as_i64(), 7);
+        assert_eq!(TypeFuncValue::Blob.as_i64(), 10);
+
+        // Test from_var_type
+        assert_eq!(
+            TypeFuncValue::from_var_type(VarType::Number),
+            Some(TypeFuncValue::Number)
+        );
+        assert_eq!(
+            TypeFuncValue::from_var_type(VarType::Func),
+            Some(TypeFuncValue::Func)
+        );
+        assert_eq!(
+            TypeFuncValue::from_var_type(VarType::Partial),
+            Some(TypeFuncValue::Func)
+        );
+        assert_eq!(TypeFuncValue::from_var_type(VarType::Unknown), None);
+    }
+
+    #[test]
+    fn test_typeval_basic() {
+        // Test number
+        let num = TypeVal::number(42);
+        assert_eq!(num.var_type(), VarType::Number);
+        assert!(!num.is_empty());
+        assert!(num.is_truthy());
+        assert_eq!(num.to_number(), 42);
+        assert_eq!(num.to_float(), 42.0);
+
+        // Test zero is empty
+        let zero = TypeVal::number(0);
+        assert!(zero.is_empty());
+        assert!(!zero.is_truthy());
+
+        // Test float
+        let float = TypeVal::float(3.14);
+        assert_eq!(float.var_type(), VarType::Float);
+        assert!(!float.is_empty());
+        assert_eq!(float.to_float(), 3.14);
+        assert_eq!(float.to_number(), 3);
+
+        // Test zero float is empty
+        let zero_float = TypeVal::float(0.0);
+        assert!(zero_float.is_empty());
+    }
+
+    #[test]
+    fn test_typeval_bool() {
+        let t = TypeVal::vim_true();
+        let f = TypeVal::vim_false();
+
+        assert_eq!(t.var_type(), VarType::Bool);
+        assert_eq!(f.var_type(), VarType::Bool);
+        assert!(t.is_truthy());
+        assert!(!f.is_truthy());
+        assert!(!t.is_empty());
+        assert!(f.is_empty());
+        assert_eq!(t.to_number(), 1);
+        assert_eq!(f.to_number(), 0);
+    }
+
+    #[test]
+    fn test_typeval_special() {
+        let null = TypeVal::vim_null();
+        assert_eq!(null.var_type(), VarType::Special);
+        assert!(null.is_empty());
+        assert!(!null.is_truthy());
+    }
+
+    #[test]
+    fn test_typeval_string() {
+        let s = TypeVal::string("hello");
+        assert_eq!(s.var_type(), VarType::String);
+        assert!(!s.is_empty());
+        assert!(s.is_truthy());
+
+        let empty = TypeVal::string("");
+        assert!(empty.is_empty());
+        assert!(!empty.is_truthy());
+    }
+
+    #[test]
+    fn test_typeval_from_traits() {
+        let n: TypeVal = 42i64.into();
+        assert_eq!(n.var_type(), VarType::Number);
+
+        let n32: TypeVal = 42i32.into();
+        assert_eq!(n32.var_type(), VarType::Number);
+
+        let f: TypeVal = 3.14f64.into();
+        assert_eq!(f.var_type(), VarType::Float);
+
+        let b: TypeVal = true.into();
+        assert_eq!(b.var_type(), VarType::Bool);
+
+        let s: TypeVal = "test".into();
+        assert_eq!(s.var_type(), VarType::String);
+
+        let s2: TypeVal = std::string::String::from("test2").into();
+        assert_eq!(s2.var_type(), VarType::String);
+    }
+
+    #[test]
+    fn test_typeval_default() {
+        let def = TypeVal::default();
+        assert_eq!(def.var_type(), VarType::Unknown);
+        assert!(def.is_empty());
+    }
+
+    #[test]
+    fn test_typeval_display() {
+        assert_eq!(format!("{}", TypeVal::number(42)), "42");
+        assert_eq!(format!("{}", TypeVal::float(3.14)), "3.14");
+        assert_eq!(format!("{}", TypeVal::string("hello")), "'hello'");
+        assert_eq!(format!("{}", TypeVal::vim_true()), "v:true");
+        assert_eq!(format!("{}", TypeVal::vim_false()), "v:false");
+        assert_eq!(format!("{}", TypeVal::vim_null()), "v:null");
+        assert_eq!(format!("{}", TypeVal::unknown()), "<unknown>");
+    }
+
+    #[test]
+    fn test_typeval_type_func_value() {
+        assert_eq!(TypeVal::number(1).type_func_value(), TypeFuncValue::Number);
+        assert_eq!(TypeVal::float(1.0).type_func_value(), TypeFuncValue::Float);
+        assert_eq!(
+            TypeVal::string("x").type_func_value(),
+            TypeFuncValue::String
+        );
+        assert_eq!(TypeVal::vim_true().type_func_value(), TypeFuncValue::Bool);
+        assert_eq!(
+            TypeVal::vim_null().type_func_value(),
+            TypeFuncValue::Special
+        );
+    }
+
+    #[test]
+    fn test_partial_handle_null() {
+        let handle = unsafe { PartialHandle::from_ptr(std::ptr::null()) };
+        assert!(handle.is_null());
+        assert!(handle.as_ptr().is_null());
     }
 }
