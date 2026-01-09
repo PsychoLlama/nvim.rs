@@ -6,6 +6,7 @@
 //!
 //! - [`state`]: Lua state accessors and callback infrastructure
 //! - [`types`]: Lua type constants and conversion utilities
+//! - [`to_lua`]: Typval to Lua conversion helpers
 
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(clippy::missing_safety_doc)]
@@ -14,6 +15,7 @@
 #![allow(clippy::cast_possible_wrap)]
 
 pub mod state;
+pub mod to_lua;
 pub mod types;
 
 use std::ffi::{c_char, c_int};
