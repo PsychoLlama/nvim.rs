@@ -11,6 +11,7 @@ pub mod api;
 pub mod bt_compile;
 pub mod bt_exec;
 pub mod bt_opcodes;
+pub mod bt_parse;
 pub mod bt_state;
 pub mod char_class;
 pub mod decompose;
