@@ -1,62 +1,54 @@
-Plan: ~/.claude/plans/shimmying-scribbling-backus.md
+Plan: ~/.claude/plans/floofy-crafting-micali.md
 
-All phases of the plan are complete. Let me provide a summary:
+Phase 33: Edit Mode Migration is now complete!
 
----
-
-## Phase 32: Syntax Highlighting Orchestration Migration - Complete
+## Summary
 
 All 7 phases have been successfully completed:
 
-### Phase 32.1: Syntax State Infrastructure ✓
-- Extended `state.rs` with stack management exports
-- Added C accessors for `syn_stack_free_all`, `syn_stack_apply_changes`
-- Added buffer modification tracking (`mod_top`, `mod_bot`, `mod_xlines`)
+### Phase 33.1: Edit State Infrastructure
+- Created `state.rs` with Position struct, TriState enum, and state management functions
+- Added C accessor functions in `edit.c` for Rust FFI
 
-### Phase 32.2: Syntax Group Management ✓
-- Created `group.rs` module for syntax-specific group operations
-- Added pattern group accessors (`synpat_syn_id`, `synpat_match_id`, `synpat_hl_group`)
-- Added `syn_id2attr` for syntax ID to attribute conversion
-- Added `get_syntax_id` and `get_syntax_id_spell` functions
+### Phase 33.2: Insert Mode Entry/Exit
+- Created `mode.rs` with InsertCommand enum and mode transition handling
+- Added mode query functions (in_replace, in_vreplace, etc.)
 
-### Phase 32.3: Syntax Cluster Operations ✓
-- Extended `cluster.rs` with containment logic
-- Added cluster lookup (`cluster_name_to_id`, `cluster_lookup`)
-- Added spell cluster checks (`is_spell_cluster`, `is_nospell_cluster`)
-- Added `synblock_has_containedin` and `synpat_inc_tag`
+### Phase 33.3: Character Insertion Engine
+- Created `insert.rs` with CharInfo struct, InsertOp struct
+- Added character classification helpers (is_whitespace, is_newline, is_printable)
+- Handles UTF-8 and multi-byte characters
 
-### Phase 32.4: Line Highlighting Engine ✓
-- Extended `highlight.rs` with line highlighting engine
-- Added `SyntaxAttrResult` struct and `get_syntax_attr` function
-- Added current state accessors (`current_col`, `current_finished`, `current_state_stored`)
-- Added spell mode constants and `synblock_syn_spell`
-- Added match tracking (`next_match_attr`, `next_match_idx`, `next_match_col`)
+### Phase 33.4: Key Event Processing
+- Created `keys.rs` with ASCII control constants and special key codes
+- Added KeyAction and NavDirection enums for key classification
+- FFI functions use `rs_edit_` prefix to avoid cmdline module conflicts
 
-### Phase 32.5: Syntax Buffer Attachment ✓
-- Created `buffer.rs` module for buffer-specific operations
-- Added `FoldLevelMode` enum and fold item tracking
-- Added buffer modification info (`ModificationInfo` struct)
-- Added change handling (`apply_buffer_changes`)
-- Added current buffer/window/synblock accessors
+### Phase 33.5: Abbreviation System
+- Created `abbrev.rs` with ABBR_OFF constant and AbbrTrigger enum
+- AbbrContext struct for abbreviation checking
+- Helper functions for trigger detection
 
-### Phase 32.6: Ex Commands Integration ✓
-- Created `commands.rs` module for Ex command support
-- Added `SyntaxSubcommand`, `CaseMode`, `SpellMode` enums
-- Added `PatternOptions` struct for pattern command options
-- Added `SyncMode` and `ExpandWhat` enums for command expansion
-- Added include flag accessors and running inc_tag management
+### Phase 33.6: Completion Integration
+- Created `completion.rs` with CTRL-X mode constants
+- CompletionTrigger enum and completion state helpers
+- FFI functions use `rs_edit_` prefix to avoid insexpand conflicts
 
-### Phase 32.7: Integration and Testing ✓
-- Updated `ref/crates.md` with expanded syntax crate description
-- All validation tests pass:
+### Phase 33.7: Integration and Testing
+- Updated `ref/crates.md` documentation
+- All validation commands pass:
+  - `just build` ✓
   - `just rust-fmt-check` ✓
   - `just rust-clippy` ✓
-  - `just rust-test` (2536 tests passed) ✓
-  - `just build` ✓
-  - Basic nvim syntax functionality verified ✓
+  - `just rust-test` ✓ (2573 tests pass)
+- Manual verification of insert mode, replace mode, and delete operations
 
-### Commits Made:
-1. `2725b2e494` - Phase 32.4: Line Highlighting Engine
-2. `e86354977c` - Phase 32.5: Syntax Buffer Attachment module
-3. `246afda75a` - Phase 32.6: Ex Commands Integration module
-4. `cf16b6066d` - Phase 32.7: Update crates.md
+### Commits Made
+1. `feat(edit): Phase 33.1 - Edit state infrastructure module`
+2. `feat(edit): Phase 33.2 - Insert mode entry/exit module`
+3. `feat(edit): Phase 33.3 - Character insertion engine module`
+4. `feat(edit): Phase 33.4 - Key event processing module`
+5. `feat(edit): Phase 33.5 - Abbreviation system module`
+6. `feat(edit): Phase 33.6 - Completion Integration module`
+7. `chore(edit): rustfmt formatting fixes for abbrev, keys, mode modules`
+8. `docs: Phase 33.7 - Update crates.md for edit module`
