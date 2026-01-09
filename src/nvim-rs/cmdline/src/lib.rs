@@ -14,6 +14,7 @@ pub mod expr;
 pub mod history;
 pub mod keys;
 pub mod pattern;
+pub mod preview;
 pub mod screen;
 pub mod search;
 pub mod sources;
