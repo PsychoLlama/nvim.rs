@@ -14,6 +14,7 @@
 #![allow(clippy::borrow_as_ptr)]
 #![allow(clippy::collapsible_if)]
 
+pub mod input;
 pub mod output;
 
 use std::ffi::{c_char, c_int, c_long, CStr};
