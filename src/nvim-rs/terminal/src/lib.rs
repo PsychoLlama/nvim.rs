@@ -2,6 +2,8 @@
 //!
 //! This crate provides Rust implementations for terminal-related functions,
 //! primarily working with the libvterm-based terminal emulator.
+//!
+//! Re-exports vterm types for terminal emulation.
 
 #![allow(unsafe_code)]
 #![allow(clippy::missing_safety_doc)]
@@ -9,6 +11,30 @@
 
 use std::ffi::c_int;
 use std::os::raw::c_void;
+
+// Re-export vterm types that don't conflict with existing definitions
+// The terminal crate already has its own VTermRect, VTermPos, and modifier constants
+pub mod vterm {
+    pub use nvim_vterm::{
+        // Parser types
+        CsiParserState, OscParserState, ParserState,
+        // State types (use prefixed names to avoid conflicts)
+        MouseProtocol as VTermMouseProtocol, Pen, SavedModes, SelectionState, TerminalModes,
+        // Screen buffer types
+        Screen, ScreenCell, ScreenPen,
+        // Keyboard encoding
+        KeyOutput, VTermKey, encode_key, encode_unichar, lookup_keycode,
+        // Mouse encoding
+        MouseOutput, MouseState, encode_button, encode_move,
+        // Mouse flags
+        MOUSE_WANT_CLICK, MOUSE_WANT_DRAG, MOUSE_WANT_MOVE,
+        // Pen colors
+        lookup_colour, lookup_colour_palette, parse_sgr_param,
+        // Encoding
+        Encoding, EncodingType, Utf8Decoder, decode_dec_drawing, decode_usascii,
+        UNICODE_INVALID,
+    };
+}
 
 // =============================================================================
 // Opaque Handles
