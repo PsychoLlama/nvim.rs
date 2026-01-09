@@ -431,6 +431,249 @@ pub unsafe extern "C" fn rs_regmmatch_get_end_col(rm: *const RegMmatch, idx: c_i
 }
 
 // =============================================================================
+// Compilation and Execution
+// =============================================================================
+
+/// Compilation result for a regex.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CompileResult {
+    /// Compilation succeeded
+    Success = 0,
+    /// Pattern syntax error
+    SyntaxError = 1,
+    /// Out of memory
+    OutOfMemory = 2,
+    /// Pattern too complex
+    PatternTooComplex = 3,
+    /// NFA engine doesn't support this pattern
+    NfaUnsupported = 4,
+}
+
+impl From<c_int> for CompileResult {
+    fn from(v: c_int) -> Self {
+        match v {
+            0 => Self::Success,
+            1 => Self::SyntaxError,
+            2 => Self::OutOfMemory,
+            3 => Self::PatternTooComplex,
+            _ => Self::NfaUnsupported,
+        }
+    }
+}
+
+/// Match result for a regex execution.
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MatchResultCode {
+    /// Match found
+    Match = 1,
+    /// No match
+    NoMatch = 0,
+    /// Error during matching
+    Error = -1,
+    /// Timed out
+    Timeout = -2,
+}
+
+impl From<c_int> for MatchResultCode {
+    fn from(v: c_int) -> Self {
+        match v {
+            1 => Self::Match,
+            0 => Self::NoMatch,
+            -2 => Self::Timeout,
+            _ => Self::Error,
+        }
+    }
+}
+
+/// Check if pattern starts with `^`.
+///
+/// # Safety
+/// `pattern` must be valid or null.
+pub unsafe fn pattern_starts_with_caret(pattern: *const u8) -> bool {
+    if pattern.is_null() {
+        return false;
+    }
+
+    let mut p = pattern;
+
+    // Skip magic prefix if present
+    if *p == b'\\' && *p.add(1) == b'm' {
+        p = p.add(2);
+    }
+
+    *p == b'^'
+}
+
+/// Check if pattern ends with `$`.
+///
+/// # Safety
+/// `pattern` must be valid or null.
+pub unsafe fn pattern_ends_with_dollar(pattern: *const u8) -> bool {
+    if pattern.is_null() {
+        return false;
+    }
+
+    // Find end of pattern
+    let mut end = pattern;
+    while *end != 0 {
+        end = end.add(1);
+    }
+
+    if end == pattern {
+        return false;
+    }
+
+    // Check last character (accounting for escapes is complex, simplified check)
+    *end.sub(1) == b'$'
+}
+
+/// Get pattern length.
+///
+/// # Safety
+/// `pattern` must be valid or null.
+pub unsafe fn pattern_len(pattern: *const u8) -> c_int {
+    if pattern.is_null() {
+        return 0;
+    }
+
+    let mut len = 0;
+    let mut p = pattern;
+    while *p != 0 {
+        len += 1;
+        p = p.add(1);
+    }
+    len
+}
+
+/// Clear submatch positions in a RegMatch.
+///
+/// # Safety
+/// `rm` must be valid.
+pub unsafe fn clear_regmatch(rm: *mut RegMatch) {
+    if rm.is_null() {
+        return;
+    }
+    for i in 0..NSUBEXP {
+        (*rm).startp[i] = ptr::null();
+        (*rm).endp[i] = ptr::null();
+    }
+}
+
+/// Clear submatch positions in a RegMmatch.
+///
+/// # Safety
+/// `rm` must be valid.
+pub unsafe fn clear_regmmatch(rm: *mut RegMmatch) {
+    if rm.is_null() {
+        return;
+    }
+    for i in 0..NSUBEXP {
+        (*rm).startpos[i] = LPos::default();
+        (*rm).endpos[i] = LPos::default();
+    }
+}
+
+/// Copy submatch positions from one RegMatch to another.
+///
+/// # Safety
+/// Both pointers must be valid.
+pub unsafe fn copy_regmatch(to: *mut RegMatch, from: *const RegMatch) {
+    if to.is_null() || from.is_null() {
+        return;
+    }
+    for i in 0..NSUBEXP {
+        (*to).startp[i] = (*from).startp[i];
+        (*to).endp[i] = (*from).endp[i];
+    }
+    (*to).rm_ic = (*from).rm_ic;
+}
+
+/// Copy submatch positions from one RegMmatch to another.
+///
+/// # Safety
+/// Both pointers must be valid.
+pub unsafe fn copy_regmmatch(to: *mut RegMmatch, from: *const RegMmatch) {
+    if to.is_null() || from.is_null() {
+        return;
+    }
+    for i in 0..NSUBEXP {
+        (*to).startpos[i] = (*from).startpos[i];
+        (*to).endpos[i] = (*from).endpos[i];
+    }
+    (*to).rmm_ic = (*from).rmm_ic;
+    (*to).rmm_maxcol = (*from).rmm_maxcol;
+}
+
+// =============================================================================
+// Additional FFI Exports
+// =============================================================================
+
+/// Check if pattern starts with caret.
+///
+/// # Safety
+/// `pattern` must be valid or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pattern_starts_with_caret(pattern: *const u8) -> c_int {
+    c_int::from(pattern_starts_with_caret(pattern))
+}
+
+/// Check if pattern ends with dollar.
+///
+/// # Safety
+/// `pattern` must be valid or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pattern_ends_with_dollar(pattern: *const u8) -> c_int {
+    c_int::from(pattern_ends_with_dollar(pattern))
+}
+
+/// Get pattern length.
+///
+/// # Safety
+/// `pattern` must be valid or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pattern_len(pattern: *const u8) -> c_int {
+    pattern_len(pattern)
+}
+
+/// Clear single-line match positions.
+///
+/// # Safety
+/// `rm` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_clear_regmatch(rm: *mut RegMatch) {
+    clear_regmatch(rm);
+}
+
+/// Clear multi-line match positions.
+///
+/// # Safety
+/// `rm` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_clear_regmmatch(rm: *mut RegMmatch) {
+    clear_regmmatch(rm);
+}
+
+/// Copy single-line match positions.
+///
+/// # Safety
+/// Both pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_copy_regmatch(to: *mut RegMatch, from: *const RegMatch) {
+    copy_regmatch(to, from);
+}
+
+/// Copy multi-line match positions.
+///
+/// # Safety
+/// Both pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_copy_regmmatch(to: *mut RegMmatch, from: *const RegMmatch) {
+    copy_regmmatch(to, from);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
