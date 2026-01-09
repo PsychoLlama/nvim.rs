@@ -4,6 +4,12 @@
 
 use std::ffi::{c_char, c_int, c_void};
 
+// Sub-modules
+pub mod parse;
+
+// Re-export parse types and functions
+pub use parse::TagPtrs;
+
 // =============================================================================
 // Constants
 // =============================================================================
