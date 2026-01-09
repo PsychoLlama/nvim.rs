@@ -19,6 +19,7 @@ pub mod screen;
 pub mod search;
 pub mod sources;
 pub mod state;
+pub mod ui;
 pub mod usercomplete;
 pub mod wildmenu;
 
