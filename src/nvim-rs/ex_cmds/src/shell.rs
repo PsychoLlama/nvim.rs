@@ -377,7 +377,9 @@ impl std::fmt::Display for ShellError {
             ShellError::SecureMode => write!(f, "E145: Shell commands not allowed in secure mode"),
             ShellError::NoPreviousCommand => write!(f, "E34: No previous command"),
             ShellError::InvalidRange => write!(f, "Invalid line range for filter"),
-            ShellError::CommandFailed(code) => write!(f, "Shell command failed with exit code {code}"),
+            ShellError::CommandFailed(code) => {
+                write!(f, "Shell command failed with exit code {code}")
+            }
             ShellError::TempFileError => write!(f, "Could not create temporary file"),
         }
     }

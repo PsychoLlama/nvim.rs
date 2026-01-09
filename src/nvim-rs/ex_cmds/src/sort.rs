@@ -327,19 +327,11 @@ impl std::error::Error for SortError {}
 #[derive(Debug, Clone, Copy)]
 pub enum SortKey {
     /// Text-based sort: start and end column positions.
-    Text {
-        start_col: i32,
-        end_col: i32,
-    },
+    Text { start_col: i32, end_col: i32 },
     /// Integer sort.
-    Integer {
-        value: i64,
-        is_number: bool,
-    },
+    Integer { value: i64, is_number: bool },
     /// Float sort.
-    Float {
-        value: f64,
-    },
+    Float { value: f64 },
 }
 
 impl SortKey {
@@ -613,10 +605,22 @@ mod tests {
         assert!(matches!(key, SortKey::Text { .. }));
 
         let key = SortKey::integer(42, true);
-        assert!(matches!(key, SortKey::Integer { value: 42, is_number: true }));
+        assert!(matches!(
+            key,
+            SortKey::Integer {
+                value: 42,
+                is_number: true
+            }
+        ));
 
         let key = SortKey::no_number();
-        assert!(matches!(key, SortKey::Integer { is_number: false, .. }));
+        assert!(matches!(
+            key,
+            SortKey::Integer {
+                is_number: false,
+                ..
+            }
+        ));
 
         let key = SortKey::float(3.5);
         assert!(matches!(key, SortKey::Float { .. }));

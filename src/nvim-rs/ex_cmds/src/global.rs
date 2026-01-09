@@ -384,20 +384,12 @@ mod tests {
     #[test]
     fn test_global_options() {
         let range = LineRange::whole_buffer(100);
-        let opts = GlobalOptions::global(
-            range,
-            "pattern".to_string(),
-            "delete".to_string(),
-        );
+        let opts = GlobalOptions::global(range, "pattern".to_string(), "delete".to_string());
         assert_eq!(opts.global_type, GlobalType::Global);
         assert_eq!(opts.pattern, "pattern");
         assert_eq!(opts.command, "delete");
 
-        let opts = GlobalOptions::vglobal(
-            range,
-            "pattern".to_string(),
-            "delete".to_string(),
-        );
+        let opts = GlobalOptions::vglobal(range, "pattern".to_string(), "delete".to_string());
         assert_eq!(opts.global_type, GlobalType::VGlobal);
     }
 

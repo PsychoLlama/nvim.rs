@@ -239,11 +239,7 @@ pub fn should_write(is_modified: bool, mode: WriteMode) -> bool {
 ///
 /// Returns 1 if valid, 0 if invalid.
 #[no_mangle]
-pub extern "C" fn rs_validate_write_range(
-    start: c_int,
-    end: c_int,
-    line_count: c_int,
-) -> c_int {
+pub extern "C" fn rs_validate_write_range(start: c_int, end: c_int, line_count: c_int) -> c_int {
     let range = LineRange::new(start, end);
     c_int::from(validate_write_range(range, line_count).is_ok())
 }
