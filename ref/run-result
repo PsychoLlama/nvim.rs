@@ -1,43 +1,62 @@
-Plan: ~/.claude/plans/scalable-snuggling-pebble.md
+Plan: ~/.claude/plans/shimmying-scribbling-backus.md
 
-## Summary: Phase 31 - Spell Checking System Migration
+All phases of the plan are complete. Let me provide a summary:
 
-The plan at `/home/overlord/.claude/plans/scalable-snuggling-pebble.md` described migrating the spell checking system to Rust. Upon executing the plan, I discovered that **the spell crate is already substantially complete**:
+---
 
-### Current State
+## Phase 32: Syntax Highlighting Orchestration Migration - Complete
 
-The `spell` crate (`src/nvim-rs/spell/`) contains:
+All 7 phases have been successfully completed:
 
-| Module | Lines | Description |
-|--------|-------|-------------|
-| `lib.rs` | 3,752 | Core types, opaque handles, FFI bindings, file format constants |
-| `spellfile.rs` | 3,279 | Binary .spl file reading/writing utilities |
-| `suggest.rs` | 2,061 | Edit distance algorithms, suggestion scoring |
-| `wordtree.rs` | 907 | Word tree traversal, binary search |
-| `check.rs` | 803 | Spell checking utilities, case folding |
-| **Total** | **10,802** | - |
+### Phase 32.1: Syntax State Infrastructure ✓
+- Extended `state.rs` with stack management exports
+- Added C accessors for `syn_stack_free_all`, `syn_stack_apply_changes`
+- Added buffer modification tracking (`mod_top`, `mod_bot`, `mod_xlines`)
 
-The crate exports **144 FFI functions** callable from C, covering:
-- Word tree traversal (`rs_tree_count_words`, `rs_traverse_tree`, `rs_tree_binary_search`)
-- Edit distance scoring (`rs_spell_edit_score`, `rs_spell_edit_score_limit`)
-- File I/O helpers (`rs_parse_*`, `rs_write_*` for all .spl section types)
-- Suggestion scoring (`rs_score_*`, `rs_rescore`, `rs_maxscore`)
-- Byte manipulation for suggestions (`rs_swap_bytes`, `rs_delete_byte`, `rs_insert_byte`)
+### Phase 32.2: Syntax Group Management ✓
+- Created `group.rs` module for syntax-specific group operations
+- Added pattern group accessors (`synpat_syn_id`, `synpat_match_id`, `synpat_hl_group`)
+- Added `syn_id2attr` for syntax ID to attribute conversion
+- Added `get_syntax_id` and `get_syntax_id_spell` functions
 
-### Verification
+### Phase 32.3: Syntax Cluster Operations ✓
+- Extended `cluster.rs` with containment logic
+- Added cluster lookup (`cluster_name_to_id`, `cluster_lookup`)
+- Added spell cluster checks (`is_spell_cluster`, `is_nospell_cluster`)
+- Added `synblock_has_containedin` and `synpat_inc_tag`
 
-All checks pass:
-- `just build` ✅
-- `just rust-test` ✅ (2,523 tests)
-- `just rust-fmt-check` ✅
-- `just rust-clippy` ✅
+### Phase 32.4: Line Highlighting Engine ✓
+- Extended `highlight.rs` with line highlighting engine
+- Added `SyntaxAttrResult` struct and `get_syntax_attr` function
+- Added current state accessors (`current_col`, `current_finished`, `current_state_stored`)
+- Added spell mode constants and `synblock_syn_spell`
+- Added match tracking (`next_match_attr`, `next_match_idx`, `next_match_col`)
 
-### Changes Made
+### Phase 32.5: Syntax Buffer Attachment ✓
+- Created `buffer.rs` module for buffer-specific operations
+- Added `FoldLevelMode` enum and fold item tracking
+- Added buffer modification info (`ModificationInfo` struct)
+- Added change handling (`apply_buffer_changes`)
+- Added current buffer/window/synblock accessors
 
-1. Updated `ref/crates.md` to expand the spell crate description:
-   - Old: "Spell checking, file I/O, word tree, suggestions"
-   - New: "Spell checking (word tree traversal, edit distance, suggestion scoring, .spl file I/O)"
+### Phase 32.6: Ex Commands Integration ✓
+- Created `commands.rs` module for Ex command support
+- Added `SyntaxSubcommand`, `CaseMode`, `SpellMode` enums
+- Added `PatternOptions` struct for pattern command options
+- Added `SyncMode` and `ExpandWhat` enums for command expansion
+- Added include flag accessors and running inc_tag management
 
-2. Committed: `cf7efdd249` - "docs: update spell crate description in ref/crates.md"
+### Phase 32.7: Integration and Testing ✓
+- Updated `ref/crates.md` with expanded syntax crate description
+- All validation tests pass:
+  - `just rust-fmt-check` ✓
+  - `just rust-clippy` ✓
+  - `just rust-test` (2536 tests passed) ✓
+  - `just build` ✓
+  - Basic nvim syntax functionality verified ✓
 
-The plan's phases 31.1-31.6 were already implemented prior to this execution. The remaining C code in `spellfile.c` and `spellsuggest.c` consists of higher-level orchestration functions that coordinate with FILE* pointers and other C infrastructure - these are appropriately left as thin wrappers calling the Rust implementations.
+### Commits Made:
+1. `2725b2e494` - Phase 32.4: Line Highlighting Engine
+2. `e86354977c` - Phase 32.5: Syntax Buffer Attachment module
+3. `246afda75a` - Phase 32.6: Ex Commands Integration module
+4. `cf16b6066d` - Phase 32.7: Update crates.md
