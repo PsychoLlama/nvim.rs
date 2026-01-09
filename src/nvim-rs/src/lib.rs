@@ -104,6 +104,7 @@ pub use nvim_textobject::*;
 pub use nvim_tui::*;
 pub use nvim_typval::*;
 pub use nvim_ugrid::*;
+pub use nvim_ui::*;
 pub use nvim_undo::*;
 pub use nvim_unpacker::*;
 pub use nvim_userfunc::*;

@@ -106,6 +106,7 @@ nvim-vterm = { path = "vterm" }
 nvim-unpacker = { path = "unpacker" }
 nvim-tui = { path = "tui" }
 nvim-typval = { path = "typval" }
+nvim-ui = { path = "ui" }
 nvim-ugrid = { path = "ugrid" }
 nvim-undo = { path = "undo" }
 nvim-userfunc = { path = "userfunc" }
