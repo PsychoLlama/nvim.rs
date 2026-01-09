@@ -10,6 +10,7 @@
 //! - [`from_lua`]: Lua to Typval conversion helpers
 //! - [`stdlib`]: Lua stdlib helpers and error handling
 //! - [`api`]: API-specific conversion helpers
+//! - [`callback`]: Callback registration and invocation
 
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(clippy::missing_safety_doc)]
@@ -18,6 +19,7 @@
 #![allow(clippy::cast_possible_wrap)]
 
 pub mod api;
+pub mod callback;
 pub mod from_lua;
 pub mod state;
 pub mod stdlib;
