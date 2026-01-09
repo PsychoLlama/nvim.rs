@@ -337,11 +337,7 @@ pub unsafe extern "C" fn rs_tag_pattern_free(pats: *mut TagPattern) {
 /// - `pat` must be a valid null-terminated C string
 /// - The pattern string must remain valid for the lifetime of the TagPattern
 #[no_mangle]
-pub unsafe extern "C" fn rs_tag_pattern_init(
-    pats: *mut TagPattern,
-    pat: *mut c_char,
-    len: c_int,
-) {
+pub unsafe extern "C" fn rs_tag_pattern_init(pats: *mut TagPattern, pat: *mut c_char, len: c_int) {
     if pats.is_null() {
         return;
     }
@@ -568,7 +564,11 @@ mod tests {
     #[test]
     fn test_tag_pattern_matches_null() {
         unsafe {
-            assert!(!rs_tag_pattern_matches(ptr::null_mut(), c"test".as_ptr(), false));
+            assert!(!rs_tag_pattern_matches(
+                ptr::null_mut(),
+                c"test".as_ptr(),
+                false
+            ));
             let pats = rs_tag_pattern_new();
             assert!(!rs_tag_pattern_matches(pats, ptr::null(), false));
             rs_tag_pattern_free(pats);

@@ -48,7 +48,6 @@ pub enum TagSearchState {
     StepForward = 4,
 }
 
-
 impl From<c_int> for TagSearchState {
     fn from(value: c_int) -> Self {
         match value {
@@ -294,11 +293,7 @@ pub unsafe extern "C" fn rs_search_info_init(info: *mut TagSearchInfo) {
 
 /// Set the search range for binary search.
 #[no_mangle]
-pub unsafe extern "C" fn rs_search_info_set_range(
-    info: *mut TagSearchInfo,
-    low: OffT,
-    high: OffT,
-) {
+pub unsafe extern "C" fn rs_search_info_set_range(info: *mut TagSearchInfo, low: OffT, high: OffT) {
     if info.is_null() {
         return;
     }
@@ -320,11 +315,7 @@ pub unsafe extern "C" fn rs_search_info_midpoint(info: *const TagSearchInfo) -> 
 /// If cmp < 0, tag is before target (search in upper half)
 /// If cmp > 0, tag is after target (search in lower half)
 #[no_mangle]
-pub unsafe extern "C" fn rs_search_info_update(
-    info: *mut TagSearchInfo,
-    curr: OffT,
-    cmp: c_int,
-) {
+pub unsafe extern "C" fn rs_search_info_update(info: *mut TagSearchInfo, curr: OffT, cmp: c_int) {
     if info.is_null() {
         return;
     }
@@ -665,10 +656,7 @@ mod tests {
                 high_offset: 200,
                 ..Default::default()
             };
-            assert_eq!(
-                rs_search_info_midpoint(std::ptr::addr_of!(info)),
-                150
-            );
+            assert_eq!(rs_search_info_midpoint(std::ptr::addr_of!(info)), 150);
         }
     }
 
@@ -745,10 +733,7 @@ mod tests {
     #[test]
     fn test_tag_cmp_names() {
         unsafe {
-            assert_eq!(
-                rs_tag_cmp_names(c"abc".as_ptr(), c"abc".as_ptr(), false),
-                0
-            );
+            assert_eq!(rs_tag_cmp_names(c"abc".as_ptr(), c"abc".as_ptr(), false), 0);
             assert!(rs_tag_cmp_names(c"abd".as_ptr(), c"abc".as_ptr(), false) > 0);
             assert!(rs_tag_cmp_names(c"abb".as_ptr(), c"abc".as_ptr(), false) < 0);
 
@@ -757,10 +742,7 @@ mod tests {
             assert!(rs_tag_cmp_names(c"abcd".as_ptr(), c"abc".as_ptr(), false) > 0);
 
             // Case insensitive
-            assert_eq!(
-                rs_tag_cmp_names(c"ABC".as_ptr(), c"abc".as_ptr(), true),
-                0
-            );
+            assert_eq!(rs_tag_cmp_names(c"ABC".as_ptr(), c"abc".as_ptr(), true), 0);
 
             // Null handling
             assert_eq!(rs_tag_cmp_names(ptr::null(), ptr::null(), false), 0);

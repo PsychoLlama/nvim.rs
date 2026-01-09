@@ -5,11 +5,13 @@
 use std::ffi::{c_char, c_int, c_void};
 
 // Sub-modules
+pub mod matches;
 pub mod parse;
 pub mod pattern;
 pub mod search;
 
 // Re-export parse types and functions
+pub use matches::MatchStorage;
 pub use parse::TagPtrs;
 pub use pattern::{RegMatch, TagPattern};
 pub use search::{
