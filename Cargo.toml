@@ -87,6 +87,7 @@ members = [
     "src/nvim-rs/tui",
     "src/nvim-rs/typval",
     "src/nvim-rs/ugrid",
+    "src/nvim-rs/vars",
     "src/nvim-rs/undo",
     "src/nvim-rs/vterm",
 ]

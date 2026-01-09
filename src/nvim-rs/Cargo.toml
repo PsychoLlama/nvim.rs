@@ -101,6 +101,7 @@ nvim-tui = { path = "tui" }
 nvim-typval = { path = "typval" }
 nvim-ugrid = { path = "ugrid" }
 nvim-undo = { path = "undo" }
+nvim-vars = { path = "vars" }
 
 [build-dependencies]
 cbindgen = "0.27"

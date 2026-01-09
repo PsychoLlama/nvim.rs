@@ -1,0 +1,17 @@
+[package]
+name = "nvim-vars"
+description = "VimL variable storage and scope management for Neovim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+bitflags = "2"
+nvim-typval = { path = "../typval" }
+
+[lints]
+workspace = true
