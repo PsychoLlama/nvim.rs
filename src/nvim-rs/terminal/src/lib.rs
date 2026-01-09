@@ -593,6 +593,136 @@ pub extern "C" fn rs_terminal_dec_refcount(term: TerminalHandle) {
 }
 
 // =============================================================================
+// Terminal I/O Operations
+// =============================================================================
+
+// External C functions for I/O operations
+extern "C" {
+    // VTerm I/O functions (defined in vterm crate)
+    fn rs_vterm_input_write(vt: *mut c_void, data: *const i8, len: usize) -> usize;
+    fn rs_vterm_keyboard_key(vt: *mut c_void, key: c_int, mods: c_int);
+    fn rs_vterm_keyboard_unichar(vt: *mut c_void, ch: u32, mods: c_int);
+    fn rs_vterm_keyboard_start_paste(vt: *mut c_void);
+    fn rs_vterm_keyboard_end_paste(vt: *mut c_void);
+    fn rs_vterm_screen_flush_damage(vts: *mut c_void);
+}
+
+/// Write input data to a terminal's `VTerm` instance.
+///
+/// This combines getting the `VTerm` handle and calling `vterm_input_write`.
+/// Returns the number of bytes written.
+///
+/// # Safety
+/// The data pointer must be valid and point to at least `len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_terminal_input_write(
+    term: TerminalHandle,
+    data: *const i8,
+    len: usize,
+) -> usize {
+    if term.is_null() || data.is_null() {
+        return 0;
+    }
+    let vt = nvim_terminal_get_vterm(term);
+    if vt.is_null() {
+        return 0;
+    }
+    rs_vterm_input_write(vt, data, len)
+}
+
+/// Flush screen damage on a terminal's `VTermScreen`.
+///
+/// This combines getting the `VTermScreen` handle and calling `vterm_screen_flush_damage`.
+#[no_mangle]
+pub extern "C" fn rs_terminal_flush_damage(term: TerminalHandle) {
+    if term.is_null() {
+        return;
+    }
+    let vts = unsafe { nvim_terminal_get_vterm_screen(term) };
+    if !vts.is_null() {
+        unsafe { rs_vterm_screen_flush_damage(vts) }
+    }
+}
+
+/// Write input data to a terminal and flush damage.
+///
+/// This is a convenience function that calls `vterm_input_write` followed by
+/// `vterm_screen_flush_damage`.
+///
+/// # Safety
+/// The data pointer must be valid and point to at least `len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_terminal_receive(
+    term: TerminalHandle,
+    data: *const i8,
+    len: usize,
+) -> usize {
+    if term.is_null() || data.is_null() {
+        return 0;
+    }
+    let vt = nvim_terminal_get_vterm(term);
+    if vt.is_null() {
+        return 0;
+    }
+    let written = rs_vterm_input_write(vt, data, len);
+
+    let vts = nvim_terminal_get_vterm_screen(term);
+    if !vts.is_null() {
+        rs_vterm_screen_flush_damage(vts);
+    }
+
+    written
+}
+
+/// Send a keyboard key to a terminal's `VTerm` instance.
+#[no_mangle]
+pub extern "C" fn rs_terminal_send_key(term: TerminalHandle, key: c_int, mods: c_int) {
+    if term.is_null() {
+        return;
+    }
+    let vt = unsafe { nvim_terminal_get_vterm(term) };
+    if !vt.is_null() {
+        unsafe { rs_vterm_keyboard_key(vt, key, mods) }
+    }
+}
+
+/// Send a Unicode character to a terminal's `VTerm` instance.
+#[no_mangle]
+pub extern "C" fn rs_terminal_send_unichar(term: TerminalHandle, ch: u32, mods: c_int) {
+    if term.is_null() {
+        return;
+    }
+    let vt = unsafe { nvim_terminal_get_vterm(term) };
+    if !vt.is_null() {
+        unsafe { rs_vterm_keyboard_unichar(vt, ch, mods) }
+    }
+}
+
+/// Start a paste operation on a terminal's `VTerm` instance.
+#[no_mangle]
+pub extern "C" fn rs_terminal_start_paste(term: TerminalHandle) {
+    if term.is_null() {
+        return;
+    }
+    let vt = unsafe { nvim_terminal_get_vterm(term) };
+    if !vt.is_null() {
+        unsafe { rs_vterm_keyboard_start_paste(vt) }
+    }
+}
+
+/// End a paste operation on a terminal's `VTerm` instance.
+#[no_mangle]
+pub extern "C" fn rs_terminal_end_paste(term: TerminalHandle) {
+    if term.is_null() {
+        return;
+    }
+    let vt = unsafe { nvim_terminal_get_vterm(term) };
+    if !vt.is_null() {
+        unsafe { rs_vterm_keyboard_end_paste(vt) }
+    }
+}
+
+// =============================================================================
 // VTerm Key Constants (from vterm_keycodes.h)
 // =============================================================================
 

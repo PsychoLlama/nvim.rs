@@ -1579,6 +1579,17 @@ extern "C" {
     fn vterm_push_output_bytes(vt: *mut c_void, bytes: *const c_char, len: usize);
     fn vterm_obtain_state(vt: *mut c_void) -> *mut c_void;
     fn vterm_obtain_screen(vt: *mut c_void) -> *mut c_void;
+
+    // I/O functions
+    fn vterm_input_write(vt: *mut c_void, data: *const c_char, len: usize) -> usize;
+    fn vterm_keyboard_key(vt: *mut c_void, key: c_int, mods: c_int);
+    fn vterm_keyboard_unichar(vt: *mut c_void, ch: u32, mods: c_int);
+    fn vterm_keyboard_start_paste(vt: *mut c_void);
+    fn vterm_keyboard_end_paste(vt: *mut c_void);
+
+    // Screen functions
+    fn vterm_screen_flush_damage(vts: *mut c_void);
+    fn vterm_screen_reset(vts: *mut c_void, hard: c_int);
 }
 
 /// Create a new `VTerm` instance.
@@ -1732,6 +1743,100 @@ pub extern "C" fn rs_vterm_obtain_screen(vt: VTermHandle) -> VTermScreenHandle {
 #[no_mangle]
 pub extern "C" fn rs_vterm_is_valid(vt: VTermHandle) -> c_int {
     c_int::from(!vt.is_null())
+}
+
+// =============================================================================
+// VTerm I/O Functions
+// =============================================================================
+
+/// Write input data to a `VTerm` instance.
+///
+/// This is the Rust wrapper for `vterm_input_write()`.
+/// Returns the number of bytes written.
+#[no_mangle]
+pub extern "C" fn rs_vterm_input_write(
+    vt: VTermHandle,
+    data: *const c_char,
+    len: usize,
+) -> usize {
+    if vt.is_null() || data.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees the handle and data pointer are valid
+    unsafe { vterm_input_write(vt.as_ptr(), data, len) }
+}
+
+/// Send a keyboard key to a `VTerm` instance.
+///
+/// This is the Rust wrapper for `vterm_keyboard_key()`.
+#[no_mangle]
+pub extern "C" fn rs_vterm_keyboard_key(vt: VTermHandle, key: c_int, mods: c_int) {
+    if vt.is_null() {
+        return;
+    }
+    // SAFETY: Caller guarantees the handle is valid
+    unsafe { vterm_keyboard_key(vt.as_ptr(), key, mods) }
+}
+
+/// Send a Unicode character to a `VTerm` instance.
+///
+/// This is the Rust wrapper for `vterm_keyboard_unichar()`.
+#[no_mangle]
+pub extern "C" fn rs_vterm_keyboard_unichar(vt: VTermHandle, ch: u32, mods: c_int) {
+    if vt.is_null() {
+        return;
+    }
+    // SAFETY: Caller guarantees the handle is valid
+    unsafe { vterm_keyboard_unichar(vt.as_ptr(), ch, mods) }
+}
+
+/// Start a paste operation on a `VTerm` instance.
+///
+/// This is the Rust wrapper for `vterm_keyboard_start_paste()`.
+#[no_mangle]
+pub extern "C" fn rs_vterm_keyboard_start_paste(vt: VTermHandle) {
+    if vt.is_null() {
+        return;
+    }
+    // SAFETY: Caller guarantees the handle is valid
+    unsafe { vterm_keyboard_start_paste(vt.as_ptr()) }
+}
+
+/// End a paste operation on a `VTerm` instance.
+///
+/// This is the Rust wrapper for `vterm_keyboard_end_paste()`.
+#[no_mangle]
+pub extern "C" fn rs_vterm_keyboard_end_paste(vt: VTermHandle) {
+    if vt.is_null() {
+        return;
+    }
+    // SAFETY: Caller guarantees the handle is valid
+    unsafe { vterm_keyboard_end_paste(vt.as_ptr()) }
+}
+
+/// Flush screen damage on a `VTermScreen` instance.
+///
+/// This is the Rust wrapper for `vterm_screen_flush_damage()`.
+#[no_mangle]
+pub extern "C" fn rs_vterm_screen_flush_damage(vts: VTermScreenHandle) {
+    if vts.is_null() {
+        return;
+    }
+    // SAFETY: Caller guarantees the handle is valid
+    unsafe { vterm_screen_flush_damage(vts.as_ptr()) }
+}
+
+/// Reset a `VTermScreen` instance.
+///
+/// This is the Rust wrapper for `vterm_screen_reset()`.
+/// Set `hard` to non-zero for a hard reset, 0 for a soft reset.
+#[no_mangle]
+pub extern "C" fn rs_vterm_screen_reset(vts: VTermScreenHandle, hard: c_int) {
+    if vts.is_null() {
+        return;
+    }
+    // SAFETY: Caller guarantees the handle is valid
+    unsafe { vterm_screen_reset(vts.as_ptr(), hard) }
 }
 
 // =============================================================================
