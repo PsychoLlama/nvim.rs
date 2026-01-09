@@ -92,4 +92,4 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | utf8proc       | utf8proc bindings                       |
 | version        | Version checks                          |
 | viewport       | Viewport and scroll management          |
-| window         | Window state and layout                 |
+| window         | Window management (state, layout, frames, navigation, tabpages) |
