@@ -1,0 +1,506 @@
+//! `:global` and `:vglobal` command implementation.
+//!
+//! The `:global` (`:g`) command executes an Ex command on all lines matching
+//! a pattern. The `:vglobal` (`:v`) command executes on non-matching lines.
+//!
+//! ## Usage
+//! - `:g/pattern/cmd` - Execute cmd on lines matching pattern
+//! - `:g!/pattern/cmd` - Execute cmd on lines NOT matching pattern (same as :v)
+//! - `:v/pattern/cmd` - Execute cmd on lines NOT matching pattern
+//! - `:{range}g/pattern/cmd` - Limit to range
+//!
+//! ## Implementation Notes
+//!
+//! The global command works in two phases:
+//! 1. Mark all matching (or non-matching) lines
+//! 2. Execute the command on each marked line
+//!
+//! This two-phase approach is necessary because executing commands can
+//! change line numbers, so we can't simply iterate through lines.
+
+use std::ffi::c_int;
+
+use crate::range::{LineNr, LineRange};
+
+/// Type of global command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[repr(i32)]
+pub enum GlobalType {
+    /// Normal global: match lines (:g)
+    #[default]
+    Global = 0,
+    /// Inverse global: non-matching lines (:v or :g!)
+    VGlobal = 1,
+}
+
+impl GlobalType {
+    /// Create from whether the command has a bang.
+    #[inline]
+    #[must_use]
+    pub const fn from_bang(has_bang: bool) -> Self {
+        if has_bang {
+            GlobalType::VGlobal
+        } else {
+            GlobalType::Global
+        }
+    }
+
+    /// Check if this matches non-matching lines (inverted).
+    #[inline]
+    #[must_use]
+    pub const fn is_inverted(&self) -> bool {
+        matches!(self, GlobalType::VGlobal)
+    }
+
+    /// Convert from C integer.
+    #[inline]
+    #[must_use]
+    pub fn from_c(value: c_int) -> Self {
+        if value == 0 {
+            GlobalType::Global
+        } else {
+            GlobalType::VGlobal
+        }
+    }
+
+    /// Convert to C integer.
+    #[inline]
+    #[must_use]
+    pub fn to_c(self) -> c_int {
+        self as c_int
+    }
+}
+
+/// Options for the global command.
+#[derive(Debug, Clone, Default)]
+pub struct GlobalOptions {
+    /// Range of lines to search.
+    pub range: LineRange,
+    /// Type of global command (normal or inverted).
+    pub global_type: GlobalType,
+    /// Pattern to match (empty = use last pattern).
+    pub pattern: String,
+    /// Command to execute on matching lines.
+    pub command: String,
+}
+
+impl GlobalOptions {
+    /// Create options for a `:global` command.
+    #[must_use]
+    pub fn global(range: LineRange, pattern: String, command: String) -> Self {
+        Self {
+            range,
+            global_type: GlobalType::Global,
+            pattern,
+            command,
+        }
+    }
+
+    /// Create options for a `:vglobal` command.
+    #[must_use]
+    pub fn vglobal(range: LineRange, pattern: String, command: String) -> Self {
+        Self {
+            range,
+            global_type: GlobalType::VGlobal,
+            pattern,
+            command,
+        }
+    }
+}
+
+/// State tracking for global command execution.
+#[derive(Debug, Clone, Default)]
+pub struct GlobalState {
+    /// Whether we're currently executing a global command.
+    pub busy: bool,
+    /// Number of lines processed.
+    pub lines_processed: i32,
+    /// Number of lines where command was executed.
+    pub lines_executed: i32,
+}
+
+impl GlobalState {
+    /// Create a new state.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            busy: false,
+            lines_processed: 0,
+            lines_executed: 0,
+        }
+    }
+
+    /// Start global command execution.
+    pub fn start(&mut self) {
+        self.busy = true;
+        self.lines_processed = 0;
+        self.lines_executed = 0;
+    }
+
+    /// Record a line being processed.
+    pub fn process_line(&mut self) {
+        self.lines_processed += 1;
+    }
+
+    /// Record a command execution.
+    pub fn execute_line(&mut self) {
+        self.lines_executed += 1;
+    }
+
+    /// Finish global command execution.
+    pub fn finish(&mut self) {
+        self.busy = false;
+    }
+
+    /// Check if currently executing a global command.
+    #[inline]
+    #[must_use]
+    pub const fn is_busy(&self) -> bool {
+        self.busy
+    }
+}
+
+/// Result of the global command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct GlobalResult {
+    /// Number of matching lines found.
+    pub matches: i32,
+    /// Number of commands executed.
+    pub executed: i32,
+    /// Whether the operation was interrupted.
+    pub interrupted: bool,
+}
+
+impl GlobalResult {
+    /// Create a new empty result.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            matches: 0,
+            executed: 0,
+            interrupted: false,
+        }
+    }
+
+    /// Check if any matches were found.
+    #[inline]
+    #[must_use]
+    pub const fn has_matches(&self) -> bool {
+        self.matches > 0
+    }
+
+    /// Record a match.
+    #[inline]
+    pub fn add_match(&mut self) {
+        self.matches += 1;
+    }
+
+    /// Record a command execution.
+    #[inline]
+    pub fn add_execution(&mut self) {
+        self.executed += 1;
+    }
+
+    /// Mark as interrupted.
+    #[inline]
+    pub fn set_interrupted(&mut self) {
+        self.interrupted = true;
+    }
+}
+
+/// Error type for global command.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GlobalError {
+    /// Invalid pattern.
+    InvalidPattern(String),
+    /// No previous pattern.
+    NoPreviousPattern,
+    /// Invalid delimiter.
+    InvalidDelimiter(char),
+    /// Nested global command.
+    NestedGlobal,
+    /// Operation was interrupted.
+    Interrupted,
+    /// Invalid range.
+    InvalidRange,
+}
+
+impl std::fmt::Display for GlobalError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            GlobalError::InvalidPattern(msg) => write!(f, "invalid pattern: {msg}"),
+            GlobalError::NoPreviousPattern => write!(f, "no previous pattern"),
+            GlobalError::InvalidDelimiter(c) => write!(f, "invalid delimiter: {c}"),
+            GlobalError::NestedGlobal => write!(f, "cannot nest global commands"),
+            GlobalError::Interrupted => write!(f, "interrupted"),
+            GlobalError::InvalidRange => write!(f, "invalid range"),
+        }
+    }
+}
+
+impl std::error::Error for GlobalError {}
+
+/// A marked line for global command execution.
+///
+/// During the marking phase, we record the line number and position
+/// of each matching line. The position is used for cursor placement
+/// when executing the command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MarkedLine {
+    /// Line number (1-based).
+    pub lnum: LineNr,
+    /// Column position for cursor (0-based).
+    pub col: i32,
+}
+
+impl MarkedLine {
+    /// Create a new marked line.
+    #[must_use]
+    pub const fn new(lnum: LineNr, col: i32) -> Self {
+        Self { lnum, col }
+    }
+
+    /// Create a marked line at the beginning of the line.
+    #[must_use]
+    pub const fn at_start(lnum: LineNr) -> Self {
+        Self { lnum, col: 0 }
+    }
+}
+
+/// Collection of marked lines for batch processing.
+#[derive(Debug, Clone, Default)]
+pub struct MarkedLines {
+    lines: Vec<MarkedLine>,
+}
+
+impl MarkedLines {
+    /// Create a new empty collection.
+    #[must_use]
+    pub fn new() -> Self {
+        Self { lines: Vec::new() }
+    }
+
+    /// Create with pre-allocated capacity.
+    #[must_use]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
+            lines: Vec::with_capacity(capacity),
+        }
+    }
+
+    /// Add a marked line.
+    pub fn push(&mut self, line: MarkedLine) {
+        self.lines.push(line);
+    }
+
+    /// Get the number of marked lines.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.lines.len()
+    }
+
+    /// Check if empty.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.lines.is_empty()
+    }
+
+    /// Clear all marked lines.
+    pub fn clear(&mut self) {
+        self.lines.clear();
+    }
+
+    /// Iterate over marked lines.
+    pub fn iter(&self) -> impl Iterator<Item = &MarkedLine> {
+        self.lines.iter()
+    }
+
+    /// Iterate in reverse order (for processing from bottom to top).
+    ///
+    /// Processing from bottom to top can be useful when the command
+    /// modifies line count, as it won't affect earlier line numbers.
+    pub fn iter_rev(&self) -> impl Iterator<Item = &MarkedLine> {
+        self.lines.iter().rev()
+    }
+}
+
+impl IntoIterator for MarkedLines {
+    type Item = MarkedLine;
+    type IntoIter = std::vec::IntoIter<MarkedLine>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.lines.into_iter()
+    }
+}
+
+// =============================================================================
+// FFI Exports
+// =============================================================================
+
+/// Create a global type from bang flag.
+///
+/// Returns 0 for normal global, 1 for vglobal.
+#[no_mangle]
+pub extern "C" fn rs_global_type_from_bang(has_bang: c_int) -> c_int {
+    GlobalType::from_bang(has_bang != 0).to_c()
+}
+
+/// Check if a global type is inverted.
+#[no_mangle]
+pub extern "C" fn rs_global_type_is_inverted(global_type: c_int) -> c_int {
+    c_int::from(GlobalType::from_c(global_type).is_inverted())
+}
+
+// =============================================================================
+// Tests
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_global_type() {
+        assert_eq!(GlobalType::Global.to_c(), 0);
+        assert_eq!(GlobalType::VGlobal.to_c(), 1);
+
+        assert_eq!(GlobalType::from_c(0), GlobalType::Global);
+        assert_eq!(GlobalType::from_c(1), GlobalType::VGlobal);
+        assert_eq!(GlobalType::from_c(99), GlobalType::VGlobal);
+    }
+
+    #[test]
+    fn test_global_type_from_bang() {
+        assert_eq!(GlobalType::from_bang(false), GlobalType::Global);
+        assert_eq!(GlobalType::from_bang(true), GlobalType::VGlobal);
+    }
+
+    #[test]
+    fn test_global_type_is_inverted() {
+        assert!(!GlobalType::Global.is_inverted());
+        assert!(GlobalType::VGlobal.is_inverted());
+    }
+
+    #[test]
+    fn test_global_options() {
+        let range = LineRange::whole_buffer(100);
+        let opts = GlobalOptions::global(
+            range,
+            "pattern".to_string(),
+            "delete".to_string(),
+        );
+        assert_eq!(opts.global_type, GlobalType::Global);
+        assert_eq!(opts.pattern, "pattern");
+        assert_eq!(opts.command, "delete");
+
+        let opts = GlobalOptions::vglobal(
+            range,
+            "pattern".to_string(),
+            "delete".to_string(),
+        );
+        assert_eq!(opts.global_type, GlobalType::VGlobal);
+    }
+
+    #[test]
+    fn test_global_state() {
+        let mut state = GlobalState::new();
+        assert!(!state.is_busy());
+
+        state.start();
+        assert!(state.is_busy());
+
+        state.process_line();
+        state.process_line();
+        assert_eq!(state.lines_processed, 2);
+
+        state.execute_line();
+        assert_eq!(state.lines_executed, 1);
+
+        state.finish();
+        assert!(!state.is_busy());
+    }
+
+    #[test]
+    fn test_global_result() {
+        let mut result = GlobalResult::new();
+        assert!(!result.has_matches());
+
+        result.add_match();
+        result.add_match();
+        assert!(result.has_matches());
+        assert_eq!(result.matches, 2);
+
+        result.add_execution();
+        assert_eq!(result.executed, 1);
+
+        result.set_interrupted();
+        assert!(result.interrupted);
+    }
+
+    #[test]
+    fn test_global_error_display() {
+        let err = GlobalError::InvalidPattern("bad regex".to_string());
+        assert_eq!(format!("{err}"), "invalid pattern: bad regex");
+
+        let err = GlobalError::NoPreviousPattern;
+        assert_eq!(format!("{err}"), "no previous pattern");
+
+        let err = GlobalError::NestedGlobal;
+        assert_eq!(format!("{err}"), "cannot nest global commands");
+    }
+
+    #[test]
+    fn test_marked_line() {
+        let line = MarkedLine::new(10, 5);
+        assert_eq!(line.lnum, 10);
+        assert_eq!(line.col, 5);
+
+        let line = MarkedLine::at_start(20);
+        assert_eq!(line.lnum, 20);
+        assert_eq!(line.col, 0);
+    }
+
+    #[test]
+    fn test_marked_lines() {
+        let mut lines = MarkedLines::new();
+        assert!(lines.is_empty());
+
+        lines.push(MarkedLine::at_start(10));
+        lines.push(MarkedLine::at_start(20));
+        lines.push(MarkedLine::at_start(30));
+
+        assert_eq!(lines.len(), 3);
+        assert!(!lines.is_empty());
+
+        let lnums: Vec<_> = lines.iter().map(|l| l.lnum).collect();
+        assert_eq!(lnums, vec![10, 20, 30]);
+
+        let lnums_rev: Vec<_> = lines.iter_rev().map(|l| l.lnum).collect();
+        assert_eq!(lnums_rev, vec![30, 20, 10]);
+
+        lines.clear();
+        assert!(lines.is_empty());
+    }
+
+    #[test]
+    fn test_marked_lines_into_iter() {
+        let mut lines = MarkedLines::new();
+        lines.push(MarkedLine::at_start(10));
+        lines.push(MarkedLine::at_start(20));
+
+        let lnums: Vec<_> = lines.into_iter().map(|l| l.lnum).collect();
+        assert_eq!(lnums, vec![10, 20]);
+    }
+
+    #[test]
+    fn test_rs_global_type_from_bang() {
+        assert_eq!(rs_global_type_from_bang(0), 0);
+        assert_eq!(rs_global_type_from_bang(1), 1);
+    }
+
+    #[test]
+    fn test_rs_global_type_is_inverted() {
+        assert_eq!(rs_global_type_is_inverted(0), 0);
+        assert_eq!(rs_global_type_is_inverted(1), 1);
+    }
+}
