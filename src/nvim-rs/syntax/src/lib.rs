@@ -20,6 +20,7 @@ use std::ffi::{c_char, c_int};
 
 pub mod cache;
 pub mod cluster;
+pub mod containment;
 pub mod keyword;
 pub mod pattern;
 pub mod region;
