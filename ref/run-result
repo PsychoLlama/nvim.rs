@@ -1,57 +1,43 @@
-Plan: ~/.claude/plans/valiant-meandering-narwhal.md
+Plan: ~/.claude/plans/scalable-snuggling-pebble.md
 
-Phase 30 is now complete. Let me provide a summary:
+## Summary: Phase 31 - Spell Checking System Migration
 
----
+The plan at `/home/overlord/.claude/plans/scalable-snuggling-pebble.md` described migrating the spell checking system to Rust. Upon executing the plan, I discovered that **the spell crate is already substantially complete**:
 
-## Phase 30 Complete: Channel/RPC and UI Infrastructure Migration
+### Current State
 
-All phases have been successfully completed:
+The `spell` crate (`src/nvim-rs/spell/`) contains:
 
-### Phase 30.1: Channel Crate (✓)
-- Created `src/nvim-rs/channel/` crate with:
-  - `ChannelHandle`, `RpcStateHandle`, `CallbackReaderHandle` opaque types
-  - `ChannelStreamType`, `ChannelPart`, `ChannelStdinMode`, `ClientType` enums
-  - FFI accessor functions for channel properties
-- Added C accessor functions to `src/nvim/channel.c`
+| Module | Lines | Description |
+|--------|-------|-------------|
+| `lib.rs` | 3,752 | Core types, opaque handles, FFI bindings, file format constants |
+| `spellfile.rs` | 3,279 | Binary .spl file reading/writing utilities |
+| `suggest.rs` | 2,061 | Edit distance algorithms, suggestion scoring |
+| `wordtree.rs` | 907 | Word tree traversal, binary search |
+| `check.rs` | 803 | Spell checking utilities, case folding |
+| **Total** | **10,802** | - |
 
-### Phase 30.2: MessagePack-RPC Crate (✓)
-- Created `src/nvim-rs/msgpack_rpc/` crate with:
-  - `MessageType` enum (Request/Response/Notification/RedrawEvent)
-  - `UnpackerHandle`, `PackerBufferHandle`, `SocketWatcherHandle` opaque types
-  - Server management FFI bindings
-- Added C accessor functions to `src/nvim/msgpack_rpc/unpacker.c` and `server.c`
+The crate exports **144 FFI functions** callable from C, covering:
+- Word tree traversal (`rs_tree_count_words`, `rs_traverse_tree`, `rs_tree_binary_search`)
+- Edit distance scoring (`rs_spell_edit_score`, `rs_spell_edit_score_limit`)
+- File I/O helpers (`rs_parse_*`, `rs_write_*` for all .spl section types)
+- Suggestion scoring (`rs_score_*`, `rs_rescore`, `rs_maxscore`)
+- Byte manipulation for suggestions (`rs_swap_bytes`, `rs_delete_byte`, `rs_insert_byte`)
 
-### Phase 30.3: UI Crate (✓)
-- Created `src/nvim-rs/ui/` crate with:
-  - `UIExtension` enum for all UI extensions (Cmdline, Popupmenu, Tabline, etc.)
-  - `LineFlags` struct for grid_line events
-  - `RemoteUIHandle`, `UIClientHandlerHandle` opaque types
-  - RemoteUI accessor FFI bindings
-- Added C accessor functions to `src/nvim/ui.c`
+### Verification
 
-### Phase 30.4: Event Loop Components (✓)
-- Extended `src/nvim-rs/event/` crate with additional handle types:
-  - `WBufferHandle` for write buffer management
-  - `UvLoopHandle`, `UvAsyncHandle`, `UvTimerHandle` for libuv wrappers
-  - `UvPipeHandle`, `UvTcpHandle`, `UvProcessHandle` for I/O handles
+All checks pass:
+- `just build` ✅
+- `just rust-test` ✅ (2,523 tests)
+- `just rust-fmt-check` ✅
+- `just rust-clippy` ✅
 
-### Phase 30.5: TUI Foundation (✓)
-- Extended `src/nvim-rs/tui/` crate with new `input` module:
-  - `KeyEncoding` enum (Legacy/Kitty/Xterm)
-  - `TermInputHandle`, `TermKeyHandle` opaque types
-  - Bracketed paste sequence constants
-  - Kitty keyboard protocol key constants
+### Changes Made
 
-### Phase 30.6-30.8: Integration, Testing, Documentation (✓)
-- Updated `ref/crates.md` with 3 new crates
-- All 2523 tests passing
-- Full build with linking passes
+1. Updated `ref/crates.md` to expand the spell crate description:
+   - Old: "Spell checking, file I/O, word tree, suggestions"
+   - New: "Spell checking (word tree traversal, edit distance, suggestion scoring, .spl file I/O)"
 
-### Commits Made:
-1. `feat(channel): Phase 30.1 - channel crate for channel infrastructure`
-2. `feat(msgpack_rpc): Phase 30.2 - MessagePack-RPC crate for protocol handling`
-3. `feat(ui): Phase 30.3 - UI crate for UI core migration`
-4. `feat(event): Phase 30.4 - complete event loop components`
-5. `feat(tui): Phase 30.5 - extend TUI crate with input module`
-6. `docs: Phase 30.6-30.8 - update crates.md with new crates`
+2. Committed: `cf7efdd249` - "docs: update spell crate description in ref/crates.md"
+
+The plan's phases 31.1-31.6 were already implemented prior to this execution. The remaining C code in `spellfile.c` and `spellsuggest.c` consists of higher-level orchestration functions that coordinate with FILE* pointers and other C infrastructure - these are appropriately left as thin wrappers calling the Rust implementations.
