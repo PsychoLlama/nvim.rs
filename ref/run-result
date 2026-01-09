@@ -1,69 +1,37 @@
-Plan: ~/.claude/plans/proud-wandering-pillow.md
+Plan: ~/.claude/plans/joyful-popping-kazoo.md
 
-The plan has been executed successfully. Here's a summary of what was accomplished:
+All steps of Phase 16 are now complete. Let me provide a summary:
 
-## Phase 15 Summary: Ex Command Line (ex_getln) Enhancement
+## Phase 16 Complete: Change Tracking Migration to Rust
 
-### Plan Analysis
+All steps in the plan have been successfully executed and committed:
 
-The original plan suggested creating a new `ex_getln` crate, but upon investigation I discovered that the existing `cmdline` crate already implements most of the required functionality:
+### Commits Made:
+1. **Phase 16.1**: Core types and OPENLINE flags (`flags.rs`, `lib.rs`)
+2. **Phase 16.2**: Change recording functions (`recording.rs`)
+3. **Phase 16.3**: Change events functions (`events.rs`)
+4. **Phase 16.4**: Display invalidation (`invalidation.rs`)
+5. **Phase 16.5**: Text editing primitives (`editing.rs`)
+6. **Phase 16.6**: Line operations (`lines.rs`)
+7. **Phase 16.7**: Comment leader parsing (`comment.rs`)
+8. **Phase 16.8**: File format state functions (`file_format.rs`)
+9. **Phase 16.9**: Complex `open_line()` function (~870 lines → `open_line.rs`)
+10. **Final**: Updated `ref/crates.md` and fixed formatting
 
-- **state.rs** - CmdlineState, CmdRedraw, buffer state, UTF-8 utilities
-- **edit.rs** - Character insertion/deletion, word operations
-- **keys.rs** - Key handling and classification
-- **history.rs** - History navigation
-- **search.rs** - Incsearch state
-- **preview.rs** - Command preview (inccommand)
-- **ui.rs** - UI events and rendering state
-- **entry.rs** - Entry context and recursion guard
-- **cmdwin.rs** - Command-line window
-- **screen.rs** - Screen positioning calculations
-- **constants.rs** - Key codes and mode constants
-- And 10+ more modules covering API, completion, etc.
+### New Crate: `nvim-change`
+Located at `src/nvim-rs/change/` with 9 modules:
+- **flags.rs**: OPENLINE_* flags for `open_line()` behavior
+- **recording.rs**: `rs_changed()`, `rs_changed_internal()`, `rs_change_warning()`
+- **events.rs**: Line/byte change notifications (`rs_changed_lines`, `rs_inserted_bytes`, etc.)
+- **invalidation.rs**: `rs_changed_lines_invalidate_buf()` for display updates
+- **editing.rs**: Text primitives (`rs_ins_bytes`, `rs_del_char`, etc.)
+- **lines.rs**: `rs_truncate_line()`, `rs_del_lines()`
+- **comment.rs**: `rs_get_leader_len()`, `rs_get_last_leader_offset()`
+- **file_format.rs**: `rs_unchanged()`, `rs_save_file_ff()`, `rs_file_ff_differs()`
+- **open_line.rs**: `rs_open_line()` - the complex 870-line function
 
-### New Modules Added (Phase 15.1)
-
-1. **viewstate.rs** - Window view state management for incsearch and preview
-   - `ViewState` struct for scroll position and cursor column
-   - `IncsearchViewState` for incremental search state tracking
-   - `Position` type for cursor positions
-   - FFI exports: `rs_save_viewstate`, `rs_restore_viewstate`, `rs_viewstate_differs`, etc.
-
-2. **fname.rs** - Filename escaping utilities for command-line
-   - `FnameEscapeMode` enum (Path, Shell, Buffer)
-   - Character escaping and classification functions
-   - Leading backslash handling for special chars (>, +, -)
-   - Tilde expansion detection
-   - FFI exports: `rs_vse_none`, `rs_vse_shell`, `rs_fname_needs_escape`, etc.
-
-### Documentation Update
-
-Updated `ref/crates.md` to reflect the new modules in the cmdline crate.
-
-### Verification
-
-- ✅ `just rust-fmt-check` - All formatting passes
-- ✅ `just rust-clippy` - No warnings
-- ✅ `just rust-test` - All 2191 tests pass
-
-### Commit
-
-```
-feat(cmdline): Phase 15.1 - add viewstate and fname modules
-
-Add two new modules to the cmdline crate:
-
-- viewstate: Save/restore window view state for incsearch and preview
-  - ViewState struct for scroll position and cursor column
-  - IncsearchViewState for incremental search state tracking
-  - FFI exports for C integration
-
-- fname: Filename escaping utilities for command-line
-  - FnameEscapeMode enum (Path, Shell, Buffer)
-  - Character escaping and classification
-  - Leading backslash handling for special chars (>, +, -)
-  - Tilde expansion detection
-
-These modules support the command-line input system (ex_getln)
-migration to Rust.
-```
+### Verification:
+All checks pass:
+- `just rust-fmt-check` ✓
+- `just rust-clippy` ✓  
+- `just rust-test` ✓ (2191 tests passing)
