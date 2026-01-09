@@ -18,6 +18,7 @@ use std::ffi::{c_char, c_int};
 // Modules
 // =============================================================================
 
+pub mod api;
 pub mod cache;
 pub mod cluster;
 pub mod containment;
