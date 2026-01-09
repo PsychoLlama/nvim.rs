@@ -4,10 +4,19 @@
 //! from `src/nvim/window.c`. It uses a combination of:
 //! - Full `repr(C)` struct for `frame_T` (direct field access)
 //! - Opaque handle pattern for `win_T*` and `tabpage_T*` (via accessor functions)
+//!
+//! # Modules
+//!
+//! - [`list`]: Window list traversal and initialization functions
+//! - [`tabpage`]: Tab page management operations
 
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(dead_code)] // Some FFI declarations are pre-declared for future use
 #![allow(clippy::doc_markdown)]
+
+// Domain-specific modules
+pub mod list;
+pub mod tabpage;
 
 use std::ffi::{c_char, c_int};
 
