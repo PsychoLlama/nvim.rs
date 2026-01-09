@@ -13,6 +13,7 @@
 
 #![allow(clippy::missing_safety_doc)]
 
+pub mod color;
 mod types;
 
 use std::ffi::c_int;
