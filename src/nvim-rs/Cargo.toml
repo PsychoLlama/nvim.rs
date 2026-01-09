@@ -19,6 +19,7 @@ nvim-channel = { path = "channel" }
 nvim-ascii = { path = "ascii" }
 nvim-autocmd = { path = "autocmd" }
 nvim-buffer = { path = "buffer" }
+nvim-bufwrite = { path = "bufwrite" }
 nvim-change = { path = "change" }
 nvim-buffer-updates = { path = "buffer_updates" }
 nvim-charset = { path = "charset" }
