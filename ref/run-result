@@ -1,39 +1,59 @@
-Plan: ~/.claude/plans/lively-baking-rose.md
+Plan: ~/.claude/plans/wise-yawning-hippo.md
 
-## Phase 24.6 - Integration & Testing: Complete ✅
+Phase 25 (Regular Expression Engine Migration) is now complete. Let me provide a summary:
 
-### Verification Summary
+## Phase 25 Complete - Regular Expression Engine Migration
 
-| Criterion | Status |
-|-----------|--------|
-| `just build` passes | ✅ |
-| `just rust-fmt-check` passes | ✅ |
-| `just rust-clippy` passes | ✅ |
-| `just rust-test` passes | ✅ (2319 tests) |
-| Syntax highlighting visually correct | ✅ |
-| No regression from Rust migration | ✅ |
+All 12 phases have been completed successfully:
 
-### Syntax Highlighting Verification
+### Completed Work
 
-- **C syntax**: `int` → `cType` ✅
-- **C comments**: `//` → `cCommentL` ✅
-- **C strings**: `"hello"` → `cCppString` ✅
-- **Python**: `def` → `pythonStatement` ✅
+**Phases 25.1-25.6** (Previously complete)
+- FFI foundation and opaque handles
+- Character classification utilities
+- Pattern parsing infrastructure
+- NFA state machine core
+- NFA compilation
+- NFA execution engine
 
-### Test Results
+**Phases 25.7** (Previously complete)
+- NFA integration and testing
 
-- `test/functional/ex_cmds/syntax_spec.lua`: 1/1 passed ✅
-- `test/functional/plugin/vim_syntax_spec.lua`: 1/1 passed ✅
-- `test/functional/ui/syntax_conceal_spec.lua`: 3 pre-existing failures (not caused by Rust migration - verified by testing on pre-Phase 24 commit)
+**Phases 25.8-25.12** (Completed in this session)
+- **Phase 25.8**: Backtracking engine state structures (`bt_state.rs`)
+  - `RegState`, `RegSave`, `SaveSe`, `RegItem`, `RegBehind`, `RegStar`
+  - `BackPos`, `RegStack`, `BackPosTable` types
+  - FFI exports for stack and backposition management
 
-### Migration Summary
+- **Phase 25.9**: Backtracking compilation (`bt_compile.rs`)
+  - `CompileFlags`, `RegCompiler` types
+  - Bytecode emission functions
+  - Node linking infrastructure
 
-**Phase 24: Syntax Highlighting System** has been successfully completed:
+- **Phase 25.10**: Backtracking execution (`bt_exec.rs`)
+  - `MatchResult`, `MatchState` types
+  - Pattern matching helpers (`match_class`, `regrepeat`)
+  - Backtrack stack operations
 
-- **Phase 24.1**: State management functions - `store_current_state`, `load_current_state`, `invalidate_current_state`, etc.
-- **Phase 24.2**: Core pattern matching - `syn_current_attr`, `check_state_ends`, `update_si_attr`, etc.
-- **Phase 24.3**: Keyword matching - `check_keyword_id`, `match_keyword`
-- **Phase 24.4**: Pattern stack operations - `push_current_state`, `pop_current_state`, `push_next_match`, `find_endpos`
-- **Phase 24.5**: Sync and line operations - `syn_sync`, `syn_start_line`, `syn_update_ends`, `syn_finish_line`, `syntax_start`
+- **Phase 25.11**: API unification (`api.rs`)
+  - `RegEngine` enum (Bt, Nfa, Auto)
+  - `RegProg`, `LPos`, `RegMatch`, `RegMmatch` types
+  - Compilation and match flags
+  - Unified FFI exports
 
-The syntax crate now has comprehensive FFI integration with over 100 Rust-exported functions bridging to the C syntax highlighting implementation, enabling future complete migration of the algorithmic core to Rust.
+- **Phase 25.12**: Integration and cleanup
+  - Updated `cbindgen.toml` with all new exports
+  - All verification checks pass (`just build`, `just rust-fmt-check`, `just rust-clippy`, `just rust-test`)
+
+### New Files Created
+- `src/nvim-rs/regexp/src/bt_state.rs` (~450 lines)
+- `src/nvim-rs/regexp/src/bt_compile.rs` (~550 lines)
+- `src/nvim-rs/regexp/src/bt_exec.rs` (~800 lines)
+- `src/nvim-rs/regexp/src/api.rs` (~520 lines)
+
+### Commits
+1. `b38d00960d` - Phase 25.8: backtracking engine state structures
+2. `d722c98b36` - Phase 25.9: backtracking compilation infrastructure
+3. `d7e7a7e47c` - Phase 25.10: backtracking execution infrastructure
+4. `6894d599cc` - Phase 25.11: unified API module
+5. `2afa41a985` - Phase 25.12: cbindgen exports update
