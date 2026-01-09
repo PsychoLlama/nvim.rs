@@ -417,12 +417,7 @@ impl StateCallbackContext {
     /// # Safety
     /// The callbacks must be valid.
     #[must_use]
-    pub unsafe fn scrollrect(
-        &self,
-        rect: VTermRect,
-        downward: c_int,
-        rightward: c_int,
-    ) -> c_int {
+    pub unsafe fn scrollrect(&self, rect: VTermRect, downward: c_int, rightward: c_int) -> c_int {
         if self.callbacks.is_null() {
             return 0;
         }

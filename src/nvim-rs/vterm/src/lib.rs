@@ -1561,6 +1561,180 @@ pub extern "C" fn rs_vterm_scroll_rect(
 }
 
 // =============================================================================
+// VTerm Core API FFI Functions
+// =============================================================================
+
+// External C functions that we call from Rust
+extern "C" {
+    fn vterm_new(rows: c_int, cols: c_int) -> *mut c_void;
+    fn vterm_free(vt: *mut c_void);
+    fn vterm_get_size(vt: *const c_void, rowsp: *mut c_int, colsp: *mut c_int);
+    fn vterm_set_size(vt: *mut c_void, rows: c_int, cols: c_int);
+    fn vterm_set_utf8(vt: *mut c_void, is_utf8: c_int);
+    fn vterm_output_set_callback(
+        vt: *mut c_void,
+        func: Option<VTermOutputCallback>,
+        user: *mut c_void,
+    );
+    fn vterm_push_output_bytes(vt: *mut c_void, bytes: *const c_char, len: usize);
+    fn vterm_obtain_state(vt: *mut c_void) -> *mut c_void;
+    fn vterm_obtain_screen(vt: *mut c_void) -> *mut c_void;
+}
+
+/// Create a new `VTerm` instance.
+///
+/// This is the Rust wrapper for `vterm_new()` that can be called from C.
+/// Returns a `VTermHandle` to the created `VTerm` instance, or a null handle on failure.
+#[no_mangle]
+pub extern "C" fn rs_vterm_new(rows: c_int, cols: c_int) -> VTermHandle {
+    if rows < 1 || cols < 1 {
+        return VTermHandle::null();
+    }
+    // SAFETY: vterm_new is a C function that allocates and returns a VTerm*
+    let ptr = unsafe { vterm_new(rows, cols) };
+    // SAFETY: The pointer from vterm_new is valid or null
+    unsafe { VTermHandle::from_ptr(ptr) }
+}
+
+/// Free a `VTerm` instance.
+///
+/// This is the Rust wrapper for `vterm_free()`.
+#[no_mangle]
+pub extern "C" fn rs_vterm_free(vt: VTermHandle) {
+    if vt.is_null() {
+        return;
+    }
+    // SAFETY: Caller guarantees the handle is valid
+    unsafe {
+        vterm_free(vt.as_ptr());
+    }
+}
+
+/// Result structure for getting `VTerm` size.
+#[repr(C)]
+pub struct VTermSize {
+    /// Number of rows
+    pub rows: c_int,
+    /// Number of columns
+    pub cols: c_int,
+}
+
+/// Get the size of a `VTerm` instance.
+///
+/// This is the Rust wrapper for `vterm_get_size()`.
+#[no_mangle]
+pub extern "C" fn rs_vterm_get_size(vt: VTermHandle) -> VTermSize {
+    if vt.is_null() {
+        return VTermSize { rows: 0, cols: 0 };
+    }
+    let mut rows: c_int = 0;
+    let mut cols: c_int = 0;
+    // SAFETY: Caller guarantees the handle is valid
+    unsafe {
+        vterm_get_size(vt.as_ptr(), &raw mut rows, &raw mut cols);
+    }
+    VTermSize { rows, cols }
+}
+
+/// Set the size of a `VTerm` instance.
+///
+/// This is the Rust wrapper for `vterm_set_size()`.
+/// Returns 1 on success, 0 if the size is invalid.
+#[no_mangle]
+pub extern "C" fn rs_vterm_set_size(vt: VTermHandle, rows: c_int, cols: c_int) -> c_int {
+    if vt.is_null() || rows < 1 || cols < 1 {
+        return 0;
+    }
+    // SAFETY: Caller guarantees the handle is valid
+    unsafe {
+        vterm_set_size(vt.as_ptr(), rows, cols);
+    }
+    1
+}
+
+/// Set UTF-8 mode for a `VTerm` instance.
+///
+/// This is the Rust wrapper for `vterm_set_utf8()`.
+#[no_mangle]
+pub extern "C" fn rs_vterm_set_utf8(vt: VTermHandle, is_utf8: c_int) {
+    if vt.is_null() {
+        return;
+    }
+    // SAFETY: Caller guarantees the handle is valid
+    unsafe {
+        vterm_set_utf8(vt.as_ptr(), is_utf8);
+    }
+}
+
+/// Set the output callback for a `VTerm` instance.
+///
+/// This is the Rust wrapper for `vterm_output_set_callback()`.
+#[no_mangle]
+pub extern "C" fn rs_vterm_set_output_callback(
+    vt: VTermHandle,
+    func: Option<VTermOutputCallback>,
+    user: *mut c_void,
+) {
+    if vt.is_null() {
+        return;
+    }
+    // SAFETY: Caller guarantees the handle is valid
+    unsafe {
+        vterm_output_set_callback(vt.as_ptr(), func, user);
+    }
+}
+
+/// Push output bytes through a `VTerm` instance.
+///
+/// This is the Rust wrapper for `vterm_push_output_bytes()`.
+/// If an output callback is set, it will be invoked.
+/// Otherwise, the bytes are buffered internally.
+#[no_mangle]
+pub extern "C" fn rs_vterm_push_output(vt: VTermHandle, bytes: *const c_char, len: usize) {
+    if vt.is_null() || bytes.is_null() {
+        return;
+    }
+    // SAFETY: Caller guarantees the handle and bytes pointer are valid
+    unsafe {
+        vterm_push_output_bytes(vt.as_ptr(), bytes, len);
+    }
+}
+
+/// Obtain the `VTermState` from a `VTerm` instance.
+///
+/// This is the Rust wrapper for `vterm_obtain_state()`.
+#[no_mangle]
+pub extern "C" fn rs_vterm_obtain_state(vt: VTermHandle) -> VTermStateHandle {
+    if vt.is_null() {
+        return VTermStateHandle::null();
+    }
+    // SAFETY: Caller guarantees the handle is valid
+    let ptr = unsafe { vterm_obtain_state(vt.as_ptr()) };
+    // SAFETY: The pointer from vterm_obtain_state is valid or null
+    unsafe { VTermStateHandle::from_ptr(ptr) }
+}
+
+/// Obtain the `VTermScreen` from a `VTerm` instance.
+///
+/// This is the Rust wrapper for `vterm_obtain_screen()`.
+#[no_mangle]
+pub extern "C" fn rs_vterm_obtain_screen(vt: VTermHandle) -> VTermScreenHandle {
+    if vt.is_null() {
+        return VTermScreenHandle::null();
+    }
+    // SAFETY: Caller guarantees the handle is valid
+    let ptr = unsafe { vterm_obtain_screen(vt.as_ptr()) };
+    // SAFETY: The pointer from vterm_obtain_screen is valid or null
+    unsafe { VTermScreenHandle::from_ptr(ptr) }
+}
+
+/// Check if a `VTerm` handle is valid (non-null).
+#[no_mangle]
+pub extern "C" fn rs_vterm_is_valid(vt: VTermHandle) -> c_int {
+    c_int::from(!vt.is_null())
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

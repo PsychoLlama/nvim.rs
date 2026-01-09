@@ -16,22 +16,45 @@ use std::os::raw::c_void;
 // The terminal crate already has its own VTermRect, VTermPos, and modifier constants
 pub mod vterm {
     pub use nvim_vterm::{
-        // Parser types
-        CsiParserState, OscParserState, ParserState,
-        // State types (use prefixed names to avoid conflicts)
-        MouseProtocol as VTermMouseProtocol, Pen, SavedModes, SelectionState, TerminalModes,
-        // Screen buffer types
-        Screen, ScreenCell, ScreenPen,
-        // Keyboard encoding
-        KeyOutput, VTermKey, encode_key, encode_unichar, lookup_keycode,
-        // Mouse encoding
-        MouseOutput, MouseState, encode_button, encode_move,
-        // Mouse flags
-        MOUSE_WANT_CLICK, MOUSE_WANT_DRAG, MOUSE_WANT_MOVE,
+        decode_dec_drawing,
+        decode_usascii,
+        encode_button,
+        encode_key,
+        encode_move,
+        encode_unichar,
         // Pen colors
-        lookup_colour, lookup_colour_palette, parse_sgr_param,
+        lookup_colour,
+        lookup_colour_palette,
+        lookup_keycode,
+        parse_sgr_param,
+        // Parser types
+        CsiParserState,
         // Encoding
-        Encoding, EncodingType, Utf8Decoder, decode_dec_drawing, decode_usascii,
+        Encoding,
+        EncodingType,
+        // Keyboard encoding
+        KeyOutput,
+        // Mouse encoding
+        MouseOutput,
+        // State types (use prefixed names to avoid conflicts)
+        MouseProtocol as VTermMouseProtocol,
+        MouseState,
+        OscParserState,
+        ParserState,
+        Pen,
+        SavedModes,
+        // Screen buffer types
+        Screen,
+        ScreenCell,
+        ScreenPen,
+        SelectionState,
+        TerminalModes,
+        Utf8Decoder,
+        VTermKey,
+        // Mouse flags
+        MOUSE_WANT_CLICK,
+        MOUSE_WANT_DRAG,
+        MOUSE_WANT_MOVE,
         UNICODE_INVALID,
     };
 }
