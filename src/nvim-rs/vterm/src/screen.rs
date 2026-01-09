@@ -9,8 +9,7 @@
 use std::ffi::{c_int, c_void};
 
 use crate::{
-    SChar, VTermColor, VTermDamageSize, VTermPos, VTermProp, VTermRect, VTermScreenCell,
-    VTermValue,
+    SChar, VTermColor, VTermDamageSize, VTermPos, VTermProp, VTermRect, VTermScreenCell, VTermValue,
 };
 
 // =============================================================================

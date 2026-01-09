@@ -17,10 +17,12 @@ use std::ffi::{c_char, c_int, c_long, c_void};
 use std::ptr;
 
 pub mod parser;
+pub mod pen;
 pub mod screen;
 pub mod state;
 
 pub use parser::*;
+pub use pen::*;
 pub use screen::*;
 pub use state::*;
 
