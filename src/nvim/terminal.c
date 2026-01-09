@@ -2634,4 +2634,54 @@ void nvim_terminal_dec_refcount(Terminal *term)
   }
 }
 
+// =============================================================================
+// Lifecycle Accessors for Rust (Phase 12.4)
+// =============================================================================
+
+/// Set the buf_handle on a Terminal (mutator for Rust).
+void nvim_terminal_set_buf_handle(Terminal *term, int buf_handle)
+{
+  if (term) {
+    term->buf_handle = buf_handle;
+  }
+}
+
+/// Set the destroy flag on a Terminal (mutator for Rust).
+void nvim_terminal_set_destroy(Terminal *term, int destroy)
+{
+  if (term) {
+    term->destroy = (destroy != 0);
+  }
+}
+
+/// Check if a terminal is valid (not null and has a vterm).
+int nvim_terminal_is_valid(Terminal *term)
+{
+  return term && term->vt ? 1 : 0;
+}
+
+/// Check if a terminal can be destroyed (refcount is 0).
+int nvim_terminal_can_destroy(Terminal *term)
+{
+  return term && term->refcount == 0 ? 1 : 0;
+}
+
+/// Get the opts.data pointer from a Terminal (for close callback).
+void *nvim_terminal_get_opts_data(Terminal *term)
+{
+  return term ? term->opts.data : NULL;
+}
+
+/// Get the opts.width from a Terminal.
+int nvim_terminal_get_opts_width(Terminal *term)
+{
+  return term ? term->opts.width : 0;
+}
+
+/// Get the opts.height from a Terminal.
+int nvim_terminal_get_opts_height(Terminal *term)
+{
+  return term ? term->opts.height : 0;
+}
+
 // vim: foldmethod=marker

@@ -197,6 +197,31 @@ extern "C" {
 
     /// Decrement the refcount on a Terminal.
     fn nvim_terminal_dec_refcount(term: TerminalHandle);
+
+    // -------------------------------------------------------------------------
+    // Lifecycle Accessors (Phase 12.4)
+    // -------------------------------------------------------------------------
+
+    /// Set the `buf_handle` on a Terminal.
+    fn nvim_terminal_set_buf_handle(term: TerminalHandle, buf_handle: c_int);
+
+    /// Set the destroy flag on a Terminal.
+    fn nvim_terminal_set_destroy(term: TerminalHandle, destroy: c_int);
+
+    /// Check if a terminal is valid (not null and has a vterm).
+    fn nvim_terminal_is_valid(term: TerminalHandle) -> c_int;
+
+    /// Check if a terminal can be destroyed (refcount is 0).
+    fn nvim_terminal_can_destroy(term: TerminalHandle) -> c_int;
+
+    /// Get the opts.data pointer from a Terminal (for close callback).
+    fn nvim_terminal_get_opts_data(term: TerminalHandle) -> *mut c_void;
+
+    /// Get the opts.width from a Terminal.
+    fn nvim_terminal_get_opts_width(term: TerminalHandle) -> c_int;
+
+    /// Get the opts.height from a Terminal.
+    fn nvim_terminal_get_opts_height(term: TerminalHandle) -> c_int;
 }
 
 // =============================================================================
@@ -589,6 +614,126 @@ pub extern "C" fn rs_terminal_inc_refcount(term: TerminalHandle) {
 pub extern "C" fn rs_terminal_dec_refcount(term: TerminalHandle) {
     if !term.is_null() {
         unsafe { nvim_terminal_dec_refcount(term) }
+    }
+}
+
+// =============================================================================
+// Terminal Lifecycle Functions (Phase 12.4)
+// =============================================================================
+
+/// Set the buffer handle on a terminal.
+///
+/// Used to associate or disassociate a terminal with a buffer.
+/// Set to 0 to clear the association.
+#[no_mangle]
+pub extern "C" fn rs_terminal_set_buf_handle(term: TerminalHandle, buf_handle: c_int) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_set_buf_handle(term, buf_handle) }
+    }
+}
+
+/// Mark a terminal for destruction.
+///
+/// Sets the destroy flag, indicating the terminal should be destroyed
+/// when safe to do so.
+#[no_mangle]
+pub extern "C" fn rs_terminal_set_destroy(term: TerminalHandle, destroy: c_int) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_set_destroy(term, destroy) }
+    }
+}
+
+/// Check if a terminal handle is valid.
+///
+/// A terminal is valid if the pointer is non-null and has a `VTerm` instance.
+/// Returns 1 if valid, 0 otherwise.
+#[no_mangle]
+pub extern "C" fn rs_terminal_is_valid(term: TerminalHandle) -> c_int {
+    if term.is_null() {
+        return 0;
+    }
+    unsafe { nvim_terminal_is_valid(term) }
+}
+
+/// Check if a terminal can be destroyed.
+///
+/// A terminal can be destroyed when its refcount is 0.
+/// Returns 1 if it can be destroyed, 0 otherwise.
+#[no_mangle]
+pub extern "C" fn rs_terminal_can_destroy(term: TerminalHandle) -> c_int {
+    if term.is_null() {
+        return 0;
+    }
+    unsafe { nvim_terminal_can_destroy(term) }
+}
+
+/// Get the opts.data pointer from a terminal.
+///
+/// This returns the user data associated with the terminal options,
+/// typically used for the close callback.
+#[no_mangle]
+pub extern "C" fn rs_terminal_get_opts_data(term: TerminalHandle) -> *mut c_void {
+    if term.is_null() {
+        return std::ptr::null_mut();
+    }
+    unsafe { nvim_terminal_get_opts_data(term) }
+}
+
+/// Get the configured width from terminal options.
+#[no_mangle]
+pub extern "C" fn rs_terminal_get_opts_width(term: TerminalHandle) -> c_int {
+    if term.is_null() {
+        return 0;
+    }
+    unsafe { nvim_terminal_get_opts_width(term) }
+}
+
+/// Get the configured height from terminal options.
+#[no_mangle]
+pub extern "C" fn rs_terminal_get_opts_height(term: TerminalHandle) -> c_int {
+    if term.is_null() {
+        return 0;
+    }
+    unsafe { nvim_terminal_get_opts_height(term) }
+}
+
+/// Prepare a terminal for close.
+///
+/// This sets the `forward_mouse` flag to false and marks the terminal as closed.
+/// Should be called when the terminal is about to be closed.
+#[no_mangle]
+pub extern "C" fn rs_terminal_prepare_close(term: TerminalHandle) {
+    if term.is_null() {
+        return;
+    }
+    unsafe {
+        nvim_terminal_set_forward_mouse(term, 0);
+        nvim_terminal_set_closed(term, 1);
+    }
+}
+
+/// Clear buffer association from a terminal.
+///
+/// Sets the `buf_handle` to 0, indicating the terminal is no longer
+/// associated with any buffer.
+#[no_mangle]
+pub extern "C" fn rs_terminal_clear_buf_handle(term: TerminalHandle) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_set_buf_handle(term, 0) }
+    }
+}
+
+/// Mark a terminal for destruction and clear buffer association.
+///
+/// This is a convenience function that performs both operations atomically.
+#[no_mangle]
+pub extern "C" fn rs_terminal_mark_for_destruction(term: TerminalHandle) {
+    if term.is_null() {
+        return;
+    }
+    unsafe {
+        nvim_terminal_set_buf_handle(term, 0);
+        nvim_terminal_set_destroy(term, 1);
     }
 }
 
