@@ -12,6 +12,7 @@ pub mod filter;
 pub mod list;
 pub mod navigate;
 pub mod parse;
+pub mod window;
 
 // =============================================================================
 // External C accessor functions
