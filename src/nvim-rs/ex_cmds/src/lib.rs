@@ -9,6 +9,7 @@
 //! - [`range`] - Line range types and utilities
 //! - [`read`] - `:read` command implementation
 //! - [`write`] - `:write`, `:update`, `:saveas` command implementations
+//! - [`substitute`] - `:substitute` (`:s`) command implementation
 //!
 //! ## Opaque Handles
 //!
@@ -21,6 +22,7 @@ use std::ffi::{c_char, c_int, c_uint};
 
 pub mod range;
 pub mod read;
+pub mod substitute;
 pub mod write;
 
 // =============================================================================
