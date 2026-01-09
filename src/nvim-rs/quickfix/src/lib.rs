@@ -8,14 +8,24 @@ use std::ffi::{c_char, c_int, c_void};
 // Submodules
 // =============================================================================
 
+pub mod api;
 pub mod commands;
+pub mod display;
+pub mod errorformat;
 pub mod external;
 pub mod filter;
 pub mod list;
 pub mod loclist;
 pub mod navigate;
 pub mod parse;
+pub mod stack;
 pub mod window;
+
+// Re-export commonly used types from submodules
+pub use api::{QfAction, QfApiResult, QfListInfo, QfWhatFlags};
+pub use display::{QfDisplayEntry, QfDisplayFormat, QfDisplayState};
+pub use errorformat::{EfmFlags, EfmParseResult, QfErrorType};
+pub use stack::{NavDirection, QfPushResult, QfStackNavResult, QfStackState};
 
 // =============================================================================
 // External C accessor functions
