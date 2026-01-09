@@ -1,0 +1,16 @@
+[package]
+name = "nvim-list"
+description = "VimL list operations for Neovim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+nvim-typval = { path = "../typval" }
+
+[lints]
+workspace = true

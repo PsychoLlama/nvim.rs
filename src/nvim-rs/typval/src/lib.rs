@@ -887,10 +887,22 @@ pub extern "C" fn rs_tv_is_truthy(tv: TypevalHandle) -> c_int {
 pub struct ListHandle(*const std::ffi::c_void);
 
 impl ListHandle {
+    /// Create a null handle.
+    #[inline]
+    pub const fn null() -> Self {
+        Self(std::ptr::null())
+    }
+
     /// Create a new list handle from a raw pointer.
     #[inline]
     pub const unsafe fn from_ptr(ptr: *const std::ffi::c_void) -> Self {
         Self(ptr)
+    }
+
+    /// Get the raw pointer.
+    #[inline]
+    pub const fn as_ptr(self) -> *const std::ffi::c_void {
+        self.0
     }
 
     /// Check if the handle is null.
@@ -907,10 +919,22 @@ impl ListHandle {
 pub struct DictHandle(*const std::ffi::c_void);
 
 impl DictHandle {
+    /// Create a null handle.
+    #[inline]
+    pub const fn null() -> Self {
+        Self(std::ptr::null())
+    }
+
     /// Create a new dict handle from a raw pointer.
     #[inline]
     pub const unsafe fn from_ptr(ptr: *const std::ffi::c_void) -> Self {
         Self(ptr)
+    }
+
+    /// Get the raw pointer.
+    #[inline]
+    pub const fn as_ptr(self) -> *const std::ffi::c_void {
+        self.0
     }
 
     /// Check if the handle is null.
@@ -927,10 +951,22 @@ impl DictHandle {
 pub struct BlobHandle(*const std::ffi::c_void);
 
 impl BlobHandle {
+    /// Create a null handle.
+    #[inline]
+    pub const fn null() -> Self {
+        Self(std::ptr::null())
+    }
+
     /// Create a new blob handle from a raw pointer.
     #[inline]
     pub const unsafe fn from_ptr(ptr: *const std::ffi::c_void) -> Self {
         Self(ptr)
+    }
+
+    /// Get the raw pointer.
+    #[inline]
+    pub const fn as_ptr(self) -> *const std::ffi::c_void {
+        self.0
     }
 
     /// Check if the handle is null.
@@ -947,6 +983,24 @@ impl BlobHandle {
 pub struct ListItemHandle(*const std::ffi::c_void);
 
 impl ListItemHandle {
+    /// Create a null handle.
+    #[inline]
+    pub const fn null() -> Self {
+        Self(std::ptr::null())
+    }
+
+    /// Create a new list item handle from a raw pointer.
+    #[inline]
+    pub const unsafe fn from_ptr(ptr: *const std::ffi::c_void) -> Self {
+        Self(ptr)
+    }
+
+    /// Get the raw pointer.
+    #[inline]
+    pub const fn as_ptr(self) -> *const std::ffi::c_void {
+        self.0
+    }
+
     /// Check if the handle is null.
     #[inline]
     #[must_use]
@@ -2342,7 +2396,7 @@ mod tests {
         assert!(!num.is_empty());
         assert!(num.is_truthy());
         assert_eq!(num.to_number(), 42);
-        assert_eq!(num.to_float(), 42.0);
+        assert!((num.to_float() - 42.0).abs() < f64::EPSILON);
 
         // Test zero is empty
         let zero = TypeVal::number(0);
@@ -2350,11 +2404,11 @@ mod tests {
         assert!(!zero.is_truthy());
 
         // Test float
-        let float = TypeVal::float(3.14);
+        let float = TypeVal::float(2.5);
         assert_eq!(float.var_type(), VarType::Float);
         assert!(!float.is_empty());
-        assert_eq!(float.to_float(), 3.14);
-        assert_eq!(float.to_number(), 3);
+        assert!((float.to_float() - 2.5).abs() < f64::EPSILON);
+        assert_eq!(float.to_number(), 2);
 
         // Test zero float is empty
         let zero_float = TypeVal::float(0.0);
@@ -2404,7 +2458,7 @@ mod tests {
         let n32: TypeVal = 42i32.into();
         assert_eq!(n32.var_type(), VarType::Number);
 
-        let f: TypeVal = 3.14f64.into();
+        let f: TypeVal = 2.5f64.into();
         assert_eq!(f.var_type(), VarType::Float);
 
         let b: TypeVal = true.into();
@@ -2427,7 +2481,7 @@ mod tests {
     #[test]
     fn test_typeval_display() {
         assert_eq!(format!("{}", TypeVal::number(42)), "42");
-        assert_eq!(format!("{}", TypeVal::float(3.14)), "3.14");
+        assert_eq!(format!("{}", TypeVal::float(2.5)), "2.5");
         assert_eq!(format!("{}", TypeVal::string("hello")), "'hello'");
         assert_eq!(format!("{}", TypeVal::vim_true()), "v:true");
         assert_eq!(format!("{}", TypeVal::vim_false()), "v:false");
