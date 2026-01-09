@@ -14,6 +14,9 @@ pub mod spellfile;
 pub mod suggest;
 pub mod wordtree;
 
+// Re-export types for cbindgen
+pub use check::{CaseType, SpellResult, WordLookupResult};
+
 use std::ffi::{c_char, c_int, c_void};
 
 // =============================================================================
