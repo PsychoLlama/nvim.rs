@@ -274,6 +274,94 @@ int nvim_fmark_get_fnum(const void *fm_void)
   return fm->fnum;
 }
 
+// ============================================================================
+// Setter functions for Rust tag stack operations
+// ============================================================================
+
+/// Set tag stack length for win_T from Rust
+void nvim_win_set_tagstacklen(void *wp_void, int len)
+{
+  win_T *wp = (win_T *)wp_void;
+  wp->w_tagstacklen = len;
+}
+
+/// Set tag stack index for win_T from Rust
+void nvim_win_set_tagstackidx(void *wp_void, int idx)
+{
+  win_T *wp = (win_T *)wp_void;
+  wp->w_tagstackidx = idx;
+}
+
+/// Set tagname in taggy_T from Rust
+void nvim_taggy_set_tagname(void *tg_void, char *name)
+{
+  taggy_T *tg = (taggy_T *)tg_void;
+  tg->tagname = name;
+}
+
+/// Set cur_match in taggy_T from Rust
+void nvim_taggy_set_cur_match(void *tg_void, int match_idx)
+{
+  taggy_T *tg = (taggy_T *)tg_void;
+  tg->cur_match = match_idx;
+}
+
+/// Set cur_fnum in taggy_T from Rust
+void nvim_taggy_set_cur_fnum(void *tg_void, int fnum)
+{
+  taggy_T *tg = (taggy_T *)tg_void;
+  tg->cur_fnum = fnum;
+}
+
+/// Set user_data in taggy_T from Rust
+void nvim_taggy_set_user_data(void *tg_void, char *data)
+{
+  taggy_T *tg = (taggy_T *)tg_void;
+  tg->user_data = data;
+}
+
+/// Get fmark lnum from taggy_T for Rust
+linenr_T nvim_taggy_get_fmark_lnum(const void *tg_void)
+{
+  const taggy_T *tg = (const taggy_T *)tg_void;
+  return tg->fmark.mark.lnum;
+}
+
+/// Get fmark col from taggy_T for Rust
+int nvim_taggy_get_fmark_col(const void *tg_void)
+{
+  const taggy_T *tg = (const taggy_T *)tg_void;
+  return tg->fmark.mark.col;
+}
+
+/// Get fmark fnum from taggy_T for Rust
+int nvim_taggy_get_fmark_fnum(const void *tg_void)
+{
+  const taggy_T *tg = (const taggy_T *)tg_void;
+  return tg->fmark.fnum;
+}
+
+/// Set fmark lnum in taggy_T from Rust
+void nvim_taggy_set_fmark_lnum(void *tg_void, linenr_T lnum)
+{
+  taggy_T *tg = (taggy_T *)tg_void;
+  tg->fmark.mark.lnum = lnum;
+}
+
+/// Set fmark col in taggy_T from Rust
+void nvim_taggy_set_fmark_col(void *tg_void, int col)
+{
+  taggy_T *tg = (taggy_T *)tg_void;
+  tg->fmark.mark.col = col;
+}
+
+/// Set fmark fnum in taggy_T from Rust
+void nvim_taggy_set_fmark_fnum(void *tg_void, int fnum)
+{
+  taggy_T *tg = (taggy_T *)tg_void;
+  tg->fmark.fnum = fnum;
+}
+
 /// Get state from findtags_state_T for Rust
 int nvim_findtags_get_state(const void *st_void)
 {

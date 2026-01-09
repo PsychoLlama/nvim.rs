@@ -9,6 +9,7 @@ pub mod matches;
 pub mod parse;
 pub mod pattern;
 pub mod search;
+pub mod stack;
 
 // Re-export parse types and functions
 pub use matches::MatchStorage;
