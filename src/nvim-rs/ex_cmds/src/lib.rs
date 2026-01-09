@@ -12,6 +12,7 @@
 //! - [`substitute`] - `:substitute` (`:s`) command implementation
 //! - [`global`] - `:global` (`:g`) and `:vglobal` (`:v`) command implementations
 //! - [`sort`] - `:sort` command implementation
+//! - [`lines`] - Line manipulation commands (`:copy`, `:move`, `:delete`, `:yank`, `:put`, `:join`)
 //!
 //! ## Opaque Handles
 //!
@@ -23,6 +24,7 @@
 use std::ffi::{c_char, c_int, c_uint};
 
 pub mod global;
+pub mod lines;
 pub mod range;
 pub mod read;
 pub mod sort;
