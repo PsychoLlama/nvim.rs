@@ -25,6 +25,7 @@ pub mod editing;
 pub mod events;
 pub mod flags;
 pub mod invalidation;
+pub mod lines;
 pub mod recording;
 
 pub use editing::{
@@ -38,6 +39,7 @@ pub use events::{
 };
 pub use flags::OpenlineFlags;
 pub use invalidation::rs_changed_lines_invalidate_buf;
+pub use lines::{rs_del_lines, rs_truncate_line};
 pub use recording::{rs_change_warning, rs_changed, rs_changed_internal};
 
 // =============================================================================
