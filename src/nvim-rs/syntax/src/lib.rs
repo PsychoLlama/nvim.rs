@@ -26,6 +26,7 @@ pub mod match_engine;
 pub mod pattern;
 pub mod region;
 pub mod state;
+pub mod sync;
 pub mod types;
 
 // =============================================================================
