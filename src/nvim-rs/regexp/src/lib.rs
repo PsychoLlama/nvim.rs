@@ -7,6 +7,7 @@
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::must_use_candidate)]
 
+pub mod bt_compile;
 pub mod bt_opcodes;
 pub mod bt_state;
 pub mod char_class;
@@ -20,6 +21,11 @@ pub mod parser;
 pub mod regsub;
 pub mod scanner;
 
+pub use bt_compile::{
+    rs_bt_chain, rs_bt_compiler_free, rs_bt_compiler_is_too_long, rs_bt_compiler_new,
+    rs_bt_compiler_size, rs_bt_compiler_start, rs_bt_emit_byte, rs_bt_emit_node,
+    rs_bt_emit_node_arg, rs_bt_insert_node, rs_bt_next, rs_bt_op, rs_bt_operand, rs_bt_set_next,
+};
 pub use bt_state::{
     rs_backpos_clear, rs_backpos_free, rs_backpos_new, rs_regstack_clear, rs_regstack_free,
     rs_regstack_is_empty, rs_regstack_new,
