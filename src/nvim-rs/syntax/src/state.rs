@@ -158,6 +158,18 @@ extern "C" {
         si_cchar: c_int,
         em: ExtMatchHandle,
     );
+
+    // -------------------------------------------------------------------------
+    // Stack management functions
+    // -------------------------------------------------------------------------
+    fn nvim_syn_stack_free_all(block: SynBlockHandle);
+    fn nvim_syn_stack_apply_changes(buf: crate::types::BufHandle);
+    fn nvim_buf_get_mod_top(buf: crate::types::BufHandle) -> c_int;
+    fn nvim_buf_get_mod_bot(buf: crate::types::BufHandle) -> c_int;
+    fn nvim_buf_get_mod_xlines(buf: crate::types::BufHandle) -> c_int;
+    fn nvim_synblock_get_linebreaks(block: SynBlockHandle) -> c_int;
+    fn nvim_synstate_set_lnum(state: SynStateHandle, lnum: c_int);
+    fn nvim_synstate_next_list_eq(a: SynStateHandle, b: SynStateHandle) -> c_int;
 }
 
 // =============================================================================
@@ -967,6 +979,85 @@ pub fn set_cur_state_item(
     em: ExtMatchHandle,
 ) {
     unsafe { nvim_syn_set_cur_state_item(idx, si_idx, si_flags, si_seqnr, si_cchar, em) }
+}
+
+// =============================================================================
+// Stack management functions
+// =============================================================================
+
+/// Free all syntax state entries for a synblock.
+///
+/// # Safety
+/// The caller must ensure the synblock handle is valid.
+pub fn stack_free_all(block: SynBlockHandle) {
+    if !block.is_null() {
+        unsafe { nvim_syn_stack_free_all(block) }
+    }
+}
+
+/// Apply buffer changes to syntax states.
+///
+/// This function invalidates or updates cached syntax states
+/// when the buffer is modified.
+///
+/// # Safety
+/// The caller must ensure the buffer handle is valid.
+pub fn stack_apply_changes(buf: crate::types::BufHandle) {
+    if !buf.is_null() {
+        unsafe { nvim_syn_stack_apply_changes(buf) }
+    }
+}
+
+/// Get the line where a buffer change starts.
+#[must_use]
+pub fn buf_mod_top(buf: crate::types::BufHandle) -> i32 {
+    if buf.is_null() {
+        return 0;
+    }
+    unsafe { nvim_buf_get_mod_top(buf) }
+}
+
+/// Get the line after a buffer change.
+#[must_use]
+pub fn buf_mod_bot(buf: crate::types::BufHandle) -> i32 {
+    if buf.is_null() {
+        return 0;
+    }
+    unsafe { nvim_buf_get_mod_bot(buf) }
+}
+
+/// Get the number of extra lines from a buffer change.
+#[must_use]
+pub fn buf_mod_xlines(buf: crate::types::BufHandle) -> i32 {
+    if buf.is_null() {
+        return 0;
+    }
+    unsafe { nvim_buf_get_mod_xlines(buf) }
+}
+
+/// Get the sync linebreaks setting from a synblock.
+#[must_use]
+pub fn synblock_linebreaks(block: SynBlockHandle) -> i32 {
+    if block.is_null() {
+        return 0;
+    }
+    unsafe { nvim_synblock_get_linebreaks(block) }
+}
+
+/// Set the line number for a syntax state.
+pub fn synstate_set_lnum(state: SynStateHandle, lnum: i32) {
+    if !state.is_null() {
+        unsafe { nvim_synstate_set_lnum(state, lnum) }
+    }
+}
+
+/// Check if two synstates have equal next_list pointers.
+#[must_use]
+pub fn synstate_next_list_eq(a: SynStateHandle, b: SynStateHandle) -> bool {
+    if a.is_null() || b.is_null() {
+        return a.is_null() && b.is_null();
+    }
+    unsafe { nvim_synstate_next_list_eq(a, b) != 0 }
 }
 
 #[cfg(test)]

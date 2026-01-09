@@ -7970,3 +7970,55 @@ int nvim_syn_get_rows(void)
 {
   return (int)Rows;
 }
+
+// =============================================================================
+// Rust-callable wrappers for state stack management
+// =============================================================================
+
+/// Wrapper for syn_stack_free_all - free all syntax state entries for a synblock
+void nvim_syn_stack_free_all(synblock_T *block)
+{
+  syn_stack_free_all(block);
+}
+
+/// Wrapper for syn_stack_apply_changes - apply buffer changes to syntax states
+void nvim_syn_stack_apply_changes(buf_T *buf)
+{
+  syn_stack_apply_changes(buf);
+}
+
+/// Get b_mod_top from buffer (line where change starts)
+int nvim_buf_get_mod_top(buf_T *buf)
+{
+  return (int)buf->b_mod_top;
+}
+
+/// Get b_mod_bot from buffer (line after change)
+int nvim_buf_get_mod_bot(buf_T *buf)
+{
+  return (int)buf->b_mod_bot;
+}
+
+/// Get b_mod_xlines from buffer (number of extra lines)
+int nvim_buf_get_mod_xlines(buf_T *buf)
+{
+  return (int)buf->b_mod_xlines;
+}
+
+/// Get b_syn_sync_linebreaks from synblock
+int nvim_synblock_get_linebreaks(synblock_T *block)
+{
+  return block->b_syn_sync_linebreaks;
+}
+
+/// Set sst_lnum on a synstate
+void nvim_synstate_set_lnum(synstate_T *state, int lnum)
+{
+  state->sst_lnum = lnum;
+}
+
+/// Get sst_next_list pointer equality check
+int nvim_synstate_next_list_eq(synstate_T *a, synstate_T *b)
+{
+  return a->sst_next_list == b->sst_next_list;
+}

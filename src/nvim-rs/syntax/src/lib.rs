@@ -4297,6 +4297,86 @@ pub unsafe extern "C" fn rs_syn_get_rows() -> c_int {
     nvim_syn_get_rows()
 }
 
+// =============================================================================
+// Phase 32.1: Stack management exports
+// =============================================================================
+
+/// Free all syntax state entries for a synblock.
+///
+/// # Safety
+/// The caller must ensure the synblock handle is valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_stack_free_all(block: SynBlockHandle) {
+    state::stack_free_all(block);
+}
+
+/// Apply buffer changes to syntax states.
+///
+/// # Safety
+/// The caller must ensure the buffer handle is valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_stack_apply_changes(buf: BufHandle) {
+    state::stack_apply_changes(buf);
+}
+
+/// Get the line where a buffer change starts.
+///
+/// # Safety
+/// The caller must ensure the buffer handle is valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_buf_mod_top(buf: BufHandle) -> c_int {
+    state::buf_mod_top(buf)
+}
+
+/// Get the line after a buffer change.
+///
+/// # Safety
+/// The caller must ensure the buffer handle is valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_buf_mod_bot(buf: BufHandle) -> c_int {
+    state::buf_mod_bot(buf)
+}
+
+/// Get the number of extra lines from a buffer change.
+///
+/// # Safety
+/// The caller must ensure the buffer handle is valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_buf_mod_xlines(buf: BufHandle) -> c_int {
+    state::buf_mod_xlines(buf)
+}
+
+/// Get the sync linebreaks setting from a synblock.
+///
+/// # Safety
+/// The caller must ensure the synblock handle is valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_linebreaks(block: SynBlockHandle) -> c_int {
+    state::synblock_linebreaks(block)
+}
+
+/// Set the line number for a syntax state.
+///
+/// # Safety
+/// The caller must ensure the synstate handle is valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synstate_set_lnum(state: SynStateHandle, lnum: c_int) {
+    state::synstate_set_lnum(state, lnum);
+}
+
+/// Check if two synstates have equal next_list pointers.
+///
+/// # Safety
+/// The caller must ensure the synstate handles are valid (or null).
+#[no_mangle]
+pub unsafe extern "C" fn rs_synstate_next_list_eq(a: SynStateHandle, b: SynStateHandle) -> c_int {
+    if state::synstate_next_list_eq(a, b) {
+        1
+    } else {
+        0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
