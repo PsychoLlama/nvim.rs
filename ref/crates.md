@@ -68,6 +68,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | quickfix       | Quickfix and location lists             |
 | regexp         | Regular expression engine               |
 | register       | Register operations                     |
+| runtime        | Runtime file management and script sourcing |
 | search         | Search and substitution                 |
 | shada          | Session data persistence (ShaDa files)  |
 | sign           | Sign management and display             |

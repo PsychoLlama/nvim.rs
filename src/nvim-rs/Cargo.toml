@@ -76,6 +76,7 @@ nvim-profile = { path = "profile" }
 nvim-quickfix = { path = "quickfix" }
 nvim-register = { path = "register" }
 nvim-regexp = { path = "regexp" }
+nvim-runtime = { path = "runtime" }
 nvim-search = { path = "search" }
 nvim-shada = { path = "shada" }
 nvim-sign = { path = "sign" }
