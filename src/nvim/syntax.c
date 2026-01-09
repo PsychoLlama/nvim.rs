@@ -7266,3 +7266,118 @@ int16_t *nvim_syn_get_id_list_all(void)
 {
   return ID_LIST_ALL;
 }
+
+// ============================================================================
+// Phase 24.3: Keyword Matching Helpers (for Rust FFI)
+// ============================================================================
+
+/// Call check_keyword_id from Rust
+/// Returns the syntax ID if matched, 0 otherwise
+int nvim_syn_check_keyword_id(char *line, int startcol, int *endcolp,
+                               int *flagsp, int16_t **next_listp,
+                               stateitem_T *cur_si, int *ccharp)
+{
+  return check_keyword_id(line, startcol, endcolp, flagsp, next_listp, cur_si, ccharp);
+}
+
+/// Call in_id_list from Rust
+/// Returns 1 if in list, 0 otherwise
+int nvim_syn_in_id_list(stateitem_T *cur_si, int16_t *list, int id, int inc_tag,
+                         int16_t *cont_in_list, int flags)
+{
+  struct sp_syn ssp;
+  ssp.id = (int16_t)id;
+  ssp.inc_tag = inc_tag;
+  ssp.cont_in_list = cont_in_list;
+  return in_id_list(cur_si, list, &ssp, flags);
+}
+
+/// Check if there are keywords (case sensitive) in synblock
+int nvim_syn_has_keywords(void)
+{
+  return syn_block != NULL && syn_block->b_keywtab.ht_used > 0 ? 1 : 0;
+}
+
+/// Check if there are keywords (case insensitive) in synblock
+int nvim_syn_has_keywords_ic(void)
+{
+  return syn_block != NULL && syn_block->b_keywtab_ic.ht_used > 0 ? 1 : 0;
+}
+
+/// Check if a char is a keyword character at position in syn_buf
+int nvim_syn_is_keyword_char(char *line, int pos)
+{
+  if (syn_buf == NULL || line == NULL) {
+    return 0;
+  }
+  return vim_iswordp_buf(line + pos, syn_buf) ? 1 : 0;
+}
+
+/// Get the current line from syn_getcurline
+char *nvim_syn_getcurline(void)
+{
+  return syn_getcurline();
+}
+
+/// Call save_chartab for syntax iskeyword
+void nvim_syn_save_chartab(char *buf)
+{
+  save_chartab(buf);
+}
+
+/// Call restore_chartab
+void nvim_syn_restore_chartab(char *buf)
+{
+  restore_chartab(buf);
+}
+
+/// Get MAXKEYWLEN constant
+int nvim_syn_get_maxkeywlen(void)
+{
+  return MAXKEYWLEN;
+}
+
+/// Call hash_find for keyword hashtab
+keyentry_T *nvim_syn_keyword_find(char *keyword, int use_ic)
+{
+  if (syn_block == NULL) {
+    return NULL;
+  }
+  hashtab_T *ht = use_ic ? &syn_block->b_keywtab_ic : &syn_block->b_keywtab;
+  if (ht->ht_used == 0) {
+    return NULL;
+  }
+  hashitem_T *hi = hash_find(ht, keyword);
+  if (HASHITEM_EMPTY(hi)) {
+    return NULL;
+  }
+  return HI2KE(hi);
+}
+
+/// Call match_keyword from Rust
+keyentry_T *nvim_syn_match_keyword(char *keyword, int use_ic, stateitem_T *cur_si)
+{
+  if (syn_block == NULL) {
+    return NULL;
+  }
+  hashtab_T *ht = use_ic ? &syn_block->b_keywtab_ic : &syn_block->b_keywtab;
+  return match_keyword(keyword, ht, cur_si);
+}
+
+/// Copy and fold case for keyword
+void nvim_syn_keyword_foldcase(char *src, int srclen, char *dst, int dstlen)
+{
+  str_foldcase(src, srclen, dst, dstlen);
+}
+
+/// Get utfc_ptr2len for keyword length calculation
+int nvim_syn_utfc_ptr2len(char *p)
+{
+  return utfc_ptr2len(p);
+}
+
+/// Get syn_buf pointer (for keyword char checks)
+void *nvim_syn_get_buf(void)
+{
+  return syn_buf;
+}

@@ -1095,6 +1095,71 @@ extern "C" {
 
     /// Get the ID_LIST_ALL pointer
     fn nvim_syn_get_id_list_all() -> IdListHandle;
+
+    // -------------------------------------------------------------------------
+    // Phase 24.3: Keyword Matching Helpers
+    // -------------------------------------------------------------------------
+
+    /// Call check_keyword_id from Rust
+    fn nvim_syn_check_keyword_id(
+        line: *mut c_char,
+        startcol: c_int,
+        endcolp: *mut c_int,
+        flagsp: *mut c_int,
+        next_listp: *mut IdListHandle,
+        cur_si: StateItemHandle,
+        ccharp: *mut c_int,
+    ) -> c_int;
+
+    /// Call in_id_list from Rust
+    fn nvim_syn_in_id_list(
+        cur_si: StateItemHandle,
+        list: IdListHandle,
+        id: c_int,
+        inc_tag: c_int,
+        cont_in_list: IdListHandle,
+        flags: c_int,
+    ) -> c_int;
+
+    /// Check if there are keywords (case sensitive) in synblock
+    fn nvim_syn_has_keywords() -> c_int;
+
+    /// Check if there are keywords (case insensitive) in synblock
+    fn nvim_syn_has_keywords_ic() -> c_int;
+
+    /// Check if a char is a keyword character at position in syn_buf
+    fn nvim_syn_is_keyword_char(line: *mut c_char, pos: c_int) -> c_int;
+
+    /// Get the current line from syn_getcurline
+    fn nvim_syn_getcurline() -> *mut c_char;
+
+    /// Call save_chartab for syntax iskeyword
+    fn nvim_syn_save_chartab(buf: *mut c_char);
+
+    /// Call restore_chartab
+    fn nvim_syn_restore_chartab(buf: *mut c_char);
+
+    /// Get MAXKEYWLEN constant
+    fn nvim_syn_get_maxkeywlen() -> c_int;
+
+    /// Call hash_find for keyword hashtab
+    fn nvim_syn_keyword_find(keyword: *mut c_char, use_ic: c_int) -> KeyEntryHandle;
+
+    /// Call match_keyword from Rust
+    fn nvim_syn_match_keyword(
+        keyword: *mut c_char,
+        use_ic: c_int,
+        cur_si: StateItemHandle,
+    ) -> KeyEntryHandle;
+
+    /// Copy and fold case for keyword
+    fn nvim_syn_keyword_foldcase(src: *mut c_char, srclen: c_int, dst: *mut c_char, dstlen: c_int);
+
+    /// Get utfc_ptr2len for keyword length calculation
+    fn nvim_syn_utfc_ptr2len(p: *mut c_char) -> c_int;
+
+    /// Get syn_buf pointer (for keyword char checks)
+    fn nvim_syn_get_buf() -> *mut std::ffi::c_void;
 }
 
 // =============================================================================
@@ -3313,6 +3378,168 @@ pub unsafe extern "C" fn rs_synblock_pattern_cont_list(idx: c_int) -> IdListHand
 #[no_mangle]
 pub unsafe extern "C" fn rs_synblock_pattern_next_list(idx: c_int) -> IdListHandle {
     nvim_synblock_pattern_next_list(idx)
+}
+
+// =============================================================================
+// Phase 24.3: Keyword Matching Functions (FFI exports)
+// =============================================================================
+
+/// Check for a keyword match at the given position.
+/// Returns the syntax ID if a keyword is found, 0 otherwise.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_keyword_id(
+    line: *mut c_char,
+    startcol: c_int,
+    endcolp: *mut c_int,
+    flagsp: *mut c_int,
+    next_listp: *mut IdListHandle,
+    cur_si: StateItemHandle,
+    ccharp: *mut c_int,
+) -> c_int {
+    nvim_syn_check_keyword_id(line, startcol, endcolp, flagsp, next_listp, cur_si, ccharp)
+}
+
+/// Check if an ID is in a contains or nextgroup list.
+/// Returns 1 if in list, 0 otherwise.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_in_id_list(
+    cur_si: StateItemHandle,
+    list: IdListHandle,
+    id: c_int,
+    inc_tag: c_int,
+    cont_in_list: IdListHandle,
+    flags: c_int,
+) -> c_int {
+    nvim_syn_in_id_list(cur_si, list, id, inc_tag, cont_in_list, flags)
+}
+
+/// Check if there are case-sensitive keywords in the synblock.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_has_keywords() -> c_int {
+    nvim_syn_has_keywords()
+}
+
+/// Check if there are case-insensitive keywords in the synblock.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_has_keywords_ic() -> c_int {
+    nvim_syn_has_keywords_ic()
+}
+
+/// Get the cont_list from a stateitem.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_get_cont_list(item: StateItemHandle) -> IdListHandle {
+    nvim_stateitem_get_cont_list(item)
+}
+
+/// Check if a character at position is a keyword character.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_is_keyword_char(line: *mut c_char, pos: c_int) -> c_int {
+    nvim_syn_is_keyword_char(line, pos)
+}
+
+/// Get the current line being processed.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_getcurline() -> *mut c_char {
+    nvim_syn_getcurline()
+}
+
+/// Save the chartab for syntax iskeyword.
+///
+/// # Safety
+/// Buffer must be at least 32 bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_save_chartab(buf: *mut c_char) {
+    nvim_syn_save_chartab(buf);
+}
+
+/// Restore the chartab.
+///
+/// # Safety
+/// Buffer must be the same as passed to rs_syn_save_chartab.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_restore_chartab(buf: *mut c_char) {
+    nvim_syn_restore_chartab(buf);
+}
+
+/// Get the maximum keyword length constant.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_maxkeywlen() -> c_int {
+    nvim_syn_get_maxkeywlen()
+}
+
+/// Find a keyword in the hashtab.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_keyword_find(
+    keyword: *mut c_char,
+    use_ic: c_int,
+) -> KeyEntryHandle {
+    nvim_syn_keyword_find(keyword, use_ic)
+}
+
+/// Match a keyword against the hashtab.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_match_keyword(
+    keyword: *mut c_char,
+    use_ic: c_int,
+    cur_si: StateItemHandle,
+) -> KeyEntryHandle {
+    nvim_syn_match_keyword(keyword, use_ic, cur_si)
+}
+
+/// Fold case for keyword comparison.
+///
+/// # Safety
+/// src and dst must be valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_keyword_foldcase(
+    src: *mut c_char,
+    srclen: c_int,
+    dst: *mut c_char,
+    dstlen: c_int,
+) {
+    nvim_syn_keyword_foldcase(src, srclen, dst, dstlen);
+}
+
+/// Get UTF character length.
+///
+/// # Safety
+/// p must be a valid pointer to a UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_utfc_ptr2len(p: *mut c_char) -> c_int {
+    nvim_syn_utfc_ptr2len(p)
+}
+
+/// Get the syn_buf pointer.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_buf() -> *mut std::ffi::c_void {
+    nvim_syn_get_buf()
 }
 
 #[cfg(test)]
