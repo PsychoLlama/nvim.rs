@@ -19,6 +19,7 @@ use std::ffi::{c_char, c_int};
 // =============================================================================
 
 pub mod cache;
+pub mod keyword;
 pub mod pattern;
 pub mod state;
 pub mod types;
@@ -844,24 +845,7 @@ extern "C" {
     /// Call restore_chartab
     fn nvim_syn_restore_chartab(buf: *mut c_char);
 
-    /// Get MAXKEYWLEN constant
-    fn nvim_syn_get_maxkeywlen() -> c_int;
-
-    /// Call hash_find for keyword hashtab
-    fn nvim_syn_keyword_find(keyword: *mut c_char, use_ic: c_int) -> KeyEntryHandle;
-
-    /// Call match_keyword from Rust
-    fn nvim_syn_match_keyword(
-        keyword: *mut c_char,
-        use_ic: c_int,
-        cur_si: StateItemHandle,
-    ) -> KeyEntryHandle;
-
-    /// Copy and fold case for keyword
-    fn nvim_syn_keyword_foldcase(src: *mut c_char, srclen: c_int, dst: *mut c_char, dstlen: c_int);
-
-    /// Get utfc_ptr2len for keyword length calculation
-    fn nvim_syn_utfc_ptr2len(p: *mut c_char) -> c_int;
+    // NOTE: Keyword-related FFI functions moved to keyword.rs module
 
     /// Get syn_buf pointer (for keyword char checks)
     fn nvim_syn_get_buf() -> *mut std::ffi::c_void;
@@ -3433,7 +3417,7 @@ pub unsafe extern "C" fn rs_syn_restore_chartab(buf: *mut c_char) {
 /// Get the maximum keyword length constant.
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_maxkeywlen() -> c_int {
-    nvim_syn_get_maxkeywlen()
+    keyword::max_keyword_len()
 }
 
 /// Find a keyword in the hashtab.
@@ -3445,7 +3429,7 @@ pub unsafe extern "C" fn rs_syn_keyword_find(
     keyword: *mut c_char,
     use_ic: c_int,
 ) -> KeyEntryHandle {
-    nvim_syn_keyword_find(keyword, use_ic)
+    keyword::keyword_find(keyword, use_ic != 0)
 }
 
 /// Match a keyword against the hashtab.
@@ -3458,7 +3442,7 @@ pub unsafe extern "C" fn rs_syn_match_keyword(
     use_ic: c_int,
     cur_si: StateItemHandle,
 ) -> KeyEntryHandle {
-    nvim_syn_match_keyword(keyword, use_ic, cur_si)
+    keyword::match_keyword(keyword, use_ic != 0, cur_si)
 }
 
 /// Fold case for keyword comparison.
@@ -3472,7 +3456,7 @@ pub unsafe extern "C" fn rs_syn_keyword_foldcase(
     dst: *mut c_char,
     dstlen: c_int,
 ) {
-    nvim_syn_keyword_foldcase(src, srclen, dst, dstlen);
+    keyword::keyword_foldcase(src, srclen, dst, dstlen);
 }
 
 /// Get UTF character length.
@@ -3481,7 +3465,7 @@ pub unsafe extern "C" fn rs_syn_keyword_foldcase(
 /// p must be a valid pointer to a UTF-8 string.
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_utfc_ptr2len(p: *mut c_char) -> c_int {
-    nvim_syn_utfc_ptr2len(p)
+    keyword::utfc_ptr2len(p)
 }
 
 /// Get the syn_buf pointer.

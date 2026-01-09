@@ -93,6 +93,12 @@ impl KeyEntryHandle {
     pub fn is_null(self) -> bool {
         self.0.is_null()
     }
+
+    /// Create a null handle
+    #[must_use]
+    pub fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
 }
 
 /// Opaque handle to a regprog_T (compiled regex program)
@@ -116,7 +122,7 @@ impl RegProgHandle {
 
 /// Opaque handle to an ID list (int16_t array terminated by 0)
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct IdListHandle(pub(crate) *mut i16);
 
 impl IdListHandle {
