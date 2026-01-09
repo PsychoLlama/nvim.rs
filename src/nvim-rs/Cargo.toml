@@ -67,6 +67,7 @@ nvim-lua = { path = "lua" }
 nvim-mapping = { path = "mapping" }
 nvim-mark = { path = "mark" }
 nvim-marktree = { path = "marktree" }
+nvim-match = { path = "match" }
 nvim-math = { path = "math" }
 nvim-mbyte = { path = "mbyte" }
 nvim-memline = { path = "memline" }
