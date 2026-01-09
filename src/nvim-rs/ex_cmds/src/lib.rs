@@ -11,6 +11,7 @@
 //! - [`write`] - `:write`, `:update`, `:saveas` command implementations
 //! - [`substitute`] - `:substitute` (`:s`) command implementation
 //! - [`global`] - `:global` (`:g`) and `:vglobal` (`:v`) command implementations
+//! - [`sort`] - `:sort` command implementation
 //!
 //! ## Opaque Handles
 //!
@@ -24,6 +25,7 @@ use std::ffi::{c_char, c_int, c_uint};
 pub mod global;
 pub mod range;
 pub mod read;
+pub mod sort;
 pub mod substitute;
 pub mod write;
 
