@@ -177,6 +177,16 @@ extern int rs_did_restart_edit(void);
 extern int rs_get_arrow_used(void);
 extern void rs_set_arrow_used(int val);
 extern linenr_T rs_get_o_lnum(void);
+// Insert module exports
+extern int rs_char_info_byte_len(int c);
+extern int rs_char_needs_nul_conversion(int c);
+extern int rs_insert_in_replace_mode(void);
+extern int rs_insert_in_vreplace_mode(void);
+extern int rs_is_printable(int c);
+extern int rs_is_whitespace(int c);
+extern int rs_is_newline(int c);
+extern colnr_T rs_insert_cursor_col(void);
+extern linenr_T rs_insert_cursor_lnum(void);
 
 /// Get the ins_need_undo static variable (accessor for Rust).
 int nvim_get_ins_need_undo(void)
