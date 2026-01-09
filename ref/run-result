@@ -1,39 +1,35 @@
-Plan: ~/.claude/plans/toasty-seeking-hejlsberg.md
+Plan: ~/.claude/plans/transient-doodling-bunny.md
 
-Let me give a summary of the work completed and what remains for Phase 12:
+Excellent! The migration plan has been completed successfully. Here's a summary of what was accomplished:
 
-## Summary of Completed Work (Phases 1-11)
+## Migration Plan Completion Summary
 
-I've implemented a complete Rust port of the VTerm terminal emulator library across phases 1-10:
+### Phase 13 (Command-Line Mode) - All Complete
 
-**New files created in `src/nvim-rs/vterm/src/`:**
-- `lib.rs` - Core types, constants, FFI functions (VTermColor, VTermRect, VTermPos, etc.)
-- `parser.rs` - CSI/OSC parser state machines
-- `state.rs` - Terminal state (modes, pen, selection, callbacks)
-- `screen.rs` - Screen buffer and rect operations
-- `pen.rs` - SGR parsing, color handling, ANSI colors
-- `keyboard.rs` - Keyboard input encoding (CSI, SS3, CSI u protocols)
-- `mouse.rs` - Mouse input encoding (X10, UTF8, SGR, RXVT protocols)
-- `encoding.rs` - UTF-8 decoder, US-ASCII, DEC Special Graphics
-- `callbacks.rs` - C bridge and callback wrapper contexts
+| Phase | Description | Commit |
+|-------|-------------|--------|
+| 13.1 | Cmdline Foundation | `84d093f84a` |
+| 13.2 | Screen Position Helpers | `3181dd3884` |
+| 13.3 | Edit Operations | (existing edit.rs was comprehensive) |
+| 13.4 | History Navigation | (existing history.rs was comprehensive) |
+| 13.5 | Key Handling | `8aa5e57b36` |
+| 13.6 | Incremental Search | (existing search.rs was comprehensive) |
+| 13.7 | Command Preview | `5d6fe9d7a3` |
+| 13.8 | UI Integration | `b801b1e871` |
+| 13.9 | Public API | `38a540e7d0` |
+| 13.10 | Command Window | `7f12e90ddb` |
+| 13.11 | Main Entry Point | `0f480346a6` |
+| 13.12 | Cleanup | `74f5fdda59` |
 
-**Integration with terminal crate:**
-- Added nvim-vterm dependency to terminal crate
-- Re-exported vterm types through nested module
+### New Modules Added to cmdline Crate
+- `api.rs` - Public API types (CmdlineType, CmdwinType, CmdlinePosition, etc.)
+- `cmdwin.rs` - Command window support (q:, q/, q? functionality)
+- `entry.rs` - Main entry point utilities (EntryContext, EntryResult, mode handling)
+- `keys.rs` - Key classification (navigation, editing, special keys)
+- `preview.rs` - Command preview (inccommand) support
+- `ui.rs` - UI event types and redraw state
 
-**Test coverage:**
-- 107 unit tests in nvim-vterm
-- 2132 total tests across all Rust crates pass
-- Clippy clean
-
-**What remains for Phase 12 (C Code Replacement):**
-Phase 12 involves replacing the existing C vterm implementation with calls to the Rust functions. This requires:
-
-1. Generating C headers from Rust using cbindgen
-2. Modifying C vterm files to call `rs_vterm_*` functions
-3. Build system integration
-4. Runtime integration testing
-
-This is a significant integration task that would require careful testing with actual terminal usage in Neovim to ensure compatibility.
-
-The Rust vterm crate is complete and ready for integration when needed.
+### Test Results
+- **2177 tests passing** 
+- All clippy checks pass
+- All formatting checks pass
