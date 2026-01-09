@@ -16,6 +16,7 @@
 pub mod color;
 pub mod command;
 pub mod complete;
+pub mod events;
 pub mod normal;
 pub mod parse;
 pub mod registry;
