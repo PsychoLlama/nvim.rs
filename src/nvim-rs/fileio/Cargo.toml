@@ -5,6 +5,7 @@ edition = "2021"
 description = "File I/O utilities for Neovim"
 
 [dependencies]
+bitflags = "2"
 
 [lib]
 crate-type = ["rlib"]

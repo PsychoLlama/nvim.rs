@@ -5,15 +5,279 @@
 //! - Device file detection (/dev/fd/N)
 //! - BOM (Byte Order Mark) detection for Unicode files
 //! - File encoding flags and conversion helpers
+//! - File format detection and conversion
+//! - Read/write flag management
 
 #![allow(unsafe_code)]
 
 use std::ffi::{c_char, c_int, CStr};
 
 // =============================================================================
+// Opaque Handles
+// =============================================================================
+// These types represent pointers to C structs that Rust doesn't need to know
+// the internals of. They're used for type safety when passing handles between
+// Rust and C.
+
+/// Opaque handle to a C `FileInfo` struct.
+/// Used for file metadata (size, mtime, permissions, etc.)
+#[repr(C)]
+pub struct FileInfoHandle {
+    _opaque: [u8; 0],
+}
+
+/// Opaque handle to a C `buf_T` struct.
+/// Represents a Neovim buffer.
+#[repr(C)]
+pub struct BufferHandle {
+    _opaque: [u8; 0],
+}
+
+/// Opaque handle to a C `context_sha256_T` struct.
+/// Used for SHA-256 checksum computation.
+#[repr(C)]
+pub struct Sha256ContextHandle {
+    _opaque: [u8; 0],
+}
+
+/// Opaque handle to a C `exarg_T` struct.
+/// Represents Ex command arguments.
+#[repr(C)]
+pub struct ExArgHandle {
+    _opaque: [u8; 0],
+}
+
+// =============================================================================
+// File Format (End-of-Line Style)
+// =============================================================================
+
+/// End-of-line format for files.
+///
+/// Corresponds to Neovim's `EOL_*` constants.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[repr(i32)]
+pub enum FileFormat {
+    /// Unknown format (not yet determined)
+    #[default]
+    Unknown = -1,
+    /// Unix format: LF only (`\n`)
+    Unix = 0,
+    /// DOS/Windows format: CR LF (`\r\n`)
+    Dos = 1,
+    /// Classic Mac format: CR only (`\r`)
+    Mac = 2,
+}
+
+impl FileFormat {
+    /// Convert from C integer value.
+    #[inline]
+    pub fn from_c(value: c_int) -> Self {
+        match value {
+            0 => FileFormat::Unix,
+            1 => FileFormat::Dos,
+            2 => FileFormat::Mac,
+            _ => FileFormat::Unknown,
+        }
+    }
+
+    /// Convert to C integer value.
+    #[inline]
+    pub fn to_c(self) -> c_int {
+        self as c_int
+    }
+
+    /// Returns the line ending string for this format.
+    #[inline]
+    pub fn line_ending(self) -> &'static [u8] {
+        match self {
+            FileFormat::Unix | FileFormat::Unknown => b"\n",
+            FileFormat::Dos => b"\r\n",
+            FileFormat::Mac => b"\r",
+        }
+    }
+}
+
+// =============================================================================
+// Read Flags
+// =============================================================================
+
+bitflags::bitflags! {
+    /// Flags for `readfile()` operations.
+    ///
+    /// These control how files are read into buffers.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+    pub struct ReadFlags: u32 {
+        /// Reading a file into a new buffer
+        const NEW = 0x01;
+        /// Reading filter output
+        const FILTER = 0x02;
+        /// Read from stdin instead of a file
+        const STDIN = 0x04;
+        /// Read from curbuf (converting after reading stdin)
+        const BUFFER = 0x08;
+        /// Reading into a dummy buffer (to check if file contents changed)
+        const DUMMY = 0x10;
+        /// Don't clear undo info or read it from a file
+        const KEEP_UNDO = 0x20;
+        /// Read from fifo/socket instead of a file
+        const FIFO = 0x40;
+        /// Do not trigger BufWinEnter
+        const NOWINENTER = 0x80;
+        /// Do not read a file, only trigger BufReadCmd
+        const NOFILE = 0x100;
+    }
+}
+
+impl ReadFlags {
+    /// Convert from C integer flags.
+    #[inline]
+    pub fn from_c(flags: c_int) -> Self {
+        Self::from_bits_truncate(flags as u32)
+    }
+
+    /// Convert to C integer flags.
+    #[inline]
+    pub fn to_c(self) -> c_int {
+        self.bits() as c_int
+    }
+}
+
+// =============================================================================
+// Write Flags (for buf_write)
+// =============================================================================
+
+bitflags::bitflags! {
+    /// Flags for `buf_write()` operations.
+    ///
+    /// These control how buffers are written to files.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+    pub struct WriteFlags: u32 {
+        /// Writing the whole file
+        const WHOLE = 0x01;
+        /// Appending to the file
+        const APPEND = 0x02;
+        /// Writing part of the file
+        const PART = 0x04;
+        /// ":w!" forced write
+        const FORCE = 0x08;
+        /// Writing for ":saveas" or similar
+        const SAVEAS = 0x10;
+        /// Writing to a new file
+        const NEW = 0x20;
+    }
+}
+
+impl WriteFlags {
+    /// Convert from C integer flags.
+    #[inline]
+    pub fn from_c(flags: c_int) -> Self {
+        Self::from_bits_truncate(flags as u32)
+    }
+
+    /// Convert to C integer flags.
+    #[inline]
+    pub fn to_c(self) -> c_int {
+        self.bits() as c_int
+    }
+}
+
+// =============================================================================
+// Conversion Type
+// =============================================================================
+
+/// Type of character encoding conversion.
+///
+/// Corresponds to Neovim's `CONV_*` constants.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[repr(i32)]
+pub enum ConvType {
+    /// No conversion needed
+    #[default]
+    None = 0,
+    /// Convert to UTF-8
+    ToUtf8 = 1,
+    /// Convert Latin-9 to UTF-8
+    Latin9ToUtf8 = 2,
+    /// Convert to Latin-1
+    ToLatin1 = 3,
+    /// Convert to Latin-9
+    ToLatin9 = 4,
+    /// Use iconv for conversion
+    Iconv = 5,
+}
+
+impl ConvType {
+    /// Convert from C integer value.
+    #[inline]
+    pub fn from_c(value: c_int) -> Self {
+        match value {
+            0 => ConvType::None,
+            1 => ConvType::ToUtf8,
+            2 => ConvType::Latin9ToUtf8,
+            3 => ConvType::ToLatin1,
+            4 => ConvType::ToLatin9,
+            5 => ConvType::Iconv,
+            _ => ConvType::None,
+        }
+    }
+
+    /// Convert to C integer value.
+    #[inline]
+    pub fn to_c(self) -> c_int {
+        self as c_int
+    }
+}
+
+// =============================================================================
+// Bad Character Handling
+// =============================================================================
+
+/// How to handle invalid/unconvertible characters during encoding conversion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum BadCharBehavior {
+    /// Replace invalid characters with '?' (default)
+    Replace,
+    /// Keep invalid characters as-is
+    Keep,
+    /// Drop/erase invalid characters
+    Drop,
+    /// Replace with a specific character
+    ReplaceWith(u8),
+}
+
+impl BadCharBehavior {
+    /// The default replacement character.
+    pub const DEFAULT_REPLACEMENT: u8 = b'?';
+
+    /// Convert from C integer value.
+    #[inline]
+    pub fn from_c(value: c_int) -> Self {
+        match value {
+            -1 => BadCharBehavior::Keep,
+            -2 => BadCharBehavior::Drop,
+            c if c == Self::DEFAULT_REPLACEMENT as c_int => BadCharBehavior::Replace,
+            c if (0..=255).contains(&c) => BadCharBehavior::ReplaceWith(c as u8),
+            _ => BadCharBehavior::Replace,
+        }
+    }
+
+    /// Convert to C integer value.
+    #[inline]
+    pub fn to_c(self) -> c_int {
+        match self {
+            BadCharBehavior::Replace => Self::DEFAULT_REPLACEMENT as c_int,
+            BadCharBehavior::Keep => -1,
+            BadCharBehavior::Drop => -2,
+            BadCharBehavior::ReplaceWith(c) => c as c_int,
+        }
+    }
+}
+
+// =============================================================================
 // File I/O Encoding Flags
 // =============================================================================
 
+// Legacy constants for C compatibility (still exported for FFI)
 /// Convert Latin1 encoding
 pub const FIO_LATIN1: c_int = 0x01;
 /// Convert UTF-8 encoding
@@ -32,6 +296,84 @@ pub const FIO_NOCONVERT: c_int = 0x2000;
 pub const FIO_UCSBOM: c_int = 0x4000;
 /// Allow all formats (for BOM detection)
 pub const FIO_ALL: c_int = -1;
+
+bitflags::bitflags! {
+    /// File I/O encoding flags.
+    ///
+    /// These flags control encoding detection and conversion during file I/O.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+    pub struct FioFlags: u32 {
+        /// Convert Latin-1 encoding
+        const LATIN1 = 0x01;
+        /// Convert UTF-8 encoding
+        const UTF8 = 0x02;
+        /// Convert UCS-2 encoding
+        const UCS2 = 0x04;
+        /// Convert UCS-4 encoding
+        const UCS4 = 0x08;
+        /// Convert UTF-16 encoding
+        const UTF16 = 0x10;
+        /// Little endian byte order
+        const ENDIAN_L = 0x80;
+        /// Skip encoding conversion
+        const NOCONVERT = 0x2000;
+        /// Check for BOM at start of file
+        const UCSBOM = 0x4000;
+
+        // Common combinations
+        /// UCS-2 Little Endian
+        const UCS2_LE = Self::UCS2.bits() | Self::ENDIAN_L.bits();
+        /// UCS-4 Little Endian
+        const UCS4_LE = Self::UCS4.bits() | Self::ENDIAN_L.bits();
+        /// UTF-16 Little Endian
+        const UTF16_LE = Self::UTF16.bits() | Self::ENDIAN_L.bits();
+    }
+}
+
+impl FioFlags {
+    /// Special value representing all formats (for BOM detection).
+    /// This is -1 as a signed integer, meaning all bits set.
+    pub const ALL: c_int = -1;
+
+    /// Convert from C integer flags.
+    ///
+    /// Handles the special case of -1 (FIO_ALL).
+    #[inline]
+    pub fn from_c(flags: c_int) -> Option<Self> {
+        if flags == -1 {
+            None // Represents FIO_ALL
+        } else {
+            Some(Self::from_bits_truncate(flags as u32))
+        }
+    }
+
+    /// Convert to C integer flags.
+    #[inline]
+    pub fn to_c(self) -> c_int {
+        self.bits() as c_int
+    }
+
+    /// Check if this represents "all formats" mode (FIO_ALL = -1).
+    #[inline]
+    pub fn is_fio_all(flags: c_int) -> bool {
+        flags == -1
+    }
+
+    /// Returns the encoding name for common flag combinations.
+    pub fn encoding_name(self) -> Option<&'static str> {
+        match self {
+            f if f == Self::LATIN1 => Some("latin1"),
+            f if f == Self::UTF8 => Some("utf-8"),
+            f if f == Self::UCS2 => Some("ucs-2"),
+            f if f == Self::UCS2_LE => Some("ucs-2le"),
+            f if f == Self::UCS4 => Some("ucs-4"),
+            f if f == Self::UCS4_LE => Some("ucs-4le"),
+            f if f == Self::UTF16 => Some("utf-16"),
+            f if f == Self::UTF16_LE => Some("utf-16le"),
+            _ => None,
+        }
+    }
+}
 
 /// Check if file times differ.
 ///
@@ -636,5 +978,157 @@ mod tests {
         let result = unsafe { rs_check_for_bom(std::ptr::null(), 5, &mut len, FIO_ALL) };
         assert!(result.is_null());
         assert_eq!(len, 2);
+    }
+
+    // =========================================================================
+    // Phase 1: Core Types & Constants Tests
+    // =========================================================================
+
+    #[test]
+    fn test_file_format_conversions() {
+        // C to Rust conversions
+        assert_eq!(FileFormat::from_c(-1), FileFormat::Unknown);
+        assert_eq!(FileFormat::from_c(0), FileFormat::Unix);
+        assert_eq!(FileFormat::from_c(1), FileFormat::Dos);
+        assert_eq!(FileFormat::from_c(2), FileFormat::Mac);
+        assert_eq!(FileFormat::from_c(999), FileFormat::Unknown);
+
+        // Rust to C conversions
+        assert_eq!(FileFormat::Unknown.to_c(), -1);
+        assert_eq!(FileFormat::Unix.to_c(), 0);
+        assert_eq!(FileFormat::Dos.to_c(), 1);
+        assert_eq!(FileFormat::Mac.to_c(), 2);
+    }
+
+    #[test]
+    fn test_file_format_line_endings() {
+        assert_eq!(FileFormat::Unix.line_ending(), b"\n");
+        assert_eq!(FileFormat::Dos.line_ending(), b"\r\n");
+        assert_eq!(FileFormat::Mac.line_ending(), b"\r");
+        assert_eq!(FileFormat::Unknown.line_ending(), b"\n"); // defaults to Unix
+    }
+
+    #[test]
+    fn test_read_flags() {
+        // Test individual flags
+        let flags = ReadFlags::NEW | ReadFlags::FILTER;
+        assert!(flags.contains(ReadFlags::NEW));
+        assert!(flags.contains(ReadFlags::FILTER));
+        assert!(!flags.contains(ReadFlags::STDIN));
+
+        // Test C conversion round-trip
+        let flags = ReadFlags::from_c(0x45); // NEW | STDIN | FIFO
+        assert!(flags.contains(ReadFlags::NEW));
+        assert!(flags.contains(ReadFlags::STDIN));
+        assert!(flags.contains(ReadFlags::FIFO));
+        assert_eq!(flags.to_c(), 0x45);
+
+        // Test all flags
+        assert_eq!(ReadFlags::NEW.to_c(), 0x01);
+        assert_eq!(ReadFlags::FILTER.to_c(), 0x02);
+        assert_eq!(ReadFlags::STDIN.to_c(), 0x04);
+        assert_eq!(ReadFlags::BUFFER.to_c(), 0x08);
+        assert_eq!(ReadFlags::DUMMY.to_c(), 0x10);
+        assert_eq!(ReadFlags::KEEP_UNDO.to_c(), 0x20);
+        assert_eq!(ReadFlags::FIFO.to_c(), 0x40);
+        assert_eq!(ReadFlags::NOWINENTER.to_c(), 0x80);
+        assert_eq!(ReadFlags::NOFILE.to_c(), 0x100);
+    }
+
+    #[test]
+    fn test_write_flags() {
+        let flags = WriteFlags::WHOLE | WriteFlags::FORCE;
+        assert!(flags.contains(WriteFlags::WHOLE));
+        assert!(flags.contains(WriteFlags::FORCE));
+        assert!(!flags.contains(WriteFlags::APPEND));
+
+        // Test values match expected C values
+        assert_eq!(WriteFlags::WHOLE.to_c(), 0x01);
+        assert_eq!(WriteFlags::APPEND.to_c(), 0x02);
+        assert_eq!(WriteFlags::PART.to_c(), 0x04);
+        assert_eq!(WriteFlags::FORCE.to_c(), 0x08);
+    }
+
+    #[test]
+    fn test_conv_type_conversions() {
+        // C to Rust
+        assert_eq!(ConvType::from_c(0), ConvType::None);
+        assert_eq!(ConvType::from_c(1), ConvType::ToUtf8);
+        assert_eq!(ConvType::from_c(2), ConvType::Latin9ToUtf8);
+        assert_eq!(ConvType::from_c(3), ConvType::ToLatin1);
+        assert_eq!(ConvType::from_c(4), ConvType::ToLatin9);
+        assert_eq!(ConvType::from_c(5), ConvType::Iconv);
+        assert_eq!(ConvType::from_c(99), ConvType::None);
+
+        // Rust to C
+        assert_eq!(ConvType::None.to_c(), 0);
+        assert_eq!(ConvType::ToUtf8.to_c(), 1);
+        assert_eq!(ConvType::Latin9ToUtf8.to_c(), 2);
+        assert_eq!(ConvType::ToLatin1.to_c(), 3);
+        assert_eq!(ConvType::ToLatin9.to_c(), 4);
+        assert_eq!(ConvType::Iconv.to_c(), 5);
+    }
+
+    #[test]
+    fn test_bad_char_behavior() {
+        // C to Rust
+        assert_eq!(
+            BadCharBehavior::from_c(b'?' as c_int),
+            BadCharBehavior::Replace
+        );
+        assert_eq!(BadCharBehavior::from_c(-1), BadCharBehavior::Keep);
+        assert_eq!(BadCharBehavior::from_c(-2), BadCharBehavior::Drop);
+        assert_eq!(
+            BadCharBehavior::from_c(b'X' as c_int),
+            BadCharBehavior::ReplaceWith(b'X')
+        );
+
+        // Rust to C
+        assert_eq!(BadCharBehavior::Replace.to_c(), b'?' as c_int);
+        assert_eq!(BadCharBehavior::Keep.to_c(), -1);
+        assert_eq!(BadCharBehavior::Drop.to_c(), -2);
+        assert_eq!(BadCharBehavior::ReplaceWith(b'X').to_c(), b'X' as c_int);
+    }
+
+    #[test]
+    fn test_fio_flags() {
+        // Test flag values match legacy constants
+        assert_eq!(FioFlags::LATIN1.bits() as c_int, FIO_LATIN1);
+        assert_eq!(FioFlags::UTF8.bits() as c_int, FIO_UTF8);
+        assert_eq!(FioFlags::UCS2.bits() as c_int, FIO_UCS2);
+        assert_eq!(FioFlags::UCS4.bits() as c_int, FIO_UCS4);
+        assert_eq!(FioFlags::UTF16.bits() as c_int, FIO_UTF16);
+        assert_eq!(FioFlags::ENDIAN_L.bits() as c_int, FIO_ENDIAN_L);
+        assert_eq!(FioFlags::NOCONVERT.bits() as c_int, FIO_NOCONVERT);
+        assert_eq!(FioFlags::UCSBOM.bits() as c_int, FIO_UCSBOM);
+
+        // Test combinations
+        assert_eq!(FioFlags::UCS2_LE.bits() as c_int, FIO_UCS2 | FIO_ENDIAN_L);
+        assert_eq!(FioFlags::UCS4_LE.bits() as c_int, FIO_UCS4 | FIO_ENDIAN_L);
+        assert_eq!(FioFlags::UTF16_LE.bits() as c_int, FIO_UTF16 | FIO_ENDIAN_L);
+
+        // Test from_c
+        assert_eq!(FioFlags::from_c(-1), None); // FIO_ALL
+        assert_eq!(FioFlags::from_c(FIO_UTF8), Some(FioFlags::UTF8));
+
+        // Test encoding names
+        assert_eq!(FioFlags::LATIN1.encoding_name(), Some("latin1"));
+        assert_eq!(FioFlags::UTF8.encoding_name(), Some("utf-8"));
+        assert_eq!(FioFlags::UCS2.encoding_name(), Some("ucs-2"));
+        assert_eq!(FioFlags::UCS2_LE.encoding_name(), Some("ucs-2le"));
+        assert_eq!(FioFlags::UTF16.encoding_name(), Some("utf-16"));
+        assert_eq!(FioFlags::UTF16_LE.encoding_name(), Some("utf-16le"));
+    }
+
+    #[test]
+    fn test_file_format_default() {
+        assert_eq!(FileFormat::default(), FileFormat::Unknown);
+    }
+
+    #[test]
+    fn test_flags_default() {
+        assert_eq!(ReadFlags::default(), ReadFlags::empty());
+        assert_eq!(WriteFlags::default(), WriteFlags::empty());
+        assert_eq!(FioFlags::default(), FioFlags::empty());
     }
 }
