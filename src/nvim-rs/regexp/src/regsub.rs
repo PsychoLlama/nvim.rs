@@ -512,8 +512,183 @@ pub fn utf8_char2len(c: c_int) -> usize {
 }
 
 // =============================================================================
+// Main Substitution Function
+// =============================================================================
+
+/// Perform regex substitution.
+///
+/// This is the main substitution function that handles:
+/// - Submatch expansion (\0-\9, &)
+/// - Case conversion (\u, \U, \l, \L, \e, \E)
+/// - Escape sequences (\r, \n, \t, \b)
+/// - Literal character copy
+///
+/// # Parameters
+/// - `source`: Replacement pattern
+/// - `dest`: Output buffer
+/// - `destlen`: Output buffer length
+/// - `match_info`: Single-line match info (or null)
+/// - `mmatch_info`: Multi-line match info (or null)
+/// - `flags`: REGSUB_* flags
+///
+/// # Returns
+/// Length of the substitution result, or -1 on error.
+///
+/// # Safety
+/// All non-null pointers must be valid.
+pub unsafe fn vim_regsub_both(
+    source: *const u8,
+    dest: *mut u8,
+    destlen: c_int,
+    match_info: *const RegMatch,
+    _mmatch_info: *const RegMMatch,
+    flags: c_int,
+) -> c_int {
+    if source.is_null() {
+        return -1;
+    }
+
+    let mut ctx = SubContext::new(source, dest, destlen, flags);
+    let magic = (flags & REGSUB_MAGIC) != 0;
+
+    while *ctx.src != 0 {
+        // Check for escape sequences
+        let (escape_result, consumed) = parse_escape(ctx.src, magic);
+
+        match escape_result {
+            EscapeResult::None => {
+                // Regular character - copy with case conversion
+                let char_len = utf8_char_len(*ctx.src);
+                let c = utf8_ptr2char(ctx.src);
+                let converted = ctx.apply_case(c);
+
+                if converted != c || char_len > 1 {
+                    // Need to encode the (possibly converted) character
+                    if !ctx.has_room(4) {
+                        break;
+                    }
+                    let written = utf8_char2bytes(converted, ctx.dst);
+                    if ctx.copy {
+                        ctx.dst = ctx.dst.add(written);
+                    } else {
+                        ctx.dst = ctx.dst.add(utf8_char2len(converted));
+                    }
+                } else {
+                    // Simple ASCII copy
+                    if !ctx.has_room(1) {
+                        break;
+                    }
+                    ctx.write_byte(*ctx.src);
+                }
+                ctx.src = ctx.src.add(char_len);
+            }
+
+            EscapeResult::Submatch(no) => {
+                // Copy the submatch content
+                if let Some((start, len)) = get_submatch_single(match_info, no as usize) {
+                    if !ctx.has_room(len) {
+                        break;
+                    }
+
+                    // Copy each character with case conversion
+                    let mut p = start;
+                    let end = start.add(len as usize);
+                    while p < end {
+                        let char_len = utf8_char_len(*p);
+                        let c = utf8_ptr2char(p);
+                        let converted = ctx.apply_case(c);
+
+                        let written = utf8_char2bytes(converted, ctx.dst);
+                        if ctx.copy {
+                            ctx.dst = ctx.dst.add(written);
+                        } else {
+                            ctx.dst = ctx.dst.add(utf8_char2len(converted));
+                        }
+                        p = p.add(char_len);
+                    }
+                }
+                ctx.src = ctx.src.add(consumed);
+            }
+
+            EscapeResult::UpperOne => {
+                ctx.func_one = CaseConvert::Upper;
+                ctx.src = ctx.src.add(consumed);
+            }
+
+            EscapeResult::UpperAll => {
+                ctx.func_all = CaseConvert::Upper;
+                ctx.src = ctx.src.add(consumed);
+            }
+
+            EscapeResult::LowerOne => {
+                ctx.func_one = CaseConvert::Lower;
+                ctx.src = ctx.src.add(consumed);
+            }
+
+            EscapeResult::LowerAll => {
+                ctx.func_all = CaseConvert::Lower;
+                ctx.src = ctx.src.add(consumed);
+            }
+
+            EscapeResult::CaseEnd => {
+                ctx.reset_case();
+                ctx.src = ctx.src.add(consumed);
+            }
+
+            EscapeResult::Literal(byte) => {
+                if !ctx.has_room(1) {
+                    break;
+                }
+                let converted = ctx.apply_case(byte as c_int);
+                ctx.write_byte(converted as u8);
+                ctx.src = ctx.src.add(consumed);
+            }
+
+            EscapeResult::EscapedBackslash => {
+                // Skip the backslash, copy the next character
+                ctx.src = ctx.src.add(1);
+                if *ctx.src != 0 {
+                    let char_len = utf8_char_len(*ctx.src);
+                    let c = utf8_ptr2char(ctx.src);
+                    let converted = ctx.apply_case(c);
+
+                    if !ctx.has_room(utf8_char2len(converted) as c_int) {
+                        break;
+                    }
+                    let written = utf8_char2bytes(converted, ctx.dst);
+                    if ctx.copy {
+                        ctx.dst = ctx.dst.add(written);
+                    } else {
+                        ctx.dst = ctx.dst.add(utf8_char2len(converted));
+                    }
+                    ctx.src = ctx.src.add(char_len);
+                }
+            }
+        }
+    }
+
+    ctx.output_len()
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
+
+/// Perform regex substitution.
+///
+/// # Safety
+/// All non-null pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_regsub_both(
+    source: *const u8,
+    dest: *mut u8,
+    destlen: c_int,
+    match_info: *const RegMatch,
+    mmatch_info: *const RegMMatch,
+    flags: c_int,
+) -> c_int {
+    vim_regsub_both(source, dest, destlen, match_info, mmatch_info, flags)
+}
 
 /// Create a new substitution context.
 ///
