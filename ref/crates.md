@@ -83,7 +83,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | shada          | Session data persistence (ShaDa files)  |
 | sign           | Sign management and display             |
 | spell          | Spell checking (word tree traversal, edit distance, suggestion scoring, .spl file I/O) |
-| statusline     | Status line rendering                   |
+| statusline     | Status/tab/winbar rendering, format parsing, click handling |
 | strings        | String manipulation                     |
 | syntax         | Syntax highlighting (patterns, state, clusters, groups, buffer attachment, Ex commands) |
 | tag            | Tag stack and navigation                |
