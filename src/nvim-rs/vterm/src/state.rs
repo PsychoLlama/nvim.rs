@@ -888,6 +888,302 @@ impl State {
 }
 
 // =============================================================================
+// FFI Exports
+// =============================================================================
+
+/// Opaque handle to `VTermState`
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VTermStateHandle(*mut c_void);
+
+impl VTermStateHandle {
+    /// Check if the handle is null.
+    #[inline]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+
+    /// Create a null handle.
+    #[inline]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+}
+
+/// FFI export: Get cursor row from state
+#[no_mangle]
+pub extern "C" fn rs_vterm_state_get_cursorpos_row(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees state is valid
+    unsafe {
+        let s = state.0 as *const State;
+        (*s).pos.row
+    }
+}
+
+/// FFI export: Get cursor column from state
+#[no_mangle]
+pub extern "C" fn rs_vterm_state_get_cursorpos_col(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees state is valid
+    unsafe {
+        let s = state.0 as *const State;
+        (*s).pos.col
+    }
+}
+
+/// FFI export: Get terminal rows from state
+#[no_mangle]
+pub extern "C" fn rs_vterm_state_get_rows(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees state is valid
+    unsafe {
+        let s = state.0 as *const State;
+        (*s).rows
+    }
+}
+
+/// FFI export: Get terminal cols from state
+#[no_mangle]
+pub extern "C" fn rs_vterm_state_get_cols(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees state is valid
+    unsafe {
+        let s = state.0 as *const State;
+        (*s).cols
+    }
+}
+
+/// FFI export: Check if autowrap is enabled
+#[no_mangle]
+pub extern "C" fn rs_vterm_state_get_autowrap(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees state is valid
+    unsafe {
+        let s = state.0 as *const State;
+        c_int::from((*s).mode.autowrap())
+    }
+}
+
+/// FFI export: Check if cursor is visible
+#[no_mangle]
+pub extern "C" fn rs_vterm_state_get_cursor_visible(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees state is valid
+    unsafe {
+        let s = state.0 as *const State;
+        c_int::from((*s).mode.cursor_visible())
+    }
+}
+
+/// FFI export: Get cursor shape
+#[no_mangle]
+pub extern "C" fn rs_vterm_state_get_cursor_shape(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees state is valid
+    unsafe {
+        let s = state.0 as *const State;
+        c_int::from((*s).mode.cursor_shape())
+    }
+}
+
+/// FFI export: Check if cursor is blinking
+#[no_mangle]
+pub extern "C" fn rs_vterm_state_get_cursor_blink(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees state is valid
+    unsafe {
+        let s = state.0 as *const State;
+        c_int::from((*s).mode.cursor_blink())
+    }
+}
+
+/// FFI export: Check if using alternate screen
+#[no_mangle]
+pub extern "C" fn rs_vterm_state_get_altscreen(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees state is valid
+    unsafe {
+        let s = state.0 as *const State;
+        c_int::from((*s).mode.alt_screen())
+    }
+}
+
+/// FFI export: Get mouse protocol
+#[no_mangle]
+pub extern "C" fn rs_vterm_state_get_mouse_protocol(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees state is valid
+    unsafe {
+        let s = state.0 as *const State;
+        (*s).mouse_protocol as c_int
+    }
+}
+
+/// FFI export: Get mouse flags
+#[no_mangle]
+pub extern "C" fn rs_vterm_state_get_mouse_flags(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees state is valid
+    unsafe {
+        let s = state.0 as *const State;
+        (*s).mouse_flags
+    }
+}
+
+/// FFI export: Check if bracketed paste is enabled
+#[no_mangle]
+pub extern "C" fn rs_vterm_state_get_bracketpaste(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees state is valid
+    unsafe {
+        let s = state.0 as *const State;
+        c_int::from((*s).mode.bracketpaste())
+    }
+}
+
+/// FFI export: Check if focus reporting is enabled
+#[no_mangle]
+pub extern "C" fn rs_vterm_state_get_report_focus(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees state is valid
+    unsafe {
+        let s = state.0 as *const State;
+        c_int::from((*s).mode.report_focus())
+    }
+}
+
+/// FFI export: Get scroll region top
+#[no_mangle]
+pub extern "C" fn rs_vterm_state_get_scroll_region_top(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees state is valid
+    unsafe {
+        let s = state.0 as *const State;
+        (*s).scrollregion_top
+    }
+}
+
+/// FFI export: Get scroll region bottom
+#[no_mangle]
+pub extern "C" fn rs_vterm_state_get_scroll_region_bottom(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees state is valid
+    unsafe {
+        let s = state.0 as *const State;
+        (*s).scroll_region_bottom()
+    }
+}
+
+/// FFI export: Get pen bold attribute
+#[no_mangle]
+pub extern "C" fn rs_vterm_state_pen_get_bold(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees state is valid
+    unsafe {
+        let s = state.0 as *const State;
+        c_int::from((*s).pen.bold())
+    }
+}
+
+/// FFI export: Get pen italic attribute
+#[no_mangle]
+pub extern "C" fn rs_vterm_state_pen_get_italic(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees state is valid
+    unsafe {
+        let s = state.0 as *const State;
+        c_int::from((*s).pen.italic())
+    }
+}
+
+/// FFI export: Get pen underline attribute
+#[no_mangle]
+pub extern "C" fn rs_vterm_state_pen_get_underline(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees state is valid
+    unsafe {
+        let s = state.0 as *const State;
+        c_int::from((*s).pen.underline())
+    }
+}
+
+/// FFI export: Get pen reverse attribute
+#[no_mangle]
+pub extern "C" fn rs_vterm_state_pen_get_reverse(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees state is valid
+    unsafe {
+        let s = state.0 as *const State;
+        c_int::from((*s).pen.reverse())
+    }
+}
+
+/// FFI export: Get pen strike attribute
+#[no_mangle]
+pub extern "C" fn rs_vterm_state_pen_get_strike(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees state is valid
+    unsafe {
+        let s = state.0 as *const State;
+        c_int::from((*s).pen.strike())
+    }
+}
+
+/// FFI export: Get pen font
+#[no_mangle]
+pub extern "C" fn rs_vterm_state_pen_get_font(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees state is valid
+    unsafe {
+        let s = state.0 as *const State;
+        c_int::from((*s).pen.font())
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

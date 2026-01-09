@@ -577,6 +577,82 @@ pub mod c1 {
 }
 
 // =============================================================================
+// FFI Exports
+// =============================================================================
+
+/// FFI export: Check if character is C0 control
+#[no_mangle]
+pub extern "C" fn rs_vterm_parser_is_c0_control(c: u8) -> c_int {
+    c_int::from(is_c0_control(c))
+}
+
+/// FFI export: Check if character is C1 control
+#[no_mangle]
+pub extern "C" fn rs_vterm_parser_is_c1_control(c: u8) -> c_int {
+    c_int::from(is_c1_control(c))
+}
+
+/// FFI export: Check if character is CSI final byte
+#[no_mangle]
+pub extern "C" fn rs_vterm_parser_is_csi_final(c: u8) -> c_int {
+    c_int::from(is_csi_final(c))
+}
+
+/// FFI export: Check if character is CSI leader byte
+#[no_mangle]
+pub extern "C" fn rs_vterm_parser_is_csi_leader(c: u8) -> c_int {
+    c_int::from(is_csi_leader(c))
+}
+
+/// FFI export: Check if character is a digit
+#[no_mangle]
+pub extern "C" fn rs_vterm_parser_is_digit(c: u8) -> c_int {
+    c_int::from(is_digit(c))
+}
+
+/// FFI export: Get digit value
+#[no_mangle]
+pub extern "C" fn rs_vterm_parser_digit_value(c: u8) -> c_int {
+    c_int::from(digit_value(c))
+}
+
+/// FFI export: Check if character is intermediate byte
+#[no_mangle]
+pub extern "C" fn rs_vterm_parser_is_intermed(c: u8) -> c_int {
+    c_int::from(Parser::is_intermed(c))
+}
+
+/// FFI export: Get parser state
+#[no_mangle]
+pub extern "C" fn rs_vterm_parser_get_state(parser: *const Parser) -> c_int {
+    if parser.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees parser is valid
+    unsafe { (*parser).state as c_int }
+}
+
+/// FFI export: Check if parser is in string state
+#[no_mangle]
+pub extern "C" fn rs_vterm_parser_is_string_state(parser: *const Parser) -> c_int {
+    if parser.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees parser is valid
+    c_int::from(unsafe { (*parser).state.is_string_state() })
+}
+
+/// FFI export: Check if parser is in active string state
+#[no_mangle]
+pub extern "C" fn rs_vterm_parser_is_active_string_state(parser: *const Parser) -> c_int {
+    if parser.is_null() {
+        return 0;
+    }
+    // SAFETY: Caller guarantees parser is valid
+    c_int::from(unsafe { (*parser).state.is_active_string_state() })
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
