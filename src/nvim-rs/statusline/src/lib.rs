@@ -1739,6 +1739,206 @@ pub unsafe extern "C" fn rs_stl_shorten_tab_label(
     (len as c_int)
 }
 
+// =============================================================================
+// FFI Exports for Printable Character Conversion
+// =============================================================================
+
+/// Convert a byte to its printable representation.
+///
+/// Control characters (0x00-0x1F) become ^@ through ^_
+/// DEL (0x7F) becomes ^?
+/// High bytes (0x80-0xFF) become <XX> hex notation
+/// Printable ASCII is returned as-is.
+///
+/// Returns the number of bytes written to buf.
+fn make_printable_impl(buf: &mut [u8], byte: u8) -> usize {
+    if buf.is_empty() {
+        return 0;
+    }
+
+    if byte == 0 {
+        // NUL -> ^@
+        if buf.len() >= 2 {
+            buf[0] = b'^';
+            buf[1] = b'@';
+            return 2;
+        }
+        return 0;
+    } else if byte < 0x20 {
+        // Control chars 0x01-0x1F -> ^A through ^_
+        if buf.len() >= 2 {
+            buf[0] = b'^';
+            buf[1] = byte + b'@';
+            return 2;
+        }
+        return 0;
+    } else if byte == 0x7F {
+        // DEL -> ^?
+        if buf.len() >= 2 {
+            buf[0] = b'^';
+            buf[1] = b'?';
+            return 2;
+        }
+        return 0;
+    } else if byte >= 0x80 {
+        // High bytes -> <XX>
+        if buf.len() >= 4 {
+            buf[0] = b'<';
+            buf[1] = HEX_CHARS[(byte >> 4) as usize];
+            buf[2] = HEX_CHARS[(byte & 0x0F) as usize];
+            buf[3] = b'>';
+            return 4;
+        }
+        return 0;
+    }
+
+    // Printable ASCII
+    buf[0] = byte;
+    1
+}
+
+/// Hex characters for conversion.
+const HEX_CHARS: &[u8; 16] = b"0123456789ABCDEF";
+
+/// FFI export: Make a byte printable.
+///
+/// Returns the number of bytes written to buf (1, 2, or 4).
+///
+/// # Safety
+/// `buf` must be null or a valid pointer to a buffer of at least 4 bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_make_printable(buf: *mut u8, buflen: usize, byte: u8) -> c_int {
+    if buf.is_null() || buflen == 0 {
+        return 0;
+    }
+    let slice = std::slice::from_raw_parts_mut(buf, buflen);
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    (make_printable_impl(slice, byte) as c_int)
+}
+
+/// Convert a string to printable form (like transstr_buf).
+///
+/// Returns the number of bytes written to out.
+fn transstr_impl(out: &mut [u8], input: &[u8]) -> usize {
+    let mut out_pos = 0;
+    for &byte in input {
+        let remaining = &mut out[out_pos..];
+        if remaining.is_empty() {
+            break;
+        }
+        let written = make_printable_impl(remaining, byte);
+        if written == 0 {
+            break;
+        }
+        out_pos += written;
+    }
+    out_pos
+}
+
+/// FFI export: Convert string to printable form.
+///
+/// Similar to transstr_buf in C. Converts unprintable characters to
+/// their printable representations (^X for control chars, <XX> for high bytes).
+///
+/// Returns the number of bytes written to out.
+///
+/// # Safety
+/// - `out` must be null or a valid pointer to a buffer of at least `outlen` bytes.
+/// - `input` must be null or a valid pointer to `inputlen` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stl_transstr(
+    out: *mut u8,
+    outlen: usize,
+    input: *const u8,
+    inputlen: usize,
+) -> c_int {
+    if out.is_null() || outlen == 0 {
+        return 0;
+    }
+    let out_slice = std::slice::from_raw_parts_mut(out, outlen);
+    let input_slice = if input.is_null() || inputlen == 0 {
+        &[]
+    } else {
+        std::slice::from_raw_parts(input, inputlen)
+    };
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    (transstr_impl(out_slice, input_slice) as c_int)
+}
+
+// =============================================================================
+// FFI Exports for Tabline Tab Counting
+// =============================================================================
+
+/// FFI export: Check if a character indicates end of tab display.
+///
+/// Returns 1 if the character is a space or separator that ends a tab display.
+#[no_mangle]
+pub const extern "C" fn rs_stl_is_tab_separator(c: u8) -> c_int {
+    if c == b' ' || c == b'|' {
+        1
+    } else {
+        0
+    }
+}
+
+/// FFI export: Calculate display width of window count in tabline.
+///
+/// For counts > 1, returns digit count. For count <= 1, returns 0.
+#[no_mangle]
+pub const extern "C" fn rs_stl_wincount_width(count: c_int) -> c_int {
+    if count <= 1 {
+        return 0;
+    }
+    let mut width = 0;
+    let mut n = count;
+    while n > 0 {
+        width += 1;
+        n /= 10;
+    }
+    width
+}
+
+/// FFI export: Format window count for tabline display.
+///
+/// Writes the count followed by optional '+' for modified.
+/// Returns the number of bytes written.
+///
+/// # Safety
+/// `buf` must be null or a valid pointer to a buffer of at least `buflen` bytes.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_stl_format_wincount(
+    buf: *mut u8,
+    buflen: usize,
+    count: c_int,
+    modified: c_int,
+) -> c_int {
+    if buf.is_null() || buflen == 0 {
+        return 0;
+    }
+
+    let mut cursor = std::io::Cursor::new(std::slice::from_raw_parts_mut(buf, buflen));
+
+    let mut written = 0;
+
+    // Write count if > 1
+    if count > 1 && write!(cursor, "{count}").is_ok() {
+        #[allow(clippy::cast_possible_wrap)]
+        {
+            written = cursor.position() as c_int;
+        }
+    }
+
+    // Write + if modified
+    if modified != 0 && (cursor.position() as usize) < buflen {
+        let pos = cursor.position() as usize;
+        (*buf.add(pos)) = b'+';
+        written += 1;
+    }
+
+    written
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2072,5 +2272,104 @@ mod tests {
         assert_eq!(rs_stl_number_width(16, 16), 2);
         assert_eq!(rs_stl_number_width(255, 16), 2);
         assert_eq!(rs_stl_number_width(256, 16), 3);
+    }
+
+    // =========================================================================
+    // Printable Character Conversion Tests
+    // =========================================================================
+
+    #[test]
+    fn test_make_printable_ascii() {
+        let mut buf = [0u8; 4];
+        let len = make_printable_impl(&mut buf, b'A');
+        assert_eq!(len, 1);
+        assert_eq!(buf[0], b'A');
+    }
+
+    #[test]
+    fn test_make_printable_nul() {
+        let mut buf = [0u8; 4];
+        let len = make_printable_impl(&mut buf, 0);
+        assert_eq!(len, 2);
+        assert_eq!(&buf[..2], b"^@");
+    }
+
+    #[test]
+    fn test_make_printable_control() {
+        let mut buf = [0u8; 4];
+        // Ctrl-A (0x01) -> ^A
+        let len = make_printable_impl(&mut buf, 0x01);
+        assert_eq!(len, 2);
+        assert_eq!(&buf[..2], b"^A");
+
+        // Escape (0x1B) -> ^[
+        let len = make_printable_impl(&mut buf, 0x1B);
+        assert_eq!(len, 2);
+        assert_eq!(&buf[..2], b"^[");
+    }
+
+    #[test]
+    fn test_make_printable_del() {
+        let mut buf = [0u8; 4];
+        let len = make_printable_impl(&mut buf, 0x7F);
+        assert_eq!(len, 2);
+        assert_eq!(&buf[..2], b"^?");
+    }
+
+    #[test]
+    fn test_make_printable_high_byte() {
+        let mut buf = [0u8; 4];
+        let len = make_printable_impl(&mut buf, 0xFF);
+        assert_eq!(len, 4);
+        assert_eq!(&buf[..4], b"<FF>");
+
+        let len = make_printable_impl(&mut buf, 0x80);
+        assert_eq!(len, 4);
+        assert_eq!(&buf[..4], b"<80>");
+    }
+
+    #[test]
+    fn test_transstr_simple() {
+        let mut out = [0u8; 32];
+        let len = transstr_impl(&mut out, b"hello");
+        assert_eq!(len, 5);
+        assert_eq!(&out[..5], b"hello");
+    }
+
+    #[test]
+    fn test_transstr_with_control() {
+        let mut out = [0u8; 32];
+        let len = transstr_impl(&mut out, b"a\x01b");
+        assert_eq!(len, 4); // a + ^A + b
+        assert_eq!(&out[..4], b"a^Ab");
+    }
+
+    #[test]
+    fn test_transstr_empty() {
+        let mut out = [0u8; 32];
+        let len = transstr_impl(&mut out, b"");
+        assert_eq!(len, 0);
+    }
+
+    // =========================================================================
+    // Tabline Helper Tests
+    // =========================================================================
+
+    #[test]
+    fn test_is_tab_separator() {
+        assert_eq!(rs_stl_is_tab_separator(b' '), 1);
+        assert_eq!(rs_stl_is_tab_separator(b'|'), 1);
+        assert_eq!(rs_stl_is_tab_separator(b'a'), 0);
+        assert_eq!(rs_stl_is_tab_separator(b'\t'), 0);
+    }
+
+    #[test]
+    fn test_wincount_width() {
+        assert_eq!(rs_stl_wincount_width(0), 0);
+        assert_eq!(rs_stl_wincount_width(1), 0);
+        assert_eq!(rs_stl_wincount_width(2), 1);
+        assert_eq!(rs_stl_wincount_width(9), 1);
+        assert_eq!(rs_stl_wincount_width(10), 2);
+        assert_eq!(rs_stl_wincount_width(100), 3);
     }
 }
