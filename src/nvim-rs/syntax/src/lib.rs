@@ -21,6 +21,7 @@ use std::ffi::{c_char, c_int};
 pub mod cache;
 pub mod cluster;
 pub mod containment;
+pub mod highlight;
 pub mod keyword;
 pub mod match_engine;
 pub mod pattern;
