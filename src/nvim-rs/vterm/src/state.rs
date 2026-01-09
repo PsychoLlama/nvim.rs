@@ -619,11 +619,8 @@ pub enum GraphemeState {
 // =============================================================================
 
 /// Putglyph callback
-pub type StatePutglyphCallback = unsafe extern "C" fn(
-    info: *const VTermGlyphInfo,
-    pos: VTermPos,
-    user: *mut c_void,
-) -> c_int;
+pub type StatePutglyphCallback =
+    unsafe extern "C" fn(info: *const VTermGlyphInfo, pos: VTermPos, user: *mut c_void) -> c_int;
 
 /// Movecursor callback
 pub type StateMovecursorCallback = unsafe extern "C" fn(
@@ -642,35 +639,23 @@ pub type StateScrollrectCallback = unsafe extern "C" fn(
 ) -> c_int;
 
 /// Moverect callback
-pub type StateMoverectCallback = unsafe extern "C" fn(
-    dest: VTermRect,
-    src: VTermRect,
-    user: *mut c_void,
-) -> c_int;
+pub type StateMoverectCallback =
+    unsafe extern "C" fn(dest: VTermRect, src: VTermRect, user: *mut c_void) -> c_int;
 
 /// Erase callback
-pub type StateEraseCallback = unsafe extern "C" fn(
-    rect: VTermRect,
-    selective: c_int,
-    user: *mut c_void,
-) -> c_int;
+pub type StateEraseCallback =
+    unsafe extern "C" fn(rect: VTermRect, selective: c_int, user: *mut c_void) -> c_int;
 
 /// Initpen callback
 pub type StateInitpenCallback = unsafe extern "C" fn(user: *mut c_void) -> c_int;
 
 /// Setpenattr callback
-pub type StateSetpenattrCallback = unsafe extern "C" fn(
-    attr: c_int,
-    val: *const crate::VTermValue,
-    user: *mut c_void,
-) -> c_int;
+pub type StateSetpenattrCallback =
+    unsafe extern "C" fn(attr: c_int, val: *const crate::VTermValue, user: *mut c_void) -> c_int;
 
 /// Settermprop callback
-pub type StateSettermrpopCallback = unsafe extern "C" fn(
-    prop: c_int,
-    val: *const crate::VTermValue,
-    user: *mut c_void,
-) -> c_int;
+pub type StateSettermrpopCallback =
+    unsafe extern "C" fn(prop: c_int, val: *const crate::VTermValue, user: *mut c_void) -> c_int;
 
 /// Bell callback
 pub type StateBellCallback = unsafe extern "C" fn(user: *mut c_void) -> c_int;
