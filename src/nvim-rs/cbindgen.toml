@@ -149,6 +149,29 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_ptrlist_single", "rs_ptrlist_patch", "rs_ptrlist_append",
            "rs_nfa_is_char_class", "rs_nfa_is_position_match", "rs_nfa_is_posix_class",
            "rs_nfa_get_subexpr_idx", "rs_check_char_class",
+           # Backtracking engine state (Phase 25.8)
+           "rs_regstack_new", "rs_regstack_free", "rs_regstack_clear", "rs_regstack_is_empty",
+           "rs_backpos_new", "rs_backpos_free", "rs_backpos_clear",
+           # Backtracking compilation (Phase 25.9)
+           "rs_bt_compiler_new", "rs_bt_compiler_free", "rs_bt_compiler_size", "rs_bt_compiler_start",
+           "rs_bt_compiler_is_too_long", "rs_bt_emit_node", "rs_bt_emit_node_arg", "rs_bt_emit_byte",
+           "rs_bt_insert_node", "rs_bt_chain", "rs_bt_set_next", "rs_bt_op", "rs_bt_next", "rs_bt_operand",
+           # Backtracking execution (Phase 25.10)
+           "rs_bt_match_state_new", "rs_bt_match_state_new_multi", "rs_bt_match_state_free",
+           "rs_bt_match_state_set_input", "rs_bt_match_state_current_byte",
+           "rs_bt_match_state_at_bol", "rs_bt_match_state_at_eol", "rs_bt_match_state_advance",
+           "rs_bt_match_state_get_startp", "rs_bt_match_state_get_endp",
+           "rs_bt_match_state_set_startp", "rs_bt_match_state_set_endp",
+           "rs_bt_match_state_clear_submatches", "rs_bt_match_state_cleanup",
+           "rs_bt_push_backtrack", "rs_bt_pop_backtrack", "rs_bt_backtrack_empty", "rs_bt_regrepeat",
+           # Unified regexp API (Phase 25.11)
+           "rs_regprog_get_engine", "rs_is_nfa_prog", "rs_is_bt_prog", "rs_get_regflags",
+           "rs_prog_in_use", "rs_set_prog_in_use", "rs_engine_to_int", "rs_int_to_engine",
+           "rs_regmatch_get_startp", "rs_regmatch_get_endp",
+           "rs_regmatch_set_startp", "rs_regmatch_set_endp",
+           "rs_regmmatch_get_start_lnum", "rs_regmmatch_get_start_col",
+           "rs_regmmatch_get_end_lnum", "rs_regmmatch_get_end_col",
+           "RegEngine", "LPos", "RegProg", "RegMatch", "RegMmatch",
            # Regex substitution engine (Phase 4)
            "rs_sub_context_new", "rs_sub_context_has_room", "rs_sub_context_output_len",
            "rs_do_upper", "rs_do_lower", "rs_utf8_char_len", "rs_utf8_ptr2char",
