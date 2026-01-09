@@ -1754,11 +1754,7 @@ pub extern "C" fn rs_vterm_is_valid(vt: VTermHandle) -> c_int {
 /// This is the Rust wrapper for `vterm_input_write()`.
 /// Returns the number of bytes written.
 #[no_mangle]
-pub extern "C" fn rs_vterm_input_write(
-    vt: VTermHandle,
-    data: *const c_char,
-    len: usize,
-) -> usize {
+pub extern "C" fn rs_vterm_input_write(vt: VTermHandle, data: *const c_char, len: usize) -> usize {
     if vt.is_null() || data.is_null() {
         return 0;
     }
