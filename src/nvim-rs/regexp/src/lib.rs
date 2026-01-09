@@ -8,6 +8,7 @@
 #![allow(clippy::must_use_candidate)]
 
 pub mod bt_opcodes;
+pub mod bt_state;
 pub mod char_class;
 pub mod decompose;
 pub mod nfa_compile;
@@ -19,6 +20,10 @@ pub mod parser;
 pub mod regsub;
 pub mod scanner;
 
+pub use bt_state::{
+    rs_backpos_clear, rs_backpos_free, rs_backpos_new, rs_regstack_clear, rs_regstack_free,
+    rs_regstack_is_empty, rs_regstack_new,
+};
 pub use char_class::rs_get_char_class;
 pub use decompose::rs_mb_decompose;
 pub use nfa_compile::{
