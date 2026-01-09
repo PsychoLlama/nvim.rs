@@ -208,6 +208,7 @@ const char *nvim_get_p_ffs(void) { return p_ffs; }
 int nvim_get_p_fic(void) { return p_fic; }
 int nvim_get_magic_overruled(void) { return (int)magic_overruled; }
 int nvim_get_p_magic(void) { return p_magic; }
+const char *nvim_get_curbuf_sua(void) { return curbuf->b_p_sua; }
 
 // =============================================================================
 // Setter functions for Rust code

@@ -15,7 +15,7 @@ rename_variants = "ScreamingSnakeCase"
 
 [parse]
 parse_deps = true
-include = ["nvim-buffer", "nvim-charset", "nvim-cmdline", "nvim-cmdhist", "nvim-cursor", "nvim-diff", "nvim-dict", "nvim-encoding", "nvim-eval", "nvim-eval-codec", "nvim-eval-exec", "nvim-ex-docmd", "nvim-fileio", "nvim-funcall", "nvim-help", "nvim-indent", "nvim-insexpand", "nvim-keycodes", "nvim-list", "nvim-lua", "nvim-mapping", "nvim-marktree", "nvim-math", "nvim-mbyte", "nvim-memutil", "nvim-menu", "nvim-mouse", "nvim-option", "nvim-os", "nvim-path", "nvim-profile", "nvim-regexp", "nvim-search", "nvim-spell", "nvim-strings", "nvim-syntax", "nvim-tag", "nvim-typval", "nvim-userfunc", "nvim-vars", "nvim-version", "nvim-viewport", "nvim-window"]
+include = ["nvim-buffer", "nvim-charset", "nvim-cmdline", "nvim-cmdhist", "nvim-cursor", "nvim-diff", "nvim-dict", "nvim-encoding", "nvim-eval", "nvim-eval-codec", "nvim-eval-exec", "nvim-ex-docmd", "nvim-fileio", "nvim-filesearch", "nvim-funcall", "nvim-help", "nvim-indent", "nvim-insexpand", "nvim-keycodes", "nvim-list", "nvim-lua", "nvim-mapping", "nvim-marktree", "nvim-math", "nvim-mbyte", "nvim-memutil", "nvim-menu", "nvim-mouse", "nvim-option", "nvim-os", "nvim-path", "nvim-profile", "nvim-regexp", "nvim-search", "nvim-spell", "nvim-strings", "nvim-syntax", "nvim-tag", "nvim-typval", "nvim-userfunc", "nvim-vars", "nvim-version", "nvim-viewport", "nvim-window"]
 
 [export]
 include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs_getchr", "rs_ungetchr", "rs_read_limits", "rs_mb_decompose", "rs_use_multibytecode", "rs_nfa_re_num_cmp", "rs_re_put_uint32", "rs_re_get_uint32", "rs_re_put_uint16", "rs_re_get_uint16", "rs_re_num_cmp", "rs_get_char_class", "rs_nfa_recognize_char_class",
@@ -527,4 +527,7 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_json_needs_escape", "rs_json_unescape_char", "rs_viml_needs_escape",
            "rs_blob_encode_hex", "rs_blob_is_literal",
            "JsonEncodeOptions", "DecodeResult", "EncodeResult",
-           "JsonType", "JsonToken", "JsonNumberResult", "UnescapeResult", "BlobFormat"]
+           "JsonType", "JsonToken", "JsonNumberResult", "UnescapeResult", "BlobFormat",
+           # File search infrastructure (Phase 47)
+           "rs_vim_findfile_init", "rs_vim_findfile", "rs_vim_findfile_cleanup",
+           "rs_vim_findfile_free_visited", "rs_vim_findfile_stopdir"]
