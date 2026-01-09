@@ -3,6 +3,20 @@
 //! This crate provides Rust implementations of sign-related functions
 //! from `src/nvim/sign.c`. Signs are markers displayed in the sign column
 //! that can indicate breakpoints, errors, warnings, and other information.
+//!
+//! # Architecture
+//!
+//! Signs are built on top of extmarks and use the decoration system.
+//! This crate follows the opaque handle pattern used elsewhere in the
+//! Neovim Rust migration.
+//!
+//! # Modules
+//!
+//! - `define` - Sign definition management
+//! - `place` - Sign placement operations
+//! - `remove` - Sign removal operations
+//! - `query` - Sign querying and listing
+//! - `commands` - Ex command handlers
 
 #![allow(unsafe_code)]
 #![allow(clippy::doc_markdown)]
@@ -10,6 +24,16 @@
 #![allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
 
 use std::ffi::{c_char, c_int, c_void, CStr};
+
+// =============================================================================
+// Submodules
+// =============================================================================
+
+pub mod commands;
+pub mod define;
+pub mod place;
+pub mod query;
+pub mod remove;
 
 // =============================================================================
 // Constants
@@ -23,6 +47,15 @@ pub const SIGN_DEF_PRIO: c_int = 10;
 
 /// Sign text width (2 characters)
 pub const SIGN_WIDTH: usize = 2;
+
+/// Global namespace (ns = 0)
+pub const NS_GLOBAL: i64 = 0;
+
+/// All namespaces sentinel value (matches UINT32_MAX)
+pub const NS_ALL: i64 = u32::MAX as i64;
+
+/// Invalid namespace sentinel value
+pub const NS_INVALID: i64 = -1;
 
 // =============================================================================
 // Opaque Handles
@@ -49,7 +82,7 @@ impl SignHandle {
 
 /// Opaque handle to C's buf_T structure (for sign operations)
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct SignBufHandle(*mut c_void);
 
 impl SignBufHandle {
@@ -58,6 +91,155 @@ impl SignBufHandle {
     pub const fn is_null(self) -> bool {
         self.0.is_null()
     }
+
+    /// Create a null handle
+    #[inline]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+
+    /// Get raw pointer
+    #[inline]
+    pub const fn as_ptr(self) -> *mut c_void {
+        self.0
+    }
+}
+
+/// Opaque handle to C's DecorSignHighlight structure
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct DecorSignHighlightHandle(*mut c_void);
+
+impl DecorSignHighlightHandle {
+    /// Check if the handle is null
+    #[inline]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+
+    /// Create a null handle
+    #[inline]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+
+    /// Get raw pointer
+    #[inline]
+    pub const fn as_ptr(self) -> *mut c_void {
+        self.0
+    }
+}
+
+/// Opaque handle to C's marktree iterator
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct MarkTreeIterHandle(*mut c_void);
+
+impl MarkTreeIterHandle {
+    /// Check if the handle is null
+    #[inline]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+
+    /// Create a null handle
+    #[inline]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+}
+
+/// Opaque handle to C's MTKey structure (marktree key)
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct MTKeyHandle(*mut c_void);
+
+impl MTKeyHandle {
+    /// Check if the handle is null
+    #[inline]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+
+    /// Create a null handle
+    #[inline]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+
+    /// Get raw pointer
+    #[inline]
+    pub const fn as_ptr(self) -> *mut c_void {
+        self.0
+    }
+}
+
+/// Line number type (matches linenr_T in Neovim)
+pub type LinenrT = i32;
+
+// =============================================================================
+// C Accessor Extern Declarations
+// =============================================================================
+
+#[allow(dead_code)]
+extern "C" {
+    // sign_T accessors
+    fn nvim_sign_get_name(sp: SignHandle) -> *const c_char;
+    fn nvim_sign_get_icon(sp: SignHandle) -> *const c_char;
+    fn nvim_sign_get_text_hl(sp: SignHandle) -> c_int;
+    fn nvim_sign_get_line_hl(sp: SignHandle) -> c_int;
+    fn nvim_sign_get_num_hl(sp: SignHandle) -> c_int;
+    fn nvim_sign_get_cul_hl(sp: SignHandle) -> c_int;
+    fn nvim_sign_get_priority(sp: SignHandle) -> c_int;
+
+    // DecorSignHighlight accessors
+    fn nvim_decor_sh_get_flags(sh: DecorSignHighlightHandle) -> u16;
+    fn nvim_decor_sh_get_priority(sh: DecorSignHighlightHandle) -> u16;
+    fn nvim_decor_sh_get_hl_id(sh: DecorSignHighlightHandle) -> c_int;
+    fn nvim_decor_sh_get_sign_name(sh: DecorSignHighlightHandle) -> *const c_char;
+    fn nvim_decor_sh_get_sign_add_id(sh: DecorSignHighlightHandle) -> c_int;
+    fn nvim_decor_sh_get_number_hl_id(sh: DecorSignHighlightHandle) -> c_int;
+    fn nvim_decor_sh_get_line_hl_id(sh: DecorSignHighlightHandle) -> c_int;
+    fn nvim_decor_sh_get_cursorline_hl_id(sh: DecorSignHighlightHandle) -> c_int;
+    fn nvim_decor_sh_get_next(sh: DecorSignHighlightHandle) -> u32;
+
+    // Buffer sign accessors
+    fn nvim_buf_get_marktree(buf: SignBufHandle) -> *mut c_void;
+    fn nvim_buf_get_fname(buf: SignBufHandle) -> *const c_char;
+    fn nvim_buf_get_fnum(buf: SignBufHandle) -> c_int;
+    fn nvim_buf_get_next(buf: SignBufHandle) -> SignBufHandle;
+
+    // Marktree/MTKey accessors
+    fn nvim_mtkey_get_row(key: MTKeyHandle) -> c_int;
+    fn nvim_mtkey_get_col(key: MTKeyHandle) -> c_int;
+    fn nvim_mtkey_get_ns(key: MTKeyHandle) -> u32;
+    fn nvim_mtkey_get_id(key: MTKeyHandle) -> u32;
+    fn nvim_mtkey_is_end(key: MTKeyHandle) -> bool;
+    fn nvim_mtkey_is_decor_sign(key: MTKeyHandle) -> bool;
+
+    // Sign map operations
+    fn nvim_sign_map_get(name: *const c_char) -> SignHandle;
+    fn nvim_sign_map_has(name: *const c_char) -> bool;
+
+    // Namespace operations
+    fn nvim_namespace_lookup(name: *const c_char) -> c_int;
+    fn nvim_describe_ns(ns: c_int, empty: *const c_char) -> *const c_char;
+    fn nvim_create_namespace(name: *const c_char) -> c_int;
+
+    // Decoration helpers
+    fn nvim_decor_find_sign(decor: *const c_void) -> DecorSignHighlightHandle;
+    fn nvim_mt_decor(key: MTKeyHandle) -> *const c_void;
+
+    // Buffer meta totals
+    fn nvim_buf_meta_total_sign_hl(buf: SignBufHandle) -> u64;
+    fn nvim_buf_meta_total_sign_text(buf: SignBufHandle) -> u64;
+
+    // Global buffer list
+    fn nvim_get_firstbuf() -> SignBufHandle;
+    fn nvim_get_curbuf() -> SignBufHandle;
+
+    // Extmark operations
+    fn nvim_extmark_del_id(buf: SignBufHandle, ns: u32, id: u32) -> bool;
 }
 
 // =============================================================================
@@ -147,11 +329,6 @@ pub unsafe extern "C" fn rs_sign_cmd_idx(cmd: *const c_char) -> c_int {
 // =============================================================================
 // Namespace Filtering
 // =============================================================================
-
-/// Special namespace values
-pub const NS_GLOBAL: i64 = 0;
-pub const NS_ALL: i64 = u32::MAX as i64;
-pub const NS_INVALID: i64 = -1;
 
 /// Convert a group name to a namespace filter value.
 ///
