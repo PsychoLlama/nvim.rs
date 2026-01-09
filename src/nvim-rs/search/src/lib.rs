@@ -13,6 +13,7 @@ pub mod helpers;
 pub mod incsearch;
 pub mod pattern;
 pub mod state;
+pub mod substitute;
 
 use std::ffi::{c_char, c_int};
 
