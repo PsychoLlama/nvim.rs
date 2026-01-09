@@ -11,6 +11,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | buffer         | Buffer state and validation             |
 | buffer_updates | Buffer change tracking                  |
 | change         | Buffer modification tracking and text editing |
+| channel        | Channel infrastructure for RPC communication |
 | charset        | Character classification and conversion |
 | cmdexpand      | Command-line completion and expansion   |
 | cmdhist        | Command history                         |
@@ -65,6 +66,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | mouse          | Mouse event handling and selection      |
 | move           | Cursor movement and scrolling           |
 | msgpack        | MessagePack serialization               |
+| msgpack_rpc    | MessagePack-RPC protocol for remote procedure calls |
 | normal         | Normal mode key processing and commands |
 | ops            | Operator handling (shift, tilde, addsub, replace, join, delete, insert) |
 | option         | Option system and configuration         |
@@ -89,9 +91,10 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | vterm          | VTerm terminal emulation core           |
 | textformat     | Text formatting options                 |
 | textobject     | Text object selection and navigation    |
-| tui            | Terminal UI                             |
+| tui            | Terminal UI (terminfo, input, output)   |
 | typval         | VimL value type handling                |
 | ugrid          | Unicode grid for TUI                    |
+| ui             | UI core types and RemoteUI state        |
 | undo           | Undo/redo system                        |
 | unpacker       | MessagePack unpacking                   |
 | userfunc       | User-defined functions (params, closure, funcref) |
