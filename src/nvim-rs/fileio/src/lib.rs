@@ -17,6 +17,7 @@ pub mod backup;
 pub mod encoding;
 pub mod modeline;
 pub mod read;
+pub mod sync;
 pub mod write;
 
 // =============================================================================
