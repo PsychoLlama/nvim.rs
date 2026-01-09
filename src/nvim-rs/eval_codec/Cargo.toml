@@ -1,0 +1,11 @@
+[package]
+name = "nvim-eval-codec"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Encode/decode support for VimL values"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]

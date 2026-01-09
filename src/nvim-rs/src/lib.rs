@@ -42,6 +42,7 @@ pub use nvim_edit::*;
 pub use nvim_encoding::base64::*;
 pub use nvim_encoding::sha256::*;
 pub use nvim_eval::*;
+pub use nvim_eval_codec::*;
 pub use nvim_eval_exec::*;
 pub use nvim_event::*;
 pub use nvim_ex_docmd::*;
