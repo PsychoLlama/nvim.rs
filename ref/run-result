@@ -1,34 +1,49 @@
-Plan: ~/.claude/plans/sunny-roaming-starfish.md
+Plan: ~/.claude/plans/woolly-munching-waterfall.md
 
-## Phase 22 Analysis Complete
+## Summary
 
-The plan at `/home/overlord/.claude/plans/sunny-roaming-starfish.md` presented four options for continuing the Rust migration. Based on my analysis, here's the current state of **Option 1 (Near-Finished Subsystems)**:
+I have executed the Phase 23 plan for the spell checking system migration. Here's what was accomplished:
 
-### Current Migration Progress
+### Phase 23.1 - Spell File Format (cbindgen exports)
+**Commit:** `d45ce7f9b2`
 
-| Subsystem | C Lines | Rust Lines | Exported Functions | Status |
-|-----------|---------|------------|-------------------|--------|
-| quickfix | 9,083 | 10,364 | 292 | ~52% migrated |
-| fileio | 3,803 | 5,089 | 20 | ~57% migrated |
-| option | 6,516 | 5,310 | 66 | ~53% migrated |
-| ex_cmds | 5,043 | 4,758 | 22 | ~54% migrated |
-| **Total** | **24,445** | **25,521** | **400** | ~51% migrated |
+Added comprehensive spell checking FFI exports to `cbindgen.toml`:
+- Tree reading: `rs_read_tree_node`, `rs_tree_count_words`, `rs_tree_binary_search`
+- Tree traversal: `rs_traverse_tree`, `rs_get_word_flags`, `rs_lookup_word`
+- Type exports: `WordLookupResult`, `SpellResult`, `CaseType`
+- Case handling: `rs_get_case_type`, `rs_spell_casefold`, `rs_spell_fold_char`, `rs_spell_is_upper`, `rs_spell_is_word_char`, `rs_spell_valid_case_check`
+- Compound checking: `rs_region_matches`, `rs_can_compound`, `rs_compound_flag_in_set`
+- File format: `rs_check_spell_magic`, `rs_check_spell_version`
+- Offset encoding: `rs_offset2bytes`, `rs_bytes2offset`
+- Suggestion scoring: `rs_rescore`, `rs_maxscore`
 
-### Verification Results
+Also added re-exports in `spell/src/lib.rs` for cbindgen visibility.
 
-All checks pass:
-- ✅ `just build` - Full build successful
-- ✅ `just rust-fmt-check` - Formatting clean
-- ✅ `just rust-clippy` - No warnings
-- ✅ `just rust-test` - 2,319 tests pass
+### Phase 23.2 - Word Tree Operations (edit distance integration)
+**Commit:** `e75dd70f97`
 
-### Summary
+Replaced C `spell_edit_score()` and `spell_edit_score_limit()` in `spellsuggest.c` with calls to existing Rust implementations:
+- `rs_spell_edit_score` - Edit distance calculation using Du and Chang (1992) algorithm
+- `rs_spell_edit_score_limit` - Edit distance with score limit optimization
 
-The four target subsystems already have substantial Rust implementations with:
-- **25,521 lines of Rust** code across the four crates
-- **400 exported FFI functions** callable from C
-- **2,319 passing unit tests**
+The old C implementations are preserved in `#if 0` blocks for reference.
 
-The codebase is in a clean state with no uncommitted changes. The plan's stated goal of "reducing C codebase by 5,000-15,000 lines" would require continuing to migrate functions from the C files that still contain ~24K lines total.
+### Build Status
+- ✅ `just build` passes
+- ✅ `just rust-fmt-check` passes  
+- ✅ `just rust-clippy` passes
+- ✅ `just rust-test` passes (2319 tests)
+- ✅ Neovim binary starts and runs correctly
 
-**Note:** The plan requires a user selection to proceed with a specific option. Each option targets different subsystems with varying complexity and completion status.
+### Current State
+The spell crate (`src/nvim-rs/spell/`) now contains:
+- ~10,800 lines of Rust code
+- Comprehensive spell file format parsing (headers, sections, trees)
+- Edit distance algorithms (now integrated with C code)
+- Word tree traversal and lookup
+- Case validation and region matching
+- Compound word checking
+
+The C files (`spell.c`, `spellfile.c`, `spellsuggest.c`) are still present (~13,300 lines) but are now using Rust for key algorithms. Full removal of these C files would require completing the remaining phases:
+- Phase 23.3: More spell suggestion functions
+- Phase 23.4: Complete integration and C file removal
