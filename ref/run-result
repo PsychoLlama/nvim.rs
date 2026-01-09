@@ -1,29 +1,11 @@
-Plan: ~/.claude/plans/iridescent-gliding-mitten.md
+Plan: ~/.claude/plans/compressed-conjuring-tiger.md
 
-**Phase 21: Tag Navigation System Migration - Complete!**
+The plan is awaiting your selection. Which component would you like to migrate for Phase 22?
 
-All 7 phases have been successfully completed:
+1. **VimL Evaluation System** (Recommended) - ~34,500 lines of C, 5% migrated. Core language engine with discrete, testable functions.
 
-| Phase | Description | Commit |
-|-------|-------------|--------|
-| 21.1 | Tag Line Parsing (parse.rs) | Previously committed |
-| 21.2 | Pattern Matching Infrastructure (pattern.rs) | Previously committed |
-| 21.3 | Tag File Search (search.rs) | Previously committed |
-| 21.4 | Match Collection & Prioritization (matches.rs) | Previously committed |
-| 21.5 | Tag Stack Operations (stack.rs) | Previously committed |
-| 21.6 | Command Handlers (commands.rs) | Previously committed |
-| 21.7 | Integration & Cleanup | `8d29473f61` |
+2. **VimL Parser** - ~3,135 lines of C, no Rust crate yet. Self-contained parsing subsystem.
 
-**Summary of Phase 21.7:**
-- Added `nvim-tag` to cbindgen.toml parse.include list
-- Added all tag crate exports (types + functions) to cbindgen export.include
-- Re-exported `nvim_tag::*` from main `nvim-rs/src/lib.rs`
-- Fixed link errors by replacing extern `ascii_isdigit`/`ascii_isalpha` (C macros) with inline Rust implementations
+3. **Regexp Engine Completion** - ~15,727 lines of C, 65% already migrated. Finish existing work.
 
-**Verification:**
-- ✅ `just rust-fmt-check` - passes
-- ✅ `just rust-clippy` - passes  
-- ✅ `just rust-test` - 2319 tests pass
-- ✅ `just build` - full build with linking succeeds
-
-The tag navigation system migration is now complete with all functions available in the static library and types exported to the C header.
+Please let me know your choice.
