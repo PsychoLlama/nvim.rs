@@ -92,7 +92,6 @@ void clear_fmark(fmark_T *const fm, const Timestamp timestamp)
 // Returns OK on success, FAIL if bad name given.
 int setmark_pos(int c, pos_T *pos, int fnum, fmarkv_T *view_pt)
 {
-  int i;
   fmarkv_T view = view_pt != NULL ? *view_pt : (fmarkv_T)INIT_FMARKV;
 
   // Check for a special key (may cause islower() to crash).
@@ -100,7 +99,7 @@ int setmark_pos(int c, pos_T *pos, int fnum, fmarkv_T *view_pt)
     return FAIL;
   }
 
-  if (c == '\'' || c == '`') {
+  if (rs_mark_is_jump_mark(c)) {
     if (pos == &curwin->w_cursor) {
       setpcmark();
       // keep it even when the cursor doesn't move
@@ -117,23 +116,23 @@ int setmark_pos(int c, pos_T *pos, int fnum, fmarkv_T *view_pt)
     return FAIL;
   }
 
-  if (c == '"') {
+  if (rs_mark_is_last_cursor(c)) {
     RESET_FMARK(&buf->b_last_cursor, *pos, buf->b_fnum, view);
     return OK;
   }
 
   // Allow setting '[ and '] for an autocommand that simulates reading a
   // file.
-  if (c == '[') {
-    buf->b_op_start = *pos;
-    return OK;
-  }
-  if (c == ']') {
-    buf->b_op_end = *pos;
+  if (rs_mark_is_sentence(c)) {
+    if (c == '[') {
+      buf->b_op_start = *pos;
+    } else {
+      buf->b_op_end = *pos;
+    }
     return OK;
   }
 
-  if (c == '<' || c == '>') {
+  if (rs_mark_is_visual(c)) {
     if (c == '<') {
       buf->b_visual.vi_start = *pos;
     } else {
@@ -151,18 +150,15 @@ int setmark_pos(int c, pos_T *pos, int fnum, fmarkv_T *view_pt)
     return OK;
   }
 
-  if (ASCII_ISLOWER(c)) {
-    i = c - 'a';
-    RESET_FMARK(buf->b_namedm + i, *pos, fnum, view);
+  int local_idx = rs_mark_local_index(c);
+  if (rs_mark_is_valid_named(c)) {
+    RESET_FMARK(buf->b_namedm + local_idx, *pos, fnum, view);
     return OK;
   }
-  if (ASCII_ISUPPER(c) || ascii_isdigit(c)) {
-    if (ascii_isdigit(c)) {
-      i = c - '0' + NMARKS;
-    } else {
-      i = c - 'A';
-    }
-    RESET_XFMARK(namedfm + i, *pos, fnum, view, NULL);
+
+  int global_idx = rs_mark_global_index(c);
+  if (global_idx >= 0) {
+    RESET_XFMARK(namedfm + global_idx, *pos, fnum, view, NULL);
     return OK;
   }
   return FAIL;
@@ -384,8 +380,8 @@ fmark_T *get_changelist(buf_T *buf, win_T *win, int count)
 fmark_T *mark_get(buf_T *buf, win_T *win, fmark_T *fmp, MarkGet flag, int name)
 {
   fmark_T *fm = NULL;
-  if (ASCII_ISUPPER(name) || ascii_isdigit(name)) {
-    // Global marks
+  if (rs_mark_is_file_mark(name)) {
+    // Global marks (A-Z, 0-9)
     xfmark_T *xfm = mark_get_global(flag != kMarkAllNoResolve, name);
     fm = &xfm->fmark;
     if (flag == kMarkBufLocal && xfm->fmark.fnum != buf->handle) {
@@ -412,17 +408,9 @@ fmark_T *mark_get(buf_T *buf, win_T *win, fmark_T *fmp, MarkGet flag, int name)
 /// @return  Mark
 xfmark_T *mark_get_global(bool resolve, int name)
 {
-  xfmark_T *mark;
-
-  if (ascii_isdigit(name)) {
-    name = name - '0' + NMARKS;
-  } else if (ASCII_ISUPPER(name)) {
-    name -= 'A';
-  } else {
-    // Not a valid mark name
-    assert(false);
-  }
-  mark = &namedfm[name];
+  int idx = rs_mark_global_index(name);
+  assert(idx >= 0);  // Must be a valid global mark name
+  xfmark_T *mark = &namedfm[idx];
 
   if (resolve && mark->fmark.fnum == 0) {
     // Resolve filename to fnum (SHADA marks)
@@ -447,36 +435,34 @@ xfmark_T *mark_get_global(bool resolve, int name)
 fmark_T *mark_get_local(buf_T *buf, win_T *win, int name)
 {
   fmark_T *mark = NULL;
-  if (ASCII_ISLOWER(name)) {
-    // normal named mark
-    mark = &buf->b_namedm[name - 'a'];
-    // to start of previous operator
-  } else if (name == '[') {
-    mark = pos_to_mark(buf, NULL, buf->b_op_start);
-    // to end of previous operator
-  } else if (name == ']') {
-    mark = pos_to_mark(buf, NULL, buf->b_op_end);
+  int idx = rs_mark_local_index(name);
+  if (rs_mark_is_valid_named(name)) {
+    // normal named mark (a-z)
+    mark = &buf->b_namedm[idx];
+  } else if (rs_mark_is_sentence(name)) {
+    // to start/end of previous operator
+    mark = pos_to_mark(buf, NULL, name == '[' ? buf->b_op_start : buf->b_op_end);
+  } else if (rs_mark_is_visual(name)) {
     // visual marks
-  } else if (name == '<' || name == '>') {
     mark = mark_get_visual(buf, name);
+  } else if (rs_mark_is_jump_mark(name)) {
     // previous context mark
-  } else if (name == '\'' || name == '`') {
     // TODO(muniter): w_pcmark should be stored as a mark, but causes a nasty bug.
     mark = pos_to_mark(curbuf, NULL, win->w_pcmark);
+  } else if (rs_mark_is_last_cursor(name)) {
     // to position when leaving buffer
-  } else if (name == '"') {
     mark = &(buf->b_last_cursor);
+  } else if (rs_mark_is_last_insert(name)) {
     // to where last Insert mode stopped
-  } else if (name == '^') {
     mark = &(buf->b_last_insert);
+  } else if (rs_mark_is_last_change(name)) {
     // to where last change was made
-  } else if (name == '.') {
     mark = &buf->b_last_change;
-    // prompt start location
   } else if (name == ':' && bt_prompt(buf)) {
+    // prompt start location
     mark = &(buf->b_prompt_start);
-    // Mark that are actually not marks but motions, e.g {, }, (, ), ...
   } else {
+    // Mark that are actually not marks but motions, e.g {, }, (, ), ...
     mark = mark_get_motion(buf, win, name);
   }
 
@@ -1735,15 +1721,16 @@ bool mark_set_local(const char name, buf_T *const buf, const fmark_T fm, const b
   FUNC_ATTR_NONNULL_ALL
 {
   fmark_T *fm_tgt = NULL;
-  if (ASCII_ISLOWER(name)) {
-    fm_tgt = &(buf->b_namedm[name - 'a']);
-  } else if (name == '"') {
+  int idx = rs_mark_local_index(name);
+  if (rs_mark_is_valid_named(name)) {
+    fm_tgt = &(buf->b_namedm[idx]);
+  } else if (rs_mark_is_last_cursor(name)) {
     fm_tgt = &(buf->b_last_cursor);
-  } else if (name == '^') {
+  } else if (rs_mark_is_last_insert(name)) {
     fm_tgt = &(buf->b_last_insert);
   } else if (name == ':') {
     fm_tgt = &(buf->b_prompt_start);
-  } else if (name == '.') {
+  } else if (rs_mark_is_last_change(name)) {
     fm_tgt = &(buf->b_last_change);
   } else {
     return false;

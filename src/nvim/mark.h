@@ -14,6 +14,17 @@
 
 extern int rs_mark_global_index(int name);
 extern int rs_mark_local_index(int name);
+extern bool rs_mark_is_valid_named(int name);
+extern bool rs_mark_is_file_mark(int name);
+extern bool rs_mark_is_jump_mark(int name);
+extern bool rs_mark_is_special(int name);
+extern bool rs_mark_is_visual(int name);
+extern bool rs_mark_is_last_cursor(int name);
+extern bool rs_mark_is_last_insert(int name);
+extern bool rs_mark_is_last_change(int name);
+extern bool rs_mark_is_sentence(int name);
+extern int rs_pos_is_valid(pos_T pos);
+extern int rs_pos_in_range(pos_T pos, int line_count);
 
 /// Convert mark name to the offset
 static inline int mark_global_index(const char name)
