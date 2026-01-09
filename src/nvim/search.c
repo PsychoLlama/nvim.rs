@@ -139,7 +139,55 @@ int nvim_get_last_idx(void)
 {
   return last_idx;
 }
+
+/// Set the last_idx static variable (setter for Rust).
+void nvim_set_last_idx(int idx)
+{
+  last_idx = idx;
+}
+
 static int lastc_bytelen = 1;             // >1 for multi-byte char
+
+/// Get the lastc_bytelen static variable (accessor for Rust).
+int nvim_get_lastc_bytelen(void)
+{
+  return lastc_bytelen;
+}
+
+/// Set the lastc_bytelen static variable (setter for Rust).
+void nvim_set_lastc_bytelen(int len)
+{
+  lastc_bytelen = len;
+}
+
+/// Get a value from the lastc array (accessor for Rust).
+uint8_t nvim_get_lastc(int idx)
+{
+  if (idx >= 0 && idx < 2) {
+    return lastc[idx];
+  }
+  return 0;
+}
+
+/// Set a value in the lastc array (setter for Rust).
+void nvim_set_lastc(int idx, uint8_t val)
+{
+  if (idx >= 0 && idx < 2) {
+    lastc[idx] = val;
+  }
+}
+
+/// Set the lastcdir static variable (setter for Rust).
+void nvim_set_lastcdir(int dir)
+{
+  lastcdir = dir;
+}
+
+/// Set the last_t_cmd static variable (setter for Rust).
+void nvim_set_last_t_cmd(int t_cmd)
+{
+  last_t_cmd = t_cmd;
+}
 
 // copy of spats[], for keeping the search patterns while executing autocmds
 static SearchPattern saved_spats[ARRAY_SIZE(spats)];
@@ -151,6 +199,90 @@ static bool saved_spats_no_hlsearch = false;
 // allocated copy of pattern used by search_regcomp()
 static char *mr_pattern = NULL;
 static size_t mr_patternlen = 0;
+
+/// Get the mr_pattern static variable (accessor for Rust).
+const char *nvim_get_mr_pattern(void)
+{
+  return mr_pattern;
+}
+
+/// Get the mr_patternlen static variable (accessor for Rust).
+size_t nvim_get_mr_patternlen(void)
+{
+  return mr_patternlen;
+}
+
+/// Get the pattern string from spats array (accessor for Rust).
+const char *nvim_get_spat_pat(int idx)
+{
+  if (idx >= 0 && idx < 2) {
+    return spats[idx].pat;
+  }
+  return NULL;
+}
+
+/// Get the pattern length from spats array (accessor for Rust).
+size_t nvim_get_spat_patlen(int idx)
+{
+  if (idx >= 0 && idx < 2) {
+    return spats[idx].patlen;
+  }
+  return 0;
+}
+
+/// Get the magic flag from spats array (accessor for Rust).
+int nvim_get_spat_magic(int idx)
+{
+  if (idx >= 0 && idx < 2) {
+    return spats[idx].magic;
+  }
+  return 0;
+}
+
+/// Get the no_scs flag from spats array (accessor for Rust).
+int nvim_get_spat_no_scs(int idx)
+{
+  if (idx >= 0 && idx < 2) {
+    return spats[idx].no_scs;
+  }
+  return 0;
+}
+
+/// Get the search direction from spats array (accessor for Rust).
+char nvim_get_spat_off_dir(int idx)
+{
+  if (idx >= 0 && idx < 2) {
+    return spats[idx].off.dir;
+  }
+  return '/';
+}
+
+/// Get the line offset flag from spats array (accessor for Rust).
+int nvim_get_spat_off_line(int idx)
+{
+  if (idx >= 0 && idx < 2) {
+    return spats[idx].off.line;
+  }
+  return 0;
+}
+
+/// Get the end offset flag from spats array (accessor for Rust).
+int nvim_get_spat_off_end(int idx)
+{
+  if (idx >= 0 && idx < 2) {
+    return spats[idx].off.end;
+  }
+  return 0;
+}
+
+/// Get the offset value from spats array (accessor for Rust).
+int64_t nvim_get_spat_off_off(int idx)
+{
+  if (idx >= 0 && idx < 2) {
+    return spats[idx].off.off;
+  }
+  return 0;
+}
 
 // Type used by find_pattern_in_path() to remember which included files have
 // been searched already.
@@ -271,6 +403,12 @@ void save_re_pat(int idx, char *pat, size_t patlen, int magic)
 // Used before/after executing autocommands and user functions.
 static int save_level = 0;
 
+/// Get the save_level static variable (accessor for Rust).
+int nvim_get_save_level(void)
+{
+  return save_level;
+}
+
 void save_search_patterns(void)
 {
   if (save_level++ != 0) {
@@ -341,6 +479,12 @@ static int saved_last_idx = 0;
 static bool saved_no_hlsearch = false;
 static colnr_T saved_search_match_endcol;
 static linenr_T saved_search_match_lines;
+
+/// Get the did_save_last_search_spat counter (accessor for Rust).
+int nvim_get_did_save_last_search_spat(void)
+{
+  return did_save_last_search_spat;
+}
 
 /// Save and restore the search pattern for incremental highlight search
 /// feature.
