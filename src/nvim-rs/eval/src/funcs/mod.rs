@@ -28,11 +28,14 @@
 pub mod bitwise;
 pub mod buffer;
 pub mod collections;
+pub mod cursor;
 mod dispatch;
 pub mod math;
 pub mod random;
+pub mod search;
 pub mod string;
 pub mod system;
+pub mod text;
 pub mod types;
 pub mod window;
 
