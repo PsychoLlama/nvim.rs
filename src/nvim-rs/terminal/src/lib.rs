@@ -247,6 +247,22 @@ extern "C" {
 
     /// Get the textbuf size constant.
     fn nvim_terminal_get_textbuf_size() -> usize;
+
+    // -------------------------------------------------------------------------
+    // Mode Integration Accessors (Phase 12.6)
+    // -------------------------------------------------------------------------
+
+    /// Notify the terminal of focus change.
+    fn nvim_terminal_set_focus(term: TerminalHandle, focus: c_int);
+
+    /// Check if the terminal should be considered for closing.
+    fn nvim_terminal_should_close(term: TerminalHandle) -> c_int;
+
+    /// Get the current mode constant for terminal mode.
+    fn nvim_get_mode_terminal() -> c_int;
+
+    /// Check if we're currently in terminal mode.
+    fn nvim_is_terminal_mode() -> c_int;
 }
 
 // =============================================================================
@@ -879,6 +895,72 @@ pub extern "C" fn rs_terminal_sync_sb_deleted(term: TerminalHandle) {
     unsafe {
         let deleted = nvim_terminal_get_sb_deleted(term);
         nvim_terminal_set_sb_deleted_last(term, deleted);
+    }
+}
+
+// =============================================================================
+// Mode Integration Functions (Phase 12.6)
+// =============================================================================
+
+/// Set terminal focus state.
+///
+/// Notifies the terminal of focus change by calling `vterm_state_focus_in`
+/// or `vterm_state_focus_out`.
+#[no_mangle]
+pub extern "C" fn rs_terminal_set_focus(term: TerminalHandle, focus: c_int) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_set_focus(term, focus) }
+    }
+}
+
+/// Check if the terminal should be closed.
+///
+/// Returns 1 if the terminal's closed flag is set and `buf_handle` is 0.
+#[no_mangle]
+pub extern "C" fn rs_terminal_should_close(term: TerminalHandle) -> c_int {
+    if term.is_null() {
+        return 0;
+    }
+    unsafe { nvim_terminal_should_close(term) }
+}
+
+/// Get the `MODE_TERMINAL` constant.
+///
+/// Returns the value of `MODE_TERMINAL` for mode checking.
+#[no_mangle]
+pub extern "C" fn rs_get_mode_terminal() -> c_int {
+    unsafe { nvim_get_mode_terminal() }
+}
+
+/// Check if currently in terminal mode.
+///
+/// Returns 1 if `State` & `MODE_TERMINAL` is true, 0 otherwise.
+#[no_mangle]
+pub extern "C" fn rs_is_terminal_mode() -> c_int {
+    unsafe { nvim_is_terminal_mode() }
+}
+
+/// Convenience function to handle terminal focus gain.
+///
+/// Sets focus to true and triggers cursor update.
+#[no_mangle]
+pub extern "C" fn rs_terminal_focus_gain(term: TerminalHandle) {
+    if term.is_null() {
+        return;
+    }
+    unsafe {
+        nvim_terminal_set_focus(term, 1);
+        nvim_terminal_set_pending_cursor(term, 1);
+    }
+}
+
+/// Convenience function to handle terminal focus loss.
+///
+/// Sets focus to false.
+#[no_mangle]
+pub extern "C" fn rs_terminal_focus_lose(term: TerminalHandle) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_set_focus(term, 0) }
     }
 }
 

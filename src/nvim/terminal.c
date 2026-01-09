@@ -2734,4 +2734,45 @@ size_t nvim_terminal_get_textbuf_size(void)
   return TEXTBUF_SIZE;
 }
 
+// =============================================================================
+// Mode Integration Accessors for Rust (Phase 12.6)
+// =============================================================================
+
+/// Notify the terminal of focus change.
+/// This calls vterm_state_focus_in or vterm_state_focus_out.
+void nvim_terminal_set_focus(Terminal *term, int focus)
+{
+  if (!term || !term->vt) {
+    return;
+  }
+  VTermState *state = vterm_obtain_state(term->vt);
+  if (focus) {
+    vterm_state_focus_in(state);
+  } else {
+    vterm_state_focus_out(state);
+  }
+}
+
+/// Check if the terminal should be considered for closing.
+/// Returns 1 if closed flag is set and buf_handle is 0.
+int nvim_terminal_should_close(Terminal *term)
+{
+  if (!term) {
+    return 0;
+  }
+  return (term->closed && term->buf_handle == 0) ? 1 : 0;
+}
+
+/// Get the current mode constant for terminal mode (MODE_TERMINAL).
+int nvim_get_mode_terminal(void)
+{
+  return MODE_TERMINAL;
+}
+
+/// Check if we're currently in terminal mode.
+int nvim_is_terminal_mode(void)
+{
+  return (State & MODE_TERMINAL) ? 1 : 0;
+}
+
 // vim: foldmethod=marker
