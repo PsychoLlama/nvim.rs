@@ -21,6 +21,7 @@
 
 use std::ffi::{c_char, c_int, c_long, c_void};
 
+pub mod comment;
 pub mod editing;
 pub mod events;
 pub mod flags;
@@ -28,6 +29,7 @@ pub mod invalidation;
 pub mod lines;
 pub mod recording;
 
+pub use comment::{rs_get_last_leader_offset, rs_get_leader_len};
 pub use editing::{
     rs_del_bytes, rs_del_char, rs_del_chars, rs_ins_bytes, rs_ins_bytes_len, rs_ins_char,
     rs_ins_char_bytes, rs_ins_str,
