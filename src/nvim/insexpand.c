@@ -1990,6 +1990,9 @@ void nvim_compl_match_set_prev(void *m, void *prev) {
 int nvim_compl_match_get_flags(void *m) {
   return m ? ((compl_T *)m)->cp_flags : 0;
 }
+int nvim_compl_match_get_score(void *m) {
+  return m ? ((compl_T *)m)->cp_score : -1;
+}
 int nvim_compl_is_first_match(void *m) {
   return m == compl_first_match ? 1 : 0;
 }
