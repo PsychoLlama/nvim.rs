@@ -267,10 +267,7 @@ mod tests {
     #[test]
     fn test_parse_group_name() {
         assert_eq!(parse_group_name("Normal"), Some(("Normal", "")));
-        assert_eq!(
-            parse_group_name("  StatusLine "),
-            Some(("StatusLine", " "))
-        );
+        assert_eq!(parse_group_name("  StatusLine "), Some(("StatusLine", " ")));
         assert_eq!(
             parse_group_name("@keyword.function rest"),
             Some(("@keyword.function", " rest"))
@@ -286,10 +283,7 @@ mod tests {
 
     #[test]
     fn test_parse_ts_capture_name() {
-        assert_eq!(
-            parse_ts_capture_name("@keyword"),
-            Some(("@keyword", None))
-        );
+        assert_eq!(parse_ts_capture_name("@keyword"), Some(("@keyword", None)));
         assert_eq!(
             parse_ts_capture_name("@keyword.function"),
             Some(("@keyword.function", Some("@keyword")))
