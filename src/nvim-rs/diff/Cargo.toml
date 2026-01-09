@@ -8,6 +8,11 @@ description = "Diff option checking for Neovim"
 [lib]
 crate-type = ["staticlib", "rlib"]
 
+[features]
+# Enable functions that require nvim_tabpage_get_diffbuf C accessor
+# (not yet implemented in C codebase)
+tabpage_diff = []
+
 [dependencies]
 libc = "0.2"
 

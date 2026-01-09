@@ -1,11 +1,26 @@
-//! Diff option checking for Neovim
+//! Diff mode support for Neovim
 //!
-//! This module provides Rust implementations for checking diff options
-//! from the 'diffopt' setting.
+//! This crate provides Rust implementations for diff mode functionality,
+//! including option parsing, buffer management, highlighting, and navigation.
 
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::doc_markdown)]
+
+// Submodules
+pub mod buffer;
+pub mod commands;
+pub mod highlight;
+pub mod navigate;
+
+// Re-export key types from submodules
+pub use buffer::{BufHandle, DiffBlockHandle, TabpageHandle, WinHandle, DB_COUNT};
+pub use commands::{DiffBlockInfo, DiffOpResult, DiffOperation, DiffRange};
+pub use highlight::{
+    DiffChangeResult, DiffHighlightGroup, DiffInlineMode, DiffLineChange, DiffLineInfo,
+    DiffLineStatus,
+};
+pub use navigate::{DiffHunkBounds, DiffNavResult, Direction};
 
 use std::ffi::c_char;
 use std::os::raw::c_int;
@@ -56,61 +71,20 @@ const XDF_INDENT_HEURISTIC: c_int = 1 << 23;
 
 use std::ffi::c_void;
 
-/// Maximum number of diff buffers (matches DB_COUNT in C).
-pub const DB_COUNT: c_int = 8;
-
-/// Opaque handle to a diff block (diff_T).
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct DiffBlockHandle(*mut c_void);
-
-impl DiffBlockHandle {
-    /// Check if the handle is null.
-    #[inline]
-    #[must_use]
-    pub const fn is_null(self) -> bool {
-        self.0.is_null()
-    }
-
-    /// Create a null handle.
-    #[inline]
-    #[must_use]
-    pub const fn null() -> Self {
-        Self(std::ptr::null_mut())
-    }
-}
-
-/// Opaque handle to a buffer (buf_T).
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct BufHandle(*mut c_void);
-
-impl BufHandle {
-    /// Check if the handle is null.
-    #[inline]
-    #[must_use]
-    pub const fn is_null(self) -> bool {
-        self.0.is_null()
-    }
-
-    /// Create a null handle.
-    #[inline]
-    #[must_use]
-    pub const fn null() -> Self {
-        Self(std::ptr::null_mut())
-    }
-}
+// Use opaque pointers for FFI to avoid type conflicts with buffer module
+type DiffBlockPtr = *mut c_void;
+type BufPtr = *mut c_void;
 
 // C accessor for the static diff_flags variable
 extern "C" {
     fn nvim_get_diff_flags() -> c_int;
     fn nvim_is_diffexpr_empty() -> bool;
-    fn nvim_get_curtab_diffbuf(idx: c_int) -> BufHandle;
+    fn nvim_get_curtab_diffbuf(idx: c_int) -> BufPtr;
     fn nvim_get_curtab_diff_invalid() -> c_int;
-    fn nvim_get_diff_first_block() -> DiffBlockHandle;
-    fn nvim_diffblock_get_next(dp: DiffBlockHandle) -> DiffBlockHandle;
-    fn nvim_diffblock_get_lnum(dp: DiffBlockHandle, idx: c_int) -> LinenrT;
-    fn nvim_diffblock_get_count(dp: DiffBlockHandle, idx: c_int) -> LinenrT;
+    fn nvim_get_diff_first_block() -> DiffBlockPtr;
+    fn nvim_diffblock_get_next(dp: DiffBlockPtr) -> DiffBlockPtr;
+    fn nvim_diffblock_get_lnum(dp: DiffBlockPtr, idx: c_int) -> LinenrT;
+    fn nvim_diffblock_get_count(dp: DiffBlockPtr, idx: c_int) -> LinenrT;
 
     // UTF-8 functions for diff_cmp
     fn utfc_ptr2len(p: *const c_char) -> c_int;
@@ -121,8 +95,8 @@ extern "C" {
     fn mb_stricmp(s1: *const c_char, s2: *const c_char) -> c_int;
 
     // Diff block setters for diff_copy_entry
-    fn nvim_diffblock_set_lnum(dp: DiffBlockHandle, idx: c_int, lnum: LinenrT);
-    fn nvim_diffblock_set_count(dp: DiffBlockHandle, idx: c_int, count: LinenrT);
+    fn nvim_diffblock_set_lnum(dp: DiffBlockPtr, idx: c_int, lnum: LinenrT);
+    fn nvim_diffblock_set_count(dp: DiffBlockPtr, idx: c_int, count: LinenrT);
 }
 
 /// Check if 'diffopt' contains "horizontal".
@@ -252,40 +226,7 @@ pub unsafe extern "C" fn rs_diffopt_inline_diff() -> c_int {
     c_int::from((nvim_get_diff_flags() & ALL_INLINE_DIFF) != 0)
 }
 
-/// Inline highlight mode enumeration.
-#[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DiffInlineMode {
-    /// No inline highlighting
-    None = 0,
-    /// Simple inline highlighting (just highlight changed region)
-    Simple = 1,
-    /// Character-level diff
-    Char = 2,
-    /// Word-level diff
-    Word = 3,
-}
-
-/// Get the current inline highlighting mode.
-///
-/// Returns the DiffInlineMode enum value based on diff_flags.
-/// Priority: word > char > simple > none.
-#[no_mangle]
-pub unsafe extern "C" fn rs_diffopt_get_inline_mode() -> DiffInlineMode {
-    let flags = nvim_get_diff_flags();
-    if (flags & DIFF_INLINE_WORD) != 0 {
-        DiffInlineMode::Word
-    } else if (flags & DIFF_INLINE_CHAR) != 0 {
-        DiffInlineMode::Char
-    } else if (flags & DIFF_INLINE_SIMPLE) != 0 {
-        DiffInlineMode::Simple
-    } else if (flags & DIFF_INLINE_NONE) != 0 {
-        DiffInlineMode::None
-    } else {
-        // Default to Char if no inline mode is explicitly set
-        DiffInlineMode::Char
-    }
-}
+// DiffInlineMode is now defined in highlight.rs and re-exported at the top
 
 // =============================================================================
 // Diff Hunk Parsing
@@ -518,7 +459,7 @@ fn diff_buf_idx_impl(buf: BufHandle) -> c_int {
     unsafe {
         for i in 0..DB_COUNT {
             let diffbuf = nvim_get_curtab_diffbuf(i);
-            if !diffbuf.is_null() && diffbuf.0 == buf.0 {
+            if !diffbuf.is_null() && diffbuf == buf.as_ptr() {
                 return i;
             }
         }
@@ -551,10 +492,10 @@ fn diff_buf_is_diffed_impl(buf: BufHandle) -> bool {
 
 /// Find the diff block that contains a given line number.
 ///
-/// Returns the diff block handle or null if not found.
-fn diff_find_block_for_line_impl(buf_idx: c_int, lnum: LinenrT) -> DiffBlockHandle {
+/// Returns the diff block pointer or null if not found.
+fn diff_find_block_for_line_impl(buf_idx: c_int, lnum: LinenrT) -> DiffBlockPtr {
     if !(0..DB_COUNT).contains(&buf_idx) {
-        return DiffBlockHandle::null();
+        return std::ptr::null_mut();
     }
 
     unsafe {
@@ -575,7 +516,7 @@ fn diff_find_block_for_line_impl(buf_idx: c_int, lnum: LinenrT) -> DiffBlockHand
 
             dp = nvim_diffblock_get_next(dp);
         }
-        DiffBlockHandle::null()
+        std::ptr::null_mut()
     }
 }
 
@@ -653,7 +594,7 @@ pub extern "C" fn rs_diff_buf_is_diffed(buf: BufHandle) -> c_int {
 /// # Safety
 /// `buf_idx` must be a valid buffer index (0 to DB_COUNT-1).
 #[no_mangle]
-pub extern "C" fn rs_diff_find_block_for_line(buf_idx: c_int, lnum: LinenrT) -> DiffBlockHandle {
+pub extern "C" fn rs_diff_find_block_for_line(buf_idx: c_int, lnum: LinenrT) -> DiffBlockPtr {
     diff_find_block_for_line_impl(buf_idx, lnum)
 }
 
@@ -773,29 +714,7 @@ fn diff_lnum_in_hunk_impl(buf_idx: c_int, lnum: LinenrT) -> bool {
     }
 }
 
-/// Hunk boundaries result structure.
-#[repr(C)]
-#[derive(Clone, Copy, Debug)]
-pub struct DiffHunkBounds {
-    /// Start line of the hunk (inclusive)
-    pub start_lnum: LinenrT,
-    /// End line of the hunk (inclusive)
-    pub end_lnum: LinenrT,
-    /// Whether a hunk was found
-    pub found: c_int,
-}
-
-impl DiffHunkBounds {
-    /// Create an empty (not found) result.
-    #[must_use]
-    pub const fn not_found() -> Self {
-        Self {
-            start_lnum: 0,
-            end_lnum: 0,
-            found: 0,
-        }
-    }
-}
+// DiffHunkBounds is now defined in navigate.rs and re-exported at the top
 
 /// Get the start and end lines of the hunk at a given position.
 ///
@@ -1039,12 +958,7 @@ pub unsafe extern "C" fn rs_diff_cmp(s1: *const c_char, s2: *const c_char) -> c_
 /// * `dp` - The current diff block to update
 /// * `idx_orig` - The source buffer index
 /// * `idx_new` - The destination buffer index
-fn diff_copy_entry_impl(
-    dprev: DiffBlockHandle,
-    dp: DiffBlockHandle,
-    idx_orig: c_int,
-    idx_new: c_int,
-) {
+fn diff_copy_entry_impl(dprev: DiffBlockPtr, dp: DiffBlockPtr, idx_orig: c_int, idx_new: c_int) {
     if dp.is_null() {
         return;
     }
@@ -1070,13 +984,13 @@ fn diff_copy_entry_impl(
 ///
 /// # Safety
 ///
-/// - `dprev` must be a valid diff block handle or null.
-/// - `dp` must be a valid diff block handle or null.
+/// - `dprev` must be a valid diff block pointer or null.
+/// - `dp` must be a valid diff block pointer or null.
 /// - `idx_orig` and `idx_new` must be valid buffer indices (0 to DB_COUNT-1).
 #[no_mangle]
 pub extern "C" fn rs_diff_copy_entry(
-    dprev: DiffBlockHandle,
-    dp: DiffBlockHandle,
+    dprev: DiffBlockPtr,
+    dp: DiffBlockPtr,
     idx_orig: c_int,
     idx_new: c_int,
 ) {
