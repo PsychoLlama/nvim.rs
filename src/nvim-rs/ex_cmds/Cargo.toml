@@ -1,0 +1,11 @@
+[package]
+name = "nvim-ex-cmds"
+version = "0.1.0"
+edition = "2021"
+description = "Ex command implementations for Neovim"
+
+[dependencies]
+bitflags = "2"
+
+[lib]
+crate-type = ["rlib"]

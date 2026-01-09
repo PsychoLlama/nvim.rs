@@ -80,6 +80,7 @@ rust-test:
       -p nvim-encoding \
       -p nvim-eval \
       -p nvim-event \
+      -p nvim-ex-cmds \
       -p nvim-ex-docmd \
       -p nvim-ex-eval \
       -p nvim-fileio \
