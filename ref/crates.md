@@ -22,6 +22,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | context        | Context stack management                |
 | cursor         | Cursor positioning and validation       |
 | cursor_shape   | Cursor mode and shape                   |
+| debugger       | Debugger infrastructure (DAP, breakpoints, stepping, state) |
 | decoration     | Virtual text and decorations            |
 | dict           | VimL dictionary operations and iteration |
 | diff           | Diff mode and output parsing            |

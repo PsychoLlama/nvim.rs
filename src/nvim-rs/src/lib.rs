@@ -32,6 +32,7 @@ pub use nvim_compositor::*;
 pub use nvim_context::*;
 pub use nvim_cursor::*;
 pub use nvim_cursor_shape::*;
+pub use nvim_debugger::*;
 pub use nvim_decoration::*;
 pub use nvim_dict::*;
 pub use nvim_diff::*;
