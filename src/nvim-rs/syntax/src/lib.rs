@@ -22,6 +22,7 @@ pub mod api;
 pub mod cache;
 pub mod cluster;
 pub mod containment;
+pub mod group;
 pub mod highlight;
 pub mod keyword;
 pub mod match_engine;
@@ -4375,6 +4376,70 @@ pub unsafe extern "C" fn rs_synstate_next_list_eq(a: SynStateHandle, b: SynState
     } else {
         0
     }
+}
+
+// =============================================================================
+// Phase 32.2: Group management exports
+// =============================================================================
+
+/// Get the syntax group ID from a pattern.
+///
+/// # Safety
+/// The caller must ensure the pattern handle is valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synpat_syn_id(pat: SynPatHandle) -> i16 {
+    group::synpat_syn_id(pat)
+}
+
+/// Get the match group ID from a pattern.
+///
+/// # Safety
+/// The caller must ensure the pattern handle is valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synpat_match_id(pat: SynPatHandle) -> i16 {
+    group::synpat_match_id(pat)
+}
+
+/// Get the topgrp setting for a synblock.
+///
+/// # Safety
+/// The caller must ensure the synblock handle is valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_topgrp(block: SynBlockHandle) -> c_int {
+    group::synblock_topgrp(block)
+}
+
+/// Get the current highlight group ID.
+///
+/// # Safety
+/// Must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_group_current_id() -> c_int {
+    group::current_id()
+}
+
+/// Get the current transparent group ID.
+///
+/// # Safety
+/// Must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_group_current_trans_id() -> c_int {
+    group::current_trans_id()
+}
+
+/// Get the syntax ID at a position in the buffer.
+///
+/// # Safety
+/// The window handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_syntax_id(
+    wp: WinHandle,
+    lnum: c_int,
+    col: c_int,
+    trans: c_int,
+    keep_state: c_int,
+) -> c_int {
+    group::get_syntax_id(wp, lnum, col, trans != 0, keep_state != 0)
 }
 
 #[cfg(test)]
