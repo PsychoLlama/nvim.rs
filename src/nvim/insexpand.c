@@ -6485,6 +6485,12 @@ int nvim_get_compl_autocomplete(void)
   return compl_autocomplete ? 1 : 0;
 }
 
+/// Get compl_restarting flag (accessor for Rust).
+int nvim_get_compl_restarting(void)
+{
+  return compl_restarting ? 1 : 0;
+}
+
 /// Get compl_from_nonkeyword flag (accessor for Rust).
 int nvim_get_compl_from_nonkeyword(void)
 {

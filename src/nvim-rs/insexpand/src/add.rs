@@ -73,10 +73,7 @@ unsafe fn is_first_match(m: ComplMatch) -> bool {
 /// # Safety
 /// Requires valid completion list state.
 #[no_mangle]
-pub unsafe extern "C" fn rs_ins_compl_match_exists(
-    str_ptr: *const u8,
-    str_len: c_int,
-) -> c_int {
+pub unsafe extern "C" fn rs_ins_compl_match_exists(str_ptr: *const u8, str_len: c_int) -> c_int {
     let first = nvim_compl_get_first_match();
     if first.is_null() || str_ptr.is_null() {
         return 0;
