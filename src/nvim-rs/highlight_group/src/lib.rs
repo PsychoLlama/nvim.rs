@@ -14,6 +14,7 @@
 #![allow(clippy::missing_safety_doc)]
 
 pub mod color;
+pub mod command;
 pub mod normal;
 pub mod parse;
 pub mod registry;
