@@ -7,10 +7,13 @@
 //! - File encoding flags and conversion helpers
 //! - File format detection and conversion
 //! - Read/write flag management
+//! - Encoding detection and conversion
 
 #![allow(unsafe_code)]
 
 use std::ffi::{c_char, c_int, CStr};
+
+pub mod encoding;
 
 // =============================================================================
 // Opaque Handles
