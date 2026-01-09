@@ -395,3 +395,46 @@ ptrdiff_t file_skip(FileDescriptor *const fp, const size_t size)
   fp->bytes_read += size - skip_remaining;
   return (ptrdiff_t)(size - skip_remaining);
 }
+
+// =============================================================================
+// Wrapper functions for Rust FFI (nvim_file_* prefix)
+// =============================================================================
+
+/// Skip bytes in file (wrapper for Rust FFI)
+ptrdiff_t nvim_file_skip(FileDescriptor *fp, size_t offset)
+{
+  return file_skip(fp, offset);
+}
+
+/// Check if at end of file (wrapper for Rust FFI)
+int nvim_file_eof(FileDescriptor *fp)
+{
+  return fp->eof ? 1 : 0;
+}
+
+/// Close file (wrapper for Rust FFI)
+int nvim_file_close(FileDescriptor *fp, int do_fsync)
+{
+  return file_close(fp, do_fsync != 0);
+}
+
+/// Read from file (wrapper for Rust FFI)
+ptrdiff_t nvim_file_read(FileDescriptor *fp, char *buf, size_t size)
+{
+  return file_read(fp, buf, size);
+}
+
+/// Get available space for writing (wrapper for Rust FFI)
+size_t nvim_file_space(FileDescriptor *fp)
+{
+  if (fp == NULL) {
+    return 0;
+  }
+  return (size_t)(fp->buffer + ARENA_BLOCK_SIZE - fp->write_pos);
+}
+
+/// Flush file (wrapper for Rust FFI)
+int nvim_file_flush(FileDescriptor *fp)
+{
+  return file_flush(fp);
+}

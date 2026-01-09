@@ -6430,6 +6430,18 @@ int get_sidescrolloff_value(win_T *wp)
   return rs_get_sidescrolloff_value(wp);
 }
 
+/// Wrapper for get_scrolloff_value (Rust FFI)
+int nvim_get_scrolloff_value(win_T *wp)
+{
+  return get_scrolloff_value(wp);
+}
+
+/// Wrapper for get_sidescrolloff_value (Rust FFI)
+int nvim_get_sidescrolloff_value(win_T *wp)
+{
+  return get_sidescrolloff_value(wp);
+}
+
 Dict get_vimoption(String name, int opt_flags, buf_T *buf, win_T *win, Arena *arena, Error *err)
 {
   OptIndex opt_idx = find_option_len(name.data, name.size);

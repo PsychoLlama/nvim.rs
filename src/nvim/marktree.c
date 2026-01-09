@@ -3314,3 +3314,25 @@ void nvim_marktree_check(MarkTree *b)
 {
   marktree_check(b);
 }
+
+// ============================================================================
+// MTKey Accessor Functions (for Rust sign crate)
+// ============================================================================
+
+/// Get row from MTKey
+int32_t nvim_mtkey_get_row(MTKey key)
+{
+  return key.pos.row;
+}
+
+/// Get namespace from MTKey
+uint32_t nvim_mtkey_get_ns(MTKey key)
+{
+  return key.ns;
+}
+
+/// Get ID from MTKey
+uint32_t nvim_mtkey_get_id(MTKey key)
+{
+  return key.id;
+}

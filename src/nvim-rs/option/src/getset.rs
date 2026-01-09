@@ -19,7 +19,7 @@ use crate::{OptFlags, SetOp, SetPrefix};
 extern "C" {
     fn xmalloc(size: usize) -> *mut c_char;
     fn xfree(ptr: *mut c_char);
-    fn ascii_iswhite(c: c_int) -> c_int;
+    fn rs_ascii_iswhite(c: c_int) -> c_int;
     fn utfc_ptr2len(p: *const c_char) -> c_int;
     fn vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
 }
@@ -156,7 +156,7 @@ pub unsafe extern "C" fn rs_stropt_copy_value(
     let mut a = arg;
 
     // Copy the string, skip over escaped chars
-    while *a != 0 && ascii_iswhite(c_int::from(*a)) == 0 {
+    while *a != 0 && rs_ascii_iswhite(c_int::from(*a)) == 0 {
         if *a as u8 == b'\\' && *a.add(1) != 0 {
             // Skip backslash (remove escape)
             a = a.add(1);

@@ -68,6 +68,7 @@ pub use nvim_memutil::*;
 pub use nvim_menu::*;
 pub use nvim_message::*;
 pub use nvim_mouse::*;
+pub use nvim_move::*;
 pub use nvim_msgpack::*;
 pub use nvim_normal::*;
 pub use nvim_ops::*;

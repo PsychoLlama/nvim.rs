@@ -677,6 +677,17 @@ int vim_vsnprintf(char *str, size_t str_m, const char *fmt, va_list ap)
   return vim_vsnprintf_typval(str, str_m, fmt, ap, NULL);
 }
 
+/// Wrapper for vim_snprintf callable from Rust.
+/// This is a simple wrapper that forwards to vim_snprintf.
+int rs_vim_snprintf(char *str, size_t str_m, const char *fmt, ...)
+{
+  va_list ap;
+  va_start(ap, fmt);
+  const int str_l = vim_vsnprintf(str, str_m, fmt, ap);
+  va_end(ap);
+  return str_l;
+}
+
 enum {
   TYPE_UNKNOWN = -1,
   TYPE_INT,

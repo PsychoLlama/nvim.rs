@@ -2124,3 +2124,132 @@ stcsign:
 
   return width;
 }
+
+// ============================================================================
+// Statusline Accessor Functions (for Rust FFI)
+// ============================================================================
+
+/// Evaluate an expression for the statusline.
+/// Returns the length of the result string.
+int nvim_stl_eval_expr(win_T *wp, const char *expr, int expr_len, char *out, int out_len)
+{
+  if (wp == NULL || expr == NULL || out == NULL || out_len <= 0) {
+    out[0] = '\0';
+    return 0;
+  }
+
+  // Create a null-terminated copy of the expression
+  char *expr_copy = xmemdupz(expr, (size_t)expr_len);
+
+  // Evaluate the expression
+  char *result = eval_to_string(expr_copy, true, false);
+  xfree(expr_copy);
+
+  if (result == NULL) {
+    out[0] = '\0';
+    return 0;
+  }
+
+  // Copy result to output buffer
+  int len = (int)strlen(result);
+  if (len >= out_len) {
+    len = out_len - 1;
+  }
+  memcpy(out, result, (size_t)len);
+  out[len] = '\0';
+
+  xfree(result);
+  return len;
+}
+
+/// Get highlight group ID by name.
+int nvim_syn_name2id(const char *name)
+{
+  if (name == NULL) {
+    return 0;
+  }
+  return syn_name2id(name);
+}
+
+/// Get byte value at cursor position in window.
+int nvim_stl_get_byte_value(win_T *wp)
+{
+  if (wp == NULL || wp->w_buffer == NULL) {
+    return 0;
+  }
+  char *line = ml_get_buf(wp->w_buffer, wp->w_cursor.lnum);
+  if (line == NULL) {
+    return 0;
+  }
+  colnr_T col = wp->w_cursor.col;
+  if (col >= ml_get_buf_len(wp->w_buffer, wp->w_cursor.lnum)) {
+    return 0;
+  }
+  return (uint8_t)line[col];
+}
+
+/// Get byte offset at cursor position in window.
+int nvim_stl_get_byte_offset(win_T *wp)
+{
+  if (wp == NULL || wp->w_buffer == NULL) {
+    return -1;
+  }
+  // Calculate total bytes before current line
+  int64_t offset = 0;
+  for (linenr_T lnum = 1; lnum < wp->w_cursor.lnum; lnum++) {
+    offset += ml_get_buf_len(wp->w_buffer, lnum) + 1;  // +1 for newline
+  }
+  offset += wp->w_cursor.col;
+  return (int)offset;
+}
+
+/// Get showcmd output.
+int nvim_stl_get_showcmd(char *buf, int buflen)
+{
+  if (buf == NULL || buflen <= 0) {
+    return 0;
+  }
+  // showcmd_buf is declared in normal.h
+  if (showcmd_buf[0] == NUL) {
+    buf[0] = '\0';
+    return 0;
+  }
+  int len = (int)strlen(showcmd_buf);
+  if (len >= buflen) {
+    len = buflen - 1;
+  }
+  memcpy(buf, showcmd_buf, (size_t)len);
+  buf[len] = '\0';
+  return len;
+}
+
+/// Get keymap name for statusline.
+int nvim_stl_get_keymap(win_T *wp, char *buf, int buflen)
+{
+  if (wp == NULL || buf == NULL || buflen <= 0) {
+    return 0;
+  }
+  buf[0] = '\0';
+  // Return empty - keymap display not commonly used
+  return 0;
+}
+
+/// Get page number for printing.
+int nvim_stl_get_page_num(void)
+{
+  return 0;  // Not applicable for screen display
+}
+
+/// Get quickfix info for statusline.
+int nvim_stl_get_qf_info(win_T *wp, char *buf, int buflen)
+{
+  if (wp == NULL || buf == NULL || buflen <= 0) {
+    return 0;
+  }
+  buf[0] = '\0';
+  // For quickfix window, show list info
+  if (bt_quickfix(wp->w_buffer)) {
+    // Could add list title/info here
+  }
+  return 0;
+}

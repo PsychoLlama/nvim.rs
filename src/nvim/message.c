@@ -279,7 +279,6 @@ int nvim_msgchunk_get_hl_id(msgchunk_T *chunk) { return chunk->sb_hl_id; }
 const char *nvim_msgchunk_get_text(msgchunk_T *chunk) { return chunk->sb_text; }
 
 // Additional C accessors for message system (used by Rust)
-int nvim_get_rows(void) { return Rows; }
 int nvim_ui_has_messages(void) { return ui_has(kUIMessages) ? 1 : 0; }
 
 // C accessors for message formatting (used by Rust)
@@ -287,7 +286,6 @@ int nvim_get_msg_col(void) { return msg_col; }
 void nvim_set_msg_col(int col) { msg_col = col; }
 int nvim_get_msg_row(void) { return msg_row; }
 void nvim_set_msg_row(int row) { msg_row = row; }
-int nvim_get_columns(void) { return Columns; }
 int nvim_get_sc_col(void) { return sc_col; }
 int nvim_get_msg_scroll(void) { return msg_scroll ? 1 : 0; }
 int nvim_get_need_wait_return(void) { return need_wait_return ? 1 : 0; }
@@ -295,6 +293,32 @@ void nvim_set_need_wait_return(int val) { need_wait_return = (val != 0); }
 int nvim_shortmess(int flag) { return shortmess(flag) ? 1 : 0; }
 // nvim_get_exmode_active is defined in grid.c
 int nvim_vim_strsize(const char *s) { return vim_strsize(s); }
+
+/// Calculate the byte length of string that fits in given cell width.
+/// Returns the number of bytes that would fit in `width` cells.
+int nvim_mb_trunc_len(const char *s, int width)
+{
+  if (s == NULL || width <= 0) {
+    return 0;
+  }
+
+  int len = 0;
+  int cells = 0;
+  const char *p = s;
+
+  while (*p != NUL && cells < width) {
+    int char_cells = ptr2cells(p);
+    if (cells + char_cells > width) {
+      break;
+    }
+    cells += char_cells;
+    int char_len = utfc_ptr2len(p);
+    len += char_len;
+    p += char_len;
+  }
+
+  return len;
+}
 
 // C accessors for message output state (used by Rust)
 int nvim_get_msg_didany(void) { return msg_didany ? 1 : 0; }

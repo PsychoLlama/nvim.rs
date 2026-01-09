@@ -789,6 +789,12 @@ int utf_char2len(const int c)
   return rs_utf_char2len(c);
 }
 
+/// Alias for utf_char2len (legacy name, used by Rust FFI)
+int mb_char2len(const int c)
+{
+  return utf_char2len(c);
+}
+
 /// Convert Unicode character to UTF-8 string
 ///
 /// @param c         character to convert to UTF-8 string in \p buf

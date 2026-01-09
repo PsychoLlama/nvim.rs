@@ -28,22 +28,14 @@ pub mod usercomplete;
 pub mod viewstate;
 pub mod wildmenu;
 
-use std::ffi::c_char;
 use std::os::raw::c_int;
-use std::os::raw::c_uint;
-
-// Flag value from option_vars.generated.h
-const K_OPT_WOP_FLAG_FUZZY: c_uint = 0x01;
 
 extern "C" {
     fn nvim_get_ccline_overstrike() -> c_int;
     fn nvim_get_ccline_cmdpos() -> c_int;
     fn nvim_get_ccline_cmdlen() -> c_int;
-    fn nvim_get_wop_flags() -> c_uint;
     fn nvim_get_cmdwin_type() -> c_int;
     fn nvim_get_cmdline_type() -> c_int;
-    fn nvim_get_compl_match_array_not_null() -> c_int;
-    fn rs_pum_visible() -> c_int;
     fn nvim_get_cmdpreview_ns() -> c_int;
     fn nvim_get_ccline_cmdfirstc() -> c_int;
 }
@@ -70,28 +62,6 @@ pub unsafe extern "C" fn rs_cmdline_at_end() -> c_int {
     c_int::from(nvim_get_ccline_cmdpos() >= nvim_get_ccline_cmdlen())
 }
 
-/// Check if fuzzy completion is enabled and the search string is non-empty.
-///
-/// Returns true if the 'wildoptions' contains "fuzzy" and the string is
-/// not empty.
-///
-/// # Safety
-///
-/// `fuzzystr` must be a valid NUL-terminated C string.
-/// Calls external C function to access the wop_flags global.
-#[no_mangle]
-pub unsafe extern "C" fn rs_cmdline_fuzzy_complete(fuzzystr: *const c_char) -> c_int {
-    if fuzzystr.is_null() {
-        return 0;
-    }
-
-    let flags = nvim_get_wop_flags();
-    let has_fuzzy_flag = (flags & K_OPT_WOP_FLAG_FUZZY) != 0;
-    let is_non_empty = *fuzzystr != 0;
-
-    c_int::from(has_fuzzy_flag && is_non_empty)
-}
-
 /// NUL character constant
 const NUL: c_int = 0;
 
@@ -108,17 +78,6 @@ pub unsafe extern "C" fn rs_is_in_cmdwin() -> c_int {
     let cmdline_type = nvim_get_cmdline_type();
 
     c_int::from(cmdwin_type != 0 && cmdline_type == NUL)
-}
-
-/// Check if the cmdline completion popup menu is being displayed.
-///
-/// Returns true if `pum_visible()` and `compl_match_array != NULL`.
-///
-/// # Safety
-/// Calls external C functions to access global state.
-#[no_mangle]
-pub unsafe extern "C" fn rs_cmdline_pum_active() -> c_int {
-    c_int::from(rs_pum_visible() != 0 && nvim_get_compl_match_array_not_null() != 0)
 }
 
 /// Get the command preview namespace.
@@ -146,6 +105,10 @@ pub unsafe extern "C" fn rs_get_cmdline_firstc() -> c_int {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::raw::c_uint;
+
+    // Flag value from option_vars.generated.h
+    const K_OPT_WOP_FLAG_FUZZY: c_uint = 0x01;
 
     #[test]
     fn test_wildoption_flag() {

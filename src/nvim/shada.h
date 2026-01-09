@@ -1,6 +1,10 @@
 #pragma once
 
 #include "nvim/api/private/defs.h"  // IWYU pragma: keep
+#include "nvim/msgpack_rpc/packer_defs.h"  // IWYU pragma: keep
+
+// Forward declaration for opaque pointer usage in Rust FFI
+typedef struct ShadaEntry ShadaEntry;
 
 /// Flags for shada_read_file and children
 typedef enum {

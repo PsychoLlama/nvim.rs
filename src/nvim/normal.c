@@ -1178,12 +1178,6 @@ int nvim_inc_cursor(void)
   return inc_cursor();
 }
 
-/// Wrapper for mb_adjust_cursor.
-void nvim_mb_adjust_cursor(void)
-{
-  mb_adjust_cursor();
-}
-
 /// Check if 'cpo' contains CPO_CHANGEW.
 bool nvim_cpo_has_changew(void)
 {

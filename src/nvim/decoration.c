@@ -1795,3 +1795,27 @@ void nvim_buf_signcols_count_range(buf_T *buf, int row1, int row2, int add, int 
 {
   buf_signcols_count_range(buf, row1, row2, add, (TriState)clear);
 }
+
+/// Get sign name from DecorSignHighlight (for Rust sign crate).
+char *nvim_decor_sh_get_sign_name(DecorSignHighlight *sh)
+{
+  return sh ? sh->sign_name : NULL;
+}
+
+/// Get highlight ID from DecorSignHighlight (for Rust sign crate).
+int nvim_decor_sh_get_hl_id(DecorSignHighlight *sh)
+{
+  return sh ? sh->hl_id : 0;
+}
+
+/// Get priority from DecorSignHighlight (for Rust sign crate).
+int nvim_decor_sh_get_priority(DecorSignHighlight *sh)
+{
+  return sh ? sh->priority : 0;
+}
+
+/// Get sign_add_id from DecorSignHighlight (for Rust sign crate).
+int nvim_decor_sh_get_sign_add_id(DecorSignHighlight *sh)
+{
+  return sh ? sh->sign_add_id : 0;
+}

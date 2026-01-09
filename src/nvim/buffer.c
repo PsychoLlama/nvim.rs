@@ -202,6 +202,18 @@ buf_T *nvim_bufref_get_buf(bufref_T *bufref)
   return bufref->br_buf;
 }
 
+/// Get the total sign HL metadata count for a buffer.
+uint32_t nvim_buf_meta_total_sign_hl(buf_T *buf)
+{
+  return buf ? buf_meta_total(buf, kMTMetaSignHL) : 0;
+}
+
+/// Get the total sign text metadata count for a buffer.
+uint32_t nvim_buf_meta_total_sign_text(buf_T *buf)
+{
+  return buf ? buf_meta_total(buf, kMTMetaSignText) : 0;
+}
+
 /// Get the br_fnum field from a bufref (accessor for Rust).
 int nvim_bufref_get_fnum(bufref_T *bufref)
 {
@@ -4415,12 +4427,6 @@ bcount_t nvim_buf_get_deleted_bytes2(buf_T *buf)
 void nvim_buf_set_deleted_bytes2(buf_T *buf, bcount_t val)
 {
   buf->deleted_bytes2 = val;
-}
-
-/// Get the b_ml.ml_line_count field from a buffer.
-linenr_T nvim_buf_get_ml_line_count(buf_T *buf)
-{
-  return buf->b_ml.ml_line_count;
 }
 
 /// Get the b_prev_line_count field from a buffer (for extmark adjust).

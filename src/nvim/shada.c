@@ -231,7 +231,7 @@ enum SRNIFlags {
 // it. This name is not actually used anywhere outside of the documentation.
 
 /// Structure defining a single ShaDa file entry
-typedef struct {
+typedef struct ShadaEntry {
   ShadaEntryType type;
   // If the entry was read from file, string data will be allocated and needs to be freed.
   // Entries can also be constructed from nvim internal data structures (like registers)
@@ -3748,3 +3748,149 @@ void check_marks_read(void)
   // the ' parameter after opening a buffer.
   curbuf->b_marks_read = true;
 }
+
+// =============================================================================
+// Accessor functions for Rust shada crate (ShadaPackerBuffer == PackerBuffer)
+// =============================================================================
+
+/// Get the current write pointer from a packer buffer
+uint8_t *nvim_shada_packer_get_ptr(PackerBuffer *packer)
+{
+  return (uint8_t *)(packer ? packer->ptr : NULL);
+}
+
+/// Set the current write pointer in a packer buffer
+void nvim_shada_packer_set_ptr(PackerBuffer *packer, uint8_t *ptr)
+{
+  if (packer) {
+    packer->ptr = (char *)ptr;
+  }
+}
+
+/// Get the end pointer from a packer buffer
+uint8_t *nvim_shada_packer_get_endptr(PackerBuffer *packer)
+{
+  return (uint8_t *)(packer ? packer->endptr : NULL);
+}
+
+/// Flush the packer buffer
+void nvim_shada_packer_flush(PackerBuffer *packer)
+{
+  if (packer && packer->packer_flush) {
+    packer->packer_flush(packer);
+  }
+}
+
+/// Read a string from shada data
+void nvim_shada_read_string(String string, int flags)
+{
+  shada_read_string(string, flags);
+}
+
+// Wrapper functions for existing shada functions (nvim_ prefix for Rust FFI)
+int nvim_get_shada_parameter(int type) { return get_shada_parameter(type); }
+char *nvim_find_shada_parameter(int type) { return find_shada_parameter(type); }
+
+// Map operations for Rust hmll implementation
+void *nvim_hmll_map_init(void)
+{
+  PMap(cstr_t) *map = xcalloc(1, sizeof(PMap(cstr_t)));
+  *map = (PMap(cstr_t)) MAP_INIT;
+  return map;
+}
+
+void nvim_hmll_map_destroy(void *map)
+{
+  if (map) {
+    map_destroy(cstr_t, (PMap(cstr_t) *)map);
+    xfree(map);
+  }
+}
+
+void *nvim_hmll_map_get(void *map, const char *key)
+{
+  if (!map || !key) {
+    return NULL;
+  }
+  return pmap_get(cstr_t)((PMap(cstr_t) *)map, key);
+}
+
+void nvim_hmll_map_put(void *map, const char *key, void *entry)
+{
+  if (!map || !key) {
+    return;
+  }
+  bool new_item = false;
+  ptr_t *val = pmap_put_ref(cstr_t)((PMap(cstr_t) *)map, key, NULL, &new_item);
+  if (val) {
+    *val = entry;
+  }
+}
+
+void nvim_hmll_map_del(void *map, const char *key)
+{
+  if (!map || !key) {
+    return;
+  }
+  pmap_del(cstr_t)((PMap(cstr_t) *)map, key, NULL);
+}
+
+// Wrapper for shada_free_shada_entry
+void nvim_shada_free_shada_entry(ShadaEntry *entry)
+{
+  shada_free_shada_entry(entry);
+}
+
+// Wrapper for shada_hist_iter
+const void *nvim_shada_hist_iter(const void *iter, uint8_t history_type,
+                                  int reading, ShadaEntry *out_entry)
+{
+  return shada_hist_iter(iter, history_type, reading != 0, out_entry);
+}
+
+// Wrapper for shada_get_default_file
+const char *nvim_shada_get_default_file(void)
+{
+  return shada_get_default_file();
+}
+
+// Option value accessors for shada
+int64_t nvim_get_p_hi(void) { return p_hi; }
+const char *nvim_get_p_shadafile(void) { return p_shadafile; }
+
+// Utility wrappers
+size_t nvim_expand_env(const char *src, char *dst, size_t dstlen)
+{
+  if (!src || !dst || dstlen == 0) {
+    return 0;
+  }
+  expand_env((char *)src, dst, (int)dstlen);
+  return strlen(dst);
+}
+
+char *nvim_xmemdupz(const char *s, size_t len)
+{
+  return xmemdupz(s, len);
+}
+
+bool nvim_strequal(const char *s1, const char *s2)
+{
+  if (s1 == s2) {
+    return true;
+  }
+  if (!s1 || !s2) {
+    return false;
+  }
+  return strcmp(s1, s2) == 0;
+}
+
+// Shada encode wrappers (forward declarations)
+extern String shada_encode_regs(void);
+extern String shada_encode_jumps(void);
+extern String shada_encode_buflist(void);
+extern String shada_encode_gvars(void);
+
+String nvim_shada_encode_regs(void) { return shada_encode_regs(); }
+String nvim_shada_encode_jumps(void) { return shada_encode_jumps(); }
+String nvim_shada_encode_buflist(void) { return shada_encode_buflist(); }
+String nvim_shada_encode_gvars(void) { return shada_encode_gvars(); }

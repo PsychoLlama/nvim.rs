@@ -1358,3 +1358,4 @@ Dict(ns_opts) nvim__ns_get(Integer ns_id, Arena *arena, Error *err)
 
   return opts;
 }
+

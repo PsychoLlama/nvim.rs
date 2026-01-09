@@ -604,7 +604,7 @@ pub unsafe fn expand_set_selected(xp: ExpandHandle, selected: c_int) {
 ///
 /// `xp` must be a valid pointer to an `expand_T` structure.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rs_cmdline_fuzzy_completion_supported(xp: *const ()) -> c_int {
+pub unsafe extern "C" fn rs_expand_fuzzy_supported(xp: *const ()) -> c_int {
     if xp.is_null() {
         return 0;
     }

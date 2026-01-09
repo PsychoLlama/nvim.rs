@@ -35,6 +35,7 @@
 #include "nvim/decoration_defs.h"
 #include "nvim/extmark.h"
 #include "nvim/extmark_defs.h"
+#include "nvim/api/extmark.h"
 #include "nvim/globals.h"
 #include "nvim/map_defs.h"
 #include "nvim/marktree.h"
@@ -762,4 +763,31 @@ ExtmarkUndoObject *nvim_extmark_undo_vec_last(extmark_undo_vec_t *uvp)
     return NULL;
   }
   return &kv_last(*uvp);
+}
+
+/// Delete extmark by ID (wrapper for Rust FFI)
+bool nvim_extmark_del_id(buf_T *buf, uint32_t ns_id, uint32_t id)
+{
+  return extmark_del_id(buf, ns_id, id);
+}
+
+// ============================================================================
+// Namespace Accessor Functions (for Rust FFI)
+// ============================================================================
+
+/// Get the name of a namespace by its ID (wrapper for Rust FFI)
+const char *nvim_describe_ns(int ns_id, const char *unknown)
+{
+  return describe_ns((NS)ns_id, unknown);
+}
+
+/// Look up a namespace ID by name (wrapper for Rust FFI)
+int nvim_namespace_lookup(const char *name)
+{
+  if (name == NULL || *name == '\0') {
+    return -1;
+  }
+  String key = { .data = (char *)name, .size = strlen(name) };
+  handle_T id = map_get(String, int)(&namespace_ids, key);
+  return id > 0 ? (int)id : -1;
 }

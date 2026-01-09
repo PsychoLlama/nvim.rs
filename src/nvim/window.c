@@ -767,12 +767,6 @@ int nvim_get_real_state(void)
   return get_real_state();
 }
 
-/// Get the global cmdline_row value.
-int nvim_get_cmdline_row(void)
-{
-  return cmdline_row;
-}
-
 /// Get the 'pumheight' option value.
 int64_t nvim_get_p_ph(void)
 {
@@ -8348,4 +8342,38 @@ void win_ui_flush(bool validate)
 win_T *lastwin_nofloating(void)
 {
   return rs_lastwin_nofloating();
+}
+
+// ============================================================================
+// Window Accessor Functions (for Rust FFI)
+// ============================================================================
+
+/// Get the number of empty rows at the bottom of a window
+int nvim_win_get_empty_rows(win_T *wp)
+{
+  return wp ? wp->w_empty_rows : 0;
+}
+
+/// Set the leftcol value for a window
+void nvim_win_set_leftcol(win_T *wp, int val)
+{
+  if (wp) {
+    wp->w_leftcol = (colnr_T)val;
+  }
+}
+
+/// Set the botline value for a window
+void nvim_win_set_botline(win_T *wp, int val)
+{
+  if (wp) {
+    wp->w_botline = (linenr_T)val;
+  }
+}
+
+/// Set the number of empty rows at the bottom of a window
+void nvim_win_set_empty_rows(win_T *wp, int val)
+{
+  if (wp) {
+    wp->w_empty_rows = val;
+  }
 }

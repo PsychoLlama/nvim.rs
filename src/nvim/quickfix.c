@@ -447,6 +447,12 @@ int nvim_qf_get_qi_type(const void *qi_void)
   return qi->qfl_type;
 }
 
+/// Alias for nvim_qf_get_qi_type (Rust FFI expects this name)
+int nvim_qi_get_qfl_type(const void *qi_void)
+{
+  return nvim_qf_get_qi_type(qi_void);
+}
+
 /// Get last entry pointer from qf_list_T for Rust
 void *nvim_qf_get_last(const void *qfl_void)
 {

@@ -6569,3 +6569,36 @@ void nvim_syn_set_expand_what(int what)
 {
   expand_what = what;
 }
+
+// ============================================================================
+// Cluster ID accessors (for Rust FFI)
+// ============================================================================
+
+/// Get cluster ID from synblock at index
+/// Returns the cluster ID (SYNID_CLUSTER + idx) or 0 if invalid
+int nvim_synblock_get_cluster_id(synblock_T *block, int idx)
+{
+  if (block == NULL || idx < 0 || idx >= block->b_syn_clusters.ga_len) {
+    return 0;
+  }
+  return SYNID_CLUSTER + idx;
+}
+
+/// Get cluster ID from a cluster pointer
+/// This computes the ID by finding the offset in the current synblock's clusters
+int nvim_syncluster_get_id(syn_cluster_T *cluster)
+{
+  if (cluster == NULL || curwin == NULL || curwin->w_s == NULL) {
+    return 0;
+  }
+  synblock_T *block = curwin->w_s;
+  syn_cluster_T *clusters = (syn_cluster_T *)block->b_syn_clusters.ga_data;
+  if (clusters == NULL) {
+    return 0;
+  }
+  int idx = (int)(cluster - clusters);
+  if (idx < 0 || idx >= block->b_syn_clusters.ga_len) {
+    return 0;
+  }
+  return SYNID_CLUSTER + idx;
+}

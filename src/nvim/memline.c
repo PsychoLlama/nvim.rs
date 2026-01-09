@@ -1973,6 +1973,27 @@ void nvim_pos_set_lnum(pos_T *pos, linenr_T lnum) { pos->lnum = lnum; }
 void nvim_pos_set_col(pos_T *pos, colnr_T col) { pos->col = col; }
 void nvim_pos_set_coladd(pos_T *pos, colnr_T coladd) { pos->coladd = coladd; }
 
+// Opaque handle accessors for cursor crate (take void* for FFI compatibility)
+linenr_T nvim_buf_get_line_count(void *buf)
+{
+  if (buf == NULL) {
+    return 0;
+  }
+  return ((buf_T *)buf)->b_ml.ml_line_count;
+}
+
+colnr_T nvim_buf_get_line_len(void *buf, linenr_T lnum)
+{
+  if (buf == NULL) {
+    return 0;
+  }
+  buf_T *b = (buf_T *)buf;
+  if (lnum < 1 || lnum > b->b_ml.ml_line_count) {
+    return 0;
+  }
+  return ml_get_buf_len(b, lnum);
+}
+
 // Block 0 validation wrappers for Rust (static functions need wrappers)
 int ml_check_b0_id_c(ZeroBlock *b0p) { return ml_check_b0_id(b0p) ? 0 : 1; }
 int ml_check_b0_strings_c(ZeroBlock *b0p) { return ml_check_b0_strings(b0p) ? 0 : 1; }
@@ -2865,7 +2886,7 @@ size_t ml_flush_deleted_bytes(buf_T *buf, size_t *codepoints, size_t *codeunits)
 }
 
 /// flush ml_line if necessary
-static void ml_flush_line(buf_T *buf, bool noalloc)
+void ml_flush_line(buf_T *buf, bool noalloc)
 {
   static bool entered = false;
 
