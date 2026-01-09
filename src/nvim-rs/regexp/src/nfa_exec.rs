@@ -426,8 +426,184 @@ pub unsafe fn state_in_list(
 }
 
 // =============================================================================
+// NFA Match Engine
+// =============================================================================
+
+/// Result of a single NFA step.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(i32)]
+pub enum NfaStepResult {
+    /// Continue matching
+    Continue = 0,
+    /// Match found
+    Match = 1,
+    /// No match possible
+    NoMatch = 2,
+    /// Error occurred
+    Error = -1,
+}
+
+/// Process a single character in the NFA matcher.
+///
+/// This is the core of Thompson's algorithm: for each state in the current
+/// list, if it can match the current character, add the successor to the
+/// next list.
+///
+/// # Safety
+/// All pointers must be valid.
+pub unsafe fn nfa_step(
+    current: *mut NfaList,
+    next: *mut NfaList,
+    c: c_int,
+    _subs: *mut RegSubs,
+) -> NfaStepResult {
+    if current.is_null() || next.is_null() {
+        return NfaStepResult::Error;
+    }
+
+    // Clear the next list
+    (*next).n = 0;
+    (*next).has_pim = 0;
+
+    // Process all states in current list
+    for i in 0..(*current).n {
+        let thread = (*current).t.add(i as usize);
+        let state = (*thread).state;
+
+        if state.is_null() {
+            continue;
+        }
+
+        let state_c = (*state).c;
+
+        // Check for match state
+        if state_c == NFA_MATCH {
+            return NfaStepResult::Match;
+        }
+
+        // Check if state matches current character
+        if nfa_state_matches(state, c) {
+            // Add successor state to next list
+            let out = (*state).out;
+            if !out.is_null() {
+                addstate(next, out, &mut (*thread).subs, &(*thread).pim, 0);
+            }
+        }
+    }
+
+    if (*next).n == 0 {
+        NfaStepResult::NoMatch
+    } else {
+        NfaStepResult::Continue
+    }
+}
+
+/// Check if an NFA state matches a character.
+///
+/// # Safety
+/// State must be valid.
+unsafe fn nfa_state_matches(state: *const NfaState, c: c_int) -> bool {
+    if state.is_null() {
+        return false;
+    }
+
+    let state_c = (*state).c;
+
+    // Direct character match
+    if state_c > 0 && state_c < 256 {
+        return state_c == c || (c >= 0 && (state_c as u8).eq_ignore_ascii_case(&(c as u8)));
+    }
+
+    // Character class match
+    match state_c {
+        crate::nfa_states::NFA_ANY => c != b'\n' as c_int && c != 0,
+        crate::nfa_states::NFA_DIGIT => (c as u8).is_ascii_digit(),
+        crate::nfa_states::NFA_NDIGIT => !(c as u8).is_ascii_digit() && c != b'\n' as c_int,
+        crate::nfa_states::NFA_WORD => (c as u8).is_ascii_alphanumeric() || c == b'_' as c_int,
+        crate::nfa_states::NFA_NWORD => {
+            !((c as u8).is_ascii_alphanumeric() || c == b'_' as c_int) && c != b'\n' as c_int
+        }
+        crate::nfa_states::NFA_WHITE => c == b' ' as c_int || c == b'\t' as c_int,
+        crate::nfa_states::NFA_NWHITE => c != b' ' as c_int && c != b'\t' as c_int,
+        crate::nfa_states::NFA_ALPHA => (c as u8).is_ascii_alphabetic(),
+        crate::nfa_states::NFA_NALPHA => !(c as u8).is_ascii_alphabetic() && c != b'\n' as c_int,
+        crate::nfa_states::NFA_LOWER => (c as u8).is_ascii_lowercase(),
+        crate::nfa_states::NFA_NLOWER => !(c as u8).is_ascii_lowercase() && c != b'\n' as c_int,
+        crate::nfa_states::NFA_UPPER => (c as u8).is_ascii_uppercase(),
+        crate::nfa_states::NFA_NUPPER => !(c as u8).is_ascii_uppercase() && c != b'\n' as c_int,
+        crate::nfa_states::NFA_HEX => (c as u8).is_ascii_hexdigit(),
+        crate::nfa_states::NFA_NHEX => !(c as u8).is_ascii_hexdigit() && c != b'\n' as c_int,
+        crate::nfa_states::NFA_OCTAL => matches!(c as u8, b'0'..=b'7'),
+        crate::nfa_states::NFA_NOCTAL => !matches!(c as u8, b'0'..=b'7') && c != b'\n' as c_int,
+        crate::nfa_states::NFA_NEWL => c == b'\n' as c_int,
+        _ => false,
+    }
+}
+
+/// Swap two thread lists.
+///
+/// # Safety
+/// Both pointers must be valid.
+#[inline]
+pub unsafe fn swap_lists(a: *mut *mut NfaList, b: *mut *mut NfaList) {
+    let tmp = *a;
+    *a = *b;
+    *b = tmp;
+}
+
+/// Increment the list ID for the next iteration.
+///
+/// This is used to efficiently check if a state is already in the current list.
+///
+/// # Safety
+/// The list must be valid.
+#[inline]
+pub unsafe fn next_list_id(list: *mut NfaList) {
+    if !list.is_null() {
+        (*list).id += 1;
+    }
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
+
+/// Perform a single NFA matching step.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_step(
+    current: *mut NfaList,
+    next: *mut NfaList,
+    c: c_int,
+    subs: *mut RegSubs,
+) -> c_int {
+    match nfa_step(current, next, c, subs) {
+        NfaStepResult::Continue => 0,
+        NfaStepResult::Match => 1,
+        NfaStepResult::NoMatch => 2,
+        NfaStepResult::Error => -1,
+    }
+}
+
+/// Swap two thread list pointers.
+///
+/// # Safety
+/// Both pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_swap_lists(a: *mut *mut NfaList, b: *mut *mut NfaList) {
+    swap_lists(a, b);
+}
+
+/// Increment list ID.
+///
+/// # Safety
+/// The list must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_next_list_id(list: *mut NfaList) {
+    next_list_id(list);
+}
 
 /// Add a state to the thread list.
 ///
