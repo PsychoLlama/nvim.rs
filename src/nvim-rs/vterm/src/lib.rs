@@ -17,7 +17,10 @@ use std::ffi::{c_char, c_int, c_long, c_void};
 use std::ptr;
 
 pub mod parser;
+pub mod state;
+
 pub use parser::*;
+pub use state::*;
 
 // =============================================================================
 // Constants
@@ -247,6 +250,27 @@ impl VTermColor {
     pub unsafe fn set_type(&mut self, t: u8) {
         // color_type field is at the same position in all union variants
         self.color_type = t;
+    }
+}
+
+impl std::fmt::Debug for VTermColor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // SAFETY: We check the type before accessing the correct variant
+        if self.is_indexed() {
+            unsafe {
+                f.debug_struct("VTermColor::Indexed")
+                    .field("idx", &self.indexed.idx)
+                    .finish()
+            }
+        } else {
+            unsafe {
+                f.debug_struct("VTermColor::Rgb")
+                    .field("red", &self.rgb.red)
+                    .field("green", &self.rgb.green)
+                    .field("blue", &self.rgb.blue)
+                    .finish()
+            }
+        }
     }
 }
 
