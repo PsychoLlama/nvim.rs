@@ -158,7 +158,9 @@ pub extern "C" fn rs_text_validate_range(start: i64, end: i64, line_count: i64) 
 
 /// Count leading whitespace characters in a line.
 pub fn count_indent_chars(line: &[u8]) -> usize {
-    line.iter().take_while(|&&c| c == b' ' || c == b'\t').count()
+    line.iter()
+        .take_while(|&&c| c == b' ' || c == b'\t')
+        .count()
 }
 
 /// Count leading whitespace as virtual columns.
@@ -197,7 +199,11 @@ pub fn make_indent(width: usize, tabstop: usize, use_tabs: bool) -> Vec<u8> {
 /// # Safety
 /// - `line` must be valid pointer to `len` bytes, or null.
 #[no_mangle]
-pub unsafe extern "C" fn rs_text_count_indent(line: *const u8, len: c_int, tabstop: c_int) -> c_int {
+pub unsafe extern "C" fn rs_text_count_indent(
+    line: *const u8,
+    len: c_int,
+    tabstop: c_int,
+) -> c_int {
     if line.is_null() || len < 0 {
         return 0;
     }

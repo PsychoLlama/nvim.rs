@@ -15,7 +15,7 @@ rename_variants = "ScreamingSnakeCase"
 
 [parse]
 parse_deps = true
-include = ["nvim-buffer", "nvim-charset", "nvim-cmdline", "nvim-cmdhist", "nvim-cursor", "nvim-diff", "nvim-encoding", "nvim-eval", "nvim-ex-docmd", "nvim-fileio", "nvim-help", "nvim-indent", "nvim-insexpand", "nvim-keycodes", "nvim-lua", "nvim-mapping", "nvim-marktree", "nvim-math", "nvim-mbyte", "nvim-memutil", "nvim-menu", "nvim-mouse", "nvim-option", "nvim-os", "nvim-path", "nvim-profile", "nvim-regexp", "nvim-search", "nvim-spell", "nvim-strings", "nvim-syntax", "nvim-tag", "nvim-version", "nvim-viewport", "nvim-window"]
+include = ["nvim-buffer", "nvim-charset", "nvim-cmdline", "nvim-cmdhist", "nvim-cursor", "nvim-diff", "nvim-dict", "nvim-encoding", "nvim-eval", "nvim-eval-codec", "nvim-eval-exec", "nvim-ex-docmd", "nvim-fileio", "nvim-funcall", "nvim-help", "nvim-indent", "nvim-insexpand", "nvim-keycodes", "nvim-list", "nvim-lua", "nvim-mapping", "nvim-marktree", "nvim-math", "nvim-mbyte", "nvim-memutil", "nvim-menu", "nvim-mouse", "nvim-option", "nvim-os", "nvim-path", "nvim-profile", "nvim-regexp", "nvim-search", "nvim-spell", "nvim-strings", "nvim-syntax", "nvim-tag", "nvim-typval", "nvim-userfunc", "nvim-vars", "nvim-version", "nvim-viewport", "nvim-window"]
 
 [export]
 include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs_getchr", "rs_ungetchr", "rs_read_limits", "rs_mb_decompose", "rs_use_multibytecode", "rs_nfa_re_num_cmp", "rs_re_put_uint32", "rs_re_get_uint32", "rs_re_put_uint16", "rs_re_get_uint16", "rs_re_num_cmp", "rs_get_char_class", "rs_nfa_recognize_char_class",
@@ -448,4 +448,83 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_multi_match_result_matched",
            "rs_multi_match_result_start_lnum", "rs_multi_match_result_start_col",
            "rs_multi_match_result_end_lnum", "rs_multi_match_result_end_col",
-           "rs_regexec_multi", "MultiMatchContext", "MultiMatchResult", "MultiPos"]
+           "rs_regexec_multi", "MultiMatchContext", "MultiMatchResult", "MultiPos",
+           # Phase 28: VimL Evaluation Engine
+           # typval crate exports
+           "rs_tv_type", "rs_tv_is_number", "rs_tv_is_string", "rs_tv_is_float",
+           "rs_tv_is_bool", "rs_tv_is_list", "rs_tv_is_dict", "rs_tv_is_blob",
+           "rs_tv_is_func", "rs_tv_is_special", "rs_tv_is_numeric",
+           "rs_tv_get_number_simple", "rs_tv_get_float_simple", "rs_tv_get_bool_simple",
+           "rs_tv_get_string_ptr", "rs_tv_is_empty", "rs_tv_is_truthy",
+           "rs_tv_list_len", "rs_tv_list_locked", "rs_tv_list_has_watchers",
+           "rs_tv_list_first", "rs_tv_list_last", "rs_tv_list_uidx",
+           "rs_tv_list_copyid", "rs_tv_list_latest_copy",
+           "rs_tv_listitem_next", "rs_tv_listitem_prev", "rs_tv_listitem_tv",
+           "rs_tv_list_find", "rs_tv_list_idx_of_item", "rs_tv_list_reverse",
+           "rs_tv_dict_len", "rs_tv_dict_locked", "rs_tv_dict_is_watched",
+           "rs_tv_blob_len", "rs_tv_blob_locked", "rs_tv_blob_get", "rs_tv_blob_set",
+           "rs_tv_blob_equal", "rs_tv_get_list", "rs_tv_get_dict", "rs_tv_get_blob",
+           "rs_tv_check_for_string_arg", "rs_tv_check_for_nonempty_string_arg",
+           "rs_tv_check_for_opt_string_arg", "rs_tv_check_for_number_arg",
+           "rs_tv_check_for_opt_number_arg", "rs_tv_check_for_float_or_nr_arg",
+           "rs_tv_check_for_bool_arg", "rs_tv_check_for_opt_bool_arg",
+           "rs_tv_check_for_blob_arg", "rs_tv_check_for_list_arg",
+           "rs_tv_check_for_dict_arg", "rs_tv_check_for_nonnull_dict_arg",
+           "rs_tv_check_for_opt_dict_arg", "rs_tv_check_for_string_or_number_arg",
+           "rs_tv_check_for_buffer_arg", "rs_tv_check_for_lnum_arg",
+           "rs_tv_check_for_string_or_list_arg", "rs_tv_check_for_opt_string_or_list_arg",
+           "rs_tv_check_for_string_or_list_or_blob_arg",
+           "rs_tv_check_for_string_or_list_or_dict_arg",
+           "rs_tv_check_for_string_or_func_arg", "rs_tv_check_for_list_or_blob_arg",
+           "rs_tv_check_num", "rs_tv_check_str", "rs_tv_check_str_or_nr",
+           "rs_eval_expr_valid_arg",
+           "TypevalHandle", "ListHandle", "ListItemHandle", "DictHandle", "BlobHandle",
+           # vars crate exports
+           "rs_vars_var_flavour", "rs_vars_is_name_char", "rs_vars_is_name_first_char",
+           "rs_vars_is_dict_key_char",
+           # list crate exports
+           "rs_list_normalize_index", "rs_list_len", "rs_list_is_empty",
+           "rs_list_first", "rs_list_last", "rs_listitem_next", "rs_listitem_prev",
+           "rs_listitem_tv", "rs_list_locked", "rs_list_is_locked",
+           "rs_list_has_watchers", "rs_list_validate_range",
+           # dict crate exports
+           "rs_dict_validate_key", "rs_dict_is_valid_identifier", "rs_dict_hash_key",
+           "rs_dict_is_nested_key", "rs_dict_key_path_depth", "rs_dict_is_dict_type",
+           # eval_exec crate exports
+           "rs_eval_checked_add", "rs_eval_checked_sub", "rs_eval_checked_mul",
+           "rs_eval_checked_div", "rs_eval_checked_mod",
+           "rs_eval_float_div", "rs_eval_float_mod",
+           "rs_eval_is_truthy_number", "rs_eval_is_truthy_float",
+           "rs_eval_compare_numbers", "rs_eval_compare_floats",
+           "rs_eval_string_to_number", "rs_eval_string_to_float",
+           # funcall crate exports
+           "rs_funcall_argspec_new", "rs_funcall_validate_argcount",
+           "rs_funcall_validate_args", "rs_funcall_vararg_state",
+           "ArgSpec", "VarargState",
+           # eval funcs exports (buffer, window, system, cursor, text, search)
+           "rs_buf_is_valid_bufnr", "rs_buf_is_special_bufnr", "rs_buf_is_valid_lnum",
+           "rs_win_is_valid_winnr", "rs_win_is_valid_winid",
+           "rs_sys_is_success", "rs_sys_is_signal", "rs_sys_is_valid_env_name",
+           "rs_cursor_pos_new", "rs_cursor_pos_is_valid", "rs_is_valid_mark",
+           "rs_text_line_range_single", "rs_text_line_range", "rs_text_validate_range",
+           "rs_text_count_indent", "rs_text_is_blank", "rs_text_first_nonblank",
+           "rs_search_parse_flags", "rs_submatch_is_matched",
+           "Position", "LineRange", "SearchFlags", "SearchResult", "Submatch", "SearchCount",
+           # userfunc crate exports
+           "rs_userfunc_flags_from_bits", "rs_userfunc_is_valid_name",
+           "rs_userfunc_is_valid_param_name", "rs_userfunc_info_new",
+           "rs_userfunc_valid_arg_count",
+           "rs_closure_info_new", "rs_closure_has_captures",
+           "rs_funcref_info_new", "rs_funcref_is_partial", "rs_funcref_parse_type",
+           "rs_bound_args_new",
+           "FuncDefFlags", "FuncCallState", "ReturnState", "FuncScope", "FuncInfo",
+           "PartialInfo", "ParamType", "ParamInfo", "CaptureMode", "ClosureInfo",
+           "CapturedVar", "ScopeLevel", "FuncrefType", "FuncrefInfo", "BoundArgsInfo",
+           # eval_codec crate exports
+           "rs_json_opts_compact", "rs_json_opts_pretty",
+           "rs_decode_is_ok", "rs_encode_is_ok",
+           "rs_json_skip_whitespace", "rs_json_parse_number",
+           "rs_json_needs_escape", "rs_json_unescape_char", "rs_viml_needs_escape",
+           "rs_blob_encode_hex", "rs_blob_is_literal",
+           "JsonEncodeOptions", "DecodeResult", "EncodeResult",
+           "JsonType", "JsonToken", "JsonNumberResult", "UnescapeResult", "BlobFormat"]

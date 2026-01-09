@@ -178,10 +178,13 @@ pub fn parse_param_counts(params: &[ParamInfo]) -> (i32, i32) {
         }
     }
 
-    let total = params.iter().filter(|p| {
-        let pt = ParamType::from_c_int(p.param_type);
-        !matches!(pt, ParamType::DictSelf | ParamType::Variadic)
-    }).count() as i32;
+    let total = params
+        .iter()
+        .filter(|p| {
+            let pt = ParamType::from_c_int(p.param_type);
+            !matches!(pt, ParamType::DictSelf | ParamType::Variadic)
+        })
+        .count() as i32;
 
     let max_args = if is_variadic { -1 } else { total };
 

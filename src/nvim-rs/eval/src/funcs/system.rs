@@ -119,8 +119,7 @@ pub fn is_valid_env_name(name: &[u8]) -> bool {
         return false;
     }
 
-    name.iter()
-        .all(|&c| c.is_ascii_alphanumeric() || c == b'_')
+    name.iter().all(|&c| c.is_ascii_alphanumeric() || c == b'_')
 }
 
 /// FFI export: validate environment variable name.

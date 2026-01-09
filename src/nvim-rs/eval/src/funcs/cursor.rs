@@ -194,7 +194,10 @@ pub const fn clamp_col(col: i64, line_len: i64) -> i64 {
 pub fn is_valid_mark(c: u8) -> bool {
     // Valid marks: a-z, A-Z, 0-9, and special marks
     c.is_ascii_alphanumeric()
-        || matches!(c, b'\'' | b'`' | b'<' | b'>' | b'[' | b']' | b'^' | b'.' | b'"')
+        || matches!(
+            c,
+            b'\'' | b'`' | b'<' | b'>' | b'[' | b']' | b'^' | b'.' | b'"'
+        )
 }
 
 /// Check if mark is a lowercase (buffer-local) mark.

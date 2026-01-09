@@ -157,9 +157,7 @@ pub fn is_valid_func_name(name: &[u8]) -> bool {
     }
 
     // Rest must be alphanumeric or underscore
-    check_name
-        .iter()
-        .all(|&c| is_valid_func_name_char(c))
+    check_name.iter().all(|&c| is_valid_func_name_char(c))
 }
 
 /// FFI export: validate function name.
