@@ -13,7 +13,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | charset        | Character classification and conversion |
 | cmdexpand      | Command-line completion and expansion   |
 | cmdhist        | Command history                         |
-| cmdline        | Command line mode (state, edit, history, keys, preview, UI, API) |
+| cmdline        | Command line mode (state, edit, history, keys, preview, UI, API, viewstate, fname) |
 | collections    | Data structures (garray, hashtab)       |
 | compositor     | Multi-grid compositing                  |
 | context        | Context stack management                |

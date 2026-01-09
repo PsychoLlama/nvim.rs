@@ -14,6 +14,7 @@ pub mod edit;
 pub mod entry;
 pub mod expand;
 pub mod expr;
+pub mod fname;
 pub mod history;
 pub mod keys;
 pub mod pattern;
@@ -24,6 +25,7 @@ pub mod sources;
 pub mod state;
 pub mod ui;
 pub mod usercomplete;
+pub mod viewstate;
 pub mod wildmenu;
 
 use std::ffi::c_char;
