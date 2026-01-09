@@ -8,6 +8,7 @@
 //! - [`types`]: Lua type constants and conversion utilities
 //! - [`to_lua`]: Typval to Lua conversion helpers
 //! - [`from_lua`]: Lua to Typval conversion helpers
+//! - [`stdlib`]: Lua stdlib helpers and error handling
 
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(clippy::missing_safety_doc)]
@@ -17,6 +18,7 @@
 
 pub mod from_lua;
 pub mod state;
+pub mod stdlib;
 pub mod to_lua;
 pub mod types;
 

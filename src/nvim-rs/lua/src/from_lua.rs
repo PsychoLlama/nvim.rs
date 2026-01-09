@@ -73,11 +73,8 @@ extern "C" {
     // Lua C API functions for reading values
     fn lua_tonumber(lstate: *mut LuaState, idx: c_int) -> f64;
     fn lua_toboolean(lstate: *mut LuaState, idx: c_int) -> c_int;
-    fn lua_tolstring(
-        lstate: *mut LuaState,
-        idx: c_int,
-        len: *mut usize,
-    ) -> *const std::ffi::c_char;
+    fn lua_tolstring(lstate: *mut LuaState, idx: c_int, len: *mut usize)
+        -> *const std::ffi::c_char;
     fn lua_type(lstate: *mut LuaState, idx: c_int) -> c_int;
     fn lua_settop(lstate: *mut LuaState, idx: c_int);
     fn lua_gettop(lstate: *mut LuaState) -> c_int;
