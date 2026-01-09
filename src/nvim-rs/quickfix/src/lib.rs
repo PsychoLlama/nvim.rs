@@ -11,6 +11,7 @@ use std::ffi::{c_char, c_int, c_void};
 pub mod commands;
 pub mod filter;
 pub mod list;
+pub mod loclist;
 pub mod navigate;
 pub mod parse;
 pub mod window;
