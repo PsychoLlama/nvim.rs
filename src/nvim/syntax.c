@@ -8065,3 +8065,80 @@ int nvim_synblock_is_nospell_cluster(synblock_T *block, int id)
 {
   return id == block->b_nospell_cluster_id;
 }
+
+// =============================================================================
+// Rust-callable wrappers for line highlighting (Phase 32.4)
+// =============================================================================
+
+/// Wrapper for get_syntax_attr - get syntax attributes at a column
+int nvim_get_syntax_attr(int col, int *can_spell, int keep_state)
+{
+  bool spell = false;
+  int attr = get_syntax_attr(col, can_spell ? &spell : NULL, keep_state != 0);
+  if (can_spell) {
+    *can_spell = spell ? 1 : 0;
+  }
+  return attr;
+}
+
+// nvim_syn_get_current_lnum already defined at line ~6119
+// nvim_syn_get_current_col already defined at line ~6125
+
+/// Set current_col
+void nvim_syn_set_current_col(int col)
+{
+  current_col = col;
+}
+
+/// Get current_finished
+int nvim_syn_get_current_finished(void)
+{
+  return current_finished;
+}
+
+/// Get current_state_stored
+int nvim_syn_get_current_state_stored(void)
+{
+  return current_state_stored;
+}
+
+// nvim_synblock_get_syn_spell already defined at line ~5735
+
+/// Get synmaxcol setting from buffer
+int nvim_buf_get_synmaxcol(buf_T *buf)
+{
+  return (int)buf->b_p_smc;
+}
+
+/// Check if current state is valid
+int nvim_syn_current_state_valid(void)
+{
+  return !INVALID_STATE(&current_state);
+}
+
+/// Validate current state if needed
+void nvim_syn_ensure_current_state_valid(void)
+{
+  if (INVALID_STATE(&current_state)) {
+    validate_current_state();
+  }
+}
+
+/// Get the current line text
+const char *nvim_syn_get_current_line(void)
+{
+  return syn_getcurline();
+}
+
+/// Get the attribute for the next match
+int nvim_syn_get_next_match_attr(void)
+{
+  // Get the attribute from current state
+  if (current_id > 0) {
+    return syn_id2attr(current_id);
+  }
+  return 0;
+}
+
+// nvim_syn_get_next_match_idx already defined at line ~6413
+// nvim_syn_get_next_match_col already defined at line ~6419

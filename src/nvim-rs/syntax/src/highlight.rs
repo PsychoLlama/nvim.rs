@@ -45,6 +45,21 @@ extern "C" {
 
     // Concealed position check
     fn syn_get_concealed_id(wp: WinHandle, lnum: c_int, col: c_int) -> c_int;
+
+    // Phase 32.4: Line highlighting
+    fn nvim_get_syntax_attr(col: c_int, can_spell: *mut c_int, keep_state: c_int) -> c_int;
+    fn nvim_syn_get_current_col() -> c_int;
+    fn nvim_syn_set_current_col(col: c_int);
+    fn nvim_syn_get_current_finished() -> c_int;
+    fn nvim_syn_get_current_state_stored() -> c_int;
+    fn nvim_synblock_get_syn_spell(block: SynBlockHandle) -> c_int;
+    fn nvim_buf_get_synmaxcol(buf: crate::types::BufHandle) -> c_int;
+    fn nvim_syn_current_state_valid() -> c_int;
+    fn nvim_syn_ensure_current_state_valid();
+    fn nvim_syn_get_current_line() -> *const std::ffi::c_char;
+    fn nvim_syn_get_next_match_attr() -> c_int;
+    fn nvim_syn_get_next_match_idx() -> c_int;
+    fn nvim_syn_get_next_match_col() -> c_int;
 }
 
 // =============================================================================
@@ -376,6 +391,143 @@ impl ResolvedHighlight {
             None
         }
     }
+}
+
+// =============================================================================
+// Phase 32.4: Line highlighting engine
+// =============================================================================
+
+/// Result from getting syntax attributes at a column.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SyntaxAttrResult {
+    /// The highlight attribute.
+    pub attr: i32,
+    /// Whether spell checking is allowed at this position.
+    pub can_spell: bool,
+}
+
+/// Get syntax attributes at a column in the current line.
+///
+/// This is the main entry point for getting highlighting during redraw.
+///
+/// # Arguments
+/// * `col` - Column number (0-based)
+/// * `keep_state` - Whether to preserve state for subsequent calls
+///
+/// # Safety
+/// Must be called after `syntax_start` has been called for the current window/line.
+#[must_use]
+pub unsafe fn get_syntax_attr(col: i32, keep_state: bool) -> SyntaxAttrResult {
+    let mut can_spell: c_int = 0;
+    let attr = nvim_get_syntax_attr(col, &mut can_spell, if keep_state { 1 } else { 0 });
+    SyntaxAttrResult {
+        attr,
+        can_spell: can_spell != 0,
+    }
+}
+
+/// Get syntax attributes without spell information.
+///
+/// # Safety
+/// Must be called after `syntax_start` has been called for the current window/line.
+#[must_use]
+pub unsafe fn get_syntax_attr_simple(col: i32, keep_state: bool) -> i32 {
+    nvim_get_syntax_attr(col, std::ptr::null_mut(), if keep_state { 1 } else { 0 })
+}
+
+/// Get the current column being processed.
+#[must_use]
+pub fn current_col() -> i32 {
+    unsafe { nvim_syn_get_current_col() }
+}
+
+/// Set the current column for processing.
+pub fn set_current_col(col: i32) {
+    unsafe { nvim_syn_set_current_col(col) }
+}
+
+/// Check if the current line processing is finished.
+#[must_use]
+pub fn current_finished() -> bool {
+    unsafe { nvim_syn_get_current_finished() != 0 }
+}
+
+/// Check if the current state has been stored.
+#[must_use]
+pub fn current_state_stored() -> bool {
+    unsafe { nvim_syn_get_current_state_stored() != 0 }
+}
+
+/// Spell checking mode constants.
+pub mod syn_spell {
+    /// Default: spell check if no @Spell cluster.
+    pub const DEFAULT: i32 = 0;
+    /// Spell check top-level text only.
+    pub const TOP: i32 = 1;
+    /// No spell checking.
+    pub const NOTOP: i32 = 2;
+}
+
+/// Get the spell setting for a synblock.
+#[must_use]
+pub fn synblock_syn_spell(block: SynBlockHandle) -> i32 {
+    if block.is_null() {
+        return syn_spell::DEFAULT;
+    }
+    unsafe { nvim_synblock_get_syn_spell(block) }
+}
+
+/// Get the synmaxcol setting from a buffer.
+#[must_use]
+pub fn buf_synmaxcol(buf: crate::types::BufHandle) -> i32 {
+    if buf.is_null() {
+        return 0;
+    }
+    unsafe { nvim_buf_get_synmaxcol(buf) }
+}
+
+/// Check if the current syntax state is valid.
+#[must_use]
+pub fn current_state_valid() -> bool {
+    unsafe { nvim_syn_current_state_valid() != 0 }
+}
+
+/// Ensure the current syntax state is valid, validating if needed.
+pub fn ensure_current_state_valid() {
+    unsafe { nvim_syn_ensure_current_state_valid() }
+}
+
+/// Get the current line text.
+///
+/// # Safety
+/// The returned pointer is only valid until the next syntax operation.
+#[must_use]
+pub unsafe fn get_current_line() -> *const std::ffi::c_char {
+    nvim_syn_get_current_line()
+}
+
+/// Get the attribute for the next match.
+#[must_use]
+pub fn next_match_attr() -> i32 {
+    unsafe { nvim_syn_get_next_match_attr() }
+}
+
+/// Get the next match pattern index.
+#[must_use]
+pub fn next_match_idx() -> i32 {
+    unsafe { nvim_syn_get_next_match_idx() }
+}
+
+/// Get the next match column.
+#[must_use]
+pub fn next_match_col() -> i32 {
+    unsafe { nvim_syn_get_next_match_col() }
+}
+
+/// Check if there is a pending next match.
+#[must_use]
+pub fn has_next_match() -> bool {
+    next_match_idx() >= 0
 }
 
 #[cfg(test)]

@@ -4525,6 +4525,80 @@ pub unsafe extern "C" fn rs_is_spell_related_cluster(block: SynBlockHandle, id: 
     }
 }
 
+// =============================================================================
+// Phase 32.4: Line highlighting exports
+// =============================================================================
+
+/// Get syntax attributes at a column.
+///
+/// # Safety
+/// Must be called after syntax_start for the current window/line.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_syntax_attr(
+    col: c_int,
+    can_spell: *mut c_int,
+    keep_state: c_int,
+) -> c_int {
+    let result = highlight::get_syntax_attr(col, keep_state != 0);
+    if !can_spell.is_null() {
+        *can_spell = if result.can_spell { 1 } else { 0 };
+    }
+    result.attr
+}
+
+/// Set the current column for processing.
+///
+/// # Safety
+/// Must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_set_current_col(col: c_int) {
+    highlight::set_current_col(col);
+}
+
+/// Check if current state has been stored.
+///
+/// # Safety
+/// Must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_current_state_stored() -> c_int {
+    if highlight::current_state_stored() {
+        1
+    } else {
+        0
+    }
+}
+
+/// Get the spell setting for a synblock.
+///
+/// # Safety
+/// The synblock handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_syn_spell(block: SynBlockHandle) -> c_int {
+    highlight::synblock_syn_spell(block)
+}
+
+/// Get the synmaxcol setting from a buffer.
+///
+/// # Safety
+/// The buffer handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_buf_synmaxcol(buf: BufHandle) -> c_int {
+    highlight::buf_synmaxcol(buf)
+}
+
+/// Ensure current state is valid, validating if needed.
+///
+/// # Safety
+/// Must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_ensure_current_state_valid() {
+    highlight::ensure_current_state_valid();
+}
+
+// Note: rs_syn_current_col, rs_syn_is_finished, rs_syn_is_state_valid,
+// rs_syn_next_match_idx, rs_syn_next_match_col, rs_syn_has_next_match
+// are already defined earlier in this file.
+
 #[cfg(test)]
 mod tests {
     use super::*;
