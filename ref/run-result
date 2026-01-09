@@ -1,50 +1,43 @@
-Plan: ~/.claude/plans/floofy-roaming-pascal.md
+Plan: ~/.claude/plans/polished-strolling-map.md
 
-Working directory is clean. All changes have been committed.
+All phases of the plan are now complete. Here's a summary:
 
-## Summary
+## Plan Execution Complete
 
-I've completed the execution of the plan at `/home/overlord/.claude/plans/floofy-roaming-pascal.md`. Here's what was accomplished:
+All phases from `/home/overlord/.claude/plans/polished-strolling-map.md` have been successfully executed:
 
-### Phase 47: File Search Infrastructure ✓
-- Created the `filesearch` crate at `src/nvim-rs/filesearch/` (~1,594 lines)
-- Implemented core file search algorithms:
-  - `rs_vim_findfile_init` - Initialize search context
-  - `rs_vim_findfile` - Find next matching file (depth-first traversal)
-  - `rs_vim_findfile_cleanup` - Free search context  
-  - `rs_vim_findfile_free_visited` - Clear visited lists
-  - `rs_vim_findfile_stopdir` - Parse stopdir string
-- Added helper functions: stack operations, visited tracking, wildcard expansion
-- Added to cbindgen config for C header generation
-- Added C accessor `nvim_get_curbuf_sua()` for suffixesadd option
-- Updated `ref/crates.md` with filesearch description
+### Phase 48: Mark System Wiring ✓
+- Wired existing Rust mark functions to C (`rs_mark_global_index`, `rs_mark_local_index`, `rs_mark_is_*`)
+- Modified `mark.c` to use Rust implementations
 
-**Note:** The C `file_search.c` cannot be fully replaced because higher-level functions like `find_file_in_path_option` cast the search context to internal C structs. The Rust implementation is available for new Rust code or future complete migration.
+### Phase 49: Sign System Wiring ✓  
+- Wired existing Rust sign functions to C (`rs_sign_row_cmp`, `rs_sign_effective_priority`)
+- Modified `sign.c` to use Rust implementations
 
-### Phase 45: Spell File I/O ✓
-- Found that `src/nvim-rs/spell/src/spellfile.rs` (3,279 lines) already contains:
-  - Constants: VIMSPELLMAGIC, section IDs, flags
-  - Structures: SpellFileHeader, SpellFileWriteInfo
-  - Section parsers: rs_parse_section_header, rs_parse_region_section, rs_parse_charflags_section, etc.
-  - Tree reading: rs_read_tree_node_count
-  - Writing utilities: rs_write_section_header, rs_write_tree_node_flags, etc.
-- The Rust implementation exists but most functions aren't wired to C yet
+### Phase 50: Ex Command-Line Input ✓
+- Extended existing `cmdline` crate (instead of creating new `ex_getln`)
+- Added `input.rs` module with buffer size calculations, input validation, command line level management, and prompt handling
+- 14 new FFI exports
 
-### Phase 46: Ex Command-Line Input ✓
-- Found that the cmdline crate already has 11,198 lines of Rust code:
-  - state.rs, keys.rs, edit.rs - State machine and input handling
-  - screen.rs, ui.rs - Screen rendering
-  - expand.rs, completion.rs - Command-line completion
-  - history.rs - Command history
-  - 161 exported FFI functions
-- Some functions are integrated with C (rs_cmdline_overstrike, rs_cmdline_at_end, etc.)
+### Phase 51: Buffer Write Operations ✓
+- Created new `nvim-bufwrite` crate
+- 4 modules: `lib.rs`, `encoding.rs`, `format.rs`, `validation.rs`
+- File format handling (Unix/DOS/Mac), encoding conversion (UCS-2/UCS-4/UTF-16/Latin-1), BOM handling, write validation
+- 26 unit tests
+
+### Phase 52: Match Highlighting ✓
+- Created new `nvim-match` crate
+- 4 modules: `lib.rs`, `id.rs`, `priority.rs`, `position.rs`
+- Match ID validation, priority ordering, position-based match handling
+- 22 unit tests
+
+### Documentation Update ✓
+- Updated `ref/crates.md` with new `bufwrite` and `match` crates
 
 ### Commits Made:
-1. `feat(filesearch): implement file search infrastructure in Rust` (Phase 47.1)
-2. `feat(filesearch): add cbindgen config and C accessor for Rust integration`
-
-All build checks pass:
-- `just build` ✓
-- `just rust-fmt-check` ✓
-- `just rust-clippy` ✓
-- `just rust-test` (2,583 tests) ✓
+1. `feat(mark): wire additional Rust mark functions to C`
+2. `feat(sign): wire additional Rust sign functions to C`
+3. `feat(cmdline): add input validation module for command line`
+4. `feat(bufwrite): add Rust crate for buffer write operations`
+5. `feat(match): add Rust crate for match highlighting`
+6. `docs(ref/crates.md): add bufwrite and match crates`
