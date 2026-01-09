@@ -12,6 +12,36 @@
 use std::ffi::c_int;
 use std::os::raw::c_void;
 
+// =============================================================================
+// Submodules
+// =============================================================================
+
+pub mod buffer;
+pub mod mode;
+pub mod pty;
+pub mod scrollback;
+
+// Re-export commonly used types from submodules
+// Note: Some types (InvalidRegion, TPF_*, TERMINAL_SB_MAX) already exist in lib.rs,
+// so we don't re-export those to avoid conflicts.
+pub use buffer::{
+    get_terminal_buffer_state, is_screen_line, is_scrollback_line, linenr_to_row, row_to_linenr,
+    validate_terminal_buffer, BufferValidation, TerminalBufferState,
+};
+pub use mode::{
+    get_terminal_cursor, get_terminal_state, validate_mode_transition, FocusChange, FocusState,
+    ModeTransitionResult, TerminalCursor, TerminalMode, TerminalState,
+};
+pub use pty::{
+    convert_nvim_modifier, is_pty_ready, KeySendResult, PtyState, SendResult, TermModifiers,
+    TermPasteFlags,
+};
+pub use scrollback::{
+    calculate_adjustment, calculate_pop, calculate_push, calculate_scrollback_size,
+    calculate_trim_count, get_scrollback_state, is_valid_scrollback_index, ScrollbackAdjustment,
+    ScrollbackLine, ScrollbackPop, ScrollbackPush, ScrollbackResult, ScrollbackState,
+};
+
 // Re-export vterm types that don't conflict with existing definitions
 // The terminal crate already has its own VTermRect, VTermPos, and modifier constants
 pub mod vterm {
