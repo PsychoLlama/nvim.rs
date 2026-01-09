@@ -5,21 +5,32 @@
 use std::ffi::{c_char, c_int, c_void};
 
 // Sub-modules
+pub mod binary;
 pub mod commands;
 pub mod matches;
 pub mod parse;
 pub mod pattern;
+pub mod preview;
 pub mod search;
+pub mod select;
 pub mod stack;
 
 // Re-export parse types and functions
+pub use binary::{BinarySearchResult, BinarySearchState, FileOffset, TagFileSortInfo};
 pub use commands::{JumpTarget, PreviewTagState};
 pub use matches::MatchStorage;
 pub use parse::TagPtrs;
 pub use pattern::{RegMatch, TagPattern};
+pub use preview::{
+    GlobalPreviewState, PreviewMode, PreviewRequest, PreviewResult, PreviewTagEntry,
+    PreviewWindowInfo, PreviewWindowState,
+};
 pub use search::{
     FindTagsMatchArgs, FindTagsStateCore, TagMatchStatus, TagSearchInfo, TagSearchState,
     TagsReadStatus,
+};
+pub use select::{
+    SelectionAction, SelectionResult, TagMatchDisplayInfo, TagSelectionState,
 };
 
 // =============================================================================
