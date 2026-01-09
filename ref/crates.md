@@ -39,6 +39,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | grid           | Screen grid operations                  |
 | help           | Help system utilities                   |
 | highlight      | Syntax highlighting and attributes      |
+| highlight_group| Highlight group management and commands |
 | indent         | Indentation calculation                 |
 | indent_c       | C/C++/Java indentation (cindent)        |
 | insexpand      | Insert-mode completion                  |
