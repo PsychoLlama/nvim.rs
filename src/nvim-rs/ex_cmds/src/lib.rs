@@ -15,6 +15,7 @@
 //! - [`lines`] - Line manipulation commands (`:copy`, `:move`, `:delete`, `:yank`, `:put`, `:join`)
 //! - [`display`] - Display commands (`:print`, `:number`, `:list`, `:=`)
 //! - [`shell`] - Shell integration (`:!`, `:shell`, filter commands)
+//! - [`format`] - Text formatting (`:retab`, `:left`, `:center`, `:right`)
 //!
 //! ## Opaque Handles
 //!
@@ -26,6 +27,7 @@
 use std::ffi::{c_char, c_int, c_uint};
 
 pub mod display;
+pub mod format;
 pub mod global;
 pub mod lines;
 pub mod range;
