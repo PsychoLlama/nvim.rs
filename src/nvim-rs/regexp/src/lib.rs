@@ -15,6 +15,7 @@ pub mod bt_parse;
 pub mod bt_state;
 pub mod char_class;
 pub mod decompose;
+pub mod multiline;
 pub mod nfa_compile;
 pub mod nfa_exec;
 pub mod nfa_match;
@@ -50,6 +51,13 @@ pub use bt_state::{
 };
 pub use char_class::rs_get_char_class;
 pub use decompose::rs_mb_decompose;
+pub use multiline::{
+    rs_multi_match_context_free, rs_multi_match_context_new, rs_multi_match_context_set_fetcher,
+    rs_multi_match_context_set_prog, rs_multi_match_context_set_start,
+    rs_multi_match_result_end_col, rs_multi_match_result_end_lnum, rs_multi_match_result_free,
+    rs_multi_match_result_matched, rs_multi_match_result_new, rs_multi_match_result_start_col,
+    rs_multi_match_result_start_lnum, rs_regexec_multi,
+};
 pub use nfa_compile::{
     rs_alloc_state, rs_append, rs_frag_new, rs_frag_stack_free, rs_frag_stack_new,
     rs_frag_stack_pop, rs_frag_stack_push, rs_list1, rs_patch, rs_state_allocator_count,
