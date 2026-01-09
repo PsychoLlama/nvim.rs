@@ -1,9 +1,12 @@
-//! Edit mode state queries for Neovim
+//! Edit mode for Neovim
 //!
 //! This crate provides Rust implementations of edit-related functions
-//! from `src/nvim/edit.c`. Uses accessor pattern for static variable access.
+//! from `src/nvim/edit.c`. It handles insert mode state management,
+//! cursor position tracking, and mode-specific operations.
 
 #![allow(unsafe_code)] // FFI requires unsafe
+
+pub mod state;
 
 use std::ffi::{c_char, c_int};
 

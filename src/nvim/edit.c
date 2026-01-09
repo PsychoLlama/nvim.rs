@@ -144,6 +144,23 @@ extern int rs_get_can_cindent(void);
 extern char *rs_buf_prompt_text(const buf_T *buf);
 extern char *rs_prompt_text(void);
 extern bool rs_prompt_curpos_editable(void);
+// State module exports
+extern int rs_state_ins_need_undo(void);
+extern int rs_state_can_cindent(void);
+extern void rs_state_set_can_cindent(int val);
+extern int rs_state_revins_on(void);
+extern int rs_state_did_restart_edit(void);
+extern int rs_state_compl_busy(void);
+extern linenr_T rs_state_insstart_lnum(void);
+extern colnr_T rs_state_insstart_col(void);
+extern linenr_T rs_state_insstart_orig_lnum(void);
+extern colnr_T rs_state_insstart_orig_col(void);
+extern colnr_T rs_state_insstart_textlen(void);
+extern colnr_T rs_state_insstart_blank_vcol(void);
+extern int rs_state_dont_sync_undo(void);
+extern void rs_state_set_dont_sync_undo(int val);
+extern linenr_T rs_state_o_lnum(void);
+extern void rs_state_set_o_lnum(linenr_T val);
 
 /// Get the ins_need_undo static variable (accessor for Rust).
 int nvim_get_ins_need_undo(void)
@@ -205,10 +222,174 @@ linenr_T nvim_curbuf_get_b_prompt_start_lnum(void)
   return curbuf->b_prompt_start.mark.lnum;
 }
 
+/// Get Insstart.lnum (accessor for Rust).
+linenr_T nvim_get_Insstart_lnum(void)
+{
+  return Insstart.lnum;
+}
+
+/// Get Insstart.col (accessor for Rust).
+colnr_T nvim_get_Insstart_col(void)
+{
+  return Insstart.col;
+}
+
+/// Set Insstart (accessor for Rust).
+void nvim_set_Insstart(linenr_T lnum, colnr_T col)
+{
+  Insstart.lnum = lnum;
+  Insstart.col = col;
+}
+
+/// Get Insstart_orig.lnum (accessor for Rust).
+linenr_T nvim_get_Insstart_orig_lnum(void)
+{
+  return Insstart_orig.lnum;
+}
+
+/// Get Insstart_orig.col (accessor for Rust).
+colnr_T nvim_get_Insstart_orig_col(void)
+{
+  return Insstart_orig.col;
+}
+
+/// Set Insstart_orig (accessor for Rust).
+void nvim_set_Insstart_orig(linenr_T lnum, colnr_T col)
+{
+  Insstart_orig.lnum = lnum;
+  Insstart_orig.col = col;
+}
+
+/// Get Insstart_textlen (accessor for Rust).
+colnr_T nvim_get_Insstart_textlen(void)
+{
+  return Insstart_textlen;
+}
+
+/// Set Insstart_textlen (accessor for Rust).
+void nvim_set_Insstart_textlen(colnr_T val)
+{
+  Insstart_textlen = val;
+}
+
+/// Get Insstart_blank_vcol (accessor for Rust).
+colnr_T nvim_get_Insstart_blank_vcol(void)
+{
+  return Insstart_blank_vcol;
+}
+
+/// Set Insstart_blank_vcol (accessor for Rust).
+void nvim_set_Insstart_blank_vcol(colnr_T val)
+{
+  Insstart_blank_vcol = val;
+}
+
+/// Get update_Insstart_orig (accessor for Rust).
+int nvim_get_update_Insstart_orig(void)
+{
+  return update_Insstart_orig;
+}
+
+/// Set update_Insstart_orig (accessor for Rust).
+void nvim_set_update_Insstart_orig(int val)
+{
+  update_Insstart_orig = val != 0;
+}
+
+/// Get revins_chars (accessor for Rust).
+int nvim_get_revins_chars(void)
+{
+  return revins_chars;
+}
+
+/// Set revins_chars (accessor for Rust).
+void nvim_set_revins_chars(int val)
+{
+  revins_chars = val;
+}
+
+/// Get revins_legal (accessor for Rust).
+int nvim_get_revins_legal(void)
+{
+  return revins_legal;
+}
+
+/// Set revins_legal (accessor for Rust).
+void nvim_set_revins_legal(int val)
+{
+  revins_legal = val;
+}
+
+/// Get revins_scol (accessor for Rust).
+int nvim_get_revins_scol(void)
+{
+  return revins_scol;
+}
+
+/// Set revins_scol (accessor for Rust).
+void nvim_set_revins_scol(int val)
+{
+  revins_scol = val;
+}
+
+/// Set did_restart_edit (accessor for Rust).
+void nvim_set_did_restart_edit(int val)
+{
+  did_restart_edit = val;
+}
+
+/// Get compl_busy (accessor for Rust).
+int nvim_get_compl_busy(void)
+{
+  return compl_busy;
+}
+
+/// Get last_insert_skip (accessor for Rust).
+int nvim_get_last_insert_skip(void)
+{
+  return last_insert_skip;
+}
+
+/// Get new_insert_skip (accessor for Rust).
+int nvim_get_new_insert_skip(void)
+{
+  return new_insert_skip;
+}
+
+/// Set new_insert_skip (accessor for Rust).
+void nvim_set_new_insert_skip(int val)
+{
+  new_insert_skip = val;
+}
+
 static TriState dont_sync_undo = kFalse;  // CTRL-G U prevents syncing undo
                                           // for the next left/right cursor key
 
 static linenr_T o_lnum = 0;
+
+/// Get dont_sync_undo (accessor for Rust).
+int nvim_get_dont_sync_undo(void)
+{
+  return dont_sync_undo;
+}
+
+/// Set dont_sync_undo (accessor for Rust).
+void nvim_set_dont_sync_undo(int val)
+{
+  dont_sync_undo = (TriState)val;
+}
+
+/// Get o_lnum (accessor for Rust).
+linenr_T nvim_get_o_lnum(void)
+{
+  return o_lnum;
+}
+
+/// Set o_lnum (accessor for Rust).
+void nvim_set_o_lnum(linenr_T val)
+{
+  o_lnum = val;
+}
 
 static kvec_t(char) replace_stack = KV_INITIAL_VALUE;
 
