@@ -33,6 +33,7 @@ pub type ColNr = c_int;
 // FFI Declarations - Rex Accessors
 // =============================================================================
 
+#[allow(dead_code)] // Some accessors are infrastructure for future phases
 extern "C" {
     // Current position accessors
     fn nvim_rex_get_lnum() -> LineNr;
@@ -744,9 +745,11 @@ mod tests {
 
     #[test]
     fn test_line_fetch_context_invalidate() {
-        let mut ctx = LineFetchContext::default();
-        ctx.cached_lnum = 42;
-        ctx.cached_line = 0x1234 as *const u8;
+        let mut ctx = LineFetchContext {
+            cached_lnum: 42,
+            cached_line: 0x1234 as *const u8,
+            ..Default::default()
+        };
 
         ctx.invalidate_cache();
 

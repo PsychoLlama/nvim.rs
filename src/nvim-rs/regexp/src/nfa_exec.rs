@@ -546,9 +546,7 @@ unsafe fn nfa_state_matches(state: *const NfaState, c: c_int) -> bool {
 /// Both pointers must be valid.
 #[inline]
 pub unsafe fn swap_lists(a: *mut *mut NfaList, b: *mut *mut NfaList) {
-    let tmp = *a;
-    *a = *b;
-    *b = tmp;
+    core::ptr::swap(a, b);
 }
 
 /// Increment the list ID for the next iteration.

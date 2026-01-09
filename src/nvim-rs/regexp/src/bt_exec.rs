@@ -32,9 +32,8 @@ use crate::bt_opcodes::{
     ANY, ANYBUT, ANYOF, BACK, BEHIND, BHPOS, BOL, BOW, BRACE_COMPLEX, BRACE_LIMITS, BRACE_SIMPLE,
     BRANCH, CURSOR, DIGIT, END, EOL, EOW, EXACTLY, HEAD, HEX, IDENT, LOWER, MATCH, MULTIBYTECODE,
     NALPHA, NCLOSE, NDIGIT, NEWL, NHEAD, NHEX, NLOWER, NOBEHIND, NOMATCH, NOPEN, NOTHING, NUPPER,
-    NWHITE, NWORD, OCTAL, PLUS, PRINT, RA_BREAK, RA_CONT, RA_FAIL, RA_MATCH, RA_NOMATCH, RE_BOF,
-    RE_COL, RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK, RE_VCOL, RE_VISUAL, SFNAME, SKWORD, SPRINT,
-    STAR, SUBPAT, UPPER, WHITE, WORD,
+    NWHITE, NWORD, OCTAL, PLUS, PRINT, RE_BOF, RE_COL, RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK,
+    RE_VCOL, RE_VISUAL, SFNAME, SKWORD, SPRINT, STAR, SUBPAT, UPPER, WHITE, WORD,
 };
 use crate::bt_state::{BackPosTable, RegSave, RegStack, RegState, NSUBEXP};
 
@@ -771,7 +770,7 @@ unsafe fn match_one_op(state: &mut MatchState, scan: *const u8, opcode: c_int) -
         SFNAME => match_char_class(state, |c| !c.is_ascii_digit() && is_fname_char(c)),
 
         // Brace complex handled by caller
-        op if op >= BRACE_COMPLEX && op < BRACE_COMPLEX + 10 => MatchStatus::Continue,
+        op if (BRACE_COMPLEX..BRACE_COMPLEX + 10).contains(&op) => MatchStatus::Continue,
 
         END => MatchStatus::Match,
 

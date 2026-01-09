@@ -17,7 +17,7 @@
 //! The C code uses `reg_getline()` to fetch lines from `rex.reg_buf`.
 //! We provide Rust equivalents that integrate with the execution state.
 
-use std::ffi::{c_char, c_int, c_void};
+use std::ffi::{c_char, c_int};
 use std::ptr;
 
 use crate::exec_state::{ColNr, LineNr};
@@ -216,7 +216,7 @@ impl LineFetcher {
         }
         if rel_lnum > self.max_line {
             // Past end - return empty string for "\n" match at end
-            return b"\0".as_ptr();
+            return c"".as_ptr().cast();
         }
 
         // Check cache
@@ -298,7 +298,7 @@ pub unsafe fn reg_getline(rel_lnum: LineNr) -> *const u8 {
 
     // Past last line - return empty for "\n" at end
     if rel_lnum > max_line {
-        return b"\0".as_ptr();
+        return c"".as_ptr().cast();
     }
 
     let buf = nvim_rex_get_reg_buf();

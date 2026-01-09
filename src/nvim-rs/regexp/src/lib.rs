@@ -26,6 +26,7 @@ pub mod nfa_states;
 pub mod parser;
 pub mod regsub;
 pub mod scanner;
+pub mod special;
 
 pub use api::{
     rs_engine_to_int, rs_get_regflags, rs_int_to_engine, rs_is_bt_prog, rs_is_nfa_prog,
@@ -54,10 +55,9 @@ pub use bt_state::{
 pub use char_class::rs_get_char_class;
 pub use decompose::rs_mb_decompose;
 pub use exec_state::{
-    rs_exec_state_advance, rs_exec_state_at_bol, rs_exec_state_at_eol,
-    rs_exec_state_current_byte, rs_exec_state_free, rs_exec_state_init_multi,
-    rs_exec_state_init_single, rs_exec_state_load_from_rex, rs_exec_state_save_to_rex,
-    rs_rex_in_use, rs_rex_set_in_use,
+    rs_exec_state_advance, rs_exec_state_at_bol, rs_exec_state_at_eol, rs_exec_state_current_byte,
+    rs_exec_state_free, rs_exec_state_init_multi, rs_exec_state_init_single,
+    rs_exec_state_load_from_rex, rs_exec_state_save_to_rex, rs_rex_in_use, rs_rex_set_in_use,
 };
 pub use line_fetch::{
     rs_line_cache_free, rs_line_cache_invalidate, rs_line_cache_new, rs_line_fetcher_free,
@@ -101,6 +101,10 @@ pub use regsub::{
 };
 pub use scanner::{
     rs_getchr, rs_initchr, rs_peekchr, rs_skipchr, rs_skipchr_keepstart, rs_ungetchr,
+};
+pub use special::{
+    rs_match_bof, rs_match_col, rs_match_cursor, rs_match_eof, rs_match_lnum, rs_match_vcol,
+    rs_parse_num_cmp,
 };
 
 use std::ffi::{c_int, c_void};
