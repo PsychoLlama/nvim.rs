@@ -17,16 +17,24 @@
 //! - [`MatchState`]: Execution state for a match attempt
 //! - [`regmatch`]: Main matching function
 //! - [`regrepeat`]: Handle repetition operators
+//!
+//! # Integration with ExecState
+//!
+//! This module integrates with [`crate::exec_state::ExecState`] for unified
+//! execution state management, and [`crate::line_fetch`] for buffer line access.
 
 use std::ffi::c_int;
 use std::ptr;
 
 use crate::bt_compile::{next, op, operand};
 use crate::bt_opcodes::{
-    get_mclose_num, get_mopen_num, is_mclose, is_mopen, ALPHA, ANY, ANYBUT, ANYOF, BACK, BOL, BOW,
-    BRANCH, DIGIT, END, EOL, EOW, EXACTLY, HEAD, HEX, IDENT, LOWER, NALPHA, NDIGIT, NEWL, NHEAD,
-    NHEX, NLOWER, NOTHING, NUPPER, NWHITE, NWORD, OCTAL, PLUS, PRINT, SPRINT, STAR, UPPER, WHITE,
-    WORD,
+    get_backref_num, get_mclose_num, get_mopen_num, is_backref, is_mclose, is_mopen, ADD_NL, ALPHA,
+    ANY, ANYBUT, ANYOF, BACK, BEHIND, BHPOS, BOL, BOW, BRACE_COMPLEX, BRACE_LIMITS, BRACE_SIMPLE,
+    BRANCH, CURSOR, DIGIT, END, EOL, EOW, EXACTLY, HEAD, HEX, IDENT, LOWER, MATCH, MULTIBYTECODE,
+    NALPHA, NCLOSE, NDIGIT, NEWL, NHEAD, NHEX, NLOWER, NOBEHIND, NOMATCH, NOPEN, NOTHING, NUPPER,
+    NWHITE, NWORD, OCTAL, PLUS, PRINT, RA_BREAK, RA_CONT, RA_FAIL, RA_MATCH, RA_NOMATCH, RE_BOF,
+    RE_COL, RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK, RE_VCOL, RE_VISUAL, SFNAME, SKWORD, SPRINT,
+    STAR, SUBPAT, UPPER, WHITE, WORD,
 };
 use crate::bt_state::{BackPosTable, RegSave, RegStack, RegState, NSUBEXP};
 
@@ -640,6 +648,31 @@ unsafe fn match_one_op(state: &mut MatchState, scan: *const u8, opcode: c_int) -
             MatchStatus::Continue
         }
 
+        // Non-capturing group markers
+        NOPEN | NCLOSE => MatchStatus::Continue,
+
+        // Backreference \1 - \9
+        op if is_backref(op) => {
+            let n = get_backref_num(op) as usize;
+            let start = state.get_startp(n);
+            let end = state.get_endp(n);
+
+            if start.is_null() || end.is_null() {
+                return MatchStatus::NoMatch;
+            }
+
+            // Match the captured text
+            let mut p = start;
+            while p < end {
+                if state.current_byte() != *p {
+                    return MatchStatus::NoMatch;
+                }
+                state.advance_input();
+                p = p.add(1);
+            }
+            MatchStatus::Continue
+        }
+
         // Quantifiers - these are handled specially
         STAR | PLUS => {
             // For simple quantifiers, use regrepeat
@@ -654,13 +687,140 @@ unsafe fn match_one_op(state: &mut MatchState, scan: *const u8, opcode: c_int) -
             MatchStatus::Continue
         }
 
+        // Brace quantifiers (handled by caller typically)
+        BRACE_SIMPLE | BRACE_LIMITS => MatchStatus::Continue,
+
+        // Look-around (simplified)
+        MATCH | NOMATCH | BEHIND | NOBEHIND | BHPOS | SUBPAT => {
+            // These require special handling with saved state
+            // For now, just continue (proper implementation requires more infrastructure)
+            MatchStatus::Continue
+        }
+
+        // Special position matchers
+        RE_BOF => {
+            // Beginning of file
+            if state.lnum == 0 && state.at_bol() {
+                MatchStatus::Continue
+            } else {
+                MatchStatus::NoMatch
+            }
+        }
+
+        RE_EOF => {
+            // End of file - at last line and at NUL
+            if state.current_byte() == 0 {
+                // In single-line mode or at last line
+                MatchStatus::Continue
+            } else {
+                MatchStatus::NoMatch
+            }
+        }
+
+        CURSOR => {
+            // Match cursor position - requires window context
+            // Simplified: treat as no-match for now
+            MatchStatus::NoMatch
+        }
+
+        RE_LNUM | RE_COL | RE_VCOL => {
+            // Line/column/virtual column comparisons
+            // These require operand parsing for comparison value
+            // Simplified: continue for now
+            MatchStatus::Continue
+        }
+
+        RE_MARK => {
+            // Match mark position - requires buffer context
+            MatchStatus::NoMatch
+        }
+
+        RE_VISUAL => {
+            // Match visual selection - requires window context
+            MatchStatus::NoMatch
+        }
+
+        RE_COMPOSING => {
+            // Match composing characters
+            MatchStatus::Continue
+        }
+
+        MULTIBYTECODE => {
+            // Match a specific multibyte character (stored in operand)
+            let opnd = operand(scan);
+            // Get the expected character from operand (UTF-8 encoded)
+            let expected_len = utf8_char_len(*opnd);
+            if expected_len == 0 {
+                return MatchStatus::NoMatch;
+            }
+
+            // Compare bytes
+            for i in 0..expected_len {
+                if state.current_byte() != *opnd.add(i) {
+                    return MatchStatus::NoMatch;
+                }
+                state.advance_input();
+            }
+            MatchStatus::Continue
+        }
+
+        // More character classes with digit restriction
+        SKWORD => match_char_class(state, |c| {
+            !c.is_ascii_digit() && (c.is_ascii_alphanumeric() || c == b'_')
+        }),
+        SFNAME => match_char_class(state, |c| !c.is_ascii_digit() && is_fname_char(c)),
+
+        // Brace complex handled by caller
+        op if op >= BRACE_COMPLEX && op < BRACE_COMPLEX + 10 => MatchStatus::Continue,
+
         END => MatchStatus::Match,
+
+        // Handle NL variants (opcode + ADD_NL)
+        op if op > ADD_NL && op <= NUPPER + ADD_NL => {
+            // First try newline match
+            if state.current_byte() == b'\n' {
+                state.advance_input();
+                return MatchStatus::Continue;
+            }
+            // Then try base opcode
+            match_one_op(state, scan, op - ADD_NL)
+        }
 
         _ => {
             // Unknown opcode
             MatchStatus::NoMatch
         }
     }
+}
+
+/// Get UTF-8 character length from first byte.
+#[inline]
+fn utf8_char_len(b: u8) -> usize {
+    if b < 0x80 {
+        1
+    } else if b < 0xC0 {
+        0 // continuation byte, invalid as start
+    } else if b < 0xE0 {
+        2
+    } else if b < 0xF0 {
+        3
+    } else if b < 0xF8 {
+        4
+    } else {
+        0 // invalid
+    }
+}
+
+/// Check if a byte is a valid filename character.
+#[inline]
+fn is_fname_char(c: u8) -> bool {
+    c.is_ascii_alphanumeric()
+        || c == b'_'
+        || c == b'.'
+        || c == b'-'
+        || c == b'/'
+        || c == b'\\'
+        || c == b'~'
 }
 
 /// Helper to match character classes.
