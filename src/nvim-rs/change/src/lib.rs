@@ -21,11 +21,16 @@
 
 use std::ffi::{c_char, c_int, c_long, c_void};
 
+pub mod editing;
 pub mod events;
 pub mod flags;
 pub mod invalidation;
 pub mod recording;
 
+pub use editing::{
+    rs_del_bytes, rs_del_char, rs_del_chars, rs_ins_bytes, rs_ins_bytes_len, rs_ins_char,
+    rs_ins_char_bytes, rs_ins_str,
+};
 pub use events::{
     rs_appended_lines, rs_appended_lines_buf, rs_appended_lines_mark, rs_changed_bytes,
     rs_changed_lines, rs_changed_lines_redraw_buf, rs_deleted_lines, rs_deleted_lines_buf,
