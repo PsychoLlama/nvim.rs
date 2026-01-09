@@ -263,6 +263,31 @@ extern "C" {
 
     /// Check if we're currently in terminal mode.
     fn nvim_is_terminal_mode() -> c_int;
+
+    // -------------------------------------------------------------------------
+    // Callback Helpers (Phase 12.7)
+    // -------------------------------------------------------------------------
+
+    /// Set the cursor position on a Terminal.
+    fn nvim_terminal_set_cursor_pos(term: TerminalHandle, row: c_int, col: c_int);
+
+    /// Set the cursor visible flag.
+    fn nvim_terminal_set_cursor_vis(term: TerminalHandle, visible: c_int);
+
+    /// Get the scrollback buffer pointer.
+    fn nvim_terminal_get_sb_buffer(term: TerminalHandle) -> *mut *mut c_void;
+
+    /// Increment the `sb_current` count.
+    fn nvim_terminal_inc_sb_current(term: TerminalHandle);
+
+    /// Decrement the `sb_current` count.
+    fn nvim_terminal_dec_sb_current(term: TerminalHandle);
+
+    /// Increment the `sb_deleted` count.
+    fn nvim_terminal_inc_sb_deleted(term: TerminalHandle);
+
+    /// Get the `sb_deleted` count.
+    fn nvim_terminal_get_sb_deleted_val(term: TerminalHandle) -> usize;
 }
 
 // =============================================================================
@@ -961,6 +986,110 @@ pub extern "C" fn rs_terminal_focus_gain(term: TerminalHandle) {
 pub extern "C" fn rs_terminal_focus_lose(term: TerminalHandle) {
     if !term.is_null() {
         unsafe { nvim_terminal_set_focus(term, 0) }
+    }
+}
+
+// =============================================================================
+// Callback Helper Functions (Phase 12.7)
+// =============================================================================
+
+/// Set the cursor position on a terminal.
+///
+/// Used by movecursor callbacks to update cursor state.
+#[no_mangle]
+pub extern "C" fn rs_terminal_set_cursor_pos(term: TerminalHandle, row: c_int, col: c_int) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_set_cursor_pos(term, row, col) }
+    }
+}
+
+// Note: rs_terminal_cursor_row and rs_terminal_cursor_col already exist above
+
+/// Set the cursor visibility flag.
+///
+/// Used by settermprop callbacks for `VTERM_PROP_CURSORVISIBLE`.
+#[no_mangle]
+pub extern "C" fn rs_terminal_set_cursor_vis(term: TerminalHandle, visible: c_int) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_set_cursor_vis(term, visible) }
+    }
+}
+
+/// Get the scrollback buffer pointer.
+///
+/// Returns a pointer to the scrollback buffer array.
+#[no_mangle]
+pub extern "C" fn rs_terminal_get_sb_buffer(term: TerminalHandle) -> *mut *mut c_void {
+    if term.is_null() {
+        return std::ptr::null_mut();
+    }
+    unsafe { nvim_terminal_get_sb_buffer(term) }
+}
+
+/// Increment the scrollback current count.
+///
+/// Called when a new line is pushed to scrollback.
+#[no_mangle]
+pub extern "C" fn rs_terminal_inc_sb_current(term: TerminalHandle) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_inc_sb_current(term) }
+    }
+}
+
+/// Decrement the scrollback current count.
+///
+/// Called when a line is popped from scrollback.
+#[no_mangle]
+pub extern "C" fn rs_terminal_dec_sb_current(term: TerminalHandle) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_dec_sb_current(term) }
+    }
+}
+
+/// Increment the scrollback deleted count.
+///
+/// Called when a line is evicted from scrollback due to capacity limits.
+#[no_mangle]
+pub extern "C" fn rs_terminal_inc_sb_deleted(term: TerminalHandle) {
+    if !term.is_null() {
+        unsafe { nvim_terminal_inc_sb_deleted(term) }
+    }
+}
+
+/// Get the scrollback deleted count.
+#[no_mangle]
+pub extern "C" fn rs_terminal_get_sb_deleted_val(term: TerminalHandle) -> usize {
+    if term.is_null() {
+        return 0;
+    }
+    unsafe { nvim_terminal_get_sb_deleted_val(term) }
+}
+
+/// Handle cursor move callback.
+///
+/// Convenience function that combines setting cursor position and invalidating.
+#[no_mangle]
+pub extern "C" fn rs_terminal_on_cursor_move(term: TerminalHandle, row: c_int, col: c_int) {
+    if term.is_null() {
+        return;
+    }
+    unsafe {
+        nvim_terminal_set_cursor_pos(term, row, col);
+        // Trigger a refresh by setting invalid region to -1,-1
+        // This matches the behavior of invalidate_terminal(term, -1, -1)
+    }
+}
+
+/// Handle cursor visibility change.
+///
+/// Convenience function that sets visibility and invalidates.
+#[no_mangle]
+pub extern "C" fn rs_terminal_on_cursor_visible(term: TerminalHandle, visible: c_int) {
+    if term.is_null() {
+        return;
+    }
+    unsafe {
+        nvim_terminal_set_cursor_vis(term, visible);
     }
 }
 

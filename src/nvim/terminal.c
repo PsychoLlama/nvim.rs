@@ -2775,4 +2775,73 @@ int nvim_is_terminal_mode(void)
   return (State & MODE_TERMINAL) ? 1 : 0;
 }
 
+// =============================================================================
+// Callback Helpers for Rust (Phase 12.7)
+// =============================================================================
+
+/// Set the cursor position on a Terminal (for movecursor callback).
+void nvim_terminal_set_cursor_pos(Terminal *term, int row, int col)
+{
+  if (term) {
+    term->cursor.row = row;
+    term->cursor.col = col;
+  }
+}
+
+/// Get the cursor row from a Terminal.
+int nvim_terminal_cursor_row(Terminal *term)
+{
+  return term ? term->cursor.row : 0;
+}
+
+/// Get the cursor col from a Terminal.
+int nvim_terminal_cursor_col(Terminal *term)
+{
+  return term ? term->cursor.col : 0;
+}
+
+/// Set the cursor visible flag (for settermprop callback).
+void nvim_terminal_set_cursor_vis(Terminal *term, int visible)
+{
+  if (term) {
+    term->cursor.visible = visible != 0;
+  }
+}
+
+/// Get the scrollback buffer pointer for a Terminal.
+void **nvim_terminal_get_sb_buffer(Terminal *term)
+{
+  return term ? (void **)term->sb_buffer : NULL;
+}
+
+/// Increment the sb_current count.
+void nvim_terminal_inc_sb_current(Terminal *term)
+{
+  if (term && term->sb_current < term->sb_size) {
+    term->sb_current++;
+  }
+}
+
+/// Decrement the sb_current count.
+void nvim_terminal_dec_sb_current(Terminal *term)
+{
+  if (term && term->sb_current > 0) {
+    term->sb_current--;
+  }
+}
+
+/// Increment the sb_deleted count.
+void nvim_terminal_inc_sb_deleted(Terminal *term)
+{
+  if (term) {
+    term->sb_deleted++;
+  }
+}
+
+/// Get the sb_deleted count.
+size_t nvim_terminal_get_sb_deleted_val(Terminal *term)
+{
+  return term ? term->sb_deleted : 0;
+}
+
 // vim: foldmethod=marker
