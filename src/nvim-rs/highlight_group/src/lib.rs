@@ -22,6 +22,7 @@ pub mod normal;
 pub mod parse;
 pub mod registry;
 mod types;
+pub mod ui;
 
 use std::ffi::c_int;
 
