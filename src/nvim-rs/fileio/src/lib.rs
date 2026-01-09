@@ -14,6 +14,7 @@
 use std::ffi::{c_char, c_int, CStr};
 
 pub mod encoding;
+pub mod read;
 
 // =============================================================================
 // Opaque Handles
