@@ -6602,3 +6602,332 @@ int nvim_syncluster_get_id(syn_cluster_T *cluster)
   }
   return SYNID_CLUSTER + idx;
 }
+
+// ============================================================================
+// Phase 24.1: State Management Helpers (for Rust FFI)
+// ============================================================================
+
+/// Check if a state item at idx has a position spanning past current line
+/// Used by store_current_state to decide if state can be stored
+int nvim_syn_state_item_spans_line(int idx, int lnum)
+{
+  if (idx < 0 || idx >= current_state.ga_len) {
+    return 0;
+  }
+  stateitem_T *cur_si = &CUR_STATE(idx);
+  if (cur_si->si_h_startpos.lnum >= lnum
+      || cur_si->si_m_endpos.lnum >= lnum
+      || cur_si->si_h_endpos.lnum >= lnum
+      || (cur_si->si_end_idx && cur_si->si_eoe_pos.lnum >= lnum)) {
+    return 1;
+  }
+  return 0;
+}
+
+/// Find a state entry in the synblock at or before given line
+/// Returns the entry or NULL
+synstate_T *nvim_syn_stack_find_entry(int lnum)
+{
+  return syn_stack_find_entry((linenr_T)lnum);
+}
+
+/// Remove a state entry from the used list and move to free list
+void nvim_syn_stack_remove_entry(synstate_T *sp)
+{
+  if (sp == NULL || syn_block == NULL) {
+    return;
+  }
+  synstate_T *p;
+  if (syn_block->b_sst_first == sp) {
+    syn_block->b_sst_first = sp->sst_next;
+  } else {
+    for (p = syn_block->b_sst_first; p != NULL; p = p->sst_next) {
+      if (p->sst_next == sp) {
+        break;
+      }
+    }
+    if (p != NULL) {
+      p->sst_next = sp->sst_next;
+    }
+  }
+  syn_stack_free_entry(syn_block, sp);
+}
+
+/// Allocate a new state entry for the given line
+/// Returns NULL if no free entries or after insert position
+synstate_T *nvim_syn_stack_alloc_entry(int lnum, synstate_T *after)
+{
+  if (syn_block == NULL) {
+    return NULL;
+  }
+
+  // If no free items, cleanup the array first
+  if (syn_block->b_sst_freecount == 0) {
+    syn_stack_cleanup();
+  }
+
+  // Still no free items?
+  if (syn_block->b_sst_freecount == 0) {
+    return NULL;
+  }
+
+  // Take the first item from the free list
+  synstate_T *p = syn_block->b_sst_firstfree;
+  syn_block->b_sst_firstfree = p->sst_next;
+  syn_block->b_sst_freecount--;
+
+  if (after == NULL) {
+    // Insert in front of the list
+    p->sst_next = syn_block->b_sst_first;
+    syn_block->b_sst_first = p;
+  } else {
+    // Insert in list after *after
+    p->sst_next = after->sst_next;
+    after->sst_next = p;
+  }
+
+  p->sst_stacksize = 0;
+  p->sst_lnum = (linenr_T)lnum;
+  return p;
+}
+
+/// Store the current state into a synstate entry
+/// This copies current_state items to the synstate's bufstate array
+void nvim_syn_store_state_to_entry(synstate_T *sp)
+{
+  if (sp == NULL) {
+    return;
+  }
+
+  // Clear any existing state
+  clear_syn_state(sp);
+  sp->sst_stacksize = current_state.ga_len;
+
+  bufstate_T *bp;
+  if (current_state.ga_len > SST_FIX_STATES) {
+    // Need to use growarray for long stacks
+    ga_init(&sp->sst_union.sst_ga, (int)sizeof(bufstate_T), 1);
+    ga_grow(&sp->sst_union.sst_ga, current_state.ga_len);
+    sp->sst_union.sst_ga.ga_len = current_state.ga_len;
+    bp = SYN_STATE_P(&(sp->sst_union.sst_ga));
+  } else {
+    bp = sp->sst_union.sst_stack;
+  }
+
+  for (int i = 0; i < sp->sst_stacksize; i++) {
+    bp[i].bs_idx = CUR_STATE(i).si_idx;
+    bp[i].bs_flags = CUR_STATE(i).si_flags;
+    bp[i].bs_seqnr = CUR_STATE(i).si_seqnr;
+    bp[i].bs_cchar = CUR_STATE(i).si_cchar;
+    bp[i].bs_extmatch = ref_extmatch(CUR_STATE(i).si_extmatch);
+  }
+
+  sp->sst_next_flags = current_next_flags;
+  sp->sst_next_list = current_next_list;
+  sp->sst_tick = display_tick;
+  sp->sst_change_lnum = 0;
+}
+
+/// Mark current state as stored
+void nvim_syn_set_state_stored(int stored)
+{
+  current_state_stored = stored ? true : false;
+}
+
+/// Call clear_current_state()
+void nvim_syn_clear_current_state(void)
+{
+  clear_current_state();
+}
+
+/// Call validate_current_state()
+void nvim_syn_validate_current_state(void)
+{
+  validate_current_state();
+}
+
+/// Call invalidate_current_state()
+void nvim_syn_invalidate_current_state(void)
+{
+  invalidate_current_state();
+}
+
+/// Set keepend_level
+void nvim_syn_set_keepend_level(int level)
+{
+  keepend_level = level;
+}
+
+/// Grow current_state array and set item at index
+void nvim_syn_grow_current_state(int size)
+{
+  ga_grow(&current_state, size);
+}
+
+/// Set current_state.ga_len
+void nvim_syn_set_current_state_len(int len)
+{
+  current_state.ga_len = len;
+}
+
+/// Set current_next_list
+void nvim_syn_set_current_next_list(int16_t *list)
+{
+  current_next_list = list;
+}
+
+/// Set current_next_flags
+void nvim_syn_set_current_next_flags(int flags)
+{
+  current_next_flags = flags;
+}
+
+/// Set current_lnum
+void nvim_syn_set_current_lnum(int lnum)
+{
+  current_lnum = (linenr_T)lnum;
+}
+
+/// Get sst_next_list from a synstate
+int16_t *nvim_synstate_get_next_list(synstate_T *state)
+{
+  if (state == NULL) {
+    return NULL;
+  }
+  return state->sst_next_list;
+}
+
+/// Get bufstate item from synstate at index
+/// Returns NULL if index out of bounds
+bufstate_T *nvim_synstate_get_bufstate(synstate_T *state, int idx)
+{
+  if (state == NULL || idx < 0 || idx >= state->sst_stacksize) {
+    return NULL;
+  }
+  bufstate_T *bp;
+  if (state->sst_stacksize > SST_FIX_STATES) {
+    bp = SYN_STATE_P(&(state->sst_union.sst_ga));
+  } else {
+    bp = state->sst_union.sst_stack;
+  }
+  return &bp[idx];
+}
+
+/// Get bs_idx from bufstate
+int nvim_bufstate_get_idx(bufstate_T *bs)
+{
+  return bs ? bs->bs_idx : 0;
+}
+
+/// Get bs_flags from bufstate
+int nvim_bufstate_get_flags(bufstate_T *bs)
+{
+  return bs ? bs->bs_flags : 0;
+}
+
+/// Get bs_seqnr from bufstate
+int nvim_bufstate_get_seqnr(bufstate_T *bs)
+{
+  return bs ? bs->bs_seqnr : 0;
+}
+
+/// Get bs_cchar from bufstate
+int nvim_bufstate_get_cchar(bufstate_T *bs)
+{
+  return bs ? bs->bs_cchar : 0;
+}
+
+/// Get bs_extmatch from bufstate (opaque pointer)
+reg_extmatch_T *nvim_bufstate_get_extmatch(bufstate_T *bs)
+{
+  return bs ? bs->bs_extmatch : NULL;
+}
+
+/// Set stateitem fields at index (used by load_current_state)
+void nvim_syn_set_cur_state_item(int idx, int si_idx, int si_flags, int si_seqnr,
+                                  int si_cchar, reg_extmatch_T *extmatch)
+{
+  if (idx < 0 || idx >= current_state.ga_len) {
+    return;
+  }
+  CUR_STATE(idx).si_idx = si_idx;
+  CUR_STATE(idx).si_flags = si_flags;
+  CUR_STATE(idx).si_seqnr = si_seqnr;
+  CUR_STATE(idx).si_cchar = si_cchar;
+  CUR_STATE(idx).si_extmatch = ref_extmatch(extmatch);
+  CUR_STATE(idx).si_ends = false;
+  CUR_STATE(idx).si_m_lnum = 0;
+  CUR_STATE(idx).si_next_list = NULL;
+  if (si_idx >= 0) {
+    CUR_STATE(idx).si_next_list = SYN_ITEMS(syn_block)[si_idx].sp_next_list;
+  }
+}
+
+/// Call update_si_attr for item at index
+void nvim_syn_update_si_attr(int idx)
+{
+  if (idx >= 0 && idx < current_state.ga_len) {
+    update_si_attr(idx);
+  }
+}
+
+/// Compare two extmatch pointers (for syn_stack_equal)
+/// Returns 1 if they match, 0 if different, -1 if needs string comparison
+int nvim_syn_extmatch_equal(reg_extmatch_T *a, reg_extmatch_T *b)
+{
+  if (a == b) {
+    return 1;
+  }
+  if (a == NULL || b == NULL) {
+    return 0;
+  }
+  return -1;  // Need string comparison
+}
+
+/// Compare extmatch strings at given sub-index with ignore-case from pattern
+/// Returns 1 if equal, 0 if different
+int nvim_syn_extmatch_strings_equal(reg_extmatch_T *a, reg_extmatch_T *b,
+                                     int subidx, int pat_idx)
+{
+  if (subidx < 0 || subidx >= NSUBEXP) {
+    return 0;
+  }
+  if (a->matches[subidx] == b->matches[subidx]) {
+    return 1;
+  }
+  if (a->matches[subidx] == NULL || b->matches[subidx] == NULL) {
+    return 0;
+  }
+
+  int ic = 0;
+  if (pat_idx >= 0 && syn_block != NULL && pat_idx < syn_block->b_syn_patterns.ga_len) {
+    ic = SYN_ITEMS(syn_block)[pat_idx].sp_ic;
+  }
+
+  return mb_strcmp_ic(ic, (const char *)a->matches[subidx],
+                      (const char *)b->matches[subidx]) == 0 ? 1 : 0;
+}
+
+/// Get NSUBEXP constant
+int nvim_syn_get_nsubexp(void)
+{
+  return NSUBEXP;
+}
+
+/// Get the sp_ic (ignore case) flag for a pattern at index
+int nvim_synblock_pattern_ic(int pat_idx)
+{
+  if (syn_block == NULL || pat_idx < 0 || pat_idx >= syn_block->b_syn_patterns.ga_len) {
+    return 0;
+  }
+  return SYN_ITEMS(syn_block)[pat_idx].sp_ic;
+}
+
+/// Get si_extmatch from a stateitem
+reg_extmatch_T *nvim_stateitem_get_extmatch(stateitem_T *item)
+{
+  if (item == NULL) {
+    return NULL;
+  }
+  return item->si_extmatch;
+}

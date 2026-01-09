@@ -140,6 +140,44 @@ impl IdListHandle {
     }
 }
 
+/// Opaque handle to a bufstate_T (stored state for state stack entry)
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct BufStateHandle(*mut std::ffi::c_void);
+
+impl BufStateHandle {
+    /// Check if the handle is null
+    #[must_use]
+    pub fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+
+    /// Create a null handle
+    #[must_use]
+    pub fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+}
+
+/// Opaque handle to a reg_extmatch_T (external match references)
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct ExtMatchHandle(*mut std::ffi::c_void);
+
+impl ExtMatchHandle {
+    /// Check if the handle is null
+    #[must_use]
+    pub fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+
+    /// Create a null handle
+    #[must_use]
+    pub fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+}
+
 // =============================================================================
 // Constants - Highlight flags (HL_*)
 // =============================================================================
@@ -809,6 +847,109 @@ extern "C" {
 
     /// Set expand_what variable
     fn nvim_syn_set_expand_what(what: c_int);
+
+    // -------------------------------------------------------------------------
+    // Phase 24.1: State Management Helpers
+    // -------------------------------------------------------------------------
+
+    /// Check if a state item at idx has a position spanning past current line
+    fn nvim_syn_state_item_spans_line(idx: c_int, lnum: c_int) -> c_int;
+
+    /// Find a state entry in the synblock at or before given line
+    fn nvim_syn_stack_find_entry(lnum: c_int) -> SynStateHandle;
+
+    /// Remove a state entry from the used list and move to free list
+    fn nvim_syn_stack_remove_entry(sp: SynStateHandle);
+
+    /// Allocate a new state entry for the given line
+    fn nvim_syn_stack_alloc_entry(lnum: c_int, after: SynStateHandle) -> SynStateHandle;
+
+    /// Store the current state into a synstate entry
+    fn nvim_syn_store_state_to_entry(sp: SynStateHandle);
+
+    /// Mark current state as stored
+    fn nvim_syn_set_state_stored(stored: c_int);
+
+    /// Call clear_current_state()
+    fn nvim_syn_clear_current_state();
+
+    /// Call validate_current_state()
+    fn nvim_syn_validate_current_state();
+
+    /// Call invalidate_current_state()
+    fn nvim_syn_invalidate_current_state();
+
+    /// Set keepend_level
+    fn nvim_syn_set_keepend_level(level: c_int);
+
+    /// Grow current_state array
+    fn nvim_syn_grow_current_state(size: c_int);
+
+    /// Set current_state.ga_len
+    fn nvim_syn_set_current_state_len(len: c_int);
+
+    /// Set current_next_list
+    fn nvim_syn_set_current_next_list(list: IdListHandle);
+
+    /// Set current_next_flags
+    fn nvim_syn_set_current_next_flags(flags: c_int);
+
+    /// Set current_lnum
+    fn nvim_syn_set_current_lnum(lnum: c_int);
+
+    /// Get sst_next_list from a synstate
+    fn nvim_synstate_get_next_list(state: SynStateHandle) -> IdListHandle;
+
+    /// Get bufstate item from synstate at index
+    fn nvim_synstate_get_bufstate(state: SynStateHandle, idx: c_int) -> BufStateHandle;
+
+    /// Get bs_idx from bufstate
+    fn nvim_bufstate_get_idx(bs: BufStateHandle) -> c_int;
+
+    /// Get bs_flags from bufstate
+    fn nvim_bufstate_get_flags(bs: BufStateHandle) -> c_int;
+
+    /// Get bs_seqnr from bufstate
+    fn nvim_bufstate_get_seqnr(bs: BufStateHandle) -> c_int;
+
+    /// Get bs_cchar from bufstate
+    fn nvim_bufstate_get_cchar(bs: BufStateHandle) -> c_int;
+
+    /// Get bs_extmatch from bufstate (opaque pointer)
+    fn nvim_bufstate_get_extmatch(bs: BufStateHandle) -> ExtMatchHandle;
+
+    /// Set stateitem fields at index (used by load_current_state)
+    fn nvim_syn_set_cur_state_item(
+        idx: c_int,
+        si_idx: c_int,
+        si_flags: c_int,
+        si_seqnr: c_int,
+        si_cchar: c_int,
+        extmatch: ExtMatchHandle,
+    );
+
+    /// Call update_si_attr for item at index
+    fn nvim_syn_update_si_attr(idx: c_int);
+
+    /// Compare two extmatch pointers (for syn_stack_equal)
+    fn nvim_syn_extmatch_equal(a: ExtMatchHandle, b: ExtMatchHandle) -> c_int;
+
+    /// Compare extmatch strings at given sub-index
+    fn nvim_syn_extmatch_strings_equal(
+        a: ExtMatchHandle,
+        b: ExtMatchHandle,
+        subidx: c_int,
+        pat_idx: c_int,
+    ) -> c_int;
+
+    /// Get NSUBEXP constant
+    fn nvim_syn_get_nsubexp() -> c_int;
+
+    /// Get the sp_ic (ignore case) flag for a pattern at index
+    fn nvim_synblock_pattern_ic(pat_idx: c_int) -> c_int;
+
+    /// Get si_extmatch from a stateitem
+    fn nvim_stateitem_get_extmatch(item: StateItemHandle) -> ExtMatchHandle;
 }
 
 // =============================================================================
@@ -2479,6 +2620,208 @@ pub extern "C" fn rs_sptype_name(sptype: c_int) -> *const c_char {
         _ => UNKNOWN_STR,
     };
     s.as_ptr() as *const c_char
+}
+
+// =============================================================================
+// Phase 24.1: State Management Functions (FFI exports)
+// =============================================================================
+
+/// Try saving the current state in b_sst_array[].
+/// The current state must be valid for the start of the current_lnum line!
+/// Returns the synstate entry (or NULL if not stored).
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_store_current_state() -> SynStateHandle {
+    let lnum = nvim_syn_get_current_lnum();
+    let state_len = nvim_syn_get_current_state_len();
+
+    // Find existing entry at or before current line
+    let sp = nvim_syn_stack_find_entry(lnum);
+
+    // Check if current state contains items that span across lines
+    // If so, we can't use this state - it's not valid for line boundaries
+    let mut has_spanning_item = false;
+    for i in (0..state_len).rev() {
+        if nvim_syn_state_item_spans_line(i, lnum) != 0 {
+            has_spanning_item = true;
+            break;
+        }
+    }
+
+    if has_spanning_item {
+        // Current state spans lines, can't store it
+        // If there was an existing entry at this line, remove it
+        if !sp.is_null() {
+            nvim_syn_stack_remove_entry(sp);
+        }
+        nvim_syn_set_state_stored(1);
+        return SynStateHandle::null();
+    }
+
+    // Determine if we need to allocate a new entry
+    let entry = if sp.is_null() || nvim_synstate_get_lnum(sp) != lnum {
+        // Need to allocate a new entry
+        nvim_syn_stack_alloc_entry(lnum, sp)
+    } else {
+        // Reuse existing entry
+        sp
+    };
+
+    if !entry.is_null() {
+        // Store current state to the entry
+        nvim_syn_store_state_to_entry(entry);
+    }
+
+    nvim_syn_set_state_stored(1);
+    entry
+}
+
+/// Copy a state stack from a synstate entry to current_state.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_load_current_state(from: SynStateHandle) {
+    if from.is_null() {
+        return;
+    }
+
+    // Clear and validate current state
+    nvim_syn_clear_current_state();
+    nvim_syn_validate_current_state();
+    nvim_syn_set_keepend_level(-1);
+
+    let stacksize = nvim_synstate_get_stacksize(from);
+    if stacksize > 0 {
+        // Grow current state array
+        nvim_syn_grow_current_state(stacksize);
+        nvim_syn_set_current_state_len(stacksize);
+
+        // Copy each state item
+        let mut keepend_level = -1;
+        for i in 0..stacksize {
+            let bs = nvim_synstate_get_bufstate(from, i);
+            if bs.is_null() {
+                continue;
+            }
+
+            let bs_idx = nvim_bufstate_get_idx(bs);
+            let bs_flags = nvim_bufstate_get_flags(bs);
+            let bs_seqnr = nvim_bufstate_get_seqnr(bs);
+            let bs_cchar = nvim_bufstate_get_cchar(bs);
+            let extmatch = nvim_bufstate_get_extmatch(bs);
+
+            // Set the state item (this also sets si_next_list based on pattern)
+            nvim_syn_set_cur_state_item(i, bs_idx, bs_flags, bs_seqnr, bs_cchar, extmatch);
+
+            // Track keepend level
+            if keepend_level < 0 && (bs_flags & HL_KEEPEND) != 0 {
+                keepend_level = i;
+            }
+
+            // Update attributes for this item
+            nvim_syn_update_si_attr(i);
+        }
+
+        nvim_syn_set_keepend_level(keepend_level);
+    }
+
+    // Copy next_list and next_flags from saved state
+    let next_list = nvim_synstate_get_next_list(from);
+    nvim_syn_set_current_next_list(next_list);
+    nvim_syn_set_current_next_flags(nvim_synstate_get_next_flags(from));
+    nvim_syn_set_current_lnum(nvim_synstate_get_lnum(from));
+}
+
+/// Compare saved state stack with the current state.
+/// Returns 1 if they are equal, 0 otherwise.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_stack_equal(sp: SynStateHandle) -> c_int {
+    if sp.is_null() {
+        return 0;
+    }
+
+    let sp_stacksize = nvim_synstate_get_stacksize(sp);
+    let current_len = nvim_syn_get_current_state_len();
+
+    // Quick check: stack sizes must match
+    if sp_stacksize != current_len {
+        return 0;
+    }
+
+    // Quick check: next_list pointers must match
+    // (We compare raw pointers since they point to the same data)
+    let sp_next_list = nvim_synstate_get_next_list(sp);
+    let cur_next_list = nvim_syn_get_current_next_list();
+    if sp_next_list.0 != cur_next_list.0 {
+        return 0;
+    }
+
+    // Compare each state item
+    let nsubexp = nvim_syn_get_nsubexp();
+    for i in (0..current_len).rev() {
+        let bs = nvim_synstate_get_bufstate(sp, i);
+        if bs.is_null() {
+            return 0;
+        }
+
+        let cur_si = nvim_syn_get_cur_state(i);
+        if cur_si.is_null() {
+            return 0;
+        }
+
+        // Compare indices
+        let bs_idx = nvim_bufstate_get_idx(bs);
+        let si_idx = nvim_stateitem_get_idx(cur_si);
+        if bs_idx != si_idx {
+            return 0;
+        }
+
+        // Compare extmatch
+        let bs_extmatch = nvim_bufstate_get_extmatch(bs);
+        let si_extmatch = nvim_stateitem_get_extmatch(cur_si);
+        let cmp = nvim_syn_extmatch_equal(bs_extmatch, si_extmatch);
+
+        if cmp == 1 {
+            // Same pointer or both NULL, continue
+            continue;
+        } else if cmp == 0 {
+            // One is NULL, the other isn't
+            return 0;
+        }
+
+        // cmp == -1: need to compare strings
+        for j in 0..nsubexp {
+            if nvim_syn_extmatch_strings_equal(bs_extmatch, si_extmatch, j, si_idx) == 0 {
+                return 0;
+            }
+        }
+    }
+
+    1
+}
+
+/// Invalidate the current state - clear it and mark as invalid.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_invalidate_current_state() {
+    nvim_syn_invalidate_current_state();
+}
+
+/// Clear the current state stack.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_clear_current_state() {
+    nvim_syn_clear_current_state();
 }
 
 #[cfg(test)]
