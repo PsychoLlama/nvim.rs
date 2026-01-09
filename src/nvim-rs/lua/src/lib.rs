@@ -1,6 +1,10 @@
 //! Lua executor FFI for Neovim
 //!
 //! This module provides Rust FFI for Lua callback invocation and executor state checking.
+//!
+//! ## Modules
+//!
+//! - [`state`]: Lua state accessors and callback infrastructure
 
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(clippy::missing_safety_doc)]
@@ -8,10 +12,14 @@
 #![allow(clippy::missing_panics_doc)]
 #![allow(clippy::cast_possible_wrap)]
 
+pub mod state;
+
 use std::ffi::{c_char, c_int};
 
 // Re-export API types for convenience
 pub use nvim_api::{Arena, Array, Error, LuaRef, NvimString, Object};
+// Re-export state module types
+pub use state::LuaState;
 
 // =============================================================================
 // LuaRetMode enum (matches C definition in executor.h)
