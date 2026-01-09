@@ -545,6 +545,24 @@ int nvim_get_search_match_endcol(void)
   return (int)search_match_endcol;
 }
 
+/// Set the search_match_lines global (setter for Rust).
+void nvim_set_search_match_lines(int val)
+{
+  search_match_lines = (linenr_T)val;
+}
+
+/// Set the search_match_endcol global (setter for Rust).
+void nvim_set_search_match_endcol(int val)
+{
+  search_match_endcol = (colnr_T)val;
+}
+
+/// Get the p_is option (incsearch) for Rust.
+int nvim_get_p_is(void)
+{
+  return p_is ? 1 : 0;
+}
+
 /// Get the no_hlsearch global (accessor for Rust).
 int nvim_get_no_hlsearch(void)
 {

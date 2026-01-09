@@ -234,7 +234,11 @@ impl SearchBehavior {
 #[inline]
 pub fn calc_extra_col(char_len: c_int, forward: bool, accept_at_start: bool) -> c_int {
     if forward {
-        if accept_at_start { 0 } else { char_len }
+        if accept_at_start {
+            0
+        } else {
+            char_len
+        }
     } else if accept_at_start {
         char_len
     } else {
