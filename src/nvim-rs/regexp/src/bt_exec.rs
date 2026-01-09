@@ -25,7 +25,7 @@ use crate::bt_compile::{next, op, operand};
 use crate::bt_opcodes::{
     get_mclose_num, get_mopen_num, is_mclose, is_mopen, ALPHA, ANY, ANYBUT, ANYOF, BACK, BOL, BOW,
     BRANCH, DIGIT, END, EOL, EOW, EXACTLY, HEAD, HEX, IDENT, LOWER, NALPHA, NDIGIT, NEWL, NHEAD,
-    NHEX, NLOWER, NOTHING, NWHITE, NWORD, NUPPER, OCTAL, PLUS, PRINT, SPRINT, STAR, UPPER, WHITE,
+    NHEX, NLOWER, NOTHING, NUPPER, NWHITE, NWORD, OCTAL, PLUS, PRINT, SPRINT, STAR, UPPER, WHITE,
     WORD,
 };
 use crate::bt_state::{BackPosTable, RegSave, RegStack, RegState, NSUBEXP};
@@ -602,7 +602,9 @@ unsafe fn match_one_op(state: &mut MatchState, scan: *const u8, opcode: c_int) -
         WORD => match_char_class(state, is_word_char),
         NWORD => match_char_class(state, |c| !is_word_char(c) && c != b'\n'),
         HEAD => match_char_class(state, |c| c.is_ascii_alphabetic() || c == b'_'),
-        NHEAD => match_char_class(state, |c| !c.is_ascii_alphabetic() && c != b'_' && c != b'\n'),
+        NHEAD => match_char_class(state, |c| {
+            !c.is_ascii_alphabetic() && c != b'_' && c != b'\n'
+        }),
         ALPHA => match_char_class(state, |c| c.is_ascii_alphabetic()),
         NALPHA => match_char_class(state, |c| !c.is_ascii_alphabetic() && c != b'\n'),
         LOWER => match_char_class(state, |c| c.is_ascii_lowercase()),

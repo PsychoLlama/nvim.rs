@@ -428,6 +428,17 @@ impl<'a> PatternParser<'a> {
         self.error_msg
     }
 
+    /// Set the re_has_z flag (pattern uses \z special).
+    pub fn set_has_z(&mut self, val: bool) {
+        self.re_has_z = val;
+    }
+
+    /// Check if pattern uses \z special.
+    #[allow(dead_code)]
+    pub fn has_z(&self) -> bool {
+        self.re_has_z
+    }
+
     /// Read and parse limits for `\{n,m}` quantifier.
     ///
     /// Parses:
@@ -1108,6 +1119,64 @@ unsafe fn parse_atom(
                 parser.set_error("E59: Character classes not yet implemented");
                 return ptr::null_mut();
             }
+            b'z' => {
+                // \z prefix: \zs, \ze, \z1-\z9, \z(...)
+                // The character after \z is checked directly (not through magic)
+                let next_chr = parser.peekchr();
+                // Convert any magic encoding back to literal, or use literal directly
+                let next_byte = if is_magic(next_chr) {
+                    un_magic(next_chr) as u8
+                } else if next_chr > 0 && next_chr < 256 {
+                    next_chr as u8
+                } else {
+                    0 // Invalid
+                };
+
+                match next_byte {
+                    b's' => {
+                        // \zs - set match start
+                        parser.skipchr();
+                        // Emit MOPEN (submatch 0) to mark match start
+                        // Note: submatch 0 is the whole match, so this effectively sets
+                        // the visible start of the match, not a capturing group.
+                        let ret = (*compiler).emit_node(MOPEN);
+                        // No HASWIDTH flag - this is zero-width
+                        return ret;
+                    }
+                    b'e' => {
+                        // \ze - set match end
+                        parser.skipchr();
+                        // Emit MCLOSE (submatch 0) to mark match end
+                        let ret = (*compiler).emit_node(MCLOSE);
+                        // No HASWIDTH flag - this is zero-width
+                        return ret;
+                    }
+                    b'(' => {
+                        // \z(...\) - external capturing group
+                        // Note: In nomagic mode, this would be \z\(
+                        // but we handle the magic ( case here too
+                        parser.skipchr();
+                        let mut inner_flags: c_int = 0;
+                        let ret = parse_reg(compiler, parser, REG_ZPAREN, &mut inner_flags);
+                        *flagp |= inner_flags & (HASWIDTH | SPSTART | HASNL | HASLOOKBH);
+                        parser.set_has_z(true);
+                        return ret;
+                    }
+                    b'1'..=b'9' => {
+                        // \z1-\z9 - external backreference
+                        parser.skipchr();
+                        let n = next_byte - b'0';
+                        let ret = (*compiler).emit_node(ZREF + n as c_int);
+                        *flagp |= HASWIDTH;
+                        parser.set_has_z(true);
+                        return ret;
+                    }
+                    _ => {
+                        parser.set_error("E68: Invalid character after \\z");
+                        return ptr::null_mut();
+                    }
+                }
+            }
             b'1'..=b'9' => {
                 // Backreference
                 let n = mc - b'0';
@@ -1228,5 +1297,86 @@ mod tests {
         let mut parser = PatternParser::new(pattern, 0);
         parser.skipchr();
         assert_eq!(parser.peekchr(), 0);
+    }
+
+    #[test]
+    fn test_parser_z_prefix() {
+        // Test \z prefix parsing - \z becomes magic 'z', and the following
+        // character is parsed normally. The atom parser handles \z specially.
+        let pattern = b"a\\zsb";
+        let mut parser = PatternParser::new(pattern, 0);
+
+        // 'a'
+        assert_eq!(parser.peekchr(), b'a' as c_int);
+        parser.skipchr();
+
+        // '\z' should produce magic 'z'
+        let c = parser.peekchr();
+        assert!(is_magic(c));
+        assert_eq!(un_magic(c), b'z' as c_int);
+        parser.skipchr();
+
+        // 's' is a regular literal character - the atom parser handles
+        // the \zs combination at a higher level
+        let c = parser.peekchr();
+        assert_eq!(c, b's' as c_int);
+        parser.skipchr();
+
+        // 'b' is literal
+        assert_eq!(parser.peekchr(), b'b' as c_int);
+    }
+
+    #[test]
+    fn test_parser_z_paren() {
+        // Test \z( parsing - \z becomes magic, ( needs \( in nomagic mode
+        let pattern = b"\\z\\(";
+        let mut parser = PatternParser::new(pattern, 0);
+
+        // '\z' should produce magic 'z'
+        let c = parser.peekchr();
+        assert!(is_magic(c));
+        assert_eq!(un_magic(c), b'z' as c_int);
+        parser.skipchr();
+
+        // '\(' should be magic '(' (grouping)
+        let c = parser.peekchr();
+        assert!(is_magic(c));
+        assert_eq!(un_magic(c), b'(' as c_int);
+    }
+
+    #[test]
+    fn test_parser_z_backref() {
+        // Test \z1 parsing - \z is prefix, 1 is literal
+        let pattern = b"\\z1";
+        let mut parser = PatternParser::new(pattern, 0);
+
+        // '\z' should produce magic 'z'
+        let c = parser.peekchr();
+        assert!(is_magic(c));
+        assert_eq!(un_magic(c), b'z' as c_int);
+        parser.skipchr();
+
+        // '1' is literal - the atom parser handles \z1 as external backreference
+        let c = parser.peekchr();
+        assert_eq!(c, b'1' as c_int);
+    }
+
+    #[test]
+    fn test_z_prefix_needs_atom_handling() {
+        // The \z prefix is converted to magic 'z', and the parse_atom
+        // function is responsible for looking at the following character
+        // to determine if it's \zs, \ze, \z1-9, or \z(
+        let pattern = b"\\ze";
+        let mut parser = PatternParser::new(pattern, 0);
+
+        // '\z' produces magic 'z'
+        let c = parser.peekchr();
+        assert!(is_magic(c));
+        assert_eq!(un_magic(c), b'z' as c_int);
+        parser.skipchr();
+
+        // 'e' is literal - parse_atom checks for this and handles \ze
+        let c = parser.peekchr();
+        assert_eq!(c, b'e' as c_int);
     }
 }
