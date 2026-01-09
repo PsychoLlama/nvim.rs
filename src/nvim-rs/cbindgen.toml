@@ -439,4 +439,13 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            # Syntax highlighting engine (Phase 26)
            "rs_syntax_id_to_attr", "rs_syntax_current_id", "rs_syntax_current_attr",
            "rs_syntax_sync_minlines", "rs_syntax_sync_maxlines",
-           "rs_syntax_sync_is_ccomment", "rs_syntax_sync_is_match"]
+           "rs_syntax_sync_is_ccomment", "rs_syntax_sync_is_match",
+           # Multiline/buffer regex matching (Phase 27.11)
+           "rs_multi_match_context_new", "rs_multi_match_context_free",
+           "rs_multi_match_context_set_prog", "rs_multi_match_context_set_start",
+           "rs_multi_match_context_set_fetcher",
+           "rs_multi_match_result_new", "rs_multi_match_result_free",
+           "rs_multi_match_result_matched",
+           "rs_multi_match_result_start_lnum", "rs_multi_match_result_start_col",
+           "rs_multi_match_result_end_lnum", "rs_multi_match_result_end_col",
+           "rs_regexec_multi", "MultiMatchContext", "MultiMatchResult", "MultiPos"]
