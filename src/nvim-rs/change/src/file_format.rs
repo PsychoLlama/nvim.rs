@@ -80,10 +80,7 @@ fn file_ff_differs_impl(buf: BufHandle, ignore_empty: bool) -> bool {
         }
 
         // Check for new, empty buffer
-        if ignore_empty
-            && (flags & BF_NEW) != 0
-            && nvim_buf_get_b_ml_ml_line_count(buf) == 1
-        {
+        if ignore_empty && (flags & BF_NEW) != 0 && nvim_buf_get_b_ml_ml_line_count(buf) == 1 {
             let line = nvim_ml_get_buf(buf, 1);
             if !line.is_null() && *line == NUL {
                 return false;

@@ -43,9 +43,9 @@ pub use events::{
 };
 pub use file_format::{rs_file_ff_differs, rs_save_file_ff, rs_unchanged};
 pub use flags::OpenlineFlags;
-pub use open_line::{rs_open_line, rs_open_line_backward, rs_open_line_forward};
 pub use invalidation::rs_changed_lines_invalidate_buf;
 pub use lines::{rs_del_lines, rs_truncate_line};
+pub use open_line::{rs_open_line, rs_open_line_backward, rs_open_line_forward};
 pub use recording::{rs_change_warning, rs_changed, rs_changed_internal};
 
 // =============================================================================

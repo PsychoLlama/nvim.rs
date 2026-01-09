@@ -10,6 +10,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | autocmd        | Autocommand events and patterns         |
 | buffer         | Buffer state and validation             |
 | buffer_updates | Buffer change tracking                  |
+| change         | Buffer modification tracking and text editing |
 | charset        | Character classification and conversion |
 | cmdexpand      | Command-line completion and expansion   |
 | cmdhist        | Command history                         |

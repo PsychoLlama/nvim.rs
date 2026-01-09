@@ -170,9 +170,19 @@ extern "C" {
     fn nvim_truncate_spaces(line: *mut c_char, col: usize);
 
     // Comment leader functions
-    fn nvim_get_leader_len(line: *const c_char, flags: *mut *mut c_char, backward: bool, include_space: bool) -> c_int;
+    fn nvim_get_leader_len(
+        line: *const c_char,
+        flags: *mut *mut c_char,
+        backward: bool,
+        include_space: bool,
+    ) -> c_int;
     fn nvim_check_linecomment(line: *const c_char) -> ColnrT;
-    fn nvim_copy_option_part(option: *mut *mut c_char, buf: *mut c_char, maxlen: c_int, sep: *const c_char) -> usize;
+    fn nvim_copy_option_part(
+        option: *mut *mut c_char,
+        buf: *mut c_char,
+        maxlen: c_int,
+        sep: *const c_char,
+    ) -> usize;
 
     // Format option functions
     fn nvim_has_format_option(opt: c_int) -> bool;
@@ -191,8 +201,20 @@ extern "C" {
     fn nvim_replace_push_nul();
 
     // Mark functions
-    fn nvim_mark_adjust(lnum: LinenrT, lnume: LinenrT, amount: LinenrT, amount_after: LinenrT, op: c_int);
-    fn nvim_mark_col_adjust(lnum: LinenrT, col: ColnrT, amount_lnum: LinenrT, amount_col: LinenrT, spaces_removed: ColnrT);
+    fn nvim_mark_adjust(
+        lnum: LinenrT,
+        lnume: LinenrT,
+        amount: LinenrT,
+        amount_after: LinenrT,
+        op: c_int,
+    );
+    fn nvim_mark_col_adjust(
+        lnum: LinenrT,
+        col: ColnrT,
+        amount_lnum: LinenrT,
+        amount_col: LinenrT,
+        spaces_removed: ColnrT,
+    );
 
     // Extmark functions
     fn nvim_extmark_splice(
@@ -367,7 +389,10 @@ fn open_line_impl(
         let mincol = nvim_get_curwin_cursor_col() + 1;
 
         // Make a copy of the current line so we can mess with it
-        let mut saved_line = nvim_xstrnsave(nvim_get_cursor_line_ptr(), nvim_get_cursor_line_len() as usize);
+        let mut saved_line = nvim_xstrnsave(
+            nvim_get_cursor_line_ptr(),
+            nvim_get_cursor_line_len() as usize,
+        );
 
         if (state & VREPLACE_FLAG) != 0 {
             // With MODE_VREPLACE we make a copy of the next line
@@ -426,7 +451,9 @@ fn open_line_impl(
             }
 
             // Do smart indenting
-            if !trunc_line && do_si && *saved_line != NUL
+            if !trunc_line
+                && do_si
+                && *saved_line != NUL
                 && (p_extra.is_null() || first_char != b'{' as c_int)
             {
                 old_cursor = nvim_get_curwin_cursor();
@@ -490,7 +517,8 @@ fn open_line_impl(
                         if last_char == b'{' as c_char {
                             nvim_set_did_si(true);
                             no_si = true;
-                        } else if last_char != b';' as c_char && last_char != b'}' as c_char
+                        } else if last_char != b';' as c_char
+                            && last_char != b'}' as c_char
                             && nvim_cin_is_cinword(ptr)
                         {
                             nvim_set_did_si(true);
@@ -508,12 +536,17 @@ fn open_line_impl(
                             && cursor_lnum < nvim_curbuf_get_b_ml_ml_line_count()
                         {
                             let len = nvim_strlen(current_ptr);
-                            was_backslashed = len > 0 && *current_ptr.add(len - 1) == b'\\' as c_char;
+                            was_backslashed =
+                                len > 0 && *current_ptr.add(len - 1) == b'\\' as c_char;
                             cursor_lnum += 1;
                             nvim_set_curwin_cursor_lnum(cursor_lnum);
                             current_ptr = nvim_ml_get(cursor_lnum);
                         }
-                        newindent = if was_backslashed { 0 } else { nvim_get_indent() };
+                        newindent = if was_backslashed {
+                            0
+                        } else {
+                            nvim_get_indent()
+                        };
                     }
                     p = nvim_skipwhite(ptr);
                     if *p == b'}' as c_char {
@@ -535,7 +568,11 @@ fn open_line_impl(
         let do_cindent = !nvim_p_paste()
             && (nvim_curbuf_get_b_p_cin() || *nvim_curbuf_get_b_p_inde_ptr() != NUL)
             && nvim_in_cinkeys(
-                if dir == FORWARD { KEY_OPEN_FORW } else { KEY_OPEN_BACK },
+                if dir == FORWARD {
+                    KEY_OPEN_FORW
+                } else {
+                    KEY_OPEN_BACK
+                },
                 b' ' as c_char,
                 nvim_linewhite(nvim_get_curwin_cursor_lnum()),
             )
@@ -728,7 +765,11 @@ fn open_line_impl(
                     + lead_repl_len
                     + (if extra_space { 1 } else { 0 })
                     + extra_len
-                    + (if second_line_indent > 0 { second_line_indent } else { 0 })
+                    + (if second_line_indent > 0 {
+                        second_line_indent
+                    } else {
+                        0
+                    })
                     + 1;
                 leader = nvim_xmalloc(bytes as usize);
                 allocated = leader;
@@ -816,7 +857,10 @@ fn open_line_impl(
                                 std::ptr::copy(
                                     p.add(head_off as usize + 1),
                                     p.add(1),
-                                    (leader.add(lead_len as usize).offset_from(p.add(head_off as usize + 1))) as usize,
+                                    (leader
+                                        .add(lead_len as usize)
+                                        .offset_from(p.add(head_off as usize + 1)))
+                                        as usize,
                                 );
                                 lead_len -= head_off;
                                 *p = b' ' as c_char;
@@ -859,7 +903,10 @@ fn open_line_impl(
                                     std::ptr::copy(
                                         p.add(l as usize),
                                         p.add(1),
-                                        (leader.add(lead_len as usize).offset_from(p.add(l as usize))) as usize,
+                                        (leader
+                                            .add(lead_len as usize)
+                                            .offset_from(p.add(l as usize)))
+                                            as usize,
                                     );
                                     lead_len -= l - 1;
                                 }
@@ -1210,9 +1257,7 @@ fn open_line_impl(
                 // Do lisp indenting
                 nvim_fixthisline(nvim_get_lisp_indent as *const c_void);
                 nvim_set_ai_col(nvim_getwhitecols_curline() as ColnrT);
-            } else if do_cindent
-                || (nvim_curbuf_get_b_p_ai() && nvim_use_indentexpr_for_lisp())
-            {
+            } else if do_cindent || (nvim_curbuf_get_b_p_ai() && nvim_use_indentexpr_for_lisp()) {
                 // Do 'cindent' or 'indentexpr' indenting
                 nvim_do_c_expr_indent();
                 nvim_set_ai_col(nvim_getwhitecols_curline() as ColnrT);
@@ -1226,7 +1271,10 @@ fn open_line_impl(
         // MODE_VREPLACE final handling
         if (nvim_get_state() & VREPLACE_FLAG) != 0 {
             // Put new line in p_extra
-            let new_p_extra = nvim_xstrnsave(nvim_get_cursor_line_ptr(), nvim_get_cursor_line_len() as usize);
+            let new_p_extra = nvim_xstrnsave(
+                nvim_get_cursor_line_ptr(),
+                nvim_get_cursor_line_len() as usize,
+            );
 
             // Put back original line
             nvim_ml_replace(nvim_get_curwin_cursor_lnum(), next_line, false);

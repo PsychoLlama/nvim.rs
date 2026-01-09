@@ -141,9 +141,7 @@ fn get_leader_len_impl(
                 }
 
                 // When 'O' flag present and using "O" command skip this one.
-                if backward
-                    && !nvim_vim_strchr(part_buf.as_ptr(), COM_NOBACK as c_int).is_null()
-                {
+                if backward && !nvim_vim_strchr(part_buf.as_ptr(), COM_NOBACK as c_int).is_null() {
                     continue;
                 }
 

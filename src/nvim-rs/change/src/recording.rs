@@ -176,7 +176,10 @@ fn change_warning_impl(buf: BufHandle, col: c_int) {
         nvim_msg_end();
 
         // Give the user time to read the message
-        if nvim_msg_silent() == 0 && !nvim_silent_mode() && nvim_ui_active() && !nvim_ui_has_messages()
+        if nvim_msg_silent() == 0
+            && !nvim_silent_mode()
+            && nvim_ui_active()
+            && !nvim_ui_has_messages()
         {
             nvim_ui_flush();
             nvim_os_delay(1002, true);

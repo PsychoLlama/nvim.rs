@@ -298,7 +298,11 @@ fn changed_lines_impl(
         changed_lines_redraw_buf_impl(buf, lnum, lnume, xtra);
 
         let curwin = nvim_get_curwin();
-        if xtra == 0 && nvim_win_get_p_diff(curwin) && nvim_win_get_buffer(curwin) == buf && !nvim_diff_internal() {
+        if xtra == 0
+            && nvim_win_get_p_diff(curwin)
+            && nvim_win_get_buffer(curwin) == buf
+            && !nvim_diff_internal()
+        {
             // When the number of lines doesn't change then mark_adjust() isn't
             // called and other diff buffers still need to be marked for
             // displaying.
@@ -428,7 +432,13 @@ fn deleted_lines_mark_impl(lnum: LinenrT, count: c_int) {
         let ml_empty = nvim_buf_get_ml_empty(curbuf);
         let made_empty = count > 0 && ml_empty;
 
-        nvim_mark_adjust(lnum, lnum + count as LinenrT - 1, MAXLNUM, -(count as LinenrT), KEXTMARK_NOOP);
+        nvim_mark_adjust(
+            lnum,
+            lnum + count as LinenrT - 1,
+            MAXLNUM,
+            -(count as LinenrT),
+            KEXTMARK_NOOP,
+        );
 
         // if we deleted the entire buffer, we need to implicitly add a new empty line
         let xtra_for_extmark = if made_empty { 1 } else { 0 };
@@ -440,7 +450,14 @@ fn deleted_lines_mark_impl(lnum: LinenrT, count: c_int) {
             -(count as LinenrT) + xtra_for_extmark,
             KEXTMARK_UNDO,
         );
-        changed_lines_impl(curbuf, lnum, 0, lnum + count as LinenrT, -(count as LinenrT), true);
+        changed_lines_impl(
+            curbuf,
+            lnum,
+            0,
+            lnum + count as LinenrT,
+            -(count as LinenrT),
+            true,
+        );
     }
 }
 

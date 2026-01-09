@@ -249,7 +249,11 @@ fn ins_char_bytes_impl(buf: *mut c_char, charlen: usize) {
         // Copy bytes after the changed character(s).
         let p = newp.add(col);
         if linelen > col + oldlen {
-            std::ptr::copy_nonoverlapping(oldp.add(col + oldlen), p.add(newlen), linelen - col - oldlen);
+            std::ptr::copy_nonoverlapping(
+                oldp.add(col + oldlen),
+                p.add(newlen),
+                linelen - col - oldlen,
+            );
         }
 
         // Insert or overwrite the new character.
@@ -267,7 +271,10 @@ fn ins_char_bytes_impl(buf: *mut c_char, charlen: usize) {
         rs_inserted_bytes(lnum, col as ColnrT, oldlen as c_int, newlen as c_int);
 
         // Showmatch for parens/braces
-        if nvim_p_sm() && (state & MODE_INSERT) != 0 && nvim_msg_silent() == 0 && !nvim_ins_compl_active()
+        if nvim_p_sm()
+            && (state & MODE_INSERT) != 0
+            && nvim_msg_silent() == 0
+            && !nvim_ins_compl_active()
         {
             nvim_showmatch(nvim_utf_ptr2char(buf));
         }
