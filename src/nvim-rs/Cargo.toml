@@ -47,6 +47,7 @@ nvim-ex-docmd = { path = "ex_docmd" }
 nvim-ex-cmds = { path = "ex_cmds" }
 nvim-ex-eval = { path = "ex_eval" }
 nvim-fileio = { path = "fileio" }
+nvim-filesearch = { path = "filesearch" }
 nvim-fold = { path = "fold" }
 nvim-funcall = { path = "funcall" }
 nvim-fuzzy = { path = "fuzzy" }

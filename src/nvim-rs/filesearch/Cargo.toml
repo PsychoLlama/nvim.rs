@@ -1,0 +1,23 @@
+[package]
+name = "nvim-filesearch"
+description = "File search infrastructure for Neovim (path, tags, cdpath)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+libc = "0.2"
+nvim-memory = { path = "../memory" }
+nvim-mbyte = { path = "../mbyte" }
+nvim-path = { path = "../path" }
+nvim-os = { path = "../os" }
+
+[build-dependencies]
+cbindgen = "0.27"
