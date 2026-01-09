@@ -128,7 +128,7 @@ impl AbbrTrigger {
             let is_word_char = (c >= 48 && c <= 57)      // 0-9
                 || (c >= 65 && c <= 90)                   // A-Z
                 || (c >= 97 && c <= 122)                  // a-z
-                || c == 95;                               // _
+                || c == 95; // _
             if !is_word_char {
                 return Some(Self::Other);
             }
@@ -220,7 +220,11 @@ pub const extern "C" fn rs_remove_abbr_off(c: c_int) -> c_int {
 /// FFI: Check if character has abbreviation offset.
 #[no_mangle]
 pub const extern "C" fn rs_has_abbr_off(c: c_int) -> c_int {
-    if has_abbr_off(c) { 1 } else { 0 }
+    if has_abbr_off(c) {
+        1
+    } else {
+        0
+    }
 }
 
 /// FFI: Check if character can trigger abbreviation (returns trigger type or -1).
@@ -295,9 +299,18 @@ mod tests {
         assert_eq!(AbbrTrigger::from_char(29), Some(AbbrTrigger::CtrlRsb));
 
         // Other punctuation
-        assert_eq!(AbbrTrigger::from_char(i32::from(b'.')), Some(AbbrTrigger::Other));
-        assert_eq!(AbbrTrigger::from_char(i32::from(b',')), Some(AbbrTrigger::Other));
-        assert_eq!(AbbrTrigger::from_char(i32::from(b'!')), Some(AbbrTrigger::Other));
+        assert_eq!(
+            AbbrTrigger::from_char(i32::from(b'.')),
+            Some(AbbrTrigger::Other)
+        );
+        assert_eq!(
+            AbbrTrigger::from_char(i32::from(b',')),
+            Some(AbbrTrigger::Other)
+        );
+        assert_eq!(
+            AbbrTrigger::from_char(i32::from(b'!')),
+            Some(AbbrTrigger::Other)
+        );
     }
 
     #[test]

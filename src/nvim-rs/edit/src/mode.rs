@@ -385,7 +385,10 @@ mod tests {
         assert_eq!(InsertCommand::from_char(b'i'), Some(InsertCommand::Insert));
         assert_eq!(InsertCommand::from_char(b'a'), Some(InsertCommand::Append));
         assert_eq!(InsertCommand::from_char(b'R'), Some(InsertCommand::Replace));
-        assert_eq!(InsertCommand::from_char(b'r'), Some(InsertCommand::SingleCr));
+        assert_eq!(
+            InsertCommand::from_char(b'r'),
+            Some(InsertCommand::SingleCr)
+        );
         assert_eq!(
             InsertCommand::from_char(b'g'),
             Some(InsertCommand::GotoInsert)

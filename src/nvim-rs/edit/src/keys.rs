@@ -311,7 +311,10 @@ pub const fn is_enter_key(key: c_int) -> bool {
 #[inline]
 #[must_use]
 pub const fn is_tab_key(key: c_int) -> bool {
-    matches!(key, ascii::TAB | special_keys::K_TAB | special_keys::K_S_TAB)
+    matches!(
+        key,
+        ascii::TAB | special_keys::K_TAB | special_keys::K_S_TAB
+    )
 }
 
 /// Check if a key is a control character (Ctrl-A through Ctrl-Z).
@@ -346,12 +349,12 @@ pub const fn is_special_key(key: c_int) -> bool {
 #[must_use]
 pub const fn get_nav_direction(key: c_int) -> Option<NavDirection> {
     match key {
-        special_keys::K_LEFT
-        | special_keys::K_S_LEFT
-        | special_keys::K_C_LEFT => Some(NavDirection::Left),
-        special_keys::K_RIGHT
-        | special_keys::K_S_RIGHT
-        | special_keys::K_C_RIGHT => Some(NavDirection::Right),
+        special_keys::K_LEFT | special_keys::K_S_LEFT | special_keys::K_C_LEFT => {
+            Some(NavDirection::Left)
+        }
+        special_keys::K_RIGHT | special_keys::K_S_RIGHT | special_keys::K_C_RIGHT => {
+            Some(NavDirection::Right)
+        }
         special_keys::K_UP | special_keys::K_S_UP => Some(NavDirection::Up),
         special_keys::K_DOWN | special_keys::K_S_DOWN => Some(NavDirection::Down),
         special_keys::K_HOME
@@ -405,7 +408,8 @@ pub const fn classify_key(key: c_int) -> KeyAction {
         || key == ascii::CTRL_Y   // char above
         || key == ascii::CTRL_G   // CTRL-G commands
         || key == ascii::CTRL_HAT // input mode switch
-        || key == ascii::CTRL_UNDERSCORE  // language switch
+        || key == ascii::CTRL_UNDERSCORE
+    // language switch
     {
         return KeyAction::Special;
     }
@@ -632,14 +636,38 @@ mod tests {
 
     #[test]
     fn test_get_nav_direction() {
-        assert_eq!(get_nav_direction(special_keys::K_LEFT), Some(NavDirection::Left));
-        assert_eq!(get_nav_direction(special_keys::K_RIGHT), Some(NavDirection::Right));
-        assert_eq!(get_nav_direction(special_keys::K_UP), Some(NavDirection::Up));
-        assert_eq!(get_nav_direction(special_keys::K_DOWN), Some(NavDirection::Down));
-        assert_eq!(get_nav_direction(special_keys::K_HOME), Some(NavDirection::Home));
-        assert_eq!(get_nav_direction(special_keys::K_END), Some(NavDirection::End));
-        assert_eq!(get_nav_direction(special_keys::K_PAGEUP), Some(NavDirection::PageUp));
-        assert_eq!(get_nav_direction(special_keys::K_PAGEDOWN), Some(NavDirection::PageDown));
+        assert_eq!(
+            get_nav_direction(special_keys::K_LEFT),
+            Some(NavDirection::Left)
+        );
+        assert_eq!(
+            get_nav_direction(special_keys::K_RIGHT),
+            Some(NavDirection::Right)
+        );
+        assert_eq!(
+            get_nav_direction(special_keys::K_UP),
+            Some(NavDirection::Up)
+        );
+        assert_eq!(
+            get_nav_direction(special_keys::K_DOWN),
+            Some(NavDirection::Down)
+        );
+        assert_eq!(
+            get_nav_direction(special_keys::K_HOME),
+            Some(NavDirection::Home)
+        );
+        assert_eq!(
+            get_nav_direction(special_keys::K_END),
+            Some(NavDirection::End)
+        );
+        assert_eq!(
+            get_nav_direction(special_keys::K_PAGEUP),
+            Some(NavDirection::PageUp)
+        );
+        assert_eq!(
+            get_nav_direction(special_keys::K_PAGEDOWN),
+            Some(NavDirection::PageDown)
+        );
         assert_eq!(get_nav_direction(i32::from(b'a')), None);
     }
 
