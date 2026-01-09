@@ -8,14 +8,20 @@
 #![allow(clippy::doc_markdown)]
 
 pub mod add;
+pub mod buffer;
+pub mod cmdline;
 pub mod dict;
 pub mod file;
 pub mod insert;
+pub mod keyword;
 pub mod leader;
 pub mod match_list;
 pub mod pum;
 pub mod sort;
+pub mod spell;
 pub mod state;
+pub mod tag;
+pub mod userfunc;
 
 use std::os::raw::{c_char, c_int, c_uint};
 
