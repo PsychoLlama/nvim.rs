@@ -212,6 +212,153 @@ impl SocketWatcherHandle {
     }
 }
 
+/// Opaque handle to a WBuffer (write buffer)
+///
+/// WBuffer holds data for writing to streams with reference counting.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WBufferHandle(*mut std::ffi::c_void);
+
+impl WBufferHandle {
+    /// Create a null handle
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+
+    /// Check if handle is null
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+/// Opaque handle to a libuv uv_loop_t
+///
+/// This is the raw libuv event loop, wrapped by Loop.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UvLoopHandle(*mut std::ffi::c_void);
+
+impl UvLoopHandle {
+    /// Create a null handle
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+
+    /// Check if handle is null
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+/// Opaque handle to a libuv uv_async_t
+///
+/// Used for cross-thread signaling in the event loop.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UvAsyncHandle(*mut std::ffi::c_void);
+
+impl UvAsyncHandle {
+    /// Create a null handle
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+
+    /// Check if handle is null
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+/// Opaque handle to a libuv uv_timer_t
+///
+/// Used for timer callbacks in the event loop.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UvTimerHandle(*mut std::ffi::c_void);
+
+impl UvTimerHandle {
+    /// Create a null handle
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+
+    /// Check if handle is null
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+/// Opaque handle to a libuv uv_pipe_t
+///
+/// Used for pipe I/O in the event loop.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UvPipeHandle(*mut std::ffi::c_void);
+
+impl UvPipeHandle {
+    /// Create a null handle
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+
+    /// Check if handle is null
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+/// Opaque handle to a libuv uv_tcp_t
+///
+/// Used for TCP connections in the event loop.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UvTcpHandle(*mut std::ffi::c_void);
+
+impl UvTcpHandle {
+    /// Create a null handle
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+
+    /// Check if handle is null
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+/// Opaque handle to a libuv uv_process_t
+///
+/// Used for child process management in the event loop.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UvProcessHandle(*mut std::ffi::c_void);
+
+impl UvProcessHandle {
+    /// Create a null handle
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+
+    /// Check if handle is null
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
 // =============================================================================
 // Event Structure
 // =============================================================================
@@ -2390,6 +2537,13 @@ mod tests {
         assert!(RStreamHandle::null().is_null());
         assert!(SignalWatcherHandle::null().is_null());
         assert!(SocketWatcherHandle::null().is_null());
+        assert!(WBufferHandle::null().is_null());
+        assert!(UvLoopHandle::null().is_null());
+        assert!(UvAsyncHandle::null().is_null());
+        assert!(UvTimerHandle::null().is_null());
+        assert!(UvPipeHandle::null().is_null());
+        assert!(UvTcpHandle::null().is_null());
+        assert!(UvProcessHandle::null().is_null());
     }
 
     #[test]
@@ -2405,6 +2559,13 @@ mod tests {
         assert_eq!(std::mem::size_of::<RStreamHandle>(), ptr_size);
         assert_eq!(std::mem::size_of::<SignalWatcherHandle>(), ptr_size);
         assert_eq!(std::mem::size_of::<SocketWatcherHandle>(), ptr_size);
+        assert_eq!(std::mem::size_of::<WBufferHandle>(), ptr_size);
+        assert_eq!(std::mem::size_of::<UvLoopHandle>(), ptr_size);
+        assert_eq!(std::mem::size_of::<UvAsyncHandle>(), ptr_size);
+        assert_eq!(std::mem::size_of::<UvTimerHandle>(), ptr_size);
+        assert_eq!(std::mem::size_of::<UvPipeHandle>(), ptr_size);
+        assert_eq!(std::mem::size_of::<UvTcpHandle>(), ptr_size);
+        assert_eq!(std::mem::size_of::<UvProcessHandle>(), ptr_size);
     }
 
     #[test]
