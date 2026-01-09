@@ -74,6 +74,7 @@ nvim-message = { path = "message" }
 nvim-mouse = { path = "mouse" }
 nvim-move = { path = "move" }
 nvim-msgpack = { path = "msgpack" }
+nvim-msgpack-rpc = { path = "msgpack_rpc" }
 nvim-normal = { path = "normal" }
 nvim-ops = { path = "ops" }
 nvim-option = { path = "option" }

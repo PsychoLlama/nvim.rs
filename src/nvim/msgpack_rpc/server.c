@@ -284,3 +284,31 @@ static void free_server(SocketWatcher *watcher, void *data)
 {
   xfree(watcher);
 }
+
+// =============================================================================
+// Accessor functions for Rust FFI (nvim-msgpack-rpc crate)
+// =============================================================================
+
+/// Wrapper for server_start
+int nvim_server_start(const char *addr)
+{
+  return server_start(addr);
+}
+
+/// Wrapper for server_stop
+int nvim_server_stop(const char *addr)
+{
+  return server_stop((char *)addr) ? 1 : 0;
+}
+
+/// Wrapper for server_address_new
+char *nvim_server_address_new(const char *name)
+{
+  return server_address_new(name);
+}
+
+/// Wrapper for server_owns_pipe_address
+int nvim_server_owns_pipe_address(const char *addr)
+{
+  return server_owns_pipe_address(addr) ? 1 : 0;
+}

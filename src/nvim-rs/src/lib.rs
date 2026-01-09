@@ -76,6 +76,7 @@ pub use nvim_message::*;
 pub use nvim_mouse::*;
 pub use nvim_move::*;
 pub use nvim_msgpack::*;
+pub use nvim_msgpack_rpc::*;
 pub use nvim_normal::*;
 pub use nvim_ops::*;
 pub use nvim_option::*;
