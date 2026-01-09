@@ -161,6 +161,22 @@ extern int rs_state_dont_sync_undo(void);
 extern void rs_state_set_dont_sync_undo(int val);
 extern linenr_T rs_state_o_lnum(void);
 extern void rs_state_set_o_lnum(linenr_T val);
+// Mode module exports
+extern void rs_init_insert_state(int startln, int cmdchar);
+extern int rs_handle_restart_edit(void);
+extern int rs_in_insert_mode(void);
+extern int rs_in_replace_mode(void);
+extern int rs_in_vreplace_mode(void);
+extern void rs_set_insert_mode(int cmdchar);
+extern void rs_update_o_lnum_on_exit(void);
+extern int rs_has_langmap(void);
+extern void rs_enable_langmap(void);
+extern void rs_disable_langmap(void);
+extern int rs_revins_on(void);
+extern int rs_did_restart_edit(void);
+extern int rs_get_arrow_used(void);
+extern void rs_set_arrow_used(int val);
+extern linenr_T rs_get_o_lnum(void);
 
 /// Get the ins_need_undo static variable (accessor for Rust).
 int nvim_get_ins_need_undo(void)
@@ -389,6 +405,36 @@ linenr_T nvim_get_o_lnum(void)
 void nvim_set_o_lnum(linenr_T val)
 {
   o_lnum = val;
+}
+
+/// Set State (accessor for Rust).
+void nvim_edit_set_State(int val)
+{
+  State = val;
+}
+
+/// Set restart_edit (accessor for Rust).
+void nvim_edit_set_restart_edit(int val)
+{
+  restart_edit = val;
+}
+
+/// Get arrow_used (accessor for Rust).
+int nvim_get_arrow_used(void)
+{
+  return arrow_used;
+}
+
+/// Set arrow_used (accessor for Rust).
+void nvim_set_arrow_used(int val)
+{
+  arrow_used = val != 0;
+}
+
+/// Get p_ri (accessor for Rust).
+int nvim_get_p_ri(void)
+{
+  return p_ri;
 }
 
 static kvec_t(char) replace_stack = KV_INITIAL_VALUE;
