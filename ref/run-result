@@ -1,39 +1,22 @@
-Plan: ~/.claude/plans/pure-watching-turing.md
+Plan: ~/.claude/plans/curious-splashing-gadget.md
 
-Phase 19 is complete. Here's a summary:
+**Phase 20: Lua Integration Migration - Complete**
 
-## Phase 19: Search System Migration - Complete
-
-All 8 phases have been successfully completed:
+All 8 phases have been successfully implemented and committed:
 
 | Phase | Description | Commit |
 |-------|-------------|--------|
-| 19.1 | State Accessors (Foundation) | `8c5d9d0e29` |
-| 19.2 | Search Direction & Pattern State | `3d24f72495` |
-| 19.3 | Pattern Matching Helpers | `930047fe1d` |
-| 19.4 | Core Search Logic | `1f54e19769` |
-| 19.5 | Incremental Search Support | `f046ef7777` |
-| 19.6 | Search Commands | `fb723eb651` |
-| 19.7 | Substitution Helpers | `8fb9b03145` |
-| 19.8 | Integration & Testing | `df2df15ce7` |
+| 20.1 | Lua State Accessors | `state.rs` - get_state, is_initialized, callback_depth |
+| 20.2 | Type Conversion Constants | `types.rs` - LuaType enum, type constants |
+| 20.3 | Typval to Lua Helpers | `to_lua.rs` - push_integer, push_string, push_object, etc. |
+| 20.4 | Lua to Typval Helpers | `from_lua.rs` - pop_integer, pop_string, pop_object, etc. |
+| 20.5 | Stdlib Helpers | `stdlib.rs` - stack ops, type checking, table manipulation |
+| 20.6 | API Conversion Helpers | `api.rs` - typval, luaref, handle, keydict helpers |
+| 20.7 | Callback Infrastructure | `callback.rs` - ref/unref, call_ref, pushref |
+| 20.8 | Integration & Testing | cbindgen.toml updated, all tests passing |
 
-### Summary Statistics
-- **180 FFI exports** (`#[no_mangle]` functions)
-- **63 unit tests**
-- **8 Rust modules**: state, direction, pattern, helpers, core, incsearch, commands, substitute
-
-### Modules Created
-1. **state.rs** - Search state accessors for static variables
-2. **direction.rs** - Search direction constants and offset handling
-3. **pattern.rs** - Pattern retrieval and magic handling
-4. **helpers.rs** - Search option flags and argument structures
-5. **core.rs** - Core search logic helpers (result constants, loop state)
-6. **incsearch.rs** - Incremental search state and highlighting
-7. **commands.rs** - Character search (f/F/t/T) helpers
-8. **substitute.rs** - Substitution flag parsing and counting
-
-### All Checks Pass
-- `just build` ✓
-- `just rust-fmt-check` ✓
-- `just rust-clippy` ✓
-- `just rust-test` ✓ (2299 tests passed)
+**Summary:**
+- **7 new Rust files** created in `src/nvim-rs/lua/src/`
+- **77 new FFI exports** (rs_* functions)
+- **All checks pass**: `just build`, `just rust-fmt-check`, `just rust-clippy`, `just rust-test`
+- **Key fix**: Lua C API macros (`lua_getglobal`, `lua_setglobal`, `luaL_checkstring`) implemented as inline Rust functions since they are not real C functions
