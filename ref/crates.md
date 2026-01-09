@@ -100,6 +100,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | ui             | UI core types and RemoteUI state        |
 | undo           | Undo/redo system                        |
 | unpacker       | MessagePack unpacking                   |
+| usercmd        | User command definition, completion, execution, and parsing |
 | userfunc       | User-defined functions (params, closure, funcref) |
 | vars           | Variable storage and scope management   |
 | utf8proc       | utf8proc bindings                       |

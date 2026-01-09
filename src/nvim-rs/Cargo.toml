@@ -112,6 +112,7 @@ nvim-typval = { path = "typval" }
 nvim-ui = { path = "ui" }
 nvim-ugrid = { path = "ugrid" }
 nvim-undo = { path = "undo" }
+nvim-usercmd = { path = "usercmd" }
 nvim-userfunc = { path = "userfunc" }
 nvim-vars = { path = "vars" }
 
