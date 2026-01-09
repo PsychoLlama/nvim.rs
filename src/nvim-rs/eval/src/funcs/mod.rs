@@ -26,9 +26,13 @@
 //! The C wrapper in funcs.c calls these Rust implementations directly.
 
 pub mod bitwise;
+pub mod collections;
 mod dispatch;
 pub mod math;
 pub mod random;
+pub mod string;
 pub mod types;
 
+pub use collections::*;
 pub use dispatch::*;
+pub use string::*;

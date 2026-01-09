@@ -209,6 +209,15 @@ pub fn rettv_set_float(rettv: TypevalPtrMut, f: f64) {
     }
 }
 
+/// Set return value to a boolean (as a number, 1 or 0).
+///
+/// VimL booleans are represented as numbers in many contexts.
+/// This sets the return value to 1 (true) or 0 (false).
+#[inline]
+pub fn rettv_set_bool(rettv: TypevalPtrMut, b: bool) {
+    rettv_set_number(rettv, i64::from(b));
+}
+
 // =============================================================================
 // Argument Array Access
 // =============================================================================

@@ -2,10 +2,18 @@
 //!
 //! This module implements type functions from `src/nvim/eval/funcs.c`:
 //! - `type()` - returns the type of a value
+//! - `typename()` - returns the type name as a string
+//! - `isnumber()` - check if value is a number
+//! - `islist()` - check if value is a list
+//! - `isdict()` - check if value is a dictionary
+//! - `isfloat()` - check if value is a float
+//! - `isstring()` - check if value is a string
 
 use std::ffi::c_void;
 
-use super::dispatch::{argvar_at, rettv_set_number, tv_get_type, TypevalPtrMut, VarType};
+use super::dispatch::{
+    argvar_at, rettv_set_bool, rettv_set_number, tv_get_type, TypevalPtrMut, VarType,
+};
 
 // =============================================================================
 // VAR_TYPE constants (from typval_defs.h)
@@ -68,6 +76,106 @@ pub unsafe extern "C" fn rs_f_type(argvars: *const c_void, rettv: *mut c_void) {
         VarType::Unknown => -1, // This should not happen in normal code
     };
     rettv_set_number(rettv, n);
+}
+
+// =============================================================================
+// Type check functions (isXXX)
+// =============================================================================
+
+/// "isnumber()" function - check if value is a number.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_isnumber(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let vtype = tv_get_type(arg0);
+    rettv_set_bool(rettv, matches!(vtype, VarType::Number));
+}
+
+/// "isfloat()" function - check if value is a float.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_isfloat(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let vtype = tv_get_type(arg0);
+    rettv_set_bool(rettv, matches!(vtype, VarType::Float));
+}
+
+/// "isstring()" function - check if value is a string.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_isstring(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let vtype = tv_get_type(arg0);
+    rettv_set_bool(rettv, matches!(vtype, VarType::String));
+}
+
+/// "islist()" function - check if value is a list.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_islist(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let vtype = tv_get_type(arg0);
+    rettv_set_bool(rettv, matches!(vtype, VarType::List));
+}
+
+/// "isdict()" function - check if value is a dictionary.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_isdict(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let vtype = tv_get_type(arg0);
+    rettv_set_bool(rettv, matches!(vtype, VarType::Dict));
+}
+
+/// "isfunc()" function - check if value is a funcref.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_isfunc(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let vtype = tv_get_type(arg0);
+    rettv_set_bool(rettv, matches!(vtype, VarType::Func | VarType::Partial));
+}
+
+/// "isblob()" function - check if value is a blob.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_isblob(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let vtype = tv_get_type(arg0);
+    rettv_set_bool(rettv, matches!(vtype, VarType::Blob));
+}
+
+/// "isbool()" function - check if value is a boolean.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_isbool(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let vtype = tv_get_type(arg0);
+    rettv_set_bool(rettv, matches!(vtype, VarType::Bool));
 }
 
 #[cfg(test)]
