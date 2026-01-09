@@ -55,6 +55,13 @@
 extern int rs_sign_cmd_idx(const char *cmd);
 extern int rs_sign_item_cmp(int priority1, uint32_t id1, uint32_t add_id1,
                             int priority2, uint32_t id2, uint32_t add_id2);
+extern int rs_sign_name_valid(const char *name);
+extern int rs_sign_priority_valid(int prio);
+extern int rs_sign_effective_priority(int prio);
+extern int rs_sign_row_cmp(int row1, int row2);
+extern bool rs_sign_id_valid(int id);
+extern int rs_sign_clamp_lnum(int lnum, int max_line);
+extern bool rs_sign_lnum_valid(int lnum);
 
 static PMap(cstr_t) sign_map = MAP_INIT;
 static kvec_t(Integer) sign_ns = KV_INITIAL_VALUE;
@@ -174,8 +181,10 @@ static int sign_row_cmp(const void *p1, const void *p2)
   const MTKey *s1 = (MTKey *)p1;
   const MTKey *s2 = (MTKey *)p2;
 
-  if (s1->pos.row != s2->pos.row) {
-    return s1->pos.row > s2->pos.row ? 1 : -1;
+  // Compare rows first using Rust helper
+  int row_cmp = rs_sign_row_cmp(s1->pos.row, s2->pos.row);
+  if (row_cmp != 0) {
+    return row_cmp;
   }
 
   DecorSignHighlight *sh1 = decor_find_sign(mt_decor(*s1));
@@ -526,9 +535,7 @@ static int sign_place(uint32_t *id, char *group, char *name, buf_T *buf, linenr_
   }
 
   // Use the default priority value for this sign.
-  if (prio == -1) {
-    prio = (sp->sn_priority != -1) ? sp->sn_priority : SIGN_DEF_PRIO;
-  }
+  prio = rs_sign_effective_priority(prio == -1 && sp->sn_priority != -1 ? sp->sn_priority : prio);
 
   if (lnum > 0) {
     // ":sign place {id} line={lnum} name={name} file={fname}": place a sign
