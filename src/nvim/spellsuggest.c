@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-// Rust implementations
+// Rust implementations (slang_T forward declared below)
 extern int rs_bytes2offset(const uint8_t **pp);
 
 #include <assert.h>
@@ -57,6 +57,10 @@ extern int rs_bytes2offset(const uint8_t **pp);
 #include "nvim/ui_defs.h"
 #include "nvim/undo.h"
 #include "nvim/vim_defs.h"
+
+// Rust edit distance implementations
+extern int rs_spell_edit_score(slang_T *slang, const char *badword, const char *goodword);
+extern int rs_spell_edit_score_limit(slang_T *slang, const char *badword, const char *goodword, int limit);
 
 // Use this to adjust the score after finding suggestions, based on the
 // suggested word sounding like the bad word.  This is much faster than doing
@@ -3444,9 +3448,14 @@ static int soundalike_score(char *goodstart, char *badstart)
 ///
 /// The algorithm is described by Du and Chang, 1992.
 /// The implementation of the algorithm comes from Aspell editdist.cpp,
-/// edit_distance().  It has been converted from C++ to C and modified to
-/// support multi-byte characters.
+/// edit_distance().  Now implemented in Rust (rs_spell_edit_score).
 static int spell_edit_score(slang_T *slang, const char *badword, const char *goodword)
+{
+  return rs_spell_edit_score(slang, badword, goodword);
+}
+
+#if 0  // Replaced by Rust implementation
+static int spell_edit_score_c(slang_T *slang, const char *badword, const char *goodword)
 {
   int wbadword[MAXWLEN];
   int wgoodword[MAXWLEN];
@@ -3520,6 +3529,15 @@ static int spell_edit_score(slang_T *slang, const char *badword, const char *goo
   xfree(cnt);
   return i;
 }
+#endif  // spell_edit_score_c
+
+/// Like spell_edit_score(), but with a limit on the score to make it faster.
+/// May return SCORE_MAXMAX when the score is higher than "limit".
+/// Now implemented in Rust (rs_spell_edit_score_limit).
+static int spell_edit_score_limit(slang_T *slang, char *badword, char *goodword, int limit)
+{
+  return rs_spell_edit_score_limit(slang, badword, goodword, limit);
+}
 
 typedef struct {
   int badi;
@@ -3527,13 +3545,14 @@ typedef struct {
   int score;
 } limitscore_T;
 
+#if 0  // Old C implementation replaced by Rust
 /// Like spell_edit_score(), but with a limit on the score to make it faster.
 /// May return SCORE_MAXMAX when the score is higher than "limit".
 ///
 /// This uses a stack for the edits still to be tried.
 /// The idea comes from Aspell leditdist.cpp.  Rewritten in C and added support
 /// for multi-byte characters.
-static int spell_edit_score_limit(slang_T *slang, char *badword, char *goodword, int limit)
+static int spell_edit_score_limit_c(slang_T *slang, char *badword, char *goodword, int limit)
 {
   return spell_edit_score_limit_w(slang, badword, goodword, limit);
 }
@@ -3697,6 +3716,7 @@ pop:
   }
   return minscore;
 }
+#endif  // Replaced by Rust implementation
 
 // =============================================================================
 // C accessor functions for Rust FFI
