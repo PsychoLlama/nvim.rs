@@ -67,6 +67,12 @@ impl SynClusterHandle {
     pub fn is_null(self) -> bool {
         self.0.is_null()
     }
+
+    /// Create a null handle
+    #[must_use]
+    pub fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
 }
 
 /// Opaque handle to a stateitem_T (current state stack item)
