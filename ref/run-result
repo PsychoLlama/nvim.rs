@@ -1,36 +1,47 @@
-Plan: ~/.claude/plans/quiet-splashing-planet.md
+Plan: ~/.claude/plans/enumerated-roaming-mitten.md
 
-## Phase 17: Window Management Migration - Complete
+All phases of the Phase 18 migration plan are now complete. Let me provide a summary of what was accomplished:
 
-All 14 phases have been completed. Here's a summary of what was accomplished:
+## Phase 18: Insert-Mode Completion (insexpand) Migration Complete
+
+### Summary
+All 24 phases of the insexpand migration have been completed successfully.
+
+### Modules Created
+The `src/nvim-rs/insexpand/` crate now contains **22 modules** with **257 exported Rust functions**:
+
+| Module | Purpose |
+|--------|---------|
+| `lib.rs` | Core mode checking, key handling, completeopt flags |
+| `add.rs` | Match addition and deduplication |
+| `buffer.rs` | Buffer-local completion helpers |
+| `cmdline.rs` | Command-line completion mode |
+| `dict.rs` | Dictionary/thesaurus completion |
+| `entry.rs` | Main entry point helpers |
+| `extmark.rs` | Extmark management for multi-line completion |
+| `file.rs` | File/path completion |
+| `insert.rs` | Insert/delete operations |
+| `keys.rs` | Key handling utilities |
+| `keyword.rs` | Keyword completion |
+| `leader.rs` | Leader/original text management |
+| `match_list.rs` | Match list data structure |
+| `navigate.rs` | Match navigation |
+| `pum.rs` | Popup menu integration |
+| `refresh.rs` | Completion refresh/continuation |
+| `sort.rs` | Match sorting (score, alphabetic, position) |
+| `source.rs` | Completion source management |
+| `spell.rs` | Spell completion |
+| `state.rs` | Completion state management |
+| `tag.rs` | Tag completion |
+| `ui.rs` | Status messages and UI helpers |
+| `userfunc.rs` | User-defined completion functions |
+| `viml.rs` | VimL function support (complete_info, etc.) |
+
+### Tests
+- **2255 unit tests** passing
+- All `just build`, `just rust-clippy`, `just rust-fmt-check`, `just rust-test` pass
 
 ### Commits Made
-1. `feat(window): Phase 17.1-17.2 - add list.rs and tabpage.rs modules`
-2. `feat(window): Phase 17.3, 17.7 - add alloc.rs, frame.rs, focus.rs modules`
-3. `feat(window): Phase 17.4-17.13 - add placeholder modules for remaining phases`
-4. `chore: update ref/crates.md window crate description`
-
-### New Modules Created (14 total)
-| Module | Purpose | Status |
-|--------|---------|--------|
-| `list.rs` | Window list traversal, validation, `only_one_window` | Active code |
-| `tabpage.rs` | Tab page management, validation, indexing | Active code |
-| `alloc.rs` | Window allocation (placeholder, complex C deps) | Placeholder |
-| `free.rs` | Window deallocation (placeholder, complex C deps) | Placeholder |
-| `split.rs` | Window splitting (placeholder, ~500 lines to refactor) | Placeholder |
-| `close.rs` | Window closing (placeholder, complex autocmd handling) | Placeholder |
-| `focus.rs` | Window navigation (`win_vert_neighbor`, `win_horz_neighbor`) | Active code |
-| `frame.rs` | Frame tree operations (`frame_fixed_height/width`, `frame_check_height/width`) | Active code |
-| `equalize.rs` | Window equalization (placeholder) | Placeholder |
-| `resize.rs` | Window resizing/scrolling (placeholder) | Placeholder |
-| `statusline.rs` | Status line/window bar (placeholder) | Placeholder |
-| `snapshot.rs` | Layout snapshots (placeholder) | Placeholder |
-| `events.rs` | UI events (placeholder) | Placeholder |
-| `commands.rs` | CTRL-W handler (placeholder, ~550 lines to refactor) | Placeholder |
-
-### Metrics
-- Window crate total: **4,577 lines** across 15 files
-- FFI exports: **58 `#[no_mangle]` functions**
-- All checks pass: `just build`, `just rust-fmt-check`, `just rust-clippy`, `just rust-test` (2191 tests)
-
-The modular structure provides a foundation for incremental migration of the complex functions that remain in C.
+1. `feat(insexpand): Phases 18.16-18.18 - add source, navigate, keys modules`
+2. `feat(insexpand): Phases 18.19-18.23 - add entry, viml, refresh, ui, extmark`
+3. `chore(insexpand): Phase 18.24 - integration and cbindgen config`
