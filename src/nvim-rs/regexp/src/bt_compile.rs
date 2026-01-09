@@ -202,6 +202,9 @@ pub struct RegCompiler {
     /// Number of \z() parentheses
     regnzpar: c_int,
 
+    /// Number of complex brace quantifiers
+    num_complex_braces: c_int,
+
     /// Pattern is too long
     reg_toolong: bool,
 
@@ -226,6 +229,7 @@ impl RegCompiler {
             regparse: pattern,
             regnpar: 1, // Start at 1, 0 is whole match
             regnzpar: 0,
+            num_complex_braces: 0,
             reg_toolong: false,
             re_flags,
             regflags: 0,
@@ -239,6 +243,7 @@ impl RegCompiler {
         self.regsize = 0;
         self.regnpar = 1;
         self.regnzpar = 0;
+        self.num_complex_braces = 0;
         self.reg_toolong = false;
         self.regflags = 0;
         self.re_has_z = false;
@@ -446,6 +451,62 @@ impl RegCompiler {
     /// Mark pattern as having \z specials
     pub fn set_has_z(&mut self) {
         self.re_has_z = true;
+    }
+
+    /// Insert a BRACE_LIMITS node before the given location.
+    ///
+    /// BRACE_LIMITS stores two 4-byte values: minval and maxval.
+    /// Total node size: 3 (opcode + next) + 8 (two 4-byte limits) = 11 bytes.
+    ///
+    /// # Safety
+    /// `before` must be a valid pointer within the bytecode buffer or null.
+    pub unsafe fn insert_limits(
+        &mut self,
+        opcode: c_int,
+        minval: i32,
+        maxval: i32,
+        before: *mut u8,
+    ) {
+        if self.is_counting() {
+            self.regsize += NODE_SIZE + 8; // opcode + next + 2x 4-byte limits
+        } else if !before.is_null() && !self.regcode.is_null() {
+            // Shift existing bytes forward
+            let shift = NODE_SIZE + 8;
+            let len = self.regcode.offset_from(before) as usize;
+            if len > 0 {
+                std::ptr::copy(before, before.add(shift), len);
+            }
+            self.regcode = self.regcode.add(shift);
+
+            // Write new node at the insertion point
+            *before = opcode as u8;
+            *before.add(1) = 0; // next high byte
+            *before.add(2) = 0; // next low byte
+
+            // Write minval (4 bytes, big-endian)
+            *before.add(3) = ((minval >> 24) & 0xff) as u8;
+            *before.add(4) = ((minval >> 16) & 0xff) as u8;
+            *before.add(5) = ((minval >> 8) & 0xff) as u8;
+            *before.add(6) = (minval & 0xff) as u8;
+
+            // Write maxval (4 bytes, big-endian)
+            *before.add(7) = ((maxval >> 24) & 0xff) as u8;
+            *before.add(8) = ((maxval >> 16) & 0xff) as u8;
+            *before.add(9) = ((maxval >> 8) & 0xff) as u8;
+            *before.add(10) = (maxval & 0xff) as u8;
+        }
+    }
+
+    /// Get and increment the complex braces counter.
+    pub fn next_complex_brace(&mut self) -> c_int {
+        let n = self.num_complex_braces;
+        self.num_complex_braces += 1;
+        n
+    }
+
+    /// Get current complex braces count.
+    pub fn complex_brace_count(&self) -> c_int {
+        self.num_complex_braces
     }
 }
 

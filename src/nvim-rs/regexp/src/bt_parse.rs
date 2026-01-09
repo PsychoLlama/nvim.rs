@@ -25,6 +25,7 @@ use std::ptr;
 
 use crate::bt_compile::{RegCompiler, NODE_SIZE};
 use crate::bt_opcodes::*;
+use crate::parser::MAX_LIMIT;
 
 // =============================================================================
 // Magic Mode Constants
@@ -426,6 +427,88 @@ impl<'a> PatternParser<'a> {
     pub fn error_message(&self) -> Option<&'static str> {
         self.error_msg
     }
+
+    /// Read and parse limits for `\{n,m}` quantifier.
+    ///
+    /// Parses:
+    /// - `{n}` - exactly n
+    /// - `{n,}` - at least n
+    /// - `{n,m}` - between n and m
+    /// - `{,m}` - at most m
+    /// - `{-n,m}` - non-greedy variant
+    ///
+    /// Returns (minval, maxval, reverse) tuple, or None on error.
+    pub fn read_limits(&mut self) -> Option<(c_int, c_int, bool)> {
+        let mut reverse = false;
+        let mut minval: c_int;
+        let maxval: c_int;
+
+        // Check for '-' at start (non-greedy)
+        if self.pos < self.pattern.len() && self.pattern[self.pos] == b'-' {
+            self.pos += 1;
+            reverse = true;
+        }
+
+        // Track whether we have seen a first digit
+        let first_pos = self.pos;
+
+        // Parse minimum value
+        minval = 0;
+        while self.pos < self.pattern.len() && self.pattern[self.pos].is_ascii_digit() {
+            minval = minval
+                .saturating_mul(10)
+                .saturating_add((self.pattern[self.pos] - b'0') as c_int);
+            self.pos += 1;
+        }
+        let had_first_digit = self.pos > first_pos;
+
+        // Check for comma
+        if self.pos < self.pattern.len() && self.pattern[self.pos] == b',' {
+            self.pos += 1; // consume comma
+
+            // Parse maximum value if present
+            if self.pos < self.pattern.len() && self.pattern[self.pos].is_ascii_digit() {
+                maxval = self.parse_decimal();
+            } else {
+                maxval = MAX_LIMIT;
+            }
+        } else if had_first_digit {
+            // It was {n} or {-n}
+            maxval = minval;
+        } else {
+            // It was {} or {-}
+            maxval = MAX_LIMIT;
+        }
+
+        // Allow either \{...} or \{...\}
+        if self.pos < self.pattern.len() && self.pattern[self.pos] == b'\\' {
+            self.pos += 1;
+        }
+
+        // Must end with }
+        if self.pos >= self.pattern.len() || self.pattern[self.pos] != b'}' {
+            self.set_error("E554: Syntax error in \\{...}");
+            return None;
+        }
+        self.pos += 1; // consume '}'
+
+        // Reinitialize parser character after manually advancing pos
+        self.next_char();
+
+        Some((minval, maxval, reverse))
+    }
+
+    /// Parse a decimal number from pattern.
+    fn parse_decimal(&mut self) -> c_int {
+        let mut val: c_int = 0;
+        while self.pos < self.pattern.len() && self.pattern[self.pos].is_ascii_digit() {
+            val = val
+                .saturating_mul(10)
+                .saturating_add((self.pattern[self.pos] - b'0') as c_int);
+            self.pos += 1;
+        }
+        val
+    }
 }
 
 // =============================================================================
@@ -754,11 +837,43 @@ unsafe fn parse_piece(
             }
         }
         b'{' => {
-            // Complex brace quantifier - skip for now
-            parser.skipchr();
-            // TODO: Implement {n,m} quantifiers
-            parser.set_error("E58: Brace quantifiers not yet implemented");
-            return ptr::null_mut();
+            // Brace quantifier \{n,m}
+            parser.skipchr(); // consume '{'
+
+            // Read the limits - note: read_limits consumes up to and including '}'
+            let Some((minval, maxval, reverse)) = parser.read_limits() else {
+                return ptr::null_mut();
+            };
+
+            // Swap min/max for non-greedy if reverse specified
+            let (minval, maxval) = if reverse {
+                (maxval, minval)
+            } else {
+                (minval, maxval)
+            };
+
+            if (flags & SIMPLE) != 0 {
+                // Simple atom: BRACE_SIMPLE + BRACE_LIMITS
+                (*compiler).insert_node(BRACE_SIMPLE, ret);
+                (*compiler).insert_limits(BRACE_LIMITS, minval, maxval, ret);
+            } else {
+                // Complex atom: BRACE_COMPLEX + BACK structure + BRACE_LIMITS
+                if (*compiler).complex_brace_count() >= 10 {
+                    parser.set_error("E60: Too many complex \\{...}s");
+                    return ptr::null_mut();
+                }
+
+                let brace_num = (*compiler).next_complex_brace();
+                (*compiler).insert_node(BRACE_COMPLEX + brace_num, ret);
+
+                // Add BACK node and chain it
+                let back = (*compiler).emit_node(BACK);
+                (*compiler).chain(ret, back);
+                (*compiler).chain(ret, ret);
+
+                // Insert BRACE_LIMITS at the beginning
+                (*compiler).insert_limits(BRACE_LIMITS, minval, maxval, ret);
+            }
         }
         _ => {}
     }
