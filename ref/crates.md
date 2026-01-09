@@ -10,6 +10,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | autocmd        | Autocommand events and patterns         |
 | buffer         | Buffer state and validation             |
 | buffer_updates | Buffer change tracking                  |
+| bufwrite       | Buffer write operations (formats, encoding, BOM, validation) |
 | change         | Buffer modification tracking and text editing |
 | channel        | Channel infrastructure for RPC communication |
 | charset        | Character classification and conversion |
@@ -57,6 +58,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | mapping        | Key mappings and abbreviations          |
 | mark           | Marks and positions                     |
 | marktree       | B-tree for extmarks at positions        |
+| match          | Match highlighting (IDs, priorities, positions) |
 | math           | Math utilities                          |
 | mbyte          | Multibyte and UTF-8 encoding            |
 | memline        | Buffer memory management (B-tree)       |
