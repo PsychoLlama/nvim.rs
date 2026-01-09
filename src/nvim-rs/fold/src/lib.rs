@@ -9,8 +9,20 @@
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::cast_possible_wrap)] // Character literals are safe ASCII values
 
+pub mod commands;
+pub mod display;
 pub mod level;
 pub mod markers;
+pub mod methods;
+pub mod tree;
+
+// Re-export key types
+pub use commands::{
+    CreateFoldCmd, DeleteFoldCmd, FoldCmdContext, FoldCmdResult, FoldNavCmd, FoldNavResult, FoldOp,
+};
+pub use display::{FoldColumnChar, FoldColumnConfig, FoldDisplayInfo, FoldTextComponents};
+pub use methods::{FoldLevelResult, FoldMethod};
+pub use tree::{FoldRange, FoldState, FoldTreeInfo, FoldUpdateRequest, FoldUpdateType};
 
 use std::ffi::{c_char, c_int};
 
