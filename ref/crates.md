@@ -37,6 +37,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | ex_eval        | Exception handling state                |
 | fileio         | File I/O (encoding, read/write, backup, modeline, sync) |
 | fold           | Folding state and methods               |
+| funcall        | VimL function call infrastructure       |
 | fuzzy          | Fuzzy matching                          |
 | getchar        | Typeahead and input buffer              |
 | grid           | Screen grid operations                  |

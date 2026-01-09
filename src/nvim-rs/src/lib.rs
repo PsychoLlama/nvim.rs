@@ -49,6 +49,7 @@ pub use nvim_ex_eval::*;
 pub use nvim_extmark::*;
 pub use nvim_fileio::*;
 pub use nvim_fold::*;
+pub use nvim_funcall::*;
 pub use nvim_fuzzy::*;
 pub use nvim_getchar::*;
 pub use nvim_grid::*;

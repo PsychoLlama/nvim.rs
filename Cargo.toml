@@ -31,6 +31,7 @@ members = [
     "src/nvim-rs/extmark",
     "src/nvim-rs/fileio",
     "src/nvim-rs/fold",
+    "src/nvim-rs/funcall",
     "src/nvim-rs/fuzzy",
     "src/nvim-rs/getchar",
     "src/nvim-rs/grid",

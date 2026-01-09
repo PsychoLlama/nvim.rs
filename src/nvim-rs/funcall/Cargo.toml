@@ -1,0 +1,10 @@
+[package]
+name = "nvim-funcall"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+nvim-typval = { path = "../typval" }
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
