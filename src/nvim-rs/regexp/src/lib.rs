@@ -14,6 +14,7 @@ pub mod bt_opcodes;
 pub mod bt_parse;
 pub mod bt_state;
 pub mod char_class;
+pub mod debug;
 pub mod decompose;
 pub mod errors;
 pub mod exec_state;
@@ -54,6 +55,11 @@ pub use bt_state::{
     rs_regstack_is_empty, rs_regstack_new,
 };
 pub use char_class::rs_get_char_class;
+pub use debug::{
+    rs_regexp_debug_enabled, rs_regexp_get_backtracks, rs_regexp_get_compilations,
+    rs_regexp_get_debug_level, rs_regexp_get_executions, rs_regexp_get_matches,
+    rs_regexp_get_transitions, rs_regexp_reset_profile, rs_regexp_set_debug_level,
+};
 pub use decompose::rs_mb_decompose;
 pub use errors::{
     rs_evaluate_complexity, rs_regex_check_abort, rs_regex_error_message, rs_regex_report_error,
