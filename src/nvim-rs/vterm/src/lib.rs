@@ -16,6 +16,7 @@
 use std::ffi::{c_char, c_int, c_long, c_void};
 use std::ptr;
 
+pub mod encoding;
 pub mod keyboard;
 pub mod mouse;
 pub mod parser;
@@ -23,6 +24,7 @@ pub mod pen;
 pub mod screen;
 pub mod state;
 
+pub use encoding::*;
 pub use keyboard::*;
 pub use mouse::*;
 pub use parser::*;
