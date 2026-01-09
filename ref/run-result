@@ -1,59 +1,44 @@
-Plan: ~/.claude/plans/wise-yawning-hippo.md
+Plan: ~/.claude/plans/hashed-sparking-trinket.md
 
-Phase 25 (Regular Expression Engine Migration) is now complete. Let me provide a summary:
+All 12 phases of the Syntax Highlighting Engine Migration plan are now complete. Let me provide a summary:
 
-## Phase 25 Complete - Regular Expression Engine Migration
+## Phase 26 - Syntax Highlighting Engine Migration: Complete
 
-All 12 phases have been completed successfully:
+All 12 phases have been successfully implemented and committed:
 
-### Completed Work
+| Phase | Description | Files |
+|-------|-------------|-------|
+| 26.1 | Core Types and FFI Foundation | `types.rs` |
+| 26.2 | Syntax Pattern Infrastructure | `pattern.rs` |
+| 26.3 | Syntax State Machine Core | `state.rs` |
+| 26.4 | Syntax State Cache | `cache.rs` |
+| 26.5 | Keyword Handling | `keyword.rs` |
+| 26.6 | Syntax Cluster Management | `cluster.rs` |
+| 26.7 | Region Handling | `region.rs` |
+| 26.8 | Contained/Transparent Logic | `containment.rs` |
+| 26.9 | Main Matching Engine | `match_engine.rs` |
+| 26.10 | Synchronization | `sync.rs` |
+| 26.11 | Highlight Integration | `highlight.rs` |
+| 26.12 | API and Commands | `api.rs`, `cbindgen.toml` |
 
-**Phases 25.1-25.6** (Previously complete)
-- FFI foundation and opaque handles
-- Character classification utilities
-- Pattern parsing infrastructure
-- NFA state machine core
-- NFA compilation
-- NFA execution engine
+### Summary of the `nvim-syntax` crate:
 
-**Phases 25.7** (Previously complete)
-- NFA integration and testing
+The syntax highlighting subsystem now has Rust modules covering:
+- **Opaque handle types** for C structs (WinHandle, SynBlockHandle, SynPatHandle, etc.)
+- **Pattern types** and accessors (SPTYPE_MATCH, SPTYPE_START, SPTYPE_END, SPTYPE_SKIP)
+- **State machine** operations for managing parsing state
+- **State cache** for tracking syntax state at line positions
+- **Keyword handling** with hashtab lookups
+- **Cluster management** for syntax group clusters
+- **Region handling** with start/skip/end pattern matching
+- **Containment logic** for contained/containedin/transparent items
+- **Matching engine** for current match state and next match information
+- **Synchronization** for finding sync points in the buffer
+- **Highlight integration** for resolving syntax IDs to attributes
+- **Public API** with cbindgen exports for C interop
 
-**Phases 25.8-25.12** (Completed in this session)
-- **Phase 25.8**: Backtracking engine state structures (`bt_state.rs`)
-  - `RegState`, `RegSave`, `SaveSe`, `RegItem`, `RegBehind`, `RegStar`
-  - `BackPos`, `RegStack`, `BackPosTable` types
-  - FFI exports for stack and backposition management
-
-- **Phase 25.9**: Backtracking compilation (`bt_compile.rs`)
-  - `CompileFlags`, `RegCompiler` types
-  - Bytecode emission functions
-  - Node linking infrastructure
-
-- **Phase 25.10**: Backtracking execution (`bt_exec.rs`)
-  - `MatchResult`, `MatchState` types
-  - Pattern matching helpers (`match_class`, `regrepeat`)
-  - Backtrack stack operations
-
-- **Phase 25.11**: API unification (`api.rs`)
-  - `RegEngine` enum (Bt, Nfa, Auto)
-  - `RegProg`, `LPos`, `RegMatch`, `RegMmatch` types
-  - Compilation and match flags
-  - Unified FFI exports
-
-- **Phase 25.12**: Integration and cleanup
-  - Updated `cbindgen.toml` with all new exports
-  - All verification checks pass (`just build`, `just rust-fmt-check`, `just rust-clippy`, `just rust-test`)
-
-### New Files Created
-- `src/nvim-rs/regexp/src/bt_state.rs` (~450 lines)
-- `src/nvim-rs/regexp/src/bt_compile.rs` (~550 lines)
-- `src/nvim-rs/regexp/src/bt_exec.rs` (~800 lines)
-- `src/nvim-rs/regexp/src/api.rs` (~520 lines)
-
-### Commits
-1. `b38d00960d` - Phase 25.8: backtracking engine state structures
-2. `d722c98b36` - Phase 25.9: backtracking compilation infrastructure
-3. `d7e7a7e47c` - Phase 25.10: backtracking execution infrastructure
-4. `6894d599cc` - Phase 25.11: unified API module
-5. `2afa41a985` - Phase 25.12: cbindgen exports update
+All checks pass:
+- `just build` ✓
+- `just rust-fmt-check` ✓
+- `just rust-clippy` ✓
+- `just rust-test` ✓
