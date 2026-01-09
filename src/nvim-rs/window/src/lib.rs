@@ -8,9 +8,18 @@
 //! # Modules
 //!
 //! - [`alloc`]: Window allocation functions (placeholder)
+//! - [`close`]: Window closing functions (placeholder)
+//! - [`commands`]: CTRL-W command handler (placeholder)
+//! - [`equalize`]: Window equalization functions (placeholder)
+//! - [`events`]: Window events and UI updates (placeholder)
 //! - [`focus`]: Window focus and navigation functions
 //! - [`frame`]: Frame tree operations
+//! - [`free`]: Window deallocation functions (placeholder)
 //! - [`list`]: Window list traversal and initialization functions
+//! - [`resize`]: Window resizing and scrolling (placeholder)
+//! - [`snapshot`]: Window layout snapshots (placeholder)
+//! - [`split`]: Window splitting functions (placeholder)
+//! - [`statusline`]: Status line and window bar (placeholder)
 //! - [`tabpage`]: Tab page management operations
 
 #![allow(unsafe_code)] // FFI requires unsafe
@@ -19,9 +28,18 @@
 
 // Domain-specific modules
 pub mod alloc;
+pub mod close;
+pub mod commands;
+pub mod equalize;
+pub mod events;
 pub mod focus;
 pub mod frame;
+pub mod free;
 pub mod list;
+pub mod resize;
+pub mod snapshot;
+pub mod split;
+pub mod statusline;
 pub mod tabpage;
 
 use std::ffi::{c_char, c_int};
