@@ -200,6 +200,22 @@ extern int rs_edit_is_printable_ascii(int key);
 extern int rs_edit_is_special_key(int key);
 extern int rs_edit_get_nav_direction(int key);
 extern int rs_edit_classify_key(int key);
+// Abbreviation module exports
+extern int rs_abbr_disabled(void);
+extern int rs_abbr_loaded(void);
+extern int rs_add_abbr_off(int c);
+extern int rs_remove_abbr_off(int c);
+extern int rs_has_abbr_off(int c);
+extern int rs_abbr_trigger_type(int c);
+extern int rs_abbr_trigger_needs_offset(int trigger_type);
+
+/// Get the no_abbr global variable (accessor for Rust).
+int nvim_get_no_abbr(void)
+{
+  return no_abbr;
+}
+
+// nvim_get_p_paste is defined in indent_c.c
 
 /// Get the ins_need_undo static variable (accessor for Rust).
 int nvim_get_ins_need_undo(void)
