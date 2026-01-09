@@ -91,9 +91,10 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | tui            | Terminal UI                             |
 | typval         | VimL value type handling                |
 | ugrid          | Unicode grid for TUI                    |
-| vars           | Variable storage and scope management   |
 | undo           | Undo/redo system                        |
 | unpacker       | MessagePack unpacking                   |
+| userfunc       | User-defined functions (params, closure, funcref) |
+| vars           | Variable storage and scope management   |
 | utf8proc       | utf8proc bindings                       |
 | version        | Version checks                          |
 | viewport       | Viewport and scroll management          |

@@ -103,6 +103,7 @@ pub use nvim_typval::*;
 pub use nvim_ugrid::*;
 pub use nvim_undo::*;
 pub use nvim_unpacker::*;
+pub use nvim_userfunc::*;
 pub use nvim_utf8proc::*;
 pub use nvim_vars::*;
 pub use nvim_version::*;
