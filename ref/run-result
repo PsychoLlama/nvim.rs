@@ -1,26 +1,69 @@
-Plan: ~/.claude/plans/dynamic-exploring-seahorse.md
+Plan: ~/.claude/plans/proud-wandering-pillow.md
 
-Phase 14 is complete. Here's a summary of what was accomplished:
+The plan has been executed successfully. Here's a summary of what was accomplished:
 
-## Phase 14: Highlight Group System Migration - Complete
+## Phase 15 Summary: Ex Command Line (ex_getln) Enhancement
 
-Created a new `highlight_group` Rust crate with **10 modules** and **82 unit tests**:
+### Plan Analysis
 
-### Modules Created:
-1. **types.rs** - Core types: `SgSet`, `ColorIdx`, `RgbValue`, color tables
-2. **color.rs** - Color utilities: hex parsing, RGB components, dark detection
-3. **registry.rs** - Group registry: builtin groups, name parsing, validation
-4. **parse.rs** - Attribute parsing: `HL_NAME_TABLE`, `ParsedAttrs`, `HlKey`
-5. **normal.rs** - Normal group handling: `NormalColors`, default colors
-6. **command.rs** - Command support: `HighlightCommand` parsing, formatting
-7. **complete.rs** - Completion: context detection, name/key/color completion
-8. **events.rs** - Event handling: `HighlightEvent`, batch changes, actions
-9. **api.rs** - API support: `GetHighlightOpts`, `SetHighlightOpts`, color parsing
-10. **ui.rs** - UI integration: `ColorMode`, terminal detection, RGB conversion
+The original plan suggested creating a new `ex_getln` crate, but upon investigation I discovered that the existing `cmdline` crate already implements most of the required functionality:
 
-### Key Statistics:
-- **2177 total tests pass** (all existing + new)
-- **82 tests** in highlight_group crate alone
-- **Formatting**: `just rust-fmt-check` passes
-- **Linting**: `just rust-clippy` passes with no warnings
-- **11 commits** for the complete phase
+- **state.rs** - CmdlineState, CmdRedraw, buffer state, UTF-8 utilities
+- **edit.rs** - Character insertion/deletion, word operations
+- **keys.rs** - Key handling and classification
+- **history.rs** - History navigation
+- **search.rs** - Incsearch state
+- **preview.rs** - Command preview (inccommand)
+- **ui.rs** - UI events and rendering state
+- **entry.rs** - Entry context and recursion guard
+- **cmdwin.rs** - Command-line window
+- **screen.rs** - Screen positioning calculations
+- **constants.rs** - Key codes and mode constants
+- And 10+ more modules covering API, completion, etc.
+
+### New Modules Added (Phase 15.1)
+
+1. **viewstate.rs** - Window view state management for incsearch and preview
+   - `ViewState` struct for scroll position and cursor column
+   - `IncsearchViewState` for incremental search state tracking
+   - `Position` type for cursor positions
+   - FFI exports: `rs_save_viewstate`, `rs_restore_viewstate`, `rs_viewstate_differs`, etc.
+
+2. **fname.rs** - Filename escaping utilities for command-line
+   - `FnameEscapeMode` enum (Path, Shell, Buffer)
+   - Character escaping and classification functions
+   - Leading backslash handling for special chars (>, +, -)
+   - Tilde expansion detection
+   - FFI exports: `rs_vse_none`, `rs_vse_shell`, `rs_fname_needs_escape`, etc.
+
+### Documentation Update
+
+Updated `ref/crates.md` to reflect the new modules in the cmdline crate.
+
+### Verification
+
+- ✅ `just rust-fmt-check` - All formatting passes
+- ✅ `just rust-clippy` - No warnings
+- ✅ `just rust-test` - All 2191 tests pass
+
+### Commit
+
+```
+feat(cmdline): Phase 15.1 - add viewstate and fname modules
+
+Add two new modules to the cmdline crate:
+
+- viewstate: Save/restore window view state for incsearch and preview
+  - ViewState struct for scroll position and cursor column
+  - IncsearchViewState for incremental search state tracking
+  - FFI exports for C integration
+
+- fname: Filename escaping utilities for command-line
+  - FnameEscapeMode enum (Path, Shell, Buffer)
+  - Character escaping and classification
+  - Leading backslash handling for special chars (>, +, -)
+  - Tilde expansion detection
+
+These modules support the command-line input system (ex_getln)
+migration to Rust.
+```
