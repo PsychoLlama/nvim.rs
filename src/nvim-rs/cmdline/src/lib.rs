@@ -6,6 +6,7 @@
 #![allow(clippy::doc_markdown)]
 
 pub mod api;
+pub mod cmdwin;
 pub mod completion;
 pub mod constants;
 pub mod context;
