@@ -1,22 +1,27 @@
-Plan: ~/.claude/plans/zany-honking-hellman.md
+Plan: ~/.claude/plans/delightful-mapping-token.md
 
-All **Phases 93-102** are now complete:
+All phases (103-112) of the Rust migration plan are now complete. Here's a summary:
 
-| Phase | Crate | Module | Description |
-|-------|-------|--------|-------------|
-| 93 | cmdline | getln.rs | Command line entry loop |
-| 94 | spell | compress.rs | Word tree compression utilities |
-| 95 | viml_parser | NEW crate | VimL expression parser |
-| 96 | regexp | match_helpers.rs | High-level regex operations |
-| 97 | syntax | attributes.rs | Attribute computation for highlighting |
-| 98 | ex_docmd | dispatch.rs | Command execution infrastructure |
-| 99 | eval/funcs | path.rs, display.rs, channel.rs | Built-in function modules |
-| 100 | quickfix | listdo.rs | :cdo/:ldo command support |
-| 101 | register | blockwise.rs | Visual block operations |
-| 102 | userfunc | call.rs | Function call infrastructure |
+## Completed Phases 103-112
 
-All phases passed:
-- `just build` - full build with linking
-- `just rust-fmt-check` - formatting
-- `just rust-clippy` - lints
-- `just rust-test` - unit tests (now at 300+ tests across all crates)
+| Phase | Module | Status |
+|-------|--------|--------|
+| 103 | Buffer Lifecycle (lifecycle.rs, properties.rs, list.rs) | ✓ |
+| 104 | Normal Mode Commands (commands.rs, pending.rs, counts.rs) | ✓ |
+| 105 | VimL String Functions (funcs/string.rs) | ✓ |
+| 106 | VimL List/Dict Functions (funcs/list.rs, funcs/dict.rs) | ✓ |
+| 107 | Getchar/Input (typeahead.rs, mapping.rs, record.rs) | ✓ |
+| 108 | Memline Operations (tree.rs, lines.rs, recovery.rs) | ✓ |
+| 109 | Message System (output.rs, confirm.rs, errors.rs) | ✓ |
+| 110 | Tag Navigation (stack.rs, search.rs, parse.rs) | ✓ |
+| 111 | Operators (yank.rs, put.rs, format.rs) | ✓ |
+| 112 | Ex Commands (mark.rs, buffer.rs, window.rs) | ✓ |
+
+**Key commits from this session:**
+- `c9f9d9bd56` - feat(ex_cmds): add mark, buffer, and window command modules
+
+All checks pass:
+- `just rust-fmt-check` ✓
+- `just rust-clippy` ✓
+- `just rust-test` ✓ (2964 tests)
+- `just build` ✓
