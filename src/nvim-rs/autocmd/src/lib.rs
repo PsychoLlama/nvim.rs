@@ -9,6 +9,9 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::missing_const_for_fn)]
 
+pub mod event;
+pub mod group;
+
 use std::ffi::{c_char, c_void};
 use std::os::raw::c_int;
 
