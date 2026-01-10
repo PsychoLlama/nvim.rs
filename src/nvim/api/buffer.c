@@ -48,6 +48,44 @@
 
 #include "api/buffer.c.generated.h"
 
+// Rust FFI declarations for buffer operations
+extern int rs_buf_is_loaded(const buf_T *buf);  // From buffer crate (returns int, not bool)
+extern bool rs_range_ordered(int64_t start, int64_t end);
+extern bool rs_range_2d_ordered(int64_t start_row, int64_t start_col, int64_t end_row, int64_t end_col);
+extern size_t rs_calc_lines_to_delete(size_t old_len, size_t new_len);
+extern size_t rs_calc_lines_to_replace(size_t old_len, size_t new_len);
+extern linenr_T rs_mark_adjust_value(int64_t start, int64_t end);
+extern colnr_T rs_col_extent(int64_t start_row, int64_t end_row, int64_t start_col, int64_t end_col);
+extern bool rs_cursor_in_range_check(linenr_T cursor_lnum, linenr_T start_row, linenr_T end_row);
+extern bcount_t rs_calc_old_byte_single_line(colnr_T start_col, colnr_T end_col);
+extern bcount_t rs_calc_old_byte_first_line(colnr_T len_at_start, colnr_T start_col);
+extern bcount_t rs_calc_old_byte_last_line(colnr_T end_col);
+extern bcount_t rs_add_line_byte_count(bcount_t byte_count, colnr_T line_len);
+extern size_t rs_calc_first_line_len(colnr_T start_col, size_t first_item_size,
+                                     size_t replacement_size, size_t last_part_len);
+extern bool rs_needs_last_line(size_t replacement_size);
+extern bcount_t rs_new_byte_from_first(size_t first_item_size);
+extern bcount_t rs_add_new_byte_middle(bcount_t byte_count, size_t line_size);
+extern bcount_t rs_add_new_byte_last(bcount_t byte_count, size_t last_item_size);
+extern bool rs_index_valid(int64_t index);
+extern bcount_t rs_inserted_bytes_for_line(size_t line_len);
+extern bool rs_mark_name_valid_len(size_t size);
+extern bool rs_mark_is_set(linenr_T lnum);
+extern bool rs_mark_in_buffer(int fnum, int handle);
+extern int64_t rs_pos_to_row(linenr_T lnum);
+extern int64_t rs_pos_to_col(colnr_T col);
+extern bool rs_needs_middle_lines(size_t size);
+extern size_t rs_middle_lines_count(size_t size);
+extern int rs_middle_lines_start_idx(size_t size);
+extern int rs_last_line_idx(size_t size);
+extern int64_t rs_maxcol_minus_one(void);
+extern bool rs_is_single_line_range(int64_t start_row, int64_t end_row);
+extern bool rs_col_in_range(int64_t col, colnr_T len);
+extern int64_t rs_normalize_col(int64_t col, colnr_T len);
+extern bool rs_dobuf_failed(int result);
+extern bool rs_uhp_has_extmarks(const void *uhp);
+extern size_t rs_calc_last_part_len(colnr_T len_at_end, colnr_T end_col);
+
 /// @brief <pre>help
 /// For more information on buffers, see |buffers|.
 ///
@@ -78,7 +116,7 @@ Integer nvim_buf_line_count(Buffer buffer, Error *err)
   }
 
   // return sentinel value if the buffer isn't loaded
-  if (buf->b_ml.ml_mfp == NULL) {
+  if (!rs_buf_is_loaded(buf)) {
     return 0;
   }
 
@@ -261,7 +299,7 @@ ArrayOf(String) nvim_buf_get_lines(uint64_t channel_id,
   }
 
   // return sentinel value if the buffer isn't loaded
-  if (buf->b_ml.ml_mfp == NULL) {
+  if (!rs_buf_is_loaded(buf)) {
     return rv;
   }
 
@@ -273,7 +311,7 @@ ArrayOf(String) nvim_buf_get_lines(uint64_t channel_id,
     return rv;
   });
 
-  if (start >= end) {
+  if (!rs_range_ordered(start, end)) {
     // Return 0-length array
     return rv;
   }
@@ -334,7 +372,7 @@ void nvim_buf_set_lines(uint64_t channel_id, Buffer buffer, Integer start, Integ
   VALIDATE((!strict_indexing || !oob), "%s", "Index out of bounds", {
     return;
   });
-  VALIDATE((start <= end), "%s", "'start' is higher than 'end'", {
+  VALIDATE(rs_range_ordered(start, end), "%s", "'start' is higher than 'end'", {
     return;
   });
 
@@ -373,7 +411,7 @@ void nvim_buf_set_lines(uint64_t channel_id, Buffer buffer, Integer start, Integ
     // If the size of the range is reducing (ie, new_len < old_len) we
     // need to delete some old_len. We do this at the start, by
     // repeatedly deleting line "start".
-    size_t to_delete = (new_len < old_len) ? old_len - new_len : 0;
+    size_t to_delete = rs_calc_lines_to_delete(old_len, new_len);
     for (size_t i = 0; i < to_delete; i++) {
       if (ml_delete_buf(buf, (linenr_T)start, false) == FAIL) {
         api_set_error(err, kErrorTypeException, "Failed to delete line");
@@ -388,12 +426,12 @@ void nvim_buf_set_lines(uint64_t channel_id, Buffer buffer, Integer start, Integ
     // For as long as possible, replace the existing old_len with the
     // new old_len. This is a more efficient operation, as it requires
     // less memory allocation and freeing.
-    size_t to_replace = old_len < new_len ? old_len : new_len;
+    size_t to_replace = rs_calc_lines_to_replace(old_len, new_len);
     bcount_t inserted_bytes = 0;
     for (size_t i = 0; i < to_replace; i++) {
       int64_t lnum = start + (int64_t)i;
 
-      VALIDATE(lnum < MAXLNUM, "%s", "Index out of bounds", {
+      VALIDATE(rs_index_valid(lnum), "%s", "Index out of bounds", {
         goto end;
       });
 
@@ -402,14 +440,14 @@ void nvim_buf_set_lines(uint64_t channel_id, Buffer buffer, Integer start, Integ
         goto end;
       }
 
-      inserted_bytes += (bcount_t)strlen(lines[i]) + 1;
+      inserted_bytes += rs_inserted_bytes_for_line(strlen(lines[i]));
     }
 
     // Now we may need to insert the remaining new old_len
     for (size_t i = to_replace; i < new_len; i++) {
       int64_t lnum = start + (int64_t)i - 1;
 
-      VALIDATE(lnum < MAXLNUM, "%s", "Index out of bounds", {
+      VALIDATE(rs_index_valid(lnum), "%s", "Index out of bounds", {
         goto end;
       });
 
@@ -418,14 +456,14 @@ void nvim_buf_set_lines(uint64_t channel_id, Buffer buffer, Integer start, Integ
         goto end;
       }
 
-      inserted_bytes += (bcount_t)strlen(lines[i]) + 1;
+      inserted_bytes += rs_inserted_bytes_for_line(strlen(lines[i]));
 
       extra++;
     }
 
     // Adjust marks. Invalidate any which lie in the
     // changed range, and move any in the remainder of the buffer.
-    linenr_T adjust = end > start ? MAXLNUM : 0;
+    linenr_T adjust = rs_mark_adjust_value(start, end);
     mark_adjust_buf(buf, (linenr_T)start, (linenr_T)(end - 1), adjust, (linenr_T)extra,
                     true, kMarkAdjustApi, kExtmarkNOOP);
 
@@ -509,20 +547,20 @@ void nvim_buf_set_text(uint64_t channel_id, Buffer buffer, Integer start_row, In
   char *str_at_start = ml_get_buf(buf, (linenr_T)start_row);
   colnr_T len_at_start = ml_get_buf_len(buf, (linenr_T)start_row);
   str_at_start = arena_memdupz(arena, str_at_start, (size_t)len_at_start);
-  start_col = start_col < 0 ? len_at_start + start_col + 1 : start_col;
-  VALIDATE_RANGE((start_col >= 0 && start_col <= len_at_start), "start_col", {
+  start_col = rs_normalize_col(start_col, len_at_start);
+  VALIDATE_RANGE(rs_col_in_range(start_col, len_at_start), "start_col", {
     return;
   });
 
   char *str_at_end = ml_get_buf(buf, (linenr_T)end_row);
   colnr_T len_at_end = ml_get_buf_len(buf, (linenr_T)end_row);
   str_at_end = arena_memdupz(arena, str_at_end, (size_t)len_at_end);
-  end_col = end_col < 0 ? len_at_end + end_col + 1 : end_col;
-  VALIDATE_RANGE((end_col >= 0 && end_col <= len_at_end), "end_col", {
+  end_col = rs_normalize_col(end_col, len_at_end);
+  VALIDATE_RANGE(rs_col_in_range(end_col, len_at_end), "end_col", {
     return;
   });
 
-  VALIDATE((start_row <= end_row && !(end_row == start_row && start_col > end_col)),
+  VALIDATE(rs_range_2d_ordered(start_row, start_col, end_row, end_col),
            "%s", "'start' is higher than 'end'", {
     return;
   });
@@ -538,31 +576,29 @@ void nvim_buf_set_text(uint64_t channel_id, Buffer buffer, Integer start_row, In
   bcount_t old_byte = 0;
 
   // calculate byte size of old region before it gets modified/deleted
-  if (start_row == end_row) {
-    old_byte = (bcount_t)end_col - start_col;
+  if (rs_is_single_line_range(start_row, end_row)) {
+    old_byte = rs_calc_old_byte_single_line((colnr_T)start_col, (colnr_T)end_col);
   } else {
-    old_byte += len_at_start - start_col;
+    old_byte += rs_calc_old_byte_first_line(len_at_start, (colnr_T)start_col);
     for (int64_t i = 1; i < end_row - start_row; i++) {
       int64_t lnum = start_row + i;
-      old_byte += ml_get_buf_len(buf, (linenr_T)lnum) + 1;
+      old_byte = rs_add_line_byte_count(old_byte, ml_get_buf_len(buf, (linenr_T)lnum));
     }
-    old_byte += (bcount_t)end_col + 1;
+    old_byte += rs_calc_old_byte_last_line((colnr_T)end_col);
   }
 
   String first_item = replacement.items[0].data.string;
   String last_item = replacement.items[replacement.size - 1].data.string;
 
-  size_t firstlen = (size_t)start_col + first_item.size;
-  size_t last_part_len = (size_t)len_at_end - (size_t)end_col;
-  if (replacement.size == 1) {
-    firstlen += last_part_len;
-  }
+  size_t last_part_len = rs_calc_last_part_len(len_at_end, (colnr_T)end_col);
+  size_t firstlen = rs_calc_first_line_len((colnr_T)start_col, first_item.size,
+                                           replacement.size, last_part_len);
   char *first = arena_allocz(arena, firstlen);
   char *last = NULL;
   memcpy(first, str_at_start, (size_t)start_col);
   memcpy(first + start_col, first_item.data, first_item.size);
   memchrsub(first + start_col, NUL, NL, first_item.size);
-  if (replacement.size == 1) {
+  if (!rs_needs_last_line(replacement.size)) {
     memcpy(first + start_col + first_item.size, str_at_end + end_col, last_part_len);
   } else {
     last = arena_allocz(arena, last_item.size + last_part_len);
@@ -573,7 +609,7 @@ void nvim_buf_set_text(uint64_t channel_id, Buffer buffer, Integer start_row, In
 
   char **lines = arena_alloc(arena, new_len * sizeof(char *), true);
   lines[0] = first;
-  new_byte += (bcount_t)(first_item.size);
+  new_byte += rs_new_byte_from_first(first_item.size);
   for (size_t i = 1; i < new_len - 1; i++) {
     const String l = replacement.items[i].data.string;
 
@@ -581,11 +617,11 @@ void nvim_buf_set_text(uint64_t channel_id, Buffer buffer, Integer start_row, In
     // NL-used-for-NUL.
     lines[i] = arena_memdupz(arena, l.data, l.size);
     memchrsub(lines[i], NUL, NL, l.size);
-    new_byte += (bcount_t)(l.size) + 1;
+    new_byte = rs_add_new_byte_middle(new_byte, l.size);
   }
-  if (replacement.size > 1) {
+  if (rs_needs_last_line(replacement.size)) {
     lines[replacement.size - 1] = last;
-    new_byte += (bcount_t)(last_item.size) + 1;
+    new_byte = rs_add_new_byte_last(new_byte, last_item.size);
   }
 
   TRY_WRAP(err, {
@@ -607,7 +643,7 @@ void nvim_buf_set_text(uint64_t channel_id, Buffer buffer, Integer start_row, In
     // If the size of the range is reducing (ie, new_len < old_len) we
     // need to delete some old_len. We do this at the start, by
     // repeatedly deleting line "start".
-    size_t to_delete = (new_len < old_len) ? old_len - new_len : 0;
+    size_t to_delete = rs_calc_lines_to_delete(old_len, new_len);
     for (size_t i = 0; i < to_delete; i++) {
       if (ml_delete_buf(buf, (linenr_T)start_row, false) == FAIL) {
         api_set_error(err, kErrorTypeException, "Failed to delete line");
@@ -622,11 +658,11 @@ void nvim_buf_set_text(uint64_t channel_id, Buffer buffer, Integer start_row, In
     // For as long as possible, replace the existing old_len with the
     // new old_len. This is a more efficient operation, as it requires
     // less memory allocation and freeing.
-    size_t to_replace = old_len < new_len ? old_len : new_len;
+    size_t to_replace = rs_calc_lines_to_replace(old_len, new_len);
     for (size_t i = 0; i < to_replace; i++) {
       int64_t lnum = start_row + (int64_t)i;
 
-      VALIDATE((lnum < MAXLNUM), "%s", "Index out of bounds", {
+      VALIDATE(rs_index_valid(lnum), "%s", "Index out of bounds", {
         goto end;
       });
 
@@ -640,7 +676,7 @@ void nvim_buf_set_text(uint64_t channel_id, Buffer buffer, Integer start_row, In
     for (size_t i = to_replace; i < new_len; i++) {
       int64_t lnum = start_row + (int64_t)i - 1;
 
-      VALIDATE((lnum < MAXLNUM), "%s", "Index out of bounds", {
+      VALIDATE(rs_index_valid(lnum), "%s", "Index out of bounds", {
         goto end;
       });
 
@@ -652,13 +688,12 @@ void nvim_buf_set_text(uint64_t channel_id, Buffer buffer, Integer start_row, In
       extra++;
     }
 
-    colnr_T col_extent = (colnr_T)(end_col
-                                   - ((end_row == start_row) ? start_col : 0));
+    colnr_T col_extent = rs_col_extent(start_row, end_row, start_col, end_col);
 
     // Adjust marks. Invalidate any which lie in the
     // changed range, and move any in the remainder of the buffer.
     // Do not adjust any cursors. need to use column-aware logic (below)
-    linenr_T adjust = end_row >= start_row ? MAXLNUM : 0;
+    linenr_T adjust = rs_mark_adjust_value(start_row, end_row + 1);
     mark_adjust_buf(buf, (linenr_T)start_row, (linenr_T)end_row - 1, adjust, (linenr_T)extra,
                     true, kMarkAdjustApi, kExtmarkNOOP);
 
@@ -671,7 +706,7 @@ void nvim_buf_set_text(uint64_t channel_id, Buffer buffer, Integer start_row, In
 
     FOR_ALL_TAB_WINDOWS(tp, win) {
       if (win->w_buffer == buf) {
-        if (win->w_cursor.lnum >= start_row && win->w_cursor.lnum <= end_row) {
+        if (rs_cursor_in_range_check(win->w_cursor.lnum, (linenr_T)start_row, (linenr_T)end_row)) {
           fix_cursor_cols(win, (linenr_T)start_row, (colnr_T)start_col, (linenr_T)end_row,
                           (colnr_T)end_col, (linenr_T)new_len, (colnr_T)last_item.size);
         } else {
@@ -715,7 +750,7 @@ ArrayOf(String) nvim_buf_get_text(uint64_t channel_id, Buffer buffer,
   }
 
   // return sentinel value if the buffer isn't loaded
-  if (buf->b_ml.ml_mfp == NULL) {
+  if (!rs_buf_is_loaded(buf)) {
     return rv;
   }
 
@@ -730,7 +765,7 @@ ArrayOf(String) nvim_buf_get_text(uint64_t channel_id, Buffer buffer,
   // nvim_buf_get_lines doesn't care if the start row is greater than the end
   // row (it will just return an empty array), but nvim_buf_get_text does in
   // order to maintain symmetry with nvim_buf_set_text.
-  VALIDATE((start_row <= end_row), "%s", "'start' is higher than 'end'", {
+  VALIDATE(rs_range_ordered(start_row, end_row), "%s", "'start' is higher than 'end'", {
     return rv;
   });
 
@@ -740,7 +775,7 @@ ArrayOf(String) nvim_buf_get_text(uint64_t channel_id, Buffer buffer,
 
   init_line_array(lstate, &rv, size, arena);
 
-  if (start_row == end_row) {
+  if (rs_is_single_line_range(start_row, end_row)) {
     String line = buf_get_text(buf, start_row, start_col, end_col, err);
     if (ERROR_SET(err)) {
       goto end;
@@ -749,15 +784,16 @@ ArrayOf(String) nvim_buf_get_text(uint64_t channel_id, Buffer buffer,
     return rv;
   }
 
-  String str = buf_get_text(buf, start_row, start_col, MAXCOL - 1, err);
+  String str = buf_get_text(buf, start_row, start_col, rs_maxcol_minus_one(), err);
   if (ERROR_SET(err)) {
     goto end;
   }
 
   push_linestr(lstate, &rv, str.data, str.size, 0, replace_nl, arena);
 
-  if (size > 2) {
-    buf_collect_lines(buf, size - 2, (linenr_T)start_row + 1, 1, replace_nl, &rv, lstate, arena);
+  if (rs_needs_middle_lines(size)) {
+    buf_collect_lines(buf, rs_middle_lines_count(size), (linenr_T)start_row + 1,
+                      rs_middle_lines_start_idx(size), replace_nl, &rv, lstate, arena);
   }
 
   str = buf_get_text(buf, end_row, 0, end_col, err);
@@ -765,7 +801,7 @@ ArrayOf(String) nvim_buf_get_text(uint64_t channel_id, Buffer buffer,
     goto end;
   }
 
-  push_linestr(lstate, &rv, str.data, str.size, (int)(size - 1), replace_nl, arena);
+  push_linestr(lstate, &rv, str.data, str.size, rs_last_line_idx(size), replace_nl, arena);
 
 end:
   if (ERROR_SET(err)) {
@@ -798,7 +834,7 @@ Integer nvim_buf_get_offset(Buffer buffer, Integer index, Error *err)
   }
 
   // return sentinel value if the buffer isn't loaded
-  if (buf->b_ml.ml_mfp == NULL) {
+  if (!rs_buf_is_loaded(buf)) {
     return -1;
   }
 
@@ -996,7 +1032,7 @@ Boolean nvim_buf_is_loaded(Buffer buffer)
   Error stub = ERROR_INIT;
   buf_T *buf = find_buffer_by_handle(buffer, &stub);
   api_clear_error(&stub);
-  return buf && buf->b_ml.ml_mfp != NULL;
+  return rs_buf_is_loaded(buf);
 }
 
 /// Deletes a buffer and its metadata (like |:bwipeout|).
@@ -1031,7 +1067,7 @@ void nvim_buf_delete(Buffer buffer, Dict(buf_delete) *opts, Error *err)
                          buf->handle,
                          force);
 
-  if (result == FAIL) {
+  if (rs_dobuf_failed(result)) {
     api_set_error(err, kErrorTypeException, "Failed to unload buffer.");
     return;
   }
@@ -1072,7 +1108,7 @@ Boolean nvim_buf_del_mark(Buffer buffer, String name, Error *err)
     return res;
   }
 
-  VALIDATE_S((name.size == 1), "mark name (must be a single char)", name.data, {
+  VALIDATE_S(rs_mark_name_valid_len(name.size), "mark name (must be a single char)", name.data, {
     return res;
   });
 
@@ -1084,7 +1120,7 @@ Boolean nvim_buf_del_mark(Buffer buffer, String name, Error *err)
   });
 
   // mark.lnum is 0 when the mark is not valid in the buffer, or is not set.
-  if (fm->mark.lnum != 0 && fm->fnum == buf->handle) {
+  if (rs_mark_is_set(fm->mark.lnum) && rs_mark_in_buffer(fm->fnum, buf->handle)) {
     // since the mark belongs to the buffer delete it.
     res = set_mark(buf, name, 0, 0, err);
   }
@@ -1118,7 +1154,7 @@ Boolean nvim_buf_set_mark(Buffer buffer, String name, Integer line, Integer col,
     return res;
   }
 
-  VALIDATE_S((name.size == 1), "mark name (must be a single char)", name.data, {
+  VALIDATE_S(rs_mark_name_valid_len(name.size), "mark name (must be a single char)", name.data, {
     return res;
   });
 
@@ -1150,7 +1186,7 @@ ArrayOf(Integer, 2) nvim_buf_get_mark(Buffer buffer, String name, Arena *arena, 
     return rv;
   }
 
-  VALIDATE_S((name.size == 1), "mark name (must be a single char)", name.data, {
+  VALIDATE_S(rs_mark_name_valid_len(name.size), "mark name (must be a single char)", name.data, {
     return rv;
   });
 
@@ -1163,7 +1199,7 @@ ArrayOf(Integer, 2) nvim_buf_get_mark(Buffer buffer, String name, Arena *arena, 
     return rv;
   });
   // (0, 0) uppercase/file mark set in another buffer.
-  if (fm->fnum != buf->handle) {
+  if (!rs_mark_in_buffer(fm->fnum, buf->handle)) {
     pos.lnum = 0;
     pos.col = 0;
   } else {
@@ -1171,8 +1207,8 @@ ArrayOf(Integer, 2) nvim_buf_get_mark(Buffer buffer, String name, Arena *arena, 
   }
 
   rv = arena_array(arena, 2);
-  ADD_C(rv, INTEGER_OBJ(pos.lnum));
-  ADD_C(rv, INTEGER_OBJ(pos.col));
+  ADD_C(rv, INTEGER_OBJ(rs_pos_to_row(pos.lnum)));
+  ADD_C(rv, INTEGER_OBJ(rs_pos_to_col(pos.col)));
 
   return rv;
 }
@@ -1246,7 +1282,7 @@ Dict nvim__buf_stats(Buffer buffer, Arena *arena, Error *err)
   } else if (buf->b_u_newhead) {
     uhp = buf->b_u_newhead;
   }
-  if (uhp) {
+  if (rs_uhp_has_extmarks(uhp)) {
     PUT_C(rv, "uhp_extmark_size", INTEGER_OBJ((Integer)kv_size(uhp->uh_extmark)));
   }
 

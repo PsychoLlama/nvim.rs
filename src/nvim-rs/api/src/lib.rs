@@ -3,6 +3,9 @@
 //! This crate provides C-compatible implementations of API utility functions.
 
 #![allow(clippy::items_after_test_module)]
+#![allow(dead_code)]
+
+pub mod buffer;
 
 use std::ffi::{c_char, c_int};
 use std::ptr;
