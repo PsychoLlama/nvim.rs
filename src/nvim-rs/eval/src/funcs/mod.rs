@@ -12,6 +12,9 @@
 //! - `string`: String manipulation (split, join, tolower, etc.)
 //! - `list`: List operations (add, insert, remove, etc.)
 //! - `dict`: Dictionary operations (keys, values, items, etc.)
+//! - `path`: File and path operations (fnamemodify, glob, etc.)
+//! - `display`: UI and display functions (screenrow, winwidth, etc.)
+//! - `channel`: Channel and job functions
 //!
 //! ## FFI Pattern
 //!
@@ -27,10 +30,13 @@
 
 pub mod bitwise;
 pub mod buffer;
+pub mod channel;
 pub mod collections;
 pub mod cursor;
 mod dispatch;
+pub mod display;
 pub mod math;
+pub mod path;
 pub mod random;
 pub mod search;
 pub mod string;
@@ -39,6 +45,9 @@ pub mod text;
 pub mod types;
 pub mod window;
 
+pub use channel::*;
 pub use collections::*;
 pub use dispatch::*;
+pub use display::*;
+pub use path::*;
 pub use string::*;
