@@ -111,6 +111,7 @@ pub use nvim_tag::*;
 pub use nvim_terminal::*;
 pub use nvim_testing::*;
 pub use nvim_state::*;
+pub use nvim_ui_client::*;
 pub use nvim_textformat::*;
 pub use nvim_textobject::*;
 pub use nvim_tui::*;
