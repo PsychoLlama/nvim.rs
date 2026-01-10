@@ -560,7 +560,10 @@ pub unsafe extern "C" fn rs_output_manager_add_output(stats: *mut OutputManagerS
 /// # Safety
 /// `stats` must be valid or null.
 #[no_mangle]
-pub unsafe extern "C" fn rs_output_manager_record_write(stats: *mut OutputManagerStats, bytes: u64) {
+pub unsafe extern "C" fn rs_output_manager_record_write(
+    stats: *mut OutputManagerStats,
+    bytes: u64,
+) {
     if !stats.is_null() {
         (*stats).record_write(bytes);
     }

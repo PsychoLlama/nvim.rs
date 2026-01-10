@@ -92,9 +92,7 @@ pub extern "C" fn rs_log_level_short_name(level: c_int) -> u8 {
 /// FFI: Check if level enabled.
 #[no_mangle]
 pub extern "C" fn rs_log_level_is_enabled(level: c_int, threshold: c_int) -> c_int {
-    c_int::from(
-        LogLevel::from_c_int(level).is_enabled_for(LogLevel::from_c_int(threshold)),
-    )
+    c_int::from(LogLevel::from_c_int(level).is_enabled_for(LogLevel::from_c_int(threshold)))
 }
 
 // =============================================================================
@@ -276,7 +274,10 @@ impl LevelConfig {
     pub const fn new(default_level: LogLevel) -> Self {
         Self {
             default_level: default_level as c_int,
-            overrides: [LevelOverride { component_id: 0, level: 0 }; 8],
+            overrides: [LevelOverride {
+                component_id: 0,
+                level: 0,
+            }; 8],
             override_count: 0,
         }
     }
@@ -321,7 +322,10 @@ pub extern "C" fn rs_level_config_new(default_level: c_int) -> LevelConfig {
 /// # Safety
 /// `config` must be valid or null.
 #[no_mangle]
-pub unsafe extern "C" fn rs_level_config_get(config: *const LevelConfig, component_id: c_int) -> c_int {
+pub unsafe extern "C" fn rs_level_config_get(
+    config: *const LevelConfig,
+    component_id: c_int,
+) -> c_int {
     if config.is_null() {
         return LogLevel::Info as c_int;
     }

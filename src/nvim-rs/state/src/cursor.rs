@@ -25,7 +25,11 @@ impl CursorPos {
     /// Create new cursor position.
     #[must_use]
     pub const fn new(line: i64, col: c_int) -> Self {
-        Self { line, col, coladd: 0 }
+        Self {
+            line,
+            col,
+            coladd: 0,
+        }
     }
 
     /// Create position with virtual column.
@@ -98,7 +102,10 @@ pub unsafe extern "C" fn rs_state_cursor_pos_is_valid(pos: *const CursorPos) -> 
 /// # Safety
 /// Both `a` and `b` must be valid or null.
 #[no_mangle]
-pub unsafe extern "C" fn rs_state_cursor_pos_cmp(a: *const CursorPos, b: *const CursorPos) -> c_int {
+pub unsafe extern "C" fn rs_state_cursor_pos_cmp(
+    a: *const CursorPos,
+    b: *const CursorPos,
+) -> c_int {
     if a.is_null() || b.is_null() {
         return 0;
     }

@@ -364,7 +364,10 @@ pub extern "C" fn rs_invocation_record_new(
 /// # Safety
 /// `record` must be valid or null.
 #[no_mangle]
-pub unsafe extern "C" fn rs_invocation_complete_ok(record: *mut InvocationRecord, duration_us: i64) {
+pub unsafe extern "C" fn rs_invocation_complete_ok(
+    record: *mut InvocationRecord,
+    duration_us: i64,
+) {
     if !record.is_null() {
         (*record).complete_ok(duration_us);
     }

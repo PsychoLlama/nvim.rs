@@ -401,6 +401,57 @@ extern void *rs_qf_find_entry_before_pos(int bnr, const void *pos, bool linewise
 extern void *rs_qf_find_closest_entry(const void *qfl, int bnr, const void *pos, int dir,
                                       bool linewise, int *errornr);
 
+// Phase 6: Filter and query functions from Rust
+extern int rs_qf_count_by_type(const void *qfl, char entry_type);
+extern int rs_qf_count_info(const void *qfl);
+extern int rs_qf_count_in_buffer(const void *qfl, int bnr);
+extern int rs_qf_count_valid_in_buffer(const void *qfl, int bnr);
+extern int rs_qf_count_on_line(const void *qfl, int bnr, linenr_T lnum);
+extern bool rs_qf_entry_text_contains(const void *qfp, const char *pattern);
+extern int rs_qf_find_text(const void *qfl, const char *pattern);
+extern int rs_qf_find_text_after(const void *qfl, int start_idx, const char *pattern);
+extern int rs_qf_count_text_matches(const void *qfl, const char *pattern);
+extern bool rs_qf_has_valid_in_buffer(const void *qfl, int bnr);
+extern bool rs_qf_all_invalid(const void *qfl);
+extern bool rs_qf_has_valid_type(const void *qfl, char entry_type);
+extern bool rs_qf_has_entries_in_range(const void *qfl, int bnr, linenr_T start, linenr_T end);
+extern int rs_qf_count_in_range(const void *qfl, int bnr, linenr_T start, linenr_T end);
+
+// Phase 6: Navigation and command functions from Rust
+extern bool rs_qf_can_go_older(const void *qi);
+extern bool rs_qf_can_go_newer(const void *qi);
+extern int rs_qf_calc_age_target(const void *qi, int count, bool go_older);
+extern int rs_qf_available_age_steps(const void *qi, bool go_older);
+extern bool rs_qf_can_go_next(const void *qfl);
+extern bool rs_qf_can_go_prev(const void *qfl);
+extern int rs_qf_calc_nav_target(const void *qfl, int count, bool forward, bool valid_only);
+extern int rs_qf_available_nav_steps(const void *qfl, bool forward);
+extern int rs_qf_find_nth_valid(const void *qfl, int n);
+
+// Phase 6: Entry iteration and comparison functions from Rust
+extern int rs_qf_entry_count_in_file(const void *qfl, int bnr);
+extern int rs_qf_count_valid_entries(const void *qfl);
+extern void *rs_qf_get_nth_valid_entry(const void *qfl, int n, int *out_idx);
+extern void *rs_qf_get_entry_at_idx(const void *qfl, int idx);
+extern void *rs_qf_find_first_of_type(const void *qfl, char type_char);
+extern void *rs_qf_find_last_of_type(const void *qfl, char type_char);
+extern int rs_qf_cmp_entries(const void *a, const void *b);
+extern bool rs_qf_entry_in_file(const void *qfp, int bnr);
+extern bool rs_qf_entry_is_active(const void *qfp);
+extern bool rs_qf_entry_has_type(const void *qfp, char type_char);
+
+// Phase 6: ID and metadata functions from Rust
+extern unsigned rs_qf_get_id(const void *qfl);
+extern int rs_qf_get_changedtick(const void *qfl);
+extern int rs_qf_get_listcount(const void *qi);
+extern int rs_qf_get_curlist_idx(const void *qi);
+extern void *rs_qf_get_curlist(const void *qi);
+extern void *rs_qf_get_list_at(const void *qi, int idx);
+
+// Phase 6: External output functions from Rust
+extern bool rs_qf_has_errors(const void *qfl);
+extern bool rs_qf_has_warnings_or_errors(const void *qfl);
+
 // =============================================================================
 // Phase 5: List management setters and wrappers for Rust
 // =============================================================================
@@ -2262,6 +2313,178 @@ static qf_list_T *qf_get_list(qf_info_T *qi, int idx)
   FUNC_ATTR_NONNULL_ALL
 {
   return &qi->qf_lists[idx];
+}
+
+// =============================================================================
+// Phase 6: Wrapper functions using Rust implementations
+// =============================================================================
+
+/// Check if we can navigate to an older list. Rust implementation.
+static bool qf_can_go_older(const qf_info_T *qi)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_can_go_older(qi);
+}
+
+/// Check if we can navigate to a newer list. Rust implementation.
+static bool qf_can_go_newer(const qf_info_T *qi)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_can_go_newer(qi);
+}
+
+/// Count entries of a specific type. Rust implementation.
+static int qf_count_by_type(const qf_list_T *qfl, char entry_type)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_count_by_type(qfl, entry_type);
+}
+
+/// Count informational entries. Rust implementation.
+static int qf_count_info(const qf_list_T *qfl)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_count_info(qfl);
+}
+
+/// Count entries in a buffer. Rust implementation.
+static int qf_count_in_buffer(const qf_list_T *qfl, int bnr)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_count_in_buffer(qfl, bnr);
+}
+
+/// Count valid entries in a buffer. Rust implementation.
+static int qf_count_valid_in_buffer(const qf_list_T *qfl, int bnr)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_count_valid_in_buffer(qfl, bnr);
+}
+
+/// Count entries on a specific line. Rust implementation.
+static int qf_count_on_line(const qf_list_T *qfl, int bnr, linenr_T lnum)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_count_on_line(qfl, bnr, lnum);
+}
+
+/// Check if entry text contains pattern. Rust implementation.
+static bool qf_entry_text_contains(const qfline_T *qfp, const char *pattern)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_entry_text_contains(qfp, pattern);
+}
+
+/// Check if there are valid entries in a buffer. Rust implementation.
+static bool qf_has_valid_in_buffer(const qf_list_T *qfl, int bnr)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_has_valid_in_buffer(qfl, bnr);
+}
+
+/// Check if all entries are invalid. Rust implementation.
+static bool qf_all_invalid(const qf_list_T *qfl)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_all_invalid(qfl);
+}
+
+/// Check if list has entries of a specific valid type. Rust implementation.
+static bool qf_has_valid_type(const qf_list_T *qfl, char entry_type)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_has_valid_type(qfl, entry_type);
+}
+
+/// Check if list has errors. Rust implementation.
+static bool qf_has_errors(const qf_list_T *qfl)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_has_errors(qfl);
+}
+
+/// Check if list has warnings or errors. Rust implementation.
+static bool qf_has_warnings_or_errors(const qf_list_T *qfl)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_has_warnings_or_errors(qfl);
+}
+
+/// Count entries in file. Rust implementation.
+static int qf_entry_count_in_file(const qf_list_T *qfl, int bnr)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_entry_count_in_file(qfl, bnr);
+}
+
+/// Count valid entries. Rust implementation.
+static int qf_count_valid_entries(const qf_list_T *qfl)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_count_valid_entries(qfl);
+}
+
+/// Check if entry is in file. Rust implementation.
+static bool qf_entry_in_file(const qfline_T *qfp, int bnr)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_entry_in_file(qfp, bnr);
+}
+
+/// Check if entry is active. Rust implementation.
+static bool qf_entry_is_active(const qfline_T *qfp)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_entry_is_active(qfp);
+}
+
+/// Check if entry has specific type. Rust implementation.
+static bool qf_entry_has_type(const qfline_T *qfp, char type_char)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_entry_has_type(qfp, type_char);
+}
+
+/// Compare two quickfix entries. Rust implementation.
+static int qf_cmp_entries(const qfline_T *a, const qfline_T *b)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_cmp_entries(a, b);
+}
+
+/// Find the Nth valid entry from current position. Rust implementation.
+static int qf_find_nth_valid(const qf_list_T *qfl, int n)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_find_nth_valid(qfl, n);
+}
+
+/// Calculate available age steps (older/newer). Rust implementation.
+static int qf_available_age_steps(const qf_info_T *qi, bool go_older)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_available_age_steps(qi, go_older);
+}
+
+/// Calculate available nav steps (forward/backward). Rust implementation.
+static int qf_available_nav_steps(const qf_list_T *qfl, bool forward)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_available_nav_steps(qfl, forward);
+}
+
+/// Check if there are entries in a range. Rust implementation.
+static bool qf_has_entries_in_range(const qf_list_T *qfl, int bnr, linenr_T start, linenr_T end)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_has_entries_in_range(qfl, bnr, start, end);
+}
+
+/// Count entries in a range. Rust implementation.
+static int qf_count_in_range(const qf_list_T *qfl, int bnr, linenr_T start, linenr_T end)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_count_in_range(qfl, bnr, start, end);
 }
 
 /// Parse a line and get the quickfix fields.
