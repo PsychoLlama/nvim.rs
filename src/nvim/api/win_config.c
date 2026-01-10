@@ -1,6 +1,43 @@
 #include <assert.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <string.h>
+
+// Rust FFI declarations
+extern int rs_win_split_flags(int split, bool toplevel);
+extern bool rs_is_vert_split(int flags);
+extern int rs_split_size(int flags, int width, int height);
+extern bool rs_need_size_adjust(int requested, int actual);
+extern bool rs_has_cmdline_offset(int offset);
+extern int rs_cmdline_offset_unset(void);
+extern bool rs_is_split_config(bool has_vertical, bool has_split);
+extern int rs_vert_split_dir(bool p_spr);
+extern int rs_horiz_split_dir(bool p_sb);
+extern bool rs_parent_is_floating(bool floating);
+extern bool rs_cmdwin_blocks_enter(int cmdwin_type, bool enter);
+extern bool rs_is_cmdwin_buf(int buf_handle, int cmdwin_buf_handle);
+extern bool rs_border_size_valid(size_t size);
+extern size_t rs_border_double_size(size_t size);
+extern bool rs_border_tuple_valid(size_t size);
+extern bool rs_is_single_cell(int cells);
+extern int rs_border_char_count(void);  // defined in winfloat crate
+extern bool rs_dimension_valid(int64_t dim);
+extern bool rs_zindex_valid(int64_t zindex);
+extern bool rs_external_needs_multigrid(bool external, bool has_multigrid);
+extern bool rs_relative_is_window(int relative);
+extern double rs_bufpos_default_row(uint8_t anchor);
+extern bool rs_anchor_has_south(uint8_t anchor);
+extern bool rs_style_is_minimal(int style);
+extern int rs_split_dir_from_layout(bool layout_is_col, bool has_next);
+extern bool rs_is_to_split(bool relative_empty, bool external, bool has_split_or_vert, bool was_split);
+extern bool rs_keep_existing_split(bool has_vertical, bool has_split, bool was_split,
+                                   bool has_win, int old_split, int new_split);
+extern bool rs_get_neighbor_direction(int split);
+extern int rs_vert_split_dir_reconfig(int old_split, bool p_spr);
+extern int rs_horiz_split_dir_reconfig(int old_split, bool p_sb);
+extern bool rs_curwin_moving_tp(bool win_is_curwin, bool has_parent, bool win_tp_is_parent_tp);
+extern int rs_frame_count_for_self_split(int n_frames);
+extern bool rs_config_win_equals_self(int config_win, int self_handle);
 
 #include "klib/kvec.h"
 #include "nvim/api/extmark.h"
@@ -213,7 +250,7 @@ Window nvim_open_win(Buffer buffer, Boolean enter, Dict(win_config) *config, Err
   if (!buf) {
     return 0;
   }
-  if ((cmdwin_type != 0 && enter) || buf == cmdwin_buf) {
+  if (rs_cmdwin_blocks_enter(cmdwin_type, enter) || rs_is_cmdwin_buf(buf->handle, cmdwin_buf ? cmdwin_buf->handle : 0)) {
     api_set_error(err, kErrorTypeException, "%s", e_cmdwin);
     return 0;
   }
@@ -223,7 +260,7 @@ Window nvim_open_win(Buffer buffer, Boolean enter, Dict(win_config) *config, Err
     return 0;
   }
 
-  bool is_split = HAS_KEY_X(config, split) || HAS_KEY_X(config, vertical);
+  bool is_split = rs_is_split_config(HAS_KEY_X(config, vertical), HAS_KEY_X(config, split));
   Window rv = 0;
   if (fconfig.noautocmd) {
     block_autocmds();
@@ -238,7 +275,7 @@ Window nvim_open_win(Buffer buffer, Boolean enter, Dict(win_config) *config, Err
     if (!parent) {
       // find_window_by_handle has already set the error
       goto cleanup;
-    } else if (is_split && parent->w_floating) {
+    } else if (is_split && rs_parent_is_floating(parent->w_floating)) {
       api_set_error(err, kErrorTypeException, "Cannot split a floating window");
       goto cleanup;
     }
@@ -251,13 +288,13 @@ Window nvim_open_win(Buffer buffer, Boolean enter, Dict(win_config) *config, Err
 
     if (HAS_KEY_X(config, vertical) && !HAS_KEY_X(config, split)) {
       if (config->vertical) {
-        fconfig.split = p_spr ? kWinSplitRight : kWinSplitLeft;
+        fconfig.split = (WinSplit)rs_vert_split_dir(p_spr);
       } else {
-        fconfig.split = p_sb ? kWinSplitBelow : kWinSplitAbove;
+        fconfig.split = (WinSplit)rs_horiz_split_dir(p_sb);
       }
     }
     int flags = win_split_flags(fconfig.split, parent == NULL) | WSP_NOENTER;
-    int size = (flags & WSP_VERT) ? fconfig.width : fconfig.height;
+    int size = rs_split_size(flags, fconfig.width, fconfig.height);
 
     TRY_WRAP(err, {
       if (parent == NULL || parent == curwin) {
@@ -277,9 +314,9 @@ Window nvim_open_win(Buffer buffer, Boolean enter, Dict(win_config) *config, Err
       if (size > 0) {
         // Without room for the requested size, window sizes may have been equalized instead.
         // If the size differs from what was requested, try to set it again now.
-        if ((flags & WSP_VERT) && wp->w_width != size) {
+        if (rs_is_vert_split(flags) && rs_need_size_adjust(size, wp->w_width)) {
           win_setwidth_win(size, wp);
-        } else if (!(flags & WSP_VERT) && wp->w_height != size) {
+        } else if (!rs_is_vert_split(flags) && rs_need_size_adjust(size, wp->w_height)) {
           win_setheight_win(size, wp);
         }
       }
@@ -297,7 +334,7 @@ Window nvim_open_win(Buffer buffer, Boolean enter, Dict(win_config) *config, Err
     goto cleanup;
   }
 
-  if (fconfig._cmdline_offset < INT_MAX) {
+  if (rs_has_cmdline_offset(fconfig._cmdline_offset)) {
     cmdline_win = wp;
   }
 
@@ -342,7 +379,7 @@ Window nvim_open_win(Buffer buffer, Boolean enter, Dict(win_config) *config, Err
     goto cleanup;
   }
 
-  if (fconfig.style == kWinStyleMinimal) {
+  if (rs_style_is_minimal(fconfig.style)) {
     win_set_minimal_style(wp);
     didset_window_options(wp, true);
   }
@@ -362,28 +399,14 @@ static WinSplit win_split_dir(win_T *win)
     return kWinSplitLeft;
   }
 
-  char layout = win->w_frame->fr_parent->fr_layout;
-  if (layout == FR_COL) {
-    return win->w_frame->fr_next ? kWinSplitAbove : kWinSplitBelow;
-  } else {
-    return win->w_frame->fr_next ? kWinSplitLeft : kWinSplitRight;
-  }
+  bool layout_is_col = (win->w_frame->fr_parent->fr_layout == FR_COL);
+  bool has_next = (win->w_frame->fr_next != NULL);
+  return (WinSplit)rs_split_dir_from_layout(layout_is_col, has_next);
 }
 
 static int win_split_flags(WinSplit split, bool toplevel)
 {
-  int flags = 0;
-  if (split == kWinSplitAbove || split == kWinSplitBelow) {
-    flags |= WSP_HOR;
-  } else {
-    flags |= WSP_VERT;
-  }
-  if (split == kWinSplitAbove || split == kWinSplitLeft) {
-    flags |= toplevel ? WSP_TOP : WSP_ABOVE;
-  } else {
-    flags |= toplevel ? WSP_BOT : WSP_BELOW;
-  }
-  return flags;
+  return rs_win_split_flags((int)split, toplevel);
 }
 
 /// Reconfigures the layout of a window.
@@ -653,14 +676,14 @@ restore_curwin:
     win_config_float(win, fconfig);
   }
   if (HAS_KEY_X(config, style)) {
-    if (fconfig.style == kWinStyleMinimal) {
+    if (rs_style_is_minimal(fconfig.style)) {
       win_set_minimal_style(win);
       didset_window_options(win, true);
     }
   }
-  if (fconfig._cmdline_offset < INT_MAX) {
+  if (rs_has_cmdline_offset(fconfig._cmdline_offset)) {
     cmdline_win = win;
-  } else if (win == cmdline_win && fconfig._cmdline_offset == INT_MAX) {
+  } else if (win == cmdline_win && fconfig._cmdline_offset == rs_cmdline_offset_unset()) {
     cmdline_win = NULL;
   }
 #undef HAS_KEY_X
@@ -746,7 +769,7 @@ Dict(win_config) nvim_win_get_config(Window window, Arena *arena, Error *err)
     PUT_KEY_X(rv, width, config->width);
     PUT_KEY_X(rv, height, config->height);
     if (!config->external) {
-      if (config->relative == kFloatRelativeWindow) {
+      if (rs_relative_is_window(config->relative)) {
         PUT_KEY_X(rv, win, config->window);
         if (config->bufpos.lnum >= 0) {
           Array pos = arena_array(arena, 2);
@@ -761,8 +784,8 @@ Dict(win_config) nvim_win_get_config(Window window, Arena *arena, Error *err)
       PUT_KEY_X(rv, zindex, config->zindex);
     }
     if (config->border) {
-      Array border = arena_array(arena, 8);
-      for (size_t i = 0; i < 8; i++) {
+      Array border = arena_array(arena, rs_border_char_count());
+      for (size_t i = 0; i < rs_border_char_count(); i++) {
         String s = cstrn_as_string(config->border_chars[i], MAX_SCHAR_SIZE);
 
         int hi_id = config->border_hl_ids[i];
@@ -796,7 +819,7 @@ Dict(win_config) nvim_win_get_config(Window window, Arena *arena, Error *err)
   const char *rel = (wp->w_floating && !config->external
                      ? float_relative_str[config->relative] : "");
   PUT_KEY_X(rv, relative, cstr_as_string(rel));
-  if (config->_cmdline_offset < INT_MAX) {
+  if (rs_has_cmdline_offset(config->_cmdline_offset)) {
     PUT_KEY_X(rv, _cmdline_offset, config->_cmdline_offset);
   }
 
@@ -986,7 +1009,7 @@ void parse_border_style(Object style, WinConfig *fconfig, Error *err)
   if (style.type == kObjectTypeArray) {
     Array arr = style.data.array;
     size_t size = arr.size;
-    if (!size || size > 8 || (size & (size - 1))) {
+    if (!rs_border_size_valid(size)) {
       api_set_error(err, kErrorTypeValidation, "invalid number of border chars");
       return;
     }
@@ -996,7 +1019,7 @@ void parse_border_style(Object style, WinConfig *fconfig, Error *err)
       int hl_id = 0;
       if (iytem.type == kObjectTypeArray) {
         Array iarr = iytem.data.array;
-        if (!iarr.size || iarr.size > 2) {
+        if (!rs_border_tuple_valid(iarr.size)) {
           api_set_error(err, kErrorTypeValidation, "invalid border char");
           return;
         }
@@ -1017,7 +1040,7 @@ void parse_border_style(Object style, WinConfig *fconfig, Error *err)
         api_set_error(err, kErrorTypeValidation, "invalid border char");
         return;
       }
-      if (string.size && mb_string2cells_len(string.data, string.size) > 1) {
+      if (string.size && !rs_is_single_cell(mb_string2cells_len(string.data, string.size))) {
         api_set_error(err, kErrorTypeValidation, "border chars must be one cell");
         return;
       }
@@ -1028,10 +1051,10 @@ void parse_border_style(Object style, WinConfig *fconfig, Error *err)
       chars[i][len] = NUL;
       hl_ids[i] = hl_id;
     }
-    while (size < 8) {
+    while (size < rs_border_char_count()) {
       memcpy(chars + size, chars, sizeof(*chars) * size);
       memcpy(hl_ids + size, hl_ids, sizeof(*hl_ids) * size);
-      size <<= 1;
+      size = rs_border_double_size(size);
     }
     if ((chars[7][0] && chars[1][0] && !chars[0][0])
         || (chars[1][0] && chars[3][0] && !chars[2][0])
@@ -1144,7 +1167,7 @@ static bool parse_win_config(win_T *wp, Dict(win_config) *config, WinConfig *fco
 
     has_relative = true;
     fconfig->external = false;
-    if (fconfig->relative == kFloatRelativeWindow) {
+    if (rs_relative_is_window(fconfig->relative)) {
       relative_is_win = true;
       fconfig->bufpos.lnum = -1;
     }
@@ -1210,7 +1233,7 @@ static bool parse_win_config(win_T *wp, Dict(win_config) *config, WinConfig *fco
       }
 
       if (!HAS_KEY_X(config, row)) {
-        fconfig->row = (fconfig->anchor & kFloatAnchorSouth) ? 0 : 1;
+        fconfig->row = rs_bufpos_default_row(fconfig->anchor);
       }
       if (!HAS_KEY_X(config, col)) {
         fconfig->col = 0;
@@ -1219,7 +1242,7 @@ static bool parse_win_config(win_T *wp, Dict(win_config) *config, WinConfig *fco
   }
 
   if (HAS_KEY_X(config, width)) {
-    if (config->width > 0) {
+    if (rs_dimension_valid(config->width)) {
       fconfig->width = (int)config->width;
     } else {
       api_set_error(err, kErrorTypeValidation, "'width' key must be a positive Integer");
@@ -1231,7 +1254,7 @@ static bool parse_win_config(win_T *wp, Dict(win_config) *config, WinConfig *fco
   }
 
   if (HAS_KEY_X(config, height)) {
-    if (config->height > 0) {
+    if (rs_dimension_valid(config->height)) {
       fconfig->height = (int)config->height;
     } else {
       api_set_error(err, kErrorTypeValidation, "'height' key must be a positive Integer");
@@ -1279,7 +1302,7 @@ static bool parse_win_config(win_T *wp, Dict(win_config) *config, WinConfig *fco
                     "Only one of 'relative' and 'external' must be used");
       goto fail;
     }
-    if (fconfig->external && !ui_has(kUIMultigrid)) {
+    if (rs_external_needs_multigrid(fconfig->external, ui_has(kUIMultigrid))) {
       api_set_error(err, kErrorTypeValidation, "UI doesn't support external windows");
       goto fail;
     }
@@ -1299,7 +1322,7 @@ static bool parse_win_config(win_T *wp, Dict(win_config) *config, WinConfig *fco
       api_set_error(err, kErrorTypeValidation, "non-float cannot have 'zindex'");
       goto fail;
     }
-    if (config->zindex > 0) {
+    if (rs_zindex_valid(config->zindex)) {
       fconfig->zindex = (int)config->zindex;
     } else {
       api_set_error(err, kErrorTypeValidation, "'zindex' key must be a positive Integer");

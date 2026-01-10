@@ -2,6 +2,21 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+// Rust FFI declarations
+extern bool rs_pos_array_valid(size_t size, int type0, int type1);
+extern bool rs_win_cursor_row_valid(int64_t row, int64_t line_count);
+extern bool rs_win_cursor_col_valid(int64_t col);
+extern bool rs_ns_id_valid(int64_t ns_id);
+extern bool rs_lnum_range_valid(int64_t start, int64_t end);
+extern bool rs_vcol_in_range(int64_t vcol);
+extern bool rs_max_height_valid(int64_t max_height);
+extern bool rs_vcol_range_valid(int64_t start, int64_t end, bool is_same_row);
+extern int64_t rs_text_height_default_max(void);
+extern int64_t rs_lnum_to_row(int64_t lnum);
+extern size_t rs_cursor_array_size(void);
+extern size_t rs_position_array_size(void);
+extern size_t rs_text_height_dict_size(void);
+
 #include "nvim/api/keysets_defs.h"
 #include "nvim/api/private/defs.h"
 #include "nvim/api/private/dispatch.h"
@@ -83,7 +98,7 @@ ArrayOf(Integer, 2) nvim_win_get_cursor(Window window, Arena *arena, Error *err)
   win_T *win = find_window_by_handle(window, err);
 
   if (win) {
-    rv = arena_array(arena, 2);
+    rv = arena_array(arena, rs_cursor_array_size());
     ADD_C(rv, INTEGER_OBJ(win->w_cursor.lnum));
     ADD_C(rv, INTEGER_OBJ(win->w_cursor.col));
   }
@@ -106,8 +121,7 @@ void nvim_win_set_cursor(Window window, ArrayOf(Integer, 2) pos, Error *err)
     return;
   }
 
-  if (pos.size != 2 || pos.items[0].type != kObjectTypeInteger
-      || pos.items[1].type != kObjectTypeInteger) {
+  if (!rs_pos_array_valid(pos.size, pos.items[0].type, pos.items[1].type)) {
     api_set_error(err,
                   kErrorTypeValidation,
                   "Argument \"pos\" must be a [row, col] array");
@@ -117,12 +131,12 @@ void nvim_win_set_cursor(Window window, ArrayOf(Integer, 2) pos, Error *err)
   int64_t row = pos.items[0].data.integer;
   int64_t col = pos.items[1].data.integer;
 
-  if (row <= 0 || row > win->w_buffer->b_ml.ml_line_count) {
+  if (!rs_win_cursor_row_valid(row, win->w_buffer->b_ml.ml_line_count)) {
     api_set_error(err, kErrorTypeValidation, "Cursor position outside buffer");
     return;
   }
 
-  if (col > MAXCOL || col < 0) {
+  if (!rs_win_cursor_col_valid(col)) {
     api_set_error(err, kErrorTypeValidation, "Column value outside range");
     return;
   }
@@ -286,7 +300,7 @@ ArrayOf(Integer, 2) nvim_win_get_position(Window window, Arena *arena, Error *er
   win_T *win = find_window_by_handle(window, err);
 
   if (win) {
-    rv = arena_array(arena, 2);
+    rv = arena_array(arena, rs_position_array_size());
     ADD_C(rv, INTEGER_OBJ(win->w_winrow));
     ADD_C(rv, INTEGER_OBJ(win->w_wincol));
   }
@@ -449,7 +463,7 @@ void nvim_win_set_hl_ns(Window window, Integer ns_id, Error *err)
   }
 
   // -1 is allowed as inherit global namespace
-  if (ns_id < -1) {
+  if (!rs_ns_id_valid(ns_id)) {
     api_set_error(err, kErrorTypeValidation, "no such namespace");
   }
 
@@ -502,7 +516,7 @@ DictAs(win_text_height_ret) nvim_win_text_height(Window window, Dict(win_text_he
                                                  Arena *arena, Error *err)
   FUNC_API_SINCE(12)
 {
-  Dict rv = arena_dict(arena, 2);
+  Dict rv = arena_dict(arena, rs_text_height_dict_size());
 
   win_T *const win = find_window_by_handle(window, err);
   if (!win) {
@@ -529,7 +543,7 @@ DictAs(win_text_height_ret) nvim_win_text_height(Window window, Dict(win_text_he
   VALIDATE(!oob, "%s", "Line index out of bounds", {
     return rv;
   });
-  VALIDATE((start_lnum <= end_lnum), "%s", "'start_row' is higher than 'end_row'", {
+  VALIDATE(rs_lnum_range_valid(start_lnum, end_lnum), "%s", "'start_row' is higher than 'end_row'", {
     return rv;
   });
 
@@ -539,7 +553,7 @@ DictAs(win_text_height_ret) nvim_win_text_height(Window window, Dict(win_text_he
       return rv;
     });
     start_vcol = opts->start_vcol;
-    VALIDATE_RANGE((start_vcol >= 0 && start_vcol <= MAXCOL), "start_vcol", {
+    VALIDATE_RANGE(rs_vcol_in_range(start_vcol), "start_vcol", {
       return rv;
     });
   }
@@ -550,21 +564,21 @@ DictAs(win_text_height_ret) nvim_win_text_height(Window window, Dict(win_text_he
       return rv;
     });
     end_vcol = opts->end_vcol;
-    VALIDATE_RANGE((end_vcol >= 0 && end_vcol <= MAXCOL), "end_vcol", {
+    VALIDATE_RANGE(rs_vcol_in_range(end_vcol), "end_vcol", {
       return rv;
     });
   }
 
-  int64_t max = INT64_MAX;
+  int64_t max = rs_text_height_default_max();
   if (HAS_KEY(opts, win_text_height, max_height)) {
-    VALIDATE_RANGE(opts->max_height > 0, "max_height", {
+    VALIDATE_RANGE(rs_max_height_valid(opts->max_height), "max_height", {
       return rv;
     });
     max = opts->max_height;
   }
 
   if (start_lnum == end_lnum && start_vcol >= 0 && end_vcol >= 0) {
-    VALIDATE((start_vcol <= end_vcol), "%s", "'start_vcol' is higher than 'end_vcol'", {
+    VALIDATE(rs_vcol_range_valid(start_vcol, end_vcol, true), "%s", "'start_vcol' is higher than 'end_vcol'", {
       return rv;
     });
   }
@@ -578,7 +592,7 @@ DictAs(win_text_height_ret) nvim_win_text_height(Window window, Dict(win_text_he
   }
   PUT_C(rv, "all", INTEGER_OBJ(all));
   PUT_C(rv, "fill", INTEGER_OBJ(fill));
-  PUT_C(rv, "end_row", INTEGER_OBJ(end_lnum - 1));
+  PUT_C(rv, "end_row", INTEGER_OBJ(rs_lnum_to_row(end_lnum)));
   PUT_C(rv, "end_vcol", INTEGER_OBJ(end_vcol));
   return rv;
 }
