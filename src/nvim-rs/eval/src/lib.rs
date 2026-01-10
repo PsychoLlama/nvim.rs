@@ -12,6 +12,8 @@
 #![allow(clippy::missing_const_for_fn)]
 
 pub mod funcs;
+pub mod operator;
+pub mod types;
 
 use std::ffi::c_int;
 use std::sync::atomic::{AtomicI32, Ordering};
