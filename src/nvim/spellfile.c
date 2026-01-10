@@ -224,9 +224,6 @@
 //                          stored as an offset to the previous number in as
 //                          few bytes as possible, see offset2bytes())
 
-// Rust implementations
-extern int rs_offset2bytes(int nr, uint8_t *buf);
-
 #include <assert.h>
 #include <ctype.h>
 #include <inttypes.h>
@@ -282,6 +279,63 @@ extern int rs_offset2bytes(int nr, uint8_t *buf);
 #include "nvim/ui.h"
 #include "nvim/undo.h"
 #include "nvim/vim_defs.h"
+
+// =============================================================================
+// Rust FFI declarations
+// =============================================================================
+
+// Rust implementations
+extern int rs_offset2bytes(int nr, uint8_t *buf);
+extern int rs_bytes2offset(const uint8_t **pp);
+extern bool rs_check_spell_magic(const uint8_t *buf);
+extern int rs_read_be_u16(const uint8_t *buf, size_t len, size_t offset);
+extern int rs_read_be_u24(const uint8_t *buf, size_t len, size_t offset);
+extern int rs_read_be_u32(const uint8_t *buf, size_t len, size_t offset);
+extern bool rs_valid_spelllang(const char *val);
+extern bool rs_valid_spellfile(const char *val);
+extern int rs_find_region(const char *rp, const char *region);
+extern bool rs_valid_spell_word(const uint8_t *word, const uint8_t *end);
+extern int rs_tree_count_words(const uint8_t *byts, int32_t *idxs, int len);
+extern int rs_encode_offset(uint8_t *p, int len, int nr);
+extern int rs_decode_offset_3byte(const uint8_t *p);
+extern int rs_decode_offset_4byte(const uint8_t *p);
+extern bool rs_sal_to_bool(const char *s);
+
+// Spellfile header functions
+extern int rs_parse_spellfile_header(const uint8_t *data, size_t len, void *header);
+extern int rs_validate_spellfile_header(const void *header);
+extern int rs_write_spellfile_header(uint8_t *out, size_t max_len, const void *header);
+extern int rs_parse_section_header(const uint8_t *data, size_t len, void *section);
+extern int rs_parse_region_section(const uint8_t *data, size_t len, void *regions);
+extern int rs_parse_charflags_section(const uint8_t *data, size_t len, void *flags);
+extern int rs_parse_rep_item(const uint8_t *data, size_t len, void *rep_item);
+extern int rs_parse_sal_header(const uint8_t *data, size_t len, void *sal);
+extern int rs_parse_sofo_section(const uint8_t *data, size_t len, void *sofo);
+extern int rs_parse_compound_header(const uint8_t *data, size_t len, void *compound);
+extern int rs_parse_sugfile_timestamp(const uint8_t *data, size_t len, void *ts);
+extern int rs_parse_tree_nodecount(const uint8_t *data, size_t len);
+
+// Write functions
+extern int rs_write_section_header(uint8_t *out, size_t max_len, int id, int flags, int data_len);
+extern int rs_write_rep_item(uint8_t *out, size_t max_len, const void *rep_item);
+extern int rs_write_charflags_section(uint8_t *out, size_t max_len, const void *flags);
+extern int rs_write_sofo_section(uint8_t *out, size_t max_len, const void *sofo);
+extern int rs_write_sal_header(uint8_t *out, size_t max_len, const void *sal);
+extern int rs_write_compound_header(uint8_t *out, size_t max_len, const void *compound);
+extern int rs_write_tree_nodecount(uint8_t *out, size_t max_len, int count);
+extern int rs_write_timestamp(uint8_t *out, size_t max_len, int64_t timestamp);
+extern int rs_write_tree_node_flags(uint8_t *out, size_t max_len, int flags);
+extern int rs_write_tree_sibling_byte(uint8_t *out, size_t max_len, int byte);
+extern int rs_write_tree_child_index(uint8_t *out, size_t max_len, int index);
+extern int rs_write_region_section(uint8_t *out, size_t max_len, const void *regions);
+extern int rs_write_end_section(uint8_t *out, size_t max_len);
+
+// Soundfold comparison
+extern int rs_soundfold_compare(const char *s1, const char *s2);
+
+// Compression functions
+extern int rs_should_compress_memory(size_t size);
+extern int rs_should_compress_words(int word_count);
 
 // Special byte values for <byte>.  Some are only used in the tree for
 // postponed prefixes, some only in the other trees.  This is a bit messy...
@@ -2986,13 +3040,104 @@ static void add_fromto(spellinfo_T *spin, garray_T *gap, char *from, char *to)
   ftp->ft_to = getroom_save(spin, word);
 }
 
-// Rust implementation
-extern bool rs_sal_to_bool(const char *s);
-
 /// Converts a boolean argument in a SAL line to true or false;
 static bool sal_to_bool(char *s)
 {
   return rs_sal_to_bool(s);
+}
+
+// =============================================================================
+// Phase 6: Wrapper functions using Rust implementations
+// =============================================================================
+
+/// Check if spell file magic bytes are valid. Rust implementation.
+static bool spell_check_magic(const uint8_t *buf)
+{
+  return rs_check_spell_magic(buf);
+}
+
+/// Validate a spell language name. Rust implementation.
+bool spellfile_valid_lang(const char *val)
+{
+  return rs_valid_spelllang(val);
+}
+
+/// Validate a spell file name. Rust implementation.
+bool spellfile_valid_name(const char *val)
+{
+  return rs_valid_spellfile(val);
+}
+
+/// Find region index in region string. Rust implementation.
+static int spellfile_find_region(const char *rp, const char *region)
+{
+  return rs_find_region(rp, region);
+}
+
+/// Check if word bytes are valid. Rust implementation.
+static bool spellfile_valid_word(const uint8_t *word, const uint8_t *end)
+{
+  return rs_valid_spell_word(word, end);
+}
+
+/// Read big-endian 16-bit value. Rust implementation.
+static int spellfile_read_be16(const uint8_t *buf, size_t len, size_t offset)
+{
+  return rs_read_be_u16(buf, len, offset);
+}
+
+/// Read big-endian 24-bit value. Rust implementation.
+static int spellfile_read_be24(const uint8_t *buf, size_t len, size_t offset)
+{
+  return rs_read_be_u24(buf, len, offset);
+}
+
+/// Read big-endian 32-bit value. Rust implementation.
+static int spellfile_read_be32(const uint8_t *buf, size_t len, size_t offset)
+{
+  return rs_read_be_u32(buf, len, offset);
+}
+
+/// Encode offset value. Rust implementation.
+static int spellfile_encode_offset(uint8_t *p, int len, int nr)
+{
+  return rs_encode_offset(p, len, nr);
+}
+
+/// Decode 3-byte offset. Rust implementation.
+static int spellfile_decode_offset_3(const uint8_t *p)
+{
+  return rs_decode_offset_3byte(p);
+}
+
+/// Decode 4-byte offset. Rust implementation.
+static int spellfile_decode_offset_4(const uint8_t *p)
+{
+  return rs_decode_offset_4byte(p);
+}
+
+/// Compare soundfolded strings. Rust implementation.
+static int spellfile_soundfold_cmp(const char *s1, const char *s2)
+{
+  return rs_soundfold_compare(s1, s2);
+}
+
+/// Check if memory should be compressed. Rust implementation.
+static bool spellfile_should_compress_mem(size_t size)
+{
+  return rs_should_compress_memory(size) != 0;
+}
+
+/// Check if words should be compressed. Rust implementation.
+static bool spellfile_should_compress_words(int word_count)
+{
+  return rs_should_compress_words(word_count) != 0;
+}
+
+/// Read offset from bytes. Rust implementation.
+static int spellfile_bytes2offset(const uint8_t **pp)
+{
+  return rs_bytes2offset(pp);
 }
 
 // Free the structure filled by spell_read_aff().
