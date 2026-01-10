@@ -64,6 +64,7 @@ nvim-highlight-group = { path = "highlight_group" }
 nvim-insexpand = { path = "insexpand" }
 nvim-indent = { path = "indent" }
 nvim-indent-c = { path = "indent_c" }
+nvim-input = { path = "input" }
 nvim-keycodes = { path = "keycodes" }
 nvim-linematch = { path = "linematch" }
 nvim-list = { path = "list" }
