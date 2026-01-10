@@ -74,6 +74,7 @@ nvim-marktree = { path = "marktree" }
 nvim-match = { path = "match" }
 nvim-math = { path = "math" }
 nvim-mbyte = { path = "mbyte" }
+nvim-memfile = { path = "memfile" }
 nvim-memline = { path = "memline" }
 nvim-memutil = { path = "memutil" }
 nvim-menu = { path = "menu" }
