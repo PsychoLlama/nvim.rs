@@ -19,6 +19,7 @@ pub mod decompose;
 pub mod errors;
 pub mod exec_state;
 pub mod line_fetch;
+pub mod match_helpers;
 pub mod multiline;
 pub mod nfa_compile;
 pub mod nfa_exec;
@@ -74,6 +75,14 @@ pub use line_fetch::{
     rs_line_cache_free, rs_line_cache_invalidate, rs_line_cache_new, rs_line_fetcher_free,
     rs_line_fetcher_from_rex, rs_line_fetcher_get_len, rs_line_fetcher_get_line,
     rs_line_fetcher_invalidate, rs_line_fetcher_new, rs_reg_getline, rs_reg_getline_len,
+};
+pub use match_helpers::{
+    rs_is_special_char, rs_match_config_new, rs_match_config_set_ignore_case,
+    rs_match_config_set_smart_case, rs_match_config_to_flags, rs_match_pos_is_valid,
+    rs_match_pos_new, rs_match_range_is_valid, rs_match_range_len, rs_match_range_new,
+    rs_match_result_get_end, rs_match_result_get_start, rs_match_result_matched,
+    rs_match_result_new, rs_match_result_submatch_count, rs_parse_magic_prefix,
+    rs_pattern_has_uppercase, rs_supports_char_class,
 };
 pub use multiline::{
     rs_multi_match_context_free, rs_multi_match_context_new, rs_multi_match_context_set_fetcher,
