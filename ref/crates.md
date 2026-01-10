@@ -39,6 +39,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | event          | Event loop and libuv integration        |
 | extmark        | Extended marks for plugins              |
 | ex_cmds        | Ex command implementations (read, write, substitute, global, sort, lines, display, shell, format) |
+| ex_cmds2       | Additional Ex commands (listdo, autowrite, buffer checking, dialogs) |
 | ex_docmd       | Ex command parsing                      |
 | ex_eval        | Exception handling state                |
 | fileio         | File I/O (encoding, read/write, backup, modeline, sync) |

@@ -49,6 +49,7 @@ nvim-event = { path = "event" }
 nvim-extmark = { path = "extmark" }
 nvim-ex-docmd = { path = "ex_docmd" }
 nvim-ex-cmds = { path = "ex_cmds" }
+nvim-ex-cmds2 = { path = "ex_cmds2" }
 nvim-ex-eval = { path = "ex_eval" }
 nvim-fileio = { path = "fileio" }
 nvim-filesearch = { path = "filesearch" }

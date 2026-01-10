@@ -49,6 +49,7 @@ pub use nvim_eval::*;
 pub use nvim_eval_codec::*;
 pub use nvim_eval_exec::*;
 pub use nvim_event::*;
+pub use nvim_ex_cmds2::*;
 pub use nvim_ex_docmd::*;
 pub use nvim_ex_eval::*;
 pub use nvim_extmark::*;
