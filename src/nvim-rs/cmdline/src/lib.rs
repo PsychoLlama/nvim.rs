@@ -19,6 +19,7 @@ pub mod entry;
 pub mod expand;
 pub mod expr;
 pub mod fname;
+pub mod getln;
 pub mod history;
 pub mod input;
 pub mod keys;
