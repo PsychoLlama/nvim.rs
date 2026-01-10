@@ -2075,8 +2075,7 @@ pub unsafe fn pattern_is_anchored_start(pattern: *const u8, magic: bool) -> bool
         *pattern == b'^'
     } else {
         // In nomagic mode, ^ is still special at start
-        *pattern == b'^'
-            || (*pattern == b'\\' && *pattern.add(1) != 0 && *pattern.add(1) == b'^')
+        *pattern == b'^' || (*pattern == b'\\' && *pattern.add(1) != 0 && *pattern.add(1) == b'^')
     }
 }
 
@@ -2712,23 +2711,41 @@ mod phase78_tests {
     fn test_estimate_replacement_len() {
         unsafe {
             // Simple literal
-            assert_eq!(estimate_replacement_len(b"hello\0".as_ptr(), 5, std::ptr::null()), 5);
+            assert_eq!(
+                estimate_replacement_len(b"hello\0".as_ptr(), 5, std::ptr::null()),
+                5
+            );
 
             // With & (whole match)
-            assert_eq!(estimate_replacement_len(b"[&]\0".as_ptr(), 5, std::ptr::null()), 7);
+            assert_eq!(
+                estimate_replacement_len(b"[&]\0".as_ptr(), 5, std::ptr::null()),
+                7
+            );
 
             // With \& (whole match)
-            assert_eq!(estimate_replacement_len(b"[\\&]\0".as_ptr(), 5, std::ptr::null()), 7);
+            assert_eq!(
+                estimate_replacement_len(b"[\\&]\0".as_ptr(), 5, std::ptr::null()),
+                7
+            );
 
             // With backref but no lens - returns -1
-            assert_eq!(estimate_replacement_len(b"\\1\0".as_ptr(), 5, std::ptr::null()), -1);
+            assert_eq!(
+                estimate_replacement_len(b"\\1\0".as_ptr(), 5, std::ptr::null()),
+                -1
+            );
 
             // With backref and lens
             let lens: [usize; NSUBEXP] = [5, 3, 0, 0, 0, 0, 0, 0, 0, 0];
-            assert_eq!(estimate_replacement_len(b"\\1\0".as_ptr(), 5, lens.as_ptr()), 3);
+            assert_eq!(
+                estimate_replacement_len(b"\\1\0".as_ptr(), 5, lens.as_ptr()),
+                3
+            );
 
             // Null replacement
-            assert_eq!(estimate_replacement_len(std::ptr::null(), 5, std::ptr::null()), 0);
+            assert_eq!(
+                estimate_replacement_len(std::ptr::null(), 5, std::ptr::null()),
+                0
+            );
         }
     }
 

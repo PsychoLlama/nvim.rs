@@ -1782,12 +1782,12 @@ pub extern "C" fn rs_char_is_printable(c: u32) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_utf8_byte_len(first_byte: u8) -> c_int {
     match first_byte {
-        0x00..=0x7F => 1,       // ASCII
-        0xC0..=0xDF => 2,       // 2-byte sequence
-        0xE0..=0xEF => 3,       // 3-byte sequence
-        0xF0..=0xF7 => 4,       // 4-byte sequence
-        0x80..=0xBF => 0,       // Continuation byte
-        _ => 0,                 // Invalid (0xF8-0xFF)
+        0x00..=0x7F => 1, // ASCII
+        0xC0..=0xDF => 2, // 2-byte sequence
+        0xE0..=0xEF => 3, // 3-byte sequence
+        0xF0..=0xF7 => 4, // 4-byte sequence
+        0x80..=0xBF => 0, // Continuation byte
+        _ => 0,           // Invalid (0xF8-0xFF)
     }
 }
 

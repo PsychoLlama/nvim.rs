@@ -362,7 +362,11 @@ pub unsafe extern "C" fn rs_parse_csi_param(
         *consumed = i;
     }
 
-    if found_digit { value } else { default_val }
+    if found_digit {
+        value
+    } else {
+        default_val
+    }
 }
 
 /// Check if a byte is a CSI parameter byte (0-9, :, ;)

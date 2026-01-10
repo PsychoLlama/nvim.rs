@@ -4594,6 +4594,634 @@ pub unsafe extern "C" fn rs_qf_parse_count_arg(arg: *const c_char) -> c_int {
     }
 }
 
+// =============================================================================
+// Phase 79: Additional Quickfix System Helpers
+// =============================================================================
+
+/// Buffer number filtering
+pub mod buffer_filter {
+    use std::ffi::c_int;
+
+    /// Filter type for quickfix buffer operations
+    #[repr(C)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum QfBufFilter {
+        /// All entries
+        All = 0,
+        /// Only entries with valid buffer numbers
+        ValidBuf = 1,
+        /// Only entries in a specific buffer
+        SpecificBuf = 2,
+        /// Only entries without buffer numbers
+        NoBuf = 3,
+    }
+
+    impl From<c_int> for QfBufFilter {
+        fn from(v: c_int) -> Self {
+            match v {
+                1 => Self::ValidBuf,
+                2 => Self::SpecificBuf,
+                3 => Self::NoBuf,
+                _ => Self::All,
+            }
+        }
+    }
+}
+
+/// Entry selection modes
+pub mod selection {
+    use std::ffi::c_int;
+
+    /// How to select entries when navigating
+    #[repr(C)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum QfSelectMode {
+        /// Select absolute entry number
+        Absolute = 0,
+        /// Select relative to current (+/- n)
+        Relative = 1,
+        /// Select first entry
+        First = 2,
+        /// Select last entry
+        Last = 3,
+        /// Select next valid entry
+        NextValid = 4,
+        /// Select previous valid entry
+        PrevValid = 5,
+        /// Select first entry in current file
+        FirstInFile = 6,
+        /// Select last entry in current file
+        LastInFile = 7,
+    }
+
+    impl From<c_int> for QfSelectMode {
+        fn from(v: c_int) -> Self {
+            match v {
+                1 => Self::Relative,
+                2 => Self::First,
+                3 => Self::Last,
+                4 => Self::NextValid,
+                5 => Self::PrevValid,
+                6 => Self::FirstInFile,
+                7 => Self::LastInFile,
+                _ => Self::Absolute,
+            }
+        }
+    }
+}
+
+/// Window operation flags
+pub mod window_flags {
+    use std::ffi::c_int;
+
+    /// Open entry in new window
+    pub const QF_NEW_WINDOW: c_int = 0x01;
+    /// Open entry in split window
+    pub const QF_SPLIT_WINDOW: c_int = 0x02;
+    /// Open entry in vertical split
+    pub const QF_VSPLIT: c_int = 0x04;
+    /// Open entry in new tab
+    pub const QF_NEW_TAB: c_int = 0x08;
+    /// Reuse existing window if possible
+    pub const QF_REUSE_WINDOW: c_int = 0x10;
+    /// Force opening even if buffer modified
+    pub const QF_FORCE_OPEN: c_int = 0x20;
+}
+
+/// List operation flags
+pub mod list_flags {
+    use std::ffi::c_int;
+
+    /// Create a new list
+    pub const QF_LIST_NEW: c_int = 0x01;
+    /// Replace current list
+    pub const QF_LIST_REPLACE: c_int = 0x02;
+    /// Append to current list
+    pub const QF_LIST_APPEND: c_int = 0x04;
+    /// Insert before current list
+    pub const QF_LIST_INSERT: c_int = 0x08;
+    /// Preserve list ID when replacing
+    pub const QF_LIST_KEEP_ID: c_int = 0x10;
+}
+
+/// Convert selection mode to `c_int`.
+#[no_mangle]
+pub const extern "C" fn rs_qf_select_mode_to_int(mode: selection::QfSelectMode) -> c_int {
+    mode as c_int
+}
+
+/// Convert `c_int` to selection mode.
+#[no_mangle]
+pub extern "C" fn rs_qf_int_to_select_mode(v: c_int) -> selection::QfSelectMode {
+    selection::QfSelectMode::from(v)
+}
+
+/// Convert buffer filter to `c_int`.
+#[no_mangle]
+pub const extern "C" fn rs_qf_buf_filter_to_int(filter: buffer_filter::QfBufFilter) -> c_int {
+    filter as c_int
+}
+
+/// Convert `c_int` to buffer filter.
+#[no_mangle]
+pub extern "C" fn rs_qf_int_to_buf_filter(v: c_int) -> buffer_filter::QfBufFilter {
+    buffer_filter::QfBufFilter::from(v)
+}
+
+/// Check if window flags contain a specific flag.
+#[no_mangle]
+pub const extern "C" fn rs_qf_has_window_flag(flags: c_int, flag: c_int) -> bool {
+    flags & flag != 0
+}
+
+/// Check if list flags contain a specific flag.
+#[no_mangle]
+pub const extern "C" fn rs_qf_has_list_flag(flags: c_int, flag: c_int) -> bool {
+    flags & flag != 0
+}
+
+/// Combine window flags.
+#[no_mangle]
+pub const extern "C" fn rs_qf_combine_window_flags(a: c_int, b: c_int) -> c_int {
+    a | b
+}
+
+/// Combine list flags.
+#[no_mangle]
+pub const extern "C" fn rs_qf_combine_list_flags(a: c_int, b: c_int) -> c_int {
+    a | b
+}
+
+/// Calculate target entry index for navigation.
+///
+/// Given the current index, total count, and navigation command,
+/// returns the new index (1-based) or -1 if navigation not possible.
+#[no_mangle]
+#[allow(clippy::match_same_arms)]
+pub const extern "C" fn rs_qf_calc_target_idx(
+    current: c_int,
+    count: c_int,
+    mode: selection::QfSelectMode,
+    offset: c_int,
+) -> c_int {
+    if count == 0 {
+        return -1;
+    }
+
+    match mode {
+        selection::QfSelectMode::Absolute => {
+            if offset >= 1 && offset <= count {
+                offset
+            } else {
+                -1
+            }
+        }
+        selection::QfSelectMode::Relative => {
+            let target = current + offset;
+            if target >= 1 && target <= count {
+                target
+            } else {
+                -1
+            }
+        }
+        selection::QfSelectMode::First => 1,
+        selection::QfSelectMode::Last => count,
+        selection::QfSelectMode::NextValid | selection::QfSelectMode::PrevValid => {
+            // These require knowing which entries are valid
+            // Return -1 to indicate caller needs more info
+            -1
+        }
+        selection::QfSelectMode::FirstInFile | selection::QfSelectMode::LastInFile => {
+            // These require file info
+            -1
+        }
+    }
+}
+
+/// Clamp an entry index to valid range.
+///
+/// Returns the index clamped to `[1, count]`, or 0 if count is 0.
+#[no_mangle]
+pub const extern "C" fn rs_qf_clamp_idx(idx: c_int, count: c_int) -> c_int {
+    if count == 0 {
+        0
+    } else if idx < 1 {
+        1
+    } else if idx > count {
+        count
+    } else {
+        idx
+    }
+}
+
+/// Check if an entry index is valid.
+#[no_mangle]
+pub const extern "C" fn rs_qf_idx_is_valid(idx: c_int, count: c_int) -> bool {
+    idx >= 1 && idx <= count
+}
+
+/// Range for display
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct QfContextRange {
+    /// Start index (1-based)
+    pub start: c_int,
+    /// End index (1-based)
+    pub end: c_int,
+}
+
+/// Calculate the range of entries to display for `:clist` with context.
+///
+/// Returns start and end indices (1-based, inclusive).
+#[no_mangle]
+pub const extern "C" fn rs_qf_calc_context_range(
+    current: c_int,
+    count: c_int,
+    show_all: bool,
+    context_lines: c_int,
+) -> QfContextRange {
+    if count == 0 {
+        return QfContextRange { start: 0, end: 0 };
+    }
+
+    if show_all {
+        return QfContextRange {
+            start: 1,
+            end: count,
+        };
+    }
+
+    let start = if current > context_lines {
+        current - context_lines
+    } else {
+        1
+    };
+    let end = if current + context_lines <= count {
+        current + context_lines
+    } else {
+        count
+    };
+
+    QfContextRange { start, end }
+}
+
+/// Parsed line:col position
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct QfLineCol {
+    /// Line number (1-based), 0 on error
+    pub line: c_int,
+    /// Column number (1-based), 0 on error
+    pub col: c_int,
+}
+
+/// Parse a line:col string to extract line and column numbers.
+///
+/// Format: "line" or "line:col" or "line,col"
+/// Returns line and col where col defaults to 1 if not specified.
+/// Returns (0, 0) on error.
+///
+/// # Safety
+///
+/// `s` must be null or point to a valid null-terminated C string.
+#[no_mangle]
+#[allow(clippy::missing_safety_doc)]
+pub unsafe extern "C" fn rs_qf_parse_line_col(s: *const c_char) -> QfLineCol {
+    if s.is_null() {
+        return QfLineCol::default();
+    }
+
+    let Ok(c_str) = std::ffi::CStr::from_ptr(s).to_str() else {
+        return QfLineCol::default();
+    };
+
+    let trimmed = c_str.trim();
+    if trimmed.is_empty() {
+        return QfLineCol::default();
+    }
+
+    // Try "line:col" format
+    if let Some(pos) = trimmed.find(':') {
+        let line_str = &trimmed[..pos];
+        let col_str = &trimmed[pos + 1..];
+
+        if let (Ok(line), Ok(col)) = (line_str.parse::<c_int>(), col_str.parse::<c_int>()) {
+            if line >= 1 && col >= 1 {
+                return QfLineCol { line, col };
+            }
+        }
+        return QfLineCol::default();
+    }
+
+    // Try "line,col" format
+    if let Some(pos) = trimmed.find(',') {
+        let line_str = &trimmed[..pos];
+        let col_str = &trimmed[pos + 1..];
+
+        if let (Ok(line), Ok(col)) = (line_str.parse::<c_int>(), col_str.parse::<c_int>()) {
+            if line >= 1 && col >= 1 {
+                return QfLineCol { line, col };
+            }
+        }
+        return QfLineCol::default();
+    }
+
+    // Just line number
+    if let Ok(line) = trimmed.parse::<c_int>() {
+        if line >= 1 {
+            return QfLineCol { line, col: 1 };
+        }
+    }
+
+    QfLineCol::default()
+}
+
+/// Get the severity level for an error type character as integer.
+///
+/// Returns: 0 = info/note, 1 = warning, 2 = error
+#[inline]
+#[must_use]
+#[allow(clippy::cast_sign_loss)]
+pub const fn type_severity_int(type_char: c_char) -> c_int {
+    match type_char as u8 {
+        b'E' | b'e' => 2, // Error
+        b'W' | b'w' => 1, // Warning
+        // Info/Note and unknown types all return 0
+        _ => 0,
+    }
+}
+
+/// Compare two error types by severity.
+///
+/// Returns: negative if a < b, 0 if equal, positive if a > b
+#[no_mangle]
+pub const extern "C" fn rs_qf_compare_type_severity(type_a: c_char, type_b: c_char) -> c_int {
+    type_severity_int(type_a) - type_severity_int(type_b)
+}
+
+/// Check if a type character indicates an error.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub const extern "C" fn rs_qf_type_is_error(type_char: c_char) -> bool {
+    matches!(type_char as u8, b'E' | b'e')
+}
+
+/// Check if a type character indicates a warning.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub const extern "C" fn rs_qf_type_is_warning(type_char: c_char) -> bool {
+    matches!(type_char as u8, b'W' | b'w')
+}
+
+/// Check if a type character indicates info/note.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub const extern "C" fn rs_qf_type_is_info(type_char: c_char) -> bool {
+    matches!(type_char as u8, b'I' | b'i' | b'N' | b'n')
+}
+
+/// Normalize a type character to uppercase.
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+pub const extern "C" fn rs_qf_type_normalize(type_char: c_char) -> c_char {
+    match type_char as u8 {
+        b'e' => b'E' as c_char,
+        b'w' => b'W' as c_char,
+        b'i' => b'I' as c_char,
+        b'n' => b'N' as c_char,
+        c => c as c_char,
+    }
+}
+
+// =============================================================================
+// Phase 79 Tests
+// =============================================================================
+
+#[cfg(test)]
+#[allow(
+    clippy::manual_c_str_literals,
+    clippy::cast_possible_wrap,
+    clippy::ptr_as_ptr
+)]
+mod phase79_tests {
+    use super::*;
+
+    #[test]
+    fn test_select_mode_conversion() {
+        assert_eq!(
+            rs_qf_select_mode_to_int(selection::QfSelectMode::Absolute),
+            0
+        );
+        assert_eq!(
+            rs_qf_select_mode_to_int(selection::QfSelectMode::Relative),
+            1
+        );
+        assert_eq!(rs_qf_select_mode_to_int(selection::QfSelectMode::First), 2);
+        assert_eq!(rs_qf_select_mode_to_int(selection::QfSelectMode::Last), 3);
+
+        assert_eq!(
+            rs_qf_int_to_select_mode(0),
+            selection::QfSelectMode::Absolute
+        );
+        assert_eq!(
+            rs_qf_int_to_select_mode(1),
+            selection::QfSelectMode::Relative
+        );
+        assert_eq!(rs_qf_int_to_select_mode(2), selection::QfSelectMode::First);
+        assert_eq!(rs_qf_int_to_select_mode(3), selection::QfSelectMode::Last);
+        assert_eq!(
+            rs_qf_int_to_select_mode(99),
+            selection::QfSelectMode::Absolute
+        );
+    }
+
+    #[test]
+    fn test_buf_filter_conversion() {
+        assert_eq!(rs_qf_buf_filter_to_int(buffer_filter::QfBufFilter::All), 0);
+        assert_eq!(
+            rs_qf_buf_filter_to_int(buffer_filter::QfBufFilter::ValidBuf),
+            1
+        );
+        assert_eq!(rs_qf_int_to_buf_filter(0), buffer_filter::QfBufFilter::All);
+        assert_eq!(
+            rs_qf_int_to_buf_filter(1),
+            buffer_filter::QfBufFilter::ValidBuf
+        );
+    }
+
+    #[test]
+    fn test_window_flags() {
+        let flags = window_flags::QF_NEW_WINDOW | window_flags::QF_VSPLIT;
+        assert!(rs_qf_has_window_flag(flags, window_flags::QF_NEW_WINDOW));
+        assert!(rs_qf_has_window_flag(flags, window_flags::QF_VSPLIT));
+        assert!(!rs_qf_has_window_flag(flags, window_flags::QF_NEW_TAB));
+
+        let combined =
+            rs_qf_combine_window_flags(window_flags::QF_NEW_WINDOW, window_flags::QF_FORCE_OPEN);
+        assert!(rs_qf_has_window_flag(combined, window_flags::QF_NEW_WINDOW));
+        assert!(rs_qf_has_window_flag(combined, window_flags::QF_FORCE_OPEN));
+    }
+
+    #[test]
+    fn test_list_flags() {
+        let flags = list_flags::QF_LIST_NEW | list_flags::QF_LIST_KEEP_ID;
+        assert!(rs_qf_has_list_flag(flags, list_flags::QF_LIST_NEW));
+        assert!(rs_qf_has_list_flag(flags, list_flags::QF_LIST_KEEP_ID));
+        assert!(!rs_qf_has_list_flag(flags, list_flags::QF_LIST_APPEND));
+    }
+
+    #[test]
+    fn test_calc_target_idx() {
+        // Empty list
+        assert_eq!(
+            rs_qf_calc_target_idx(0, 0, selection::QfSelectMode::First, 0),
+            -1
+        );
+
+        // First/Last
+        assert_eq!(
+            rs_qf_calc_target_idx(5, 10, selection::QfSelectMode::First, 0),
+            1
+        );
+        assert_eq!(
+            rs_qf_calc_target_idx(5, 10, selection::QfSelectMode::Last, 0),
+            10
+        );
+
+        // Absolute
+        assert_eq!(
+            rs_qf_calc_target_idx(5, 10, selection::QfSelectMode::Absolute, 3),
+            3
+        );
+        assert_eq!(
+            rs_qf_calc_target_idx(5, 10, selection::QfSelectMode::Absolute, 15),
+            -1
+        );
+
+        // Relative
+        assert_eq!(
+            rs_qf_calc_target_idx(5, 10, selection::QfSelectMode::Relative, 2),
+            7
+        );
+        assert_eq!(
+            rs_qf_calc_target_idx(5, 10, selection::QfSelectMode::Relative, -3),
+            2
+        );
+        assert_eq!(
+            rs_qf_calc_target_idx(5, 10, selection::QfSelectMode::Relative, 10),
+            -1
+        );
+    }
+
+    #[test]
+    fn test_clamp_idx() {
+        assert_eq!(rs_qf_clamp_idx(5, 10), 5);
+        assert_eq!(rs_qf_clamp_idx(0, 10), 1);
+        assert_eq!(rs_qf_clamp_idx(-5, 10), 1);
+        assert_eq!(rs_qf_clamp_idx(15, 10), 10);
+        assert_eq!(rs_qf_clamp_idx(5, 0), 0);
+    }
+
+    #[test]
+    fn test_idx_is_valid() {
+        assert!(rs_qf_idx_is_valid(1, 10));
+        assert!(rs_qf_idx_is_valid(10, 10));
+        assert!(rs_qf_idx_is_valid(5, 10));
+        assert!(!rs_qf_idx_is_valid(0, 10));
+        assert!(!rs_qf_idx_is_valid(11, 10));
+        assert!(!rs_qf_idx_is_valid(1, 0));
+    }
+
+    #[test]
+    fn test_calc_context_range() {
+        // Empty list
+        let r = rs_qf_calc_context_range(0, 0, false, 5);
+        assert_eq!((r.start, r.end), (0, 0));
+
+        // Show all
+        let r = rs_qf_calc_context_range(5, 100, true, 5);
+        assert_eq!((r.start, r.end), (1, 100));
+
+        // With context
+        let r = rs_qf_calc_context_range(50, 100, false, 5);
+        assert_eq!((r.start, r.end), (45, 55));
+        let r = rs_qf_calc_context_range(3, 100, false, 5);
+        assert_eq!((r.start, r.end), (1, 8));
+        let r = rs_qf_calc_context_range(98, 100, false, 5);
+        assert_eq!((r.start, r.end), (93, 100));
+    }
+
+    #[test]
+    fn test_parse_line_col() {
+        unsafe {
+            // Line only
+            let r = rs_qf_parse_line_col(b"10\0".as_ptr() as *const c_char);
+            assert_eq!((r.line, r.col), (10, 1));
+
+            // Line:col
+            let r = rs_qf_parse_line_col(b"10:5\0".as_ptr() as *const c_char);
+            assert_eq!((r.line, r.col), (10, 5));
+
+            // Line,col
+            let r = rs_qf_parse_line_col(b"10,5\0".as_ptr() as *const c_char);
+            assert_eq!((r.line, r.col), (10, 5));
+
+            // Invalid
+            let r = rs_qf_parse_line_col(b"abc\0".as_ptr() as *const c_char);
+            assert_eq!((r.line, r.col), (0, 0));
+            let r = rs_qf_parse_line_col(b"0\0".as_ptr() as *const c_char);
+            assert_eq!((r.line, r.col), (0, 0));
+            let r = rs_qf_parse_line_col(std::ptr::null());
+            assert_eq!((r.line, r.col), (0, 0));
+        }
+    }
+
+    #[test]
+    fn test_type_severity() {
+        assert_eq!(type_severity_int(b'E' as c_char), 2);
+        assert_eq!(type_severity_int(b'e' as c_char), 2);
+        assert_eq!(type_severity_int(b'W' as c_char), 1);
+        assert_eq!(type_severity_int(b'w' as c_char), 1);
+        assert_eq!(type_severity_int(b'I' as c_char), 0);
+        assert_eq!(type_severity_int(b'N' as c_char), 0);
+    }
+
+    #[test]
+    fn test_cmp_type_severity() {
+        assert!(rs_qf_compare_type_severity(b'E' as c_char, b'W' as c_char) > 0);
+        assert!(rs_qf_compare_type_severity(b'W' as c_char, b'E' as c_char) < 0);
+        assert_eq!(
+            rs_qf_compare_type_severity(b'E' as c_char, b'e' as c_char),
+            0
+        );
+    }
+
+    #[test]
+    fn test_type_classification() {
+        assert!(rs_qf_type_is_error(b'E' as c_char));
+        assert!(rs_qf_type_is_error(b'e' as c_char));
+        assert!(!rs_qf_type_is_error(b'W' as c_char));
+
+        assert!(rs_qf_type_is_warning(b'W' as c_char));
+        assert!(rs_qf_type_is_warning(b'w' as c_char));
+        assert!(!rs_qf_type_is_warning(b'E' as c_char));
+
+        assert!(rs_qf_type_is_info(b'I' as c_char));
+        assert!(rs_qf_type_is_info(b'N' as c_char));
+        assert!(!rs_qf_type_is_info(b'E' as c_char));
+    }
+
+    #[test]
+    fn test_normalize_type() {
+        assert_eq!(rs_qf_type_normalize(b'e' as c_char), b'E' as c_char);
+        assert_eq!(rs_qf_type_normalize(b'E' as c_char), b'E' as c_char);
+        assert_eq!(rs_qf_type_normalize(b'w' as c_char), b'W' as c_char);
+        assert_eq!(rs_qf_type_normalize(b'i' as c_char), b'I' as c_char);
+        assert_eq!(rs_qf_type_normalize(b'n' as c_char), b'N' as c_char);
+        assert_eq!(rs_qf_type_normalize(b'X' as c_char), b'X' as c_char);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
