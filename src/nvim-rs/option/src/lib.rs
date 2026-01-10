@@ -13,11 +13,15 @@
 
 pub mod callbacks;
 pub mod completion;
+pub mod copy;
+pub mod expand;
 pub mod format;
 pub mod getset;
 pub mod init;
 pub mod parsing;
 pub mod scope;
+pub mod set;
+pub mod show;
 pub mod sideeffect;
 pub mod validate;
 
