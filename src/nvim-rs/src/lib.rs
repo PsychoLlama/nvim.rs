@@ -123,6 +123,7 @@ pub use nvim_version::*;
 pub use nvim_viewport::*;
 pub use nvim_vterm::*;
 pub use nvim_window::*;
+pub use nvim_winfloat::*;
 
 /// FFI-safe result type for operations that can fail
 #[repr(C)]

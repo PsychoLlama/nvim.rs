@@ -114,3 +114,4 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | version        | Version checks                          |
 | viewport       | Viewport and scroll management          |
 | window         | Window management (state, layout, frames, navigation, tabpages) |
+| winfloat       | Floating windows (relative positioning, anchors, split, style, z-index) |

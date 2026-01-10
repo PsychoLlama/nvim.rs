@@ -122,6 +122,7 @@ nvim-usercmd = { path = "usercmd" }
 nvim-userfunc = { path = "userfunc" }
 nvim-vars = { path = "vars" }
 nvim-session = { path = "session" }
+nvim-winfloat = { path = "winfloat" }
 
 [build-dependencies]
 cbindgen = "0.27"
