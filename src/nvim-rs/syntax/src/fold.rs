@@ -1,0 +1,458 @@
+//! Syntax-based folding integration.
+//!
+//! This module provides utilities for syntax-based folding,
+//! tracking fold levels based on syntax regions.
+
+use std::ffi::c_int;
+
+// =============================================================================
+// Fold level tracking
+// =============================================================================
+
+/// Fold level for a line.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FoldLevel {
+    /// Base fold level.
+    pub level: c_int,
+    /// Start of fold flag.
+    pub start: bool,
+    /// End of fold flag.
+    pub end: bool,
+    /// Nested fold level (for nested regions).
+    pub nested: c_int,
+}
+
+impl FoldLevel {
+    /// Create a fold level.
+    #[must_use]
+    pub const fn new(level: c_int) -> Self {
+        Self {
+            level,
+            start: false,
+            end: false,
+            nested: 0,
+        }
+    }
+
+    /// Create a fold start.
+    #[must_use]
+    pub const fn start(level: c_int) -> Self {
+        Self {
+            level,
+            start: true,
+            end: false,
+            nested: 0,
+        }
+    }
+
+    /// Create a fold end.
+    #[must_use]
+    pub const fn end(level: c_int) -> Self {
+        Self {
+            level,
+            start: false,
+            end: true,
+            nested: 0,
+        }
+    }
+
+    /// Check if this is a fold start.
+    #[must_use]
+    pub const fn is_start(&self) -> bool {
+        self.start
+    }
+
+    /// Check if this is a fold end.
+    #[must_use]
+    pub const fn is_end(&self) -> bool {
+        self.end
+    }
+
+    /// Check if fold level is zero (no fold).
+    #[must_use]
+    pub const fn is_zero(&self) -> bool {
+        self.level == 0 && self.nested == 0
+    }
+
+    /// Get effective level (including nested).
+    #[must_use]
+    pub const fn effective_level(&self) -> c_int {
+        self.level + self.nested
+    }
+}
+
+// =============================================================================
+// Fold state
+// =============================================================================
+
+/// State of syntax-based folding for a buffer.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SynFoldState {
+    /// Current fold level.
+    pub current_level: c_int,
+    /// Maximum fold level seen.
+    pub max_level: c_int,
+    /// Number of fold regions active.
+    pub active_regions: c_int,
+    /// Whether fold state is valid.
+    pub valid: bool,
+    /// Whether we're inside a syntax fold.
+    pub in_fold: bool,
+}
+
+impl SynFoldState {
+    /// Create new fold state.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            current_level: 0,
+            max_level: 0,
+            active_regions: 0,
+            valid: true,
+            in_fold: false,
+        }
+    }
+
+    /// Enter a fold region.
+    pub fn enter_fold(&mut self) {
+        self.current_level += 1;
+        self.active_regions += 1;
+        self.in_fold = true;
+        if self.current_level > self.max_level {
+            self.max_level = self.current_level;
+        }
+    }
+
+    /// Leave a fold region.
+    pub fn leave_fold(&mut self) {
+        if self.current_level > 0 {
+            self.current_level -= 1;
+        }
+        if self.active_regions > 0 {
+            self.active_regions -= 1;
+        }
+        self.in_fold = self.current_level > 0;
+    }
+
+    /// Reset fold state.
+    pub fn reset(&mut self) {
+        self.current_level = 0;
+        self.active_regions = 0;
+        self.in_fold = false;
+        self.valid = true;
+        // Don't reset max_level - that's useful info
+    }
+
+    /// Invalidate fold state (needs recomputation).
+    pub fn invalidate(&mut self) {
+        self.valid = false;
+    }
+
+    /// Get current fold level.
+    #[must_use]
+    pub const fn level(&self) -> c_int {
+        self.current_level
+    }
+}
+
+// =============================================================================
+// Fold computation
+// =============================================================================
+
+/// Result of computing fold level for a line.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct FoldComputeResult {
+    /// Fold level of the line.
+    pub level: c_int,
+    /// Whether level represents fold start.
+    pub is_start: bool,
+    /// Whether level represents fold end.
+    pub is_end: bool,
+    /// Flags for folding method.
+    pub flags: c_int,
+}
+
+impl FoldComputeResult {
+    /// Create a result for a regular line.
+    #[must_use]
+    pub const fn line(level: c_int) -> Self {
+        Self {
+            level,
+            is_start: false,
+            is_end: false,
+            flags: 0,
+        }
+    }
+
+    /// Create a result for fold start.
+    #[must_use]
+    pub const fn start(level: c_int) -> Self {
+        Self {
+            level,
+            is_start: true,
+            is_end: false,
+            flags: 0,
+        }
+    }
+
+    /// Create a result for fold end.
+    #[must_use]
+    pub const fn end(level: c_int) -> Self {
+        Self {
+            level,
+            is_start: false,
+            is_end: true,
+            flags: 0,
+        }
+    }
+
+    /// Create undefined result.
+    #[must_use]
+    pub const fn undefined() -> Self {
+        Self {
+            level: -1,
+            is_start: false,
+            is_end: false,
+            flags: 0,
+        }
+    }
+
+    /// Check if result is defined.
+    #[must_use]
+    pub const fn is_defined(&self) -> bool {
+        self.level >= 0
+    }
+}
+
+impl Default for FoldComputeResult {
+    fn default() -> Self {
+        Self::line(0)
+    }
+}
+
+// =============================================================================
+// FFI exports
+// =============================================================================
+
+/// Create new fold level.
+#[no_mangle]
+pub extern "C" fn rs_syn_fold_level_new(level: c_int) -> FoldLevel {
+    FoldLevel::new(level)
+}
+
+/// Create fold level for start.
+#[no_mangle]
+pub extern "C" fn rs_syn_fold_level_start(level: c_int) -> FoldLevel {
+    FoldLevel::start(level)
+}
+
+/// Create fold level for end.
+#[no_mangle]
+pub extern "C" fn rs_syn_fold_level_end(level: c_int) -> FoldLevel {
+    FoldLevel::end(level)
+}
+
+/// Check if fold level is start.
+///
+/// # Safety
+/// `fl` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_fold_level_is_start(fl: *const FoldLevel) -> c_int {
+    if fl.is_null() {
+        return 0;
+    }
+    c_int::from((*fl).is_start())
+}
+
+/// Check if fold level is end.
+///
+/// # Safety
+/// `fl` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_fold_level_is_end(fl: *const FoldLevel) -> c_int {
+    if fl.is_null() {
+        return 0;
+    }
+    c_int::from((*fl).is_end())
+}
+
+/// Get effective fold level.
+///
+/// # Safety
+/// `fl` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_fold_level_effective(fl: *const FoldLevel) -> c_int {
+    if fl.is_null() {
+        return 0;
+    }
+    (*fl).effective_level()
+}
+
+/// Create new fold state.
+#[no_mangle]
+pub extern "C" fn rs_syn_fold_state_new() -> SynFoldState {
+    SynFoldState::new()
+}
+
+/// Enter fold region.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_fold_state_enter(state: *mut SynFoldState) {
+    if !state.is_null() {
+        (*state).enter_fold();
+    }
+}
+
+/// Leave fold region.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_fold_state_leave(state: *mut SynFoldState) {
+    if !state.is_null() {
+        (*state).leave_fold();
+    }
+}
+
+/// Reset fold state.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_fold_state_reset(state: *mut SynFoldState) {
+    if !state.is_null() {
+        (*state).reset();
+    }
+}
+
+/// Get fold state level.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_fold_state_level(state: *const SynFoldState) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    (*state).level()
+}
+
+/// Check if fold state is valid.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_fold_state_is_valid(state: *const SynFoldState) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    c_int::from((*state).valid)
+}
+
+/// Create fold compute result for a line.
+#[no_mangle]
+pub extern "C" fn rs_syn_fold_compute_line(level: c_int) -> FoldComputeResult {
+    FoldComputeResult::line(level)
+}
+
+/// Create fold compute result for start.
+#[no_mangle]
+pub extern "C" fn rs_syn_fold_compute_start(level: c_int) -> FoldComputeResult {
+    FoldComputeResult::start(level)
+}
+
+/// Create fold compute result for end.
+#[no_mangle]
+pub extern "C" fn rs_syn_fold_compute_end(level: c_int) -> FoldComputeResult {
+    FoldComputeResult::end(level)
+}
+
+/// Check if fold compute result is defined.
+///
+/// # Safety
+/// `result` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_fold_compute_is_defined(result: *const FoldComputeResult) -> c_int {
+    if result.is_null() {
+        return 0;
+    }
+    c_int::from((*result).is_defined())
+}
+
+// =============================================================================
+// Tests
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_fold_level() {
+        let fl = FoldLevel::new(3);
+        assert_eq!(fl.level, 3);
+        assert!(!fl.is_start());
+        assert!(!fl.is_end());
+
+        let fl = FoldLevel::start(2);
+        assert!(fl.is_start());
+        assert!(!fl.is_end());
+
+        let fl = FoldLevel::end(2);
+        assert!(!fl.is_start());
+        assert!(fl.is_end());
+
+        let fl = FoldLevel {
+            level: 2,
+            nested: 1,
+            ..Default::default()
+        };
+        assert_eq!(fl.effective_level(), 3);
+    }
+
+    #[test]
+    fn test_fold_state() {
+        let mut state = SynFoldState::new();
+        assert_eq!(state.level(), 0);
+        assert!(!state.in_fold);
+
+        state.enter_fold();
+        assert_eq!(state.level(), 1);
+        assert!(state.in_fold);
+
+        state.enter_fold();
+        assert_eq!(state.level(), 2);
+        assert_eq!(state.max_level, 2);
+
+        state.leave_fold();
+        assert_eq!(state.level(), 1);
+        assert!(state.in_fold);
+
+        state.leave_fold();
+        assert_eq!(state.level(), 0);
+        assert!(!state.in_fold);
+    }
+
+    #[test]
+    fn test_fold_compute_result() {
+        let r = FoldComputeResult::line(3);
+        assert_eq!(r.level, 3);
+        assert!(!r.is_start);
+        assert!(!r.is_end);
+        assert!(r.is_defined());
+
+        let r = FoldComputeResult::start(2);
+        assert!(r.is_start);
+
+        let r = FoldComputeResult::end(2);
+        assert!(r.is_end);
+
+        let r = FoldComputeResult::undefined();
+        assert!(!r.is_defined());
+    }
+}
