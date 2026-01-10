@@ -102,6 +102,80 @@
 // Rust implementations
 extern char *rs_skip_vimgrep_pat(char *p, char **s, int *flags);
 
+// Phase 6: Buffer operations from Rust
+extern int rs_buffer_action_from_raw(int value);
+extern int rs_buffer_action_removes_from_list(int action);
+extern int rs_buffer_action_is_destructive(int action);
+extern int rs_buffer_nav_from_raw(int value);
+extern int rs_calc_next_bufnr(int current, int total, int count, int forward);
+extern int rs_should_block_modified(int action, int force, int modified);
+extern int rs_can_unload_buffer(int modified, int force, int hidden);
+extern int rs_parse_bufnr(const uint8_t *arg, int len);
+extern int rs_is_numeric_bufarg(const uint8_t *arg, int len);
+
+// Phase 6: Display functions from Rust
+extern int rs_display_mode_from_flags(int flags);
+extern int rs_line_number_width(int max_lnum);
+extern int rs_alignment_from_c(int value);
+extern int rs_alignment_swap_rtl(int alignment);
+extern int rs_calculate_alignment_indent(int indent, int width, int textwidth, int alignment);
+extern int rs_tabstop_padding(int col, int tabstop);
+
+// Phase 6: Global command functions from Rust
+extern int rs_global_type_from_bang(int has_bang);
+extern int rs_global_type_is_inverted(int global_type);
+
+// Phase 6: Range and line operations from Rust
+extern int rs_validate_copy(int dest, int line1, int line2, int line_count);
+extern int rs_validate_move(int dest, int line1, int line2, int line_count);
+extern int rs_adjust_line_after_move(int line, int dest, int line1, int line2);
+
+// Phase 6: Mark functions from Rust
+extern int rs_is_valid_mark(int c);
+extern int rs_is_local_mark(int c);
+extern int rs_is_global_mark(int c);
+extern int rs_is_numbered_mark(int c);
+extern int rs_is_special_mark(int c);
+extern int rs_mark_type_from_char(int c);
+extern int rs_parse_mark_range(const char *args, int *out_start, int *out_end);
+extern int rs_count_marks_in_args(const char *args);
+extern int rs_is_valid_jumplist_idx(int idx, int len);
+extern int rs_jumplist_display_idx(int actual_idx, int len);
+extern int rs_is_valid_changelist_idx(int idx, int len);
+extern int rs_get_jumplist_size(void);
+extern int rs_get_changelist_size(void);
+
+// Phase 6: Read and shell functions from Rust
+extern int rs_validate_read_position(int line, int line_count);
+extern int rs_shell_flags_from_c(int value);
+extern int rs_find_unescaped_bang(const char *cmd);
+extern int rs_needs_shell_escape(int c);
+
+// Phase 6: Sort and substitute functions from Rust
+extern int rs_parse_sort_flags(const char *flags);
+extern int rs_sort_numeric_is_integer(int mode);
+extern int rs_sort_numeric_is_float(int mode);
+extern int rs_parse_sub_flags(const char *flags);
+extern int rs_is_valid_delimiter(int c);
+
+// Phase 6: Window operations from Rust
+extern int rs_split_direction_from_raw(int value);
+extern int rs_split_is_vertical(int dir);
+extern int rs_split_position_from_options(int vertical, int belowright, int topleft);
+extern int rs_calc_split_size(int total, int count, int min_size);
+extern int rs_can_split(int total_size, int min_size);
+extern int rs_close_action_from_raw(int value);
+extern int rs_can_close_window(int win_count, int is_only, int force);
+extern int rs_can_do_only(int win_count, int has_modified, int force);
+extern int rs_win_nav_from_raw(int value);
+extern int rs_win_nav_is_horizontal(int dir);
+extern int rs_min_window_height(void);
+extern int rs_min_window_width(void);
+
+// Phase 6: Write functions from Rust
+extern int rs_validate_write_range(int start, int end, int line_count);
+extern int rs_should_write_update(int is_modified);
+
 /// Case matching style to use for :substitute
 typedef enum {
   kSubHonorOptions = 0,  ///< Honor the user's 'ignorecase'/'smartcase' options
@@ -137,6 +211,316 @@ typedef struct {
 } PreviewLines;
 
 #include "ex_cmds.c.generated.h"
+
+// Phase 6: Wrapper functions for Rust implementations
+
+/// Check if buffer action removes from list. Rust implementation.
+static bool buf_action_removes_from_list(int action)
+  FUNC_ATTR_PURE
+{
+  return rs_buffer_action_removes_from_list(action) != 0;
+}
+
+/// Check if buffer action is destructive. Rust implementation.
+static bool buf_action_is_destructive(int action)
+  FUNC_ATTR_PURE
+{
+  return rs_buffer_action_is_destructive(action) != 0;
+}
+
+/// Calculate next buffer number for navigation. Rust implementation.
+static int buf_calc_next_bufnr(int current, int total, int count, int forward)
+  FUNC_ATTR_PURE
+{
+  return rs_calc_next_bufnr(current, total, count, forward);
+}
+
+/// Check if modified buffer should block. Rust implementation.
+static bool buf_should_block_modified(int action, int force, int modified)
+  FUNC_ATTR_PURE
+{
+  return rs_should_block_modified(action, force, modified) != 0;
+}
+
+/// Check if buffer can be unloaded. Rust implementation.
+static bool buf_can_unload(int modified, int force, int hidden)
+  FUNC_ATTR_PURE
+{
+  return rs_can_unload_buffer(modified, force, hidden) != 0;
+}
+
+/// Parse buffer number from argument. Rust implementation.
+static int buf_parse_bufnr(const uint8_t *arg, int len)
+  FUNC_ATTR_PURE
+{
+  return rs_parse_bufnr(arg, len);
+}
+
+/// Check if arg is numeric buffer arg. Rust implementation.
+static bool buf_is_numeric_arg(const uint8_t *arg, int len)
+  FUNC_ATTR_PURE
+{
+  return rs_is_numeric_bufarg(arg, len) != 0;
+}
+
+/// Get line number display width. Rust implementation.
+static int disp_line_number_width(int max_lnum)
+  FUNC_ATTR_PURE
+{
+  return rs_line_number_width(max_lnum);
+}
+
+/// Swap alignment for RTL. Rust implementation.
+static int disp_alignment_swap_rtl(int alignment)
+  FUNC_ATTR_PURE
+{
+  return rs_alignment_swap_rtl(alignment);
+}
+
+/// Calculate alignment indent. Rust implementation.
+static int disp_calc_alignment_indent(int indent, int width, int textwidth, int alignment)
+  FUNC_ATTR_PURE
+{
+  return rs_calculate_alignment_indent(indent, width, textwidth, alignment);
+}
+
+/// Calculate tabstop padding. Rust implementation.
+static int disp_tabstop_padding(int col, int tabstop)
+  FUNC_ATTR_PURE
+{
+  return rs_tabstop_padding(col, tabstop);
+}
+
+/// Get global type from bang. Rust implementation.
+static int global_type_from_bang(int has_bang)
+  FUNC_ATTR_PURE
+{
+  return rs_global_type_from_bang(has_bang);
+}
+
+/// Check if global type is inverted. Rust implementation.
+static bool global_type_is_inverted(int global_type)
+  FUNC_ATTR_PURE
+{
+  return rs_global_type_is_inverted(global_type) != 0;
+}
+
+/// Validate copy range. Rust implementation.
+static bool range_validate_copy(int dest, int line1, int line2, int line_count)
+  FUNC_ATTR_PURE
+{
+  return rs_validate_copy(dest, line1, line2, line_count) != 0;
+}
+
+/// Validate move range. Rust implementation.
+static bool range_validate_move(int dest, int line1, int line2, int line_count)
+  FUNC_ATTR_PURE
+{
+  return rs_validate_move(dest, line1, line2, line_count) != 0;
+}
+
+/// Adjust line after move. Rust implementation.
+static int range_adjust_after_move(int line, int dest, int line1, int line2)
+  FUNC_ATTR_PURE
+{
+  return rs_adjust_line_after_move(line, dest, line1, line2);
+}
+
+/// Check if mark is valid. Rust implementation.
+static bool mark_is_valid(int c)
+  FUNC_ATTR_PURE
+{
+  return rs_is_valid_mark(c) != 0;
+}
+
+/// Check if mark is local. Rust implementation.
+static bool mark_is_local(int c)
+  FUNC_ATTR_PURE
+{
+  return rs_is_local_mark(c) != 0;
+}
+
+/// Check if mark is global. Rust implementation.
+static bool mark_is_global(int c)
+  FUNC_ATTR_PURE
+{
+  return rs_is_global_mark(c) != 0;
+}
+
+/// Check if mark is numbered. Rust implementation.
+static bool mark_is_numbered(int c)
+  FUNC_ATTR_PURE
+{
+  return rs_is_numbered_mark(c) != 0;
+}
+
+/// Check if mark is special. Rust implementation.
+static bool mark_is_special(int c)
+  FUNC_ATTR_PURE
+{
+  return rs_is_special_mark(c) != 0;
+}
+
+/// Get mark type from char. Rust implementation.
+static int mark_type_from_char(int c)
+  FUNC_ATTR_PURE
+{
+  return rs_mark_type_from_char(c);
+}
+
+/// Count marks in args. Rust implementation.
+static int mark_count_in_args(const char *args)
+  FUNC_ATTR_PURE
+{
+  return rs_count_marks_in_args(args);
+}
+
+/// Check if jumplist index is valid. Rust implementation.
+static bool jumplist_idx_valid(int idx, int len)
+  FUNC_ATTR_PURE
+{
+  return rs_is_valid_jumplist_idx(idx, len) != 0;
+}
+
+/// Get jumplist display index. Rust implementation.
+static int jumplist_display_idx(int actual_idx, int len)
+  FUNC_ATTR_PURE
+{
+  return rs_jumplist_display_idx(actual_idx, len);
+}
+
+/// Check if changelist index is valid. Rust implementation.
+static bool changelist_idx_valid(int idx, int len)
+  FUNC_ATTR_PURE
+{
+  return rs_is_valid_changelist_idx(idx, len) != 0;
+}
+
+/// Validate read position. Rust implementation.
+static bool read_validate_position(int line, int line_count)
+  FUNC_ATTR_PURE
+{
+  return rs_validate_read_position(line, line_count) != 0;
+}
+
+/// Find unescaped bang in command. Rust implementation.
+static int shell_find_unescaped_bang(const char *cmd)
+  FUNC_ATTR_PURE
+{
+  return rs_find_unescaped_bang(cmd);
+}
+
+/// Check if character needs shell escape. Rust implementation.
+static bool shell_needs_escape(int c)
+  FUNC_ATTR_PURE
+{
+  return rs_needs_shell_escape(c) != 0;
+}
+
+/// Parse sort flags. Rust implementation.
+static int sort_parse_flags(const char *flags)
+  FUNC_ATTR_PURE
+{
+  return rs_parse_sort_flags(flags);
+}
+
+/// Check if sort mode is integer. Rust implementation.
+static bool sort_is_integer(int mode)
+  FUNC_ATTR_PURE
+{
+  return rs_sort_numeric_is_integer(mode) != 0;
+}
+
+/// Check if sort mode is float. Rust implementation.
+static bool sort_is_float(int mode)
+  FUNC_ATTR_PURE
+{
+  return rs_sort_numeric_is_float(mode) != 0;
+}
+
+/// Check if delimiter is valid. Rust implementation.
+static bool sub_is_valid_delimiter(int c)
+  FUNC_ATTR_PURE
+{
+  return rs_is_valid_delimiter(c) != 0;
+}
+
+/// Check if split is vertical. Rust implementation.
+static bool split_is_vertical(int dir)
+  FUNC_ATTR_PURE
+{
+  return rs_split_is_vertical(dir) != 0;
+}
+
+/// Get split position from options. Rust implementation.
+static int split_position_from_opts(int vertical, int belowright, int topleft)
+  FUNC_ATTR_PURE
+{
+  return rs_split_position_from_options(vertical, belowright, topleft);
+}
+
+/// Calculate split size. Rust implementation.
+static int split_calc_size(int total, int count, int min_size)
+  FUNC_ATTR_PURE
+{
+  return rs_calc_split_size(total, count, min_size);
+}
+
+/// Check if can split. Rust implementation.
+static bool split_can_do(int total_size, int min_size)
+  FUNC_ATTR_PURE
+{
+  return rs_can_split(total_size, min_size) != 0;
+}
+
+/// Check if can close window. Rust implementation.
+static bool win_can_close(int win_count, int is_only, int force)
+  FUNC_ATTR_PURE
+{
+  return rs_can_close_window(win_count, is_only, force) != 0;
+}
+
+/// Check if can do :only. Rust implementation.
+static bool win_can_do_only(int win_count, int has_modified, int force)
+  FUNC_ATTR_PURE
+{
+  return rs_can_do_only(win_count, has_modified, force) != 0;
+}
+
+/// Check if window nav is horizontal. Rust implementation.
+static bool win_nav_is_horizontal(int dir)
+  FUNC_ATTR_PURE
+{
+  return rs_win_nav_is_horizontal(dir) != 0;
+}
+
+/// Get minimum window height. Rust implementation.
+static int win_min_height(void)
+  FUNC_ATTR_PURE
+{
+  return rs_min_window_height();
+}
+
+/// Get minimum window width. Rust implementation.
+static int win_min_width(void)
+  FUNC_ATTR_PURE
+{
+  return rs_min_window_width();
+}
+
+/// Validate write range. Rust implementation.
+static bool write_validate_range(int start, int end, int line_count)
+  FUNC_ATTR_PURE
+{
+  return rs_validate_write_range(start, end, line_count) != 0;
+}
+
+/// Check if should write update. Rust implementation.
+static bool write_should_update(int is_modified)
+  FUNC_ATTR_PURE
+{
+  return rs_should_write_update(is_modified) != 0;
+}
 
 static const char e_non_numeric_argument_to_z[]
   = N_("E144: Non-numeric argument to :z");
