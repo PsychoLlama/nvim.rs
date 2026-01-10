@@ -10,6 +10,7 @@
 #![allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
 
 pub mod check;
+pub mod compress;
 pub mod soundfold;
 pub mod spellfile;
 pub mod suggest;
