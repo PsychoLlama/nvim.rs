@@ -19,6 +19,7 @@ use std::ffi::{c_char, c_int};
 // =============================================================================
 
 pub mod api;
+pub mod attr;
 pub mod buffer;
 pub mod cache;
 pub mod cluster;
@@ -116,6 +117,15 @@ pub use types::{
     SYNSPL_DEFAULT,
     SYNSPL_NOTOP,
     SYNSPL_TOP,
+};
+
+pub use attr::{
+    rs_combine_attrs, rs_invalidation_needs_full_sync, rs_should_spell_check,
+    rs_syn_attr_stack_clear, rs_syn_attr_stack_depth, rs_syn_attr_stack_effective_attr,
+    rs_syn_attr_stack_effective_spell, rs_syn_attr_stack_free, rs_syn_attr_stack_new,
+    rs_syn_attr_stack_pop, rs_syn_attr_stack_push, rs_syn_attr_state_conceal_char,
+    rs_syn_attr_state_has_attr, rs_syn_attr_state_is_concealed, rs_syn_attr_state_new,
+    rs_syn_change_merge, rs_syn_change_no_change, rs_syn_change_range, rs_syn_change_single_line,
 };
 
 // =============================================================================
