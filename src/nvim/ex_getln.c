@@ -229,6 +229,54 @@ extern int rs_is_in_cmdwin(void);
 extern int rs_text_locked(void);
 extern const char *rs_get_text_locked_msg(void);
 
+// Phase 6: Additional cmdline functions from Rust
+extern int rs_cmdline_state_overstrike(void);
+extern int rs_cmdline_state_at_end(void);
+extern int rs_cmdline_state_is_empty(void);
+extern int rs_cmdline_state_is_search(void);
+extern int rs_cmdline_state_is_ex_cmd(void);
+extern int rs_cmdline_get_level(void);
+extern int rs_cmdline_at_max_level(void);
+extern int rs_cmdline_get_cmdpos(void);
+extern int rs_cmdline_get_cmdlen(void);
+extern void rs_cmdline_set_cmdpos(int pos);
+extern int rs_cmdline_get_redraw_state(void);
+extern void rs_cmdline_set_redraw_state(int state);
+extern int rs_cmdline_get_one_key(void);
+extern void rs_cmdline_set_one_key(int one_key);
+extern int rs_cmdline_get_hl_id(void);
+extern void rs_cmdline_set_hl_id(int hl_id);
+extern int rs_cmdline_get_xp_context(void);
+extern int rs_cmd_startcol(void);
+extern int rs_cmdline_charsize(int idx);
+extern int rs_cmd_screencol(int bytepos);
+extern int rs_cursor_screencol(void);
+extern int rs_is_password_mode(void);
+extern int rs_parse_search_delimiter(const char *pattern, size_t len);
+extern int rs_is_literal_pattern(const char *pattern, size_t len);
+extern int rs_has_word_boundary(const char *pattern, size_t len);
+extern int rs_cmdline_insert_char(int c, int overstrike);
+extern int rs_cmdline_delete_char_before(void);
+extern int rs_cmdline_delete_char_at(void);
+extern int rs_cmdline_delete_word_before(void);
+extern int rs_cmdline_delete_to_start(void);
+extern int rs_cmdline_cursor_left(void);
+extern int rs_cmdline_cursor_right(void);
+extern int rs_cmdline_cursor_home(void);
+extern int rs_cmdline_cursor_end(void);
+extern int rs_cmdline_cursor_word_left(void);
+extern int rs_cmdline_cursor_word_right(void);
+extern int rs_cmdline_insert_str(const char *s, size_t len);
+extern int rs_check_bracket_balance(const char *expr, size_t len);
+extern int rs_is_expr_likely_complete(const char *expr, size_t len);
+extern int rs_find_last_token_start(const char *expr, size_t len);
+extern int rs_fname_needs_leading_escape(const char *fname, size_t len);
+extern int rs_starts_with_tilde_slash(const char *path, size_t len);
+extern int rs_expand_fuzzy_supported(const void *xp);
+extern int rs_expand_get_context(const void *xp);
+extern int rs_expand_is_file_context(const void *xp);
+extern int rs_expand_uses_internal_matching(const void *xp);
+
 static handle_T cmdpreview_bufnr = 0;
 static int cmdpreview_ns = 0;
 
@@ -3198,6 +3246,143 @@ bool cmdline_at_end(void)
   FUNC_ATTR_PURE
 {
   return rs_cmdline_at_end() != 0;
+}
+
+// =============================================================================
+// Phase 6: Wrapper functions using Rust implementations
+// =============================================================================
+
+/// Check if cmdline is empty. Rust implementation.
+bool cmdline_is_empty(void)
+  FUNC_ATTR_PURE
+{
+  return rs_cmdline_state_is_empty() != 0;
+}
+
+/// Check if cmdline is in search mode. Rust implementation.
+bool cmdline_is_search(void)
+  FUNC_ATTR_PURE
+{
+  return rs_cmdline_state_is_search() != 0;
+}
+
+/// Check if cmdline is in ex command mode. Rust implementation.
+bool cmdline_is_ex_cmd(void)
+  FUNC_ATTR_PURE
+{
+  return rs_cmdline_state_is_ex_cmd() != 0;
+}
+
+/// Get command line nesting level. Rust implementation.
+int cmdline_level(void)
+  FUNC_ATTR_PURE
+{
+  return rs_cmdline_get_level();
+}
+
+/// Check if at max cmdline level. Rust implementation.
+bool cmdline_at_max_level(void)
+  FUNC_ATTR_PURE
+{
+  return rs_cmdline_at_max_level() != 0;
+}
+
+/// Get cursor position in cmdline. Rust implementation.
+int cmdline_get_pos(void)
+  FUNC_ATTR_PURE
+{
+  return rs_cmdline_get_cmdpos();
+}
+
+/// Get cmdline length. Rust implementation.
+int cmdline_get_len(void)
+  FUNC_ATTR_PURE
+{
+  return rs_cmdline_get_cmdlen();
+}
+
+/// Check if in password mode. Rust implementation.
+bool cmdline_is_password(void)
+  FUNC_ATTR_PURE
+{
+  return rs_is_password_mode() != 0;
+}
+
+/// Parse search delimiter from pattern. Rust implementation.
+int cmdline_parse_search_delim(const char *pattern, size_t len)
+  FUNC_ATTR_PURE
+{
+  return rs_parse_search_delimiter(pattern, len);
+}
+
+/// Check if pattern is literal. Rust implementation.
+bool cmdline_is_literal_pattern(const char *pattern, size_t len)
+  FUNC_ATTR_PURE
+{
+  return rs_is_literal_pattern(pattern, len) != 0;
+}
+
+/// Check if pattern has word boundary. Rust implementation.
+bool cmdline_has_word_boundary(const char *pattern, size_t len)
+  FUNC_ATTR_PURE
+{
+  return rs_has_word_boundary(pattern, len) != 0;
+}
+
+/// Check bracket balance in expr. Rust implementation.
+int cmdline_check_bracket_balance(const char *expr, size_t len)
+  FUNC_ATTR_PURE
+{
+  return rs_check_bracket_balance(expr, len);
+}
+
+/// Check if expression is likely complete. Rust implementation.
+bool cmdline_is_expr_complete(const char *expr, size_t len)
+  FUNC_ATTR_PURE
+{
+  return rs_is_expr_likely_complete(expr, len) != 0;
+}
+
+/// Find last token start in expression. Rust implementation.
+int cmdline_find_last_token(const char *expr, size_t len)
+  FUNC_ATTR_PURE
+{
+  return rs_find_last_token_start(expr, len);
+}
+
+/// Check if fname needs leading escape. Rust implementation.
+bool cmdline_fname_needs_escape(const char *fname, size_t len)
+  FUNC_ATTR_PURE
+{
+  return rs_fname_needs_leading_escape(fname, len) != 0;
+}
+
+/// Check if path starts with ~/. Rust implementation.
+bool cmdline_starts_with_tilde(const char *path, size_t len)
+  FUNC_ATTR_PURE
+{
+  return rs_starts_with_tilde_slash(path, len) != 0;
+}
+
+/// Check if expansion supports fuzzy matching. Rust implementation.
+bool cmdline_expand_fuzzy_supported(const void *xp)
+  FUNC_ATTR_PURE
+{
+  return rs_expand_fuzzy_supported(xp) != 0;
+}
+
+/// Check if expansion is file context. Rust implementation.
+bool cmdline_expand_is_file_context(const void *xp)
+  FUNC_ATTR_PURE
+{
+  return rs_expand_is_file_context(xp) != 0;
+}
+
+/// Check if expansion uses internal matching. Rust implementation.
+bool cmdline_expand_uses_internal(const void *xp)
+  FUNC_ATTR_PURE
+{
+  return rs_expand_uses_internal_matching(xp) != 0;
 }
 
 /// Deallocate a command line buffer, updating the buffer size and length.
