@@ -59,7 +59,9 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | keycodes       | Key code parsing                        |
 | linematch      | Diff line alignment                     |
 | list           | VimL list operations and iteration      |
+| log            | Logging infrastructure (levels, filters, output destinations) |
 | lua            | Lua integration (state, types, conversion, stdlib, callbacks) |
+| main           | Main startup infrastructure (init, cleanup, signals, environment) |
 | mapping        | Key mappings and abbreviations          |
 | mark           | Marks and positions                     |
 | marktree       | B-tree for extmarks at positions        |
@@ -94,11 +96,13 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | shada          | Session data persistence (ShaDa files)  |
 | sign           | Sign management and display             |
 | spell          | Spell checking (word tree traversal, edit distance, suggestion scoring, .spl file I/O) |
+| state          | State management (global, mode, cursor, screen) |
 | statusline     | Status/tab/winbar rendering, format parsing, click handling |
 | strings        | String manipulation                     |
 | syntax         | Syntax highlighting (patterns, state, clusters, groups, buffer attachment, Ex commands) |
 | tag            | Tag stack and navigation                |
 | terminal       | Terminal emulator state and utilities   |
+| testing        | Testing framework (assertions, fixtures, runners, mocks) |
 | vterm          | VTerm terminal emulation core           |
 | textformat     | Text formatting options                 |
 | textobject     | Text object selection and navigation    |
@@ -106,6 +110,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | typval         | VimL value type handling                |
 | ugrid          | Unicode grid for TUI                    |
 | ui             | UI core types and RemoteUI state        |
+| ui_client      | UI client protocol (events, handlers, attachment) |
 | undo           | Undo/redo system                        |
 | unpacker       | MessagePack unpacking                   |
 | usercmd        | User command definition, completion, execution, and parsing |
