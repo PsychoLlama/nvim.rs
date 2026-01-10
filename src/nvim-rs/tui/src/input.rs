@@ -227,6 +227,163 @@ pub const KITTY_KEY_KP_ENTER: u32 = 57414;
 pub const KITTY_KEY_KP_EQUAL: u32 = 57415;
 
 // ============================================================================
+// Input Helper Functions
+// ============================================================================
+
+/// Check if a key code is a Kitty special key (not a regular character)
+///
+/// Special keys have codes >= 57344
+#[no_mangle]
+pub extern "C" fn rs_is_kitty_special_key(keycode: u32) -> c_int {
+    c_int::from(keycode >= 57344)
+}
+
+/// Check if a key code is a Kitty function key (F1-F35)
+#[no_mangle]
+pub extern "C" fn rs_is_kitty_function_key(keycode: u32) -> c_int {
+    c_int::from((57364..=57398).contains(&keycode))
+}
+
+/// Check if a key code is a Kitty modifier key (Shift, Ctrl, Alt, etc.)
+#[no_mangle]
+pub extern "C" fn rs_is_kitty_modifier_key(keycode: u32) -> c_int {
+    c_int::from((KITTY_KEY_LEFT_SHIFT..=KITTY_KEY_RIGHT_META).contains(&keycode))
+}
+
+/// Check if a key code is a Kitty keypad key
+#[no_mangle]
+pub extern "C" fn rs_is_kitty_keypad_key(keycode: u32) -> c_int {
+    c_int::from((KITTY_KEY_KP_0..=KITTY_KEY_KP_EQUAL).contains(&keycode))
+}
+
+/// Check if a key code is a Kitty navigation key (arrows, home, end, etc.)
+#[no_mangle]
+pub extern "C" fn rs_is_kitty_navigation_key(keycode: u32) -> c_int {
+    c_int::from((KITTY_KEY_INSERT..=KITTY_KEY_MENU).contains(&keycode))
+}
+
+/// Get the function key number (1-12+) from a Kitty key code
+///
+/// Returns 0 if not a function key.
+#[no_mangle]
+pub extern "C" fn rs_kitty_function_key_number(keycode: u32) -> c_int {
+    if (KITTY_KEY_F1..=KITTY_KEY_F12).contains(&keycode) {
+        (keycode - KITTY_KEY_F1 + 1) as c_int
+    } else if (57376..=57398).contains(&keycode) {
+        // F13-F35
+        (keycode - 57376 + 13) as c_int
+    } else {
+        0
+    }
+}
+
+/// Get the keypad digit (0-9) from a Kitty key code
+///
+/// Returns -1 if not a keypad digit.
+#[no_mangle]
+pub extern "C" fn rs_kitty_keypad_digit(keycode: u32) -> c_int {
+    if (KITTY_KEY_KP_0..=KITTY_KEY_KP_9).contains(&keycode) {
+        (keycode - KITTY_KEY_KP_0) as c_int
+    } else {
+        -1
+    }
+}
+
+/// Check if a sequence starts with the bracketed paste start sequence
+///
+/// # Safety
+///
+/// `data` must point to at least `len` valid bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_bracketed_paste_start(data: *const u8, len: usize) -> c_int {
+    if data.is_null() || len < BRACKETED_PASTE_START_LEN {
+        return 0;
+    }
+
+    let slice = std::slice::from_raw_parts(data, BRACKETED_PASTE_START_LEN);
+    c_int::from(slice == BRACKETED_PASTE_START)
+}
+
+/// Check if a sequence starts with the bracketed paste end sequence
+///
+/// # Safety
+///
+/// `data` must point to at least `len` valid bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_bracketed_paste_end(data: *const u8, len: usize) -> c_int {
+    if data.is_null() || len < BRACKETED_PASTE_END_LEN {
+        return 0;
+    }
+
+    let slice = std::slice::from_raw_parts(data, BRACKETED_PASTE_END_LEN);
+    c_int::from(slice == BRACKETED_PASTE_END)
+}
+
+/// Parse a CSI sequence parameter as an integer
+///
+/// Returns the parsed value, or default_val if parsing fails.
+/// Updates `consumed` with the number of bytes consumed.
+///
+/// # Safety
+///
+/// `data` must point to at least `len` valid bytes.
+/// `consumed` must be a valid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_csi_param(
+    data: *const u8,
+    len: usize,
+    default_val: c_int,
+    consumed: *mut usize,
+) -> c_int {
+    if data.is_null() || len == 0 {
+        if !consumed.is_null() {
+            *consumed = 0;
+        }
+        return default_val;
+    }
+
+    let slice = std::slice::from_raw_parts(data, len);
+    let mut value: c_int = 0;
+    let mut i = 0usize;
+    let mut found_digit = false;
+
+    while i < slice.len() {
+        let c = slice[i];
+        if c.is_ascii_digit() {
+            value = value * 10 + (c - b'0') as c_int;
+            found_digit = true;
+            i += 1;
+        } else {
+            break;
+        }
+    }
+
+    if !consumed.is_null() {
+        *consumed = i;
+    }
+
+    if found_digit { value } else { default_val }
+}
+
+/// Check if a byte is a CSI parameter byte (0-9, :, ;)
+#[no_mangle]
+pub extern "C" fn rs_is_csi_param_byte(byte: u8) -> c_int {
+    c_int::from(byte.is_ascii_digit() || byte == b':' || byte == b';')
+}
+
+/// Check if a byte is a CSI intermediate byte (0x20-0x2F)
+#[no_mangle]
+pub extern "C" fn rs_is_csi_intermediate_byte(byte: u8) -> c_int {
+    c_int::from((0x20..=0x2F).contains(&byte))
+}
+
+/// Check if a byte is a CSI final byte (0x40-0x7E)
+#[no_mangle]
+pub extern "C" fn rs_is_csi_final_byte(byte: u8) -> c_int {
+    c_int::from((0x40..=0x7E).contains(&byte))
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
