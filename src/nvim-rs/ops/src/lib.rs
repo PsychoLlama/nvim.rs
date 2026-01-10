@@ -15,6 +15,8 @@
 //! - [`delete`]: Delete operation calculations (d, x, D)
 //! - [`yank`]: Yank operation calculations (y)
 //! - [`insert`]: Insert/change operation calculations (I, A, c)
+//! - [`put`]: Put/paste operation calculations (p, P)
+//! - [`format`]: Text formatting operations (gq, gw, =)
 
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(clippy::doc_markdown)]
@@ -22,9 +24,11 @@
 
 pub mod addsub;
 pub mod delete;
+pub mod format;
 pub mod insert;
 pub mod join;
 pub mod oparg;
+pub mod put;
 pub mod replace;
 pub mod shift;
 pub mod tilde;
