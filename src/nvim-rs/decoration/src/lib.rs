@@ -17,6 +17,7 @@
 #![allow(dead_code)]
 
 pub mod cache;
+pub mod decor;
 pub mod invoke;
 pub mod provider;
 

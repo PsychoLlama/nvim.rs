@@ -36,6 +36,47 @@ extern int rs_decor_virt_pos_kind(void *range);
 extern int rs_sign_item_cmp(int priority1, uint32_t id1, uint32_t add_id1,
                             int priority2, uint32_t id2, uint32_t add_id2);
 
+// Additional Rust implementations for Phase 133
+extern DecorSignHighlight rs_decor_sh_from_inline(uint16_t flags, uint16_t priority,
+                                                   int hl_id, uint32_t conceal_char);
+extern uint16_t rs_decor_type_flags(int ext, uint8_t vt_flags, uint16_t sh_flags,
+                                    int has_vt, int has_sh);
+extern int rs_decor_init_draw_col_value(int win_col, int hidden, int kind,
+                                        int pos, int vt_flags);
+extern int rs_should_recheck_draw_col(int draw_col);
+extern int rs_calc_eol_right_width(void *state, int from_idx, int row);
+extern int rs_range_end_before(int end_row, int end_col, int row, int col);
+extern int rs_range_start_after(int start_row, int start_col, int row, int col);
+extern int rs_priority_cmp(uint32_t priority1, int ordering1,
+                           uint32_t priority2, int ordering2);
+extern int rs_draw_col_is_just_added(int draw_col);
+extern int rs_draw_col_is_disabled(int draw_col);
+extern int rs_draw_col_is_pending(int draw_col);
+extern int rs_draw_col_is_unset(int draw_col);
+extern int rs_draw_col_is_valid(int draw_col);
+extern int rs_virt_pos_is_eol(int pos);
+extern int rs_virt_pos_needs_col(int pos);
+extern int rs_virt_pos_offscreen_ok(int pos);
+extern int rs_hl_mode_replaces(int mode);
+extern int rs_hl_mode_combines(int mode);
+extern int rs_hl_mode_blends(int mode);
+extern int rs_decor_kind_is_virt(int kind);
+extern int rs_decor_kind_is_sign(int kind);
+extern int rs_decor_kind_is_highlight(int kind);
+extern int rs_decor_kind_is_ui_watched(int kind);
+extern int rs_sh_is_sign(uint16_t flags);
+extern int rs_sh_is_hl_eol(uint16_t flags);
+extern int rs_sh_is_ui_watched(uint16_t flags);
+extern int rs_sh_is_conceal(uint16_t flags);
+extern int rs_sh_is_spell_on(uint16_t flags);
+extern int rs_sh_is_spell_off(uint16_t flags);
+extern int rs_sh_is_conceal_lines(uint16_t flags);
+extern int rs_vt_is_lines(uint8_t flags);
+extern int rs_vt_is_hide(uint8_t flags);
+extern int rs_vt_is_lines_above(uint8_t flags);
+extern int rs_vt_repeat_linebreak(uint8_t flags);
+extern int rs_compute_virt_text_attr(int hl_id, int base_attr, int mode, int *use_hl_id);
+
 uint32_t decor_freelist = UINT32_MAX;
 
 // Decorations might be requested to be deleted in a callback in the middle of redrawing.
@@ -100,12 +141,12 @@ void decor_redraw(buf_T *buf, int row1, int row2, int col1, DecorInline decor)
   if (decor.ext) {
     DecorVirtText *vt = decor.data.ext.vt;
     while (vt) {
-      bool below = (vt->flags & kVTIsLines) && !(vt->flags & kVTLinesAbove);
+      bool below = rs_vt_is_lines(vt->flags) && !rs_vt_is_lines_above(vt->flags);
       linenr_T vt_lnum = row1 + 1 + below;
       redraw_buf_line_later(buf, vt_lnum, true);
-      if (vt->flags & kVTIsLines || vt->pos == kVPosInline) {
+      if (rs_vt_is_lines(vt->flags) || vt->pos == kVPosInline) {
         // changed_lines_redraw_buf(buf, vt_lnum, vt_lnum + 1, 0);
-        colnr_T vt_col = vt->flags & kVTIsLines ? 0 : col1;
+        colnr_T vt_col = rs_vt_is_lines(vt->flags) ? 0 : col1;
         changed_lines_invalidate_buf(buf, vt_lnum, vt_col, vt_lnum + 1, 0);
       }
       vt = vt->next;
@@ -125,12 +166,13 @@ void decor_redraw(buf_T *buf, int row1, int row2, int col1, DecorInline decor)
 void decor_redraw_sh(buf_T *buf, int row1, int row2, DecorSignHighlight sh)
 {
   if (sh.hl_id || (sh.url != NULL)
-      || (sh.flags & (kSHIsSign | kSHSpellOn | kSHSpellOff | kSHConceal))) {
+      || rs_sh_is_sign(sh.flags) || rs_sh_is_spell_on(sh.flags)
+      || rs_sh_is_spell_off(sh.flags) || rs_sh_is_conceal(sh.flags)) {
     if (row2 >= row1) {
       redraw_buf_range_later(buf, row1 + 1, row2 + 1);
     }
   }
-  if (sh.flags & kSHConcealLines) {
+  if (rs_sh_is_conceal_lines(sh.flags)) {
     FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
       // TODO(luukvbaal): redraw only unconcealed lines, and scroll lines below
       // it up or down. Also when opening/closing a fold.
@@ -139,7 +181,7 @@ void decor_redraw_sh(buf_T *buf, int row1, int row2, DecorSignHighlight sh)
       }
     }
   }
-  if (sh.flags & kSHUIWatched) {
+  if (rs_sh_is_ui_watched(sh.flags)) {
     redraw_buf_line_later(buf, row1 + 1, false);
   }
 }
@@ -170,18 +212,7 @@ DecorSignHighlight decor_sh_from_inline(DecorHighlightInline item)
 {
   // TODO(bfredl): Eventually simple signs will be inlinable as well
   assert(!(item.flags & kSHIsSign));
-  DecorSignHighlight conv = {
-    .flags = item.flags,
-    .priority = item.priority,
-    .text[0] = item.conceal_char,
-    .hl_id = item.hl_id,
-    .number_hl_id = 0,
-    .line_hl_id = 0,
-    .cursorline_hl_id = 0,
-    .next = DECOR_ID_INVALID,
-  };
-
-  return conv;
+  return rs_decor_sh_from_inline(item.flags, item.priority, item.hl_id, item.conceal_char);
 }
 
 void buf_put_decor(buf_T *buf, DecorInline decor, int row, int row2)
@@ -215,7 +246,7 @@ static void may_force_numberwidth_recompute(buf_T *buf, bool unplace)
 static int sign_add_id = 0;
 void buf_put_decor_sh(buf_T *buf, DecorSignHighlight *sh, int row1, int row2)
 {
-  if (sh->flags & kSHIsSign) {
+  if (rs_sh_is_sign(sh->flags)) {
     sh->sign_add_id = sign_add_id++;
     if (sh->text[0]) {
       buf_signcols_count_range(buf, row1, row2, 1, kFalse);
@@ -243,7 +274,7 @@ void buf_decor_remove(buf_T *buf, int row1, int row2, int col1, DecorInline deco
 
 void buf_remove_decor_sh(buf_T *buf, int row1, int row2, DecorSignHighlight *sh)
 {
-  if (sh->flags & kSHIsSign) {
+  if (rs_sh_is_sign(sh->flags)) {
     if (sh->text[0]) {
       if (buf_meta_total(buf, kMTMetaSignText)) {
         buf_signcols_count_range(buf, row1, row2, -1, kFalse);
@@ -291,7 +322,7 @@ void decor_free(DecorInline decor)
 static void decor_free_inner(DecorVirtText *vt, uint32_t first_idx)
 {
   while (vt) {
-    if (vt->flags & kVTIsLines) {
+    if (rs_vt_is_lines(vt->flags)) {
       clear_virtlines(&vt->data.virt_lines);
     } else {
       clear_virttext(&vt->data.virt_text);
@@ -304,7 +335,7 @@ static void decor_free_inner(DecorVirtText *vt, uint32_t first_idx)
   uint32_t idx = first_idx;
   while (idx != DECOR_ID_INVALID) {
     DecorSignHighlight *sh = &kv_A(decor_items, idx);
-    if (sh->flags & kSHIsSign) {
+    if (rs_sh_is_sign(sh->flags)) {
       XFREE_CLEAR(sh->sign_name);
     }
     sh->flags = 0;
@@ -368,7 +399,7 @@ void decor_check_invalid_glyphs(void)
 {
   for (size_t i = 0; i < kv_size(decor_items); i++) {
     DecorSignHighlight *it = &kv_A(decor_items, i);
-    int width = (it->flags & kSHIsSign) ? SIGN_WIDTH : ((it->flags & kSHConceal) ? 1 : 0);
+    int width = rs_sh_is_sign(it->flags) ? SIGN_WIDTH : (rs_sh_is_conceal(it->flags) ? 1 : 0);
     for (int j = 0; j < width; j++) {
       if (schar_high(it->text[j])) {
         it->text[j] = schar_from_char(schar_get_first_codepoint(it->text[j]));
@@ -612,7 +643,7 @@ static void decor_range_insert(DecorState *state, DecorRange *range)
 void decor_range_add_virt(DecorState *state, int start_row, int start_col, int end_row, int end_col,
                           DecorVirtText *vt, bool owned)
 {
-  bool is_lines = vt->flags & kVTIsLines;
+  bool is_lines = rs_vt_is_lines(vt->flags);
   DecorRange range = {
     .start_row = start_row, .start_col = start_col, .end_row = end_row, .end_col = end_col,
     .kind = is_lines ? kDecorKindVirtLines : kDecorKindVirtText,
@@ -629,7 +660,7 @@ void decor_range_add_sh(DecorState *state, int start_row, int start_col, int end
                         DecorSignHighlight *sh, bool owned, uint32_t ns, uint32_t mark_id,
                         DecorPriority subpriority)
 {
-  if (sh->flags & kSHIsSign) {
+  if (rs_sh_is_sign(sh->flags)) {
     return;
   }
 
@@ -644,14 +675,14 @@ void decor_range_add_sh(DecorState *state, int start_row, int start_col, int end
   };
 
   if (sh->hl_id || (sh->url != NULL)
-      || (sh->flags & (kSHConceal | kSHSpellOn | kSHSpellOff))) {
+      || rs_sh_is_conceal(sh->flags) || rs_sh_is_spell_on(sh->flags) || rs_sh_is_spell_off(sh->flags)) {
     if (sh->hl_id) {
       range.attr_id = syn_id2attr(sh->hl_id);
     }
     decor_range_insert(state, &range);
   }
 
-  if (sh->flags & (kSHUIWatched)) {
+  if (rs_sh_is_ui_watched(sh->flags)) {
     range.kind = kDecorKindUIWatched;
     range.data.ui.ns_id = ns;
     range.data.ui.mark_id = mark_id;
@@ -665,13 +696,8 @@ void decor_init_draw_col(int win_col, bool hidden, DecorRange *item)
 {
   DecorVirtText *vt = item->kind == kDecorKindVirtText ? item->data.vt : NULL;
   VirtTextPos pos = decor_virt_pos_kind(item);
-  if (win_col < 0 && pos != kVPosInline) {
-    item->draw_col = win_col;
-  } else if (pos == kVPosOverlay) {
-    item->draw_col = (vt && (vt->flags & kVTHide) && hidden) ? INT_MIN : win_col;
-  } else {
-    item->draw_col = -1;
-  }
+  int vt_flags = vt ? vt->flags : 0;
+  item->draw_col = rs_decor_init_draw_col_value(win_col, hidden, item->kind, pos, vt_flags);
 }
 
 void decor_recheck_draw_col(int win_col, bool hidden, DecorState *state)
@@ -682,7 +708,7 @@ void decor_recheck_draw_col(int win_col, bool hidden, DecorState *state)
 
   for (int i = 0; i < end; i++) {
     DecorRange *const r = &slots[indices[i]].range;
-    if (r->draw_col == -3) {
+    if (rs_should_recheck_draw_col(r->draw_col)) {
       decor_init_draw_col(win_col, hidden, r);
     }
   }
@@ -775,7 +801,7 @@ next_mark:
     DecorRange *const r = &slot->range;
 
     bool keep;
-    if (r->end_row < row || (r->end_row == row && r->end_col <= col)) {
+    if (rs_range_end_before(r->end_row, r->end_col, row, col)) {
       keep = r->start_row >= row && decor_virt_pos(r);
     } else {
       keep = true;
@@ -788,7 +814,7 @@ next_mark:
         attr = hl_combine_attr(attr, r->attr_id);
       }
 
-      if (r->kind == kDecorKindHighlight && (r->data.sh.flags & kSHConceal)) {
+      if (rs_decor_kind_is_highlight(r->kind) && rs_sh_is_conceal(r->data.sh.flags)) {
         conceal = 1;
         if (r->start_row == row && r->start_col == col) {
           DecorSignHighlight *sh = &r->data.sh;
@@ -799,10 +825,10 @@ next_mark:
         }
       }
 
-      if (r->kind == kDecorKindHighlight) {
-        if (r->data.sh.flags & kSHSpellOn) {
+      if (rs_decor_kind_is_highlight(r->kind)) {
+        if (rs_sh_is_spell_on(r->data.sh.flags)) {
           spell = kTrue;
-        } else if (r->data.sh.flags & kSHSpellOff) {
+        } else if (rs_sh_is_spell_off(r->data.sh.flags)) {
           spell = kFalse;
         }
         if (r->data.sh.url != NULL) {
@@ -812,7 +838,7 @@ next_mark:
     }
 
     if (r->start_row == row && r->start_col <= col
-        && decor_virt_pos(r) && r->draw_col == -10) {
+        && decor_virt_pos(r) && rs_draw_col_is_just_added(r->draw_col)) {
       decor_init_draw_col(win_col, hidden, r);
     }
 
@@ -820,10 +846,10 @@ next_mark:
       indices[new_cur_end++] = index;
     } else {
       if (r->owned) {
-        if (r->kind == kDecorKindVirtText) {
+        if (rs_decor_kind_is_virt(r->kind)) {
           clear_virttext(&r->data.vt->data.virt_text);
           xfree(r->data.vt);
-        } else if (r->kind == kDecorKindHighlight) {
+        } else if (rs_decor_kind_is_highlight(r->kind)) {
           xfree((void *)r->data.sh.url);
         }
       }
@@ -1108,7 +1134,7 @@ bool decor_redraw_eol(win_T *wp, DecorState *state, int *eol_attr, int eol_col)
     DecorRange *r = &slots[indices[i]].range;
     has_virt_pos |= r->start_row == state->row && decor_virt_pos(r);
 
-    if (r->kind == kDecorKindHighlight && (r->data.sh.flags & kSHHlEol)) {
+    if (rs_decor_kind_is_highlight(r->kind) && rs_sh_is_hl_eol(r->data.sh.flags)) {
       *eol_attr = hl_combine_attr(*eol_attr, r->attr_id);
     }
   }
@@ -1142,8 +1168,8 @@ int decor_virt_lines(win_T *wp, int start_row, int end_row, int *num_below, Virt
     DecorVirtText *vt = mt_decor_virt(mark);
     if (!mt_invalid(mark) && ns_in_win(mark.ns, wp)) {
       while (vt) {
-        if (vt->flags & kVTIsLines) {
-          bool above = vt->flags & kVTLinesAbove;
+        if (rs_vt_is_lines(vt->flags)) {
+          bool above = rs_vt_is_lines_above(vt->flags);
           int mrow = mark.pos.row;
           int draw_row = mrow + (above ? 0 : 1);
           if (draw_row >= start_row && draw_row < end_row
@@ -1184,7 +1210,7 @@ void decor_to_dict_legacy(Dict *dict, DecorInline decor, bool hl_name, Arena *ar
   if (decor.ext) {
     DecorVirtText *vt = decor.data.ext.vt;
     while (vt) {
-      if (vt->flags & kVTIsLines) {
+      if (rs_vt_is_lines(vt->flags)) {
         virt_lines = vt;
       } else {
         virt_text = vt;
@@ -1195,7 +1221,7 @@ void decor_to_dict_legacy(Dict *dict, DecorInline decor, bool hl_name, Arena *ar
     uint32_t idx = decor.data.ext.sh_idx;
     while (idx != DECOR_ID_INVALID) {
       DecorSignHighlight *sh = &kv_A(decor_items, idx);
-      if (sh->flags & (kSHIsSign)) {
+      if (rs_sh_is_sign(sh->flags)) {
         sh_sign = *sh;
       } else {
         sh_hl = *sh;
@@ -1208,27 +1234,27 @@ void decor_to_dict_legacy(Dict *dict, DecorInline decor, bool hl_name, Arena *ar
 
   if (sh_hl.hl_id) {
     PUT_C(*dict, "hl_group", hl_group_name(sh_hl.hl_id, hl_name));
-    PUT_C(*dict, "hl_eol", BOOLEAN_OBJ(sh_hl.flags & kSHHlEol));
+    PUT_C(*dict, "hl_eol", BOOLEAN_OBJ(rs_sh_is_hl_eol(sh_hl.flags)));
     priority = sh_hl.priority;
   }
 
-  if (sh_hl.flags & kSHConceal) {
+  if (rs_sh_is_conceal(sh_hl.flags)) {
     char buf[MAX_SCHAR_SIZE];
     schar_get(buf, sh_hl.text[0]);
     PUT_C(*dict, "conceal", CSTR_TO_ARENA_OBJ(arena, buf));
   }
 
-  if (sh_hl.flags & kSHConcealLines) {
+  if (rs_sh_is_conceal_lines(sh_hl.flags)) {
     PUT_C(*dict, "conceal_lines", STRING_OBJ(cstr_as_string("")));
   }
 
-  if (sh_hl.flags & kSHSpellOn) {
+  if (rs_sh_is_spell_on(sh_hl.flags)) {
     PUT_C(*dict, "spell", BOOLEAN_OBJ(true));
-  } else if (sh_hl.flags & kSHSpellOff) {
+  } else if (rs_sh_is_spell_off(sh_hl.flags)) {
     PUT_C(*dict, "spell", BOOLEAN_OBJ(false));
   }
 
-  if (sh_hl.flags & kSHUIWatched) {
+  if (rs_sh_is_ui_watched(sh_hl.flags)) {
     PUT_C(*dict, "ui_watched", BOOLEAN_OBJ(true));
   }
 
@@ -1243,8 +1269,8 @@ void decor_to_dict_legacy(Dict *dict, DecorInline decor, bool hl_name, Arena *ar
 
     Array chunks = virt_text_to_array(virt_text->data.virt_text, hl_name, arena);
     PUT_C(*dict, "virt_text", ARRAY_OBJ(chunks));
-    PUT_C(*dict, "virt_text_hide", BOOLEAN_OBJ(virt_text->flags & kVTHide));
-    PUT_C(*dict, "virt_text_repeat_linebreak", BOOLEAN_OBJ(virt_text->flags & kVTRepeatLinebreak));
+    PUT_C(*dict, "virt_text_hide", BOOLEAN_OBJ(rs_vt_is_hide(virt_text->flags)));
+    PUT_C(*dict, "virt_text_repeat_linebreak", BOOLEAN_OBJ(rs_vt_repeat_linebreak(virt_text->flags)));
     if (virt_text->pos == kVPosWinCol) {
       PUT_C(*dict, "virt_text_win_col", INTEGER_OBJ(virt_text->col));
     }
@@ -1261,14 +1287,14 @@ void decor_to_dict_legacy(Dict *dict, DecorInline decor, bool hl_name, Arena *ar
       ADD(all_chunks, ARRAY_OBJ(chunks));
     }
     PUT_C(*dict, "virt_lines", ARRAY_OBJ(all_chunks));
-    PUT_C(*dict, "virt_lines_above", BOOLEAN_OBJ(virt_lines->flags & kVTLinesAbove));
+    PUT_C(*dict, "virt_lines_above", BOOLEAN_OBJ(rs_vt_is_lines_above(virt_lines->flags)));
     PUT_C(*dict, "virt_lines_leftcol", BOOLEAN_OBJ(virt_lines_flags & kVLLeftcol));
     PUT_C(*dict, "virt_lines_overflow",
           CSTR_AS_OBJ(virt_lines_flags & kVLScroll ? "scroll" : "trunc"));
     priority = virt_lines->priority;
   }
 
-  if (sh_sign.flags & kSHIsSign) {
+  if (rs_sh_is_sign(sh_sign.flags)) {
     if (sh_sign.text[0]) {
       char buf[SIGN_WIDTH * MAX_SCHAR_SIZE];
       describe_sign_text(buf, sh_sign.text);
@@ -1310,18 +1336,18 @@ uint16_t decor_type_flags(DecorInline decor)
     uint16_t type_flags = kExtmarkNone;
     DecorVirtText *vt = decor.data.ext.vt;
     while (vt) {
-      type_flags |= (vt->flags & kVTIsLines) ? kExtmarkVirtLines : kExtmarkVirtText;
+      type_flags |= rs_vt_is_lines(vt->flags) ? kExtmarkVirtLines : kExtmarkVirtText;
       vt = vt->next;
     }
     uint32_t idx = decor.data.ext.sh_idx;
     while (idx != DECOR_ID_INVALID) {
       DecorSignHighlight *sh = &kv_A(decor_items, idx);
-      type_flags |= (sh->flags & kSHIsSign) ? kExtmarkSign : kExtmarkHighlight;
+      type_flags |= rs_sh_is_sign(sh->flags) ? kExtmarkSign : kExtmarkHighlight;
       idx = sh->next;
     }
     return type_flags;
   } else {
-    return (decor.data.hl.flags & kSHIsSign) ? kExtmarkSign : kExtmarkHighlight;
+    return rs_sh_is_sign(decor.data.hl.flags) ? kExtmarkSign : kExtmarkHighlight;
   }
 }
 
