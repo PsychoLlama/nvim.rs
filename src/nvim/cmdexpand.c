@@ -100,6 +100,68 @@ static char *cmdline_orig = NULL;
 
 extern int rs_cmdline_fuzzy_complete(const char *fuzzystr);
 extern int rs_cmdline_pum_active(void);
+extern int rs_cmdline_fuzzy_completion_supported(int context);
+
+// Phase 6: Backslash constants from Rust
+extern int rs_xp_bs_none(void);
+extern int rs_xp_bs_one(void);
+extern int rs_xp_bs_three(void);
+extern int rs_xp_bs_comma(void);
+
+// Phase 6: Wild mode constants from Rust
+extern int rs_wild_free(void);
+extern int rs_wild_expand_free(void);
+extern int rs_wild_expand_keep(void);
+extern int rs_wild_next(void);
+extern int rs_wild_prev(void);
+extern int rs_wild_all(void);
+extern int rs_wild_longest(void);
+extern int rs_wild_all_keep(void);
+extern int rs_wild_cancel(void);
+extern int rs_wild_apply(void);
+extern int rs_wild_pageup(void);
+extern int rs_wild_pagedown(void);
+extern int rs_wild_pum_want(void);
+
+// Phase 6: Wild options constants from Rust
+extern int rs_wild_list_notfound(void);
+extern int rs_wild_home_replace(void);
+extern int rs_wild_use_nl(void);
+extern int rs_wild_no_beep(void);
+extern int rs_wild_add_slash(void);
+extern int rs_wild_keep_all(void);
+extern int rs_wild_silent(void);
+extern int rs_wild_escape(void);
+extern int rs_wild_icase(void);
+extern int rs_wild_alllinks(void);
+extern int rs_wild_ignore_completeslash(void);
+extern int rs_wild_noerror(void);
+extern int rs_wild_buflastused(void);
+extern int rs_buf_diff_filter(void);
+extern int rs_wild_noselect(void);
+extern int rs_wild_may_expand_pattern(void);
+extern int rs_wild_func_trigger(void);
+
+// Phase 6: Expand context constants from Rust
+extern int rs_expand_unsuccessful(void);
+extern int rs_expand_ok(void);
+extern int rs_expand_nothing(void);
+extern int rs_expand_commands(void);
+extern int rs_expand_files(void);
+extern int rs_expand_directories(void);
+extern int rs_expand_settings(void);
+extern int rs_expand_buffers(void);
+extern int rs_expand_help(void);
+extern int rs_expand_functions(void);
+extern int rs_expand_user_commands(void);
+extern int rs_expand_lua(void);
+
+// Phase 6: Validation functions from Rust
+extern int rs_expand_context_valid(int context);
+extern int rs_is_file_expand_context(int context);
+extern int rs_is_user_expand_context(int context);
+extern int rs_wild_mode_is_navigation(int mode);
+extern int rs_wild_mode_needs_list(int mode);
 
 // C accessor for Rust FFI
 unsigned nvim_get_wop_flags(void)
@@ -228,6 +290,372 @@ int nvim_get_pum_want_item(void)
 int nvim_get_wild_menu_showing(void)
 {
   return wild_menu_showing;
+}
+
+// Phase 6: Wrapper functions for Rust implementations
+
+/// Get XP_BS_NONE constant. Rust implementation.
+static int xp_const_bs_none(void)
+  FUNC_ATTR_PURE
+{
+  return rs_xp_bs_none();
+}
+
+/// Get XP_BS_ONE constant. Rust implementation.
+static int xp_const_bs_one(void)
+  FUNC_ATTR_PURE
+{
+  return rs_xp_bs_one();
+}
+
+/// Get XP_BS_THREE constant. Rust implementation.
+static int xp_const_bs_three(void)
+  FUNC_ATTR_PURE
+{
+  return rs_xp_bs_three();
+}
+
+/// Get XP_BS_COMMA constant. Rust implementation.
+static int xp_const_bs_comma(void)
+  FUNC_ATTR_PURE
+{
+  return rs_xp_bs_comma();
+}
+
+/// Get WILD_FREE constant. Rust implementation.
+static int wild_const_free(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_free();
+}
+
+/// Get WILD_EXPAND_FREE constant. Rust implementation.
+static int wild_const_expand_free(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_expand_free();
+}
+
+/// Get WILD_EXPAND_KEEP constant. Rust implementation.
+static int wild_const_expand_keep(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_expand_keep();
+}
+
+/// Get WILD_NEXT constant. Rust implementation.
+static int wild_const_next(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_next();
+}
+
+/// Get WILD_PREV constant. Rust implementation.
+static int wild_const_prev(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_prev();
+}
+
+/// Get WILD_ALL constant. Rust implementation.
+static int wild_const_all(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_all();
+}
+
+/// Get WILD_LONGEST constant. Rust implementation.
+static int wild_const_longest(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_longest();
+}
+
+/// Get WILD_ALL_KEEP constant. Rust implementation.
+static int wild_const_all_keep(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_all_keep();
+}
+
+/// Get WILD_CANCEL constant. Rust implementation.
+static int wild_const_cancel(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_cancel();
+}
+
+/// Get WILD_APPLY constant. Rust implementation.
+static int wild_const_apply(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_apply();
+}
+
+/// Get WILD_PAGEUP constant. Rust implementation.
+static int wild_const_pageup(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_pageup();
+}
+
+/// Get WILD_PAGEDOWN constant. Rust implementation.
+static int wild_const_pagedown(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_pagedown();
+}
+
+/// Get WILD_PUM_WANT constant. Rust implementation.
+static int wild_const_pum_want(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_pum_want();
+}
+
+/// Get WILD_LIST_NOTFOUND constant. Rust implementation.
+static int wild_opt_list_notfound(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_list_notfound();
+}
+
+/// Get WILD_HOME_REPLACE constant. Rust implementation.
+static int wild_opt_home_replace(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_home_replace();
+}
+
+/// Get WILD_USE_NL constant. Rust implementation.
+static int wild_opt_use_nl(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_use_nl();
+}
+
+/// Get WILD_NO_BEEP constant. Rust implementation.
+static int wild_opt_no_beep(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_no_beep();
+}
+
+/// Get WILD_ADD_SLASH constant. Rust implementation.
+static int wild_opt_add_slash(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_add_slash();
+}
+
+/// Get WILD_KEEP_ALL constant. Rust implementation.
+static int wild_opt_keep_all(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_keep_all();
+}
+
+/// Get WILD_SILENT constant. Rust implementation.
+static int wild_opt_silent(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_silent();
+}
+
+/// Get WILD_ESCAPE constant. Rust implementation.
+static int wild_opt_escape(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_escape();
+}
+
+/// Get WILD_ICASE constant. Rust implementation.
+static int wild_opt_icase(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_icase();
+}
+
+/// Get WILD_ALLLINKS constant. Rust implementation.
+static int wild_opt_alllinks(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_alllinks();
+}
+
+/// Get WILD_IGNORE_COMPLETESLASH constant. Rust implementation.
+static int wild_opt_ignore_completeslash(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_ignore_completeslash();
+}
+
+/// Get WILD_NOERROR constant. Rust implementation.
+static int wild_opt_noerror(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_noerror();
+}
+
+/// Get WILD_BUFLASTUSED constant. Rust implementation.
+static int wild_opt_buflastused(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_buflastused();
+}
+
+/// Get BUF_DIFF_FILTER constant. Rust implementation.
+static int wild_opt_buf_diff_filter(void)
+  FUNC_ATTR_PURE
+{
+  return rs_buf_diff_filter();
+}
+
+/// Get WILD_NOSELECT constant. Rust implementation.
+static int wild_opt_noselect(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_noselect();
+}
+
+/// Get WILD_MAY_EXPAND_PATTERN constant. Rust implementation.
+static int wild_opt_may_expand_pattern(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_may_expand_pattern();
+}
+
+/// Get WILD_FUNC_TRIGGER constant. Rust implementation.
+static int wild_opt_func_trigger(void)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_func_trigger();
+}
+
+/// Get EXPAND_UNSUCCESSFUL constant. Rust implementation.
+static int expand_const_unsuccessful(void)
+  FUNC_ATTR_PURE
+{
+  return rs_expand_unsuccessful();
+}
+
+/// Get EXPAND_OK constant. Rust implementation.
+static int expand_const_ok(void)
+  FUNC_ATTR_PURE
+{
+  return rs_expand_ok();
+}
+
+/// Get EXPAND_NOTHING constant. Rust implementation.
+static int expand_const_nothing(void)
+  FUNC_ATTR_PURE
+{
+  return rs_expand_nothing();
+}
+
+/// Get EXPAND_COMMANDS constant. Rust implementation.
+static int expand_const_commands(void)
+  FUNC_ATTR_PURE
+{
+  return rs_expand_commands();
+}
+
+/// Get EXPAND_FILES constant. Rust implementation.
+static int expand_const_files(void)
+  FUNC_ATTR_PURE
+{
+  return rs_expand_files();
+}
+
+/// Get EXPAND_DIRECTORIES constant. Rust implementation.
+static int expand_const_directories(void)
+  FUNC_ATTR_PURE
+{
+  return rs_expand_directories();
+}
+
+/// Get EXPAND_SETTINGS constant. Rust implementation.
+static int expand_const_settings(void)
+  FUNC_ATTR_PURE
+{
+  return rs_expand_settings();
+}
+
+/// Get EXPAND_BUFFERS constant. Rust implementation.
+static int expand_const_buffers(void)
+  FUNC_ATTR_PURE
+{
+  return rs_expand_buffers();
+}
+
+/// Get EXPAND_HELP constant. Rust implementation.
+static int expand_const_help(void)
+  FUNC_ATTR_PURE
+{
+  return rs_expand_help();
+}
+
+/// Get EXPAND_FUNCTIONS constant. Rust implementation.
+static int expand_const_functions(void)
+  FUNC_ATTR_PURE
+{
+  return rs_expand_functions();
+}
+
+/// Get EXPAND_USER_COMMANDS constant. Rust implementation.
+static int expand_const_user_commands(void)
+  FUNC_ATTR_PURE
+{
+  return rs_expand_user_commands();
+}
+
+/// Get EXPAND_LUA constant. Rust implementation.
+static int expand_const_lua(void)
+  FUNC_ATTR_PURE
+{
+  return rs_expand_lua();
+}
+
+/// Check if expand context is valid. Rust implementation.
+static bool expand_context_is_valid(int context)
+  FUNC_ATTR_PURE
+{
+  return rs_expand_context_valid(context) != 0;
+}
+
+/// Check if context is file expansion. Rust implementation.
+static bool expand_is_file_context(int context)
+  FUNC_ATTR_PURE
+{
+  return rs_is_file_expand_context(context) != 0;
+}
+
+/// Check if context is user expansion. Rust implementation.
+static bool expand_is_user_context(int context)
+  FUNC_ATTR_PURE
+{
+  return rs_is_user_expand_context(context) != 0;
+}
+
+/// Check if wild mode is navigation. Rust implementation.
+static bool wild_mode_is_nav(int mode)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_mode_is_navigation(mode) != 0;
+}
+
+/// Check if wild mode needs list. Rust implementation.
+static bool wild_mode_wants_list(int mode)
+  FUNC_ATTR_PURE
+{
+  return rs_wild_mode_needs_list(mode) != 0;
+}
+
+/// Check if fuzzy completion is supported for context. Rust implementation.
+static bool fuzzy_complete_ctx_supported(int context)
+  FUNC_ATTR_PURE
+{
+  return rs_cmdline_fuzzy_completion_supported(context) != 0;
 }
 
 #define SHOW_MATCH(m) (showtail ? showmatches_gettail(matches[m], false) : matches[m])
