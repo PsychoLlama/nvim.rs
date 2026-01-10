@@ -2429,6 +2429,293 @@ pub unsafe extern "C" fn rs_socket_watcher_call_close_cb(watcher: SocketWatcherH
 }
 
 // =============================================================================
+// Event Creation and Management (Pure Rust)
+// =============================================================================
+
+/// Create an event with a handler and arguments
+///
+/// This is a helper for creating Event structures from Rust.
+///
+/// # Arguments
+///
+/// * `handler` - The callback function
+/// * `arg0` - First argument (can be null)
+///
+/// # Safety
+///
+/// The handler must be a valid function pointer that expects the argument types provided.
+#[no_mangle]
+pub unsafe extern "C" fn rs_event_create(
+    handler: ArgvCallback,
+    arg0: *mut std::ffi::c_void,
+) -> Event {
+    let mut event = Event::nil();
+    event.handler = handler;
+    event.argv[0] = arg0;
+    event
+}
+
+/// Create an event with a handler and two arguments
+///
+/// # Safety
+///
+/// The handler must be a valid function pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_event_create2(
+    handler: ArgvCallback,
+    arg0: *mut std::ffi::c_void,
+    arg1: *mut std::ffi::c_void,
+) -> Event {
+    let mut event = Event::nil();
+    event.handler = handler;
+    event.argv[0] = arg0;
+    event.argv[1] = arg1;
+    event
+}
+
+/// Create an event with a handler and three arguments
+///
+/// # Safety
+///
+/// The handler must be a valid function pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_event_create3(
+    handler: ArgvCallback,
+    arg0: *mut std::ffi::c_void,
+    arg1: *mut std::ffi::c_void,
+    arg2: *mut std::ffi::c_void,
+) -> Event {
+    let mut event = Event::nil();
+    event.handler = handler;
+    event.argv[0] = arg0;
+    event.argv[1] = arg1;
+    event.argv[2] = arg2;
+    event
+}
+
+/// Copy an event structure
+///
+/// # Safety
+///
+/// `src` must be a valid pointer to an Event struct.
+/// `dst` must be a valid pointer to writable Event memory.
+#[no_mangle]
+pub unsafe extern "C" fn rs_event_copy(dst: *mut Event, src: *const Event) {
+    if !dst.is_null() && !src.is_null() {
+        *dst = *src;
+    }
+}
+
+// =============================================================================
+// Loop Management (Pure Rust Logic)
+// =============================================================================
+
+/// Check if a Loop is in a state where it can accept new events
+///
+/// Returns 1 if the loop is active and not closing, 0 otherwise.
+///
+/// # Safety
+///
+/// `loop_` must be a valid Loop handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_loop_is_active(loop_: LoopHandle) -> c_int {
+    if loop_.is_null() {
+        return 0;
+    }
+    // Loop is active if it's not closing
+    c_int::from(nvim_loop_is_closing(loop_) == 0)
+}
+
+/// Check if a Loop can be re-entered (recursive == 0)
+///
+/// Returns 1 if the loop can be entered, 0 if already in use.
+///
+/// # Safety
+///
+/// `loop_` must be a valid Loop handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_loop_can_enter(loop_: LoopHandle) -> c_int {
+    if loop_.is_null() {
+        return 0;
+    }
+    c_int::from(nvim_loop_get_recursive(loop_) == 0)
+}
+
+/// Get the combined size of all event queues in a Loop
+///
+/// Returns the sum of events, fast_events, and thread_events sizes.
+///
+/// # Safety
+///
+/// `loop_` must be a valid Loop handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_loop_total_events(loop_: LoopHandle) -> usize {
+    if loop_.is_null() {
+        return 0;
+    }
+
+    let mut total = 0usize;
+
+    let events = nvim_loop_get_events(loop_);
+    if !events.is_null() {
+        total += nvim_multiqueue_get_size_field(events);
+    }
+
+    let fast_events = nvim_loop_get_fast_events(loop_);
+    if !fast_events.is_null() {
+        total += nvim_multiqueue_get_size_field(fast_events);
+    }
+
+    let thread_events = nvim_loop_get_thread_events(loop_);
+    if !thread_events.is_null() {
+        total += nvim_multiqueue_get_size_field(thread_events);
+    }
+
+    total
+}
+
+/// Check if all event queues in a Loop are empty
+///
+/// Returns 1 if all queues are empty, 0 if any has events.
+///
+/// # Safety
+///
+/// `loop_` must be a valid Loop handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_loop_all_empty(loop_: LoopHandle) -> c_int {
+    c_int::from(rs_loop_total_events(loop_) == 0)
+}
+
+/// Check if Loop has any fast events pending
+///
+/// # Safety
+///
+/// `loop_` must be a valid Loop handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_loop_has_fast_events(loop_: LoopHandle) -> c_int {
+    if loop_.is_null() {
+        return 0;
+    }
+    let fast_events = nvim_loop_get_fast_events(loop_);
+    if fast_events.is_null() {
+        return 0;
+    }
+    c_int::from(rs_multiqueue_empty(fast_events) == 0)
+}
+
+/// Check if Loop has any thread events pending
+///
+/// Note: Caller should hold the loop mutex when calling this.
+///
+/// # Safety
+///
+/// `loop_` must be a valid Loop handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_loop_has_thread_events(loop_: LoopHandle) -> c_int {
+    if loop_.is_null() {
+        return 0;
+    }
+    let thread_events = nvim_loop_get_thread_events(loop_);
+    if thread_events.is_null() {
+        return 0;
+    }
+    c_int::from(rs_multiqueue_empty(thread_events) == 0)
+}
+
+// =============================================================================
+// MultiQueue Extended Operations (Pure Rust)
+// =============================================================================
+
+/// Get the combined size of a MultiQueue and its parent (if any)
+///
+/// If the queue has a parent, returns the parent's size (which includes
+/// link nodes for all children). Otherwise returns the queue's own size.
+///
+/// # Safety
+///
+/// `mq` must be a valid MultiQueue handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_multiqueue_total_size(mq: MultiQueueHandle) -> usize {
+    if mq.is_null() {
+        return 0;
+    }
+    nvim_multiqueue_get_size_field(mq)
+}
+
+/// Check if a MultiQueue is a child queue (has a parent)
+///
+/// Returns 1 if this is a child queue, 0 if it's a root queue.
+///
+/// # Safety
+///
+/// `mq` must be a valid MultiQueue handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_multiqueue_is_child(mq: MultiQueueHandle) -> c_int {
+    if mq.is_null() {
+        return 0;
+    }
+    nvim_multiqueue_has_parent(mq)
+}
+
+/// Check if a MultiQueue is a root queue (no parent)
+///
+/// Returns 1 if this is a root queue, 0 if it's a child.
+///
+/// # Safety
+///
+/// `mq` must be a valid MultiQueue handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_multiqueue_is_root(mq: MultiQueueHandle) -> c_int {
+    if mq.is_null() {
+        return 0; // null is neither root nor child
+    }
+    c_int::from(nvim_multiqueue_has_parent(mq) == 0)
+}
+
+// =============================================================================
+// TimeWatcher Extended Operations (Pure Rust)
+// =============================================================================
+
+/// Check if a TimeWatcher has a callback set
+///
+/// # Safety
+///
+/// `tw` must be a valid TimeWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_timewatcher_has_cb(tw: TimeWatcherHandle) -> c_int {
+    if tw.is_null() {
+        return 0;
+    }
+    c_int::from(!nvim_timewatcher_get_cb(tw).is_null())
+}
+
+/// Check if a TimeWatcher has a close callback set
+///
+/// # Safety
+///
+/// `tw` must be a valid TimeWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_timewatcher_has_close_cb(tw: TimeWatcherHandle) -> c_int {
+    if tw.is_null() {
+        return 0;
+    }
+    c_int::from(!nvim_timewatcher_get_close_cb(tw).is_null())
+}
+
+/// Check if a TimeWatcher has an events queue
+///
+/// # Safety
+///
+/// `tw` must be a valid TimeWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_timewatcher_has_events(tw: TimeWatcherHandle) -> c_int {
+    if tw.is_null() {
+        return 0;
+    }
+    c_int::from(!nvim_timewatcher_get_events(tw).is_null())
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -2604,4 +2891,84 @@ mod tests {
         }
         assert!(event.is_nil());
     }
+
+    #[test]
+    fn test_event_create() {
+        // Test event creation with handler
+        unsafe extern "C" fn dummy_handler(_argv: *mut *mut std::ffi::c_void) {}
+
+        let arg0 = 123usize as *mut std::ffi::c_void;
+        let event = unsafe { rs_event_create(Some(dummy_handler), arg0) };
+
+        assert!(!event.is_nil());
+        assert!(event.handler.is_some());
+        assert_eq!(event.argv[0], arg0);
+        // Other args should be null
+        for i in 1..EVENT_HANDLER_MAX_ARGC {
+            assert!(event.argv[i].is_null());
+        }
+    }
+
+    #[test]
+    fn test_event_create2() {
+        unsafe extern "C" fn dummy_handler(_argv: *mut *mut std::ffi::c_void) {}
+
+        let arg0 = 111usize as *mut std::ffi::c_void;
+        let arg1 = 222usize as *mut std::ffi::c_void;
+        let event = unsafe { rs_event_create2(Some(dummy_handler), arg0, arg1) };
+
+        assert!(!event.is_nil());
+        assert_eq!(event.argv[0], arg0);
+        assert_eq!(event.argv[1], arg1);
+        // Other args should be null
+        for i in 2..EVENT_HANDLER_MAX_ARGC {
+            assert!(event.argv[i].is_null());
+        }
+    }
+
+    #[test]
+    fn test_event_create3() {
+        unsafe extern "C" fn dummy_handler(_argv: *mut *mut std::ffi::c_void) {}
+
+        let arg0 = 111usize as *mut std::ffi::c_void;
+        let arg1 = 222usize as *mut std::ffi::c_void;
+        let arg2 = 333usize as *mut std::ffi::c_void;
+        let event = unsafe { rs_event_create3(Some(dummy_handler), arg0, arg1, arg2) };
+
+        assert!(!event.is_nil());
+        assert_eq!(event.argv[0], arg0);
+        assert_eq!(event.argv[1], arg1);
+        assert_eq!(event.argv[2], arg2);
+        // Other args should be null
+        for i in 3..EVENT_HANDLER_MAX_ARGC {
+            assert!(event.argv[i].is_null());
+        }
+    }
+
+    #[test]
+    fn test_event_copy() {
+        unsafe extern "C" fn dummy_handler(_argv: *mut *mut std::ffi::c_void) {}
+
+        let arg0 = 42usize as *mut std::ffi::c_void;
+        let src = Event {
+            handler: Some(dummy_handler),
+            argv: {
+                let mut arr = [std::ptr::null_mut(); EVENT_HANDLER_MAX_ARGC];
+                arr[0] = arg0;
+                arr
+            },
+        };
+
+        let mut dst = Event::nil();
+        unsafe {
+            rs_event_copy(&raw mut dst, &raw const src);
+        }
+
+        assert!(dst.handler.is_some());
+        assert_eq!(dst.argv[0], arg0);
+    }
+
+    // Note: Tests for rs_loop_*, rs_multiqueue_*, rs_timewatcher_* functions that
+    // call C accessor functions are tested via the full build with C integration.
+    // Pure Rust unit tests can only test functions that don't call into C.
 }
