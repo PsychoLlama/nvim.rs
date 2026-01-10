@@ -84,6 +84,46 @@ extern void rs_grid_line_mirror(int width);
 // Grid handle assignment and border text
 extern void rs_grid_assign_handle(ScreenGrid *grid);
 extern int rs_get_bordertext_col(int total_col, int text_width, int align);
+// Grid helper functions (Phase 135)
+extern schar_T rs_schar_from_ascii(int c);
+extern int rs_slf_is_rightleft(int flags);
+extern int rs_slf_is_wrap(int flags);
+extern int rs_slf_is_inc_vcol(int flags);
+extern int rs_slf_rightleft(void);
+extern int rs_slf_wrap(void);
+extern int rs_slf_inc_vcol(void);
+extern int rs_slf_combine(int rightleft, int wrap, int inc_vcol);
+extern size_t rs_grid_cell_count(int rows, int cols);
+extern size_t rs_grid_line_offset(int row, int cols);
+extern int rs_grid_row_valid(int row, int rows);
+extern int rs_grid_col_valid(int col, int cols);
+extern int rs_grid_pos_valid(int row, int col, int rows, int cols);
+extern int rs_grid_clamp_col(int col, int cols);
+extern int rs_grid_clamp_row(int row, int rows);
+extern int rs_schar_is_nul(schar_T sc);
+extern int rs_schar_is_space(schar_T sc);
+extern schar_T rs_schar_space(void);
+extern schar_T rs_schar_gt(void);
+extern schar_T rs_schar_lt(void);
+extern schar_T rs_schar_tilde(void);
+extern schar_T rs_schar_at(void);
+extern int rs_sattr_is_invalid(int attr);
+extern int rs_sattr_invalid(void);
+extern int rs_sattr_default(void);
+extern int rs_colnr_invalid(void);
+extern int rs_colnr_is_invalid(int col);
+extern int rs_grid_copy_len(int old_cols, int new_cols);
+extern int rs_grid_should_copy(int new_row, int old_rows, int old_chars_not_null);
+extern int rs_grid_align_is_left(int align);
+extern int rs_grid_align_is_center(int align);
+extern int rs_grid_align_is_right(int align);
+extern int rs_grid_align_left_val(void);
+extern int rs_grid_align_center_val(void);
+extern int rs_grid_align_right_val(void);
+extern int rs_rdb_is_nodelta(unsigned int flags);
+extern int rs_rdb_is_invalid(unsigned int flags);
+extern unsigned int rs_rdb_flag_nodelta(void);
+extern unsigned int rs_rdb_flag_invalid(void);
 
 // temporary buffer for rendering a single screenline, so it can be
 // compared with previous contents to calculate smallest delta.

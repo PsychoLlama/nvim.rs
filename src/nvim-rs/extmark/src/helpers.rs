@@ -199,7 +199,12 @@ pub extern "C" fn rs_pos_between_inclusive(
 
 /// FFI: Compute new row after adjustment.
 #[no_mangle]
-pub extern "C" fn rs_adjust_row(row: c_int, start_row: c_int, old_rows: c_int, new_rows: c_int) -> c_int {
+pub extern "C" fn rs_adjust_row(
+    row: c_int,
+    start_row: c_int,
+    old_rows: c_int,
+    new_rows: c_int,
+) -> c_int {
     if row < start_row {
         row
     } else if row < start_row + old_rows {
@@ -274,13 +279,23 @@ pub extern "C" fn rs_extmark_op_is_undo_no_redo(op: c_int) -> c_int {
 
 /// FFI: Check if a splice operation affects marks.
 #[no_mangle]
-pub extern "C" fn rs_splice_affects_marks(old_row: c_int, old_col: c_int, new_row: c_int, new_col: c_int) -> c_int {
+pub extern "C" fn rs_splice_affects_marks(
+    old_row: c_int,
+    old_col: c_int,
+    new_row: c_int,
+    new_col: c_int,
+) -> c_int {
     c_int::from(old_row > 0 || old_col > 0 || new_row > 0 || new_col > 0)
 }
 
 /// FFI: Check if a splice is row-only (no column change on same row).
 #[no_mangle]
-pub extern "C" fn rs_splice_is_row_only(old_row: c_int, old_col: c_int, new_row: c_int, new_col: c_int) -> c_int {
+pub extern "C" fn rs_splice_is_row_only(
+    old_row: c_int,
+    old_col: c_int,
+    new_row: c_int,
+    new_col: c_int,
+) -> c_int {
     c_int::from((old_row > 0 || new_row > 0) && old_col == 0 && new_col == 0)
 }
 

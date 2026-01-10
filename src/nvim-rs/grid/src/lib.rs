@@ -26,6 +26,8 @@
 #![allow(clippy::bool_to_int_with_if)]
 #![allow(clippy::range_plus_one)]
 
+pub mod helpers;
+
 use std::collections::HashMap;
 use std::ffi::{c_char, c_int, c_uint, CStr};
 use std::sync::{LazyLock, Mutex};

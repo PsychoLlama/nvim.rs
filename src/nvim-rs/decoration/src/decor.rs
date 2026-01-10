@@ -699,7 +699,11 @@ pub fn compute_virt_text_attr(hl_id: c_int, base_attr: c_int, _mode: HlMode) -> 
         }
         Ordering::Equal => {
             // Zero hl_id means use max of attr
-            if base_attr < 0 { (0, false) } else { (base_attr, false) }
+            if base_attr < 0 {
+                (0, false)
+            } else {
+                (base_attr, false)
+            }
         }
         Ordering::Greater => {
             // Positive hl_id means apply this highlight
