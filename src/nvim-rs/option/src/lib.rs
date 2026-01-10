@@ -13,9 +13,12 @@
 
 pub mod callbacks;
 pub mod completion;
+pub mod format;
 pub mod getset;
 pub mod init;
 pub mod parsing;
+pub mod scope;
+pub mod sideeffect;
 pub mod validate;
 
 use std::ffi::{c_char, c_int, c_uint};
