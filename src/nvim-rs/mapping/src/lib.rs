@@ -13,6 +13,9 @@
 #![allow(clippy::missing_const_for_fn)] // extern "C" functions can't be const
 #![allow(clippy::must_use_candidate)] // Internal helper functions
 
+pub mod abbrev;
+pub mod flags;
+
 use std::ffi::{c_char, c_int, c_void};
 
 // =============================================================================
