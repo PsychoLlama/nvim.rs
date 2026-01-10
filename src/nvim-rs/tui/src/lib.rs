@@ -1906,6 +1906,345 @@ pub extern "C" fn rs_256_color_seq_len(color: u8, is_fg: c_int) -> c_int {
     (5 + rs_num_digits(color as u32) as usize) as c_int
 }
 
+// ============================================================================
+// Additional TUI Helper Functions
+// ============================================================================
+
+/// Output buffer size constant
+const OUTBUF_SIZE: usize = 0xffff;
+
+/// Calculate remaining buffer space
+#[no_mangle]
+pub extern "C" fn rs_tui_buf_remaining(bufpos: usize) -> usize {
+    OUTBUF_SIZE.saturating_sub(bufpos)
+}
+
+/// Check if buffer needs flushing for given write size
+#[no_mangle]
+pub extern "C" fn rs_tui_needs_flush(bufpos: usize, write_size: usize) -> bool {
+    bufpos + write_size >= OUTBUF_SIZE
+}
+
+/// Get OUTBUF_SIZE constant
+#[no_mangle]
+pub extern "C" fn rs_tui_outbuf_size() -> usize {
+    OUTBUF_SIZE
+}
+
+/// Calculate scroll region reset sequence length
+#[no_mangle]
+pub extern "C" fn rs_tui_scroll_reset_len() -> c_int {
+    // "\x1b[r" = 3 bytes
+    3
+}
+
+/// Calculate scroll region set sequence length (for top/bot)
+#[no_mangle]
+pub extern "C" fn rs_tui_scroll_region_len(top: u32, bot: u32) -> c_int {
+    // "\x1b[top;botr" = CSI + top_digits + ';' + bot_digits + 'r'
+    (CSI_LEN + rs_num_digits(top) as usize + 1 + rs_num_digits(bot) as usize + 1) as c_int
+}
+
+/// Check if cursor position is at right margin
+#[no_mangle]
+pub extern "C" fn rs_tui_at_right_margin(col: c_int, width: c_int) -> bool {
+    col >= width - 1
+}
+
+/// Check if cursor position needs wrapping
+#[no_mangle]
+pub extern "C" fn rs_tui_cursor_needs_wrap(col: c_int, width: c_int) -> bool {
+    col >= width
+}
+
+/// Calculate new row after wrap
+#[no_mangle]
+pub extern "C" fn rs_tui_wrap_row(row: c_int, height: c_int) -> c_int {
+    if row < height - 1 {
+        row + 1
+    } else {
+        row
+    }
+}
+
+/// Check if scroll region is full screen
+#[no_mangle]
+pub extern "C" fn rs_tui_is_full_screen(
+    top: c_int,
+    bot: c_int,
+    left: c_int,
+    right: c_int,
+    width: c_int,
+    height: c_int,
+) -> bool {
+    top == 0 && left == 0 && bot == height - 1 && right == width - 1
+}
+
+/// Check if scroll region is full width
+#[no_mangle]
+pub extern "C" fn rs_tui_is_full_width(left: c_int, right: c_int, width: c_int) -> bool {
+    left == 0 && right == width - 1
+}
+
+/// Calculate SGR attribute sequence length (base)
+#[no_mangle]
+pub extern "C" fn rs_tui_sgr_base_len() -> c_int {
+    // "\x1b[m" minimum = 3, "\x1b[0m" = 4
+    3
+}
+
+/// Calculate SGR bold sequence length
+#[no_mangle]
+pub extern "C" fn rs_tui_sgr_bold_len() -> c_int {
+    // "1" or "22" = 1-2
+    2
+}
+
+/// Calculate SGR italic sequence length
+#[no_mangle]
+pub extern "C" fn rs_tui_sgr_italic_len() -> c_int {
+    // "3" or "23" = 1-2
+    2
+}
+
+/// Calculate SGR underline sequence length
+#[no_mangle]
+pub extern "C" fn rs_tui_sgr_underline_len() -> c_int {
+    // "4" or "24" = 1-2, or "4:N" = 3 for extended styles
+    3
+}
+
+/// Calculate SGR strikethrough sequence length
+#[no_mangle]
+pub extern "C" fn rs_tui_sgr_strikethrough_len() -> c_int {
+    // "9" or "29" = 1-2
+    2
+}
+
+/// Calculate SGR reverse sequence length
+#[no_mangle]
+pub extern "C" fn rs_tui_sgr_reverse_len() -> c_int {
+    // "7" or "27" = 1-2
+    2
+}
+
+/// Check if attribute ID is valid (non-negative)
+#[no_mangle]
+pub extern "C" fn rs_tui_attr_id_valid(id: c_int) -> bool {
+    id >= 0
+}
+
+/// Check if URL index is valid (non-negative)
+#[no_mangle]
+pub extern "C" fn rs_tui_url_valid(url: c_int) -> bool {
+    url >= 0
+}
+
+/// Calculate OSC 8 URL start sequence length
+#[no_mangle]
+pub extern "C" fn rs_tui_osc8_start_len() -> c_int {
+    // "\x1b]8;;" = 5
+    5
+}
+
+/// Calculate OSC 8 URL end sequence length
+#[no_mangle]
+pub extern "C" fn rs_tui_osc8_end_len() -> c_int {
+    // "\x1b]8;;\x07" = 6
+    6
+}
+
+/// Calculate terminator length (BEL vs ST)
+#[no_mangle]
+pub extern "C" fn rs_tui_terminator_len(use_bel: bool) -> c_int {
+    // BEL = 1 (\x07), ST = 2 (\x1b\\)
+    if use_bel {
+        1
+    } else {
+        2
+    }
+}
+
+/// Check if row is within grid bounds
+#[no_mangle]
+pub extern "C" fn rs_tui_row_in_bounds(row: c_int, height: c_int) -> bool {
+    row >= 0 && row < height
+}
+
+/// Check if column is within grid bounds
+#[no_mangle]
+pub extern "C" fn rs_tui_col_in_bounds(col: c_int, width: c_int) -> bool {
+    col >= 0 && col < width
+}
+
+/// Check if cell position is within grid bounds
+#[no_mangle]
+pub extern "C" fn rs_tui_cell_in_bounds(
+    row: c_int,
+    col: c_int,
+    height: c_int,
+    width: c_int,
+) -> bool {
+    row >= 0 && row < height && col >= 0 && col < width
+}
+
+/// Calculate grid cell index from row/col
+#[no_mangle]
+pub extern "C" fn rs_tui_cell_index(row: c_int, col: c_int, width: c_int) -> c_int {
+    row * width + col
+}
+
+/// Calculate row from cell index
+#[no_mangle]
+pub extern "C" fn rs_tui_index_to_row(index: c_int, width: c_int) -> c_int {
+    if width > 0 {
+        index / width
+    } else {
+        0
+    }
+}
+
+/// Calculate column from cell index
+#[no_mangle]
+pub extern "C" fn rs_tui_index_to_col(index: c_int, width: c_int) -> c_int {
+    if width > 0 {
+        index % width
+    } else {
+        0
+    }
+}
+
+/// Check if resize is needed
+#[no_mangle]
+pub extern "C" fn rs_tui_resize_needed(
+    current_width: c_int,
+    current_height: c_int,
+    new_width: c_int,
+    new_height: c_int,
+) -> bool {
+    current_width != new_width || current_height != new_height
+}
+
+/// Calculate erase characters sequence length
+#[no_mangle]
+pub extern "C" fn rs_tui_ech_seq_len(count: u32) -> c_int {
+    // "\x1b[NX" = CSI + digits + 'X'
+    (CSI_LEN + rs_num_digits(count) as usize + 1) as c_int
+}
+
+/// Calculate delete line sequence length
+#[no_mangle]
+pub extern "C" fn rs_tui_dl_seq_len(count: u32) -> c_int {
+    // "\x1b[NM" = CSI + digits + 'M'
+    (CSI_LEN + rs_num_digits(count) as usize + 1) as c_int
+}
+
+/// Calculate insert line sequence length
+#[no_mangle]
+pub extern "C" fn rs_tui_il_seq_len(count: u32) -> c_int {
+    // "\x1b[NL" = CSI + digits + 'L'
+    (CSI_LEN + rs_num_digits(count) as usize + 1) as c_int
+}
+
+/// Check if color value is special (negative = default)
+#[no_mangle]
+pub extern "C" fn rs_tui_is_special_color(color: i32) -> bool {
+    color < 0
+}
+
+/// Get default foreground color value
+#[no_mangle]
+pub extern "C" fn rs_tui_default_fg() -> i32 {
+    -1
+}
+
+/// Get default background color value
+#[no_mangle]
+pub extern "C" fn rs_tui_default_bg() -> i32 {
+    -1
+}
+
+/// Check if terminal cursor position is invalid
+#[no_mangle]
+pub extern "C" fn rs_tui_cursor_invalid(row: c_int) -> bool {
+    row < 0
+}
+
+/// Clamp row to valid range
+#[no_mangle]
+pub extern "C" fn rs_tui_clamp_row(row: c_int, height: c_int) -> c_int {
+    if row < 0 {
+        0
+    } else if row >= height {
+        height - 1
+    } else {
+        row
+    }
+}
+
+/// Clamp column to valid range
+#[no_mangle]
+pub extern "C" fn rs_tui_clamp_col(col: c_int, width: c_int) -> c_int {
+    if col < 0 {
+        0
+    } else if col >= width {
+        width - 1
+    } else {
+        col
+    }
+}
+
+/// Calculate visual bell invert sequence length
+#[no_mangle]
+pub extern "C" fn rs_tui_vbell_seq_len() -> c_int {
+    // "\x1b[?5h" + "\x1b[?5l" = 5 + 5 = 10
+    10
+}
+
+/// Calculate terminal mode set/reset sequence length
+#[no_mangle]
+pub extern "C" fn rs_tui_term_mode_seq_len(mode: u32) -> c_int {
+    // "\x1b[?Nh" or "\x1b[?Nl" = CSI + '?' + digits + char
+    (CSI_LEN + 1 + rs_num_digits(mode) as usize + 1) as c_int
+}
+
+/// Get TOO_MANY_EVENTS threshold
+#[no_mangle]
+pub extern "C" fn rs_tui_too_many_events() -> c_int {
+    1_000_000
+}
+
+/// Calculate cursor style sequence length
+#[no_mangle]
+pub extern "C" fn rs_tui_cursor_style_len(style: u32) -> c_int {
+    // "\x1b[N q" = CSI + digit(s) + space + 'q'
+    (CSI_LEN + rs_num_digits(style) as usize + 2) as c_int
+}
+
+/// Check if cursor style is valid (0-6)
+#[no_mangle]
+pub extern "C" fn rs_tui_cursor_style_valid(style: c_int) -> bool {
+    (0..=6).contains(&style)
+}
+
+/// Get cursor shape for block cursor
+#[no_mangle]
+pub extern "C" fn rs_tui_cursor_block() -> c_int {
+    1
+}
+
+/// Get cursor shape for underline cursor
+#[no_mangle]
+pub extern "C" fn rs_tui_cursor_underline() -> c_int {
+    3
+}
+
+/// Get cursor shape for bar cursor
+#[no_mangle]
+pub extern "C" fn rs_tui_cursor_bar() -> c_int {
+    5
+}
+
 #[cfg(test)]
 mod extended_tests {
     use super::*;
