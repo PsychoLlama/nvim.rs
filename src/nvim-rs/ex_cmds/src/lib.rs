@@ -16,6 +16,9 @@
 //! - [`display`] - Display commands (`:print`, `:number`, `:list`, `:=`)
 //! - [`shell`] - Shell integration (`:!`, `:shell`, filter commands)
 //! - [`format`] - Text formatting (`:retab`, `:left`, `:center`, `:right`)
+//! - [`mark`] - Mark-related commands (`:marks`, `:delmarks`, `:jumps`, `:changes`)
+//! - [`buffer`] - Buffer commands (`:buffer`, `:bdelete`, `:bunload`, `:bwipeout`)
+//! - [`window`] - Window commands (`:split`, `:vsplit`, `:close`, `:only`)
 //!
 //! ## Opaque Handles
 //!
@@ -26,15 +29,18 @@
 
 use std::ffi::{c_char, c_int, c_uint};
 
+pub mod buffer;
 pub mod display;
 pub mod format;
 pub mod global;
 pub mod lines;
+pub mod mark;
 pub mod range;
 pub mod read;
 pub mod shell;
 pub mod sort;
 pub mod substitute;
+pub mod window;
 pub mod write;
 
 // =============================================================================
