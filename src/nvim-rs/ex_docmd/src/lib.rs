@@ -522,3 +522,485 @@ mod tests {
         assert_eq!(check_nextcmd(b"\t \t \nx\0"), Some(5));
     }
 }
+
+// =============================================================================
+// Phase 81: Ex Command Execution Helpers
+// =============================================================================
+
+/// Command execution flags
+pub mod exec_flags {
+    use std::os::raw::c_int;
+
+    /// Execute command normally
+    pub const NORMAL: c_int = 0;
+    /// Silent execution (no messages)
+    pub const SILENT: c_int = 0x01;
+    /// Verify before executing
+    pub const VERIFY: c_int = 0x02;
+    /// Preview mode (no side effects)
+    pub const PREVIEW: c_int = 0x04;
+    /// Source file mode
+    pub const SOURCE: c_int = 0x08;
+    /// Don't add to history
+    pub const NO_HISTORY: c_int = 0x10;
+    /// Execute in sandbox
+    pub const SANDBOX: c_int = 0x20;
+    /// Continue after error
+    pub const CONTINUE: c_int = 0x40;
+    /// Verbose mode
+    pub const VERBOSE: c_int = 0x80;
+}
+
+/// Command modifier flags
+pub mod cmdmod_flags {
+    use std::os::raw::c_int;
+
+    /// :silent modifier
+    pub const SILENT: c_int = 0x001;
+    /// :silent! modifier (ignore errors)
+    pub const SILENT_ERR: c_int = 0x002;
+    /// :hide modifier
+    pub const HIDE: c_int = 0x004;
+    /// :keepalt modifier
+    pub const KEEPALT: c_int = 0x008;
+    /// :keepmarks modifier
+    pub const KEEPMARKS: c_int = 0x010;
+    /// :keepjumps modifier
+    pub const KEEPJUMPS: c_int = 0x020;
+    /// :lockmarks modifier
+    pub const LOCKMARKS: c_int = 0x040;
+    /// :noswapfile modifier
+    pub const NOSWAPFILE: c_int = 0x080;
+    /// :unsilent modifier
+    pub const UNSILENT: c_int = 0x100;
+    /// :noautocmd modifier
+    pub const NOAUTOCMD: c_int = 0x200;
+    /// :browse modifier
+    pub const BROWSE: c_int = 0x400;
+    /// :confirm modifier
+    pub const CONFIRM: c_int = 0x800;
+}
+
+/// Check if execution flags include a specific flag.
+#[no_mangle]
+pub const extern "C" fn rs_exec_has_flag(flags: c_int, flag: c_int) -> bool {
+    (flags & flag) != 0
+}
+
+/// Set an execution flag.
+#[no_mangle]
+pub const extern "C" fn rs_exec_set_flag(flags: c_int, flag: c_int) -> c_int {
+    flags | flag
+}
+
+/// Clear an execution flag.
+#[no_mangle]
+pub const extern "C" fn rs_exec_clear_flag(flags: c_int, flag: c_int) -> c_int {
+    flags & !flag
+}
+
+/// Check if command modifier flags include a specific modifier.
+#[no_mangle]
+pub const extern "C" fn rs_cmdmod_has_flag(flags: c_int, flag: c_int) -> bool {
+    (flags & flag) != 0
+}
+
+/// Set a command modifier flag.
+#[no_mangle]
+pub const extern "C" fn rs_cmdmod_set_flag(flags: c_int, flag: c_int) -> c_int {
+    flags | flag
+}
+
+/// Clear a command modifier flag.
+#[no_mangle]
+pub const extern "C" fn rs_cmdmod_clear_flag(flags: c_int, flag: c_int) -> c_int {
+    flags & !flag
+}
+
+/// Check if execution is in silent mode.
+#[no_mangle]
+pub const extern "C" fn rs_exec_is_silent(flags: c_int) -> bool {
+    (flags & (cmdmod_flags::SILENT | cmdmod_flags::SILENT_ERR)) != 0
+}
+
+/// Check if errors should be suppressed.
+#[no_mangle]
+pub const extern "C" fn rs_exec_suppress_errors(flags: c_int) -> bool {
+    (flags & cmdmod_flags::SILENT_ERR) != 0
+}
+
+// =============================================================================
+// Range Specification Helpers
+// =============================================================================
+
+/// Address type for Ex commands
+pub mod addr_type {
+    use std::os::raw::c_int;
+
+    /// Lines in current buffer
+    pub const LINES: c_int = 0;
+    /// Windows in current tab
+    pub const WINDOWS: c_int = 1;
+    /// Arguments in argument list
+    pub const ARGUMENTS: c_int = 2;
+    /// Loaded buffers
+    pub const LOADED_BUFS: c_int = 3;
+    /// All buffers
+    pub const BUFFERS: c_int = 4;
+    /// Tabs
+    pub const TABS: c_int = 5;
+    /// Tabs with new tab
+    pub const TABS_REL: c_int = 6;
+    /// Quickfix entries
+    pub const QUICKFIX: c_int = 7;
+    /// No range
+    pub const NONE: c_int = 8;
+    /// Other (custom)
+    pub const OTHER: c_int = 9;
+
+    /// Number of address types
+    pub const COUNT: c_int = 10;
+}
+
+/// Check if an address type refers to lines.
+#[no_mangle]
+pub const extern "C" fn rs_addr_is_lines(addr: c_int) -> bool {
+    addr == addr_type::LINES
+}
+
+/// Check if an address type refers to windows.
+#[no_mangle]
+pub const extern "C" fn rs_addr_is_windows(addr: c_int) -> bool {
+    addr == addr_type::WINDOWS
+}
+
+/// Check if an address type refers to buffers.
+#[no_mangle]
+pub const extern "C" fn rs_addr_is_buffers(addr: c_int) -> bool {
+    matches!(addr, x if x == addr_type::LOADED_BUFS || x == addr_type::BUFFERS)
+}
+
+/// Check if an address type refers to tabs.
+#[no_mangle]
+pub const extern "C" fn rs_addr_is_tabs(addr: c_int) -> bool {
+    matches!(addr, x if x == addr_type::TABS || x == addr_type::TABS_REL)
+}
+
+/// Check if range is empty (no range specified).
+#[no_mangle]
+pub const extern "C" fn rs_range_is_empty(line1: c_int, line2: c_int) -> bool {
+    line1 == 0 && line2 == 0
+}
+
+/// Check if range is a single line.
+#[no_mangle]
+pub const extern "C" fn rs_range_is_single(line1: c_int, line2: c_int) -> bool {
+    line1 > 0 && line1 == line2
+}
+
+/// Normalize range (ensure line1 <= line2).
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct ExRange {
+    pub line1: c_int,
+    pub line2: c_int,
+}
+
+/// Normalize range so line1 <= line2.
+#[no_mangle]
+pub const extern "C" fn rs_range_normalize(line1: c_int, line2: c_int) -> ExRange {
+    if line1 <= line2 {
+        ExRange { line1, line2 }
+    } else {
+        ExRange {
+            line1: line2,
+            line2: line1,
+        }
+    }
+}
+
+/// Calculate range count (number of lines).
+#[no_mangle]
+pub const extern "C" fn rs_range_count(line1: c_int, line2: c_int) -> c_int {
+    if line2 >= line1 && line1 > 0 {
+        line2 - line1 + 1
+    } else {
+        0
+    }
+}
+
+/// Clamp a line number to a valid range.
+#[no_mangle]
+pub const extern "C" fn rs_range_clamp_line(line: c_int, max_line: c_int) -> c_int {
+    if line < 1 {
+        1
+    } else if line > max_line {
+        max_line
+    } else {
+        line
+    }
+}
+
+// =============================================================================
+// Command Context Helpers
+// =============================================================================
+
+/// Command context type
+pub mod cmd_context {
+    use std::os::raw::c_int;
+
+    /// Normal command execution
+    pub const NORMAL: c_int = 0;
+    /// Inside a function
+    pub const FUNCTION: c_int = 1;
+    /// Inside a script
+    pub const SCRIPT: c_int = 2;
+    /// Inside a command-line window
+    pub const CMDWIN: c_int = 3;
+    /// Inside an autocommand
+    pub const AUTOCMD: c_int = 4;
+    /// Inside a mapping
+    pub const MAPPING: c_int = 5;
+    /// Inside an expression
+    pub const EXPR: c_int = 6;
+}
+
+/// Check if command context allows certain operations.
+#[no_mangle]
+pub const extern "C" fn rs_context_allows_modify(context: c_int) -> bool {
+    // Most contexts allow modification
+    context != cmd_context::EXPR
+}
+
+/// Check if command context is interactive.
+#[no_mangle]
+pub const extern "C" fn rs_context_is_interactive(context: c_int) -> bool {
+    context == cmd_context::NORMAL || context == cmd_context::CMDWIN
+}
+
+// =============================================================================
+// Command Recursion Helpers
+// =============================================================================
+
+/// Maximum command recursion depth
+pub const MAX_CMD_DEPTH: c_int = 200;
+
+/// Check if command depth is safe.
+#[no_mangle]
+pub const extern "C" fn rs_cmd_depth_ok(depth: c_int) -> bool {
+    depth >= 0 && depth < MAX_CMD_DEPTH
+}
+
+/// Calculate recursion level from depth.
+#[no_mangle]
+pub const extern "C" fn rs_cmd_depth_to_level(depth: c_int) -> c_int {
+    if depth < 0 {
+        0
+    } else {
+        depth + 1
+    }
+}
+
+// =============================================================================
+// Special Argument Detection
+// =============================================================================
+
+/// Check if a character could start a special argument.
+///
+/// Special arguments include:
+/// - '%' - current file
+/// - '#' - alternate file
+/// - '<' - visual range
+#[no_mangle]
+pub const extern "C" fn rs_is_special_arg_char(c: c_int) -> bool {
+    matches!(c as u8, b'%' | b'#' | b'<')
+}
+
+/// Check if a character starts a register specification.
+#[no_mangle]
+pub const extern "C" fn rs_is_register_char(c: c_int) -> bool {
+    let c = c as u8;
+    c.is_ascii_alphabetic() || matches!(c, b'"' | b'*' | b'+' | b'-' | b'/' | b':' | b'_')
+}
+
+/// Check if a character is a valid count digit.
+#[no_mangle]
+pub const extern "C" fn rs_is_count_char(c: c_int) -> bool {
+    (c as u8).is_ascii_digit()
+}
+
+/// Parse a count from the beginning of a string.
+///
+/// Returns the count value (0 if no count found).
+#[no_mangle]
+pub const unsafe extern "C" fn rs_ex_parse_count(s: *const u8, consumed: *mut c_int) -> c_int {
+    if s.is_null() {
+        if !consumed.is_null() {
+            *consumed = 0;
+        }
+        return 0;
+    }
+
+    let mut count: c_int = 0;
+    let mut i: c_int = 0;
+
+    loop {
+        let c = *s.add(i as usize);
+        if c == 0 || !c.is_ascii_digit() {
+            break;
+        }
+        count = count.saturating_mul(10).saturating_add((c - b'0') as c_int);
+        i += 1;
+    }
+
+    if !consumed.is_null() {
+        *consumed = i;
+    }
+    count
+}
+
+// =============================================================================
+// Phase 81 Tests
+// =============================================================================
+
+#[cfg(test)]
+#[allow(clippy::manual_c_str_literals)]
+mod phase81_tests {
+    use super::*;
+
+    #[test]
+    fn test_exec_flags() {
+        let flags = 0;
+        let flags = rs_exec_set_flag(flags, exec_flags::SILENT);
+        assert!(rs_exec_has_flag(flags, exec_flags::SILENT));
+        assert!(!rs_exec_has_flag(flags, exec_flags::PREVIEW));
+
+        let flags = rs_exec_set_flag(flags, exec_flags::PREVIEW);
+        assert!(rs_exec_has_flag(flags, exec_flags::SILENT));
+        assert!(rs_exec_has_flag(flags, exec_flags::PREVIEW));
+
+        let flags = rs_exec_clear_flag(flags, exec_flags::SILENT);
+        assert!(!rs_exec_has_flag(flags, exec_flags::SILENT));
+        assert!(rs_exec_has_flag(flags, exec_flags::PREVIEW));
+    }
+
+    #[test]
+    fn test_cmdmod_flags() {
+        let flags = 0;
+        let flags = rs_cmdmod_set_flag(flags, cmdmod_flags::SILENT);
+        assert!(rs_cmdmod_has_flag(flags, cmdmod_flags::SILENT));
+
+        let flags = rs_cmdmod_set_flag(flags, cmdmod_flags::SILENT_ERR);
+        assert!(rs_exec_is_silent(flags));
+        assert!(rs_exec_suppress_errors(flags));
+    }
+
+    #[test]
+    fn test_addr_types() {
+        assert!(rs_addr_is_lines(addr_type::LINES));
+        assert!(!rs_addr_is_lines(addr_type::WINDOWS));
+
+        assert!(rs_addr_is_windows(addr_type::WINDOWS));
+        assert!(!rs_addr_is_windows(addr_type::LINES));
+
+        assert!(rs_addr_is_buffers(addr_type::LOADED_BUFS));
+        assert!(rs_addr_is_buffers(addr_type::BUFFERS));
+        assert!(!rs_addr_is_buffers(addr_type::LINES));
+
+        assert!(rs_addr_is_tabs(addr_type::TABS));
+        assert!(rs_addr_is_tabs(addr_type::TABS_REL));
+        assert!(!rs_addr_is_tabs(addr_type::LINES));
+    }
+
+    #[test]
+    fn test_range_helpers() {
+        assert!(rs_range_is_empty(0, 0));
+        assert!(!rs_range_is_empty(1, 0));
+        assert!(!rs_range_is_empty(0, 1));
+        assert!(!rs_range_is_empty(1, 1));
+
+        assert!(rs_range_is_single(1, 1));
+        assert!(rs_range_is_single(5, 5));
+        assert!(!rs_range_is_single(1, 2));
+        assert!(!rs_range_is_single(0, 0));
+
+        let r = rs_range_normalize(5, 3);
+        assert_eq!(r.line1, 3);
+        assert_eq!(r.line2, 5);
+
+        let r = rs_range_normalize(3, 5);
+        assert_eq!(r.line1, 3);
+        assert_eq!(r.line2, 5);
+
+        assert_eq!(rs_range_count(1, 5), 5);
+        assert_eq!(rs_range_count(5, 5), 1);
+        assert_eq!(rs_range_count(5, 3), 0); // Invalid
+        assert_eq!(rs_range_count(0, 5), 0); // Invalid
+
+        assert_eq!(rs_range_clamp_line(0, 100), 1);
+        assert_eq!(rs_range_clamp_line(-5, 100), 1);
+        assert_eq!(rs_range_clamp_line(50, 100), 50);
+        assert_eq!(rs_range_clamp_line(150, 100), 100);
+    }
+
+    #[test]
+    fn test_context_helpers() {
+        assert!(rs_context_allows_modify(cmd_context::NORMAL));
+        assert!(rs_context_allows_modify(cmd_context::FUNCTION));
+        assert!(!rs_context_allows_modify(cmd_context::EXPR));
+
+        assert!(rs_context_is_interactive(cmd_context::NORMAL));
+        assert!(rs_context_is_interactive(cmd_context::CMDWIN));
+        assert!(!rs_context_is_interactive(cmd_context::SCRIPT));
+    }
+
+    #[test]
+    fn test_cmd_depth() {
+        assert!(rs_cmd_depth_ok(0));
+        assert!(rs_cmd_depth_ok(199));
+        assert!(!rs_cmd_depth_ok(200));
+        assert!(!rs_cmd_depth_ok(-1));
+
+        assert_eq!(rs_cmd_depth_to_level(0), 1);
+        assert_eq!(rs_cmd_depth_to_level(5), 6);
+        assert_eq!(rs_cmd_depth_to_level(-1), 0);
+    }
+
+    #[test]
+    fn test_special_chars() {
+        assert!(rs_is_special_arg_char(b'%' as c_int));
+        assert!(rs_is_special_arg_char(b'#' as c_int));
+        assert!(rs_is_special_arg_char(b'<' as c_int));
+        assert!(!rs_is_special_arg_char(b'x' as c_int));
+
+        assert!(rs_is_register_char(b'a' as c_int));
+        assert!(rs_is_register_char(b'Z' as c_int));
+        assert!(rs_is_register_char(b'"' as c_int));
+        assert!(rs_is_register_char(b'*' as c_int));
+        assert!(rs_is_register_char(b'+' as c_int));
+        assert!(!rs_is_register_char(b'1' as c_int));
+
+        assert!(rs_is_count_char(b'0' as c_int));
+        assert!(rs_is_count_char(b'9' as c_int));
+        assert!(!rs_is_count_char(b'a' as c_int));
+    }
+
+    #[test]
+    fn test_ex_parse_count() {
+        unsafe {
+            let mut consumed: c_int = 0;
+
+            assert_eq!(rs_ex_parse_count(b"123abc\0".as_ptr(), &mut consumed), 123);
+            assert_eq!(consumed, 3);
+
+            assert_eq!(rs_ex_parse_count(b"0\0".as_ptr(), &mut consumed), 0);
+            assert_eq!(consumed, 1);
+
+            assert_eq!(rs_ex_parse_count(b"abc\0".as_ptr(), &mut consumed), 0);
+            assert_eq!(consumed, 0);
+
+            assert_eq!(rs_ex_parse_count(std::ptr::null(), &mut consumed), 0);
+            assert_eq!(consumed, 0);
+        }
+    }
+}
