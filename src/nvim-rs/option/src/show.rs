@@ -567,9 +567,15 @@ mod tests {
     #[test]
     fn test_calc_display_width() {
         // Boolean: "  name" = 2 + name_len
-        assert_eq!(calc_display_width(6, 0, OptValType::Boolean, DisplayFormat::Short), 8);
+        assert_eq!(
+            calc_display_width(6, 0, OptValType::Boolean, DisplayFormat::Short),
+            8
+        );
 
         // Number short: "name=123"
-        assert_eq!(calc_display_width(4, 3, OptValType::Number, DisplayFormat::Short), 8);
+        assert_eq!(
+            calc_display_width(4, 3, OptValType::Number, DisplayFormat::Short),
+            8
+        );
     }
 }

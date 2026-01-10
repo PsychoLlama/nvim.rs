@@ -458,10 +458,7 @@ mod tests {
             CopyDirection::GlobalToLocal.source_scope(),
             OptScope::Global
         );
-        assert_eq!(
-            CopyDirection::LocalToGlobal.dest_scope(),
-            OptScope::Global
-        );
+        assert_eq!(CopyDirection::LocalToGlobal.dest_scope(), OptScope::Global);
     }
 
     #[test]
@@ -514,10 +511,7 @@ mod tests {
         unsafe {
             assert_eq!(rs_str_values_equal(c"hello".as_ptr(), c"hello".as_ptr()), 1);
             assert_eq!(rs_str_values_equal(c"hello".as_ptr(), c"world".as_ptr()), 0);
-            assert_eq!(
-                rs_str_values_equal(std::ptr::null(), std::ptr::null()),
-                1
-            );
+            assert_eq!(rs_str_values_equal(std::ptr::null(), std::ptr::null()), 1);
             assert_eq!(rs_str_values_equal(c"x".as_ptr(), std::ptr::null()), 0);
         }
     }

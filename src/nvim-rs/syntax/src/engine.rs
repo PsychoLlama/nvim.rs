@@ -186,12 +186,7 @@ impl MatchResult {
 
     /// Create a successful match result.
     #[must_use]
-    pub const fn found(
-        syn_id: c_int,
-        start_col: c_int,
-        end_col: c_int,
-        attr_id: c_int,
-    ) -> Self {
+    pub const fn found(syn_id: c_int, start_col: c_int, end_col: c_int, attr_id: c_int) -> Self {
         Self {
             found: true,
             syn_id,

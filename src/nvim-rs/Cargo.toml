@@ -69,6 +69,7 @@ nvim-keycodes = { path = "keycodes" }
 nvim-linematch = { path = "linematch" }
 nvim-list = { path = "list" }
 nvim-lua = { path = "lua" }
+nvim-main = { path = "main" }
 nvim-mapping = { path = "mapping" }
 nvim-mark = { path = "mark" }
 nvim-marktree = { path = "marktree" }

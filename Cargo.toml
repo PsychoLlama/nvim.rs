@@ -47,6 +47,7 @@ members = [
     "src/nvim-rs/linematch",
     "src/nvim-rs/list",
     "src/nvim-rs/lua",
+    "src/nvim-rs/main",
     "src/nvim-rs/mapping",
     "src/nvim-rs/mark",
     "src/nvim-rs/marktree",

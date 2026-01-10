@@ -1,0 +1,10 @@
+[package]
+name = "nvim-main"
+version = "0.1.0"
+edition = "2021"
+description = "Neovim main/startup infrastructure"
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]

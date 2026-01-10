@@ -74,13 +74,19 @@ impl SynCmdType {
     /// Check if this is a definition command (creates syntax items).
     #[must_use]
     pub const fn is_definition(self) -> bool {
-        matches!(self, Self::Match | Self::Region | Self::Keyword | Self::Cluster)
+        matches!(
+            self,
+            Self::Match | Self::Region | Self::Keyword | Self::Cluster
+        )
     }
 
     /// Check if this command takes a group name.
     #[must_use]
     pub const fn takes_group_name(self) -> bool {
-        matches!(self, Self::Match | Self::Region | Self::Keyword | Self::Cluster | Self::Clear)
+        matches!(
+            self,
+            Self::Match | Self::Region | Self::Keyword | Self::Cluster | Self::Clear
+        )
     }
 
     /// Check if this command takes a pattern.

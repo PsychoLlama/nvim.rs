@@ -338,7 +338,9 @@ pub fn is_valid_bufvar_name(name: &[u8]) -> bool {
     }
 
     // Rest must be alphanumeric or underscore
-    name[1..].iter().all(|&c| c.is_ascii_alphanumeric() || c == b'_')
+    name[1..]
+        .iter()
+        .all(|&c| c.is_ascii_alphanumeric() || c == b'_')
 }
 
 // =============================================================================

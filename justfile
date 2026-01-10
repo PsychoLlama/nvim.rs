@@ -93,6 +93,7 @@ rust-test:
       -p nvim-keycodes \
       -p nvim-linematch \
       -p nvim-lua \
+      -p nvim-main \
       -p nvim-mapping \
       -p nvim-mark \
       -p nvim-marktree \

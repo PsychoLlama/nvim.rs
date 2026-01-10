@@ -70,6 +70,7 @@ pub use nvim_keycodes::*;
 pub use nvim_linematch::*;
 pub use nvim_list::*;
 pub use nvim_lua::*;
+pub use nvim_main::*;
 pub use nvim_mapping::*;
 pub use nvim_mark::*;
 pub use nvim_marktree::*;

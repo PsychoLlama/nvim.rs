@@ -167,7 +167,12 @@ pub struct WinDimensions {
 impl WinDimensions {
     /// Create new dimensions.
     pub const fn new(width: c_int, height: c_int, row: c_int, col: c_int) -> Self {
-        Self { width, height, row, col }
+        Self {
+            width,
+            height,
+            row,
+            col,
+        }
     }
 
     /// Check if dimensions are valid.
