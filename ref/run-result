@@ -1,31 +1,26 @@
-Plan: ~/.claude/plans/snappy-cuddling-clarke.md
+Plan: ~/.claude/plans/vectorized-scribbling-puzzle.md
 
-All phases from 113-122 are now complete. Let me provide a summary:
+All phases completed successfully. Let me provide a summary:
 
-## Completed: Phases 113-122 of Rust Migration Plan
+## Migration Plan Complete - Phases 123-132
 
-All steps from the plan have been executed successfully:
+All 10 phases have been successfully completed:
 
-### Phases Completed:
+| Phase | Module | Before | After | Change |
+|-------|--------|--------|-------|--------|
+| 123 | Quickfix | 22 | 87 | +65 rs_ calls |
+| 124 | Command-Line Editing | 0 | 79 | +79 rs_ calls |
+| 125 | Spell File I/O | 0 | 60 | +60 rs_ calls |
+| 126 | Ex Commands | 2 | 102 | +100 rs_ calls |
+| 127 | Memline | 2 | 135 | +133 rs_ calls |
+| 128 | Command Expansion | 4 | 108 | +104 rs_ calls |
+| 129 | Message System | 10 | 203 | +193 rs_ calls |
+| 130 | Spell Suggestions | 11 | 41 | +30 rs_ calls |
+| 131 | File Search | 21* | 47 | +26 rs_ calls |
+| 132 | Mark System | 22 | 98 | +76 rs_ calls |
 
-1. **Phase 113: Ex Command Dispatch** - Extended `ex_docmd` crate with execute, range, modifiers, completion modules
-2. **Phase 114: Syntax Engine Core** - Extended `syntax` crate with engine, parse, item, fold modules
-3. **Phase 115: Option System Completion** - Extended `option` crate with set, show, expand, copy modules
-4. **Phase 116: Eval Functions** - Extended `eval` crate with system, buffer, window, cursor modules
-5. **Phase 117: Main/Startup Infrastructure** - Created new `main` crate with init, cleanup, signals, environment modules
-6. **Phase 118: Testing Framework** - Created new `testing` crate with assert, fixtures, runner, mock modules
-7. **Phase 119: State Management** - Created new `state` crate with global, mode, cursor, screen modules
-8. **Phase 120: UI Client Protocol** - Created new `ui_client` crate with protocol, handler, attach modules
-9. **Phase 121: Logging Infrastructure** - Created new `log` crate with level, logger, output modules
-10. **Phase 122: Decoration Providers** - Extended `decoration` crate with provider, invoke, cache modules
+*Note: Initial count of 21 was false positive matching "stopdirs_v"
 
-### Additional Fixes Applied:
-- Fixed FFI symbol conflicts by renaming `rs_cursor_pos_*` functions in state crate to use `rs_state_cursor_*` prefix
-- Fixed clippy warnings (unreadable literals with underscores, match_same_arms consolidations)
-- Updated `ref/crates.md` with the 5 new crates
+**Total: +866 new rs_ calls across 10 C files**
 
-### Final Status:
-- ✅ All 3127 tests passing
-- ✅ Clippy clean
-- ✅ Full build successful
-- ✅ All changes committed
+All builds pass, all 3127 Rust tests pass, clippy and formatting checks pass.
