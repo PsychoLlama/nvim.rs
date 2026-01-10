@@ -114,6 +114,7 @@ nvim-viewport = { path = "viewport" }
 nvim-window = { path = "window" }
 nvim-terminal = { path = "terminal" }
 nvim-testing = { path = "testing" }
+nvim-state = { path = "state" }
 nvim-vterm = { path = "vterm" }
 nvim-unpacker = { path = "unpacker" }
 nvim-tui = { path = "tui" }
