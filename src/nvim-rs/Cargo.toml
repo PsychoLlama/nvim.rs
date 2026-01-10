@@ -122,6 +122,7 @@ nvim-undo = { path = "undo" }
 nvim-usercmd = { path = "usercmd" }
 nvim-userfunc = { path = "userfunc" }
 nvim-vars = { path = "vars" }
+nvim-viml-parser = { path = "viml_parser" }
 nvim-session = { path = "session" }
 nvim-winfloat = { path = "winfloat" }
 

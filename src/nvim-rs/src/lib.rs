@@ -122,6 +122,7 @@ pub use nvim_utf8proc::*;
 pub use nvim_vars::*;
 pub use nvim_version::*;
 pub use nvim_viewport::*;
+pub use nvim_viml_parser::*;
 pub use nvim_vterm::*;
 pub use nvim_window::*;
 pub use nvim_winfloat::*;

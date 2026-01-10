@@ -114,5 +114,6 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | utf8proc       | utf8proc bindings                       |
 | version        | Version checks                          |
 | viewport       | Viewport and scroll management          |
+| viml_parser    | VimL expression parser (tokens, literals, escapes) |
 | window         | Window management (state, layout, frames, navigation, tabpages) |
 | winfloat       | Floating windows (relative positioning, anchors, split, style, z-index) |

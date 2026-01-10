@@ -121,7 +121,8 @@ rust-test:
       -p nvim-ugrid \
       -p nvim-unpacker \
       -p nvim-version \
-      -p nvim-viewport
+      -p nvim-viewport \
+      -p nvim-viml-parser
 
 # Run Rust linter
 rust-clippy:
