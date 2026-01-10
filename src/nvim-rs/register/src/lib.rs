@@ -6,6 +6,10 @@
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::must_use_candidate)]
 
+pub mod blockwise;
+
+pub use blockwise::*;
+
 use std::ffi::{c_char, c_int};
 
 /// MotionType values matching `normal_defs.h`.
