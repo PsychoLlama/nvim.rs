@@ -1,0 +1,16 @@
+[package]
+name = "nvim-optionstr"
+description = "Option string validation for Neovim"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+bitflags = "2"

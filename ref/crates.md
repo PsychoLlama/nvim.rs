@@ -76,6 +76,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | normal         | Normal mode key processing and commands |
 | ops            | Operator handling (shift, tilde, addsub, replace, join, delete, insert) |
 | option         | Option system and configuration         |
+| optionstr      | Option string validation (fillchars, listchars, flags, comma-lists) |
 | os             | OS abstractions (env, time, fs)         |
 | path           | Path manipulation                       |
 | plines         | Physical line display calculations      |
