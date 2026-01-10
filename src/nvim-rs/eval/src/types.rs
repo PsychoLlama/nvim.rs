@@ -388,7 +388,10 @@ mod tests {
 
     #[test]
     fn test_common_type() {
-        assert_eq!(common_type(VarType::Number, VarType::Number), VarType::Number);
+        assert_eq!(
+            common_type(VarType::Number, VarType::Number),
+            VarType::Number
+        );
         assert_eq!(common_type(VarType::Number, VarType::Float), VarType::Float);
         assert_eq!(common_type(VarType::Float, VarType::Number), VarType::Float);
         assert_eq!(

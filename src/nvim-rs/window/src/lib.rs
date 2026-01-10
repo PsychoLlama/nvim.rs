@@ -15,6 +15,7 @@
 //! - [`focus`]: Window focus and navigation functions
 //! - [`frame`]: Frame tree operations
 //! - [`free`]: Window deallocation functions (placeholder)
+//! - [`layout`]: Window layout tree operations
 //! - [`list`]: Window list traversal and initialization functions
 //! - [`resize`]: Window resizing and scrolling (placeholder)
 //! - [`snapshot`]: Window layout snapshots (placeholder)
@@ -35,6 +36,7 @@ pub mod events;
 pub mod focus;
 pub mod frame;
 pub mod free;
+pub mod layout;
 pub mod list;
 pub mod resize;
 pub mod snapshot;

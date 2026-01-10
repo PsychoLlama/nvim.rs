@@ -144,7 +144,12 @@ pub fn classify_abbr(trigger: &[u8]) -> AbbrType {
         AbbrType::FullId
     } else if has_keyword {
         // Check if last char is keyword
-        let last = trigger.iter().rev().find(|&&c| c != 0).copied().unwrap_or(0);
+        let last = trigger
+            .iter()
+            .rev()
+            .find(|&&c| c != 0)
+            .copied()
+            .unwrap_or(0);
         if is_keyword_char(last) {
             AbbrType::EndId
         } else {
@@ -285,10 +290,7 @@ impl AbbrExpansionState {
 
 /// Get abbreviation type from trigger.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn rs_abbr_classify(
-    trigger: *const u8,
-    len: usize,
-) -> c_int {
+pub unsafe extern "C" fn rs_abbr_classify(trigger: *const u8, len: usize) -> c_int {
     if trigger.is_null() || len == 0 {
         return AbbrType::NonId.to_raw();
     }

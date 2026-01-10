@@ -548,7 +548,10 @@ mod tests {
         assert!(has_effect(effect_flags::EFF_ALL, effect_flags::EFF_REDRAW));
         assert!(has_effect(effect_flags::EFF_ALL, effect_flags::EFF_UI));
         assert!(!has_effect(effect_flags::EFF_REDRAW, effect_flags::EFF_UI));
-        assert!(!has_effect(effect_flags::EFF_NONE, effect_flags::EFF_REDRAW));
+        assert!(!has_effect(
+            effect_flags::EFF_NONE,
+            effect_flags::EFF_REDRAW
+        ));
     }
 
     #[test]
