@@ -32,6 +32,76 @@
 
 extern bool rs_cindent_on(void);
 
+// Phase 137: C indentation Rust helpers
+// Comment detection
+extern bool rs_cin_iscomment(const char *p);
+extern bool rs_cin_islinecomment(const char *p);
+extern bool rs_cin_ispreproc(const char *s);
+extern const char *rs_cin_skipcomment(const char *s);
+extern bool rs_cin_nocode(const char *s);
+// String handling
+extern const char *rs_skip_string(const char *p);
+extern bool rs_is_pos_in_string(const char *line, int col);
+// Keyword detection
+extern bool rs_cin_starts_with(const char *s, const char *word);
+extern bool rs_cin_isif(const char *p);
+extern bool rs_cin_iselse(const char *p);
+extern bool rs_cin_isdo(const char *p);
+extern bool rs_cin_isbreak(const char *p);
+extern bool rs_cin_isdefault(const char *s);
+extern bool rs_cin_iscase(const char *s, bool strict);
+extern bool rs_cin_has_js_key(const char *text);
+extern bool rs_cin_is_cpp_namespace(const char *s);
+extern bool rs_cin_ends_in(const char *s, const char *find);
+extern const char *rs_cin_skip_comment_and_string(const char *s);
+// Bracket matching
+typedef struct {
+  bool found;
+  int col;
+} BracketMatch;
+extern BracketMatch rs_find_last_paren(const char *line, char start, char end);
+extern int rs_count_unmatched_open(const char *line, char start, char end, int max_col);
+extern bool rs_is_inside_brackets(const char *line, int col, char start, char end);
+extern int rs_cin_skip2pos_col(const char *line, int col);
+extern bool rs_cin_iscomment_pos(const char *line, int col);
+// Statement detection
+extern char rs_cin_isterminated(const char *s, bool incl_open, bool incl_comma);
+extern bool rs_cin_is_terminated(const char *s);
+extern bool rs_cin_iswhile(const char *p);
+extern bool rs_cin_isfor(const char *p);
+extern bool rs_cin_isreturn(const char *p);
+extern bool rs_cin_iscontinue(const char *p);
+extern bool rs_cin_isgoto(const char *p);
+extern bool rs_cin_isswitch(const char *p);
+extern int rs_cin_find_equal(const char *s);
+extern bool rs_cin_is_compound_init(const char *s);
+extern bool rs_cin_istypedef(const char *p);
+extern bool rs_cin_isstatic(const char *p);
+extern bool rs_cin_ispublic(const char *p);
+extern bool rs_cin_isprotected(const char *p);
+extern bool rs_cin_isprivate(const char *p);
+extern bool rs_cin_isenum(const char *p);
+extern bool rs_cin_isstruct(const char *p);
+extern bool rs_cin_isclass(const char *p);
+extern bool rs_cin_isunion(const char *p);
+// Indentation helpers
+extern bool rs_cin_ends_in_backslash(const char *s);
+extern bool rs_linewhite(const char *s);
+extern bool rs_cin_looks_like_funcdecl(const char *s);
+extern bool rs_cin_is_kr_param(const char *s);
+extern bool rs_cin_is_cpp_lambda(const char *s);
+extern bool rs_cin_is_template_decl(const char *s);
+extern bool rs_cin_is_extern_c(const char *s);
+extern bool rs_cin_starts_multiline_comment(const char *s);
+extern bool rs_cin_inside_multiline_comment(const char *s);
+extern bool rs_cin_ends_multiline_comment(const char *s);
+extern bool rs_cin_is_closing_brace_line(const char *s);
+extern bool rs_cin_is_opening_brace_line(const char *s);
+extern bool rs_cin_is_ternary_continuation(const char *s);
+extern bool rs_cin_is_bool_continuation(const char *s);
+extern int rs_cin_brace_position(const char *line, int brace_col);
+extern bool rs_cin_is_operator_continuation(const char *s);
+
 /// C accessor for p_paste global option.
 int nvim_get_p_paste(void)
 {
