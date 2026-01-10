@@ -8,7 +8,9 @@
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(clippy::cast_possible_wrap)] // Byte literals in ASCII range are safe
 
+pub mod lifecycle;
 pub mod list;
+pub mod properties;
 pub mod state;
 
 use std::ffi::{c_char, c_int};

@@ -318,6 +318,54 @@ OptInt nvim_buf_get_p_sw(buf_T *buf)
   return buf->b_p_sw;
 }
 
+/// Get the b_nwindows field from a buffer (number of windows).
+int nvim_buf_get_nwindows(buf_T *buf)
+{
+  return buf->b_nwindows;
+}
+
+/// Get the b_locked field from a buffer.
+int nvim_buf_get_locked(buf_T *buf)
+{
+  return buf->b_locked;
+}
+
+/// Get the b_locked_split field from a buffer.
+int nvim_buf_get_locked_split(buf_T *buf)
+{
+  return buf->b_locked_split;
+}
+
+/// Get the b_flags field from a buffer.
+int nvim_buf_get_flags(buf_T *buf)
+{
+  return buf->b_flags;
+}
+
+/// Get the b_changed field from a buffer.
+int nvim_buf_get_changed(buf_T *buf)
+{
+  return buf->b_changed;
+}
+
+/// Get the b_p_bl (buflisted option) field from a buffer.
+int nvim_buf_get_b_p_bl(buf_T *buf)
+{
+  return buf->b_p_bl;
+}
+
+/// Get the b_ffname field from a buffer (full filename) - for Rust.
+const char *nvim_buf_get_ffname(buf_T *buf)
+{
+  return buf->b_ffname;
+}
+
+/// Get the b_sfname field from a buffer (short filename) - for Rust.
+const char *nvim_buf_get_sfname(buf_T *buf)
+{
+  return buf->b_sfname;
+}
+
 typedef enum {
   kBffClearWinInfo = 1,
   kBffInitChangedtick = 2,
