@@ -22,6 +22,8 @@ pub mod fname;
 pub mod history;
 pub mod input;
 pub mod keys;
+pub mod matchstate;
+pub mod mode;
 pub mod pattern;
 pub mod preview;
 pub mod screen;
