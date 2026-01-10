@@ -1692,3 +1692,270 @@ mod tests {
         );
     }
 }
+
+// ============================================================================
+// Terminal Capability Helpers (Pure Rust)
+// ============================================================================
+
+/// Calculate the number of columns needed for a character
+///
+/// Returns 1 for single-width characters, 2 for double-width (CJK),
+/// and 0 for control/combining characters.
+///
+/// This is a simplified implementation - for full Unicode width handling,
+/// refer to wcwidth in mbyte.c.
+///
+/// # Safety
+///
+/// This function is safe to call.
+#[no_mangle]
+pub extern "C" fn rs_char_display_width(c: u32) -> c_int {
+    char_display_width_impl(c)
+}
+
+fn char_display_width_impl(c: u32) -> c_int {
+    // Control characters
+    if c < 0x20 || (0x7F..=0x9F).contains(&c) {
+        return 0;
+    }
+
+    // Common ASCII
+    if c < 0x100 {
+        return 1;
+    }
+
+    // Combining characters (simplified check)
+    if (0x0300..=0x036F).contains(&c)  // Combining Diacritical Marks
+        || (0x1AB0..=0x1AFF).contains(&c)  // Combining Diacritical Marks Extended
+        || (0x1DC0..=0x1DFF).contains(&c)  // Combining Diacritical Marks Supplement
+        || (0x20D0..=0x20FF).contains(&c)  // Combining Diacritical Marks for Symbols
+        || (0xFE20..=0xFE2F).contains(&c)
+    // Combining Half Marks
+    {
+        return 0;
+    }
+
+    // East Asian Wide characters (simplified check)
+    if (0x1100..=0x115F).contains(&c)  // Hangul Jamo
+        || (0x2E80..=0x303E).contains(&c)  // CJK Radicals, Kangxi Radicals, etc.
+        || (0x3040..=0x9FFF).contains(&c)  // Hiragana through CJK Unified Ideographs
+        || (0xAC00..=0xD7A3).contains(&c)  // Hangul Syllables
+        || (0xF900..=0xFAFF).contains(&c)  // CJK Compatibility Ideographs
+        || (0xFE10..=0xFE1F).contains(&c)  // Vertical forms
+        || (0xFF00..=0xFF60).contains(&c)  // Fullwidth forms
+        || (0xFFE0..=0xFFE6).contains(&c)  // Fullwidth currency/punctuation
+        || (0x20000..=0x2FFFF).contains(&c)  // CJK Extension B-F
+        || (0x30000..=0x3FFFF).contains(&c)
+    // CJK Extension G-H
+    {
+        return 2;
+    }
+
+    // Default to single width
+    1
+}
+
+/// Check if a character is a printable character for terminal display
+///
+/// Returns 1 if printable, 0 otherwise.
+#[no_mangle]
+pub extern "C" fn rs_char_is_printable(c: u32) -> c_int {
+    // Control characters are not printable
+    if c < 0x20 || (0x7F..=0x9F).contains(&c) {
+        return 0;
+    }
+
+    // Surrogate pairs and invalid Unicode
+    if (0xD800..=0xDFFF).contains(&c) || c > 0x10FFFF {
+        return 0;
+    }
+
+    // Private use area might not be displayable, but treat as printable
+    // (terminal may have custom glyphs)
+
+    1
+}
+
+/// Calculate the byte length of a UTF-8 encoded codepoint
+///
+/// Returns 1-4 for valid UTF-8 start bytes, 0 for continuation or invalid bytes.
+#[no_mangle]
+pub extern "C" fn rs_utf8_byte_len(first_byte: u8) -> c_int {
+    match first_byte {
+        0x00..=0x7F => 1,       // ASCII
+        0xC0..=0xDF => 2,       // 2-byte sequence
+        0xE0..=0xEF => 3,       // 3-byte sequence
+        0xF0..=0xF7 => 4,       // 4-byte sequence
+        0x80..=0xBF => 0,       // Continuation byte
+        _ => 0,                 // Invalid (0xF8-0xFF)
+    }
+}
+
+/// Check if a byte is a UTF-8 continuation byte
+#[no_mangle]
+pub extern "C" fn rs_is_utf8_continuation(byte: u8) -> c_int {
+    c_int::from((byte & 0xC0) == 0x80)
+}
+
+/// Validate a UTF-8 sequence and return its length
+///
+/// Returns the byte length of a valid UTF-8 sequence, or 0 if invalid.
+///
+/// # Safety
+///
+/// `bytes` must point to at least `len` valid bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_utf8_validate_len(bytes: *const u8, len: usize) -> c_int {
+    if bytes.is_null() || len == 0 {
+        return 0;
+    }
+
+    let first = *bytes;
+    let expected_len = rs_utf8_byte_len(first);
+
+    if expected_len == 0 || (expected_len as usize) > len {
+        return 0;
+    }
+
+    // Check continuation bytes
+    for i in 1..(expected_len as usize) {
+        let byte = *bytes.add(i);
+        if (byte & 0xC0) != 0x80 {
+            return 0;
+        }
+    }
+
+    expected_len
+}
+
+// ============================================================================
+// ANSI Escape Sequence Helpers
+// ============================================================================
+
+/// CSI (Control Sequence Introducer) length
+pub const CSI_LEN: usize = 2; // "\x1b["
+
+/// Calculate the number of digits needed to represent a number
+#[no_mangle]
+pub extern "C" fn rs_num_digits(mut n: u32) -> c_int {
+    if n == 0 {
+        return 1;
+    }
+
+    let mut count = 0;
+    while n > 0 {
+        count += 1;
+        n /= 10;
+    }
+    count
+}
+
+/// Calculate the length of a cursor position escape sequence
+///
+/// The sequence format is "\x1b[row;colH" where row and col are 1-based.
+#[no_mangle]
+pub extern "C" fn rs_cursor_move_seq_len(row: u32, col: u32) -> c_int {
+    // CSI + row + ';' + col + 'H'
+    (CSI_LEN + rs_num_digits(row) as usize + 1 + rs_num_digits(col) as usize + 1) as c_int
+}
+
+/// Calculate the length of a SGR (Select Graphic Rendition) reset sequence
+///
+/// Returns the length of "\x1b[0m" or "\x1b[m".
+#[no_mangle]
+pub extern "C" fn rs_sgr_reset_len() -> c_int {
+    4 // "\x1b[0m"
+}
+
+/// Check if a value represents the default foreground color
+#[no_mangle]
+pub extern "C" fn rs_is_default_fg(color: i32) -> c_int {
+    c_int::from(color == -1)
+}
+
+/// Check if a value represents the default background color
+#[no_mangle]
+pub extern "C" fn rs_is_default_bg(color: i32) -> c_int {
+    c_int::from(color == -1)
+}
+
+/// Calculate the length of an RGB color escape sequence
+///
+/// Format: "38;2;R;G;B" for foreground or "48;2;R;G;B" for background
+#[no_mangle]
+pub extern "C" fn rs_rgb_color_seq_len(r: u8, g: u8, b: u8, is_fg: c_int) -> c_int {
+    // "38;2;" or "48;2;" = 5 bytes
+    // + R digits + ';' + G digits + ';' + B digits
+    let len = 5
+        + rs_num_digits(r as u32) as usize
+        + 1
+        + rs_num_digits(g as u32) as usize
+        + 1
+        + rs_num_digits(b as u32) as usize;
+    let _ = is_fg; // Both fg and bg have same length
+    len as c_int
+}
+
+/// Calculate the length of a 256-color escape sequence
+///
+/// Format: "38;5;N" for foreground or "48;5;N" for background
+#[no_mangle]
+pub extern "C" fn rs_256_color_seq_len(color: u8, is_fg: c_int) -> c_int {
+    // "38;5;" or "48;5;" = 5 bytes + color digits
+    let _ = is_fg;
+    (5 + rs_num_digits(color as u32) as usize) as c_int
+}
+
+#[cfg(test)]
+mod extended_tests {
+    use super::*;
+
+    #[test]
+    fn test_char_display_width() {
+        // ASCII
+        assert_eq!(char_display_width_impl(b'A' as u32), 1);
+        assert_eq!(char_display_width_impl(b' ' as u32), 1);
+
+        // Control characters
+        assert_eq!(char_display_width_impl(0), 0);
+        assert_eq!(char_display_width_impl(0x1F), 0);
+
+        // CJK character (U+4E2D - Chinese "middle")
+        assert_eq!(char_display_width_impl(0x4E2D), 2);
+
+        // Combining character
+        assert_eq!(char_display_width_impl(0x0300), 0);
+    }
+
+    #[test]
+    fn test_utf8_byte_len() {
+        assert_eq!(rs_utf8_byte_len(b'A'), 1);
+        assert_eq!(rs_utf8_byte_len(0xC0), 2);
+        assert_eq!(rs_utf8_byte_len(0xE0), 3);
+        assert_eq!(rs_utf8_byte_len(0xF0), 4);
+        assert_eq!(rs_utf8_byte_len(0x80), 0); // continuation
+        assert_eq!(rs_utf8_byte_len(0xFF), 0); // invalid
+    }
+
+    #[test]
+    fn test_num_digits() {
+        assert_eq!(rs_num_digits(0), 1);
+        assert_eq!(rs_num_digits(1), 1);
+        assert_eq!(rs_num_digits(9), 1);
+        assert_eq!(rs_num_digits(10), 2);
+        assert_eq!(rs_num_digits(99), 2);
+        assert_eq!(rs_num_digits(100), 3);
+        assert_eq!(rs_num_digits(999), 3);
+        assert_eq!(rs_num_digits(1000), 4);
+    }
+
+    #[test]
+    fn test_cursor_move_seq_len() {
+        // "\x1b[1;1H" = 2 (CSI) + 1 (row) + 1 (;) + 1 (col) + 1 (H) = 6 bytes
+        assert_eq!(rs_cursor_move_seq_len(1, 1), 6);
+        // "\x1b[10;20H" = 2 (CSI) + 2 (row) + 1 (;) + 2 (col) + 1 (H) = 8 bytes
+        assert_eq!(rs_cursor_move_seq_len(10, 20), 8);
+        // "\x1b[100;200H" = 2 (CSI) + 3 (row) + 1 (;) + 3 (col) + 1 (H) = 10 bytes
+        assert_eq!(rs_cursor_move_seq_len(100, 200), 10);
+    }
+}
