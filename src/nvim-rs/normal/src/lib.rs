@@ -8,9 +8,11 @@
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_const_for_fn)]
 
+pub mod commands;
 pub mod count;
 pub mod execute;
 pub mod operator;
+pub mod pending;
 pub mod visual;
 
 use std::ffi::{c_int, c_uint};
