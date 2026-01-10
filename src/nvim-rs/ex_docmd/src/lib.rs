@@ -13,11 +13,13 @@
 
 pub mod address;
 pub mod args;
+pub mod completion;
 pub mod dispatch;
 pub mod errors;
 pub mod execute;
 pub mod lookup;
 pub mod modifiers;
+pub mod range;
 pub mod source;
 pub mod table;
 
@@ -26,11 +28,13 @@ use std::ptr;
 
 pub use address::*;
 pub use args::*;
+pub use completion::*;
 pub use dispatch::*;
 pub use errors::*;
 pub use execute::*;
 pub use lookup::*;
 pub use modifiers::*;
+pub use range::*;
 pub use source::*;
 pub use table::*;
 

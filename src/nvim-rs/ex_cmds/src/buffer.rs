@@ -149,11 +149,19 @@ pub const fn calc_next_bufnr(
     match direction {
         BufferNavDirection::Next => {
             let next = current + count;
-            if next > max_bufnr { 1 } else { next }
+            if next > max_bufnr {
+                1
+            } else {
+                next
+            }
         }
         BufferNavDirection::Previous => {
             let prev = current - count;
-            if prev < 1 { max_bufnr } else { prev }
+            if prev < 1 {
+                max_bufnr
+            } else {
+                prev
+            }
         }
         BufferNavDirection::First => 1,
         BufferNavDirection::Last => max_bufnr,
@@ -203,7 +211,9 @@ pub fn parse_bufnr(arg: &[u8]) -> c_int {
     let mut result: c_int = 0;
     for &c in arg {
         if c.is_ascii_digit() {
-            result = result.saturating_mul(10).saturating_add((c - b'0') as c_int);
+            result = result
+                .saturating_mul(10)
+                .saturating_add((c - b'0') as c_int);
         } else {
             break;
         }

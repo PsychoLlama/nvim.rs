@@ -129,7 +129,11 @@ pub const fn validate_list_range(
         0
     } else if start < 0 {
         let s = len + start;
-        if s < 0 { 0 } else { s }
+        if s < 0 {
+            0
+        } else {
+            s
+        }
     } else if start >= len {
         len
     } else {
@@ -141,7 +145,11 @@ pub const fn validate_list_range(
         len
     } else if end < 0 {
         let e = len + end + 1;
-        if e < 0 { 0 } else { e }
+        if e < 0 {
+            0
+        } else {
+            e
+        }
     } else if end >= len {
         len
     } else {

@@ -295,7 +295,11 @@ pub extern "C" fn rs_split_position_from_options(
 
 /// FFI: Calculate split size.
 #[no_mangle]
-pub extern "C" fn rs_calc_split_size(total_size: c_int, requested: c_int, min_size: c_int) -> c_int {
+pub extern "C" fn rs_calc_split_size(
+    total_size: c_int,
+    requested: c_int,
+    min_size: c_int,
+) -> c_int {
     calc_split_size(total_size, requested, min_size)
 }
 

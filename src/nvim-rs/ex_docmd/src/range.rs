@@ -1,0 +1,664 @@
+//! Range parsing and manipulation utilities for Ex commands.
+//!
+//! This module provides functions for parsing and manipulating line ranges
+//! in Ex commands, such as `1,5`, `%`, `'a,'b`, `.,$`, etc.
+
+use std::ffi::{c_char, c_int, c_long};
+
+// =============================================================================
+// FFI declarations
+// =============================================================================
+
+extern "C" {
+    fn skipwhite(p: *const c_char) -> *mut c_char;
+}
+
+// =============================================================================
+// Range representation
+// =============================================================================
+
+/// A line range for Ex commands.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LineRange {
+    /// First line (1-based), 0 means unset.
+    pub line1: c_long,
+    /// Second line (1-based), 0 means unset.
+    pub line2: c_long,
+    /// Number of addresses given (0, 1, or 2).
+    pub addr_count: c_int,
+}
+
+impl LineRange {
+    /// Create an empty range.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            line1: 0,
+            line2: 0,
+            addr_count: 0,
+        }
+    }
+
+    /// Create a single-line range.
+    #[must_use]
+    pub const fn single(line: c_long) -> Self {
+        Self {
+            line1: line,
+            line2: line,
+            addr_count: 1,
+        }
+    }
+
+    /// Create a two-address range.
+    #[must_use]
+    pub const fn from_pair(line1: c_long, line2: c_long) -> Self {
+        Self {
+            line1,
+            line2,
+            addr_count: 2,
+        }
+    }
+
+    /// Check if the range is empty (no address given).
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.addr_count == 0
+    }
+
+    /// Check if the range is a single line.
+    #[must_use]
+    pub const fn is_single(&self) -> bool {
+        self.addr_count == 1
+    }
+
+    /// Check if the range has two addresses.
+    #[must_use]
+    pub const fn is_pair(&self) -> bool {
+        self.addr_count >= 2
+    }
+
+    /// Check if the range is valid (line1 <= line2).
+    #[must_use]
+    pub const fn is_valid(&self) -> bool {
+        self.line1 <= self.line2
+    }
+
+    /// Normalize the range so line1 <= line2.
+    pub fn normalize(&mut self) {
+        if self.line1 > self.line2 {
+            std::mem::swap(&mut self.line1, &mut self.line2);
+        }
+    }
+
+    /// Get the number of lines in the range.
+    #[must_use]
+    pub const fn count(&self) -> c_long {
+        if self.line1 <= self.line2 && self.addr_count > 0 {
+            self.line2 - self.line1 + 1
+        } else {
+            0
+        }
+    }
+
+    /// Clamp the range to valid buffer lines.
+    pub fn clamp(&mut self, max_line: c_long) {
+        if self.line1 < 1 {
+            self.line1 = 1;
+        }
+        if self.line2 < 1 {
+            self.line2 = 1;
+        }
+        if self.line1 > max_line {
+            self.line1 = max_line;
+        }
+        if self.line2 > max_line {
+            self.line2 = max_line;
+        }
+    }
+
+    /// Check if a line is within the range.
+    #[must_use]
+    pub const fn contains(&self, line: c_long) -> bool {
+        line >= self.line1 && line <= self.line2
+    }
+}
+
+// =============================================================================
+// Range parsing state
+// =============================================================================
+
+/// State during range parsing.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RangeParseState {
+    /// Whether % was used (whole file).
+    pub whole_file: bool,
+    /// Whether # was used (alternate file).
+    pub alternate: bool,
+    /// Whether . was used (current line).
+    pub current_line: bool,
+    /// Whether $ was used (last line).
+    pub last_line: bool,
+    /// Whether a mark was used.
+    pub used_mark: bool,
+    /// Whether a search pattern was used.
+    pub used_search: bool,
+    /// Whether a visual range was used.
+    pub visual_range: bool,
+}
+
+impl RangeParseState {
+    /// Create new parse state.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            whole_file: false,
+            alternate: false,
+            current_line: false,
+            last_line: false,
+            used_mark: false,
+            used_search: false,
+            visual_range: false,
+        }
+    }
+
+    /// Reset the parse state.
+    pub fn reset(&mut self) {
+        *self = Self::new();
+    }
+
+    /// Check if any special range was used.
+    #[must_use]
+    pub const fn has_special(&self) -> bool {
+        self.whole_file
+            || self.alternate
+            || self.current_line
+            || self.last_line
+            || self.used_mark
+            || self.used_search
+            || self.visual_range
+    }
+}
+
+// =============================================================================
+// Address element characters
+// =============================================================================
+
+/// Check if character is a range address character.
+///
+/// Address characters: digits, '.', '$', '%', '\'', '/', '?', '+', '-', '\\', '*'
+#[inline]
+pub const fn is_addr_char(c: u8) -> bool {
+    c.is_ascii_digit()
+        || matches!(
+            c,
+            b'.' | b'$' | b'%' | b'\'' | b'/' | b'?' | b'+' | b'-' | b'\\' | b'*'
+        )
+}
+
+/// Check if character starts a numeric address.
+#[inline]
+pub const fn is_addr_digit(c: u8) -> bool {
+    c.is_ascii_digit() || matches!(c, b'+' | b'-')
+}
+
+/// Check if character is a range separator.
+#[inline]
+pub const fn is_range_sep(c: u8) -> bool {
+    c == b',' || c == b';'
+}
+
+/// FFI wrapper for is_addr_char.
+#[no_mangle]
+#[allow(clippy::manual_range_contains)]
+pub extern "C" fn rs_is_addr_char(c: c_int) -> c_int {
+    if c < 0 || c > 127 {
+        return 0;
+    }
+    c_int::from(is_addr_char(c as u8))
+}
+
+/// FFI wrapper for is_addr_digit.
+#[no_mangle]
+#[allow(clippy::manual_range_contains)]
+pub extern "C" fn rs_is_addr_digit(c: c_int) -> c_int {
+    if c < 0 || c > 127 {
+        return 0;
+    }
+    c_int::from(is_addr_digit(c as u8))
+}
+
+/// FFI wrapper for is_range_sep.
+#[no_mangle]
+#[allow(clippy::manual_range_contains)]
+pub extern "C" fn rs_is_range_sep(c: c_int) -> c_int {
+    if c < 0 || c > 127 {
+        return 0;
+    }
+    c_int::from(is_range_sep(c as u8))
+}
+
+// =============================================================================
+// Range utilities
+// =============================================================================
+
+/// Skip over an address specification.
+///
+/// Returns a pointer past the address, or the original pointer if no address.
+///
+/// # Safety
+///
+/// `p` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_skip_address(p: *const c_char) -> *const c_char {
+    if p.is_null() {
+        return p;
+    }
+
+    let mut ptr = p;
+
+    // Skip leading whitespace
+    ptr = skipwhite(ptr) as *const c_char;
+
+    // Skip address characters
+    loop {
+        let c = *ptr as u8;
+        if c == 0 {
+            break;
+        }
+
+        if c.is_ascii_digit() {
+            // Skip digits
+            while (*ptr as u8).is_ascii_digit() {
+                ptr = ptr.add(1);
+            }
+        } else if c == b'.' || c == b'$' || c == b'%' || c == b'*' {
+            ptr = ptr.add(1);
+        } else if c == b'\'' {
+            // Mark - skip ' and mark character
+            ptr = ptr.add(1);
+            if *ptr != 0 {
+                ptr = ptr.add(1);
+            }
+        } else if c == b'/' || c == b'?' {
+            // Search pattern - skip to matching delimiter
+            let delim = c;
+            ptr = ptr.add(1);
+            while *ptr != 0 && (*ptr as u8) != delim {
+                if *ptr as u8 == b'\\' && *ptr.add(1) != 0 {
+                    ptr = ptr.add(1);
+                }
+                ptr = ptr.add(1);
+            }
+            if *ptr != 0 {
+                ptr = ptr.add(1);
+            }
+        } else if c == b'+' || c == b'-' {
+            // Offset
+            ptr = ptr.add(1);
+            // Skip optional digits
+            while (*ptr as u8).is_ascii_digit() {
+                ptr = ptr.add(1);
+            }
+        } else if c == b'\\' {
+            // Special marks: \/, \?, \&
+            if matches!(*ptr.add(1) as u8, b'/' | b'?' | b'&') {
+                ptr = ptr.add(2);
+            } else {
+                break;
+            }
+        } else {
+            break;
+        }
+
+        // Skip whitespace between parts
+        while (*ptr as u8) == b' ' || (*ptr as u8) == b'\t' {
+            ptr = ptr.add(1);
+        }
+    }
+
+    ptr
+}
+
+/// Parse a simple line number from the start of a string.
+///
+/// Returns the number and sets `consumed` to the number of characters consumed.
+/// Returns 0 if no number found.
+///
+/// # Safety
+///
+/// `s` must be a valid null-terminated C string.
+/// `consumed` must be valid for writes if non-null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_line_number(s: *const c_char, consumed: *mut c_int) -> c_long {
+    if s.is_null() {
+        if !consumed.is_null() {
+            *consumed = 0;
+        }
+        return 0;
+    }
+
+    let mut ptr = s;
+    let mut negative = false;
+
+    // Check for sign
+    if *ptr as u8 == b'-' {
+        negative = true;
+        ptr = ptr.add(1);
+    } else if *ptr as u8 == b'+' {
+        ptr = ptr.add(1);
+    }
+
+    // Parse digits
+    let mut value: c_long = 0;
+    let mut has_digits = false;
+    while (*ptr as u8).is_ascii_digit() {
+        has_digits = true;
+        value = value
+            .saturating_mul(10)
+            .saturating_add((*ptr as u8 - b'0') as c_long);
+        ptr = ptr.add(1);
+    }
+
+    if !consumed.is_null() {
+        *consumed = (ptr as usize - s as usize) as c_int;
+    }
+
+    if !has_digits {
+        return 0;
+    }
+
+    if negative {
+        -value
+    } else {
+        value
+    }
+}
+
+// =============================================================================
+// Default range calculation
+// =============================================================================
+
+/// Get the default line for a command without an address (usually current line = 0 means use cursor).
+#[no_mangle]
+pub extern "C" fn rs_default_line() -> c_long {
+    0 // Caller should interpret 0 as "use cursor line"
+}
+
+/// Create a whole-file range from given line count.
+#[no_mangle]
+pub extern "C" fn rs_make_whole_file_range(last_line: c_long) -> LineRange {
+    if last_line <= 0 {
+        LineRange::single(1)
+    } else {
+        LineRange::from_pair(1, last_line)
+    }
+}
+
+// =============================================================================
+// Range FFI exports
+// =============================================================================
+
+/// Create an empty line range.
+#[no_mangle]
+pub extern "C" fn rs_line_range_new() -> LineRange {
+    LineRange::new()
+}
+
+/// Create a single-line range.
+#[no_mangle]
+pub extern "C" fn rs_line_range_single(line: c_long) -> LineRange {
+    LineRange::single(line)
+}
+
+/// Create a pair range.
+#[no_mangle]
+pub extern "C" fn rs_line_range_pair(line1: c_long, line2: c_long) -> LineRange {
+    LineRange::from_pair(line1, line2)
+}
+
+/// Check if range is empty.
+///
+/// # Safety
+/// `range` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_line_range_is_empty(range: *const LineRange) -> c_int {
+    if range.is_null() {
+        return 1;
+    }
+    c_int::from((*range).is_empty())
+}
+
+/// Check if range is single line.
+///
+/// # Safety
+/// `range` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_line_range_is_single(range: *const LineRange) -> c_int {
+    if range.is_null() {
+        return 0;
+    }
+    c_int::from((*range).is_single())
+}
+
+/// Check if range is valid.
+///
+/// # Safety
+/// `range` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_line_range_is_valid(range: *const LineRange) -> c_int {
+    if range.is_null() {
+        return 0;
+    }
+    c_int::from((*range).is_valid())
+}
+
+/// Normalize range so line1 <= line2.
+///
+/// # Safety
+/// `range` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_line_range_normalize(range: *mut LineRange) {
+    if !range.is_null() {
+        (*range).normalize();
+    }
+}
+
+/// Get line count in range.
+///
+/// # Safety
+/// `range` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_line_range_count(range: *const LineRange) -> c_long {
+    if range.is_null() {
+        return 0;
+    }
+    (*range).count()
+}
+
+/// Clamp range to buffer bounds.
+///
+/// # Safety
+/// `range` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_line_range_clamp(range: *mut LineRange, max_line: c_long) {
+    if !range.is_null() {
+        (*range).clamp(max_line);
+    }
+}
+
+/// Check if range contains a line.
+///
+/// # Safety
+/// `range` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_line_range_contains(range: *const LineRange, line: c_long) -> c_int {
+    if range.is_null() {
+        return 0;
+    }
+    c_int::from((*range).contains(line))
+}
+
+// =============================================================================
+// RangeParseState FFI
+// =============================================================================
+
+/// Create new parse state.
+#[no_mangle]
+pub extern "C" fn rs_range_parse_state_new() -> RangeParseState {
+    RangeParseState::new()
+}
+
+/// Reset parse state.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_range_parse_state_reset(state: *mut RangeParseState) {
+    if !state.is_null() {
+        (*state).reset();
+    }
+}
+
+/// Check if parse state has special range.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_range_parse_state_has_special(state: *const RangeParseState) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    c_int::from((*state).has_special())
+}
+
+// =============================================================================
+// Tests
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_line_range_new() {
+        let range = LineRange::new();
+        assert!(range.is_empty());
+        assert!(!range.is_single());
+        assert!(!range.is_pair());
+        assert_eq!(range.count(), 0);
+    }
+
+    #[test]
+    fn test_line_range_single() {
+        let range = LineRange::single(5);
+        assert!(!range.is_empty());
+        assert!(range.is_single());
+        assert!(!range.is_pair());
+        assert_eq!(range.line1, 5);
+        assert_eq!(range.line2, 5);
+        assert_eq!(range.count(), 1);
+    }
+
+    #[test]
+    fn test_line_range_pair() {
+        let range = LineRange::from_pair(3, 10);
+        assert!(!range.is_empty());
+        assert!(!range.is_single());
+        assert!(range.is_pair());
+        assert_eq!(range.line1, 3);
+        assert_eq!(range.line2, 10);
+        assert_eq!(range.count(), 8);
+    }
+
+    #[test]
+    fn test_line_range_normalize() {
+        let mut range = LineRange::from_pair(10, 3);
+        assert!(!range.is_valid());
+        range.normalize();
+        assert!(range.is_valid());
+        assert_eq!(range.line1, 3);
+        assert_eq!(range.line2, 10);
+    }
+
+    #[test]
+    fn test_line_range_clamp() {
+        let mut range = LineRange::from_pair(0, 100);
+        range.clamp(50);
+        assert_eq!(range.line1, 1);
+        assert_eq!(range.line2, 50);
+
+        let mut range = LineRange::from_pair(-5, 30);
+        range.clamp(20);
+        assert_eq!(range.line1, 1);
+        assert_eq!(range.line2, 20);
+    }
+
+    #[test]
+    fn test_line_range_contains() {
+        let range = LineRange::from_pair(5, 15);
+        assert!(!range.contains(4));
+        assert!(range.contains(5));
+        assert!(range.contains(10));
+        assert!(range.contains(15));
+        assert!(!range.contains(16));
+    }
+
+    #[test]
+    fn test_is_addr_char() {
+        assert!(is_addr_char(b'0'));
+        assert!(is_addr_char(b'9'));
+        assert!(is_addr_char(b'.'));
+        assert!(is_addr_char(b'$'));
+        assert!(is_addr_char(b'%'));
+        assert!(is_addr_char(b'\''));
+        assert!(is_addr_char(b'/'));
+        assert!(is_addr_char(b'?'));
+        assert!(is_addr_char(b'+'));
+        assert!(is_addr_char(b'-'));
+        assert!(!is_addr_char(b'x'));
+        assert!(!is_addr_char(b' '));
+    }
+
+    #[test]
+    fn test_is_range_sep() {
+        assert!(is_range_sep(b','));
+        assert!(is_range_sep(b';'));
+        assert!(!is_range_sep(b':'));
+        assert!(!is_range_sep(b'.'));
+    }
+
+    #[test]
+    fn test_range_parse_state() {
+        let state = RangeParseState::new();
+        assert!(!state.has_special());
+
+        let mut state = RangeParseState::new();
+        state.whole_file = true;
+        assert!(state.has_special());
+
+        state.reset();
+        assert!(!state.has_special());
+
+        state.used_mark = true;
+        assert!(state.has_special());
+    }
+
+    #[test]
+    fn test_ffi_addr_chars() {
+        assert_eq!(rs_is_addr_char(b'.' as c_int), 1);
+        assert_eq!(rs_is_addr_char(b'$' as c_int), 1);
+        assert_eq!(rs_is_addr_char(b'x' as c_int), 0);
+        assert_eq!(rs_is_addr_char(-1), 0);
+        assert_eq!(rs_is_addr_char(200), 0);
+
+        assert_eq!(rs_is_addr_digit(b'5' as c_int), 1);
+        assert_eq!(rs_is_addr_digit(b'+' as c_int), 1);
+        assert_eq!(rs_is_addr_digit(b'.' as c_int), 0);
+
+        assert_eq!(rs_is_range_sep(b',' as c_int), 1);
+        assert_eq!(rs_is_range_sep(b';' as c_int), 1);
+        assert_eq!(rs_is_range_sep(b':' as c_int), 0);
+    }
+}
