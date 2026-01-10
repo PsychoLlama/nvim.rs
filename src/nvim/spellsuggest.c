@@ -61,6 +61,31 @@ extern int rs_bytes2offset(const uint8_t **pp);
 // Rust edit distance implementations
 extern int rs_spell_edit_score(slang_T *slang, const char *badword, const char *goodword);
 extern int rs_spell_edit_score_limit(slang_T *slang, const char *badword, const char *goodword, int limit);
+extern int rs_soundalike_score(const char *goodstart, const char *badstart);
+
+// Rust score computation functions
+extern int rs_rescore_suggestion(int word_score, int sound_score);
+extern int rs_maxscore_for_suggestion(int max_score, int sound_score);
+extern int rs_score_maxmax(void);
+extern int rs_score_big_suggest(void);
+extern size_t rs_maxsug(void);
+
+// Rust byte manipulation for suggestions
+extern bool rs_swap_bytes(uint8_t *word, size_t word_len, size_t pos);
+extern bool rs_swap3_bytes(uint8_t *word, size_t word_len, size_t pos);
+extern bool rs_rotate3_left(uint8_t *word, size_t word_len, size_t pos);
+extern bool rs_rotate3_right(uint8_t *word, size_t word_len, size_t pos);
+extern size_t rs_delete_byte(uint8_t *word, size_t word_len, size_t pos);
+extern bool rs_insert_byte(uint8_t *word, size_t word_len, size_t *new_len, size_t pos, uint8_t byte);
+extern bool rs_substitute_byte(uint8_t *word, size_t word_len, size_t pos, uint8_t byte);
+
+// Rust suggestion comparison functions
+extern int rs_suggestion_compare(const void *a, const void *b);
+extern bool rs_suggestion_same_word(const void *a, const void *b);
+
+// Rust REP replacement functions
+extern int rs_rep_matches_at(const char *word, size_t word_len, const char *from, size_t from_len, size_t pos);
+extern bool rs_apply_rep(char *word, size_t word_cap, size_t *word_len, const char *from, size_t from_len, const char *to, size_t to_len, size_t pos);
 
 // Use this to adjust the score after finding suggestions, based on the
 // suggested word sounding like the bad word.  This is much faster than doing
@@ -73,6 +98,97 @@ extern int rs_spell_edit_score_limit(slang_T *slang, const char *badword, const 
 // Do the opposite: based on a maximum end score and a known sound score,
 // compute the maximum word score that can be used.
 #define MAXSCORE(word_score, sound_score) ((4 * (word_score) - (sound_score)) / 3)
+
+/// Rescore a suggestion. Rust implementation.
+static int rescore_sug(int word_score, int sound_score)
+  FUNC_ATTR_CONST
+{
+  return rs_rescore_suggestion(word_score, sound_score);
+}
+
+/// Compute max word score for a given max end score. Rust implementation.
+static int maxscore_sug(int max_score, int sound_score)
+  FUNC_ATTR_CONST
+{
+  return rs_maxscore_for_suggestion(max_score, sound_score);
+}
+
+/// Get SCORE_MAXMAX constant. Rust implementation.
+static int get_score_maxmax(void)
+  FUNC_ATTR_CONST
+{
+  return rs_score_maxmax();
+}
+
+/// Get SCORE_BIG constant. Rust implementation.
+static int get_score_big(void)
+  FUNC_ATTR_CONST
+{
+  return rs_score_big_suggest();
+}
+
+/// Get maximum suggestions constant. Rust implementation.
+static size_t get_maxsug(void)
+  FUNC_ATTR_CONST
+{
+  return rs_maxsug();
+}
+
+/// Swap two adjacent bytes in a word. Rust implementation.
+static bool swap_bytes(uint8_t *word, size_t word_len, size_t pos)
+{
+  return rs_swap_bytes(word, word_len, pos);
+}
+
+/// Swap bytes over 3 positions. Rust implementation.
+static bool swap3_bytes(uint8_t *word, size_t word_len, size_t pos)
+{
+  return rs_swap3_bytes(word, word_len, pos);
+}
+
+/// Rotate 3 bytes left. Rust implementation.
+static bool rotate3_left(uint8_t *word, size_t word_len, size_t pos)
+{
+  return rs_rotate3_left(word, word_len, pos);
+}
+
+/// Rotate 3 bytes right. Rust implementation.
+static bool rotate3_right(uint8_t *word, size_t word_len, size_t pos)
+{
+  return rs_rotate3_right(word, word_len, pos);
+}
+
+/// Delete a byte from a word. Rust implementation.
+static size_t delete_byte(uint8_t *word, size_t word_len, size_t pos)
+{
+  return rs_delete_byte(word, word_len, pos);
+}
+
+/// Insert a byte into a word. Rust implementation.
+static bool insert_byte(uint8_t *word, size_t word_len, size_t *new_len, size_t pos, uint8_t byte)
+{
+  return rs_insert_byte(word, word_len, new_len, pos, byte);
+}
+
+/// Substitute a byte in a word. Rust implementation.
+static bool substitute_byte(uint8_t *word, size_t word_len, size_t pos, uint8_t byte)
+{
+  return rs_substitute_byte(word, word_len, pos, byte);
+}
+
+/// Check if REP matches at position. Rust implementation.
+static int rep_matches_at(const char *word, size_t word_len, const char *from, size_t from_len,
+                          size_t pos)
+{
+  return rs_rep_matches_at(word, word_len, from, from_len, pos);
+}
+
+/// Apply REP replacement. Rust implementation.
+static bool apply_rep(char *word, size_t word_cap, size_t *word_len, const char *from,
+                      size_t from_len, const char *to, size_t to_len, size_t pos)
+{
+  return rs_apply_rep(word, word_cap, word_len, from, from_len, to, to_len, pos);
+}
 
 // only used for su_badflags
 #define WF_MIXCAP   0x20        // mix of upper and lower case: macaRONI
@@ -3224,8 +3340,6 @@ static int cleanup_suggestions(garray_T *gap, int maxscore, int keep)
   }
   return maxscore;
 }
-
-extern int rs_soundalike_score(const char *goodstart, const char *badstart);
 
 /// Compute a score for two sound-a-like words.
 /// This permits up to two inserts/deletes/swaps/etc. to keep things fast.
