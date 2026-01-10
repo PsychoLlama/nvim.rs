@@ -181,6 +181,171 @@ extern int rs_msg_use_grid(void);
 extern int rs_msg_scrollsize(void);
 extern int rs_msg_do_throttle(void);
 
+// Phase 6: Message state functions from Rust
+extern int rs_msg_scrolled(void);
+extern int rs_msg_scroll(void);
+extern void rs_set_msg_scroll(int val);
+extern int rs_msg_hist_off(void);
+extern void rs_set_msg_hist_off(int val);
+extern int rs_keep_msg_more(void);
+extern int rs_msg_didany(void);
+extern void rs_set_msg_didany(int val);
+extern int rs_msg_didout(void);
+extern void rs_set_msg_didout(int val);
+extern int rs_msg_nowait(void);
+extern void rs_set_msg_nowait(int val);
+extern int rs_lines_left(void);
+extern void rs_set_lines_left(int val);
+extern int rs_need_wait_return(void);
+extern void rs_set_need_wait_return(int val);
+extern int rs_emsg_on_display(void);
+extern void rs_set_emsg_on_display(int val);
+extern int rs_need_fileinfo(void);
+extern void rs_set_need_fileinfo(int val);
+
+// Phase 6: Message attributes from Rust
+extern int rs_msg_hl_id2attr(int hl_id);
+extern int rs_msg_combine_attr(int hl_id);
+extern int rs_msg_error_attr(void);
+extern int rs_msg_warning_attr(void);
+extern int rs_msg_area_attr(void);
+extern int rs_msg_more_attr(void);
+extern int rs_msg_special_attr(void);
+extern int rs_msg_question_attr(void);
+extern int rs_msg_title_attr(void);
+
+// Phase 6: Message position functions from Rust
+extern int rs_msg_col(void);
+extern void rs_set_msg_col(int col);
+extern int rs_msg_row(void);
+extern void rs_set_msg_row(int row);
+extern int rs_msg_room(void);
+extern int rs_msg_should_truncate(void);
+extern int rs_cmdline_row(void);
+extern int rs_msg_clamp_col(int col);
+
+// Phase 6: Message checks from Rust
+extern int rs_msg_overflow(void);
+extern int rs_msg_check_wait_return(void);
+extern int rs_msg_need_more(void);
+extern int rs_msg_dec_lines_left(void);
+extern int rs_shortmess(int flag);
+extern int rs_msg_strsize(const char *s);
+extern int rs_msg_needs_truncation(const char *s);
+extern int rs_msg_advance_spaces(int col);
+extern int rs_screen_columns(void);
+extern int rs_screen_rows(void);
+extern int rs_msg_trunc_len(const char *s, int width);
+extern int rs_msg_trunc_bufsize(int room);
+extern int rs_msg_trunc_room(int room_in);
+extern int rs_msg_trunc_half(int room_in);
+extern int rs_msg_fits(int len, int room);
+extern int rs_msg_outtrans_long_room(void);
+extern int rs_msg_outtrans_long_should_trunc(int len, int room);
+extern int rs_msg_outtrans_long_slen(int room);
+extern int rs_msg_silent(void);
+extern int rs_is_msg_silent(void);
+
+// Phase 6: Error message state from Rust
+extern int rs_emsg_off(void);
+extern void rs_set_emsg_off(int val);
+extern void rs_emsg_off_enter(void);
+extern void rs_emsg_off_leave(void);
+extern int rs_is_emsg_off(void);
+extern int rs_emsg_skip(void);
+extern void rs_set_emsg_skip(int val);
+extern void rs_emsg_skip_enter(void);
+extern void rs_emsg_skip_leave(void);
+extern int rs_emsg_silent(void);
+extern void rs_set_emsg_silent(int val);
+extern void rs_emsg_silent_enter(void);
+extern void rs_emsg_silent_leave(void);
+extern int rs_is_emsg_silent(void);
+extern int rs_emsg_severe(void);
+extern void rs_set_emsg_severe(int val);
+extern int rs_emsg_noredir(void);
+extern void rs_set_emsg_noredir(int val);
+extern int rs_did_emsg(void);
+extern void rs_set_did_emsg(int val);
+extern void rs_inc_did_emsg(void);
+extern int rs_has_did_emsg(void);
+extern int rs_called_emsg(void);
+extern void rs_set_called_emsg(int val);
+extern void rs_inc_called_emsg(void);
+extern int rs_emsg_not_now_simple(void);
+extern int rs_is_emsg_suppressed(void);
+extern int rs_emsg_save_state(void);
+extern void rs_emsg_restore_state(int state);
+extern int rs_did_emsg_syntax(void);
+extern int rs_emsg_now(void);
+extern void rs_emsg_reset_counters(void);
+extern int rs_emsg_suppression_depth(void);
+
+// Phase 6: Dialog functions from Rust
+extern int rs_is_dialog_button_sep(int c);
+extern int rs_is_dialog_hotkey_char(int c);
+extern int rs_dialog_button_sep(void);
+extern int rs_dialog_hotkey_char(void);
+extern int rs_dialog_yes(void);
+extern int rs_dialog_no(void);
+extern int rs_dialog_cancel(void);
+extern int rs_dialog_all(void);
+extern int rs_dialog_discard_all(void);
+extern int rs_count_dialog_buttons(const char *buttons);
+extern const char *rs_find_dialog_button(const char *buttons, int n);
+extern int rs_dialog_type_generic(void);
+extern int rs_dialog_type_error(void);
+extern int rs_dialog_type_warning(void);
+extern int rs_dialog_type_info(void);
+extern int rs_dialog_type_question(void);
+extern int rs_dialog_is_error_or_warning(int dialog_type);
+
+// Phase 6: Scrollback buffer functions from Rust
+extern int rs_sb_clear_state(void);
+extern void rs_set_sb_clear_state(int state);
+extern int rs_sb_should_clear(void);
+extern int rs_sb_cmdline_busy(void);
+extern void rs_sb_mark_eol(void);
+extern void rs_sb_start_cmdline(void);
+extern void rs_sb_restart_cmdline(void);
+extern void rs_sb_end_cmdline(void);
+extern void rs_sb_schedule_clear(void);
+extern void rs_sb_clear(int all);
+extern int rs_sb_line_count(void);
+extern int rs_sb_has_content(void);
+extern int rs_sb_empty(void);
+extern int rs_sb_clear_none(void);
+extern int rs_sb_clear_all(void);
+extern int rs_sb_clear_cmdline_busy(void);
+extern int rs_sb_clear_cmdline_done(void);
+extern void rs_sb_reset_clear_state(void);
+extern int rs_is_silent_mode(void);
+
+// Phase 6: Message history from Rust
+extern int rs_msg_hist_len(void);
+extern int rs_msg_hist_max(void);
+extern void rs_set_msg_hist_len(int len);
+extern void rs_inc_msg_hist_len(void);
+extern void rs_dec_msg_hist_len(void);
+extern int rs_msg_hist_disabled(void);
+extern int rs_msg_hist_at_capacity(void);
+extern int rs_msg_hist_empty(void);
+extern int rs_msg_hist_count(void);
+extern int rs_msg_hist_temp_count(void);
+
+// Phase 6: Confirm message from Rust
+extern const char *rs_confirm_msg(void);
+extern void rs_set_confirm_msg(const char *msg);
+extern int rs_confirm_msg_used(void);
+extern int rs_is_confirm_msg_used(void);
+extern void rs_confirm_msg_enter(void);
+extern void rs_confirm_msg_leave(void);
+extern const char *rs_confirm_buttons(void);
+extern void rs_set_confirm_buttons(const char *buttons);
+extern int rs_has_confirm_msg(void);
+extern void rs_clear_confirm_msg(void);
+extern void rs_clear_confirm_buttons(void);
+
 /// C accessor for msg_scrolled global.
 int nvim_get_msg_scrolled(void)
 {
@@ -365,6 +530,321 @@ int nvim_get_keep_msg_more(void) { return keep_msg_more ? 1 : 0; }
 int nvim_syn_id2attr(int hl_id) { return syn_id2attr(hl_id); }
 int nvim_hl_combine_attr(int a, int b) { return hl_combine_attr(a, b); }
 int nvim_hl_attr(int hlf) { return hl_attr_active[hlf]; }
+
+// Phase 6: Wrapper functions for Rust implementations
+
+/// Get error attribute. Rust implementation.
+static int msg_get_error_attr(void)
+  FUNC_ATTR_PURE
+{
+  return rs_msg_error_attr();
+}
+
+/// Get warning attribute. Rust implementation.
+static int msg_get_warning_attr(void)
+  FUNC_ATTR_PURE
+{
+  return rs_msg_warning_attr();
+}
+
+/// Get message area attribute. Rust implementation.
+static int msg_get_area_attr(void)
+  FUNC_ATTR_PURE
+{
+  return rs_msg_area_attr();
+}
+
+/// Get more prompt attribute. Rust implementation.
+static int msg_get_more_attr(void)
+  FUNC_ATTR_PURE
+{
+  return rs_msg_more_attr();
+}
+
+/// Get special message attribute. Rust implementation.
+static int msg_get_special_attr(void)
+  FUNC_ATTR_PURE
+{
+  return rs_msg_special_attr();
+}
+
+/// Get question attribute. Rust implementation.
+static int msg_get_question_attr(void)
+  FUNC_ATTR_PURE
+{
+  return rs_msg_question_attr();
+}
+
+/// Get title attribute. Rust implementation.
+static int msg_get_title_attr(void)
+  FUNC_ATTR_PURE
+{
+  return rs_msg_title_attr();
+}
+
+/// Check if should truncate message. Rust implementation.
+static bool msg_do_truncate(void)
+  FUNC_ATTR_PURE
+{
+  return rs_msg_should_truncate() != 0;
+}
+
+/// Get message room. Rust implementation.
+static int msg_get_room(void)
+  FUNC_ATTR_PURE
+{
+  return rs_msg_room();
+}
+
+/// Check message overflow. Rust implementation.
+static bool msg_is_overflow(void)
+  FUNC_ATTR_PURE
+{
+  return rs_msg_overflow() != 0;
+}
+
+/// Check if wait return needed. Rust implementation.
+static bool msg_check_wait(void)
+  FUNC_ATTR_PURE
+{
+  return rs_msg_check_wait_return() != 0;
+}
+
+/// Check if more prompt needed. Rust implementation.
+static bool msg_more_needed(void)
+  FUNC_ATTR_PURE
+{
+  return rs_msg_need_more() != 0;
+}
+
+/// Get screen columns. Rust implementation.
+static int msg_screen_cols(void)
+  FUNC_ATTR_PURE
+{
+  return rs_screen_columns();
+}
+
+/// Get screen rows. Rust implementation.
+static int msg_screen_rows(void)
+  FUNC_ATTR_PURE
+{
+  return rs_screen_rows();
+}
+
+/// Get truncation buffer size. Rust implementation.
+static int msg_get_trunc_bufsize(int room)
+  FUNC_ATTR_PURE
+{
+  return rs_msg_trunc_bufsize(room);
+}
+
+/// Get truncation room. Rust implementation.
+static int msg_get_trunc_room(int room_in)
+  FUNC_ATTR_PURE
+{
+  return rs_msg_trunc_room(room_in);
+}
+
+/// Get truncation half. Rust implementation.
+static int msg_get_trunc_half(int room_in)
+  FUNC_ATTR_PURE
+{
+  return rs_msg_trunc_half(room_in);
+}
+
+/// Check if message fits. Rust implementation.
+static bool msg_does_fit(int len, int room)
+  FUNC_ATTR_PURE
+{
+  return rs_msg_fits(len, room) != 0;
+}
+
+/// Check if emsg is off. Rust implementation.
+static bool emsg_is_off(void)
+  FUNC_ATTR_PURE
+{
+  return rs_is_emsg_off() != 0;
+}
+
+/// Check if emsg is silent. Rust implementation.
+static bool emsg_is_silent(void)
+  FUNC_ATTR_PURE
+{
+  return rs_is_emsg_silent() != 0;
+}
+
+/// Check if emsg is suppressed. Rust implementation.
+static bool emsg_suppressed(void)
+  FUNC_ATTR_PURE
+{
+  return rs_is_emsg_suppressed() != 0;
+}
+
+/// Save emsg state. Rust implementation.
+static int emsg_state_save(void)
+  FUNC_ATTR_PURE
+{
+  return rs_emsg_save_state();
+}
+
+/// Restore emsg state. Rust implementation.
+static void emsg_state_restore(int state)
+{
+  rs_emsg_restore_state(state);
+}
+
+/// Check for emsg now. Rust implementation.
+static bool emsg_is_now(void)
+  FUNC_ATTR_PURE
+{
+  return rs_emsg_now() != 0;
+}
+
+/// Reset emsg counters. Rust implementation.
+static void emsg_counters_reset(void)
+{
+  rs_emsg_reset_counters();
+}
+
+/// Check if dialog button separator. Rust implementation.
+static bool dlg_is_button_sep(int c)
+  FUNC_ATTR_PURE
+{
+  return rs_is_dialog_button_sep(c) != 0;
+}
+
+/// Check if dialog hotkey char. Rust implementation.
+static bool dlg_is_hotkey_char(int c)
+  FUNC_ATTR_PURE
+{
+  return rs_is_dialog_hotkey_char(c) != 0;
+}
+
+/// Get dialog button separator. Rust implementation.
+static int dlg_button_sep(void)
+  FUNC_ATTR_PURE
+{
+  return rs_dialog_button_sep();
+}
+
+/// Get dialog hotkey char. Rust implementation.
+static int dlg_hotkey_char(void)
+  FUNC_ATTR_PURE
+{
+  return rs_dialog_hotkey_char();
+}
+
+/// Count dialog buttons. Rust implementation.
+static int dlg_count_buttons(const char *buttons)
+  FUNC_ATTR_PURE
+{
+  return rs_count_dialog_buttons(buttons);
+}
+
+/// Check if dialog type is error or warning. Rust implementation.
+static bool dlg_is_error_or_warning(int dialog_type)
+  FUNC_ATTR_PURE
+{
+  return rs_dialog_is_error_or_warning(dialog_type) != 0;
+}
+
+/// Get scrollback clear state. Rust implementation.
+static int sb_get_clear_state(void)
+  FUNC_ATTR_PURE
+{
+  return rs_sb_clear_state();
+}
+
+/// Check if scrollback should clear. Rust implementation.
+static bool sb_do_clear(void)
+  FUNC_ATTR_PURE
+{
+  return rs_sb_should_clear() != 0;
+}
+
+/// Check if cmdline busy in scrollback. Rust implementation.
+static bool sb_is_cmdline_busy(void)
+  FUNC_ATTR_PURE
+{
+  return rs_sb_cmdline_busy() != 0;
+}
+
+/// Get scrollback line count. Rust implementation.
+static int sb_get_line_count(void)
+  FUNC_ATTR_PURE
+{
+  return rs_sb_line_count();
+}
+
+/// Check if scrollback has content. Rust implementation.
+static bool sb_has_content(void)
+  FUNC_ATTR_PURE
+{
+  return rs_sb_has_content() != 0;
+}
+
+/// Check if scrollback is empty. Rust implementation.
+static bool sb_is_empty(void)
+  FUNC_ATTR_PURE
+{
+  return rs_sb_empty() != 0;
+}
+
+/// Check if msg history disabled. Rust implementation.
+static bool msg_hist_is_disabled(void)
+  FUNC_ATTR_PURE
+{
+  return rs_msg_hist_disabled() != 0;
+}
+
+/// Check if msg history at capacity. Rust implementation.
+static bool msg_hist_is_full(void)
+  FUNC_ATTR_PURE
+{
+  return rs_msg_hist_at_capacity() != 0;
+}
+
+/// Check if msg history empty. Rust implementation.
+static bool msg_hist_is_empty(void)
+  FUNC_ATTR_PURE
+{
+  return rs_msg_hist_empty() != 0;
+}
+
+/// Get msg history count. Rust implementation.
+static int msg_hist_get_count(void)
+  FUNC_ATTR_PURE
+{
+  return rs_msg_hist_count();
+}
+
+/// Get msg history temp count. Rust implementation.
+static int msg_hist_get_temp_count(void)
+  FUNC_ATTR_PURE
+{
+  return rs_msg_hist_temp_count();
+}
+
+/// Check if confirm msg used. Rust implementation.
+static bool confirm_msg_is_used(void)
+  FUNC_ATTR_PURE
+{
+  return rs_is_confirm_msg_used() != 0;
+}
+
+/// Check if has confirm msg. Rust implementation.
+static bool has_confirm_msg(void)
+  FUNC_ATTR_PURE
+{
+  return rs_has_confirm_msg() != 0;
+}
+
+/// Check if silent mode. Rust implementation.
+static bool is_silent_mode(void)
+  FUNC_ATTR_PURE
+{
+  return rs_is_silent_mode() != 0;
+}
 
 // Rust implementation
 extern int rs_redirecting(void);
