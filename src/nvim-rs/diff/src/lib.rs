@@ -10,6 +10,7 @@
 // Submodules
 pub mod buffer;
 pub mod commands;
+pub mod helpers;
 pub mod highlight;
 pub mod navigate;
 

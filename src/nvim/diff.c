@@ -99,6 +99,69 @@ typedef struct {
 
 extern DiffoptResult rs_diffopt_parse(const char *p_dip);
 
+// Phase 136: Diff helper functions
+extern int rs_diff_has_filler(int flags);
+extern int rs_diff_has_iblank(int flags);
+extern int rs_diff_has_icase(int flags);
+extern int rs_diff_has_iwhite(int flags);
+extern int rs_diff_has_iwhiteall(int flags);
+extern int rs_diff_has_iwhiteeol(int flags);
+extern int rs_diff_has_any_white(int flags);
+extern int rs_diff_has_horizontal(int flags);
+extern int rs_diff_has_vertical(int flags);
+extern int rs_diff_has_hiddenoff(int flags);
+extern int rs_diff_has_internal(int flags);
+extern int rs_diff_has_closeoff(int flags);
+extern int rs_diff_has_followwrap(int flags);
+extern int rs_diff_has_linematch(int flags);
+extern int rs_diff_has_anchor(int flags);
+extern int rs_diff_has_any_inline(int flags);
+extern int rs_diff_has_inline_none(int flags);
+extern int rs_diff_has_inline_simple(int flags);
+extern int rs_diff_has_inline_char(int flags);
+extern int rs_diff_has_inline_word(int flags);
+extern int rs_diff_flag_filler(void);
+extern int rs_diff_flag_iblank(void);
+extern int rs_diff_flag_icase(void);
+extern int rs_diff_flag_iwhite(void);
+extern int rs_diff_flag_iwhiteall(void);
+extern int rs_diff_flag_iwhiteeol(void);
+extern int rs_diff_flag_horizontal(void);
+extern int rs_diff_flag_vertical(void);
+extern int rs_diff_flag_hiddenoff(void);
+extern int rs_diff_flag_internal(void);
+extern int rs_diff_flag_closeoff(void);
+extern int rs_diff_flag_followwrap(void);
+extern int rs_diff_flag_linematch(void);
+extern int rs_diff_flag_anchor(void);
+extern int rs_diff_mask_all_white(void);
+extern int rs_diff_mask_all_inline(void);
+extern int rs_diff_db_count(void);
+extern int rs_diff_idx_valid(int idx);
+extern int rs_diff_idx_next(int idx);
+extern int rs_diff_idx_prev(int idx);
+extern int rs_diff_lnum_valid(int lnum);
+extern int rs_diff_count_valid(int count);
+extern int rs_diff_block_end(int lnum, int count);
+extern int rs_diff_lnum_in_block(int lnum, int block_lnum, int count);
+extern int rs_diff_block_offset(int lnum1, int count1, int lnum2, int count2);
+extern int rs_diff_block_is_empty(int count);
+extern int rs_diff_block_is_insert(int count);
+extern int rs_diff_block_is_delete(int count, int target_count);
+extern int rs_diff_block_is_change(int count1, int count2);
+extern int rs_diff_filler_count(int this_count, int max_other_count);
+extern int rs_diff_ok(void);
+extern int rs_diff_fail(void);
+extern int rs_diff_is_ok(int result);
+extern int rs_diff_is_fail(int result);
+extern int rs_diff_default_context(void);
+extern int rs_diff_context_min1(int context);
+extern int rs_diff_lnum_in_context(int lnum, int block_lnum, int count, int context);
+extern int rs_diff_default_foldcolumn(void);
+extern int rs_diff_foldcolumn_clamp(int foldcol);
+extern int rs_diff_default_linematch(void);
+extern int rs_diff_linematch_enabled(int lines);
+
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
 
