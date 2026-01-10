@@ -206,3 +206,50 @@ void wstream_release_wbuffer(WBuffer *buffer)
     xfree(buffer);
   }
 }
+
+// =============================================================================
+// Rust accessor functions for WBuffer opaque handle pattern
+// =============================================================================
+
+/// Get the size from a WBuffer (accessor for Rust).
+size_t nvim_wbuffer_get_size(WBuffer *buffer)
+{
+  return buffer->size;
+}
+
+/// Get the refcount from a WBuffer (accessor for Rust).
+size_t nvim_wbuffer_get_refcount(WBuffer *buffer)
+{
+  return buffer->refcount;
+}
+
+/// Get the data pointer from a WBuffer (accessor for Rust).
+char *nvim_wbuffer_get_data(WBuffer *buffer)
+{
+  return buffer->data;
+}
+
+/// Get the callback from a WBuffer (accessor for Rust).
+void *nvim_wbuffer_get_cb(WBuffer *buffer)
+{
+  return (void *)buffer->cb;
+}
+
+/// Set the size for a WBuffer (accessor for Rust).
+void nvim_wbuffer_set_size(WBuffer *buffer, size_t size)
+{
+  buffer->size = size;
+}
+
+/// Set the refcount for a WBuffer (accessor for Rust).
+void nvim_wbuffer_set_refcount(WBuffer *buffer, size_t refcount)
+{
+  buffer->refcount = refcount;
+}
+
+/// Decrement refcount for a WBuffer (accessor for Rust).
+/// Returns 1 if refcount is now 0 and buffer should be freed.
+int nvim_wbuffer_decref(WBuffer *buffer)
+{
+  return (--buffer->refcount == 0) ? 1 : 0;
+}

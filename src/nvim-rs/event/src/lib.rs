@@ -447,6 +447,7 @@ pub struct EventQueue {
     pub prev: *mut EventQueue,
 }
 
+#[allow(dead_code)]
 extern "C" {
     // Loop accessors
     fn nvim_loop_get_events(loop_: LoopHandle) -> MultiQueueHandle;
@@ -592,6 +593,15 @@ extern "C" {
     fn nvim_socket_watcher_set_close_cb(watcher: SocketWatcherHandle, cb: *mut std::ffi::c_void);
     fn nvim_socket_watcher_call_cb(watcher: SocketWatcherHandle, status: c_int);
     fn nvim_socket_watcher_call_close_cb(watcher: SocketWatcherHandle);
+
+    // WBuffer accessors
+    fn nvim_wbuffer_get_size(buffer: WBufferHandle) -> usize;
+    fn nvim_wbuffer_get_refcount(buffer: WBufferHandle) -> usize;
+    fn nvim_wbuffer_get_data(buffer: WBufferHandle) -> *mut std::ffi::c_char;
+    fn nvim_wbuffer_get_cb(buffer: WBufferHandle) -> *mut std::ffi::c_void;
+    fn nvim_wbuffer_set_size(buffer: WBufferHandle, size: usize);
+    fn nvim_wbuffer_set_refcount(buffer: WBufferHandle, refcount: usize);
+    fn nvim_wbuffer_decref(buffer: WBufferHandle) -> c_int;
 }
 
 // =============================================================================
@@ -2713,6 +2723,278 @@ pub unsafe extern "C" fn rs_timewatcher_has_events(tw: TimeWatcherHandle) -> c_i
         return 0;
     }
     c_int::from(!nvim_timewatcher_get_events(tw).is_null())
+}
+
+// =============================================================================
+// Stream Extended Operations (Pure Rust)
+// =============================================================================
+
+/// Check if a Stream has pending write requests
+///
+/// Returns 1 if there are pending requests, 0 otherwise.
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_has_pending(stream: StreamHandle) -> c_int {
+    if stream.is_null() {
+        return 0;
+    }
+    c_int::from(nvim_stream_pending_reqs(stream) > 0)
+}
+
+/// Check if a Stream is ready for operations (not closed and no pending requests)
+///
+/// Returns 1 if ready, 0 otherwise.
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_is_ready(stream: StreamHandle) -> c_int {
+    if stream.is_null() {
+        return 0;
+    }
+    let closed = nvim_stream_is_closed(stream) != 0;
+    let pending = nvim_stream_pending_reqs(stream) > 0;
+    c_int::from(!closed && !pending)
+}
+
+/// Check if a Stream is within its memory limit
+///
+/// Returns 1 if curmem <= maxmem, 0 otherwise.
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_within_limit(stream: StreamHandle) -> c_int {
+    if stream.is_null() {
+        return 0;
+    }
+    let curmem = nvim_stream_get_curmem(stream);
+    let maxmem = nvim_stream_get_maxmem(stream);
+    c_int::from(curmem <= maxmem)
+}
+
+/// Get the available write capacity for a Stream
+///
+/// Returns the number of bytes that can be written (maxmem - curmem),
+/// or 0 if over limit or if stream is null.
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_write_capacity(stream: StreamHandle) -> usize {
+    if stream.is_null() {
+        return 0;
+    }
+    let curmem = nvim_stream_get_curmem(stream);
+    let maxmem = nvim_stream_get_maxmem(stream);
+    if curmem >= maxmem {
+        return 0;
+    }
+    maxmem - curmem
+}
+
+/// Check if a Stream has a write callback set
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_has_write_cb(stream: StreamHandle) -> c_int {
+    if stream.is_null() {
+        return 0;
+    }
+    c_int::from(!nvim_stream_get_write_cb(stream).is_null())
+}
+
+/// Check if a Stream has a close callback set
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_has_close_cb(stream: StreamHandle) -> c_int {
+    if stream.is_null() {
+        return 0;
+    }
+    c_int::from(!nvim_stream_get_close_cb(stream).is_null())
+}
+
+/// Check if a Stream has an events queue
+///
+/// # Safety
+///
+/// `stream` must be a valid Stream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_stream_has_events(stream: StreamHandle) -> c_int {
+    if stream.is_null() {
+        return 0;
+    }
+    c_int::from(!nvim_stream_get_events(stream).is_null())
+}
+
+// =============================================================================
+// RStream Extended Operations (Pure Rust)
+// =============================================================================
+
+/// Check if an RStream is ready to process data
+///
+/// Returns 1 if the stream has data available and hasn't reached EOF.
+///
+/// # Safety
+///
+/// `stream` must be a valid RStream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_rstream_has_data(stream: RStreamHandle) -> c_int {
+    if stream.is_null() {
+        return 0;
+    }
+    let available = nvim_rstream_available(stream);
+    c_int::from(available > 0)
+}
+
+/// Check if an RStream is in a terminal state (EOF or closed)
+///
+/// Returns 1 if the stream has reached EOF or is closed.
+///
+/// # Safety
+///
+/// `stream` must be a valid RStream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_rstream_is_terminal(stream: RStreamHandle) -> c_int {
+    if stream.is_null() {
+        return 1; // Null is terminal
+    }
+    let did_eof = nvim_rstream_did_eof(stream) != 0;
+    let inner_stream = nvim_rstream_get_stream(stream);
+    let is_closed = if inner_stream.is_null() {
+        true
+    } else {
+        nvim_stream_is_closed(inner_stream) != 0
+    };
+    c_int::from(did_eof || is_closed)
+}
+
+/// Check if an RStream can accept more data (has buffer space)
+///
+/// Returns 1 if the stream wants to read and hasn't paused due to full buffer.
+///
+/// # Safety
+///
+/// `stream` must be a valid RStream handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_rstream_can_receive(stream: RStreamHandle) -> c_int {
+    if stream.is_null() {
+        return 0;
+    }
+    // Check if wants to read and not at EOF
+    let wants_read = nvim_rstream_want_read(stream) != 0;
+    let at_eof = nvim_rstream_did_eof(stream) != 0;
+    c_int::from(wants_read && !at_eof)
+}
+
+// =============================================================================
+// SocketWatcher Extended Operations (Pure Rust)
+// =============================================================================
+
+/// Check if a SocketWatcher has a callback set
+///
+/// # Safety
+///
+/// `watcher` must be a valid SocketWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_socket_watcher_has_cb(watcher: SocketWatcherHandle) -> c_int {
+    if watcher.is_null() {
+        return 0;
+    }
+    c_int::from(!nvim_socket_watcher_get_cb(watcher).is_null())
+}
+
+/// Check if a SocketWatcher has a close callback set
+///
+/// # Safety
+///
+/// `watcher` must be a valid SocketWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_socket_watcher_has_close_cb(watcher: SocketWatcherHandle) -> c_int {
+    if watcher.is_null() {
+        return 0;
+    }
+    c_int::from(!nvim_socket_watcher_get_close_cb(watcher).is_null())
+}
+
+/// Check if a SocketWatcher has an events queue
+///
+/// # Safety
+///
+/// `watcher` must be a valid SocketWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_socket_watcher_has_events(watcher: SocketWatcherHandle) -> c_int {
+    if watcher.is_null() {
+        return 0;
+    }
+    c_int::from(!nvim_socket_watcher_get_events(watcher).is_null())
+}
+
+/// Check if a SocketWatcher has user data set
+///
+/// # Safety
+///
+/// `watcher` must be a valid SocketWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_socket_watcher_has_data(watcher: SocketWatcherHandle) -> c_int {
+    if watcher.is_null() {
+        return 0;
+    }
+    c_int::from(!nvim_socket_watcher_get_data(watcher).is_null())
+}
+
+// =============================================================================
+// WBuffer Operations (Pure Rust)
+// =============================================================================
+
+/// Check if a WBuffer has a finalizer callback set
+///
+/// # Safety
+///
+/// `buffer` must be a valid WBuffer handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_wbuffer_has_finalizer(buffer: WBufferHandle) -> c_int {
+    if buffer.is_null() {
+        return 0;
+    }
+    c_int::from(!nvim_wbuffer_get_cb(buffer).is_null())
+}
+
+/// Get the refcount from a WBuffer
+///
+/// # Safety
+///
+/// `buffer` must be a valid WBuffer handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_wbuffer_refcount(buffer: WBufferHandle) -> usize {
+    if buffer.is_null() {
+        return 0;
+    }
+    nvim_wbuffer_get_refcount(buffer)
+}
+
+/// Check if a WBuffer can be freed (refcount == 0)
+///
+/// # Safety
+///
+/// `buffer` must be a valid WBuffer handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_wbuffer_can_free(buffer: WBufferHandle) -> c_int {
+    if buffer.is_null() {
+        return 0;
+    }
+    c_int::from(nvim_wbuffer_get_refcount(buffer) == 0)
 }
 
 // =============================================================================
