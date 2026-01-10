@@ -1554,6 +1554,101 @@ pub unsafe extern "C" fn rs_vim_findfile_stopdir(buf: *mut c_char) -> *mut c_cha
     }
 }
 
+// ============================================================================
+// Constant Exports (FFI)
+// ============================================================================
+
+/// Get FINDFILE_FILE constant.
+#[no_mangle]
+pub const extern "C" fn rs_findfile_file() -> c_int {
+    FINDFILE_FILE
+}
+
+/// Get FINDFILE_DIR constant.
+#[no_mangle]
+pub const extern "C" fn rs_findfile_dir() -> c_int {
+    FINDFILE_DIR
+}
+
+/// Get FINDFILE_BOTH constant.
+#[no_mangle]
+pub const extern "C" fn rs_findfile_both() -> c_int {
+    FINDFILE_BOTH
+}
+
+/// Get FF_MAX_STAR_STAR_EXPAND constant.
+#[no_mangle]
+pub const extern "C" fn rs_ff_max_star_star_expand() -> u8 {
+    FF_MAX_STAR_STAR_EXPAND
+}
+
+/// Get MAXPATHL constant.
+#[no_mangle]
+pub const extern "C" fn rs_maxpathl() -> usize {
+    MAXPATHL
+}
+
+// ============================================================================
+// Path Utilities (FFI)
+// ============================================================================
+
+/// Check if a path is absolute (file search version).
+#[no_mangle]
+pub unsafe extern "C" fn rs_ff_is_absolute_path(path: *const c_char) -> c_int {
+    if path.is_null() {
+        return 0;
+    }
+    vim_isAbsName(path)
+}
+
+/// Check if a path has a URL protocol.
+#[no_mangle]
+pub unsafe extern "C" fn rs_path_has_url(path: *const c_char) -> c_int {
+    if path.is_null() {
+        return 0;
+    }
+    path_with_url(path)
+}
+
+/// Check if a character is a path separator.
+#[no_mangle]
+pub extern "C" fn rs_is_pathsep(c: c_int) -> c_int {
+    // On Unix, only '/' is a path separator
+    // On Windows, both '/' and '\\' are path separators
+    #[cfg(windows)]
+    {
+        if c == b'/' as c_int || c == b'\\' as c_int {
+            return 1;
+        }
+        0
+    }
+    #[cfg(not(windows))]
+    {
+        if c == b'/' as c_int {
+            return 1;
+        }
+        0
+    }
+}
+
+/// Check if a path is a directory.
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_directory(path: *const c_char) -> c_int {
+    if path.is_null() {
+        return 0;
+    }
+    os_isdir(path)
+}
+
+/// Check if a path exists.
+#[no_mangle]
+pub unsafe extern "C" fn rs_path_exists(path: *const c_char) -> c_int {
+    if path.is_null() {
+        return 0;
+    }
+    os_path_exists(path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1564,5 +1659,21 @@ mod tests {
         assert_eq!(FINDFILE_DIR, 1);
         assert_eq!(FINDFILE_BOTH, 2);
         assert_eq!(FF_MAX_STAR_STAR_EXPAND, 30);
+    }
+
+    #[test]
+    fn test_constant_exports() {
+        assert_eq!(rs_findfile_file(), FINDFILE_FILE);
+        assert_eq!(rs_findfile_dir(), FINDFILE_DIR);
+        assert_eq!(rs_findfile_both(), FINDFILE_BOTH);
+        assert_eq!(rs_ff_max_star_star_expand(), FF_MAX_STAR_STAR_EXPAND);
+        assert_eq!(rs_maxpathl(), MAXPATHL);
+    }
+
+    #[test]
+    fn test_is_pathsep() {
+        assert_eq!(rs_is_pathsep(b'/' as c_int), 1);
+        assert_eq!(rs_is_pathsep(b'a' as c_int), 0);
+        assert_eq!(rs_is_pathsep(0), 0);
     }
 }

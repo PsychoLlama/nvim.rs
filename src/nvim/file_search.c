@@ -83,6 +83,114 @@
 #include "nvim/strings.h"
 #include "nvim/vim_defs.h"
 
+// =============================================================================
+// Rust FFI declarations
+// =============================================================================
+
+// Constants
+extern int rs_findfile_file(void);
+extern int rs_findfile_dir(void);
+extern int rs_findfile_both(void);
+extern uint8_t rs_ff_max_star_star_expand(void);
+extern size_t rs_maxpathl(void);
+
+// Path utilities
+extern int rs_ff_is_absolute_path(const char *path);
+extern int rs_path_has_url(const char *path);
+extern int rs_is_pathsep(int c);
+extern int rs_is_directory(const char *path);
+extern int rs_path_exists(const char *path);
+
+// Core file search functions
+extern void *rs_vim_findfile_init(char *path, const char *filename, size_t filenamelen,
+                                   const char *stopdirs, int level, int free_visited,
+                                   int find_what, void *search_ctx_arg, int tagfile,
+                                   const char *rel_fname);
+extern void rs_vim_findfile_free_visited(void *search_ctx_arg);
+extern void rs_vim_findfile_cleanup(void *ctx);
+extern char *rs_vim_findfile(void *search_ctx_arg);
+extern char *rs_vim_findfile_stopdir(char *buf);
+
+// =============================================================================
+// Rust wrapper functions
+// =============================================================================
+
+/// Get FINDFILE_FILE constant. Rust implementation.
+static int get_findfile_file(void)
+  FUNC_ATTR_CONST
+{
+  return rs_findfile_file();
+}
+
+/// Get FINDFILE_DIR constant. Rust implementation.
+static int get_findfile_dir(void)
+  FUNC_ATTR_CONST
+{
+  return rs_findfile_dir();
+}
+
+/// Get FINDFILE_BOTH constant. Rust implementation.
+static int get_findfile_both(void)
+  FUNC_ATTR_CONST
+{
+  return rs_findfile_both();
+}
+
+/// Get FF_MAX_STAR_STAR_EXPAND constant. Rust implementation.
+static uint8_t get_ff_max_star_star_expand(void)
+  FUNC_ATTR_CONST
+{
+  return rs_ff_max_star_star_expand();
+}
+
+/// Get MAXPATHL constant. Rust implementation.
+static size_t get_maxpathl(void)
+  FUNC_ATTR_CONST
+{
+  return rs_maxpathl();
+}
+
+/// Check if path is absolute. Rust implementation.
+static int is_absolute_path(const char *path)
+  FUNC_ATTR_PURE
+{
+  return rs_ff_is_absolute_path(path);
+}
+
+/// Check if path has URL protocol. Rust implementation.
+static int has_url_protocol(const char *path)
+  FUNC_ATTR_PURE
+{
+  return rs_path_has_url(path);
+}
+
+/// Check if character is a path separator. Rust implementation.
+static int char_is_pathsep(int c)
+  FUNC_ATTR_CONST
+{
+  return rs_is_pathsep(c);
+}
+
+/// Check if path is a directory. Rust implementation.
+static int path_is_directory(const char *path)
+  FUNC_ATTR_PURE
+{
+  return rs_is_directory(path);
+}
+
+/// Check if path exists. Rust implementation.
+static int path_file_exists(const char *path)
+  FUNC_ATTR_PURE
+{
+  return rs_path_exists(path);
+}
+
+/// Parse stopdir string. Rust implementation.
+static char *parse_stopdir(char *buf)
+{
+  return rs_vim_findfile_stopdir(buf);
+}
+
 static String ff_expand_buffer = STRING_INIT;  // used for expanding filenames
 
 // type for the directory search stack
