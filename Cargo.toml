@@ -91,6 +91,7 @@ members = [
     "src/nvim-rs/viewport",
     "src/nvim-rs/window",
     "src/nvim-rs/terminal",
+    "src/nvim-rs/testing",
     "src/nvim-rs/unpacker",
     "src/nvim-rs/tui",
     "src/nvim-rs/typval",
