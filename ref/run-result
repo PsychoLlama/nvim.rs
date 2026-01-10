@@ -1,27 +1,31 @@
-Plan: ~/.claude/plans/delightful-mapping-token.md
+Plan: ~/.claude/plans/snappy-cuddling-clarke.md
 
-All phases (103-112) of the Rust migration plan are now complete. Here's a summary:
+All phases from 113-122 are now complete. Let me provide a summary:
 
-## Completed Phases 103-112
+## Completed: Phases 113-122 of Rust Migration Plan
 
-| Phase | Module | Status |
-|-------|--------|--------|
-| 103 | Buffer Lifecycle (lifecycle.rs, properties.rs, list.rs) | ✓ |
-| 104 | Normal Mode Commands (commands.rs, pending.rs, counts.rs) | ✓ |
-| 105 | VimL String Functions (funcs/string.rs) | ✓ |
-| 106 | VimL List/Dict Functions (funcs/list.rs, funcs/dict.rs) | ✓ |
-| 107 | Getchar/Input (typeahead.rs, mapping.rs, record.rs) | ✓ |
-| 108 | Memline Operations (tree.rs, lines.rs, recovery.rs) | ✓ |
-| 109 | Message System (output.rs, confirm.rs, errors.rs) | ✓ |
-| 110 | Tag Navigation (stack.rs, search.rs, parse.rs) | ✓ |
-| 111 | Operators (yank.rs, put.rs, format.rs) | ✓ |
-| 112 | Ex Commands (mark.rs, buffer.rs, window.rs) | ✓ |
+All steps from the plan have been executed successfully:
 
-**Key commits from this session:**
-- `c9f9d9bd56` - feat(ex_cmds): add mark, buffer, and window command modules
+### Phases Completed:
 
-All checks pass:
-- `just rust-fmt-check` ✓
-- `just rust-clippy` ✓
-- `just rust-test` ✓ (2964 tests)
-- `just build` ✓
+1. **Phase 113: Ex Command Dispatch** - Extended `ex_docmd` crate with execute, range, modifiers, completion modules
+2. **Phase 114: Syntax Engine Core** - Extended `syntax` crate with engine, parse, item, fold modules
+3. **Phase 115: Option System Completion** - Extended `option` crate with set, show, expand, copy modules
+4. **Phase 116: Eval Functions** - Extended `eval` crate with system, buffer, window, cursor modules
+5. **Phase 117: Main/Startup Infrastructure** - Created new `main` crate with init, cleanup, signals, environment modules
+6. **Phase 118: Testing Framework** - Created new `testing` crate with assert, fixtures, runner, mock modules
+7. **Phase 119: State Management** - Created new `state` crate with global, mode, cursor, screen modules
+8. **Phase 120: UI Client Protocol** - Created new `ui_client` crate with protocol, handler, attach modules
+9. **Phase 121: Logging Infrastructure** - Created new `log` crate with level, logger, output modules
+10. **Phase 122: Decoration Providers** - Extended `decoration` crate with provider, invoke, cache modules
+
+### Additional Fixes Applied:
+- Fixed FFI symbol conflicts by renaming `rs_cursor_pos_*` functions in state crate to use `rs_state_cursor_*` prefix
+- Fixed clippy warnings (unreadable literals with underscores, match_same_arms consolidations)
+- Updated `ref/crates.md` with the 5 new crates
+
+### Final Status:
+- ✅ All 3127 tests passing
+- ✅ Clippy clean
+- ✅ Full build successful
+- ✅ All changes committed
