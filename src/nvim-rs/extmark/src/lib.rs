@@ -498,10 +498,12 @@ extern "C" {
 // ============================================================================
 
 /// Compute flags for a new mark.
+/// Note: Does NOT set MT_FLAG_REAL - that's in MT_FLAG_EXTERNAL_MASK and
+/// gets added separately via decor_flags in extmark_set.
 #[inline]
 #[must_use]
 pub fn mt_flags(right_gravity: bool, no_undo: bool, invalidate: bool, decor_ext: bool) -> u16 {
-    let mut flags = MT_FLAG_REAL;
+    let mut flags = 0u16;
     if right_gravity {
         flags |= MT_FLAG_RIGHT_GRAVITY;
     }
