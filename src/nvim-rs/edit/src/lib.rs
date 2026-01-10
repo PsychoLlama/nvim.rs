@@ -11,7 +11,9 @@ pub mod completion;
 pub mod insert;
 pub mod keys;
 pub mod mode;
+pub mod replace;
 pub mod state;
+pub mod undo;
 
 use std::ffi::{c_char, c_int};
 
