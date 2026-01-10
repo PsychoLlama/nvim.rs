@@ -2998,6 +2998,275 @@ pub unsafe extern "C" fn rs_wbuffer_can_free(buffer: WBufferHandle) -> c_int {
 }
 
 // =============================================================================
+// Proc Extended Operations (Pure Rust)
+// =============================================================================
+
+/// Check if a Proc has exited (status >= 0)
+///
+/// Returns 1 if the process has exited, 0 if still running.
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_has_exited(proc: ProcHandle) -> c_int {
+    if proc.is_null() {
+        return 0;
+    }
+    c_int::from(nvim_proc_get_status(proc) >= 0)
+}
+
+/// Check if a Proc is still running (not closed and not exited)
+///
+/// Returns 1 if still running, 0 if exited or closed.
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_is_running(proc: ProcHandle) -> c_int {
+    if proc.is_null() {
+        return 0;
+    }
+    let exited = nvim_proc_get_status(proc) >= 0;
+    let closed = nvim_proc_is_closed(proc) != 0;
+    c_int::from(!exited && !closed)
+}
+
+/// Check if a Proc is waiting to be killed (has stopped_time > 0)
+///
+/// Returns 1 if stop has been requested, 0 otherwise.
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_is_stopping(proc: ProcHandle) -> c_int {
+    if proc.is_null() {
+        return 0;
+    }
+    let stopped_time = nvim_proc_get_stopped_time(proc);
+    let exited = nvim_proc_get_status(proc) >= 0;
+    c_int::from(stopped_time > 0 && !exited)
+}
+
+/// Check if a Proc has any references
+///
+/// Returns 1 if refcount > 0, 0 otherwise.
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_has_refs(proc: ProcHandle) -> c_int {
+    if proc.is_null() {
+        return 0;
+    }
+    c_int::from(nvim_proc_get_refcount(proc) > 0)
+}
+
+/// Check if a Proc has a callback set
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_has_cb(proc: ProcHandle) -> c_int {
+    if proc.is_null() {
+        return 0;
+    }
+    c_int::from(!nvim_proc_get_cb(proc).is_null())
+}
+
+/// Check if a Proc has an internal exit callback set
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_has_internal_exit_cb(proc: ProcHandle) -> c_int {
+    if proc.is_null() {
+        return 0;
+    }
+    c_int::from(!nvim_proc_get_internal_exit_cb(proc).is_null())
+}
+
+/// Check if a Proc has an internal close callback set
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_has_internal_close_cb(proc: ProcHandle) -> c_int {
+    if proc.is_null() {
+        return 0;
+    }
+    c_int::from(!nvim_proc_get_internal_close_cb(proc).is_null())
+}
+
+/// Check if a Proc has an events queue
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_has_events(proc: ProcHandle) -> c_int {
+    if proc.is_null() {
+        return 0;
+    }
+    c_int::from(!nvim_proc_get_events(proc).is_null())
+}
+
+/// Check if a Proc is a PTY process (type == kProcTypePty)
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_is_pty(proc: ProcHandle) -> c_int {
+    if proc.is_null() {
+        return 0;
+    }
+    c_int::from(nvim_proc_get_type(proc) == 1) // kProcTypePty == 1
+}
+
+/// Check if a Proc is a libuv process (type == kProcTypeUv)
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_is_uv(proc: ProcHandle) -> c_int {
+    if proc.is_null() {
+        return 0;
+    }
+    c_int::from(nvim_proc_get_type(proc) == 0) // kProcTypeUv == 0
+}
+
+/// Check if a Proc is detached
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_is_detached(proc: ProcHandle) -> c_int {
+    if proc.is_null() {
+        return 0;
+    }
+    nvim_proc_get_detach(proc)
+}
+
+/// Check if a Proc has an exepath set
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_has_exepath(proc: ProcHandle) -> c_int {
+    if proc.is_null() {
+        return 0;
+    }
+    c_int::from(!nvim_proc_get_exepath(proc).is_null())
+}
+
+/// Check if a Proc has a cwd set
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_has_cwd(proc: ProcHandle) -> c_int {
+    if proc.is_null() {
+        return 0;
+    }
+    c_int::from(!nvim_proc_get_cwd(proc).is_null())
+}
+
+/// Check if a Proc has argv set
+///
+/// # Safety
+///
+/// `proc` must be a valid Proc handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_proc_has_argv(proc: ProcHandle) -> c_int {
+    if proc.is_null() {
+        return 0;
+    }
+    c_int::from(!nvim_proc_get_argv(proc).is_null())
+}
+
+// =============================================================================
+// SignalWatcher Extended Operations (Pure Rust)
+// =============================================================================
+
+/// Check if a SignalWatcher has a callback set
+///
+/// # Safety
+///
+/// `watcher` must be a valid SignalWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_signal_watcher_has_cb(watcher: SignalWatcherHandle) -> c_int {
+    if watcher.is_null() {
+        return 0;
+    }
+    c_int::from(!nvim_signal_watcher_get_cb(watcher).is_null())
+}
+
+/// Check if a SignalWatcher has a close callback set
+///
+/// # Safety
+///
+/// `watcher` must be a valid SignalWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_signal_watcher_has_close_cb(watcher: SignalWatcherHandle) -> c_int {
+    if watcher.is_null() {
+        return 0;
+    }
+    c_int::from(!nvim_signal_watcher_get_close_cb(watcher).is_null())
+}
+
+/// Check if a SignalWatcher has an events queue
+///
+/// # Safety
+///
+/// `watcher` must be a valid SignalWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_signal_watcher_has_events(watcher: SignalWatcherHandle) -> c_int {
+    if watcher.is_null() {
+        return 0;
+    }
+    c_int::from(!nvim_signal_watcher_get_events(watcher).is_null())
+}
+
+/// Check if a SignalWatcher has user data set
+///
+/// # Safety
+///
+/// `watcher` must be a valid SignalWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_signal_watcher_has_data(watcher: SignalWatcherHandle) -> c_int {
+    if watcher.is_null() {
+        return 0;
+    }
+    c_int::from(!nvim_signal_watcher_get_data(watcher).is_null())
+}
+
+/// Get the signal number from a SignalWatcher
+///
+/// Returns 0 if the watcher is null.
+///
+/// # Safety
+///
+/// `watcher` must be a valid SignalWatcher handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_signal_watcher_signum(watcher: SignalWatcherHandle) -> c_int {
+    if watcher.is_null() {
+        return 0;
+    }
+    nvim_signal_watcher_get_signum(watcher)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
