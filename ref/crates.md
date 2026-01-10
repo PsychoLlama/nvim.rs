@@ -6,6 +6,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | -------------- | --------------------------------------- |
 | api            | API types and conversions               |
 | arabic         | Arabic text shaping                     |
+| arglist        | Argument list management (navigation, operations, entries) |
 | ascii          | ASCII character predicates              |
 | autocmd        | Autocommand events and patterns         |
 | buffer         | Buffer state and validation             |

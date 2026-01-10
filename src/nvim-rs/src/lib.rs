@@ -16,6 +16,7 @@
 // This ensures they're included in the static library
 pub use nvim_api::*;
 pub use nvim_arabic::*;
+pub use nvim_arglist::*;
 pub use nvim_ascii::*;
 pub use nvim_autocmd::*;
 pub use nvim_buffer::*;

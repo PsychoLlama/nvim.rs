@@ -15,6 +15,7 @@ workspace = true
 [dependencies]
 nvim-api = { path = "api" }
 nvim-arabic = { path = "arabic" }
+nvim-arglist = { path = "arglist" }
 nvim-channel = { path = "channel" }
 nvim-ascii = { path = "ascii" }
 nvim-autocmd = { path = "autocmd" }
