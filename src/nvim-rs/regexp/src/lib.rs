@@ -2011,3 +2011,746 @@ mod tests {
         assert_eq!(CLASS_NONE, 99);
     }
 }
+
+// =============================================================================
+// Phase 78: Additional Regex Engine Helpers
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// 78a: Pattern Analysis Helpers
+// -----------------------------------------------------------------------------
+
+/// Check if a character is a regex metacharacter in magic mode.
+#[inline]
+pub fn is_magic_meta(c: u8) -> bool {
+    matches!(
+        c,
+        b'.' | b'*' | b'+' | b'?' | b'{' | b'[' | b']' | b'^' | b'$' | b'|' | b'(' | b')' | b'\\'
+    )
+}
+
+/// Check if a character is a regex metacharacter in nomagic mode.
+#[inline]
+pub fn is_nomagic_meta(c: u8) -> bool {
+    matches!(c, b'^' | b'$' | b'\\')
+}
+
+/// Check if a pattern is a simple literal (no metacharacters).
+/// This is used for optimization - literal patterns can use faster string matching.
+///
+/// # Safety
+/// `pattern` must point to a valid null-terminated string.
+#[inline]
+pub unsafe fn is_literal_pattern(pattern: *const u8, magic: bool) -> bool {
+    if pattern.is_null() {
+        return true;
+    }
+
+    let mut p = pattern;
+    while *p != 0 {
+        let c = *p;
+        if magic {
+            if is_magic_meta(c) {
+                return false;
+            }
+        } else if is_nomagic_meta(c) {
+            return false;
+        }
+        p = p.add(1);
+    }
+    true
+}
+
+/// Check if a pattern is anchored at the beginning (starts with ^).
+///
+/// # Safety
+/// `pattern` must point to a valid null-terminated string.
+#[inline]
+pub unsafe fn pattern_is_anchored_start(pattern: *const u8, magic: bool) -> bool {
+    if pattern.is_null() || *pattern == 0 {
+        return false;
+    }
+
+    if magic {
+        *pattern == b'^'
+    } else {
+        // In nomagic mode, ^ is still special at start
+        *pattern == b'^'
+            || (*pattern == b'\\' && *pattern.add(1) != 0 && *pattern.add(1) == b'^')
+    }
+}
+
+/// Check if a pattern is anchored at the end (ends with $).
+///
+/// # Safety
+/// `pattern` must point to a valid null-terminated string.
+#[inline]
+pub unsafe fn pattern_is_anchored_end(pattern: *const u8, magic: bool) -> bool {
+    if pattern.is_null() || *pattern == 0 {
+        return false;
+    }
+
+    // Find the end
+    let mut p = pattern;
+    while *p != 0 {
+        p = p.add(1);
+    }
+
+    if p == pattern {
+        return false;
+    }
+
+    p = p.sub(1);
+
+    if magic {
+        // Check for unescaped $
+        if *p == b'$' {
+            // Make sure it's not escaped
+            if p == pattern {
+                return true;
+            }
+            let mut backslashes = 0;
+            let mut check = p.sub(1);
+            while check >= pattern && *check == b'\\' {
+                backslashes += 1;
+                if check == pattern {
+                    break;
+                }
+                check = check.sub(1);
+            }
+            return backslashes % 2 == 0;
+        }
+        false
+    } else {
+        // In nomagic mode, \$ at end
+        if p > pattern && *p == b'$' && *p.sub(1) == b'\\' {
+            return true;
+        }
+        // Or plain $ is also special at end
+        *p == b'$'
+    }
+}
+
+/// Count the minimum length a pattern can match.
+/// Returns 0 for patterns that can match empty strings.
+/// Returns -1 if the pattern is too complex to analyze.
+///
+/// This is a simplified analysis - complex patterns may return -1.
+///
+/// # Safety
+/// `pattern` must point to a valid null-terminated string.
+pub unsafe fn pattern_min_match_len(pattern: *const u8) -> c_int {
+    if pattern.is_null() || *pattern == 0 {
+        return 0;
+    }
+
+    let mut len: c_int = 0;
+    let mut p = pattern;
+
+    while *p != 0 {
+        match *p {
+            b'\\' => {
+                if *p.add(1) == 0 {
+                    break;
+                }
+                let next = *p.add(1);
+                match next {
+                    // Zero-width assertions
+                    b'<' | b'>' | b'b' | b'B' | b'z' | b's' | b'Z' | b'%' => {
+                        p = p.add(2);
+                    }
+                    // Backreferences - can't determine length
+                    b'1'..=b'9' => return -1,
+                    // Optional/multi operators
+                    b'?' | b'=' | b'{' => {
+                        p = p.add(2);
+                    }
+                    _ => {
+                        len += 1;
+                        p = p.add(2);
+                    }
+                }
+            }
+            // Anchors - zero width
+            b'^' | b'$' => {
+                p = p.add(1);
+            }
+            // Single char match
+            b'.' => {
+                len += 1;
+                p = p.add(1);
+            }
+            // Character class - minimum 1 char
+            b'[' => {
+                len += 1;
+                // Skip to closing ]
+                p = p.add(1);
+                if *p == b'^' {
+                    p = p.add(1);
+                }
+                if *p == b']' {
+                    p = p.add(1);
+                }
+                while *p != 0 && *p != b']' {
+                    if *p == b'\\' && *p.add(1) != 0 {
+                        p = p.add(2);
+                    } else {
+                        p = p.add(1);
+                    }
+                }
+                if *p == b']' {
+                    p = p.add(1);
+                }
+            }
+            // Multi operators - make previous optional
+            b'*' | b'+' | b'?' => {
+                if *p == b'*' || *p == b'?' {
+                    // These can match zero
+                    if len > 0 {
+                        len -= 1;
+                    }
+                }
+                // + requires at least one, so len stays
+                p = p.add(1);
+            }
+            // Grouping - too complex
+            b'(' | b')' | b'|' => return -1,
+            // Literal character
+            _ => {
+                len += 1;
+                p = p.add(1);
+            }
+        }
+    }
+
+    len
+}
+
+// FFI exports for pattern analysis
+
+/// Check if a character is a regex metacharacter in magic mode.
+#[no_mangle]
+pub extern "C" fn rs_is_magic_meta(c: u8) -> c_int {
+    c_int::from(is_magic_meta(c))
+}
+
+/// Check if a character is a regex metacharacter in nomagic mode.
+#[no_mangle]
+pub extern "C" fn rs_is_nomagic_meta(c: u8) -> c_int {
+    c_int::from(is_nomagic_meta(c))
+}
+
+/// Check if a pattern is a simple literal (for regex optimization).
+///
+/// # Safety
+/// `pattern` must point to a valid null-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_regex_is_literal(pattern: *const u8, magic: c_int) -> c_int {
+    c_int::from(is_literal_pattern(pattern, magic != 0))
+}
+
+/// Check if pattern is anchored at start.
+///
+/// # Safety
+/// `pattern` must point to a valid null-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pattern_is_anchored_start(pattern: *const u8, magic: c_int) -> c_int {
+    c_int::from(pattern_is_anchored_start(pattern, magic != 0))
+}
+
+/// Check if pattern is anchored at end.
+///
+/// # Safety
+/// `pattern` must point to a valid null-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pattern_is_anchored_end(pattern: *const u8, magic: c_int) -> c_int {
+    c_int::from(pattern_is_anchored_end(pattern, magic != 0))
+}
+
+/// Get minimum match length for a pattern.
+///
+/// # Safety
+/// `pattern` must point to a valid null-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pattern_min_match_len(pattern: *const u8) -> c_int {
+    pattern_min_match_len(pattern)
+}
+
+// -----------------------------------------------------------------------------
+// 78b: NFA Engine Helpers
+// -----------------------------------------------------------------------------
+
+/// Maximum number of NFA states before switching to backtracking engine.
+pub const NFA_MAX_STATES: c_int = 100000;
+
+/// Value indicating NFA is too expensive.
+pub const NFA_TOO_EXPENSIVE: c_int = -1;
+
+/// Maximum depth for NFA recursive operations.
+pub const NFA_MAX_DEPTH: c_int = 5000;
+
+/// Check if an NFA state count is within acceptable limits.
+#[inline]
+pub const fn nfa_state_count_ok(count: c_int) -> bool {
+    count >= 0 && count < NFA_MAX_STATES
+}
+
+/// Estimate NFA complexity from pattern length.
+/// Returns estimated state count, or NFA_TOO_EXPENSIVE if likely too complex.
+///
+/// This is a heuristic used to decide whether to use NFA or backtracking.
+#[inline]
+pub const fn estimate_nfa_complexity(pattern_len: usize) -> c_int {
+    // Simple heuristic: each pattern char can generate multiple states
+    // Quantifiers and groups can multiply this
+    let base = pattern_len as c_int * 3;
+    if base > NFA_MAX_STATES / 2 {
+        NFA_TOO_EXPENSIVE
+    } else {
+        base
+    }
+}
+
+// FFI exports for NFA helpers
+
+/// Check if NFA state count is acceptable.
+#[no_mangle]
+pub extern "C" fn rs_nfa_state_count_ok(count: c_int) -> c_int {
+    c_int::from(nfa_state_count_ok(count))
+}
+
+/// Estimate NFA complexity from pattern length.
+#[no_mangle]
+pub extern "C" fn rs_estimate_nfa_complexity(pattern_len: usize) -> c_int {
+    estimate_nfa_complexity(pattern_len)
+}
+
+// -----------------------------------------------------------------------------
+// 78c: Backtracking Engine Helpers
+// -----------------------------------------------------------------------------
+
+/// Maximum recursion depth for backtracking engine.
+pub const BT_MAX_RECURSION: c_int = 10000;
+
+/// Backtrack stack growth increment.
+pub const BT_STACK_GROWTH: usize = 1024;
+
+/// Check if backtracking depth is within limits.
+#[inline]
+pub const fn bt_depth_ok(depth: c_int) -> bool {
+    depth >= 0 && depth < BT_MAX_RECURSION
+}
+
+/// Calculate backtrack stack size needed for a pattern.
+/// Returns estimated size in entries.
+#[inline]
+pub const fn estimate_bt_stack_size(pattern_len: usize, input_len: usize) -> usize {
+    // Worst case: each character could create a backtrack point
+    // Bounded by recursion limit
+    let estimate = pattern_len.saturating_mul(input_len);
+    if estimate > BT_MAX_RECURSION as usize {
+        BT_MAX_RECURSION as usize
+    } else if estimate < 64 {
+        64 // Minimum stack size
+    } else {
+        estimate
+    }
+}
+
+// FFI exports for backtracking helpers
+
+/// Check if backtracking depth is acceptable.
+#[no_mangle]
+pub extern "C" fn rs_bt_depth_ok(depth: c_int) -> c_int {
+    c_int::from(bt_depth_ok(depth))
+}
+
+/// Estimate backtrack stack size needed.
+#[no_mangle]
+pub extern "C" fn rs_estimate_bt_stack_size(pattern_len: usize, input_len: usize) -> usize {
+    estimate_bt_stack_size(pattern_len, input_len)
+}
+
+// -----------------------------------------------------------------------------
+// 78d: Execution & Substitution Helpers
+// -----------------------------------------------------------------------------
+
+/// Substitution flags
+pub mod sub_flags {
+    use std::ffi::c_int;
+
+    /// Substitute all occurrences
+    pub const SUBST_ALL: c_int = 1;
+    /// Case-insensitive matching
+    pub const SUBST_IC: c_int = 2;
+    /// Use magic mode
+    pub const SUBST_MAGIC: c_int = 4;
+    /// First substitution (for ~ handling)
+    pub const SUBST_FIRST_LINE: c_int = 8;
+    /// Preview mode (for inccommand)
+    pub const SUBST_PREVIEW: c_int = 16;
+}
+
+/// Check if a substitution replacement contains backreferences.
+///
+/// # Safety
+/// `replacement` must point to a valid null-terminated string.
+pub unsafe fn replacement_has_backref(replacement: *const u8) -> bool {
+    if replacement.is_null() {
+        return false;
+    }
+
+    let mut p = replacement;
+    while *p != 0 {
+        if *p == b'\\' {
+            let next = *p.add(1);
+            if next == 0 {
+                break;
+            }
+            // \0-\9 are backreferences
+            if next.is_ascii_digit() {
+                return true;
+            }
+            // \& is whole match
+            if next == b'&' {
+                return true;
+            }
+            p = p.add(2);
+        } else if *p == b'&' {
+            // Unescaped & is also whole match in some modes
+            return true;
+        } else {
+            p = p.add(1);
+        }
+    }
+    false
+}
+
+/// Check if a substitution replacement contains special sequences.
+/// Special sequences include: \r \n \t \e \b \u \U \l \L \~
+///
+/// # Safety
+/// `replacement` must point to a valid null-terminated string.
+pub unsafe fn replacement_has_special(replacement: *const u8) -> bool {
+    if replacement.is_null() {
+        return false;
+    }
+
+    let mut p = replacement;
+    while *p != 0 {
+        if *p == b'\\' {
+            let next = *p.add(1);
+            if next == 0 {
+                break;
+            }
+            match next {
+                b'r' | b'n' | b't' | b'e' | b'b' | b'u' | b'U' | b'l' | b'L' | b'~' => {
+                    return true;
+                }
+                _ => {}
+            }
+            p = p.add(2);
+        } else {
+            p = p.add(1);
+        }
+    }
+    false
+}
+
+/// Estimate the length of a substitution result.
+/// Returns -1 if the result length cannot be estimated (backreferences present).
+///
+/// # Safety
+/// `replacement` must point to a valid null-terminated string.
+pub unsafe fn estimate_replacement_len(
+    replacement: *const u8,
+    match_len: usize,
+    backref_lens: *const usize,
+) -> isize {
+    if replacement.is_null() {
+        return 0;
+    }
+
+    let mut len: usize = 0;
+    let mut p = replacement;
+
+    while *p != 0 {
+        if *p == b'\\' {
+            let next = *p.add(1);
+            if next == 0 {
+                break;
+            }
+
+            if next.is_ascii_digit() {
+                // Backref - need to look up length
+                if backref_lens.is_null() {
+                    return -1;
+                }
+                let idx = (next - b'0') as usize;
+                if idx < NSUBEXP {
+                    len += *backref_lens.add(idx);
+                }
+            } else if next == b'&' || next == b'0' {
+                // Whole match
+                len += match_len;
+            } else {
+                // Escape sequence - typically 1 char
+                len += 1;
+            }
+            p = p.add(2);
+        } else if *p == b'&' {
+            // Unescaped & - whole match
+            len += match_len;
+            p = p.add(1);
+        } else {
+            // Literal character
+            len += 1;
+            p = p.add(1);
+        }
+    }
+
+    len as isize
+}
+
+// FFI exports for substitution helpers
+
+/// Check if replacement has backreferences.
+///
+/// # Safety
+/// `replacement` must point to a valid null-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_replacement_has_backref(replacement: *const u8) -> c_int {
+    c_int::from(replacement_has_backref(replacement))
+}
+
+/// Check if replacement has special sequences.
+///
+/// # Safety
+/// `replacement` must point to a valid null-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_replacement_has_special(replacement: *const u8) -> c_int {
+    c_int::from(replacement_has_special(replacement))
+}
+
+/// Estimate replacement result length.
+///
+/// # Safety
+/// `replacement` must point to a valid null-terminated string.
+/// `backref_lens` if non-null must point to an array of NSUBEXP usizes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_estimate_replacement_len(
+    replacement: *const u8,
+    match_len: usize,
+    backref_lens: *const usize,
+) -> isize {
+    estimate_replacement_len(replacement, match_len, backref_lens)
+}
+
+// =============================================================================
+// Phase 78 Tests
+// =============================================================================
+
+#[cfg(test)]
+#[allow(clippy::manual_c_str_literals)]
+mod phase78_tests {
+    use super::*;
+
+    // Pattern analysis tests
+    #[test]
+    fn test_is_magic_meta() {
+        assert!(is_magic_meta(b'.'));
+        assert!(is_magic_meta(b'*'));
+        assert!(is_magic_meta(b'+'));
+        assert!(is_magic_meta(b'?'));
+        assert!(is_magic_meta(b'['));
+        assert!(is_magic_meta(b'^'));
+        assert!(is_magic_meta(b'$'));
+        assert!(is_magic_meta(b'\\'));
+        assert!(!is_magic_meta(b'a'));
+        assert!(!is_magic_meta(b'z'));
+        assert!(!is_magic_meta(b'0'));
+    }
+
+    #[test]
+    fn test_is_nomagic_meta() {
+        assert!(is_nomagic_meta(b'^'));
+        assert!(is_nomagic_meta(b'$'));
+        assert!(is_nomagic_meta(b'\\'));
+        assert!(!is_nomagic_meta(b'.'));
+        assert!(!is_nomagic_meta(b'*'));
+        assert!(!is_nomagic_meta(b'a'));
+    }
+
+    #[test]
+    fn test_is_literal_pattern() {
+        unsafe {
+            // Magic mode
+            assert!(is_literal_pattern(b"hello\0".as_ptr(), true));
+            assert!(!is_literal_pattern(b"hel.o\0".as_ptr(), true));
+            assert!(!is_literal_pattern(b"hello*\0".as_ptr(), true));
+            assert!(!is_literal_pattern(b"^hello\0".as_ptr(), true));
+
+            // Nomagic mode
+            assert!(is_literal_pattern(b"hello\0".as_ptr(), false));
+            assert!(is_literal_pattern(b"hel.o\0".as_ptr(), false)); // . is literal in nomagic
+            assert!(!is_literal_pattern(b"^hello\0".as_ptr(), false)); // ^ still special
+            assert!(!is_literal_pattern(b"hello\\+\0".as_ptr(), false)); // \ is special
+
+            // Null and empty
+            assert!(is_literal_pattern(std::ptr::null(), true));
+            assert!(is_literal_pattern(b"\0".as_ptr(), true));
+        }
+    }
+
+    #[test]
+    fn test_pattern_is_anchored_start() {
+        unsafe {
+            assert!(pattern_is_anchored_start(b"^hello\0".as_ptr(), true));
+            assert!(!pattern_is_anchored_start(b"hello\0".as_ptr(), true));
+            assert!(!pattern_is_anchored_start(b"he^llo\0".as_ptr(), true));
+            assert!(!pattern_is_anchored_start(std::ptr::null(), true));
+        }
+    }
+
+    #[test]
+    fn test_pattern_is_anchored_end() {
+        unsafe {
+            assert!(pattern_is_anchored_end(b"hello$\0".as_ptr(), true));
+            assert!(!pattern_is_anchored_end(b"hello\0".as_ptr(), true));
+            assert!(!pattern_is_anchored_end(b"hel$lo\0".as_ptr(), true));
+            // Escaped $ is not anchor
+            assert!(!pattern_is_anchored_end(b"hello\\$\0".as_ptr(), true));
+        }
+    }
+
+    #[test]
+    fn test_pattern_min_match_len() {
+        unsafe {
+            assert_eq!(pattern_min_match_len(b"hello\0".as_ptr()), 5);
+            assert_eq!(pattern_min_match_len(b"^hello$\0".as_ptr()), 5);
+            assert_eq!(pattern_min_match_len(b"a.b\0".as_ptr()), 3);
+            assert_eq!(pattern_min_match_len(b"a*\0".as_ptr()), 0);
+            assert_eq!(pattern_min_match_len(b"a+\0".as_ptr()), 1);
+            assert_eq!(pattern_min_match_len(b"a?\0".as_ptr()), 0);
+            assert_eq!(pattern_min_match_len(std::ptr::null()), 0);
+            assert_eq!(pattern_min_match_len(b"\0".as_ptr()), 0);
+        }
+    }
+
+    // NFA helper tests
+    #[test]
+    fn test_nfa_state_count_ok() {
+        assert!(nfa_state_count_ok(0));
+        assert!(nfa_state_count_ok(1000));
+        assert!(nfa_state_count_ok(NFA_MAX_STATES - 1));
+        assert!(!nfa_state_count_ok(NFA_MAX_STATES));
+        assert!(!nfa_state_count_ok(-1));
+    }
+
+    #[test]
+    fn test_estimate_nfa_complexity() {
+        assert_eq!(estimate_nfa_complexity(0), 0);
+        assert_eq!(estimate_nfa_complexity(10), 30);
+        assert_eq!(estimate_nfa_complexity(100), 300);
+        // Very long pattern should return TOO_EXPENSIVE
+        assert_eq!(
+            estimate_nfa_complexity(NFA_MAX_STATES as usize),
+            NFA_TOO_EXPENSIVE
+        );
+    }
+
+    // Backtracking helper tests
+    #[test]
+    fn test_bt_depth_ok() {
+        assert!(bt_depth_ok(0));
+        assert!(bt_depth_ok(1000));
+        assert!(bt_depth_ok(BT_MAX_RECURSION - 1));
+        assert!(!bt_depth_ok(BT_MAX_RECURSION));
+        assert!(!bt_depth_ok(-1));
+    }
+
+    #[test]
+    fn test_estimate_bt_stack_size() {
+        assert!(estimate_bt_stack_size(10, 100) >= 64);
+        assert!(estimate_bt_stack_size(100, 100) <= BT_MAX_RECURSION as usize);
+        // Overflow protection
+        assert_eq!(
+            estimate_bt_stack_size(1000000, 1000000),
+            BT_MAX_RECURSION as usize
+        );
+    }
+
+    // Substitution helper tests
+    #[test]
+    fn test_replacement_has_backref() {
+        unsafe {
+            assert!(replacement_has_backref(b"\\1\0".as_ptr()));
+            assert!(replacement_has_backref(b"foo\\2bar\0".as_ptr()));
+            assert!(replacement_has_backref(b"\\&\0".as_ptr()));
+            assert!(replacement_has_backref(b"foo&bar\0".as_ptr()));
+            assert!(!replacement_has_backref(b"hello\0".as_ptr()));
+            assert!(!replacement_has_backref(b"\\n\\t\0".as_ptr()));
+            assert!(!replacement_has_backref(std::ptr::null()));
+        }
+    }
+
+    #[test]
+    fn test_replacement_has_special() {
+        unsafe {
+            assert!(replacement_has_special(b"\\n\0".as_ptr()));
+            assert!(replacement_has_special(b"\\r\0".as_ptr()));
+            assert!(replacement_has_special(b"\\t\0".as_ptr()));
+            assert!(replacement_has_special(b"\\U\0".as_ptr()));
+            assert!(replacement_has_special(b"\\l\0".as_ptr()));
+            assert!(replacement_has_special(b"\\~\0".as_ptr()));
+            assert!(!replacement_has_special(b"hello\0".as_ptr()));
+            assert!(!replacement_has_special(b"\\1\0".as_ptr())); // backref, not special
+        }
+    }
+
+    #[test]
+    fn test_estimate_replacement_len() {
+        unsafe {
+            // Simple literal
+            assert_eq!(estimate_replacement_len(b"hello\0".as_ptr(), 5, std::ptr::null()), 5);
+
+            // With & (whole match)
+            assert_eq!(estimate_replacement_len(b"[&]\0".as_ptr(), 5, std::ptr::null()), 7);
+
+            // With \& (whole match)
+            assert_eq!(estimate_replacement_len(b"[\\&]\0".as_ptr(), 5, std::ptr::null()), 7);
+
+            // With backref but no lens - returns -1
+            assert_eq!(estimate_replacement_len(b"\\1\0".as_ptr(), 5, std::ptr::null()), -1);
+
+            // With backref and lens
+            let lens: [usize; NSUBEXP] = [5, 3, 0, 0, 0, 0, 0, 0, 0, 0];
+            assert_eq!(estimate_replacement_len(b"\\1\0".as_ptr(), 5, lens.as_ptr()), 3);
+
+            // Null replacement
+            assert_eq!(estimate_replacement_len(std::ptr::null(), 5, std::ptr::null()), 0);
+        }
+    }
+
+    #[test]
+    fn test_sub_flags() {
+        assert_eq!(sub_flags::SUBST_ALL, 1);
+        assert_eq!(sub_flags::SUBST_IC, 2);
+        assert_eq!(sub_flags::SUBST_MAGIC, 4);
+        assert_eq!(sub_flags::SUBST_FIRST_LINE, 8);
+        assert_eq!(sub_flags::SUBST_PREVIEW, 16);
+    }
+
+    #[test]
+    fn test_nfa_constants() {
+        assert_eq!(NFA_MAX_STATES, 100000);
+        assert_eq!(NFA_TOO_EXPENSIVE, -1);
+        assert_eq!(NFA_MAX_DEPTH, 5000);
+    }
+
+    #[test]
+    fn test_bt_constants() {
+        assert_eq!(BT_MAX_RECURSION, 10000);
+        assert_eq!(BT_STACK_GROWTH, 1024);
+    }
+}
