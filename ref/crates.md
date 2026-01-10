@@ -15,6 +15,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | change         | Buffer modification tracking and text editing |
 | channel        | Channel infrastructure for RPC communication |
 | charset        | Character classification and conversion |
+| clipboard      | Clipboard integration (providers, selections, async operations) |
 | cmdexpand      | Command-line completion and expansion   |
 | cmdhist        | Command history                         |
 | cmdline        | Command line mode (state, edit, history, keys, preview, UI, API, viewstate, fname) |
