@@ -5153,3 +5153,444 @@ mod tests {
         }
     }
 }
+
+// =============================================================================
+// Phase 82: Syntax Highlighting Engine Helpers
+// =============================================================================
+
+/// Syntax state stack management flags
+pub mod state_flags {
+    use std::os::raw::c_int;
+
+    /// State is valid
+    pub const VALID: c_int = 0x01;
+    /// State has been modified
+    pub const MODIFIED: c_int = 0x02;
+    /// State needs re-sync
+    pub const NEED_SYNC: c_int = 0x04;
+    /// State is cached
+    pub const CACHED: c_int = 0x08;
+    /// State includes continuation
+    pub const CONTINUED: c_int = 0x10;
+    /// State at end of line
+    pub const EOL: c_int = 0x20;
+}
+
+/// Check if state has a specific flag.
+#[no_mangle]
+pub const extern "C" fn rs_syn_state_has_flag(flags: c_int, flag: c_int) -> bool {
+    (flags & flag) != 0
+}
+
+/// Set a state flag.
+#[no_mangle]
+pub const extern "C" fn rs_syn_state_set_flag(flags: c_int, flag: c_int) -> c_int {
+    flags | flag
+}
+
+/// Clear a state flag.
+#[no_mangle]
+pub const extern "C" fn rs_syn_state_clear_flag(flags: c_int, flag: c_int) -> c_int {
+    flags & !flag
+}
+
+/// Sync method types
+pub mod sync_method {
+    use std::os::raw::c_int;
+
+    /// No sync method specified
+    pub const NONE: c_int = 0;
+    /// Sync from cursor position
+    pub const CCOMMENT: c_int = 1;
+    /// Sync using linebreaks
+    pub const LINEBREAKS: c_int = 2;
+    /// Sync from start of buffer
+    pub const FROMSTART: c_int = 3;
+    /// Sync to match patterns
+    pub const MATCH: c_int = 4;
+    /// Minimum number of lines
+    pub const MINLINES: c_int = 5;
+    /// Maximum number of lines
+    pub const MAXLINES: c_int = 6;
+}
+
+/// Check if sync method is line-based.
+#[no_mangle]
+pub const extern "C" fn rs_syn_sync_is_line_based(method: c_int) -> bool {
+    matches!(
+        method,
+        x if x == sync_method::LINEBREAKS
+            || x == sync_method::MINLINES
+            || x == sync_method::MAXLINES
+    )
+}
+
+/// Check if sync method scans from start.
+#[no_mangle]
+pub const extern "C" fn rs_syn_sync_from_start(method: c_int) -> bool {
+    method == sync_method::FROMSTART
+}
+
+// =============================================================================
+// Line State Helpers
+// =============================================================================
+
+/// Syntax line processing states
+pub mod line_state {
+    use std::os::raw::c_int;
+
+    /// Not started
+    pub const INIT: c_int = 0;
+    /// Processing in progress
+    pub const ACTIVE: c_int = 1;
+    /// Finished processing
+    pub const DONE: c_int = 2;
+    /// Error occurred
+    pub const ERROR: c_int = 3;
+}
+
+/// Check if line state indicates processing is needed.
+#[no_mangle]
+pub const extern "C" fn rs_syn_line_needs_processing(state: c_int) -> bool {
+    state == line_state::INIT || state == line_state::ACTIVE
+}
+
+/// Check if line processing is complete.
+#[no_mangle]
+pub const extern "C" fn rs_syn_line_is_done(state: c_int) -> bool {
+    state == line_state::DONE || state == line_state::ERROR
+}
+
+// =============================================================================
+// Match Position Helpers
+// =============================================================================
+
+/// Match position result
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct SynMatchPos {
+    /// Column where match starts (0-based)
+    pub start_col: c_int,
+    /// Column where match ends (0-based, exclusive)
+    pub end_col: c_int,
+    /// Match flags
+    pub flags: c_int,
+}
+
+/// Create an empty match position.
+#[no_mangle]
+pub const extern "C" fn rs_syn_match_pos_empty() -> SynMatchPos {
+    SynMatchPos {
+        start_col: 0,
+        end_col: 0,
+        flags: 0,
+    }
+}
+
+/// Create a match position with given bounds.
+#[no_mangle]
+pub const extern "C" fn rs_syn_match_pos_new(
+    start_col: c_int,
+    end_col: c_int,
+    flags: c_int,
+) -> SynMatchPos {
+    SynMatchPos {
+        start_col,
+        end_col,
+        flags,
+    }
+}
+
+/// Check if match position is valid.
+#[no_mangle]
+pub const extern "C" fn rs_syn_match_pos_is_valid(pos: SynMatchPos) -> bool {
+    pos.start_col >= 0 && pos.end_col >= pos.start_col
+}
+
+/// Calculate match length.
+#[no_mangle]
+pub const extern "C" fn rs_syn_match_pos_len(pos: SynMatchPos) -> c_int {
+    if pos.end_col >= pos.start_col {
+        pos.end_col - pos.start_col
+    } else {
+        0
+    }
+}
+
+// =============================================================================
+// State Stack Depth Helpers
+// =============================================================================
+
+/// Maximum syntax state stack depth
+pub const MAX_SYN_STACK_DEPTH: c_int = 100;
+
+/// Minimum state stack depth before warning
+pub const MIN_SYN_STACK_THRESHOLD: c_int = 10;
+
+/// Check if syntax stack depth is safe.
+#[no_mangle]
+pub const extern "C" fn rs_syn_stack_depth_ok(depth: c_int) -> bool {
+    depth >= 0 && depth < MAX_SYN_STACK_DEPTH
+}
+
+/// Check if syntax stack is near limit.
+#[no_mangle]
+pub const extern "C" fn rs_syn_stack_near_limit(depth: c_int) -> bool {
+    depth >= MAX_SYN_STACK_DEPTH - MIN_SYN_STACK_THRESHOLD
+}
+
+/// Calculate remaining stack capacity.
+#[no_mangle]
+pub const extern "C" fn rs_syn_stack_remaining(depth: c_int) -> c_int {
+    if depth < 0 {
+        MAX_SYN_STACK_DEPTH
+    } else if depth >= MAX_SYN_STACK_DEPTH {
+        0
+    } else {
+        MAX_SYN_STACK_DEPTH - depth
+    }
+}
+
+// =============================================================================
+// Highlight ID Helpers
+// =============================================================================
+
+/// Check if a highlight ID is valid for syntax use.
+#[no_mangle]
+pub const extern "C" fn rs_syn_hl_id_is_valid(id: c_int) -> bool {
+    id >= 0 && id < MAX_HL_ID
+}
+
+/// Check if a highlight ID is in the cluster range.
+///
+/// Uses the existing is_cluster_id function which correctly checks SYNID_CLUSTER range.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub const extern "C" fn rs_syn_id_is_cluster_range(id: c_int) -> bool {
+    is_cluster_id(id as i16)
+}
+
+/// Convert syntax ID to highlight group index.
+#[no_mangle]
+pub const extern "C" fn rs_syn_id_to_hl_idx(id: c_int) -> c_int {
+    if id >= 0 && id < MAX_HL_ID {
+        id
+    } else {
+        0
+    }
+}
+
+// =============================================================================
+// Concealment Helpers
+// =============================================================================
+
+/// Concealment levels
+pub mod conceal_level {
+    use std::os::raw::c_int;
+
+    /// No concealment
+    pub const NONE: c_int = 0;
+    /// Conceal with replacement character
+    pub const REPLACE: c_int = 1;
+    /// Conceal with space
+    pub const SPACE: c_int = 2;
+    /// Full concealment (nothing shown)
+    pub const FULL: c_int = 3;
+}
+
+/// Check if concealment is active.
+#[no_mangle]
+pub const extern "C" fn rs_syn_conceal_is_active(level: c_int) -> bool {
+    level > conceal_level::NONE
+}
+
+/// Check if concealment completely hides text.
+#[no_mangle]
+pub const extern "C" fn rs_syn_conceal_is_hidden(level: c_int) -> bool {
+    level >= conceal_level::FULL
+}
+
+/// Get effective concealment character.
+#[no_mangle]
+pub const extern "C" fn rs_syn_conceal_char(level: c_int, cchar: c_int) -> c_int {
+    match level {
+        x if x <= conceal_level::NONE => 0,
+        x if x == conceal_level::REPLACE && cchar != 0 => cchar,
+        x if x == conceal_level::SPACE => b' ' as c_int,
+        _ => 0,
+    }
+}
+
+// =============================================================================
+// Pattern Timeout Helpers
+// =============================================================================
+
+/// Default syntax timeout in milliseconds
+pub const SYN_TIMEOUT_DEFAULT: c_int = 3000;
+
+/// Minimum syntax timeout in milliseconds
+pub const SYN_TIMEOUT_MIN: c_int = 100;
+
+/// Maximum syntax timeout in milliseconds
+pub const SYN_TIMEOUT_MAX: c_int = 60000;
+
+/// Clamp timeout value to valid range.
+#[no_mangle]
+pub const extern "C" fn rs_syn_timeout_clamp(timeout: c_int) -> c_int {
+    if timeout < SYN_TIMEOUT_MIN {
+        SYN_TIMEOUT_MIN
+    } else if timeout > SYN_TIMEOUT_MAX {
+        SYN_TIMEOUT_MAX
+    } else {
+        timeout
+    }
+}
+
+/// Check if timeout value is valid.
+#[no_mangle]
+pub const extern "C" fn rs_syn_timeout_is_valid(timeout: c_int) -> bool {
+    timeout >= SYN_TIMEOUT_MIN && timeout <= SYN_TIMEOUT_MAX
+}
+
+// =============================================================================
+// Phase 82 Tests
+// =============================================================================
+
+#[cfg(test)]
+mod phase82_tests {
+    use super::*;
+
+    #[test]
+    fn test_state_flags() {
+        let flags = 0;
+        let flags = rs_syn_state_set_flag(flags, state_flags::VALID);
+        assert!(rs_syn_state_has_flag(flags, state_flags::VALID));
+        assert!(!rs_syn_state_has_flag(flags, state_flags::MODIFIED));
+
+        let flags = rs_syn_state_set_flag(flags, state_flags::CACHED);
+        assert!(rs_syn_state_has_flag(flags, state_flags::VALID));
+        assert!(rs_syn_state_has_flag(flags, state_flags::CACHED));
+
+        let flags = rs_syn_state_clear_flag(flags, state_flags::VALID);
+        assert!(!rs_syn_state_has_flag(flags, state_flags::VALID));
+        assert!(rs_syn_state_has_flag(flags, state_flags::CACHED));
+    }
+
+    #[test]
+    fn test_sync_method() {
+        assert!(rs_syn_sync_is_line_based(sync_method::LINEBREAKS));
+        assert!(rs_syn_sync_is_line_based(sync_method::MINLINES));
+        assert!(rs_syn_sync_is_line_based(sync_method::MAXLINES));
+        assert!(!rs_syn_sync_is_line_based(sync_method::CCOMMENT));
+        assert!(!rs_syn_sync_is_line_based(sync_method::MATCH));
+
+        assert!(rs_syn_sync_from_start(sync_method::FROMSTART));
+        assert!(!rs_syn_sync_from_start(sync_method::LINEBREAKS));
+    }
+
+    #[test]
+    fn test_line_state() {
+        assert!(rs_syn_line_needs_processing(line_state::INIT));
+        assert!(rs_syn_line_needs_processing(line_state::ACTIVE));
+        assert!(!rs_syn_line_needs_processing(line_state::DONE));
+        assert!(!rs_syn_line_needs_processing(line_state::ERROR));
+
+        assert!(rs_syn_line_is_done(line_state::DONE));
+        assert!(rs_syn_line_is_done(line_state::ERROR));
+        assert!(!rs_syn_line_is_done(line_state::INIT));
+        assert!(!rs_syn_line_is_done(line_state::ACTIVE));
+    }
+
+    #[test]
+    fn test_match_pos() {
+        let empty = rs_syn_match_pos_empty();
+        assert_eq!(empty.start_col, 0);
+        assert_eq!(empty.end_col, 0);
+        assert!(rs_syn_match_pos_is_valid(empty));
+
+        let pos = rs_syn_match_pos_new(5, 10, 0);
+        assert!(rs_syn_match_pos_is_valid(pos));
+        assert_eq!(rs_syn_match_pos_len(pos), 5);
+
+        let invalid = rs_syn_match_pos_new(10, 5, 0);
+        assert!(!rs_syn_match_pos_is_valid(invalid));
+        assert_eq!(rs_syn_match_pos_len(invalid), 0);
+    }
+
+    #[test]
+    fn test_stack_depth() {
+        assert!(rs_syn_stack_depth_ok(0));
+        assert!(rs_syn_stack_depth_ok(99));
+        assert!(!rs_syn_stack_depth_ok(100));
+        assert!(!rs_syn_stack_depth_ok(-1));
+
+        assert!(!rs_syn_stack_near_limit(0));
+        assert!(!rs_syn_stack_near_limit(89));
+        assert!(rs_syn_stack_near_limit(90));
+        assert!(rs_syn_stack_near_limit(99));
+
+        assert_eq!(rs_syn_stack_remaining(0), 100);
+        assert_eq!(rs_syn_stack_remaining(50), 50);
+        assert_eq!(rs_syn_stack_remaining(100), 0);
+        assert_eq!(rs_syn_stack_remaining(-1), 100);
+    }
+
+    #[test]
+    fn test_hl_id_helpers() {
+        use crate::types::SYNID_CLUSTER;
+
+        assert!(rs_syn_hl_id_is_valid(0));
+        assert!(rs_syn_hl_id_is_valid(MAX_HL_ID - 1));
+        assert!(!rs_syn_hl_id_is_valid(MAX_HL_ID));
+        assert!(!rs_syn_hl_id_is_valid(-1));
+
+        // Cluster IDs start at SYNID_CLUSTER (23000)
+        assert!(!rs_syn_id_is_cluster_range(0));
+        assert!(!rs_syn_id_is_cluster_range(MAX_HL_ID - 1));
+        assert!(!rs_syn_id_is_cluster_range(MAX_HL_ID)); // Not in cluster range
+        assert!(rs_syn_id_is_cluster_range(SYNID_CLUSTER)); // First cluster ID
+        assert!(rs_syn_id_is_cluster_range(SYNID_CLUSTER + 100));
+
+        assert_eq!(rs_syn_id_to_hl_idx(5), 5);
+        assert_eq!(rs_syn_id_to_hl_idx(MAX_HL_ID), 0); // Out of range
+        assert_eq!(rs_syn_id_to_hl_idx(-1), 0); // Negative
+    }
+
+    #[test]
+    fn test_conceal() {
+        assert!(!rs_syn_conceal_is_active(conceal_level::NONE));
+        assert!(rs_syn_conceal_is_active(conceal_level::REPLACE));
+        assert!(rs_syn_conceal_is_active(conceal_level::SPACE));
+        assert!(rs_syn_conceal_is_active(conceal_level::FULL));
+
+        assert!(!rs_syn_conceal_is_hidden(conceal_level::NONE));
+        assert!(!rs_syn_conceal_is_hidden(conceal_level::REPLACE));
+        assert!(!rs_syn_conceal_is_hidden(conceal_level::SPACE));
+        assert!(rs_syn_conceal_is_hidden(conceal_level::FULL));
+
+        assert_eq!(rs_syn_conceal_char(conceal_level::NONE, b'x' as c_int), 0);
+        assert_eq!(
+            rs_syn_conceal_char(conceal_level::REPLACE, b'x' as c_int),
+            b'x' as c_int
+        );
+        assert_eq!(rs_syn_conceal_char(conceal_level::REPLACE, 0), 0);
+        assert_eq!(
+            rs_syn_conceal_char(conceal_level::SPACE, b'x' as c_int),
+            b' ' as c_int
+        );
+        assert_eq!(rs_syn_conceal_char(conceal_level::FULL, b'x' as c_int), 0);
+    }
+
+    #[test]
+    fn test_timeout() {
+        assert_eq!(rs_syn_timeout_clamp(50), SYN_TIMEOUT_MIN);
+        assert_eq!(rs_syn_timeout_clamp(3000), 3000);
+        assert_eq!(rs_syn_timeout_clamp(100000), SYN_TIMEOUT_MAX);
+
+        assert!(!rs_syn_timeout_is_valid(50));
+        assert!(rs_syn_timeout_is_valid(SYN_TIMEOUT_MIN));
+        assert!(rs_syn_timeout_is_valid(SYN_TIMEOUT_DEFAULT));
+        assert!(rs_syn_timeout_is_valid(SYN_TIMEOUT_MAX));
+        assert!(!rs_syn_timeout_is_valid(100000));
+    }
+}
