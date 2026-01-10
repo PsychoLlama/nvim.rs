@@ -63,7 +63,7 @@ impl SelectionType {
     /// Create from register name
     pub const fn from_register(name: c_int) -> Self {
         match name {
-            0x2A => Self::Primary,  // b'*'
+            0x2A => Self::Primary, // b'*'
             _ => Self::Clipboard,
         }
     }
@@ -345,14 +345,8 @@ mod tests {
 
     #[test]
     fn test_selection_type() {
-        assert_eq!(
-            SelectionType::from_raw(0),
-            Some(SelectionType::Primary)
-        );
-        assert_eq!(
-            SelectionType::from_raw(1),
-            Some(SelectionType::Clipboard)
-        );
+        assert_eq!(SelectionType::from_raw(0), Some(SelectionType::Primary));
+        assert_eq!(SelectionType::from_raw(1), Some(SelectionType::Clipboard));
         assert_eq!(SelectionType::from_raw(100), None);
 
         assert_eq!(SelectionType::Primary.x11_name(), "PRIMARY");
@@ -443,10 +437,7 @@ mod tests {
         assert_eq!(rs_clipboard_selection_valid(0), 1);
         assert_eq!(rs_clipboard_selection_valid(100), 0);
 
-        assert_eq!(
-            rs_clipboard_selection_to_register(0),
-            b'*' as c_int
-        );
+        assert_eq!(rs_clipboard_selection_to_register(0), b'*' as c_int);
         assert_eq!(rs_clipboard_motion_from_char(b'v'), MotionType::CharWise);
         assert_eq!(rs_clipboard_motion_to_char(1), b'v');
     }

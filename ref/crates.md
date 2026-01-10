@@ -86,6 +86,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | register       | Register operations                     |
 | runtime        | Runtime file management and script sourcing |
 | search         | Search and substitution                 |
+| session        | Session persistence (:mksession, :mkview, flags, components) |
 | shada          | Session data persistence (ShaDa files)  |
 | sign           | Sign management and display             |
 | spell          | Spell checking (word tree traversal, edit distance, suggestion scoring, .spl file I/O) |

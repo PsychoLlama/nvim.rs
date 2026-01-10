@@ -29,9 +29,7 @@ pub use search::{
     FindTagsMatchArgs, FindTagsStateCore, TagMatchStatus, TagSearchInfo, TagSearchState,
     TagsReadStatus,
 };
-pub use select::{
-    SelectionAction, SelectionResult, TagMatchDisplayInfo, TagSelectionState,
-};
+pub use select::{SelectionAction, SelectionResult, TagMatchDisplayInfo, TagSelectionState};
 
 // =============================================================================
 // Constants

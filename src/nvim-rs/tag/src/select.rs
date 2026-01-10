@@ -225,7 +225,7 @@ pub const fn parse_selection_key(key: c_int) -> SelectionAction {
         0x100 | 107 => SelectionAction::Up,   // K_UP or 'k'
         0x101 | 106 => SelectionAction::Down, // K_DOWN or 'j'
         // Page keys
-        0x102 | 2 => SelectionAction::PageUp,   // K_PAGEUP or Ctrl-B
+        0x102 | 2 => SelectionAction::PageUp, // K_PAGEUP or Ctrl-B
         0x103 | 6 => SelectionAction::PageDown, // K_PAGEDOWN or Ctrl-F
         // Home/End
         0x104 | 103 => SelectionAction::First, // K_HOME or 'g'

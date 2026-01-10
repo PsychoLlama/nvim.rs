@@ -301,11 +301,7 @@ impl ArgNavResult {
 // =============================================================================
 
 /// Calculate target index for navigation
-pub fn calculate_nav_target(
-    current: c_int,
-    count: c_int,
-    nav: &ArgNavigation,
-) -> ArgNavResult {
+pub fn calculate_nav_target(current: c_int, count: c_int, nav: &ArgNavigation) -> ArgNavResult {
     if count == 0 {
         return ArgNavResult::failure(1); // Empty
     }

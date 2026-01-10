@@ -329,10 +329,7 @@ pub extern "C" fn rs_fold_text_components(line_count: LinenrT, level: c_int) -> 
 
 /// FFI export: Calculate fold percent of buffer
 #[no_mangle]
-pub extern "C" fn rs_fold_percent_of_buffer(
-    line_count: LinenrT,
-    total_lines: LinenrT,
-) -> c_int {
+pub extern "C" fn rs_fold_percent_of_buffer(line_count: LinenrT, total_lines: LinenrT) -> c_int {
     let components = FoldTextComponents::new(line_count, 1);
     c_int::from(components.percent_of_buffer(total_lines))
 }

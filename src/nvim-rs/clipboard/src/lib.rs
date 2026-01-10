@@ -212,8 +212,8 @@ impl ClipboardRegister {
     /// Create from register name
     pub const fn from_name(name: c_int) -> Self {
         match name {
-            0x2A => Self::Star,  // b'*'
-            0x2B => Self::Plus,  // b'+'
+            0x2A => Self::Star, // b'*'
+            0x2B => Self::Plus, // b'+'
             _ => Self::None,
         }
     }

@@ -18,7 +18,7 @@ use std::ffi::c_int;
 // Re-export key types
 pub use breakpoint::{Breakpoint, BreakpointFlags, BreakpointType};
 pub use dap::{DapMessage, DapMessageType, DapState};
-pub use state::{DebuggerState, DebugStatus};
+pub use state::{DebugStatus, DebuggerState};
 pub use stepping::{StepMode, StepResult};
 
 // =============================================================================

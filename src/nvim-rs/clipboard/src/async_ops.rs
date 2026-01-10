@@ -344,13 +344,19 @@ pub extern "C" fn rs_clipboard_state_is_success(state: c_int) -> c_int {
 
 /// FFI export: Create get request
 #[no_mangle]
-pub extern "C" fn rs_clipboard_request_get(id: u64, register: ClipboardRegister) -> ClipboardRequest {
+pub extern "C" fn rs_clipboard_request_get(
+    id: u64,
+    register: ClipboardRegister,
+) -> ClipboardRequest {
     ClipboardRequest::get(id, register)
 }
 
 /// FFI export: Create set request
 #[no_mangle]
-pub extern "C" fn rs_clipboard_request_set(id: u64, register: ClipboardRegister) -> ClipboardRequest {
+pub extern "C" fn rs_clipboard_request_set(
+    id: u64,
+    register: ClipboardRegister,
+) -> ClipboardRequest {
     ClipboardRequest::set(id, register)
 }
 

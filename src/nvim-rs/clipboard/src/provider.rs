@@ -363,7 +363,10 @@ mod tests {
 
     #[test]
     fn test_provider() {
-        assert_eq!(ClipboardProvider::from_raw(0), Some(ClipboardProvider::None));
+        assert_eq!(
+            ClipboardProvider::from_raw(0),
+            Some(ClipboardProvider::None)
+        );
         assert_eq!(ClipboardProvider::from_raw(4), Some(ClipboardProvider::X11));
         assert_eq!(ClipboardProvider::from_raw(100), None);
 

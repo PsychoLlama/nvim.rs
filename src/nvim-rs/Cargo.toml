@@ -118,6 +118,7 @@ nvim-undo = { path = "undo" }
 nvim-usercmd = { path = "usercmd" }
 nvim-userfunc = { path = "userfunc" }
 nvim-vars = { path = "vars" }
+nvim-session = { path = "session" }
 
 [build-dependencies]
 cbindgen = "0.27"
