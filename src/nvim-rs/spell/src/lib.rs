@@ -10,8 +10,10 @@
 #![allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
 
 pub mod check;
+pub mod soundfold;
 pub mod spellfile;
 pub mod suggest;
+pub mod wordnode;
 pub mod wordtree;
 
 // Re-export types for cbindgen
