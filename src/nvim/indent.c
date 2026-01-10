@@ -69,6 +69,54 @@ extern TabstopFromtoResult rs_tabstop_fromto(int start_col, int end_col, int ts,
 extern int rs_get_sw_value_col(buf_T *buf, int col, bool left);
 extern bool rs_may_do_si(void);
 
+// Phase 138: Indentation helper functions
+// Character classification
+extern int rs_indent_is_space(char c);
+extern int rs_indent_is_tab(char c);
+extern int rs_indent_is_white(char c);
+extern int rs_indent_is_eol(char c);
+// Indent flags
+extern int rs_indent_flag_set(void);
+extern int rs_indent_flag_inc(void);
+extern int rs_indent_flag_dec(void);
+extern int rs_indent_is_set(int action);
+extern int rs_indent_is_inc(int action);
+extern int rs_indent_is_dec(int action);
+// Shiftround modes
+extern int rs_sr_round(void);
+extern int rs_sr_left(void);
+extern int rs_sr_right(void);
+extern int rs_sr_is_round(int mode);
+extern int rs_sr_is_left(int mode);
+extern int rs_sr_is_right(int mode);
+// Indent calculations
+extern int rs_indent_round(int indent, int sw);
+extern int rs_indent_floor(int indent, int sw);
+extern int rs_indent_ceil(int indent, int sw);
+extern int rs_indent_shift(int cur_indent, int sw, int count, int round);
+extern int rs_indent_on_boundary(int indent, int sw);
+// Whitespace counting
+extern int rs_count_leading_white(const char *ptr);
+extern int rs_count_leading_spaces(const char *ptr);
+extern int rs_count_leading_tabs(const char *ptr);
+extern int rs_line_is_blank(const char *ptr);
+extern int rs_line_no_indent(const char *ptr);
+// Column calculations
+extern int rs_col_add_spaces(int col, int spaces);
+extern int rs_col_add_tab(int col, int ts);
+extern int rs_tabs_to_spaces(int ntabs, int ts);
+extern int rs_spaces_to_tabs(int spaces, int ts);
+extern int rs_spaces_after_tabs(int spaces, int ts);
+// Expandtab helpers
+extern int rs_use_expandtab(int expandtab);
+extern int rs_indent_chars_needed(int indent, int ts, int expandtab);
+// Default values
+extern int rs_default_ts(void);
+extern int rs_default_sw(void);
+extern int rs_default_sts(void);
+extern int rs_normalize_ts(int ts);
+extern int rs_normalize_sw(int sw, int ts);
+
 /// Set the integer values corresponding to the string setting of 'vartabstop'.
 /// "array" will be set, caller must free it if needed.
 ///
