@@ -23,6 +23,9 @@
 #![allow(clippy::semicolon_if_nothing_returned)] // Style preference
 #![allow(clippy::items_after_statements)] // Matching C code style
 #![allow(clippy::cast_possible_truncation)] // Values within range in practice
+#![allow(dead_code)]
+
+pub mod helpers;
 
 use std::ffi::{c_int, c_void};
 

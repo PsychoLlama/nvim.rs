@@ -48,6 +48,46 @@
 
 #include "extmark.c.generated.h"
 
+// Rust FFI declarations for extmark helpers
+extern int rs_flags_paired(uint16_t flags);
+extern int rs_flags_end(uint16_t flags);
+extern int rs_flags_right(uint16_t flags);
+extern int rs_flags_invalid(uint16_t flags);
+extern int rs_flags_invalidate(uint16_t flags);
+extern int rs_flags_no_undo(uint16_t flags);
+extern int rs_flags_decor_any(uint16_t flags);
+extern int rs_flags_decor_ext(uint16_t flags);
+extern int rs_flags_real(uint16_t flags);
+extern uint16_t rs_flags_compute(int right_gravity, int no_undo, int invalidate, int decor_ext);
+extern uint16_t rs_flags_set_invalid(uint16_t flags);
+extern uint16_t rs_flags_clear_invalid(uint16_t flags);
+extern int rs_pos_cmp(int row1, int col1, int row2, int col2);
+extern int rs_pos_eq(int row1, int col1, int row2, int col2);
+extern int rs_row_valid(int row);
+extern int rs_row_invalid(int row);
+extern int rs_pos_before(int row1, int col1, int row2, int col2);
+extern int rs_pos_before_or_eq(int row1, int col1, int row2, int col2);
+extern int rs_pos_after(int row1, int col1, int row2, int col2);
+extern int rs_pos_after_or_eq(int row1, int col1, int row2, int col2);
+extern int rs_pos_between(int pos_row, int pos_col, int start_row, int start_col,
+                            int end_row, int end_col);
+extern int rs_pos_between_inclusive(int pos_row, int pos_col, int start_row, int start_col,
+                                      int end_row, int end_col);
+extern int rs_adjust_row(int row, int start_row, int old_rows, int new_rows);
+extern int rs_row_in_change_range(int row, int start_row, int old_rows);
+extern uint64_t rs_extmark_lookup_key(uint32_t ns, uint32_t id, int is_end);
+extern uint32_t rs_extmark_lookup_key_ns(uint64_t key);
+extern uint32_t rs_extmark_lookup_key_id(uint64_t key);
+extern int rs_extmark_op_is_noop(int op);
+extern int rs_extmark_op_is_undo(int op);
+extern int rs_extmark_op_is_no_undo(int op);
+extern int rs_extmark_op_is_undo_no_redo(int op);
+extern int rs_splice_affects_marks(int old_row, int old_col, int new_row, int new_col);
+extern int rs_splice_is_row_only(int old_row, int old_col, int new_row, int new_col);
+extern int rs_splice_is_col_only(int old_row, int new_row);
+extern int rs_splice_end_row(int start_row, int old_row);
+extern int rs_splice_end_col(int start_col, int old_row, int old_col);
+
 /// Create or update an extmark
 ///
 /// must not be used during iteration!
@@ -58,20 +98,20 @@ void extmark_set(buf_T *buf, uint32_t ns_id, uint32_t *idp, int row, colnr_T col
   uint32_t *ns = map_put_ref(uint32_t, uint32_t)(buf->b_extmark_ns, ns_id, NULL, NULL);
   uint32_t id = idp ? *idp : 0;
 
-  uint16_t flags = mt_flags(right_gravity, no_undo, invalidate, decor.ext) | decor_flags;
+  uint16_t flags = rs_flags_compute(right_gravity, no_undo, invalidate, decor.ext) | decor_flags;
   if (id == 0) {
     id = ++*ns;
   } else {
     MarkTreeIter itr[1] = { 0 };
     MTKey old_mark = marktree_lookup_ns(buf->b_marktree, ns_id, id, false, itr);
     if (old_mark.id) {
-      if (mt_paired(old_mark) || end_row > -1) {
+      if (rs_flags_paired(old_mark.flags) || end_row > -1) {
         extmark_del_id(buf, ns_id, id);
       } else {
         assert(marktree_itr_valid(itr));
-        if (old_mark.pos.row == row && old_mark.pos.col == col) {
+        if (rs_pos_eq(old_mark.pos.row, old_mark.pos.col, row, col)) {
           // not paired: we can revise in place
-          if (!mt_invalid(old_mark) && mt_decor_any(old_mark)) {
+          if (!rs_flags_invalid(old_mark.flags) && rs_flags_decor_any(old_mark.flags)) {
             mt_itr_rawkey(itr).flags &= (uint16_t) ~MT_FLAG_EXTERNAL_MASK;
             buf_decor_remove(buf, row, row, col, mt_decor(old_mark), true);
           }
@@ -81,7 +121,7 @@ void extmark_set(buf_T *buf, uint32_t ns_id, uint32_t *idp, int row, colnr_T col
           goto revised;
         }
         marktree_del_itr(buf->b_marktree, itr, false);
-        if (!mt_invalid(old_mark)) {
+        if (!rs_flags_invalid(old_mark.flags)) {
           buf_decor_remove(buf, old_mark.pos.row, old_mark.pos.row, old_mark.pos.col,
                            mt_decor(old_mark), true);
         }
@@ -111,14 +151,14 @@ static void extmark_setraw(buf_T *buf, uint64_t mark, int row, colnr_T col, bool
 {
   MarkTreeIter itr[1] = { 0 };
   MTKey key = marktree_lookup(buf->b_marktree, mark, itr);
-  bool move = key.pos.row != row || key.pos.col != col;
+  bool move = !rs_pos_eq(key.pos.row, key.pos.col, row, col);
   if (key.pos.row < 0 || (!move && !invalid)) {
     return;  // Mark was deleted or no change needed
   }
 
   // Only the position before undo needs to be redrawn here,
   // as the position after undo should be marked as changed.
-  if (!invalid && mt_decor_any(key) && key.pos.row != row) {
+  if (!invalid && rs_flags_decor_any(key.flags) && key.pos.row != row) {
     decor_redraw(buf, key.pos.row, key.pos.row, key.pos.col, mt_decor(key));
   }
 
@@ -128,10 +168,11 @@ static void extmark_setraw(buf_T *buf, uint64_t mark, int row, colnr_T col, bool
   MTKey alt = marktree_get_alt(buf->b_marktree, key, altitr);
 
   if (invalid) {
-    mt_itr_rawkey(itr).flags &= (uint16_t) ~MT_FLAG_INVALID;
-    mt_itr_rawkey(altitr).flags &= (uint16_t) ~MT_FLAG_INVALID;
-    marktree_revise_meta(buf->b_marktree, mt_end(key) ? altitr : itr, mt_end(key) ? alt : key);
-  } else if (!mt_invalid(key) && key.flags & MT_FLAG_DECOR_SIGNTEXT && buf->b_signcols.autom) {
+    mt_itr_rawkey(itr).flags = rs_flags_clear_invalid(mt_itr_rawkey(itr).flags);
+    mt_itr_rawkey(altitr).flags = rs_flags_clear_invalid(mt_itr_rawkey(altitr).flags);
+    marktree_revise_meta(buf->b_marktree, rs_flags_end(key.flags) ? altitr : itr,
+                         rs_flags_end(key.flags) ? alt : key);
+  } else if (!rs_flags_invalid(key.flags) && key.flags & MT_FLAG_DECOR_SIGNTEXT && buf->b_signcols.autom) {
     row1 = MIN(alt.pos.row, MIN(key.pos.row, row));
     row2 = MAX(alt.pos.row, MAX(key.pos.row, row));
     buf_signcols_count_range(buf, row1, MIN(curbuf->b_ml.ml_line_count - 1, row2), 0, kTrue);
@@ -143,7 +184,7 @@ static void extmark_setraw(buf_T *buf, uint64_t mark, int row, colnr_T col, bool
 
   if (invalid) {
     buf_put_decor(buf, mt_decor(key), MIN(row, key.pos.row), MAX(row, key.pos.row));
-  } else if (!mt_invalid(key) && key.flags & MT_FLAG_DECOR_SIGNTEXT && buf->b_signcols.autom) {
+  } else if (!rs_flags_invalid(key.flags) && key.flags & MT_FLAG_DECOR_SIGNTEXT && buf->b_signcols.autom) {
     buf_signcols_count_range(buf, row1, MIN(curbuf->b_ml.ml_line_count - 1, row2), 0, kNone);
   }
 }
@@ -178,11 +219,11 @@ void extmark_del(buf_T *buf, MarkTreeIter *itr, MTKey key, bool restore)
     }
   }
 
-  if (mt_decor_any(key)) {
-    if (mt_invalid(key)) {
+  if (rs_flags_decor_any(key.flags)) {
+    if (rs_flags_invalid(key.flags)) {
       decor_free(mt_decor(key));
     } else {
-      if (mt_end(key)) {
+      if (rs_flags_end(key.flags)) {
         MTKey k = key;
         key = key2;
         key2 = k;
@@ -221,10 +262,8 @@ bool extmark_clear(buf_T *buf, uint32_t ns_id, int l_row, colnr_T l_col, int u_r
   marktree_itr_get(buf->b_marktree, l_row, l_col, itr);
   while (true) {
     MTKey mark = marktree_itr_current(itr);
-    if (mark.pos.row < 0
-        || mark.pos.row > u_row
-        || (mark.pos.row == u_row && mark.pos.col > u_col)) {
-      if (mark.pos.row >= 0) {
+    if (rs_row_invalid(mark.pos.row) || rs_pos_after(mark.pos.row, mark.pos.col, u_row, u_col)) {
+      if (rs_row_valid(mark.pos.row)) {
         marks_cleared_all = false;
       }
       break;
@@ -283,12 +322,10 @@ ExtmarkInfoArray extmark_get(buf_T *buf, uint32_t ns_id, int l_row, colnr_T l_co
 
   while ((int64_t)kv_size(array) < amount) {
     MTKey mark = marktree_itr_current(itr);
-    if (mark.pos.row < 0
-        || (mark.pos.row > u_row)
-        || (mark.pos.row == u_row && mark.pos.col > u_col)) {
+    if (rs_row_invalid(mark.pos.row) || rs_pos_after(mark.pos.row, mark.pos.col, u_row, u_col)) {
       break;
     }
-    if (!mt_end(mark)) {
+    if (!rs_flags_end(mark.flags)) {
       MTKey end = marktree_get_alt(buf->b_marktree, mark, NULL);
       push_mark(&array, ns_id, type_filter, mtpair_from(mark, end));
     }
@@ -303,7 +340,7 @@ static void push_mark(ExtmarkInfoArray *array, uint32_t ns_id, ExtmarkType type_
     return;
   }
   if (type_filter != kExtmarkNone) {
-    if (!mt_decor_any(mark.start)) {
+    if (!rs_flags_decor_any(mark.start.flags)) {
       return;
     }
     uint16_t type_flags = decor_type_flags(mt_decor(mark.start));
@@ -336,12 +373,12 @@ void extmark_free_all(buf_T *buf)
   marktree_itr_get(buf->b_marktree, 0, 0, itr);
   while (true) {
     MTKey mark = marktree_itr_current(itr);
-    if (mark.pos.row < 0) {
+    if (rs_row_invalid(mark.pos.row)) {
       break;
     }
 
     // don't free mark.decor twice for a paired mark.
-    if (!(mt_paired(mark) && mt_end(mark))) {
+    if (!(rs_flags_paired(mark.flags) && rs_flags_end(mark.flags))) {
       decor_free(mt_decor(mark));
     }
 
@@ -370,43 +407,43 @@ void extmark_splice_delete(buf_T *buf, int l_row, colnr_T l_col, int u_row, coln
   marktree_itr_get(buf->b_marktree, (int32_t)l_row, l_col, itr);
   while (true) {
     MTKey mark = marktree_itr_current(itr);
-    if (mark.pos.row < 0 || mark.pos.row > u_row) {
+    if (rs_row_invalid(mark.pos.row) || mark.pos.row > u_row) {
       break;
     }
 
     bool copy = true;
     // No need to copy left gravity marks at the beginning of the range,
     // and right gravity marks at the end of the range, unless invalidated.
-    if (mark.pos.row == l_row && mark.pos.col - !mt_right(mark) < l_col) {
+    if (mark.pos.row == l_row && mark.pos.col - !rs_flags_right(mark.flags) < l_col) {
       copy = false;
     } else if (mark.pos.row == u_row) {
       if (mark.pos.col > u_col + 1) {
         break;
-      } else if (mark.pos.col + mt_right(mark) > u_col) {
+      } else if (mark.pos.col + rs_flags_right(mark.flags) > u_col) {
         copy = false;
       }
     }
 
     bool invalidated = false;
     // Invalidate/delete mark
-    if (!only_copy && !mt_invalid(mark) && mt_invalidate(mark) && !mt_end(mark)) {
+    if (!only_copy && !rs_flags_invalid(mark.flags) && rs_flags_invalidate(mark.flags) && !rs_flags_end(mark.flags)) {
       MarkTreeIter enditr[1] = { *itr };
       MTPos endpos = marktree_get_altpos(buf->b_marktree, mark, enditr);
       // Invalidate unpaired marks in deleted lines and paired marks whose entire
       // range has been deleted.
-      if ((!mt_paired(mark) && mark.pos.row < u_row)
-          || (mt_paired(mark)
+      if ((!rs_flags_paired(mark.flags) && mark.pos.row < u_row)
+          || (rs_flags_paired(mark.flags)
               && (endpos.col <= u_col || (!u_col && endpos.row == mark.pos.row))
               && mark.pos.col >= l_col
               && mark.pos.row >= l_row && endpos.row <= u_row - (u_col ? 0 : 1))) {
-        if (mt_no_undo(mark)) {
+        if (rs_flags_no_undo(mark.flags)) {
           extmark_del(buf, itr, mark, true);
           continue;
         } else {
           copy = true;
           invalidated = true;
-          mt_itr_rawkey(itr).flags |= MT_FLAG_INVALID;
-          mt_itr_rawkey(enditr).flags |= MT_FLAG_INVALID;
+          mt_itr_rawkey(itr).flags = rs_flags_set_invalid(mt_itr_rawkey(itr).flags);
+          mt_itr_rawkey(enditr).flags = rs_flags_set_invalid(mt_itr_rawkey(enditr).flags);
           marktree_revise_meta(buf->b_marktree, itr, mark);
           buf_decor_remove(buf, mark.pos.row, endpos.row, mark.pos.col, mt_decor(mark), false);
         }
@@ -414,7 +451,7 @@ void extmark_splice_delete(buf_T *buf, int l_row, colnr_T l_col, int u_row, coln
     }
 
     // Push mark to undo header
-    if (copy && (only_copy || (uvp != NULL && op == kExtmarkUndo && !mt_no_undo(mark)))) {
+    if (copy && (only_copy || (uvp != NULL && rs_extmark_op_is_undo(op) && !rs_flags_no_undo(mark.flags)))) {
       ExtmarkSavePos pos = {
         .mark = mt_lookup_key(mark),
         .invalidated = invalidated,
@@ -556,12 +593,12 @@ void extmark_splice_impl(buf_T *buf, int start_row, colnr_T start_col, bcount_t 
                           old_row, old_col, old_byte,
                           new_row, new_col, new_byte);
 
-  if (old_row > 0 || old_col > 0) {
+  if (rs_splice_affects_marks(old_row, old_col, 0, 0)) {
     // Copy and invalidate marks that would be effected by delete
     // TODO(bfredl): Be smart about marks that already have been
     // saved (important for merge!)
-    int end_row = start_row + old_row;
-    int end_col = (old_row ? 0 : start_col) + old_col;
+    int end_row = rs_splice_end_row(start_row, old_row);
+    int end_col = rs_splice_end_col(start_col, old_row, old_col);
     u_header_T *uhp = u_force_get_undo_header(buf);
     extmark_undo_vec_t *uvp = uhp ? &uhp->uh_extmark : NULL;
     extmark_splice_delete(buf, start_row, start_col, end_row, end_col, uvp, false, undo);
@@ -570,7 +607,7 @@ void extmark_splice_impl(buf_T *buf, int start_row, colnr_T start_col, bcount_t 
   // Remove signs inside edited region from "b_signcols.count", add after splicing.
   if (old_row > 0 || new_row > 0) {
     int count = buf->b_prev_line_count > 0 ? buf->b_prev_line_count : buf->b_ml.ml_line_count;
-    buf_signcols_count_range(buf, start_row, MIN(count - 1, start_row + old_row), 0, kTrue);
+    buf_signcols_count_range(buf, start_row, MIN(count - 1, rs_splice_end_row(start_row, old_row)), 0, kTrue);
     buf->b_prev_line_count = 0;
   }
 
@@ -579,11 +616,11 @@ void extmark_splice_impl(buf_T *buf, int start_row, colnr_T start_col, bcount_t 
                   new_row, new_col);
 
   if (old_row > 0 || new_row > 0) {
-    int row2 = MIN(buf->b_ml.ml_line_count - 1, start_row + new_row);
+    int row2 = MIN(buf->b_ml.ml_line_count - 1, rs_splice_end_row(start_row, new_row));
     buf_signcols_count_range(buf, start_row, row2, 0, kNone);
   }
 
-  if (undo == kExtmarkUndo) {
+  if (rs_extmark_op_is_undo(undo)) {
     u_header_T *uhp = u_force_get_undo_header(buf);
     if (!uhp) {
       return;
@@ -675,7 +712,7 @@ void extmark_move_region(buf_T *buf, int start_row, colnr_T start_col, bcount_t 
                           0, 0, 0,
                           extent_row, extent_col, extent_byte);
 
-  if (undo == kExtmarkUndo) {
+  if (rs_extmark_op_is_undo(undo)) {
     u_header_T *uhp = u_force_get_undo_header(buf);
     if (!uhp) {
       return;
