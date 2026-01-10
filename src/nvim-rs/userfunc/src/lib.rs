@@ -22,11 +22,13 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::doc_markdown)]
 
+pub mod call;
 pub mod closure;
 pub mod funcref;
 pub mod params;
 pub mod types;
 
+pub use call::*;
 pub use closure::*;
 pub use funcref::*;
 pub use params::*;
