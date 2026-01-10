@@ -79,6 +79,51 @@ static bool in_script = false;
 
 extern int rs_nlua_is_deferred_safe(void);
 
+// Rust executor helpers
+extern bool rs_wait_timeout_valid(int64_t timeout);
+extern bool rs_wait_interval_valid(int64_t interval);
+extern int64_t rs_wait_default_interval(void);
+extern bool rs_lua_ref_valid(int ref_);
+extern int rs_lua_mode_ret(int mode);
+extern size_t rs_lua_eval_cmd_size(size_t str_size);
+extern size_t rs_lua_do_cmd_size(size_t cmd_size);
+extern size_t rs_lua_call_cmd_size(size_t str_size);
+extern int rs_lua_pcall_insert_pos(int nargs);
+extern int rs_lua_pcall_remove_pos(int nresults);
+extern int rs_lua_calc_multret_nresults(int top, int pre_top, int nargs);
+extern int rs_lua_fast_cb_nresult(int top, int pre_top, int nargs);
+extern char rs_ucmd_nargs_char(bool has_extra, bool has_nospc, bool has_needarg);
+extern bool rs_ucmd_fargs_single(bool has_nospc, bool has_needarg, size_t arg_len);
+extern bool rs_ucmd_fargs_empty(bool has_nospc, bool has_needarg, size_t arg_len);
+extern bool rs_lua_print_needs_space(int curargidx, int nargs);
+extern int rs_wait_nresults_empty(void);
+extern int rs_wait_return_count(int nresults);
+extern int rs_wait_timeout_code(void);
+extern int rs_wait_interrupted_code(void);
+extern bool rs_wait_no_results(int nresults);
+extern bool rs_lcmd_fits_iosize(size_t lcmd_len, size_t iosize);
+extern bool rs_lua_ref_needs_tracking(int ref_);
+extern int rs_lua_ref_count_inc(int count);
+extern int rs_lua_ref_count_dec(int count);
+extern bool rs_has_lua_table_ref(int ref_);
+extern size_t rs_lua_call_name_limit(size_t name_len);
+extern size_t rs_lua_call_error_buf_size(size_t name_len);
+extern bool rs_expand_prefix_valid(ptrdiff_t prefix_len, ptrdiff_t patlen);
+extern bool rs_expand_has_results(int num_results);
+extern void rs_luado_transform_nuls(char *buf, size_t len);
+extern bool rs_luado_line_exceeds(int line, int line_count);
+extern bool rs_sctx_needs_verbose(int p_verbose);
+extern bool rs_sctx_is_c_func(char what);
+extern bool rs_sctx_source_is_file(char first_char);
+extern const char *rs_ucmd_split_string(bool above, bool below, bool top, bool bot);
+extern int rs_ucmd_smods_tab(int cmod_tab);
+extern int rs_ucmd_smods_verbose(int cmod_verbose);
+extern int rs_ucmd_preview_argc(bool preview);
+extern int rs_ucmd_preview_retc(bool preview);
+extern bool rs_ucmd_preview_retval_valid(int retval);
+extern bool rs_funcref_is_file_source(char first_char);
+extern bool rs_funcref_linedefined_valid(int linedefined);
+
 // Initialized in nlua_init().
 static lua_State *global_lstate = NULL;
 
@@ -184,16 +229,16 @@ int nlua_pcall(lua_State *lstate, int nargs, int nresults)
   lua_getglobal(lstate, "debug");
   lua_getfield(lstate, -1, "traceback");
   lua_remove(lstate, -2);
-  lua_insert(lstate, -2 - nargs);
+  lua_insert(lstate, rs_lua_pcall_insert_pos(nargs));
   int pre_top = lua_gettop(lstate);
-  int status = lua_pcall(lstate, nargs, nresults, -2 - nargs);
+  int status = lua_pcall(lstate, nargs, nresults, rs_lua_pcall_insert_pos(nargs));
   if (status) {
     lua_remove(lstate, -2);
   } else {
     if (nresults == LUA_MULTRET) {
-      nresults = lua_gettop(lstate) - (pre_top - nargs - 1);
+      nresults = rs_lua_calc_multret_nresults(lua_gettop(lstate), pre_top, nargs);
     }
-    lua_remove(lstate, -1 - nresults);
+    lua_remove(lstate, rs_lua_pcall_remove_pos(nresults));
   }
   return status;
 }
@@ -244,7 +289,7 @@ static int nlua_fast_cfpcall(lua_State *lstate, int nargs, int nresult, int flag
     retval = -status;
   } else {  // LUA_OK
     if (nresult == LUA_MULTRET) {
-      nresult = lua_gettop(lstate) - top + nargs + 1;
+      nresult = rs_lua_fast_cb_nresult(lua_gettop(lstate), top, nargs);
     }
     retval = nresult;
   }
@@ -462,7 +507,7 @@ static int nlua_wait(lua_State *lstate)
   }
 
   intptr_t timeout = luaL_checkinteger(lstate, 1);
-  if (timeout < 0) {
+  if (!rs_wait_timeout_valid(timeout)) {
     return luaL_error(lstate, "timeout must be >= 0");
   }
 
@@ -485,10 +530,10 @@ static int nlua_wait(lua_State *lstate)
     }
   }
 
-  intptr_t interval = 200;
+  intptr_t interval = rs_wait_default_interval();
   if (lua_top >= 3 && !lua_isnil(lstate, 3)) {
     interval = luaL_checkinteger(lstate, 3);
-    if (interval < 0) {
+    if (!rs_wait_interval_valid(interval)) {
       return luaL_error(lstate, "interval must be >= 0");
     }
   }
@@ -535,22 +580,22 @@ static int nlua_wait(lua_State *lstate)
     return lua_error(lstate);
   } else if (callback_result) {
     lua_pushboolean(lstate, 1);
-    if (nresults == 0) {
+    if (rs_wait_no_results(nresults)) {
       lua_pushnil(lstate);
-      nresults = 1;
+      nresults = rs_wait_nresults_empty();
     } else {
       lua_insert(lstate, -1 - nresults);
     }
-    return nresults + 1;
+    return rs_wait_return_count(nresults);
   } else if (got_int) {
     got_int = false;
     vgetc();
     lua_pushboolean(lstate, 0);
-    lua_pushinteger(lstate, -2);
+    lua_pushinteger(lstate, rs_wait_interrupted_code());
     return 2;
   } else {
     lua_pushboolean(lstate, 0);
-    lua_pushinteger(lstate, -1);
+    lua_pushinteger(lstate, rs_wait_timeout_code());
     return 2;
   }
 }
@@ -1042,7 +1087,7 @@ static int nlua_print(lua_State *const lstate)
       PRINT_ERROR("<Unknown error: lua_tolstring returned NULL for tostring result>");
     }
     ga_concat_len(&msg_ga, s, len);
-    if (curargidx < nargs) {
+    if (rs_lua_print_needs_space(curargidx, nargs)) {
       ga_append(&msg_ga, ' ');
     }
     lua_pop(lstate, 1);
@@ -1340,8 +1385,8 @@ LuaRef nlua_ref(lua_State *lstate, nlua_ref_state_t *ref_state, int index)
 {
   lua_pushvalue(lstate, index);
   LuaRef ref = luaL_ref(lstate, LUA_REGISTRYINDEX);
-  if (ref > 0) {
-    ref_state->ref_count++;
+  if (rs_lua_ref_needs_tracking(ref)) {
+    ref_state->ref_count = rs_lua_ref_count_inc(ref_state->ref_count);
 #ifdef NLUA_TRACK_REFS
     if (nlua_track_refs) {
       // dummy allocation to make LeakSanitizer track our luarefs
@@ -1363,8 +1408,8 @@ LuaRef nlua_ref_global(lua_State *lstate, int index)
 /// remove the value from the registry
 void nlua_unref(lua_State *lstate, nlua_ref_state_t *ref_state, LuaRef ref)
 {
-  if (ref > 0) {
-    ref_state->ref_count--;
+  if (rs_lua_ref_needs_tracking(ref)) {
+    ref_state->ref_count = rs_lua_ref_count_dec(ref_state->ref_count);
 #ifdef NLUA_TRACK_REFS
     // NB: don't remove entry from map to track double-unref
     if (nlua_track_refs) {
@@ -1421,9 +1466,9 @@ void nlua_typval_eval(const String str, typval_T *const arg, typval_T *const ret
   FUNC_ATTR_NONNULL_ALL
 {
 #define EVALHEADER "local _A=select(1,...) return ("
-  const size_t lcmd_len = sizeof(EVALHEADER) - 1 + str.size + 1;
+  const size_t lcmd_len = rs_lua_eval_cmd_size(str.size);
   char *lcmd;
-  if (lcmd_len < IOSIZE) {
+  if (rs_lcmd_fits_iosize(lcmd_len, IOSIZE)) {
     lcmd = IObuff;
   } else {
     lcmd = xmalloc(lcmd_len);
@@ -1445,9 +1490,9 @@ void nlua_typval_call(const char *str, size_t len, typval_T *const args, int arg
 {
 #define CALLHEADER "return "
 #define CALLSUFFIX "(...)"
-  const size_t lcmd_len = sizeof(CALLHEADER) - 1 + len + sizeof(CALLSUFFIX) - 1;
+  const size_t lcmd_len = rs_lua_call_cmd_size(len);
   char *lcmd;
-  if (lcmd_len < IOSIZE) {
+  if (rs_lcmd_fits_iosize(lcmd_len, IOSIZE)) {
     lcmd = IObuff;
   } else {
     lcmd = xmalloc(lcmd_len);
