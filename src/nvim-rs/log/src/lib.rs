@@ -267,8 +267,8 @@ mod tests {
         assert_eq!(entry.line, 100);
         assert_eq!(entry.timestamp_us, 0);
 
-        let entry_ts = LogEntry::with_timestamp(2, 50, 1234567890);
-        assert_eq!(entry_ts.timestamp_us, 1234567890);
+        let entry_ts = LogEntry::with_timestamp(2, 50, 1_234_567_890);
+        assert_eq!(entry_ts.timestamp_us, 1_234_567_890);
     }
 
     #[test]

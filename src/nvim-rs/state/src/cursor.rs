@@ -77,7 +77,7 @@ impl CursorPos {
 
 /// FFI: Create cursor position.
 #[no_mangle]
-pub extern "C" fn rs_cursor_pos_new(line: i64, col: c_int) -> CursorPos {
+pub extern "C" fn rs_state_cursor_pos_new(line: i64, col: c_int) -> CursorPos {
     CursorPos::new(line, col)
 }
 
@@ -86,7 +86,7 @@ pub extern "C" fn rs_cursor_pos_new(line: i64, col: c_int) -> CursorPos {
 /// # Safety
 /// `pos` must be valid or null.
 #[no_mangle]
-pub unsafe extern "C" fn rs_cursor_pos_is_valid(pos: *const CursorPos) -> c_int {
+pub unsafe extern "C" fn rs_state_cursor_pos_is_valid(pos: *const CursorPos) -> c_int {
     if pos.is_null() {
         return 0;
     }
@@ -98,7 +98,7 @@ pub unsafe extern "C" fn rs_cursor_pos_is_valid(pos: *const CursorPos) -> c_int 
 /// # Safety
 /// Both `a` and `b` must be valid or null.
 #[no_mangle]
-pub unsafe extern "C" fn rs_cursor_pos_cmp(a: *const CursorPos, b: *const CursorPos) -> c_int {
+pub unsafe extern "C" fn rs_state_cursor_pos_cmp(a: *const CursorPos, b: *const CursorPos) -> c_int {
     if a.is_null() || b.is_null() {
         return 0;
     }

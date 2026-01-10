@@ -476,12 +476,12 @@ mod tests {
     fn test_message_builder() {
         let builder = LogMessageBuilder::new(LogLevel::Info)
             .line(42)
-            .timestamp(1234567890)
+            .timestamp(1_234_567_890)
             .component(5);
 
         let (entry, context) = builder.build();
         assert_eq!(entry.line, 42);
-        assert_eq!(entry.timestamp_us, 1234567890);
+        assert_eq!(entry.timestamp_us, 1_234_567_890);
         assert_eq!(context.component_id, 5);
     }
 
