@@ -15,6 +15,7 @@ pub mod errorformat;
 pub mod external;
 pub mod filter;
 pub mod list;
+pub mod listdo;
 pub mod loclist;
 pub mod navigate;
 pub mod parse;
@@ -25,6 +26,7 @@ pub mod window;
 pub use api::{QfAction, QfApiResult, QfListInfo, QfWhatFlags};
 pub use display::{QfDisplayEntry, QfDisplayFormat, QfDisplayState};
 pub use errorformat::{EfmFlags, EfmParseResult, QfErrorType};
+pub use listdo::{FileEntry, FileListDoState, ListDoResult, ListDoState, ListDoType};
 pub use stack::{NavDirection, QfPushResult, QfStackNavResult, QfStackState};
 
 // =============================================================================
