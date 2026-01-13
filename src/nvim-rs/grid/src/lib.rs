@@ -27,6 +27,7 @@
 #![allow(clippy::range_plus_one)]
 
 pub mod cell;
+pub mod drawing;
 pub mod helpers;
 pub mod lifecycle;
 
