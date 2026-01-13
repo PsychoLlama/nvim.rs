@@ -14,6 +14,8 @@
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::must_use_candidate)]
 
+pub mod floating;
+
 use std::ffi::{c_int, c_void};
 
 /// Opaque handle to C's ScreenGrid
