@@ -298,6 +298,102 @@ pub extern "C" fn rs_efm_flags_is_valid(flags: u16) -> c_int {
     c_int::from(EfmFlags::from_raw(flags).is_valid())
 }
 
+/// FFI export: Check efm flags global
+#[no_mangle]
+pub extern "C" fn rs_efm_flags_is_global(flags: u16) -> c_int {
+    c_int::from(EfmFlags::from_raw(flags).is_global())
+}
+
+/// FFI export: Check efm flags file_always
+#[no_mangle]
+pub extern "C" fn rs_efm_flags_file_always(flags: u16) -> c_int {
+    c_int::from(EfmFlags::from_raw(flags).file_always())
+}
+
+/// FFI export: Check efm flags ignore_case
+#[no_mangle]
+pub extern "C" fn rs_efm_flags_ignore_case(flags: u16) -> c_int {
+    c_int::from(EfmFlags::from_raw(flags).ignore_case())
+}
+
+/// FFI export: Check efm flags end_pattern
+#[no_mangle]
+pub extern "C" fn rs_efm_flags_is_end_pattern(flags: u16) -> c_int {
+    c_int::from(EfmFlags::from_raw(flags).is_end_pattern())
+}
+
+/// FFI export: Check efm flags include
+#[no_mangle]
+pub extern "C" fn rs_efm_flags_is_include(flags: u16) -> c_int {
+    c_int::from(EfmFlags::from_raw(flags).is_include())
+}
+
+/// FFI export: Check efm flags define
+#[no_mangle]
+pub extern "C" fn rs_efm_flags_is_define(flags: u16) -> c_int {
+    c_int::from(EfmFlags::from_raw(flags).is_define())
+}
+
+/// FFI export: Get EFM_MULTILINE constant
+#[no_mangle]
+pub extern "C" fn rs_efm_multiline() -> c_int {
+    c_int::from(EFM_MULTILINE)
+}
+
+/// FFI export: Get EFM_CONTINUATION constant
+#[no_mangle]
+pub extern "C" fn rs_efm_continuation() -> c_int {
+    c_int::from(EFM_CONTINUATION)
+}
+
+/// FFI export: Get EFM_GLOBAL constant
+#[no_mangle]
+pub extern "C" fn rs_efm_global() -> c_int {
+    c_int::from(EFM_GLOBAL)
+}
+
+/// FFI export: Get EFM_VALID constant
+#[no_mangle]
+pub extern "C" fn rs_efm_valid() -> c_int {
+    c_int::from(EFM_VALID)
+}
+
+/// FFI export: Get EfmMatchType::Message value
+#[no_mangle]
+pub extern "C" fn rs_efm_match_message() -> c_int {
+    EfmMatchType::Message as c_int
+}
+
+/// FFI export: Get EfmMatchType::FileName value
+#[no_mangle]
+pub extern "C" fn rs_efm_match_filename() -> c_int {
+    EfmMatchType::FileName as c_int
+}
+
+/// FFI export: Get EfmMatchType::LineNumber value
+#[no_mangle]
+pub extern "C" fn rs_efm_match_linenumber() -> c_int {
+    EfmMatchType::LineNumber as c_int
+}
+
+/// FFI export: Get EfmMatchType::ColumnNumber value
+#[no_mangle]
+pub extern "C" fn rs_efm_match_columnnumber() -> c_int {
+    EfmMatchType::ColumnNumber as c_int
+}
+
+/// FFI export: Get EfmMatchType::ErrorType value
+#[no_mangle]
+pub extern "C" fn rs_efm_match_errortype() -> c_int {
+    EfmMatchType::ErrorType as c_int
+}
+
+/// FFI export: Get EfmMatchType::Pattern value
+#[no_mangle]
+pub extern "C" fn rs_efm_match_pattern() -> c_int {
+    EfmMatchType::Pattern as c_int
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
