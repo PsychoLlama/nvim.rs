@@ -9,9 +9,11 @@
 
 use std::ffi::{c_char, c_int};
 
+mod buffers;
 mod components;
 mod serializer;
 
+pub use buffers::*;
 pub use components::*;
 pub use serializer::*;
 
