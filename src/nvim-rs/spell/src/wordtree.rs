@@ -386,6 +386,198 @@ pub fn get_all_word_flags(byts: &[u8], idxs: &[IdxT], end_idx: usize) -> Vec<u32
 // FFI Functions
 // =============================================================================
 
+// Phase 148: Word Tree Traversal - additional FFI exports
+
+/// Check if word flags indicate the word is banned.
+#[no_mangle]
+pub extern "C" fn rs_word_is_banned(flags: u32) -> bool {
+    is_banned(flags)
+}
+
+/// Check if word flags indicate the word is rare.
+#[no_mangle]
+pub extern "C" fn rs_word_is_rare(flags: u32) -> bool {
+    is_rare(flags)
+}
+
+/// Check if word flags indicate the word requires compounding.
+#[no_mangle]
+pub extern "C" fn rs_word_requires_compound(flags: u32) -> bool {
+    requires_compound(flags)
+}
+
+/// Check if word flags indicate the word can't start a compound.
+#[no_mangle]
+pub extern "C" fn rs_word_no_compound_before(flags: u32) -> bool {
+    no_compound_before(flags)
+}
+
+/// Check if word flags indicate the word can't end a compound.
+#[no_mangle]
+pub extern "C" fn rs_word_no_compound_after(flags: u32) -> bool {
+    no_compound_after(flags)
+}
+
+/// Check if word flags have a compound flag set.
+#[no_mangle]
+pub extern "C" fn rs_word_has_compound_flag(flags: u32) -> bool {
+    has_compound_flag(flags)
+}
+
+/// Get the compound flag byte from word flags.
+#[no_mangle]
+pub extern "C" fn rs_word_get_compound_flag(flags: u32) -> u8 {
+    get_compound_flag(flags)
+}
+
+/// Check if a compound flag is allowed.
+///
+/// # Safety
+/// `allowed_flags` must be a valid pointer to a NUL-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compound_flag_allowed(allowed_flags: *const u8, flag: u8) -> bool {
+    if allowed_flags.is_null() {
+        return false;
+    }
+    // Find the length by scanning for NUL
+    let mut len = 0usize;
+    while *allowed_flags.add(len) != 0 {
+        len += 1;
+        if len > 256 {
+            // Safety limit
+            return false;
+        }
+    }
+    let slice = std::slice::from_raw_parts(allowed_flags, len);
+    compound_flag_allowed(slice, flag)
+}
+
+/// Check if word flags have region set.
+#[no_mangle]
+pub extern "C" fn rs_word_has_region(flags: u32) -> bool {
+    (flags & WF_REGION) != 0
+}
+
+/// Check if word flags have ONECAP set.
+#[no_mangle]
+pub extern "C" fn rs_word_has_onecap(flags: u32) -> bool {
+    (flags & WF_ONECAP) != 0
+}
+
+/// Check if word flags have ALLCAP set.
+#[no_mangle]
+pub extern "C" fn rs_word_has_allcap(flags: u32) -> bool {
+    (flags & WF_ALLCAP) != 0
+}
+
+/// Check if word flags have KEEPCAP set.
+#[no_mangle]
+pub extern "C" fn rs_word_has_keepcap(flags: u32) -> bool {
+    (flags & WF_KEEPCAP) != 0
+}
+
+/// Check if word flags have FIXCAP set.
+#[no_mangle]
+pub extern "C" fn rs_word_has_fixcap(flags: u32) -> bool {
+    (flags & WF_FIXCAP) != 0
+}
+
+/// Check if word flags have AFX (affix ID) set.
+#[no_mangle]
+pub extern "C" fn rs_word_has_afx(flags: u32) -> bool {
+    (flags & WF_AFX) != 0
+}
+
+/// Get MAXWLEN constant.
+#[no_mangle]
+pub extern "C" fn rs_spell_maxwlen() -> usize {
+    MAXWLEN
+}
+
+/// Word flags constant: WF_REGION
+#[no_mangle]
+pub extern "C" fn rs_wf_region() -> u32 {
+    WF_REGION
+}
+
+/// Word flags constant: WF_ONECAP
+#[no_mangle]
+pub extern "C" fn rs_wf_onecap() -> u32 {
+    WF_ONECAP
+}
+
+/// Word flags constant: WF_ALLCAP
+#[no_mangle]
+pub extern "C" fn rs_wf_allcap() -> u32 {
+    WF_ALLCAP
+}
+
+/// Word flags constant: WF_RARE
+#[no_mangle]
+pub extern "C" fn rs_wf_rare() -> u32 {
+    WF_RARE
+}
+
+/// Word flags constant: WF_BANNED
+#[no_mangle]
+pub extern "C" fn rs_wf_banned() -> u32 {
+    WF_BANNED
+}
+
+/// Word flags constant: WF_AFX
+#[no_mangle]
+pub extern "C" fn rs_wf_afx() -> u32 {
+    WF_AFX
+}
+
+/// Word flags constant: WF_FIXCAP
+#[no_mangle]
+pub extern "C" fn rs_wf_fixcap() -> u32 {
+    WF_FIXCAP
+}
+
+/// Word flags constant: WF_KEEPCAP
+#[no_mangle]
+pub extern "C" fn rs_wf_keepcap() -> u32 {
+    WF_KEEPCAP
+}
+
+/// Word flags constant: WF_NEEDCOMP
+#[no_mangle]
+pub extern "C" fn rs_wf_needcomp() -> u32 {
+    WF_NEEDCOMP
+}
+
+/// Word flags constant: WF_NOCOMPBEF
+#[no_mangle]
+pub extern "C" fn rs_wf_nocompbef() -> u32 {
+    WF_NOCOMPBEF
+}
+
+/// Word flags constant: WF_NOCOMPAFT
+#[no_mangle]
+pub extern "C" fn rs_wf_nocompaft() -> u32 {
+    WF_NOCOMPAFT
+}
+
+/// Word flags constant: WF_COMPROOT
+#[no_mangle]
+pub extern "C" fn rs_wf_comproot() -> u32 {
+    WF_COMPROOT
+}
+
+/// Word flags constant: WF_RAREPFX
+#[no_mangle]
+pub extern "C" fn rs_wf_rarepfx() -> u32 {
+    WF_RAREPFX
+}
+
+/// Word flags constant: WF_COMPFLAG_MASK
+#[no_mangle]
+pub extern "C" fn rs_wf_compflag_mask() -> u32 {
+    WF_COMPFLAG_MASK
+}
+
 /// FFI wrapper for tree_binary_search.
 ///
 /// # Safety
