@@ -6364,6 +6364,152 @@ pub unsafe extern "C" fn rs_syn_get_sptype_start() -> c_int {
 // defined earlier in the file using ExtMatchHandle.
 
 // =============================================================================
+// Phase 145: Syntax Groups & Clusters
+// =============================================================================
+
+// Note: The extern declarations for these functions are already present
+// earlier in the file. We just add new Rust exports below.
+extern "C" {
+    fn nvim_syn_cluster_name2id(name: *const c_char) -> c_int;
+    fn nvim_synblock_is_spell_cluster(block: SynBlockHandle, id: c_int) -> c_int;
+    fn nvim_synblock_is_nospell_cluster(block: SynBlockHandle, id: c_int) -> c_int;
+    // nvim_synblock_get_spell_cluster_id and nvim_synblock_get_nospell_cluster_id
+    // are already declared earlier in the file.
+}
+
+/// Get cluster ID by name.
+///
+/// # Safety
+/// The name must be a valid C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_cluster_name2id(name: *const c_char) -> c_int {
+    if name.is_null() {
+        return 0;
+    }
+    nvim_syn_cluster_name2id(name)
+}
+
+/// Check if cluster ID is the spell cluster.
+///
+/// # Safety
+/// The block handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_is_spell_cluster(block: SynBlockHandle, id: c_int) -> c_int {
+    if block.is_null() {
+        return 0;
+    }
+    nvim_synblock_is_spell_cluster(block, id)
+}
+
+/// Check if cluster ID is the nospell cluster.
+///
+/// # Safety
+/// The block handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_is_nospell_cluster(block: SynBlockHandle, id: c_int) -> c_int {
+    if block.is_null() {
+        return 0;
+    }
+    nvim_synblock_is_nospell_cluster(block, id)
+}
+
+/// Get spell cluster ID from block.
+///
+/// # Safety
+/// The block handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_get_spell_cluster_id(block: SynBlockHandle) -> c_int {
+    if block.is_null() {
+        return 0;
+    }
+    nvim_synblock_get_spell_cluster_id(block)
+}
+
+/// Get nospell cluster ID from block.
+///
+/// # Safety
+/// The block handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_get_nospell_cluster_id(block: SynBlockHandle) -> c_int {
+    if block.is_null() {
+        return 0;
+    }
+    nvim_synblock_get_nospell_cluster_id(block)
+}
+
+/// Get cluster name.
+///
+/// # Safety
+/// The cluster handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syncluster_get_name(cluster: SynClusterHandle) -> *const c_char {
+    if cluster.is_null() {
+        return std::ptr::null();
+    }
+    nvim_syncluster_get_name(cluster)
+}
+
+/// Get cluster name (uppercase).
+///
+/// # Safety
+/// The cluster handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syncluster_get_name_u(cluster: SynClusterHandle) -> *const c_char {
+    if cluster.is_null() {
+        return std::ptr::null();
+    }
+    nvim_syncluster_get_name_u(cluster)
+}
+
+/// Get highlight group from pattern.
+///
+/// # Safety
+/// The pattern handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synpat_get_hl_group(pat: SynPatHandle) -> c_int {
+    if pat.is_null() {
+        return 0;
+    }
+    nvim_synpat_get_hl_group(pat)
+}
+
+/// Get cluster ID at index from synblock.
+///
+/// # Safety
+/// The block handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_get_cluster_id(block: SynBlockHandle, idx: c_int) -> c_int {
+    if block.is_null() {
+        return 0;
+    }
+    nvim_synblock_get_cluster_id(block, idx)
+}
+
+/// Get cluster ID from cluster structure.
+///
+/// # Safety
+/// The cluster handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syncluster_get_id(cluster: SynClusterHandle) -> c_int {
+    if cluster.is_null() {
+        return 0;
+    }
+    nvim_syncluster_get_id(cluster)
+}
+
+/// Get cluster list pointer.
+///
+/// # Safety
+/// The cluster handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syncluster_get_list(cluster: SynClusterHandle) -> IdListHandle {
+    if cluster.is_null() {
+        return IdListHandle::null();
+    }
+    nvim_syncluster_get_list(cluster)
+}
+
+// =============================================================================
 // Phase 82 Tests
 // =============================================================================
 
