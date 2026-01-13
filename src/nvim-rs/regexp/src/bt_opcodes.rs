@@ -614,6 +614,114 @@ pub extern "C" fn rs_bt_is_magic(x: c_int) -> c_int {
     c_int::from(is_magic(x))
 }
 
+/// Check if opcode is a ZOPEN.
+#[no_mangle]
+pub extern "C" fn rs_bt_is_zopen(op: c_int) -> c_int {
+    c_int::from(is_zopen(op))
+}
+
+/// Check if opcode is a ZCLOSE.
+#[no_mangle]
+pub extern "C" fn rs_bt_is_zclose(op: c_int) -> c_int {
+    c_int::from(is_zclose(op))
+}
+
+/// Check if opcode is a ZREF.
+#[no_mangle]
+pub extern "C" fn rs_bt_is_zref(op: c_int) -> c_int {
+    c_int::from(is_zref(op))
+}
+
+/// Check if opcode is a BRACE_COMPLEX.
+#[no_mangle]
+pub extern "C" fn rs_bt_is_brace_complex(op: c_int) -> c_int {
+    c_int::from(is_brace_complex(op))
+}
+
+/// Get the subexpr number from an MOPEN opcode.
+#[no_mangle]
+pub extern "C" fn rs_bt_get_mopen_num(op: c_int) -> c_int {
+    get_mopen_num(op)
+}
+
+/// Get the subexpr number from an MCLOSE opcode.
+#[no_mangle]
+pub extern "C" fn rs_bt_get_mclose_num(op: c_int) -> c_int {
+    get_mclose_num(op)
+}
+
+/// Get the backref number from a BACKREF opcode.
+#[no_mangle]
+pub extern "C" fn rs_bt_get_backref_num(op: c_int) -> c_int {
+    get_backref_num(op)
+}
+
+/// Get the subexpr number from a ZOPEN opcode.
+#[no_mangle]
+pub extern "C" fn rs_bt_get_zopen_num(op: c_int) -> c_int {
+    get_zopen_num(op)
+}
+
+/// Get the subexpr number from a ZCLOSE opcode.
+#[no_mangle]
+pub extern "C" fn rs_bt_get_zclose_num(op: c_int) -> c_int {
+    get_zclose_num(op)
+}
+
+/// Get the brace number from a BRACE_COMPLEX opcode.
+#[no_mangle]
+pub extern "C" fn rs_bt_get_brace_complex_num(op: c_int) -> c_int {
+    get_brace_complex_num(op)
+}
+
+/// Get the REGMAGIC constant value.
+#[no_mangle]
+pub extern "C" fn rs_bt_regmagic() -> c_int {
+    REGMAGIC as c_int
+}
+
+/// Get the ADD_NL constant value.
+#[no_mangle]
+pub extern "C" fn rs_bt_add_nl() -> c_int {
+    ADD_NL
+}
+
+/// Get the FIRST_NL constant value.
+#[no_mangle]
+pub extern "C" fn rs_bt_first_nl() -> c_int {
+    FIRST_NL
+}
+
+/// Get the LAST_NL constant value.
+#[no_mangle]
+pub extern "C" fn rs_bt_last_nl() -> c_int {
+    LAST_NL
+}
+
+/// Get the REGSTACK_INITIAL constant value.
+#[no_mangle]
+pub extern "C" fn rs_bt_regstack_initial() -> c_int {
+    REGSTACK_INITIAL as c_int
+}
+
+/// Get the BACKPOS_INITIAL constant value.
+#[no_mangle]
+pub extern "C" fn rs_bt_backpos_initial() -> c_int {
+    BACKPOS_INITIAL as c_int
+}
+
+/// Get the HASWIDTH flag value.
+#[no_mangle]
+pub extern "C" fn rs_bt_haswidth() -> c_int {
+    HASWIDTH
+}
+
+/// Get the SIMPLE flag value.
+#[no_mangle]
+pub extern "C" fn rs_bt_simple() -> c_int {
+    SIMPLE
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
