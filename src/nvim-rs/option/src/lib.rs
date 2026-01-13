@@ -22,6 +22,7 @@ pub mod init;
 pub mod parsing;
 pub mod scope;
 pub mod set;
+pub mod setcmd;
 pub mod setops;
 pub mod show;
 pub mod sideeffect;
