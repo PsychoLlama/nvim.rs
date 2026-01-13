@@ -9,6 +9,7 @@
 #![allow(clippy::missing_const_for_fn)]
 
 pub mod id;
+pub mod item;
 pub mod position;
 pub mod priority;
 
