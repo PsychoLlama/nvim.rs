@@ -18,8 +18,9 @@
 //! - [`layout`]: Window layout tree operations
 //! - [`list`]: Window list traversal and initialization functions
 //! - [`navigate`]: Window finding and movement navigation
+//! - [`preview`]: Preview window finding and state queries
 //! - [`resize`]: Window resize calculations and execution helpers
-//! - [`snapshot`]: Window layout snapshots (placeholder)
+//! - [`snapshot`]: Window layout snapshot helpers
 //! - [`split`]: Window splitting functions (placeholder)
 //! - [`statusline`]: Status line and window bar (placeholder)
 //! - [`tabpage`]: Tab page management operations
@@ -40,6 +41,7 @@ pub mod free;
 pub mod layout;
 pub mod list;
 pub mod navigate;
+pub mod preview;
 pub mod resize;
 pub mod snapshot;
 pub mod split;
