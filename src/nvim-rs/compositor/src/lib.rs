@@ -15,6 +15,7 @@
 #![allow(clippy::must_use_candidate)]
 
 pub mod floating;
+pub mod state;
 
 use std::ffi::{c_int, c_void};
 
