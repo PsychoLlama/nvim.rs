@@ -25,6 +25,7 @@ pub mod set;
 pub mod show;
 pub mod sideeffect;
 pub mod validate;
+pub mod value;
 
 use std::ffi::{c_char, c_int, c_uint};
 

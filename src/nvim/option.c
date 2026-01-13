@@ -276,6 +276,25 @@ int nvim_win_get_diff(win_T *win) { return win ? win->w_p_diff : 0; }
 OptIndex nvim_get_opt_idx_foldmethod(void) { return kOptFoldmethod; }
 OptIndex nvim_get_opt_idx_wrap(void) { return kOptWrap; }
 
+// =============================================================================
+// Accessor functions for Rust value module (Phase 164)
+// =============================================================================
+
+// Full screen state (option module specific)
+int nvim_option_get_full_screen(void) { return full_screen; }
+
+// Screen dimensions
+int nvim_option_get_rows(void) { return Rows; }
+
+// Window accessor for view height (option module specific)
+int nvim_option_win_get_view_height(win_T *win) { return win ? win->w_view_height : 0; }
+
+// Global option value accessors for validation
+OptInt nvim_option_get_p_wmh(void) { return p_wmh; }
+OptInt nvim_option_get_p_wh(void) { return p_wh; }
+OptInt nvim_option_get_p_wmw(void) { return p_wmw; }
+OptInt nvim_option_get_p_wiw(void) { return p_wiw; }
+
 static const char e_unknown_option[]
   = N_("E518: Unknown option");
 static const char e_not_allowed_in_modeline[]
