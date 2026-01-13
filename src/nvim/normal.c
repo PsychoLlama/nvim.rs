@@ -556,6 +556,18 @@ int nvim_oap_get_regname(void)
   return current_oap ? current_oap->regname : NUL;
 }
 
+/// Get global opcount (accessor for Rust).
+int nvim_get_opcount(void)
+{
+  return opcount;
+}
+
+/// Set global opcount (accessor for Rust).
+void nvim_set_opcount(int val)
+{
+  opcount = val;
+}
+
 /// Get the nv_max_linear value.
 int nvim_get_nv_max_linear(void)
 {
@@ -1477,6 +1489,12 @@ void nvim_set_VIsual_coladd(int coladd)
 void nvim_set_VIsual_active(bool val)
 {
   VIsual_active = val;
+}
+
+/// Get VIsual_reselect global (accessor for Rust).
+int nvim_get_VIsual_reselect(void)
+{
+  return VIsual_reselect;
 }
 
 /// Set VIsual_reselect global.

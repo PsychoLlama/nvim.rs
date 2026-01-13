@@ -3603,6 +3603,11 @@ int nvim_get_allow_keys(void)
   return allow_keys;
 }
 
+void nvim_set_allow_keys(int val)
+{
+  allow_keys = val;
+}
+
 int nvim_get_keytyped(void)
 {
   return KeyTyped ? 1 : 0;
