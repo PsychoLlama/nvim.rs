@@ -229,6 +229,118 @@ pub unsafe extern "C" fn rs_is_operator_pending(oap: OapHandle) -> bool {
 }
 
 // =============================================================================
+// FFI Exports for Constants
+// =============================================================================
+
+/// FFI export: Get NV_NCH constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_nv_nch() -> c_int {
+    NV_NCH
+}
+
+/// FFI export: Get NV_NCH_NOP constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_nv_nch_nop() -> c_int {
+    NV_NCH_NOP
+}
+
+/// FFI export: Get NV_NCH_ALW constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_nv_nch_alw() -> c_int {
+    NV_NCH_ALW
+}
+
+/// FFI export: Get NV_LANG constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_nv_lang() -> c_int {
+    NV_LANG
+}
+
+/// FFI export: Get NV_SS constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_nv_ss() -> c_int {
+    NV_SS
+}
+
+/// FFI export: Get NV_SSS constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_nv_sss() -> c_int {
+    NV_SSS
+}
+
+/// FFI export: Get NV_STS constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_nv_sts() -> c_int {
+    NV_STS
+}
+
+/// FFI export: Get NV_KEEPREG constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_nv_keepreg() -> c_int {
+    NV_KEEPREG
+}
+
+/// FFI export: Get NV_RL constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_nv_rl() -> c_int {
+    NV_RL
+}
+
+/// FFI export: Get NV_NCW constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_nv_ncw() -> c_int {
+    NV_NCW
+}
+
+/// FFI export: Get OP_NOP constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_op_nop() -> c_int {
+    OP_NOP
+}
+
+/// FFI export: Check if flag has NV_NCH set
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_flags_has_nch(flags: c_int) -> c_int {
+    c_int::from(flags & NV_NCH != 0)
+}
+
+/// FFI export: Check if flag has NV_LANG set
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_flags_has_lang(flags: c_int) -> c_int {
+    c_int::from(flags & NV_LANG != 0)
+}
+
+/// FFI export: Check if flag has NV_NCW set
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_flags_has_ncw(flags: c_int) -> c_int {
+    c_int::from(flags & NV_NCW != 0)
+}
+
+/// FFI export: Check if flag has NV_RL set
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_flags_has_rl(flags: c_int) -> c_int {
+    c_int::from(flags & NV_RL != 0)
+}
+
+/// FFI export: Check if flag has NV_KEEPREG set
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_flags_has_keepreg(flags: c_int) -> c_int {
+    c_int::from(flags & NV_KEEPREG != 0)
+}
+
+/// FFI export: Check if flag has selection flags (NV_SS or NV_SSS)
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_flags_has_selection(flags: c_int) -> c_int {
+    c_int::from((flags & NV_SS != 0) || (flags & NV_SSS != 0))
+}
+
+/// FFI export: Get max count constant (999999999)
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_max_count() -> c_int {
+    999_999_999
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

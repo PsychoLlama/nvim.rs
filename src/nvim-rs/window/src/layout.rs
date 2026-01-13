@@ -481,11 +481,7 @@ pub extern "C" fn rs_layout_split_dir(value: c_int) -> c_int {
 
 /// Clamp width to constraints.
 #[unsafe(no_mangle)]
-pub extern "C" fn rs_size_clamp_width(
-    width: c_int,
-    min_width: c_int,
-    max_width: c_int,
-) -> c_int {
+pub extern "C" fn rs_size_clamp_width(width: c_int, min_width: c_int, max_width: c_int) -> c_int {
     let constraints = SizeConstraints {
         min_width,
         min_height: 1,
