@@ -32,12 +32,14 @@
 #![allow(dead_code)]
 
 pub mod accessors;
+pub mod callbacks;
 pub mod constants;
 pub mod state;
 pub mod types;
 
 // Re-export main types
 pub use accessors::*;
+pub use callbacks::*;
 pub use constants::*;
 pub use state::*;
 pub use types::*;

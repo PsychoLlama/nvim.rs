@@ -136,6 +136,12 @@ extern int rs_col_print(uint8_t *buf, size_t buflen, int col, int vcol);
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to buf_T fields from Rust code.
 
+/// Get the buffer handle (b_fnum) from a buffer.
+int nvim_buf_get_handle(buf_T *buf)
+{
+  return buf ? buf->b_fnum : 0;
+}
+
 /// Get the first character of the b_p_bt (buftype option) field.
 char nvim_buf_get_buftype(buf_T *buf)
 {
