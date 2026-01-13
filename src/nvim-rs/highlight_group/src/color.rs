@@ -184,6 +184,64 @@ pub fn color_idx_description(idx: c_int) -> &'static str {
     }
 }
 
+// =============================================================================
+// FFI Exports
+// =============================================================================
+
+use std::ffi::{c_char, CStr};
+
+/// Parse a hex color string to RGB value.
+///
+/// # Safety
+/// `s` must be a valid null-terminated C string or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_hl_parse_hex_color(s: *const c_char) -> RgbValue {
+    if s.is_null() {
+        return RGB_INVALID;
+    }
+    let s_str = match unsafe { CStr::from_ptr(s) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return RGB_INVALID,
+    };
+    parse_hex_color(s_str)
+}
+
+/// Extract the red component from an RGB value.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_hl_rgb_red(color: RgbValue) -> c_int {
+    rgb_red(color) as c_int
+}
+
+/// Extract the green component from an RGB value.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_hl_rgb_green(color: RgbValue) -> c_int {
+    rgb_green(color) as c_int
+}
+
+/// Extract the blue component from an RGB value.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_hl_rgb_blue(color: RgbValue) -> c_int {
+    rgb_blue(color) as c_int
+}
+
+/// Create an RGB value from red, green, blue components.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_hl_rgb_from_components(r: c_int, g: c_int, b: c_int) -> RgbValue {
+    rgb_from_components(r as u8, g as u8, b as u8)
+}
+
+/// Check if an RGB color is valid (not invalid/unset).
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_hl_is_valid_rgb(color: RgbValue) -> c_int {
+    c_int::from(is_valid_rgb(color))
+}
+
+/// Check if an RGB color is dark.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_hl_is_dark_color(color: RgbValue) -> c_int {
+    c_int::from(is_dark_color(color))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

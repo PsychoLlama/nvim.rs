@@ -384,6 +384,173 @@ fn format_setting(setting: &HlSetting<'_>) -> String {
     }
 }
 
+// =============================================================================
+// FFI Exports
+// =============================================================================
+
+use std::ffi::{c_char, CStr};
+
+/// Check if a character ends an Ex command.
+///
+/// # Safety
+/// This function is safe as it takes a simple integer.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_hl_cmd_ends_excmd(c: c_int) -> c_int {
+    let ch = char::from_u32(c as u32).unwrap_or('\0');
+    c_int::from(ends_excmd(ch))
+}
+
+/// Check if a highlight command line would list all groups.
+///
+/// # Safety
+/// `line` must be a valid null-terminated C string or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_hl_cmd_is_list_all(line: *const c_char) -> c_int {
+    if line.is_null() {
+        return 1; // Empty line = list all
+    }
+    let line_str = match unsafe { CStr::from_ptr(line) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return 0,
+    };
+    match parse_command(line_str) {
+        Ok(HighlightCommand::ListAll) => 1,
+        _ => 0,
+    }
+}
+
+/// Check if a highlight command line would list a single group.
+///
+/// # Safety
+/// `line` must be a valid null-terminated C string or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_hl_cmd_is_list_one(line: *const c_char) -> c_int {
+    if line.is_null() {
+        return 0;
+    }
+    let line_str = match unsafe { CStr::from_ptr(line) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return 0,
+    };
+    match parse_command(line_str) {
+        Ok(HighlightCommand::ListOne(_)) => 1,
+        _ => 0,
+    }
+}
+
+/// Check if a highlight command line is a clear command.
+///
+/// # Safety
+/// `line` must be a valid null-terminated C string or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_hl_cmd_is_clear(line: *const c_char) -> c_int {
+    if line.is_null() {
+        return 0;
+    }
+    let line_str = match unsafe { CStr::from_ptr(line) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return 0,
+    };
+    match parse_command(line_str) {
+        Ok(HighlightCommand::Clear { .. }) => 1,
+        _ => 0,
+    }
+}
+
+/// Check if a highlight command line is a link command.
+///
+/// # Safety
+/// `line` must be a valid null-terminated C string or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_hl_cmd_is_link(line: *const c_char) -> c_int {
+    if line.is_null() {
+        return 0;
+    }
+    let line_str = match unsafe { CStr::from_ptr(line) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return 0,
+    };
+    match parse_command(line_str) {
+        Ok(HighlightCommand::Link { .. }) => 1,
+        _ => 0,
+    }
+}
+
+/// Check if a highlight command line is a set command.
+///
+/// # Safety
+/// `line` must be a valid null-terminated C string or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_hl_cmd_is_set(line: *const c_char) -> c_int {
+    if line.is_null() {
+        return 0;
+    }
+    let line_str = match unsafe { CStr::from_ptr(line) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return 0,
+    };
+    match parse_command(line_str) {
+        Ok(HighlightCommand::Set { .. }) => 1,
+        _ => 0,
+    }
+}
+
+/// Check if a highlight command line has the default modifier.
+///
+/// # Safety
+/// `line` must be a valid null-terminated C string or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_hl_cmd_has_default(line: *const c_char) -> c_int {
+    if line.is_null() {
+        return 0;
+    }
+    let line_str = match unsafe { CStr::from_ptr(line) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return 0,
+    };
+    match parse_command(line_str) {
+        Ok(HighlightCommand::Clear { is_default, .. })
+        | Ok(HighlightCommand::Link { is_default, .. })
+        | Ok(HighlightCommand::Set { is_default, .. }) => c_int::from(is_default),
+        _ => 0,
+    }
+}
+
+/// Check if a highlight command would modify (vs. just list).
+///
+/// # Safety
+/// `line` must be a valid null-terminated C string or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_hl_cmd_is_modifying(line: *const c_char) -> c_int {
+    if line.is_null() {
+        return 0;
+    }
+    let line_str = match unsafe { CStr::from_ptr(line) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return 0,
+    };
+    match parse_command(line_str) {
+        Ok(ref cmd) => c_int::from(is_modifying_command(cmd)),
+        _ => 0,
+    }
+}
+
+/// Check if a highlight command would affect the Normal group.
+///
+/// # Safety
+/// `name` must be a valid null-terminated C string or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_hl_cmd_affects_normal(name: *const c_char) -> c_int {
+    if name.is_null() {
+        return 0;
+    }
+    let name_str = match unsafe { CStr::from_ptr(name) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return 0,
+    };
+    c_int::from(affects_normal(name_str))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
