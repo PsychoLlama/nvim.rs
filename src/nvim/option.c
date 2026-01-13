@@ -295,6 +295,21 @@ OptInt nvim_option_get_p_wh(void) { return p_wh; }
 OptInt nvim_option_get_p_wmw(void) { return p_wmw; }
 OptInt nvim_option_get_p_wiw(void) { return p_wiw; }
 
+// Phase 165: Core set operations accessors
+// Option variable pointer accessors
+const char *nvim_option_get_p_mouse(void) { return (const char *)p_mouse; }
+const char *nvim_option_get_p_flp(void) { return (const char *)p_flp; }
+const char *nvim_option_get_p_wbr(void) { return (const char *)p_wbr; }
+
+// Buffer variable pointer accessors
+const char *nvim_buf_get_p_flp(buf_T *buf) { return buf ? (const char *)buf->b_p_flp : NULL; }
+
+// Window variable pointer accessors
+const char *nvim_win_get_p_wbr(win_T *win) { return win ? (const char *)win->w_p_wbr : NULL; }
+
+// Window briopt_list accessor
+int nvim_win_get_briopt_list(win_T *win) { return win ? win->w_briopt_list : 0; }
+
 static const char e_unknown_option[]
   = N_("E518: Unknown option");
 static const char e_not_allowed_in_modeline[]
