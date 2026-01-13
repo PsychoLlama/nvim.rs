@@ -659,6 +659,373 @@ pub unsafe extern "C" fn rs_tagptrs_free(tagp: *mut TagPtrs) {
 }
 
 // =============================================================================
+// Phase 151: Additional Tag File Parsing FFI Exports
+// =============================================================================
+
+/// Get the size of TagPtrs structure for C allocation.
+#[no_mangle]
+pub extern "C" fn rs_tagptrs_size() -> usize {
+    std::mem::size_of::<TagPtrs>()
+}
+
+/// Get the alignment of TagPtrs structure.
+#[no_mangle]
+pub extern "C" fn rs_tagptrs_align() -> usize {
+    std::mem::align_of::<TagPtrs>()
+}
+
+/// Check if a character is valid as a tag name character.
+#[no_mangle]
+pub extern "C" fn rs_is_tag_char(c: u8) -> bool {
+    // Tag names can contain alphanumeric, underscore, and some special chars
+    c.is_ascii_alphanumeric() || c == b'_' || c == b'.' || c == b':'
+}
+
+/// Check if a character is a valid tag file separator.
+#[no_mangle]
+pub extern "C" fn rs_is_tag_separator(c: u8) -> bool {
+    c == TAB
+}
+
+/// Check if the line appears to be a tag file comment.
+///
+/// # Safety
+/// `line` must be a valid pointer to a null-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_tag_comment(line: *const c_char) -> bool {
+    if line.is_null() {
+        return false;
+    }
+    let first = *line as u8;
+    // Comments start with ! (header line) or #
+    first == b'!' || first == b'#'
+}
+
+/// Check if the line is a tag file header line.
+///
+/// Header lines start with "!_TAG_".
+///
+/// # Safety
+/// `line` must be a valid pointer to a null-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_tag_header(line: *const c_char) -> bool {
+    if line.is_null() {
+        return false;
+    }
+    starts_with(line, c"!_TAG_".as_ptr())
+}
+
+/// Check if the tag line indicates a sorted file.
+///
+/// Returns:
+/// - 0 = unsorted
+/// - 1 = sorted (case sensitive)
+/// - 2 = sorted (case insensitive / fold)
+///
+/// # Safety
+/// `line` must be a valid pointer to a null-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tag_header_sort_type(line: *const c_char) -> c_int {
+    if line.is_null() {
+        return 0;
+    }
+
+    // Check for "!_TAG_FILE_SORTED\t"
+    if !starts_with(line, c"!_TAG_FILE_SORTED\t".as_ptr()) {
+        return 0;
+    }
+
+    // Skip to the value
+    let p = line.add(18); // Length of "!_TAG_FILE_SORTED\t"
+    if *p == 0 {
+        return 0;
+    }
+
+    // The value should be '0', '1', or '2'
+    match *p as u8 {
+        b'1' => 1,
+        b'2' => 2,
+        _ => 0, // Unsorted for '0' or any other value
+    }
+}
+
+/// Get the tagname_end from TagPtrs.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagptrs_get_tagname_end(tagp: *const TagPtrs) -> *const c_char {
+    if tagp.is_null() {
+        return ptr::null();
+    }
+    (*tagp).tagname_end
+}
+
+/// Get the fname_end from TagPtrs.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagptrs_get_fname_end(tagp: *const TagPtrs) -> *const c_char {
+    if tagp.is_null() {
+        return ptr::null();
+    }
+    (*tagp).fname_end
+}
+
+/// Get the command_end from TagPtrs.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagptrs_get_command_end(tagp: *const TagPtrs) -> *const c_char {
+    if tagp.is_null() {
+        return ptr::null();
+    }
+    (*tagp).command_end
+}
+
+/// Get the tagkind_end from TagPtrs.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagptrs_get_tagkind_end(tagp: *const TagPtrs) -> *const c_char {
+    if tagp.is_null() {
+        return ptr::null();
+    }
+    (*tagp).tagkind_end
+}
+
+/// Get the user_data_end from TagPtrs.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagptrs_get_user_data_end(tagp: *const TagPtrs) -> *const c_char {
+    if tagp.is_null() {
+        return ptr::null();
+    }
+    (*tagp).user_data_end
+}
+
+/// Set the tagname field in TagPtrs.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagptrs_set_tagname(tagp: *mut TagPtrs, val: *mut c_char) {
+    if tagp.is_null() {
+        return;
+    }
+    (*tagp).tagname = val;
+}
+
+/// Set the tagname_end field in TagPtrs.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagptrs_set_tagname_end(tagp: *mut TagPtrs, val: *mut c_char) {
+    if tagp.is_null() {
+        return;
+    }
+    (*tagp).tagname_end = val;
+}
+
+/// Set the fname field in TagPtrs.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagptrs_set_fname(tagp: *mut TagPtrs, val: *mut c_char) {
+    if tagp.is_null() {
+        return;
+    }
+    (*tagp).fname = val;
+}
+
+/// Set the fname_end field in TagPtrs.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagptrs_set_fname_end(tagp: *mut TagPtrs, val: *mut c_char) {
+    if tagp.is_null() {
+        return;
+    }
+    (*tagp).fname_end = val;
+}
+
+/// Set the command field in TagPtrs.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagptrs_set_command(tagp: *mut TagPtrs, val: *mut c_char) {
+    if tagp.is_null() {
+        return;
+    }
+    (*tagp).command = val;
+}
+
+/// Set the command_end field in TagPtrs.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagptrs_set_command_end(tagp: *mut TagPtrs, val: *mut c_char) {
+    if tagp.is_null() {
+        return;
+    }
+    (*tagp).command_end = val;
+}
+
+/// Set the tag_fname field in TagPtrs.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagptrs_set_tag_fname(tagp: *mut TagPtrs, val: *mut c_char) {
+    if tagp.is_null() {
+        return;
+    }
+    (*tagp).tag_fname = val;
+}
+
+/// Set the tagkind field in TagPtrs.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagptrs_set_tagkind(tagp: *mut TagPtrs, val: *mut c_char) {
+    if tagp.is_null() {
+        return;
+    }
+    (*tagp).tagkind = val;
+}
+
+/// Set the tagkind_end field in TagPtrs.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagptrs_set_tagkind_end(tagp: *mut TagPtrs, val: *mut c_char) {
+    if tagp.is_null() {
+        return;
+    }
+    (*tagp).tagkind_end = val;
+}
+
+/// Set the user_data field in TagPtrs.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagptrs_set_user_data(tagp: *mut TagPtrs, val: *mut c_char) {
+    if tagp.is_null() {
+        return;
+    }
+    (*tagp).user_data = val;
+}
+
+/// Set the user_data_end field in TagPtrs.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagptrs_set_user_data_end(tagp: *mut TagPtrs, val: *mut c_char) {
+    if tagp.is_null() {
+        return;
+    }
+    (*tagp).user_data_end = val;
+}
+
+/// Set the tagline field in TagPtrs.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagptrs_set_tagline(tagp: *mut TagPtrs, val: LinenrT) {
+    if tagp.is_null() {
+        return;
+    }
+    (*tagp).tagline = val;
+}
+
+/// Check if TagPtrs has a valid command.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagptrs_has_command(tagp: *const TagPtrs) -> bool {
+    if tagp.is_null() {
+        return false;
+    }
+    !(*tagp).command.is_null()
+}
+
+/// Check if TagPtrs has a valid tagline (non-zero).
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagptrs_has_tagline(tagp: *const TagPtrs) -> bool {
+    if tagp.is_null() {
+        return false;
+    }
+    (*tagp).tagline > 0
+}
+
+/// Check if command is a search pattern (starts with / or ?).
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagptrs_command_is_pattern(tagp: *const TagPtrs) -> bool {
+    if tagp.is_null() {
+        return false;
+    }
+    let cmd = (*tagp).command;
+    if cmd.is_null() {
+        return false;
+    }
+    let first = *cmd as u8;
+    first == b'/' || first == b'?'
+}
+
+/// Check if command is a line number.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagptrs_command_is_linenr(tagp: *const TagPtrs) -> bool {
+    if tagp.is_null() {
+        return false;
+    }
+    let cmd = (*tagp).command;
+    if cmd.is_null() {
+        return false;
+    }
+    (*cmd as u8).is_ascii_digit()
+}
+
+/// Get the command length from TagPtrs.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagptrs_command_len(tagp: *const TagPtrs) -> usize {
+    if tagp.is_null() {
+        return 0;
+    }
+    let tagp = &*tagp;
+    if tagp.command.is_null() {
+        return 0;
+    }
+    if tagp.command_end.is_null() {
+        // Calculate length to end of string
+        strlen_safe(tagp.command)
+    } else {
+        tagp.command_end.offset_from(tagp.command) as usize
+    }
+}
+
+/// Copy tag name to a buffer.
+///
+/// Returns the number of bytes copied (not including NUL terminator).
+///
+/// # Safety
+/// `buf` must be valid for `buf_len` bytes. `tagp` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagptrs_copy_tagname(
+    tagp: *const TagPtrs,
+    buf: *mut c_char,
+    buf_len: usize,
+) -> usize {
+    if tagp.is_null() || buf.is_null() || buf_len == 0 {
+        return 0;
+    }
+    let tagp = &*tagp;
+    if tagp.tagname.is_null() || tagp.tagname_end.is_null() {
+        *buf = 0;
+        return 0;
+    }
+
+    let name_len = tagp.tagname_end.offset_from(tagp.tagname) as usize;
+    let copy_len = name_len.min(buf_len - 1);
+
+    std::ptr::copy_nonoverlapping(tagp.tagname, buf, copy_len);
+    *buf.add(copy_len) = 0;
+
+    copy_len
+}
+
+/// Copy file name to a buffer.
+///
+/// Returns the number of bytes copied (not including NUL terminator).
+///
+/// # Safety
+/// `buf` must be valid for `buf_len` bytes. `tagp` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagptrs_copy_fname(
+    tagp: *const TagPtrs,
+    buf: *mut c_char,
+    buf_len: usize,
+) -> usize {
+    if tagp.is_null() || buf.is_null() || buf_len == 0 {
+        return 0;
+    }
+    let tagp = &*tagp;
+    if tagp.fname.is_null() || tagp.fname_end.is_null() {
+        *buf = 0;
+        return 0;
+    }
+
+    let name_len = tagp.fname_end.offset_from(tagp.fname) as usize;
+    let copy_len = name_len.min(buf_len - 1);
+
+    std::ptr::copy_nonoverlapping(tagp.fname, buf, copy_len);
+    *buf.add(copy_len) = 0;
+
+    copy_len
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

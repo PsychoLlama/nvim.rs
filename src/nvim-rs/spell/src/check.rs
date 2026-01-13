@@ -700,9 +700,7 @@ pub extern "C" fn rs_compound_check_flags_new(
 /// # Safety
 /// `flags` must be a valid pointer to a CompoundCheckFlags.
 #[no_mangle]
-pub unsafe extern "C" fn rs_compound_check_flags_max_parts(
-    flags: *const CompoundCheckFlags,
-) -> u8 {
+pub unsafe extern "C" fn rs_compound_check_flags_max_parts(flags: *const CompoundCheckFlags) -> u8 {
     if flags.is_null() {
         return 0;
     }
