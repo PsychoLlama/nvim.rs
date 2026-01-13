@@ -1830,7 +1830,9 @@ pub unsafe extern "C" fn rs_suggestion_result_is_split(result: *const Suggestion
 /// # Safety
 /// `result` must be a valid pointer to a SuggestionResult.
 #[no_mangle]
-pub unsafe extern "C" fn rs_suggestion_result_is_soundalike(result: *const SuggestionResult) -> bool {
+pub unsafe extern "C" fn rs_suggestion_result_is_soundalike(
+    result: *const SuggestionResult,
+) -> bool {
     if result.is_null() {
         return false;
     }

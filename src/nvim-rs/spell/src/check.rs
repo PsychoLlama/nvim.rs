@@ -668,6 +668,135 @@ pub unsafe extern "C" fn rs_compound_flag_in_set(
 }
 
 // =============================================================================
+// Phase 150: Additional Compound Word FFI Exports
+// =============================================================================
+
+/// Create a new CompoundCheckFlags with defaults.
+#[no_mangle]
+pub extern "C" fn rs_compound_check_flags_default() -> CompoundCheckFlags {
+    CompoundCheckFlags::default()
+}
+
+/// Create CompoundCheckFlags with specified values.
+#[no_mangle]
+pub extern "C" fn rs_compound_check_flags_new(
+    max_parts: u8,
+    min_len: u8,
+    max_syl: u8,
+    allow_start: bool,
+    allow_end: bool,
+) -> CompoundCheckFlags {
+    CompoundCheckFlags {
+        max_parts,
+        min_len,
+        max_syl,
+        allow_start,
+        allow_end,
+    }
+}
+
+/// Get max_parts from CompoundCheckFlags.
+///
+/// # Safety
+/// `flags` must be a valid pointer to a CompoundCheckFlags.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compound_check_flags_max_parts(
+    flags: *const CompoundCheckFlags,
+) -> u8 {
+    if flags.is_null() {
+        return 0;
+    }
+    (*flags).max_parts
+}
+
+/// Get min_len from CompoundCheckFlags.
+///
+/// # Safety
+/// `flags` must be a valid pointer to a CompoundCheckFlags.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compound_check_flags_min_len(flags: *const CompoundCheckFlags) -> u8 {
+    if flags.is_null() {
+        return 0;
+    }
+    (*flags).min_len
+}
+
+/// Get max_syl from CompoundCheckFlags.
+///
+/// # Safety
+/// `flags` must be a valid pointer to a CompoundCheckFlags.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compound_check_flags_max_syl(flags: *const CompoundCheckFlags) -> u8 {
+    if flags.is_null() {
+        return 0;
+    }
+    (*flags).max_syl
+}
+
+/// Check if compound is allowed at start.
+///
+/// # Safety
+/// `flags` must be a valid pointer to a CompoundCheckFlags.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compound_check_flags_allow_start(
+    flags: *const CompoundCheckFlags,
+) -> bool {
+    if flags.is_null() {
+        return false;
+    }
+    (*flags).allow_start
+}
+
+/// Check if compound is allowed at end.
+///
+/// # Safety
+/// `flags` must be a valid pointer to a CompoundCheckFlags.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compound_check_flags_allow_end(
+    flags: *const CompoundCheckFlags,
+) -> bool {
+    if flags.is_null() {
+        return false;
+    }
+    (*flags).allow_end
+}
+
+// Note: rs_word_needs_compound, rs_word_no_compound_before, rs_word_no_compound_after,
+// rs_word_compound_flag, rs_word_has_compound_flag are exported from wordtree.rs
+
+/// Check if word can be the first part of a compound.
+#[no_mangle]
+pub extern "C" fn rs_can_compound_start(flags: u32) -> bool {
+    can_compound(flags, true, false)
+}
+
+/// Check if word can be a middle part of a compound.
+#[no_mangle]
+pub extern "C" fn rs_can_compound_middle(flags: u32) -> bool {
+    can_compound(flags, false, false)
+}
+
+/// Check if word can be the last part of a compound.
+#[no_mangle]
+pub extern "C" fn rs_can_compound_end(flags: u32) -> bool {
+    can_compound(flags, false, true)
+}
+
+/// Validate compound word part count.
+#[no_mangle]
+pub extern "C" fn rs_compound_valid_parts(part_count: u8, max_parts: u8) -> bool {
+    max_parts == 0 || part_count <= max_parts
+}
+
+/// Validate compound word part length.
+#[no_mangle]
+pub extern "C" fn rs_compound_valid_len(word_len: usize, min_len: u8) -> bool {
+    min_len == 0 || word_len >= min_len as usize
+}
+
+// Note: WF_* flag constants are exported from wordtree.rs
+
+// =============================================================================
 // Tests
 // =============================================================================
 

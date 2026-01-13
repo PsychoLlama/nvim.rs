@@ -411,6 +411,334 @@ pub unsafe extern "C" fn rs_soundfold_compare(
 }
 
 // =============================================================================
+// Phase 150: Additional FFI Exports for Soundalike & Compound
+// =============================================================================
+
+/// Get SAL_F0LLOWUP flag constant.
+#[no_mangle]
+pub extern "C" fn rs_sal_flag_followup() -> c_int {
+    sal_flags::SAL_F0LLOWUP
+}
+
+/// Get SAL_COLLAPSE flag constant.
+#[no_mangle]
+pub extern "C" fn rs_sal_flag_collapse() -> c_int {
+    sal_flags::SAL_COLLAPSE
+}
+
+/// Get SAL_REM_ACCENTS flag constant.
+#[no_mangle]
+pub extern "C" fn rs_sal_flag_rem_accents() -> c_int {
+    sal_flags::SAL_REM_ACCENTS
+}
+
+/// Get SAL_SOFO flag constant.
+#[no_mangle]
+pub extern "C" fn rs_sal_flag_sofo() -> c_int {
+    sal_flags::SAL_SOFO
+}
+
+/// Get maximum soundfold length constant.
+#[no_mangle]
+pub extern "C" fn rs_maxsofo_len() -> usize {
+    MAXSOFO_LEN
+}
+
+/// Create a new SoundfoldState.
+///
+/// # Safety
+/// `state_out` must be a valid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_soundfold_state_new(flags: c_int, state_out: *mut SoundfoldState) {
+    if state_out.is_null() {
+        return;
+    }
+    *state_out = SoundfoldState::new(flags);
+}
+
+/// Reset a SoundfoldState.
+///
+/// # Safety
+/// `state` must be a valid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_soundfold_state_reset(state: *mut SoundfoldState) {
+    if state.is_null() {
+        return;
+    }
+    (*state).reset();
+}
+
+/// Check if SoundfoldState has followup.
+///
+/// # Safety
+/// `state` must be a valid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_soundfold_state_has_followup(state: *const SoundfoldState) -> bool {
+    if state.is_null() {
+        return false;
+    }
+    (*state).has_followup()
+}
+
+/// Check if SoundfoldState has collapse.
+///
+/// # Safety
+/// `state` must be a valid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_soundfold_state_has_collapse(state: *const SoundfoldState) -> bool {
+    if state.is_null() {
+        return false;
+    }
+    (*state).has_collapse()
+}
+
+/// Check if SoundfoldState has accent removal.
+///
+/// # Safety
+/// `state` must be a valid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_soundfold_state_has_rem_accents(state: *const SoundfoldState) -> bool {
+    if state.is_null() {
+        return false;
+    }
+    (*state).has_rem_accents()
+}
+
+/// Check if SoundfoldState uses SOFO table.
+///
+/// # Safety
+/// `state` must be a valid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_soundfold_state_is_sofo(state: *const SoundfoldState) -> bool {
+    if state.is_null() {
+        return false;
+    }
+    (*state).is_sofo()
+}
+
+/// Add output character to SoundfoldState (handles collapse).
+///
+/// # Safety
+/// `state` must be a valid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_soundfold_state_add_output(
+    state: *mut SoundfoldState,
+    c: c_int,
+) -> bool {
+    if state.is_null() {
+        return false;
+    }
+    (*state).add_output(c)
+}
+
+/// Get SoundfoldState output position.
+///
+/// # Safety
+/// `state` must be a valid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_soundfold_state_out_pos(state: *const SoundfoldState) -> usize {
+    if state.is_null() {
+        return 0;
+    }
+    (*state).out_pos
+}
+
+/// Get SoundfoldState source position.
+///
+/// # Safety
+/// `state` must be a valid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_soundfold_state_src_pos(state: *const SoundfoldState) -> usize {
+    if state.is_null() {
+        return 0;
+    }
+    (*state).src_pos
+}
+
+/// Set SoundfoldState source position.
+///
+/// # Safety
+/// `state` must be a valid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_soundfold_state_set_src_pos(state: *mut SoundfoldState, pos: usize) {
+    if state.is_null() {
+        return;
+    }
+    (*state).src_pos = pos;
+}
+
+/// Set SoundfoldState output position.
+///
+/// # Safety
+/// `state` must be a valid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_soundfold_state_set_out_pos(state: *mut SoundfoldState, pos: usize) {
+    if state.is_null() {
+        return;
+    }
+    (*state).out_pos = pos;
+}
+
+/// Check if SoundfoldState is at word start.
+///
+/// # Safety
+/// `state` must be a valid pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_soundfold_state_at_start(state: *const SoundfoldState) -> bool {
+    if state.is_null() {
+        return true;
+    }
+    (*state).at_start
+}
+
+/// Perform SOFO table lookup.
+///
+/// Returns: 0 if character should be removed, the mapped character if mapped,
+/// or the original character if not in table.
+///
+/// # Safety
+/// `from` and `to` must be valid arrays of length `table_len`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sofo_lookup(
+    from: *const c_int,
+    to: *const c_int,
+    table_len: usize,
+    c: c_int,
+) -> c_int {
+    if from.is_null() || to.is_null() || table_len == 0 {
+        return c; // Keep character if no table
+    }
+
+    let from_slice = std::slice::from_raw_parts(from, table_len);
+    let to_slice = std::slice::from_raw_parts(to, table_len);
+
+    match sofo_lookup(from_slice, to_slice, c) {
+        SofoResult::Mapped(tc) => tc,
+        SofoResult::Remove => 0,
+        SofoResult::Keep => c,
+    }
+}
+
+/// Perform SOFO fold on a word.
+///
+/// # Safety
+/// All pointers must be valid with the given lengths.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sofo_fold(
+    word: *const c_int,
+    word_len: usize,
+    from: *const c_int,
+    to: *const c_int,
+    table_len: usize,
+    output: *mut c_int,
+    output_len: usize,
+) -> usize {
+    if word.is_null() || from.is_null() || to.is_null() || output.is_null() {
+        return 0;
+    }
+
+    let word_slice = std::slice::from_raw_parts(word, word_len);
+    let from_slice = std::slice::from_raw_parts(from, table_len);
+    let to_slice = std::slice::from_raw_parts(to, table_len);
+    let output_slice = std::slice::from_raw_parts_mut(output, output_len);
+
+    sofo_fold(word_slice, from_slice, to_slice, output_slice)
+}
+
+/// Get number of matches from a soundfold comparison.
+///
+/// # Safety
+/// Pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_soundfold_compare_matches(
+    word1: *const c_int,
+    len1: usize,
+    word2: *const c_int,
+    len2: usize,
+) -> c_int {
+    if word1.is_null() || word2.is_null() {
+        return 0;
+    }
+
+    let slice1 = std::slice::from_raw_parts(word1, len1);
+    let slice2 = std::slice::from_raw_parts(word2, len2);
+
+    soundfold_compare(slice1, slice2).matches
+}
+
+/// Get number of diffs from a soundfold comparison.
+///
+/// # Safety
+/// Pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_soundfold_compare_diffs(
+    word1: *const c_int,
+    len1: usize,
+    word2: *const c_int,
+    len2: usize,
+) -> c_int {
+    if word1.is_null() || word2.is_null() {
+        return i32::MAX;
+    }
+
+    let slice1 = std::slice::from_raw_parts(word1, len1);
+    let slice2 = std::slice::from_raw_parts(word2, len2);
+
+    soundfold_compare(slice1, slice2).diffs
+}
+
+/// Check if two soundfolded words are similar within a threshold.
+///
+/// # Safety
+/// Pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_soundfold_is_similar(
+    word1: *const c_int,
+    len1: usize,
+    word2: *const c_int,
+    len2: usize,
+    threshold: c_int,
+) -> bool {
+    if word1.is_null() || word2.is_null() {
+        return false;
+    }
+
+    let slice1 = std::slice::from_raw_parts(word1, len1);
+    let slice2 = std::slice::from_raw_parts(word2, len2);
+
+    soundfold_compare(slice1, slice2).is_similar(threshold)
+}
+
+/// Calculate soundfold similarity score (percentage-based).
+///
+/// Returns a score from 0-100 where 100 is identical.
+///
+/// # Safety
+/// Pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_soundfold_similarity_score(
+    word1: *const c_int,
+    len1: usize,
+    word2: *const c_int,
+    len2: usize,
+) -> c_int {
+    if word1.is_null() || word2.is_null() {
+        return 0;
+    }
+
+    let slice1 = std::slice::from_raw_parts(word1, len1);
+    let slice2 = std::slice::from_raw_parts(word2, len2);
+
+    let score = soundfold_compare(slice1, slice2);
+    let total = score.matches + score.diffs;
+    if total == 0 {
+        return 100;
+    }
+
+    (score.matches * 100) / total
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
