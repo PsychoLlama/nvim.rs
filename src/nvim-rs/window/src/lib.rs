@@ -8,7 +8,7 @@
 //! # Modules
 //!
 //! - [`alloc`]: Window allocation functions (placeholder)
-//! - [`close`]: Window closing functions (placeholder)
+//! - [`close`]: Window closing validation and execution helpers
 //! - [`commands`]: CTRL-W command handler (placeholder)
 //! - [`equalize`]: Window equalization functions (placeholder)
 //! - [`events`]: Window events and UI updates (placeholder)
@@ -17,7 +17,8 @@
 //! - [`free`]: Window deallocation functions (placeholder)
 //! - [`layout`]: Window layout tree operations
 //! - [`list`]: Window list traversal and initialization functions
-//! - [`resize`]: Window resizing and scrolling (placeholder)
+//! - [`navigate`]: Window finding and movement navigation
+//! - [`resize`]: Window resize calculations and execution helpers
 //! - [`snapshot`]: Window layout snapshots (placeholder)
 //! - [`split`]: Window splitting functions (placeholder)
 //! - [`statusline`]: Status line and window bar (placeholder)
@@ -38,6 +39,7 @@ pub mod frame;
 pub mod free;
 pub mod layout;
 pub mod list;
+pub mod navigate;
 pub mod resize;
 pub mod snapshot;
 pub mod split;
