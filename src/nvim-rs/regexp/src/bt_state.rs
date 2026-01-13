@@ -685,6 +685,79 @@ pub unsafe extern "C" fn rs_backpos_clear(table: *mut BackPosTable) {
     }
 }
 
+/// Get the NSUBEXP constant.
+#[no_mangle]
+pub extern "C" fn rs_bt_nsubexp() -> c_int {
+    NSUBEXP as c_int
+}
+
+/// Convert a RegState enum to int.
+#[no_mangle]
+pub extern "C" fn rs_regstate_nopen() -> c_int {
+    RegState::Nopen as c_int
+}
+
+/// Get RegState::Mopen value.
+#[no_mangle]
+pub extern "C" fn rs_regstate_mopen() -> c_int {
+    RegState::Mopen as c_int
+}
+
+/// Get RegState::Mclose value.
+#[no_mangle]
+pub extern "C" fn rs_regstate_mclose() -> c_int {
+    RegState::Mclose as c_int
+}
+
+/// Get RegState::Branch value.
+#[no_mangle]
+pub extern "C" fn rs_regstate_branch() -> c_int {
+    RegState::Branch as c_int
+}
+
+/// Get RegState::StarLong value.
+#[no_mangle]
+pub extern "C" fn rs_regstate_star_long() -> c_int {
+    RegState::StarLong as c_int
+}
+
+/// Get RegState::StarShort value.
+#[no_mangle]
+pub extern "C" fn rs_regstate_star_short() -> c_int {
+    RegState::StarShort as c_int
+}
+
+/// Get RegState::Nomatch value.
+#[no_mangle]
+pub extern "C" fn rs_regstate_nomatch() -> c_int {
+    RegState::Nomatch as c_int
+}
+
+/// Get RegState::Behind1 value.
+#[no_mangle]
+pub extern "C" fn rs_regstate_behind1() -> c_int {
+    RegState::Behind1 as c_int
+}
+
+/// Get RegState::Behind2 value.
+#[no_mangle]
+pub extern "C" fn rs_regstate_behind2() -> c_int {
+    RegState::Behind2 as c_int
+}
+
+/// Get the length of the backtrack stack.
+///
+/// # Safety
+/// `stack` must be a valid pointer or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_regstack_len(stack: *const RegStack) -> c_int {
+    if stack.is_null() {
+        0
+    } else {
+        (*stack).data.len() as c_int
+    }
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
