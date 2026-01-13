@@ -13,6 +13,7 @@ use super::types::{CmdArgHandle, OpArgHandle};
 // External C Functions
 // =============================================================================
 
+#[cfg(not(test))]
 #[allow(dead_code)]
 extern "C" {
     // OpArg accessors (from normal.c)
@@ -51,6 +52,69 @@ extern "C" {
     fn nvim_get_VIsual_active() -> c_int;
     fn nvim_get_cmdwin_type() -> c_int;
 }
+
+// =============================================================================
+// Test stubs for C functions
+// =============================================================================
+
+#[cfg(test)]
+mod test_stubs {
+    #![allow(unused_variables, non_snake_case)]
+    use super::*;
+
+    pub unsafe fn nvim_oap_get_op_type_ptr(_oap: OpArgHandle) -> c_int {
+        0
+    }
+    pub unsafe fn nvim_oap_set_op_type(_oap: OpArgHandle, _val: c_int) {}
+    pub unsafe fn nvim_oap_get_motion_type(_oap: OpArgHandle) -> c_int {
+        -1
+    }
+    pub unsafe fn nvim_oap_set_motion_type(_oap: OpArgHandle, _val: c_int) {}
+    pub unsafe fn nvim_oap_get_inclusive(_oap: OpArgHandle) -> bool {
+        false
+    }
+    pub unsafe fn nvim_oap_set_inclusive(_oap: OpArgHandle, _val: bool) {}
+    pub unsafe fn nvim_oap_get_regname_ptr(_oap: OpArgHandle) -> c_int {
+        0
+    }
+    pub unsafe fn nvim_oap_set_regname(_oap: OpArgHandle, _val: c_int) {}
+    pub unsafe fn nvim_oap_get_motion_force(_oap: OpArgHandle) -> c_int {
+        0
+    }
+    pub unsafe fn nvim_oap_set_motion_force(_oap: OpArgHandle, _val: c_int) {}
+
+    pub unsafe fn nvim_cap_get_oap(_cap: CmdArgHandle) -> OpArgHandle {
+        OpArgHandle::null()
+    }
+    pub unsafe fn nvim_cap_get_cmdchar(_cap: CmdArgHandle) -> c_int {
+        0
+    }
+    pub unsafe fn nvim_cap_get_nchar(_cap: CmdArgHandle) -> c_int {
+        0
+    }
+    pub unsafe fn nvim_cap_get_count0(_cap: CmdArgHandle) -> c_int {
+        0
+    }
+    pub unsafe fn nvim_cap_get_count1(_cap: CmdArgHandle) -> c_int {
+        1
+    }
+    pub unsafe fn nvim_cap_get_arg(_cap: CmdArgHandle) -> c_int {
+        0
+    }
+    pub unsafe fn nvim_cap_get_retval(_cap: CmdArgHandle) -> c_int {
+        0
+    }
+
+    pub unsafe fn nvim_get_VIsual_active() -> c_int {
+        0
+    }
+    pub unsafe fn nvim_get_cmdwin_type() -> c_int {
+        0
+    }
+}
+
+#[cfg(test)]
+use test_stubs::*;
 
 // =============================================================================
 // Operator Argument Helpers

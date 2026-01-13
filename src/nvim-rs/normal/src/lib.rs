@@ -14,6 +14,7 @@ pub mod dispatch;
 pub mod execute;
 pub mod motion;
 pub mod operator;
+pub mod operator_cmds;
 pub mod pending;
 pub mod visual;
 
