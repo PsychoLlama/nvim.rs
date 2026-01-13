@@ -363,6 +363,70 @@ pub extern "C" fn rs_f_list_copy_type(deep: c_int) -> c_int {
     CopyType::from_raw(deep).to_raw()
 }
 
+/// FFI export: Get max flatten depth constant.
+#[no_mangle]
+pub extern "C" fn rs_list_max_flatten_depth() -> i64 {
+    MAX_FLATTEN_DEPTH
+}
+
+/// FFI export: Check if copy type is deep.
+#[no_mangle]
+pub extern "C" fn rs_list_copy_is_deep(copy_type: c_int) -> c_int {
+    c_int::from(CopyType::from_raw(copy_type).is_deep())
+}
+
+/// FFI export: Get CopyType::Shallow constant.
+#[no_mangle]
+pub extern "C" fn rs_list_copy_shallow() -> c_int {
+    CopyType::Shallow.to_raw()
+}
+
+/// FFI export: Get CopyType::Deep constant.
+#[no_mangle]
+pub extern "C" fn rs_list_copy_deep() -> c_int {
+    CopyType::Deep.to_raw()
+}
+
+/// FFI export: Check if list index result is valid.
+#[no_mangle]
+pub extern "C" fn rs_list_index_valid(result: ListIndexResult) -> c_int {
+    c_int::from(result.valid)
+}
+
+/// FFI export: Get normalized index from result.
+#[no_mangle]
+pub extern "C" fn rs_list_index_value(result: ListIndexResult) -> c_int {
+    result.index
+}
+
+/// FFI export: Check if list range result is valid.
+#[no_mangle]
+pub extern "C" fn rs_list_range_valid(result: ListRangeResult) -> c_int {
+    c_int::from(result.valid)
+}
+
+/// FFI export: Get start index from range result.
+#[no_mangle]
+pub extern "C" fn rs_list_range_start(result: ListRangeResult) -> c_int {
+    result.start
+}
+
+/// FFI export: Get end index from range result.
+#[no_mangle]
+pub extern "C" fn rs_list_range_end(result: ListRangeResult) -> c_int {
+    result.end
+}
+
+/// FFI export: Get range length.
+#[no_mangle]
+pub extern "C" fn rs_list_range_len(result: ListRangeResult) -> c_int {
+    if result.valid {
+        result.end - result.start
+    } else {
+        0
+    }
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
