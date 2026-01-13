@@ -3,6 +3,8 @@
 //! This module provides helper functions for managing completion sources
 //! and the 'complete' option.
 
+#![allow(clippy::missing_const_for_fn)]
+
 use std::os::raw::c_int;
 
 // C accessor functions
@@ -44,6 +46,30 @@ pub unsafe extern "C" fn rs_source_has_matches() -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_source_match_count() -> c_int {
     nvim_get_compl_matches()
+}
+
+/// FFI export: Get CTRL_X_NORMAL constant.
+#[no_mangle]
+pub extern "C" fn rs_ctrl_x_normal() -> c_int {
+    CTRL_X_NORMAL
+}
+
+/// FFI export: Get CTRL_X_NOT_DEFINED_YET constant.
+#[no_mangle]
+pub extern "C" fn rs_ctrl_x_not_defined_yet() -> c_int {
+    CTRL_X_NOT_DEFINED_YET
+}
+
+/// FFI export: Get current CTRL-X mode.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_ctrl_x_mode() -> c_int {
+    nvim_get_ctrl_x_mode()
+}
+
+/// FFI export: Check if completion started.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compl_is_started() -> c_int {
+    nvim_get_compl_started()
 }
 
 #[cfg(test)]

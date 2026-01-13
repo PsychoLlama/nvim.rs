@@ -3,6 +3,8 @@
 //! This module provides Rust implementations for managing the completion match list,
 //! including allocation, freeing, and list manipulation operations.
 
+#![allow(clippy::missing_const_for_fn)]
+
 use std::os::raw::{c_int, c_void};
 use std::ptr;
 
@@ -211,6 +213,60 @@ pub unsafe extern "C" fn rs_ins_compl_free() {
     nvim_compl_set_curr_match(ComplMatch::null());
     nvim_compl_set_shown_match(ComplMatch::null());
     nvim_compl_set_old_match(ComplMatch::null());
+}
+
+/// FFI export: Get CP_ORIGINAL_TEXT constant.
+#[no_mangle]
+pub extern "C" fn rs_cp_original_text() -> c_int {
+    CP_ORIGINAL_TEXT
+}
+
+/// FFI export: Get first match in the list.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compl_get_first_match() -> *mut c_void {
+    nvim_compl_get_first_match().0
+}
+
+/// FFI export: Get current match.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compl_get_curr_match() -> *mut c_void {
+    nvim_compl_get_curr_match().0
+}
+
+/// FFI export: Check if match handle is null.
+#[no_mangle]
+pub extern "C" fn rs_compl_match_is_null(node: *mut c_void) -> c_int {
+    c_int::from(ComplMatch(node).is_null())
+}
+
+/// FFI export: Check if a match is the first match.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compl_is_first_match(node: *mut c_void) -> c_int {
+    let m = ComplMatch(node);
+    if m.is_null() {
+        return 0;
+    }
+    nvim_compl_is_first_match(m)
+}
+
+/// FFI export: Check if a match is at original text.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compl_at_original_text(node: *mut c_void) -> c_int {
+    let m = ComplMatch(node);
+    if m.is_null() {
+        return 0;
+    }
+    nvim_compl_match_at_original_text(m)
+}
+
+/// FFI export: Get match flags.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compl_match_flags(node: *mut c_void) -> c_int {
+    let m = ComplMatch(node);
+    if m.is_null() {
+        return 0;
+    }
+    nvim_compl_match_get_flags(m)
 }
 
 #[cfg(test)]

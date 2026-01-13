@@ -4,6 +4,8 @@
 //! consolidating state-related operations. Many of these are already implemented
 //! in lib.rs but this module provides additional utilities and documentation.
 
+#![allow(clippy::missing_const_for_fn)]
+
 use std::os::raw::c_int;
 
 // C accessor functions for state
@@ -178,6 +180,60 @@ pub unsafe extern "C" fn rs_get_compl_state_flags() -> c_int {
         flags |= 16;
     }
     flags
+}
+
+/// FFI export: Get CONT_ADDING constant.
+#[no_mangle]
+pub extern "C" fn rs_cont_adding() -> c_int {
+    CONT_ADDING
+}
+
+/// FFI export: Get CONT_INTRPT constant.
+#[no_mangle]
+pub extern "C" fn rs_cont_intrpt() -> c_int {
+    CONT_INTRPT
+}
+
+/// FFI export: Get CONT_N_ADDS constant.
+#[no_mangle]
+pub extern "C" fn rs_cont_n_adds() -> c_int {
+    CONT_N_ADDS
+}
+
+/// FFI export: Get CONT_S_IPOS constant.
+#[no_mangle]
+pub extern "C" fn rs_cont_s_ipos() -> c_int {
+    CONT_S_IPOS
+}
+
+/// FFI export: Get CONT_SOL constant.
+#[no_mangle]
+pub extern "C" fn rs_cont_sol() -> c_int {
+    CONT_SOL
+}
+
+/// FFI export: Get CONT_LOCAL constant.
+#[no_mangle]
+pub extern "C" fn rs_cont_local() -> c_int {
+    CONT_LOCAL
+}
+
+/// FFI export: Get raw continuation status.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_compl_cont_status() -> c_int {
+    nvim_get_compl_cont_status()
+}
+
+/// FFI export: Get compl_enter_selects flag.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_compl_enter_selects() -> c_int {
+    nvim_get_compl_enter_selects()
+}
+
+/// FFI export: Get compl_used_match flag.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_compl_used_match() -> c_int {
+    nvim_get_compl_used_match()
 }
 
 #[cfg(test)]
