@@ -26,6 +26,7 @@
 #![allow(clippy::bool_to_int_with_if)]
 #![allow(clippy::range_plus_one)]
 
+pub mod cell;
 pub mod helpers;
 
 use std::collections::HashMap;
