@@ -1,46 +1,56 @@
-Plan: ~/.claude/plans/streamed-whistling-whale.md
+Plan: ~/.claude/plans/recursive-snuggling-salamander.md
 
-Excellent! The migration is complete. Here's a summary:
+All steps completed successfully. Let me provide a summary of the work completed:
 
-## Phases 163-182 Migration Complete
+---
 
-All 20 phases from the plan have been successfully completed:
+## Plan Execution Complete
 
-### Part 1: Option System (Phases 163-168) - Previously completed
-- Phases 163-168 were completed in the prior session
+All 20 phases (183-202) from the plan have been successfully completed. Here's a summary:
 
-### Part 2: UI Compositor & Grid System (Phases 169-174) - Previously completed
-- Phases 169-174 were completed in the prior session
+### Phases Completed in This Session
 
-### Part 3: Session & View Persistence (Phases 175-182) - Completed in this session
+| Phase | Domain | Functions Added | Crate/File |
+|-------|--------|-----------------|------------|
+| 199 | Eval Core | 47 (25+22) | eval/types.rs, eval/operator.rs |
+| 200 | Eval Expressions | 28 (11+17) | eval/funcs/list.rs, eval/lib.rs |
+| 201 | Insert Completion Engine | 20 (4+7+9) | insexpand/source.rs, match_list.rs, state.rs |
+| 202 | Insert Completion UI | 17 (6+11) | insexpand/pum.rs, ui.rs |
 
-| Phase | Module | Tests Added |
-|-------|--------|-------------|
-| 175 | session/lib.rs (infrastructure) | Pre-existing |
-| 176 | session/buffers.rs | ~10 |
-| 177 | session/layout.rs | ~10 |
-| 178 | session/view.rs | ~10 |
-| 179 | session/commands.rs | ~9 |
-| 180 | session/loading.rs | ~9 |
-| 181 | session/viewload.rs | ~12 |
-| 182 | session/integration.rs | ~11 |
+### Summary of FFI Functions Added
 
-### Final Statistics
-- **Total rs_ functions**: 7,475
-- **Session crate tests**: 86
-- **Total Rust tests**: 3,275 (all passing)
-- **Build status**: Success
-- **Clippy status**: Pass
-- **Format status**: Pass
+**Phase 199 (Eval Core):**
+- VarType constants (10): `rs_vartype_unknown`, `rs_vartype_number`, `rs_vartype_string`, etc.
+- Type checks: `rs_vartype_is_stringifiable`, `rs_vartype_is_arithmetic`
+- Coercion results (4): `rs_coercion_ok`, `rs_coercion_incompatible`, etc.
+- Type flags (5): `rs_tf_to_string`, `rs_tf_to_number`, `rs_tf_to_float`, etc.
+- Operator constants and checks (22 functions)
 
-### New Session Crate Modules (9 total)
-1. `lib.rs` - Core session flags and utilities
-2. `buffers.rs` - Buffer state serialization
-3. `commands.rs` - Session command handlers
-4. `components.rs` - Session component helpers
-5. `integration.rs` - Event hooks, auto-save, error handling
-6. `layout.rs` - Window layout serialization
-7. `loading.rs` - Session loading infrastructure
-8. `serializer.rs` - Session serialization helpers
-9. `view.rs` - View state serialization
-10. `viewload.rs` - View loading infrastructure
+**Phase 200 (Eval Expressions):**
+- List operations (11): `rs_list_max_flatten_depth`, `rs_list_copy_*`, `rs_list_index_*`, `rs_list_range_*`
+- Variable scope constants (8): `rs_scope_global`, `rs_scope_local`, etc.
+- VarFlavour constants (3): `rs_var_flavour_default`, `rs_var_flavour_session`, `rs_var_flavour_shada`
+- Tristate and other constants (5): `rs_k_none`, `rs_k_false`, `rs_k_true`, etc.
+
+**Phase 201 (Insert Completion Engine):**
+- CTRL-X mode constants and accessors (4)
+- Match list accessors and checks (7)
+- Continuation status constants (6) and state accessors (3)
+
+**Phase 202 (Insert Completion UI):**
+- Popup menu constants (3) and state checks (3)
+- CTRL-X mode constants (11)
+
+### Verification Results
+
+- ✅ `just build` - Passed
+- ✅ `just rust-fmt-check` - Passed
+- ✅ `just rust-clippy` - Passed
+- ✅ `just rust-test` - 3284 tests passed
+
+### Commits Made
+
+1. `8b5c906cd0` - feat(eval/core): Phase 199 - eval core FFI expansion
+2. `ac18f916d0` - feat(eval/expressions): Phase 200 - eval expressions FFI expansion
+3. `758b60e78b` - feat(insexpand/engine): Phase 201 - insert completion engine FFI expansion
+4. `52f262406c` - feat(insexpand/ui): Phase 202 - insert completion UI FFI expansion
