@@ -51,9 +51,8 @@ fn visual_block_char() -> c_int {
 
 /// Check if character starts visual mode.
 fn is_visual_cmd(cmdchar: c_int) -> bool {
-    cmdchar == c_int::from(b'v')
-        || cmdchar == c_int::from(b'V')
-        || cmdchar == 0x16 // CTRL-V
+    // 0x16 is CTRL-V
+    cmdchar == c_int::from(b'v') || cmdchar == c_int::from(b'V') || cmdchar == 0x16
 }
 
 /// Get visual mode type from command character.
