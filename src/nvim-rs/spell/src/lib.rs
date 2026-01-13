@@ -2382,6 +2382,255 @@ pub extern "C" fn rs_spell_suggest_score_threshold() -> c_int {
     SPELL_SUGGEST_SCORE_THRESHOLD
 }
 
+// =============================================================================
+// Phase 147: Spell File I/O Deep Migration
+// =============================================================================
+
+// Note: slang_T setter functions would require C accessor additions.
+// For now, Phase 147 focuses on standalone helpers that don't need C accessors.
+
+/// Spell file section IDs.
+pub mod section_ids {
+    use std::ffi::c_int;
+
+    /// End of sections marker.
+    pub const SN_END: c_int = 0;
+    /// Region section.
+    pub const SN_REGION: c_int = 1;
+    /// Charflags section.
+    pub const SN_CHARFLAGS: c_int = 2;
+    /// Midword section.
+    pub const SN_MIDWORD: c_int = 3;
+    /// Prefcond section.
+    pub const SN_PREFCOND: c_int = 4;
+    /// REP section.
+    pub const SN_REP: c_int = 5;
+    /// REPSAL section.
+    pub const SN_REPSAL: c_int = 6;
+    /// SAL section.
+    pub const SN_SAL: c_int = 7;
+    /// SOFO section.
+    pub const SN_SOFO: c_int = 8;
+    /// MAP section.
+    pub const SN_MAP: c_int = 9;
+    /// Compound section.
+    pub const SN_COMPOUND: c_int = 10;
+    /// Syllable section.
+    pub const SN_SYLLABLE: c_int = 11;
+    /// NoBreak section.
+    pub const SN_NOBREAK: c_int = 12;
+    /// Sugfile section.
+    pub const SN_SUGFILE: c_int = 13;
+    /// NoSplitSugs section.
+    pub const SN_NOSPLITSUGS: c_int = 14;
+    /// NoCompSugs section.
+    pub const SN_NOCOMPOUNDSUGS: c_int = 15;
+    /// Words section.
+    pub const SN_WORDS: c_int = 16;
+    /// Prefix tree section.
+    pub const SN_PREFIXTREE: c_int = 17;
+    /// Info section.
+    pub const SN_INFO: c_int = 18;
+}
+
+/// Get section ID for SN_END.
+#[no_mangle]
+pub extern "C" fn rs_spell_section_end() -> c_int {
+    section_ids::SN_END
+}
+
+/// Get section ID for SN_REGION.
+#[no_mangle]
+pub extern "C" fn rs_spell_section_region() -> c_int {
+    section_ids::SN_REGION
+}
+
+/// Get section ID for SN_CHARFLAGS.
+#[no_mangle]
+pub extern "C" fn rs_spell_section_charflags() -> c_int {
+    section_ids::SN_CHARFLAGS
+}
+
+/// Get section ID for SN_MIDWORD.
+#[no_mangle]
+pub extern "C" fn rs_spell_section_midword() -> c_int {
+    section_ids::SN_MIDWORD
+}
+
+/// Get section ID for SN_PREFCOND.
+#[no_mangle]
+pub extern "C" fn rs_spell_section_prefcond() -> c_int {
+    section_ids::SN_PREFCOND
+}
+
+/// Get section ID for SN_REP.
+#[no_mangle]
+pub extern "C" fn rs_spell_section_rep() -> c_int {
+    section_ids::SN_REP
+}
+
+/// Get section ID for SN_SAL.
+#[no_mangle]
+pub extern "C" fn rs_spell_section_sal() -> c_int {
+    section_ids::SN_SAL
+}
+
+/// Get section ID for SN_SOFO.
+#[no_mangle]
+pub extern "C" fn rs_spell_section_sofo() -> c_int {
+    section_ids::SN_SOFO
+}
+
+/// Get section ID for SN_COMPOUND.
+#[no_mangle]
+pub extern "C" fn rs_spell_section_compound() -> c_int {
+    section_ids::SN_COMPOUND
+}
+
+/// Get section ID for SN_PREFIXTREE.
+#[no_mangle]
+pub extern "C" fn rs_spell_section_prefixtree() -> c_int {
+    section_ids::SN_PREFIXTREE
+}
+
+/// Get section ID for SN_WORDS.
+#[no_mangle]
+pub extern "C" fn rs_spell_section_words() -> c_int {
+    section_ids::SN_WORDS
+}
+
+/// Get section ID for SN_INFO.
+#[no_mangle]
+pub extern "C" fn rs_spell_section_info() -> c_int {
+    section_ids::SN_INFO
+}
+
+/// Check if a section ID is valid.
+#[no_mangle]
+pub extern "C" fn rs_spell_section_is_valid(id: c_int) -> bool {
+    (section_ids::SN_END..=section_ids::SN_INFO).contains(&id)
+}
+
+/// Check if a section is required (cannot be skipped).
+#[no_mangle]
+pub extern "C" fn rs_spell_section_is_required(id: c_int) -> bool {
+    // Most sections can be skipped if unknown
+    // These are typically required for basic spell checking
+    matches!(
+        id,
+        section_ids::SN_REGION | section_ids::SN_CHARFLAGS | section_ids::SN_PREFCOND
+    )
+}
+
+/// Spell file tree types.
+pub mod tree_types {
+    use std::ffi::c_int;
+
+    /// Case-folded word tree.
+    pub const TREE_FWORD: c_int = 0;
+    /// Keep-case word tree.
+    pub const TREE_KWORD: c_int = 1;
+    /// Prefix tree.
+    pub const TREE_PREFIX: c_int = 2;
+}
+
+/// Get tree type for case-folded words.
+#[no_mangle]
+pub extern "C" fn rs_spell_tree_fword() -> c_int {
+    tree_types::TREE_FWORD
+}
+
+/// Get tree type for keep-case words.
+#[no_mangle]
+pub extern "C" fn rs_spell_tree_kword() -> c_int {
+    tree_types::TREE_KWORD
+}
+
+/// Get tree type for prefixes.
+#[no_mangle]
+pub extern "C" fn rs_spell_tree_prefix() -> c_int {
+    tree_types::TREE_PREFIX
+}
+
+/// Spell file loading result.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SpellFileResult {
+    /// Error code (0 for success).
+    pub error: c_int,
+    /// Number of bytes consumed.
+    pub bytes_consumed: c_int,
+    /// Number of items parsed.
+    pub items_parsed: c_int,
+}
+
+impl SpellFileResult {
+    /// Create a success result.
+    #[must_use]
+    pub const fn success(bytes_consumed: c_int, items_parsed: c_int) -> Self {
+        Self {
+            error: 0,
+            bytes_consumed,
+            items_parsed,
+        }
+    }
+
+    /// Create an error result.
+    #[must_use]
+    pub const fn error(error: c_int) -> Self {
+        Self {
+            error,
+            bytes_consumed: 0,
+            items_parsed: 0,
+        }
+    }
+
+    /// Check if the result is successful.
+    #[must_use]
+    pub const fn is_ok(&self) -> bool {
+        self.error == 0
+    }
+}
+
+/// Create a success spell file result.
+#[no_mangle]
+pub extern "C" fn rs_spell_file_result_success(
+    bytes_consumed: c_int,
+    items_parsed: c_int,
+) -> SpellFileResult {
+    SpellFileResult::success(bytes_consumed, items_parsed)
+}
+
+/// Create an error spell file result.
+#[no_mangle]
+pub extern "C" fn rs_spell_file_result_error(error: c_int) -> SpellFileResult {
+    SpellFileResult::error(error)
+}
+
+/// Check if a spell file result is OK.
+///
+/// # Safety
+/// `result` must be a valid pointer to a `SpellFileResult`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_spell_file_result_is_ok(result: *const SpellFileResult) -> bool {
+    if result.is_null() {
+        return false;
+    }
+    (*result).is_ok()
+}
+
+/// Get error code from spell file result.
+///
+/// # Safety
+/// `result` must be a valid pointer to a `SpellFileResult`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_spell_file_result_get_error(result: *const SpellFileResult) -> c_int {
+    if result.is_null() {
+        return SP_OTHERERROR;
+    }
+    (*result).error
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
