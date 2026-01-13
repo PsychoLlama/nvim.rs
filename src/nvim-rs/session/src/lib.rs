@@ -16,6 +16,7 @@ mod layout;
 mod loading;
 mod serializer;
 mod view;
+mod viewload;
 
 pub use buffers::*;
 pub use commands::*;
@@ -24,6 +25,7 @@ pub use layout::*;
 pub use loading::*;
 pub use serializer::*;
 pub use view::*;
+pub use viewload::*;
 
 // =============================================================================
 // Session Option Flags (matches kOptSsopFlag* from option_vars.generated.h)
