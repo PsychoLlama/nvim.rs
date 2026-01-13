@@ -1597,6 +1597,291 @@ pub unsafe extern "C" fn rs_apply_rep(
 }
 
 // =============================================================================
+// Phase 149: Suggestion Generation - additional FFI exports
+// =============================================================================
+
+/// Get the default DEL score.
+#[no_mangle]
+pub extern "C" fn rs_score_default_del() -> c_int {
+    SCORES.del
+}
+
+/// Get the default INS score.
+#[no_mangle]
+pub extern "C" fn rs_score_default_ins() -> c_int {
+    SCORES.ins
+}
+
+/// Get the default SUBST score.
+#[no_mangle]
+pub extern "C" fn rs_score_default_subst() -> c_int {
+    SCORES.subst
+}
+
+/// Get the default SWAP score.
+#[no_mangle]
+pub extern "C" fn rs_score_default_swap() -> c_int {
+    SCORES.swap
+}
+
+/// Get the default ICASE score.
+#[no_mangle]
+pub extern "C" fn rs_score_default_icase() -> c_int {
+    SCORES.icase
+}
+
+/// Get the default SIMILAR score.
+#[no_mangle]
+pub extern "C" fn rs_score_default_similar() -> c_int {
+    SCORES.similar
+}
+
+/// Calculate word count adjustment score.
+///
+/// Common words get a bonus that makes them more likely to be suggested.
+#[no_mangle]
+pub extern "C" fn rs_score_wordcount_adj(score: c_int, word_count: c_int) -> c_int {
+    // Adjust score based on word frequency
+    // Higher word count = lower (better) score
+    if word_count <= 0 {
+        return score;
+    }
+
+    // Each doubling of word count reduces score by ~10%
+    let log_count = f64::from(word_count).log2() as c_int;
+    let adjustment = log_count * 5;
+    score.saturating_sub(adjustment.min(50))
+}
+
+/// State values for suggestion trie walk.
+pub mod suggest_state {
+    use std::ffi::c_int;
+
+    /// Start state.
+    pub const STATE_START: c_int = 0;
+    /// Initial state (processing first char).
+    pub const STATE_NOPREFIX: c_int = 1;
+    /// Split word state.
+    pub const STATE_SPLITUNDO: c_int = 2;
+    /// End of word state.
+    pub const STATE_ENDNUL: c_int = 3;
+    /// Plain match state.
+    pub const STATE_PLAIN: c_int = 4;
+    /// Delete state.
+    pub const STATE_DEL: c_int = 5;
+    /// Insert state.
+    pub const STATE_INS: c_int = 6;
+    /// Swap state.
+    pub const STATE_SWAP: c_int = 7;
+    /// Unswap state.
+    pub const STATE_UNSWAP: c_int = 8;
+    /// Unrotate 3L state.
+    pub const STATE_UNROT3L: c_int = 9;
+    /// Unrotate 3R state.
+    pub const STATE_UNROT3R: c_int = 10;
+    /// REP initial state.
+    pub const STATE_REP_INI: c_int = 11;
+    /// REP undo state.
+    pub const STATE_REP_UNDO: c_int = 12;
+    /// REP state.
+    pub const STATE_REP: c_int = 13;
+    /// Final state.
+    pub const STATE_FINAL: c_int = 14;
+}
+
+/// Get suggestion state START.
+#[no_mangle]
+pub extern "C" fn rs_suggest_state_start() -> c_int {
+    suggest_state::STATE_START
+}
+
+/// Get suggestion state NOPREFIX.
+#[no_mangle]
+pub extern "C" fn rs_suggest_state_noprefix() -> c_int {
+    suggest_state::STATE_NOPREFIX
+}
+
+/// Get suggestion state SPLITUNDO.
+#[no_mangle]
+pub extern "C" fn rs_suggest_state_splitundo() -> c_int {
+    suggest_state::STATE_SPLITUNDO
+}
+
+/// Get suggestion state ENDNUL.
+#[no_mangle]
+pub extern "C" fn rs_suggest_state_endnul() -> c_int {
+    suggest_state::STATE_ENDNUL
+}
+
+/// Get suggestion state PLAIN.
+#[no_mangle]
+pub extern "C" fn rs_suggest_state_plain() -> c_int {
+    suggest_state::STATE_PLAIN
+}
+
+/// Get suggestion state DEL.
+#[no_mangle]
+pub extern "C" fn rs_suggest_state_del() -> c_int {
+    suggest_state::STATE_DEL
+}
+
+/// Get suggestion state INS.
+#[no_mangle]
+pub extern "C" fn rs_suggest_state_ins() -> c_int {
+    suggest_state::STATE_INS
+}
+
+/// Get suggestion state SWAP.
+#[no_mangle]
+pub extern "C" fn rs_suggest_state_swap() -> c_int {
+    suggest_state::STATE_SWAP
+}
+
+/// Get suggestion state FINAL.
+#[no_mangle]
+pub extern "C" fn rs_suggest_state_final() -> c_int {
+    suggest_state::STATE_FINAL
+}
+
+/// Suggestion result structure.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SuggestionResult {
+    /// Score for this suggestion (lower is better).
+    pub score: c_int,
+    /// Length of the suggestion word.
+    pub word_len: c_int,
+    /// Whether this is a split suggestion.
+    pub is_split: bool,
+    /// Whether the suggestion is from a sound-alike match.
+    pub is_soundalike: bool,
+}
+
+impl SuggestionResult {
+    /// Create a new suggestion result.
+    #[must_use]
+    pub const fn new(score: c_int, word_len: c_int) -> Self {
+        Self {
+            score,
+            word_len,
+            is_split: false,
+            is_soundalike: false,
+        }
+    }
+
+    /// Create a split suggestion result.
+    #[must_use]
+    pub const fn split(score: c_int, word_len: c_int) -> Self {
+        Self {
+            score,
+            word_len,
+            is_split: true,
+            is_soundalike: false,
+        }
+    }
+
+    /// Create a soundalike suggestion result.
+    #[must_use]
+    pub const fn soundalike(score: c_int, word_len: c_int) -> Self {
+        Self {
+            score,
+            word_len,
+            is_split: false,
+            is_soundalike: true,
+        }
+    }
+}
+
+/// Create a new suggestion result.
+#[no_mangle]
+pub extern "C" fn rs_suggestion_result_new(score: c_int, word_len: c_int) -> SuggestionResult {
+    SuggestionResult::new(score, word_len)
+}
+
+/// Create a split suggestion result.
+#[no_mangle]
+pub extern "C" fn rs_suggestion_result_split(score: c_int, word_len: c_int) -> SuggestionResult {
+    SuggestionResult::split(score, word_len)
+}
+
+/// Create a soundalike suggestion result.
+#[no_mangle]
+pub extern "C" fn rs_suggestion_result_soundalike(
+    score: c_int,
+    word_len: c_int,
+) -> SuggestionResult {
+    SuggestionResult::soundalike(score, word_len)
+}
+
+/// Check if suggestion result is a split.
+///
+/// # Safety
+/// `result` must be a valid pointer to a SuggestionResult.
+#[no_mangle]
+pub unsafe extern "C" fn rs_suggestion_result_is_split(result: *const SuggestionResult) -> bool {
+    if result.is_null() {
+        return false;
+    }
+    (*result).is_split
+}
+
+/// Check if suggestion result is soundalike.
+///
+/// # Safety
+/// `result` must be a valid pointer to a SuggestionResult.
+#[no_mangle]
+pub unsafe extern "C" fn rs_suggestion_result_is_soundalike(result: *const SuggestionResult) -> bool {
+    if result.is_null() {
+        return false;
+    }
+    (*result).is_soundalike
+}
+
+/// Get score from suggestion result.
+///
+/// # Safety
+/// `result` must be a valid pointer to a SuggestionResult.
+#[no_mangle]
+pub unsafe extern "C" fn rs_suggestion_result_get_score(result: *const SuggestionResult) -> c_int {
+    if result.is_null() {
+        return SCORE_MAXMAX;
+    }
+    (*result).score
+}
+
+/// Maximum number of suggestions to generate.
+pub const MAX_SUGGESTIONS: usize = 25;
+
+/// Get max suggestions constant.
+#[no_mangle]
+pub extern "C" fn rs_max_suggestions() -> usize {
+    MAX_SUGGESTIONS
+}
+
+/// Minimum score improvement to keep a suggestion.
+pub const MIN_SCORE_IMPROVEMENT: c_int = 10;
+
+/// Get minimum score improvement constant.
+#[no_mangle]
+pub extern "C" fn rs_min_score_improvement() -> c_int {
+    MIN_SCORE_IMPROVEMENT
+}
+
+/// Check if a score is good enough for a suggestion.
+#[no_mangle]
+pub extern "C" fn rs_score_is_good_suggestion(score: c_int, best_score: c_int) -> bool {
+    // A suggestion is good if its score is within 3x the best score
+    score <= best_score * 3
+}
+
+/// Calculate combined score from word and soundalike scores.
+#[no_mangle]
+pub extern "C" fn rs_suggest_combine_scores(word_score: c_int, sound_score: c_int) -> c_int {
+    // Weight the word score more heavily
+    (word_score * 3 + sound_score) / 4
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
