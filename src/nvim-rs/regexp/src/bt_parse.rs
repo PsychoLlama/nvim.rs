@@ -1311,6 +1311,169 @@ unsafe fn parse_atom(
 // FFI Exports
 // =============================================================================
 
+/// Get the MAGIC_OFF constant.
+#[no_mangle]
+pub extern "C" fn rs_bt_magic_off() -> c_int {
+    MAGIC_OFF
+}
+
+/// Get the MAGIC_ON constant.
+#[no_mangle]
+pub extern "C" fn rs_bt_magic_on() -> c_int {
+    MAGIC_ON
+}
+
+/// Get the MAGIC_ALL constant.
+#[no_mangle]
+pub extern "C" fn rs_bt_magic_all() -> c_int {
+    MAGIC_ALL
+}
+
+/// Get the MAGIC_NONE constant.
+#[no_mangle]
+pub extern "C" fn rs_bt_magic_none() -> c_int {
+    MAGIC_NONE
+}
+
+/// Check if a character needs escaping in magic mode.
+#[no_mangle]
+pub extern "C" fn rs_bt_is_metachar(c: c_int) -> c_int {
+    // In magic mode, these characters are special
+    let special = b"^$.*~[]\\";
+    if (0..256).contains(&c) {
+        c_int::from(special.contains(&(c as u8)))
+    } else {
+        0
+    }
+}
+
+/// Check if a character is a valid quantifier start.
+#[no_mangle]
+pub extern "C" fn rs_bt_is_quantifier_char(c: c_int) -> c_int {
+    if (0..256).contains(&c) {
+        let ch = c as u8;
+        c_int::from(ch == b'*' || ch == b'+' || ch == b'?' || ch == b'{')
+    } else {
+        0
+    }
+}
+
+/// Check if a character is a valid brace quantifier part.
+#[no_mangle]
+pub extern "C" fn rs_bt_is_brace_quantifier_char(c: c_int) -> c_int {
+    if (0..256).contains(&c) {
+        let ch = c as u8;
+        c_int::from(ch.is_ascii_digit() || ch == b',' || ch == b'-')
+    } else {
+        0
+    }
+}
+
+/// Check if a pattern starts with a "very magic" indicator.
+///
+/// # Safety
+/// `pattern` must be a valid pointer to at least 2 bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_is_very_magic(pattern: *const u8) -> c_int {
+    if pattern.is_null() {
+        return 0;
+    }
+    // \v = very magic, \V = very nomagic
+    if *pattern == b'\\' && !pattern.add(1).is_null() {
+        let next = *pattern.add(1);
+        c_int::from(next == b'v' || next == b'V')
+    } else {
+        0
+    }
+}
+
+/// Check if a pattern starts with a "magic" indicator.
+///
+/// # Safety
+/// `pattern` must be a valid pointer to at least 2 bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_is_magic_prefix(pattern: *const u8) -> c_int {
+    if pattern.is_null() {
+        return 0;
+    }
+    // \m = magic, \M = nomagic
+    if *pattern == b'\\' && !pattern.add(1).is_null() {
+        let next = *pattern.add(1);
+        c_int::from(next == b'm' || next == b'M')
+    } else {
+        0
+    }
+}
+
+/// Get the magic mode from a magic prefix character.
+/// Returns -1 if not a valid magic prefix.
+#[no_mangle]
+pub extern "C" fn rs_bt_magic_from_char(c: c_int) -> c_int {
+    if !(0..=255).contains(&c) {
+        return -1;
+    }
+    match c as u8 {
+        b'm' => MAGIC_ON,
+        b'M' => MAGIC_OFF,
+        b'v' => MAGIC_ALL,
+        b'V' => MAGIC_NONE,
+        _ => -1,
+    }
+}
+
+/// Check if a character ends a regex pattern.
+#[no_mangle]
+pub extern "C" fn rs_bt_is_pattern_end(c: c_int, delim: c_int) -> c_int {
+    if c == 0 || c == b'\n' as c_int {
+        return 1;
+    }
+    if delim > 0 && c == delim {
+        return 1;
+    }
+    0
+}
+
+/// Check if the character after backslash is a special escape.
+#[no_mangle]
+pub extern "C" fn rs_bt_is_special_escape(c: c_int) -> c_int {
+    if !(0..=255).contains(&c) {
+        return 0;
+    }
+    // Characters that have special meaning after backslash
+    let specials = b"nrtbfeaodsSwWdDxXuUlLcCpP<>zZ@=!~#&|(){}[]^$.*+?_";
+    c_int::from(specials.contains(&(c as u8)))
+}
+
+/// Check if the character starts a POSIX character class.
+#[no_mangle]
+pub extern "C" fn rs_bt_is_posix_class_start(c: c_int) -> c_int {
+    c_int::from(c == b'[' as c_int)
+}
+
+/// Check if this is a character class end.
+#[no_mangle]
+pub extern "C" fn rs_bt_is_class_end(c: c_int, prev_bracket: c_int) -> c_int {
+    // ']' ends a class, but not if it's the first char after '[' or '[^'
+    c_int::from(c == b']' as c_int && prev_bracket == 0)
+}
+
+/// Get the MAX_LIMIT constant for brace quantifiers.
+#[no_mangle]
+pub extern "C" fn rs_bt_max_limit() -> i64 {
+    MAX_LIMIT as i64
+}
+
+/// Check if a character is valid in a replacement string escape.
+#[no_mangle]
+pub extern "C" fn rs_bt_is_repl_escape(c: c_int) -> c_int {
+    if !(0..=255).contains(&c) {
+        return 0;
+    }
+    // Characters that have special meaning in replacement strings
+    let specials = b"&~0123456789uUlLeEnrtb\\";
+    c_int::from(specials.contains(&(c as u8)))
+}
+
 /// Parse a pattern and emit bytecode.
 ///
 /// # Safety
