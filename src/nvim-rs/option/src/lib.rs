@@ -14,11 +14,14 @@
 pub mod callbacks;
 pub mod completion;
 pub mod copy;
+pub mod defaults;
 pub mod expand;
 pub mod format;
 pub mod getset;
+pub mod groups;
 pub mod index;
 pub mod init;
+pub mod modeline;
 pub mod parsing;
 pub mod scope;
 pub mod set;
@@ -26,6 +29,7 @@ pub mod setcmd;
 pub mod setops;
 pub mod show;
 pub mod sideeffect;
+pub mod types;
 pub mod validate;
 pub mod value;
 
