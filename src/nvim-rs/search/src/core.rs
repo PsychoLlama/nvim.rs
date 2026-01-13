@@ -370,6 +370,184 @@ pub unsafe extern "C" fn rs_search_loop_has_wrapped(state: *const SearchLoopStat
     c_int::from((*state).wrapped)
 }
 
+// =============================================================================
+// Phase 153: Additional Pattern Search Core FFI Exports
+// =============================================================================
+
+/// FFI: Get size of SearchLoopState for C allocation.
+#[no_mangle]
+pub extern "C" fn rs_search_loop_state_size() -> usize {
+    std::mem::size_of::<SearchLoopState>()
+}
+
+/// FFI: Create new default SearchLoopState.
+#[no_mangle]
+pub extern "C" fn rs_search_loop_state_new() -> SearchLoopState {
+    SearchLoopState::new()
+}
+
+/// FFI: Get the loop iteration from state.
+///
+/// # Safety
+/// The caller must ensure `state` points to valid memory.
+#[no_mangle]
+pub unsafe extern "C" fn rs_search_loop_get_iter(state: *const SearchLoopState) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    (*state).loop_iter
+}
+
+/// FFI: Get the match count from state.
+///
+/// # Safety
+/// The caller must ensure `state` points to valid memory.
+#[no_mangle]
+pub unsafe extern "C" fn rs_search_loop_get_match_count(state: *const SearchLoopState) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    (*state).match_count
+}
+
+/// FFI: Increment match count in state.
+///
+/// # Safety
+/// The caller must ensure `state` points to valid memory.
+#[no_mangle]
+pub unsafe extern "C" fn rs_search_loop_found_match(state: *mut SearchLoopState) {
+    if !state.is_null() {
+        (*state).found_match();
+    }
+}
+
+/// FFI: Get the start line from state.
+///
+/// # Safety
+/// The caller must ensure `state` points to valid memory.
+#[no_mangle]
+pub unsafe extern "C" fn rs_search_loop_get_start_lnum(state: *const SearchLoopState) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    (*state).start_lnum
+}
+
+/// FFI: Get the start column from state.
+///
+/// # Safety
+/// The caller must ensure `state` points to valid memory.
+#[no_mangle]
+pub unsafe extern "C" fn rs_search_loop_get_start_col(state: *const SearchLoopState) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    (*state).start_col
+}
+
+/// FFI: Set the start line in state.
+///
+/// # Safety
+/// The caller must ensure `state` points to valid memory.
+#[no_mangle]
+pub unsafe extern "C" fn rs_search_loop_set_start_lnum(state: *mut SearchLoopState, lnum: c_int) {
+    if !state.is_null() {
+        (*state).start_lnum = lnum;
+    }
+}
+
+/// FFI: Set the start column in state.
+///
+/// # Safety
+/// The caller must ensure `state` points to valid memory.
+#[no_mangle]
+pub unsafe extern "C" fn rs_search_loop_set_start_col(state: *mut SearchLoopState, col: c_int) {
+    if !state.is_null() {
+        (*state).start_col = col;
+    }
+}
+
+/// FFI: Reset search loop state to default values.
+///
+/// # Safety
+/// The caller must ensure `state` points to valid memory.
+#[no_mangle]
+pub unsafe extern "C" fn rs_search_loop_reset(state: *mut SearchLoopState) {
+    if !state.is_null() {
+        *state = SearchLoopState::new();
+    }
+}
+
+/// FFI: Check if search behavior has accept_at_start.
+#[no_mangle]
+pub extern "C" fn rs_search_accepts_at_start(options: c_int) -> c_int {
+    c_int::from(SearchBehavior::from_options(options).accept_at_start)
+}
+
+/// FFI: Check if search behavior returns end position.
+#[no_mangle]
+pub extern "C" fn rs_search_returns_end(options: c_int) -> c_int {
+    c_int::from(SearchBehavior::from_options(options).return_end)
+}
+
+/// FFI: Check if search behavior keeps pattern.
+#[no_mangle]
+pub extern "C" fn rs_search_keeps_pattern(options: c_int) -> c_int {
+    c_int::from(SearchBehavior::from_options(options).keep_pattern)
+}
+
+/// FFI: Check if search behavior adds to history.
+#[no_mangle]
+pub extern "C" fn rs_search_adds_to_history(options: c_int) -> c_int {
+    c_int::from(SearchBehavior::from_options(options).add_to_history)
+}
+
+/// FFI: Check if search behavior allows peek.
+#[no_mangle]
+pub extern "C" fn rs_search_allows_peek(options: c_int) -> c_int {
+    c_int::from(SearchBehavior::from_options(options).allow_peek)
+}
+
+/// FFI: Check if search behavior uses column.
+#[no_mangle]
+pub extern "C" fn rs_search_uses_column(options: c_int) -> c_int {
+    c_int::from(SearchBehavior::from_options(options).use_column)
+}
+
+/// FFI: Check if search behavior uses fold mode.
+#[no_mangle]
+pub extern "C" fn rs_search_uses_fold(options: c_int) -> c_int {
+    c_int::from(SearchBehavior::from_options(options).fold_mode)
+}
+
+/// FFI: Convert direction character to bool (true = forward).
+#[no_mangle]
+pub extern "C" fn rs_dirc_is_forward(dirc: c_int) -> bool {
+    dirc == b'/' as c_int || dirc == direction::DIR_FORWARD as c_int
+}
+
+/// FFI: Get the forward direction character.
+#[no_mangle]
+pub extern "C" fn rs_dirc_forward() -> c_int {
+    b'/' as c_int
+}
+
+/// FFI: Get the backward direction character.
+#[no_mangle]
+pub extern "C" fn rs_dirc_backward() -> c_int {
+    b'?' as c_int
+}
+
+/// FFI: Flip search direction.
+#[no_mangle]
+pub extern "C" fn rs_dirc_flip(dirc: c_int) -> c_int {
+    if is_forward_dirc(dirc) {
+        b'?' as c_int
+    } else {
+        b'/' as c_int
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
