@@ -8224,3 +8224,93 @@ int nvim_syn_get_ic_setting(synblock_T *block)
 {
   return block->b_syn_ic;
 }
+
+// =============================================================================
+// Phase 143: Syntax State Machine Migration - C Accessors
+// =============================================================================
+
+/// Wrapper for syn_get_id - get syntax ID at a file position
+int nvim_syn_get_id(win_T *wp, int lnum, int col, int trans, int *spellp, int keep_state)
+{
+  bool spell = false;
+  int id = syn_get_id(wp, (linenr_T)lnum, (colnr_T)col, trans, spellp ? &spell : NULL, keep_state);
+  if (spellp) {
+    *spellp = spell ? 1 : 0;
+  }
+  return id;
+}
+
+/// Wrapper for get_syntax_info - get extra info about syntax item
+int nvim_get_syntax_info(int *seqnrp)
+{
+  return get_syntax_info(seqnrp);
+}
+
+/// Wrapper for syn_get_concealed_id
+int nvim_syn_get_concealed_id(win_T *wp, int lnum, int col)
+{
+  return syn_get_concealed_id(wp, (linenr_T)lnum, (colnr_T)col);
+}
+
+/// Wrapper for syn_get_foldlevel
+int nvim_syn_get_foldlevel(win_T *wp, int lnum)
+{
+  return syn_get_foldlevel(wp, (linenr_T)lnum);
+}
+
+/// Wrapper for syntax_end_parsing
+void nvim_syntax_end_parsing(win_T *wp, int lnum)
+{
+  syntax_end_parsing(wp, (linenr_T)lnum);
+}
+
+/// Wrapper for syn_stack_cleanup
+int nvim_syn_stack_cleanup(void)
+{
+  return syn_stack_cleanup() ? 1 : 0;
+}
+
+/// Get synmaxcol from current syntax buffer
+int nvim_syn_buf_get_synmaxcol(void)
+{
+  return (int)syn_buf->b_p_smc;
+}
+
+/// Get sync linebreaks from current synblock
+int nvim_syn_get_sync_linebreaks(void)
+{
+  return syn_block->b_syn_sync_linebreaks;
+}
+
+/// Set tick on synstate
+void nvim_synstate_set_tick(synstate_T *state, int tick)
+{
+  if (state) {
+    state->sst_tick = tick;
+  }
+}
+
+/// Get tick from synstate
+int nvim_synstate_get_tick_val(synstate_T *state)
+{
+  return state ? state->sst_tick : 0;
+}
+
+/// Get display_tick global
+int nvim_syn_get_display_tick_val(void)
+{
+  return display_tick;
+}
+
+/// Set sst_lasttick global
+void nvim_syn_set_sst_lasttick_val(int tick)
+{
+  // This is used for state cache invalidation
+  // sst_lasttick isn't a direct global but this is placeholder
+}
+
+// Note: The following accessor functions are already defined earlier in the file:
+// nvim_stateitem_get_m_lnum, nvim_stateitem_get_m_startcol,
+// nvim_stateitem_set_m_lnum, nvim_stateitem_set_m_startcol,
+// nvim_stateitem_set_cchar, nvim_stateitem_set_h_startpos,
+// nvim_stateitem_get_cchar, nvim_stateitem_get_end_idx, nvim_stateitem_get_ends

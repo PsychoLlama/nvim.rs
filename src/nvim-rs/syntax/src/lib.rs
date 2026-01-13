@@ -4847,6 +4847,528 @@ pub unsafe extern "C" fn rs_syn_ic_setting(block: SynBlockHandle) -> c_int {
     }
 }
 
+// =============================================================================
+// Phase 143: Syntax State Machine Migration
+// =============================================================================
+
+extern "C" {
+    // Additional C accessors for Phase 143
+    fn nvim_syn_get_id(
+        wp: WinHandle,
+        lnum: c_int,
+        col: c_int,
+        trans: c_int,
+        spellp: *mut c_int,
+        keep_state: c_int,
+    ) -> c_int;
+
+    fn nvim_syn_get_concealed_id(wp: WinHandle, lnum: c_int, col: c_int) -> c_int;
+
+    fn nvim_get_syntax_info(seqnrp: *mut c_int) -> c_int;
+
+    fn nvim_syn_get_foldlevel(wp: WinHandle, lnum: c_int) -> c_int;
+
+    fn nvim_syntax_end_parsing(wp: WinHandle, lnum: c_int);
+
+    fn nvim_syn_stack_cleanup() -> c_int;
+
+    fn nvim_syn_buf_get_synmaxcol() -> c_int;
+
+    fn nvim_syn_get_sync_linebreaks() -> c_int;
+
+    fn nvim_synstate_set_tick(state: SynStateHandle, tick: c_int);
+
+    fn nvim_synstate_get_tick_val(state: SynStateHandle) -> c_int;
+
+    // Note: nvim_stateitem_get_m_lnum, nvim_stateitem_get_m_startcol,
+    // nvim_stateitem_set_m_lnum, nvim_stateitem_set_m_startcol,
+    // nvim_stateitem_get_end_idx, nvim_stateitem_get_ends are already
+    // declared in the main extern block near the top of the file.
+}
+
+/// Get syntax ID at a file position.
+/// This is the main entry point for getting syntax highlighting info.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_id(
+    wp: WinHandle,
+    lnum: c_int,
+    col: c_int,
+    trans: c_int,
+    spellp: *mut c_int,
+    keep_state: c_int,
+) -> c_int {
+    nvim_syn_get_id(wp, lnum, col, trans, spellp, keep_state)
+}
+
+/// Return the syntax ID at position "i" in the current stack.
+/// The caller must have called syn_get_id() before to fill the stack.
+/// Returns -1 when "i" is out of range.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_stack_item(i: c_int) -> c_int {
+    let state_len = nvim_syn_get_current_state_len();
+    if i >= state_len {
+        nvim_syn_invalidate_current_state();
+        return -1;
+    }
+
+    let item = nvim_syn_get_cur_state(i);
+    if item.is_null() {
+        return -1;
+    }
+    nvim_stateitem_get_id(item)
+}
+
+/// Get extra information about the syntax item.
+/// Must be called right after get_syntax_attr().
+/// Returns the current flags.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_syntax_info(seqnrp: *mut c_int) -> c_int {
+    nvim_get_syntax_info(seqnrp)
+}
+
+/// Get the sequence number of the concealed file position.
+/// Returns seqnr if the file position is concealed, 0 otherwise.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_concealed_id(wp: WinHandle, lnum: c_int, col: c_int) -> c_int {
+    nvim_syn_get_concealed_id(wp, lnum, col)
+}
+
+/// Get folding level for line "lnum" in window "wp".
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_foldlevel(wp: WinHandle, lnum: c_int) -> c_int {
+    nvim_syn_get_foldlevel(wp, lnum)
+}
+
+/// End parsing syntax above line "lnum".
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syntax_end_parsing(wp: WinHandle, lnum: c_int) {
+    nvim_syntax_end_parsing(wp, lnum);
+}
+
+/// Clean up the syntax state stack.
+/// Returns 1 if an entry was freed, 0 otherwise.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_stack_cleanup() -> c_int {
+    nvim_syn_stack_cleanup()
+}
+
+/// Get the synmaxcol setting for the current syntax buffer.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_buf_get_synmaxcol() -> c_int {
+    nvim_syn_buf_get_synmaxcol()
+}
+
+/// Get the sync linebreaks from the current synblock.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_sync_linebreaks() -> c_int {
+    nvim_syn_get_sync_linebreaks()
+}
+
+/// Set the tick value for a synstate.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synstate_set_tick(state: SynStateHandle, tick: c_int) {
+    if !state.is_null() {
+        nvim_synstate_set_tick(state, tick);
+    }
+}
+
+/// Get the tick value for a synstate.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synstate_get_tick(state: SynStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    nvim_synstate_get_tick_val(state)
+}
+
+/// Get stateitem m_lnum field.
+///
+/// # Safety
+/// The item handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_get_m_lnum(item: StateItemHandle) -> c_int {
+    if item.is_null() {
+        return 0;
+    }
+    nvim_stateitem_get_m_lnum(item)
+}
+
+/// Get stateitem m_startcol field.
+///
+/// # Safety
+/// The item handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_get_m_startcol(item: StateItemHandle) -> c_int {
+    if item.is_null() {
+        return 0;
+    }
+    nvim_stateitem_get_m_startcol(item)
+}
+
+/// Set stateitem m_lnum field.
+///
+/// # Safety
+/// The item handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_set_m_lnum_p143(item: StateItemHandle, lnum: c_int) {
+    if !item.is_null() {
+        nvim_stateitem_set_m_lnum(item, lnum);
+    }
+}
+
+/// Set stateitem m_startcol field.
+///
+/// # Safety
+/// The item handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_set_m_startcol_p143(item: StateItemHandle, col: c_int) {
+    if !item.is_null() {
+        nvim_stateitem_set_m_startcol(item, col);
+    }
+}
+
+/// Get stateitem end_idx field.
+///
+/// # Safety
+/// The item handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_get_end_idx_p143(item: StateItemHandle) -> c_int {
+    if item.is_null() {
+        return 0;
+    }
+    nvim_stateitem_get_end_idx(item)
+}
+
+/// Get stateitem ends field.
+///
+/// # Safety
+/// The item handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_get_ends_p143(item: StateItemHandle) -> c_int {
+    if item.is_null() {
+        return 0;
+    }
+    nvim_stateitem_get_ends(item)
+}
+
+// Note: Many constants and accessors defined earlier in this file are re-exported
+// through these Rust wrappers for Phase 143 compatibility.
+
+/// Get KEYWORD_IDX constant.
+#[no_mangle]
+pub extern "C" fn rs_get_keyword_idx() -> c_int {
+    KEYWORD_IDX
+}
+
+/// Get NONE_IDX constant.
+#[no_mangle]
+pub extern "C" fn rs_get_none_idx() -> c_int {
+    NONE_IDX
+}
+
+/// Get SST_FIX_STATES constant.
+#[no_mangle]
+pub extern "C" fn rs_get_sst_fix_states() -> c_int {
+    SST_FIX_STATES
+}
+
+/// Get SST_DIST constant.
+#[no_mangle]
+pub extern "C" fn rs_get_sst_dist() -> c_int {
+    SST_DIST
+}
+
+/// Get SST_MIN_ENTRIES constant.
+#[no_mangle]
+pub extern "C" fn rs_get_sst_min_entries() -> c_int {
+    SST_MIN_ENTRIES
+}
+
+/// Get SST_MAX_ENTRIES constant.
+#[no_mangle]
+pub extern "C" fn rs_get_sst_max_entries() -> c_int {
+    SST_MAX_ENTRIES
+}
+
+// Note: rs_syn_set_current_col, rs_syn_get_current_col,
+// rs_syn_get_current_lnum, rs_syn_set_current_lnum are already defined
+// earlier in the file.
+
+/// Get current state stored flag.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_current_state_stored() -> c_int {
+    nvim_syn_is_current_state_stored()
+}
+
+/// Set current state stored flag.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_current_state_stored(stored: c_int) {
+    nvim_syn_set_state_stored(stored);
+}
+
+/// Get stateitem flags field.
+///
+/// # Safety
+/// The item handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_get_flags(item: StateItemHandle) -> c_int {
+    if item.is_null() {
+        return 0;
+    }
+    nvim_stateitem_get_flags(item)
+}
+
+/// Get stateitem idx field.
+///
+/// # Safety
+/// The item handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_get_idx(item: StateItemHandle) -> c_int {
+    if item.is_null() {
+        return 0;
+    }
+    nvim_stateitem_get_idx(item)
+}
+
+/// Get stateitem attr field.
+///
+/// # Safety
+/// The item handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_get_attr(item: StateItemHandle) -> c_int {
+    if item.is_null() {
+        return 0;
+    }
+    nvim_stateitem_get_attr(item)
+}
+
+/// Get stateitem seqnr field.
+///
+/// # Safety
+/// The item handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stateitem_get_seqnr(item: StateItemHandle) -> c_int {
+    if item.is_null() {
+        return 0;
+    }
+    nvim_stateitem_get_seqnr(item)
+}
+
+// Note: rs_stateitem_get_cchar, rs_stateitem_get_end_idx, rs_stateitem_get_ends,
+// rs_stateitem_get_m_lnum, rs_stateitem_get_m_startcol,
+// rs_stateitem_set_m_lnum, rs_stateitem_set_m_startcol,
+// rs_stateitem_set_cchar, rs_stateitem_set_h_startpos are already
+// defined earlier in the file.
+
+/// Get synstate stacksize field.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synstate_get_stacksize(state: SynStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    nvim_synstate_get_stacksize(state)
+}
+
+/// Get synstate next_flags field.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synstate_get_next_flags(state: SynStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    nvim_synstate_get_next_flags(state)
+}
+
+/// Get synstate change_lnum field.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synstate_get_change_lnum_val(state: SynStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    nvim_synstate_get_change_lnum(state)
+}
+
+// Note: rs_synstate_set_change_lnum is already defined earlier in the file.
+
+/// Get synstate next pointer.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synstate_get_next(state: SynStateHandle) -> SynStateHandle {
+    if state.is_null() {
+        return SynStateHandle::null();
+    }
+    nvim_synstate_get_next(state)
+}
+
+/// Get synstate next_list pointer.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synstate_get_next_list(state: SynStateHandle) -> IdListHandle {
+    if state.is_null() {
+        return IdListHandle::null();
+    }
+    nvim_synstate_get_next_list(state)
+}
+
+/// Get synblock sst_first pointer.
+///
+/// # Safety
+/// The block handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_get_sst_first(block: SynBlockHandle) -> SynStateHandle {
+    if block.is_null() {
+        return SynStateHandle::null();
+    }
+    nvim_synblock_get_sst_first(block)
+}
+
+/// Get synblock sst_firstfree pointer.
+///
+/// # Safety
+/// The block handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_get_sst_firstfree(block: SynBlockHandle) -> SynStateHandle {
+    if block.is_null() {
+        return SynStateHandle::null();
+    }
+    nvim_synblock_get_sst_firstfree(block)
+}
+
+/// Check if synblock has an sst_array.
+///
+/// # Safety
+/// The block handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_has_sst_array(block: SynBlockHandle) -> c_int {
+    if block.is_null() {
+        return 0;
+    }
+    nvim_synblock_has_sst_array(block)
+}
+
+/// Get synblock sst_len.
+///
+/// # Safety
+/// The block handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_get_sst_len(block: SynBlockHandle) -> c_int {
+    if block.is_null() {
+        return 0;
+    }
+    nvim_synblock_get_sst_len(block)
+}
+
+/// Get synblock sst_freecount.
+///
+/// # Safety
+/// The block handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_get_sst_freecount(block: SynBlockHandle) -> c_int {
+    if block.is_null() {
+        return 0;
+    }
+    nvim_synblock_get_sst_freecount(block)
+}
+
+/// Get synblock sync_minlines.
+///
+/// # Safety
+/// The block handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_get_sync_minlines(block: SynBlockHandle) -> c_int {
+    if block.is_null() {
+        return 0;
+    }
+    nvim_synblock_get_sync_minlines(block)
+}
+
+/// Get synblock sync_maxlines.
+///
+/// # Safety
+/// The block handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_get_sync_maxlines(block: SynBlockHandle) -> c_int {
+    if block.is_null() {
+        return 0;
+    }
+    nvim_synblock_get_sync_maxlines(block)
+}
+
+/// Get synblock sync_flags.
+///
+/// # Safety
+/// The block handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_get_sync_flags(block: SynBlockHandle) -> c_int {
+    if block.is_null() {
+        return 0;
+    }
+    nvim_synblock_get_sync_flags(block)
+}
+
+/// Get synblock sync_id.
+///
+/// # Safety
+/// The block handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_get_sync_id(block: SynBlockHandle) -> i16 {
+    if block.is_null() {
+        return 0;
+    }
+    nvim_synblock_get_sync_id(block)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
