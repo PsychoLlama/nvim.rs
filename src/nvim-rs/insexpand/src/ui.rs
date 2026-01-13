@@ -4,6 +4,8 @@
 //! The actual UI rendering remains in C (popupmenu.c, message.c), but Rust
 //! provides utilities for state checking and formatting.
 
+#![allow(clippy::missing_const_for_fn)]
+
 use std::os::raw::c_int;
 
 // C accessor functions
@@ -169,6 +171,72 @@ pub unsafe extern "C" fn rs_ui_is_searching() -> c_int {
         nvim_get_compl_started() != 0
             && (nvim_get_compl_interrupted() != 0 || nvim_get_compl_time_slice_expired() != 0),
     )
+}
+
+/// FFI export: Get CTRL_X_WANT_IDENT constant.
+#[no_mangle]
+pub extern "C" fn rs_ctrl_x_want_ident() -> c_int {
+    CTRL_X_WANT_IDENT
+}
+
+/// FFI export: Get CTRL_X_WHOLE_LINE constant.
+#[no_mangle]
+pub extern "C" fn rs_ctrl_x_whole_line() -> c_int {
+    CTRL_X_WHOLE_LINE
+}
+
+/// FFI export: Get CTRL_X_FILES constant.
+#[no_mangle]
+pub extern "C" fn rs_ctrl_x_files() -> c_int {
+    CTRL_X_FILES
+}
+
+/// FFI export: Get CTRL_X_TAGS constant.
+#[no_mangle]
+pub extern "C" fn rs_ctrl_x_tags() -> c_int {
+    CTRL_X_TAGS
+}
+
+/// FFI export: Get CTRL_X_DICTIONARY constant.
+#[no_mangle]
+pub extern "C" fn rs_ctrl_x_dictionary() -> c_int {
+    CTRL_X_DICTIONARY
+}
+
+/// FFI export: Get CTRL_X_THESAURUS constant.
+#[no_mangle]
+pub extern "C" fn rs_ctrl_x_thesaurus() -> c_int {
+    CTRL_X_THESAURUS
+}
+
+/// FFI export: Get CTRL_X_CMDLINE constant.
+#[no_mangle]
+pub extern "C" fn rs_ctrl_x_cmdline() -> c_int {
+    CTRL_X_CMDLINE
+}
+
+/// FFI export: Get CTRL_X_FUNCTION constant.
+#[no_mangle]
+pub extern "C" fn rs_ctrl_x_function() -> c_int {
+    CTRL_X_FUNCTION
+}
+
+/// FFI export: Get CTRL_X_OMNI constant.
+#[no_mangle]
+pub extern "C" fn rs_ctrl_x_omni() -> c_int {
+    CTRL_X_OMNI
+}
+
+/// FFI export: Get CTRL_X_SPELL constant.
+#[no_mangle]
+pub extern "C" fn rs_ctrl_x_spell() -> c_int {
+    CTRL_X_SPELL
+}
+
+/// FFI export: Get CTRL_X_EVAL constant.
+#[no_mangle]
+pub extern "C" fn rs_ctrl_x_eval() -> c_int {
+    CTRL_X_EVAL
 }
 
 #[cfg(test)]

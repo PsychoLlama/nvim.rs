@@ -3,6 +3,8 @@
 //! This module provides Rust implementations for popup menu related
 //! functionality, including match counting and selection logic.
 
+#![allow(clippy::missing_const_for_fn)]
+
 use std::os::raw::c_int;
 
 use crate::match_list::ComplMatch;
@@ -154,6 +156,42 @@ pub unsafe extern "C" fn rs_should_skip_pum(pum_wanted: c_int, menuone: c_int) -
         return 1;
     }
     c_int::from(rs_pum_enough_matches(menuone) == 0)
+}
+
+/// FFI export: Default minimum matches needed for popup (2).
+#[no_mangle]
+pub extern "C" fn rs_pum_default_min_matches() -> c_int {
+    2
+}
+
+/// FFI export: Minimum matches needed for popup with menuone (1).
+#[no_mangle]
+pub extern "C" fn rs_pum_menuone_min_matches() -> c_int {
+    1
+}
+
+/// FFI export: Check if autocomplete is active.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_is_autocomplete() -> c_int {
+    nvim_get_compl_autocomplete()
+}
+
+/// FFI export: Check if first match is null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_first_match_is_null() -> c_int {
+    c_int::from(nvim_compl_get_first_match().is_null())
+}
+
+/// FFI export: Constant for no selection (-1).
+#[no_mangle]
+pub extern "C" fn rs_pum_no_selection() -> c_int {
+    -1
+}
+
+/// FFI export: Check if match array exists.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_match_array_exists() -> c_int {
+    nvim_get_compl_match_array_exists()
 }
 
 #[cfg(test)]
