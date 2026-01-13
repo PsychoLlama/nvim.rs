@@ -399,7 +399,10 @@ mod tests {
 
             assert_eq!(rs_frame_count_leaves(std::ptr::null()), 0);
             assert_eq!(rs_frame_is_valid(std::ptr::null()), 1);
-            assert_eq!(rs_frame_contains_win(std::ptr::null(), WinHandle::null()), 0);
+            assert_eq!(
+                rs_frame_contains_win(std::ptr::null(), WinHandle::null()),
+                0
+            );
 
             assert_eq!(rs_frame_children_width(std::ptr::null()), 0);
             assert_eq!(rs_frame_children_height(std::ptr::null()), 0);

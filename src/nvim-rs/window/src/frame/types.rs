@@ -8,7 +8,6 @@ use std::ptr;
 
 use crate::{Frame, WinHandle};
 
-
 // =============================================================================
 // Frame Layout Direction
 // =============================================================================
@@ -426,7 +425,11 @@ pub extern "C" fn rs_layout_dir_is_col(value: c_int) -> c_int {
 /// FFI export: Get opposite layout direction.
 #[unsafe(no_mangle)]
 pub extern "C" fn rs_layout_dir_opposite(value: c_int) -> c_int {
-    c_int::from(LayoutDir::from_raw(layout_value_to_i8(value)).opposite().to_raw())
+    c_int::from(
+        LayoutDir::from_raw(layout_value_to_i8(value))
+            .opposite()
+            .to_raw(),
+    )
 }
 
 /// FFI export: Get layout from frame.
