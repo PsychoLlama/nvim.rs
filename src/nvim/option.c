@@ -328,6 +328,30 @@ void nvim_option_win_set_nrwidth(win_T *win, int value) { if (win) win->w_nrwidt
 int nvim_option_win_get_sms(win_T *win) { return win ? win->w_p_sms : 0; }
 void nvim_option_win_set_skipcol(win_T *win, int value) { if (win) win->w_skipcol = value; }
 
+// Phase 167: Behavior callback accessors
+OptInt nvim_callback_get_p_uc(void) { return p_uc; }
+int nvim_callback_get_p_ea(void) { return p_ea; }
+int nvim_callback_is_one_window(void) { return ONE_WINDOW; }
+int nvim_callback_is_curbuf_help(void) { return curbuf->b_help; }
+int nvim_callback_get_curwin_height(void) { return curwin->w_height; }
+OptInt nvim_callback_get_p_hh(void) { return p_hh; }
+win_T *nvim_callback_get_curwin(void) { return curwin; }
+
+// Buffer accessors for behavior callbacks
+int nvim_buf_get_p_swf(buf_T *buf) { return buf ? buf->b_p_swf : 0; }
+int nvim_buf_get_p_udf(buf_T *buf) { return buf ? buf->b_p_udf : 0; }
+int nvim_callback_get_p_udf(void) { return p_udf; }
+
+// Colorcolumn check wrapper
+void check_colorcolumn_win(win_T *win) { check_colorcolumn(NULL, win); }
+
+// Iterate callback for all tab windows
+void nvim_callback_for_all_tab_windows(void (*callback)(win_T *)) {
+  FOR_ALL_TAB_WINDOWS(tp, wp) {
+    callback(wp);
+  }
+}
+
 static const char e_unknown_option[]
   = N_("E518: Unknown option");
 static const char e_not_allowed_in_modeline[]

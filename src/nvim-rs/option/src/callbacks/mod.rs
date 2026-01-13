@@ -6,6 +6,7 @@
 
 #![allow(clippy::missing_safety_doc)] // FFI functions safety is implicit
 
+pub mod behavior;
 pub mod complex;
 pub mod display;
 pub mod numeric;
