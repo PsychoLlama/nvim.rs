@@ -14,12 +14,13 @@
 //! - [`constants`]: Frame direction constants, layout flags, split constraints
 //! - [`types`]: Frame handle types, LayoutDir enum, SplitInfo struct
 //! - [`accessors`]: Frame field getters/setters
-//! - (future) [`operations`]: Frame tree manipulation operations
+//! - [`operations`]: Frame tree manipulation operations
 
 #![allow(clippy::missing_const_for_fn)]
 
 pub mod accessors;
 pub mod constants;
+pub mod operations;
 pub mod types;
 
 use std::ffi::c_int;
