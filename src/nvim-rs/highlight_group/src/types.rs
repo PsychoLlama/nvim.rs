@@ -182,6 +182,28 @@ pub const COLOR_NUMBERS_8: &[c_int] = &[
     0, 4, 2, 6, 1, 5, 3, 3, 7, 7, 7, 7, 8, 8, 12, 12, 10, 10, 14, 14, 9, 9, 13, 13, 11, 11, 15, -1,
 ];
 
+// =============================================================================
+// FFI Exports
+// =============================================================================
+
+/// Get the `RGB_INVALID` constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_hl_rgb_invalid() -> RgbValue {
+    RGB_INVALID
+}
+
+/// Get the `MAX_HL_ID` constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_hl_max_id() -> c_int {
+    MAX_HL_ID
+}
+
+/// Check if a color index is a special value.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_hl_color_idx_is_special(idx: c_int) -> c_int {
+    c_int::from(ColorIdx::is_special(idx))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

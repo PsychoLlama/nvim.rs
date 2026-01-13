@@ -1001,14 +1001,8 @@ mod tests {
             // Two normal functions - sort by score
             let func2 = CString::new("bar").unwrap();
             assert!(
-                rs_fuzzy_match_func_compare(
-                    normal_func.as_ptr(),
-                    100,
-                    0,
-                    func2.as_ptr(),
-                    50,
-                    1
-                ) < 0
+                rs_fuzzy_match_func_compare(normal_func.as_ptr(), 100, 0, func2.as_ptr(), 50, 1)
+                    < 0
             );
         }
     }

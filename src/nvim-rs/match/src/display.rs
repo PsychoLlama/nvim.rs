@@ -33,12 +33,7 @@ pub const fn calc_start_col(lnum: i64, match_lnum: i64, start_col: i32) -> i32 {
 /// If the match ends on this line, use the end column.
 /// Otherwise, highlight to MAXCOL (end of line).
 #[must_use]
-pub const fn calc_end_col(
-    lnum: i64,
-    match_lnum: i64,
-    end_lnum_offset: i64,
-    end_col: i32,
-) -> i32 {
+pub const fn calc_end_col(lnum: i64, match_lnum: i64, end_lnum_offset: i64, end_col: i32) -> i32 {
     if lnum == match_lnum + end_lnum_offset {
         end_col
     } else {
@@ -213,7 +208,11 @@ pub extern "C" fn rs_match_display_maxcol() -> c_int {
 
 /// Calculate start column for highlighting.
 #[unsafe(no_mangle)]
-pub extern "C" fn rs_match_calc_hl_start_col(lnum: i64, match_lnum: i64, start_col: c_int) -> c_int {
+pub extern "C" fn rs_match_calc_hl_start_col(
+    lnum: i64,
+    match_lnum: i64,
+    start_col: c_int,
+) -> c_int {
     calc_start_col(lnum, match_lnum, start_col)
 }
 
@@ -450,7 +449,7 @@ mod tests {
         assert!(is_in_multiline_match(6, 5, 0, 2)); // line 6, match 5-7
         assert!(is_in_multiline_match(5, 5, 0, 2)); // start line
         assert!(is_in_multiline_match(7, 5, 0, 2)); // end line
-        // Out of range
+                                                    // Out of range
         assert!(!is_in_multiline_match(4, 5, 0, 2));
         assert!(!is_in_multiline_match(8, 5, 0, 2));
     }

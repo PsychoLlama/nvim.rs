@@ -9,7 +9,8 @@
 //! via FFI. This module provides Rust-side utilities that don't require
 //! direct table access.
 
-use std::ffi::c_int;
+use libc::c_char;
+use std::ffi::{c_int, CStr};
 
 use crate::types::{SgSet, MAX_SYN_NAME};
 use crate::{is_valid_hl_name, is_valid_hl_name_char};
@@ -240,6 +241,133 @@ pub fn normalize_name<'a>(name: &str, buffer: &'a mut [u8]) -> Option<&'a str> {
 
     // SAFETY: We only wrote ASCII characters (uppercase conversion)
     Some(unsafe { std::str::from_utf8_unchecked(&buffer[..name.len()]) })
+}
+
+// =============================================================================
+// FFI Exports
+// =============================================================================
+
+/// Convert C string to Rust str, handling null.
+unsafe fn cstr_to_str<'a>(ptr: *const c_char) -> Option<&'a str> {
+    if ptr.is_null() {
+        return None;
+    }
+    CStr::from_ptr(ptr).to_str().ok()
+}
+
+/// Check if name refers to the "Normal" highlight group.
+///
+/// # Safety
+/// `name` must be a valid null-terminated C string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_hl_is_normal_group(name: *const c_char) -> c_int {
+    cstr_to_str(name).map_or(0, |s| c_int::from(is_normal_group(s)))
+}
+
+/// Check if name is a built-in highlight group.
+///
+/// # Safety
+/// `name` must be a valid null-terminated C string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_hl_is_builtin_group(name: *const c_char) -> c_int {
+    cstr_to_str(name).map_or(0, |s| c_int::from(is_builtin_group(s)))
+}
+
+/// Check if name is a treesitter capture (starts with '@').
+///
+/// # Safety
+/// `name` must be a valid null-terminated C string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_hl_is_ts_capture(name: *const c_char) -> c_int {
+    cstr_to_str(name).map_or(0, |s| c_int::from(is_ts_capture(s)))
+}
+
+/// Check if highlight ID is valid.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_hl_is_valid_id(id: c_int, max_id: c_int) -> c_int {
+    c_int::from(is_valid_hl_id(id, max_id))
+}
+
+/// Check if highlight group has settings.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_hl_has_settings(sg_set: c_int, sg_cleared: c_int, check_link: c_int) -> c_int {
+    c_int::from(has_settings(
+        SgSet(sg_set),
+        sg_cleared != 0,
+        check_link != 0,
+    ))
+}
+
+/// Get the `MAX_SYN_NAME` constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_hl_max_syn_name() -> c_int {
+    MAX_SYN_NAME as c_int
+}
+
+/// Get the number of built-in highlight groups.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_hl_builtin_count() -> c_int {
+    BUILTIN_GROUPS.len() as c_int
+}
+
+/// Check if SgSet has cterm flag set.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_hl_sg_set_has_cterm(sg_set: c_int) -> c_int {
+    c_int::from(SgSet(sg_set).has_cterm())
+}
+
+/// Check if SgSet has gui flag set.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_hl_sg_set_has_gui(sg_set: c_int) -> c_int {
+    c_int::from(SgSet(sg_set).has_gui())
+}
+
+/// Check if SgSet has link flag set.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_hl_sg_set_has_link(sg_set: c_int) -> c_int {
+    c_int::from(SgSet(sg_set).has_link())
+}
+
+/// Get `SgSet` cterm flag value.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_hl_sg_set_cterm_flag() -> c_int {
+    SgSet::CTERM.0
+}
+
+/// Get `SgSet` gui flag value.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_hl_sg_set_gui_flag() -> c_int {
+    SgSet::GUI.0
+}
+
+/// Get `SgSet` link flag value.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_hl_sg_set_link_flag() -> c_int {
+    SgSet::LINK.0
+}
+
+/// Set cterm flag in `SgSet`.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_hl_sg_set_add_cterm(sg_set: c_int) -> c_int {
+    let mut s = SgSet(sg_set);
+    s.set_cterm();
+    s.0
+}
+
+/// Set gui flag in `SgSet`.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_hl_sg_set_add_gui(sg_set: c_int) -> c_int {
+    let mut s = SgSet(sg_set);
+    s.set_gui();
+    s.0
+}
+
+/// Set link flag in `SgSet`.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_hl_sg_set_add_link(sg_set: c_int) -> c_int {
+    let mut s = SgSet(sg_set);
+    s.set_link();
+    s.0
 }
 
 #[cfg(test)]
