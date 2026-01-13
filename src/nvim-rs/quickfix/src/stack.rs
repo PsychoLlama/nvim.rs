@@ -273,6 +273,108 @@ pub extern "C" fn rs_qf_stack_nav_newer_target(qi: QfStackHandle, count: c_int) 
     calculate_nav_target(&state, NavDirection::Newer, count).unwrap_or(INVALID_QFIDX)
 }
 
+/// FFI export: Calculate nav target for first list
+#[no_mangle]
+pub extern "C" fn rs_qf_stack_nav_first_target(qi: QfStackHandle) -> c_int {
+    let state = QfStackState::from_handle(qi);
+    calculate_nav_target(&state, NavDirection::First, 0).unwrap_or(INVALID_QFIDX)
+}
+
+/// FFI export: Calculate nav target for last list
+#[no_mangle]
+pub extern "C" fn rs_qf_stack_nav_last_target(qi: QfStackHandle) -> c_int {
+    let state = QfStackState::from_handle(qi);
+    calculate_nav_target(&state, NavDirection::Last, 0).unwrap_or(INVALID_QFIDX)
+}
+
+/// FFI export: Calculate nav target for absolute index
+#[no_mangle]
+pub extern "C" fn rs_qf_stack_nav_absolute_target(qi: QfStackHandle, idx: c_int) -> c_int {
+    let state = QfStackState::from_handle(qi);
+    calculate_nav_target(&state, NavDirection::Absolute(idx), 0).unwrap_or(INVALID_QFIDX)
+}
+
+/// FFI export: Calculate push result
+#[no_mangle]
+pub extern "C" fn rs_qf_stack_calculate_push(qi: QfStackHandle) -> QfPushResult {
+    let state = QfStackState::from_handle(qi);
+    calculate_push(&state)
+}
+
+/// FFI export: Get the LISTCOUNT constant
+#[no_mangle]
+pub extern "C" fn rs_qf_listcount() -> c_int {
+    LISTCOUNT as c_int
+}
+
+/// FFI export: Get the INVALID_QFIDX constant
+#[no_mangle]
+pub extern "C" fn rs_qf_invalid_idx() -> c_int {
+    INVALID_QFIDX
+}
+
+/// FFI export: Check if an index is valid for the stack
+#[no_mangle]
+pub extern "C" fn rs_qf_stack_idx_valid(qi: QfStackHandle, idx: c_int) -> c_int {
+    let state = QfStackState::from_handle(qi);
+    c_int::from(idx >= 0 && idx < state.list_count)
+}
+
+/// FFI export: Get remaining capacity in the stack
+#[no_mangle]
+pub extern "C" fn rs_qf_stack_remaining_capacity(qi: QfStackHandle) -> c_int {
+    let state = QfStackState::from_handle(qi);
+    (LISTCOUNT as c_int) - state.list_count
+}
+
+/// FFI export: Check if stack is empty
+#[no_mangle]
+pub extern "C" fn rs_qf_stack_is_empty(qi: QfStackHandle) -> c_int {
+    c_int::from(QfStackState::from_handle(qi).is_empty)
+}
+
+/// FFI export: Check if stack is full
+#[no_mangle]
+pub extern "C" fn rs_qf_stack_is_full(qi: QfStackHandle) -> c_int {
+    c_int::from(QfStackState::from_handle(qi).is_full)
+}
+
+/// FFI export: Get the list count from stack
+#[no_mangle]
+pub extern "C" fn rs_qf_stack_list_count(qi: QfStackHandle) -> c_int {
+    QfStackState::from_handle(qi).list_count
+}
+
+/// FFI export: Get current list index from stack
+#[no_mangle]
+pub extern "C" fn rs_qf_stack_cur_idx(qi: QfStackHandle) -> c_int {
+    QfStackState::from_handle(qi).cur_idx
+}
+
+/// FFI export: Get NavResult Success value
+#[no_mangle]
+pub extern "C" fn rs_qf_nav_result_success() -> c_int {
+    QfStackNavResult::Success as c_int
+}
+
+/// FFI export: Get NavResult Empty value
+#[no_mangle]
+pub extern "C" fn rs_qf_nav_result_empty() -> c_int {
+    QfStackNavResult::Empty as c_int
+}
+
+/// FFI export: Get NavResult AtOldest value
+#[no_mangle]
+pub extern "C" fn rs_qf_nav_result_at_oldest() -> c_int {
+    QfStackNavResult::AtOldest as c_int
+}
+
+/// FFI export: Get NavResult AtNewest value
+#[no_mangle]
+pub extern "C" fn rs_qf_nav_result_at_newest() -> c_int {
+    QfStackNavResult::AtNewest as c_int
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
