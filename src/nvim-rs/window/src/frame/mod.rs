@@ -12,13 +12,14 @@
 //! # Submodules
 //!
 //! - [`constants`]: Frame direction constants, layout flags, split constraints
-//! - (future) [`types`]: Frame handle types, LayoutDir enum, SplitInfo struct
+//! - [`types`]: Frame handle types, LayoutDir enum, SplitInfo struct
 //! - (future) [`accessors`]: Frame field getters/setters
 //! - (future) [`operations`]: Frame tree manipulation operations
 
 #![allow(clippy::missing_const_for_fn)]
 
 pub mod constants;
+pub mod types;
 
 use std::ffi::c_int;
 
