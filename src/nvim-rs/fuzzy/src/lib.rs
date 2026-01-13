@@ -481,6 +481,197 @@ pub unsafe extern "C" fn rs_fuzzy_match_str(
     fuzzy_score(pattern, haystack).unwrap_or(SCORE_NONE)
 }
 
+/// Get the `SCORE_NONE` constant value (sentinel for no match).
+#[unsafe(no_mangle)]
+pub const extern "C" fn rs_fuzzy_score_none() -> c_int {
+    SCORE_NONE
+}
+
+/// Get the maximum match length constant.
+#[unsafe(no_mangle)]
+pub const extern "C" fn rs_fuzzy_max_len() -> c_int {
+    MATCH_MAX_LEN as c_int
+}
+
+/// Get the gap leading penalty (scaled to integer).
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_fuzzy_penalty_gap_leading() -> c_int {
+    (SCORE_GAP_LEADING * SCORE_SCALE) as c_int
+}
+
+/// Get the gap trailing penalty (scaled to integer).
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_fuzzy_penalty_gap_trailing() -> c_int {
+    (SCORE_GAP_TRAILING * SCORE_SCALE) as c_int
+}
+
+/// Get the inner gap penalty (scaled to integer).
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_fuzzy_penalty_gap_inner() -> c_int {
+    (SCORE_GAP_INNER * SCORE_SCALE) as c_int
+}
+
+/// Get the consecutive match bonus (scaled to integer).
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_fuzzy_bonus_consecutive() -> c_int {
+    (SCORE_MATCH_CONSECUTIVE * SCORE_SCALE) as c_int
+}
+
+/// Get the slash (path separator) boundary bonus (scaled to integer).
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_fuzzy_bonus_slash() -> c_int {
+    (SCORE_MATCH_SLASH * SCORE_SCALE) as c_int
+}
+
+/// Get the word boundary bonus (scaled to integer).
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_fuzzy_bonus_word() -> c_int {
+    (SCORE_MATCH_WORD * SCORE_SCALE) as c_int
+}
+
+/// Get the capital letter (camelCase) bonus (scaled to integer).
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_fuzzy_bonus_capital() -> c_int {
+    (SCORE_MATCH_CAPITAL * SCORE_SCALE) as c_int
+}
+
+/// Get the dot boundary bonus (scaled to integer).
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_fuzzy_bonus_dot() -> c_int {
+    (SCORE_MATCH_DOT * SCORE_SCALE) as c_int
+}
+
+/// Check if a fuzzy match exists without computing score.
+///
+/// This is faster than `rs_fuzzy_match` when you only need to know if a match exists.
+///
+/// # Safety
+///
+/// `str_ptr` and `pat_ptr` must be valid null-terminated C strings.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_fuzzy_has_match(
+    str_ptr: *const c_char,
+    pat_ptr: *const c_char,
+) -> bool {
+    let haystack = match cstr_to_str(str_ptr) {
+        Some(s) => s,
+        None => return false,
+    };
+
+    let pattern = match cstr_to_str(pat_ptr) {
+        Some(s) => s,
+        None => return false,
+    };
+
+    has_match(pattern, haystack)
+}
+
+/// Compute the boundary bonus for a character at given position.
+///
+/// This function computes what bonus a character would get based on the
+/// preceding character context.
+///
+/// # Safety
+///
+/// `prev_char` and `curr_char` should be valid UTF-8 character codes.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_fuzzy_compute_bonus(prev_char: u32, curr_char: u32) -> c_int {
+    let prev_c = char::from_u32(prev_char).unwrap_or('\0');
+    let curr_c = char::from_u32(curr_char).unwrap_or('\0');
+    let bonus = compute_bonus(prev_c, curr_c);
+    (bonus * SCORE_SCALE) as c_int
+}
+
+/// Compare two fuzzy match items for sorting (descending by score, stable by index).
+///
+/// Returns:
+/// - negative if item1 should come before item2
+/// - positive if item1 should come after item2
+/// - zero if they are equal
+#[unsafe(no_mangle)]
+#[allow(clippy::comparison_chain, clippy::missing_const_for_fn)]
+pub extern "C" fn rs_fuzzy_match_item_compare(
+    score1: c_int,
+    idx1: c_int,
+    score2: c_int,
+    idx2: c_int,
+) -> c_int {
+    if score1 == score2 {
+        // Stable sort by index
+        if idx1 == idx2 {
+            0
+        } else if idx1 > idx2 {
+            1
+        } else {
+            -1
+        }
+    } else if score1 > score2 {
+        -1 // Higher score comes first (descending order)
+    } else {
+        1
+    }
+}
+
+/// Compare two fuzzy match strings for sorting (descending by score, stable by index).
+///
+/// Same as `rs_fuzzy_match_item_compare` but for string matches.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_fuzzy_match_str_compare(
+    score1: c_int,
+    idx1: c_int,
+    score2: c_int,
+    idx2: c_int,
+) -> c_int {
+    rs_fuzzy_match_item_compare(score1, idx1, score2, idx2)
+}
+
+/// Compare two fuzzy function matches for sorting.
+///
+/// This is similar to string comparison but moves `<SNR>` functions to the end.
+///
+/// # Safety
+///
+/// `str1` and `str2` must be valid null-terminated C strings.
+#[unsafe(no_mangle)]
+#[allow(clippy::comparison_chain)]
+pub unsafe extern "C" fn rs_fuzzy_match_func_compare(
+    str1: *const c_char,
+    score1: c_int,
+    idx1: c_int,
+    str2: *const c_char,
+    score2: c_int,
+    idx2: c_int,
+) -> c_int {
+    let s1 = cstr_to_str(str1).unwrap_or("");
+    let s2 = cstr_to_str(str2).unwrap_or("");
+
+    let s1_is_snr = s1.starts_with('<');
+    let s2_is_snr = s2.starts_with('<');
+
+    // Move <SNR> functions to the end
+    if !s1_is_snr && s2_is_snr {
+        return -1;
+    }
+    if s1_is_snr && !s2_is_snr {
+        return 1;
+    }
+
+    // Otherwise, sort by score (descending), then by index (stable)
+    if score1 == score2 {
+        if idx1 == idx2 {
+            0
+        } else if idx1 > idx2 {
+            1
+        } else {
+            -1
+        }
+    } else if score1 > score2 {
+        -1
+    } else {
+        1
+    }
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
@@ -691,5 +882,134 @@ mod tests {
         assert!(!is_word_char(' '));
         assert!(!is_word_char('.'));
         assert!(!is_word_char('/'));
+    }
+
+    #[test]
+    fn test_ffi_score_none() {
+        assert_eq!(rs_fuzzy_score_none(), SCORE_NONE);
+    }
+
+    #[test]
+    fn test_ffi_max_len() {
+        assert_eq!(rs_fuzzy_max_len(), MATCH_MAX_LEN as c_int);
+    }
+
+    #[test]
+    fn test_ffi_penalties() {
+        assert_eq!(rs_fuzzy_penalty_gap_leading(), -5);
+        assert_eq!(rs_fuzzy_penalty_gap_trailing(), -5);
+        assert_eq!(rs_fuzzy_penalty_gap_inner(), -10);
+    }
+
+    #[test]
+    fn test_ffi_bonuses() {
+        assert_eq!(rs_fuzzy_bonus_consecutive(), 1000);
+        assert_eq!(rs_fuzzy_bonus_slash(), 900);
+        assert_eq!(rs_fuzzy_bonus_word(), 800);
+        assert_eq!(rs_fuzzy_bonus_capital(), 700);
+        assert_eq!(rs_fuzzy_bonus_dot(), 600);
+    }
+
+    #[test]
+    fn test_ffi_has_match() {
+        use std::ffi::CString;
+
+        let haystack = CString::new("foo_bar").unwrap();
+        let pattern = CString::new("fb").unwrap();
+        let bad_pattern = CString::new("xyz").unwrap();
+
+        unsafe {
+            assert!(rs_fuzzy_has_match(haystack.as_ptr(), pattern.as_ptr()));
+            assert!(!rs_fuzzy_has_match(haystack.as_ptr(), bad_pattern.as_ptr()));
+        }
+    }
+
+    #[test]
+    fn test_ffi_compute_bonus() {
+        // Test word boundary bonus
+        let bonus = rs_fuzzy_compute_bonus('_' as u32, 'a' as u32);
+        assert_eq!(bonus, 800); // SCORE_MATCH_WORD * SCALE
+
+        // Test slash boundary bonus
+        let bonus = rs_fuzzy_compute_bonus('/' as u32, 'a' as u32);
+        assert_eq!(bonus, 900); // SCORE_MATCH_SLASH * SCALE
+
+        // Test capital bonus (camelCase)
+        let bonus = rs_fuzzy_compute_bonus('a' as u32, 'B' as u32);
+        assert_eq!(bonus, 700); // SCORE_MATCH_CAPITAL * SCALE
+
+        // Test dot boundary bonus
+        let bonus = rs_fuzzy_compute_bonus('.' as u32, 'a' as u32);
+        assert_eq!(bonus, 600); // SCORE_MATCH_DOT * SCALE
+
+        // Test no bonus
+        let bonus = rs_fuzzy_compute_bonus('a' as u32, 'b' as u32);
+        assert_eq!(bonus, 0);
+    }
+
+    #[test]
+    fn test_ffi_match_item_compare() {
+        // Higher score should come first
+        assert!(rs_fuzzy_match_item_compare(100, 0, 50, 1) < 0);
+        assert!(rs_fuzzy_match_item_compare(50, 0, 100, 1) > 0);
+
+        // Same score - stable sort by index
+        assert_eq!(rs_fuzzy_match_item_compare(100, 0, 100, 0), 0);
+        assert!(rs_fuzzy_match_item_compare(100, 1, 100, 0) > 0);
+        assert!(rs_fuzzy_match_item_compare(100, 0, 100, 1) < 0);
+    }
+
+    #[test]
+    fn test_ffi_match_str_compare() {
+        // Should behave the same as item compare
+        assert!(rs_fuzzy_match_str_compare(100, 0, 50, 1) < 0);
+        assert!(rs_fuzzy_match_str_compare(50, 0, 100, 1) > 0);
+    }
+
+    #[test]
+    fn test_ffi_match_func_compare() {
+        use std::ffi::CString;
+
+        let normal_func = CString::new("foo").unwrap();
+        let snr_func = CString::new("<SNR>123_bar").unwrap();
+
+        unsafe {
+            // Normal function should come before <SNR> function
+            assert!(
+                rs_fuzzy_match_func_compare(
+                    normal_func.as_ptr(),
+                    100,
+                    0,
+                    snr_func.as_ptr(),
+                    100,
+                    1
+                ) < 0
+            );
+
+            // <SNR> function should come after normal function
+            assert!(
+                rs_fuzzy_match_func_compare(
+                    snr_func.as_ptr(),
+                    100,
+                    0,
+                    normal_func.as_ptr(),
+                    100,
+                    1
+                ) > 0
+            );
+
+            // Two normal functions - sort by score
+            let func2 = CString::new("bar").unwrap();
+            assert!(
+                rs_fuzzy_match_func_compare(
+                    normal_func.as_ptr(),
+                    100,
+                    0,
+                    func2.as_ptr(),
+                    50,
+                    1
+                ) < 0
+            );
+        }
     }
 }

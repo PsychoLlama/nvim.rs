@@ -80,7 +80,11 @@ pub extern "C" fn rs_session_should_save_buffer_check(
 /// Returns the line number from the first wininfo entry, or 1 if <= 0.
 #[no_mangle]
 pub extern "C" fn rs_session_buffer_lnum_or_default(lnum: LineNr) -> LineNr {
-    if lnum <= 0 { 1 } else { lnum }
+    if lnum <= 0 {
+        1
+    } else {
+        lnum
+    }
 }
 
 /// Check if buffer has a short file name that can be used.
@@ -213,9 +217,7 @@ pub extern "C" fn rs_session_should_restore_arg_idx(
     wargcount: c_int,
     is_session: c_int,
 ) -> c_int {
-    c_int::from(
-        w_arg_idx != current_arg_idx && w_arg_idx < wargcount && is_session != 0,
-    )
+    c_int::from(w_arg_idx != current_arg_idx && w_arg_idx < wargcount && is_session != 0)
 }
 
 // =============================================================================
@@ -338,7 +340,8 @@ pub extern "C" fn rs_session_buf_is_help(is_help: c_int) -> c_int {
 /// This prevents losing folding info when re-editing.
 #[no_mangle]
 pub extern "C" fn rs_session_edit_bufexists_fmt() -> *const c_char {
-    static FMT: &[u8] = b"if bufexists(fnamemodify(\"%s\", \":p\")) | buffer %s | else | edit %s | endif\n\0";
+    static FMT: &[u8] =
+        b"if bufexists(fnamemodify(\"%s\", \":p\")) | buffer %s | else | edit %s | endif\n\0";
     FMT.as_ptr().cast::<c_char>()
 }
 
@@ -388,34 +391,19 @@ mod tests {
     #[test]
     fn test_should_save_buffer_check() {
         // Normal buffer with file name and listed
-        assert_eq!(
-            rs_session_should_save_buffer_check(1, 1, 1, 0, 0, 0, 0),
-            1
-        );
+        assert_eq!(rs_session_should_save_buffer_check(1, 1, 1, 0, 0, 0, 0), 1);
 
         // No file name
-        assert_eq!(
-            rs_session_should_save_buffer_check(0, 1, 1, 0, 0, 0, 0),
-            0
-        );
+        assert_eq!(rs_session_should_save_buffer_check(0, 1, 1, 0, 0, 0, 0), 0);
 
         // Not listed
-        assert_eq!(
-            rs_session_should_save_buffer_check(1, 0, 1, 0, 0, 0, 0),
-            0
-        );
+        assert_eq!(rs_session_should_save_buffer_check(1, 0, 1, 0, 0, 0, 0), 0);
 
         // Only save windows mode, no windows
-        assert_eq!(
-            rs_session_should_save_buffer_check(1, 1, 0, 0, 0, 0, 1),
-            0
-        );
+        assert_eq!(rs_session_should_save_buffer_check(1, 1, 0, 0, 0, 0, 1), 0);
 
         // Help buffer without HELP flag
-        assert_eq!(
-            rs_session_should_save_buffer_check(1, 1, 1, 1, 0, 0, 0),
-            0
-        );
+        assert_eq!(rs_session_should_save_buffer_check(1, 1, 1, 1, 0, 0, 0), 0);
 
         // Help buffer with HELP flag
         assert_eq!(
@@ -424,10 +412,7 @@ mod tests {
         );
 
         // Terminal without TERMINAL flag
-        assert_eq!(
-            rs_session_should_save_buffer_check(1, 1, 1, 0, 1, 0, 0),
-            0
-        );
+        assert_eq!(rs_session_should_save_buffer_check(1, 1, 1, 0, 1, 0, 0), 0);
 
         // Terminal with TERMINAL flag
         assert_eq!(
@@ -585,7 +570,10 @@ mod tests {
         );
 
         // Cannot use short name -> 1
-        assert_eq!(rs_session_fname_type(0, 1, SessionFlags::CURDIR.bits(), 0, 0), 1);
+        assert_eq!(
+            rs_session_fname_type(0, 1, SessionFlags::CURDIR.bits(), 0, 0),
+            1
+        );
     }
 
     #[test]

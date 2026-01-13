@@ -124,11 +124,7 @@ pub extern "C" fn rs_session_hscroll_endif() -> *const c_char {
 
 /// Check if horizontal scroll needs to be saved.
 #[no_mangle]
-pub extern "C" fn rs_session_need_hscroll(
-    wrap: c_int,
-    leftcol: c_int,
-    width: c_int,
-) -> c_int {
+pub extern "C" fn rs_session_need_hscroll(wrap: c_int, leftcol: c_int, width: c_int) -> c_int {
     c_int::from(wrap == 0 && leftcol > 0 && width > 0)
 }
 
@@ -230,10 +226,7 @@ pub extern "C" fn rs_session_setl_foldcolumn_fmt() -> *const c_char {
 
 /// Check if local options should be saved.
 #[no_mangle]
-pub extern "C" fn rs_session_should_save_local_options(
-    flags: u32,
-    is_view: c_int,
-) -> c_int {
+pub extern "C" fn rs_session_should_save_local_options(flags: u32, is_view: c_int) -> c_int {
     let f = SessionFlags::from_bits_truncate(flags);
 
     if f.contains(SessionFlags::OPTIONS) || f.contains(SessionFlags::LOCALOPTIONS) {
@@ -379,10 +372,7 @@ mod tests {
     #[test]
     fn test_has_folds_flag() {
         assert_eq!(rs_session_has_folds_flag(0), 0);
-        assert_eq!(
-            rs_session_has_folds_flag(SessionFlags::FOLDS.bits()),
-            1
-        );
+        assert_eq!(rs_session_has_folds_flag(SessionFlags::FOLDS.bits()), 1);
     }
 
     #[test]

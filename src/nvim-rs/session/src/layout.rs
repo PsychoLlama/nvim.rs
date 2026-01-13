@@ -383,7 +383,8 @@ pub extern "C" fn rs_session_save_winminwidth_cmd() -> *const c_char {
 /// Get the set winheight/winwidth to 1 commands.
 #[no_mangle]
 pub extern "C" fn rs_session_set_winheight_1_cmd() -> *const c_char {
-    static CMD: &[u8] = b"set winminheight=0\nset winheight=1\nset winminwidth=0\nset winwidth=1\n\0";
+    static CMD: &[u8] =
+        b"set winminheight=0\nset winheight=1\nset winminwidth=0\nset winwidth=1\n\0";
     CMD.as_ptr().cast::<c_char>()
 }
 
@@ -537,8 +538,14 @@ mod tests {
     fn test_should_save_tcd() {
         assert_eq!(rs_session_should_save_tcd(0, 0), 0);
         assert_eq!(rs_session_should_save_tcd(0, 1), 0);
-        assert_eq!(rs_session_should_save_tcd(SessionFlags::CURDIR.bits(), 0), 0);
-        assert_eq!(rs_session_should_save_tcd(SessionFlags::CURDIR.bits(), 1), 1);
+        assert_eq!(
+            rs_session_should_save_tcd(SessionFlags::CURDIR.bits(), 0),
+            0
+        );
+        assert_eq!(
+            rs_session_should_save_tcd(SessionFlags::CURDIR.bits(), 1),
+            1
+        );
     }
 
     #[test]
