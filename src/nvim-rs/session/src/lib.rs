@@ -13,11 +13,13 @@ mod buffers;
 mod components;
 mod layout;
 mod serializer;
+mod view;
 
 pub use buffers::*;
 pub use components::*;
 pub use layout::*;
 pub use serializer::*;
+pub use view::*;
 
 // =============================================================================
 // Session Option Flags (matches kOptSsopFlag* from option_vars.generated.h)
