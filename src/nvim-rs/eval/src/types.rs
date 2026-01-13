@@ -319,6 +319,156 @@ pub extern "C" fn rs_common_type(a: c_int, b: c_int) -> c_int {
     common_type(VarType::from_raw(a), VarType::from_raw(b)).to_raw()
 }
 
+/// FFI export: Get VarType::Unknown constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_vartype_unknown() -> c_int {
+    VarType::Unknown.to_raw()
+}
+
+/// FFI export: Get VarType::Number constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_vartype_number() -> c_int {
+    VarType::Number.to_raw()
+}
+
+/// FFI export: Get VarType::String constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_vartype_string() -> c_int {
+    VarType::String.to_raw()
+}
+
+/// FFI export: Get VarType::Func constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_vartype_func() -> c_int {
+    VarType::Func.to_raw()
+}
+
+/// FFI export: Get VarType::List constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_vartype_list() -> c_int {
+    VarType::List.to_raw()
+}
+
+/// FFI export: Get VarType::Dict constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_vartype_dict() -> c_int {
+    VarType::Dict.to_raw()
+}
+
+/// FFI export: Get VarType::Float constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_vartype_float() -> c_int {
+    VarType::Float.to_raw()
+}
+
+/// FFI export: Get VarType::Bool constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_vartype_bool() -> c_int {
+    VarType::Bool.to_raw()
+}
+
+/// FFI export: Get VarType::Special constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_vartype_special() -> c_int {
+    VarType::Special.to_raw()
+}
+
+/// FFI export: Get VarType::Blob constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_vartype_blob() -> c_int {
+    VarType::Blob.to_raw()
+}
+
+/// FFI export: Check if type is stringifiable.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_vartype_is_stringifiable(value: c_int) -> c_int {
+    c_int::from(VarType::from_raw(value).is_stringifiable())
+}
+
+/// FFI export: Check if type is arithmetic.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_vartype_is_arithmetic(value: c_int) -> c_int {
+    c_int::from(VarType::from_raw(value).is_arithmetic())
+}
+
+/// FFI export: Get CoercionResult::Ok constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_coercion_ok() -> c_int {
+    CoercionResult::Ok as c_int
+}
+
+/// FFI export: Get CoercionResult::Incompatible constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_coercion_incompatible() -> c_int {
+    CoercionResult::Incompatible as c_int
+}
+
+/// FFI export: Get CoercionResult::OutOfRange constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_coercion_out_of_range() -> c_int {
+    CoercionResult::OutOfRange as c_int
+}
+
+/// FFI export: Get CoercionResult::PrecisionLoss constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_coercion_precision_loss() -> c_int {
+    CoercionResult::PrecisionLoss as c_int
+}
+
+/// FFI export: Check type flags allow conversion.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_type_flags_allow(flags: c_int, to: c_int) -> c_int {
+    c_int::from(flags_allow(flags, VarType::from_raw(to)))
+}
+
+/// FFI export: Get TF_TO_STRING constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_tf_to_string() -> c_int {
+    type_flags::TF_TO_STRING
+}
+
+/// FFI export: Get TF_TO_NUMBER constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_tf_to_number() -> c_int {
+    type_flags::TF_TO_NUMBER
+}
+
+/// FFI export: Get TF_TO_FLOAT constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_tf_to_float() -> c_int {
+    type_flags::TF_TO_FLOAT
+}
+
+/// FFI export: Get TF_TO_BOOL constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_tf_to_bool() -> c_int {
+    type_flags::TF_TO_BOOL
+}
+
+/// FFI export: Get TF_STRICT constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_tf_strict() -> c_int {
+    type_flags::TF_STRICT
+}
+
+/// FFI export: Check type compatibility - returns allowed flag.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_type_compat_allowed(from: c_int, to: c_int) -> c_int {
+    c_int::from(check_type_compat(VarType::from_raw(from), VarType::from_raw(to)).allowed)
+}
+
+/// FFI export: Check type compatibility - returns needs_coercion flag.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_type_compat_needs_coercion(from: c_int, to: c_int) -> c_int {
+    c_int::from(check_type_compat(VarType::from_raw(from), VarType::from_raw(to)).needs_coercion)
+}
+
+/// FFI export: Check type compatibility - returns data_loss flag.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_type_compat_data_loss(from: c_int, to: c_int) -> c_int {
+    c_int::from(check_type_compat(VarType::from_raw(from), VarType::from_raw(to)).data_loss)
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
