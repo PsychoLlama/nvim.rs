@@ -2,10 +2,8 @@
 //!
 //! This module provides Rust implementations of tab page operations
 //! from `src/nvim/window.c`.
-//!
-//! Note: The FFI exported functions (`rs_*`) are still defined in `lib.rs`
-//! for now to avoid duplicate symbol errors. This module provides helper
-//! functions that are used by the main implementations.
+
+#![allow(clippy::missing_const_for_fn)]
 
 use std::ffi::c_int;
 
@@ -16,6 +14,25 @@ use crate::list::{
     get_tabpage_firstwin, nvim_get_first_tabpage, nvim_tabpage_get_next, nvim_win_get_next,
     win_valid_any_tab_impl,
 };
+
+// =============================================================================
+// External C Functions
+// =============================================================================
+
+extern "C" {
+    /// Get curtab.
+    fn nvim_get_curtab() -> TabpageHandle;
+
+    /// Get lastused_tabpage.
+    fn nvim_get_lastused_tabpage() -> TabpageHandle;
+
+    /// Get w_floating from window.
+    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
+}
+
+// =============================================================================
+// Tabpage Validation
+// =============================================================================
 
 /// Check if "tpc" is a pointer to an existing tabpage.
 ///
@@ -28,7 +45,6 @@ pub(crate) fn valid_tabpage_impl(tpc: TabpageHandle) -> bool {
     }
 
     // Iterate over all tabpages using FOR_ALL_TABS pattern
-    // SAFETY: nvim_get_first_tabpage and nvim_tabpage_get_next are safe accessors
     let mut tp = unsafe { nvim_get_first_tabpage() };
     while !tp.is_null() {
         if tp == tpc {
@@ -39,31 +55,9 @@ pub(crate) fn valid_tabpage_impl(tpc: TabpageHandle) -> bool {
     false
 }
 
-// Note: FFI wrapper rs_valid_tabpage is in lib.rs
-
-/// Get the 1-based index of a tabpage.
-///
-/// This is the Rust equivalent of `tabpage_index()` in window.c.
-/// Iterates through tabpages from `first_tabpage` to find the index.
-#[inline]
-fn tabpage_index_impl(ftp: TabpageHandle) -> c_int {
-    // SAFETY: nvim_get_first_tabpage and nvim_tabpage_get_next are safe accessors
-    let mut i: c_int = 1;
-    let mut tp = unsafe { nvim_get_first_tabpage() };
-    while !tp.is_null() && tp != ftp {
-        i += 1;
-        tp = unsafe { nvim_tabpage_get_next(tp) };
-    }
-    i
-}
-
-// Note: FFI wrapper rs_tabpage_index is in lib.rs
-
 /// Check if a tabpage has any valid window.
 ///
 /// This is the Rust equivalent of `valid_tabpage_win()` in window.c.
-/// Iterates through all tabpages to find `tpc`, then checks if any window
-/// in that tabpage is valid (using `win_valid_any_tab`).
 #[inline]
 fn valid_tabpage_win_impl(tpc: TabpageHandle) -> bool {
     if tpc.is_null() {
@@ -71,7 +65,6 @@ fn valid_tabpage_win_impl(tpc: TabpageHandle) -> bool {
     }
 
     // Find the tabpage in the list
-    // SAFETY: All accessors handle pointers safely
     let mut tp = unsafe { nvim_get_first_tabpage() };
     while !tp.is_null() {
         if tp == tpc {
@@ -91,16 +84,29 @@ fn valid_tabpage_win_impl(tpc: TabpageHandle) -> bool {
     false
 }
 
-// Note: FFI wrapper rs_valid_tabpage_win is in lib.rs
+// =============================================================================
+// Tabpage Finding
+// =============================================================================
+
+/// Get the 1-based index of a tabpage.
+///
+/// This is the Rust equivalent of `tabpage_index()` in window.c.
+#[inline]
+fn tabpage_index_impl(ftp: TabpageHandle) -> c_int {
+    let mut i: c_int = 1;
+    let mut tp = unsafe { nvim_get_first_tabpage() };
+    while !tp.is_null() && tp != ftp {
+        i += 1;
+        tp = unsafe { nvim_tabpage_get_next(tp) };
+    }
+    i
+}
 
 /// Find tab page by 1-based number.
 ///
 /// This is the Rust equivalent of `find_tabpage()` in window.c.
-/// Iterates through tabpages from `first_tabpage` counting to n.
-/// Returns NULL when not found.
 #[inline]
 fn find_tabpage_impl(n: c_int) -> TabpageHandle {
-    // SAFETY: nvim_get_first_tabpage and nvim_tabpage_get_next are safe accessors
     let mut i: c_int = 1;
     let mut tp = unsafe { nvim_get_first_tabpage() };
     while !tp.is_null() && i != n {
@@ -110,23 +116,18 @@ fn find_tabpage_impl(n: c_int) -> TabpageHandle {
     tp
 }
 
-// Note: FFI wrapper rs_find_tabpage is in lib.rs
-
 /// Find the tabpage that contains a given window.
 ///
 /// This is the Rust equivalent of `win_find_tabpage()` in window.c.
-/// Iterates through all tabpages and windows using FOR_ALL_TAB_WINDOWS pattern.
 #[inline]
 fn win_find_tabpage_impl(win: WinHandle) -> TabpageHandle {
     if win.is_null() {
-        return unsafe { TabpageHandle::from_ptr(std::ptr::null_mut()) };
+        return TabpageHandle::null();
     }
 
-    // FOR_ALL_TAB_WINDOWS pattern: iterate through all tabpages and their windows
-    // SAFETY: All accessors handle pointers safely
+    // FOR_ALL_TAB_WINDOWS pattern
     let mut tp = unsafe { nvim_get_first_tabpage() };
     while !tp.is_null() {
-        // Iterate through windows in this tabpage
         let mut wp = get_tabpage_firstwin(tp);
         while !wp.is_null() {
             if wp == win {
@@ -136,11 +137,212 @@ fn win_find_tabpage_impl(win: WinHandle) -> TabpageHandle {
         }
         tp = unsafe { nvim_tabpage_get_next(tp) };
     }
-    // Return null if not found
-    unsafe { TabpageHandle::from_ptr(std::ptr::null_mut()) }
+    TabpageHandle::null()
 }
 
-// Note: FFI wrapper rs_win_find_tabpage is in lib.rs
+// =============================================================================
+// Tabpage Counting and Navigation
+// =============================================================================
+
+/// Count total tabpages.
+fn count_tabpages_impl() -> c_int {
+    let mut count = 0;
+    let mut tp = unsafe { nvim_get_first_tabpage() };
+    while !tp.is_null() {
+        count += 1;
+        tp = unsafe { nvim_tabpage_get_next(tp) };
+    }
+    count
+}
+
+/// Get the last tabpage.
+fn last_tabpage_impl() -> TabpageHandle {
+    let mut tp = unsafe { nvim_get_first_tabpage() };
+    let mut last = tp;
+    while !tp.is_null() {
+        last = tp;
+        tp = unsafe { nvim_tabpage_get_next(tp) };
+    }
+    last
+}
+
+/// Get the previous tabpage (before curtab).
+fn prev_tabpage_impl() -> TabpageHandle {
+    unsafe {
+        let curtab = nvim_get_curtab();
+        if curtab.is_null() {
+            return TabpageHandle::null();
+        }
+
+        let mut tp = nvim_get_first_tabpage();
+        let mut prev = TabpageHandle::null();
+        while !tp.is_null() && tp != curtab {
+            prev = tp;
+            tp = nvim_tabpage_get_next(tp);
+        }
+        prev
+    }
+}
+
+/// Get the next tabpage (after curtab).
+fn next_tabpage_impl() -> TabpageHandle {
+    unsafe {
+        let curtab = nvim_get_curtab();
+        if curtab.is_null() {
+            return TabpageHandle::null();
+        }
+        nvim_tabpage_get_next(curtab)
+    }
+}
+
+/// Check if this is the only tabpage.
+fn only_one_tabpage_impl() -> bool {
+    unsafe {
+        let first = nvim_get_first_tabpage();
+        first.is_null() || nvim_tabpage_get_next(first).is_null()
+    }
+}
+
+/// Check if curtab is the first tabpage.
+fn is_first_tabpage_impl() -> bool {
+    unsafe {
+        let curtab = nvim_get_curtab();
+        let first = nvim_get_first_tabpage();
+        curtab == first
+    }
+}
+
+/// Check if curtab is the last tabpage.
+fn is_last_tabpage_impl() -> bool {
+    unsafe {
+        let curtab = nvim_get_curtab();
+        if curtab.is_null() {
+            return false;
+        }
+        nvim_tabpage_get_next(curtab).is_null()
+    }
+}
+
+// =============================================================================
+// Tabpage Window Queries
+// =============================================================================
+
+/// Count windows in a tabpage.
+fn count_windows_in_tabpage_impl(tp: TabpageHandle) -> c_int {
+    let mut count = 0;
+    let mut wp = get_tabpage_firstwin(tp);
+    while !wp.is_null() {
+        count += 1;
+        wp = unsafe { nvim_win_get_next(wp) };
+    }
+    count
+}
+
+/// Count non-floating windows in a tabpage.
+fn count_nonfloating_in_tabpage_impl(tp: TabpageHandle) -> c_int {
+    unsafe {
+        let mut count = 0;
+        let mut wp = get_tabpage_firstwin(tp);
+        while !wp.is_null() {
+            if nvim_win_get_floating(wp) == 0 {
+                count += 1;
+            }
+            wp = nvim_win_get_next(wp);
+        }
+        count
+    }
+}
+
+/// Get the last used tabpage if valid.
+fn get_lastused_tabpage_impl() -> TabpageHandle {
+    unsafe {
+        let lastused = nvim_get_lastused_tabpage();
+        if !lastused.is_null() && valid_tabpage_impl(lastused) {
+            return lastused;
+        }
+        TabpageHandle::null()
+    }
+}
+
+/// Check if there's a valid last used tabpage.
+fn has_lastused_tabpage_impl() -> bool {
+    !get_lastused_tabpage_impl().is_null()
+}
+
+// =============================================================================
+// FFI Exports
+// =============================================================================
+//
+// Note: Several tabpage FFI functions are exported from lib.rs:
+// - rs_valid_tabpage - validates tabpage exists
+// - rs_valid_tabpage_win - check if tabpage has valid window
+// - rs_tabpage_index - get 1-based index of tabpage
+// - rs_find_tabpage - find tabpage by 1-based number
+// - rs_one_tabpage - check if only one tabpage
+// - rs_win_find_tabpage - find tabpage containing window
+// - rs_tabpage_win_valid - check if window valid in tabpage
+//
+// This module provides additional tabpage operations.
+
+/// FFI: Count total tabpages.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_tabpage_count() -> c_int {
+    count_tabpages_impl()
+}
+
+/// FFI: Get last tabpage.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_tabpage_last() -> TabpageHandle {
+    last_tabpage_impl()
+}
+
+/// FFI: Get previous tabpage.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_tabpage_prev() -> TabpageHandle {
+    prev_tabpage_impl()
+}
+
+/// FFI: Get next tabpage.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_tabpage_next() -> TabpageHandle {
+    next_tabpage_impl()
+}
+
+/// FFI: Check if curtab is first.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_tabpage_is_first() -> c_int {
+    c_int::from(is_first_tabpage_impl())
+}
+
+/// FFI: Check if curtab is last.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_tabpage_is_last() -> c_int {
+    c_int::from(is_last_tabpage_impl())
+}
+
+/// FFI: Count windows in tabpage.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_tabpage_count_windows(tp: TabpageHandle) -> c_int {
+    count_windows_in_tabpage_impl(tp)
+}
+
+/// FFI: Count non-floating windows in tabpage.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_tabpage_count_nonfloating(tp: TabpageHandle) -> c_int {
+    count_nonfloating_in_tabpage_impl(tp)
+}
+
+/// FFI: Get last used tabpage.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_tabpage_lastused() -> TabpageHandle {
+    get_lastused_tabpage_impl()
+}
+
+/// FFI: Check if last used tabpage exists.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_tabpage_has_lastused() -> c_int {
+    c_int::from(has_lastused_tabpage_impl())
+}
 
 #[cfg(test)]
 mod tests {
@@ -148,8 +350,15 @@ mod tests {
 
     #[test]
     fn test_tabpage_handle_null() {
-        let handle = unsafe { TabpageHandle::from_ptr(std::ptr::null_mut()) };
+        let handle = TabpageHandle::null();
         assert!(handle.is_null());
         assert!(!valid_tabpage_impl(handle));
+    }
+
+    #[test]
+    fn test_null_tabpage_operations() {
+        let null_tp = TabpageHandle::null();
+        assert_eq!(count_windows_in_tabpage_impl(null_tp), 0);
+        assert_eq!(count_nonfloating_in_tabpage_impl(null_tp), 0);
     }
 }

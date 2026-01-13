@@ -338,6 +338,12 @@ tabpage_T *nvim_get_first_tabpage(void)
   return first_tabpage;
 }
 
+/// Get the last used tabpage (accessor for Rust).
+tabpage_T *nvim_get_lastused_tabpage(void)
+{
+  return lastused_tabpage;
+}
+
 // Frame accessors for Rust opaque handle pattern.
 
 /// Get the fr_layout field from a frame (accessor for Rust).

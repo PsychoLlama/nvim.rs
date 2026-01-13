@@ -101,6 +101,13 @@ impl WinHandle {
 pub struct TabpageHandle(*mut std::ffi::c_void);
 
 impl TabpageHandle {
+    /// Create a null handle.
+    #[inline]
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+
     /// Create a new tabpage handle from a raw pointer.
     ///
     /// # Safety
