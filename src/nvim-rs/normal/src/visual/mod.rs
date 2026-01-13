@@ -10,6 +10,9 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::match_same_arms)]
 
+pub mod operations;
+pub mod state;
+
 use std::ffi::c_int;
 
 // =============================================================================

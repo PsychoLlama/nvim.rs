@@ -12,6 +12,7 @@ pub mod commands;
 pub mod count;
 pub mod dispatch;
 pub mod execute;
+pub mod insert;
 pub mod motion;
 pub mod operator;
 pub mod operator_cmds;
