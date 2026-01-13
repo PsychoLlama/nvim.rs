@@ -5989,6 +5989,381 @@ pub const extern "C" fn rs_syn_timeout_is_valid(timeout: c_int) -> bool {
 }
 
 // =============================================================================
+// Phase 144: Pattern Matching Integration
+// =============================================================================
+
+// Note: The extern declarations for these functions are already present
+// earlier in the file. We just add new Rust exports below.
+
+/// Check state ends - clean up finished states from the stack.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_check_state_ends() {
+    nvim_syn_check_state_ends();
+}
+
+/// Push next match onto the state stack.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_push_next_match() -> StateItemHandle {
+    nvim_syn_push_next_match()
+}
+
+/// Find end position for a syntax pattern.
+///
+/// # Safety
+/// This function accesses C global state. All output pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_find_endpos(
+    idx: c_int,
+    start_lnum: c_int,
+    start_col: c_int,
+    m_end_lnum: *mut c_int,
+    m_end_col: *mut c_int,
+    hl_end_lnum: *mut c_int,
+    hl_end_col: *mut c_int,
+    flagsp: *mut c_int,
+    end_end_lnum: *mut c_int,
+    end_end_col: *mut c_int,
+    end_idx: *mut c_int,
+    start_ext: ExtMatchHandle,
+) {
+    nvim_syn_find_endpos(
+        idx,
+        start_lnum,
+        start_col,
+        m_end_lnum,
+        m_end_col,
+        hl_end_lnum,
+        hl_end_col,
+        flagsp,
+        end_end_lnum,
+        end_end_col,
+        end_idx,
+        start_ext,
+    );
+}
+
+/// Update state item end position.
+///
+/// # Safety
+/// The state item handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_update_si_end(sip: StateItemHandle, startcol: c_int, force: c_int) {
+    if !sip.is_null() {
+        nvim_syn_update_si_end(sip, startcol, force);
+    }
+}
+
+/// Get pattern flags for a syntax pattern.
+///
+/// # Safety
+/// The index must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_pattern_flags(idx: c_int) -> c_int {
+    nvim_syn_get_pattern_flags(idx)
+}
+
+/// Get pattern conceal character.
+///
+/// # Safety
+/// The index must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_pattern_cchar(idx: c_int) -> c_int {
+    nvim_syn_get_pattern_cchar(idx)
+}
+
+/// Get pattern type (SPTYPE_MATCH, SPTYPE_START, SPTYPE_END, SPTYPE_SKIP).
+///
+/// # Safety
+/// The index must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_pattern_type(idx: c_int) -> c_int {
+    nvim_syn_get_pattern_type(idx)
+}
+
+/// Get syntax match ID from pattern.
+///
+/// # Safety
+/// The index must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_pattern_syn_match_id(idx: c_int) -> c_int {
+    nvim_syn_get_pattern_syn_match_id(idx)
+}
+
+/// Check if ID list represents "ALL".
+///
+/// # Safety
+/// The list handle must be valid or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_is_id_list_all(list: IdListHandle) -> c_int {
+    nvim_syn_is_id_list_all(list)
+}
+
+// Note: rs_syn_get_next_match_attr is defined in highlight.rs.
+
+/// Get highlight start position for next match.
+///
+/// # Safety
+/// Output pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_next_match_h_startpos(lnum: *mut c_int, col: *mut c_int) {
+    nvim_syn_get_next_match_h_startpos(lnum, col);
+}
+
+/// Get match end position for next match.
+///
+/// # Safety
+/// Output pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_next_match_m_endpos(lnum: *mut c_int, col: *mut c_int) {
+    nvim_syn_get_next_match_m_endpos(lnum, col);
+}
+
+/// Get highlight end position for next match.
+///
+/// # Safety
+/// Output pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_next_match_h_endpos(lnum: *mut c_int, col: *mut c_int) {
+    nvim_syn_get_next_match_h_endpos(lnum, col);
+}
+
+/// Get end of start position for next match.
+///
+/// # Safety
+/// Output pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_next_match_eos_pos(lnum: *mut c_int, col: *mut c_int) {
+    nvim_syn_get_next_match_eos_pos(lnum, col);
+}
+
+/// Get end of end position for next match.
+///
+/// # Safety
+/// Output pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_next_match_eoe_pos(lnum: *mut c_int, col: *mut c_int) {
+    nvim_syn_get_next_match_eoe_pos(lnum, col);
+}
+
+/// Get flags for next match.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_next_match_flags() -> c_int {
+    nvim_syn_get_next_match_flags()
+}
+
+/// Get end index for next match.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_next_match_end_idx() -> c_int {
+    nvim_syn_get_next_match_end_idx()
+}
+
+/// Get next sequence number.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_next_seqnr() -> c_int {
+    nvim_syn_get_next_seqnr()
+}
+
+/// Set next sequence number.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_set_next_seqnr(seqnr: c_int) {
+    nvim_syn_set_next_seqnr(seqnr);
+}
+
+/// Increment and return next sequence number.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_incr_next_seqnr() -> c_int {
+    nvim_syn_incr_next_seqnr()
+}
+
+/// Unreference an extmatch structure.
+///
+/// # Safety
+/// The handle must be valid or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_unref_extmatch_p144(em: ExtMatchHandle) {
+    if !em.is_null() {
+        nvim_syn_unref_extmatch(em);
+    }
+}
+
+/// Update syntax item attribute.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_call_update_si_attr(idx: c_int) {
+    nvim_syn_call_update_si_attr(idx);
+}
+
+/// Check keepend flag propagation.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_check_keepend() {
+    nvim_syn_check_keepend();
+}
+
+/// Pop current state from stack.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_pop_current_state() {
+    nvim_syn_pop_current_state();
+}
+
+/// Push state onto current state stack.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_push_current_state(idx: c_int) {
+    nvim_syn_push_current_state(idx);
+}
+
+/// Get HL_ONELINE flag.
+///
+/// # Safety
+/// This function accesses C global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_hl_oneline() -> c_int {
+    nvim_syn_get_hl_oneline()
+}
+
+/// Get HL_KEEPEND flag.
+///
+/// # Safety
+/// This function accesses C global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_hl_keepend() -> c_int {
+    nvim_syn_get_hl_keepend()
+}
+
+/// Get HL_MATCH flag.
+///
+/// # Safety
+/// This function accesses C global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_hl_match() -> c_int {
+    nvim_syn_get_hl_match()
+}
+
+/// Get HL_CONCEAL flag.
+///
+/// # Safety
+/// This function accesses C global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_hl_conceal() -> c_int {
+    nvim_syn_get_hl_conceal()
+}
+
+/// Get HL_CONCEALENDS flag.
+///
+/// # Safety
+/// This function accesses C global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_hl_concealends() -> c_int {
+    nvim_syn_get_hl_concealends()
+}
+
+/// Get HL_MATCHCONT flag.
+///
+/// # Safety
+/// This function accesses C global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_hl_matchcont() -> c_int {
+    nvim_syn_get_hl_matchcont()
+}
+
+/// Get HL_EXTEND flag.
+///
+/// # Safety
+/// This function accesses C global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_hl_extend() -> c_int {
+    nvim_syn_get_hl_extend()
+}
+
+/// Get SF_CCOMMENT sync flag.
+///
+/// # Safety
+/// This function accesses C global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_sf_ccomment() -> c_int {
+    nvim_syn_get_sf_ccomment()
+}
+
+/// Get SF_MATCH sync flag.
+///
+/// # Safety
+/// This function accesses C global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_sf_match() -> c_int {
+    nvim_syn_get_sf_match()
+}
+
+/// Get HL_SYNC_HERE flag.
+///
+/// # Safety
+/// This function accesses C global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_hl_sync_here() -> c_int {
+    nvim_syn_get_hl_sync_here()
+}
+
+/// Get HL_SYNC_THERE flag.
+///
+/// # Safety
+/// This function accesses C global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_hl_sync_there() -> c_int {
+    nvim_syn_get_hl_sync_there()
+}
+
+/// Get SPTYPE_MATCH constant.
+///
+/// # Safety
+/// This function accesses C global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_sptype_match() -> c_int {
+    nvim_syn_get_sptype_match()
+}
+
+/// Get SPTYPE_START constant.
+///
+/// # Safety
+/// This function accesses C global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_sptype_start() -> c_int {
+    nvim_syn_get_sptype_start()
+}
+
+// Note: rs_syn_extmatch_equal, rs_syn_extmatch_strings_equal are already
+// defined earlier in the file using ExtMatchHandle.
+
+// =============================================================================
 // Phase 82 Tests
 // =============================================================================
 
