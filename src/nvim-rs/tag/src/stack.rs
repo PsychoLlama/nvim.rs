@@ -521,6 +521,172 @@ pub unsafe extern "C" fn rs_tagstack_entry_has_name(tg: TaggyHandle) -> bool {
 }
 
 // =============================================================================
+// Phase 152: Additional Tag Stack Management FFI Exports
+// =============================================================================
+
+/// Get the TAGSTACKSIZE constant.
+#[no_mangle]
+pub extern "C" fn rs_tagstacksize() -> c_int {
+    TAGSTACKSIZE
+}
+
+/// Check if a stack entry has user data.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagstack_entry_has_user_data(tg: TaggyHandle) -> bool {
+    if tg.is_null() {
+        return false;
+    }
+    !nvim_taggy_get_user_data(tg).is_null()
+}
+
+/// Check if a stack entry has a valid mark (line > 0).
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagstack_entry_has_mark(tg: TaggyHandle) -> bool {
+    if tg.is_null() {
+        return false;
+    }
+    nvim_taggy_get_fmark_lnum(tg) > 0
+}
+
+/// Set the tag name for a stack entry.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagstack_entry_set_tagname(tg: TaggyHandle, name: *mut c_char) {
+    if tg.is_null() {
+        return;
+    }
+    nvim_taggy_set_tagname(tg as *mut c_void, name);
+}
+
+/// Set the match index for a stack entry.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagstack_entry_set_match(tg: TaggyHandle, match_idx: c_int) {
+    if tg.is_null() {
+        return;
+    }
+    nvim_taggy_set_cur_match(tg as *mut c_void, match_idx);
+}
+
+/// Set the buffer number for a stack entry.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagstack_entry_set_fnum(tg: TaggyHandle, fnum: c_int) {
+    if tg.is_null() {
+        return;
+    }
+    nvim_taggy_set_cur_fnum(tg as *mut c_void, fnum);
+}
+
+/// Set the user data for a stack entry.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagstack_entry_set_user_data(tg: TaggyHandle, data: *mut c_char) {
+    if tg.is_null() {
+        return;
+    }
+    nvim_taggy_set_user_data(tg as *mut c_void, data);
+}
+
+/// Set the mark line number for a stack entry.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagstack_entry_set_mark_lnum(tg: TaggyHandle, lnum: LinenrT) {
+    if tg.is_null() {
+        return;
+    }
+    nvim_taggy_set_fmark_lnum(tg as *mut c_void, lnum);
+}
+
+/// Set the mark column for a stack entry.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagstack_entry_set_mark_col(tg: TaggyHandle, col: ColnrT) {
+    if tg.is_null() {
+        return;
+    }
+    nvim_taggy_set_fmark_col(tg as *mut c_void, col);
+}
+
+/// Set the mark file number for a stack entry.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagstack_entry_set_mark_fnum(tg: TaggyHandle, fnum: c_int) {
+    if tg.is_null() {
+        return;
+    }
+    nvim_taggy_set_fmark_fnum(tg as *mut c_void, fnum);
+}
+
+/// Get the number of positions we can go older.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagstack_older_count(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    nvim_win_get_tagstackidx(wp)
+}
+
+/// Get the number of positions we can go newer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagstack_newer_count(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    let idx = nvim_win_get_tagstackidx(wp);
+    let len = nvim_win_get_tagstacklen(wp);
+    len - idx
+}
+
+/// Check if the stack is at a specific index.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagstack_at_idx(wp: WinHandle, idx: c_int) -> bool {
+    if wp.is_null() {
+        return false;
+    }
+    nvim_win_get_tagstackidx(wp) == idx
+}
+
+/// Get remaining capacity in the tag stack.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagstack_remaining(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    TAGSTACKSIZE - nvim_win_get_tagstacklen(wp)
+}
+
+/// Set both length and index atomically.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagstack_set_len_idx(wp: WinHandle, len: c_int, idx: c_int) {
+    if wp.is_null() {
+        return;
+    }
+    let wp_mut = wp as *mut c_void;
+    let clamped_len = len.clamp(0, TAGSTACKSIZE);
+    let clamped_idx = idx.clamp(0, clamped_len);
+    nvim_win_set_tagstacklen(wp_mut, clamped_len);
+    nvim_win_set_tagstackidx(wp_mut, clamped_idx);
+}
+
+/// Increment the current match index in a stack entry.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagstack_entry_inc_match(tg: TaggyHandle) -> c_int {
+    if tg.is_null() {
+        return 0;
+    }
+    let cur = nvim_taggy_get_cur_match(tg);
+    let new = cur + 1;
+    nvim_taggy_set_cur_match(tg as *mut c_void, new);
+    new
+}
+
+/// Decrement the current match index in a stack entry.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tagstack_entry_dec_match(tg: TaggyHandle) -> c_int {
+    if tg.is_null() {
+        return 0;
+    }
+    let cur = nvim_taggy_get_cur_match(tg);
+    let new = (cur - 1).max(0);
+    nvim_taggy_set_cur_match(tg as *mut c_void, new);
+    new
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
