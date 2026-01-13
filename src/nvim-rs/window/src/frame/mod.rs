@@ -8,8 +8,17 @@
 //! - A leaf (`FR_LEAF`) containing a single window
 //! - A row (`FR_ROW`) containing horizontally arranged child frames
 //! - A column (`FR_COL`) containing vertically arranged child frames
+//!
+//! # Submodules
+//!
+//! - [`constants`]: Frame direction constants, layout flags, split constraints
+//! - (future) [`types`]: Frame handle types, LayoutDir enum, SplitInfo struct
+//! - (future) [`accessors`]: Frame field getters/setters
+//! - (future) [`operations`]: Frame tree manipulation operations
 
 #![allow(clippy::missing_const_for_fn)]
+
+pub mod constants;
 
 use std::ffi::c_int;
 
