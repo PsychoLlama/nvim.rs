@@ -10,12 +10,14 @@
 use std::ffi::{c_char, c_int};
 
 mod buffers;
+mod commands;
 mod components;
 mod layout;
 mod serializer;
 mod view;
 
 pub use buffers::*;
+pub use commands::*;
 pub use components::*;
 pub use layout::*;
 pub use serializer::*;
