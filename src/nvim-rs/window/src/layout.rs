@@ -445,6 +445,148 @@ pub extern "C" fn rs_size_distribution(total: c_int, fixed: c_int, flex_count: c
     SizeDistribution::calculate(total, fixed, flex_count).per_flex
 }
 
+/// Get size distribution extra pixels.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_size_distribution_extra(
+    total: c_int,
+    fixed: c_int,
+    flex_count: c_int,
+) -> c_int {
+    SizeDistribution::calculate(total, fixed, flex_count).extra
+}
+
+/// Check if split direction is valid.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_split_dir_is_valid(value: c_int) -> c_int {
+    c_int::from(SplitDir::from_raw(value).is_valid())
+}
+
+/// Get split direction for position.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_split_pos_direction(value: c_int) -> c_int {
+    SplitPos::from_raw(value).direction().to_raw()
+}
+
+/// Check if split position is before.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_split_pos_is_before(value: c_int) -> c_int {
+    c_int::from(SplitPos::from_raw(value).is_before())
+}
+
+/// Get layout split direction.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_layout_split_dir(value: c_int) -> c_int {
+    LayoutType::from_raw(value).split_dir().to_raw()
+}
+
+/// Clamp width to constraints.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_size_clamp_width(
+    width: c_int,
+    min_width: c_int,
+    max_width: c_int,
+) -> c_int {
+    let constraints = SizeConstraints {
+        min_width,
+        min_height: 1,
+        max_width,
+        max_height: 0,
+        fixed_width: false,
+        fixed_height: false,
+    };
+    constraints.clamp_width(width)
+}
+
+/// Clamp height to constraints.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_size_clamp_height(
+    height: c_int,
+    min_height: c_int,
+    max_height: c_int,
+) -> c_int {
+    let constraints = SizeConstraints {
+        min_width: 1,
+        min_height,
+        max_width: 0,
+        max_height,
+        fixed_width: false,
+        fixed_height: false,
+    };
+    constraints.clamp_height(height)
+}
+
+/// Get resize direction includes width.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_resize_includes_width(value: c_int) -> c_int {
+    c_int::from(ResizeDir::from_raw(value).includes_width())
+}
+
+/// Get resize direction includes height.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_resize_includes_height(value: c_int) -> c_int {
+    c_int::from(ResizeDir::from_raw(value).includes_height())
+}
+
+/// Get SplitDir::None constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_split_dir_none() -> c_int {
+    SplitDir::None.to_raw()
+}
+
+/// Get SplitDir::Horizontal constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_split_dir_horizontal() -> c_int {
+    SplitDir::Horizontal.to_raw()
+}
+
+/// Get SplitDir::Vertical constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_split_dir_vertical() -> c_int {
+    SplitDir::Vertical.to_raw()
+}
+
+/// Get SplitPos::Above constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_split_pos_above() -> c_int {
+    SplitPos::Above.to_raw()
+}
+
+/// Get SplitPos::Below constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_split_pos_below() -> c_int {
+    SplitPos::Below.to_raw()
+}
+
+/// Get SplitPos::Left constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_split_pos_left() -> c_int {
+    SplitPos::Left.to_raw()
+}
+
+/// Get SplitPos::Right constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_split_pos_right() -> c_int {
+    SplitPos::Right.to_raw()
+}
+
+/// Get ResizeDir::Width constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_resize_dir_width() -> c_int {
+    ResizeDir::Width.to_raw()
+}
+
+/// Get ResizeDir::Height constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_resize_dir_height() -> c_int {
+    ResizeDir::Height.to_raw()
+}
+
+/// Get ResizeDir::Both constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_resize_dir_both() -> c_int {
+    ResizeDir::Both.to_raw()
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
