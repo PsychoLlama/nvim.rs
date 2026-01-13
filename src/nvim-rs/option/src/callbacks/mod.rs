@@ -7,6 +7,7 @@
 #![allow(clippy::missing_safety_doc)] // FFI functions safety is implicit
 
 pub mod complex;
+pub mod display;
 pub mod numeric;
 pub mod string;
 
@@ -92,7 +93,7 @@ pub const fn callback_ok() -> CallbackResult {
 
 /// Request a redraw of all windows.
 #[inline]
-fn request_redraw_all(typ: UpdateType) {
+pub fn request_redraw_all(typ: UpdateType) {
     unsafe { redraw_all_later(typ as c_int) }
 }
 

@@ -310,6 +310,24 @@ const char *nvim_win_get_p_wbr(win_T *win) { return win ? (const char *)win->w_p
 // Window briopt_list accessor
 int nvim_win_get_briopt_list(win_T *win) { return win ? win->w_briopt_list : 0; }
 
+// Phase 166: Display callback accessors
+int nvim_callback_get_full_screen(void) { return full_screen; }
+OptInt nvim_callback_get_p_ch(void) { return p_ch; }
+void nvim_callback_set_p_ch(OptInt value) { p_ch = value; }
+int nvim_callback_get_rows(void) { return Rows; }
+frame_T *nvim_callback_get_topframe(void) { return topframe; }
+int nvim_callback_get_topframe_fr_height(void) { return topframe->fr_height; }
+int nvim_callback_tabline_height(void) { return tabline_height(); }
+int nvim_callback_global_stl_height(void) { return global_stl_height(); }
+int nvim_callback_min_rows_curtab(void) { return min_rows(curtab); }
+void nvim_callback_set_clear_cmdline(int value) { clear_cmdline = value != 0; }
+
+// Window accessors for display callbacks
+const char *nvim_option_win_get_stc(win_T *win) { return win ? (const char *)win->w_p_stc : NULL; }
+void nvim_option_win_set_nrwidth(win_T *win, int value) { if (win) win->w_nrwidth_line_count = value; }
+int nvim_option_win_get_sms(win_T *win) { return win ? win->w_p_sms : 0; }
+void nvim_option_win_set_skipcol(win_T *win, int value) { if (win) win->w_skipcol = value; }
+
 static const char e_unknown_option[]
   = N_("E518: Unknown option");
 static const char e_not_allowed_in_modeline[]
