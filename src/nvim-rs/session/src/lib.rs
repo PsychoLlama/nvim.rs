@@ -11,10 +11,12 @@ use std::ffi::{c_char, c_int};
 
 mod buffers;
 mod components;
+mod layout;
 mod serializer;
 
 pub use buffers::*;
 pub use components::*;
+pub use layout::*;
 pub use serializer::*;
 
 // =============================================================================
