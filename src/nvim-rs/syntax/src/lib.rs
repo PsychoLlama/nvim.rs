@@ -6510,6 +6510,111 @@ pub unsafe extern "C" fn rs_syncluster_get_list(cluster: SynClusterHandle) -> Id
 }
 
 // =============================================================================
+// Phase 146: State Caching
+// =============================================================================
+
+// Note: Extern declarations for state caching functions are already declared
+// earlier in the file (around lines 586-659 and 1058-1061).
+
+/// Remove an entry from the state stack.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_stack_remove_entry(sp: SynStateHandle) {
+    if !sp.is_null() {
+        nvim_syn_stack_remove_entry(sp);
+    }
+}
+
+/// Allocate a new entry in the state stack.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_stack_alloc_entry(
+    lnum: c_int,
+    after: SynStateHandle,
+) -> SynStateHandle {
+    nvim_syn_stack_alloc_entry(lnum, after)
+}
+
+/// Store current state to a stack entry.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_store_state_to_entry(sp: SynStateHandle) {
+    if !sp.is_null() {
+        nvim_syn_store_state_to_entry(sp);
+    }
+}
+
+/// Set current state item at index.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_set_cur_state_item(
+    idx: c_int,
+    si_idx: c_int,
+    si_flags: c_int,
+    si_seqnr: c_int,
+    si_cchar: c_int,
+    extmatch: ExtMatchHandle,
+) {
+    nvim_syn_set_cur_state_item(idx, si_idx, si_flags, si_seqnr, si_cchar, extmatch);
+}
+
+/// Check if a state item spans past a line.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_state_item_spans_line(idx: c_int, lnum: c_int) -> c_int {
+    nvim_syn_state_item_spans_line(idx, lnum)
+}
+
+/// Get sst_check_lnum from synblock.
+///
+/// # Safety
+/// The block handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_get_sst_check_lnum(block: SynBlockHandle) -> c_int {
+    if block.is_null() {
+        return 0;
+    }
+    nvim_synblock_get_sst_check_lnum(block)
+}
+
+/// Get first state in sst array (using current syn_block).
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_sst_first() -> SynStateHandle {
+    nvim_syn_get_sst_first()
+}
+
+/// Get sst array pointer.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_get_sst_array() -> *mut std::ffi::c_void {
+    nvim_syn_get_sst_array()
+}
+
+/// Find entry in stack by line number.
+///
+/// # Safety
+/// This function accesses C global state and must be called from the main thread.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_stack_find_entry_ptr(lnum: c_int) -> SynStateHandle {
+    nvim_syn_stack_find_entry_ptr(lnum)
+}
+
+// =============================================================================
 // Phase 82 Tests
 // =============================================================================
 
