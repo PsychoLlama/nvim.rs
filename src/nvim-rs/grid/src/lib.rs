@@ -28,6 +28,7 @@
 
 pub mod cell;
 pub mod helpers;
+pub mod lifecycle;
 
 use std::collections::HashMap;
 use std::ffi::{c_char, c_int, c_uint, CStr};
