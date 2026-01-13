@@ -6,9 +6,11 @@
 //! # Submodules
 //!
 //! - [`validation`]: Split validation and size calculations
-//! - (future) [`execute`]: Split execution functions
+//! - [`execute`]: Split execution helper functions
 
+pub mod execute;
 pub mod validation;
 
 // Re-export common items
+pub use execute::*;
 pub use validation::*;
