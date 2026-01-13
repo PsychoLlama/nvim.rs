@@ -4,6 +4,8 @@
 //! normal mode commands.
 
 pub mod constants;
+pub mod types;
 
 // Re-export common items
 pub use constants::*;
+pub use types::*;
