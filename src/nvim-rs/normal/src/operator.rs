@@ -492,6 +492,114 @@ pub extern "C" fn rs_has_op_flag(flags: c_int, flag: c_int) -> c_int {
     c_int::from(has_op_flag(flags, flag))
 }
 
+/// FFI export: Get operator character from OpType
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_op_type_char(value: c_int) -> c_int {
+    c_int::from(OpType::from_raw(value).char())
+}
+
+/// FFI export: Check if operator is case operator
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_op_is_case(value: c_int) -> c_int {
+    c_int::from(OpType::from_raw(value).is_case())
+}
+
+/// FFI export: Check if operator is indent operator
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_op_is_indent(value: c_int) -> c_int {
+    c_int::from(OpType::from_raw(value).is_indent())
+}
+
+/// FFI export: Get text object character
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_text_object_char(value: c_int) -> c_int {
+    c_int::from(TextObject::from_raw(value).char())
+}
+
+/// FFI export: Get text object closing character
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_text_object_closing_char(value: c_int) -> c_int {
+    c_int::from(TextObject::from_raw(value).closing_char())
+}
+
+/// FFI export: Get OPF_CHAR constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_opf_char() -> c_int {
+    op_flags::OPF_CHAR
+}
+
+/// FFI export: Get OPF_LINE constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_opf_line() -> c_int {
+    op_flags::OPF_LINE
+}
+
+/// FFI export: Get OPF_BLOCK constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_opf_block() -> c_int {
+    op_flags::OPF_BLOCK
+}
+
+/// FFI export: Get OPF_INCLUSIVE constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_opf_inclusive() -> c_int {
+    op_flags::OPF_INCLUSIVE
+}
+
+/// FFI export: Get OPF_CHANGE constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_opf_change() -> c_int {
+    op_flags::OPF_CHANGE
+}
+
+/// FFI export: Get OPF_DOUBLE constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_opf_double() -> c_int {
+    op_flags::OPF_DOUBLE
+}
+
+/// FFI export: Set an operator flag
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_set_op_flag(flags: c_int, flag: c_int) -> c_int {
+    set_op_flag(flags, flag)
+}
+
+/// FFI export: Clear an operator flag
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_clear_op_flag(flags: c_int, flag: c_int) -> c_int {
+    clear_op_flag(flags, flag)
+}
+
+/// FFI export: Get MotionType::Char constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_motion_type_char() -> c_int {
+    MotionType::Char.to_raw()
+}
+
+/// FFI export: Get MotionType::Line constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_motion_type_line() -> c_int {
+    MotionType::Line.to_raw()
+}
+
+/// FFI export: Get MotionType::Block constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_motion_type_block() -> c_int {
+    MotionType::Block.to_raw()
+}
+
+/// FFI export: Get TextObjectSelect inner constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_text_object_inner() -> c_int {
+    TextObjectSelect::Inner.to_raw()
+}
+
+/// FFI export: Get TextObjectSelect outer constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_text_object_outer() -> c_int {
+    TextObjectSelect::Outer.to_raw()
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
