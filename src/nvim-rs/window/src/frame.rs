@@ -9,6 +9,8 @@
 //! - A row (`FR_ROW`) containing horizontally arranged child frames
 //! - A column (`FR_COL`) containing vertically arranged child frames
 
+#![allow(clippy::missing_const_for_fn)]
+
 use std::ffi::c_int;
 
 use crate::{Frame, WinHandle, FR_COL, FR_LEAF, FR_ROW};
@@ -183,6 +185,227 @@ pub(crate) fn frame_check_width_impl(topfrp: *const Frame, width: c_int) -> bool
 
 // Note: FFI wrappers rs_frame_fixed_height, rs_frame_fixed_width,
 // rs_frame_check_height, rs_frame_check_width are in lib.rs
+
+// =============================================================================
+// FFI Exports for Frame Operations
+// =============================================================================
+
+/// FFI export: Get frame layout type
+///
+/// # Safety
+/// Caller must ensure `frp` is null or a valid pointer to a Frame.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_frame_get_layout(frp: *const Frame) -> c_int {
+    if frp.is_null() {
+        return -1;
+    }
+    c_int::from((*frp).fr_layout)
+}
+
+/// FFI export: Get frame width
+///
+/// # Safety
+/// Caller must ensure `frp` is null or a valid pointer to a Frame.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_frame_get_width(frp: *const Frame) -> c_int {
+    if frp.is_null() {
+        return 0;
+    }
+    (*frp).fr_width
+}
+
+/// FFI export: Get frame height
+///
+/// # Safety
+/// Caller must ensure `frp` is null or a valid pointer to a Frame.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_frame_get_height(frp: *const Frame) -> c_int {
+    if frp.is_null() {
+        return 0;
+    }
+    (*frp).fr_height
+}
+
+/// FFI export: Get frame newwidth
+///
+/// # Safety
+/// Caller must ensure `frp` is null or a valid pointer to a Frame.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_frame_get_newwidth(frp: *const Frame) -> c_int {
+    if frp.is_null() {
+        return 0;
+    }
+    (*frp).fr_newwidth
+}
+
+/// FFI export: Get frame newheight
+///
+/// # Safety
+/// Caller must ensure `frp` is null or a valid pointer to a Frame.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_frame_get_newheight(frp: *const Frame) -> c_int {
+    if frp.is_null() {
+        return 0;
+    }
+    (*frp).fr_newheight
+}
+
+/// FFI export: Get frame parent
+///
+/// # Safety
+/// Caller must ensure `frp` is null or a valid pointer to a Frame.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_frame_get_parent(frp: *const Frame) -> *mut Frame {
+    if frp.is_null() {
+        return std::ptr::null_mut();
+    }
+    (*frp).fr_parent
+}
+
+/// FFI export: Get frame next sibling
+///
+/// # Safety
+/// Caller must ensure `frp` is null or a valid pointer to a Frame.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_frame_get_next(frp: *const Frame) -> *mut Frame {
+    if frp.is_null() {
+        return std::ptr::null_mut();
+    }
+    (*frp).fr_next
+}
+
+/// FFI export: Get frame prev sibling
+///
+/// # Safety
+/// Caller must ensure `frp` is null or a valid pointer to a Frame.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_frame_get_prev(frp: *const Frame) -> *mut Frame {
+    if frp.is_null() {
+        return std::ptr::null_mut();
+    }
+    (*frp).fr_prev
+}
+
+/// FFI export: Get frame first child
+///
+/// # Safety
+/// Caller must ensure `frp` is null or a valid pointer to a Frame.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_frame_get_child(frp: *const Frame) -> *mut Frame {
+    if frp.is_null() {
+        return std::ptr::null_mut();
+    }
+    (*frp).fr_child
+}
+
+/// FFI export: Get frame window
+///
+/// # Safety
+/// Caller must ensure `frp` is null or a valid pointer to a Frame.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_frame_get_win(frp: *const Frame) -> WinHandle {
+    if frp.is_null() {
+        return WinHandle::null();
+    }
+    (*frp).fr_win
+}
+
+/// FFI export: Check if frame is a leaf
+///
+/// # Safety
+/// Caller must ensure `frp` is null or a valid pointer to a Frame.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_frame_is_leaf(frp: *const Frame) -> c_int {
+    if frp.is_null() {
+        return 0;
+    }
+    c_int::from((*frp).fr_layout == FR_LEAF)
+}
+
+/// FFI export: Check if frame is a row
+///
+/// # Safety
+/// Caller must ensure `frp` is null or a valid pointer to a Frame.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_frame_is_row(frp: *const Frame) -> c_int {
+    if frp.is_null() {
+        return 0;
+    }
+    c_int::from((*frp).fr_layout == FR_ROW)
+}
+
+/// FFI export: Check if frame is a column
+///
+/// # Safety
+/// Caller must ensure `frp` is null or a valid pointer to a Frame.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_frame_is_col(frp: *const Frame) -> c_int {
+    if frp.is_null() {
+        return 0;
+    }
+    c_int::from((*frp).fr_layout == FR_COL)
+}
+
+/// FFI export: Count children in frame
+///
+/// # Safety
+/// Caller must ensure `frp` is null or a valid pointer to a Frame.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_frame_child_count(frp: *const Frame) -> c_int {
+    if frp.is_null() {
+        return 0;
+    }
+    let mut count = 0;
+    let mut child = (*frp).fr_child;
+    while !child.is_null() {
+        count += 1;
+        child = (*child).fr_next;
+    }
+    count
+}
+
+/// FFI export: Check if frame has no children
+///
+/// # Safety
+/// Caller must ensure `frp` is null or a valid pointer to a Frame.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_frame_has_no_children(frp: *const Frame) -> c_int {
+    if frp.is_null() {
+        return 1;
+    }
+    c_int::from((*frp).fr_child.is_null())
+}
+
+/// FFI export: Check if frame is the only child
+///
+/// # Safety
+/// Caller must ensure `frp` is null or a valid pointer to a Frame.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_frame_is_only_child(frp: *const Frame) -> c_int {
+    if frp.is_null() {
+        return 0;
+    }
+    let frame = &*frp;
+    c_int::from(frame.fr_prev.is_null() && frame.fr_next.is_null())
+}
+
+/// FFI export: Get the FR_LEAF constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_fr_leaf() -> c_int {
+    c_int::from(FR_LEAF)
+}
+
+/// FFI export: Get the FR_ROW constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_fr_row() -> c_int {
+    c_int::from(FR_ROW)
+}
+
+/// FFI export: Get the FR_COL constant
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_fr_col() -> c_int {
+    c_int::from(FR_COL)
+}
 
 #[cfg(test)]
 mod tests {
