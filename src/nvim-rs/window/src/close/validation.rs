@@ -1,18 +1,7 @@
-//! Window close validation and helper functions.
+//! Window close validation functions.
 //!
-//! This module provides Rust implementations of window close validation
-//! and helper functions from `src/nvim/window.c`.
-//!
-//! Note: The main closing functions (`win_close`, `win_close_othertab`) remain in C
-//! due to their complexity (~275 lines for `win_close`) and dependencies on:
-//! - Extensive autocmd handling (WinLeave, WinClosed, BufLeave, etc.)
-//! - Buffer management
-//! - Tabpage management
-//! - Memory deallocation
-//! - Layout restoration
-//!
-//! This module provides validation functions that can be called from C
-//! to check if windows can be safely closed.
+//! This module provides validation functions for window close operations,
+//! checking whether closes are allowed and various window state queries.
 
 use std::ffi::c_int;
 
