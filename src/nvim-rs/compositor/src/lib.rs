@@ -13,8 +13,10 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::must_use_candidate)]
+#![allow(clippy::missing_const_for_fn)]
 
 pub mod floating;
+pub mod linebuf;
 pub mod state;
 
 use std::ffi::{c_int, c_void};

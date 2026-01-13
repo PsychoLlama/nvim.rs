@@ -248,6 +248,77 @@ bool nvim_curgrid_is_default(void)
   return curgrid == &default_grid;
 }
 
+// Grid position-based accessors for compositor (different from grid.c array accessors)
+
+/// Get character at grid position (compositor)
+schar_T nvim_comp_grid_get_char_at(ScreenGrid *grid, int row, int col)
+{
+  if (!grid || row < 0 || col < 0 || row >= grid->rows || col >= grid->cols) {
+    return 0;
+  }
+  return grid->chars[grid->line_offset[row] + (size_t)col];
+}
+
+/// Get attribute at grid position (compositor)
+sattr_T nvim_comp_grid_get_attr_at(ScreenGrid *grid, int row, int col)
+{
+  if (!grid || row < 0 || col < 0 || row >= grid->rows || col >= grid->cols) {
+    return 0;
+  }
+  return grid->attrs[grid->line_offset[row] + (size_t)col];
+}
+
+/// Set character at grid position (compositor)
+void nvim_comp_grid_set_char_at(ScreenGrid *grid, int row, int col, schar_T c)
+{
+  if (!grid || row < 0 || col < 0 || row >= grid->rows || col >= grid->cols) {
+    return;
+  }
+  grid->chars[grid->line_offset[row] + (size_t)col] = c;
+}
+
+/// Set attribute at grid position (compositor)
+void nvim_comp_grid_set_attr_at(ScreenGrid *grid, int row, int col, sattr_T a)
+{
+  if (!grid || row < 0 || col < 0 || row >= grid->rows || col >= grid->cols) {
+    return;
+  }
+  grid->attrs[grid->line_offset[row] + (size_t)col] = a;
+}
+
+
+/// Wrapper for hl_blend_attrs
+int nvim_hl_blend_attrs(int back_attr, int front_attr, bool *through)
+{
+  return hl_blend_attrs(back_attr, front_attr, through);
+}
+
+// Debug highlight accessors
+
+/// Get dbghl_normal
+int nvim_comp_get_dbghl_normal(void)
+{
+  return dbghl_normal;
+}
+
+/// Get dbghl_clear
+int nvim_comp_get_dbghl_clear(void)
+{
+  return dbghl_clear;
+}
+
+/// Get dbghl_composed
+int nvim_comp_get_dbghl_composed(void)
+{
+  return dbghl_composed;
+}
+
+/// Get dbghl_recompose
+int nvim_comp_get_dbghl_recompose(void)
+{
+  return dbghl_recompose;
+}
+
 /// C wrapper for ui_composed_call_grid_cursor_goto (generated function)
 void nvim_ui_composed_call_grid_cursor_goto(int grid_handle, int row, int col)
 {
