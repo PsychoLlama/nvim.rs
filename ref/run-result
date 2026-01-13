@@ -1,24 +1,33 @@
-Plan: ~/.claude/plans/moonlit-imagining-mochi.md
+Plan: ~/.claude/plans/warm-skipping-cray.md
 
-All phases completed successfully. Let me provide a summary:
+Phases 149-153 are complete. Let me provide a summary of progress:
 
-## Migration Plan Complete - Phases 133-142
+**Migration Progress Summary (Phases 149-153)**:
 
-All 10 phases have been successfully completed:
+| Phase | Description | Exports Added | Total |
+|-------|-------------|---------------|-------|
+| 149 | Suggestion Generation | 50 (suggest.rs) | 6,926 |
+| 150 | Soundalike & Compound | 40 (soundfold.rs, check.rs) | 7,293 |
+| 151 | Tag File Parsing | 31 (parse.rs) | 7,324 |
+| 152 | Tag Stack Management | 17 (stack.rs) | 7,341 |
+| 153 | Pattern Search Core | 21 (core.rs) | 7,362 |
 
-| Phase | Module | Before | After | Change |
-|-------|--------|--------|-------|--------|
-| 133 | Decoration System | 8 | 68 | +60 rs_ calls |
-| 134 | Extended Marks | 0 | 40 | +40 rs_ calls |
-| 135 | Grid Operations | 73 | 112 | +39 rs_ calls |
-| 136 | Diff System | 40 | 101 | +61 rs_ calls |
-| 137 | C Indentation | 9 | 67 | +58 rs_ calls |
-| 138 | Indentation Core | 22 | 60 | +38 rs_ calls |
-| 139 | API - Buffer Operations | 0 | 53 | +53 rs_ calls |
-| 140 | API - Window Operations | 0 | 44 | +44 rs_ calls |
-| 141 | Lua Executor | 10 | 80 | +70 rs_ calls |
-| 142 | TUI Core | 56 | 100 | +44 rs_ calls |
+**Commits made**:
+1. `0d51f65da6` - feat(spell/suggest): Phase 149 - suggestion generation FFI expansion
+2. `8d1c955e5f` - feat(spell): Phase 150 - soundalike & compound FFI expansion
+3. `66a6b4c99a` - feat(tag/parse): Phase 151 - tag file parsing FFI expansion
+4. `6d0aea8e7c` - feat(tag/stack): Phase 152 - tag stack management FFI expansion
+5. `a41c1e438d` - feat(search/core): Phase 153 - pattern search core FFI expansion
 
-**Total: +507 new rs_ calls across 10 C files**
+**Remaining Phases (154-162)**:
+- Phase 154: Incremental Search
+- Phase 155: Search History
+- Phase 156: Special Searches
+- Phase 157: Command Parsing
+- Phase 158: Range Processing
+- Phase 159: Command Execution Framework
+- Phase 160: Script Commands
+- Phase 161: Command Modifiers
+- Phase 162: Error Handling
 
-All builds pass, all 3193 Rust tests pass, clippy and formatting checks pass.
+Shall I continue with the remaining phases?
