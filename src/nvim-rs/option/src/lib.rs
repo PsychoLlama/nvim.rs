@@ -17,6 +17,7 @@ pub mod copy;
 pub mod expand;
 pub mod format;
 pub mod getset;
+pub mod index;
 pub mod init;
 pub mod parsing;
 pub mod scope;

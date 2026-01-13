@@ -265,6 +265,17 @@ int nvim_callback_get_no_hlsearch(void) { return no_hlsearch; }
 void nvim_callback_set_need_maketitle(int value) { need_maketitle = value != 0; }
 void nvim_callback_set_redraw_tabline(int value) { redraw_tabline = value != 0; }
 
+// =============================================================================
+// Accessor functions for Rust index module (Phase 163)
+// =============================================================================
+
+// Window diff accessor
+int nvim_win_get_diff(win_T *win) { return win ? win->w_p_diff : 0; }
+
+// Known option index accessors
+OptIndex nvim_get_opt_idx_foldmethod(void) { return kOptFoldmethod; }
+OptIndex nvim_get_opt_idx_wrap(void) { return kOptWrap; }
+
 static const char e_unknown_option[]
   = N_("E518: Unknown option");
 static const char e_not_allowed_in_modeline[]
@@ -3443,6 +3454,28 @@ static inline bool option_is_window_local(OptIndex opt_idx)
 ssize_t option_scope_idx(OptIndex opt_idx, OptScope scope)
 {
   return options[opt_idx].scope_idx[scope];
+}
+
+// =============================================================================
+// Non-static wrappers for Rust FFI (Phase 163)
+// =============================================================================
+
+/// Check if option is global-local (FFI wrapper).
+int nvim_option_is_global_local(OptIndex opt_idx)
+{
+  return option_is_global_local(opt_idx);
+}
+
+/// Check if option is global-only (FFI wrapper).
+int nvim_option_is_global_only(OptIndex opt_idx)
+{
+  return option_is_global_only(opt_idx);
+}
+
+/// Check if option is window-local (FFI wrapper).
+int nvim_option_is_window_local(OptIndex opt_idx)
+{
+  return option_is_window_local(opt_idx);
 }
 
 /// Get option flags.
