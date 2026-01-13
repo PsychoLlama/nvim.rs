@@ -36,6 +36,7 @@ pub use nvim_cursor::*;
 pub use nvim_cursor_shape::*;
 pub use nvim_debugger::*;
 pub use nvim_decoration::*;
+pub use nvim_decoration_provider::*;
 pub use nvim_dict::*;
 pub use nvim_diff::*;
 pub use nvim_digraph::*;

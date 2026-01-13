@@ -32,6 +32,7 @@ nvim-cursor = { path = "cursor" }
 nvim-cursor-shape = { path = "cursor_shape" }
 nvim-debugger = { path = "debugger" }
 nvim-decoration = { path = "decoration" }
+nvim-decoration-provider = { path = "decoration_provider" }
 nvim-dict = { path = "dict" }
 nvim-diff = { path = "diff" }
 nvim-digraph = { path = "digraph" }
