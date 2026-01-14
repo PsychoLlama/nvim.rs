@@ -139,6 +139,11 @@ extern int rs_split_max_windows(int vertical);
 extern int rs_split_iteration_size(int vertical, int todo);
 extern int rs_split_make_windows_flags(int vertical);
 
+// Close validation functions from Rust
+extern int rs_close_can_close_floating(void);
+extern int rs_close_count_nonfloating(tabpage_T *tp);
+extern int rs_close_count_total(tabpage_T *tp);
+
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to win_T fields from Rust code.
 
@@ -4052,7 +4057,12 @@ bool one_window(win_T *win, tabpage_T *tp)
 static bool can_close_floating_windows(tabpage_T *tp)
 {
   assert(tp != curtab && (tp || !is_aucmd_win(lastwin)));
-  for (win_T *wp = tp ? tp->tp_lastwin : lastwin; wp->w_floating; wp = wp->w_prev) {
+  // Use Rust helper for current tabpage
+  if (tp == NULL) {
+    return rs_close_can_close_floating() != 0;
+  }
+  // For other tabpages, iterate in C (since we need tp_lastwin access)
+  for (win_T *wp = tp->tp_lastwin; wp->w_floating; wp = wp->w_prev) {
     buf_T *buf = wp->w_buffer;
     int need_hide = (bufIsChanged(buf) && buf->b_nwindows <= 1);
 
