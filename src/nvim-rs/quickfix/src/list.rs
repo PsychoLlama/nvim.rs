@@ -3,6 +3,12 @@
 //! This module provides Rust implementations for creating, modifying, and
 //! managing quickfix and location lists, including stack navigation.
 
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_sign_loss)]
+#![allow(clippy::missing_const_for_fn)]
+#![allow(clippy::must_use_candidate)]
+#![allow(clippy::use_self)]
+
 use std::ffi::{c_char, c_int, c_void};
 
 /// Line number type (matches `linenr_T` in Neovim)
@@ -51,7 +57,13 @@ extern "C" {
     fn nvim_qfline_get_prev(qfp: QfLineHandle) -> QfLineHandle;
     fn nvim_qfline_get_fnum(qfp: QfLineHandle) -> c_int;
     fn nvim_qfline_get_lnum(qfp: QfLineHandle) -> LinenrT;
+    fn nvim_qfline_get_col(qfp: QfLineHandle) -> c_int;
+    fn nvim_qfline_get_end_lnum(qfp: QfLineHandle) -> LinenrT;
+    fn nvim_qfline_get_end_col(qfp: QfLineHandle) -> c_int;
+    fn nvim_qfline_get_nr(qfp: QfLineHandle) -> c_int;
     fn nvim_qfline_get_valid(qfp: QfLineHandle) -> bool;
+    fn nvim_qfline_get_type(qfp: QfLineHandle) -> c_char;
+    fn nvim_qfline_get_viscol(qfp: QfLineHandle) -> bool;
 
     // List operations
     fn nvim_qf_new_list(qi: QfInfoHandleMut, title: *const c_char);
@@ -578,6 +590,276 @@ pub unsafe extern "C" fn rs_qf_stack_available(qi: QfInfoHandle) -> c_int {
 }
 
 // =============================================================================
+// Entry Types and Categories
+// =============================================================================
+
+/// Quickfix entry type classification.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QfEntryType {
+    /// Error entry.
+    Error = 0,
+    /// Warning entry.
+    Warning = 1,
+    /// Informational entry.
+    Info = 2,
+    /// Note entry.
+    Note = 3,
+    /// Other/unknown type.
+    Other = 4,
+}
+
+impl QfEntryType {
+    /// Convert from type character.
+    pub const fn from_char(c: c_char) -> Self {
+        match c as u8 {
+            b'E' | b'e' => QfEntryType::Error,
+            b'W' | b'w' => QfEntryType::Warning,
+            b'I' | b'i' => QfEntryType::Info,
+            b'N' | b'n' => QfEntryType::Note,
+            _ => QfEntryType::Other,
+        }
+    }
+
+    /// Get the type character.
+    pub const fn to_char(self) -> c_char {
+        match self {
+            QfEntryType::Error => b'E' as c_char,
+            QfEntryType::Warning => b'W' as c_char,
+            QfEntryType::Info => b'I' as c_char,
+            QfEntryType::Note => b'N' as c_char,
+            QfEntryType::Other => b' ' as c_char,
+        }
+    }
+
+    /// Check if this is an error type.
+    pub const fn is_error(self) -> bool {
+        matches!(self, QfEntryType::Error)
+    }
+
+    /// Check if this is a warning type.
+    pub const fn is_warning(self) -> bool {
+        matches!(self, QfEntryType::Warning)
+    }
+}
+
+/// Quickfix entry summary.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct QfEntrySummary {
+    /// Line number (1-based).
+    pub lnum: LinenrT,
+    /// Column number (1-based, 0 if not specified).
+    pub col: c_int,
+    /// End line number (0 if not specified).
+    pub end_lnum: LinenrT,
+    /// End column (0 if not specified).
+    pub end_col: c_int,
+    /// Buffer number (0 if not associated).
+    pub fnum: c_int,
+    /// Entry type.
+    pub entry_type: QfEntryType,
+    /// Whether the entry is valid.
+    pub valid: bool,
+    /// Whether column is visual column.
+    pub viscol: bool,
+    /// Entry number/error number.
+    pub nr: c_int,
+}
+
+impl QfEntrySummary {
+    /// Create an empty summary.
+    pub const fn empty() -> Self {
+        Self {
+            lnum: 0,
+            col: 0,
+            end_lnum: 0,
+            end_col: 0,
+            fnum: 0,
+            entry_type: QfEntryType::Other,
+            valid: false,
+            viscol: false,
+            nr: 0,
+        }
+    }
+
+    /// Check if this entry has a range (multi-line/column).
+    pub const fn has_range(&self) -> bool {
+        self.end_lnum > 0 || self.end_col > 0
+    }
+
+    /// Check if this entry references a file.
+    pub const fn has_file(&self) -> bool {
+        self.fnum > 0
+    }
+
+    /// Check if this entry has a position.
+    pub const fn has_position(&self) -> bool {
+        self.lnum > 0
+    }
+}
+
+impl Default for QfEntrySummary {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
+/// Get entry summary from a quickfix entry handle.
+///
+/// # Safety
+///
+/// - `qfp` may be null (returns empty summary)
+/// - If non-null, `qfp` must be a valid pointer to a `qfline_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_entry_summary(qfp: QfLineHandle) -> QfEntrySummary {
+    if qfp.is_null() {
+        return QfEntrySummary::empty();
+    }
+
+    let type_char = nvim_qfline_get_type(qfp);
+    QfEntrySummary {
+        lnum: nvim_qfline_get_lnum(qfp),
+        col: nvim_qfline_get_col(qfp),
+        end_lnum: nvim_qfline_get_end_lnum(qfp),
+        end_col: nvim_qfline_get_end_col(qfp),
+        fnum: nvim_qfline_get_fnum(qfp),
+        entry_type: QfEntryType::from_char(type_char),
+        valid: nvim_qfline_get_valid(qfp),
+        viscol: nvim_qfline_get_viscol(qfp),
+        nr: nvim_qfline_get_nr(qfp),
+    }
+}
+
+// =============================================================================
+// Entry Categorization
+// =============================================================================
+
+/// Entry count by type.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct QfTypeCounts {
+    /// Number of error entries.
+    pub errors: c_int,
+    /// Number of warning entries.
+    pub warnings: c_int,
+    /// Number of info entries.
+    pub info: c_int,
+    /// Number of note entries.
+    pub notes: c_int,
+    /// Number of other entries.
+    pub other: c_int,
+}
+
+impl QfTypeCounts {
+    /// Get total count.
+    pub const fn total(&self) -> c_int {
+        self.errors + self.warnings + self.info + self.notes + self.other
+    }
+
+    /// Check if there are any errors.
+    pub const fn has_errors(&self) -> bool {
+        self.errors > 0
+    }
+
+    /// Check if there are any warnings.
+    pub const fn has_warnings(&self) -> bool {
+        self.warnings > 0
+    }
+}
+
+/// Count entries by type in a quickfix list.
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns zero counts)
+/// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_type_counts(qfl: QfListHandle) -> QfTypeCounts {
+    if qfl.is_null() {
+        return QfTypeCounts::default();
+    }
+
+    let mut counts = QfTypeCounts::default();
+    let mut qfp = nvim_qf_get_start(qfl);
+    while !qfp.is_null() {
+        let type_char = nvim_qfline_get_type(qfp);
+        match QfEntryType::from_char(type_char) {
+            QfEntryType::Error => counts.errors += 1,
+            QfEntryType::Warning => counts.warnings += 1,
+            QfEntryType::Info => counts.info += 1,
+            QfEntryType::Note => counts.notes += 1,
+            QfEntryType::Other => counts.other += 1,
+        }
+        qfp = nvim_qfline_get_next(qfp);
+    }
+
+    counts
+}
+
+// =============================================================================
+// File Association Helpers
+// =============================================================================
+
+/// File reference in quickfix entry.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct QfFileRef {
+    /// Buffer number (0 if none).
+    pub fnum: c_int,
+    /// Number of entries for this file.
+    pub entry_count: c_int,
+    /// First entry index for this file (1-based).
+    pub first_entry: c_int,
+}
+
+impl QfFileRef {
+    /// Create an empty file reference.
+    pub const fn empty() -> Self {
+        Self {
+            fnum: 0,
+            entry_count: 0,
+            first_entry: 0,
+        }
+    }
+
+    /// Check if this references a valid file.
+    pub const fn has_file(&self) -> bool {
+        self.fnum > 0
+    }
+}
+
+impl Default for QfFileRef {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
+/// FFI export: Get entry type from character.
+#[no_mangle]
+pub extern "C" fn rs_qf_entry_type_from_char(c: c_char) -> QfEntryType {
+    QfEntryType::from_char(c)
+}
+
+/// FFI export: Get character from entry type.
+#[no_mangle]
+pub extern "C" fn rs_qf_entry_type_to_char(entry_type: QfEntryType) -> c_char {
+    entry_type.to_char()
+}
+
+/// FFI export: Check if entry has file reference.
+#[no_mangle]
+pub extern "C" fn rs_qf_entry_has_file(summary: QfEntrySummary) -> c_int {
+    c_int::from(summary.has_file())
+}
+
+/// FFI export: Check if entry has range.
+#[no_mangle]
+pub extern "C" fn rs_qf_entry_has_range(summary: QfEntrySummary) -> c_int {
+    c_int::from(summary.has_range())
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -720,5 +1002,138 @@ mod tests {
         unsafe {
             assert_eq!(rs_qf_stack_available(std::ptr::null()), 0);
         }
+    }
+
+    #[test]
+    fn test_entry_type_values() {
+        assert_eq!(QfEntryType::Error as c_int, 0);
+        assert_eq!(QfEntryType::Warning as c_int, 1);
+        assert_eq!(QfEntryType::Info as c_int, 2);
+        assert_eq!(QfEntryType::Note as c_int, 3);
+        assert_eq!(QfEntryType::Other as c_int, 4);
+    }
+
+    #[test]
+    fn test_entry_type_from_char() {
+        assert_eq!(QfEntryType::from_char(b'E' as c_char), QfEntryType::Error);
+        assert_eq!(QfEntryType::from_char(b'e' as c_char), QfEntryType::Error);
+        assert_eq!(QfEntryType::from_char(b'W' as c_char), QfEntryType::Warning);
+        assert_eq!(QfEntryType::from_char(b'w' as c_char), QfEntryType::Warning);
+        assert_eq!(QfEntryType::from_char(b'I' as c_char), QfEntryType::Info);
+        assert_eq!(QfEntryType::from_char(b'N' as c_char), QfEntryType::Note);
+        assert_eq!(QfEntryType::from_char(b'X' as c_char), QfEntryType::Other);
+    }
+
+    #[test]
+    fn test_entry_type_to_char() {
+        assert_eq!(QfEntryType::Error.to_char(), b'E' as c_char);
+        assert_eq!(QfEntryType::Warning.to_char(), b'W' as c_char);
+        assert_eq!(QfEntryType::Info.to_char(), b'I' as c_char);
+        assert_eq!(QfEntryType::Note.to_char(), b'N' as c_char);
+        assert_eq!(QfEntryType::Other.to_char(), b' ' as c_char);
+    }
+
+    #[test]
+    fn test_entry_type_checks() {
+        assert!(QfEntryType::Error.is_error());
+        assert!(!QfEntryType::Warning.is_error());
+
+        assert!(QfEntryType::Warning.is_warning());
+        assert!(!QfEntryType::Error.is_warning());
+    }
+
+    #[test]
+    fn test_entry_summary_empty() {
+        let summary = QfEntrySummary::empty();
+        assert_eq!(summary.lnum, 0);
+        assert!(!summary.valid);
+        assert!(!summary.has_file());
+        assert!(!summary.has_position());
+        assert!(!summary.has_range());
+    }
+
+    #[test]
+    fn test_entry_summary_with_values() {
+        let summary = QfEntrySummary {
+            lnum: 10,
+            col: 5,
+            end_lnum: 12,
+            end_col: 10,
+            fnum: 1,
+            entry_type: QfEntryType::Error,
+            valid: true,
+            viscol: false,
+            nr: 1,
+        };
+        assert!(summary.has_file());
+        assert!(summary.has_position());
+        assert!(summary.has_range());
+    }
+
+    #[test]
+    fn test_type_counts_default() {
+        let counts = QfTypeCounts::default();
+        assert_eq!(counts.total(), 0);
+        assert!(!counts.has_errors());
+        assert!(!counts.has_warnings());
+    }
+
+    #[test]
+    fn test_type_counts_with_values() {
+        let counts = QfTypeCounts {
+            errors: 5,
+            warnings: 3,
+            info: 2,
+            notes: 1,
+            other: 0,
+        };
+        assert_eq!(counts.total(), 11);
+        assert!(counts.has_errors());
+        assert!(counts.has_warnings());
+    }
+
+    #[test]
+    fn test_file_ref_empty() {
+        let file_ref = QfFileRef::empty();
+        assert_eq!(file_ref.fnum, 0);
+        assert!(!file_ref.has_file());
+    }
+
+    #[test]
+    fn test_file_ref_with_file() {
+        let file_ref = QfFileRef {
+            fnum: 5,
+            entry_count: 10,
+            first_entry: 1,
+        };
+        assert!(file_ref.has_file());
+    }
+
+    #[test]
+    fn test_null_entry_summary() {
+        unsafe {
+            let summary = rs_qf_entry_summary(std::ptr::null());
+            assert_eq!(summary.lnum, 0);
+            assert!(!summary.valid);
+        }
+    }
+
+    #[test]
+    fn test_null_type_counts() {
+        unsafe {
+            let counts = rs_qf_type_counts(std::ptr::null());
+            assert_eq!(counts.total(), 0);
+        }
+    }
+
+    #[test]
+    fn test_struct_sizes() {
+        use std::mem::size_of;
+        // QfEntrySummary should be reasonable
+        assert!(size_of::<QfEntrySummary>() <= 40);
+        // QfTypeCounts: 5 * 4 = 20 bytes
+        assert_eq!(size_of::<QfTypeCounts>(), 20);
+        // QfFileRef: 3 * 4 = 12 bytes
+        assert_eq!(size_of::<QfFileRef>(), 12);
     }
 }
