@@ -6,14 +6,24 @@
 //!
 //! # Modules
 //!
-//! - [`history`]: Message history linked list management
-//! - [`chunk`]: Scrollback buffer message chunks
-//! - [`format`]: Message formatting utilities
-//! - [`output`]: Message output state management
 //! - [`attr`]: Message attribute handling
-//! - [`scrollback`]: Scrollback buffer management
+//! - [`chunk`]: Scrollback buffer message chunks
 //! - [`dialog`]: Dialog and confirmation handling
 //! - [`error`]: Error and warning message state
+//! - [`format`]: Message formatting utilities
+//! - [`history`]: Message history linked list management
+//! - [`keys`]: Special key display utilities
+//! - [`line`]: Line printing utilities for :print/:list
+//! - [`output`]: Message output state management
+//! - [`output_core`]: Core message output functions (msg, msg_puts)
+//! - [`scheduled`]: Deferred message handling
+//! - [`scrollback`]: Scrollback buffer management
+//! - [`verbose`]: Verbose and redirection message handling
+//! - [`warning`]: Warning message utilities
+//!
+//! # Statistics
+//!
+//! This crate exports 331 `#[no_mangle]` functions for C FFI.
 //!
 //! # Note
 //!
