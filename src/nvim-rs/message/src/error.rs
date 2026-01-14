@@ -428,6 +428,167 @@ pub unsafe extern "C" fn rs_emsg_suppression_depth() -> c_int {
     nvim_get_emsg_off() + nvim_get_emsg_skip() + nvim_get_emsg_silent()
 }
 
+// ============================================================================
+// Phase 423: Error Message Output Functions
+// ============================================================================
+
+extern "C" {
+    // Error message output functions - call into C
+    fn emsg_multiline(
+        s: *const std::ffi::c_char,
+        kind: *const std::ffi::c_char,
+        hl_id: c_int,
+        multiline: c_int,
+    ) -> c_int;
+    fn iemsg(s: *const std::ffi::c_char);
+
+    // Source info functions
+    fn msg_source(hl_id: c_int);
+    fn reset_last_sourcing();
+}
+
+use std::ffi::c_char;
+
+/// Display an error message with kind and highlight.
+///
+/// Full version of emsg with all options. Used for multiline error
+/// messages and special highlighting.
+///
+/// # Arguments
+/// * `s` - The error message string (NUL-terminated)
+/// * `kind` - Message kind for ext_messages (e.g., "emsg")
+/// * `hl_id` - Highlight group ID (typically HLF_E for errors)
+/// * `multiline` - If true, handle embedded newlines specially
+///
+/// # Returns
+/// * `true` (1) if wait_return() was not called
+/// * `false` (0) if wait_return() was called
+///
+/// # Safety
+/// - `s` and `kind` must be valid NUL-terminated C strings
+#[no_mangle]
+pub unsafe extern "C" fn rs_emsg_multiline_full(
+    s: *const c_char,
+    kind: *const c_char,
+    hl_id: c_int,
+    multiline: c_int,
+) -> c_int {
+    emsg_multiline(s, kind, hl_id, multiline)
+}
+
+/// Display an internal error message.
+///
+/// For internal Neovim errors that shouldn't normally occur.
+/// Always displayed regardless of suppression state.
+///
+/// # Arguments
+/// * `s` - The error message string (NUL-terminated)
+///
+/// # Safety
+/// - `s` must be a valid NUL-terminated C string
+#[no_mangle]
+pub unsafe extern "C" fn rs_iemsg(s: *const c_char) {
+    iemsg(s);
+}
+
+/// Display source info before an error message.
+///
+/// Shows the script name and line number where the error occurred.
+///
+/// # Arguments
+/// * `hl_id` - Highlight group ID for the source info
+///
+/// # Safety
+/// Calls C function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_source(hl_id: c_int) {
+    msg_source(hl_id);
+}
+
+/// Reset the last sourcing info.
+///
+/// Clears the cached source name/line so it will be
+/// displayed again for the next error.
+///
+/// # Safety
+/// Calls C function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reset_last_sourcing() {
+    reset_last_sourcing();
+}
+
+// ============================================================================
+// Error Message Constants
+// ============================================================================
+
+/// Highlight face for error messages (HLF_E)
+pub const HLF_E: c_int = 6;
+
+/// Highlight face for warning messages (HLF_W)
+pub const HLF_W: c_int = 44;
+
+/// Internal error message prefix
+pub const IEMSG_PREFIX: &[u8] = b"internal error: \0";
+
+// ============================================================================
+// Convenience Functions
+// ============================================================================
+
+/// Display an error with multiline handling.
+///
+/// Convenience wrapper for multiline error messages with standard error highlight.
+///
+/// # Arguments
+/// * `s` - The error message string
+/// * `kind` - Message kind for ext_messages
+///
+/// # Returns
+/// Result from `rs_emsg_multiline_full`
+///
+/// # Safety
+/// - `s` and `kind` must be valid NUL-terminated C strings
+#[no_mangle]
+pub unsafe extern "C" fn rs_emsg_multiline_hl(s: *const c_char, kind: *const c_char) -> c_int {
+    emsg_multiline(s, kind, HLF_E, 1)
+}
+
+/// Check if error output is currently possible.
+///
+/// Returns true if errors can be displayed right now.
+/// Uses the simple check (emsg_off and emsg_skip).
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_emsg_can_output() -> c_int {
+    // Use the simple check - same as rs_emsg_now
+    let off = nvim_get_emsg_off();
+    let skip = nvim_get_emsg_skip();
+    c_int::from(off == 0 && skip == 0)
+}
+
+/// Begin an error message sequence.
+///
+/// Increments error counters to track that an error is being processed.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_emsg_begin() {
+    rs_inc_called_emsg();
+}
+
+/// End an error message sequence.
+///
+/// Sets the emsg_on_display flag to indicate an error was shown.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_emsg_end() {
+    nvim_set_emsg_on_display(1);
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
