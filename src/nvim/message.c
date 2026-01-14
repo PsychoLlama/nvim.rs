@@ -552,6 +552,9 @@ int nvim_msg_grid_get_cols(void) { return msg_grid.cols; }
 int nvim_get_redir_off(void) { return redir_off ? 1 : 0; }
 void nvim_set_redir_off(int val) { redir_off = (val != 0); }
 
+// Phase 431: Special key helpers
+int nvim_is_special_key(int key) { return IS_SPECIAL(key) ? 1 : 0; }
+
 // C accessors for attribute functions (used by Rust)
 int nvim_syn_id2attr(int hl_id) { return syn_id2attr(hl_id); }
 int nvim_hl_combine_attr(int a, int b) { return hl_combine_attr(a, b); }
