@@ -947,6 +947,125 @@ pub extern "C" fn rs_compound_valid_len(word_len: usize, min_len: u8) -> bool {
 // Note: WF_* flag constants are exported from wordtree.rs
 
 // =============================================================================
+// Phase 324: Compound Rule Matching
+// =============================================================================
+
+/// Match compound flags against compound rules.
+///
+/// This checks if the compound flags collected so far could possibly match
+/// any compound rule. It's used to stop trying compounds early when
+/// there's no matching rule.
+///
+/// Rules are in the format: "abc/def/[gh]ij/..." where:
+/// - Each letter matches a flag byte directly
+/// - [...] matches any of the enclosed flags
+/// - Rules are separated by /
+///
+/// # Arguments
+/// * `comprules` - The compound rules string (NUL-terminated, rules separated by /)
+/// * `compflags` - The compound flags collected so far (NUL-terminated)
+///
+/// # Returns
+/// true if the flags match the start of any rule
+pub fn match_compoundrule(comprules: &[u8], compflags: &[u8]) -> bool {
+    if comprules.is_empty() || comprules[0] == 0 {
+        return false;
+    }
+
+    let mut rule_idx = 0;
+
+    // Loop over all the COMPOUNDRULE entries
+    while rule_idx < comprules.len() && comprules[rule_idx] != 0 {
+        // Loop over the flags in the compound word we have made,
+        // match them against the current rule entry
+        let mut flag_idx = 0;
+        let mut p = rule_idx;
+
+        'flags: loop {
+            let c = if flag_idx < compflags.len() {
+                compflags[flag_idx]
+            } else {
+                0
+            };
+
+            if c == 0 {
+                // Found a rule that matches for the flags we have so far
+                return true;
+            }
+
+            if p >= comprules.len() || comprules[p] == 0 || comprules[p] == b'/' {
+                // End of rule, it's too short
+                break 'flags;
+            }
+
+            if comprules[p] == b'[' {
+                // Compare against all the flags in []
+                p += 1;
+                let mut bracket_match = false;
+
+                while p < comprules.len() && comprules[p] != b']' && comprules[p] != 0 {
+                    if comprules[p] == c {
+                        bracket_match = true;
+                    }
+                    p += 1;
+                }
+
+                if !bracket_match {
+                    break 'flags;
+                }
+
+                // Skip past the ]
+                if p < comprules.len() && comprules[p] == b']' {
+                    p += 1;
+                }
+            } else if comprules[p] != c {
+                // Flag of word doesn't match flag in pattern
+                break 'flags;
+            } else {
+                p += 1;
+            }
+
+            flag_idx += 1;
+        }
+
+        // Skip to the next "/", where the next pattern starts
+        while rule_idx < comprules.len() && comprules[rule_idx] != 0 && comprules[rule_idx] != b'/'
+        {
+            rule_idx += 1;
+        }
+
+        // Skip the "/" itself
+        if rule_idx < comprules.len() && comprules[rule_idx] == b'/' {
+            rule_idx += 1;
+        }
+    }
+
+    // Checked all the rules and none of them match the flags
+    false
+}
+
+/// FFI wrapper for match_compoundrule
+///
+/// # Safety
+/// `comprules` and `compflags` must be valid pointers
+#[no_mangle]
+pub unsafe extern "C" fn rs_match_compoundrule(
+    comprules: *const u8,
+    comprules_len: usize,
+    compflags: *const u8,
+    compflags_len: usize,
+) -> bool {
+    if comprules.is_null() || compflags.is_null() {
+        return false;
+    }
+
+    let comprules_slice = std::slice::from_raw_parts(comprules, comprules_len);
+    let compflags_slice = std::slice::from_raw_parts(compflags, compflags_len);
+
+    match_compoundrule(comprules_slice, compflags_slice)
+}
+
+// =============================================================================
 // Phase 321: Find Word - Core Spell Checking
 // =============================================================================
 
@@ -1796,5 +1915,49 @@ mod tests {
         assert_eq!(GREEK_CAPITAL_SIGMA, 0x03A3);
         assert_eq!(GREEK_SMALL_SIGMA, 0x03C3);
         assert_eq!(GREEK_SMALL_FINAL_SIGMA, 0x03C2);
+    }
+
+    // =========================================================================
+    // Phase 324 Tests: Compound Rule Matching
+    // =========================================================================
+
+    #[test]
+    fn test_match_compoundrule_simple() {
+        // Rule "ab" matches flags "a", "ab", but not "c", "abc"
+        assert!(match_compoundrule(b"ab\0", b"a\0"));
+        assert!(match_compoundrule(b"ab\0", b"ab\0"));
+        assert!(!match_compoundrule(b"ab\0", b"c\0"));
+        assert!(!match_compoundrule(b"ab\0", b"abc\0"));
+    }
+
+    #[test]
+    fn test_match_compoundrule_multiple_rules() {
+        // Multiple rules separated by /
+        // "ab/cd" should match "a", "ab", "c", "cd"
+        assert!(match_compoundrule(b"ab/cd\0", b"a\0"));
+        assert!(match_compoundrule(b"ab/cd\0", b"ab\0"));
+        assert!(match_compoundrule(b"ab/cd\0", b"c\0"));
+        assert!(match_compoundrule(b"ab/cd\0", b"cd\0"));
+        assert!(!match_compoundrule(b"ab/cd\0", b"e\0"));
+    }
+
+    #[test]
+    fn test_match_compoundrule_brackets() {
+        // "[ab]c" should match flags starting with a or b
+        assert!(match_compoundrule(b"[ab]c\0", b"a\0"));
+        assert!(match_compoundrule(b"[ab]c\0", b"b\0"));
+        assert!(match_compoundrule(b"[ab]c\0", b"ac\0"));
+        assert!(match_compoundrule(b"[ab]c\0", b"bc\0"));
+        assert!(!match_compoundrule(b"[ab]c\0", b"c\0"));
+        assert!(!match_compoundrule(b"[ab]c\0", b"dc\0"));
+    }
+
+    #[test]
+    fn test_match_compoundrule_empty() {
+        // Empty rules or flags
+        assert!(!match_compoundrule(b"\0", b"a\0"));
+        assert!(!match_compoundrule(b"", b"a\0"));
+        // Empty flags means nothing collected yet - should match any rule
+        assert!(match_compoundrule(b"ab\0", b"\0"));
     }
 }
