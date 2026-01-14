@@ -70,6 +70,12 @@ const XDF_PATIENCE_DIFF: c_int = 1 << 14;
 const XDF_HISTOGRAM_DIFF: c_int = 1 << 15;
 const XDF_INDENT_HEURISTIC: c_int = 1 << 23;
 
+// XDiff whitespace ignore flags (from xdiff.h)
+const XDF_IGNORE_WHITESPACE: c_int = 1 << 2;
+const XDF_IGNORE_WHITESPACE_CHANGE: c_int = 1 << 3;
+const XDF_IGNORE_WHITESPACE_AT_EOL: c_int = 1 << 4;
+const XDF_IGNORE_BLANK_LINES: c_int = 1 << 5;
+
 use std::ffi::c_void;
 
 // Use opaque pointers for FFI to avoid type conflicts with buffer module
@@ -1311,6 +1317,78 @@ pub extern "C" fn rs_diff_block_alignment_offset(
 }
 
 // =============================================================================
+// XDiff Parameter Setup (Phase 365-366)
+// =============================================================================
+
+/// Result of xdiff parameter setup.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct XdiffParams {
+    /// Combined xdiff flags (algorithm + whitespace handling).
+    pub flags: c_int,
+}
+
+impl XdiffParams {
+    /// Create empty params.
+    #[must_use]
+    pub const fn empty() -> Self {
+        Self { flags: 0 }
+    }
+}
+
+/// Convert diff flags and algorithm to xdiff parameter flags.
+///
+/// This converts Neovim's diff_flags and diff_algorithm into the flags
+/// expected by the xdiff library's xpparam_t.flags field.
+const fn diff_to_xdiff_params_impl(diff_flags: c_int, diff_algorithm: c_int) -> XdiffParams {
+    let mut xdf_flags = diff_algorithm;
+
+    // Convert whitespace handling flags
+    if (diff_flags & DIFF_IWHITE) != 0 {
+        xdf_flags |= XDF_IGNORE_WHITESPACE_CHANGE;
+    }
+    if (diff_flags & DIFF_IWHITEALL) != 0 {
+        xdf_flags |= XDF_IGNORE_WHITESPACE;
+    }
+    if (diff_flags & DIFF_IWHITEEOL) != 0 {
+        xdf_flags |= XDF_IGNORE_WHITESPACE_AT_EOL;
+    }
+    if (diff_flags & DIFF_IBLANK) != 0 {
+        xdf_flags |= XDF_IGNORE_BLANK_LINES;
+    }
+
+    XdiffParams { flags: xdf_flags }
+}
+
+/// FFI export: Convert diff flags to xdiff params.
+///
+/// Returns the xdiff flags for use with xdl_diff().
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_to_xdiff_params(diff_algorithm: c_int) -> XdiffParams {
+    diff_to_xdiff_params_impl(nvim_get_diff_flags(), diff_algorithm)
+}
+
+/// FFI export: Convert explicit diff flags and algorithm to xdiff params.
+#[no_mangle]
+pub const extern "C" fn rs_diff_to_xdiff_params_explicit(
+    diff_flags: c_int,
+    diff_algorithm: c_int,
+) -> XdiffParams {
+    diff_to_xdiff_params_impl(diff_flags, diff_algorithm)
+}
+
+/// Check if xdiff should use the internal diff (not external diffexpr).
+fn should_use_internal_diff_impl() -> bool {
+    unsafe { (nvim_get_diff_flags() & DIFF_INTERNAL) != 0 && nvim_is_diffexpr_empty() }
+}
+
+/// FFI export: Check if internal diff should be used.
+#[no_mangle]
+pub extern "C" fn rs_diff_should_use_internal() -> c_int {
+    c_int::from(should_use_internal_diff_impl())
+}
+
+// =============================================================================
 // Diffopt Parsing
 // =============================================================================
 
@@ -2384,5 +2462,96 @@ mod tests {
     fn test_diff_total_count_invalid_idx() {
         assert_eq!(diff_total_count_for_buf_impl(-1), 0);
         assert_eq!(diff_total_count_for_buf_impl(DB_COUNT), 0);
+    }
+
+    // =========================================================================
+    // XDiff Parameter Tests (Phase 365-366)
+    // =========================================================================
+
+    #[test]
+    fn test_xdiff_whitespace_constants() {
+        // Verify xdiff whitespace flag positions
+        assert_eq!(XDF_IGNORE_WHITESPACE, 1 << 2);
+        assert_eq!(XDF_IGNORE_WHITESPACE_CHANGE, 1 << 3);
+        assert_eq!(XDF_IGNORE_WHITESPACE_AT_EOL, 1 << 4);
+        assert_eq!(XDF_IGNORE_BLANK_LINES, 1 << 5);
+    }
+
+    #[test]
+    fn test_xdiff_params_empty() {
+        let params = XdiffParams::empty();
+        assert_eq!(params.flags, 0);
+    }
+
+    #[test]
+    fn test_xdiff_params_struct_size() {
+        // Should be 4 bytes (single c_int)
+        assert_eq!(std::mem::size_of::<XdiffParams>(), 4);
+    }
+
+    #[test]
+    fn test_diff_to_xdiff_params_algorithm_only() {
+        // No diff flags, just algorithm
+        let params = diff_to_xdiff_params_impl(0, XDF_PATIENCE_DIFF);
+        assert_eq!(params.flags, XDF_PATIENCE_DIFF);
+    }
+
+    #[test]
+    fn test_diff_to_xdiff_params_with_iwhite() {
+        let params = diff_to_xdiff_params_impl(DIFF_IWHITE, 0);
+        assert_ne!(params.flags & XDF_IGNORE_WHITESPACE_CHANGE, 0);
+        assert_eq!(params.flags & XDF_IGNORE_WHITESPACE, 0);
+    }
+
+    #[test]
+    fn test_diff_to_xdiff_params_with_iwhiteall() {
+        let params = diff_to_xdiff_params_impl(DIFF_IWHITEALL, 0);
+        assert_ne!(params.flags & XDF_IGNORE_WHITESPACE, 0);
+    }
+
+    #[test]
+    fn test_diff_to_xdiff_params_with_iwhiteeol() {
+        let params = diff_to_xdiff_params_impl(DIFF_IWHITEEOL, 0);
+        assert_ne!(params.flags & XDF_IGNORE_WHITESPACE_AT_EOL, 0);
+    }
+
+    #[test]
+    fn test_diff_to_xdiff_params_with_iblank() {
+        let params = diff_to_xdiff_params_impl(DIFF_IBLANK, 0);
+        assert_ne!(params.flags & XDF_IGNORE_BLANK_LINES, 0);
+    }
+
+    #[test]
+    fn test_diff_to_xdiff_params_combined() {
+        // Test with algorithm + multiple whitespace flags
+        let diff_flags = DIFF_IWHITE | DIFF_IBLANK;
+        let params = diff_to_xdiff_params_impl(diff_flags, XDF_HISTOGRAM_DIFF);
+
+        // Algorithm should be set
+        assert_ne!(params.flags & XDF_HISTOGRAM_DIFF, 0);
+        // Whitespace flags should be converted
+        assert_ne!(params.flags & XDF_IGNORE_WHITESPACE_CHANGE, 0);
+        assert_ne!(params.flags & XDF_IGNORE_BLANK_LINES, 0);
+        // Other flags should not be set
+        assert_eq!(params.flags & XDF_IGNORE_WHITESPACE, 0);
+        assert_eq!(params.flags & XDF_IGNORE_WHITESPACE_AT_EOL, 0);
+    }
+
+    #[test]
+    fn test_diff_to_xdiff_params_all_whitespace() {
+        let diff_flags = DIFF_IWHITE | DIFF_IWHITEALL | DIFF_IWHITEEOL | DIFF_IBLANK;
+        let params = diff_to_xdiff_params_impl(diff_flags, 0);
+
+        assert_ne!(params.flags & XDF_IGNORE_WHITESPACE_CHANGE, 0);
+        assert_ne!(params.flags & XDF_IGNORE_WHITESPACE, 0);
+        assert_ne!(params.flags & XDF_IGNORE_WHITESPACE_AT_EOL, 0);
+        assert_ne!(params.flags & XDF_IGNORE_BLANK_LINES, 0);
+    }
+
+    #[test]
+    fn test_diff_to_xdiff_params_unrelated_flags_ignored() {
+        // Flags like DIFF_FILLER shouldn't affect xdiff params
+        let params = diff_to_xdiff_params_impl(DIFF_FILLER | DIFF_INTERNAL | DIFF_ICASE, 0);
+        assert_eq!(params.flags, 0);
     }
 }
