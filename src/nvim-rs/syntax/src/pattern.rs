@@ -10,7 +10,8 @@ use std::ffi::{c_char, c_int};
 
 use crate::types::{
     IdListHandle, RegProgHandle, SynBlockHandle, SynPatHandle, HL_CONTAINED, HL_FOLD, HL_KEEPEND,
-    HL_TRANSP, SPTYPE_END, SPTYPE_MATCH, SPTYPE_SKIP, SPTYPE_START,
+    HL_TRANSP, SPO_COUNT, SPO_HE_OFF, SPO_HS_OFF, SPO_LC_OFF, SPO_ME_OFF, SPO_MS_OFF, SPO_RE_OFF,
+    SPO_RS_OFF, SPTYPE_END, SPTYPE_MATCH, SPTYPE_SKIP, SPTYPE_START,
 };
 
 // =============================================================================
@@ -529,6 +530,119 @@ pub fn get_pattern_syn_match_id(idx: i32) -> i32 {
     unsafe { nvim_syn_get_pattern_syn_match_id(idx) }
 }
 
+// =============================================================================
+// Pattern offset types
+// =============================================================================
+
+/// Represents the type of offset for a syntax pattern.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OffsetType {
+    /// Match start offset (ms=)
+    MatchStart,
+    /// Match end offset (me=)
+    MatchEnd,
+    /// Highlight start offset (hs=)
+    HighlightStart,
+    /// Highlight end offset (he=)
+    HighlightEnd,
+    /// Region start offset (rs=)
+    RegionStart,
+    /// Region end offset (re=)
+    RegionEnd,
+    /// Leading context offset (lc=)
+    LeadingContext,
+}
+
+impl OffsetType {
+    /// Convert to the SPO_* constant index
+    #[must_use]
+    pub const fn to_index(self) -> i32 {
+        match self {
+            Self::MatchStart => SPO_MS_OFF,
+            Self::MatchEnd => SPO_ME_OFF,
+            Self::HighlightStart => SPO_HS_OFF,
+            Self::HighlightEnd => SPO_HE_OFF,
+            Self::RegionStart => SPO_RS_OFF,
+            Self::RegionEnd => SPO_RE_OFF,
+            Self::LeadingContext => SPO_LC_OFF,
+        }
+    }
+
+    /// Create from an SPO_* constant index
+    #[must_use]
+    pub const fn from_index(index: i32) -> Option<Self> {
+        match index {
+            SPO_MS_OFF => Some(Self::MatchStart),
+            SPO_ME_OFF => Some(Self::MatchEnd),
+            SPO_HS_OFF => Some(Self::HighlightStart),
+            SPO_HE_OFF => Some(Self::HighlightEnd),
+            SPO_RS_OFF => Some(Self::RegionStart),
+            SPO_RE_OFF => Some(Self::RegionEnd),
+            SPO_LC_OFF => Some(Self::LeadingContext),
+            _ => None,
+        }
+    }
+
+    /// Get the short name used in syntax pattern definitions
+    #[must_use]
+    pub const fn short_name(&self) -> &'static str {
+        match self {
+            Self::MatchStart => "ms",
+            Self::MatchEnd => "me",
+            Self::HighlightStart => "hs",
+            Self::HighlightEnd => "he",
+            Self::RegionStart => "rs",
+            Self::RegionEnd => "re",
+            Self::LeadingContext => "lc",
+        }
+    }
+
+    /// All offset types in order
+    pub const ALL: [Self; 7] = [
+        Self::MatchStart,
+        Self::MatchEnd,
+        Self::HighlightStart,
+        Self::HighlightEnd,
+        Self::RegionStart,
+        Self::RegionEnd,
+        Self::LeadingContext,
+    ];
+}
+
+/// Represents the direction of an offset (from start or end of match)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OffsetDirection {
+    /// Offset from the start of the matched text
+    FromStart,
+    /// Offset from the end of the matched text
+    FromEnd,
+}
+
+/// Decodes the sp_off_flags field for a pattern offset.
+///
+/// The flags encode which offsets are relative to start vs end of match:
+/// - Bit (1 << SPO_XX_OFF) means offset from start
+/// - Bit (1 << (SPO_XX_OFF + SPO_COUNT)) means offset from end
+#[must_use]
+pub fn decode_offset_direction(off_flags: i16, offset_type: OffsetType) -> OffsetDirection {
+    let idx = offset_type.to_index();
+    let from_end_bit = 1 << (idx + SPO_COUNT);
+    if (off_flags as i32 & from_end_bit) != 0 {
+        OffsetDirection::FromEnd
+    } else {
+        OffsetDirection::FromStart
+    }
+}
+
+/// Check if an offset is specified (either from start or end)
+#[must_use]
+pub fn has_offset(off_flags: i16, offset_type: OffsetType) -> bool {
+    let idx = offset_type.to_index();
+    let from_start_bit = 1 << idx;
+    let from_end_bit = 1 << (idx + SPO_COUNT);
+    (off_flags as i32 & (from_start_bit | from_end_bit)) != 0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -573,5 +687,113 @@ mod tests {
 
         assert!(!non_null_block.is_null());
         assert!(!non_null_pat.is_null());
+    }
+
+    #[test]
+    fn test_offset_type_to_index() {
+        assert_eq!(OffsetType::MatchStart.to_index(), SPO_MS_OFF);
+        assert_eq!(OffsetType::MatchEnd.to_index(), SPO_ME_OFF);
+        assert_eq!(OffsetType::HighlightStart.to_index(), SPO_HS_OFF);
+        assert_eq!(OffsetType::HighlightEnd.to_index(), SPO_HE_OFF);
+        assert_eq!(OffsetType::RegionStart.to_index(), SPO_RS_OFF);
+        assert_eq!(OffsetType::RegionEnd.to_index(), SPO_RE_OFF);
+        assert_eq!(OffsetType::LeadingContext.to_index(), SPO_LC_OFF);
+    }
+
+    #[test]
+    fn test_offset_type_from_index() {
+        assert_eq!(
+            OffsetType::from_index(SPO_MS_OFF),
+            Some(OffsetType::MatchStart)
+        );
+        assert_eq!(
+            OffsetType::from_index(SPO_ME_OFF),
+            Some(OffsetType::MatchEnd)
+        );
+        assert_eq!(
+            OffsetType::from_index(SPO_HS_OFF),
+            Some(OffsetType::HighlightStart)
+        );
+        assert_eq!(
+            OffsetType::from_index(SPO_HE_OFF),
+            Some(OffsetType::HighlightEnd)
+        );
+        assert_eq!(
+            OffsetType::from_index(SPO_RS_OFF),
+            Some(OffsetType::RegionStart)
+        );
+        assert_eq!(
+            OffsetType::from_index(SPO_RE_OFF),
+            Some(OffsetType::RegionEnd)
+        );
+        assert_eq!(
+            OffsetType::from_index(SPO_LC_OFF),
+            Some(OffsetType::LeadingContext)
+        );
+        assert_eq!(OffsetType::from_index(99), None);
+    }
+
+    #[test]
+    fn test_offset_type_short_names() {
+        assert_eq!(OffsetType::MatchStart.short_name(), "ms");
+        assert_eq!(OffsetType::MatchEnd.short_name(), "me");
+        assert_eq!(OffsetType::HighlightStart.short_name(), "hs");
+        assert_eq!(OffsetType::HighlightEnd.short_name(), "he");
+        assert_eq!(OffsetType::RegionStart.short_name(), "rs");
+        assert_eq!(OffsetType::RegionEnd.short_name(), "re");
+        assert_eq!(OffsetType::LeadingContext.short_name(), "lc");
+    }
+
+    #[test]
+    fn test_offset_type_all_array() {
+        // Verify ALL array contains all 7 offset types
+        assert_eq!(OffsetType::ALL.len(), SPO_COUNT as usize);
+
+        // Verify each type is present once
+        for (i, offset_type) in OffsetType::ALL.iter().enumerate() {
+            assert_eq!(offset_type.to_index(), i as i32);
+        }
+    }
+
+    #[test]
+    fn test_decode_offset_direction() {
+        // No flags set = from start
+        assert_eq!(
+            decode_offset_direction(0, OffsetType::MatchStart),
+            OffsetDirection::FromStart
+        );
+
+        // Test from_end bit for MatchStart (SPO_MS_OFF = 0)
+        // from_end bit = 1 << (0 + 7) = 128
+        let flags_me_from_end: i16 = 1 << (SPO_MS_OFF + SPO_COUNT);
+        assert_eq!(
+            decode_offset_direction(flags_me_from_end, OffsetType::MatchStart),
+            OffsetDirection::FromEnd
+        );
+
+        // Test that wrong bit doesn't affect different offset type
+        assert_eq!(
+            decode_offset_direction(flags_me_from_end, OffsetType::MatchEnd),
+            OffsetDirection::FromStart
+        );
+    }
+
+    #[test]
+    fn test_has_offset() {
+        // No flags = no offset
+        assert!(!has_offset(0, OffsetType::MatchStart));
+
+        // From start bit set
+        let from_start: i16 = 1 << SPO_MS_OFF;
+        assert!(has_offset(from_start, OffsetType::MatchStart));
+        assert!(!has_offset(from_start, OffsetType::MatchEnd));
+
+        // From end bit set
+        let from_end: i16 = 1 << (SPO_MS_OFF + SPO_COUNT);
+        assert!(has_offset(from_end, OffsetType::MatchStart));
+
+        // Both bits set (unusual but should still report has_offset)
+        let both: i16 = from_start | from_end;
+        assert!(has_offset(both, OffsetType::MatchStart));
     }
 }

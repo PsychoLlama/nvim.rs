@@ -407,5 +407,19 @@ mod tests {
     fn test_max_keyword_len_constant() {
         // Test the constant value matches
         assert_eq!(MAX_KEYWORD_LEN, MAXKEYWLEN);
+        // Also verify the value is 80
+        assert_eq!(MAXKEYWLEN, 80);
     }
+
+    #[test]
+    fn test_keyword_iter_from_null() {
+        // Test iterator creation with null handle
+        // Note: We can't call next() because it triggers FFI
+        let iter = KeywordIter::new(KeyEntryHandle::null());
+        assert!(iter.current.is_null());
+    }
+
+    // Note: Tests that would call functions with extern FFI (even with null checks)
+    // cannot be included here because the test binary doesn't link against the C library.
+    // Such tests are covered by integration tests with the full build.
 }
