@@ -496,6 +496,11 @@ int nvim_get_msg_no_more(void) { return msg_no_more ? 1 : 0; }
 int nvim_get_lines_left(void) { return lines_left; }
 void nvim_set_lines_left(int val) { lines_left = val; }
 int nvim_get_msg_scrolled_ign(void) { return msg_scrolled_ign ? 1 : 0; }
+
+// C accessors for msg_scrolled and msg_did_scroll (used by Rust)
+void nvim_set_msg_scrolled(int val) { msg_scrolled = val; }
+int nvim_get_msg_did_scroll(void) { return msg_did_scroll ? 1 : 0; }
+void nvim_set_msg_did_scroll(int val) { msg_did_scroll = (val != 0); }
 int nvim_get_emsg_on_display(void) { return emsg_on_display ? 1 : 0; }
 void nvim_set_emsg_on_display(int val) { emsg_on_display = (val != 0); }
 

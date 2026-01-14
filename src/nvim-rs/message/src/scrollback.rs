@@ -344,6 +344,105 @@ pub unsafe extern "C" fn rs_sb_reset_clear_state() {
     nvim_set_do_clear_sb_text(SbClearState::NONE.0);
 }
 
+// ============================================================================
+// Phase 426: Additional Scroll Operations
+// ============================================================================
+
+extern "C" {
+    // Scroll functions
+    fn msg_scroll_up(may_throttle: c_int, zerocmd: c_int);
+    fn nvim_get_msg_scrolled() -> c_int;
+    fn nvim_set_msg_scrolled(val: c_int);
+    fn nvim_get_msg_did_scroll() -> c_int;
+    fn nvim_set_msg_did_scroll(val: c_int);
+}
+
+/// Scroll message display up by one line.
+///
+/// # Arguments
+/// * `may_throttle` - If true, allow throttling for slow UI
+/// * `zerocmd` - If true, handling cmdheight=0 case
+///
+/// # Safety
+/// Calls C function that modifies display state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_scroll_up(may_throttle: c_int, zerocmd: c_int) {
+    msg_scroll_up(may_throttle, zerocmd);
+}
+
+/// Scroll message display up (normal case).
+///
+/// Convenience wrapper without throttling or zerocmd handling.
+///
+/// # Safety
+/// Calls C function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_scroll_up_simple() {
+    msg_scroll_up(0, 0);
+}
+
+// Note: rs_msg_scrolled() is defined in lib.rs
+
+/// Set the msg_scrolled counter.
+///
+/// # Safety
+/// Calls C mutator function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_msg_scrolled(val: c_int) {
+    nvim_set_msg_scrolled(val);
+}
+
+/// Increment the msg_scrolled counter.
+///
+/// # Safety
+/// Calls C accessor/mutator functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_inc_msg_scrolled() {
+    let val = nvim_get_msg_scrolled();
+    nvim_set_msg_scrolled(val + 1);
+}
+
+/// Check if message display has scrolled.
+///
+/// Returns true if msg_scrolled > 0.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_has_msg_scrolled() -> c_int {
+    c_int::from(nvim_get_msg_scrolled() > 0)
+}
+
+/// Check if msg_did_scroll flag is set.
+///
+/// Returns true if scrolling occurred during current message.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_did_scroll() -> c_int {
+    nvim_get_msg_did_scroll()
+}
+
+/// Set the msg_did_scroll flag.
+///
+/// # Safety
+/// Calls C mutator function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_msg_did_scroll(val: c_int) {
+    nvim_set_msg_did_scroll(val);
+}
+
+/// Reset scroll state for new message.
+///
+/// # Safety
+/// Calls C mutator functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_reset_scroll() {
+    nvim_set_msg_scrolled(0);
+    nvim_set_msg_did_scroll(0);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
