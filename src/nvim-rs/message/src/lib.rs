@@ -35,6 +35,7 @@ pub mod error;
 pub mod format;
 pub mod history;
 pub mod output;
+pub mod output_core;
 pub mod scrollback;
 
 // Re-export FFI functions for the static library
@@ -45,6 +46,7 @@ pub use error::*;
 pub use format::*;
 pub use history::*;
 pub use output::*;
+pub use output_core::*;
 pub use scrollback::*;
 
 // ============================================================================
