@@ -133,6 +133,18 @@ extern int rs_buf_hide(buf_T *buf);
 extern int rs_bufref_valid(bufref_T *bufref);
 extern int rs_col_print(uint8_t *buf, size_t buflen, int col, int vcol);
 
+// Additional buffer state/lifecycle functions from Rust
+extern int rs_buf_is_modified(buf_T *buf);
+extern int rs_buf_has_filename(buf_T *buf);
+extern int rs_buf_is_dummy(buf_T *buf);
+extern int rs_buf_is_never_loaded(buf_T *buf);
+extern int rs_buf_is_readonly(buf_T *buf);
+extern int rs_buf_is_modifiable(buf_T *buf);
+extern int rs_buf_is_listed(buf_T *buf);
+extern int rs_buf_is_empty(buf_T *buf);
+extern int rs_buf_nwindows(buf_T *buf);
+extern int rs_buf_can_unload(buf_T *buf);
+
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to buf_T fields from Rust code.
 
