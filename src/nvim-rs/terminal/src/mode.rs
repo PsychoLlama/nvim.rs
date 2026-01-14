@@ -546,4 +546,63 @@ mod tests {
         assert_eq!(cursor.shape, CursorShape::Block);
         assert!(!cursor.blink);
     }
+
+    #[test]
+    fn test_terminal_mode_methods() {
+        assert!(!TerminalMode::None.is_terminal());
+        assert!(TerminalMode::Normal.is_terminal());
+        assert!(TerminalMode::Insert.is_terminal());
+
+        assert!(!TerminalMode::None.is_insert());
+        assert!(!TerminalMode::Normal.is_insert());
+        assert!(TerminalMode::Insert.is_insert());
+
+        assert!(!TerminalMode::None.is_normal());
+        assert!(TerminalMode::Normal.is_normal());
+        assert!(!TerminalMode::Insert.is_normal());
+    }
+
+    #[test]
+    fn test_cursor_shape_roundtrip() {
+        // All cursor shapes should roundtrip through raw values
+        assert_eq!(
+            CursorShape::from_raw(CursorShape::Block.as_raw()),
+            Some(CursorShape::Block)
+        );
+        assert_eq!(
+            CursorShape::from_raw(CursorShape::Underline.as_raw()),
+            Some(CursorShape::Underline)
+        );
+        assert_eq!(
+            CursorShape::from_raw(CursorShape::Bar.as_raw()),
+            Some(CursorShape::Bar)
+        );
+    }
+
+    #[test]
+    fn test_opaque_handle_null_checks() {
+        let null_term = TerminalHandle::null();
+        let null_win = WinHandle::null();
+
+        assert!(null_term.is_null());
+        assert!(null_win.is_null());
+
+        // Non-null handles
+        let fake_term = TerminalHandle(std::ptr::dangling_mut::<std::ffi::c_void>());
+        let fake_win = WinHandle(std::ptr::dangling_mut::<std::ffi::c_void>());
+
+        assert!(!fake_term.is_null());
+        assert!(!fake_win.is_null());
+    }
+
+    #[test]
+    fn test_validate_mode_transition_null() {
+        // Validate with null terminal should return NullTerminal error
+        let result = validate_mode_transition(
+            TerminalHandle::null(),
+            TerminalMode::None,
+            TerminalMode::Insert,
+        );
+        assert_eq!(result, ModeTransitionResult::NullTerminal);
+    }
 }
