@@ -375,6 +375,183 @@ pub unsafe extern "C" fn rs_dec_msg_hist_len() {
     }
 }
 
+// ============================================================================
+// Phase 427: Additional History Management Functions
+// ============================================================================
+
+/// Set the first history entry directly.
+///
+/// # Safety
+/// Calls C mutator function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_msg_hist_first(entry: *mut MessageHistoryEntryHandle) {
+    nvim_set_msg_hist_first(entry);
+}
+
+/// Set the last history entry directly.
+///
+/// # Safety
+/// Calls C mutator function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_msg_hist_last(entry: *mut MessageHistoryEntryHandle) {
+    nvim_set_msg_hist_last(entry);
+}
+
+/// Check if history has exactly one entry.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_single() -> c_int {
+    let first = nvim_get_msg_hist_first();
+    if first.is_null() {
+        return 0;
+    }
+    c_int::from(nvim_msg_hist_entry_get_next(first).is_null())
+}
+
+/// Check if a specific entry is the last one in history.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_is_last(entry: *mut MessageHistoryEntryHandle) -> c_int {
+    if entry.is_null() {
+        return 0;
+    }
+    c_int::from(entry == nvim_get_msg_hist_last())
+}
+
+/// Check if a specific entry is the first one in history.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_is_first(entry: *mut MessageHistoryEntryHandle) -> c_int {
+    if entry.is_null() {
+        return 0;
+    }
+    c_int::from(entry == nvim_get_msg_hist_first())
+}
+
+/// Get the number of non-temporary entries in history.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_permanent_count() -> c_int {
+    nvim_get_msg_hist_len()
+}
+
+/// Check if history recording is currently possible.
+///
+/// Returns true if not disabled and not at capacity.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_can_add() -> c_int {
+    let disabled = nvim_get_msg_hist_off() != 0 || nvim_get_msg_silent() != 0;
+    c_int::from(!disabled)
+}
+
+/// Trim history to the maximum allowed size.
+///
+/// Equivalent to calling `rs_msg_hist_clear(max)`.
+///
+/// # Safety
+/// Calls C accessor and mutator functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_trim() {
+    let max = nvim_get_msg_hist_max();
+    rs_msg_hist_clear(max);
+}
+
+/// Clear all history entries.
+///
+/// Equivalent to calling `rs_msg_hist_clear(0)`.
+///
+/// # Safety
+/// Calls C accessor and mutator functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_clear_all() {
+    rs_msg_hist_clear(0);
+}
+
+/// Get the nth entry from the start of history.
+///
+/// Returns NULL if n >= total count.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_nth(n: c_int) -> *mut MessageHistoryEntryHandle {
+    if n < 0 {
+        return ptr::null_mut();
+    }
+
+    let mut entry = nvim_get_msg_hist_first();
+    let mut i = 0;
+
+    while !entry.is_null() && i < n {
+        entry = nvim_msg_hist_entry_get_next(entry);
+        i += 1;
+    }
+
+    entry
+}
+
+/// Get the nth entry from the end of history.
+///
+/// Returns NULL if n >= total count.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_nth_last(n: c_int) -> *mut MessageHistoryEntryHandle {
+    if n < 0 {
+        return ptr::null_mut();
+    }
+
+    let mut entry = nvim_get_msg_hist_last();
+    let mut i = 0;
+
+    while !entry.is_null() && i < n {
+        entry = nvim_msg_hist_entry_get_prev(entry);
+        i += 1;
+    }
+
+    entry
+}
+
+/// Skip entries from the start of history.
+///
+/// Returns the (skip+1)th entry, or NULL if not enough entries.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_skip(skip: c_int) -> *mut MessageHistoryEntryHandle {
+    rs_msg_hist_nth(skip)
+}
+
+/// Calculate how many entries to skip for `:messages N`.
+///
+/// Given total length and requested count, returns how many
+/// to skip from the beginning.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_hist_calc_skip(count: c_int) -> c_int {
+    let len = nvim_get_msg_hist_len();
+    if count >= len {
+        0
+    } else {
+        len - count
+    }
+}
+
 #[cfg(test)]
 mod tests {
     // Integration tests would require mocking C functions
