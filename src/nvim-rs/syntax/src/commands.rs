@@ -593,4 +593,101 @@ mod tests {
             &["toplevel", "notoplevel", "default"]
         );
     }
+
+    #[test]
+    fn test_all_subcommand_names() {
+        let names = SyntaxSubcommand::all_names();
+        // Should have at least the basic commands
+        assert!(names.len() >= 15);
+        assert!(names.contains(&"case"));
+        assert!(names.contains(&"clear"));
+        assert!(names.contains(&"keyword"));
+        assert!(names.contains(&"match"));
+        assert!(names.contains(&"region"));
+        // "on" is an alias for "enable"
+        assert!(names.contains(&"on"));
+        assert!(names.contains(&"enable"));
+    }
+
+    #[test]
+    fn test_subcommand_roundtrip() {
+        // All subcommands should roundtrip through name()
+        let cmds = [
+            SyntaxSubcommand::Case,
+            SyntaxSubcommand::Clear,
+            SyntaxSubcommand::Cluster,
+            SyntaxSubcommand::Conceal,
+            SyntaxSubcommand::Enable,
+            SyntaxSubcommand::FoldLevel,
+            SyntaxSubcommand::Include,
+            SyntaxSubcommand::IsKeyword,
+            SyntaxSubcommand::Keyword,
+            SyntaxSubcommand::List,
+            SyntaxSubcommand::Manual,
+            SyntaxSubcommand::Match,
+            SyntaxSubcommand::Off,
+            SyntaxSubcommand::Region,
+            SyntaxSubcommand::Reset,
+            SyntaxSubcommand::Spell,
+            SyntaxSubcommand::Sync,
+        ];
+
+        for cmd in cmds {
+            let name = cmd.name();
+            let parsed = SyntaxSubcommand::from_name(name);
+            assert_eq!(parsed, Some(cmd), "Failed roundtrip for {:?}", cmd);
+        }
+    }
+
+    #[test]
+    fn test_pattern_options_default_values() {
+        let opts = PatternOptions::default();
+        assert!(!opts.contained);
+        assert!(!opts.transparent);
+        assert!(!opts.oneline);
+        assert!(!opts.keepend);
+        assert!(!opts.extend);
+        assert!(!opts.excludenl);
+        assert!(!opts.skipwhite);
+        assert!(!opts.skipnl);
+        assert!(!opts.skipempty);
+        assert!(!opts.conceal);
+        assert!(!opts.concealends);
+        assert!(!opts.fold);
+        assert!(opts.cchar.is_none());
+        assert!(opts.contains.is_empty());
+        assert!(opts.containedin.is_empty());
+        assert!(opts.nextgroup.is_empty());
+    }
+
+    #[test]
+    fn test_sync_mode_all_variants() {
+        // Test all sync mode variants can be parsed
+        assert_eq!(SyncMode::from_arg("fromstart"), Some(SyncMode::FromStart));
+        assert_eq!(SyncMode::from_arg("ccomment"), Some(SyncMode::CComment));
+        assert_eq!(SyncMode::from_arg("match"), Some(SyncMode::Match));
+        assert_eq!(SyncMode::from_arg("lines"), Some(SyncMode::Lines));
+        assert_eq!(SyncMode::from_arg("minlines"), Some(SyncMode::MinLines));
+        assert_eq!(SyncMode::from_arg("maxlines"), Some(SyncMode::MaxLines));
+        assert_eq!(SyncMode::from_arg("linebreaks"), Some(SyncMode::LineBreaks));
+    }
+
+    #[test]
+    fn test_case_mode_default() {
+        // Default should be Match (case-sensitive)
+        let default = CaseMode::default();
+        assert_eq!(default, CaseMode::Match);
+    }
+
+    #[test]
+    fn test_spell_mode_default() {
+        let default = SpellMode::default();
+        assert_eq!(default, SpellMode::Default);
+    }
+
+    #[test]
+    fn test_sync_mode_default() {
+        let default = SyncMode::default();
+        assert_eq!(default, SyncMode::FromStart);
+    }
 }
