@@ -4084,3 +4084,236 @@ pub extern "C" fn rs_get_small_delete_put_direction(at_eol: bool) -> c_int {
         0 // BACKWARD
     }
 }
+
+// =============================================================================
+// Phase 410: Yank operations helpers
+// =============================================================================
+
+/// Check if the motion type should be converted to linewise.
+///
+/// If the cursor was in column 1 before and after the movement, and the
+/// operator is not inclusive, the yank is always linewise.
+#[no_mangle]
+pub extern "C" fn rs_yank_should_be_linewise(
+    motion_type: c_int,
+    start_col: c_int,
+    end_col: c_int,
+    inclusive: bool,
+    is_visual: bool,
+    sel_is_o: bool,
+    line_count: usize,
+) -> bool {
+    motion_type == K_MT_CHAR_WISE
+        && start_col == 0
+        && !inclusive
+        && (!is_visual || sel_is_o)
+        && end_col == 0
+        && line_count > 1
+}
+
+/// Calculate adjusted yank line count for linewise conversion.
+///
+/// When converting charwise to linewise, decrease yanklines by 1.
+#[no_mangle]
+pub extern "C" fn rs_yank_adjusted_line_count(line_count: usize, converted: bool) -> usize {
+    if converted {
+        line_count.saturating_sub(1)
+    } else {
+        line_count
+    }
+}
+
+/// Calculate block width for blockwise yank.
+///
+/// Width is end_vcol - start_vcol, adjusted if curswant is MAXCOL.
+#[no_mangle]
+pub extern "C" fn rs_yank_block_width(
+    start_vcol: c_int,
+    end_vcol: c_int,
+    curswant_is_maxcol: bool,
+) -> c_int {
+    let width = end_vcol - start_vcol;
+    if curswant_is_maxcol && width > 0 {
+        width - 1
+    } else {
+        width
+    }
+}
+
+/// Check if block copy should exclude trailing whitespace.
+#[no_mangle]
+pub extern "C" fn rs_yank_exclude_trailing_ws(excl_tr_ws: bool) -> bool {
+    excl_tr_ws
+}
+
+/// Calculate block line size including spaces.
+///
+/// size = startspaces + endspaces + textlen
+#[no_mangle]
+pub extern "C" fn rs_yank_block_line_size(
+    startspaces: c_int,
+    endspaces: c_int,
+    textlen: c_int,
+) -> c_int {
+    startspaces + endspaces + textlen
+}
+
+/// Check if we should append the new yank to existing content.
+#[no_mangle]
+pub extern "C" fn rs_yank_should_append(append: bool, has_content: bool) -> bool {
+    append && has_content
+}
+
+/// Determine if linewise type should override other types when appending.
+///
+/// kMTLineWise overrides kMTCharWise and kMTBlockWise.
+#[no_mangle]
+pub extern "C" fn rs_yank_linewise_overrides(yank_type: c_int) -> bool {
+    yank_type == K_MT_LINE_WISE
+}
+
+/// Check if charwise append should concatenate last/first lines.
+///
+/// When appending charwise content and CPO_REGAPPEND is not set,
+/// the last line of old and first line of new should be concatenated.
+#[no_mangle]
+pub extern "C" fn rs_yank_should_concatenate_lines(
+    curr_type: c_int,
+    cpo_regappend_set: bool,
+) -> bool {
+    curr_type == K_MT_CHAR_WISE && !cpo_regappend_set
+}
+
+/// Calculate combined size for concatenating two strings.
+#[no_mangle]
+pub extern "C" fn rs_yank_concat_size(size1: usize, size2: usize) -> usize {
+    size1.saturating_add(size2)
+}
+
+/// Calculate new array size after append.
+#[no_mangle]
+pub extern "C" fn rs_yank_append_array_size(curr_size: usize, reg_size: usize) -> usize {
+    curr_size.saturating_add(reg_size)
+}
+
+/// Determine if yank message should be displayed.
+///
+/// Only display if:
+/// - message flag is true
+/// - For charwise single line, set yanklines to 0
+/// - For lines > p_report, show message
+#[no_mangle]
+pub extern "C" fn rs_yank_should_show_message(
+    message: bool,
+    yank_type: c_int,
+    line_count: usize,
+    p_report: i64,
+) -> bool {
+    if !message {
+        return false;
+    }
+    // charwise single line doesn't count
+    let adjusted_lines = if yank_type == K_MT_CHAR_WISE && line_count == 1 {
+        0
+    } else {
+        line_count
+    };
+    adjusted_lines > p_report as usize
+}
+
+/// Get the adjusted line count for yank messages.
+///
+/// Charwise single line yanklines is reported as 0.
+#[no_mangle]
+pub extern "C" fn rs_yank_message_line_count(yank_type: c_int, line_count: usize) -> usize {
+    if yank_type == K_MT_CHAR_WISE && line_count == 1 {
+        0
+    } else {
+        line_count
+    }
+}
+
+/// Check if marks should be updated after yank.
+#[no_mangle]
+pub extern "C" fn rs_yank_should_update_marks(lockmarks: bool) -> bool {
+    !lockmarks
+}
+
+/// Determine end column for mark setting.
+///
+/// For linewise, col should be MAXCOL. For others, depends on inclusive.
+#[no_mangle]
+pub extern "C" fn rs_yank_mark_end_col_is_maxcol(yank_type: c_int) -> bool {
+    yank_type == K_MT_LINE_WISE
+}
+
+/// Check if end position should be excluded for marks.
+///
+/// For non-linewise and non-inclusive operations, exclude the end position.
+#[no_mangle]
+pub extern "C" fn rs_yank_should_exclude_end(yank_type: c_int, inclusive: bool) -> bool {
+    yank_type != K_MT_LINE_WISE && !inclusive
+}
+
+/// Check if regname should be displayed in message.
+#[no_mangle]
+pub extern "C" fn rs_yank_show_regname_in_message(regname: c_int) -> bool {
+    regname != 0
+}
+
+/// Calculate total size of startspaces padding.
+#[no_mangle]
+pub extern "C" fn rs_yank_startspaces_size(startspaces: c_int) -> c_int {
+    if startspaces > 0 {
+        startspaces
+    } else {
+        0
+    }
+}
+
+/// Calculate text position offset after startspaces.
+#[no_mangle]
+pub extern "C" fn rs_yank_text_offset_after_startspaces(startspaces: c_int) -> c_int {
+    if startspaces > 0 {
+        startspaces
+    } else {
+        0
+    }
+}
+
+/// Get initial y_idx for yank iteration.
+#[no_mangle]
+pub extern "C" fn rs_yank_initial_idx() -> usize {
+    0
+}
+
+/// Increment yank index.
+#[no_mangle]
+pub extern "C" fn rs_yank_next_idx(idx: usize) -> usize {
+    idx.saturating_add(1)
+}
+
+/// Check if yank iteration is complete.
+#[no_mangle]
+pub extern "C" fn rs_yank_iteration_complete(idx: usize, total: usize) -> bool {
+    idx >= total
+}
+
+/// Calculate starting y_idx for append copy.
+///
+/// When concatenating charwise, skip the first line (index 0).
+/// Otherwise start from 0.
+#[no_mangle]
+pub extern "C" fn rs_yank_append_start_idx(concatenated: bool) -> usize {
+    if concatenated {
+        1
+    } else {
+        0
+    }
+}
+
+/// Calculate the space character for padding.
+#[no_mangle]
+pub extern "C" fn rs_yank_space_char() -> c_int {
+    c_int::from(b' ')
+}
