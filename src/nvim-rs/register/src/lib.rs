@@ -2911,3 +2911,236 @@ pub extern "C" fn rs_needs_clipboard_query_on_read(regname: c_int) -> bool {
         || regname == 0
         || regname == c_int::from(b'"')
 }
+
+// =============================================================================
+// Phase 405: Write Operations
+// =============================================================================
+
+/// Write target type for write_reg_contents routing.
+#[repr(C)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum WriteRegTarget {
+    /// Normal yank register
+    YankRegister = 0,
+    /// Search pattern register ('/')
+    SearchPattern = 1,
+    /// Alternate file register ('#')
+    AlternateFile = 2,
+    /// Expression register ('=')
+    Expression = 3,
+    /// Black hole register ('_')
+    BlackHole = 4,
+}
+
+/// Determine the write target type for a register name.
+#[no_mangle]
+pub extern "C" fn rs_get_write_target_type(regname: c_int) -> WriteRegTarget {
+    match regname as u8 {
+        b'/' => WriteRegTarget::SearchPattern,
+        b'#' => WriteRegTarget::AlternateFile,
+        b'=' => WriteRegTarget::Expression,
+        b'_' => WriteRegTarget::BlackHole,
+        _ => WriteRegTarget::YankRegister,
+    }
+}
+
+/// Check if a register write should be skipped (black hole).
+#[no_mangle]
+pub extern "C" fn rs_is_write_noop(regname: c_int) -> bool {
+    regname == c_int::from(b'_')
+}
+
+/// Check if writing to search or expression register with multiple lines
+/// should produce an error.
+///
+/// Search pattern and expression registers can only hold single lines.
+#[no_mangle]
+pub extern "C" fn rs_write_rejects_multiline(regname: c_int) -> bool {
+    regname == c_int::from(b'/') || regname == c_int::from(b'=')
+}
+
+/// Check if write operation should append based on register name.
+///
+/// Uppercase letter registers always append.
+#[no_mangle]
+pub extern "C" fn rs_write_should_append(regname: c_int, must_append: bool) -> bool {
+    must_append || rs_is_append_register(regname) != 0
+}
+
+/// Determine the effective motion type from string content.
+///
+/// If yank_type is unknown and string ends with newline, returns linewise.
+/// Otherwise returns the given type or charwise as default.
+///
+/// # Safety
+///
+/// str_ptr must be valid for len bytes (if len > 0).
+#[no_mangle]
+pub unsafe extern "C" fn rs_determine_motion_type_from_string(
+    str_ptr: *const c_char,
+    len: isize,
+    yank_type: c_int,
+) -> c_int {
+    // If type is already specified, use it
+    if yank_type != K_MT_UNKNOWN {
+        return yank_type;
+    }
+
+    // Auto-detect: if string ends with newline, use linewise
+    if len > 0 && !str_ptr.is_null() {
+        let last_char = *str_ptr.offset(len - 1) as u8;
+        if last_char == b'\n' || last_char == b'\r' {
+            return K_MT_LINE_WISE;
+        }
+    }
+
+    K_MT_CHAR_WISE
+}
+
+/// Parse register type string (for setreg()).
+///
+/// Accepts: 'v'/'c' (charwise), 'V'/'l' (linewise), 'b'/Ctrl-V (blockwise).
+/// Returns motion type constant or K_MT_UNKNOWN for invalid input.
+#[no_mangle]
+pub extern "C" fn rs_parse_register_type_char(type_char: c_int) -> c_int {
+    match type_char as u8 {
+        0 => K_MT_UNKNOWN,
+        b'v' | b'c' => K_MT_CHAR_WISE,
+        b'V' | b'l' => K_MT_LINE_WISE,
+        b'b' | 0x16 => K_MT_BLOCK_WISE, // 0x16 is Ctrl-V
+        _ => -1,                        // Invalid
+    }
+}
+
+/// Check if register type string is valid.
+#[no_mangle]
+pub extern "C" fn rs_is_valid_register_type_string(type_char: c_int) -> bool {
+    rs_parse_register_type_char(type_char) != -1
+}
+
+/// Count newlines in a string.
+///
+/// Used to determine number of lines when converting string to register.
+///
+/// # Safety
+///
+/// str_ptr must be valid for len bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_count_newlines(str_ptr: *const c_char, len: usize) -> usize {
+    if str_ptr.is_null() || len == 0 {
+        return 0;
+    }
+
+    let slice = std::slice::from_raw_parts(str_ptr as *const u8, len);
+    slice.iter().filter(|&&c| c == b'\n').count()
+}
+
+/// Calculate number of lines when string is split by newlines.
+///
+/// Returns count of segments (lines) that would result from splitting.
+/// Empty string produces 1 line (empty).
+///
+/// # Safety
+///
+/// str_ptr must be valid for len bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_count_lines_in_string(str_ptr: *const c_char, len: usize) -> usize {
+    if str_ptr.is_null() || len == 0 {
+        return 1;
+    }
+
+    let newlines = rs_count_newlines(str_ptr, len);
+
+    // Check if string ends with newline (doesn't create extra line)
+    let slice = std::slice::from_raw_parts(str_ptr as *const u8, len);
+    let ends_with_newline = slice.last().is_some_and(|&c| c == b'\n');
+
+    if ends_with_newline {
+        // "a\nb\n" has 2 lines
+        newlines
+    } else {
+        // "a\nb" has 2 lines
+        newlines + 1
+    }
+}
+
+extern "C" {
+    fn strlen(s: *const c_char) -> usize;
+}
+
+/// Prepare expression register for append.
+///
+/// Returns the current length of expr_line if appending, or 0 if not.
+///
+/// # Safety
+///
+/// Accesses global expr_line via FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_prepare_expr_append(must_append: bool) -> usize {
+    if !must_append {
+        return 0;
+    }
+
+    let expr = nvim_get_expr_line();
+    if expr.is_null() {
+        return 0;
+    }
+
+    // Calculate length of existing expr_line
+    strlen(expr)
+}
+
+/// Check if a regtype string specifies a block width.
+///
+/// Format: "b7" means blockwise with width 7.
+/// Returns the width if present (>= 0), or -1 if no width specified.
+///
+/// # Safety
+///
+/// regtype must be valid for len bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_block_width_from_regtype(
+    regtype: *const c_char,
+    len: usize,
+) -> c_int {
+    if regtype.is_null() || len < 2 {
+        return -1;
+    }
+
+    let first = *regtype as u8;
+    if first != b'b' && first != CTRL_V {
+        return -1;
+    }
+
+    let second = *regtype.offset(1) as u8;
+    if !second.is_ascii_digit() {
+        return -1;
+    }
+
+    // Parse the number
+    let slice = std::slice::from_raw_parts(regtype.offset(1) as *const u8, len - 1);
+    let mut width: c_int = 0;
+    for &c in slice {
+        if c.is_ascii_digit() {
+            width = width * 10 + (c - b'0') as c_int;
+        } else {
+            break;
+        }
+    }
+
+    // Width is stored as width - 1 in neovim
+    width - 1
+}
+
+/// Format register type as a character for display.
+///
+/// Returns 'v' for charwise, 'V' for linewise, Ctrl-V for blockwise.
+#[no_mangle]
+pub extern "C" fn rs_motion_type_to_char(motion_type: c_int) -> c_int {
+    match motion_type {
+        K_MT_CHAR_WISE => c_int::from(b'v'),
+        K_MT_LINE_WISE => c_int::from(b'V'),
+        K_MT_BLOCK_WISE => c_int::from(CTRL_V),
+        _ => 0,
+    }
+}
