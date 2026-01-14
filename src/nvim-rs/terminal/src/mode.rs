@@ -357,6 +357,185 @@ impl FocusChange {
 }
 
 // =============================================================================
+// Job State Integration
+// =============================================================================
+
+/// Job state for terminal processes.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum JobState {
+    /// Job has not started.
+    Pending = 0,
+    /// Job is running.
+    Running = 1,
+    /// Job is paused/stopped.
+    Stopped = 2,
+    /// Job has exited normally.
+    Exited = 3,
+    /// Job was killed by signal.
+    Killed = 4,
+    /// Job failed to start.
+    Failed = 5,
+}
+
+impl JobState {
+    /// Check if the job is active (running or stopped).
+    pub const fn is_active(self) -> bool {
+        matches!(self, JobState::Running | JobState::Stopped)
+    }
+
+    /// Check if the job has terminated.
+    pub const fn is_terminated(self) -> bool {
+        matches!(self, JobState::Exited | JobState::Killed | JobState::Failed)
+    }
+
+    /// Check if the job is running.
+    pub const fn is_running(self) -> bool {
+        matches!(self, JobState::Running)
+    }
+}
+
+/// Terminal job info.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct JobInfo {
+    /// Current job state.
+    pub state: JobState,
+    /// Exit code (valid only when state is Exited).
+    pub exit_code: c_int,
+    /// Signal number (valid only when state is Killed).
+    pub signal: c_int,
+}
+
+impl JobInfo {
+    /// Create a pending job info.
+    pub const fn pending() -> Self {
+        Self {
+            state: JobState::Pending,
+            exit_code: -1,
+            signal: 0,
+        }
+    }
+
+    /// Create a running job info.
+    pub const fn running() -> Self {
+        Self {
+            state: JobState::Running,
+            exit_code: -1,
+            signal: 0,
+        }
+    }
+
+    /// Create an exited job info.
+    pub const fn exited(code: c_int) -> Self {
+        Self {
+            state: JobState::Exited,
+            exit_code: code,
+            signal: 0,
+        }
+    }
+
+    /// Create a killed job info.
+    pub const fn killed(signal: c_int) -> Self {
+        Self {
+            state: JobState::Killed,
+            exit_code: -1,
+            signal,
+        }
+    }
+
+    /// Check if job exited successfully (exit code 0).
+    pub const fn exited_success(&self) -> bool {
+        matches!(self.state, JobState::Exited) && self.exit_code == 0
+    }
+}
+
+impl Default for JobInfo {
+    fn default() -> Self {
+        Self::pending()
+    }
+}
+
+// =============================================================================
+// Mode Entry/Exit Helpers
+// =============================================================================
+
+/// Reason for entering terminal mode.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModeEntryReason {
+    /// Explicit user action (e.g., i in terminal window).
+    UserAction = 0,
+    /// Terminal buffer opened.
+    BufferOpen = 1,
+    /// Window focus change.
+    WindowFocus = 2,
+    /// API call.
+    Api = 3,
+}
+
+/// Reason for exiting terminal mode.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ModeExitReason {
+    /// User pressed escape or similar.
+    UserAction = 0,
+    /// Job terminated.
+    JobTerminated = 1,
+    /// Window focus lost.
+    WindowBlur = 2,
+    /// API call.
+    Api = 3,
+    /// Buffer closed.
+    BufferClosed = 4,
+}
+
+/// Mode entry request.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct ModeEntry {
+    /// Target mode.
+    pub target: TerminalMode,
+    /// Reason for entry.
+    pub reason: ModeEntryReason,
+}
+
+impl ModeEntry {
+    /// Create an insert mode entry.
+    pub const fn insert(reason: ModeEntryReason) -> Self {
+        Self {
+            target: TerminalMode::Insert,
+            reason,
+        }
+    }
+
+    /// Create a normal mode entry.
+    pub const fn normal(reason: ModeEntryReason) -> Self {
+        Self {
+            target: TerminalMode::Normal,
+            reason,
+        }
+    }
+}
+
+/// Mode exit request.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct ModeExit {
+    /// Current mode being exited.
+    pub from: TerminalMode,
+    /// Reason for exit.
+    pub reason: ModeExitReason,
+}
+
+impl ModeExit {
+    /// Create an exit request.
+    pub const fn new(from: TerminalMode, reason: ModeExitReason) -> Self {
+        Self { from, reason }
+    }
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
 
@@ -416,6 +595,50 @@ pub extern "C" fn rs_validate_mode_transition(
         _ => return ModeTransitionResult::InvalidTransition,
     };
     validate_mode_transition(term, from_mode, to_mode)
+}
+
+/// FFI export: Check if job is active.
+#[no_mangle]
+pub extern "C" fn rs_terminal_job_is_active(state: c_int) -> c_int {
+    let job_state = match state {
+        0 => JobState::Pending,
+        1 => JobState::Running,
+        2 => JobState::Stopped,
+        3 => JobState::Exited,
+        4 => JobState::Killed,
+        5 => JobState::Failed,
+        _ => return 0,
+    };
+    c_int::from(job_state.is_active())
+}
+
+/// FFI export: Check if job is terminated.
+#[no_mangle]
+pub extern "C" fn rs_terminal_job_is_terminated(state: c_int) -> c_int {
+    let job_state = match state {
+        0 => JobState::Pending,
+        1 => JobState::Running,
+        2 => JobState::Stopped,
+        3 => JobState::Exited,
+        4 => JobState::Killed,
+        5 => JobState::Failed,
+        _ => return 0,
+    };
+    c_int::from(job_state.is_terminated())
+}
+
+/// FFI export: Create exited job info.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_terminal_job_exited(exit_code: c_int) -> JobInfo {
+    JobInfo::exited(exit_code)
+}
+
+/// FFI export: Create killed job info.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_terminal_job_killed(signal: c_int) -> JobInfo {
+    JobInfo::killed(signal)
 }
 
 #[cfg(test)]
@@ -604,5 +827,104 @@ mod tests {
             TerminalMode::Insert,
         );
         assert_eq!(result, ModeTransitionResult::NullTerminal);
+    }
+
+    #[test]
+    fn test_job_state_values() {
+        assert_eq!(JobState::Pending as c_int, 0);
+        assert_eq!(JobState::Running as c_int, 1);
+        assert_eq!(JobState::Stopped as c_int, 2);
+        assert_eq!(JobState::Exited as c_int, 3);
+        assert_eq!(JobState::Killed as c_int, 4);
+        assert_eq!(JobState::Failed as c_int, 5);
+    }
+
+    #[test]
+    fn test_job_state_checks() {
+        assert!(!JobState::Pending.is_active());
+        assert!(JobState::Running.is_active());
+        assert!(JobState::Stopped.is_active());
+        assert!(!JobState::Exited.is_active());
+        assert!(!JobState::Killed.is_active());
+        assert!(!JobState::Failed.is_active());
+
+        assert!(!JobState::Pending.is_terminated());
+        assert!(!JobState::Running.is_terminated());
+        assert!(!JobState::Stopped.is_terminated());
+        assert!(JobState::Exited.is_terminated());
+        assert!(JobState::Killed.is_terminated());
+        assert!(JobState::Failed.is_terminated());
+
+        assert!(!JobState::Pending.is_running());
+        assert!(JobState::Running.is_running());
+        assert!(!JobState::Stopped.is_running());
+    }
+
+    #[test]
+    fn test_job_info_creation() {
+        let pending = JobInfo::pending();
+        assert_eq!(pending.state, JobState::Pending);
+        assert_eq!(pending.exit_code, -1);
+
+        let running = JobInfo::running();
+        assert_eq!(running.state, JobState::Running);
+
+        let exited = JobInfo::exited(42);
+        assert_eq!(exited.state, JobState::Exited);
+        assert_eq!(exited.exit_code, 42);
+        assert!(!exited.exited_success());
+
+        let success = JobInfo::exited(0);
+        assert!(success.exited_success());
+
+        let killed = JobInfo::killed(9);
+        assert_eq!(killed.state, JobState::Killed);
+        assert_eq!(killed.signal, 9);
+    }
+
+    #[test]
+    fn test_mode_entry_reason_values() {
+        assert_eq!(ModeEntryReason::UserAction as c_int, 0);
+        assert_eq!(ModeEntryReason::BufferOpen as c_int, 1);
+        assert_eq!(ModeEntryReason::WindowFocus as c_int, 2);
+        assert_eq!(ModeEntryReason::Api as c_int, 3);
+    }
+
+    #[test]
+    fn test_mode_exit_reason_values() {
+        assert_eq!(ModeExitReason::UserAction as c_int, 0);
+        assert_eq!(ModeExitReason::JobTerminated as c_int, 1);
+        assert_eq!(ModeExitReason::WindowBlur as c_int, 2);
+        assert_eq!(ModeExitReason::Api as c_int, 3);
+        assert_eq!(ModeExitReason::BufferClosed as c_int, 4);
+    }
+
+    #[test]
+    fn test_mode_entry_creation() {
+        let insert = ModeEntry::insert(ModeEntryReason::UserAction);
+        assert_eq!(insert.target, TerminalMode::Insert);
+        assert_eq!(insert.reason, ModeEntryReason::UserAction);
+
+        let normal = ModeEntry::normal(ModeEntryReason::WindowFocus);
+        assert_eq!(normal.target, TerminalMode::Normal);
+        assert_eq!(normal.reason, ModeEntryReason::WindowFocus);
+    }
+
+    #[test]
+    fn test_mode_exit_creation() {
+        let exit = ModeExit::new(TerminalMode::Insert, ModeExitReason::UserAction);
+        assert_eq!(exit.from, TerminalMode::Insert);
+        assert_eq!(exit.reason, ModeExitReason::UserAction);
+    }
+
+    #[test]
+    fn test_struct_sizes() {
+        use std::mem::size_of;
+        // JobInfo should be reasonable size
+        assert!(size_of::<JobInfo>() <= 16);
+        // ModeEntry should be small
+        assert!(size_of::<ModeEntry>() <= 8);
+        // ModeExit should be small
+        assert!(size_of::<ModeExit>() <= 8);
     }
 }
