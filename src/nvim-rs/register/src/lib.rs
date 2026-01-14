@@ -3357,3 +3357,322 @@ pub unsafe extern "C" fn rs_get_register_char_count(regname: c_int) -> usize {
     }
     total
 }
+
+// =============================================================================
+// Phase 407: Recording operations helpers
+// =============================================================================
+
+/// Check if a register name is valid for recording macros.
+///
+/// Valid recording registers are: 0-9, a-z, A-Z, "
+#[inline]
+pub fn is_valid_recording_register(c: u8) -> bool {
+    c.is_ascii_alphanumeric() || c == b'"'
+}
+
+/// FFI wrapper for recording register validation.
+#[no_mangle]
+pub extern "C" fn rs_is_valid_recording_register(c: c_int) -> bool {
+    if c < 0 {
+        return false;
+    }
+    is_valid_recording_register(c as u8)
+}
+
+/// Check if a register name is valid for macro execution.
+///
+/// Valid execution registers are: 0-9, a-z, A-Z, @, ", -, _, =, :, .
+/// (Note: % and # are NOT valid for execution)
+#[inline]
+pub fn is_valid_execreg(c: u8) -> bool {
+    c.is_ascii_alphanumeric()
+        || c == b'@'
+        || c == b'"'
+        || c == b'-'
+        || c == b'_'
+        || c == b'='
+        || c == b':'
+        || c == b'.'
+}
+
+/// FFI wrapper for execution register validation.
+#[no_mangle]
+pub extern "C" fn rs_is_valid_execreg(c: c_int) -> bool {
+    if c < 0 {
+        return false;
+    }
+    is_valid_execreg(c as u8)
+}
+
+/// Check if a register name would use the "repeat previous" behavior.
+///
+/// In @@ or when regname is '@', it repeats the last executed register.
+#[inline]
+pub const fn is_repeat_register(c: u8) -> bool {
+    c == b'@'
+}
+
+/// FFI wrapper for repeat register check.
+#[no_mangle]
+pub extern "C" fn rs_is_repeat_register(c: c_int) -> bool {
+    is_repeat_register(c as u8)
+}
+
+/// Check if a register name is the expression register.
+#[inline]
+pub const fn is_expr_register(c: u8) -> bool {
+    c == b'='
+}
+
+/// FFI wrapper for expression register check.
+#[no_mangle]
+pub extern "C" fn rs_is_expr_register_for_exec(c: c_int) -> bool {
+    is_expr_register(c as u8)
+}
+
+/// Check if a register name is the last command register.
+#[inline]
+pub const fn is_cmdline_register(c: u8) -> bool {
+    c == b':'
+}
+
+/// FFI wrapper for cmdline register check.
+#[no_mangle]
+pub extern "C" fn rs_is_cmdline_register(c: c_int) -> bool {
+    is_cmdline_register(c as u8)
+}
+
+/// Check if a register name is the last inserted text register.
+#[inline]
+pub const fn is_insert_register(c: u8) -> bool {
+    c == b'.'
+}
+
+/// FFI wrapper for insert register check.
+#[no_mangle]
+pub extern "C" fn rs_is_insert_register(c: c_int) -> bool {
+    is_insert_register(c as u8)
+}
+
+/// Check if a register execution would require special handling.
+///
+/// Special execution registers: =, :, .
+/// These require fetching content from special sources rather than
+/// the normal yank register array.
+#[inline]
+pub const fn needs_special_exec_handling(c: u8) -> bool {
+    c == b'=' || c == b':' || c == b'.'
+}
+
+/// FFI wrapper for special execution handling check.
+#[no_mangle]
+pub extern "C" fn rs_needs_special_exec_handling(c: c_int) -> bool {
+    needs_special_exec_handling(c as u8)
+}
+
+/// Check if register execution needs to insert newlines.
+///
+/// Linewise registers need newlines between lines and after the last line.
+#[no_mangle]
+pub extern "C" fn rs_execreg_needs_newline(
+    motion_type: c_int,
+    line_index: usize,
+    total_lines: usize,
+    add_cr: bool,
+) -> bool {
+    // Insert NL between lines and after last line if type is kMTLineWise
+    motion_type == K_MT_LINE_WISE || line_index < total_lines.saturating_sub(1) || add_cr
+}
+
+/// Determine the remap mode for register execution.
+///
+/// For :@r (colon mode), remapping is disabled.
+/// For normal @r, remapping is enabled.
+///
+/// Returns: REMAP_NONE (0) for colon mode, REMAP_YES (1) otherwise.
+#[no_mangle]
+pub extern "C" fn rs_get_execreg_remap_mode(colon: bool) -> c_int {
+    if colon {
+        0
+    } else {
+        1
+    } // REMAP_NONE = 0, REMAP_YES = 1
+}
+
+/// Get the register name to display when recording.
+///
+/// Returns 0 for unnamed register (to display as '"'), otherwise
+/// returns the register name unchanged.
+#[no_mangle]
+pub extern "C" fn rs_get_recording_display_name(regname: c_int) -> c_int {
+    if regname == 0 {
+        c_int::from(b'"')
+    } else {
+        regname
+    }
+}
+
+/// Get the register name to use for reg_executing.
+///
+/// When regname is 0 (unnamed), returns '"'.
+/// Otherwise returns the regname unchanged.
+#[no_mangle]
+pub extern "C" fn rs_get_reg_executing_name(regname: c_int) -> c_int {
+    if regname == 0 {
+        c_int::from(b'"')
+    } else {
+        regname
+    }
+}
+
+/// Check if a character should be escaped for typeahead when executing
+/// the command line register.
+///
+/// Control characters (0x01-0x1f) need CTRL-V escaping.
+#[inline]
+pub const fn needs_ctrl_v_escape(c: u8) -> bool {
+    c >= 0x01 && c <= 0x1f
+}
+
+/// FFI wrapper for CTRL-V escape check.
+#[no_mangle]
+pub extern "C" fn rs_needs_ctrl_v_escape(c: c_int) -> bool {
+    if !(0..=0xff).contains(&c) {
+        return false;
+    }
+    needs_ctrl_v_escape(c as u8)
+}
+
+/// Check if line is a continuation line (starts with \ or "\ ).
+///
+/// Used for line-continuation in :@register execution.
+#[inline]
+pub fn is_continuation_line(line: &[u8]) -> bool {
+    // Skip whitespace
+    let trimmed = skip_whitespace(line);
+    if trimmed.is_empty() {
+        return false;
+    }
+    // Check for \ or "\
+    if trimmed[0] == b'\\' {
+        return true;
+    }
+    if trimmed.len() >= 3 && trimmed[0] == b'"' && trimmed[1] == b'\\' && trimmed[2] == b' ' {
+        return true;
+    }
+    false
+}
+
+/// Skip leading whitespace bytes.
+fn skip_whitespace(s: &[u8]) -> &[u8] {
+    let mut i = 0;
+    while i < s.len() && (s[i] == b' ' || s[i] == b'\t') {
+        i += 1;
+    }
+    &s[i..]
+}
+
+/// FFI wrapper for execreg continuation line check.
+///
+/// # Safety
+///
+/// `line` must be a valid null-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_execreg_continuation_line(line: *const c_char) -> bool {
+    if line.is_null() {
+        return false;
+    }
+    // Find string length
+    let mut len = 0;
+    let mut ptr = line;
+    while *ptr != 0 {
+        len += 1;
+        ptr = ptr.add(1);
+    }
+    if len == 0 {
+        return false;
+    }
+    let slice = std::slice::from_raw_parts(line as *const u8, len);
+    is_continuation_line(slice)
+}
+
+/// Check if the Visual mode prefix "'<,'>" should be stripped.
+///
+/// When in Visual mode and executing :@:, the prefix is automatically
+/// added, so we should strip it if it's already there.
+///
+/// # Safety
+///
+/// `cmd` must be a valid null-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_should_strip_visual_prefix(
+    cmd: *const c_char,
+    visual_active: bool,
+) -> bool {
+    if !visual_active || cmd.is_null() {
+        return false;
+    }
+    // Check for "'<,'>", which is 5 characters
+    let prefix = b"'<,'>";
+    let mut ptr = cmd;
+    for &expected in prefix {
+        if *ptr as u8 != expected {
+            return false;
+        }
+        ptr = ptr.add(1);
+    }
+    true
+}
+
+/// Get the reedit command for put_reedit_in_typebuf.
+///
+/// When restart_edit is 'V', returns "gR".
+/// When restart_edit is 'I', returns "i".
+/// Otherwise returns the character as a single-char string.
+///
+/// Returns the length of the command (1 or 2).
+///
+/// # Safety
+///
+/// `buf` must be a valid pointer to a buffer of at least 3 bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_reedit_command(restart_edit: c_int, buf: *mut u8) -> c_int {
+    if buf.is_null() {
+        return 0;
+    }
+    if restart_edit == c_int::from(b'V') {
+        *buf = b'g';
+        *buf.add(1) = b'R';
+        *buf.add(2) = 0;
+        2
+    } else {
+        let c = if restart_edit == c_int::from(b'I') {
+            b'i'
+        } else {
+            restart_edit as u8
+        };
+        *buf = c;
+        *buf.add(1) = 0;
+        1
+    }
+}
+
+/// Check if a recording is currently active based on reg_recording value.
+#[no_mangle]
+pub extern "C" fn rs_is_recording_active(reg_recording: c_int) -> bool {
+    reg_recording != 0
+}
+
+/// Check if starting recording should fail due to invalid register.
+#[no_mangle]
+pub extern "C" fn rs_recording_start_should_fail(c: c_int) -> bool {
+    c < 0 || !rs_is_valid_recording_register(c)
+}
+
+/// Check if execution of a register is disallowed.
+///
+/// % and # registers cannot be executed.
+#[no_mangle]
+pub extern "C" fn rs_execreg_disallowed(regname: c_int) -> bool {
+    regname == c_int::from(b'%') || regname == c_int::from(b'#')
+}
