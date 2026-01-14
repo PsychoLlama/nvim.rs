@@ -795,6 +795,509 @@ pub extern "C" fn rs_compound_valid_len(word_len: usize, min_len: u8) -> bool {
 // Note: WF_* flag constants are exported from wordtree.rs
 
 // =============================================================================
+// Phase 321: Find Word - Core Spell Checking
+// =============================================================================
+
+/// Find mode for word checking.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FindWordMode {
+    /// Check case-folded word in fold-case tree
+    FoldWord = 0,
+    /// Check word in keep-case tree
+    KeepWord = 1,
+    /// Check for word after a prefix
+    Prefix = 2,
+    /// Check for compound word continuation (fold-case)
+    Compound = 3,
+    /// Check for compound word continuation (keep-case)
+    KeepCompound = 4,
+}
+
+/// Result of find_word operation
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FindWordResult {
+    /// Result code (SP_OK, SP_BAD, etc)
+    pub result: c_int,
+    /// Length of matched word in bytes (in original word)
+    pub word_len: c_int,
+    /// Flags from the dictionary entry
+    pub flags: u32,
+}
+
+/// Constants matching C SP_* values
+pub const SP_BANNED: c_int = -1;
+pub const SP_RARE: c_int = 0;
+pub const SP_OK: c_int = 1;
+pub const SP_LOCAL: c_int = 2;
+pub const SP_BAD: c_int = 3;
+
+/// FFI export for SP_BANNED constant
+#[no_mangle]
+pub extern "C" fn rs_sp_banned() -> c_int {
+    SP_BANNED
+}
+
+/// FFI export for SP_RARE constant
+#[no_mangle]
+pub extern "C" fn rs_sp_rare() -> c_int {
+    SP_RARE
+}
+
+/// FFI export for SP_OK constant
+#[no_mangle]
+pub extern "C" fn rs_sp_ok() -> c_int {
+    SP_OK
+}
+
+/// FFI export for SP_LOCAL constant
+#[no_mangle]
+pub extern "C" fn rs_sp_local() -> c_int {
+    SP_LOCAL
+}
+
+/// FFI export for SP_BAD constant
+#[no_mangle]
+pub extern "C" fn rs_sp_bad() -> c_int {
+    SP_BAD
+}
+
+/// Core word finding function implementing the tree traversal from find_word().
+///
+/// This function traverses the spell dictionary tree to find if a word matches.
+/// It handles:
+/// - Binary search through sorted sibling bytes
+/// - Multiple possible word endings
+/// - Flag/region validation
+/// - Case validation
+/// - Space folding (one space can match multiple spaces)
+///
+/// # Arguments
+/// * `byts` - The tree bytes array
+/// * `idxs` - The tree indices array
+/// * `word` - The word to look up (case-folded for FOLDWORD mode, original otherwise)
+/// * `word_len` - Available bytes in word
+/// * `mode` - The find mode (FOLDWORD, KEEPWORD, PREFIX, COMPOUND, KEEPCOMPOUND)
+/// * `start_offset` - Starting offset in word (for PREFIX/COMPOUND modes)
+/// * `capflags` - Capitalization flags of original word (WF_ONECAP, WF_ALLCAP, etc)
+/// * `region` - Required region bitmask (REGION_ALL for any)
+///
+/// # Returns
+/// A FindWordResult with the best match found
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_lines)]
+pub fn find_word_in_tree(
+    byts: &[u8],
+    idxs: &[crate::IdxT],
+    word: &[u8],
+    word_len: usize,
+    mode: FindWordMode,
+    start_offset: usize,
+    capflags: u32,
+    region: c_int,
+) -> FindWordResult {
+    let mut result = FindWordResult {
+        result: SP_BAD,
+        word_len: 0,
+        flags: 0,
+    };
+
+    if byts.is_empty() || idxs.is_empty() {
+        return result;
+    }
+
+    // For keep-case modes, we have unlimited folded length
+    let flen_available = if mode == FindWordMode::KeepWord || mode == FindWordMode::KeepCompound {
+        9999usize
+    } else {
+        word_len.saturating_sub(start_offset)
+    };
+
+    let mut arridx: usize = 0;
+    let mut wlen: usize = start_offset;
+    let mut flen = flen_available;
+
+    // Arrays to store possible word endings (max MAXWLEN entries)
+    let mut endlen = [0usize; 254];
+    let mut endidx = [0usize; 254];
+    let mut endidxcnt: usize = 0;
+
+    // Traverse the tree
+    loop {
+        if arridx >= byts.len() {
+            break;
+        }
+
+        let len = byts[arridx] as usize;
+        arridx += 1;
+
+        if arridx >= byts.len() {
+            break;
+        }
+
+        // If the first possible byte is a zero, the word could end here
+        if byts[arridx] == 0 {
+            if endidxcnt >= 254 {
+                // Corrupted spell file protection
+                break;
+            }
+            endlen[endidxcnt] = wlen;
+            endidx[endidxcnt] = arridx;
+            endidxcnt += 1;
+            arridx += 1;
+
+            let mut remaining = len.saturating_sub(1);
+
+            // Skip over consecutive zeros (multiple flag/region combinations)
+            while remaining > 0 && arridx < byts.len() && byts[arridx] == 0 {
+                arridx += 1;
+                remaining -= 1;
+            }
+
+            if remaining == 0 {
+                break; // No children, word must end here
+            }
+        }
+
+        // Stop at end of word
+        if wlen >= word.len() {
+            break;
+        }
+
+        // Get the byte to search for
+        let mut c = word[wlen];
+        if c == b'\t' {
+            c = b' ';
+        }
+
+        // Calculate search range
+        let first_sibling = arridx;
+        let mut sibling_count = len;
+
+        // Account for zeros we skipped
+        if endidxcnt > 0 && endidx[endidxcnt - 1] == arridx - 1 {
+            // We just recorded an ending, adjust count
+            let zeros_at_end = 1; // At least one zero
+            sibling_count = sibling_count.saturating_sub(zeros_at_end);
+        }
+
+        if sibling_count == 0 {
+            break;
+        }
+
+        let last_sibling = first_sibling + sibling_count - 1;
+        if last_sibling >= byts.len() || last_sibling >= idxs.len() {
+            break;
+        }
+
+        // Binary search for the byte
+        let found = crate::wordtree::tree_binary_search(byts, first_sibling, last_sibling, c);
+
+        match found {
+            Some(found_idx) => {
+                if found_idx >= idxs.len() {
+                    break;
+                }
+                arridx = idxs[found_idx] as usize;
+                wlen += 1;
+                flen = flen.saturating_sub(1);
+
+                // Handle space folding: one space matches multiple spaces
+                if c == b' ' {
+                    while wlen < word.len() && flen > 0 {
+                        let next_c = word[wlen];
+                        if next_c != b' ' && next_c != b'\t' {
+                            break;
+                        }
+                        wlen += 1;
+                        flen = flen.saturating_sub(1);
+                    }
+                }
+            }
+            None => break,
+        }
+    }
+
+    // Check all possible endings, starting from longest
+    while endidxcnt > 0 {
+        endidxcnt -= 1;
+        let end_arridx = endidx[endidxcnt];
+        let end_wlen = endlen[endidxcnt];
+
+        // Verify we're at a valid ending position
+        if end_arridx == 0 || end_arridx >= byts.len() {
+            continue;
+        }
+
+        // Check the flags at this ending
+        let prev_idx = end_arridx.saturating_sub(1);
+        if prev_idx >= byts.len() {
+            continue;
+        }
+
+        let mut flags_len = byts[prev_idx] as usize;
+        let mut idx = end_arridx;
+
+        // Iterate through all flag combinations at this ending
+        while flags_len > 0 && idx < byts.len() && byts[idx] == 0 {
+            if idx >= idxs.len() {
+                break;
+            }
+
+            let flags = idxs[idx] as u32;
+            idx += 1;
+            flags_len -= 1;
+
+            // For fold-case mode, validate case
+            if mode == FindWordMode::FoldWord {
+                // KEEPCAP words must be in keep-case tree
+                if capflags == WF_KEEPCAP {
+                    continue;
+                }
+                // Validate case flags
+                if !spell_valid_case(capflags, flags) {
+                    continue;
+                }
+            }
+
+            // Check if word is banned
+            if (flags & WF_BANNED) != 0 {
+                if result.result > SP_BANNED {
+                    result.result = SP_BANNED;
+                    result.word_len = end_wlen as c_int;
+                    result.flags = flags;
+                }
+                continue;
+            }
+
+            // Check region
+            let res = if (flags & WF_REGION) != 0 {
+                let word_region = (flags >> 16) & 0xff;
+                if region == REGION_ALL || (word_region & region as u32) != 0 {
+                    if (flags & WF_RARE) != 0 {
+                        SP_RARE
+                    } else {
+                        SP_OK
+                    }
+                } else {
+                    SP_LOCAL
+                }
+            } else if (flags & WF_RARE) != 0 {
+                SP_RARE
+            } else {
+                SP_OK
+            };
+
+            // Update result if better than current
+            if res < result.result || (res == result.result && end_wlen as c_int > result.word_len)
+            {
+                result.result = res;
+                result.word_len = end_wlen as c_int;
+                result.flags = flags;
+
+                if res == SP_OK {
+                    return result;
+                }
+            }
+        }
+    }
+
+    result
+}
+
+/// FFI wrapper for find_word_in_tree
+///
+/// # Safety
+/// All pointers must be valid, arrays must have at least `tree_len` elements.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_word_in_tree(
+    byts: *const u8,
+    idxs: *const crate::IdxT,
+    tree_len: usize,
+    word: *const u8,
+    word_len: usize,
+    mode: FindWordMode,
+    start_offset: usize,
+    capflags: u32,
+    region: c_int,
+    result_out: *mut FindWordResult,
+) -> c_int {
+    if byts.is_null() || idxs.is_null() || word.is_null() || result_out.is_null() {
+        return SP_BAD;
+    }
+
+    let byts_slice = std::slice::from_raw_parts(byts, tree_len);
+    let idxs_slice = std::slice::from_raw_parts(idxs, tree_len);
+    let word_slice = std::slice::from_raw_parts(word, word_len);
+
+    let result = find_word_in_tree(
+        byts_slice,
+        idxs_slice,
+        word_slice,
+        word_len,
+        mode,
+        start_offset,
+        capflags,
+        region,
+    );
+
+    *result_out = result;
+    result.result
+}
+
+/// Check word in both fold-case and keep-case trees, returning the best result.
+///
+/// This is a higher-level function that combines checking both trees.
+///
+/// # Arguments
+/// * `fbyts` - Fold-case tree bytes
+/// * `fidxs` - Fold-case tree indices
+/// * `flen` - Fold-case tree length
+/// * `kbyts` - Keep-case tree bytes (may be empty)
+/// * `kidxs` - Keep-case tree indices (may be empty)
+/// * `klen` - Keep-case tree length
+/// * `fword` - Case-folded word
+/// * `fword_len` - Length of case-folded word
+/// * `word` - Original word (for keep-case checking)
+/// * `word_len` - Length of original word
+/// * `capflags` - Capitalization flags
+/// * `region` - Required region
+///
+/// # Returns
+/// The best FindWordResult from either tree
+#[allow(clippy::too_many_arguments)]
+pub fn check_word_both_trees(
+    fbyts: &[u8],
+    fidxs: &[crate::IdxT],
+    kbyts: &[u8],
+    kidxs: &[crate::IdxT],
+    fword: &[u8],
+    word: &[u8],
+    capflags: u32,
+    region: c_int,
+) -> FindWordResult {
+    let mut best = FindWordResult {
+        result: SP_BAD,
+        word_len: 0,
+        flags: 0,
+    };
+
+    // Check fold-case tree
+    if !fbyts.is_empty() && !fidxs.is_empty() {
+        let fold_result = find_word_in_tree(
+            fbyts,
+            fidxs,
+            fword,
+            fword.len(),
+            FindWordMode::FoldWord,
+            0,
+            capflags,
+            region,
+        );
+        if fold_result.result < best.result
+            || (fold_result.result == best.result && fold_result.word_len > best.word_len)
+        {
+            best = fold_result;
+        }
+    }
+
+    // Check keep-case tree
+    if !kbyts.is_empty() && !kidxs.is_empty() {
+        let keep_result = find_word_in_tree(
+            kbyts,
+            kidxs,
+            word,
+            word.len(),
+            FindWordMode::KeepWord,
+            0,
+            0, // capflags not used for keep-case
+            region,
+        );
+        if keep_result.result < best.result
+            || (keep_result.result == best.result && keep_result.word_len > best.word_len)
+        {
+            best = keep_result;
+        }
+    }
+
+    best
+}
+
+/// FFI wrapper for check_word_both_trees
+///
+/// # Safety
+/// All pointers must be valid
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub unsafe extern "C" fn rs_check_word_both_trees(
+    fbyts: *const u8,
+    fidxs: *const crate::IdxT,
+    flen: usize,
+    kbyts: *const u8,
+    kidxs: *const crate::IdxT,
+    klen: usize,
+    fword: *const u8,
+    fword_len: usize,
+    word: *const u8,
+    word_len: usize,
+    capflags: u32,
+    region: c_int,
+    result_out: *mut FindWordResult,
+) -> c_int {
+    if result_out.is_null() {
+        return SP_BAD;
+    }
+
+    // Handle null tree pointers gracefully
+    let fbyts_slice = if fbyts.is_null() || flen == 0 {
+        &[]
+    } else {
+        std::slice::from_raw_parts(fbyts, flen)
+    };
+    let fidxs_slice = if fidxs.is_null() || flen == 0 {
+        &[]
+    } else {
+        std::slice::from_raw_parts(fidxs, flen)
+    };
+    let kbyts_slice = if kbyts.is_null() || klen == 0 {
+        &[]
+    } else {
+        std::slice::from_raw_parts(kbyts, klen)
+    };
+    let kidxs_slice = if kidxs.is_null() || klen == 0 {
+        &[]
+    } else {
+        std::slice::from_raw_parts(kidxs, klen)
+    };
+
+    let fword_slice = if fword.is_null() {
+        &[]
+    } else {
+        std::slice::from_raw_parts(fword, fword_len)
+    };
+    let word_slice = if word.is_null() {
+        &[]
+    } else {
+        std::slice::from_raw_parts(word, word_len)
+    };
+
+    let result = check_word_both_trees(
+        fbyts_slice,
+        fidxs_slice,
+        kbyts_slice,
+        kidxs_slice,
+        fword_slice,
+        word_slice,
+        capflags,
+        region,
+    );
+
+    *result_out = result;
+    result.result
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -926,5 +1429,160 @@ mod tests {
 
         let result = lookup_word(&byts, &idxs, b"a", 0, REGION_ALL);
         assert_eq!(result.result, SpellResult::Banned);
+    }
+
+    // =============================================================================
+    // Phase 321 Tests: find_word_in_tree
+    // =============================================================================
+
+    #[test]
+    fn test_sp_constants() {
+        assert_eq!(SP_BANNED, -1);
+        assert_eq!(SP_RARE, 0);
+        assert_eq!(SP_OK, 1);
+        assert_eq!(SP_LOCAL, 2);
+        assert_eq!(SP_BAD, 3);
+    }
+
+    #[test]
+    fn test_find_word_in_tree_simple() {
+        // Tree for word "cat": c -> a -> t -> END
+        // Structure: [count, bytes...][count, bytes...] etc.
+        // Root: 1 child 'c' at idx 2
+        // 'c' node: 1 child 'a' at idx 4
+        // 'a' node: 1 child 't' at idx 6
+        // 't' node: 1 ending (0) with flags 0
+        let byts: [u8; 8] = [
+            1, b'c', // Root: 1 sibling 'c'
+            1, b'a', // After 'c': 1 sibling 'a'
+            1, b't', // After 'a': 1 sibling 't'
+            1, 0, // After 't': 1 sibling (end marker)
+        ];
+        let idxs: [IdxT; 8] = [
+            0, 2, // 'c' -> idx 2
+            0, 4, // 'a' -> idx 4
+            0, 6, // 't' -> idx 6
+            0, 0, // flags = 0 (word is OK)
+        ];
+
+        let result = find_word_in_tree(
+            &byts,
+            &idxs,
+            b"cat",
+            3,
+            FindWordMode::FoldWord,
+            0,
+            0,
+            REGION_ALL,
+        );
+        assert_eq!(result.result, SP_OK);
+        assert_eq!(result.word_len, 3);
+    }
+
+    #[test]
+    fn test_find_word_in_tree_not_found() {
+        let byts: [u8; 8] = [1, b'c', 1, b'a', 1, b't', 1, 0];
+        let idxs: [IdxT; 8] = [0, 2, 0, 4, 0, 6, 0, 0];
+
+        let result = find_word_in_tree(
+            &byts,
+            &idxs,
+            b"dog",
+            3,
+            FindWordMode::FoldWord,
+            0,
+            0,
+            REGION_ALL,
+        );
+        assert_eq!(result.result, SP_BAD);
+    }
+
+    #[test]
+    fn test_find_word_in_tree_rare() {
+        let byts: [u8; 4] = [1, b'a', 1, 0];
+        let idxs: [IdxT; 4] = [0, 2, 0, WF_RARE as IdxT];
+
+        let result = find_word_in_tree(
+            &byts,
+            &idxs,
+            b"a",
+            1,
+            FindWordMode::FoldWord,
+            0,
+            0,
+            REGION_ALL,
+        );
+        assert_eq!(result.result, SP_RARE);
+        assert_eq!(result.word_len, 1);
+    }
+
+    #[test]
+    fn test_find_word_in_tree_banned() {
+        let byts: [u8; 4] = [1, b'a', 1, 0];
+        let idxs: [IdxT; 4] = [0, 2, 0, WF_BANNED as IdxT];
+
+        let result = find_word_in_tree(
+            &byts,
+            &idxs,
+            b"a",
+            1,
+            FindWordMode::FoldWord,
+            0,
+            0,
+            REGION_ALL,
+        );
+        assert_eq!(result.result, SP_BANNED);
+    }
+
+    #[test]
+    fn test_find_word_in_tree_region() {
+        // Tree with region flag
+        let byts: [u8; 4] = [1, b'a', 1, 0];
+        let region_1 = 0x0001_0000u32; // Region 1 in bits 16-23
+        let idxs: [IdxT; 4] = [0, 2, 0, (WF_REGION | region_1) as IdxT];
+
+        // Matching region
+        let result = find_word_in_tree(
+            &byts,
+            &idxs,
+            b"a",
+            1,
+            FindWordMode::FoldWord,
+            0,
+            0,
+            0x01, // Region 1
+        );
+        assert_eq!(result.result, SP_OK);
+
+        // Non-matching region
+        let result = find_word_in_tree(
+            &byts,
+            &idxs,
+            b"a",
+            1,
+            FindWordMode::FoldWord,
+            0,
+            0,
+            0x02, // Region 2
+        );
+        assert_eq!(result.result, SP_LOCAL);
+    }
+
+    #[test]
+    fn test_check_word_both_trees() {
+        // Simple tree for "a"
+        let fbyts: [u8; 4] = [1, b'a', 1, 0];
+        let fidxs: [IdxT; 4] = [0, 2, 0, 0];
+
+        let result = check_word_both_trees(&fbyts, &fidxs, &[], &[], b"a", b"a", 0, REGION_ALL);
+        assert_eq!(result.result, SP_OK);
+    }
+
+    #[test]
+    fn test_find_word_default_result() {
+        let result = FindWordResult::default();
+        assert_eq!(result.result, 0); // c_int default is 0
+        assert_eq!(result.word_len, 0);
+        assert_eq!(result.flags, 0);
     }
 }
