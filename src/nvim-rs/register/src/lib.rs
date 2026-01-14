@@ -2727,3 +2727,187 @@ pub unsafe extern "C" fn rs_reg_get_line_ptr(
     }
     nvim_yankreg_get_line_data(reg, line_idx)
 }
+
+// =============================================================================
+// Phase 404: Core Register Access
+// =============================================================================
+
+/// Register access mode constants (matching yreg_mode_t).
+pub const YREG_PASTE: c_int = 0;
+pub const YREG_YANK: c_int = 1;
+pub const YREG_PUT: c_int = 2;
+
+/// Check if a register access should try clipboard synchronization.
+///
+/// Returns true if the mode and register name combination should
+/// attempt clipboard provider access.
+#[no_mangle]
+pub extern "C" fn rs_should_sync_clipboard(regname: c_int, mode: c_int) -> bool {
+    // Clipboard sync only for paste/put modes
+    if mode != YREG_PASTE && mode != YREG_PUT {
+        return false;
+    }
+
+    // Only for clipboard registers or unnamed register
+    regname == 0
+        || regname == c_int::from(b'"')
+        || regname == c_int::from(b'*')
+        || regname == c_int::from(b'+')
+}
+
+/// Check if a register access should fall back to y_previous.
+///
+/// When clipboard is not available, certain registers should fall back
+/// to the previously used register.
+#[no_mangle]
+pub extern "C" fn rs_should_use_previous_register(regname: c_int, mode: c_int) -> bool {
+    // Don't use previous for yank mode
+    if mode == YREG_YANK {
+        return false;
+    }
+
+    // Use previous for unnamed or clipboard registers
+    regname == 0
+        || regname == c_int::from(b'"')
+        || regname == c_int::from(b'*')
+        || regname == c_int::from(b'+')
+}
+
+/// Check if we should return an empty register for clipboard fallback.
+///
+/// When in PUT mode and clipboard is not available, return empty register
+/// for clipboard-specific registers.
+#[no_mangle]
+pub extern "C" fn rs_should_return_empty_clipboard_register(regname: c_int, mode: c_int) -> bool {
+    mode == YREG_PUT && (regname == c_int::from(b'*') || regname == c_int::from(b'+'))
+}
+
+/// Get the index for a register, with fallback to register 0.
+///
+/// Unlike rs_op_reg_index, this always returns a valid index (defaults to 0).
+#[no_mangle]
+pub extern "C" fn rs_get_register_index_with_fallback(regname: c_int) -> c_int {
+    let i = rs_op_reg_index(regname);
+    if i == -1 {
+        0
+    } else {
+        i
+    }
+}
+
+/// Check if yank mode should update y_previous.
+#[no_mangle]
+pub extern "C" fn rs_yank_updates_previous(mode: c_int) -> bool {
+    mode == YREG_YANK
+}
+
+/// Get register for yank operation (simple path without clipboard).
+///
+/// This is the simple case of get_yank_register for YREG_YANK mode
+/// where clipboard synchronization is not needed.
+///
+/// # Safety
+///
+/// Accesses global register state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_yank_register_for_yank(regname: c_int) -> YankRegHandle {
+    let i = rs_get_register_index_with_fallback(regname);
+    let reg = nvim_get_y_regs_ptr(i);
+
+    // Remember the written register for unnamed paste
+    nvim_set_y_previous_by_index(i);
+
+    reg
+}
+
+/// Determine which register index to use for unnamed operations by mode.
+///
+/// Returns the index that should be used when no register is specified.
+/// For yank operations, this is register 0.
+/// For paste operations, this depends on y_previous.
+#[no_mangle]
+pub extern "C" fn rs_get_unnamed_register_index_by_mode(mode: c_int) -> c_int {
+    if mode == YREG_YANK {
+        // For yank, use register 0
+        0
+    } else {
+        // For paste, use previous register index (handled by C for clipboard)
+        // Return -1 to indicate caller should check y_previous
+        -1
+    }
+}
+
+/// Get register type (motion type) for a named register.
+///
+/// # Safety
+///
+/// Accesses global register state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_register_motion_type(regname: c_int) -> c_int {
+    let i = rs_op_reg_index(regname);
+    if i == -1 {
+        return K_MT_UNKNOWN;
+    }
+    let reg = nvim_get_y_regs_ptr(i);
+    if reg.0.is_null() || !nvim_yankreg_has_array(reg) {
+        return K_MT_UNKNOWN;
+    }
+    nvim_yankreg_get_type(reg)
+}
+
+/// Get register width (for blockwise registers).
+///
+/// # Safety
+///
+/// Accesses global register state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_register_width(regname: c_int) -> c_int {
+    let i = rs_op_reg_index(regname);
+    if i == -1 {
+        return 0;
+    }
+    let reg = nvim_get_y_regs_ptr(i);
+    if reg.0.is_null() || !nvim_yankreg_has_array(reg) {
+        return 0;
+    }
+    nvim_yankreg_get_width(reg)
+}
+
+/// Check if a register is empty (by name).
+///
+/// # Safety
+///
+/// Accesses global register state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_register_empty(regname: c_int) -> bool {
+    let i = rs_op_reg_index(regname);
+    if i == -1 {
+        return true;
+    }
+    let reg = nvim_get_y_regs_ptr(i);
+    nvim_yankreg_is_empty(reg)
+}
+
+/// Get the "unnamed" register index (register 0).
+#[no_mangle]
+pub extern "C" fn rs_get_yank_register_index() -> c_int {
+    0
+}
+
+/// Check if register should be treated as writable clipboard.
+///
+/// Returns true if the register is a clipboard register and clipboard
+/// provider should be notified of writes.
+#[no_mangle]
+pub extern "C" fn rs_is_writable_clipboard_register(regname: c_int) -> bool {
+    regname == c_int::from(b'*') || regname == c_int::from(b'+')
+}
+
+/// Check if register name needs clipboard query on read.
+#[no_mangle]
+pub extern "C" fn rs_needs_clipboard_query_on_read(regname: c_int) -> bool {
+    regname == c_int::from(b'*')
+        || regname == c_int::from(b'+')
+        || regname == 0
+        || regname == c_int::from(b'"')
+}
