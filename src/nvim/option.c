@@ -212,6 +212,50 @@ extern int rs_format_bool(int value, int flags);
 extern int rs_needs_escape(int c);
 extern int rs_number_radix(int style);
 
+// Set command functions (from Rust setcmd.rs)
+extern int rs_set_command_type_from_flags(int flags);
+extern int rs_set_command_type_to_flags(int cmd_type);
+extern int rs_set_arg_modifies(int arg_type);
+extern int rs_set_arg_is_compound(int arg_type);
+extern int rs_show_mode_is_all(int mode);
+extern int rs_show_mode_is_changed(int mode);
+extern int rs_show_mode_is_terminal(int mode);
+extern int rs_resolve_effective_scope(int cmd_type, uint32_t opt_scope_support);
+extern int rs_copy_direction_for_new_win(void);
+extern int rs_copy_direction_local_to_global(void);
+
+// Set operations functions (from Rust setops.rs)
+extern int rs_scope_is_local(int opt_flags);
+extern int rs_scope_is_global(int opt_flags);
+extern int rs_scope_is_both(int opt_flags);
+extern int rs_is_modeline(int opt_flags);
+extern int rs_flags_to_scope(int opt_flags);
+extern int rs_str_values_same_ptr(const char *old, const char *new);
+extern int rs_should_set_was_set(const char *errmsg);
+extern uint32_t rs_add_was_set_flag(uint32_t flags);
+extern uint32_t rs_apply_insecure_flag_change(uint32_t flags, int change);
+
+// Value computation functions (from Rust value.rs)
+extern int64_t rs_apply_number_op(int64_t oldval, int64_t operand, int op);
+extern int rs_is_reset_to_default(int nextchar);
+extern int rs_is_reset_to_global(int nextchar);
+extern int rs_is_invert(int nextchar);
+
+// Validation functions (from Rust lib.rs)
+extern int rs_validate_nonnegative(int64_t value);
+extern int rs_validate_positive(int64_t value);
+extern int rs_validate_range(int64_t value, int64_t min, int64_t max);
+extern int64_t rs_clamp_value(int64_t value, int64_t min, int64_t max);
+extern int rs_validate_regexpengine(int64_t value);
+extern int rs_validate_history(int64_t value);
+extern int rs_validate_percentage(int64_t value);
+extern int64_t rs_clamp_percentage(int64_t value);
+extern int rs_validate_blend(int value);
+
+// Init functions (from Rust init.rs)
+extern int rs_is_unix(void);
+extern const char *rs_default_tmpdir(void);
+
 // =============================================================================
 // Accessor functions for Rust code
 // =============================================================================
