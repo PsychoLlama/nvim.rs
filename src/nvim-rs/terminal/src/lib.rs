@@ -17,7 +17,9 @@ use std::os::raw::c_void;
 // =============================================================================
 
 pub mod buffer;
+pub mod input;
 pub mod mode;
+pub mod output;
 pub mod pty;
 pub mod scrollback;
 
@@ -28,9 +30,17 @@ pub use buffer::{
     get_terminal_buffer_state, is_screen_line, is_scrollback_line, linenr_to_row, row_to_linenr,
     validate_terminal_buffer, BufferValidation, TerminalBufferState,
 };
+pub use input::{
+    is_valid_input_char, is_valid_key_code, InputEvent, InputEventType, InputModifiers,
+    InputValidation, TerminalKey, INPUT_MOD_ALT, INPUT_MOD_CTRL, INPUT_MOD_SHIFT,
+};
 pub use mode::{
     get_terminal_cursor, get_terminal_state, validate_mode_transition, FocusChange, FocusState,
     ModeTransitionResult, TerminalCursor, TerminalMode, TerminalState,
+};
+pub use output::{
+    BellFlags, DamageRegion, OutputEvent, OutputEventType, TitleUpdateResult, BELL_AUDIO,
+    BELL_URGENT, BELL_VISUAL, MAX_TITLE_LEN,
 };
 pub use pty::{
     convert_nvim_modifier, is_pty_ready, KeySendResult, PtyState, SendResult, TermModifiers,
