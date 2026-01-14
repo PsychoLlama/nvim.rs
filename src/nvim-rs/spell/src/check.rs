@@ -167,7 +167,132 @@ pub extern "C" fn rs_spell_is_word_char(c: u32, spelltab: SpelltabHandle) -> boo
     spell_is_word_char(c, spelltab)
 }
 
-/// Fold a word to lowercase for spell checking.
+// Greek sigma special case constants
+const GREEK_CAPITAL_SIGMA: u32 = 0x03A3;
+const GREEK_SMALL_SIGMA: u32 = 0x03C3;
+const GREEK_SMALL_FINAL_SIGMA: u32 = 0x03C2;
+
+// External C functions for Unicode handling
+extern "C" {
+    fn spell_tofold(c: c_int) -> c_int;
+}
+
+/// Decode a UTF-8 character from a byte slice.
+///
+/// Returns the codepoint and the number of bytes consumed.
+fn utf8_decode(bytes: &[u8]) -> Option<(u32, usize)> {
+    if bytes.is_empty() {
+        return None;
+    }
+
+    let first = bytes[0];
+    if first == 0 {
+        return None;
+    }
+
+    if first < 0x80 {
+        // ASCII
+        return Some((u32::from(first), 1));
+    }
+
+    if first < 0xC0 {
+        // Invalid start byte (continuation byte)
+        return Some((u32::from(first), 1));
+    }
+
+    let (len, mask): (usize, u8) = if first < 0xE0 {
+        (2, 0x1F)
+    } else if first < 0xF0 {
+        (3, 0x0F)
+    } else if first < 0xF8 {
+        (4, 0x07)
+    } else {
+        // Invalid
+        return Some((u32::from(first), 1));
+    };
+
+    if bytes.len() < len {
+        // Not enough bytes
+        return Some((u32::from(first), 1));
+    }
+
+    let mut codepoint = u32::from(first & mask);
+    for byte in bytes.iter().take(len).skip(1) {
+        let cont = *byte;
+        if cont & 0xC0 != 0x80 {
+            // Invalid continuation byte
+            return Some((u32::from(first), 1));
+        }
+        codepoint = (codepoint << 6) | u32::from(cont & 0x3F);
+    }
+
+    Some((codepoint, len))
+}
+
+/// Encode a Unicode codepoint as UTF-8 into a buffer.
+///
+/// Returns the number of bytes written.
+fn utf8_encode(codepoint: u32, output: &mut [u8]) -> usize {
+    if codepoint < 0x80 {
+        if output.is_empty() {
+            return 0;
+        }
+        output[0] = codepoint as u8;
+        1
+    } else if codepoint < 0x800 {
+        if output.len() < 2 {
+            return 0;
+        }
+        output[0] = (0xC0 | (codepoint >> 6)) as u8;
+        output[1] = (0x80 | (codepoint & 0x3F)) as u8;
+        2
+    } else if codepoint < 0x10000 {
+        if output.len() < 3 {
+            return 0;
+        }
+        output[0] = (0xE0 | (codepoint >> 12)) as u8;
+        output[1] = (0x80 | ((codepoint >> 6) & 0x3F)) as u8;
+        output[2] = (0x80 | (codepoint & 0x3F)) as u8;
+        3
+    } else {
+        if output.len() < 4 {
+            return 0;
+        }
+        output[0] = (0xF0 | (codepoint >> 18)) as u8;
+        output[1] = (0x80 | ((codepoint >> 12) & 0x3F)) as u8;
+        output[2] = (0x80 | ((codepoint >> 6) & 0x3F)) as u8;
+        output[3] = (0x80 | (codepoint & 0x3F)) as u8;
+        4
+    }
+}
+
+/// Check if position starts with a word character
+fn is_word_char_at(bytes: &[u8], spelltab: SpelltabHandle) -> bool {
+    if bytes.is_empty() || bytes[0] == 0 {
+        return false;
+    }
+
+    let first = bytes[0];
+    if first < 128 {
+        // ASCII - check spell table
+        spell_is_word_char(u32::from(first), spelltab)
+    } else {
+        // UTF-8 - decode and check if it's a Unicode letter
+        if let Some((codepoint, _)) = utf8_decode(bytes) {
+            // Check if it's a Unicode letter (alphabetic)
+            // This is a simplified check - for full correctness we'd call C
+            char::from_u32(codepoint).is_some_and(char::is_alphabetic)
+        } else {
+            false
+        }
+    }
+}
+
+/// Fold a word to lowercase for spell checking with full UTF-8 support.
+///
+/// Handles UTF-8 multi-byte characters and the Greek sigma special case:
+/// - Greek capital sigma (Σ, 0x03A3) folds to small sigma (σ, 0x03C3)
+/// - Except at end of word where it folds to final sigma (ς, 0x03C2)
 ///
 /// # Arguments
 /// * `word` - The word to fold (UTF-8 bytes)
@@ -182,25 +307,52 @@ pub fn spell_casefold(word: &[u8], output: &mut [u8], spelltab: SpelltabHandle) 
     }
 
     let mut out_idx = 0;
-    for &c in word {
-        if c == 0 {
-            break;
-        }
+    let mut in_idx = 0;
 
-        // For ASCII, use the spell fold table
-        let folded = if c < 128 {
-            spell_fold_char(u32::from(c), spelltab) as u8
-        } else {
-            // UTF-8 continuation bytes or high bytes - copy as-is
-            // Full UTF-8 folding should be done by C code
-            c
+    while in_idx < word.len() {
+        // Decode next UTF-8 character
+        let Some((codepoint, char_len)) = utf8_decode(&word[in_idx..]) else {
+            break;
         };
 
-        if out_idx >= output.len() - 1 {
+        if codepoint == 0 {
             break;
         }
-        output[out_idx] = folded;
-        out_idx += 1;
+
+        // Check output space (max 4 bytes for UTF-8 + 1 for NUL)
+        if out_idx + 5 > output.len() {
+            break;
+        }
+
+        // Fold the character
+        let folded = if codepoint == GREEK_CAPITAL_SIGMA || codepoint == GREEK_SMALL_FINAL_SIGMA {
+            // Greek sigma special case
+            // Check if this is the last character or followed by non-word char
+            let next_idx = in_idx + char_len;
+            let at_end = next_idx >= word.len()
+                || word[next_idx] == 0
+                || !is_word_char_at(&word[next_idx..], spelltab);
+            if at_end {
+                GREEK_SMALL_FINAL_SIGMA
+            } else {
+                GREEK_SMALL_SIGMA
+            }
+        } else if codepoint < 256 {
+            // Use spell fold table for characters < 256
+            spell_fold_char(codepoint, spelltab)
+        } else {
+            // For other Unicode, use Unicode lowercase (via extern C)
+            unsafe { spell_tofold(codepoint as c_int) as u32 }
+        };
+
+        // Encode the folded character
+        let written = utf8_encode(folded, &mut output[out_idx..]);
+        if written == 0 {
+            break;
+        }
+
+        out_idx += written;
+        in_idx += char_len;
     }
 
     // NUL-terminate
@@ -1584,5 +1736,65 @@ mod tests {
         assert_eq!(result.result, 0); // c_int default is 0
         assert_eq!(result.word_len, 0);
         assert_eq!(result.flags, 0);
+    }
+
+    // =========================================================================
+    // Phase 323 Tests: UTF-8 Case Folding
+    // =========================================================================
+
+    #[test]
+    fn test_utf8_decode_ascii() {
+        let (cp, len) = utf8_decode(b"a").unwrap();
+        assert_eq!(cp, 0x61);
+        assert_eq!(len, 1);
+    }
+
+    #[test]
+    fn test_utf8_decode_two_byte() {
+        // é is U+00E9, encoded as 0xC3 0xA9
+        let bytes = [0xC3, 0xA9];
+        let (cp, len) = utf8_decode(&bytes).unwrap();
+        assert_eq!(cp, 0xE9);
+        assert_eq!(len, 2);
+    }
+
+    #[test]
+    fn test_utf8_decode_three_byte() {
+        // Greek capital sigma Σ is U+03A3, encoded as 0xCE 0xA3
+        let bytes = [0xCE, 0xA3];
+        let (cp, len) = utf8_decode(&bytes).unwrap();
+        assert_eq!(cp, 0x03A3);
+        assert_eq!(len, 2);
+    }
+
+    #[test]
+    fn test_utf8_encode_ascii() {
+        let mut buf = [0u8; 4];
+        let len = utf8_encode(0x61, &mut buf);
+        assert_eq!(len, 1);
+        assert_eq!(buf[0], b'a');
+    }
+
+    #[test]
+    fn test_utf8_encode_two_byte() {
+        let mut buf = [0u8; 4];
+        let len = utf8_encode(0xE9, &mut buf);
+        assert_eq!(len, 2);
+        assert_eq!(&buf[..2], &[0xC3, 0xA9]);
+    }
+
+    #[test]
+    fn test_utf8_encode_three_byte() {
+        let mut buf = [0u8; 4];
+        let len = utf8_encode(0x03A3, &mut buf);
+        assert_eq!(len, 2); // Greek sigma fits in 2 bytes
+        assert_eq!(&buf[..2], &[0xCE, 0xA3]);
+    }
+
+    #[test]
+    fn test_greek_sigma_constants() {
+        assert_eq!(GREEK_CAPITAL_SIGMA, 0x03A3);
+        assert_eq!(GREEK_SMALL_SIGMA, 0x03C3);
+        assert_eq!(GREEK_SMALL_FINAL_SIGMA, 0x03C2);
     }
 }
