@@ -37,6 +37,7 @@ pub mod history;
 pub mod output;
 pub mod output_core;
 pub mod scrollback;
+pub mod verbose;
 pub mod warning;
 
 // Re-export FFI functions for the static library
@@ -49,6 +50,7 @@ pub use history::*;
 pub use output::*;
 pub use output_core::*;
 pub use scrollback::*;
+pub use verbose::*;
 pub use warning::*;
 
 // ============================================================================
