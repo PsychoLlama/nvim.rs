@@ -134,6 +134,11 @@ extern void rs_frame_remove(frame_T *frp);
 extern void rs_win_append(win_T *after, win_T *wp, tabpage_T *tp);
 extern void rs_win_remove(win_T *wp, tabpage_T *tp);
 
+// Split helper functions from Rust
+extern int rs_split_max_windows(int vertical);
+extern int rs_split_iteration_size(int vertical, int todo);
+extern int rs_split_make_windows_flags(int vertical);
+
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to win_T fields from Rust code.
 
@@ -3239,21 +3244,8 @@ int win_count(void)
 /// @return actual number of windows on the screen.
 int make_windows(int count, bool vertical)
 {
-  int maxcount;
-
-  if (vertical) {
-    // Each window needs at least 'winminwidth' lines and a separator column.
-    maxcount = (int)(curwin->w_width + curwin->w_vsep_width
-                     - (p_wiw - p_wmw)) / ((int)p_wmw + 1);
-  } else {
-    // Each window needs at least 'winminheight' lines.
-    // If statusline isn't global, each window also needs a statusline.
-    // If 'winbar' is set, each window also needs a winbar.
-    maxcount = (int)(curwin->w_height + curwin->w_hsep_height + curwin->w_status_height
-                     - (p_wh - p_wmh)) / ((int)p_wmh + STATUS_HEIGHT + global_winbar_height());
-  }
-
-  maxcount = MAX(maxcount, 2);
+  // Calculate maximum number of windows using Rust helper
+  int maxcount = rs_split_max_windows(vertical);
   count = MIN(count, maxcount);
 
   // add status line now, otherwise first window will be too big
@@ -3266,20 +3258,13 @@ int make_windows(int count, bool vertical)
   block_autocmds();
 
   int todo;
+  int flags = rs_split_make_windows_flags(vertical);
 
   // todo is number of windows left to create
   for (todo = count - 1; todo > 0; todo--) {
-    if (vertical) {
-      if (win_split(curwin->w_width - (curwin->w_width - todo)
-                    / (todo + 1) - 1, WSP_VERT | WSP_ABOVE) == FAIL) {
-        break;
-      }
-    } else {
-      if (win_split(curwin->w_height - (curwin->w_height - todo
-                                        * STATUS_HEIGHT) / (todo + 1)
-                    - STATUS_HEIGHT, WSP_ABOVE) == FAIL) {
-        break;
-      }
+    int split_size = rs_split_iteration_size(vertical, todo);
+    if (win_split(split_size, flags) == FAIL) {
+      break;
     }
   }
 
