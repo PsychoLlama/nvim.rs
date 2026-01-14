@@ -37,6 +37,7 @@ pub mod history;
 pub mod output;
 pub mod output_core;
 pub mod scrollback;
+pub mod warning;
 
 // Re-export FFI functions for the static library
 pub use attr::*;
@@ -48,6 +49,7 @@ pub use history::*;
 pub use output::*;
 pub use output_core::*;
 pub use scrollback::*;
+pub use warning::*;
 
 // ============================================================================
 // Message Kind Constants
