@@ -4552,3 +4552,236 @@ pub extern "C" fn rs_put_forward_one_char(dir: c_int, cursor_char_not_nul: bool)
 pub extern "C" fn rs_put_newline_char() -> c_int {
     c_int::from(b'\n')
 }
+
+// =============================================================================
+// Phase 412: Put operations completion helpers (do_put part 2)
+// Block mode and visual mode
+// =============================================================================
+
+/// Check if block mode put should handle virtual edit.
+#[no_mangle]
+pub extern "C" fn rs_put_block_ve_all(ve_flags: c_int) -> bool {
+    // kOptVeFlagAll = 1
+    ve_flags == 1
+}
+
+/// Check if block mode should move to next multi-byte character.
+#[no_mangle]
+pub extern "C" fn rs_put_block_advance_col(dir: c_int, c_not_nul: bool) -> bool {
+    dir == DIR_FORWARD && c_not_nul
+}
+
+/// Calculate block column adjustment with virtual edit.
+#[no_mangle]
+pub extern "C" fn rs_put_block_col_adjust(col: c_int, coladd: c_int) -> c_int {
+    col + coladd
+}
+
+/// Check if line is too short for block put (needs padding).
+#[no_mangle]
+pub extern "C" fn rs_put_block_line_short(vcol: c_int, col: c_int, ptr_is_nul: bool) -> bool {
+    vcol < col || (vcol == col && ptr_is_nul)
+}
+
+/// Calculate startspaces for short line padding.
+#[no_mangle]
+pub extern "C" fn rs_put_block_startspaces_short(col: c_int, vcol: c_int) -> c_int {
+    if col > vcol {
+        col - vcol
+    } else {
+        0
+    }
+}
+
+/// Calculate endspaces when vcol > col.
+#[no_mangle]
+pub extern "C" fn rs_put_block_endspaces(vcol: c_int, col: c_int) -> c_int {
+    if vcol > col {
+        vcol - col
+    } else {
+        0
+    }
+}
+
+/// Calculate startspaces when splitting a character.
+#[no_mangle]
+pub extern "C" fn rs_put_block_startspaces_split(incr: c_int, endspaces: c_int) -> c_int {
+    incr - endspaces
+}
+
+/// Check if character at position is a Tab (can be split).
+#[no_mangle]
+pub extern "C" fn rs_put_block_can_split(c: c_int) -> bool {
+    c == c_int::from(b'\t')
+}
+
+/// Check if block inner mode is set.
+#[no_mangle]
+pub extern "C" fn rs_put_block_inner(flags: c_int) -> bool {
+    (flags & PUT_BLOCK_INNER) != 0
+}
+
+/// Calculate spaces for right side of block.
+///
+/// spaces = y_width + 1 (for normal block put)
+#[no_mangle]
+pub extern "C" fn rs_put_block_initial_spaces(y_width: c_int) -> c_int {
+    y_width + 1
+}
+
+/// Calculate spaces after subtracting charlen.
+///
+/// spaces -= charlen, but at least 0
+#[no_mangle]
+pub extern "C" fn rs_put_block_spaces_subtract(spaces: c_int, charlen: c_int) -> c_int {
+    if spaces > charlen {
+        spaces - charlen
+    } else {
+        0
+    }
+}
+
+/// Calculate total size for block line insert.
+///
+/// totlen = count * (yanklen + spaces) + bd.startspaces + bd.endspaces
+#[no_mangle]
+pub extern "C" fn rs_put_block_totlen(
+    count: usize,
+    yanklen: usize,
+    spaces: usize,
+    startspaces: usize,
+    endspaces: usize,
+) -> usize {
+    count
+        .saturating_mul(yanklen.saturating_add(spaces))
+        .saturating_add(startspaces)
+        .saturating_add(endspaces)
+}
+
+/// Calculate new line length after block insert.
+#[no_mangle]
+pub extern "C" fn rs_put_block_newlen(oldlen: usize, totlen: usize, delcount: usize) -> usize {
+    oldlen.saturating_add(totlen).saturating_sub(delcount)
+}
+
+/// Check if new line needs to be appended during block put.
+#[no_mangle]
+pub extern "C" fn rs_put_block_need_append(cursor_lnum: i64, max_line_count: i64) -> bool {
+    cursor_lnum > max_line_count
+}
+
+/// Calculate visual edit column increment for forward direction.
+#[no_mangle]
+pub extern "C" fn rs_put_ve_forward_incr(dir: c_int, c_is_nul: bool) -> c_int {
+    if dir == DIR_FORWARD && c_is_nul {
+        1
+    } else {
+        0
+    }
+}
+
+/// Check if tab needs backward cursor adjustment.
+#[no_mangle]
+pub extern "C" fn rs_put_tab_backward_adjust(
+    dir: c_int,
+    c_is_tab: bool,
+    cursor_col_nonzero: bool,
+) -> bool {
+    dir == DIR_BACKWARD && c_is_tab && cursor_col_nonzero
+}
+
+/// Check if tab needs forward cursor adjustment.
+#[no_mangle]
+pub extern "C" fn rs_put_tab_forward_adjust(
+    dir: c_int,
+    c_is_tab: bool,
+    col_minus_1_eq_endcol2: bool,
+) -> bool {
+    dir == DIR_FORWARD && c_is_tab && col_minus_1_eq_endcol2
+}
+
+/// Check if charwise put with virtualedit should use special handling.
+#[no_mangle]
+pub extern "C" fn rs_put_ve_charwise(ve_flags: c_int, y_type: c_int) -> bool {
+    ve_flags == 1 && y_type == K_MT_CHAR_WISE // kOptVeFlagAll = 1
+}
+
+/// Check if cursor is on a Tab.
+#[no_mangle]
+pub extern "C" fn rs_put_cursor_on_tab(c: c_int) -> bool {
+    c == c_int::from(b'\t')
+}
+
+/// Get Tab character value.
+#[no_mangle]
+pub extern "C" fn rs_put_tab_char() -> c_int {
+    c_int::from(b'\t')
+}
+
+/// Calculate number of lines added by put operation.
+#[no_mangle]
+pub extern "C" fn rs_put_nr_lines_added(y_size: usize, nr_lines: usize) -> usize {
+    y_size.saturating_add(nr_lines)
+}
+
+/// Check if put operation should display message.
+#[no_mangle]
+pub extern "C" fn rs_put_should_message(nr_lines: i64, p_report: i64) -> bool {
+    nr_lines > p_report
+}
+
+/// Calculate new cursor column after charwise put.
+#[no_mangle]
+pub extern "C" fn rs_put_charwise_new_col(col: c_int, totlen: c_int, cursor_at_end: bool) -> c_int {
+    if cursor_at_end {
+        col + totlen
+    } else {
+        col
+    }
+}
+
+/// Determine if cursor should stay at original position.
+#[no_mangle]
+pub extern "C" fn rs_put_cursor_original(flags: c_int) -> bool {
+    (flags & PUT_CURSEND) == 0 && (flags & PUT_LINE) == 0
+}
+
+/// Calculate mark end column for block mode.
+///
+/// For block mode, end column is col + y_width.
+#[no_mangle]
+pub extern "C" fn rs_put_block_mark_end_col(col: c_int, y_width: c_int) -> c_int {
+    col + y_width
+}
+
+/// Calculate mark end line for multi-line put.
+#[no_mangle]
+pub extern "C" fn rs_put_mark_end_lnum(start_lnum: i64, nr_lines: i64) -> i64 {
+    start_lnum + nr_lines - 1
+}
+
+/// Check if visual mode put should delete old content first.
+#[no_mangle]
+pub extern "C" fn rs_put_visual_delete_first(visual_active: bool) -> bool {
+    visual_active
+}
+
+/// Get the line count adjustment for linewise visual put.
+///
+/// Visual linewise puts may delete existing lines.
+#[no_mangle]
+pub extern "C" fn rs_put_visual_line_adjust(visual_lines: i64, put_lines: i64) -> i64 {
+    put_lines - visual_lines
+}
+
+/// Check if charwise put should advance past end of line.
+#[no_mangle]
+pub extern "C" fn rs_put_charwise_past_eol(ve_flags: c_int, cursor_at_eol: bool) -> bool {
+    ve_flags != 0 && cursor_at_eol
+}
+
+/// Get NUL character value.
+#[no_mangle]
+pub extern "C" fn rs_put_nul_char() -> c_int {
+    0
+}
