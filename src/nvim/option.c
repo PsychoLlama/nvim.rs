@@ -354,6 +354,23 @@ extern const char *rs_did_set_termguicolors(void);
 extern const char *rs_did_set_virtualedit(void);
 extern const char *rs_did_set_writebackup(void);
 
+// Phase 527-530: Option display and expansion functions from Rust
+extern int rs_bool_display_show_no(int value);
+extern int rs_count_num_digits(int64_t value);
+extern int rs_count_hex_digits(int64_t value);
+extern int rs_str_display_width(const char *value, int escape);
+extern int rs_char_needs_escape(int c);
+extern int rs_at_env_var(const char *str, int pos);
+extern int rs_find_env_start(const char *str, int pos);
+extern int rs_is_env_char(int c);
+extern int rs_env_name_len(const char *str);
+extern int rs_needs_home_expand(const char *str);
+extern int rs_tilde_user_len(const char *str);
+extern int rs_opt_is_path_sep(int c);
+extern int rs_find_last_path_sep(const char *str);
+extern int rs_opt_is_absolute_path(const char *str);
+extern int rs_count_csv_items(const char *str);
+
 // =============================================================================
 // Accessor functions for Rust code
 // =============================================================================
