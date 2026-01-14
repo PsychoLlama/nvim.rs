@@ -1884,6 +1884,271 @@ pub extern "C" fn rs_suggest_combine_scores(word_score: c_int, sound_score: c_in
 }
 
 // =============================================================================
+// Phase 322: Spell Suggest Option Parsing
+// =============================================================================
+
+/// Spellsuggest flags
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct SpsFlags {
+    /// Which algorithm to use (SPS_BEST, SPS_FAST, SPS_DOUBLE)
+    pub flags: c_int,
+    /// Maximum number of suggestions
+    pub limit: c_int,
+}
+
+/// Use best suggestions (default)
+pub const SPS_BEST: c_int = 1;
+/// Use fast suggestions (less accurate but quicker)
+pub const SPS_FAST: c_int = 2;
+/// Double-check suggestions
+pub const SPS_DOUBLE: c_int = 4;
+
+/// Default suggestion limit
+pub const SPS_LIMIT_DEFAULT: c_int = 9999;
+
+/// FFI export for SPS_BEST constant
+#[no_mangle]
+pub extern "C" fn rs_sps_best() -> c_int {
+    SPS_BEST
+}
+
+/// FFI export for SPS_FAST constant
+#[no_mangle]
+pub extern "C" fn rs_sps_fast() -> c_int {
+    SPS_FAST
+}
+
+/// FFI export for SPS_DOUBLE constant
+#[no_mangle]
+pub extern "C" fn rs_sps_double() -> c_int {
+    SPS_DOUBLE
+}
+
+/// FFI export for default limit
+#[no_mangle]
+pub extern "C" fn rs_sps_limit_default() -> c_int {
+    SPS_LIMIT_DEFAULT
+}
+
+/// Parse a single spellsuggest option value.
+///
+/// Returns the SPS_* flag value, or -1 if invalid.
+/// For numeric values, returns 0 and the parsed number.
+///
+/// # Arguments
+/// * `value` - The option value to parse (null-terminated)
+/// * `limit_out` - Output for numeric limit (set if value is a number)
+///
+/// Returns the SPS_* flag value, or:
+/// - 0 for numeric values (limit stored in limit_out)
+/// - 0 for expr:/file:/timeout: prefixed values (valid but no flag)
+/// - -1 for invalid values
+pub fn parse_sps_value(value: &[u8], limit_out: &mut c_int) -> c_int {
+    if value.is_empty() {
+        return -1;
+    }
+
+    // Check if it starts with a digit
+    if value[0].is_ascii_digit() {
+        // Parse numeric limit
+        let mut num = 0i32;
+        let mut idx = 0;
+        while idx < value.len() && value[idx].is_ascii_digit() {
+            num = num
+                .saturating_mul(10)
+                .saturating_add(i32::from(value[idx] - b'0'));
+            idx += 1;
+        }
+        // Check that rest is empty (or NUL)
+        if idx < value.len() && value[idx] != 0 && !value[idx].is_ascii_digit() {
+            return -1;
+        }
+        *limit_out = num;
+        return 0;
+    }
+
+    // Find actual length (stop at NUL)
+    let len = value.iter().position(|&c| c == 0).unwrap_or(value.len());
+    let val = &value[..len];
+
+    // Check for known keywords
+    if val == b"best" {
+        return SPS_BEST;
+    }
+    if val == b"fast" {
+        return SPS_FAST;
+    }
+    if val == b"double" {
+        return SPS_DOUBLE;
+    }
+
+    // Check for valid prefixes
+    if val.len() >= 5 {
+        if val.starts_with(b"expr:") {
+            return 0; // Valid but no flag
+        }
+        if val.starts_with(b"file:") {
+            return 0; // Valid but no flag
+        }
+    }
+
+    if val.len() >= 8 && val.starts_with(b"timeout:") {
+        // Check that timeout value is valid (digit or - followed by digit)
+        let rest = &val[8..];
+        if !rest.is_empty() {
+            if rest[0].is_ascii_digit() {
+                return 0; // Valid
+            }
+            if rest[0] == b'-' && rest.len() > 1 && rest[1].is_ascii_digit() {
+                return 0; // Valid negative timeout
+            }
+        }
+        return -1; // Invalid timeout format
+    }
+
+    -1 // Unknown value
+}
+
+/// Parse the 'spellsuggest' option value.
+///
+/// # Arguments
+/// * `option` - The full option string (null-terminated, comma-separated)
+///
+/// # Returns
+/// `SpsFlags` with the parsed flags and limit.
+///
+/// # Errors
+/// Returns `Err(())` if the option contains invalid values or conflicting flags.
+#[allow(clippy::result_unit_err)]
+pub fn parse_spellsuggest(option: &[u8]) -> Result<SpsFlags, ()> {
+    let mut result = SpsFlags {
+        flags: 0,
+        limit: SPS_LIMIT_DEFAULT,
+    };
+
+    if option.is_empty() || option[0] == 0 {
+        result.flags = SPS_BEST;
+        return Ok(result);
+    }
+
+    let mut idx = 0;
+    while idx < option.len() && option[idx] != 0 {
+        // Skip leading commas
+        while idx < option.len() && option[idx] == b',' {
+            idx += 1;
+        }
+
+        if idx >= option.len() || option[idx] == 0 {
+            break;
+        }
+
+        // Find end of this part (comma or NUL)
+        let start = idx;
+        while idx < option.len() && option[idx] != b',' && option[idx] != 0 {
+            idx += 1;
+        }
+
+        let part = &option[start..idx];
+        let mut part_limit = 0;
+        let flag = parse_sps_value(part, &mut part_limit);
+
+        if flag == -1 {
+            // Invalid value
+            return Err(());
+        }
+
+        if flag == 0 && part[0].is_ascii_digit() {
+            // Numeric limit
+            result.limit = part_limit;
+        } else if flag != 0 {
+            // Check for conflicting flags
+            if result.flags != 0 {
+                return Err(());
+            }
+            result.flags = flag;
+        }
+        // flag == 0 and not numeric means expr:/file:/timeout: - no action needed
+    }
+
+    if result.flags == 0 {
+        result.flags = SPS_BEST;
+    }
+
+    Ok(result)
+}
+
+/// FFI wrapper for parse_sps_value
+///
+/// # Safety
+/// `value` must be a valid pointer to a null-terminated string
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_sps_value(
+    value: *const u8,
+    value_len: usize,
+    limit_out: *mut c_int,
+) -> c_int {
+    if value.is_null() || limit_out.is_null() {
+        return -1;
+    }
+
+    let value_slice = std::slice::from_raw_parts(value, value_len);
+    let mut limit = 0;
+    let result = parse_sps_value(value_slice, &mut limit);
+    *limit_out = limit;
+    result
+}
+
+/// FFI wrapper for parse_spellsuggest
+///
+/// # Safety
+/// `option` must be a valid pointer, `result_out` must be valid
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_spellsuggest(
+    option: *const u8,
+    option_len: usize,
+    result_out: *mut SpsFlags,
+) -> c_int {
+    if option.is_null() || result_out.is_null() {
+        *result_out = SpsFlags {
+            flags: SPS_BEST,
+            limit: SPS_LIMIT_DEFAULT,
+        };
+        return -1; // FAIL
+    }
+
+    let option_slice = std::slice::from_raw_parts(option, option_len);
+    if let Ok(flags) = parse_spellsuggest(option_slice) {
+        *result_out = flags;
+        0 // OK
+    } else {
+        *result_out = SpsFlags {
+            flags: SPS_BEST,
+            limit: SPS_LIMIT_DEFAULT,
+        };
+        -1 // FAIL
+    }
+}
+
+/// Check if spellsuggest option is valid (for option validation)
+///
+/// # Safety
+/// `option` must be a valid pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_spell_check_sps(option: *const u8, option_len: usize) -> c_int {
+    if option.is_null() {
+        return -1; // FAIL
+    }
+
+    let option_slice = std::slice::from_raw_parts(option, option_len);
+    if parse_spellsuggest(option_slice).is_ok() {
+        0 // OK
+    } else {
+        -1 // FAIL
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -2344,5 +2609,112 @@ mod tests {
         let mut word = *b"hello";
         let old = substitute_byte(&mut word, 5, b'x');
         assert_eq!(old, 0);
+    }
+
+    // =========================================================================
+    // Phase 322 Tests: Spellsuggest Option Parsing
+    // =========================================================================
+
+    #[test]
+    fn test_sps_constants() {
+        assert_eq!(SPS_BEST, 1);
+        assert_eq!(SPS_FAST, 2);
+        assert_eq!(SPS_DOUBLE, 4);
+        assert_eq!(SPS_LIMIT_DEFAULT, 9999);
+    }
+
+    #[test]
+    fn test_parse_sps_value_keywords() {
+        let mut limit = 0;
+        assert_eq!(parse_sps_value(b"best", &mut limit), SPS_BEST);
+        assert_eq!(parse_sps_value(b"fast", &mut limit), SPS_FAST);
+        assert_eq!(parse_sps_value(b"double", &mut limit), SPS_DOUBLE);
+    }
+
+    #[test]
+    fn test_parse_sps_value_numeric() {
+        let mut limit = 0;
+        assert_eq!(parse_sps_value(b"10", &mut limit), 0);
+        assert_eq!(limit, 10);
+
+        assert_eq!(parse_sps_value(b"25", &mut limit), 0);
+        assert_eq!(limit, 25);
+
+        assert_eq!(parse_sps_value(b"100", &mut limit), 0);
+        assert_eq!(limit, 100);
+    }
+
+    #[test]
+    fn test_parse_sps_value_prefixes() {
+        let mut limit = 0;
+        assert_eq!(parse_sps_value(b"expr:something", &mut limit), 0);
+        assert_eq!(parse_sps_value(b"file:/path/to/file", &mut limit), 0);
+        assert_eq!(parse_sps_value(b"timeout:100", &mut limit), 0);
+        assert_eq!(parse_sps_value(b"timeout:-1", &mut limit), 0);
+    }
+
+    #[test]
+    fn test_parse_sps_value_invalid() {
+        let mut limit = 0;
+        assert_eq!(parse_sps_value(b"unknown", &mut limit), -1);
+        assert_eq!(parse_sps_value(b"10abc", &mut limit), -1);
+        assert_eq!(parse_sps_value(b"timeout:", &mut limit), -1);
+        assert_eq!(parse_sps_value(b"timeout:abc", &mut limit), -1);
+        assert_eq!(parse_sps_value(b"", &mut limit), -1);
+    }
+
+    #[test]
+    fn test_parse_spellsuggest_simple() {
+        let result = parse_spellsuggest(b"best").unwrap();
+        assert_eq!(result.flags, SPS_BEST);
+        assert_eq!(result.limit, SPS_LIMIT_DEFAULT);
+
+        let result = parse_spellsuggest(b"fast").unwrap();
+        assert_eq!(result.flags, SPS_FAST);
+
+        let result = parse_spellsuggest(b"double").unwrap();
+        assert_eq!(result.flags, SPS_DOUBLE);
+    }
+
+    #[test]
+    fn test_parse_spellsuggest_with_limit() {
+        let result = parse_spellsuggest(b"best,10").unwrap();
+        assert_eq!(result.flags, SPS_BEST);
+        assert_eq!(result.limit, 10);
+
+        let result = parse_spellsuggest(b"20,fast").unwrap();
+        assert_eq!(result.flags, SPS_FAST);
+        assert_eq!(result.limit, 20);
+    }
+
+    #[test]
+    fn test_parse_spellsuggest_default() {
+        // Empty string defaults to SPS_BEST
+        let result = parse_spellsuggest(b"").unwrap();
+        assert_eq!(result.flags, SPS_BEST);
+        assert_eq!(result.limit, SPS_LIMIT_DEFAULT);
+    }
+
+    #[test]
+    fn test_parse_spellsuggest_invalid() {
+        // Unknown value
+        assert!(parse_spellsuggest(b"unknown").is_err());
+
+        // Duplicate flags
+        assert!(parse_spellsuggest(b"best,fast").is_err());
+    }
+
+    #[test]
+    fn test_parse_spellsuggest_with_expr() {
+        // expr: is valid but doesn't set flags
+        let result = parse_spellsuggest(b"expr:myfunction").unwrap();
+        assert_eq!(result.flags, SPS_BEST); // Defaults to BEST
+    }
+
+    #[test]
+    fn test_sps_flags_default() {
+        let flags = SpsFlags::default();
+        assert_eq!(flags.flags, 0);
+        assert_eq!(flags.limit, 0);
     }
 }
