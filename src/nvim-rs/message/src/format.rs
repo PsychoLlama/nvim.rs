@@ -395,6 +395,232 @@ pub unsafe extern "C" fn rs_msg_clamp_col(col: c_int) -> c_int {
     }
 }
 
+// ============================================================================
+// Additional C Function Declarations for Phase 422
+// ============================================================================
+
+extern "C" {
+    // String truncation
+    fn msg_strtrunc(s: *const c_char, force: c_int) -> *mut c_char;
+    fn trunc_string(s: *const c_char, buf: *mut c_char, room_in: c_int, buflen: c_int);
+
+    // Character translation
+    fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: c_int) -> c_int;
+    fn msg_outtrans_len(msgstr: *const c_char, len: c_int, hl_id: c_int, hist: c_int) -> c_int;
+    fn msg_outtrans_one(p: *const c_char, hl_id: c_int, hist: c_int) -> *const c_char;
+    fn msg_outtrans_special(strstart: *const c_char, from: c_int, maxlen: c_int) -> c_int;
+
+    // Memory management
+    fn nvim_xfree(ptr: *mut c_char);
+}
+
+// ============================================================================
+// String Truncation Functions
+// ============================================================================
+
+/// Truncate a message string if it would cause a hit-return prompt.
+///
+/// Returns NULL if no truncation is needed, or an allocated truncated string.
+/// The returned string must be freed by the caller using `rs_msg_free_trunc`.
+///
+/// # Arguments
+/// * `s` - The string to potentially truncate
+/// * `force` - If true, always truncate regardless of message settings
+///
+/// # Safety
+/// - `s` must be a valid NUL-terminated C string
+/// - Returned pointer (if not NULL) must be freed with `rs_msg_free_trunc`
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_strtrunc(s: *const c_char, force: c_int) -> *mut c_char {
+    msg_strtrunc(s, force)
+}
+
+/// Free a truncated string allocated by `rs_msg_strtrunc`.
+///
+/// # Safety
+/// - `ptr` must be NULL or a pointer returned by `rs_msg_strtrunc`
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_free_trunc(ptr: *mut c_char) {
+    if !ptr.is_null() {
+        nvim_xfree(ptr);
+    }
+}
+
+/// Truncate a string "s" to "buf" with cell width "room".
+///
+/// The result is truncated in the middle with "..." if needed.
+/// "s" and "buf" may be equal for in-place truncation.
+///
+/// # Arguments
+/// * `s` - Source string
+/// * `buf` - Destination buffer
+/// * `room_in` - Available screen cells
+/// * `buflen` - Size of destination buffer
+///
+/// # Safety
+/// - `s` must be a valid NUL-terminated C string
+/// - `buf` must be a valid buffer of at least `buflen` bytes
+#[no_mangle]
+pub unsafe extern "C" fn rs_trunc_string(
+    s: *const c_char,
+    buf: *mut c_char,
+    room_in: c_int,
+    buflen: c_int,
+) {
+    trunc_string(s, buf, room_in, buflen);
+}
+
+// ============================================================================
+// Output Translation Functions
+// ============================================================================
+
+/// Output a string with unprintable character translation.
+///
+/// Outputs characters, translating unprintable ones to their visible form
+/// (like ^I for tab, <80> for special chars, etc).
+///
+/// # Arguments
+/// * `str` - The string to output (NUL-terminated)
+/// * `hl_id` - Highlight group ID (0 for default)
+/// * `hist` - If true, add to message history
+///
+/// # Returns
+/// Number of screen cells used
+///
+/// # Safety
+/// - `str` must be a valid NUL-terminated C string
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_outtrans(str: *const c_char, hl_id: c_int, hist: c_int) -> c_int {
+    msg_outtrans(str, hl_id, hist)
+}
+
+/// Output a string with length and unprintable character translation.
+///
+/// Like `rs_msg_outtrans` but takes an explicit length.
+///
+/// # Arguments
+/// * `msgstr` - The string to output
+/// * `len` - Length in bytes (-1 for NUL-terminated)
+/// * `hl_id` - Highlight group ID (0 for default)
+/// * `hist` - If true, add to message history
+///
+/// # Returns
+/// Number of screen cells used
+///
+/// # Safety
+/// - `msgstr` must be a valid string of at least `len` bytes
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_outtrans_len(
+    msgstr: *const c_char,
+    len: c_int,
+    hl_id: c_int,
+    hist: c_int,
+) -> c_int {
+    msg_outtrans_len(msgstr, len, hl_id, hist)
+}
+
+/// Output one character at position and return pointer to next.
+///
+/// Handles multi-byte characters correctly.
+///
+/// # Arguments
+/// * `p` - Pointer to the character
+/// * `hl_id` - Highlight group ID
+/// * `hist` - If true, add to message history
+///
+/// # Returns
+/// Pointer to the next character in the string
+///
+/// # Safety
+/// - `p` must be a valid pointer into a string
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_outtrans_one(
+    p: *const c_char,
+    hl_id: c_int,
+    hist: c_int,
+) -> *const c_char {
+    msg_outtrans_one(p, hl_id, hist)
+}
+
+/// Output a string showing special keys in <> form.
+///
+/// Used for displaying mappings. K_SPECIAL sequences are shown as <F1>,
+/// <S-Up>, etc. Unprintable characters are also shown in <> form.
+///
+/// # Arguments
+/// * `strstart` - The string to output (NUL-terminated)
+/// * `from` - True for LHS of a mapping (shows space as <Space>)
+/// * `maxlen` - Maximum screen columns (0 for unlimited)
+///
+/// # Returns
+/// Number of screen cells used
+///
+/// # Safety
+/// - `strstart` must be a valid NUL-terminated C string or NULL
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_outtrans_special(
+    strstart: *const c_char,
+    from: c_int,
+    maxlen: c_int,
+) -> c_int {
+    msg_outtrans_special(strstart, from, maxlen)
+}
+
+// ============================================================================
+// String Conversion Utilities
+// ============================================================================
+
+/// Check if truncation should be applied based on current state.
+///
+/// This implements the logic from msg_strtrunc to determine if
+/// truncation is appropriate without allocating a buffer.
+///
+/// # Returns
+/// * 1 if truncation should be applied
+/// * 0 if message should be shown in full
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_should_trunc_impl() -> c_int {
+    let msg_scroll = nvim_get_msg_scroll() != 0;
+    let need_wait_return = nvim_get_need_wait_return() != 0;
+    let has_truncall = nvim_shortmess(SHM_TRUNCALL) != 0;
+    let exmode_active = nvim_get_exmode_active() != 0;
+    let msg_silent = nvim_get_msg_silent();
+    let ui_has_messages = nvim_ui_has_messages() != 0;
+
+    c_int::from(
+        !msg_scroll
+            && !need_wait_return
+            && has_truncall
+            && !exmode_active
+            && msg_silent == 0
+            && !ui_has_messages,
+    )
+}
+
+/// Calculate if string needs truncation and return room available.
+///
+/// # Arguments
+/// * `str_width` - Width of the string in cells
+///
+/// # Returns
+/// * Available room if truncation needed (positive)
+/// * 0 if no truncation needed
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_calc_trunc_room(str_width: c_int) -> c_int {
+    let room = rs_msg_room();
+    if str_width > room && room > 0 {
+        room
+    } else {
+        0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
