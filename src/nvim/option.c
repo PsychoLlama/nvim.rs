@@ -256,6 +256,104 @@ extern int rs_validate_blend(int value);
 extern int rs_is_unix(void);
 extern const char *rs_default_tmpdir(void);
 
+// Numeric validation callbacks (from Rust callbacks/numeric.rs)
+extern const char *rs_validate_num_range(int64_t value, int64_t min, int64_t max);
+extern const char *rs_validate_num_nonnegative(int64_t value);
+extern const char *rs_validate_num_positive(int64_t value);
+extern const char *rs_validate_cmdheight(int64_t value);
+extern const char *rs_validate_columns(int64_t value);
+extern const char *rs_validate_lines(int64_t value);
+extern const char *rs_validate_cmdwinheight(int64_t value);
+extern const char *rs_validate_helpheight(int64_t value);
+extern const char *rs_validate_laststatus(int64_t value);
+extern const char *rs_validate_boolean_int(int64_t value);
+extern const char *rs_validate_numberwidth(int64_t value);
+extern const char *rs_validate_pumheight(int64_t value);
+extern const char *rs_validate_pumwidth(int64_t value);
+extern const char *rs_validate_report(int64_t value);
+extern const char *rs_validate_scroll(int64_t value);
+extern const char *rs_validate_scrolljump(int64_t value);
+extern const char *rs_validate_scrolloff(int64_t value);
+extern const char *rs_validate_shiftwidth(int64_t value);
+extern const char *rs_validate_showtabline(int64_t value);
+extern const char *rs_validate_sidescroll(int64_t value);
+extern const char *rs_validate_sidescrolloff(int64_t value);
+extern const char *rs_validate_softtabstop(int64_t value);
+extern const char *rs_validate_tabstop(int64_t value);
+extern const char *rs_validate_textwidth(int64_t value);
+extern const char *rs_validate_timeoutlen(int64_t value);
+extern const char *rs_validate_titlelen(int64_t value);
+extern const char *rs_validate_updatecount(int64_t value);
+extern const char *rs_validate_updatetime(int64_t value);
+extern const char *rs_validate_winheight(int64_t value);
+extern const char *rs_validate_winminheight(int64_t value);
+extern const char *rs_validate_winminwidth(int64_t value);
+extern const char *rs_validate_winwidth(int64_t value);
+extern const char *rs_validate_wrapmargin(int64_t value);
+extern const char *rs_validate_foldlevel(int64_t value);
+extern const char *rs_validate_foldminlines(int64_t value);
+extern const char *rs_validate_foldnestmax(int64_t value);
+extern const char *rs_validate_foldcolumn(int64_t value);
+extern const char *rs_validate_conceallevel(int64_t value);
+extern const char *rs_validate_iminsert(int64_t value);
+extern const char *rs_validate_verbose(int64_t value);
+extern const char *rs_validate_undolevels(int64_t value);
+extern const char *rs_validate_synmaxcol(int64_t value);
+extern const char *rs_error_number_required(void);
+
+// Did-set callbacks (from Rust callbacks/mod.rs)
+extern const char *rs_did_set_hlsearch(void);
+extern const char *rs_did_set_ignorecase(void);
+extern const char *rs_did_set_title_icon(void);
+extern void rs_did_set_title(void);
+extern const char *rs_did_set_titlelen(int64_t old_value);
+extern const char *rs_did_set_laststatus(void);
+extern const char *rs_did_set_showtabline(void);
+extern const char *rs_did_set_iminsert(void);
+extern const char *rs_did_set_langnoremap(int new_value);
+extern const char *rs_did_set_langremap(int new_value);
+extern const char *rs_did_set_paste(void);
+extern const char *rs_did_set_foldlevel(void);
+extern const char *rs_did_set_smoothscroll(void);
+extern const char *rs_did_set_textwidth(void);
+extern const char *rs_did_set_pumblend(void);
+extern const char *rs_did_set_winblend(void);
+
+// Display callbacks (from Rust callbacks/display.rs)
+extern const char *rs_did_set_showtabline_full(void);
+extern const char *rs_did_set_ruler(void);
+extern const char *rs_did_set_showcmd(void);
+extern const char *rs_did_set_cursorline(void);
+extern const char *rs_did_set_cursorcolumn(void);
+extern const char *rs_did_set_colorcolumn(void);
+extern const char *rs_did_set_list(void);
+extern const char *rs_did_set_wrap(void);
+extern const char *rs_did_set_linebreak(void);
+extern const char *rs_did_set_breakindent(void);
+extern const char *rs_did_set_foldcolumn(void);
+extern const char *rs_did_set_conceallevel(void);
+extern const char *rs_did_set_concealcursor(void);
+extern const char *rs_did_set_fillchars(void);
+extern const char *rs_did_set_listchars(void);
+
+// Behavior callbacks (from Rust callbacks/behavior.rs)
+extern const char *rs_did_set_binary(void);
+extern const char *rs_did_set_eof_eol_fixeol_bomb(void);
+extern const char *rs_did_set_helpheight(void);
+extern const char *rs_did_set_autoread(void);
+extern const char *rs_did_set_autowrite(void);
+extern const char *rs_did_set_backup(void);
+extern const char *rs_did_set_expandtab(void);
+extern const char *rs_did_set_hidden(void);
+extern const char *rs_did_set_insertmode(void);
+extern const char *rs_did_set_modifiable(void);
+extern const char *rs_did_set_modified(void);
+extern const char *rs_did_set_readonly(void);
+extern const char *rs_did_set_spell(void);
+extern const char *rs_did_set_termguicolors(void);
+extern const char *rs_did_set_virtualedit(void);
+extern const char *rs_did_set_writebackup(void);
+
 // =============================================================================
 // Accessor functions for Rust code
 // =============================================================================
