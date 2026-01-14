@@ -3676,3 +3676,208 @@ pub extern "C" fn rs_recording_start_should_fail(c: c_int) -> bool {
 pub extern "C" fn rs_execreg_disallowed(regname: c_int) -> bool {
     regname == c_int::from(b'%') || regname == c_int::from(b'#')
 }
+
+// =============================================================================
+// Phase 408: Register execution helpers
+// =============================================================================
+
+/// Get the actual register name to execute after handling '@' repeat.
+///
+/// If regname is '@', returns the lastc (previously executed register).
+/// Otherwise returns the regname unchanged.
+#[no_mangle]
+pub extern "C" fn rs_resolve_execreg_name(regname: c_int, lastc: c_int) -> c_int {
+    if regname == c_int::from(b'@') {
+        lastc
+    } else {
+        regname
+    }
+}
+
+/// Check if the execreg lastc is valid (not NUL).
+#[no_mangle]
+pub extern "C" fn rs_execreg_lastc_valid(lastc: c_int) -> bool {
+    lastc != 0
+}
+
+/// Check if execution should use escape mode for typeahead.
+///
+/// When executing special registers (:, =), escape mode is used.
+/// For normal register execution, escape depends on the content type.
+#[no_mangle]
+pub extern "C" fn rs_execreg_use_escape(regname: c_int) -> bool {
+    let c = regname as u8;
+    c == b':' || c == b'='
+}
+
+/// Check if execution should add colon prefix.
+///
+/// For command line register (:), colon is added.
+/// For expression register (=), colon is based on the parameter.
+#[no_mangle]
+pub extern "C" fn rs_execreg_should_add_colon(regname: c_int) -> bool {
+    regname == c_int::from(b':')
+}
+
+/// Calculate the number of lines to iterate when executing a register.
+///
+/// Returns the size of the register's y_array.
+///
+/// # Safety
+///
+/// `reg` must be a valid YankRegHandle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_execreg_line_count(reg: YankRegHandle) -> usize {
+    if reg.0.is_null() || !nvim_yankreg_has_array(reg) {
+        return 0;
+    }
+    nvim_yankreg_get_size(reg)
+}
+
+/// Check if we should process lines in reverse order for typeahead.
+///
+/// Lines are inserted into typeahead in reverse order (last to first).
+/// This returns true to indicate reverse iteration is needed.
+#[no_mangle]
+pub extern "C" fn rs_execreg_iterate_reverse() -> bool {
+    true
+}
+
+/// Get the iteration index for a given position when iterating in reverse.
+///
+/// For reverse iteration from size-1 down to 0.
+#[no_mangle]
+pub extern "C" fn rs_execreg_reverse_index(size: usize, forward_idx: usize) -> usize {
+    size.saturating_sub(1).saturating_sub(forward_idx)
+}
+
+/// Check if this is the last line in reverse iteration.
+///
+/// In reverse iteration, line index 0 is the "last" processed line.
+#[no_mangle]
+pub extern "C" fn rs_execreg_is_last_line(line_idx: usize) -> bool {
+    line_idx == 0
+}
+
+/// Check if we need to check for line continuation at this position.
+///
+/// Line continuation is only checked when:
+/// - colon mode is enabled
+/// - we're not at the first line (i > 0)
+#[no_mangle]
+pub extern "C" fn rs_should_check_line_continuation(colon: bool, line_idx: usize) -> bool {
+    colon && line_idx > 0
+}
+
+/// Get the line that starts the continuation block.
+///
+/// When processing line continuation, we need to find where the
+/// continuation starts. This searches backwards from the current
+/// position to find the first non-continuation line.
+///
+/// Returns the starting index for the continuation block.
+#[no_mangle]
+pub extern "C" fn rs_find_continuation_start(current_idx: usize) -> usize {
+    // The actual logic for finding continuation start is in C
+    // since it needs to access the line contents.
+    // This is a placeholder that just returns current_idx - 1.
+    current_idx.saturating_sub(1)
+}
+
+/// Check if a register can be executed (has content).
+///
+/// # Safety
+///
+/// Accesses global register state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_can_execute_register(regname: c_int) -> bool {
+    // Black hole register always "succeeds" (does nothing)
+    if regname == c_int::from(b'_') {
+        return true;
+    }
+
+    // Special registers need special handling
+    if needs_special_exec_handling(regname as u8) {
+        return true; // Will be checked when fetching content
+    }
+
+    // Check if normal register has content
+    let i = rs_op_reg_index(regname);
+    if i == -1 {
+        return false;
+    }
+    let reg = nvim_get_y_regs_ptr(i);
+    !reg.0.is_null() && nvim_yankreg_has_array(reg)
+}
+
+/// Get escape string for control character escaping in command line register.
+///
+/// Control characters 0x01-0x1f need to be escaped with CTRL-V.
+/// This returns a static string with the escape characters.
+#[no_mangle]
+pub extern "C" fn rs_get_cmdline_escape_chars() -> *const c_char {
+    // This is the escape string used in do_execreg for the : register
+    // Contains characters 0x01-0x1f that need escaping
+    static ESCAPE_CHARS: [u8; 32] = [
+        0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+        0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e,
+        0x1f, 0x00,
+    ];
+    ESCAPE_CHARS.as_ptr() as *const c_char
+}
+
+/// Check if typeahead insertion should use REMAP_NONE.
+///
+/// REMAP_NONE is used for:
+/// - Colon mode (:@r)
+/// - Escaped content
+#[no_mangle]
+pub extern "C" fn rs_use_remap_none(colon: bool, escaped: bool) -> bool {
+    colon || escaped
+}
+
+/// Get the CTRL-V character value for escaping.
+#[no_mangle]
+pub extern "C" fn rs_get_ctrl_v() -> c_int {
+    c_int::from(CTRL_V)
+}
+
+/// Check if line should have colon prepended in :@r mode.
+///
+/// When executing :@r, each line gets a ':' prepended.
+#[no_mangle]
+pub extern "C" fn rs_execreg_prepend_colon(colon: bool) -> bool {
+    colon
+}
+
+/// Calculate position adjustment after line continuation.
+///
+/// After processing a continuation block, we need to adjust
+/// our position to skip the lines that were already processed.
+#[no_mangle]
+pub extern "C" fn rs_adjust_position_after_continuation(
+    _current_idx: usize,
+    continuation_start: usize,
+) -> usize {
+    continuation_start
+}
+
+/// Check if we're iterating over a valid line index.
+#[no_mangle]
+pub extern "C" fn rs_execreg_valid_index(idx: usize, size: usize) -> bool {
+    idx < size
+}
+
+/// Get the next index when iterating backwards.
+///
+/// Returns the previous index, or usize::MAX if we've gone past 0.
+#[no_mangle]
+pub extern "C" fn rs_execreg_prev_index(idx: usize) -> usize {
+    idx.wrapping_sub(1)
+}
+
+/// Check if we've finished iterating (reached before index 0).
+#[no_mangle]
+pub extern "C" fn rs_execreg_iteration_done(idx: usize) -> bool {
+    idx == usize::MAX
+}
