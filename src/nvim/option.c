@@ -128,6 +128,90 @@ extern int rs_csh_like_shell(void);
 extern int rs_fish_like_shell(void);
 extern int rs_default_fileformat(void);
 
+// Option type checking (from Rust types.rs)
+extern int rs_opt_type_bool(void);
+extern int rs_opt_type_number(void);
+extern int rs_opt_type_string(void);
+extern int rs_is_bool_option(int opt_type);
+extern int rs_is_number_option(int opt_type);
+extern int rs_is_string_option(int opt_type);
+extern int rs_is_valid_bool(int value);
+extern int rs_opt_is_in_range(int64_t value, int64_t min, int64_t max);
+extern int rs_opt_allows_negative(int flags);
+extern int rs_opt_is_valid_number(int64_t value, int flags);
+extern int rs_opt_must_be_nonempty(int flags);
+extern int rs_opt_is_path_option(int flags);
+extern int rs_opt_is_comma_list(int flags);
+extern int rs_opt_is_flags_option(int flags);
+
+// Option scope functions (from Rust scope.rs)
+extern int rs_supports_scope(int flags, int scope);
+extern int rs_most_specific_scope(int flags);
+extern int rs_scope_priority(int scope);
+
+// Option defaults and state (from Rust defaults.rs)
+extern int rs_default_builtin(void);
+extern int rs_default_modeline(void);
+extern int rs_default_vimrc(void);
+extern int rs_default_env(void);
+extern int rs_default_system(void);
+extern int rs_opt_changed_flag(void);
+extern int rs_opt_user_set_flag(void);
+extern int rs_opt_modeline_set_flag(void);
+extern int rs_opt_script_set_flag(void);
+extern int rs_opt_factory_flag(void);
+extern int rs_opt_is_changed(int flags);
+extern int rs_opt_is_user_set(int flags);
+extern int rs_opt_is_modeline_set(int flags);
+extern int rs_opt_is_script_set(int flags);
+extern int rs_opt_is_factory_default(int flags);
+extern int rs_default_source_priority(int source);
+extern int rs_source_has_higher_priority(int source1, int source2);
+
+// Option groups and scope flags (from Rust groups.rs)
+extern int rs_opt_group_general(void);
+extern int rs_opt_group_window(void);
+extern int rs_opt_group_buffer(void);
+extern int rs_opt_group_display(void);
+extern int rs_opt_group_editing(void);
+extern int rs_opt_group_search(void);
+extern int rs_opt_group_indent(void);
+extern int rs_opt_group_terminal(void);
+extern int rs_opt_scope_global_flag(void);
+extern int rs_opt_scope_window_flag(void);
+extern int rs_opt_scope_buffer_flag(void);
+extern int rs_opt_has_global_scope(int scope_flags);
+extern int rs_opt_has_window_scope(int scope_flags);
+extern int rs_opt_has_buffer_scope(int scope_flags);
+extern int rs_opt_has_local_scope(int scope_flags);
+extern int rs_opt_is_global_only(int scope_flags);
+extern int rs_opt_is_global_local(int scope_flags);
+
+// Side effect functions (from Rust sideeffect.rs)
+extern int rs_redraw_level(uint32_t flags);
+extern int rs_needs_redraw(uint32_t flags);
+extern int rs_side_effect_category(int value);
+extern int rs_callback_type(int value);
+extern int rs_has_effect(int flags, int effect);
+
+// Modeline functions (from Rust modeline.rs)
+extern int rs_modeline_vim(void);
+extern int rs_modeline_first(void);
+extern int rs_modeline_last(void);
+extern int rs_modeline_ex(void);
+extern int rs_ml_secure_flag(void);
+extern int rs_ml_expr_ok_flag(void);
+extern int rs_ml_sandbox_flag(void);
+extern int rs_could_start_modeline(int c);
+extern int rs_is_secure_modeline(int flags);
+extern int rs_ml_allows_expressions(int flags);
+extern int rs_is_sandboxed_modeline(int flags);
+
+// Format functions (from Rust format.rs)
+extern int rs_format_bool(int value, int flags);
+extern int rs_needs_escape(int c);
+extern int rs_number_radix(int style);
+
 // =============================================================================
 // Accessor functions for Rust code
 // =============================================================================
