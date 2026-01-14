@@ -1738,3 +1738,392 @@ mod tests {
         assert!(rs_register_valid_for_read(0));
     }
 }
+
+// =============================================================================
+// Phase 401: Register Iteration and Basic Access
+// =============================================================================
+
+extern "C" {
+    /// Check if register is empty (calls C reg_empty inline function).
+    fn nvim_reg_empty(reg: YankRegHandle) -> bool;
+
+    /// Compare y_previous pointer with a register.
+    fn nvim_is_y_previous(reg: YankRegHandle) -> bool;
+}
+
+/// Opaque iterator state for register iteration.
+/// Points to the current position in the register array.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct RegIterHandle(*const std::ffi::c_void);
+
+impl Default for RegIterHandle {
+    fn default() -> Self {
+        Self(std::ptr::null())
+    }
+}
+
+/// Check if a register is empty.
+///
+/// A register is empty if:
+/// - y_array is NULL
+/// - y_size is 0
+/// - y_size is 1, y_type is charwise, and the single line has size 0
+///
+/// # Safety
+///
+/// The `reg` handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reg_empty(reg: YankRegHandle) -> bool {
+    if reg.0.is_null() {
+        return true;
+    }
+
+    if !nvim_yankreg_has_array(reg) {
+        return true;
+    }
+
+    let size = nvim_yankreg_get_size(reg);
+    if size == 0 {
+        return true;
+    }
+
+    if size == 1
+        && nvim_yankreg_get_type(reg) == K_MT_CHAR_WISE
+        && nvim_yankreg_get_line_size(reg, 0) == 0
+    {
+        return true;
+    }
+
+    false
+}
+
+/// Iterate over registers in an array.
+///
+/// # Arguments
+///
+/// * `iter` - Iterator state. Pass NULL to start iteration.
+/// * `regs` - Base pointer to register array.
+/// * `name` - Output: register name character.
+/// * `reg` - Output: copy of register contents (yankreg_T).
+/// * `is_unnamed` - Output: true if this register is y_previous.
+///
+/// # Returns
+///
+/// Pointer that must be passed to next call, or NULL if iteration is complete.
+///
+/// # Safety
+///
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_op_reg_iter(
+    iter: RegIterHandle,
+    regs: YankRegHandle,
+    name: *mut c_char,
+    reg: YankRegHandle,
+    is_unnamed: *mut bool,
+) -> RegIterHandle {
+    // Initialize name to NUL
+    if !name.is_null() {
+        *name = 0;
+    }
+
+    // Calculate the starting position
+    let base = regs.0 as *const std::ffi::c_void;
+
+    // Get pointer to current register (or start from beginning if iter is NULL)
+    let mut iter_reg = if iter.0.is_null() {
+        regs
+    } else {
+        YankRegHandle(iter.0 as *mut std::ffi::c_void)
+    };
+
+    // Calculate offset from base
+    let yankreg_size = std::mem::size_of::<std::ffi::c_void>() * 8; // Approximate size
+    let get_offset =
+        |ptr: YankRegHandle| -> isize { (ptr.0 as isize - base as isize) / yankreg_size as isize };
+
+    // Skip empty registers until we find a non-empty one or reach the end
+    while get_offset(iter_reg) < NUM_SAVED_REGISTERS as isize && nvim_reg_empty(iter_reg) {
+        iter_reg =
+            YankRegHandle((iter_reg.0 as *mut u8).add(yankreg_size) as *mut std::ffi::c_void);
+    }
+
+    // Check if we've reached the end
+    if get_offset(iter_reg) >= NUM_SAVED_REGISTERS as isize || nvim_reg_empty(iter_reg) {
+        return RegIterHandle(std::ptr::null());
+    }
+
+    // Get the register index
+    let iter_off = get_offset(iter_reg) as c_int;
+
+    // Set the output name
+    if !name.is_null() {
+        *name = rs_get_register_name(iter_off) as c_char;
+    }
+
+    // Copy register contents to output
+    if !reg.0.is_null() {
+        nvim_copy_yankreg(reg, iter_reg);
+    }
+
+    // Check if this is the unnamed register
+    if !is_unnamed.is_null() {
+        *is_unnamed = nvim_is_y_previous(iter_reg);
+    }
+
+    // Find the next non-empty register for the return value
+    let mut next_reg =
+        YankRegHandle((iter_reg.0 as *mut u8).add(yankreg_size) as *mut std::ffi::c_void);
+    while get_offset(next_reg) < NUM_SAVED_REGISTERS as isize {
+        if !nvim_reg_empty(next_reg) {
+            return RegIterHandle(next_reg.0);
+        }
+        next_reg =
+            YankRegHandle((next_reg.0 as *mut u8).add(yankreg_size) as *mut std::ffi::c_void);
+    }
+
+    RegIterHandle(std::ptr::null())
+}
+
+/// Iterate over global registers.
+///
+/// This is a convenience wrapper around rs_op_reg_iter that uses the global y_regs array.
+///
+/// # Arguments
+///
+/// * `iter` - Iterator state. Pass NULL to start iteration.
+/// * `name` - Output: register name character.
+/// * `reg` - Output: copy of register contents.
+/// * `is_unnamed` - Output: true if this register is y_previous.
+///
+/// # Returns
+///
+/// Pointer that must be passed to next call, or NULL if iteration is complete.
+///
+/// # Safety
+///
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_op_global_reg_iter(
+    iter: RegIterHandle,
+    name: *mut c_char,
+    reg: YankRegHandle,
+    is_unnamed: *mut bool,
+) -> RegIterHandle {
+    let regs = nvim_get_y_regs_ptr(0);
+    rs_op_reg_iter(iter, regs, name, reg, is_unnamed)
+}
+
+/// Set a register to a given value.
+///
+/// # Arguments
+///
+/// * `name` - Register name character.
+/// * `reg` - Register value to set (contents are copied).
+/// * `is_unnamed` - Whether to set y_previous to point to this register.
+///
+/// # Returns
+///
+/// true on success, false if register name is invalid.
+///
+/// # Safety
+///
+/// The `reg` handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_op_reg_set(name: c_char, reg: YankRegHandle, is_unnamed: bool) -> bool {
+    let i = rs_op_reg_index(c_int::from(name));
+    if i == -1 {
+        return false;
+    }
+
+    // Free the old register contents
+    let dest = nvim_get_y_regs_ptr(i);
+    nvim_free_register(dest);
+
+    // Copy the new contents
+    nvim_copy_yankreg(dest, reg);
+
+    // Set y_previous if requested
+    if is_unnamed {
+        nvim_set_y_previous_by_index(i);
+    }
+
+    true
+}
+
+/// Get the first non-empty register index starting from a given index.
+///
+/// # Arguments
+///
+/// * `start_idx` - Index to start searching from (0-based).
+///
+/// # Returns
+///
+/// Index of first non-empty register, or -1 if none found.
+///
+/// # Safety
+///
+/// Accesses global register state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_next_nonempty_register(start_idx: c_int) -> c_int {
+    for i in start_idx..NUM_SAVED_REGISTERS {
+        let reg = nvim_get_y_regs_ptr(i);
+        if !nvim_yankreg_is_empty(reg) {
+            return i;
+        }
+    }
+    -1
+}
+
+/// Get the count of non-empty registers in a range.
+///
+/// # Arguments
+///
+/// * `start_idx` - Start index (inclusive).
+/// * `end_idx` - End index (exclusive).
+///
+/// # Returns
+///
+/// Number of non-empty registers in the range.
+///
+/// # Safety
+///
+/// Accesses global register state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_count_nonempty_registers_range(
+    start_idx: c_int,
+    end_idx: c_int,
+) -> c_int {
+    let mut count: c_int = 0;
+    for i in start_idx..end_idx.min(NUM_REGISTERS) {
+        let reg = nvim_get_y_regs_ptr(i);
+        if !nvim_yankreg_is_empty(reg) {
+            count += 1;
+        }
+    }
+    count
+}
+
+/// Check if a register index is valid.
+///
+/// # Arguments
+///
+/// * `idx` - Register index to check.
+///
+/// # Returns
+///
+/// true if index is within valid range [0, NUM_REGISTERS).
+#[no_mangle]
+pub extern "C" fn rs_is_valid_register_index(idx: c_int) -> bool {
+    (0..NUM_REGISTERS).contains(&idx)
+}
+
+/// Get the register index range for a category.
+///
+/// # Arguments
+///
+/// * `category` - 0=numbered (0-9), 1=named (a-z), 2=special (deletion, star, plus)
+/// * `start` - Output: start index (inclusive).
+/// * `end` - Output: end index (exclusive).
+///
+/// # Returns
+///
+/// true if category is valid.
+///
+/// # Safety
+///
+/// Output pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_register_range(
+    category: c_int,
+    start: *mut c_int,
+    end: *mut c_int,
+) -> bool {
+    let (s, e) = match category {
+        0 => (0, 10),                            // numbered 0-9
+        1 => (10, 36),                           // named a-z
+        2 => (DELETION_REGISTER, NUM_REGISTERS), // special
+        _ => return false,
+    };
+
+    if !start.is_null() {
+        *start = s;
+    }
+    if !end.is_null() {
+        *end = e;
+    }
+    true
+}
+
+/// Get the timestamp of a register by name.
+///
+/// # Safety
+///
+/// Accesses global register state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_register_get_timestamp(regname: c_int) -> u64 {
+    let i = rs_op_reg_index(regname);
+    if i == -1 {
+        return 0;
+    }
+    let reg = nvim_get_y_regs_ptr(i);
+    nvim_yankreg_get_timestamp(reg)
+}
+
+extern "C" {
+    fn nvim_yankreg_get_timestamp(reg: YankRegHandle) -> u64;
+}
+
+/// Compare two registers by timestamp.
+///
+/// # Returns
+///
+/// -1 if reg1 is older, 0 if equal, 1 if reg1 is newer.
+///
+/// # Safety
+///
+/// Accesses global register state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compare_register_timestamps(regname1: c_int, regname2: c_int) -> c_int {
+    let ts1 = rs_register_get_timestamp(regname1);
+    let ts2 = rs_register_get_timestamp(regname2);
+
+    match ts1.cmp(&ts2) {
+        std::cmp::Ordering::Less => -1,
+        std::cmp::Ordering::Equal => 0,
+        std::cmp::Ordering::Greater => 1,
+    }
+}
+
+/// Find the most recently modified register in a range.
+///
+/// # Arguments
+///
+/// * `start_idx` - Start index (inclusive).
+/// * `end_idx` - End index (exclusive).
+///
+/// # Returns
+///
+/// Index of most recently modified register, or -1 if all empty.
+///
+/// # Safety
+///
+/// Accesses global register state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_most_recent_register(start_idx: c_int, end_idx: c_int) -> c_int {
+    let mut best_idx: c_int = -1;
+    let mut best_ts: u64 = 0;
+
+    for i in start_idx..end_idx.min(NUM_REGISTERS) {
+        let reg = nvim_get_y_regs_ptr(i);
+        if !nvim_yankreg_is_empty(reg) {
+            let ts = nvim_yankreg_get_timestamp(reg);
+            if best_idx == -1 || ts > best_ts {
+                best_idx = i;
+                best_ts = ts;
+            }
+        }
+    }
+    best_idx
+}

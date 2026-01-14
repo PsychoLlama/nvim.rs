@@ -450,6 +450,20 @@ void nvim_yankreg_free_data_at(yankreg_T *reg, size_t idx)
   xfree(reg->y_array[idx].data);
 }
 
+// Phase 401 accessors: Register iteration support
+
+/// Check if register is empty (wrapper for inline function).
+bool nvim_reg_empty(const yankreg_T *reg)
+{
+  return reg_empty(reg);
+}
+
+/// Check if a register pointer equals y_previous.
+bool nvim_is_y_previous(const yankreg_T *reg)
+{
+  return reg == y_previous;
+}
+
 /// @return the index of the register "" points to.
 int get_unname_register(void)
 {
