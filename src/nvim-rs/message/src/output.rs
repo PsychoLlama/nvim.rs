@@ -236,6 +236,147 @@ pub unsafe extern "C" fn rs_msg_dec_lines_left() -> c_int {
     rs_msg_need_more()
 }
 
+// ============================================================================
+// Phase 425: Wait/Return Prompt Functions
+// ============================================================================
+
+extern "C" {
+    // Wait return functions
+    fn wait_return(redraw: c_int);
+    fn no_wait_return_get() -> c_int;
+    fn no_wait_return_inc();
+    fn no_wait_return_dec();
+    fn nvim_get_vgetc_busy() -> c_int;
+    fn nvim_get_msg_silent() -> c_int;
+}
+
+/// Wait for the user to press a key and optionally redraw.
+///
+/// This is the main function for "Press ENTER to continue" prompts.
+///
+/// # Arguments
+/// * `redraw` - If true, redraw the screen after the wait
+///
+/// # Safety
+/// Calls C function that blocks for user input.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wait_return(redraw: c_int) {
+    wait_return(redraw);
+}
+
+/// Wait for return with screen redraw.
+///
+/// Convenience wrapper that always redraws after waiting.
+///
+/// # Safety
+/// Calls C function that blocks for user input.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wait_return_redraw() {
+    wait_return(1);
+}
+
+/// Wait for return without screen redraw.
+///
+/// Convenience wrapper that doesn't redraw after waiting.
+///
+/// # Safety
+/// Calls C function that blocks for user input.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wait_return_no_redraw() {
+    wait_return(0);
+}
+
+/// Get the no_wait_return counter.
+///
+/// When > 0, wait_return() won't wait for a key.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_no_wait_return() -> c_int {
+    no_wait_return_get()
+}
+
+/// Increment no_wait_return to prevent waiting.
+///
+/// # Safety
+/// Calls C function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_no_wait_return_enter() {
+    no_wait_return_inc();
+}
+
+/// Decrement no_wait_return.
+///
+/// # Safety
+/// Calls C function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_no_wait_return_leave() {
+    no_wait_return_dec();
+}
+
+/// Check if waiting for return is currently blocked.
+///
+/// Returns true if any condition prevents wait_return from waiting:
+/// - msg_silent is set
+/// - vgetc_busy is set
+/// - no_wait_return is set
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wait_return_blocked() -> c_int {
+    let msg_silent = nvim_get_msg_silent();
+    let vgetc_busy = nvim_get_vgetc_busy();
+    let no_wait = no_wait_return_get();
+
+    c_int::from(msg_silent != 0 || vgetc_busy > 0 || no_wait > 0)
+}
+
+/// Check if wait_return should be called.
+///
+/// Returns true if need_wait_return is set and waiting is not blocked.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_should_wait_return() -> c_int {
+    let need_wait = nvim_get_need_wait_return();
+    let blocked = rs_wait_return_blocked();
+
+    c_int::from(need_wait != 0 && blocked == 0)
+}
+
+/// Set need_wait_return flag.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_request_wait_return() {
+    nvim_set_need_wait_return(1);
+}
+
+/// Clear need_wait_return flag.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_clear_wait_return() {
+    nvim_set_need_wait_return(0);
+}
+
+/// Reset wait return state after handling.
+///
+/// Clears need_wait_return and msg_didout flags.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reset_wait_return_state() {
+    nvim_set_need_wait_return(0);
+    nvim_set_msg_didout(0);
+}
+
 #[cfg(test)]
 mod tests {
     // Integration tests would require mocking C functions
