@@ -178,6 +178,112 @@ pub extern "C" fn rs_foldlevelDiff(wp: WinHandle, lnum: LineNr, off: LineNr) -> 
 
 #[cfg(test)]
 mod tests {
-    // Note: Most testing requires FFI integration with C code.
-    // Unit tests here would need mock implementations of the extern "C" functions.
+    use super::*;
+
+    // =========================================================================
+    // FoldLevelResult Tests
+    // =========================================================================
+
+    #[test]
+    fn test_fold_level_result_default() {
+        let result = FoldLevelResult::default();
+        assert_eq!(result.lvl, 0);
+        assert_eq!(result.lvl_next, 0);
+        assert_eq!(result.start, 0);
+    }
+
+    #[test]
+    fn test_fold_level_result_clone() {
+        let result = FoldLevelResult {
+            lvl: 2,
+            lvl_next: 3,
+            start: 1,
+        };
+        let cloned = result;
+        assert_eq!(cloned.lvl, 2);
+        assert_eq!(cloned.lvl_next, 3);
+        assert_eq!(cloned.start, 1);
+    }
+
+    #[test]
+    fn test_fold_level_result_copy() {
+        let result = FoldLevelResult {
+            lvl: 5,
+            lvl_next: 6,
+            start: 2,
+        };
+        let copied = result;
+        // Original should still be valid (Copy trait)
+        assert_eq!(result.lvl, 5);
+        assert_eq!(copied.lvl, 5);
+    }
+
+    #[test]
+    fn test_fold_level_result_size() {
+        // Should be 3 * c_int (12 bytes on most platforms)
+        assert_eq!(
+            std::mem::size_of::<FoldLevelResult>(),
+            3 * std::mem::size_of::<c_int>()
+        );
+    }
+
+    #[test]
+    fn test_fold_level_result_repr_c() {
+        // Verify it's suitable for C FFI by checking alignment
+        assert!(std::mem::align_of::<FoldLevelResult>() <= std::mem::align_of::<c_int>() * 2);
+    }
+
+    #[test]
+    fn test_fold_level_result_negative_lvl() {
+        // -1 is a valid value meaning "depends on surrounding lines"
+        let result = FoldLevelResult {
+            lvl: -1,
+            lvl_next: 0,
+            start: 0,
+        };
+        assert_eq!(result.lvl, -1);
+    }
+
+    #[test]
+    fn test_fold_level_result_debug() {
+        let result = FoldLevelResult {
+            lvl: 1,
+            lvl_next: 2,
+            start: 0,
+        };
+        let debug_str = format!("{result:?}");
+        assert!(debug_str.contains("lvl: 1"));
+        assert!(debug_str.contains("lvl_next: 2"));
+        assert!(debug_str.contains("start: 0"));
+    }
+
+    #[test]
+    fn test_fold_level_result_high_values() {
+        // Test with high fold levels (edge case)
+        let result = FoldLevelResult {
+            lvl: 100,
+            lvl_next: 101,
+            start: 50,
+        };
+        assert_eq!(result.lvl, 100);
+        assert_eq!(result.lvl_next, 101);
+        assert_eq!(result.start, 50);
+    }
+
+    #[test]
+    fn test_fold_level_result_zero_values() {
+        // Explicit zero initialization
+        let result = FoldLevelResult {
+            lvl: 0,
+            lvl_next: 0,
+            start: 0,
+        };
+        assert_eq!(result.lvl, 0);
+        assert_eq!(result.lvl_next, 0);
+        assert_eq!(result.start, 0);
+    }
+
+    // Note: FFI-dependent tests (foldlevel_indent_impl, foldlevel_diff_impl)
+    // require the full neovim binary to be linked and cannot be run in isolation.
+    // They are tested through integration tests instead.
 }

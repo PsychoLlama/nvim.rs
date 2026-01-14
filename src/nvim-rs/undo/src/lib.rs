@@ -2810,6 +2810,10 @@ unsafe fn put_header_ptr_by_seq(fp: FileHandle, seq: c_int) -> bool {
 mod tests {
     use super::*;
 
+    // =========================================================================
+    // Handle Size and Null Tests
+    // =========================================================================
+
     #[test]
     fn test_handle_sizes() {
         // Verify handle sizes match pointer size
@@ -2831,5 +2835,183 @@ mod tests {
     fn test_null_handle_checks() {
         assert!(rs_uhp_is_null(UHeaderHandle(std::ptr::null_mut())));
         assert!(rs_uep_is_null(UEntryHandle(std::ptr::null_mut())));
+    }
+
+    #[test]
+    fn test_file_handle_null() {
+        let handle = FileHandle::null();
+        assert!(handle.is_null());
+    }
+
+    #[test]
+    fn test_file_handle_size() {
+        assert_eq!(
+            std::mem::size_of::<FileHandle>(),
+            std::mem::size_of::<*mut c_void>()
+        );
+    }
+
+    // =========================================================================
+    // Undo File Format Constants Tests
+    // =========================================================================
+
+    #[test]
+    fn test_undo_magic_bytes() {
+        // Verify the magic bytes are correct
+        assert_eq!(UF_START_MAGIC, b"Vim\x9fUnDo\xe5");
+        assert_eq!(UF_START_MAGIC_LEN, 9);
+    }
+
+    #[test]
+    fn test_undo_magic_values() {
+        // Verify magic values for file format
+        assert_eq!(UF_HEADER_MAGIC, 0x5fd0);
+        assert_eq!(UF_HEADER_END_MAGIC, 0xe7aa);
+        assert_eq!(UF_ENTRY_MAGIC, 0xf518);
+        assert_eq!(UF_ENTRY_END_MAGIC, 0x3581);
+    }
+
+    #[test]
+    fn test_undo_version() {
+        // Version should be 3 for current format
+        assert_eq!(UF_VERSION, 3);
+    }
+
+    #[test]
+    fn test_undo_extra_field_ids() {
+        // Extra field identifiers
+        assert_eq!(UF_LAST_SAVE_NR, 1);
+        assert_eq!(UHP_SAVE_NR, 1);
+    }
+
+    #[test]
+    fn test_undo_hash_size() {
+        // SHA-256 produces 32 bytes
+        assert_eq!(UNDO_HASH_SIZE, 32);
+    }
+
+    // =========================================================================
+    // Result Constants Tests
+    // =========================================================================
+
+    #[test]
+    fn test_ok_fail_constants() {
+        // Verify OK and FAIL match Neovim conventions
+        assert_eq!(OK, 1);
+        assert_eq!(FAIL, 0);
+        assert_ne!(OK, FAIL);
+    }
+
+    // =========================================================================
+    // Type Alias Tests
+    // =========================================================================
+
+    #[test]
+    fn test_time_t_size() {
+        // TimeT should be pointer-sized (i64 on 64-bit, i32 on 32-bit)
+        #[cfg(target_pointer_width = "64")]
+        assert_eq!(std::mem::size_of::<TimeT>(), 8);
+        #[cfg(target_pointer_width = "32")]
+        assert_eq!(std::mem::size_of::<TimeT>(), 4);
+    }
+
+    #[test]
+    fn test_linenr_t_size() {
+        // LinenrT is c_long
+        assert_eq!(
+            std::mem::size_of::<LinenrT>(),
+            std::mem::size_of::<c_long>()
+        );
+    }
+
+    #[test]
+    fn test_colnr_t_size() {
+        // ColnrT is c_int
+        assert_eq!(std::mem::size_of::<ColnrT>(), std::mem::size_of::<c_int>());
+    }
+
+    // =========================================================================
+    // Handle Representation Tests
+    // =========================================================================
+
+    #[test]
+    fn test_buf_handle_repr() {
+        // BufHandle should be repr(transparent) over a pointer
+        let ptr: *mut c_void = 0x1234 as *mut c_void;
+        let handle = BufHandle(ptr);
+        assert_eq!(handle.0, ptr);
+    }
+
+    #[test]
+    fn test_uheader_handle_repr() {
+        // UHeaderHandle should be repr(transparent) over a pointer
+        let ptr: *mut c_void = 0x5678 as *mut c_void;
+        let handle = UHeaderHandle(ptr);
+        assert_eq!(handle.0, ptr);
+    }
+
+    #[test]
+    fn test_uentry_handle_repr() {
+        // UEntryHandle should be repr(transparent) over a pointer
+        let ptr: *mut c_void = 0xabcd as *mut c_void;
+        let handle = UEntryHandle(ptr);
+        assert_eq!(handle.0, ptr);
+    }
+
+    // =========================================================================
+    // Magic Number Uniqueness Tests
+    // =========================================================================
+
+    #[test]
+    fn test_magic_numbers_are_unique() {
+        // All magic numbers should be distinct
+        let magics = [
+            UF_HEADER_MAGIC,
+            UF_HEADER_END_MAGIC,
+            UF_ENTRY_MAGIC,
+            UF_ENTRY_END_MAGIC,
+        ];
+
+        for i in 0..magics.len() {
+            for j in (i + 1)..magics.len() {
+                assert_ne!(
+                    magics[i], magics[j],
+                    "Magic numbers at indices {i} and {j} should be different"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_magic_numbers_nonzero() {
+        // Magic numbers should be non-zero
+        assert_ne!(UF_HEADER_MAGIC, 0);
+        assert_ne!(UF_HEADER_END_MAGIC, 0);
+        assert_ne!(UF_ENTRY_MAGIC, 0);
+        assert_ne!(UF_ENTRY_END_MAGIC, 0);
+    }
+
+    // =========================================================================
+    // Start Magic Tests
+    // =========================================================================
+
+    #[test]
+    fn test_start_magic_contains_vim() {
+        // The start magic should begin with "Vim"
+        assert!(UF_START_MAGIC.starts_with(b"Vim"));
+    }
+
+    #[test]
+    fn test_start_magic_contains_undo() {
+        // The start magic should contain "UnDo" (case sensitive)
+        let magic_str = std::str::from_utf8(&UF_START_MAGIC[4..8]).unwrap_or("");
+        assert_eq!(magic_str, "UnDo");
+    }
+
+    #[test]
+    fn test_start_magic_special_bytes() {
+        // Verify the special bytes (0x9f after Vim, 0xe5 at end)
+        assert_eq!(UF_START_MAGIC[3], 0x9f);
+        assert_eq!(UF_START_MAGIC[8], 0xe5);
     }
 }
