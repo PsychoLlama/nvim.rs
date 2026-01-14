@@ -555,6 +555,7 @@ const CTRL_A: c_int = 1;
 const CTRL_F: c_int = 6;
 const CTRL_P: c_int = 16;
 const CTRL_R: c_int = 18;
+const CTRL_U: c_int = 21;
 const CTRL_W: c_int = 23;
 const NUL: c_int = 0;
 
@@ -4316,4 +4317,238 @@ pub extern "C" fn rs_yank_append_start_idx(concatenated: bool) -> usize {
 #[no_mangle]
 pub extern "C" fn rs_yank_space_char() -> c_int {
     c_int::from(b' ')
+}
+
+// =============================================================================
+// Phase 411: Put operations core helpers (do_put part 1)
+// =============================================================================
+
+// PUT flags constants
+/// Leave cursor after end of new text
+pub const PUT_CURSEND: c_int = 0x01;
+/// Force linewise put
+pub const PUT_LINE: c_int = 0x02;
+/// Put in Visual block mode
+pub const PUT_BLOCK_INNER: c_int = 0x04;
+/// Put in Visual line mode, split lines
+pub const PUT_LINE_SPLIT: c_int = 0x08;
+/// Put lines forward
+pub const PUT_LINE_FORWARD: c_int = 0x10;
+/// In Visual line mode
+pub const PUT_LINE_VISUAL: c_int = 0x20;
+
+// Direction constants
+/// Put before cursor
+pub const DIR_BACKWARD: c_int = 0;
+/// Put after cursor
+pub const DIR_FORWARD: c_int = 1;
+
+/// Check if put is using the '.' (last inserted) register.
+#[no_mangle]
+pub extern "C" fn rs_put_is_insert_register(regname: c_int, reg_is_null: bool) -> bool {
+    regname == c_int::from(b'.') && reg_is_null
+}
+
+/// Check if put should use linewise handling for '.' register.
+#[no_mangle]
+pub extern "C" fn rs_put_insert_is_linewise(flags: c_int) -> bool {
+    (flags & PUT_LINE) != 0
+}
+
+/// Determine the command start character for '.' register put.
+///
+/// 'c' for non-linewise visual, 'i' for linewise PUT_LINE or backward,
+/// 'a' for forward.
+#[no_mangle]
+pub extern "C" fn rs_put_insert_command_char(
+    non_linewise_vis: bool,
+    flags: c_int,
+    dir: c_int,
+) -> c_int {
+    if non_linewise_vis {
+        c_int::from(b'c')
+    } else if (flags & PUT_LINE) != 0 {
+        c_int::from(b'i')
+    } else if dir == DIR_FORWARD {
+        c_int::from(b'a')
+    } else {
+        c_int::from(b'i')
+    }
+}
+
+/// Check if put should use special register handling.
+#[no_mangle]
+pub extern "C" fn rs_put_needs_special_reg(regname: c_int) -> bool {
+    rs_classify_special_register(regname) != 0
+}
+
+/// Check if expression register needs line splitting.
+#[no_mangle]
+pub extern "C" fn rs_put_expr_needs_split(regname: c_int) -> bool {
+    regname == c_int::from(b'=')
+}
+
+/// Determine the type for special register put.
+///
+/// Default is charwise, unless the content ends with a newline.
+#[no_mangle]
+pub extern "C" fn rs_put_special_reg_type(ends_with_newline: bool) -> c_int {
+    if ends_with_newline {
+        K_MT_LINE_WISE
+    } else {
+        K_MT_CHAR_WISE
+    }
+}
+
+/// Check if put should force linewise mode.
+#[no_mangle]
+pub extern "C" fn rs_put_force_linewise(flags: c_int) -> bool {
+    (flags & PUT_LINE) != 0
+}
+
+/// Check if put content is empty.
+#[no_mangle]
+pub extern "C" fn rs_put_content_empty(y_size: usize, y_array_null: bool) -> bool {
+    y_size == 0 || y_array_null
+}
+
+/// Check if linewise put should split lines.
+#[no_mangle]
+pub extern "C" fn rs_put_should_split_lines(y_type: c_int, flags: c_int) -> bool {
+    y_type == K_MT_LINE_WISE && (flags & PUT_LINE_SPLIT) != 0
+}
+
+/// Check if linewise put should go forward.
+#[no_mangle]
+pub extern "C" fn rs_put_should_forward(flags: c_int) -> bool {
+    (flags & PUT_LINE_FORWARD) != 0
+}
+
+/// Check if cursor should be at end after put.
+#[no_mangle]
+pub extern "C" fn rs_put_cursor_at_end(flags: c_int) -> bool {
+    (flags & PUT_CURSEND) != 0
+}
+
+/// Calculate lnum for blockwise u_save.
+///
+/// lnum = curwin->w_cursor.lnum + y_size + 1, clamped to max line count + 1.
+#[no_mangle]
+pub extern "C" fn rs_put_block_usave_lnum(
+    cursor_lnum: i64,
+    y_size: usize,
+    max_line_count: i64,
+) -> i64 {
+    let lnum = cursor_lnum + y_size as i64 + 1;
+    if lnum > max_line_count + 1 {
+        max_line_count + 1
+    } else {
+        lnum
+    }
+}
+
+/// Check if put is linewise.
+#[no_mangle]
+pub extern "C" fn rs_put_is_linewise(y_type: c_int) -> bool {
+    y_type == K_MT_LINE_WISE
+}
+
+/// Check if put is blockwise.
+#[no_mangle]
+pub extern "C" fn rs_put_is_blockwise(y_type: c_int) -> bool {
+    y_type == K_MT_BLOCK_WISE
+}
+
+/// Check if put is charwise.
+#[no_mangle]
+pub extern "C" fn rs_put_is_charwise(y_type: c_int) -> bool {
+    y_type == K_MT_CHAR_WISE
+}
+
+/// Get the regname string for error messages.
+///
+/// Returns '"' for unnamed register (regname == 0).
+#[no_mangle]
+pub extern "C" fn rs_put_regname_for_error(regname: c_int) -> c_int {
+    if regname == 0 {
+        c_int::from(b'"')
+    } else {
+        regname
+    }
+}
+
+/// Check if linewise put needs to adjust cursor for forward direction.
+#[no_mangle]
+pub extern "C" fn rs_put_linewise_forward(dir: c_int) -> bool {
+    dir == DIR_FORWARD
+}
+
+/// Calculate line number after linewise put.
+///
+/// Returns cursor lnum if backward, cursor lnum + 1 if forward.
+#[no_mangle]
+pub extern "C" fn rs_put_linewise_lnum(cursor_lnum: i64, dir: c_int) -> i64 {
+    if dir == DIR_FORWARD {
+        cursor_lnum + 1
+    } else {
+        cursor_lnum
+    }
+}
+
+/// Check if charwise put starts at end of line.
+#[no_mangle]
+pub extern "C" fn rs_put_at_eol(cursor_at_eol: bool) -> bool {
+    cursor_at_eol
+}
+
+/// Check if charwise put with single line should use different handling.
+#[no_mangle]
+pub extern "C" fn rs_put_charwise_single_line(y_size: usize) -> bool {
+    y_size == 1
+}
+
+/// Calculate total length for charwise single-line put.
+#[no_mangle]
+pub extern "C" fn rs_put_single_line_totlen(line_len: usize, count: usize) -> usize {
+    line_len.saturating_mul(count)
+}
+
+/// Calculate string repeat count for charwise put.
+#[no_mangle]
+pub extern "C" fn rs_put_repeat_count(count: c_int) -> usize {
+    if count > 0 {
+        count as usize
+    } else {
+        1
+    }
+}
+
+/// Check if PUT_CURSEND with PUT_LINE should stuff "j0".
+#[no_mangle]
+pub extern "C" fn rs_put_stuff_j0(flags: c_int) -> bool {
+    (flags & PUT_CURSEND) != 0 && (flags & PUT_LINE) != 0
+}
+
+/// Check if PUT_LINE without PUT_CURSEND should stuff "g'[".
+#[no_mangle]
+pub extern "C" fn rs_put_stuff_goto_mark(flags: c_int) -> bool {
+    (flags & PUT_CURSEND) == 0 && (flags & PUT_LINE) != 0
+}
+
+/// Get Ctrl-U character for put operation.
+#[no_mangle]
+pub extern "C" fn rs_put_ctrl_u() -> c_int {
+    c_int::from(CTRL_U)
+}
+
+/// Check if charwise put should move cursor forward one character.
+#[no_mangle]
+pub extern "C" fn rs_put_forward_one_char(dir: c_int, cursor_char_not_nul: bool) -> bool {
+    dir == DIR_FORWARD && cursor_char_not_nul
+}
+
+/// Get newline character for line splitting.
+#[no_mangle]
+pub extern "C" fn rs_put_newline_char() -> c_int {
+    c_int::from(b'\n')
 }
