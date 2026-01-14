@@ -1479,19 +1479,19 @@ pub unsafe extern "C" fn rs_write_timestamp(
 
 /// Byte values used in spell file tree.
 ///
-/// Values 0x00-0xFB are regular character bytes.
-/// Values 0xFC-0xFF have special meanings.
+/// These are special byte values that appear at the start of a node's sibling data.
+/// Values > BY_SPECIAL are regular character bytes.
 pub mod tree_bytes {
-    /// End of word, no flags.
+    /// End of word without flags or region; for postponed prefix: no <pflags>
     pub const BY_NOFLAGS: u8 = 0;
-    /// End of word, flags byte follows.
-    pub const BY_FLAGS: u8 = 1;
-    /// End of word, flags and 1-byte index follow.
-    pub const BY_FLAGS2: u8 = 2;
-    /// Sibling with index and character.
-    pub const BY_INDEX: u8 = 3;
-    /// Special byte value - start of special range.
-    pub const BY_SPECIAL: u8 = 0xFC;
+    /// Child is shared, index follows
+    pub const BY_INDEX: u8 = 1;
+    /// End of word, <flags> byte follows; for postponed prefix: <pflags> follows
+    pub const BY_FLAGS: u8 = 2;
+    /// End of word, <flags> and <flags2> bytes follow; never used in prefix tree
+    pub const BY_FLAGS2: u8 = 3;
+    /// Highest special byte value - values > BY_SPECIAL are regular characters
+    pub const BY_SPECIAL: u8 = BY_FLAGS2;
 }
 
 /// Tree node flags for spell file writing.
@@ -1632,27 +1632,17 @@ pub unsafe extern "C" fn rs_write_tree_node_flags(
 
 /// Write a tree node sibling byte to buffer.
 ///
-/// Handles encoding of character bytes, distinguishing between regular
-/// characters (0x00-0xFB) and special values (0xFC-0xFF).
+/// For regular characters, writes the byte directly.
+/// Note: Special bytes (0-3) are only special when a node's wn_byte is 0 (end of word).
+/// For non-end-of-word nodes, the byte is written directly regardless of value.
 ///
 /// Returns bytes written or None if buffer too small.
 pub fn write_tree_sibling_byte(buf: &mut [u8], byte: u8) -> Option<usize> {
-    if byte < tree_bytes::BY_SPECIAL {
-        // Regular character byte
-        if buf.is_empty() {
-            return None;
-        }
-        buf[0] = byte;
-        Some(1)
-    } else {
-        // Special byte - needs escape sequence
-        if buf.len() < 2 {
-            return None;
-        }
-        buf[0] = tree_bytes::BY_SPECIAL;
-        buf[1] = byte - tree_bytes::BY_SPECIAL;
-        Some(2)
+    if buf.is_empty() {
+        return None;
     }
+    buf[0] = byte;
+    Some(1)
 }
 
 /// FFI wrapper for writing tree sibling byte.
@@ -2456,6 +2446,404 @@ pub unsafe extern "C" fn rs_read_tree_node_count(
 }
 
 // =============================================================================
+// Tree Node Reading (Phase 329-330)
+// =============================================================================
+
+/// Word flags used in tree nodes.
+pub mod word_flags {
+    /// Word has region specified.
+    pub const WF_REGION: i32 = 0x02;
+    /// Word has affix ID.
+    pub const WF_AFX: i32 = 0x04;
+    /// Word has prefix ID.
+    pub const WF_PFX: i32 = 0x08;
+}
+
+/// Mask to mark a shared tree node index.
+const SHARED_MASK: i32 = 0x0800_0000;
+
+/// Read a 2-byte big-endian integer from buffer.
+#[inline]
+fn get2c(buf: &[u8], offset: usize) -> Option<i32> {
+    if offset + 2 > buf.len() {
+        return None;
+    }
+    Some(((buf[offset] as i32) << 8) | (buf[offset + 1] as i32))
+}
+
+/// Read a 3-byte big-endian integer from buffer.
+#[inline]
+fn get3c(buf: &[u8], offset: usize) -> Option<i32> {
+    if offset + 3 > buf.len() {
+        return None;
+    }
+    Some(((buf[offset] as i32) << 16) | ((buf[offset + 1] as i32) << 8) | (buf[offset + 2] as i32))
+}
+
+/// State tracker for reading tree nodes from a buffer.
+///
+/// This replaces the FILE* based reading in C with buffer-based reading.
+#[derive(Debug)]
+pub struct TreeReader<'a> {
+    /// Input buffer
+    buf: &'a [u8],
+    /// Current read position
+    pos: usize,
+}
+
+impl<'a> TreeReader<'a> {
+    /// Create a new tree reader.
+    pub fn new(buf: &'a [u8]) -> Self {
+        Self { buf, pos: 0 }
+    }
+
+    /// Get the current position.
+    pub fn position(&self) -> usize {
+        self.pos
+    }
+
+    /// Get a byte at the current position and advance.
+    fn getc(&mut self) -> Option<i32> {
+        if self.pos >= self.buf.len() {
+            return None;
+        }
+        let c = self.buf[self.pos] as i32;
+        self.pos += 1;
+        Some(c)
+    }
+
+    /// Read a 2-byte big-endian value and advance.
+    fn get2c(&mut self) -> Option<i32> {
+        let val = get2c(self.buf, self.pos)?;
+        self.pos += 2;
+        Some(val)
+    }
+
+    /// Read a 3-byte big-endian value and advance.
+    fn get3c(&mut self) -> Option<i32> {
+        let val = get3c(self.buf, self.pos)?;
+        self.pos += 3;
+        Some(val)
+    }
+}
+
+/// Read one row of siblings from the spell file and store it in the byte array
+/// "byts" and index array "idxs". Recursively read the children.
+///
+/// This is a Rust port of `read_tree_node()` from spellfile.c.
+///
+/// # Arguments
+/// * `reader` - Buffer reader
+/// * `byts` - Output byte array (node bytes)
+/// * `idxs` - Output index array (node indexes)
+/// * `maxidx` - Size of arrays
+/// * `startidx` - Current index in "byts" and "idxs"
+/// * `prefixtree` - true for reading PREFIXTREE
+/// * `maxprefcondnr` - Maximum for <prefcondnr>
+///
+/// # Returns
+/// The index (>= 0) following the siblings, or SP_* error code.
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_truncation)]
+pub fn read_tree_node(
+    reader: &mut TreeReader,
+    byts: &mut [u8],
+    idxs: &mut [i32],
+    maxidx: i32,
+    startidx: i32,
+    prefixtree: bool,
+    maxprefcondnr: i32,
+) -> i32 {
+    let mut idx = startidx;
+
+    // Read <siblingcount>
+    let len = match reader.getc() {
+        Some(c) if c > 0 => c,
+        _ => return SP_TRUNCERROR,
+    };
+
+    if startidx + len >= maxidx {
+        return SP_FORMERROR;
+    }
+
+    byts[idx as usize] = len as u8;
+    idx += 1;
+
+    // Read the byte values, flag/region bytes and shared indexes.
+    for _i in 1..=len {
+        let Some(c) = reader.getc() else {
+            return SP_TRUNCERROR;
+        };
+
+        let byte_val;
+        if c <= tree_bytes::BY_SPECIAL as i32 {
+            if c == tree_bytes::BY_NOFLAGS as i32 && !prefixtree {
+                // No flags, all regions.
+                idxs[idx as usize] = 0;
+                byte_val = 0;
+            } else if c != tree_bytes::BY_INDEX as i32 {
+                // BY_FLAGS, BY_FLAGS2, or BY_NOFLAGS in prefix tree
+                let idx_val = if prefixtree {
+                    // Read the optional pflags byte, the prefix ID and the
+                    // condition nr. In idxs[] store the prefix ID in the low
+                    // byte, the condition index shifted up 8 bits, the flags
+                    // shifted up 24 bits.
+                    let mut val = if c == tree_bytes::BY_FLAGS as i32 {
+                        match reader.getc() {
+                            Some(pflags) => pflags << 24,
+                            None => return SP_TRUNCERROR,
+                        }
+                    } else {
+                        0
+                    };
+
+                    // Read <affixID>
+                    match reader.getc() {
+                        Some(affixid) => val |= affixid,
+                        None => return SP_TRUNCERROR,
+                    }
+
+                    // Read <prefcondnr>
+                    match reader.get2c() {
+                        Some(n) if n < maxprefcondnr => val |= n << 8,
+                        Some(_) => return SP_FORMERROR,
+                        None => return SP_TRUNCERROR,
+                    }
+
+                    val
+                } else {
+                    // c must be BY_FLAGS or BY_FLAGS2
+                    // Read flags and optional region and prefix ID. In
+                    // idxs[] the flags go in the low two bytes, region above
+                    // that and prefix ID above the region.
+                    let c2 = c;
+                    let Some(mut val) = reader.getc() else {
+                        return SP_TRUNCERROR;
+                    };
+
+                    if c2 == tree_bytes::BY_FLAGS2 as i32 {
+                        match reader.getc() {
+                            Some(flags2) => val += flags2 << 8,
+                            None => return SP_TRUNCERROR,
+                        }
+                    }
+
+                    if val & word_flags::WF_REGION != 0 {
+                        match reader.getc() {
+                            Some(region) => val += region << 16,
+                            None => return SP_TRUNCERROR,
+                        }
+                    }
+
+                    if val & word_flags::WF_AFX != 0 {
+                        match reader.getc() {
+                            Some(affixid) => val += affixid << 24,
+                            None => return SP_TRUNCERROR,
+                        }
+                    }
+
+                    val
+                };
+
+                idxs[idx as usize] = idx_val;
+                byte_val = 0;
+            } else {
+                // c == BY_INDEX
+                // Read <nodeidx>
+                let n = match reader.get3c() {
+                    Some(n) if n >= 0 && n < maxidx => n,
+                    Some(_) => return SP_FORMERROR,
+                    None => return SP_TRUNCERROR,
+                };
+
+                idxs[idx as usize] = n + SHARED_MASK;
+
+                // Read <xbyte>
+                byte_val = match reader.getc() {
+                    Some(xbyte) => xbyte,
+                    None => return SP_TRUNCERROR,
+                };
+            }
+        } else {
+            // Regular character byte
+            byte_val = c;
+        }
+
+        byts[idx as usize] = byte_val as u8;
+        idx += 1;
+    }
+
+    // Recursively read the children for non-shared siblings.
+    // Skip the end-of-word ones (zero byte value) and the shared ones
+    // (and remove SHARED_MASK).
+    for i in 1..=len {
+        let sibling_idx = (startidx + i) as usize;
+        if byts[sibling_idx] != 0 {
+            if idxs[sibling_idx] & SHARED_MASK != 0 {
+                idxs[sibling_idx] &= !SHARED_MASK;
+            } else {
+                idxs[sibling_idx] = idx;
+                idx = read_tree_node(reader, byts, idxs, maxidx, idx, prefixtree, maxprefcondnr);
+                if idx < 0 {
+                    break;
+                }
+            }
+        }
+    }
+
+    idx
+}
+
+/// Read a complete word tree from a buffer.
+///
+/// This is a Rust port of `spell_read_tree()` from spellfile.c.
+///
+/// # Arguments
+/// * `buf` - Input buffer containing tree data
+/// * `byts` - Output byte array (will be filled with node bytes)
+/// * `idxs` - Output index array (will be filled with node indexes)
+/// * `prefixtree` - true for reading PREFIXTREE
+/// * `prefixcnt` - When prefixtree is true: prefix count (max prefcondnr)
+///
+/// # Returns
+/// * `Ok((bytes_consumed, node_count))` on success
+/// * `Err(SP_* error code)` on failure
+#[allow(clippy::cast_sign_loss)]
+#[allow(clippy::cast_possible_wrap)]
+pub fn read_tree(
+    buf: &[u8],
+    byts: &mut [u8],
+    idxs: &mut [i32],
+    prefixtree: bool,
+    prefixcnt: i32,
+) -> Result<(usize, i32), c_int> {
+    // Read node count (4 bytes BE)
+    let (nodecount, header_consumed) = read_tree_node_count(buf)?;
+
+    if nodecount == 0 {
+        return Ok((header_consumed, 0));
+    }
+
+    // Validate node count - check for overflow before casting
+    if nodecount > i32::MAX as u32 {
+        return Err(SP_FORMERROR);
+    }
+    let len = nodecount as i32;
+
+    // Check array sizes
+    if byts.len() < nodecount as usize || idxs.len() < nodecount as usize {
+        return Err(SP_FORMERROR);
+    }
+
+    // Create reader starting after the node count
+    let mut reader = TreeReader::new(&buf[header_consumed..]);
+
+    // Read the tree recursively
+    let result = read_tree_node(&mut reader, byts, idxs, len, 0, prefixtree, prefixcnt);
+
+    if result < 0 {
+        return Err(result);
+    }
+
+    Ok((header_consumed + reader.position(), result))
+}
+
+/// FFI wrapper for reading a word tree.
+///
+/// # Safety
+/// All pointers must be valid. `byts` and `idxs` must have at least `array_len` elements.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_read_tree(
+    buf: *const u8,
+    buf_len: usize,
+    byts: *mut u8,
+    idxs: *mut i32,
+    array_len: usize,
+    prefixtree: bool,
+    prefixcnt: c_int,
+    bytes_consumed_out: *mut usize,
+    node_count_out: *mut i32,
+) -> c_int {
+    if buf.is_null()
+        || byts.is_null()
+        || idxs.is_null()
+        || bytes_consumed_out.is_null()
+        || node_count_out.is_null()
+    {
+        return SP_OTHERERROR;
+    }
+
+    let buf_slice = std::slice::from_raw_parts(buf, buf_len);
+    let byts_slice = std::slice::from_raw_parts_mut(byts, array_len);
+    let idxs_slice = std::slice::from_raw_parts_mut(idxs, array_len);
+
+    match read_tree(buf_slice, byts_slice, idxs_slice, prefixtree, prefixcnt) {
+        Ok((consumed, count)) => {
+            *bytes_consumed_out = consumed;
+            *node_count_out = count;
+            0
+        }
+        Err(e) => e,
+    }
+}
+
+/// Read tree data, allocating output arrays.
+///
+/// This is the main entry point for tree reading that handles allocation.
+/// Returns a result with allocated byte and index arrays.
+///
+/// # Safety
+/// This function is safe but calls unsafe FFI functions internally.
+#[allow(clippy::type_complexity)]
+pub fn read_tree_alloc(
+    buf: &[u8],
+    prefixtree: bool,
+    prefixcnt: i32,
+) -> Result<(Vec<u8>, Vec<i32>, usize), c_int> {
+    // First read the node count
+    let (nodecount, _) = read_tree_node_count(buf)?;
+
+    if nodecount == 0 {
+        return Ok((Vec::new(), Vec::new(), 4));
+    }
+
+    // Allocate arrays
+    let mut byts = vec![0u8; nodecount as usize];
+    let mut idxs = vec![0i32; nodecount as usize];
+
+    // Read the tree
+    let (consumed, _count) = read_tree(buf, &mut byts, &mut idxs, prefixtree, prefixcnt)?;
+
+    Ok((byts, idxs, consumed))
+}
+
+/// FFI function to get the node count from tree header without reading the tree.
+///
+/// # Safety
+/// `buf` must be valid for `buf_len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_read_tree_peek_nodecount(
+    buf: *const u8,
+    buf_len: usize,
+    nodecount_out: *mut u32,
+) -> c_int {
+    if buf.is_null() || nodecount_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let slice = std::slice::from_raw_parts(buf, buf_len);
+    match read_tree_node_count(slice) {
+        Ok((count, _)) => {
+            *nodecount_out = count;
+            0
+        }
+        Err(e) => e,
+    }
+}
+
+// =============================================================================
 // Spell File Loader State
 // =============================================================================
 
@@ -2991,21 +3379,25 @@ mod tests {
     fn test_write_tree_sibling_byte_regular() {
         let mut buf = [0u8; 5];
 
-        // Regular byte (< 0xFC)
+        // Regular character byte
         let written = write_tree_sibling_byte(&mut buf, b'a').unwrap();
         assert_eq!(written, 1);
         assert_eq!(buf[0], b'a');
     }
 
     #[test]
-    fn test_write_tree_sibling_byte_special() {
+    fn test_write_tree_sibling_byte_any_value() {
         let mut buf = [0u8; 5];
 
-        // Special byte (>= 0xFC)
+        // Any byte value is written directly (no escaping)
         let written = write_tree_sibling_byte(&mut buf, 0xFE).unwrap();
-        assert_eq!(written, 2);
-        assert_eq!(buf[0], tree_bytes::BY_SPECIAL);
-        assert_eq!(buf[1], 0xFE - tree_bytes::BY_SPECIAL);
+        assert_eq!(written, 1);
+        assert_eq!(buf[0], 0xFE);
+
+        // Even "special" byte values are written directly for character nodes
+        let written = write_tree_sibling_byte(&mut buf, tree_bytes::BY_FLAGS).unwrap();
+        assert_eq!(written, 1);
+        assert_eq!(buf[0], tree_bytes::BY_FLAGS);
     }
 
     #[test]
@@ -3275,5 +3667,195 @@ mod tests {
         state.offset = 50;
         state.error = SP_FORMERROR;
         assert!(!state.has_more()); // Error stops further reading
+    }
+
+    // =========================================================================
+    // Tree Reading Tests (Phase 329-330)
+    // =========================================================================
+
+    #[test]
+    fn test_tree_reader_basic() {
+        let buf = [0x01, 0x02, 0x03, 0x04, 0x05];
+        let mut reader = TreeReader::new(&buf);
+
+        assert_eq!(reader.position(), 0);
+        assert_eq!(reader.getc(), Some(0x01));
+        assert_eq!(reader.position(), 1);
+        assert_eq!(reader.getc(), Some(0x02));
+        assert_eq!(reader.position(), 2);
+    }
+
+    #[test]
+    fn test_tree_reader_get2c() {
+        let buf = [0x01, 0x02, 0x03, 0x04];
+        let mut reader = TreeReader::new(&buf);
+
+        let val = reader.get2c().unwrap();
+        assert_eq!(val, 0x0102);
+        assert_eq!(reader.position(), 2);
+    }
+
+    #[test]
+    fn test_tree_reader_get3c() {
+        let buf = [0x01, 0x02, 0x03, 0x04];
+        let mut reader = TreeReader::new(&buf);
+
+        let val = reader.get3c().unwrap();
+        assert_eq!(val, 0x0001_0203);
+        assert_eq!(reader.position(), 3);
+    }
+
+    #[test]
+    fn test_tree_reader_eof() {
+        let buf = [0x01];
+        let mut reader = TreeReader::new(&buf);
+
+        assert_eq!(reader.getc(), Some(0x01));
+        assert_eq!(reader.getc(), None); // EOF
+    }
+
+    #[test]
+    fn test_read_tree_empty() {
+        // Empty tree: node count = 0
+        let buf = [0x00, 0x00, 0x00, 0x00];
+        let mut byts = [0u8; 10];
+        let mut idxs = [0i32; 10];
+
+        let (consumed, count) = read_tree(&buf, &mut byts, &mut idxs, false, 0).unwrap();
+        assert_eq!(consumed, 4);
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn test_read_tree_single_node_no_flags() {
+        // Tree with 1 sibling, no flags, end-of-word
+        // Format: <nodecount 4B> <siblingcount 1B> <BY_NOFLAGS 1B>
+        #[rustfmt::skip]
+        let buf = [
+            0x00, 0x00, 0x00, 0x02, // nodecount = 2
+            0x01,                   // siblingcount = 1
+            tree_bytes::BY_NOFLAGS, // BY_NOFLAGS = end of word, no flags
+        ];
+        let mut byts = [0u8; 10];
+        let mut idxs = [0i32; 10];
+
+        let (consumed, count) = read_tree(&buf, &mut byts, &mut idxs, false, 0).unwrap();
+        assert_eq!(consumed, 6);
+        assert_eq!(count, 2);
+        assert_eq!(byts[0], 1); // siblingcount stored in first position
+        assert_eq!(byts[1], 0); // end-of-word marker
+        assert_eq!(idxs[1], 0); // no flags
+    }
+
+    #[test]
+    fn test_read_tree_simple_word() {
+        // Tree representing a simple word like "a"
+        // Structure: root has 1 sibling 'a', which has 1 child that is end-of-word
+        //
+        // Layout in buffer:
+        // [0-3] nodecount = 4 (header, 4 bytes)
+        // [4] siblingcount = 1 for root
+        // [5] 'a' = 0x61 character byte
+        // [6] siblingcount = 1 for child
+        // [7] BY_NOFLAGS = 0 (end of word marker)
+        //
+        // Total: 4 + 1 + 1 + 1 + 1 = 8 bytes
+        #[rustfmt::skip]
+        let buf = [
+            0x00, 0x00, 0x00, 0x04, // nodecount = 4
+            0x01,                   // siblingcount = 1
+            b'a',                   // character 'a' (> BY_SPECIAL, so regular char)
+            // Child node for 'a':
+            0x01,                   // siblingcount = 1
+            tree_bytes::BY_NOFLAGS, // end of word (0)
+        ];
+        let mut byts = [0u8; 10];
+        let mut idxs = [0i32; 10];
+
+        let (consumed, count) = read_tree(&buf, &mut byts, &mut idxs, false, 0).unwrap();
+        assert_eq!(consumed, 8);
+        assert_eq!(count, 4);
+
+        // Verify structure
+        assert_eq!(byts[0], 1); // root siblingcount
+        assert_eq!(byts[1], b'a'); // character
+        assert_eq!(idxs[1], 2); // child index
+        assert_eq!(byts[2], 1); // child siblingcount
+        assert_eq!(byts[3], 0); // end-of-word marker
+    }
+
+    #[test]
+    fn test_read_tree_with_flags() {
+        // Tree with a word that has flags set (WF_REGION)
+        #[rustfmt::skip]
+        let buf = [
+            0x00, 0x00, 0x00, 0x02,       // nodecount = 2
+            0x01,                         // siblingcount = 1
+            tree_bytes::BY_FLAGS,         // has flags
+            word_flags::WF_REGION as u8,  // flags byte with region bit
+            0x05,                         // region = 5
+        ];
+        let mut byts = [0u8; 10];
+        let mut idxs = [0i32; 10];
+
+        let (consumed, count) = read_tree(&buf, &mut byts, &mut idxs, false, 0).unwrap();
+        assert_eq!(consumed, 8);
+        assert_eq!(count, 2);
+
+        // Check flags were stored correctly
+        // idxs should have: flags in low bytes, region shifted up
+        let stored = idxs[1];
+        assert_eq!(stored & 0xFF, word_flags::WF_REGION); // flags
+        assert_eq!((stored >> 16) & 0xFF, 0x05); // region
+    }
+
+    #[test]
+    fn test_read_tree_truncated() {
+        // Tree with incomplete data
+        #[rustfmt::skip]
+        let buf = [
+            0x00, 0x00, 0x00, 0x10, // nodecount = 16
+            0x05,                   // siblingcount = 5 (Missing sibling data!)
+        ];
+        let mut byts = [0u8; 20];
+        let mut idxs = [0i32; 20];
+
+        let result = read_tree(&buf, &mut byts, &mut idxs, false, 0);
+        assert_eq!(result.unwrap_err(), SP_TRUNCERROR);
+    }
+
+    #[test]
+    fn test_read_tree_alloc_empty() {
+        let buf = [0x00, 0x00, 0x00, 0x00];
+
+        let (byts, idxs, consumed) = read_tree_alloc(&buf, false, 0).unwrap();
+        assert!(byts.is_empty());
+        assert!(idxs.is_empty());
+        assert_eq!(consumed, 4);
+    }
+
+    #[test]
+    fn test_read_tree_alloc_simple() {
+        // Simple tree with 2 nodes
+        #[rustfmt::skip]
+        let buf = [
+            0x00, 0x00, 0x00, 0x02, // nodecount = 2
+            0x01,                   // siblingcount = 1
+            tree_bytes::BY_NOFLAGS, // end of word
+        ];
+
+        let (byts, idxs, consumed) = read_tree_alloc(&buf, false, 0).unwrap();
+        assert_eq!(byts.len(), 2);
+        assert_eq!(idxs.len(), 2);
+        assert_eq!(consumed, 6);
+        assert_eq!(byts[0], 1); // siblingcount
+    }
+
+    #[test]
+    fn test_word_flags_constants() {
+        // Verify flag constants match expected values
+        assert_eq!(word_flags::WF_REGION, 0x02);
+        assert_eq!(word_flags::WF_AFX, 0x04);
+        assert_eq!(word_flags::WF_PFX, 0x08);
     }
 }
