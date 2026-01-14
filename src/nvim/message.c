@@ -555,6 +555,11 @@ void nvim_set_redir_off(int val) { redir_off = (val != 0); }
 // Phase 431: Special key helpers
 int nvim_is_special_key(int key) { return IS_SPECIAL(key) ? 1 : 0; }
 
+// Phase 432: Line printing accessors
+int nvim_get_list_mode(void) { return curwin->w_p_list ? 1 : 0; }
+// Note: nvim_get_columns is defined in ex_getln.c
+// Note: nvim_get_got_int is defined in ex_eval.c
+
 // C accessors for attribute functions (used by Rust)
 int nvim_syn_id2attr(int hl_id) { return syn_id2attr(hl_id); }
 int nvim_hl_combine_attr(int a, int b) { return hl_combine_attr(a, b); }
