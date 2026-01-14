@@ -2170,12 +2170,15 @@ pub extern "C" fn rs_classify_special_register(regname: c_int) -> c_int {
     }
 }
 
-/// Check if a register is a special register.
+/// Check if a register is a special (computed) register.
 ///
 /// Special registers have their values computed on access rather than
-/// stored in the y_regs array.
+/// stored in the y_regs array. This includes %, #, =, :, /, ., Ctrl keys, and _.
+///
+/// Note: This is more comprehensive than rs_is_special_register in ex_docmd
+/// which only checks for a subset of special registers.
 #[no_mangle]
-pub extern "C" fn rs_is_special_register(regname: c_int) -> bool {
+pub extern "C" fn rs_is_computed_register(regname: c_int) -> bool {
     rs_classify_special_register(regname) != SPEC_REG_NONE
 }
 
@@ -2306,6 +2309,11 @@ impl Default for SpecRegResult {
     }
 }
 
+/// GRegFlags for get_reg_contents compatibility.
+pub const K_GREG_NO_EXPR: c_int = 1; // Do not allow expression register
+pub const K_GREG_EXPR_SRC: c_int = 2; // Return expression itself for "=" register
+pub const K_GREG_LIST: c_int = 4; // Return list (not supported in Rust impl)
+
 /// Get the value of a special register (partial implementation).
 ///
 /// This handles registers that can be retrieved without complex dependencies:
@@ -2408,4 +2416,314 @@ pub unsafe extern "C" fn rs_get_spec_reg(regname: c_int, errmsg: bool) -> SpecRe
     }
 
     result
+}
+
+// =============================================================================
+// Phase 403: Register Contents Retrieval
+// =============================================================================
+
+/// Result structure for get_reg_contents_string.
+#[repr(C)]
+pub struct RegContentsResult {
+    /// Pointer to the allocated string, or NULL on error.
+    pub data: *mut c_char,
+    /// Length of the string (not including NUL terminator).
+    pub len: usize,
+    /// True if this is valid (data may still be NULL for empty).
+    pub valid: bool,
+}
+
+impl Default for RegContentsResult {
+    fn default() -> Self {
+        Self {
+            data: std::ptr::null_mut(),
+            len: 0,
+            valid: false,
+        }
+    }
+}
+
+/// Compute the total length needed for register contents as a string.
+///
+/// # Arguments
+///
+/// * `reg` - The register handle.
+///
+/// # Returns
+///
+/// Total length including newlines, not including NUL terminator.
+///
+/// # Safety
+///
+/// The `reg` handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compute_reg_contents_len(reg: YankRegHandle) -> usize {
+    if reg.0.is_null() || !nvim_yankreg_has_array(reg) {
+        return 0;
+    }
+
+    let y_size = nvim_yankreg_get_size(reg);
+    let y_type = nvim_yankreg_get_type(reg);
+
+    let mut len: usize = 0;
+    for i in 0..y_size {
+        len += nvim_yankreg_get_line_size(reg, i);
+        // Insert a newline between lines and after last line if linewise
+        if y_type == K_MT_LINE_WISE || i < y_size - 1 {
+            len += 1;
+        }
+    }
+    len
+}
+
+/// Copy register contents into a pre-allocated buffer.
+///
+/// The buffer must be at least `rs_compute_reg_contents_len(reg) + 1` bytes.
+///
+/// # Arguments
+///
+/// * `reg` - The register handle.
+/// * `buf` - Output buffer.
+/// * `buf_len` - Size of output buffer.
+///
+/// # Returns
+///
+/// Number of bytes written (not including NUL), or 0 on error.
+///
+/// # Safety
+///
+/// The `reg` handle must be valid. Buffer must be large enough.
+#[no_mangle]
+pub unsafe extern "C" fn rs_copy_reg_contents_to_buf(
+    reg: YankRegHandle,
+    buf: *mut c_char,
+    buf_len: usize,
+) -> usize {
+    if reg.0.is_null() || buf.is_null() || !nvim_yankreg_has_array(reg) {
+        if !buf.is_null() && buf_len > 0 {
+            *buf = 0;
+        }
+        return 0;
+    }
+
+    let y_size = nvim_yankreg_get_size(reg);
+    let y_type = nvim_yankreg_get_type(reg);
+
+    let mut pos: usize = 0;
+    for i in 0..y_size {
+        let line_data = nvim_yankreg_get_line_data(reg, i);
+        let line_size = nvim_yankreg_get_line_size(reg, i);
+
+        // Check if we have room
+        if pos + line_size >= buf_len {
+            break;
+        }
+
+        // Copy line data
+        if line_size > 0 && !line_data.is_null() {
+            std::ptr::copy_nonoverlapping(line_data, buf.add(pos), line_size);
+            pos += line_size;
+        }
+
+        // Add newline if needed
+        let needs_newline = y_type == K_MT_LINE_WISE || i < y_size - 1;
+        if needs_newline && pos < buf_len - 1 {
+            *buf.add(pos) = b'\n' as c_char;
+            pos += 1;
+        }
+    }
+
+    // NUL terminate
+    if pos < buf_len {
+        *buf.add(pos) = 0;
+    }
+
+    pos
+}
+
+/// Get the contents of a yank register as an allocated string.
+///
+/// This is the string-mode portion of get_reg_contents (not list mode).
+///
+/// # Arguments
+///
+/// * `regname` - Register name character. Use '@' for unnamed.
+///
+/// # Returns
+///
+/// RegContentsResult with allocated string or NULL on error.
+/// Caller must free result.data if non-NULL.
+///
+/// # Safety
+///
+/// Accesses global register state. Caller must free returned string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_reg_contents_string(regname: c_int) -> RegContentsResult {
+    let mut result = RegContentsResult::default();
+
+    // "@@" is used for unnamed register
+    let actual_regname = if regname == c_int::from(b'@') {
+        c_int::from(b'"')
+    } else {
+        regname
+    };
+
+    // Check for valid regname (but 0/NUL is allowed)
+    if actual_regname != 0 && !rs_valid_yank_reg(actual_regname, false) {
+        return result;
+    }
+
+    // Get the register for reading
+    let reg = nvim_get_yank_register_for_paste(actual_regname);
+    if reg.0.is_null() || !nvim_yankreg_has_array(reg) {
+        return result;
+    }
+
+    let y_size = nvim_yankreg_get_size(reg);
+    if y_size == 0 {
+        // Empty register - return empty string
+        result.data = nvim_xmallocz(0);
+        result.len = 0;
+        result.valid = true;
+        return result;
+    }
+
+    // Compute length
+    let len = rs_compute_reg_contents_len(reg);
+
+    // Allocate buffer
+    let buf = nvim_xmallocz(len);
+    if buf.is_null() {
+        return result;
+    }
+
+    // Copy contents
+    let written = rs_copy_reg_contents_to_buf(reg, buf, len + 1);
+
+    result.data = buf;
+    result.len = written;
+    result.valid = true;
+    result
+}
+
+/// Check if get_reg_contents should handle a register specially.
+///
+/// Returns true if the register is '=' (expression) and the caller
+/// should handle it specially based on flags.
+#[no_mangle]
+pub extern "C" fn rs_reg_contents_needs_special_handling(regname: c_int, flags: c_int) -> bool {
+    if regname == c_int::from(b'=') {
+        // Expression register needs special handling
+        return true;
+    }
+
+    // Check if it's a special register that get_spec_reg handles
+    let spec_type = rs_classify_special_register(regname);
+    if spec_type != SPEC_REG_NONE {
+        // Don't handle cursor-based registers
+        if !rs_is_cursor_register(regname) {
+            return true;
+        }
+    }
+
+    // List mode not handled by Rust
+    flags & K_GREG_LIST != 0
+}
+
+/// Get expression register contents with flag handling.
+///
+/// # Arguments
+///
+/// * `flags` - GRegFlags (kGRegNoExpr, kGRegExprSrc, etc.)
+///
+/// # Returns
+///
+/// Allocated string or NULL. Caller must free.
+///
+/// # Safety
+///
+/// Accesses global state via FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_expr_reg_contents(flags: c_int) -> *mut c_char {
+    // Don't allow using an expression register inside an expression
+    if flags & K_GREG_NO_EXPR != 0 {
+        return std::ptr::null_mut();
+    }
+
+    if flags & K_GREG_EXPR_SRC != 0 {
+        // Return expression itself
+        rs_get_expr_line_src()
+    } else {
+        // Return evaluated result
+        rs_get_expr_line()
+    }
+}
+
+/// Count total lines in a register.
+///
+/// # Safety
+///
+/// Accesses global register state via C FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reg_line_count(regname: c_int) -> usize {
+    let i = rs_op_reg_index(regname);
+    if i == -1 {
+        return 0;
+    }
+    let reg = nvim_get_y_regs_ptr(i);
+    if reg.0.is_null() || !nvim_yankreg_has_array(reg) {
+        return 0;
+    }
+    nvim_yankreg_get_size(reg)
+}
+
+/// Get a specific line from a register (returns pointer to internal data).
+///
+/// # Arguments
+///
+/// * `regname` - Register name.
+/// * `line_idx` - Zero-based line index.
+/// * `line_len` - Output: length of the line.
+///
+/// # Returns
+///
+/// Pointer to line data (internal, do not free), or NULL.
+///
+/// # Safety
+///
+/// The returned pointer is only valid while the register is unchanged.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reg_get_line_ptr(
+    regname: c_int,
+    line_idx: usize,
+    line_len: *mut usize,
+) -> *const c_char {
+    let i = rs_op_reg_index(regname);
+    if i == -1 {
+        if !line_len.is_null() {
+            *line_len = 0;
+        }
+        return std::ptr::null();
+    }
+
+    let reg = nvim_get_y_regs_ptr(i);
+    if reg.0.is_null() || !nvim_yankreg_has_array(reg) {
+        if !line_len.is_null() {
+            *line_len = 0;
+        }
+        return std::ptr::null();
+    }
+
+    let y_size = nvim_yankreg_get_size(reg);
+    if line_idx >= y_size {
+        if !line_len.is_null() {
+            *line_len = 0;
+        }
+        return std::ptr::null();
+    }
+
+    if !line_len.is_null() {
+        *line_len = nvim_yankreg_get_line_size(reg, line_idx);
+    }
+    nvim_yankreg_get_line_data(reg, line_idx)
 }
