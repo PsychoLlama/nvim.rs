@@ -734,6 +734,75 @@ pub unsafe fn set_current_match_result(result: &MatchResult) {
     set_current_seqnr(result.seqnr);
 }
 
+// =============================================================================
+// Match status helpers
+// =============================================================================
+
+/// Status of the matching engine
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MatchStatus {
+    /// No match at current position
+    NoMatch,
+    /// Match found and in progress
+    Matching,
+    /// Inside a region but no specific match at this column
+    InRegion,
+    /// Finished processing current line
+    Finished,
+    /// State is invalid/needs sync
+    Invalid,
+}
+
+/// Get the current match status
+#[must_use]
+pub fn match_status() -> MatchStatus {
+    if !is_current_state_valid() {
+        return MatchStatus::Invalid;
+    }
+    if is_current_finished() {
+        return MatchStatus::Finished;
+    }
+    if current_id() > 0 {
+        return MatchStatus::Matching;
+    }
+    if !is_current_state_empty() {
+        return MatchStatus::InRegion;
+    }
+    MatchStatus::NoMatch
+}
+
+/// Check if we're actively matching something at the current position
+#[must_use]
+pub fn is_actively_matching() -> bool {
+    is_current_state_valid() && current_id() > 0
+}
+
+/// Check if we're inside any syntax region (regardless of highlight)
+#[must_use]
+pub fn is_in_syntax_context() -> bool {
+    is_current_state_valid() && !is_current_state_empty()
+}
+
+/// Get the depth of the current syntax nesting
+#[must_use]
+pub fn syntax_nesting_depth() -> i32 {
+    current_state_len()
+}
+
+/// Summary of the current matching state for debugging
+#[derive(Debug, Clone, Copy, Default)]
+pub struct MatchStateSummary {
+    pub lnum: i32,
+    pub col: i32,
+    pub id: i32,
+    pub trans_id: i32,
+    pub attr: i32,
+    pub flags: i32,
+    pub nesting_depth: i32,
+    pub is_finished: bool,
+    pub is_stored: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -777,5 +846,28 @@ mod tests {
         let pos = Position { lnum: 10, col: 5 };
         assert_eq!(pos.lnum, 10);
         assert_eq!(pos.col, 5);
+    }
+
+    #[test]
+    fn test_match_status_enum_values() {
+        // Test that all match status variants are distinct
+        assert_ne!(MatchStatus::NoMatch, MatchStatus::Matching);
+        assert_ne!(MatchStatus::Matching, MatchStatus::InRegion);
+        assert_ne!(MatchStatus::InRegion, MatchStatus::Finished);
+        assert_ne!(MatchStatus::Finished, MatchStatus::Invalid);
+    }
+
+    #[test]
+    fn test_match_state_summary_default() {
+        let summary = MatchStateSummary::default();
+        assert_eq!(summary.lnum, 0);
+        assert_eq!(summary.col, 0);
+        assert_eq!(summary.id, 0);
+        assert_eq!(summary.trans_id, 0);
+        assert_eq!(summary.attr, 0);
+        assert_eq!(summary.flags, 0);
+        assert_eq!(summary.nesting_depth, 0);
+        assert!(!summary.is_finished);
+        assert!(!summary.is_stored);
     }
 }
