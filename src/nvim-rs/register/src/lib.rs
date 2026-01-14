@@ -168,12 +168,18 @@ fn strchr(s: &[u8], c: u8) -> bool {
 /// Check if register should be inserted literally (selection or clipboard).
 ///
 /// Returns true for '*', '+', or any alphanumeric register name.
+#[inline]
+pub fn is_literal_register(c: u8) -> bool {
+    c == b'*' || c == b'+' || ascii_isalnum(c)
+}
+
+/// FFI wrapper for literal register check.
 #[no_mangle]
 pub extern "C" fn rs_is_literal_register(regname: c_int) -> c_int {
     let Ok(c) = u8::try_from(regname) else {
         return 0;
     };
-    c_int::from(c == b'*' || c == b'+' || ascii_isalnum(c))
+    c_int::from(is_literal_register(c))
 }
 
 /// Convert register name into register index.
@@ -548,8 +554,12 @@ pub unsafe extern "C" fn rs_finish_write_reg(
 const CTRL_A: c_int = 1;
 const CTRL_F: c_int = 6;
 const CTRL_P: c_int = 16;
+const CTRL_R: c_int = 18;
 const CTRL_W: c_int = 23;
 const NUL: c_int = 0;
+
+// Key code constants from keycodes.h
+const K_SPECIAL: u8 = 0x80;
 
 /// Check if the current yank register has kMTLineWise register type.
 ///
@@ -3880,4 +3890,197 @@ pub extern "C" fn rs_execreg_prev_index(idx: usize) -> usize {
 #[no_mangle]
 pub extern "C" fn rs_execreg_iteration_done(idx: usize) -> bool {
     idx == usize::MAX
+}
+
+// =============================================================================
+// Phase 409: Insert register helpers
+// =============================================================================
+
+/// Check if register name is valid for insert_reg.
+///
+/// NUL is valid (uses unnamed register), as are all valid yank registers.
+#[no_mangle]
+pub extern "C" fn rs_insert_reg_valid(regname: c_int) -> bool {
+    regname == 0 || rs_valid_yank_reg(regname, false)
+}
+
+/// Check if insert should use the "last inserted" register.
+///
+/// Register '.' contains the last inserted text.
+#[no_mangle]
+pub extern "C" fn rs_is_last_insert_register(regname: c_int) -> bool {
+    regname == c_int::from(b'.')
+}
+
+/// Check if insert should use literal mode.
+///
+/// Some registers are always inserted literally regardless of the
+/// literally_arg parameter.
+#[no_mangle]
+pub extern "C" fn rs_insert_reg_use_literal(regname: c_int, literally_arg: bool) -> bool {
+    literally_arg || is_literal_register(regname as u8)
+}
+
+/// Check if this is the small delete register with charwise content.
+///
+/// The small delete register (-) has special handling in insert mode
+/// when the content is charwise.
+#[no_mangle]
+pub extern "C" fn rs_is_small_delete_charwise(regname: c_int, motion_type: c_int) -> bool {
+    regname == c_int::from(b'-') && motion_type == K_MT_CHAR_WISE
+}
+
+/// Check if insert_reg should insert a newline after the current line.
+///
+/// Newlines are inserted:
+/// - Between all lines (i < size - 1)
+/// - After the last line if the register is linewise
+#[no_mangle]
+pub extern "C" fn rs_insert_reg_needs_newline(
+    motion_type: c_int,
+    line_idx: usize,
+    total_lines: usize,
+) -> bool {
+    motion_type == K_MT_LINE_WISE || line_idx < total_lines.saturating_sub(1)
+}
+
+/// Get the register to use for insert_reg when no reg is provided.
+///
+/// When reg is NULL, uses get_yank_register with YREG_PASTE mode.
+/// Returns the regname that should be used for looking up the register.
+#[no_mangle]
+pub extern "C" fn rs_insert_reg_get_regname(regname: c_int) -> c_int {
+    regname
+}
+
+/// Check if we should use special register handling for insert_reg.
+///
+/// Special registers (%, #, etc.) are handled by get_spec_reg.
+#[no_mangle]
+pub extern "C" fn rs_insert_reg_is_special(regname: c_int) -> bool {
+    rs_classify_special_register(regname) != 0
+}
+
+/// Check if register content can be inserted.
+///
+/// # Safety
+///
+/// `reg` must be a valid YankRegHandle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_insert_reg_has_content(reg: YankRegHandle) -> bool {
+    !reg.0.is_null() && nvim_yankreg_has_array(reg) && nvim_yankreg_get_size(reg) > 0
+}
+
+/// Get the number of lines to insert from a register.
+///
+/// # Safety
+///
+/// `reg` must be a valid YankRegHandle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_insert_reg_line_count(reg: YankRegHandle) -> usize {
+    if reg.0.is_null() || !nvim_yankreg_has_array(reg) {
+        return 0;
+    }
+    nvim_yankreg_get_size(reg)
+}
+
+// =============================================================================
+// Cmdline paste register helpers
+// =============================================================================
+
+/// Check if cmdline paste should use literal mode.
+#[no_mangle]
+pub extern "C" fn rs_cmdline_paste_use_literal(regname: c_int, literally_arg: bool) -> bool {
+    literally_arg || is_literal_register(regname as u8)
+}
+
+/// Check if cmdline paste should insert CR between lines.
+///
+/// CR (^M) is inserted between lines unless remcr is true.
+#[no_mangle]
+pub extern "C" fn rs_cmdline_paste_insert_cr(
+    line_idx: usize,
+    total_lines: usize,
+    remcr: bool,
+) -> bool {
+    line_idx < total_lines.saturating_sub(1) && !remcr
+}
+
+/// Get the CR character for cmdline paste.
+#[no_mangle]
+pub extern "C" fn rs_get_cr_char() -> c_int {
+    c_int::from(b'\r')
+}
+
+/// Check if cmdline paste register is valid.
+///
+/// Only non-special registers can be pasted to cmdline.
+#[no_mangle]
+pub extern "C" fn rs_cmdline_paste_valid(regname: c_int) -> bool {
+    // cmdline_paste_reg only works with non-special registers
+    // Special registers are handled differently in the caller
+    rs_valid_yank_reg(regname, false) && rs_classify_special_register(regname) == 0
+}
+
+/// Get the line size for cmdline paste bounds checking.
+///
+/// # Safety
+///
+/// `reg` must be a valid YankRegHandle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cmdline_paste_line_count(reg: YankRegHandle) -> usize {
+    if reg.0.is_null() || !nvim_yankreg_has_array(reg) {
+        return 0;
+    }
+    nvim_yankreg_get_size(reg)
+}
+
+// =============================================================================
+// Stuffing helpers (for insert mode register insertion)
+// =============================================================================
+
+/// Check if character needs escaping when stuffing.
+///
+/// Special characters like K_SPECIAL need escaping.
+#[no_mangle]
+pub extern "C" fn rs_stuff_needs_escape(c: c_int) -> bool {
+    // K_SPECIAL needs escaping
+    c == c_int::from(K_SPECIAL)
+}
+
+/// Get the K_SPECIAL character value.
+#[no_mangle]
+pub extern "C" fn rs_get_k_special() -> c_int {
+    c_int::from(K_SPECIAL)
+}
+
+/// Check if insert_reg is handling a register that needs special processing.
+///
+/// The small delete register (-) with charwise content has special behavior
+/// in replace mode.
+#[no_mangle]
+pub extern "C" fn rs_insert_reg_special_small_delete(
+    regname: c_int,
+    motion_type: c_int,
+    is_replace_mode: bool,
+) -> bool {
+    regname == c_int::from(b'-') && motion_type == K_MT_CHAR_WISE && is_replace_mode
+}
+
+/// Get CTRL-R character for redo buffer.
+#[no_mangle]
+pub extern "C" fn rs_get_ctrl_r() -> c_int {
+    c_int::from(CTRL_R)
+}
+
+/// Determine direction for small delete register put in replace mode.
+///
+/// Returns BACKWARD (0) normally, FORWARD (1) if at end of line.
+#[no_mangle]
+pub extern "C" fn rs_get_small_delete_put_direction(at_eol: bool) -> c_int {
+    if at_eol {
+        1 // FORWARD
+    } else {
+        0 // BACKWARD
+    }
 }
