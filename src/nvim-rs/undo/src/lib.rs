@@ -2077,6 +2077,90 @@ unsafe fn undo_time_to_target(
 }
 
 // =============================================================================
+// Phase 349: Undo Time Formatting
+// =============================================================================
+
+extern "C" {
+    fn nvim_undo_strftime(buf: *mut c_char, buflen: usize, fmt: *const c_char, tt: TimeT) -> usize;
+    fn nvim_undo_time(seconds_count: i64) -> *const c_char;
+}
+
+/// Format a timestamp for display in undo messages.
+///
+/// This formats the given time relative to the current time:
+/// - Within 100 seconds: "N second(s) ago"
+/// - Within 12 hours: "HH:MM:SS"
+/// - Older: "YYYY/MM/DD HH:MM:SS"
+///
+/// # Safety
+///
+/// `buf` must be a valid pointer to a buffer of at least `buflen` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_undo_fmt_time(buf: *mut c_char, buflen: usize, tt: TimeT) {
+    if buf.is_null() || buflen == 0 {
+        return;
+    }
+
+    let now = nvim_undo_os_time();
+    let seconds_diff = now - tt;
+
+    if seconds_diff >= 100 {
+        // Use strftime for longer times
+        let n = if seconds_diff < 60 * 60 * 12 {
+            // Within 12 hours - show time only
+            nvim_undo_strftime(buf, buflen, c"%H:%M:%S".as_ptr(), tt)
+        } else {
+            // Longer ago - show full date and time
+            nvim_undo_strftime(buf, buflen, c"%Y/%m/%d %H:%M:%S".as_ptr(), tt)
+        };
+
+        if n == 0 {
+            // strftime failed, clear buffer
+            *buf = 0;
+        }
+    } else {
+        // Within 100 seconds - use "N second(s) ago" format
+        // Call C's gettext for pluralization
+        let msg = nvim_undo_time(seconds_diff);
+        if !msg.is_null() {
+            // Copy the message to the buffer
+            let msg_len = libc::strlen(msg);
+            let copy_len = if msg_len < buflen - 1 {
+                msg_len
+            } else {
+                buflen - 1
+            };
+            ptr::copy_nonoverlapping(msg, buf, copy_len);
+            *buf.add(copy_len) = 0;
+        } else {
+            *buf = 0;
+        }
+    }
+}
+
+/// Get the time elapsed since a timestamp in seconds.
+///
+/// # Safety
+///
+/// No specific safety requirements beyond normal FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_undo_time_elapsed(tt: TimeT) -> i64 {
+    let now = nvim_undo_os_time();
+    now - tt
+}
+
+/// Check if a timestamp is within a certain number of seconds of now.
+///
+/// # Safety
+///
+/// No specific safety requirements beyond normal FFI.
+#[no_mangle]
+pub unsafe extern "C" fn rs_undo_time_within(tt: TimeT, seconds: i64) -> bool {
+    let elapsed = nvim_undo_os_time() - tt;
+    elapsed.abs() <= seconds
+}
+
+// =============================================================================
 // Phase 1: Undo Tree Traversal Helpers
 // =============================================================================
 

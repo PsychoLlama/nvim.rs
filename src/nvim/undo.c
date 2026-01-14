@@ -3317,6 +3317,25 @@ time_t nvim_undo_os_time(void)
   return os_time();
 }
 
+// Strftime wrapper for Rust time formatting
+size_t nvim_undo_strftime(char *buf, size_t buflen, const char *fmt, time_t tt)
+{
+  struct tm curtime;
+  os_localtime_r(&tt, &curtime);
+  return strftime(buf, buflen, fmt, &curtime);
+}
+
+// Return the localized "N second(s) ago" string
+const char *nvim_undo_time(int64_t seconds)
+{
+  static char buf[256];
+  vim_snprintf(buf, sizeof(buf),
+               NGETTEXT("%" PRId64 " second ago",
+                        "%" PRId64 " seconds ago", (uint32_t)seconds),
+               seconds);
+  return buf;
+}
+
 int nvim_get_lastmark(void)
 {
   return lastmark;
