@@ -1060,6 +1060,170 @@ pub fn synstate_next_list_eq(a: SynStateHandle, b: SynStateHandle) -> bool {
     unsafe { nvim_synstate_next_list_eq(a, b) != 0 }
 }
 
+// =============================================================================
+// State machine transition helpers
+// =============================================================================
+
+/// Describes the current state of the syntax state machine
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StateMachineState {
+    /// Initial state, no highlighting active
+    Initial,
+    /// Inside a region waiting for end pattern
+    InRegion,
+    /// Processing a match pattern
+    InMatch,
+    /// State is invalid and needs recomputation
+    Invalid,
+}
+
+/// Get the current state machine state
+#[must_use]
+pub fn get_state_machine_state() -> StateMachineState {
+    if !is_current_state_valid() {
+        return StateMachineState::Invalid;
+    }
+    if is_current_state_empty() {
+        return StateMachineState::Initial;
+    }
+    let len = current_state_len();
+    if len > 0 {
+        let top = unsafe { nvim_syn_get_stateitem(len - 1) };
+        if !top.is_null() {
+            // Check if the top item is a match (HL_MATCH flag)
+            if unsafe { nvim_stateitem_has_match(top) != 0 } {
+                return StateMachineState::InMatch;
+            }
+        }
+    }
+    StateMachineState::InRegion
+}
+
+/// State iterator for traversing the state stack from bottom to top
+pub struct StateStackIter {
+    index: i32,
+    len: i32,
+}
+
+impl StateStackIter {
+    /// Create a new state stack iterator
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            index: 0,
+            len: current_state_len(),
+        }
+    }
+}
+
+impl Default for StateStackIter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Iterator for StateStackIter {
+    type Item = StateItemHandle;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index >= self.len {
+            return None;
+        }
+        let item = unsafe { nvim_syn_get_stateitem(self.index) };
+        self.index += 1;
+        if item.is_null() {
+            None
+        } else {
+            Some(item)
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remaining = (self.len - self.index) as usize;
+        (remaining, Some(remaining))
+    }
+}
+
+impl ExactSizeIterator for StateStackIter {}
+
+/// Synstate linked list iterator
+pub struct SynStateIter {
+    current: SynStateHandle,
+}
+
+impl SynStateIter {
+    /// Create a new synstate iterator starting from the given state
+    #[must_use]
+    pub fn new(start: SynStateHandle) -> Self {
+        Self { current: start }
+    }
+
+    /// Create an iterator for a synblock's state list
+    #[must_use]
+    pub fn for_block(block: SynBlockHandle) -> Self {
+        Self::new(synblock_first_state(block))
+    }
+}
+
+impl Iterator for SynStateIter {
+    type Item = SynStateHandle;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current.is_null() {
+            return None;
+        }
+        let result = self.current;
+        self.current = synstate_next(self.current);
+        Some(result)
+    }
+}
+
+/// Summary of a state item for debugging/inspection
+#[derive(Debug, Clone, Copy)]
+pub struct StateItemSummary {
+    pub idx: i32,
+    pub id: i32,
+    pub trans_id: i32,
+    pub attr: i32,
+    pub flags: i32,
+    pub is_keyword: bool,
+    pub is_match: bool,
+    pub has_cont_list: bool,
+}
+
+impl StateItemSummary {
+    /// Create a summary from a state item handle
+    ///
+    /// # Safety
+    /// This function calls extern FFI functions. The item handle must be valid
+    /// or null (returns a zeroed summary for null).
+    #[must_use]
+    pub fn from_item(item: StateItemHandle) -> Self {
+        if item.is_null() {
+            return Self {
+                idx: 0,
+                id: 0,
+                trans_id: 0,
+                attr: 0,
+                flags: 0,
+                is_keyword: false,
+                is_match: false,
+                has_cont_list: false,
+            };
+        }
+        Self {
+            idx: stateitem_idx(item),
+            id: stateitem_id(item),
+            trans_id: stateitem_trans_id(item),
+            attr: stateitem_attr(item),
+            flags: stateitem_flags(item),
+            is_keyword: stateitem_is_keyword(item),
+            is_match: stateitem_has_match(item),
+            has_cont_list: stateitem_has_cont_list(item),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1116,4 +1280,28 @@ mod tests {
         // Test that KEYWORD_IDX is the expected value
         assert_eq!(KEYWORD_IDX, -1);
     }
+
+    #[test]
+    fn test_state_machine_state_enum() {
+        // Test that all state variants are distinct
+        assert_ne!(StateMachineState::Initial, StateMachineState::InRegion);
+        assert_ne!(StateMachineState::InRegion, StateMachineState::InMatch);
+        assert_ne!(StateMachineState::InMatch, StateMachineState::Invalid);
+        assert_ne!(StateMachineState::Initial, StateMachineState::Invalid);
+    }
+
+    #[test]
+    fn test_synstate_iter_null() {
+        // Test that SynStateIter handles null start correctly
+        let iter = SynStateIter::new(SynStateHandle::null());
+        assert!(iter.current.is_null());
+    }
+
+    // Note: test_state_stack_iter_default cannot be included here because
+    // StateStackIter::new() calls current_state_len() which is an extern FFI function.
+    // Such tests are covered by integration tests with the full build.
+
+    // Note: test_state_item_summary_null cannot be included here because
+    // StateItemSummary::from_item calls extern FFI functions even for null handles.
+    // Such tests are covered by integration tests with the full build.
 }
