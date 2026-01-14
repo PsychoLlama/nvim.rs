@@ -354,6 +354,211 @@ pub const extern "C" fn rs_dialog_is_error_or_warning(dialog_type: c_int) -> c_i
     }
 }
 
+// ============================================================================
+// Phase 428: Additional Dialog System Functions
+// ============================================================================
+
+extern "C" {
+    /// Get `msg_silent` flag
+    fn nvim_get_msg_silent() -> c_int;
+    /// UI active check
+    fn ui_active() -> c_int;
+    /// Get `no_wait_return` counter
+    fn no_wait_return_get() -> c_int;
+    /// Increment `no_wait_return`
+    fn no_wait_return_inc();
+    /// Decrement `no_wait_return`
+    fn no_wait_return_dec();
+}
+
+/// Check if dialogs should be suppressed.
+///
+/// Returns true if silent_mode or msg_silent is set.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_dialogs_suppressed() -> c_int {
+    let silent_mode = nvim_get_silent_mode();
+    let msg_silent = nvim_get_msg_silent();
+    c_int::from(silent_mode != 0 || msg_silent != 0)
+}
+
+/// Check if dialog can be shown.
+///
+/// Returns true if not in silent mode.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_dialog_can_show() -> c_int {
+    c_int::from(nvim_get_silent_mode() == 0)
+}
+
+/// Check if UI is ready for dialogs.
+///
+/// Returns true if a UI is active.
+///
+/// # Safety
+/// Calls C function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_dialog_ui_ready() -> c_int {
+    ui_active()
+}
+
+/// Enter dialog context - suppress wait_return.
+///
+/// # Safety
+/// Calls C function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_dialog_enter() {
+    no_wait_return_inc();
+}
+
+/// Leave dialog context.
+///
+/// # Safety
+/// Calls C function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_dialog_leave() {
+    no_wait_return_dec();
+}
+
+/// Check if currently in dialog context.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_in_dialog() -> c_int {
+    c_int::from(no_wait_return_get() > 0)
+}
+
+/// Clear all dialog state.
+///
+/// Frees confirm_msg and confirm_buttons.
+///
+/// # Safety
+/// Calls C accessor functions and frees memory.
+#[no_mangle]
+pub unsafe extern "C" fn rs_dialog_clear_all() {
+    rs_clear_confirm_msg();
+    rs_clear_confirm_buttons();
+}
+
+/// Check if dialog response indicates acceptance.
+///
+/// Returns true for YES or ALL.
+#[no_mangle]
+pub const extern "C" fn rs_dialog_response_accept(response: c_int) -> c_int {
+    if response == DialogResponse::YES.0 || response == DialogResponse::ALL.0 {
+        1
+    } else {
+        0
+    }
+}
+
+/// Check if dialog response indicates rejection.
+///
+/// Returns true for NO or DISCARD_ALL.
+#[no_mangle]
+pub const extern "C" fn rs_dialog_response_reject(response: c_int) -> c_int {
+    if response == DialogResponse::NO.0 || response == DialogResponse::DISCARD_ALL.0 {
+        1
+    } else {
+        0
+    }
+}
+
+/// Check if dialog response indicates cancellation.
+///
+/// Returns true for CANCEL or 0 (cancelled).
+#[no_mangle]
+pub const extern "C" fn rs_dialog_response_cancel(response: c_int) -> c_int {
+    if response == DialogResponse::CANCEL.0 || response == 0 {
+        1
+    } else {
+        0
+    }
+}
+
+/// Check if dialog response applies to all items.
+///
+/// Returns true for ALL or DISCARD_ALL.
+#[no_mangle]
+pub const extern "C" fn rs_dialog_response_all(response: c_int) -> c_int {
+    if response == DialogResponse::ALL.0 || response == DialogResponse::DISCARD_ALL.0 {
+        1
+    } else {
+        0
+    }
+}
+
+/// Count hotkeys in a button string.
+///
+/// Counts occurrences of the hotkey marker character.
+///
+/// # Safety
+/// `buttons` must be a valid null-terminated C string or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_count_dialog_hotkeys(buttons: *const c_char) -> c_int {
+    if buttons.is_null() {
+        return 0;
+    }
+
+    let mut count = 0;
+    let mut p = buttons;
+
+    while *p != 0 {
+        if c_int::from(*p) == DLG_HOTKEY_CHAR {
+            count += 1;
+        }
+        p = p.add(1);
+    }
+
+    count
+}
+
+/// Check if all buttons in a string have explicit hotkeys.
+///
+/// # Safety
+/// `buttons` must be a valid null-terminated C string or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_dialog_all_have_hotkeys(buttons: *const c_char) -> c_int {
+    let button_count = rs_count_dialog_buttons(buttons);
+    let hotkey_count = rs_count_dialog_hotkeys(buttons);
+    c_int::from(button_count > 0 && hotkey_count >= button_count)
+}
+
+/// Maximum buttons with tracked hotkey state.
+pub const HAS_HOTKEY_LEN: c_int = 30;
+
+/// Maximum bytes for a single hotkey character.
+pub const HOTK_LEN: c_int = 6; // MB_MAXBYTES
+
+/// Get the HAS_HOTKEY_LEN constant.
+#[no_mangle]
+pub const extern "C" fn rs_has_hotkey_len() -> c_int {
+    HAS_HOTKEY_LEN
+}
+
+/// Get the HOTK_LEN constant.
+#[no_mangle]
+pub const extern "C" fn rs_hotk_len() -> c_int {
+    HOTK_LEN
+}
+
+/// Calculate memory needed for hotkey storage.
+///
+/// Returns (button_count * HOTK_LEN) + 1 for NUL.
+#[no_mangle]
+pub const extern "C" fn rs_dialog_hotkey_bufsize(button_count: c_int) -> c_int {
+    if button_count <= 0 {
+        1 // Just NUL
+    } else {
+        button_count * HOTK_LEN + 1
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -394,5 +599,49 @@ mod tests {
         assert_eq!(rs_is_dialog_hotkey_char(c_int::from(b'&')), 1);
         assert_eq!(rs_is_dialog_hotkey_char(c_int::from(b'\n')), 0);
         assert_eq!(rs_is_dialog_hotkey_char(c_int::from(b'a')), 0);
+    }
+
+    #[test]
+    fn test_dialog_response_accept() {
+        assert_eq!(rs_dialog_response_accept(DialogResponse::YES.0), 1);
+        assert_eq!(rs_dialog_response_accept(DialogResponse::ALL.0), 1);
+        assert_eq!(rs_dialog_response_accept(DialogResponse::NO.0), 0);
+        assert_eq!(rs_dialog_response_accept(DialogResponse::CANCEL.0), 0);
+    }
+
+    #[test]
+    fn test_dialog_response_reject() {
+        assert_eq!(rs_dialog_response_reject(DialogResponse::NO.0), 1);
+        assert_eq!(rs_dialog_response_reject(DialogResponse::DISCARD_ALL.0), 1);
+        assert_eq!(rs_dialog_response_reject(DialogResponse::YES.0), 0);
+    }
+
+    #[test]
+    fn test_dialog_response_cancel() {
+        assert_eq!(rs_dialog_response_cancel(DialogResponse::CANCEL.0), 1);
+        assert_eq!(rs_dialog_response_cancel(0), 1);
+        assert_eq!(rs_dialog_response_cancel(DialogResponse::YES.0), 0);
+    }
+
+    #[test]
+    fn test_dialog_response_all() {
+        assert_eq!(rs_dialog_response_all(DialogResponse::ALL.0), 1);
+        assert_eq!(rs_dialog_response_all(DialogResponse::DISCARD_ALL.0), 1);
+        assert_eq!(rs_dialog_response_all(DialogResponse::YES.0), 0);
+    }
+
+    #[test]
+    fn test_dialog_hotkey_bufsize() {
+        assert_eq!(rs_dialog_hotkey_bufsize(0), 1);
+        assert_eq!(rs_dialog_hotkey_bufsize(1), HOTK_LEN + 1);
+        assert_eq!(rs_dialog_hotkey_bufsize(3), 3 * HOTK_LEN + 1);
+    }
+
+    #[test]
+    fn test_dialog_constants_phase428() {
+        assert_eq!(HAS_HOTKEY_LEN, 30);
+        assert_eq!(HOTK_LEN, 6);
+        assert_eq!(rs_has_hotkey_len(), 30);
+        assert_eq!(rs_hotk_len(), 6);
     }
 }
