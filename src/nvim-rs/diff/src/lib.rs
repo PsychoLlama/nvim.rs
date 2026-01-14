@@ -999,6 +999,318 @@ pub extern "C" fn rs_diff_copy_entry(
 }
 
 // =============================================================================
+// Block Lifecycle Helpers (Phase 361-364)
+// =============================================================================
+
+/// Result of block sanity check.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BlockSanityResult {
+    /// Whether the block is valid.
+    pub valid: c_int,
+    /// Index of the problematic buffer (-1 if valid).
+    pub bad_idx: c_int,
+}
+
+impl BlockSanityResult {
+    /// Create a valid result.
+    #[must_use]
+    pub const fn ok() -> Self {
+        Self {
+            valid: OK,
+            bad_idx: -1,
+        }
+    }
+
+    /// Create an invalid result.
+    #[must_use]
+    pub const fn fail(idx: c_int) -> Self {
+        Self {
+            valid: FAIL,
+            bad_idx: idx,
+        }
+    }
+}
+
+/// Validate that a diff block's line ranges are within buffer bounds.
+///
+/// Returns OK if valid, FAIL if any buffer has out-of-bounds lines.
+#[allow(clippy::cast_sign_loss)]
+fn diff_validate_block_bounds_impl(
+    dp: DiffBlockPtr,
+    buf_line_counts: &[LinenrT; DB_COUNT as usize],
+) -> BlockSanityResult {
+    if dp.is_null() {
+        return BlockSanityResult::fail(-1);
+    }
+
+    unsafe {
+        for i in 0..DB_COUNT {
+            if !nvim_get_curtab_diffbuf(i).is_null() {
+                let lnum = nvim_diffblock_get_lnum(dp, i);
+                let count = nvim_diffblock_get_count(dp, i);
+                let buf_lines = buf_line_counts[i as usize];
+
+                // Check if the block extends past the buffer
+                if lnum + count - 1 > buf_lines {
+                    return BlockSanityResult::fail(i);
+                }
+
+                // Check for negative counts (shouldn't happen but be safe)
+                if count < 0 {
+                    return BlockSanityResult::fail(i);
+                }
+            }
+        }
+        BlockSanityResult::ok()
+    }
+}
+
+/// FFI export: Validate block bounds.
+///
+/// # Safety
+/// `buf_line_counts` must be a valid pointer to an array of DB_COUNT elements.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_validate_block_bounds(
+    dp: DiffBlockPtr,
+    buf_line_counts: *const LinenrT,
+) -> BlockSanityResult {
+    if buf_line_counts.is_null() {
+        return BlockSanityResult::fail(-1);
+    }
+    let counts: [LinenrT; DB_COUNT as usize] = std::ptr::read(buf_line_counts.cast());
+    diff_validate_block_bounds_impl(dp, &counts)
+}
+
+/// Check if a diff block should be removed (all counts are zero).
+fn diff_block_is_empty_impl(dp: DiffBlockPtr) -> bool {
+    if dp.is_null() {
+        return true;
+    }
+
+    unsafe {
+        for i in 0..DB_COUNT {
+            if !nvim_get_curtab_diffbuf(i).is_null() && nvim_diffblock_get_count(dp, i) != 0 {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+/// FFI export: Check if block is empty (all counts zero).
+#[no_mangle]
+pub extern "C" fn rs_diff_block_is_empty_all(dp: DiffBlockPtr) -> c_int {
+    c_int::from(diff_block_is_empty_impl(dp))
+}
+
+/// Check if two adjacent diff blocks should be merged.
+fn diff_blocks_should_merge_impl(dp1: DiffBlockPtr, dp2: DiffBlockPtr, idx: c_int) -> bool {
+    if dp1.is_null() || dp2.is_null() {
+        return false;
+    }
+    if !(0..DB_COUNT).contains(&idx) {
+        return false;
+    }
+
+    unsafe {
+        let dp1_end = nvim_diffblock_get_lnum(dp1, idx) + nvim_diffblock_get_count(dp1, idx);
+        let dp2_start = nvim_diffblock_get_lnum(dp2, idx);
+        dp1_end == dp2_start
+    }
+}
+
+/// FFI export: Check if blocks should be merged.
+#[no_mangle]
+pub extern "C" fn rs_diff_blocks_should_merge(
+    dp1: DiffBlockPtr,
+    dp2: DiffBlockPtr,
+    idx: c_int,
+) -> c_int {
+    c_int::from(diff_blocks_should_merge_impl(dp1, dp2, idx))
+}
+
+/// Calculate the total line count for a buffer across all diff blocks.
+fn diff_total_count_for_buf_impl(buf_idx: c_int) -> LinenrT {
+    if !(0..DB_COUNT).contains(&buf_idx) {
+        return 0;
+    }
+
+    unsafe {
+        let mut total = 0;
+        let mut dp = nvim_get_diff_first_block();
+        while !dp.is_null() {
+            total += nvim_diffblock_get_count(dp, buf_idx);
+            dp = nvim_diffblock_get_next(dp);
+        }
+        total
+    }
+}
+
+/// FFI export: Get total count for a buffer across all blocks.
+#[no_mangle]
+pub extern "C" fn rs_diff_total_count_for_buf(buf_idx: c_int) -> LinenrT {
+    diff_total_count_for_buf_impl(buf_idx)
+}
+
+// =============================================================================
+// Linematch Helpers (Phase 377)
+// =============================================================================
+
+/// Check if linematch should run for a block.
+///
+/// Returns true if linematch is enabled and the block size is within limits.
+fn diff_should_run_linematch_impl(
+    dp: DiffBlockPtr,
+    linematch_lines: c_int,
+    diff_flags: c_int,
+) -> bool {
+    const DIFF_LINEMATCH_LOCAL: c_int = 0x1000;
+
+    if dp.is_null() {
+        return false;
+    }
+    if (diff_flags & DIFF_LINEMATCH_LOCAL) == 0 {
+        return false;
+    }
+
+    unsafe {
+        let mut total_size = 0;
+        for i in 0..DB_COUNT {
+            if !nvim_get_curtab_diffbuf(i).is_null() {
+                let count = nvim_diffblock_get_count(dp, i);
+                if count < 0 {
+                    // Safety: negative count would cause allocation issues
+                    return false;
+                }
+                total_size += count;
+            }
+        }
+        total_size <= linematch_lines
+    }
+}
+
+/// FFI export: Check if linematch should run.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_should_run_linematch(
+    dp: DiffBlockPtr,
+    linematch_lines: c_int,
+) -> c_int {
+    c_int::from(diff_should_run_linematch_impl(
+        dp,
+        linematch_lines,
+        nvim_get_diff_flags(),
+    ))
+}
+
+/// Count the number of buffers in a diff block with non-zero counts.
+fn diff_count_nonzero_buffers_impl(dp: DiffBlockPtr) -> c_int {
+    if dp.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        let mut count = 0;
+        for i in 0..DB_COUNT {
+            if !nvim_get_curtab_diffbuf(i).is_null() && nvim_diffblock_get_count(dp, i) > 0 {
+                count += 1;
+            }
+        }
+        count
+    }
+}
+
+/// FFI export: Count non-zero buffers in a block.
+#[no_mangle]
+pub extern "C" fn rs_diff_count_nonzero_buffers(dp: DiffBlockPtr) -> c_int {
+    diff_count_nonzero_buffers_impl(dp)
+}
+
+// =============================================================================
+// Virtual Line Calculation (Phase 378-379)
+// =============================================================================
+
+/// Calculate the maximum virtual line count in a diff block.
+///
+/// Virtual lines = max(counts across all buffers).
+fn diff_block_max_virtual_lines_impl(dp: DiffBlockPtr) -> LinenrT {
+    if dp.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        let mut max_count = 0;
+        for i in 0..DB_COUNT {
+            if !nvim_get_curtab_diffbuf(i).is_null() {
+                let count = nvim_diffblock_get_count(dp, i);
+                if count > max_count {
+                    max_count = count;
+                }
+            }
+        }
+        max_count
+    }
+}
+
+/// FFI export: Get max virtual lines in a block.
+#[no_mangle]
+pub extern "C" fn rs_diff_block_max_virtual_lines(dp: DiffBlockPtr) -> LinenrT {
+    diff_block_max_virtual_lines_impl(dp)
+}
+
+/// Calculate filler lines for a buffer in a diff block.
+///
+/// Filler lines = max_virtual - this_buffer_count.
+fn diff_block_filler_for_buf_impl(dp: DiffBlockPtr, buf_idx: c_int) -> LinenrT {
+    if dp.is_null() || !(0..DB_COUNT).contains(&buf_idx) {
+        return 0;
+    }
+
+    unsafe {
+        let max_lines = diff_block_max_virtual_lines_impl(dp);
+        let this_count = nvim_diffblock_get_count(dp, buf_idx);
+        if max_lines > this_count {
+            max_lines - this_count
+        } else {
+            0
+        }
+    }
+}
+
+/// FFI export: Get filler lines for a buffer in a block.
+#[no_mangle]
+pub extern "C" fn rs_diff_block_filler_for_buf(dp: DiffBlockPtr, buf_idx: c_int) -> LinenrT {
+    diff_block_filler_for_buf_impl(dp, buf_idx)
+}
+
+/// Calculate the offset needed to align lines between two buffers.
+fn diff_block_alignment_offset_impl(dp: DiffBlockPtr, from_idx: c_int, to_idx: c_int) -> LinenrT {
+    if dp.is_null() {
+        return 0;
+    }
+    if !(0..DB_COUNT).contains(&from_idx) || !(0..DB_COUNT).contains(&to_idx) {
+        return 0;
+    }
+
+    unsafe {
+        let from_end =
+            nvim_diffblock_get_lnum(dp, from_idx) + nvim_diffblock_get_count(dp, from_idx);
+        let to_end = nvim_diffblock_get_lnum(dp, to_idx) + nvim_diffblock_get_count(dp, to_idx);
+        from_end - to_end
+    }
+}
+
+/// FFI export: Get alignment offset between two buffers.
+#[no_mangle]
+pub extern "C" fn rs_diff_block_alignment_offset(
+    dp: DiffBlockPtr,
+    from_idx: c_int,
+    to_idx: c_int,
+) -> LinenrT {
+    diff_block_alignment_offset_impl(dp, from_idx, to_idx)
+}
+
+// =============================================================================
 // Diffopt Parsing
 // =============================================================================
 
@@ -2022,5 +2334,55 @@ mod tests {
         assert_ne!(result.diff_flags & DIFF_INLINE_CHAR, 0);
         assert_eq!(result.diff_algorithm, XDF_HISTOGRAM_DIFF);
         assert_eq!(result.diff_context, 3);
+    }
+
+    // =========================================================================
+    // Block Lifecycle Tests (Phase 361-364)
+    // =========================================================================
+
+    #[test]
+    fn test_block_sanity_result_ok() {
+        let result = BlockSanityResult::ok();
+        assert_eq!(result.valid, OK);
+        assert_eq!(result.bad_idx, -1);
+    }
+
+    #[test]
+    fn test_block_sanity_result_fail() {
+        let result = BlockSanityResult::fail(3);
+        assert_eq!(result.valid, FAIL);
+        assert_eq!(result.bad_idx, 3);
+    }
+
+    #[test]
+    fn test_block_sanity_result_size() {
+        // Should be 2 * 4 = 8 bytes
+        assert_eq!(std::mem::size_of::<BlockSanityResult>(), 8);
+    }
+
+    // =========================================================================
+    // Virtual Line Tests (Phase 378-379)
+    // =========================================================================
+
+    #[test]
+    fn test_diff_block_null_handling() {
+        // Null block should return safe defaults
+        let null_ptr = std::ptr::null_mut();
+        assert!(diff_block_is_empty_impl(null_ptr));
+        assert_eq!(diff_block_max_virtual_lines_impl(null_ptr), 0);
+        assert_eq!(diff_block_filler_for_buf_impl(null_ptr, 0), 0);
+        assert_eq!(diff_block_alignment_offset_impl(null_ptr, 0, 1), 0);
+    }
+
+    #[test]
+    fn test_diff_blocks_should_merge_null() {
+        let null_ptr = std::ptr::null_mut();
+        assert!(!diff_blocks_should_merge_impl(null_ptr, null_ptr, 0));
+    }
+
+    #[test]
+    fn test_diff_total_count_invalid_idx() {
+        assert_eq!(diff_total_count_for_buf_impl(-1), 0);
+        assert_eq!(diff_total_count_for_buf_impl(DB_COUNT), 0);
     }
 }

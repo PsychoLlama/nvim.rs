@@ -374,8 +374,233 @@ pub const fn diff_get_highlight_group(
     }
 }
 
+// =============================================================================
+// Inline Diff Change Detection (Phase 373-376)
+// =============================================================================
+
+/// Result of finding the inline change range.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct InlineChangeRange {
+    /// Start column of the change (0-based byte offset).
+    pub start_col: ColnrT,
+    /// End column of the change (0-based byte offset, exclusive).
+    pub end_col: ColnrT,
+    /// Whether a change was found.
+    pub found: c_int,
+}
+
+impl InlineChangeRange {
+    /// Create an empty (no change) result.
+    #[must_use]
+    pub const fn no_change() -> Self {
+        Self {
+            start_col: 0,
+            end_col: 0,
+            found: 0,
+        }
+    }
+
+    /// Create a change result.
+    #[must_use]
+    pub const fn new(start: ColnrT, end: ColnrT) -> Self {
+        Self {
+            start_col: start,
+            end_col: end,
+            found: 1,
+        }
+    }
+
+    /// Create a full-line change result.
+    #[must_use]
+    pub const fn full_line(line_len: ColnrT) -> Self {
+        Self {
+            start_col: 0,
+            end_col: line_len,
+            found: 1,
+        }
+    }
+}
+
+/// Compare two byte slices and find the first differing position.
+///
+/// Returns the byte offset where they first differ, or the length of the
+/// shorter slice if one is a prefix of the other.
+pub fn find_first_diff(s1: &[u8], s2: &[u8]) -> usize {
+    let min_len = s1.len().min(s2.len());
+    for i in 0..min_len {
+        if s1[i] != s2[i] {
+            return i;
+        }
+    }
+    min_len
+}
+
+/// Compare two byte slices from the end and find the last differing position.
+///
+/// Returns the number of matching bytes from the end.
+pub fn find_last_match(s1: &[u8], s2: &[u8]) -> usize {
+    let min_len = s1.len().min(s2.len());
+    let mut match_count = 0;
+    for i in 0..min_len {
+        if s1[s1.len() - 1 - i] != s2[s2.len() - 1 - i] {
+            break;
+        }
+        match_count += 1;
+    }
+    match_count
+}
+
+/// Find the simple inline change range between two lines.
+///
+/// This is the "simple" algorithm that just finds the first and last
+/// differing bytes.
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+pub fn find_simple_inline_change(line1: &[u8], line2: &[u8]) -> InlineChangeRange {
+    if line1 == line2 {
+        return InlineChangeRange::no_change();
+    }
+
+    // Cap line lengths to i32::MAX for safety
+    let len1 = line1.len().min(i32::MAX as usize);
+    let len2 = line2.len().min(i32::MAX as usize);
+
+    if len1 == 0 {
+        return InlineChangeRange::full_line(len2 as ColnrT);
+    }
+    if len2 == 0 {
+        return InlineChangeRange::full_line(len1 as ColnrT);
+    }
+
+    let start = find_first_diff(line1, line2);
+    let end_match = find_last_match(line1, line2);
+
+    // Calculate end position, ensuring start <= end
+    let end = len1.saturating_sub(end_match).max(start);
+
+    InlineChangeRange::new(start as ColnrT, end as ColnrT)
+}
+
+/// Word boundary detection for word-level diff.
+#[inline]
+pub const fn is_word_char(c: u8) -> bool {
+    c.is_ascii_alphanumeric() || c == b'_'
+}
+
+/// Find word boundaries in a byte slice.
+///
+/// Returns a vector of (start, end) byte offsets for each word.
+pub fn find_word_boundaries(line: &[u8]) -> Vec<(usize, usize)> {
+    let mut words = Vec::new();
+    let mut in_word = false;
+    let mut word_start = 0;
+
+    for (i, &c) in line.iter().enumerate() {
+        if is_word_char(c) {
+            if !in_word {
+                word_start = i;
+                in_word = true;
+            }
+        } else if in_word {
+            words.push((word_start, i));
+            in_word = false;
+        }
+    }
+
+    if in_word {
+        words.push((word_start, line.len()));
+    }
+
+    words
+}
+
+/// Line status result with detailed information.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct DiffLineStatusResult {
+    /// Status code (-2 = added, -1 = changed, 0 = normal, >0 = filler count).
+    pub status: c_int,
+    /// Whether the line is in a diff block.
+    pub in_diff: c_int,
+    /// The diff block handle (null if not in diff).
+    pub block: DiffBlockHandle,
+}
+
+impl DiffLineStatusResult {
+    /// Create a result for a line not in diff.
+    #[must_use]
+    pub const fn not_in_diff() -> Self {
+        Self {
+            status: 0,
+            in_diff: 0,
+            block: DiffBlockHandle::null(),
+        }
+    }
+
+    /// Create a result for a changed line.
+    #[must_use]
+    pub const fn changed(block: DiffBlockHandle) -> Self {
+        Self {
+            status: -1,
+            in_diff: 1,
+            block,
+        }
+    }
+
+    /// Create a result for an added line.
+    #[must_use]
+    pub const fn added(block: DiffBlockHandle) -> Self {
+        Self {
+            status: -2,
+            in_diff: 1,
+            block,
+        }
+    }
+
+    /// Create a result for filler lines.
+    #[must_use]
+    pub const fn filler(count: c_int, block: DiffBlockHandle) -> Self {
+        Self {
+            status: count,
+            in_diff: 1,
+            block,
+        }
+    }
+}
+
 // FFI exports removed - the main ones are in lib.rs to maintain existing API compatibility.
 // Additional exports that aren't in lib.rs:
+
+/// FFI export: Find simple inline change range.
+///
+/// # Safety
+/// `line1` and `line2` must be valid pointers to C strings.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_diff_find_simple_inline_change(
+    line1: *const c_char,
+    line1_len: c_int,
+    line2: *const c_char,
+    line2_len: c_int,
+) -> InlineChangeRange {
+    if line1.is_null() || line2.is_null() {
+        return InlineChangeRange::no_change();
+    }
+    if line1_len < 0 || line2_len < 0 {
+        return InlineChangeRange::no_change();
+    }
+
+    let s1 = std::slice::from_raw_parts(line1.cast::<u8>(), line1_len as usize);
+    let s2 = std::slice::from_raw_parts(line2.cast::<u8>(), line2_len as usize);
+    find_simple_inline_change(s1, s2)
+}
+
+/// FFI export: Check if byte is a word character.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+pub extern "C" fn rs_diff_is_word_char(c: c_int) -> c_int {
+    c_int::from(is_word_char(c as u8))
+}
 
 /// FFI export: Calculate filler lines for a diff block.
 #[no_mangle]
@@ -403,6 +628,126 @@ mod tests {
         assert_eq!(DiffInlineMode::Simple as c_int, 1);
         assert_eq!(DiffInlineMode::Char as c_int, 2);
         assert_eq!(DiffInlineMode::Word as c_int, 3);
+    }
+
+    #[test]
+    fn test_inline_change_range_no_change() {
+        let range = InlineChangeRange::no_change();
+        assert_eq!(range.start_col, 0);
+        assert_eq!(range.end_col, 0);
+        assert_eq!(range.found, 0);
+    }
+
+    #[test]
+    fn test_inline_change_range_new() {
+        let range = InlineChangeRange::new(5, 10);
+        assert_eq!(range.start_col, 5);
+        assert_eq!(range.end_col, 10);
+        assert_eq!(range.found, 1);
+    }
+
+    #[test]
+    fn test_inline_change_range_full_line() {
+        let range = InlineChangeRange::full_line(20);
+        assert_eq!(range.start_col, 0);
+        assert_eq!(range.end_col, 20);
+        assert_eq!(range.found, 1);
+    }
+
+    #[test]
+    fn test_find_first_diff() {
+        assert_eq!(find_first_diff(b"hello", b"hello"), 5);
+        assert_eq!(find_first_diff(b"hello", b"hella"), 4);
+        assert_eq!(find_first_diff(b"hello", b"world"), 0);
+        assert_eq!(find_first_diff(b"hello", b"he"), 2);
+        assert_eq!(find_first_diff(b"", b"hello"), 0);
+    }
+
+    #[test]
+    fn test_find_last_match() {
+        assert_eq!(find_last_match(b"hello", b"hello"), 5);
+        assert_eq!(find_last_match(b"hello", b"jello"), 4);
+        assert_eq!(find_last_match(b"hello", b"world"), 0);
+        assert_eq!(find_last_match(b"hello", b"lo"), 2);
+    }
+
+    #[test]
+    fn test_find_simple_inline_change_identical() {
+        let range = find_simple_inline_change(b"hello world", b"hello world");
+        assert_eq!(range.found, 0);
+    }
+
+    #[test]
+    fn test_find_simple_inline_change_middle() {
+        let range = find_simple_inline_change(b"hello world", b"hello WORLD");
+        assert_eq!(range.found, 1);
+        assert_eq!(range.start_col, 6);
+        assert_eq!(range.end_col, 11);
+    }
+
+    #[test]
+    fn test_find_simple_inline_change_start() {
+        let range = find_simple_inline_change(b"hello", b"jello");
+        assert_eq!(range.found, 1);
+        assert_eq!(range.start_col, 0);
+        assert_eq!(range.end_col, 1);
+    }
+
+    #[test]
+    fn test_find_simple_inline_change_empty() {
+        let range = find_simple_inline_change(b"", b"hello");
+        assert_eq!(range.found, 1);
+        assert_eq!(range.start_col, 0);
+        assert_eq!(range.end_col, 5);
+    }
+
+    #[test]
+    fn test_is_word_char() {
+        assert!(is_word_char(b'a'));
+        assert!(is_word_char(b'Z'));
+        assert!(is_word_char(b'5'));
+        assert!(is_word_char(b'_'));
+        assert!(!is_word_char(b' '));
+        assert!(!is_word_char(b'.'));
+        assert!(!is_word_char(b'-'));
+    }
+
+    #[test]
+    fn test_find_word_boundaries() {
+        let words = find_word_boundaries(b"hello world");
+        assert_eq!(words.len(), 2);
+        assert_eq!(words[0], (0, 5));
+        assert_eq!(words[1], (6, 11));
+
+        let words = find_word_boundaries(b"  foo_bar  baz  ");
+        assert_eq!(words.len(), 2);
+        assert_eq!(words[0], (2, 9));
+        assert_eq!(words[1], (11, 14));
+
+        let words = find_word_boundaries(b"");
+        assert_eq!(words.len(), 0);
+
+        let words = find_word_boundaries(b"   ");
+        assert_eq!(words.len(), 0);
+    }
+
+    #[test]
+    fn test_diff_line_status_result() {
+        let not_in_diff = DiffLineStatusResult::not_in_diff();
+        assert_eq!(not_in_diff.status, 0);
+        assert_eq!(not_in_diff.in_diff, 0);
+
+        let changed = DiffLineStatusResult::changed(DiffBlockHandle::null());
+        assert_eq!(changed.status, -1);
+        assert_eq!(changed.in_diff, 1);
+
+        let added = DiffLineStatusResult::added(DiffBlockHandle::null());
+        assert_eq!(added.status, -2);
+        assert_eq!(added.in_diff, 1);
+
+        let filler = DiffLineStatusResult::filler(5, DiffBlockHandle::null());
+        assert_eq!(filler.status, 5);
+        assert_eq!(filler.in_diff, 1);
     }
 
     #[test]
