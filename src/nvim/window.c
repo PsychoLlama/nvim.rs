@@ -144,6 +144,36 @@ extern int rs_close_can_close_floating(void);
 extern int rs_close_count_nonfloating(tabpage_T *tp);
 extern int rs_close_count_total(tabpage_T *tp);
 
+// Frame tree operations from Rust (operations.rs)
+extern void rs_frame_init(frame_T *frp);
+extern void rs_frame_clear_links(frame_T *frp);
+extern void rs_frame_copy_size(frame_T *dest, const frame_T *src);
+extern frame_T *rs_frame_first_leaf(frame_T *frp);
+extern frame_T *rs_frame_last_leaf(frame_T *frp);
+extern frame_T *rs_frame_next_leaf(frame_T *frp);
+extern frame_T *rs_frame_prev_leaf(frame_T *frp);
+extern int rs_frame_count_leaves(const frame_T *frp);
+extern int rs_frame_is_valid(const frame_T *frp);
+extern int rs_frame_contains_win(const frame_T *frp, win_T *wp);
+extern int rs_frame_children_width(const frame_T *frp);
+extern int rs_frame_children_height(const frame_T *frp);
+extern int rs_frame_max_child_width(const frame_T *frp);
+extern int rs_frame_max_child_height(const frame_T *frp);
+extern void rs_frame_propagate_size(frame_T *frp);
+
+// Window navigation from Rust (navigate/movement.rs)
+extern win_T *rs_nav_find_in_direction(int dir);
+extern win_T *rs_nav_find_left(win_T *wp);
+extern win_T *rs_nav_find_right(win_T *wp);
+extern win_T *rs_nav_find_above(win_T *wp);
+extern win_T *rs_nav_find_below(win_T *wp);
+extern win_T *rs_nav_get_next(win_T *wp, int wrap);
+extern win_T *rs_nav_get_prev(win_T *wp, int wrap);
+extern win_T *rs_nav_get_next_nonfloat(win_T *wp, int wrap);
+extern win_T *rs_nav_get_prev_nonfloat(win_T *wp, int wrap);
+extern int rs_nav_is_horizontal_dir(int dir);
+extern int rs_nav_is_vertical_dir(int dir);
+
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to win_T fields from Rust code.
 
