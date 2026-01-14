@@ -92,6 +92,12 @@ pub use types::{
     HL_SYNC_THERE,
     HL_TRANSP,
     HL_TRANS_CONT,
+    // Constants - Item argument types
+    ID_LIST_ALL_SENTINEL,
+    ITEM_END,
+    ITEM_MATCHGROUP,
+    ITEM_SKIP,
+    ITEM_START,
     // Constants - Special indices
     KEYWORD_IDX,
     MAXKEYWLEN,
@@ -103,6 +109,15 @@ pub use types::{
     // Constants - Sync flags
     SF_CCOMMENT,
     SF_MATCH,
+    // Constants - Pattern offset types
+    SPO_COUNT,
+    SPO_HE_OFF,
+    SPO_HS_OFF,
+    SPO_LC_OFF,
+    SPO_ME_OFF,
+    SPO_MS_OFF,
+    SPO_RE_OFF,
+    SPO_RS_OFF,
     // Constants - Pattern types
     SPTYPE_END,
     SPTYPE_MATCH,
@@ -122,6 +137,9 @@ pub use types::{
     SYNSPL_NOTOP,
     SYNSPL_TOP,
 };
+
+// Re-export pattern offset and item type enums
+pub use pattern::PatternType;
 
 pub use attr::{
     rs_combine_attrs, rs_invalidation_needs_full_sync, rs_should_spell_check,

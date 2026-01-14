@@ -355,6 +355,48 @@ pub const NONE_IDX: c_int = -2;
 pub const MAXKEYWLEN: c_int = 80;
 
 // =============================================================================
+// Constants - Syntax pattern offset types (SPO_*)
+// =============================================================================
+
+/// Match start offset
+pub const SPO_MS_OFF: c_int = 0;
+/// Match end offset
+pub const SPO_ME_OFF: c_int = 1;
+/// Highlight start offset
+pub const SPO_HS_OFF: c_int = 2;
+/// Highlight end offset
+pub const SPO_HE_OFF: c_int = 3;
+/// Region start offset
+pub const SPO_RS_OFF: c_int = 4;
+/// Region end offset
+pub const SPO_RE_OFF: c_int = 5;
+/// Leading context offset
+pub const SPO_LC_OFF: c_int = 6;
+/// Number of offset types
+pub const SPO_COUNT: c_int = 7;
+
+// =============================================================================
+// Constants - Item argument types (ITEM_*)
+// =============================================================================
+
+/// Start argument for syn_cmd_match/region
+pub const ITEM_START: c_int = 0;
+/// Skip argument for syn_cmd_region
+pub const ITEM_SKIP: c_int = 1;
+/// End argument for syn_cmd_region
+pub const ITEM_END: c_int = 2;
+/// Matchgroup argument
+pub const ITEM_MATCHGROUP: c_int = 3;
+
+// =============================================================================
+// Constants - Special ID list sentinel
+// =============================================================================
+
+/// ID list that means "all but contained groups"
+/// In C this is `((int16_t *)-1)`, we use a sentinel value
+pub const ID_LIST_ALL_SENTINEL: isize = -1;
+
+// =============================================================================
 // Syntax ID helper types and functions
 // =============================================================================
 
@@ -560,5 +602,156 @@ mod tests {
         assert!(ExtMatchHandle::null().is_null());
         assert!(WinHandle::null().is_null());
         assert!(BufHandle::null().is_null());
+    }
+
+    #[test]
+    fn test_spo_offset_constants() {
+        // Verify offset constants are sequential
+        assert_eq!(SPO_MS_OFF, 0);
+        assert_eq!(SPO_ME_OFF, 1);
+        assert_eq!(SPO_HS_OFF, 2);
+        assert_eq!(SPO_HE_OFF, 3);
+        assert_eq!(SPO_RS_OFF, 4);
+        assert_eq!(SPO_RE_OFF, 5);
+        assert_eq!(SPO_LC_OFF, 6);
+        assert_eq!(SPO_COUNT, 7);
+
+        // Verify all offsets are less than count (use runtime to avoid clippy warning)
+        let count = SPO_COUNT;
+        assert!(SPO_MS_OFF < count);
+        assert!(SPO_ME_OFF < count);
+        assert!(SPO_HS_OFF < count);
+        assert!(SPO_HE_OFF < count);
+        assert!(SPO_RS_OFF < count);
+        assert!(SPO_RE_OFF < count);
+        assert!(SPO_LC_OFF < count);
+    }
+
+    #[test]
+    fn test_item_argument_constants() {
+        // Verify item argument constants
+        assert_eq!(ITEM_START, 0);
+        assert_eq!(ITEM_SKIP, 1);
+        assert_eq!(ITEM_END, 2);
+        assert_eq!(ITEM_MATCHGROUP, 3);
+    }
+
+    #[test]
+    fn test_opaque_handle_sizes() {
+        // Verify all opaque handles are pointer-sized for FFI compatibility
+        use std::mem::size_of;
+
+        assert_eq!(size_of::<SynBlockHandle>(), size_of::<*mut ()>());
+        assert_eq!(size_of::<SynStateHandle>(), size_of::<*mut ()>());
+        assert_eq!(size_of::<SynPatHandle>(), size_of::<*mut ()>());
+        assert_eq!(size_of::<SynClusterHandle>(), size_of::<*mut ()>());
+        assert_eq!(size_of::<StateItemHandle>(), size_of::<*mut ()>());
+        assert_eq!(size_of::<KeyEntryHandle>(), size_of::<*mut ()>());
+        assert_eq!(size_of::<RegProgHandle>(), size_of::<*mut ()>());
+        assert_eq!(size_of::<IdListHandle>(), size_of::<*mut i16>());
+        assert_eq!(size_of::<BufStateHandle>(), size_of::<*mut ()>());
+        assert_eq!(size_of::<ExtMatchHandle>(), size_of::<*mut ()>());
+        assert_eq!(size_of::<WinHandle>(), size_of::<*mut ()>());
+        assert_eq!(size_of::<BufHandle>(), size_of::<*mut ()>());
+    }
+
+    #[test]
+    fn test_opaque_handle_alignment() {
+        // Verify all opaque handles have pointer alignment for FFI compatibility
+        use std::mem::align_of;
+
+        assert_eq!(align_of::<SynBlockHandle>(), align_of::<*mut ()>());
+        assert_eq!(align_of::<SynStateHandle>(), align_of::<*mut ()>());
+        assert_eq!(align_of::<SynPatHandle>(), align_of::<*mut ()>());
+        assert_eq!(align_of::<SynClusterHandle>(), align_of::<*mut ()>());
+        assert_eq!(align_of::<StateItemHandle>(), align_of::<*mut ()>());
+        assert_eq!(align_of::<KeyEntryHandle>(), align_of::<*mut ()>());
+        assert_eq!(align_of::<RegProgHandle>(), align_of::<*mut ()>());
+        assert_eq!(align_of::<IdListHandle>(), align_of::<*mut i16>());
+        assert_eq!(align_of::<BufStateHandle>(), align_of::<*mut ()>());
+        assert_eq!(align_of::<ExtMatchHandle>(), align_of::<*mut ()>());
+        assert_eq!(align_of::<WinHandle>(), align_of::<*mut ()>());
+        assert_eq!(align_of::<BufHandle>(), align_of::<*mut ()>());
+    }
+
+    #[test]
+    fn test_hl_flags_are_distinct_bits() {
+        // Verify all HL_* flags use distinct bit positions (no overlap)
+        let flags = [
+            HL_CONTAINED,
+            HL_TRANSP,
+            HL_ONELINE,
+            HL_HAS_EOL,
+            HL_SYNC_HERE,
+            HL_SYNC_THERE,
+            HL_MATCH,
+            HL_SKIPNL,
+            HL_SKIPWHITE,
+            HL_SKIPEMPTY,
+            HL_KEEPEND,
+            HL_EXCLUDENL,
+            HL_DISPLAY,
+            HL_FOLD,
+            HL_EXTEND,
+            HL_MATCHCONT,
+            HL_TRANS_CONT,
+            HL_CONCEAL,
+            HL_CONCEALENDS,
+            HL_INCLUDED_TOPLEVEL,
+        ];
+
+        // Check that each flag is a power of 2 (single bit set)
+        for flag in flags.iter() {
+            assert_eq!(flag.count_ones(), 1, "Flag {:#x} is not a single bit", flag);
+        }
+
+        // Check no two flags share the same bit
+        let mut combined = 0;
+        for flag in flags.iter() {
+            assert_eq!(
+                combined & flag,
+                0,
+                "Flag {:#x} overlaps with previous flags",
+                flag
+            );
+            combined |= flag;
+        }
+    }
+
+    #[test]
+    fn test_synid_ranges_dont_overlap() {
+        // Verify the SYNID_* ranges don't overlap
+        // Use runtime variables to avoid clippy's assertions_on_constants
+        let max_hl_id = MAX_HL_ID;
+        let synid_allbut = SYNID_ALLBUT;
+        let synid_top = SYNID_TOP;
+        let synid_contained = SYNID_CONTAINED;
+        let synid_cluster = SYNID_CLUSTER;
+
+        assert!(max_hl_id > 0);
+        assert_eq!(synid_allbut, max_hl_id);
+        assert!(synid_top > synid_allbut);
+        assert!(synid_contained > synid_top);
+        assert!(synid_cluster > synid_contained);
+
+        // Verify each range is at least 1000 wide
+        assert!(synid_top - synid_allbut >= 1000);
+        assert!(synid_contained - synid_top >= 1000);
+        assert!(synid_cluster - synid_contained >= 1000);
+    }
+
+    #[test]
+    fn test_sptype_constants_match_c() {
+        // Verify SPTYPE_* constants match C definitions
+        assert_eq!(SPTYPE_MATCH, 1);
+        assert_eq!(SPTYPE_START, 2);
+        assert_eq!(SPTYPE_END, 3);
+        assert_eq!(SPTYPE_SKIP, 4);
+    }
+
+    #[test]
+    fn test_id_list_all_sentinel() {
+        // Verify the sentinel value for ID_LIST_ALL
+        assert_eq!(ID_LIST_ALL_SENTINEL, -1);
     }
 }
