@@ -3144,3 +3144,216 @@ pub extern "C" fn rs_motion_type_to_char(motion_type: c_int) -> c_int {
         _ => 0,
     }
 }
+
+// =============================================================================
+// Phase 406: Yank Register Utilities
+// =============================================================================
+
+/// Check if a yank should shift delete registers.
+///
+/// Delete registers (1-9) are shifted when the delete is at least one line.
+/// This is used in shift_delete_registers.
+#[no_mangle]
+pub extern "C" fn rs_should_shift_delete_registers(
+    motion_type: c_int,
+    use_small_delete: bool,
+) -> bool {
+    // Don't shift if using small delete register
+    if use_small_delete {
+        return false;
+    }
+    // Shift for linewise deletes
+    motion_type == K_MT_LINE_WISE
+}
+
+/// Get the small delete register name ('-').
+#[no_mangle]
+pub extern "C" fn rs_get_small_delete_register() -> c_int {
+    c_int::from(b'-')
+}
+
+/// Check if a delete should use the small delete register.
+///
+/// Small delete register is used for deletes that are less than one line.
+#[no_mangle]
+pub extern "C" fn rs_use_small_delete_register(motion_type: c_int, is_delete: bool) -> bool {
+    is_delete && motion_type != K_MT_LINE_WISE
+}
+
+/// Get the index to use for shifting delete registers.
+///
+/// Delete registers 1-9 correspond to indices 1-9 in y_regs.
+#[no_mangle]
+pub extern "C" fn rs_get_delete_register_index(num: c_int) -> c_int {
+    // Registers 1-9 are at indices 1-9
+    if (1..=9).contains(&num) {
+        num
+    } else {
+        -1
+    }
+}
+
+/// Get the number of delete registers (9).
+#[no_mangle]
+pub extern "C" fn rs_get_num_delete_registers() -> c_int {
+    9
+}
+
+/// Check if a register index is a delete register.
+#[no_mangle]
+pub extern "C" fn rs_is_delete_register_index(idx: c_int) -> bool {
+    (1..=9).contains(&idx)
+}
+
+/// Check if register contents should have trailing newline removed.
+///
+/// When copying from clipboard, charwise registers with empty last line
+/// should have it removed. Also used for determining motion type.
+///
+/// # Safety
+///
+/// `reg` must be a valid YankRegHandle obtained from C code.
+#[no_mangle]
+pub unsafe extern "C" fn rs_should_remove_trailing_empty_line(
+    reg: YankRegHandle,
+    is_clipboard: bool,
+) -> bool {
+    if reg.0.is_null() || !nvim_yankreg_has_array(reg) {
+        return false;
+    }
+
+    let y_size = nvim_yankreg_get_size(reg);
+    if y_size == 0 {
+        return false;
+    }
+
+    // Check if last line is empty
+    let last_size = nvim_yankreg_get_line_size(reg, y_size - 1);
+    if last_size != 0 {
+        return false;
+    }
+
+    let y_type = nvim_yankreg_get_type(reg);
+
+    // Charwise registers can have trailing newline
+    if y_type == K_MT_CHAR_WISE {
+        return false;
+    }
+
+    // Unknown type or linewise from clipboard should be adjusted
+    if y_type == K_MT_UNKNOWN || is_clipboard {
+        return true;
+    }
+
+    false
+}
+
+/// Calculate updated register width for blockwise yanks.
+///
+/// Returns the maximum display width across all lines.
+///
+/// # Safety
+///
+/// reg must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_calculate_register_width(reg: YankRegHandle) -> c_int {
+    if reg.0.is_null() || !nvim_yankreg_has_array(reg) {
+        return 0;
+    }
+
+    let y_size = nvim_yankreg_get_size(reg);
+    let mut max_width: c_int = 0;
+
+    for i in 0..y_size {
+        let line_data = nvim_yankreg_get_line_data(reg, i);
+        if !line_data.is_null() {
+            let width = nvim_mb_string2cells(line_data) as c_int;
+            if width > max_width {
+                max_width = width;
+            }
+        }
+    }
+
+    max_width
+}
+
+/// Check if this is a yank operation (as opposed to delete/change).
+///
+/// Yank uses register 0 by default, while delete shifts 1-9.
+#[no_mangle]
+pub extern "C" fn rs_is_yank_operation(op_type: c_int) -> bool {
+    // OP_YANK = 0 in C code (this is a simplified check)
+    op_type == 0
+}
+
+/// Get the default register for yank operation (register 0).
+#[no_mangle]
+pub extern "C" fn rs_get_default_yank_register() -> c_int {
+    0
+}
+
+/// Check if we need to notify clipboard provider after yank.
+///
+/// Returns true if register is a clipboard register or unnamed register
+/// with clipboard=unnamed option.
+#[no_mangle]
+pub extern "C" fn rs_needs_clipboard_notify_after_yank(regname: c_int) -> bool {
+    regname == c_int::from(b'*')
+        || regname == c_int::from(b'+')
+        || regname == 0
+        || regname == c_int::from(b'"')
+}
+
+/// Format register info for :reg command display.
+///
+/// Returns the character representation of the register type.
+#[no_mangle]
+pub extern "C" fn rs_get_register_display_type(motion_type: c_int) -> c_char {
+    match motion_type {
+        K_MT_CHAR_WISE => b'c' as c_char,
+        K_MT_LINE_WISE => b'l' as c_char,
+        K_MT_BLOCK_WISE => b'b' as c_char,
+        _ => b' ' as c_char,
+    }
+}
+
+/// Check if register should be displayed in :reg output.
+///
+/// Skips empty registers.
+///
+/// # Safety
+///
+/// Accesses global register state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_should_display_register(regname: c_int) -> bool {
+    let i = rs_op_reg_index(regname);
+    if i == -1 {
+        return false;
+    }
+    let reg = nvim_get_y_regs_ptr(i);
+    !nvim_yankreg_is_empty(reg)
+}
+
+/// Get the total character count across all lines in a register.
+///
+/// # Safety
+///
+/// Accesses global register state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_register_char_count(regname: c_int) -> usize {
+    let i = rs_op_reg_index(regname);
+    if i == -1 {
+        return 0;
+    }
+    let reg = nvim_get_y_regs_ptr(i);
+    if reg.0.is_null() || !nvim_yankreg_has_array(reg) {
+        return 0;
+    }
+
+    let y_size = nvim_yankreg_get_size(reg);
+    let mut total: usize = 0;
+    for i in 0..y_size {
+        total += nvim_yankreg_get_line_size(reg, i);
+    }
+    total
+}
