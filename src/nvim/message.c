@@ -536,6 +536,17 @@ void nvim_set_msg_scroll(int val) { msg_scroll = (val != 0); }
 void nvim_set_msg_hist_off(int val) { msg_hist_off = (val != 0); }
 int nvim_get_keep_msg_more(void) { return keep_msg_more ? 1 : 0; }
 
+// Phase 429: Message grid state accessors
+int nvim_get_msg_grid_pos(void) { return msg_grid_pos; }
+void nvim_set_msg_grid_pos(int pos) { msg_grid_pos = pos; }
+int nvim_get_msg_scrolled_at_flush(void) { return msg_scrolled_at_flush; }
+void nvim_set_msg_scrolled_at_flush(int val) { msg_scrolled_at_flush = val; }
+int nvim_msg_grid_has_chars(void) { return msg_grid.chars != NULL ? 1 : 0; }
+int nvim_msg_grid_is_throttled(void) { return msg_grid.throttled ? 1 : 0; }
+void nvim_msg_grid_set_throttled(int val) { msg_grid.throttled = (val != 0); }
+int nvim_msg_grid_get_rows(void) { return msg_grid.rows; }
+int nvim_msg_grid_get_cols(void) { return msg_grid.cols; }
+
 // C accessors for attribute functions (used by Rust)
 int nvim_syn_id2attr(int hl_id) { return syn_id2attr(hl_id); }
 int nvim_hl_combine_attr(int a, int b) { return hl_combine_attr(a, b); }
