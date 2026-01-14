@@ -464,6 +464,62 @@ bool nvim_is_y_previous(const yankreg_T *reg)
   return reg == y_previous;
 }
 
+// Phase 402 accessors: Special register support
+
+/// Get current buffer's filename (b_fname).
+const char *nvim_get_curbuf_fname(void)
+{
+  return curbuf->b_fname;
+}
+
+/// Wrapper for getaltfname().
+char *nvim_get_altfname(bool errmsg)
+{
+  return getaltfname(errmsg);
+}
+
+/// Get last command line.
+const char *nvim_get_last_cmdline(void)
+{
+  return last_cmdline;
+}
+
+/// Get last search pattern.
+const char *nvim_get_last_search_pat(void)
+{
+  return last_search_pat();
+}
+
+/// Get last inserted text (allocated copy).
+char *nvim_get_last_insert_save(void)
+{
+  return get_last_insert_save();
+}
+
+/// Wrapper for check_fname().
+void nvim_check_fname(void)
+{
+  check_fname();
+}
+
+/// Emit "No last command line" error.
+void nvim_emsg_nolastcmd(void)
+{
+  emsg(_(e_nolastcmd));
+}
+
+/// Emit "No previous regular expression" error.
+void nvim_emsg_noprevre(void)
+{
+  emsg(_(e_noprevre));
+}
+
+/// Emit "No inserted text" error.
+void nvim_emsg_noinstext(void)
+{
+  emsg(_(e_noinstext));
+}
+
 /// @return the index of the register "" points to.
 int get_unname_register(void)
 {

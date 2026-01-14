@@ -2127,3 +2127,285 @@ pub unsafe extern "C" fn rs_find_most_recent_register(start_idx: c_int, end_idx:
     }
     best_idx
 }
+
+// =============================================================================
+// Phase 402: Special Register Reading
+// =============================================================================
+
+/// Special register type constants for categorization.
+pub const SPEC_REG_NONE: c_int = 0;
+pub const SPEC_REG_FILENAME: c_int = 1; // %
+pub const SPEC_REG_ALTFILE: c_int = 2; // #
+pub const SPEC_REG_EXPRESSION: c_int = 3; // =
+pub const SPEC_REG_CMDLINE: c_int = 4; // :
+pub const SPEC_REG_SEARCH: c_int = 5; // /
+pub const SPEC_REG_INSERTED: c_int = 6; // .
+pub const SPEC_REG_FILENAME_CURSOR: c_int = 7; // Ctrl-F
+pub const SPEC_REG_PATH_CURSOR: c_int = 8; // Ctrl-P
+pub const SPEC_REG_WORD_CURSOR: c_int = 9; // Ctrl-W
+pub const SPEC_REG_WORD_ALL_CURSOR: c_int = 10; // Ctrl-A
+pub const SPEC_REG_LINE_CURSOR: c_int = 11; // Ctrl-L
+pub const SPEC_REG_BLACKHOLE: c_int = 12; // _
+
+/// Classify a special register by name.
+///
+/// Returns the special register type constant, or SPEC_REG_NONE if
+/// the register is not a special register.
+#[no_mangle]
+pub extern "C" fn rs_classify_special_register(regname: c_int) -> c_int {
+    match regname {
+        r if r == c_int::from(b'%') => SPEC_REG_FILENAME,
+        r if r == c_int::from(b'#') => SPEC_REG_ALTFILE,
+        r if r == c_int::from(b'=') => SPEC_REG_EXPRESSION,
+        r if r == c_int::from(b':') => SPEC_REG_CMDLINE,
+        r if r == c_int::from(b'/') => SPEC_REG_SEARCH,
+        r if r == c_int::from(b'.') => SPEC_REG_INSERTED,
+        r if r == CTRL_F => SPEC_REG_FILENAME_CURSOR,
+        r if r == CTRL_P => SPEC_REG_PATH_CURSOR,
+        r if r == CTRL_W => SPEC_REG_WORD_CURSOR,
+        r if r == CTRL_A => SPEC_REG_WORD_ALL_CURSOR,
+        12 => SPEC_REG_LINE_CURSOR, // Ctrl-L
+        r if r == c_int::from(b'_') => SPEC_REG_BLACKHOLE,
+        _ => SPEC_REG_NONE,
+    }
+}
+
+/// Check if a register is a special register.
+///
+/// Special registers have their values computed on access rather than
+/// stored in the y_regs array.
+#[no_mangle]
+pub extern "C" fn rs_is_special_register(regname: c_int) -> bool {
+    rs_classify_special_register(regname) != SPEC_REG_NONE
+}
+
+/// Check if a special register requires errmsg=true to return a value.
+///
+/// Some special registers (Ctrl-F, Ctrl-P, Ctrl-W, Ctrl-A, Ctrl-L) only
+/// return values when errmsg is true, because they need to be able to
+/// report errors.
+#[no_mangle]
+pub extern "C" fn rs_special_register_requires_errmsg(regname: c_int) -> bool {
+    matches!(
+        rs_classify_special_register(regname),
+        SPEC_REG_FILENAME_CURSOR
+            | SPEC_REG_PATH_CURSOR
+            | SPEC_REG_WORD_CURSOR
+            | SPEC_REG_WORD_ALL_CURSOR
+            | SPEC_REG_LINE_CURSOR
+    )
+}
+
+/// Check if a special register's value should be marked as allocated.
+///
+/// Some special registers return newly allocated strings that the caller
+/// must free, while others return pointers to existing data.
+#[no_mangle]
+pub extern "C" fn rs_special_register_allocates(regname: c_int) -> bool {
+    matches!(
+        rs_classify_special_register(regname),
+        SPEC_REG_EXPRESSION
+            | SPEC_REG_INSERTED
+            | SPEC_REG_FILENAME_CURSOR
+            | SPEC_REG_PATH_CURSOR
+            | SPEC_REG_WORD_CURSOR
+            | SPEC_REG_WORD_ALL_CURSOR
+    )
+}
+
+/// Check if a special register always returns empty string.
+///
+/// The black hole register (_) always returns an empty string.
+#[no_mangle]
+pub extern "C" fn rs_special_register_is_always_empty(regname: c_int) -> bool {
+    rs_classify_special_register(regname) == SPEC_REG_BLACKHOLE
+}
+
+/// Check if a register is a "cursor" special register.
+///
+/// Cursor registers get their value from the text under or around the cursor.
+#[no_mangle]
+pub extern "C" fn rs_is_cursor_register(regname: c_int) -> bool {
+    matches!(
+        rs_classify_special_register(regname),
+        SPEC_REG_FILENAME_CURSOR
+            | SPEC_REG_PATH_CURSOR
+            | SPEC_REG_WORD_CURSOR
+            | SPEC_REG_WORD_ALL_CURSOR
+            | SPEC_REG_LINE_CURSOR
+    )
+}
+
+/// Get a description string for a special register type.
+///
+/// Returns a pointer to a static string describing the register type.
+/// Returns NULL for unknown types.
+#[no_mangle]
+pub extern "C" fn rs_special_register_description(reg_type: c_int) -> *const c_char {
+    static DESC_FILENAME: &[u8] = b"file name\0";
+    static DESC_ALTFILE: &[u8] = b"alternate file name\0";
+    static DESC_EXPRESSION: &[u8] = b"expression result\0";
+    static DESC_CMDLINE: &[u8] = b"last command line\0";
+    static DESC_SEARCH: &[u8] = b"last search pattern\0";
+    static DESC_INSERTED: &[u8] = b"last inserted text\0";
+    static DESC_FILENAME_CURSOR: &[u8] = b"filename under cursor\0";
+    static DESC_PATH_CURSOR: &[u8] = b"path under cursor\0";
+    static DESC_WORD_CURSOR: &[u8] = b"word under cursor\0";
+    static DESC_WORD_ALL_CURSOR: &[u8] = b"WORD under cursor\0";
+    static DESC_LINE_CURSOR: &[u8] = b"line under cursor\0";
+    static DESC_BLACKHOLE: &[u8] = b"black hole\0";
+
+    match reg_type {
+        SPEC_REG_FILENAME => DESC_FILENAME.as_ptr() as *const c_char,
+        SPEC_REG_ALTFILE => DESC_ALTFILE.as_ptr() as *const c_char,
+        SPEC_REG_EXPRESSION => DESC_EXPRESSION.as_ptr() as *const c_char,
+        SPEC_REG_CMDLINE => DESC_CMDLINE.as_ptr() as *const c_char,
+        SPEC_REG_SEARCH => DESC_SEARCH.as_ptr() as *const c_char,
+        SPEC_REG_INSERTED => DESC_INSERTED.as_ptr() as *const c_char,
+        SPEC_REG_FILENAME_CURSOR => DESC_FILENAME_CURSOR.as_ptr() as *const c_char,
+        SPEC_REG_PATH_CURSOR => DESC_PATH_CURSOR.as_ptr() as *const c_char,
+        SPEC_REG_WORD_CURSOR => DESC_WORD_CURSOR.as_ptr() as *const c_char,
+        SPEC_REG_WORD_ALL_CURSOR => DESC_WORD_ALL_CURSOR.as_ptr() as *const c_char,
+        SPEC_REG_LINE_CURSOR => DESC_LINE_CURSOR.as_ptr() as *const c_char,
+        SPEC_REG_BLACKHOLE => DESC_BLACKHOLE.as_ptr() as *const c_char,
+        _ => std::ptr::null(),
+    }
+}
+
+// FFI declarations for special register accessors
+extern "C" {
+    fn nvim_get_curbuf_fname() -> *const c_char;
+    fn nvim_get_altfname(errmsg: bool) -> *mut c_char;
+    fn nvim_get_last_cmdline() -> *const c_char;
+    fn nvim_get_last_search_pat() -> *const c_char;
+    fn nvim_get_last_insert_save() -> *mut c_char;
+    fn nvim_check_fname();
+    fn nvim_emsg_nolastcmd();
+    fn nvim_emsg_noprevre();
+    fn nvim_emsg_noinstext();
+}
+
+/// Result structure for get_spec_reg.
+#[repr(C)]
+pub struct SpecRegResult {
+    /// Pointer to the result string, or NULL if not available.
+    pub value: *mut c_char,
+    /// True if value was allocated and must be freed by caller.
+    pub allocated: bool,
+    /// True if the register name was recognized as a special register.
+    pub is_special: bool,
+}
+
+impl Default for SpecRegResult {
+    fn default() -> Self {
+        Self {
+            value: std::ptr::null_mut(),
+            allocated: false,
+            is_special: false,
+        }
+    }
+}
+
+/// Get the value of a special register (partial implementation).
+///
+/// This handles registers that can be retrieved without complex dependencies:
+/// - '%': filename (if available)
+/// - '=': expression result
+/// - ':': last command line
+/// - '/': last search pattern
+/// - '.': last inserted text
+/// - '_': black hole (empty string)
+///
+/// For cursor-based registers (Ctrl-F, Ctrl-P, Ctrl-W, Ctrl-A, Ctrl-L),
+/// this function returns is_special=true but value=NULL, indicating the
+/// caller should use the C implementation.
+///
+/// # Arguments
+///
+/// * `regname` - Register name character.
+/// * `errmsg` - Whether to emit error messages for missing values.
+///
+/// # Returns
+///
+/// A SpecRegResult structure with the value and metadata.
+///
+/// # Safety
+///
+/// Accesses global state via C FFI. Caller must free value if allocated=true.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_spec_reg(regname: c_int, errmsg: bool) -> SpecRegResult {
+    let mut result = SpecRegResult::default();
+
+    let reg_type = rs_classify_special_register(regname);
+    if reg_type == SPEC_REG_NONE {
+        return result;
+    }
+
+    result.is_special = true;
+
+    match reg_type {
+        SPEC_REG_FILENAME => {
+            if errmsg {
+                nvim_check_fname();
+            }
+            result.value = nvim_get_curbuf_fname() as *mut c_char;
+            result.allocated = false;
+        }
+        SPEC_REG_ALTFILE => {
+            result.value = nvim_get_altfname(errmsg);
+            result.allocated = false;
+        }
+        SPEC_REG_EXPRESSION => {
+            result.value = rs_get_expr_line();
+            result.allocated = true;
+        }
+        SPEC_REG_CMDLINE => {
+            let cmdline = nvim_get_last_cmdline();
+            if cmdline.is_null() && errmsg {
+                nvim_emsg_nolastcmd();
+            }
+            result.value = cmdline as *mut c_char;
+            result.allocated = false;
+        }
+        SPEC_REG_SEARCH => {
+            let pat = nvim_get_last_search_pat();
+            if pat.is_null() && errmsg {
+                nvim_emsg_noprevre();
+            }
+            result.value = pat as *mut c_char;
+            result.allocated = false;
+        }
+        SPEC_REG_INSERTED => {
+            result.value = nvim_get_last_insert_save();
+            result.allocated = true;
+            if result.value.is_null() && errmsg {
+                nvim_emsg_noinstext();
+            }
+        }
+        SPEC_REG_BLACKHOLE => {
+            // Black hole register always returns empty string
+            // We return a pointer to a static empty string
+            static EMPTY: &[u8] = b"\0";
+            result.value = EMPTY.as_ptr() as *mut c_char;
+            result.allocated = false;
+        }
+        // Cursor-based registers require complex dependencies
+        // Return is_special=true but let C handle the actual retrieval
+        SPEC_REG_FILENAME_CURSOR
+        | SPEC_REG_PATH_CURSOR
+        | SPEC_REG_WORD_CURSOR
+        | SPEC_REG_WORD_ALL_CURSOR
+        | SPEC_REG_LINE_CURSOR => {
+            if !errmsg {
+                // These registers require errmsg=true to return a value
+                result.is_special = false;
+            }
+            // value remains NULL, caller should use C implementation
+        }
+        _ => {
+            result.is_special = false;
+        }
+    }
+
+    result
+}
