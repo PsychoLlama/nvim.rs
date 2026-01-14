@@ -131,6 +131,8 @@ extern win_T *rs_win_horz_neighbor(tabpage_T *tp, win_T *wp, int left, int count
 extern void rs_frame_append(frame_T *after, frame_T *frp);
 extern void rs_frame_insert(frame_T *before, frame_T *frp);
 extern void rs_frame_remove(frame_T *frp);
+extern void rs_win_append(win_T *after, win_T *wp, tabpage_T *tp);
+extern void rs_win_remove(win_T *wp, tabpage_T *tp);
 
 // Accessor functions for Rust opaque handle pattern.
 // These provide safe access to win_T fields from Rust code.
@@ -279,6 +281,56 @@ win_T *nvim_win_get_next(win_T *wp)
 win_T *nvim_win_get_prev(win_T *wp)
 {
   return wp->w_prev;
+}
+
+/// Set the w_next field of a window (accessor for Rust).
+void nvim_win_set_next(win_T *wp, win_T *next)
+{
+  wp->w_next = next;
+}
+
+/// Set the w_prev field of a window (accessor for Rust).
+void nvim_win_set_prev(win_T *wp, win_T *prev)
+{
+  wp->w_prev = prev;
+}
+
+/// Set the firstwin global variable (accessor for Rust).
+/// Also syncs curtab->tp_firstwin if curtab is not NULL.
+void nvim_set_firstwin(win_T *wp)
+{
+  firstwin = wp;
+  if (curtab != NULL) {
+    curtab->tp_firstwin = wp;
+  }
+}
+
+/// Set the lastwin global variable (accessor for Rust).
+/// Also syncs curtab->tp_lastwin if curtab is not NULL.
+void nvim_set_lastwin(win_T *wp)
+{
+  lastwin = wp;
+  if (curtab != NULL) {
+    curtab->tp_lastwin = wp;
+  }
+}
+
+/// Set the tp_firstwin field of a tabpage (accessor for Rust).
+void nvim_tabpage_set_firstwin(tabpage_T *tp, win_T *wp)
+{
+  tp->tp_firstwin = wp;
+}
+
+/// Set the tp_lastwin field of a tabpage (accessor for Rust).
+void nvim_tabpage_set_lastwin(tabpage_T *tp, win_T *wp)
+{
+  tp->tp_lastwin = wp;
+}
+
+/// Get the tp_lastwin field from a tabpage (accessor for Rust).
+win_T *nvim_tabpage_get_lastwin(tabpage_T *tp)
+{
+  return tp->tp_lastwin;
 }
 
 // Global state accessors for Rust.
@@ -6540,25 +6592,7 @@ void win_append(win_T *after, win_T *wp, tabpage_T *tp)
   FUNC_ATTR_NONNULL_ARG(2)
 {
   assert(tp == NULL || tp != curtab);
-
-  win_T **first = tp == NULL ? &firstwin : &tp->tp_firstwin;
-  win_T **last = tp == NULL ? &lastwin : &tp->tp_lastwin;
-
-  // after NULL is in front of the first
-  win_T *before = after == NULL ? *first : after->w_next;
-
-  wp->w_next = before;
-  wp->w_prev = after;
-  if (after == NULL) {
-    *first = wp;
-  } else {
-    after->w_next = wp;
-  }
-  if (before == NULL) {
-    *last = wp;
-  } else {
-    before->w_prev = wp;
-  }
+  rs_win_append(after, wp, tp);
 }
 
 /// Remove a window from the window list.
@@ -6568,21 +6602,7 @@ void win_remove(win_T *wp, tabpage_T *tp)
   FUNC_ATTR_NONNULL_ARG(1)
 {
   assert(tp == NULL || tp != curtab);
-
-  if (wp->w_prev != NULL) {
-    wp->w_prev->w_next = wp->w_next;
-  } else if (tp == NULL) {
-    firstwin = curtab->tp_firstwin = wp->w_next;
-  } else {
-    tp->tp_firstwin = wp->w_next;
-  }
-  if (wp->w_next != NULL) {
-    wp->w_next->w_prev = wp->w_prev;
-  } else if (tp == NULL) {
-    lastwin = curtab->tp_lastwin = wp->w_prev;
-  } else {
-    tp->tp_lastwin = wp->w_prev;
-  }
+  rs_win_remove(wp, tp);
 }
 
 // Append frame "frp" in a frame list after frame "after".
