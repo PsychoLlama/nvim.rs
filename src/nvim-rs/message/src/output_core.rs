@@ -300,6 +300,106 @@ const HLF_T: c_int = 25; // From highlight.h: HLF_T = 25
 const HLF_8: c_int = 38; // From highlight.h: HLF_8 = 38
 
 // ============================================================================
+// Printf-Style Message Constants
+// ============================================================================
+
+/// IOSIZE - Buffer size for sprintf, I/O, etc.
+///
+/// This matches the C definition in globals.h.
+pub const IOSIZE: c_int = 1025;
+
+/// Maximum number of format arguments typically used in messages.
+pub const MAX_MSG_ARGS: c_int = 20;
+
+// ============================================================================
+// Printf-Style Message Helpers
+// ============================================================================
+
+/// Calculate the buffer size needed for a printf-style message.
+///
+/// Returns IOSIZE as that's the maximum size used for message formatting.
+#[no_mangle]
+pub const extern "C" fn rs_msg_printf_bufsize() -> c_int {
+    IOSIZE
+}
+
+/// Check if a buffer size is sufficient for printf-style messages.
+///
+/// Returns true if size >= IOSIZE.
+#[no_mangle]
+pub const extern "C" fn rs_msg_bufsize_ok(size: c_int) -> c_int {
+    (size >= IOSIZE) as c_int
+}
+
+/// Check if character is a printf format specifier start.
+///
+/// Returns true for '%'.
+#[no_mangle]
+pub const extern "C" fn rs_is_format_char(c: c_int) -> c_int {
+    (c == b'%' as c_int) as c_int
+}
+
+/// Check if character is a printf conversion specifier.
+///
+/// Returns true for d, i, o, u, x, X, e, E, f, F, g, G, a, A, c, s, p, n, %.
+#[no_mangle]
+pub const extern "C" fn rs_is_printf_spec(c: c_int) -> c_int {
+    // Check against character codes directly
+    (c == b'd' as c_int
+        || c == b'i' as c_int
+        || c == b'o' as c_int
+        || c == b'u' as c_int
+        || c == b'x' as c_int
+        || c == b'X' as c_int
+        || c == b'e' as c_int
+        || c == b'E' as c_int
+        || c == b'f' as c_int
+        || c == b'F' as c_int
+        || c == b'g' as c_int
+        || c == b'G' as c_int
+        || c == b'a' as c_int
+        || c == b'A' as c_int
+        || c == b'c' as c_int
+        || c == b's' as c_int
+        || c == b'p' as c_int
+        || c == b'n' as c_int
+        || c == b'%' as c_int) as c_int
+}
+
+/// Check if character is a printf flag.
+///
+/// Returns true for -, +, space, #, 0.
+#[no_mangle]
+pub const extern "C" fn rs_is_printf_flag(c: c_int) -> c_int {
+    (c == b'-' as c_int
+        || c == b'+' as c_int
+        || c == b' ' as c_int
+        || c == b'#' as c_int
+        || c == b'0' as c_int) as c_int
+}
+
+/// Check if character could be part of a printf format field width or precision.
+///
+/// Returns true for digits and '.'.
+#[no_mangle]
+pub const extern "C" fn rs_is_printf_width(c: c_int) -> c_int {
+    ((c >= b'0' as c_int && c <= b'9' as c_int) || c == b'.' as c_int) as c_int
+}
+
+/// Check if character is a printf length modifier.
+///
+/// Returns true for h, l, L, z, j, t.
+#[no_mangle]
+pub const extern "C" fn rs_is_printf_length(c: c_int) -> c_int {
+    (c == b'h' as c_int
+        || c == b'l' as c_int
+        || c == b'L' as c_int
+        || c == b'z' as c_int
+        || c == b'j' as c_int
+        || c == b't' as c_int) as c_int
+}
+
+// ============================================================================
 // Unit Tests
 // ============================================================================
 
@@ -326,5 +426,49 @@ mod tests {
 
         assert_eq!(k_second(c), second);
         assert_eq!(k_third(c), third);
+    }
+
+    #[test]
+    fn test_iosize() {
+        assert_eq!(IOSIZE, 1025);
+        assert_eq!(rs_msg_printf_bufsize(), 1025);
+    }
+
+    #[test]
+    fn test_bufsize_ok() {
+        assert_eq!(rs_msg_bufsize_ok(1025), 1);
+        assert_eq!(rs_msg_bufsize_ok(2000), 1);
+        assert_eq!(rs_msg_bufsize_ok(1024), 0);
+        assert_eq!(rs_msg_bufsize_ok(0), 0);
+    }
+
+    #[test]
+    fn test_printf_helpers() {
+        // Format char
+        assert_eq!(rs_is_format_char(c_int::from(b'%')), 1);
+        assert_eq!(rs_is_format_char(c_int::from(b'd')), 0);
+
+        // Printf spec
+        assert_eq!(rs_is_printf_spec(c_int::from(b'd')), 1);
+        assert_eq!(rs_is_printf_spec(c_int::from(b's')), 1);
+        assert_eq!(rs_is_printf_spec(c_int::from(b'X')), 1);
+        assert_eq!(rs_is_printf_spec(c_int::from(b'a')), 1); // hexfloat
+        assert_eq!(rs_is_printf_spec(c_int::from(b'z')), 0); // not a conversion spec
+
+        // Printf flag
+        assert_eq!(rs_is_printf_flag(c_int::from(b'-')), 1);
+        assert_eq!(rs_is_printf_flag(c_int::from(b'+')), 1);
+        assert_eq!(rs_is_printf_flag(c_int::from(b'd')), 0);
+
+        // Printf width
+        assert_eq!(rs_is_printf_width(c_int::from(b'0')), 1);
+        assert_eq!(rs_is_printf_width(c_int::from(b'9')), 1);
+        assert_eq!(rs_is_printf_width(c_int::from(b'.')), 1);
+        assert_eq!(rs_is_printf_width(c_int::from(b'd')), 0);
+
+        // Printf length
+        assert_eq!(rs_is_printf_length(c_int::from(b'l')), 1);
+        assert_eq!(rs_is_printf_length(c_int::from(b'h')), 1);
+        assert_eq!(rs_is_printf_length(c_int::from(b'd')), 0);
     }
 }
