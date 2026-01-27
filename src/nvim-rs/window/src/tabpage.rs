@@ -344,6 +344,212 @@ pub extern "C" fn rs_tabpage_has_lastused() -> c_int {
     c_int::from(has_lastused_tabpage_impl())
 }
 
+// =============================================================================
+// Tabpage Navigation Helpers
+// =============================================================================
+
+/// Find target tabpage for goto_tabpage with count n.
+///
+/// Returns the target tabpage based on count:
+/// - n == 0: next tabpage (wrap around)
+/// - n < 0: previous n times (wrap around)
+/// - n > 0: tabpage at position n
+/// - n == 9999: last tabpage
+fn goto_tabpage_find_target_impl(n: c_int) -> TabpageHandle {
+    unsafe {
+        let first = nvim_get_first_tabpage();
+        let curtab = nvim_get_curtab();
+
+        // Only one tabpage
+        if first.is_null() || nvim_tabpage_get_next(first).is_null() {
+            return TabpageHandle::null();
+        }
+
+        if n == 0 {
+            // No count, go to next tab page, wrap around end
+            let next = nvim_tabpage_get_next(curtab);
+            if next.is_null() {
+                return first;
+            }
+            return next;
+        }
+
+        if n < 0 {
+            // Go to previous tab page, wrap around end. N times.
+            let mut ttp = curtab;
+            for _ in n..0 {
+                // Find the tabpage before ttp
+                let mut tp = first;
+                while !tp.is_null() && nvim_tabpage_get_next(tp) != ttp {
+                    tp = nvim_tabpage_get_next(tp);
+                }
+                if tp.is_null() {
+                    // ttp was first, wrap to last
+                    tp = first;
+                    while !nvim_tabpage_get_next(tp).is_null() {
+                        tp = nvim_tabpage_get_next(tp);
+                    }
+                }
+                ttp = tp;
+            }
+            return ttp;
+        }
+
+        if n == 9999 {
+            // Go to last tabpage
+            let mut tp = first;
+            while !nvim_tabpage_get_next(tp).is_null() {
+                tp = nvim_tabpage_get_next(tp);
+            }
+            return tp;
+        }
+
+        // Go to tabpage at position n
+        find_tabpage_impl(n)
+    }
+}
+
+/// Check if tabpage move is valid (not moving to same position).
+fn tabpage_move_is_valid_impl(nr: c_int) -> bool {
+    unsafe {
+        let first = nvim_get_first_tabpage();
+        let curtab = nvim_get_curtab();
+
+        // Only one tabpage - can't move
+        if first.is_null() || nvim_tabpage_get_next(first).is_null() {
+            return false;
+        }
+
+        // Find target position
+        let mut n = 1;
+        let mut tp = first;
+        while !tp.is_null() && nvim_tabpage_get_next(tp) != TabpageHandle::null() && n < nr {
+            tp = nvim_tabpage_get_next(tp);
+            n += 1;
+        }
+
+        // Can't move if target is curtab or position right before curtab
+        if tp == curtab {
+            return false;
+        }
+        if nr > 0 && !nvim_tabpage_get_next(tp).is_null() && nvim_tabpage_get_next(tp) == curtab {
+            return false;
+        }
+
+        true
+    }
+}
+
+/// Get the position where curtab would move to.
+fn tabpage_move_get_target_impl(nr: c_int) -> TabpageHandle {
+    unsafe {
+        let first = nvim_get_first_tabpage();
+
+        if first.is_null() {
+            return TabpageHandle::null();
+        }
+
+        let mut n = 1;
+        let mut tp = first;
+        while !tp.is_null() && !nvim_tabpage_get_next(tp).is_null() && n < nr {
+            tp = nvim_tabpage_get_next(tp);
+            n += 1;
+        }
+        tp
+    }
+}
+
+// =============================================================================
+// Tabpage Creation Helpers
+// =============================================================================
+
+/// Check if a new tabpage can be created.
+///
+/// Returns error code:
+/// - 0: can create
+/// - 1: in command-line window
+fn can_create_tabpage_impl() -> c_int {
+    // The actual cmdwin check needs to be done in C
+    // This is a placeholder for the Rust helper structure
+    0
+}
+
+/// Determine insert position for new tabpage.
+///
+/// after == 0: after current
+/// after == 1: at start (becomes first)
+/// after > 1: after tabpage N
+fn new_tabpage_insert_position_impl(after: c_int) -> TabpageHandle {
+    unsafe {
+        let curtab = nvim_get_curtab();
+        let first = nvim_get_first_tabpage();
+
+        if after == 1 {
+            // Insert at start - return null to indicate first position
+            return TabpageHandle::null();
+        }
+
+        if after == 0 {
+            // Insert after current tabpage
+            return curtab;
+        }
+
+        // Insert after tabpage N
+        let mut tp = first;
+        let mut n = 1;
+        while !tp.is_null() && n < after {
+            if nvim_tabpage_get_next(tp).is_null() {
+                break;
+            }
+            tp = nvim_tabpage_get_next(tp);
+            n += 1;
+        }
+        tp
+    }
+}
+
+// =============================================================================
+// Additional FFI Exports
+// =============================================================================
+
+/// FFI: Find target tabpage for goto_tabpage.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_tabpage_goto_target(n: c_int) -> TabpageHandle {
+    goto_tabpage_find_target_impl(n)
+}
+
+/// FFI: Check if tabpage move is valid.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_tabpage_move_is_valid(nr: c_int) -> c_int {
+    c_int::from(tabpage_move_is_valid_impl(nr))
+}
+
+/// FFI: Get target position for tabpage move.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_tabpage_move_target(nr: c_int) -> TabpageHandle {
+    tabpage_move_get_target_impl(nr)
+}
+
+/// FFI: Check if tabpage can be created.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_tabpage_can_create() -> c_int {
+    can_create_tabpage_impl()
+}
+
+/// FFI: Get insert position for new tabpage.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_tabpage_insert_position(after: c_int) -> TabpageHandle {
+    new_tabpage_insert_position_impl(after)
+}
+
+// Note: The following FFI exports are in lib.rs:
+// - rs_tabpage_index - get tabpage index
+// - rs_win_find_tabpage - find tabpage containing window
+// - rs_valid_tabpage - validate tabpage
+// - rs_valid_tabpage_win - validate tabpage has valid window
+// - rs_one_tabpage - check if only one tabpage
+// - rs_find_tabpage - find tabpage by index
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -360,5 +566,17 @@ mod tests {
         let null_tp = TabpageHandle::null();
         assert_eq!(count_windows_in_tabpage_impl(null_tp), 0);
         assert_eq!(count_nonfloating_in_tabpage_impl(null_tp), 0);
+    }
+
+    #[test]
+    fn test_null_window_find_tabpage() {
+        let null_win = WinHandle::null();
+        assert!(win_find_tabpage_impl(null_win).is_null());
+    }
+
+    #[test]
+    fn test_can_create_tabpage() {
+        // Basic check - cmdwin is checked in C
+        assert_eq!(can_create_tabpage_impl(), 0);
     }
 }
