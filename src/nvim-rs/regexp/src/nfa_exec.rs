@@ -649,6 +649,208 @@ pub unsafe extern "C" fn rs_state_in_list_with_subs(
 }
 
 // =============================================================================
+// Submatch and PIM Comparison
+// =============================================================================
+
+/// Compare two submatches for equality.
+///
+/// Returns true if sub1 and sub2 have the same start positions.
+/// When using back-references, also checks the end position.
+///
+/// # Safety
+/// Both pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sub_equal(
+    sub1: *const crate::nfa_states::RegSub,
+    sub2: *const crate::nfa_states::RegSub,
+) -> c_int {
+    if sub1.is_null() || sub2.is_null() {
+        return c_int::from(sub1.is_null() && sub2.is_null());
+    }
+
+    let in_use1 = (*sub1).in_use as usize;
+    let in_use2 = (*sub2).in_use as usize;
+    let todo = in_use1.max(in_use2);
+
+    let is_multi = nvim_rex_is_multi() != 0;
+    let has_backref = nvim_rex_get_nfa_has_backref() != 0;
+
+    for i in 0..todo {
+        if is_multi {
+            // Multi-line: compare line/col positions
+            let s1 = if i < in_use1 {
+                (*sub1).list.multi[i].start_lnum
+            } else {
+                -1
+            };
+            let s2 = if i < in_use2 {
+                (*sub2).list.multi[i].start_lnum
+            } else {
+                -1
+            };
+
+            if s1 != s2 {
+                return 0;
+            }
+            if s1 != -1 && (*sub1).list.multi[i].start_col != (*sub2).list.multi[i].start_col {
+                return 0;
+            }
+
+            // With backreferences, also check end positions
+            if has_backref {
+                let e1 = if i < in_use1 {
+                    (*sub1).list.multi[i].end_lnum
+                } else {
+                    -1
+                };
+                let e2 = if i < in_use2 {
+                    (*sub2).list.multi[i].end_lnum
+                } else {
+                    -1
+                };
+
+                if e1 != e2 {
+                    return 0;
+                }
+                if e1 != -1 && (*sub1).list.multi[i].end_col != (*sub2).list.multi[i].end_col {
+                    return 0;
+                }
+            }
+        } else {
+            // Single-line: compare pointers
+            let sp1 = if i < in_use1 {
+                (*sub1).list.line[i].start
+            } else {
+                ptr::null()
+            };
+            let sp2 = if i < in_use2 {
+                (*sub2).list.line[i].start
+            } else {
+                ptr::null()
+            };
+
+            if sp1 != sp2 {
+                return 0;
+            }
+
+            // With backreferences, also check end positions
+            if has_backref {
+                let ep1 = if i < in_use1 {
+                    (*sub1).list.line[i].end
+                } else {
+                    ptr::null()
+                };
+                let ep2 = if i < in_use2 {
+                    (*sub2).list.line[i].end
+                } else {
+                    ptr::null()
+                };
+
+                if ep1 != ep2 {
+                    return 0;
+                }
+            }
+        }
+    }
+
+    1
+}
+
+/// Compare two PIMs (Postponed Invisible Match) for equality.
+///
+/// Returns true if one and two are equal. That includes when both are not set.
+///
+/// # Safety
+/// Pointers may be null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pim_equal(one: *const NfaPim, two: *const NfaPim) -> c_int {
+    let one_unused = one.is_null() || (*one).result == NFA_PIM_UNUSED;
+    let two_unused = two.is_null() || (*two).result == NFA_PIM_UNUSED;
+
+    // Both unused = equal
+    if one_unused {
+        return c_int::from(two_unused);
+    }
+
+    // One used, one not = not equal
+    if two_unused {
+        return 0;
+    }
+
+    // Compare state ID
+    if (*one).state.is_null() || (*two).state.is_null() {
+        return c_int::from((*one).state.is_null() && (*two).state.is_null());
+    }
+    if (*(*one).state).id != (*(*two).state).id {
+        return 0;
+    }
+
+    // Compare position
+    if nvim_rex_is_multi() != 0 {
+        // Multi-line mode: compare line/col
+        c_int::from(
+            (*one).end.pos.lnum == (*two).end.pos.lnum && (*one).end.pos.col == (*two).end.pos.col,
+        )
+    } else {
+        // Single-line mode: compare pointers
+        c_int::from((*one).end.ptr == (*two).end.ptr)
+    }
+}
+
+/// Check if a state leads to NFA_MATCH without consuming input.
+///
+/// # Safety
+/// State must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_match_follows(state: *const NfaState, depth: c_int) -> c_int {
+    match_follows_impl(state, depth)
+}
+
+unsafe fn match_follows_impl(startstate: *const NfaState, depth: c_int) -> c_int {
+    use crate::nfa_states::*;
+
+    // Avoid too much recursion
+    if depth > 10 {
+        return 0;
+    }
+
+    let mut state = startstate;
+    while !state.is_null() {
+        let c = (*state).c;
+
+        match c {
+            NFA_MATCH => return 1,
+            NFA_SPLIT => {
+                if match_follows_impl((*state).out, depth + 1) != 0 {
+                    return 1;
+                }
+                state = (*state).out1;
+            }
+            NFA_EMPTY | NFA_NOPEN | NFA_NCLOSE | NFA_MOPEN | NFA_MCLOSE | NFA_BOL | NFA_BOF
+            | NFA_BOW | NFA_ZSTART | NFA_ZEND => {
+                state = (*state).out;
+            }
+            // MOPEN/MCLOSE with index
+            c if (NFA_MOPEN..=NFA_MOPEN + 9).contains(&c) => {
+                state = (*state).out;
+            }
+            c if (NFA_MCLOSE..=NFA_MCLOSE + 9).contains(&c) => {
+                state = (*state).out;
+            }
+            // ZOPEN/ZCLOSE
+            c if (NFA_ZOPEN..=NFA_ZOPEN + 9).contains(&c) => {
+                state = (*state).out;
+            }
+            c if (NFA_ZCLOSE..=NFA_ZCLOSE + 9).contains(&c) => {
+                state = (*state).out;
+            }
+            _ => return 0,
+        }
+    }
+    0
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

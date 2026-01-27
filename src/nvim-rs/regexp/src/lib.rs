@@ -101,7 +101,10 @@ pub use nfa_compile::{
     rs_nfa_get_regstart, rs_nfa_postprocess, rs_patch, rs_state_allocator_count,
     rs_state_allocator_free, rs_state_allocator_new, rs_state_allocator_reset,
 };
-pub use nfa_exec::{rs_addstate, rs_addstate_here};
+pub use nfa_exec::{
+    rs_addstate, rs_addstate_here, rs_match_follows, rs_next_list_id, rs_nfa_step, rs_pim_equal,
+    rs_state_in_list_with_subs, rs_sub_equal, rs_swap_lists,
+};
 pub use nfa_match::{
     rs_clear_subs, rs_copy_pim, rs_copy_subs, rs_init_thread, rs_is_match_state, rs_is_split_state,
     rs_list_has_match, rs_mark_state_in_list, rs_match_context_advance, rs_match_context_at_eol,
