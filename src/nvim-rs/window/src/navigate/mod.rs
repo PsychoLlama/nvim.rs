@@ -7,10 +7,13 @@
 //!
 //! - [`find`]: Window finding and lookup functions
 //! - [`movement`]: Window movement and cursor navigation
+//! - [`frame`]: Frame-based navigation helpers
 
 pub mod find;
+pub mod frame;
 pub mod movement;
 
 // Re-export common items
 pub use find::*;
+pub use frame::*;
 pub use movement::*;
