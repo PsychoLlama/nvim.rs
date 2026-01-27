@@ -52,6 +52,63 @@
 // Rust FFI declarations
 extern int rs_syntax_present(win_T *win);
 
+// Phase 541: Syntax state machine functions from Rust
+extern int rs_syn_current_lnum(void);
+extern int rs_syn_current_col(void);
+extern int rs_syn_is_finished(void);
+extern int rs_syn_is_state_valid(void);
+extern int rs_syn_state_len(void);
+extern int rs_syn_current_id(void);
+extern int rs_syn_current_trans_id(void);
+extern int rs_syn_current_attr(void);
+extern int rs_syn_current_flags(void);
+extern int rs_syn_keepend_level(void);
+extern int rs_syn_cur_foldlevel(void);
+extern void *rs_syn_get_state_item(int idx);
+
+// Phase 541: Pattern functions from Rust
+extern int rs_synpat_has_prog(const void *pat);
+extern int rs_synpat_has_contains(const void *pat);
+extern int rs_synpat_has_nextgroup(const void *pat);
+extern int rs_synpat_has_containedin(const void *pat);
+extern int rs_synpat_defines_fold(const void *pat);
+extern int rs_synpat_is_transparent(const void *pat);
+extern int rs_synpat_is_contained(const void *pat);
+extern int rs_synpat_has_keepend(const void *pat);
+extern int rs_synpat_get_type(const void *pat);
+extern int rs_synpat_get_syn_id(const void *pat);
+
+// Phase 541: Block and cluster functions from Rust
+extern int rs_synblock_has_patterns(const void *block);
+extern int rs_synblock_has_clusters(const void *block);
+extern int rs_synblock_has_folds(const void *block);
+extern int rs_synblock_has_keywords(const void *block);
+extern int rs_synblock_has_keywords_ic(const void *block);
+extern size_t rs_synblock_keyword_count(const void *block);
+extern size_t rs_synblock_keyword_count_ic(const void *block);
+extern int rs_syncluster_has_list(const void *cluster);
+
+// Phase 541: ID classification functions from Rust
+extern int rs_is_cluster_id(int16_t id);
+extern int rs_is_special_id(int16_t id);
+extern int rs_is_normal_id(int16_t id);
+extern int rs_get_cluster_index(int16_t id);
+extern int16_t rs_make_cluster_id(int16_t index);
+extern int rs_synid_type(int16_t id);
+
+// Phase 541: Match state functions from Rust
+extern int rs_syn_next_match_idx(void);
+extern int rs_syn_next_match_col(void);
+extern int rs_syn_has_next_match(void);
+
+// Phase 541: State item functions from Rust
+extern int rs_stateitem_is_keyword(const void *item);
+extern int rs_stateitem_get_id(const void *item);
+extern int rs_stateitem_get_trans_id(const void *item);
+extern int rs_stateitem_get_cchar(const void *item);
+extern int rs_stateitem_has_trans_cont(const void *item);
+extern int rs_stateitem_has_match(const void *item);
+
 static bool did_syntax_onoff = false;
 
 // different types of offsets that are possible
