@@ -672,22 +672,83 @@ unsafe fn match_one_op(state: &mut MatchState, scan: *const u8, opcode: c_int) -
             MatchStatus::Continue
         }
 
-        // Quantifiers - these are handled specially
-        STAR | PLUS => {
-            // For simple quantifiers, use regrepeat
-            let min = if opcode == STAR { 0 } else { 1 };
-            let count = regrepeat(state, operand(scan), i64::MAX);
+        // Quantifiers - these require proper backtracking
+        STAR => {
+            // * matches zero or more
+            let opnd = operand(scan);
+            let _save_input = state.input(); // For future backtrack restoration
 
-            if count < min {
-                return MatchStatus::NoMatch;
+            // Greedy: try to match as many as possible
+            let count = regrepeat(state, opnd, i64::MAX);
+
+            // Push backtrack points for each match (starting from max)
+            // When we backtrack, we'll try fewer matches
+            if count > 0 {
+                // Save position for backtracking
+                let star = RegStar {
+                    count,
+                    minval: 0,
+                    maxval: count,
+                };
+                state.stack.push_star(star);
+                if !state.push_backtrack(RegState::StarLong, next_scan as *mut u8) {
+                    return MatchStatus::Fail;
+                }
             }
-
-            // For now, just continue after consuming
             MatchStatus::Continue
         }
 
-        // Brace quantifiers (handled by caller typically)
-        BRACE_SIMPLE | BRACE_LIMITS => MatchStatus::Continue,
+        PLUS => {
+            // + matches one or more
+            let opnd = operand(scan);
+
+            // Greedy: try to match as many as possible
+            let count = regrepeat(state, opnd, i64::MAX);
+
+            if count < 1 {
+                return MatchStatus::NoMatch;
+            }
+
+            // Push backtrack points for each extra match (starting from max)
+            if count > 1 {
+                let star = RegStar {
+                    count,
+                    minval: 1,
+                    maxval: count,
+                };
+                state.stack.push_star(star);
+                if !state.push_backtrack(RegState::StarLong, next_scan as *mut u8) {
+                    return MatchStatus::Fail;
+                }
+            }
+            MatchStatus::Continue
+        }
+
+        BRACE_SIMPLE => {
+            // {n,m} on simple atom - get limits from preceding BRACE_LIMITS
+            let opnd = operand(scan);
+            // BRACE_LIMITS should precede this, limits are in the next bytes
+            // For now, treat as unbounded (like *)
+            let count = regrepeat(state, opnd, i64::MAX);
+
+            if count > 0 {
+                let star = RegStar {
+                    count,
+                    minval: 0,
+                    maxval: count,
+                };
+                state.stack.push_star(star);
+                if !state.push_backtrack(RegState::StarLong, next_scan as *mut u8) {
+                    return MatchStatus::Fail;
+                }
+            }
+            MatchStatus::Continue
+        }
+
+        BRACE_LIMITS => {
+            // Just a marker with min/max values, skip to next
+            MatchStatus::Continue
+        }
 
         // Look-around (simplified)
         MATCH | NOMATCH | BEHIND | NOBEHIND | BHPOS | SUBPAT => {
