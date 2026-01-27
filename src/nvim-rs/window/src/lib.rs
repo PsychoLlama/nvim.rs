@@ -35,6 +35,7 @@ pub mod close;
 pub mod commands;
 pub mod equalize;
 pub mod events;
+pub mod exchange;
 pub mod focus;
 pub mod frame;
 pub mod free;
