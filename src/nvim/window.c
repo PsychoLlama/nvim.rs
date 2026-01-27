@@ -1021,6 +1021,18 @@ OptInt nvim_get_p_stal(void)
   return p_stal;
 }
 
+/// Get the global winbar height (wrapper for Rust FFI).
+int nvim_global_winbar_height(void)
+{
+  return global_winbar_height();
+}
+
+/// Get the global statusline height (wrapper for Rust FFI).
+int nvim_global_stl_height(void)
+{
+  return global_stl_height();
+}
+
 /// Check if there is more than one tabpage.
 int nvim_first_tabpage_has_next(void)
 {
