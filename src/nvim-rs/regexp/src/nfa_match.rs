@@ -774,6 +774,151 @@ pub unsafe extern "C" fn rs_copy_ze_off(
 }
 
 // =============================================================================
+// Position Matching Functions
+// =============================================================================
+
+extern "C" {
+    /// Get character class from C.
+    fn mb_get_class_tab(ptr: *const u8, chartab: *const u64) -> c_int;
+    /// Get previous character's class (wrapper around static reg_prev_class).
+    fn nvim_rex_reg_prev_class() -> c_int;
+    /// Get the rex global state.
+    fn nvim_rex_get_input() -> *mut u8;
+    fn nvim_rex_get_line() -> *mut u8;
+    fn nvim_rex_get_lnum() -> c_int;
+    fn nvim_rex_get_reg_firstlnum() -> c_int;
+    fn nvim_rex_get_reg_maxline() -> c_int;
+    fn nvim_rex_get_reg_buf_chartab() -> *const u64;
+}
+
+/// Check if current position matches beginning of line (BOL).
+///
+/// Returns 1 if at beginning of line, 0 otherwise.
+///
+/// # Safety
+/// Requires valid rex global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_bol() -> c_int {
+    let input = nvim_rex_get_input();
+    let line = nvim_rex_get_line();
+    c_int::from(input == line)
+}
+
+/// Check if current position matches end of line (EOL).
+///
+/// Returns 1 if at end of line (NUL byte), 0 otherwise.
+///
+/// # Safety
+/// Requires valid rex global state with `curc` being the current character.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_eol(curc: c_int) -> c_int {
+    c_int::from(curc == 0)
+}
+
+/// Check if current position matches beginning of word (BOW).
+///
+/// A word boundary exists when the current character is a word character
+/// and the previous character is not (or doesn't exist).
+///
+/// Returns 1 if at beginning of word, 0 otherwise.
+///
+/// # Safety
+/// Requires valid rex global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_bow(curc: c_int) -> c_int {
+    // If at EOL, not a BOW
+    if curc == 0 {
+        return 0;
+    }
+
+    let input = nvim_rex_get_input();
+    let chartab = nvim_rex_get_reg_buf_chartab();
+
+    // Get class of current character
+    let this_class = mb_get_class_tab(input, chartab);
+
+    // Classes 0 and 1 are whitespace/punctuation, not word characters
+    if this_class <= 1 {
+        return 0;
+    }
+
+    // Check if previous character is same class (not a word boundary)
+    let prev_class = nvim_rex_reg_prev_class();
+    if prev_class == this_class {
+        return 0;
+    }
+
+    1
+}
+
+/// Check if current position matches end of word (EOW).
+///
+/// A word boundary exists when the previous character is a word character
+/// and the current character is not (or we're at end of line).
+///
+/// Returns 1 if at end of word, 0 otherwise.
+///
+/// # Safety
+/// Requires valid rex global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_eow() -> c_int {
+    let input = nvim_rex_get_input();
+    let line = nvim_rex_get_line();
+
+    // If at start of line, not an EOW
+    if input == line {
+        return 0;
+    }
+
+    let chartab = nvim_rex_get_reg_buf_chartab();
+
+    // Get class of current and previous characters
+    let this_class = mb_get_class_tab(input, chartab);
+    let prev_class = nvim_rex_reg_prev_class();
+
+    // EOW if previous was a word char and current is not, or different class
+    // Classes 0 and 1 are whitespace/punctuation
+    if this_class == prev_class || prev_class == 0 || prev_class == 1 {
+        return 0;
+    }
+
+    1
+}
+
+/// Check if current position matches beginning of file (BOF).
+///
+/// Returns 1 if at very beginning of buffer, 0 otherwise.
+///
+/// # Safety
+/// Requires valid rex global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_bof() -> c_int {
+    let input = nvim_rex_get_input();
+    let line = nvim_rex_get_line();
+    let lnum = nvim_rex_get_lnum();
+    let first_lnum = nvim_rex_get_reg_firstlnum();
+    let is_multi = nvim_rex_is_multi() != 0;
+
+    // At BOF if: line 0, at start of line, and (not multi-line or first_lnum is 1)
+    c_int::from(lnum == 0 && input == line && (!is_multi || first_lnum == 1))
+}
+
+/// Check if current position matches end of file (EOF).
+///
+/// Returns 1 if at very end of buffer, 0 otherwise.
+///
+/// # Safety
+/// Requires valid rex global state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_eof(curc: c_int) -> c_int {
+    let lnum = nvim_rex_get_lnum();
+    let max_line = nvim_rex_get_reg_maxline();
+
+    // At EOF if: at last line and current char is NUL
+    c_int::from(lnum == max_line && curc == 0)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

@@ -5059,6 +5059,7 @@ win_T *nvim_rex_get_reg_win(void) { return rex.reg_win; }
 void nvim_rex_set_reg_win(win_T *win) { rex.reg_win = win; }
 buf_T *nvim_rex_get_reg_buf(void) { return rex.reg_buf; }
 void nvim_rex_set_reg_buf(buf_T *buf) { rex.reg_buf = buf; }
+uint64_t *nvim_rex_get_reg_buf_chartab(void) { return rex.reg_buf ? rex.reg_buf->b_chartab : NULL; }
 linenr_T nvim_rex_get_reg_firstlnum(void) { return rex.reg_firstlnum; }
 void nvim_rex_set_reg_firstlnum(linenr_T lnum) { rex.reg_firstlnum = lnum; }
 linenr_T nvim_rex_get_reg_maxline(void) { return rex.reg_maxline; }
@@ -5081,6 +5082,9 @@ int nvim_rex_get_need_clear_subexpr(void) { return rex.need_clear_subexpr; }
 void nvim_rex_set_need_clear_subexpr(int v) { rex.need_clear_subexpr = v; }
 int nvim_rex_get_need_clear_zsubexpr(void) { return rex.need_clear_zsubexpr; }
 void nvim_rex_set_need_clear_zsubexpr(int v) { rex.need_clear_zsubexpr = v; }
+
+// reg_prev_class wrapper for Rust
+int nvim_rex_reg_prev_class(void) { return reg_prev_class(); }
 
 // NFA engine state accessors
 int nvim_rex_get_nfa_has_zend(void) { return rex.nfa_has_zend; }

@@ -106,6 +106,7 @@ pub use nfa_exec::{
     rs_state_in_list_with_subs, rs_sub_equal, rs_swap_lists,
 };
 pub use nfa_match::{
+    rs_check_bof, rs_check_bol, rs_check_bow, rs_check_eof, rs_check_eol, rs_check_eow,
     rs_clear_subs, rs_copy_pim, rs_copy_subs, rs_init_thread, rs_is_match_state, rs_is_split_state,
     rs_list_has_match, rs_mark_state_in_list, rs_match_context_advance, rs_match_context_at_eol,
     rs_match_context_current_byte, rs_match_context_new, rs_match_context_new_multi,
