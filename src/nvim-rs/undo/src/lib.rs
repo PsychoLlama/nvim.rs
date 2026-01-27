@@ -31,6 +31,11 @@ pub struct UHeaderHandle(*mut c_void);
 #[derive(Clone, Copy)]
 pub struct UEntryHandle(*mut c_void);
 
+/// Opaque handle to win_T.
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct WinHandle(*mut c_void);
+
 /// Type alias for time_t (platform-dependent).
 #[cfg(target_pointer_width = "64")]
 pub type TimeT = i64;
@@ -405,6 +410,110 @@ extern "C" {
     // Global lastmark accessor
     fn nvim_get_lastmark() -> c_int;
     fn nvim_set_lastmark(val: c_int);
+
+    // ==========================================================================
+    // Phase 2: Core Undo Operations FFI (memline manipulation)
+    // ==========================================================================
+
+    /// Delete line 'lnum' in buffer. Returns OK/FAIL.
+    fn nvim_ml_delete_lnum(lnum: LinenrT) -> c_int;
+
+    /// Delete line 'lnum' in buffer with flags. Returns OK/FAIL.
+    fn nvim_ml_delete_flags(lnum: LinenrT, flags: c_int) -> c_int;
+
+    /// Append line after 'lnum' in current buffer. Returns OK/FAIL.
+    fn nvim_ml_append_lnum(lnum: LinenrT, line: *const c_char, len: ColnrT, newfile: bool)
+        -> c_int;
+
+    /// Append line with flags. Returns OK/FAIL.
+    fn nvim_ml_append_flags(lnum: LinenrT, line: *const c_char, len: ColnrT, flags: c_int)
+        -> c_int;
+
+    /// Replace line in current buffer. Returns OK/FAIL.
+    fn nvim_ml_replace_lnum(lnum: LinenrT, line: *const c_char, copy: bool) -> c_int;
+
+    /// Block/unblock autocommands
+    fn nvim_block_autocmds();
+    fn nvim_unblock_autocmds();
+
+    /// Set pc mark for jump list
+    fn nvim_setpcmark();
+
+    /// Check cursor line number validity and adjust if needed
+    fn nvim_check_cursor_lnum(win: WinHandle);
+
+    /// Mark adjust for undo
+    fn nvim_mark_adjust_undo(top: LinenrT, bot: LinenrT, amount: LinenrT, amount_after: LinenrT);
+
+    /// Changed lines notification
+    fn nvim_changed_lines(
+        buf: BufHandle,
+        top: LinenrT,
+        col: ColnrT,
+        bot: LinenrT,
+        xtra: LinenrT,
+        do_buf_event: bool,
+    );
+
+    /// Mark buffer as changed
+    fn nvim_buf_changed(buf: BufHandle);
+
+    /// Mark buffer as unchanged
+    fn nvim_buf_unchanged(buf: BufHandle, ff: bool, always_strstruc: bool);
+
+    /// Check spell for window
+    fn nvim_spell_check_window(win: WinHandle) -> bool;
+
+    /// Redraw window line
+    fn nvim_redrawWinline(win: WinHandle, lnum: LinenrT);
+
+    /// Apply extmark undo
+    fn nvim_extmark_apply_undo(uhp: UHeaderHandle, idx: usize, undo: bool);
+
+    /// Buffer updates unload
+    fn nvim_buf_updates_unload(buf: BufHandle, force: bool);
+
+    /// Check position validity
+    fn nvim_check_pos(buf: BufHandle, pos: *mut c_void);
+
+    /// Buffer is empty check
+    fn nvim_buf_is_empty(buf: BufHandle) -> bool;
+
+    /// Current window handle accessor
+    fn nvim_get_curwin() -> WinHandle;
+
+    /// Window buffer accessor
+    fn nvim_win_get_buffer(win: WinHandle) -> BufHandle;
+
+    /// Set window cursor
+    fn nvim_win_set_cursor_pos(win: WinHandle, lnum: LinenrT, col: ColnrT, coladd: ColnrT);
+
+    /// Get window cursor line
+    fn nvim_win_get_cursor_lnum(win: WinHandle) -> LinenrT;
+
+    /// Save line for undo (returns allocated string)
+    fn nvim_u_save_line(buf: BufHandle, lnum: LinenrT) -> *mut c_char;
+
+    /// Get global_busy flag
+    fn nvim_get_global_busy() -> bool;
+
+    /// Check if messaging is allowed
+    fn nvim_messaging() -> bool;
+
+    /// Get KeyTyped flag
+    fn nvim_get_key_typed() -> bool;
+
+    /// Get fdo_flags for fold options
+    fn nvim_get_fdo_flags() -> c_int;
+
+    /// Fold open cursor
+    fn nvim_foldOpenCursor();
+
+    /// Check VIsual_active
+    fn nvim_get_visual_active() -> bool;
+
+    /// Get VIsual position
+    fn nvim_get_visual_pos(lnum: *mut LinenrT, col: *mut ColnrT, coladd: *mut ColnrT);
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed.
