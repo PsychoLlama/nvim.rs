@@ -15,6 +15,7 @@ pub mod level;
 pub mod markers;
 pub mod methods;
 pub mod tree;
+pub mod update;
 
 // Re-export key types
 pub use commands::{
