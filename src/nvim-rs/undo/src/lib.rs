@@ -2890,6 +2890,341 @@ unsafe fn put_header_ptr_by_seq(fp: FileHandle, seq: c_int) -> bool {
     undo_write_bytes(fp, val, 4)
 }
 
+// =============================================================================
+// Phase 1: Undo File Serialization Functions
+// =============================================================================
+
+/// Serialize an undo entry (u_entry_T) to the file.
+///
+/// Writes: ue_top, ue_bot, ue_lcount, ue_size, then each line with its length.
+///
+/// # Safety
+///
+/// - `fp` must be a valid file handle
+/// - `uep` must be a valid undo entry handle
+#[allow(dead_code)]
+unsafe fn serialize_uep(fp: FileHandle, uep: UEntryHandle) -> bool {
+    // Write entry header fields
+    if !undo_write_4(fp, nvim_uep_get_top(uep) as i32) {
+        return false;
+    }
+    if !undo_write_4(fp, nvim_uep_get_bot(uep) as i32) {
+        return false;
+    }
+    if !undo_write_4(fp, nvim_uep_get_lcount(uep) as i32) {
+        return false;
+    }
+
+    let size = nvim_uep_get_size(uep);
+    if !undo_write_4(fp, size as i32) {
+        return false;
+    }
+
+    // Write each line in the array
+    for i in 0..size {
+        let line = nvim_uep_get_array_element(uep, i);
+        let len = if line.is_null() {
+            0
+        } else {
+            libc::strlen(line)
+        };
+
+        // Write length first
+        if !undo_write_bytes(fp, len as u64, 4) {
+            return false;
+        }
+
+        // Write line content if non-empty
+        if len > 0 && !undo_write(fp, line as *const u8, len) {
+            return false;
+        }
+    }
+
+    true
+}
+
+/// Serialize an undo header (u_header_T) to the file.
+///
+/// Writes the header magic, all header fields, then all entries and extmarks.
+///
+/// # Safety
+///
+/// - `fp` must be a valid file handle
+/// - `uhp` must be a valid undo header handle
+#[allow(dead_code)]
+unsafe fn serialize_uhp(fp: FileHandle, uhp: UHeaderHandle) -> bool {
+    // Write header magic
+    if !undo_write_2(fp, UF_HEADER_MAGIC) {
+        return false;
+    }
+
+    // Write header pointers as sequence numbers
+    if !put_header_ptr_by_seq(fp, nvim_uhp_get_next_seq(uhp)) {
+        return false;
+    }
+    if !put_header_ptr_by_seq(fp, nvim_uhp_get_prev_seq(uhp)) {
+        return false;
+    }
+    if !put_header_ptr_by_seq(fp, nvim_uhp_get_alt_next_seq(uhp)) {
+        return false;
+    }
+    if !put_header_ptr_by_seq(fp, nvim_uhp_get_alt_prev_seq(uhp)) {
+        return false;
+    }
+
+    // Write sequence number
+    if !undo_write_4(fp, nvim_uhp_get_seq(uhp)) {
+        return false;
+    }
+
+    // Write cursor position
+    if !serialize_pos(
+        fp,
+        nvim_uhp_get_cursor_lnum(uhp),
+        nvim_uhp_get_cursor_col(uhp),
+        nvim_uhp_get_cursor_coladd(uhp),
+    ) {
+        return false;
+    }
+
+    // Write cursor vcol
+    if !undo_write_4(fp, nvim_uhp_get_cursor_vcol(uhp)) {
+        return false;
+    }
+
+    // Write flags (2 bytes)
+    if !undo_write_2(fp, nvim_uhp_get_flags(uhp) as u16) {
+        return false;
+    }
+
+    // Write named marks (NMARKS = 26)
+    for i in 0..NMARKS as c_int {
+        if !serialize_pos(
+            fp,
+            nvim_uhp_get_namedm_lnum(uhp, i),
+            nvim_uhp_get_namedm_col(uhp, i),
+            nvim_uhp_get_namedm_coladd(uhp, i),
+        ) {
+            return false;
+        }
+    }
+
+    // Write visual info
+    if !serialize_visualinfo(fp, uhp) {
+        return false;
+    }
+
+    // Write time (8 bytes)
+    if !undo_write_time(fp, nvim_uhp_get_time(uhp)) {
+        return false;
+    }
+
+    // Write optional fields - save_nr
+    if !undo_write_bytes(fp, 4, 1) {
+        // length
+        return false;
+    }
+    if !undo_write_bytes(fp, u64::from(UHP_SAVE_NR), 1) {
+        // field id
+        return false;
+    }
+    if !undo_write_4(fp, nvim_uhp_get_save_nr(uhp)) {
+        return false;
+    }
+
+    // Write end marker for optional fields
+    if !undo_write_bytes(fp, 0, 1) {
+        return false;
+    }
+
+    // Write all undo entries
+    let mut uep = nvim_uhp_get_entry(uhp);
+    while !uep.0.is_null() {
+        if !undo_write_2(fp, UF_ENTRY_MAGIC) {
+            return false;
+        }
+        if !serialize_uep(fp, uep) {
+            return false;
+        }
+        uep = nvim_uep_get_next(uep);
+    }
+
+    // Write entry end magic
+    if !undo_write_2(fp, UF_ENTRY_END_MAGIC) {
+        return false;
+    }
+
+    // Write all extmark undo objects
+    let extmark_count = nvim_uhp_get_extmark_count(uhp);
+    for i in 0..extmark_count {
+        let ext_type = nvim_uhp_get_extmark_type(uhp, i);
+        // Only serialize splice and move types
+        if ext_type == 1 || ext_type == 2 {
+            // kExtmarkSplice = 1, kExtmarkMove = 2
+            if !undo_write_2(fp, UF_ENTRY_MAGIC) {
+                return false;
+            }
+            if !undo_write_4(fp, ext_type) {
+                return false;
+            }
+            // Get the extmark data and write it
+            let mut buf = [0u8; 128]; // Large enough for ExtmarkSplice or ExtmarkMove
+            let size = if ext_type == 1 { 72 } else { 48 }; // Approximate sizes
+            nvim_uhp_get_extmark_data(uhp, i, buf.as_mut_ptr(), size);
+            if !undo_write(fp, buf.as_ptr(), size) {
+                return false;
+            }
+        }
+    }
+
+    // Write extmark end magic
+    if !undo_write_2(fp, UF_ENTRY_END_MAGIC) {
+        return false;
+    }
+
+    true
+}
+
+/// Serialize the undo file header.
+///
+/// Writes magic bytes, version, hash, buffer info, and undo tree header data.
+///
+/// # Safety
+///
+/// - `fp` must be a valid file handle
+/// - `buf` must be a valid buffer handle
+/// - `hash` must point to UNDO_HASH_SIZE bytes
+#[allow(dead_code)]
+unsafe fn serialize_header(fp: FileHandle, buf: BufHandle, hash: *const u8) -> bool {
+    // Write start magic
+    if !undo_write(fp, UF_START_MAGIC.as_ptr(), UF_START_MAGIC_LEN) {
+        return false;
+    }
+
+    // Write version
+    if !undo_write_2(fp, UF_VERSION) {
+        return false;
+    }
+
+    // Write hash
+    if !undo_write(fp, hash, UNDO_HASH_SIZE) {
+        return false;
+    }
+
+    // Write buffer line count
+    let line_count = nvim_buf_get_b_ml_line_count(buf);
+    if !undo_write_4(fp, line_count as i32) {
+        return false;
+    }
+
+    // Write b_u_line_ptr
+    let line_ptr = nvim_buf_get_b_u_line_ptr(buf);
+    let line_len = if line_ptr.is_null() {
+        0
+    } else {
+        libc::strlen(line_ptr)
+    };
+    if !undo_write_bytes(fp, line_len as u64, 4) {
+        return false;
+    }
+    if line_len > 0 && !undo_write(fp, line_ptr as *const u8, line_len) {
+        return false;
+    }
+
+    // Write b_u_line_lnum and b_u_line_colnr
+    if !undo_write_4(fp, nvim_buf_get_b_u_line_lnum(buf) as i32) {
+        return false;
+    }
+    if !undo_write_4(fp, nvim_buf_get_b_u_line_colnr(buf)) {
+        return false;
+    }
+
+    // Write undo tree header pointers
+    let oldhead = nvim_buf_get_b_u_oldhead(buf);
+    let newhead = nvim_buf_get_b_u_newhead(buf);
+    let curhead = nvim_buf_get_b_u_curhead(buf);
+
+    if !put_header_ptr(fp, oldhead) {
+        return false;
+    }
+    if !put_header_ptr(fp, newhead) {
+        return false;
+    }
+    if !put_header_ptr(fp, curhead) {
+        return false;
+    }
+
+    // Write undo tree state
+    if !undo_write_4(fp, nvim_buf_get_b_u_numhead(buf)) {
+        return false;
+    }
+    if !undo_write_4(fp, nvim_buf_get_b_u_seq_last(buf)) {
+        return false;
+    }
+    if !undo_write_4(fp, nvim_buf_get_b_u_seq_cur(buf)) {
+        return false;
+    }
+
+    // Write time
+    if !undo_write_time(fp, nvim_buf_get_b_u_time_cur(buf)) {
+        return false;
+    }
+
+    // Write optional fields - last save nr
+    if !undo_write_bytes(fp, 4, 1) {
+        // length
+        return false;
+    }
+    if !undo_write_bytes(fp, u64::from(UF_LAST_SAVE_NR), 1) {
+        // field id
+        return false;
+    }
+    if !undo_write_4(fp, nvim_buf_get_b_u_save_nr_last(buf)) {
+        return false;
+    }
+
+    // Write end marker for optional fields
+    if !undo_write_bytes(fp, 0, 1) {
+        return false;
+    }
+
+    true
+}
+
+/// FFI export: Serialize undo entry.
+///
+/// # Safety
+///
+/// All handles must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_serialize_uep(fp: FileHandle, uep: UEntryHandle) -> bool {
+    serialize_uep(fp, uep)
+}
+
+/// FFI export: Serialize undo header.
+///
+/// # Safety
+///
+/// All handles must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_serialize_uhp(fp: FileHandle, uhp: UHeaderHandle) -> bool {
+    serialize_uhp(fp, uhp)
+}
+
+/// FFI export: Serialize file header.
+///
+/// # Safety
+///
+/// All handles must be valid, hash must point to UNDO_HASH_SIZE bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_serialize_header(
+    fp: FileHandle,
+    buf: BufHandle,
+    hash: *const u8,
+) -> bool {
+    serialize_header(fp, buf, hash)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
