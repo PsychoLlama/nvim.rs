@@ -7,10 +7,13 @@
 //!
 //! - [`validation`]: Close validation and safety checks
 //! - [`execute`]: Close execution helper functions
+//! - [`frame`]: Frame tree helpers for close operations
 
 pub mod execute;
+pub mod frame;
 pub mod validation;
 
 // Re-export common items
 pub use execute::*;
+pub use frame::*;
 pub use validation::*;
