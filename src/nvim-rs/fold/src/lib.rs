@@ -332,6 +332,13 @@ extern "C" {
 
     /// Set the w_p_fdl (foldlevel) field in a window.
     fn nvim_win_set_p_fdl(wp: WinHandle, fdl: c_int);
+
+    // ========================================================================
+    // Phase 3: Fold Navigation FFI
+    // ========================================================================
+
+    /// Set the pc mark (for jump list).
+    fn nvim_setpcmark();
 }
 
 // ============================================================================
@@ -2635,6 +2642,202 @@ fn fold_adjust_visual_impl() {
 }
 
 // ============================================================================
+// Phase 3: Fold Navigation Implementation
+// ============================================================================
+
+/// Result values for fold operations (matching C OK/FAIL).
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+
+/// Direction constant for forward (matches C FORWARD from vim_defs.h).
+const FORWARD: c_int = 1;
+
+/// Move cursor to fold boundary.
+///
+/// Move cursor to the start or end of the fold at the cursor line, or the
+/// next/previous fold.
+///
+/// # Arguments
+/// * `updown` - true = "[z" or "]z" (to start/end of fold), false = "zj" or "zk"
+/// * `dir` - direction: FORWARD to end/next, BACKWARD to start/prev
+/// * `count` - number of times to repeat
+///
+/// # Returns
+/// OK on success, FAIL if no fold found
+#[allow(clippy::too_many_lines)]
+fn fold_move_to_impl(updown: bool, dir: c_int, count: c_int) -> c_int {
+    let curwin = unsafe { nvim_get_curwin() };
+    let mut retval = FAIL;
+
+    // Update folds first
+    unsafe { nvim_checkupdate(curwin) };
+
+    // Repeat "count" times
+    for _ in 0..count {
+        // Find nested folds. Stop when a fold is closed. The deepest fold
+        // that moves the cursor is used.
+        let mut lnum_off: LineNr = 0;
+        let mut gap = unsafe { nvim_win_get_folds(curwin) };
+        let gap_len = unsafe { nvim_ga_len(gap) };
+        if gap_len == 0 {
+            break;
+        }
+
+        let mut use_level = false;
+        let mut maybe_small = false;
+        let cursor_lnum = unsafe { nvim_win_get_cursor_lnum(curwin) };
+        let mut lnum_found = cursor_lnum;
+        let mut level: c_int = 0;
+        let mut last = false;
+
+        loop {
+            // Try to find a fold containing cursor_lnum - lnum_off
+            let find_result = fold_find(gap, cursor_lnum - lnum_off);
+
+            let fp = match find_result {
+                Some((fp, true)) => fp,
+                Some((fp, false)) => {
+                    // Fold not found (we got the first fold below lnum)
+                    if !updown {
+                        break;
+                    }
+                    let gap_len = unsafe { nvim_ga_len(gap) };
+                    if gap_len == 0 {
+                        break;
+                    }
+
+                    // When moving up, consider a fold above the cursor;
+                    // when moving down consider a fold below the cursor.
+                    let fp_data = unsafe { nvim_ga_fold_at(gap, 0) };
+                    let fp_idx =
+                        fold_find_with_idx(gap, cursor_lnum - lnum_off).map_or(0, |(_, idx)| idx);
+
+                    if dir == FORWARD {
+                        // Moving forward - need the fold at fp_idx
+                        if fp_idx >= gap_len {
+                            break;
+                        }
+                        // Get previous fold (fp - 1 in C)
+                        if fp_idx == 0 {
+                            break;
+                        }
+                        let prev_fp = unsafe { nvim_ga_fold_at(gap, fp_idx - 1) };
+                        last = true;
+                        prev_fp
+                    } else {
+                        // Moving backward
+                        if fp_data.is_null() {
+                            break;
+                        }
+                        last = true;
+                        fp
+                    }
+                }
+                None => break,
+            };
+
+            if fp.is_null() {
+                break;
+            }
+
+            if !last {
+                // Check if this fold is closed.
+                let is_closed = check_closed_impl(
+                    curwin,
+                    fp,
+                    &mut use_level,
+                    level,
+                    &mut maybe_small,
+                    lnum_off,
+                );
+                if is_closed {
+                    last = true;
+                }
+
+                // "[z" and "]z" stop at closed fold
+                if last && !updown {
+                    break;
+                }
+            }
+
+            let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+            let fd_len = unsafe { nvim_fold_get_fd_len(fp) };
+
+            if updown {
+                // Get fold index for neighbor access
+                let fp_idx =
+                    fold_find_with_idx(gap, cursor_lnum - lnum_off).map_or(0, |(_, idx)| idx);
+                let gap_len = unsafe { nvim_ga_len(gap) };
+
+                if dir == FORWARD {
+                    // to start of next fold if there is one
+                    if fp_idx + 1 < gap_len {
+                        let next_fp = unsafe { nvim_ga_fold_at(gap, fp_idx + 1) };
+                        if !next_fp.is_null() {
+                            let next_top = unsafe { nvim_fold_get_fd_top(next_fp) };
+                            let lnum = next_top + lnum_off;
+                            if lnum > cursor_lnum {
+                                lnum_found = lnum;
+                            }
+                        }
+                    }
+                } else {
+                    // to end of previous fold if there is one
+                    if fp_idx > 0 {
+                        let prev_fp = unsafe { nvim_ga_fold_at(gap, fp_idx - 1) };
+                        if !prev_fp.is_null() {
+                            let prev_top = unsafe { nvim_fold_get_fd_top(prev_fp) };
+                            let prev_len = unsafe { nvim_fold_get_fd_len(prev_fp) };
+                            let lnum = prev_top + lnum_off + prev_len - 1;
+                            if lnum < cursor_lnum {
+                                lnum_found = lnum;
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Open fold found, set cursor to its start/end and then check
+                // nested folds.
+                if dir == FORWARD {
+                    let lnum = fd_top + lnum_off + fd_len - 1;
+                    if lnum > cursor_lnum {
+                        lnum_found = lnum;
+                    }
+                } else {
+                    let lnum = fd_top + lnum_off;
+                    if lnum < cursor_lnum {
+                        lnum_found = lnum;
+                    }
+                }
+            }
+
+            if last {
+                break;
+            }
+
+            // Check nested folds (if any).
+            gap = unsafe { nvim_fold_get_fd_nested(fp) };
+            lnum_off += fd_top;
+            level += 1;
+        }
+
+        if lnum_found == cursor_lnum {
+            break;
+        }
+        if retval == FAIL {
+            unsafe { nvim_setpcmark() };
+        }
+        unsafe {
+            nvim_win_set_cursor_lnum(curwin, lnum_found);
+            nvim_win_set_cursor_col(curwin, 0);
+        }
+        retval = OK;
+    }
+
+    retval
+}
+
+// ============================================================================
 // Phase 5: FFI Exports
 // ============================================================================
 
@@ -2654,6 +2857,23 @@ pub extern "C" fn rs_foldAdjustCursor(wp: WinHandle) {
 #[no_mangle]
 pub extern "C" fn rs_foldAdjustVisual() {
     fold_adjust_visual_impl();
+}
+
+/// Move cursor to fold boundary.
+///
+/// Move cursor to the start or end of the fold at the cursor line, or the
+/// next/previous fold.
+///
+/// # Arguments
+/// * `updown` - true = "[z" or "]z" (to start/end of fold), false = "zj" or "zk"
+/// * `dir` - direction: FORWARD to end/next, BACKWARD to start/prev
+/// * `count` - number of times to repeat
+///
+/// # Safety
+/// This function is safe to call from C.
+#[no_mangle]
+pub extern "C" fn rs_foldMoveTo(updown: bool, dir: c_int, count: c_int) -> c_int {
+    fold_move_to_impl(updown, dir, count)
 }
 
 #[cfg(test)]
