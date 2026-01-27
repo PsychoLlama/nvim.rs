@@ -426,6 +426,18 @@ bool ctrl_x_mode_register(void) { return rs_ctrl_x_mode_register() != 0; }
 bool ctrl_x_mode_not_default(void) { return rs_ctrl_x_mode_not_default() != 0; }
 bool ctrl_x_mode_not_defined_yet(void) { return rs_ctrl_x_mode_not_defined_yet() != 0; }
 
+/// Accessor for Rust FFI: check if ctrl-x mode is not default.
+int nvim_ctrl_x_mode_not_default(void)
+{
+  return ctrl_x_mode_not_default() ? 1 : 0;
+}
+
+/// Accessor for Rust FFI: get curbuf->b_p_inf (infercase option).
+int nvim_curbuf_get_b_p_inf(void)
+{
+  return curbuf->b_p_inf ? 1 : 0;
+}
+
 bool compl_status_adding(void) { return rs_compl_status_adding() != 0; }
 bool compl_status_sol(void) { return rs_compl_status_sol() != 0; }
 bool compl_status_local(void) { return rs_compl_status_local() != 0; }

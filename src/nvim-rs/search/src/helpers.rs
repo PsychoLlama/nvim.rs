@@ -494,6 +494,190 @@ pub extern "C" fn rs_search_opt_mark() -> c_int {
     options::SEARCH_MARK
 }
 
+// =============================================================================
+// Pattern Case Sensitivity
+// =============================================================================
+
+// External C functions for pattern analysis
+extern "C" {
+    /// Check if character is uppercase (multibyte aware).
+    fn nvim_mb_isupper(c: c_int) -> c_int;
+
+    /// Get UTF character from byte pointer.
+    fn nvim_utf_ptr2char(p: *const std::ffi::c_char) -> c_int;
+
+    /// Get UTF character length including composing chars.
+    fn nvim_utfc_ptr2len(p: *const std::ffi::c_char) -> c_int;
+
+    /// Skip regexp to find magic value.
+    /// Returns pointer past pattern, sets magic_val.
+    fn nvim_skip_regexp_ex(
+        startp: *const std::ffi::c_char,
+        dirc: c_int,
+        magic: c_int,
+        newp: *mut *mut std::ffi::c_char,
+        dropped: *mut c_int,
+        magic_val: *mut c_int,
+    ) -> *const std::ffi::c_char;
+
+    /// Check if ctrl-x mode is not default.
+    fn nvim_ctrl_x_mode_not_default() -> c_int;
+
+    /// Get curbuf->b_p_inf (infercase option).
+    fn nvim_curbuf_get_b_p_inf() -> c_int;
+}
+
+/// Magic mode values (from regexp_defs.h)
+pub mod magic {
+    use std::ffi::c_int;
+
+    /// No magic at all
+    pub const MAGIC_NONE: c_int = 1;
+    /// 'nomagic' or \M
+    pub const MAGIC_OFF: c_int = 2;
+    /// 'magic' or \m (default)
+    pub const MAGIC_ON: c_int = 3;
+    /// Very magic \v
+    pub const MAGIC_ALL: c_int = 4;
+}
+
+/// Check if pattern has an uppercase character.
+///
+/// This follows the logic of `pat_has_uppercase()` in search.c.
+/// Skips backslash-escaped characters in magic mode.
+///
+/// # Safety
+/// `pat` must be a valid null-terminated C string.
+pub unsafe fn pat_has_uppercase(pat: *const std::ffi::c_char) -> bool {
+    if pat.is_null() {
+        return false;
+    }
+
+    // Get the magicness of the pattern
+    let mut magic_val: c_int = magic::MAGIC_ON;
+    nvim_skip_regexp_ex(
+        pat,
+        0, // NUL - no delimiter
+        c_int::from(magic_isset()),
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+        &mut magic_val,
+    );
+
+    let mut p = pat;
+    while *p != 0 {
+        let l = nvim_utfc_ptr2len(p);
+
+        if l > 1 {
+            // Multi-byte character
+            let c = nvim_utf_ptr2char(p);
+            if nvim_mb_isupper(c) != 0 {
+                return true;
+            }
+            p = p.add(l as usize);
+        } else if *p == b'\\' as i8 && magic_val <= magic::MAGIC_ON {
+            // Backslash escape in magic mode
+            let next = *p.add(1);
+            if next == b'_' as i8 && *p.add(2) != 0 {
+                // skip "\_X"
+                p = p.add(3);
+            } else if next == b'%' as i8 && *p.add(2) != 0 {
+                // skip "\%X"
+                p = p.add(3);
+            } else if next != 0 {
+                // skip "\X"
+                p = p.add(2);
+            } else {
+                p = p.add(1);
+            }
+        } else if (*p == b'%' as i8 || *p == b'_' as i8) && magic_val == magic::MAGIC_ALL {
+            // In very magic mode, % and _ are special
+            let next = *p.add(1);
+            if next != 0 {
+                p = p.add(2);
+            } else {
+                p = p.add(1);
+            }
+        } else {
+            // Single byte character - check if uppercase
+            let c = *p as u8;
+            if nvim_mb_isupper(c_int::from(c)) != 0 {
+                return true;
+            }
+            p = p.add(1);
+        }
+    }
+    false
+}
+
+/// Determine case sensitivity for a pattern.
+///
+/// This is the Rust equivalent of `ignorecase()` in search.c.
+/// Uses p_ic and p_scs global options.
+///
+/// # Safety
+/// `pat` must be a valid null-terminated C string.
+pub unsafe fn ignorecase(pat: *const std::ffi::c_char) -> bool {
+    ignorecase_opt(pat, get_p_ic(), get_p_scs())
+}
+
+/// Determine case sensitivity with explicit options.
+///
+/// This is the Rust equivalent of `ignorecase_opt()` in search.c.
+///
+/// # Safety
+/// `pat` must be a valid null-terminated C string.
+pub unsafe fn ignorecase_opt(pat: *const std::ffi::c_char, ic_in: bool, scs: bool) -> bool {
+    let mut ic = ic_in;
+
+    if ic && !get_no_smartcase() && scs {
+        // Check for ctrl-x mode with infercase
+        let in_ctrl_x_with_inf =
+            nvim_ctrl_x_mode_not_default() != 0 && nvim_curbuf_get_b_p_inf() != 0;
+
+        if !in_ctrl_x_with_inf {
+            // Smartcase: if pattern has uppercase, don't ignore case
+            ic = !pat_has_uppercase(pat);
+        }
+    }
+
+    // Clear no_smartcase after checking
+    set_no_smartcase(false);
+
+    ic
+}
+
+/// FFI: Check if pattern has uppercase.
+///
+/// # Safety
+/// `pat` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pat_has_uppercase(pat: *const std::ffi::c_char) -> c_int {
+    c_int::from(pat_has_uppercase(pat))
+}
+
+/// FFI: Determine case sensitivity for pattern.
+///
+/// # Safety
+/// `pat` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ignorecase(pat: *const std::ffi::c_char) -> c_int {
+    c_int::from(ignorecase(pat))
+}
+
+/// FFI: Determine case sensitivity with explicit options.
+///
+/// # Safety
+/// `pat` must be a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ignorecase_opt(
+    pat: *const std::ffi::c_char,
+    ic: c_int,
+    scs: c_int,
+) -> c_int {
+    c_int::from(ignorecase_opt(pat, ic != 0, scs != 0))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

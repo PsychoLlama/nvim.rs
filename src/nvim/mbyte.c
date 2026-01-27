@@ -957,6 +957,24 @@ bool mb_isupper(int a)
   return mb_tolower(a) != a;
 }
 
+/// Accessor for Rust FFI: check if character is uppercase.
+int nvim_mb_isupper(int c)
+{
+  return mb_isupper(c) ? 1 : 0;
+}
+
+/// Accessor for Rust FFI: get UTF character from byte pointer.
+int nvim_utf_ptr2char(const char *p)
+{
+  return utf_ptr2char(p);
+}
+
+/// Accessor for Rust FFI: get UTF character length including composing chars.
+int nvim_utfc_ptr2len(const char *p)
+{
+  return utfc_ptr2len(p);
+}
+
 bool mb_isalpha(int a)
   FUNC_ATTR_WARN_UNUSED_RESULT
 {

@@ -714,6 +714,18 @@ char *skip_regexp_ex(char *startp, int dirc, int magic, char **newp, int *droppe
   return p;
 }
 
+/// Accessor for Rust FFI: skip regexp and get magic value.
+const char *nvim_skip_regexp_ex(const char *startp, int dirc, int magic,
+                                char **newp, int *dropped, int *magic_val)
+{
+  magic_T mval = MAGIC_ON;
+  char *result = skip_regexp_ex((char *)startp, dirc, magic, newp, dropped, &mval);
+  if (magic_val != NULL) {
+    *magic_val = (int)mval;
+  }
+  return result;
+}
+
 // variables used for parsing
 static int prevchr_len;    // byte length of previous char
 static int at_start;       // True when on the first character
