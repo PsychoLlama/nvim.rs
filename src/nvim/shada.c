@@ -65,7 +65,21 @@
 #include "nvim/version.h"
 #include "nvim/vim_defs.h"
 
-extern int rs_hist_type2char(int hist_type);
+// Phase 562: Rust ShaDa implementations
+extern int rs_shada_hist_type2char(int hist_type);
+extern int rs_shada_hist_char2type(int c);
+extern int rs_get_shada_parameter(int typ);
+extern const char *rs_find_shada_parameter(int typ);
+extern int rs_shada_entry_type_valid(int entry_type);
+extern const char *rs_shada_entry_type_name(int entry_type);
+extern uint64_t rs_vim_be64toh(uint64_t big_endian_64_bits);
+extern uint64_t rs_vim_htobe64(uint64_t host_64_bits);
+extern int rs_shada_entry_type_from_raw(uint64_t raw_type);
+extern int rs_shada_is_unknown_entry(uint64_t entry_type);
+extern int rs_shada_should_write_entry(size_t packed_size, size_t max_kbyte);
+
+// Legacy alias
+#define rs_hist_type2char rs_shada_hist_type2char
 
 #ifdef HAVE_BE64TOH
 # define _BSD_SOURCE 1  // NOLINT(bugprone-reserved-identifier)
@@ -2932,21 +2946,10 @@ static void shada_free_shada_entry(ShadaEntry *const entry)
 }
 
 #ifndef HAVE_BE64TOH
+// Use Rust implementation for byte order conversion
 static inline uint64_t vim_be64toh(uint64_t big_endian_64_bits)
 {
-# ifdef ORDER_BIG_ENDIAN
-  return big_endian_64_bits;
-# else
-  // It may appear that when !defined(ORDER_BIG_ENDIAN) actual order is big
-  // endian. This variant is suboptimal, but it works regardless of actual
-  // order.
-  uint8_t *buf = (uint8_t *)&big_endian_64_bits;
-  uint64_t ret = 0;
-  for (size_t i = 8; i; i--) {
-    ret |= ((uint64_t)buf[i - 1]) << ((8 - i) * 8);
-  }
-  return ret;
-# endif
+  return rs_vim_be64toh(big_endian_64_bits);
 }
 # define be64toh vim_be64toh
 #endif
