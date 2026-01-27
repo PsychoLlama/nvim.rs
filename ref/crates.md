@@ -89,7 +89,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | popupmenu      | Popup menu state                        |
 | profile        | Profiling utilities                     |
 | quickfix       | Quickfix and location lists             |
-| regexp         | Regular expression engine (BT/NFA compilation, execution, substitution, special matching) |
+| regexp         | Regular expression engine (BT/NFA compilation and execution, thread list management, position matching, substitution) |
 | register       | Register operations                     |
 | runtime        | Runtime file management and script sourcing |
 | search         | Search and substitution                 |

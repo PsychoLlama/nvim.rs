@@ -1,7 +1,49 @@
-//! Regular expression utilities for Neovim
+//! Regular Expression Engine for Neovim
 //!
-//! This crate provides Rust implementations of regex helper functions,
-//! wrapping the Vim regex engines which remain in C.
+//! This crate provides the Rust implementation of Neovim's regular expression engine,
+//! supporting both the NFA (Non-deterministic Finite Automaton) and BT (Backtracking)
+//! engines used by Vim's regex syntax.
+//!
+//! # Architecture
+//!
+//! The crate is organized into several major components:
+//!
+//! ## Core Engines
+//!
+//! - **NFA Engine** (`nfa_*` modules): Thompson's NFA construction with parallel state
+//!   tracking. Faster for most patterns but doesn't support backreferences.
+//!
+//! - **BT Engine** (`bt_*` modules): Recursive descent backtracking engine. Slower but
+//!   supports full Vim regex syntax including backreferences.
+//!
+//! ## Key Modules
+//!
+//! - [`api`]: Unified public API for compilation and matching
+//! - [`nfa_compile`]: NFA pattern compilation and optimization
+//! - [`nfa_exec`]: NFA execution with thread list management
+//! - [`nfa_match`]: Position matching helpers for NFA engine
+//! - [`bt_compile`]: BT pattern compilation
+//! - [`bt_exec`]: BT execution state and matching
+//! - [`regsub`]: Substitution engine for replacement patterns
+//!
+//! ## Supporting Modules
+//!
+//! - [`char_class`]: Character class recognition (`:alpha:`, etc.)
+//! - [`parser`]: Common parsing utilities
+//! - [`scanner`]: Pattern scanner for both engines
+//! - [`special`]: Position assertions (cursor, line number, etc.)
+//!
+//! # Engine Selection
+//!
+//! The engine is selected via the `'regexpengine'` option:
+//! - `0`: Automatic (NFA with fallback to BT)
+//! - `1`: Force NFA engine
+//! - `2`: Force BT engine
+//!
+//! # FFI
+//!
+//! All public functions are exported with C-compatible FFI for integration with
+//! Neovim's C core. Functions are prefixed with `rs_` for clarity.
 
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::missing_const_for_fn)]
