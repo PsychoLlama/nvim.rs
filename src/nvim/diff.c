@@ -162,6 +162,35 @@ extern int rs_diff_foldcolumn_clamp(int foldcol);
 extern int rs_diff_default_linematch(void);
 extern int rs_diff_linematch_enabled(int lines);
 
+// Phase 558: Additional diff functions from Rust
+extern int rs_diffopt_inline_none(void);
+extern int rs_diffopt_inline_simple(void);
+extern int rs_diffopt_inline_char(void);
+extern int rs_diffopt_inline_word(void);
+extern int rs_diffopt_anchor(void);
+extern int rs_diffopt_inline_any(void);
+extern int rs_diffopt_inline_diff(void);
+extern int rs_diff_buf_idx(const void *buf);
+extern int rs_diff_check_invalid(void);
+extern int rs_diff_count_buffers(void);
+extern int rs_diff_buf_is_diffed(const void *buf);
+extern void *rs_diff_find_block_for_line(int buf_idx, linenr_T lnum);
+extern int rs_diff_get_filler_lines(int buf_idx, linenr_T lnum);
+extern linenr_T rs_diff_find_next_hunk(int buf_idx, linenr_T lnum);
+extern linenr_T rs_diff_find_prev_hunk(int buf_idx, linenr_T lnum);
+extern int rs_diff_lnum_in_hunk(int buf_idx, linenr_T lnum);
+extern int rs_diff_should_use_internal(void);
+extern linenr_T rs_diff_total_count_for_buf(int buf_idx);
+
+// Phase 558: Diff hunk bounds struct from Rust
+typedef struct {
+  linenr_T start;
+  linenr_T end;
+  int count;
+  bool valid;
+} DiffHunkBounds;
+extern DiffHunkBounds rs_diff_hunk_start_end(int buf_idx, linenr_T lnum);
+
 static bool diff_busy = false;         // using diff structs, don't change them
 static bool diff_need_update = false;  // ex_diffupdate needs to be called
 
@@ -2788,6 +2817,62 @@ bool diffopt_linematch(void)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
   return rs_diffopt_linematch() != 0;
+}
+
+// Return true if 'diffopt' contains "inline:none".
+bool diffopt_inline_none(void)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_diffopt_inline_none() != 0;
+}
+
+// Return true if 'diffopt' contains "inline:simple".
+bool diffopt_inline_simple(void)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_diffopt_inline_simple() != 0;
+}
+
+// Return true if 'diffopt' contains "inline:char".
+bool diffopt_inline_char(void)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_diffopt_inline_char() != 0;
+}
+
+// Return true if 'diffopt' contains "inline:word".
+bool diffopt_inline_word(void)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_diffopt_inline_word() != 0;
+}
+
+// Return true if 'diffopt' contains any inline highlighting mode.
+bool diffopt_inline_any(void)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_diffopt_inline_any() != 0;
+}
+
+// Return true if 'diffopt' has char or word inline diff enabled.
+bool diffopt_inline_diff(void)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_diffopt_inline_diff() != 0;
+}
+
+// Return true if 'diffopt' contains "anchor".
+bool diffopt_anchor(void)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_diffopt_anchor() != 0;
+}
+
+// Check if internal diff algorithm should be used based on options.
+bool diff_should_use_internal(void)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_diff_should_use_internal() != 0;
 }
 
 /// Called when a line has been updated. Used for updating inline diff in Insert
