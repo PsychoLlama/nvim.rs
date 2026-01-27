@@ -61,6 +61,49 @@
 #include "nvim/garray.h"
 #include "nvim/garray_defs.h"
 
+// Phase 549: Rust marktree FFI declarations
+// Position comparison and manipulation functions
+extern bool rs_pos_leq(MTPos a, MTPos b);
+extern bool rs_pos_less(MTPos a, MTPos b);
+extern void rs_relative(MTPos base, MTPos *val);
+extern void rs_unrelative(MTPos base, MTPos *val);
+extern void rs_compose(MTPos *base, MTPos val);
+
+// Mark key property functions
+extern bool rs_mt_paired(MTKey key);
+extern bool rs_mt_end(MTKey key);
+extern bool rs_mt_start(MTKey key);
+extern bool rs_mt_right(MTKey key);
+extern bool rs_mt_no_undo(MTKey key);
+extern bool rs_mt_invalidate(MTKey key);
+extern bool rs_mt_invalid(MTKey key);
+extern bool rs_mt_decor_any(MTKey key);
+extern bool rs_mt_decor_sign(MTKey key);
+extern bool rs_mt_conceal_lines(MTKey key);
+
+// Lookup ID functions
+extern uint64_t rs_mt_lookup_id(uint32_t ns, uint32_t id, bool end);
+extern uint64_t rs_mt_lookup_key_side(MTKey key, bool end);
+extern uint64_t rs_mt_lookup_key(MTKey key);
+
+// Key comparison and flag functions
+extern int rs_key_cmp(MTKey a, MTKey b);
+extern uint16_t rs_mt_flags(bool right_gravity, bool no_undo, bool invalidate, bool decor_ext);
+
+// Iterator functions
+extern bool rs_marktree_itr_valid(MarkTreeIter *itr);
+extern MTPos rs_marktree_itr_pos(MarkTreeIter *itr);
+extern MTKey rs_marktree_itr_current(MarkTreeIter *itr);
+extern bool rs_marktree_itr_node_done(MarkTreeIter *itr);
+extern bool rs_marktree_itr_next(MarkTree *b, MarkTreeIter *itr);
+extern bool rs_marktree_itr_prev(MarkTree *b, MarkTreeIter *itr);
+extern bool rs_marktree_itr_first(MarkTree *b, MarkTreeIter *itr);
+
+// Tree operations
+extern void rs_marktree_put_key(MarkTree *b, MTKey k);
+extern void rs_marktree_clear(MarkTree *b);
+extern void rs_marktree_check(MarkTree *b);
+
 #define T MT_BRANCH_FACTOR
 #define ILEN (sizeof(MTNode) + sizeof(struct mtnode_inner_s))
 
