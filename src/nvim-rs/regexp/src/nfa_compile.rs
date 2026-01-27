@@ -611,6 +611,198 @@ pub unsafe extern "C" fn rs_append(l1: *mut Ptrlist, l2: *mut Ptrlist) -> *mut P
 }
 
 // =============================================================================
+// NFA Optimization Functions
+// =============================================================================
+
+/// Maximum recursion depth for NFA analysis
+const MAX_DEPTH: c_int = 1000;
+
+/// Check if the NFA always matches at the beginning of line.
+///
+/// Returns 1 if the pattern is anchored (starts with BOL/BOF), 0 otherwise.
+///
+/// # Safety
+/// `start` must be a valid NFA state pointer or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_get_reganch(start: *mut NfaState, depth: c_int) -> c_int {
+    nfa_get_reganch_impl(start, depth)
+}
+
+unsafe fn nfa_get_reganch_impl(start: *mut NfaState, depth: c_int) -> c_int {
+    use crate::nfa_states::*;
+
+    if start.is_null() {
+        return 0;
+    }
+    if depth >= MAX_DEPTH {
+        return 0;
+    }
+
+    let p = start;
+    let c = (*p).c;
+
+    // BOL and BOF indicate anchor
+    if c == NFA_BOL || c == NFA_BOF {
+        return 1;
+    }
+
+    // MOPEN/ZOPEN - continue checking
+    if c == NFA_MOPEN
+        || (NFA_MOPEN..=NFA_MOPEN + 9).contains(&c)
+        || (NFA_ZOPEN..=NFA_ZOPEN + 9).contains(&c)
+    {
+        return nfa_get_reganch_impl((*p).out, depth + 1);
+    }
+
+    // NFA_SPLIT requires both branches to be anchored
+    if c == NFA_SPLIT {
+        let r1 = nfa_get_reganch_impl((*p).out, depth + 1);
+        let r2 = nfa_get_reganch_impl((*p).out1, depth + 1);
+        return if r1 != 0 && r2 != 0 { 1 } else { 0 };
+    }
+
+    // Lookahead/behind - continue with out
+    if (NFA_START_INVISIBLE..=NFA_END_INVISIBLE).contains(&c) {
+        return nfa_get_reganch_impl((*p).out, depth + 1);
+    }
+
+    // For other states, not anchored
+    0
+}
+
+/// Get the starting character for the pattern (if it has one).
+///
+/// Returns the character code, or 0 if no fixed start character.
+///
+/// # Safety
+/// `start` must be a valid NFA state pointer or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_get_regstart(start: *mut NfaState, depth: c_int) -> c_int {
+    nfa_get_regstart_impl(start, depth)
+}
+
+unsafe fn nfa_get_regstart_impl(start: *mut NfaState, depth: c_int) -> c_int {
+    use crate::nfa_states::*;
+
+    if start.is_null() {
+        return 0;
+    }
+    if depth >= MAX_DEPTH {
+        return 0;
+    }
+
+    let p = start;
+    let c = (*p).c;
+
+    // If it's a literal character
+    if c > 0 && c < 256 {
+        return c;
+    }
+
+    // Transparent states - continue
+    if c == NFA_BOL || c == NFA_BOF || c == NFA_BOW || c == NFA_MOPEN || c == NFA_NOPEN {
+        return nfa_get_regstart_impl((*p).out, depth + 1);
+    }
+
+    // MOPEN + subexpr
+    if (NFA_MOPEN..=NFA_MOPEN + 9).contains(&c) {
+        return nfa_get_regstart_impl((*p).out, depth + 1);
+    }
+
+    // ZOPEN
+    if (NFA_ZOPEN..=NFA_ZOPEN + 9).contains(&c) {
+        return nfa_get_regstart_impl((*p).out, depth + 1);
+    }
+
+    // NFA_SPLIT - both branches must have same start char
+    if c == NFA_SPLIT {
+        let c1 = nfa_get_regstart_impl((*p).out, depth + 1);
+        let c2 = nfa_get_regstart_impl((*p).out1, depth + 1);
+        return if c1 == c2 { c1 } else { 0 };
+    }
+
+    // Lookahead - continue
+    if (NFA_START_INVISIBLE..=NFA_END_INVISIBLE).contains(&c) {
+        return nfa_get_regstart_impl((*p).out, depth + 1);
+    }
+
+    0
+}
+
+/// Extract a literal match text from the NFA if the pattern is simple enough.
+///
+/// Returns a pointer to the match text, or null if the pattern is complex.
+///
+/// # Safety
+/// `start` must be a valid NFA state pointer or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_get_match_text(start: *mut NfaState) -> *mut u8 {
+    nfa_get_match_text_impl(start)
+}
+
+unsafe fn nfa_get_match_text_impl(start: *mut NfaState) -> *mut u8 {
+    use crate::nfa_states::*;
+
+    if start.is_null() {
+        return ptr::null_mut();
+    }
+
+    // For simple literal patterns, we could extract the text
+    // This is an optimization where patterns like "foo" can use
+    // a simple string search instead of full NFA matching
+
+    // Walk through the NFA and check if it's a simple sequence of literals
+    let mut p = start;
+
+    // Skip over transparent states at the beginning
+    loop {
+        if p.is_null() {
+            return ptr::null_mut();
+        }
+        let c = (*p).c;
+
+        // Skip MOPEN/NOPEN/ZOPEN at start
+        if c == NFA_MOPEN
+            || c == NFA_NOPEN
+            || (NFA_MOPEN..=NFA_MOPEN + 9).contains(&c)
+            || (NFA_ZOPEN..=NFA_ZOPEN + 9).contains(&c)
+        {
+            p = (*p).out;
+            continue;
+        }
+
+        // Check for literal character
+        if c > 0 && c < 256 {
+            // Found a literal - the C code stores this in a specific way
+            // For now, return null to indicate we can't extract match text
+            // The full implementation requires buffer allocation
+            return ptr::null_mut();
+        }
+
+        // For other states, can't extract simple text
+        return ptr::null_mut();
+    }
+}
+
+/// Post-process the NFA for optimization.
+///
+/// This function is called after NFA construction to apply optimizations
+/// such as detecting patterns that can use simpler matching.
+///
+/// # Safety
+/// `prog_ptr` must be a valid nfa_regprog_T pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_postprocess(prog_ptr: *mut std::ffi::c_void) {
+    // The actual post-processing is complex and modifies the NFA states
+    // For now, this is a stub that allows the C code to call it
+    // The full implementation would optimize things like:
+    // - Detecting patterns that always match empty string
+    // - Marking states that can be skipped
+    // - Pre-computing character class membership
+    let _ = prog_ptr;
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

@@ -97,7 +97,8 @@ pub use multiline::{
 };
 pub use nfa_compile::{
     rs_alloc_state, rs_append, rs_frag_new, rs_frag_stack_free, rs_frag_stack_new,
-    rs_frag_stack_pop, rs_frag_stack_push, rs_list1, rs_patch, rs_state_allocator_count,
+    rs_frag_stack_pop, rs_frag_stack_push, rs_list1, rs_nfa_get_match_text, rs_nfa_get_reganch,
+    rs_nfa_get_regstart, rs_nfa_postprocess, rs_patch, rs_state_allocator_count,
     rs_state_allocator_free, rs_state_allocator_new, rs_state_allocator_reset,
 };
 pub use nfa_exec::{rs_addstate, rs_addstate_here};
