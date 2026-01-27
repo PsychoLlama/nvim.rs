@@ -308,6 +308,10 @@ static int no_Magic(int x)
   return rs_no_magic(x);
 }
 
+// Rust implementations for BT optimization (Phase 1)
+extern uint8_t *rs_bt_find_regmust(uint8_t *scan, int flags, int *out_len);
+extern int rs_bt_get_regstart(uint8_t *scan);
+
 // Rust implementation
 extern int rs_toggle_magic(int x);
 
@@ -4923,8 +4927,6 @@ static uint8_t *reg(int paren, int *flagp)
 static regprog_T *bt_regcomp(uint8_t *expr, int re_flags)
 {
   uint8_t *scan;
-  uint8_t *longest;
-  int len;
   int flags;
 
   if (expr == NULL) {
@@ -4981,18 +4983,8 @@ static regprog_T *bt_regcomp(uint8_t *expr, int re_flags)
       scan = regnext(scan);
     }
 
-    if (OP(scan) == EXACTLY) {
-      r->regstart = utf_ptr2char((char *)OPERAND(scan));
-    } else if (OP(scan) == BOW
-               || OP(scan) == EOW
-               || OP(scan) == NOTHING
-               || OP(scan) == MOPEN + 0 || OP(scan) == NOPEN
-               || OP(scan) == MCLOSE + 0 || OP(scan) == NCLOSE) {
-      uint8_t *regnext_scan = regnext(scan);
-      if (OP(regnext_scan) == EXACTLY) {
-        r->regstart = utf_ptr2char((char *)OPERAND(regnext_scan));
-      }
-    }
+    // Use Rust implementation for regstart extraction
+    r->regstart = rs_bt_get_regstart(scan);
 
     // If there's something expensive in the r.e., find the longest
     // literal string that must appear and make it the regmust.  Resolve
@@ -5005,19 +4997,8 @@ static regprog_T *bt_regcomp(uint8_t *expr, int re_flags)
     // first. Used a lot for "#" and "*" commands. (Added by mool).
     if ((flags & SPSTART || OP(scan) == BOW || OP(scan) == EOW)
         && !(flags & HASNL)) {
-      longest = NULL;
-      len = 0;
-      for (; scan != NULL; scan = regnext(scan)) {
-        if (OP(scan) == EXACTLY) {
-          size_t scanlen = strlen((char *)OPERAND(scan));
-          if (scanlen >= (size_t)len) {
-            longest = OPERAND(scan);
-            len = (int)scanlen;
-          }
-        }
-      }
-      r->regmust = longest;
-      r->regmlen = len;
+      // Use Rust implementation for regmust extraction
+      r->regmust = rs_bt_find_regmust(scan, flags, &r->regmlen);
     }
   }
 #ifdef BT_REGEXP_DUMP

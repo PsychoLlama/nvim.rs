@@ -23,7 +23,9 @@
 use std::ffi::c_int;
 use std::ptr;
 
-use crate::bt_opcodes::{END, HASWIDTH, SIMPLE, SPSTART};
+use crate::bt_opcodes::{
+    BOW, END, EOW, EXACTLY, HASWIDTH, MCLOSE, MOPEN, NCLOSE, NOPEN, NOTHING, SIMPLE, SPSTART,
+};
 
 // =============================================================================
 // Constants
@@ -172,6 +174,15 @@ pub unsafe fn operand_mut(p: *mut u8) -> *mut u8 {
     } else {
         p.add(NODE_SIZE)
     }
+}
+
+/// Get the next node pointer as mutable
+///
+/// # Safety
+/// `p` must be a valid pointer to a bytecode node with at least 3 bytes
+#[inline]
+pub unsafe fn next_mut(p: *mut u8) -> *mut u8 {
+    next(p) as *mut u8
 }
 
 // =============================================================================
@@ -675,6 +686,117 @@ pub unsafe extern "C" fn rs_bt_next(p: *const u8) -> *const u8 {
 #[no_mangle]
 pub unsafe extern "C" fn rs_bt_operand(p: *const u8) -> *const u8 {
     operand(p)
+}
+
+// =============================================================================
+// FFI Declarations for Compilation
+// =============================================================================
+
+extern "C" {
+    // UTF-8 functions
+    fn utf_ptr2char(p: *const i8) -> c_int;
+}
+
+/// Get strlen using standard C library
+fn c_strlen(s: *const u8) -> usize {
+    if s.is_null() {
+        return 0;
+    }
+    let mut len = 0;
+    unsafe {
+        while *s.add(len) != 0 {
+            len += 1;
+        }
+    }
+    len
+}
+
+/// Find the longest literal string that must appear in a match.
+///
+/// This optimization extracts a "must match" substring from the pattern.
+/// If the pattern contains expensive operators (STAR, etc.), we find the
+/// longest EXACTLY node that must be present for any match.
+///
+/// Returns (pointer to string, length), or (null, 0) if none found.
+///
+/// # Safety
+/// `scan` must be a valid pointer to bytecode, or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_find_regmust(
+    scan: *mut u8,
+    flags: c_int,
+    out_len: *mut c_int,
+) -> *mut u8 {
+    if out_len.is_null() {
+        return ptr::null_mut();
+    }
+
+    *out_len = 0;
+
+    // Don't search for regmust if pattern has newline (can affect matching)
+    if (flags & 0x8) != 0 {
+        // HASNL
+        return ptr::null_mut();
+    }
+
+    let mut longest: *mut u8 = ptr::null_mut();
+    let mut len: c_int = 0;
+    let mut current = scan;
+
+    while !current.is_null() {
+        if op(current) == EXACTLY {
+            let operand_ptr = operand(current);
+            let scanlen = c_strlen(operand_ptr) as c_int;
+            if scanlen >= len {
+                longest = operand_ptr as *mut u8;
+                len = scanlen;
+            }
+        }
+        current = next(current) as *mut u8;
+    }
+
+    *out_len = len;
+    longest
+}
+
+/// Extract the starting character from a pattern.
+///
+/// If the pattern starts with EXACTLY, return the first character.
+/// This optimization allows quick rejection of non-matching lines.
+///
+/// Returns the character, or 0 if no optimization possible.
+///
+/// # Safety
+/// `scan` must be a valid pointer to bytecode.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_get_regstart(scan: *mut u8) -> c_int {
+    if scan.is_null() {
+        return 0;
+    }
+
+    if op(scan) == EXACTLY {
+        let operand_ptr = operand(scan) as *const i8;
+        return utf_ptr2char(operand_ptr);
+    }
+
+    // Also check after BOW, EOW, NOTHING, MOPEN/NOPEN/MCLOSE/NCLOSE
+    let opcode = op(scan);
+    if opcode == BOW
+        || opcode == EOW
+        || opcode == NOTHING
+        || opcode == MOPEN
+        || opcode == NOPEN
+        || opcode == MCLOSE
+        || opcode == NCLOSE
+    {
+        let next_scan = next(scan) as *mut u8;
+        if !next_scan.is_null() && op(next_scan) == EXACTLY {
+            let operand_ptr = operand(next_scan) as *const i8;
+            return utf_ptr2char(operand_ptr);
+        }
+    }
+
+    0
 }
 
 // =============================================================================
