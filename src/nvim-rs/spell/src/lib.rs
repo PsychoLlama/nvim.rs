@@ -1,7 +1,34 @@
 //! Spell checking utilities for Neovim
 //!
 //! This crate provides Rust implementations of spell checking functions
-//! from `src/nvim/spell.c`.
+//! from `src/nvim/spell.c`, `src/nvim/spellfile.c`, and `src/nvim/spellsuggest.c`.
+//!
+//! ## Architecture
+//!
+//! The spell crate is organized into the following modules:
+//!
+//! - [`spellfile`] - Spell file I/O (.spl file format parsing and writing)
+//! - [`check`] - Core spell checking logic (word lookup, case validation)
+//! - [`suggest`] - Suggestion algorithms (edit distance, scoring)
+//! - [`soundfold`] - Phonetic folding for sound-alike suggestions
+//! - [`wordtree`] - Word tree traversal for the compact trie structure
+//! - [`wordnode`] - Word node helpers for tree construction
+//! - [`compress`] - Word tree compression for mkspell
+//! - [`commands`] - Support for spell commands (zg, zw, ]s, [s, etc.)
+//!
+//! ## Data Structures
+//!
+//! The spell system uses opaque handles to interface with C:
+//!
+//! - [`SlangHandle`] - Handle to a spell language (slang_T)
+//! - [`LangpHandle`] - Handle to a language pointer entry (langp_T)
+//! - [`SpelltabHandle`] - Handle to the spell character table (spelltab_T)
+//!
+//! ## FFI Integration
+//!
+//! All public FFI functions are prefixed with `rs_` and are safe to call from C.
+//! The functions follow the opaque handle pattern to avoid exposing Rust memory
+//! layout to C code.
 
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(clippy::ptr_as_ptr)]
