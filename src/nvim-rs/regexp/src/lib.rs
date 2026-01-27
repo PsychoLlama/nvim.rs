@@ -45,12 +45,15 @@ pub use bt_compile::{
     rs_bt_op, rs_bt_operand, rs_bt_set_next,
 };
 pub use bt_exec::{
-    rs_bt_backtrack_empty, rs_bt_match_state_advance, rs_bt_match_state_at_bol,
-    rs_bt_match_state_at_eol, rs_bt_match_state_cleanup, rs_bt_match_state_clear_submatches,
-    rs_bt_match_state_current_byte, rs_bt_match_state_free, rs_bt_match_state_get_endp,
-    rs_bt_match_state_get_startp, rs_bt_match_state_new, rs_bt_match_state_new_multi,
-    rs_bt_match_state_set_endp, rs_bt_match_state_set_input, rs_bt_match_state_set_startp,
-    rs_bt_pop_backtrack, rs_bt_push_backtrack, rs_bt_regrepeat,
+    rs_bt_backpos_add, rs_bt_backpos_find, rs_bt_backtrack_empty, rs_bt_get_backpos, rs_bt_get_col,
+    rs_bt_get_lnum, rs_bt_get_stack, rs_bt_init_match, rs_bt_init_match_multi, rs_bt_is_multi,
+    rs_bt_match_state_advance, rs_bt_match_state_at_bol, rs_bt_match_state_at_eol,
+    rs_bt_match_state_cleanup, rs_bt_match_state_clear_submatches, rs_bt_match_state_current_byte,
+    rs_bt_match_state_free, rs_bt_match_state_get_endp, rs_bt_match_state_get_startp,
+    rs_bt_match_state_new, rs_bt_match_state_new_multi, rs_bt_match_state_set_endp,
+    rs_bt_match_state_set_input, rs_bt_match_state_set_startp, rs_bt_pop_backtrack, rs_bt_pop_star,
+    rs_bt_push_backtrack, rs_bt_push_star, rs_bt_regrepeat, rs_bt_restore_pos, rs_bt_save_pos,
+    rs_bt_set_match_nl,
 };
 pub use bt_state::{
     rs_backpos_clear, rs_backpos_free, rs_backpos_new, rs_regstack_clear, rs_regstack_free,

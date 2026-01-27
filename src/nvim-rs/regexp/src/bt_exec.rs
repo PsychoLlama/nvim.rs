@@ -35,7 +35,7 @@ use crate::bt_opcodes::{
     NWHITE, NWORD, OCTAL, PLUS, PRINT, RE_BOF, RE_COL, RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK,
     RE_VCOL, RE_VISUAL, SFNAME, SKWORD, SPRINT, STAR, SUBPAT, UPPER, WHITE, WORD,
 };
-use crate::bt_state::{BackPosTable, RegSave, RegStack, RegState, NSUBEXP};
+use crate::bt_state::{BackPosTable, RegSave, RegStack, RegStar, RegState, NSUBEXP};
 
 // =============================================================================
 // Match Result
@@ -1095,6 +1095,234 @@ pub unsafe extern "C" fn rs_bt_regmatch(state: *mut MatchState, program: *const 
         MatchResult::Match => 1,
         MatchResult::NoMatch => 0,
         MatchResult::Error | MatchResult::TimedOut => -1,
+    }
+}
+
+/// Initialize a match state for a new match attempt.
+///
+/// This resets the state for a fresh match at the given position.
+///
+/// # Safety
+/// `state` and `input` must be valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_init_match(
+    state: *mut MatchState,
+    input: *const u8,
+    line_start: *const u8,
+) {
+    if state.is_null() {
+        return;
+    }
+    let s = &mut *state;
+    s.set_input(input);
+    s.set_line_start(line_start);
+    s.clear_submatches();
+    s.stack.clear();
+    s.backpos.clear();
+}
+
+/// Initialize a multi-line match state.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_init_match_multi(state: *mut MatchState, lnum: c_int, col: c_int) {
+    if state.is_null() {
+        return;
+    }
+    let s = &mut *state;
+    s.lnum = lnum;
+    s.col = col;
+    s.clear_submatches();
+    s.stack.clear();
+    s.backpos.clear();
+}
+
+/// Save the current match position.
+///
+/// # Safety
+/// `state` and `out` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_save_pos(state: *const MatchState, out: *mut RegSave) {
+    if state.is_null() || out.is_null() {
+        return;
+    }
+    *out = (*state).save_pos();
+}
+
+/// Restore a saved match position.
+///
+/// # Safety
+/// `state` and `saved` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_restore_pos(state: *mut MatchState, saved: *const RegSave) {
+    if state.is_null() || saved.is_null() {
+        return;
+    }
+    (*state).restore_pos(&*saved);
+}
+
+/// Get backpos table from match state.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_get_backpos(state: *mut MatchState) -> *mut BackPosTable {
+    if state.is_null() {
+        ptr::null_mut()
+    } else {
+        &mut (*state).backpos as *mut BackPosTable
+    }
+}
+
+/// Add an entry to the backpos table.
+///
+/// # Safety
+/// `table` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_backpos_add(table: *mut BackPosTable, scan: *mut u8, pos: RegSave) {
+    if !table.is_null() {
+        (*table).push(scan, pos);
+    }
+}
+
+/// Find an entry in the backpos table by scan position.
+///
+/// # Safety
+/// `table` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_backpos_find(
+    table: *const BackPosTable,
+    scan: *const u8,
+    out: *mut RegSave,
+) -> c_int {
+    if table.is_null() || out.is_null() {
+        return 0;
+    }
+    match (*table).find(scan) {
+        Some(bp) => {
+            *out = bp.bp_pos;
+            1
+        }
+        None => 0,
+    }
+}
+
+/// Get the stack from match state.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_get_stack(state: *mut MatchState) -> *mut RegStack {
+    if state.is_null() {
+        ptr::null_mut()
+    } else {
+        &mut (*state).stack as *mut RegStack
+    }
+}
+
+/// Push a star (repetition) state onto the stack.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_push_star(
+    state: *mut MatchState,
+    count: i64,
+    minval: i64,
+    maxval: i64,
+) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    let star = RegStar {
+        count,
+        minval,
+        maxval,
+    };
+    c_int::from((*state).stack.push_star(star))
+}
+
+/// Pop a star state from the stack.
+///
+/// Returns the count, or -1 if empty.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_pop_star(
+    state: *mut MatchState,
+    out_count: *mut i64,
+    out_minval: *mut i64,
+    out_maxval: *mut i64,
+) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    match (*state).stack.pop_star() {
+        Some(star) => {
+            if !out_count.is_null() {
+                *out_count = star.count;
+            }
+            if !out_minval.is_null() {
+                *out_minval = star.minval;
+            }
+            if !out_maxval.is_null() {
+                *out_maxval = star.maxval;
+            }
+            1
+        }
+        None => 0,
+    }
+}
+
+/// Set the match_nl flag (whether '.' matches newline).
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_set_match_nl(state: *mut MatchState, match_nl: c_int) {
+    if !state.is_null() {
+        (*state).match_nl = match_nl != 0;
+    }
+}
+
+/// Get whether we're in multi-line mode.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_is_multi(state: *const MatchState) -> c_int {
+    if state.is_null() {
+        0
+    } else {
+        c_int::from((*state).multi)
+    }
+}
+
+/// Get current line number (multi-line mode).
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_get_lnum(state: *const MatchState) -> c_int {
+    if state.is_null() {
+        0
+    } else {
+        (*state).lnum
+    }
+}
+
+/// Get current column (multi-line mode).
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_get_col(state: *const MatchState) -> c_int {
+    if state.is_null() {
+        0
+    } else {
+        (*state).col
     }
 }
 
