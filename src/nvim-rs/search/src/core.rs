@@ -548,6 +548,430 @@ pub extern "C" fn rs_dirc_flip(dirc: c_int) -> c_int {
     }
 }
 
+// =============================================================================
+// Search Position Types
+// =============================================================================
+
+/// Line number type (matches linenr_T in C)
+pub type LinenrT = i32;
+/// Column number type (matches colnr_T in C)
+pub type ColnrT = i32;
+
+/// Position in a buffer (line + column)
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SearchPos {
+    /// Line number (1-based)
+    pub lnum: LinenrT,
+    /// Column number (0-based byte offset)
+    pub col: ColnrT,
+    /// Column offset for virtual column handling
+    pub coladd: ColnrT,
+}
+
+impl SearchPos {
+    /// Create a new position
+    pub const fn new(lnum: LinenrT, col: ColnrT) -> Self {
+        Self {
+            lnum,
+            col,
+            coladd: 0,
+        }
+    }
+
+    /// Create a position with coladd
+    pub const fn with_coladd(lnum: LinenrT, col: ColnrT, coladd: ColnrT) -> Self {
+        Self { lnum, col, coladd }
+    }
+
+    /// Check if position is valid (lnum > 0)
+    pub const fn is_valid(&self) -> bool {
+        self.lnum > 0
+    }
+
+    /// Check if position is at start of line
+    pub const fn at_bol(&self) -> bool {
+        self.col == 0
+    }
+
+    /// Compare positions (returns -1, 0, or 1)
+    pub fn compare(&self, other: &Self) -> c_int {
+        if self.lnum != other.lnum {
+            if self.lnum < other.lnum {
+                -1
+            } else {
+                1
+            }
+        } else if self.col != other.col {
+            if self.col < other.col {
+                -1
+            } else {
+                1
+            }
+        } else {
+            0
+        }
+    }
+
+    /// Check if this position is before another
+    pub fn is_before(&self, other: &Self) -> bool {
+        self.compare(other) < 0
+    }
+
+    /// Check if this position is after another
+    pub fn is_after(&self, other: &Self) -> bool {
+        self.compare(other) > 0
+    }
+
+    /// Check if positions are equal
+    pub fn equals(&self, other: &Self) -> bool {
+        self.lnum == other.lnum && self.col == other.col
+    }
+}
+
+/// Result of a search operation
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct SearchResult {
+    /// Whether a match was found
+    pub found: bool,
+    /// Start position of match
+    pub start: SearchPos,
+    /// End position of match
+    pub end: SearchPos,
+    /// Whether search wrapped around
+    pub wrapped: bool,
+    /// Number of lines matched (for multiline patterns)
+    pub matched_lines: c_int,
+}
+
+impl Default for SearchResult {
+    fn default() -> Self {
+        Self::not_found()
+    }
+}
+
+impl SearchResult {
+    /// Create a not-found result
+    pub const fn not_found() -> Self {
+        Self {
+            found: false,
+            start: SearchPos::new(0, 0),
+            end: SearchPos::new(0, 0),
+            wrapped: false,
+            matched_lines: 0,
+        }
+    }
+
+    /// Create a found result
+    pub const fn found_at(start: SearchPos, end: SearchPos) -> Self {
+        Self {
+            found: true,
+            start,
+            end,
+            wrapped: false,
+            matched_lines: 1,
+        }
+    }
+
+    /// Mark the result as having wrapped
+    pub fn mark_wrapped(mut self) -> Self {
+        self.wrapped = true;
+        self
+    }
+
+    /// Set the number of matched lines
+    pub fn with_matched_lines(mut self, lines: c_int) -> Self {
+        self.matched_lines = lines;
+        self
+    }
+}
+
+// =============================================================================
+// Search Match Context
+// =============================================================================
+
+/// Context for a search match operation
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct SearchMatchContext {
+    /// Direction: FORWARD (1) or BACKWARD (-1)
+    pub direction: c_int,
+    /// Search options flags
+    pub options: c_int,
+    /// Pattern index (RE_SEARCH, RE_SUBST, etc.)
+    pub pat_use: c_int,
+    /// Number of matches to find
+    pub count: c_int,
+    /// Stop at this line (0 = no limit)
+    pub stop_lnum: LinenrT,
+    /// Whether to search in closed folds
+    pub search_in_folds: bool,
+}
+
+impl Default for SearchMatchContext {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SearchMatchContext {
+    /// Create a new default context
+    pub const fn new() -> Self {
+        Self {
+            direction: direction::DIR_FORWARD as c_int,
+            options: 0,
+            pat_use: state::RE_SEARCH,
+            count: 1,
+            stop_lnum: 0,
+            search_in_folds: false,
+        }
+    }
+
+    /// Create a forward search context
+    pub const fn forward() -> Self {
+        Self {
+            direction: direction::DIR_FORWARD as c_int,
+            ..Self::new()
+        }
+    }
+
+    /// Create a backward search context
+    pub const fn backward() -> Self {
+        Self {
+            direction: direction::DIR_BACKWARD as c_int,
+            ..Self::new()
+        }
+    }
+
+    /// Check if this is a forward search
+    pub const fn is_forward(&self) -> bool {
+        self.direction > 0
+    }
+
+    /// Check if this is a backward search
+    pub const fn is_backward(&self) -> bool {
+        self.direction < 0
+    }
+
+    /// Set the search options
+    pub fn with_options(mut self, options: c_int) -> Self {
+        self.options = options;
+        self
+    }
+
+    /// Set the count
+    pub fn with_count(mut self, count: c_int) -> Self {
+        self.count = count;
+        self
+    }
+
+    /// Set the stop line
+    pub fn with_stop_lnum(mut self, lnum: LinenrT) -> Self {
+        self.stop_lnum = lnum;
+        self
+    }
+}
+
+// =============================================================================
+// FFI Exports for Search Position Types
+// =============================================================================
+
+/// FFI: Create a new SearchPos
+#[no_mangle]
+pub extern "C" fn rs_search_pos_new(lnum: LinenrT, col: ColnrT) -> SearchPos {
+    SearchPos::new(lnum, col)
+}
+
+/// FFI: Check if SearchPos is valid
+///
+/// # Safety
+/// The caller must ensure `pos` points to valid memory if non-null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_search_pos_is_valid(pos: *const SearchPos) -> c_int {
+    if pos.is_null() {
+        return 0;
+    }
+    c_int::from((*pos).is_valid())
+}
+
+/// FFI: Compare two positions
+///
+/// # Safety
+/// The caller must ensure `a` and `b` point to valid memory if non-null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_search_pos_compare(a: *const SearchPos, b: *const SearchPos) -> c_int {
+    if a.is_null() || b.is_null() {
+        return 0;
+    }
+    (*a).compare(&*b)
+}
+
+/// FFI: Check if pos a is before pos b
+///
+/// # Safety
+/// The caller must ensure `a` and `b` point to valid memory if non-null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_search_pos_is_before(
+    a: *const SearchPos,
+    b: *const SearchPos,
+) -> c_int {
+    if a.is_null() || b.is_null() {
+        return 0;
+    }
+    c_int::from((*a).is_before(&*b))
+}
+
+/// FFI: Create a not-found SearchResult
+#[no_mangle]
+pub extern "C" fn rs_search_result_not_found() -> SearchResult {
+    SearchResult::not_found()
+}
+
+/// FFI: Create a found SearchResult
+#[no_mangle]
+pub extern "C" fn rs_search_result_found_at(start: SearchPos, end: SearchPos) -> SearchResult {
+    SearchResult::found_at(start, end)
+}
+
+/// FFI: Check if SearchResult was found
+///
+/// # Safety
+/// The caller must ensure `result` points to valid memory if non-null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_search_result_was_found(result: *const SearchResult) -> c_int {
+    if result.is_null() {
+        return 0;
+    }
+    c_int::from((*result).found)
+}
+
+/// FFI: Check if SearchResult wrapped
+///
+/// # Safety
+/// The caller must ensure `result` points to valid memory if non-null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_search_result_did_wrap(result: *const SearchResult) -> c_int {
+    if result.is_null() {
+        return 0;
+    }
+    c_int::from((*result).wrapped)
+}
+
+/// FFI: Create a new SearchMatchContext
+#[no_mangle]
+pub extern "C" fn rs_search_match_context_new() -> SearchMatchContext {
+    SearchMatchContext::new()
+}
+
+/// FFI: Create a forward SearchMatchContext
+#[no_mangle]
+pub extern "C" fn rs_search_match_context_forward() -> SearchMatchContext {
+    SearchMatchContext::forward()
+}
+
+/// FFI: Create a backward SearchMatchContext
+#[no_mangle]
+pub extern "C" fn rs_search_match_context_backward() -> SearchMatchContext {
+    SearchMatchContext::backward()
+}
+
+/// FFI: Check if context is forward
+///
+/// # Safety
+/// The caller must ensure `ctx` points to valid memory if non-null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_search_match_context_is_forward(
+    ctx: *const SearchMatchContext,
+) -> c_int {
+    if ctx.is_null() {
+        return 0;
+    }
+    c_int::from((*ctx).is_forward())
+}
+
+/// FFI: Get search position lnum
+///
+/// # Safety
+/// The caller must ensure `pos` points to valid memory if non-null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_search_pos_get_lnum(pos: *const SearchPos) -> LinenrT {
+    if pos.is_null() {
+        return 0;
+    }
+    (*pos).lnum
+}
+
+/// FFI: Get search position col
+///
+/// # Safety
+/// The caller must ensure `pos` points to valid memory if non-null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_search_pos_get_col(pos: *const SearchPos) -> ColnrT {
+    if pos.is_null() {
+        return 0;
+    }
+    (*pos).col
+}
+
+/// FFI: Set search position lnum
+///
+/// # Safety
+/// The caller must ensure `pos` points to valid memory if non-null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_search_pos_set_lnum(pos: *mut SearchPos, lnum: LinenrT) {
+    if !pos.is_null() {
+        (*pos).lnum = lnum;
+    }
+}
+
+/// FFI: Set search position col
+///
+/// # Safety
+/// The caller must ensure `pos` points to valid memory if non-null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_search_pos_set_col(pos: *mut SearchPos, col: ColnrT) {
+    if !pos.is_null() {
+        (*pos).col = col;
+    }
+}
+
+/// FFI: Get search result start position
+///
+/// # Safety
+/// The caller must ensure `result` points to valid memory if non-null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_search_result_get_start(result: *const SearchResult) -> SearchPos {
+    if result.is_null() {
+        return SearchPos::default();
+    }
+    (*result).start
+}
+
+/// FFI: Get search result end position
+///
+/// # Safety
+/// The caller must ensure `result` points to valid memory if non-null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_search_result_get_end(result: *const SearchResult) -> SearchPos {
+    if result.is_null() {
+        return SearchPos::default();
+    }
+    (*result).end
+}
+
+/// FFI: Get number of matched lines
+///
+/// # Safety
+/// The caller must ensure `result` points to valid memory if non-null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_search_result_get_matched_lines(result: *const SearchResult) -> c_int {
+    if result.is_null() {
+        return 0;
+    }
+    (*result).matched_lines
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
