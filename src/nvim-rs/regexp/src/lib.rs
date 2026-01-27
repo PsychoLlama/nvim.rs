@@ -32,11 +32,12 @@ pub mod scanner;
 pub mod special;
 
 pub use api::{
-    rs_engine_to_int, rs_get_regflags, rs_int_to_engine, rs_is_bt_prog, rs_is_nfa_prog,
-    rs_prog_in_use, rs_regmatch_get_endp, rs_regmatch_get_startp, rs_regmatch_set_endp,
-    rs_regmatch_set_startp, rs_regmmatch_get_end_col, rs_regmmatch_get_end_lnum,
-    rs_regmmatch_get_start_col, rs_regmmatch_get_start_lnum, rs_regprog_get_engine,
-    rs_set_prog_in_use,
+    rs_clear_regmatch, rs_clear_regmmatch, rs_copy_regmatch, rs_copy_regmmatch, rs_engine_to_int,
+    rs_get_regflags, rs_int_to_engine, rs_is_bt_prog, rs_is_nfa_prog, rs_pattern_ends_with_dollar,
+    rs_pattern_len, rs_pattern_starts_with_caret, rs_prog_in_use, rs_regmatch_get_endp,
+    rs_regmatch_get_startp, rs_regmatch_set_endp, rs_regmatch_set_startp, rs_regmmatch_get_end_col,
+    rs_regmmatch_get_end_lnum, rs_regmmatch_get_start_col, rs_regmmatch_get_start_lnum,
+    rs_regprog_get_engine, rs_set_prog_in_use,
 };
 pub use bt_compile::{
     rs_bt_chain, rs_bt_compiler_free, rs_bt_compiler_is_too_long, rs_bt_compiler_new,
