@@ -517,6 +517,21 @@ extern bool rs_qf_valid_list_range(const void *qfl, int start, int end);
 extern void rs_qf_clamp_range(const void *qfl, int start, int end, int *out_start, int *out_end);
 extern int rs_qf_calc_window_height(const void *qfl, int min_height, int max_height);
 
+// Phase 555: Filter statistics struct from Rust
+typedef struct {
+  int total;
+  int valid;
+  int errors;
+  int warnings;
+  int info;
+  int in_buffer;
+} QfFilterStats;
+extern QfFilterStats rs_qf_filter_stats(const void *qfl, int bnr);
+extern int rs_qf_find_matching(const void *qfl, int bnr, char entry_type, bool valid_only);
+extern int rs_qf_find_matching_after(const void *qfl, int start_idx, int bnr, char entry_type,
+                                     bool valid_only);
+extern int rs_qf_find_in_range(const void *qfl, int bnr, linenr_T start_lnum, linenr_T end_lnum);
+
 // =============================================================================
 // Phase 5: List management setters and wrappers for Rust
 // =============================================================================
