@@ -126,7 +126,7 @@ pub use parser::{
 pub use regsub::{
     rs_do_lower, rs_do_upper, rs_is_k_special, rs_sub_context_has_room, rs_sub_context_new,
     rs_sub_context_output_len, rs_utf8_char2bytes, rs_utf8_char2len, rs_utf8_char_len,
-    rs_utf8_ptr2char,
+    rs_utf8_ptr2char, rs_vim_regsub_both,
 };
 pub use scanner::{
     rs_getchr, rs_initchr, rs_peekchr, rs_skipchr, rs_skipchr_keepstart, rs_ungetchr,
