@@ -697,6 +697,18 @@ OptInt nvim_get_p_wiw(void)
   return p_wiw;
 }
 
+/// Get the global p_sb (splitbelow) value.
+int nvim_get_p_sb(void)
+{
+  return p_sb ? 1 : 0;
+}
+
+/// Get the global p_spr (splitright) value.
+int nvim_get_p_spr(void)
+{
+  return p_spr ? 1 : 0;
+}
+
 /// Get the global Rows value.
 int nvim_get_Rows(void)
 {
