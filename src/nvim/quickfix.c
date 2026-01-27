@@ -452,6 +452,71 @@ extern void *rs_qf_get_list_at(const void *qi, int idx);
 extern bool rs_qf_has_errors(const void *qfl);
 extern bool rs_qf_has_warnings_or_errors(const void *qfl);
 
+// Phase 554: Display and window functions from Rust
+extern linenr_T rs_qf_cursor_line(const void *qfl);
+extern bool rs_qf_should_update_cursor(const void *qfl, int old_idx);
+extern int rs_qf_calc_scroll(const void *qfl, linenr_T top_line, int window_height);
+extern linenr_T rs_qf_calc_centered_top(const void *qfl, int window_height);
+extern void *rs_qf_entry_at_line(const void *qfl, int line);
+extern int rs_qf_count_with_position(const void *qfl);
+extern int rs_qf_count_with_file(const void *qfl);
+extern int rs_qf_lnum_display_width(int lnum);
+extern unsigned char rs_qf_type_display_char(unsigned char type_code);
+extern int rs_qf_is_error_type(unsigned char type_code);
+extern int rs_qf_is_warning_type(unsigned char type_code);
+extern int rs_qf_display_scroll_percent(int total, int first_visible, int visible_lines);
+
+// Phase 554: Display range calculation struct from Rust
+typedef struct {
+  int start_idx;
+  int end_idx;
+  int total;
+  int current;
+} QfDisplayRange;
+extern QfDisplayRange rs_qf_calc_display_range(const void *qfl, int window_height);
+
+// Phase 554: Entry display info struct from Rust
+typedef struct {
+  int fnum;
+  linenr_T lnum;
+  int col;
+  linenr_T end_lnum;
+  int end_col;
+  int nr;
+  char entry_type;
+  bool valid;
+  bool has_position;
+  bool has_range;
+} QfEntryDisplay;
+extern QfEntryDisplay rs_qf_entry_display_info(const void *qfp);
+extern QfEntryDisplay rs_qf_current_entry_display(const void *qfl);
+
+// Phase 554: Command result struct from Rust
+typedef struct {
+  bool success;
+  int new_idx;
+  int count;
+  bool update_window;
+} QfCmdResult;
+extern QfCmdResult rs_qf_cmd_cc_result(const void *qfl, int target_idx);
+extern QfCmdResult rs_qf_cmd_nav_result(const void *qfl, int count, bool forward);
+
+// Phase 554: List info struct from Rust
+typedef struct {
+  int list_idx;
+  int count;
+  int current_idx;
+  bool is_current;
+  bool has_title;
+} QfListInfo;
+extern QfListInfo rs_qf_get_list_info(const void *qi, int list_idx);
+extern QfListInfo rs_qf_current_list_info(const void *qfl);
+
+// Phase 554: Range validation functions from Rust
+extern bool rs_qf_valid_list_range(const void *qfl, int start, int end);
+extern void rs_qf_clamp_range(const void *qfl, int start, int end, int *out_start, int *out_end);
+extern int rs_qf_calc_window_height(const void *qfl, int min_height, int max_height);
+
 // =============================================================================
 // Phase 5: List management setters and wrappers for Rust
 // =============================================================================
@@ -5265,19 +5330,21 @@ static char *qf_types(int c, int nr)
   static char cc[3];
   char *p;
 
-  if (c == 'W' || c == 'w') {
+  // Use Rust functions for type classification
+  unsigned char uc = (unsigned char)c;
+  if (rs_qf_is_warning_type(uc)) {
     p = " warning";
   } else if (c == 'I' || c == 'i') {
     p = " info";
   } else if (c == 'N' || c == 'n') {
     p = " note";
-  } else if (c == 'E' || c == 'e' || (c == 0 && nr > 0)) {
+  } else if (rs_qf_is_error_type(uc) || (c == 0 && nr > 0)) {
     p = " error";
   } else if (c == 0 || c == 1) {
     p = "";
   } else {
     cc[0] = ' ';
-    cc[1] = (char)c;
+    cc[1] = (char)rs_qf_type_display_char(uc);
     cc[2] = NUL;
     p = cc;
   }
@@ -5496,7 +5563,9 @@ void ex_copen(exarg_T *eap)
   if (eap->addr_count != 0) {
     height = (int)eap->line2;
   } else {
-    height = QF_WINHEIGHT;
+    // Use Rust function to calculate optimal height based on entry count
+    qf_list_T *qfl_temp = qf_get_curlist(qi);
+    height = rs_qf_calc_window_height(qfl_temp, 3, QF_WINHEIGHT);
   }
   reset_VIsual_and_resel();  // stop Visual mode
 
@@ -5516,8 +5585,11 @@ void ex_copen(exarg_T *eap)
   qf_list_T *qfl = qf_get_curlist(qi);
   qf_set_title_var(qfl);
   // Save the current index here, as updating the quickfix buffer may free
-  // the quickfix list
-  int lnum = qfl->qf_index;
+  // the quickfix list. Use Rust function for cursor line calculation.
+  linenr_T lnum = rs_qf_cursor_line(qfl);
+  if (lnum == 0) {
+    lnum = 1;  // Default to first line if empty
+  }
 
   // Fill the buffer with the quickfix list.
   qf_fill_buffer(qfl, curbuf, NULL, curwin->handle);
@@ -5591,14 +5663,15 @@ linenr_T nvim_qf_current_entry(win_T *wp)
 /// @param old_qf_index  previous qf_index or zero
 static bool qf_win_pos_update(qf_info_T *qi, int old_qf_index)
 {
-  int qf_index = qf_get_curlist(qi)->qf_index;
+  qf_list_T *qfl = qf_get_curlist(qi);
+  int qf_index = qfl->qf_index;
 
   // Put the cursor on the current error in the quickfix window, so that
   // it's viewable.
   win_T *win = qf_find_win(qi);
   if (win != NULL
       && qf_index <= win->w_buffer->b_ml.ml_line_count
-      && old_qf_index != qf_index) {
+      && rs_qf_should_update_cursor(qfl, old_qf_index)) {
     win->w_redraw_top = MIN(old_qf_index, qf_index);
     win->w_redraw_bot = MAX(old_qf_index, qf_index);
     qf_win_goto(win, qf_index);
