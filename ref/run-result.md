@@ -1,52 +1,23 @@
-Plan: ~/.claude/plans/adaptive-twirling-wand.md
+Plan: ~/.claude/plans/breezy-wibbling-alpaca.md
 
-Now let me provide a summary of the completed work. The plan execution is complete for the portions that were achievable without more invasive changes to the `build_stl_str_hl` function. Let me create a summary:
+The regex engine is working correctly with the migrated Rust helpers.
 
-## Summary
+Based on my analysis, the regexp migration plan has been partially completed:
 
-I have executed the statusline subsystem migration plan with the following accomplishments:
+**Completed:**
+- Phase 1: Helper functions (`cstrchr`, `cstrncmp`) migrated to Rust
+- Phase 2: BT engine support functions (`reg_breakcheck`, `reg_iswordc`, `reg_prev_class`, `reg_nextline`) migrated
+- Phase 3: NFA engine now uses shared Rust helpers
+- Phase 4: Key compilation helpers are wired (`rs_bt_find_regmust`, `rs_bt_get_regstart`, `rs_re_put_uint32`, `rs_read_limits`, scanner functions)
 
-### Completed Work
+**Pending (requires significant work):**
+- Phase 5: Public API migration (`vim_regcomp`, `vim_regexec` - these would require migrating the ~1000-line `reg()` parser and ~1400-line `regmatch()` functions)
+- Phase 6: Cleanup and optimization
 
-**Phase 1: Audit and Wire-Up Foundation**
-- Mapped all C functions to their Rust equivalents
-- Identified 103 Rust `#[no_mangle]` exports in the statusline crate
-- Identified 6 functions that were already wired up to C
+The remaining work to fully migrate the regexp engine would require:
+1. Converting global state (`regcode`, `regsize`, `regparse`) to Rust-owned structures
+2. Migrating the recursive descent parser `reg()` (~1000 lines)
+3. Migrating `regmatch()` (~1400 lines) and `nfa_regmatch()` (~1400 lines)
+4. Migrating the public API entry points
 
-**Phase 2: Wire Up Click Definition Functions**
-- Wired `stl_clear_click_defs` → `rs_stl_clear_click_defs`
-- Wired `stl_alloc_click_defs` → `rs_stl_alloc_click_defs`
-- Wired `stl_fill_click_defs` → `rs_stl_fill_click_defs`
-
-These functions are now thin C wrappers that delegate to Rust implementations, removing ~42 lines of C code.
-
-**Phase 3: Verified Integration**
-- Existing wired functions (`rs_stl_connected`, `rs_fillchar_status`, `rs_tabwidth_calc`) continue to work
-- All code paths in `win_redr_status`, `win_redr_winbar`, `redraw_custom_statusline`, and `draw_tabline` now use Rust functions for click handling
-
-**Phases 6-7: Tabline/Winbar and Public API**
-- Tabline click handling now fully uses Rust functions
-- Winbar click handling now fully uses Rust functions
-- Public API accessor functions (`nvim_stl_*`) are in place for Rust FFI
-
-### Remaining Work (Future Phases)
-
-**Phase 4-5: `build_stl_str_hl` Migration**
-- The core statusline rendering function `build_stl_str_hl` remains in C
-- Rust has `rs_build_stl_str` but with a simpler interface
-- Full migration requires:
-  - Matching output parameter interface (hltab, tabtab, stcp)
-  - Handling complex expression evaluation callbacks
-  - Managing memory allocation for click records
-
-**Phase 8: Cleanup and Documentation**
-- Update `ref/crates.md` if needed
-- Document the migration patterns used
-
-### Verification
-
-All checks pass:
-- `just build` ✓
-- `just rust-fmt-check` ✓
-- `just rust-clippy` ✓
-- `just rust-test` (statusline) ✓ (242 tests)
+This is substantial work that was beyond what could be completed in this session. The incremental work done establishes the foundation (FFI bindings, accessors, helper functions) that future phases would build upon.
