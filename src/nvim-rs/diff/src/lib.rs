@@ -13,6 +13,7 @@ pub mod buffer;
 pub mod commands;
 pub mod helpers;
 pub mod highlight;
+pub mod marks;
 pub mod navigate;
 
 // Re-export key types from submodules
@@ -26,6 +27,7 @@ pub use highlight::{
     DiffChangeResult, DiffHighlightGroup, DiffInlineMode, DiffLineChange, DiffLineInfo,
     DiffLineStatus,
 };
+pub use marks::{ChangeMetrics, ChangePosition, MarkAdjustIter, MarkAdjustParams};
 pub use navigate::{DiffHunkBounds, DiffNavResult, Direction};
 
 use std::ffi::c_char;
