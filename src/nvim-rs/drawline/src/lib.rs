@@ -803,6 +803,11 @@ extern "C" {
 
     // Diff highlight accessor
     fn nvim_wlv_get_diff_hlf(wlv: WlvHandle) -> c_int;
+    fn nvim_wlv_set_diff_hlf(wlv: WlvHandle, val: c_int);
+
+    // Reset extra attribute accessors
+    fn nvim_wlv_get_reset_extra_attr(wlv: WlvHandle) -> bool;
+    fn nvim_wlv_set_reset_extra_attr(wlv: WlvHandle, val: bool);
 
     // Highlight functions for set_line_attr_for_diff
     fn rs_hl_get_underline() -> c_int;
@@ -2630,6 +2635,242 @@ pub unsafe extern "C" fn rs_wlv_needs_lbr(wlv: WlvHandle) -> c_int {
 #[no_mangle]
 pub unsafe extern "C" fn rs_wlv_set_needs_lbr(wlv: WlvHandle, val: c_int) {
     nvim_wlv_set_need_lbr(wlv, val != 0);
+}
+
+// ============================================================================
+// Phase 4: Syntax & Highlighting Attribute Helpers
+// ============================================================================
+
+/// Get the line attribute for the whole line.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_line_attr(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_line_attr(wlv)
+}
+
+/// Set the line attribute for the whole line.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_set_line_attr(wlv: WlvHandle, attr: c_int) {
+    nvim_wlv_set_line_attr(wlv, attr);
+}
+
+/// Get the low-priority line attribute.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_line_attr_lowprio(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_line_attr_lowprio(wlv)
+}
+
+/// Set the low-priority line attribute.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_set_line_attr_lowprio(wlv: WlvHandle, attr: c_int) {
+    nvim_wlv_set_line_attr_lowprio(wlv, attr);
+}
+
+/// Check if the line has a line attribute.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_has_line_attr(wlv: WlvHandle) -> c_int {
+    c_int::from(nvim_wlv_get_line_attr(wlv) != 0 || nvim_wlv_get_line_attr_lowprio(wlv) != 0)
+}
+
+/// Combine an attribute with the line attribute.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_combine_line_attr(wlv: WlvHandle, attr: c_int) {
+    let current = nvim_wlv_get_line_attr(wlv);
+    let combined = hl_combine_attr(current, attr);
+    nvim_wlv_set_line_attr(wlv, combined);
+}
+
+/// Combine an attribute with the low-priority line attribute.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_combine_line_attr_lowprio(wlv: WlvHandle, attr: c_int) {
+    let current = nvim_wlv_get_line_attr_lowprio(wlv);
+    let combined = hl_combine_attr(current, attr);
+    nvim_wlv_set_line_attr_lowprio(wlv, combined);
+}
+
+/// Get the effective line attribute (combines line_attr and line_attr_lowprio).
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_effective_line_attr(wlv: WlvHandle) -> c_int {
+    let line_attr = nvim_wlv_get_line_attr(wlv);
+    let line_attr_lowprio = nvim_wlv_get_line_attr_lowprio(wlv);
+    hl_combine_attr(line_attr_lowprio, line_attr)
+}
+
+/// Clear the line attributes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_clear_line_attr(wlv: WlvHandle) {
+    nvim_wlv_set_line_attr(wlv, 0);
+    nvim_wlv_set_line_attr_lowprio(wlv, 0);
+}
+
+/// Combine multiple attributes.
+///
+/// Takes a base attribute and combines it with up to 3 overlay attributes.
+/// Null (0) attributes are skipped.
+#[no_mangle]
+pub unsafe extern "C" fn rs_combine_multi_attrs(
+    base: c_int,
+    attr1: c_int,
+    attr2: c_int,
+    attr3: c_int,
+) -> c_int {
+    let mut result = base;
+    if attr1 != 0 {
+        result = hl_combine_attr(result, attr1);
+    }
+    if attr2 != 0 {
+        result = hl_combine_attr(result, attr2);
+    }
+    if attr3 != 0 {
+        result = hl_combine_attr(result, attr3);
+    }
+    result
+}
+
+/// Check if an attribute is non-default (has highlighting).
+#[no_mangle]
+pub extern "C" fn rs_attr_has_highlight(attr: c_int) -> c_int {
+    c_int::from(attr != 0)
+}
+
+/// Get the sign cul attribute.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_sign_cul_attr(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_sign_cul_attr(wlv)
+}
+
+/// Get the sign num attribute.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_sign_num_attr(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_sign_num_attr(wlv)
+}
+
+/// Check if there's a sign-related CursorLine attribute.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_has_sign_cul_attr(wlv: WlvHandle) -> c_int {
+    c_int::from(nvim_wlv_get_sign_cul_attr(wlv) != 0)
+}
+
+/// Check if there's a sign-related number attribute.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_has_sign_num_attr(wlv: WlvHandle) -> c_int {
+    c_int::from(nvim_wlv_get_sign_num_attr(wlv) != 0)
+}
+
+/// Get the CursorLine attribute.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_cul_attr(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_cul_attr(wlv)
+}
+
+/// Set the CursorLine attribute.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_set_cul_attr(wlv: WlvHandle, attr: c_int) {
+    nvim_wlv_set_cul_attr(wlv, attr);
+}
+
+/// Check if there's a CursorLine attribute.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_has_cul_attr(wlv: WlvHandle) -> c_int {
+    c_int::from(nvim_wlv_get_cul_attr(wlv) != 0)
+}
+
+/// Get the diff highlight flag.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_diff_hlf(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_diff_hlf(wlv)
+}
+
+/// Set the diff highlight flag.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_set_diff_hlf(wlv: WlvHandle, hlf: c_int) {
+    nvim_wlv_set_diff_hlf(wlv, hlf);
+}
+
+/// Check if this line has diff highlighting.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_has_diff(wlv: WlvHandle) -> c_int {
+    c_int::from(nvim_wlv_get_diff_hlf(wlv) != 0)
+}
+
+/// Get the visual selection fromcol.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_fromcol(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_fromcol(wlv)
+}
+
+/// Set the visual selection fromcol.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_set_fromcol(wlv: WlvHandle, col: c_int) {
+    nvim_wlv_set_fromcol(wlv, col);
+}
+
+/// Get the visual selection tocol.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_tocol(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_tocol(wlv)
+}
+
+/// Set the visual selection tocol.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_set_tocol(wlv: WlvHandle, col: c_int) {
+    nvim_wlv_set_tocol(wlv, col);
+}
+
+/// Check if a column is within the visual selection range.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_in_visual_range(wlv: WlvHandle, col: c_int) -> c_int {
+    let fromcol = nvim_wlv_get_fromcol(wlv);
+    let tocol = nvim_wlv_get_tocol(wlv);
+    c_int::from(col >= fromcol && col < tocol)
+}
+
+/// Check if visual selection is active on this line.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_has_visual(wlv: WlvHandle) -> c_int {
+    let tocol = nvim_wlv_get_tocol(wlv);
+    c_int::from(tocol > 0)
+}
+
+/// Get the previous number attribute.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_prev_num_attr(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_prev_num_attr(wlv)
+}
+
+/// Set the previous number attribute.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_set_prev_num_attr(wlv: WlvHandle, attr: c_int) {
+    nvim_wlv_set_prev_num_attr(wlv, attr);
+}
+
+/// Check if the number attribute has changed.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_num_attr_changed(wlv: WlvHandle, attr: c_int) -> c_int {
+    c_int::from(nvim_wlv_get_prev_num_attr(wlv) != attr)
+}
+
+/// Check if should reset extra attribute.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_reset_extra_attr(wlv: WlvHandle) -> c_int {
+    c_int::from(nvim_wlv_get_reset_extra_attr(wlv))
+}
+
+/// Set the reset extra attribute flag.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_set_reset_extra_attr(wlv: WlvHandle, val: c_int) {
+    nvim_wlv_set_reset_extra_attr(wlv, val != 0);
+}
+
+/// Check if showing showbreak.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_need_showbreak(wlv: WlvHandle) -> c_int {
+    c_int::from(nvim_wlv_get_need_showbreak(wlv))
+}
+
+/// Set the need showbreak flag.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_set_need_showbreak(wlv: WlvHandle, val: c_int) {
+    nvim_wlv_set_need_showbreak(wlv, val != 0);
 }
 
 #[cfg(test)]
