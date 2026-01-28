@@ -303,9 +303,254 @@ pub extern "C" fn rs_ruler_calc_width(
     calc_ruler_width(&ctx, &opts)
 }
 
+// =============================================================================
+// Ruler Redraw State Machine
+// =============================================================================
+
+/// Represents the decision of what to do for ruler redraw.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RulerRedrawAction {
+    /// Don't redraw - ruler is disabled or covered
+    None = 0,
+    /// Clear the ruler (it was drawn but shouldn't be now)
+    Clear = 1,
+    /// Use custom rulerformat
+    UseRulerformat = 2,
+    /// Draw the standard ruler
+    DrawStandard = 3,
+    /// Skip - editing in submode, would overwrite mode message
+    Skip = 4,
+}
+
+/// Context for deciding ruler redraw action.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct RulerRedrawContext {
+    /// p_ru - ruler option
+    pub show_ruler: c_int,
+    /// curwin->w_status_height == 0
+    pub curwin_no_status: c_int,
+    /// lastwin_nofloating()->w_status_height > 0
+    pub lastwin_has_status: c_int,
+    /// global_stl_height() > 0
+    pub is_stl_global: c_int,
+    /// p_ch == 0
+    pub cmdheight_zero: c_int,
+    /// ui_has(kUIMessages)
+    pub ui_has_messages: c_int,
+    /// Previous did_ruler_col value (-1 if not drawn)
+    pub did_ruler_col: c_int,
+    /// cursor.lnum > line_count
+    pub cursor_invalid: c_int,
+    /// edit_submode != NULL
+    pub in_edit_submode: c_int,
+    /// *p_ruf (rulerformat is set)
+    pub has_rulerformat: c_int,
+}
+
+impl Default for RulerRedrawContext {
+    fn default() -> Self {
+        Self {
+            show_ruler: 0,
+            curwin_no_status: 0,
+            lastwin_has_status: 0,
+            is_stl_global: 0,
+            cmdheight_zero: 0,
+            ui_has_messages: 0,
+            did_ruler_col: -1,
+            cursor_invalid: 0,
+            in_edit_submode: 0,
+            has_rulerformat: 0,
+        }
+    }
+}
+
+/// Determine what ruler redraw action to take.
+///
+/// This encapsulates the complex condition checking from `redraw_ruler()`.
+pub const fn decide_ruler_action(ctx: &RulerRedrawContext) -> RulerRedrawAction {
+    let is_stl_global = ctx.is_stl_global != 0;
+    let lastwin_has_status = ctx.lastwin_has_status != 0;
+
+    // Check if ruler should be drawn
+    let ruler_disabled = ctx.show_ruler == 0
+        || lastwin_has_status
+        || is_stl_global
+        || (ctx.cmdheight_zero != 0 && ctx.ui_has_messages == 0);
+
+    if ruler_disabled {
+        // Ruler is disabled - check if we need to clear it
+        if ctx.did_ruler_col > 0 {
+            return RulerRedrawAction::Clear;
+        }
+        return RulerRedrawAction::None;
+    }
+
+    // Check if cursor position is valid
+    if ctx.cursor_invalid != 0 {
+        return RulerRedrawAction::None;
+    }
+
+    // Don't draw ruler while doing insert-completion (might overwrite mode message)
+    let curwin_no_status = ctx.curwin_no_status != 0;
+    if curwin_no_status && !is_stl_global && ctx.in_edit_submode != 0 {
+        return RulerRedrawAction::Skip;
+    }
+
+    // Check if using rulerformat
+    let part_of_status = lastwin_has_status || is_stl_global;
+    if ctx.has_rulerformat != 0
+        && (ctx.cmdheight_zero == 0 || (ctx.ui_has_messages != 0 && !part_of_status))
+    {
+        return RulerRedrawAction::UseRulerformat;
+    }
+
+    // Draw standard ruler
+    RulerRedrawAction::DrawStandard
+}
+
+/// FFI export: Decide ruler redraw action.
+#[no_mangle]
+pub const extern "C" fn rs_ruler_decide_action(ctx: &RulerRedrawContext) -> c_int {
+    decide_ruler_action(ctx) as c_int
+}
+
+/// FFI export: Check if ruler should use external UI.
+#[no_mangle]
+pub extern "C" fn rs_ruler_use_ext_ui(ui_has_messages: c_int, part_of_status: c_int) -> c_int {
+    c_int::from(ui_has_messages != 0 && part_of_status == 0)
+}
+
+/// Calculate ruler column position.
+///
+/// Returns the column where the ruler should start.
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+pub const fn calc_ruler_col(
+    ru_col: c_int,
+    columns: c_int,
+    width: c_int,
+    content_width: c_int,
+) -> c_int {
+    let this_ru_col = ru_col - (columns - width);
+
+    // Never use more than half the window/screen width
+    let min_col = (width + 1) / 2;
+    let adjusted = if this_ru_col < min_col {
+        min_col
+    } else {
+        this_ru_col
+    };
+
+    // Make sure content fits
+    if adjusted + content_width > width {
+        width - content_width
+    } else {
+        adjusted
+    }
+}
+
+/// FFI export: Calculate ruler column position.
+#[no_mangle]
+pub const extern "C" fn rs_ruler_calc_col(
+    ru_col: c_int,
+    columns: c_int,
+    width: c_int,
+    content_width: c_int,
+) -> c_int {
+    calc_ruler_col(ru_col, columns, width, content_width)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_ruler_redraw_action_none() {
+        let ctx = RulerRedrawContext {
+            show_ruler: 0,
+            did_ruler_col: -1,
+            ..Default::default()
+        };
+        assert_eq!(decide_ruler_action(&ctx), RulerRedrawAction::None);
+    }
+
+    #[test]
+    fn test_ruler_redraw_action_clear() {
+        let ctx = RulerRedrawContext {
+            show_ruler: 0,
+            did_ruler_col: 10,
+            ..Default::default()
+        };
+        assert_eq!(decide_ruler_action(&ctx), RulerRedrawAction::Clear);
+    }
+
+    #[test]
+    fn test_ruler_redraw_action_draw_standard() {
+        let ctx = RulerRedrawContext {
+            show_ruler: 1,
+            curwin_no_status: 1,
+            lastwin_has_status: 0,
+            is_stl_global: 0,
+            cmdheight_zero: 0,
+            ui_has_messages: 0,
+            did_ruler_col: -1,
+            cursor_invalid: 0,
+            in_edit_submode: 0,
+            has_rulerformat: 0,
+        };
+        assert_eq!(decide_ruler_action(&ctx), RulerRedrawAction::DrawStandard);
+    }
+
+    #[test]
+    fn test_ruler_redraw_action_use_rulerformat() {
+        let ctx = RulerRedrawContext {
+            show_ruler: 1,
+            curwin_no_status: 1,
+            lastwin_has_status: 0,
+            is_stl_global: 0,
+            cmdheight_zero: 0,
+            ui_has_messages: 0,
+            did_ruler_col: -1,
+            cursor_invalid: 0,
+            in_edit_submode: 0,
+            has_rulerformat: 1,
+        };
+        assert_eq!(decide_ruler_action(&ctx), RulerRedrawAction::UseRulerformat);
+    }
+
+    #[test]
+    fn test_ruler_redraw_action_skip_submode() {
+        let ctx = RulerRedrawContext {
+            show_ruler: 1,
+            curwin_no_status: 1,
+            lastwin_has_status: 0,
+            is_stl_global: 0,
+            cmdheight_zero: 0,
+            ui_has_messages: 0,
+            did_ruler_col: -1,
+            cursor_invalid: 0,
+            in_edit_submode: 1,
+            has_rulerformat: 0,
+        };
+        assert_eq!(decide_ruler_action(&ctx), RulerRedrawAction::Skip);
+    }
+
+    #[test]
+    fn test_calc_ruler_col() {
+        // Basic case
+        let col = calc_ruler_col(17, 80, 80, 10);
+        assert!(col >= 40); // At least half width
+        assert!(col + 10 <= 80); // Content fits
+    }
+
+    #[test]
+    fn test_calc_ruler_col_narrow_window() {
+        // Content almost fills half
+        let col = calc_ruler_col(17, 80, 40, 15);
+        assert!(col >= 20); // At least half of 40
+        assert!(col + 15 <= 40);
+    }
 
     #[test]
     fn test_ruler_context_percentage() {
