@@ -2344,6 +2344,110 @@ pub unsafe extern "C" fn rs_parse_map_section(
 }
 
 // =============================================================================
+// Syllable Section Parsing
+// =============================================================================
+
+/// Parse syllable section.
+///
+/// The syllable section contains syllable definitions for the language.
+/// It's a simple string that is passed to `init_syl_tab()` in C.
+///
+/// Format: <syllable string (len bytes)>
+pub fn parse_syllable_section(buf: &[u8], output: &mut [u8]) -> Result<usize, c_int> {
+    // Check for NUL bytes (invalid)
+    if buf.contains(&0) {
+        return Err(SP_FORMERROR);
+    }
+
+    let copy_len = buf.len().min(output.len().saturating_sub(1));
+    output[..copy_len].copy_from_slice(&buf[..copy_len]);
+    // NUL-terminate
+    if copy_len < output.len() {
+        output[copy_len] = 0;
+    }
+
+    Ok(copy_len)
+}
+
+/// FFI wrapper for parsing syllable section.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_syllable_section(
+    buf: *const u8,
+    buf_len: usize,
+    output: *mut u8,
+    output_len: usize,
+    written_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || output.is_null() || written_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let in_slice = std::slice::from_raw_parts(buf, buf_len);
+    let out_slice = std::slice::from_raw_parts_mut(output, output_len);
+
+    match parse_syllable_section(in_slice, out_slice) {
+        Ok(written) => {
+            *written_out = written;
+            0
+        }
+        Err(e) => e,
+    }
+}
+
+// =============================================================================
+// Info Section Parsing
+// =============================================================================
+
+/// Parse info section.
+///
+/// The info section contains information about the spell file (author, etc.).
+/// It's a simple string.
+///
+/// Format: <info string (len bytes)>
+pub fn parse_info_section(buf: &[u8], output: &mut [u8]) -> Result<usize, c_int> {
+    // Info section can contain NUL bytes as separators between fields
+    let copy_len = buf.len().min(output.len().saturating_sub(1));
+    output[..copy_len].copy_from_slice(&buf[..copy_len]);
+    // NUL-terminate
+    if copy_len < output.len() {
+        output[copy_len] = 0;
+    }
+
+    Ok(copy_len)
+}
+
+/// FFI wrapper for parsing info section.
+///
+/// # Safety
+/// All pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_info_section(
+    buf: *const u8,
+    buf_len: usize,
+    output: *mut u8,
+    output_len: usize,
+    written_out: *mut usize,
+) -> c_int {
+    if buf.is_null() || output.is_null() || written_out.is_null() {
+        return SP_OTHERERROR;
+    }
+
+    let in_slice = std::slice::from_raw_parts(buf, buf_len);
+    let out_slice = std::slice::from_raw_parts_mut(output, output_len);
+
+    match parse_info_section(in_slice, out_slice) {
+        Ok(written) => {
+            *written_out = written;
+            0
+        }
+        Err(e) => e,
+    }
+}
+
+// =============================================================================
 // WORDS Section Parsing
 // =============================================================================
 

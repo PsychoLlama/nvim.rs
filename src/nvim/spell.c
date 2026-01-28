@@ -318,6 +318,101 @@ slang_T *nvim_slang_get_next(slang_T *slang)
   return slang->sl_next;
 }
 
+// Compound options accessor
+int nvim_slang_get_compoptions(slang_T *slang)
+{
+  return slang->sl_compoptions;
+}
+
+// Compound regex program accessor
+regprog_T *nvim_slang_get_compprog(slang_T *slang)
+{
+  return slang->sl_compprog;
+}
+
+// REP array accessor - returns pointer to garray_T
+garray_T *nvim_slang_get_rep(slang_T *slang)
+{
+  return &slang->sl_rep;
+}
+
+// REP first lookup table accessor
+int16_t *nvim_slang_get_rep_first(slang_T *slang)
+{
+  return slang->sl_rep_first;
+}
+
+// REPSAL array accessor - returns pointer to garray_T
+garray_T *nvim_slang_get_repsal(slang_T *slang)
+{
+  return &slang->sl_repsal;
+}
+
+// REPSAL first lookup table accessor
+int16_t *nvim_slang_get_repsal_first(slang_T *slang)
+{
+  return slang->sl_repsal_first;
+}
+
+// Prefix conditions accessor
+regprog_T **nvim_slang_get_prefprog(slang_T *slang)
+{
+  return slang->sl_prefprog;
+}
+
+// Prefix count accessor
+int nvim_slang_get_prefixcnt(slang_T *slang)
+{
+  return slang->sl_prefixcnt;
+}
+
+// Compound patterns accessor
+garray_T *nvim_slang_get_comppat(slang_T *slang)
+{
+  return &slang->sl_comppat;
+}
+
+// Compound flags accessor
+char *nvim_slang_get_compflags(slang_T *slang)
+{
+  return slang->sl_compflags;
+}
+
+// Compound allowed accessors
+uint8_t *nvim_slang_get_compallowed(slang_T *slang)
+{
+  return slang->sl_compallowed;
+}
+
+// Compound start/end flags
+int nvim_slang_get_compstartflags(slang_T *slang)
+{
+  return slang->sl_compstartflags;
+}
+
+int nvim_slang_get_compallflags(slang_T *slang)
+{
+  return slang->sl_compallflags;
+}
+
+// MAP string accessor
+char *nvim_slang_get_map_str(slang_T *slang)
+{
+  return slang->sl_map_str;
+}
+
+// Syllable table accessor
+char *nvim_slang_get_syllable(slang_T *slang)
+{
+  return slang->sl_syllable;
+}
+
+// Midword characters accessor
+char *nvim_slang_get_midword(slang_T *slang)
+{
+  return slang->sl_midword;
+}
+
 // Global spell language list accessor
 slang_T *nvim_get_first_lang(void)
 {

@@ -150,6 +150,28 @@ extern "C" {
     fn nvim_slang_get_add(slang: SlangHandle) -> bool;
     fn nvim_slang_get_next(slang: SlangHandle) -> SlangHandle;
 
+    // slang_T compound options and regex
+    fn nvim_slang_get_compoptions(slang: SlangHandle) -> c_int;
+    fn nvim_slang_get_compprog(slang: SlangHandle) -> *mut c_void;
+    fn nvim_slang_get_prefprog(slang: SlangHandle) -> *mut *mut c_void;
+    fn nvim_slang_get_prefixcnt(slang: SlangHandle) -> c_int;
+    fn nvim_slang_get_compflags(slang: SlangHandle) -> *mut c_char;
+    fn nvim_slang_get_compallowed(slang: SlangHandle) -> *mut u8;
+    fn nvim_slang_get_compstartflags(slang: SlangHandle) -> c_int;
+    fn nvim_slang_get_compallflags(slang: SlangHandle) -> c_int;
+
+    // slang_T REP/REPSAL accessors (returns garray_T*)
+    fn nvim_slang_get_rep(slang: SlangHandle) -> *mut c_void;
+    fn nvim_slang_get_rep_first(slang: SlangHandle) -> *mut i16;
+    fn nvim_slang_get_repsal(slang: SlangHandle) -> *mut c_void;
+    fn nvim_slang_get_repsal_first(slang: SlangHandle) -> *mut i16;
+    fn nvim_slang_get_comppat(slang: SlangHandle) -> *mut c_void;
+
+    // slang_T string accessors
+    fn nvim_slang_get_map_str(slang: SlangHandle) -> *mut c_char;
+    fn nvim_slang_get_syllable(slang: SlangHandle) -> *mut c_char;
+    fn nvim_slang_get_midword(slang: SlangHandle) -> *mut c_char;
+
     // slang_T list accessors
     fn nvim_get_first_lang() -> SlangHandle;
 
@@ -296,6 +318,102 @@ impl SlangHandle {
     #[must_use]
     pub fn first() -> Self {
         unsafe { nvim_get_first_lang() }
+    }
+
+    /// Get compound options flags (COMP_* values)
+    #[must_use]
+    pub fn compoptions(self) -> c_int {
+        unsafe { nvim_slang_get_compoptions(self) }
+    }
+
+    /// Get compiled compound regex program
+    #[must_use]
+    pub fn compprog(self) -> *mut c_void {
+        unsafe { nvim_slang_get_compprog(self) }
+    }
+
+    /// Get prefix condition regex programs array
+    #[must_use]
+    pub fn prefprog(self) -> *mut *mut c_void {
+        unsafe { nvim_slang_get_prefprog(self) }
+    }
+
+    /// Get prefix condition count
+    #[must_use]
+    pub fn prefixcnt(self) -> c_int {
+        unsafe { nvim_slang_get_prefixcnt(self) }
+    }
+
+    /// Get compound flags string
+    #[must_use]
+    pub fn compflags(self) -> *mut c_char {
+        unsafe { nvim_slang_get_compflags(self) }
+    }
+
+    /// Get compound allowed flags array
+    #[must_use]
+    pub fn compallowed(self) -> *mut u8 {
+        unsafe { nvim_slang_get_compallowed(self) }
+    }
+
+    /// Get compound start flags
+    #[must_use]
+    pub fn compstartflags(self) -> c_int {
+        unsafe { nvim_slang_get_compstartflags(self) }
+    }
+
+    /// Get compound all flags
+    #[must_use]
+    pub fn compallflags(self) -> c_int {
+        unsafe { nvim_slang_get_compallflags(self) }
+    }
+
+    /// Get REP items array (garray_T*)
+    #[must_use]
+    pub fn rep(self) -> *mut c_void {
+        unsafe { nvim_slang_get_rep(self) }
+    }
+
+    /// Get REP first lookup table
+    #[must_use]
+    pub fn rep_first(self) -> *mut i16 {
+        unsafe { nvim_slang_get_rep_first(self) }
+    }
+
+    /// Get REPSAL items array (garray_T*)
+    #[must_use]
+    pub fn repsal(self) -> *mut c_void {
+        unsafe { nvim_slang_get_repsal(self) }
+    }
+
+    /// Get REPSAL first lookup table
+    #[must_use]
+    pub fn repsal_first(self) -> *mut i16 {
+        unsafe { nvim_slang_get_repsal_first(self) }
+    }
+
+    /// Get compound patterns array (garray_T*)
+    #[must_use]
+    pub fn comppat(self) -> *mut c_void {
+        unsafe { nvim_slang_get_comppat(self) }
+    }
+
+    /// Get MAP string for similar character groups
+    #[must_use]
+    pub fn map_str(self) -> *mut c_char {
+        unsafe { nvim_slang_get_map_str(self) }
+    }
+
+    /// Get syllable pattern string
+    #[must_use]
+    pub fn syllable(self) -> *mut c_char {
+        unsafe { nvim_slang_get_syllable(self) }
+    }
+
+    /// Get midword characters string
+    #[must_use]
+    pub fn midword(self) -> *mut c_char {
+        unsafe { nvim_slang_get_midword(self) }
     }
 }
 
