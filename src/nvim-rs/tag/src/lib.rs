@@ -30,8 +30,8 @@ pub use preview::{
     PreviewWindowInfo, PreviewWindowState,
 };
 pub use search::{
-    FindTagsMatchArgs, FindTagsStateCore, TagMatchStatus, TagSearchInfo, TagSearchState,
-    TagsReadStatus,
+    FindTagsContext, FindTagsMatchArgs, FindTagsStateCore, TagMatchStatus, TagSearchInfo,
+    TagSearchState, TagsReadStatus,
 };
 pub use select::{SelectionAction, SelectionResult, TagMatchDisplayInfo, TagSelectionState};
 
