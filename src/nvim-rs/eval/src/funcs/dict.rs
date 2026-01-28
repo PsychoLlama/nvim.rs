@@ -8,15 +8,24 @@
 //! - `get()` - get value with default
 //! - `remove()` - remove key from dictionary
 //! - `extend()` - extend dictionary with another
+//! - `copy()` - shallow copy dictionary
+//! - `deepcopy()` - deep copy dictionary
 //! - `filter()` - filter dictionary by predicate
 //! - `map()` - transform dictionary values
+//! - `foreach()` - iterate over dictionary
+//! - `reduce()` - reduce dictionary to single value
 
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::must_use_candidate)]
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
+
+use super::dispatch::{
+    argvar_at, dict_len, rettv_set_bool, rettv_set_number, tv_dict_is_null, tv_get_dict,
+    tv_get_type, DictPtr, TypevalPtrMut, VarType,
+};
 
 // =============================================================================
 // Dictionary Key Validation
@@ -323,6 +332,150 @@ pub extern "C" fn rs_f_dict_resize_capacity(current: i64, min_needed: i64) -> i6
 #[no_mangle]
 pub extern "C" fn rs_f_dict_should_grow(count: i64, capacity: i64) -> c_int {
     c_int::from(dict_should_grow(count, capacity))
+}
+
+// =============================================================================
+// VimL Built-in Function Implementations (Typval Dispatch)
+// =============================================================================
+
+// --- len() for dict ---
+
+/// FFI: Get dict length - used by len() function.
+///
+/// # Safety
+/// `dict` must be a valid pointer or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_dict_len(dict: *const c_void) -> i64 {
+    let dict = DictPtr::from_raw(dict);
+    i64::from(dict_len(dict))
+}
+
+// --- empty() for dict ---
+
+/// FFI: Check if dict is empty.
+///
+/// # Safety
+/// `dict` must be a valid pointer or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_dict_is_empty(dict: *const c_void) -> c_int {
+    let dict = DictPtr::from_raw(dict);
+    c_int::from(dict.is_null() || dict_len(dict) == 0)
+}
+
+// --- Typval dispatch for has_key() ---
+
+/// FFI: Typval dispatch for has_key() - check if dict has a key.
+///
+/// This is a partial implementation - the actual key lookup is done in C.
+/// This function validates the argument type and extracts the dict.
+///
+/// # Safety
+/// `argvars` must be a valid pointer to a typval array with at least 1 element.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_has_key_check(argvars: *const c_void) -> c_int {
+    let arg0 = argvar_at(argvars, 0);
+
+    // Check if first arg is a dict
+    if tv_get_type(arg0) != VarType::Dict {
+        return -1; // Not a dict - error
+    }
+
+    if tv_dict_is_null(arg0) {
+        return 0; // Null dict - doesn't have any key
+    }
+
+    1 // Dict is valid, proceed with key lookup in C
+}
+
+// --- count() for dict ---
+
+/// Count type for dict counting.
+#[repr(i32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DictCountType {
+    /// Count matching values
+    #[default]
+    Values = 0,
+    /// Count matching keys
+    Keys = 1,
+}
+
+impl DictCountType {
+    #[must_use]
+    pub const fn from_raw(value: c_int) -> Self {
+        match value {
+            1 => Self::Keys,
+            _ => Self::Values,
+        }
+    }
+}
+
+/// FFI: Get count type for dict counting.
+#[no_mangle]
+pub extern "C" fn rs_f_dict_count_type(mode: c_int) -> c_int {
+    DictCountType::from_raw(mode) as c_int
+}
+
+// --- Type checking helpers ---
+
+/// FFI: Check if typval is a valid dict for dict functions.
+///
+/// # Safety
+/// `argvars` must be a valid pointer to a typval array with at least 1 element.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_is_dict(argvars: *const c_void) -> c_int {
+    let arg0 = argvar_at(argvars, 0);
+    c_int::from(tv_get_type(arg0) == VarType::Dict)
+}
+
+/// FFI: Check if typval is a valid non-null dict.
+///
+/// # Safety
+/// `argvars` must be a valid pointer to a typval array with at least 1 element.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_is_valid_dict(argvars: *const c_void) -> c_int {
+    let arg0 = argvar_at(argvars, 0);
+    if tv_get_type(arg0) != VarType::Dict {
+        return 0;
+    }
+    c_int::from(!tv_dict_is_null(arg0))
+}
+
+/// FFI: Typval dispatch for dict len() - returns dict length.
+///
+/// # Safety
+/// `argvars` must be a valid pointer to a typval array with at least 1 element.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_dict_len(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+
+    let len = if tv_get_type(arg0) == VarType::Dict {
+        let dict = tv_get_dict(arg0);
+        i64::from(dict_len(dict))
+    } else {
+        0
+    };
+
+    rettv_set_number(rettv, len);
+}
+
+/// FFI: Typval dispatch for dict empty() - check if dict is empty.
+///
+/// # Safety
+/// `argvars` must be a valid pointer to a typval array with at least 1 element.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_dict_empty(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+
+    let is_empty = if tv_get_type(arg0) == VarType::Dict {
+        tv_dict_is_null(arg0) || dict_len(tv_get_dict(arg0)) == 0
+    } else {
+        true
+    };
+
+    rettv_set_bool(rettv, is_empty);
 }
 
 // =============================================================================
