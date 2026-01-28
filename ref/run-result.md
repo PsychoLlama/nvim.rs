@@ -1,23 +1,38 @@
-Plan: ~/.claude/plans/breezy-wibbling-alpaca.md
+Plan: ~/.claude/plans/synthetic-exploring-gadget.md
 
-The regex engine is working correctly with the migrated Rust helpers.
+**Summary of Migration Work Completed**
 
-Based on my analysis, the regexp migration plan has been partially completed:
+I've successfully executed the migration plan. Here's what was accomplished:
 
-**Completed:**
-- Phase 1: Helper functions (`cstrchr`, `cstrncmp`) migrated to Rust
-- Phase 2: BT engine support functions (`reg_breakcheck`, `reg_iswordc`, `reg_prev_class`, `reg_nextline`) migrated
-- Phase 3: NFA engine now uses shared Rust helpers
-- Phase 4: Key compilation helpers are wired (`rs_bt_find_regmust`, `rs_bt_get_regstart`, `rs_re_put_uint32`, `rs_read_limits`, scanner functions)
+## Phase 1: UI Compositor (Completed in previous context)
+All 8 compositor functions were migrated to Rust:
+- `debug_delay()`, `compose_debug()`
+- `compose_line()` - the core composition algorithm
+- `compose_area()`
+- `ui_comp_raw_line()`
+- `ui_comp_msg_set_pos()`
+- `ui_comp_grid_scroll()`
+- `ui_comp_grid_resize()`
 
-**Pending (requires significant work):**
-- Phase 5: Public API migration (`vim_regcomp`, `vim_regexec` - these would require migrating the ~1000-line `reg()` parser and ~1400-line `regmatch()` functions)
-- Phase 6: Cleanup and optimization
+## Phase 2: Popup Menu Core Logic (New in this session)
+Migrated 4 functions to Rust:
+- `pum_clear()` - resets scroll position
+- `pum_ext_select_item()` - external UI selection
+- `pum_invalidate()` - marks popup as needing redraw  
+- `pum_undisplay()` - hides popup menu
 
-The remaining work to fully migrate the regexp engine would require:
-1. Converting global state (`regcode`, `regsize`, `regparse`) to Rust-owned structures
-2. Migrating the recursive descent parser `reg()` (~1000 lines)
-3. Migrating `regmatch()` (~1400 lines) and `nfa_regmatch()` (~1400 lines)
-4. Migrating the public API entry points
+The popupmenu crate already had substantial Rust infrastructure (display, mouse, placement modules) that these functions now use.
 
-This is substantial work that was beyond what could be completed in this session. The incremental work done establishes the foundation (FFI bindings, accessors, helper functions) that future phases would build upon.
+## Phase 3: Terminal Foundation (New in this session)
+Wired up 2 accessor functions to their existing Rust implementations:
+- `terminal_running()` - checks if terminal is running
+- `terminal_buf()` - gets buffer handle for terminal
+
+The terminal crate already has extensive Rust code with many functions available (`rs_terminal_cursor_*`, `rs_terminal_forward_mouse`, etc.) that can be wired up incrementally.
+
+## Verification
+- `just build` - passes ✓
+- `just rust-fmt-check` - passes ✓  
+- `just rust-clippy` - passes ✓
+
+All changes have been committed to the `rust-migration` branch with descriptive commit messages following the project conventions.
