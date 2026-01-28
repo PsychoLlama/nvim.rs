@@ -110,6 +110,15 @@ extern tabpage_T *rs_find_tabpage(int n);
 extern int rs_get_last_winid(void);
 extern win_T *rs_lastwin_nofloating(void);
 extern win_T *rs_frame2win(frame_T *frp);
+extern frame_T *rs_win_altframe(win_T *win);
+
+// Result structure from rs_winframe_find_altwin
+typedef struct {
+  frame_T *altfr;
+  int dir;
+} WinframeResult;
+extern WinframeResult rs_winframe_find_altwin(win_T *wp, frame_T *altfr_initial);
+
 extern int rs_frame_minheight(frame_T *topfrp, win_T *next_curwin);
 extern int rs_frame_minwidth(frame_T *topfrp, win_T *next_curwin);
 extern int rs_win_comp_pos(void);
@@ -4668,69 +4677,17 @@ win_T *winframe_find_altwin(win_T *win, int *dirp, tabpage_T *tp, frame_T **altf
     return NULL;
   }
 
-  frame_T *frp_close = win->w_frame;
-
-  // Find the window and frame that gets the space.
+  // Find the initial window and frame that gets the space.
   frame_T *frp2 = win_altframe(win, tp);
+
+  // Call Rust to find the best altframe considering wfh/wfw constraints.
+  WinframeResult result = rs_winframe_find_altwin(win, frp2);
+  frp2 = result.altfr;
+  *dirp = result.dir;
+
   win_T *wp = frame2win(frp2);
 
-  if (frp_close->fr_parent->fr_layout == FR_COL) {
-    // When 'winfixheight' is set, try to find another frame in the column
-    // (as close to the closed frame as possible) to distribute the height
-    // to.
-    if (frp2->fr_win != NULL && frp2->fr_win->w_p_wfh) {
-      frame_T *frp = frp_close->fr_prev;
-      frame_T *frp3 = frp_close->fr_next;
-      while (frp != NULL || frp3 != NULL) {
-        if (frp != NULL) {
-          if (!frame_fixed_height(frp)) {
-            frp2 = frp;
-            wp = frame2win(frp2);
-            break;
-          }
-          frp = frp->fr_prev;
-        }
-        if (frp3 != NULL) {
-          if (frp3->fr_win != NULL && !frp3->fr_win->w_p_wfh) {
-            frp2 = frp3;
-            wp = frp3->fr_win;
-            break;
-          }
-          frp3 = frp3->fr_next;
-        }
-      }
-    }
-    *dirp = 'v';
-  } else {
-    // When 'winfixwidth' is set, try to find another frame in the column
-    // (as close to the closed frame as possible) to distribute the width
-    // to.
-    if (frp2->fr_win != NULL && frp2->fr_win->w_p_wfw) {
-      frame_T *frp = frp_close->fr_prev;
-      frame_T *frp3 = frp_close->fr_next;
-      while (frp != NULL || frp3 != NULL) {
-        if (frp != NULL) {
-          if (!frame_fixed_width(frp)) {
-            frp2 = frp;
-            wp = frame2win(frp2);
-            break;
-          }
-          frp = frp->fr_prev;
-        }
-        if (frp3 != NULL) {
-          if (frp3->fr_win != NULL && !frp3->fr_win->w_p_wfw) {
-            frp2 = frp3;
-            wp = frp3->fr_win;
-            break;
-          }
-          frp3 = frp3->fr_next;
-        }
-      }
-    }
-    *dirp = 'h';
-  }
-
-  assert(wp != win && frp2 != frp_close);
+  assert(wp != win && frp2 != win->w_frame);
   if (altfr != NULL) {
     *altfr = frp2;
   }
@@ -4865,47 +4822,7 @@ static frame_T *win_altframe(win_T *win, tabpage_T *tp)
     return alt_tabpage()->tp_curwin->w_frame;
   }
 
-  frame_T *frp = win->w_frame;
-
-  if (frp->fr_prev == NULL) {
-    return frp->fr_next;
-  }
-  if (frp->fr_next == NULL) {
-    return frp->fr_prev;
-  }
-
-  // By default the next window will get the space that was abandoned by this
-  // window
-  frame_T *target_fr = frp->fr_next;
-  frame_T *other_fr = frp->fr_prev;
-
-  // If this is part of a column of windows and 'splitbelow' is true then the
-  // previous window will get the space.
-  if (frp->fr_parent != NULL && frp->fr_parent->fr_layout == FR_COL && p_sb) {
-    target_fr = frp->fr_prev;
-    other_fr = frp->fr_next;
-  }
-
-  // If this is part of a row of windows, and 'splitright' is true then the
-  // previous window will get the space.
-  if (frp->fr_parent != NULL && frp->fr_parent->fr_layout == FR_ROW && p_spr) {
-    target_fr = frp->fr_prev;
-    other_fr = frp->fr_next;
-  }
-
-  // If 'wfh' or 'wfw' is set for the target and not for the alternate
-  // window, reverse the selection.
-  if (frp->fr_parent != NULL && frp->fr_parent->fr_layout == FR_ROW) {
-    if (frame_fixed_width(target_fr) && !frame_fixed_width(other_fr)) {
-      target_fr = other_fr;
-    }
-  } else {
-    if (frame_fixed_height(target_fr) && !frame_fixed_height(other_fr)) {
-      target_fr = other_fr;
-    }
-  }
-
-  return target_fr;
+  return rs_win_altframe(win);
 }
 
 // Return the tabpage that will be used if the current one is closed.

@@ -20,6 +20,18 @@ extern "C" {
 
     /// Get topframe.
     fn nvim_get_topframe() -> *mut Frame;
+
+    /// Get p_sb (splitbelow) option.
+    fn nvim_get_p_sb() -> c_int;
+
+    /// Get p_spr (splitright) option.
+    fn nvim_get_p_spr() -> c_int;
+
+    /// Check if frame has fixed height.
+    fn rs_frame_fixed_height(frp: *const Frame) -> c_int;
+
+    /// Check if frame has fixed width.
+    fn rs_frame_fixed_width(frp: *const Frame) -> c_int;
 }
 
 // =============================================================================
@@ -268,6 +280,239 @@ fn close_needs_layout_adjustment_impl(wp: WinHandle) -> bool {
 }
 
 // =============================================================================
+// Win Altframe Selection
+// =============================================================================
+
+/// Find the alternate frame that receives space when a window is closed.
+///
+/// This implements the win_altframe logic:
+/// - Prefers next sibling by default
+/// - If 'splitbelow' is set for FR_COL, prefer previous sibling
+/// - If 'splitright' is set for FR_ROW, prefer previous sibling
+/// - If target has wfh/wfw but other doesn't, reverse the selection
+///
+/// # Safety
+/// Caller must ensure `wp` is a valid window handle with a valid frame.
+fn win_altframe_impl(wp: WinHandle) -> *mut Frame {
+    if wp.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    unsafe {
+        let frp = nvim_win_get_frame(wp);
+        if frp.is_null() {
+            return std::ptr::null_mut();
+        }
+
+        // If no previous sibling, must use next
+        if (*frp).fr_prev.is_null() {
+            return (*frp).fr_next;
+        }
+
+        // If no next sibling, must use prev
+        if (*frp).fr_next.is_null() {
+            return (*frp).fr_prev;
+        }
+
+        // By default the next window will get the space
+        let mut target_fr = (*frp).fr_next;
+        let mut other_fr = (*frp).fr_prev;
+
+        let parent = (*frp).fr_parent;
+        if !parent.is_null() {
+            let layout = (*parent).fr_layout;
+
+            // If this is part of a column and 'splitbelow' is true,
+            // the previous window gets the space
+            if layout == FR_COL && nvim_get_p_sb() != 0 {
+                target_fr = (*frp).fr_prev;
+                other_fr = (*frp).fr_next;
+            }
+
+            // If this is part of a row and 'splitright' is true,
+            // the previous window gets the space
+            if layout == FR_ROW && nvim_get_p_spr() != 0 {
+                target_fr = (*frp).fr_prev;
+                other_fr = (*frp).fr_next;
+            }
+
+            // If 'wfh' or 'wfw' is set for target but not for other, reverse
+            if layout == FR_ROW {
+                if rs_frame_fixed_width(target_fr) != 0 && rs_frame_fixed_width(other_fr) == 0 {
+                    target_fr = other_fr;
+                }
+            } else if rs_frame_fixed_height(target_fr) != 0 && rs_frame_fixed_height(other_fr) == 0
+            {
+                target_fr = other_fr;
+            }
+        }
+
+        target_fr
+    }
+}
+
+// =============================================================================
+// Winframe Find Altwin Helper
+// =============================================================================
+
+/// Result structure for winframe_find_altwin.
+/// This is used to return multiple values from the Rust implementation.
+#[repr(C)]
+pub struct WinframeResult {
+    /// The alternate frame that will receive the space.
+    pub altfr: *mut Frame,
+    /// The direction ('v' for vertical, 'h' for horizontal).
+    pub dir: c_int,
+}
+
+extern "C" {
+    /// Get window from frame (recursive).
+    fn rs_frame2win(frp: *mut Frame) -> WinHandle;
+
+    /// Get w_p_wfh from window.
+    fn nvim_win_get_wfh(wp: WinHandle) -> c_int;
+
+    /// Get w_p_wfw from window.
+    fn nvim_win_get_wfw(wp: WinHandle) -> c_int;
+}
+
+/// Find the best alternate frame considering winfixheight/winfixwidth constraints.
+///
+/// When the initial altframe has wfh/wfw set, search outward from the closing
+/// window to find a frame that can accept the space.
+///
+/// # Arguments
+/// * `frp_close` - Frame of the window being closed
+/// * `altfr` - Initial alternate frame from win_altframe
+///
+/// # Returns
+/// The best frame to receive the space (may be same as altfr)
+fn find_best_altframe_for_col(frp_close: *const Frame, altfr: *mut Frame) -> *mut Frame {
+    if frp_close.is_null() || altfr.is_null() {
+        return altfr;
+    }
+
+    unsafe {
+        // Check if altfr has a leaf window with wfh set
+        let alt_win = (*altfr).fr_win;
+        if alt_win.is_null() || nvim_win_get_wfh(alt_win) == 0 {
+            return altfr; // No wfh, use as-is
+        }
+
+        // Search outward from frp_close for a frame without fixed height
+        let mut frp_prev = (*frp_close).fr_prev;
+        let mut frp_next = (*frp_close).fr_next;
+
+        while !frp_prev.is_null() || !frp_next.is_null() {
+            if !frp_prev.is_null() {
+                if rs_frame_fixed_height(frp_prev) == 0 {
+                    return frp_prev;
+                }
+                frp_prev = (*frp_prev).fr_prev;
+            }
+            if !frp_next.is_null() {
+                let frp_next_win = (*frp_next).fr_win;
+                if !frp_next_win.is_null() && nvim_win_get_wfh(frp_next_win) == 0 {
+                    return frp_next;
+                }
+                frp_next = (*frp_next).fr_next;
+            }
+        }
+
+        altfr
+    }
+}
+
+/// Find the best alternate frame for horizontal layout (row).
+fn find_best_altframe_for_row(frp_close: *const Frame, altfr: *mut Frame) -> *mut Frame {
+    if frp_close.is_null() || altfr.is_null() {
+        return altfr;
+    }
+
+    unsafe {
+        // Check if altfr has a leaf window with wfw set
+        let alt_win = (*altfr).fr_win;
+        if alt_win.is_null() || nvim_win_get_wfw(alt_win) == 0 {
+            return altfr; // No wfw, use as-is
+        }
+
+        // Search outward from frp_close for a frame without fixed width
+        let mut frp_prev = (*frp_close).fr_prev;
+        let mut frp_next = (*frp_close).fr_next;
+
+        while !frp_prev.is_null() || !frp_next.is_null() {
+            if !frp_prev.is_null() {
+                if rs_frame_fixed_width(frp_prev) == 0 {
+                    return frp_prev;
+                }
+                frp_prev = (*frp_prev).fr_prev;
+            }
+            if !frp_next.is_null() {
+                let frp_next_win = (*frp_next).fr_win;
+                if !frp_next_win.is_null() && nvim_win_get_wfw(frp_next_win) == 0 {
+                    return frp_next;
+                }
+                frp_next = (*frp_next).fr_next;
+            }
+        }
+
+        altfr
+    }
+}
+
+/// Core implementation of winframe_find_altwin.
+///
+/// Finds the frame and direction for space redistribution when closing a window.
+///
+/// # Arguments
+/// * `wp` - Window being closed
+/// * `altfr_initial` - Initial alternate frame from win_altframe
+///
+/// # Returns
+/// WinframeResult with the best altframe and direction
+fn winframe_find_altwin_impl(wp: WinHandle, altfr_initial: *mut Frame) -> WinframeResult {
+    let null_result = WinframeResult {
+        altfr: std::ptr::null_mut(),
+        dir: 0,
+    };
+
+    if wp.is_null() || altfr_initial.is_null() {
+        return null_result;
+    }
+
+    unsafe {
+        let frp_close = nvim_win_get_frame(wp);
+        if frp_close.is_null() {
+            return null_result;
+        }
+
+        let parent = (*frp_close).fr_parent;
+        if parent.is_null() {
+            return WinframeResult {
+                altfr: altfr_initial,
+                dir: c_int::from(b'h'),
+            };
+        }
+
+        let layout = (*parent).fr_layout;
+
+        if layout == FR_COL {
+            let best_altfr = find_best_altframe_for_col(frp_close, altfr_initial);
+            WinframeResult {
+                altfr: best_altfr,
+                dir: c_int::from(b'v'),
+            }
+        } else {
+            let best_altfr = find_best_altframe_for_row(frp_close, altfr_initial);
+            WinframeResult {
+                altfr: best_altfr,
+                dir: c_int::from(b'h'),
+            }
+        }
+    }
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
 
@@ -275,6 +520,30 @@ fn close_needs_layout_adjustment_impl(wp: WinHandle) -> bool {
 #[unsafe(no_mangle)]
 pub extern "C" fn rs_close_find_altframe(wp: WinHandle) -> *mut Frame {
     find_altframe_impl(wp)
+}
+
+/// FFI: Find the alternate frame using splitbelow/splitright and wfh/wfw logic.
+///
+/// This is the more sophisticated altframe selection that considers options.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_win_altframe(wp: WinHandle) -> *mut Frame {
+    win_altframe_impl(wp)
+}
+
+/// FFI: Find the best altframe and direction considering wfh/wfw constraints.
+///
+/// # Arguments
+/// * `wp` - Window being closed
+/// * `altfr_initial` - Initial alternate frame from win_altframe
+///
+/// # Returns
+/// WinframeResult with the best altframe and direction
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_winframe_find_altwin(
+    wp: WinHandle,
+    altfr_initial: *mut Frame,
+) -> WinframeResult {
+    winframe_find_altwin_impl(wp, altfr_initial)
 }
 
 /// FFI: Check if frame should be flattened after removal.
