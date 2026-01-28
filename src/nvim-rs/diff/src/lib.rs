@@ -17,7 +17,10 @@ pub mod navigate;
 
 // Re-export key types from submodules
 pub use block::{DiffBlockInfo as BlockInfo, DiffBlockIter};
-pub use buffer::{BufHandle, DiffBlockHandle, TabpageHandle, WinHandle, DB_COUNT};
+pub use buffer::{
+    BufHandle, DiffBlockHandle, DiffBufAddResult, DiffBufIter, DiffBufRegState, TabpageHandle,
+    WinHandle, DB_COUNT,
+};
 pub use commands::{DiffBlockInfo, DiffOpResult, DiffOperation, DiffRange};
 pub use highlight::{
     DiffChangeResult, DiffHighlightGroup, DiffInlineMode, DiffLineChange, DiffLineInfo,

@@ -202,24 +202,9 @@ pub fn diff_buf_idx(buf: BufHandle) -> c_int {
 /// Find the index of a buffer in a specific tab's diff list.
 ///
 /// Returns the buffer index (0 to DB_COUNT-1) or DB_COUNT if not found.
-///
-/// Note: This function requires nvim_tabpage_get_diffbuf C accessor which doesn't exist yet.
-#[allow(dead_code)]
-#[cfg(feature = "tabpage_diff")]
 pub fn diff_buf_idx_tp(buf: BufHandle, tp: TabpageHandle) -> c_int {
-    if buf.is_null() || tp.is_null() {
-        return DB_COUNT;
-    }
-
-    unsafe {
-        for i in 0..DB_COUNT {
-            let diffbuf = nvim_tabpage_get_diffbuf(tp, i);
-            if !diffbuf.is_null() && diffbuf.0 == buf.0 {
-                return i;
-            }
-        }
-        DB_COUNT
-    }
+    // SAFETY: Handles are checked for null
+    unsafe { rs_diff_buf_idx_tp(buf, tp) }
 }
 
 /// Check if the diff list is invalid (needs update).
@@ -246,10 +231,6 @@ pub fn diff_buf_is_diffed(buf: BufHandle) -> bool {
 }
 
 /// Check if a buffer is in diff mode in any tab.
-///
-/// Note: This function requires nvim_tabpage_get_diffbuf C accessor which doesn't exist yet.
-#[allow(dead_code)]
-#[cfg(feature = "tabpage_diff")]
 pub fn diff_mode_buf(buf: BufHandle) -> bool {
     if buf.is_null() {
         return false;
@@ -423,39 +404,15 @@ pub fn diff_copy_entry(
 /// Check if a diff block contains valid line numbers.
 ///
 /// Returns OK if valid, FAIL if invalid.
-///
-/// Note: This function requires nvim_tabpage_get_diffbuf C accessor which doesn't exist yet.
 #[allow(dead_code)]
-#[cfg(feature = "tabpage_diff")]
-pub fn diff_check_sanity(tp: TabpageHandle, dp: DiffBlockHandle) -> c_int {
-    if tp.is_null() || dp.is_null() {
-        return FAIL;
-    }
-
-    unsafe {
-        for i in 0..DB_COUNT {
-            let buf = nvim_tabpage_get_diffbuf(tp, i);
-            if !buf.is_null() {
-                let lnum = nvim_diffblock_get_lnum(dp, i);
-                let count = nvim_diffblock_get_count(dp, i);
-                let line_count = nvim_buf_get_ml_line_count(buf);
-
-                if lnum + count - 1 > line_count {
-                    return FAIL;
-                }
-            }
-        }
-        OK
-    }
+pub fn diff_check_sanity_internal(tp: TabpageHandle, dp: DiffBlockHandle) -> c_int {
+    // SAFETY: Handles are checked for null inside rs_diff_check_sanity
+    unsafe { rs_diff_check_sanity(tp, dp) }
 }
 
 // =============================================================================
-// FFI Exports
+// FFI Exports (Block Queries)
 // =============================================================================
-
-// FFI exports removed - the main ones are in lib.rs to maintain existing API compatibility.
-// Additional exports below don't call functions requiring nvim_tabpage_get_diffbuf which doesn't
-// exist yet in the C codebase.
 
 /// FFI export: Get maximum diff block length.
 #[no_mangle]
@@ -480,10 +437,313 @@ pub extern "C" fn rs_diff_copy_entry_new(
     diff_copy_entry(dprev, dp, idx_orig, idx_new);
 }
 
-// Note: The following FFI exports are disabled because they require C accessor functions
-// (nvim_tabpage_get_diffbuf, nvim_tabpage_get_diff_invalid, nvim_tabpage_set_diff_invalid)
-// that don't exist yet in the C codebase:
-//   rs_diff_buf_idx_tp, rs_diff_mode_buf, rs_diff_check_sanity
+// =============================================================================
+// Buffer Registration
+// =============================================================================
+
+/// Result of attempting to add a buffer to diff mode.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiffBufAddResult {
+    /// Buffer was successfully added.
+    Added = 0,
+    /// Buffer was already in diff mode.
+    AlreadyAdded = 1,
+    /// No free slots available (DB_COUNT limit reached).
+    NoFreeSlot = 2,
+    /// Invalid buffer provided.
+    InvalidBuffer = 3,
+}
+
+/// Result of buffer registration query.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct DiffBufRegState {
+    /// Index of buffer in diff list (-1 if not found).
+    pub idx: c_int,
+    /// First free slot index (-1 if none available).
+    pub free_slot: c_int,
+    /// Total number of registered buffers.
+    pub count: c_int,
+    /// Whether all slots are full.
+    pub is_full: bool,
+}
+
+impl Default for DiffBufRegState {
+    fn default() -> Self {
+        Self {
+            idx: -1,
+            free_slot: -1,
+            count: 0,
+            is_full: false,
+        }
+    }
+}
+
+/// Query the buffer registration state for a tabpage.
+///
+/// This provides information needed to decide whether a buffer can be added
+/// to diff mode and where.
+///
+/// # Safety
+/// `buf` and `tp` must be valid handles or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_buf_reg_state(
+    buf: BufHandle,
+    tp: TabpageHandle,
+) -> DiffBufRegState {
+    if tp.is_null() {
+        return DiffBufRegState::default();
+    }
+
+    let mut state = DiffBufRegState::default();
+
+    for i in 0..DB_COUNT {
+        let diffbuf = nvim_tabpage_get_diffbuf(tp, i);
+        if diffbuf.is_null() {
+            if state.free_slot < 0 {
+                state.free_slot = i;
+            }
+        } else {
+            state.count += 1;
+            if !buf.is_null() && diffbuf.0 == buf.0 {
+                state.idx = i;
+            }
+        }
+    }
+
+    state.is_full = state.count >= DB_COUNT;
+    state
+}
+
+/// Check if a buffer can be added to diff mode.
+///
+/// Returns the result code and the slot index to use (-1 if cannot add).
+///
+/// # Safety
+/// `buf` and `tp` must be valid handles.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_buf_can_add(
+    buf: BufHandle,
+    tp: TabpageHandle,
+) -> DiffBufAddResult {
+    if buf.is_null() || tp.is_null() {
+        return DiffBufAddResult::InvalidBuffer;
+    }
+
+    let state = rs_diff_buf_reg_state(buf, tp);
+
+    if state.idx >= 0 {
+        return DiffBufAddResult::AlreadyAdded;
+    }
+
+    if state.is_full {
+        return DiffBufAddResult::NoFreeSlot;
+    }
+
+    DiffBufAddResult::Added
+}
+
+/// Find the index of a buffer in a tabpage's diff list.
+///
+/// Returns the index (0 to DB_COUNT-1) or DB_COUNT if not found.
+///
+/// # Safety
+/// `buf` and `tp` must be valid handles.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_buf_idx_tp(buf: BufHandle, tp: TabpageHandle) -> c_int {
+    if buf.is_null() || tp.is_null() {
+        return DB_COUNT;
+    }
+
+    for i in 0..DB_COUNT {
+        let diffbuf = nvim_tabpage_get_diffbuf(tp, i);
+        if !diffbuf.is_null() && diffbuf.0 == buf.0 {
+            return i;
+        }
+    }
+    DB_COUNT
+}
+
+/// Check if a buffer is in diff mode in a specific tabpage.
+///
+/// # Safety
+/// `buf` and `tp` must be valid handles.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_buf_is_diffed_tp(buf: BufHandle, tp: TabpageHandle) -> bool {
+    rs_diff_buf_idx_tp(buf, tp) != DB_COUNT
+}
+
+/// Find the first free slot in a tabpage's diff buffer list.
+///
+/// Returns the slot index (0 to DB_COUNT-1) or -1 if no free slot.
+///
+/// # Safety
+/// `tp` must be a valid handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_find_free_slot(tp: TabpageHandle) -> c_int {
+    if tp.is_null() {
+        return -1;
+    }
+
+    for i in 0..DB_COUNT {
+        if nvim_tabpage_get_diffbuf(tp, i).is_null() {
+            return i;
+        }
+    }
+    -1
+}
+
+/// Count the number of active diff buffers in a tabpage.
+///
+/// # Safety
+/// `tp` must be a valid handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_count_buffers_tp(tp: TabpageHandle) -> c_int {
+    if tp.is_null() {
+        return 0;
+    }
+
+    let mut count = 0;
+    for i in 0..DB_COUNT {
+        if !nvim_tabpage_get_diffbuf(tp, i).is_null() {
+            count += 1;
+        }
+    }
+    count
+}
+
+/// Check if diff list sanity is valid (line numbers within buffer bounds).
+///
+/// Returns 1 (OK) if valid, 0 (FAIL) if invalid.
+///
+/// # Safety
+/// `tp` and `dp` must be valid handles.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_check_sanity(tp: TabpageHandle, dp: DiffBlockHandle) -> c_int {
+    if tp.is_null() || dp.is_null() {
+        return FAIL;
+    }
+
+    for i in 0..DB_COUNT {
+        let buf = nvim_tabpage_get_diffbuf(tp, i);
+        if !buf.is_null() {
+            let lnum = nvim_diffblock_get_lnum(dp, i);
+            let count = nvim_diffblock_get_count(dp, i);
+            let line_count = nvim_buf_get_ml_line_count(buf);
+
+            if lnum + count - 1 > line_count {
+                return FAIL;
+            }
+        }
+    }
+    OK
+}
+
+// =============================================================================
+// Buffer Iteration
+// =============================================================================
+
+/// Iterator state for walking through diff buffers in a tabpage.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct DiffBufIter {
+    /// Tabpage being iterated.
+    pub tp: TabpageHandle,
+    /// Current index (0 to DB_COUNT).
+    pub idx: c_int,
+    /// Current buffer (null if done).
+    pub current: BufHandle,
+    /// Whether iteration is complete.
+    pub done: bool,
+}
+
+impl Default for DiffBufIter {
+    fn default() -> Self {
+        Self {
+            tp: TabpageHandle::null(),
+            idx: 0,
+            current: BufHandle::null(),
+            done: true,
+        }
+    }
+}
+
+/// Create a new iterator for diff buffers in a tabpage.
+///
+/// # Safety
+/// `tp` must be a valid tabpage handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_buf_iter_new(tp: TabpageHandle) -> DiffBufIter {
+    if tp.is_null() {
+        return DiffBufIter::default();
+    }
+
+    let mut iter = DiffBufIter {
+        tp,
+        idx: -1, // Will be advanced to first valid
+        current: BufHandle::null(),
+        done: false,
+    };
+
+    // Advance to first valid buffer
+    rs_diff_buf_iter_next(&raw mut iter);
+    iter
+}
+
+/// Advance the diff buffer iterator to the next buffer.
+///
+/// Returns true if there are more buffers, false if done.
+///
+/// # Safety
+/// `iter` must be a valid pointer to a `DiffBufIter`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_diff_buf_iter_next(iter: *mut DiffBufIter) -> bool {
+    if iter.is_null() {
+        return false;
+    }
+
+    let it = &mut *iter;
+    if it.done || it.tp.is_null() {
+        it.done = true;
+        it.current = BufHandle::null();
+        return false;
+    }
+
+    // Find next non-null buffer
+    loop {
+        it.idx += 1;
+        if it.idx >= DB_COUNT {
+            it.done = true;
+            it.current = BufHandle::null();
+            return false;
+        }
+
+        let buf = nvim_tabpage_get_diffbuf(it.tp, it.idx);
+        if !buf.is_null() {
+            it.current = buf;
+            return true;
+        }
+    }
+}
+
+/// Check if the diff buffer iterator is done.
+#[no_mangle]
+pub const extern "C" fn rs_diff_buf_iter_done(iter: &DiffBufIter) -> bool {
+    iter.done
+}
+
+/// Get the current buffer from the iterator.
+#[no_mangle]
+pub const extern "C" fn rs_diff_buf_iter_current(iter: &DiffBufIter) -> BufHandle {
+    iter.current
+}
+
+/// Get the current buffer index from the iterator.
+#[no_mangle]
+pub const extern "C" fn rs_diff_buf_iter_idx(iter: &DiffBufIter) -> c_int {
+    iter.idx
+}
 
 #[cfg(test)]
 mod tests {
@@ -533,5 +793,49 @@ mod tests {
         assert_eq!(size_of::<BufHandle>(), size_of::<*mut c_void>());
         assert_eq!(size_of::<TabpageHandle>(), size_of::<*mut c_void>());
         assert_eq!(size_of::<WinHandle>(), size_of::<*mut c_void>());
+    }
+
+    #[test]
+    fn test_diff_buf_add_result_values() {
+        assert_eq!(DiffBufAddResult::Added as c_int, 0);
+        assert_eq!(DiffBufAddResult::AlreadyAdded as c_int, 1);
+        assert_eq!(DiffBufAddResult::NoFreeSlot as c_int, 2);
+        assert_eq!(DiffBufAddResult::InvalidBuffer as c_int, 3);
+    }
+
+    #[test]
+    fn test_diff_buf_reg_state_default() {
+        let state = DiffBufRegState::default();
+        assert_eq!(state.idx, -1);
+        assert_eq!(state.free_slot, -1);
+        assert_eq!(state.count, 0);
+        assert!(!state.is_full);
+    }
+
+    #[test]
+    fn test_diff_buf_iter_default() {
+        let iter = DiffBufIter::default();
+        assert!(iter.tp.is_null());
+        assert_eq!(iter.idx, 0);
+        assert!(iter.current.is_null());
+        assert!(iter.done);
+    }
+
+    #[test]
+    fn test_diff_buf_iter_done() {
+        let iter = DiffBufIter::default();
+        assert!(rs_diff_buf_iter_done(&iter));
+    }
+
+    #[test]
+    fn test_diff_buf_iter_current() {
+        let iter = DiffBufIter::default();
+        assert!(rs_diff_buf_iter_current(&iter).is_null());
+    }
+
+    #[test]
+    fn test_diff_buf_iter_idx() {
+        let iter = DiffBufIter::default();
+        assert_eq!(rs_diff_buf_iter_idx(&iter), 0);
     }
 }
