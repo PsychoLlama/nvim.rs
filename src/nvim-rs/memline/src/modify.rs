@@ -817,6 +817,271 @@ pub extern "C" fn rs_ml_pages_needed(
     (space_needed + header_size + page_size - 1) / page_size
 }
 
+// =============================================================================
+// Delete Operation Helpers
+// =============================================================================
+
+/// Calculate the line count before deletion.
+///
+/// In delete context, count = locked_high - locked_low + 2
+/// (different from append which uses locked_high - locked_low)
+///
+/// # Arguments
+/// * `locked_high` - Last line number in the locked block
+/// * `locked_low` - First line number in the locked block
+#[no_mangle]
+pub extern "C" fn rs_ml_delete_line_count(locked_high: LineNr, locked_low: LineNr) -> c_int {
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    let count = (locked_high - locked_low + 2) as c_int;
+    count
+}
+
+/// Calculate the size of a line in a data block.
+///
+/// The size includes the text and NUL terminator.
+///
+/// # Arguments
+/// * `db_index` - Pointer to the db_index array
+/// * `idx` - Index of the line to get size of
+/// * `db_txt_end` - The db_txt_end value for line 0
+///
+/// # Safety
+/// - `db_index` must be a valid pointer to an array
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_calc_line_size(
+    db_index: *const u32,
+    idx: c_int,
+    db_txt_end: u32,
+) -> c_int {
+    if db_index.is_null() || idx < 0 {
+        return 0;
+    }
+
+    #[allow(clippy::cast_sign_loss)]
+    let line_start = (*db_index.add(idx as usize)) & DB_INDEX_MASK;
+
+    let line_end = if idx == 0 {
+        db_txt_end
+    } else {
+        #[allow(clippy::cast_sign_loss)]
+        let prev = (*db_index.add((idx - 1) as usize)) & DB_INDEX_MASK;
+        prev
+    };
+
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    let size = (line_end - line_start) as c_int;
+    size
+}
+
+/// Update a data block header after deleting a line.
+///
+/// # Safety
+/// - `header` must be a valid pointer to a DataBlockHeader
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_db_delete_update_header(
+    header: *mut DataBlockHeader,
+    line_size: c_int,
+) {
+    if header.is_null() || line_size <= 0 {
+        return;
+    }
+    #[allow(clippy::cast_sign_loss)]
+    let size = line_size as u32;
+    #[allow(clippy::cast_possible_truncation)]
+    let space = size + INDEX_SIZE as u32;
+    (*header).db_free += space;
+    (*header).db_txt_start += size;
+    (*header).db_line_count -= 1;
+}
+
+/// Check if a data block becomes empty after deletion.
+///
+/// Returns true if there's only one line in the block.
+#[no_mangle]
+pub extern "C" fn rs_ml_block_becomes_empty(count: c_int) -> c_int {
+    c_int::from(count == 1)
+}
+
+/// Calculate the flags to set after a successful delete.
+///
+/// After delete, both ML_LOCKED_DIRTY and ML_LOCKED_POS are set.
+#[no_mangle]
+pub extern "C" fn rs_ml_calc_delete_flags(current_flags: c_int) -> c_int {
+    current_flags | ML_LOCKED_DIRTY | ML_LOCKED_POS
+}
+
+/// Check if the buffer becomes empty after delete.
+///
+/// Returns true if line_count == 1 (only the line being deleted).
+#[no_mangle]
+pub extern "C" fn rs_ml_buffer_becomes_empty(line_count: LineNr) -> c_int {
+    c_int::from(line_count == 1)
+}
+
+// =============================================================================
+// Replace Operation Helpers
+// =============================================================================
+
+/// Check if a replace operation is valid.
+///
+/// Replace is valid if the line number is within range and the buffer has a memfile.
+///
+/// # Safety
+/// - `buf` must be a valid buffer pointer or NULL
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_can_replace(buf: *mut BufHandle, lnum: LineNr) -> c_int {
+    if buf.is_null() {
+        return 0;
+    }
+
+    // Must have memfile
+    if nvim_buf_has_ml_mfp(buf) == 0 {
+        return 0;
+    }
+
+    let line_count = nvim_buf_get_ml_line_count(buf);
+
+    // Line number must be valid (1 to line_count)
+    c_int::from(lnum >= 1 && lnum <= line_count)
+}
+
+/// Calculate size difference when replacing a line.
+///
+/// Positive means new line is larger, negative means smaller.
+///
+/// # Arguments
+/// * `old_len` - Length of the old line
+/// * `new_len` - Length of the new line
+#[no_mangle]
+pub extern "C" fn rs_ml_replace_size_diff(old_len: ColNr, new_len: ColNr) -> c_int {
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    let diff = new_len as c_int - old_len as c_int;
+    diff
+}
+
+/// Check if a replace operation fits in the current block.
+///
+/// Returns true if the block has enough free space for the size difference.
+///
+/// # Arguments
+/// * `db_free` - Free space in the data block
+/// * `size_diff` - Size difference (new_len - old_len)
+#[no_mangle]
+pub extern "C" fn rs_ml_replace_fits_in_block(db_free: u32, size_diff: c_int) -> c_int {
+    if size_diff <= 0 {
+        // New line is same size or smaller - always fits
+        return 1;
+    }
+    // New line is larger - check if we have room
+    #[allow(clippy::cast_sign_loss)]
+    let needed = size_diff as u32;
+    c_int::from(db_free >= needed)
+}
+
+// =============================================================================
+// Index Array Update Helpers
+// =============================================================================
+
+/// Shift index entries after deletion.
+///
+/// Moves indexes from `idx+1` onwards to fill the gap at `idx`,
+/// adjusting each by adding `line_size` to account for text movement.
+///
+/// # Arguments
+/// * `db_index` - Pointer to the db_index array
+/// * `idx` - Index of the deleted line
+/// * `count` - Original line count in block
+/// * `line_size` - Size of the deleted line
+///
+/// # Safety
+/// - `db_index` must be a valid pointer to a mutable array
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_shift_indexes_delete(
+    db_index: *mut u32,
+    idx: c_int,
+    count: c_int,
+    line_size: c_int,
+) {
+    if db_index.is_null() || idx < 0 || count <= 0 || line_size <= 0 {
+        return;
+    }
+
+    // Shift indexes and adjust for text movement
+    for i in idx..(count - 1) {
+        #[allow(clippy::cast_sign_loss)]
+        let next_idx = (i + 1) as usize;
+        #[allow(clippy::cast_sign_loss)]
+        let curr_idx = i as usize;
+        #[allow(clippy::cast_sign_loss)]
+        let adjustment = line_size as u32;
+        *db_index.add(curr_idx) = (*db_index.add(next_idx)) + adjustment;
+    }
+}
+
+/// Shift index entries after insertion.
+///
+/// Moves indexes from `idx+1` backwards to make room for a new entry at `idx+1`,
+/// adjusting each by subtracting `text_len` to account for text movement.
+///
+/// # Arguments
+/// * `db_index` - Pointer to the db_index array
+/// * `db_idx` - Index after which we're inserting
+/// * `line_count` - Original line count in block
+/// * `text_len` - Length of the new line
+///
+/// # Safety
+/// - `db_index` must be a valid pointer to a mutable array
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_shift_indexes_insert(
+    db_index: *mut u32,
+    db_idx: c_int,
+    line_count: c_int,
+    text_len: ColNr,
+) {
+    if db_index.is_null() {
+        return;
+    }
+
+    // Move indexes backwards (from end to db_idx+1)
+    for i in ((db_idx + 1)..line_count).rev() {
+        #[allow(clippy::cast_sign_loss)]
+        let curr_idx = i as usize;
+        #[allow(clippy::cast_sign_loss)]
+        let next_idx = (i + 1) as usize;
+        #[allow(clippy::cast_sign_loss)]
+        let adjustment = text_len as u32;
+        *db_index.add(next_idx) = (*db_index.add(curr_idx)) - adjustment;
+    }
+}
+
+/// Set the index entry for a newly inserted line.
+///
+/// # Arguments
+/// * `db_index` - Pointer to the db_index array
+/// * `idx` - Index where to store
+/// * `offset` - Text offset for the new line
+/// * `mark` - If non-zero, set the DB_MARKED flag
+///
+/// # Safety
+/// - `db_index` must be a valid pointer to a mutable array
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_set_index_entry(
+    db_index: *mut u32,
+    idx: c_int,
+    offset: u32,
+    mark: c_int,
+) {
+    if db_index.is_null() || idx < 0 {
+        return;
+    }
+    #[allow(clippy::cast_sign_loss)]
+    let entry = db_index.add(idx as usize);
+    *entry = offset;
+    if mark != 0 {
+        *entry |= !DB_INDEX_MASK;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -932,5 +1197,95 @@ mod tests {
 
         // 400 bytes + 24 header on 512 page = ceil(424/512) = 1
         assert_eq!(rs_ml_pages_needed(400, 24, 512), 1);
+    }
+
+    #[test]
+    fn test_delete_line_count() {
+        // locked_high=50, locked_low=40 -> 50-40+2 = 12
+        assert_eq!(rs_ml_delete_line_count(50, 40), 12);
+    }
+
+    #[test]
+    fn test_calc_line_size() {
+        // Line 0: starts at 900, ends at db_txt_end=1000 -> size 100
+        // Line 1: starts at 850, ends at 900 (prev entry) -> size 50
+        let db_index: [u32; 3] = [900, 850, 800];
+
+        unsafe {
+            assert_eq!(rs_ml_calc_line_size(db_index.as_ptr(), 0, 1000), 100);
+            assert_eq!(rs_ml_calc_line_size(db_index.as_ptr(), 1, 1000), 50);
+            assert_eq!(rs_ml_calc_line_size(db_index.as_ptr(), 2, 1000), 50);
+        }
+    }
+
+    #[test]
+    fn test_block_becomes_empty() {
+        assert_eq!(rs_ml_block_becomes_empty(1), 1);
+        assert_eq!(rs_ml_block_becomes_empty(2), 0);
+        assert_eq!(rs_ml_block_becomes_empty(0), 0);
+    }
+
+    #[test]
+    fn test_buffer_becomes_empty() {
+        assert_eq!(rs_ml_buffer_becomes_empty(1), 1);
+        assert_eq!(rs_ml_buffer_becomes_empty(2), 0);
+        assert_eq!(rs_ml_buffer_becomes_empty(100), 0);
+    }
+
+    #[test]
+    fn test_replace_size_diff() {
+        // Same size
+        assert_eq!(rs_ml_replace_size_diff(10, 10), 0);
+        // New is larger
+        assert_eq!(rs_ml_replace_size_diff(10, 15), 5);
+        // New is smaller
+        assert_eq!(rs_ml_replace_size_diff(10, 5), -5);
+    }
+
+    #[test]
+    fn test_replace_fits_in_block() {
+        // Smaller or same always fits
+        assert_eq!(rs_ml_replace_fits_in_block(50, 0), 1);
+        assert_eq!(rs_ml_replace_fits_in_block(50, -10), 1);
+
+        // Larger fits if enough room
+        assert_eq!(rs_ml_replace_fits_in_block(50, 30), 1);
+        assert_eq!(rs_ml_replace_fits_in_block(50, 50), 1);
+
+        // Larger doesn't fit if not enough room
+        assert_eq!(rs_ml_replace_fits_in_block(50, 51), 0);
+        assert_eq!(rs_ml_replace_fits_in_block(50, 100), 0);
+    }
+
+    #[test]
+    fn test_shift_indexes_delete() {
+        let mut db_index: [u32; 4] = [900, 850, 800, 750];
+
+        unsafe {
+            // Delete line at idx=1, count=4, line_size=50
+            // After: idx[1]=idx[2]+50=850, idx[2]=idx[3]+50=800
+            rs_ml_shift_indexes_delete(db_index.as_mut_ptr(), 1, 4, 50);
+
+            assert_eq!(db_index[0], 900); // unchanged
+            assert_eq!(db_index[1], 850); // was 800+50
+            assert_eq!(db_index[2], 800); // was 750+50
+                                          // db_index[3] is now garbage
+        }
+    }
+
+    #[test]
+    fn test_set_index_entry() {
+        let mut db_index: [u32; 2] = [0, 0];
+
+        unsafe {
+            // Set entry without mark
+            rs_ml_set_index_entry(db_index.as_mut_ptr(), 0, 500, 0);
+            assert_eq!(db_index[0], 500);
+
+            // Set entry with mark
+            rs_ml_set_index_entry(db_index.as_mut_ptr(), 1, 600, 1);
+            assert_eq!(db_index[1] & DB_INDEX_MASK, 600);
+            assert_ne!(db_index[1] & !DB_INDEX_MASK, 0);
+        }
     }
 }
