@@ -21,8 +21,9 @@ extern "C" {
 }
 
 // CTRL-X mode constants
-const CTRL_X_THESAURUS: c_int = 13;
-const CTRL_X_DICTIONARY: c_int = 9 + 0x100; // 9 + CTRL_X_WANT_IDENT
+const CTRL_X_WANT_IDENT: c_int = 0x100;
+const CTRL_X_DICTIONARY: c_int = 9 + CTRL_X_WANT_IDENT;
+const CTRL_X_THESAURUS: c_int = 10 + CTRL_X_WANT_IDENT;
 
 /// Check if we're in dictionary completion mode.
 #[no_mangle]
@@ -206,14 +207,209 @@ pub unsafe extern "C" fn rs_dict_count_words_in_line(mut ptr: *const c_char) -> 
     count
 }
 
+// =============================================================================
+// Phase 5: Extended Dictionary and Thesaurus Functions
+// =============================================================================
+
+// Additional C accessor functions
+extern "C" {
+    fn nvim_get_compl_started() -> c_int;
+    fn nvim_get_compl_length() -> c_int;
+}
+
+/// Check if dictionary completion is active.
+#[no_mangle]
+pub unsafe extern "C" fn rs_dict_is_active() -> c_int {
+    let started = nvim_get_compl_started();
+    let mode = nvim_get_ctrl_x_mode();
+    c_int::from(started != 0 && (mode == CTRL_X_DICTIONARY || mode == CTRL_X_THESAURUS))
+}
+
+/// Check if dictionary completion can continue.
+#[no_mangle]
+pub unsafe extern "C" fn rs_dict_can_continue() -> c_int {
+    let started = nvim_get_compl_started();
+    let interrupted = nvim_get_compl_interrupted();
+    c_int::from(started != 0 && interrupted == 0)
+}
+
+/// Get minimum word length for dictionary matches.
+#[no_mangle]
+pub unsafe extern "C" fn rs_dict_min_length() -> c_int {
+    nvim_get_compl_length()
+}
+
+/// Check if a word is long enough for dictionary match.
+#[no_mangle]
+pub unsafe extern "C" fn rs_dict_word_is_long_enough(len: c_int) -> c_int {
+    let min_len = nvim_get_compl_length();
+    c_int::from(len >= min_len)
+}
+
+/// Compare two strings case-insensitively (ASCII only).
+#[no_mangle]
+#[allow(
+    clippy::missing_const_for_fn,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss
+)]
+pub unsafe extern "C" fn rs_dict_stricmp(
+    s1: *const c_char,
+    s2: *const c_char,
+    len: c_int,
+) -> c_int {
+    if s1.is_null() || s2.is_null() || len < 0 {
+        return c_int::from(s1 != s2);
+    }
+
+    for i in 0..len as usize {
+        let c1 = *s1.add(i);
+        let c2 = *s2.add(i);
+
+        // Convert to lowercase for comparison (ASCII only)
+        // ASCII 'A'-'Z' is 65-90, safe range for c_char
+        let lc1 = if (65..=90).contains(&c1) { c1 + 32 } else { c1 };
+        let lc2 = if (65..=90).contains(&c2) { c2 + 32 } else { c2 };
+
+        if lc1 != lc2 {
+            return c_int::from(lc1 > lc2) - c_int::from(lc1 < lc2);
+        }
+    }
+
+    0
+}
+
+/// Check if a string starts with another string (case-sensitive).
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub unsafe extern "C" fn rs_dict_starts_with(
+    str_ptr: *const c_char,
+    prefix: *const c_char,
+    prefix_len: c_int,
+) -> c_int {
+    if str_ptr.is_null() || prefix.is_null() || prefix_len < 0 {
+        return 0;
+    }
+
+    #[allow(clippy::cast_sign_loss)]
+    for i in 0..prefix_len as usize {
+        let c1 = *str_ptr.add(i);
+        let c2 = *prefix.add(i);
+        if c1 == 0 || c1 != c2 {
+            return 0;
+        }
+    }
+
+    1
+}
+
+/// Check if a string starts with another string (case-insensitive, ASCII).
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn, clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_dict_starts_with_icase(
+    str_ptr: *const c_char,
+    prefix: *const c_char,
+    prefix_len: c_int,
+) -> c_int {
+    if str_ptr.is_null() || prefix.is_null() || prefix_len < 0 {
+        return 0;
+    }
+
+    for i in 0..prefix_len as usize {
+        let c1 = *str_ptr.add(i);
+        let c2 = *prefix.add(i);
+
+        if c1 == 0 {
+            return 0;
+        }
+
+        // Convert to lowercase for comparison
+        // ASCII 'A'-'Z' is 65-90
+        let lc1 = if (65..=90).contains(&c1) { c1 + 32 } else { c1 };
+        let lc2 = if (65..=90).contains(&c2) { c2 + 32 } else { c2 };
+
+        if lc1 != lc2 {
+            return 0;
+        }
+    }
+
+    1
+}
+
+/// Extract the Nth word from a line.
+///
+/// Returns pointers to start and end of the word via out parameters.
+/// Returns 1 if word found, 0 if not found.
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_dict_get_nth_word(
+    line: *const c_char,
+    n: c_int,
+    start_out: *mut *const c_char,
+    end_out: *mut *const c_char,
+) -> c_int {
+    if line.is_null() || n < 0 || start_out.is_null() || end_out.is_null() {
+        return 0;
+    }
+
+    let mut ptr = line;
+    let mut word_idx = 0;
+
+    loop {
+        // Skip whitespace
+        while *ptr != 0 && *ptr != b'\n' as c_char {
+            if *ptr != b' ' as c_char && *ptr != b'\t' as c_char {
+                break;
+            }
+            ptr = ptr.add(1);
+        }
+
+        // End of line?
+        if *ptr == 0 || *ptr == b'\n' as c_char {
+            break;
+        }
+
+        // Found a word
+        let word_start = ptr;
+
+        // Skip to end of word
+        while *ptr != 0
+            && *ptr != b'\n' as c_char
+            && *ptr != b' ' as c_char
+            && *ptr != b'\t' as c_char
+        {
+            ptr = ptr.add(1);
+        }
+
+        if word_idx == n {
+            *start_out = word_start;
+            *end_out = ptr;
+            return 1;
+        }
+
+        word_idx += 1;
+    }
+
+    0
+}
+
+/// Check if character is a thesaurus word separator.
+///
+/// In thesaurus files, commas and semicolons can separate synonyms.
+#[no_mangle]
+pub extern "C" fn rs_dict_is_thesaurus_sep(c: c_char) -> c_int {
+    // ASCII: comma=44, semicolon=59, space=32, tab=9
+    c_int::from(c == 44 || c == 59 || c == 32 || c == 9)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_ctrl_x_mode_constants() {
-        assert_eq!(CTRL_X_THESAURUS, 13);
         assert_eq!(CTRL_X_DICTIONARY, 9 + 0x100);
+        assert_eq!(CTRL_X_THESAURUS, 10 + 0x100);
     }
 
     #[test]
