@@ -6684,6 +6684,18 @@ int nvim_get_compl_matches(void)
   return compl_matches;
 }
 
+/// Get compl_get_longest flag for Rust.
+int nvim_get_compl_get_longest(void)
+{
+  return compl_get_longest ? 1 : 0;
+}
+
+/// Get compl_cont_mode for Rust.
+int nvim_get_compl_cont_mode(void)
+{
+  return compl_cont_mode;
+}
+
 /// Check if compl_curr_match->cp_str.data is not NULL for Rust.
 int nvim_compl_curr_match_has_str(void)
 {

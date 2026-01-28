@@ -3,6 +3,15 @@
 //! This module provides functions for managing and querying completion state,
 //! consolidating state-related operations. Many of these are already implemented
 //! in lib.rs but this module provides additional utilities and documentation.
+//!
+//! The completion state machine has several modes:
+//! - CTRL_X_NORMAL (0): Default keyword completion (^N/^P)
+//! - CTRL_X_NOT_DEFINED_YET (1): Just pressed ^X, waiting for next key
+//! - CTRL_X_SCROLL (2): Scrolling without completing
+//! - CTRL_X_WHOLE_LINE (3): Line completion (^X^L)
+//! - CTRL_X_FILES (4): File name completion (^X^F)
+//! - CTRL_X_TAGS: Tag completion (^X^])
+//! - etc.
 
 #![allow(clippy::missing_const_for_fn)]
 
@@ -11,6 +20,7 @@ use std::os::raw::c_int;
 // C accessor functions for state
 extern "C" {
     // State flag accessors
+    fn nvim_get_ctrl_x_mode() -> c_int;
     fn nvim_get_compl_started() -> c_int;
     fn nvim_get_compl_interrupted() -> c_int;
     fn nvim_get_compl_time_slice_expired() -> c_int;
@@ -20,6 +30,7 @@ extern "C" {
     fn nvim_get_compl_cont_status() -> c_int;
     fn nvim_get_compl_restarting() -> c_int;
     fn nvim_get_compl_autocomplete() -> c_int;
+    fn nvim_get_compl_get_longest() -> c_int;
 
     // Match state
     fn nvim_compl_first_match_is_null() -> c_int;
@@ -33,7 +44,43 @@ extern "C" {
     fn nvim_get_compl_length() -> c_int;
     fn nvim_get_compl_col() -> c_int;
     fn nvim_get_compl_selected_item() -> c_int;
+    fn nvim_get_compl_cont_mode() -> c_int;
 }
+
+// CTRL-X mode constants
+const CTRL_X_WANT_IDENT: c_int = 0x100;
+
+const CTRL_X_NORMAL: c_int = 0;
+const CTRL_X_NOT_DEFINED_YET: c_int = 1;
+const CTRL_X_SCROLL: c_int = 2;
+#[allow(dead_code)]
+const CTRL_X_WHOLE_LINE: c_int = 3;
+#[allow(dead_code)]
+const CTRL_X_FILES: c_int = 4;
+#[allow(dead_code)]
+const CTRL_X_TAGS: c_int = 5 + CTRL_X_WANT_IDENT;
+#[allow(dead_code)]
+const CTRL_X_PATH_PATTERNS: c_int = 6 + CTRL_X_WANT_IDENT;
+#[allow(dead_code)]
+const CTRL_X_PATH_DEFINES: c_int = 7 + CTRL_X_WANT_IDENT;
+const CTRL_X_FINISHED: c_int = 8;
+#[allow(dead_code)]
+const CTRL_X_DICTIONARY: c_int = 9 + CTRL_X_WANT_IDENT;
+#[allow(dead_code)]
+const CTRL_X_THESAURUS: c_int = 10 + CTRL_X_WANT_IDENT;
+#[allow(dead_code)]
+const CTRL_X_CMDLINE: c_int = 11;
+#[allow(dead_code)]
+const CTRL_X_FUNCTION: c_int = 12;
+#[allow(dead_code)]
+const CTRL_X_OMNI: c_int = 13;
+#[allow(dead_code)]
+const CTRL_X_SPELL: c_int = 14;
+const CTRL_X_EVAL: c_int = 16;
+const CTRL_X_CMDLINE_CTRL_X: c_int = 17;
+const CTRL_X_BUFNAMES: c_int = 18;
+#[allow(dead_code)]
+const CTRL_X_REGISTER: c_int = 19;
 
 // Continuation status flags (must match C defines)
 const CONT_ADDING: c_int = 1;
@@ -236,6 +283,146 @@ pub unsafe extern "C" fn rs_get_compl_used_match() -> c_int {
     nvim_get_compl_used_match()
 }
 
+// =============================================================================
+// Phase 1: State Machine Core Functions
+// =============================================================================
+
+/// Get the raw CTRL-X mode state value.
+///
+/// Returns the current ctrl_x_mode value directly.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ctrl_x_mode_state() -> c_int {
+    nvim_get_ctrl_x_mode()
+}
+
+/// Check if the CTRL-X mode wants an identifier.
+///
+/// Returns true if the current mode has the CTRL_X_WANT_IDENT flag set.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ctrl_x_mode_wants_ident_current() -> c_int {
+    c_int::from((nvim_get_ctrl_x_mode() & CTRL_X_WANT_IDENT) != 0)
+}
+
+/// Get the base CTRL-X mode (without the WANT_IDENT flag).
+///
+/// Strips the CTRL_X_WANT_IDENT flag from the current mode value.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ctrl_x_mode_base_current() -> c_int {
+    nvim_get_ctrl_x_mode() & !CTRL_X_WANT_IDENT
+}
+
+/// Check if completion mode is finished.
+///
+/// Returns true if ctrl_x_mode is CTRL_X_FINISHED.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ctrl_x_mode_finished() -> c_int {
+    c_int::from(nvim_get_ctrl_x_mode() == CTRL_X_FINISHED)
+}
+
+/// Check if completion mode is eval (builtin complete()).
+///
+/// Returns true if ctrl_x_mode is CTRL_X_EVAL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ctrl_x_mode_eval() -> c_int {
+    c_int::from(nvim_get_ctrl_x_mode() == CTRL_X_EVAL)
+}
+
+/// Check if completion mode is buffer names.
+///
+/// Returns true if ctrl_x_mode is CTRL_X_BUFNAMES.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ctrl_x_mode_bufnames() -> c_int {
+    c_int::from(nvim_get_ctrl_x_mode() == CTRL_X_BUFNAMES)
+}
+
+/// Check if CTRL-X CTRL-X was typed in command-line mode.
+///
+/// Returns true if ctrl_x_mode is CTRL_X_CMDLINE_CTRL_X.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ctrl_x_mode_cmdline_ctrl_x() -> c_int {
+    c_int::from(nvim_get_ctrl_x_mode() == CTRL_X_CMDLINE_CTRL_X)
+}
+
+/// Get the continuation mode.
+///
+/// Returns the value of compl_cont_mode.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_compl_cont_mode() -> c_int {
+    nvim_get_compl_cont_mode()
+}
+
+/// Check if compl_get_longest is set.
+///
+/// Returns true if completion should find the longest common match.
+#[no_mangle]
+pub unsafe extern "C" fn rs_compl_get_longest() -> c_int {
+    nvim_get_compl_get_longest()
+}
+
+/// Get a summary of completion mode state.
+///
+/// Returns a bitfield with mode information:
+/// - Bit 0: completion started
+/// - Bit 1: mode is not default
+/// - Bit 2: mode is finished
+/// - Bit 3: mode wants ident
+/// - Bit 4: mode is scroll
+#[no_mangle]
+pub unsafe extern "C" fn rs_compl_mode_summary() -> c_int {
+    let mode = nvim_get_ctrl_x_mode();
+    let mut summary = 0;
+
+    if nvim_get_compl_started() != 0 {
+        summary |= 1;
+    }
+    if mode != CTRL_X_NORMAL {
+        summary |= 2;
+    }
+    if mode == CTRL_X_FINISHED {
+        summary |= 4;
+    }
+    if (mode & CTRL_X_WANT_IDENT) != 0 {
+        summary |= 8;
+    }
+    if mode == CTRL_X_SCROLL {
+        summary |= 16;
+    }
+
+    summary
+}
+
+/// Check if completion should transition to finished state.
+///
+/// Returns true if we're in a non-scroll CTRL-X mode and should finish.
+#[no_mangle]
+pub unsafe extern "C" fn rs_should_finish_ctrl_x() -> c_int {
+    let mode = nvim_get_ctrl_x_mode();
+    // If we're in scroll mode, we go to NORMAL; otherwise to FINISHED
+    c_int::from(mode != CTRL_X_NORMAL && mode != CTRL_X_SCROLL && mode != CTRL_X_FINISHED)
+}
+
+/// Get the next state after leaving a non-default CTRL-X mode.
+///
+/// Returns CTRL_X_NORMAL if in scroll mode, CTRL_X_FINISHED otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn rs_next_ctrl_x_state_on_leave() -> c_int {
+    if nvim_get_ctrl_x_mode() == CTRL_X_SCROLL {
+        CTRL_X_NORMAL
+    } else {
+        CTRL_X_FINISHED
+    }
+}
+
+/// Check if we're in a state where completion can be started.
+///
+/// Returns true if in CTRL_X_NOT_DEFINED_YET or normal mode without completion.
+#[no_mangle]
+pub unsafe extern "C" fn rs_can_start_completion() -> c_int {
+    let mode = nvim_get_ctrl_x_mode();
+    let started = nvim_get_compl_started() != 0;
+    c_int::from(mode == CTRL_X_NOT_DEFINED_YET || (mode == CTRL_X_NORMAL && !started))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -256,5 +443,71 @@ mod tests {
         assert_eq!(CONT_ADDING & CONT_SOL, 0);
         assert_eq!(CONT_ADDING & CONT_LOCAL, 0);
         assert_eq!(CONT_SOL & CONT_LOCAL, 0);
+    }
+
+    #[test]
+    fn test_ctrl_x_mode_constants() {
+        // Verify CTRL-X mode constants match expected values
+        assert_eq!(CTRL_X_NORMAL, 0);
+        assert_eq!(CTRL_X_NOT_DEFINED_YET, 1);
+        assert_eq!(CTRL_X_SCROLL, 2);
+        assert_eq!(CTRL_X_WHOLE_LINE, 3);
+        assert_eq!(CTRL_X_FILES, 4);
+        assert_eq!(CTRL_X_FINISHED, 8);
+        assert_eq!(CTRL_X_CMDLINE, 11);
+        assert_eq!(CTRL_X_FUNCTION, 12);
+        assert_eq!(CTRL_X_OMNI, 13);
+        assert_eq!(CTRL_X_SPELL, 14);
+        assert_eq!(CTRL_X_EVAL, 16);
+        assert_eq!(CTRL_X_CMDLINE_CTRL_X, 17);
+        assert_eq!(CTRL_X_BUFNAMES, 18);
+        assert_eq!(CTRL_X_REGISTER, 19);
+    }
+
+    #[test]
+    fn test_ctrl_x_want_ident() {
+        // Modes with CTRL_X_WANT_IDENT should have the flag set
+        assert_eq!(CTRL_X_WANT_IDENT, 0x100);
+        assert_ne!(CTRL_X_TAGS & CTRL_X_WANT_IDENT, 0);
+        assert_ne!(CTRL_X_PATH_PATTERNS & CTRL_X_WANT_IDENT, 0);
+        assert_ne!(CTRL_X_PATH_DEFINES & CTRL_X_WANT_IDENT, 0);
+        assert_ne!(CTRL_X_DICTIONARY & CTRL_X_WANT_IDENT, 0);
+        assert_ne!(CTRL_X_THESAURUS & CTRL_X_WANT_IDENT, 0);
+
+        // Modes without CTRL_X_WANT_IDENT should not have the flag
+        assert_eq!(CTRL_X_NORMAL & CTRL_X_WANT_IDENT, 0);
+        assert_eq!(CTRL_X_SCROLL & CTRL_X_WANT_IDENT, 0);
+        assert_eq!(CTRL_X_FILES & CTRL_X_WANT_IDENT, 0);
+    }
+
+    #[test]
+    fn test_ctrl_x_modes_unique() {
+        let modes = [
+            CTRL_X_NORMAL,
+            CTRL_X_NOT_DEFINED_YET,
+            CTRL_X_SCROLL,
+            CTRL_X_WHOLE_LINE,
+            CTRL_X_FILES,
+            CTRL_X_TAGS,
+            CTRL_X_PATH_PATTERNS,
+            CTRL_X_PATH_DEFINES,
+            CTRL_X_FINISHED,
+            CTRL_X_DICTIONARY,
+            CTRL_X_THESAURUS,
+            CTRL_X_CMDLINE,
+            CTRL_X_FUNCTION,
+            CTRL_X_OMNI,
+            CTRL_X_SPELL,
+            CTRL_X_EVAL,
+            CTRL_X_CMDLINE_CTRL_X,
+            CTRL_X_BUFNAMES,
+            CTRL_X_REGISTER,
+        ];
+
+        for i in 0..modes.len() {
+            for j in (i + 1)..modes.len() {
+                assert_ne!(modes[i], modes[j], "Modes at {i} and {j} are equal");
+            }
+        }
     }
 }
