@@ -16,6 +16,7 @@ pub mod external;
 pub mod helpers;
 pub mod highlight;
 pub mod marks;
+pub mod nav;
 pub mod navigate;
 pub mod ops;
 pub mod scroll;
@@ -37,6 +38,10 @@ pub use highlight::{
     DiffLineStatus,
 };
 pub use marks::{ChangeMetrics, ChangePosition, MarkAdjustIter, MarkAdjustParams};
+pub use nav::{
+    BlockPosition, BlockPositionResult, CursorAdjustResult, DiffModeOptions, DiffWinOptions,
+    MotionResult, WindowDiffStatus,
+};
 pub use navigate::{DiffHunkBounds, DiffNavResult, Direction};
 pub use ops::{AdjustedRange, DiffOpError, DiffOpRange, DiffOpState, DiffOtherBufResult};
 pub use scroll::{
