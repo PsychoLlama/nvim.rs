@@ -394,6 +394,157 @@ pub unsafe extern "C" fn rs_stl_alloc_click_defs(
     }
 }
 
+// =============================================================================
+// Tabline Support
+// =============================================================================
+
+/// Tabline item type for rendering.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TablineItemType {
+    /// Normal tab label
+    Tab = 0,
+    /// Tab close button (X)
+    Close = 1,
+    /// Fill area (after all tabs)
+    Fill = 2,
+}
+
+/// Tabline item for building tabline.
+#[derive(Debug, Clone)]
+pub struct TablineItem {
+    /// Item type
+    pub item_type: TablineItemType,
+    /// Tab page number (1-based, 0 for fill)
+    pub tabnr: c_int,
+    /// Start column in output
+    pub start_col: c_int,
+    /// End column in output
+    pub end_col: c_int,
+    /// Whether this tab is selected
+    pub is_selected: bool,
+}
+
+impl TablineItem {
+    /// Create a new tab item.
+    pub const fn tab(tabnr: c_int, start_col: c_int, end_col: c_int, is_selected: bool) -> Self {
+        Self {
+            item_type: TablineItemType::Tab,
+            tabnr,
+            start_col,
+            end_col,
+            is_selected,
+        }
+    }
+
+    /// Create a new close button item.
+    pub const fn close(tabnr: c_int, start_col: c_int, end_col: c_int) -> Self {
+        Self {
+            item_type: TablineItemType::Close,
+            tabnr,
+            start_col,
+            end_col,
+            is_selected: false,
+        }
+    }
+
+    /// Create a new fill item.
+    pub const fn fill(start_col: c_int, end_col: c_int) -> Self {
+        Self {
+            item_type: TablineItemType::Fill,
+            tabnr: 0,
+            start_col,
+            end_col,
+            is_selected: false,
+        }
+    }
+
+    /// Get the width of this item.
+    pub const fn width(&self) -> c_int {
+        self.end_col - self.start_col
+    }
+}
+
+/// Tabline builder for creating tabline.
+#[derive(Debug, Default)]
+pub struct TablineBuilder {
+    /// Items in the tabline
+    items: Vec<TablineItem>,
+    /// Current column position
+    current_col: c_int,
+    /// Associated click tracker
+    clicks: ClickTracker,
+}
+
+impl TablineBuilder {
+    /// Create a new tabline builder.
+    pub const fn new() -> Self {
+        Self {
+            items: Vec::new(),
+            current_col: 0,
+            clicks: ClickTracker::new(),
+        }
+    }
+
+    /// Add a tab to the tabline.
+    #[allow(clippy::cast_sign_loss)]
+    pub fn add_tab(&mut self, tabnr: c_int, width: c_int, is_selected: bool) {
+        let start = self.current_col;
+        let end = start + width;
+
+        self.items
+            .push(TablineItem::tab(tabnr, start, end, is_selected));
+        self.clicks
+            .start_tab_switch(start.max(0) as usize, tabnr);
+        self.current_col = end;
+    }
+
+    /// Add a close button to the tabline.
+    #[allow(clippy::cast_sign_loss)]
+    pub fn add_close_button(&mut self, tabnr: c_int, width: c_int) {
+        let start = self.current_col;
+        let end = start + width;
+
+        self.items.push(TablineItem::close(tabnr, start, end));
+        self.clicks
+            .start_tab_close(start.max(0) as usize, tabnr);
+        self.current_col = end;
+    }
+
+    /// Add fill area to the tabline.
+    #[allow(clippy::cast_sign_loss)]
+    pub fn add_fill(&mut self, width: c_int) {
+        let start = self.current_col;
+        let end = start + width;
+
+        self.items.push(TablineItem::fill(start, end));
+        self.clicks.end_region(start.max(0) as usize);
+        self.current_col = end;
+    }
+
+    /// Get the current column position.
+    pub const fn current_col(&self) -> c_int {
+        self.current_col
+    }
+
+    /// Get all items.
+    pub fn items(&self) -> &[TablineItem] {
+        &self.items
+    }
+
+    /// Get the click tracker.
+    pub const fn clicks(&self) -> &ClickTracker {
+        &self.clicks
+    }
+
+    /// Clear the builder.
+    pub fn clear(&mut self) {
+        self.items.clear();
+        self.current_col = 0;
+        self.clicks.clear();
+    }
+}
+
 /// Fill the click definitions array based on click records.
 ///
 /// # Safety
@@ -657,5 +808,79 @@ mod tests {
         assert!(is_valid_for_statusline(ClickType::FuncRun));
         assert!(!is_valid_for_statusline(ClickType::TabSwitch));
         assert!(!is_valid_for_statusline(ClickType::TabClose));
+    }
+
+    #[test]
+    fn test_tabline_item_tab() {
+        let item = TablineItem::tab(1, 0, 10, true);
+        assert_eq!(item.item_type, TablineItemType::Tab);
+        assert_eq!(item.tabnr, 1);
+        assert_eq!(item.start_col, 0);
+        assert_eq!(item.end_col, 10);
+        assert!(item.is_selected);
+        assert_eq!(item.width(), 10);
+    }
+
+    #[test]
+    fn test_tabline_item_close() {
+        let item = TablineItem::close(2, 10, 12);
+        assert_eq!(item.item_type, TablineItemType::Close);
+        assert_eq!(item.tabnr, 2);
+        assert_eq!(item.width(), 2);
+    }
+
+    #[test]
+    fn test_tabline_item_fill() {
+        let item = TablineItem::fill(20, 80);
+        assert_eq!(item.item_type, TablineItemType::Fill);
+        assert_eq!(item.tabnr, 0);
+        assert_eq!(item.width(), 60);
+    }
+
+    #[test]
+    fn test_tabline_builder_basic() {
+        let mut builder = TablineBuilder::new();
+
+        builder.add_tab(1, 8, true);
+        builder.add_tab(2, 8, false);
+        builder.add_close_button(2, 2);
+        builder.add_fill(62);
+
+        assert_eq!(builder.items().len(), 4);
+        assert_eq!(builder.current_col(), 80);
+
+        let items = builder.items();
+        assert_eq!(items[0].tabnr, 1);
+        assert!(items[0].is_selected);
+        assert_eq!(items[1].tabnr, 2);
+        assert!(!items[1].is_selected);
+        assert_eq!(items[2].item_type, TablineItemType::Close);
+        assert_eq!(items[3].item_type, TablineItemType::Fill);
+    }
+
+    #[test]
+    fn test_tabline_builder_clicks() {
+        let mut builder = TablineBuilder::new();
+
+        builder.add_tab(1, 10, true);
+        builder.add_tab(2, 10, false);
+
+        let clicks: Vec<_> = builder.clicks().iter().collect();
+        assert_eq!(clicks.len(), 2);
+        assert_eq!(clicks[0].1, ClickType::TabSwitch);
+        assert_eq!(clicks[0].2, 1); // tabnr
+        assert_eq!(clicks[1].2, 2); // tabnr
+    }
+
+    #[test]
+    fn test_tabline_builder_clear() {
+        let mut builder = TablineBuilder::new();
+        builder.add_tab(1, 10, true);
+        builder.add_fill(70);
+
+        builder.clear();
+        assert!(builder.items().is_empty());
+        assert_eq!(builder.current_col(), 0);
+        assert!(builder.clicks().is_empty());
     }
 }
