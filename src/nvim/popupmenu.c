@@ -228,6 +228,48 @@ void nvim_set_pum_height(int val)
   pum_height = val;
 }
 
+// Accessors for pum_array items (for Rust FFI)
+const char *nvim_pum_item_get_text(const pumitem_T *array, int index)
+{
+  return array[index].pum_text;
+}
+
+const char *nvim_pum_item_get_kind(const pumitem_T *array, int index)
+{
+  return array[index].pum_kind;
+}
+
+const char *nvim_pum_item_get_extra(const pumitem_T *array, int index)
+{
+  return array[index].pum_extra;
+}
+
+int nvim_pum_item_get_user_abbr_hlattr(const pumitem_T *array, int index)
+{
+  return array[index].pum_user_abbr_hlattr;
+}
+
+int nvim_pum_item_get_user_kind_hlattr(const pumitem_T *array, int index)
+{
+  return array[index].pum_user_kind_hlattr;
+}
+
+// Accessor for the 'pumborder' option
+const char *nvim_get_p_pumborder(void)
+{
+  return p_pumborder;
+}
+
+// Accessor for completion item align flags
+int nvim_get_cia_flags(void)
+{
+  return cia_flags;
+}
+
+// Static string constants for border comparison (exposed to Rust)
+const char *const opt_winborder_shadow = "shadow";
+const char *const opt_winborder_none = "none";
+
 #include "popupmenu.c.generated.h"
 #define PUM_DEF_HEIGHT 10
 

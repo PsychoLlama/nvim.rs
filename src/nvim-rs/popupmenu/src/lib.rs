@@ -2,9 +2,15 @@
 //!
 //! This crate provides Rust implementations of popup menu functions
 //! from `src/nvim/popupmenu.c`.
+//!
+//! # Modules
+//!
+//! - [`item`]: Item access and highlight attribute handling
 
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(clippy::cast_lossless)] // FFI needs flexible casts between c_int and i64
+
+pub mod item;
 
 use std::ffi::c_int;
 
