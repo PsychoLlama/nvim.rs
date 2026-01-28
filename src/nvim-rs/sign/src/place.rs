@@ -198,6 +198,193 @@ pub extern "C" fn rs_sign_lnum_valid(lnum: LinenrT) -> bool {
 }
 
 // =============================================================================
+// Sign Placement Parameters
+// =============================================================================
+
+/// Parameters for placing a sign.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct SignPlaceParams {
+    /// Buffer handle
+    pub buf: SignBufHandle,
+    /// Sign ID (0 for auto-assign)
+    pub id: u32,
+    /// Sign group (null for global)
+    pub group: *const c_char,
+    /// Sign name
+    pub name: *const c_char,
+    /// Line number
+    pub lnum: LinenrT,
+    /// Priority (-1 for default)
+    pub priority: c_int,
+}
+
+impl Default for SignPlaceParams {
+    fn default() -> Self {
+        Self {
+            buf: SignBufHandle::null(),
+            id: 0,
+            group: std::ptr::null(),
+            name: std::ptr::null(),
+            lnum: 0,
+            priority: -1,
+        }
+    }
+}
+
+/// FFI export: Create default sign place params.
+#[no_mangle]
+pub extern "C" fn rs_sign_place_params_default() -> SignPlaceParams {
+    SignPlaceParams::default()
+}
+
+/// Sign placement result.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignPlaceResult {
+    /// Success
+    Ok = 0,
+    /// Sign name not specified
+    NoName = 1,
+    /// Sign is not defined
+    NotDefined = 2,
+    /// Buffer is invalid
+    InvalidBuffer = 3,
+    /// Line number is invalid
+    InvalidLine = 4,
+    /// Group name is invalid
+    InvalidGroup = 5,
+    /// Sign ID is invalid
+    InvalidId = 6,
+}
+
+// =============================================================================
+// Sign Deletion Parameters
+// =============================================================================
+
+/// Parameters for deleting signs.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct SignDeleteParams {
+    /// Buffer handle (null for all buffers)
+    pub buf: SignBufHandle,
+    /// Sign ID (0 for all signs)
+    pub id: c_int,
+    /// Sign group (null for global)
+    pub group: *const c_char,
+    /// Line number (-1 for any line)
+    pub lnum: LinenrT,
+}
+
+impl Default for SignDeleteParams {
+    fn default() -> Self {
+        Self {
+            buf: SignBufHandle::null(),
+            id: 0,
+            group: std::ptr::null(),
+            lnum: -1,
+        }
+    }
+}
+
+/// FFI export: Create default sign delete params.
+#[no_mangle]
+pub extern "C" fn rs_sign_delete_params_default() -> SignDeleteParams {
+    SignDeleteParams::default()
+}
+
+/// Sign deletion scope.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignDeleteScope {
+    /// Delete specific sign by ID
+    ById = 0,
+    /// Delete all signs on a line
+    ByLine = 1,
+    /// Delete all signs in a group
+    ByGroup = 2,
+    /// Delete all signs in buffer
+    All = 3,
+}
+
+/// Determine the deletion scope from parameters.
+#[no_mangle]
+pub extern "C" fn rs_sign_delete_scope(
+    id: c_int,
+    lnum: LinenrT,
+    group_is_all: c_int,
+) -> SignDeleteScope {
+    if id > 0 {
+        SignDeleteScope::ById
+    } else if lnum > 0 {
+        SignDeleteScope::ByLine
+    } else if group_is_all != 0 {
+        SignDeleteScope::All
+    } else {
+        SignDeleteScope::ByGroup
+    }
+}
+
+// =============================================================================
+// Sign Location Query
+// =============================================================================
+
+/// Sign location result.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SignLocation {
+    /// Line number (0 if not found)
+    pub lnum: LinenrT,
+    /// Whether the sign was found
+    pub found: bool,
+}
+
+/// FFI export: Create a sign location for a found sign.
+#[no_mangle]
+pub extern "C" fn rs_sign_location_found(lnum: LinenrT) -> SignLocation {
+    SignLocation { lnum, found: true }
+}
+
+/// FFI export: Create a sign location for a not-found sign.
+#[no_mangle]
+pub extern "C" fn rs_sign_location_not_found() -> SignLocation {
+    SignLocation::default()
+}
+
+// =============================================================================
+// Extmark Decoration Flags
+// =============================================================================
+
+/// Marktree flag for sign text decoration.
+pub const MT_FLAG_DECOR_SIGNTEXT: u16 = 0x0040;
+
+/// Marktree flag for sign highlight decoration.
+pub const MT_FLAG_DECOR_SIGNHL: u16 = 0x0080;
+
+/// Calculate decoration flags for a sign.
+///
+/// Returns the appropriate MT_FLAG_DECOR_* flags based on sign properties.
+#[no_mangle]
+pub extern "C" fn rs_sign_calc_decor_flags(
+    has_text: c_int,
+    has_line_hl: c_int,
+    has_num_hl: c_int,
+    has_cul_hl: c_int,
+) -> u16 {
+    let mut flags: u16 = 0;
+
+    if has_text != 0 {
+        flags |= MT_FLAG_DECOR_SIGNTEXT;
+    }
+
+    if has_line_hl != 0 || has_num_hl != 0 || has_cul_hl != 0 {
+        flags |= MT_FLAG_DECOR_SIGNHL;
+    }
+
+    flags
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -236,5 +423,64 @@ mod tests {
         assert!(!rs_sign_lnum_valid(-1));
         assert!(rs_sign_lnum_valid(1));
         assert!(rs_sign_lnum_valid(100));
+    }
+
+    #[test]
+    fn test_sign_place_params_default() {
+        let params = SignPlaceParams::default();
+        assert!(params.buf.is_null());
+        assert_eq!(params.id, 0);
+        assert!(params.group.is_null());
+        assert!(params.name.is_null());
+        assert_eq!(params.lnum, 0);
+        assert_eq!(params.priority, -1);
+    }
+
+    #[test]
+    fn test_sign_delete_params_default() {
+        let params = SignDeleteParams::default();
+        assert!(params.buf.is_null());
+        assert_eq!(params.id, 0);
+        assert!(params.group.is_null());
+        assert_eq!(params.lnum, -1);
+    }
+
+    #[test]
+    fn test_sign_delete_scope() {
+        assert_eq!(rs_sign_delete_scope(5, 0, 0), SignDeleteScope::ById);
+        assert_eq!(rs_sign_delete_scope(0, 10, 0), SignDeleteScope::ByLine);
+        assert_eq!(rs_sign_delete_scope(0, 0, 1), SignDeleteScope::All);
+        assert_eq!(rs_sign_delete_scope(0, 0, 0), SignDeleteScope::ByGroup);
+    }
+
+    #[test]
+    fn test_sign_location() {
+        let found = rs_sign_location_found(42);
+        assert!(found.found);
+        assert_eq!(found.lnum, 42);
+
+        let not_found = rs_sign_location_not_found();
+        assert!(!not_found.found);
+        assert_eq!(not_found.lnum, 0);
+    }
+
+    #[test]
+    fn test_sign_calc_decor_flags() {
+        assert_eq!(rs_sign_calc_decor_flags(0, 0, 0, 0), 0);
+        assert_eq!(rs_sign_calc_decor_flags(1, 0, 0, 0), MT_FLAG_DECOR_SIGNTEXT);
+        assert_eq!(rs_sign_calc_decor_flags(0, 1, 0, 0), MT_FLAG_DECOR_SIGNHL);
+        assert_eq!(rs_sign_calc_decor_flags(0, 0, 1, 0), MT_FLAG_DECOR_SIGNHL);
+        assert_eq!(rs_sign_calc_decor_flags(0, 0, 0, 1), MT_FLAG_DECOR_SIGNHL);
+        assert_eq!(
+            rs_sign_calc_decor_flags(1, 1, 0, 0),
+            MT_FLAG_DECOR_SIGNTEXT | MT_FLAG_DECOR_SIGNHL
+        );
+    }
+
+    #[test]
+    fn test_sign_place_result() {
+        assert_eq!(SignPlaceResult::Ok as c_int, 0);
+        assert_eq!(SignPlaceResult::NoName as c_int, 1);
+        assert_eq!(SignPlaceResult::NotDefined as c_int, 2);
     }
 }

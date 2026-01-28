@@ -40,6 +40,10 @@ pub mod text;
 
 // Re-exports
 pub use define::{SignDefineError, SignDefineParams, SignHighlights};
+pub use place::{
+    SignDeleteParams, SignDeleteScope, SignLocation, SignPlaceParams, SignPlaceResult,
+    MT_FLAG_DECOR_SIGNHL, MT_FLAG_DECOR_SIGNTEXT,
+};
 pub use storage::{SignMapIterator, SignNamespace, SignProperties};
 pub use text::{ScharT, SignTextResult, MAX_SCHAR_SIZE};
 
