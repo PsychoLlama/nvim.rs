@@ -483,6 +483,121 @@ impl StatuslineBuilder {
         }
     }
 
+    /// Apply truncation to the output if it exceeds max_width.
+    ///
+    /// This is called during post-processing to ensure the output fits within
+    /// the maximum width. Truncation is applied at the truncation point if one
+    /// was set, otherwise from the beginning.
+    ///
+    /// Returns the new width after truncation.
+    #[allow(
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_possible_wrap
+    )]
+    pub fn apply_truncation(&mut self, max_width: usize) -> usize {
+        let current_width = self.output.len();
+
+        if max_width == 0 || current_width <= max_width {
+            return current_width;
+        }
+
+        // Find the truncation point
+        let trunc_pos = if let Some(trunc_idx) = self.truncation_point {
+            self.items.get(trunc_idx).map_or(0, |i| i.start)
+        } else {
+            // No truncation marker - truncate from beginning
+            0
+        };
+
+        // Calculate how many bytes to remove
+        let width_after_trunc = current_width - trunc_pos;
+
+        // If content after trunc point is already too long, truncate from end
+        if width_after_trunc >= max_width {
+            // Truncate from the end
+            let keep = max_width.saturating_sub(1);
+            self.output.truncate(keep);
+            self.output.push(b'>');
+
+            // Adjust items
+            for item in &mut self.items {
+                if item.start > keep {
+                    item.start = keep;
+                }
+            }
+            return max_width;
+        }
+
+        // Calculate excess to remove from before trunc point
+        let excess = current_width - max_width + 1; // +1 for '<' marker
+
+        if excess >= trunc_pos {
+            // Remove everything before trunc point, add '<'
+            self.output.drain(0..trunc_pos);
+            self.output.insert(0, b'<');
+
+            // Adjust item positions
+            let offset = trunc_pos.saturating_sub(1);
+            for item in &mut self.items {
+                item.start = item.start.saturating_sub(offset);
+            }
+        } else {
+            // Remove only the excess, add '<'
+            let remove_start = trunc_pos.saturating_sub(excess);
+            self.output.drain(remove_start..trunc_pos);
+            self.output.insert(remove_start, b'<');
+
+            // Adjust item positions
+            let offset = excess.saturating_sub(1);
+            for item in &mut self.items {
+                if item.start >= trunc_pos {
+                    item.start = item.start.saturating_sub(offset);
+                } else if item.start > remove_start {
+                    item.start = remove_start;
+                }
+            }
+        }
+
+        max_width
+    }
+
+    /// Apply both truncation and separator filling in the correct order.
+    ///
+    /// This is the main post-processing entry point that handles:
+    /// 1. Truncation if output exceeds max_width
+    /// 2. Separator filling if output is shorter than max_width
+    pub fn post_process(&mut self, max_width: usize) {
+        let current_width = self.output.len();
+
+        if max_width == 0 {
+            return;
+        }
+
+        if current_width > max_width {
+            // Apply truncation
+            self.apply_truncation(max_width);
+        } else if current_width < max_width {
+            // Apply separator filling
+            self.finalize(max_width);
+        }
+    }
+
+    /// Get separator item indices.
+    pub fn separator_indices(&self) -> &[usize] {
+        &self.separators
+    }
+
+    /// Check if a truncation point is set.
+    pub const fn has_truncation_point(&self) -> bool {
+        self.truncation_point.is_some()
+    }
+
+    /// Get truncation point item index if set.
+    pub const fn truncation_index(&self) -> Option<usize> {
+        self.truncation_point
+    }
+
     /// Clear the builder for reuse.
     pub fn clear(&mut self) {
         self.output.clear();
@@ -680,5 +795,74 @@ mod tests {
         assert_eq!(click.item_type, ItemType::ClickFunc);
         assert_eq!(click.cmd, Some("MyFunc".to_string()));
         assert_eq!(click.minwid, 42);
+    }
+
+    #[test]
+    fn test_apply_truncation_no_truncation_needed() {
+        let mut builder = StatuslineBuilder::new(80);
+        builder.append_literal("hello"); // 5 chars
+        let width = builder.apply_truncation(10); // max 10
+        assert_eq!(width, 5);
+        assert_eq!(builder.output_str(), Some("hello"));
+    }
+
+    #[test]
+    fn test_apply_truncation_from_end() {
+        let mut builder = StatuslineBuilder::new(80);
+        builder.append_literal("hello world"); // 11 chars
+        let width = builder.apply_truncation(5); // max 5
+        assert_eq!(width, 5);
+        let output = builder.output_str().unwrap();
+        assert_eq!(output.len(), 5);
+        assert!(output.ends_with('>'));
+    }
+
+    #[test]
+    fn test_apply_truncation_with_truncation_marker() {
+        let mut builder = StatuslineBuilder::new(80);
+        builder.append_literal("abc");
+        builder.add_truncation_marker();
+        builder.append_literal("defghijk"); // Total 11 chars
+        assert!(builder.has_truncation_point());
+        let width = builder.apply_truncation(6); // max 6
+        assert!(width <= 6);
+    }
+
+    #[test]
+    fn test_post_process_truncation() {
+        let mut builder = StatuslineBuilder::new(80);
+        builder.append_literal("this is a very long statusline");
+        builder.post_process(10);
+        assert!(builder.position() <= 10);
+    }
+
+    #[test]
+    fn test_post_process_separator_filling() {
+        let mut builder = StatuslineBuilder::new(80);
+        builder.append_literal("left");
+        builder.add_separator();
+        builder.append_literal("right");
+        builder.post_process(20);
+        assert_eq!(builder.position(), 20);
+    }
+
+    #[test]
+    fn test_separator_indices() {
+        let mut builder = StatuslineBuilder::new(80);
+        builder.append_literal("a");
+        builder.add_separator();
+        builder.append_literal("b");
+        builder.add_separator();
+        builder.append_literal("c");
+        assert_eq!(builder.separator_indices().len(), 2);
+    }
+
+    #[test]
+    fn test_truncation_index() {
+        let mut builder = StatuslineBuilder::new(80);
+        builder.append_literal("hello");
+        assert!(builder.truncation_index().is_none());
+        builder.add_truncation_marker();
+        assert!(builder.truncation_index().is_some());
     }
 }
