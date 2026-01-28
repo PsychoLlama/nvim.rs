@@ -348,6 +348,222 @@ pub const extern "C" fn rs_tabline_remaining(state: &TablineDrawState) -> c_int 
     state.remaining_width()
 }
 
+// =============================================================================
+// Tabline Drawing Decisions
+// =============================================================================
+
+/// Represents the decision of what to do for tabline draw.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TablineDrawAction {
+    /// Don't draw - no grid or no height
+    None = 0,
+    /// Use external UI tabline
+    UseExtUi = 1,
+    /// Use custom 'tabline' option
+    UseCustom = 2,
+    /// Draw built-in tabline
+    DrawBuiltin = 3,
+}
+
+/// Context for deciding tabline draw action.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TablineDrawContext {
+    /// default_grid.chars != NULL
+    pub has_grid: c_int,
+    /// ui_has(kUITabline)
+    pub ui_has_tabline: c_int,
+    /// tabline_height() > 0
+    pub has_tabline_height: c_int,
+    /// *p_tal != NUL (tabline option is set)
+    pub has_tabline_option: c_int,
+}
+
+/// Determine what tabline draw action to take.
+pub const fn decide_tabline_action(ctx: &TablineDrawContext) -> TablineDrawAction {
+    // Early exits
+    if ctx.has_grid == 0 {
+        return TablineDrawAction::None;
+    }
+
+    if ctx.ui_has_tabline != 0 {
+        return TablineDrawAction::UseExtUi;
+    }
+
+    if ctx.has_tabline_height == 0 {
+        return TablineDrawAction::None;
+    }
+
+    // Check for custom tabline
+    if ctx.has_tabline_option != 0 {
+        return TablineDrawAction::UseCustom;
+    }
+
+    TablineDrawAction::DrawBuiltin
+}
+
+/// FFI export: Decide tabline draw action.
+#[no_mangle]
+pub const extern "C" fn rs_tabline_decide_action(ctx: &TablineDrawContext) -> c_int {
+    decide_tabline_action(ctx) as c_int
+}
+
+/// Tab rendering info for a single tab.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TabRenderInfo {
+    /// Tab number (1-based)
+    pub tabnr: c_int,
+    /// Number of (focusable, non-hidden) windows in this tab
+    pub win_count: c_int,
+    /// Whether any buffer in this tab is modified
+    pub modified: c_int,
+    /// Whether this is the current tab
+    pub is_current: c_int,
+    /// Starting column for this tab
+    pub start_col: c_int,
+    /// Ending column for this tab (exclusive)
+    pub end_col: c_int,
+}
+
+impl TabRenderInfo {
+    /// Create a new tab render info.
+    pub const fn new(tabnr: c_int, is_current: bool) -> Self {
+        Self {
+            tabnr,
+            win_count: 0,
+            modified: 0,
+            is_current: if is_current { 1 } else { 0 },
+            start_col: 0,
+            end_col: 0,
+        }
+    }
+}
+
+/// FFI export: Create tab render info.
+#[no_mangle]
+pub const extern "C" fn rs_tab_render_info_new(tabnr: c_int, is_current: c_int) -> TabRenderInfo {
+    TabRenderInfo::new(tabnr, is_current != 0)
+}
+
+/// Calculate how much room is needed for tab prefix (count + modified indicator).
+///
+/// Returns the number of characters for the prefix (e.g., "2+ " or " ").
+pub const fn calc_tab_prefix_width(win_count: c_int, modified: bool) -> c_int {
+    let mut width = 0;
+
+    // Window count
+    if win_count > 1 {
+        width += count_digits(win_count);
+    }
+
+    // Modified indicator
+    if modified {
+        width += 1; // '+'
+    }
+
+    // Space after prefix if there's any prefix
+    if width > 0 {
+        width += 1;
+    }
+
+    // Leading space
+    width += 1;
+
+    width
+}
+
+/// Count digits in a number.
+const fn count_digits(n: c_int) -> c_int {
+    if n <= 0 {
+        return 1;
+    }
+    let mut count = 0;
+    let mut val = n;
+    while val > 0 {
+        val /= 10;
+        count += 1;
+    }
+    count
+}
+
+/// FFI export: Calculate tab prefix width.
+#[no_mangle]
+pub const extern "C" fn rs_tab_prefix_width(win_count: c_int, modified: c_int) -> c_int {
+    calc_tab_prefix_width(win_count, modified != 0)
+}
+
+/// Check if there's room for another tab at the given column.
+///
+/// Returns true if there's at least 4 columns remaining (minimum for a useful tab).
+pub const fn tabline_has_room_for_tab(col: c_int, columns: c_int) -> bool {
+    col < columns - 4
+}
+
+/// FFI export: Check if tabline has room for another tab.
+#[no_mangle]
+pub const extern "C" fn rs_tabline_has_room_at(col: c_int, columns: c_int) -> c_int {
+    if tabline_has_room_for_tab(col, columns) {
+        1
+    } else {
+        0
+    }
+}
+
+/// Calculate the column range for the close button (X).
+///
+/// Returns (start_col, end_col) where the X should be drawn.
+/// The X is in the last column when there are multiple tabs.
+pub const fn tabline_close_button_range(columns: c_int, has_multiple_tabs: bool) -> (c_int, c_int) {
+    if has_multiple_tabs {
+        (columns - 1, columns)
+    } else {
+        (-1, -1) // No close button
+    }
+}
+
+/// FFI export: Get close button start column.
+#[no_mangle]
+pub const extern "C" fn rs_tabline_close_col(columns: c_int, tab_count: c_int) -> c_int {
+    let (start, _) = tabline_close_button_range(columns, tab_count > 1);
+    start
+}
+
+/// Calculate the available width for showcmd in tabline.
+///
+/// showcmd is displayed when 'showcmdloc' == "tabline".
+pub const fn tabline_showcmd_width(columns: c_int, col: c_int, has_multiple_tabs: bool) -> c_int {
+    let available = columns - col - if has_multiple_tabs { 3 } else { 0 };
+    // Max showcmd width is 10
+    if available > 10 { 10 } else if available > 0 { available } else { 0 }
+}
+
+/// FFI export: Calculate showcmd width in tabline.
+#[no_mangle]
+pub const extern "C" fn rs_tabline_showcmd_width(
+    columns: c_int,
+    col: c_int,
+    tab_count: c_int,
+) -> c_int {
+    tabline_showcmd_width(columns, col, tab_count > 1)
+}
+
+/// Calculate the column where showcmd should start in tabline.
+pub const fn tabline_showcmd_col(columns: c_int, showcmd_width: c_int, has_multiple_tabs: bool) -> c_int {
+    columns - showcmd_width - if has_multiple_tabs { 2 } else { 0 }
+}
+
+/// FFI export: Calculate showcmd start column in tabline.
+#[no_mangle]
+pub const extern "C" fn rs_tabline_showcmd_col(
+    columns: c_int,
+    showcmd_width: c_int,
+    tab_count: c_int,
+) -> c_int {
+    tabline_showcmd_col(columns, showcmd_width, tab_count > 1)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -471,5 +687,112 @@ mod tests {
         assert_eq!(ctx.col, 1);
         assert_eq!(ctx.virtcol, 1);
         assert!(!ctx.empty_line);
+    }
+
+    #[test]
+    fn test_tabline_draw_action_none() {
+        let ctx = TablineDrawContext {
+            has_grid: 0,
+            ..Default::default()
+        };
+        assert_eq!(decide_tabline_action(&ctx), TablineDrawAction::None);
+    }
+
+    #[test]
+    fn test_tabline_draw_action_use_ext_ui() {
+        let ctx = TablineDrawContext {
+            has_grid: 1,
+            ui_has_tabline: 1,
+            has_tabline_height: 1,
+            has_tabline_option: 0,
+        };
+        assert_eq!(decide_tabline_action(&ctx), TablineDrawAction::UseExtUi);
+    }
+
+    #[test]
+    fn test_tabline_draw_action_use_custom() {
+        let ctx = TablineDrawContext {
+            has_grid: 1,
+            ui_has_tabline: 0,
+            has_tabline_height: 1,
+            has_tabline_option: 1,
+        };
+        assert_eq!(decide_tabline_action(&ctx), TablineDrawAction::UseCustom);
+    }
+
+    #[test]
+    fn test_tabline_draw_action_draw_builtin() {
+        let ctx = TablineDrawContext {
+            has_grid: 1,
+            ui_has_tabline: 0,
+            has_tabline_height: 1,
+            has_tabline_option: 0,
+        };
+        assert_eq!(decide_tabline_action(&ctx), TablineDrawAction::DrawBuiltin);
+    }
+
+    #[test]
+    fn test_tab_prefix_width() {
+        // Just leading space
+        assert_eq!(calc_tab_prefix_width(1, false), 1);
+        // Window count + trailing space + leading space
+        assert_eq!(calc_tab_prefix_width(2, false), 3); // "2 " + leading " "
+        // Window count (2 digits) + trailing space + leading space
+        assert_eq!(calc_tab_prefix_width(10, false), 4); // "10 " + " "
+        // Modified only + trailing space + leading space
+        assert_eq!(calc_tab_prefix_width(1, true), 3); // "+ " + " "
+        // Window count + modified + trailing space + leading space
+        assert_eq!(calc_tab_prefix_width(2, true), 4); // "2+ " + " "
+    }
+
+    #[test]
+    fn test_tabline_has_room() {
+        assert!(tabline_has_room_for_tab(0, 80));
+        assert!(tabline_has_room_for_tab(75, 80));
+        assert!(!tabline_has_room_for_tab(76, 80));
+        assert!(!tabline_has_room_for_tab(80, 80));
+    }
+
+    #[test]
+    fn test_tabline_close_button() {
+        let (start, end) = tabline_close_button_range(80, true);
+        assert_eq!(start, 79);
+        assert_eq!(end, 80);
+
+        let (start, end) = tabline_close_button_range(80, false);
+        assert_eq!(start, -1);
+        assert_eq!(end, -1);
+    }
+
+    #[test]
+    fn test_tabline_showcmd_width() {
+        // Plenty of room
+        assert_eq!(tabline_showcmd_width(80, 0, false), 10);
+        assert_eq!(tabline_showcmd_width(80, 0, true), 10); // 80 - 0 - 3 = 77 > 10
+
+        // Limited room
+        assert_eq!(tabline_showcmd_width(20, 15, true), 2); // 20 - 15 - 3 = 2
+
+        // No room
+        assert_eq!(tabline_showcmd_width(20, 20, false), 0);
+    }
+
+    #[test]
+    fn test_tabline_showcmd_col() {
+        assert_eq!(tabline_showcmd_col(80, 10, false), 70);
+        assert_eq!(tabline_showcmd_col(80, 10, true), 68); // 80 - 10 - 2
+    }
+
+    #[test]
+    fn test_tab_render_info() {
+        let info = TabRenderInfo::new(1, true);
+        assert_eq!(info.tabnr, 1);
+        assert_eq!(info.is_current, 1);
+        assert_eq!(info.win_count, 0);
+        assert_eq!(info.modified, 0);
+
+        let info = TabRenderInfo::new(2, false);
+        assert_eq!(info.tabnr, 2);
+        assert_eq!(info.is_current, 0);
     }
 }
