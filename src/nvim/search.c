@@ -563,6 +563,24 @@ int nvim_get_p_is(void)
   return p_is ? 1 : 0;
 }
 
+/// Set highlight_match global (for Rust incsearch).
+void nvim_set_highlight_match(int value)
+{
+  highlight_match = value != 0;
+}
+
+/// Set search_first_line global (for Rust incsearch).
+void nvim_set_search_first_line(linenr_T value)
+{
+  search_first_line = value;
+}
+
+/// Set search_last_line global (for Rust incsearch).
+void nvim_set_search_last_line(linenr_T value)
+{
+  search_last_line = value;
+}
+
 /// Get the no_hlsearch global (accessor for Rust).
 int nvim_get_no_hlsearch(void)
 {

@@ -2571,6 +2571,25 @@ void status_redraw_all(void)
   rs_status_redraw_all();
 }
 
+/// C accessor for status_redraw_all for Rust incsearch (avoids recursion).
+void nvim_status_redraw_all(void)
+{
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    if (wp->w_status_height > 0 || (wp == curwin && global_stl_height() > 0)) {
+      wp->w_redr_status = true;
+    }
+    if (wp->w_winbar_height > 0) {
+      wp->w_redr_status = true;
+    }
+  }
+}
+
+/// C accessor for update_screen for Rust incsearch.
+void nvim_update_screen(void)
+{
+  update_screen();
+}
+
 /// Marks all status lines and window bars of the current buffer for redraw.
 void status_redraw_curbuf(void)
 {

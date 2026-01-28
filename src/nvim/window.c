@@ -432,6 +432,42 @@ void nvim_save_viewstate(void *vs)
   p[6] = (int32_t)curwin->w_empty_rows;
 }
 
+/// Restore current window view state (accessor for Rust).
+void nvim_restore_viewstate(const void *vs)
+{
+  const int32_t *p = (const int32_t *)vs;
+  curwin->w_curswant = (colnr_T)p[0];
+  curwin->w_leftcol = (colnr_T)p[1];
+  curwin->w_skipcol = (colnr_T)p[2];
+  curwin->w_topline = (linenr_T)p[3];
+  curwin->w_topfill = (int)p[4];
+  curwin->w_botline = (linenr_T)p[5];
+  curwin->w_empty_rows = (int)p[6];
+}
+
+/// Set the current window's cursor position (accessor for Rust).
+void nvim_set_curwin_cursor_pos(const void *pos)
+{
+  const int32_t *p = (const int32_t *)pos;
+  curwin->w_cursor.lnum = (linenr_T)p[0];
+  curwin->w_cursor.col = (colnr_T)p[1];
+  curwin->w_cursor.coladd = (colnr_T)p[2];
+}
+
+/// Compare two positions for equality (accessor for Rust).
+int nvim_equalpos(const void *pos1, const void *pos2)
+{
+  const int32_t *p1 = (const int32_t *)pos1;
+  const int32_t *p2 = (const int32_t *)pos2;
+  return p1[0] == p2[0] && p1[1] == p2[1] && p1[2] == p2[2];
+}
+
+/// Validate cursor position (accessor for Rust).
+void nvim_validate_cursor(void)
+{
+  validate_cursor(curwin);
+}
+
 /// Get the current buffer (accessor for Rust).
 buf_T *nvim_get_curbuf(void)
 {

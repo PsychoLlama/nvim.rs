@@ -1897,6 +1897,12 @@ bool char_avail(void)
   return retval != NUL;
 }
 
+/// Check if a character is available (accessor for Rust).
+int nvim_char_avail(void)
+{
+  return char_avail() ? 1 : 0;
+}
+
 static int no_reduce_keys = 0;  ///< Do not apply modifiers to the key.
 
 /// "getchar()" and "getcharstr()" functions

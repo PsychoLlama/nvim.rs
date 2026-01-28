@@ -411,9 +411,32 @@ pub struct IncsearchStateT {
 extern "C" {
     fn nvim_get_curwin_handle() -> c_int;
     fn nvim_get_curwin_cursor_pos(pos: *mut PosT);
+    fn nvim_set_curwin_cursor_pos(pos: *const PosT);
     fn nvim_get_magic_overruled() -> c_int;
     fn nvim_save_viewstate(vs: *mut ViewStateT);
+    fn nvim_restore_viewstate(vs: *const ViewStateT);
+    fn nvim_option_set_magic_overruled(value: c_int);
+
+    // Incsearch highlighting C dependencies
+    fn nvim_get_p_is() -> c_int;
+    fn nvim_cmd_silent() -> c_int;
+    fn nvim_char_avail() -> c_int;
+    fn nvim_set_highlight_match(value: c_int);
+    fn nvim_set_search_first_line(value: i32);
+    fn nvim_set_search_last_line(value: i32);
+    fn nvim_validate_cursor();
+    fn nvim_status_redraw_all();
+    fn nvim_redraw_all_later(upd_type: c_int);
+    fn nvim_update_screen();
+    fn nvim_setpcmark();
+    fn nvim_equalpos(pos1: *const PosT, pos2: *const PosT) -> c_int;
 }
+
+// Update type constants (from nvim/types_defs.h)
+const UPD_SOME_VALID: c_int = 10;
+
+// MAXLNUM constant
+const MAXLNUM: i32 = 0x7fff_ffff;
 
 /// Initialize incsearch state (FFI).
 ///
@@ -453,6 +476,111 @@ pub unsafe extern "C" fn rs_init_incsearch_state(state: *mut IncsearchStateT) {
     // Save view state
     nvim_save_viewstate(std::ptr::addr_of_mut!(s.init_viewstate));
     nvim_save_viewstate(std::ptr::addr_of_mut!(s.old_viewstate));
+}
+
+/// Finish incsearch highlighting (FFI).
+///
+/// Cleans up after incremental search, restoring cursor position and view state.
+///
+/// # Safety
+///
+/// `state` must be a valid pointer to an IncsearchStateT struct.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_finish_incsearch_highlighting(
+    gotesc: c_int,
+    state: *mut IncsearchStateT,
+    call_update_screen: c_int,
+) {
+    if state.is_null() {
+        return;
+    }
+
+    let s = &mut *state;
+
+    if !s.did_incsearch {
+        return;
+    }
+
+    s.did_incsearch = false;
+
+    if gotesc != 0 {
+        // Restore cursor to saved position on escape
+        nvim_set_curwin_cursor_pos(std::ptr::addr_of!(s.save_cursor));
+    } else {
+        // Check if we need to set the mark
+        if nvim_equalpos(
+            std::ptr::addr_of!(s.save_cursor),
+            std::ptr::addr_of!(s.search_start),
+        ) == 0
+        {
+            // Put the '" mark at the original position
+            nvim_set_curwin_cursor_pos(std::ptr::addr_of!(s.save_cursor));
+            nvim_setpcmark();
+        }
+        nvim_set_curwin_cursor_pos(std::ptr::addr_of!(s.search_start));
+    }
+
+    // Restore view state
+    nvim_restore_viewstate(std::ptr::addr_of!(s.old_viewstate));
+
+    // Turn off highlight match
+    nvim_set_highlight_match(0);
+
+    // Reset search line range to default
+    nvim_set_search_first_line(0);
+    nvim_set_search_last_line(MAXLNUM);
+
+    // Restore magic_overruled
+    nvim_option_set_magic_overruled(s.magic_overruled_save);
+
+    // Validation and redraw
+    nvim_validate_cursor();
+    nvim_status_redraw_all();
+    nvim_redraw_all_later(UPD_SOME_VALID);
+
+    if call_update_screen != 0 {
+        nvim_update_screen();
+    }
+}
+
+/// Check if incsearch highlighting should be done (FFI).
+///
+/// This is a simplified check for whether 'incsearch' is enabled and
+/// we're in a context where highlighting makes sense.
+///
+/// Returns 1 if highlighting should be done, 0 otherwise.
+///
+/// # Safety
+///
+/// This function calls C functions to check global state.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_should_do_incsearch(firstc: c_int) -> c_int {
+    // Check if 'incsearch' option is set and not in silent mode
+    if nvim_get_p_is() == 0 || nvim_cmd_silent() != 0 {
+        return 0;
+    }
+
+    // For search prompts, always do incsearch
+    if firstc == b'/' as c_int || firstc == b'?' as c_int {
+        return 1;
+    }
+
+    // For ex commands, need to parse the pattern (handled in C for now)
+    if firstc == b':' as c_int {
+        return 1; // Let caller handle pattern parsing
+    }
+
+    0
+}
+
+/// Check if input is available and incsearch should be postponed (FFI).
+///
+/// # Safety
+///
+/// This function calls C functions to check input availability.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_incsearch_should_postpone() -> c_int {
+    nvim_char_avail()
 }
 
 /// Check if a firstc is a search prompt (FFI).

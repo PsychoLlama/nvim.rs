@@ -280,8 +280,12 @@ typedef struct {
 } HistoryBrowseState;
 extern int rs_command_line_browse_history(HistoryBrowseState *state);
 
-// Rust incsearch state initialization
+// Rust incsearch state functions
 extern void rs_init_incsearch_state(incsearch_state_T *state);
+extern void rs_finish_incsearch_highlighting(int gotesc, incsearch_state_T *state,
+                                             int call_update_screen);
+extern int rs_should_do_incsearch(int firstc);
+extern int rs_incsearch_should_postpone(void);
 
 extern int rs_check_bracket_balance(const char *expr, size_t len);
 extern int rs_is_expr_likely_complete(const char *expr, size_t len);
@@ -713,36 +717,8 @@ static int may_add_char_to_search(int firstc, int *c, incsearch_state_T *s)
 static void finish_incsearch_highlighting(bool gotesc, incsearch_state_T *s,
                                           bool call_update_screen)
 {
-  if (!s->did_incsearch) {
-    return;
-  }
-
-  s->did_incsearch = false;
-  if (gotesc) {
-    curwin->w_cursor = s->save_cursor;
-  } else {
-    if (!equalpos(s->save_cursor, s->search_start)) {
-      // put the '" mark at the original position
-      curwin->w_cursor = s->save_cursor;
-      setpcmark();
-    }
-    curwin->w_cursor = s->search_start;
-  }
-  restore_viewstate(curwin, &s->old_viewstate);
-  highlight_match = false;
-
-  // by default search all lines
-  search_first_line = 0;
-  search_last_line = MAXLNUM;
-
-  magic_overruled = s->magic_overruled_save;
-
-  validate_cursor(curwin);          // needed for TAB
-  status_redraw_all();
-  redraw_all_later(UPD_SOME_VALID);
-  if (call_update_screen) {
-    update_screen();
-  }
+  // Delegate to Rust implementation
+  rs_finish_incsearch_highlighting(gotesc ? 1 : 0, s, call_update_screen ? 1 : 0);
 }
 
 /// Initialize the current command-line info.
