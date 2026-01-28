@@ -421,6 +421,163 @@ pub extern "C" fn rs_cmd_only_one_window() -> c_int {
     c_int::from(only_one_window_impl())
 }
 
+// =============================================================================
+// Exchange/Rotate Helpers
+// =============================================================================
+
+extern "C" {
+    /// Get w_frame from window.
+    fn nvim_win_get_frame(wp: WinHandle) -> *mut crate::Frame;
+}
+
+/// Find the target frame for window exchange operation.
+///
+/// Returns the frame to exchange with based on Prenum:
+/// - Prenum > 0: find frame at position Prenum in parent's children
+/// - Prenum == 0 and next exists: use next frame
+/// - Otherwise: use prev frame
+fn find_exchange_target_frame_impl(prenum: c_int) -> *mut crate::Frame {
+    unsafe {
+        let curwin = nvim_get_curwin();
+        if curwin.is_null() {
+            return std::ptr::null_mut();
+        }
+
+        let cur_frame = nvim_win_get_frame(curwin);
+        if cur_frame.is_null() {
+            return std::ptr::null_mut();
+        }
+
+        let parent = (*cur_frame).fr_parent;
+        if parent.is_null() {
+            return std::ptr::null_mut();
+        }
+
+        if prenum > 0 {
+            // Find frame at position prenum
+            let mut frp = (*parent).fr_child;
+            let mut n = prenum;
+            while !frp.is_null() && n > 1 {
+                frp = (*frp).fr_next;
+                n -= 1;
+            }
+            frp
+        } else if !(*cur_frame).fr_next.is_null() {
+            // Swap with next
+            (*cur_frame).fr_next
+        } else {
+            // Swap with prev
+            (*cur_frame).fr_prev
+        }
+    }
+}
+
+/// Check if exchange target frame is valid.
+///
+/// Target must be a leaf frame (not containing sub-frames) and not curwin.
+fn is_exchange_target_valid_impl(frp: *const crate::Frame) -> bool {
+    if frp.is_null() {
+        return false;
+    }
+
+    unsafe {
+        // Must be a leaf (have a window, not sub-frames)
+        let target_win = (*frp).fr_win;
+        if target_win.is_null() {
+            return false;
+        }
+
+        // Can't exchange with self
+        let curwin = nvim_get_curwin();
+        target_win != curwin
+    }
+}
+
+/// Check if rotation is possible in current frame's parent.
+///
+/// All frames in the parent row/col must be leaves (single windows).
+fn can_rotate_frames_impl() -> bool {
+    unsafe {
+        let curwin = nvim_get_curwin();
+        if curwin.is_null() {
+            return false;
+        }
+
+        let cur_frame = nvim_win_get_frame(curwin);
+        if cur_frame.is_null() {
+            return false;
+        }
+
+        let parent = (*cur_frame).fr_parent;
+        if parent.is_null() {
+            return false;
+        }
+
+        // Check all sibling frames
+        let mut frp = (*parent).fr_child;
+        while !frp.is_null() {
+            if (*frp).fr_win.is_null() {
+                // Found a frame without a direct window (has sub-frames)
+                return false;
+            }
+            frp = (*frp).fr_next;
+        }
+        true
+    }
+}
+
+/// Count frames in current parent for rotation.
+fn count_rotate_frames_impl() -> c_int {
+    unsafe {
+        let curwin = nvim_get_curwin();
+        if curwin.is_null() {
+            return 0;
+        }
+
+        let cur_frame = nvim_win_get_frame(curwin);
+        if cur_frame.is_null() {
+            return 0;
+        }
+
+        let parent = (*cur_frame).fr_parent;
+        if parent.is_null() {
+            return 1; // Only curwin's frame
+        }
+
+        let mut count = 0;
+        let mut frp = (*parent).fr_child;
+        while !frp.is_null() {
+            count += 1;
+            frp = (*frp).fr_next;
+        }
+        count
+    }
+}
+
+/// FFI: Find exchange target frame.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_cmd_exchange_target(prenum: c_int) -> *mut crate::Frame {
+    find_exchange_target_frame_impl(prenum)
+}
+
+/// FFI: Check if exchange target is valid.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_cmd_exchange_valid(frp: *const crate::Frame) -> c_int {
+    c_int::from(is_exchange_target_valid_impl(frp))
+}
+
+/// FFI: Check if rotation is possible.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_cmd_can_rotate() -> c_int {
+    c_int::from(can_rotate_frames_impl())
+}
+
+/// FFI: Count frames for rotation.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_cmd_rotate_frame_count() -> c_int {
+    count_rotate_frames_impl()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
