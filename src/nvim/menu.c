@@ -54,6 +54,7 @@ extern bool rs_menu_is_popup(const char *name);
 extern bool rs_menu_is_toolbar(const char *name);
 extern bool rs_menu_is_menubar(const char *name);
 extern bool rs_menu_is_separator(const char *name);
+extern bool rs_menu_is_hidden(const char *name);
 
 /// The character for each menu mode
 static char *menu_mode_chars[] = { "n", "v", "s", "o", "i", "c", "tl", "t" };
@@ -1359,8 +1360,7 @@ bool menu_is_separator(char *name)
 /// @return true if the menu is hidden
 static bool menu_is_hidden(char *name)
 {
-  return (name[0] == MNU_HIDDEN_CHAR)
-         || (menu_is_popup(name) && name[5] != NUL);
+  return rs_menu_is_hidden(name);
 }
 
 static int get_menu_mode(void)
@@ -1923,4 +1923,80 @@ void f_menu_info(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
   if (menu->modes & modes) {
     menuitem_getinfo(menu_name, menu, modes, retdict);
   }
+}
+
+// ============================================================================
+// C accessor functions for Rust FFI
+// ============================================================================
+
+/// Get the modes field from a menu.
+int nvim_menu_get_modes(vimmenu_T *menu)
+{
+  return menu->modes;
+}
+
+/// Get the enabled field from a menu.
+int nvim_menu_get_enabled(vimmenu_T *menu)
+{
+  return menu->enabled;
+}
+
+/// Get the name field from a menu.
+const char *nvim_menu_get_name(vimmenu_T *menu)
+{
+  return menu->name;
+}
+
+/// Get the dname (display name) field from a menu.
+const char *nvim_menu_get_dname(vimmenu_T *menu)
+{
+  return menu->dname;
+}
+
+/// Get the en_name (English name) field from a menu.
+const char *nvim_menu_get_en_name(vimmenu_T *menu)
+{
+  return menu->en_name;
+}
+
+/// Get the en_dname (English display name) field from a menu.
+const char *nvim_menu_get_en_dname(vimmenu_T *menu)
+{
+  return menu->en_dname;
+}
+
+/// Get the priority field from a menu.
+int nvim_menu_get_priority(vimmenu_T *menu)
+{
+  return menu->priority;
+}
+
+/// Get the children field from a menu.
+vimmenu_T *nvim_menu_get_children(vimmenu_T *menu)
+{
+  return menu->children;
+}
+
+/// Get the parent field from a menu.
+vimmenu_T *nvim_menu_get_parent(vimmenu_T *menu)
+{
+  return menu->parent;
+}
+
+/// Get the next sibling field from a menu.
+vimmenu_T *nvim_menu_get_next(vimmenu_T *menu)
+{
+  return menu->next;
+}
+
+/// Get the mnemonic field from a menu.
+int nvim_menu_get_mnemonic(vimmenu_T *menu)
+{
+  return menu->mnemonic;
+}
+
+/// Get the actext (accelerator text) field from a menu.
+const char *nvim_menu_get_actext(vimmenu_T *menu)
+{
+  return menu->actext;
 }
