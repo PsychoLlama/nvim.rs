@@ -22,6 +22,7 @@ pub mod render;
 pub mod ruler;
 pub mod statuscol;
 pub mod tabline;
+pub mod ui;
 pub mod winbar;
 
 pub use builder::{BuilderItem, ItemType, StatuslineBuilder};
@@ -33,6 +34,7 @@ pub use highlight::{HighlightTracker, StlHighlightRecord};
 pub use render::{build_stl_str, BuildResult, RenderContext};
 pub use statuscol::{LineNumberMode, StatusColContext};
 pub use tabline::{TabInfo, TablineContext, WinbarContext};
+pub use ui::{GridCell, GridSpan, UiContentBuilder, UiHighlight};
 
 /// schar_T is stored as a u32 in Rust.
 type ScharT = u32;
