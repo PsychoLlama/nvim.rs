@@ -8,6 +8,7 @@
 #![allow(clippy::doc_markdown)]
 
 // Submodules
+pub mod block;
 pub mod buffer;
 pub mod commands;
 pub mod helpers;
@@ -15,6 +16,7 @@ pub mod highlight;
 pub mod navigate;
 
 // Re-export key types from submodules
+pub use block::{DiffBlockInfo as BlockInfo, DiffBlockIter};
 pub use buffer::{BufHandle, DiffBlockHandle, TabpageHandle, WinHandle, DB_COUNT};
 pub use commands::{DiffBlockInfo, DiffOpResult, DiffOperation, DiffRange};
 pub use highlight::{

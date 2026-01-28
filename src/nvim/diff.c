@@ -4409,3 +4409,59 @@ int nvim_get_db_count(void)
 {
   return DB_COUNT;
 }
+
+/// Check if a diff block has been line-matched.
+/// @param dp Diff block pointer
+/// @return true if line-matched, false otherwise
+bool nvim_diffblock_is_linematched(diff_T *dp)
+{
+  if (dp == NULL) {
+    return false;
+  }
+  return dp->is_linematched;
+}
+
+/// Check if a diff block has inline changes.
+/// @param dp Diff block pointer
+/// @return true if there are changes, false otherwise
+bool nvim_diffblock_has_changes(diff_T *dp)
+{
+  if (dp == NULL) {
+    return false;
+  }
+  return dp->df_changes.ga_len > 0;
+}
+
+/// Get the first diff block for a tabpage.
+/// @param tp Tabpage pointer
+/// @return First diff block or NULL
+diff_T *nvim_tabpage_get_first_diff(tabpage_T *tp)
+{
+  if (tp == NULL) {
+    return NULL;
+  }
+  return tp->tp_first_diff;
+}
+
+/// Get a diff buffer from a tabpage by index.
+/// @param tp  Tabpage pointer
+/// @param idx Buffer index (0 to DB_COUNT-1)
+/// @return Buffer pointer or NULL
+buf_T *nvim_tabpage_get_diffbuf(tabpage_T *tp, int idx)
+{
+  if (tp == NULL || idx < 0 || idx >= DB_COUNT) {
+    return NULL;
+  }
+  return tp->tp_diffbuf[idx];
+}
+
+/// Check if a tabpage's diff list is invalid.
+/// @param tp Tabpage pointer
+/// @return true if invalid, false otherwise
+bool nvim_tabpage_is_diff_invalid(tabpage_T *tp)
+{
+  if (tp == NULL) {
+    return true;
+  }
+  return tp->tp_diff_invalid;
+}
