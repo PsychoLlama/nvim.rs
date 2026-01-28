@@ -157,6 +157,7 @@ extern void rs_foldUpdateIEMS_indent(win_T *wp, linenr_T top, linenr_T bot);
 // Rust FFI declarations for Phase 5: Navigation and Display
 extern void rs_foldAdjustCursor(win_T *wp);
 extern void rs_foldAdjustVisual(void);
+extern int rs_foldMoveTo(bool updown, int dir, int count);
 
 // Rust FFI declarations for Phase 1: Manual Fold Operations
 extern void rs_foldCreate(win_T *wp, linenr_T start_lnum, linenr_T end_lnum);
@@ -561,117 +562,7 @@ void nvim_foldUpdateAll_c(win_T *win)
 /// @param dir  FORWARD or BACKWARD
 int foldMoveTo(const bool updown, const int dir, const int count)
 {
-  int retval = FAIL;
-  fold_T *fp;
-
-  checkupdate(curwin);
-
-  // Repeat "count" times.
-  for (int n = 0; n < count; n++) {
-    // Find nested folds.  Stop when a fold is closed.  The deepest fold
-    // that moves the cursor is used.
-    linenr_T lnum_off = 0;
-    garray_T *gap = &curwin->w_folds;
-    if (gap->ga_len == 0) {
-      break;
-    }
-    bool use_level = false;
-    bool maybe_small = false;
-    linenr_T lnum_found = curwin->w_cursor.lnum;
-    int level = 0;
-    bool last = false;
-    while (true) {
-      if (!foldFind(gap, curwin->w_cursor.lnum - lnum_off, &fp)) {
-        if (!updown || gap->ga_len == 0) {
-          break;
-        }
-
-        // When moving up, consider a fold above the cursor; when
-        // moving down consider a fold below the cursor.
-        if (dir == FORWARD) {
-          if (fp - (fold_T *)gap->ga_data >= gap->ga_len) {
-            break;
-          }
-          fp--;
-        } else {
-          if (fp == (fold_T *)gap->ga_data) {
-            break;
-          }
-        }
-        // don't look for contained folds, they will always move
-        // the cursor too far.
-        last = true;
-      }
-
-      if (!last) {
-        // Check if this fold is closed.
-        if (check_closed(curwin, fp, &use_level, level,
-                         &maybe_small, lnum_off)) {
-          last = true;
-        }
-
-        // "[z" and "]z" stop at closed fold
-        if (last && !updown) {
-          break;
-        }
-      }
-
-      if (updown) {
-        if (dir == FORWARD) {
-          // to start of next fold if there is one
-          if (fp + 1 - (fold_T *)gap->ga_data < gap->ga_len) {
-            linenr_T lnum = fp[1].fd_top + lnum_off;
-            if (lnum > curwin->w_cursor.lnum) {
-              lnum_found = lnum;
-            }
-          }
-        } else {
-          // to end of previous fold if there is one
-          if (fp > (fold_T *)gap->ga_data) {
-            linenr_T lnum = fp[-1].fd_top + lnum_off + fp[-1].fd_len - 1;
-            if (lnum < curwin->w_cursor.lnum) {
-              lnum_found = lnum;
-            }
-          }
-        }
-      } else {
-        // Open fold found, set cursor to its start/end and then check
-        // nested folds.
-        if (dir == FORWARD) {
-          linenr_T lnum = fp->fd_top + lnum_off + fp->fd_len - 1;
-          if (lnum > curwin->w_cursor.lnum) {
-            lnum_found = lnum;
-          }
-        } else {
-          linenr_T lnum = fp->fd_top + lnum_off;
-          if (lnum < curwin->w_cursor.lnum) {
-            lnum_found = lnum;
-          }
-        }
-      }
-
-      if (last) {
-        break;
-      }
-
-      // Check nested folds (if any).
-      gap = &fp->fd_nested;
-      lnum_off += fp->fd_top;
-      level++;
-    }
-    if (lnum_found != curwin->w_cursor.lnum) {
-      if (retval == FAIL) {
-        setpcmark();
-      }
-      curwin->w_cursor.lnum = lnum_found;
-      curwin->w_cursor.col = 0;
-      retval = OK;
-    } else {
-      break;
-    }
-  }
-
-  return retval;
+  return rs_foldMoveTo(updown, dir, count);
 }
 
 // foldInitWin() {{{2
