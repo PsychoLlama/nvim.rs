@@ -1281,6 +1281,60 @@ pub extern "C" fn rs_ui_comp_grid_scroll(
 }
 
 // =============================================================================
+// UI Comp Grid Resize Implementation
+// =============================================================================
+
+extern "C" {
+    // UI events
+    fn ui_composed_call_grid_resize(grid: i64, width: i64, height: i64);
+
+    // Linebuf resize
+    fn nvim_comp_resize_linebuf(new_size: usize);
+
+    // Debug dimension tracking (only in debug builds)
+    #[cfg(debug_assertions)]
+    fn nvim_comp_set_chk_dimensions(width: c_int, height: c_int);
+}
+
+/// Handle grid resize for the compositor.
+///
+/// When grid 1 (the default composed grid) is resized, this function:
+/// - Sends the resize event to the UI
+/// - Updates debug dimension tracking (in debug builds)
+/// - Resizes the linebuf/attrbuf to match the new width
+///
+/// # Arguments
+/// * `grid` - Grid handle (only grid 1 triggers buffer resize)
+/// * `width` - New grid width
+/// * `height` - New grid height
+fn ui_comp_grid_resize_impl(grid: i64, width: i64, height: i64) {
+    unsafe {
+        if grid == 1 {
+            // Send resize event for the composed grid
+            ui_composed_call_grid_resize(1, width, height);
+
+            // Update debug dimensions
+            #[cfg(debug_assertions)]
+            nvim_comp_set_chk_dimensions(width as c_int, height as c_int);
+
+            // Resize linebuf to match new width
+            nvim_comp_resize_linebuf(width as usize);
+        }
+    }
+}
+
+/// FFI wrapper for ui_comp_grid_resize.
+///
+/// Handles grid resize operations for the compositor.
+///
+/// # Safety
+/// This function accesses global compositor state.
+#[no_mangle]
+pub extern "C" fn rs_ui_comp_grid_resize(grid: i64, width: i64, height: i64) {
+    ui_comp_grid_resize_impl(grid, width, height);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

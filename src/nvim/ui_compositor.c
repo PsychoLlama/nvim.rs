@@ -192,6 +192,28 @@ size_t nvim_comp_get_linebuf_size(void)
   return bufsize;
 }
 
+/// Resize the compositor line buffer.
+///
+/// This function reallocates linebuf and attrbuf if the new size differs.
+void nvim_comp_resize_linebuf(size_t new_size)
+{
+  if (bufsize != new_size) {
+    xfree(linebuf);
+    xfree(attrbuf);
+    linebuf = xmalloc(new_size * sizeof(*linebuf));
+    attrbuf = xmalloc(new_size * sizeof(*attrbuf));
+    bufsize = new_size;
+  }
+}
+
+#ifndef NDEBUG
+void nvim_comp_set_chk_dimensions(int width, int height)
+{
+  chk_width = width;
+  chk_height = height;
+}
+#endif
+
 // Compositor state accessors
 ScreenGrid *nvim_get_curgrid(void)
 {
@@ -524,21 +546,10 @@ void ui_comp_grid_scroll(Integer grid, Integer top, Integer bot, Integer left, I
   rs_ui_comp_grid_scroll(grid, top, bot, left, right, rows, cols);
 }
 
+// Rust implementation of ui_comp_grid_resize
+extern void rs_ui_comp_grid_resize(Integer grid, Integer width, Integer height);
+
 void ui_comp_grid_resize(Integer grid, Integer width, Integer height)
 {
-  if (grid == 1) {
-    ui_composed_call_grid_resize(1, width, height);
-#ifndef NDEBUG
-    chk_width = (int)width;
-    chk_height = (int)height;
-#endif
-    size_t new_bufsize = (size_t)width;
-    if (bufsize != new_bufsize) {
-      xfree(linebuf);
-      xfree(attrbuf);
-      linebuf = xmalloc(new_bufsize * sizeof(*linebuf));
-      attrbuf = xmalloc(new_bufsize * sizeof(*attrbuf));
-      bufsize = new_bufsize;
-    }
-  }
+  rs_ui_comp_grid_resize(grid, width, height);
 }
