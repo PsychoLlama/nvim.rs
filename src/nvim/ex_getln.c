@@ -318,6 +318,16 @@ extern int rs_cmdwin_needs_vim_filetype(int histtype);
 extern int rs_cmdwin_cleanup_had_error(int old_curwin_valid, int old_curbuf_valid, int buf_changed);
 extern int rs_cmdwin_to_hist_type(int win_type);
 
+// Phase 9: Drawing and coloring helpers from Rust
+extern int rs_color_cache_valid(unsigned int cache_prompt_id, unsigned int current_prompt_id,
+                                int cache_cmdbuff_is_null);
+extern int rs_should_skip_coloring(unsigned int current_prompt_id, unsigned int prev_prompt_id,
+                                   int prev_errors);
+extern int rs_should_reset_callback_errors(unsigned int current_prompt_id,
+                                           unsigned int prev_prompt_id);
+extern int rs_calculate_draw_len(int start, int requested_len, int cmdlen);
+extern int rs_should_draw(int cmdbuff_is_null, int start, int len, int cmdlen);
+
 extern int rs_check_bracket_balance(const char *expr, size_t len);
 extern int rs_is_expr_likely_complete(const char *expr, size_t len);
 extern int rs_find_last_token_start(const char *expr, size_t len);
@@ -3441,10 +3451,12 @@ static bool color_cmdline(CmdlineInfo *colored_ccline)
   const char *err_errmsg = e_intern2;
   bool dgc_ret = true;
 
-  if (colored_ccline->prompt_id != prev_prompt_id) {
+  // Use Rust helper to check if callback errors should be reset.
+  if (rs_should_reset_callback_errors(colored_ccline->prompt_id, prev_prompt_id)) {
     prev_prompt_errors = 0;
     prev_prompt_id = colored_ccline->prompt_id;
-  } else if (prev_prompt_errors >= MAX_CB_ERRORS) {
+  } else if (rs_should_skip_coloring(colored_ccline->prompt_id, prev_prompt_id, prev_prompt_errors)) {
+    // Skip coloring due to too many previous errors.
     goto color_cmdline_end;
   }
   if (colored_ccline->highlight_callback.type != kCallbackNone) {

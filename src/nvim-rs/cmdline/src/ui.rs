@@ -266,8 +266,149 @@ impl Prompt {
 }
 
 // =============================================================================
+// Color Cache Validation
+// =============================================================================
+
+/// Maximum number of callback errors before disabling highlighting.
+pub const MAX_CALLBACK_ERRORS: i32 = 3;
+
+/// Check if color cache is still valid.
+///
+/// The cache is valid if:
+/// 1. The prompt ID matches
+/// 2. The cached command buffer is not null
+/// 3. The command buffer content matches
+#[must_use]
+pub const fn color_cache_valid(
+    cache_prompt_id: u32,
+    current_prompt_id: u32,
+    cache_cmdbuff_is_null: bool,
+) -> bool {
+    if cache_prompt_id != current_prompt_id {
+        return false;
+    }
+    if cache_cmdbuff_is_null {
+        return false;
+    }
+    // Actual string comparison must be done by caller
+    true
+}
+
+/// Check if coloring should be skipped due to too many errors.
+#[must_use]
+pub const fn should_skip_coloring(
+    current_prompt_id: u32,
+    prev_prompt_id: u32,
+    prev_errors: i32,
+) -> bool {
+    current_prompt_id == prev_prompt_id && prev_errors >= MAX_CALLBACK_ERRORS
+}
+
+/// Check if callback errors should be reset (new prompt).
+#[must_use]
+pub const fn should_reset_callback_errors(current_prompt_id: u32, prev_prompt_id: u32) -> bool {
+    current_prompt_id != prev_prompt_id
+}
+
+// =============================================================================
+// Draw Range Calculations
+// =============================================================================
+
+/// Calculate the number of bytes to draw.
+///
+/// Ensures we don't draw past the end of the command buffer.
+#[must_use]
+pub const fn calculate_draw_len(start: i32, requested_len: i32, cmdlen: i32) -> i32 {
+    let remaining = cmdlen - start;
+    if requested_len > remaining {
+        remaining
+    } else {
+        requested_len
+    }
+}
+
+/// Check if drawing should proceed.
+///
+/// Drawing should not proceed if:
+/// - Command buffer is null
+/// - Start position is past end
+/// - Length is zero or negative
+#[must_use]
+pub const fn should_draw(cmdbuff_is_null: bool, start: i32, len: i32, cmdlen: i32) -> bool {
+    if cmdbuff_is_null {
+        return false;
+    }
+    if start >= cmdlen {
+        return false;
+    }
+    if len <= 0 {
+        return false;
+    }
+    true
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
+
+/// Check if color cache is valid (FFI).
+///
+/// Note: Actual string comparison must be done by caller.
+#[no_mangle]
+pub extern "C" fn rs_color_cache_valid(
+    cache_prompt_id: u32,
+    current_prompt_id: u32,
+    cache_cmdbuff_is_null: c_int,
+) -> c_int {
+    c_int::from(color_cache_valid(
+        cache_prompt_id,
+        current_prompt_id,
+        cache_cmdbuff_is_null != 0,
+    ))
+}
+
+/// Check if coloring should be skipped (FFI).
+#[no_mangle]
+pub extern "C" fn rs_should_skip_coloring(
+    current_prompt_id: u32,
+    prev_prompt_id: u32,
+    prev_errors: c_int,
+) -> c_int {
+    c_int::from(should_skip_coloring(
+        current_prompt_id,
+        prev_prompt_id,
+        prev_errors,
+    ))
+}
+
+/// Check if callback errors should be reset (FFI).
+#[no_mangle]
+pub extern "C" fn rs_should_reset_callback_errors(
+    current_prompt_id: u32,
+    prev_prompt_id: u32,
+) -> c_int {
+    c_int::from(should_reset_callback_errors(
+        current_prompt_id,
+        prev_prompt_id,
+    ))
+}
+
+/// Calculate draw length (FFI).
+#[no_mangle]
+pub extern "C" fn rs_calculate_draw_len(start: c_int, requested_len: c_int, cmdlen: c_int) -> c_int {
+    calculate_draw_len(start, requested_len, cmdlen)
+}
+
+/// Check if drawing should proceed (FFI).
+#[no_mangle]
+pub extern "C" fn rs_should_draw(
+    cmdbuff_is_null: c_int,
+    start: c_int,
+    len: c_int,
+    cmdlen: c_int,
+) -> c_int {
+    c_int::from(should_draw(cmdbuff_is_null != 0, start, len, cmdlen))
+}
 
 /// Check if redraw state needs any redraw (FFI).
 #[no_mangle]
@@ -382,5 +523,66 @@ mod tests {
         assert!(search.is_search());
         assert!(!search.is_ex_cmd());
         assert_eq!(search.firstc_str(), "/");
+    }
+
+    #[test]
+    fn test_color_cache_valid() {
+        // Same prompt ID, non-null cache
+        assert!(color_cache_valid(1, 1, false));
+
+        // Different prompt ID
+        assert!(!color_cache_valid(1, 2, false));
+
+        // Null cache buffer
+        assert!(!color_cache_valid(1, 1, true));
+    }
+
+    #[test]
+    fn test_should_skip_coloring() {
+        // Same prompt, too many errors
+        assert!(should_skip_coloring(1, 1, MAX_CALLBACK_ERRORS));
+        assert!(should_skip_coloring(1, 1, MAX_CALLBACK_ERRORS + 1));
+
+        // Same prompt, not enough errors
+        assert!(!should_skip_coloring(1, 1, MAX_CALLBACK_ERRORS - 1));
+
+        // Different prompt, many errors (should NOT skip - new prompt)
+        assert!(!should_skip_coloring(2, 1, MAX_CALLBACK_ERRORS));
+    }
+
+    #[test]
+    fn test_should_reset_callback_errors() {
+        assert!(should_reset_callback_errors(2, 1));
+        assert!(!should_reset_callback_errors(1, 1));
+    }
+
+    #[test]
+    fn test_calculate_draw_len() {
+        // Normal case
+        assert_eq!(calculate_draw_len(0, 10, 20), 10);
+
+        // Requested more than available
+        assert_eq!(calculate_draw_len(15, 10, 20), 5);
+
+        // Exactly at end
+        assert_eq!(calculate_draw_len(10, 10, 20), 10);
+    }
+
+    #[test]
+    fn test_should_draw() {
+        // Normal case
+        assert!(should_draw(false, 0, 10, 20));
+
+        // Null buffer
+        assert!(!should_draw(true, 0, 10, 20));
+
+        // Start past end
+        assert!(!should_draw(false, 25, 10, 20));
+
+        // Zero length
+        assert!(!should_draw(false, 0, 0, 20));
+
+        // Negative length
+        assert!(!should_draw(false, 0, -1, 20));
     }
 }
