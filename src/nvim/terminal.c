@@ -131,6 +131,10 @@ typedef struct {
 extern MultiQueue *rs_loop_get_events(Loop *loop);
 #define loop_get_events(l) rs_loop_get_events(l)
 
+// Rust FFI declarations from nvim-terminal crate
+extern int rs_terminal_running(void *term);
+extern int rs_terminal_buf(void *term);
+
 // Delay for refreshing the terminal buffer after receiving updates from
 // libvterm. Improves performance when receiving large bursts of data.
 #define REFRESH_DELAY 10
@@ -1287,7 +1291,7 @@ Buffer terminal_buf(const Terminal *term)
 
 bool terminal_running(const Terminal *term)
 {
-  return !term->closed;
+  return rs_terminal_running((void *)term) != 0;
 }
 
 void terminal_notify_theme(Terminal *term, bool dark)
