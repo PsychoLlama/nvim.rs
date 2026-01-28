@@ -17,6 +17,7 @@ pub mod helpers;
 pub mod highlight;
 pub mod marks;
 pub mod navigate;
+pub mod scroll;
 pub mod update;
 
 // Re-export key types from submodules
@@ -36,6 +37,9 @@ pub use highlight::{
 };
 pub use marks::{ChangeMetrics, ChangePosition, MarkAdjustIter, MarkAdjustParams};
 pub use navigate::{DiffHunkBounds, DiffNavResult, Direction};
+pub use scroll::{
+    BoundsResult, DiffScrollState, FillerPosition, ScrollBindState, TopfillResult, ToplineResult,
+};
 pub use update::{
     DiffLineUpdateState, DiffRedrawState, DiffUpdateState, FillerUpdateResult,
     ShouldInvalidateResult,
