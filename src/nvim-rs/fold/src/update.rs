@@ -309,6 +309,21 @@ extern "C" {
     // Level getters (call C implementations)
     fn nvim_foldlevelIndent(wp: WinHandle, lnum: LinenrT, off: LinenrT) -> FoldLevelResult;
     fn nvim_foldlevelDiff(wp: WinHandle, lnum: LinenrT, off: LinenrT) -> FoldLevelResult;
+    #[allow(dead_code)]
+    fn nvim_foldlevelMarker(
+        wp: WinHandle,
+        lnum: LinenrT,
+        off: LinenrT,
+        current_lvl: c_int,
+    ) -> FoldLevelResult;
+
+    // Marker parsing
+    #[allow(dead_code)]
+    fn nvim_parseMarker(wp: WinHandle);
+
+    // Fold method check
+    #[allow(dead_code)]
+    fn nvim_foldmethod_is_marker(wp: WinHandle) -> c_int;
 
     // Global fold changed flag
     fn nvim_get_fold_changed() -> bool;
@@ -416,6 +431,37 @@ fn call_diff_level_getter(flp: &mut FlineT) {
     flp.had_end = flp.end;
     // For diff method, end stays at MAX_LEVEL + 1 (not set by level getter)
     flp.end = MAX_LEVEL + 1;
+}
+
+/// Call the marker level getter
+fn call_marker_level_getter(flp: &mut FlineT) {
+    // Marker method requires passing current level - it tracks fold state across lines
+    let result = unsafe { nvim_foldlevelMarker(flp.wp, flp.lnum, flp.off, flp.lvl) };
+    flp.lvl = result.lvl;
+    flp.lvl_next = result.lvl_next;
+    flp.start = result.start;
+    flp.had_end = flp.end;
+    // For marker method, end stays at MAX_LEVEL + 1 (not set by level getter)
+    flp.end = MAX_LEVEL + 1;
+}
+
+/// Type of level getter to use
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+enum LevelGetterKind {
+    Indent,
+    Diff,
+    Marker,
+}
+
+/// Call the appropriate level getter based on kind
+#[allow(dead_code)]
+fn call_level_getter(flp: &mut FlineT, kind: LevelGetterKind) {
+    match kind {
+        LevelGetterKind::Indent => call_indent_level_getter(flp),
+        LevelGetterKind::Diff => call_diff_level_getter(flp),
+        LevelGetterKind::Marker => call_marker_level_getter(flp),
+    }
 }
 
 /// IEMS update for indent and diff methods only.

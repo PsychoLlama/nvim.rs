@@ -3149,6 +3149,12 @@ int nvim_foldmethod_is_diff(win_T *wp)
   return foldmethodIsDiff(wp) ? 1 : 0;
 }
 
+/// Check if foldmethod is marker.
+int nvim_foldmethod_is_marker(win_T *wp)
+{
+  return foldmethodIsMarker(wp) ? 1 : 0;
+}
+
 /// Get diff_context global.
 linenr_T nvim_get_diff_context(void)
 {
@@ -3205,6 +3211,34 @@ FoldLevelResult_C nvim_foldlevelDiff(win_T *wp, linenr_T lnum, linenr_T off)
   flp.had_end = MAX_LEVEL + 1;
 
   foldlevelDiff(&flp);
+
+  FoldLevelResult_C result = {
+    .lvl = flp.lvl,
+    .lvl_next = flp.lvl_next,
+    .start = flp.start,
+    .end = flp.end,
+  };
+  return result;
+}
+
+// Note: nvim_parseMarker is already defined above (around line 3061)
+
+/// Wrapper for foldlevelMarker that returns the FoldLevelResult.
+/// Requires nvim_parseMarker to be called first.
+/// Current level (flp.lvl) must be passed in - caller tracks state.
+FoldLevelResult_C nvim_foldlevelMarker(win_T *wp, linenr_T lnum, linenr_T off, int current_lvl)
+{
+  fline_T flp;
+  flp.wp = wp;
+  flp.lnum = lnum;
+  flp.off = off;
+  flp.lvl = current_lvl;
+  flp.lvl_next = current_lvl;
+  flp.start = 0;
+  flp.end = MAX_LEVEL + 1;
+  flp.had_end = MAX_LEVEL + 1;
+
+  foldlevelMarker(&flp);
 
   FoldLevelResult_C result = {
     .lvl = flp.lvl,
