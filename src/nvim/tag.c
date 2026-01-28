@@ -484,6 +484,65 @@ void nvim_copy_option_part(char **option, char *buf, size_t maxlen, const char *
   copy_option_part(option, buf, maxlen, (char *)sep);
 }
 
+// ============================================================================
+// Rust FFI accessor functions for jump.rs
+// ============================================================================
+
+/// Check if a path exists for Rust (tag module)
+bool nvim_tag_path_exists(const char *path)
+{
+  return os_path_exists(path);
+}
+
+/// Check if there's a BufReadCmd autocmd for this file
+bool nvim_has_bufreadcmd(const char *fname)
+{
+  return has_autocmd(EVENT_BUFREADCMD, fname, NULL);
+}
+
+/// Get the postponed_split global
+int nvim_get_postponed_split(void)
+{
+  return postponed_split;
+}
+
+/// Set the postponed_split global
+void nvim_set_postponed_split(int val)
+{
+  postponed_split = val;
+}
+
+/// Get the g_do_tagpreview global
+int nvim_get_g_do_tagpreview(void)
+{
+  return g_do_tagpreview;
+}
+
+/// Set the g_do_tagpreview global
+void nvim_set_g_do_tagpreview(int val)
+{
+  g_do_tagpreview = val;
+}
+
+/// Check if buffer can be set (with forceit flag)
+bool nvim_check_can_set_curbuf_forceit(int forceit)
+{
+  return check_can_set_curbuf_forceit(forceit);
+}
+
+/// Set the nofile_fname (for error reporting)
+void nvim_set_nofile_fname(const char *fname)
+{
+  xfree(nofile_fname);
+  nofile_fname = fname != NULL ? xstrdup(fname) : NULL;
+}
+
+/// Get the nofile_fname (for error reporting)
+const char *nvim_get_nofile_fname(void)
+{
+  return nofile_fname;
+}
+
 #include "tag.c.generated.h"
 
 static const char e_tag_stack_empty[]
@@ -3424,6 +3483,12 @@ static char *expand_tag_fname(char *fname, char *const tag_fname, const bool exp
   xfree(expanded_fname);
 
   return retval;
+}
+
+/// Expand tag filename relative to tag file (wrapper for Rust)
+char *nvim_expand_tag_fname(const char *fname, const char *tag_fname, bool expand)
+{
+  return expand_tag_fname((char *)fname, (char *)tag_fname, expand);
 }
 
 /// Check if we have a tag for the buffer with name "buf_ffname".
