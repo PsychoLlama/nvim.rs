@@ -514,39 +514,14 @@ static bool curgrid_covered_above(int row)
   return rs_curgrid_covered_above(row);
 }
 
+// Rust implementation of ui_comp_grid_scroll
+extern void rs_ui_comp_grid_scroll(Integer grid, Integer top, Integer bot, Integer left,
+                                   Integer right, Integer rows, Integer cols);
+
 void ui_comp_grid_scroll(Integer grid, Integer top, Integer bot, Integer left, Integer right,
                          Integer rows, Integer cols)
 {
-  if (!ui_comp_should_draw() || !ui_comp_set_grid((int)grid)) {
-    return;
-  }
-  top += curgrid->comp_row;
-  bot += curgrid->comp_row;
-  left += curgrid->comp_col;
-  right += curgrid->comp_col;
-  bool covered = curgrid_covered_above((int)(bot - MAX(rows, 0)));
-
-  if (covered || curgrid->blending) {
-    // TODO(bfredl):
-    // 1. check if rectangles actually overlap
-    // 2. calculate subareas that can scroll.
-    compose_debug(top, bot, left, right, dbghl_recompose, true);
-    for (int r = (int)(top + MAX(-rows, 0)); r < bot - MAX(rows, 0); r++) {
-      // TODO(bfredl): workaround for win_update() performing two scrolls in a
-      // row, where the latter might scroll invalid space created by the first.
-      // ideally win_update() should keep track of this itself and not scroll
-      // the invalid space.
-      if (curgrid->attrs[curgrid->line_offset[r - curgrid->comp_row]
-                         + (size_t)left - (size_t)curgrid->comp_col] >= 0) {
-        compose_line(r, left, right, 0);
-      }
-    }
-  } else {
-    ui_composed_call_grid_scroll(1, top, bot, left, right, rows, cols);
-    if (rdb_flags & kOptRdbFlagCompositor) {
-      debug_delay(2);
-    }
-  }
+  rs_ui_comp_grid_scroll(grid, top, bot, left, right, rows, cols);
 }
 
 void ui_comp_grid_resize(Integer grid, Integer width, Integer height)

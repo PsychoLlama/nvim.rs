@@ -1179,6 +1179,108 @@ pub extern "C" fn rs_ui_comp_msg_set_pos(
 }
 
 // =============================================================================
+// UI Comp Grid Scroll Implementation
+// =============================================================================
+
+/// Handle grid scroll operation.
+///
+/// This function handles scroll operations on a grid, deciding whether to:
+/// - Scroll directly (if uncovered and no blending)
+/// - Recompose the affected area (if covered or blending)
+///
+/// # Arguments
+/// * `grid` - Grid handle
+/// * `top` - Top row (in grid coordinates)
+/// * `bot` - Bottom row (in grid coordinates)
+/// * `left` - Left column (in grid coordinates)
+/// * `right` - Right column (in grid coordinates)
+/// * `rows` - Number of rows to scroll (positive=up, negative=down)
+/// * `cols` - Number of columns to scroll (currently unused)
+fn ui_comp_grid_scroll_impl(
+    grid: i64,
+    mut top: i64,
+    mut bot: i64,
+    mut left: i64,
+    mut right: i64,
+    rows: i64,
+    cols: i64,
+) {
+    unsafe {
+        // Early return if can't draw or can't set grid
+        if rs_ui_comp_should_draw() == 0 || rs_ui_comp_set_grid(grid as c_int) == 0 {
+            return;
+        }
+
+        let curgrid = nvim_get_curgrid();
+        let comp_row = i64::from(nvim_screengrid_get_comp_row(curgrid));
+        let comp_col = i64::from(nvim_screengrid_get_comp_col(curgrid));
+
+        // Transform to screen coordinates
+        top += comp_row;
+        bot += comp_row;
+        left += comp_col;
+        right += comp_col;
+
+        let check_row = bot - rows.max(0);
+        let covered = rs_curgrid_covered_above(check_row as c_int);
+
+        if covered || nvim_screengrid_get_blending(curgrid) {
+            // Need to recompose - can't use direct scroll
+            let dbghl_recompose = nvim_comp_get_dbghl_recompose();
+            compose_debug_impl(top, bot, left, right, dbghl_recompose, true);
+
+            // Compose the affected lines (excluding the scrolled-out region)
+            let first_row = top + (-rows).max(0);
+            let last_row = bot - rows.max(0);
+
+            // Get grid attrs pointer for validity check
+            let curgrid_attrs = nvim_screengrid_get_attrs(curgrid);
+            let curgrid_line_offset = nvim_screengrid_get_line_offset(curgrid);
+
+            for r in first_row..last_row {
+                // Workaround: check if line has valid attributes before composing
+                // (handles case where scroll invalidates content that isn't refreshed yet)
+                let grid_row = (r - comp_row) as usize;
+                let grid_col = (left - comp_col) as usize;
+                let off = *curgrid_line_offset.add(grid_row) + grid_col;
+
+                if *curgrid_attrs.add(off) >= 0 {
+                    compose_line_impl(r, left, right, 0);
+                }
+            }
+        } else {
+            // Can scroll directly
+            ui_composed_call_grid_scroll(1, top, bot, left, right, rows, cols);
+
+            // Debug delay if compositor debugging enabled
+            if (nvim_get_rdb_flags() & rdb_flags::COMPOSITOR) != 0 {
+                debug_delay_impl(2);
+            }
+        }
+    }
+}
+
+/// FFI wrapper for ui_comp_grid_scroll.
+///
+/// Handles grid scroll operations.
+///
+/// # Safety
+/// This function accesses global compositor state and grid data.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn rs_ui_comp_grid_scroll(
+    grid: i64,
+    top: i64,
+    bot: i64,
+    left: i64,
+    right: i64,
+    rows: i64,
+    cols: i64,
+) {
+    ui_comp_grid_scroll_impl(grid, top, bot, left, right, rows, cols);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
