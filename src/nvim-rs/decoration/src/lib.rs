@@ -527,6 +527,398 @@ pub extern "C" fn rs_decor_virt_pos_kind(range: DecorRangeHandle) -> c_int {
     }
 }
 
+// ============================================================================
+// Phase 3: Conceal and Decoration Attribute Helpers
+// ============================================================================
+
+/// Check if concealment is active in the current decoration state.
+///
+/// Returns true if decor_state.conceal > 0.
+#[no_mangle]
+pub extern "C" fn rs_conceal_check(state: DecorStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    c_int::from(decor_state_conceal(state) > 0)
+}
+
+/// Check if concealment should show a replacement character.
+///
+/// Returns true if conceal level allows showing a character (level 1 or 2).
+#[no_mangle]
+pub extern "C" fn rs_conceal_shows_char(state: DecorStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    let conceal = decor_state_conceal(state);
+    c_int::from(conceal == 1 || conceal == 2)
+}
+
+/// Check if concealment is full (completely hides text).
+///
+/// Returns true if conceal level is 3 (full concealment).
+#[no_mangle]
+pub extern "C" fn rs_conceal_is_full(state: DecorStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    c_int::from(decor_state_conceal(state) >= 3)
+}
+
+/// Get the conceal character if one is set.
+///
+/// Returns the conceal_char from decor_state, or 0 if no character is set.
+#[no_mangle]
+pub extern "C" fn rs_get_conceal_char(state: DecorStateHandle) -> ScharT {
+    if state.is_null() {
+        return 0;
+    }
+    decor_state_conceal_char(state)
+}
+
+/// Get the conceal attribute if one is set.
+///
+/// Returns the conceal_attr from decor_state, or 0 if no attribute is set.
+#[no_mangle]
+pub extern "C" fn rs_get_conceal_attr(state: DecorStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    decor_state_conceal_attr(state)
+}
+
+/// Check if decoration has a custom conceal character.
+///
+/// Returns true if decor_state has a non-zero conceal_char.
+#[no_mangle]
+pub extern "C" fn rs_has_conceal_char(state: DecorStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    c_int::from(decor_state_conceal_char(state) != 0)
+}
+
+/// Check if decoration has a custom conceal attribute.
+///
+/// Returns true if decor_state has a non-zero conceal_attr.
+#[no_mangle]
+pub extern "C" fn rs_has_conceal_attr(state: DecorStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    c_int::from(decor_state_conceal_attr(state) != 0)
+}
+
+/// Get the spell state from decoration.
+///
+/// Returns the spell tristate: -1 = inherit, 0 = spell off, 1 = spell on.
+#[no_mangle]
+pub extern "C" fn rs_get_decor_spell(state: DecorStateHandle) -> c_int {
+    if state.is_null() {
+        return -1; // Inherit
+    }
+    decor_state_spell(state)
+}
+
+/// Check if decoration forces spell checking on.
+#[no_mangle]
+pub extern "C" fn rs_decor_spell_on(state: DecorStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    c_int::from(decor_state_spell(state) == 1)
+}
+
+/// Check if decoration forces spell checking off.
+#[no_mangle]
+pub extern "C" fn rs_decor_spell_off(state: DecorStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    c_int::from(decor_state_spell(state) == 0)
+}
+
+/// Get decoration attributes for a specific column.
+///
+/// Returns the col_until value indicating how far the current decoration extends.
+#[no_mangle]
+pub extern "C" fn rs_get_decor_col_until(state: DecorStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    decor_state_col_until(state)
+}
+
+/// Check if we're past the decoration column extent.
+///
+/// Returns true if `col >= col_until`, meaning decoration needs refresh.
+#[no_mangle]
+pub extern "C" fn rs_decor_needs_refresh(state: DecorStateHandle, col: c_int) -> c_int {
+    if state.is_null() {
+        return 1;
+    }
+    c_int::from(col >= decor_state_col_until(state))
+}
+
+/// Get the current decoration row.
+#[no_mangle]
+pub extern "C" fn rs_get_decor_row(state: DecorStateHandle) -> c_int {
+    if state.is_null() {
+        return -1;
+    }
+    decor_state_row(state)
+}
+
+/// Check if decoration state is on a specific row.
+#[no_mangle]
+pub extern "C" fn rs_decor_on_row(state: DecorStateHandle, row: c_int) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    c_int::from(decor_state_row(state) == row)
+}
+
+/// Get the number of active decoration ranges.
+#[no_mangle]
+pub extern "C" fn rs_get_active_decor_count(state: DecorStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    decor_state_current_end(state)
+}
+
+/// Check if there are any active decorations.
+#[no_mangle]
+pub extern "C" fn rs_has_active_decor(state: DecorStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    c_int::from(decor_state_current_end(state) > 0)
+}
+
+/// Get the current decoration attribute ID.
+#[no_mangle]
+pub extern "C" fn rs_get_decor_attr(state: DecorStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    decor_state_current(state)
+}
+
+/// Check if decoration range is for the current row.
+#[no_mangle]
+pub extern "C" fn rs_decor_range_on_row(range: DecorRangeHandle, row: c_int) -> c_int {
+    if range.is_null() {
+        return 0;
+    }
+    c_int::from(decor_range_start_row(range) == row)
+}
+
+/// Check if decoration range starts at or before a column.
+#[no_mangle]
+pub extern "C" fn rs_decor_range_starts_by(range: DecorRangeHandle, col: c_int) -> c_int {
+    if range.is_null() {
+        return 0;
+    }
+    c_int::from(decor_range_start_col(range) <= col)
+}
+
+/// Check if decoration range ends after a column.
+#[no_mangle]
+pub extern "C" fn rs_decor_range_ends_after(range: DecorRangeHandle, col: c_int) -> c_int {
+    if range.is_null() {
+        return 0;
+    }
+    c_int::from(decor_range_end_col(range) > col)
+}
+
+/// Check if a column is within a decoration range (on same row).
+#[no_mangle]
+pub extern "C" fn rs_decor_range_contains_col(range: DecorRangeHandle, col: c_int) -> c_int {
+    if range.is_null() {
+        return 0;
+    }
+    let start = decor_range_start_col(range);
+    let end = decor_range_end_col(range);
+    c_int::from(col >= start && col < end)
+}
+
+/// Get the decoration range priority.
+#[no_mangle]
+pub extern "C" fn rs_get_decor_priority(range: DecorRangeHandle) -> u32 {
+    if range.is_null() {
+        return 0;
+    }
+    decor_range_priority(range)
+}
+
+/// Get the decoration range attribute ID.
+#[no_mangle]
+pub extern "C" fn rs_get_decor_range_attr(range: DecorRangeHandle) -> c_int {
+    if range.is_null() {
+        return 0;
+    }
+    decor_range_attr_id(range)
+}
+
+/// Check if decoration range is a highlight type.
+#[no_mangle]
+pub extern "C" fn rs_decor_range_is_highlight(range: DecorRangeHandle) -> c_int {
+    if range.is_null() {
+        return 0;
+    }
+    c_int::from(decor_range_kind(range) == Some(DecorKind::Highlight))
+}
+
+/// Check if decoration range is a sign type.
+#[no_mangle]
+pub extern "C" fn rs_decor_range_is_sign(range: DecorRangeHandle) -> c_int {
+    if range.is_null() {
+        return 0;
+    }
+    c_int::from(decor_range_kind(range) == Some(DecorKind::Sign))
+}
+
+/// Check if decoration range is a virtual text type.
+#[no_mangle]
+pub extern "C" fn rs_decor_range_is_virt_text(range: DecorRangeHandle) -> c_int {
+    if range.is_null() {
+        return 0;
+    }
+    c_int::from(decor_range_kind(range) == Some(DecorKind::VirtText))
+}
+
+/// Check if decoration range is a virtual lines type.
+#[no_mangle]
+pub extern "C" fn rs_decor_range_is_virt_lines(range: DecorRangeHandle) -> c_int {
+    if range.is_null() {
+        return 0;
+    }
+    c_int::from(decor_range_kind(range) == Some(DecorKind::VirtLines))
+}
+
+/// Check if decoration range is UI watched.
+#[no_mangle]
+pub extern "C" fn rs_decor_range_is_ui_watched(range: DecorRangeHandle) -> c_int {
+    if range.is_null() {
+        return 0;
+    }
+    c_int::from(decor_range_kind(range) == Some(DecorKind::UIWatched))
+}
+
+/// Get virtual text width from a decoration range.
+///
+/// Returns 0 if the range is not a virtual text type.
+#[no_mangle]
+pub extern "C" fn rs_get_virt_text_width(range: DecorRangeHandle) -> c_int {
+    if range.is_null() {
+        return 0;
+    }
+    let vt = decor_range_virt_text(range);
+    if vt.is_null() {
+        return 0;
+    }
+    virt_text_width(vt)
+}
+
+/// Get virtual text highlight mode from a decoration range.
+///
+/// Returns HlMode::Unknown (0) if not a virtual text type.
+#[no_mangle]
+pub extern "C" fn rs_get_virt_hl_mode(range: DecorRangeHandle) -> c_int {
+    if range.is_null() {
+        return HlMode::Unknown as c_int;
+    }
+    let vt = decor_range_virt_text(range);
+    if vt.is_null() {
+        return HlMode::Unknown as c_int;
+    }
+    virt_text_hl_mode(vt).map_or(HlMode::Unknown as c_int, |m| m as c_int)
+}
+
+/// Get virtual text position from a decoration range.
+///
+/// Returns VirtTextPos::EndOfLine (0) if not a virtual text type.
+#[no_mangle]
+pub extern "C" fn rs_get_virt_pos(range: DecorRangeHandle) -> c_int {
+    if range.is_null() {
+        return VirtTextPos::EndOfLine as c_int;
+    }
+    let vt = decor_range_virt_text(range);
+    if vt.is_null() {
+        return VirtTextPos::EndOfLine as c_int;
+    }
+    virt_text_pos(vt).map_or(VirtTextPos::EndOfLine as c_int, |p| p as c_int)
+}
+
+/// Check if virtual text is inline.
+#[no_mangle]
+pub extern "C" fn rs_virt_is_inline(range: DecorRangeHandle) -> c_int {
+    if range.is_null() {
+        return 0;
+    }
+    let vt = decor_range_virt_text(range);
+    if vt.is_null() {
+        return 0;
+    }
+    c_int::from(virt_text_pos(vt) == Some(VirtTextPos::Inline))
+}
+
+/// Check if virtual text is overlay.
+#[no_mangle]
+pub extern "C" fn rs_virt_is_overlay(range: DecorRangeHandle) -> c_int {
+    if range.is_null() {
+        return 0;
+    }
+    let vt = decor_range_virt_text(range);
+    if vt.is_null() {
+        return 0;
+    }
+    c_int::from(virt_text_pos(vt) == Some(VirtTextPos::Overlay))
+}
+
+/// Check if virtual text is right-aligned.
+#[no_mangle]
+pub extern "C" fn rs_virt_is_right_align(range: DecorRangeHandle) -> c_int {
+    if range.is_null() {
+        return 0;
+    }
+    let vt = decor_range_virt_text(range);
+    if vt.is_null() {
+        return 0;
+    }
+    c_int::from(virt_text_pos(vt) == Some(VirtTextPos::RightAlign))
+}
+
+/// Check if virtual text is at end of line.
+#[no_mangle]
+pub extern "C" fn rs_virt_is_eol(range: DecorRangeHandle) -> c_int {
+    if range.is_null() {
+        return 0;
+    }
+    let vt = decor_range_virt_text(range);
+    if vt.is_null() {
+        return 0;
+    }
+    let pos = virt_text_pos(vt);
+    c_int::from(
+        pos == Some(VirtTextPos::EndOfLine) || pos == Some(VirtTextPos::EndOfLineRightAlign),
+    )
+}
+
+/// Get virtual text flags from a decoration range.
+#[no_mangle]
+pub extern "C" fn rs_get_virt_flags(range: DecorRangeHandle) -> c_int {
+    if range.is_null() {
+        return 0;
+    }
+    let vt = decor_range_virt_text(range);
+    if vt.is_null() {
+        return 0;
+    }
+    virt_text_flags(vt)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -2405,6 +2405,233 @@ pub unsafe extern "C" fn rs_wlv_has_virt_lines(wlv: WlvHandle) -> c_int {
     c_int::from(above > 0 || below > 0)
 }
 
+// ============================================================================
+// Phase 3: Extmark Decoration Attribute Helpers
+// ============================================================================
+
+/// Check if n_extra is set for inline virtual text (extmark).
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_is_extmark_extra(wlv: WlvHandle) -> c_int {
+    c_int::from(nvim_wlv_get_extra_for_extmark(wlv))
+}
+
+/// Set the extmark extra flag.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_set_extmark_extra(wlv: WlvHandle, val: c_int) {
+    nvim_wlv_set_extra_for_extmark(wlv, val != 0);
+}
+
+/// Check if we should apply extmark attributes.
+///
+/// Returns true if either there's no n_extra or it's not for extmark.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_apply_extmark_attr(wlv: WlvHandle) -> c_int {
+    let n_extra = nvim_wlv_get_n_extra(wlv);
+    let extra_for_extmark = nvim_wlv_get_extra_for_extmark(wlv);
+    c_int::from(n_extra == 0 || !extra_for_extmark)
+}
+
+/// Get the virtual inline highlight mode.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_virt_inline_hl_mode(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_virt_inline_hl_mode(wlv)
+}
+
+/// Set the virtual inline highlight mode.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_set_virt_inline_hl_mode(wlv: WlvHandle, mode: c_int) {
+    nvim_wlv_set_virt_inline_hl_mode(wlv, mode);
+}
+
+/// Check if the virtual inline highlight mode is replace.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_virt_inline_replaces(wlv: WlvHandle) -> c_int {
+    c_int::from(nvim_wlv_get_virt_inline_hl_mode(wlv) <= HL_MODE_REPLACE)
+}
+
+/// Get the number of skipped cells for virtual text.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_skipped_cells(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_skipped_cells(wlv)
+}
+
+/// Set the number of skipped cells for virtual text.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_set_skipped_cells(wlv: WlvHandle, val: c_int) {
+    nvim_wlv_set_skipped_cells(wlv, val);
+}
+
+/// Add to the number of skipped cells.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_add_skipped_cells(wlv: WlvHandle, delta: c_int) -> c_int {
+    let current = nvim_wlv_get_skipped_cells(wlv);
+    let new_val = current + delta;
+    nvim_wlv_set_skipped_cells(wlv, new_val);
+    new_val
+}
+
+/// Get the p_extra pointer (extra text to display).
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_p_extra(wlv: WlvHandle) -> *const c_char {
+    nvim_wlv_get_p_extra(wlv)
+}
+
+/// Set the p_extra pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_set_p_extra(wlv: WlvHandle, ptr: *const c_char) {
+    nvim_wlv_set_p_extra(wlv, ptr.cast_mut());
+}
+
+/// Check if there's extra text to display.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_has_p_extra(wlv: WlvHandle) -> c_int {
+    let p = nvim_wlv_get_p_extra(wlv);
+    c_int::from(!p.is_null())
+}
+
+/// Get the sc_extra character (repeated extra character).
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_sc_extra(wlv: WlvHandle) -> ScharT {
+    nvim_wlv_get_sc_extra(wlv)
+}
+
+/// Set the sc_extra character.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_set_sc_extra(wlv: WlvHandle, c: ScharT) {
+    nvim_wlv_set_sc_extra(wlv, c);
+}
+
+/// Get the sc_final character (terminating extra character).
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_sc_final(wlv: WlvHandle) -> ScharT {
+    nvim_wlv_get_sc_final(wlv)
+}
+
+/// Set the sc_final character.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_set_sc_final(wlv: WlvHandle, c: ScharT) {
+    nvim_wlv_set_sc_final(wlv, c);
+}
+
+/// Check if using repeated character for extra (sc_extra != NUL).
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_uses_sc_extra(wlv: WlvHandle) -> c_int {
+    c_int::from(nvim_wlv_get_sc_extra(wlv) != 0)
+}
+
+/// Clear the extra text state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_clear_extra(wlv: WlvHandle) {
+    nvim_wlv_set_n_extra(wlv, 0);
+    nvim_wlv_set_p_extra(wlv, std::ptr::null_mut());
+    nvim_wlv_set_sc_extra(wlv, 0); // NUL
+    nvim_wlv_set_sc_final(wlv, 0); // NUL
+    nvim_wlv_set_extra_for_extmark(wlv, false);
+}
+
+/// Setup extra text from a string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_setup_extra(
+    wlv: WlvHandle,
+    text: *const c_char,
+    len: c_int,
+    attr: c_int,
+    for_extmark: c_int,
+) {
+    nvim_wlv_set_p_extra(wlv, text.cast_mut());
+    nvim_wlv_set_n_extra(wlv, len);
+    nvim_wlv_set_n_attr(wlv, len);
+    nvim_wlv_set_extra_attr(wlv, attr);
+    nvim_wlv_set_sc_extra(wlv, 0); // NUL
+    nvim_wlv_set_sc_final(wlv, 0); // NUL
+    nvim_wlv_set_extra_for_extmark(wlv, for_extmark != 0);
+}
+
+/// Setup extra text with a repeated character.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_setup_extra_schar(
+    wlv: WlvHandle,
+    sc: ScharT,
+    count: c_int,
+    attr: c_int,
+) {
+    nvim_wlv_set_p_extra(wlv, std::ptr::null_mut());
+    nvim_wlv_set_n_extra(wlv, count);
+    nvim_wlv_set_n_attr(wlv, count);
+    nvim_wlv_set_extra_attr(wlv, attr);
+    nvim_wlv_set_sc_extra(wlv, sc);
+    nvim_wlv_set_sc_final(wlv, 0); // NUL
+    nvim_wlv_set_extra_for_extmark(wlv, false);
+}
+
+/// Get the extra attribute.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_extra_attr(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_extra_attr(wlv)
+}
+
+/// Set the extra attribute.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_set_extra_attr(wlv: WlvHandle, attr: c_int) {
+    nvim_wlv_set_extra_attr(wlv, attr);
+}
+
+/// Get the vcol_off_co (conceal offset).
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_vcol_off_co(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_vcol_off_co(wlv)
+}
+
+/// Set the vcol_off_co (conceal offset).
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_set_vcol_off_co(wlv: WlvHandle, val: c_int) {
+    nvim_wlv_set_vcol_off_co(wlv, val);
+}
+
+/// Increment the vcol_off_co.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_inc_vcol_off_co(wlv: WlvHandle) -> c_int {
+    let val = nvim_wlv_get_vcol_off_co(wlv) + 1;
+    nvim_wlv_set_vcol_off_co(wlv, val);
+    val
+}
+
+/// Get the bogus columns count.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_boguscols(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_boguscols(wlv)
+}
+
+/// Set the bogus columns count.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_set_boguscols(wlv: WlvHandle, val: c_int) {
+    nvim_wlv_set_boguscols(wlv, val);
+}
+
+/// Get the old bogus columns count.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_old_boguscols(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_old_boguscols(wlv)
+}
+
+/// Check if we need to handle bogus columns.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_has_boguscols(wlv: WlvHandle) -> c_int {
+    c_int::from(nvim_wlv_get_boguscols(wlv) > 0)
+}
+
+/// Check if we need line break handling.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_needs_lbr(wlv: WlvHandle) -> c_int {
+    c_int::from(nvim_wlv_get_need_lbr(wlv))
+}
+
+/// Set the line break needed flag.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_set_needs_lbr(wlv: WlvHandle, val: c_int) {
+    nvim_wlv_set_need_lbr(wlv, val != 0);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
