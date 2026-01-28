@@ -403,6 +403,87 @@ int64_t nvim_get_p_tl(void)
   return p_tl;
 }
 
+// ============================================================================
+// Rust FFI accessor functions for tag file iteration (functions not using tag_fnames)
+// ============================================================================
+
+/// Check if the current buffer is a help buffer
+bool nvim_curbuf_is_help(void)
+{
+  return curbuf->b_help;
+}
+
+/// Get the 'helpfile' option value
+const char *nvim_get_p_hf(void)
+{
+  return p_hf;
+}
+
+/// Get the buffer-local 'tags' option
+const char *nvim_get_curbuf_tags(void)
+{
+  return curbuf->b_p_tags;
+}
+
+/// Get the global 'tags' option
+const char *nvim_get_p_tags(void)
+{
+  return p_tags;
+}
+
+/// Get path_tail for Rust
+char *nvim_path_tail(char *path)
+{
+  return path_tail(path);
+}
+
+/// Simplify filename for Rust
+void nvim_simplify_filename(char *fname)
+{
+  simplify_filename(fname);
+}
+
+/// Initialize vim_findfile for Rust
+void *nvim_vim_findfile_init(const char *path, const char *filename, size_t filename_len,
+                              const char *stopdirs, int level, bool free_visited,
+                              int find_what, void *search_ctx, bool tagfile,
+                              const char *buf_ffname)
+{
+  return vim_findfile_init((char *)path, (char *)filename, filename_len,
+                           (char *)stopdirs, level, free_visited,
+                           find_what, search_ctx, tagfile, (char *)buf_ffname);
+}
+
+/// Find next file for Rust
+char *nvim_vim_findfile(void *search_ctx)
+{
+  return vim_findfile(search_ctx);
+}
+
+/// Cleanup vim_findfile context for Rust
+void nvim_vim_findfile_cleanup(void *search_ctx)
+{
+  vim_findfile_cleanup(search_ctx);
+}
+
+/// Get stop directory from path for Rust
+char *nvim_vim_findfile_stopdir(char *buf)
+{
+  return vim_findfile_stopdir(buf);
+}
+
+/// Get current buffer's full file name for Rust
+const char *nvim_get_curbuf_ffname(void)
+{
+  return curbuf->b_ffname;
+}
+
+/// Copy next part of option value for Rust
+void nvim_copy_option_part(char **option, char *buf, size_t maxlen, const char *sep)
+{
+  copy_option_part(option, buf, maxlen, (char *)sep);
+}
+
 #include "tag.c.generated.h"
 
 static const char e_tag_stack_empty[]
@@ -2658,6 +2739,49 @@ static bool found_tagfile_cb(int num_fnames, char **fnames, bool all, void *cook
   }
 
   return num_fnames > 0;
+}
+
+// ============================================================================
+// Rust FFI accessor functions for tag_fnames
+// ============================================================================
+
+/// Get the number of tag file names in the help file list
+int nvim_tag_fnames_len(void)
+{
+  return tag_fnames.ga_len;
+}
+
+/// Get a tag file name from the help file list by index
+const char *nvim_tag_fnames_get(int idx)
+{
+  if (idx < 0 || idx >= tag_fnames.ga_len) {
+    return NULL;
+  }
+  return ((char **)(tag_fnames.ga_data))[idx];
+}
+
+/// Clear the help file tag names list
+void nvim_tag_fnames_clear(void)
+{
+  ga_clear_strings(&tag_fnames);
+}
+
+/// Initialize the help file tag names list
+void nvim_tag_fnames_init(void)
+{
+  ga_init(&tag_fnames, (int)sizeof(char *), 10);
+}
+
+/// Add a tag file name to the help file list
+void nvim_tag_fnames_add(char *fname)
+{
+  GA_APPEND(char *, &tag_fnames, fname);
+}
+
+/// Do in runtimepath for tags (finds doc/tags files)
+void nvim_do_in_runtimepath_for_tags(void)
+{
+  do_in_runtimepath("doc/tags doc/tags-??", DIP_ALL, found_tagfile_cb, NULL);
 }
 
 #if defined(EXITFREE)

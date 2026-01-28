@@ -7,6 +7,7 @@ use std::ffi::{c_char, c_int, c_void};
 // Sub-modules
 pub mod binary;
 pub mod commands;
+pub mod files;
 pub mod matches;
 pub mod parse;
 pub mod pattern;
@@ -18,6 +19,7 @@ pub mod stack;
 // Re-export parse types and functions
 pub use binary::{BinarySearchResult, BinarySearchState, FileOffset, TagFileSortInfo};
 pub use commands::{JumpTarget, PreviewTagState};
+pub use files::TagFileIterator;
 pub use matches::MatchStorage;
 pub use parse::TagPtrs;
 pub use pattern::{RegMatch, TagPattern};
