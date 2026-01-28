@@ -79,7 +79,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | move           | Cursor movement and scrolling           |
 | msgpack        | MessagePack serialization               |
 | msgpack_rpc    | MessagePack-RPC protocol for remote procedure calls |
-| normal         | Normal mode key processing and commands |
+| normal         | Normal mode (command dispatch table, motion commands, operators, visual mode) |
 | ops            | Operator handling (shift, tilde, addsub, replace, join, delete, insert) |
 | option         | Option system and configuration         |
 | optionstr      | Option string validation (fillchars, listchars, flags, comma-lists) |
