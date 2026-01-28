@@ -1,6 +1,30 @@
-//! Tag navigation functions for Neovim C-to-Rust migration
+//! Tag navigation system for Neovim C-to-Rust migration.
 //!
-//! This module provides Rust implementations of tag stack and navigation functions.
+//! This crate provides Rust implementations of tag stack and navigation functions,
+//! progressively replacing the C code in `src/nvim/tag.c`.
+//!
+//! # Architecture
+//!
+//! The tag system is organized into specialized modules:
+//!
+//! - [`stack`]: Tag stack manipulation (push, pop, navigation)
+//! - [`search`]: Tag search state machine and `find_tags` helpers
+//! - [`parse`]: Tag line parsing and field extraction
+//! - [`binary`]: Binary search for sorted tag files
+//! - [`pattern`]: Pattern preparation and matching
+//! - [`matches`]: Match collection and storage
+//! - [`select`]: Interactive tag selection UI
+//! - [`preview`]: Preview window management
+//! - [`commands`]: Command helpers and location list integration
+//! - [`files`]: Tag file iteration
+//! - [`jump`]: Jump-to-tag orchestration
+//! - [`dispatch`]: `do_tag` command dispatcher helpers
+//!
+//! # FFI Boundary
+//!
+//! Functions exported to C use the `#[no_mangle] pub extern "C"` pattern with
+//! the `rs_` prefix. C accessor functions provide access to opaque types like
+//! `win_T` and `taggy_T`.
 
 use std::ffi::{c_char, c_int, c_void};
 

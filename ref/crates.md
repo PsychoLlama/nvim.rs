@@ -101,7 +101,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | statusline     | Status/tab/winbar rendering, format parsing, click handling |
 | strings        | String manipulation                     |
 | syntax         | Syntax highlighting (patterns, state, clusters, groups, buffer attachment, Ex commands) |
-| tag            | Tag stack and navigation                |
+| tag            | Tag system (stack, search, navigation, file iteration, jump orchestration, location lists) |
 | terminal       | Terminal emulator state and utilities   |
 | testing        | Testing framework (assertions, fixtures, runners, mocks) |
 | vterm          | VTerm terminal emulation core           |
