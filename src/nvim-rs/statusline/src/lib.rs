@@ -20,6 +20,7 @@ pub mod highlight;
 pub mod render;
 pub mod statuscol;
 pub mod tabline;
+pub mod winbar;
 
 pub use builder::{BuilderItem, ItemType, StatuslineBuilder};
 pub use click::{ClickDefinition, ClickRecord, ClickTracker, ClickType};
