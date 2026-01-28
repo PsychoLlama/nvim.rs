@@ -559,6 +559,222 @@ pub const extern "C" fn rs_dialog_hotkey_bufsize(button_count: c_int) -> c_int {
     }
 }
 
+// ============================================================================
+// Phase 3.3: Dialog Function Wrappers
+// ============================================================================
+
+extern "C" {
+    /// Call do_dialog() C function
+    fn do_dialog(
+        dialog_type: c_int,
+        title: *const c_char,
+        message: *const c_char,
+        buttons: *const c_char,
+        dfltbutton: c_int,
+        textfield: *const c_char,
+        ex_cmd: c_int,
+    ) -> c_int;
+
+    /// Call vim_dialog_yesno() C function
+    fn vim_dialog_yesno(
+        dialog_type: c_int,
+        title: *const c_char,
+        message: *const c_char,
+        dflt: c_int,
+    ) -> c_int;
+
+    /// Call vim_dialog_yesnocancel() C function
+    fn vim_dialog_yesnocancel(
+        dialog_type: c_int,
+        title: *const c_char,
+        message: *const c_char,
+        dflt: c_int,
+    ) -> c_int;
+
+    /// Call vim_dialog_yesnoallcancel() C function
+    fn vim_dialog_yesnoallcancel(
+        dialog_type: c_int,
+        title: *const c_char,
+        message: *const c_char,
+        dflt: c_int,
+    ) -> c_int;
+}
+
+/// Show a dialog and wait for a response.
+///
+/// This is the main dialog function that handles all types of dialogs.
+///
+/// # Arguments
+/// * `dialog_type` - Type of dialog (VIM_GENERIC, VIM_ERROR, etc.)
+/// * `title` - Dialog title (may be NULL)
+/// * `message` - Main message text
+/// * `buttons` - Newline-separated button names with & hotkey markers
+/// * `dfltbutton` - Default button number (1-indexed)
+/// * `textfield` - Input field content for inputdialog(), or NULL
+/// * `ex_cmd` - If true, pressing : accepts default and starts Ex command
+///
+/// # Returns
+/// * 0 if cancelled
+/// * Otherwise the nth button (1-indexed)
+///
+/// # Safety
+/// - `title`, `message`, `buttons` must be valid C strings or NULL
+/// - `textfield` must be valid C string or NULL
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_dialog(
+    dialog_type: c_int,
+    title: *const c_char,
+    message: *const c_char,
+    buttons: *const c_char,
+    dfltbutton: c_int,
+    textfield: *const c_char,
+    ex_cmd: c_int,
+) -> c_int {
+    do_dialog(
+        dialog_type,
+        title,
+        message,
+        buttons,
+        dfltbutton,
+        textfield,
+        ex_cmd,
+    )
+}
+
+/// Show a Yes/No dialog.
+///
+/// Convenience function for simple yes/no confirmations.
+///
+/// # Arguments
+/// * `dialog_type` - Type of dialog
+/// * `title` - Dialog title (may be NULL, defaults to "Question")
+/// * `message` - Question text
+/// * `dflt` - Default button (1=Yes, 2=No)
+///
+/// # Returns
+/// * VIM_YES (2) if Yes was selected
+/// * VIM_NO (3) if No was selected
+///
+/// # Safety
+/// - `title`, `message` must be valid C strings or NULL
+#[no_mangle]
+pub unsafe extern "C" fn rs_dialog_yesno(
+    dialog_type: c_int,
+    title: *const c_char,
+    message: *const c_char,
+    dflt: c_int,
+) -> c_int {
+    vim_dialog_yesno(dialog_type, title, message, dflt)
+}
+
+/// Show a Yes/No/Cancel dialog.
+///
+/// Convenience function for confirmations with cancel option.
+///
+/// # Arguments
+/// * `dialog_type` - Type of dialog
+/// * `title` - Dialog title (may be NULL, defaults to "Question")
+/// * `message` - Question text
+/// * `dflt` - Default button (1=Yes, 2=No, 3=Cancel)
+///
+/// # Returns
+/// * VIM_YES (2) if Yes was selected
+/// * VIM_NO (3) if No was selected
+/// * VIM_CANCEL (4) if Cancel was selected or dialog was cancelled
+///
+/// # Safety
+/// - `title`, `message` must be valid C strings or NULL
+#[no_mangle]
+pub unsafe extern "C" fn rs_dialog_yesnocancel(
+    dialog_type: c_int,
+    title: *const c_char,
+    message: *const c_char,
+    dflt: c_int,
+) -> c_int {
+    vim_dialog_yesnocancel(dialog_type, title, message, dflt)
+}
+
+/// Show a Yes/No/All/Discard All/Cancel dialog.
+///
+/// Convenience function for batch operations with multiple options.
+///
+/// # Arguments
+/// * `dialog_type` - Type of dialog
+/// * `title` - Dialog title (may be NULL, defaults to "Question")
+/// * `message` - Question text
+/// * `dflt` - Default button (1=Yes, 2=No, 3=All, 4=Discard All, 5=Cancel)
+///
+/// # Returns
+/// * VIM_YES (2) if Yes was selected
+/// * VIM_NO (3) if No was selected
+/// * VIM_ALL (5) if Save All was selected
+/// * VIM_DISCARDALL (6) if Discard All was selected
+/// * VIM_CANCEL (4) if Cancel was selected or dialog was cancelled
+///
+/// # Safety
+/// - `title`, `message` must be valid C strings or NULL
+#[no_mangle]
+pub unsafe extern "C" fn rs_dialog_yesnoallcancel(
+    dialog_type: c_int,
+    title: *const c_char,
+    message: *const c_char,
+    dflt: c_int,
+) -> c_int {
+    vim_dialog_yesnoallcancel(dialog_type, title, message, dflt)
+}
+
+/// Quick yes/no dialog with default type.
+///
+/// Uses VIM_QUESTION type and defaults to Yes.
+///
+/// # Safety
+/// - `message` must be a valid C string
+#[no_mangle]
+pub unsafe extern "C" fn rs_confirm_yesno(message: *const c_char) -> c_int {
+    vim_dialog_yesno(DialogType::QUESTION.0, ptr::null(), message, 1)
+}
+
+/// Quick yes/no/cancel dialog with default type.
+///
+/// Uses VIM_QUESTION type and defaults to Yes.
+///
+/// # Safety
+/// - `message` must be a valid C string
+#[no_mangle]
+pub unsafe extern "C" fn rs_confirm_yesnocancel(message: *const c_char) -> c_int {
+    vim_dialog_yesnocancel(DialogType::QUESTION.0, ptr::null(), message, 1)
+}
+
+/// Check if dialog result was affirmative (Yes or All).
+///
+/// # Arguments
+/// * `result` - Result from dialog function
+///
+/// # Returns
+/// * 1 if result was Yes or All
+/// * 0 otherwise
+#[no_mangle]
+pub const extern "C" fn rs_dialog_affirmed(result: c_int) -> c_int {
+    if result == DialogResponse::YES.0 || result == DialogResponse::ALL.0 {
+        1
+    } else {
+        0
+    }
+}
+
+/// Convert dialog result to boolean (true if Yes/All, false otherwise).
+///
+/// # Arguments
+/// * `result` - Result from dialog function
+///
+/// # Returns
+/// * 1 if result indicates acceptance
+/// * 0 if result indicates rejection or cancellation
+#[no_mangle]
+pub const extern "C" fn rs_dialog_to_bool(result: c_int) -> c_int {
+    rs_dialog_affirmed(result)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
