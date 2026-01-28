@@ -1,61 +1,45 @@
-Plan: ~/.claude/plans/valiant-orbiting-rainbow.md
+Plan: ~/.claude/plans/vivid-leaping-kitten.md
 
-All 6 phases of the plan have been completed. Let me provide a summary:
+All 8 phases of the plan have been completed successfully.
 
-## Plan Execution Complete
+## Summary
 
-All 6 phases of the Window System Completion plan have been executed:
+I have completed execution of the insexpand migration plan at `/home/overlord/.claude/plans/vivid-leaping-kitten.md`. All 8 phases were implemented:
 
-### Phase 1: Resize Execution ✅
-- Migrated `win_drag_status_line` and `win_drag_vsep_line` to Rust
-- Added C accessors for global state (nvim_get_min_set_ch, etc.)
-- Commit: `e9e928b44c`
+**Phase 1: Completion State Machine Core**
+- Added state machine functions to `state.rs` including `rs_ctrl_x_mode_state`, `rs_compl_mode_summary`, `rs_can_start_completion`, etc.
 
-### Phase 2: Window Equalization ✅
-- Migrated `win_equal` and `win_equal_rec` (~300 lines of C → Rust)
-- Full recursive equalization algorithm with winfixheight/winfixwidth support
-- Added nvim_get_p_ead accessor
-- Commit: `1d61a88035`
+**Phase 2: Completion Match Management**
+- Extended `match_list.rs` with match navigation functions
+- Extended `navigate.rs` with navigation utilities
+- Extended `pum.rs` with popup menu state functions
 
-### Phase 3: Close Operations ✅
-- Migrated `win_altframe` (splitbelow/splitright logic)
-- Migrated `winframe_find_altwin` (wfh/wfw constraint handling)
-- Added WinframeResult struct for FFI
-- `frame_flatten` stays in C (uses xfree)
-- Commit: `53602f02dd`
+**Phase 3: Keyword Completion Engine**
+- Extended `keyword.rs` with word handling functions
+- Extended `buffer.rs` with buffer scanning utilities
 
-### Phase 4: Split Operations ✅
-- Added SplitSpaceResult struct for combined validation
-- Added `rs_split_space_toplevel` and `rs_split_space_regular`
-- The split module already had ~700+ lines of helpers
-- Main `win_split_ins` stays in C (memory allocation, UI)
-- Commit: `e539505c0e`
+**Phase 4: File and Path Completion**
+- Extended `file.rs` with path manipulation and wildcard detection functions
 
-### Phase 5: Tabpage Operations ✅
-- Added tabpage transition validation helpers
-- Added `rs_tabpage_close_alternate` for finding alternate after close
-- The tabpage module already had comprehensive helpers
-- Main navigation functions stay in C (autocmds, memory)
-- Commit: `f4ac403666`
+**Phase 5: Dictionary and Thesaurus**
+- Extended `dict.rs` with dictionary/thesaurus completion functions
+- Fixed `CTRL_X_THESAURUS` constant (was incorrectly 13, should be 10 + 0x100)
 
-### Phase 6: Command Handler ✅
-- Added exchange/rotate command helpers
-- `rs_cmd_exchange_target`, `rs_cmd_can_rotate`
-- Commands module has comprehensive helpers for classification
-- Main `do_window` dispatcher stays in C (global state, UI)
-- Commit: `2a7e9ddfca`
+**Phase 6: Completion UI Integration**
+- Extended `ui.rs` with UI state and display functions
 
-### Success Criteria Met:
-- ✅ Build passes: `just build` completes
-- ✅ Lints clean: `just rust-clippy` and `just rust-fmt-check` pass
-- ✅ All changes committed incrementally
+**Phase 7: Key Handling and Commands**
+- Extended `keys.rs` with backspace and navigation utilities
+- Extended `insert.rs` with deletion and insert helpers
 
-### Note on Design Decisions:
-Several functions couldn't be fully migrated to Rust because they involve:
-- **Memory allocation** (win_alloc, xfree, alloc_tabpage)
-- **Autocmd triggers** (apply_autocmds, CHECK_CMDWIN)
-- **Linked list manipulation** with C's win_remove/win_append
-- **UI calls** (redraw_later, emsg)
-- **Global state mutation** (curwin, curtab assignments)
+**Phase 8: Refresh and Cleanup**
+- Extended `refresh.rs` with restart and cleanup utilities
+- Extended `leader.rs` with leader update helpers
 
-The plan's goal of providing comprehensive Rust helpers for validation, calculation, and decision-making was achieved, while keeping memory management and side-effectful operations in C where they belong.
+**Results:**
+- Build passes: ✓
+- `just rust-fmt-check`: ✓
+- `just rust-clippy`: ✓
+- `just rust-test` (insexpand crate): 95 tests passing
+- Total migrated functions in insexpand crate: **418**
+- 8 commits created, one per phase
