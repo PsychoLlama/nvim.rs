@@ -27,6 +27,7 @@ pub mod source;
 pub mod spell;
 pub mod state;
 pub mod tag;
+pub mod types;
 pub mod ui;
 pub mod userfunc;
 pub mod viml;
