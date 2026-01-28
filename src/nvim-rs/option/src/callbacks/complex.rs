@@ -673,6 +673,319 @@ pub unsafe extern "C" fn rs_validate_messagesopt(value: *const c_char) -> c_int 
 }
 
 // =============================================================================
+// Arabic Option Callback
+// =============================================================================
+
+extern "C" {
+    fn nvim_win_get_p_arab(win: *const std::ffi::c_void) -> c_int;
+    fn nvim_win_set_p_rl(win: *mut std::ffi::c_void, val: c_int);
+    fn nvim_win_get_p_rl(win: *const std::ffi::c_void) -> c_int;
+    fn nvim_get_p_tbidi() -> c_int;
+    fn nvim_get_p_arshape() -> c_int;
+    fn nvim_set_p_arshape(val: c_int);
+    fn nvim_get_p_enc() -> *const c_char;
+    fn nvim_set_p_deco(val: c_int);
+    fn nvim_buf_set_b_p_iminsert(buf: *mut std::ffi::c_void, val: c_int);
+    fn nvim_buf_set_b_p_imsearch(buf: *mut std::ffi::c_void, val: c_int);
+    fn nvim_win_get_w_buffer(win: *const std::ffi::c_void) -> *mut std::ffi::c_void;
+    fn changed_window_setting(win: *mut std::ffi::c_void);
+    fn redraw_all_later(typ: c_int);
+    fn set_option_value(opt_idx: c_int, value: *const c_char, opt_flags: c_int) -> *const c_char;
+    fn msg_source(hl: c_int);
+    fn msg(s: *const c_char, hl: c_int) -> c_int;
+    fn set_vim_var_string(idx: c_int, s: *const c_char, len: c_int);
+    fn gettext(s: *const c_char) -> *const c_char;
+}
+
+/// Constants for iminsert/imsearch values
+const B_IMODE_NONE: c_int = 0;
+const B_IMODE_USE_INSERT: c_int = -1;
+
+/// Update type: NOT_VALID
+const UPD_NOT_VALID: c_int = 30;
+
+/// kOptKeymap index (get from C)
+const K_OPT_KEYMAP: c_int = 155; // This should match the actual index in C
+
+/// Highlight type for warnings
+const HLF_W: c_int = 36;
+
+/// VimL variable index for v:warningmsg
+const VV_WARNINGMSG: c_int = 39;
+
+/// Callback for 'arabic' option.
+///
+/// When 'arabic' is set or reset, handle various sub-settings:
+/// - rightleft mode
+/// - arabicshape
+/// - delcombine
+/// - keymap
+/// - encoding check
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_arabic(win: *mut std::ffi::c_void) -> CallbackResult {
+    if win.is_null() {
+        return callback_ok();
+    }
+
+    let is_arabic = nvim_win_get_p_arab(win) != 0;
+    let tbidi = nvim_get_p_tbidi() != 0;
+
+    if is_arabic {
+        // 'arabic' is set, handle various sub-settings.
+        if !tbidi {
+            // Set rightleft mode
+            if nvim_win_get_p_rl(win) == 0 {
+                nvim_win_set_p_rl(win, 1);
+                changed_window_setting(win);
+            }
+
+            // Enable Arabic shaping (major part of what Arabic requires)
+            if nvim_get_p_arshape() == 0 {
+                nvim_set_p_arshape(1);
+                redraw_all_later(UPD_NOT_VALID);
+            }
+        }
+
+        // Arabic requires UTF-8 encoding, inform user if not set
+        let enc = nvim_get_p_enc();
+        if !enc.is_null() && !streq_cstr(enc, b"utf-8\0") {
+            let warning = c"W17: Arabic requires UTF-8, do ':set encoding=utf-8'";
+            msg_source(HLF_W);
+            msg(gettext(warning.as_ptr()), HLF_W);
+            set_vim_var_string(VV_WARNINGMSG, gettext(warning.as_ptr()), -1);
+        }
+
+        // Set 'delcombine'
+        nvim_set_p_deco(1);
+
+        // Force-set the necessary keymap for Arabic
+        // Note: This returns an error message if it fails
+        let keymap_val = c"arabic";
+        let errmsg = set_option_value(K_OPT_KEYMAP, keymap_val.as_ptr(), 0x02); // OPT_LOCAL
+        if !errmsg.is_null() {
+            return errmsg;
+        }
+    } else {
+        // 'arabic' is reset, handle various sub-settings.
+        if !tbidi {
+            // Reset rightleft mode
+            if nvim_win_get_p_rl(win) != 0 {
+                nvim_win_set_p_rl(win, 0);
+                changed_window_setting(win);
+            }
+            // 'arabicshape' isn't reset, it is a global option and
+            // another window may still need it "on".
+        }
+
+        // 'delcombine' isn't reset, it is a global option and another
+        // window may still want it "on".
+
+        // Revert to the default keymap
+        let buf = nvim_win_get_w_buffer(win);
+        if !buf.is_null() {
+            nvim_buf_set_b_p_iminsert(buf, B_IMODE_NONE);
+            nvim_buf_set_b_p_imsearch(buf, B_IMODE_USE_INSERT);
+        }
+    }
+
+    callback_ok()
+}
+
+/// Check if C string equals a null-terminated byte slice.
+#[inline]
+unsafe fn streq_cstr(s: *const c_char, bytes: &[u8]) -> bool {
+    if s.is_null() {
+        return false;
+    }
+    let mut p = s;
+    for &b in bytes {
+        if b == 0 {
+            return *p == 0;
+        }
+        if *p == 0 || (*p as u8) != b {
+            return false;
+        }
+        p = p.add(1);
+    }
+    true
+}
+
+// =============================================================================
+// Scrollbind Option Callback
+// =============================================================================
+
+extern "C" {
+    fn nvim_win_get_p_scb(win: *const std::ffi::c_void) -> c_int;
+    fn do_check_scrollbind(check: c_int);
+}
+
+/// Callback for 'scrollbind' option.
+/// When 'scrollbind' changes, sync scroll positions if enabled.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_scrollbind(win: *const std::ffi::c_void) -> CallbackResult {
+    if win.is_null() {
+        return callback_ok();
+    }
+
+    if nvim_win_get_p_scb(win) != 0 {
+        // 'scrollbind' was set - check scroll binding
+        do_check_scrollbind(1);
+    }
+
+    callback_ok()
+}
+
+// =============================================================================
+// Undofile Option Callback
+// =============================================================================
+
+extern "C" {
+    fn nvim_buf_get_p_udf(buf: *const std::ffi::c_void) -> c_int;
+    fn u_compute_hash(buf: *mut std::ffi::c_void, hash: *mut u8);
+    fn u_read_undo(name: *const c_char, hash: *const u8, orig_name: *const c_char) -> c_int;
+    fn nvim_buf_get_b_ffname(buf: *const std::ffi::c_void) -> *const c_char;
+}
+
+/// SHA256 hash length
+const UNDO_HASH_SIZE: usize = 32;
+
+/// Callback for 'undofile' option.
+/// When 'undofile' is set, attempt to read undo file.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_undofile(buf: *mut std::ffi::c_void) -> CallbackResult {
+    if buf.is_null() {
+        return callback_ok();
+    }
+
+    if nvim_buf_get_p_udf(buf) != 0 {
+        // 'undofile' was set - try to read undo file
+        let fname = nvim_buf_get_b_ffname(buf);
+        if !fname.is_null() && *fname != 0 {
+            let mut hash = [0u8; UNDO_HASH_SIZE];
+            u_compute_hash(buf, hash.as_mut_ptr());
+            u_read_undo(std::ptr::null(), hash.as_ptr(), fname);
+        }
+    }
+
+    callback_ok()
+}
+
+// =============================================================================
+// Lisp Option Callback
+// =============================================================================
+
+extern "C" {
+    fn nvim_buf_get_p_lisp(buf: *const std::ffi::c_void) -> c_int;
+    fn nvim_buf_set_b_p_ml(buf: *mut std::ffi::c_void, val: c_int);
+}
+
+/// Callback for 'lisp' option.
+/// When 'lisp' is set, also set 'modeline'.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_lisp(buf: *mut std::ffi::c_void) -> CallbackResult {
+    if buf.is_null() {
+        return callback_ok();
+    }
+
+    if nvim_buf_get_p_lisp(buf) != 0 {
+        // 'lisp' was set - also set 'modeline'
+        // (This is historical behavior)
+        nvim_buf_set_b_p_ml(buf, 1);
+    }
+
+    callback_ok()
+}
+
+// =============================================================================
+// Autochdir Option Callback
+// =============================================================================
+
+extern "C" {
+    fn nvim_get_p_acd() -> c_int;
+    fn do_autochdir();
+}
+
+/// Callback for 'autochdir' option.
+/// When 'autochdir' is set, change to buffer's directory.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_autochdir() -> CallbackResult {
+    if nvim_get_p_acd() != 0 {
+        do_autochdir();
+    }
+    callback_ok()
+}
+
+// =============================================================================
+// Shellslash Option Callback (Windows-specific)
+// =============================================================================
+
+extern "C" {
+    fn invalidate_fname_path();
+}
+
+/// Callback for 'shellslash' option.
+/// When 'shellslash' changes, invalidate filename paths.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_shellslash() -> CallbackResult {
+    // This is only meaningful on Windows, but we still need to
+    // invalidate paths when it changes
+    invalidate_fname_path();
+    callback_ok()
+}
+
+// =============================================================================
+// Wildchar Option Callback
+// =============================================================================
+
+extern "C" {
+    fn nvim_get_p_wc() -> c_int;
+    fn nvim_set_p_wc(val: c_int);
+}
+
+/// Special key code for Escape
+const ESC: c_int = 27;
+/// Special key code for Tab
+const TAB: c_int = 9;
+
+/// Callback for 'wildchar' option.
+/// Validate that wildchar isn't set to a special character.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_wildchar() -> CallbackResult {
+    let wc = nvim_get_p_wc();
+
+    // Don't allow setting wildchar to Escape or Tab
+    if wc == ESC {
+        nvim_set_p_wc(TAB);
+    }
+
+    callback_ok()
+}
+
+// =============================================================================
+// Window Option Callback
+// =============================================================================
+
+extern "C" {
+    fn nvim_get_Rows() -> c_int;
+    fn nvim_get_p_window() -> c_int;
+    fn nvim_set_p_window(val: c_int);
+}
+
+/// Callback for 'window' option.
+/// Ensure 'window' doesn't exceed number of screen rows.
+#[no_mangle]
+pub unsafe extern "C" fn rs_did_set_window() -> CallbackResult {
+    let rows = nvim_get_Rows();
+    let window = nvim_get_p_window();
+
+    if window >= rows {
+        nvim_set_p_window(rows - 1);
+    }
+
+    callback_ok()
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

@@ -524,7 +524,7 @@ extern "C" {
 
     // State accessors
     fn nvim_get_curwin() -> *const std::ffi::c_void;
-    fn nvim_get_curbuf() -> *const std::ffi::c_void;
+    fn nvim_get_curbuf() -> *mut std::ffi::c_void;
     fn nvim_get_options_array() -> *const std::ffi::c_void;
     fn nvim_get_option_flags(opt_idx: c_int) -> u32;
     fn nvim_get_option_var(opt_idx: c_int) -> *mut std::ffi::c_void;
@@ -703,7 +703,11 @@ unsafe fn do_set_process_args(arg: *mut c_char, opt_flags: c_int) -> c_int {
 /// Format and display an error message for :set command.
 #[allow(clippy::cast_possible_truncation)]
 #[allow(clippy::cast_possible_wrap)]
-unsafe fn format_and_show_error(startarg: *const c_char, endarg: *const c_char, errmsg: *const c_char) {
+unsafe fn format_and_show_error(
+    startarg: *const c_char,
+    endarg: *const c_char,
+    errmsg: *const c_char,
+) {
     let iobuff = nvim_get_iobuff();
     let i = vim_snprintf(iobuff, IOSIZE, c"%s".as_ptr(), errmsg) + 2;
 
@@ -715,11 +719,7 @@ unsafe fn format_and_show_error(startarg: *const c_char, endarg: *const c_char, 
             c": ".as_ptr(),
             IOSIZE - (i as usize) + 2,
         );
-        ptr::copy_nonoverlapping(
-            startarg,
-            iobuff.add(i as usize),
-            arg_len as usize,
-        );
+        ptr::copy_nonoverlapping(startarg, iobuff.add(i as usize), arg_len as usize);
         *iobuff.add((i as usize) + (arg_len as usize)) = 0;
     }
 
