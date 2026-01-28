@@ -23,6 +23,7 @@ pub mod ruler;
 pub mod statuscol;
 pub mod tabline;
 pub mod ui;
+pub mod ui_ext;
 pub mod winbar;
 
 pub use builder::{BuilderItem, ItemType, StatuslineBuilder};

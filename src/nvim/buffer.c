@@ -384,6 +384,12 @@ const char *nvim_buf_get_sfname(buf_T *buf)
   return buf->b_sfname;
 }
 
+/// Get the NameBuff global (accessor for Rust).
+const char *nvim_get_namebuff(void)
+{
+  return NameBuff;
+}
+
 typedef enum {
   kBffClearWinInfo = 1,
   kBffInitChangedtick = 2,

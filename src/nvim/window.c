@@ -513,6 +513,18 @@ tabpage_T *nvim_get_lastused_tabpage(void)
   return lastused_tabpage;
 }
 
+/// Get the tp_curwin field from a tabpage (accessor for Rust).
+win_T *nvim_tabpage_get_curwin(tabpage_T *tp)
+{
+  return tp->tp_curwin;
+}
+
+/// Get the handle field from a tabpage (accessor for Rust).
+int nvim_tabpage_get_handle(tabpage_T *tp)
+{
+  return (int)tp->handle;
+}
+
 // Frame accessors for Rust opaque handle pattern.
 
 /// Get the fr_layout field from a frame (accessor for Rust).
