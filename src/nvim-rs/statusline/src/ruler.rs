@@ -39,6 +39,7 @@ impl Default for RulerOptions {
 }
 
 /// Ruler context for rendering.
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct RulerContext {
     /// Current line number (1-based)

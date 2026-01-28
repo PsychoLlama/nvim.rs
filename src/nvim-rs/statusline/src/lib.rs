@@ -14,6 +14,7 @@ use nvim_window::{BufHandle, Frame, WinHandle, FR_COL};
 
 pub mod builder;
 pub mod click;
+pub mod draw;
 pub mod eval;
 pub mod format;
 pub mod highlight;
@@ -25,6 +26,7 @@ pub mod winbar;
 
 pub use builder::{BuilderItem, ItemType, StatuslineBuilder};
 pub use click::{ClickDefinition, ClickRecord, ClickTracker, ClickType};
+pub use draw::{DrawContext, DrawResult, TablineDrawState};
 pub use eval::{EvalContext, EvalResult, NumberBase};
 pub use format::{FormatParser, FormatSpec, StlFlag, StlFormatContext, StlItem, StlItemType};
 pub use highlight::{HighlightTracker, StlHighlightRecord};
