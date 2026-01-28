@@ -5098,6 +5098,146 @@ int nvim_parse_get_reg_cpo_lit(void) { return reg_cpo_lit; }
 int nvim_parse_get_reg_magic(void) { return (int)reg_magic; }
 void nvim_parse_set_reg_magic(int m) { reg_magic = (magic_T)m; }
 
+// =============================================================================
+// Phase 1.1: bt_regprog_T accessors (used by Rust BT engine)
+// =============================================================================
+
+// bt_regprog_T field accessors
+int nvim_bt_regprog_get_regstart(const regprog_T *prog)
+{
+  return ((const bt_regprog_T *)prog)->regstart;
+}
+
+int nvim_bt_regprog_get_reganch(const regprog_T *prog)
+{
+  return ((const bt_regprog_T *)prog)->reganch;
+}
+
+const uint8_t *nvim_bt_regprog_get_regmust(const regprog_T *prog)
+{
+  return ((const bt_regprog_T *)prog)->regmust;
+}
+
+int nvim_bt_regprog_get_regmlen(const regprog_T *prog)
+{
+  return ((const bt_regprog_T *)prog)->regmlen;
+}
+
+int nvim_bt_regprog_get_reghasz(const regprog_T *prog)
+{
+  return ((const bt_regprog_T *)prog)->reghasz;
+}
+
+const uint8_t *nvim_bt_regprog_get_program(const regprog_T *prog)
+{
+  return ((const bt_regprog_T *)prog)->program;
+}
+
+// =============================================================================
+// Phase 1.3: nfa_regprog_T accessors (used by Rust NFA engine)
+// Using void* for opaque handle pattern since nfa_state_T is internal
+// =============================================================================
+
+// nfa_regprog_T field accessors
+void *nvim_nfa_regprog_get_start(const regprog_T *prog)
+{
+  return ((const nfa_regprog_T *)prog)->start;
+}
+
+int nvim_nfa_regprog_get_reganch(const regprog_T *prog)
+{
+  return ((const nfa_regprog_T *)prog)->reganch;
+}
+
+int nvim_nfa_regprog_get_regstart(const regprog_T *prog)
+{
+  return ((const nfa_regprog_T *)prog)->regstart;
+}
+
+const uint8_t *nvim_nfa_regprog_get_match_text(const regprog_T *prog)
+{
+  return ((const nfa_regprog_T *)prog)->match_text;
+}
+
+int nvim_nfa_regprog_get_has_zend(const regprog_T *prog)
+{
+  return ((const nfa_regprog_T *)prog)->has_zend;
+}
+
+int nvim_nfa_regprog_get_has_backref(const regprog_T *prog)
+{
+  return ((const nfa_regprog_T *)prog)->has_backref;
+}
+
+int nvim_nfa_regprog_get_reghasz(const regprog_T *prog)
+{
+  return ((const nfa_regprog_T *)prog)->reghasz;
+}
+
+const char *nvim_nfa_regprog_get_pattern(const regprog_T *prog)
+{
+  return ((const nfa_regprog_T *)prog)->pattern;
+}
+
+int nvim_nfa_regprog_get_nsubexp(const regprog_T *prog)
+{
+  return ((const nfa_regprog_T *)prog)->nsubexp;
+}
+
+int nvim_nfa_regprog_get_nstate(const regprog_T *prog)
+{
+  return ((const nfa_regprog_T *)prog)->nstate;
+}
+
+void *nvim_nfa_regprog_get_state(const regprog_T *prog, int idx)
+{
+  const nfa_regprog_T *nfa = (const nfa_regprog_T *)prog;
+  if (idx >= 0 && idx < nfa->nstate) {
+    return (void *)&nfa->state[idx];
+  }
+  return NULL;
+}
+
+// nfa_state_T field accessors (using void* opaque handles)
+int nvim_nfa_state_get_c(const void *state)
+{
+  return ((const nfa_state_T *)state)->c;
+}
+
+void *nvim_nfa_state_get_out(const void *state)
+{
+  return ((const nfa_state_T *)state)->out;
+}
+
+void *nvim_nfa_state_get_out1(const void *state)
+{
+  return ((const nfa_state_T *)state)->out1;
+}
+
+int nvim_nfa_state_get_id(const void *state)
+{
+  return ((const nfa_state_T *)state)->id;
+}
+
+int nvim_nfa_state_get_lastlist(const void *state, int idx)
+{
+  const nfa_state_T *s = (const nfa_state_T *)state;
+  return (idx == 0 || idx == 1) ? s->lastlist[idx] : 0;
+}
+
+void nvim_nfa_state_set_lastlist(void *state, int idx, int val)
+{
+  nfa_state_T *s = (nfa_state_T *)state;
+  if (idx == 0 || idx == 1) {
+    s->lastlist[idx] = val;
+  }
+}
+
+int nvim_nfa_state_get_val(const void *state)
+{
+  return ((const nfa_state_T *)state)->val;
+}
+
 // Helper functions for number parsing
 int nvim_hex2nr(int c) { return hex2nr(c); }
 int nvim_ascii_isxdigit(int c) { return ascii_isxdigit(c); }

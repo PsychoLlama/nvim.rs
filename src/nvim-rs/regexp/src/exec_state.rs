@@ -104,6 +104,36 @@ extern "C" {
     // rex_in_use flag
     fn nvim_rex_in_use() -> bool;
     fn nvim_rex_set_in_use(in_use: bool);
+
+    // bt_regprog_T field accessors (Phase 1.1)
+    fn nvim_bt_regprog_get_regstart(prog: *const c_void) -> c_int;
+    fn nvim_bt_regprog_get_reganch(prog: *const c_void) -> c_int;
+    fn nvim_bt_regprog_get_regmust(prog: *const c_void) -> *const u8;
+    fn nvim_bt_regprog_get_regmlen(prog: *const c_void) -> c_int;
+    fn nvim_bt_regprog_get_reghasz(prog: *const c_void) -> c_int;
+    fn nvim_bt_regprog_get_program(prog: *const c_void) -> *const u8;
+
+    // nfa_regprog_T field accessors (Phase 1.3)
+    fn nvim_nfa_regprog_get_start(prog: *const c_void) -> *mut c_void;
+    fn nvim_nfa_regprog_get_reganch(prog: *const c_void) -> c_int;
+    fn nvim_nfa_regprog_get_regstart(prog: *const c_void) -> c_int;
+    fn nvim_nfa_regprog_get_match_text(prog: *const c_void) -> *const u8;
+    fn nvim_nfa_regprog_get_has_zend(prog: *const c_void) -> c_int;
+    fn nvim_nfa_regprog_get_has_backref(prog: *const c_void) -> c_int;
+    fn nvim_nfa_regprog_get_reghasz(prog: *const c_void) -> c_int;
+    fn nvim_nfa_regprog_get_pattern(prog: *const c_void) -> *const i8;
+    fn nvim_nfa_regprog_get_nsubexp(prog: *const c_void) -> c_int;
+    fn nvim_nfa_regprog_get_nstate(prog: *const c_void) -> c_int;
+    fn nvim_nfa_regprog_get_state(prog: *const c_void, idx: c_int) -> *mut c_void;
+
+    // nfa_state_T field accessors (Phase 1.3)
+    fn nvim_nfa_state_get_c(state: *const c_void) -> c_int;
+    fn nvim_nfa_state_get_out(state: *const c_void) -> *mut c_void;
+    fn nvim_nfa_state_get_out1(state: *const c_void) -> *mut c_void;
+    fn nvim_nfa_state_get_id(state: *const c_void) -> c_int;
+    fn nvim_nfa_state_get_lastlist(state: *const c_void, idx: c_int) -> c_int;
+    fn nvim_nfa_state_set_lastlist(state: *mut c_void, idx: c_int, val: c_int);
+    fn nvim_nfa_state_get_val(state: *const c_void) -> c_int;
 }
 
 // =============================================================================
