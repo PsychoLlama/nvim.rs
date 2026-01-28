@@ -174,6 +174,9 @@ static unsigned last_qf_id = 0;   // Last Used quickfix list id
 extern bool rs_qf_stack_empty(const void *qi);
 extern bool rs_qf_list_empty(const void *qfl);
 
+// Phase 1: List lifecycle functions implemented in Rust
+extern void rs_qf_new_list(void *qi, const char *title);
+
 /// Get listcount from qf_info_T for Rust (using void* to avoid type visibility issues)
 int nvim_qf_get_listcount(const void *qi_void)
 {
@@ -1237,6 +1240,69 @@ char *nvim_qf_fix_fname(const char *fname, int bufnum)
 bool nvim_qf_is_printc(int c)
 {
   return vim_isprintc(c);
+}
+
+// =============================================================================
+// Phase 1: Core List Lifecycle accessor functions for Rust
+// =============================================================================
+
+/// Set the quickfix list ID
+void nvim_qf_set_id(void *qfl_void, unsigned id)
+{
+  if (qfl_void == NULL) {
+    return;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  qfl->qf_id = id;
+}
+
+/// Set the quickfix list type
+void nvim_qf_set_qfl_type(void *qfl_void, int qfl_type)
+{
+  if (qfl_void == NULL) {
+    return;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  qfl->qfl_type = (qfltype_T)qfl_type;
+}
+
+/// Set has_user_data flag
+void nvim_qf_set_has_user_data(void *qfl_void, bool has_user_data)
+{
+  if (qfl_void == NULL) {
+    return;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  qfl->qf_has_user_data = has_user_data;
+}
+
+/// Get a mutable list handle at the specified index
+void *nvim_qf_get_list_at_mut(void *qi_void, int idx)
+{
+  if (qi_void == NULL) {
+    return NULL;
+  }
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  if (idx < 0 || idx >= qi->qf_listcount) {
+    return NULL;
+  }
+  return &qi->qf_lists[idx];
+}
+
+/// Allocate and return the next quickfix list ID
+unsigned nvim_qf_alloc_next_id(void)
+{
+  return ++last_qf_id;
+}
+
+/// Clear a quickfix list structure (zero all fields)
+void nvim_qf_clear_list_struct(void *qfl_void)
+{
+  if (qfl_void == NULL) {
+    return;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  memset(qfl, 0, sizeof(*qfl));
 }
 
 // =============================================================================
@@ -2913,30 +2979,11 @@ static void qf_pop_stack(qf_info_T *qi, bool adjust)
 /// Prepare for adding a new quickfix list. If the current list is in the
 /// middle of the stack, then all the following lists are freed and then
 /// the new list is added.
+///
+/// NOTE: Implementation now in Rust (rs_qf_new_list). This is a thin wrapper.
 static void qf_new_list(qf_info_T *qi, const char *qf_title)
 {
-  // If the current entry is not the last entry, delete entries beyond
-  // the current entry.  This makes it possible to browse in a tree-like
-  // way with ":grep".
-  while (qi->qf_listcount > qi->qf_curlist + 1) {
-    qf_free(&qi->qf_lists[--qi->qf_listcount]);
-  }
-
-  // When the stack is full, remove to oldest entry
-  // Otherwise, add a new entry.
-  if (qi->qf_listcount == qi->qf_maxcount) {
-    qf_pop_stack(qi, false);
-    qi->qf_curlist = qi->qf_listcount - 1;  // point to new empty list
-  } else {
-    qi->qf_curlist = qi->qf_listcount++;
-  }
-
-  qf_list_T *qfl = qf_get_curlist(qi);
-  CLEAR_POINTER(qfl);
-  qf_store_title(qfl, qf_title);
-  qfl->qfl_type = qi->qfl_type;
-  qfl->qf_id = ++last_qf_id;
-  qfl->qf_has_user_data = false;
+  rs_qf_new_list((void *)qi, qf_title);
 }
 
 /// Parse the match for filename ('%f') pattern in regmatch.

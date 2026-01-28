@@ -1791,6 +1791,14 @@ extern "C" {
     ) -> c_int;
     fn nvim_qf_fix_fname(fname: *const c_char, bufnum: c_int) -> *mut c_char;
     fn nvim_qf_is_printc(c: c_int) -> bool;
+
+    // Phase 1: Core List Lifecycle accessors
+    fn nvim_qf_set_id(qfl: QfListHandleMut, id: u32);
+    fn nvim_qf_set_qfl_type(qfl: QfListHandleMut, qfl_type: c_int);
+    fn nvim_qf_set_has_user_data(qfl: QfListHandleMut, has_user_data: bool);
+    fn nvim_qf_get_list_at_mut(qi: QfInfoHandleMut, idx: c_int) -> QfListHandleMut;
+    fn nvim_qf_alloc_next_id() -> u32;
+    fn nvim_qf_clear_list_struct(qfl: QfListHandleMut);
 }
 
 /// Opaque handle to buffer (Phase 7)
@@ -1904,10 +1912,16 @@ pub unsafe extern "C" fn rs_get_ql_info() -> QfInfoHandleMut {
     nvim_get_ql_info()
 }
 
-/// Create a new quickfix list in the stack.
+/// Create a new quickfix list in the stack (implementation in Rust).
 ///
 /// This creates a new list, potentially removing older lists if the stack is full.
 /// The new list becomes the current list.
+///
+/// Algorithm:
+/// 1. If current list is not the last, delete all lists after current
+/// 2. If stack is full, remove the oldest list
+/// 3. Create new list at the next position
+/// 4. Initialize the new list with title, type, and unique ID
 ///
 /// # Safety
 ///
@@ -1918,7 +1932,59 @@ pub unsafe extern "C" fn rs_qf_new_list(qi: QfInfoHandleMut, title: *const c_cha
     if qi.is_null() {
         return;
     }
-    nvim_qf_new_list(qi, title);
+
+    let list_count = nvim_qf_get_listcount(qi);
+    let cur_list = nvim_qf_get_curlist_idx(qi);
+    let max_count = nvim_qf_get_maxcount(qi);
+
+    // If the current entry is not the last entry, delete entries beyond
+    // the current entry. This makes it possible to browse in a tree-like
+    // way with ":grep".
+    let mut count = list_count;
+    while count > cur_list + 1 {
+        count -= 1;
+        let qfl = nvim_qf_get_list_at_mut(qi, count);
+        if !qfl.is_null() {
+            nvim_qf_free_list(qfl);
+        }
+        nvim_qf_set_listcount(qi, count);
+    }
+
+    // When the stack is full, remove the oldest entry
+    // Otherwise, add a new entry.
+    let new_cur_list;
+    if count == max_count {
+        nvim_qf_pop_stack(qi, false);
+        new_cur_list = count - 1; // point to new empty list
+    } else {
+        new_cur_list = count;
+        nvim_qf_set_listcount(qi, count + 1);
+    }
+
+    nvim_qf_set_curlist_idx(qi, new_cur_list);
+
+    // Get the new list and initialize it
+    let qfl = nvim_qf_get_list_at_mut(qi, new_cur_list);
+    if qfl.is_null() {
+        return;
+    }
+
+    // Clear the list structure
+    nvim_qf_clear_list_struct(qfl);
+
+    // Set the title
+    nvim_qf_store_title(qfl, title);
+
+    // Set list type from stack type
+    let qi_type = nvim_qf_get_qi_type(qi);
+    nvim_qf_set_qfl_type(qfl, qi_type);
+
+    // Allocate unique ID
+    let new_id = nvim_qf_alloc_next_id();
+    nvim_qf_set_id(qfl, new_id);
+
+    // Initialize has_user_data to false
+    nvim_qf_set_has_user_data(qfl, false);
 }
 
 /// Free all resources of a quickfix list.
