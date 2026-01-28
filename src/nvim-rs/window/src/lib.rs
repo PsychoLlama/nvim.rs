@@ -1429,6 +1429,9 @@ pub extern "C" fn rs_frame_minwidth(topfrp: *const Frame, next_curwin: WinHandle
 /// UPD_NOT_VALID constant from screen.h
 const UPD_NOT_VALID: c_int = 40;
 
+/// UPD_SOME_VALID constant from screen.h
+const UPD_SOME_VALID: c_int = 35;
+
 /// kFloatRelativeWindow constant from window.h
 const K_FLOAT_RELATIVE_WINDOW: c_int = 2;
 
@@ -1626,6 +1629,15 @@ extern "C" {
 
     /// Set the global redraw_cmdline flag.
     fn nvim_set_redraw_cmdline(val: bool);
+
+    /// Get the global cmdline_row value.
+    fn nvim_get_cmdline_row() -> c_int;
+
+    /// Get the min_set_ch value (minimum command line height set by user).
+    fn nvim_get_min_set_ch() -> i64;
+
+    /// Wrapper for showmode().
+    fn nvim_showmode();
 }
 
 /// UPD_VALID constant from screen.h
@@ -2032,6 +2044,296 @@ fn win_setwidth_win_impl(mut width: c_int, wp: WinHandle) {
 #[no_mangle]
 pub extern "C" fn rs_win_setwidth_win(width: c_int, wp: WinHandle) {
     win_setwidth_win_impl(width, wp);
+}
+
+// ============================================================================
+// Drag operations
+// ============================================================================
+
+/// Status line of dragwin is dragged "offset" lines down (negative is up).
+///
+/// This is the Rust equivalent of `win_drag_status_line()` in window.c.
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::too_many_lines)]
+fn win_drag_status_line_impl(dragwin: WinHandle, mut offset: c_int) {
+    if dragwin.is_null() {
+        return;
+    }
+
+    // SAFETY: All pointer accesses are guarded by null checks
+    unsafe {
+        let topframe = nvim_get_topframe();
+        let mut fr = nvim_win_get_frame(dragwin);
+        if fr.is_null() {
+            return;
+        }
+
+        let mut curfr = fr;
+        if fr != topframe {
+            // more than one window
+            fr = (*fr).fr_parent;
+            // When the parent frame is not a column of frames, its parent should be.
+            if !fr.is_null() && (*fr).fr_layout != FR_COL {
+                curfr = fr;
+                if fr != topframe {
+                    // only a row of windows, may drag statusline
+                    fr = (*fr).fr_parent;
+                }
+            }
+        }
+
+        // If this is the last frame in a column, may want to resize the parent
+        // frame instead (go two up to skip a row of frames).
+        while curfr != topframe && (*curfr).fr_next.is_null() {
+            if !fr.is_null() && fr != topframe {
+                fr = (*fr).fr_parent;
+            }
+            curfr = if fr.is_null() { curfr } else { fr };
+            if !fr.is_null() && fr != topframe {
+                fr = (*fr).fr_parent;
+            }
+        }
+
+        let up = offset < 0; // if true, drag status line up, otherwise down
+
+        let room: c_int;
+        if up {
+            // drag up
+            offset = -offset;
+            // sum up the room of the current frame and above it
+            if fr == curfr {
+                // only one window
+                room = (*fr).fr_height - frame_minheight_impl(fr, WinHandle::null());
+            } else {
+                let mut r = 0;
+                let mut child = if fr.is_null() {
+                    std::ptr::null_mut()
+                } else {
+                    (*fr).fr_child
+                };
+                while !child.is_null() {
+                    r += (*child).fr_height - frame_minheight_impl(child, WinHandle::null());
+                    if child == curfr {
+                        break;
+                    }
+                    child = (*child).fr_next;
+                }
+                room = r;
+            }
+            fr = (*curfr).fr_next; // put fr at frame that grows
+        } else {
+            // drag down
+            // Only dragging the last status line can reduce p_ch.
+            let cmdline_row = nvim_get_cmdline_row();
+            let p_ch = nvim_get_window_p_ch() as c_int;
+            let min_set_ch = nvim_get_min_set_ch() as c_int;
+
+            let mut r = nvim_get_Rows() - cmdline_row;
+            if !(*curfr).fr_next.is_null() {
+                r -= p_ch + global_stl_height();
+            } else if min_set_ch > 0 {
+                r -= 1;
+            }
+            r = std::cmp::max(r, 0);
+
+            // sum up the room of frames below of the current one
+            let mut child = (*curfr).fr_next;
+            while !child.is_null() {
+                r += (*child).fr_height - frame_minheight_impl(child, WinHandle::null());
+                child = (*child).fr_next;
+            }
+            room = r;
+            fr = curfr; // put fr at window that grows
+        }
+
+        // If not enough room then move as far as we can
+        offset = std::cmp::min(offset, room);
+        if offset <= 0 {
+            return;
+        }
+
+        // Grow frame fr by "offset" lines.
+        // Doesn't happen when dragging the last status line up.
+        if !fr.is_null() {
+            nvim_frame_new_height(fr, (*fr).fr_height + offset, up, false, true);
+        }
+
+        let shrink_fr = if up {
+            curfr // current frame gets smaller
+        } else {
+            (*curfr).fr_next // next frame gets smaller
+        };
+
+        // Now make the other frames smaller.
+        let mut frp = shrink_fr;
+        let mut remaining = offset;
+        while !frp.is_null() && remaining > 0 {
+            let n = frame_minheight_impl(frp, WinHandle::null());
+            if (*frp).fr_height - remaining <= n {
+                remaining -= (*frp).fr_height - n;
+                nvim_frame_new_height(frp, n, !up, false, true);
+            } else {
+                nvim_frame_new_height(frp, (*frp).fr_height - remaining, !up, false, true);
+                break;
+            }
+            frp = if up { (*frp).fr_prev } else { (*frp).fr_next };
+        }
+
+        win_comp_pos_impl();
+        nvim_win_fix_scroll(true);
+
+        nvim_redraw_all_later(UPD_SOME_VALID);
+        nvim_showmode();
+    }
+}
+
+/// FFI wrapper for `win_drag_status_line`.
+#[no_mangle]
+pub extern "C" fn rs_win_drag_status_line(dragwin: WinHandle, offset: c_int) {
+    win_drag_status_line_impl(dragwin, offset);
+}
+
+/// Separator line of dragwin is dragged "offset" lines right (negative is left).
+///
+/// This is the Rust equivalent of `win_drag_vsep_line()` in window.c.
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::too_many_lines)]
+fn win_drag_vsep_line_impl(dragwin: WinHandle, mut offset: c_int) {
+    if dragwin.is_null() {
+        return;
+    }
+
+    // SAFETY: All pointer accesses are guarded by null checks
+    unsafe {
+        let topframe = nvim_get_topframe();
+        let mut fr = nvim_win_get_frame(dragwin);
+        if fr.is_null() {
+            return;
+        }
+
+        if fr == topframe {
+            // only one window (cannot happen?)
+            return;
+        }
+
+        let mut curfr = fr;
+        fr = (*fr).fr_parent;
+        if fr.is_null() {
+            return;
+        }
+
+        // When the parent frame is not a row of frames, its parent should be.
+        if (*fr).fr_layout != FR_ROW {
+            if fr == topframe {
+                // only a column of windows (cannot happen?)
+                return;
+            }
+            curfr = fr;
+            fr = (*fr).fr_parent;
+            if fr.is_null() {
+                return;
+            }
+        }
+
+        // If this is the last frame in a row, may want to resize a parent
+        // frame instead.
+        while (*curfr).fr_next.is_null() {
+            if fr == topframe {
+                break;
+            }
+            curfr = fr;
+            fr = (*fr).fr_parent;
+            if fr.is_null() {
+                break;
+            }
+            if fr != topframe {
+                curfr = fr;
+                fr = (*fr).fr_parent;
+                if fr.is_null() {
+                    break;
+                }
+            }
+        }
+
+        let left = offset < 0; // if true, drag separator line left, otherwise right
+
+        let room: c_int;
+        if left {
+            // drag left
+            offset = -offset;
+            // sum up the room of the current frame and left of it
+            let mut r = 0;
+            let parent_fr = if fr.is_null() { curfr } else { fr };
+            let mut child = (*parent_fr).fr_child;
+            while !child.is_null() {
+                r += (*child).fr_width - frame_minwidth_impl(child, WinHandle::null());
+                if child == curfr {
+                    break;
+                }
+                child = (*child).fr_next;
+            }
+            room = r;
+            fr = (*curfr).fr_next; // put fr at frame that grows
+        } else {
+            // drag right
+            // sum up the room of frames right of the current one
+            let mut r = 0;
+            let mut child = (*curfr).fr_next;
+            while !child.is_null() {
+                r += (*child).fr_width - frame_minwidth_impl(child, WinHandle::null());
+                child = (*child).fr_next;
+            }
+            room = r;
+            fr = curfr; // put fr at window that grows
+        }
+
+        // If not enough room then move as far as we can
+        offset = std::cmp::min(offset, room);
+
+        // No room at all, quit.
+        if offset <= 0 {
+            return;
+        }
+
+        if fr.is_null() {
+            // This can happen when calling win_move_separator() on the rightmost
+            // window. Just don't do anything.
+            return;
+        }
+
+        // grow frame fr by offset lines
+        nvim_frame_new_width(fr, (*fr).fr_width + offset, left, false);
+
+        // shrink other frames: current and at the left or at the right
+        let shrink_fr = if left {
+            curfr // current frame gets smaller
+        } else {
+            (*curfr).fr_next // next frame gets smaller
+        };
+
+        let mut frp = shrink_fr;
+        let mut remaining = offset;
+        while !frp.is_null() && remaining > 0 {
+            let n = frame_minwidth_impl(frp, WinHandle::null());
+            if (*frp).fr_width - remaining <= n {
+                remaining -= (*frp).fr_width - n;
+                nvim_frame_new_width(frp, n, !left, false);
+            } else {
+                nvim_frame_new_width(frp, (*frp).fr_width - remaining, !left, false);
+                break;
+            }
+            frp = if left { (*frp).fr_prev } else { (*frp).fr_next };
+        }
+
+        win_comp_pos_impl();
+        nvim_redraw_all_later(UPD_NOT_VALID);
+    }
+}
+
+/// FFI wrapper for `win_drag_vsep_line`.
+#[no_mangle]
+pub extern "C" fn rs_win_drag_vsep_line(dragwin: WinHandle, offset: c_int) {
+    win_drag_vsep_line_impl(dragwin, offset);
 }
 
 /// FFI wrapper for `frame_new_height`.

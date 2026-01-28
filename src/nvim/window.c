@@ -1902,6 +1902,16 @@ win_T *swbuf_goto_win_with_buf(buf_T *buf)
 // resize the topframe to values higher than this minimum, but not lower.
 static OptInt min_set_ch = 1;
 
+/// Get the min_set_ch value (minimum command line height set by user).
+OptInt nvim_get_min_set_ch(void)
+{
+  return min_set_ch;
+}
+
+// Rust FFI declarations for drag functions
+extern void rs_win_drag_status_line(win_T *dragwin, int offset);
+extern void rs_win_drag_vsep_line(win_T *dragwin, int offset);
+
 /// all CTRL-W window commands are handled here, called from normal_cmd().
 ///
 /// @param xchar  extra char from ":wincmd gx" or NUL
@@ -7290,202 +7300,13 @@ const char *did_set_winminwidth(optset_T *args FUNC_ATTR_UNUSED)
 /// Status line of dragwin is dragged "offset" lines down (negative is up).
 void win_drag_status_line(win_T *dragwin, int offset)
 {
-  frame_T *fr = dragwin->w_frame;
-  frame_T *curfr = fr;
-  if (fr != topframe) {         // more than one window
-    fr = fr->fr_parent;
-    // When the parent frame is not a column of frames, its parent should
-    // be.
-    if (fr->fr_layout != FR_COL) {
-      curfr = fr;
-      if (fr != topframe) {     // only a row of windows, may drag statusline
-        fr = fr->fr_parent;
-      }
-    }
-  }
-
-  // If this is the last frame in a column, may want to resize the parent
-  // frame instead (go two up to skip a row of frames).
-  while (curfr != topframe && curfr->fr_next == NULL) {
-    if (fr != topframe) {
-      fr = fr->fr_parent;
-    }
-    curfr = fr;
-    if (fr != topframe) {
-      fr = fr->fr_parent;
-    }
-  }
-
-  int room;
-  const bool up = offset < 0;  // if true, drag status line up, otherwise down
-
-  if (up) {  // drag up
-    offset = -offset;
-    // sum up the room of the current frame and above it
-    if (fr == curfr) {
-      // only one window
-      room = fr->fr_height - frame_minheight(fr, NULL);
-    } else {
-      room = 0;
-      for (fr = fr->fr_child;; fr = fr->fr_next) {
-        room += fr->fr_height - frame_minheight(fr, NULL);
-        if (fr == curfr) {
-          break;
-        }
-      }
-    }
-    fr = curfr->fr_next;                // put fr at frame that grows
-  } else {  // drag down
-    // Only dragging the last status line can reduce p_ch.
-    room = Rows - cmdline_row;
-    if (curfr->fr_next != NULL) {
-      room -= (int)p_ch + global_stl_height();
-    } else if (min_set_ch > 0) {
-      room--;
-    }
-    room = MAX(room, 0);
-    // sum up the room of frames below of the current one
-    FOR_ALL_FRAMES(fr, curfr->fr_next) {
-      room += fr->fr_height - frame_minheight(fr, NULL);
-    }
-    fr = curfr;  // put fr at window that grows
-  }
-
-  // If not enough room then move as far as we can
-  offset = MIN(offset, room);
-  if (offset <= 0) {
-    return;
-  }
-
-  // Grow frame fr by "offset" lines.
-  // Doesn't happen when dragging the last status line up.
-  if (fr != NULL) {
-    frame_new_height(fr, fr->fr_height + offset, up, false, true);
-  }
-
-  if (up) {
-    fr = curfr;                 // current frame gets smaller
-  } else {
-    fr = curfr->fr_next;        // next frame gets smaller
-  }
-  // Now make the other frames smaller.
-  while (fr != NULL && offset > 0) {
-    int n = frame_minheight(fr, NULL);
-    if (fr->fr_height - offset <= n) {
-      offset -= fr->fr_height - n;
-      frame_new_height(fr, n, !up, false, true);
-    } else {
-      frame_new_height(fr, fr->fr_height - offset, !up, false, true);
-      break;
-    }
-    if (up) {
-      fr = fr->fr_prev;
-    } else {
-      fr = fr->fr_next;
-    }
-  }
-  win_comp_pos();
-  win_fix_scroll(true);
-
-  redraw_all_later(UPD_SOME_VALID);
-  showmode();
+  rs_win_drag_status_line(dragwin, offset);
 }
 
 // Separator line of dragwin is dragged "offset" lines right (negative is left).
 void win_drag_vsep_line(win_T *dragwin, int offset)
 {
-  frame_T *fr = dragwin->w_frame;
-  if (fr == topframe) {         // only one window (cannot happen?)
-    return;
-  }
-  frame_T *curfr = fr;
-  fr = fr->fr_parent;
-  // When the parent frame is not a row of frames, its parent should be.
-  if (fr->fr_layout != FR_ROW) {
-    if (fr == topframe) {       // only a column of windows (cannot happen?)
-      return;
-    }
-    curfr = fr;
-    fr = fr->fr_parent;
-  }
-
-  // If this is the last frame in a row, may want to resize a parent
-  // frame instead.
-  while (curfr->fr_next == NULL) {
-    if (fr == topframe) {
-      break;
-    }
-    curfr = fr;
-    fr = fr->fr_parent;
-    if (fr != topframe) {
-      curfr = fr;
-      fr = fr->fr_parent;
-    }
-  }
-
-  int room;
-  const bool left = offset < 0;  // if true, drag separator line left, otherwise right
-
-  if (left) {  // drag left
-    offset = -offset;
-    // sum up the room of the current frame and left of it
-    room = 0;
-    for (fr = fr->fr_child;; fr = fr->fr_next) {
-      room += fr->fr_width - frame_minwidth(fr, NULL);
-      if (fr == curfr) {
-        break;
-      }
-    }
-    fr = curfr->fr_next;                // put fr at frame that grows
-  } else {  // drag right
-    // sum up the room of frames right of the current one
-    room = 0;
-    FOR_ALL_FRAMES(fr, curfr->fr_next) {
-      room += fr->fr_width - frame_minwidth(fr, NULL);
-    }
-    fr = curfr;  // put fr at window that grows
-  }
-
-  // If not enough room then move as far as we can
-  offset = MIN(offset, room);
-
-  // No room at all, quit.
-  if (offset <= 0) {
-    return;
-  }
-
-  if (fr == NULL) {
-    // This can happen when calling win_move_separator() on the rightmost
-    // window.  Just don't do anything.
-    return;
-  }
-
-  // grow frame fr by offset lines
-  frame_new_width(fr, fr->fr_width + offset, left, false);
-
-  // shrink other frames: current and at the left or at the right
-  if (left) {
-    fr = curfr;                 // current frame gets smaller
-  } else {
-    fr = curfr->fr_next;        // next frame gets smaller
-  }
-  while (fr != NULL && offset > 0) {
-    int n = frame_minwidth(fr, NULL);
-    if (fr->fr_width - offset <= n) {
-      offset -= fr->fr_width - n;
-      frame_new_width(fr, n, !left, false);
-    } else {
-      frame_new_width(fr, fr->fr_width - offset, !left, false);
-      break;
-    }
-    if (left) {
-      fr = fr->fr_prev;
-    } else {
-      fr = fr->fr_next;
-    }
-  }
-  win_comp_pos();
-  redraw_all_later(UPD_NOT_VALID);
+  rs_win_drag_vsep_line(dragwin, offset);
 }
 
 #define FRACTION_MULT   16384
