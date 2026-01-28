@@ -1,40 +1,17 @@
-Plan: ~/.claude/plans/compressed-waddling-iverson.md
+Plan: ~/.claude/plans/foamy-soaring-treehouse.md
 
-All 10 phases of the menu system migration are now complete. Let me provide a summary of what was accomplished:
+All phases of the undo migration plan have been completed:
 
-## Summary: Menu System Rust Migration Complete
+**Summary of completed work:**
 
-All 10 phases have been successfully completed:
+1. **Phase 1 (u_write_undo)**: Implemented `rs_u_write_undo` in Rust with serialization for undo headers, entries, and extmarks.
 
-### Phases Completed:
-1. **Phase 1: Menu Tree Infrastructure** - VimMenuHandle opaque type, C accessors, menu classification
-2. **Phase 2: Menu Path Parsing** - Name comparison, mnemonic extraction
-3. **Phase 3: Menu Lookup and Search** - Find menu by name/sibling, path depth
-4. **Phase 4: Menu Creation** - Validation, insert point, mode computation
-5. **Phase 5: Menu Deletion** - Mode remaining, parent recalculation, empty detection
-6. **Phase 6: Menu Execution** - Mode index/flag conversion, menu strings
-7. **Phase 7: Ex Commands** - Command mode parsing, mode string generation
-8. **Phase 8: Wildmenu Integration** - Completion context, completable menu counting
-9. **Phase 9: Popup Menu Integration** - Mode chars, popup menu finding
-10. **Phase 10: Cleanup and API** - Documentation, crate description update
+2. **Phase 2 (u_read_undo)**: Implemented `rs_u_read_undo` in Rust with deserialization and pointer swizzling logic.
 
-### Files Created/Modified:
-- `src/nvim-rs/menu/src/lib.rs` - Main module with exports and constants
-- `src/nvim-rs/menu/src/classify.rs` - Menu type classification
-- `src/nvim-rs/menu/src/commands.rs` - Ex command parsing
-- `src/nvim-rs/menu/src/completion.rs` - Wildmenu completion
-- `src/nvim-rs/menu/src/create.rs` - Menu creation helpers
-- `src/nvim-rs/menu/src/delete.rs` - Menu deletion helpers
-- `src/nvim-rs/menu/src/execute.rs` - Mode utilities
-- `src/nvim-rs/menu/src/handle.rs` - Opaque handle type
-- `src/nvim-rs/menu/src/hidden.rs` - Hidden menu detection
-- `src/nvim-rs/menu/src/lookup.rs` - Menu search operations
-- `src/nvim-rs/menu/src/path.rs` - Path parsing
-- `src/nvim-rs/menu/src/popup.rs` - Popup menu utilities
-- `src/nvim-rs/menu/src/traverse.rs` - Tree traversal
-- `ref/crates.md` - Updated crate documentation
+3. **Phase 3 (C wrappers)**: Added C wrapper functions for file I/O operations used by Rust via FFI.
 
-### Stats:
-- **45 unit tests** passing
-- All builds, format checks, and clippy checks pass
-- **11 commits** made across the 10 phases
+4. **Phase 4 (ex_undolist)**: Implemented `rs_ex_undolist` in Rust for the `:undolist` Ex command with tree traversal and display formatting.
+
+5. **Phase 5 (VimL functions)**: Implemented `rs_u_eval_tree` and `rs_f_undofile` in Rust for `undotree()` and `undofile()` VimL functions. Added typval construction FFI wrappers.
+
+6. **Phase 6 (Cleanup)**: Updated documentation in the Rust crate and ref/crates.md, removed unused C code (e_not_open constant).
