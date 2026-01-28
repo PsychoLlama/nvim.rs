@@ -94,6 +94,7 @@ const K_KENTER: c_int = termcap2key(KS_EXTRA, KE_KENTER);
 
 // Tab
 const K_TAB: c_int = termcap2key(KS_EXTRA, KE_TAB);
+const K_S_TAB: c_int = termcap2key(b'k' as c_int, b'B' as c_int);
 
 // Mouse events
 const K_LEFTMOUSE: c_int = termcap2key(KS_EXTRA, KE_LEFTMOUSE);
@@ -403,6 +404,80 @@ pub const fn is_literal_insert(key: c_int) -> bool {
 }
 
 // =============================================================================
+// Key Dispatch Helpers
+// =============================================================================
+
+/// Invert horizontal movements for RTL command line.
+///
+/// When cmdmsg_rl is set, left/right keys are swapped for RTL display.
+#[must_use]
+pub const fn invert_rtl_key(key: c_int) -> c_int {
+    match key {
+        K_RIGHT => K_LEFT,
+        K_S_RIGHT => K_S_LEFT,
+        K_C_RIGHT => K_C_LEFT,
+        K_LEFT => K_RIGHT,
+        K_S_LEFT => K_S_RIGHT,
+        K_C_LEFT => K_C_RIGHT,
+        _ => key,
+    }
+}
+
+/// Check if key should end the wildmenu.
+///
+/// Returns true if the key is not a wildcard/completion navigation key.
+#[must_use]
+pub const fn should_end_wildmenu(key: c_int, p_wc: c_int, p_wcm: c_int) -> bool {
+    // Key is not wildchar or wildcharm
+    let not_wc = key != p_wc && key != p_wcm && key != CTRL_Z;
+
+    // Key is not a completion navigation key
+    let not_nav = key != CTRL_N && key != CTRL_P && key != CTRL_A && key != CTRL_L;
+
+    not_wc && not_nav
+}
+
+/// Check if key should end wildmenu for pum.
+///
+/// PageUp/PageDown are allowed in popup menu.
+#[must_use]
+pub const fn should_end_wildmenu_pum(key: c_int) -> bool {
+    key != K_PAGEDOWN && key != K_PAGEUP && key != K_KPAGEDOWN && key != K_KPAGEUP
+}
+
+/// Check if key triggers CmdlineLeavePre autocmd.
+#[must_use]
+pub const fn triggers_cmdline_leave_pre(key: c_int) -> bool {
+    key == b'\n' as c_int || key == b'\r' as c_int || key == K_KENTER || key == ESC || key == CTRL_C
+}
+
+/// Check if key should free history lookfor string.
+///
+/// Returns true if the key is NOT a history navigation or completion key.
+#[must_use]
+pub const fn should_free_lookfor(key: c_int) -> bool {
+    !matches!(
+        key,
+        K_S_DOWN
+            | K_S_UP
+            | K_DOWN
+            | K_UP
+            | K_PAGEDOWN
+            | K_PAGEUP
+            | K_KPAGEDOWN
+            | K_KPAGEUP
+            | K_LEFT
+            | K_RIGHT
+    )
+}
+
+/// Check if S-Tab should be converted to Ctrl-P for completion.
+#[must_use]
+pub const fn is_stab_to_ctrl_p(key: c_int, p_wc: c_int) -> bool {
+    key != p_wc && key == K_S_TAB
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
 
@@ -508,6 +583,42 @@ pub extern "C" fn rs_is_register_insert(key: c_int) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_is_literal_insert(key: c_int) -> c_int {
     c_int::from(is_literal_insert(key))
+}
+
+/// Invert horizontal movements for RTL command line (FFI).
+#[no_mangle]
+pub extern "C" fn rs_invert_rtl_key(key: c_int) -> c_int {
+    invert_rtl_key(key)
+}
+
+/// Check if key should end wildmenu (FFI).
+#[no_mangle]
+pub extern "C" fn rs_should_end_wildmenu(key: c_int, p_wc: c_int, p_wcm: c_int) -> c_int {
+    c_int::from(should_end_wildmenu(key, p_wc, p_wcm))
+}
+
+/// Check if key should end wildmenu for pum (FFI).
+#[no_mangle]
+pub extern "C" fn rs_should_end_wildmenu_pum(key: c_int) -> c_int {
+    c_int::from(should_end_wildmenu_pum(key))
+}
+
+/// Check if key triggers CmdlineLeavePre autocmd (FFI).
+#[no_mangle]
+pub extern "C" fn rs_triggers_cmdline_leave_pre(key: c_int) -> c_int {
+    c_int::from(triggers_cmdline_leave_pre(key))
+}
+
+/// Check if key should free history lookfor string (FFI).
+#[no_mangle]
+pub extern "C" fn rs_should_free_lookfor(key: c_int) -> c_int {
+    c_int::from(should_free_lookfor(key))
+}
+
+/// Check if S-Tab should be converted to Ctrl-P for completion (FFI).
+#[no_mangle]
+pub extern "C" fn rs_is_stab_to_ctrl_p(key: c_int, p_wc: c_int) -> c_int {
+    c_int::from(is_stab_to_ctrl_p(key, p_wc))
 }
 
 // =============================================================================

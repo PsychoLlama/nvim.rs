@@ -287,6 +287,14 @@ extern void rs_finish_incsearch_highlighting(int gotesc, incsearch_state_T *stat
 extern int rs_should_do_incsearch(int firstc);
 extern int rs_incsearch_should_postpone(void);
 
+// Rust key dispatch helpers
+extern int rs_invert_rtl_key(int key);
+extern int rs_should_end_wildmenu(int key, int p_wc, int p_wcm);
+extern int rs_should_end_wildmenu_pum(int key);
+extern int rs_triggers_cmdline_leave_pre(int key);
+extern int rs_should_free_lookfor(int key);
+extern int rs_is_stab_to_ctrl_p(int key, int p_wc);
+
 extern int rs_check_bracket_balance(const char *expr, size_t len);
 extern int rs_is_expr_likely_complete(const char *expr, size_t len);
 extern int rs_find_last_token_start(const char *expr, size_t len);
@@ -1371,20 +1379,7 @@ static int command_line_execute(VimState *state, int key)
       // Invert horizontal movements and operations.  Only when
       // typed by the user directly, not when the result of a
       // mapping.
-      switch (s->c) {
-      case K_RIGHT:
-        s->c = K_LEFT; break;
-      case K_S_RIGHT:
-        s->c = K_S_LEFT; break;
-      case K_C_RIGHT:
-        s->c = K_C_LEFT; break;
-      case K_LEFT:
-        s->c = K_RIGHT; break;
-      case K_S_LEFT:
-        s->c = K_S_RIGHT; break;
-      case K_C_LEFT:
-        s->c = K_C_RIGHT; break;
-      }
+      s->c = rs_invert_rtl_key(s->c);
     }
   }
 
@@ -1415,7 +1410,7 @@ static int command_line_execute(VimState *state, int key)
 
   // When there are matching completions to select <S-Tab> works like
   // CTRL-P (unless 'wc' is <S-Tab>).
-  if (s->c != p_wc && s->c == K_S_TAB && s->xpc.xp_numfiles > 0) {
+  if (rs_is_stab_to_ctrl_p(s->c, (int)p_wc) && s->xpc.xp_numfiles > 0) {
     s->c = Ctrl_P;
   }
 
@@ -1450,12 +1445,8 @@ static int command_line_execute(VimState *state, int key)
   // 'wildcharm' or Ctrl-N or Ctrl-P or Ctrl-A or Ctrl-L).
   // If the popup menu is displayed, then PageDown and PageUp keys are
   // also used to navigate the menu.
-  bool end_wildmenu = (!key_is_wc && s->c != Ctrl_Z
-                       && s->c != Ctrl_N && s->c != Ctrl_P && s->c != Ctrl_A
-                       && s->c != Ctrl_L);
-  end_wildmenu = end_wildmenu && (!cmdline_pum_active()
-                                  || (s->c != K_PAGEDOWN && s->c != K_PAGEUP
-                                      && s->c != K_KPAGEDOWN && s->c != K_KPAGEUP));
+  bool end_wildmenu = !key_is_wc && rs_should_end_wildmenu(s->c, (int)p_wc, (int)p_wcm);
+  end_wildmenu = end_wildmenu && (!cmdline_pum_active() || rs_should_end_wildmenu_pum(s->c));
 
   // free expanded names when finished walking through matches
   if (end_wildmenu) {
