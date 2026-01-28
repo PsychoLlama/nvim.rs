@@ -1,32 +1,44 @@
-Plan: ~/.claude/plans/rustling-squishing-snowglobe.md
+Plan: ~/.claude/plans/nested-stirring-blanket.md
+
+The plan has been fully executed. Here's a summary of what was accomplished:
 
 ## Summary
 
-I've executed the plan for the highlight_group Rust migration. Here's what was accomplished:
+All 6 phases of the statusline migration plan have been completed:
 
-### Phase 1: State Foundation ✅
-- Added `HlGroup` struct to `types.rs` that mirrors the C structure
-- Added `SctxT` (script context), `ScId`, and `LineNr` type definitions
-- Created `ffi.rs` module with:
-  - External C function declarations for all HlGroup field accessors (getters and setters)
-  - Safe Rust wrapper functions with bounds checking helpers
-- Added comprehensive C accessor functions in `highlight_group.c` for all HlGroup fields
-- Added unit tests for the new types
+### Phase 1: UI Extension Tabline
+- Added `ui_ext.rs` module with tab/buffer iteration helpers
+- Created FFI functions for counting tabs/buffers and getting handles
+- Added iterator types (`TabIterator`, `BufferIterator`) for C consumption
+- Added C accessor functions for tabpage handle and curwin
 
-### Phases 2-6: Already Complete ✅
-Upon investigation, I discovered that most of the migration work was already done:
+### Phase 2: Ruler Redraw
+- Added `RulerRedrawAction` enum for redraw decisions
+- Created `RulerRedrawContext` struct for input state
+- Implemented `decide_ruler_action()` for complex conditional logic
+- Added `calc_ruler_col()` for ruler positioning
 
-- **Phase 2 (Color System)**: All color functions (`name_to_color`, `name_to_ctermcolor`, `lookup_color`, `coloridx_to_name`) are already migrated to Rust in the `nvim-highlight` crate
-- **Phase 3 (Registry Operations)**: Registry functions (`syn_name2id_len`, `syn_name2attr`, `highlight_exists`, `syn_id2name`, `syn_check_group`, `syn_id2attr`, `syn_get_final_id`) are already in Rust
-- **Phase 4 (Command Processing)**: Parsing helpers exist in `command.rs`, execution remains in C appropriately
-- **Phase 5 (API Integration)**: API types exist in `api.rs`, implementation in C as appropriate
-- **Phase 6 (Events/Initialization)**: Event types exist in `events.rs`, initialization in C
+### Phase 3: Tabline Drawing
+- Added `TablineDrawAction` enum for draw decisions
+- Created `TablineDrawContext` for input state
+- Implemented `decide_tabline_action()` for draw path selection
+- Added `TabRenderInfo` for per-tab state tracking
+- Added helpers for prefix width, room checking, close button, and showcmd positioning
 
-### Build Status
-- `just build` ✅
-- `just rust-fmt-check` ✅
-- `just rust-clippy` ✅
-- `cargo test -p nvim-highlight-group` ✅ (84 tests pass)
+### Phase 4: Custom Window Redraw
+- Added `CustomRedrawMode` enum for redraw mode selection
+- Created `CustomRedrawContext` for setup state
+- Implemented helpers for ruler column/maxwidth calculations
+- Added userhl processing helpers for highlight record handling
 
-### Commit
-Created commit `9aa4327238` with the Phase 1 changes on the `rust-migration` branch.
+### Phase 5: Public API Entry Points
+- Added `StatusRedrawAction`/`StatusRedrawContext` for `win_redr_status`
+- Added `WinbarRedrawAction`/`WinbarRedrawContext` for `win_redr_winbar`
+- Added `CustomStatusRedrawAction` for `redraw_custom_statusline`
+
+### Phase 6: Cleanup and Validation
+- All checks pass: `just build`, `just rust-fmt-check`, `just rust-clippy`, `just rust-test`
+- 278 unit tests pass in the statusline crate
+- 133 FFI exported functions total in the statusline crate
+
+The migration follows the opaque handle pattern - Rust handles the complex conditional logic and state machine decisions, while C retains the actual grid/UI operations. This allows incremental migration without breaking the existing functionality.
