@@ -6,11 +6,13 @@
 //! # Modules
 //!
 //! - [`item`]: Item access and highlight attribute handling
+//! - [`placement`]: Position and size calculations
 
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(clippy::cast_lossless)] // FFI needs flexible casts between c_int and i64
 
 pub mod item;
+pub mod placement;
 
 use std::ffi::c_int;
 
