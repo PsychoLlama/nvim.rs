@@ -178,6 +178,7 @@ extern bool rs_qf_list_empty(const void *qfl);
 extern void rs_qf_new_list(void *qi, const char *title);
 extern void rs_qf_free_items(void *qfl);
 extern void rs_qf_free_list(void *qfl);
+extern void rs_qf_pop_stack(void *qi, bool adjust);
 
 /// Get listcount from qf_info_T for Rust (using void* to avoid type visibility issues)
 int nvim_qf_get_listcount(const void *qi_void)
@@ -1346,6 +1347,57 @@ void nvim_qf_set_changedtick(void *qfl_void, int changedtick)
   }
   qf_list_T *qfl = (qf_list_T *)qfl_void;
   qfl->qf_changedtick = changedtick;
+}
+
+/// Shift lists down by one position (for pop_stack)
+/// Copies lists[1..count] to lists[0..count-1]
+void nvim_qf_shift_lists_down(void *qi_void)
+{
+  if (qi_void == NULL) {
+    return;
+  }
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  for (int i = 1; i < qi->qf_listcount; i++) {
+    qi->qf_lists[i - 1] = qi->qf_lists[i];
+  }
+}
+
+/// Zero the list at index (listcount - 1)
+void nvim_qf_zero_top_list(void *qi_void)
+{
+  if (qi_void == NULL) {
+    return;
+  }
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  if (qi->qf_listcount > 0) {
+    memset(&qi->qf_lists[qi->qf_listcount - 1], 0, sizeof(qf_list_T));
+  }
+}
+
+/// Decrement curlist, handling wrap to max
+void nvim_qf_decr_curlist(void *qi_void)
+{
+  if (qi_void == NULL) {
+    return;
+  }
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  if (qi->qf_curlist == 0) {
+    qi->qf_curlist = qi->qf_listcount - 1;
+  } else {
+    qi->qf_curlist--;
+  }
+}
+
+/// Decrement listcount
+void nvim_qf_decr_listcount(void *qi_void)
+{
+  if (qi_void == NULL) {
+    return;
+  }
+  qf_info_T *qi = (qf_info_T *)qi_void;
+  if (qi->qf_listcount > 0) {
+    qi->qf_listcount--;
+  }
 }
 
 // =============================================================================
@@ -2999,24 +3051,11 @@ static qf_list_T *qf_get_curlist(qf_info_T *qi)
 /// to the same list, unless it is deleted, if so then use the
 /// newest created list instead. qf_listcount will be set correctly.
 /// The above will only happen if <adjust> is true.
+///
+/// NOTE: Implementation now in Rust (rs_qf_pop_stack). This is a thin wrapper.
 static void qf_pop_stack(qf_info_T *qi, bool adjust)
 {
-  qf_free(&qi->qf_lists[0]);
-  for (int i = 1; i < qi->qf_listcount; i++) {
-    qi->qf_lists[i - 1] = qi->qf_lists[i];
-  }
-
-  // fill with zeroes now unused list at the top
-  memset(qi->qf_lists + qi->qf_listcount - 1, 0, sizeof(*qi->qf_lists));
-
-  if (adjust) {
-    qi->qf_listcount--;
-    if (qi->qf_curlist == 0) {
-      qi->qf_curlist = qi->qf_listcount - 1;
-    } else {
-      qi->qf_curlist--;
-    }
-  }
+  rs_qf_pop_stack((void *)qi, adjust);
 }
 
 /// Prepare for adding a new quickfix list. If the current list is in the

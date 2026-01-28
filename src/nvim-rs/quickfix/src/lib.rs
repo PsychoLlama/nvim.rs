@@ -1803,6 +1803,10 @@ extern "C" {
     fn nvim_qf_free_ctx(qfl: QfListHandleMut);
     fn nvim_qf_free_callback(qfl: QfListHandleMut);
     fn nvim_qf_set_changedtick(qfl: QfListHandleMut, changedtick: c_int);
+    fn nvim_qf_shift_lists_down(qi: QfInfoHandleMut);
+    fn nvim_qf_zero_top_list(qi: QfInfoHandleMut);
+    fn nvim_qf_decr_curlist(qi: QfInfoHandleMut);
+    fn nvim_qf_decr_listcount(qi: QfInfoHandleMut);
 }
 
 /// Opaque handle to buffer (Phase 7)
@@ -2109,11 +2113,17 @@ pub unsafe extern "C" fn rs_qf_store_title(qfl: QfListHandleMut, title: *const c
     nvim_qf_store_title(qfl, title);
 }
 
-/// Pop the oldest list from the quickfix stack.
+/// Pop the oldest list from the quickfix stack (implementation in Rust).
 ///
 /// This removes the first (oldest) list from the stack, shifting all
 /// remaining lists down. If `adjust` is true, also decrements listcount
 /// and adjusts curlist.
+///
+/// Algorithm:
+/// 1. Free the first list (index 0)
+/// 2. Shift all lists down by one position
+/// 3. Zero the now-unused top list
+/// 4. If adjust: decrement listcount and adjust curlist
 ///
 /// # Safety
 ///
@@ -2123,7 +2133,24 @@ pub unsafe extern "C" fn rs_qf_pop_stack(qi: QfInfoHandleMut, adjust: bool) {
     if qi.is_null() {
         return;
     }
-    nvim_qf_pop_stack(qi, adjust);
+
+    // Free the first list
+    let first_list = nvim_qf_get_list_at_mut(qi, 0);
+    if !first_list.is_null() {
+        rs_qf_free_list(first_list);
+    }
+
+    // Shift all lists down
+    nvim_qf_shift_lists_down(qi);
+
+    // Zero the now-unused top list
+    nvim_qf_zero_top_list(qi);
+
+    // Adjust listcount and curlist if requested
+    if adjust {
+        nvim_qf_decr_listcount(qi);
+        nvim_qf_decr_curlist(qi);
+    }
 }
 
 /// Set the start (first entry) pointer for a quickfix list.
