@@ -1628,6 +1628,248 @@ pub unsafe extern "C" fn rs_vterm_state_is_protected(state: VTermStateHandle) ->
 }
 
 // =============================================================================
+// CSI Cursor Movement Commands (Migrated from C)
+// =============================================================================
+
+/// CUU - Cursor Up (CSI n A) - ECMA-48 8.3.22
+///
+/// Move cursor up by `count` rows. Clears phantom column.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_csi_cursor_up(state: VTermStateHandle, count: c_int) {
+    if state.is_null() {
+        return;
+    }
+
+    let pos = nvim_vterm_state_get_pos(state);
+    let new_pos = VTermPos {
+        row: pos.row - count,
+        col: pos.col,
+    };
+    nvim_vterm_state_set_pos(state, new_pos);
+    nvim_vterm_state_set_at_phantom(state, 0);
+}
+
+/// CUD - Cursor Down (CSI n B) - ECMA-48 8.3.19
+///
+/// Move cursor down by `count` rows. Clears phantom column.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_csi_cursor_down(state: VTermStateHandle, count: c_int) {
+    if state.is_null() {
+        return;
+    }
+
+    let pos = nvim_vterm_state_get_pos(state);
+    let new_pos = VTermPos {
+        row: pos.row + count,
+        col: pos.col,
+    };
+    nvim_vterm_state_set_pos(state, new_pos);
+    nvim_vterm_state_set_at_phantom(state, 0);
+}
+
+/// CUF - Cursor Forward (CSI n C) - ECMA-48 8.3.20
+///
+/// Move cursor forward (right) by `count` columns. Clears phantom column.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_csi_cursor_forward(state: VTermStateHandle, count: c_int) {
+    if state.is_null() {
+        return;
+    }
+
+    let pos = nvim_vterm_state_get_pos(state);
+    let new_pos = VTermPos {
+        row: pos.row,
+        col: pos.col + count,
+    };
+    nvim_vterm_state_set_pos(state, new_pos);
+    nvim_vterm_state_set_at_phantom(state, 0);
+}
+
+/// CUB - Cursor Back (CSI n D) - ECMA-48 8.3.18
+///
+/// Move cursor back (left) by `count` columns. Clears phantom column.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_csi_cursor_back(state: VTermStateHandle, count: c_int) {
+    if state.is_null() {
+        return;
+    }
+
+    let pos = nvim_vterm_state_get_pos(state);
+    let new_pos = VTermPos {
+        row: pos.row,
+        col: pos.col - count,
+    };
+    nvim_vterm_state_set_pos(state, new_pos);
+    nvim_vterm_state_set_at_phantom(state, 0);
+}
+
+/// CNL - Cursor Next Line (CSI n E) - ECMA-48 8.3.12
+///
+/// Move cursor to start of line `count` lines down. Clears phantom column.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_csi_cursor_next_line(
+    state: VTermStateHandle,
+    count: c_int,
+) {
+    if state.is_null() {
+        return;
+    }
+
+    let pos = nvim_vterm_state_get_pos(state);
+    let new_pos = VTermPos {
+        row: pos.row + count,
+        col: 0,
+    };
+    nvim_vterm_state_set_pos(state, new_pos);
+    nvim_vterm_state_set_at_phantom(state, 0);
+}
+
+/// CPL - Cursor Previous Line (CSI n F) - ECMA-48 8.3.13
+///
+/// Move cursor to start of line `count` lines up. Clears phantom column.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_csi_cursor_prev_line(
+    state: VTermStateHandle,
+    count: c_int,
+) {
+    if state.is_null() {
+        return;
+    }
+
+    let pos = nvim_vterm_state_get_pos(state);
+    let new_pos = VTermPos {
+        row: pos.row - count,
+        col: 0,
+    };
+    nvim_vterm_state_set_pos(state, new_pos);
+    nvim_vterm_state_set_at_phantom(state, 0);
+}
+
+/// CHA - Cursor Horizontal Absolute (CSI n G) - ECMA-48 8.3.9
+///
+/// Move cursor to column `col` (1-based). Clears phantom column.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_csi_cursor_horizontal_absolute(
+    state: VTermStateHandle,
+    col: c_int,
+) {
+    if state.is_null() {
+        return;
+    }
+
+    let pos = nvim_vterm_state_get_pos(state);
+    let new_pos = VTermPos {
+        row: pos.row,
+        col: col - 1, // Convert from 1-based to 0-based
+    };
+    nvim_vterm_state_set_pos(state, new_pos);
+    nvim_vterm_state_set_at_phantom(state, 0);
+}
+
+/// CUP - Cursor Position (CSI row ; col H) - ECMA-48 8.3.21
+///
+/// Move cursor to absolute position (row, col), both 1-based.
+/// When origin mode is set, positions are relative to scroll region.
+/// Clears phantom column.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_csi_cursor_position(
+    state: VTermStateHandle,
+    row: c_int,
+    col: c_int,
+) {
+    if state.is_null() {
+        return;
+    }
+
+    // Convert from 1-based to 0-based
+    let mut new_row = row - 1;
+    let mut new_col = col - 1;
+
+    // If origin mode is set, positions are relative to scroll region
+    if nvim_vterm_state_mode_origin(state) != 0 {
+        new_row += nvim_vterm_state_get_scrollregion_top(state);
+        new_col += nvim_vterm_state_scrollregion_left(state);
+    }
+
+    let new_pos = VTermPos {
+        row: new_row,
+        col: new_col,
+    };
+    nvim_vterm_state_set_pos(state, new_pos);
+    nvim_vterm_state_set_at_phantom(state, 0);
+}
+
+/// VPA - Vertical Line Position Absolute (CSI n d) - ECMA-48 8.3.158
+///
+/// Move cursor to row `row` (1-based), keeping column. Clears phantom column.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_csi_vertical_position_absolute(
+    state: VTermStateHandle,
+    row: c_int,
+) {
+    if state.is_null() {
+        return;
+    }
+
+    let pos = nvim_vterm_state_get_pos(state);
+    let mut new_row = row - 1; // Convert from 1-based to 0-based
+
+    // If origin mode is set, positions are relative to scroll region
+    if nvim_vterm_state_mode_origin(state) != 0 {
+        new_row += nvim_vterm_state_get_scrollregion_top(state);
+    }
+
+    let new_pos = VTermPos {
+        row: new_row,
+        col: pos.col,
+    };
+    nvim_vterm_state_set_pos(state, new_pos);
+    nvim_vterm_state_set_at_phantom(state, 0);
+}
+
+/// HVP - Horizontal and Vertical Position (CSI row ; col f) - ECMA-48 8.3.63
+///
+/// Same as CUP - move cursor to absolute position (row, col).
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_csi_hvp(
+    state: VTermStateHandle,
+    row: c_int,
+    col: c_int,
+) {
+    rs_vterm_state_csi_cursor_position(state, row, col);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
