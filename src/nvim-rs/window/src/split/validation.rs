@@ -63,6 +63,12 @@ extern "C" {
 
     /// Get p_wmw (winminwidth option).
     fn nvim_get_p_wmw() -> i64;
+
+    /// Get p_wh (winheight option).
+    fn nvim_get_p_wh() -> i64;
+
+    /// Get p_wiw (winwidth option).
+    fn nvim_get_p_wiw() -> i64;
 }
 
 // =============================================================================
@@ -373,6 +379,169 @@ pub extern "C" fn rs_split_clamp_size(flags: c_int, requested: c_int, total_size
     };
 
     requested.clamp(min_size, max_size.max(min_size))
+}
+
+// =============================================================================
+// Combined Validation
+// =============================================================================
+
+extern "C" {
+    /// Get frame_minheight.
+    fn rs_frame_minheight(topfrp: *const Frame, next_curwin: WinHandle) -> c_int;
+
+    /// Get frame_minwidth.
+    fn rs_frame_minwidth(topfrp: *const Frame, next_curwin: WinHandle) -> c_int;
+}
+
+/// NOWIN sentinel value.
+const NOWIN: WinHandle = unsafe { WinHandle::from_ptr((-1isize) as *mut std::ffi::c_void) };
+
+/// Result of split space calculation.
+#[repr(C)]
+pub struct SplitSpaceResult {
+    /// Minimum size needed (minheight or minwidth).
+    pub minsize: c_int,
+    /// Available space.
+    pub available: c_int,
+    /// Total needed space.
+    pub needed: c_int,
+    /// Whether there's enough room for the split.
+    pub has_room: bool,
+}
+
+/// Calculate split space requirements for toplevel splits.
+fn calc_split_space_toplevel_impl(
+    vertical: bool,
+    need_status: c_int,
+    with_room: bool,
+) -> SplitSpaceResult {
+    unsafe {
+        let topframe = nvim_get_topframe();
+        if topframe.is_null() {
+            return SplitSpaceResult {
+                minsize: 0,
+                available: 0,
+                needed: 0,
+                has_room: false,
+            };
+        }
+
+        if vertical {
+            let wmw1 = (nvim_get_p_wmw() as c_int).max(1);
+            let minsize = rs_frame_minwidth(topframe, NOWIN);
+            let available = (*topframe).fr_width;
+            let mut needed = wmw1 + 1 + minsize;
+            if with_room {
+                let p_wiw = nvim_get_p_wiw() as c_int;
+                needed += p_wiw - wmw1;
+            }
+            SplitSpaceResult {
+                minsize,
+                available,
+                needed,
+                has_room: available >= needed,
+            }
+        } else {
+            let wmh1 = (nvim_get_p_wmh() as c_int).max(1);
+            let minsize = rs_frame_minheight(topframe, NOWIN) + need_status;
+            let available = (*topframe).fr_height;
+            let mut needed = wmh1 + STATUS_HEIGHT + minsize;
+            if with_room {
+                let p_wh = nvim_get_p_wh() as c_int;
+                needed += p_wh - wmh1;
+            }
+            SplitSpaceResult {
+                minsize,
+                available,
+                needed,
+                has_room: available >= needed,
+            }
+        }
+    }
+}
+
+/// Calculate split space requirements for regular (non-toplevel) splits.
+fn calc_split_space_regular_impl(
+    oldwin_frame: *const Frame,
+    vertical: bool,
+    need_status: c_int,
+    with_room: bool,
+) -> SplitSpaceResult {
+    if oldwin_frame.is_null() {
+        return SplitSpaceResult {
+            minsize: 0,
+            available: 0,
+            needed: 0,
+            has_room: false,
+        };
+    }
+
+    unsafe {
+        if vertical {
+            let wmw1 = (nvim_get_p_wmw() as c_int).max(1);
+            let minsize = rs_frame_minwidth(oldwin_frame, NOWIN);
+            let available = (*oldwin_frame).fr_width;
+            let mut needed = wmw1 + 1 + minsize;
+            if with_room {
+                let p_wiw = nvim_get_p_wiw() as c_int;
+                needed += p_wiw - wmw1;
+            }
+            SplitSpaceResult {
+                minsize,
+                available,
+                needed,
+                has_room: available >= needed,
+            }
+        } else {
+            let wmh1 = (nvim_get_p_wmh() as c_int).max(1);
+            let minsize = rs_frame_minheight(oldwin_frame, NOWIN) + need_status;
+            let available = (*oldwin_frame).fr_height;
+            let mut needed = wmh1 + STATUS_HEIGHT + minsize;
+            if with_room {
+                let p_wh = nvim_get_p_wh() as c_int;
+                needed += p_wh - wmh1;
+            }
+            SplitSpaceResult {
+                minsize,
+                available,
+                needed,
+                has_room: available >= needed,
+            }
+        }
+    }
+}
+
+/// FFI: Calculate split space for toplevel splits.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_split_space_toplevel(
+    vertical: c_int,
+    need_status: c_int,
+    with_room: c_int,
+) -> SplitSpaceResult {
+    calc_split_space_toplevel_impl(vertical != 0, need_status, with_room != 0)
+}
+
+/// FFI: Calculate split space for regular splits.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_split_space_regular(
+    oldwin_frame: *const Frame,
+    vertical: c_int,
+    need_status: c_int,
+    with_room: c_int,
+) -> SplitSpaceResult {
+    calc_split_space_regular_impl(oldwin_frame, vertical != 0, need_status, with_room != 0)
+}
+
+/// FFI: Check if split space result has room.
+///
+/// # Safety
+/// Caller must ensure `result` is null or a valid pointer to a SplitSpaceResult.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_split_has_room(result: *const SplitSpaceResult) -> c_int {
+    if result.is_null() {
+        return 0;
+    }
+    c_int::from((*result).has_room)
 }
 
 #[cfg(test)]
