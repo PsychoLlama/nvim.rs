@@ -18,6 +18,7 @@ pub mod eval;
 pub mod format;
 pub mod highlight;
 pub mod render;
+pub mod ruler;
 pub mod statuscol;
 pub mod tabline;
 pub mod winbar;
