@@ -378,6 +378,151 @@ pub extern "C" fn rs_dbghl_recompose() -> c_int {
 }
 
 // =============================================================================
+// Debug Delay and Compose Debug
+// =============================================================================
+
+extern "C" {
+    // UI functions
+    fn ui_call_flush();
+    fn ui_composed_call_raw_line(
+        grid: i64,
+        row: i64,
+        startcol: i64,
+        endcol: i64,
+        clearcol: i64,
+        clearattr: i64,
+        flags: c_int,
+        chunk: *const ScharT,
+        attrs: *const SattrT,
+    );
+
+    // Option accessors
+    fn nvim_get_p_wd() -> i64;
+    fn nvim_get_rdb_flags() -> u32;
+
+    // Highlight function
+    fn nvim_syn_id2attr(hl_id: c_int) -> c_int;
+
+    // Default grid accessors
+    fn nvim_get_default_grid() -> crate::ScreenGridHandle;
+    fn nvim_screengrid_get_rows(grid: crate::ScreenGridHandle) -> c_int;
+    fn nvim_screengrid_get_cols(grid: crate::ScreenGridHandle) -> c_int;
+}
+
+/// RedrawDebug flag constants (from option_vars.generated.h)
+pub mod rdb_flags {
+    /// Compositor debug mode
+    pub const COMPOSITOR: u32 = 0x01;
+    /// No throttle
+    pub const NOTHROTTLE: u32 = 0x02;
+    /// Invalid flag
+    pub const INVALID: u32 = 0x04;
+    /// No delta
+    pub const NODELTA: u32 = 0x08;
+    /// Line flag
+    pub const LINE: u32 = 0x10;
+    /// Flush flag
+    pub const FLUSH: u32 = 0x20;
+}
+
+/// Sleep for debugging visualization.
+///
+/// Flushes the UI and sleeps based on 'writedelay' option and number of lines.
+///
+/// This is the Rust implementation of the C `debug_delay()` function.
+fn debug_delay_impl(lines: i64) {
+    unsafe {
+        ui_call_flush();
+        let wd = nvim_get_p_wd().unsigned_abs();
+        let factor = lines.clamp(1, 5) as u64;
+        if wd > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(factor * wd));
+        }
+    }
+}
+
+/// Visualize composited area for debugging.
+///
+/// When 'redrawdebug' contains "compositor", highlights the affected area
+/// and optionally delays to make the changes visible.
+///
+/// This is the Rust implementation of the C `compose_debug()` function.
+fn compose_debug_impl(
+    startrow: i64,
+    endrow: i64,
+    startcol: i64,
+    endcol: i64,
+    syn_id: c_int,
+    delay: bool,
+) {
+    unsafe {
+        let flags = nvim_get_rdb_flags();
+        if (flags & rdb_flags::COMPOSITOR) == 0 || startcol >= endcol {
+            return;
+        }
+
+        let default_grid = nvim_get_default_grid();
+        let grid_rows = i64::from(nvim_screengrid_get_rows(default_grid));
+        let grid_cols = i64::from(nvim_screengrid_get_cols(default_grid));
+
+        let endrow = endrow.min(grid_rows);
+        let endcol = endcol.min(grid_cols);
+        let attr = i64::from(nvim_syn_id2attr(syn_id));
+
+        if delay {
+            debug_delay_impl(endrow - startrow);
+        }
+
+        // Get linebuf pointers for the call (we pass empty data, attr fills it)
+        let linebuf = nvim_comp_get_linebuf_char();
+        let attrbuf = nvim_comp_get_linebuf_attr();
+
+        for row in startrow..endrow {
+            ui_composed_call_raw_line(
+                1, // grid handle for composed output
+                row, startcol, startcol, // endcol same as startcol - no content
+                endcol,   // clearcol - area to clear with attr
+                attr, 0, // no flags
+                linebuf, attrbuf,
+            );
+        }
+
+        if delay {
+            debug_delay_impl(endrow - startrow);
+        }
+    }
+}
+
+/// FFI wrapper for debug_delay.
+///
+/// Flushes UI and sleeps for debugging visualization.
+///
+/// # Safety
+/// This function calls C UI flush and OS sleep.
+#[no_mangle]
+pub extern "C" fn rs_debug_delay(lines: i64) {
+    debug_delay_impl(lines);
+}
+
+/// FFI wrapper for compose_debug.
+///
+/// Highlights the specified area for debugging when redrawdebug=compositor.
+///
+/// # Safety
+/// This function accesses global state and calls UI functions.
+#[no_mangle]
+pub extern "C" fn rs_compose_debug(
+    startrow: i64,
+    endrow: i64,
+    startcol: i64,
+    endcol: i64,
+    syn_id: c_int,
+    delay: bool,
+) {
+    compose_debug_impl(startrow, endrow, startcol, endcol, syn_id, delay);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

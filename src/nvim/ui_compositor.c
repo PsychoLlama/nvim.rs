@@ -114,6 +114,12 @@ void nvim_set_valid_screen(bool valid)
   valid_screen = valid;
 }
 
+/// C accessor for 'writedelay' option.
+int64_t nvim_get_p_wd(void)
+{
+  return p_wd;
+}
+
 // Layer stack accessors for Rust compositor crate
 size_t nvim_layers_size(void)
 {
@@ -556,38 +562,20 @@ static void compose_line(Integer row, Integer startcol, Integer endcol, LineFlag
                             (const sattr_T *)attrbuf + skipstart);
 }
 
+// Rust implementations of compose_debug and debug_delay
+extern void rs_compose_debug(Integer startrow, Integer endrow, Integer startcol, Integer endcol,
+                             int syn_id, bool delay);
+extern void rs_debug_delay(Integer lines);
+
 static void compose_debug(Integer startrow, Integer endrow, Integer startcol, Integer endcol,
                           int syn_id, bool delay)
 {
-  if (!(rdb_flags & kOptRdbFlagCompositor) || startcol >= endcol) {
-    return;
-  }
-
-  endrow = MIN(endrow, default_grid.rows);
-  endcol = MIN(endcol, default_grid.cols);
-  int attr = syn_id2attr(syn_id);
-
-  if (delay) {
-    debug_delay(endrow - startrow);
-  }
-
-  for (int row = (int)startrow; row < endrow; row++) {
-    ui_composed_call_raw_line(1, row, startcol, startcol, endcol, attr, false,
-                              (const schar_T *)linebuf,
-                              (const sattr_T *)attrbuf);
-  }
-
-  if (delay) {
-    debug_delay(endrow - startrow);
-  }
+  rs_compose_debug(startrow, endrow, startcol, endcol, syn_id, delay);
 }
 
 static void debug_delay(Integer lines)
 {
-  ui_call_flush();
-  uint64_t wd = (uint64_t)llabs(p_wd);
-  uint64_t factor = (uint64_t)MAX(MIN(lines, 5), 1);
-  os_sleep(factor * wd);
+  rs_debug_delay(lines);
 }
 
 static void compose_area(Integer startrow, Integer endrow, Integer startcol, Integer endcol)
