@@ -1027,6 +1027,158 @@ pub extern "C" fn rs_ui_comp_raw_line(
 }
 
 // =============================================================================
+// UI Comp Msg Set Pos Implementation
+// =============================================================================
+
+extern "C" {
+    // Message grid accessors (nvim_get_msg_grid already declared above)
+    fn nvim_screengrid_set_comp_row(grid: crate::ScreenGridHandle, row: c_int);
+    fn nvim_screengrid_set_pending_comp_index_update(grid: crate::ScreenGridHandle, pending: bool);
+
+    // Message state accessors
+    fn nvim_get_msg_current_row() -> c_int;
+    fn nvim_set_msg_current_row(row: c_int);
+    fn nvim_get_msg_was_scrolled() -> bool;
+    fn nvim_set_msg_was_scrolled(scrolled: bool);
+    fn nvim_set_msg_sep_row(row: c_int);
+
+    // Global dimensions
+    fn nvim_get_rows() -> c_int;
+
+    // schar_from_buf
+    fn rs_schar_from_buf(buf: *const u8, len: usize) -> ScharT;
+
+    // Grid scroll call
+    fn ui_composed_call_grid_scroll(
+        grid: i64,
+        top: i64,
+        bot: i64,
+        left: i64,
+        right: i64,
+        rows: i64,
+        cols: i64,
+    );
+}
+
+/// Opaque String type from C
+#[repr(C)]
+pub struct CString {
+    /// Pointer to the string data
+    pub data: *const u8,
+    /// Size of the string
+    pub size: usize,
+}
+
+/// Set the message grid position.
+///
+/// This function handles repositioning the message area, including:
+/// - Setting the message separator row when scrolled
+/// - Composing or scrolling the area as needed
+/// - Tracking the current message row state
+///
+/// # Arguments
+/// * `_grid` - Grid handle (unused, always msg_grid)
+/// * `row` - New row position for message grid
+/// * `scrolled` - Whether the messages are currently scrolled
+/// * `sep_char` - Separator character string
+/// * `_zindex` - Z-index (unused here)
+/// * `_compindex` - Compositor index (unused here)
+#[allow(clippy::too_many_arguments)]
+fn ui_comp_msg_set_pos_impl(
+    _grid: i64,
+    row: i64,
+    scrolled: bool,
+    sep_char_data: *const u8,
+    sep_char_size: usize,
+    _zindex: i64,
+    _compindex: i64,
+) {
+    unsafe {
+        let msg_grid = nvim_get_msg_grid();
+
+        // Mark grid for compositor index update
+        nvim_screengrid_set_pending_comp_index_update(msg_grid, true);
+        nvim_screengrid_set_comp_row(msg_grid, row as c_int);
+
+        // Handle separator row
+        if scrolled && row > 0 {
+            nvim_set_msg_sep_row(row as c_int - 1);
+            if !sep_char_data.is_null() && sep_char_size > 0 {
+                let sep_char = rs_schar_from_buf(sep_char_data, sep_char_size);
+                nvim_set_msg_sep_char(sep_char);
+            }
+        } else {
+            nvim_set_msg_sep_row(-1);
+        }
+
+        let msg_current_row = nvim_get_msg_current_row();
+        let msg_was_scrolled = nvim_get_msg_was_scrolled();
+        let rows = i64::from(nvim_get_rows());
+        let columns = i64::from(nvim_get_columns());
+        let default_grid = nvim_get_default_grid();
+        let default_cols = i64::from(nvim_screengrid_get_cols(default_grid));
+
+        if row > i64::from(msg_current_row) && rs_ui_comp_should_draw() != 0 {
+            // Message area is expanding down
+            let start_row = (i64::from(msg_current_row) - 1).max(0);
+            compose_area_impl(start_row, row, 0, default_cols);
+        } else if row < i64::from(msg_current_row)
+            && rs_ui_comp_should_draw() != 0
+            && (i64::from(msg_current_row) < rows || (scrolled && !msg_was_scrolled))
+        {
+            // Message area is shrinking up
+            let delta = i64::from(msg_current_row) - row;
+
+            if nvim_screengrid_get_blending(msg_grid) {
+                // With blending, need to recompose
+                let first_row = (row - i64::from(scrolled)).max(0);
+                compose_area_impl(first_row, rows - delta, 0, columns);
+            } else {
+                // Without blending, can scroll
+                let first_row = (row - i64::from(msg_was_scrolled)).max(0);
+                ui_composed_call_grid_scroll(1, first_row, rows, 0, columns, delta, 0);
+
+                if scrolled && !msg_was_scrolled && row > 0 {
+                    compose_area_impl(row - 1, row, 0, columns);
+                }
+            }
+        }
+
+        // Update message state
+        nvim_set_msg_current_row(row as c_int);
+        nvim_set_msg_was_scrolled(scrolled);
+    }
+}
+
+/// FFI wrapper for ui_comp_msg_set_pos.
+///
+/// Sets the message grid position.
+///
+/// # Safety
+/// This function accesses global compositor state.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn rs_ui_comp_msg_set_pos(
+    grid: i64,
+    row: i64,
+    scrolled: bool,
+    sep_char_data: *const u8,
+    sep_char_size: usize,
+    zindex: i64,
+    compindex: i64,
+) {
+    ui_comp_msg_set_pos_impl(
+        grid,
+        row,
+        scrolled,
+        sep_char_data,
+        sep_char_size,
+        zindex,
+        compindex,
+    );
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

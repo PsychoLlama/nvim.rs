@@ -495,40 +495,15 @@ bool ui_comp_set_screen_valid(bool valid)
   return rs_ui_comp_set_screen_valid(valid);
 }
 
+// Rust implementation of ui_comp_msg_set_pos
+extern void rs_ui_comp_msg_set_pos(Integer grid, Integer row, Boolean scrolled,
+                                   const char *sep_char_data, size_t sep_char_size,
+                                   Integer zindex, Integer compindex);
+
 void ui_comp_msg_set_pos(Integer grid, Integer row, Boolean scrolled, String sep_char,
                          Integer zindex, Integer compindex)
 {
-  msg_grid.pending_comp_index_update = true;
-  msg_grid.comp_row = (int)row;
-  if (scrolled && row > 0) {
-    msg_sep_row = (int)row - 1;
-    if (sep_char.data) {
-      msg_sep_char = schar_from_buf(sep_char.data, sep_char.size);
-    }
-  } else {
-    msg_sep_row = -1;
-  }
-
-  if (row > msg_current_row && ui_comp_should_draw()) {
-    compose_area(MAX(msg_current_row - 1, 0), row, 0, default_grid.cols);
-  } else if (row < msg_current_row && ui_comp_should_draw()
-             && (msg_current_row < Rows || (scrolled && !msg_was_scrolled))) {
-    int delta = msg_current_row - (int)row;
-    if (msg_grid.blending) {
-      int first_row = MAX((int)row - (scrolled ? 1 : 0), 0);
-      compose_area(first_row, Rows - delta, 0, Columns);
-    } else {
-      // scroll separator together with message text
-      int first_row = MAX((int)row - (msg_was_scrolled ? 1 : 0), 0);
-      ui_composed_call_grid_scroll(1, first_row, Rows, 0, Columns, delta, 0);
-      if (scrolled && !msg_was_scrolled && row > 0) {
-        compose_area(row - 1, row, 0, Columns);
-      }
-    }
-  }
-
-  msg_current_row = (int)row;
-  msg_was_scrolled = scrolled;
+  rs_ui_comp_msg_set_pos(grid, row, scrolled, sep_char.data, sep_char.size, zindex, compindex);
 }
 
 /// check if curgrid is covered on row or above
