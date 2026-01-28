@@ -435,7 +435,11 @@ extern "C" {
 /// - `s` must be a valid NUL-terminated C string
 /// - `buf` must be a valid buffer of at least `buflen` bytes
 #[no_mangle]
-#[allow(clippy::too_many_lines, clippy::cast_sign_loss, clippy::cast_possible_wrap)]
+#[allow(
+    clippy::too_many_lines,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_wrap
+)]
 pub unsafe extern "C" fn rs_trunc_string(
     s: *const c_char,
     buf: *mut c_char,
@@ -560,7 +564,11 @@ pub unsafe extern "C" fn rs_trunc_string(
 /// - `s` must be a valid NUL-terminated C string
 /// - Returned pointer (if not NULL) must be freed with `rs_msg_free_trunc`
 #[no_mangle]
-#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
 pub unsafe extern "C" fn rs_msg_strtrunc(s: *const c_char, force: c_int) -> *mut c_char {
     // Check conditions for truncation
     let should_truncate = force != 0

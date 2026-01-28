@@ -457,6 +457,8 @@ int nvim_get_msg_scroll(void) { return msg_scroll ? 1 : 0; }
 int nvim_get_need_wait_return(void) { return need_wait_return ? 1 : 0; }
 void nvim_set_need_wait_return(int val) { need_wait_return = (val != 0); }
 int nvim_shortmess(int flag) { return shortmess(flag) ? 1 : 0; }
+/// Check if p_debug contains a specific character
+int nvim_p_debug_contains(int c) { return vim_strchr(p_debug, c) != NULL ? 1 : 0; }
 // nvim_get_exmode_active is defined in grid.c
 int nvim_vim_strsize(const char *s) { return vim_strsize(s); }
 int nvim_cmd_silent(void) { return cmd_silent ? 1 : 0; }

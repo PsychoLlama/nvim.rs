@@ -39,6 +39,8 @@ extern "C" {
     fn nvim_get_emsg_on_display() -> c_int;
     /// Set `emsg_on_display` flag
     fn nvim_set_emsg_on_display(val: c_int);
+    /// Check if p_debug contains a specific character
+    fn nvim_p_debug_contains(c: c_int) -> c_int;
 }
 
 /// Get the emsg_off counter (error messages disabled).
@@ -320,13 +322,34 @@ pub unsafe extern "C" fn rs_emsg_on_display_set(val: c_int) {
 /// - emsg_off is set and debug mode is not 'm' or 't', or
 /// - emsg_skip is set
 ///
-/// This is a simplified check; the full check in C also consults p_debug.
+/// This matches the C function `emsg_not_now()` exactly.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_emsg_not_now() -> c_int {
+    let emsg_off = nvim_get_emsg_off();
+    let emsg_skip = nvim_get_emsg_skip();
+
+    // If emsg_off > 0 and debug doesn't contain 'm' or 't', skip messages
+    // If emsg_skip > 0, always skip messages
+    let skip_due_to_off = emsg_off > 0
+        && nvim_p_debug_contains(c_int::from(b'm')) == 0
+        && nvim_p_debug_contains(c_int::from(b't')) == 0;
+
+    c_int::from(skip_due_to_off || emsg_skip > 0)
+}
+
+/// Simplified check if error messages should not be shown.
+///
+/// Only checks emsg_skip, not the full emsg_not_now logic.
+/// Use `rs_emsg_not_now` for the full check.
 ///
 /// # Safety
 /// Calls C accessor functions.
 #[no_mangle]
 pub unsafe extern "C" fn rs_emsg_not_now_simple() -> c_int {
-    // Simplified version without p_debug check
+    // Simplified version - only check emsg_skip
     c_int::from(nvim_get_emsg_skip() > 0)
 }
 
