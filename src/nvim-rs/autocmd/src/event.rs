@@ -80,6 +80,594 @@ impl EventCategory {
 }
 
 // =============================================================================
+// Event Types (Complete Enum)
+// =============================================================================
+
+/// Total number of autocommand events.
+pub const NUM_EVENTS: c_int = 141;
+
+/// Autocommand event types.
+///
+/// This enum contains all autocommand event types supported by Neovim.
+/// Values must match the C enum in `auevents_enum.generated.h`.
+#[repr(i32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Event {
+    // Buffer events (0-22)
+    BufAdd = 0,
+    BufCreate = 1,
+    BufDelete = 2,
+    BufEnter = 3,
+    BufFilePost = 4,
+    BufFilePre = 5,
+    BufHidden = 6,
+    BufLeave = 7,
+    BufModifiedSet = 8,
+    BufNew = 9,
+    BufNewFile = 10,
+    BufRead = 11,
+    BufReadCmd = 12,
+    BufReadPost = 13,
+    BufReadPre = 14,
+    BufUnload = 15,
+    BufWinEnter = 16,
+    BufWinLeave = 17,
+    BufWipeout = 18,
+    BufWrite = 19,
+    BufWriteCmd = 20,
+    BufWritePost = 21,
+    BufWritePre = 22,
+
+    // Channel events (23-24)
+    ChanInfo = 23,
+    ChanOpen = 24,
+
+    // Command-line events (25-31)
+    CmdlineChanged = 25,
+    CmdlineEnter = 26,
+    CmdlineLeave = 27,
+    CmdlineLeavePre = 28,
+    CmdUndefined = 29,
+    CmdWinEnter = 30,
+    CmdWinLeave = 31,
+
+    // Color/UI events (32-33)
+    ColorScheme = 32,
+    ColorSchemePre = 33,
+
+    // Completion events (34-36)
+    CompleteChanged = 34,
+    CompleteDone = 35,
+    CompleteDonePre = 36,
+
+    // Cursor events (37-41)
+    CursorHold = 37,
+    CursorHoldI = 38,
+    CursorMoved = 39,
+    CursorMovedC = 40,
+    CursorMovedI = 41,
+
+    // Diagnostic events (42)
+    DiagnosticChanged = 42,
+
+    // Diff events (43)
+    DiffUpdated = 43,
+
+    // Directory events (44-45)
+    DirChanged = 44,
+    DirChangedPre = 45,
+
+    // Encoding events (46)
+    EncodingChanged = 46,
+
+    // Exit events (47)
+    ExitPre = 47,
+
+    // File events (48-65)
+    FileAppendCmd = 48,
+    FileAppendPost = 49,
+    FileAppendPre = 50,
+    FileChangedRO = 51,
+    FileChangedShell = 52,
+    FileChangedShellPost = 53,
+    FileEncoding = 54,
+    FileReadCmd = 55,
+    FileReadPost = 56,
+    FileReadPre = 57,
+    FileType = 58,
+    FileWriteCmd = 59,
+    FileWritePost = 60,
+    FileWritePre = 61,
+    FilterReadPost = 62,
+    FilterReadPre = 63,
+    FilterWritePost = 64,
+    FilterWritePre = 65,
+
+    // Focus events (66-67)
+    FocusGained = 66,
+    FocusLost = 67,
+
+    // Function events (68)
+    FuncUndefined = 68,
+
+    // GUI events (69-70)
+    GUIEnter = 69,
+    GUIFailed = 70,
+
+    // Insert mode events (71-75)
+    InsertChange = 71,
+    InsertCharPre = 72,
+    InsertEnter = 73,
+    InsertLeave = 74,
+    InsertLeavePre = 75,
+
+    // LSP events (76-81)
+    LspAttach = 76,
+    LspDetach = 77,
+    LspNotify = 78,
+    LspProgress = 79,
+    LspRequest = 80,
+    LspTokenUpdate = 81,
+
+    // Menu events (82)
+    MenuPopup = 82,
+
+    // Mode events (83)
+    ModeChanged = 83,
+
+    // Option events (84)
+    OptionSet = 84,
+
+    // Pack events (85-86)
+    PackChanged = 85,
+    PackChangedPre = 86,
+
+    // Progress events (87)
+    Progress = 87,
+
+    // Quickfix events (88-89)
+    QuickFixCmdPost = 88,
+    QuickFixCmdPre = 89,
+
+    // Quit events (90)
+    QuitPre = 90,
+
+    // Recording events (91-92)
+    RecordingEnter = 91,
+    RecordingLeave = 92,
+
+    // Remote events (93)
+    RemoteReply = 93,
+
+    // Safe state events (94)
+    SafeState = 94,
+
+    // Search events (95)
+    SearchWrapped = 95,
+
+    // Session events (96-97)
+    SessionLoadPost = 96,
+    SessionWritePost = 97,
+
+    // Shell events (98-99)
+    ShellCmdPost = 98,
+    ShellFilterPost = 99,
+
+    // Signal events (100)
+    Signal = 100,
+
+    // Source events (101-103)
+    SourceCmd = 101,
+    SourcePost = 102,
+    SourcePre = 103,
+
+    // Spell events (104)
+    SpellFileMissing = 104,
+
+    // Stdin events (105-106)
+    StdinReadPost = 105,
+    StdinReadPre = 106,
+
+    // Swap events (107)
+    SwapExists = 107,
+
+    // Syntax events (108)
+    Syntax = 108,
+
+    // Tab events (109-113)
+    TabClosed = 109,
+    TabEnter = 110,
+    TabLeave = 111,
+    TabNew = 112,
+    TabNewEntered = 113,
+
+    // Terminal events (114-120)
+    TermChanged = 114,
+    TermClose = 115,
+    TermEnter = 116,
+    TermLeave = 117,
+    TermOpen = 118,
+    TermRequest = 119,
+    TermResponse = 120,
+
+    // Text events (121-125)
+    TextChanged = 121,
+    TextChangedI = 122,
+    TextChangedP = 123,
+    TextChangedT = 124,
+    TextYankPost = 125,
+
+    // UI events (126-127)
+    UIEnter = 126,
+    UILeave = 127,
+
+    // User events (128)
+    User = 128,
+
+    // Vim events (129-134)
+    VimEnter = 129,
+    VimLeave = 130,
+    VimLeavePre = 131,
+    VimResized = 132,
+    VimResume = 133,
+    VimSuspend = 134,
+
+    // Window events (135-140)
+    WinClosed = 135,
+    WinEnter = 136,
+    WinLeave = 137,
+    WinNew = 138,
+    WinResized = 139,
+    WinScrolled = 140,
+}
+
+impl Event {
+    /// Create from raw C enum value.
+    #[must_use]
+    #[allow(clippy::missing_transmute_annotations)]
+    pub const fn from_raw(value: c_int) -> Option<Self> {
+        if value < 0 || value >= NUM_EVENTS {
+            return None;
+        }
+        // SAFETY: We checked bounds above, and the repr(i32) ensures layout matches
+        Some(unsafe { std::mem::transmute::<c_int, Self>(value) })
+    }
+
+    /// Convert to raw C enum value.
+    #[must_use]
+    pub const fn to_raw(self) -> c_int {
+        self as c_int
+    }
+
+    /// Check if this event is valid.
+    #[must_use]
+    pub const fn is_valid(self) -> bool {
+        (self as c_int) >= 0 && (self as c_int) < NUM_EVENTS
+    }
+
+    /// Get the category of this event.
+    #[must_use]
+    #[allow(clippy::too_many_lines)]
+    pub const fn category(self) -> EventCategory {
+        match self {
+            // Buffer events
+            Self::BufAdd
+            | Self::BufCreate
+            | Self::BufDelete
+            | Self::BufEnter
+            | Self::BufFilePost
+            | Self::BufFilePre
+            | Self::BufHidden
+            | Self::BufLeave
+            | Self::BufModifiedSet
+            | Self::BufNew
+            | Self::BufNewFile
+            | Self::BufRead
+            | Self::BufReadCmd
+            | Self::BufReadPost
+            | Self::BufReadPre
+            | Self::BufUnload
+            | Self::BufWinEnter
+            | Self::BufWinLeave
+            | Self::BufWipeout
+            | Self::BufWrite
+            | Self::BufWriteCmd
+            | Self::BufWritePost
+            | Self::BufWritePre => EventCategory::Buffer,
+
+            // File events
+            Self::FileAppendCmd
+            | Self::FileAppendPost
+            | Self::FileAppendPre
+            | Self::FileChangedRO
+            | Self::FileChangedShell
+            | Self::FileChangedShellPost
+            | Self::FileEncoding
+            | Self::FileReadCmd
+            | Self::FileReadPost
+            | Self::FileReadPre
+            | Self::FileType
+            | Self::FileWriteCmd
+            | Self::FileWritePost
+            | Self::FileWritePre
+            | Self::FilterReadPost
+            | Self::FilterReadPre
+            | Self::FilterWritePost
+            | Self::FilterWritePre => EventCategory::File,
+
+            // Window events
+            Self::WinClosed
+            | Self::WinEnter
+            | Self::WinLeave
+            | Self::WinNew
+            | Self::WinResized
+            | Self::WinScrolled => EventCategory::Window,
+
+            // Tab events
+            Self::TabClosed
+            | Self::TabEnter
+            | Self::TabLeave
+            | Self::TabNew
+            | Self::TabNewEntered => EventCategory::Tab,
+
+            // Cursor events
+            Self::CursorHold
+            | Self::CursorHoldI
+            | Self::CursorMoved
+            | Self::CursorMovedC
+            | Self::CursorMovedI => EventCategory::Cursor,
+
+            // Insert mode events
+            Self::InsertChange
+            | Self::InsertCharPre
+            | Self::InsertEnter
+            | Self::InsertLeave
+            | Self::InsertLeavePre => EventCategory::Insert,
+
+            // Cmdline events
+            Self::CmdlineChanged
+            | Self::CmdlineEnter
+            | Self::CmdlineLeave
+            | Self::CmdlineLeavePre
+            | Self::CmdUndefined
+            | Self::CmdWinEnter
+            | Self::CmdWinLeave => EventCategory::Cmdline,
+
+            // Terminal events
+            Self::TermChanged
+            | Self::TermClose
+            | Self::TermEnter
+            | Self::TermLeave
+            | Self::TermOpen
+            | Self::TermRequest
+            | Self::TermResponse => EventCategory::Terminal,
+
+            // UI events
+            Self::ColorScheme
+            | Self::ColorSchemePre
+            | Self::FocusGained
+            | Self::FocusLost
+            | Self::GUIEnter
+            | Self::GUIFailed
+            | Self::UIEnter
+            | Self::UILeave
+            | Self::VimResized => EventCategory::Ui,
+
+            // Session events
+            Self::VimEnter
+            | Self::VimLeave
+            | Self::VimLeavePre
+            | Self::VimResume
+            | Self::VimSuspend
+            | Self::ExitPre
+            | Self::QuitPre
+            | Self::SessionLoadPost
+            | Self::SessionWritePost
+            | Self::SafeState => EventCategory::Session,
+
+            // Text change events
+            Self::TextChanged
+            | Self::TextChangedI
+            | Self::TextChangedP
+            | Self::TextChangedT
+            | Self::TextYankPost => EventCategory::TextChange,
+
+            // Completion events
+            Self::CompleteChanged | Self::CompleteDone | Self::CompleteDonePre => {
+                EventCategory::Completion
+            }
+
+            // User events
+            Self::User => EventCategory::User,
+
+            // Everything else categorized as Unknown
+            _ => EventCategory::Unknown,
+        }
+    }
+
+    /// Get the event name as a static string.
+    #[must_use]
+    #[allow(clippy::too_many_lines)]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::BufAdd => "BufAdd",
+            Self::BufCreate => "BufCreate",
+            Self::BufDelete => "BufDelete",
+            Self::BufEnter => "BufEnter",
+            Self::BufFilePost => "BufFilePost",
+            Self::BufFilePre => "BufFilePre",
+            Self::BufHidden => "BufHidden",
+            Self::BufLeave => "BufLeave",
+            Self::BufModifiedSet => "BufModifiedSet",
+            Self::BufNew => "BufNew",
+            Self::BufNewFile => "BufNewFile",
+            Self::BufRead => "BufRead",
+            Self::BufReadCmd => "BufReadCmd",
+            Self::BufReadPost => "BufReadPost",
+            Self::BufReadPre => "BufReadPre",
+            Self::BufUnload => "BufUnload",
+            Self::BufWinEnter => "BufWinEnter",
+            Self::BufWinLeave => "BufWinLeave",
+            Self::BufWipeout => "BufWipeout",
+            Self::BufWrite => "BufWrite",
+            Self::BufWriteCmd => "BufWriteCmd",
+            Self::BufWritePost => "BufWritePost",
+            Self::BufWritePre => "BufWritePre",
+            Self::ChanInfo => "ChanInfo",
+            Self::ChanOpen => "ChanOpen",
+            Self::CmdlineChanged => "CmdlineChanged",
+            Self::CmdlineEnter => "CmdlineEnter",
+            Self::CmdlineLeave => "CmdlineLeave",
+            Self::CmdlineLeavePre => "CmdlineLeavePre",
+            Self::CmdUndefined => "CmdUndefined",
+            Self::CmdWinEnter => "CmdWinEnter",
+            Self::CmdWinLeave => "CmdWinLeave",
+            Self::ColorScheme => "ColorScheme",
+            Self::ColorSchemePre => "ColorSchemePre",
+            Self::CompleteChanged => "CompleteChanged",
+            Self::CompleteDone => "CompleteDone",
+            Self::CompleteDonePre => "CompleteDonePre",
+            Self::CursorHold => "CursorHold",
+            Self::CursorHoldI => "CursorHoldI",
+            Self::CursorMoved => "CursorMoved",
+            Self::CursorMovedC => "CursorMovedC",
+            Self::CursorMovedI => "CursorMovedI",
+            Self::DiagnosticChanged => "DiagnosticChanged",
+            Self::DiffUpdated => "DiffUpdated",
+            Self::DirChanged => "DirChanged",
+            Self::DirChangedPre => "DirChangedPre",
+            Self::EncodingChanged => "EncodingChanged",
+            Self::ExitPre => "ExitPre",
+            Self::FileAppendCmd => "FileAppendCmd",
+            Self::FileAppendPost => "FileAppendPost",
+            Self::FileAppendPre => "FileAppendPre",
+            Self::FileChangedRO => "FileChangedRO",
+            Self::FileChangedShell => "FileChangedShell",
+            Self::FileChangedShellPost => "FileChangedShellPost",
+            Self::FileEncoding => "FileEncoding",
+            Self::FileReadCmd => "FileReadCmd",
+            Self::FileReadPost => "FileReadPost",
+            Self::FileReadPre => "FileReadPre",
+            Self::FileType => "FileType",
+            Self::FileWriteCmd => "FileWriteCmd",
+            Self::FileWritePost => "FileWritePost",
+            Self::FileWritePre => "FileWritePre",
+            Self::FilterReadPost => "FilterReadPost",
+            Self::FilterReadPre => "FilterReadPre",
+            Self::FilterWritePost => "FilterWritePost",
+            Self::FilterWritePre => "FilterWritePre",
+            Self::FocusGained => "FocusGained",
+            Self::FocusLost => "FocusLost",
+            Self::FuncUndefined => "FuncUndefined",
+            Self::GUIEnter => "GUIEnter",
+            Self::GUIFailed => "GUIFailed",
+            Self::InsertChange => "InsertChange",
+            Self::InsertCharPre => "InsertCharPre",
+            Self::InsertEnter => "InsertEnter",
+            Self::InsertLeave => "InsertLeave",
+            Self::InsertLeavePre => "InsertLeavePre",
+            Self::LspAttach => "LspAttach",
+            Self::LspDetach => "LspDetach",
+            Self::LspNotify => "LspNotify",
+            Self::LspProgress => "LspProgress",
+            Self::LspRequest => "LspRequest",
+            Self::LspTokenUpdate => "LspTokenUpdate",
+            Self::MenuPopup => "MenuPopup",
+            Self::ModeChanged => "ModeChanged",
+            Self::OptionSet => "OptionSet",
+            Self::PackChanged => "PackChanged",
+            Self::PackChangedPre => "PackChangedPre",
+            Self::Progress => "Progress",
+            Self::QuickFixCmdPost => "QuickFixCmdPost",
+            Self::QuickFixCmdPre => "QuickFixCmdPre",
+            Self::QuitPre => "QuitPre",
+            Self::RecordingEnter => "RecordingEnter",
+            Self::RecordingLeave => "RecordingLeave",
+            Self::RemoteReply => "RemoteReply",
+            Self::SafeState => "SafeState",
+            Self::SearchWrapped => "SearchWrapped",
+            Self::SessionLoadPost => "SessionLoadPost",
+            Self::SessionWritePost => "SessionWritePost",
+            Self::ShellCmdPost => "ShellCmdPost",
+            Self::ShellFilterPost => "ShellFilterPost",
+            Self::Signal => "Signal",
+            Self::SourceCmd => "SourceCmd",
+            Self::SourcePost => "SourcePost",
+            Self::SourcePre => "SourcePre",
+            Self::SpellFileMissing => "SpellFileMissing",
+            Self::StdinReadPost => "StdinReadPost",
+            Self::StdinReadPre => "StdinReadPre",
+            Self::SwapExists => "SwapExists",
+            Self::Syntax => "Syntax",
+            Self::TabClosed => "TabClosed",
+            Self::TabEnter => "TabEnter",
+            Self::TabLeave => "TabLeave",
+            Self::TabNew => "TabNew",
+            Self::TabNewEntered => "TabNewEntered",
+            Self::TermChanged => "TermChanged",
+            Self::TermClose => "TermClose",
+            Self::TermEnter => "TermEnter",
+            Self::TermLeave => "TermLeave",
+            Self::TermOpen => "TermOpen",
+            Self::TermRequest => "TermRequest",
+            Self::TermResponse => "TermResponse",
+            Self::TextChanged => "TextChanged",
+            Self::TextChangedI => "TextChangedI",
+            Self::TextChangedP => "TextChangedP",
+            Self::TextChangedT => "TextChangedT",
+            Self::TextYankPost => "TextYankPost",
+            Self::UIEnter => "UIEnter",
+            Self::UILeave => "UILeave",
+            Self::User => "User",
+            Self::VimEnter => "VimEnter",
+            Self::VimLeave => "VimLeave",
+            Self::VimLeavePre => "VimLeavePre",
+            Self::VimResized => "VimResized",
+            Self::VimResume => "VimResume",
+            Self::VimSuspend => "VimSuspend",
+            Self::WinClosed => "WinClosed",
+            Self::WinEnter => "WinEnter",
+            Self::WinLeave => "WinLeave",
+            Self::WinNew => "WinNew",
+            Self::WinResized => "WinResized",
+            Self::WinScrolled => "WinScrolled",
+        }
+    }
+}
+
+// Note: Default is explicitly implemented rather than derived to document
+// that BufAdd (0) is the default event value
+#[allow(clippy::derivable_impls)]
+impl Default for Event {
+    fn default() -> Self {
+        Self::BufAdd
+    }
+}
+
+// =============================================================================
+// Event FFI Exports
+// =============================================================================
+
+/// Check if an event value is valid.
+#[unsafe(no_mangle)]
+#[allow(clippy::manual_range_contains)]
+pub extern "C" fn rs_event_valid(event: c_int) -> c_int {
+    c_int::from(event >= 0 && event < NUM_EVENTS)
+}
+
+/// Get the category of an event.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_event_category(event: c_int) -> c_int {
+    Event::from_raw(event).map_or(EventCategory::Unknown.to_raw(), |e| e.category().to_raw())
+}
+
+/// Get the number of events.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_num_events() -> c_int {
+    NUM_EVENTS
+}
+
+// =============================================================================
 // Event Flags
 // =============================================================================
 
@@ -472,5 +1060,75 @@ mod tests {
         assert!(matched.matched);
         assert_eq!(matched.event, 42);
         assert_eq!(matched.score, 100);
+    }
+
+    #[test]
+    fn test_event_from_raw() {
+        // Valid events
+        assert_eq!(Event::from_raw(0), Some(Event::BufAdd));
+        assert_eq!(Event::from_raw(3), Some(Event::BufEnter));
+        assert_eq!(Event::from_raw(37), Some(Event::CursorHold));
+        assert_eq!(Event::from_raw(128), Some(Event::User));
+        assert_eq!(Event::from_raw(140), Some(Event::WinScrolled));
+
+        // Invalid events
+        assert_eq!(Event::from_raw(-1), None);
+        assert_eq!(Event::from_raw(141), None);
+        assert_eq!(Event::from_raw(1000), None);
+    }
+
+    #[test]
+    fn test_event_to_raw() {
+        assert_eq!(Event::BufAdd.to_raw(), 0);
+        assert_eq!(Event::BufEnter.to_raw(), 3);
+        assert_eq!(Event::CursorHold.to_raw(), 37);
+        assert_eq!(Event::User.to_raw(), 128);
+        assert_eq!(Event::WinScrolled.to_raw(), 140);
+    }
+
+    #[test]
+    fn test_event_enum_category() {
+        assert_eq!(Event::BufEnter.category(), EventCategory::Buffer);
+        assert_eq!(Event::FileType.category(), EventCategory::File);
+        assert_eq!(Event::WinEnter.category(), EventCategory::Window);
+        assert_eq!(Event::TabEnter.category(), EventCategory::Tab);
+        assert_eq!(Event::CursorHold.category(), EventCategory::Cursor);
+        assert_eq!(Event::InsertEnter.category(), EventCategory::Insert);
+        assert_eq!(Event::CmdlineEnter.category(), EventCategory::Cmdline);
+        assert_eq!(Event::TermOpen.category(), EventCategory::Terminal);
+        assert_eq!(Event::ColorScheme.category(), EventCategory::Ui);
+        assert_eq!(Event::VimEnter.category(), EventCategory::Session);
+        assert_eq!(Event::TextChanged.category(), EventCategory::TextChange);
+        assert_eq!(Event::CompleteDone.category(), EventCategory::Completion);
+        assert_eq!(Event::User.category(), EventCategory::User);
+    }
+
+    #[test]
+    fn test_event_name() {
+        assert_eq!(Event::BufAdd.name(), "BufAdd");
+        assert_eq!(Event::BufEnter.name(), "BufEnter");
+        assert_eq!(Event::CursorHold.name(), "CursorHold");
+        assert_eq!(Event::TextYankPost.name(), "TextYankPost");
+        assert_eq!(Event::WinScrolled.name(), "WinScrolled");
+    }
+
+    #[test]
+    fn test_event_is_valid() {
+        assert!(Event::BufAdd.is_valid());
+        assert!(Event::WinScrolled.is_valid());
+    }
+
+    #[test]
+    fn test_num_events() {
+        assert_eq!(NUM_EVENTS, 141);
+    }
+
+    #[test]
+    fn test_event_roundtrip() {
+        // Test that all events can round-trip through raw conversion
+        for i in 0..NUM_EVENTS {
+            let event = Event::from_raw(i).expect("valid event");
+            assert_eq!(event.to_raw(), i);
+        }
     }
 }
