@@ -1220,8 +1220,7 @@ extern "C" {
     fn nvim_vterm_state_this_row_width(state: VTermStateHandle) -> c_int;
 
     // Line info accessors
-    fn nvim_vterm_state_get_lineinfo_at(state: VTermStateHandle, row: c_int)
-        -> *mut VTermLineInfo;
+    fn nvim_vterm_state_get_lineinfo_at(state: VTermStateHandle, row: c_int) -> *mut VTermLineInfo;
     fn nvim_vterm_state_set_lineinfo_continuation(
         state: VTermStateHandle,
         row: c_int,
@@ -1861,11 +1860,7 @@ pub unsafe extern "C" fn rs_vterm_state_csi_vertical_position_absolute(
 /// # Safety
 /// The state handle must be valid.
 #[no_mangle]
-pub unsafe extern "C" fn rs_vterm_state_csi_hvp(
-    state: VTermStateHandle,
-    row: c_int,
-    col: c_int,
-) {
+pub unsafe extern "C" fn rs_vterm_state_csi_hvp(state: VTermStateHandle, row: c_int, col: c_int) {
     rs_vterm_state_csi_cursor_position(state, row, col);
 }
 

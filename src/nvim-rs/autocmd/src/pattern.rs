@@ -127,7 +127,11 @@ pub fn glob_to_regex(pattern: &[u8]) -> (String, bool, i32) {
                             i += 1;
                         }
                         // Check for \\\{ -> \{
-                        b'\\' if i + 3 < slice.len() && slice[i + 2] == b'\\' && slice[i + 3] == b'{' => {
+                        b'\\'
+                            if i + 3 < slice.len()
+                                && slice[i + 2] == b'\\'
+                                && slice[i + 3] == b'{' =>
+                        {
                             result.push('\\');
                             result.push('{');
                             i += 3;
@@ -190,7 +194,6 @@ pub fn glob_to_regex(pattern: &[u8]) -> (String, bool, i32) {
 
     (result, allow_dirs, error)
 }
-
 
 // =============================================================================
 // FFI Exports
