@@ -2877,6 +2877,496 @@ pub extern "C" fn rs_foldMoveTo(updown: bool, dir: c_int, count: c_int) -> c_int
     fold_move_to_impl(updown, dir, count)
 }
 
+// ============================================================================
+// Phase 1: Manual Fold Operations
+// ============================================================================
+
+extern "C" {
+    /// Call foldCreateMarkers in C (for marker method).
+    fn nvim_foldCreateMarkers(wp: WinHandle, start_lnum: LineNr, end_lnum: LineNr);
+
+    /// Call closeFold in C.
+    fn nvim_closeFold(lnum: LineNr, count: c_int);
+
+    /// Check if foldmethod is marker for the window.
+    #[allow(dead_code)]
+    fn nvim_foldmethodIsMarker(wp: WinHandle) -> c_int;
+
+    /// Emit error message for no fold found.
+    fn nvim_emsg_e_nofold();
+
+    /// Call parseMarker for the window (sets global foldstartmarkerlen/foldendmarker).
+    fn nvim_parseMarker(wp: WinHandle);
+
+    /// Delete fold markers in C.
+    fn nvim_deleteFoldMarkers(wp: WinHandle, fp: FoldHandle, recursive: bool, lnum_off: LineNr);
+
+    /// Check if buffer is modifiable (for fold operations).
+    #[allow(dead_code)]
+    fn nvim_fold_buf_is_modifiable(buf: BufHandle) -> c_int;
+
+    /// Emit error message for buffer not modifiable (for fold operations).
+    #[allow(dead_code)]
+    fn nvim_fold_emsg_modifiable();
+
+    /// Call check_cursor_col for window.
+    fn nvim_check_cursor_col(wp: WinHandle);
+
+    /// Call changed_lines for buffer.
+    fn nvim_changed_lines(
+        buf: BufHandle,
+        first: LineNr,
+        col: c_int,
+        last: LineNr,
+        xtra: LineNr,
+        add_undo: bool,
+    );
+
+    /// Send buffer update events.
+    fn nvim_buf_updates_send_changes(
+        buf: BufHandle,
+        firstlnum: LineNr,
+        num_added: i64,
+        num_removed: i64,
+    );
+
+    /// Redraw the current buffer later.
+    fn nvim_redraw_curbuf_later(redraw_type: c_int);
+}
+
+/// UPD_INVERTED redraw type.
+const UPD_INVERTED: c_int = 25;
+
+/// Create a fold from line `start_lnum` to line `end_lnum` (inclusive) in the window.
+///
+/// For marker method, this adds fold markers to the buffer.
+/// For manual method, this creates a fold entry in the fold tree.
+#[allow(clippy::too_many_lines)]
+fn fold_create_impl(wp: WinHandle, mut start_lnum: LineNr, mut end_lnum: LineNr) {
+    if wp.is_null() {
+        return;
+    }
+
+    // Swap if start > end
+    if start_lnum > end_lnum {
+        std::mem::swap(&mut start_lnum, &mut end_lnum);
+    }
+
+    // When 'foldmethod' is "marker" add markers, which creates the folds.
+    if foldmethod_is_marker_impl(wp) {
+        unsafe { nvim_foldCreateMarkers(wp, start_lnum, end_lnum) };
+        return;
+    }
+
+    // checkupdate(wp)
+    unsafe { nvim_checkupdate(wp) };
+
+    let mut use_level = false;
+    let mut closed = false;
+    let mut level = 0;
+    let mut start_rel = start_lnum;
+    let mut end_rel = end_lnum;
+
+    // Find the place to insert the new fold
+    let mut gap = unsafe { nvim_win_get_folds(wp) };
+    let mut i: c_int;
+
+    let len = unsafe { nvim_ga_len(gap) };
+    if len == 0 {
+        i = 0;
+    } else {
+        // Find fold containing start_rel
+        loop {
+            let Some((found, fp_idx)) = fold_find_with_idx(gap, start_rel) else {
+                i = 0;
+                break;
+            };
+
+            if !found {
+                i = fp_idx;
+                break;
+            }
+
+            let fp = unsafe { nvim_ga_fold_at(gap, fp_idx) };
+            if fp.is_null() {
+                i = fp_idx;
+                break;
+            }
+
+            let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+            let fd_len = unsafe { nvim_fold_get_fd_len(fp) };
+
+            if fd_top + fd_len > end_rel {
+                // New fold is completely inside this fold: Go one level deeper.
+                let nested = unsafe { nvim_fold_get_fd_nested(fp) };
+                gap = nested;
+                start_rel -= fd_top;
+                end_rel -= fd_top;
+
+                let fdl = unsafe { nvim_win_get_p_fdl(wp) };
+                let fd_flags = unsafe { nvim_fold_get_fd_flags(fp) };
+
+                if use_level || fd_flags == fold_flags::FD_LEVEL {
+                    use_level = true;
+                    if level >= fdl {
+                        closed = true;
+                    }
+                } else if fd_flags == fold_flags::FD_CLOSED {
+                    closed = true;
+                }
+                level += 1;
+            } else {
+                // This fold and new fold overlap: Insert here and move some folds inside the new fold.
+                i = fp_idx;
+                break;
+            }
+        }
+
+        // Handle case where we descended into nested folds and found empty array
+        let gap_len = unsafe { nvim_ga_len(gap) };
+        if gap_len == 0 {
+            i = 0;
+        }
+    }
+
+    // Grow the array to make room for new fold
+    unsafe { nvim_ga_grow_folds(gap, 1) };
+
+    // Count number of folds that will be contained in the new fold.
+    let mut cont: c_int = 0;
+    let gap_len = unsafe { nvim_ga_len(gap) };
+    for j in i..gap_len {
+        let fp = unsafe { nvim_ga_fold_at(gap, j) };
+        if fp.is_null() {
+            break;
+        }
+        let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+        if fd_top > end_rel {
+            break;
+        }
+        cont += 1;
+    }
+
+    if cont > 0 {
+        // Adjust start_rel to be the minimum of it and the first contained fold's top
+        let fp_first = unsafe { nvim_ga_fold_at(gap, i) };
+        if !fp_first.is_null() {
+            let first_top = unsafe { nvim_fold_get_fd_top(fp_first) };
+            start_rel = start_rel.min(first_top);
+        }
+
+        // When last contained fold isn't completely contained, adjust end of new fold.
+        let fp_last = unsafe { nvim_ga_fold_at(gap, i + cont - 1) };
+        if !fp_last.is_null() {
+            let last_top = unsafe { nvim_fold_get_fd_top(fp_last) };
+            let last_len = unsafe { nvim_fold_get_fd_len(fp_last) };
+            end_rel = end_rel.max(last_top + last_len - 1);
+        }
+
+        // Move folds after the contained ones down by (1 - cont) positions
+        // i.e., we're removing `cont` folds and adding 1 fold
+        if i + cont < gap_len {
+            unsafe {
+                nvim_fold_memmove(gap, i + 1, i + cont, gap_len - (i + cont));
+            }
+        }
+
+        // Set new length: gap_len + 1 - cont
+        let new_len = gap_len + 1 - cont;
+        unsafe { nvim_ga_set_len(gap, new_len) };
+    } else {
+        // No contained folds - simpler case
+        // Shift existing folds to make room
+        if i < gap_len {
+            unsafe {
+                nvim_fold_memmove(gap, i + 1, i, gap_len - i);
+            }
+        }
+
+        // Increment length
+        unsafe { nvim_ga_set_len(gap, gap_len + 1) };
+    }
+
+    // Get pointer to where new fold will be inserted (after potential shift)
+    let fp = unsafe { nvim_ga_fold_at(gap, i) };
+    if fp.is_null() {
+        return;
+    }
+
+    // Initialize nested array
+    let nested = unsafe { nvim_fold_get_fd_nested(fp) };
+    if !nested.is_null() {
+        unsafe { nvim_ga_init_folds(nested) };
+    }
+
+    // Set up the new fold
+    unsafe {
+        nvim_fold_set_fd_top(fp, start_rel);
+        nvim_fold_set_fd_len(fp, end_rel - start_rel + 1);
+        nvim_fold_set_fd_flags(fp, fold_flags::FD_CLOSED);
+        nvim_fold_set_fd_small(fp, tristate::K_NONE);
+    }
+
+    // We want the new fold to be closed. If it would remain open because
+    // of using 'foldlevel', need to adjust fd_flags of containing folds.
+    let fdl = unsafe { nvim_win_get_p_fdl(wp) };
+    if use_level && !closed && level < fdl {
+        unsafe { nvim_closeFold(start_lnum, 1) };
+    }
+    if !use_level {
+        unsafe { nvim_win_set_w_fold_manual(wp, true) };
+    }
+
+    // Redraw
+    unsafe { nvim_changed_window_setting(wp) };
+}
+
+/// Delete folds from line `start` to `end` (inclusive).
+///
+/// When `recursive` is true, delete recursively.
+/// When `had_visual` is true, a visual selection was used.
+#[allow(clippy::too_many_lines)]
+fn delete_fold_impl(wp: WinHandle, start: LineNr, end: LineNr, recursive: bool, had_visual: bool) {
+    if wp.is_null() {
+        return;
+    }
+
+    // checkupdate(wp)
+    unsafe { nvim_checkupdate(wp) };
+
+    let mut lnum = start;
+    let mut did_one = false;
+    let mut first_lnum = MAXLNUM;
+    let mut last_lnum: LineNr = 0;
+
+    while lnum <= end {
+        // Find the deepest fold for "lnum".
+        let mut gap = unsafe { nvim_win_get_folds(wp) };
+        let mut found_ga: Option<GArrayHandle> = None;
+        let mut found_fp: FoldHandle = FoldHandle(std::ptr::null_mut());
+        let mut found_idx: c_int = 0;
+        let mut found_off: LineNr = 0;
+        let mut lnum_off: LineNr = 0;
+        let mut use_level = false;
+        let mut level = 0;
+
+        loop {
+            let Some((found, fp_idx)) = fold_find_with_idx(gap, lnum - lnum_off) else {
+                break;
+            };
+
+            if !found {
+                break;
+            }
+
+            let fp = unsafe { nvim_ga_fold_at(gap, fp_idx) };
+            if fp.is_null() {
+                break;
+            }
+
+            // lnum is inside this fold, remember info
+            found_ga = Some(gap);
+            found_fp = fp;
+            found_idx = fp_idx;
+            found_off = lnum_off;
+
+            // if "lnum" is folded, don't check nesting
+            let mut maybe_small = false;
+            let is_closed =
+                check_closed_impl(wp, fp, &mut use_level, level, &mut maybe_small, lnum_off);
+            if is_closed {
+                break;
+            }
+
+            // check nested folds
+            let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+            gap = unsafe { nvim_fold_get_fd_nested(fp) };
+            lnum_off += fd_top;
+            level += 1;
+        }
+
+        if let Some(found_gap) = found_ga {
+            let fd_top = unsafe { nvim_fold_get_fd_top(found_fp) };
+            let fd_len = unsafe { nvim_fold_get_fd_len(found_fp) };
+            lnum = fd_top + fd_len + found_off;
+
+            if foldmethod_is_manual_impl(wp) {
+                delete_fold_entry_impl(wp, found_gap, found_idx, recursive);
+            } else {
+                first_lnum = first_lnum.min(fd_top + found_off);
+                last_lnum = last_lnum.max(lnum);
+                if !did_one {
+                    unsafe { nvim_parseMarker(wp) };
+                }
+                unsafe { nvim_deleteFoldMarkers(wp, found_fp, recursive, found_off) };
+            }
+            did_one = true;
+
+            // redraw window
+            unsafe { nvim_changed_window_setting(wp) };
+        } else {
+            lnum += 1;
+        }
+    }
+
+    if did_one {
+        // Deleting markers may make cursor column invalid
+        unsafe { nvim_check_cursor_col(wp) };
+    } else {
+        unsafe { nvim_emsg_e_nofold() };
+        // Force a redraw to remove the Visual highlighting.
+        if had_visual {
+            let buf = unsafe { nvim_win_get_buffer(wp) };
+            unsafe { nvim_redraw_buf_later(buf, UPD_INVERTED) };
+        }
+    }
+
+    if last_lnum > 0 {
+        let buf = unsafe { nvim_win_get_buffer(wp) };
+        unsafe { nvim_changed_lines(buf, first_lnum, 0, last_lnum, 0, false) };
+
+        // send one nvim_buf_lines_event at the end
+        let num_changed = i64::from(last_lnum - first_lnum);
+        unsafe { nvim_buf_updates_send_changes(buf, first_lnum, num_changed, num_changed) };
+    }
+}
+
+extern "C" {
+    /// Redraw buffer later.
+    fn nvim_redraw_buf_later(buf: BufHandle, redraw_type: c_int);
+}
+
+/// Open or close folds for current window in lines "first" to "last".
+///
+/// Used for "zo", "zO", "zc" and "zC" in Visual mode.
+fn op_fold_range_impl(
+    first_lnum: LineNr,
+    last_lnum: LineNr,
+    opening: bool,
+    recurse: bool,
+    had_visual: bool,
+) {
+    let curwin = unsafe { nvim_get_curwin() };
+    let mut done = done_flags::DONE_NOTHING;
+
+    let mut lnum = first_lnum;
+    while lnum <= last_lnum {
+        let mut lnum_next = lnum;
+
+        // Opening one level only: next fold to open is after the one going to be opened.
+        if opening && !recurse {
+            let mut temp_last: LineNr = 0;
+            if unsafe { nvim_hasFolding(curwin, lnum, std::ptr::null_mut(), &raw mut temp_last) }
+                != 0
+            {
+                lnum_next = temp_last;
+            }
+        }
+
+        set_manual_fold_impl(lnum, opening, recurse, &raw mut done);
+
+        // Closing one level only: next line to close a fold is after just closed fold.
+        if !opening && !recurse {
+            let mut temp_last: LineNr = 0;
+            if unsafe { nvim_hasFolding(curwin, lnum, std::ptr::null_mut(), &raw mut temp_last) }
+                != 0
+            {
+                lnum_next = temp_last;
+            }
+        }
+
+        lnum = lnum_next + 1;
+    }
+
+    if done == done_flags::DONE_NOTHING {
+        unsafe { nvim_emsg_e_nofold() };
+    }
+
+    // Force a redraw to remove the Visual highlighting.
+    if had_visual {
+        unsafe { nvim_redraw_curbuf_later(UPD_INVERTED) };
+    }
+}
+
+/// Open folds until the cursor line is not in a closed fold.
+fn fold_open_cursor_impl() {
+    let curwin = unsafe { nvim_get_curwin() };
+
+    // checkupdate(curwin)
+    unsafe { nvim_checkupdate(curwin) };
+
+    if !has_any_folding_impl(curwin) {
+        return;
+    }
+
+    loop {
+        let mut done: c_int = done_flags::DONE_NOTHING;
+        let cursor_lnum = unsafe { nvim_win_get_cursor_lnum(curwin) };
+        set_manual_fold_win_impl(curwin, cursor_lnum, true, false, &raw mut done);
+        if done & done_flags::DONE_ACTION == 0 {
+            break;
+        }
+    }
+}
+
+// ============================================================================
+// Phase 1: Manual Fold Operations FFI Exports
+// ============================================================================
+
+/// Create a fold from line `start_lnum` to line `end_lnum` (inclusive).
+///
+/// # Safety
+/// The `wp` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_foldCreate(wp: WinHandle, start_lnum: LineNr, end_lnum: LineNr) {
+    fold_create_impl(wp, start_lnum, end_lnum);
+}
+
+/// Delete folds from line `start` to `end` (inclusive).
+///
+/// # Safety
+/// The `wp` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_deleteFold(
+    wp: WinHandle,
+    start: LineNr,
+    end: LineNr,
+    recursive: c_int,
+    had_visual: bool,
+) {
+    delete_fold_impl(wp, start, end, recursive != 0, had_visual);
+}
+
+/// Open or close folds for current window in lines "first" to "last".
+///
+/// # Safety
+/// This function is safe to call from C.
+#[no_mangle]
+pub extern "C" fn rs_opFoldRange(
+    first_lnum: LineNr,
+    last_lnum: LineNr,
+    opening: c_int,
+    recurse: c_int,
+    had_visual: bool,
+) {
+    op_fold_range_impl(
+        first_lnum,
+        last_lnum,
+        opening != 0,
+        recurse != 0,
+        had_visual,
+    );
+}
+
+/// Open folds until the cursor line is not in a closed fold.
+///
+/// # Safety
+/// This function is safe to call from C.
+#[no_mangle]
+pub extern "C" fn rs_foldOpenCursor() {
+    fold_open_cursor_impl();
+}
+
 #[cfg(test)]
 mod tests {
     // Tests require FFI stubs which aren't available in pure Rust testing.

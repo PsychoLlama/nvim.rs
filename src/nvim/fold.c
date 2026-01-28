@@ -155,6 +155,13 @@ extern void rs_foldMarkAdjust(win_T *wp, linenr_T line1, linenr_T line2,
 extern void rs_foldAdjustCursor(win_T *wp);
 extern void rs_foldAdjustVisual(void);
 
+// Rust FFI declarations for Phase 1: Manual Fold Operations
+extern void rs_foldCreate(win_T *wp, linenr_T start_lnum, linenr_T end_lnum);
+extern void rs_deleteFold(win_T *wp, linenr_T start, linenr_T end, int recursive, bool had_visual);
+extern void rs_opFoldRange(linenr_T first_lnum, linenr_T last_lnum, int opening,
+                           int recurse, bool had_visual);
+extern void rs_foldOpenCursor(void);
+
 // Struct returned by rs_hasFoldingWin
 typedef struct {
   int has_folding;
@@ -378,33 +385,7 @@ void closeFoldRecurse(pos_T pos)
 /// @param had_visual  true when Visual selection used
 void opFoldRange(pos_T firstpos, pos_T lastpos, int opening, int recurse, bool had_visual)
 {
-  int done = DONE_NOTHING;              // avoid error messages
-  linenr_T first = firstpos.lnum;
-  linenr_T last = lastpos.lnum;
-  linenr_T lnum_next;
-
-  for (linenr_T lnum = first; lnum <= last; lnum = lnum_next + 1) {
-    pos_T temp = { lnum, 0, 0 };
-    lnum_next = lnum;
-    // Opening one level only: next fold to open is after the one going to
-    // be opened.
-    if (opening && !recurse) {
-      hasFolding(curwin, lnum, NULL, &lnum_next);
-    }
-    setManualFold(temp, opening, recurse, &done);
-    // Closing one level only: next line to close a fold is after just
-    // closed fold.
-    if (!opening && !recurse) {
-      hasFolding(curwin, lnum, NULL, &lnum_next);
-    }
-  }
-  if (done == DONE_NOTHING) {
-    emsg(_(e_nofold));
-  }
-  // Force a redraw to remove the Visual highlighting.
-  if (had_visual) {
-    redraw_curbuf_later(UPD_INVERTED);
-  }
+  rs_opFoldRange(firstpos.lnum, lastpos.lnum, opening, recurse, had_visual);
 }
 
 // openFold() {{{2
@@ -426,16 +407,7 @@ void openFoldRecurse(pos_T pos)
 /// Open folds until the cursor line is not in a closed fold.
 void foldOpenCursor(void)
 {
-  checkupdate(curwin);
-  if (hasAnyFolding(curwin)) {
-    while (true) {
-      int done = DONE_NOTHING;
-      setManualFold(curwin->w_cursor, true, false, &done);
-      if (!(done & DONE_ACTION)) {
-        break;
-      }
-    }
-  }
+  rs_foldOpenCursor();
 }
 
 // newFoldLevel() {{{2
@@ -485,126 +457,7 @@ int foldManualAllowed(bool create)
 /// window.
 void foldCreate(win_T *wp, pos_T start, pos_T end)
 {
-  bool use_level = false;
-  bool closed = false;
-  int level = 0;
-  pos_T start_rel = start;
-  pos_T end_rel = end;
-
-  if (start.lnum > end.lnum) {
-    // reverse the range
-    end = start_rel;
-    start = end_rel;
-    start_rel = start;
-    end_rel = end;
-  }
-
-  // When 'foldmethod' is "marker" add markers, which creates the folds.
-  if (foldmethodIsMarker(wp)) {
-    foldCreateMarkers(wp, start, end);
-    return;
-  }
-
-  checkupdate(wp);
-
-  int i;
-
-  // Find the place to insert the new fold
-  garray_T *gap = &wp->w_folds;
-  if (gap->ga_len == 0) {
-    i = 0;
-  } else {
-    fold_T *fp;
-    while (true) {
-      if (!foldFind(gap, start_rel.lnum, &fp)) {
-        break;
-      }
-      if (fp->fd_top + fp->fd_len > end_rel.lnum) {
-        // New fold is completely inside this fold: Go one level deeper.
-        gap = &fp->fd_nested;
-        start_rel.lnum -= fp->fd_top;
-        end_rel.lnum -= fp->fd_top;
-        if (use_level || fp->fd_flags == FD_LEVEL) {
-          use_level = true;
-          if (level >= wp->w_p_fdl) {
-            closed = true;
-          }
-        } else if (fp->fd_flags == FD_CLOSED) {
-          closed = true;
-        }
-        level++;
-      } else {
-        // This fold and new fold overlap: Insert here and move some folds
-        // inside the new fold.
-        break;
-      }
-    }
-    if (gap->ga_len == 0) {
-      i = 0;
-    } else {
-      i = (int)(fp - (fold_T *)gap->ga_data);
-    }
-  }
-
-  ga_grow(gap, 1);
-  {
-    fold_T *fp = (fold_T *)gap->ga_data + i;
-    garray_T fold_ga;
-    ga_init(&fold_ga, (int)sizeof(fold_T), 10);
-
-    // Count number of folds that will be contained in the new fold.
-    int cont;
-    for (cont = 0; i + cont < gap->ga_len; cont++) {
-      if (fp[cont].fd_top > end_rel.lnum) {
-        break;
-      }
-    }
-    if (cont > 0) {
-      ga_grow(&fold_ga, cont);
-      // If the first fold starts before the new fold, let the new fold
-      // start there.  Otherwise the existing fold would change.
-      start_rel.lnum = MIN(start_rel.lnum, fp->fd_top);
-
-      // When last contained fold isn't completely contained, adjust end
-      // of new fold.
-      end_rel.lnum = MAX(end_rel.lnum, fp[cont - 1].fd_top + fp[cont - 1].fd_len - 1);
-      // Move contained folds to inside new fold
-      memmove(fold_ga.ga_data, fp, sizeof(fold_T) * (size_t)cont);
-      fold_ga.ga_len += cont;
-      i += cont;
-
-      // Adjust line numbers in contained folds to be relative to the
-      // new fold.
-      for (int j = 0; j < cont; j++) {
-        ((fold_T *)fold_ga.ga_data)[j].fd_top -= start_rel.lnum;
-      }
-    }
-    // Move remaining entries to after the new fold.
-    if (i < gap->ga_len) {
-      memmove(fp + 1, (fold_T *)gap->ga_data + i,
-              sizeof(fold_T) * (size_t)(gap->ga_len - i));
-    }
-    gap->ga_len = gap->ga_len + 1 - cont;
-
-    // insert new fold
-    fp->fd_nested = fold_ga;
-    fp->fd_top = start_rel.lnum;
-    fp->fd_len = end_rel.lnum - start_rel.lnum + 1;
-
-    // We want the new fold to be closed.  If it would remain open because
-    // of using 'foldlevel', need to adjust fd_flags of containing folds.
-    if (use_level && !closed && level < wp->w_p_fdl) {
-      closeFold(start, 1);
-    }
-    if (!use_level) {
-      wp->w_fold_manual = true;
-    }
-    fp->fd_flags = FD_CLOSED;
-    fp->fd_small = kNone;
-
-    // redraw
-    changed_window_setting(wp);
-  }
+  rs_foldCreate(wp, start.lnum, end.lnum);
 }
 
 // deleteFold() {{{2
@@ -615,89 +468,7 @@ void foldCreate(win_T *wp, pos_T start, pos_T end)
 void deleteFold(win_T *const wp, const linenr_T start, const linenr_T end, const int recursive,
                 const bool had_visual)
 {
-  fold_T *found_fp = NULL;
-  linenr_T found_off = 0;
-  bool maybe_small = false;
-  int level = 0;
-  linenr_T lnum = start;
-  bool did_one = false;
-  linenr_T first_lnum = MAXLNUM;
-  linenr_T last_lnum = 0;
-
-  checkupdate(wp);
-
-  while (lnum <= end) {
-    // Find the deepest fold for "start".
-    garray_T *gap = &wp->w_folds;
-    garray_T *found_ga = NULL;
-    linenr_T lnum_off = 0;
-    bool use_level = false;
-    while (true) {
-      fold_T *fp;
-      if (!foldFind(gap, lnum - lnum_off, &fp)) {
-        break;
-      }
-      // lnum is inside this fold, remember info
-      found_ga = gap;
-      found_fp = fp;
-      found_off = lnum_off;
-
-      // if "lnum" is folded, don't check nesting
-      if (check_closed(wp, fp, &use_level, level,
-                       &maybe_small, lnum_off)) {
-        break;
-      }
-
-      // check nested folds
-      gap = &fp->fd_nested;
-      lnum_off += fp->fd_top;
-      level++;
-    }
-    if (found_ga == NULL) {
-      lnum++;
-    } else {
-      lnum = found_fp->fd_top + found_fp->fd_len + found_off;
-
-      if (foldmethodIsManual(wp)) {
-        deleteFoldEntry(wp, found_ga,
-                        (int)(found_fp - (fold_T *)found_ga->ga_data),
-                        recursive);
-      } else {
-        first_lnum = MIN(first_lnum, found_fp->fd_top + found_off);
-        last_lnum = MAX(last_lnum, lnum);
-        if (!did_one) {
-          parseMarker(wp);
-        }
-        deleteFoldMarkers(wp, found_fp, recursive, found_off);
-      }
-      did_one = true;
-
-      // redraw window
-      changed_window_setting(wp);
-    }
-  }
-  if (!did_one) {
-    emsg(_(e_nofold));
-    // Force a redraw to remove the Visual highlighting.
-    if (had_visual) {
-      redraw_buf_later(wp->w_buffer, UPD_INVERTED);
-    }
-  } else {
-    // Deleting markers may make cursor column invalid
-    check_cursor_col(wp);
-  }
-
-  if (last_lnum > 0) {
-    changed_lines(wp->w_buffer, first_lnum, 0, last_lnum, 0, false);
-
-    // send one nvim_buf_lines_event at the end
-    // last_lnum is the line *after* the last line of the outermost fold
-    // that was modified. Note also that deleting a fold might only require
-    // the modification of the *first* line of the fold, but we send through a
-    // notification that includes every line that was part of the fold
-    int64_t num_changed = last_lnum - first_lnum;
-    buf_updates_send_changes(wp->w_buffer, first_lnum, num_changed, num_changed);
-  }
+  rs_deleteFold(wp, start, end, recursive, had_visual);
 }
 
 // clearFolding() {{{2
@@ -3252,4 +3023,85 @@ void nvim_win_set_w_foldinvalid(win_T *wp, bool val)
 void nvim_deleteFoldRecurse_c(buf_T *buf, garray_T *gap)
 {
   deleteFoldRecurse(buf, gap);
+}
+
+// ============================================================================
+// Phase 1: Manual Fold Operations accessors
+// ============================================================================
+
+/// Wrapper for foldCreateMarkers for Rust.
+void nvim_foldCreateMarkers(win_T *wp, linenr_T start_lnum, linenr_T end_lnum)
+{
+  pos_T start = { start_lnum, 0, 0 };
+  pos_T end = { end_lnum, 0, 0 };
+  foldCreateMarkers(wp, start, end);
+}
+
+/// Wrapper for closeFold for Rust.
+void nvim_closeFold(linenr_T lnum, int count)
+{
+  pos_T pos = { lnum, 0, 0 };
+  closeFold(pos, count);
+}
+
+/// Emit the "no fold found" error message (e_nofold).
+void nvim_emsg_e_nofold(void)
+{
+  emsg(_(e_nofold));
+}
+
+/// Wrapper for parseMarker for Rust.
+void nvim_parseMarker(win_T *wp)
+{
+  parseMarker(wp);
+}
+
+/// Wrapper for deleteFoldMarkers for Rust.
+void nvim_deleteFoldMarkers(win_T *wp, fold_T *fp, bool recursive, linenr_T lnum_off)
+{
+  deleteFoldMarkers(wp, fp, recursive, lnum_off);
+}
+
+/// Check if buffer is modifiable (for fold operations).
+int nvim_fold_buf_is_modifiable(buf_T *buf)
+{
+  return MODIFIABLE(buf) ? 1 : 0;
+}
+
+/// Emit error message for buffer not modifiable (for fold operations).
+void nvim_fold_emsg_modifiable(void)
+{
+  emsg(_(e_modifiable));
+}
+
+/// Wrapper for check_cursor_col for Rust.
+void nvim_check_cursor_col(win_T *wp)
+{
+  check_cursor_col(wp);
+}
+
+/// Wrapper for changed_lines for Rust.
+void nvim_changed_lines(buf_T *buf, linenr_T first, int col, linenr_T last, linenr_T xtra,
+                        bool add_undo)
+{
+  changed_lines(buf, first, col, last, xtra, add_undo);
+}
+
+/// Wrapper for buf_updates_send_changes for Rust.
+void nvim_buf_updates_send_changes(buf_T *buf, linenr_T firstlnum, int64_t num_added,
+                                   int64_t num_removed)
+{
+  buf_updates_send_changes(buf, firstlnum, num_added, num_removed);
+}
+
+/// Redraw buffer later.
+void nvim_redraw_buf_later(buf_T *buf, int redraw_type)
+{
+  redraw_buf_later(buf, redraw_type);
+}
+
+/// Redraw the current buffer later.
+void nvim_redraw_curbuf_later(int redraw_type)
+{
+  redraw_curbuf_later(redraw_type);
 }
