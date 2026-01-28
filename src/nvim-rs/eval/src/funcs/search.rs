@@ -13,6 +13,10 @@
 #![allow(clippy::must_use_candidate)]
 #![allow(clippy::struct_excessive_bools)]
 #![allow(clippy::cast_sign_loss)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::branches_sharing_code)]
 
 use std::ffi::c_int;
 
@@ -279,6 +283,274 @@ impl SearchCount {
 }
 
 // =============================================================================
+// Pattern Matching Helpers (for match(), matchstr(), etc.)
+// =============================================================================
+
+/// Simple byte pattern match (literal, no regex).
+///
+/// Returns the byte offset of the match, or -1 if not found.
+pub fn match_literal(haystack: &[u8], needle: &[u8], start: usize) -> i64 {
+    if needle.is_empty() {
+        return start as i64;
+    }
+    if start >= haystack.len() || needle.len() > haystack.len() - start {
+        return -1;
+    }
+
+    for i in start..=haystack.len() - needle.len() {
+        if &haystack[i..i + needle.len()] == needle {
+            return i as i64;
+        }
+    }
+
+    -1
+}
+
+/// Case-insensitive literal match.
+pub fn match_literal_ic(haystack: &[u8], needle: &[u8], start: usize) -> i64 {
+    if needle.is_empty() {
+        return start as i64;
+    }
+    if start >= haystack.len() || needle.len() > haystack.len() - start {
+        return -1;
+    }
+
+    for i in start..=haystack.len() - needle.len() {
+        if haystack[i..i + needle.len()].eq_ignore_ascii_case(needle) {
+            return i as i64;
+        }
+    }
+
+    -1
+}
+
+/// FFI: Simple literal pattern match.
+#[no_mangle]
+pub unsafe extern "C" fn rs_match_literal(
+    haystack: *const u8,
+    haystack_len: c_int,
+    needle: *const u8,
+    needle_len: c_int,
+    start: c_int,
+) -> i64 {
+    if haystack.is_null() || needle.is_null() || haystack_len < 0 || needle_len < 0 || start < 0 {
+        return -1;
+    }
+
+    let h = std::slice::from_raw_parts(haystack, haystack_len as usize);
+    let n = std::slice::from_raw_parts(needle, needle_len as usize);
+    match_literal(h, n, start as usize)
+}
+
+// =============================================================================
+// Fuzzy Matching Helpers (for matchfuzzy(), matchfuzzypos())
+// =============================================================================
+
+/// Fuzzy match scoring constants.
+pub mod fuzzy {
+    /// Score for exact match
+    pub const EXACT_MATCH: i32 = 100;
+    /// Score for prefix match
+    pub const PREFIX_MATCH: i32 = 50;
+    /// Score for consecutive characters
+    pub const CONSECUTIVE: i32 = 15;
+    /// Score for matching after separator
+    pub const AFTER_SEPARATOR: i32 = 30;
+    /// Score for matching capital after lowercase (camelCase)
+    pub const CAMEL_CASE: i32 = 25;
+    /// Base score for any match
+    pub const BASE_MATCH: i32 = 10;
+    /// Penalty for unmatched characters
+    pub const UNMATCHED_PENALTY: i32 = -1;
+}
+
+/// Characters that act as separators for fuzzy matching.
+fn is_separator(c: u8) -> bool {
+    matches!(c, b' ' | b'_' | b'-' | b'/' | b'\\' | b'.' | b':')
+}
+
+/// Calculate fuzzy match score.
+///
+/// Returns (score, positions) where:
+/// - score: Match quality (higher is better, 0 if no match)
+/// - positions: Byte positions of matched characters
+pub fn fuzzy_match(text: &[u8], pattern: &[u8]) -> (i32, Vec<usize>) {
+    if pattern.is_empty() {
+        return (fuzzy::EXACT_MATCH, Vec::new());
+    }
+    if text.is_empty() {
+        return (0, Vec::new());
+    }
+
+    #[allow(clippy::redundant_closure_for_method_calls)]
+    let pattern_lower: Vec<u8> = pattern.iter().map(|c| c.to_ascii_lowercase()).collect();
+    #[allow(clippy::redundant_closure_for_method_calls)]
+    let text_lower: Vec<u8> = text.iter().map(|c| c.to_ascii_lowercase()).collect();
+
+    let mut positions = Vec::with_capacity(pattern.len());
+    let mut score = 0i32;
+    let mut pattern_idx = 0;
+    let mut prev_match_pos: Option<usize> = None;
+
+    for (i, &tc) in text_lower.iter().enumerate() {
+        if pattern_idx >= pattern_lower.len() {
+            break;
+        }
+
+        if tc == pattern_lower[pattern_idx] {
+            positions.push(i);
+
+            // Score based on position and context
+            if i == 0 {
+                score += fuzzy::PREFIX_MATCH;
+            } else if let Some(prev) = prev_match_pos {
+                if i == prev + 1 {
+                    score += fuzzy::CONSECUTIVE;
+                }
+            }
+
+            // After separator bonus
+            if i > 0 && is_separator(text[i - 1]) {
+                score += fuzzy::AFTER_SEPARATOR;
+            }
+
+            // CamelCase bonus
+            if i > 0 && text[i].is_ascii_uppercase() && text[i - 1].is_ascii_lowercase() {
+                score += fuzzy::CAMEL_CASE;
+            }
+
+            score += fuzzy::BASE_MATCH;
+            prev_match_pos = Some(i);
+            pattern_idx += 1;
+        }
+    }
+
+    // Check if all pattern characters matched
+    if pattern_idx < pattern_lower.len() {
+        return (0, Vec::new());
+    }
+
+    // Penalty for extra characters in text
+    let unmatched = text.len().saturating_sub(positions.len());
+    score += (unmatched as i32) * fuzzy::UNMATCHED_PENALTY;
+
+    // Exact match bonus
+    if text_lower == pattern_lower {
+        score += fuzzy::EXACT_MATCH;
+    }
+
+    (score.max(1), positions)
+}
+
+/// FFI: Calculate fuzzy match score only.
+#[no_mangle]
+pub unsafe extern "C" fn rs_fuzzy_match_score(
+    text: *const u8,
+    text_len: c_int,
+    pattern: *const u8,
+    pattern_len: c_int,
+) -> i32 {
+    if text.is_null() || pattern.is_null() || text_len < 0 || pattern_len < 0 {
+        return 0;
+    }
+
+    let t = std::slice::from_raw_parts(text, text_len as usize);
+    let p = std::slice::from_raw_parts(pattern, pattern_len as usize);
+    fuzzy_match(t, p).0
+}
+
+// =============================================================================
+// Searchpair Helpers
+// =============================================================================
+
+/// Searchpair matching mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(i32)]
+pub enum SearchpairMode {
+    /// Find matching closing pair
+    Forward = 0,
+    /// Find matching opening pair
+    Backward = 1,
+}
+
+impl SearchpairMode {
+    /// Create from C int.
+    pub const fn from_c_int(val: c_int) -> Self {
+        if val == 1 {
+            Self::Backward
+        } else {
+            Self::Forward
+        }
+    }
+}
+
+/// Stack-based pair matching for searchpair().
+///
+/// Returns the position of the matching pair, or None if not found.
+pub fn find_matching_pair(
+    start_pattern: &[u8],
+    end_pattern: &[u8],
+    text: &[u8],
+    start_pos: usize,
+    forward: bool,
+) -> Option<usize> {
+    if start_pattern.is_empty() || end_pattern.is_empty() {
+        return None;
+    }
+
+    let mut depth = 1i32;
+
+    if forward {
+        let mut pos = start_pos;
+        while pos < text.len() {
+            // Check for end pattern first (looking for closing)
+            if pos + end_pattern.len() <= text.len()
+                && &text[pos..pos + end_pattern.len()] == end_pattern
+            {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(pos);
+                }
+                pos += end_pattern.len();
+                continue;
+            }
+            // Check for nested start pattern
+            if pos + start_pattern.len() <= text.len()
+                && &text[pos..pos + start_pattern.len()] == start_pattern
+            {
+                depth += 1;
+                pos += start_pattern.len();
+                continue;
+            }
+            pos += 1;
+        }
+    } else {
+        // Backward search
+        let mut pos = start_pos;
+        while pos > 0 {
+            pos -= 1;
+            // Check for start pattern (looking for opening)
+            if pos + start_pattern.len() <= text.len()
+                && &text[pos..pos + start_pattern.len()] == start_pattern
+            {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(pos);
+                }
+            }
+            // Check for nested end pattern
+            if pos + end_pattern.len() <= text.len()
+                && &text[pos..pos + end_pattern.len()] == end_pattern
+            {
+                depth += 1;
+            }
+        }
+    }
+
+    None
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -334,5 +606,87 @@ mod tests {
         assert_eq!(count.current, 3);
         assert_eq!(count.total, 10);
         assert!(count.exact);
+    }
+
+    #[test]
+    fn test_match_literal() {
+        assert_eq!(match_literal(b"hello world", b"world", 0), 6);
+        assert_eq!(match_literal(b"hello world", b"hello", 0), 0);
+        assert_eq!(match_literal(b"hello world", b"xyz", 0), -1);
+        assert_eq!(match_literal(b"hello world", b"world", 7), -1);
+        assert_eq!(match_literal(b"abcabc", b"bc", 0), 1);
+        assert_eq!(match_literal(b"abcabc", b"bc", 2), 4);
+    }
+
+    #[test]
+    fn test_match_literal_ic() {
+        assert_eq!(match_literal_ic(b"Hello World", b"world", 0), 6);
+        assert_eq!(match_literal_ic(b"HELLO", b"hello", 0), 0);
+        assert_eq!(match_literal_ic(b"ABC", b"xyz", 0), -1);
+    }
+
+    #[test]
+    fn test_fuzzy_match_basic() {
+        // Exact match
+        let (score, positions) = fuzzy_match(b"hello", b"hello");
+        assert!(score > 0);
+        assert_eq!(positions.len(), 5);
+
+        // Subsequence match
+        let (score, positions) = fuzzy_match(b"hello world", b"hwd");
+        assert!(score > 0);
+        assert_eq!(positions, vec![0, 6, 10]);
+
+        // No match
+        let (score, _) = fuzzy_match(b"hello", b"xyz");
+        assert_eq!(score, 0);
+    }
+
+    #[test]
+    fn test_fuzzy_match_scoring() {
+        // Prefix match should score higher
+        let (prefix_score, _) = fuzzy_match(b"file_name", b"fil");
+        let (middle_score, _) = fuzzy_match(b"some_file", b"fil");
+        assert!(prefix_score > middle_score);
+
+        // Exact match should score highest
+        let (exact_score, _) = fuzzy_match(b"test", b"test");
+        let (partial_score, _) = fuzzy_match(b"testing", b"test");
+        assert!(exact_score > partial_score);
+    }
+
+    #[test]
+    fn test_fuzzy_match_camel_case() {
+        // CamelCase matching
+        let (score, positions) = fuzzy_match(b"getFileName", b"gfn");
+        assert!(score > 0);
+        assert_eq!(positions, vec![0, 3, 7]); // g, F, N
+    }
+
+    #[test]
+    fn test_find_matching_pair() {
+        // Simple case: "()" - start at 1, find ) at position 1
+        let text = b"()";
+        let pos = find_matching_pair(b"(", b")", text, 1, true);
+        assert_eq!(pos, Some(1));
+
+        // Nested: "(())" - start at 1, should skip inner pair and find outer )
+        // Text: "(())"
+        //        0123
+        // Starting at 1, we see ( at 1 (depth 2), ) at 2 (depth 1), ) at 3 (depth 0)
+        let text = b"(())";
+        let pos = find_matching_pair(b"(", b")", text, 1, true);
+        assert_eq!(pos, Some(3));
+
+        // Start inside inner pair
+        let pos = find_matching_pair(b"(", b")", text, 2, true);
+        assert_eq!(pos, Some(2));
+
+        // Unbalanced - no match
+        let pos = find_matching_pair(b"(", b")", b"(()", 1, true);
+        // Text: "(()"
+        //        012
+        // Starting at 1: ( at 1 (depth 2), ) at 2 (depth 1) - no match for outer
+        assert_eq!(pos, None);
     }
 }
