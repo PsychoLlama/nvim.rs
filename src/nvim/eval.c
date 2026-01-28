@@ -2503,7 +2503,7 @@ static int eval_multdiv_number(typval_T *tv1, typval_T *tv2, int op)
 /// @param[in]  want_string  True if "." is string_concatenation, otherwise
 ///                          float
 /// @return  OK or FAIL.
-static int eval6(char **arg, typval_T *rettv, evalarg_T *const evalarg, bool want_string)
+int eval6(char **arg, typval_T *rettv, evalarg_T *const evalarg, bool want_string)
 {
   // Get the first variable.
   if (eval7(arg, rettv, evalarg, want_string) == FAIL) {
@@ -6935,4 +6935,86 @@ char *typval_tostring(typval_T *arg, bool quotes)
     return xstrdup(arg->vval.v_string == NULL ? "" : arg->vval.v_string);
   }
   return encode_tv2string(arg, NULL);
+}
+
+// =============================================================================
+// Accessor functions for Rust FFI
+// =============================================================================
+
+/// Get eval_flags from evalarg_T (accessor for Rust).
+int evalarg_get_flags(const evalarg_T *evalarg)
+{
+  return evalarg ? evalarg->eval_flags : 0;
+}
+
+/// Set eval_flags in evalarg_T (accessor for Rust).
+void evalarg_set_flags(evalarg_T *evalarg, int flags)
+{
+  if (evalarg) {
+    evalarg->eval_flags = flags;
+  }
+}
+
+/// Get did_emsg global (accessor for Rust).
+int did_emsg_get(void)
+{
+  return did_emsg;
+}
+
+/// Get called_emsg global (accessor for Rust).
+int called_emsg_get(void)
+{
+  return called_emsg;
+}
+
+/// Set nextcmd in exarg_T (accessor for Rust).
+void exarg_set_nextcmd(exarg_T *eap, char *nextcmd)
+{
+  if (eap) {
+    eap->nextcmd = nextcmd;
+  }
+}
+
+/// Get p_ic option value (accessor for Rust).
+int p_ic_get(void)
+{
+  return p_ic;
+}
+
+/// Set v_type in typval_T (accessor for Rust).
+void nvim_tv_set_type(typval_T *tv, int vtype)
+{
+  if (tv) {
+    tv->v_type = (VarType)vtype;
+  }
+}
+
+/// Get grow array from blob (accessor for Rust).
+garray_T *blob_get_ga(blob_T *blob)
+{
+  return blob ? &blob->bv_ga : NULL;
+}
+
+/// Wrapper for tv_blob_len inline function (accessor for Rust eval_exec).
+int nvim_blob_len(const blob_T *b)
+{
+  return tv_blob_len(b);
+}
+
+/// Wrapper for tv_blob_get inline function (accessor for Rust eval_exec).
+int nvim_blob_get(const blob_T *b, int idx)
+{
+  return (int)tv_blob_get(b, idx);
+}
+
+/// Wrapper for tv_blob_alloc (accessor for Rust eval_exec).
+blob_T *nvim_blob_alloc(void)
+{
+  return tv_blob_alloc();
+}
+
+/// Wrapper for tv_blob_set_ret inline function (accessor for Rust eval_exec).
+void nvim_blob_set_ret(typval_T *tv, blob_T *b)
+{
+  tv_blob_set_ret(tv, b);
 }
