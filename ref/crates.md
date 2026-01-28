@@ -73,7 +73,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | memline        | Buffer memory management (B-tree, line access, modification, swap files, recovery) |
 | memory         | Memory allocation wrappers              |
 | memutil        | Memory and string utilities             |
-| menu           | Menu system                             |
+| menu           | Menu system (tree structure, modes, popup, wildmenu, commands) |
 | message        | Message system (history, formatting, dialogs, scrollback) |
 | mouse          | Mouse event handling and selection      |
 | move           | Cursor movement and scrolling           |

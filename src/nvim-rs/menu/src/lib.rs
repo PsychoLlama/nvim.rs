@@ -5,10 +5,29 @@
 //! pointers are treated as opaque handles, with field access done through
 //! C accessor functions.
 //!
+//! # Architecture
+//!
+//! The menu system is a tree structure where each menu can have children
+//! (submenus) and siblings (next menu at the same level). Menus support
+//! multiple modes (Normal, Visual, Insert, etc.) with different actions
+//! per mode.
+//!
+//! ## Opaque Handle Pattern
+//!
+//! All menu operations use [`VimMenuHandle`], which wraps a `*mut c_void`
+//! pointer to the C `vimmenu_T` structure. Field access is done through
+//! C accessor functions defined in `menu.c`:
+//!
+//! - `nvim_menu_get_modes()` - Get mode flags
+//! - `nvim_menu_get_enabled()` - Get enabled flags
+//! - `nvim_menu_get_name()` - Get menu name
+//! - `nvim_menu_get_children()` - Get first child menu
+//! - `nvim_menu_get_next()` - Get next sibling menu
+//!
 //! # Modules
 //!
 //! - [`classify`]: Menu name classification (popup, toolbar, winbar, etc.)
-//! - [`commands`]: Ex command mode parsing
+//! - [`commands`]: Ex command mode parsing (`:menu`, `:nmenu`, etc.)
 //! - [`completion`]: Wildmenu completion utilities
 //! - [`create`]: Menu creation helpers
 //! - [`delete`]: Menu deletion helpers
@@ -16,9 +35,25 @@
 //! - [`handle`]: Opaque handle types for menu structures
 //! - [`hidden`]: Hidden menu detection
 //! - [`lookup`]: Menu lookup and search
-//! - [`path`]: Menu path parsing
-//! - [`popup`]: Popup menu utilities
+//! - [`path`]: Menu path parsing and name comparison
+//! - [`popup`]: Popup menu utilities (right-click context menus)
 //! - [`traverse`]: Tree traversal helpers
+//!
+//! # Menu Modes
+//!
+//! Menus can have different actions for different Vim modes. The mode
+//! constants in [`menu_modes`] define both indices (0-7) and flags (bitmasks):
+//!
+//! | Mode      | Index | Flag |
+//! |-----------|-------|------|
+//! | Normal    | 0     | 1    |
+//! | Visual    | 1     | 2    |
+//! | Select    | 2     | 4    |
+//! | Op-pending| 3     | 8    |
+//! | Insert    | 4     | 16   |
+//! | Cmdline   | 5     | 32   |
+//! | Terminal  | 6     | 64   |
+//! | Tip       | 7     | 128  |
 
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
