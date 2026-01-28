@@ -400,9 +400,10 @@ pub unsafe extern "C" fn rs_msg_clamp_col(col: c_int) -> c_int {
 // ============================================================================
 
 extern "C" {
-    // String truncation
-    fn msg_strtrunc(s: *const c_char, force: c_int) -> *mut c_char;
-    fn trunc_string(s: *const c_char, buf: *mut c_char, room_in: c_int, buflen: c_int);
+    // Character width and length functions (from mbyte crate)
+    fn rs_ptr2cells(p: *const c_char) -> c_int;
+    fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
+    fn rs_utf_head_off(base: *const c_char, p: *const c_char) -> c_int;
 
     // Character translation
     fn msg_outtrans(str: *const c_char, hl_id: c_int, hist: c_int) -> c_int;
@@ -411,40 +412,13 @@ extern "C" {
     fn msg_outtrans_special(strstart: *const c_char, from: c_int, maxlen: c_int) -> c_int;
 
     // Memory management
+    fn xmalloc(size: usize) -> *mut c_char;
     fn nvim_xfree(ptr: *mut c_char);
 }
 
 // ============================================================================
-// String Truncation Functions
+// String Truncation Functions (Phase 3.1: Pure Rust Implementation)
 // ============================================================================
-
-/// Truncate a message string if it would cause a hit-return prompt.
-///
-/// Returns NULL if no truncation is needed, or an allocated truncated string.
-/// The returned string must be freed by the caller using `rs_msg_free_trunc`.
-///
-/// # Arguments
-/// * `s` - The string to potentially truncate
-/// * `force` - If true, always truncate regardless of message settings
-///
-/// # Safety
-/// - `s` must be a valid NUL-terminated C string
-/// - Returned pointer (if not NULL) must be freed with `rs_msg_free_trunc`
-#[no_mangle]
-pub unsafe extern "C" fn rs_msg_strtrunc(s: *const c_char, force: c_int) -> *mut c_char {
-    msg_strtrunc(s, force)
-}
-
-/// Free a truncated string allocated by `rs_msg_strtrunc`.
-///
-/// # Safety
-/// - `ptr` must be NULL or a pointer returned by `rs_msg_strtrunc`
-#[no_mangle]
-pub unsafe extern "C" fn rs_msg_free_trunc(ptr: *mut c_char) {
-    if !ptr.is_null() {
-        nvim_xfree(ptr);
-    }
-}
 
 /// Truncate a string "s" to "buf" with cell width "room".
 ///
@@ -461,13 +435,184 @@ pub unsafe extern "C" fn rs_msg_free_trunc(ptr: *mut c_char) {
 /// - `s` must be a valid NUL-terminated C string
 /// - `buf` must be a valid buffer of at least `buflen` bytes
 #[no_mangle]
+#[allow(clippy::too_many_lines, clippy::cast_sign_loss, clippy::cast_possible_wrap)]
 pub unsafe extern "C" fn rs_trunc_string(
     s: *const c_char,
     buf: *mut c_char,
     room_in: c_int,
     buflen: c_int,
 ) {
-    trunc_string(s, buf, room_in, buflen);
+    let room = if room_in < 3 { 0 } else { room_in - 3 }; // "..." takes 3 chars
+
+    // Empty string case
+    if *s == 0 {
+        if buflen > 0 {
+            *buf = 0;
+        }
+        return;
+    }
+
+    let half = room / 2;
+    let mut len: c_int = 0;
+    let mut e: c_int = 0;
+
+    // First part: Start of the string
+    while len < half && e < buflen {
+        if *s.offset(e as isize) == 0 {
+            // Text fits without truncating!
+            *buf.offset(e as isize) = 0;
+            return;
+        }
+
+        let n = rs_ptr2cells(s.offset(e as isize));
+        if len + n > half {
+            break;
+        }
+        len += n;
+        *buf.offset(e as isize) = *s.offset(e as isize);
+
+        // Handle multi-byte characters
+        let char_len = rs_utfc_ptr2len(s.offset(e as isize));
+        for _ in 1..char_len {
+            e += 1;
+            if e >= buflen {
+                break;
+            }
+            *buf.offset(e as isize) = *s.offset(e as isize);
+        }
+        e += 1;
+    }
+
+    // Calculate string length
+    let mut slen: c_int = 0;
+    while *s.offset(slen as isize) != 0 {
+        slen += 1;
+    }
+
+    // Last part: End of the string - find where to start
+    let mut i = slen;
+    let mut half_end = slen;
+
+    loop {
+        // Move back to start of previous character
+        let head_off = rs_utf_head_off(s, s.offset((half_end - 1) as isize));
+        half_end = half_end - head_off - 1;
+
+        let n = rs_ptr2cells(s.offset(half_end as isize));
+        if len + n > room || half_end == 0 {
+            break;
+        }
+        len += n;
+        i = half_end;
+    }
+
+    if i <= e + 3 {
+        // Text fits without truncating
+        if s != buf {
+            let mut copy_len = slen;
+            if copy_len >= buflen {
+                copy_len = buflen - 1;
+            }
+            copy_len = copy_len - e + 1;
+            if copy_len < 1 {
+                *buf.offset((e - 1) as isize) = 0;
+            } else {
+                std::ptr::copy(
+                    s.offset(e as isize),
+                    buf.offset(e as isize),
+                    copy_len as usize,
+                );
+            }
+        }
+    } else if e + 3 < buflen {
+        // Set the middle "..." and copy the last part
+        *buf.offset(e as isize) = b'.' as c_char;
+        *buf.offset((e + 1) as isize) = b'.' as c_char;
+        *buf.offset((e + 2) as isize) = b'.' as c_char;
+
+        // Calculate remaining length
+        let mut remaining = slen - i + 1;
+        if remaining >= buflen - e - 3 {
+            remaining = buflen - e - 3 - 1;
+        }
+        std::ptr::copy(
+            s.offset(i as isize),
+            buf.offset((e + 3) as isize),
+            remaining as usize,
+        );
+        *buf.offset((e + 3 + remaining - 1) as isize) = 0;
+    } else {
+        // Can't fit in the "...", just truncate
+        *buf.offset((buflen - 1) as isize) = 0;
+    }
+}
+
+/// Truncate a message string if it would cause a hit-return prompt.
+///
+/// Returns NULL if no truncation is needed, or an allocated truncated string.
+/// The returned string must be freed by the caller using `rs_msg_free_trunc`.
+///
+/// # Arguments
+/// * `s` - The string to potentially truncate
+/// * `force` - If true, always truncate regardless of message settings
+///
+/// # Safety
+/// - `s` must be a valid NUL-terminated C string
+/// - Returned pointer (if not NULL) must be freed with `rs_msg_free_trunc`
+#[no_mangle]
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_msg_strtrunc(s: *const c_char, force: c_int) -> *mut c_char {
+    // Check conditions for truncation
+    let should_truncate = force != 0
+        || (nvim_get_msg_scroll() == 0
+            && nvim_get_need_wait_return() == 0
+            && nvim_shortmess(SHM_TRUNCALL) != 0
+            && nvim_get_exmode_active() == 0
+            && nvim_get_msg_silent() == 0
+            && nvim_ui_has_messages() == 0);
+
+    if !should_truncate {
+        return std::ptr::null_mut();
+    }
+
+    let len = nvim_vim_strsize(s);
+    let msg_scrolled = nvim_get_msg_scrolled();
+    let rows = nvim_get_rows();
+    let msg_row = nvim_get_msg_row();
+    let columns = nvim_get_columns();
+    let sc_col = nvim_get_sc_col();
+
+    let room = if msg_scrolled != 0 {
+        // Use all the columns
+        (rows - msg_row) * columns - 1
+    } else {
+        // Use up to 'showcmd' column
+        (rows - msg_row - 1) * columns + sc_col - 1
+    };
+
+    if len > room && room > 0 {
+        // May have up to 18 bytes per cell (6 per char, up to two composing chars)
+        let buf_size = ((room + 2) * 18) as usize;
+        let buf = xmalloc(buf_size);
+        if buf.is_null() {
+            return std::ptr::null_mut();
+        }
+        rs_trunc_string(s, buf, room, buf_size as c_int);
+        buf
+    } else {
+        std::ptr::null_mut()
+    }
+}
+
+/// Free a truncated string allocated by `rs_msg_strtrunc`.
+///
+/// # Safety
+/// - `ptr` must be NULL or a pointer returned by `rs_msg_strtrunc`
+#[no_mangle]
+pub unsafe extern "C" fn rs_msg_free_trunc(ptr: *mut c_char) {
+    if !ptr.is_null() {
+        nvim_xfree(ptr);
+    }
 }
 
 // ============================================================================

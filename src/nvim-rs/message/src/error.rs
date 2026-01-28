@@ -449,6 +449,28 @@ extern "C" {
 
 use std::ffi::c_char;
 
+/// Display a simple error message.
+///
+/// This is the standard function for displaying error messages to the user.
+/// It uses the default error highlight (HLF_E) and "emsg" kind.
+///
+/// Equivalent to C's `emsg()` function.
+///
+/// # Arguments
+/// * `s` - The error message string (NUL-terminated)
+///
+/// # Returns
+/// * `true` (1) if wait_return() was not called
+/// * `false` (0) if wait_return() was called
+///
+/// # Safety
+/// - `s` must be a valid NUL-terminated C string
+#[no_mangle]
+pub unsafe extern "C" fn rs_emsg(s: *const c_char) -> c_int {
+    static KIND: &[u8] = b"emsg\0";
+    emsg_multiline(s, KIND.as_ptr().cast::<c_char>(), HLF_E, 0)
+}
+
 /// Display an error message with kind and highlight.
 ///
 /// Full version of emsg with all options. Used for multiline error

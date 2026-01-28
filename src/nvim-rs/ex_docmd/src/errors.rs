@@ -115,18 +115,6 @@ pub unsafe extern "C" fn rs_get_e_trailing_arg() -> *const c_char {
 // Error emission utilities
 // =============================================================================
 
-/// Emit an error message.
-///
-/// # Safety
-///
-/// `msg` must be a valid C string pointer.
-#[no_mangle]
-pub unsafe extern "C" fn rs_emsg(msg: *const c_char) {
-    if !msg.is_null() {
-        nvim_emsg(msg);
-    }
-}
-
 /// Emit the "Invalid range" error message (E16).
 ///
 /// # Safety
