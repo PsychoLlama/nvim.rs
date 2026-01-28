@@ -277,12 +277,10 @@ pub enum CompletionType {
 
 /// Clamp a cursor position to be within valid range.
 ///
-/// Position is clamped to [0, cmdlen].
+/// Position is clamped to [0, cmdlen]. Negative positions wrap to end.
 #[must_use]
 pub const fn clamp_cmdpos(pos: i32, cmdlen: i32) -> i32 {
-    if pos < 0 {
-        cmdlen
-    } else if pos > cmdlen {
+    if pos < 0 || pos > cmdlen {
         cmdlen
     } else {
         pos

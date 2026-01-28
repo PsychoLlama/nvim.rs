@@ -240,6 +240,7 @@ pub const fn can_open_cmdwin(
 ///
 /// After win_split(), check if autocommands messed with the old window.
 #[must_use]
+#[allow(clippy::fn_params_excessive_bools)]
 pub const fn cmdwin_split_invalid(
     old_curwin_valid: bool,
     curwin_is_old: bool,
@@ -251,6 +252,7 @@ pub const fn cmdwin_split_invalid(
 
 /// Check if buffer creation for cmdwin failed.
 #[must_use]
+#[allow(clippy::fn_params_excessive_bools)]
 pub const fn cmdwin_buffer_invalid(
     newbuf_status_ok: bool,
     cmdwin_valid: bool,
@@ -504,7 +506,10 @@ mod tests {
         assert_eq!(can_open_cmdwin(false, true, 0), CmdwinOpenError::TextLocked);
 
         // Secret mode (password)
-        assert_eq!(can_open_cmdwin(false, false, 1), CmdwinOpenError::SecretMode);
+        assert_eq!(
+            can_open_cmdwin(false, false, 1),
+            CmdwinOpenError::SecretMode
+        );
     }
 
     #[test]

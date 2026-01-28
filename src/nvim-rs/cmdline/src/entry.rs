@@ -490,7 +490,11 @@ pub extern "C" fn rs_entry_should_use_cmdmsg_rl(
     win_p_rl: c_int,
     win_p_rlc_has_s: c_int,
 ) -> c_int {
-    c_int::from(should_use_cmdmsg_rl(firstc, win_p_rl != 0, win_p_rlc_has_s != 0))
+    c_int::from(should_use_cmdmsg_rl(
+        firstc,
+        win_p_rl != 0,
+        win_p_rlc_has_s != 0,
+    ))
 }
 
 /// Check if entry should use lmap (FFI).
@@ -507,7 +511,11 @@ pub extern "C" fn rs_entry_use_b_p_iminsert(firstc: c_int, b_p_imsearch: i64) ->
 
 /// Validate entry conditions (FFI).
 #[no_mangle]
-pub extern "C" fn rs_entry_validate(level: c_int, has_cmdbuff: c_int, clear_ccline: c_int) -> c_int {
+pub extern "C" fn rs_entry_validate(
+    level: c_int,
+    has_cmdbuff: c_int,
+    clear_ccline: c_int,
+) -> c_int {
     validate_entry(level, has_cmdbuff != 0, clear_ccline != 0) as c_int
 }
 
@@ -656,7 +664,10 @@ mod tests {
         assert_eq!(validate_entry(0, true, true), EntryValidation::NeedsSave);
 
         // Too deep
-        assert_eq!(validate_entry(50, false, true), EntryValidation::TooRecursive);
+        assert_eq!(
+            validate_entry(50, false, true),
+            EntryValidation::TooRecursive
+        );
     }
 
     #[test]
@@ -665,7 +676,12 @@ mod tests {
         assert!(should_add_to_history(hist::CMD, 5, i32::from(b':'), true));
 
         // Search always added (even if not typed)
-        assert!(should_add_to_history(hist::SEARCH, 5, i32::from(b'/'), false));
+        assert!(should_add_to_history(
+            hist::SEARCH,
+            5,
+            i32::from(b'/'),
+            false
+        ));
 
         // Empty command
         assert!(!should_add_to_history(hist::CMD, 0, i32::from(b':'), true));

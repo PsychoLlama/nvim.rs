@@ -262,6 +262,7 @@ fn is_substitute_prefix(cmd: &[u8]) -> bool {
 ///
 /// These options are disabled to avoid messing up the preview display.
 #[derive(Debug, Clone, Copy, Default)]
+#[allow(clippy::struct_excessive_bools)]
 pub struct PreviewWindowOptions {
     /// Disable 'cursorline'.
     pub cursorline: bool,

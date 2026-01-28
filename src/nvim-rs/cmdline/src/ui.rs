@@ -395,7 +395,11 @@ pub extern "C" fn rs_should_reset_callback_errors(
 
 /// Calculate draw length (FFI).
 #[no_mangle]
-pub extern "C" fn rs_calculate_draw_len(start: c_int, requested_len: c_int, cmdlen: c_int) -> c_int {
+pub extern "C" fn rs_calculate_draw_len(
+    start: c_int,
+    requested_len: c_int,
+    cmdlen: c_int,
+) -> c_int {
     calculate_draw_len(start, requested_len, cmdlen)
 }
 
