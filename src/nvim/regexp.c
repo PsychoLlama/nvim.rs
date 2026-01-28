@@ -603,6 +603,10 @@ extern void rs_skipchr_keepstart(void);
 extern int rs_getchr(void);
 extern void rs_ungetchr(void);
 
+// Rust implementations for string helpers
+extern char *rs_cstrchr(const char *s, int c);
+extern int rs_cstrncmp(const char *s1, const char *s2, int *n);
+
 // Check for an equivalence class name "[=a=]".  "pp" points to the '['.
 // Returns a character representing the class. Zero means that no item was
 // recognized.  Otherwise "pp" is advanced to after the item.
@@ -1322,70 +1326,7 @@ static void mb_decompose(int c, int *c1, int *c2, int *c3)
 /// case-folding but have different length (e.g. 's' and 'ſ')
 static int cstrncmp(char *s1, char *s2, int *n)
 {
-  int result;
-
-  if (!rex.reg_ic) {
-    result = strncmp(s1, s2, (size_t)(*n));
-  } else {
-    char *p = s1;
-    int n2 = 0;
-    int n1 = *n;
-    // count the number of characters for byte-length of s1
-    while (n1 > 0 && *p != NUL) {
-      n1 -= utfc_ptr2len(s1);
-      MB_PTR_ADV(p);
-      n2++;
-    }
-    // count the number of bytes to advance the same number of chars for s2
-    p = s2;
-    while (n2-- > 0 && *p != NUL) {
-      MB_PTR_ADV(p);
-    }
-
-    n2 = (int)(p - s2);
-
-    result = utf_strnicmp(s1, s2, (size_t)(*n), (size_t)n2);
-    if (result == 0 && n2 < *n) {
-      *n = n2;
-    }
-  }
-
-  // if it failed and it's utf8 and we want to combineignore:
-  if (result != 0 && rex.reg_icombine) {
-    const char *str1, *str2;
-    int c1, c2, c11, c12;
-    int junk;
-
-    // we have to handle the strcmp ourselves, since it is necessary to
-    // deal with the composing characters by ignoring them:
-    str1 = s1;
-    str2 = s2;
-    c1 = c2 = 0;
-    while ((int)(str1 - s1) < *n) {
-      c1 = mb_ptr2char_adv(&str1);
-      c2 = mb_ptr2char_adv(&str2);
-
-      // decompose the character if necessary, into 'base' characters
-      // because I don't care about Arabic, I will hard-code the Hebrew
-      // which I *do* care about!  So sue me...
-      if (c1 != c2 && (!rex.reg_ic || utf_fold(c1) != utf_fold(c2))) {
-        // decomposition necessary?
-        mb_decompose(c1, &c11, &junk, &junk);
-        mb_decompose(c2, &c12, &junk, &junk);
-        c1 = c11;
-        c2 = c12;
-        if (c11 != c12 && (!rex.reg_ic || utf_fold(c11) != utf_fold(c12))) {
-          break;
-        }
-      }
-    }
-    result = c2 - c1;
-    if (result == 0) {
-      *n = (int)(str2 - s2);
-    }
-  }
-
-  return result;
+  return rs_cstrncmp(s1, s2, n);
 }
 
 /// Wrapper around strchr which accounts for case-insensitive searches and
@@ -1401,38 +1342,7 @@ static inline char *cstrchr(const char *const s, const int c)
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_ALL
   FUNC_ATTR_ALWAYS_INLINE
 {
-  if (!rex.reg_ic) {
-    return vim_strchr(s, c);
-  }
-
-  int cc, lc;
-  if (c > 0x80) {
-    cc = utf_fold(c);
-    lc = cc;
-  } else if (ASCII_ISUPPER(c)) {
-    cc = TOLOWER_ASC(c);
-    lc = cc;
-  } else if (ASCII_ISLOWER(c)) {
-    cc = TOUPPER_ASC(c);
-    lc = c;
-  } else {
-    return vim_strchr(s, c);
-  }
-
-  for (const char *p = s; *p != NUL; p += utfc_ptr2len(p)) {
-    const int uc = utf_ptr2char(p);
-    if (c > 0x80 || uc > 0x80) {
-      // Do not match an illegal byte.  E.g. 0xff matches 0xc3 0xbf, not 0xff.
-      // Compare with lower case of the character.
-      if ((uc < 0x80 || uc != (uint8_t)(*p)) && utf_fold(uc) == lc) {
-        return (char *)p;
-      }
-    } else if ((uint8_t)(*p) == c || (uint8_t)(*p) == cc) {
-      return (char *)p;
-    }
-  }
-
-  return NULL;
+  return rs_cstrchr(s, c);
 }
 
 ////////////////////////////////////////////////////////////////

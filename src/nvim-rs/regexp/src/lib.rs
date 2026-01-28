@@ -60,6 +60,7 @@ pub mod debug;
 pub mod decompose;
 pub mod errors;
 pub mod exec_state;
+pub mod helpers;
 pub mod line_fetch;
 pub mod match_helpers;
 pub mod multiline;
@@ -118,6 +119,7 @@ pub use exec_state::{
     rs_exec_state_free, rs_exec_state_init_multi, rs_exec_state_init_single,
     rs_exec_state_load_from_rex, rs_exec_state_save_to_rex, rs_rex_in_use, rs_rex_set_in_use,
 };
+pub use helpers::{rs_cstrchr, rs_cstrncmp};
 pub use line_fetch::{
     rs_line_cache_free, rs_line_cache_invalidate, rs_line_cache_new, rs_line_fetcher_free,
     rs_line_fetcher_from_rex, rs_line_fetcher_get_len, rs_line_fetcher_get_line,
