@@ -463,6 +463,172 @@ pub unsafe extern "C" fn rs_pattern_head_len(pat: *const c_char, use_magic: bool
 }
 
 // =============================================================================
+// Pattern analysis functions (Phase 3)
+// =============================================================================
+
+/// Check if a tag pattern contains regexp wildcards.
+///
+/// This checks for characters that indicate the pattern should be treated
+/// as a regular expression: ^, $, ., *, [, ~, \\.
+///
+/// Returns true if the pattern contains any regexp metacharacters.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pattern_has_wildcard(pat: *const c_char) -> bool {
+    if pat.is_null() {
+        return false;
+    }
+
+    let mut p = pat;
+    while *p != 0 {
+        let c = *p as u8;
+        // Check for regexp metacharacters
+        if matches!(c, b'^' | b'$' | b'.' | b'*' | b'[' | b'~' | b'\\') {
+            return true;
+        }
+        p = p.add(1);
+    }
+
+    false
+}
+
+/// Check if a pattern starts with a word boundary anchor.
+///
+/// Returns true if the pattern starts with ^ or \\<.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pattern_starts_anchored(pat: *const c_char) -> bool {
+    if pat.is_null() {
+        return false;
+    }
+
+    if *pat == b'^' as c_char {
+        return true;
+    }
+
+    if *pat == b'\\' as c_char && *pat.add(1) == b'<' as c_char {
+        return true;
+    }
+
+    false
+}
+
+/// Check if a pattern ends with a word boundary anchor.
+///
+/// Returns true if the pattern ends with $ or \\>.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pattern_ends_anchored(pat: *const c_char, len: c_int) -> bool {
+    if pat.is_null() || len <= 0 {
+        return false;
+    }
+
+    let last = *pat.add(len as usize - 1) as u8;
+    if last == b'$' {
+        return true;
+    }
+
+    if len >= 2 {
+        let second_last = *pat.add(len as usize - 2) as u8;
+        if second_last == b'\\' && last == b'>' {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Classify a tag pattern for search optimization.
+///
+/// Returns a classification code:
+/// - 0: Plain literal pattern (no regexp needed)
+/// - 1: Anchored at start (can use binary search)
+/// - 2: Full regexp (requires full scan)
+#[no_mangle]
+pub unsafe extern "C" fn rs_classify_pattern(pat: *const c_char, len: c_int) -> c_int {
+    if pat.is_null() || len <= 0 {
+        return 0;
+    }
+
+    // Check if it has any wildcard characters
+    if !rs_pattern_has_wildcard(pat) {
+        return 0; // Plain literal
+    }
+
+    // Check if it's anchored at start (can use binary search optimization)
+    if rs_pattern_starts_anchored(pat) {
+        return 1; // Anchored at start
+    }
+
+    // Full regexp required
+    2
+}
+
+/// Count the number of literal characters at the start of a pattern.
+///
+/// This is useful for determining how much of a pattern can be used
+/// for binary search optimization.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pattern_literal_prefix_len(
+    pat: *const c_char,
+    use_magic: bool,
+) -> c_int {
+    if pat.is_null() {
+        return 0;
+    }
+
+    let mut p = pat;
+    let mut len = 0;
+
+    // Skip leading anchor if present
+    if *p == b'^' as c_char {
+        p = p.add(1);
+    } else if *p == b'\\' as c_char && *p.add(1) == b'<' as c_char {
+        p = p.add(2);
+    }
+
+    // Count characters until we hit a metacharacter
+    while *p != 0 {
+        if rs_is_pattern_meta(*p as c_int, use_magic) {
+            break;
+        }
+        len += 1;
+        p = p.add(1);
+    }
+
+    len
+}
+
+/// Check if a pattern is a simple literal (no regexp needed).
+///
+/// A simple literal pattern has no metacharacters and can be matched
+/// with a simple string comparison.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pattern_is_literal(pat: *const c_char) -> bool {
+    !rs_pattern_has_wildcard(pat)
+}
+
+/// Get the effective search pattern by stripping anchors.
+///
+/// If the pattern starts with ^ or \\<, returns a pointer to the first
+/// character after the anchor. Otherwise returns the original pointer.
+///
+/// This is useful for extracting the searchable prefix of a pattern.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pattern_skip_anchor(pat: *const c_char) -> *const c_char {
+    if pat.is_null() {
+        return ptr::null();
+    }
+
+    if *pat == b'^' as c_char {
+        return pat.add(1);
+    }
+
+    if *pat == b'\\' as c_char && *pat.add(1) == b'<' as c_char {
+        return pat.add(2);
+    }
+
+    pat
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -579,6 +745,112 @@ mod tests {
     fn test_pattern_head_len_null() {
         unsafe {
             assert_eq!(rs_pattern_head_len(ptr::null(), true), 0);
+        }
+    }
+
+    #[test]
+    fn test_pattern_has_wildcard() {
+        unsafe {
+            // Patterns with wildcards
+            assert!(rs_pattern_has_wildcard(c"^foo".as_ptr()));
+            assert!(rs_pattern_has_wildcard(c"foo$".as_ptr()));
+            assert!(rs_pattern_has_wildcard(c"fo.o".as_ptr()));
+            assert!(rs_pattern_has_wildcard(c"fo*o".as_ptr()));
+            assert!(rs_pattern_has_wildcard(c"fo[o]".as_ptr()));
+            assert!(rs_pattern_has_wildcard(c"foo~".as_ptr()));
+            assert!(rs_pattern_has_wildcard(c"f\\oo".as_ptr()));
+
+            // Plain literals
+            assert!(!rs_pattern_has_wildcard(c"foo".as_ptr()));
+            assert!(!rs_pattern_has_wildcard(c"my_function".as_ptr()));
+            assert!(!rs_pattern_has_wildcard(c"Class::method".as_ptr()));
+
+            // Null safety
+            assert!(!rs_pattern_has_wildcard(ptr::null()));
+        }
+    }
+
+    #[test]
+    fn test_pattern_starts_anchored() {
+        unsafe {
+            assert!(rs_pattern_starts_anchored(c"^foo".as_ptr()));
+            assert!(rs_pattern_starts_anchored(c"\\<foo".as_ptr()));
+            assert!(!rs_pattern_starts_anchored(c"foo".as_ptr()));
+            assert!(!rs_pattern_starts_anchored(c"foo^".as_ptr()));
+            assert!(!rs_pattern_starts_anchored(ptr::null()));
+        }
+    }
+
+    #[test]
+    fn test_pattern_ends_anchored() {
+        unsafe {
+            assert!(rs_pattern_ends_anchored(c"foo$".as_ptr(), 4));
+            assert!(rs_pattern_ends_anchored(c"foo\\>".as_ptr(), 5));
+            assert!(!rs_pattern_ends_anchored(c"foo".as_ptr(), 3));
+            assert!(!rs_pattern_ends_anchored(c"$foo".as_ptr(), 4));
+            assert!(!rs_pattern_ends_anchored(ptr::null(), 0));
+            assert!(!rs_pattern_ends_anchored(c"f".as_ptr(), 0)); // len <= 0
+        }
+    }
+
+    #[test]
+    fn test_classify_pattern() {
+        unsafe {
+            // Plain literal
+            assert_eq!(rs_classify_pattern(c"foo".as_ptr(), 3), 0);
+            // Anchored at start
+            assert_eq!(rs_classify_pattern(c"^foo".as_ptr(), 4), 1);
+            assert_eq!(rs_classify_pattern(c"\\<foo".as_ptr(), 5), 1);
+            // Full regexp
+            assert_eq!(rs_classify_pattern(c"fo*o".as_ptr(), 4), 2);
+            assert_eq!(rs_classify_pattern(c"foo$".as_ptr(), 4), 2);
+            // Null safety
+            assert_eq!(rs_classify_pattern(ptr::null(), 0), 0);
+        }
+    }
+
+    #[test]
+    fn test_pattern_literal_prefix_len() {
+        unsafe {
+            // Pattern without anchor
+            assert_eq!(rs_pattern_literal_prefix_len(c"foo".as_ptr(), true), 3);
+            // Pattern with ^ anchor
+            assert_eq!(rs_pattern_literal_prefix_len(c"^foo".as_ptr(), true), 3);
+            // Pattern with \< anchor
+            assert_eq!(rs_pattern_literal_prefix_len(c"\\<foo".as_ptr(), true), 3);
+            // Pattern with meta character
+            assert_eq!(rs_pattern_literal_prefix_len(c"^fo.o".as_ptr(), true), 2);
+            // Null safety
+            assert_eq!(rs_pattern_literal_prefix_len(ptr::null(), true), 0);
+        }
+    }
+
+    #[test]
+    fn test_pattern_is_literal() {
+        unsafe {
+            assert!(rs_pattern_is_literal(c"foo".as_ptr()));
+            assert!(rs_pattern_is_literal(c"my_function".as_ptr()));
+            assert!(!rs_pattern_is_literal(c"^foo".as_ptr()));
+            assert!(!rs_pattern_is_literal(c"foo*".as_ptr()));
+        }
+    }
+
+    #[test]
+    fn test_pattern_skip_anchor() {
+        unsafe {
+            // Patterns with anchors
+            let result = rs_pattern_skip_anchor(c"^foo".as_ptr());
+            assert_eq!(*result as u8, b'f');
+
+            let result = rs_pattern_skip_anchor(c"\\<foo".as_ptr());
+            assert_eq!(*result as u8, b'f');
+
+            // Pattern without anchor
+            let result = rs_pattern_skip_anchor(c"foo".as_ptr());
+            assert_eq!(*result as u8, b'f');
+
+            // Null safety
+            assert!(rs_pattern_skip_anchor(ptr::null()).is_null());
         }
     }
 }
