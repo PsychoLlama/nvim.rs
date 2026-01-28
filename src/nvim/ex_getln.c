@@ -1738,6 +1738,7 @@ static int may_do_command_line_next_incsearch(int firstc, int count, incsearch_s
 }
 
 /// Handle backspace, delete and CTRL-W keys in the command-line mode.
+/// Uses Rust edit functions for the core deletion logic.
 static int command_line_erase_chars(CommandLineState *s)
 {
   if (s->c == K_KDEL) {
@@ -1754,41 +1755,26 @@ static int command_line_erase_chars(CommandLineState *s)
   }
 
   if (ccline.cmdpos > 0) {
-    int j = ccline.cmdpos;
-    char *p = mb_prevptr(ccline.cmdbuff, ccline.cmdbuff + j);
-
+    // Use Rust edit functions for deletion
+    int result;
     if (s->c == Ctrl_W) {
-      while (p > ccline.cmdbuff && ascii_isspace(*p)) {
-        p = mb_prevptr(ccline.cmdbuff, p);
-      }
-
-      int i = mb_get_class(p);
-      while (p > ccline.cmdbuff && mb_get_class(p) == i) {
-        p = mb_prevptr(ccline.cmdbuff, p);
-      }
-
-      if (mb_get_class(p) != i) {
-        p += utfc_ptr2len(p);
-      }
+      result = rs_cmdline_delete_word_before();
+    } else {
+      result = rs_cmdline_delete_char_before();
     }
 
-    ccline.cmdpos = (int)(p - ccline.cmdbuff);
-    ccline.cmdlen -= j - ccline.cmdpos;
-    int i = ccline.cmdpos;
-
-    while (i < ccline.cmdlen) {
-      ccline.cmdbuff[i++] = ccline.cmdbuff[j++];
+    if (result > 0) {
+      // Line was changed
+      if (ccline.cmdlen == 0) {
+        s->is_state.search_start = s->is_state.save_cursor;
+        // save view settings, so that the screen won't be restored at the
+        // wrong position
+        s->is_state.old_viewstate = s->is_state.init_viewstate;
+      }
+      redrawcmd();
+      return CMDLINE_CHANGED;
     }
-
-    // Truncate at the end, required for multi-byte chars.
-    ccline.cmdbuff[ccline.cmdlen] = NUL;
-    if (ccline.cmdlen == 0) {
-      s->is_state.search_start = s->is_state.save_cursor;
-      // save view settings, so that the screen won't be restored at the
-      // wrong position
-      s->is_state.old_viewstate = s->is_state.init_viewstate;
-    }
-    redrawcmd();
+    return CMDLINE_NOT_CHANGED;
   } else if (ccline.cmdlen == 0 && s->c != Ctrl_W
              && ccline.cmdprompt == NULL && s->indent == 0) {
     // In ex and debug mode it doesn't make sense to return.

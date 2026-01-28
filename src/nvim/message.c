@@ -459,6 +459,9 @@ void nvim_set_need_wait_return(int val) { need_wait_return = (val != 0); }
 int nvim_shortmess(int flag) { return shortmess(flag) ? 1 : 0; }
 // nvim_get_exmode_active is defined in grid.c
 int nvim_vim_strsize(const char *s) { return vim_strsize(s); }
+int nvim_cmd_silent(void) { return cmd_silent ? 1 : 0; }
+int nvim_ui_has_cmdline(void) { return ui_has(kUICmdline) ? 1 : 0; }
+void nvim_msg_putchar(int c) { msg_putchar(c); }
 
 /// Calculate the byte length of string that fits in given cell width.
 /// Returns the number of bytes that would fit in `width` cells.
