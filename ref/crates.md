@@ -81,7 +81,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | msgpack_rpc    | MessagePack-RPC protocol for remote procedure calls |
 | normal         | Normal mode (command dispatch table, motion commands, operators, visual mode) |
 | ops            | Operator handling (shift, tilde, addsub, replace, join, delete, insert) |
-| option         | Option system and configuration         |
+| option         | Option system and configuration (accessors, callbacks, validation, :set parsing, scope, types, values) |
 | optionstr      | Option string validation (fillchars, listchars, flags, comma-lists) |
 | os             | OS abstractions (env, time, fs)         |
 | path           | Path manipulation                       |
