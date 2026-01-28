@@ -8,7 +8,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | arabic         | Arabic text shaping                     |
 | arglist        | Argument list management (navigation, operations, entries) |
 | ascii          | ASCII character predicates              |
-| autocmd        | Autocommand events and patterns         |
+| autocmd        | Autocommand events, groups, patterns, and execution |
 | buffer         | Buffer state and validation             |
 | buffer_updates | Buffer change tracking                  |
 | bufwrite       | Buffer write operations (formats, encoding, BOM, validation) |
@@ -56,7 +56,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | indent         | Indentation calculation                 |
 | indent_c       | C/C++/Java indentation (cindent)        |
 | input          | Input handling (buffer sizes, state, ring buffer, breakcheck) |
-| insexpand      | Insert-mode completion                  |
+| insexpand      | Insert-mode completion (state, modes, list, popup, sources) |
 | keycodes       | Key code parsing                        |
 | linematch      | Diff line alignment                     |
 | list           | VimL list operations and iteration      |
