@@ -753,6 +753,166 @@ pub const extern "C" fn rs_userhl_index(userhl: c_int) -> c_int {
     userhl - 1
 }
 
+// =============================================================================
+// Phase 5: Public API Entry Points
+// =============================================================================
+
+/// Result of win_redr_status decision.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatusRedrawAction {
+    /// Skip - busy/recursing or wildmenu showing
+    Skip = 0,
+    /// No status line - set redraw_cmdline
+    NoCmdline = 1,
+    /// Defer - not redrawing right now
+    Defer = 2,
+    /// Use custom statusline
+    UseCustom = 3,
+    /// Draw default statusline (not implemented in current Neovim)
+    DrawDefault = 4,
+}
+
+/// Context for win_redr_status decision.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct StatusRedrawContext {
+    /// Static busy flag (recursion guard)
+    pub busy: c_int,
+    /// wild_menu_showing != 0
+    pub wild_menu_showing: c_int,
+    /// ui_has(kUIWildmenu)
+    pub ui_has_wildmenu: c_int,
+    /// wp->w_status_height == 0
+    pub no_status_height: c_int,
+    /// global_stl_height() > 0
+    pub is_stl_global: c_int,
+    /// wp == curwin
+    pub is_curwin: c_int,
+    /// redrawing()
+    pub is_redrawing: c_int,
+    /// *wp->w_p_stl != NUL (window-local statusline set)
+    pub has_local_stl: c_int,
+    /// *p_stl != NUL (global statusline set)
+    pub has_global_stl: c_int,
+    /// wp->w_floating
+    pub is_floating: c_int,
+}
+
+/// Determine the status redraw action.
+pub const fn decide_status_redraw(ctx: &StatusRedrawContext) -> StatusRedrawAction {
+    let is_stl_global = ctx.is_stl_global != 0;
+    let is_curwin = ctx.is_curwin != 0;
+
+    // Check recursion/busy and wildmenu
+    if ctx.busy != 0 || (ctx.wild_menu_showing != 0 && ctx.ui_has_wildmenu == 0) {
+        return StatusRedrawAction::Skip;
+    }
+
+    // No status line
+    let no_status = ctx.no_status_height != 0;
+    if no_status && !(is_stl_global && is_curwin) {
+        return StatusRedrawAction::NoCmdline;
+    }
+
+    // Not redrawing right now
+    if ctx.is_redrawing == 0 {
+        return StatusRedrawAction::Defer;
+    }
+
+    // Check for custom statusline
+    let has_local_stl = ctx.has_local_stl != 0;
+    let has_global_stl = ctx.has_global_stl != 0;
+    let is_floating = ctx.is_floating != 0;
+
+    if has_local_stl || (has_global_stl && (!is_floating || (is_stl_global && is_curwin))) {
+        return StatusRedrawAction::UseCustom;
+    }
+
+    // Default statusline (not used in current Neovim but kept for completeness)
+    StatusRedrawAction::DrawDefault
+}
+
+/// FFI export: Decide status redraw action.
+#[no_mangle]
+pub const extern "C" fn rs_status_redraw_action(ctx: &StatusRedrawContext) -> c_int {
+    decide_status_redraw(ctx) as c_int
+}
+
+/// Result of win_redr_winbar decision.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WinbarRedrawAction {
+    /// Skip - recursing, no height, or not redrawing
+    Skip = 0,
+    /// Use custom winbar
+    UseCustom = 1,
+}
+
+/// Context for win_redr_winbar decision.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct WinbarRedrawContext {
+    /// Static entered flag (recursion guard)
+    pub entered: c_int,
+    /// wp->w_winbar_height == 0
+    pub no_winbar_height: c_int,
+    /// redrawing()
+    pub is_redrawing: c_int,
+    /// *p_wbr != NUL (global winbar set)
+    pub has_global_wbr: c_int,
+    /// *wp->w_p_wbr != NUL (local winbar set)
+    pub has_local_wbr: c_int,
+}
+
+/// Determine the winbar redraw action.
+pub const fn decide_winbar_redraw(ctx: &WinbarRedrawContext) -> WinbarRedrawAction {
+    // Check recursion
+    if ctx.entered != 0 {
+        return WinbarRedrawAction::Skip;
+    }
+
+    // No winbar height or not redrawing
+    if ctx.no_winbar_height != 0 || ctx.is_redrawing == 0 {
+        return WinbarRedrawAction::Skip;
+    }
+
+    // Check for custom winbar
+    if ctx.has_global_wbr != 0 || ctx.has_local_wbr != 0 {
+        return WinbarRedrawAction::UseCustom;
+    }
+
+    WinbarRedrawAction::Skip
+}
+
+/// FFI export: Decide winbar redraw action.
+#[no_mangle]
+pub const extern "C" fn rs_winbar_redraw_action(ctx: &WinbarRedrawContext) -> c_int {
+    decide_winbar_redraw(ctx) as c_int
+}
+
+/// Result of redraw_custom_statusline decision.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CustomStatusRedrawAction {
+    /// Skip - recursing
+    Skip = 0,
+    /// Redraw custom statusline
+    Redraw = 1,
+}
+
+/// FFI export: Decide custom statusline redraw action.
+///
+/// Simple recursion check - returns Skip if entered, Redraw otherwise.
+#[no_mangle]
+pub const extern "C" fn rs_custom_status_redraw_action(entered: c_int) -> c_int {
+    if entered != 0 {
+        CustomStatusRedrawAction::Skip as c_int
+    } else {
+        CustomStatusRedrawAction::Redraw as c_int
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1056,5 +1216,94 @@ mod tests {
     fn test_userhl_index() {
         assert_eq!(rs_userhl_index(1), 0);
         assert_eq!(rs_userhl_index(9), 8);
+    }
+
+    // Tests for Phase 5: Public API Entry Points
+
+    #[test]
+    fn test_status_redraw_action_skip_busy() {
+        let ctx = StatusRedrawContext {
+            busy: 1,
+            ..Default::default()
+        };
+        assert_eq!(decide_status_redraw(&ctx), StatusRedrawAction::Skip);
+    }
+
+    #[test]
+    fn test_status_redraw_action_skip_wildmenu() {
+        let ctx = StatusRedrawContext {
+            wild_menu_showing: 1,
+            ui_has_wildmenu: 0,
+            ..Default::default()
+        };
+        assert_eq!(decide_status_redraw(&ctx), StatusRedrawAction::Skip);
+    }
+
+    #[test]
+    fn test_status_redraw_action_no_cmdline() {
+        let ctx = StatusRedrawContext {
+            no_status_height: 1,
+            is_stl_global: 0,
+            is_curwin: 0,
+            ..Default::default()
+        };
+        assert_eq!(decide_status_redraw(&ctx), StatusRedrawAction::NoCmdline);
+    }
+
+    #[test]
+    fn test_status_redraw_action_defer() {
+        let ctx = StatusRedrawContext {
+            no_status_height: 0,
+            is_redrawing: 0,
+            ..Default::default()
+        };
+        assert_eq!(decide_status_redraw(&ctx), StatusRedrawAction::Defer);
+    }
+
+    #[test]
+    fn test_status_redraw_action_use_custom() {
+        let ctx = StatusRedrawContext {
+            no_status_height: 0,
+            is_redrawing: 1,
+            has_local_stl: 1,
+            ..Default::default()
+        };
+        assert_eq!(decide_status_redraw(&ctx), StatusRedrawAction::UseCustom);
+    }
+
+    #[test]
+    fn test_winbar_redraw_action_skip_entered() {
+        let ctx = WinbarRedrawContext {
+            entered: 1,
+            ..Default::default()
+        };
+        assert_eq!(decide_winbar_redraw(&ctx), WinbarRedrawAction::Skip);
+    }
+
+    #[test]
+    fn test_winbar_redraw_action_skip_no_height() {
+        let ctx = WinbarRedrawContext {
+            no_winbar_height: 1,
+            is_redrawing: 1,
+            ..Default::default()
+        };
+        assert_eq!(decide_winbar_redraw(&ctx), WinbarRedrawAction::Skip);
+    }
+
+    #[test]
+    fn test_winbar_redraw_action_use_custom() {
+        let ctx = WinbarRedrawContext {
+            no_winbar_height: 0,
+            is_redrawing: 1,
+            has_global_wbr: 1,
+            ..Default::default()
+        };
+        assert_eq!(decide_winbar_redraw(&ctx), WinbarRedrawAction::UseCustom);
+    }
+
+    #[test]
+    fn test_custom_status_redraw_action() {
+        assert_eq!(rs_custom_status_redraw_action(1), CustomStatusRedrawAction::Skip as c_int);
+        assert_eq!(rs_custom_status_redraw_action(0), CustomStatusRedrawAction::Redraw as c_int);
     }
 }
