@@ -68,6 +68,9 @@ extern "C" {
     fn nvim_buf_get_help(buf: BufHandle) -> c_int;
     fn nvim_buf_get_fnum(buf: BufHandle) -> c_int;
     fn nvim_win_get_pvw(wp: WinHandle) -> c_int;
+    fn nvim_win_get_arg_idx(wp: WinHandle) -> c_int;
+    fn nvim_win_get_arg_idx_invalid(wp: WinHandle) -> c_int;
+    fn nvim_win_argcount(wp: WinHandle) -> c_int;
 }
 
 /// Context for evaluating statusline items.
@@ -147,11 +150,7 @@ pub fn eval_flag(flag: StlFlag, ctx: &EvalContext) -> EvalResult {
             base: NumberBase::Decimal,
         },
         StlFlag::Column => EvalResult::Number {
-            value: if !ctx.mode_insert && ctx.empty_line {
-                0
-            } else {
-                ctx.col
-            },
+            value: get_current_col(ctx),
             base: NumberBase::Decimal,
         },
         StlFlag::VirtCol => EvalResult::Number {
@@ -193,23 +192,8 @@ pub fn eval_flag(flag: StlFlag, ctx: &EvalContext) -> EvalResult {
         StlFlag::PreviewFlag | StlFlag::PreviewFlagAlt => eval_preview(flag, ctx.wp),
         StlFlag::Filetype | StlFlag::FiletypeAlt => eval_filetype(flag, ctx.buf),
 
-        // Offset and byte value - would need line content
-        StlFlag::Offset | StlFlag::OffsetX => EvalResult::Number {
-            value: 0,
-            base: if matches!(flag, StlFlag::OffsetX) {
-                NumberBase::Hexadecimal
-            } else {
-                NumberBase::Decimal
-            },
-        },
-        StlFlag::ByteVal | StlFlag::ByteValX => EvalResult::Number {
-            value: 0,
-            base: if matches!(flag, StlFlag::ByteValX) {
-                NumberBase::Hexadecimal
-            } else {
-                NumberBase::Decimal
-            },
-        },
+        // Argument list status
+        StlFlag::ArgListStat => eval_arglist_status(ctx.wp),
 
         // Other items (not directly evaluated)
         StlFlag::PageNum => EvalResult::Number {
@@ -217,7 +201,8 @@ pub fn eval_flag(flag: StlFlag, ctx: &EvalContext) -> EvalResult {
             base: NumberBase::Decimal,
         },
 
-        // Items that need special handling
+        // Items that need special handling or C wrappers
+        // (Quickfix, Offset, ByteVal, expression, keymap, showcmd, etc.)
         _ => EvalResult::Empty,
     }
 }
@@ -362,6 +347,42 @@ fn eval_filetype(flag: StlFlag, buf: BufHandle) -> EvalResult {
         };
 
         EvalResult::String(s)
+    }
+}
+
+/// Evaluate argument list status (%a).
+///
+/// Shows "(2 of 8)" or "((2) of 8)" if editing more than one file in the argument list.
+fn eval_arglist_status(wp: WinHandle) -> EvalResult {
+    if wp.is_null() {
+        return EvalResult::Empty;
+    }
+
+    unsafe {
+        let argcount = nvim_win_argcount(wp);
+        if argcount <= 1 {
+            return EvalResult::Empty;
+        }
+
+        let arg_idx = nvim_win_get_arg_idx(wp);
+        let arg_idx_invalid = nvim_win_get_arg_idx_invalid(wp) != 0;
+
+        let s = if arg_idx_invalid {
+            format!("(({}) of {})", arg_idx + 1, argcount)
+        } else {
+            format!("({} of {})", arg_idx + 1, argcount)
+        };
+
+        EvalResult::String(s)
+    }
+}
+
+/// Get current column position, properly handling empty lines and insert mode.
+const fn get_current_col(ctx: &EvalContext) -> c_int {
+    if !ctx.mode_insert && ctx.empty_line {
+        0
+    } else {
+        ctx.col
     }
 }
 

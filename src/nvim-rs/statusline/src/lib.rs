@@ -1939,6 +1939,50 @@ pub unsafe extern "C" fn rs_stl_format_wincount(
     written
 }
 
+// =============================================================================
+// FFI Exports for Item Evaluation Functions
+// =============================================================================
+
+/// FFI export: Evaluate argument list status.
+///
+/// Returns the argument list status string like "(2 of 8)" or "((2) of 8)".
+///
+/// # Safety
+/// `buf` must be null or a valid pointer to a buffer of at least `buflen` bytes.
+/// `wp` must be a valid window handle.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_stl_eval_arglist_status(
+    buf: *mut u8,
+    buflen: usize,
+    wp: WinHandle,
+) -> c_int {
+    if buf.is_null() || buflen == 0 || wp.is_null() {
+        return 0;
+    }
+
+    let argcount = nvim_win_argcount(wp);
+    if argcount <= 1 {
+        return 0;
+    }
+
+    let arg_idx = nvim_win_get_arg_idx(wp);
+    let arg_idx_invalid = nvim_win_get_arg_idx_invalid(wp) != 0;
+
+    let mut cursor = std::io::Cursor::new(std::slice::from_raw_parts_mut(buf, buflen));
+
+    let result = if arg_idx_invalid {
+        write!(cursor, "(({}) of {})", arg_idx + 1, argcount)
+    } else {
+        write!(cursor, "({} of {})", arg_idx + 1, argcount)
+    };
+
+    match result {
+        Ok(()) => cursor.position() as c_int,
+        Err(_) => 0,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
