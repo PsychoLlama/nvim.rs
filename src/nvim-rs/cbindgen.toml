@@ -497,10 +497,28 @@ include = ["rs_initchr", "rs_peekchr", "rs_skipchr", "rs_skipchr_keepstart", "rs
            "rs_eval_is_truthy_number", "rs_eval_is_truthy_float",
            "rs_eval_compare_numbers", "rs_eval_compare_floats",
            "rs_eval_string_to_number", "rs_eval_string_to_float",
+           # eval_exec expression evaluators (Phase 1)
+           "rs_eval0", "rs_eval1", "rs_eval2", "rs_eval3", "rs_eval4", "rs_eval5",
+           # eval_exec operators (Phase 2)
+           "rs_compare_numbers", "rs_compare_floats", "rs_apply_comparison", "rs_typval_compare",
+           "CompareResult",
+           # eval_exec errors (Phase 7)
+           "rs_eval_emsg_silent", "rs_eval_has_emsg", "rs_eval_is_aborting",
+           "rs_eval_error_number", "rs_eval_is_type_error", "rs_eval_is_function_error",
+           "rs_eval_is_lock_error", "EvalErrorCode", "ErrorState",
+           # vars lookup (Phase 3)
+           "rs_find_var_ht", "rs_get_var_value", "rs_parse_scope_prefix", "rs_skip_scope_prefix",
+           "HashtabHandle", "DictitemHandle", "DictHandle", "ScopePrefix",
            # funcall crate exports
            "rs_funcall_argspec_new", "rs_funcall_validate_argcount",
            "rs_funcall_validate_args", "rs_funcall_vararg_state",
            "ArgSpec", "VarargState",
+           # funcall dispatch (Phase 4)
+           "rs_funcall_lookup", "rs_funcall_is_global", "rs_funcall_skip_global",
+           "rs_funcall_validate_for_func", "rs_funcall_get_min_args", "rs_funcall_get_max_args",
+           "rs_funcall_error_from_fcerr",
+           "TypevalHandle", "UfuncHandle", "PartialHandle", "FuncexeHandle",
+           "UfuncFlags", "FuncLookupResult",
            # eval funcs exports (buffer, window, system, cursor, text, search)
            "rs_buf_is_valid_bufnr", "rs_buf_is_special_bufnr", "rs_buf_is_valid_lnum",
            "rs_win_is_valid_winnr", "rs_win_is_valid_winid",

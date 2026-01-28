@@ -36,7 +36,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | encoding       | Text encoding (base64, hashing)         |
 | eval           | VimL built-in functions (math, bitwise, type, random) |
 | eval_codec     | VimL value encoding/decoding (JSON, blob, escape)   |
-| eval_exec      | VimL expression evaluation (operators, comparisons) |
+| eval_exec      | VimL expression evaluation (eval0-eval5, operators, comparisons, error handling) |
 | event          | Event loop and libuv integration        |
 | extmark        | Extended marks for plugins              |
 | ex_cmds        | Ex command implementations (read, write, substitute, global, sort, lines, display, shell, format) |
@@ -46,7 +46,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | fileio         | File I/O (encoding, read/write, backup, modeline, sync) |
 | filesearch     | File search infrastructure for path, tags, cdpath      |
 | fold           | Folding state and methods               |
-| funcall        | VimL function call infrastructure       |
+| funcall        | VimL function call infrastructure (dispatch, lookup, argument validation) |
 | fuzzy          | Fuzzy matching                          |
 | getchar        | Typeahead and input buffer              |
 | grid           | Screen grid operations (cell access, line copy/clear, allocation, memory management) |
@@ -116,7 +116,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | unpacker       | MessagePack unpacking                   |
 | usercmd        | User command definition, completion, execution, and parsing |
 | userfunc       | User-defined functions (params, closure, funcref) |
-| vars           | Variable storage and scope management   |
+| vars           | Variable storage and scope management (lookup, scope prefixes) |
 | utf8proc       | utf8proc bindings                       |
 | version        | Version checks                          |
 | viewport       | Viewport and scroll management          |
