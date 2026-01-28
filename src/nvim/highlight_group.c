@@ -194,6 +194,46 @@ typedef struct {
 int nvim_hl_table_get_sg_gui(int idx) { return ((HlGroup *)highlight_ga.ga_data)[idx].sg_gui; }
 int nvim_hl_table_get_sg_cterm(int idx) { return ((HlGroup *)highlight_ga.ga_data)[idx].sg_cterm; }
 
+// Additional C accessors for Rust FFI
+char *nvim_hl_table_get_sg_name(int idx) { return ((HlGroup *)highlight_ga.ga_data)[idx].sg_name; }
+char *nvim_hl_table_get_sg_name_u(int idx) { return ((HlGroup *)highlight_ga.ga_data)[idx].sg_name_u; }
+bool nvim_hl_table_get_sg_cleared(int idx) { return ((HlGroup *)highlight_ga.ga_data)[idx].sg_cleared; }
+int nvim_hl_table_get_sg_attr(int idx) { return ((HlGroup *)highlight_ga.ga_data)[idx].sg_attr; }
+int nvim_hl_table_get_sg_link(int idx) { return ((HlGroup *)highlight_ga.ga_data)[idx].sg_link; }
+int nvim_hl_table_get_sg_deflink(int idx) { return ((HlGroup *)highlight_ga.ga_data)[idx].sg_deflink; }
+int nvim_hl_table_get_sg_set(int idx) { return ((HlGroup *)highlight_ga.ga_data)[idx].sg_set; }
+int nvim_hl_table_get_sg_cterm_fg(int idx) { return ((HlGroup *)highlight_ga.ga_data)[idx].sg_cterm_fg; }
+int nvim_hl_table_get_sg_cterm_bg(int idx) { return ((HlGroup *)highlight_ga.ga_data)[idx].sg_cterm_bg; }
+bool nvim_hl_table_get_sg_cterm_bold(int idx) { return ((HlGroup *)highlight_ga.ga_data)[idx].sg_cterm_bold; }
+RgbValue nvim_hl_table_get_sg_rgb_fg(int idx) { return ((HlGroup *)highlight_ga.ga_data)[idx].sg_rgb_fg; }
+RgbValue nvim_hl_table_get_sg_rgb_bg(int idx) { return ((HlGroup *)highlight_ga.ga_data)[idx].sg_rgb_bg; }
+RgbValue nvim_hl_table_get_sg_rgb_sp(int idx) { return ((HlGroup *)highlight_ga.ga_data)[idx].sg_rgb_sp; }
+int nvim_hl_table_get_sg_rgb_fg_idx(int idx) { return ((HlGroup *)highlight_ga.ga_data)[idx].sg_rgb_fg_idx; }
+int nvim_hl_table_get_sg_rgb_bg_idx(int idx) { return ((HlGroup *)highlight_ga.ga_data)[idx].sg_rgb_bg_idx; }
+int nvim_hl_table_get_sg_rgb_sp_idx(int idx) { return ((HlGroup *)highlight_ga.ga_data)[idx].sg_rgb_sp_idx; }
+int nvim_hl_table_get_sg_blend(int idx) { return ((HlGroup *)highlight_ga.ga_data)[idx].sg_blend; }
+int nvim_hl_table_get_sg_parent(int idx) { return ((HlGroup *)highlight_ga.ga_data)[idx].sg_parent; }
+
+// Setters for hl_table fields (used by Rust)
+void nvim_hl_table_set_sg_cleared(int idx, bool val) { ((HlGroup *)highlight_ga.ga_data)[idx].sg_cleared = val; }
+void nvim_hl_table_set_sg_attr(int idx, int val) { ((HlGroup *)highlight_ga.ga_data)[idx].sg_attr = val; }
+void nvim_hl_table_set_sg_link(int idx, int val) { ((HlGroup *)highlight_ga.ga_data)[idx].sg_link = val; }
+void nvim_hl_table_set_sg_deflink(int idx, int val) { ((HlGroup *)highlight_ga.ga_data)[idx].sg_deflink = val; }
+void nvim_hl_table_set_sg_set(int idx, int val) { ((HlGroup *)highlight_ga.ga_data)[idx].sg_set = val; }
+void nvim_hl_table_set_sg_cterm(int idx, int val) { ((HlGroup *)highlight_ga.ga_data)[idx].sg_cterm = val; }
+void nvim_hl_table_set_sg_cterm_fg(int idx, int val) { ((HlGroup *)highlight_ga.ga_data)[idx].sg_cterm_fg = val; }
+void nvim_hl_table_set_sg_cterm_bg(int idx, int val) { ((HlGroup *)highlight_ga.ga_data)[idx].sg_cterm_bg = val; }
+void nvim_hl_table_set_sg_cterm_bold(int idx, bool val) { ((HlGroup *)highlight_ga.ga_data)[idx].sg_cterm_bold = val; }
+void nvim_hl_table_set_sg_gui(int idx, int val) { ((HlGroup *)highlight_ga.ga_data)[idx].sg_gui = val; }
+void nvim_hl_table_set_sg_rgb_fg(int idx, RgbValue val) { ((HlGroup *)highlight_ga.ga_data)[idx].sg_rgb_fg = val; }
+void nvim_hl_table_set_sg_rgb_bg(int idx, RgbValue val) { ((HlGroup *)highlight_ga.ga_data)[idx].sg_rgb_bg = val; }
+void nvim_hl_table_set_sg_rgb_sp(int idx, RgbValue val) { ((HlGroup *)highlight_ga.ga_data)[idx].sg_rgb_sp = val; }
+void nvim_hl_table_set_sg_rgb_fg_idx(int idx, int val) { ((HlGroup *)highlight_ga.ga_data)[idx].sg_rgb_fg_idx = val; }
+void nvim_hl_table_set_sg_rgb_bg_idx(int idx, int val) { ((HlGroup *)highlight_ga.ga_data)[idx].sg_rgb_bg_idx = val; }
+void nvim_hl_table_set_sg_rgb_sp_idx(int idx, int val) { ((HlGroup *)highlight_ga.ga_data)[idx].sg_rgb_sp_idx = val; }
+void nvim_hl_table_set_sg_blend(int idx, int val) { ((HlGroup *)highlight_ga.ga_data)[idx].sg_blend = val; }
+void nvim_hl_table_set_sg_parent(int idx, int val) { ((HlGroup *)highlight_ga.ga_data)[idx].sg_parent = val; }
+
 enum {
   kColorIdxNone = -1,
   kColorIdxHex = -2,

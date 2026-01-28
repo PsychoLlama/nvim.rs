@@ -3,7 +3,7 @@
 //! This module defines the primary data structures used for managing
 //! highlight groups in Neovim.
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 
 /// Flags indicating which parts of a highlight group have been set.
 #[repr(C)]
@@ -95,6 +95,112 @@ pub type RgbValue = i32;
 
 /// Constant for invalid/unset RGB color
 pub const RGB_INVALID: RgbValue = -1;
+
+/// Script ID type (matches C's scid_T)
+pub type ScId = c_int;
+
+/// Line number type (matches C's linenr_T)
+pub type LineNr = i32;
+
+/// Script context type (matches C's sctx_T).
+///
+/// Tracks where a highlight group or option was defined/set.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SctxT {
+    /// Script ID
+    pub sc_sid: ScId,
+    /// Sourcing sequence number
+    pub sc_seq: c_int,
+    /// Line number
+    pub sc_lnum: LineNr,
+    /// Channel ID (only used when sc_sid is SID_API_CLIENT)
+    pub sc_chan: u64,
+}
+
+/// Structure that stores information about a highlight group.
+///
+/// The ID of a highlight group is also called group ID. It is the index in
+/// the highlight_ga array PLUS ONE.
+///
+/// This mirrors the C `HlGroup` struct in `highlight_group.c`.
+#[repr(C)]
+#[derive(Debug, Clone)]
+pub struct HlGroup {
+    /// Highlight group name
+    pub sg_name: *mut c_char,
+    /// Uppercase of sg_name (for case-insensitive lookup)
+    pub sg_name_u: *mut c_char,
+    /// "hi clear" was used
+    pub sg_cleared: bool,
+    /// Screen attr (see ATTR_ENTRY)
+    pub sg_attr: c_int,
+    /// Link to this highlight group ID
+    pub sg_link: c_int,
+    /// Default link; restored in highlight_clear()
+    pub sg_deflink: c_int,
+    /// Combination of flags in SG_SET (SG_CTERM, SG_GUI, SG_LINK)
+    pub sg_set: c_int,
+    /// Script where the default link was set
+    pub sg_deflink_sctx: SctxT,
+    /// Script in which the group was last set for terminal UIs
+    pub sg_script_ctx: SctxT,
+    /// "cterm=" highlighting attributes (combination of HlAttrFlags)
+    pub sg_cterm: c_int,
+    /// Terminal fg color number + 1
+    pub sg_cterm_fg: c_int,
+    /// Terminal bg color number + 1
+    pub sg_cterm_bg: c_int,
+    /// Bold attr was set for light color for RGB UIs
+    pub sg_cterm_bold: bool,
+    /// "gui=" highlighting attributes (combination of HlAttrFlags)
+    pub sg_gui: c_int,
+    /// RGB foreground color
+    pub sg_rgb_fg: RgbValue,
+    /// RGB background color
+    pub sg_rgb_bg: RgbValue,
+    /// RGB special color
+    pub sg_rgb_sp: RgbValue,
+    /// RGB foreground color index
+    pub sg_rgb_fg_idx: c_int,
+    /// RGB background color index
+    pub sg_rgb_bg_idx: c_int,
+    /// RGB special color index
+    pub sg_rgb_sp_idx: c_int,
+    /// Blend level (0-100 inclusive), -1 if unset
+    pub sg_blend: c_int,
+    /// Parent of @nested.group
+    pub sg_parent: c_int,
+}
+
+impl Default for HlGroup {
+    fn default() -> Self {
+        Self {
+            sg_name: std::ptr::null_mut(),
+            sg_name_u: std::ptr::null_mut(),
+            sg_cleared: true,
+            sg_attr: 0,
+            sg_link: 0,
+            sg_deflink: 0,
+            sg_set: 0,
+            sg_deflink_sctx: SctxT::default(),
+            sg_script_ctx: SctxT::default(),
+            sg_cterm: 0,
+            sg_cterm_fg: 0,
+            sg_cterm_bg: 0,
+            sg_cterm_bold: false,
+            sg_gui: 0,
+            sg_rgb_fg: RGB_INVALID,
+            sg_rgb_bg: RGB_INVALID,
+            sg_rgb_sp: RGB_INVALID,
+            sg_rgb_fg_idx: ColorIdx::None as c_int,
+            sg_rgb_bg_idx: ColorIdx::None as c_int,
+            sg_rgb_sp_idx: ColorIdx::None as c_int,
+            sg_blend: -1,
+            sg_parent: 0,
+        }
+    }
+}
 
 /// Maximum length for a syntax name
 pub const MAX_SYN_NAME: usize = 200;
@@ -268,5 +374,39 @@ mod tests {
         assert_eq!(COLOR_NAMES.len(), COLOR_NUMBERS_88.len());
         assert_eq!(COLOR_NAMES.len(), COLOR_NUMBERS_256.len());
         assert_eq!(COLOR_NAMES.len(), COLOR_NUMBERS_8.len());
+    }
+
+    #[test]
+    fn test_sctx_t_default() {
+        let sctx = SctxT::default();
+        assert_eq!(sctx.sc_sid, 0);
+        assert_eq!(sctx.sc_seq, 0);
+        assert_eq!(sctx.sc_lnum, 0);
+        assert_eq!(sctx.sc_chan, 0);
+    }
+
+    #[test]
+    fn test_hl_group_default() {
+        let group = HlGroup::default();
+        assert!(group.sg_name.is_null());
+        assert!(group.sg_name_u.is_null());
+        assert!(group.sg_cleared);
+        assert_eq!(group.sg_attr, 0);
+        assert_eq!(group.sg_link, 0);
+        assert_eq!(group.sg_deflink, 0);
+        assert_eq!(group.sg_set, 0);
+        assert_eq!(group.sg_cterm, 0);
+        assert_eq!(group.sg_cterm_fg, 0);
+        assert_eq!(group.sg_cterm_bg, 0);
+        assert!(!group.sg_cterm_bold);
+        assert_eq!(group.sg_gui, 0);
+        assert_eq!(group.sg_rgb_fg, RGB_INVALID);
+        assert_eq!(group.sg_rgb_bg, RGB_INVALID);
+        assert_eq!(group.sg_rgb_sp, RGB_INVALID);
+        assert_eq!(group.sg_rgb_fg_idx, ColorIdx::None as c_int);
+        assert_eq!(group.sg_rgb_bg_idx, ColorIdx::None as c_int);
+        assert_eq!(group.sg_rgb_sp_idx, ColorIdx::None as c_int);
+        assert_eq!(group.sg_blend, -1);
+        assert_eq!(group.sg_parent, 0);
     }
 }
