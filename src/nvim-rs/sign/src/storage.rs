@@ -13,8 +13,9 @@ use crate::SignHandle;
 // C FFI declarations
 // =============================================================================
 
+#[allow(dead_code)]
 extern "C" {
-    /// Get sign by name from the sign map
+    /// Get sign by name from the sign map (also declared in define.rs)
     fn nvim_sign_map_get(name: *const c_char) -> SignHandle;
 
     /// Check if sign exists in the map

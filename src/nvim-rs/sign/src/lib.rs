@@ -39,6 +39,7 @@ pub mod storage;
 pub mod text;
 
 // Re-exports
+pub use define::{SignDefineError, SignDefineParams, SignHighlights};
 pub use storage::{SignMapIterator, SignNamespace, SignProperties};
 pub use text::{ScharT, SignTextResult, MAX_SCHAR_SIZE};
 
