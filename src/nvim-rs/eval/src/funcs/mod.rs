@@ -44,6 +44,7 @@ pub mod search;
 pub mod string;
 pub mod system;
 pub mod text;
+pub mod timer;
 pub mod types;
 pub mod window;
 
