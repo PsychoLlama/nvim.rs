@@ -1184,6 +1184,303 @@ pub extern "C" fn rs_vterm_state_pen_get_font(state: VTermStateHandle) -> c_int 
 }
 
 // =============================================================================
+// C Accessor Function Declarations
+// =============================================================================
+
+// These are C accessor functions defined in state.c that provide access to
+// VTermState fields. They may not all be used immediately but are declared
+// for future use as more state functions are migrated to Rust.
+#[allow(dead_code)]
+extern "C" {
+    // Dimension accessors
+    fn nvim_vterm_state_get_rows(state: VTermStateHandle) -> c_int;
+    fn nvim_vterm_state_get_cols(state: VTermStateHandle) -> c_int;
+
+    // Cursor position accessors
+    fn nvim_vterm_state_get_pos(state: VTermStateHandle) -> VTermPos;
+    fn nvim_vterm_state_set_pos(state: VTermStateHandle, pos: VTermPos);
+    fn nvim_vterm_state_get_at_phantom(state: VTermStateHandle) -> c_int;
+    fn nvim_vterm_state_set_at_phantom(state: VTermStateHandle, at_phantom: c_int);
+
+    // Scroll region accessors
+    fn nvim_vterm_state_get_scrollregion_top(state: VTermStateHandle) -> c_int;
+    fn nvim_vterm_state_set_scrollregion_top(state: VTermStateHandle, top: c_int);
+    fn nvim_vterm_state_get_scrollregion_bottom(state: VTermStateHandle) -> c_int;
+    fn nvim_vterm_state_set_scrollregion_bottom(state: VTermStateHandle, bottom: c_int);
+    fn nvim_vterm_state_get_scrollregion_left(state: VTermStateHandle) -> c_int;
+    fn nvim_vterm_state_set_scrollregion_left(state: VTermStateHandle, left: c_int);
+    fn nvim_vterm_state_get_scrollregion_right(state: VTermStateHandle) -> c_int;
+    fn nvim_vterm_state_set_scrollregion_right(state: VTermStateHandle, right: c_int);
+
+    // Computed scroll region bounds
+    fn nvim_vterm_state_scrollregion_bottom(state: VTermStateHandle) -> c_int;
+    fn nvim_vterm_state_scrollregion_left(state: VTermStateHandle) -> c_int;
+    fn nvim_vterm_state_scrollregion_right(state: VTermStateHandle) -> c_int;
+    fn nvim_vterm_state_row_width(state: VTermStateHandle, row: c_int) -> c_int;
+    fn nvim_vterm_state_this_row_width(state: VTermStateHandle) -> c_int;
+
+    // Line info accessors
+    fn nvim_vterm_state_get_lineinfo_at(state: VTermStateHandle, row: c_int)
+        -> *mut VTermLineInfo;
+    fn nvim_vterm_state_set_lineinfo_continuation(
+        state: VTermStateHandle,
+        row: c_int,
+        continuation: c_int,
+    );
+
+    // Mode accessors
+    fn nvim_vterm_state_mode_autowrap(state: VTermStateHandle) -> c_int;
+    fn nvim_vterm_state_mode_insert(state: VTermStateHandle) -> c_int;
+    fn nvim_vterm_state_mode_newline(state: VTermStateHandle) -> c_int;
+    fn nvim_vterm_state_mode_origin(state: VTermStateHandle) -> c_int;
+    fn nvim_vterm_state_mode_cursor_visible(state: VTermStateHandle) -> c_int;
+    fn nvim_vterm_state_mode_leftrightmargin(state: VTermStateHandle) -> c_int;
+    fn nvim_vterm_state_mode_alt_screen(state: VTermStateHandle) -> c_int;
+
+    // Protected cell accessor
+    fn nvim_vterm_state_get_protected_cell(state: VTermStateHandle) -> c_int;
+
+    // Callback accessors
+    fn nvim_vterm_state_get_callbacks(state: VTermStateHandle) -> *const VTermStateCallbacks;
+    fn nvim_vterm_state_get_cbdata(state: VTermStateHandle) -> *mut c_void;
+
+    // VTerm handle accessor
+    fn nvim_vterm_state_get_vt(state: VTermStateHandle) -> *mut c_void;
+
+    // Grapheme buffer accessors
+    fn nvim_vterm_state_get_grapheme_buf(state: VTermStateHandle) -> *mut i8;
+    fn nvim_vterm_state_get_grapheme_len(state: VTermStateHandle) -> usize;
+    fn nvim_vterm_state_set_grapheme_len(state: VTermStateHandle, len: usize);
+    fn nvim_vterm_state_get_combine_width(state: VTermStateHandle) -> c_int;
+    fn nvim_vterm_state_set_combine_width(state: VTermStateHandle, width: c_int);
+    fn nvim_vterm_state_get_combine_pos(state: VTermStateHandle) -> VTermPos;
+    fn nvim_vterm_state_set_combine_pos(state: VTermStateHandle, pos: VTermPos);
+
+    // VTerm output functions (existing C functions)
+    fn vterm_push_output_sprintf_ctrl(vt: *mut c_void, c1: u8, fmt: *const i8, ...);
+}
+
+// =============================================================================
+// Cursor Movement Functions (Migrated from C)
+// =============================================================================
+
+/// Update the cursor position and optionally notify via callback.
+///
+/// This function handles cursor position changes and calls the movecursor
+/// callback if registered.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_updatecursor(
+    state: VTermStateHandle,
+    oldpos: *const VTermPos,
+    cancel_phantom: c_int,
+) {
+    if state.is_null() {
+        return;
+    }
+
+    let pos = nvim_vterm_state_get_pos(state);
+
+    if cancel_phantom != 0 {
+        nvim_vterm_state_set_at_phantom(state, 0);
+    }
+
+    let callbacks = nvim_vterm_state_get_callbacks(state);
+    if callbacks.is_null() {
+        return;
+    }
+
+    if let Some(movecursor) = (*callbacks).movecursor {
+        let cbdata = nvim_vterm_state_get_cbdata(state);
+        let cursor_visible = nvim_vterm_state_mode_cursor_visible(state);
+
+        if oldpos.is_null() {
+            // Use current position as old position
+            movecursor(pos, pos, cursor_visible, cbdata);
+        } else {
+            movecursor(pos, *oldpos, cursor_visible, cbdata);
+        }
+    }
+}
+
+/// Set the cursor position directly.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_setpos(state: VTermStateHandle, pos: VTermPos) {
+    if state.is_null() {
+        return;
+    }
+    nvim_vterm_state_set_pos(state, pos);
+}
+
+/// Move cursor to absolute position (row, col).
+/// Returns true if the cursor was within scroll region bounds.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_cursor_moveto(
+    state: VTermStateHandle,
+    row: c_int,
+    col: c_int,
+) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+
+    let rows = nvim_vterm_state_get_rows(state);
+    let cols = nvim_vterm_state_get_cols(state);
+
+    // Clamp position to valid bounds, tracking if we were out of bounds
+    let (new_row, row_clamped) = if row < 0 {
+        (0, true)
+    } else if row >= rows {
+        (rows - 1, true)
+    } else {
+        (row, false)
+    };
+
+    let (new_col, col_clamped) = if col < 0 {
+        (0, true)
+    } else if col >= cols {
+        (cols - 1, true)
+    } else {
+        (col, false)
+    };
+
+    let new_pos = VTermPos {
+        row: new_row,
+        col: new_col,
+    };
+    nvim_vterm_state_set_pos(state, new_pos);
+
+    c_int::from(!row_clamped && !col_clamped)
+}
+
+/// Scroll the terminal region.
+/// `downward`: positive = scroll down (new lines at top), negative = scroll up
+/// `rightward`: positive = scroll right (new columns at left), negative = scroll left
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_scroll(
+    state: VTermStateHandle,
+    rect: VTermRect,
+    downward: c_int,
+    rightward: c_int,
+) {
+    if state.is_null() {
+        return;
+    }
+
+    // Handle line continuations for vertical scrolling
+    if downward != 0 {
+        let cols = nvim_vterm_state_get_cols(state);
+
+        // Check if this is a full-width scroll region
+        if rect.start_col == 0 && rect.end_col == cols {
+            // Mark affected lines for continuation updates
+            if downward > 0 {
+                // Scrolling down - lines moving up lose their continuation status
+                for row in rect.start_row..(rect.start_row + downward).min(rect.end_row) {
+                    nvim_vterm_state_set_lineinfo_continuation(state, row, 0);
+                }
+            } else {
+                // Scrolling up - lines moving down
+                let up_count = -downward;
+                for row in (rect.end_row - up_count).max(rect.start_row)..rect.end_row {
+                    nvim_vterm_state_set_lineinfo_continuation(state, row, 0);
+                }
+            }
+        }
+    }
+
+    // Call the scrollrect callback
+    let callbacks = nvim_vterm_state_get_callbacks(state);
+    if !callbacks.is_null() {
+        if let Some(scrollrect) = (*callbacks).scrollrect {
+            let cbdata = nvim_vterm_state_get_cbdata(state);
+            scrollrect(rect, downward, rightward, cbdata);
+        }
+    }
+}
+
+// Note: The following functions use the existing FFI exports that access
+// the Rust State struct directly:
+// - rs_vterm_state_get_scroll_region_top
+// - rs_vterm_state_get_scroll_region_bottom
+// - rs_vterm_state_get_cols
+// - rs_vterm_state_get_rows
+//
+// The C accessor functions (nvim_vterm_state_*) are available for use
+// in the scroll/cursor movement functions above.
+
+/// Check if autowrap mode is enabled.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_is_autowrap(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    nvim_vterm_state_mode_autowrap(state)
+}
+
+/// Check if insert mode is enabled.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_is_insert_mode(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    nvim_vterm_state_mode_insert(state)
+}
+
+/// Check if newline mode is enabled.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_is_newline_mode(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    nvim_vterm_state_mode_newline(state)
+}
+
+/// Check if origin mode is enabled.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_is_origin_mode(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    nvim_vterm_state_mode_origin(state)
+}
+
+/// Check if the cell at current position is protected.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_is_protected(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    nvim_vterm_state_get_protected_cell(state)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
