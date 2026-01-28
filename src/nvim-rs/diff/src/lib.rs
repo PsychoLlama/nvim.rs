@@ -17,6 +17,7 @@ pub mod helpers;
 pub mod highlight;
 pub mod marks;
 pub mod navigate;
+pub mod ops;
 pub mod scroll;
 pub mod update;
 
@@ -37,6 +38,7 @@ pub use highlight::{
 };
 pub use marks::{ChangeMetrics, ChangePosition, MarkAdjustIter, MarkAdjustParams};
 pub use navigate::{DiffHunkBounds, DiffNavResult, Direction};
+pub use ops::{AdjustedRange, DiffOpError, DiffOpRange, DiffOpState, DiffOtherBufResult};
 pub use scroll::{
     BoundsResult, DiffScrollState, FillerPosition, ScrollBindState, TopfillResult, ToplineResult,
 };
