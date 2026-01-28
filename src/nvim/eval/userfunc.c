@@ -4181,3 +4181,89 @@ char *register_luafunc(LuaRef ref)
   // coverity[leaked_storage]
   return fp->uf_name;
 }
+
+// =============================================================================
+// Rust FFI Accessor Functions
+// =============================================================================
+
+/// Get ufunc flags.
+int nvim_ufunc_get_flags(const ufunc_T *fp)
+{
+  return fp ? fp->uf_flags : 0;
+}
+
+/// Get minimum number of arguments for ufunc.
+int nvim_ufunc_get_min_args(const ufunc_T *fp)
+{
+  if (fp == NULL) {
+    return 0;
+  }
+  // uf_args.ga_len is total args, uf_def_args.ga_len is optional args
+  return fp->uf_args.ga_len - fp->uf_def_args.ga_len;
+}
+
+/// Get maximum number of arguments for ufunc (-1 if variadic).
+int nvim_ufunc_get_max_args(const ufunc_T *fp)
+{
+  if (fp == NULL) {
+    return 0;
+  }
+  if (fp->uf_varargs) {
+    return -1;
+  }
+  return fp->uf_args.ga_len;
+}
+
+/// Get function from partial.
+ufunc_T *nvim_partial_get_func(const partial_T *pt)
+{
+  return pt ? pt->pt_func : NULL;
+}
+
+/// Get argument count from partial.
+int nvim_partial_get_argc(const partial_T *pt)
+{
+  return pt ? pt->pt_argc : 0;
+}
+
+/// Get dict from partial.
+dict_T *nvim_partial_get_dict(const partial_T *pt)
+{
+  return pt ? pt->pt_dict : NULL;
+}
+
+/// Check if partial was auto-created.
+int nvim_partial_is_auto(const partial_T *pt)
+{
+  return pt && pt->pt_auto;
+}
+
+/// Get partial from funcexe.
+partial_T *nvim_funcexe_get_partial(const funcexe_T *fe)
+{
+  return fe ? fe->fe_partial : NULL;
+}
+
+/// Get selfdict from funcexe.
+dict_T *nvim_funcexe_get_selfdict(const funcexe_T *fe)
+{
+  return fe ? fe->fe_selfdict : NULL;
+}
+
+/// Get evaluate flag from funcexe.
+int nvim_funcexe_get_evaluate(const funcexe_T *fe)
+{
+  return fe ? fe->fe_evaluate : 0;
+}
+
+/// Apply FuncUndefined autocmd and return result.
+int apply_autocmds_for_funcundefined(const char *name)
+{
+  return apply_autocmds(EVENT_FUNCUNDEFINED, name, name, true, NULL);
+}
+
+/// Check if name is a builtin function (wrapper for static function).
+int nvim_is_builtin_function(const char *name, int len)
+{
+  return builtin_function(name, len);
+}

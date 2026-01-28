@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 nvim-typval = { path = "../typval" }
+bitflags = "2.10"
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "warn"

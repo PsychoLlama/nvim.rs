@@ -25,6 +25,17 @@
 
 use std::ffi::c_int;
 
+// Submodules
+pub mod dispatch;
+
+// Re-export dispatch types
+pub use dispatch::{
+    rs_funcall_error_from_fcerr, rs_funcall_get_max_args, rs_funcall_get_min_args,
+    rs_funcall_is_global, rs_funcall_lookup, rs_funcall_skip_global, rs_funcall_validate_for_func,
+    FuncLookupResult, FuncexeHandle, PartialHandle, TypevalHandle, UfuncFlags, UfuncHandle,
+    FLEN_FIXED, MAX_FUNC_ARGS,
+};
+
 // =============================================================================
 // Function Call Result
 // =============================================================================
