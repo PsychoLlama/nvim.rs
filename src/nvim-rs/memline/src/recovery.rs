@@ -374,12 +374,172 @@ pub unsafe extern "C" fn rs_fnamecmp_ino(
     fnamecmp_ino_c(fname_c, fname_s, ino_block0)
 }
 
+// =============================================================================
+// Recovery State Helpers
+// =============================================================================
+
+use crate::types::{
+    SEA_CHOICE_ABORT, SEA_CHOICE_DELETE, SEA_CHOICE_EDIT, SEA_CHOICE_NONE, SEA_CHOICE_QUIT,
+    SEA_CHOICE_READONLY, SEA_CHOICE_RECOVER,
+};
+
+/// Check if a swap file can be recovered.
+///
+/// A swap file can be recovered if:
+/// - It has valid block 0 identification
+/// - The strings in block 0 are valid (NUL-terminated)
+/// - The byte order magic numbers are correct
+///
+/// # Safety
+/// - `b0` must be a valid pointer to a ZeroBlock
+#[no_mangle]
+pub unsafe extern "C" fn rs_swap_file_recoverable(b0: *const c_void) -> c_int {
+    if b0.is_null() {
+        return 0;
+    }
+
+    // Check ID bytes
+    if ml_check_b0_id_c(b0) != 0 {
+        return 0;
+    }
+
+    // Check strings are valid
+    if ml_check_b0_strings_c(b0) != 0 {
+        return 0;
+    }
+
+    // Check byte order
+    if b0_magic_wrong_c(b0) != 0 {
+        return 0;
+    }
+
+    1
+}
+
+/// Get the swap file attention choice from a user response.
+///
+/// Maps user input characters to SEA_CHOICE constants:
+/// - 'O' or 'o' -> SEA_CHOICE_READONLY (1)
+/// - 'E' or 'e' -> SEA_CHOICE_EDIT (2)
+/// - 'R' or 'r' -> SEA_CHOICE_RECOVER (3)
+/// - 'D' or 'd' -> SEA_CHOICE_DELETE (4)
+/// - 'Q' or 'q' -> SEA_CHOICE_QUIT (5)
+/// - 'A' or 'a' -> SEA_CHOICE_ABORT (6)
+/// - Other -> SEA_CHOICE_NONE (0)
+#[no_mangle]
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)] // Intentional: interpreting c_int as ASCII char code
+pub extern "C" fn rs_sea_choice_from_char(c: c_int) -> c_int {
+    match c as u8 {
+        b'O' | b'o' => SEA_CHOICE_READONLY,
+        b'E' | b'e' => SEA_CHOICE_EDIT,
+        b'R' | b'r' => SEA_CHOICE_RECOVER,
+        b'D' | b'd' => SEA_CHOICE_DELETE,
+        b'Q' | b'q' => SEA_CHOICE_QUIT,
+        b'A' | b'a' => SEA_CHOICE_ABORT,
+        _ => SEA_CHOICE_NONE,
+    }
+}
+
+/// Get a descriptive string for a SEA_CHOICE value.
+///
+/// Returns a static string describing the choice, or NULL for invalid values.
+///
+/// # Safety
+/// Returns a pointer to static string data.
+#[no_mangle]
+pub extern "C" fn rs_sea_choice_name(choice: c_int) -> *const c_char {
+    // Static strings for each choice
+    static NONE: &[u8] = b"None\0";
+    static READONLY: &[u8] = b"Open Read-Only\0";
+    static EDIT: &[u8] = b"Edit anyway\0";
+    static RECOVER: &[u8] = b"Recover\0";
+    static DELETE: &[u8] = b"Delete it\0";
+    static QUIT: &[u8] = b"Quit\0";
+    static ABORT: &[u8] = b"Abort\0";
+
+    match choice {
+        x if x == SEA_CHOICE_NONE => NONE.as_ptr().cast(),
+        x if x == SEA_CHOICE_READONLY => READONLY.as_ptr().cast(),
+        x if x == SEA_CHOICE_EDIT => EDIT.as_ptr().cast(),
+        x if x == SEA_CHOICE_RECOVER => RECOVER.as_ptr().cast(),
+        x if x == SEA_CHOICE_DELETE => DELETE.as_ptr().cast(),
+        x if x == SEA_CHOICE_QUIT => QUIT.as_ptr().cast(),
+        x if x == SEA_CHOICE_ABORT => ABORT.as_ptr().cast(),
+        _ => std::ptr::null(),
+    }
+}
+
+/// Check if a SEA_CHOICE value means "proceed with editing".
+///
+/// Returns true for: EDIT, RECOVER
+#[no_mangle]
+pub extern "C" fn rs_sea_choice_proceeds(choice: c_int) -> c_int {
+    c_int::from(choice == SEA_CHOICE_EDIT || choice == SEA_CHOICE_RECOVER)
+}
+
+/// Check if a SEA_CHOICE value means "abort operation".
+///
+/// Returns true for: QUIT, ABORT
+#[no_mangle]
+pub extern "C" fn rs_sea_choice_aborts(choice: c_int) -> c_int {
+    c_int::from(choice == SEA_CHOICE_QUIT || choice == SEA_CHOICE_ABORT)
+}
+
+// =============================================================================
+// Byte Order Conversion
+// =============================================================================
+
+/// Portable conversion of long to byte array.
+///
+/// Stores the value in a byte order independent format.
+/// This is used for swap file portability across different architectures.
+///
+/// # Implementation
+///
+/// Each byte stores 8 bits of the value, starting with the least significant.
+///
+/// # Safety
+/// - `s` must be a valid pointer to at least 8 bytes
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap)] // Intentional: storing bytes
+pub unsafe extern "C" fn rs_long_to_char_portable(n: i64, s: *mut c_char) {
+    if s.is_null() {
+        return;
+    }
+
+    let mut val = n;
+    for i in 0..8 {
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let byte = (val & 0xFF) as c_char;
+        *s.add(i) = byte;
+        val >>= 8;
+    }
+}
+
+/// Portable conversion of byte array to long.
+///
+/// Reverses the conversion done by `rs_long_to_char_portable`.
+///
+/// # Safety
+/// - `s` must be a valid pointer to at least 8 bytes
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)] // Intentional: reading bytes
+pub unsafe extern "C" fn rs_char_to_long_portable(s: *const c_char) -> i64 {
+    if s.is_null() {
+        return 0;
+    }
+
+    let mut result: i64 = 0;
+    for i in (0..8).rev() {
+        let byte = i64::from(*s.add(i) as u8);
+        result = (result << 8) | byte;
+    }
+    result
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::types::{
-        SEA_CHOICE_ABORT, SEA_CHOICE_DELETE, SEA_CHOICE_EDIT, SEA_CHOICE_NONE, SEA_CHOICE_QUIT,
-        SEA_CHOICE_READONLY, SEA_CHOICE_RECOVER,
-    };
+    use super::*;
 
     #[test]
     fn test_sea_choice_constants() {
@@ -391,5 +551,61 @@ mod tests {
         assert_eq!(SEA_CHOICE_DELETE, 4);
         assert_eq!(SEA_CHOICE_QUIT, 5);
         assert_eq!(SEA_CHOICE_ABORT, 6);
+    }
+
+    #[test]
+    fn test_sea_choice_from_char() {
+        assert_eq!(rs_sea_choice_from_char(b'O' as c_int), SEA_CHOICE_READONLY);
+        assert_eq!(rs_sea_choice_from_char(b'o' as c_int), SEA_CHOICE_READONLY);
+        assert_eq!(rs_sea_choice_from_char(b'E' as c_int), SEA_CHOICE_EDIT);
+        assert_eq!(rs_sea_choice_from_char(b'R' as c_int), SEA_CHOICE_RECOVER);
+        assert_eq!(rs_sea_choice_from_char(b'D' as c_int), SEA_CHOICE_DELETE);
+        assert_eq!(rs_sea_choice_from_char(b'Q' as c_int), SEA_CHOICE_QUIT);
+        assert_eq!(rs_sea_choice_from_char(b'A' as c_int), SEA_CHOICE_ABORT);
+        assert_eq!(rs_sea_choice_from_char(b'X' as c_int), SEA_CHOICE_NONE);
+    }
+
+    #[test]
+    fn test_sea_choice_proceeds() {
+        assert_eq!(rs_sea_choice_proceeds(SEA_CHOICE_NONE), 0);
+        assert_eq!(rs_sea_choice_proceeds(SEA_CHOICE_READONLY), 0);
+        assert_eq!(rs_sea_choice_proceeds(SEA_CHOICE_EDIT), 1);
+        assert_eq!(rs_sea_choice_proceeds(SEA_CHOICE_RECOVER), 1);
+        assert_eq!(rs_sea_choice_proceeds(SEA_CHOICE_DELETE), 0);
+        assert_eq!(rs_sea_choice_proceeds(SEA_CHOICE_QUIT), 0);
+        assert_eq!(rs_sea_choice_proceeds(SEA_CHOICE_ABORT), 0);
+    }
+
+    #[test]
+    fn test_sea_choice_aborts() {
+        assert_eq!(rs_sea_choice_aborts(SEA_CHOICE_NONE), 0);
+        assert_eq!(rs_sea_choice_aborts(SEA_CHOICE_READONLY), 0);
+        assert_eq!(rs_sea_choice_aborts(SEA_CHOICE_EDIT), 0);
+        assert_eq!(rs_sea_choice_aborts(SEA_CHOICE_RECOVER), 0);
+        assert_eq!(rs_sea_choice_aborts(SEA_CHOICE_DELETE), 0);
+        assert_eq!(rs_sea_choice_aborts(SEA_CHOICE_QUIT), 1);
+        assert_eq!(rs_sea_choice_aborts(SEA_CHOICE_ABORT), 1);
+    }
+
+    #[test]
+    fn test_long_char_conversion() {
+        let mut buf = [0i8; 8];
+
+        unsafe {
+            // Test positive value
+            rs_long_to_char_portable(0x1234_5678_9ABC_DEF0, buf.as_mut_ptr());
+            let result = rs_char_to_long_portable(buf.as_ptr());
+            assert_eq!(result, 0x1234_5678_9ABC_DEF0);
+
+            // Test negative value
+            rs_long_to_char_portable(-1, buf.as_mut_ptr());
+            let result = rs_char_to_long_portable(buf.as_ptr());
+            assert_eq!(result, -1);
+
+            // Test zero
+            rs_long_to_char_portable(0, buf.as_mut_ptr());
+            let result = rs_char_to_long_portable(buf.as_ptr());
+            assert_eq!(result, 0);
+        }
     }
 }
