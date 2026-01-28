@@ -9,10 +9,12 @@
 //! - [`placement`]: Position and size calculations
 //! - [`render`]: Text rendering and attribute handling
 //! - [`redraw`]: Core redraw logic helpers
+//! - [`display`]: Display orchestration
 
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(clippy::cast_lossless)] // FFI needs flexible casts between c_int and i64
 
+pub mod display;
 pub mod item;
 pub mod placement;
 pub mod redraw;

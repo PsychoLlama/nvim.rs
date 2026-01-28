@@ -228,6 +228,42 @@ void nvim_set_pum_height(int val)
   pum_height = val;
 }
 
+// Display state accessors for Rust FFI
+void nvim_set_pum_is_visible(int val)
+{
+  pum_is_visible = val != 0;
+}
+
+int nvim_get_pum_is_drawn(void)
+{
+  return pum_is_drawn;
+}
+
+void nvim_set_pum_is_drawn(int val)
+{
+  pum_is_drawn = val != 0;
+}
+
+void nvim_set_pum_external(int val)
+{
+  pum_external = val != 0;
+}
+
+int nvim_get_pum_invalid(void)
+{
+  return pum_invalid;
+}
+
+void nvim_set_pum_invalid(int val)
+{
+  pum_invalid = val != 0;
+}
+
+void nvim_clear_pum_array(void)
+{
+  pum_array = NULL;
+}
+
 // Accessors for pum_array items (for Rust FFI)
 const char *nvim_pum_item_get_text(const pumitem_T *array, int index)
 {
