@@ -472,58 +472,16 @@ void ui_comp_compose_grid(ScreenGrid *grid)
   rs_ui_comp_compose_grid(grid);
 }
 
+// Rust implementation of ui_comp_raw_line
+extern void rs_ui_comp_raw_line(Integer grid, Integer row, Integer startcol, Integer endcol,
+                                Integer clearcol, Integer clearattr, int flags,
+                                const schar_T *chunk, const sattr_T *attrs);
+
 void ui_comp_raw_line(Integer grid, Integer row, Integer startcol, Integer endcol, Integer clearcol,
                       Integer clearattr, LineFlags flags, const schar_T *chunk,
                       const sattr_T *attrs)
 {
-  if (!ui_comp_should_draw() || !ui_comp_set_grid((int)grid)) {
-    return;
-  }
-
-  row += curgrid->comp_row;
-  startcol += curgrid->comp_col;
-  endcol += curgrid->comp_col;
-  clearcol += curgrid->comp_col;
-  if (curgrid != &default_grid) {
-    flags = flags & ~kLineFlagWrap;
-  }
-
-  assert(endcol <= clearcol);
-
-  // TODO(bfredl): this should not really be necessary. But on some condition
-  // when resizing nvim, a window will be attempted to be drawn on the older
-  // and possibly larger global screen size.
-  if (row >= default_grid.rows) {
-    DLOG("compositor: invalid row %" PRId64 " on grid %" PRId64, row, grid);
-    return;
-  }
-  if (clearcol > default_grid.cols) {
-    DLOG("compositor: invalid last column %" PRId64 " on grid %" PRId64,
-         clearcol, grid);
-    if (startcol >= default_grid.cols) {
-      return;
-    }
-    clearcol = default_grid.cols;
-    endcol = MIN(endcol, clearcol);
-  }
-
-  bool covered = curgrid_covered_above((int)row);
-  // TODO(bfredl): eventually should just fix compose_line to respect clearing
-  // and optimize it for uncovered lines.
-  if (flags & kLineFlagInvalid || covered || curgrid->blending) {
-    compose_debug(row, row + 1, startcol, clearcol, dbghl_composed, true);
-    compose_line(row, startcol, clearcol, flags);
-  } else {
-    compose_debug(row, row + 1, startcol, endcol, dbghl_normal, endcol >= clearcol);
-    compose_debug(row, row + 1, endcol, clearcol, dbghl_clear, true);
-#ifndef NDEBUG
-    for (int i = 0; i < endcol - startcol; i++) {
-      assert(attrs[i] >= 0);
-    }
-#endif
-    ui_composed_call_raw_line(1, row, startcol, endcol, clearcol, clearattr,
-                              flags, chunk, attrs);
-  }
+  rs_ui_comp_raw_line(grid, row, startcol, endcol, clearcol, clearattr, flags, chunk, attrs);
 }
 
 /// The screen is invalid and will soon be cleared

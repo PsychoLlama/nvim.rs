@@ -878,6 +878,155 @@ pub extern "C" fn rs_compose_area(startrow: i64, endrow: i64, startcol: i64, end
 }
 
 // =============================================================================
+// UI Comp Raw Line Implementation
+// =============================================================================
+
+extern "C" {
+    // curgrid accessors (not already declared above)
+    fn nvim_get_curgrid() -> crate::ScreenGridHandle;
+
+    // curgrid_covered_above from Rust
+    fn rs_curgrid_covered_above(row: c_int) -> bool;
+
+    // ui_comp_should_draw and ui_comp_set_grid from Rust
+    fn rs_ui_comp_should_draw() -> c_int;
+    fn rs_ui_comp_set_grid(handle: c_int) -> c_int;
+}
+
+/// Process a raw line update from a grid.
+///
+/// This function handles incoming raw line updates from grids and either:
+/// - Recomposes the line through the full compositor (if there's overlap or blending)
+/// - Passes through directly to the UI (if uncovered and no blending)
+///
+/// # Arguments
+/// * `grid` - Grid handle
+/// * `row` - Row in grid coordinates
+/// * `startcol` - Start column in grid coordinates
+/// * `endcol` - End of content in grid coordinates
+/// * `clearcol` - End of clear area in grid coordinates
+/// * `clearattr` - Attribute for cleared area
+/// * `flags` - LineFlags
+/// * `chunk` - Character data
+/// * `attrs` - Attribute data
+#[allow(clippy::too_many_arguments)]
+fn ui_comp_raw_line_impl(
+    grid_handle: i64,
+    mut row: i64,
+    mut startcol: i64,
+    mut endcol: i64,
+    mut clearcol: i64,
+    clearattr: i64,
+    mut flags: c_int,
+    chunk: *const ScharT,
+    attrs: *const SattrT,
+) {
+    unsafe {
+        // Early return if can't draw or can't set grid
+        if rs_ui_comp_should_draw() == 0 || rs_ui_comp_set_grid(grid_handle as c_int) == 0 {
+            return;
+        }
+
+        let curgrid = nvim_get_curgrid();
+        let comp_row = nvim_screengrid_get_comp_row(curgrid);
+        let comp_col = nvim_screengrid_get_comp_col(curgrid);
+
+        // Transform from grid coordinates to screen coordinates
+        row += i64::from(comp_row);
+        startcol += i64::from(comp_col);
+        endcol += i64::from(comp_col);
+        clearcol += i64::from(comp_col);
+
+        // Clear wrap flag if not on default grid
+        let default_grid = nvim_get_default_grid();
+        if curgrid.0 != default_grid.0 {
+            flags &= !line_flags::WRAP;
+        }
+
+        debug_assert!(endcol <= clearcol);
+
+        // Bounds checking
+        let default_rows = i64::from(nvim_screengrid_get_rows(default_grid));
+        let default_cols = i64::from(nvim_screengrid_get_cols(default_grid));
+
+        if row >= default_rows {
+            // Invalid row - skip silently (logged in C)
+            return;
+        }
+
+        if clearcol > default_cols {
+            // Column out of bounds - clamp
+            if startcol >= default_cols {
+                return;
+            }
+            clearcol = default_cols;
+            endcol = endcol.min(clearcol);
+        }
+
+        // Check if line needs full recomposition
+        let covered = rs_curgrid_covered_above(row as c_int);
+        let blending = nvim_screengrid_get_blending(curgrid);
+
+        if (flags & line_flags::INVALID) != 0 || covered || blending {
+            // Full recomposition needed
+            let dbghl_composed = nvim_comp_get_dbghl_composed();
+            compose_debug_impl(row, row + 1, startcol, clearcol, dbghl_composed, true);
+            compose_line_impl(row, startcol, clearcol, flags);
+        } else {
+            // Direct passthrough
+            let dbghl_normal = nvim_comp_get_dbghl_normal();
+            let dbghl_clear = nvim_comp_get_dbghl_clear();
+
+            compose_debug_impl(
+                row,
+                row + 1,
+                startcol,
+                endcol,
+                dbghl_normal,
+                endcol >= clearcol,
+            );
+            compose_debug_impl(row, row + 1, endcol, clearcol, dbghl_clear, true);
+
+            // Debug: verify all attributes are non-negative
+            #[cfg(debug_assertions)]
+            {
+                for i in 0..(endcol - startcol) as usize {
+                    debug_assert!(*attrs.add(i) >= 0);
+                }
+            }
+
+            ui_composed_call_raw_line(
+                1, row, startcol, endcol, clearcol, clearattr, flags, chunk, attrs,
+            );
+        }
+    }
+}
+
+/// FFI wrapper for ui_comp_raw_line.
+///
+/// Processes a raw line update from a grid.
+///
+/// # Safety
+/// This function accesses global compositor state and grid data.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "C" fn rs_ui_comp_raw_line(
+    grid: i64,
+    row: i64,
+    startcol: i64,
+    endcol: i64,
+    clearcol: i64,
+    clearattr: i64,
+    flags: c_int,
+    chunk: *const ScharT,
+    attrs: *const SattrT,
+) {
+    ui_comp_raw_line_impl(
+        grid, row, startcol, endcol, clearcol, clearattr, flags, chunk, attrs,
+    );
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
