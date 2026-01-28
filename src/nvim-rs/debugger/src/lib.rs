@@ -224,6 +224,133 @@ impl DebugCapabilities {
 }
 
 // =============================================================================
+// Debug Command Types (for Vim debug mode)
+// =============================================================================
+
+/// Debug command types for Vim script debugger
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DebugCommand {
+    /// No command / unknown
+    #[default]
+    None = 0,
+    /// Continue execution
+    Continue = 1,
+    /// Step to next statement (over functions)
+    Next = 2,
+    /// Step into functions
+    Step = 3,
+    /// Finish current function
+    Finish = 4,
+    /// Quit debugging
+    Quit = 5,
+    /// Interrupt execution
+    Interrupt = 6,
+    /// Show backtrace
+    Backtrace = 7,
+    /// Frame selection
+    Frame = 8,
+    /// Go up one frame
+    Up = 9,
+    /// Go down one frame
+    Down = 10,
+}
+
+impl DebugCommand {
+    /// Create from raw value
+    pub const fn from_raw(value: c_int) -> Option<Self> {
+        match value {
+            0 => Some(Self::None),
+            1 => Some(Self::Continue),
+            2 => Some(Self::Next),
+            3 => Some(Self::Step),
+            4 => Some(Self::Finish),
+            5 => Some(Self::Quit),
+            6 => Some(Self::Interrupt),
+            7 => Some(Self::Backtrace),
+            8 => Some(Self::Frame),
+            9 => Some(Self::Up),
+            10 => Some(Self::Down),
+            _ => None,
+        }
+    }
+
+    /// Convert to raw value
+    pub const fn as_raw(self) -> c_int {
+        self as c_int
+    }
+
+    /// Check if this command exits debug mode
+    pub const fn exits_debug_mode(self) -> bool {
+        matches!(
+            self,
+            Self::Continue | Self::Next | Self::Step | Self::Finish | Self::Quit | Self::Interrupt
+        )
+    }
+
+    /// Check if this command continues in debug loop
+    pub const fn continues_debug_loop(self) -> bool {
+        matches!(self, Self::Backtrace | Self::Frame | Self::Up | Self::Down)
+    }
+
+    /// Get the tail suffix for command matching
+    pub const fn tail_suffix(self) -> &'static str {
+        match self {
+            Self::None => "",
+            Self::Continue => "ont",
+            Self::Next => "ext",
+            Self::Step => "tep",
+            Self::Finish => "inish",
+            Self::Quit => "uit",
+            Self::Interrupt => "nterrupt",
+            Self::Backtrace => "acktrace",
+            Self::Frame => "rame",
+            Self::Up => "p",
+            Self::Down => "own",
+        }
+    }
+}
+
+/// Vim script breakpoint types
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum VimBreakpointType {
+    /// Function breakpoint
+    #[default]
+    Func = 1,
+    /// File breakpoint
+    File = 2,
+    /// Expression watchpoint
+    Expr = 3,
+}
+
+impl VimBreakpointType {
+    /// Create from raw value
+    pub const fn from_raw(value: c_int) -> Option<Self> {
+        match value {
+            1 => Some(Self::Func),
+            2 => Some(Self::File),
+            3 => Some(Self::Expr),
+            _ => None,
+        }
+    }
+
+    /// Convert to raw value
+    pub const fn as_raw(self) -> c_int {
+        self as c_int
+    }
+
+    /// Get type string for parsing
+    pub const fn type_string(self) -> &'static str {
+        match self {
+            Self::Func => "func",
+            Self::File => "file",
+            Self::Expr => "expr",
+        }
+    }
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
 
@@ -269,6 +396,63 @@ pub extern "C" fn rs_debug_caps_step_in(flags: u32) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_debug_caps_evaluate(flags: u32) -> c_int {
     c_int::from(DebugCapabilities::from_raw(flags).supports_evaluate())
+}
+
+/// FFI export: Parse debug command from first character
+///
+/// Returns the command type based on the first character of input.
+/// This mirrors the switch statement in do_debug().
+#[no_mangle]
+pub extern "C" fn rs_debug_parse_command(first_char: u8) -> c_int {
+    let cmd = match first_char {
+        b'c' => DebugCommand::Continue,
+        b'n' => DebugCommand::Next,
+        b's' => DebugCommand::Step,
+        b'f' => DebugCommand::Finish, // Note: 'fr' is Frame, handled separately
+        b'q' => DebugCommand::Quit,
+        b'i' => DebugCommand::Interrupt,
+        b'b' | b'w' => DebugCommand::Backtrace,
+        b'u' => DebugCommand::Up,
+        b'd' => DebugCommand::Down,
+        _ => DebugCommand::None,
+    };
+    cmd.as_raw()
+}
+
+/// FFI export: Check if debug command exits debug mode
+#[no_mangle]
+pub extern "C" fn rs_debug_command_exits(cmd: c_int) -> c_int {
+    DebugCommand::from_raw(cmd).map_or(0, |c| c_int::from(c.exits_debug_mode()))
+}
+
+/// FFI export: Check if debug command continues in debug loop
+#[no_mangle]
+pub extern "C" fn rs_debug_command_continues_loop(cmd: c_int) -> c_int {
+    DebugCommand::from_raw(cmd).map_or(0, |c| c_int::from(c.continues_debug_loop()))
+}
+
+/// FFI export: Get Vim breakpoint type from raw value
+#[no_mangle]
+pub extern "C" fn rs_vim_breakpoint_type_valid(btype: c_int) -> c_int {
+    c_int::from(VimBreakpointType::from_raw(btype).is_some())
+}
+
+/// FFI export: Get DBG_FUNC constant
+#[no_mangle]
+pub extern "C" fn rs_vim_dbg_func() -> c_int {
+    VimBreakpointType::Func.as_raw()
+}
+
+/// FFI export: Get DBG_FILE constant
+#[no_mangle]
+pub extern "C" fn rs_vim_dbg_file() -> c_int {
+    VimBreakpointType::File.as_raw()
+}
+
+/// FFI export: Get DBG_EXPR constant
+#[no_mangle]
+pub extern "C" fn rs_vim_dbg_expr() -> c_int {
+    VimBreakpointType::Expr.as_raw()
 }
 
 // =============================================================================
@@ -322,5 +506,71 @@ mod tests {
 
         assert_eq!(rs_debug_event_is_stopping(0), 1);
         assert_eq!(rs_debug_event_is_stopping(5), 0);
+    }
+
+    #[test]
+    fn test_debug_command() {
+        assert_eq!(DebugCommand::from_raw(1), Some(DebugCommand::Continue));
+        assert_eq!(DebugCommand::from_raw(100), None);
+
+        assert!(DebugCommand::Continue.exits_debug_mode());
+        assert!(DebugCommand::Step.exits_debug_mode());
+        assert!(!DebugCommand::Backtrace.exits_debug_mode());
+
+        assert!(DebugCommand::Backtrace.continues_debug_loop());
+        assert!(DebugCommand::Up.continues_debug_loop());
+        assert!(!DebugCommand::Continue.continues_debug_loop());
+    }
+
+    #[test]
+    fn test_vim_breakpoint_type() {
+        assert_eq!(
+            VimBreakpointType::from_raw(1),
+            Some(VimBreakpointType::Func)
+        );
+        assert_eq!(
+            VimBreakpointType::from_raw(2),
+            Some(VimBreakpointType::File)
+        );
+        assert_eq!(
+            VimBreakpointType::from_raw(3),
+            Some(VimBreakpointType::Expr)
+        );
+        assert_eq!(VimBreakpointType::from_raw(0), None);
+
+        assert_eq!(VimBreakpointType::Func.type_string(), "func");
+        assert_eq!(VimBreakpointType::File.type_string(), "file");
+        assert_eq!(VimBreakpointType::Expr.type_string(), "expr");
+    }
+
+    #[test]
+    fn test_debug_command_ffi() {
+        // Test command parsing
+        assert_eq!(
+            rs_debug_parse_command(b'c'),
+            DebugCommand::Continue.as_raw()
+        );
+        assert_eq!(rs_debug_parse_command(b'n'), DebugCommand::Next.as_raw());
+        assert_eq!(rs_debug_parse_command(b's'), DebugCommand::Step.as_raw());
+        assert_eq!(rs_debug_parse_command(b'q'), DebugCommand::Quit.as_raw());
+        assert_eq!(rs_debug_parse_command(b'x'), DebugCommand::None.as_raw());
+
+        // Test exits debug mode
+        assert_eq!(rs_debug_command_exits(1), 1); // Continue
+        assert_eq!(rs_debug_command_exits(7), 0); // Backtrace
+
+        // Test continues loop
+        assert_eq!(rs_debug_command_continues_loop(7), 1); // Backtrace
+        assert_eq!(rs_debug_command_continues_loop(1), 0); // Continue
+    }
+
+    #[test]
+    fn test_vim_breakpoint_ffi() {
+        assert_eq!(rs_vim_dbg_func(), 1);
+        assert_eq!(rs_vim_dbg_file(), 2);
+        assert_eq!(rs_vim_dbg_expr(), 3);
+
+        assert_eq!(rs_vim_breakpoint_type_valid(1), 1);
+        assert_eq!(rs_vim_breakpoint_type_valid(0), 0);
     }
 }
