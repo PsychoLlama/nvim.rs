@@ -298,7 +298,11 @@ pub const extern "C" fn rs_pum_mouse_scroll(
     if new_first < 0 {
         0
     } else if new_first > size - height {
-        if size > height { size - height } else { 0 }
+        if size > height {
+            size - height
+        } else {
+            0
+        }
     } else {
         new_first
     }

@@ -1,18 +1,28 @@
-//! Popup menu state queries for Neovim
+//! Popup menu (completion menu) implementation for Neovim.
 //!
 //! This crate provides Rust implementations of popup menu functions
-//! from `src/nvim/popupmenu.c`.
+//! from `src/nvim/popupmenu.c`. The popup menu is used for completion
+//! suggestions, context menus, and other popup UI elements.
+//!
+//! # Architecture
+//!
+//! The popup menu consists of several components:
+//!
+//! - **State management**: Visibility, selection, scroll position
+//! - **Layout calculation**: Positioning and sizing relative to cursor
+//! - **Rendering**: Drawing items with highlight attributes and scrollbar
+//! - **Event handling**: Mouse interaction and keyboard navigation
 //!
 //! # Modules
 //!
-//! - [`item`]: Item access and highlight attribute handling
-//! - [`placement`]: Position and size calculations
-//! - [`render`]: Text rendering and attribute handling
-//! - [`redraw`]: Core redraw logic helpers
-//! - [`display`]: Display orchestration
-//! - [`mouse`]: Mouse handling
-//! - [`event`]: Event info
-//! - [`context_menu`]: Context menu and UI integration
+//! - [`item`]: Item access, column ordering, and highlight attribute handling
+//! - [`placement`]: Position and size calculations for vertical/horizontal layout
+//! - [`render`]: Text rendering with fuzzy match highlighting and attributes
+//! - [`redraw`]: Core redraw logic helpers for the rendering loop
+//! - [`display`]: Display orchestration (show/hide, external UI handling)
+//! - [`mouse`]: Mouse position detection and scroll handling
+//! - [`event`]: Event information for dictionary population
+//! - [`context_menu`]: Context menu (right-click popup) and UI flush
 
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(clippy::cast_lossless)] // FFI needs flexible casts between c_int and i64
