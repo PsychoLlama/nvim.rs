@@ -3974,6 +3974,134 @@ unsafe fn cleanup_read_error(
     }
 }
 
+// =============================================================================
+// Phase 4: Ex Command Migration - ex_undolist
+// =============================================================================
+
+// GArray handle for Rust FFI
+#[repr(transparent)]
+#[derive(Copy, Clone)]
+pub struct GArrayHandle(*mut c_void);
+
+// Additional FFI declarations for ex_undolist
+extern "C" {
+    fn nvim_undo_msg_simple(msg: *const c_char);
+    fn nvim_msg_start();
+    fn nvim_msg_end();
+    fn nvim_undo_msg_puts_hl_title(msg: *const c_char);
+    fn nvim_undo_msg_putchar(c: c_int);
+    fn nvim_undo_msg_puts(msg: *const c_char);
+    fn nvim_undolist_format_entry(
+        uhp: UHeaderHandle,
+        changes: c_int,
+        buf: *mut c_char,
+        buf_size: usize,
+    );
+    fn nvim_undo_xstrdup(s: *const c_char) -> *mut c_char;
+}
+
+/// opaque handle for exarg_T
+#[repr(transparent)]
+#[derive(Copy, Clone)]
+pub struct ExargHandle(*mut c_void);
+
+/// ":undolist": List the leafs of the undo tree
+///
+/// # Safety
+///
+/// `eap` must be a valid ExargT handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ex_undolist(_eap: ExargHandle) {
+    let buf = nvim_get_curbuf();
+    let mut changes: c_int = 1;
+
+    // 1: walk the tree to find all leafs, put the info in "ga".
+    // 2: sort the lines
+    // 3: display the list
+    let mark = nvim_inc_lastmark();
+    let nomark = nvim_inc_lastmark();
+
+    // We'll collect strings directly in a Vec and then sort and display
+    let mut entries: Vec<(*mut c_char, c_int)> = Vec::new();
+
+    let mut uhp = nvim_buf_get_b_u_oldhead(buf);
+    while !uhp.0.is_null() {
+        let prev = nvim_uhp_get_prev(uhp);
+
+        if prev.0.is_null() && nvim_uhp_get_walk(uhp) != nomark && nvim_uhp_get_walk(uhp) != mark {
+            // Format the entry
+            let entry_buf: [c_char; 256] = [0; 256];
+            nvim_undolist_format_entry(uhp, changes, entry_buf.as_ptr() as *mut c_char, 256);
+            let entry_str = nvim_undo_xstrdup(entry_buf.as_ptr());
+            let seq = nvim_uhp_get_seq(uhp);
+            entries.push((entry_str, seq));
+        }
+
+        nvim_uhp_set_walk(uhp, mark);
+
+        // go down in the tree if we haven't been there
+        if !prev.0.is_null() && nvim_uhp_get_walk(prev) != nomark && nvim_uhp_get_walk(prev) != mark
+        {
+            uhp = prev;
+            changes += 1;
+        } else {
+            let alt_next = nvim_uhp_get_alt_next(uhp);
+            if !alt_next.0.is_null()
+                && nvim_uhp_get_walk(alt_next) != nomark
+                && nvim_uhp_get_walk(alt_next) != mark
+            {
+                // go to alternate branch if we haven't been there
+                uhp = alt_next;
+            } else {
+                let next = nvim_uhp_get_next(uhp);
+                let alt_prev = nvim_uhp_get_alt_prev(uhp);
+                if !next.0.is_null()
+                    && alt_prev.0.is_null()
+                    && nvim_uhp_get_walk(next) != nomark
+                    && nvim_uhp_get_walk(next) != mark
+                {
+                    // go up in the tree if we haven't been there and we are at the
+                    // start of alternate branches
+                    uhp = next;
+                    changes -= 1;
+                } else {
+                    // need to backtrack; mark this node as done
+                    nvim_uhp_set_walk(uhp, nomark);
+                    if !alt_prev.0.is_null() {
+                        uhp = alt_prev;
+                    } else {
+                        uhp = next;
+                        changes -= 1;
+                    }
+                }
+            }
+        }
+    }
+
+    if entries.is_empty() {
+        nvim_undo_msg_simple(c"Nothing to undo".as_ptr());
+    } else {
+        // Sort by sequence number
+        entries.sort_by_key(|e| e.1);
+
+        nvim_msg_start();
+        nvim_undo_msg_puts_hl_title(c"number changes  when               saved".as_ptr());
+        for (entry, _seq) in &entries {
+            if nvim_undo_got_int() {
+                break;
+            }
+            nvim_undo_msg_putchar(b'\n' as c_int);
+            nvim_undo_msg_puts(*entry);
+        }
+        nvim_msg_end();
+
+        // Free all the strings
+        for (entry, _) in entries {
+            nvim_xfree(entry as *mut c_void);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

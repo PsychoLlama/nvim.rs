@@ -178,6 +178,7 @@ extern void rs_u_undoline(void);
 extern void rs_undo_time(int step, bool sec, bool file, bool absolute);
 extern void rs_u_write_undo(const char *name, bool forceit, buf_T *buf, const uint8_t *hash);
 extern void rs_u_read_undo(const char *name, const uint8_t *hash, const char *orig_name);
+extern void rs_ex_undolist(exarg_T *eap);
 
 #include "undo.c.generated.h"
 
@@ -1792,80 +1793,8 @@ void u_sync(bool force)
 /// ":undolist": List the leafs of the undo tree
 void ex_undolist(exarg_T *eap)
 {
-  int changes = 1;
-
-  // 1: walk the tree to find all leafs, put the info in "ga".
-  // 2: sort the lines
-  // 3: display the list
-  int mark = ++lastmark;
-  int nomark = ++lastmark;
-  garray_T ga;
-  ga_init(&ga, (int)sizeof(char *), 20);
-
-  u_header_T *uhp = curbuf->b_u_oldhead;
-  while (uhp != NULL) {
-    if (uhp->uh_prev.ptr == NULL && uhp->uh_walk != nomark
-        && uhp->uh_walk != mark) {
-      vim_snprintf(IObuff, IOSIZE, "%6d %7d  ", uhp->uh_seq, changes);
-      undo_fmt_time(IObuff + strlen(IObuff), IOSIZE - strlen(IObuff), uhp->uh_time);
-      if (uhp->uh_save_nr > 0) {
-        while (strlen(IObuff) < 33) {
-          xstrlcat(IObuff, " ", IOSIZE);
-        }
-        vim_snprintf_add(IObuff, IOSIZE, "  %3d", uhp->uh_save_nr);
-      }
-      GA_APPEND(char *, &ga, xstrdup(IObuff));
-    }
-
-    uhp->uh_walk = mark;
-
-    // go down in the tree if we haven't been there
-    if (uhp->uh_prev.ptr != NULL && uhp->uh_prev.ptr->uh_walk != nomark
-        && uhp->uh_prev.ptr->uh_walk != mark) {
-      uhp = uhp->uh_prev.ptr;
-      changes++;
-    } else if (uhp->uh_alt_next.ptr != NULL
-               && uhp->uh_alt_next.ptr->uh_walk != nomark
-               && uhp->uh_alt_next.ptr->uh_walk != mark) {
-      // go to alternate branch if we haven't been there
-      uhp = uhp->uh_alt_next.ptr;
-    } else if (uhp->uh_next.ptr != NULL && uhp->uh_alt_prev.ptr == NULL
-               // go up in the tree if we haven't been there and we are at the
-               // start of alternate branches
-               && uhp->uh_next.ptr->uh_walk != nomark
-               && uhp->uh_next.ptr->uh_walk != mark) {
-      uhp = uhp->uh_next.ptr;
-      changes--;
-    } else {
-      // need to backtrack; mark this node as done
-      uhp->uh_walk = nomark;
-      if (uhp->uh_alt_prev.ptr != NULL) {
-        uhp = uhp->uh_alt_prev.ptr;
-      } else {
-        uhp = uhp->uh_next.ptr;
-        changes--;
-      }
-    }
-  }
-
-  if (GA_EMPTY(&ga)) {
-    msg(_("Nothing to undo"), 0);
-  } else {
-    sort_strings(ga.ga_data, ga.ga_len);
-
-    msg_start();
-    msg_puts_hl(_("number changes  when               saved"), HLF_T, false);
-    for (int i = 0; i < ga.ga_len && !got_int; i++) {
-      msg_putchar('\n');
-      if (got_int) {
-        break;
-      }
-      msg_puts(((const char **)ga.ga_data)[i]);
-    }
-    msg_end();
-
-    ga_clear_strings(&ga);
-  }
+  // Call the Rust implementation
+  rs_ex_undolist(eap);
 }
 
 /// ":undojoin": continue adding to the last entry list
@@ -3402,4 +3331,55 @@ int nvim_uhp_get_alt_next_seq_for_swizzle(u_header_T *uhp)
 int nvim_uhp_get_alt_prev_seq_for_swizzle(u_header_T *uhp)
 {
   return uhp->uh_alt_prev.seq;
+}
+
+// ============================================================================
+// Ex Command FFI Functions (for Rust FFI)
+// ============================================================================
+
+void nvim_undo_msg_simple(const char *s)
+{
+  msg(s, 0);
+}
+
+void nvim_msg_start(void)
+{
+  msg_start();
+}
+
+void nvim_msg_end(void)
+{
+  msg_end();
+}
+
+void nvim_undo_msg_puts_hl_title(const char *s)
+{
+  msg_puts_hl(s, HLF_T, false);
+}
+
+void nvim_undo_msg_putchar(int c)
+{
+  msg_putchar(c);
+}
+
+void nvim_undo_msg_puts(const char *s)
+{
+  msg_puts(s);
+}
+
+char *nvim_undo_xstrdup(const char *s)
+{
+  return xstrdup(s);
+}
+
+void nvim_undolist_format_entry(u_header_T *uhp, int changes, char *buf, size_t buf_size)
+{
+  vim_snprintf(buf, buf_size, "%6d %7d  ", uhp->uh_seq, changes);
+  undo_fmt_time(buf + strlen(buf), buf_size - strlen(buf), uhp->uh_time);
+  if (uhp->uh_save_nr > 0) {
+    while (strlen(buf) < 33) {
+      xstrlcat(buf, " ", buf_size);
+    }
+    vim_snprintf_add(buf, buf_size, "  %3d", uhp->uh_save_nr);
+  }
 }
