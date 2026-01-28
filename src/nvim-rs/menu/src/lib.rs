@@ -17,6 +17,7 @@
 
 pub mod classify;
 pub mod create;
+pub mod delete;
 pub mod handle;
 pub mod hidden;
 pub mod lookup;
@@ -31,6 +32,10 @@ pub use classify::{
 pub use create::{
     rs_compute_new_menu_modes, rs_find_menu_insert_point, rs_menu_item_exists,
     rs_menu_path_needs_parents, rs_validate_menu_name,
+};
+pub use delete::{
+    rs_menu_has_modes, rs_menu_is_empty, rs_menu_remaining_modes, rs_recalculate_parent_modes,
+    rs_should_delete_menu, rs_should_free_tip,
 };
 pub use handle::VimMenuHandle;
 pub use hidden::rs_menu_is_hidden;
