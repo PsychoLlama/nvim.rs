@@ -667,6 +667,187 @@ pub unsafe extern "C" fn rs_f_count_string(
     count_substring(haystack, needle, ignore_case != 0)
 }
 
+// --- join() function helpers ---
+
+/// Join list items into a string with separator.
+///
+/// This is a pure Rust implementation for joining strings.
+/// The actual list iteration is done in C; this just handles the string joining.
+pub fn join_strings(items: &[&[u8]], separator: &[u8]) -> Vec<u8> {
+    if items.is_empty() {
+        return Vec::new();
+    }
+
+    // Calculate total length
+    let total_len: usize = items.iter().map(|s| s.len()).sum::<usize>()
+        + separator.len() * items.len().saturating_sub(1);
+
+    let mut result = Vec::with_capacity(total_len);
+
+    for (i, item) in items.iter().enumerate() {
+        if i > 0 {
+            result.extend_from_slice(separator);
+        }
+        result.extend_from_slice(item);
+    }
+
+    result
+}
+
+/// FFI: Join two strings with separator.
+///
+/// This is a building block - C code can call this repeatedly to join list items.
+///
+/// # Safety
+/// All pointers must be valid or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_join_two(
+    first: *const u8,
+    first_len: c_int,
+    second: *const u8,
+    second_len: c_int,
+    sep: *const u8,
+    sep_len: c_int,
+    out_len: *mut c_int,
+) -> *mut u8 {
+    let first_slice = if first.is_null() {
+        &[]
+    } else {
+        std::slice::from_raw_parts(first, first_len.max(0) as usize)
+    };
+
+    let second_slice = if second.is_null() {
+        &[]
+    } else {
+        std::slice::from_raw_parts(second, second_len.max(0) as usize)
+    };
+
+    let sep_slice = if sep.is_null() {
+        &[]
+    } else {
+        std::slice::from_raw_parts(sep, sep_len.max(0) as usize)
+    };
+
+    let result = join_strings(&[first_slice, second_slice], sep_slice);
+
+    if !out_len.is_null() {
+        *out_len = result.len() as c_int;
+    }
+
+    // Allocate and copy the result
+    // The caller is responsible for freeing this memory
+    let ptr = libc::malloc(result.len() + 1).cast::<u8>();
+    if ptr.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    std::ptr::copy_nonoverlapping(result.as_ptr(), ptr, result.len());
+    *ptr.add(result.len()) = 0; // NUL terminator
+
+    ptr
+}
+
+// --- split() function helpers ---
+
+/// Split a string by separator into parts.
+///
+/// VimL split() behavior:
+/// - If keepempty is false, empty strings are removed from result
+/// - If separator is empty, splits on whitespace (runs of whitespace)
+pub fn split_string(s: &[u8], sep: &[u8], keepempty: bool) -> Vec<Vec<u8>> {
+    if s.is_empty() {
+        return if keepempty {
+            vec![Vec::new()]
+        } else {
+            Vec::new()
+        };
+    }
+
+    if sep.is_empty() {
+        // Split on whitespace - runs of whitespace are treated as single separator
+        return split_on_whitespace(s, keepempty);
+    }
+
+    let mut result = Vec::new();
+    let mut start = 0;
+
+    loop {
+        // Find next occurrence of separator
+        let end = find_substring(&s[start..], sep).map_or(s.len(), |pos| start + pos);
+
+        let part = &s[start..end];
+        if keepempty || !part.is_empty() {
+            result.push(part.to_vec());
+        }
+
+        if end >= s.len() {
+            break;
+        }
+
+        start = end + sep.len();
+
+        // Handle trailing separator
+        if start >= s.len() {
+            if keepempty {
+                result.push(Vec::new());
+            }
+            break;
+        }
+    }
+
+    result
+}
+
+/// Split string on whitespace (runs of whitespace are single separator).
+fn split_on_whitespace(s: &[u8], keepempty: bool) -> Vec<Vec<u8>> {
+    let mut result = Vec::new();
+    let mut start = 0;
+    let mut in_word = false;
+
+    for (i, &c) in s.iter().enumerate() {
+        if c.is_ascii_whitespace() {
+            if in_word {
+                let part = &s[start..i];
+                if keepempty || !part.is_empty() {
+                    result.push(part.to_vec());
+                }
+                in_word = false;
+            }
+        } else if !in_word {
+            start = i;
+            in_word = true;
+        }
+    }
+
+    // Handle last word
+    if in_word {
+        let part = &s[start..];
+        if keepempty || !part.is_empty() {
+            result.push(part.to_vec());
+        }
+    }
+
+    result
+}
+
+/// Find first occurrence of needle in haystack.
+fn find_substring(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    if needle.is_empty() || needle.len() > haystack.len() {
+        return None;
+    }
+
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
+}
+
+// --- flatten() helpers ---
+
+/// Check if flatten depth is valid (0 to MAX_FLATTEN_DEPTH).
+pub const fn validate_flatten_depth(depth: i64) -> bool {
+    depth >= 0 && depth <= MAX_FLATTEN_DEPTH
+}
+
 // =============================================================================
 // Tests
 // =============================================================================
@@ -831,5 +1012,84 @@ mod tests {
 
         // "aaaa" contains "aa" twice non-overlapping
         assert_eq!(count_substring(b"aaaa", b"aa", false), 2);
+    }
+
+    #[test]
+    fn test_join_strings() {
+        // Basic join
+        let items: Vec<&[u8]> = vec![b"a", b"b", b"c"];
+        assert_eq!(join_strings(&items, b","), b"a,b,c");
+
+        // Empty separator
+        let items: Vec<&[u8]> = vec![b"hello", b"world"];
+        assert_eq!(join_strings(&items, b""), b"helloworld");
+
+        // Single item
+        let items: Vec<&[u8]> = vec![b"single"];
+        assert_eq!(join_strings(&items, b","), b"single");
+
+        // Empty items
+        let items: Vec<&[u8]> = Vec::new();
+        assert_eq!(join_strings(&items, b","), b"");
+
+        // Multi-char separator
+        let items: Vec<&[u8]> = vec![b"a", b"b"];
+        assert_eq!(join_strings(&items, b" - "), b"a - b");
+    }
+
+    #[test]
+    fn test_split_string() {
+        // Basic split
+        let result = split_string(b"a,b,c", b",", false);
+        assert_eq!(result, vec![b"a".to_vec(), b"b".to_vec(), b"c".to_vec()]);
+
+        // Keep empty parts
+        let result = split_string(b"a,,c", b",", true);
+        assert_eq!(result, vec![b"a".to_vec(), b"".to_vec(), b"c".to_vec()]);
+
+        // Don't keep empty parts
+        let result = split_string(b"a,,c", b",", false);
+        assert_eq!(result, vec![b"a".to_vec(), b"c".to_vec()]);
+
+        // Trailing separator with keepempty
+        let result = split_string(b"a,b,", b",", true);
+        assert_eq!(result, vec![b"a".to_vec(), b"b".to_vec(), b"".to_vec()]);
+
+        // Empty string
+        let result = split_string(b"", b",", false);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_split_on_whitespace() {
+        // Basic whitespace split
+        let result = split_string(b"hello world", b"", false);
+        assert_eq!(result, vec![b"hello".to_vec(), b"world".to_vec()]);
+
+        // Multiple whitespace chars
+        let result = split_string(b"hello   world", b"", false);
+        assert_eq!(result, vec![b"hello".to_vec(), b"world".to_vec()]);
+
+        // Tabs and spaces
+        let result = split_string(b"a\tb\tc", b"", false);
+        assert_eq!(result, vec![b"a".to_vec(), b"b".to_vec(), b"c".to_vec()]);
+    }
+
+    #[test]
+    fn test_find_substring() {
+        assert_eq!(find_substring(b"hello world", b"world"), Some(6));
+        assert_eq!(find_substring(b"hello world", b"hello"), Some(0));
+        assert_eq!(find_substring(b"hello world", b"xyz"), None);
+        assert_eq!(find_substring(b"hello", b""), None);
+        assert_eq!(find_substring(b"hi", b"hello"), None);
+    }
+
+    #[test]
+    fn test_validate_flatten_depth() {
+        assert!(validate_flatten_depth(0));
+        assert!(validate_flatten_depth(1));
+        assert!(validate_flatten_depth(999));
+        assert!(!validate_flatten_depth(-1));
+        assert!(!validate_flatten_depth(1000));
     }
 }
