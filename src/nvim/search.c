@@ -115,6 +115,10 @@ extern int rs_last_csearch_forward(void);
 extern int rs_last_csearch_until(void);
 extern const char *rs_last_csearch(void);
 extern int rs_search_was_last_used(void);
+extern int rs_pat_has_uppercase(const char *pat);
+extern int rs_ignorecase(const char *pat);
+extern int rs_ignorecase_opt(const char *pat, int ic, int scs);
+extern int rs_needs_previous_pattern(const char *pat);
 
 /// Get the lastcdir static variable (accessor for Rust).
 int nvim_get_lastcdir(void)
