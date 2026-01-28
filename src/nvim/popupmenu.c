@@ -270,6 +270,12 @@ int nvim_get_cia_flags(void)
 const char *const opt_winborder_shadow = "shadow";
 const char *const opt_winborder_none = "none";
 
+// Accessor for window highlight attribute (for Rust FFI)
+int nvim_curwin_hl_attr(int hlf)
+{
+  return win_hl_attr(curwin, hlf);
+}
+
 #include "popupmenu.c.generated.h"
 #define PUM_DEF_HEIGHT 10
 

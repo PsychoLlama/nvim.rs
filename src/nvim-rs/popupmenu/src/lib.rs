@@ -7,12 +7,14 @@
 //!
 //! - [`item`]: Item access and highlight attribute handling
 //! - [`placement`]: Position and size calculations
+//! - [`render`]: Text rendering and attribute handling
 
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(clippy::cast_lossless)] // FFI needs flexible casts between c_int and i64
 
 pub mod item;
 pub mod placement;
+pub mod render;
 
 use std::ffi::c_int;
 
