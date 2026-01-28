@@ -66,6 +66,8 @@ extern int rs_pum_visible(void);
 extern int rs_pum_drawn(void);
 extern void rs_pum_clear(void);
 extern void rs_pum_ext_select_item(int item, int insert, int finish);
+extern void rs_pum_invalidate(void);
+extern int rs_pum_undisplay(int immediate);
 
 static pumitem_T *pum_array = NULL;  // items of displayed pum
 static int pum_size;                // nr of items in "pum_array"
@@ -1538,11 +1540,7 @@ static bool pum_set_selected(int n, int repeat)
 /// Undisplay the popup menu (later).
 void pum_undisplay(bool immediate)
 {
-  pum_is_visible = false;
-  pum_array = NULL;
-  must_redraw_pum = false;
-
-  if (immediate) {
+  if (rs_pum_undisplay(immediate ? 1 : 0)) {
     pum_check_clear();
   }
 }
@@ -1592,7 +1590,7 @@ bool pum_drawn(void)
 /// Screen was cleared, need to redraw next time
 void pum_invalidate(void)
 {
-  pum_invalid = true;
+  rs_pum_invalidate();
 }
 
 void pum_recompose(void)
