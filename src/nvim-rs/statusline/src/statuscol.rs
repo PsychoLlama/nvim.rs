@@ -241,6 +241,66 @@ pub fn render_fold_column(
 /// Sign placeholder for when no sign is present.
 pub const SIGN_EMPTY: &str = "  "; // Two spaces
 
+/// Wrap indicator character (shown on wrapped lines).
+pub const WRAP_CHAR: char = ' ';
+
+/// Line continuation indicator (for virtual/wrapped lines).
+pub const VIRTNUM_CHAR: char = ' ';
+
+/// Statuscolumn build options.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct StatusColOptions {
+    /// Whether to show line numbers
+    pub show_number: bool,
+    /// Whether to show relative numbers
+    pub show_relativenumber: bool,
+    /// Whether to show fold column
+    pub show_foldcolumn: bool,
+    /// Whether to show sign column
+    pub show_signcolumn: bool,
+    /// Width of the number column
+    pub number_width: c_int,
+    /// Width of the fold column
+    pub fold_width: c_int,
+    /// Width of the sign column
+    pub sign_width: c_int,
+    /// Whether to show wrap indicator
+    pub show_wrap_indicator: bool,
+}
+
+impl StatusColOptions {
+    /// Create new options with defaults.
+    pub const fn new() -> Self {
+        Self {
+            show_number: false,
+            show_relativenumber: false,
+            show_foldcolumn: false,
+            show_signcolumn: false,
+            number_width: 4,
+            fold_width: 0,
+            sign_width: 0,
+            show_wrap_indicator: false,
+        }
+    }
+
+    /// Get the line number mode based on options.
+    pub const fn line_number_mode(&self) -> LineNumberMode {
+        LineNumberMode::from_options(self.show_number, self.show_relativenumber)
+    }
+
+    /// Calculate total width of the statuscolumn.
+    pub const fn total_width(&self) -> c_int {
+        let mut width = 0;
+        if self.show_number || self.show_relativenumber {
+            width += self.number_width + 1; // +1 for separator space
+        }
+        width += self.fold_width;
+        width += self.sign_width * 2; // Signs are 2 chars wide
+        width
+    }
+}
+
 /// Render sign column segment.
 ///
 /// If `sign_text` is None or empty, renders placeholder spaces.
@@ -305,6 +365,206 @@ pub fn render_statuscol_line(
 
     #[allow(clippy::cast_possible_truncation)]
     (cursor.position() as c_int)
+}
+
+/// Render wrap indicator for wrapped lines.
+///
+/// This is shown in place of line numbers on wrapped/virtual lines.
+#[allow(clippy::cast_sign_loss)]
+pub fn render_wrap_indicator(width: c_int, wrap_char: char) -> String {
+    if width <= 0 {
+        return String::new();
+    }
+    wrap_char.to_string().repeat(width as usize)
+}
+
+/// Render a virtual line marker.
+///
+/// Virtual lines (from virtual text) show a different indicator.
+#[allow(clippy::cast_sign_loss)]
+pub fn render_virtnum_indicator(width: c_int) -> String {
+    if width <= 0 {
+        return String::new();
+    }
+    VIRTNUM_CHAR.to_string().repeat(width as usize)
+}
+
+/// Build the statuscolumn string for a line.
+///
+/// This is the main entry point for statuscolumn rendering.
+#[allow(clippy::cast_sign_loss)]
+pub fn build_statuscol(
+    buf: &mut [u8],
+    ctx: &StatusColContext,
+    opts: &StatusColOptions,
+    sign_text: Option<&str>,
+) -> c_int {
+    if buf.is_empty() {
+        return 0;
+    }
+
+    let mode = opts.line_number_mode();
+
+    // Handle virtual/wrapped lines
+    if ctx.is_virtual {
+        let mut cursor = std::io::Cursor::new(buf);
+        // Show wrap indicator instead of line number
+        if opts.fold_width > 0 {
+            let _ = write!(cursor, "{}", render_wrap_indicator(opts.fold_width, ' '));
+        }
+        if opts.sign_width > 0 {
+            let _ = write!(cursor, "{}", " ".repeat(opts.sign_width as usize * 2));
+        }
+        if mode != LineNumberMode::None && opts.number_width > 0 {
+            let _ = write!(
+                cursor,
+                "{} ",
+                render_wrap_indicator(opts.number_width, WRAP_CHAR)
+            );
+        }
+        #[allow(clippy::cast_possible_truncation)]
+        return cursor.position() as c_int;
+    }
+
+    // Normal line rendering
+    render_statuscol_line(
+        buf,
+        ctx,
+        mode,
+        opts.number_width,
+        opts.fold_width,
+        opts.sign_width,
+        sign_text,
+    )
+}
+
+// =============================================================================
+// FFI Exports
+// =============================================================================
+
+/// FFI export: Calculate line number width.
+#[no_mangle]
+pub extern "C" fn rs_statuscol_calc_number_width(line_count: c_int) -> c_int {
+    calc_number_width(line_count)
+}
+
+/// FFI export: Get line number mode from options.
+#[no_mangle]
+pub const extern "C" fn rs_statuscol_line_number_mode(
+    number: c_int,
+    relativenumber: c_int,
+) -> c_int {
+    LineNumberMode::from_options(number != 0, relativenumber != 0) as c_int
+}
+
+/// FFI export: Render fold column.
+///
+/// # Safety
+/// `buf` must be null or a valid pointer to a buffer of at least `buflen` bytes.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_statuscol_render_fold(
+    buf: *mut u8,
+    buflen: usize,
+    fold_level: c_int,
+    is_folded: c_int,
+    max_level: c_int,
+    width: c_int,
+) -> c_int {
+    if buf.is_null() || buflen == 0 {
+        return 0;
+    }
+
+    let result = render_fold_column(fold_level, is_folded != 0, max_level, width);
+    let bytes = result.as_bytes();
+    let len = bytes.len().min(buflen);
+    std::ptr::copy_nonoverlapping(bytes.as_ptr(), buf, len);
+    len as c_int
+}
+
+/// FFI export: Render sign column.
+///
+/// # Safety
+/// `buf` and `sign_text` must be null or valid pointers.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_statuscol_render_sign(
+    buf: *mut u8,
+    buflen: usize,
+    sign_text: *const std::ffi::c_char,
+    width: c_int,
+) -> c_int {
+    if buf.is_null() || buflen == 0 {
+        return 0;
+    }
+
+    let sign = if sign_text.is_null() {
+        None
+    } else {
+        std::ffi::CStr::from_ptr(sign_text).to_str().ok()
+    };
+
+    let result = render_sign_column(sign, width);
+    let bytes = result.as_bytes();
+    let len = bytes.len().min(buflen);
+    std::ptr::copy_nonoverlapping(bytes.as_ptr(), buf, len);
+    len as c_int
+}
+
+/// FFI export: Format line number with padding.
+///
+/// # Safety
+/// `buf` must be null or a valid pointer to a buffer of at least `buflen` bytes.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_statuscol_format_line_number(
+    buf: *mut u8,
+    buflen: usize,
+    lnum: c_int,
+    relnum: c_int,
+    mode: c_int,
+    width: c_int,
+    right_align: c_int,
+) -> c_int {
+    if buf.is_null() || buflen == 0 {
+        return 0;
+    }
+
+    let mode_enum = match mode {
+        1 => LineNumberMode::Absolute,
+        2 => LineNumberMode::Relative,
+        3 => LineNumberMode::Hybrid,
+        _ => LineNumberMode::None, // 0 and invalid values
+    };
+
+    let ctx = StatusColContext::new(lnum, relnum, 0);
+    let result = format_line_number_padded(&ctx, mode_enum, width, right_align != 0);
+    let bytes = result.as_bytes();
+    let len = bytes.len().min(buflen);
+    std::ptr::copy_nonoverlapping(bytes.as_ptr(), buf, len);
+    len as c_int
+}
+
+/// FFI export: Render wrap indicator.
+///
+/// # Safety
+/// `buf` must be null or a valid pointer to a buffer of at least `buflen` bytes.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_statuscol_render_wrap(
+    buf: *mut u8,
+    buflen: usize,
+    width: c_int,
+) -> c_int {
+    if buf.is_null() || buflen == 0 {
+        return 0;
+    }
+
+    let result = render_wrap_indicator(width, WRAP_CHAR);
+    let bytes = result.as_bytes();
+    let len = bytes.len().min(buflen);
+    std::ptr::copy_nonoverlapping(bytes.as_ptr(), buf, len);
+    len as c_int
 }
 
 #[cfg(test)]
@@ -464,5 +724,91 @@ mod tests {
         // Should contain: fold column (2), sign (2), line number (3) + space
         assert!(result.contains("42"));
         assert!(result.contains(">>"));
+    }
+
+    #[test]
+    fn test_render_wrap_indicator() {
+        let s = render_wrap_indicator(4, WRAP_CHAR);
+        assert_eq!(s.len(), 4);
+        assert!(s.chars().all(|c| c == WRAP_CHAR));
+    }
+
+    #[test]
+    fn test_render_wrap_indicator_zero_width() {
+        let s = render_wrap_indicator(0, WRAP_CHAR);
+        assert!(s.is_empty());
+    }
+
+    #[test]
+    fn test_status_col_options_default() {
+        let opts = StatusColOptions::new();
+        assert!(!opts.show_number);
+        assert!(!opts.show_relativenumber);
+        assert_eq!(opts.line_number_mode(), LineNumberMode::None);
+    }
+
+    #[test]
+    fn test_status_col_options_total_width() {
+        let opts = StatusColOptions {
+            show_number: true,
+            number_width: 4,
+            fold_width: 2,
+            sign_width: 1,
+            ..Default::default()
+        };
+        // number (4) + sep (1) + fold (2) + sign (2)
+        assert_eq!(opts.total_width(), 9);
+    }
+
+    #[test]
+    fn test_build_statuscol_virtual_line() {
+        let ctx = StatusColContext {
+            lnum: 10,
+            relnum: 0,
+            line_count: 100,
+            is_virtual: true,
+            ..Default::default()
+        };
+        let opts = StatusColOptions {
+            show_number: true,
+            number_width: 4,
+            ..Default::default()
+        };
+
+        let mut buf = [0u8; 64];
+        let len = build_statuscol(&mut buf, &ctx, &opts, None);
+        assert!(len > 0);
+
+        #[allow(clippy::cast_sign_loss)]
+        let result = std::str::from_utf8(&buf[..len as usize]).unwrap();
+        // Should not contain line number for virtual line
+        assert!(!result.contains("10"));
+    }
+
+    #[test]
+    fn test_build_statuscol_normal_line() {
+        let ctx = StatusColContext {
+            lnum: 42,
+            relnum: 5,
+            line_count: 100,
+            is_virtual: false,
+            fold_level: 1,
+            is_folded: false,
+            ..Default::default()
+        };
+        let opts = StatusColOptions {
+            show_number: true,
+            number_width: 4,
+            fold_width: 2,
+            ..Default::default()
+        };
+
+        let mut buf = [0u8; 64];
+        let len = build_statuscol(&mut buf, &ctx, &opts, None);
+        assert!(len > 0);
+
+        #[allow(clippy::cast_sign_loss)]
+        let result = std::str::from_utf8(&buf[..len as usize]).unwrap();
+        assert!(result.contains("42"));
     }
 }
