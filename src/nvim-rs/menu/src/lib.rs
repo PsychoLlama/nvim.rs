@@ -8,8 +8,15 @@
 //! # Modules
 //!
 //! - [`classify`]: Menu name classification (popup, toolbar, winbar, etc.)
+//! - [`commands`]: Ex command mode parsing
+//! - [`completion`]: Wildmenu completion utilities
+//! - [`create`]: Menu creation helpers
+//! - [`delete`]: Menu deletion helpers
+//! - [`execute`]: Menu execution and mode utilities
 //! - [`handle`]: Opaque handle types for menu structures
 //! - [`hidden`]: Hidden menu detection
+//! - [`lookup`]: Menu lookup and search
+//! - [`path`]: Menu path parsing
 //! - [`traverse`]: Tree traversal helpers
 
 #![allow(unsafe_code)] // FFI requires unsafe
@@ -17,6 +24,7 @@
 
 pub mod classify;
 pub mod commands;
+pub mod completion;
 pub mod create;
 pub mod delete;
 pub mod execute;
@@ -32,6 +40,10 @@ pub use classify::{
     rs_menu_is_winbar,
 };
 pub use commands::{rs_get_menu_cmd_modes, rs_get_menu_mode_str, MenuCmdResult};
+pub use completion::{
+    rs_count_completable_menus, rs_menu_completion_context, rs_menu_is_completable,
+    rs_should_expand_all_modes, MenuCompletionContext,
+};
 pub use create::{
     rs_compute_new_menu_modes, rs_find_menu_insert_point, rs_menu_item_exists,
     rs_menu_path_needs_parents, rs_validate_menu_name,
