@@ -194,6 +194,108 @@ pub unsafe extern "C" fn rs_pum_match_array_exists() -> c_int {
     nvim_get_compl_match_array_exists()
 }
 
+// =============================================================================
+// Phase 2: Popup Menu Update Functions
+// =============================================================================
+
+// Additional C accessors for Phase 2
+extern "C" {
+    fn nvim_pum_visible() -> c_int;
+    fn nvim_get_compl_selected_item() -> c_int;
+    fn nvim_get_compl_started() -> c_int;
+}
+
+/// Check if the popup menu is visible.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_is_visible() -> c_int {
+    nvim_pum_visible()
+}
+
+/// Check if the popup menu needs to be updated.
+///
+/// Returns true if completion is active but popup isn't visible.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_needs_update() -> c_int {
+    let started = nvim_get_compl_started();
+    let visible = nvim_pum_visible();
+    c_int::from(started != 0 && visible == 0)
+}
+
+/// Check if the popup menu should be hidden.
+///
+/// Returns true if completion is not active but popup is visible.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_should_hide() -> c_int {
+    let started = nvim_get_compl_started();
+    let visible = nvim_pum_visible();
+    c_int::from(started == 0 && visible != 0)
+}
+
+/// Get the current selected item in the popup menu.
+///
+/// Returns -1 if nothing is selected.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_selected_item() -> c_int {
+    nvim_get_compl_selected_item()
+}
+
+/// Check if an item is selected in the popup menu.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_has_selection() -> c_int {
+    c_int::from(nvim_get_compl_selected_item() >= 0)
+}
+
+/// Calculate the new selected index after navigation.
+///
+/// Parameters:
+/// - `current_idx`: current selected index (-1 if none)
+/// - `delta`: how much to move (positive = forward, negative = backward)
+/// - `total_count`: total number of items in the list
+///
+/// Returns the new selected index, handling wrap-around.
+#[no_mangle]
+pub const extern "C" fn rs_pum_calc_new_selection(
+    current_idx: c_int,
+    delta: c_int,
+    total_count: c_int,
+) -> c_int {
+    if total_count <= 0 {
+        return -1;
+    }
+
+    // When starting from no selection, just select first or last
+    if current_idx < 0 {
+        return if delta > 0 { 0 } else { total_count - 1 };
+    }
+
+    let new_idx = current_idx + delta;
+
+    // Handle wrap-around
+    if new_idx < 0 {
+        // Wrap to end
+        ((new_idx % total_count) + total_count) % total_count
+    } else if new_idx >= total_count {
+        // Wrap to start
+        new_idx % total_count
+    } else {
+        new_idx
+    }
+}
+
+/// Check if the popup menu selection changed.
+///
+/// Compares old selection with current.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_selection_changed(old_selected: c_int) -> c_int {
+    c_int::from(nvim_get_compl_selected_item() != old_selected)
+}
+
+/// Check if the popup is active (visible and has selection).
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_is_active() -> c_int {
+    c_int::from(nvim_pum_visible() != 0 && nvim_get_compl_selected_item() >= 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -209,5 +311,31 @@ mod tests {
 
         // When not shown_match_ok and not noselect, return -1
         assert_eq!(rs_pum_calculate_selected(0, 0, 0, 5), -1);
+    }
+
+    #[test]
+    fn test_calc_new_selection() {
+        // Basic forward navigation
+        assert_eq!(rs_pum_calc_new_selection(0, 1, 5), 1);
+        assert_eq!(rs_pum_calc_new_selection(3, 1, 5), 4);
+
+        // Basic backward navigation
+        assert_eq!(rs_pum_calc_new_selection(4, -1, 5), 3);
+        assert_eq!(rs_pum_calc_new_selection(1, -1, 5), 0);
+
+        // Wrap forward
+        assert_eq!(rs_pum_calc_new_selection(4, 1, 5), 0);
+        assert_eq!(rs_pum_calc_new_selection(4, 2, 5), 1);
+
+        // Wrap backward
+        assert_eq!(rs_pum_calc_new_selection(0, -1, 5), 4);
+        assert_eq!(rs_pum_calc_new_selection(0, -2, 5), 3);
+
+        // From no selection (-1)
+        assert_eq!(rs_pum_calc_new_selection(-1, 1, 5), 0); // Forward starts at 0
+        assert_eq!(rs_pum_calc_new_selection(-1, -1, 5), 4); // Backward starts at end
+
+        // Empty list
+        assert_eq!(rs_pum_calc_new_selection(0, 1, 0), -1);
     }
 }
