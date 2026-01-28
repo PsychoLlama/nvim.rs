@@ -740,20 +740,20 @@ mod tests {
         let mut entry = PointerEntry::new();
 
         unsafe {
-            assert_eq!(rs_ml_pe_get_bnum(&entry), 0);
-            assert_eq!(rs_ml_pe_get_line_count(&entry), 0);
-            assert_eq!(rs_ml_pe_get_old_lnum(&entry), 0);
-            assert_eq!(rs_ml_pe_get_page_count(&entry), 0);
+            assert_eq!(rs_ml_pe_get_bnum(&raw const entry), 0);
+            assert_eq!(rs_ml_pe_get_line_count(&raw const entry), 0);
+            assert_eq!(rs_ml_pe_get_old_lnum(&raw const entry), 0);
+            assert_eq!(rs_ml_pe_get_page_count(&raw const entry), 0);
 
-            rs_ml_pe_set_bnum(&mut entry, 42);
-            rs_ml_pe_set_line_count(&mut entry, 100);
-            rs_ml_pe_set_old_lnum(&mut entry, 1);
-            rs_ml_pe_set_page_count(&mut entry, 3);
+            rs_ml_pe_set_bnum(&raw mut entry, 42);
+            rs_ml_pe_set_line_count(&raw mut entry, 100);
+            rs_ml_pe_set_old_lnum(&raw mut entry, 1);
+            rs_ml_pe_set_page_count(&raw mut entry, 3);
 
-            assert_eq!(rs_ml_pe_get_bnum(&entry), 42);
-            assert_eq!(rs_ml_pe_get_line_count(&entry), 100);
-            assert_eq!(rs_ml_pe_get_old_lnum(&entry), 1);
-            assert_eq!(rs_ml_pe_get_page_count(&entry), 3);
+            assert_eq!(rs_ml_pe_get_bnum(&raw const entry), 42);
+            assert_eq!(rs_ml_pe_get_line_count(&raw const entry), 100);
+            assert_eq!(rs_ml_pe_get_old_lnum(&raw const entry), 1);
+            assert_eq!(rs_ml_pe_get_page_count(&raw const entry), 3);
         }
     }
 
@@ -762,16 +762,16 @@ mod tests {
         let mut header = PointerBlockHeader::new(128);
 
         unsafe {
-            assert_eq!(rs_ml_pb_is_valid(&header), 1);
-            assert_eq!(rs_ml_pb_get_count(&header), 0);
-            assert_eq!(rs_ml_pb_get_count_max(&header), 128);
-            assert_eq!(rs_ml_pb_has_room(&header), 1);
-            assert_eq!(rs_ml_pb_is_full(&header), 0);
+            assert_eq!(rs_ml_pb_is_valid(&raw const header), 1);
+            assert_eq!(rs_ml_pb_get_count(&raw const header), 0);
+            assert_eq!(rs_ml_pb_get_count_max(&raw const header), 128);
+            assert_eq!(rs_ml_pb_has_room(&raw const header), 1);
+            assert_eq!(rs_ml_pb_is_full(&raw const header), 0);
 
-            rs_ml_pb_set_count(&mut header, 128);
-            assert_eq!(rs_ml_pb_get_count(&header), 128);
-            assert_eq!(rs_ml_pb_has_room(&header), 0);
-            assert_eq!(rs_ml_pb_is_full(&header), 1);
+            rs_ml_pb_set_count(&raw mut header, 128);
+            assert_eq!(rs_ml_pb_get_count(&raw const header), 128);
+            assert_eq!(rs_ml_pb_has_room(&raw const header), 0);
+            assert_eq!(rs_ml_pb_is_full(&raw const header), 1);
         }
     }
 
@@ -780,21 +780,21 @@ mod tests {
         let mut header = DataBlockHeader::new(4096);
 
         unsafe {
-            assert_eq!(rs_ml_db_is_valid(&header), 1);
-            assert_eq!(rs_ml_db_get_txt_start(&header), 4096);
-            assert_eq!(rs_ml_db_get_txt_end(&header), 4096);
-            assert_eq!(rs_ml_db_get_line_count(&header), 0);
-            assert_eq!(rs_ml_db_is_empty(&header), 1);
+            assert_eq!(rs_ml_db_is_valid(&raw const header), 1);
+            assert_eq!(rs_ml_db_get_txt_start(&raw const header), 4096);
+            assert_eq!(rs_ml_db_get_txt_end(&raw const header), 4096);
+            assert_eq!(rs_ml_db_get_line_count(&raw const header), 0);
+            assert_eq!(rs_ml_db_is_empty(&raw const header), 1);
 
-            rs_ml_db_set_line_count(&mut header, 10);
-            assert_eq!(rs_ml_db_get_line_count(&header), 10);
-            assert_eq!(rs_ml_db_is_empty(&header), 0);
+            rs_ml_db_set_line_count(&raw mut header, 10);
+            assert_eq!(rs_ml_db_get_line_count(&raw const header), 10);
+            assert_eq!(rs_ml_db_is_empty(&raw const header), 0);
 
-            rs_ml_db_set_txt_start(&mut header, 3000);
-            assert_eq!(rs_ml_db_get_txt_start(&header), 3000);
+            rs_ml_db_set_txt_start(&raw mut header, 3000);
+            assert_eq!(rs_ml_db_get_txt_start(&raw const header), 3000);
 
-            rs_ml_db_set_free(&mut header, 500);
-            assert_eq!(rs_ml_db_get_free(&header), 500);
+            rs_ml_db_set_free(&raw mut header, 500);
+            assert_eq!(rs_ml_db_get_free(&raw const header), 500);
         }
     }
 }

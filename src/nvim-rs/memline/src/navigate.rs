@@ -632,8 +632,8 @@ mod tests {
 
     #[test]
     fn test_stack_grow() {
-        assert_eq!(rs_ml_stack_grow_size(0), STACK_INCR as c_int);
-        assert_eq!(rs_ml_stack_grow_size(5), 5 + STACK_INCR as c_int);
+        assert_eq!(rs_ml_stack_grow_size(0), c_int::try_from(STACK_INCR).unwrap());
+        assert_eq!(rs_ml_stack_grow_size(5), 5 + c_int::try_from(STACK_INCR).unwrap());
     }
 
     #[test]
@@ -662,9 +662,9 @@ mod tests {
                 3,
                 25,
                 1,
-                &mut high,
-                &mut bnum,
-                &mut page_count,
+                &raw mut high,
+                &raw mut bnum,
+                &raw mut page_count,
             );
             assert_eq!(idx, 0);
             assert_eq!(high, 50);
@@ -676,9 +676,9 @@ mod tests {
                 3,
                 60,
                 1,
-                &mut high,
-                &mut bnum,
-                &mut page_count,
+                &raw mut high,
+                &raw mut bnum,
+                &raw mut page_count,
             );
             assert_eq!(idx, 1);
             assert_eq!(high, 80);
@@ -690,9 +690,9 @@ mod tests {
                 3,
                 90,
                 1,
-                &mut high,
-                &mut bnum,
-                &mut page_count,
+                &raw mut high,
+                &raw mut bnum,
+                &raw mut page_count,
             );
             assert_eq!(idx, 2);
             assert_eq!(high, 100);
@@ -704,9 +704,9 @@ mod tests {
                 3,
                 101,
                 1,
-                &mut high,
-                &mut bnum,
-                &mut page_count,
+                &raw mut high,
+                &raw mut bnum,
+                &raw mut page_count,
             );
             assert_eq!(idx, -1);
         }
@@ -717,13 +717,13 @@ mod tests {
         let mut entry = PointerEntry::with_values(10, 50, 1, 1);
 
         unsafe {
-            rs_ml_update_ptr_line_count(&mut entry, ML_INSERT);
+            rs_ml_update_ptr_line_count(&raw mut entry, ML_INSERT);
             assert_eq!(entry.pe_line_count, 51);
 
-            rs_ml_update_ptr_line_count(&mut entry, ML_DELETE);
+            rs_ml_update_ptr_line_count(&raw mut entry, ML_DELETE);
             assert_eq!(entry.pe_line_count, 50);
 
-            rs_ml_update_ptr_line_count(&mut entry, ML_FIND);
+            rs_ml_update_ptr_line_count(&raw mut entry, ML_FIND);
             assert_eq!(entry.pe_line_count, 50); // unchanged
         }
     }

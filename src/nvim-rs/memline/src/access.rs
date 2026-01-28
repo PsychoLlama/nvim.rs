@@ -693,10 +693,10 @@ mod tests {
 
         unsafe {
             // Room for 50 bytes + 4 byte index = 54 bytes needed
-            assert_eq!(rs_ml_db_has_room(&header, 50), 1);
+            assert_eq!(rs_ml_db_has_room(&raw const header, 50), 1);
 
             // Not room for 100 bytes + 4 byte index = 104 bytes needed
-            assert_eq!(rs_ml_db_has_room(&header, 100), 0);
+            assert_eq!(rs_ml_db_has_room(&raw const header, 100), 0);
         }
     }
 }
