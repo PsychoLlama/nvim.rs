@@ -23,8 +23,8 @@
 use std::ffi::{c_int, c_void};
 
 use super::dispatch::{
-    argvar_at, rettv_set_number, rettv_set_string, tv_get_number_chk, tv_get_string_bytes,
-    tv_get_string_chk_bytes, TypevalPtrMut,
+    argvar_at, rettv_set_float, rettv_set_number, rettv_set_string, tv_get_number_chk,
+    tv_get_string_bytes, tv_get_string_chk_bytes, TypevalPtrMut,
 };
 
 // =============================================================================
@@ -837,22 +837,22 @@ pub unsafe extern "C" fn rs_f_tv_trim(argvars: *const c_void, rettv: *mut c_void
 
 /// Helper for trim - handles optional mask and direction.
 fn trim_with_mask<'a>(s: &'a [u8], mask: Option<&[u8]>, dir: i64) -> &'a [u8] {
-    match mask {
-        Some(mask_chars) if !mask_chars.is_empty() => {
-            // Custom mask characters
-            match dir {
-                1 => trim_chars_start(s, mask_chars),
-                2 => trim_chars_end(s, mask_chars),
-                _ => trim_chars(s, mask_chars),
-            }
+    // Check if we have a non-empty custom mask
+    let use_custom_mask = matches!(mask, Some(m) if !m.is_empty());
+
+    if use_custom_mask {
+        let mask_chars = mask.unwrap();
+        match dir {
+            1 => trim_chars_start(s, mask_chars),
+            2 => trim_chars_end(s, mask_chars),
+            _ => trim_chars(s, mask_chars),
         }
-        _ => {
-            // No mask or empty mask, use default whitespace trimming
-            match dir {
-                1 => trim_start(s),
-                2 => trim_end(s),
-                _ => trim(s),
-            }
+    } else {
+        // No mask or empty mask, use default whitespace trimming
+        match dir {
+            1 => trim_start(s),
+            2 => trim_end(s),
+            _ => trim(s),
         }
     }
 }
@@ -1198,6 +1198,449 @@ fn str_reverse_utf8(s: &[u8]) -> Vec<u8> {
 }
 
 // =============================================================================
+// Phase 2: Advanced String Functions
+// =============================================================================
+
+/// Parse string to integer with given base.
+///
+/// Supports bases 2, 8, 10, 16.
+/// Returns (value, chars_consumed).
+pub fn str2nr(s: &[u8], base: i32, allow_quote: bool) -> (i64, usize) {
+    if s.is_empty() {
+        return (0, 0);
+    }
+
+    let mut pos = 0;
+
+    // Skip leading whitespace
+    while pos < s.len() && s[pos].is_ascii_whitespace() {
+        pos += 1;
+    }
+
+    if pos >= s.len() {
+        return (0, 0);
+    }
+
+    // Check for sign
+    let negative = s[pos] == b'-';
+    if s[pos] == b'+' || s[pos] == b'-' {
+        pos += 1;
+        // Skip whitespace after sign
+        while pos < s.len() && s[pos].is_ascii_whitespace() {
+            pos += 1;
+        }
+    }
+
+    if pos >= s.len() {
+        return (0, 0);
+    }
+
+    // Detect base from prefix if base is 0 or 10
+    let actual_base = if base == 0 || base == 10 {
+        if pos + 1 < s.len() && s[pos] == b'0' {
+            match s[pos + 1] {
+                b'x' | b'X' => 16,
+                b'b' | b'B' => 2,
+                b'o' | b'O' => 8,
+                _ if s[pos + 1].is_ascii_digit() => 8, // Traditional octal
+                _ => 10,
+            }
+        } else {
+            10
+        }
+    } else {
+        base
+    };
+
+    // Skip base prefix (0x, 0b, 0o)
+    if pos + 1 < s.len() && s[pos] == b'0' {
+        let prefix_char = s[pos + 1];
+        let should_skip = match actual_base {
+            16 => prefix_char == b'x' || prefix_char == b'X',
+            2 => prefix_char == b'b' || prefix_char == b'B',
+            8 => prefix_char == b'o' || prefix_char == b'O',
+            _ => false,
+        };
+        if should_skip {
+            pos += 2;
+        }
+    }
+
+    let start_pos = pos;
+    let mut value: i64 = 0;
+
+    while pos < s.len() {
+        let c = s[pos];
+
+        // Handle quote separator (like 1'000'000)
+        if allow_quote && c == b'\'' {
+            pos += 1;
+            continue;
+        }
+
+        let digit = match c {
+            b'0'..=b'9' => i64::from(c - b'0'),
+            b'a'..=b'f' if actual_base == 16 => i64::from(c - b'a' + 10),
+            b'A'..=b'F' if actual_base == 16 => i64::from(c - b'A' + 10),
+            _ => break,
+        };
+
+        if digit >= i64::from(actual_base) {
+            break;
+        }
+
+        value = value
+            .saturating_mul(i64::from(actual_base))
+            .saturating_add(digit);
+        pos += 1;
+    }
+
+    let consumed = pos - start_pos;
+    if negative {
+        value = -value;
+    }
+
+    (value, consumed)
+}
+
+/// Parse string to float.
+///
+/// Returns (value, chars_consumed).
+pub fn str2float(s: &[u8]) -> (f64, usize) {
+    if s.is_empty() {
+        return (0.0, 0);
+    }
+
+    let mut pos = 0;
+
+    // Skip leading whitespace
+    while pos < s.len() && s[pos].is_ascii_whitespace() {
+        pos += 1;
+    }
+
+    if pos >= s.len() {
+        return (0.0, 0);
+    }
+
+    // Check for sign
+    let negative = s[pos] == b'-';
+    if s[pos] == b'+' || s[pos] == b'-' {
+        pos += 1;
+        // Skip whitespace after sign
+        while pos < s.len() && s[pos].is_ascii_whitespace() {
+            pos += 1;
+        }
+    }
+
+    // Parse as string and use Rust's float parsing
+    let start = pos;
+    let mut has_digits = false;
+
+    // Integer part
+    while pos < s.len() && s[pos].is_ascii_digit() {
+        has_digits = true;
+        pos += 1;
+    }
+
+    // Fractional part
+    if pos < s.len() && s[pos] == b'.' {
+        pos += 1;
+        while pos < s.len() && s[pos].is_ascii_digit() {
+            has_digits = true;
+            pos += 1;
+        }
+    }
+
+    // Exponent part
+    if pos < s.len() && (s[pos] == b'e' || s[pos] == b'E') {
+        pos += 1;
+        if pos < s.len() && (s[pos] == b'+' || s[pos] == b'-') {
+            pos += 1;
+        }
+        while pos < s.len() && s[pos].is_ascii_digit() {
+            pos += 1;
+        }
+    }
+
+    if !has_digits {
+        return (0.0, 0);
+    }
+
+    // Parse the extracted substring
+    let float_str = std::str::from_utf8(&s[start..pos]).unwrap_or("0");
+    let value = float_str.parse::<f64>().unwrap_or(0.0);
+    let value = if negative { -value } else { value };
+
+    (value, pos - start)
+}
+
+/// Get byte index from character index.
+///
+/// Returns the byte index of the character at position `charidx`.
+/// Returns -1 if out of bounds.
+pub fn byteidx(s: &[u8], charidx: i64) -> i64 {
+    if charidx < 0 || s.is_empty() {
+        return -1;
+    }
+
+    let mut byte_pos = 0;
+    let mut char_count = 0;
+    let target = charidx as usize;
+
+    while byte_pos < s.len() {
+        if char_count == target {
+            return byte_pos as i64;
+        }
+
+        // Skip to next character
+        let b = s[byte_pos];
+        let char_len = if b < 0x80 {
+            1
+        } else if b & 0xE0 == 0xC0 {
+            2
+        } else if b & 0xF0 == 0xE0 {
+            3
+        } else if b & 0xF8 == 0xF0 {
+            4
+        } else {
+            1 // Invalid UTF-8, treat as single byte
+        };
+
+        byte_pos += char_len.min(s.len() - byte_pos);
+        char_count += 1;
+    }
+
+    // If charidx equals the number of characters, return len
+    if char_count == target {
+        return byte_pos as i64;
+    }
+
+    -1
+}
+
+/// Get character index from byte index.
+///
+/// Returns the character index at byte position `byteidx`.
+/// Returns -1 if out of bounds or in the middle of a character.
+pub fn charidx(s: &[u8], byte_idx: i64) -> i64 {
+    if byte_idx < 0 || s.is_empty() {
+        return -1;
+    }
+
+    let target = byte_idx as usize;
+    if target > s.len() {
+        return -1;
+    }
+
+    // Special case: byte_idx at end of string
+    if target == s.len() {
+        return strlen_chars(s) as i64;
+    }
+
+    // Check if we're at a valid character boundary
+    if target > 0 && (s[target] & 0xC0) == 0x80 {
+        // We're in the middle of a multi-byte character
+        return -1;
+    }
+
+    // Count characters up to byte_idx
+    let mut char_count = 0;
+    let mut byte_pos = 0;
+
+    while byte_pos < target {
+        let b = s[byte_pos];
+        let char_len = if b < 0x80 {
+            1
+        } else if b & 0xE0 == 0xC0 {
+            2
+        } else if b & 0xF0 == 0xE0 {
+            3
+        } else if b & 0xF8 == 0xF0 {
+            4
+        } else {
+            1
+        };
+
+        byte_pos += char_len.min(s.len() - byte_pos);
+        char_count += 1;
+    }
+
+    char_count
+}
+
+/// Get character at index.
+///
+/// Returns the Unicode codepoint at character index `idx`.
+/// Returns -1 if out of bounds.
+pub fn strgetchar(s: &[u8], idx: i64) -> i64 {
+    if idx < 0 || s.is_empty() {
+        return -1;
+    }
+
+    let target = idx as usize;
+    let mut char_count = 0;
+    let mut byte_pos = 0;
+
+    while byte_pos < s.len() {
+        if char_count == target {
+            // Decode the character at this position
+            let b = s[byte_pos];
+            if b < 0x80 {
+                return i64::from(b);
+            }
+
+            let (len, mask): (usize, u8) = if b & 0xE0 == 0xC0 {
+                (2, 0x1F)
+            } else if b & 0xF0 == 0xE0 {
+                (3, 0x0F)
+            } else if b & 0xF8 == 0xF0 {
+                (4, 0x07)
+            } else {
+                return i64::from(b); // Invalid UTF-8
+            };
+
+            if byte_pos + len > s.len() {
+                return i64::from(b); // Incomplete character
+            }
+
+            let mut codepoint = u32::from(b & mask);
+            for i in 1..len {
+                let cont = s[byte_pos + i];
+                if (cont & 0xC0) != 0x80 {
+                    return i64::from(b); // Invalid continuation
+                }
+                codepoint = (codepoint << 6) | u32::from(cont & 0x3F);
+            }
+
+            return i64::from(codepoint);
+        }
+
+        // Skip to next character
+        let b = s[byte_pos];
+        let char_len = if b < 0x80 {
+            1
+        } else if b & 0xE0 == 0xC0 {
+            2
+        } else if b & 0xF0 == 0xE0 {
+            3
+        } else if b & 0xF8 == 0xF0 {
+            4
+        } else {
+            1
+        };
+
+        byte_pos += char_len.min(s.len() - byte_pos);
+        char_count += 1;
+    }
+
+    -1
+}
+
+/// VimL `str2nr(str [, base [, quoted]])` - convert string to number.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_str2nr(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let arg1 = argvar_at(argvars, 1);
+    let arg2 = argvar_at(argvars, 2);
+
+    let s = tv_get_string_bytes(arg0);
+    let (base, _) = tv_get_number_chk(arg1);
+    let base = if base == 0 { 10 } else { base as i32 };
+    let (quoted, _) = tv_get_number_chk(arg2);
+    let allow_quote = quoted != 0;
+
+    // Validate base
+    if base != 2 && base != 8 && base != 10 && base != 16 {
+        rettv_set_number(rettv, 0);
+        return;
+    }
+
+    let (value, _) = str2nr(s, base, allow_quote);
+    rettv_set_number(rettv, value);
+}
+
+/// VimL `str2float(str)` - convert string to float.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_str2float(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let s = tv_get_string_bytes(arg0);
+
+    let (value, _) = str2float(s);
+    rettv_set_float(rettv, value);
+}
+
+/// VimL `byteidx(str, idx [, countcc])` - get byte index from character index.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_byteidx(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let arg1 = argvar_at(argvars, 1);
+
+    let s = tv_get_string_bytes(arg0);
+    let (idx, error) = tv_get_number_chk(arg1);
+
+    if error {
+        rettv_set_number(rettv, -1);
+        return;
+    }
+
+    rettv_set_number(rettv, byteidx(s, idx));
+}
+
+/// VimL `charidx(str, idx [, countcc [, utf16]])` - get character index from byte index.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_charidx(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let arg1 = argvar_at(argvars, 1);
+
+    let s = tv_get_string_bytes(arg0);
+    let (idx, error) = tv_get_number_chk(arg1);
+
+    if error {
+        rettv_set_number(rettv, -1);
+        return;
+    }
+
+    rettv_set_number(rettv, charidx(s, idx));
+}
+
+/// VimL `strgetchar(str, idx)` - get character at index.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_strgetchar(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let arg1 = argvar_at(argvars, 1);
+
+    let s = tv_get_string_bytes(arg0);
+    let (idx, error) = tv_get_number_chk(arg1);
+
+    if error {
+        rettv_set_number(rettv, -1);
+        return;
+    }
+
+    rettv_set_number(rettv, strgetchar(s, idx));
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -1363,5 +1806,80 @@ mod tests {
         let jp = "日本語".as_bytes();
         let reversed = str_reverse_utf8(jp);
         assert_eq!(reversed, "語本日".as_bytes());
+    }
+
+    #[test]
+    fn test_str2nr() {
+        // Decimal
+        assert_eq!(str2nr(b"123", 10, false).0, 123);
+        assert_eq!(str2nr(b"-456", 10, false).0, -456);
+        assert_eq!(str2nr(b"  789  ", 10, false).0, 789);
+
+        // Hex
+        assert_eq!(str2nr(b"0xff", 16, false).0, 255);
+        assert_eq!(str2nr(b"FF", 16, false).0, 255);
+        assert_eq!(str2nr(b"0x10", 16, false).0, 16);
+
+        // Binary
+        assert_eq!(str2nr(b"0b1010", 2, false).0, 10);
+        assert_eq!(str2nr(b"1010", 2, false).0, 10);
+
+        // Octal
+        assert_eq!(str2nr(b"0o77", 8, false).0, 63);
+        assert_eq!(str2nr(b"77", 8, false).0, 63);
+
+        // With quote separator
+        assert_eq!(str2nr(b"1'000'000", 10, true).0, 1_000_000);
+    }
+
+    #[test]
+    fn test_str2float() {
+        assert!((str2float(b"3.25").0 - 3.25).abs() < 0.001);
+        assert!((str2float(b"-2.5").0 - (-2.5)).abs() < 0.001);
+        assert!((str2float(b"1e10").0 - 1e10).abs() < 1.0);
+        assert!((str2float(b"  42  ").0 - 42.0).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_byteidx() {
+        assert_eq!(byteidx(b"hello", 0), 0);
+        assert_eq!(byteidx(b"hello", 2), 2);
+        assert_eq!(byteidx(b"hello", 5), 5);
+        assert_eq!(byteidx(b"hello", 6), -1);
+
+        // UTF-8
+        let jp = "日本語".as_bytes(); // 9 bytes, 3 chars
+        assert_eq!(byteidx(jp, 0), 0);
+        assert_eq!(byteidx(jp, 1), 3);
+        assert_eq!(byteidx(jp, 2), 6);
+        assert_eq!(byteidx(jp, 3), 9);
+    }
+
+    #[test]
+    fn test_charidx() {
+        assert_eq!(charidx(b"hello", 0), 0);
+        assert_eq!(charidx(b"hello", 2), 2);
+        assert_eq!(charidx(b"hello", 5), 5);
+
+        // UTF-8
+        let jp = "日本語".as_bytes(); // 9 bytes, 3 chars
+        assert_eq!(charidx(jp, 0), 0);
+        assert_eq!(charidx(jp, 3), 1);
+        assert_eq!(charidx(jp, 6), 2);
+        assert_eq!(charidx(jp, 9), 3);
+        // Invalid: in the middle of a character
+        assert_eq!(charidx(jp, 1), -1);
+    }
+
+    #[test]
+    fn test_strgetchar() {
+        assert_eq!(strgetchar(b"hello", 0), i64::from(b'h'));
+        assert_eq!(strgetchar(b"hello", 4), i64::from(b'o'));
+        assert_eq!(strgetchar(b"hello", 5), -1);
+
+        // UTF-8 - "日" is U+65E5
+        let jp = "日本語".as_bytes();
+        assert_eq!(strgetchar(jp, 0), 0x65E5);
+        assert_eq!(strgetchar(jp, 1), 0x672C); // "本" is U+672C
     }
 }
