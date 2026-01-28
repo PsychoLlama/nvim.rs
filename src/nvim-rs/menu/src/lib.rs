@@ -17,6 +17,7 @@
 //! - [`hidden`]: Hidden menu detection
 //! - [`lookup`]: Menu lookup and search
 //! - [`path`]: Menu path parsing
+//! - [`popup`]: Popup menu utilities
 //! - [`traverse`]: Tree traversal helpers
 
 #![allow(unsafe_code)] // FFI requires unsafe
@@ -32,6 +33,7 @@ pub mod handle;
 pub mod hidden;
 pub mod lookup;
 pub mod path;
+pub mod popup;
 pub mod traverse;
 
 // Re-exports for convenience
@@ -63,6 +65,10 @@ pub use lookup::{
     rs_menu_path_depth, MenuSearchResult,
 };
 pub use path::{rs_menu_name_equal, rs_menu_namelen, rs_menu_text, MenuTextResult};
+pub use popup::{
+    rs_find_popup_menu, rs_get_menu_mode_chars, rs_get_menu_mode_chars_len,
+    rs_is_popup_menu_for_mode, rs_popup_menu_should_show, rs_popup_mode_name_len, MENU_MODE_CHARS,
+};
 
 /// Hidden menu character (']')
 pub const MNU_HIDDEN_CHAR: u8 = b']';
