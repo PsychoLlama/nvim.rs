@@ -16,6 +16,7 @@
 #![allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
 
 pub mod classify;
+pub mod commands;
 pub mod create;
 pub mod delete;
 pub mod execute;
@@ -30,6 +31,7 @@ pub use classify::{
     rs_menu_is_menubar, rs_menu_is_popup, rs_menu_is_separator, rs_menu_is_toolbar,
     rs_menu_is_winbar,
 };
+pub use commands::{rs_get_menu_cmd_modes, rs_get_menu_mode_str, MenuCmdResult};
 pub use create::{
     rs_compute_new_menu_modes, rs_find_menu_insert_point, rs_menu_item_exists,
     rs_menu_path_needs_parents, rs_validate_menu_name,
