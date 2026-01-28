@@ -385,8 +385,6 @@ int u_savecommon(buf_T *buf, linenr_T top, linenr_T bot, linenr_T newbot, bool r
 // extra fields for uhp
 #define UHP_SAVE_NR            1
 
-static const char e_not_open[] = N_("E828: Cannot open undo file for writing: %s");
-
 /// Compute the hash for a buffer text into hash[UNDO_HASH_SIZE].
 ///
 /// @param[in] buf The buffer used to compute the hash

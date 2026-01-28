@@ -112,7 +112,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | ugrid          | Unicode grid for TUI                    |
 | ui             | UI core types and RemoteUI state        |
 | ui_client      | UI client protocol (events, handlers, attachment) |
-| undo           | Undo/redo system                        |
+| undo           | Undo/redo system (undo tree, file I/O, :undolist, undofile(), undotree()) |
 | unpacker       | MessagePack unpacking                   |
 | usercmd        | User command definition, completion, execution, and parsing |
 | userfunc       | User-defined functions (params, closure, funcref) |

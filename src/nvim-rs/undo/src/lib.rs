@@ -2,6 +2,22 @@
 //!
 //! This crate provides functions for Neovim's multi-level undo/redo system.
 //!
+//! ## Architecture
+//!
+//! The undo system uses an opaque handle pattern for interoperability with C:
+//! - `BufHandle` - Handle to C `buf_T` buffer struct
+//! - `UHeaderHandle` - Handle to C `u_header_T` undo header struct
+//! - `UEntryHandle` - Handle to C `u_entry_T` undo entry struct
+//!
+//! ## Major Functions
+//!
+//! - `rs_u_write_undo` - Write undo tree to persistent file
+//! - `rs_u_read_undo` - Read undo tree from persistent file
+//! - `rs_ex_undolist` - `:undolist` Ex command implementation
+//! - `rs_u_eval_tree` - Build VimL dict for `undotree()`
+//! - `rs_f_undofile` - `undofile()` VimL function
+//! - `rs_undo_time` - Navigate undo tree by time/sequence
+//!
 //! ## File I/O Infrastructure
 //!
 //! This module includes types and helpers for undo file persistence:
