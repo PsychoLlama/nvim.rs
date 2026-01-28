@@ -11,6 +11,7 @@
 pub mod block;
 pub mod buffer;
 pub mod commands;
+pub mod compute;
 pub mod helpers;
 pub mod highlight;
 pub mod marks;
@@ -23,6 +24,7 @@ pub use buffer::{
     WinHandle, DB_COUNT,
 };
 pub use commands::{DiffBlockInfo, DiffOpResult, DiffOperation, DiffRange};
+pub use compute::{DiffAlgorithm, DiffBufferPair, DiffComputeState, NewBlockInfo, XdiffHunk};
 pub use highlight::{
     DiffChangeResult, DiffHighlightGroup, DiffInlineMode, DiffLineChange, DiffLineInfo,
     DiffLineStatus,
