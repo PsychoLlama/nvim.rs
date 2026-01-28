@@ -177,6 +177,7 @@ extern bool rs_qf_list_empty(const void *qfl);
 // Phase 1: List lifecycle functions implemented in Rust
 extern void rs_qf_new_list(void *qi, const char *title);
 extern void rs_qf_free_items(void *qfl);
+extern void rs_qf_free_list(void *qfl);
 
 /// Get listcount from qf_info_T for Rust (using void* to avoid type visibility issues)
 int nvim_qf_get_listcount(const void *qi_void)
@@ -1304,6 +1305,47 @@ void nvim_qf_clear_list_struct(void *qfl_void)
   }
   qf_list_T *qfl = (qf_list_T *)qfl_void;
   memset(qfl, 0, sizeof(*qfl));
+}
+
+/// Free the title of a quickfix list
+void nvim_qf_free_title(void *qfl_void)
+{
+  if (qfl_void == NULL) {
+    return;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  XFREE_CLEAR(qfl->qf_title);
+}
+
+/// Free the context typval of a quickfix list
+void nvim_qf_free_ctx(void *qfl_void)
+{
+  if (qfl_void == NULL) {
+    return;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  tv_free(qfl->qf_ctx);
+  qfl->qf_ctx = NULL;
+}
+
+/// Free the quickfix text function callback
+void nvim_qf_free_callback(void *qfl_void)
+{
+  if (qfl_void == NULL) {
+    return;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  callback_free(&qfl->qf_qftf_cb);
+}
+
+/// Set the changedtick for a quickfix list
+void nvim_qf_set_changedtick(void *qfl_void, int changedtick)
+{
+  if (qfl_void == NULL) {
+    return;
+  }
+  qf_list_T *qfl = (qf_list_T *)qfl_void;
+  qfl->qf_changedtick = changedtick;
 }
 
 // =============================================================================
@@ -5277,16 +5319,11 @@ static void qf_free_items(qf_list_T *qfl)
 
 /// Free error list "idx". Frees all the entries in the quickfix list,
 /// associated context information and the title.
+///
+/// NOTE: Implementation now in Rust (rs_qf_free_list). This is a thin wrapper.
 static void qf_free(qf_list_T *qfl)
 {
-  qf_free_items(qfl);
-
-  XFREE_CLEAR(qfl->qf_title);
-  tv_free(qfl->qf_ctx);
-  qfl->qf_ctx = NULL;
-  callback_free(&qfl->qf_qftf_cb);
-  qfl->qf_id = 0;
-  qfl->qf_changedtick = 0;
+  rs_qf_free_list((void *)qfl);
 }
 
 /// Adjust error list entries for changed line numbers

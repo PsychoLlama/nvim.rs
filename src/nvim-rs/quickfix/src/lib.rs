@@ -1799,6 +1799,10 @@ extern "C" {
     fn nvim_qf_get_list_at_mut(qi: QfInfoHandleMut, idx: c_int) -> QfListHandleMut;
     fn nvim_qf_alloc_next_id() -> u32;
     fn nvim_qf_clear_list_struct(qfl: QfListHandleMut);
+    fn nvim_qf_free_title(qfl: QfListHandleMut);
+    fn nvim_qf_free_ctx(qfl: QfListHandleMut);
+    fn nvim_qf_free_callback(qfl: QfListHandleMut);
+    fn nvim_qf_set_changedtick(qfl: QfListHandleMut, changedtick: c_int);
 }
 
 /// Opaque handle to buffer (Phase 7)
@@ -1987,9 +1991,16 @@ pub unsafe extern "C" fn rs_qf_new_list(qi: QfInfoHandleMut, title: *const c_cha
     nvim_qf_set_has_user_data(qfl, false);
 }
 
-/// Free all resources of a quickfix list.
+/// Free all resources of a quickfix list (implementation in Rust).
 ///
 /// This frees all entries, the title, context, and other resources.
+///
+/// Algorithm:
+/// 1. Free all items (via `rs_qf_free_items`)
+/// 2. Free title
+/// 3. Free context typval
+/// 4. Free callback
+/// 5. Reset id and changedtick to 0
 ///
 /// # Safety
 ///
@@ -2000,7 +2011,22 @@ pub unsafe extern "C" fn rs_qf_free_list(qfl: QfListHandleMut) {
     if qfl.is_null() {
         return;
     }
-    nvim_qf_free_list(qfl);
+
+    // Free all entries
+    rs_qf_free_items(qfl);
+
+    // Free title
+    nvim_qf_free_title(qfl);
+
+    // Free context typval
+    nvim_qf_free_ctx(qfl);
+
+    // Free callback
+    nvim_qf_free_callback(qfl);
+
+    // Reset id and changedtick
+    nvim_qf_set_id(qfl, 0);
+    nvim_qf_set_changedtick(qfl, 0);
 }
 
 /// Free only the entries in a quickfix list (implementation in Rust).
