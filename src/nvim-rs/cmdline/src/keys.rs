@@ -302,6 +302,12 @@ pub const fn history_uses_prefix(key: c_int) -> bool {
     matches!(key, K_UP | K_DOWN)
 }
 
+/// Check if a key navigates to newer history (down direction).
+#[must_use]
+pub const fn is_history_newer_key(key: c_int) -> bool {
+    matches!(key, K_DOWN | K_S_DOWN | CTRL_N | K_PAGEDOWN | K_KPAGEDOWN)
+}
+
 /// Check if a key is an enter/execute key.
 /// Note: NL and CTRL_J are the same value (10).
 #[must_use]

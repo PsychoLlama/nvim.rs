@@ -11,6 +11,8 @@
 
 use std::ffi::{c_char, c_int};
 
+use crate::keys::{history_uses_prefix, is_history_newer_key};
+
 // =============================================================================
 // History Type Constants
 // =============================================================================
@@ -52,6 +54,7 @@ extern "C" {
     fn nvim_get_ccline_cmdbuff() -> *mut c_char;
     fn nvim_set_ccline_cmdpos(pos: c_int);
     fn nvim_set_ccline_cmdlen(len: c_int);
+    fn nvim_set_ccline_cmdbuff_at(idx: c_int, val: c_char);
 
     // Buffer management
     fn alloc_cmdbuff(len: c_int);
@@ -62,6 +65,9 @@ extern "C" {
 
     // Beep
     fn beep_flush();
+
+    // String copy
+    fn nvim_strcpy_cmdbuff(src: *const c_char);
 }
 
 /// C structure for history entry
@@ -426,6 +432,224 @@ pub extern "C" fn rs_key_uses_prefix_match(key: c_int) -> c_int {
 }
 
 // Note: rs_hist_char2type and rs_hist_type2char are defined in the cmdhist crate
+
+// =============================================================================
+// History Browsing
+// =============================================================================
+
+/// Result codes for command line operations (matching C enum)
+mod cmdline_result {
+    use std::ffi::c_int;
+    /// Command line not changed
+    pub const NOT_CHANGED: c_int = 1;
+    /// Command line changed
+    pub const CHANGED: c_int = 2;
+}
+
+/// State needed for history browsing passed from C.
+///
+/// This mirrors the relevant fields from CommandLineState in C.
+#[repr(C)]
+pub struct HistoryBrowseState {
+    /// Current key code
+    pub c: c_int,
+    /// First character of prompt (: / ? = @ >)
+    pub firstc: c_int,
+    /// Current history index
+    pub hiscnt: c_int,
+    /// Saved history index
+    pub save_hiscnt: c_int,
+    /// History type
+    pub histype: c_int,
+    /// Prefix to match (owned by C)
+    pub lookfor: *mut c_char,
+    /// Length of lookfor prefix
+    pub lookforlen: c_int,
+}
+
+/// Copy search history entry with separator replacement.
+///
+/// When recalling a search history entry, we may need to replace the
+/// separator character if it differs from the current search separator.
+///
+/// # Safety
+///
+/// Caller must ensure pointers are valid and buffer is allocated.
+unsafe fn copy_search_history_with_sep_replace(
+    src: *const c_char,
+    src_len: c_int,
+    old_sep: u8,
+    new_sep: u8,
+) {
+    // First pass: count the length needed
+    let mut len = 0i32;
+    for j in 0..src_len {
+        let ch = *src.add(j as usize) as u8;
+        let prev = if j > 0 {
+            *src.add((j - 1) as usize) as u8
+        } else {
+            0
+        };
+
+        if ch == old_sep && prev != b'\\' {
+            // Replace old sep with new sep
+            len += 1;
+        } else if ch == new_sep && prev != b'\\' {
+            // Escape new sep
+            len += 2;
+        } else {
+            len += 1;
+        }
+    }
+
+    // Allocate buffer
+    alloc_cmdbuff(len);
+
+    // Second pass: copy with replacements
+    let mut pos = 0i32;
+    for j in 0..src_len {
+        let ch = *src.add(j as usize) as u8;
+        let prev = if j > 0 {
+            *src.add((j - 1) as usize) as u8
+        } else {
+            0
+        };
+
+        if ch == old_sep && prev != b'\\' {
+            // Replace old sep with new sep
+            nvim_set_ccline_cmdbuff_at(pos, new_sep as c_char);
+        } else if ch == new_sep && prev != b'\\' {
+            // Escape new sep
+            nvim_set_ccline_cmdbuff_at(pos, b'\\' as c_char);
+            pos += 1;
+            nvim_set_ccline_cmdbuff_at(pos, ch as c_char);
+        } else {
+            nvim_set_ccline_cmdbuff_at(pos, ch as c_char);
+        }
+        pos += 1;
+    }
+
+    // Null terminate
+    nvim_set_ccline_cmdbuff_at(pos, 0);
+    nvim_set_ccline_cmdpos(len);
+    nvim_set_ccline_cmdlen(len);
+}
+
+/// Browse command history.
+///
+/// Handles Up, Down, Page Up, Page Down, Ctrl-N, Ctrl-P keys.
+///
+/// # Safety
+///
+/// Caller must ensure state pointer is valid and properly initialized.
+/// The lookfor field may be modified by this function.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_command_line_browse_history(state: *mut HistoryBrowseState) -> c_int {
+    let state = &mut *state;
+
+    // Check if history is available
+    let hislen = nvim_get_hislen();
+    if state.histype == hist_type::HIST_INVALID || hislen == 0 || state.firstc == 0 {
+        return cmdline_result::NOT_CHANGED;
+    }
+
+    state.save_hiscnt = state.hiscnt;
+
+    // Save current command for prefix matching if not already saved
+    // Note: lookfor allocation/deallocation is handled by C caller
+    let _cmdpos = nvim_get_ccline_cmdpos();
+
+    // Determine direction
+    let next_match = is_history_newer_key(state.c);
+    let use_prefix = history_uses_prefix(state.c);
+
+    // Navigate history
+    let mut nav = HistoryNavigator {
+        hiscnt: state.hiscnt,
+        save_hiscnt: state.save_hiscnt,
+        histype: state.histype,
+        lookfor: if state.lookfor.is_null() {
+            None
+        } else {
+            Some(
+                std::slice::from_raw_parts(state.lookfor.cast::<u8>(), state.lookforlen as usize)
+                    .to_vec(),
+            )
+        },
+        lookforlen: state.lookforlen as usize,
+    };
+
+    let direction = if next_match {
+        HistoryDirection::Newer
+    } else {
+        HistoryDirection::Older
+    };
+
+    // Navigate to next history entry
+    nav.next_histidx(direction, use_prefix);
+
+    // Update state from navigator
+    state.hiscnt = nav.hiscnt;
+
+    if state.hiscnt != state.save_hiscnt {
+        // Jumped to a different entry
+        dealloc_cmdbuff();
+
+        let (p, plen, entry_firstc): (*const c_char, c_int, Option<u8>) = if state.hiscnt == hislen
+        {
+            // Back to the saved command line
+            (state.lookfor.cast_const(), state.lookforlen, None)
+        } else {
+            let entries = get_histentry(state.histype);
+            let entry = &*entries.add(state.hiscnt as usize);
+
+            // For search history, check if we need to replace separators
+            let old_firstc = if state.histype == hist_type::HIST_SEARCH {
+                // The separator is stored after the string + NUL
+                let sep_byte = *entry.hisstr.add(entry.hisstrlen + 1) as u8;
+                if sep_byte != 0 && sep_byte != state.firstc as u8 {
+                    Some(sep_byte)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            (
+                entry.hisstr.cast_const(),
+                entry.hisstrlen as c_int,
+                old_firstc,
+            )
+        };
+
+        // Handle search history separator replacement
+        if state.histype == hist_type::HIST_SEARCH
+            && !p.is_null()
+            && !std::ptr::eq(p, state.lookfor)
+        {
+            if let Some(old_sep) = entry_firstc {
+                copy_search_history_with_sep_replace(p, plen, old_sep, state.firstc as u8);
+                redrawcmd();
+                return cmdline_result::CHANGED;
+            }
+        }
+
+        // Normal case: just copy the string
+        alloc_cmdbuff(plen);
+        if !p.is_null() {
+            nvim_strcpy_cmdbuff(p);
+        }
+        nvim_set_ccline_cmdpos(plen);
+        nvim_set_ccline_cmdlen(plen);
+
+        redrawcmd();
+        return cmdline_result::CHANGED;
+    }
+
+    beep_flush();
+    cmdline_result::NOT_CHANGED
+}
 
 // =============================================================================
 // Tests

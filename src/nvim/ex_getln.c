@@ -267,6 +267,19 @@ extern int rs_cmdline_cursor_end(void);
 extern int rs_cmdline_cursor_word_left(void);
 extern int rs_cmdline_cursor_word_right(void);
 extern int rs_cmdline_insert_str(const char *s, size_t len);
+
+// Phase 1: History browsing from Rust
+typedef struct {
+  int c;
+  int firstc;
+  int hiscnt;
+  int save_hiscnt;
+  int histype;
+  char *lookfor;
+  int lookforlen;
+} HistoryBrowseState;
+extern int rs_command_line_browse_history(HistoryBrowseState *state);
+
 extern int rs_check_bracket_balance(const char *expr, size_t len);
 extern int rs_is_expr_likely_complete(const char *expr, size_t len);
 extern int rs_find_last_token_start(const char *expr, size_t len);
@@ -1910,148 +1923,41 @@ static void command_line_left_right_mouse(CommandLineState *s)
   }
 }
 
-static void command_line_next_histidx(CommandLineState *s, bool next_match)
-{
-  while (true) {
-    // one step backwards
-    if (!next_match) {
-      if (s->hiscnt == get_hislen()) {
-        // first time
-        s->hiscnt = *get_hisidx(s->histype);
-      } else if (s->hiscnt == 0 && *get_hisidx(s->histype) != get_hislen() - 1) {
-        s->hiscnt = get_hislen() - 1;
-      } else if (s->hiscnt != *get_hisidx(s->histype) + 1) {
-        s->hiscnt--;
-      } else {
-        // at top of list
-        s->hiscnt = s->save_hiscnt;
-        break;
-      }
-    } else {          // one step forwards
-      // on last entry, clear the line
-      if (s->hiscnt == *get_hisidx(s->histype)) {
-        s->hiscnt = get_hislen();
-        break;
-      }
-
-      // not on a history line, nothing to do
-      if (s->hiscnt == get_hislen()) {
-        break;
-      }
-
-      if (s->hiscnt == get_hislen() - 1) {
-        // wrap around
-        s->hiscnt = 0;
-      } else {
-        s->hiscnt++;
-      }
-    }
-
-    if (s->hiscnt < 0 || get_histentry(s->histype)[s->hiscnt].hisstr == NULL) {
-      s->hiscnt = s->save_hiscnt;
-      break;
-    }
-
-    if ((s->c != K_UP && s->c != K_DOWN)
-        || s->hiscnt == s->save_hiscnt
-        || strncmp(get_histentry(s->histype)[s->hiscnt].hisstr,
-                   s->lookfor, (size_t)s->lookforlen) == 0) {
-      break;
-    }
-  }
-}
-
 /// Handle the Up, Down, Page Up, Page down, CTRL-N and CTRL-P key in the
 /// command-line mode.
 static int command_line_browse_history(CommandLineState *s)
 {
-  if (s->histype == HIST_INVALID || get_hislen() == 0 || s->firstc == NUL) {
-    // no history
-    return CMDLINE_NOT_CHANGED;
-  }
-
-  s->save_hiscnt = s->hiscnt;
-
-  // save current command string so it can be restored later
+  // Save current command string so it can be restored later (required before calling Rust)
   if (s->lookfor == NULL) {
     s->lookfor = xstrnsave(ccline.cmdbuff, (size_t)ccline.cmdlen);
     s->lookfor[ccline.cmdpos] = NUL;
     s->lookforlen = ccline.cmdpos;
   }
 
-  bool next_match = (s->c == K_DOWN || s->c == K_S_DOWN || s->c == Ctrl_N
-                     || s->c == K_PAGEDOWN || s->c == K_KPAGEDOWN);
-  command_line_next_histidx(s, next_match);
+  // Pack state for Rust
+  HistoryBrowseState rs_state = {
+    .c = s->c,
+    .firstc = s->firstc,
+    .hiscnt = s->hiscnt,
+    .save_hiscnt = s->save_hiscnt,
+    .histype = s->histype,
+    .lookfor = s->lookfor,
+    .lookforlen = s->lookforlen,
+  };
 
-  if (s->hiscnt != s->save_hiscnt) {  // jumped to other entry
-    char *p;
-    int plen;
-    int old_firstc;
+  // Call Rust implementation
+  int result = rs_command_line_browse_history(&rs_state);
 
-    dealloc_cmdbuff();
+  // Update state from Rust
+  s->hiscnt = rs_state.hiscnt;
+  s->save_hiscnt = rs_state.save_hiscnt;
 
+  // Clear xp_context on history change
+  if (result == CMDLINE_CHANGED) {
     s->xpc.xp_context = EXPAND_NOTHING;
-    if (s->hiscnt == get_hislen()) {
-      p = s->lookfor;                  // back to the old one
-      plen = s->lookforlen;
-    } else {
-      p = get_histentry(s->histype)[s->hiscnt].hisstr;
-      plen = (int)get_histentry(s->histype)[s->hiscnt].hisstrlen;
-    }
-
-    if (s->histype == HIST_SEARCH
-        && p != s->lookfor
-        && (old_firstc = (uint8_t)p[plen + 1]) != s->firstc) {
-      int len = 0;
-      // Correct for the separator character used when
-      // adding the history entry vs the one used now.
-      // First loop: count length.
-      // Second loop: copy the characters.
-      for (int i = 0; i <= 1; i++) {
-        len = 0;
-        for (int j = 0; p[j] != NUL; j++) {
-          // Replace old sep with new sep, unless it is
-          // escaped.
-          if (p[j] == old_firstc
-              && (j == 0 || p[j - 1] != '\\')) {
-            if (i > 0) {
-              ccline.cmdbuff[len] = (char)s->firstc;
-            }
-          } else {
-            // Escape new sep, unless it is already
-            // escaped.
-            if (p[j] == s->firstc
-                && (j == 0 || p[j - 1] != '\\')) {
-              if (i > 0) {
-                ccline.cmdbuff[len] = '\\';
-              }
-              len++;
-            }
-
-            if (i > 0) {
-              ccline.cmdbuff[len] = p[j];
-            }
-          }
-          len++;
-        }
-
-        if (i == 0) {
-          alloc_cmdbuff(len);
-        }
-      }
-      ccline.cmdbuff[len] = NUL;
-      ccline.cmdpos = ccline.cmdlen = len;
-    } else {
-      alloc_cmdbuff(plen);
-      STRCPY(ccline.cmdbuff, p);
-      ccline.cmdpos = ccline.cmdlen = plen;
-    }
-
-    redrawcmd();
-    return CMDLINE_CHANGED;
   }
-  beep_flush();
-  return CMDLINE_NOT_CHANGED;
+
+  return result;
 }
 
 static int command_line_handle_key(CommandLineState *s)
@@ -3386,7 +3292,7 @@ bool cmdline_expand_uses_internal(const void *xp)
 }
 
 /// Deallocate a command line buffer, updating the buffer size and length.
-static void dealloc_cmdbuff(void)
+void dealloc_cmdbuff(void)
 {
   XFREE_CLEAR(ccline.cmdbuff);
   ccline.cmdlen = ccline.cmdbufflen = 0;
@@ -3394,7 +3300,7 @@ static void dealloc_cmdbuff(void)
 
 /// Allocate a new command line buffer.
 /// Assigns the new buffer to ccline.cmdbuff and ccline.cmdbufflen.
-static void alloc_cmdbuff(int len)
+void alloc_cmdbuff(int len)
 {
   // give some extra space to avoid having to allocate all the time
   if (len < 80) {
@@ -5382,6 +5288,20 @@ void nvim_set_ccline_cmdindent(int indent)
 void nvim_set_ccline_cmdfirstc(int firstc)
 {
   ccline.cmdfirstc = firstc;
+}
+
+// Accessors for history browsing (Phase 1 cmdline migration)
+
+void nvim_set_ccline_cmdbuff_at(int idx, char val)
+{
+  ccline.cmdbuff[idx] = val;
+}
+
+void nvim_strcpy_cmdbuff(const char *src)
+{
+  if (src != NULL && ccline.cmdbuff != NULL) {
+    STRCPY(ccline.cmdbuff, src);
+  }
 }
 
 // Accessors for screen position calculations (Phase 13.2)
