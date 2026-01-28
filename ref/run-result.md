@@ -1,34 +1,76 @@
-Plan: ~/.claude/plans/modular-spinning-puddle.md
+Plan: ~/.claude/plans/scalable-pondering-ember.md
 
 ## Summary
 
-I've executed the plan for wiring undo, quickfix, and search components to Rust. Here's what was accomplished:
+I've successfully executed the migration plan. Here's what was accomplished:
 
-### Phase 1: Undo/Redo System
-- **Status**: Already complete from previous work
-- The undo system was already extensively wired to Rust, with functions like `u_write_undo`, `u_read_undo`, `u_savecommon`, `u_undo`, `u_redo`, `ex_undolist`, `u_sync`, `u_unchanged`, `u_update_save_nr`, and `u_clearall` all forwarding to Rust implementations
+### Phase 1: VTerm State Machine Migration
 
-### Phase 2: Quickfix
-- Added FFI declarations and wrapper functions for:
-  - **Navigation functions**: `QfJumpTarget` struct, `rs_qf_calc_jump_target`, `rs_qf_idx_for_lnum`, `rs_qf_first_entry_in_file`, `rs_qf_last_entry_in_file`, `rs_qf_entry_after_pos_idx`, `rs_qf_entry_before_pos_idx`
-  - **Entry position checks**: `rs_qf_at_first`, `rs_qf_at_last`
-  - **Entry validation**: `rs_qf_entry_covers_line`, `rs_qf_entry_has_valid_range`, `rs_qf_entry_has_valid_col_range`, `rs_qf_entry_has_module`, `rs_qf_entry_has_nr`
-  - **Entry analysis**: `rs_qf_entry_line_span`, `rs_qf_entry_is_complete`, `rs_qf_entry_is_diagnostic`, `rs_qf_entry_severity`
-  - **Entry counting**: `rs_qf_count_errors`, `rs_qf_count_warnings`, `rs_qf_curlist_entry_count`, `rs_qf_curlist_valid_count`
+**Commits:**
+1. `4fa475e16f` - feat(vterm): add C accessor functions and initial Rust state migration
+2. `f65ab78a21` - feat(vterm): add scroll region handling and linefeed in Rust
+3. `a236a28c73` - feat(vterm): add CSI cursor movement command handlers in Rust
 
-### Phase 3: Search
-- Added FFI declarations for:
-  - **Pattern utilities**: `rs_pat_has_uppercase`, `rs_ignorecase`, `rs_ignorecase_opt`, `rs_needs_previous_pattern`
-  - **Pattern accessors**: `rs_get_search_pattern`, `rs_get_subst_pattern`, `rs_get_last_used_pattern`, `rs_get_mr_pattern`
-  - **Incremental search**: `rs_incsearch_state_save`, `rs_incsearch_state_restore`
+**New C Accessor Functions Added to `state.c`:**
+- Dimension accessors (rows, cols)
+- Cursor position accessors (pos, at_phantom)
+- Scroll region accessors (top, bottom, left, right) with computed bounds
+- Line info accessors and scroll helpers
+- Mode accessors (autowrap, insert, newline, origin, etc.)
+- Protected cell accessor
+- Callback accessors
+- Tabstop accessors
+- VTerm handle and grapheme buffer accessors
 
-### Commits
-1. `b999711904` - feat(quickfix): wire navigation Rust functions to C
-2. `576f936bb6` - feat(search): add FFI declarations for Rust pattern utilities
-3. `c75bb9c58f` - feat(quickfix,search): add more Rust FFI declarations
+**New Rust FFI Functions in `state.rs`:**
+- `rs_vterm_state_updatecursor` - cursor position update with callback
+- `rs_vterm_state_setpos` - direct position setting
+- `rs_vterm_state_cursor_moveto` - absolute cursor movement with bounds
+- `rs_vterm_state_scroll` - full scroll implementation with lineinfo updates
+- `rs_vterm_state_cursor_in_scrollregion` - check cursor in scroll region
+- `rs_vterm_state_linefeed` - linefeed with scroll region handling
+- Tabstop functions (set, clear, check)
+- Mode query functions (autowrap, insert, newline, origin, protected)
+- CSI cursor movement commands (CUU, CUD, CUF, CUB, CNL, CPL, CHA, CUP, VPA, HVP)
 
-### Verification
-- Build passes: ✅
-- Rust format check: ✅
-- Rust clippy: ✅
-- Rust unit tests (undo): ✅
+### Phase 2: Fold System
+
+The exploration revealed that the fold system already has substantial Rust coverage with 46 FFI functions migrated across 7 modules (methods, tree, commands, level, markers, display, update). The existing implementation covers:
+- Fold method checks
+- Fold tree manipulation
+- Fold level calculation
+- Fold state management
+- IEMS update algorithm
+- Fold navigation and display
+
+### Phase 3: Autocommand Pattern Matching
+
+**Commit:** `e4d759c08a` - feat(autocmd): add glob pattern matching module in Rust
+
+**New `pattern.rs` Module:**
+- `glob_to_regex` - Convert shell-style glob patterns to regex patterns
+  - `*` → `.*`
+  - `?` → `.`
+  - `{a,b}` → `\(a\|b\)` (Vim magic mode alternation)
+  - Proper anchoring based on leading/trailing `*`
+  - Path separator detection for `allow_dirs` flag
+  - Error detection for unmatched braces
+
+- `glob_match` - Simple glob matching without regex engine
+  - Supports `*` and `?` wildcards
+  - Case-insensitive matching option
+  - Efficient backtracking algorithm
+
+**FFI Exports:**
+- `rs_glob_to_regex` - Convert glob to regex with buffer output
+- `rs_glob_match_simple` - Direct pattern matching
+
+**All Tests Pass:**
+- 107 vterm tests
+- 36 autocmd tests
+
+**Verification:**
+- `just build` ✓
+- `just rust-fmt-check` ✓
+- `just rust-clippy` ✓
+- Unit tests ✓
