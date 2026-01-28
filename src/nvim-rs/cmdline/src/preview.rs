@@ -255,8 +255,108 @@ fn is_substitute_prefix(cmd: &[u8]) -> bool {
 }
 
 // =============================================================================
+// Preview Window Configuration
+// =============================================================================
+
+/// Window options that should be disabled for preview windows.
+///
+/// These options are disabled to avoid messing up the preview display.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PreviewWindowOptions {
+    /// Disable 'cursorline'.
+    pub cursorline: bool,
+    /// Disable 'cursorcolumn'.
+    pub cursorcolumn: bool,
+    /// Disable 'spell'.
+    pub spell: bool,
+    /// Disable folding.
+    pub foldenable: bool,
+}
+
+impl PreviewWindowOptions {
+    /// Create options for preview window (all disabled).
+    #[must_use]
+    pub const fn for_preview() -> Self {
+        Self {
+            cursorline: false,
+            cursorcolumn: false,
+            spell: false,
+            foldenable: false,
+        }
+    }
+}
+
+/// Check if preview buffer should be skipped during state save.
+#[must_use]
+pub const fn should_skip_buffer_for_preview(buf_handle: i64, preview_bufnr: i64) -> bool {
+    buf_handle == preview_bufnr
+}
+
+/// Get the namespace ID for command preview extmarks.
+///
+/// This is lazily initialized and cached.
+static CMDPREVIEW_NS: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(-1);
+
+/// Get or initialize the preview namespace ID.
+#[must_use]
+pub fn get_preview_namespace() -> i32 {
+    let ns = CMDPREVIEW_NS.load(std::sync::atomic::Ordering::Relaxed);
+    if ns >= 0 {
+        return ns;
+    }
+    // Return cached value from C side
+    unsafe { nvim_get_cmdpreview_ns() }
+}
+
+// C function to get the preview namespace
+extern "C" {
+    fn nvim_get_cmdpreview_ns() -> c_int;
+}
+
+/// Set the preview namespace ID (called from C during initialization).
+pub fn set_preview_namespace(ns: i32) {
+    CMDPREVIEW_NS.store(ns, std::sync::atomic::Ordering::Relaxed);
+}
+
+// =============================================================================
+// Preview Buffer State
+// =============================================================================
+
+/// Check if undo restoration is needed for a buffer.
+#[must_use]
+pub const fn needs_undo_restore(current_seq: i64, saved_seq: i64) -> bool {
+    current_seq != saved_seq
+}
+
+/// Preview cmdmod flags that should be set.
+pub mod cmdmod_flags {
+    /// Disable swap file for preview.
+    pub const CMOD_NOSWAPFILE: i32 = 0x1000;
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
+
+// Note: rs_cmdpreview_get_ns is defined in lib.rs to avoid duplication
+
+/// Set preview namespace (FFI).
+#[no_mangle]
+pub extern "C" fn rs_cmdpreview_set_ns(ns: c_int) {
+    set_preview_namespace(ns);
+}
+
+/// Check if buffer should be skipped for preview (FFI).
+#[no_mangle]
+pub extern "C" fn rs_cmdpreview_should_skip_buffer(buf_handle: i64, preview_bufnr: i64) -> c_int {
+    c_int::from(should_skip_buffer_for_preview(buf_handle, preview_bufnr))
+}
+
+/// Check if undo restoration is needed (FFI).
+#[no_mangle]
+pub extern "C" fn rs_cmdpreview_needs_undo_restore(current_seq: i64, saved_seq: i64) -> c_int {
+    c_int::from(needs_undo_restore(current_seq, saved_seq))
+}
 
 /// Check if preview mode is enabled (FFI).
 #[no_mangle]
@@ -379,5 +479,36 @@ mod tests {
 
         assert_eq!(is_previewable_command(b"edit"), PreviewType::None);
         assert_eq!(is_previewable_command(b""), PreviewType::None);
+    }
+
+    #[test]
+    fn test_preview_window_options() {
+        let opts = PreviewWindowOptions::for_preview();
+        assert!(!opts.cursorline);
+        assert!(!opts.cursorcolumn);
+        assert!(!opts.spell);
+        assert!(!opts.foldenable);
+    }
+
+    #[test]
+    fn test_should_skip_buffer_for_preview() {
+        // Same buffer handle - should skip
+        assert!(should_skip_buffer_for_preview(42, 42));
+
+        // Different buffer handle - should not skip
+        assert!(!should_skip_buffer_for_preview(42, 100));
+
+        // Zero preview bufnr (not set) - should not skip
+        assert!(!should_skip_buffer_for_preview(42, 0));
+    }
+
+    #[test]
+    fn test_needs_undo_restore() {
+        // Same sequence - no restore needed
+        assert!(!needs_undo_restore(10, 10));
+
+        // Different sequence - restore needed
+        assert!(needs_undo_restore(15, 10));
+        assert!(needs_undo_restore(10, 15));
     }
 }

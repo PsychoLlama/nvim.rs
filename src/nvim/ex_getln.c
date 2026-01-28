@@ -2356,8 +2356,11 @@ handle_T cmdpreview_get_bufnr(void)
 // C accessor for cmdpreview_ns (used by Rust)
 int nvim_get_cmdpreview_ns(void) { return cmdpreview_ns; }
 
-// Rust implementation
+// Phase 8: Command preview helpers from Rust
 extern int rs_cmdpreview_get_ns(void);
+extern void rs_cmdpreview_set_ns(int ns);
+extern int rs_cmdpreview_should_skip_buffer(int64_t buf_handle, int64_t preview_bufnr);
+extern int rs_cmdpreview_needs_undo_restore(int64_t current_seq, int64_t saved_seq);
 
 int cmdpreview_get_ns(void)
 {
@@ -2509,7 +2512,8 @@ static void cmdpreview_prepare(CpInfo *cpinfo)
     buf_T *buf = win->w_buffer;
 
     // Don't save state of command preview buffer or preview window.
-    if (buf->handle == cmdpreview_bufnr) {
+    // Use Rust helper to check if buffer should be skipped for preview.
+    if (rs_cmdpreview_should_skip_buffer(buf->handle, cmdpreview_bufnr)) {
       continue;
     }
 
@@ -2575,7 +2579,9 @@ static void cmdpreview_restore_state(CpInfo *cpinfo)
     // Clear preview highlights.
     extmark_clear(buf, (uint32_t)cmdpreview_ns, 0, 0, MAXLNUM, MAXCOL);
 
-    if (buf->b_u_seq_cur != cp_bufinfo.undo_info.save_b_u_seq_cur) {
+    // Use Rust helper to check if undo restoration is needed.
+    if (rs_cmdpreview_needs_undo_restore(buf->b_u_seq_cur,
+                                         cp_bufinfo.undo_info.save_b_u_seq_cur)) {
       int count = 0;
 
       // Calculate how many undo steps are necessary to restore earlier state.
