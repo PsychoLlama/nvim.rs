@@ -18,6 +18,7 @@
 pub mod classify;
 pub mod create;
 pub mod delete;
+pub mod execute;
 pub mod handle;
 pub mod hidden;
 pub mod lookup;
@@ -37,6 +38,10 @@ pub use delete::{
     rs_menu_has_modes, rs_menu_is_empty, rs_menu_remaining_modes, rs_recalculate_parent_modes,
     rs_should_delete_menu, rs_should_free_tip,
 };
+pub use execute::{
+    rs_get_menu_string, rs_menu_has_string_for_mode, rs_menu_is_enabled_for_mode,
+    rs_menu_mode_name, rs_mode_flag_to_index, rs_mode_index_to_flag,
+};
 pub use handle::VimMenuHandle;
 pub use hidden::rs_menu_is_hidden;
 pub use lookup::{
@@ -52,6 +57,8 @@ pub const MNU_HIDDEN_CHAR: u8 = b']';
 pub mod menu_modes {
     use std::ffi::c_int;
 
+    /// Invalid menu index.
+    pub const MENU_INDEX_INVALID: c_int = -1;
     /// Menu index for normal mode.
     pub const MENU_INDEX_NORMAL: c_int = 0;
     /// Menu index for visual mode.
