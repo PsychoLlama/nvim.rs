@@ -21,6 +21,7 @@ pub mod navigate;
 pub mod ops;
 pub mod scroll;
 pub mod update;
+pub mod viml;
 
 // Re-export key types from submodules
 pub use block::{DiffBlockInfo as BlockInfo, DiffBlockIter};
@@ -51,6 +52,7 @@ pub use update::{
     DiffLineUpdateState, DiffRedrawState, DiffUpdateState, FillerUpdateResult,
     ShouldInvalidateResult,
 };
+pub use viml::{DiffFillerResult, DiffHlIdCache, DiffHlIdResult, DiffHlType, DiffLineVimInfo};
 
 use std::ffi::c_char;
 use std::os::raw::c_int;
