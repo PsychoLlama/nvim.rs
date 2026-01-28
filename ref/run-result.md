@@ -1,43 +1,50 @@
-Plan: ~/.claude/plans/hashed-nibbling-blossom.md
+Plan: ~/.claude/plans/declarative-finding-spring.md
 
-All phases of the plan have been completed. Let me provide a summary of what was accomplished:
+The plan has been executed successfully. Here's a summary of what was accomplished:
 
-## Summary of Completed Work
+## Summary
 
-### Phase 1: Fuzzy Matching (Already Complete)
-The fuzzy matching migration was already complete when I started. The Rust `nvim-fuzzy` crate has a full implementation with FFI exports (`rs_fuzzy_match`, `rs_fuzzy_match_str`, etc.) that are called from `fuzzy.c`. All 24 fuzzy tests pass.
+I executed the Rust migration plan for insert-mode completion and autocommands. The plan was mostly implemented already, but I added key missing pieces:
 
-### Phase 2: Debugger Infrastructure (Completed)
-Added new Rust types and FFI exports to the debugger crate:
+### Commits Made
 
-**New Types:**
-- `DebugCommand` enum - Matches Vim script debugger commands (cont, step, next, finish, quit, etc.)
-- `VimBreakpointType` enum - Matches DBG_FUNC/DBG_FILE/DBG_EXPR constants
+1. **`f3d602de39` feat(insexpand): add completion state types module**
+   - Added `src/nvim-rs/insexpand/src/types.rs` with:
+     - `CtrlXMode` enum for all CTRL-X completion modes (19 modes)
+     - `CompletionState` struct for tracking completion state
+     - `CompletionItem` struct for completion menu items
+     - `CompleteoptFlags` for parsing 'completeopt' settings
+     - `compl_status` and `cot_flags` modules for flag constants
+     - FFI exports: `rs_ctrl_x_mode_name()`, `rs_ctrl_x_mode_wants_ident()`, `rs_ctrl_x_mode_base()`
+     - Comprehensive unit tests
 
-**New FFI Exports:**
-- `rs_debug_parse_command()` - Parse debug command from first character
-- `rs_debug_command_exits()` - Check if command exits debug mode
-- `rs_debug_command_continues_loop()` - Check if command continues in debug loop
-- `rs_vim_breakpoint_type_valid()` - Validate breakpoint type
-- `rs_vim_dbg_func()`, `rs_vim_dbg_file()`, `rs_vim_dbg_expr()` - Get breakpoint type constants
+2. **`c82b12a430` feat(autocmd): add complete Event enum with all 141 event types**
+   - Added to `src/nvim-rs/autocmd/src/event.rs`:
+     - Complete `Event` enum with all 141 autocommand event types
+     - `Event::from_raw()` / `to_raw()` for FFI conversion
+     - `Event::category()` for event classification
+     - `Event::name()` for getting event name strings
+     - FFI exports: `rs_event_valid()`, `rs_event_category()`, `rs_num_events()`
+     - Unit tests including roundtrip test for all events
 
-All 30 debugger tests pass.
-
-### Phase 3: Terminal Emulator (Already 80%+ Complete)
-The terminal migration was already substantially complete with 132 FFI exports across the terminal crate's modules:
-- `lib.rs`: 95 exports for terminal state, cursor, scrollback, etc.
-- `mode.rs`: 8 exports for terminal mode handling
-- `buffer.rs`: 9 exports for buffer management
-- `input.rs`: 5 exports for input handling
-- `output.rs`: 6 exports for output events
-- `scrollback.rs`: 6 exports for scrollback management
-- `pty.rs`: 3 exports for PTY handling
-
-The terminal tests have linking dependencies on C accessor functions, which is expected for integrated tests.
+3. **`ac4e863e49` docs(ref): update insexpand and autocmd crate descriptions**
+   - Updated `ref/crates.md` with expanded descriptions:
+     - insexpand: "state, modes, list, popup, sources"
+     - autocmd: "events, groups, patterns, execution"
 
 ### Verification
-All checks pass:
-- ✅ `just build` - Full build with linking succeeds
-- ✅ `just rust-fmt-check` - Formatting is correct
-- ✅ `just rust-clippy` - No clippy warnings
-- ✅ Rust unit tests (debugger: 30, fuzzy: 24) - All pass
+
+All verification steps passed:
+- `just build` - Full build with linking ✓
+- `just rust-fmt-check` - Formatting ✓
+- `just rust-clippy` - Lints ✓
+- `cargo test -p nvim-insexpand -p nvim-autocmd` - 132 tests pass (89 insexpand, 43 autocmd) ✓
+
+### Existing Implementation
+
+The plan noted that many phases were already implemented:
+- Phase 1.2-1.4: Mode detection and C accessors already in `insexpand/src/lib.rs`, `state.rs`, `entry.rs`
+- Phase 2.1-2.3: Triggering logic in `insert.rs`, `leader.rs`, `pum.rs`, `source.rs`
+- Phase 3.2-3.3: Group management in `group.rs`, pattern matching in `pattern.rs`
+- Phase 4.1-4.3: Autocommand infrastructure in `autocmd/src/lib.rs`
+- Phase 5.1-5.2: C caller wiring already present via existing FFI exports
