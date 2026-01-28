@@ -565,6 +565,17 @@ int nvim_get_list_mode(void) { return curwin->w_p_list ? 1 : 0; }
 // Note: nvim_get_columns is defined in ex_getln.c
 // Note: nvim_get_got_int is defined in ex_eval.c
 
+// Phase 3.4: Display state accessors (used by Rust display.rs)
+void nvim_set_cmdline_row(int val) { cmdline_row = val; }
+int nvim_get_did_wait_return(void) { return did_wait_return ? 1 : 0; }
+void nvim_set_did_wait_return(int val) { did_wait_return = (val != 0); }
+int nvim_get_msg_ext_overwrite(void) { return msg_ext_overwrite ? 1 : 0; }
+void nvim_set_msg_ext_overwrite(int val) { msg_ext_overwrite = (val != 0); }
+int nvim_get_msg_ext_skip_flush(void) { return msg_ext_skip_flush ? 1 : 0; }
+void nvim_set_msg_ext_skip_flush(int val) { msg_ext_skip_flush = (val != 0); }
+int nvim_get_need_clr_eos(void) { return need_clr_eos ? 1 : 0; }
+void nvim_set_need_clr_eos(int val) { need_clr_eos = (val != 0); }
+
 // C accessors for attribute functions (used by Rust)
 int nvim_syn_id2attr(int hl_id) { return syn_id2attr(hl_id); }
 int nvim_hl_combine_attr(int a, int b) { return hl_combine_attr(a, b); }
