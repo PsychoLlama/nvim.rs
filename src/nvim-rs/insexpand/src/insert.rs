@@ -301,6 +301,141 @@ pub unsafe extern "C" fn rs_insert_find_newline(s: *const c_char) -> c_int {
     -1
 }
 
+// =============================================================================
+// Phase 7: Extended Insert Helper Functions
+// =============================================================================
+
+// Additional C accessor functions for Phase 7
+extern "C" {
+    fn nvim_get_compl_started() -> c_int;
+    fn nvim_get_compl_interrupted() -> c_int;
+    fn nvim_get_ctrl_x_mode() -> c_int;
+    fn nvim_get_compl_autocomplete() -> c_int;
+
+    // Rust functions from lib.rs
+    fn rs_ins_compl_has_preinsert() -> c_int;
+}
+
+// CTRL-X mode constants
+const CTRL_X_OMNI: c_int = 13;
+const CTRL_X_EVAL: c_int = 16;
+
+/// Check if deletion should stop completion.
+///
+/// Returns true if the position is past the completion start in a mode
+/// that should stop on delete.
+#[no_mangle]
+pub unsafe extern "C" fn rs_insert_deletion_stops(new_col: c_int) -> c_int {
+    let compl_col = nvim_get_compl_col();
+    let mode = nvim_get_ctrl_x_mode();
+
+    // Eval mode always stops on backspace
+    if mode == CTRL_X_EVAL {
+        return 1;
+    }
+
+    // Stop if we delete past the completion start, except omni
+    if new_col < compl_col {
+        return 1;
+    }
+
+    // Stop at the start column for non-omni modes
+    if new_col == compl_col && mode != CTRL_X_OMNI {
+        return 1;
+    }
+
+    0
+}
+
+/// Check if we can use backspace during completion.
+///
+/// Takes into account the backspace option (bs_start flag) and completion length.
+#[no_mangle]
+pub unsafe extern "C" fn rs_insert_can_bs(new_col: c_int, can_bs_start: c_int) -> c_int {
+    let compl_col = nvim_get_compl_col();
+    let compl_length = nvim_get_compl_length();
+
+    // If can't backspace before start, check against completion length
+    if can_bs_start == 0 {
+        let diff = new_col - compl_col - compl_length;
+        if diff < 0 {
+            return 0; // Would delete into original text
+        }
+    }
+
+    1
+}
+
+/// Check if completion was stopped by interrupt.
+#[no_mangle]
+pub unsafe extern "C" fn rs_insert_was_interrupted() -> c_int {
+    nvim_get_compl_interrupted()
+}
+
+/// Check if we should restart completion after backspace.
+#[no_mangle]
+pub unsafe extern "C" fn rs_insert_needs_restart(new_col: c_int) -> c_int {
+    let compl_col = nvim_get_compl_col();
+    let compl_length = nvim_get_compl_length();
+
+    // Need restart if we deleted into the completed area
+    c_int::from(new_col <= compl_col + compl_length)
+}
+
+/// Check if the completion has preinsert enabled.
+#[no_mangle]
+pub unsafe extern "C" fn rs_insert_has_preinsert() -> c_int {
+    rs_ins_compl_has_preinsert()
+}
+
+/// Calculate new leader length after deletion.
+///
+/// The leader is the text from completion start to cursor.
+#[no_mangle]
+pub unsafe extern "C" fn rs_insert_new_leader_len(new_col: c_int) -> c_int {
+    let compl_col = nvim_get_compl_col();
+    let len = new_col - compl_col;
+    if len < 0 {
+        0
+    } else {
+        len
+    }
+}
+
+/// Check if completion should clear selection after backspace.
+///
+/// Returns true in autocomplete mode when selection should be reset.
+#[no_mangle]
+pub unsafe extern "C" fn rs_insert_should_clear_selection() -> c_int {
+    let autocomplete = nvim_get_compl_autocomplete();
+    let started = nvim_get_compl_started();
+    let has_preinsert = rs_ins_compl_has_preinsert();
+
+    // Clear selection in autocomplete mode when not using preinsert
+    c_int::from(autocomplete != 0 && started != 0 && has_preinsert == 0)
+}
+
+/// Get the typed text length relative to completion start.
+#[no_mangle]
+pub unsafe extern "C" fn rs_insert_typed_len() -> c_int {
+    let cursor_col = nvim_get_cursor_col();
+    let compl_col = nvim_get_compl_col();
+    let len = cursor_col - compl_col;
+    if len < 0 {
+        0
+    } else {
+        len
+    }
+}
+
+/// Check if the typed length is within valid bounds.
+#[no_mangle]
+pub unsafe extern "C" fn rs_insert_typed_len_valid() -> c_int {
+    let cursor_col = nvim_get_cursor_col();
+    let compl_col = nvim_get_compl_col();
+    c_int::from(cursor_col >= compl_col)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
