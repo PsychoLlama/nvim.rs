@@ -893,12 +893,7 @@ pub unsafe extern "C" fn rs_validate_path(path: *const c_char, flags: c_int) -> 
         // Actually we can't check this since the string ends at null
 
         // Check for parent directory reference
-        if check_security
-            && !allow_parent
-            && prev_was_sep
-            && c == b'.'
-            && *p.add(1) as u8 == b'.'
-        {
+        if check_security && !allow_parent && prev_was_sep && c == b'.' && *p.add(1) as u8 == b'.' {
             let after = *p.add(2) as u8;
             if after == 0 || after == b'/' || after == b'\\' {
                 return validation_error(error_codes::SECURITY_VIOLATION, offset);
