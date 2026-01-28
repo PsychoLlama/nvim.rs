@@ -196,6 +196,145 @@ pub unsafe extern "C" fn rs_leader_matches_orig() -> c_int {
     1
 }
 
+// =============================================================================
+// Phase 8: Leader Update and Cleanup Helpers
+// =============================================================================
+
+// Additional C accessor functions
+extern "C" {
+    fn nvim_get_compl_started() -> c_int;
+    fn nvim_get_compl_length() -> c_int;
+}
+
+/// Check if the new leader needs to update the completion.
+///
+/// Returns true if the leader differs from the original and completion is active.
+#[no_mangle]
+pub unsafe extern "C" fn rs_leader_needs_update() -> c_int {
+    if nvim_get_compl_started() == 0 {
+        return 0;
+    }
+    c_int::from(rs_leader_matches_orig() == 0)
+}
+
+/// Calculate how much extra text was typed beyond the original.
+///
+/// Returns the byte difference between leader and original text lengths.
+/// Positive means more was typed, negative means backspace was used.
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_leader_extra_len() -> c_int {
+    let leader_len = rs_leader_get_len();
+    let orig_len = nvim_get_compl_orig_text_size();
+    (leader_len as c_int) - (orig_len as c_int)
+}
+
+/// Get how much text to insert from the leader after deletion.
+///
+/// This is the portion of the leader that extends beyond the common prefix.
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap, clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_leader_insert_len(compl_len: c_int) -> c_int {
+    let leader_len = rs_leader_get_len();
+
+    #[allow(clippy::cast_sign_loss)]
+    {
+        if compl_len < 0 {
+            return leader_len as c_int;
+        }
+        let to_insert = leader_len.saturating_sub(compl_len as usize);
+        to_insert as c_int
+    }
+}
+
+/// Check if the leader is longer than the minimum completion length.
+#[no_mangle]
+pub unsafe extern "C" fn rs_leader_above_min_len() -> c_int {
+    let leader_len = rs_leader_get_len();
+    let min_len = nvim_get_compl_length();
+
+    #[allow(clippy::cast_sign_loss)]
+    {
+        c_int::from(leader_len >= min_len as usize)
+    }
+}
+
+/// Compare a string with the leader.
+///
+/// Returns 1 if the string matches the leader up to the leader's length.
+/// This is used to check if a match starts with the leader.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub unsafe extern "C" fn rs_leader_str_matches(s: *const c_char, s_len: usize) -> c_int {
+    let leader_data = rs_leader_get_data();
+    let leader_len = rs_leader_get_len();
+
+    if leader_data.is_null() || leader_len == 0 {
+        return 1; // Empty leader matches everything
+    }
+
+    if s.is_null() || s_len < leader_len {
+        return 0; // String too short
+    }
+
+    // Compare byte by byte
+    for i in 0..leader_len {
+        if *s.add(i) != *leader_data.add(i) {
+            return 0;
+        }
+    }
+
+    1
+}
+
+/// Check if the leader is empty.
+#[no_mangle]
+pub unsafe extern "C" fn rs_leader_is_empty() -> c_int {
+    c_int::from(rs_leader_get_len() == 0)
+}
+
+/// Calculate bytes to delete when updating leader.
+///
+/// Returns how many bytes need to be deleted before inserting new leader text.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub unsafe extern "C" fn rs_leader_bytes_to_delete(cursor_col: c_int, compl_col: c_int) -> c_int {
+    let diff = cursor_col - compl_col;
+    if diff < 0 {
+        0
+    } else {
+        diff
+    }
+}
+
+/// Get the byte offset into the leader where new text starts.
+///
+/// This is used when inserting the portion of leader that follows the common prefix.
+#[no_mangle]
+pub unsafe extern "C" fn rs_leader_new_text_offset(compl_len: c_int) -> usize {
+    if compl_len < 0 {
+        return 0;
+    }
+
+    #[allow(clippy::cast_sign_loss)]
+    {
+        let leader_len = rs_leader_get_len();
+        let offset = compl_len as usize;
+        offset.min(leader_len)
+    }
+}
+
+/// Check if we need to update original text after leader change.
+///
+/// Returns true when completion started and leader was updated.
+#[no_mangle]
+pub unsafe extern "C" fn rs_leader_should_update_orig() -> c_int {
+    if nvim_get_compl_started() == 0 {
+        return 0;
+    }
+    rs_leader_is_set()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
