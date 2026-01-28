@@ -360,6 +360,137 @@ pub extern "C" fn rs_ub_same_dir() -> c_int {
     UB_SAME_DIR
 }
 
+// =============================================================================
+// Block 0 Field Access Helpers
+// =============================================================================
+
+/// Get the b0_dirty field value from a ZeroBlock.
+///
+/// The dirty flag is stored at b0_fname[B0_FNAME_SIZE_ORG - 1].
+///
+/// # Arguments
+/// * `b0_fname` - Pointer to the b0_fname field
+/// * `fname_size` - Size of the b0_fname field (B0_FNAME_SIZE_ORG)
+///
+/// # Safety
+/// - `b0_fname` must be a valid pointer to an array of at least `fname_size` bytes
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)] // Intentional: reading byte as unsigned
+pub unsafe extern "C" fn rs_b0_get_dirty(b0_fname: *const c_char, fname_size: usize) -> c_int {
+    if b0_fname.is_null() || fname_size == 0 {
+        return 0;
+    }
+    c_int::from(*b0_fname.add(fname_size - 1) as u8)
+}
+
+/// Set the b0_dirty field value in a ZeroBlock.
+///
+/// # Safety
+/// - `b0_fname` must be a valid pointer to a mutable array
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap)] // Intentional: writing byte value
+pub unsafe extern "C" fn rs_b0_set_dirty(b0_fname: *mut c_char, fname_size: usize, dirty: c_int) {
+    if b0_fname.is_null() || fname_size == 0 {
+        return;
+    }
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let value = dirty as u8;
+    *b0_fname.add(fname_size - 1) = value as c_char;
+}
+
+/// Get the b0_flags field value from a ZeroBlock.
+///
+/// The flags are stored at b0_fname[B0_FNAME_SIZE_ORG - 2].
+///
+/// # Safety
+/// - `b0_fname` must be a valid pointer to an array of at least `fname_size` bytes
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)] // Intentional: reading byte as unsigned
+pub unsafe extern "C" fn rs_b0_get_flags(b0_fname: *const c_char, fname_size: usize) -> c_int {
+    if b0_fname.is_null() || fname_size < 2 {
+        return 0;
+    }
+    c_int::from(*b0_fname.add(fname_size - 2) as u8)
+}
+
+/// Set the b0_flags field value in a ZeroBlock.
+///
+/// # Safety
+/// - `b0_fname` must be a valid pointer to a mutable array
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap)] // Intentional: writing byte value
+pub unsafe extern "C" fn rs_b0_set_flags(b0_fname: *mut c_char, fname_size: usize, flags: c_int) {
+    if b0_fname.is_null() || fname_size < 2 {
+        return;
+    }
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let value = flags as u8;
+    *b0_fname.add(fname_size - 2) = value as c_char;
+}
+
+/// Extract the file format from b0_flags.
+///
+/// The lowest two bits contain the file format:
+/// - 0: not set (compatible with Vim 6.x)
+/// - 1: EOL_UNIX + 1
+/// - 2: EOL_DOS + 1
+/// - 3: EOL_MAC + 1
+#[no_mangle]
+pub extern "C" fn rs_b0_get_fileformat(b0_flags: c_int) -> c_int {
+    b0_flags & 3 // B0_FF_MASK
+}
+
+/// Check if the same-dir flag is set in b0_flags.
+#[no_mangle]
+pub extern "C" fn rs_b0_has_same_dir(b0_flags: c_int) -> c_int {
+    c_int::from((b0_flags & 4) != 0) // B0_SAME_DIR
+}
+
+/// Check if the has-fenc flag is set in b0_flags.
+#[no_mangle]
+pub extern "C" fn rs_b0_has_fenc(b0_flags: c_int) -> c_int {
+    c_int::from((b0_flags & 8) != 0) // B0_HAS_FENC
+}
+
+// =============================================================================
+// Swap File Path Helpers
+// =============================================================================
+
+/// Check if a swap file name looks like a recovery file.
+///
+/// Recovery files have names like "*.swp" or "*.swo" etc.
+///
+/// # Safety
+/// - `fname` must be a valid C string
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap)] // Intentional: comparing ASCII byte values
+pub unsafe extern "C" fn rs_is_swap_file_name(fname: *const c_char) -> c_int {
+    if fname.is_null() {
+        return 0;
+    }
+
+    // Find string length manually
+    let mut len = 0usize;
+    while *fname.add(len) != 0 {
+        len += 1;
+    }
+
+    if len < 4 {
+        return 0;
+    }
+
+    // Check for .sw? extension
+    let ext = fname.add(len - 4);
+    if *ext == b'.' as c_char
+        && *ext.add(1) == b's' as c_char
+        && *ext.add(2) == b'w' as c_char
+    {
+        return 1;
+    }
+
+    0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -368,5 +499,81 @@ mod tests {
     fn test_ub_constants() {
         assert_eq!(rs_ub_fname(), UB_FNAME);
         assert_eq!(rs_ub_same_dir(), UB_SAME_DIR);
+    }
+
+    #[test]
+    fn test_b0_dirty() {
+        let mut fname = [0i8; 10];
+
+        unsafe {
+            // Set dirty
+            rs_b0_set_dirty(fname.as_mut_ptr(), 10, 0x55);
+            assert_eq!(rs_b0_get_dirty(fname.as_ptr(), 10), 0x55);
+
+            // Clear dirty
+            rs_b0_set_dirty(fname.as_mut_ptr(), 10, 0);
+            assert_eq!(rs_b0_get_dirty(fname.as_ptr(), 10), 0);
+        }
+    }
+
+    #[test]
+    fn test_b0_flags() {
+        let mut fname = [0i8; 10];
+
+        unsafe {
+            rs_b0_set_flags(fname.as_mut_ptr(), 10, 0x0F);
+            assert_eq!(rs_b0_get_flags(fname.as_ptr(), 10), 0x0F);
+        }
+    }
+
+    #[test]
+    fn test_b0_flag_extraction() {
+        // Test file format extraction (bits 0-1)
+        assert_eq!(rs_b0_get_fileformat(0b0001), 1); // Unix
+        assert_eq!(rs_b0_get_fileformat(0b0010), 2); // DOS
+        assert_eq!(rs_b0_get_fileformat(0b0011), 3); // Mac
+
+        // Test same-dir flag (bit 2)
+        assert_eq!(rs_b0_has_same_dir(0b0000), 0);
+        assert_eq!(rs_b0_has_same_dir(0b0100), 1);
+
+        // Test has-fenc flag (bit 3)
+        assert_eq!(rs_b0_has_fenc(0b0000), 0);
+        assert_eq!(rs_b0_has_fenc(0b1000), 1);
+
+        // Test combined flags
+        let flags = 0b1101; // fenc + same_dir + unix
+        assert_eq!(rs_b0_get_fileformat(flags), 1);
+        assert_eq!(rs_b0_has_same_dir(flags), 1);
+        assert_eq!(rs_b0_has_fenc(flags), 1);
+    }
+
+    #[test]
+    fn test_is_swap_file_name() {
+        unsafe {
+            // Valid swap files
+            assert_eq!(
+                rs_is_swap_file_name(b"test.swp\0".as_ptr().cast()),
+                1
+            );
+            assert_eq!(
+                rs_is_swap_file_name(b"file.swo\0".as_ptr().cast()),
+                1
+            );
+            assert_eq!(
+                rs_is_swap_file_name(b"/path/to/file.swn\0".as_ptr().cast()),
+                1
+            );
+
+            // Not swap files
+            assert_eq!(
+                rs_is_swap_file_name(b"test.txt\0".as_ptr().cast()),
+                0
+            );
+            assert_eq!(
+                rs_is_swap_file_name(b"sw\0".as_ptr().cast()),
+                0
+            ); // too short
+        }
     }
 }
