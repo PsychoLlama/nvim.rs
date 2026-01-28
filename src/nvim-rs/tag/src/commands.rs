@@ -515,6 +515,377 @@ pub unsafe extern "C" fn rs_jump_target_needs_file_change(
 }
 
 // =============================================================================
+// Location List Integration
+// =============================================================================
+
+/// Maximum tag name length for location list
+pub const TAG_NAME_MAX_LEN: usize = 128;
+/// Command buffer size for location list patterns
+pub const CMDBUFFSIZE: usize = 256;
+
+/// Tag list display entry information
+#[derive(Default)]
+#[repr(C)]
+pub struct TagListEntry {
+    /// Index in match list (0-based)
+    pub index: c_int,
+    /// Match type byte
+    pub match_type: u8,
+    /// Whether this entry is the current match
+    pub is_current: bool,
+}
+
+/// Initialize a tag list entry.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tag_list_entry_init(
+    entry: *mut TagListEntry,
+    index: c_int,
+    match_type: u8,
+    is_current: bool,
+) {
+    if entry.is_null() {
+        return;
+    }
+    (*entry).index = index;
+    (*entry).match_type = match_type;
+    (*entry).is_current = is_current;
+}
+
+/// Check if entry is the current match.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tag_list_entry_is_current(entry: *const TagListEntry) -> bool {
+    if entry.is_null() {
+        return false;
+    }
+    (*entry).is_current
+}
+
+/// Get formatted index string for tag list display.
+///
+/// Returns the 1-based index as would be displayed.
+#[no_mangle]
+pub extern "C" fn rs_tag_list_display_index(index: c_int) -> c_int {
+    index + 1
+}
+
+/// Location list entry for tag match
+#[repr(C)]
+pub struct TagLocationEntry {
+    /// Tag name (null-terminated, max TAG_NAME_MAX_LEN)
+    pub tag_name: [c_char; TAG_NAME_MAX_LEN + 1],
+    /// Tag name length
+    pub tag_name_len: c_int,
+    /// Line number (0 if pattern-based)
+    pub lnum: LinenrT,
+    /// Search pattern (if lnum is 0)
+    pub pattern: [c_char; CMDBUFFSIZE + 1],
+    /// Pattern length
+    pub pattern_len: c_int,
+    /// Whether entry is valid
+    pub valid: bool,
+}
+
+impl Default for TagLocationEntry {
+    fn default() -> Self {
+        Self {
+            tag_name: [0; TAG_NAME_MAX_LEN + 1],
+            tag_name_len: 0,
+            lnum: 0,
+            pattern: [0; CMDBUFFSIZE + 1],
+            pattern_len: 0,
+            valid: false,
+        }
+    }
+}
+
+/// Allocate a new location entry.
+#[no_mangle]
+pub extern "C" fn rs_tag_location_entry_new() -> *mut TagLocationEntry {
+    Box::into_raw(Box::new(TagLocationEntry::default()))
+}
+
+/// Free a location entry.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tag_location_entry_free(entry: *mut TagLocationEntry) {
+    if !entry.is_null() {
+        drop(Box::from_raw(entry));
+    }
+}
+
+/// Initialize location entry with tag name.
+///
+/// Copies up to TAG_NAME_MAX_LEN characters of the tag name.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tag_location_set_name(
+    entry: *mut TagLocationEntry,
+    name: *const c_char,
+    len: c_int,
+) {
+    if entry.is_null() || name.is_null() {
+        return;
+    }
+
+    let copy_len = std::cmp::min(len as usize, TAG_NAME_MAX_LEN);
+
+    for i in 0..copy_len {
+        (*entry).tag_name[i] = *name.add(i);
+    }
+    (*entry).tag_name[copy_len] = 0;
+    (*entry).tag_name_len = copy_len as c_int;
+    (*entry).valid = true;
+}
+
+/// Set line number for location entry.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tag_location_set_lnum(entry: *mut TagLocationEntry, lnum: LinenrT) {
+    if entry.is_null() {
+        return;
+    }
+    (*entry).lnum = lnum;
+}
+
+/// Check if command string is a line number.
+///
+/// Returns true if the first character is a digit.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tag_cmd_is_linenr(cmd: *const c_char) -> bool {
+    if cmd.is_null() {
+        return false;
+    }
+    let c = *cmd as u8;
+    c.is_ascii_digit()
+}
+
+/// Parse a line number from command string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tag_cmd_parse_linenr(cmd: *const c_char) -> LinenrT {
+    if cmd.is_null() {
+        return 0;
+    }
+
+    let mut result: LinenrT = 0;
+    let mut ptr = cmd;
+
+    while !ptr.is_null() {
+        let c = *ptr as u8;
+        if !c.is_ascii_digit() {
+            break;
+        }
+        result = result * 10 + (c - b'0') as LinenrT;
+        ptr = ptr.add(1);
+    }
+
+    result
+}
+
+/// Skip leading '/' or '?' in search pattern.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tag_pattern_skip_delim(pat: *const c_char) -> *const c_char {
+    if pat.is_null() {
+        return pat;
+    }
+
+    let c = *pat as u8;
+    if c == b'/' || c == b'?' {
+        pat.add(1)
+    } else {
+        pat
+    }
+}
+
+/// Check if character is a search delimiter ('/' or '?').
+#[no_mangle]
+pub extern "C" fn rs_tag_is_search_delim(c: c_char) -> bool {
+    let c = c as u8;
+    c == b'/' || c == b'?'
+}
+
+/// Check if pattern starts with '^' anchor.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tag_pattern_has_caret(pat: *const c_char) -> bool {
+    if pat.is_null() {
+        return false;
+    }
+    *pat as u8 == b'^'
+}
+
+/// Check if pattern ends with '$' anchor.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tag_pattern_has_dollar(pat: *const c_char, len: c_int) -> bool {
+    if pat.is_null() || len <= 0 {
+        return false;
+    }
+    *pat.add((len - 1) as usize) as u8 == b'$'
+}
+
+/// Format a search pattern for location list.
+///
+/// Prepends "^" if needed, adds "\V" for very nomagic, and handles "$" escaping.
+/// Returns the length of the formatted pattern.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tag_format_llist_pattern(
+    entry: *mut TagLocationEntry,
+    cmd_start: *const c_char,
+    cmd_end: *const c_char,
+) -> c_int {
+    if entry.is_null() || cmd_start.is_null() || cmd_end.is_null() {
+        return 0;
+    }
+
+    // Skip delimiters
+    let mut start = cmd_start;
+    let mut end = cmd_end;
+
+    if rs_tag_is_search_delim(*start) {
+        start = start.add(1);
+    }
+    if end > start && rs_tag_is_search_delim(*end) {
+        end = end.sub(1);
+    }
+
+    let mut pos = 0usize;
+
+    // Handle "^" at start
+    if start < end && *start as u8 == b'^' {
+        (*entry).pattern[pos] = b'^' as c_char;
+        pos += 1;
+        start = start.add(1);
+    }
+
+    // Add "\V" for very nomagic
+    if pos + 2 < CMDBUFFSIZE {
+        (*entry).pattern[pos] = b'\\' as c_char;
+        (*entry).pattern[pos + 1] = b'V' as c_char;
+        pos += 2;
+    }
+
+    // Copy the pattern content
+    let content_len = end.offset_from(start) as usize + 1;
+    let max_copy = std::cmp::min(content_len, CMDBUFFSIZE - pos - 2);
+
+    for i in 0..max_copy {
+        (*entry).pattern[pos + i] = *start.add(i);
+    }
+    pos += max_copy;
+
+    // Handle "$" at end - escape it
+    if pos > 0 && (*entry).pattern[pos - 1] as u8 == b'$' && pos < CMDBUFFSIZE {
+        (*entry).pattern[pos - 1] = b'\\' as c_char;
+        (*entry).pattern[pos] = b'$' as c_char;
+        pos += 1;
+    }
+
+    (*entry).pattern[pos] = 0;
+    (*entry).pattern_len = pos as c_int;
+    pos as c_int
+}
+
+/// Get pattern pointer from location entry.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tag_location_get_pattern(
+    entry: *const TagLocationEntry,
+) -> *const c_char {
+    if entry.is_null() {
+        return std::ptr::null();
+    }
+    (*entry).pattern.as_ptr()
+}
+
+/// Get tag name pointer from location entry.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tag_location_get_name(entry: *const TagLocationEntry) -> *const c_char {
+    if entry.is_null() {
+        return std::ptr::null();
+    }
+    (*entry).tag_name.as_ptr()
+}
+
+/// Get line number from location entry.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tag_location_get_lnum(entry: *const TagLocationEntry) -> LinenrT {
+    if entry.is_null() {
+        return 0;
+    }
+    (*entry).lnum
+}
+
+/// Check if location entry uses line number (vs pattern).
+#[no_mangle]
+pub unsafe extern "C" fn rs_tag_location_uses_lnum(entry: *const TagLocationEntry) -> bool {
+    if entry.is_null() {
+        return false;
+    }
+    (*entry).lnum > 0
+}
+
+// =============================================================================
+// Tag List Display Helpers
+// =============================================================================
+
+/// Match type mask for extracting type from match byte
+pub const MT_MASK: u8 = 0x0F;
+
+/// Calculate the tag column width for display alignment.
+///
+/// Returns the width to use for tag name column, or MAXCOL if wrapping needed.
+#[no_mangle]
+pub extern "C" fn rs_tag_calc_display_width(taglen: c_int, columns: c_int) -> c_int {
+    // Minimum width is 18
+    let min_width = 18;
+    let width = if taglen + 2 > min_width {
+        taglen + 2
+    } else {
+        min_width
+    };
+
+    // If too wide for screen, use MAXCOL to indicate line wrap
+    if width > columns - 25 {
+        0x7FFF_FFFF // MAXCOL
+    } else {
+        width
+    }
+}
+
+/// Check if display should wrap to next line.
+#[no_mangle]
+pub extern "C" fn rs_tag_display_should_wrap(taglen: c_int) -> bool {
+    taglen == 0x7FFF_FFFF // MAXCOL
+}
+
+/// Get the display column for file name after tag.
+#[no_mangle]
+pub extern "C" fn rs_tag_display_file_column(taglen: c_int) -> c_int {
+    if taglen == 0x7FFF_FFFF {
+        24 // After wrap
+    } else {
+        13 + taglen
+    }
+}
+
+/// Check if an entry is the current match in a tag list.
+#[no_mangle]
+pub extern "C" fn rs_tag_is_current_match(
+    index: c_int,
+    cur_match: c_int,
+    new_tag: bool,
+    use_tagstack: bool,
+    preview_match: c_int,
+    preview_active: bool,
+) -> bool {
+    if new_tag {
+        return false;
+    }
+
+    if preview_active {
+        index == preview_match
+    } else if use_tagstack {
+        index == cur_match
+    } else {
+        false
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
