@@ -177,6 +177,7 @@ extern u_header_T *rs_u_force_get_undo_header(buf_T *buf);
 extern void rs_u_undoline(void);
 extern void rs_undo_time(int step, bool sec, bool file, bool absolute);
 extern void rs_u_write_undo(const char *name, bool forceit, buf_T *buf, const uint8_t *hash);
+extern void rs_u_read_undo(const char *name, const uint8_t *hash, const char *orig_name);
 
 #include "undo.c.generated.h"
 
@@ -909,300 +910,8 @@ void u_write_undo(const char *const name, const bool forceit, buf_T *const buf, 
 void u_read_undo(char *name, const uint8_t *hash, const char *orig_name FUNC_ATTR_UNUSED)
   FUNC_ATTR_NONNULL_ARG(2)
 {
-  u_header_T **uhp_table = NULL;
-  char *line_ptr = NULL;
-
-  char *file_name;
-  if (name == NULL) {
-    file_name = u_get_undo_file_name(curbuf->b_ffname, true);
-    if (file_name == NULL) {
-      return;
-    }
-
-#ifdef UNIX
-    // For safety we only read an undo file if the owner is equal to the
-    // owner of the text file or equal to the current user.
-    FileInfo file_info_orig;
-    FileInfo file_info_undo;
-    if (os_fileinfo(orig_name, &file_info_orig)
-        && os_fileinfo(file_name, &file_info_undo)
-        && file_info_orig.stat.st_uid != file_info_undo.stat.st_uid
-        && file_info_undo.stat.st_uid != getuid()) {
-      if (p_verbose > 0) {
-        verbose_enter();
-        smsg(0, _("Not reading undo file, owner differs: %s"),
-             file_name);
-        verbose_leave();
-      }
-      return;
-    }
-#endif
-  } else {
-    file_name = name;
-  }
-
-  if (p_verbose > 0) {
-    verbose_enter();
-    smsg(0, _("Reading undo file: %s"), file_name);
-    verbose_leave();
-  }
-
-  FILE *fp = os_fopen(file_name, "r");
-  if (fp == NULL) {
-    if (name != NULL || p_verbose > 0) {
-      semsg(_("E822: Cannot open undo file for reading: %s"), file_name);
-    }
-    goto error;
-  }
-
-  bufinfo_T bi = {
-    .bi_buf = curbuf,
-    .bi_fp = fp,
-  };
-
-  // Read the undo file header.
-  char magic_buf[UF_START_MAGIC_LEN];
-  if (fread(magic_buf, UF_START_MAGIC_LEN, 1, fp) != 1
-      || memcmp(magic_buf, UF_START_MAGIC, UF_START_MAGIC_LEN) != 0) {
-    semsg(_("E823: Not an undo file: %s"), file_name);
-    goto error;
-  }
-  int version = get2c(fp);
-  if (version != UF_VERSION) {
-    semsg(_("E824: Incompatible undo file: %s"), file_name);
-    goto error;
-  }
-
-  uint8_t read_hash[UNDO_HASH_SIZE];
-  if (!undo_read(&bi, read_hash, UNDO_HASH_SIZE)) {
-    corruption_error("hash", file_name);
-    goto error;
-  }
-  linenr_T line_count = (linenr_T)undo_read_4c(&bi);
-  if (memcmp(hash, read_hash, UNDO_HASH_SIZE) != 0
-      || line_count != curbuf->b_ml.ml_line_count) {
-    if (p_verbose > 0 || name != NULL) {
-      if (name == NULL) {
-        verbose_enter();
-      }
-      give_warning(_("File contents changed, cannot use undo info"), true);
-      if (name == NULL) {
-        verbose_leave();
-      }
-    }
-    goto error;
-  }
-
-  // Read undo data for "U" command.
-  int str_len = undo_read_4c(&bi);
-  if (str_len < 0) {
-    goto error;
-  }
-
-  if (str_len > 0) {
-    line_ptr = undo_read_string(&bi, (size_t)str_len);
-  }
-  linenr_T line_lnum = (linenr_T)undo_read_4c(&bi);
-  colnr_T line_colnr = (colnr_T)undo_read_4c(&bi);
-  if (line_lnum < 0 || line_colnr < 0) {
-    corruption_error("line lnum/col", file_name);
-    goto error;
-  }
-
-  // Begin general undo data
-  int old_header_seq = undo_read_4c(&bi);
-  int new_header_seq = undo_read_4c(&bi);
-  int cur_header_seq = undo_read_4c(&bi);
-  int num_head = undo_read_4c(&bi);
-  int seq_last = undo_read_4c(&bi);
-  int seq_cur = undo_read_4c(&bi);
-  time_t seq_time = undo_read_time(&bi);
-
-  // Optional header fields.
-  int last_save_nr = 0;
-  while (true) {
-    int len = undo_read_byte(&bi);
-
-    if (len == 0 || len == EOF) {
-      break;
-    }
-    int what = undo_read_byte(&bi);
-    switch (what) {
-    case UF_LAST_SAVE_NR:
-      last_save_nr = undo_read_4c(&bi);
-      break;
-
-    default:
-      // field not supported, skip
-      while (--len >= 0) {
-        undo_read_byte(&bi);
-      }
-    }
-  }
-
-  // uhp_table will store the freshly created undo headers we allocate
-  // until we insert them into curbuf. The table remains sorted by the
-  // sequence numbers of the headers.
-  // When there are no headers uhp_table is NULL.
-  if (num_head > 0) {
-    if ((size_t)num_head < SIZE_MAX / sizeof(*uhp_table)) {
-      uhp_table = xmalloc((size_t)num_head * sizeof(*uhp_table));
-    }
-  }
-
-  int num_read_uhps = 0;
-
-  int c;
-  while ((c = undo_read_2c(&bi)) == UF_HEADER_MAGIC) {
-    if (num_read_uhps >= num_head) {
-      corruption_error("num_head too small", file_name);
-      goto error;
-    }
-
-    u_header_T *uhp = unserialize_uhp(&bi, file_name);
-    if (uhp == NULL) {
-      goto error;
-    }
-    uhp_table[num_read_uhps++] = uhp;
-  }
-
-  if (num_read_uhps != num_head) {
-    corruption_error("num_head", file_name);
-    goto error;
-  }
-  if (c != UF_HEADER_END_MAGIC) {
-    corruption_error("end marker", file_name);
-    goto error;
-  }
-
-#ifdef U_DEBUG
-  size_t amount = num_head * sizeof(int) + 1;
-  int *uhp_table_used = xmalloc(amount);
-  memset(uhp_table_used, 0, amount);
-# define SET_FLAG(j) ++uhp_table_used[j]
-#else
-# define SET_FLAG(j)
-#endif
-
-  // We have put all of the headers into a table. Now we iterate through the
-  // table and swizzle each sequence number we have stored in uh_*_seq into
-  // a pointer corresponding to the header with that sequence number.
-  int16_t old_idx = -1;
-  int16_t new_idx = -1;
-  int16_t cur_idx = -1;
-  for (int i = 0; i < num_head; i++) {
-    u_header_T *uhp = uhp_table[i];
-    if (uhp == NULL) {
-      continue;
-    }
-    for (int j = 0; j < num_head; j++) {
-      if (uhp_table[j] != NULL && i != j
-          && uhp_table[i]->uh_seq == uhp_table[j]->uh_seq) {
-        corruption_error("duplicate uh_seq", file_name);
-        goto error;
-      }
-    }
-    for (int j = 0; j < num_head; j++) {
-      if (uhp_table[j] != NULL
-          && uhp_table[j]->uh_seq == uhp->uh_next.seq) {
-        uhp->uh_next.ptr = uhp_table[j];
-        SET_FLAG(j);
-        break;
-      }
-    }
-    for (int j = 0; j < num_head; j++) {
-      if (uhp_table[j] != NULL
-          && uhp_table[j]->uh_seq == uhp->uh_prev.seq) {
-        uhp->uh_prev.ptr = uhp_table[j];
-        SET_FLAG(j);
-        break;
-      }
-    }
-    for (int j = 0; j < num_head; j++) {
-      if (uhp_table[j] != NULL
-          && uhp_table[j]->uh_seq == uhp->uh_alt_next.seq) {
-        uhp->uh_alt_next.ptr = uhp_table[j];
-        SET_FLAG(j);
-        break;
-      }
-    }
-    for (int j = 0; j < num_head; j++) {
-      if (uhp_table[j] != NULL
-          && uhp_table[j]->uh_seq == uhp->uh_alt_prev.seq) {
-        uhp->uh_alt_prev.ptr = uhp_table[j];
-        SET_FLAG(j);
-        break;
-      }
-    }
-    if (old_header_seq > 0 && old_idx < 0 && uhp->uh_seq == old_header_seq) {
-      assert(i <= INT16_MAX);
-      old_idx = (int16_t)i;
-      SET_FLAG(i);
-    }
-    if (new_header_seq > 0 && new_idx < 0 && uhp->uh_seq == new_header_seq) {
-      assert(i <= INT16_MAX);
-      new_idx = (int16_t)i;
-      SET_FLAG(i);
-    }
-    if (cur_header_seq > 0 && cur_idx < 0 && uhp->uh_seq == cur_header_seq) {
-      assert(i <= INT16_MAX);
-      cur_idx = (int16_t)i;
-      SET_FLAG(i);
-    }
-  }
-
-  // Now that we have read the undo info successfully, free the current undo
-  // info and use the info from the file.
-  u_blockfree(curbuf);
-  curbuf->b_u_oldhead = old_idx < 0 ? NULL : uhp_table[old_idx];
-  curbuf->b_u_newhead = new_idx < 0 ? NULL : uhp_table[new_idx];
-  curbuf->b_u_curhead = cur_idx < 0 ? NULL : uhp_table[cur_idx];
-  curbuf->b_u_line_ptr = line_ptr;
-  curbuf->b_u_line_lnum = line_lnum;
-  curbuf->b_u_line_colnr = line_colnr;
-  curbuf->b_u_numhead = num_head;
-  curbuf->b_u_seq_last = seq_last;
-  curbuf->b_u_seq_cur = seq_cur;
-  curbuf->b_u_time_cur = seq_time;
-  curbuf->b_u_save_nr_last = last_save_nr;
-  curbuf->b_u_save_nr_cur = last_save_nr;
-
-  curbuf->b_u_synced = true;
-  xfree(uhp_table);
-
-#ifdef U_DEBUG
-  for (int i = 0; i < num_head; i++) {
-    if (uhp_table_used[i] == 0) {
-      semsg("uhp_table entry %" PRId64 " not used, leaking memory", (int64_t)i);
-    }
-  }
-  xfree(uhp_table_used);
-  u_check(true);
-#endif
-
-  if (name != NULL) {
-    smsg(0, _("Finished reading undo file %s"), file_name);
-  }
-  goto theend;
-
-error:
-  xfree(line_ptr);
-  if (uhp_table != NULL) {
-    for (int i = 0; i < num_read_uhps; i++) {
-      if (uhp_table[i] != NULL) {
-        u_free_uhp(uhp_table[i]);
-      }
-    }
-    xfree(uhp_table);
-  }
-
-theend:
-  if (fp != NULL) {
-    fclose(fp);
-  }
-  if (file_name != name) {
-    xfree(file_name);
-  }
+  // Call the Rust implementation
+  rs_u_read_undo(name, hash, orig_name);
 }
 
 /// Writes a sequence of bytes to the undo file.
@@ -3594,4 +3303,103 @@ void nvim_undo_write_error(const char *file_name)
 void nvim_undo_writing(const char *file_name)
 {
   smsg(0, _("Writing undo file: %s"), file_name);
+}
+
+void nvim_undo_reading(const char *file_name)
+{
+  smsg(0, _("Reading undo file: %s"), file_name);
+}
+
+void nvim_undo_not_reading_owner_differs(const char *file_name)
+{
+  smsg(0, _("Not reading undo file, owner differs: %s"), file_name);
+}
+
+void nvim_undo_cannot_open_for_reading(const char *file_name)
+{
+  semsg(_("E822: Cannot open undo file for reading: %s"), file_name);
+}
+
+void nvim_undo_not_undo_file(const char *file_name)
+{
+  semsg(_("E823: Not an undo file: %s"), file_name);
+}
+
+void nvim_undo_incompatible_version(const char *file_name)
+{
+  semsg(_("E824: Incompatible undo file: %s"), file_name);
+}
+
+void nvim_undo_corruption_error(const char *what, const char *file_name)
+{
+  semsg(_("E825: Corrupted undo file (%s): %s"), what, file_name);
+}
+
+void nvim_undo_file_changed_warning(void)
+{
+  give_warning(_("File contents changed, cannot use undo info"), true);
+}
+
+void nvim_undo_finished_reading(const char *file_name)
+{
+  smsg(0, _("Finished reading undo file %s"), file_name);
+}
+
+FILE *nvim_os_fopen(const char *path, const char *mode)
+{
+  return os_fopen(path, mode);
+}
+
+void nvim_u_blockfree(buf_T *buf)
+{
+  u_blockfree(buf);
+}
+
+void nvim_u_free_uhp(u_header_T *uhp)
+{
+  u_free_uhp(uhp);
+}
+
+bool nvim_undo_check_owner(const char *orig_name, const char *file_name)
+{
+#ifdef UNIX
+  FileInfo file_info_orig;
+  FileInfo file_info_undo;
+  if (os_fileinfo(orig_name, &file_info_orig)
+      && os_fileinfo(file_name, &file_info_undo)
+      && file_info_orig.stat.st_uid != file_info_undo.stat.st_uid
+      && file_info_undo.stat.st_uid != getuid()) {
+    return false;
+  }
+#endif
+  return true;
+}
+
+u_header_T *nvim_unserialize_uhp(FILE *fp, const char *file_name)
+{
+  bufinfo_T bi = {
+    .bi_buf = curbuf,
+    .bi_fp = fp,
+  };
+  return unserialize_uhp(&bi, file_name);
+}
+
+int nvim_uhp_get_next_seq_for_swizzle(u_header_T *uhp)
+{
+  return uhp->uh_next.seq;
+}
+
+int nvim_uhp_get_prev_seq_for_swizzle(u_header_T *uhp)
+{
+  return uhp->uh_prev.seq;
+}
+
+int nvim_uhp_get_alt_next_seq_for_swizzle(u_header_T *uhp)
+{
+  return uhp->uh_alt_next.seq;
+}
+
+int nvim_uhp_get_alt_prev_seq_for_swizzle(u_header_T *uhp)
+{
+  return uhp->uh_alt_prev.seq;
 }

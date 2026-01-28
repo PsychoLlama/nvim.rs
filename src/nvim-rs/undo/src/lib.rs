@@ -3593,6 +3593,387 @@ pub unsafe extern "C" fn rs_u_write_undo(
     }
 }
 
+// =============================================================================
+// Phase 2: Complete Undo File Read Implementation
+// =============================================================================
+
+// Additional FFI declarations for u_read_undo
+extern "C" {
+    fn nvim_undo_reading(file_name: *const c_char);
+    fn nvim_undo_not_reading_owner_differs(file_name: *const c_char);
+    fn nvim_undo_cannot_open_for_reading(file_name: *const c_char);
+    fn nvim_undo_not_undo_file(file_name: *const c_char);
+    fn nvim_undo_incompatible_version(file_name: *const c_char);
+    fn nvim_undo_corruption_error(what: *const c_char, file_name: *const c_char);
+    fn nvim_undo_file_changed_warning();
+    fn nvim_undo_finished_reading(file_name: *const c_char);
+    fn nvim_os_fopen(path: *const c_char, mode: *const c_char) -> FileHandle;
+    fn nvim_u_blockfree(buf: BufHandle);
+    fn nvim_u_free_uhp(uhp: UHeaderHandle);
+    fn nvim_undo_check_owner(orig_name: *const c_char, file_name: *const c_char) -> bool;
+
+    // Deserialization helpers
+    fn nvim_unserialize_uhp(fp: FileHandle, file_name: *const c_char) -> UHeaderHandle;
+
+    // Get uh_seq from a header in seq mode (for pointer swizzling)
+    fn nvim_uhp_get_next_seq_for_swizzle(uhp: UHeaderHandle) -> c_int;
+    fn nvim_uhp_get_prev_seq_for_swizzle(uhp: UHeaderHandle) -> c_int;
+    fn nvim_uhp_get_alt_next_seq_for_swizzle(uhp: UHeaderHandle) -> c_int;
+    fn nvim_uhp_get_alt_prev_seq_for_swizzle(uhp: UHeaderHandle) -> c_int;
+}
+
+/// Read the undo tree from an undo file.
+///
+/// This is the Rust implementation of `u_read_undo`.
+///
+/// # Arguments
+///
+/// * `name` - Name of the undo file or NULL to generate from curbuf
+/// * `hash` - Hash value of the buffer text (UNDO_HASH_SIZE bytes)
+/// * `orig_name` - Original file name (for owner check on Unix)
+///
+/// # Safety
+///
+/// All handles must be valid. `hash` must point to UNDO_HASH_SIZE bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_read_undo(
+    name: *const c_char,
+    hash: *const u8,
+    orig_name: *const c_char,
+) {
+    let buf = nvim_get_curbuf();
+    let file_name: *mut c_char;
+    let mut uhp_table: *mut UHeaderHandle = ptr::null_mut();
+    let mut line_ptr: *mut c_char = ptr::null_mut();
+    let mut num_read_uhps: c_int = 0;
+
+    // Get the undo file name
+    if name.is_null() {
+        let ffname = nvim_buf_get_b_ffname(buf);
+        file_name = nvim_u_get_undo_file_name(ffname, true);
+        if file_name.is_null() {
+            return;
+        }
+
+        // For safety we only read an undo file if the owner is equal to the
+        // owner of the text file or equal to the current user.
+        if !nvim_undo_check_owner(orig_name, file_name) {
+            if nvim_get_p_verbose() > 0 {
+                nvim_undo_verbose_enter();
+                nvim_undo_not_reading_owner_differs(file_name);
+                nvim_undo_verbose_leave();
+            }
+            nvim_xfree(file_name as *mut c_void);
+            return;
+        }
+    } else {
+        file_name = name as *mut c_char;
+    }
+
+    if nvim_get_p_verbose() > 0 {
+        nvim_undo_verbose_enter();
+        nvim_undo_reading(file_name);
+        nvim_undo_verbose_leave();
+    }
+
+    let fp = nvim_os_fopen(file_name, c"r".as_ptr());
+    if fp.is_null() {
+        if !name.is_null() || nvim_get_p_verbose() > 0 {
+            nvim_undo_cannot_open_for_reading(file_name);
+        }
+        // goto error
+        cleanup_read_error(name, file_name, fp, line_ptr, uhp_table, num_read_uhps);
+        return;
+    }
+
+    // Read the undo file header.
+    let mut magic_buf = [0u8; UF_START_MAGIC_LEN];
+    if nvim_undo_fread(
+        magic_buf.as_mut_ptr() as *mut c_void,
+        UF_START_MAGIC_LEN,
+        1,
+        fp,
+    ) != 1
+        || magic_buf != *UF_START_MAGIC
+    {
+        nvim_undo_not_undo_file(file_name);
+        cleanup_read_error(name, file_name, fp, line_ptr, uhp_table, num_read_uhps);
+        return;
+    }
+
+    let version = undo_read_2c(fp);
+    if version != UF_VERSION as c_int {
+        nvim_undo_incompatible_version(file_name);
+        cleanup_read_error(name, file_name, fp, line_ptr, uhp_table, num_read_uhps);
+        return;
+    }
+
+    // Read hash
+    let mut read_hash = [0u8; UNDO_HASH_SIZE];
+    if !undo_read(fp, read_hash.as_mut_ptr(), UNDO_HASH_SIZE) {
+        nvim_undo_corruption_error(c"hash".as_ptr(), file_name);
+        cleanup_read_error(name, file_name, fp, line_ptr, uhp_table, num_read_uhps);
+        return;
+    }
+
+    let line_count = undo_read_4c(fp) as LinenrT;
+    let buf_line_count = nvim_buf_get_ml_line_count(buf);
+
+    // Compare hashes
+    let hash_slice = std::slice::from_raw_parts(hash, UNDO_HASH_SIZE);
+    if read_hash != *hash_slice || line_count != buf_line_count {
+        if nvim_get_p_verbose() > 0 || !name.is_null() {
+            if name.is_null() {
+                nvim_undo_verbose_enter();
+            }
+            nvim_undo_file_changed_warning();
+            if name.is_null() {
+                nvim_undo_verbose_leave();
+            }
+        }
+        cleanup_read_error(name, file_name, fp, line_ptr, uhp_table, num_read_uhps);
+        return;
+    }
+
+    // Read undo data for "U" command.
+    let str_len = undo_read_4c(fp);
+    if str_len < 0 {
+        cleanup_read_error(name, file_name, fp, line_ptr, uhp_table, num_read_uhps);
+        return;
+    }
+
+    if str_len > 0 {
+        line_ptr = undo_read_string(fp, str_len as usize);
+    }
+
+    let line_lnum = undo_read_4c(fp) as LinenrT;
+    let line_colnr = undo_read_4c(fp) as ColnrT;
+    if line_lnum < 0 || line_colnr < 0 {
+        nvim_undo_corruption_error(c"line lnum/col".as_ptr(), file_name);
+        cleanup_read_error(name, file_name, fp, line_ptr, uhp_table, num_read_uhps);
+        return;
+    }
+
+    // Begin general undo data
+    let old_header_seq = undo_read_4c(fp);
+    let new_header_seq = undo_read_4c(fp);
+    let cur_header_seq = undo_read_4c(fp);
+    let num_head = undo_read_4c(fp);
+    let seq_last = undo_read_4c(fp);
+    let seq_cur = undo_read_4c(fp);
+    let seq_time = undo_read_time(fp);
+
+    // Optional header fields.
+    let mut last_save_nr: c_int = 0;
+    loop {
+        let len = undo_read_byte(fp);
+        if len == 0 || len == -1 {
+            break;
+        }
+        let what = undo_read_byte(fp);
+        match what as u8 {
+            UF_LAST_SAVE_NR => {
+                last_save_nr = undo_read_4c(fp);
+            }
+            _ => {
+                // field not supported, skip
+                for _ in 0..len {
+                    undo_read_byte(fp);
+                }
+            }
+        }
+    }
+
+    // Allocate uhp_table to store the freshly created undo headers
+    if num_head > 0 {
+        let size = (num_head as usize).saturating_mul(std::mem::size_of::<UHeaderHandle>());
+        if size < usize::MAX {
+            uhp_table = nvim_xmallocz(size) as *mut UHeaderHandle;
+        }
+    }
+
+    // Read all undo headers
+    loop {
+        let c = undo_read_2c(fp);
+        if c != UF_HEADER_MAGIC as c_int {
+            if c != UF_HEADER_END_MAGIC as c_int {
+                nvim_undo_corruption_error(c"end marker".as_ptr(), file_name);
+                cleanup_read_error(name, file_name, fp, line_ptr, uhp_table, num_read_uhps);
+                return;
+            }
+            break;
+        }
+
+        if num_read_uhps >= num_head {
+            nvim_undo_corruption_error(c"num_head too small".as_ptr(), file_name);
+            cleanup_read_error(name, file_name, fp, line_ptr, uhp_table, num_read_uhps);
+            return;
+        }
+
+        let uhp = nvim_unserialize_uhp(fp, file_name);
+        if uhp.0.is_null() {
+            cleanup_read_error(name, file_name, fp, line_ptr, uhp_table, num_read_uhps);
+            return;
+        }
+        *uhp_table.add(num_read_uhps as usize) = uhp;
+        num_read_uhps += 1;
+    }
+
+    if num_read_uhps != num_head {
+        nvim_undo_corruption_error(c"num_head".as_ptr(), file_name);
+        cleanup_read_error(name, file_name, fp, line_ptr, uhp_table, num_read_uhps);
+        return;
+    }
+
+    // Swizzle sequence numbers into pointers
+    let mut old_idx: i16 = -1;
+    let mut new_idx: i16 = -1;
+    let mut cur_idx: i16 = -1;
+
+    for i in 0..num_head {
+        let uhp = *uhp_table.add(i as usize);
+        if uhp.0.is_null() {
+            continue;
+        }
+
+        // Check for duplicate sequence numbers
+        let this_seq = nvim_uhp_get_seq(uhp);
+        for j in 0..num_head {
+            if i != j {
+                let other = *uhp_table.add(j as usize);
+                if !other.0.is_null() && nvim_uhp_get_seq(other) == this_seq {
+                    nvim_undo_corruption_error(c"duplicate uh_seq".as_ptr(), file_name);
+                    cleanup_read_error(name, file_name, fp, line_ptr, uhp_table, num_read_uhps);
+                    return;
+                }
+            }
+        }
+
+        // Swizzle uh_next
+        let next_seq = nvim_uhp_get_next_seq_for_swizzle(uhp);
+        for j in 0..num_head {
+            let candidate = *uhp_table.add(j as usize);
+            if !candidate.0.is_null() && nvim_uhp_get_seq(candidate) == next_seq {
+                nvim_uhp_set_next(uhp, candidate);
+                break;
+            }
+        }
+
+        // Swizzle uh_prev
+        let prev_seq = nvim_uhp_get_prev_seq_for_swizzle(uhp);
+        for j in 0..num_head {
+            let candidate = *uhp_table.add(j as usize);
+            if !candidate.0.is_null() && nvim_uhp_get_seq(candidate) == prev_seq {
+                nvim_uhp_set_prev(uhp, candidate);
+                break;
+            }
+        }
+
+        // Swizzle uh_alt_next
+        let alt_next_seq = nvim_uhp_get_alt_next_seq_for_swizzle(uhp);
+        for j in 0..num_head {
+            let candidate = *uhp_table.add(j as usize);
+            if !candidate.0.is_null() && nvim_uhp_get_seq(candidate) == alt_next_seq {
+                nvim_uhp_set_alt_next(uhp, candidate);
+                break;
+            }
+        }
+
+        // Swizzle uh_alt_prev
+        let alt_prev_seq = nvim_uhp_get_alt_prev_seq_for_swizzle(uhp);
+        for j in 0..num_head {
+            let candidate = *uhp_table.add(j as usize);
+            if !candidate.0.is_null() && nvim_uhp_get_seq(candidate) == alt_prev_seq {
+                nvim_uhp_set_alt_prev(uhp, candidate);
+                break;
+            }
+        }
+
+        // Find indices for old, new, cur headers
+        if old_header_seq > 0 && old_idx < 0 && this_seq == old_header_seq {
+            old_idx = i as i16;
+        }
+        if new_header_seq > 0 && new_idx < 0 && this_seq == new_header_seq {
+            new_idx = i as i16;
+        }
+        if cur_header_seq > 0 && cur_idx < 0 && this_seq == cur_header_seq {
+            cur_idx = i as i16;
+        }
+    }
+
+    // Now that we have read the undo info successfully, free the current undo
+    // info and use the info from the file.
+    nvim_u_blockfree(buf);
+
+    let oldhead = if old_idx < 0 {
+        UHeaderHandle(ptr::null_mut())
+    } else {
+        *uhp_table.add(old_idx as usize)
+    };
+    let newhead = if new_idx < 0 {
+        UHeaderHandle(ptr::null_mut())
+    } else {
+        *uhp_table.add(new_idx as usize)
+    };
+    let curhead = if cur_idx < 0 {
+        UHeaderHandle(ptr::null_mut())
+    } else {
+        *uhp_table.add(cur_idx as usize)
+    };
+
+    nvim_buf_set_b_u_oldhead(buf, oldhead);
+    nvim_buf_set_b_u_newhead(buf, newhead);
+    nvim_buf_set_b_u_curhead(buf, curhead);
+    nvim_buf_set_b_u_line_ptr(buf, line_ptr);
+    nvim_buf_set_b_u_line_lnum(buf, line_lnum);
+    nvim_buf_set_b_u_line_colnr(buf, line_colnr);
+    nvim_buf_set_b_u_numhead(buf, num_head);
+    nvim_buf_set_b_u_seq_last(buf, seq_last);
+    nvim_buf_set_b_u_seq_cur(buf, seq_cur);
+    nvim_buf_set_b_u_time_cur(buf, seq_time);
+    nvim_buf_set_b_u_save_nr_last(buf, last_save_nr);
+    nvim_buf_set_b_u_save_nr_cur(buf, last_save_nr);
+    nvim_buf_set_b_u_synced(buf, true);
+
+    nvim_xfree(uhp_table as *mut c_void);
+
+    if !name.is_null() {
+        nvim_undo_finished_reading(file_name);
+    }
+
+    nvim_undo_fclose(fp);
+    if name.is_null() {
+        nvim_xfree(file_name as *mut c_void);
+    }
+}
+
+/// Cleanup helper for read_undo error paths.
+unsafe fn cleanup_read_error(
+    name: *const c_char,
+    file_name: *mut c_char,
+    fp: FileHandle,
+    line_ptr: *mut c_char,
+    uhp_table: *mut UHeaderHandle,
+    num_read_uhps: c_int,
+) {
+    nvim_xfree(line_ptr as *mut c_void);
+    if !uhp_table.is_null() {
+        for i in 0..num_read_uhps {
+            let uhp = *uhp_table.add(i as usize);
+            if !uhp.0.is_null() {
+                nvim_u_free_uhp(uhp);
+            }
+        }
+        nvim_xfree(uhp_table as *mut c_void);
+    }
+    if !fp.is_null() {
+        nvim_undo_fclose(fp);
+    }
+    if name.is_null() && !file_name.is_null() {
+        nvim_xfree(file_name as *mut c_void);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
