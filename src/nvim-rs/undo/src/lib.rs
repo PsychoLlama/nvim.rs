@@ -3334,6 +3334,265 @@ pub unsafe extern "C" fn rs_serialize_header(
     serialize_header(fp, buf, hash)
 }
 
+// =============================================================================
+// Phase 1: Complete Undo File Write Implementation
+// =============================================================================
+
+// Additional FFI declarations for u_write_undo
+extern "C" {
+    fn nvim_undo_cannot_write_no_dir();
+    fn nvim_undo_will_not_overwrite_cannot_read(file_name: *const c_char);
+    fn nvim_undo_will_not_overwrite_not_undo(file_name: *const c_char);
+    fn nvim_undo_skip_write_nothing();
+    fn nvim_undo_write_error(file_name: *const c_char);
+    fn nvim_undo_writing(file_name: *const c_char);
+}
+
+/// O_CREAT | O_WRONLY | O_EXCL | O_NOFOLLOW flags for open()
+const O_CREAT: c_int = 0o100;
+const O_WRONLY: c_int = 0o1;
+const O_EXCL: c_int = 0o200;
+const O_NOFOLLOW: c_int = 0o400000;
+const O_RDONLY: c_int = 0o0;
+
+/// Write the undo tree to an undo file.
+///
+/// This is the Rust implementation of `u_write_undo`.
+///
+/// # Arguments
+///
+/// * `name` - Name of the undo file or NULL to generate from buffer name
+/// * `forceit` - True for `:wundo!`, false otherwise
+/// * `buf` - Buffer for which undo file is written
+/// * `hash` - Hash value of the buffer text (UNDO_HASH_SIZE bytes)
+///
+/// # Safety
+///
+/// All handles must be valid. `hash` must point to UNDO_HASH_SIZE bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_write_undo(
+    name: *const c_char,
+    forceit: bool,
+    buf: BufHandle,
+    hash: *const u8,
+) {
+    let file_name: *mut c_char;
+    let mut write_ok = false;
+
+    // Get the undo file name
+    if name.is_null() {
+        let ffname = nvim_buf_get_b_ffname(buf);
+        file_name = nvim_u_get_undo_file_name(ffname, false);
+        if file_name.is_null() {
+            if nvim_get_p_verbose() > 0 {
+                nvim_undo_verbose_enter();
+                nvim_undo_cannot_write_no_dir();
+                nvim_undo_verbose_leave();
+            }
+            return;
+        }
+    } else {
+        file_name = name as *mut c_char;
+    }
+
+    // Decide about the permission to use for the undo file. If the buffer
+    // has a name use the permission of the original file. Otherwise only
+    // allow the user to access the undo file.
+    let ffname = nvim_buf_get_b_ffname(buf);
+    let mut perm: c_int = 0o600;
+    if !ffname.is_null() {
+        perm = nvim_os_getperm(ffname);
+        if perm < 0 {
+            perm = 0o600;
+        }
+    }
+
+    // Strip any sticky and executable bits.
+    perm &= 0o666;
+
+    // If the undo file already exists, verify that it actually is an undo
+    // file, and delete it.
+    if nvim_os_path_exists(file_name) {
+        if name.is_null() || !forceit {
+            // Check we can read it and it's an undo file.
+            let fd = nvim_os_open(file_name, O_RDONLY, 0);
+            if fd < 0 {
+                if !name.is_null() || nvim_get_p_verbose() > 0 {
+                    if name.is_null() {
+                        nvim_undo_verbose_enter();
+                    }
+                    nvim_undo_will_not_overwrite_cannot_read(file_name);
+                    if name.is_null() {
+                        nvim_undo_verbose_leave();
+                    }
+                }
+                if name.is_null() {
+                    nvim_xfree(file_name as *mut c_void);
+                }
+                return;
+            }
+
+            let mut mbuf = [0u8; UF_START_MAGIC_LEN];
+            let len = nvim_read_eintr(fd, mbuf.as_mut_ptr() as *mut c_void, UF_START_MAGIC_LEN);
+            nvim_os_close(fd);
+
+            if len < UF_START_MAGIC_LEN as isize || mbuf != *UF_START_MAGIC {
+                if !name.is_null() || nvim_get_p_verbose() > 0 {
+                    if name.is_null() {
+                        nvim_undo_verbose_enter();
+                    }
+                    nvim_undo_will_not_overwrite_not_undo(file_name);
+                    if name.is_null() {
+                        nvim_undo_verbose_leave();
+                    }
+                }
+                if name.is_null() {
+                    nvim_xfree(file_name as *mut c_void);
+                }
+                return;
+            }
+        }
+        nvim_os_remove(file_name);
+    }
+
+    // If there is no undo information at all, quit here after deleting any
+    // existing undo file.
+    let numhead = nvim_buf_get_b_u_numhead(buf);
+    let line_ptr = nvim_buf_get_b_u_line_ptr(buf);
+    if numhead == 0 && line_ptr.is_null() {
+        if nvim_get_p_verbose() > 0 {
+            nvim_undo_verbose_enter();
+            nvim_undo_skip_write_nothing();
+            nvim_undo_verbose_leave();
+        }
+        if name.is_null() {
+            nvim_xfree(file_name as *mut c_void);
+        }
+        return;
+    }
+
+    // Create the undo file
+    let fd = nvim_os_open(file_name, O_CREAT | O_WRONLY | O_EXCL | O_NOFOLLOW, perm);
+    if fd < 0 {
+        nvim_undo_semsg(
+            c"E828: Cannot open undo file for writing: %s".as_ptr(),
+            file_name,
+        );
+        if name.is_null() {
+            nvim_xfree(file_name as *mut c_void);
+        }
+        return;
+    }
+    nvim_os_setperm(file_name, perm);
+
+    if nvim_get_p_verbose() > 0 {
+        nvim_undo_verbose_enter();
+        nvim_undo_writing(file_name);
+        nvim_undo_verbose_leave();
+    }
+
+    // Try to set the group of the undo file same as the original file
+    if !ffname.is_null() {
+        let new_perm = nvim_undo_set_file_group(fd, ffname, file_name, perm);
+        if new_perm != perm {
+            nvim_os_setperm(file_name, new_perm);
+        }
+    }
+
+    let fp = nvim_fdopen(fd, c"w".as_ptr());
+    if fp.is_null() {
+        nvim_undo_semsg(
+            c"E828: Cannot open undo file for writing: %s".as_ptr(),
+            file_name,
+        );
+        nvim_os_close(fd);
+        nvim_os_remove(file_name);
+        if name.is_null() {
+            nvim_xfree(file_name as *mut c_void);
+        }
+        return;
+    }
+
+    // Undo must be synced.
+    nvim_u_sync(true);
+
+    // Write the header.
+    if !serialize_header(fp, buf, hash) {
+        nvim_undo_fclose(fp);
+        nvim_undo_write_error(file_name);
+        if name.is_null() {
+            nvim_xfree(file_name as *mut c_void);
+        }
+        return;
+    }
+
+    // Iteratively serialize UHPs and their UEPs from the top down.
+    let mark = nvim_inc_lastmark();
+    let mut uhp = nvim_buf_get_b_u_oldhead(buf);
+    while !uhp.0.is_null() {
+        // Serialize current UHP if we haven't seen it
+        if nvim_uhp_get_walk(uhp) != mark {
+            nvim_uhp_set_walk(uhp, mark);
+            if !serialize_uhp(fp, uhp) {
+                nvim_undo_fclose(fp);
+                nvim_undo_write_error(file_name);
+                if name.is_null() {
+                    nvim_xfree(file_name as *mut c_void);
+                }
+                return;
+            }
+        }
+
+        // Now walk through the tree - algorithm from undo_time().
+        let prev = nvim_uhp_get_prev(uhp);
+        if !prev.0.is_null() && nvim_uhp_get_walk(prev) != mark {
+            uhp = prev;
+        } else {
+            let alt_next = nvim_uhp_get_alt_next(uhp);
+            if !alt_next.0.is_null() && nvim_uhp_get_walk(alt_next) != mark {
+                uhp = alt_next;
+            } else {
+                let next = nvim_uhp_get_next(uhp);
+                let alt_prev = nvim_uhp_get_alt_prev(uhp);
+                if !next.0.is_null() && alt_prev.0.is_null() && nvim_uhp_get_walk(next) != mark {
+                    uhp = next;
+                } else if !alt_prev.0.is_null() {
+                    uhp = alt_prev;
+                } else {
+                    uhp = nvim_uhp_get_next(uhp);
+                }
+            }
+        }
+    }
+
+    // Write end magic
+    if undo_write_2(fp, UF_HEADER_END_MAGIC) {
+        write_ok = true;
+    }
+
+    // Fsync if p_fs is set
+    if nvim_get_p_fs() && nvim_undo_fflush(fp) == 0 && nvim_os_fsync(nvim_fileno(fp)) != 0 {
+        write_ok = false;
+    }
+
+    nvim_undo_fclose(fp);
+
+    if !write_ok {
+        nvim_undo_write_error(file_name);
+    }
+
+    // Copy ACL from original file
+    if !ffname.is_null() {
+        let acl = nvim_os_get_acl(ffname);
+        nvim_os_set_acl(file_name, acl);
+        nvim_os_free_acl(acl);
+    }
+
+    if name.is_null() {
+        nvim_xfree(file_name as *mut c_void);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

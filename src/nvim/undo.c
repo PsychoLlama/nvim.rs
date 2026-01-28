@@ -176,6 +176,7 @@ extern void rs_u_find_first_changed(void);
 extern u_header_T *rs_u_force_get_undo_header(buf_T *buf);
 extern void rs_u_undoline(void);
 extern void rs_undo_time(int step, bool sec, bool file, bool absolute);
+extern void rs_u_write_undo(const char *name, bool forceit, buf_T *buf, const uint8_t *hash);
 
 #include "undo.c.generated.h"
 
@@ -896,205 +897,8 @@ static void unserialize_visualinfo(bufinfo_T *bi, visualinfo_T *info)
 void u_write_undo(const char *const name, const bool forceit, buf_T *const buf, uint8_t *const hash)
   FUNC_ATTR_NONNULL_ARG(3, 4)
 {
-  char *file_name;
-#ifdef U_DEBUG
-  int headers_written = 0;
-#endif
-  FILE *fp = NULL;
-  bool write_ok = false;
-
-  if (name == NULL) {
-    file_name = u_get_undo_file_name(buf->b_ffname, false);
-    if (file_name == NULL) {
-      if (p_verbose > 0) {
-        verbose_enter();
-        smsg(0, "%s", _("Cannot write undo file in any directory in 'undodir'"));
-        verbose_leave();
-      }
-      return;
-    }
-  } else {
-    file_name = (char *)name;
-  }
-
-  // Decide about the permission to use for the undo file.  If the buffer
-  // has a name use the permission of the original file.  Otherwise only
-  // allow the user to access the undo file.
-  int perm = 0600;
-  if (buf->b_ffname != NULL) {
-    perm = os_getperm(buf->b_ffname);
-    if (perm < 0) {
-      perm = 0600;
-    }
-  }
-
-  // Strip any sticky and executable bits.
-  perm = perm & 0666;
-
-  // If the undo file already exists, verify that it actually is an undo
-  // file, and delete it.
-  if (os_path_exists(file_name)) {
-    if (name == NULL || !forceit) {
-      // Check we can read it and it's an undo file.
-      int fd = os_open(file_name, O_RDONLY, 0);
-      if (fd < 0) {
-        if (name != NULL || p_verbose > 0) {
-          if (name == NULL) {
-            verbose_enter();
-          }
-          smsg(0, _("Will not overwrite with undo file, cannot read: %s"),
-               file_name);
-          if (name == NULL) {
-            verbose_leave();
-          }
-        }
-        goto theend;
-      } else {
-        char mbuf[UF_START_MAGIC_LEN];
-        ssize_t len = read_eintr(fd, mbuf, UF_START_MAGIC_LEN);
-        close(fd);
-        if (len < UF_START_MAGIC_LEN
-            || memcmp(mbuf, UF_START_MAGIC, UF_START_MAGIC_LEN) != 0) {
-          if (name != NULL || p_verbose > 0) {
-            if (name == NULL) {
-              verbose_enter();
-            }
-            smsg(0, _("Will not overwrite, this is not an undo file: %s"),
-                 file_name);
-            if (name == NULL) {
-              verbose_leave();
-            }
-          }
-          goto theend;
-        }
-      }
-    }
-    os_remove(file_name);
-  }
-
-  // If there is no undo information at all, quit here after deleting any
-  // existing undo file.
-  if (buf->b_u_numhead == 0 && buf->b_u_line_ptr == NULL) {
-    if (p_verbose > 0) {
-      verb_msg(_("Skipping undo file write, nothing to undo"));
-    }
-    goto theend;
-  }
-
-  int fd = os_open(file_name, O_CREAT|O_WRONLY|O_EXCL|O_NOFOLLOW, perm);
-  if (fd < 0) {
-    semsg(_(e_not_open), file_name);
-    goto theend;
-  }
-  os_setperm(file_name, perm);
-  if (p_verbose > 0) {
-    verbose_enter();
-    smsg(0, _("Writing undo file: %s"), file_name);
-    verbose_leave();
-  }
-
-#ifdef U_DEBUG
-  // Check there is no problem in undo info before writing.
-  u_check(false);
-#endif
-
-#ifdef UNIX
-  // Try to set the group of the undo file same as the original file. If
-  // this fails, set the protection bits for the group same as the
-  // protection bits for others.
-  FileInfo file_info_old;
-  FileInfo file_info_new;
-  if (buf->b_ffname != NULL
-      && os_fileinfo(buf->b_ffname, &file_info_old)
-      && os_fileinfo(file_name, &file_info_new)
-      && file_info_old.stat.st_gid != file_info_new.stat.st_gid
-      && os_fchown(fd, (uv_uid_t)-1, (uv_gid_t)file_info_old.stat.st_gid)) {
-    os_setperm(file_name, (perm & 0707) | ((perm & 07) << 3));
-  }
-#endif
-
-  fp = fdopen(fd, "w");
-  if (fp == NULL) {
-    semsg(_(e_not_open), file_name);
-    close(fd);
-    os_remove(file_name);
-    goto theend;
-  }
-
-  // Undo must be synced.
-  u_sync(true);
-
-  // Write the header.
-  bufinfo_T bi = {
-    .bi_buf = buf,
-    .bi_fp = fp,
-  };
-  if (!serialize_header(&bi, hash)) {
-    goto write_error;
-  }
-
-  // Iteratively serialize UHPs and their UEPs from the top down.
-  int mark = ++lastmark;
-  u_header_T *uhp = buf->b_u_oldhead;
-  while (uhp != NULL) {
-    // Serialize current UHP if we haven't seen it
-    if (uhp->uh_walk != mark) {
-      uhp->uh_walk = mark;
-#ifdef U_DEBUG
-      headers_written++;
-#endif
-      if (!serialize_uhp(&bi, uhp)) {
-        goto write_error;
-      }
-    }
-
-    // Now walk through the tree - algorithm from undo_time().
-    if (uhp->uh_prev.ptr != NULL && uhp->uh_prev.ptr->uh_walk != mark) {
-      uhp = uhp->uh_prev.ptr;
-    } else if (uhp->uh_alt_next.ptr != NULL
-               && uhp->uh_alt_next.ptr->uh_walk != mark) {
-      uhp = uhp->uh_alt_next.ptr;
-    } else if (uhp->uh_next.ptr != NULL && uhp->uh_alt_prev.ptr == NULL
-               && uhp->uh_next.ptr->uh_walk != mark) {
-      uhp = uhp->uh_next.ptr;
-    } else if (uhp->uh_alt_prev.ptr != NULL) {
-      uhp = uhp->uh_alt_prev.ptr;
-    } else {
-      uhp = uhp->uh_next.ptr;
-    }
-  }
-
-  if (undo_write_bytes(&bi, (uintmax_t)UF_HEADER_END_MAGIC, 2)) {
-    write_ok = true;
-  }
-#ifdef U_DEBUG
-  if (headers_written != buf->b_u_numhead) {
-    semsg("Written %" PRId64 " headers, ...", (int64_t)headers_written);
-    semsg("... but numhead is %" PRId64, (int64_t)buf->b_u_numhead);
-  }
-#endif
-
-  if (p_fs && fflush(fp) == 0 && os_fsync(fd) != 0) {
-    write_ok = false;
-  }
-
-write_error:
-  fclose(fp);
-  if (!write_ok) {
-    semsg(_(e_write_error_in_undo_file_str), file_name);
-  }
-
-  if (buf->b_ffname != NULL) {
-    // For systems that support ACL: get the ACL from the original file.
-    vim_acl_T acl = os_get_acl(buf->b_ffname);
-    os_set_acl(file_name, acl);
-    os_free_acl(acl);
-  }
-
-theend:
-  if (file_name != name) {
-    xfree(file_name);
-  }
+  // Call the Rust implementation
+  rs_u_write_undo(name, forceit, buf, hash);
 }
 
 /// Loads the undo tree from an undo file.
@@ -3756,4 +3560,38 @@ u_header_T *nvim_u_force_get_undo_header(buf_T *buf)
 extmark_undo_vec_t *nvim_uhp_get_extmark(u_header_T *uhp)
 {
   return &uhp->uh_extmark;
+}
+
+// ============================================================================
+// Undo File I/O Message Functions (for Rust FFI)
+// ============================================================================
+
+void nvim_undo_cannot_write_no_dir(void)
+{
+  verb_msg(_("Cannot write undo file in any directory in 'undodir'"));
+}
+
+void nvim_undo_will_not_overwrite_cannot_read(const char *file_name)
+{
+  smsg(0, _("Will not overwrite with undo file, cannot read: %s"), file_name);
+}
+
+void nvim_undo_will_not_overwrite_not_undo(const char *file_name)
+{
+  smsg(0, _("Will not overwrite, this is not an undo file: %s"), file_name);
+}
+
+void nvim_undo_skip_write_nothing(void)
+{
+  verb_msg(_("Skipping undo file write, nothing to undo"));
+}
+
+void nvim_undo_write_error(const char *file_name)
+{
+  semsg(_(e_write_error_in_undo_file_str), file_name);
+}
+
+void nvim_undo_writing(const char *file_name)
+{
+  smsg(0, _("Writing undo file: %s"), file_name);
 }
