@@ -748,4 +748,83 @@ mod tests {
     fn test_tagstacksize_constant() {
         assert_eq!(TAGSTACKSIZE, 20);
     }
+
+    #[test]
+    fn test_rs_tagstacksize() {
+        assert_eq!(rs_tagstacksize(), 20);
+    }
+
+    #[test]
+    fn test_entry_has_user_data_null() {
+        unsafe {
+            assert!(!rs_tagstack_entry_has_user_data(ptr::null()));
+        }
+    }
+
+    #[test]
+    fn test_entry_has_mark_null() {
+        unsafe {
+            assert!(!rs_tagstack_entry_has_mark(ptr::null()));
+        }
+    }
+
+    #[test]
+    fn test_entry_setters_null() {
+        unsafe {
+            // These should not crash with null pointers
+            rs_tagstack_entry_set_tagname(ptr::null(), ptr::null_mut());
+            rs_tagstack_entry_set_match(ptr::null(), 5);
+            rs_tagstack_entry_set_fnum(ptr::null(), 1);
+            rs_tagstack_entry_set_user_data(ptr::null(), ptr::null_mut());
+            rs_tagstack_entry_set_mark_lnum(ptr::null(), 10);
+            rs_tagstack_entry_set_mark_col(ptr::null(), 5);
+            rs_tagstack_entry_set_mark_fnum(ptr::null(), 1);
+        }
+    }
+
+    #[test]
+    fn test_older_newer_count_null() {
+        unsafe {
+            assert_eq!(rs_tagstack_older_count(ptr::null()), 0);
+            assert_eq!(rs_tagstack_newer_count(ptr::null()), 0);
+        }
+    }
+
+    #[test]
+    fn test_at_idx_null() {
+        unsafe {
+            assert!(!rs_tagstack_at_idx(ptr::null(), 0));
+        }
+    }
+
+    #[test]
+    fn test_remaining_null() {
+        unsafe {
+            assert_eq!(rs_tagstack_remaining(ptr::null()), 0);
+        }
+    }
+
+    #[test]
+    fn test_set_len_idx_null() {
+        unsafe {
+            // Should not crash with null pointer
+            rs_tagstack_set_len_idx(ptr::null(), 5, 3);
+        }
+    }
+
+    #[test]
+    fn test_inc_dec_match_null() {
+        unsafe {
+            assert_eq!(rs_tagstack_entry_inc_match(ptr::null()), 0);
+            assert_eq!(rs_tagstack_entry_dec_match(ptr::null()), 0);
+        }
+    }
+
+    #[test]
+    fn test_truncate_null() {
+        unsafe {
+            // Should not crash with null pointer
+            rs_tagstack_truncate(ptr::null());
+        }
+    }
 }
