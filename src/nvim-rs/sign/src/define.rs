@@ -364,7 +364,9 @@ pub enum SignDefineError {
 /// # Safety
 /// All string pointers in `params` must be valid or null.
 #[no_mangle]
-pub unsafe extern "C" fn rs_sign_define_validate(params: *const SignDefineParams) -> SignDefineError {
+pub unsafe extern "C" fn rs_sign_define_validate(
+    params: *const SignDefineParams,
+) -> SignDefineError {
     if params.is_null() {
         return SignDefineError::MissingName;
     }

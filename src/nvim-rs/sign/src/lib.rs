@@ -32,6 +32,7 @@ use std::ffi::{c_char, c_int, c_void, CStr};
 
 pub mod commands;
 pub mod define;
+pub mod operations;
 pub mod place;
 pub mod query;
 pub mod remove;
@@ -40,6 +41,10 @@ pub mod text;
 
 // Re-exports
 pub use define::{SignDefineError, SignDefineParams, SignHighlights};
+pub use operations::{
+    SignCommand, SignJumpResult, SignJumpTarget, SignPlaceOpParams, SignPlaceOpResult,
+    SignUnplaceBatch,
+};
 pub use place::{
     SignDeleteParams, SignDeleteScope, SignLocation, SignPlaceParams, SignPlaceResult,
     MT_FLAG_DECOR_SIGNHL, MT_FLAG_DECOR_SIGNTEXT,

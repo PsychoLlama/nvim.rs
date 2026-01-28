@@ -390,16 +390,20 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::assertions_on_constants)]
     fn test_sign_namespace_constants() {
+        // Test GLOBAL namespace
         assert!(SignNamespace::GLOBAL.is_global);
         assert!(!SignNamespace::GLOBAL.is_all);
         assert!(!SignNamespace::GLOBAL.is_invalid);
         assert_eq!(SignNamespace::GLOBAL.id, 0);
 
+        // Test ALL namespace
         assert!(!SignNamespace::ALL.is_global);
         assert!(SignNamespace::ALL.is_all);
         assert!(!SignNamespace::ALL.is_invalid);
 
+        // Test INVALID namespace
         assert!(!SignNamespace::INVALID.is_global);
         assert!(!SignNamespace::INVALID.is_all);
         assert!(SignNamespace::INVALID.is_invalid);
