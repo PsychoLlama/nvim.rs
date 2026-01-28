@@ -18,6 +18,7 @@
 pub mod classify;
 pub mod handle;
 pub mod hidden;
+pub mod lookup;
 pub mod path;
 pub mod traverse;
 
@@ -28,6 +29,10 @@ pub use classify::{
 };
 pub use handle::VimMenuHandle;
 pub use hidden::rs_menu_is_hidden;
+pub use lookup::{
+    rs_count_menu_siblings, rs_find_menu_by_name, rs_find_menu_sibling, rs_menu_exists,
+    rs_menu_path_depth, MenuSearchResult,
+};
 pub use path::{rs_menu_name_equal, rs_menu_namelen, rs_menu_text, MenuTextResult};
 
 /// Hidden menu character (']')
