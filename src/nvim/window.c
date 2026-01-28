@@ -1393,6 +1393,56 @@ linenr_T nvim_win_get_botline(win_T *wp)
   return wp->w_botline;
 }
 
+/// Get the window's redraw type.
+int nvim_win_get_redr_type(win_T *wp)
+{
+  return wp ? wp->w_redr_type : 0;
+}
+
+/// Set the window's redraw type.
+void nvim_win_set_redr_type(win_T *wp, int val)
+{
+  if (wp) {
+    wp->w_redr_type = val;
+  }
+}
+
+/// Get the number of valid w_lines entries.
+int nvim_win_get_lines_valid(win_T *wp)
+{
+  return wp ? wp->w_lines_valid : 0;
+}
+
+// NOTE: nvim_win_set_lines_valid already defined earlier in this file
+
+/// Get the top line of the redraw range.
+linenr_T nvim_win_get_redraw_top(win_T *wp)
+{
+  return wp ? wp->w_redraw_top : 0;
+}
+
+/// Set the top line of the redraw range.
+void nvim_win_set_redraw_top(win_T *wp, linenr_T val)
+{
+  if (wp) {
+    wp->w_redraw_top = val;
+  }
+}
+
+/// Get the bottom line of the redraw range.
+linenr_T nvim_win_get_redraw_bot(win_T *wp)
+{
+  return wp ? wp->w_redraw_bot : 0;
+}
+
+/// Set the bottom line of the redraw range.
+void nvim_win_set_redraw_bot(win_T *wp, linenr_T val)
+{
+  if (wp) {
+    wp->w_redraw_bot = val;
+  }
+}
+
 /// Get the window's topfill (filler lines above topline).
 int nvim_win_get_topfill(win_T *wp)
 {

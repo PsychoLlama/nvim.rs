@@ -2453,6 +2453,24 @@ void set_must_redraw(int type)
   }
 }
 
+/// Get the current must_redraw value (Rust FFI).
+int nvim_get_must_redraw(void)
+{
+  return must_redraw;
+}
+
+/// Set the must_redraw value directly (Rust FFI).
+void nvim_set_must_redraw(int val)
+{
+  must_redraw = val;
+}
+
+/// Get the redraw_not_allowed flag (Rust FFI).
+int nvim_get_redraw_not_allowed(void)
+{
+  return redraw_not_allowed ? 1 : 0;
+}
+
 void screen_invalidate_highlights(void)
 {
   FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {

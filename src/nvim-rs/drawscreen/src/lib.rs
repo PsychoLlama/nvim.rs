@@ -7,6 +7,7 @@
 #![allow(dead_code)] // Some extern functions are pre-declared for future use
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::must_use_candidate)]
+#![allow(clippy::missing_safety_doc)] // FFI functions follow standard C calling conventions
 
 use std::ffi::{c_int, c_void};
 
@@ -577,6 +578,400 @@ pub extern "C" fn rs_status_redraw_curbuf() {
     status_redraw_curbuf_impl();
 }
 
+// =============================================================================
+// Phase 6: Screen Update Logic - Update Strategies and Redraw Management
+// =============================================================================
+
+/// Line number type (matches C's linenr_T which is typically int32_t).
+type LinenrT = i32;
+
+// Redraw type constants from screen.h
+/// UPD_NOT_VALID - redraw all windows for buffer changes
+pub const UPD_NOT_VALID: c_int = 30;
+/// UPD_SOME_VALID - redraw some windows (changed highlighting)
+pub const UPD_SOME_VALID: c_int = 25;
+/// UPD_INVERTED - redraw inverted area (selection)
+pub const UPD_INVERTED: c_int = 15;
+/// UPD_INVERTED_ALL - redraw all inverted areas
+pub const UPD_INVERTED_ALL: c_int = 10;
+/// UPD_REDRAW_TOP - redraw top of window
+pub const UPD_REDRAW_TOP: c_int = 5;
+/// UPD_CLEAR - clear screen and redraw all
+pub const UPD_CLEAR: c_int = 40;
+
+// Additional C accessor functions for window redraw state
+extern "C" {
+    fn nvim_win_get_redr_type(wp: WinHandle) -> c_int;
+    fn nvim_win_set_redr_type(wp: WinHandle, val: c_int);
+    fn nvim_win_get_lines_valid(wp: WinHandle) -> c_int;
+    fn nvim_win_set_lines_valid(wp: WinHandle, val: c_int);
+    fn nvim_win_get_redraw_top(wp: WinHandle) -> LinenrT;
+    fn nvim_win_set_redraw_top(wp: WinHandle, val: LinenrT);
+    fn nvim_win_get_redraw_bot(wp: WinHandle) -> LinenrT;
+    fn nvim_win_set_redraw_bot(wp: WinHandle, val: LinenrT);
+    fn nvim_win_get_topline(wp: WinHandle) -> LinenrT;
+    fn nvim_win_get_botline(wp: WinHandle) -> LinenrT;
+    fn nvim_get_must_redraw() -> c_int;
+    fn nvim_set_must_redraw(val: c_int);
+    fn nvim_get_redraw_not_allowed() -> c_int;
+    fn nvim_redraw_later(wp: WinHandle, redraw_type: c_int);
+}
+
+/// Get the redraw type for a window.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_get_redr_type(wp: WinHandle) -> c_int {
+    nvim_win_get_redr_type(wp)
+}
+
+/// Set the redraw type for a window.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_set_redr_type(wp: WinHandle, val: c_int) {
+    nvim_win_set_redr_type(wp, val);
+}
+
+/// Get the number of valid lines in a window.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_get_lines_valid(wp: WinHandle) -> c_int {
+    nvim_win_get_lines_valid(wp)
+}
+
+/// Set the number of valid lines in a window.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_set_lines_valid(wp: WinHandle, val: c_int) {
+    nvim_win_set_lines_valid(wp, val);
+}
+
+/// Get the top line for redraw range.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_get_redraw_top(wp: WinHandle) -> LinenrT {
+    nvim_win_get_redraw_top(wp)
+}
+
+/// Set the top line for redraw range.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_set_redraw_top(wp: WinHandle, val: LinenrT) {
+    nvim_win_set_redraw_top(wp, val);
+}
+
+/// Get the bottom line for redraw range.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_get_redraw_bot(wp: WinHandle) -> LinenrT {
+    nvim_win_get_redraw_bot(wp)
+}
+
+/// Set the bottom line for redraw range.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_set_redraw_bot(wp: WinHandle, val: LinenrT) {
+    nvim_win_set_redraw_bot(wp, val);
+}
+
+/// Get the top line of the window viewport.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_get_topline(wp: WinHandle) -> LinenrT {
+    nvim_win_get_topline(wp)
+}
+
+/// Get the bottom line of the window viewport.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_get_botline(wp: WinHandle) -> LinenrT {
+    nvim_win_get_botline(wp)
+}
+
+/// Get the global must_redraw flag.
+#[no_mangle]
+pub extern "C" fn rs_get_must_redraw() -> c_int {
+    unsafe { nvim_get_must_redraw() }
+}
+
+/// Set the global must_redraw flag.
+#[no_mangle]
+pub extern "C" fn rs_set_must_redraw(val: c_int) {
+    unsafe { nvim_set_must_redraw(val) };
+}
+
+/// Check if redraw is currently allowed.
+#[no_mangle]
+pub extern "C" fn rs_redraw_allowed() -> c_int {
+    unsafe { c_int::from(nvim_get_redraw_not_allowed() == 0) }
+}
+
+/// Set the must_redraw global only if type is higher.
+#[no_mangle]
+pub extern "C" fn rs_set_must_redraw_max(redraw_type: c_int) {
+    unsafe {
+        if nvim_get_redraw_not_allowed() == 0 {
+            let current = nvim_get_must_redraw();
+            if redraw_type > current {
+                nvim_set_must_redraw(redraw_type);
+            }
+        }
+    }
+}
+
+/// Check if a redraw type indicates the window needs full redraw.
+#[no_mangle]
+pub extern "C" fn rs_redraw_type_is_full(redraw_type: c_int) -> c_int {
+    c_int::from(redraw_type >= UPD_NOT_VALID)
+}
+
+/// Check if a redraw type indicates clear and redraw.
+#[no_mangle]
+pub extern "C" fn rs_redraw_type_is_clear(redraw_type: c_int) -> c_int {
+    c_int::from(redraw_type >= UPD_CLEAR)
+}
+
+/// Check if a line is within the window's visible range.
+#[no_mangle]
+pub unsafe extern "C" fn rs_line_in_window(wp: WinHandle, lnum: LinenrT) -> c_int {
+    let topline = nvim_win_get_topline(wp);
+    let botline = nvim_win_get_botline(wp);
+    c_int::from(lnum >= topline && lnum < botline)
+}
+
+/// Check if a line range overlaps with the window's visible range.
+#[no_mangle]
+pub unsafe extern "C" fn rs_range_in_window(wp: WinHandle, first: LinenrT, last: LinenrT) -> c_int {
+    let topline = nvim_win_get_topline(wp);
+    let botline = nvim_win_get_botline(wp);
+    c_int::from(last >= topline && first < botline)
+}
+
+/// Update the window's redraw range to include a specific line.
+///
+/// Similar to redrawWinline but just updates the range.
+#[no_mangle]
+pub unsafe extern "C" fn rs_update_redraw_line(wp: WinHandle, lnum: LinenrT) {
+    rs_update_redraw_range(wp, lnum, lnum);
+}
+
+/// Update the window's redraw range to include a range of lines.
+///
+/// Only updates if the range is visible in the window.
+#[no_mangle]
+pub unsafe extern "C" fn rs_update_redraw_range(wp: WinHandle, first: LinenrT, last: LinenrT) {
+    let topline = nvim_win_get_topline(wp);
+    let botline = nvim_win_get_botline(wp);
+
+    // Only update if range is visible
+    if last >= topline && first < botline {
+        let current_top = nvim_win_get_redraw_top(wp);
+        let current_bot = nvim_win_get_redraw_bot(wp);
+
+        // Update top of redraw range
+        if current_top == 0 || first < current_top {
+            nvim_win_set_redraw_top(wp, first);
+        }
+
+        // Update bottom of redraw range
+        if current_bot == 0 || last > current_bot {
+            nvim_win_set_redraw_bot(wp, last);
+        }
+
+        // Mark window for redraw
+        nvim_redraw_later(wp, UPD_VALID);
+    }
+}
+
+/// Reset the window's redraw range.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reset_redraw_range(wp: WinHandle) {
+    nvim_win_set_redraw_top(wp, 0);
+    nvim_win_set_redraw_bot(wp, 0);
+}
+
+/// Check if window has a pending redraw range.
+#[no_mangle]
+pub unsafe extern "C" fn rs_has_redraw_range(wp: WinHandle) -> c_int {
+    let top = nvim_win_get_redraw_top(wp);
+    let bot = nvim_win_get_redraw_bot(wp);
+    c_int::from(top != 0 || bot != 0)
+}
+
+/// Get the effective redraw range (clamped to visible area).
+///
+/// Returns the start line via out_first and end line via out_last.
+/// Returns 1 if there is a valid range, 0 otherwise.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_effective_redraw_range(
+    wp: WinHandle,
+    out_first: *mut LinenrT,
+    out_last: *mut LinenrT,
+) -> c_int {
+    let top = nvim_win_get_redraw_top(wp);
+    let bot = nvim_win_get_redraw_bot(wp);
+    let topline = nvim_win_get_topline(wp);
+    let botline = nvim_win_get_botline(wp);
+
+    if top == 0 && bot == 0 {
+        return 0;
+    }
+
+    // Clamp to visible range
+    let first = if top == 0 { topline } else { top.max(topline) };
+    let last = if bot == 0 {
+        botline - 1
+    } else {
+        bot.min(botline - 1)
+    };
+
+    if first <= last {
+        if !out_first.is_null() {
+            *out_first = first;
+        }
+        if !out_last.is_null() {
+            *out_last = last;
+        }
+        1
+    } else {
+        0
+    }
+}
+
+/// Calculate the number of lines in the redraw range.
+#[no_mangle]
+pub unsafe extern "C" fn rs_redraw_range_lines(wp: WinHandle) -> c_int {
+    let mut first: LinenrT = 0;
+    let mut last: LinenrT = 0;
+
+    if rs_get_effective_redraw_range(wp, &raw mut first, &raw mut last) != 0 {
+        (last - first + 1) as c_int
+    } else {
+        0
+    }
+}
+
+/// Invalidate the window's line validity.
+///
+/// This is called when something changes that requires redrawing lines
+/// even if they were previously marked as valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_invalidate_lines_valid(wp: WinHandle) {
+    nvim_win_set_lines_valid(wp, 0);
+}
+
+/// Check if window needs any redrawing.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_needs_redraw(wp: WinHandle) -> c_int {
+    let redr_type = nvim_win_get_redr_type(wp);
+    c_int::from(redr_type != 0)
+}
+
+/// Check if window needs full redraw (not just partial).
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_needs_full_redraw(wp: WinHandle) -> c_int {
+    let redr_type = nvim_win_get_redr_type(wp);
+    c_int::from(redr_type >= UPD_NOT_VALID)
+}
+
+/// Compare two redraw types and return the higher one.
+#[no_mangle]
+pub extern "C" fn rs_max_redraw_type(type1: c_int, type2: c_int) -> c_int {
+    type1.max(type2)
+}
+
+/// Check if redraw type1 subsumes type2.
+///
+/// Returns true if satisfying type1 would also satisfy type2.
+#[no_mangle]
+pub extern "C" fn rs_redraw_type_subsumes(type1: c_int, type2: c_int) -> c_int {
+    c_int::from(type1 >= type2)
+}
+
+// =============================================================================
+// Scroll Region Helpers
+// =============================================================================
+
+/// Calculate the number of lines that can be scrolled.
+///
+/// Returns the number of valid lines that can be reused after scrolling.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // const extern "C" fn is unstable
+pub extern "C" fn rs_scroll_reusable_lines(
+    _wp: WinHandle,
+    old_topline: LinenrT,
+    new_topline: LinenrT,
+    win_height: c_int,
+) -> c_int {
+    let scroll_amount = new_topline - old_topline;
+
+    if scroll_amount == 0 {
+        // No scroll
+        return win_height;
+    }
+
+    let abs_scroll = scroll_amount.abs() as c_int;
+
+    if abs_scroll >= win_height {
+        // Scrolled more than window height - no reusable lines
+        0
+    } else {
+        // Can reuse (win_height - abs_scroll) lines
+        win_height - abs_scroll
+    }
+}
+
+/// Check if a scroll operation would be beneficial.
+///
+/// Returns true if scrolling would preserve more lines than it invalidates.
+#[no_mangle]
+pub extern "C" fn rs_scroll_is_beneficial(scroll_amount: c_int, win_height: c_int) -> c_int {
+    // Scrolling is beneficial if we preserve more than half the lines
+    let abs_scroll = scroll_amount.abs();
+    c_int::from(abs_scroll > 0 && abs_scroll < win_height / 2)
+}
+
+/// Calculate source row for a scroll copy operation.
+///
+/// Given a destination row and scroll delta, returns the source row.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // const extern "C" fn is unstable
+pub extern "C" fn rs_scroll_source_row(dest_row: c_int, scroll_delta: c_int) -> c_int {
+    dest_row + scroll_delta
+}
+
+/// Check if a row is valid for scroll copy from source.
+#[no_mangle]
+pub extern "C" fn rs_scroll_row_valid(
+    source_row: c_int,
+    first_row: c_int,
+    last_row: c_int,
+) -> c_int {
+    c_int::from(source_row >= first_row && source_row < last_row)
+}
+
+/// Calculate the scroll region bounds.
+///
+/// Returns start_row and end_row for the scroll region.
+///
+/// # Safety
+/// Caller must ensure out_start and out_end are valid pointers (or null).
+#[no_mangle]
+pub unsafe extern "C" fn rs_calc_scroll_region(
+    win_row: c_int,
+    win_height: c_int,
+    scroll_delta: c_int,
+    out_start: *mut c_int,
+    out_end: *mut c_int,
+) {
+    if scroll_delta > 0 {
+        // Scrolling up - copy from below
+        if !out_start.is_null() {
+            *out_start = win_row + scroll_delta;
+        }
+        if !out_end.is_null() {
+            *out_end = win_row + win_height;
+        }
+    } else {
+        // Scrolling down - copy from above
+        if !out_start.is_null() {
+            *out_start = win_row;
+        }
+        if !out_end.is_null() {
+            *out_end = win_row + win_height + scroll_delta;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -651,5 +1046,96 @@ mod tests {
             std::mem::size_of::<WindowCorner>(),
             std::mem::size_of::<c_int>()
         );
+    }
+
+    // Phase 6: Screen Update Logic tests
+
+    #[test]
+    #[allow(clippy::assertions_on_constants)]
+    fn test_redraw_type_constants() {
+        // Verify redraw type constants have correct ordering
+        assert!(UPD_REDRAW_TOP < UPD_INVERTED_ALL);
+        assert!(UPD_INVERTED_ALL < UPD_INVERTED);
+        assert!(UPD_INVERTED < UPD_VALID);
+        assert!(UPD_VALID < UPD_SOME_VALID);
+        assert!(UPD_SOME_VALID < UPD_NOT_VALID);
+        assert!(UPD_NOT_VALID < UPD_CLEAR);
+    }
+
+    #[test]
+    fn test_redraw_type_is_full() {
+        assert_eq!(rs_redraw_type_is_full(UPD_VALID), 0);
+        assert_eq!(rs_redraw_type_is_full(UPD_SOME_VALID), 0);
+        assert_eq!(rs_redraw_type_is_full(UPD_NOT_VALID), 1);
+        assert_eq!(rs_redraw_type_is_full(UPD_CLEAR), 1);
+    }
+
+    #[test]
+    fn test_redraw_type_is_clear() {
+        assert_eq!(rs_redraw_type_is_clear(UPD_NOT_VALID), 0);
+        assert_eq!(rs_redraw_type_is_clear(UPD_CLEAR), 1);
+        assert_eq!(rs_redraw_type_is_clear(UPD_CLEAR + 1), 1);
+    }
+
+    #[test]
+    fn test_max_redraw_type() {
+        assert_eq!(rs_max_redraw_type(UPD_VALID, UPD_NOT_VALID), UPD_NOT_VALID);
+        assert_eq!(rs_max_redraw_type(UPD_NOT_VALID, UPD_VALID), UPD_NOT_VALID);
+        assert_eq!(rs_max_redraw_type(UPD_CLEAR, UPD_NOT_VALID), UPD_CLEAR);
+    }
+
+    #[test]
+    fn test_redraw_type_subsumes() {
+        assert_eq!(rs_redraw_type_subsumes(UPD_CLEAR, UPD_NOT_VALID), 1);
+        assert_eq!(rs_redraw_type_subsumes(UPD_NOT_VALID, UPD_VALID), 1);
+        assert_eq!(rs_redraw_type_subsumes(UPD_VALID, UPD_NOT_VALID), 0);
+    }
+
+    #[test]
+    fn test_scroll_is_beneficial() {
+        // Scrolling 1 line in 24 line window is beneficial
+        assert_eq!(rs_scroll_is_beneficial(1, 24), 1);
+        // Scrolling 10 lines in 24 line window is beneficial
+        assert_eq!(rs_scroll_is_beneficial(10, 24), 1);
+        // Scrolling 12+ lines in 24 line window is not beneficial
+        assert_eq!(rs_scroll_is_beneficial(12, 24), 0);
+        // Scrolling 0 lines is not beneficial
+        assert_eq!(rs_scroll_is_beneficial(0, 24), 0);
+        // Negative scroll also works
+        assert_eq!(rs_scroll_is_beneficial(-5, 24), 1);
+    }
+
+    #[test]
+    fn test_scroll_source_row() {
+        assert_eq!(rs_scroll_source_row(10, 5), 15);
+        assert_eq!(rs_scroll_source_row(10, -5), 5);
+        assert_eq!(rs_scroll_source_row(0, 3), 3);
+    }
+
+    #[test]
+    fn test_scroll_row_valid() {
+        assert_eq!(rs_scroll_row_valid(5, 0, 10), 1);
+        assert_eq!(rs_scroll_row_valid(0, 0, 10), 1);
+        assert_eq!(rs_scroll_row_valid(9, 0, 10), 1);
+        assert_eq!(rs_scroll_row_valid(10, 0, 10), 0); // at boundary
+        assert_eq!(rs_scroll_row_valid(-1, 0, 10), 0); // below range
+    }
+
+    #[test]
+    fn test_calc_scroll_region() {
+        let mut start: c_int = 0;
+        let mut end: c_int = 0;
+
+        unsafe {
+            // Scrolling up (positive delta)
+            rs_calc_scroll_region(5, 20, 3, &raw mut start, &raw mut end);
+            assert_eq!(start, 8); // win_row + scroll_delta
+            assert_eq!(end, 25); // win_row + win_height
+
+            // Scrolling down (negative delta)
+            rs_calc_scroll_region(5, 20, -3, &raw mut start, &raw mut end);
+            assert_eq!(start, 5); // win_row
+            assert_eq!(end, 22); // win_row + win_height + scroll_delta
+        }
     }
 }
