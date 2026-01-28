@@ -257,6 +257,191 @@ pub const SIGN_DEF_ARG_NUMHL: c_int = 6;
 pub const SIGN_DEF_ARG_PRIORITY: c_int = 7;
 
 // =============================================================================
+// Sign Define Command Arguments
+// =============================================================================
+
+/// Arguments for :sign define command
+#[repr(C)]
+#[derive(Debug, Clone)]
+pub struct SignDefineArgs {
+    /// Sign name (required)
+    pub name: *const c_char,
+    /// Icon path (optional)
+    pub icon: *const c_char,
+    /// Sign text (optional)
+    pub text: *const c_char,
+    /// Line highlight group (optional)
+    pub linehl: *const c_char,
+    /// Text highlight group (optional)
+    pub texthl: *const c_char,
+    /// Cursorline highlight group (optional)
+    pub culhl: *const c_char,
+    /// Number column highlight group (optional)
+    pub numhl: *const c_char,
+    /// Priority (-1 for default)
+    pub priority: c_int,
+}
+
+impl Default for SignDefineArgs {
+    fn default() -> Self {
+        Self {
+            name: std::ptr::null(),
+            icon: std::ptr::null(),
+            text: std::ptr::null(),
+            linehl: std::ptr::null(),
+            texthl: std::ptr::null(),
+            culhl: std::ptr::null(),
+            numhl: std::ptr::null(),
+            priority: -1,
+        }
+    }
+}
+
+/// Create default sign define arguments.
+#[no_mangle]
+pub extern "C" fn rs_sign_define_args_default() -> SignDefineArgs {
+    SignDefineArgs::default()
+}
+
+/// Check if sign define arguments have a valid name.
+///
+/// # Safety
+/// `args.name` must be null or a valid null-terminated C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_define_args_has_name(args: &SignDefineArgs) -> bool {
+    if args.name.is_null() {
+        return false;
+    }
+    *args.name.cast::<u8>() != 0
+}
+
+/// Check if sign define arguments specify any visual attributes.
+#[no_mangle]
+pub extern "C" fn rs_sign_define_args_has_attrs(args: &SignDefineArgs) -> bool {
+    !args.icon.is_null()
+        || !args.text.is_null()
+        || !args.linehl.is_null()
+        || !args.texthl.is_null()
+        || !args.culhl.is_null()
+        || !args.numhl.is_null()
+        || args.priority != -1
+}
+
+// =============================================================================
+// Command Execution Results
+// =============================================================================
+
+/// Result of a sign command execution
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignCmdResult {
+    /// Success
+    Ok = 0,
+    /// Invalid command index
+    InvalidCmd = 1,
+    /// Missing required argument
+    MissingArg = 2,
+    /// Invalid argument value
+    InvalidArg = 3,
+    /// Sign not found
+    SignNotFound = 4,
+    /// Buffer not found
+    BufferNotFound = 5,
+    /// Operation failed
+    Failed = 6,
+}
+
+/// Convert sign command result to return code.
+///
+/// Returns 0 for success, -1 for failure (matches Vim convention).
+#[no_mangle]
+pub extern "C" fn rs_sign_cmd_result_to_rc(result: SignCmdResult) -> c_int {
+    if result == SignCmdResult::Ok {
+        0
+    } else {
+        -1
+    }
+}
+
+// =============================================================================
+// Argument Validation Helpers
+// =============================================================================
+
+/// Validate ID argument for sign commands.
+///
+/// Returns true if valid:
+/// - For place: id > 0 (required) or id == 0 (auto-assign)
+/// - For unplace: any id value
+/// - For jump: id > 0 (required)
+#[no_mangle]
+pub extern "C" fn rs_sign_validate_id(id: c_int, cmd: c_int) -> bool {
+    match SignCmd::from_int(cmd) {
+        Some(SignCmd::Place) => id >= 0,
+        Some(SignCmd::Jump) => id > 0,
+        // Unplace and others accept any ID
+        _ => true,
+    }
+}
+
+/// Validate line number argument for sign commands.
+///
+/// Returns true if valid:
+/// - For place: lnum > 0 for new placement, or lnum == 0 for modify
+/// - For unplace: lnum >= -1 (all lines or specific)
+/// - For jump: lnum not used
+#[no_mangle]
+pub extern "C" fn rs_sign_validate_lnum(lnum: LinenrT, cmd: c_int) -> bool {
+    match SignCmd::from_int(cmd) {
+        Some(SignCmd::Place) => lnum >= 0,
+        Some(SignCmd::Unplace) => lnum >= -1,
+        _ => true,
+    }
+}
+
+// =============================================================================
+// Command Output Formatting
+// =============================================================================
+
+/// Format mode for sign listing.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignListFormat {
+    /// List all defined signs
+    AllDefined = 0,
+    /// List a specific defined sign
+    SpecificDefined = 1,
+    /// List all placed signs
+    AllPlaced = 2,
+    /// List placed signs in a buffer
+    PlacedInBuffer = 3,
+    /// List placed signs in a group
+    PlacedInGroup = 4,
+}
+
+/// Determine the list format based on command arguments.
+#[no_mangle]
+pub extern "C" fn rs_sign_list_format(
+    cmd: c_int,
+    has_name: c_int,
+    has_buf: c_int,
+    has_group: c_int,
+) -> SignListFormat {
+    if cmd == SignCmd::List as c_int {
+        if has_name != 0 {
+            SignListFormat::SpecificDefined
+        } else {
+            SignListFormat::AllDefined
+        }
+    } else if has_buf != 0 {
+        SignListFormat::PlacedInBuffer
+    } else if has_group != 0 {
+        SignListFormat::PlacedInGroup
+    } else {
+        SignListFormat::AllPlaced
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -316,5 +501,98 @@ mod tests {
         assert_eq!(rs_sign_unplace_mode(0), SignUnplaceMode::All);
         assert_eq!(rs_sign_unplace_mode(1), SignUnplaceMode::ById);
         assert_eq!(rs_sign_unplace_mode(100), SignUnplaceMode::ById);
+    }
+
+    #[test]
+    fn test_sign_define_args_default() {
+        let args = rs_sign_define_args_default();
+        assert!(args.name.is_null());
+        assert!(args.icon.is_null());
+        assert!(args.text.is_null());
+        assert!(args.linehl.is_null());
+        assert!(args.texthl.is_null());
+        assert!(args.culhl.is_null());
+        assert!(args.numhl.is_null());
+        assert_eq!(args.priority, -1);
+    }
+
+    #[test]
+    fn test_sign_define_args_has_attrs() {
+        let default = rs_sign_define_args_default();
+        assert!(!rs_sign_define_args_has_attrs(&default));
+
+        let with_prio = SignDefineArgs {
+            priority: 10,
+            ..Default::default()
+        };
+        assert!(rs_sign_define_args_has_attrs(&with_prio));
+    }
+
+    #[test]
+    fn test_sign_cmd_result_to_rc() {
+        assert_eq!(rs_sign_cmd_result_to_rc(SignCmdResult::Ok), 0);
+        assert_eq!(rs_sign_cmd_result_to_rc(SignCmdResult::InvalidCmd), -1);
+        assert_eq!(rs_sign_cmd_result_to_rc(SignCmdResult::MissingArg), -1);
+        assert_eq!(rs_sign_cmd_result_to_rc(SignCmdResult::Failed), -1);
+    }
+
+    #[test]
+    fn test_sign_validate_id() {
+        // Place: id >= 0
+        assert!(rs_sign_validate_id(0, SignCmd::Place as c_int));
+        assert!(rs_sign_validate_id(1, SignCmd::Place as c_int));
+        assert!(!rs_sign_validate_id(-1, SignCmd::Place as c_int));
+
+        // Unplace: any id
+        assert!(rs_sign_validate_id(-1, SignCmd::Unplace as c_int));
+        assert!(rs_sign_validate_id(0, SignCmd::Unplace as c_int));
+        assert!(rs_sign_validate_id(1, SignCmd::Unplace as c_int));
+
+        // Jump: id > 0
+        assert!(!rs_sign_validate_id(-1, SignCmd::Jump as c_int));
+        assert!(!rs_sign_validate_id(0, SignCmd::Jump as c_int));
+        assert!(rs_sign_validate_id(1, SignCmd::Jump as c_int));
+    }
+
+    #[test]
+    fn test_sign_validate_lnum() {
+        // Place: lnum >= 0
+        assert!(rs_sign_validate_lnum(0, SignCmd::Place as c_int));
+        assert!(rs_sign_validate_lnum(1, SignCmd::Place as c_int));
+        assert!(!rs_sign_validate_lnum(-1, SignCmd::Place as c_int));
+
+        // Unplace: lnum >= -1
+        assert!(rs_sign_validate_lnum(-1, SignCmd::Unplace as c_int));
+        assert!(rs_sign_validate_lnum(0, SignCmd::Unplace as c_int));
+        assert!(rs_sign_validate_lnum(1, SignCmd::Unplace as c_int));
+    }
+
+    #[test]
+    fn test_sign_list_format() {
+        // List command with name
+        assert_eq!(
+            rs_sign_list_format(SignCmd::List as c_int, 1, 0, 0),
+            SignListFormat::SpecificDefined
+        );
+        // List command without name
+        assert_eq!(
+            rs_sign_list_format(SignCmd::List as c_int, 0, 0, 0),
+            SignListFormat::AllDefined
+        );
+        // Place command with buffer
+        assert_eq!(
+            rs_sign_list_format(SignCmd::Place as c_int, 0, 1, 0),
+            SignListFormat::PlacedInBuffer
+        );
+        // Place command with group
+        assert_eq!(
+            rs_sign_list_format(SignCmd::Place as c_int, 0, 0, 1),
+            SignListFormat::PlacedInGroup
+        );
+        // Place command no filter
+        assert_eq!(
+            rs_sign_list_format(SignCmd::Place as c_int, 0, 0, 0),
+            SignListFormat::AllPlaced
+        );
     }
 }
