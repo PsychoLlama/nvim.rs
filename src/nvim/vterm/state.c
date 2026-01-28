@@ -2692,3 +2692,75 @@ void nvim_vterm_state_set_combine_pos(VTermState *state, VTermPos pos)
 {
   state->combine_pos = pos;
 }
+
+// --- Lineinfo scroll helpers ---
+
+void nvim_vterm_state_lineinfo_scroll_down(VTermState *state, int start_row, int end_row,
+                                           int count)
+{
+  // Scroll lineinfo down by `count` rows (shift entries up in memory)
+  int height = end_row - start_row - count;
+  if (height > 0) {
+    memmove(state->lineinfo + start_row,
+            state->lineinfo + start_row + count,
+            (size_t)height * sizeof(state->lineinfo[0]));
+  }
+  // Clear the new rows at the bottom
+  for (int row = end_row - count; row < end_row; row++) {
+    state->lineinfo[row] = (VTermLineInfo){ 0 };
+  }
+}
+
+void nvim_vterm_state_lineinfo_scroll_up(VTermState *state, int start_row, int end_row, int count)
+{
+  // Scroll lineinfo up by `count` rows (shift entries down in memory)
+  int height = end_row - start_row - count;
+  if (height > 0) {
+    memmove(state->lineinfo + start_row + count,
+            state->lineinfo + start_row,
+            (size_t)height * sizeof(state->lineinfo[0]));
+  }
+  // Clear the new rows at the top
+  for (int row = start_row; row < start_row + count; row++) {
+    state->lineinfo[row] = (VTermLineInfo){ 0 };
+  }
+}
+
+void nvim_vterm_state_lineinfo_clear(VTermState *state, int row)
+{
+  state->lineinfo[row] = (VTermLineInfo){ 0 };
+}
+
+// --- Tabstop accessors ---
+
+uint8_t *nvim_vterm_state_get_tabstops(VTermState *state)
+{
+  return state->tabstops;
+}
+
+int nvim_vterm_state_is_col_tabstop(const VTermState *state, int col)
+{
+  uint8_t mask = (uint8_t)(1 << (col & 7));
+  return state->tabstops[col >> 3] & mask;
+}
+
+void nvim_vterm_state_set_col_tabstop(VTermState *state, int col)
+{
+  uint8_t mask = (uint8_t)(1 << (col & 7));
+  state->tabstops[col >> 3] |= mask;
+}
+
+void nvim_vterm_state_clear_col_tabstop(VTermState *state, int col)
+{
+  uint8_t mask = (uint8_t)(1 << (col & 7));
+  state->tabstops[col >> 3] &= ~mask;
+}
+
+// --- VTerm scroll_rect helper ---
+
+void nvim_vterm_scroll_rect(VTermRect rect, int downward, int rightward,
+                            int (*moverect)(VTermRect dest, VTermRect src, void *user),
+                            int (*erase)(VTermRect rect, int selective, void *user), void *user)
+{
+  vterm_scroll_rect(rect, downward, rightward, moverect, erase, user);
+}

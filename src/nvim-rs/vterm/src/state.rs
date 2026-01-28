@@ -1256,6 +1256,36 @@ extern "C" {
     fn nvim_vterm_state_get_combine_pos(state: VTermStateHandle) -> VTermPos;
     fn nvim_vterm_state_set_combine_pos(state: VTermStateHandle, pos: VTermPos);
 
+    // Lineinfo scroll helpers
+    fn nvim_vterm_state_lineinfo_scroll_down(
+        state: VTermStateHandle,
+        start_row: c_int,
+        end_row: c_int,
+        count: c_int,
+    );
+    fn nvim_vterm_state_lineinfo_scroll_up(
+        state: VTermStateHandle,
+        start_row: c_int,
+        end_row: c_int,
+        count: c_int,
+    );
+    fn nvim_vterm_state_lineinfo_clear(state: VTermStateHandle, row: c_int);
+
+    // Tabstop accessors
+    fn nvim_vterm_state_is_col_tabstop(state: VTermStateHandle, col: c_int) -> c_int;
+    fn nvim_vterm_state_set_col_tabstop(state: VTermStateHandle, col: c_int);
+    fn nvim_vterm_state_clear_col_tabstop(state: VTermStateHandle, col: c_int);
+
+    // VTerm scroll_rect helper
+    fn nvim_vterm_scroll_rect(
+        rect: VTermRect,
+        downward: c_int,
+        rightward: c_int,
+        moverect: Option<StateMoverectCallback>,
+        erase: Option<StateEraseCallback>,
+        user: *mut c_void,
+    );
+
     // VTerm output functions (existing C functions)
     fn vterm_push_output_sprintf_ctrl(vt: *mut c_void, c1: u8, fmt: *const i8, ...);
 }
@@ -1362,8 +1392,14 @@ pub unsafe extern "C" fn rs_vterm_state_cursor_moveto(
 }
 
 /// Scroll the terminal region.
-/// `downward`: positive = scroll down (new lines at top), negative = scroll up
-/// `rightward`: positive = scroll right (new columns at left), negative = scroll left
+/// `downward`: positive = scroll down (content moves up, new lines at bottom)
+/// `rightward`: positive = scroll right (content moves left, new columns at right)
+///
+/// This is the full scroll implementation that:
+/// 1. Clamps scroll amounts to region bounds
+/// 2. Updates lineinfo for full-width scrolls
+/// 3. Calls scrollrect callback if available
+/// 4. Falls back to moverect/erase if scrollrect not handled
 ///
 /// # Safety
 /// The state handle must be valid.
@@ -1374,40 +1410,151 @@ pub unsafe extern "C" fn rs_vterm_state_scroll(
     downward: c_int,
     rightward: c_int,
 ) {
-    if state.is_null() {
+    if state.is_null() || (downward == 0 && rightward == 0) {
         return;
     }
 
-    // Handle line continuations for vertical scrolling
-    if downward != 0 {
-        let cols = nvim_vterm_state_get_cols(state);
+    // Clamp scroll amounts to region bounds
+    let rows = rect.end_row - rect.start_row;
+    let downward = downward.clamp(-rows, rows);
 
-        // Check if this is a full-width scroll region
-        if rect.start_col == 0 && rect.end_col == cols {
-            // Mark affected lines for continuation updates
-            if downward > 0 {
-                // Scrolling down - lines moving up lose their continuation status
-                for row in rect.start_row..(rect.start_row + downward).min(rect.end_row) {
-                    nvim_vterm_state_set_lineinfo_continuation(state, row, 0);
-                }
-            } else {
-                // Scrolling up - lines moving down
-                let up_count = -downward;
-                for row in (rect.end_row - up_count).max(rect.start_row)..rect.end_row {
-                    nvim_vterm_state_set_lineinfo_continuation(state, row, 0);
-                }
-            }
+    let cols = rect.end_col - rect.start_col;
+    let rightward = rightward.clamp(-cols, cols);
+
+    // Update lineinfo if full-width vertical scroll
+    let state_cols = nvim_vterm_state_get_cols(state);
+    if rect.start_col == 0 && rect.end_col == state_cols && rightward == 0 {
+        if downward > 0 {
+            nvim_vterm_state_lineinfo_scroll_down(state, rect.start_row, rect.end_row, downward);
+        } else if downward < 0 {
+            nvim_vterm_state_lineinfo_scroll_up(state, rect.start_row, rect.end_row, -downward);
         }
     }
 
-    // Call the scrollrect callback
+    // Try the scrollrect callback first
     let callbacks = nvim_vterm_state_get_callbacks(state);
     if !callbacks.is_null() {
         if let Some(scrollrect) = (*callbacks).scrollrect {
             let cbdata = nvim_vterm_state_get_cbdata(state);
-            scrollrect(rect, downward, rightward, cbdata);
+            if scrollrect(rect, downward, rightward, cbdata) != 0 {
+                return; // Callback handled it
+            }
+        }
+
+        // Fallback to moverect/erase
+        nvim_vterm_scroll_rect(
+            rect,
+            downward,
+            rightward,
+            (*callbacks).moverect,
+            (*callbacks).erase,
+            nvim_vterm_state_get_cbdata(state),
+        );
+    }
+}
+
+/// Check if the cursor is within the scroll region.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_cursor_in_scrollregion(state: VTermStateHandle) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+
+    let pos = nvim_vterm_state_get_pos(state);
+    let scrollregion_top = nvim_vterm_state_get_scrollregion_top(state);
+    let scrollregion_bottom = nvim_vterm_state_scrollregion_bottom(state);
+    let scrollregion_left = nvim_vterm_state_scrollregion_left(state);
+    let scrollregion_right = nvim_vterm_state_scrollregion_right(state);
+
+    if pos.row < scrollregion_top || pos.row >= scrollregion_bottom {
+        return 0;
+    }
+    if pos.col < scrollregion_left || pos.col >= scrollregion_right {
+        return 0;
+    }
+
+    1
+}
+
+/// Perform a linefeed operation.
+///
+/// If the cursor is at the bottom of the scroll region, scrolls the region.
+/// Otherwise, moves the cursor down one row.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_linefeed(state: VTermStateHandle) {
+    if state.is_null() {
+        return;
+    }
+
+    let pos = nvim_vterm_state_get_pos(state);
+    let scrollregion_bottom = nvim_vterm_state_scrollregion_bottom(state);
+
+    if pos.row == scrollregion_bottom - 1 {
+        // At bottom of scroll region - scroll the region
+        let scrollregion_top = nvim_vterm_state_get_scrollregion_top(state);
+        let scrollregion_left = nvim_vterm_state_scrollregion_left(state);
+        let scrollregion_right = nvim_vterm_state_scrollregion_right(state);
+
+        let rect = VTermRect {
+            start_row: scrollregion_top,
+            end_row: scrollregion_bottom,
+            start_col: scrollregion_left,
+            end_col: scrollregion_right,
+        };
+
+        rs_vterm_state_scroll(state, rect, 1, 0);
+    } else {
+        let rows = nvim_vterm_state_get_rows(state);
+        if pos.row < rows - 1 {
+            let new_pos = VTermPos {
+                row: pos.row + 1,
+                col: pos.col,
+            };
+            nvim_vterm_state_set_pos(state, new_pos);
         }
     }
+}
+
+/// Set a column tabstop.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_set_tabstop(state: VTermStateHandle, col: c_int) {
+    if state.is_null() {
+        return;
+    }
+    nvim_vterm_state_set_col_tabstop(state, col);
+}
+
+/// Clear a column tabstop.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_clear_tabstop(state: VTermStateHandle, col: c_int) {
+    if state.is_null() {
+        return;
+    }
+    nvim_vterm_state_clear_col_tabstop(state, col);
+}
+
+/// Check if a column is a tabstop.
+///
+/// # Safety
+/// The state handle must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vterm_state_is_tabstop(state: VTermStateHandle, col: c_int) -> c_int {
+    if state.is_null() {
+        return 0;
+    }
+    nvim_vterm_state_is_col_tabstop(state, col)
 }
 
 // Note: The following functions use the existing FFI exports that access
