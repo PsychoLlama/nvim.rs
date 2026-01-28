@@ -55,6 +55,10 @@
 extern int rs_stl_connected(win_T *wp);
 extern schar_T rs_fillchar_status(int *group, win_T *wp);
 extern int rs_tabwidth_calc(int columns, int tabcount);
+extern void rs_stl_clear_click_defs(StlClickDefinition *click_defs, size_t click_defs_size);
+extern StlClickDefinition *rs_stl_alloc_click_defs(StlClickDefinition *cdp, int width, size_t *size);
+extern void rs_stl_fill_click_defs(StlClickDefinition *click_defs, StlClickRecord *click_recs,
+                                   const char *buf, int width, bool tabline);
 
 // Determines how deeply nested %{} blocks will be evaluated in statusline.
 #define MAX_STL_EVAL_DEPTH 100
@@ -138,66 +142,20 @@ bool stl_connected(win_T *wp)
 /// @param[in]  tpcd_size  Size of the table.
 void stl_clear_click_defs(StlClickDefinition *const click_defs, const size_t click_defs_size)
 {
-  if (click_defs != NULL) {
-    for (size_t i = 0; i < click_defs_size; i++) {
-      if (i == 0 || click_defs[i].func != click_defs[i - 1].func) {
-        xfree(click_defs[i].func);
-      }
-    }
-    memset(click_defs, 0, click_defs_size * sizeof(click_defs[0]));
-  }
+  rs_stl_clear_click_defs(click_defs, click_defs_size);
 }
 
 /// Allocate or resize the click definitions array if needed.
 StlClickDefinition *stl_alloc_click_defs(StlClickDefinition *cdp, int width, size_t *size)
 {
-  if (*size < (size_t)width) {
-    xfree(cdp);
-    *size = (size_t)width;
-    cdp = xcalloc(*size, sizeof(StlClickDefinition));
-  }
-  return cdp;
+  return rs_stl_alloc_click_defs(cdp, width, size);
 }
 
 /// Fill the click definitions array if needed.
 void stl_fill_click_defs(StlClickDefinition *click_defs, StlClickRecord *click_recs,
                          const char *buf, int width, bool tabline)
 {
-  if (click_defs == NULL) {
-    return;
-  }
-
-  int col = 0;
-  int len = 0;
-
-  StlClickDefinition cur_click_def = {
-    .type = kStlClickDisabled,
-  };
-  for (int i = 0; click_recs[i].start != NULL; i++) {
-    len += vim_strnsize(buf, (int)(click_recs[i].start - buf));
-    assert(len <= width);
-    if (col < len) {
-      while (col < len) {
-        click_defs[col++] = cur_click_def;
-      }
-    } else {
-      xfree(cur_click_def.func);
-    }
-    buf = click_recs[i].start;
-    cur_click_def = click_recs[i].def;
-    if (!tabline && !(cur_click_def.type == kStlClickDisabled
-                      || cur_click_def.type == kStlClickFuncRun)) {
-      // window bar and status line only support click functions
-      cur_click_def.type = kStlClickDisabled;
-    }
-  }
-  if (col < width) {
-    while (col < width) {
-      click_defs[col++] = cur_click_def;
-    }
-  } else {
-    xfree(cur_click_def.func);
-  }
+  rs_stl_fill_click_defs(click_defs, click_recs, buf, width, tabline);
 }
 
 /// Redraw the status line, window bar, ruler or tabline.
