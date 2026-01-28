@@ -237,6 +237,238 @@ pub unsafe extern "C" fn rs_file_count_path_components(path: *const c_char) -> c
     count
 }
 
+// =============================================================================
+// Phase 4: Extended File Completion Functions
+// =============================================================================
+
+// Additional C accessor functions
+extern "C" {
+    fn nvim_get_compl_started() -> c_int;
+    fn nvim_get_compl_col() -> c_int;
+    fn nvim_get_cursor_col() -> c_int;
+}
+
+/// Check if file completion is active.
+#[no_mangle]
+pub unsafe extern "C" fn rs_file_is_active() -> c_int {
+    let started = nvim_get_compl_started();
+    let mode = nvim_get_ctrl_x_mode();
+    c_int::from(
+        started != 0
+            && (mode == CTRL_X_FILES
+                || mode == CTRL_X_PATH_PATTERNS
+                || mode == CTRL_X_PATH_DEFINES),
+    )
+}
+
+/// Check if file completion can continue.
+#[no_mangle]
+pub unsafe extern "C" fn rs_file_can_continue() -> c_int {
+    let started = nvim_get_compl_started();
+    let interrupted = nvim_get_compl_interrupted();
+    c_int::from(started != 0 && interrupted == 0)
+}
+
+/// Get the length of text typed for file completion.
+#[no_mangle]
+pub unsafe extern "C" fn rs_file_typed_len() -> c_int {
+    let cursor_col = nvim_get_cursor_col();
+    let compl_col = nvim_get_compl_col();
+    let len = cursor_col - compl_col;
+    if len < 0 {
+        0
+    } else {
+        len
+    }
+}
+
+/// Check if path has a wildcard character.
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap, clippy::missing_const_for_fn)]
+pub unsafe extern "C" fn rs_file_has_wildcard(path: *const c_char) -> c_int {
+    if path.is_null() {
+        return 0;
+    }
+
+    let mut ptr = path;
+    while *ptr != 0 {
+        let c = *ptr;
+        if c == b'*' as c_char || c == b'?' as c_char || c == b'[' as c_char {
+            return 1;
+        }
+        ptr = ptr.add(1);
+    }
+
+    0
+}
+
+/// Check if path is a hidden file (starts with dot).
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_file_is_hidden(path: *const c_char) -> c_int {
+    if path.is_null() || *path == 0 {
+        return 0;
+    }
+
+    // Find basename
+    let last_sep = rs_file_find_last_sep_any(path);
+    let basename = if last_sep < 0 {
+        path
+    } else {
+        #[allow(clippy::cast_sign_loss)]
+        path.add(last_sep as usize + 1)
+    };
+
+    // Check if starts with dot
+    c_int::from(*basename == b'.' as c_char)
+}
+
+/// Check if path represents current or parent directory.
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_file_is_dot_or_dotdot(path: *const c_char) -> c_int {
+    if path.is_null() || *path == 0 {
+        return 0;
+    }
+
+    // Find basename
+    let last_sep = rs_file_find_last_sep_any(path);
+    let basename = if last_sep < 0 {
+        path
+    } else {
+        #[allow(clippy::cast_sign_loss)]
+        path.add(last_sep as usize + 1)
+    };
+
+    // Check for "." or ".."
+    if *basename == b'.' as c_char {
+        let next = *basename.add(1);
+        if next == 0 {
+            return 1; // "."
+        }
+        if next == b'.' as c_char && *basename.add(2) == 0 {
+            return 1; // ".."
+        }
+    }
+
+    0
+}
+
+/// Get the extension of a filename.
+///
+/// Returns the offset of the extension (including the dot), or -1 if no extension.
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_file_extension_offset(path: *const c_char) -> c_int {
+    if path.is_null() || *path == 0 {
+        return -1;
+    }
+
+    // Find basename first
+    let last_sep = rs_file_find_last_sep_any(path);
+    let basename_start = if last_sep < 0 {
+        0
+    } else {
+        (last_sep + 1) as usize
+    };
+
+    // Find last dot in basename
+    let mut last_dot: c_int = -1;
+    let mut pos = basename_start;
+    let mut ptr = path.add(basename_start);
+
+    while *ptr != 0 {
+        if *ptr == b'.' as c_char {
+            #[allow(clippy::cast_possible_truncation)]
+            {
+                last_dot = pos as c_int;
+            }
+        }
+        ptr = ptr.add(1);
+        pos += 1;
+    }
+
+    // Don't count dot at start of basename as extension
+    #[allow(clippy::cast_possible_truncation)]
+    if last_dot == basename_start as c_int {
+        -1
+    } else {
+        last_dot
+    }
+}
+
+/// Compare two paths for equality, normalizing separators.
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_file_paths_equal(path1: *const c_char, path2: *const c_char) -> c_int {
+    if path1.is_null() || path2.is_null() {
+        return c_int::from(path1 == path2); // Both null = equal
+    }
+
+    let mut p1 = path1;
+    let mut p2 = path2;
+
+    while *p1 != 0 && *p2 != 0 {
+        let c1 = if *p1 == b'\\' as c_char {
+            b'/' as c_char
+        } else {
+            *p1
+        };
+        let c2 = if *p2 == b'\\' as c_char {
+            b'/' as c_char
+        } else {
+            *p2
+        };
+
+        if c1 != c2 {
+            return 0;
+        }
+
+        p1 = p1.add(1);
+        p2 = p2.add(1);
+    }
+
+    c_int::from(*p1 == 0 && *p2 == 0)
+}
+
+/// Check if path1 is a prefix of path2.
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap, clippy::missing_const_for_fn)]
+pub unsafe extern "C" fn rs_file_is_prefix(prefix: *const c_char, path: *const c_char) -> c_int {
+    if prefix.is_null() || path.is_null() {
+        return 0;
+    }
+
+    let mut p1 = prefix;
+    let mut p2 = path;
+
+    while *p1 != 0 {
+        if *p2 == 0 {
+            return 0; // path is shorter
+        }
+
+        let c1 = if *p1 == b'\\' as c_char {
+            b'/' as c_char
+        } else {
+            *p1
+        };
+        let c2 = if *p2 == b'\\' as c_char {
+            b'/' as c_char
+        } else {
+            *p2
+        };
+
+        if c1 != c2 {
+            return 0;
+        }
+
+        p1 = p1.add(1);
+        p2 = p2.add(1);
+    }
+
+    1
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
