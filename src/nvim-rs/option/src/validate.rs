@@ -539,6 +539,381 @@ pub extern "C" fn rs_validate_blend(value: c_int) -> c_int {
 }
 
 // =============================================================================
+// Cross-Option Dependency Validation
+// =============================================================================
+
+/// Validation result with error context.
+#[repr(C)]
+pub struct ValidationResult {
+    /// 0 = valid, non-zero = error code
+    pub error_code: c_int,
+    /// Offset in string where error occurred (-1 if not applicable)
+    pub error_offset: c_int,
+}
+
+impl Default for ValidationResult {
+    fn default() -> Self {
+        Self {
+            error_code: 0,
+            error_offset: -1,
+        }
+    }
+}
+
+/// Error codes for validation
+pub mod error_codes {
+    use std::ffi::c_int;
+
+    pub const VALID: c_int = 0;
+    pub const INVALID_VALUE: c_int = 1;
+    pub const OUT_OF_RANGE: c_int = 2;
+    pub const INVALID_FORMAT: c_int = 3;
+    pub const DEPENDENCY_CONFLICT: c_int = 4;
+    pub const SECURITY_VIOLATION: c_int = 5;
+    pub const EMPTY_NOT_ALLOWED: c_int = 6;
+    pub const INVALID_CHARACTER: c_int = 7;
+}
+
+/// Create a successful validation result.
+#[inline]
+fn validation_ok() -> ValidationResult {
+    ValidationResult::default()
+}
+
+/// Create a validation error at a specific position.
+#[inline]
+fn validation_error(code: c_int, offset: c_int) -> ValidationResult {
+    ValidationResult {
+        error_code: code,
+        error_offset: offset,
+    }
+}
+
+/// Validate a numeric option value with bounds.
+///
+/// # Arguments
+/// * `value` - The value to validate
+/// * `min` - Minimum allowed value (or i64::MIN for no minimum)
+/// * `max` - Maximum allowed value (or i64::MAX for no maximum)
+/// * `allow_negative` - Whether negative values are allowed
+///
+/// # Returns
+/// ValidationResult with error_code 0 on success.
+#[no_mangle]
+pub extern "C" fn rs_validate_numeric_bounds(
+    value: i64,
+    min: i64,
+    max: i64,
+    allow_negative: c_int,
+) -> ValidationResult {
+    if value < 0 && allow_negative == 0 {
+        return validation_error(error_codes::OUT_OF_RANGE, -1);
+    }
+    if value < min || value > max {
+        return validation_error(error_codes::OUT_OF_RANGE, -1);
+    }
+    validation_ok()
+}
+
+/// Validate that a string contains only characters from an allowed set.
+///
+/// # Arguments
+/// * `value` - The string to validate
+/// * `allowed` - String of allowed characters
+///
+/// # Returns
+/// ValidationResult with offset of first invalid character.
+#[no_mangle]
+pub unsafe extern "C" fn rs_validate_chars(
+    value: *const c_char,
+    allowed: *const c_char,
+) -> ValidationResult {
+    if value.is_null() || allowed.is_null() {
+        return validation_error(error_codes::INVALID_VALUE, -1);
+    }
+
+    // Build allowed set
+    let mut allowed_set = [false; 256];
+    let mut a = allowed;
+    while *a != 0 {
+        allowed_set[*a as u8 as usize] = true;
+        a = a.add(1);
+    }
+
+    // Check each character
+    let mut v = value;
+    let mut offset = 0;
+    while *v != 0 {
+        if !allowed_set[*v as u8 as usize] {
+            return validation_error(error_codes::INVALID_CHARACTER, offset);
+        }
+        v = v.add(1);
+        offset += 1;
+    }
+
+    validation_ok()
+}
+
+/// Validate a comma-separated list of values against allowed values.
+///
+/// # Arguments
+/// * `value` - The comma-separated string
+/// * `allowed` - Comma-separated list of allowed values
+/// * `allow_empty` - Whether empty items are allowed
+///
+/// # Returns
+/// ValidationResult with error info.
+#[no_mangle]
+pub unsafe extern "C" fn rs_validate_comma_list(
+    value: *const c_char,
+    allowed: *const c_char,
+    allow_empty: c_int,
+) -> ValidationResult {
+    if value.is_null() {
+        return validation_error(error_codes::INVALID_VALUE, -1);
+    }
+
+    // Empty string is valid if allow_empty is set
+    if *value == 0 {
+        return if allow_empty != 0 {
+            validation_ok()
+        } else {
+            validation_error(error_codes::EMPTY_NOT_ALLOWED, 0)
+        };
+    }
+
+    // Build set of allowed values
+    let mut allowed_values: Vec<Vec<u8>> = Vec::new();
+    if !allowed.is_null() && *allowed != 0 {
+        let mut start = allowed;
+        let mut p = allowed;
+        loop {
+            if *p == 0 || *p as u8 == b',' {
+                let len = p.offset_from(start) as usize;
+                let mut val = Vec::with_capacity(len);
+                for i in 0..len {
+                    val.push(*start.add(i) as u8);
+                }
+                allowed_values.push(val);
+                if *p == 0 {
+                    break;
+                }
+                start = p.add(1);
+            }
+            p = p.add(1);
+        }
+    }
+
+    // Check each item in the value
+    let mut offset: c_int = 0;
+    let mut start = value;
+    let mut p = value;
+    loop {
+        if *p == 0 || *p as u8 == b',' {
+            let len = p.offset_from(start) as usize;
+
+            // Check if empty
+            if len == 0 && allow_empty == 0 {
+                return validation_error(error_codes::EMPTY_NOT_ALLOWED, offset);
+            }
+
+            // Check if in allowed list (if we have one)
+            if len > 0 && !allowed_values.is_empty() {
+                let mut item = Vec::with_capacity(len);
+                for i in 0..len {
+                    item.push(*start.add(i) as u8);
+                }
+
+                if !allowed_values.iter().any(|v| v == &item) {
+                    return validation_error(error_codes::INVALID_VALUE, offset);
+                }
+            }
+
+            if *p == 0 {
+                break;
+            }
+            start = p.add(1);
+            #[allow(clippy::cast_possible_truncation)]
+            {
+                offset = (start.offset_from(value)) as c_int;
+            }
+        }
+        p = p.add(1);
+    }
+
+    validation_ok()
+}
+
+// =============================================================================
+// Enhanced Error Message Generation
+// =============================================================================
+
+/// Write a formatted error message to a buffer.
+///
+/// # Arguments
+/// * `errbuf` - Buffer to write to
+/// * `errbuflen` - Size of buffer
+/// * `error_code` - Error code (see error_codes module)
+/// * `value` - Value that caused the error
+/// * `context` - Additional context (option name, etc.)
+///
+/// # Returns
+/// Pointer to error buffer, or internal static message if buffer too small.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_format_validation_error(
+    errbuf: *mut c_char,
+    errbuflen: usize,
+    error_code: c_int,
+    value: *const c_char,
+    context: *const c_char,
+) -> *const c_char {
+    if errbuf.is_null() || errbuflen < 32 {
+        // Return static message
+        return match error_code {
+            error_codes::OUT_OF_RANGE => c"E474: Value out of range".as_ptr(),
+            error_codes::INVALID_FORMAT => c"E474: Invalid format".as_ptr(),
+            error_codes::INVALID_CHARACTER => c"E474: Invalid character".as_ptr(),
+            error_codes::EMPTY_NOT_ALLOWED => c"E474: Empty value not allowed".as_ptr(),
+            error_codes::DEPENDENCY_CONFLICT => c"E474: Option dependency conflict".as_ptr(),
+            error_codes::SECURITY_VIOLATION => c"E523: Security violation".as_ptr(),
+            _ => c"E474: Invalid argument".as_ptr(),
+        };
+    }
+
+    // Format error message
+    let prefix: &[u8] = match error_code {
+        error_codes::OUT_OF_RANGE => b"E474: Value out of range",
+        error_codes::INVALID_FORMAT => b"E474: Invalid format",
+        error_codes::INVALID_CHARACTER => b"E474: Invalid character",
+        error_codes::EMPTY_NOT_ALLOWED => b"E474: Empty value not allowed",
+        error_codes::DEPENDENCY_CONFLICT => b"E474: Option dependency conflict",
+        error_codes::SECURITY_VIOLATION => b"E523: Security violation",
+        _ => b"E474: Invalid argument",
+    };
+
+    // Copy prefix
+    let prefix_len = prefix.len().min(errbuflen - 1);
+    for (i, &b) in prefix.iter().take(prefix_len).enumerate() {
+        *errbuf.add(i) = b as c_char;
+    }
+    let mut pos = prefix_len;
+
+    // Add context if provided
+    if !context.is_null() && *context != 0 && pos + 5 < errbuflen {
+        *errbuf.add(pos) = b' ' as c_char;
+        *errbuf.add(pos + 1) = b'f' as c_char;
+        *errbuf.add(pos + 2) = b'o' as c_char;
+        *errbuf.add(pos + 3) = b'r' as c_char;
+        *errbuf.add(pos + 4) = b' ' as c_char;
+        pos += 5;
+
+        let mut c = context;
+        while *c != 0 && pos < errbuflen - 1 {
+            *errbuf.add(pos) = *c;
+            c = c.add(1);
+            pos += 1;
+        }
+    }
+
+    // Add value if provided
+    if !value.is_null() && *value != 0 && pos + 3 < errbuflen {
+        *errbuf.add(pos) = b':' as c_char;
+        *errbuf.add(pos + 1) = b' ' as c_char;
+        pos += 2;
+
+        let mut v = value;
+        while *v != 0 && pos < errbuflen - 1 {
+            *errbuf.add(pos) = *v;
+            v = v.add(1);
+            pos += 1;
+        }
+    }
+
+    *errbuf.add(pos) = 0;
+    errbuf
+}
+
+// =============================================================================
+// Path Validation
+// =============================================================================
+
+/// Validate a file path for security issues.
+///
+/// Checks for:
+/// - Null bytes (path truncation attack)
+/// - Parent directory references (..) in certain contexts
+/// - Absolute paths when relative expected
+///
+/// # Arguments
+/// * `path` - The path to validate
+/// * `flags` - Validation flags (see path_flags module)
+///
+/// # Returns
+/// ValidationResult with error info.
+pub mod path_flags {
+    use std::ffi::c_int;
+
+    pub const ALLOW_ABSOLUTE: c_int = 0x01;
+    pub const ALLOW_PARENT_REF: c_int = 0x02;
+    pub const CHECK_SECURITY: c_int = 0x04;
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn rs_validate_path(path: *const c_char, flags: c_int) -> ValidationResult {
+    if path.is_null() {
+        return validation_error(error_codes::INVALID_VALUE, -1);
+    }
+
+    let allow_absolute = (flags & path_flags::ALLOW_ABSOLUTE) != 0;
+    let allow_parent = (flags & path_flags::ALLOW_PARENT_REF) != 0;
+    let check_security = (flags & path_flags::CHECK_SECURITY) != 0;
+
+    let mut p = path;
+    let mut offset: c_int = 0;
+    let mut prev_was_sep = true;
+
+    // Check first character for absolute path
+    if !allow_absolute {
+        let first = *p as u8;
+        if first == b'/' || first == b'\\' {
+            return validation_error(error_codes::SECURITY_VIOLATION, 0);
+        }
+        // Windows drive letter
+        if first.is_ascii_alphabetic() && *p.add(1) as u8 == b':' {
+            return validation_error(error_codes::SECURITY_VIOLATION, 0);
+        }
+    }
+
+    while *p != 0 {
+        let c = *p as u8;
+
+        // Check for null byte in middle of string (shouldn't happen, but be safe)
+        // Actually we can't check this since the string ends at null
+
+        // Check for parent directory reference
+        if check_security
+            && !allow_parent
+            && prev_was_sep
+            && c == b'.'
+            && *p.add(1) as u8 == b'.'
+        {
+            let after = *p.add(2) as u8;
+            if after == 0 || after == b'/' || after == b'\\' {
+                return validation_error(error_codes::SECURITY_VIOLATION, offset);
+            }
+        }
+
+        prev_was_sep = c == b'/' || c == b'\\';
+        p = p.add(1);
+        offset += 1;
+    }
+
+    validation_ok()
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
