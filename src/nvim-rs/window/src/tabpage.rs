@@ -550,6 +550,99 @@ pub extern "C" fn rs_tabpage_insert_position(after: c_int) -> TabpageHandle {
 // - rs_one_tabpage - check if only one tabpage
 // - rs_find_tabpage - find tabpage by index
 
+// =============================================================================
+// Tabpage Transition Validation
+// =============================================================================
+
+/// Check if transitioning to a tabpage would be a no-op.
+///
+/// Returns true if the target is the current tabpage or invalid.
+fn is_tabpage_transition_noop_impl(tp: TabpageHandle) -> bool {
+    if tp.is_null() {
+        return true;
+    }
+    unsafe {
+        let curtab = nvim_get_curtab();
+        tp == curtab
+    }
+}
+
+/// Check if a tabpage transition is valid (target exists and differs from current).
+fn is_tabpage_transition_valid_impl(tp: TabpageHandle) -> bool {
+    if tp.is_null() {
+        return false;
+    }
+    unsafe {
+        let curtab = nvim_get_curtab();
+        if tp == curtab {
+            return false;
+        }
+        valid_tabpage_impl(tp)
+    }
+}
+
+/// Get the target tabpage for a goto_tabpage_tp call.
+///
+/// Validates that:
+/// 1. Target is not null
+/// 2. Target is not current tabpage
+/// 3. Target is a valid tabpage
+///
+/// Returns the valid target or null if invalid.
+fn validate_tabpage_transition_impl(tp: TabpageHandle) -> TabpageHandle {
+    if is_tabpage_transition_valid_impl(tp) {
+        tp
+    } else {
+        TabpageHandle::null()
+    }
+}
+
+/// FFI: Check if tabpage transition is no-op.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_tabpage_transition_is_noop(tp: TabpageHandle) -> c_int {
+    c_int::from(is_tabpage_transition_noop_impl(tp))
+}
+
+/// FFI: Check if tabpage transition is valid.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_tabpage_transition_is_valid(tp: TabpageHandle) -> c_int {
+    c_int::from(is_tabpage_transition_valid_impl(tp))
+}
+
+/// FFI: Validate and get target tabpage.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_tabpage_validate_transition(tp: TabpageHandle) -> TabpageHandle {
+    validate_tabpage_transition_impl(tp)
+}
+
+/// FFI: Get the tabpage to transition to after closing current.
+///
+/// Returns the best alternate tabpage when the current is being closed.
+/// Prefers lastused_tabpage if valid, otherwise uses neighbor.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_tabpage_close_alternate() -> TabpageHandle {
+    unsafe {
+        // First try lastused
+        let lastused = nvim_get_lastused_tabpage();
+        if !lastused.is_null() && valid_tabpage_impl(lastused) {
+            let curtab = nvim_get_curtab();
+            if lastused != curtab {
+                return lastused;
+            }
+        }
+
+        // Fall back to next or previous
+        let curtab = nvim_get_curtab();
+        let next = nvim_tabpage_get_next(curtab);
+        if !next.is_null() {
+            return next;
+        }
+
+        // Use previous (find it)
+        prev_tabpage_impl()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
