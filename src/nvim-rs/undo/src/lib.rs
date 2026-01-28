@@ -4102,6 +4102,147 @@ pub unsafe extern "C" fn rs_ex_undolist(_eap: ExargHandle) {
     }
 }
 
+// ============================================================================
+// Phase 5: VimL Function Migration (undofile, undotree)
+// ============================================================================
+
+/// Opaque handle for list_T
+#[repr(transparent)]
+#[derive(Copy, Clone)]
+pub struct ListHandle(*mut c_void);
+
+impl ListHandle {
+    /// Create a null handle.
+    #[inline]
+    pub const fn null() -> Self {
+        ListHandle(std::ptr::null_mut())
+    }
+
+    /// Check if this handle is null.
+    #[inline]
+    pub fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+/// Opaque handle for dict_T
+#[repr(transparent)]
+#[derive(Copy, Clone)]
+pub struct DictHandle(*mut c_void);
+
+impl DictHandle {
+    /// Create a null handle.
+    #[inline]
+    pub const fn null() -> Self {
+        DictHandle(std::ptr::null_mut())
+    }
+}
+
+// FFI declarations for typval construction
+extern "C" {
+    fn nvim_tv_list_alloc() -> ListHandle;
+    fn nvim_tv_dict_alloc() -> DictHandle;
+    fn nvim_tv_list_append_dict(list: ListHandle, dict: DictHandle);
+    fn nvim_tv_dict_add_nr(dict: DictHandle, key: *const c_char, key_len: usize, nr: i64);
+    fn nvim_tv_dict_add_list(
+        dict: DictHandle,
+        key: *const c_char,
+        key_len: usize,
+        list: ListHandle,
+    );
+    fn nvim_FullName_save(fname: *const c_char, force: bool) -> *mut c_char;
+}
+
+/// Build the undo tree as a VimL list for undotree().
+///
+/// This is called recursively to build alternate branches.
+///
+/// # Safety
+///
+/// All handles must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_eval_tree(buf: BufHandle, first_uhp: UHeaderHandle) -> ListHandle {
+    let list = nvim_tv_list_alloc();
+
+    let newhead = nvim_buf_get_b_u_newhead(buf);
+    let curhead = nvim_buf_get_b_u_curhead(buf);
+
+    let mut uhp = first_uhp;
+    while !uhp.0.is_null() {
+        let dict = nvim_tv_dict_alloc();
+
+        // Add seq
+        let seq = nvim_uhp_get_seq(uhp) as i64;
+        nvim_tv_dict_add_nr(dict, c"seq".as_ptr(), 3, seq);
+
+        // Add time
+        let time = nvim_uhp_get_time(uhp);
+        nvim_tv_dict_add_nr(dict, c"time".as_ptr(), 4, time);
+
+        // Add newhead marker if applicable
+        if uhp.0 == newhead.0 {
+            nvim_tv_dict_add_nr(dict, c"newhead".as_ptr(), 7, 1);
+        }
+
+        // Add curhead marker if applicable
+        if uhp.0 == curhead.0 {
+            nvim_tv_dict_add_nr(dict, c"curhead".as_ptr(), 7, 1);
+        }
+
+        // Add save number if > 0
+        let save_nr = nvim_uhp_get_save_nr(uhp);
+        if save_nr > 0 {
+            nvim_tv_dict_add_nr(dict, c"save".as_ptr(), 4, save_nr as i64);
+        }
+
+        // Recurse for alternate branches
+        let alt_next = nvim_uhp_get_alt_next(uhp);
+        if !alt_next.0.is_null() {
+            let alt_list = rs_u_eval_tree(buf, alt_next);
+            nvim_tv_dict_add_list(dict, c"alt".as_ptr(), 3, alt_list);
+        }
+
+        nvim_tv_list_append_dict(list, dict);
+
+        // Move to previous entry
+        uhp = nvim_uhp_get_prev(uhp);
+    }
+
+    list
+}
+
+/// undofile(name) - return the undo file path for a file name.
+///
+/// This is a Rust implementation that returns the path string.
+/// The C wrapper handles typval conversion.
+///
+/// # Safety
+///
+/// `fname` must be a valid C string or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_undofile(fname: *const c_char) -> *mut c_char {
+    if fname.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    // Check if fname is empty
+    if *fname == 0 {
+        return std::ptr::null_mut();
+    }
+
+    // Get full path
+    let ffname = nvim_FullName_save(fname, true);
+    if ffname.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    // Get undo file name
+    let result = nvim_u_get_undo_file_name(ffname, false);
+    nvim_xfree(ffname as *mut c_void);
+
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

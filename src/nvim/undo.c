@@ -179,6 +179,8 @@ extern void rs_undo_time(int step, bool sec, bool file, bool absolute);
 extern void rs_u_write_undo(const char *name, bool forceit, buf_T *buf, const uint8_t *hash);
 extern void rs_u_read_undo(const char *name, const uint8_t *hash, const char *orig_name);
 extern void rs_ex_undolist(exarg_T *eap);
+extern list_T *rs_u_eval_tree(buf_T *buf, const u_header_T *first_uhp);
+extern char *rs_f_undofile(const char *fname);
 
 #include "undo.c.generated.h"
 
@@ -1984,31 +1986,7 @@ bool curbufIsChanged(void)
 static list_T *u_eval_tree(buf_T *const buf, const u_header_T *const first_uhp)
   FUNC_ATTR_WARN_UNUSED_RESULT FUNC_ATTR_NONNULL_RET
 {
-  list_T *const list = tv_list_alloc(kListLenMayKnow);
-
-  for (const u_header_T *uhp = first_uhp; uhp != NULL; uhp = uhp->uh_prev.ptr) {
-    dict_T *const dict = tv_dict_alloc();
-    tv_dict_add_nr(dict, S_LEN("seq"), (varnumber_T)uhp->uh_seq);
-    tv_dict_add_nr(dict, S_LEN("time"), (varnumber_T)uhp->uh_time);
-    if (uhp == buf->b_u_newhead) {
-      tv_dict_add_nr(dict, S_LEN("newhead"), 1);
-    }
-    if (uhp == buf->b_u_curhead) {
-      tv_dict_add_nr(dict, S_LEN("curhead"), 1);
-    }
-    if (uhp->uh_save_nr > 0) {
-      tv_dict_add_nr(dict, S_LEN("save"), (varnumber_T)uhp->uh_save_nr);
-    }
-
-    if (uhp->uh_alt_next.ptr != NULL) {
-      // Recursive call to add alternate undo tree.
-      tv_dict_add_list(dict, S_LEN("alt"), u_eval_tree(buf, uhp->uh_alt_next.ptr));
-    }
-
-    tv_list_append_dict(list, dict);
-  }
-
-  return list;
+  return rs_u_eval_tree(buf, first_uhp);
 }
 
 /// "undofile(name)" function
@@ -2016,18 +1994,7 @@ void f_undofile(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
   rettv->v_type = VAR_STRING;
   const char *const fname = tv_get_string(&argvars[0]);
-
-  if (*fname == NUL) {
-    // If there is no file name there will be no undo file.
-    rettv->vval.v_string = NULL;
-  } else {
-    char *ffname = FullName_save(fname, true);
-
-    if (ffname != NULL) {
-      rettv->vval.v_string = u_get_undo_file_name(ffname, false);
-    }
-    xfree(ffname);
-  }
+  rettv->vval.v_string = rs_f_undofile(fname);
 }
 
 /// "undotree(expr)" function
@@ -3382,4 +3349,38 @@ void nvim_undolist_format_entry(u_header_T *uhp, int changes, char *buf, size_t 
     }
     vim_snprintf_add(buf, buf_size, "  %3d", uhp->uh_save_nr);
   }
+}
+
+// ============================================================================
+// Phase 5: VimL function FFI wrappers
+// ============================================================================
+
+list_T *nvim_tv_list_alloc(void)
+{
+  return tv_list_alloc(kListLenMayKnow);
+}
+
+dict_T *nvim_tv_dict_alloc(void)
+{
+  return tv_dict_alloc();
+}
+
+void nvim_tv_list_append_dict(list_T *list, dict_T *dict)
+{
+  tv_list_append_dict(list, dict);
+}
+
+void nvim_tv_dict_add_nr(dict_T *dict, const char *key, size_t key_len, varnumber_T nr)
+{
+  tv_dict_add_nr(dict, key, key_len, nr);
+}
+
+void nvim_tv_dict_add_list(dict_T *dict, const char *key, size_t key_len, list_T *list)
+{
+  tv_dict_add_list(dict, key, key_len, list);
+}
+
+char *nvim_FullName_save(const char *fname, bool force)
+{
+  return FullName_save(fname, force);
 }
