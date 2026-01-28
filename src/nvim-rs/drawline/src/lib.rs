@@ -2873,6 +2873,129 @@ pub unsafe extern "C" fn rs_wlv_set_need_showbreak(wlv: WlvHandle, val: c_int) {
     nvim_wlv_set_need_showbreak(wlv, val != 0);
 }
 
+// ============================================================================
+// Phase 5: Line Numbers & Signs - Gutter Rendering Helpers
+// ============================================================================
+
+/// Check if we're on the text row (not filler).
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_on_text_row(wlv: WlvHandle) -> c_int {
+    let filler_todo = nvim_wlv_get_filler_todo(wlv);
+    c_int::from(filler_todo <= 0)
+}
+
+/// Get sign text character at position.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_sign_text(
+    wlv: WlvHandle,
+    sign_idx: c_int,
+    pos: c_int,
+) -> ScharT {
+    nvim_wlv_get_sattr_text(wlv, sign_idx, pos)
+}
+
+/// Get sign highlight id.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_sign_hl_id(wlv: WlvHandle, sign_idx: c_int) -> c_int {
+    nvim_wlv_get_sattr_hl_id(wlv, sign_idx)
+}
+
+/// Check if sign has text.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_sign_has_text(wlv: WlvHandle, sign_idx: c_int) -> c_int {
+    c_int::from(nvim_wlv_get_sattr_text(wlv, sign_idx, 0) != 0)
+}
+
+/// Get the fold info for the current line.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_foldinfo(wlv: WlvHandle) -> FoldInfo {
+    nvim_wlv_get_foldinfo(wlv)
+}
+
+/// Get the vcol_sbr (showbreak vcol).
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_vcol_sbr(wlv: WlvHandle) -> ColnrT {
+    nvim_wlv_get_vcol_sbr(wlv)
+}
+
+/// Set the vcol_sbr (showbreak vcol).
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_set_vcol_sbr(wlv: WlvHandle, val: ColnrT) {
+    nvim_wlv_set_vcol_sbr(wlv, val);
+}
+
+/// Get the window highlight attribute.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_hl_attr(wp: WinHandle, hlf: c_int) -> c_int {
+    nvim_win_hl_attr(wp, hlf)
+}
+
+/// Check if line numbers are enabled for this window.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_has_line_numbers(wp: WinHandle) -> c_int {
+    c_int::from(nvim_win_get_p_nu(wp) != 0 || nvim_win_get_p_rnu(wp) != 0)
+}
+
+/// Check if absolute line numbers are enabled.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_has_number(wp: WinHandle) -> c_int {
+    c_int::from(nvim_win_get_p_nu(wp) != 0)
+}
+
+/// Check if relative line numbers are enabled.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_has_relativenumber(wp: WinHandle) -> c_int {
+    c_int::from(nvim_win_get_p_rnu(wp) != 0)
+}
+
+/// Check if using rightleft mode.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_is_rightleft(wp: WinHandle) -> c_int {
+    nvim_win_get_p_rl(wp)
+}
+
+/// Get the cursor line number.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_get_cursor_lnum(wp: WinHandle) -> LinenrT {
+    nvim_win_get_cursor_lnum(wp)
+}
+
+/// Check if lnum is the cursor line.
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_cursor_line(wp: WinHandle, lnum: LinenrT) -> c_int {
+    c_int::from(nvim_win_get_cursor_lnum(wp) == lnum)
+}
+
+/// Get the window's view width.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_get_view_width(wp: WinHandle) -> c_int {
+    nvim_win_get_view_width(wp)
+}
+
+/// Get the window's skip column (for smooth scrolling).
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_get_skipcol(wp: WinHandle) -> ColnrT {
+    nvim_win_get_skipcol(wp)
+}
+
+/// Check if there's a skipcol set.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_has_skipcol(wp: WinHandle) -> c_int {
+    c_int::from(nvim_win_get_skipcol(wp) > 0)
+}
+
+/// Get the list characters "precedes" character.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_get_lcs_prec(wp: WinHandle) -> ScharT {
+    nvim_win_get_lcs_prec(wp)
+}
+
+/// Check if list mode is enabled.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_has_list(wp: WinHandle) -> c_int {
+    c_int::from(nvim_win_get_p_list(wp) != 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
