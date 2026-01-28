@@ -1286,7 +1286,7 @@ void terminal_get_line_attributes(Terminal *term, win_T *wp, int linenr, int *te
 
 Buffer terminal_buf(const Terminal *term)
 {
-  return term->buf_handle;
+  return rs_terminal_buf((void *)term);
 }
 
 bool terminal_running(const Terminal *term)
