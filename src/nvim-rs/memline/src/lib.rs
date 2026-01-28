@@ -15,12 +15,29 @@
 //!
 //! # Modules
 //!
-//! - [`types`]: Core data structures, constants, and opaque handles
-//! - [`access`]: Line access functions
-//! - [`modify`]: Line modification functions (append, delete, replace)
-//! - [`navigate`]: Cursor navigation and byte offset functions
-//! - [`swap`]: Swap file management
-//! - [`recovery`]: Recovery and attention file handling
+//! - [`types`]: Core data structures (B-tree nodes, handles), constants (flags,
+//!   action codes, block IDs), and size calculations
+//! - [`access`]: Line access functions - get line text and length, caching,
+//!   data block index manipulation
+//! - [`modify`]: Line modification - append, delete, replace operations with
+//!   block splitting/merging support
+//! - [`navigate`]: Cursor navigation, byte offset calculations, position
+//!   validation, and B-tree traversal helpers
+//! - [`swap`]: Swap file management - open/close, sync, block 0 field access,
+//!   dirty state tracking
+//! - [`recovery`]: Recovery from swap files - attention dialog handling,
+//!   byte order detection, cross-platform recovery support
+//!
+//! # FFI Functions
+//!
+//! This crate exports 200+ functions for C interop, organized by category:
+//!
+//! - **Constant accessors** (`rs_ml_get_*`): Access memline constants
+//! - **Line access** (`rs_ml_get_len`, `rs_ml_get_pos`, etc.): Read line content
+//! - **Line modification** (`rs_ml_append`, `rs_ml_delete`, `rs_ml_replace`): Edit buffer
+//! - **Navigation** (`rs_inc`, `rs_dec`, `rs_goto_byte`): Move cursor position
+//! - **Swap file** (`rs_ml_open`, `rs_ml_sync_all`, `rs_b0_*`): Manage swap files
+//! - **Recovery** (`rs_ml_recover`, `rs_sea_choice_*`): Handle crash recovery
 //!
 //! # Note
 //!

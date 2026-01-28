@@ -481,10 +481,7 @@ pub unsafe extern "C" fn rs_is_swap_file_name(fname: *const c_char) -> c_int {
 
     // Check for .sw? extension
     let ext = fname.add(len - 4);
-    if *ext == b'.' as c_char
-        && *ext.add(1) == b's' as c_char
-        && *ext.add(2) == b'w' as c_char
-    {
+    if *ext == b'.' as c_char && *ext.add(1) == b's' as c_char && *ext.add(2) == b'w' as c_char {
         return 1;
     }
 
@@ -552,28 +549,16 @@ mod tests {
     fn test_is_swap_file_name() {
         unsafe {
             // Valid swap files
-            assert_eq!(
-                rs_is_swap_file_name(b"test.swp\0".as_ptr().cast()),
-                1
-            );
-            assert_eq!(
-                rs_is_swap_file_name(b"file.swo\0".as_ptr().cast()),
-                1
-            );
+            assert_eq!(rs_is_swap_file_name(b"test.swp\0".as_ptr().cast()), 1);
+            assert_eq!(rs_is_swap_file_name(b"file.swo\0".as_ptr().cast()), 1);
             assert_eq!(
                 rs_is_swap_file_name(b"/path/to/file.swn\0".as_ptr().cast()),
                 1
             );
 
             // Not swap files
-            assert_eq!(
-                rs_is_swap_file_name(b"test.txt\0".as_ptr().cast()),
-                0
-            );
-            assert_eq!(
-                rs_is_swap_file_name(b"sw\0".as_ptr().cast()),
-                0
-            ); // too short
+            assert_eq!(rs_is_swap_file_name(b"test.txt\0".as_ptr().cast()), 0);
+            assert_eq!(rs_is_swap_file_name(b"sw\0".as_ptr().cast()), 0); // too short
         }
     }
 }

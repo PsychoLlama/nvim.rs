@@ -70,7 +70,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | math           | Math utilities                          |
 | mbyte          | Multibyte and UTF-8 encoding            |
 | memfile        | Swap file management (block headers, dirty state, page calculations) |
-| memline        | Buffer memory management (B-tree)       |
+| memline        | Buffer memory management (B-tree, line access, modification, swap files, recovery) |
 | memory         | Memory allocation wrappers              |
 | memutil        | Memory and string utilities             |
 | menu           | Menu system                             |

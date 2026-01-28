@@ -642,7 +642,10 @@ mod tests {
         unsafe {
             // Line 0: start=900, end=1000, len=100
             assert_eq!(rs_ml_db_get_line_start(db_index.as_ptr(), 0), 900);
-            assert_eq!(rs_ml_db_get_line_end(db_index.as_ptr(), 0, db_txt_end), 1000);
+            assert_eq!(
+                rs_ml_db_get_line_end(db_index.as_ptr(), 0, db_txt_end),
+                1000
+            );
             assert_eq!(rs_ml_db_get_line_len(db_index.as_ptr(), 0, db_txt_end), 100);
 
             // Line 1: start=850, end=900, len=50
