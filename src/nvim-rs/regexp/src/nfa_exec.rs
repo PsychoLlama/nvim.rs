@@ -851,6 +851,118 @@ unsafe fn match_follows_impl(startstate: *const NfaState, depth: c_int) -> c_int
 }
 
 // =============================================================================
+// NFA Regmatch Types
+// =============================================================================
+
+/// Opaque handle to nfa_regprog_T from C.
+#[repr(C)]
+pub struct NfaProgHandle {
+    _private: [u8; 0],
+}
+
+// Note: nfa_regmatch() is a static function in C, so we can't call it directly.
+// The Rust NFA execution uses nfa_step() and addstate() which are fully
+// implemented above. When the full NFA matcher is migrated to Rust, it will
+// replace the C implementation.
+
+// =============================================================================
+// Thread List Operations
+// =============================================================================
+
+// Note: Most list operations are defined in nfa_states.rs
+// Here we add a few additional helpers for the execution engine.
+
+/// Check if a thread list is empty.
+///
+/// # Safety
+/// List must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_list_empty(list: *const NfaList) -> c_int {
+    c_int::from(list.is_null() || (*list).n == 0)
+}
+
+/// Get the list ID for duplicate detection.
+///
+/// # Safety
+/// List must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_list_id(list: *const NfaList) -> c_int {
+    if list.is_null() {
+        0
+    } else {
+        (*list).id
+    }
+}
+
+/// Get a thread from the list by index (const version).
+///
+/// # Safety
+/// List must be valid and index must be in bounds.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_list_get_thread(
+    list: *const NfaList,
+    idx: c_int,
+) -> *const NfaThread {
+    if list.is_null() || idx < 0 || idx >= (*list).n {
+        ptr::null()
+    } else {
+        (*list).t.add(idx as usize)
+    }
+}
+
+// =============================================================================
+// Match Result Helpers
+// =============================================================================
+
+/// Check if an NFA match was successful.
+///
+/// # Arguments
+/// * `result` - Result from rs_nfa_step or rs_nfa_regmatch
+///
+/// # Returns
+/// 1 if match found, 0 otherwise
+#[no_mangle]
+pub const extern "C" fn rs_nfa_match_found(result: c_int) -> c_int {
+    (result == 1) as c_int
+}
+
+/// Check if matching should continue.
+///
+/// # Arguments
+/// * `result` - Result from rs_nfa_step
+///
+/// # Returns
+/// 1 if should continue, 0 if done (match or no-match)
+#[no_mangle]
+pub const extern "C" fn rs_nfa_should_continue(result: c_int) -> c_int {
+    (result == 0) as c_int
+}
+
+/// Check if no match is possible.
+///
+/// # Arguments
+/// * `result` - Result from rs_nfa_step
+///
+/// # Returns
+/// 1 if no match possible, 0 otherwise
+#[no_mangle]
+pub const extern "C" fn rs_nfa_no_match(result: c_int) -> c_int {
+    (result == 2) as c_int
+}
+
+/// Check if an error occurred.
+///
+/// # Arguments
+/// * `result` - Result from rs_nfa_step or rs_nfa_regmatch
+///
+/// # Returns
+/// 1 if error, 0 otherwise
+#[no_mangle]
+pub const extern "C" fn rs_nfa_match_error(result: c_int) -> c_int {
+    (result < 0) as c_int
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -873,5 +985,25 @@ mod tests {
     #[test]
     fn test_max_addstate_depth() {
         assert_eq!(MAX_ADDSTATE_DEPTH, 5000);
+    }
+
+    #[test]
+    fn test_match_result_helpers() {
+        assert_eq!(rs_nfa_match_found(1), 1);
+        assert_eq!(rs_nfa_match_found(0), 0);
+        assert_eq!(rs_nfa_match_found(2), 0);
+        assert_eq!(rs_nfa_match_found(-1), 0);
+
+        assert_eq!(rs_nfa_should_continue(0), 1);
+        assert_eq!(rs_nfa_should_continue(1), 0);
+        assert_eq!(rs_nfa_should_continue(2), 0);
+
+        assert_eq!(rs_nfa_no_match(2), 1);
+        assert_eq!(rs_nfa_no_match(0), 0);
+        assert_eq!(rs_nfa_no_match(1), 0);
+
+        assert_eq!(rs_nfa_match_error(-1), 1);
+        assert_eq!(rs_nfa_match_error(0), 0);
+        assert_eq!(rs_nfa_match_error(1), 0);
     }
 }
