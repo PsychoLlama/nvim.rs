@@ -4912,9 +4912,27 @@ int nvim_dict_has_watchers(const dict_T *d)
   return !QUEUE_EMPTY(&d->watchers);
 }
 
+/// Get dict length (number of items) (accessor for Rust).
+int nvim_dict_get_len(const dict_T *d)
+{
+  if (d == NULL) {
+    return 0;
+  }
+  return (int)d->dv_hashtab.ht_used;
+}
+
 // =============================================================================
 // Blob accessor functions for Rust
 // =============================================================================
+
+/// Get blob length from typval (accessor for Rust).
+int nvim_tv_blob_len(const typval_T *tv)
+{
+  if (tv == NULL || tv->v_type != VAR_BLOB || tv->vval.v_blob == NULL) {
+    return 0;
+  }
+  return tv_blob_len(tv->vval.v_blob);
+}
 
 /// Get bv_ga.ga_len from a blob (accessor for Rust).
 int nvim_blob_get_len(const blob_T *b)

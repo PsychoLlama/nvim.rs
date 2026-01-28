@@ -155,6 +155,45 @@ extern "C" {
     /// Allocate a string of given size and set it as typval value.
     /// Returns pointer to the allocated buffer.
     fn nvim_tv_alloc_string(tv: *mut c_void, len: usize) -> *mut u8;
+
+    // --- List accessors ---
+    /// Check if typval is a null list.
+    fn nvim_tv_list_is_null(tv: *const c_void) -> c_int;
+
+    /// Get list pointer from typval (must be VAR_LIST).
+    fn nvim_tv_get_list(tv: *const c_void) -> *const c_void;
+
+    /// Get list length.
+    fn nvim_list_get_len(l: *const c_void) -> c_int;
+
+    /// Get first item in list.
+    fn nvim_list_get_first(l: *const c_void) -> *const c_void;
+
+    /// Get last item in list.
+    fn nvim_list_get_last(l: *const c_void) -> *const c_void;
+
+    /// Get next list item.
+    fn nvim_listitem_get_next(li: *const c_void) -> *const c_void;
+
+    /// Get previous list item.
+    fn nvim_listitem_get_prev(li: *const c_void) -> *const c_void;
+
+    /// Get typval from list item.
+    fn nvim_listitem_get_tv(li: *const c_void) -> *const c_void;
+
+    // --- Dict accessors ---
+    /// Check if typval is a null dict.
+    fn nvim_tv_dict_is_null(tv: *const c_void) -> c_int;
+
+    /// Get dict pointer from typval (must be VAR_DICT).
+    fn nvim_tv_get_dict(tv: *const c_void) -> *const c_void;
+
+    /// Get dict length (number of items).
+    fn nvim_dict_get_len(d: *const c_void) -> c_int;
+
+    // --- Blob accessors ---
+    /// Get blob length.
+    fn nvim_tv_blob_len(tv: *const c_void) -> c_int;
 }
 
 // =============================================================================
@@ -331,6 +370,220 @@ pub fn rettv_alloc_string(rettv: TypevalPtrMut, len: usize) -> Option<&'static m
         None
     } else {
         Some(unsafe { std::slice::from_raw_parts_mut(ptr, len) })
+    }
+}
+
+// =============================================================================
+// List Accessors
+// =============================================================================
+
+/// Opaque handle to a `list_T*`.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct ListPtr(*const c_void);
+
+impl ListPtr {
+    /// Create from a raw pointer.
+    ///
+    /// # Safety
+    /// The pointer must be a valid `list_T*` or null.
+    #[inline]
+    pub const unsafe fn from_raw(ptr: *const c_void) -> Self {
+        Self(ptr)
+    }
+
+    /// Get the raw pointer.
+    #[inline]
+    pub const fn as_ptr(self) -> *const c_void {
+        self.0
+    }
+
+    /// Check if null.
+    #[inline]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+/// Opaque handle to a `listitem_T*`.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct ListItemPtr(*const c_void);
+
+impl ListItemPtr {
+    /// Create from a raw pointer.
+    ///
+    /// # Safety
+    /// The pointer must be a valid `listitem_T*` or null.
+    #[inline]
+    pub const unsafe fn from_raw(ptr: *const c_void) -> Self {
+        Self(ptr)
+    }
+
+    /// Get the raw pointer.
+    #[inline]
+    pub const fn as_ptr(self) -> *const c_void {
+        self.0
+    }
+
+    /// Check if null.
+    #[inline]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+/// Check if a typval contains a null list.
+#[inline]
+pub fn tv_list_is_null(tv: TypevalPtr) -> bool {
+    if tv.is_null() {
+        return true;
+    }
+    unsafe { nvim_tv_list_is_null(tv.as_ptr()) != 0 }
+}
+
+/// Get list from typval.
+#[inline]
+pub fn tv_get_list(tv: TypevalPtr) -> ListPtr {
+    if tv.is_null() {
+        return unsafe { ListPtr::from_raw(std::ptr::null()) };
+    }
+    let ptr = unsafe { nvim_tv_get_list(tv.as_ptr()) };
+    unsafe { ListPtr::from_raw(ptr) }
+}
+
+/// Get the length of a list.
+#[inline]
+pub fn list_len(l: ListPtr) -> c_int {
+    if l.is_null() {
+        0
+    } else {
+        unsafe { nvim_list_get_len(l.as_ptr()) }
+    }
+}
+
+/// Get the first item of a list.
+#[inline]
+pub fn list_first(l: ListPtr) -> ListItemPtr {
+    if l.is_null() {
+        return unsafe { ListItemPtr::from_raw(std::ptr::null()) };
+    }
+    let ptr = unsafe { nvim_list_get_first(l.as_ptr()) };
+    unsafe { ListItemPtr::from_raw(ptr) }
+}
+
+/// Get the last item of a list.
+#[inline]
+pub fn list_last(l: ListPtr) -> ListItemPtr {
+    if l.is_null() {
+        return unsafe { ListItemPtr::from_raw(std::ptr::null()) };
+    }
+    let ptr = unsafe { nvim_list_get_last(l.as_ptr()) };
+    unsafe { ListItemPtr::from_raw(ptr) }
+}
+
+/// Get the next item after a list item.
+#[inline]
+pub fn listitem_next(li: ListItemPtr) -> ListItemPtr {
+    if li.is_null() {
+        return unsafe { ListItemPtr::from_raw(std::ptr::null()) };
+    }
+    let ptr = unsafe { nvim_listitem_get_next(li.as_ptr()) };
+    unsafe { ListItemPtr::from_raw(ptr) }
+}
+
+/// Get the previous item before a list item.
+#[inline]
+pub fn listitem_prev(li: ListItemPtr) -> ListItemPtr {
+    if li.is_null() {
+        return unsafe { ListItemPtr::from_raw(std::ptr::null()) };
+    }
+    let ptr = unsafe { nvim_listitem_get_prev(li.as_ptr()) };
+    unsafe { ListItemPtr::from_raw(ptr) }
+}
+
+/// Get the typval from a list item.
+#[inline]
+pub fn listitem_tv(li: ListItemPtr) -> TypevalPtr {
+    if li.is_null() {
+        return unsafe { TypevalPtr::from_raw(std::ptr::null()) };
+    }
+    let ptr = unsafe { nvim_listitem_get_tv(li.as_ptr()) };
+    unsafe { TypevalPtr::from_raw(ptr) }
+}
+
+// =============================================================================
+// Dict Accessors
+// =============================================================================
+
+/// Opaque handle to a `dict_T*`.
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy)]
+pub struct DictPtr(*const c_void);
+
+impl DictPtr {
+    /// Create from a raw pointer.
+    ///
+    /// # Safety
+    /// The pointer must be a valid `dict_T*` or null.
+    #[inline]
+    pub const unsafe fn from_raw(ptr: *const c_void) -> Self {
+        Self(ptr)
+    }
+
+    /// Get the raw pointer.
+    #[inline]
+    pub const fn as_ptr(self) -> *const c_void {
+        self.0
+    }
+
+    /// Check if null.
+    #[inline]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+}
+
+/// Check if a typval contains a null dict.
+#[inline]
+pub fn tv_dict_is_null(tv: TypevalPtr) -> bool {
+    if tv.is_null() {
+        return true;
+    }
+    unsafe { nvim_tv_dict_is_null(tv.as_ptr()) != 0 }
+}
+
+/// Get dict from typval.
+#[inline]
+pub fn tv_get_dict(tv: TypevalPtr) -> DictPtr {
+    if tv.is_null() {
+        return unsafe { DictPtr::from_raw(std::ptr::null()) };
+    }
+    let ptr = unsafe { nvim_tv_get_dict(tv.as_ptr()) };
+    unsafe { DictPtr::from_raw(ptr) }
+}
+
+/// Get the length (number of items) of a dict.
+#[inline]
+pub fn dict_len(d: DictPtr) -> c_int {
+    if d.is_null() {
+        0
+    } else {
+        unsafe { nvim_dict_get_len(d.as_ptr()) }
+    }
+}
+
+// =============================================================================
+// Blob Accessors
+// =============================================================================
+
+/// Get blob length from typval.
+#[inline]
+pub fn tv_blob_len(tv: TypevalPtr) -> c_int {
+    if tv.is_null() {
+        0
+    } else {
+        unsafe { nvim_tv_blob_len(tv.as_ptr()) }
     }
 }
 

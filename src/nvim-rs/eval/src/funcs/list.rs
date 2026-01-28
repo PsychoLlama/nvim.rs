@@ -1,23 +1,39 @@
 //! List manipulation functions for VimL.
 //!
 //! This module implements list functions from `src/nvim/eval/funcs.c`:
+//! - `len()` - get length of list/dict/string/blob
+//! - `empty()` - check if list/dict/string/blob is empty
+//! - `count()` - count occurrences in list/dict/string
+//! - `get()` - get item from list/dict/blob with default
 //! - `add()` - append item to list
 //! - `insert()` - insert item at position
 //! - `remove()` - remove item at position
 //! - `extend()` - extend list with another list
+//! - `copy()` - shallow copy list/dict
+//! - `deepcopy()` - deep copy list/dict
 //! - `sort()` - sort list
-//! - `reverse()` - reverse list
 //! - `uniq()` - remove duplicates from sorted list
+//! - `reverse()` - reverse list
 //! - `filter()` - filter list by predicate
 //! - `map()` - transform list items
 //! - `reduce()` - reduce list to single value
+//! - `index()` - find index of item in list
+//! - `indexof()` - find index of item using predicate
+//! - `flatten()` - flatten nested lists
+//! - `flattennew()` - flatten nested lists (returns new list)
 
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::must_use_candidate)]
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
+
+use super::dispatch::{
+    argvar_at, dict_len, list_len, rettv_set_bool, rettv_set_number, tv_blob_len, tv_dict_is_null,
+    tv_get_dict, tv_get_list, tv_get_string_bytes, tv_get_type, tv_list_is_null, DictPtr, ListPtr,
+    TypevalPtrMut, VarType,
+};
 
 // =============================================================================
 // List Index Operations
@@ -428,6 +444,230 @@ pub extern "C" fn rs_list_range_len(result: ListRangeResult) -> c_int {
 }
 
 // =============================================================================
+// VimL Built-in Function Implementations (Typval Dispatch)
+// =============================================================================
+
+// --- len() function ---
+
+/// Compute length for various types.
+///
+/// VimL `len()` returns:
+/// - String: byte length (strlen)
+/// - Number: byte length of string representation
+/// - List: number of items
+/// - Dict: number of key-value pairs
+/// - Blob: number of bytes
+/// - Other types: error (handled by C caller)
+fn compute_len(list: ListPtr, dict: DictPtr, blob_len: c_int, string_len: usize) -> i64 {
+    if !list.is_null() {
+        i64::from(list_len(list))
+    } else if !dict.is_null() {
+        i64::from(dict_len(dict))
+    } else if blob_len > 0 {
+        i64::from(blob_len)
+    } else {
+        string_len as i64
+    }
+}
+
+/// FFI: len() helper - computes length based on type.
+///
+/// This is called from C after type checking. The C code passes the appropriate
+/// values based on the type.
+///
+/// # Safety
+/// `list` and `dict` must be valid pointers or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_len_impl(
+    list: *const c_void,
+    dict: *const c_void,
+    blob_len: c_int,
+    string_len: usize,
+) -> i64 {
+    let list = ListPtr::from_raw(list);
+    let dict = DictPtr::from_raw(dict);
+    compute_len(list, dict, blob_len, string_len)
+}
+
+// --- empty() function ---
+//
+// VimL `empty()` returns true for:
+// - String/Func: NULL or empty string
+// - Number: 0
+// - Float: 0.0
+// - List: NULL or empty
+// - Dict: NULL or empty
+// - Bool: v:false
+// - Partial: always false (never empty)
+// - Blob: NULL or empty
+
+/// Check if a list is empty.
+#[inline]
+fn list_is_empty(list: ListPtr) -> bool {
+    list.is_null() || list_len(list) == 0
+}
+
+/// Check if a dict is empty.
+#[inline]
+fn dict_is_empty(dict: DictPtr) -> bool {
+    dict.is_null() || dict_len(dict) == 0
+}
+
+/// FFI: empty() for list type.
+///
+/// # Safety
+/// `list` must be a valid pointer or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_empty_list(list: *const c_void) -> c_int {
+    let list = ListPtr::from_raw(list);
+    c_int::from(list_is_empty(list))
+}
+
+/// FFI: empty() for dict type.
+///
+/// # Safety
+/// `dict` must be a valid pointer or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_empty_dict(dict: *const c_void) -> c_int {
+    let dict = DictPtr::from_raw(dict);
+    c_int::from(dict_is_empty(dict))
+}
+
+/// FFI: Typval dispatch for len() - handles List, Dict, Blob, String, Number types.
+///
+/// # Safety
+/// `argvars` must be a valid pointer to a typval array with at least 1 element.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_len(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+
+    let len = match tv_get_type(arg0) {
+        VarType::List => {
+            let list = tv_get_list(arg0);
+            i64::from(list_len(list))
+        }
+        VarType::Dict => {
+            let dict = tv_get_dict(arg0);
+            i64::from(dict_len(dict))
+        }
+        VarType::Blob => i64::from(tv_blob_len(arg0)),
+        VarType::String | VarType::Number => {
+            let s = tv_get_string_bytes(arg0);
+            s.len() as i64
+        }
+        // Other types are errors - C caller should have validated
+        _ => 0,
+    };
+
+    rettv_set_number(rettv, len);
+}
+
+/// FFI: Typval dispatch for empty() - handles all types.
+///
+/// # Safety
+/// `argvars` must be a valid pointer to a typval array with at least 1 element.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_empty(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+
+    let is_empty = match tv_get_type(arg0) {
+        VarType::List => tv_list_is_null(arg0) || list_len(tv_get_list(arg0)) == 0,
+        VarType::Dict => tv_dict_is_null(arg0) || dict_len(tv_get_dict(arg0)) == 0,
+        VarType::Blob => tv_blob_len(arg0) == 0,
+        VarType::String | VarType::Func => {
+            let s = tv_get_string_bytes(arg0);
+            s.is_empty()
+        }
+        VarType::Number => {
+            // Check if number is 0 - use string representation
+            let s = tv_get_string_bytes(arg0);
+            s == b"0"
+        }
+        VarType::Float => {
+            // Float 0.0 is empty
+            let s = tv_get_string_bytes(arg0);
+            s.starts_with(b"0.0")
+        }
+        VarType::Bool => {
+            // v:false is empty, v:true is not
+            let s = tv_get_string_bytes(arg0);
+            s == b"v:false"
+        }
+        VarType::Special => {
+            // v:null and v:none are empty
+            let s = tv_get_string_bytes(arg0);
+            s == b"v:null" || s == b"v:none"
+        }
+        VarType::Partial => false, // Partial is never empty
+        VarType::Unknown => true,
+    };
+
+    rettv_set_bool(rettv, is_empty);
+}
+
+// --- count() function helpers ---
+
+/// Count occurrences of a byte in a byte slice.
+#[allow(clippy::naive_bytecount)]
+pub fn count_byte_in_slice(haystack: &[u8], needle: u8) -> i64 {
+    haystack.iter().filter(|&&b| b == needle).count() as i64
+}
+
+/// Count non-overlapping occurrences of a substring in a string.
+pub fn count_substring(haystack: &[u8], needle: &[u8], ignore_case: bool) -> i64 {
+    if needle.is_empty() || haystack.len() < needle.len() {
+        return 0;
+    }
+
+    let mut count = 0i64;
+    let mut pos = 0;
+
+    while pos + needle.len() <= haystack.len() {
+        let matches = if ignore_case {
+            haystack[pos..pos + needle.len()]
+                .iter()
+                .zip(needle.iter())
+                .all(|(a, b)| a.eq_ignore_ascii_case(b))
+        } else {
+            &haystack[pos..pos + needle.len()] == needle
+        };
+
+        if matches {
+            count += 1;
+            pos += needle.len(); // Non-overlapping
+        } else {
+            pos += 1;
+        }
+    }
+
+    count
+}
+
+/// FFI: count() for string - count substring occurrences.
+///
+/// # Safety
+/// Pointers must be valid or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_count_string(
+    haystack: *const u8,
+    haystack_len: c_int,
+    needle: *const u8,
+    needle_len: c_int,
+    ignore_case: c_int,
+) -> i64 {
+    if haystack.is_null() || needle.is_null() {
+        return 0;
+    }
+
+    let haystack = std::slice::from_raw_parts(haystack, haystack_len.max(0) as usize);
+    let needle = std::slice::from_raw_parts(needle, needle_len.max(0) as usize);
+
+    count_substring(haystack, needle, ignore_case != 0)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -551,5 +791,45 @@ mod tests {
         assert!(CopyType::Deep.is_deep());
         assert_eq!(CopyType::from_raw(0), CopyType::Shallow);
         assert_eq!(CopyType::from_raw(1), CopyType::Deep);
+    }
+
+    #[test]
+    fn test_count_byte_in_slice() {
+        assert_eq!(count_byte_in_slice(b"hello", b'l'), 2);
+        assert_eq!(count_byte_in_slice(b"hello", b'o'), 1);
+        assert_eq!(count_byte_in_slice(b"hello", b'x'), 0);
+        assert_eq!(count_byte_in_slice(b"", b'x'), 0);
+    }
+
+    #[test]
+    fn test_count_substring() {
+        // Basic cases
+        assert_eq!(count_substring(b"hello world", b"o", false), 2);
+        assert_eq!(count_substring(b"hello world", b"l", false), 3);
+        assert_eq!(count_substring(b"hello world", b"ll", false), 1);
+        assert_eq!(count_substring(b"hello world", b"x", false), 0);
+
+        // Case insensitive
+        assert_eq!(count_substring(b"Hello World", b"o", true), 2);
+        assert_eq!(count_substring(b"Hello World", b"O", true), 2);
+        assert_eq!(count_substring(b"HELLO", b"ll", true), 1);
+
+        // Edge cases
+        assert_eq!(count_substring(b"", b"x", false), 0);
+        assert_eq!(count_substring(b"hello", b"", false), 0);
+        assert_eq!(count_substring(b"aaa", b"aa", false), 1); // Non-overlapping
+
+        // Longer needle than haystack
+        assert_eq!(count_substring(b"hi", b"hello", false), 0);
+    }
+
+    #[test]
+    fn test_count_substring_non_overlapping() {
+        // "ababa" contains "aba" once non-overlapping (positions 0-2)
+        // If we count at position 0, next search starts at position 3
+        assert_eq!(count_substring(b"ababa", b"aba", false), 1);
+
+        // "aaaa" contains "aa" twice non-overlapping
+        assert_eq!(count_substring(b"aaaa", b"aa", false), 2);
     }
 }
