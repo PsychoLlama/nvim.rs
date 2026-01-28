@@ -553,6 +553,25 @@ extern int rs_qf_last_entry_in_file(const void *qfl, int bnr);
 extern int rs_qf_entry_after_pos_idx(const void *qfl, const void *pos, int bnr);
 extern int rs_qf_entry_before_pos_idx(const void *qfl, const void *pos, int bnr);
 
+// Entry position and validation from Rust
+extern bool rs_qf_at_first(const void *qfl);
+extern bool rs_qf_at_last(const void *qfl);
+extern bool rs_qf_entry_covers_line(const void *qfp, linenr_T lnum);
+extern bool rs_qf_entry_has_valid_range(const void *qfp);
+extern bool rs_qf_entry_has_valid_col_range(const void *qfp);
+extern bool rs_qf_entry_has_module(const void *qfp);
+extern bool rs_qf_entry_has_nr(const void *qfp);
+extern int rs_qf_entry_line_span(const void *qfp);
+extern bool rs_qf_entry_is_complete(const void *qfp);
+extern bool rs_qf_entry_is_diagnostic(const void *qfp);
+extern int rs_qf_entry_severity(const void *qfp);
+
+// Entry counting from Rust
+extern int rs_qf_count_errors(const void *qfl);
+extern int rs_qf_count_warnings(const void *qfl);
+extern int rs_qf_curlist_entry_count(const void *qi);
+extern int rs_qf_curlist_valid_count(const void *qi);
+
 // =============================================================================
 // Phase 5: List management setters and wrappers for Rust
 // =============================================================================

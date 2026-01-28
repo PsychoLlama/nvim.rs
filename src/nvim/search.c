@@ -110,15 +110,27 @@ static Direction lastcdir = FORWARD;      // last direction of character search
 static bool last_t_cmd = true;            // last search t_cmd
 static char lastc_bytes[MAX_SCHAR_SIZE + 1];
 
-// Rust FFI declarations
+// Rust FFI declarations for character search state
 extern int rs_last_csearch_forward(void);
 extern int rs_last_csearch_until(void);
 extern const char *rs_last_csearch(void);
 extern int rs_search_was_last_used(void);
+
+// Rust FFI declarations for pattern utilities
 extern int rs_pat_has_uppercase(const char *pat);
 extern int rs_ignorecase(const char *pat);
 extern int rs_ignorecase_opt(const char *pat, int ic, int scs);
 extern int rs_needs_previous_pattern(const char *pat);
+
+// Rust FFI declarations for pattern accessors
+extern const char *rs_get_search_pattern(void);
+extern const char *rs_get_subst_pattern(void);
+extern const char *rs_get_last_used_pattern(void);
+extern const char *rs_get_mr_pattern(void);
+
+// Rust FFI declarations for incremental search
+extern void rs_incsearch_state_save(void *state);
+extern void rs_incsearch_state_restore(const void *state);
 
 /// Get the lastcdir static variable (accessor for Rust).
 int nvim_get_lastcdir(void)
