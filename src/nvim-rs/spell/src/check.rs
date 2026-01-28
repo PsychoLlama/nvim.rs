@@ -461,6 +461,104 @@ pub unsafe extern "C" fn rs_get_case_type(
 }
 
 // =============================================================================
+// Bad Word Case Type Detection
+// =============================================================================
+
+/// Mixed case flag - word has both upper and lower in middle
+pub const WF_MIXCAP: u32 = 0x100;
+
+/// Like get_case_type() but for a KEEPCAP word add ONECAP if the word starts
+/// with a capital. So that make_case_word() can turn WOrd into Word.
+/// Add ALLCAP for "WOrD".
+///
+/// This is used by the suggestion system to determine how to adjust the
+/// case of suggested words.
+///
+/// # Arguments
+/// * `word` - The word to analyze (UTF-8 bytes)
+/// * `spelltab` - Handle to the spell character table
+///
+/// # Returns
+/// Word flags indicating the case pattern (may include WF_KEEPCAP | WF_ONECAP, etc.)
+pub fn badword_captype(word: &[u8], spelltab: SpelltabHandle) -> u32 {
+    let flags = get_case_type(word, spelltab).to_flags();
+
+    // If not KEEPCAP, return the basic flags
+    if (flags & WF_KEEPCAP) == 0 {
+        return flags;
+    }
+
+    // Count the number of UPPER and lower case letters
+    let mut lower_count = 0u32;
+    let mut upper_count = 0u32;
+    let mut first_upper = false;
+    let mut is_first = true;
+
+    for &c in word {
+        if c == 0 {
+            break;
+        }
+
+        // Skip non-ASCII for now (needs UTF-8 decoding)
+        if c >= 128 {
+            continue;
+        }
+
+        let is_upper = spell_is_upper(u32::from(c), spelltab);
+
+        if is_upper {
+            upper_count += 1;
+            if is_first {
+                first_upper = true;
+            }
+        } else if c.is_ascii_lowercase() {
+            lower_count += 1;
+        }
+
+        if c.is_ascii_alphabetic() {
+            is_first = false;
+        }
+    }
+
+    let mut result_flags = flags;
+
+    // If there are more UPPER than lower case letters suggest an
+    // ALLCAP word. Otherwise, if the first letter is UPPER then
+    // suggest ONECAP. Exception: "ALl" most likely should be "All",
+    // require three upper case letters.
+    if upper_count > lower_count && upper_count > 2 {
+        result_flags |= WF_ALLCAP;
+    } else if first_upper {
+        result_flags |= WF_ONECAP;
+    }
+
+    // maCARONI maCAroni - has mixed case in middle
+    if upper_count >= 2 && lower_count >= 2 {
+        result_flags |= WF_MIXCAP;
+    }
+
+    result_flags
+}
+
+/// FFI wrapper for badword_captype
+///
+/// # Safety
+/// `word` must be a valid pointer to at least `word_len` bytes
+#[no_mangle]
+pub unsafe extern "C" fn rs_badword_captype(
+    word: *const u8,
+    word_len: usize,
+    spelltab: SpelltabHandle,
+) -> u32 {
+    if word.is_null() {
+        return 0;
+    }
+
+    let word_slice = std::slice::from_raw_parts(word, word_len);
+    badword_captype(word_slice, spelltab)
+}
+
+// =============================================================================
 // Case Validity Checking
 // =============================================================================
 
@@ -1959,5 +2057,52 @@ mod tests {
         assert!(!match_compoundrule(b"", b"a\0"));
         // Empty flags means nothing collected yet - should match any rule
         assert!(match_compoundrule(b"ab\0", b"\0"));
+    }
+
+    // =========================================================================
+    // Bad Word Case Type Tests
+    // =========================================================================
+
+    #[test]
+    fn test_badword_captype_all_lower() {
+        let spelltab = SpelltabHandle::null();
+        let flags = badword_captype(b"hello", spelltab);
+        // All lowercase returns 0 (AllLower has no flags)
+        assert_eq!(flags & (WF_ONECAP | WF_ALLCAP | WF_KEEPCAP), 0);
+    }
+
+    #[test]
+    fn test_badword_captype_first_cap() {
+        let spelltab = SpelltabHandle::null();
+        let flags = badword_captype(b"Hello", spelltab);
+        // First letter cap returns OneCap
+        assert_eq!(flags & WF_ONECAP, WF_ONECAP);
+    }
+
+    #[test]
+    fn test_badword_captype_all_caps() {
+        let spelltab = SpelltabHandle::null();
+        let flags = badword_captype(b"HELLO", spelltab);
+        // All caps returns AllCap
+        assert_eq!(flags & WF_ALLCAP, WF_ALLCAP);
+    }
+
+    #[test]
+    fn test_badword_captype_keepcap_with_first() {
+        let spelltab = SpelltabHandle::null();
+        // "WOrd" is KEEPCAP but starts with capital, should suggest ONECAP
+        let flags = badword_captype(b"WOrd", spelltab);
+        // Should have KEEPCAP and ONECAP
+        assert!((flags & WF_KEEPCAP) != 0);
+        assert!((flags & WF_ONECAP) != 0);
+    }
+
+    #[test]
+    fn test_badword_captype_mixcap() {
+        let spelltab = SpelltabHandle::null();
+        // "maCARONI" has mixed case in middle
+        let flags = badword_captype(b"maCARONI", spelltab);
+        // Should have MIXCAP flag
+        assert!((flags & WF_MIXCAP) != 0);
     }
 }
