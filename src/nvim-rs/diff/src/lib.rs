@@ -17,6 +17,7 @@ pub mod helpers;
 pub mod highlight;
 pub mod marks;
 pub mod navigate;
+pub mod update;
 
 // Re-export key types from submodules
 pub use block::{DiffBlockInfo as BlockInfo, DiffBlockIter};
@@ -35,6 +36,10 @@ pub use highlight::{
 };
 pub use marks::{ChangeMetrics, ChangePosition, MarkAdjustIter, MarkAdjustParams};
 pub use navigate::{DiffHunkBounds, DiffNavResult, Direction};
+pub use update::{
+    DiffLineUpdateState, DiffRedrawState, DiffUpdateState, FillerUpdateResult,
+    ShouldInvalidateResult,
+};
 
 use std::ffi::c_char;
 use std::os::raw::c_int;
