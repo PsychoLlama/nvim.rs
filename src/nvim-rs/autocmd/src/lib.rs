@@ -11,6 +11,7 @@
 
 pub mod event;
 pub mod group;
+pub mod pattern;
 
 use std::ffi::{c_char, c_void};
 use std::os::raw::c_int;
