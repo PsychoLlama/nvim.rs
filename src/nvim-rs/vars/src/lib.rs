@@ -37,8 +37,17 @@
 
 use std::ffi::{c_char, c_int};
 
+// Submodules
+pub mod lookup;
+
 // Re-export typval types for convenience
 pub use nvim_typval::{VarLockStatus, VarType};
+
+// Re-export lookup types and functions
+pub use lookup::{
+    rs_find_var_ht, rs_get_var_value, rs_parse_scope_prefix, rs_skip_scope_prefix, DictHandle,
+    DictitemHandle, HashtabHandle, ScopePrefix,
+};
 
 // =============================================================================
 // VimVar Index enum (matching C's VimVarIndex in eval_defs.h)

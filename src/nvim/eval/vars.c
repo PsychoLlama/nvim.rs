@@ -3623,3 +3623,77 @@ void f_setbufvar(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     curbuf = save_curbuf;
   }
 }
+
+// =============================================================================
+// Rust FFI Accessor Functions
+// =============================================================================
+
+/// Get the current buffer's variables dictionary.
+dict_T *nvim_curbuf_get_vars(void)
+{
+  return curbuf->b_vars;
+}
+
+/// Get the current window's variables dictionary.
+dict_T *nvim_curwin_get_vars(void)
+{
+  return curwin->w_vars;
+}
+
+/// Get the current tab's variables dictionary.
+dict_T *nvim_curtab_get_vars(void)
+{
+  return curtab->tp_vars;
+}
+
+/// Get the hashtab from a dictionary.
+hashtab_T *nvim_dict_get_hashtab(dict_T *dict)
+{
+  if (dict == NULL) {
+    return NULL;
+  }
+  return &dict->dv_hashtab;
+}
+
+/// Check if a hashitem is empty.
+int nvim_hashitem_empty(hashitem_T *hi)
+{
+  return HASHITEM_EMPTY(hi);
+}
+
+/// Convert hashitem to dictitem.
+dictitem_T *nvim_hi2dictitem(hashitem_T *hi)
+{
+  return TV_DICT_HI2DI(hi);
+}
+
+/// Get the compat hashtab (for variables accessible without v: prefix).
+hashtab_T *nvim_get_compat_hashtab(void)
+{
+  return &compat_hashtab;
+}
+
+/// Get script variables dictionary by script ID.
+dict_T *nvim_get_script_vars_dict(int sid)
+{
+  if (sid <= 0 || sid > script_items.ga_len) {
+    return NULL;
+  }
+  scriptvar_T *sv = SCRIPT_SV(sid);
+  return sv ? &sv->sv_dict : NULL;
+}
+
+/// Get current script context SID.
+int nvim_get_current_sctx_sid(void)
+{
+  return current_sctx.sc_sid;
+}
+
+/// Get typval from dictitem.
+typval_T *nvim_dictitem_get_tv(dictitem_T *di)
+{
+  if (di == NULL) {
+    return NULL;
+  }
+  return &di->di_tv;
+}
