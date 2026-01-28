@@ -1,23 +1,38 @@
-Plan: ~/.claude/plans/serialized-churning-muffin.md
+Plan: ~/.claude/plans/giggly-giggling-scott.md
 
-All 8 phases of the tag system migration plan are complete:
+Excellent! All 10 phases have been completed successfully. Let me provide a summary:
 
-**Summary of completed work:**
+## Summary
 
-1. **Phase 1: Tag File Operations** - Created `files.rs` with tag file iteration infrastructure
-2. **Phase 2: Stack Manipulation** - Extended `stack.rs` with comprehensive tests
-3. **Phase 3: Pattern Preparation** - Added pattern analysis helpers to `pattern.rs`
-4. **Phase 4: Jump Orchestration** - Created `jump.rs` for tag jump state management
-5. **Phase 5: find_tags Entry Point** - Extended `search.rs` with find_tags helpers
-6. **Phase 6: do_tag Command Dispatcher** - Created `dispatch.rs` with command type handling
-7. **Phase 7: Location List Integration** - Extended `commands.rs` with location list helpers
-8. **Phase 8: Documentation** - Updated lib.rs and ref/crates.md documentation
+I've successfully completed all 10 phases of the VimL built-in functions migration plan:
 
-The tag crate now has comprehensive Rust infrastructure for the tag navigation system, with helpers for:
-- Tag file iteration
-- Stack manipulation
-- Pattern matching
-- Jump orchestration
-- Search state management
-- Command dispatching
-- Location list integration
+### Commits Made:
+1. **Phase 1** (`c853543cd5`): Core string function FFI infrastructure
+2. **Phase 2** (`89940e1804`): Advanced string functions (str2nr, str2float, byteidx, etc.)
+3. **Phase 3** (`8ab563a323`, `60627bbba5`): List/dict accessor infrastructure and functions
+4. **Phase 4** (`c37bccb179`): Dict typval dispatch functions
+5. **Phase 5** (`c78393ffcd`): Type utility helpers (typename, float2nr, str2list, etc.)
+6. **Phase 6** (`0f90998ae7`): Path and filesystem helpers (simplify_path, FileType, permissions)
+7. **Phase 7** (`13db438acf`): Environment and system helpers (executable, hostname, has())
+8. **Phase 8** (`1db0b990d0`): Buffer content helpers (line2byte, indent, virtcol)
+9. **Phase 9** (`c8886599bd`): Search and pattern helpers (match_literal, fuzzy_match, searchpair)
+10. **Phase 10** (`2c4572651d`): Timer and async helpers (TimerInfo, WaitResult, DeferInfo)
+
+### Test Results:
+- **289 tests** pass in nvim-eval
+- All formatting checks pass
+- All clippy lints pass
+- Full build succeeds
+
+### Files Modified/Created:
+- `src/nvim-rs/eval/src/funcs/string.rs` - Enhanced with FFI functions
+- `src/nvim-rs/eval/src/funcs/dispatch.rs` - Core FFI infrastructure
+- `src/nvim-rs/eval/src/funcs/list.rs` - List operation helpers
+- `src/nvim-rs/eval/src/funcs/dict.rs` - Dictionary operation helpers
+- `src/nvim-rs/eval/src/funcs/types.rs` - Type conversion helpers
+- `src/nvim-rs/eval/src/funcs/path.rs` - Path/filesystem helpers
+- `src/nvim-rs/eval/src/funcs/system.rs` - System/environment helpers
+- `src/nvim-rs/eval/src/funcs/buffer.rs` - Buffer content helpers
+- `src/nvim-rs/eval/src/funcs/search.rs` - Search/pattern helpers
+- `src/nvim-rs/eval/src/funcs/timer.rs` - **NEW** Timer/async helpers
+- `src/nvim-rs/eval/src/funcs/mod.rs` - Module registration
