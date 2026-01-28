@@ -4783,6 +4783,80 @@ bool nvim_tv_get_float_chk(const typval_T *tv, double *ret)
 }
 
 // =============================================================================
+// String accessor functions for Rust
+// =============================================================================
+
+/// Get string from typval with type conversion (accessor for Rust).
+/// Uses a static buffer for conversions, so result may be overwritten by next call.
+/// @param tv  The typval to get the string from.
+/// @param out_len  If non-NULL, receives the string length.
+/// @return Pointer to the string (may be static buffer).
+const char *nvim_tv_get_string(const typval_T *tv, size_t *out_len)
+{
+  const char *s = tv_get_string(tv);
+  if (out_len != NULL) {
+    *out_len = strlen(s);
+  }
+  return s;
+}
+
+/// Get string from typval with error checking (accessor for Rust).
+/// @param tv  The typval to get the string from.
+/// @param out_len  If non-NULL, receives the string length.
+/// @return Pointer to the string, or NULL on error.
+const char *nvim_tv_get_string_chk(const typval_T *tv, size_t *out_len)
+{
+  const char *s = tv_get_string_chk(tv);
+  if (s == NULL) {
+    if (out_len != NULL) {
+      *out_len = 0;
+    }
+    return NULL;
+  }
+  if (out_len != NULL) {
+    *out_len = strlen(s);
+  }
+  return s;
+}
+
+/// Set typval to a string (takes ownership, setter for Rust).
+/// @param tv  The typval to set.
+/// @param s   The string to set (NULL-terminated, will be owned by typval).
+void nvim_tv_set_string(typval_T *tv, char *s)
+{
+  tv->v_type = VAR_STRING;
+  tv->vval.v_string = s;
+}
+
+/// Set typval to a copy of a string (setter for Rust).
+/// @param tv   The typval to set.
+/// @param s    The string to copy (NULL-terminated).
+/// @param len  Length of the string (or -1 to use strlen).
+void nvim_tv_set_string_copy(typval_T *tv, const char *s, int len)
+{
+  tv->v_type = VAR_STRING;
+  if (s == NULL) {
+    tv->vval.v_string = NULL;
+  } else if (len < 0) {
+    tv->vval.v_string = xstrdup(s);
+  } else {
+    tv->vval.v_string = xmemdupz(s, (size_t)len);
+  }
+}
+
+/// Allocate a string of given size and set it as typval value (accessor for Rust).
+/// @param tv   The typval to set.
+/// @param len  Length of the string to allocate (not including NUL terminator).
+/// @return Pointer to the allocated string buffer, or NULL on failure.
+char *nvim_tv_alloc_string(typval_T *tv, size_t len)
+{
+  tv->v_type = VAR_STRING;
+  tv->vval.v_string = xmalloc(len + 1);
+  tv->vval.v_string[len] = NUL;
+  return tv->vval.v_string;
+}
+
+// =============================================================================
 // List accessor functions for Rust
 // =============================================================================
 

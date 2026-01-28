@@ -4,6 +4,8 @@
 //! implementations.
 
 #![allow(clippy::must_use_candidate)]
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_possible_truncation)]
 #![allow(dead_code)]
 
 use std::ffi::{c_int, c_void};
@@ -131,6 +133,28 @@ extern "C" {
     /// Get float from typval with error checking.
     /// Returns false and sets rettv to 0.0 if conversion fails.
     fn nvim_tv_get_float_chk(tv: *const c_void, ret: *mut f64) -> bool;
+
+    // --- String accessors ---
+    /// Get raw string pointer from typval (no conversion).
+    fn nvim_tv_get_string_ptr(tv: *const c_void) -> *const u8;
+
+    /// Get string with type conversion.
+    /// Uses a static buffer for conversions, so result may be overwritten by next call.
+    fn nvim_tv_get_string(tv: *const c_void, out_len: *mut usize) -> *const u8;
+
+    /// Get string with error checking.
+    /// Returns NULL on error.
+    fn nvim_tv_get_string_chk(tv: *const c_void, out_len: *mut usize) -> *const u8;
+
+    /// Set typval to a string (takes ownership).
+    fn nvim_tv_set_string(tv: *mut c_void, s: *mut u8);
+
+    /// Set typval to a copy of a string.
+    fn nvim_tv_set_string_copy(tv: *mut c_void, s: *const u8, len: c_int);
+
+    /// Allocate a string of given size and set it as typval value.
+    /// Returns pointer to the allocated buffer.
+    fn nvim_tv_alloc_string(tv: *mut c_void, len: usize) -> *mut u8;
 }
 
 // =============================================================================
@@ -216,6 +240,98 @@ pub fn rettv_set_float(rettv: TypevalPtrMut, f: f64) {
 #[inline]
 pub fn rettv_set_bool(rettv: TypevalPtrMut, b: bool) {
     rettv_set_number(rettv, i64::from(b));
+}
+
+// =============================================================================
+// String Accessors
+// =============================================================================
+
+/// Get string from typval (with type conversion).
+/// Returns the string as a byte slice, or an empty slice if null/invalid.
+///
+/// # Safety
+/// The returned slice is only valid until the next call to any tv_get_string function.
+#[inline]
+pub fn tv_get_string_bytes(tv: TypevalPtr) -> &'static [u8] {
+    if tv.is_null() {
+        return &[];
+    }
+    let mut len: usize = 0;
+    let ptr = unsafe { nvim_tv_get_string(tv.as_ptr(), &raw mut len) };
+    if ptr.is_null() || len == 0 {
+        &[]
+    } else {
+        unsafe { std::slice::from_raw_parts(ptr, len) }
+    }
+}
+
+/// Get string from typval with error checking.
+/// Returns None on error, Some(bytes) on success.
+///
+/// # Safety
+/// The returned slice is only valid until the next call to any tv_get_string function.
+#[inline]
+pub fn tv_get_string_chk_bytes(tv: TypevalPtr) -> Option<&'static [u8]> {
+    if tv.is_null() {
+        return None;
+    }
+    let mut len: usize = 0;
+    let ptr = unsafe { nvim_tv_get_string_chk(tv.as_ptr(), &raw mut len) };
+    if ptr.is_null() {
+        None
+    } else {
+        Some(unsafe { std::slice::from_raw_parts(ptr, len) })
+    }
+}
+
+/// Get raw string pointer from typval (no conversion, VAR_STRING only).
+/// Returns empty slice if not a string type or null.
+#[inline]
+pub fn tv_get_string_ptr(tv: TypevalPtr) -> &'static [u8] {
+    if tv.is_null() {
+        return &[];
+    }
+    let ptr = unsafe { nvim_tv_get_string_ptr(tv.as_ptr()) };
+    if ptr.is_null() {
+        &[]
+    } else {
+        // Find length by scanning for NUL
+        let mut len = 0;
+        unsafe {
+            while *ptr.add(len) != 0 {
+                len += 1;
+            }
+        }
+        unsafe { std::slice::from_raw_parts(ptr, len) }
+    }
+}
+
+/// Set return value to a copy of a byte slice.
+#[inline]
+pub fn rettv_set_string(rettv: TypevalPtrMut, s: &[u8]) {
+    if rettv.is_null() {
+        return;
+    }
+    unsafe {
+        nvim_tv_set_string_copy(rettv.as_ptr(), s.as_ptr(), s.len() as c_int);
+    }
+}
+
+/// Allocate a string in the return value and return a mutable slice to fill.
+/// The caller must fill the buffer with valid UTF-8 (or at least valid bytes).
+///
+/// Returns None if allocation fails or rettv is null.
+#[inline]
+pub fn rettv_alloc_string(rettv: TypevalPtrMut, len: usize) -> Option<&'static mut [u8]> {
+    if rettv.is_null() {
+        return None;
+    }
+    let ptr = unsafe { nvim_tv_alloc_string(rettv.as_ptr(), len) };
+    if ptr.is_null() {
+        None
+    } else {
+        Some(unsafe { std::slice::from_raw_parts_mut(ptr, len) })
+    }
 }
 
 // =============================================================================

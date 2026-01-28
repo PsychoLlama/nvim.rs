@@ -8,13 +8,24 @@
 //! - `tolower()` - convert to lowercase (ASCII)
 //! - `toupper()` - convert to uppercase (ASCII)
 //! - `trim()` - trim whitespace
+//! - `escape()` - escape characters
+//! - `shellescape()` - shell escape
+//! - `strpart()` - substring by bytes
+//! - `strcharpart()` - substring by characters
+//! - `char2nr()` - character to number
+//! - `nr2char()` - number to character
 
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::must_use_candidate)]
 
-use std::ffi::c_int;
+use std::ffi::{c_int, c_void};
+
+use super::dispatch::{
+    argvar_at, rettv_set_number, rettv_set_string, tv_get_number_chk, tv_get_string_bytes,
+    tv_get_string_chk_bytes, TypevalPtrMut,
+};
 
 // =============================================================================
 // Pure String Functions (No FFI)
@@ -769,6 +780,424 @@ pub unsafe extern "C" fn rs_f_split_count(
 }
 
 // =============================================================================
+// Typval Dispatch FFI (VimL function interface)
+// =============================================================================
+
+/// VimL `tolower(str)` - convert string to lowercase.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_tolower(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let s = tv_get_string_bytes(arg0);
+
+    let result = to_lower_ascii(s);
+    rettv_set_string(rettv, &result);
+}
+
+/// VimL `toupper(str)` - convert string to uppercase.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_toupper(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let s = tv_get_string_bytes(arg0);
+
+    let result = to_upper_ascii(s);
+    rettv_set_string(rettv, &result);
+}
+
+/// VimL `trim(str [, mask [, dir]])` - trim whitespace or specified characters.
+///
+/// dir: 0=both (default), 1=left only, 2=right only
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_trim(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let s = tv_get_string_bytes(arg0);
+
+    // Check for optional mask and dir arguments
+    let arg1 = argvar_at(argvars, 1);
+    let mask = tv_get_string_chk_bytes(arg1);
+
+    let arg2 = argvar_at(argvars, 2);
+    let (dir, error) = tv_get_number_chk(arg2);
+    let dir = if error { 0 } else { dir };
+
+    let result = trim_with_mask(s, mask, dir);
+    rettv_set_string(rettv, result);
+}
+
+/// Helper for trim - handles optional mask and direction.
+fn trim_with_mask<'a>(s: &'a [u8], mask: Option<&[u8]>, dir: i64) -> &'a [u8] {
+    match mask {
+        Some(mask_chars) if !mask_chars.is_empty() => {
+            // Custom mask characters
+            match dir {
+                1 => trim_chars_start(s, mask_chars),
+                2 => trim_chars_end(s, mask_chars),
+                _ => trim_chars(s, mask_chars),
+            }
+        }
+        _ => {
+            // No mask or empty mask, use default whitespace trimming
+            match dir {
+                1 => trim_start(s),
+                2 => trim_end(s),
+                _ => trim(s),
+            }
+        }
+    }
+}
+
+/// Trim specified characters from both ends.
+fn trim_chars<'a>(s: &'a [u8], mask: &[u8]) -> &'a [u8] {
+    let start = s.iter().position(|c| !mask.contains(c));
+    let end = s.iter().rposition(|c| !mask.contains(c));
+
+    match (start, end) {
+        (Some(start_idx), Some(end_idx)) => &s[start_idx..=end_idx],
+        _ => &[],
+    }
+}
+
+/// Trim specified characters from start.
+fn trim_chars_start<'a>(s: &'a [u8], mask: &[u8]) -> &'a [u8] {
+    match s.iter().position(|c| !mask.contains(c)) {
+        Some(start) => &s[start..],
+        None => &[],
+    }
+}
+
+/// Trim specified characters from end.
+fn trim_chars_end<'a>(s: &'a [u8], mask: &[u8]) -> &'a [u8] {
+    match s.iter().rposition(|c| !mask.contains(c)) {
+        Some(end) => &s[..=end],
+        None => &[],
+    }
+}
+
+/// VimL `escape(str, chars)` - escape specified characters.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_escape(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let arg1 = argvar_at(argvars, 1);
+
+    let s = tv_get_string_bytes(arg0);
+    let chars = tv_get_string_bytes(arg1);
+
+    let result = escape(s, chars);
+    rettv_set_string(rettv, &result);
+}
+
+/// VimL `shellescape(str [, special])` - escape string for shell.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_shellescape(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let arg1 = argvar_at(argvars, 1);
+
+    let s = tv_get_string_bytes(arg0);
+    let (special, _) = tv_get_number_chk(arg1);
+    let special = special != 0;
+
+    let result = shellescape(s, special);
+    rettv_set_string(rettv, &result);
+}
+
+/// VimL `stridx(haystack, needle [, start])` - find substring.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_stridx(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let arg1 = argvar_at(argvars, 1);
+    let arg2 = argvar_at(argvars, 2);
+
+    let haystack = tv_get_string_bytes(arg0);
+    let needle = tv_get_string_bytes(arg1);
+    let (start, error) = tv_get_number_chk(arg2);
+
+    if error {
+        rettv_set_number(rettv, -1);
+        return;
+    }
+
+    let start = if start < 0 { 0 } else { start as usize };
+    if start >= haystack.len() {
+        rettv_set_number(rettv, -1);
+        return;
+    }
+
+    let search_slice = &haystack[start..];
+    match str_index(search_slice, needle) {
+        Some(idx) => rettv_set_number(rettv, (start + idx) as i64),
+        None => rettv_set_number(rettv, -1),
+    }
+}
+
+/// VimL `strridx(haystack, needle [, start])` - find last substring.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_strridx(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let arg1 = argvar_at(argvars, 1);
+    let arg2 = argvar_at(argvars, 2);
+
+    let haystack = tv_get_string_bytes(arg0);
+    let needle = tv_get_string_bytes(arg1);
+    let (start, error) = tv_get_number_chk(arg2);
+
+    // start limits where to START the search, not where to end
+    let search_end = if error || start < 0 {
+        haystack.len()
+    } else {
+        (start as usize + needle.len()).min(haystack.len())
+    };
+
+    let search_slice = &haystack[..search_end];
+    match str_rindex(search_slice, needle) {
+        Some(idx) => rettv_set_number(rettv, idx as i64),
+        None => rettv_set_number(rettv, -1),
+    }
+}
+
+/// VimL `strpart(str, start [, len [, chars]])` - get substring.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_strpart(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let arg1 = argvar_at(argvars, 1);
+    let arg2 = argvar_at(argvars, 2);
+    let arg3 = argvar_at(argvars, 3);
+
+    let s = tv_get_string_bytes(arg0);
+    let (start, error) = tv_get_number_chk(arg1);
+    if error {
+        rettv_set_string(rettv, &[]);
+        return;
+    }
+
+    // Check if len argument is present
+    let len = {
+        let (n, error) = tv_get_number_chk(arg2);
+        if error {
+            None
+        } else {
+            Some(n)
+        }
+    };
+
+    // Check for chars flag (4th argument)
+    let (chars_flag, _) = tv_get_number_chk(arg3);
+    let use_chars = chars_flag != 0;
+
+    if use_chars {
+        // Character-based indexing
+        let result = strcharpart(s, start, len);
+        rettv_set_string(rettv, &result);
+    } else {
+        // Byte-based indexing
+        let result = strpart(s, start, len);
+        rettv_set_string(rettv, result);
+    }
+}
+
+/// VimL `strcharpart(str, start [, len [, skipcc]])` - get substring by chars.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_strcharpart(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let arg1 = argvar_at(argvars, 1);
+    let arg2 = argvar_at(argvars, 2);
+
+    let s = tv_get_string_bytes(arg0);
+    let (start, error) = tv_get_number_chk(arg1);
+    if error {
+        rettv_set_string(rettv, &[]);
+        return;
+    }
+
+    // Check if len argument is present
+    let len = {
+        let (n, error) = tv_get_number_chk(arg2);
+        if error {
+            None
+        } else {
+            Some(n)
+        }
+    };
+
+    let result = strcharpart(s, start, len);
+    rettv_set_string(rettv, &result);
+}
+
+/// VimL `strlen(str)` - get string length in bytes.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_strlen(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let s = tv_get_string_bytes(arg0);
+
+    rettv_set_number(rettv, strlen_bytes(s) as i64);
+}
+
+/// VimL `strchars(str [, skipcc])` - get string length in characters.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_strchars(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let s = tv_get_string_bytes(arg0);
+
+    // TODO: handle skipcc argument for combining characters
+    rettv_set_number(rettv, strlen_chars(s) as i64);
+}
+
+/// VimL `char2nr(str [, utf8])` - get character number.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_char2nr(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let s = tv_get_string_bytes(arg0);
+
+    rettv_set_number(rettv, i64::from(char2nr(s)));
+}
+
+/// VimL `nr2char(nr [, utf8])` - convert number to character.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_nr2char(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+
+    let (nr, error) = tv_get_number_chk(arg0);
+    if error || nr < 0 {
+        rettv_set_string(rettv, &[]);
+        return;
+    }
+
+    let result = nr2char(nr as u32);
+    rettv_set_string(rettv, &result);
+}
+
+/// VimL `tr(str, from, to)` - translate characters.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_tr(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let arg1 = argvar_at(argvars, 1);
+    let arg2 = argvar_at(argvars, 2);
+
+    let s = tv_get_string_bytes(arg0);
+    let from = tv_get_string_bytes(arg1);
+    let to = tv_get_string_bytes(arg2);
+
+    let result = tr(s, from, to);
+    rettv_set_string(rettv, &result);
+}
+
+/// VimL `repeat(str, count)` - repeat string.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_repeat_str(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let arg1 = argvar_at(argvars, 1);
+
+    let s = tv_get_string_bytes(arg0);
+    let (count, error) = tv_get_number_chk(arg1);
+
+    if error || count < 0 {
+        rettv_set_string(rettv, &[]);
+        return;
+    }
+
+    let result = str_repeat(s, count as usize);
+    rettv_set_string(rettv, &result);
+}
+
+/// VimL `reverse(str)` for strings - reverse byte order.
+/// Note: This handles the string case only; lists are handled separately.
+///
+/// # Safety
+/// Caller must provide valid pointers to typval_T arrays.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_tv_reverse_str(argvars: *const c_void, rettv: *mut c_void) {
+    let rettv = TypevalPtrMut::from_raw(rettv);
+    let arg0 = argvar_at(argvars, 0);
+    let s = tv_get_string_bytes(arg0);
+
+    // For UTF-8, we need to reverse by characters, not bytes
+    let result = str_reverse_utf8(s);
+    rettv_set_string(rettv, &result);
+}
+
+/// Reverse a string by UTF-8 characters (not bytes).
+fn str_reverse_utf8(s: &[u8]) -> Vec<u8> {
+    // Collect character start positions
+    let mut char_starts: Vec<usize> = Vec::new();
+    for (i, &b) in s.iter().enumerate() {
+        if (b & 0xC0) != 0x80 {
+            char_starts.push(i);
+        }
+    }
+
+    let mut result = Vec::with_capacity(s.len());
+    for &start in char_starts.iter().rev() {
+        // Find end of this character
+        let end = char_starts
+            .iter()
+            .find(|&&pos| pos > start)
+            .copied()
+            .unwrap_or(s.len());
+        result.extend_from_slice(&s[start..end]);
+    }
+
+    result
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -918,5 +1347,21 @@ mod tests {
     fn test_nr2char() {
         assert_eq!(nr2char(65), b"A");
         assert_eq!(nr2char(0x65E5), "日".as_bytes());
+    }
+
+    #[test]
+    fn test_trim_chars() {
+        assert_eq!(trim_chars(b"xxhelloxx", b"x"), b"hello");
+        assert_eq!(trim_chars(b"abchelloabc", b"abc"), b"hello");
+        assert_eq!(trim_chars(b"xxx", b"x"), b"");
+    }
+
+    #[test]
+    fn test_str_reverse_utf8() {
+        assert_eq!(str_reverse_utf8(b"hello"), b"olleh");
+        // Japanese "日本語" should reverse to "語本日"
+        let jp = "日本語".as_bytes();
+        let reversed = str_reverse_utf8(jp);
+        assert_eq!(reversed, "語本日".as_bytes());
     }
 }
