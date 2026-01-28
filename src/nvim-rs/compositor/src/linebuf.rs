@@ -826,6 +826,58 @@ pub extern "C" fn rs_compose_line(row: i64, startcol: i64, endcol: i64, flags: c
 }
 
 // =============================================================================
+// Compose Area Implementation
+// =============================================================================
+
+/// Compose a rectangular area from multiple grid layers.
+///
+/// This function first calls compose_debug for visualization, then
+/// iterates over all rows in the area calling compose_line for each.
+///
+/// # Arguments
+/// * `startrow` - Starting row (inclusive)
+/// * `endrow` - Ending row (exclusive)
+/// * `startcol` - Starting column (inclusive)
+/// * `endcol` - Ending column (exclusive)
+fn compose_area_impl(startrow: i64, mut endrow: i64, startcol: i64, mut endcol: i64) {
+    unsafe {
+        // Get debug highlight ID for recompose
+        let dbghl_recompose = nvim_comp_get_dbghl_recompose();
+
+        // Call debug visualization
+        compose_debug_impl(startrow, endrow, startcol, endcol, dbghl_recompose, true);
+
+        // Clamp to default grid bounds
+        let default_grid = nvim_get_default_grid();
+        let grid_rows = i64::from(nvim_screengrid_get_rows(default_grid));
+        let grid_cols = i64::from(nvim_screengrid_get_cols(default_grid));
+
+        endrow = endrow.min(grid_rows);
+        endcol = endcol.min(grid_cols);
+
+        if endcol <= startcol {
+            return;
+        }
+
+        // Compose each row
+        for r in startrow..endrow {
+            compose_line_impl(r, startcol, endcol, line_flags::INVALID);
+        }
+    }
+}
+
+/// FFI wrapper for compose_area.
+///
+/// Composes a rectangular area from multiple grid layers.
+///
+/// # Safety
+/// This function accesses global compositor state and grid data.
+#[no_mangle]
+pub extern "C" fn rs_compose_area(startrow: i64, endrow: i64, startcol: i64, endcol: i64) {
+    compose_area_impl(startrow, endrow, startcol, endcol);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

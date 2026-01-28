@@ -446,17 +446,12 @@ static void debug_delay(Integer lines)
   rs_debug_delay(lines);
 }
 
+// Rust implementation of compose_area
+extern void rs_compose_area(Integer startrow, Integer endrow, Integer startcol, Integer endcol);
+
 static void compose_area(Integer startrow, Integer endrow, Integer startcol, Integer endcol)
 {
-  compose_debug(startrow, endrow, startcol, endcol, dbghl_recompose, true);
-  endrow = MIN(endrow, default_grid.rows);
-  endcol = MIN(endcol, default_grid.cols);
-  if (endcol <= startcol) {
-    return;
-  }
-  for (int r = (int)startrow; r < endrow; r++) {
-    compose_line(r, startcol, endcol, kLineFlagInvalid);
-  }
+  rs_compose_area(startrow, endrow, startcol, endcol);
 }
 
 // Non-static wrapper for compose_area callable from Rust
