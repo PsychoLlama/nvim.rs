@@ -35,9 +35,11 @@ pub mod define;
 pub mod place;
 pub mod query;
 pub mod remove;
+pub mod storage;
 pub mod text;
 
 // Re-exports
+pub use storage::{SignMapIterator, SignNamespace, SignProperties};
 pub use text::{ScharT, SignTextResult, MAX_SCHAR_SIZE};
 
 // =============================================================================
