@@ -322,6 +322,354 @@ pub extern "C" fn rs_char_cells_simple(c: c_int) -> c_int {
 // Tests
 // =============================================================================
 
+// =============================================================================
+// Grid Cell Write Operations (Phase 1 - Grid Core)
+// =============================================================================
+
+/// Type for ScreenGrid pointer (opaque to Rust)
+type ScreenGridPtr = *mut std::ffi::c_void;
+
+extern "C" {
+    fn nvim_screengrid_get_chars(grid: ScreenGridPtr) -> *mut ScharT;
+    fn nvim_screengrid_get_attrs(grid: ScreenGridPtr) -> *mut SattrT;
+    fn nvim_screengrid_get_vcols(grid: ScreenGridPtr) -> *mut ColnrT;
+    fn nvim_screengrid_get_line_offset(grid: ScreenGridPtr) -> *mut usize;
+    fn nvim_screengrid_get_rows(grid: ScreenGridPtr) -> c_int;
+    fn nvim_screengrid_get_cols(grid: ScreenGridPtr) -> c_int;
+}
+
+/// Write a character directly to a grid cell at (row, col).
+///
+/// This bypasses the linebuf and writes directly to the grid.
+///
+/// # Safety
+/// - `grid` must be a valid ScreenGrid pointer
+/// - row and col must be within grid bounds
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_put_schar(
+    grid: ScreenGridPtr,
+    row: c_int,
+    col: c_int,
+    schar: ScharT,
+    attr: SattrT,
+) {
+    if grid.is_null() {
+        return;
+    }
+
+    let chars = nvim_screengrid_get_chars(grid);
+    let attrs = nvim_screengrid_get_attrs(grid);
+    let line_offset = nvim_screengrid_get_line_offset(grid);
+
+    if chars.is_null() || attrs.is_null() || line_offset.is_null() {
+        return;
+    }
+
+    let rows = nvim_screengrid_get_rows(grid);
+    let cols = nvim_screengrid_get_cols(grid);
+
+    if row < 0 || row >= rows || col < 0 || col >= cols {
+        return;
+    }
+
+    let off = *line_offset.add(row as usize) + col as usize;
+    *chars.add(off) = schar;
+    *attrs.add(off) = attr;
+}
+
+/// Write a character and vcol directly to a grid cell at (row, col).
+///
+/// This bypasses the linebuf and writes directly to the grid.
+///
+/// # Safety
+/// - `grid` must be a valid ScreenGrid pointer
+/// - row and col must be within grid bounds
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_put_schar_full(
+    grid: ScreenGridPtr,
+    row: c_int,
+    col: c_int,
+    schar: ScharT,
+    attr: SattrT,
+    vcol: ColnrT,
+) {
+    if grid.is_null() {
+        return;
+    }
+
+    let chars = nvim_screengrid_get_chars(grid);
+    let attrs = nvim_screengrid_get_attrs(grid);
+    let vcols = nvim_screengrid_get_vcols(grid);
+    let line_offset = nvim_screengrid_get_line_offset(grid);
+
+    if chars.is_null() || attrs.is_null() || vcols.is_null() || line_offset.is_null() {
+        return;
+    }
+
+    let rows = nvim_screengrid_get_rows(grid);
+    let cols = nvim_screengrid_get_cols(grid);
+
+    if row < 0 || row >= rows || col < 0 || col >= cols {
+        return;
+    }
+
+    let off = *line_offset.add(row as usize) + col as usize;
+    *chars.add(off) = schar;
+    *attrs.add(off) = attr;
+    *vcols.add(off) = vcol;
+}
+
+/// Read a character from a grid cell at (row, col).
+///
+/// # Safety
+/// - `grid` must be a valid ScreenGrid pointer
+/// - row and col must be within grid bounds
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_get_schar(grid: ScreenGridPtr, row: c_int, col: c_int) -> ScharT {
+    if grid.is_null() {
+        return 0;
+    }
+
+    let chars = nvim_screengrid_get_chars(grid);
+    let line_offset = nvim_screengrid_get_line_offset(grid);
+
+    if chars.is_null() || line_offset.is_null() {
+        return 0;
+    }
+
+    let rows = nvim_screengrid_get_rows(grid);
+    let cols = nvim_screengrid_get_cols(grid);
+
+    if row < 0 || row >= rows || col < 0 || col >= cols {
+        return 0;
+    }
+
+    let off = *line_offset.add(row as usize) + col as usize;
+    *chars.add(off)
+}
+
+/// Read an attribute from a grid cell at (row, col).
+///
+/// # Safety
+/// - `grid` must be a valid ScreenGrid pointer
+/// - row and col must be within grid bounds
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_get_attr(grid: ScreenGridPtr, row: c_int, col: c_int) -> SattrT {
+    if grid.is_null() {
+        return SATTR_INVALID;
+    }
+
+    let attrs = nvim_screengrid_get_attrs(grid);
+    let line_offset = nvim_screengrid_get_line_offset(grid);
+
+    if attrs.is_null() || line_offset.is_null() {
+        return SATTR_INVALID;
+    }
+
+    let rows = nvim_screengrid_get_rows(grid);
+    let cols = nvim_screengrid_get_cols(grid);
+
+    if row < 0 || row >= rows || col < 0 || col >= cols {
+        return SATTR_INVALID;
+    }
+
+    let off = *line_offset.add(row as usize) + col as usize;
+    *attrs.add(off)
+}
+
+/// Read a vcol from a grid cell at (row, col).
+///
+/// # Safety
+/// - `grid` must be a valid ScreenGrid pointer
+/// - row and col must be within grid bounds
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_get_vcol(grid: ScreenGridPtr, row: c_int, col: c_int) -> ColnrT {
+    if grid.is_null() {
+        return COLNR_INVALID;
+    }
+
+    let vcols = nvim_screengrid_get_vcols(grid);
+    let line_offset = nvim_screengrid_get_line_offset(grid);
+
+    if vcols.is_null() || line_offset.is_null() {
+        return COLNR_INVALID;
+    }
+
+    let rows = nvim_screengrid_get_rows(grid);
+    let cols = nvim_screengrid_get_cols(grid);
+
+    if row < 0 || row >= rows || col < 0 || col >= cols {
+        return COLNR_INVALID;
+    }
+
+    let off = *line_offset.add(row as usize) + col as usize;
+    *vcols.add(off)
+}
+
+/// Copy a line segment within a grid from one row to another.
+///
+/// This is the public FFI wrapper for grid line copying.
+///
+/// # Safety
+/// - `grid` must be a valid ScreenGrid pointer
+/// - `to_row` and `from_row` must be within grid bounds
+/// - `col` + `width` must not exceed grid columns
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_copy_line(
+    grid: ScreenGridPtr,
+    to_row: c_int,
+    from_row: c_int,
+    col: c_int,
+    width: c_int,
+) {
+    if grid.is_null() || width <= 0 {
+        return;
+    }
+
+    let chars = nvim_screengrid_get_chars(grid);
+    let attrs = nvim_screengrid_get_attrs(grid);
+    let vcols = nvim_screengrid_get_vcols(grid);
+    let line_offset = nvim_screengrid_get_line_offset(grid);
+
+    if chars.is_null() || attrs.is_null() || vcols.is_null() || line_offset.is_null() {
+        return;
+    }
+
+    let rows = nvim_screengrid_get_rows(grid);
+    let cols = nvim_screengrid_get_cols(grid);
+
+    // Bounds checking
+    if to_row < 0 || to_row >= rows || from_row < 0 || from_row >= rows {
+        return;
+    }
+    if col < 0 || col + width > cols {
+        return;
+    }
+
+    let off_to = *line_offset.add(to_row as usize) + col as usize;
+    let off_from = *line_offset.add(from_row as usize) + col as usize;
+    let width_usize = width as usize;
+
+    // Use ptr::copy for memmove semantics (handles overlapping regions)
+    std::ptr::copy(chars.add(off_from), chars.add(off_to), width_usize);
+    std::ptr::copy(attrs.add(off_from), attrs.add(off_to), width_usize);
+    std::ptr::copy(vcols.add(off_from), vcols.add(off_to), width_usize);
+}
+
+/// Fill a range of cells in a grid row with a character and attribute.
+///
+/// # Safety
+/// - `grid` must be a valid ScreenGrid pointer
+/// - row and column range must be within grid bounds
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_fill_row(
+    grid: ScreenGridPtr,
+    row: c_int,
+    start_col: c_int,
+    end_col: c_int,
+    schar: ScharT,
+    attr: SattrT,
+) {
+    if grid.is_null() || start_col >= end_col {
+        return;
+    }
+
+    let chars = nvim_screengrid_get_chars(grid);
+    let attrs = nvim_screengrid_get_attrs(grid);
+    let vcols = nvim_screengrid_get_vcols(grid);
+    let line_offset = nvim_screengrid_get_line_offset(grid);
+
+    if chars.is_null() || attrs.is_null() || vcols.is_null() || line_offset.is_null() {
+        return;
+    }
+
+    let rows = nvim_screengrid_get_rows(grid);
+    let cols = nvim_screengrid_get_cols(grid);
+
+    if row < 0 || row >= rows {
+        return;
+    }
+
+    let start = start_col.max(0) as usize;
+    let end = end_col.min(cols) as usize;
+    let base_off = *line_offset.add(row as usize);
+
+    for col in start..end {
+        let off = base_off + col;
+        *chars.add(off) = schar;
+        *attrs.add(off) = attr;
+        *vcols.add(off) = COLNR_INVALID;
+    }
+}
+
+/// Compare a cell in the grid with expected values.
+///
+/// Returns true if the cell matches the expected schar and attr.
+///
+/// # Safety
+/// - `grid` must be a valid ScreenGrid pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_cell_matches(
+    grid: ScreenGridPtr,
+    row: c_int,
+    col: c_int,
+    expected_schar: ScharT,
+    expected_attr: SattrT,
+) -> c_int {
+    if grid.is_null() {
+        return 0;
+    }
+
+    let chars = nvim_screengrid_get_chars(grid);
+    let attrs = nvim_screengrid_get_attrs(grid);
+    let line_offset = nvim_screengrid_get_line_offset(grid);
+
+    if chars.is_null() || attrs.is_null() || line_offset.is_null() {
+        return 0;
+    }
+
+    let rows = nvim_screengrid_get_rows(grid);
+    let cols = nvim_screengrid_get_cols(grid);
+
+    if row < 0 || row >= rows || col < 0 || col >= cols {
+        return 0;
+    }
+
+    let off = *line_offset.add(row as usize) + col as usize;
+    let actual_schar = *chars.add(off);
+    let actual_attr = *attrs.add(off);
+
+    c_int::from(actual_schar == expected_schar && actual_attr == expected_attr)
+}
+
+/// Check if a row in the grid is "invalid" (first cell has negative attr).
+///
+/// This is used to detect rows that need full redraw.
+///
+/// # Safety
+/// - `grid` must be a valid ScreenGrid pointer
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_row_invalid(grid: ScreenGridPtr, row: c_int) -> c_int {
+    if grid.is_null() {
+        return 1; // Treat as invalid if no grid
+    }
+
+    let attrs = nvim_screengrid_get_attrs(grid);
+    let line_offset = nvim_screengrid_get_line_offset(grid);
+
+    if attrs.is_null() || line_offset.is_null() {
+        return 1;
+    }
+
+    let rows = nvim_screengrid_get_rows(grid);
+    if row < 0 || row >= rows {
+        return 1;
+    }
+
+    let off = *line_offset.add(row as usize);
+    c_int::from(*attrs.add(off) < 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

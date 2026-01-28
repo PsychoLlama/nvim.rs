@@ -329,6 +329,120 @@ pub extern "C" fn rs_should_preserve_row(
 }
 
 // =============================================================================
+// Allocation Validation Helpers (Phase 1)
+// =============================================================================
+
+/// Check if allocation parameters are valid for grid_alloc.
+///
+/// Returns 1 if parameters are valid, 0 otherwise.
+#[no_mangle]
+pub extern "C" fn rs_grid_alloc_params_valid(rows: c_int, cols: c_int) -> c_int {
+    // Both dimensions must be non-negative
+    if rows < 0 || cols < 0 {
+        return 0;
+    }
+    // At least one dimension must be non-zero for a valid grid
+    // (though 0x0 is technically valid for clearing)
+    1
+}
+
+/// Calculate the number of bytes needed for chars/attrs/vcols arrays.
+///
+/// Returns bytes needed, or 0 on overflow/invalid params.
+#[no_mangle]
+pub extern "C" fn rs_grid_array_bytes(rows: c_int, cols: c_int, elem_size: usize) -> usize {
+    if rows < 0 || cols < 0 {
+        return 0;
+    }
+
+    let Some(cells) = (rows as usize).checked_mul(cols as usize) else {
+        return 0;
+    };
+
+    cells.checked_mul(elem_size).unwrap_or(0)
+}
+
+/// Calculate line_offset array entry for a row.
+///
+/// This is used during grid_alloc to initialize the line_offset array.
+#[no_mangle]
+pub extern "C" fn rs_grid_row_offset(row: c_int, cols: c_int) -> usize {
+    if row < 0 || cols < 0 {
+        return 0;
+    }
+    (row as usize) * (cols as usize)
+}
+
+/// Determine if content should be copied during resize.
+///
+/// Returns 1 if copy is requested and we have valid source data.
+#[no_mangle]
+pub extern "C" fn rs_grid_should_copy_on_resize(
+    copy: c_int,
+    new_row: c_int,
+    old_rows: c_int,
+    old_chars_not_null: c_int,
+) -> c_int {
+    c_int::from(copy != 0 && new_row < old_rows && old_chars_not_null != 0)
+}
+
+/// Calculate number of elements to copy per row during resize.
+///
+/// Returns the minimum of old_cols and new_cols.
+#[no_mangle]
+pub extern "C" fn rs_grid_copy_width(old_cols: c_int, new_cols: c_int) -> c_int {
+    if old_cols <= 0 || new_cols <= 0 {
+        return 0;
+    }
+    old_cols.min(new_cols)
+}
+
+// =============================================================================
+// Grid State Queries (Phase 1)
+// =============================================================================
+
+/// Check if grid has valid dimensions (rows > 0 && cols > 0).
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_has_valid_dims(grid: *mut std::ffi::c_void) -> c_int {
+    if grid.is_null() {
+        return 0;
+    }
+
+    let rows = nvim_screengrid_get_rows(grid);
+    let cols = nvim_screengrid_get_cols(grid);
+
+    c_int::from(rows > 0 && cols > 0)
+}
+
+/// Check if grid needs allocation (no chars array).
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_needs_alloc(grid: *mut std::ffi::c_void) -> c_int {
+    if grid.is_null() {
+        return 1;
+    }
+
+    let chars = nvim_screengrid_get_chars(grid);
+    c_int::from(chars.is_null())
+}
+
+/// Check if grid dimensions match requested size.
+#[no_mangle]
+pub unsafe extern "C" fn rs_grid_dims_match(
+    grid: *mut std::ffi::c_void,
+    rows: c_int,
+    cols: c_int,
+) -> c_int {
+    if grid.is_null() {
+        return 0;
+    }
+
+    let grid_rows = nvim_screengrid_get_rows(grid);
+    let grid_cols = nvim_screengrid_get_cols(grid);
+
+    c_int::from(grid_rows == rows && grid_cols == cols)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -429,5 +543,50 @@ mod tests {
         assert_eq!(rs_should_preserve_row(5, 10, 1), 1);
         assert_eq!(rs_should_preserve_row(15, 10, 1), 0); // row >= old_rows
         assert_eq!(rs_should_preserve_row(5, 10, 0), 0); // no old chars
+    }
+
+    #[test]
+    fn test_grid_alloc_params_valid() {
+        assert_eq!(rs_grid_alloc_params_valid(10, 80), 1);
+        assert_eq!(rs_grid_alloc_params_valid(0, 0), 1); // 0x0 is valid for clearing
+        assert_eq!(rs_grid_alloc_params_valid(-1, 80), 0);
+        assert_eq!(rs_grid_alloc_params_valid(10, -1), 0);
+    }
+
+    #[test]
+    fn test_grid_array_bytes() {
+        // 10 rows * 80 cols = 800 cells
+        assert_eq!(rs_grid_array_bytes(10, 80, 4), 3200); // 800 * 4
+        assert_eq!(rs_grid_array_bytes(10, 80, 8), 6400); // 800 * 8
+        assert_eq!(rs_grid_array_bytes(0, 80, 4), 0);
+        assert_eq!(rs_grid_array_bytes(-1, 80, 4), 0);
+    }
+
+    #[test]
+    fn test_grid_row_offset() {
+        assert_eq!(rs_grid_row_offset(0, 80), 0);
+        assert_eq!(rs_grid_row_offset(1, 80), 80);
+        assert_eq!(rs_grid_row_offset(5, 80), 400);
+        assert_eq!(rs_grid_row_offset(-1, 80), 0);
+    }
+
+    #[test]
+    fn test_grid_should_copy_on_resize() {
+        // copy=true, row<old_rows, has chars
+        assert_eq!(rs_grid_should_copy_on_resize(1, 5, 10, 1), 1);
+        // copy=false
+        assert_eq!(rs_grid_should_copy_on_resize(0, 5, 10, 1), 0);
+        // row >= old_rows
+        assert_eq!(rs_grid_should_copy_on_resize(1, 15, 10, 1), 0);
+        // no old chars
+        assert_eq!(rs_grid_should_copy_on_resize(1, 5, 10, 0), 0);
+    }
+
+    #[test]
+    fn test_grid_copy_width() {
+        assert_eq!(rs_grid_copy_width(80, 120), 80);
+        assert_eq!(rs_grid_copy_width(120, 80), 80);
+        assert_eq!(rs_grid_copy_width(0, 80), 0);
+        assert_eq!(rs_grid_copy_width(-1, 80), 0);
     }
 }
