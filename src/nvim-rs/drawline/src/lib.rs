@@ -2177,6 +2177,234 @@ pub unsafe extern "C" fn rs_wlv_put_linebuf(
     wlv_put_linebuf_impl(wp, wlv, endcol, clear_end, bg_attr, flags);
 }
 
+// ============================================================================
+// Phase 2: Line Drawing State Helpers
+// ============================================================================
+
+// Additional WLV accessors for state management (char_attr exists in C)
+extern "C" {
+    fn nvim_wlv_get_char_attr(wlv: WlvHandle) -> c_int;
+    fn nvim_wlv_set_char_attr(wlv: WlvHandle, val: c_int);
+}
+
+/// Check if there are filler lines remaining to draw.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_has_filler_todo(wlv: WlvHandle) -> c_int {
+    c_int::from(nvim_wlv_get_filler_todo(wlv) > 0)
+}
+
+/// Check if all filler lines have been drawn.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_filler_complete(wlv: WlvHandle) -> c_int {
+    c_int::from(nvim_wlv_get_filler_todo(wlv) == 0)
+}
+
+/// Get the number of filler lines for diff display.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_filler_lines(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_filler_lines(wlv)
+}
+
+/// Check if this is a virtual line (filler line within actual text).
+///
+/// Returns true if filler_todo > filler_lines (i.e., drawing virtual lines
+/// that come before the diff filler lines).
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_is_virtual_line(wlv: WlvHandle) -> c_int {
+    let filler_todo = nvim_wlv_get_filler_todo(wlv);
+    let filler_lines = nvim_wlv_get_filler_lines(wlv);
+    c_int::from(filler_todo > filler_lines)
+}
+
+/// Get the character attribute for the current cell.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_char_attr(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_char_attr(wlv)
+}
+
+/// Set the character attribute for the current cell.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_set_char_attr(wlv: WlvHandle, attr: c_int) {
+    nvim_wlv_set_char_attr(wlv, attr);
+}
+
+/// Combine an attribute with the current character attribute.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_combine_char_attr(wlv: WlvHandle, attr: c_int) {
+    let current = nvim_wlv_get_char_attr(wlv);
+    let combined = hl_combine_attr(current, attr);
+    nvim_wlv_set_char_attr(wlv, combined);
+}
+
+/// Get the number of extra characters to display.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_n_extra(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_n_extra(wlv)
+}
+
+/// Check if there are extra characters to display.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_has_n_extra(wlv: WlvHandle) -> c_int {
+    c_int::from(nvim_wlv_get_n_extra(wlv) > 0)
+}
+
+/// Decrement the n_extra counter.
+///
+/// Returns the new value after decrement.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_dec_n_extra(wlv: WlvHandle) -> c_int {
+    let current = nvim_wlv_get_n_extra(wlv);
+    let new_val = current - 1;
+    nvim_wlv_set_n_extra(wlv, new_val);
+    new_val
+}
+
+/// Get the number of cells to skip.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_skip_cells(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_skip_cells(wlv)
+}
+
+/// Set the number of cells to skip.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_set_skip_cells(wlv: WlvHandle, val: c_int) {
+    nvim_wlv_set_skip_cells(wlv, val);
+}
+
+/// Decrement the skip_cells counter.
+///
+/// Returns the new value after decrement.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_dec_skip_cells(wlv: WlvHandle) -> c_int {
+    let current = nvim_wlv_get_skip_cells(wlv);
+    let new_val = if current > 0 { current - 1 } else { 0 };
+    nvim_wlv_set_skip_cells(wlv, new_val);
+    new_val
+}
+
+/// Check if we should skip the current cell.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_should_skip(wlv: WlvHandle) -> c_int {
+    c_int::from(nvim_wlv_get_skip_cells(wlv) > 0)
+}
+
+/// Get the number of attribute cells remaining.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_n_attr(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_n_attr(wlv)
+}
+
+/// Set the number of attribute cells.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_set_n_attr(wlv: WlvHandle, val: c_int) {
+    nvim_wlv_set_n_attr(wlv, val);
+}
+
+/// Check if there are attribute cells remaining.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_has_n_attr(wlv: WlvHandle) -> c_int {
+    c_int::from(nvim_wlv_get_n_attr(wlv) > 0)
+}
+
+/// Decrement the n_attr counter.
+///
+/// Returns the new value after decrement.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_dec_n_attr(wlv: WlvHandle) -> c_int {
+    let current = nvim_wlv_get_n_attr(wlv);
+    let new_val = if current > 0 { current - 1 } else { 0 };
+    nvim_wlv_set_n_attr(wlv, new_val);
+    new_val
+}
+
+/// Get the row number being drawn.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_row(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_row(wlv)
+}
+
+/// Get the starting row for this line.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_startrow(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_startrow(wlv)
+}
+
+/// Check if we are on the first row of a wrapped line.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_is_first_row(wlv: WlvHandle) -> c_int {
+    c_int::from(nvim_wlv_get_row(wlv) == nvim_wlv_get_startrow(wlv))
+}
+
+/// Get the line number being drawn.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_lnum(wlv: WlvHandle) -> LinenrT {
+    nvim_wlv_get_lnum(wlv)
+}
+
+/// Get the current column offset.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_off(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_off(wlv)
+}
+
+/// Set the current column offset.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_set_off(wlv: WlvHandle, val: c_int) {
+    nvim_wlv_set_off(wlv, val);
+}
+
+/// Advance the column offset by a given amount.
+///
+/// Returns the new offset value.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_advance_off(wlv: WlvHandle, delta: c_int) -> c_int {
+    let current = nvim_wlv_get_off(wlv);
+    let new_val = current + delta;
+    nvim_wlv_set_off(wlv, new_val);
+    new_val
+}
+
+/// Get the fold info for the current line.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_fold_level(wlv: WlvHandle) -> c_int {
+    let fi = nvim_wlv_get_foldinfo(wlv);
+    fi.fi_level
+}
+
+/// Check if the current line is folded.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_is_folded(wlv: WlvHandle) -> c_int {
+    let fi = nvim_wlv_get_foldinfo(wlv);
+    c_int::from(fi.fi_lines > 0)
+}
+
+/// Get the number of lines in the current fold.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_fold_lines(wlv: WlvHandle) -> LinenrT {
+    let fi = nvim_wlv_get_foldinfo(wlv);
+    fi.fi_lines
+}
+
+/// Get the number of virtual lines above this line.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_n_virt_lines(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_n_virt_lines(wlv)
+}
+
+/// Get the number of virtual lines below this line.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_get_n_virt_below(wlv: WlvHandle) -> c_int {
+    nvim_wlv_get_n_virt_below(wlv)
+}
+
+/// Check if there are any virtual lines for this line.
+#[no_mangle]
+pub unsafe extern "C" fn rs_wlv_has_virt_lines(wlv: WlvHandle) -> c_int {
+    let above = nvim_wlv_get_n_virt_lines(wlv);
+    let below = nvim_wlv_get_n_virt_below(wlv);
+    c_int::from(above > 0 || below > 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
