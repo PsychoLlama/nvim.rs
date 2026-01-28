@@ -523,6 +523,309 @@ pub extern "C" fn rs_compose_debug(
 }
 
 // =============================================================================
+// Compose Line Implementation
+// =============================================================================
+
+/// LineFlags constants (from ui_defs.h)
+pub mod line_flags {
+    /// Line wraps to next line
+    pub const WRAP: i32 = 1;
+    /// Line contains invalid content
+    pub const INVALID: i32 = 2;
+}
+
+extern "C" {
+    // Additional grid accessors for compose_line (those not already declared above)
+    fn nvim_screengrid_get_comp_width(grid: crate::ScreenGridHandle) -> c_int;
+    fn nvim_screengrid_get_comp_height(grid: crate::ScreenGridHandle) -> c_int;
+    fn nvim_screengrid_get_comp_disabled(grid: crate::ScreenGridHandle) -> bool;
+    fn nvim_screengrid_get_comp_row(grid: crate::ScreenGridHandle) -> c_int;
+    fn nvim_screengrid_get_comp_col(grid: crate::ScreenGridHandle) -> c_int;
+    fn nvim_screengrid_get_comp_index(grid: crate::ScreenGridHandle) -> usize;
+    fn nvim_screengrid_get_chars(grid: crate::ScreenGridHandle) -> *mut ScharT;
+    fn nvim_screengrid_get_attrs(grid: crate::ScreenGridHandle) -> *mut SattrT;
+    fn nvim_screengrid_get_line_offset(grid: crate::ScreenGridHandle) -> *mut usize;
+
+    // Layer accessors
+    fn nvim_layers_size() -> usize;
+    fn nvim_layers_get(i: usize) -> crate::ScreenGridHandle;
+
+    // Message grid and separator
+    fn nvim_get_msg_grid() -> crate::ScreenGridHandle;
+    fn nvim_get_msg_sep_row() -> c_int;
+
+    // Global state
+    fn nvim_get_columns() -> c_int;
+    fn nvim_get_hl_attr_active() -> *const c_int;
+
+    // schar_from_char for the braille character
+    fn rs_schar_from_char(c: c_int) -> ScharT;
+}
+
+/// HLF_MSGSEP index (from highlight_defs.h)
+const HLF_MSGSEP: usize = 122; // MsgSeparator highlight group
+
+/// Get highlight attribute for a highlight group.
+#[inline]
+fn hl_attr(n: usize) -> c_int {
+    unsafe {
+        let hl_attr_active = nvim_get_hl_attr_active();
+        if hl_attr_active.is_null() {
+            0
+        } else {
+            *hl_attr_active.add(n)
+        }
+    }
+}
+
+/// Compose a single line from multiple grid layers.
+///
+/// This is the core compositing algorithm that merges overlapping grids
+/// into the linebuf/attrbuf for display. It handles:
+/// - Layer stacking and overlap detection
+/// - Double-width character edge cases
+/// - Message separator rendering
+/// - Transparency blending (pumblend/winblend)
+///
+/// # Arguments
+/// * `row` - Screen row to compose
+/// * `startcol` - Starting column (inclusive)
+/// * `endcol` - Ending column (exclusive)
+/// * `flags` - LineFlags (WRAP, INVALID)
+#[allow(clippy::too_many_lines)]
+fn compose_line_impl(row: i64, mut startcol: i64, mut endcol: i64, mut flags: c_int) {
+    unsafe {
+        let default_grid = nvim_get_default_grid();
+        let default_cols = i64::from(nvim_screengrid_get_cols(default_grid));
+
+        // If rightleft is set, startcol may be -1
+        startcol = startcol.max(0);
+
+        // Check for double-width char edge cases
+        let mut skipstart = 0i64;
+        let mut skipend = 0i64;
+        if startcol > 0 && (flags & line_flags::INVALID) != 0 {
+            startcol -= 1;
+            skipstart = 1;
+        }
+        if endcol < default_cols && (flags & line_flags::INVALID) != 0 {
+            endcol += 1;
+            skipend = 1;
+        }
+
+        let linebuf = nvim_comp_get_linebuf_char();
+        let attrbuf = nvim_comp_get_linebuf_attr();
+
+        // Get background line data from default_grid
+        let default_chars = nvim_screengrid_get_chars(default_grid);
+        let default_attrs = nvim_screengrid_get_attrs(default_grid);
+        let default_line_offset = nvim_screengrid_get_line_offset(default_grid);
+
+        let row_offset = *default_line_offset.add(row as usize) + startcol as usize;
+        let bg_line = default_chars.add(row_offset);
+        let bg_attrs = default_attrs.add(row_offset);
+
+        let msg_grid = nvim_get_msg_grid();
+        let msg_sep_row = nvim_get_msg_sep_row();
+        let msg_grid_comp_index = nvim_screengrid_get_comp_index(msg_grid);
+        let msg_sep_char = nvim_get_msg_sep_char();
+
+        let layers_size = nvim_layers_size();
+        let mut col = startcol as c_int;
+        let mut last_grid = crate::ScreenGridHandle(std::ptr::null_mut());
+
+        while i64::from(col) < endcol {
+            let mut until = 0i32;
+            let mut grid = crate::ScreenGridHandle(std::ptr::null_mut());
+
+            // Find the topmost grid covering this column
+            for i in 0..layers_size {
+                let g = nvim_layers_get(i);
+
+                // Check for pending resize - use min of actual and comp dimensions
+                let grid_width = nvim_screengrid_get_cols(g).min(nvim_screengrid_get_comp_width(g));
+                let grid_height =
+                    nvim_screengrid_get_rows(g).min(nvim_screengrid_get_comp_height(g));
+                let comp_row = nvim_screengrid_get_comp_row(g);
+                let comp_col = nvim_screengrid_get_comp_col(g);
+
+                // Skip if row is outside this grid
+                if comp_row > row as c_int
+                    || row as c_int >= comp_row + grid_height
+                    || nvim_screengrid_get_comp_disabled(g)
+                {
+                    continue;
+                }
+
+                if comp_col <= col && col < comp_col + grid_width {
+                    grid = g;
+                    until = comp_col + grid_width;
+                } else if comp_col > col && (until == 0 || comp_col < until) {
+                    until = comp_col;
+                }
+            }
+            until = until.min(endcol as c_int);
+
+            // These should hold if layers is properly set up
+            debug_assert!(!grid.is_null());
+            debug_assert!(until > col);
+            debug_assert!(i64::from(until) <= default_cols);
+
+            let n = (until - col) as usize;
+            let buf_offset = (col - startcol as c_int) as usize;
+
+            // Check for message separator row
+            if row as c_int == msg_sep_row
+                && nvim_screengrid_get_comp_index(grid) <= msg_grid_comp_index
+            {
+                // Fill with message separator
+                let msg_sep_attr = hl_attr(HLF_MSGSEP) as SattrT;
+                for i in col..until {
+                    let idx = (i - startcol as c_int) as usize;
+                    *linebuf.add(idx) = msg_sep_char;
+                    *attrbuf.add(idx) = msg_sep_attr;
+                }
+                last_grid = msg_grid;
+            } else {
+                // Copy from the grid
+                let grid_chars = nvim_screengrid_get_chars(grid);
+                let grid_attrs = nvim_screengrid_get_attrs(grid);
+                let grid_line_offset = nvim_screengrid_get_line_offset(grid);
+                let comp_row = nvim_screengrid_get_comp_row(grid);
+                let comp_col = nvim_screengrid_get_comp_col(grid);
+
+                let grid_row = (row as c_int - comp_row) as usize;
+                let grid_col = (col - comp_col) as usize;
+                let off = *grid_line_offset.add(grid_row) + grid_col;
+
+                std::ptr::copy_nonoverlapping(grid_chars.add(off), linebuf.add(buf_offset), n);
+                std::ptr::copy_nonoverlapping(grid_attrs.add(off), attrbuf.add(buf_offset), n);
+
+                // Handle doublewidth char cut-off at end
+                let grid_cols = nvim_screengrid_get_cols(grid);
+                if comp_col + grid_cols > until && *grid_chars.add(off + n) == SCHAR_NUL {
+                    *linebuf.add(buf_offset + n - 1) = schar_from_ascii(b' ');
+                    if col == startcol as c_int && n == 1 {
+                        skipstart = 0;
+                    }
+                }
+                last_grid = grid;
+            }
+
+            // Handle blending (pumblend/winblend)
+            if nvim_screengrid_get_blending(grid) {
+                let mut i = buf_offset;
+                let until_offset = (until - startcol as c_int) as usize;
+
+                while i < until_offset {
+                    let mut width = 1usize;
+                    let fg_char = *linebuf.add(i);
+                    let bg_char = *bg_line.add(i);
+
+                    // Check for transparent foreground
+                    let braille_empty = rs_schar_from_char(0x2800);
+                    let mut thru = (fg_char == schar_from_ascii(b' ') || fg_char == braille_empty)
+                        && bg_char != SCHAR_NUL;
+
+                    // Check for doublewidth background
+                    if i + 1 < (endcol - startcol) as usize && *bg_line.add(i + 1) == SCHAR_NUL {
+                        width = 2;
+                        let fg_char2 = *linebuf.add(i + 1);
+                        thru &= fg_char2 == schar_from_ascii(b' ') || fg_char2 == braille_empty;
+                    }
+
+                    // Blend attributes
+                    *attrbuf.add(i) = nvim_hl_blend_attrs(
+                        c_int::from(*bg_attrs.add(i)),
+                        c_int::from(*attrbuf.add(i)),
+                        &raw mut thru,
+                    ) as SattrT;
+
+                    if width == 2 {
+                        *attrbuf.add(i + 1) = nvim_hl_blend_attrs(
+                            c_int::from(*bg_attrs.add(i + 1)),
+                            c_int::from(*attrbuf.add(i + 1)),
+                            &raw mut thru,
+                        ) as SattrT;
+                    }
+
+                    // Copy background through if transparent
+                    if thru {
+                        std::ptr::copy_nonoverlapping(bg_line.add(i), linebuf.add(i), width);
+                    }
+
+                    i += width;
+                }
+            }
+
+            // Handle doublewidth char cut-off at start
+            if *linebuf.add(buf_offset) == SCHAR_NUL {
+                *linebuf.add(buf_offset) = schar_from_ascii(b' ');
+                if col == endcol as c_int - 1 {
+                    skipend = 0;
+                }
+            } else if col == startcol as c_int && n > 1 && *linebuf.add(1) == SCHAR_NUL {
+                skipstart = 0;
+            }
+
+            col = until;
+        }
+
+        // Final doublewidth check
+        let last_idx = (endcol - startcol - 1) as usize;
+        if *linebuf.add(last_idx) == SCHAR_NUL {
+            skipend = 0;
+        }
+
+        // Clear wrap flag if not at full width
+        let columns = nvim_get_columns();
+        if last_grid.is_null()
+            || (last_grid.0 != default_grid.0
+                && !(nvim_screengrid_get_comp_col(last_grid) == 0
+                    && nvim_screengrid_get_cols(last_grid) == columns))
+        {
+            flags &= !line_flags::WRAP;
+        }
+
+        // Validate attributes
+        let rdb_flags = nvim_get_rdb_flags();
+        for i in skipstart as usize..(endcol - skipend - startcol) as usize {
+            if *attrbuf.add(i) < 0 {
+                if (rdb_flags & rdb_flags::INVALID) != 0 {
+                    std::process::abort();
+                } else {
+                    *attrbuf.add(i) = 0;
+                }
+            }
+        }
+
+        // Output the composed line
+        ui_composed_call_raw_line(
+            1,
+            row,
+            startcol + skipstart,
+            endcol - skipend,
+            endcol - skipend,
+            0,
+            flags,
+            linebuf.add(skipstart as usize),
+            attrbuf.add(skipstart as usize),
+        );
+    }
+}
+
+/// FFI wrapper for compose_line.
+///
+/// Composes a single line from multiple grid layers.
+///
+/// # Safety
+/// This function accesses global compositor state and grid data.
+#[no_mangle]
+pub extern "C" fn rs_compose_line(row: i64, startcol: i64, endcol: i64, flags: c_int) {
+    compose_line_impl(row, startcol, endcol, flags);
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
