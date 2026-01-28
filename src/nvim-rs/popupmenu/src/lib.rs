@@ -10,12 +10,16 @@
 //! - [`render`]: Text rendering and attribute handling
 //! - [`redraw`]: Core redraw logic helpers
 //! - [`display`]: Display orchestration
+//! - [`mouse`]: Mouse handling
+//! - [`event`]: Event info
 
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(clippy::cast_lossless)] // FFI needs flexible casts between c_int and i64
 
 pub mod display;
+pub mod event;
 pub mod item;
+pub mod mouse;
 pub mod placement;
 pub mod redraw;
 pub mod render;

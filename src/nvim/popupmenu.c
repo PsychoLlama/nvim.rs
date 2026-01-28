@@ -264,6 +264,58 @@ void nvim_clear_pum_array(void)
   pum_array = NULL;
 }
 
+// Mouse/event accessors for Rust FFI
+int nvim_get_pum_left_col(void)
+{
+  return pum_left_col;
+}
+
+int nvim_get_pum_right_col(void)
+{
+  return pum_right_col;
+}
+
+int nvim_get_pum_win_row_offset(void)
+{
+  return pum_win_row_offset;
+}
+
+int nvim_get_pum_win_col_offset(void)
+{
+  return pum_win_col_offset;
+}
+
+int nvim_get_pum_anchor_grid(void)
+{
+  return pum_anchor_grid;
+}
+
+// pum_want setters for Rust FFI (some getters are defined elsewhere)
+int nvim_get_pum_want_finish(void)
+{
+  return pum_want.finish;
+}
+
+void nvim_set_pum_want_active(int val)
+{
+  pum_want.active = val != 0;
+}
+
+void nvim_set_pum_want_item(int val)
+{
+  pum_want.item = val;
+}
+
+void nvim_set_pum_want_insert(int val)
+{
+  pum_want.insert = val != 0;
+}
+
+void nvim_set_pum_want_finish(int val)
+{
+  pum_want.finish = val != 0;
+}
+
 // Accessors for pum_array items (for Rust FFI)
 const char *nvim_pum_item_get_text(const pumitem_T *array, int index)
 {
