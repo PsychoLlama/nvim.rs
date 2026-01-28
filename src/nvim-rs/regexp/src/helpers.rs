@@ -279,6 +279,133 @@ unsafe fn cstrncmp_with_decompose(s1: *const c_char, s2: *const c_char, n: *mut 
 }
 
 // =============================================================================
+// Rex state helpers
+// =============================================================================
+
+extern "C" {
+    /// Check for CTRL-C interrupt (fast version).
+    fn fast_breakcheck();
+
+    /// Check if character is a word character in the given buffer.
+    fn vim_iswordc_buf(c: c_int, buf: BufHandle) -> c_int;
+
+    /// Get the character class of a character with chartab.
+    fn mb_get_class_tab(p: *const u8, chartab: *const u64) -> c_int;
+
+    /// Get head offset for UTF-8 character.
+    fn utf_head_off(base: *const u8, p: *const u8) -> c_int;
+
+    /// Get rex.reg_buf.
+    fn nvim_rex_get_reg_buf() -> BufHandle;
+
+    /// Get chartab from buffer.
+    fn nvim_buf_get_chartab(buf: BufHandle) -> *const u64;
+
+    /// Get line at given line number (relative to first line).
+    fn nvim_reg_getline(lnum: c_int) -> *mut c_char;
+
+    /// Get rex.reg_nobreak.
+    fn nvim_rex_get_reg_nobreak() -> bool;
+
+    /// Get rex.input.
+    fn nvim_rex_get_input() -> *mut u8;
+
+    /// Set rex.input.
+    fn nvim_rex_set_input(input: *mut u8);
+
+    /// Get rex.line.
+    fn nvim_rex_get_line() -> *mut u8;
+
+    /// Set rex.line.
+    fn nvim_rex_set_line(line: *mut u8);
+
+    /// Get rex.lnum.
+    fn nvim_rex_get_lnum() -> c_int;
+
+    /// Set rex.lnum.
+    fn nvim_rex_set_lnum(lnum: c_int);
+}
+
+/// Opaque buffer handle type.
+pub type BufHandle = *mut std::ffi::c_void;
+
+/// Check for CTRL-C interrupt during regex matching.
+///
+/// Only checks if `rex.reg_nobreak` is not set (i.e., interrupts allowed).
+///
+/// # Safety
+///
+/// Must be called during regex execution with valid rex state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reg_breakcheck() {
+    if !nvim_rex_get_reg_nobreak() {
+        fast_breakcheck();
+    }
+}
+
+/// Check if character is a word character for the current buffer.
+///
+/// Uses the 'iskeyword' option from `rex.reg_buf`.
+///
+/// # Safety
+///
+/// Must be called during regex execution with valid rex state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reg_iswordc(c: c_int) -> c_int {
+    let buf = nvim_rex_get_reg_buf();
+    vim_iswordc_buf(c, buf)
+}
+
+/// Get the character class of the previous character.
+///
+/// Returns the character class (0-2 typically) or -1 if at beginning of line.
+///
+/// # Safety
+///
+/// Must be called during regex execution with valid rex state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reg_prev_class() -> c_int {
+    let input = nvim_rex_get_input();
+    let line = nvim_rex_get_line();
+
+    if input > line {
+        // Get the previous character (handle multi-byte)
+        let prev = input.sub(1);
+        let head_off = utf_head_off(line, prev);
+        let prev_start = prev.sub(head_off as usize);
+
+        let buf = nvim_rex_get_reg_buf();
+        let chartab = nvim_buf_get_chartab(buf);
+        mb_get_class_tab(prev_start, chartab)
+    } else {
+        -1
+    }
+}
+
+/// Advance to the next line in multi-line matching.
+///
+/// Increments `rex.lnum`, loads the new line into `rex.line`,
+/// and sets `rex.input` to the start of the line.
+///
+/// # Safety
+///
+/// Must be called during multi-line regex execution with valid rex state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_reg_nextline() {
+    // Increment line number
+    let lnum = nvim_rex_get_lnum() + 1;
+    nvim_rex_set_lnum(lnum);
+
+    // Get the new line
+    let line = nvim_reg_getline(lnum);
+    nvim_rex_set_line(line as *mut u8);
+    nvim_rex_set_input(line as *mut u8);
+
+    // Check for interrupt
+    rs_reg_breakcheck();
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

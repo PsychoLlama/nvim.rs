@@ -607,6 +607,12 @@ extern void rs_ungetchr(void);
 extern char *rs_cstrchr(const char *s, int c);
 extern int rs_cstrncmp(const char *s1, const char *s2, int *n);
 
+// Rust implementations for rex state helpers
+extern void rs_reg_breakcheck(void);
+extern int rs_reg_iswordc(int c);
+extern int rs_reg_prev_class(void);
+extern void rs_reg_nextline(void);
+
 // Check for an equivalence class name "[=a=]".  "pp" points to the '['.
 // Returns a character representing the class. Zero means that no item was
 // recognized.  Otherwise "pp" is advanced to after the item.
@@ -937,16 +943,14 @@ static bool rex_in_use = false;
 
 static void reg_breakcheck(void)
 {
-  if (!rex.reg_nobreak) {
-    fast_breakcheck();
-  }
+  rs_reg_breakcheck();
 }
 
 // Return true if character 'c' is included in 'iskeyword' option for
 // "reg_buf" buffer.
 static bool reg_iswordc(int c)
 {
-  return vim_iswordc_buf(c, rex.reg_buf);
+  return rs_reg_iswordc(c) != 0;
 }
 
 static bool can_f_submatch = false;  ///< true when submatch() can be used
@@ -1026,6 +1030,12 @@ static char *reg_getline(linenr_T lnum)
   return line;
 }
 
+// Non-static wrapper for Rust to call reg_getline
+char *nvim_reg_getline(linenr_T lnum)
+{
+  return reg_getline(lnum);
+}
+
 /// Get length of line "lnum", which is relative to "reg_firstlnum".
 static colnr_T reg_getline_len(linenr_T lnum)
 {
@@ -1077,12 +1087,7 @@ void unref_extmatch(reg_extmatch_T *em)
 // Get class of previous character.
 static int reg_prev_class(void)
 {
-  if (rex.input > rex.line) {
-    return mb_get_class_tab((char *)rex.input - 1 -
-                            utf_head_off((char *)rex.line, (char *)rex.input - 1),
-                            rex.reg_buf->b_chartab);
-  }
-  return -1;
+  return rs_reg_prev_class();
 }
 
 // Return true if the current rex.input position matches the Visual area.
@@ -1222,9 +1227,7 @@ static void cleanup_zsubexpr(void)
 // Advance rex.lnum, rex.line and rex.input to the next line.
 static void reg_nextline(void)
 {
-  rex.line = (uint8_t *)reg_getline(++rex.lnum);
-  rex.input = rex.line;
-  reg_breakcheck();
+  rs_reg_nextline();
 }
 
 // Check whether a backreference matches.
