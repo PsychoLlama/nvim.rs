@@ -536,7 +536,13 @@ pub const extern "C" fn rs_tabline_close_col(columns: c_int, tab_count: c_int) -
 pub const fn tabline_showcmd_width(columns: c_int, col: c_int, has_multiple_tabs: bool) -> c_int {
     let available = columns - col - if has_multiple_tabs { 3 } else { 0 };
     // Max showcmd width is 10
-    if available > 10 { 10 } else if available > 0 { available } else { 0 }
+    if available > 10 {
+        10
+    } else if available > 0 {
+        available
+    } else {
+        0
+    }
 }
 
 /// FFI export: Calculate showcmd width in tabline.
@@ -550,7 +556,11 @@ pub const extern "C" fn rs_tabline_showcmd_width(
 }
 
 /// Calculate the column where showcmd should start in tabline.
-pub const fn tabline_showcmd_col(columns: c_int, showcmd_width: c_int, has_multiple_tabs: bool) -> c_int {
+pub const fn tabline_showcmd_col(
+    columns: c_int,
+    showcmd_width: c_int,
+    has_multiple_tabs: bool,
+) -> c_int {
     columns - showcmd_width - if has_multiple_tabs { 2 } else { 0 }
 }
 
@@ -638,14 +648,14 @@ pub const extern "C" fn rs_custom_redraw_mode(
 /// Calculate ruler column offset.
 ///
 /// The ruler format may have a leading width spec that determines the column.
-pub const fn calc_ruler_col_offset(
-    ru_col: c_int,
-    columns: c_int,
-    maxwidth: c_int,
-) -> c_int {
+pub const fn calc_ruler_col_offset(ru_col: c_int, columns: c_int, maxwidth: c_int) -> c_int {
     let offset = ru_col - (columns - maxwidth);
     let half = (maxwidth + 1) / 2;
-    if offset > half { offset } else { half }
+    if offset > half {
+        offset
+    } else {
+        half
+    }
 }
 
 /// FFI export: Calculate ruler column offset.
@@ -679,7 +689,11 @@ pub const fn should_skip_custom_redraw(maxwidth: c_int) -> bool {
 /// FFI export: Check if custom redraw should be skipped.
 #[no_mangle]
 pub const extern "C" fn rs_should_skip_custom_redraw(maxwidth: c_int) -> c_int {
-    if should_skip_custom_redraw(maxwidth) { 1 } else { 0 }
+    if should_skip_custom_redraw(maxwidth) {
+        1
+    } else {
+        0
+    }
 }
 
 /// Result of processing highlight records for custom redraw.
@@ -700,7 +714,11 @@ pub struct HlRecordResult {
 /// - userhl == 0: use default attr/group
 /// - userhl < 0: use syn_id2attr(-userhl), group = -userhl
 /// - userhl > 0: use highlight_user[userhl-1], group from User{N}
-pub const fn process_userhl(userhl: c_int, default_attr: c_int, default_group: c_int) -> HlRecordResult {
+pub const fn process_userhl(
+    userhl: c_int,
+    default_attr: c_int,
+    default_group: c_int,
+) -> HlRecordResult {
     if userhl == 0 {
         HlRecordResult {
             attr: default_attr,
@@ -717,7 +735,7 @@ pub const fn process_userhl(userhl: c_int, default_attr: c_int, default_group: c
     } else {
         // Will need to lookup from highlight_user or highlight_stlnc
         HlRecordResult {
-            attr: userhl, // Placeholder - C needs to lookup from array
+            attr: userhl,  // Placeholder - C needs to lookup from array
             group: userhl, // Placeholder - C needs to call syn_name2id for "User{N}"
             use_combined: 1,
         }
@@ -1086,11 +1104,11 @@ mod tests {
         assert_eq!(calc_tab_prefix_width(1, false), 1);
         // Window count + trailing space + leading space
         assert_eq!(calc_tab_prefix_width(2, false), 3); // "2 " + leading " "
-        // Window count (2 digits) + trailing space + leading space
+                                                        // Window count (2 digits) + trailing space + leading space
         assert_eq!(calc_tab_prefix_width(10, false), 4); // "10 " + " "
-        // Modified only + trailing space + leading space
+                                                         // Modified only + trailing space + leading space
         assert_eq!(calc_tab_prefix_width(1, true), 3); // "+ " + " "
-        // Window count + modified + trailing space + leading space
+                                                       // Window count + modified + trailing space + leading space
         assert_eq!(calc_tab_prefix_width(2, true), 4); // "2+ " + " "
     }
 
@@ -1303,7 +1321,13 @@ mod tests {
 
     #[test]
     fn test_custom_status_redraw_action() {
-        assert_eq!(rs_custom_status_redraw_action(1), CustomStatusRedrawAction::Skip as c_int);
-        assert_eq!(rs_custom_status_redraw_action(0), CustomStatusRedrawAction::Redraw as c_int);
+        assert_eq!(
+            rs_custom_status_redraw_action(1),
+            CustomStatusRedrawAction::Skip as c_int
+        );
+        assert_eq!(
+            rs_custom_status_redraw_action(0),
+            CustomStatusRedrawAction::Redraw as c_int
+        );
     }
 }
