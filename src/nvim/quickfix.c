@@ -176,6 +176,7 @@ extern bool rs_qf_list_empty(const void *qfl);
 
 // Phase 1: List lifecycle functions implemented in Rust
 extern void rs_qf_new_list(void *qi, const char *title);
+extern void rs_qf_free_items(void *qfl);
 
 /// Get listcount from qf_info_T for Rust (using void* to avoid type visibility issues)
 int nvim_qf_get_listcount(const void *qi_void)
@@ -5267,48 +5268,11 @@ void qf_history(exarg_T *eap)
 
 /// Free all the entries in the error list "idx". Note that other information
 /// associated with the list like context and title are not freed.
+///
+/// NOTE: Implementation now in Rust (rs_qf_free_items). This is a thin wrapper.
 static void qf_free_items(qf_list_T *qfl)
 {
-  bool stop = false;
-
-  while (qfl->qf_count && qfl->qf_start != NULL) {
-    qfline_T *qfp = qfl->qf_start;
-    qfline_T *qfpnext = qfp->qf_next;
-    if (!stop) {
-      xfree(qfp->qf_fname);
-      xfree(qfp->qf_module);
-      xfree(qfp->qf_text);
-      xfree(qfp->qf_pattern);
-      tv_clear(&qfp->qf_user_data);
-      stop = (qfp == qfpnext);
-      xfree(qfp);
-      if (stop) {
-        // Somehow qf_count may have an incorrect value, set it to 1
-        // to avoid crashing when it's wrong.
-        // TODO(vim): Avoid qf_count being incorrect.
-        qfl->qf_count = 1;
-      } else {
-        qfl->qf_start = qfpnext;
-      }
-    }
-    qfl->qf_count--;
-  }
-
-  qfl->qf_start = NULL;
-  qfl->qf_ptr = NULL;
-  qfl->qf_index = 0;
-  qfl->qf_start = NULL;
-  qfl->qf_last = NULL;
-  qfl->qf_ptr = NULL;
-  qfl->qf_nonevalid = true;
-
-  qf_clean_dir_stack(&qfl->qf_dir_stack);
-  qfl->qf_directory = NULL;
-  qf_clean_dir_stack(&qfl->qf_file_stack);
-  qfl->qf_currfile = NULL;
-  qfl->qf_multiline = false;
-  qfl->qf_multiignore = false;
-  qfl->qf_multiscan = false;
+  rs_qf_free_items((void *)qfl);
 }
 
 /// Free error list "idx". Frees all the entries in the quickfix list,

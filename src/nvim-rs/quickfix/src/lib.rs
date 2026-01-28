@@ -2003,10 +2003,18 @@ pub unsafe extern "C" fn rs_qf_free_list(qfl: QfListHandleMut) {
     nvim_qf_free_list(qfl);
 }
 
-/// Free only the entries in a quickfix list.
+/// Free only the entries in a quickfix list (implementation in Rust).
 ///
 /// This frees all entry items but preserves the list structure.
 /// Used when repopulating a list with new content.
+///
+/// Algorithm:
+/// 1. Walk through linked list freeing each entry
+/// 2. Reset list pointers (start, last, ptr) to null
+/// 3. Reset index and count to 0
+/// 4. Set nonevalid to true
+/// 5. Clean directory stacks
+/// 6. Reset multiline flags
 ///
 /// # Safety
 ///
@@ -2016,7 +2024,49 @@ pub unsafe extern "C" fn rs_qf_free_items(qfl: QfListHandleMut) {
     if qfl.is_null() {
         return;
     }
-    nvim_qf_free_items(qfl);
+
+    // Get the start of the linked list
+    let mut qfp = nvim_qf_get_start(qfl);
+    let mut count = nvim_qf_get_count(qfl);
+
+    // Walk through the list and free each entry
+    while count > 0 && !qfp.is_null() {
+        let next = nvim_qfline_get_next(qfp);
+
+        // Check for circular reference (safety check)
+        let is_circular = qfp == next.cast();
+        if is_circular {
+            // Force count to 1 to break the loop
+            count = 1;
+        }
+
+        // Free the entry (nvim_qfline_free handles all string fields and typval)
+        nvim_qfline_free(qfp.cast_mut());
+
+        if !is_circular {
+            qfp = next;
+        }
+        count -= 1;
+    }
+
+    // Reset list pointers
+    nvim_qf_set_start(qfl, std::ptr::null());
+    nvim_qf_set_last(qfl, std::ptr::null());
+    nvim_qf_set_ptr(qfl, std::ptr::null());
+    nvim_qf_set_index(qfl, 0);
+    nvim_qf_set_count(qfl, 0);
+    nvim_qf_set_nonevalid(qfl, true);
+
+    // Clean directory stacks
+    nvim_qf_clean_dir_stack(qfl, false); // dir stack
+    nvim_qf_set_directory(qfl, std::ptr::null_mut());
+    nvim_qf_clean_dir_stack(qfl, true); // file stack
+    nvim_qf_set_currfile(qfl, std::ptr::null_mut());
+
+    // Reset multiline flags
+    nvim_qf_set_multiline(qfl, false);
+    nvim_qf_set_multiignore(qfl, false);
+    nvim_qf_set_multiscan(qfl, false);
 }
 
 /// Set the title of a quickfix list.
