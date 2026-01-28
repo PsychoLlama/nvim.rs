@@ -632,8 +632,14 @@ mod tests {
 
     #[test]
     fn test_stack_grow() {
-        assert_eq!(rs_ml_stack_grow_size(0), c_int::try_from(STACK_INCR).unwrap());
-        assert_eq!(rs_ml_stack_grow_size(5), 5 + c_int::try_from(STACK_INCR).unwrap());
+        assert_eq!(
+            rs_ml_stack_grow_size(0),
+            c_int::try_from(STACK_INCR).unwrap()
+        );
+        assert_eq!(
+            rs_ml_stack_grow_size(5),
+            5 + c_int::try_from(STACK_INCR).unwrap()
+        );
     }
 
     #[test]

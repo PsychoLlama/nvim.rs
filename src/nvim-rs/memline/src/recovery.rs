@@ -555,11 +555,23 @@ mod tests {
 
     #[test]
     fn test_sea_choice_from_char() {
-        assert_eq!(rs_sea_choice_from_char(c_int::from(b'O')), SEA_CHOICE_READONLY);
-        assert_eq!(rs_sea_choice_from_char(c_int::from(b'o')), SEA_CHOICE_READONLY);
+        assert_eq!(
+            rs_sea_choice_from_char(c_int::from(b'O')),
+            SEA_CHOICE_READONLY
+        );
+        assert_eq!(
+            rs_sea_choice_from_char(c_int::from(b'o')),
+            SEA_CHOICE_READONLY
+        );
         assert_eq!(rs_sea_choice_from_char(c_int::from(b'E')), SEA_CHOICE_EDIT);
-        assert_eq!(rs_sea_choice_from_char(c_int::from(b'R')), SEA_CHOICE_RECOVER);
-        assert_eq!(rs_sea_choice_from_char(c_int::from(b'D')), SEA_CHOICE_DELETE);
+        assert_eq!(
+            rs_sea_choice_from_char(c_int::from(b'R')),
+            SEA_CHOICE_RECOVER
+        );
+        assert_eq!(
+            rs_sea_choice_from_char(c_int::from(b'D')),
+            SEA_CHOICE_DELETE
+        );
         assert_eq!(rs_sea_choice_from_char(c_int::from(b'Q')), SEA_CHOICE_QUIT);
         assert_eq!(rs_sea_choice_from_char(c_int::from(b'A')), SEA_CHOICE_ABORT);
         assert_eq!(rs_sea_choice_from_char(c_int::from(b'X')), SEA_CHOICE_NONE);
