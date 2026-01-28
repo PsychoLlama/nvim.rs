@@ -239,6 +239,161 @@ pub extern "C" fn rs_ctrl_x_eval() -> c_int {
     CTRL_X_EVAL
 }
 
+// =============================================================================
+// Phase 6: Extended UI Integration Functions
+// =============================================================================
+
+// Additional C accessor functions
+extern "C" {
+    fn nvim_get_compl_col() -> c_int;
+    fn nvim_get_cursor_col() -> c_int;
+    fn nvim_compl_shown_match_exists() -> c_int;
+    fn nvim_get_compl_autocomplete() -> c_int;
+}
+
+/// Check if completion should update the UI.
+///
+/// Returns true if completion state changed and UI needs refresh.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_needs_refresh() -> c_int {
+    let started = nvim_get_compl_started();
+    let visible = nvim_pum_visible();
+
+    // Need refresh if:
+    // - Completion started but popup not visible
+    // - Completion stopped but popup still visible
+    c_int::from((started != 0 && visible == 0) || (started == 0 && visible != 0))
+}
+
+/// Get the column where completion text starts.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_compl_col() -> c_int {
+    nvim_get_compl_col()
+}
+
+/// Get the cursor column.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_cursor_col() -> c_int {
+    nvim_get_cursor_col()
+}
+
+/// Get the width of the completed text.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_completion_width() -> c_int {
+    let cursor_col = nvim_get_cursor_col();
+    let compl_col = nvim_get_compl_col();
+    let width = cursor_col - compl_col;
+    if width < 0 {
+        0
+    } else {
+        width
+    }
+}
+
+/// Check if a shown match exists.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_has_shown_match() -> c_int {
+    nvim_compl_shown_match_exists()
+}
+
+/// Check if autocomplete is enabled.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_is_autocomplete() -> c_int {
+    nvim_get_compl_autocomplete()
+}
+
+/// Calculate the progress percentage for display.
+///
+/// Returns a value from 0 to 100 representing completion progress.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_ui_progress_percent(current: c_int, total: c_int) -> c_int {
+    if total <= 0 {
+        return 100; // Assume complete if no total
+    }
+    if current <= 0 {
+        return 0;
+    }
+    if current >= total {
+        return 100;
+    }
+    ((i64::from(current) * 100) / i64::from(total)) as c_int
+}
+
+/// Determine the completion indicator to show.
+///
+/// Returns:
+/// - 0: No indicator (completion complete)
+/// - 1: Searching indicator (still searching)
+/// - 2: Interrupted indicator (user interrupted)
+/// - 3: Timeout indicator (time limit reached)
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_indicator_type() -> c_int {
+    if nvim_get_compl_started() == 0 {
+        return 0;
+    }
+
+    if nvim_get_compl_time_slice_expired() != 0 {
+        return 3; // Timeout
+    }
+
+    if nvim_get_compl_interrupted() != 0 {
+        return 2; // Interrupted
+    }
+
+    // Still active means still searching
+    1
+}
+
+/// Check if completion message needs clearing.
+///
+/// Returns true if completion ended and message should be cleared.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_should_clear_msg() -> c_int {
+    c_int::from(nvim_get_compl_started() == 0 && nvim_pum_visible() == 0)
+}
+
+/// Calculate the display index for the selected item (1-based for users).
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_display_index() -> c_int {
+    let selected = nvim_get_compl_selected_item();
+    if selected < 0 {
+        0 // No selection
+    } else {
+        selected + 1 // 1-based for display
+    }
+}
+
+/// Format match count string (e.g., "3/10" for 3rd of 10).
+///
+/// Returns:
+/// - 0: Cannot format (no matches)
+/// - 1: Format as "X matches"
+/// - 2: Format as "X/Y"
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_format_type() -> c_int {
+    let matches = nvim_get_compl_matches();
+    let selected = nvim_get_compl_selected_item();
+
+    if matches <= 0 {
+        return 0;
+    }
+    if selected < 0 {
+        return 1; // "X matches"
+    }
+    2 // "X/Y"
+}
+
+/// Check if the mode name should be shown.
+///
+/// Returns true if in a CTRL-X sub-mode that has a specific name.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ui_show_mode_name() -> c_int {
+    let mode = nvim_get_ctrl_x_mode();
+    // Show mode name for all modes except NORMAL and SCROLL
+    c_int::from(mode >= CTRL_X_WHOLE_LINE)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
