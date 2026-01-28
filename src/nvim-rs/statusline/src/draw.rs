@@ -564,6 +564,195 @@ pub const extern "C" fn rs_tabline_showcmd_col(
     tabline_showcmd_col(columns, showcmd_width, tab_count > 1)
 }
 
+// =============================================================================
+// Custom Window Redraw Decision Helpers
+// =============================================================================
+
+/// The mode for win_redr_custom.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CustomRedrawMode {
+    /// Tabline (wp == NULL)
+    Tabline = 0,
+    /// Winbar (draw_winbar == true)
+    Winbar = 1,
+    /// Statusline (normal statusline)
+    Statusline = 2,
+    /// Rulerformat (draw_ruler == true)
+    Ruler = 3,
+}
+
+/// Context for custom window redraw setup.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CustomRedrawContext {
+    /// The mode of redraw
+    pub mode: c_int,
+    /// Row to draw on
+    pub row: c_int,
+    /// Starting column
+    pub col: c_int,
+    /// Maximum width for content
+    pub maxwidth: c_int,
+    /// Fill character (as schar_T/u32)
+    pub fillchar: u32,
+    /// Highlight attribute
+    pub attr: c_int,
+    /// Highlight group (hlf_T value)
+    pub group: c_int,
+    /// Option index (kOptTabline, kOptWinbar, etc.)
+    pub opt_idx: c_int,
+    /// Option scope (OPT_LOCAL or 0)
+    pub opt_scope: c_int,
+    /// Whether using external UI event
+    pub use_ui_event: c_int,
+}
+
+/// Determine the custom redraw mode from the arguments.
+pub const fn determine_custom_redraw_mode(
+    wp_is_null: bool,
+    draw_winbar: bool,
+    draw_ruler: bool,
+) -> CustomRedrawMode {
+    if wp_is_null {
+        CustomRedrawMode::Tabline
+    } else if draw_winbar {
+        CustomRedrawMode::Winbar
+    } else if draw_ruler {
+        CustomRedrawMode::Ruler
+    } else {
+        CustomRedrawMode::Statusline
+    }
+}
+
+/// FFI export: Determine custom redraw mode.
+#[no_mangle]
+pub const extern "C" fn rs_custom_redraw_mode(
+    wp_is_null: c_int,
+    draw_winbar: c_int,
+    draw_ruler: c_int,
+) -> c_int {
+    determine_custom_redraw_mode(wp_is_null != 0, draw_winbar != 0, draw_ruler != 0) as c_int
+}
+
+/// Calculate ruler column offset.
+///
+/// The ruler format may have a leading width spec that determines the column.
+pub const fn calc_ruler_col_offset(
+    ru_col: c_int,
+    columns: c_int,
+    maxwidth: c_int,
+) -> c_int {
+    let offset = ru_col - (columns - maxwidth);
+    let half = (maxwidth + 1) / 2;
+    if offset > half { offset } else { half }
+}
+
+/// FFI export: Calculate ruler column offset.
+#[no_mangle]
+pub const extern "C" fn rs_ruler_col_offset(
+    ru_col: c_int,
+    columns: c_int,
+    maxwidth: c_int,
+) -> c_int {
+    calc_ruler_col_offset(ru_col, columns, maxwidth)
+}
+
+/// Calculate the effective maxwidth after ruler offset.
+pub const fn calc_ruler_maxwidth(original_maxwidth: c_int, col_offset: c_int) -> c_int {
+    original_maxwidth - col_offset
+}
+
+/// FFI export: Calculate ruler effective maxwidth.
+#[no_mangle]
+pub const extern "C" fn rs_ruler_maxwidth(original_maxwidth: c_int, col_offset: c_int) -> c_int {
+    calc_ruler_maxwidth(original_maxwidth, col_offset)
+}
+
+/// Check if the custom redraw should be skipped.
+///
+/// Returns true if maxwidth <= 0 (nothing to draw).
+pub const fn should_skip_custom_redraw(maxwidth: c_int) -> bool {
+    maxwidth <= 0
+}
+
+/// FFI export: Check if custom redraw should be skipped.
+#[no_mangle]
+pub const extern "C" fn rs_should_skip_custom_redraw(maxwidth: c_int) -> c_int {
+    if should_skip_custom_redraw(maxwidth) { 1 } else { 0 }
+}
+
+/// Result of processing highlight records for custom redraw.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct HlRecordResult {
+    /// Current highlight attribute to use
+    pub attr: c_int,
+    /// Current highlight group
+    pub group: c_int,
+    /// Whether to use combined attribute
+    pub use_combined: c_int,
+}
+
+/// Process a userhl value to determine the appropriate attribute.
+///
+/// Returns (attr, group, use_combined).
+/// - userhl == 0: use default attr/group
+/// - userhl < 0: use syn_id2attr(-userhl), group = -userhl
+/// - userhl > 0: use highlight_user[userhl-1], group from User{N}
+pub const fn process_userhl(userhl: c_int, default_attr: c_int, default_group: c_int) -> HlRecordResult {
+    if userhl == 0 {
+        HlRecordResult {
+            attr: default_attr,
+            group: default_group,
+            use_combined: 0,
+        }
+    } else if userhl < 0 {
+        // Will need to call syn_id2attr(-userhl) from C
+        HlRecordResult {
+            attr: -userhl, // Placeholder - C needs to call syn_id2attr
+            group: -userhl,
+            use_combined: 1,
+        }
+    } else {
+        // Will need to lookup from highlight_user or highlight_stlnc
+        HlRecordResult {
+            attr: userhl, // Placeholder - C needs to lookup from array
+            group: userhl, // Placeholder - C needs to call syn_name2id for "User{N}"
+            use_combined: 1,
+        }
+    }
+}
+
+/// FFI export: Process userhl value (returns interpretation flags).
+///
+/// Returns:
+/// - 0 if userhl == 0 (use default)
+/// - 1 if userhl < 0 (use syn_id2attr)
+/// - 2 if userhl > 0 (use highlight_user lookup)
+#[no_mangle]
+pub const extern "C" fn rs_userhl_type(userhl: c_int) -> c_int {
+    if userhl == 0 {
+        0
+    } else if userhl < 0 {
+        1
+    } else {
+        2
+    }
+}
+
+/// Get the syn_id value from a negative userhl.
+#[no_mangle]
+pub const extern "C" fn rs_userhl_syn_id(userhl: c_int) -> c_int {
+    -userhl
+}
+
+/// Get the User highlight index (1-9) from a positive userhl.
+#[no_mangle]
+pub const extern "C" fn rs_userhl_index(userhl: c_int) -> c_int {
+    userhl - 1
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -794,5 +983,78 @@ mod tests {
         let info = TabRenderInfo::new(2, false);
         assert_eq!(info.tabnr, 2);
         assert_eq!(info.is_current, 0);
+    }
+
+    // Tests for Phase 4: Custom Window Redraw
+
+    #[test]
+    fn test_custom_redraw_mode() {
+        assert_eq!(
+            determine_custom_redraw_mode(true, false, false),
+            CustomRedrawMode::Tabline
+        );
+        assert_eq!(
+            determine_custom_redraw_mode(false, true, false),
+            CustomRedrawMode::Winbar
+        );
+        assert_eq!(
+            determine_custom_redraw_mode(false, false, true),
+            CustomRedrawMode::Ruler
+        );
+        assert_eq!(
+            determine_custom_redraw_mode(false, false, false),
+            CustomRedrawMode::Statusline
+        );
+    }
+
+    #[test]
+    fn test_calc_ruler_col_offset() {
+        // ru_col = 17, Columns = 80, maxwidth = 80
+        // offset = 17 - (80 - 80) = 17
+        // half = (80 + 1) / 2 = 40
+        // result = max(17, 40) = 40
+        assert_eq!(calc_ruler_col_offset(17, 80, 80), 40);
+
+        // ru_col = 50, Columns = 80, maxwidth = 80
+        // offset = 50 - (80 - 80) = 50
+        // half = 40
+        // result = max(50, 40) = 50
+        assert_eq!(calc_ruler_col_offset(50, 80, 80), 50);
+    }
+
+    #[test]
+    fn test_calc_ruler_maxwidth() {
+        assert_eq!(calc_ruler_maxwidth(80, 40), 40);
+        assert_eq!(calc_ruler_maxwidth(100, 30), 70);
+    }
+
+    #[test]
+    fn test_should_skip_custom_redraw() {
+        assert!(should_skip_custom_redraw(0));
+        assert!(should_skip_custom_redraw(-1));
+        assert!(!should_skip_custom_redraw(1));
+        assert!(!should_skip_custom_redraw(80));
+    }
+
+    #[test]
+    fn test_userhl_type() {
+        // Default highlight
+        assert_eq!(rs_userhl_type(0), 0);
+        // syn_id2attr highlight
+        assert_eq!(rs_userhl_type(-5), 1);
+        // User highlight
+        assert_eq!(rs_userhl_type(3), 2);
+    }
+
+    #[test]
+    fn test_userhl_syn_id() {
+        assert_eq!(rs_userhl_syn_id(-5), 5);
+        assert_eq!(rs_userhl_syn_id(-1), 1);
+    }
+
+    #[test]
+    fn test_userhl_index() {
+        assert_eq!(rs_userhl_index(1), 0);
+        assert_eq!(rs_userhl_index(9), 8);
     }
 }
