@@ -8,12 +8,14 @@
 //! - [`item`]: Item access and highlight attribute handling
 //! - [`placement`]: Position and size calculations
 //! - [`render`]: Text rendering and attribute handling
+//! - [`redraw`]: Core redraw logic helpers
 
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(clippy::cast_lossless)] // FFI needs flexible casts between c_int and i64
 
 pub mod item;
 pub mod placement;
+pub mod redraw;
 pub mod render;
 
 use std::ffi::c_int;
