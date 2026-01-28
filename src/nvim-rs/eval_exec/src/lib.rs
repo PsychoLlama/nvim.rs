@@ -860,6 +860,7 @@ impl EvalFlags {
 // Expression Evaluator Module
 // =============================================================================
 
+pub mod errors;
 pub mod eval;
 pub mod operators;
 
@@ -872,6 +873,13 @@ pub use eval::{
 // Re-export FFI functions from the operators module
 pub use operators::{
     rs_apply_comparison, rs_compare_floats, rs_compare_numbers, rs_typval_compare, CompareResult,
+};
+
+// Re-export error types
+pub use errors::{
+    rs_eval_emsg_silent, rs_eval_error_number, rs_eval_has_emsg, rs_eval_is_aborting,
+    rs_eval_is_function_error, rs_eval_is_lock_error, rs_eval_is_type_error, ErrorState, EvalError,
+    EvalErrorCode, EvalOpResult,
 };
 
 // =============================================================================
