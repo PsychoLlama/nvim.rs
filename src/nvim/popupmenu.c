@@ -64,6 +64,8 @@
 // Rust FFI declarations
 extern int rs_pum_visible(void);
 extern int rs_pum_drawn(void);
+extern void rs_pum_clear(void);
+extern void rs_pum_ext_select_item(int item, int insert, int finish);
 
 static pumitem_T *pum_array = NULL;  // items of displayed pum
 static int pum_size;                // nr of items in "pum_array"
@@ -1572,7 +1574,7 @@ void pum_check_clear(void)
 /// displayed item.
 void pum_clear(void)
 {
-  pum_first = 0;
+  rs_pum_clear();
 }
 
 /// @return true if the popup menu is displayed.
@@ -1600,13 +1602,7 @@ void pum_recompose(void)
 
 void pum_ext_select_item(int item, bool insert, bool finish)
 {
-  if (!pum_visible() || item < -1 || item >= pum_size) {
-    return;
-  }
-  pum_want.active = true;
-  pum_want.item = item;
-  pum_want.insert = insert;
-  pum_want.finish = finish;
+  rs_pum_ext_select_item(item, insert ? 1 : 0, finish ? 1 : 0);
 }
 
 // Rust implementation of pum_get_height

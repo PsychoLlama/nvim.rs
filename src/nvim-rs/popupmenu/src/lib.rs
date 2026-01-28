@@ -101,6 +101,16 @@ extern "C" {
     /// Set the `pum_rl` static variable.
     fn nvim_set_pum_rl(val: c_int);
 
+    // pum_want struct accessors
+    /// Set the `pum_want.active` field.
+    fn nvim_set_pum_want_active(val: c_int);
+    /// Set the `pum_want.item` field.
+    fn nvim_set_pum_want_item(val: c_int);
+    /// Set the `pum_want.insert` field.
+    fn nvim_set_pum_want_insert(val: c_int);
+    /// Set the `pum_want.finish` field.
+    fn nvim_set_pum_want_finish(val: c_int);
+
     // Global accessors
     /// Get the global Columns value.
     fn nvim_get_Columns() -> c_int;
@@ -818,6 +828,38 @@ pub const extern "C" fn rs_pum_compute_thumb(
         pos: thumb_pos,
         height: thumb_height,
     }
+}
+
+/// Clear the popup menu.
+///
+/// Currently only resets the offset to the first displayed item (`pum_first = 0`).
+///
+/// # Safety
+/// Calls C accessor function to set `pum_first`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_clear() {
+    nvim_set_pum_first(0);
+}
+
+/// Select an item in the popup menu for external UI.
+///
+/// # Arguments
+/// * `item` - Item index to select (-1 to deselect)
+/// * `insert` - Whether to insert the selected item
+/// * `finish` - Whether this is the final selection
+///
+/// # Safety
+/// Calls C accessor functions for `pum_want` and `pum_size`.
+#[no_mangle]
+pub unsafe extern "C" fn rs_pum_ext_select_item(item: c_int, insert: c_int, finish: c_int) {
+    // Check if visible and item is in valid range
+    if nvim_get_pum_is_visible() == 0 || item < -1 || item >= nvim_get_pum_size() {
+        return;
+    }
+    nvim_set_pum_want_active(1);
+    nvim_set_pum_want_item(item);
+    nvim_set_pum_want_insert(insert);
+    nvim_set_pum_want_finish(finish);
 }
 
 /// Check if a row is within the scrollbar thumb area.
