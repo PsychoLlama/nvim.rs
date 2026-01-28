@@ -98,7 +98,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | sign           | Sign management and display             |
 | spell          | Spell checking (word tree traversal, edit distance, suggestion scoring, .spl file I/O) |
 | state          | State management (global, mode, cursor, screen) |
-| statusline     | Status/tab/winbar rendering, format parsing, click handling |
+| statusline     | Status/tab/winbar/ruler rendering, format parsing, click handling, statuscolumn, UI integration |
 | strings        | String manipulation                     |
 | syntax         | Syntax highlighting (patterns, state, clusters, groups, buffer attachment, Ex commands) |
 | tag            | Tag system (stack, search, navigation, file iteration, jump orchestration, location lists) |

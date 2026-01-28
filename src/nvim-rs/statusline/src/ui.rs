@@ -197,7 +197,8 @@ impl UiContentBuilder {
     /// Add a content chunk.
     pub fn add_chunk(&mut self, attr: c_int, content: &str, hl_group: c_int) {
         if !content.is_empty() {
-            self.chunks.push(UiContentChunk::new(attr, content, hl_group));
+            self.chunks
+                .push(UiContentChunk::new(attr, content, hl_group));
         }
     }
 
@@ -269,11 +270,7 @@ pub const fn calc_ruler_row(rows: c_int, in_statusline: bool, win_row: c_int) ->
 }
 
 /// Calculate available width for statusline.
-pub const fn calc_statusline_width(
-    win_width: c_int,
-    is_global: bool,
-    columns: c_int,
-) -> c_int {
+pub const fn calc_statusline_width(win_width: c_int, is_global: bool, columns: c_int) -> c_int {
     if is_global {
         columns
     } else {
@@ -479,7 +476,10 @@ mod tests {
     #[test]
     fn test_ui_highlight_for_statusline() {
         assert_eq!(UiHighlight::for_statusline(true), UiHighlight::StatusLine);
-        assert_eq!(UiHighlight::for_statusline(false), UiHighlight::StatusLineNC);
+        assert_eq!(
+            UiHighlight::for_statusline(false),
+            UiHighlight::StatusLineNC
+        );
     }
 
     #[test]

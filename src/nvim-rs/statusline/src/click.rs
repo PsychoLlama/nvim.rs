@@ -494,8 +494,7 @@ impl TablineBuilder {
 
         self.items
             .push(TablineItem::tab(tabnr, start, end, is_selected));
-        self.clicks
-            .start_tab_switch(start.max(0) as usize, tabnr);
+        self.clicks.start_tab_switch(start.max(0) as usize, tabnr);
         self.current_col = end;
     }
 
@@ -506,8 +505,7 @@ impl TablineBuilder {
         let end = start + width;
 
         self.items.push(TablineItem::close(tabnr, start, end));
-        self.clicks
-            .start_tab_close(start.max(0) as usize, tabnr);
+        self.clicks.start_tab_close(start.max(0) as usize, tabnr);
         self.current_col = end;
     }
 

@@ -119,11 +119,7 @@ pub const fn make_ruler_context(
 /// This is the main ruler rendering function that can be used
 /// both for statusline rulers and command-line rulers.
 #[allow(clippy::cast_sign_loss)]
-pub fn render_ruler_with_context(
-    buf: &mut [u8],
-    ctx: &RulerContext,
-    opts: &RulerOptions,
-) -> c_int {
+pub fn render_ruler_with_context(buf: &mut [u8], ctx: &RulerContext, opts: &RulerOptions) -> c_int {
     render_ruler(buf, ctx, opts)
 }
 
@@ -134,7 +130,11 @@ pub fn render_ruler_with_context(
 pub const fn calc_ruler_col(ru_col: c_int, width: c_int) -> c_int {
     // Never use more than half the width
     let half = (width + 1) / 2;
-    if ru_col > half { ru_col } else { half }
+    if ru_col > half {
+        ru_col
+    } else {
+        half
+    }
 }
 
 /// Check if global statusline is enabled.
@@ -279,7 +279,11 @@ impl TablineDrawState {
         let tab_width = if tab_count > 0 {
             // Same formula as rs_tabwidth_calc
             let w = (width - 1 + tab_count / 2) / tab_count;
-            if w < 6 { 6 } else { w }
+            if w < 6 {
+                6
+            } else {
+                w
+            }
         } else {
             0
         };
@@ -319,7 +323,11 @@ pub const extern "C" fn rs_tabline_state_new(width: c_int, tab_count: c_int) -> 
 /// FFI export: Check if tabline has room for more tabs.
 #[no_mangle]
 pub const extern "C" fn rs_tabline_has_room(state: &TablineDrawState) -> c_int {
-    if state.has_room() { 1 } else { 0 }
+    if state.has_room() {
+        1
+    } else {
+        0
+    }
 }
 
 /// FFI export: Get tab width for tabline.
@@ -355,15 +363,7 @@ mod tests {
 
     #[test]
     fn test_draw_context_new() {
-        let ctx = DrawContext::new(
-            WinHandle::null(),
-            100,
-            5,
-            10,
-            u32::from(b'-'),
-            42,
-            true,
-        );
+        let ctx = DrawContext::new(WinHandle::null(), 100, 5, 10, u32::from(b'-'), 42, true);
         assert_eq!(ctx.max_width, 100);
         assert_eq!(ctx.row, 5);
         assert_eq!(ctx.col, 10);

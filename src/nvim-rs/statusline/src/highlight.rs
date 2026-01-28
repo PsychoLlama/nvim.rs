@@ -276,7 +276,11 @@ pub struct HighlightSpan {
 impl HighlightSpan {
     /// Create a new highlight span.
     pub const fn new(start: usize, end: usize, hl_attr: c_int) -> Self {
-        Self { start, end, hl_attr }
+        Self {
+            start,
+            end,
+            hl_attr,
+        }
     }
 
     /// Check if this span is empty.
