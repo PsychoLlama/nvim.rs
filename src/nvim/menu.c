@@ -55,6 +55,7 @@ extern bool rs_menu_is_toolbar(const char *name);
 extern bool rs_menu_is_menubar(const char *name);
 extern bool rs_menu_is_separator(const char *name);
 extern bool rs_menu_is_hidden(const char *name);
+extern bool rs_menu_name_equal(const char *name, vimmenu_T *menu);
 
 /// The character for each menu mode
 static char *menu_mode_chars[] = { "n", "v", "s", "o", "i", "c", "tl", "t" };
@@ -1118,25 +1119,7 @@ static char *menu_name_skip(char *const name)
 /// two ways: raw menu name and menu name without '&'.  ignore part after a TAB.
 static bool menu_name_equal(const char *const name, const vimmenu_T *const menu)
 {
-  if (menu->en_name != NULL
-      && (menu_namecmp(name, menu->en_name)
-          || menu_namecmp(name, menu->en_dname))) {
-    return true;
-  }
-  return menu_namecmp(name, menu->name) || menu_namecmp(name, menu->dname);
-}
-
-static bool menu_namecmp(const char *const name, const char *const mname)
-{
-  int i;
-
-  for (i = 0; name[i] != NUL && name[i] != TAB; i++) {
-    if (name[i] != mname[i]) {
-      break;
-    }
-  }
-  return (name[i] == NUL || name[i] == TAB)
-         && (mname[i] == NUL || mname[i] == TAB);
+  return rs_menu_name_equal(name, (vimmenu_T *)menu);
 }
 
 /// Returns the \ref MENU_MODES specified by menu command `cmd`.

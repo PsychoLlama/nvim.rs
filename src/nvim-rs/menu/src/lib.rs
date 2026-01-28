@@ -18,6 +18,7 @@
 pub mod classify;
 pub mod handle;
 pub mod hidden;
+pub mod path;
 pub mod traverse;
 
 // Re-exports for convenience
@@ -27,6 +28,7 @@ pub use classify::{
 };
 pub use handle::VimMenuHandle;
 pub use hidden::rs_menu_is_hidden;
+pub use path::{rs_menu_name_equal, rs_menu_namelen, rs_menu_text, MenuTextResult};
 
 /// Hidden menu character (']')
 pub const MNU_HIDDEN_CHAR: u8 = b']';
