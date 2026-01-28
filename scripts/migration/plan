@@ -13,13 +13,13 @@ description="$1"
 
 # Check for previous run result
 previous_result=""
-if [[ -f "ref/run-result" ]]; then
+if [[ -f "ref/run-result.md" ]]; then
   log "Found previous run result"
   previous_result="
 
 ## Previous Work
 
-@ref/run-result contains details from the most recent work."
+@ref/run-result.md contains details from the most recent work."
 fi
 
 log "Running Claude in plan mode..."
