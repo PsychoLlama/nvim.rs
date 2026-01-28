@@ -861,11 +861,17 @@ impl EvalFlags {
 // =============================================================================
 
 pub mod eval;
+pub mod operators;
 
 // Re-export FFI functions from the eval module
 pub use eval::{
     rs_eval0, rs_eval1, rs_eval2, rs_eval3, rs_eval4, rs_eval5, EvalargHandle, ExargHandle,
     TypevalHandle,
+};
+
+// Re-export FFI functions from the operators module
+pub use operators::{
+    rs_apply_comparison, rs_compare_floats, rs_compare_numbers, rs_typval_compare, CompareResult,
 };
 
 // =============================================================================

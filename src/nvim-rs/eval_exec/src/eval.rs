@@ -851,10 +851,10 @@ pub unsafe extern "C" fn rs_eval4(
 // =============================================================================
 
 /// Handle fourth level expression:
-///   +       number addition, concatenation of list or blob
-///   -       number subtraction
-///   .       string concatenation
-///   ..      string concatenation
+/// - `+` number addition, concatenation of list or blob
+/// - `-` number subtraction
+/// - `.` string concatenation
+/// - `..` string concatenation
 ///
 /// # Safety
 /// See `eval1_impl` for safety requirements.

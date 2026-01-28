@@ -7018,3 +7018,15 @@ void nvim_blob_set_ret(typval_T *tv, blob_T *b)
 {
   tv_blob_set_ret(tv, b);
 }
+
+/// Check if typval is a function (VAR_FUNC or VAR_PARTIAL) - accessor for Rust.
+int nvim_tv_is_func(const typval_T *tv)
+{
+  return tv->v_type == VAR_FUNC || tv->v_type == VAR_PARTIAL;
+}
+
+/// Get partial pointer from typval - accessor for Rust.
+partial_T *nvim_tv_get_partial(const typval_T *tv)
+{
+  return tv->vval.v_partial;
+}
