@@ -553,6 +553,337 @@ pub unsafe extern "C" fn rs_shorten_path(
 }
 
 // =============================================================================
+// Path Simplification (simplify())
+// =============================================================================
+
+/// Simplify a path by removing redundant components.
+///
+/// This removes `.` components and resolves `..` components where possible.
+/// Does NOT follow symlinks (use `resolve` for that).
+///
+/// Returns the simplified path as a new Vec.
+pub fn simplify_path(path: &[u8]) -> Vec<u8> {
+    if path.is_empty() {
+        return Vec::new();
+    }
+
+    let mut result: Vec<&[u8]> = Vec::new();
+    let is_absolute = path.first() == Some(&b'/');
+
+    // Split on both / and \ for cross-platform support
+    let mut start = 0;
+    let mut i = 0;
+
+    while i <= path.len() {
+        let is_sep = i == path.len() || path[i] == b'/' || path[i] == b'\\';
+        if is_sep {
+            let component = &path[start..i];
+
+            if component.is_empty() || component == b"." {
+                // Skip empty components and current directory
+            } else if component == b".." {
+                // Go up one directory if possible
+                if !result.is_empty() && result.last() != Some(&b"..".as_slice()) {
+                    result.pop();
+                } else if !is_absolute {
+                    // Keep .. for relative paths
+                    result.push(component);
+                }
+                // For absolute paths, .. at root is ignored
+            } else {
+                result.push(component);
+            }
+
+            start = i + 1;
+        }
+        i += 1;
+    }
+
+    // Build result
+    let mut out = Vec::with_capacity(path.len());
+    if is_absolute {
+        out.push(b'/');
+    }
+
+    for (idx, component) in result.iter().enumerate() {
+        if idx > 0 {
+            out.push(b'/');
+        }
+        out.extend_from_slice(component);
+    }
+
+    // Handle edge cases
+    if out.is_empty() && !is_absolute {
+        out.push(b'.');
+    }
+
+    out
+}
+
+/// FFI export: simplify path.
+///
+/// Returns the number of bytes written to `out`, or -1 on error.
+///
+/// # Safety
+/// - `path` must be valid for `path_len` bytes.
+/// - `out` must be valid for `out_len` bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_simplify_path(
+    path: *const u8,
+    path_len: c_int,
+    out: *mut u8,
+    out_len: c_int,
+) -> c_int {
+    if path.is_null() || out.is_null() || path_len < 0 || out_len < 0 {
+        return -1;
+    }
+
+    let path_slice = std::slice::from_raw_parts(path, path_len as usize);
+    let simplified = simplify_path(path_slice);
+
+    if simplified.len() > out_len as usize {
+        return -1; // Buffer too small
+    }
+
+    let out_slice = std::slice::from_raw_parts_mut(out, out_len as usize);
+    out_slice[..simplified.len()].copy_from_slice(&simplified);
+    simplified.len() as c_int
+}
+
+// =============================================================================
+// File Type Constants
+// =============================================================================
+
+/// File type enumeration for getftype().
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(i32)]
+pub enum FileType {
+    /// Regular file
+    File = 0,
+    /// Directory
+    Dir = 1,
+    /// Symbolic link
+    Link = 2,
+    /// Block device
+    Bdev = 3,
+    /// Character device
+    Cdev = 4,
+    /// Socket
+    Socket = 5,
+    /// FIFO (named pipe)
+    Fifo = 6,
+    /// Other/unknown
+    Other = 7,
+}
+
+impl FileType {
+    /// Convert to VimL string representation.
+    pub const fn as_viml_str(&self) -> &'static [u8] {
+        match self {
+            Self::File => b"file",
+            Self::Dir => b"dir",
+            Self::Link => b"link",
+            Self::Bdev => b"bdev",
+            Self::Cdev => b"cdev",
+            Self::Socket => b"socket",
+            Self::Fifo => b"fifo",
+            Self::Other => b"other",
+        }
+    }
+
+    /// Convert from C int.
+    pub const fn from_c_int(val: c_int) -> Self {
+        match val {
+            0 => Self::File,
+            1 => Self::Dir,
+            2 => Self::Link,
+            3 => Self::Bdev,
+            4 => Self::Cdev,
+            5 => Self::Socket,
+            6 => Self::Fifo,
+            _ => Self::Other,
+        }
+    }
+}
+
+/// FFI export: get file type string.
+///
+/// Returns pointer to static string.
+#[no_mangle]
+pub extern "C" fn rs_filetype_str(ftype: c_int) -> *const u8 {
+    FileType::from_c_int(ftype).as_viml_str().as_ptr()
+}
+
+/// FFI export: get file type string length.
+#[no_mangle]
+pub extern "C" fn rs_filetype_str_len(ftype: c_int) -> c_int {
+    FileType::from_c_int(ftype).as_viml_str().len() as c_int
+}
+
+// =============================================================================
+// File Permission Helpers
+// =============================================================================
+
+/// Unix permission bits.
+pub mod perms {
+    /// Owner read
+    pub const S_IRUSR: u32 = 0o400;
+    /// Owner write
+    pub const S_IWUSR: u32 = 0o200;
+    /// Owner execute
+    pub const S_IXUSR: u32 = 0o100;
+    /// Group read
+    pub const S_IRGRP: u32 = 0o040;
+    /// Group write
+    pub const S_IWGRP: u32 = 0o020;
+    /// Group execute
+    pub const S_IXGRP: u32 = 0o010;
+    /// Others read
+    pub const S_IROTH: u32 = 0o004;
+    /// Others write
+    pub const S_IWOTH: u32 = 0o002;
+    /// Others execute
+    pub const S_IXOTH: u32 = 0o001;
+}
+
+/// Convert permission bits to rwx string (e.g., "rwxr-xr-x").
+///
+/// Returns the number of bytes written (always 9 if successful, 0 on error).
+pub fn mode_to_perm_string(mode: u32, out: &mut [u8]) -> usize {
+    if out.len() < 9 {
+        return 0;
+    }
+
+    out[0] = if mode & perms::S_IRUSR != 0 {
+        b'r'
+    } else {
+        b'-'
+    };
+    out[1] = if mode & perms::S_IWUSR != 0 {
+        b'w'
+    } else {
+        b'-'
+    };
+    out[2] = if mode & perms::S_IXUSR != 0 {
+        b'x'
+    } else {
+        b'-'
+    };
+    out[3] = if mode & perms::S_IRGRP != 0 {
+        b'r'
+    } else {
+        b'-'
+    };
+    out[4] = if mode & perms::S_IWGRP != 0 {
+        b'w'
+    } else {
+        b'-'
+    };
+    out[5] = if mode & perms::S_IXGRP != 0 {
+        b'x'
+    } else {
+        b'-'
+    };
+    out[6] = if mode & perms::S_IROTH != 0 {
+        b'r'
+    } else {
+        b'-'
+    };
+    out[7] = if mode & perms::S_IWOTH != 0 {
+        b'w'
+    } else {
+        b'-'
+    };
+    out[8] = if mode & perms::S_IXOTH != 0 {
+        b'x'
+    } else {
+        b'-'
+    };
+
+    9
+}
+
+/// FFI export: convert mode to permission string.
+///
+/// # Safety
+/// - `out` must be valid for at least 9 bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_mode_to_perm_string(mode: u32, out: *mut u8) -> c_int {
+    if out.is_null() {
+        return 0;
+    }
+    let out_slice = std::slice::from_raw_parts_mut(out, 9);
+    mode_to_perm_string(mode, out_slice) as c_int
+}
+
+// =============================================================================
+// File Size Helpers
+// =============================================================================
+
+/// File size constants.
+pub mod size {
+    /// Bytes in a kilobyte
+    pub const KB: i64 = 1024;
+    /// Bytes in a megabyte
+    pub const MB: i64 = 1024 * 1024;
+    /// Bytes in a gigabyte
+    pub const GB: i64 = 1024 * 1024 * 1024;
+}
+
+/// Format file size as human-readable string.
+///
+/// Returns the number of bytes written to `out`.
+pub fn format_file_size(bytes: i64, out: &mut [u8]) -> usize {
+    if out.is_empty() {
+        return 0;
+    }
+
+    let (value, suffix): (i64, &[u8]) = if bytes >= size::GB {
+        (bytes / size::GB, b"G")
+    } else if bytes >= size::MB {
+        (bytes / size::MB, b"M")
+    } else if bytes >= size::KB {
+        (bytes / size::KB, b"K")
+    } else {
+        (bytes, b"")
+    };
+
+    // Simple integer to string conversion
+    let mut num_buf = [0u8; 20];
+    let mut num_len = 0;
+    let mut v = value.unsigned_abs();
+
+    if v == 0 {
+        num_buf[0] = b'0';
+        num_len = 1;
+    } else {
+        while v > 0 {
+            num_buf[num_len] = b'0' + (v % 10) as u8;
+            v /= 10;
+            num_len += 1;
+        }
+        num_buf[..num_len].reverse();
+    }
+
+    let total = num_len + suffix.len() + usize::from(value < 0);
+    if total > out.len() {
+        return 0;
+    }
+
+    let mut pos = 0;
+    if value < 0 {
+        out[pos] = b'-';
+        pos += 1;
+    }
+    out[pos..pos + num_len].copy_from_slice(&num_buf[..num_len]);
+    pos += num_len;
+    out[pos..pos + suffix.len()].copy_from_slice(suffix);
+    pos += suffix.len();
+
+    pos
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -652,5 +983,79 @@ mod tests {
         assert!(!is_current_dir(b".."));
         assert!(is_parent_dir(b".."));
         assert!(!is_parent_dir(b"."));
+    }
+
+    #[test]
+    fn test_simplify_path() {
+        assert_eq!(simplify_path(b"/foo/./bar"), b"/foo/bar");
+        assert_eq!(simplify_path(b"/foo/../bar"), b"/bar");
+        assert_eq!(simplify_path(b"/foo/bar/../baz"), b"/foo/baz");
+        assert_eq!(simplify_path(b"./foo/bar"), b"foo/bar");
+        assert_eq!(simplify_path(b"foo/./bar/./baz"), b"foo/bar/baz");
+        assert_eq!(simplify_path(b"foo/../bar"), b"bar");
+        assert_eq!(simplify_path(b"../foo"), b"../foo");
+        assert_eq!(simplify_path(b"../../foo"), b"../../foo");
+        assert_eq!(simplify_path(b"/.."), b"/");
+        assert_eq!(simplify_path(b""), b"");
+        assert_eq!(simplify_path(b"."), b".");
+        assert_eq!(simplify_path(b"./"), b".");
+    }
+
+    #[test]
+    fn test_file_type() {
+        assert_eq!(FileType::File.as_viml_str(), b"file");
+        assert_eq!(FileType::Dir.as_viml_str(), b"dir");
+        assert_eq!(FileType::Link.as_viml_str(), b"link");
+        assert_eq!(FileType::from_c_int(0), FileType::File);
+        assert_eq!(FileType::from_c_int(1), FileType::Dir);
+        assert_eq!(FileType::from_c_int(99), FileType::Other);
+    }
+
+    #[test]
+    fn test_mode_to_perm_string() {
+        let mut out = [0u8; 9];
+
+        // rwxr-xr-x (755)
+        let len = mode_to_perm_string(0o755, &mut out);
+        assert_eq!(len, 9);
+        assert_eq!(&out, b"rwxr-xr-x");
+
+        // rw-r--r-- (644)
+        let len = mode_to_perm_string(0o644, &mut out);
+        assert_eq!(len, 9);
+        assert_eq!(&out, b"rw-r--r--");
+
+        // rwx------ (700)
+        let len = mode_to_perm_string(0o700, &mut out);
+        assert_eq!(len, 9);
+        assert_eq!(&out, b"rwx------");
+
+        // --------- (000)
+        let len = mode_to_perm_string(0o000, &mut out);
+        assert_eq!(len, 9);
+        assert_eq!(&out, b"---------");
+    }
+
+    #[test]
+    fn test_format_file_size() {
+        let mut out = [0u8; 32];
+
+        let len = format_file_size(0, &mut out);
+        assert_eq!(&out[..len], b"0");
+
+        let len = format_file_size(512, &mut out);
+        assert_eq!(&out[..len], b"512");
+
+        let len = format_file_size(1024, &mut out);
+        assert_eq!(&out[..len], b"1K");
+
+        let len = format_file_size(1024 * 1024, &mut out);
+        assert_eq!(&out[..len], b"1M");
+
+        let len = format_file_size(1024 * 1024 * 1024, &mut out);
+        assert_eq!(&out[..len], b"1G");
+
+        let len = format_file_size(2048, &mut out);
+        assert_eq!(&out[..len], b"2K");
     }
 }
