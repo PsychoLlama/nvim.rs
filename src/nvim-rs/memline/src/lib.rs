@@ -390,6 +390,306 @@ pub extern "C" fn rs_ml_get_index_size() -> usize {
     INDEX_SIZE
 }
 
+/// Get the size of the data block header.
+///
+/// This is the offset where the db_index array starts.
+///
+/// # Safety
+/// Pure function, no safety concerns.
+#[no_mangle]
+pub extern "C" fn rs_ml_get_data_block_header_size() -> usize {
+    DATA_BLOCK_HEADER_SIZE
+}
+
+/// Calculate the maximum number of pointer entries for a given page size.
+///
+/// # Safety
+/// Pure function, no safety concerns.
+#[no_mangle]
+pub extern "C" fn rs_ml_pb_count_max(page_size: usize) -> u16 {
+    pb_count_max(page_size)
+}
+
+// =============================================================================
+// PointerEntry FFI Functions
+// =============================================================================
+
+/// Get the block number from a PointerEntry.
+///
+/// # Safety
+/// - `entry` must be a valid pointer to a PointerEntry
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_pe_get_bnum(entry: *const PointerEntry) -> BlockNr {
+    if entry.is_null() {
+        return 0;
+    }
+    (*entry).pe_bnum
+}
+
+/// Set the block number in a PointerEntry.
+///
+/// # Safety
+/// - `entry` must be a valid pointer to a PointerEntry
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_pe_set_bnum(entry: *mut PointerEntry, bnum: BlockNr) {
+    if !entry.is_null() {
+        (*entry).pe_bnum = bnum;
+    }
+}
+
+/// Get the line count from a PointerEntry.
+///
+/// # Safety
+/// - `entry` must be a valid pointer to a PointerEntry
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_pe_get_line_count(entry: *const PointerEntry) -> LineNr {
+    if entry.is_null() {
+        return 0;
+    }
+    (*entry).pe_line_count
+}
+
+/// Set the line count in a PointerEntry.
+///
+/// # Safety
+/// - `entry` must be a valid pointer to a PointerEntry
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_pe_set_line_count(entry: *mut PointerEntry, count: LineNr) {
+    if !entry.is_null() {
+        (*entry).pe_line_count = count;
+    }
+}
+
+/// Get the old line number from a PointerEntry.
+///
+/// # Safety
+/// - `entry` must be a valid pointer to a PointerEntry
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_pe_get_old_lnum(entry: *const PointerEntry) -> LineNr {
+    if entry.is_null() {
+        return 0;
+    }
+    (*entry).pe_old_lnum
+}
+
+/// Set the old line number in a PointerEntry.
+///
+/// # Safety
+/// - `entry` must be a valid pointer to a PointerEntry
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_pe_set_old_lnum(entry: *mut PointerEntry, lnum: LineNr) {
+    if !entry.is_null() {
+        (*entry).pe_old_lnum = lnum;
+    }
+}
+
+/// Get the page count from a PointerEntry.
+///
+/// # Safety
+/// - `entry` must be a valid pointer to a PointerEntry
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_pe_get_page_count(entry: *const PointerEntry) -> c_int {
+    if entry.is_null() {
+        return 0;
+    }
+    (*entry).pe_page_count
+}
+
+/// Set the page count in a PointerEntry.
+///
+/// # Safety
+/// - `entry` must be a valid pointer to a PointerEntry
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_pe_set_page_count(entry: *mut PointerEntry, count: c_int) {
+    if !entry.is_null() {
+        (*entry).pe_page_count = count;
+    }
+}
+
+// =============================================================================
+// PointerBlockHeader FFI Functions
+// =============================================================================
+
+/// Check if a pointer block header is valid.
+///
+/// # Safety
+/// - `header` must be a valid pointer to a PointerBlockHeader
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_pb_is_valid(header: *const PointerBlockHeader) -> c_int {
+    if header.is_null() {
+        return 0;
+    }
+    c_int::from((*header).is_valid())
+}
+
+/// Get the count of entries in a pointer block.
+///
+/// # Safety
+/// - `header` must be a valid pointer to a PointerBlockHeader
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_pb_get_count(header: *const PointerBlockHeader) -> u16 {
+    if header.is_null() {
+        return 0;
+    }
+    (*header).pb_count
+}
+
+/// Set the count of entries in a pointer block.
+///
+/// # Safety
+/// - `header` must be a valid pointer to a PointerBlockHeader
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_pb_set_count(header: *mut PointerBlockHeader, count: u16) {
+    if !header.is_null() {
+        (*header).pb_count = count;
+    }
+}
+
+/// Get the maximum count of entries in a pointer block.
+///
+/// # Safety
+/// - `header` must be a valid pointer to a PointerBlockHeader
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_pb_get_count_max(header: *const PointerBlockHeader) -> u16 {
+    if header.is_null() {
+        return 0;
+    }
+    (*header).pb_count_max
+}
+
+/// Check if a pointer block has room for another entry.
+///
+/// # Safety
+/// - `header` must be a valid pointer to a PointerBlockHeader
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_pb_has_room(header: *const PointerBlockHeader) -> c_int {
+    if header.is_null() {
+        return 0;
+    }
+    c_int::from((*header).has_room())
+}
+
+/// Check if a pointer block is full.
+///
+/// # Safety
+/// - `header` must be a valid pointer to a PointerBlockHeader
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_pb_is_full(header: *const PointerBlockHeader) -> c_int {
+    if header.is_null() {
+        return 1; // Treat null as full
+    }
+    c_int::from((*header).is_full())
+}
+
+// =============================================================================
+// DataBlockHeader FFI Functions
+// =============================================================================
+
+/// Check if a data block header is valid.
+///
+/// # Safety
+/// - `header` must be a valid pointer to a DataBlockHeader
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_db_is_valid(header: *const DataBlockHeader) -> c_int {
+    if header.is_null() {
+        return 0;
+    }
+    c_int::from((*header).is_valid())
+}
+
+/// Get the free space in a data block.
+///
+/// # Safety
+/// - `header` must be a valid pointer to a DataBlockHeader
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_db_get_free(header: *const DataBlockHeader) -> u32 {
+    if header.is_null() {
+        return 0;
+    }
+    (*header).db_free
+}
+
+/// Set the free space in a data block.
+///
+/// # Safety
+/// - `header` must be a valid pointer to a DataBlockHeader
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_db_set_free(header: *mut DataBlockHeader, free: u32) {
+    if !header.is_null() {
+        (*header).db_free = free;
+    }
+}
+
+/// Get the text start offset in a data block.
+///
+/// # Safety
+/// - `header` must be a valid pointer to a DataBlockHeader
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_db_get_txt_start(header: *const DataBlockHeader) -> u32 {
+    if header.is_null() {
+        return 0;
+    }
+    (*header).db_txt_start
+}
+
+/// Set the text start offset in a data block.
+///
+/// # Safety
+/// - `header` must be a valid pointer to a DataBlockHeader
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_db_set_txt_start(header: *mut DataBlockHeader, start: u32) {
+    if !header.is_null() {
+        (*header).db_txt_start = start;
+    }
+}
+
+/// Get the text end offset in a data block.
+///
+/// # Safety
+/// - `header` must be a valid pointer to a DataBlockHeader
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_db_get_txt_end(header: *const DataBlockHeader) -> u32 {
+    if header.is_null() {
+        return 0;
+    }
+    (*header).db_txt_end
+}
+
+/// Get the line count in a data block.
+///
+/// # Safety
+/// - `header` must be a valid pointer to a DataBlockHeader
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_db_get_line_count(header: *const DataBlockHeader) -> i64 {
+    if header.is_null() {
+        return 0;
+    }
+    (*header).db_line_count
+}
+
+/// Set the line count in a data block.
+///
+/// # Safety
+/// - `header` must be a valid pointer to a DataBlockHeader
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_db_set_line_count(header: *mut DataBlockHeader, count: i64) {
+    if !header.is_null() {
+        (*header).db_line_count = count;
+    }
+}
+
+/// Check if a data block is empty.
+///
+/// # Safety
+/// - `header` must be a valid pointer to a DataBlockHeader
+#[no_mangle]
+pub unsafe extern "C" fn rs_ml_db_is_empty(header: *const DataBlockHeader) -> c_int {
+    if header.is_null() {
+        return 1; // Treat null as empty
+    }
+    c_int::from((*header).is_empty())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -401,5 +701,83 @@ mod tests {
         assert_eq!(rs_ml_get_line_dirty_flag(), ML_LINE_DIRTY);
         assert_eq!(rs_ml_get_data_id(), DATA_ID);
         assert_eq!(rs_ml_get_ptr_id(), PTR_ID);
+    }
+
+    #[test]
+    fn test_data_block_header_size() {
+        let size = rs_ml_get_data_block_header_size();
+        // Should be at least the size of the fields (2 + 4 + 4 + 4 + 8 = 22 bytes)
+        // but may be larger due to alignment
+        assert!(size >= 22);
+    }
+
+    #[test]
+    fn test_pb_count_max_export() {
+        let count = rs_ml_pb_count_max(4096);
+        assert!(count > 100);
+        assert!(count < 200);
+    }
+
+    #[test]
+    fn test_pointer_entry_ffi() {
+        let mut entry = PointerEntry::new();
+
+        unsafe {
+            assert_eq!(rs_ml_pe_get_bnum(&entry), 0);
+            assert_eq!(rs_ml_pe_get_line_count(&entry), 0);
+            assert_eq!(rs_ml_pe_get_old_lnum(&entry), 0);
+            assert_eq!(rs_ml_pe_get_page_count(&entry), 0);
+
+            rs_ml_pe_set_bnum(&mut entry, 42);
+            rs_ml_pe_set_line_count(&mut entry, 100);
+            rs_ml_pe_set_old_lnum(&mut entry, 1);
+            rs_ml_pe_set_page_count(&mut entry, 3);
+
+            assert_eq!(rs_ml_pe_get_bnum(&entry), 42);
+            assert_eq!(rs_ml_pe_get_line_count(&entry), 100);
+            assert_eq!(rs_ml_pe_get_old_lnum(&entry), 1);
+            assert_eq!(rs_ml_pe_get_page_count(&entry), 3);
+        }
+    }
+
+    #[test]
+    fn test_pointer_block_header_ffi() {
+        let mut header = PointerBlockHeader::new(128);
+
+        unsafe {
+            assert_eq!(rs_ml_pb_is_valid(&header), 1);
+            assert_eq!(rs_ml_pb_get_count(&header), 0);
+            assert_eq!(rs_ml_pb_get_count_max(&header), 128);
+            assert_eq!(rs_ml_pb_has_room(&header), 1);
+            assert_eq!(rs_ml_pb_is_full(&header), 0);
+
+            rs_ml_pb_set_count(&mut header, 128);
+            assert_eq!(rs_ml_pb_get_count(&header), 128);
+            assert_eq!(rs_ml_pb_has_room(&header), 0);
+            assert_eq!(rs_ml_pb_is_full(&header), 1);
+        }
+    }
+
+    #[test]
+    fn test_data_block_header_ffi() {
+        let mut header = DataBlockHeader::new(4096);
+
+        unsafe {
+            assert_eq!(rs_ml_db_is_valid(&header), 1);
+            assert_eq!(rs_ml_db_get_txt_start(&header), 4096);
+            assert_eq!(rs_ml_db_get_txt_end(&header), 4096);
+            assert_eq!(rs_ml_db_get_line_count(&header), 0);
+            assert_eq!(rs_ml_db_is_empty(&header), 1);
+
+            rs_ml_db_set_line_count(&mut header, 10);
+            assert_eq!(rs_ml_db_get_line_count(&header), 10);
+            assert_eq!(rs_ml_db_is_empty(&header), 0);
+
+            rs_ml_db_set_txt_start(&mut header, 3000);
+            assert_eq!(rs_ml_db_get_txt_start(&header), 3000);
+
+            rs_ml_db_set_free(&mut header, 500);
+            assert_eq!(rs_ml_db_get_free(&header), 500);
+        }
     }
 }

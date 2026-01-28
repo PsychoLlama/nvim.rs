@@ -293,6 +293,236 @@ pub type BlockNr = i64;
 /// Column number type
 pub type ColNr = i32;
 
+// =============================================================================
+// B-tree Data Structures
+// =============================================================================
+
+/// Entry in a pointer block, representing a branch in the B-tree.
+///
+/// Each entry points to a child block (either another pointer block or a data block)
+/// and tracks the number of lines in that branch.
+///
+/// # Fields (mirrored from C)
+///
+/// - `pe_bnum` - Block number of the child
+/// - `pe_line_count` - Total number of lines in this branch
+/// - `pe_old_lnum` - Line number for this block (used during recovery)
+/// - `pe_page_count` - Number of pages in the child block
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PointerEntry {
+    /// Block number of the child block
+    pub pe_bnum: BlockNr,
+    /// Number of lines in this branch
+    pub pe_line_count: LineNr,
+    /// Line number for recovery
+    pub pe_old_lnum: LineNr,
+    /// Number of pages in the child block
+    pub pe_page_count: c_int,
+}
+
+impl PointerEntry {
+    /// Create a new empty pointer entry.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            pe_bnum: 0,
+            pe_line_count: 0,
+            pe_old_lnum: 0,
+            pe_page_count: 0,
+        }
+    }
+
+    /// Create a pointer entry with the given values.
+    #[must_use]
+    pub const fn with_values(
+        bnum: BlockNr,
+        line_count: LineNr,
+        old_lnum: LineNr,
+        page_count: c_int,
+    ) -> Self {
+        Self {
+            pe_bnum: bnum,
+            pe_line_count: line_count,
+            pe_old_lnum: old_lnum,
+            pe_page_count: page_count,
+        }
+    }
+}
+
+/// Header for a pointer block (internal B-tree node).
+///
+/// Pointer blocks contain an array of `PointerEntry` values, each pointing
+/// to a child block. The actual pointer array follows immediately after
+/// this header in memory.
+///
+/// # Memory Layout
+///
+/// ```text
+/// +------------------+
+/// | pb_id (u16)      |  Block ID: PTR_ID (0x7074)
+/// | pb_count (u16)   |  Number of valid entries
+/// | pb_count_max(u16)|  Maximum entries that fit
+/// +------------------+
+/// | pb_pointer[0]    |  First PointerEntry
+/// | pb_pointer[1]    |  Second PointerEntry
+/// | ...              |
+/// | pb_pointer[n-1]  |  Last PointerEntry
+/// +------------------+
+/// | (empty space)    |  Unused space to end of page
+/// +------------------+
+/// ```
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct PointerBlockHeader {
+    /// Block ID, should be PTR_ID (0x7074)
+    pub pb_id: u16,
+    /// Number of valid pointer entries
+    pub pb_count: u16,
+    /// Maximum number of entries that fit in this block
+    pub pb_count_max: u16,
+}
+
+impl PointerBlockHeader {
+    /// Create a new pointer block header.
+    #[must_use]
+    pub const fn new(count_max: u16) -> Self {
+        Self {
+            pb_id: PTR_ID,
+            pb_count: 0,
+            pb_count_max: count_max,
+        }
+    }
+
+    /// Check if this is a valid pointer block.
+    #[must_use]
+    pub const fn is_valid(&self) -> bool {
+        self.pb_id == PTR_ID
+    }
+
+    /// Check if there's room for another entry.
+    #[must_use]
+    pub const fn has_room(&self) -> bool {
+        self.pb_count < self.pb_count_max
+    }
+
+    /// Check if the block is full.
+    #[must_use]
+    pub const fn is_full(&self) -> bool {
+        self.pb_count >= self.pb_count_max
+    }
+}
+
+impl Default for PointerBlockHeader {
+    fn default() -> Self {
+        Self {
+            pb_id: PTR_ID,
+            pb_count: 0,
+            pb_count_max: 0,
+        }
+    }
+}
+
+/// Header for a data block (B-tree leaf node).
+///
+/// Data blocks store the actual line text. Lines are stored in reverse order -
+/// the first line's text is at the end of the block, with subsequent lines
+/// placed before it.
+///
+/// # Memory Layout
+///
+/// ```text
+/// +------------------+
+/// | db_id (u16)      |  Block ID: DATA_ID (0x6461)
+/// | db_free (u32)    |  Free space available
+/// | db_txt_start(u32)|  Byte offset where text starts
+/// | db_txt_end (u32) |  Byte offset just after block
+/// | db_line_count    |  Number of lines in this block
+/// +------------------+
+/// | db_index[0]      |  Offset of first line's text
+/// | db_index[1]      |  Offset of second line's text
+/// | ...              |
+/// +------------------+
+/// | (free space)     |  Empty space between indexes and text
+/// +------------------+
+/// | line N text      |  Text of last line (near db_txt_start)
+/// | ...              |
+/// | line 1 text      |  Text of first line (at end of block)
+/// +------------------+
+/// ```
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct DataBlockHeader {
+    /// Block ID, should be DATA_ID (0x6461)
+    pub db_id: u16,
+    /// Free space available in the block
+    pub db_free: u32,
+    /// Byte offset where text starts (grows downward)
+    pub db_txt_start: u32,
+    /// Byte offset just after the block (block size)
+    pub db_txt_end: u32,
+    /// Number of lines stored in this block
+    pub db_line_count: i64,
+}
+
+impl DataBlockHeader {
+    /// Create a new data block header for a block of the given size.
+    #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
+    pub const fn new(block_size: u32) -> Self {
+        // Header size is the offset of db_index (where the index array starts)
+        // Safe: header size is always small (< 32 bytes)
+        let header_size = std::mem::size_of::<Self>() as u32;
+        Self {
+            db_id: DATA_ID,
+            db_free: block_size - header_size,
+            db_txt_start: block_size,
+            db_txt_end: block_size,
+            db_line_count: 0,
+        }
+    }
+
+    /// Check if this is a valid data block.
+    #[must_use]
+    pub const fn is_valid(&self) -> bool {
+        self.db_id == DATA_ID
+    }
+
+    /// Check if the block is empty (no lines).
+    #[must_use]
+    pub const fn is_empty(&self) -> bool {
+        self.db_line_count == 0
+    }
+}
+
+impl Default for DataBlockHeader {
+    fn default() -> Self {
+        Self {
+            db_id: DATA_ID,
+            db_free: 0,
+            db_txt_start: 0,
+            db_txt_end: 0,
+            db_line_count: 0,
+        }
+    }
+}
+
+/// Size of the data block header (offset to db_index array).
+pub const DATA_BLOCK_HEADER_SIZE: usize = std::mem::size_of::<DataBlockHeader>();
+
+/// Calculate the maximum number of pointer entries that fit in a page.
+///
+/// # Arguments
+/// * `page_size` - Size of a memory page in bytes
+#[must_use]
+#[allow(clippy::cast_possible_truncation)]
+pub const fn pb_count_max(page_size: usize) -> u16 {
+    let header_size = std::mem::size_of::<PointerBlockHeader>();
+    let entry_size = std::mem::size_of::<PointerEntry>();
+    // Safe: result is always a small number (< 200 for typical page sizes)
+    ((page_size - header_size) / entry_size) as u16
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -337,5 +567,51 @@ mod tests {
         // The mask should clear only the top bit
         let marked = DB_MARKED | 0x1234;
         assert_eq!(marked & DB_INDEX_MASK, 0x1234);
+    }
+
+    #[test]
+    fn test_pointer_entry() {
+        let entry = PointerEntry::new();
+        assert_eq!(entry.pe_bnum, 0);
+        assert_eq!(entry.pe_line_count, 0);
+        assert_eq!(entry.pe_old_lnum, 0);
+        assert_eq!(entry.pe_page_count, 0);
+
+        let entry = PointerEntry::with_values(42, 100, 1, 3);
+        assert_eq!(entry.pe_bnum, 42);
+        assert_eq!(entry.pe_line_count, 100);
+        assert_eq!(entry.pe_old_lnum, 1);
+        assert_eq!(entry.pe_page_count, 3);
+    }
+
+    #[test]
+    fn test_pointer_block_header() {
+        let header = PointerBlockHeader::new(128);
+        assert!(header.is_valid());
+        assert_eq!(header.pb_id, PTR_ID);
+        assert_eq!(header.pb_count, 0);
+        assert_eq!(header.pb_count_max, 128);
+        assert!(header.has_room());
+        assert!(!header.is_full());
+    }
+
+    #[test]
+    fn test_data_block_header() {
+        let header = DataBlockHeader::new(4096);
+        assert!(header.is_valid());
+        assert_eq!(header.db_id, DATA_ID);
+        assert_eq!(header.db_txt_end, 4096);
+        assert_eq!(header.db_txt_start, 4096);
+        assert!(header.is_empty());
+    }
+
+    #[test]
+    fn test_pb_count_max() {
+        // For a 4096-byte page
+        let count = pb_count_max(4096);
+        // Header is 6 bytes, entry is ~24 bytes (8 + 8 + 8 + 4)
+        // So we should get around (4096 - 6) / 28 = ~146 entries
+        assert!(count > 100);
+        assert!(count < 200);
     }
 }
