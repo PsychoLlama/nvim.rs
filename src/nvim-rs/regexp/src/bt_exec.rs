@@ -30,10 +30,10 @@ use crate::bt_compile::{next, op, operand};
 use crate::bt_opcodes::{
     get_backref_num, get_mclose_num, get_mopen_num, is_backref, is_mclose, is_mopen, ADD_NL, ALPHA,
     ANY, ANYBUT, ANYOF, BACK, BEHIND, BHPOS, BOL, BOW, BRACE_COMPLEX, BRACE_LIMITS, BRACE_SIMPLE,
-    BRANCH, CURSOR, DIGIT, END, EOL, EOW, EXACTLY, HEAD, HEX, IDENT, LOWER, MATCH, MULTIBYTECODE,
-    NALPHA, NCLOSE, NDIGIT, NEWL, NHEAD, NHEX, NLOWER, NOBEHIND, NOMATCH, NOPEN, NOTHING, NUPPER,
-    NWHITE, NWORD, OCTAL, PLUS, PRINT, RE_BOF, RE_COL, RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK,
-    RE_VCOL, RE_VISUAL, SFNAME, SKWORD, SPRINT, STAR, SUBPAT, UPPER, WHITE, WORD,
+    BRANCH, CURSOR, DIGIT, END, EOL, EOW, EXACTLY, FNAME, HEAD, HEX, IDENT, LOWER, MATCH,
+    MULTIBYTECODE, NALPHA, NCLOSE, NDIGIT, NEWL, NHEAD, NHEX, NLOWER, NOBEHIND, NOMATCH, NOPEN,
+    NOTHING, NUPPER, NWHITE, NWORD, OCTAL, PLUS, PRINT, RE_BOF, RE_COL, RE_COMPOSING, RE_EOF,
+    RE_LNUM, RE_MARK, RE_VCOL, RE_VISUAL, SFNAME, SKWORD, SPRINT, STAR, SUBPAT, UPPER, WHITE, WORD,
 };
 use crate::bt_state::{BackPosTable, RegSave, RegStack, RegStar, RegState, NSUBEXP};
 
@@ -379,15 +379,60 @@ pub unsafe fn regrepeat(state: &mut MatchState, scan: *const u8, maxcount: i64) 
         }
 
         let matches = match opcode {
+            // Basic matchers
             ANY => c != b'\n' || state.match_nl,
             ANYOF => match_class(opnd, c),
             ANYBUT => !match_class(opnd, c) && c != b'\n',
             EXACTLY => !opnd.is_null() && *opnd == c,
             NEWL => c == b'\n',
+
+            // Whitespace classes
             WHITE => c == b' ' || c == b'\t',
+            NWHITE => c != b' ' && c != b'\t' && c != b'\n',
+
+            // Digit classes
             DIGIT => c.is_ascii_digit(),
+            NDIGIT => !c.is_ascii_digit() && c != b'\n',
+
+            // Hex digit classes
+            HEX => c.is_ascii_hexdigit(),
+            NHEX => !c.is_ascii_hexdigit() && c != b'\n',
+
+            // Octal digit classes
+            OCTAL => matches!(c, b'0'..=b'7'),
+            // NOCTAL intentionally not added here - would need NOCTAL constant
+
+            // Word/identifier classes
             WORD => c.is_ascii_alphanumeric() || c == b'_',
+            NWORD => !c.is_ascii_alphanumeric() && c != b'_' && c != b'\n',
+
+            // Head (start of identifier)
             HEAD => c.is_ascii_alphabetic() || c == b'_',
+            NHEAD => !c.is_ascii_alphabetic() && c != b'_' && c != b'\n',
+
+            // Alpha classes
+            ALPHA => c.is_ascii_alphabetic(),
+            NALPHA => !c.is_ascii_alphabetic() && c != b'\n',
+
+            // Case classes
+            LOWER => c.is_ascii_lowercase(),
+            NLOWER => !c.is_ascii_lowercase() && c != b'\n',
+            UPPER => c.is_ascii_uppercase(),
+            NUPPER => !c.is_ascii_uppercase() && c != b'\n',
+
+            // Print classes (ASCII printable)
+            PRINT => c.is_ascii_graphic() || c == b' ',
+            SPRINT => c.is_ascii_graphic(), // Start of printable (excludes leading space)
+
+            // Identifier classes (for now, treat as word chars for ASCII)
+            IDENT => c.is_ascii_alphanumeric() || c == b'_',
+            // SIDENT handled same as IDENT for ASCII
+            SKWORD => c.is_ascii_alphanumeric() || c == b'_',
+
+            // Filename characters (basic ASCII version)
+            FNAME => is_fname_char(c),
+            SFNAME => is_fname_char(c),
+
             _ => false,
         };
 
