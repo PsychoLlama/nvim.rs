@@ -206,6 +206,213 @@ pub mod hlf {
     pub const FC: c_int = 16;
     /// Message area
     pub const MSG: c_int = 21;
+    /// LineNr
+    pub const N: c_int = 23;
+    /// SignColumn
+    pub const SC: c_int = 30;
+    /// User1-9 start
+    pub const USER1: c_int = 61;
+}
+
+/// Get the appropriate statusline highlight based on whether window is current.
+///
+/// Returns `HLF_S` for current window, `HLF_SNC` for non-current.
+pub const fn get_statusline_hl(is_curwin: bool) -> c_int {
+    if is_curwin {
+        hlf::S
+    } else {
+        hlf::SNC
+    }
+}
+
+/// Get the appropriate window bar highlight based on whether window is current.
+///
+/// Returns `HLF_WBR` for current window, `HLF_WBRNC` for non-current.
+pub const fn get_winbar_hl(is_curwin: bool) -> c_int {
+    if is_curwin {
+        hlf::WBR
+    } else {
+        hlf::WBRNC
+    }
+}
+
+/// Get the appropriate tabline highlight based on whether tab is selected.
+///
+/// Returns `HLF_TPS` for selected tab, `HLF_TP` for non-selected.
+pub const fn get_tabline_hl(is_selected: bool) -> c_int {
+    if is_selected {
+        hlf::TPS
+    } else {
+        hlf::TP
+    }
+}
+
+/// Convert a user highlight number (0-9) to a userhl value.
+///
+/// - 0 returns 0 (default)
+/// - 1-9 returns 1-9 (User1-User9)
+pub const fn user_hl_to_userhl(user_num: u8) -> c_int {
+    if user_num == 0 {
+        0
+    } else if user_num > 9 {
+        9
+    } else {
+        user_num as c_int
+    }
+}
+
+/// Highlight span for tracking highlight regions.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct HighlightSpan {
+    /// Start byte offset in output
+    pub start: usize,
+    /// End byte offset in output
+    pub end: usize,
+    /// Highlight attribute ID
+    pub hl_attr: c_int,
+}
+
+impl HighlightSpan {
+    /// Create a new highlight span.
+    pub const fn new(start: usize, end: usize, hl_attr: c_int) -> Self {
+        Self { start, end, hl_attr }
+    }
+
+    /// Check if this span is empty.
+    pub const fn is_empty(&self) -> bool {
+        self.start >= self.end
+    }
+
+    /// Get the length of the span.
+    pub const fn len(&self) -> usize {
+        self.end.saturating_sub(self.start)
+    }
+}
+
+/// Builder for highlight spans from highlight records.
+pub struct HighlightSpanBuilder {
+    spans: Vec<HighlightSpan>,
+    current_start: usize,
+    current_hl: c_int,
+}
+
+impl Default for HighlightSpanBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl HighlightSpanBuilder {
+    /// Create a new span builder.
+    pub const fn new() -> Self {
+        Self {
+            spans: Vec::new(),
+            current_start: 0,
+            current_hl: 0,
+        }
+    }
+
+    /// Process a highlight record.
+    pub fn process_record(&mut self, rec: &StlHighlightRecord) {
+        // Close previous span if there was one
+        if self.current_hl != 0 && rec.start > self.current_start {
+            self.spans.push(HighlightSpan::new(
+                self.current_start,
+                rec.start,
+                self.current_hl,
+            ));
+        }
+
+        // Start new span
+        self.current_start = rec.start;
+        self.current_hl = rec.userhl;
+    }
+
+    /// Finalize with the total length, closing any open span.
+    pub fn finalize(&mut self, total_len: usize) {
+        if self.current_hl != 0 && total_len > self.current_start {
+            self.spans.push(HighlightSpan::new(
+                self.current_start,
+                total_len,
+                self.current_hl,
+            ));
+        }
+    }
+
+    /// Get the built spans.
+    pub fn spans(&self) -> &[HighlightSpan] {
+        &self.spans
+    }
+
+    /// Consume and return the spans.
+    pub fn into_spans(self) -> Vec<HighlightSpan> {
+        self.spans
+    }
+}
+
+// =============================================================================
+// FFI Exports
+// =============================================================================
+
+/// FFI export: Get statusline highlight for window.
+#[no_mangle]
+pub const extern "C" fn rs_stl_get_statusline_hl(is_curwin: c_int) -> c_int {
+    get_statusline_hl(is_curwin != 0)
+}
+
+/// FFI export: Get winbar highlight for window.
+#[no_mangle]
+pub const extern "C" fn rs_stl_get_winbar_hl(is_curwin: c_int) -> c_int {
+    get_winbar_hl(is_curwin != 0)
+}
+
+/// FFI export: Get tabline highlight for tab.
+#[no_mangle]
+pub const extern "C" fn rs_stl_get_tabline_hl(is_selected: c_int) -> c_int {
+    get_tabline_hl(is_selected != 0)
+}
+
+/// FFI export: Convert user highlight number to userhl value.
+#[no_mangle]
+pub const extern "C" fn rs_stl_user_hl_to_userhl(user_num: u8) -> c_int {
+    user_hl_to_userhl(user_num)
+}
+
+/// FFI export: Parse a highlight name from format string.
+///
+/// Returns the length of the highlight name, or -1 if invalid.
+/// The highlight name starts at `input + start` and ends before the closing '#'.
+///
+/// # Safety
+/// `input` must be null or a valid pointer to at least `input_len` bytes.
+/// `name_end` must be null or a valid pointer to a c_int.
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_stl_parse_highlight_name(
+    input: *const u8,
+    input_len: usize,
+    start: usize,
+    name_end: *mut c_int,
+) -> c_int {
+    if input.is_null() || start >= input_len {
+        return -1;
+    }
+
+    let slice = std::slice::from_raw_parts(input, input_len);
+    let Ok(s) = std::str::from_utf8(slice) else {
+        return -1;
+    };
+
+    match parse_highlight_name(s, start) {
+        Some((name, end_pos)) => {
+            if !name_end.is_null() {
+                *name_end = end_pos as c_int;
+            }
+            name.len() as c_int
+        }
+        None => -1,
+    }
 }
 
 #[cfg(test)]
@@ -320,5 +527,74 @@ mod tests {
         assert_eq!(hlf::TP, 34);
         assert_eq!(hlf::TPS, 35);
         assert_eq!(hlf::TPF, 36);
+    }
+
+    #[test]
+    fn test_get_statusline_hl() {
+        assert_eq!(get_statusline_hl(true), hlf::S);
+        assert_eq!(get_statusline_hl(false), hlf::SNC);
+    }
+
+    #[test]
+    fn test_get_winbar_hl() {
+        assert_eq!(get_winbar_hl(true), hlf::WBR);
+        assert_eq!(get_winbar_hl(false), hlf::WBRNC);
+    }
+
+    #[test]
+    fn test_get_tabline_hl() {
+        assert_eq!(get_tabline_hl(true), hlf::TPS);
+        assert_eq!(get_tabline_hl(false), hlf::TP);
+    }
+
+    #[test]
+    fn test_user_hl_to_userhl() {
+        assert_eq!(user_hl_to_userhl(0), 0);
+        assert_eq!(user_hl_to_userhl(1), 1);
+        assert_eq!(user_hl_to_userhl(9), 9);
+        assert_eq!(user_hl_to_userhl(10), 9); // Clamped
+    }
+
+    #[test]
+    fn test_highlight_span() {
+        let span = HighlightSpan::new(10, 20, 5);
+        assert_eq!(span.start, 10);
+        assert_eq!(span.end, 20);
+        assert_eq!(span.len(), 10);
+        assert!(!span.is_empty());
+
+        let empty_span = HighlightSpan::new(5, 5, 0);
+        assert!(empty_span.is_empty());
+        assert_eq!(empty_span.len(), 0);
+    }
+
+    #[test]
+    fn test_highlight_span_builder() {
+        let mut builder = HighlightSpanBuilder::new();
+
+        // Simulate: start with default, then User1 at pos 5, then reset at pos 15
+        builder.process_record(&StlHighlightRecord::new(5, 1));
+        builder.process_record(&StlHighlightRecord::new(15, 0));
+        builder.finalize(20);
+
+        let spans = builder.spans();
+        assert_eq!(spans.len(), 1);
+        assert_eq!(spans[0].start, 5);
+        assert_eq!(spans[0].end, 15);
+        assert_eq!(spans[0].hl_attr, 1);
+    }
+
+    #[test]
+    fn test_highlight_span_builder_unclosed() {
+        let mut builder = HighlightSpanBuilder::new();
+
+        // Start User1 at pos 5, never reset
+        builder.process_record(&StlHighlightRecord::new(5, 1));
+        builder.finalize(20);
+
+        let spans = builder.spans();
+        assert_eq!(spans.len(), 1);
+        assert_eq!(spans[0].start, 5);
+        assert_eq!(spans[0].end, 20);
     }
 }
