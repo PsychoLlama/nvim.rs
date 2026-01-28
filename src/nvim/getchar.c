@@ -3564,6 +3564,35 @@ int nvim_get_typebuf_no_abbr_cnt(void)
   return typebuf.tb_no_abbr_cnt;
 }
 
+// Additional typeahead buffer accessors for rs_ins_typebuf
+void nvim_init_typebuf(void)
+{
+  init_typebuf();
+}
+
+void nvim_state_no_longer_safe(void)
+{
+  state_no_longer_safe("rs_ins_typebuf()");
+}
+
+int nvim_grow_typebuf(int new_buflen)
+{
+  // Grow the typeahead buffer
+  int new_size = new_buflen;
+  uint8_t *new_buf = xrealloc(typebuf.tb_buf, (size_t)new_size);
+  uint8_t *new_noremap = xrealloc(typebuf.tb_noremap, (size_t)new_size);
+
+  if (new_buf == NULL || new_noremap == NULL) {
+    // Realloc failed - this shouldn't happen with xrealloc but handle it
+    return 0;
+  }
+
+  typebuf.tb_buf = new_buf;
+  typebuf.tb_noremap = new_noremap;
+  typebuf.tb_buflen = new_size;
+  return 1;
+}
+
 int nvim_get_cmd_silent(void)
 {
   return cmd_silent ? 1 : 0;

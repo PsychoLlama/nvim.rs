@@ -733,6 +733,213 @@ pub unsafe extern "C" fn rs_typebuf_is_silent() -> c_int {
     c_int::from(nvim_get_typebuf_silent() > 0)
 }
 
+/// Insert a string into the typeahead buffer.
+///
+/// This is the Rust implementation of ins_typebuf().
+///
+/// # Arguments
+/// * `str` - NUL-terminated string to insert
+/// * `noremap` - Remapping control:
+///   - 0 (REMAP_YES): new string can be mapped again
+///   - -1 (REMAP_NONE): new string cannot be mapped
+///   - -2 (REMAP_SCRIPT): only script-local mappings
+///   - -3 (REMAP_SKIP): first char cannot be mapped
+///   - > 0: that many characters cannot be mapped
+/// * `offset` - Position in the buffer to insert at
+/// * `nottyped` - If true, characters are marked as not typed
+/// * `silent` - If true, cmd_silent will be set when chars are read
+///
+/// # Returns
+/// OK (1) on success, FAIL (0) if the string is too long.
+///
+/// # Safety
+/// * `str` must be a valid NUL-terminated string pointer.
+/// * Calls C accessor functions and performs pointer operations.
+#[no_mangle]
+#[allow(clippy::too_many_lines)] // Port of C ins_typebuf() which is also large
+pub unsafe extern "C" fn rs_ins_typebuf(
+    str: *const u8,
+    noremap: c_int,
+    offset: c_int,
+    nottyped: c_int,
+    silent: c_int,
+) -> c_int {
+    // Initialize typebuf if needed
+    nvim_init_typebuf();
+
+    // Increment change counter
+    increment_typebuf_change_cnt();
+
+    // Notify state is no longer safe
+    nvim_state_no_longer_safe();
+
+    if str.is_null() {
+        return OK;
+    }
+
+    // Get string length (count bytes until NUL)
+    let addlen = {
+        let mut len: c_int = 0;
+        let mut p = str;
+        while *p != 0 {
+            len += 1;
+            p = p.add(1);
+        }
+        len
+    };
+    if addlen == 0 {
+        return OK;
+    }
+
+    let maxmaplen = nvim_get_maxmaplen();
+    let tb_off = nvim_get_typebuf_off();
+    let tb_len = nvim_get_typebuf_len();
+    let tb_buflen = nvim_get_typebuf_buflen();
+    let tb_buf = nvim_get_typebuf_buf();
+
+    // Easy case: there is room in front of typebuf.tb_buf[typebuf.tb_off]
+    if offset == 0 && addlen <= tb_off {
+        let new_off = tb_off - addlen;
+        nvim_set_typebuf_off(new_off);
+        std::ptr::copy_nonoverlapping(str, tb_buf.offset(new_off as isize), addlen as usize);
+    } else if tb_len == 0 && tb_buflen >= addlen + 3 * (maxmaplen + 4) {
+        // Buffer is empty and string fits in the existing buffer.
+        // Leave some space before and after, if possible.
+        let new_off = ((tb_buflen - addlen - 3 * (maxmaplen + 4)) / 2).max(0);
+        nvim_set_typebuf_off(new_off);
+        std::ptr::copy_nonoverlapping(str, tb_buf.offset(new_off as isize), addlen as usize);
+    } else {
+        // Need to allocate more room for the buffer
+        let newoff = maxmaplen + 4;
+        let extra = addlen + newoff + 4 * (maxmaplen + 4);
+
+        if tb_len > i32::MAX - extra {
+            // String is too long
+            return FAIL;
+        }
+
+        // Allocate new buffers (done in C via xrealloc)
+        let new_buflen = tb_len + extra;
+        if nvim_grow_typebuf(new_buflen) == 0 {
+            return FAIL;
+        }
+
+        // Get updated buffer pointers after reallocation
+        let tb_buf = nvim_get_typebuf_buf();
+        let tb_noremap = nvim_get_typebuf_noremap();
+        let old_off = nvim_get_typebuf_off();
+
+        // Copy existing content to new position, making room for insertion
+        // First: bytes before offset
+        if offset > 0 {
+            std::ptr::copy(
+                tb_buf.offset(old_off as isize),
+                tb_buf.offset(newoff as isize),
+                offset as usize,
+            );
+            std::ptr::copy(
+                tb_noremap.offset(old_off as isize),
+                tb_noremap.offset(newoff as isize),
+                offset as usize,
+            );
+        }
+
+        // Copy new string at offset position
+        std::ptr::copy_nonoverlapping(
+            str,
+            tb_buf.offset((newoff + offset) as isize),
+            addlen as usize,
+        );
+
+        // Copy bytes after offset (including NUL)
+        let bytes_after = (tb_len - offset + 1) as usize;
+        std::ptr::copy(
+            tb_buf.offset((old_off + offset) as isize),
+            tb_buf.offset((newoff + offset + addlen) as isize),
+            bytes_after,
+        );
+        let noremap_after = (tb_len - offset) as usize;
+        std::ptr::copy(
+            tb_noremap.offset((old_off + offset) as isize),
+            tb_noremap.offset((newoff + offset + addlen) as isize),
+            noremap_after,
+        );
+
+        nvim_set_typebuf_off(newoff);
+    }
+
+    // Update length
+    let new_len = nvim_get_typebuf_len() + addlen;
+    nvim_set_typebuf_len(new_len);
+
+    // Set the NUL terminator
+    let tb_buf = nvim_get_typebuf_buf();
+    let tb_off = nvim_get_typebuf_off();
+    *tb_buf.offset((tb_off + new_len) as isize) = 0;
+
+    // Determine remap value and count for noremap flags
+    let (val, nrm) = match noremap {
+        _ if noremap == REMAP_SCRIPT => (RM_SCRIPT, addlen),
+        _ if noremap == REMAP_SKIP => (RM_ABBR, 1),
+        _ if noremap < 0 => (RM_NONE, addlen),
+        _ if noremap > 0 => (RM_NONE, noremap),
+        _ => (RM_YES, 0),
+    };
+
+    // Set noremap flags for the inserted characters
+    let tb_noremap = nvim_get_typebuf_noremap();
+    for i in 0..addlen {
+        let idx = tb_off + i + offset;
+        *tb_noremap.offset(idx as isize) = if i < nrm { val } else { RM_YES };
+    }
+
+    // Adjust maplen if characters were not typed (or offset is within mapped region)
+    let mut tb_maplen = nvim_get_typebuf_maplen();
+    if nottyped != 0 || tb_maplen > offset {
+        tb_maplen += addlen;
+        nvim_set_typebuf_maplen(tb_maplen);
+    }
+
+    // Adjust silent if needed
+    let mut tb_silent = nvim_get_typebuf_silent();
+    if silent != 0 || tb_silent > offset {
+        tb_silent += addlen;
+        nvim_set_typebuf_silent(tb_silent);
+    }
+
+    // Adjust no_abbr_cnt if needed (when inserting at the beginning)
+    if offset == 0 {
+        let mut tb_no_abbr_cnt = nvim_get_typebuf_no_abbr_cnt();
+        if tb_no_abbr_cnt != 0 {
+            tb_no_abbr_cnt += addlen;
+            nvim_set_typebuf_no_abbr_cnt(tb_no_abbr_cnt);
+        }
+    }
+
+    OK
+}
+
+// Remap constants matching C
+const RM_YES: u8 = 0;
+const RM_NONE: u8 = 1;
+const RM_SCRIPT: u8 = 2;
+const RM_ABBR: u8 = 4;
+
+// noremap parameter constants
+const REMAP_SCRIPT: c_int = -2;
+const REMAP_SKIP: c_int = -3;
+
+// Return codes
+const OK: c_int = 1;
+const FAIL: c_int = 0;
+
+// Additional C function declarations needed
+extern "C" {
+    fn nvim_init_typebuf();
+    fn nvim_state_no_longer_safe();
+    fn nvim_grow_typebuf(new_buflen: c_int) -> c_int;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
