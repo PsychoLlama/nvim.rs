@@ -1,7 +1,19 @@
-//! Screen drawing functions for Neovim
+//! Screen Update Orchestration for Neovim
 //!
-//! This crate provides Rust implementations of screen drawing functions
-//! from `src/nvim/drawscreen.c`, focusing on separator drawing between windows.
+//! This crate provides Rust implementations of screen update functions
+//! from `src/nvim/drawscreen.c`. It handles:
+//!
+//! - **Separator Drawing**: Window separators (horizontal and vertical)
+//! - **Redraw Management**: Tracking which windows need redrawing
+//! - **Scroll Optimization**: Efficient scrolling within windows
+//! - **Screen Invalidation**: Marking regions as needing updates
+//!
+//! # FFI Exports
+//!
+//! The crate exports 43 functions prefixed with `rs_` for C interop:
+//! - Window redraw state (`rs_win_redr_*`)
+//! - Scroll region calculation (`rs_calc_scroll_region`)
+//! - Global screen state (`rs_must_redraw`, `rs_set_must_redraw`)
 
 #![allow(unsafe_code)]
 #![allow(dead_code)] // Some extern functions are pre-declared for future use

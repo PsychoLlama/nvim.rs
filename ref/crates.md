@@ -20,7 +20,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | cmdhist        | Command history                         |
 | cmdline        | Command line mode (state, edit, history, keys, preview, UI, API, viewstate, fname) |
 | collections    | Data structures (garray, hashtab)       |
-| compositor     | Multi-grid compositing                  |
+| compositor     | Multi-grid compositing (layer stack, z-order, clipping, floating windows, blending, damage tracking) |
 | context        | Context stack management                |
 | cursor         | Cursor positioning and validation       |
 | cursor_shape   | Cursor mode and shape                   |
@@ -30,8 +30,8 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | dict           | VimL dictionary operations and iteration |
 | diff           | Diff mode and output parsing            |
 | digraph        | Digraph lookup                          |
-| drawline       | Line rendering                          |
-| drawscreen     | Screen drawing and separators           |
+| drawline       | Line rendering (state machine, filler lines, virtual text, conceal, gutter, syntax highlighting) |
+| drawscreen     | Screen update orchestration (redraw types, invalidation, scroll optimization, window refresh) |
 | edit           | Edit mode (state, insert, keys, abbreviations, completion) |
 | encoding       | Text encoding (base64, hashing)         |
 | eval           | VimL built-in functions (math, bitwise, type, random) |
@@ -49,7 +49,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | funcall        | VimL function call infrastructure       |
 | fuzzy          | Fuzzy matching                          |
 | getchar        | Typeahead and input buffer              |
-| grid           | Screen grid operations                  |
+| grid           | Screen grid operations (cell access, line copy/clear, allocation, memory management) |
 | help           | Help system utilities                   |
 | highlight      | Syntax highlighting and attributes      |
 | highlight_group| Highlight group management and commands |
