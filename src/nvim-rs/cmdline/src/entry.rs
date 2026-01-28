@@ -380,6 +380,160 @@ pub extern "C" fn rs_entry_cmdline_mode(use_langmap: c_int) -> c_int {
 }
 
 // =============================================================================
+// Entry/Exit Orchestration Helpers
+// =============================================================================
+
+/// Check if entry should use right-to-left command line.
+///
+/// RTL cmdline is used when the current window is RTL and
+/// `rlc` option contains 's' (search), and we're in search mode.
+#[must_use]
+pub const fn should_use_cmdmsg_rl(firstc: i32, win_p_rl: bool, win_p_rlc_has_s: bool) -> bool {
+    if !win_p_rl || !win_p_rlc_has_s {
+        return false;
+    }
+    let effective = if firstc == -1 { 0 } else { firstc };
+    effective == b'/' as i32 || effective == b'?' as i32
+}
+
+/// Check if entry should use lmap mappings.
+///
+/// Use `:lmap` mappings for search patterns and input().
+#[must_use]
+pub const fn should_use_lmap(firstc: i32, b_p_imsearch: i64) -> bool {
+    let effective = if firstc == -1 { 0 } else { firstc };
+    if effective != b'/' as i32 && effective != b'?' as i32 && effective != b'@' as i32 {
+        return false;
+    }
+    // B_IMODE_LMAP = 2
+    b_p_imsearch == 2
+}
+
+/// Get the buffer's imsearch pointer value to use.
+///
+/// Returns whether to use b_p_iminsert (true) or b_p_imsearch (false).
+#[must_use]
+pub const fn use_b_p_iminsert(firstc: i32, b_p_imsearch: i64) -> bool {
+    let effective = if firstc == -1 { 0 } else { firstc };
+    // Only for search/input modes
+    if effective != b'/' as i32 && effective != b'?' as i32 && effective != b'@' as i32 {
+        return false;
+    }
+    // B_IMODE_USE_INSERT = 0
+    b_p_imsearch == 0
+}
+
+/// Entry validation result.
+#[repr(i32)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EntryValidation {
+    /// Entry is valid, proceed.
+    Valid = 0,
+    /// Already have a cmdline buffer (recursive), need to save.
+    NeedsSave = 1,
+    /// Too deeply nested, error out.
+    TooRecursive = 2,
+}
+
+/// Validate entry conditions.
+#[must_use]
+pub const fn validate_entry(level: i32, has_cmdbuff: bool, clear_ccline: bool) -> EntryValidation {
+    if level >= MAX_CMDLINE_LEVEL {
+        return EntryValidation::TooRecursive;
+    }
+    if has_cmdbuff && clear_ccline {
+        return EntryValidation::NeedsSave;
+    }
+    EntryValidation::Valid
+}
+
+/// Check if exit should add to history.
+///
+/// Put line in history buffer (":" and "=" only when it was typed).
+#[must_use]
+pub const fn should_add_to_history(
+    histype: i32,
+    cmdlen: i32,
+    firstc: i32,
+    some_key_typed: bool,
+) -> bool {
+    // HIST_INVALID = -1
+    if histype == -1 {
+        return false;
+    }
+    if cmdlen == 0 {
+        return false;
+    }
+    let effective_firstc = if firstc == -1 { 0 } else { firstc };
+    if effective_firstc == 0 {
+        return false;
+    }
+    // HIST_SEARCH = 1
+    some_key_typed || histype == 1
+}
+
+/// Check if exit should save new_last_cmdline.
+#[must_use]
+pub const fn should_save_last_cmdline(firstc: i32) -> bool {
+    let effective = if firstc == -1 { 0 } else { firstc };
+    effective == b':' as i32
+}
+
+// =============================================================================
+// Additional FFI Exports for Entry/Exit
+// =============================================================================
+
+/// Check if entry should use RTL cmdline (FFI).
+#[no_mangle]
+pub extern "C" fn rs_entry_should_use_cmdmsg_rl(
+    firstc: c_int,
+    win_p_rl: c_int,
+    win_p_rlc_has_s: c_int,
+) -> c_int {
+    c_int::from(should_use_cmdmsg_rl(firstc, win_p_rl != 0, win_p_rlc_has_s != 0))
+}
+
+/// Check if entry should use lmap (FFI).
+#[no_mangle]
+pub extern "C" fn rs_entry_should_use_lmap(firstc: c_int, b_p_imsearch: i64) -> c_int {
+    c_int::from(should_use_lmap(firstc, b_p_imsearch))
+}
+
+/// Check if should use b_p_iminsert instead of b_p_imsearch (FFI).
+#[no_mangle]
+pub extern "C" fn rs_entry_use_b_p_iminsert(firstc: c_int, b_p_imsearch: i64) -> c_int {
+    c_int::from(use_b_p_iminsert(firstc, b_p_imsearch))
+}
+
+/// Validate entry conditions (FFI).
+#[no_mangle]
+pub extern "C" fn rs_entry_validate(level: c_int, has_cmdbuff: c_int, clear_ccline: c_int) -> c_int {
+    validate_entry(level, has_cmdbuff != 0, clear_ccline != 0) as c_int
+}
+
+/// Check if should add to history on exit (FFI).
+#[no_mangle]
+pub extern "C" fn rs_entry_should_add_to_history(
+    histype: c_int,
+    cmdlen: c_int,
+    firstc: c_int,
+    some_key_typed: c_int,
+) -> c_int {
+    c_int::from(should_add_to_history(
+        histype,
+        cmdlen,
+        firstc,
+        some_key_typed != 0,
+    ))
+}
+
+/// Check if should save last cmdline on exit (FFI).
+#[no_mangle]
+pub extern "C" fn rs_entry_should_save_last_cmdline(firstc: c_int) -> c_int {
+    c_int::from(should_save_last_cmdline(firstc))
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -475,5 +629,55 @@ mod tests {
         assert_eq!(hist_char2type(i32::from(b'@')), hist::INPUT);
         assert_eq!(hist_char2type(i32::from(b'>')), hist::DEBUG);
         assert_eq!(hist_char2type(0), hist::CMD);
+    }
+
+    #[test]
+    fn test_should_use_cmdmsg_rl() {
+        // RTL search mode
+        assert!(should_use_cmdmsg_rl(i32::from(b'/'), true, true));
+        assert!(should_use_cmdmsg_rl(i32::from(b'?'), true, true));
+
+        // Not RTL window
+        assert!(!should_use_cmdmsg_rl(i32::from(b'/'), false, true));
+
+        // Not search mode
+        assert!(!should_use_cmdmsg_rl(i32::from(b':'), true, true));
+
+        // rlc doesn't have 's'
+        assert!(!should_use_cmdmsg_rl(i32::from(b'/'), true, false));
+    }
+
+    #[test]
+    fn test_entry_validation() {
+        // Normal entry
+        assert_eq!(validate_entry(0, false, true), EntryValidation::Valid);
+
+        // Recursive entry needs save
+        assert_eq!(validate_entry(0, true, true), EntryValidation::NeedsSave);
+
+        // Too deep
+        assert_eq!(validate_entry(50, false, true), EntryValidation::TooRecursive);
+    }
+
+    #[test]
+    fn test_should_add_to_history() {
+        // Normal typed command
+        assert!(should_add_to_history(hist::CMD, 5, i32::from(b':'), true));
+
+        // Search always added (even if not typed)
+        assert!(should_add_to_history(hist::SEARCH, 5, i32::from(b'/'), false));
+
+        // Empty command
+        assert!(!should_add_to_history(hist::CMD, 0, i32::from(b':'), true));
+
+        // Invalid histype
+        assert!(!should_add_to_history(-1, 5, i32::from(b':'), true));
+    }
+
+    #[test]
+    fn test_should_save_last_cmdline() {
+        assert!(should_save_last_cmdline(i32::from(b':')));
+        assert!(!should_save_last_cmdline(i32::from(b'/')));
+        assert!(!should_save_last_cmdline(i32::from(b'?')));
     }
 }

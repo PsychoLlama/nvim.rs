@@ -295,6 +295,17 @@ extern int rs_triggers_cmdline_leave_pre(int key);
 extern int rs_should_free_lookfor(int key);
 extern int rs_is_stab_to_ctrl_p(int key, int p_wc);
 
+// Phase 6: Entry/exit orchestration helpers from Rust
+extern int rs_entry_should_use_cmdmsg_rl(int firstc, int win_p_rl, int win_p_rlc_has_s);
+extern int rs_entry_should_use_lmap(int firstc, int64_t b_p_imsearch);
+extern int rs_entry_use_b_p_iminsert(int firstc, int64_t b_p_imsearch);
+extern int rs_entry_validate(int level, int has_cmdbuff, int clear_ccline);
+extern int rs_entry_should_add_to_history(int histype, int cmdlen, int firstc, int some_key_typed);
+extern int rs_entry_should_save_last_cmdline(int firstc);
+extern int rs_entry_hist_char2type(int firstc);
+extern int rs_entry_is_search(int firstc);
+extern int rs_entry_cmdline_type(int firstc);
+
 extern int rs_check_bracket_balance(const char *expr, size_t len);
 extern int rs_is_expr_likely_complete(const char *expr, size_t len);
 extern int rs_find_last_token_start(const char *expr, size_t len);
@@ -827,8 +838,9 @@ static uint8_t *command_line_enter(int firstc, int count, int indent, bool clear
   ccline.xpc = &s->xpc;
   clear_cmdline_orig();
 
-  cmdmsg_rl = (curwin->w_p_rl && *curwin->w_p_rlc == 's'
-               && (s->firstc == '/' || s->firstc == '?'));
+  // Use Rust helper to determine RTL command line mode
+  cmdmsg_rl = rs_entry_should_use_cmdmsg_rl(s->firstc, curwin->w_p_rl,
+                                            *curwin->w_p_rlc == 's');
 
   msg_grid_validate();
 
@@ -871,7 +883,8 @@ static uint8_t *command_line_enter(int firstc, int count, int indent, bool clear
 
   setmouse();
 
-  s->cmdline_type = firstc > 0 ? firstc : '-';
+  // Use Rust helper to get the cmdline type for events
+  s->cmdline_type = rs_entry_cmdline_type(firstc);
   Error err = ERROR_INIT;
   char firstcbuf[2];
   firstcbuf[0] = (char)s->cmdline_type;
@@ -903,7 +916,7 @@ static uint8_t *command_line_enter(int firstc, int count, int indent, bool clear
 
   init_history();
   s->hiscnt = get_hislen();  // set hiscnt to impossible history value
-  s->histype = hist_char2type(s->firstc);
+  s->histype = rs_entry_hist_char2type(s->firstc);
   do_digraph(-1);                       // init digraph typeahead
 
   // If something above caused an error, reset the flags, we do want to type
@@ -995,13 +1008,12 @@ static uint8_t *command_line_enter(int firstc, int count, int indent, bool clear
 
   if (ccline.cmdbuff != NULL) {
     // Put line in history buffer (":" and "=" only when it was typed).
-    if (s->histype != HIST_INVALID
-        && ccline.cmdlen
-        && s->firstc != NUL
-        && (s->some_key_typed || s->histype == HIST_SEARCH)) {
+    // Use Rust helper to determine if we should add to history.
+    if (rs_entry_should_add_to_history(s->histype, ccline.cmdlen, s->firstc,
+                                       s->some_key_typed)) {
       add_to_history(s->histype, ccline.cmdbuff, (size_t)ccline.cmdlen, true,
                      s->histype == HIST_SEARCH ? s->firstc : NUL);
-      if (s->firstc == ':') {
+      if (rs_entry_should_save_last_cmdline(s->firstc)) {
         xfree(new_last_cmdline);
         new_last_cmdline = xstrnsave(ccline.cmdbuff, (size_t)ccline.cmdlen);
       }
