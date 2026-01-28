@@ -38,6 +38,7 @@ pub mod query;
 pub mod remove;
 pub mod storage;
 pub mod text;
+pub mod viml;
 
 // Re-exports
 pub use define::{SignDefineError, SignDefineParams, SignHighlights};
@@ -51,6 +52,11 @@ pub use place::{
 };
 pub use storage::{SignMapIterator, SignNamespace, SignProperties};
 pub use text::{ScharT, SignTextResult, MAX_SCHAR_SIZE};
+pub use viml::{
+    SignDefineResult, SignDefineVimlParams, SignGetPlacedFilter, SignJumpVimlParams,
+    SignPlaceResultCode, SignPlaceVimlParams, SignUnplaceResult, SignUnplaceVimlParams,
+    SignVimlReturnType,
+};
 
 // =============================================================================
 // Constants
