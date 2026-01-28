@@ -328,6 +328,14 @@ extern int rs_should_reset_callback_errors(unsigned int current_prompt_id,
 extern int rs_calculate_draw_len(int start, int requested_len, int cmdlen);
 extern int rs_should_draw(int cmdbuff_is_null, int start, int len, int cmdlen);
 
+// Phase 10: VimL API helpers from Rust
+extern int rs_clamp_cmdpos(int pos, int cmdlen);
+extern int rs_vim_pos_to_internal(int vim_pos);
+extern int rs_internal_pos_to_vim(int internal_pos);
+extern int rs_is_valid_cmdline_ptr(int ptr_is_null);
+extern int rs_calculate_new_cmdpos(int requested_pos, int cmdlen);
+extern int rs_is_valid_setcmdpos_arg(int pos);
+
 extern int rs_check_bracket_balance(const char *expr, size_t len);
 extern int rs_is_expr_likely_complete(const char *expr, size_t len);
 extern int rs_find_last_token_start(const char *expr, size_t len);
@@ -4416,7 +4424,8 @@ void f_getcmdline(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 void f_getcmdpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
   CmdlineInfo *p = get_ccline_ptr();
-  rettv->vval.v_number = p != NULL ? p->cmdpos + 1 : 0;
+  // Use Rust helper to convert internal 0-based to Vim 1-based position.
+  rettv->vval.v_number = p != NULL ? rs_internal_pos_to_vim(p->cmdpos) : 0;
 }
 
 /// "getcmdprompt()" function
@@ -4432,7 +4441,8 @@ void f_getcmdprompt(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 void f_getcmdscreenpos(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
   CmdlineInfo *p = get_ccline_ptr();
-  rettv->vval.v_number = p != NULL ? p->cmdspos + 1 : 0;
+  // Use Rust helper to convert internal 0-based to Vim 1-based position.
+  rettv->vval.v_number = p != NULL ? rs_internal_pos_to_vim(p->cmdspos) : 0;
 }
 
 /// "getcmdtype()" function
@@ -4458,7 +4468,8 @@ static int set_cmdline_str(const char *str, int pos)
   p->cmdlen = len;
   STRCPY(p->cmdbuff, str);
 
-  p->cmdpos = pos < 0 || pos > p->cmdlen ? p->cmdlen : pos;
+  // Use Rust helper to clamp position to valid range.
+  p->cmdpos = rs_clamp_cmdpos(pos, p->cmdlen);
   new_cmdpos = p->cmdpos;
 
   redrawcmd();

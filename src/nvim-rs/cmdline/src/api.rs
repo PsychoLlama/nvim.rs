@@ -272,8 +272,136 @@ pub enum CompletionType {
 }
 
 // =============================================================================
+// Position Clamping
+// =============================================================================
+
+/// Clamp a cursor position to be within valid range.
+///
+/// Position is clamped to [0, cmdlen].
+#[must_use]
+pub const fn clamp_cmdpos(pos: i32, cmdlen: i32) -> i32 {
+    if pos < 0 {
+        cmdlen
+    } else if pos > cmdlen {
+        cmdlen
+    } else {
+        pos
+    }
+}
+
+/// Convert 1-based Vim position to 0-based internal position.
+///
+/// Vim uses 1-based positions, internal code uses 0-based.
+#[must_use]
+pub const fn vim_pos_to_internal(vim_pos: i32) -> i32 {
+    if vim_pos <= 0 {
+        0
+    } else {
+        vim_pos - 1
+    }
+}
+
+/// Convert 0-based internal position to 1-based Vim position.
+///
+/// For getcmdpos() return value.
+#[must_use]
+pub const fn internal_pos_to_vim(internal_pos: i32) -> i32 {
+    internal_pos + 1
+}
+
+// =============================================================================
+// Validation Helpers
+// =============================================================================
+
+/// Check if cmdline pointer is valid for API operations.
+#[must_use]
+pub const fn is_valid_cmdline_ptr(ptr_is_null: bool) -> bool {
+    !ptr_is_null
+}
+
+/// Calculate the new position after setcmdline.
+///
+/// If pos < 0 or pos > len, clamp to len.
+#[must_use]
+pub const fn calculate_new_cmdpos(requested_pos: i32, cmdlen: i32) -> i32 {
+    clamp_cmdpos(requested_pos, cmdlen)
+}
+
+/// Check if setcmdpos argument is valid.
+///
+/// The position must be positive (Vim uses 1-based).
+#[must_use]
+pub const fn is_valid_setcmdpos_arg(pos: i32) -> bool {
+    pos >= 1
+}
+
+// =============================================================================
+// Return Value Helpers
+// =============================================================================
+
+/// Get return value for getcmdpos when not in cmdline.
+#[must_use]
+pub const fn getcmdpos_not_in_cmdline() -> i32 {
+    0
+}
+
+/// Get return value for getcmdscreenpos when not in cmdline.
+#[must_use]
+pub const fn getcmdscreenpos_not_in_cmdline() -> i32 {
+    0
+}
+
+/// Get return value for setcmdline/setcmdpos on failure.
+#[must_use]
+pub const fn setcmd_failure() -> i32 {
+    1
+}
+
+/// Get return value for setcmdline/setcmdpos on success.
+#[must_use]
+pub const fn setcmd_success() -> i32 {
+    0
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
+
+/// Clamp cursor position (FFI).
+#[no_mangle]
+pub extern "C" fn rs_clamp_cmdpos(pos: c_int, cmdlen: c_int) -> c_int {
+    clamp_cmdpos(pos, cmdlen)
+}
+
+/// Convert Vim position to internal (FFI).
+#[no_mangle]
+pub extern "C" fn rs_vim_pos_to_internal(vim_pos: c_int) -> c_int {
+    vim_pos_to_internal(vim_pos)
+}
+
+/// Convert internal position to Vim (FFI).
+#[no_mangle]
+pub extern "C" fn rs_internal_pos_to_vim(internal_pos: c_int) -> c_int {
+    internal_pos_to_vim(internal_pos)
+}
+
+/// Check if cmdline ptr is valid (FFI).
+#[no_mangle]
+pub extern "C" fn rs_is_valid_cmdline_ptr(ptr_is_null: c_int) -> c_int {
+    c_int::from(is_valid_cmdline_ptr(ptr_is_null != 0))
+}
+
+/// Calculate new cmdpos for setcmdline (FFI).
+#[no_mangle]
+pub extern "C" fn rs_calculate_new_cmdpos(requested_pos: c_int, cmdlen: c_int) -> c_int {
+    calculate_new_cmdpos(requested_pos, cmdlen)
+}
+
+/// Check if setcmdpos arg is valid (FFI).
+#[no_mangle]
+pub extern "C" fn rs_is_valid_setcmdpos_arg(pos: c_int) -> c_int {
+    c_int::from(is_valid_setcmdpos_arg(pos))
+}
 
 /// Get cmdline type from firstc (FFI).
 #[no_mangle]
@@ -382,5 +510,60 @@ mod tests {
 
         assert!(!ApiResult::InvalidArg.is_ok());
         assert!(ApiResult::InvalidArg.is_err());
+    }
+
+    #[test]
+    fn test_clamp_cmdpos() {
+        // Normal case
+        assert_eq!(clamp_cmdpos(5, 10), 5);
+
+        // At boundary
+        assert_eq!(clamp_cmdpos(10, 10), 10);
+        assert_eq!(clamp_cmdpos(0, 10), 0);
+
+        // Out of bounds
+        assert_eq!(clamp_cmdpos(15, 10), 10);
+        assert_eq!(clamp_cmdpos(-1, 10), 10);
+        assert_eq!(clamp_cmdpos(-5, 10), 10);
+    }
+
+    #[test]
+    fn test_vim_pos_conversion() {
+        // Vim uses 1-based, internal uses 0-based
+        assert_eq!(vim_pos_to_internal(1), 0);
+        assert_eq!(vim_pos_to_internal(5), 4);
+        assert_eq!(vim_pos_to_internal(0), 0);
+
+        assert_eq!(internal_pos_to_vim(0), 1);
+        assert_eq!(internal_pos_to_vim(4), 5);
+    }
+
+    #[test]
+    fn test_is_valid_cmdline_ptr() {
+        assert!(is_valid_cmdline_ptr(false));
+        assert!(!is_valid_cmdline_ptr(true));
+    }
+
+    #[test]
+    fn test_calculate_new_cmdpos() {
+        assert_eq!(calculate_new_cmdpos(5, 10), 5);
+        assert_eq!(calculate_new_cmdpos(15, 10), 10);
+        assert_eq!(calculate_new_cmdpos(-1, 10), 10);
+    }
+
+    #[test]
+    fn test_is_valid_setcmdpos_arg() {
+        assert!(is_valid_setcmdpos_arg(1));
+        assert!(is_valid_setcmdpos_arg(10));
+        assert!(!is_valid_setcmdpos_arg(0));
+        assert!(!is_valid_setcmdpos_arg(-1));
+    }
+
+    #[test]
+    fn test_return_values() {
+        assert_eq!(getcmdpos_not_in_cmdline(), 0);
+        assert_eq!(getcmdscreenpos_not_in_cmdline(), 0);
+        assert_eq!(setcmd_failure(), 1);
+        assert_eq!(setcmd_success(), 0);
     }
 }
