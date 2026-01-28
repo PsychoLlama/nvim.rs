@@ -538,6 +538,21 @@ extern int rs_qf_find_matching_after(const void *qfl, int start_idx, int bnr, ch
                                      bool valid_only);
 extern int rs_qf_find_in_range(const void *qfl, int bnr, linenr_T start_lnum, linenr_T end_lnum);
 
+// Navigation jump target struct from Rust
+typedef struct {
+  int entry_idx;
+  linenr_T lnum;
+  int col;
+  int fnum;
+  bool valid;
+} QfJumpTarget;
+extern QfJumpTarget rs_qf_calc_jump_target(const void *qfl, int idx);
+extern int rs_qf_idx_for_lnum(const void *qfl, int bnr, linenr_T lnum);
+extern int rs_qf_first_entry_in_file(const void *qfl, int bnr);
+extern int rs_qf_last_entry_in_file(const void *qfl, int bnr);
+extern int rs_qf_entry_after_pos_idx(const void *qfl, const void *pos, int bnr);
+extern int rs_qf_entry_before_pos_idx(const void *qfl, const void *pos, int bnr);
+
 // =============================================================================
 // Phase 5: List management setters and wrappers for Rust
 // =============================================================================
@@ -2726,6 +2741,34 @@ static int qf_count_in_range(const qf_list_T *qfl, int bnr, linenr_T start, line
   FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
   return rs_qf_count_in_range(qfl, bnr, start, end);
+}
+
+/// Calculate jump target for a specific entry index. Rust implementation.
+static QfJumpTarget qf_calc_jump_target(const qf_list_T *qfl, int idx)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_calc_jump_target(qfl, idx);
+}
+
+/// Find entry index for a line number in a buffer. Rust implementation.
+static int qf_idx_for_lnum(const qf_list_T *qfl, int bnr, linenr_T lnum)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_idx_for_lnum(qfl, bnr, lnum);
+}
+
+/// Find the first entry index in a file. Rust implementation.
+static int qf_first_entry_in_file(const qf_list_T *qfl, int bnr)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_first_entry_in_file(qfl, bnr);
+}
+
+/// Find the last entry index in a file. Rust implementation.
+static int qf_last_entry_in_file(const qf_list_T *qfl, int bnr)
+  FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
+{
+  return rs_qf_last_entry_in_file(qfl, bnr);
 }
 
 /// Parse a line and get the quickfix fields.
