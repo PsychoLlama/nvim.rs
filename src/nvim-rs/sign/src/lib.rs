@@ -12,6 +12,7 @@
 //!
 //! # Modules
 //!
+//! - `text` - Sign text utilities (initialization, display)
 //! - `define` - Sign definition management
 //! - `place` - Sign placement operations
 //! - `remove` - Sign removal operations
@@ -34,6 +35,10 @@ pub mod define;
 pub mod place;
 pub mod query;
 pub mod remove;
+pub mod text;
+
+// Re-exports
+pub use text::{ScharT, SignTextResult, MAX_SCHAR_SIZE};
 
 // =============================================================================
 // Constants
