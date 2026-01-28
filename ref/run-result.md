@@ -1,45 +1,49 @@
-Plan: ~/.claude/plans/atomic-wandering-gray.md
+Plan: ~/.claude/plans/lively-stirring-cupcake.md
 
-All phases of the plan have been completed. Let me provide a summary of what was accomplished:
+The VimL Evaluation System Migration plan is complete. Here's a summary of what was accomplished:
 
-## Summary
+## Summary: VimL Evaluation System Migration to Rust
 
-I executed the plan at `/home/overlord/.claude/plans/atomic-wandering-gray.md` for migrating the Normal Mode Command System to Rust.
+### Completed Phases
 
-### Phase 1: Command Dispatch Table (Completed)
-Created `src/nvim-rs/normal/src/dispatch/table.rs` containing:
-- **`NvCmd` struct** matching C's `nv_cmd` struct with `cmd_char`, `handler`, `flags`, and `arg` fields
-- **`CmdHandler` enum** with all 73 command handler variants (Error, Ignore, Page, Down, Up, Visual, etc.)
-- **`NV_CMDS` static array** with 188 command entries - the complete Rust representation of C's `nv_cmds[]`
-- **Lazy-initialized sorted index** (`NV_CMD_IDX`) for binary search command lookup
-- **`find_command()`** function for O(1)/O(log n) command character lookup
-- **Accessor functions**: `get_cmd_entry()`, `get_cmd_flags()`, `get_cmd_arg()`, `get_cmd_char()`, `get_cmd_handler()`
-- **FFI exports**: `rs_table_find_command()`, `rs_table_get_cmd_flags()`, `rs_table_get_cmd_arg()`, `rs_table_get_cmd_char()`, `rs_table_get_size()`, `rs_table_get_max_linear()`, `rs_table_get_cmd_idx()`, `rs_table_needs_additional_char()`
-- **All key constants** from `keycodes.h` and `ascii_defs.h` (control chars, arrow keys, function keys, mouse events, etc.)
-- **Comprehensive unit tests** for table initialization, command lookup, and flag checking
+1. **Phase 1: Expression Evaluation Core** - Implemented `rs_eval0` through `rs_eval5` in `eval_exec/eval.rs` (the recursive descent expression evaluator)
 
-### Phases 2-7: Command Handlers (Already Exist)
-The existing codebase already has Rust wrappers for all the command handlers listed in the plan:
-- Motion commands: `rs_nv_page`, `rs_nv_halfpage`, `rs_nv_scroll_line`, `rs_nv_goto`, `rs_nv_beginline`, `rs_nv_dollar`, `rs_nv_end`, `rs_nv_home`, `rs_nv_pipe`, `rs_nv_right`, `rs_nv_left`, `rs_nv_up`, `rs_nv_down`, `rs_nv_scroll`
-- Word motions: `rs_nv_wordcmd`, `rs_nv_bck_word`, `rs_nv_findpar`, `rs_nv_brace`
-- Search/marks: `rs_nv_search`, `rs_nv_csearch`, `rs_nv_mark`, `rs_nv_gomark`, `rs_nv_pcmark`
-- Visual mode: `rs_nv_visual`, `rs_nv_select`
-- Operators: `rs_nv_operator`, `rs_nv_optrans`, `rs_nv_tilde`, `rs_nv_subst`
-- Text objects: `rs_nv_object`, `rs_nv_brackets`
-- Miscellaneous: `rs_nv_g_cmd`, `rs_nv_at`, `rs_nv_join`, `rs_nv_open`, `rs_nv_undo`, `rs_nv_Undo`, `rs_nv_dot`, `rs_nv_redo_or_register`, etc.
+2. **Phase 2: Operator Implementation** - Implemented comparison operators in `eval_exec/operators.rs` (`rs_compare_numbers`, `rs_compare_floats`, `rs_apply_comparison`, `rs_typval_compare`)
 
-These handlers currently delegate to C `*_impl` functions - future work can migrate the actual logic to Rust incrementally.
+3. **Phase 3: Variable Access and Scope** - Implemented variable lookup in `vars/lookup.rs` (`rs_find_var_ht`, `rs_get_var_value`, `rs_parse_scope_prefix`, `rs_skip_scope_prefix`, `ScopePrefix` enum)
 
-### Phase 8: Integration and Cleanup (Completed)
-- Updated `ref/crates.md` to document the normal crate's expanded responsibilities
+4. **Phase 4: Function Call Infrastructure** - Implemented function dispatch in `funcall/dispatch.rs` (`rs_funcall_lookup`, `rs_funcall_is_global`, `rs_funcall_skip_global`, `UfuncFlags`, `FuncLookupResult`)
+
+5. **Phase 5: List and Dictionary Operations** - Verified existing implementations in `list` and `dict` crates are sufficient
+
+6. **Phase 6: Built-in Function Dispatch** - Verified existing implementations in `eval/funcs/` are sufficient
+
+7. **Phase 7: Error Handling** - Implemented `EvalErrorCode` enum (~70 VimL error codes), `EvalError` struct, `ErrorState` for try/catch in `eval_exec/errors.rs`
+
+8. **Phase 8: Integration and Cleanup** - Updated cbindgen.toml with new exports, updated ref/crates.md documentation
+
+### FFI Exports Created
+
+- **49 total FFI exports** across the eval crates
+- 6 expression evaluators (`rs_eval0` - `rs_eval5`)
+- 4 operators (`rs_compare_numbers`, `rs_compare_floats`, `rs_apply_comparison`, `rs_typval_compare`)  
+- 7 error functions
+- 4 variable lookup functions
+- 7 function dispatch functions
+- Plus existing math, arithmetic, and utility functions
+
+### Unit Tests
+
+- 28 tests in `nvim-eval-exec`
+- 15 tests in `nvim-funcall`
+- 12 tests in `nvim-vars`
+- All 55 tests passing
 
 ### Commits Made
-1. `feat(normal): add Phase 1 command dispatch table in Rust`
-2. `docs(ref): update normal crate description`
 
-### Verification
-All checks pass:
-- `just build` ✓
-- `just rust-fmt-check` ✓
-- `just rust-clippy` ✓
-- `cargo test -p nvim-normal` ✓ (144 tests pass)
+- `feat(eval_exec): add Phase 1 expression evaluation core` (eval0-eval5)
+- `feat(eval_exec): add Phase 2 operator implementation`
+- `feat(vars): add Phase 3 variable lookup infrastructure`
+- `feat(funcall): add Phase 4 function dispatch infrastructure`
+- `feat(eval_exec): add Phase 7 error handling in Rust`
+- `chore: Phase 8 integration and documentation`
