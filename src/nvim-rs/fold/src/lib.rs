@@ -118,15 +118,18 @@ impl WlineHandle {
 }
 
 /// Fold flags (matching C defines in `fold.c`).
+///
+/// Note: In C these are stored as `char` but used as integers in comparisons.
+/// We use `c_int` here for convenience in Rust arithmetic and comparisons.
 pub mod fold_flags {
-    /// Fold is open (nested ones can be closed).
-    pub const FD_OPEN: c_char = 0;
-    /// Fold is closed.
-    pub const FD_CLOSED: c_char = 1;
-    /// Fold depends on 'foldlevel' (nested folds too).
-    pub const FD_LEVEL: c_char = 2;
+    use std::ffi::c_int;
 
-    use std::ffi::c_char;
+    /// Fold is open (nested ones can be closed).
+    pub const FD_OPEN: c_int = 0;
+    /// Fold is closed.
+    pub const FD_CLOSED: c_int = 1;
+    /// Fold depends on 'foldlevel' (nested folds too).
+    pub const FD_LEVEL: c_int = 2;
 }
 
 /// TriState values (matching C enum in `types_defs.h`).
@@ -191,7 +194,7 @@ extern "C" {
     fn nvim_fold_get_fd_nested(fp: FoldHandle) -> GArrayHandle;
 
     /// Get the fd_flags field from a fold.
-    fn nvim_fold_get_fd_flags(fp: FoldHandle) -> c_char;
+    fn nvim_fold_get_fd_flags(fp: FoldHandle) -> c_int;
 
     /// Get the w_foldinvalid field from a window (reserved for future use).
     #[allow(dead_code)]
@@ -201,7 +204,7 @@ extern "C" {
     fn nvim_checkupdate(wp: WinHandle);
 
     /// Set the fd_flags field of a fold.
-    fn nvim_fold_set_fd_flags(fp: FoldHandle, flags: c_char);
+    fn nvim_fold_set_fd_flags(fp: FoldHandle, flags: c_int);
 
     /// Get the fd_small field from a fold.
     #[allow(dead_code)]
@@ -2502,6 +2505,18 @@ pub extern "C" fn rs_foldMarkAdjust(
     amount_after: LineNr,
 ) {
     fold_mark_adjust_impl(wp, line1, line2, amount, amount_after);
+}
+
+/// Update folds using IEMS algorithm for indent/diff methods.
+///
+/// This function handles fold updates for 'foldmethod' values of "indent" and "diff".
+/// Other fold methods (marker, expr, syntax) continue to use the C implementation.
+///
+/// # Safety
+/// The `wp` parameter must be a valid `win_T*` pointer or null.
+#[no_mangle]
+pub extern "C" fn rs_foldUpdateIEMS_indent(wp: WinHandle, top: LineNr, bot: LineNr) {
+    update::fold_update_iems_indent_impl(wp, top, bot);
 }
 
 // ============================================================================

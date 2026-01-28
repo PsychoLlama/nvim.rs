@@ -151,6 +151,9 @@ extern void rs_foldUpdateAfterInsert(void);
 extern void rs_foldMarkAdjust(win_T *wp, linenr_T line1, linenr_T line2,
                               linenr_T amount, linenr_T amount_after);
 
+// Rust FFI declarations for Phase 2: IEMS Algorithm
+extern void rs_foldUpdateIEMS_indent(win_T *wp, linenr_T top, linenr_T bot);
+
 // Rust FFI declarations for Phase 5: Navigation and Display
 extern void rs_foldAdjustCursor(win_T *wp);
 extern void rs_foldAdjustVisual(void);
@@ -508,11 +511,15 @@ void foldUpdate(win_T *wp, linenr_T top, linenr_T bot)
     }
   }
 
-  if (foldmethodIsIndent(wp)
-      || foldmethodIsExpr(wp)
-      || foldmethodIsMarker(wp)
-      || foldmethodIsDiff(wp)
-      || foldmethodIsSyntax(wp)) {
+  if (foldmethodIsIndent(wp) || foldmethodIsDiff(wp)) {
+    // Phase 2: Use Rust implementation for indent/diff methods
+    int save_got_int = got_int;
+    got_int = false;
+    rs_foldUpdateIEMS_indent(wp, top, bot);
+    got_int |= save_got_int;
+  } else if (foldmethodIsExpr(wp)
+             || foldmethodIsMarker(wp)
+             || foldmethodIsSyntax(wp)) {
     int save_got_int = got_int;
 
     // reset got_int here, otherwise it won't work
@@ -2672,9 +2679,9 @@ garray_T *nvim_fold_get_fd_nested(fold_T *fp)
 }
 
 /// Get the fd_flags field from a fold.
-char nvim_fold_get_fd_flags(fold_T *fp)
+int nvim_fold_get_fd_flags(fold_T *fp)
 {
-  return fp->fd_flags;
+  return (int)fp->fd_flags;
 }
 
 /// Get the w_foldinvalid field from a window.
@@ -2734,9 +2741,9 @@ bool nvim_wline_get_folded(wline_T *wl)
 // ============================================================================
 
 /// Set the fd_flags field of a fold.
-void nvim_fold_set_fd_flags(fold_T *fp, char flags)
+void nvim_fold_set_fd_flags(fold_T *fp, int flags)
 {
-  fp->fd_flags = flags;
+  fp->fd_flags = (char)flags;
 }
 
 /// Get the fd_small field from a fold.
@@ -3105,3 +3112,162 @@ void nvim_redraw_curbuf_later(int redraw_type)
 {
   redraw_curbuf_later(redraw_type);
 }
+
+// ============================================================================
+// Phase 2: IEMS Algorithm accessors
+// ============================================================================
+
+// Note: nvim_get_got_int is defined in ex_eval.c
+
+/// Call line_breakcheck.
+void nvim_line_breakcheck(void)
+{
+  line_breakcheck();
+}
+
+/// Get buffer line count (for fold Rust code).
+linenr_T nvim_fold_buf_get_line_count(buf_T *buf)
+{
+  return buf->b_ml.ml_line_count;
+}
+
+/// Get w_foldinvalid field.
+int nvim_win_get_foldinvalid(win_T *wp)
+{
+  return wp->w_foldinvalid ? 1 : 0;
+}
+
+/// Set w_foldinvalid field.
+void nvim_win_set_foldinvalid(win_T *wp, int val)
+{
+  wp->w_foldinvalid = val != 0;
+}
+
+/// Check if foldmethod is diff.
+int nvim_foldmethod_is_diff(win_T *wp)
+{
+  return foldmethodIsDiff(wp) ? 1 : 0;
+}
+
+/// Get diff_context global.
+linenr_T nvim_get_diff_context(void)
+{
+  return diff_context;
+}
+
+/// Wrapper for foldLevelWin.
+int nvim_foldLevelWin(win_T *wp, linenr_T lnum)
+{
+  return foldLevelWin(wp, lnum);
+}
+
+/// Redraw window range later.
+void nvim_redraw_win_range_later(win_T *wp, linenr_T top, linenr_T bot)
+{
+  redraw_win_range_later(wp, top, bot);
+}
+
+/// Wrapper for foldlevelIndent that returns the FoldLevelResult.
+FoldLevelResult_C nvim_foldlevelIndent(win_T *wp, linenr_T lnum, linenr_T off)
+{
+  fline_T flp;
+  flp.wp = wp;
+  flp.lnum = lnum;
+  flp.off = off;
+  flp.lvl = 0;
+  flp.lvl_next = -1;
+  flp.start = 0;
+  flp.end = MAX_LEVEL + 1;
+  flp.had_end = MAX_LEVEL + 1;
+
+  foldlevelIndent(&flp);
+
+  FoldLevelResult_C result = {
+    .lvl = flp.lvl,
+    .lvl_next = flp.lvl_next,
+    .start = flp.start,
+    .end = flp.end,
+  };
+  return result;
+}
+
+/// Wrapper for foldlevelDiff that returns the FoldLevelResult.
+FoldLevelResult_C nvim_foldlevelDiff(win_T *wp, linenr_T lnum, linenr_T off)
+{
+  fline_T flp;
+  flp.wp = wp;
+  flp.lnum = lnum;
+  flp.off = off;
+  flp.lvl = 0;
+  flp.lvl_next = -1;
+  flp.start = 0;
+  flp.end = MAX_LEVEL + 1;
+  flp.had_end = MAX_LEVEL + 1;
+
+  foldlevelDiff(&flp);
+
+  FoldLevelResult_C result = {
+    .lvl = flp.lvl,
+    .lvl_next = flp.lvl_next,
+    .start = flp.start,
+    .end = flp.end,
+  };
+  return result;
+}
+
+/// Wrapper for foldRemove.
+void nvim_foldRemove(win_T *wp, garray_T *gap, linenr_T top, linenr_T bot)
+{
+  foldRemove(wp, gap, top, bot);
+}
+
+/// Wrapper for foldInsert.
+void nvim_foldInsert(garray_T *gap, int i)
+{
+  foldInsert(gap, i);
+}
+
+/// Wrapper for foldSplit.
+void nvim_foldSplit(buf_T *buf, garray_T *gap, int i, linenr_T top, linenr_T bot)
+{
+  foldSplit(buf, gap, i, top, bot);
+}
+
+/// Wrapper for deleteFoldEntry.
+void nvim_deleteFoldEntry(win_T *wp, garray_T *gap, int idx, int recursive)
+{
+  deleteFoldEntry(wp, gap, idx, recursive != 0);
+}
+
+/// Wrapper for foldMerge.
+void nvim_foldMerge(win_T *wp, int fp1_idx, garray_T *gap, int fp2_idx)
+{
+  fold_T *fp = (fold_T *)gap->ga_data + fp1_idx;
+  fold_T *fp2 = (fold_T *)gap->ga_data + fp2_idx;
+  foldMerge(wp, fp, gap, fp2);
+}
+
+/// Wrapper for foldMarkAdjustRecurse.
+void nvim_foldMarkAdjustRecurse(win_T *wp, garray_T *gap, linenr_T line1,
+                                linenr_T line2, linenr_T amount, linenr_T amount_after)
+{
+  foldMarkAdjustRecurse(wp, gap, line1, line2, amount, amount_after);
+}
+
+/// Wrapper for setSmallMaybe.
+void nvim_setSmallMaybe(garray_T *gap)
+{
+  setSmallMaybe(gap);
+}
+
+/// Wrapper for foldFind that returns index.
+/// Returns 1 if found, 0 if not found. Sets found_idx to the index.
+int nvim_foldFind(garray_T *gap, linenr_T lnum, int *found_idx)
+{
+  fold_T *fp;
+  int result = foldFind(gap, lnum, &fp);
+  *found_idx = (int)(fp - (fold_T *)gap->ga_data);
+  return result ? 1 : 0;
+}
+
+// Note: nvim_win_get_p_fen is defined in window.c

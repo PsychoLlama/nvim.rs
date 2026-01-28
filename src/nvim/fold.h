@@ -12,4 +12,12 @@
 
 EXTERN int disable_fold_update INIT( = 0);
 
+/// Result struct for fold level calculations (used by Rust FFI).
+typedef struct {
+  int lvl;
+  int lvl_next;
+  int start;
+  int end;
+} FoldLevelResult_C;
+
 #include "fold.h.generated.h"

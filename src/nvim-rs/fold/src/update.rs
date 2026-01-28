@@ -12,6 +12,7 @@
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::similar_names)]
 
 use std::ffi::c_int;
 
@@ -261,6 +262,679 @@ impl FoldRecursionState {
             first_in_gap: true,
         }
     }
+}
+
+// =============================================================================
+// IEMS Algorithm - Indent fold method support
+// =============================================================================
+
+use nvim_buffer::BufHandle;
+
+use crate::level::FoldLevelResult;
+use crate::{fold_flags, tristate, FoldHandle};
+
+extern "C" {
+    // Global state access
+    fn nvim_get_got_int() -> c_int;
+    fn nvim_line_breakcheck();
+
+    // Buffer accessors
+    fn nvim_win_get_buffer(wp: WinHandle) -> BufHandle;
+    fn nvim_fold_buf_get_line_count(buf: BufHandle) -> LinenrT;
+    fn nvim_win_get_foldinvalid(wp: WinHandle) -> c_int;
+    fn nvim_win_set_foldinvalid(wp: WinHandle, val: c_int);
+
+    // Fold array accessors
+    fn nvim_win_get_folds(wp: WinHandle) -> GArrayHandle;
+    fn nvim_ga_len(gap: GArrayHandle) -> c_int;
+    fn nvim_ga_fold_at(gap: GArrayHandle, idx: c_int) -> FoldHandle;
+    fn nvim_fold_get_fd_top(fp: FoldHandle) -> LinenrT;
+    fn nvim_fold_get_fd_len(fp: FoldHandle) -> LinenrT;
+    fn nvim_fold_get_fd_flags(fp: FoldHandle) -> c_int;
+    fn nvim_fold_get_fd_nested(fp: FoldHandle) -> GArrayHandle;
+    fn nvim_fold_set_fd_top(fp: FoldHandle, top: LinenrT);
+    fn nvim_fold_set_fd_len(fp: FoldHandle, len: LinenrT);
+    fn nvim_fold_set_fd_flags(fp: FoldHandle, flags: c_int);
+    fn nvim_fold_set_fd_small(fp: FoldHandle, small: c_int);
+
+    // Fold method checks
+    fn nvim_foldmethod_is_diff(wp: WinHandle) -> c_int;
+
+    // Fold operations
+    #[allow(dead_code)]
+    fn nvim_foldLevelWin(wp: WinHandle, lnum: LinenrT) -> c_int;
+    fn nvim_changed_window_setting(wp: WinHandle);
+    fn nvim_redraw_win_range_later(wp: WinHandle, top: LinenrT, bot: LinenrT);
+
+    // Level getters (call C implementations)
+    fn nvim_foldlevelIndent(wp: WinHandle, lnum: LinenrT, off: LinenrT) -> FoldLevelResult;
+    fn nvim_foldlevelDiff(wp: WinHandle, lnum: LinenrT, off: LinenrT) -> FoldLevelResult;
+
+    // Global fold changed flag
+    fn nvim_get_fold_changed() -> bool;
+    fn nvim_set_fold_changed(val: bool);
+
+    // Diff context
+    fn nvim_get_diff_context() -> LinenrT;
+
+    // Fold manipulation
+    fn nvim_foldRemove(wp: WinHandle, gap: GArrayHandle, top: LinenrT, bot: LinenrT);
+    fn nvim_foldInsert(gap: GArrayHandle, i: c_int);
+    fn nvim_foldSplit(buf: BufHandle, gap: GArrayHandle, i: c_int, top: LinenrT, bot: LinenrT);
+    fn nvim_deleteFoldEntry(wp: WinHandle, gap: GArrayHandle, idx: c_int, recursive: c_int);
+    fn nvim_foldMerge(wp: WinHandle, fp1_idx: c_int, gap: GArrayHandle, fp2_idx: c_int);
+    fn nvim_foldMarkAdjustRecurse(
+        wp: WinHandle,
+        gap: GArrayHandle,
+        line1: LinenrT,
+        line2: LinenrT,
+        amount: LinenrT,
+        amount_after: LinenrT,
+    );
+
+    // setSmallMaybe
+    fn nvim_setSmallMaybe(gap: GArrayHandle);
+
+    // foldFind - returns index or -1 if not found
+    fn nvim_foldFind(gap: GArrayHandle, lnum: LinenrT, found_idx: *mut c_int) -> c_int;
+
+    // Window option: w_p_fen (fold enable)
+    fn nvim_win_get_p_fen(wp: WinHandle) -> c_int;
+}
+
+/// MAXLNUM constant
+const MAXLNUM: LinenrT = 0x7fff_ffff;
+
+/// Minimum of two values
+#[inline]
+const fn min(a: LinenrT, b: LinenrT) -> LinenrT {
+    if a < b {
+        a
+    } else {
+        b
+    }
+}
+
+/// Maximum of two values
+#[inline]
+const fn max(a: LinenrT, b: LinenrT) -> LinenrT {
+    if a > b {
+        a
+    } else {
+        b
+    }
+}
+
+/// Extended fline state that includes lnum_save
+#[repr(C)]
+#[derive(Debug, Clone)]
+struct FlineT {
+    wp: WinHandle,
+    lnum: LinenrT,
+    off: LinenrT,
+    lnum_save: LinenrT,
+    lvl: c_int,
+    lvl_next: c_int,
+    start: c_int,
+    end: c_int,
+    had_end: c_int,
+}
+
+impl FlineT {
+    fn new(wp: WinHandle) -> Self {
+        Self {
+            wp,
+            lnum: 0,
+            off: 0,
+            lnum_save: 0,
+            lvl: 0,
+            lvl_next: -1,
+            start: 0,
+            end: MAX_LEVEL + 1,
+            had_end: MAX_LEVEL + 1,
+        }
+    }
+}
+
+/// Call the indent level getter
+fn call_indent_level_getter(flp: &mut FlineT) {
+    let result = unsafe { nvim_foldlevelIndent(flp.wp, flp.lnum, flp.off) };
+    flp.lvl = result.lvl;
+    flp.lvl_next = result.lvl_next;
+    flp.start = result.start;
+    flp.had_end = flp.end;
+    // For indent method, end stays at MAX_LEVEL + 1 (not set by level getter)
+    flp.end = MAX_LEVEL + 1;
+}
+
+/// Call the diff level getter
+fn call_diff_level_getter(flp: &mut FlineT) {
+    let result = unsafe { nvim_foldlevelDiff(flp.wp, flp.lnum, flp.off) };
+    flp.lvl = result.lvl;
+    flp.lvl_next = result.lvl_next;
+    flp.start = result.start;
+    flp.had_end = flp.end;
+    // For diff method, end stays at MAX_LEVEL + 1 (not set by level getter)
+    flp.end = MAX_LEVEL + 1;
+}
+
+/// IEMS update for indent and diff methods only.
+///
+/// This is a simplified version that handles just indent and diff fold methods.
+/// Marker, expr, and syntax methods continue to use the C implementation.
+#[allow(clippy::too_many_lines)]
+pub fn fold_update_iems_indent_impl(wp: WinHandle, mut top: LinenrT, mut bot: LinenrT) {
+    if wp.is_null() {
+        return;
+    }
+
+    // Check if we're being called recursively (invalid_top != 0 check in C)
+    // We use a simple guard by checking got_int state
+    let buf = unsafe { nvim_win_get_buffer(wp) };
+    if buf.is_null() {
+        return;
+    }
+
+    // Handle w_foldinvalid
+    if unsafe { nvim_win_get_foldinvalid(wp) } != 0 {
+        top = 1;
+        bot = unsafe { nvim_fold_buf_get_line_count(buf) };
+        unsafe { nvim_win_set_foldinvalid(wp, 0) };
+
+        // Mark all folds as maybe-small
+        let gap = unsafe { nvim_win_get_folds(wp) };
+        unsafe { nvim_setSmallMaybe(gap) };
+    }
+
+    // Add context for diff folding
+    let is_diff = unsafe { nvim_foldmethod_is_diff(wp) } != 0;
+    if is_diff {
+        let diff_context = unsafe { nvim_get_diff_context() };
+        if top > diff_context {
+            top -= diff_context;
+        } else {
+            top = 1;
+        }
+        bot += diff_context;
+    }
+
+    // Clamp top to buffer size
+    let line_count = unsafe { nvim_fold_buf_get_line_count(buf) };
+    top = min(top, line_count);
+
+    // Initialize fold line state
+    let mut flp = FlineT::new(wp);
+    flp.lnum = top;
+
+    unsafe { nvim_set_fold_changed(false) };
+
+    // Determine the level getter
+    let use_indent = !is_diff;
+
+    // For indent method, start one line back to handle undefined fold levels
+    if use_indent && top > 1 {
+        flp.lnum -= 1;
+    }
+
+    // Backup to a line for which the fold level is defined
+    flp.lvl = -1;
+    while unsafe { nvim_get_got_int() } == 0 {
+        flp.lvl_next = -1;
+
+        if use_indent {
+            call_indent_level_getter(&mut flp);
+        } else {
+            call_diff_level_getter(&mut flp);
+        }
+
+        if flp.lvl >= 0 {
+            break;
+        }
+
+        if flp.lnum <= 1 {
+            break;
+        }
+        flp.lnum -= 1;
+    }
+
+    let start = flp.lnum;
+    let mut end = bot;
+
+    // Do at least one line
+    if start > end && end < line_count {
+        end = start;
+    }
+
+    let gap = unsafe { nvim_win_get_folds(wp) };
+
+    // Main loop
+    while unsafe { nvim_get_got_int() } == 0 {
+        // Stop at end of file
+        if flp.lnum > line_count {
+            break;
+        }
+
+        // For indent/diff methods, stop when past end
+        if flp.lnum > end {
+            break;
+        }
+
+        // A level 1 fold starts at a line with foldlevel > 0
+        if flp.lvl > 0 {
+            end = fold_update_iems_recurse_indent(
+                wp,
+                gap,
+                1,
+                start,
+                &mut flp,
+                end,
+                fold_flags::FD_LEVEL,
+                use_indent,
+            );
+        } else {
+            if flp.lnum == line_count {
+                break;
+            }
+            flp.lnum += 1;
+            flp.lvl = flp.lvl_next;
+
+            if use_indent {
+                call_indent_level_getter(&mut flp);
+            } else {
+                call_diff_level_getter(&mut flp);
+            }
+        }
+    }
+
+    // Remove any remaining folds from start to end
+    unsafe { nvim_foldRemove(wp, gap, start, end) };
+
+    // Redraw if folds changed
+    if unsafe { nvim_get_fold_changed() } && unsafe { nvim_win_get_p_fen(wp) } != 0 {
+        unsafe { nvim_changed_window_setting(wp) };
+    }
+
+    // Redraw past bot if we updated further
+    if end != bot {
+        unsafe { nvim_redraw_win_range_later(wp, top, end) };
+    }
+}
+
+/// Recursive fold update for indent/diff methods.
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_arguments)]
+#[allow(clippy::useless_let_if_seq)]
+#[allow(clippy::precedence)]
+#[allow(clippy::bool_to_int_with_if)]
+#[allow(clippy::if_not_else)]
+fn fold_update_iems_recurse_indent(
+    wp: WinHandle,
+    gap: GArrayHandle,
+    level: c_int,
+    startlnum: LinenrT,
+    flp: &mut FlineT,
+    mut bot: LinenrT,
+    topflags: c_int,
+    use_indent: bool,
+) -> LinenrT {
+    let buf = unsafe { nvim_win_get_buffer(wp) };
+    let line_count = unsafe { nvim_fold_buf_get_line_count(buf) } - flp.off;
+
+    let firstlnum = flp.lnum;
+    let mut startlnum2 = startlnum;
+    flp.lnum_save = flp.lnum;
+
+    let mut fp_idx: c_int = -1;
+
+    // Main loop
+    while unsafe { nvim_get_got_int() } == 0 {
+        unsafe { nvim_line_breakcheck() };
+
+        // Set lvl, clamped to MAX_LEVEL
+        let mut lvl = min(flp.lvl, MAX_LEVEL as LinenrT) as c_int;
+
+        // Force fold end if we're past the first line and conditions are met
+        if flp.lnum > firstlnum && (level > lvl - flp.start || level >= flp.had_end) {
+            lvl = 0;
+        }
+
+        // For indent/diff, stop when past bot
+        if flp.lnum > bot {
+            break;
+        }
+
+        // Handle fold creation/reuse at the start of a nested fold
+        if fp_idx < 0
+            && (lvl != level
+                || flp.lnum_save >= bot
+                || flp.start != 0
+                || flp.had_end <= MAX_LEVEL as c_int
+                || flp.lnum == line_count)
+        {
+            // Find or create a fold
+            let concat = if flp.start != 0 || flp.had_end <= MAX_LEVEL as c_int {
+                0
+            } else {
+                1
+            };
+
+            let gap_len = unsafe { nvim_ga_len(gap) };
+
+            if gap_len > 0 {
+                let mut found_idx: c_int = 0;
+                let found = unsafe { nvim_foldFind(gap, startlnum, &raw mut found_idx) };
+
+                if found != 0 || found_idx < gap_len {
+                    let fp = unsafe { nvim_ga_fold_at(gap, found_idx) };
+                    let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+                    let fd_len = unsafe { nvim_fold_get_fd_len(fp) };
+
+                    if fd_top + fd_len + concat > firstlnum {
+                        // Use existing fold
+                        if fd_top == firstlnum {
+                            // Perfect match
+                            fp_idx = found_idx;
+                        } else if fd_top >= startlnum {
+                            // Adjust fold position
+                            if fd_top > firstlnum {
+                                unsafe {
+                                    let nested = nvim_fold_get_fd_nested(fp);
+                                    nvim_foldMarkAdjustRecurse(
+                                        wp,
+                                        nested,
+                                        0,
+                                        MAXLNUM,
+                                        fd_top - firstlnum,
+                                        0,
+                                    );
+                                }
+                            } else {
+                                unsafe {
+                                    let nested = nvim_fold_get_fd_nested(fp);
+                                    nvim_foldMarkAdjustRecurse(
+                                        wp,
+                                        nested,
+                                        0,
+                                        firstlnum - fd_top - 1,
+                                        MAXLNUM,
+                                        fd_top - firstlnum,
+                                    );
+                                }
+                            }
+                            unsafe {
+                                nvim_fold_set_fd_len(fp, fd_len + fd_top - firstlnum);
+                                nvim_fold_set_fd_top(fp, firstlnum);
+                                nvim_fold_set_fd_small(fp, tristate::K_NONE);
+                                nvim_set_fold_changed(true);
+                            }
+                            fp_idx = found_idx;
+                        } else if flp.start != 0 && lvl == level || firstlnum != startlnum {
+                            // Need to split the fold
+                            let (breakstart, breakend) = if firstlnum != startlnum {
+                                (startlnum, firstlnum)
+                            } else {
+                                (flp.lnum, flp.lnum)
+                            };
+
+                            let fp = unsafe { nvim_ga_fold_at(gap, found_idx) };
+                            let nested = unsafe { nvim_fold_get_fd_nested(fp) };
+                            let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+                            unsafe {
+                                nvim_foldRemove(wp, nested, breakstart - fd_top, breakend - fd_top);
+                                nvim_foldSplit(buf, gap, found_idx, breakstart, breakend - 1);
+                            }
+                            fp_idx = found_idx + 1;
+                        }
+
+                        // Try to merge with previous fold if possible
+                        if fp_idx >= 0 {
+                            let fp = unsafe { nvim_ga_fold_at(gap, fp_idx) };
+                            let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+                            if fd_top == startlnum && concat != 0 && fp_idx > 0 {
+                                let fp2 = unsafe { nvim_ga_fold_at(gap, fp_idx - 1) };
+                                let fd2_top = unsafe { nvim_fold_get_fd_top(fp2) };
+                                let fd2_len = unsafe { nvim_fold_get_fd_len(fp2) };
+                                if fd2_top + fd2_len == fd_top {
+                                    unsafe {
+                                        nvim_foldMerge(wp, fp_idx - 1, gap, fp_idx);
+                                    }
+                                    fp_idx -= 1;
+                                }
+                            }
+                        }
+                    } else if fd_top >= startlnum {
+                        // Delete fold that's no longer valid
+                        unsafe {
+                            nvim_deleteFoldEntry(wp, gap, found_idx, 1);
+                        }
+                    } else {
+                        // Truncate fold that extends past startlnum
+                        unsafe {
+                            nvim_fold_set_fd_len(fp, startlnum - fd_top);
+                            let nested = nvim_fold_get_fd_nested(fp);
+                            nvim_foldMarkAdjustRecurse(
+                                wp,
+                                nested,
+                                startlnum - fd_top,
+                                MAXLNUM,
+                                MAXLNUM,
+                                0,
+                            );
+                            nvim_set_fold_changed(true);
+                        }
+                    }
+                }
+            }
+
+            // If no fold found/created, insert a new one
+            if fp_idx < 0 {
+                let gap_len = unsafe { nvim_ga_len(gap) };
+                let mut idx = 0;
+
+                if gap_len > 0 {
+                    let mut found_idx: c_int = 0;
+                    unsafe { nvim_foldFind(gap, startlnum, &raw mut found_idx) };
+                    idx = found_idx;
+                }
+
+                unsafe { nvim_foldInsert(gap, idx) };
+                let fp = unsafe { nvim_ga_fold_at(gap, idx) };
+
+                unsafe {
+                    nvim_fold_set_fd_top(fp, firstlnum);
+                    nvim_fold_set_fd_len(fp, bot - firstlnum + 1);
+
+                    if topflags == fold_flags::FD_OPEN {
+                        nvim_win_set_w_fold_manual(wp, true);
+                        nvim_fold_set_fd_flags(fp, fold_flags::FD_OPEN);
+                    } else if idx <= 0 {
+                        nvim_fold_set_fd_flags(fp, topflags);
+                        if topflags != fold_flags::FD_LEVEL {
+                            nvim_win_set_w_fold_manual(wp, true);
+                        }
+                    } else {
+                        let prev_fp = nvim_ga_fold_at(gap, idx - 1);
+                        let prev_flags = nvim_fold_get_fd_flags(prev_fp);
+                        nvim_fold_set_fd_flags(fp, prev_flags);
+                    }
+                    nvim_fold_set_fd_small(fp, tristate::K_NONE);
+                    nvim_set_fold_changed(true);
+                }
+                fp_idx = idx;
+            }
+        }
+
+        // Found a line with lower foldlevel - fold ends
+        if lvl < level || flp.lnum > line_count {
+            break;
+        }
+
+        // Handle nested folds
+        if lvl > level && fp_idx >= 0 {
+            bot = max(bot, flp.lnum);
+
+            let fp = unsafe { nvim_ga_fold_at(gap, fp_idx) };
+            let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+            let nested = unsafe { nvim_fold_get_fd_nested(fp) };
+            let fd_flags = unsafe { nvim_fold_get_fd_flags(fp) };
+
+            flp.lnum = flp.lnum_save - fd_top;
+            flp.off += fd_top;
+
+            bot = fold_update_iems_recurse_indent(
+                wp,
+                nested,
+                level + 1,
+                startlnum2 - fd_top,
+                flp,
+                bot - fd_top,
+                fd_flags,
+                use_indent,
+            );
+
+            // Re-fetch fp after recursion (array may have changed)
+            let fp = unsafe { nvim_ga_fold_at(gap, fp_idx) };
+            let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+
+            flp.lnum += fd_top;
+            flp.lnum_save += fd_top;
+            flp.off -= fd_top;
+            bot += fd_top;
+            startlnum2 = flp.lnum;
+        } else {
+            // Get level of next line
+            flp.lnum = flp.lnum_save;
+            let ll = flp.lnum + 1;
+
+            while unsafe { nvim_get_got_int() } == 0 {
+                flp.lnum += 1;
+                if flp.lnum > line_count {
+                    break;
+                }
+                flp.lvl = flp.lvl_next;
+
+                if use_indent {
+                    call_indent_level_getter(flp);
+                } else {
+                    call_diff_level_getter(flp);
+                }
+
+                if flp.lvl >= 0 || flp.had_end <= MAX_LEVEL as c_int {
+                    break;
+                }
+            }
+
+            if flp.lnum > line_count {
+                break;
+            }
+
+            flp.lnum_save = flp.lnum;
+            flp.lnum = ll;
+        }
+    }
+
+    if fp_idx < 0 {
+        return bot;
+    }
+
+    // Finalize the fold
+    let fp = unsafe { nvim_ga_fold_at(gap, fp_idx) };
+    let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+    let fd_len = unsafe { nvim_fold_get_fd_len(fp) };
+
+    // Extend fold if needed
+    if fd_len < flp.lnum - fd_top {
+        unsafe {
+            nvim_fold_set_fd_len(fp, flp.lnum - fd_top);
+            nvim_fold_set_fd_small(fp, tristate::K_NONE);
+            nvim_set_fold_changed(true);
+        }
+    } else if fd_top + fd_len > line_count {
+        unsafe {
+            nvim_fold_set_fd_len(fp, line_count - fd_top + 1);
+        }
+    }
+
+    // Delete contained folds from end of last found to current position
+    let nested = unsafe { nvim_fold_get_fd_nested(fp) };
+    let fd_top = unsafe { nvim_fold_get_fd_top(fp) };
+    unsafe {
+        nvim_foldRemove(wp, nested, startlnum2 - fd_top, flp.lnum - 1 - fd_top);
+    }
+
+    // Handle fold end
+    let lvl = min(flp.lvl, MAX_LEVEL as LinenrT) as c_int;
+    if lvl < level {
+        let fd_len = unsafe { nvim_fold_get_fd_len(fp) };
+        if fd_len != flp.lnum - fd_top {
+            if fd_top + fd_len - 1 > bot {
+                // For indent/diff: split fold below bot
+                unsafe {
+                    nvim_foldSplit(buf, gap, fp_idx, flp.lnum, bot);
+                }
+            } else {
+                unsafe {
+                    nvim_fold_set_fd_len(fp, flp.lnum - fd_top);
+                }
+            }
+            unsafe { nvim_set_fold_changed(true) };
+        }
+    }
+
+    // Delete/adjust following folds
+    loop {
+        let gap_len = unsafe { nvim_ga_len(gap) };
+        if fp_idx + 1 >= gap_len {
+            break;
+        }
+
+        let fp2 = unsafe { nvim_ga_fold_at(gap, fp_idx + 1) };
+        let fd2_top = unsafe { nvim_fold_get_fd_top(fp2) };
+        let fd2_len = unsafe { nvim_fold_get_fd_len(fp2) };
+
+        if fd2_top > flp.lnum {
+            break;
+        }
+
+        if fd2_top + fd2_len > flp.lnum {
+            if fd2_top < flp.lnum {
+                // Make fold start at lnum
+                let nested = unsafe { nvim_fold_get_fd_nested(fp2) };
+                unsafe {
+                    nvim_foldMarkAdjustRecurse(
+                        wp,
+                        nested,
+                        0,
+                        flp.lnum - fd2_top - 1,
+                        MAXLNUM,
+                        fd2_top - flp.lnum,
+                    );
+                    nvim_fold_set_fd_len(fp2, fd2_len - (flp.lnum - fd2_top));
+                    nvim_fold_set_fd_top(fp2, flp.lnum);
+                    nvim_set_fold_changed(true);
+                }
+            }
+
+            if lvl >= level {
+                // Merge with following fold
+                unsafe {
+                    nvim_foldMerge(wp, fp_idx, gap, fp_idx + 1);
+                }
+            }
+            break;
+        }
+
+        unsafe {
+            nvim_set_fold_changed(true);
+            nvim_deleteFoldEntry(wp, gap, fp_idx + 1, 1);
+        }
+    }
+
+    max(bot, flp.lnum - 1)
+}
+
+extern "C" {
+    fn nvim_win_set_w_fold_manual(wp: WinHandle, val: bool);
 }
 
 #[cfg(test)]
