@@ -212,8 +212,181 @@ pub const fn cmdwin_to_hist_type(win_type: CmdwinType) -> i32 {
 }
 
 // =============================================================================
+// Command Window Open Validation
+// =============================================================================
+
+/// Check if command window can be opened based on current state.
+///
+/// Returns an error code if it cannot be opened, or Ok if it can.
+#[must_use]
+pub const fn can_open_cmdwin(
+    cmdwin_type_active: bool,
+    text_locked: bool,
+    cmdline_star: i32,
+) -> CmdwinOpenError {
+    if cmdwin_type_active {
+        return CmdwinOpenError::AlreadyInCmdwin;
+    }
+    if text_locked {
+        return CmdwinOpenError::TextLocked;
+    }
+    if cmdline_star > 0 {
+        return CmdwinOpenError::SecretMode;
+    }
+    CmdwinOpenError::Ok
+}
+
+/// Check if window split validation failed.
+///
+/// After win_split(), check if autocommands messed with the old window.
+#[must_use]
+pub const fn cmdwin_split_invalid(
+    old_curwin_valid: bool,
+    curwin_is_old: bool,
+    old_curbuf_valid: bool,
+    buf_changed: bool,
+) -> bool {
+    !old_curwin_valid || curwin_is_old || !old_curbuf_valid || buf_changed
+}
+
+/// Check if buffer creation for cmdwin failed.
+#[must_use]
+pub const fn cmdwin_buffer_invalid(
+    newbuf_status_ok: bool,
+    cmdwin_valid: bool,
+    curwin_is_cmdwin: bool,
+    old_curwin_valid: bool,
+    old_curbuf_valid: bool,
+    buf_changed: bool,
+) -> bool {
+    !newbuf_status_ok
+        || !cmdwin_valid
+        || !curwin_is_cmdwin
+        || !old_curwin_valid
+        || !old_curbuf_valid
+        || buf_changed
+}
+
+// =============================================================================
+// Command Window Tab Mapping
+// =============================================================================
+
+/// Check if Tab key should be mapped for completion in cmdwin.
+///
+/// Tab completion mapping is added for Ex and Debug command windows.
+#[must_use]
+pub const fn cmdwin_needs_tab_mapping(histtype: i32, p_wc: i32) -> bool {
+    // TAB = 9
+    const TAB: i32 = 9;
+    // HIST_CMD = 0, HIST_DEBUG = 4
+    const HIST_CMD: i32 = 0;
+    const HIST_DEBUG: i32 = 4;
+
+    if p_wc != TAB {
+        return false;
+    }
+    histtype == HIST_CMD || histtype == HIST_DEBUG
+}
+
+/// Check if cmdwin should set vim filetype.
+///
+/// Ex and Debug command windows get vim filetype for syntax highlighting.
+#[must_use]
+pub const fn cmdwin_needs_vim_filetype(histtype: i32) -> bool {
+    const HIST_CMD: i32 = 0;
+    const HIST_DEBUG: i32 = 4;
+    histtype == HIST_CMD || histtype == HIST_DEBUG
+}
+
+// =============================================================================
+// Command Window Cleanup Validation
+// =============================================================================
+
+/// Check if command window cleanup detected an error (window/buffer changed).
+#[must_use]
+pub const fn cmdwin_cleanup_had_error(
+    old_curwin_valid: bool,
+    old_curbuf_valid: bool,
+    buf_changed: bool,
+) -> bool {
+    !old_curwin_valid || !old_curbuf_valid || buf_changed
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
+
+/// Check if command window can be opened (FFI).
+#[no_mangle]
+pub extern "C" fn rs_cmdwin_can_open(
+    cmdwin_type_active: c_int,
+    text_locked: c_int,
+    cmdline_star: c_int,
+) -> c_int {
+    can_open_cmdwin(cmdwin_type_active != 0, text_locked != 0, cmdline_star) as c_int
+}
+
+/// Check if split validation failed (FFI).
+#[no_mangle]
+pub extern "C" fn rs_cmdwin_split_invalid(
+    old_curwin_valid: c_int,
+    curwin_is_old: c_int,
+    old_curbuf_valid: c_int,
+    buf_changed: c_int,
+) -> c_int {
+    c_int::from(cmdwin_split_invalid(
+        old_curwin_valid != 0,
+        curwin_is_old != 0,
+        old_curbuf_valid != 0,
+        buf_changed != 0,
+    ))
+}
+
+/// Check if buffer creation validation failed (FFI).
+#[no_mangle]
+pub extern "C" fn rs_cmdwin_buffer_invalid(
+    newbuf_status_ok: c_int,
+    cmdwin_valid: c_int,
+    curwin_is_cmdwin: c_int,
+    old_curwin_valid: c_int,
+    old_curbuf_valid: c_int,
+    buf_changed: c_int,
+) -> c_int {
+    c_int::from(cmdwin_buffer_invalid(
+        newbuf_status_ok != 0,
+        cmdwin_valid != 0,
+        curwin_is_cmdwin != 0,
+        old_curwin_valid != 0,
+        old_curbuf_valid != 0,
+        buf_changed != 0,
+    ))
+}
+
+/// Check if Tab mapping is needed for cmdwin (FFI).
+#[no_mangle]
+pub extern "C" fn rs_cmdwin_needs_tab_mapping(histtype: c_int, p_wc: c_int) -> c_int {
+    c_int::from(cmdwin_needs_tab_mapping(histtype, p_wc))
+}
+
+/// Check if vim filetype is needed for cmdwin (FFI).
+#[no_mangle]
+pub extern "C" fn rs_cmdwin_needs_vim_filetype(histtype: c_int) -> c_int {
+    c_int::from(cmdwin_needs_vim_filetype(histtype))
+}
+
+/// Check if cleanup detected an error (FFI).
+#[no_mangle]
+pub extern "C" fn rs_cmdwin_cleanup_had_error(
+    old_curwin_valid: c_int,
+    old_curbuf_valid: c_int,
+    buf_changed: c_int,
+) -> c_int {
+    c_int::from(cmdwin_cleanup_had_error(
+        old_curwin_valid != 0,
+        old_curbuf_valid != 0,
+        buf_changed != 0,
+    ))
+}
 
 /// Get command window type from char (FFI).
 #[no_mangle]
@@ -314,5 +487,87 @@ mod tests {
         assert!(CmdwinOpenError::Ok.can_open());
         assert!(!CmdwinOpenError::AlreadyInCmdwin.can_open());
         assert!(!CmdwinOpenError::TextLocked.can_open());
+    }
+
+    #[test]
+    fn test_can_open_cmdwin() {
+        // Normal case - can open
+        assert_eq!(can_open_cmdwin(false, false, 0), CmdwinOpenError::Ok);
+
+        // Already in cmdwin
+        assert_eq!(
+            can_open_cmdwin(true, false, 0),
+            CmdwinOpenError::AlreadyInCmdwin
+        );
+
+        // Text locked
+        assert_eq!(can_open_cmdwin(false, true, 0), CmdwinOpenError::TextLocked);
+
+        // Secret mode (password)
+        assert_eq!(can_open_cmdwin(false, false, 1), CmdwinOpenError::SecretMode);
+    }
+
+    #[test]
+    fn test_cmdwin_split_invalid() {
+        // All valid
+        assert!(!cmdwin_split_invalid(true, false, true, false));
+
+        // Old curwin not valid
+        assert!(cmdwin_split_invalid(false, false, true, false));
+
+        // Curwin is old (didn't create new window)
+        assert!(cmdwin_split_invalid(true, true, true, false));
+
+        // Old curbuf not valid
+        assert!(cmdwin_split_invalid(true, false, false, false));
+
+        // Buffer changed
+        assert!(cmdwin_split_invalid(true, false, true, true));
+    }
+
+    #[test]
+    fn test_cmdwin_needs_tab_mapping() {
+        const TAB: i32 = 9;
+        const HIST_CMD: i32 = 0;
+        const HIST_DEBUG: i32 = 4;
+        const HIST_SEARCH: i32 = 1;
+
+        // Tab wildchar with Ex history
+        assert!(cmdwin_needs_tab_mapping(HIST_CMD, TAB));
+
+        // Tab wildchar with Debug history
+        assert!(cmdwin_needs_tab_mapping(HIST_DEBUG, TAB));
+
+        // Tab wildchar with Search history - no mapping
+        assert!(!cmdwin_needs_tab_mapping(HIST_SEARCH, TAB));
+
+        // Non-tab wildchar - no mapping
+        assert!(!cmdwin_needs_tab_mapping(HIST_CMD, b'%' as i32));
+    }
+
+    #[test]
+    fn test_cmdwin_needs_vim_filetype() {
+        const HIST_CMD: i32 = 0;
+        const HIST_DEBUG: i32 = 4;
+        const HIST_SEARCH: i32 = 1;
+
+        assert!(cmdwin_needs_vim_filetype(HIST_CMD));
+        assert!(cmdwin_needs_vim_filetype(HIST_DEBUG));
+        assert!(!cmdwin_needs_vim_filetype(HIST_SEARCH));
+    }
+
+    #[test]
+    fn test_cmdwin_cleanup_had_error() {
+        // All valid - no error
+        assert!(!cmdwin_cleanup_had_error(true, true, false));
+
+        // Window invalid
+        assert!(cmdwin_cleanup_had_error(false, true, false));
+
+        // Buffer invalid
+        assert!(cmdwin_cleanup_had_error(true, false, false));
+
+        // Buffer changed
+        assert!(cmdwin_cleanup_had_error(true, true, true));
     }
 }

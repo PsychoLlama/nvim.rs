@@ -306,6 +306,18 @@ extern int rs_entry_hist_char2type(int firstc);
 extern int rs_entry_is_search(int firstc);
 extern int rs_entry_cmdline_type(int firstc);
 
+// Phase 7: Command window helpers from Rust
+extern int rs_cmdwin_can_open(int cmdwin_type_active, int text_locked, int cmdline_star);
+extern int rs_cmdwin_split_invalid(int old_curwin_valid, int curwin_is_old,
+                                   int old_curbuf_valid, int buf_changed);
+extern int rs_cmdwin_buffer_invalid(int newbuf_status_ok, int cmdwin_valid,
+                                    int curwin_is_cmdwin, int old_curwin_valid,
+                                    int old_curbuf_valid, int buf_changed);
+extern int rs_cmdwin_needs_tab_mapping(int histtype, int p_wc);
+extern int rs_cmdwin_needs_vim_filetype(int histtype);
+extern int rs_cmdwin_cleanup_had_error(int old_curwin_valid, int old_curbuf_valid, int buf_changed);
+extern int rs_cmdwin_to_hist_type(int win_type);
+
 extern int rs_check_bracket_balance(const char *expr, size_t len);
 extern int rs_is_expr_likely_complete(const char *expr, size_t len);
 extern int rs_find_last_token_start(const char *expr, size_t len);
@@ -4591,9 +4603,9 @@ static int open_cmdwin(void)
   bool save_exmode = exmode_active;
   bool save_cmdmsg_rl = cmdmsg_rl;
 
-  // Can't do this when text or buffer is locked.
-  // Can't do this recursively.  Can't do it when typing a password.
-  if (text_or_buf_locked() || cmdwin_type != 0 || cmdline_star > 0) {
+  // Use Rust helper to check if cmdwin can be opened.
+  // Can't do this when text or buffer is locked, recursively, or typing a password.
+  if (rs_cmdwin_can_open(cmdwin_type != 0, text_or_buf_locked(), cmdline_star) != 0) {
     beep_flush();
     return K_IGNORE;
   }
@@ -4619,8 +4631,10 @@ static int open_cmdwin(void)
   }
   // win_split() autocommands may have messed with the old window or buffer.
   // Treat it as abandoning this command-line.
-  if (!win_valid(old_curwin) || curwin == old_curwin || !bufref_valid(&old_curbuf)
-      || old_curwin->w_buffer != old_curbuf.br_buf) {
+  // Use Rust helper for validation check.
+  if (rs_cmdwin_split_invalid(win_valid(old_curwin), curwin == old_curwin,
+                              bufref_valid(&old_curbuf),
+                              old_curwin->w_buffer != old_curbuf.br_buf)) {
     beep_flush();
     ga_clear(&winsizes);
     return Ctrl_C;
@@ -4638,8 +4652,10 @@ static int open_cmdwin(void)
   // autocommands from do_ecmd(), as cmdwin restrictions do not apply to them!
   const int newbuf_status = buf_open_scratch(0, NULL);
   const bool cmdwin_valid = win_valid(cmdwin_win);
-  if (newbuf_status == FAIL || !cmdwin_valid || curwin != cmdwin_win || !win_valid(old_curwin)
-      || !bufref_valid(&old_curbuf) || old_curwin->w_buffer != old_curbuf.br_buf) {
+  // Use Rust helper for buffer creation validation.
+  if (rs_cmdwin_buffer_invalid(newbuf_status == OK, cmdwin_valid, curwin == cmdwin_win,
+                               win_valid(old_curwin), bufref_valid(&old_curbuf),
+                               old_curwin->w_buffer != old_curbuf.br_buf)) {
     if (newbuf_status == OK) {
       set_bufref(&bufref, curbuf);
     }
@@ -4674,12 +4690,13 @@ static int open_cmdwin(void)
   // Showing the prompt may have set need_wait_return, reset it.
   need_wait_return = false;
 
-  const int histtype = hist_char2type(cmdwin_type);
-  if (histtype == HIST_CMD || histtype == HIST_DEBUG) {
-    if (p_wc == TAB) {
-      add_map("<Tab>", "<C-X><C-V>", MODE_INSERT, true);
-      add_map("<Tab>", "a<C-X><C-V>", MODE_NORMAL, true);
-    }
+  // Use Rust helper to get history type and check if Tab mapping/filetype needed.
+  const int histtype = rs_cmdwin_to_hist_type(cmdwin_type);
+  if (rs_cmdwin_needs_tab_mapping(histtype, p_wc)) {
+    add_map("<Tab>", "<C-X><C-V>", MODE_INSERT, true);
+    add_map("<Tab>", "a<C-X><C-V>", MODE_NORMAL, true);
+  }
+  if (rs_cmdwin_needs_vim_filetype(histtype)) {
     set_option_value_give_err(kOptFiletype, STATIC_CSTR_AS_OPTVAL("vim"), OPT_LOCAL);
   }
   curbuf->b_ro_locked--;
@@ -4758,9 +4775,9 @@ static int open_cmdwin(void)
   exmode_active = save_exmode;
 
   // Safety check: The old window or buffer was changed or deleted: It's a bug
-  // when this happens!
-  if (!win_valid(old_curwin) || !bufref_valid(&old_curbuf)
-      || old_curwin->w_buffer != old_curbuf.br_buf) {
+  // when this happens! Use Rust helper for validation.
+  if (rs_cmdwin_cleanup_had_error(win_valid(old_curwin), bufref_valid(&old_curbuf),
+                                  old_curwin->w_buffer != old_curbuf.br_buf)) {
     cmdwin_result = Ctrl_C;
     emsg(_(e_active_window_or_buffer_changed_or_deleted));
   } else {
