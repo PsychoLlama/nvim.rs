@@ -12,10 +12,12 @@
 //! - [`display`]: Display orchestration
 //! - [`mouse`]: Mouse handling
 //! - [`event`]: Event info
+//! - [`context_menu`]: Context menu and UI integration
 
 #![allow(unsafe_code)] // FFI requires unsafe
 #![allow(clippy::cast_lossless)] // FFI needs flexible casts between c_int and i64
 
+pub mod context_menu;
 pub mod display;
 pub mod event;
 pub mod item;
