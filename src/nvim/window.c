@@ -400,6 +400,38 @@ win_T *nvim_get_lastwin(void)
   return lastwin;
 }
 
+/// Get the current window's handle (accessor for Rust).
+int nvim_get_curwin_handle(void)
+{
+  return curwin->handle;
+}
+
+/// Get the current window's cursor position for incsearch state (accessor for Rust).
+/// Fills the provided pos struct with lnum, col, coladd.
+void nvim_get_curwin_cursor_pos(void *pos)
+{
+  // pos is a pointer to a struct with lnum (int32), col (int), coladd (int)
+  int32_t *p = (int32_t *)pos;
+  p[0] = (int32_t)curwin->w_cursor.lnum;
+  p[1] = (int32_t)curwin->w_cursor.col;
+  p[2] = (int32_t)curwin->w_cursor.coladd;
+}
+
+/// Save current window view state (accessor for Rust).
+/// Fills the provided viewstate struct.
+void nvim_save_viewstate(void *vs)
+{
+  // vs is a pointer to a struct matching viewstate_T layout
+  int32_t *p = (int32_t *)vs;
+  p[0] = (int32_t)curwin->w_curswant;
+  p[1] = (int32_t)curwin->w_leftcol;
+  p[2] = (int32_t)curwin->w_skipcol;
+  p[3] = (int32_t)curwin->w_topline;
+  p[4] = (int32_t)curwin->w_topfill;
+  p[5] = (int32_t)curwin->w_botline;
+  p[6] = (int32_t)curwin->w_empty_rows;
+}
+
 /// Get the current buffer (accessor for Rust).
 buf_T *nvim_get_curbuf(void)
 {

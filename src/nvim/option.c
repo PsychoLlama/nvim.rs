@@ -491,7 +491,7 @@ void nvim_option_set_tm(OptInt value) { p_tm = value; }
 void nvim_option_set_hi(OptInt value) { p_hi = value; }
 void nvim_option_set_re(OptInt value) { p_re = value; }
 
-// Special setter for magic_overruled
+// Special setter for magic_overruled (for Rust)
 void nvim_option_set_magic_overruled(int value) { magic_overruled = (optmagic_T)value; }
 
 // =============================================================================

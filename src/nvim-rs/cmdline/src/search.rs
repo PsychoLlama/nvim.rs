@@ -324,8 +324,136 @@ pub fn should_do_incsearch_highlighting(
 }
 
 // =============================================================================
+// FFI-compatible Types
+// =============================================================================
+
+/// Position in file or buffer (matches C pos_T).
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct PosT {
+    /// Line number
+    pub lnum: i32,
+    /// Column number
+    pub col: c_int,
+    /// Column add (for virtual columns)
+    pub coladd: c_int,
+}
+
+impl PosT {
+    /// Create a new position.
+    #[must_use]
+    pub const fn new(lnum: i32, col: c_int, coladd: c_int) -> Self {
+        Self { lnum, col, coladd }
+    }
+
+    /// Clear the position (set to zero).
+    pub fn clear(&mut self) {
+        self.lnum = 0;
+        self.col = 0;
+        self.coladd = 0;
+    }
+}
+
+/// View state for a window (matches C viewstate_T).
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ViewStateT {
+    pub vs_curswant: c_int,
+    pub vs_leftcol: c_int,
+    pub vs_skipcol: c_int,
+    pub vs_topline: i32,
+    pub vs_topfill: c_int,
+    pub vs_botline: i32,
+    pub vs_empty_rows: c_int,
+}
+
+/// Magic override state (matches C optmagic_T).
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum OptMagicT {
+    #[default]
+    NotSet = 0,
+    On = 1,
+    Off = 2,
+}
+
+/// FFI-compatible incsearch state (matches C incsearch_state_T).
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct IncsearchStateT {
+    /// Where 'incsearch' starts searching
+    pub search_start: PosT,
+    /// Saved cursor position
+    pub save_cursor: PosT,
+    /// Window where this state is valid
+    pub winid: c_int,
+    /// Initial view state
+    pub init_viewstate: ViewStateT,
+    /// Old view state (for restore)
+    pub old_viewstate: ViewStateT,
+    /// Match start position
+    pub match_start: PosT,
+    /// Match end position
+    pub match_end: PosT,
+    /// Whether incsearch highlighting has been done
+    pub did_incsearch: bool,
+    /// Whether incsearch is postponed
+    pub incsearch_postponed: bool,
+    /// Saved magic_overruled value
+    pub magic_overruled_save: c_int,
+}
+
+// =============================================================================
 // FFI Functions
 // =============================================================================
+
+// External C functions for accessing global state
+extern "C" {
+    fn nvim_get_curwin_handle() -> c_int;
+    fn nvim_get_curwin_cursor_pos(pos: *mut PosT);
+    fn nvim_get_magic_overruled() -> c_int;
+    fn nvim_save_viewstate(vs: *mut ViewStateT);
+}
+
+/// Initialize incsearch state (FFI).
+///
+/// This implements the init_incsearch_state function from C.
+///
+/// # Safety
+///
+/// `state` must be a valid pointer to an IncsearchStateT struct.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_init_incsearch_state(state: *mut IncsearchStateT) {
+    if state.is_null() {
+        return;
+    }
+
+    let s = &mut *state;
+
+    // Get current window handle
+    s.winid = nvim_get_curwin_handle();
+
+    // Get current cursor position
+    nvim_get_curwin_cursor_pos(std::ptr::addr_of_mut!(s.match_start));
+
+    // Reset flags
+    s.did_incsearch = false;
+    s.incsearch_postponed = false;
+
+    // Save magic_overruled
+    s.magic_overruled_save = nvim_get_magic_overruled();
+
+    // Clear match_end
+    s.match_end.clear();
+
+    // Copy cursor to save_cursor and search_start
+    s.save_cursor = s.match_start;
+    s.search_start = s.match_start;
+
+    // Save view state
+    nvim_save_viewstate(std::ptr::addr_of_mut!(s.init_viewstate));
+    nvim_save_viewstate(std::ptr::addr_of_mut!(s.old_viewstate));
+}
 
 /// Check if a firstc is a search prompt (FFI).
 #[unsafe(no_mangle)]

@@ -280,6 +280,9 @@ typedef struct {
 } HistoryBrowseState;
 extern int rs_command_line_browse_history(HistoryBrowseState *state);
 
+// Rust incsearch state initialization
+extern void rs_init_incsearch_state(incsearch_state_T *state);
+
 extern int rs_check_bracket_balance(const char *expr, size_t len);
 extern int rs_is_expr_likely_complete(const char *expr, size_t len);
 extern int rs_find_last_token_start(const char *expr, size_t len);
@@ -328,16 +331,8 @@ static void restore_viewstate(win_T *wp, viewstate_T *vs)
 
 static void init_incsearch_state(incsearch_state_T *s)
 {
-  s->winid = curwin->handle;
-  s->match_start = curwin->w_cursor;
-  s->did_incsearch = false;
-  s->incsearch_postponed = false;
-  s->magic_overruled_save = magic_overruled;
-  clearpos(&s->match_end);
-  s->save_cursor = curwin->w_cursor;  // may be restored later
-  s->search_start = curwin->w_cursor;
-  save_viewstate(curwin, &s->init_viewstate);
-  save_viewstate(curwin, &s->old_viewstate);
+  // Delegate to Rust implementation
+  rs_init_incsearch_state(s);
 }
 
 static void set_search_match(pos_T *t)
