@@ -658,6 +658,304 @@ pub extern "C" fn rs_supports_char_class(c: c_int) -> c_int {
 }
 
 // =============================================================================
+// Additional FFI Exports (R7)
+// =============================================================================
+
+/// Get RE_MAGIC constant.
+#[no_mangle]
+pub extern "C" fn rs_re_magic() -> c_int {
+    RE_MAGIC
+}
+
+/// Get RE_IGNORECASE constant.
+#[no_mangle]
+pub extern "C" fn rs_re_ignorecase() -> c_int {
+    RE_IGNORECASE
+}
+
+/// Get RE_SMARTCASE constant.
+#[no_mangle]
+pub extern "C" fn rs_re_smartcase() -> c_int {
+    RE_SMARTCASE
+}
+
+/// Get RE_BOL constant.
+#[no_mangle]
+pub extern "C" fn rs_re_bol() -> c_int {
+    RE_BOL
+}
+
+/// Get RE_NO_CHANGE constant.
+#[no_mangle]
+pub extern "C" fn rs_re_no_change() -> c_int {
+    RE_NO_CHANGE
+}
+
+/// Get RE_NEWLINE constant.
+#[no_mangle]
+pub extern "C" fn rs_re_newline() -> c_int {
+    RE_NEWLINE
+}
+
+/// Get RE_EXTENDED constant.
+#[no_mangle]
+pub extern "C" fn rs_re_extended() -> c_int {
+    RE_EXTENDED
+}
+
+/// Get RE_EXTENDED_START constant.
+#[no_mangle]
+pub extern "C" fn rs_re_extended_start() -> c_int {
+    RE_EXTENDED_START
+}
+
+/// Get AUTOMATIC_ENGINE constant.
+#[no_mangle]
+pub extern "C" fn rs_automatic_engine() -> c_int {
+    AUTOMATIC_ENGINE
+}
+
+/// Get BACKTRACKING_ENGINE constant.
+#[no_mangle]
+pub extern "C" fn rs_backtracking_engine() -> c_int {
+    BACKTRACKING_ENGINE
+}
+
+/// Get NFA_ENGINE constant.
+#[no_mangle]
+pub extern "C" fn rs_nfa_engine() -> c_int {
+    NFA_ENGINE
+}
+
+/// Get NSUBEXP constant.
+#[no_mangle]
+pub extern "C" fn rs_match_nsubexp() -> c_int {
+    NSUBEXP as c_int
+}
+
+/// Translate backslash escape character for match helpers.
+#[no_mangle]
+pub extern "C" fn rs_match_backslash_trans(c: u8) -> c_int {
+    backslash_trans(c)
+}
+
+/// Set match result as matched.
+///
+/// # Safety
+/// `result` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_match_result_set_matched(result: *mut MatchResult, matched: c_int) {
+    if !result.is_null() {
+        (*result).matched = matched != 0;
+    }
+}
+
+/// Set submatch start position.
+///
+/// # Safety
+/// `result` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_match_result_set_start(
+    result: *mut MatchResult,
+    idx: c_int,
+    lnum: i32,
+    col: c_int,
+) {
+    if !result.is_null() && idx >= 0 && (idx as usize) < NSUBEXP {
+        (*result).sub_start[idx as usize] = MatchPos::new(lnum, col);
+    }
+}
+
+/// Set submatch end position.
+///
+/// # Safety
+/// `result` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_match_result_set_end(
+    result: *mut MatchResult,
+    idx: c_int,
+    lnum: i32,
+    col: c_int,
+) {
+    if !result.is_null() && idx >= 0 && (idx as usize) < NSUBEXP {
+        (*result).sub_end[idx as usize] = MatchPos::new(lnum, col);
+    }
+}
+
+/// Set the main range on match result.
+///
+/// # Safety
+/// `result` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_match_result_set_range(
+    result: *mut MatchResult,
+    start_lnum: i32,
+    start_col: c_int,
+    end_lnum: i32,
+    end_col: c_int,
+) {
+    if !result.is_null() {
+        (*result).range =
+            MatchRange::new(MatchPos::new(start_lnum, start_col), MatchPos::new(end_lnum, end_col));
+    }
+}
+
+/// Get the start position line number from match result range.
+///
+/// # Safety
+/// `result` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_match_result_range_start_lnum(result: *const MatchResult) -> i32 {
+    if result.is_null() {
+        0
+    } else {
+        (*result).range.start.lnum
+    }
+}
+
+/// Get the start position column from match result range.
+///
+/// # Safety
+/// `result` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_match_result_range_start_col(result: *const MatchResult) -> c_int {
+    if result.is_null() {
+        0
+    } else {
+        (*result).range.start.col
+    }
+}
+
+/// Get the end position line number from match result range.
+///
+/// # Safety
+/// `result` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_match_result_range_end_lnum(result: *const MatchResult) -> i32 {
+    if result.is_null() {
+        0
+    } else {
+        (*result).range.end.lnum
+    }
+}
+
+/// Get the end position column from match result range.
+///
+/// # Safety
+/// `result` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_match_result_range_end_col(result: *const MatchResult) -> c_int {
+    if result.is_null() {
+        0
+    } else {
+        (*result).range.end.col
+    }
+}
+
+/// Set newline on match configuration.
+///
+/// # Safety
+/// `config` must be valid if not null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_match_config_set_newline(
+    config: *mut MatchConfig,
+    value: c_int,
+) -> c_int {
+    if config.is_null() {
+        return 0;
+    }
+    (*config).newline = value != 0;
+    1
+}
+
+/// Set start_col on match configuration.
+///
+/// # Safety
+/// `config` must be valid if not null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_match_config_set_start_col(
+    config: *mut MatchConfig,
+    col: c_int,
+) -> c_int {
+    if config.is_null() {
+        return 0;
+    }
+    (*config).start_col = col;
+    1
+}
+
+/// Set max_col on match configuration.
+///
+/// # Safety
+/// `config` must be valid if not null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_match_config_set_max_col(
+    config: *mut MatchConfig,
+    col: c_int,
+) -> c_int {
+    if config.is_null() {
+        return 0;
+    }
+    (*config).max_col = col;
+    1
+}
+
+/// Set timeout on match configuration.
+///
+/// # Safety
+/// `config` must be valid if not null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_match_config_set_timeout(
+    config: *mut MatchConfig,
+    timeout_ms: i64,
+) -> c_int {
+    if config.is_null() {
+        return 0;
+    }
+    (*config).timeout_ms = timeout_ms;
+    1
+}
+
+/// Get ignore_case from match configuration.
+///
+/// # Safety
+/// `config` must be valid if not null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_match_config_get_ignore_case(config: *const MatchConfig) -> c_int {
+    if config.is_null() {
+        0
+    } else {
+        c_int::from((*config).ignore_case)
+    }
+}
+
+/// Get smart_case from match configuration.
+///
+/// # Safety
+/// `config` must be valid if not null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_match_config_get_smart_case(config: *const MatchConfig) -> c_int {
+    if config.is_null() {
+        0
+    } else {
+        c_int::from((*config).smart_case)
+    }
+}
+
+/// Get start_col from match configuration.
+///
+/// # Safety
+/// `config` must be valid if not null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_match_config_get_start_col(config: *const MatchConfig) -> c_int {
+    if config.is_null() {
+        0
+    } else {
+        (*config).start_col
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
