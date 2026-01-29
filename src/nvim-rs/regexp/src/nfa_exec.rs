@@ -1292,6 +1292,437 @@ pub const extern "C" fn rs_nfa_match_error(result: c_int) -> c_int {
 // Tests
 // =============================================================================
 
+// =============================================================================
+// Additional NFA Execution FFI Exports (Phase R5)
+// =============================================================================
+
+/// Get the number of threads in a list.
+///
+/// # Safety
+/// List must be valid or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_list_len(list: *const NfaList) -> c_int {
+    if list.is_null() {
+        0
+    } else {
+        (*list).n
+    }
+}
+
+/// Get the capacity of a list.
+///
+/// # Safety
+/// List must be valid or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_list_capacity(list: *const NfaList) -> c_int {
+    if list.is_null() {
+        0
+    } else {
+        (*list).len
+    }
+}
+
+/// Check if a list has PIM (Postponed Invisible Match).
+///
+/// # Safety
+/// List must be valid or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_list_has_pim(list: *const NfaList) -> c_int {
+    if list.is_null() {
+        0
+    } else {
+        (*list).has_pim
+    }
+}
+
+/// Set the has_pim flag on a list.
+///
+/// # Safety
+/// List must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_list_set_has_pim(list: *mut NfaList, val: c_int) {
+    if !list.is_null() {
+        (*list).has_pim = val;
+    }
+}
+
+/// Set the list ID.
+///
+/// # Safety
+/// List must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_list_set_id(list: *mut NfaList, id: c_int) {
+    if !list.is_null() {
+        (*list).id = id;
+    }
+}
+
+/// Get a mutable thread from the list by index.
+///
+/// # Safety
+/// List must be valid and index must be in bounds.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_list_get_thread_mut(
+    list: *mut NfaList,
+    idx: c_int,
+) -> *mut NfaThread {
+    if list.is_null() || idx < 0 || idx >= (*list).n {
+        ptr::null_mut()
+    } else {
+        (*list).t.add(idx as usize)
+    }
+}
+
+/// Get the state from a thread.
+///
+/// # Safety
+/// Thread must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_thread_get_state(thread: *const NfaThread) -> *mut NfaState {
+    if thread.is_null() {
+        ptr::null_mut()
+    } else {
+        (*thread).state
+    }
+}
+
+/// Set the state on a thread.
+///
+/// # Safety
+/// Thread must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_thread_set_state(thread: *mut NfaThread, state: *mut NfaState) {
+    if !thread.is_null() {
+        (*thread).state = state;
+    }
+}
+
+/// Get the PIM from a thread.
+///
+/// # Safety
+/// Thread must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_thread_get_pim(thread: *const NfaThread) -> *const NfaPim {
+    if thread.is_null() {
+        ptr::null()
+    } else {
+        &(*thread).pim
+    }
+}
+
+/// Get a mutable pointer to the PIM from a thread.
+///
+/// # Safety
+/// Thread must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_thread_get_pim_mut(thread: *mut NfaThread) -> *mut NfaPim {
+    if thread.is_null() {
+        ptr::null_mut()
+    } else {
+        &mut (*thread).pim
+    }
+}
+
+/// Get the subs (submatch info) from a thread.
+///
+/// # Safety
+/// Thread must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_thread_get_subs(thread: *const NfaThread) -> *const RegSubs {
+    if thread.is_null() {
+        ptr::null()
+    } else {
+        &(*thread).subs
+    }
+}
+
+/// Get a mutable pointer to the subs from a thread.
+///
+/// # Safety
+/// Thread must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_thread_get_subs_mut(thread: *mut NfaThread) -> *mut RegSubs {
+    if thread.is_null() {
+        ptr::null_mut()
+    } else {
+        &mut (*thread).subs
+    }
+}
+
+/// Get the state character code.
+///
+/// # Safety
+/// State must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_state_get_c(state: *const NfaState) -> c_int {
+    if state.is_null() {
+        0
+    } else {
+        (*state).c
+    }
+}
+
+/// Get the state ID.
+///
+/// # Safety
+/// State must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_state_get_id(state: *const NfaState) -> c_int {
+    if state.is_null() {
+        -1
+    } else {
+        (*state).id
+    }
+}
+
+/// Get the out pointer from a state.
+///
+/// # Safety
+/// State must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_state_get_out(state: *const NfaState) -> *mut NfaState {
+    if state.is_null() {
+        ptr::null_mut()
+    } else {
+        (*state).out
+    }
+}
+
+/// Get the out1 pointer from a state.
+///
+/// # Safety
+/// State must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_state_get_out1(state: *const NfaState) -> *mut NfaState {
+    if state.is_null() {
+        ptr::null_mut()
+    } else {
+        (*state).out1
+    }
+}
+
+/// Get a lastlist value from a state.
+///
+/// # Safety
+/// State must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_state_get_lastlist(state: *const NfaState, idx: c_int) -> c_int {
+    if state.is_null() || idx < 0 || idx as usize >= 2 {
+        0
+    } else {
+        (*state).lastlist[idx as usize]
+    }
+}
+
+/// Set a lastlist value on a state.
+///
+/// # Safety
+/// State must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_state_set_lastlist(state: *mut NfaState, idx: c_int, val: c_int) {
+    if !state.is_null() && idx >= 0 && (idx as usize) < 2 {
+        (*state).lastlist[idx as usize] = val;
+    }
+}
+
+/// Check if a PIM is unused.
+///
+/// # Safety
+/// PIM pointer may be null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_pim_is_unused(pim: *const NfaPim) -> c_int {
+    c_int::from(pim.is_null() || (*pim).result == NFA_PIM_UNUSED)
+}
+
+/// Get the result field from a PIM.
+///
+/// # Safety
+/// PIM must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_pim_get_result(pim: *const NfaPim) -> c_int {
+    if pim.is_null() {
+        NFA_PIM_UNUSED
+    } else {
+        (*pim).result
+    }
+}
+
+/// Set the result field on a PIM.
+///
+/// # Safety
+/// PIM must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_pim_set_result(pim: *mut NfaPim, result: c_int) {
+    if !pim.is_null() {
+        (*pim).result = result;
+    }
+}
+
+/// Get the state field from a PIM.
+///
+/// # Safety
+/// PIM must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_pim_get_state(pim: *const NfaPim) -> *mut NfaState {
+    if pim.is_null() {
+        ptr::null_mut()
+    } else {
+        (*pim).state
+    }
+}
+
+/// Set the state field on a PIM.
+///
+/// # Safety
+/// PIM must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_pim_set_state(pim: *mut NfaPim, state: *mut NfaState) {
+    if !pim.is_null() {
+        (*pim).state = state;
+    }
+}
+
+/// Reset recursion depth counter (call before starting a new match).
+#[no_mangle]
+pub extern "C" fn rs_nfa_reset_depth() {
+    unsafe {
+        *DEPTH.inner.get() = 0;
+    }
+}
+
+/// Get current recursion depth.
+#[no_mangle]
+pub extern "C" fn rs_nfa_get_depth() -> c_int {
+    unsafe { *DEPTH.inner.get() }
+}
+
+/// Get the ADDSTATE_HERE_OFFSET constant.
+#[no_mangle]
+pub extern "C" fn rs_nfa_addstate_here_offset() -> c_int {
+    ADDSTATE_HERE_OFFSET
+}
+
+/// Get the MAX_ADDSTATE_DEPTH constant.
+#[no_mangle]
+pub extern "C" fn rs_nfa_max_addstate_depth() -> c_int {
+    MAX_ADDSTATE_DEPTH
+}
+
+/// Check if NFA state matches a given character.
+///
+/// # Safety
+/// State must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_nfa_state_matches(state: *const NfaState, c: c_int) -> c_int {
+    c_int::from(nfa_state_matches(state, c))
+}
+
+/// Get the norm sub from RegSubs.
+///
+/// # Safety
+/// Subs must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_regsubs_get_norm(subs: *const RegSubs) -> *const RegSub {
+    if subs.is_null() {
+        ptr::null()
+    } else {
+        &(*subs).norm
+    }
+}
+
+/// Get a mutable pointer to the norm sub from RegSubs.
+///
+/// # Safety
+/// Subs must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_regsubs_get_norm_mut(subs: *mut RegSubs) -> *mut RegSub {
+    if subs.is_null() {
+        ptr::null_mut()
+    } else {
+        &mut (*subs).norm
+    }
+}
+
+/// Get the synt sub from RegSubs.
+///
+/// # Safety
+/// Subs must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_regsubs_get_synt(subs: *const RegSubs) -> *const RegSub {
+    if subs.is_null() {
+        ptr::null()
+    } else {
+        &(*subs).synt
+    }
+}
+
+/// Get a mutable pointer to the synt sub from RegSubs.
+///
+/// # Safety
+/// Subs must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_regsubs_get_synt_mut(subs: *mut RegSubs) -> *mut RegSub {
+    if subs.is_null() {
+        ptr::null_mut()
+    } else {
+        &mut (*subs).synt
+    }
+}
+
+/// Get the in_use count from RegSub.
+///
+/// # Safety
+/// Sub must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_regsub_get_in_use(sub: *const RegSub) -> c_int {
+    if sub.is_null() {
+        0
+    } else {
+        (*sub).in_use
+    }
+}
+
+/// Set the in_use count on RegSub.
+///
+/// # Safety
+/// Sub must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_regsub_set_in_use(sub: *mut RegSub, val: c_int) {
+    if !sub.is_null() {
+        (*sub).in_use = val;
+    }
+}
+
+/// Get NFA_PIM_UNUSED constant.
+#[no_mangle]
+pub extern "C" fn rs_nfa_pim_unused() -> c_int {
+    NFA_PIM_UNUSED
+}
+
+/// Get NFA_MATCH constant.
+#[no_mangle]
+pub extern "C" fn rs_nfa_match_const() -> c_int {
+    NFA_MATCH
+}
+
+/// Get NFA_SPLIT constant.
+#[no_mangle]
+pub extern "C" fn rs_nfa_split_const() -> c_int {
+    NFA_SPLIT
+}
+
+/// Get NFA_EMPTY constant.
+#[no_mangle]
+pub extern "C" fn rs_nfa_empty_const() -> c_int {
+    NFA_EMPTY
+}
+
+/// Get NFA_SKIP constant.
+#[no_mangle]
+pub extern "C" fn rs_nfa_skip_const() -> c_int {
+    NFA_SKIP
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

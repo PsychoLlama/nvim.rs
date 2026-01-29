@@ -1568,6 +1568,294 @@ pub unsafe extern "C" fn rs_bt_get_col(state: *const MatchState) -> c_int {
 // Tests
 // =============================================================================
 
+// =============================================================================
+// Additional BT Execution FFI Exports (Phase R4)
+// =============================================================================
+
+/// Advance input by n bytes.
+///
+/// # Safety
+/// `state` must be valid and input must have at least n more bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_match_state_advance_by(state: *mut MatchState, n: c_int) {
+    if !state.is_null() && n > 0 {
+        (*state).advance_input_by(n as usize);
+    }
+}
+
+/// Get the previous byte (before current position).
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_match_state_prev_byte(state: *const MatchState) -> u8 {
+    if state.is_null() {
+        0
+    } else {
+        (*state).prev_byte()
+    }
+}
+
+/// Clear the backtrack stack.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_clear_backtrack(state: *mut MatchState) {
+    if !state.is_null() {
+        (*state).clear_backtrack();
+    }
+}
+
+/// Clear the backpos table.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_clear_backpos(state: *mut MatchState) {
+    if !state.is_null() {
+        (*state).clear_backpos();
+    }
+}
+
+/// Get the current input pointer.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_get_input(state: *const MatchState) -> *const u8 {
+    if state.is_null() {
+        std::ptr::null()
+    } else {
+        (*state).input()
+    }
+}
+
+/// Set the line start pointer.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_set_line_start(state: *mut MatchState, start: *const u8) {
+    if !state.is_null() {
+        (*state).set_line_start(start);
+    }
+}
+
+/// Check if a byte is a word character (alphanumeric or underscore).
+#[no_mangle]
+pub extern "C" fn rs_bt_is_word_char(c: u8) -> c_int {
+    c_int::from(is_word_char(c))
+}
+
+/// Check if a byte is a filename character.
+#[no_mangle]
+pub extern "C" fn rs_bt_is_fname_char(c: u8) -> c_int {
+    c_int::from(is_fname_char(c))
+}
+
+/// Get UTF-8 character length from first byte.
+#[no_mangle]
+pub extern "C" fn rs_bt_utf8_char_len(b: u8) -> c_int {
+    utf8_char_len(b) as c_int
+}
+
+/// Match a character against a character class.
+///
+/// # Safety
+/// `class_start` must point to valid NUL-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_match_class(class_start: *const u8, c: u8) -> c_int {
+    c_int::from(match_class(class_start, c))
+}
+
+/// Compare position values for line/column matching.
+#[no_mangle]
+pub extern "C" fn rs_bt_compare_pos(actual: i64, limit: i64, cmp_op: u8) -> c_int {
+    c_int::from(compare_pos(actual, limit, cmp_op))
+}
+
+/// Set the lnum field (for multi-line mode).
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_set_lnum(state: *mut MatchState, lnum: c_int) {
+    if !state.is_null() {
+        (*state).lnum = lnum;
+    }
+}
+
+/// Set the col field (for multi-line mode).
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_set_col(state: *mut MatchState, col: c_int) {
+    if !state.is_null() {
+        (*state).col = col;
+    }
+}
+
+/// Get the BRACE_LIMITS min value.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_get_bl_minval(state: *const MatchState) -> i64 {
+    if state.is_null() {
+        0
+    } else {
+        (*state).bl_minval
+    }
+}
+
+/// Get the BRACE_LIMITS max value.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_get_bl_maxval(state: *const MatchState) -> i64 {
+    if state.is_null() {
+        i64::MAX
+    } else {
+        (*state).bl_maxval
+    }
+}
+
+/// Set the BRACE_LIMITS values.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_set_brace_limits(state: *mut MatchState, minval: i64, maxval: i64) {
+    if !state.is_null() {
+        (*state).bl_minval = minval;
+        (*state).bl_maxval = maxval;
+    }
+}
+
+/// Get a brace min value by index.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_get_brace_min(state: *const MatchState, idx: c_int) -> i64 {
+    if state.is_null() || idx < 0 || idx as usize >= NSUBEXP {
+        0
+    } else {
+        (*state).brace_min[idx as usize]
+    }
+}
+
+/// Get a brace max value by index.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_get_brace_max(state: *const MatchState, idx: c_int) -> i64 {
+    if state.is_null() || idx < 0 || idx as usize >= NSUBEXP {
+        i64::MAX
+    } else {
+        (*state).brace_max[idx as usize]
+    }
+}
+
+/// Get a brace count value by index.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_get_brace_count(state: *const MatchState, idx: c_int) -> i64 {
+    if state.is_null() || idx < 0 || idx as usize >= NSUBEXP {
+        0
+    } else {
+        (*state).brace_count[idx as usize]
+    }
+}
+
+/// Set a brace min value by index.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_set_brace_min(state: *mut MatchState, idx: c_int, val: i64) {
+    if !state.is_null() && idx >= 0 && (idx as usize) < NSUBEXP {
+        (*state).brace_min[idx as usize] = val;
+    }
+}
+
+/// Set a brace max value by index.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_set_brace_max(state: *mut MatchState, idx: c_int, val: i64) {
+    if !state.is_null() && idx >= 0 && (idx as usize) < NSUBEXP {
+        (*state).brace_max[idx as usize] = val;
+    }
+}
+
+/// Set a brace count value by index.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_set_brace_count(state: *mut MatchState, idx: c_int, val: i64) {
+    if !state.is_null() && idx >= 0 && (idx as usize) < NSUBEXP {
+        (*state).brace_count[idx as usize] = val;
+    }
+}
+
+/// Increment a brace count value by index, returning the new value.
+///
+/// # Safety
+/// `state` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_bt_incr_brace_count(state: *mut MatchState, idx: c_int) -> i64 {
+    if state.is_null() || idx < 0 || idx as usize >= NSUBEXP {
+        0
+    } else {
+        (*state).brace_count[idx as usize] += 1;
+        (*state).brace_count[idx as usize]
+    }
+}
+
+/// Get the match result as an integer (Match=1, NoMatch=0, Error=-1, TimedOut=-2).
+#[no_mangle]
+pub extern "C" fn rs_bt_match_result_to_int(result: c_int) -> c_int {
+    match result {
+        1 => 1,  // Match
+        0 => 0,  // NoMatch
+        -1 => -1, // Error
+        _ => -2,  // TimedOut or unknown
+    }
+}
+
+/// Check if match result indicates success.
+#[no_mangle]
+pub extern "C" fn rs_bt_match_result_is_match(result: c_int) -> c_int {
+    c_int::from(result == 1)
+}
+
+/// Check if match result indicates error.
+#[no_mangle]
+pub extern "C" fn rs_bt_match_result_is_error(result: c_int) -> c_int {
+    c_int::from(result < 0)
+}
+
+/// Get the size of RegSave structure for FFI.
+#[no_mangle]
+pub extern "C" fn rs_bt_regsave_size() -> usize {
+    std::mem::size_of::<RegSave>()
+}
+
+/// Get the number of subexpressions constant.
+#[no_mangle]
+pub extern "C" fn rs_bt_get_nsubexp() -> c_int {
+    NSUBEXP as c_int
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
