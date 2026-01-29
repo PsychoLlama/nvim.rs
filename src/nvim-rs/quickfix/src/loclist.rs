@@ -299,6 +299,437 @@ pub unsafe extern "C" fn rs_ll_window_is_empty(wp: WinHandle) -> bool {
 }
 
 // =============================================================================
+// Phase Q6: Location List Command Helpers (:lopen, :lnext, :lprev)
+// =============================================================================
+
+/// Location list navigation state.
+#[repr(C)]
+#[derive(Debug, Clone, Default)]
+pub struct LoclistNavState {
+    /// Current entry index (1-based)
+    pub current_idx: c_int,
+    /// Total entries in current list
+    pub total_entries: c_int,
+    /// Number of valid entries
+    pub valid_entries: c_int,
+    /// Current list index (0-based)
+    pub list_idx: c_int,
+    /// Total lists in stack
+    pub list_count: c_int,
+    /// Whether current entry is valid
+    pub current_is_valid: bool,
+    /// Whether we can go to next entry
+    pub can_go_next: bool,
+    /// Whether we can go to previous entry
+    pub can_go_prev: bool,
+    /// Whether we can go to newer list
+    pub can_go_newer: bool,
+    /// Whether we can go to older list
+    pub can_go_older: bool,
+}
+
+/// Get navigation state for a window's location list.
+///
+/// # Safety
+///
+/// - `wp` may be null (returns defaults)
+/// - `qfl` may be null (returns defaults)
+#[no_mangle]
+pub unsafe extern "C" fn rs_ll_nav_state(wp: WinHandle, qfl: QfListHandle) -> LoclistNavState {
+    let mut state = LoclistNavState::default();
+
+    if wp.is_null() {
+        return state;
+    }
+
+    let qi = nvim_win_get_loclist(wp);
+    if qi.is_null() {
+        return state;
+    }
+
+    state.list_count = nvim_qf_get_listcount(qi);
+    state.list_idx = nvim_qf_get_curlist_idx(qi);
+    state.can_go_older = state.list_idx > 0;
+    state.can_go_newer = state.list_idx < state.list_count - 1;
+
+    if !qfl.is_null() {
+        state.total_entries = nvim_qf_get_count(qfl);
+        state.current_idx = crate::nvim_qf_get_index(qfl);
+        state.can_go_next = state.current_idx < state.total_entries;
+        state.can_go_prev = state.current_idx > 1;
+
+        // Count valid entries and check if current is valid
+        let mut qfp = crate::nvim_qf_get_start(qfl);
+        let mut idx = 1;
+        while !qfp.is_null() {
+            if crate::nvim_qfline_get_valid(qfp) {
+                state.valid_entries += 1;
+                if idx == state.current_idx {
+                    state.current_is_valid = true;
+                }
+            }
+            qfp = crate::nvim_qfline_get_next(qfp);
+            idx += 1;
+        }
+    }
+
+    state
+}
+
+/// Check if a window can perform location list navigation.
+///
+/// Returns true if the window has a non-empty location list.
+///
+/// # Safety
+///
+/// - `wp` may be null (returns false)
+#[no_mangle]
+pub unsafe extern "C" fn rs_ll_can_navigate(wp: WinHandle) -> bool {
+    if wp.is_null() {
+        return false;
+    }
+
+    let qi = nvim_win_get_loclist(wp);
+    if qi.is_null() {
+        return false;
+    }
+
+    nvim_qf_get_listcount(qi) > 0
+}
+
+/// Calculate target index for :lnext/:lprev navigation.
+///
+/// Returns the target entry index, or 0 if navigation is not possible.
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns 0)
+#[no_mangle]
+pub unsafe extern "C" fn rs_ll_calc_nav_target(
+    qfl: QfListHandle,
+    count: c_int,
+    forward: bool,
+) -> c_int {
+    if qfl.is_null() || count <= 0 {
+        return 0;
+    }
+
+    let current = crate::nvim_qf_get_index(qfl);
+    let total = nvim_qf_get_count(qfl);
+
+    if total == 0 {
+        return 0;
+    }
+
+    let target = if forward {
+        current + count
+    } else {
+        current - count
+    };
+
+    // Clamp to valid range
+    if target < 1 {
+        1
+    } else if target > total {
+        total
+    } else {
+        target
+    }
+}
+
+/// Calculate target list index for :lolder/:lnewer navigation.
+///
+/// Returns the target list index (0-based), or -1 if navigation is not possible.
+///
+/// # Safety
+///
+/// - `wp` may be null (returns -1)
+#[no_mangle]
+pub unsafe extern "C" fn rs_ll_calc_age_target(
+    wp: WinHandle,
+    count: c_int,
+    go_older: bool,
+) -> c_int {
+    if wp.is_null() || count <= 0 {
+        return -1;
+    }
+
+    let qi = nvim_win_get_loclist(wp);
+    if qi.is_null() {
+        return -1;
+    }
+
+    let current = nvim_qf_get_curlist_idx(qi);
+    let list_count = nvim_qf_get_listcount(qi);
+
+    let target = if go_older {
+        current - count
+    } else {
+        current + count
+    };
+
+    if target < 0 || target >= list_count {
+        -1
+    } else {
+        target
+    }
+}
+
+/// Get the number of steps available in a direction.
+///
+/// Returns how many entries can be navigated forward/backward.
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns 0)
+#[no_mangle]
+pub unsafe extern "C" fn rs_ll_available_nav_steps(qfl: QfListHandle, forward: bool) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let current = crate::nvim_qf_get_index(qfl);
+    let total = nvim_qf_get_count(qfl);
+
+    if forward {
+        total - current
+    } else {
+        current - 1
+    }
+}
+
+/// Get the number of lists available in a direction.
+///
+/// Returns how many older/newer lists can be navigated to.
+///
+/// # Safety
+///
+/// - `wp` may be null (returns 0)
+#[no_mangle]
+pub unsafe extern "C" fn rs_ll_available_age_steps(wp: WinHandle, go_older: bool) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    let qi = nvim_win_get_loclist(wp);
+    if qi.is_null() {
+        return 0;
+    }
+
+    let current = nvim_qf_get_curlist_idx(qi);
+    let list_count = nvim_qf_get_listcount(qi);
+
+    if go_older {
+        current
+    } else {
+        list_count - current - 1
+    }
+}
+
+/// Information for opening the location list window.
+#[repr(C)]
+#[derive(Debug, Clone, Default)]
+pub struct LoclistOpenInfo {
+    /// Whether we should open the window
+    pub should_open: bool,
+    /// Recommended height for the window
+    pub height: c_int,
+    /// Number of entries in the list
+    pub entry_count: c_int,
+    /// Current entry index
+    pub current_idx: c_int,
+    /// Whether this is a new list
+    pub is_new_list: bool,
+}
+
+/// Get information needed to open a location list window.
+///
+/// # Safety
+///
+/// - `wp` may be null (returns defaults with `should_open`=false)
+/// - `qfl` may be null (returns defaults with `should_open`=false)
+#[no_mangle]
+pub unsafe extern "C" fn rs_ll_open_info(
+    wp: WinHandle,
+    qfl: QfListHandle,
+    min_height: c_int,
+    max_height: c_int,
+) -> LoclistOpenInfo {
+    let mut info = LoclistOpenInfo::default();
+
+    if wp.is_null() || qfl.is_null() {
+        return info;
+    }
+
+    let qi = nvim_win_get_loclist(wp);
+    if qi.is_null() {
+        return info;
+    }
+
+    let count = nvim_qf_get_count(qfl);
+    if count == 0 {
+        return info;
+    }
+
+    info.should_open = true;
+    info.entry_count = count;
+    info.current_idx = crate::nvim_qf_get_index(qfl);
+    info.height = count.clamp(min_height.max(1), max_height);
+    info.is_new_list = nvim_qf_get_curlist_idx(qi) == nvim_qf_get_listcount(qi) - 1;
+
+    info
+}
+
+/// Check if a location list window needs to be updated.
+///
+/// Returns true if the buffer line count differs from entry count.
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns false)
+#[no_mangle]
+pub unsafe extern "C" fn rs_ll_window_needs_update(
+    qfl: QfListHandle,
+    buf_line_count: c_int,
+) -> bool {
+    if qfl.is_null() {
+        return false;
+    }
+
+    let count = nvim_qf_get_count(qfl);
+    buf_line_count != count
+}
+
+/// Result of a location list command.
+#[repr(C)]
+#[derive(Debug, Clone, Default)]
+pub struct LoclistCmdResult {
+    /// Whether the command succeeded
+    pub success: bool,
+    /// New entry index (for navigation)
+    pub new_idx: c_int,
+    /// New list index (for age navigation)
+    pub new_list_idx: c_int,
+    /// Whether to update the window
+    pub update_window: bool,
+    /// Whether to jump to entry
+    pub jump_to_entry: bool,
+}
+
+/// Calculate result for :ll (jump to entry) command.
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns failure result)
+#[no_mangle]
+pub unsafe extern "C" fn rs_ll_cmd_ll_result(
+    qfl: QfListHandle,
+    target_idx: c_int,
+) -> LoclistCmdResult {
+    let mut result = LoclistCmdResult::default();
+
+    if qfl.is_null() {
+        return result;
+    }
+
+    let count = nvim_qf_get_count(qfl);
+    if count == 0 || target_idx < 1 || target_idx > count {
+        return result;
+    }
+
+    result.success = true;
+    result.new_idx = target_idx;
+    result.update_window = true;
+    result.jump_to_entry = true;
+
+    result
+}
+
+/// Calculate result for :lnext/:lprev navigation command.
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns failure result)
+#[no_mangle]
+pub unsafe extern "C" fn rs_ll_cmd_nav_result(
+    qfl: QfListHandle,
+    count: c_int,
+    forward: bool,
+) -> LoclistCmdResult {
+    let mut result = LoclistCmdResult::default();
+
+    if qfl.is_null() || count <= 0 {
+        return result;
+    }
+
+    let current = crate::nvim_qf_get_index(qfl);
+    let total = nvim_qf_get_count(qfl);
+
+    if total == 0 {
+        return result;
+    }
+
+    let target = if forward {
+        (current + count).min(total)
+    } else {
+        (current - count).max(1)
+    };
+
+    if target == current {
+        return result;
+    }
+
+    result.success = true;
+    result.new_idx = target;
+    result.update_window = true;
+    result.jump_to_entry = true;
+
+    result
+}
+
+/// Calculate result for :lolder/:lnewer command.
+///
+/// # Safety
+///
+/// - `wp` may be null (returns failure result)
+#[no_mangle]
+pub unsafe extern "C" fn rs_ll_cmd_age_result(
+    wp: WinHandle,
+    count: c_int,
+    go_older: bool,
+) -> LoclistCmdResult {
+    let mut result = LoclistCmdResult::default();
+
+    if wp.is_null() || count <= 0 {
+        return result;
+    }
+
+    let qi = nvim_win_get_loclist(wp);
+    if qi.is_null() {
+        return result;
+    }
+
+    let current = nvim_qf_get_curlist_idx(qi);
+    let list_count = nvim_qf_get_listcount(qi);
+
+    let target = if go_older {
+        current - count
+    } else {
+        current + count
+    };
+
+    if target < 0 || target >= list_count {
+        return result;
+    }
+
+    result.success = true;
+    result.new_list_idx = target;
+    result.update_window = true;
+
+    result
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -363,5 +794,118 @@ mod tests {
         assert_eq!(info.entry_count, 0);
         assert_eq!(info.refcount, 0);
         assert!(!info.is_shared);
+    }
+
+    // Phase Q6 tests
+    #[test]
+    fn test_null_nav_state() {
+        unsafe {
+            let state = rs_ll_nav_state(std::ptr::null(), std::ptr::null());
+            assert_eq!(state.current_idx, 0);
+            assert_eq!(state.total_entries, 0);
+            assert!(!state.can_go_next);
+            assert!(!state.can_go_prev);
+        }
+    }
+
+    #[test]
+    fn test_null_can_navigate() {
+        unsafe {
+            assert!(!rs_ll_can_navigate(std::ptr::null()));
+        }
+    }
+
+    #[test]
+    fn test_null_calc_nav_target() {
+        unsafe {
+            assert_eq!(rs_ll_calc_nav_target(std::ptr::null(), 1, true), 0);
+        }
+    }
+
+    #[test]
+    fn test_null_calc_age_target() {
+        unsafe {
+            assert_eq!(rs_ll_calc_age_target(std::ptr::null(), 1, true), -1);
+        }
+    }
+
+    #[test]
+    fn test_null_available_nav_steps() {
+        unsafe {
+            assert_eq!(rs_ll_available_nav_steps(std::ptr::null(), true), 0);
+        }
+    }
+
+    #[test]
+    fn test_null_available_age_steps() {
+        unsafe {
+            assert_eq!(rs_ll_available_age_steps(std::ptr::null(), true), 0);
+        }
+    }
+
+    #[test]
+    fn test_null_open_info() {
+        unsafe {
+            let info = rs_ll_open_info(std::ptr::null(), std::ptr::null(), 3, 10);
+            assert!(!info.should_open);
+            assert_eq!(info.entry_count, 0);
+        }
+    }
+
+    #[test]
+    fn test_null_window_needs_update() {
+        unsafe {
+            assert!(!rs_ll_window_needs_update(std::ptr::null(), 10));
+        }
+    }
+
+    #[test]
+    fn test_null_cmd_ll_result() {
+        unsafe {
+            let result = rs_ll_cmd_ll_result(std::ptr::null(), 1);
+            assert!(!result.success);
+        }
+    }
+
+    #[test]
+    fn test_null_cmd_nav_result() {
+        unsafe {
+            let result = rs_ll_cmd_nav_result(std::ptr::null(), 1, true);
+            assert!(!result.success);
+        }
+    }
+
+    #[test]
+    fn test_null_cmd_age_result() {
+        unsafe {
+            let result = rs_ll_cmd_age_result(std::ptr::null(), 1, true);
+            assert!(!result.success);
+        }
+    }
+
+    #[test]
+    fn test_nav_state_default() {
+        let state = LoclistNavState::default();
+        assert_eq!(state.current_idx, 0);
+        assert_eq!(state.total_entries, 0);
+        assert!(!state.can_go_next);
+        assert!(!state.can_go_prev);
+    }
+
+    #[test]
+    fn test_open_info_default() {
+        let info = LoclistOpenInfo::default();
+        assert!(!info.should_open);
+        assert_eq!(info.height, 0);
+        assert_eq!(info.entry_count, 0);
+    }
+
+    #[test]
+    fn test_cmd_result_default() {
+        let result = LoclistCmdResult::default();
+        assert!(!result.success);
+        assert_eq!(result.new_idx, 0);
+        assert!(!result.update_window);
+        assert!(!result.jump_to_entry);
     }
 }
