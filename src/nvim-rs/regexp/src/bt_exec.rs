@@ -28,13 +28,13 @@ use std::ptr;
 
 use crate::bt_compile::{next, op, operand};
 use crate::bt_opcodes::{
-    get_backref_num, get_mclose_num, get_mopen_num, is_backref, is_mclose, is_mopen, operand_max,
-    operand_min, ADD_NL, ALPHA, ANY, ANYBUT, ANYOF, BACK, BEHIND, BHPOS, BOL, BOW, BRACE_COMPLEX,
-    BRACE_LIMITS, BRACE_SIMPLE, BRANCH, CURSOR, DIGIT, END, EOL, EOW, EXACTLY, FNAME, HEAD, HEX,
-    IDENT, LOWER, MATCH, MULTIBYTECODE, NALPHA, NCLOSE, NDIGIT, NEWL, NHEAD, NHEX, NLOWER,
-    NOBEHIND, NOMATCH, NOPEN, NOTHING, NUPPER, NWHITE, NWORD, OCTAL, PLUS, PRINT, RE_BOF, RE_COL,
-    RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK, RE_VCOL, RE_VISUAL, SFNAME, SKWORD, SPRINT, STAR,
-    SUBPAT, UPPER, WHITE, WORD,
+    get_backref_num, get_mclose_num, get_mopen_num, is_backref, is_mclose, is_mopen, operand_cmp,
+    operand_max, operand_min, ADD_NL, ALPHA, ANY, ANYBUT, ANYOF, BACK, BEHIND, BHPOS, BOL, BOW,
+    BRACE_COMPLEX, BRACE_LIMITS, BRACE_SIMPLE, BRANCH, CURSOR, DIGIT, END, EOL, EOW, EXACTLY,
+    FNAME, HEAD, HEX, IDENT, LOWER, MATCH, MULTIBYTECODE, NALPHA, NCLOSE, NDIGIT, NEWL, NHEAD,
+    NHEX, NLOWER, NOBEHIND, NOMATCH, NOPEN, NOTHING, NUPPER, NWHITE, NWORD, OCTAL, PLUS, PRINT,
+    RE_BOF, RE_COL, RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK, RE_VCOL, RE_VISUAL, SFNAME, SKWORD,
+    SPRINT, STAR, SUBPAT, UPPER, WHITE, WORD,
 };
 use crate::bt_state::{BackPosTable, RegSave, RegStack, RegStar, RegState, NSUBEXP};
 
@@ -869,11 +869,43 @@ unsafe fn match_one_op(state: &mut MatchState, scan: *const u8, opcode: c_int) -
             MatchStatus::NoMatch
         }
 
-        RE_LNUM | RE_COL | RE_VCOL => {
-            // Line/column/virtual column comparisons
-            // These require operand parsing for comparison value
-            // Simplified: continue for now
-            MatchStatus::Continue
+        RE_LNUM => {
+            // Match line number comparison (\%l, \%<l, \%>l)
+            let limit = operand_min(scan);
+            let cmp_op = operand_cmp(scan);
+            // lnum is 0-based internally, but limit is 1-based from pattern
+            let actual = state.lnum as i64 + 1;
+            if compare_pos(actual, limit, cmp_op) {
+                MatchStatus::Continue
+            } else {
+                MatchStatus::NoMatch
+            }
+        }
+
+        RE_COL => {
+            // Match column comparison (\%c, \%<c, \%>c)
+            let limit = operand_min(scan);
+            let cmp_op = operand_cmp(scan);
+            // col is 0-based internally, limit is 1-based from pattern
+            let actual = state.col as i64 + 1;
+            if compare_pos(actual, limit, cmp_op) {
+                MatchStatus::Continue
+            } else {
+                MatchStatus::NoMatch
+            }
+        }
+
+        RE_VCOL => {
+            // Match virtual column comparison (\%v, \%<v, \%>v)
+            // Virtual column considers tabs - for now treat same as column
+            let limit = operand_min(scan);
+            let cmp_op = operand_cmp(scan);
+            let actual = state.col as i64 + 1;
+            if compare_pos(actual, limit, cmp_op) {
+                MatchStatus::Continue
+            } else {
+                MatchStatus::NoMatch
+            }
         }
 
         RE_MARK => {
@@ -1032,6 +1064,21 @@ where
 #[inline]
 fn is_word_char(c: u8) -> bool {
     c.is_ascii_alphanumeric() || c == b'_'
+}
+
+/// Compare position value against limit with comparison operator.
+///
+/// The cmp_op byte encodes the comparison:
+/// - '<' (0x3C): actual < limit
+/// - '>' (0x3E): actual > limit
+/// - other: actual == limit
+#[inline]
+fn compare_pos(actual: i64, limit: i64, cmp_op: u8) -> bool {
+    match cmp_op {
+        b'<' => actual < limit,
+        b'>' => actual > limit,
+        _ => actual == limit,
+    }
 }
 
 // =============================================================================
