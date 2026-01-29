@@ -824,4 +824,179 @@ mod tests {
         };
         assert_eq!(rs_qf_make_grep_action(create_info), b' ');
     }
+
+    // ==========================================================================
+    // Phase Q4: Ex Command Helper Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_cc_default_errornr() {
+        // Test without address
+        assert_eq!(rs_qf_cc_default_errornr(CcCmdType::Cc), 0);
+        assert_eq!(rs_qf_cc_default_errornr(CcCmdType::Ll), 0);
+        assert_eq!(rs_qf_cc_default_errornr(CcCmdType::CRewind), 1);
+        assert_eq!(rs_qf_cc_default_errornr(CcCmdType::LRewind), 1);
+        assert_eq!(rs_qf_cc_default_errornr(CcCmdType::CFirst), 1);
+        assert_eq!(rs_qf_cc_default_errornr(CcCmdType::LFirst), 1);
+        assert_eq!(rs_qf_cc_default_errornr(CcCmdType::CLast), 32767);
+        assert_eq!(rs_qf_cc_default_errornr(CcCmdType::LLast), 32767);
+    }
+
+    #[test]
+    fn test_cnext_direction() {
+        assert_eq!(
+            rs_qf_cnext_direction(CnextCmdType::CNext),
+            QfDirection::Forward
+        );
+        assert_eq!(
+            rs_qf_cnext_direction(CnextCmdType::LNext),
+            QfDirection::Forward
+        );
+        assert_eq!(
+            rs_qf_cnext_direction(CnextCmdType::CPrevious),
+            QfDirection::Backward
+        );
+        assert_eq!(
+            rs_qf_cnext_direction(CnextCmdType::CPrev),
+            QfDirection::Backward
+        );
+    }
+}
+
+// =============================================================================
+// Phase Q4: :cc Command Helpers
+// =============================================================================
+
+/// Command type for :cc style commands
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CcCmdType {
+    /// :cc - jump to error N
+    #[default]
+    Cc,
+    /// :ll - location list version
+    Ll,
+    /// :crewind - jump to first error
+    CRewind,
+    /// :lrewind
+    LRewind,
+    /// :cfirst - jump to first error
+    CFirst,
+    /// :lfirst
+    LFirst,
+    /// :clast - jump to last error
+    CLast,
+    /// :llast
+    LLast,
+}
+
+/// Get the default error number for :cc style commands (when no address given).
+///
+/// - :cc/:ll -> 0 (current error)
+/// - :crewind/:cfirst/:lrewind/:lfirst -> 1 (first error)
+/// - :clast/:llast -> 32767 (last error, clamped)
+#[no_mangle]
+pub const extern "C" fn rs_qf_cc_default_errornr(cmd_type: CcCmdType) -> c_int {
+    match cmd_type {
+        CcCmdType::Cc | CcCmdType::Ll => 0,
+        CcCmdType::CRewind | CcCmdType::LRewind | CcCmdType::CFirst | CcCmdType::LFirst => 1,
+        CcCmdType::CLast | CcCmdType::LLast => 32767,
+    }
+}
+
+/// Check if a :cc command type is a location list command.
+#[no_mangle]
+pub const extern "C" fn rs_qf_cc_is_loclist(cmd_type: CcCmdType) -> bool {
+    matches!(
+        cmd_type,
+        CcCmdType::Ll | CcCmdType::LRewind | CcCmdType::LFirst | CcCmdType::LLast
+    )
+}
+
+// =============================================================================
+// Phase Q4: :cnext Command Helpers
+// =============================================================================
+
+/// Command type for :cnext style commands
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CnextCmdType {
+    /// :cnext - next error
+    #[default]
+    CNext,
+    /// :lnext
+    LNext,
+    /// :cprevious - previous error
+    CPrevious,
+    /// :cprev - same as cprevious
+    CPrev,
+    /// :lprevious
+    LPrevious,
+    /// :lprev
+    LPrev,
+    /// :cNext - previous error (capital N)
+    CNextBig,
+    /// :lNext
+    LNextBig,
+    /// :cnfile - first error in next file
+    CNFile,
+    /// :lnfile
+    LNFile,
+    /// :cpfile - last error in previous file
+    CPFile,
+    /// :lpfile
+    LPFile,
+    /// :cNfile - first error in previous file
+    CNFileBig,
+    /// :lNfile
+    LNFileBig,
+}
+
+/// Get the navigation direction for :cnext style commands.
+#[no_mangle]
+pub const extern "C" fn rs_qf_cnext_direction(cmd_type: CnextCmdType) -> QfDirection {
+    match cmd_type {
+        CnextCmdType::CNext | CnextCmdType::LNext | CnextCmdType::CNFile | CnextCmdType::LNFile => {
+            QfDirection::Forward
+        }
+        CnextCmdType::CPrevious
+        | CnextCmdType::CPrev
+        | CnextCmdType::LPrevious
+        | CnextCmdType::LPrev
+        | CnextCmdType::CNextBig
+        | CnextCmdType::LNextBig
+        | CnextCmdType::CPFile
+        | CnextCmdType::LPFile
+        | CnextCmdType::CNFileBig
+        | CnextCmdType::LNFileBig => QfDirection::Backward,
+    }
+}
+
+/// Check if a :cnext command type is a location list command.
+#[no_mangle]
+pub const extern "C" fn rs_qf_cnext_is_loclist(cmd_type: CnextCmdType) -> bool {
+    matches!(
+        cmd_type,
+        CnextCmdType::LNext
+            | CnextCmdType::LPrevious
+            | CnextCmdType::LPrev
+            | CnextCmdType::LNextBig
+            | CnextCmdType::LNFile
+            | CnextCmdType::LPFile
+            | CnextCmdType::LNFileBig
+    )
+}
+
+/// Check if a :cnext command type navigates by file (nfile/pfile).
+#[no_mangle]
+pub const extern "C" fn rs_qf_cnext_is_file_nav(cmd_type: CnextCmdType) -> bool {
+    matches!(
+        cmd_type,
+        CnextCmdType::CNFile
+            | CnextCmdType::LNFile
+            | CnextCmdType::CPFile
+            | CnextCmdType::LPFile
+            | CnextCmdType::CNFileBig
+            | CnextCmdType::LNFileBig
+    )
 }
