@@ -367,10 +367,472 @@ pub extern "C" fn rs_calc_block_padding(cur_col: c_int, line_len: c_int) -> c_in
 }
 
 // =============================================================================
+// Phase O2: Additional Put Operation Helpers
+// =============================================================================
+
+/// Put flag constants (must match register.h)
+pub const PUT_FIXINDENT: c_int = 1;
+pub const PUT_CURSEND: c_int = 2;
+pub const PUT_LINE: c_int = 4;
+pub const PUT_LINE_SPLIT: c_int = 8;
+pub const PUT_LINE_FORWARD: c_int = 16;
+pub const PUT_BLOCK_INNER: c_int = 32;
+
+/// Forward direction constant
+pub const FORWARD: c_int = 1;
+/// Backward direction constant
+pub const BACKWARD: c_int = 0;
+
+/// Check if put operation uses the '.' register (insert register).
+///
+/// # Arguments
+/// * `regname` - Register name
+///
+/// # Returns
+/// true if this is the insert register
+#[must_use]
+#[inline]
+pub const fn is_insert_register_put(regname: c_int) -> bool {
+    regname == b'.' as c_int
+}
+
+/// Check if put operation uses a special register that needs conversion.
+///
+/// Special registers like '%', '#', ':', '=' need special handling.
+///
+/// # Arguments
+/// * `regname` - Register name
+///
+/// # Returns
+/// true if this is a special register
+#[must_use]
+#[inline]
+pub const fn is_special_put_register(regname: c_int) -> bool {
+    matches!(
+        regname,
+        37  // '%' current file
+            | 35 // '#' alternate file
+            | 58 // ':' last command
+            | 61 // '=' expression
+    )
+}
+
+/// Get the insert command start character for '.' register put.
+///
+/// Returns 'c' for non-linewise visual, 'i' for PUT_LINE or before, 'a' for after.
+///
+/// # Arguments
+/// * `non_linewise_vis` - Whether in non-linewise visual mode
+/// * `flags` - Put flags
+/// * `dir` - Put direction (FORWARD or BACKWARD)
+///
+/// # Returns
+/// The command character ('c', 'i', or 'a')
+#[must_use]
+#[inline]
+pub const fn get_insert_cmd_char(non_linewise_vis: bool, flags: c_int, dir: c_int) -> c_int {
+    if non_linewise_vis {
+        b'c' as c_int
+    } else if (flags & PUT_LINE) != 0 {
+        b'i' as c_int
+    } else if dir == FORWARD {
+        b'a' as c_int
+    } else {
+        b'i' as c_int
+    }
+}
+
+/// Check if put needs to split lines (for visual linewise put).
+///
+/// # Arguments
+/// * `flags` - Put flags
+///
+/// # Returns
+/// true if lines need to be split
+#[must_use]
+#[inline]
+pub const fn needs_put_line_split(flags: c_int) -> bool {
+    (flags & PUT_LINE_SPLIT) != 0
+}
+
+/// Check if put should go to the forward position after visual block.
+///
+/// # Arguments
+/// * `flags` - Put flags
+///
+/// # Returns
+/// true if put should go forward
+#[must_use]
+#[inline]
+pub const fn needs_put_line_forward(flags: c_int) -> bool {
+    (flags & PUT_LINE_FORWARD) != 0
+}
+
+/// Check if put should be forced to linewise.
+///
+/// # Arguments
+/// * `flags` - Put flags
+///
+/// # Returns
+/// true if put should be linewise
+#[must_use]
+#[inline]
+pub const fn is_forced_linewise_put(flags: c_int) -> bool {
+    (flags & PUT_LINE) != 0
+}
+
+/// Check if put is in block inner mode (no trailing spaces).
+///
+/// # Arguments
+/// * `flags` - Put flags
+///
+/// # Returns
+/// true if block inner mode
+#[must_use]
+#[inline]
+pub const fn is_block_inner_put(flags: c_int) -> bool {
+    (flags & PUT_BLOCK_INNER) != 0
+}
+
+/// Check if cursor should be left at end of put text.
+///
+/// # Arguments
+/// * `flags` - Put flags
+///
+/// # Returns
+/// true if cursor should be at end
+#[must_use]
+#[inline]
+pub const fn should_put_cursend(flags: c_int) -> bool {
+    (flags & PUT_CURSEND) != 0
+}
+
+/// Check if put should fix indentation.
+///
+/// # Arguments
+/// * `flags` - Put flags
+///
+/// # Returns
+/// true if indent should be fixed
+#[must_use]
+#[inline]
+pub const fn should_put_fixindent(flags: c_int) -> bool {
+    (flags & PUT_FIXINDENT) != 0
+}
+
+/// Calculate the undo save range for block put.
+///
+/// # Arguments
+/// * `cursor_lnum` - Current cursor line
+/// * `y_size` - Number of lines in register
+/// * `ml_line_count` - Total lines in buffer
+///
+/// # Returns
+/// End line number for u_save
+#[must_use]
+#[inline]
+pub const fn calc_block_put_undo_end(
+    cursor_lnum: c_int,
+    y_size: c_int,
+    ml_line_count: c_int,
+) -> c_int {
+    let end = cursor_lnum + y_size + 1;
+    if end > ml_line_count + 1 {
+        ml_line_count + 1
+    } else {
+        end
+    }
+}
+
+/// Calculate the line number for linewise put.
+///
+/// # Arguments
+/// * `cursor_lnum` - Current cursor line
+/// * `dir` - Put direction
+///
+/// # Returns
+/// Line number for put
+#[must_use]
+#[inline]
+pub const fn calc_linewise_put_line(cursor_lnum: c_int, dir: c_int) -> c_int {
+    if dir == FORWARD {
+        cursor_lnum + 1
+    } else {
+        cursor_lnum
+    }
+}
+
+/// Calculate cursor line adjustment after linewise put.
+///
+/// # Arguments
+/// * `lnum` - Line number where put happens
+/// * `dir` - Put direction
+///
+/// # Returns
+/// New cursor line number
+#[must_use]
+#[inline]
+pub const fn calc_cursor_lnum_after_linewise_put(lnum: c_int, dir: c_int) -> c_int {
+    if dir == FORWARD {
+        lnum - 1
+    } else {
+        lnum
+    }
+}
+
+/// Calculate start spaces for block put when line is short.
+///
+/// # Arguments
+/// * `vcol` - Current virtual column
+/// * `target_col` - Target column
+///
+/// # Returns
+/// Number of spaces needed
+#[must_use]
+#[inline]
+pub const fn calc_block_put_startspaces(vcol: c_int, target_col: c_int) -> c_int {
+    if vcol < target_col {
+        target_col - vcol
+    } else {
+        0
+    }
+}
+
+/// Calculate end spaces for block put when inside a tab.
+///
+/// # Arguments
+/// * `vcol` - Current virtual column
+/// * `target_col` - Target column
+///
+/// # Returns
+/// Number of end spaces
+#[must_use]
+#[inline]
+pub const fn calc_block_put_endspaces(vcol: c_int, target_col: c_int) -> c_int {
+    if vcol > target_col {
+        vcol - target_col
+    } else {
+        0
+    }
+}
+
+/// Calculate trailing spaces for block put line padding.
+///
+/// # Arguments
+/// * `y_width` - Block width
+/// * `text_width` - Actual text width
+///
+/// # Returns
+/// Number of trailing spaces (0 if negative)
+#[must_use]
+#[inline]
+pub const fn calc_block_put_trailing_spaces(y_width: c_int, text_width: c_int) -> c_int {
+    let spaces = y_width + 1 - text_width;
+    if spaces < 0 {
+        0
+    } else {
+        spaces
+    }
+}
+
+/// Check if block put needs a new line appended.
+///
+/// # Arguments
+/// * `cursor_lnum` - Current cursor line
+/// * `ml_line_count` - Total lines in buffer
+///
+/// # Returns
+/// true if a new line needs to be appended
+#[must_use]
+#[inline]
+pub const fn needs_block_put_append(cursor_lnum: c_int, ml_line_count: c_int) -> bool {
+    cursor_lnum > ml_line_count
+}
+
+/// Calculate total length for a new line in put.
+///
+/// # Arguments
+/// * `bd_textcol` - Block definition text column
+/// * `bd_startspaces` - Start spaces
+/// * `yanklen` - Length of yanked text
+/// * `bd_endspaces` - End spaces
+/// * `spaces` - Trailing spaces
+/// * `oldlen` - Original line length
+/// * `delcount` - Characters to delete
+///
+/// # Returns
+/// Total length of new line
+#[must_use]
+#[inline]
+pub const fn calc_put_newline_len(
+    bd_textcol: c_int,
+    bd_startspaces: c_int,
+    yanklen: c_int,
+    bd_endspaces: c_int,
+    spaces: c_int,
+    oldlen: c_int,
+    delcount: c_int,
+) -> c_int {
+    bd_textcol + bd_startspaces + yanklen + bd_endspaces + spaces + oldlen - bd_textcol - delcount
+}
+
+/// Check if line is short for block put (needs padding).
+///
+/// # Arguments
+/// * `vcol` - Current virtual column
+/// * `target_col` - Target column
+/// * `at_eol` - Whether at end of line
+///
+/// # Returns
+/// true if line is short
+#[must_use]
+#[inline]
+pub const fn is_shortline_for_put(vcol: c_int, target_col: c_int, at_eol: bool) -> bool {
+    vcol < target_col || (vcol == target_col && at_eol)
+}
+
+// =============================================================================
+// Phase O2 FFI Exports
+// =============================================================================
+
+/// FFI: Check if put uses insert register.
+#[no_mangle]
+pub extern "C" fn rs_is_insert_register_put(regname: c_int) -> c_int {
+    c_int::from(is_insert_register_put(regname))
+}
+
+/// FFI: Check if put uses special register.
+#[no_mangle]
+pub extern "C" fn rs_is_special_put_register(regname: c_int) -> c_int {
+    c_int::from(is_special_put_register(regname))
+}
+
+/// FFI: Get insert command character.
+#[no_mangle]
+pub extern "C" fn rs_get_insert_cmd_char(
+    non_linewise_vis: c_int,
+    flags: c_int,
+    dir: c_int,
+) -> c_int {
+    get_insert_cmd_char(non_linewise_vis != 0, flags, dir)
+}
+
+/// FFI: Check if put needs line split.
+#[no_mangle]
+pub extern "C" fn rs_needs_put_line_split(flags: c_int) -> c_int {
+    c_int::from(needs_put_line_split(flags))
+}
+
+/// FFI: Check if put needs line forward.
+#[no_mangle]
+pub extern "C" fn rs_needs_put_line_forward(flags: c_int) -> c_int {
+    c_int::from(needs_put_line_forward(flags))
+}
+
+/// FFI: Check if put is forced linewise.
+#[no_mangle]
+pub extern "C" fn rs_is_forced_linewise_put(flags: c_int) -> c_int {
+    c_int::from(is_forced_linewise_put(flags))
+}
+
+/// FFI: Check if block inner put.
+#[no_mangle]
+pub extern "C" fn rs_is_block_inner_put(flags: c_int) -> c_int {
+    c_int::from(is_block_inner_put(flags))
+}
+
+/// FFI: Check if cursor should be at end.
+#[no_mangle]
+pub extern "C" fn rs_should_put_cursend(flags: c_int) -> c_int {
+    c_int::from(should_put_cursend(flags))
+}
+
+/// FFI: Check if indent should be fixed.
+#[no_mangle]
+pub extern "C" fn rs_should_put_fixindent(flags: c_int) -> c_int {
+    c_int::from(should_put_fixindent(flags))
+}
+
+/// FFI: Calculate block put undo end.
+#[no_mangle]
+pub extern "C" fn rs_calc_block_put_undo_end(
+    cursor_lnum: c_int,
+    y_size: c_int,
+    ml_line_count: c_int,
+) -> c_int {
+    calc_block_put_undo_end(cursor_lnum, y_size, ml_line_count)
+}
+
+/// FFI: Calculate linewise put line.
+#[no_mangle]
+pub extern "C" fn rs_calc_linewise_put_line(cursor_lnum: c_int, dir: c_int) -> c_int {
+    calc_linewise_put_line(cursor_lnum, dir)
+}
+
+/// FFI: Calculate cursor line after linewise put.
+#[no_mangle]
+pub extern "C" fn rs_calc_cursor_lnum_after_linewise_put(lnum: c_int, dir: c_int) -> c_int {
+    calc_cursor_lnum_after_linewise_put(lnum, dir)
+}
+
+/// FFI: Calculate block put start spaces.
+#[no_mangle]
+pub extern "C" fn rs_calc_block_put_startspaces(vcol: c_int, target_col: c_int) -> c_int {
+    calc_block_put_startspaces(vcol, target_col)
+}
+
+/// FFI: Calculate block put end spaces.
+#[no_mangle]
+pub extern "C" fn rs_calc_block_put_endspaces(vcol: c_int, target_col: c_int) -> c_int {
+    calc_block_put_endspaces(vcol, target_col)
+}
+
+/// FFI: Calculate block put trailing spaces.
+#[no_mangle]
+pub extern "C" fn rs_calc_block_put_trailing_spaces(y_width: c_int, text_width: c_int) -> c_int {
+    calc_block_put_trailing_spaces(y_width, text_width)
+}
+
+/// FFI: Check if block put needs append.
+#[no_mangle]
+pub extern "C" fn rs_needs_block_put_append(cursor_lnum: c_int, ml_line_count: c_int) -> c_int {
+    c_int::from(needs_block_put_append(cursor_lnum, ml_line_count))
+}
+
+/// FFI: Calculate put new line length.
+#[no_mangle]
+pub extern "C" fn rs_calc_put_newline_len(
+    bd_textcol: c_int,
+    bd_startspaces: c_int,
+    yanklen: c_int,
+    bd_endspaces: c_int,
+    spaces: c_int,
+    oldlen: c_int,
+    delcount: c_int,
+) -> c_int {
+    calc_put_newline_len(
+        bd_textcol,
+        bd_startspaces,
+        yanklen,
+        bd_endspaces,
+        spaces,
+        oldlen,
+        delcount,
+    )
+}
+
+/// FFI: Check if line is short for put.
+#[no_mangle]
+pub extern "C" fn rs_is_shortline_for_put(vcol: c_int, target_col: c_int, at_eol: c_int) -> c_int {
+    c_int::from(is_shortline_for_put(vcol, target_col, at_eol != 0))
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
 #[cfg(test)]
+#[allow(clippy::cast_lossless)]
 mod tests {
     use super::*;
 
@@ -453,5 +915,178 @@ mod tests {
         assert_eq!(rs_calc_linewise_put_lnum(1, 5, 3), 6);
         assert_eq!(rs_calc_charwise_put_col(1, 5, 0), 6);
         assert_eq!(rs_calc_put_line_count(3, 2), 6);
+    }
+
+    // =========================================================================
+    // Phase O2 Tests
+    // =========================================================================
+
+    #[test]
+    fn test_is_insert_register_put() {
+        assert!(is_insert_register_put(b'.' as c_int));
+        assert!(!is_insert_register_put(b'a' as c_int));
+        assert!(!is_insert_register_put(0));
+    }
+
+    #[test]
+    fn test_is_special_put_register() {
+        assert!(is_special_put_register(b'%' as c_int));
+        assert!(is_special_put_register(b'#' as c_int));
+        assert!(is_special_put_register(b':' as c_int));
+        assert!(is_special_put_register(b'=' as c_int));
+        assert!(!is_special_put_register(b'a' as c_int));
+    }
+
+    #[test]
+    fn test_get_insert_cmd_char() {
+        // Non-linewise visual: 'c'
+        assert_eq!(get_insert_cmd_char(true, 0, FORWARD), b'c' as c_int);
+
+        // PUT_LINE: 'i'
+        assert_eq!(get_insert_cmd_char(false, PUT_LINE, FORWARD), b'i' as c_int);
+
+        // Forward without PUT_LINE: 'a'
+        assert_eq!(get_insert_cmd_char(false, 0, FORWARD), b'a' as c_int);
+
+        // Backward: 'i'
+        assert_eq!(get_insert_cmd_char(false, 0, BACKWARD), b'i' as c_int);
+    }
+
+    #[test]
+    fn test_put_flag_checks() {
+        assert!(needs_put_line_split(PUT_LINE_SPLIT));
+        assert!(!needs_put_line_split(0));
+
+        assert!(needs_put_line_forward(PUT_LINE_FORWARD));
+        assert!(!needs_put_line_forward(0));
+
+        assert!(is_forced_linewise_put(PUT_LINE));
+        assert!(!is_forced_linewise_put(0));
+
+        assert!(is_block_inner_put(PUT_BLOCK_INNER));
+        assert!(!is_block_inner_put(0));
+
+        assert!(should_put_cursend(PUT_CURSEND));
+        assert!(!should_put_cursend(0));
+
+        assert!(should_put_fixindent(PUT_FIXINDENT));
+        assert!(!should_put_fixindent(0));
+    }
+
+    #[test]
+    fn test_calc_block_put_undo_end() {
+        // Normal case
+        assert_eq!(calc_block_put_undo_end(5, 3, 100), 9);
+
+        // Clamped to line count
+        assert_eq!(calc_block_put_undo_end(98, 5, 100), 101);
+    }
+
+    #[test]
+    fn test_calc_linewise_put_line() {
+        assert_eq!(calc_linewise_put_line(10, FORWARD), 11);
+        assert_eq!(calc_linewise_put_line(10, BACKWARD), 10);
+    }
+
+    #[test]
+    fn test_calc_cursor_lnum_after_linewise_put() {
+        assert_eq!(calc_cursor_lnum_after_linewise_put(11, FORWARD), 10);
+        assert_eq!(calc_cursor_lnum_after_linewise_put(10, BACKWARD), 10);
+    }
+
+    #[test]
+    fn test_calc_block_put_startspaces() {
+        assert_eq!(calc_block_put_startspaces(5, 10), 5);
+        assert_eq!(calc_block_put_startspaces(10, 10), 0);
+        assert_eq!(calc_block_put_startspaces(15, 10), 0);
+    }
+
+    #[test]
+    fn test_calc_block_put_endspaces() {
+        assert_eq!(calc_block_put_endspaces(15, 10), 5);
+        assert_eq!(calc_block_put_endspaces(10, 10), 0);
+        assert_eq!(calc_block_put_endspaces(5, 10), 0);
+    }
+
+    #[test]
+    fn test_calc_block_put_trailing_spaces() {
+        assert_eq!(calc_block_put_trailing_spaces(10, 5), 6);
+        assert_eq!(calc_block_put_trailing_spaces(10, 10), 1);
+        assert_eq!(calc_block_put_trailing_spaces(5, 10), 0);
+    }
+
+    #[test]
+    fn test_needs_block_put_append() {
+        assert!(needs_block_put_append(101, 100));
+        assert!(!needs_block_put_append(100, 100));
+        assert!(!needs_block_put_append(50, 100));
+    }
+
+    #[test]
+    fn test_calc_put_newline_len() {
+        // bd_textcol=10, startspaces=2, yanklen=5, endspaces=1, spaces=3, oldlen=20, delcount=1
+        // = 10 + 2 + 5 + 1 + 3 + 20 - 10 - 1 = 30
+        assert_eq!(calc_put_newline_len(10, 2, 5, 1, 3, 20, 1), 30);
+    }
+
+    #[test]
+    fn test_is_shortline_for_put() {
+        assert!(is_shortline_for_put(5, 10, false));
+        assert!(is_shortline_for_put(10, 10, true));
+        assert!(!is_shortline_for_put(10, 10, false));
+        assert!(!is_shortline_for_put(15, 10, false));
+    }
+
+    #[test]
+    fn test_phase_o2_ffi_wrappers() {
+        // rs_is_insert_register_put
+        assert_eq!(rs_is_insert_register_put(b'.' as c_int), 1);
+        assert_eq!(rs_is_insert_register_put(b'a' as c_int), 0);
+
+        // rs_is_special_put_register
+        assert_eq!(rs_is_special_put_register(b'%' as c_int), 1);
+
+        // rs_get_insert_cmd_char
+        assert_eq!(rs_get_insert_cmd_char(1, 0, FORWARD), b'c' as c_int);
+
+        // rs_needs_put_line_split
+        assert_eq!(rs_needs_put_line_split(PUT_LINE_SPLIT), 1);
+        assert_eq!(rs_needs_put_line_split(0), 0);
+
+        // rs_is_forced_linewise_put
+        assert_eq!(rs_is_forced_linewise_put(PUT_LINE), 1);
+
+        // rs_is_block_inner_put
+        assert_eq!(rs_is_block_inner_put(PUT_BLOCK_INNER), 1);
+
+        // rs_should_put_cursend
+        assert_eq!(rs_should_put_cursend(PUT_CURSEND), 1);
+
+        // rs_calc_block_put_undo_end
+        assert_eq!(rs_calc_block_put_undo_end(5, 3, 100), 9);
+
+        // rs_calc_linewise_put_line
+        assert_eq!(rs_calc_linewise_put_line(10, FORWARD), 11);
+
+        // rs_calc_cursor_lnum_after_linewise_put
+        assert_eq!(rs_calc_cursor_lnum_after_linewise_put(11, FORWARD), 10);
+
+        // rs_calc_block_put_startspaces
+        assert_eq!(rs_calc_block_put_startspaces(5, 10), 5);
+
+        // rs_calc_block_put_endspaces
+        assert_eq!(rs_calc_block_put_endspaces(15, 10), 5);
+
+        // rs_calc_block_put_trailing_spaces
+        assert_eq!(rs_calc_block_put_trailing_spaces(10, 5), 6);
+
+        // rs_needs_block_put_append
+        assert_eq!(rs_needs_block_put_append(101, 100), 1);
+
+        // rs_calc_put_newline_len
+        assert_eq!(rs_calc_put_newline_len(10, 2, 5, 1, 3, 20, 1), 30);
+
+        // rs_is_shortline_for_put
+        assert_eq!(rs_is_shortline_for_put(5, 10, 0), 1);
     }
 }
