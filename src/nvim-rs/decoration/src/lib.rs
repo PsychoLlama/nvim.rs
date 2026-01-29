@@ -20,6 +20,8 @@ pub mod cache;
 pub mod decor;
 pub mod invoke;
 pub mod provider;
+pub mod range;
+pub mod redraw;
 
 use std::ffi::{c_char, c_int, c_void};
 
