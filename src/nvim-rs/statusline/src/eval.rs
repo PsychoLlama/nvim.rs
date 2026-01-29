@@ -71,6 +71,14 @@ extern "C" {
     fn nvim_win_get_arg_idx(wp: WinHandle) -> c_int;
     fn nvim_win_get_arg_idx_invalid(wp: WinHandle) -> c_int;
     fn nvim_win_argcount(wp: WinHandle) -> c_int;
+
+    // Statusline-specific accessors
+    fn nvim_stl_get_byte_offset(wp: WinHandle) -> c_int;
+    fn nvim_stl_get_byte_value(wp: WinHandle) -> c_int;
+    fn nvim_stl_get_showcmd(buf: *mut c_char, buflen: c_int) -> c_int;
+    fn nvim_stl_get_keymap(wp: WinHandle, buf: *mut c_char, buflen: c_int) -> c_int;
+    fn nvim_stl_get_qf_info(wp: WinHandle, buf: *mut c_char, buflen: c_int) -> c_int;
+    fn nvim_stl_get_page_num() -> c_int;
 }
 
 /// Context for evaluating statusline items.
@@ -195,14 +203,54 @@ pub fn eval_flag(flag: StlFlag, ctx: &EvalContext) -> EvalResult {
         // Argument list status
         StlFlag::ArgListStat => eval_arglist_status(ctx.wp),
 
-        // Other items (not directly evaluated)
-        StlFlag::PageNum => EvalResult::Number {
-            value: 0,
-            base: NumberBase::Decimal,
+        // Page number (printing)
+        StlFlag::PageNum => unsafe {
+            EvalResult::Number {
+                value: nvim_stl_get_page_num(),
+                base: NumberBase::Decimal,
+            }
         },
 
-        // Items that need special handling or C wrappers
-        // (Quickfix, Offset, ByteVal, expression, keymap, showcmd, etc.)
+        // Byte offset items
+        StlFlag::Offset => unsafe {
+            EvalResult::Number {
+                value: nvim_stl_get_byte_offset(ctx.wp),
+                base: NumberBase::Decimal,
+            }
+        },
+        StlFlag::OffsetX => unsafe {
+            EvalResult::Number {
+                value: nvim_stl_get_byte_offset(ctx.wp),
+                base: NumberBase::Hexadecimal,
+            }
+        },
+
+        // Byte value items
+        StlFlag::ByteVal => unsafe {
+            let byte = nvim_stl_get_byte_value(ctx.wp);
+            EvalResult::Number {
+                value: byte,
+                base: NumberBase::Decimal,
+            }
+        },
+        StlFlag::ByteValX => unsafe {
+            let byte = nvim_stl_get_byte_value(ctx.wp);
+            EvalResult::Number {
+                value: byte,
+                base: NumberBase::Hexadecimal,
+            }
+        },
+
+        // Keymap
+        StlFlag::Keymap => eval_keymap(ctx.wp),
+
+        // Quickfix
+        StlFlag::Quickfix => eval_quickfix(ctx.wp),
+
+        // Showcmd
+        StlFlag::ShowCmd => eval_showcmd(),
+
+        // Items that need special handling at render level
         _ => EvalResult::Empty,
     }
 }
@@ -374,6 +422,77 @@ fn eval_arglist_status(wp: WinHandle) -> EvalResult {
         };
 
         EvalResult::String(s)
+    }
+}
+
+/// Evaluate keymap indicator (%k).
+///
+/// Shows the keymap name when active, formatted as "<%s>".
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
+fn eval_keymap(wp: WinHandle) -> EvalResult {
+    if wp.is_null() {
+        return EvalResult::Empty;
+    }
+
+    let mut buf = [0u8; 128];
+    unsafe {
+        let len = nvim_stl_get_keymap(wp, buf.as_mut_ptr().cast(), buf.len() as c_int);
+        if len > 0 {
+            std::str::from_utf8(&buf[..len as usize])
+                .map_or(EvalResult::Empty, |s| EvalResult::String(s.to_string()))
+        } else {
+            EvalResult::Empty
+        }
+    }
+}
+
+/// Evaluate quickfix/location list indicator (%q).
+///
+/// Shows "[Quickfix List]" or "[Location List]" when in a quickfix/loclist window.
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
+fn eval_quickfix(wp: WinHandle) -> EvalResult {
+    if wp.is_null() {
+        return EvalResult::Empty;
+    }
+
+    let mut buf = [0u8; 64];
+    unsafe {
+        let len = nvim_stl_get_qf_info(wp, buf.as_mut_ptr().cast(), buf.len() as c_int);
+        if len > 0 {
+            std::str::from_utf8(&buf[..len as usize])
+                .map_or(EvalResult::Empty, |s| EvalResult::String(s.to_string()))
+        } else {
+            EvalResult::Empty
+        }
+    }
+}
+
+/// Evaluate showcmd buffer (%S).
+///
+/// Shows the current command sequence being typed.
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
+fn eval_showcmd() -> EvalResult {
+    let mut buf = [0u8; 64];
+    unsafe {
+        let len = nvim_stl_get_showcmd(buf.as_mut_ptr().cast(), buf.len() as c_int);
+        if len > 0 {
+            std::str::from_utf8(&buf[..len as usize])
+                .map_or(EvalResult::Empty, |s| EvalResult::String(s.to_string()))
+        } else {
+            EvalResult::Empty
+        }
     }
 }
 
@@ -573,5 +692,43 @@ mod tests {
     fn test_number_base_values() {
         assert_eq!(NumberBase::Decimal as c_int, 10);
         assert_eq!(NumberBase::Hexadecimal as c_int, 16);
+    }
+
+    // Tests for eval_flag are integration tests that require C FFI
+    // and are run as part of the full build. The following tests
+    // verify the pure-Rust parts of the eval module.
+
+    #[test]
+    fn test_stl_flag_is_numeric() {
+        // Verify which flags produce numeric values
+        assert!(StlFlag::Line.is_numeric());
+        assert!(StlFlag::NumLines.is_numeric());
+        assert!(StlFlag::Column.is_numeric());
+        assert!(StlFlag::VirtCol.is_numeric());
+        assert!(StlFlag::Percentage.is_numeric());
+        assert!(StlFlag::Offset.is_numeric());
+        assert!(StlFlag::OffsetX.is_numeric());
+        assert!(StlFlag::ByteVal.is_numeric());
+        assert!(StlFlag::ByteValX.is_numeric());
+        assert!(StlFlag::PageNum.is_numeric());
+        assert!(StlFlag::BufNo.is_numeric());
+        // Non-numeric
+        assert!(!StlFlag::Keymap.is_numeric());
+        assert!(!StlFlag::Quickfix.is_numeric());
+        assert!(!StlFlag::ShowCmd.is_numeric());
+        assert!(!StlFlag::FilePath.is_numeric());
+    }
+
+    #[test]
+    fn test_stl_flag_is_flag_item() {
+        // Verify which flags are conditional items
+        assert!(StlFlag::RoFlag.is_flag_item());
+        assert!(StlFlag::Modified.is_flag_item());
+        assert!(StlFlag::HelpFlag.is_flag_item());
+        assert!(StlFlag::PreviewFlag.is_flag_item());
+        // Non-flag items
+        assert!(!StlFlag::Line.is_flag_item());
+        assert!(!StlFlag::Keymap.is_flag_item());
+        assert!(!StlFlag::Quickfix.is_flag_item());
     }
 }

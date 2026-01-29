@@ -2150,15 +2150,20 @@ int nvim_stl_get_byte_value(win_T *wp)
 int nvim_stl_get_byte_offset(win_T *wp)
 {
   if (wp == NULL || wp->w_buffer == NULL) {
-    return -1;
+    return 0;
   }
-  // Calculate total bytes before current line
-  int64_t offset = 0;
-  for (linenr_T lnum = 1; lnum < wp->w_cursor.lnum; lnum++) {
-    offset += ml_get_buf_len(wp->w_buffer, lnum) + 1;  // +1 for newline
+  // Use ml_find_line_or_offset which is O(log n) for byte offset calculation
+  int l = ml_find_line_or_offset(wp->w_buffer, wp->w_cursor.lnum, NULL, false);
+  if (wp->w_buffer->b_ml.ml_flags & ML_EMPTY) {
+    return 0;
   }
-  offset += wp->w_cursor.col;
-  return (int)offset;
+  if (l < 0) {
+    return 0;
+  }
+  // Add column position, but handle empty lines
+  bool empty_line = ml_get_buf_len(wp->w_buffer, wp->w_cursor.lnum) == 0;
+  int col_offset = ((State & MODE_INSERT) == 0 && empty_line) ? 0 : (int)wp->w_cursor.col;
+  return l + 1 + col_offset;
 }
 
 /// Get showcmd output.
@@ -2188,8 +2193,9 @@ int nvim_stl_get_keymap(win_T *wp, char *buf, int buflen)
     return 0;
   }
   buf[0] = '\0';
-  // Return empty - keymap display not commonly used
-  return 0;
+  // Call get_keymap_str to get the keymap name formatted as "<%s>"
+  int len = get_keymap_str(wp, "<%s>", buf, buflen);
+  return len > 0 ? len : 0;
 }
 
 /// Get page number for printing.
@@ -2207,7 +2213,14 @@ int nvim_stl_get_qf_info(win_T *wp, char *buf, int buflen)
   buf[0] = '\0';
   // For quickfix window, show list info
   if (bt_quickfix(wp->w_buffer)) {
-    // Could add list title/info here
+    const char *msg = wp->w_llist_ref ? _(msg_loclist) : _(msg_qflist);
+    int len = (int)strlen(msg);
+    if (len >= buflen) {
+      len = buflen - 1;
+    }
+    memcpy(buf, msg, (size_t)len);
+    buf[len] = '\0';
+    return len;
   }
   return 0;
 }
