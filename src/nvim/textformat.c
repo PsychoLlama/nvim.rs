@@ -44,13 +44,52 @@
 
 #include "textformat.c.generated.h"
 
-// Rust implementation
+// Rust implementations
 extern int rs_has_format_option(int x);
+extern int rs_ends_in_white(linenr_T lnum);
+extern int rs_fmt_check_par(linenr_T lnum, int *leader_len, char **leader_flags, int do_comments);
+extern int rs_same_leader(linenr_T lnum, int leader1_len, char *leader1_flags,
+                          int leader2_len, char *leader2_flags);
+extern int rs_paragraph_start(linenr_T lnum);
 
 /// C accessor for curbuf->b_p_fo (formatoptions).
 char *nvim_get_curbuf_b_p_fo(void)
 {
   return curbuf->b_p_fo;
+}
+
+// =============================================================================
+// C Accessor Functions for Rust
+// =============================================================================
+
+/// Get line content at lnum (accessor for Rust).
+char *nvim_textfmt_ml_get(linenr_T lnum)
+{
+  return ml_get(lnum);
+}
+
+/// Get line length at lnum (accessor for Rust).
+colnr_T nvim_textfmt_ml_get_len(linenr_T lnum)
+{
+  return ml_get_len(lnum);
+}
+
+/// Get comment leader length (accessor for Rust).
+int nvim_textfmt_get_leader_len(char *line, char **flags, bool backward, bool include_space)
+{
+  return get_leader_len(line, flags, backward, include_space);
+}
+
+/// Check if line starts a paragraph/section (accessor for Rust).
+bool nvim_textfmt_startPS(linenr_T lnum, int para, bool both)
+{
+  return startPS(lnum, para, both);
+}
+
+/// Get number indent for a line (accessor for Rust).
+int nvim_textfmt_get_number_indent(linenr_T lnum)
+{
+  return get_number_indent(lnum);
 }
 
 static bool did_add_space = false;  ///< auto_format() added an extra space
@@ -471,37 +510,13 @@ void internal_format(int textwidth, int second_indent, int flags, bool format_on
 /// comment leader changes.
 static int fmt_check_par(linenr_T lnum, int *leader_len, char **leader_flags, bool do_comments)
 {
-  char *flags = NULL;        // init for GCC
-  char *ptr = ml_get(lnum);
-  if (do_comments) {
-    *leader_len = get_leader_len(ptr, leader_flags, false, true);
-  } else {
-    *leader_len = 0;
-  }
-
-  if (*leader_len > 0) {
-    // Search for 'e' flag in comment leader flags.
-    flags = *leader_flags;
-    while (*flags && *flags != ':' && *flags != COM_END) {
-      flags++;
-    }
-  }
-
-  return *skipwhite(ptr + *leader_len) == NUL
-         || (*leader_len > 0 && *flags == COM_END)
-         || startPS(lnum, NUL, false);
+  return rs_fmt_check_par(lnum, leader_len, leader_flags, do_comments);
 }
 
 /// @return  true if line "lnum" ends in a white character.
 static bool ends_in_white(linenr_T lnum)
 {
-  char *s = ml_get(lnum);
-
-  if (*s == NUL) {
-    return false;
-  }
-  colnr_T l = ml_get_len(lnum) - 1;
-  return ascii_iswhite((uint8_t)s[l]);
+  return rs_ends_in_white(lnum) != 0;
 }
 
 /// @return  true if the two comment leaders given are the same.
@@ -512,63 +527,7 @@ static bool ends_in_white(linenr_T lnum)
 static bool same_leader(linenr_T lnum, int leader1_len, char *leader1_flags, int leader2_len,
                         char *leader2_flags)
 {
-  int idx1 = 0;
-  int idx2 = 0;
-
-  if (leader1_len == 0) {
-    return leader2_len == 0;
-  }
-
-  // If first leader has 'f' flag, the lines can be joined only if the
-  // second line does not have a leader.
-  // If first leader has 'e' flag, the lines can never be joined.
-  // If first leader has 's' flag, the lines can only be joined if there is
-  // some text after it and the second line has the 'm' flag.
-  if (leader1_flags != NULL) {
-    for (char *p = leader1_flags; *p && *p != ':'; p++) {
-      if (*p == COM_FIRST) {
-        return leader2_len == 0;
-      }
-      if (*p == COM_END) {
-        return false;
-      }
-      if (*p == COM_START) {
-        int line_len = ml_get_len(lnum);
-        if (line_len <= leader1_len) {
-          return false;
-        }
-        if (leader2_flags == NULL || leader2_len == 0) {
-          return false;
-        }
-        for (p = leader2_flags; *p && *p != ':'; p++) {
-          if (*p == COM_MIDDLE) {
-            return true;
-          }
-        }
-        return false;
-      }
-    }
-  }
-
-  // Get current line and next line, compare the leaders.
-  // The first line has to be saved, only one line can be locked at a time.
-  char *line1 = xstrnsave(ml_get(lnum), (size_t)ml_get_len(lnum));
-  for (idx1 = 0; ascii_iswhite(line1[idx1]); idx1++) {}
-  char *line2 = ml_get(lnum + 1);
-  for (idx2 = 0; idx2 < leader2_len; idx2++) {
-    if (!ascii_iswhite(line2[idx2])) {
-      if (line1[idx1++] != line2[idx2]) {
-        break;
-      }
-    } else {
-      while (ascii_iswhite(line1[idx1])) {
-        idx1++;
-      }
-    }
-  }
-  xfree(line1);
-
-  return idx2 == leader2_len && idx1 == leader1_len;
+  return rs_same_leader(lnum, leader1_len, leader1_flags, leader2_len, leader2_flags) != 0;
 }
 
 /// Used for auto-formatting.
@@ -577,38 +536,7 @@ static bool same_leader(linenr_T lnum, int leader1_len, char *leader1_flags, int
 ///          false when the previous line is in the same paragraph.
 static bool paragraph_start(linenr_T lnum)
 {
-  int leader_len = 0;                // leader len of current line
-  char *leader_flags = NULL;         // flags for leader of current line
-  int next_leader_len = 0;           // leader len of next line
-  char *next_leader_flags = NULL;    // flags for leader of next line
-
-  if (lnum <= 1) {
-    return true;                // start of the file
-  }
-  char *p = ml_get(lnum - 1);
-  if (*p == NUL) {
-    return true;                // after empty line
-  }
-  const bool do_comments = has_format_option(FO_Q_COMS);  // format comments
-  if (fmt_check_par(lnum - 1, &leader_len, &leader_flags, do_comments)) {
-    return true;  // after non-paragraph line
-  }
-
-  if (fmt_check_par(lnum, &next_leader_len, &next_leader_flags, do_comments)) {
-    return true;  // "lnum" is not a paragraph line
-  }
-
-  if (has_format_option(FO_WHITE_PAR) && !ends_in_white(lnum - 1)) {
-    return true;                // missing trailing space in previous line.
-  }
-  if (has_format_option(FO_Q_NUMBER) && (get_number_indent(lnum) > 0)) {
-    return true;                // numbered item starts in "lnum".
-  }
-  if (!same_leader(lnum - 1, leader_len, leader_flags,
-                   next_leader_len, next_leader_flags)) {
-    return true;                // change of comment leader.
-  }
-  return false;
+  return rs_paragraph_start(lnum) != 0;
 }
 
 /// Called after inserting or deleting text: When 'formatoptions' includes the
