@@ -83,6 +83,97 @@ extern char *rs_str_foldcase(const char *str, int orglen, char *buf, int buflen,
 
 static bool chartab_initialized = false;
 
+// ============================================================================
+// Accessor functions for Rust FFI
+// ============================================================================
+
+/// Get 'isident' option value.
+const char *nvim_charset_get_p_isi(void)
+{
+  return p_isi;
+}
+
+/// Get 'isprint' option value.
+const char *nvim_charset_get_p_isp(void)
+{
+  return p_isp;
+}
+
+/// Get 'isfname' option value.
+const char *nvim_charset_get_p_isf(void)
+{
+  return p_isf;
+}
+
+/// Get 'iskeyword' for a buffer.
+const char *nvim_charset_get_buf_p_isk(buf_T *buf)
+{
+  return buf ? buf->b_p_isk : NULL;
+}
+
+/// Get dy_flags (display flags).
+unsigned nvim_charset_get_dy_flags(void)
+{
+  return dy_flags;
+}
+
+/// Get b_p_lisp flag from a buffer.
+int nvim_charset_get_buf_lisp(buf_T *buf)
+{
+  return buf ? buf->b_p_lisp : 0;
+}
+
+/// Advance pointer and get UTF character (skips composing characters).
+int nvim_charset_mb_ptr2char_adv(const char **pp)
+{
+  return mb_ptr2char_adv(pp);
+}
+
+/// Check if character is lowercase.
+int nvim_charset_mb_islower(int c)
+{
+  return mb_islower(c) ? 1 : 0;
+}
+
+/// Check if character is uppercase.
+int nvim_charset_mb_isupper(int c)
+{
+  return mb_isupper(c) ? 1 : 0;
+}
+
+/// Get pointer to g_chartab array.
+uint8_t *nvim_charset_get_g_chartab(void)
+{
+  return g_chartab;
+}
+
+/// Check if chartab is initialized.
+int nvim_charset_is_initialized(void)
+{
+  return chartab_initialized ? 1 : 0;
+}
+
+/// Get pointer comparison values for option string detection.
+/// These are used in parse_isopt to determine which option is being set.
+const char *nvim_charset_get_p_isi_ptr(void)
+{
+  return p_isi;
+}
+
+const char *nvim_charset_get_p_isp_ptr(void)
+{
+  return p_isp;
+}
+
+const char *nvim_charset_get_p_isf_ptr(void)
+{
+  return p_isf;
+}
+
+// ============================================================================
+// Chartab macros and definitions
+// ============================================================================
+
 // b_chartab[] is an array with 256 bits, each bit representing one of the
 // characters 0-255.
 #define SET_CHARTAB(buf, c) \
