@@ -6,6 +6,7 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::cast_possible_truncation)]
 
+pub mod getters;
 pub mod helpers;
 
 use std::ffi::c_char;

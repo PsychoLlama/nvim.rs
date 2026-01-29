@@ -438,6 +438,36 @@ const char *nvim_get_namebuff(void)
   return NameBuff;
 }
 
+/// Get the 'softtabstop' option value for a buffer.
+OptInt nvim_buf_get_p_sts(buf_T *buf)
+{
+  return buf ? buf->b_p_sts : 0;
+}
+
+/// Get pointer to current line in current buffer (accessor for Rust).
+const char *nvim_curbuf_get_line_ptr(void)
+{
+  return ml_get_buf(curbuf, curwin->w_cursor.lnum);
+}
+
+/// Get pointer to line at lnum in current buffer (accessor for Rust).
+const char *nvim_curbuf_get_line_at(linenr_T lnum)
+{
+  return ml_get(lnum);
+}
+
+/// Get pointer to line at lnum in specified buffer (accessor for Rust).
+const char *nvim_buf_get_line_at(buf_T *buf, linenr_T lnum)
+{
+  return ml_get_buf(buf, lnum);
+}
+
+/// Get whitespace column count at start of current line (accessor for Rust).
+int nvim_getwhitecols_curline(void)
+{
+  return (int)getwhitecols_curline();
+}
+
 typedef enum {
   kBffClearWinInfo = 1,
   kBffInitChangedtick = 2,

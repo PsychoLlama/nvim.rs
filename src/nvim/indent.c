@@ -117,6 +117,16 @@ extern int rs_default_sts(void);
 extern int rs_normalize_ts(int ts);
 extern int rs_normalize_sw(int sw, int ts);
 
+// Phase: Getters (indent/getters.rs)
+extern int rs_get_sw_value(buf_T *buf);
+extern int rs_get_sw_value_indent(buf_T *buf, bool left);
+extern int rs_get_sts_value(void);
+extern int rs_get_indent(void);
+extern int rs_get_indent_lnum(linenr_T lnum);
+extern int rs_get_indent_buf(buf_T *buf, linenr_T lnum);
+extern bool rs_inindent(int extra);
+extern int *rs_tabstop_copy(const int *oldts);
+
 /// Set the integer values corresponding to the string setting of 'vartabstop'.
 /// "array" will be set, caller must free it if needed.
 ///
@@ -229,16 +239,7 @@ static bool tabstop_eq(const colnr_T *ts1, const colnr_T *ts2)
 /// Copy a tabstop array, allocating space for the new array.
 int *tabstop_copy(const int *oldts)
 {
-  if (oldts == 0) {
-    return 0;
-  }
-
-  int *newts = xmalloc((unsigned)(oldts[0] + 1) * sizeof(int));
-  for (int t = 0; t <= oldts[0]; t++) {
-    newts[t] = oldts[t];
-  }
-
-  return newts;
+  return rs_tabstop_copy(oldts);
 }
 
 /// Return a count of the number of tabstops.
@@ -257,8 +258,7 @@ int tabstop_first(colnr_T *ts)
 /// 'tabstop' value when 'shiftwidth' is zero.
 int get_sw_value(buf_T *buf)
 {
-  int result = get_sw_value_col(buf, 0, false);
-  return result;
+  return rs_get_sw_value(buf);
 }
 
 /// Idem, using "pos".
@@ -275,10 +275,7 @@ static int get_sw_value_pos(buf_T *buf, pos_T *pos, bool left)
 /// Idem, using the first non-black in the current line.
 int get_sw_value_indent(buf_T *buf, bool left)
 {
-  pos_T pos = curwin->w_cursor;
-
-  pos.col = (colnr_T)getwhitecols_curline();
-  return get_sw_value_pos(buf, &pos, left);
+  return rs_get_sw_value_indent(buf, left);
 }
 
 /// Idem, using virtual column "col".
@@ -291,26 +288,25 @@ int get_sw_value_col(buf_T *buf, colnr_T col, bool left)
 /// using the shiftwidth  value when 'softtabstop' is negative.
 int get_sts_value(void)
 {
-  int result = curbuf->b_p_sts < 0 ? get_sw_value(curbuf) : (int)curbuf->b_p_sts;
-  return result;
+  return rs_get_sts_value();
 }
 
 /// Count the size (in window cells) of the indent in the current line.
 int get_indent(void)
 {
-  return indent_size_ts(get_cursor_line_ptr(), curbuf->b_p_ts, curbuf->b_p_vts_array);
+  return rs_get_indent();
 }
 
 /// Count the size (in window cells) of the indent in line "lnum".
 int get_indent_lnum(linenr_T lnum)
 {
-  return indent_size_ts(ml_get(lnum), curbuf->b_p_ts, curbuf->b_p_vts_array);
+  return rs_get_indent_lnum(lnum);
 }
 
 /// Count the size (in window cells) of the indent in line "lnum" of buffer "buf".
 int get_indent_buf(buf_T *buf, linenr_T lnum)
 {
-  return indent_size_ts(ml_get_buf(buf, lnum), buf->b_p_ts, buf->b_p_vts_array);
+  return rs_get_indent_buf(buf, lnum);
 }
 
 /// Compute the size of the indent (in window cells) in line "ptr",
@@ -841,17 +837,7 @@ int nvim_get_breakindent_win_lnum(win_T *wp, linenr_T lnum)
 // the line.
 bool inindent(int extra)
 {
-  char *ptr;
-  colnr_T col;
-
-  for (col = 0, ptr = get_cursor_line_ptr(); ascii_iswhite(*ptr); col++) {
-    ptr++;
-  }
-
-  if (col >= curwin->w_cursor.col + extra) {
-    return true;
-  }
-  return false;
+  return rs_inindent(extra);
 }
 
 /// Handle reindenting a block of lines.

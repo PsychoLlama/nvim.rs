@@ -4615,6 +4615,12 @@ colnr_T get_nolist_virtcol(void)
   return curwin->w_virtcol;
 }
 
+/// Get virtual column without list mode (accessor for Rust).
+int nvim_get_nolist_virtcol(void)
+{
+  return (int)get_nolist_virtcol();
+}
+
 // Handle the InsertCharPre autocommand.
 // "c" is the character that was typed.
 // Return a pointer to allocated memory with the replacement string.
