@@ -8051,3 +8051,48 @@ void nvim_win_set_empty_rows(win_T *wp, int val)
     wp->w_empty_rows = val;
   }
 }
+
+/// Check if window's buffer equals the given buffer.
+/// Returns 1 if equal, 0 otherwise.
+int nvim_win_buffer_eq(win_T *wp, buf_T *buf)
+{
+  return (wp && wp->w_buffer == buf) ? 1 : 0;
+}
+
+/// Get the grid allocation valid flag for window.
+int nvim_win_grid_alloc_valid(win_T *wp)
+{
+  return wp ? wp->w_grid_alloc.valid : 0;
+}
+
+/// Set the grid allocation valid flag for window.
+void nvim_win_grid_alloc_set_valid(win_T *wp, int val)
+{
+  if (wp) {
+    wp->w_grid_alloc.valid = (val != 0);
+  }
+}
+
+/// Get the window's w_redr_type field (for Rust FFI compatibility).
+/// This is an alias for nvim_win_get_redr_type.
+int nvim_win_get_w_redr_type(win_T *wp)
+{
+  return wp ? wp->w_redr_type : 0;
+}
+
+/// Set the window's w_redr_type field (for Rust FFI compatibility).
+/// This is an alias for nvim_win_set_redr_type.
+void nvim_win_set_w_redr_type(win_T *wp, int val)
+{
+  if (wp) {
+    wp->w_redr_type = val;
+  }
+}
+
+/// Set the window's w_lines_valid field (for Rust FFI compatibility).
+void nvim_win_set_w_lines_valid(win_T *wp, int val)
+{
+  if (wp) {
+    wp->w_lines_valid = (linenr_T)val;
+  }
+}

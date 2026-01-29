@@ -984,6 +984,407 @@ pub unsafe extern "C" fn rs_calc_scroll_region(
     }
 }
 
+// =============================================================================
+// Phase D1: Redraw Management Functions
+// =============================================================================
+
+// Additional C accessor functions for window redraw management
+extern "C" {
+    // Window w_redr_type accessor
+    fn nvim_win_get_w_redr_type(wp: WinHandle) -> c_int;
+    fn nvim_win_set_w_redr_type(wp: WinHandle, val: c_int);
+
+    // Window w_lines_valid accessor
+    fn nvim_win_get_w_lines_valid(wp: WinHandle) -> c_int;
+    fn nvim_win_set_w_lines_valid(wp: WinHandle, val: c_int);
+
+    // Grid invalidation
+    fn nvim_win_grid_alloc_valid(wp: WinHandle) -> c_int;
+    fn nvim_win_grid_alloc_set_valid(wp: WinHandle, val: c_int);
+
+    // Buffer comparison
+    fn nvim_win_buffer_eq(wp: WinHandle, buf: BufHandle) -> c_int;
+
+    // Floating window check
+    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
+}
+
+/// Mark a window for later redraw with the specified type.
+///
+/// This is the Rust equivalent of `redraw_later()` in drawscreen.c.
+/// Sets `wp->w_redr_type` to `type` if current value is lower.
+/// Also updates `must_redraw` global to ensure screen update happens.
+///
+/// # Arguments
+/// * `wp` - Window to mark for redraw
+/// * `redraw_type` - The redraw type (UPD_VALID, UPD_NOT_VALID, etc.)
+fn redraw_later_impl(wp: WinHandle, redraw_type: c_int) {
+    if wp.is_null() {
+        return;
+    }
+
+    unsafe {
+        // Check if redraw is allowed and type is higher than current
+        if nvim_get_redraw_not_allowed() != 0 {
+            return;
+        }
+
+        let current_type = nvim_win_get_w_redr_type(wp);
+        if current_type >= redraw_type {
+            return;
+        }
+
+        // Set the new redraw type
+        nvim_win_set_w_redr_type(wp, redraw_type);
+
+        // If type >= UPD_NOT_VALID, invalidate line cache
+        if redraw_type >= UPD_NOT_VALID {
+            nvim_win_set_w_lines_valid(wp, 0);
+        }
+
+        // Update must_redraw global
+        let must_redraw = nvim_get_must_redraw();
+        if redraw_type > must_redraw {
+            nvim_set_must_redraw(redraw_type);
+        }
+    }
+}
+
+/// FFI wrapper for `redraw_later`.
+///
+/// Marks a window for later redraw with the specified type.
+#[no_mangle]
+pub extern "C" fn rs_redraw_later(wp: WinHandle, redraw_type: c_int) {
+    redraw_later_impl(wp, redraw_type);
+}
+
+/// Mark all windows in the current tab for later redraw.
+///
+/// This is the Rust equivalent of `redraw_all_later()` in drawscreen.c.
+fn redraw_all_later_impl(redraw_type: c_int) {
+    unsafe {
+        // Iterate all windows in current tab
+        let mut wp = nvim_get_firstwin();
+        while !wp.is_null() {
+            redraw_later_impl(wp, redraw_type);
+            wp = nvim_win_get_next(wp);
+        }
+
+        // Also update must_redraw directly
+        if nvim_get_redraw_not_allowed() == 0 {
+            let must_redraw = nvim_get_must_redraw();
+            if redraw_type > must_redraw {
+                nvim_set_must_redraw(redraw_type);
+            }
+        }
+    }
+}
+
+/// FFI wrapper for `redraw_all_later`.
+///
+/// Marks all windows in the current tab for later redraw.
+#[no_mangle]
+pub extern "C" fn rs_redraw_all_later(redraw_type: c_int) {
+    redraw_all_later_impl(redraw_type);
+}
+
+/// Mark all windows showing a specific buffer for redraw.
+///
+/// This is the Rust equivalent of `redraw_buf_later()` in drawscreen.c.
+fn redraw_buf_later_impl(buf: BufHandle, redraw_type: c_int) {
+    unsafe {
+        let mut wp = nvim_get_firstwin();
+        while !wp.is_null() {
+            if nvim_win_buffer_eq(wp, buf) != 0 {
+                redraw_later_impl(wp, redraw_type);
+            }
+            wp = nvim_win_get_next(wp);
+        }
+    }
+}
+
+/// FFI wrapper for `redraw_buf_later`.
+///
+/// Marks all windows displaying the given buffer for redraw.
+#[no_mangle]
+pub extern "C" fn rs_redraw_buf_later(buf: BufHandle, redraw_type: c_int) {
+    redraw_buf_later_impl(buf, redraw_type);
+}
+
+/// Mark all windows showing the current buffer for redraw.
+///
+/// This is the Rust equivalent of `redraw_curbuf_later()` in drawscreen.c.
+fn redraw_curbuf_later_impl(redraw_type: c_int) {
+    unsafe {
+        let curbuf = nvim_get_curbuf();
+        redraw_buf_later_impl(curbuf, redraw_type);
+    }
+}
+
+/// FFI wrapper for `redraw_curbuf_later`.
+///
+/// Marks all windows displaying the current buffer for redraw.
+#[no_mangle]
+pub extern "C" fn rs_redraw_curbuf_later(redraw_type: c_int) {
+    redraw_curbuf_later_impl(redraw_type);
+}
+
+/// Invalidate highlights for all windows in the current tab.
+///
+/// This is the Rust equivalent of `screen_invalidate_highlights()` in drawscreen.c.
+fn screen_invalidate_highlights_impl() {
+    unsafe {
+        let mut wp = nvim_get_firstwin();
+        while !wp.is_null() {
+            redraw_later_impl(wp, UPD_NOT_VALID);
+            nvim_win_grid_alloc_set_valid(wp, 0);
+            wp = nvim_win_get_next(wp);
+        }
+    }
+}
+
+/// FFI wrapper for `screen_invalidate_highlights`.
+///
+/// Invalidates highlights for all windows, forcing full redraw.
+#[no_mangle]
+pub extern "C" fn rs_screen_invalidate_highlights() {
+    screen_invalidate_highlights_impl();
+}
+
+/// Mark a line range in a window for redraw.
+///
+/// This is the Rust equivalent of `redraw_win_range_later()` in drawscreen.c.
+/// Only updates if the range is visible in the window.
+fn redraw_win_range_later_impl(wp: WinHandle, first: LinenrT, last: LinenrT) {
+    unsafe {
+        let topline = nvim_win_get_topline(wp);
+        let botline = nvim_win_get_botline(wp);
+
+        // Only update if range is visible
+        if last >= topline && first < botline {
+            let current_top = nvim_win_get_redraw_top(wp);
+            let current_bot = nvim_win_get_redraw_bot(wp);
+
+            // Update top of redraw range
+            if current_top == 0 || first < current_top {
+                nvim_win_set_redraw_top(wp, first);
+            }
+
+            // Update bottom of redraw range
+            if current_bot == 0 || last > current_bot {
+                nvim_win_set_redraw_bot(wp, last);
+            }
+
+            redraw_later_impl(wp, UPD_VALID);
+        }
+    }
+}
+
+/// FFI wrapper for `redraw_win_range_later`.
+///
+/// Marks a range of lines in a window for redraw.
+#[no_mangle]
+pub extern "C" fn rs_redraw_win_range_later(wp: WinHandle, first: LinenrT, last: LinenrT) {
+    redraw_win_range_later_impl(wp, first, last);
+}
+
+/// Mark a single line in a window for redraw.
+///
+/// This is the Rust equivalent of `redrawWinline()` in drawscreen.c.
+#[no_mangle]
+pub extern "C" fn rs_redrawWinline(wp: WinHandle, lnum: LinenrT) {
+    redraw_win_range_later_impl(wp, lnum, lnum);
+}
+
+/// Mark a line range in all windows showing a buffer.
+///
+/// This is the Rust equivalent of `redraw_buf_range_later()` in drawscreen.c.
+fn redraw_buf_range_later_impl(buf: BufHandle, first: LinenrT, last: LinenrT) {
+    unsafe {
+        let mut wp = nvim_get_firstwin();
+        while !wp.is_null() {
+            if nvim_win_buffer_eq(wp, buf) != 0 {
+                redraw_win_range_later_impl(wp, first, last);
+            }
+            wp = nvim_win_get_next(wp);
+        }
+    }
+}
+
+/// FFI wrapper for `redraw_buf_range_later`.
+///
+/// Marks a range of lines in all windows displaying the buffer.
+#[no_mangle]
+pub extern "C" fn rs_redraw_buf_range_later(buf: BufHandle, first: LinenrT, last: LinenrT) {
+    redraw_buf_range_later_impl(buf, first, last);
+}
+
+/// Check if window needs status line redraw.
+///
+/// Helper for redraw_buf_status_later.
+fn win_needs_status_redraw(wp: WinHandle) -> bool {
+    unsafe {
+        let status_h = nvim_win_get_status_height(wp);
+        let winbar_h = nvim_win_get_winbar_height(wp);
+        let is_stl_global = global_stl_height() != 0;
+        let is_curwin = wp == nvim_get_curwin();
+
+        status_h > 0 || (is_curwin && is_stl_global) || winbar_h > 0
+    }
+}
+
+/// Mark status lines for buffer for redraw.
+///
+/// This is the Rust equivalent of `redraw_buf_status_later()` in drawscreen.c.
+fn redraw_buf_status_later_impl(buf: BufHandle) {
+    unsafe {
+        let mut wp = nvim_get_firstwin();
+        while !wp.is_null() {
+            if nvim_win_buffer_eq(wp, buf) != 0 && win_needs_status_redraw(wp) {
+                nvim_win_set_redr_status(wp, 1);
+
+                // Set must_redraw to at least UPD_VALID
+                if nvim_get_redraw_not_allowed() == 0 {
+                    let must_redraw = nvim_get_must_redraw();
+                    if UPD_VALID > must_redraw {
+                        nvim_set_must_redraw(UPD_VALID);
+                    }
+                }
+            }
+            wp = nvim_win_get_next(wp);
+        }
+    }
+}
+
+/// FFI wrapper for `redraw_buf_status_later`.
+///
+/// Marks status lines of windows displaying the buffer for redraw.
+#[no_mangle]
+pub extern "C" fn rs_redraw_buf_status_later(buf: BufHandle) {
+    redraw_buf_status_later_impl(buf);
+}
+
+// =============================================================================
+// Phase D1: Window Update State Management
+// =============================================================================
+
+/// Window update state tracking structure.
+///
+/// This struct tracks the state needed during a win_update() call.
+/// It corresponds to the local variables in win_update() in drawscreen.c.
+#[repr(C)]
+pub struct WinUpdateState {
+    /// First row below top area that needs updating
+    pub top_end: c_int,
+    /// First row of mid area that needs updating
+    pub mid_start: c_int,
+    /// First row below mid area that needs updating
+    pub mid_end: c_int,
+    /// First row of bot area that needs updating
+    pub bot_start: c_int,
+    /// First row that needs redraw due to scrolling
+    pub bot_scroll_start: c_int,
+    /// True when scrolled down when w_topline got smaller
+    pub scrolled_down: c_int,
+    /// Redraw above mod_top
+    pub top_to_mod: c_int,
+}
+
+impl Default for WinUpdateState {
+    fn default() -> Self {
+        Self {
+            top_end: 0,
+            mid_start: 999,
+            mid_end: 0,
+            bot_start: 999,
+            bot_scroll_start: 999,
+            scrolled_down: 0,
+            top_to_mod: 0,
+        }
+    }
+}
+
+/// Initialize window update state.
+///
+/// Returns the initial state for a win_update() call.
+#[no_mangle]
+pub extern "C" fn rs_win_update_state_init() -> WinUpdateState {
+    WinUpdateState::default()
+}
+
+/// Check if window should skip update (zero-height or zero-width).
+///
+/// Returns 1 if window should skip update, 0 otherwise.
+/// Also draws separators for zero-dimension windows.
+#[no_mangle]
+pub extern "C" fn rs_win_should_skip_update(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 1;
+    }
+
+    unsafe {
+        let view_height = nvim_win_get_view_height(wp);
+        let view_width = nvim_win_get_view_width(wp);
+
+        if view_height == 0 {
+            // Draw separators and return skip
+            rs_draw_hsep_win(wp);
+            rs_draw_sep_connectors_win(wp);
+            nvim_win_set_w_redr_type(wp, 0);
+            return 1;
+        }
+
+        if view_width == 0 {
+            // Draw separators and return skip
+            rs_draw_vsep_win(wp);
+            rs_draw_sep_connectors_win(wp);
+            nvim_win_set_w_redr_type(wp, 0);
+            return 1;
+        }
+
+        0
+    }
+}
+
+// Additional accessor for view dimensions
+extern "C" {
+    fn nvim_win_get_view_height(wp: WinHandle) -> c_int;
+    fn nvim_win_get_view_width(wp: WinHandle) -> c_int;
+}
+
+/// Reset window redraw type after update.
+#[no_mangle]
+pub extern "C" fn rs_win_update_reset_redr_type(wp: WinHandle) {
+    if !wp.is_null() {
+        unsafe {
+            nvim_win_set_w_redr_type(wp, 0);
+        }
+    }
+}
+
+/// Check if redraw type requires full window redraw.
+#[no_mangle]
+pub extern "C" fn rs_win_needs_full_update(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        let redr_type = nvim_win_get_w_redr_type(wp);
+        c_int::from(redr_type >= UPD_NOT_VALID)
+    }
+}
+
+/// Get the effective redraw type for a window, clamped to valid range.
+#[no_mangle]
+pub extern "C" fn rs_win_get_effective_redr_type(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    unsafe { nvim_win_get_w_redr_type(wp).clamp(0, UPD_CLEAR) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1149,5 +1550,69 @@ mod tests {
             assert_eq!(start, 5); // win_row
             assert_eq!(end, 22); // win_row + win_height + scroll_delta
         }
+    }
+
+    // =============================================================================
+    // Phase D1: Redraw Management Tests
+    // =============================================================================
+
+    #[test]
+    fn test_win_update_state_default() {
+        let state = WinUpdateState::default();
+        assert_eq!(state.top_end, 0);
+        assert_eq!(state.mid_start, 999);
+        assert_eq!(state.mid_end, 0);
+        assert_eq!(state.bot_start, 999);
+        assert_eq!(state.bot_scroll_start, 999);
+        assert_eq!(state.scrolled_down, 0);
+        assert_eq!(state.top_to_mod, 0);
+    }
+
+    #[test]
+    fn test_win_update_state_init() {
+        let state = rs_win_update_state_init();
+        assert_eq!(state.top_end, 0);
+        assert_eq!(state.mid_start, 999);
+        assert_eq!(state.mid_end, 0);
+        assert_eq!(state.bot_start, 999);
+        assert_eq!(state.bot_scroll_start, 999);
+        assert_eq!(state.scrolled_down, 0);
+        assert_eq!(state.top_to_mod, 0);
+    }
+
+    #[test]
+    fn test_win_update_state_size() {
+        // WinUpdateState should be properly sized for FFI
+        assert_eq!(
+            std::mem::size_of::<WinUpdateState>(),
+            std::mem::size_of::<c_int>() * 7
+        );
+    }
+
+    #[test]
+    fn test_null_window_skip_update() {
+        let null_win = unsafe { WinHandle::from_ptr(std::ptr::null_mut()) };
+        // Null window should return skip
+        assert_eq!(rs_win_should_skip_update(null_win), 1);
+    }
+
+    #[test]
+    fn test_null_window_needs_full_update() {
+        let null_win = unsafe { WinHandle::from_ptr(std::ptr::null_mut()) };
+        // Null window should not need full update
+        assert_eq!(rs_win_needs_full_update(null_win), 0);
+    }
+
+    #[test]
+    fn test_null_window_effective_redr_type() {
+        let null_win = unsafe { WinHandle::from_ptr(std::ptr::null_mut()) };
+        // Null window should return 0
+        assert_eq!(rs_win_get_effective_redr_type(null_win), 0);
+    }
+
+    #[test]
+    fn test_buf_handle_null() {
+        let null_buf = BufHandle(std::ptr::null_mut());
+        assert!(null_buf.is_null());
     }
 }
