@@ -345,6 +345,329 @@ pub extern "C" fn rs_is_wide_char(c: c_int) -> c_int {
     c_int::from(is_wide_char(c))
 }
 
+// =============================================================================
+// Phase O1: Additional Join Operation Helpers
+// =============================================================================
+
+/// Check if join should remove comment leaders.
+///
+/// Comment leaders are removed when:
+/// - use_formatoptions is true
+/// - FO_REMOVE_COMS is set in formatoptions
+///
+/// # Arguments
+/// * `use_formatoptions` - Whether to use formatoptions
+/// * `fo_remove_coms` - Whether FO_REMOVE_COMS is set
+///
+/// # Returns
+/// true if comment leaders should be removed
+#[must_use]
+#[inline]
+pub const fn should_remove_comments(use_formatoptions: bool, fo_remove_coms: bool) -> bool {
+    use_formatoptions && fo_remove_coms
+}
+
+/// Calculate cursor column after join operation.
+///
+/// After joining, the cursor is positioned based on 'cpoptions':
+/// - With CPO_JOINCOL ('j'): at currsize (first column of joined text)
+/// - Without: at the end of the first line (before join point)
+///
+/// # Arguments
+/// * `sumsize` - Total size after join
+/// * `currsize` - Size of last joined line
+/// * `last_spaces` - Spaces before last line
+/// * `cpo_joincol` - Whether CPO_JOINCOL is set
+///
+/// # Returns
+/// Cursor column position
+#[must_use]
+#[inline]
+pub const fn calc_cursor_col_after_join(
+    sumsize: c_int,
+    currsize: c_int,
+    last_spaces: c_int,
+    cpo_joincol: bool,
+) -> c_int {
+    if cpo_joincol {
+        currsize
+    } else {
+        sumsize - currsize - last_spaces
+    }
+}
+
+/// Calculate mark column adjustment for joined lines.
+///
+/// When joining lines, marks need to be adjusted. This calculates the
+/// column adjustment amount.
+///
+/// # Arguments
+/// * `cend_offset` - Current position in new line (cend - newp)
+/// * `spaces_removed` - Number of spaces that were removed
+///
+/// # Returns
+/// Column amount for mark adjustment
+#[must_use]
+#[inline]
+pub const fn calc_mark_col_adjust(cend_offset: c_int, spaces_removed: c_int) -> c_int {
+    cend_offset - spaces_removed
+}
+
+/// Calculate total join buffer size needed.
+///
+/// # Arguments
+/// * `total_text_size` - Sum of all line sizes
+/// * `total_spaces` - Sum of all spaces to insert
+///
+/// # Returns
+/// Total buffer size needed (excluding NUL terminator)
+#[must_use]
+#[inline]
+pub const fn calc_join_buffer_size(total_text_size: c_int, total_spaces: c_int) -> c_int {
+    total_text_size + total_spaces
+}
+
+/// Check if line should be skipped for comment removal.
+///
+/// The first line is never processed for comment removal.
+/// Subsequent lines only have comments removed if previous was a comment.
+///
+/// # Arguments
+/// * `line_index` - Index of current line (0-based)
+/// * `prev_was_comment` - Whether previous line was a comment
+///
+/// # Returns
+/// true if comment removal should be attempted
+#[must_use]
+#[inline]
+pub const fn should_try_remove_comment(line_index: c_int, prev_was_comment: bool) -> bool {
+    line_index > 0 && prev_was_comment
+}
+
+/// Check if join operation should save undo state.
+///
+/// # Arguments
+/// * `save_undo` - Whether undo save was requested
+///
+/// # Returns
+/// true if undo should be saved
+#[must_use]
+#[inline]
+pub const fn should_save_join_undo(save_undo: bool) -> bool {
+    save_undo
+}
+
+/// Calculate the undo save range for join.
+///
+/// # Arguments
+/// * `cursor_lnum` - Current cursor line number
+/// * `count` - Number of lines to join
+///
+/// # Returns
+/// `(start_lnum, end_lnum)` for u_save
+#[must_use]
+#[inline]
+pub const fn calc_join_undo_range(cursor_lnum: c_int, count: c_int) -> (c_int, c_int) {
+    (cursor_lnum - 1, cursor_lnum + count)
+}
+
+/// Calculate lines to delete after join.
+///
+/// After joining, we delete (count - 1) lines since they're merged.
+///
+/// # Arguments
+/// * `count` - Number of lines joined
+///
+/// # Returns
+/// Number of lines to delete
+#[must_use]
+#[inline]
+pub const fn calc_lines_to_delete_after_join(count: c_int) -> c_int {
+    if count > 0 {
+        count - 1
+    } else {
+        0
+    }
+}
+
+/// Calculate extmark splice parameters for join.
+///
+/// # Arguments
+/// * `removed_chars` - Characters removed from line start
+/// * `spaces_to_insert` - Spaces to insert
+///
+/// # Returns
+/// `(old_col, old_byte, new_col, new_byte)` for extmark_splice
+#[must_use]
+#[inline]
+pub const fn calc_join_extmark_params(
+    removed_chars: c_int,
+    spaces_to_insert: c_int,
+) -> (c_int, c_int, c_int, c_int) {
+    (
+        removed_chars,
+        removed_chars + 1, // +1 for newline
+        spaces_to_insert,
+        spaces_to_insert,
+    )
+}
+
+/// Check if this is the first line in a join (no spaces added).
+///
+/// # Arguments
+/// * `sumsize` - Running sum size (0 for first line)
+///
+/// # Returns
+/// true if this is the first line
+#[must_use]
+#[inline]
+pub const fn is_first_join_line(sumsize: c_int) -> bool {
+    sumsize == 0
+}
+
+/// Get last two characters of a string for joinspaces check.
+///
+/// This is a helper for the C code that calls calc_join_spaces.
+/// Returns (0, 0) for empty strings.
+///
+/// # Arguments
+/// * `len` - String length
+/// * `last_char` - Last character
+/// * `second_last_char` - Second to last character
+///
+/// # Returns
+/// `(endcurr1, endcurr2)` for join spaces calculation
+#[must_use]
+#[inline]
+pub const fn get_join_end_chars(
+    len: c_int,
+    last_char: c_int,
+    second_last_char: c_int,
+) -> (c_int, c_int) {
+    if len == 0 {
+        (0, 0)
+    } else if len == 1 {
+        (last_char, 0)
+    } else {
+        (last_char, second_last_char)
+    }
+}
+
+// =============================================================================
+// FFI Wrappers for Phase O1 Additions
+// =============================================================================
+
+/// FFI wrapper for should_remove_comments.
+#[no_mangle]
+pub extern "C" fn rs_should_remove_comments(
+    use_formatoptions: c_int,
+    fo_remove_coms: c_int,
+) -> c_int {
+    c_int::from(should_remove_comments(
+        use_formatoptions != 0,
+        fo_remove_coms != 0,
+    ))
+}
+
+/// FFI wrapper for calc_cursor_col_after_join.
+#[no_mangle]
+pub extern "C" fn rs_calc_cursor_col_after_join(
+    sumsize: c_int,
+    currsize: c_int,
+    last_spaces: c_int,
+    cpo_joincol: c_int,
+) -> c_int {
+    calc_cursor_col_after_join(sumsize, currsize, last_spaces, cpo_joincol != 0)
+}
+
+/// FFI wrapper for calc_mark_col_adjust.
+#[no_mangle]
+pub extern "C" fn rs_calc_mark_col_adjust(cend_offset: c_int, spaces_removed: c_int) -> c_int {
+    calc_mark_col_adjust(cend_offset, spaces_removed)
+}
+
+/// FFI wrapper for calc_join_buffer_size.
+#[no_mangle]
+pub extern "C" fn rs_calc_join_buffer_size(total_text_size: c_int, total_spaces: c_int) -> c_int {
+    calc_join_buffer_size(total_text_size, total_spaces)
+}
+
+/// FFI wrapper for should_try_remove_comment.
+#[no_mangle]
+pub extern "C" fn rs_should_try_remove_comment(
+    line_index: c_int,
+    prev_was_comment: c_int,
+) -> c_int {
+    c_int::from(should_try_remove_comment(line_index, prev_was_comment != 0))
+}
+
+/// FFI wrapper for should_save_join_undo.
+#[no_mangle]
+pub extern "C" fn rs_should_save_join_undo(save_undo: c_int) -> c_int {
+    c_int::from(should_save_join_undo(save_undo != 0))
+}
+
+/// FFI wrapper for calc_join_undo_range.
+///
+/// # Safety
+/// `start_out` and `end_out` must be valid pointers if non-null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_calc_join_undo_range(
+    cursor_lnum: c_int,
+    count: c_int,
+    start_out: *mut c_int,
+    end_out: *mut c_int,
+) {
+    let (start, end) = calc_join_undo_range(cursor_lnum, count);
+    if !start_out.is_null() {
+        unsafe {
+            *start_out = start;
+        }
+    }
+    if !end_out.is_null() {
+        unsafe {
+            *end_out = end;
+        }
+    }
+}
+
+/// FFI wrapper for calc_lines_to_delete_after_join.
+#[no_mangle]
+pub extern "C" fn rs_calc_lines_to_delete_after_join(count: c_int) -> c_int {
+    calc_lines_to_delete_after_join(count)
+}
+
+/// FFI wrapper for is_first_join_line.
+#[no_mangle]
+pub extern "C" fn rs_is_first_join_line(sumsize: c_int) -> c_int {
+    c_int::from(is_first_join_line(sumsize))
+}
+
+/// FFI wrapper for get_join_end_chars.
+///
+/// # Safety
+/// `endcurr1_out` and `endcurr2_out` must be valid pointers if non-null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_join_end_chars(
+    len: c_int,
+    last_char: c_int,
+    second_last_char: c_int,
+    endcurr1_out: *mut c_int,
+    endcurr2_out: *mut c_int,
+) {
+    let (endcurr1, endcurr2) = get_join_end_chars(len, last_char, second_last_char);
+    if !endcurr1_out.is_null() {
+        unsafe {
+            *endcurr1_out = endcurr1;
+        }
+    }
+    if !endcurr2_out.is_null() {
+        unsafe {
+            *endcurr2_out = endcurr2;
+        }
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::cast_lossless)]
 mod tests {
@@ -667,5 +990,139 @@ mod tests {
         // rs_is_wide_char
         assert_eq!(rs_is_wide_char(b'a' as c_int), 0);
         assert_eq!(rs_is_wide_char(0x100), 1);
+    }
+
+    // =========================================================================
+    // Phase O1 Addition Tests
+    // =========================================================================
+
+    #[test]
+    fn test_should_remove_comments() {
+        // Both true
+        assert!(should_remove_comments(true, true));
+
+        // Either false
+        assert!(!should_remove_comments(false, true));
+        assert!(!should_remove_comments(true, false));
+        assert!(!should_remove_comments(false, false));
+    }
+
+    #[test]
+    fn test_calc_cursor_col_after_join() {
+        // With CPO_JOINCOL: use currsize
+        assert_eq!(calc_cursor_col_after_join(100, 20, 1, true), 20);
+
+        // Without CPO_JOINCOL: sumsize - currsize - last_spaces
+        assert_eq!(calc_cursor_col_after_join(100, 20, 1, false), 79);
+    }
+
+    #[test]
+    fn test_calc_mark_col_adjust() {
+        assert_eq!(calc_mark_col_adjust(50, 5), 45);
+        assert_eq!(calc_mark_col_adjust(100, 0), 100);
+    }
+
+    #[test]
+    fn test_calc_join_buffer_size() {
+        assert_eq!(calc_join_buffer_size(100, 10), 110);
+        assert_eq!(calc_join_buffer_size(0, 0), 0);
+    }
+
+    #[test]
+    fn test_should_try_remove_comment() {
+        // First line: never remove
+        assert!(!should_try_remove_comment(0, true));
+        assert!(!should_try_remove_comment(0, false));
+
+        // Later lines: only if prev was comment
+        assert!(should_try_remove_comment(1, true));
+        assert!(!should_try_remove_comment(1, false));
+        assert!(should_try_remove_comment(5, true));
+    }
+
+    #[test]
+    fn test_should_save_join_undo() {
+        assert!(should_save_join_undo(true));
+        assert!(!should_save_join_undo(false));
+    }
+
+    #[test]
+    fn test_calc_join_undo_range() {
+        let (start, end) = calc_join_undo_range(10, 5);
+        assert_eq!(start, 9);
+        assert_eq!(end, 15);
+    }
+
+    #[test]
+    fn test_calc_lines_to_delete_after_join() {
+        assert_eq!(calc_lines_to_delete_after_join(5), 4);
+        assert_eq!(calc_lines_to_delete_after_join(1), 0);
+        assert_eq!(calc_lines_to_delete_after_join(0), 0);
+    }
+
+    #[test]
+    fn test_calc_join_extmark_params() {
+        let (old_col, old_byte, new_col, new_byte) = calc_join_extmark_params(5, 2);
+        assert_eq!(old_col, 5);
+        assert_eq!(old_byte, 6); // +1 for newline
+        assert_eq!(new_col, 2);
+        assert_eq!(new_byte, 2);
+    }
+
+    #[test]
+    fn test_is_first_join_line() {
+        assert!(is_first_join_line(0));
+        assert!(!is_first_join_line(1));
+        assert!(!is_first_join_line(100));
+    }
+
+    #[test]
+    fn test_get_join_end_chars() {
+        // Empty string
+        let (e1, e2) = get_join_end_chars(0, 0, 0);
+        assert_eq!(e1, 0);
+        assert_eq!(e2, 0);
+
+        // Single char
+        let (e1, e2) = get_join_end_chars(1, b'a' as c_int, 0);
+        assert_eq!(e1, b'a' as c_int);
+        assert_eq!(e2, 0);
+
+        // Multiple chars
+        let (e1, e2) = get_join_end_chars(5, b'.' as c_int, b'x' as c_int);
+        assert_eq!(e1, b'.' as c_int);
+        assert_eq!(e2, b'x' as c_int);
+    }
+
+    #[test]
+    fn test_phase_o1_join_ffi_wrappers() {
+        // rs_should_remove_comments
+        assert_eq!(rs_should_remove_comments(1, 1), 1);
+        assert_eq!(rs_should_remove_comments(0, 1), 0);
+
+        // rs_calc_cursor_col_after_join
+        assert_eq!(rs_calc_cursor_col_after_join(100, 20, 1, 1), 20);
+        assert_eq!(rs_calc_cursor_col_after_join(100, 20, 1, 0), 79);
+
+        // rs_calc_mark_col_adjust
+        assert_eq!(rs_calc_mark_col_adjust(50, 5), 45);
+
+        // rs_calc_join_buffer_size
+        assert_eq!(rs_calc_join_buffer_size(100, 10), 110);
+
+        // rs_should_try_remove_comment
+        assert_eq!(rs_should_try_remove_comment(0, 1), 0);
+        assert_eq!(rs_should_try_remove_comment(1, 1), 1);
+
+        // rs_should_save_join_undo
+        assert_eq!(rs_should_save_join_undo(1), 1);
+        assert_eq!(rs_should_save_join_undo(0), 0);
+
+        // rs_calc_lines_to_delete_after_join
+        assert_eq!(rs_calc_lines_to_delete_after_join(5), 4);
+
+        // rs_is_first_join_line
+        assert_eq!(rs_is_first_join_line(0), 1);
+        assert_eq!(rs_is_first_join_line(1), 0);
     }
 }

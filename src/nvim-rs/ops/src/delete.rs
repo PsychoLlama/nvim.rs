@@ -548,6 +548,317 @@ pub unsafe extern "C" fn rs_determine_delete_register(
     }
 }
 
+// =============================================================================
+// Phase O1: Additional Delete Operation Helpers
+// =============================================================================
+
+/// Check if we should copy deleted text to a register.
+///
+/// Deleted text is NOT copied when:
+/// - Using black hole register '_'
+///
+/// # Arguments
+/// * `regname` - Register name
+///
+/// # Returns
+/// true if text should be copied to register
+#[must_use]
+#[inline]
+pub const fn should_copy_to_register(regname: c_int) -> bool {
+    regname != b'_' as c_int
+}
+
+/// Check if the delete operation needs undo save.
+///
+/// # Arguments
+/// * `motion_type` - Motion type
+/// * `start_lnum` - Starting line number
+/// * `end_lnum` - Ending line number
+///
+/// # Returns
+/// `(start_save, end_save)` - Line numbers for undo save
+#[must_use]
+#[inline]
+pub const fn calc_delete_undo_range(
+    motion_type: MotionType,
+    start_lnum: c_int,
+    end_lnum: c_int,
+) -> (c_int, c_int) {
+    match motion_type {
+        MotionType::BlockWise | MotionType::LineWise => (start_lnum - 1, end_lnum + 1),
+        MotionType::CharWise | MotionType::Unknown => (start_lnum - 1, start_lnum + 1),
+    }
+}
+
+/// Calculate if a multiline charwise delete should use join.
+///
+/// When deleting across multiple lines charwise, we:
+/// 1. Truncate the first line
+/// 2. Delete middle lines
+/// 3. Delete from start of last line
+/// 4. Join the remaining parts
+///
+/// # Arguments
+/// * `line_count` - Number of lines affected
+///
+/// # Returns
+/// true if join is needed
+#[must_use]
+#[inline]
+pub const fn needs_join_after_delete(line_count: c_int) -> bool {
+    line_count > 1
+}
+
+/// Calculate the number of middle lines to delete.
+///
+/// In a multiline delete, middle lines (all but first and last) are deleted.
+///
+/// # Arguments
+/// * `line_count` - Total number of lines affected
+///
+/// # Returns
+/// Number of lines to delete with del_lines()
+#[must_use]
+#[inline]
+pub const fn calc_middle_lines_to_delete(line_count: c_int) -> c_int {
+    if line_count <= 2 {
+        0
+    } else {
+        line_count - 2
+    }
+}
+
+/// Check if delete should skip cursor coladd adjustment.
+///
+/// In virtual edit mode, when the cursor is on a real character,
+/// coladd should be reset.
+///
+/// # Arguments
+/// * `gchar_is_nul` - Whether gchar_cursor() == NUL
+///
+/// # Returns
+/// true if coladd should be reset
+#[must_use]
+#[inline]
+pub const fn should_reset_coladd(gchar_is_nul: bool) -> bool {
+    !gchar_is_nul
+}
+
+/// Calculate extmark splice parameters for block delete.
+///
+/// # Arguments
+/// * `textcol` - Column where block starts
+/// * `textlen` - Length of deleted text
+/// * `startspaces` - Start spaces
+/// * `endspaces` - End spaces
+///
+/// # Returns
+/// `(old_extent, new_extent)` - Parameters for extmark_splice_cols
+#[must_use]
+#[inline]
+pub const fn calc_block_delete_extmark_params(
+    textlen: c_int,
+    startspaces: c_int,
+    endspaces: c_int,
+) -> (c_int, c_int) {
+    (textlen, startspaces + endspaces)
+}
+
+/// Check if we should beep for operating on empty region.
+///
+/// Beeping happens when:
+/// - 'E' is in 'cpoptions'
+/// - Operation is on empty region
+///
+/// # Arguments
+/// * `cpo_has_e` - Whether CPO_EMPTYREGION is set
+///
+/// # Returns
+/// true if should beep
+#[must_use]
+#[inline]
+pub const fn should_beep_empty_region(cpo_has_e: bool) -> bool {
+    cpo_has_e
+}
+
+/// Calculate delete region byte count for extmark splice.
+///
+/// # Arguments
+/// * `line_count` - Number of lines
+/// * `end_col` - End column in last line
+/// * `inclusive` - Whether motion is inclusive
+///
+/// # Returns
+/// `(lines_to_delete, last_line_cols, inclusive_adjustment)` for extmark tracking
+#[must_use]
+#[inline]
+pub const fn calc_delete_region_info(
+    line_count: c_int,
+    end_col: c_int,
+    inclusive: bool,
+) -> (c_int, c_int, c_int) {
+    let inclusive_adj = if inclusive { 1 } else { 0 };
+    let not_inclusive_adj = if inclusive { 0 } else { 1 };
+    // Returns (lines_to_delete, last_line_cols, inclusive_adjustment)
+    (
+        line_count - 1,
+        end_col + 1 - not_inclusive_adj,
+        inclusive_adj,
+    )
+}
+
+/// Determine block delete replacement character count.
+///
+/// When deleting in block mode, the deleted chars may be replaced with spaces.
+///
+/// # Arguments
+/// * `startspaces` - Spaces at start
+/// * `endspaces` - Spaces at end
+///
+/// # Returns
+/// Total replacement spaces
+#[must_use]
+#[inline]
+pub const fn calc_block_delete_replacement_spaces(startspaces: c_int, endspaces: c_int) -> c_int {
+    startspaces + endspaces
+}
+
+/// Check if virtual edit adjustments are needed for delete.
+///
+/// # Arguments
+/// * `virtual_op` - Whether in virtual edit mode
+///
+/// # Returns
+/// true if virtual edit adjustments are needed
+#[must_use]
+#[inline]
+pub const fn needs_virtual_edit_adjustments(virtual_op: bool) -> bool {
+    virtual_op
+}
+
+/// Calculate the delete operation type for auto-format.
+///
+/// # Arguments
+/// * `op_type` - Operator type
+///
+/// # Returns
+/// true if auto_format should be called
+#[must_use]
+#[inline]
+pub const fn should_call_auto_format(op_type: OpType) -> bool {
+    matches!(op_type, OpType::Delete)
+}
+
+// =============================================================================
+// FFI Wrappers for Phase O1 Additions
+// =============================================================================
+
+/// FFI wrapper for should_copy_to_register.
+#[no_mangle]
+pub extern "C" fn rs_should_copy_to_register(regname: c_int) -> c_int {
+    c_int::from(should_copy_to_register(regname))
+}
+
+/// FFI wrapper for calc_delete_undo_range.
+///
+/// # Safety
+/// `start_save_out` and `end_save_out` must be valid pointers if non-null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_calc_delete_undo_range(
+    motion_type: c_int,
+    start_lnum: c_int,
+    end_lnum: c_int,
+    start_save_out: *mut c_int,
+    end_save_out: *mut c_int,
+) {
+    let mt = MotionType::from_raw(motion_type);
+    let (start_save, end_save) = calc_delete_undo_range(mt, start_lnum, end_lnum);
+
+    if !start_save_out.is_null() {
+        unsafe {
+            *start_save_out = start_save;
+        }
+    }
+    if !end_save_out.is_null() {
+        unsafe {
+            *end_save_out = end_save;
+        }
+    }
+}
+
+/// FFI wrapper for needs_join_after_delete.
+#[no_mangle]
+pub extern "C" fn rs_needs_join_after_delete(line_count: c_int) -> c_int {
+    c_int::from(needs_join_after_delete(line_count))
+}
+
+/// FFI wrapper for calc_middle_lines_to_delete.
+#[no_mangle]
+pub extern "C" fn rs_calc_middle_lines_to_delete(line_count: c_int) -> c_int {
+    calc_middle_lines_to_delete(line_count)
+}
+
+/// FFI wrapper for should_reset_coladd.
+#[no_mangle]
+pub extern "C" fn rs_should_reset_coladd(gchar_is_nul: c_int) -> c_int {
+    c_int::from(should_reset_coladd(gchar_is_nul != 0))
+}
+
+/// FFI wrapper for calc_block_delete_extmark_params.
+///
+/// # Safety
+/// `old_extent_out` and `new_extent_out` must be valid pointers if non-null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_calc_block_delete_extmark_params(
+    textlen: c_int,
+    startspaces: c_int,
+    endspaces: c_int,
+    old_extent_out: *mut c_int,
+    new_extent_out: *mut c_int,
+) {
+    let (old_extent, new_extent) =
+        calc_block_delete_extmark_params(textlen, startspaces, endspaces);
+
+    if !old_extent_out.is_null() {
+        unsafe {
+            *old_extent_out = old_extent;
+        }
+    }
+    if !new_extent_out.is_null() {
+        unsafe {
+            *new_extent_out = new_extent;
+        }
+    }
+}
+
+/// FFI wrapper for should_beep_empty_region.
+#[no_mangle]
+pub extern "C" fn rs_should_beep_empty_region(cpo_has_e: c_int) -> c_int {
+    c_int::from(should_beep_empty_region(cpo_has_e != 0))
+}
+
+/// FFI wrapper for calc_block_delete_replacement_spaces.
+#[no_mangle]
+pub extern "C" fn rs_calc_block_delete_replacement_spaces(
+    startspaces: c_int,
+    endspaces: c_int,
+) -> c_int {
+    calc_block_delete_replacement_spaces(startspaces, endspaces)
+}
+
+/// FFI wrapper for needs_virtual_edit_adjustments.
+#[no_mangle]
+pub extern "C" fn rs_needs_virtual_edit_adjustments(virtual_op: c_int) -> c_int {
+    c_int::from(needs_virtual_edit_adjustments(virtual_op != 0))
+}
+
+/// FFI wrapper for should_call_auto_format.
+#[no_mangle]
+pub extern "C" fn rs_should_call_auto_format(op_type: c_int) -> c_int {
+    let op = OpType::from_raw(op_type).unwrap_or(OpType::Nop);
+    c_int::from(should_call_auto_format(op))
+}
+
 #[cfg(test)]
 #[allow(clippy::cast_lossless)]
 mod tests {
@@ -862,5 +1173,124 @@ mod tests {
         // rs_is_empty_line_delete (charwise=0, delete=1)
         assert_eq!(rs_is_empty_line_delete(0, 1, 1, 1), 1);
         assert_eq!(rs_is_empty_line_delete(0, 1, 1, 0), 0); // not empty
+    }
+
+    // =========================================================================
+    // Phase O1 Addition Tests
+    // =========================================================================
+
+    #[test]
+    fn test_should_copy_to_register() {
+        // Black hole register: don't copy
+        assert!(!should_copy_to_register(b'_' as c_int));
+
+        // All other registers: copy
+        assert!(should_copy_to_register(0)); // unnamed
+        assert!(should_copy_to_register(b'a' as c_int));
+        assert!(should_copy_to_register(b'"' as c_int));
+        assert!(should_copy_to_register(b'1' as c_int));
+    }
+
+    #[test]
+    fn test_calc_delete_undo_range() {
+        // Block/linewise: full range
+        let (start, end) = calc_delete_undo_range(MotionType::BlockWise, 10, 20);
+        assert_eq!(start, 9);
+        assert_eq!(end, 21);
+
+        let (start, end) = calc_delete_undo_range(MotionType::LineWise, 10, 20);
+        assert_eq!(start, 9);
+        assert_eq!(end, 21);
+
+        // Charwise: single line range
+        let (start, end) = calc_delete_undo_range(MotionType::CharWise, 10, 20);
+        assert_eq!(start, 9);
+        assert_eq!(end, 11);
+    }
+
+    #[test]
+    fn test_needs_join_after_delete() {
+        assert!(!needs_join_after_delete(1));
+        assert!(needs_join_after_delete(2));
+        assert!(needs_join_after_delete(10));
+    }
+
+    #[test]
+    fn test_calc_middle_lines_to_delete() {
+        assert_eq!(calc_middle_lines_to_delete(1), 0);
+        assert_eq!(calc_middle_lines_to_delete(2), 0);
+        assert_eq!(calc_middle_lines_to_delete(3), 1);
+        assert_eq!(calc_middle_lines_to_delete(10), 8);
+    }
+
+    #[test]
+    fn test_should_reset_coladd() {
+        assert!(should_reset_coladd(false)); // not NUL means reset
+        assert!(!should_reset_coladd(true)); // NUL means don't reset
+    }
+
+    #[test]
+    fn test_calc_block_delete_extmark_params() {
+        let (old, new) = calc_block_delete_extmark_params(10, 2, 3);
+        assert_eq!(old, 10);
+        assert_eq!(new, 5);
+    }
+
+    #[test]
+    fn test_should_beep_empty_region() {
+        assert!(should_beep_empty_region(true));
+        assert!(!should_beep_empty_region(false));
+    }
+
+    #[test]
+    fn test_calc_block_delete_replacement_spaces() {
+        assert_eq!(calc_block_delete_replacement_spaces(2, 3), 5);
+        assert_eq!(calc_block_delete_replacement_spaces(0, 0), 0);
+    }
+
+    #[test]
+    fn test_needs_virtual_edit_adjustments() {
+        assert!(needs_virtual_edit_adjustments(true));
+        assert!(!needs_virtual_edit_adjustments(false));
+    }
+
+    #[test]
+    fn test_should_call_auto_format() {
+        assert!(should_call_auto_format(OpType::Delete));
+        assert!(!should_call_auto_format(OpType::Change));
+        assert!(!should_call_auto_format(OpType::Yank));
+    }
+
+    #[test]
+    fn test_phase_o1_ffi_wrappers() {
+        // rs_should_copy_to_register
+        assert_eq!(rs_should_copy_to_register(b'_' as c_int), 0);
+        assert_eq!(rs_should_copy_to_register(b'a' as c_int), 1);
+
+        // rs_needs_join_after_delete
+        assert_eq!(rs_needs_join_after_delete(1), 0);
+        assert_eq!(rs_needs_join_after_delete(2), 1);
+
+        // rs_calc_middle_lines_to_delete
+        assert_eq!(rs_calc_middle_lines_to_delete(3), 1);
+
+        // rs_should_reset_coladd
+        assert_eq!(rs_should_reset_coladd(0), 1);
+        assert_eq!(rs_should_reset_coladd(1), 0);
+
+        // rs_should_beep_empty_region
+        assert_eq!(rs_should_beep_empty_region(1), 1);
+        assert_eq!(rs_should_beep_empty_region(0), 0);
+
+        // rs_calc_block_delete_replacement_spaces
+        assert_eq!(rs_calc_block_delete_replacement_spaces(2, 3), 5);
+
+        // rs_needs_virtual_edit_adjustments
+        assert_eq!(rs_needs_virtual_edit_adjustments(1), 1);
+        assert_eq!(rs_needs_virtual_edit_adjustments(0), 0);
+
+        // rs_should_call_auto_format (delete=1)
+        assert_eq!(rs_should_call_auto_format(1), 1);
+        assert_eq!(rs_should_call_auto_format(2), 0); // yank
     }
 }
