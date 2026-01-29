@@ -1679,6 +1679,337 @@ pub unsafe extern "C" fn rs_vim_str2nr(
 }
 
 // ============================================================================
+// Chartab Initialization
+// ============================================================================
+
+// FFI declarations for charset accessor functions
+extern "C" {
+    fn nvim_charset_get_p_isi() -> *const c_char;
+    fn nvim_charset_get_p_isp() -> *const c_char;
+    fn nvim_charset_get_p_isf() -> *const c_char;
+    fn nvim_charset_get_buf_p_isk(buf: BufHandle) -> *const c_char;
+    fn nvim_charset_get_dy_flags() -> u32;
+    fn nvim_charset_get_buf_lisp(buf: BufHandle) -> c_int;
+    fn nvim_charset_mb_ptr2char_adv(pp: *mut *const c_char) -> c_int;
+    fn nvim_charset_mb_islower(c: c_int) -> c_int;
+    fn nvim_charset_mb_isupper(c: c_int) -> c_int;
+    fn nvim_charset_get_g_chartab() -> *mut u8;
+    fn nvim_charset_get_p_isi_ptr() -> *const c_char;
+    fn nvim_charset_get_p_isp_ptr() -> *const c_char;
+    fn nvim_charset_get_p_isf_ptr() -> *const c_char;
+}
+
+// Display flag constant (kOptDyFlagUhex = 0x04)
+const K_OPT_DY_FLAG_UHEX: u32 = 0x04;
+
+/// Set a bit in a buffer chartab (uint64_t[4] bitmap).
+#[inline]
+fn set_chartab(chartab: *mut u64, c: u8) {
+    let idx = (c >> 6) as usize;
+    let bit = 1u64 << (c & 0x3f);
+    unsafe {
+        *chartab.add(idx) |= bit;
+    }
+}
+
+/// Reset (clear) a bit in a buffer chartab (uint64_t[4] bitmap).
+#[inline]
+fn reset_chartab(chartab: *mut u64, c: u8) {
+    let idx = (c >> 6) as usize;
+    let bit = 1u64 << (c & 0x3f);
+    unsafe {
+        *chartab.add(idx) &= !bit;
+    }
+}
+
+/// Parse 'iskeyword', 'isident', 'isfname', or 'isprint' option string.
+///
+/// This is the core parsing logic for charset options. The format is a list
+/// of characters, character numbers, or ranges separated by commas.
+/// Examples: "200-210,x,#-178,-", "@,48-57,_"
+///
+/// Special handling:
+/// - `^` prefix means exclusion (remove from set)
+/// - `@` alone means all alphabetic characters (using mb_islower/mb_isupper)
+/// - Ranges are specified with hyphen: "a-z"
+///
+/// # Arguments
+/// * `var` - Option string to parse
+/// * `buf` - Buffer handle for iskeyword, or null for global options
+/// * `only_check` - If true, just validate syntax; don't modify chartab
+///
+/// # Returns
+/// 0 on success (OK), 1 on parse error (FAIL)
+///
+/// # Safety
+/// - `var` must be a valid pointer to a null-terminated string
+/// - If `buf` is not null, it must be a valid buffer handle
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::similar_names)]
+pub unsafe extern "C" fn rs_parse_isopt(
+    var: *const c_char,
+    buf: *mut std::ffi::c_void,
+    only_check: bool,
+) -> c_int {
+    if var.is_null() {
+        return 1; // FAIL
+    }
+
+    let mut p = var;
+
+    // Get pointer references for option type detection
+    let opt_isi = nvim_charset_get_p_isi_ptr();
+    let opt_isp = nvim_charset_get_p_isp_ptr();
+    let opt_isf = nvim_charset_get_p_isf_ptr();
+
+    // Get g_chartab for modification
+    let chartab_ptr = nvim_charset_get_g_chartab();
+    let dy_flags = nvim_charset_get_dy_flags();
+
+    // Get buffer chartab for iskeyword
+    let buf_chartab = if buf.is_null() {
+        std::ptr::null_mut()
+    } else {
+        nvim_buf_get_chartab(BufHandle(buf)).cast_mut()
+    };
+
+    // Parse the option string
+    while *p != 0 {
+        let mut tilde = false;
+        let mut do_isalpha = false;
+
+        // Check for exclusion prefix
+        if *p == b'^' as c_char && *p.add(1) != 0 {
+            tilde = true;
+            p = p.add(1);
+        }
+
+        // Get the first character/number
+        let mut c: c_int;
+        if ascii_isdigit(*p as u8) {
+            let mut p_mut = p.cast_mut();
+            c = rs_getdigits_int(
+                std::ptr::addr_of_mut!(p_mut),
+                1, // strict
+                0, // def
+            );
+            p = p_mut;
+        } else {
+            c = nvim_charset_mb_ptr2char_adv(std::ptr::addr_of_mut!(p));
+        }
+
+        let mut c2: c_int = -1;
+
+        // Check for range
+        if *p == b'-' as c_char && *p.add(1) != 0 {
+            p = p.add(1);
+
+            if ascii_isdigit(*p as u8) {
+                let mut p_mut = p.cast_mut();
+                c2 = rs_getdigits_int(
+                    std::ptr::addr_of_mut!(p_mut),
+                    1, // strict
+                    0, // def
+                );
+                p = p_mut;
+            } else {
+                c2 = nvim_charset_mb_ptr2char_adv(std::ptr::addr_of_mut!(p));
+            }
+        }
+
+        // Validate
+        if c <= 0
+            || c >= 256
+            || (c2 < c && c2 != -1)
+            || c2 >= 256
+            || !(*p == 0 || *p == b',' as c_char)
+        {
+            return 1; // FAIL
+        }
+
+        let trail_comma = *p == b',' as c_char;
+
+        // Skip comma and whitespace
+        if *p == b',' as c_char {
+            p = p.add(1);
+        }
+        while *p == b' ' as c_char {
+            p = p.add(1);
+        }
+
+        if trail_comma && *p == 0 {
+            // Trailing comma is not allowed
+            return 1; // FAIL
+        }
+
+        if only_check {
+            continue;
+        }
+
+        if c2 == -1 {
+            // Not a range
+            if c == b'@' as c_int {
+                // Single '@' means all alphabetic characters
+                do_isalpha = true;
+                c = 1;
+                c2 = 255;
+            } else {
+                c2 = c;
+            }
+        }
+
+        // Apply to chartab
+        while c <= c2 {
+            // Check if this character should be included
+            let is_alpha = if do_isalpha {
+                nvim_charset_mb_islower(c) != 0 || nvim_charset_mb_isupper(c) != 0
+            } else {
+                true
+            };
+
+            if !do_isalpha || is_alpha {
+                let cu = c as u8;
+
+                if var == opt_isi {
+                    // (re)set ID flag
+                    if tilde {
+                        *chartab_ptr.add(cu as usize) &= !CT_ID_CHAR;
+                    } else {
+                        *chartab_ptr.add(cu as usize) |= CT_ID_CHAR;
+                    }
+                } else if var == opt_isp {
+                    // (re)set printable
+                    if !(b' '..=b'~').contains(&cu) {
+                        if tilde {
+                            let cell_size = if (dy_flags & K_OPT_DY_FLAG_UHEX) != 0 {
+                                4
+                            } else {
+                                2
+                            };
+                            *chartab_ptr.add(cu as usize) =
+                                (*chartab_ptr.add(cu as usize) & !CT_CELL_MASK) | cell_size;
+                            *chartab_ptr.add(cu as usize) &= !CT_PRINT_CHAR;
+                        } else {
+                            *chartab_ptr.add(cu as usize) =
+                                (*chartab_ptr.add(cu as usize) & !CT_CELL_MASK) | 1;
+                            *chartab_ptr.add(cu as usize) |= CT_PRINT_CHAR;
+                        }
+                    }
+                } else if var == opt_isf {
+                    // (re)set fname flag
+                    if tilde {
+                        *chartab_ptr.add(cu as usize) &= !CT_FNAME_CHAR;
+                    } else {
+                        *chartab_ptr.add(cu as usize) |= CT_FNAME_CHAR;
+                    }
+                } else {
+                    // iskeyword: modify buffer chartab
+                    if !buf_chartab.is_null() {
+                        if tilde {
+                            reset_chartab(buf_chartab, cu);
+                        } else {
+                            set_chartab(buf_chartab, cu);
+                        }
+                    }
+                }
+            }
+            c += 1;
+        }
+    }
+
+    0 // OK
+}
+
+/// Validate option string format without modifying chartab.
+///
+/// # Safety
+/// - `var` must be a valid pointer to a null-terminated string
+#[no_mangle]
+pub unsafe extern "C" fn rs_check_isopt(var: *const c_char) -> c_int {
+    rs_parse_isopt(var, std::ptr::null_mut(), true)
+}
+
+/// Initialize buffer chartab from options.
+///
+/// If `global` is true, also reinitializes g_chartab[] from scratch.
+///
+/// # Safety
+/// - `buf` must be a valid buffer handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_buf_init_chartab(buf: *mut std::ffi::c_void, global: bool) -> c_int {
+    let chartab_ptr = nvim_charset_get_g_chartab();
+    let dy_flags = nvim_charset_get_dy_flags();
+
+    if global {
+        // Initialize g_chartab with defaults
+
+        // Characters 0x00-0x1F: unprintable (2 or 4 cells for uhex)
+        for c in 0u8..b' ' {
+            let cell_size = if (dy_flags & K_OPT_DY_FLAG_UHEX) != 0 {
+                4
+            } else {
+                2
+            };
+            *chartab_ptr.add(c as usize) = cell_size;
+        }
+
+        // Characters 0x20-0x7E: printable, 1 cell
+        for c in b' '..=b'~' {
+            *chartab_ptr.add(c as usize) = 1 | CT_PRINT_CHAR;
+        }
+
+        // Characters 0x7F-0xFF
+        for c in (b'~' + 1)..=255u8 {
+            if c >= 0xa0 {
+                // UTF-8: bytes 0xa0-0xff are printable (latin1)
+                // Also assume multi-byte chars are filename characters
+                *chartab_ptr.add(c as usize) = (CT_PRINT_CHAR | CT_FNAME_CHAR) | 1;
+            } else {
+                // 0x7F-0x9F: unprintable
+                let cell_size = if (dy_flags & K_OPT_DY_FLAG_UHEX) != 0 {
+                    4
+                } else {
+                    2
+                };
+                *chartab_ptr.add(c as usize) = cell_size;
+            }
+        }
+    }
+
+    // Clear buffer chartab
+    let buf_chartab = nvim_buf_get_chartab(BufHandle(buf)).cast_mut();
+    if !buf_chartab.is_null() {
+        for i in 0..4 {
+            *buf_chartab.add(i) = 0;
+        }
+    }
+
+    // In lisp mode, '-' is included in keywords
+    if nvim_charset_get_buf_lisp(BufHandle(buf)) != 0 && !buf_chartab.is_null() {
+        set_chartab(buf_chartab, b'-');
+    }
+
+    // Parse the options
+    let start_i = if global { 0 } else { 3 };
+
+    for i in start_i..=3 {
+        let p = match i {
+            0 => nvim_charset_get_p_isi(),                   // isident
+            1 => nvim_charset_get_p_isp(),                   // isprint
+            2 => nvim_charset_get_p_isf(),                   // isfname
+            _ => nvim_charset_get_buf_p_isk(BufHandle(buf)), // iskeyword
+        };
+
+        if rs_parse_isopt(p, buf, false) != 0 {
+            return 1; // FAIL
+        }
+    }
+
+    0 // OK
+}
+
+// ============================================================================
 // Case Folding
 // ============================================================================
 
