@@ -383,6 +383,10 @@ extern "C" {
 
     /// Get whether the entry at idx is an alternative name.
     fn nvim_get_key_names_table_is_alt(idx: c_int) -> bool;
+
+    /// Lookup a special key code by name using the generated hash function.
+    /// Returns the index in `key_names_table`, or -1 if not found.
+    fn nvim_get_special_key_code_hash(name: *const std::ffi::c_char, len: usize) -> c_int;
 }
 
 /// Try to find key "c" in the special key table.
@@ -400,6 +404,49 @@ pub extern "C" fn rs_find_special_key_in_table(c: c_int) -> c_int {
         }
     }
     -1
+}
+
+/// Find the special key with the given name.
+///
+/// # Arguments
+/// * `name` - Name of the special key. Does not have to end with NUL, it is
+///   assumed to end before the first non-idchar. If name starts with "t_" the
+///   next two characters are interpreted as a termcap name.
+///
+/// # Returns
+/// Key code or 0 if not found.
+///
+/// # Safety
+/// `name` must be a valid pointer to a C string with at least 4 readable bytes
+/// if the name starts with "t_".
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_special_key_code(name: *const std::ffi::c_char) -> c_int {
+    if name.is_null() {
+        return 0;
+    }
+
+    let name_u8 = name.cast::<u8>();
+
+    // Check for termcap name: t_xx
+    if *name_u8 == b't' && *name_u8.add(1) == b'_' && *name_u8.add(2) != 0 && *name_u8.add(3) != 0 {
+        return termcap2key(c_int::from(*name_u8.add(2)), c_int::from(*name_u8.add(3)));
+    }
+
+    // Find the end of the identifier
+    let mut name_end = name_u8;
+    while nvim_ascii::rs_ascii_isident(c_int::from(*name_end)) != 0 {
+        name_end = name_end.add(1);
+    }
+
+    // name_end is always >= name_u8, so the offset is always non-negative
+    #[allow(clippy::cast_sign_loss)]
+    let len = name_end.offset_from(name_u8) as usize;
+    let idx = nvim_get_special_key_code_hash(name, len);
+    if idx >= 0 {
+        nvim_get_key_names_table_key(idx)
+    } else {
+        0
+    }
 }
 
 /// Return the modifier mask bit corresponding to modifier name.

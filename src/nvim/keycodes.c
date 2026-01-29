@@ -43,6 +43,7 @@ typedef struct {
 
 extern ExtractModifiersResult rs_extract_modifiers(int key, int *modp, bool simplify);
 extern int rs_find_special_key_in_table(int c);
+extern int rs_get_special_key_code(const char *name);
 
 // =============================================================================
 // Accessor functions for key_names_table (for Rust FFI)
@@ -88,6 +89,13 @@ size_t nvim_get_key_names_table_name_size(int idx)
     return 0;
   }
   return key_names_table[idx].name.size;
+}
+
+/// Lookup a special key code by name using the generated hash function.
+/// Returns the index in key_names_table, or -1 if not found.
+int nvim_get_special_key_code_hash(const char *name, size_t len)
+{
+  return get_special_key_code_hash(name, len);
 }
 
 // Some useful tables.
@@ -531,17 +539,7 @@ int find_special_key_in_table(int c)
 int get_special_key_code(const char *name)
   FUNC_ATTR_NONNULL_ALL FUNC_ATTR_PURE FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  if (name[0] == 't' && name[1] == '_' && name[2] != NUL && name[3] != NUL) {
-    return TERMCAP2KEY((uint8_t)name[2], (uint8_t)name[3]);
-  }
-
-  const char *name_end = name;
-  while (ascii_isident(*name_end)) {
-    name_end++;
-  }
-
-  int idx = get_special_key_code_hash(name, (size_t)(name_end - name));
-  return idx >= 0 ? key_names_table[idx].key : 0;
+  return rs_get_special_key_code(name);
 }
 
 /// Look up the given mouse code to return the relevant information in the other arguments.
