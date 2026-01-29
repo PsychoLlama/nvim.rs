@@ -189,9 +189,8 @@ const char *nvim_charset_get_p_isf_ptr(void)
 #define GET_CHARTAB_TAB(chartab, c) \
   ((chartab)[(unsigned)(c) >> 6] & (1ull << ((c) & 0x3f)))
 
-// Table used below, see init_chartab() for an explanation
-// Not static - exposed for Rust FFI access
-uint8_t g_chartab[256];
+// Table owned by Rust, declared here for C access
+extern uint8_t g_chartab[256];
 
 // Flags for g_chartab[].
 #define CT_CELL_MASK  0x07  ///< mask: nr of display cells (1, 2 or 4)

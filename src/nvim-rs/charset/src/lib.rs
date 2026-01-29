@@ -23,10 +23,18 @@ const CT_PRINT_CHAR: u8 = 0x10; // flag: set for printable chars
 const CT_ID_CHAR: u8 = 0x20; // flag: set for ID chars
 const CT_FNAME_CHAR: u8 = 0x40; // flag: set for file name chars
 
-// External reference to g_chartab from C
-extern "C" {
-    static g_chartab: [u8; 256];
-}
+/// Global chartab array - owned by Rust, exported to C.
+///
+/// This array contains character properties for bytes 0-255:
+/// - Lower 3 bits (CT_CELL_MASK): display cell count (1, 2, or 4)
+/// - Bit 4 (CT_PRINT_CHAR): set for printable characters
+/// - Bit 5 (CT_ID_CHAR): set for identifier characters
+/// - Bit 6 (CT_FNAME_CHAR): set for filename characters
+///
+/// SAFETY: This static mut is only modified during chartab initialization
+/// which happens before any concurrent access.
+#[no_mangle]
+pub static mut g_chartab: [u8; 256] = [0u8; 256];
 
 // External reference to utfc_ptr2len from C
 // This function returns the byte length of a UTF-8 character including composing characters
