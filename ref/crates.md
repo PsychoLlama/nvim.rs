@@ -48,7 +48,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | fold           | Folding state and methods               |
 | funcall        | VimL function call infrastructure (dispatch, lookup, argument validation) |
 | fuzzy          | Fuzzy matching                          |
-| getchar        | Typeahead and input buffer              |
+| getchar        | Typeahead buffer, input, stuff/redo buffers, mapping state |
 | grid           | Screen grid operations (cell access, line copy/clear, allocation, memory management) |
 | help           | Help system utilities                   |
 | highlight      | Syntax highlighting and attributes      |
