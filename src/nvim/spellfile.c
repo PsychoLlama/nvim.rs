@@ -408,6 +408,14 @@ typedef struct {
 extern int rs_parse_compound_header(const uint8_t *buf, size_t buf_len, RsCompoundHeader *header_out,
                                     size_t *consumed_out);
 
+// Phase B2: Tree reading functions
+extern int rs_read_tree(const uint8_t *buf, size_t buf_len, uint8_t *byts, int32_t *idxs,
+                        size_t array_len, bool prefixtree, int prefixcnt,
+                        size_t *bytes_consumed_out, int *node_count_out);
+extern int rs_read_tree_peek_nodecount(const uint8_t *buf, size_t buf_len, uint32_t *nodecount_out);
+extern int rs_read_tree_node_count(const uint8_t *buf, size_t buf_len, uint32_t *count_out,
+                                   size_t *consumed_out);
+
 // Special byte values for <byte>.  Some are only used in the tree for
 // postponed prefixes, some only in the other trees.  This is a bit messy...
 enum {
