@@ -795,8 +795,10 @@ pub unsafe extern "C" fn rs_match_result_set_range(
     end_col: c_int,
 ) {
     if !result.is_null() {
-        (*result).range =
-            MatchRange::new(MatchPos::new(start_lnum, start_col), MatchPos::new(end_lnum, end_col));
+        (*result).range = MatchRange::new(
+            MatchPos::new(start_lnum, start_col),
+            MatchPos::new(end_lnum, end_col),
+        );
     }
 }
 

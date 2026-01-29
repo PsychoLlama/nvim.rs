@@ -325,7 +325,11 @@ pub extern "C" fn rs_is_excmd_call(call_type: c_int) -> c_int {
 /// FFI: Get minimum args for function (0 = no bound args).
 #[unsafe(no_mangle)]
 pub extern "C" fn rs_func_min_args(has_varargs: c_int, defined_args: c_int) -> c_int {
-    if has_varargs != 0 { 0 } else { defined_args }
+    if has_varargs != 0 {
+        0
+    } else {
+        defined_args
+    }
 }
 
 /// FFI: Check if arg count is valid for function.

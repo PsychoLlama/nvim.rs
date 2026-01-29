@@ -1825,8 +1825,8 @@ pub unsafe extern "C" fn rs_bt_incr_brace_count(state: *mut MatchState, idx: c_i
 #[no_mangle]
 pub extern "C" fn rs_bt_match_result_to_int(result: c_int) -> c_int {
     match result {
-        1 => 1,  // Match
-        0 => 0,  // NoMatch
+        1 => 1,   // Match
+        0 => 0,   // NoMatch
         -1 => -1, // Error
         _ => -2,  // TimedOut or unknown
     }

@@ -223,9 +223,9 @@ pub extern "C" fn rs_is_tab_scope(scope: c_int) -> c_int {
 pub extern "C" fn rs_scope_name_len(scope: c_int) -> c_int {
     match scope {
         SCOPE_GLOBAL | SCOPE_SCRIPT | SCOPE_BUFFER | SCOPE_WINDOW => 7, // "global", "script", "buffer", "window"
-        SCOPE_LOCAL => 6, // "local"
-        SCOPE_ARG | SCOPE_VIM | SCOPE_TAB => 4, // "arg", "vim", "tab"
-        _ => 8,           // "unknown"
+        SCOPE_LOCAL => 6,                                               // "local"
+        SCOPE_ARG | SCOPE_VIM | SCOPE_TAB => 4,                         // "arg", "vim", "tab"
+        _ => 8,                                                         // "unknown"
     }
 }
 
@@ -282,7 +282,11 @@ pub unsafe extern "C" fn rs_scope_prefix_len(name: *const u8, len: c_int) -> c_i
     let first = *name;
     let second = *name.add(1);
 
-    if second == b':' && is_valid_scope_prefix(first) { 2 } else { 0 }
+    if second == b':' && is_valid_scope_prefix(first) {
+        2
+    } else {
+        0
+    }
 }
 
 // =============================================================================
