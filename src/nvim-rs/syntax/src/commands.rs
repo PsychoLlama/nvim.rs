@@ -568,7 +568,11 @@ pub extern "C" fn rs_syn_subcmd_count() -> c_int {
 /// Check if a subcommand ID is valid.
 #[no_mangle]
 pub const extern "C" fn rs_syn_subcmd_is_valid(id: c_int) -> c_int {
-    if id >= 0 && id <= subcmd_id::SYNC { 1 } else { 0 }
+    if id >= 0 && id <= subcmd_id::SYNC {
+        1
+    } else {
+        0
+    }
 }
 
 /// Case mode constants
@@ -685,9 +689,6 @@ pub unsafe extern "C" fn rs_syn_curwin_synblock() -> SynBlockHandle {
 pub unsafe extern "C" fn rs_syn_curwin() -> WinHandle {
     curwin()
 }
-
-
-
 
 /// Command settings struct
 #[repr(C)]

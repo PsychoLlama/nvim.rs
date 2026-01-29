@@ -215,7 +215,6 @@ use std::ffi::c_void;
 /// Opaque pointer to synblock for FFI
 pub type SynBlockPtr = *const c_void;
 
-
 /// Get both the syntax ID and attribute at once.
 #[repr(C)]
 pub struct SynIdAttr {
@@ -244,16 +243,22 @@ pub unsafe extern "C" fn rs_syn_current_trans_id_attr() -> SynIdAttr {
 /// Check if a syntax ID is valid (non-zero positive).
 #[no_mangle]
 pub const extern "C" fn rs_syn_id_is_valid(id: c_int) -> c_int {
-    if id > 0 { 1 } else { 0 }
+    if id > 0 {
+        1
+    } else {
+        0
+    }
 }
 
 /// Check if a pattern index indicates a keyword match.
 #[no_mangle]
 pub const extern "C" fn rs_syn_is_keyword_idx(idx: c_int) -> c_int {
-    if idx == crate::types::KEYWORD_IDX { 1 } else { 0 }
+    if idx == crate::types::KEYWORD_IDX {
+        1
+    } else {
+        0
+    }
 }
-
-
 
 /// Pattern group info structure
 #[repr(C)]
@@ -328,7 +333,11 @@ pub unsafe extern "C" fn rs_syn_query_at_pos(
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_current_has_group() -> c_int {
     let id = nvim_syn_get_current_id();
-    if id > 0 { 1 } else { 0 }
+    if id > 0 {
+        1
+    } else {
+        0
+    }
 }
 
 /// Check if the current syntax state has a transparent group.
@@ -336,7 +345,11 @@ pub unsafe extern "C" fn rs_syn_current_has_group() -> c_int {
 pub unsafe extern "C" fn rs_syn_current_is_transparent() -> c_int {
     let id = nvim_syn_get_current_id();
     let trans_id = nvim_syn_get_current_trans_id();
-    if id != trans_id { 1 } else { 0 }
+    if id != trans_id {
+        1
+    } else {
+        0
+    }
 }
 
 /// Get the effective ID (transparent if different, otherwise regular).
@@ -381,7 +394,6 @@ pub unsafe extern "C" fn rs_syn_compare_groups(id1: c_int, id2: c_int) -> GroupC
 
     GroupCompareResult { same_id, same_attr }
 }
-
 
 /// The KEYWORD_IDX constant for identifying keyword patterns.
 #[no_mangle]

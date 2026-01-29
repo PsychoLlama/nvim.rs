@@ -1288,7 +1288,11 @@ pub unsafe extern "C" fn rs_syn_state_depth() -> c_int {
 /// Check if we're at the top level (depth 0 or 1)
 #[no_mangle]
 pub unsafe extern "C" fn rs_syn_state_at_top_level() -> c_int {
-    if current_state_len() <= 1 { 1 } else { 0 }
+    if current_state_len() <= 1 {
+        1
+    } else {
+        0
+    }
 }
 
 /// Get the highlight group ID from the top of the state stack.

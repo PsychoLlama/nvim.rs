@@ -428,14 +428,22 @@ pub unsafe extern "C" fn rs_synblock_status(block: SynBlockPtr) -> BufferSyntaxS
 #[no_mangle]
 pub unsafe extern "C" fn rs_synblock_can_highlight(block: SynBlockPtr) -> c_int {
     let handle = SynBlockHandle(block as *mut c_void);
-    if can_highlight(handle) { 1 } else { 0 }
+    if can_highlight(handle) {
+        1
+    } else {
+        0
+    }
 }
 
 /// Check if syntax-based folding can be computed for a synblock.
 #[no_mangle]
 pub unsafe extern "C" fn rs_synblock_can_fold(block: SynBlockPtr) -> c_int {
     let handle = SynBlockHandle(block as *mut c_void);
-    if can_compute_folds(handle) { 1 } else { 0 }
+    if can_compute_folds(handle) {
+        1
+    } else {
+        0
+    }
 }
 
 /// Buffer modification info structure for FFI
@@ -593,7 +601,11 @@ pub unsafe extern "C" fn rs_syntax_start_at(wp: WinHandle, lnum: c_int) {
 pub unsafe extern "C" fn rs_buf_needs_syntax_update(buf: BufPtr) -> c_int {
     let handle = BufHandle(buf as *mut c_void);
     let info = ModificationInfo::from_buffer(handle);
-    if info.has_modifications() { 1 } else { 0 }
+    if info.has_modifications() {
+        1
+    } else {
+        0
+    }
 }
 
 /// Get the range of lines affected by buffer modifications.
