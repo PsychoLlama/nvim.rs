@@ -58,6 +58,10 @@ static const char e_digraph_setlist_argument_must_be_list_of_lists_with_two_item
 // Rust implementations
 extern int rs_digraph_get(int char1, int char2, int meta_char);
 extern int rs_getexactdigraph(int char1, int char2, int meta_char);
+extern int rs_check_digraph_chars_valid(int char1, int char2);
+extern void rs_registerdigraph(int char1, int char2, int result);
+extern int rs_get_digraph_for_char(int val, uint8_t *out_char1, uint8_t *out_char2);
+extern int rs_do_digraph(int c);
 
 // digraphs added by the user
 static garray_T user_digraphs = { 0, 0, (int)sizeof(digr_T), 10, NULL };
@@ -1496,6 +1500,30 @@ int nvim_get_digraphdefault_len(void)
   return (int)(ARRAY_SIZE(digraphdefault));
 }
 
+/// Get pointer to user digraphs garray for mutation.
+void *nvim_get_user_digraphs_ptr(void)
+{
+  return &user_digraphs;
+}
+
+/// Grow the user digraphs garray by n items.
+void nvim_user_digraphs_grow(int n)
+{
+  ga_grow(&user_digraphs, n);
+}
+
+/// Increment the user digraphs garray length.
+void nvim_user_digraphs_inc_len(void)
+{
+  user_digraphs.ga_len++;
+}
+
+/// Get the value of the 'digraph' option.
+int nvim_get_p_dg(void)
+{
+  return p_dg;
+}
+
 /// handle digraphs after typing a character
 ///
 /// @param c
@@ -1503,48 +1531,21 @@ int nvim_get_digraphdefault_len(void)
 /// @return The digraph.
 int do_digraph(int c)
 {
-  static int backspaced;  // character before K_BS
-  static int lastchar;   // last typed character
-
-  if (c == -1) {         // init values
-    backspaced = -1;
-  } else if (p_dg) {
-    if (backspaced >= 0) {
-      c = digraph_get(backspaced, c, false);
-    }
-    backspaced = -1;
-
-    if (((c == K_BS) || (c == Ctrl_H)) && (lastchar >= 0)) {
-      backspaced = lastchar;
-    }
-  }
-  lastchar = c;
-  return c;
+  return rs_do_digraph(c);
 }
 
 /// Find a digraph for "val".  If found return the string to display it.
 /// If not found return NULL.
 char *get_digraph_for_char(int val_arg)
 {
-  const int val = val_arg;
-  const digr_T *dp;
   static char r[3];
+  uint8_t char1, char2;
 
-  for (int use_defaults = 0; use_defaults <= 1; use_defaults++) {
-    if (use_defaults == 0) {
-      dp = (const digr_T *)user_digraphs.ga_data;
-    } else {
-      dp = digraphdefault;
-    }
-    for (int i = 0; use_defaults ? dp->char1 != NUL : i < user_digraphs.ga_len; i++) {
-      if (dp->result == val) {
-        r[0] = (char)dp->char1;
-        r[1] = (char)dp->char2;
-        r[2] = NUL;
-        return r;
-      }
-      dp++;
-    }
+  if (rs_get_digraph_for_char(val_arg, &char1, &char2)) {
+    r[0] = (char)char1;
+    r[1] = (char)char2;
+    r[2] = NUL;
+    return r;
   }
   return NULL;
 }
@@ -1623,21 +1624,7 @@ int digraph_get(int char1, int char2, bool meta_char)
 /// Add a digraph to the digraph table.
 static void registerdigraph(int char1, int char2, int n)
 {
-  // If the digraph already exists, replace "result".
-  digr_T *dp = (digr_T *)user_digraphs.ga_data;
-  for (int i = 0; i < user_digraphs.ga_len; i++) {
-    if ((int)dp->char1 == char1 && (int)dp->char2 == char2) {
-      dp->result = n;
-      return;
-    }
-    dp++;
-  }
-
-  // Add a new digraph to the table.
-  dp = GA_APPEND_VIA_PTR(digr_T, &user_digraphs);
-  dp->char1 = (uint8_t)char1;
-  dp->char2 = (uint8_t)char2;
-  dp->result = n;
+  rs_registerdigraph(char1, char2, n);
 }
 
 /// Check the characters are valid for a digraph.
@@ -1645,17 +1632,23 @@ static void registerdigraph(int char1, int char2, int n)
 /// returns false.
 bool check_digraph_chars_valid(int char1, int char2)
 {
-  if (char2 == 0) {
+  int result = rs_check_digraph_chars_valid(char1, char2);
+  switch (result) {
+  case 1: {
+    // char2 is 0 - digraph must be two characters
     char msg[MB_MAXCHAR + 1];
     msg[utf_char2bytes(char1, msg)] = NUL;
     semsg(_(e_digraph_must_be_just_two_characters_str), msg);
     return false;
   }
-  if (char1 == ESC || char2 == ESC) {
+  case 2:
+    // ESC not allowed
     emsg(_("E104: Escape not allowed in digraph"));
     return false;
+  default:
+    // Valid (result == 3)
+    return true;
   }
-  return true;
 }
 
 /// Add the digraphs in the argument to the digraph table.

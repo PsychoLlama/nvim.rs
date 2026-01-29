@@ -1,10 +1,30 @@
 //! Digraph functions for Neovim.
 //!
-//! This crate provides Rust implementations of digraph lookup functions.
+//! This crate provides Rust implementations of digraph functions including:
+//! - Digraph lookup (`rs_digraph_get`, `rs_getexactdigraph`)
+//! - Character validation (`rs_check_digraph_chars_valid`)
+//! - User digraph registration (`rs_registerdigraph`)
+//! - Reverse lookup (`rs_get_digraph_for_char`)
+//! - Input state machine (`rs_do_digraph`)
+//! - Vimscript function helpers (`rs_digraph_get_viml`, `rs_digraph_set_viml`)
+//! - List operations (`rs_digraph_iterate`, `rs_digraph_format_pair`)
 
 use std::ffi::c_void;
 
 use libc::c_int;
+
+mod input;
+mod list;
+mod register;
+mod validate;
+mod viml;
+
+// Re-export FFI functions
+pub use input::rs_do_digraph;
+pub use list::{rs_digraph_format_pair, rs_digraph_format_result, rs_digraph_iterate};
+pub use register::{rs_get_digraph_for_char, rs_registerdigraph};
+pub use validate::rs_check_digraph_chars_valid;
+pub use viml::{rs_digraph_get_viml, rs_digraph_set_viml, rs_parse_digraph_chars};
 
 /// Digraph entry structure matching C's `digr_T`.
 #[repr(C)]

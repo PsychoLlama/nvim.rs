@@ -29,7 +29,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | decoration_provider | Decoration provider infrastructure (callbacks, state, hl caching) |
 | dict           | VimL dictionary operations and iteration |
 | diff           | Diff mode (options, buffers, blocks, navigation, highlighting, scroll binding, operations, VimL functions) |
-| digraph        | Digraph lookup                          |
+| digraph        | Digraph operations (lookup, validation, registration, input state machine, Vimscript function helpers) |
 | drawline       | Line rendering (state machine, filler lines, virtual text, conceal, gutter, syntax highlighting) |
 | drawscreen     | Screen update orchestration (redraw types, invalidation, scroll optimization, window refresh) |
 | edit           | Edit mode (state, insert, keys, abbreviations, completion) |
