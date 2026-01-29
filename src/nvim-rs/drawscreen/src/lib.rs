@@ -1385,6 +1385,214 @@ pub extern "C" fn rs_win_get_effective_redr_type(wp: WinHandle) -> c_int {
     unsafe { nvim_win_get_w_redr_type(wp).clamp(0, UPD_CLEAR) }
 }
 
+// =============================================================================
+// Phase D1.4: Screen Update Loop Helpers
+// =============================================================================
+
+// Additional C function declarations for screen update
+extern "C" {
+    // Global flags
+    fn nvim_get_updating_screen() -> c_int;
+    fn nvim_set_updating_screen(val: c_int);
+    fn nvim_get_redrawing_disabled() -> c_int;
+
+    // Window clear state
+    fn nvim_win_get_redr_border(wp: WinHandle) -> c_int;
+    fn nvim_win_set_redr_border(wp: WinHandle, val: c_int);
+
+    // Buffer mod state
+    fn nvim_buf_get_mod_set(buf: BufHandle) -> c_int;
+    fn nvim_buf_set_mod_set(buf: BufHandle, val: c_int);
+}
+
+/// Check if screen updating is currently in progress.
+///
+/// Returns 1 if updating_screen is set, 0 otherwise.
+#[no_mangle]
+pub extern "C" fn rs_is_updating_screen() -> c_int {
+    unsafe { nvim_get_updating_screen() }
+}
+
+/// Set the updating_screen flag.
+#[no_mangle]
+pub extern "C" fn rs_set_updating_screen(val: c_int) {
+    unsafe {
+        nvim_set_updating_screen(val);
+    }
+}
+
+/// Check if redrawing is currently disabled.
+///
+/// Returns 1 if RedrawingDisabled is set, 0 otherwise.
+#[no_mangle]
+pub extern "C" fn rs_is_redrawing_disabled() -> c_int {
+    unsafe { nvim_get_redrawing_disabled() }
+}
+
+/// Check if a window needs its border redrawn.
+#[no_mangle]
+pub extern "C" fn rs_win_needs_border_redraw(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        let redr_border = nvim_win_get_redr_border(wp);
+        let redr_type = nvim_win_get_w_redr_type(wp);
+        c_int::from(redr_border != 0 || redr_type >= UPD_NOT_VALID)
+    }
+}
+
+/// Reset window's border redraw flag.
+#[no_mangle]
+pub extern "C" fn rs_win_reset_redr_border(wp: WinHandle) {
+    if !wp.is_null() {
+        unsafe {
+            nvim_win_set_redr_border(wp, 0);
+        }
+    }
+}
+
+/// Reset buffer's mod_set flag for a window.
+#[no_mangle]
+pub extern "C" fn rs_win_reset_buf_mod_set(wp: WinHandle) {
+    if !wp.is_null() {
+        unsafe {
+            let buf = nvim_win_get_buffer(wp);
+            if !buf.is_null() {
+                nvim_buf_set_mod_set(buf, 0);
+            }
+        }
+    }
+}
+
+/// Check if buffer has modifications that need to be displayed.
+#[no_mangle]
+pub extern "C" fn rs_win_buf_has_mod_set(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        let buf = nvim_win_get_buffer(wp);
+        if buf.is_null() {
+            return 0;
+        }
+        nvim_buf_get_mod_set(buf)
+    }
+}
+
+/// Update state for a window after win_update().
+///
+/// This resets relevant state that should be cleared after a window update.
+#[no_mangle]
+pub extern "C" fn rs_win_post_update(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+
+    unsafe {
+        // Reset redraw type
+        nvim_win_set_w_redr_type(wp, 0);
+        // Reset border redraw flag
+        nvim_win_set_redr_border(wp, 0);
+    }
+}
+
+// =============================================================================
+// Phase D1.4: Visual Mode Update Helpers
+// =============================================================================
+
+// Additional C function declarations for visual mode
+extern "C" {
+    fn nvim_get_visual_active() -> c_int;
+    fn nvim_get_visual_mode() -> c_int;
+    fn nvim_win_get_old_visual_mode(wp: WinHandle) -> c_int;
+    fn nvim_win_set_old_visual_mode(wp: WinHandle, val: c_int);
+    fn nvim_win_get_old_cursor_lnum(wp: WinHandle) -> LinenrT;
+    fn nvim_win_set_old_cursor_lnum(wp: WinHandle, val: LinenrT);
+    fn nvim_win_get_old_visual_lnum(wp: WinHandle) -> LinenrT;
+    fn nvim_win_set_old_visual_lnum(wp: WinHandle, val: LinenrT);
+    fn nvim_win_get_old_visual_col(wp: WinHandle) -> ColnrT;
+    fn nvim_win_set_old_visual_col(wp: WinHandle, val: ColnrT);
+}
+
+/// Column number type (matches `colnr_T` in Neovim).
+type ColnrT = i32;
+
+/// Check if visual selection changed and needs redraw.
+///
+/// Returns 1 if visual mode state changed in a way that requires redraw.
+#[no_mangle]
+pub extern "C" fn rs_visual_selection_changed(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        let visual_active = nvim_get_visual_active() != 0;
+        let old_visual_mode = nvim_win_get_old_visual_mode(wp);
+
+        if !visual_active && old_visual_mode == 0 {
+            return 0;
+        }
+
+        if visual_active {
+            let current_mode = nvim_get_visual_mode();
+            if current_mode != old_visual_mode {
+                return 1;
+            }
+        }
+
+        1
+    }
+}
+
+/// Update visual mode tracking state after window update.
+#[no_mangle]
+pub extern "C" fn rs_update_visual_state(
+    wp: WinHandle,
+    cursor_lnum: LinenrT,
+    visual_lnum: LinenrT,
+    visual_col: ColnrT,
+) {
+    if wp.is_null() {
+        return;
+    }
+
+    unsafe {
+        let visual_active = nvim_get_visual_active() != 0;
+
+        if visual_active {
+            let visual_mode = nvim_get_visual_mode();
+            nvim_win_set_old_visual_mode(wp, visual_mode);
+            nvim_win_set_old_cursor_lnum(wp, cursor_lnum);
+            nvim_win_set_old_visual_lnum(wp, visual_lnum);
+            nvim_win_set_old_visual_col(wp, visual_col);
+        } else {
+            nvim_win_set_old_visual_mode(wp, 0);
+            nvim_win_set_old_cursor_lnum(wp, 0);
+            nvim_win_set_old_visual_lnum(wp, 0);
+            nvim_win_set_old_visual_col(wp, 0);
+        }
+    }
+}
+
+/// Clear visual mode state for a window.
+#[no_mangle]
+pub extern "C" fn rs_clear_visual_state(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+
+    unsafe {
+        nvim_win_set_old_visual_mode(wp, 0);
+        nvim_win_set_old_cursor_lnum(wp, 0);
+        nvim_win_set_old_visual_lnum(wp, 0);
+        nvim_win_set_old_visual_col(wp, 0);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

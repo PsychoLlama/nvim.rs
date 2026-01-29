@@ -2666,3 +2666,115 @@ void win_update_cursorline(win_T *wp, foldinfo_T *foldinfo)
     }
   }
 }
+
+// =============================================================================
+// Phase D1: Screen Update Loop FFI Accessors
+// =============================================================================
+
+/// Check if screen updating is currently in progress.
+int nvim_get_updating_screen(void)
+{
+  return updating_screen ? 1 : 0;
+}
+
+/// Set the updating_screen flag.
+void nvim_set_updating_screen(int val)
+{
+  updating_screen = (val != 0);
+}
+
+/// Check if redrawing is currently disabled.
+int nvim_get_redrawing_disabled(void)
+{
+  return RedrawingDisabled;
+}
+
+/// Get the window's redr_border flag.
+int nvim_win_get_redr_border(win_T *wp)
+{
+  return wp ? wp->w_redr_border : 0;
+}
+
+/// Set the window's redr_border flag.
+void nvim_win_set_redr_border(win_T *wp, int val)
+{
+  if (wp) {
+    wp->w_redr_border = (val != 0);
+  }
+}
+
+/// Get the buffer's mod_set flag.
+int nvim_buf_get_mod_set(buf_T *buf)
+{
+  return buf ? buf->b_mod_set : 0;
+}
+
+/// Set the buffer's mod_set flag.
+void nvim_buf_set_mod_set(buf_T *buf, int val)
+{
+  if (buf) {
+    buf->b_mod_set = (val != 0);
+  }
+}
+
+/// Get the visual mode value.
+int nvim_get_visual_mode(void)
+{
+  return VIsual_mode;
+}
+
+/// Get the window's old_visual_mode.
+int nvim_win_get_old_visual_mode(win_T *wp)
+{
+  return wp ? wp->w_old_visual_mode : 0;
+}
+
+/// Set the window's old_visual_mode.
+void nvim_win_set_old_visual_mode(win_T *wp, int val)
+{
+  if (wp) {
+    wp->w_old_visual_mode = (char)val;
+  }
+}
+
+/// Get the window's old_cursor_lnum.
+linenr_T nvim_win_get_old_cursor_lnum(win_T *wp)
+{
+  return wp ? wp->w_old_cursor_lnum : 0;
+}
+
+/// Set the window's old_cursor_lnum.
+void nvim_win_set_old_cursor_lnum(win_T *wp, linenr_T val)
+{
+  if (wp) {
+    wp->w_old_cursor_lnum = val;
+  }
+}
+
+/// Get the window's old_visual_lnum.
+linenr_T nvim_win_get_old_visual_lnum(win_T *wp)
+{
+  return wp ? wp->w_old_visual_lnum : 0;
+}
+
+/// Set the window's old_visual_lnum.
+void nvim_win_set_old_visual_lnum(win_T *wp, linenr_T val)
+{
+  if (wp) {
+    wp->w_old_visual_lnum = val;
+  }
+}
+
+/// Get the window's old_visual_col.
+colnr_T nvim_win_get_old_visual_col(win_T *wp)
+{
+  return wp ? wp->w_old_visual_col : 0;
+}
+
+/// Set the window's old_visual_col.
+void nvim_win_set_old_visual_col(win_T *wp, colnr_T val)
+{
+  if (wp) {
+    wp->w_old_visual_col = val;
+  }
+}
