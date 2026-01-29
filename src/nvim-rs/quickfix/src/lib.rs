@@ -20,6 +20,7 @@ pub mod loclist;
 pub mod navigate;
 pub mod parse;
 pub mod stack;
+pub mod types;
 pub mod window;
 
 // Re-export commonly used types from submodules
@@ -28,6 +29,10 @@ pub use display::{QfDisplayEntry, QfDisplayFormat, QfDisplayState};
 pub use errorformat::{EfmFlags, EfmParseResult, QfErrorType};
 pub use listdo::{FileEntry, FileListDoState, ListDoResult, ListDoState, ListDoType};
 pub use stack::{NavDirection, QfPushResult, QfStackNavResult, QfStackState};
+pub use types::{
+    LineNr, QfEntry, QfEntryOption, QfEntrySummary, QfEntryType, QfList, QfListStats, QfListType,
+    QfPosition, QfStack, QF_INVALID_BUFNR, QF_INVALID_IDX, QF_LISTCOUNT,
+};
 
 // =============================================================================
 // External C accessor functions
