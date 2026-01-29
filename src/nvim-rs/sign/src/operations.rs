@@ -280,12 +280,279 @@ pub extern "C" fn rs_sign_cmd_from_index(idx: c_int) -> c_int {
 }
 
 // =============================================================================
+// Sign Placement Execution
+// =============================================================================
+
+/// Parameters for sign placement execution.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct SignPlaceExecParams {
+    /// Buffer handle
+    pub buf: crate::SignBufHandle,
+    /// Namespace ID (0 for global)
+    pub ns_id: u32,
+    /// Sign ID (0 for auto-assign)
+    pub id: u32,
+    /// Line number (1-based)
+    pub lnum: LinenrT,
+    /// Priority
+    pub priority: c_int,
+    /// Sign definition handle
+    pub sp: SignHandle,
+}
+
+impl Default for SignPlaceExecParams {
+    fn default() -> Self {
+        Self {
+            buf: crate::SignBufHandle::null(),
+            ns_id: 0,
+            id: 0,
+            lnum: 0,
+            priority: SIGN_DEF_PRIO,
+            sp: SignHandle::null(),
+        }
+    }
+}
+
+/// Create default sign placement execution params.
+#[no_mangle]
+pub extern "C" fn rs_sign_place_exec_params_default() -> SignPlaceExecParams {
+    SignPlaceExecParams::default()
+}
+
+/// Check if sign placement exec params are valid.
+#[no_mangle]
+pub extern "C" fn rs_sign_place_exec_valid(params: &SignPlaceExecParams) -> c_int {
+    // Need buffer, sign definition, valid line
+    c_int::from(!params.buf.is_null() && !params.sp.is_null() && params.lnum > 0)
+}
+
+// =============================================================================
+// Sign Unplace Execution
+// =============================================================================
+
+/// Parameters for sign unplace execution.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct SignUnplaceExecParams {
+    /// Buffer handle (null for all buffers)
+    pub buf: crate::SignBufHandle,
+    /// Namespace ID (0 for global, u32::MAX for all)
+    pub ns_id: u64,
+    /// Sign ID (0 for all in namespace)
+    pub id: u32,
+    /// Line number filter (0 for all lines)
+    pub atlnum: LinenrT,
+}
+
+impl Default for SignUnplaceExecParams {
+    fn default() -> Self {
+        Self {
+            buf: crate::SignBufHandle::null(),
+            ns_id: 0,
+            id: 0,
+            atlnum: 0,
+        }
+    }
+}
+
+/// Create default sign unplace execution params.
+#[no_mangle]
+pub extern "C" fn rs_sign_unplace_exec_params_default() -> SignUnplaceExecParams {
+    SignUnplaceExecParams::default()
+}
+
+/// Check if unplace should affect all buffers.
+#[no_mangle]
+pub extern "C" fn rs_sign_unplace_all_buffers(params: &SignUnplaceExecParams) -> c_int {
+    c_int::from(params.buf.is_null())
+}
+
+/// Check if unplace should affect all namespaces.
+#[no_mangle]
+pub extern "C" fn rs_sign_unplace_all_namespaces(params: &SignUnplaceExecParams) -> c_int {
+    c_int::from(params.ns_id == u64::from(u32::MAX))
+}
+
+/// Check if unplace should affect all signs.
+#[no_mangle]
+pub extern "C" fn rs_sign_unplace_all_signs(params: &SignUnplaceExecParams) -> c_int {
+    c_int::from(params.id == 0)
+}
+
+// =============================================================================
+// Sign Define Execution
+// =============================================================================
+
+/// Parameters for sign define execution.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct SignDefineExecParams {
+    /// Sign name
+    pub name: *const c_char,
+    /// Icon path (null if not set)
+    pub icon: *const c_char,
+    /// Sign text (null if not set)
+    pub text: *const c_char,
+    /// Text highlight ID (0 if not set)
+    pub text_hl: c_int,
+    /// Line highlight ID (0 if not set)
+    pub line_hl: c_int,
+    /// Number highlight ID (0 if not set)
+    pub num_hl: c_int,
+    /// Cursorline highlight ID (0 if not set)
+    pub cul_hl: c_int,
+    /// Priority (-1 for default)
+    pub priority: c_int,
+}
+
+impl Default for SignDefineExecParams {
+    fn default() -> Self {
+        Self {
+            name: std::ptr::null(),
+            icon: std::ptr::null(),
+            text: std::ptr::null(),
+            text_hl: 0,
+            line_hl: 0,
+            num_hl: 0,
+            cul_hl: 0,
+            priority: -1,
+        }
+    }
+}
+
+/// Create default sign define execution params.
+#[no_mangle]
+pub extern "C" fn rs_sign_define_exec_params_default() -> SignDefineExecParams {
+    SignDefineExecParams::default()
+}
+
+/// Check if sign define exec params have a valid name.
+///
+/// # Safety
+/// `params.name` must be null or a valid C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_define_exec_valid(params: &SignDefineExecParams) -> c_int {
+    if params.name.is_null() {
+        return 0;
+    }
+    // Check name is not empty
+    c_int::from(*params.name.cast::<u8>() != 0)
+}
+
+/// Check if sign define exec has any visual attributes.
+#[no_mangle]
+pub extern "C" fn rs_sign_define_exec_has_attrs(params: &SignDefineExecParams) -> c_int {
+    c_int::from(
+        !params.icon.is_null()
+            || !params.text.is_null()
+            || params.text_hl > 0
+            || params.line_hl > 0
+            || params.num_hl > 0
+            || params.cul_hl > 0
+            || params.priority >= 0,
+    )
+}
+
+// =============================================================================
+// Sign Undefine Execution
+// =============================================================================
+
+/// Result of sign undefine operation.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SignUndefineResult {
+    /// Success
+    Ok = 0,
+    /// Sign not found
+    NotFound = 1,
+    /// Invalid name
+    InvalidName = 2,
+}
+
+/// Check if a sign can be undefined.
+///
+/// # Safety
+/// `name` must be null or a valid C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_sign_can_undefine(name: *const c_char) -> SignUndefineResult {
+    if name.is_null() {
+        return SignUndefineResult::InvalidName;
+    }
+
+    // Check name is not empty
+    if *name.cast::<u8>() == 0 {
+        return SignUndefineResult::InvalidName;
+    }
+
+    // Look up the sign
+    let sp = nvim_sign_map_get(name);
+    if sp.is_null() {
+        SignUndefineResult::NotFound
+    } else {
+        SignUndefineResult::Ok
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_sign_place_exec_params_default() {
+        let params = SignPlaceExecParams::default();
+        assert!(params.buf.is_null());
+        assert_eq!(params.ns_id, 0);
+        assert_eq!(params.id, 0);
+        assert_eq!(params.lnum, 0);
+        assert_eq!(params.priority, SIGN_DEF_PRIO);
+        assert!(params.sp.is_null());
+    }
+
+    #[test]
+    fn test_sign_unplace_exec_params_default() {
+        let params = SignUnplaceExecParams::default();
+        assert!(params.buf.is_null());
+        assert_eq!(params.ns_id, 0);
+        assert_eq!(params.id, 0);
+        assert_eq!(params.atlnum, 0);
+    }
+
+    #[test]
+    fn test_sign_define_exec_params_default() {
+        let params = SignDefineExecParams::default();
+        assert!(params.name.is_null());
+        assert!(params.icon.is_null());
+        assert!(params.text.is_null());
+        assert_eq!(params.text_hl, 0);
+        assert_eq!(params.line_hl, 0);
+        assert_eq!(params.num_hl, 0);
+        assert_eq!(params.cul_hl, 0);
+        assert_eq!(params.priority, -1);
+    }
+
+    #[test]
+    fn test_sign_define_exec_has_attrs() {
+        let default = SignDefineExecParams::default();
+        assert_eq!(rs_sign_define_exec_has_attrs(&default), 0);
+
+        let with_prio = SignDefineExecParams {
+            priority: 10,
+            ..Default::default()
+        };
+        assert_eq!(rs_sign_define_exec_has_attrs(&with_prio), 1);
+    }
+
+    #[test]
+    fn test_sign_undefine_result() {
+        assert_eq!(SignUndefineResult::Ok as c_int, 0);
+        assert_eq!(SignUndefineResult::NotFound as c_int, 1);
+        assert_eq!(SignUndefineResult::InvalidName as c_int, 2);
+    }
 
     #[test]
     fn test_sign_place_op_result() {

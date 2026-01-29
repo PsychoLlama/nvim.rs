@@ -43,8 +43,9 @@ pub mod viml;
 // Re-exports
 pub use define::{SignDefineError, SignDefineParams, SignHighlights};
 pub use operations::{
-    SignCommand, SignJumpResult, SignJumpTarget, SignPlaceOpParams, SignPlaceOpResult,
-    SignUnplaceBatch,
+    SignCommand, SignDefineExecParams, SignJumpResult, SignJumpTarget, SignPlaceExecParams,
+    SignPlaceOpParams, SignPlaceOpResult, SignUndefineResult, SignUnplaceBatch,
+    SignUnplaceExecParams,
 };
 pub use place::{
     SignDeleteParams, SignDeleteScope, SignLocation, SignPlaceParams, SignPlaceResult,
@@ -86,7 +87,7 @@ pub const NS_INVALID: i64 = -1;
 
 /// Opaque handle to C's sign_T structure
 #[repr(transparent)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct SignHandle(*mut c_void);
 
 impl SignHandle {
