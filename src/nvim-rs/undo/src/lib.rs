@@ -29,8 +29,10 @@
 #![allow(clippy::missing_const_for_fn)]
 #![allow(clippy::must_use_candidate)]
 
-use std::ffi::{c_char, c_int, c_long, c_uchar, c_void};
+use std::ffi::{c_char, c_int, c_long, c_uchar, c_void, CStr};
 use std::ptr;
+
+use nvim_encoding::sha256::Sha256Context;
 
 /// Opaque handle to buf_T.
 #[repr(transparent)]
@@ -3348,6 +3350,41 @@ pub unsafe extern "C" fn rs_serialize_header(
     hash: *const u8,
 ) -> bool {
     serialize_header(fp, buf, hash)
+}
+
+// =============================================================================
+// Hash computation for undo files
+// =============================================================================
+
+/// Compute SHA-256 hash of all buffer lines.
+///
+/// This is the Rust implementation of `u_compute_hash`.
+/// Each line is hashed including the null terminator.
+///
+/// # Safety
+///
+/// `buf` must be a valid buffer handle. `hash` must point to at least 32 bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_u_compute_hash(buf: BufHandle, hash: *mut u8) {
+    if hash.is_null() {
+        return;
+    }
+
+    let mut ctx = Sha256Context::new();
+    let line_count = nvim_buf_get_ml_line_count(buf);
+
+    for lnum in 1..=line_count {
+        let line = nvim_ml_get_buf_line(buf, lnum);
+        if !line.is_null() {
+            // Get line as a C string, then hash it including the null terminator
+            let c_str = CStr::from_ptr(line);
+            let bytes = c_str.to_bytes_with_nul();
+            ctx.update(bytes);
+        }
+    }
+
+    let digest = ctx.finish();
+    std::ptr::copy_nonoverlapping(digest.as_ptr(), hash, 32);
 }
 
 // =============================================================================

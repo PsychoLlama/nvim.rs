@@ -176,6 +176,7 @@ extern void rs_u_find_first_changed(void);
 extern u_header_T *rs_u_force_get_undo_header(buf_T *buf);
 extern void rs_u_undoline(void);
 extern void rs_undo_time(int step, bool sec, bool file, bool absolute);
+extern void rs_u_compute_hash(buf_T *buf, uint8_t *hash);
 extern void rs_u_write_undo(const char *name, bool forceit, buf_T *buf, const uint8_t *hash);
 extern void rs_u_read_undo(const char *name, const uint8_t *hash, const char *orig_name);
 extern void rs_ex_undolist(exarg_T *eap);
@@ -392,13 +393,7 @@ int u_savecommon(buf_T *buf, linenr_T top, linenr_T bot, linenr_T newbot, bool r
 ///                 the hash
 void u_compute_hash(buf_T *buf, uint8_t *hash)
 {
-  context_sha256_T ctx;
-  sha256_start(&ctx);
-  for (linenr_T lnum = 1; lnum <= buf->b_ml.ml_line_count; lnum++) {
-    char *p = ml_get_buf(buf, lnum);
-    sha256_update(&ctx, (uint8_t *)p, strlen(p) + 1);
-  }
-  sha256_finish(&ctx, hash);
+  rs_u_compute_hash(buf, hash);
 }
 
 /// Return an allocated string of the full path of the target undofile.
