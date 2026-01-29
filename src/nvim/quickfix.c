@@ -573,6 +573,21 @@ extern int rs_qf_curlist_entry_count(const void *qi);
 extern int rs_qf_curlist_valid_count(const void *qi);
 
 // =============================================================================
+// Phase 4 (Window Management): Text formatting functions from Rust
+// =============================================================================
+
+/// Format quickfix entry text for display (replaces newlines with spaces)
+extern size_t rs_qf_fmt_text(const char *text, char *out, size_t out_size);
+
+/// Format range text for a quickfix entry (e.g., "10-15 col 5-8")
+extern size_t rs_qf_range_text(linenr_T lnum, linenr_T end_lnum, int col, int end_col,
+                               char *out, size_t out_size);
+
+/// Format a quickfix entry for display (filename|lnum col type|)
+extern size_t rs_qf_format_entry_line(const void *qfp, const char *fname,
+                                      char *out, size_t out_size);
+
+// =============================================================================
 // Phase 1 (Parser Migration): Errorformat parsing functions from Rust
 // =============================================================================
 

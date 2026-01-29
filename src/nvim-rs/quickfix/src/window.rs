@@ -3,6 +3,10 @@
 //! This module provides functions for window positioning, cursor management,
 //! and display-related calculations in the quickfix window.
 
+#![allow(clippy::cast_possible_wrap)]
+#![allow(clippy::cast_possible_truncation)]
+#![allow(clippy::cast_sign_loss)]
+
 use std::ffi::{c_char, c_int};
 
 use crate::{
@@ -484,6 +488,218 @@ pub unsafe extern "C" fn rs_qf_count_with_file(qfl: QfListHandle) -> c_int {
 }
 
 // =============================================================================
+// Text Formatting
+// =============================================================================
+
+/// Format quickfix entry text for display.
+///
+/// Converts newlines to spaces and collapses whitespace after newlines.
+/// Writes the result to `out` buffer with max `out_size` bytes.
+///
+/// # Safety
+///
+/// - `text` may be null (writes empty string)
+/// - `out` must be a valid pointer to a buffer of at least `out_size` bytes
+/// - If non-null, `text` must be a valid null-terminated C string
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_fmt_text(
+    text: *const c_char,
+    out: *mut c_char,
+    out_size: usize,
+) -> usize {
+    if out.is_null() || out_size == 0 {
+        return 0;
+    }
+
+    // Write empty string if text is null
+    if text.is_null() {
+        *out = 0;
+        return 0;
+    }
+
+    let Ok(text_str) = std::ffi::CStr::from_ptr(text).to_str() else {
+        *out = 0;
+        return 0;
+    };
+
+    let mut written = 0;
+    let max_write = out_size - 1; // Reserve space for null terminator
+    let mut chars = text_str.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if written >= max_write {
+            break;
+        }
+
+        if c == '\n' {
+            // Replace newline with space
+            *out.add(written) = b' ' as c_char;
+            written += 1;
+
+            // Skip following whitespace and newlines
+            while let Some(&next) = chars.peek() {
+                if next == ' ' || next == '\t' || next == '\n' {
+                    chars.next();
+                } else {
+                    break;
+                }
+            }
+        } else {
+            // Copy character (only single-byte chars for C compatibility)
+            let byte = c as u32;
+            if byte <= 127 {
+                *out.add(written) = byte as c_char;
+                written += 1;
+            } else {
+                // For multi-byte UTF-8, copy each byte
+                let mut buf = [0u8; 4];
+                let encoded = c.encode_utf8(&mut buf);
+                for &b in encoded.as_bytes() {
+                    if written >= max_write {
+                        break;
+                    }
+                    *out.add(written) = b as c_char;
+                    written += 1;
+                }
+            }
+        }
+    }
+
+    // Null terminate
+    *out.add(written) = 0;
+    written
+}
+
+/// Format range text for a quickfix entry (e.g., "10-15 col 5-8").
+///
+/// Writes the formatted range to `out` buffer with max `out_size` bytes.
+///
+/// # Safety
+///
+/// - `out` must be a valid pointer to a buffer of at least `out_size` bytes
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_range_text(
+    lnum: LinenrT,
+    end_lnum: LinenrT,
+    col: c_int,
+    end_col: c_int,
+    out: *mut c_char,
+    out_size: usize,
+) -> usize {
+    use std::fmt::Write;
+
+    if out.is_null() || out_size == 0 {
+        return 0;
+    }
+
+    let mut result = String::with_capacity(64);
+
+    // Write line number
+    let _ = write!(result, "{lnum}");
+
+    // Write end line if different
+    if end_lnum > 0 && end_lnum != lnum {
+        let _ = write!(result, "-{end_lnum}");
+    }
+
+    // Write column if present
+    if col > 0 {
+        let _ = write!(result, " col {col}");
+
+        // Write end column if different
+        if end_col > 0 && end_col != col {
+            let _ = write!(result, "-{end_col}");
+        }
+    }
+
+    // Copy to output buffer
+    let bytes = result.as_bytes();
+    let copy_len = bytes.len().min(out_size - 1);
+
+    std::ptr::copy_nonoverlapping(bytes.as_ptr(), out.cast::<u8>(), copy_len);
+    *out.add(copy_len) = 0;
+
+    copy_len
+}
+
+/// Format a quickfix entry for display in the quickfix buffer.
+///
+/// Produces a line in the format: "filename|lnum col type|text"
+///
+/// # Safety
+///
+/// - `qfp` may be null (writes empty string)
+/// - `out` must be a valid pointer to a buffer of at least `out_size` bytes
+/// - If non-null, `qfp` must be a valid pointer to a `qfline_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_format_entry_line(
+    qfp: QfLineHandle,
+    fname: *const c_char,
+    out: *mut c_char,
+    out_size: usize,
+) -> usize {
+    use std::fmt::Write;
+
+    if out.is_null() || out_size == 0 {
+        return 0;
+    }
+
+    if qfp.is_null() {
+        *out = 0;
+        return 0;
+    }
+
+    let mut result = String::with_capacity(256);
+
+    // Add filename if present
+    if !fname.is_null() {
+        if let Ok(fname_str) = std::ffi::CStr::from_ptr(fname).to_str() {
+            result.push_str(fname_str);
+        }
+    }
+
+    result.push('|');
+
+    // Add position info
+    let lnum = nvim_qfline_get_lnum(qfp);
+    if lnum > 0 {
+        let _ = write!(result, "{lnum}");
+
+        let end_lnum = nvim_qfline_get_end_lnum(qfp);
+        if end_lnum > 0 && end_lnum != lnum {
+            let _ = write!(result, "-{end_lnum}");
+        }
+
+        let col = nvim_qfline_get_col(qfp);
+        if col > 0 {
+            let _ = write!(result, " col {col}");
+
+            let end_col = nvim_qfline_get_end_col(qfp);
+            if end_col > 0 && end_col != col {
+                let _ = write!(result, "-{end_col}");
+            }
+        }
+    }
+
+    // Add entry type
+    let entry_type = nvim_qfline_get_type(qfp);
+    if entry_type != 0 && entry_type != b' ' as c_char {
+        let _ = write!(result, " {}", entry_type as u8 as char);
+    }
+
+    result.push('|');
+
+    // Copy to output buffer (text is added by caller)
+    let bytes = result.as_bytes();
+    let copy_len = bytes.len().min(out_size - 1);
+
+    std::ptr::copy_nonoverlapping(bytes.as_ptr(), out.cast::<u8>(), copy_len);
+    *out.add(copy_len) = 0;
+
+    copy_len
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -569,6 +785,97 @@ mod tests {
             let line = c"no separators here";
             let hl = rs_qf_calc_line_highlights(line.as_ptr());
             assert!(!hl.valid);
+        }
+    }
+
+    #[test]
+    fn test_fmt_text_basic() {
+        unsafe {
+            let mut out = [0i8; 256];
+            let text = c"hello world";
+            let len = rs_qf_fmt_text(text.as_ptr(), out.as_mut_ptr(), out.len());
+            assert_eq!(len, 11);
+            let result = std::ffi::CStr::from_ptr(out.as_ptr());
+            assert_eq!(result.to_str().unwrap(), "hello world");
+        }
+    }
+
+    #[test]
+    fn test_fmt_text_newlines() {
+        unsafe {
+            let mut out = [0i8; 256];
+            let text = c"line1\nline2\nline3";
+            let len = rs_qf_fmt_text(text.as_ptr(), out.as_mut_ptr(), out.len());
+            let result = std::ffi::CStr::from_ptr(out.as_ptr());
+            assert_eq!(result.to_str().unwrap(), "line1 line2 line3");
+            assert_eq!(len, 17);
+        }
+    }
+
+    #[test]
+    fn test_fmt_text_collapse_whitespace() {
+        unsafe {
+            let mut out = [0i8; 256];
+            let text = c"foo\n   bar\n\t\tbaz";
+            let len = rs_qf_fmt_text(text.as_ptr(), out.as_mut_ptr(), out.len());
+            let result = std::ffi::CStr::from_ptr(out.as_ptr());
+            // After newline, whitespace is collapsed
+            assert_eq!(result.to_str().unwrap(), "foo bar baz");
+            assert_eq!(len, 11);
+        }
+    }
+
+    #[test]
+    fn test_fmt_text_null() {
+        unsafe {
+            let mut out = [0i8; 256];
+            let len = rs_qf_fmt_text(std::ptr::null(), out.as_mut_ptr(), out.len());
+            assert_eq!(len, 0);
+            assert_eq!(out[0], 0);
+        }
+    }
+
+    #[test]
+    fn test_range_text_line_only() {
+        unsafe {
+            let mut out = [0i8; 64];
+            let len = rs_qf_range_text(10, 0, 0, 0, out.as_mut_ptr(), out.len());
+            let result = std::ffi::CStr::from_ptr(out.as_ptr());
+            assert_eq!(result.to_str().unwrap(), "10");
+            assert_eq!(len, 2);
+        }
+    }
+
+    #[test]
+    fn test_range_text_line_range() {
+        unsafe {
+            let mut out = [0i8; 64];
+            let len = rs_qf_range_text(10, 15, 0, 0, out.as_mut_ptr(), out.len());
+            let result = std::ffi::CStr::from_ptr(out.as_ptr());
+            assert_eq!(result.to_str().unwrap(), "10-15");
+            assert_eq!(len, 5);
+        }
+    }
+
+    #[test]
+    fn test_range_text_with_col() {
+        unsafe {
+            let mut out = [0i8; 64];
+            let len = rs_qf_range_text(10, 0, 5, 0, out.as_mut_ptr(), out.len());
+            let result = std::ffi::CStr::from_ptr(out.as_ptr());
+            assert_eq!(result.to_str().unwrap(), "10 col 5");
+            assert_eq!(len, 8);
+        }
+    }
+
+    #[test]
+    fn test_range_text_full() {
+        unsafe {
+            let mut out = [0i8; 64];
+            let len = rs_qf_range_text(10, 15, 5, 8, out.as_mut_ptr(), out.len());
+            let result = std::ffi::CStr::from_ptr(out.as_ptr());
+            assert_eq!(result.to_str().unwrap(), "10-15 col 5-8");
+            assert_eq!(len, 13);
         }
     }
 }
