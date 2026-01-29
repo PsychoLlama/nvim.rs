@@ -52,6 +52,8 @@ extern int rs_same_leader(linenr_T lnum, int leader1_len, char *leader1_flags,
                           int leader2_len, char *leader2_flags);
 extern int rs_paragraph_start(linenr_T lnum);
 extern int rs_comp_textwidth(int ff);
+extern void rs_op_format(oparg_T *oap, int keep_cursor);
+extern void rs_op_formatexpr(oparg_T *oap);
 
 /// C accessor for curbuf->b_p_fo (formatoptions).
 char *nvim_get_curbuf_b_p_fo(void)
@@ -151,6 +153,172 @@ bool nvim_textfmt_get_curwin_w_p_nu(void)
 bool nvim_textfmt_get_curwin_w_p_rnu(void)
 {
   return curwin->w_p_rnu;
+}
+
+// =============================================================================
+// C Accessor Functions for Format Operators (Phase T3)
+// =============================================================================
+
+/// Get oap->cursor_start.lnum (accessor for Rust).
+linenr_T nvim_textfmt_oap_get_cursor_start_lnum(oparg_T *oap)
+{
+  return oap->cursor_start.lnum;
+}
+
+/// Get oap->cursor_start.col (accessor for Rust).
+colnr_T nvim_textfmt_oap_get_cursor_start_col(oparg_T *oap)
+{
+  return oap->cursor_start.col;
+}
+
+/// Get oap->start.lnum (accessor for Rust).
+linenr_T nvim_textfmt_oap_get_start_lnum(oparg_T *oap)
+{
+  return oap->start.lnum;
+}
+
+/// Get oap->start.col (accessor for Rust).
+colnr_T nvim_textfmt_oap_get_start_col(oparg_T *oap)
+{
+  return oap->start.col;
+}
+
+/// Get oap->end.lnum (accessor for Rust).
+linenr_T nvim_textfmt_oap_get_end_lnum(oparg_T *oap)
+{
+  return oap->end.lnum;
+}
+
+/// Get oap->line_count (accessor for Rust).
+linenr_T nvim_textfmt_oap_get_line_count(oparg_T *oap)
+{
+  return oap->line_count;
+}
+
+/// Get oap->is_VIsual (accessor for Rust).
+bool nvim_textfmt_oap_get_is_VIsual(oparg_T *oap)
+{
+  return oap->is_VIsual;
+}
+
+/// Get oap->end_adjusted (accessor for Rust).
+bool nvim_textfmt_oap_get_end_adjusted(oparg_T *oap)
+{
+  return oap->end_adjusted;
+}
+
+/// Set curwin->w_cursor (accessor for Rust).
+void nvim_textfmt_set_curwin_cursor(linenr_T lnum, colnr_T col)
+{
+  curwin->w_cursor.lnum = lnum;
+  curwin->w_cursor.col = col;
+}
+
+/// Get curwin->w_cursor.lnum (accessor for Rust).
+linenr_T nvim_textfmt_get_curwin_cursor_lnum(void)
+{
+  return curwin->w_cursor.lnum;
+}
+
+/// Call u_save (accessor for Rust).
+int nvim_textfmt_u_save(linenr_T top, linenr_T bot)
+{
+  return u_save(top, bot);
+}
+
+/// Call redraw_curbuf_later (accessor for Rust).
+void nvim_textfmt_redraw_curbuf_later(int type)
+{
+  redraw_curbuf_later(type);
+}
+
+/// Get cmdmod lockmarks flag (accessor for Rust).
+bool nvim_textfmt_get_cmdmod_lockmarks(void)
+{
+  return (cmdmod.cmod_flags & CMOD_LOCKMARKS) != 0;
+}
+
+/// Set curbuf->b_op_start (accessor for Rust).
+void nvim_textfmt_set_curbuf_op_start(linenr_T lnum, colnr_T col)
+{
+  curbuf->b_op_start.lnum = lnum;
+  curbuf->b_op_start.col = col;
+}
+
+/// Set curbuf->b_op_end (accessor for Rust).
+void nvim_textfmt_set_curbuf_op_end(linenr_T lnum, colnr_T col)
+{
+  curbuf->b_op_end.lnum = lnum;
+  curbuf->b_op_end.col = col;
+}
+
+/// Set saved_cursor (accessor for Rust).
+void nvim_textfmt_set_saved_cursor(linenr_T lnum, colnr_T col)
+{
+  saved_cursor.lnum = lnum;
+  saved_cursor.col = col;
+}
+
+/// Get saved_cursor.lnum (accessor for Rust).
+linenr_T nvim_textfmt_get_saved_cursor_lnum(void)
+{
+  return saved_cursor.lnum;
+}
+
+/// Clear saved_cursor (accessor for Rust).
+void nvim_textfmt_clear_saved_cursor(void)
+{
+  saved_cursor.lnum = 0;
+}
+
+/// Call format_lines (accessor for Rust).
+void nvim_textfmt_format_lines(linenr_T line_count, bool avoid_fex)
+{
+  format_lines(line_count, avoid_fex);
+}
+
+/// Call beginline (accessor for Rust).
+void nvim_textfmt_beginline(int flags)
+{
+  beginline(flags);
+}
+
+/// Call check_cursor (accessor for Rust).
+void nvim_textfmt_check_cursor(void *win)
+{
+  check_cursor((win_T *)win);
+}
+
+/// Get curbuf->b_ml.ml_line_count (accessor for Rust).
+linenr_T nvim_textfmt_get_ml_line_count(void)
+{
+  return curbuf->b_ml.ml_line_count;
+}
+
+/// Call msgmore (accessor for Rust).
+void nvim_textfmt_msgmore(linenr_T n)
+{
+  msgmore(n);
+}
+
+/// Adjust visual windows after line count change (accessor for Rust).
+void nvim_textfmt_adjust_visual_windows(linenr_T old_line_count)
+{
+  FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
+    if (wp->w_old_cursor_lnum != 0) {
+      if (wp->w_old_cursor_lnum > wp->w_old_visual_lnum) {
+        wp->w_old_cursor_lnum += old_line_count;
+      } else {
+        wp->w_old_visual_lnum += old_line_count;
+      }
+    }
+  }
+}
+
+/// Call fex_format (accessor for Rust).
+int nvim_textfmt_fex_format(linenr_T lnum, long count, int c)
+{
+  return fex_format(lnum, count, c);
 }
 
 static bool did_add_space = false;  ///< auto_format() added an extra space
@@ -743,87 +911,13 @@ int comp_textwidth(bool ff)
 /// @param keep_cursor  keep cursor on same text char
 void op_format(oparg_T *oap, bool keep_cursor)
 {
-  linenr_T old_line_count = curbuf->b_ml.ml_line_count;
-
-  // Place the cursor where the "gq" or "gw" command was given, so that "u"
-  // can put it back there.
-  curwin->w_cursor = oap->cursor_start;
-
-  if (u_save((linenr_T)(oap->start.lnum - 1),
-             (linenr_T)(oap->end.lnum + 1)) == FAIL) {
-    return;
-  }
-  curwin->w_cursor = oap->start;
-
-  if (oap->is_VIsual) {
-    // When there is no change: need to remove the Visual selection
-    redraw_curbuf_later(UPD_INVERTED);
-  }
-
-  if ((cmdmod.cmod_flags & CMOD_LOCKMARKS) == 0) {
-    // Set '[ mark at the start of the formatted area
-    curbuf->b_op_start = oap->start;
-  }
-
-  // For "gw" remember the cursor position and put it back below (adjusted
-  // for joined and split lines).
-  if (keep_cursor) {
-    saved_cursor = oap->cursor_start;
-  }
-
-  format_lines(oap->line_count, keep_cursor);
-
-  // Leave the cursor at the first non-blank of the last formatted line.
-  // If the cursor was moved one line back (e.g. with "Q}") go to the next
-  // line, so "." will do the next lines.
-  if (oap->end_adjusted && curwin->w_cursor.lnum < curbuf->b_ml.ml_line_count) {
-    curwin->w_cursor.lnum++;
-  }
-  beginline(BL_WHITE | BL_FIX);
-  old_line_count = curbuf->b_ml.ml_line_count - old_line_count;
-  msgmore(old_line_count);
-
-  if ((cmdmod.cmod_flags & CMOD_LOCKMARKS) == 0) {
-    // put '] mark on the end of the formatted area
-    curbuf->b_op_end = curwin->w_cursor;
-  }
-
-  if (keep_cursor) {
-    curwin->w_cursor = saved_cursor;
-    saved_cursor.lnum = 0;
-
-    // formatting may have made the cursor position invalid
-    check_cursor(curwin);
-  }
-
-  if (oap->is_VIsual) {
-    FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {
-      if (wp->w_old_cursor_lnum != 0) {
-        // When lines have been inserted or deleted, adjust the end of
-        // the Visual area to be redrawn.
-        if (wp->w_old_cursor_lnum > wp->w_old_visual_lnum) {
-          wp->w_old_cursor_lnum += old_line_count;
-        } else {
-          wp->w_old_visual_lnum += old_line_count;
-        }
-      }
-    }
-  }
+  rs_op_format(oap, keep_cursor);
 }
 
 /// Implementation of the format operator 'gq' for when using 'formatexpr'.
 void op_formatexpr(oparg_T *oap)
 {
-  if (oap->is_VIsual) {
-    // When there is no change: need to remove the Visual selection
-    redraw_curbuf_later(UPD_INVERTED);
-  }
-
-  if (fex_format(oap->start.lnum, oap->line_count, NUL) != 0) {
-    // As documented: when 'formatexpr' returns non-zero fall back to
-    // internal formatting.
-    op_format(oap, false);
-  }
+  rs_op_formatexpr(oap);
 }
 
 /// @param c  character to be inserted
