@@ -30,6 +30,7 @@ pub mod setcmd;
 pub mod setops;
 pub mod show;
 pub mod sideeffect;
+pub mod storage;
 pub mod types;
 pub mod validate;
 pub mod value;
