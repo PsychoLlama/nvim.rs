@@ -493,6 +493,271 @@ impl ExpandWhat {
     }
 }
 
+// =============================================================================
+// FFI exports for Ex commands (Phase Y6)
+// =============================================================================
+
+use std::ffi::c_void;
+
+/// Opaque pointer to synblock for FFI
+pub type SynBlockPtr = *const c_void;
+
+/// Subcommand ID constants for FFI
+pub mod subcmd_id {
+    pub const CASE: i32 = 0;
+    pub const CLEAR: i32 = 1;
+    pub const CLUSTER: i32 = 2;
+    pub const CONCEAL: i32 = 3;
+    pub const ENABLE: i32 = 4;
+    pub const FOLDLEVEL: i32 = 5;
+    pub const INCLUDE: i32 = 6;
+    pub const ISKEYWORD: i32 = 7;
+    pub const KEYWORD: i32 = 8;
+    pub const LIST: i32 = 9;
+    pub const MANUAL: i32 = 10;
+    pub const MATCH: i32 = 11;
+    pub const OFF: i32 = 12;
+    pub const REGION: i32 = 13;
+    pub const RESET: i32 = 14;
+    pub const SPELL: i32 = 15;
+    pub const SYNC: i32 = 16;
+    pub const INVALID: i32 = -1;
+}
+
+/// Parse a syntax subcommand name and return its ID.
+/// Returns -1 for invalid commands.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_parse_subcmd(name: *const c_char) -> c_int {
+    if name.is_null() {
+        return subcmd_id::INVALID;
+    }
+
+    let name_str = match std::ffi::CStr::from_ptr(name).to_str() {
+        Ok(s) => s,
+        Err(_) => return subcmd_id::INVALID,
+    };
+
+    match SyntaxSubcommand::from_name(name_str) {
+        Some(SyntaxSubcommand::Case) => subcmd_id::CASE,
+        Some(SyntaxSubcommand::Clear) => subcmd_id::CLEAR,
+        Some(SyntaxSubcommand::Cluster) => subcmd_id::CLUSTER,
+        Some(SyntaxSubcommand::Conceal) => subcmd_id::CONCEAL,
+        Some(SyntaxSubcommand::Enable) => subcmd_id::ENABLE,
+        Some(SyntaxSubcommand::FoldLevel) => subcmd_id::FOLDLEVEL,
+        Some(SyntaxSubcommand::Include) => subcmd_id::INCLUDE,
+        Some(SyntaxSubcommand::IsKeyword) => subcmd_id::ISKEYWORD,
+        Some(SyntaxSubcommand::Keyword) => subcmd_id::KEYWORD,
+        Some(SyntaxSubcommand::List) => subcmd_id::LIST,
+        Some(SyntaxSubcommand::Manual) => subcmd_id::MANUAL,
+        Some(SyntaxSubcommand::Match) => subcmd_id::MATCH,
+        Some(SyntaxSubcommand::Off) => subcmd_id::OFF,
+        Some(SyntaxSubcommand::Region) => subcmd_id::REGION,
+        Some(SyntaxSubcommand::Reset) => subcmd_id::RESET,
+        Some(SyntaxSubcommand::Spell) => subcmd_id::SPELL,
+        Some(SyntaxSubcommand::Sync) => subcmd_id::SYNC,
+        None => subcmd_id::INVALID,
+    }
+}
+
+/// Get the number of available syntax subcommands.
+#[no_mangle]
+pub extern "C" fn rs_syn_subcmd_count() -> c_int {
+    SyntaxSubcommand::all_names().len() as c_int
+}
+
+/// Check if a subcommand ID is valid.
+#[no_mangle]
+pub const extern "C" fn rs_syn_subcmd_is_valid(id: c_int) -> c_int {
+    if id >= 0 && id <= subcmd_id::SYNC { 1 } else { 0 }
+}
+
+/// Case mode constants
+#[no_mangle]
+pub const extern "C" fn rs_syn_case_match() -> c_int {
+    0
+}
+
+#[no_mangle]
+pub const extern "C" fn rs_syn_case_ignore() -> c_int {
+    1
+}
+
+/// Parse case mode argument.
+/// Returns 0 for "match", 1 for "ignore", -1 for invalid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_parse_case_mode(arg: *const c_char) -> c_int {
+    if arg.is_null() {
+        return -1;
+    }
+
+    let arg_str = match std::ffi::CStr::from_ptr(arg).to_str() {
+        Ok(s) => s,
+        Err(_) => return -1,
+    };
+
+    match CaseMode::from_arg(arg_str) {
+        Some(CaseMode::Match) => 0,
+        Some(CaseMode::Ignore) => 1,
+        None => -1,
+    }
+}
+
+/// Spell mode constants
+#[no_mangle]
+pub const extern "C" fn rs_syn_spell_default() -> c_int {
+    spell_mode::DEFAULT
+}
+
+#[no_mangle]
+pub const extern "C" fn rs_syn_spell_toplevel() -> c_int {
+    spell_mode::TOP
+}
+
+#[no_mangle]
+pub const extern "C" fn rs_syn_spell_notoplevel() -> c_int {
+    spell_mode::NOTOP
+}
+
+/// Parse spell mode argument.
+/// Returns spell mode constant or -1 for invalid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_parse_spell_mode(arg: *const c_char) -> c_int {
+    if arg.is_null() {
+        return -1;
+    }
+
+    let arg_str = match std::ffi::CStr::from_ptr(arg).to_str() {
+        Ok(s) => s,
+        Err(_) => return -1,
+    };
+
+    match SpellMode::from_arg(arg_str) {
+        Some(mode) => mode.to_raw(),
+        None => -1,
+    }
+}
+
+/// Sync mode constants
+pub mod sync_mode_id {
+    pub const FROM_START: i32 = 0;
+    pub const CCOMMENT: i32 = 1;
+    pub const MATCH: i32 = 2;
+    pub const LINES: i32 = 3;
+    pub const MINLINES: i32 = 4;
+    pub const MAXLINES: i32 = 5;
+    pub const LINEBREAKS: i32 = 6;
+    pub const INVALID: i32 = -1;
+}
+
+/// Parse sync mode argument.
+/// Returns sync mode ID or -1 for invalid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_parse_sync_mode(arg: *const c_char) -> c_int {
+    if arg.is_null() {
+        return sync_mode_id::INVALID;
+    }
+
+    let arg_str = match std::ffi::CStr::from_ptr(arg).to_str() {
+        Ok(s) => s,
+        Err(_) => return sync_mode_id::INVALID,
+    };
+
+    match SyncMode::from_arg(arg_str) {
+        Some(SyncMode::FromStart) => sync_mode_id::FROM_START,
+        Some(SyncMode::CComment) => sync_mode_id::CCOMMENT,
+        Some(SyncMode::Match) => sync_mode_id::MATCH,
+        Some(SyncMode::Lines) => sync_mode_id::LINES,
+        Some(SyncMode::MinLines) => sync_mode_id::MINLINES,
+        Some(SyncMode::MaxLines) => sync_mode_id::MAXLINES,
+        Some(SyncMode::LineBreaks) => sync_mode_id::LINEBREAKS,
+        None => sync_mode_id::INVALID,
+    }
+}
+
+/// Get the current synblock for the current window.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_curwin_synblock() -> SynBlockHandle {
+    curwin_synblock()
+}
+
+/// Get the current window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_curwin() -> WinHandle {
+    curwin()
+}
+
+
+
+
+/// Command settings struct
+#[repr(C)]
+pub struct SynCmdSettings {
+    /// Whether to include linked groups
+    pub include_link: c_int,
+    /// Whether to include default groups
+    pub include_default: c_int,
+    /// Whether to include "None"
+    pub include_none: c_int,
+    /// Current running include tag
+    pub inc_tag: c_int,
+}
+
+/// Get current command settings.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_cmd_settings() -> SynCmdSettings {
+    SynCmdSettings {
+        include_link: if include_link() { 1 } else { 0 },
+        include_default: if include_default() { 1 } else { 0 },
+        include_none: if include_none() { 1 } else { 0 },
+        inc_tag: running_inc_tag(),
+    }
+}
+
+/// Synblock settings for commands
+#[repr(C)]
+pub struct SynblockCmdSettings {
+    /// Whether concealing is enabled
+    pub conceal: c_int,
+    /// Whether case-insensitive matching is enabled
+    pub ignorecase: c_int,
+}
+
+/// Get synblock command settings.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synblock_cmd_settings(block: SynBlockPtr) -> SynblockCmdSettings {
+    let handle = SynBlockHandle(block as *mut c_void);
+    SynblockCmdSettings {
+        conceal: if synblock_conceal_setting(handle) {
+            1
+        } else {
+            0
+        },
+        ignorecase: if synblock_ic_setting(handle) { 1 } else { 0 },
+    }
+}
+
+/// Expansion type constants
+pub mod expand_type {
+    pub const SUBCMD: i32 = 0;
+    pub const CASE: i32 = 1;
+    pub const SPELL: i32 = 2;
+    pub const SYNC: i32 = 3;
+    pub const CLUSTER: i32 = 4;
+}
+
+/// Get the number of options for an expansion type.
+#[no_mangle]
+pub extern "C" fn rs_syn_expand_count(expand_type: c_int) -> c_int {
+    match expand_type {
+        expand_type::SUBCMD => SyntaxSubcommand::all_names().len() as c_int,
+        expand_type::CASE => 2,
+        expand_type::SPELL => 3,
+        expand_type::SYNC => 10,
+        expand_type::CLUSTER => 0, // Dynamic
+        _ => 0,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
