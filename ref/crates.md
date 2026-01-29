@@ -66,7 +66,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | mapping        | Key mappings and abbreviations          |
 | mark           | Marks and positions                     |
 | marktree       | B-tree for extmarks at positions        |
-| match          | Match highlighting (IDs, priorities, positions) |
+| match          | Match highlighting (add, delete, lookup, positions, ranges, viml helpers) |
 | math           | Math utilities                          |
 | mbyte          | Multibyte and UTF-8 encoding            |
 | memfile        | Swap file management (block headers, dirty state, page calculations) |

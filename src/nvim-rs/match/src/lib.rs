@@ -8,11 +8,16 @@
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::missing_const_for_fn)]
 
+pub mod add;
+pub mod delete;
 pub mod display;
 pub mod id;
 pub mod item;
+pub mod lookup;
 pub mod position;
 pub mod priority;
+pub mod range;
+pub mod viml;
 
 use std::ffi::c_int;
 

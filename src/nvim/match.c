@@ -39,7 +39,183 @@
 
 #include "match.c.generated.h"
 
+// =============================================================================
+// Rust FFI declarations
+// =============================================================================
+
+// add.rs - Match addition validation
+extern int rs_match_is_reserved_id(int id);
+extern int rs_match_is_valid_matchadd_id(int id);
+extern int rs_match_is_valid_matchaddpos_id(int id);
+extern int rs_match_id_exists(win_T *wp, int id);
+extern matchitem_T *rs_match_find_insert_point(win_T *wp, int priority);
+extern int rs_match_should_insert_at_head(win_T *wp, int priority);
+extern int rs_match_validate_add(win_T *wp, const char *group, const char *pattern,
+                                 int id, int for_matchadd, int *out_id, int *out_next_id);
+extern int rs_match_add_error_empty_group(void);
+extern int rs_match_add_error_empty_pattern(void);
+extern int rs_match_add_error_invalid_id(void);
+extern int rs_match_add_error_id_taken(void);
+extern int rs_match_add_error_id_reserved(void);
+
+// delete.rs - Match deletion
+extern int rs_match_validate_delete_id(int id);
+extern matchitem_T *rs_match_find_by_id(win_T *wp, int id);
+extern matchitem_T *rs_match_find_for_delete(win_T *wp, int id,
+                                             matchitem_T **out_prev, int *out_at_head);
+extern int rs_match_validate_delete(win_T *wp, int id);
+extern int rs_match_delete_error_invalid_id(void);
+extern int rs_match_delete_error_not_found(void);
+
+// lookup.rs - Match queries
+extern matchitem_T *rs_match_get_by_id(win_T *wp, int id);
+extern int rs_match_get_info_by_id(win_T *wp, int id, int *out_priority, int *out_hlg_id,
+                                   int *out_has_pattern, int *out_has_positions, int *out_pos_count);
+extern int rs_match_count(win_T *wp);
+extern int rs_match_has_matches(win_T *wp);
+extern matchitem_T *rs_match_get_first(win_T *wp);
+extern matchitem_T *rs_match_get_next(matchitem_T *m);
+
+// position.rs - Position validation
+extern int rs_match_validate_number_position(int64_t lnum);
+extern int rs_match_validate_list_position(int64_t lnum, int col, int len, int list_len);
+extern int rs_match_position_overlaps_range(int64_t lnum, int64_t range_top, int64_t range_bot);
+
+// range.rs - Line range calculations
+extern int64_t rs_match_range_include_line_top(int64_t current_top, int64_t lnum);
+extern int64_t rs_match_range_include_line_bot(int64_t current_bot, int64_t lnum);
+extern int rs_match_range_is_valid(int64_t top, int64_t bot);
+extern int rs_match_range_contains(int64_t top, int64_t bot, int64_t lnum);
+
 static const char *e_invalwindow = N_("E957: Invalid window number");
+
+// =============================================================================
+// Accessor functions for Rust FFI
+// =============================================================================
+
+/// Get the head of the match list for a window.
+matchitem_T *nvim_match_get_head(win_T *wp)
+{
+  return wp->w_match_head;
+}
+
+/// Set the head of the match list for a window.
+void nvim_match_set_head(win_T *wp, matchitem_T *head)
+{
+  wp->w_match_head = head;
+}
+
+/// Get the next match ID for a window.
+int nvim_match_get_next_id(win_T *wp)
+{
+  return wp->w_next_match_id;
+}
+
+/// Set the next match ID for a window.
+void nvim_match_set_next_id(win_T *wp, int id)
+{
+  wp->w_next_match_id = id;
+}
+
+/// Get the next match item in the linked list.
+matchitem_T *nvim_match_item_next(matchitem_T *m)
+{
+  return m != NULL ? m->mit_next : NULL;
+}
+
+/// Set the next pointer of a match item.
+void nvim_match_item_set_next(matchitem_T *m, matchitem_T *next)
+{
+  if (m != NULL) {
+    m->mit_next = next;
+  }
+}
+
+/// Get the ID of a match item.
+int nvim_match_item_get_id(matchitem_T *m)
+{
+  return m != NULL ? m->mit_id : 0;
+}
+
+/// Get the priority of a match item.
+int nvim_match_item_get_priority(matchitem_T *m)
+{
+  return m != NULL ? m->mit_priority : 0;
+}
+
+/// Get the pattern of a match item (may be NULL for position matches).
+const char *nvim_match_item_get_pattern(matchitem_T *m)
+{
+  return m != NULL ? m->mit_pattern : NULL;
+}
+
+/// Get the highlight group ID of a match item.
+int nvim_match_item_get_hlg_id(matchitem_T *m)
+{
+  return m != NULL ? m->mit_hlg_id : 0;
+}
+
+/// Get the conceal character of a match item.
+int nvim_match_item_get_conceal_char(matchitem_T *m)
+{
+  return m != NULL ? m->mit_conceal_char : 0;
+}
+
+/// Get the top line number for position matches.
+linenr_T nvim_match_item_get_toplnum(matchitem_T *m)
+{
+  return m != NULL ? m->mit_toplnum : 0;
+}
+
+/// Get the bottom line number for position matches.
+linenr_T nvim_match_item_get_botlnum(matchitem_T *m)
+{
+  return m != NULL ? m->mit_botlnum : 0;
+}
+
+/// Check if a match item has a pattern (vs positions).
+bool nvim_match_item_has_pattern(matchitem_T *m)
+{
+  return m != NULL && m->mit_pattern != NULL;
+}
+
+/// Check if a match item has positions.
+bool nvim_match_item_has_positions(matchitem_T *m)
+{
+  return m != NULL && m->mit_pos_array != NULL && m->mit_pos_count > 0;
+}
+
+/// Get the position count for a match item.
+int nvim_match_item_get_pos_count(matchitem_T *m)
+{
+  return m != NULL ? m->mit_pos_count : 0;
+}
+
+/// Allocate a new match item.
+matchitem_T *nvim_match_alloc(void)
+{
+  return xcalloc(1, sizeof(matchitem_T));
+}
+
+/// Free a match item and all its resources.
+void nvim_match_free(matchitem_T *m)
+{
+  if (m != NULL) {
+    vim_regfree(m->mit_match.regprog);
+    xfree(m->mit_pattern);
+    xfree(m->mit_pos_array);
+    xfree(m);
+  }
+}
+
+/// Allocate position array for a match item.
+llpos_T *nvim_match_alloc_positions(size_t count)
+{
+  if (count == 0) {
+    return NULL;
+  }
+  return xcalloc(count, sizeof(llpos_T));
+}
 
 #define SEARCH_HL_PRIORITY 0
 
