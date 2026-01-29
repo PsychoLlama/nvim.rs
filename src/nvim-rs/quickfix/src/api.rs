@@ -501,6 +501,208 @@ pub extern "C" fn rs_qf_valid_list_nr(nr: c_int, listcount: c_int) -> bool {
 }
 
 // =============================================================================
+// Phase Q7: Additional VimL API Helpers
+// =============================================================================
+
+/// Parameters for setqflist()/setloclist()
+#[repr(C)]
+#[derive(Debug, Clone, Default)]
+pub struct QfSetListParams {
+    /// Action to perform ('r', 'a', 'f', or ' ')
+    pub action: u8,
+    /// Target list number (0 = current)
+    pub nr: c_int,
+    /// ID to operate on (0 = use nr)
+    pub id: u32,
+    /// New index to set (0 = don't change)
+    pub idx: c_int,
+    /// Whether we have title
+    pub has_title: bool,
+    /// Whether we have context
+    pub has_context: bool,
+    /// Whether to create new list
+    pub create_new: bool,
+}
+
+/// FFI export: Parse setqflist action and validate
+#[no_mangle]
+pub extern "C" fn rs_qf_parse_setlist_action(action: u8) -> c_int {
+    match action {
+        b' ' | 0 | b'r' => 0, // Replace
+        b'a' => 1,            // Append
+        b'f' => 2,            // Free
+        _ => -1,              // Invalid
+    }
+}
+
+/// Validation result for setqflist parameters
+#[repr(C)]
+#[derive(Debug, Clone, Default)]
+pub struct QfSetListValidation {
+    /// Whether parameters are valid
+    pub valid: bool,
+    /// Error code (0 = no error)
+    pub error_code: c_int,
+    /// Resolved list index (0-based)
+    pub resolved_list_idx: c_int,
+    /// Whether to create a new list
+    pub create_new: bool,
+}
+
+/// FFI export: Validate setqflist parameters
+#[no_mangle]
+pub extern "C" fn rs_qf_validate_setlist(
+    action: u8,
+    nr: c_int,
+    id: u32,
+    curlist: c_int,
+    listcount: c_int,
+) -> QfSetListValidation {
+    let mut result = QfSetListValidation::default();
+
+    // Validate action
+    let parsed_action = rs_qf_parse_setlist_action(action);
+    if parsed_action < 0 {
+        result.error_code = 1; // Invalid action
+        return result;
+    }
+
+    // For 'f' (free) action, must have valid list
+    if parsed_action == 2 && listcount == 0 {
+        result.error_code = 2; // No list to free
+        return result;
+    }
+
+    // Resolve list number
+    if id != 0 {
+        // ID takes precedence - caller needs to resolve
+        result.valid = true;
+        result.resolved_list_idx = -1; // Signal to use ID
+    } else if nr == 0 {
+        // Current list
+        if listcount == 0 && parsed_action != 0 {
+            // No current list and not replacing
+            result.create_new = true;
+        }
+        result.resolved_list_idx = curlist;
+        result.valid = true;
+    } else {
+        let resolved = rs_qf_resolve_list_nr(nr, curlist, listcount);
+        if resolved < 0 && parsed_action != 0 {
+            result.error_code = 3; // Invalid list number
+            return result;
+        }
+        result.resolved_list_idx = resolved;
+        result.valid = true;
+    }
+
+    result
+}
+
+/// Result of getqflist() operation
+#[repr(C)]
+#[derive(Debug, Clone, Default)]
+pub struct QfGetListResult {
+    /// Operation succeeded
+    pub success: bool,
+    /// Number of entries
+    pub size: c_int,
+    /// Current index (1-based)
+    pub idx: c_int,
+    /// List ID
+    pub id: u32,
+    /// Changed tick
+    pub changedtick: c_int,
+    /// Quickfix buffer number
+    pub qfbufnr: c_int,
+    /// File window ID (for location lists)
+    pub filewinid: c_int,
+}
+
+/// FFI export: Create empty getqflist result
+#[no_mangle]
+pub extern "C" fn rs_qf_getlist_result_empty() -> QfGetListResult {
+    QfGetListResult::default()
+}
+
+/// FFI export: Create success getqflist result with basic info
+#[no_mangle]
+pub extern "C" fn rs_qf_getlist_result_success(
+    size: c_int,
+    idx: c_int,
+    id: u32,
+) -> QfGetListResult {
+    QfGetListResult {
+        success: true,
+        size,
+        idx,
+        id,
+        ..Default::default()
+    }
+}
+
+/// Index validation for setqflist 'idx' field
+#[no_mangle]
+pub extern "C" fn rs_qf_validate_setlist_idx(idx: c_int, count: c_int) -> c_int {
+    if idx <= 0 {
+        // 0 or negative means "don't change" or "last"
+        if idx == 0 {
+            0 // Don't change
+        } else {
+            // Negative: from end
+            let resolved = count + idx + 1;
+            if resolved < 1 {
+                1 // Clamp to first
+            } else if resolved > count {
+                count // Clamp to last
+            } else {
+                resolved
+            }
+        }
+    } else if idx > count {
+        count // Clamp to last
+    } else {
+        idx
+    }
+}
+
+/// Entry index validation for API
+#[no_mangle]
+pub extern "C" fn rs_qf_api_valid_entry_idx(idx: c_int, count: c_int) -> bool {
+    idx >= 1 && idx <= count
+}
+
+/// Get the "what" constant value
+#[no_mangle]
+pub extern "C" fn rs_qf_what_all() -> u32 {
+    QF_WHAT_ALL
+}
+
+/// Get the "what" idx constant value
+#[no_mangle]
+pub extern "C" fn rs_qf_what_idx() -> u32 {
+    QF_WHAT_IDX
+}
+
+/// Get the "what" items constant value
+#[no_mangle]
+pub extern "C" fn rs_qf_what_items() -> u32 {
+    QF_WHAT_ITEMS
+}
+
+/// Get the "what" title constant value
+#[no_mangle]
+pub extern "C" fn rs_qf_what_title() -> u32 {
+    QF_WHAT_TITLE
+}
+
+/// Get the "what" size constant value
+#[no_mangle]
+pub extern "C" fn rs_qf_what_size() -> u32 {
+    QF_WHAT_SIZE
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -646,5 +848,105 @@ mod tests {
         assert_eq!(props.bufnr, 0);
         assert_eq!(props.lnum, 0);
         assert!(!props.valid);
+    }
+
+    // Phase Q7 tests
+    #[test]
+    fn test_parse_setlist_action() {
+        assert_eq!(rs_qf_parse_setlist_action(b' '), 0);
+        assert_eq!(rs_qf_parse_setlist_action(b'r'), 0);
+        assert_eq!(rs_qf_parse_setlist_action(b'a'), 1);
+        assert_eq!(rs_qf_parse_setlist_action(b'f'), 2);
+        assert_eq!(rs_qf_parse_setlist_action(b'x'), -1);
+    }
+
+    #[test]
+    fn test_validate_setlist_valid() {
+        let result = rs_qf_validate_setlist(b' ', 0, 0, 2, 5);
+        assert!(result.valid);
+        assert_eq!(result.resolved_list_idx, 2);
+    }
+
+    #[test]
+    fn test_validate_setlist_invalid_action() {
+        let result = rs_qf_validate_setlist(b'x', 0, 0, 0, 5);
+        assert!(!result.valid);
+        assert_eq!(result.error_code, 1);
+    }
+
+    #[test]
+    fn test_validate_setlist_with_id() {
+        let result = rs_qf_validate_setlist(b' ', 0, 123, 0, 5);
+        assert!(result.valid);
+        assert_eq!(result.resolved_list_idx, -1); // Signal to use ID
+    }
+
+    #[test]
+    fn test_getlist_result_empty() {
+        let result = rs_qf_getlist_result_empty();
+        assert!(!result.success);
+        assert_eq!(result.size, 0);
+    }
+
+    #[test]
+    fn test_getlist_result_success() {
+        let result = rs_qf_getlist_result_success(10, 3, 42);
+        assert!(result.success);
+        assert_eq!(result.size, 10);
+        assert_eq!(result.idx, 3);
+        assert_eq!(result.id, 42);
+    }
+
+    #[test]
+    fn test_validate_setlist_idx() {
+        // Normal positive
+        assert_eq!(rs_qf_validate_setlist_idx(3, 10), 3);
+
+        // Zero means don't change
+        assert_eq!(rs_qf_validate_setlist_idx(0, 10), 0);
+
+        // Clamp to max
+        assert_eq!(rs_qf_validate_setlist_idx(15, 10), 10);
+
+        // Negative from end
+        assert_eq!(rs_qf_validate_setlist_idx(-1, 10), 10);
+        assert_eq!(rs_qf_validate_setlist_idx(-5, 10), 6);
+
+        // Clamp negative
+        assert_eq!(rs_qf_validate_setlist_idx(-20, 10), 1);
+    }
+
+    #[test]
+    fn test_valid_entry_idx() {
+        assert!(rs_qf_api_valid_entry_idx(1, 10));
+        assert!(rs_qf_api_valid_entry_idx(10, 10));
+        assert!(!rs_qf_api_valid_entry_idx(0, 10));
+        assert!(!rs_qf_api_valid_entry_idx(11, 10));
+        assert!(!rs_qf_api_valid_entry_idx(-1, 10));
+    }
+
+    #[test]
+    fn test_what_constants() {
+        assert_eq!(rs_qf_what_all(), QF_WHAT_ALL);
+        assert_eq!(rs_qf_what_idx(), QF_WHAT_IDX);
+        assert_eq!(rs_qf_what_items(), QF_WHAT_ITEMS);
+        assert_eq!(rs_qf_what_title(), QF_WHAT_TITLE);
+        assert_eq!(rs_qf_what_size(), QF_WHAT_SIZE);
+    }
+
+    #[test]
+    fn test_setlist_params_default() {
+        let params = QfSetListParams::default();
+        assert_eq!(params.action, 0);
+        assert_eq!(params.nr, 0);
+        assert_eq!(params.id, 0);
+        assert!(!params.has_title);
+    }
+
+    #[test]
+    fn test_setlist_validation_default() {
+        let validation = QfSetListValidation::default();
+        assert!(!validation.valid);
+        assert_eq!(validation.error_code, 0);
     }
 }
