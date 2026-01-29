@@ -2186,4 +2186,189 @@ mod tests {
         // With topfill
         assert_eq!(rs_change_invalidation_start(10, 10, 3), 3);
     }
+
+    // =============================================================================
+    // Phase D5: Integration Tests
+    // =============================================================================
+
+    /// Test a complete scroll scenario combining multiple functions.
+    #[test]
+    fn test_integration_scroll_scenario() {
+        // Simulate a window with 24 visible lines
+        let win_height = 24;
+        let old_topline: LinenrT = 100;
+        let new_topline: LinenrT = 105; // Scrolled down 5 lines
+
+        // 1. Calculate scroll direction
+        let direction = rs_scroll_direction(old_topline, new_topline);
+        assert_eq!(direction, 1); // Scrolled up (content moved up)
+
+        // 2. Check if scroll is beneficial
+        let scroll_lines = (new_topline - old_topline) as c_int;
+        let is_beneficial = rs_scroll_is_beneficial(scroll_lines, win_height);
+        assert_eq!(is_beneficial, 1); // 5 lines scroll in 24-line window is good
+
+        // 3. Calculate reusable lines
+        let reusable = rs_scroll_reusable_lines(
+            unsafe { WinHandle::from_ptr(std::ptr::null_mut()) },
+            old_topline,
+            new_topline,
+            win_height,
+        );
+        assert_eq!(reusable, 19); // 24 - 5 = 19 lines can be reused
+
+        // 4. Calculate redraw bounds
+        let first_redraw = rs_scroll_first_redraw_line(scroll_lines, win_height);
+        let last_redraw = rs_scroll_last_redraw_line(scroll_lines, win_height);
+        assert_eq!(first_redraw, 0); // Start redrawing from top
+        assert_eq!(last_redraw, 5); // Redraw first 5 lines
+    }
+
+    /// Test a complete cursor visibility scenario.
+    #[test]
+    fn test_integration_cursor_visibility() {
+        let topline: LinenrT = 100;
+        let botline: LinenrT = 123; // 24 visible lines
+        let scrolloff = 3;
+
+        // Test cursor in visible area
+        let cursor_visible: LinenrT = 110;
+        assert_eq!(
+            rs_line_visible_in_window(cursor_visible, topline, botline),
+            1
+        );
+        assert_eq!(rs_cursor_above_window(cursor_visible, topline), 0);
+        assert_eq!(rs_cursor_below_window(cursor_visible, botline), 0);
+        assert_eq!(
+            rs_scroll_to_cursor(cursor_visible, topline, botline, scrolloff),
+            0
+        );
+
+        // Test cursor above visible area
+        let cursor_above: LinenrT = 95;
+        assert_eq!(rs_line_visible_in_window(cursor_above, topline, botline), 0);
+        assert_eq!(rs_cursor_above_window(cursor_above, topline), 1);
+        // Should scroll down to show cursor
+        let scroll_needed = rs_scroll_to_cursor(cursor_above, topline, botline, scrolloff);
+        assert!(scroll_needed < 0); // Negative means scroll down
+
+        // Test cursor below visible area
+        let cursor_below: LinenrT = 130;
+        assert_eq!(rs_line_visible_in_window(cursor_below, topline, botline), 0);
+        assert_eq!(rs_cursor_below_window(cursor_below, botline), 1);
+        // Should scroll up to show cursor
+        let scroll_needed = rs_scroll_to_cursor(cursor_below, topline, botline, scrolloff);
+        assert!(scroll_needed > 0); // Positive means scroll up
+    }
+
+    /// Test smooth scroll step calculation for various scenarios.
+    #[test]
+    fn test_integration_smooth_scroll() {
+        let win_height = 40;
+
+        // Test progressive scroll steps
+        let target_offsets = [1, 2, 5, 10, 20, 50, 100];
+        let mut prev_abs_step = 0;
+
+        for &offset in &target_offsets {
+            let step = rs_smooth_scroll_step(100, 100 + offset, win_height);
+            let abs_step = step.abs();
+
+            // Step should be positive for positive offset
+            assert!(step > 0);
+            // Step should not exceed half window
+            assert!(abs_step <= win_height / 2);
+            // Larger offsets should generally produce larger steps
+            // (but this isn't strictly monotonic due to clamping)
+            if offset > 3 {
+                assert!(abs_step >= prev_abs_step);
+            }
+            prev_abs_step = abs_step;
+        }
+    }
+
+    /// Test full redraw vs scroll optimization decision.
+    #[test]
+    fn test_integration_redraw_decision() {
+        let win_height = 30;
+
+        // Case 1: Small scroll, no changes -> scroll
+        assert_eq!(rs_scroll_vs_redraw(3, win_height, 0), 1);
+
+        // Case 2: Small scroll, few changes -> scroll
+        assert_eq!(rs_scroll_vs_redraw(3, win_height, 2), 1);
+
+        // Case 3: Small scroll, many changes -> might redraw
+        // With 3 scroll + 20 changes, only 7 lines preserved (< 10 = win_height/3)
+        assert_eq!(rs_scroll_vs_redraw(3, win_height, 20), 0);
+
+        // Case 4: Large scroll -> redraw
+        assert_eq!(rs_scroll_vs_redraw(25, win_height, 0), 0);
+
+        // Case 5: Moderate scroll, moderate changes
+        // 10 scroll preserves 20, minus 5 changes = 15 preserved (> 10)
+        assert_eq!(rs_scroll_vs_redraw(10, win_height, 5), 1);
+    }
+
+    /// Test change invalidation range calculation.
+    #[test]
+    fn test_integration_change_invalidation() {
+        let topline: LinenrT = 100;
+        let topfill = 2;
+
+        // Change entirely above window
+        let start = rs_change_invalidation_start(50, topline, topfill);
+        assert_eq!(start, 0); // Start from row 0
+
+        // Change at topline
+        let start = rs_change_invalidation_start(100, topline, topfill);
+        assert_eq!(start, topfill); // Offset by topfill
+
+        // Change 5 lines below topline
+        let start = rs_change_invalidation_start(105, topline, topfill);
+        assert_eq!(start, 5 + topfill); // 5 lines + topfill
+    }
+
+    /// Test WinUpdateState initialization and field access.
+    #[test]
+    fn test_win_update_state_fields() {
+        let state = rs_win_update_state_init();
+
+        // Verify all fields have expected default values
+        assert_eq!(state.top_end, 0);
+        assert_eq!(state.mid_start, 999);
+        assert_eq!(state.mid_end, 0);
+        assert_eq!(state.bot_start, 999);
+        assert_eq!(state.bot_scroll_start, 999);
+        assert_eq!(state.scrolled_down, 0);
+        assert_eq!(state.top_to_mod, 0);
+
+        // Verify struct is properly aligned for FFI
+        assert_eq!(
+            std::mem::align_of::<WinUpdateState>(),
+            std::mem::align_of::<c_int>()
+        );
+    }
+
+    /// Test redraw type comparison functions work correctly together.
+    #[test]
+    fn test_integration_redraw_types() {
+        // Test that all our redraw type helpers are consistent
+        for base in [UPD_VALID, UPD_NOT_VALID, UPD_CLEAR] {
+            // Max with self should return self
+            assert_eq!(rs_max_redraw_type(base, base), base);
+
+            // Self should subsume self
+            assert_eq!(rs_redraw_type_subsumes(base, base), 1);
+        }
+
+        // Test transitivity: if A subsumes B and B subsumes C, then A subsumes C
+        let types = [UPD_VALID, UPD_SOME_VALID, UPD_NOT_VALID, UPD_CLEAR];
+        for i in 0..types.len() {
+            for j in i..types.len() {
+                // Higher index types should subsume lower index types
+                assert_eq!(rs_redraw_type_subsumes(types[j], types[i]), 1);
+            }
+        }
+    }
 }
