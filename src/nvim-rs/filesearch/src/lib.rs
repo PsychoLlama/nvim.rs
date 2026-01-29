@@ -1754,6 +1754,26 @@ extern "C" {
     fn do_autocmd_dirchanged(new_dir: *mut c_char, scope: c_int, cause: c_int, pre: bool);
 }
 
+/// Trigger DirChanged or DirChangedPre autocmd.
+///
+/// This function orchestrates the autocmd firing when the directory changes.
+/// It delegates to the C implementation which has access to the Vim dictionary
+/// type system and autocmd infrastructure.
+///
+/// # Safety
+/// `new_dir` must be a valid C string pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_do_autocmd_dirchanged(
+    new_dir: *mut c_char,
+    scope: c_int,
+    cause: c_int,
+    pre: bool,
+) {
+    // Delegate to C implementation which manages v:event dictionary
+    // and autocmd execution
+    do_autocmd_dirchanged(new_dir, scope, cause, pre);
+}
+
 /// Change to a file's directory.
 /// Caller must call shorten_fnames()!
 ///

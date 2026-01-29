@@ -136,6 +136,9 @@ extern char *rs_file_name_in_line(char *line, int col, int options, long count,
 extern char *rs_find_file_name_in_path(char *ptr, size_t len, int options, long count,
                                        char *rel_fname);
 
+// Autocmd integration function
+extern void rs_do_autocmd_dirchanged(char *new_dir, int scope, int cause, bool pre);
+
 // Accessor functions for Rust
 int VIsual_active_get(void) { return VIsual_active ? 1 : 0; }
 
