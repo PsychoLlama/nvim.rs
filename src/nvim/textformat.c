@@ -51,6 +51,7 @@ extern int rs_fmt_check_par(linenr_T lnum, int *leader_len, char **leader_flags,
 extern int rs_same_leader(linenr_T lnum, int leader1_len, char *leader1_flags,
                           int leader2_len, char *leader2_flags);
 extern int rs_paragraph_start(linenr_T lnum);
+extern int rs_comp_textwidth(int ff);
 
 /// C accessor for curbuf->b_p_fo (formatoptions).
 char *nvim_get_curbuf_b_p_fo(void)
@@ -90,6 +91,66 @@ bool nvim_textfmt_startPS(linenr_T lnum, int para, bool both)
 int nvim_textfmt_get_number_indent(linenr_T lnum)
 {
   return get_number_indent(lnum);
+}
+
+/// Get curbuf->b_p_tw (textwidth option, accessor for Rust).
+int nvim_textfmt_get_curbuf_b_p_tw(void)
+{
+  return (int)curbuf->b_p_tw;
+}
+
+/// Get curbuf->b_p_wm (wrapmargin option, accessor for Rust).
+int nvim_textfmt_get_curbuf_b_p_wm(void)
+{
+  return (int)curbuf->b_p_wm;
+}
+
+/// Get curwin->w_view_width (accessor for Rust).
+int nvim_textfmt_get_curwin_w_view_width(void)
+{
+  return curwin->w_view_width;
+}
+
+/// Get curbuf pointer (accessor for Rust).
+void *nvim_textfmt_get_curbuf(void)
+{
+  return curbuf;
+}
+
+/// Get cmdwin_buf pointer (accessor for Rust).
+void *nvim_textfmt_get_cmdwin_buf(void)
+{
+  return cmdwin_buf;
+}
+
+/// Get curwin pointer (accessor for Rust).
+void *nvim_textfmt_get_curwin(void)
+{
+  return curwin;
+}
+
+/// Get fold column count for window (accessor for Rust).
+int nvim_textfmt_win_fdccol_count(void *win)
+{
+  return win_fdccol_count((win_T *)win);
+}
+
+/// Get curwin->w_scwidth (sign column width, accessor for Rust).
+int nvim_textfmt_get_curwin_w_scwidth(void)
+{
+  return curwin->w_scwidth;
+}
+
+/// Get curwin->w_p_nu (number option, accessor for Rust).
+bool nvim_textfmt_get_curwin_w_p_nu(void)
+{
+  return curwin->w_p_nu;
+}
+
+/// Get curwin->w_p_rnu (relativenumber option, accessor for Rust).
+bool nvim_textfmt_get_curwin_w_p_rnu(void)
+{
+  return curwin->w_p_rnu;
 }
 
 static bool did_add_space = false;  ///< auto_format() added an extra space
@@ -674,26 +735,7 @@ void check_auto_format(bool end_insert)
 /// @param ff  force formatting (for "gq" command)
 int comp_textwidth(bool ff)
 {
-  int textwidth = (int)curbuf->b_p_tw;
-  if (textwidth == 0 && curbuf->b_p_wm) {
-    // The width is the window width minus 'wrapmargin' minus all the
-    // things that add to the margin.
-    textwidth = curwin->w_view_width - (int)curbuf->b_p_wm;
-    if (curbuf == cmdwin_buf) {
-      textwidth -= 1;
-    }
-    textwidth -= win_fdccol_count(curwin);
-    textwidth -= curwin->w_scwidth;
-
-    if (curwin->w_p_nu || curwin->w_p_rnu) {
-      textwidth -= 8;
-    }
-  }
-  textwidth = MAX(textwidth, 0);
-  if (ff && textwidth == 0) {
-    textwidth = MIN(curwin->w_view_width - 1, 79);
-  }
-  return textwidth;
+  return rs_comp_textwidth(ff);
 }
 
 /// Implementation of the format operator 'gq'.
