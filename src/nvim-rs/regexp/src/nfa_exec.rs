@@ -25,14 +25,14 @@ use std::ptr;
 
 use crate::nfa_match::{copy_pim, copy_sub, MAX_ADDSTATE_DEPTH};
 use crate::nfa_states::{
-    NfaList, NfaPim, NfaState, NfaThread, RegSubs, NFA_BOF, NFA_BOL, NFA_EMPTY, NFA_MATCH,
-    NFA_MCLOSE, NFA_MCLOSE1, NFA_MCLOSE2, NFA_MCLOSE3, NFA_MCLOSE4, NFA_MCLOSE5, NFA_MCLOSE6,
-    NFA_MCLOSE7, NFA_MCLOSE8, NFA_MCLOSE9, NFA_MOPEN, NFA_MOPEN1, NFA_MOPEN2, NFA_MOPEN3,
-    NFA_MOPEN4, NFA_MOPEN5, NFA_MOPEN6, NFA_MOPEN7, NFA_MOPEN8, NFA_MOPEN9, NFA_NCLOSE, NFA_NOPEN,
-    NFA_PIM_UNUSED, NFA_SKIP, NFA_SPLIT, NFA_ZCLOSE, NFA_ZCLOSE1, NFA_ZCLOSE2, NFA_ZCLOSE3,
-    NFA_ZCLOSE4, NFA_ZCLOSE5, NFA_ZCLOSE6, NFA_ZCLOSE7, NFA_ZCLOSE8, NFA_ZCLOSE9, NFA_ZEND,
-    NFA_ZOPEN, NFA_ZOPEN1, NFA_ZOPEN2, NFA_ZOPEN3, NFA_ZOPEN4, NFA_ZOPEN5, NFA_ZOPEN6, NFA_ZOPEN7,
-    NFA_ZOPEN8, NFA_ZOPEN9, NFA_ZSTART,
+    ColNr, MultiPos, NfaList, NfaPim, NfaState, NfaThread, RegSub, RegSubs, NFA_BOF, NFA_BOL,
+    NFA_EMPTY, NFA_MATCH, NFA_MCLOSE, NFA_MCLOSE1, NFA_MCLOSE2, NFA_MCLOSE3, NFA_MCLOSE4,
+    NFA_MCLOSE5, NFA_MCLOSE6, NFA_MCLOSE7, NFA_MCLOSE8, NFA_MCLOSE9, NFA_MOPEN, NFA_MOPEN1,
+    NFA_MOPEN2, NFA_MOPEN3, NFA_MOPEN4, NFA_MOPEN5, NFA_MOPEN6, NFA_MOPEN7, NFA_MOPEN8, NFA_MOPEN9,
+    NFA_NCLOSE, NFA_NOPEN, NFA_PIM_UNUSED, NFA_SKIP, NFA_SPLIT, NFA_ZCLOSE, NFA_ZCLOSE1,
+    NFA_ZCLOSE2, NFA_ZCLOSE3, NFA_ZCLOSE4, NFA_ZCLOSE5, NFA_ZCLOSE6, NFA_ZCLOSE7, NFA_ZCLOSE8,
+    NFA_ZCLOSE9, NFA_ZEND, NFA_ZOPEN, NFA_ZOPEN1, NFA_ZOPEN2, NFA_ZOPEN3, NFA_ZOPEN4, NFA_ZOPEN5,
+    NFA_ZOPEN6, NFA_ZOPEN7, NFA_ZOPEN8, NFA_ZOPEN9, NFA_ZSTART, NSUBEXP,
 };
 
 // =============================================================================
@@ -53,6 +53,7 @@ extern "C" {
     fn nvim_rex_get_lnum() -> c_int;
     fn nvim_rex_get_nfa_has_backref() -> c_int;
     fn nvim_rex_get_nfa_has_zsubexpr() -> c_int;
+    fn nvim_rex_get_nfa_has_zend() -> c_int;
     fn nvim_rex_get_nfa_ll_index() -> c_int;
     fn nvim_rex_get_nfa_endp() -> *const c_char;
     fn nvim_rex_is_multi() -> c_int;
@@ -98,6 +99,266 @@ unsafe fn get_temp_subs() -> *mut RegSubs {
         *storage = Some(Box::new(RegSubs::default()));
     }
     storage.as_mut().unwrap().as_mut() as *mut RegSubs
+}
+
+// =============================================================================
+// Submatch Position Helpers
+// =============================================================================
+
+/// Saved state for a multi-line submatch position.
+#[derive(Clone, Copy, Default)]
+struct SavedMultiPos {
+    pos: MultiPos,
+    in_use: c_int,
+}
+
+/// Saved state for a single-line submatch position (start pointer).
+#[derive(Clone, Copy)]
+struct SavedLineStart {
+    start: *mut u8,
+    in_use: c_int,
+}
+
+impl Default for SavedLineStart {
+    fn default() -> Self {
+        Self {
+            start: ptr::null_mut(),
+            in_use: -1,
+        }
+    }
+}
+
+/// Saved state for a single-line submatch position (end pointer).
+#[derive(Clone, Copy)]
+struct SavedLineEnd {
+    end: *mut u8,
+    in_use: c_int,
+}
+
+impl Default for SavedLineEnd {
+    fn default() -> Self {
+        Self {
+            end: ptr::null_mut(),
+            in_use: -1,
+        }
+    }
+}
+
+/// Get the subexpression index and sub pointer for an MOPEN/ZOPEN state.
+///
+/// Returns (subidx, is_syntax) where is_syntax indicates if it's a \z() group.
+#[inline]
+fn get_open_subexpr_info(state_c: c_int) -> (usize, bool) {
+    if state_c == NFA_ZSTART {
+        (0, false)
+    } else if (NFA_ZOPEN..=NFA_ZOPEN9).contains(&state_c) {
+        ((state_c - NFA_ZOPEN) as usize, true)
+    } else {
+        ((state_c - NFA_MOPEN) as usize, false)
+    }
+}
+
+/// Get the subexpression index and sub pointer for an MCLOSE/ZCLOSE state.
+///
+/// Returns (subidx, is_syntax) where is_syntax indicates if it's a \z() group.
+#[inline]
+fn get_close_subexpr_info(state_c: c_int) -> (usize, bool) {
+    if state_c == NFA_ZEND {
+        (0, false)
+    } else if (NFA_ZCLOSE..=NFA_ZCLOSE9).contains(&state_c) {
+        ((state_c - NFA_ZCLOSE) as usize, true)
+    } else {
+        ((state_c - NFA_MCLOSE) as usize, false)
+    }
+}
+
+/// Save and set the start position for a subexpression (multi-line mode).
+///
+/// Returns the saved state that should be restored after recursion.
+///
+/// # Safety
+/// `sub` must be valid and `subidx` must be < NSUBEXP.
+unsafe fn save_and_set_start_multi(sub: *mut RegSub, subidx: usize, off: c_int) -> SavedMultiPos {
+    let lnum = nvim_rex_get_lnum();
+    let input = nvim_rex_get_input();
+    let line = nvim_rex_get_line();
+
+    let mut saved = SavedMultiPos::default();
+
+    if subidx < (*sub).in_use as usize {
+        // Save existing position
+        saved.pos = (*sub).list.multi[subidx];
+        saved.in_use = -1; // Signal that we saved an existing position
+    } else {
+        // Fill gaps and extend in_use
+        saved.in_use = (*sub).in_use;
+        for i in (*sub).in_use as usize..subidx {
+            (*sub).list.multi[i].start_lnum = -1;
+            (*sub).list.multi[i].end_lnum = -1;
+        }
+        (*sub).in_use = (subidx + 1) as c_int;
+    }
+
+    // Set the start position
+    if off == -1 {
+        // Position is at start of next line
+        (*sub).list.multi[subidx].start_lnum = lnum + 1;
+        (*sub).list.multi[subidx].start_col = 0;
+    } else {
+        (*sub).list.multi[subidx].start_lnum = lnum;
+        (*sub).list.multi[subidx].start_col = (input.offset_from(line) + off as isize) as ColNr;
+    }
+    (*sub).list.multi[subidx].end_lnum = -1;
+
+    saved
+}
+
+/// Restore a saved start position for a subexpression (multi-line mode).
+///
+/// # Safety
+/// `sub` must be valid and `subidx` must be < NSUBEXP.
+unsafe fn restore_start_multi(sub: *mut RegSub, subidx: usize, saved: &SavedMultiPos) {
+    if saved.in_use == -1 {
+        // Restore saved position
+        (*sub).list.multi[subidx] = saved.pos;
+    } else {
+        // Restore in_use count
+        (*sub).in_use = saved.in_use;
+    }
+}
+
+/// Save and set the start position for a subexpression (single-line mode).
+///
+/// Returns the saved state that should be restored after recursion.
+///
+/// # Safety
+/// `sub` must be valid and `subidx` must be < NSUBEXP.
+unsafe fn save_and_set_start_line(sub: *mut RegSub, subidx: usize, off: c_int) -> SavedLineStart {
+    let input = nvim_rex_get_input();
+
+    let mut saved = SavedLineStart::default();
+
+    if subidx < (*sub).in_use as usize {
+        // Save existing position
+        saved.start = (*sub).list.line[subidx].start;
+        saved.in_use = -1; // Signal that we saved an existing position
+    } else {
+        // Fill gaps and extend in_use
+        saved.in_use = (*sub).in_use;
+        for i in (*sub).in_use as usize..subidx {
+            (*sub).list.line[i].start = ptr::null_mut();
+            (*sub).list.line[i].end = ptr::null_mut();
+        }
+        (*sub).in_use = (subidx + 1) as c_int;
+    }
+
+    // Set the start position
+    (*sub).list.line[subidx].start = input.add(off as usize);
+
+    saved
+}
+
+/// Restore a saved start position for a subexpression (single-line mode).
+///
+/// # Safety
+/// `sub` must be valid and `subidx` must be < NSUBEXP.
+unsafe fn restore_start_line(sub: *mut RegSub, subidx: usize, saved: &SavedLineStart) {
+    if saved.in_use == -1 {
+        // Restore saved position
+        (*sub).list.line[subidx].start = saved.start;
+    } else {
+        // Restore in_use count
+        (*sub).in_use = saved.in_use;
+    }
+}
+
+/// Save and set the end position for a subexpression (multi-line mode).
+///
+/// Returns the saved state that should be restored after recursion.
+///
+/// # Safety
+/// `sub` must be valid and `subidx` must be < NSUBEXP.
+unsafe fn save_and_set_end_multi(sub: *mut RegSub, subidx: usize, off: c_int) -> SavedMultiPos {
+    let lnum = nvim_rex_get_lnum();
+    let input = nvim_rex_get_input();
+    let line = nvim_rex_get_line();
+
+    // Save existing in_use and position
+    let saved = SavedMultiPos {
+        pos: (*sub).list.multi[subidx],
+        in_use: (*sub).in_use,
+    };
+
+    // We don't fill gaps here - MOPEN should have done that
+    if (*sub).in_use as usize <= subidx {
+        (*sub).in_use = (subidx + 1) as c_int;
+    }
+
+    // Set the end position
+    if off == -1 {
+        // Position is at start of next line
+        (*sub).list.multi[subidx].end_lnum = lnum + 1;
+        (*sub).list.multi[subidx].end_col = 0;
+    } else {
+        (*sub).list.multi[subidx].end_lnum = lnum;
+        (*sub).list.multi[subidx].end_col = (input.offset_from(line) + off as isize) as ColNr;
+    }
+
+    saved
+}
+
+/// Restore a saved end position for a subexpression (multi-line mode).
+///
+/// # Safety
+/// `sub` must be valid and `subidx` must be < NSUBEXP.
+unsafe fn restore_end_multi(sub: *mut RegSub, subidx: usize, saved: &SavedMultiPos) {
+    (*sub).list.multi[subidx] = saved.pos;
+    (*sub).in_use = saved.in_use;
+}
+
+/// Save and set the end position for a subexpression (single-line mode).
+///
+/// Returns the saved state that should be restored after recursion.
+///
+/// # Safety
+/// `sub` must be valid and `subidx` must be < NSUBEXP.
+unsafe fn save_and_set_end_line(sub: *mut RegSub, subidx: usize, off: c_int) -> SavedLineEnd {
+    let input = nvim_rex_get_input();
+
+    // Save existing in_use and position
+    let saved = SavedLineEnd {
+        end: (*sub).list.line[subidx].end,
+        in_use: (*sub).in_use,
+    };
+
+    // We don't fill gaps here - MOPEN should have done that
+    if (*sub).in_use as usize <= subidx {
+        (*sub).in_use = (subidx + 1) as c_int;
+    }
+
+    // Set the end position
+    (*sub).list.line[subidx].end = input.add(off as usize);
+
+    saved
+}
+
+/// Restore a saved end position for a subexpression (single-line mode).
+///
+/// # Safety
+/// `sub` must be valid and `subidx` must be < NSUBEXP.
+unsafe fn restore_end_line(sub: *mut RegSub, subidx: usize, saved: &SavedLineEnd) {
+    (*sub).list.line[subidx].end = saved.end;
+    (*sub).in_use = saved.in_use;
+}
+
+/// Get a mutable pointer to either the norm or synt sub from subs.
+#[inline]
+unsafe fn get_sub_ptr(subs: *mut RegSubs, is_syntax: bool) -> *mut RegSub {
+    if is_syntax {
+        &mut (*subs).synt
+    } else {
+        &mut (*subs).norm
+    }
 }
 
 // =============================================================================
@@ -306,8 +567,31 @@ pub unsafe fn addstate(
         | NFA_MOPEN7 | NFA_MOPEN8 | NFA_MOPEN9 | NFA_ZOPEN | NFA_ZOPEN1 | NFA_ZOPEN2
         | NFA_ZOPEN3 | NFA_ZOPEN4 | NFA_ZOPEN5 | NFA_ZOPEN6 | NFA_ZOPEN7 | NFA_ZOPEN8
         | NFA_ZOPEN9 | NFA_ZSTART => {
-            // TODO: Handle submatch start position tracking
-            result_subs = addstate(list, (*state).out, result_subs, pim, off);
+            let (subidx, is_syntax) = get_open_subexpr_info((*state).c);
+            if subidx < NSUBEXP {
+                let sub = get_sub_ptr(result_subs, is_syntax);
+                let is_multi = nvim_rex_is_multi() != 0;
+
+                if is_multi {
+                    let saved = save_and_set_start_multi(sub, subidx, off);
+                    result_subs = addstate(list, (*state).out, result_subs, pim, off);
+                    if !result_subs.is_null() {
+                        // subs may have changed, need to get sub again
+                        let sub = get_sub_ptr(result_subs, is_syntax);
+                        restore_start_multi(sub, subidx, &saved);
+                    }
+                } else {
+                    let saved = save_and_set_start_line(sub, subidx, off);
+                    result_subs = addstate(list, (*state).out, result_subs, pim, off);
+                    if !result_subs.is_null() {
+                        // subs may have changed, need to get sub again
+                        let sub = get_sub_ptr(result_subs, is_syntax);
+                        restore_start_line(sub, subidx, &saved);
+                    }
+                }
+            } else {
+                result_subs = addstate(list, (*state).out, result_subs, pim, off);
+            }
         }
 
         // MCLOSE states: save submatch end position and continue
@@ -315,8 +599,50 @@ pub unsafe fn addstate(
         | NFA_MCLOSE6 | NFA_MCLOSE7 | NFA_MCLOSE8 | NFA_MCLOSE9 | NFA_ZCLOSE | NFA_ZCLOSE1
         | NFA_ZCLOSE2 | NFA_ZCLOSE3 | NFA_ZCLOSE4 | NFA_ZCLOSE5 | NFA_ZCLOSE6 | NFA_ZCLOSE7
         | NFA_ZCLOSE8 | NFA_ZCLOSE9 | NFA_ZEND => {
-            // TODO: Handle submatch end position tracking
-            result_subs = addstate(list, (*state).out, result_subs, pim, off);
+            // Special case: NFA_MCLOSE (index 0) with \ze - don't overwrite if already set
+            let skip_position_update =
+                if (*state).c == NFA_MCLOSE && nvim_rex_get_nfa_has_zend() != 0 {
+                    let is_multi = nvim_rex_is_multi() != 0;
+                    let sub = &(*result_subs).norm;
+                    if is_multi {
+                        sub.list.multi[0].end_lnum >= 0
+                    } else {
+                        !sub.list.line[0].end.is_null()
+                    }
+                } else {
+                    false
+                };
+
+            if skip_position_update {
+                // Don't overwrite the position set by \ze
+                result_subs = addstate(list, (*state).out, result_subs, pim, off);
+            } else {
+                let (subidx, is_syntax) = get_close_subexpr_info((*state).c);
+                if subidx < NSUBEXP {
+                    let sub = get_sub_ptr(result_subs, is_syntax);
+                    let is_multi = nvim_rex_is_multi() != 0;
+
+                    if is_multi {
+                        let saved = save_and_set_end_multi(sub, subidx, off);
+                        result_subs = addstate(list, (*state).out, result_subs, pim, off);
+                        if !result_subs.is_null() {
+                            // subs may have changed, need to get sub again
+                            let sub = get_sub_ptr(result_subs, is_syntax);
+                            restore_end_multi(sub, subidx, &saved);
+                        }
+                    } else {
+                        let saved = save_and_set_end_line(sub, subidx, off);
+                        result_subs = addstate(list, (*state).out, result_subs, pim, off);
+                        if !result_subs.is_null() {
+                            // subs may have changed, need to get sub again
+                            let sub = get_sub_ptr(result_subs, is_syntax);
+                            restore_end_line(sub, subidx, &saved);
+                        }
+                    }
+                } else {
+                    result_subs = addstate(list, (*state).out, result_subs, pim, off);
+                }
+            }
         }
 
         // BOL/BOF already handled above

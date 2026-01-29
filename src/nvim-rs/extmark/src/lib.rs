@@ -1717,7 +1717,9 @@ pub extern "C" fn rs_extmark_query_params_valid(params: &ExtmarkQueryParams) -> 
     if params.end_row >= 0 && params.end_row < params.start_row {
         return 0;
     }
-    if params.end_row == params.start_row && params.end_col >= 0 && params.end_col < params.start_col
+    if params.end_row == params.start_row
+        && params.end_col >= 0
+        && params.end_col < params.start_col
     {
         return 0;
     }

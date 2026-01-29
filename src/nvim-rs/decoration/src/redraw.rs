@@ -6,8 +6,8 @@
 use std::ffi::c_int;
 
 use crate::{
-    DecorKind, DecorRangeHandle, DecorStateHandle, VirtTextPos, WinHandle,
-    DRAW_COL_JUST_ADDED, DRAW_COL_UNSET,
+    DecorKind, DecorRangeHandle, DecorStateHandle, VirtTextPos, WinHandle, DRAW_COL_JUST_ADDED,
+    DRAW_COL_UNSET,
 };
 
 // =============================================================================
