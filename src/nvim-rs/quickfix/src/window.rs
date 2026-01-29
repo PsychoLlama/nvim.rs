@@ -700,6 +700,257 @@ pub unsafe extern "C" fn rs_qf_format_entry_line(
 }
 
 // =============================================================================
+// Phase Q5: Additional Window Integration Helpers
+// =============================================================================
+
+/// Window size constraints for quickfix window.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct QfWindowSize {
+    /// Minimum height (lines)
+    pub min_height: c_int,
+    /// Maximum height (lines)
+    pub max_height: c_int,
+    /// Preferred height based on entry count
+    pub preferred_height: c_int,
+    /// Whether to use a horizontal split
+    pub horizontal: bool,
+}
+
+impl Default for QfWindowSize {
+    fn default() -> Self {
+        Self {
+            min_height: 3,
+            max_height: 10,
+            preferred_height: 10,
+            horizontal: true,
+        }
+    }
+}
+
+/// Calculate optimal quickfix window size.
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns defaults)
+/// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_calc_window_size(
+    qfl: QfListHandle,
+    min_height: c_int,
+    max_height: c_int,
+) -> QfWindowSize {
+    let mut size = QfWindowSize {
+        min_height: min_height.max(1),
+        max_height: max_height.max(min_height),
+        ..Default::default()
+    };
+
+    if qfl.is_null() {
+        size.preferred_height = size.min_height;
+        return size;
+    }
+
+    let count = nvim_qf_get_count(qfl);
+    size.preferred_height = count.clamp(size.min_height, size.max_height);
+
+    size
+}
+
+/// Check if quickfix window should be opened/updated.
+///
+/// Returns true if there are entries to display.
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns false)
+/// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_should_open_window(qfl: QfListHandle) -> bool {
+    if qfl.is_null() {
+        return false;
+    }
+
+    nvim_qf_get_count(qfl) > 0
+}
+
+/// Calculate the line to scroll to after an update.
+///
+/// Returns the optimal top line to show the current entry.
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns 1)
+/// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_scroll_to_current(
+    qfl: QfListHandle,
+    window_height: c_int,
+    context_lines: c_int,
+) -> LinenrT {
+    if qfl.is_null() || window_height <= 0 {
+        return 1;
+    }
+
+    let current = nvim_qf_get_index(qfl);
+    let count = nvim_qf_get_count(qfl);
+
+    if current <= 0 || count <= 0 {
+        return 1;
+    }
+
+    // Keep context_lines above the current entry if possible
+    let desired_top = (current - context_lines).max(1);
+
+    // But don't leave blank space at bottom
+    let max_top = (count - window_height + 1).max(1);
+
+    desired_top.min(max_top)
+}
+
+/// Get the buffer line number for an entry index.
+///
+/// In the quickfix window, the buffer line number equals the entry index.
+/// This function validates the index and returns the corresponding line.
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns 0)
+/// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_entry_to_buf_line(qfl: QfListHandle, entry_idx: c_int) -> LinenrT {
+    if qfl.is_null() || entry_idx <= 0 {
+        return 0;
+    }
+
+    let count = nvim_qf_get_count(qfl);
+    if entry_idx > count {
+        return 0;
+    }
+
+    entry_idx
+}
+
+/// Get the entry index for a buffer line number.
+///
+/// Inverse of `rs_qf_entry_to_buf_line`.
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns 0)
+/// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_buf_line_to_entry(qfl: QfListHandle, buf_line: LinenrT) -> c_int {
+    if qfl.is_null() || buf_line <= 0 {
+        return 0;
+    }
+
+    let count = nvim_qf_get_count(qfl);
+    if buf_line > count {
+        return 0;
+    }
+
+    buf_line
+}
+
+/// Check if the quickfix window buffer is valid.
+///
+/// Returns true if the buffer line count matches the quickfix entry count.
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns false)
+/// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_window_buf_valid(
+    qfl: QfListHandle,
+    buf_line_count: LinenrT,
+) -> bool {
+    if qfl.is_null() {
+        return false;
+    }
+
+    let count = nvim_qf_get_count(qfl);
+    buf_line_count == count
+}
+
+/// Calculate how many lines need to be added/removed to sync buffer with list.
+///
+/// Returns:
+/// - Positive: lines to add
+/// - Negative: lines to remove
+/// - Zero: buffer is in sync
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns 0)
+/// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_window_buf_delta(
+    qfl: QfListHandle,
+    buf_line_count: LinenrT,
+) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let count = nvim_qf_get_count(qfl);
+    count - buf_line_count
+}
+
+/// Information about quickfix window state.
+#[repr(C)]
+#[derive(Debug, Clone, Default)]
+pub struct QfWindowInfo {
+    /// Whether the quickfix window exists
+    pub exists: bool,
+    /// Current entry index (1-based)
+    pub current_idx: c_int,
+    /// Total entry count
+    pub total_count: c_int,
+    /// Number of valid entries
+    pub valid_count: c_int,
+    /// Whether current entry is valid
+    pub current_is_valid: bool,
+}
+
+/// Get information about the quickfix window state.
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns defaults)
+/// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_window_info(qfl: QfListHandle) -> QfWindowInfo {
+    let mut info = QfWindowInfo::default();
+
+    if qfl.is_null() {
+        return info;
+    }
+
+    info.exists = true;
+    info.current_idx = nvim_qf_get_index(qfl);
+    info.total_count = nvim_qf_get_count(qfl);
+
+    // Count valid entries and check if current is valid
+    let mut qfp = nvim_qf_get_start(qfl);
+    let mut idx = 1;
+
+    while !qfp.is_null() {
+        if nvim_qfline_get_valid(qfp) {
+            info.valid_count += 1;
+            if idx == info.current_idx {
+                info.current_is_valid = true;
+            }
+        }
+        qfp = nvim_qfline_get_next(qfp);
+        idx += 1;
+    }
+
+    info
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -877,5 +1128,86 @@ mod tests {
             assert_eq!(result.to_str().unwrap(), "10-15 col 5-8");
             assert_eq!(len, 13);
         }
+    }
+
+    // Phase Q5 tests
+    #[test]
+    fn test_window_size_default() {
+        let size = QfWindowSize::default();
+        assert_eq!(size.min_height, 3);
+        assert_eq!(size.max_height, 10);
+        assert!(size.horizontal);
+    }
+
+    #[test]
+    fn test_null_calc_window_size() {
+        unsafe {
+            let size = rs_qf_calc_window_size(std::ptr::null(), 3, 10);
+            assert_eq!(size.min_height, 3);
+            assert_eq!(size.max_height, 10);
+            assert_eq!(size.preferred_height, 3);
+        }
+    }
+
+    #[test]
+    fn test_null_should_open_window() {
+        unsafe {
+            assert!(!rs_qf_should_open_window(std::ptr::null()));
+        }
+    }
+
+    #[test]
+    fn test_null_scroll_to_current() {
+        unsafe {
+            assert_eq!(rs_qf_scroll_to_current(std::ptr::null(), 10, 3), 1);
+        }
+    }
+
+    #[test]
+    fn test_null_entry_to_buf_line() {
+        unsafe {
+            assert_eq!(rs_qf_entry_to_buf_line(std::ptr::null(), 1), 0);
+        }
+    }
+
+    #[test]
+    fn test_null_buf_line_to_entry() {
+        unsafe {
+            assert_eq!(rs_qf_buf_line_to_entry(std::ptr::null(), 1), 0);
+        }
+    }
+
+    #[test]
+    fn test_null_window_buf_valid() {
+        unsafe {
+            assert!(!rs_qf_window_buf_valid(std::ptr::null(), 10));
+        }
+    }
+
+    #[test]
+    fn test_null_window_buf_delta() {
+        unsafe {
+            assert_eq!(rs_qf_window_buf_delta(std::ptr::null(), 10), 0);
+        }
+    }
+
+    #[test]
+    fn test_null_window_info() {
+        unsafe {
+            let info = rs_qf_window_info(std::ptr::null());
+            assert!(!info.exists);
+            assert_eq!(info.current_idx, 0);
+            assert_eq!(info.total_count, 0);
+        }
+    }
+
+    #[test]
+    fn test_window_info_default() {
+        let info = QfWindowInfo::default();
+        assert!(!info.exists);
+        assert_eq!(info.current_idx, 0);
+        assert_eq!(info.total_count, 0);
+        assert_eq!(info.valid_count, 0);
+        assert!(!info.current_is_valid);
     }
 }
