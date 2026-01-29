@@ -1655,3 +1655,219 @@ pub extern "C" fn rs_extmark_next_id(buf: BufHandle, ns_id: u32) -> u32 {
         unsafe { *ns + 1 }
     }
 }
+
+// ============================================================================
+// API Layer Functions
+// ============================================================================
+
+/// Query parameters for getting extmarks.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct ExtmarkQueryParams {
+    /// Namespace ID (0 for all)
+    pub ns_id: u32,
+    /// Start row
+    pub start_row: c_int,
+    /// Start column
+    pub start_col: ColnrT,
+    /// End row (-1 for no limit)
+    pub end_row: c_int,
+    /// End column (-1 for no limit)
+    pub end_col: ColnrT,
+    /// Maximum number of results (0 for unlimited)
+    pub limit: u32,
+    /// Type filter (bitmask of ExtmarkType)
+    pub type_filter: u32,
+    /// Whether to include details in results
+    pub details: bool,
+    /// Whether to overlap the search range
+    pub overlap: bool,
+}
+
+impl Default for ExtmarkQueryParams {
+    fn default() -> Self {
+        Self {
+            ns_id: 0,
+            start_row: 0,
+            start_col: 0,
+            end_row: -1,
+            end_col: -1,
+            limit: 0,
+            type_filter: 0,
+            details: false,
+            overlap: false,
+        }
+    }
+}
+
+/// FFI: Create default query params.
+#[no_mangle]
+pub extern "C" fn rs_extmark_query_params_default() -> ExtmarkQueryParams {
+    ExtmarkQueryParams::default()
+}
+
+/// FFI: Check if query params are valid.
+#[no_mangle]
+pub extern "C" fn rs_extmark_query_params_valid(params: &ExtmarkQueryParams) -> c_int {
+    // Start must be non-negative
+    if params.start_row < 0 || params.start_col < 0 {
+        return 0;
+    }
+    // End can be -1 (unlimited) or >= start
+    if params.end_row >= 0 && params.end_row < params.start_row {
+        return 0;
+    }
+    if params.end_row == params.start_row && params.end_col >= 0 && params.end_col < params.start_col
+    {
+        return 0;
+    }
+    1
+}
+
+/// Result of counting extmarks.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ExtmarkCountResult {
+    /// Number of extmarks found
+    pub count: u32,
+    /// Whether the limit was reached
+    pub limit_reached: bool,
+}
+
+/// FFI: Count extmarks in a range.
+#[no_mangle]
+pub extern "C" fn rs_extmark_count_range(
+    buf: BufHandle,
+    ns_id: u32,
+    start_row: c_int,
+    start_col: ColnrT,
+    end_row: c_int,
+    end_col: ColnrT,
+    limit: u32,
+) -> ExtmarkCountResult {
+    if unsafe { nvim_extmark_ns_map_size(buf) } == 0 {
+        return ExtmarkCountResult::default();
+    }
+
+    let all_ns = ns_id == 0;
+    let itr = unsafe { nvim_marktree_itr_alloc() };
+    let tree = unsafe { nvim_buf_get_marktree(buf) };
+    unsafe { nvim_marktree_itr_get(tree, start_row, start_col, itr) };
+
+    let mut count: u32 = 0;
+    let mut limit_reached = false;
+
+    loop {
+        let mark = unsafe { nvim_marktree_itr_current(itr) };
+
+        // Check bounds
+        if mark.pos.row < 0 {
+            break;
+        }
+        if end_row >= 0 && mark.pos.row > end_row {
+            break;
+        }
+        if end_row >= 0 && mark.pos.row == end_row && end_col >= 0 && mark.pos.col > end_col {
+            break;
+        }
+
+        // Check namespace
+        if all_ns || mark.ns == ns_id {
+            // Don't count end marks of pairs
+            if !mt_end(mark) {
+                count += 1;
+                if limit > 0 && count >= limit {
+                    limit_reached = true;
+                    break;
+                }
+            }
+        }
+
+        unsafe { nvim_marktree_itr_next(tree, itr) };
+    }
+
+    unsafe { nvim_marktree_itr_free(itr) };
+
+    ExtmarkCountResult {
+        count,
+        limit_reached,
+    }
+}
+
+/// FFI: Get namespace ID count for a buffer.
+#[no_mangle]
+pub extern "C" fn rs_extmark_ns_count(buf: BufHandle) -> usize {
+    unsafe { nvim_extmark_ns_map_size(buf) }
+}
+
+/// FFI: Check if namespace has any extmarks in buffer.
+#[no_mangle]
+pub extern "C" fn rs_extmark_ns_has_marks(buf: BufHandle, ns_id: u32) -> bool {
+    let ns = unsafe { nvim_extmark_ns_get_ref(buf, ns_id) };
+    !ns.is_null()
+}
+
+/// Position for iteration bounds.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ExtmarkBounds {
+    /// Minimum row
+    pub min_row: c_int,
+    /// Maximum row
+    pub max_row: c_int,
+    /// Number of extmarks
+    pub count: u32,
+}
+
+/// FFI: Get bounds of extmarks in a namespace.
+#[no_mangle]
+pub extern "C" fn rs_extmark_get_bounds(buf: BufHandle, ns_id: u32) -> ExtmarkBounds {
+    if unsafe { nvim_extmark_ns_map_size(buf) } == 0 {
+        return ExtmarkBounds {
+            min_row: -1,
+            max_row: -1,
+            count: 0,
+        };
+    }
+
+    let itr = unsafe { nvim_marktree_itr_alloc() };
+    let tree = unsafe { nvim_buf_get_marktree(buf) };
+    unsafe { nvim_marktree_itr_get(tree, 0, 0, itr) };
+
+    let mut min_row: c_int = -1;
+    let mut max_row: c_int = -1;
+    let mut count: u32 = 0;
+
+    loop {
+        let mark = unsafe { nvim_marktree_itr_current(itr) };
+        if mark.pos.row < 0 {
+            break;
+        }
+
+        if (ns_id == 0 || mark.ns == ns_id) && !mt_end(mark) {
+            if min_row < 0 || mark.pos.row < min_row {
+                min_row = mark.pos.row;
+            }
+            if mark.pos.row > max_row {
+                max_row = mark.pos.row;
+            }
+            count += 1;
+        }
+
+        unsafe { nvim_marktree_itr_next(tree, itr) };
+    }
+
+    unsafe { nvim_marktree_itr_free(itr) };
+
+    ExtmarkBounds {
+        min_row,
+        max_row,
+        count,
+    }
+}
+
+/// FFI: Delete an extmark by ID (wrapper for API).
+#[no_mangle]
+pub extern "C" fn rs_nvim_buf_del_extmark(buf: BufHandle, ns_id: u32, id: u32) -> bool {
+    rs_extmark_del_id(buf, ns_id, id)
+}
