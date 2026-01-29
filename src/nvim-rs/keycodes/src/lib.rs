@@ -145,6 +145,26 @@ const KE_FILLER: c_int = b'X' as c_int;
 // NUL character
 const NUL: c_int = 0;
 
+// ASCII characters
+const BS: c_int = 0x08; // Backspace
+const DEL: c_int = 0x7f; // Delete
+
+// FSK_* flags for find_special_key
+const FSK_KEYCODE: c_int = 0x01; // prefer key code, e.g. K_DEL in place of DEL
+const FSK_KEEP_X_KEY: c_int = 0x02; // don't translate xHome to Home key
+const FSK_IN_STRING: c_int = 0x04; // in string, double quote is escaped
+const FSK_SIMPLIFY: c_int = 0x08; // simplify <C-H>, etc.
+
+// STR2NR constants for vim_str2nr
+const STR2NR_BIN: c_int = 0x01;
+const STR2NR_OCT: c_int = 0x02;
+const STR2NR_HEX: c_int = 0x04;
+const STR2NR_OOCT: c_int = 0x40;
+const STR2NR_ALL: c_int = STR2NR_BIN | STR2NR_OCT | STR2NR_HEX | STR2NR_OOCT;
+
+// KE_KDEL constant
+const KE_KDEL: c_int = 79;
+
 /// Convert termcap codes to internal key representation
 /// TERMCAP2KEY(a, b) = -((a) + ((int)(b) << 8))
 const fn termcap2key(a: c_int, b: c_int) -> c_int {
@@ -294,6 +314,8 @@ const K_F37: c_int = termcap2key(b'F' as c_int, b'R' as c_int);
 const K_INS: c_int = termcap2key(b'k' as c_int, b'I' as c_int);
 const K_DEL: c_int = termcap2key(b'k' as c_int, b'D' as c_int);
 const K_DELLINE: c_int = termcap2key(b'k' as c_int, b'L' as c_int);
+const K_BS: c_int = termcap2key(b'k' as c_int, b'b' as c_int);
+const K_KDEL: c_int = termcap2key(KS_EXTRA, KE_KDEL);
 
 // Mouse key codes
 const K_LEFTMOUSE: c_int = termcap2key(KS_EXTRA, KE_LEFTMOUSE);
@@ -461,6 +483,18 @@ extern "C" {
     /// Translate character to printable string representation.
     /// Returns a pointer to a static buffer.
     fn transchar(c: c_int) -> *const std::ffi::c_char;
+
+    /// Get length of UTF-8 character with max bytes check.
+    fn utfc_ptr2len_len(p: *const std::ffi::c_char, maxlen: c_int) -> c_int;
+
+    /// Get length of UTF-8 character.
+    fn utfc_ptr2len(p: *const std::ffi::c_char) -> c_int;
+
+    /// Emit error message.
+    fn emsg(s: *const std::ffi::c_char) -> c_int;
+
+    /// Get `e_invarg` error string.
+    static e_invarg: *const std::ffi::c_char;
 }
 
 /// Try to find key "c" in the special key table.
@@ -1526,6 +1560,245 @@ pub unsafe extern "C" fn rs_vim_strsave_escape_ks(
 #[inline]
 const fn is_special(key: c_int) -> bool {
     key < 0
+}
+
+/// Case-insensitive comparison of prefix.
+/// Returns true if `s` starts with `prefix` (case-insensitive).
+unsafe fn strnicmp_prefix(s: *const u8, prefix: &[u8]) -> bool {
+    for (i, &p) in prefix.iter().enumerate() {
+        let c = *s.add(i);
+        if !c.eq_ignore_ascii_case(&p) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Try translating a <> name to a key code.
+///
+/// # Arguments
+/// * `srcp` - Pointer to pointer to the source string. Advanced past the <> name on success.
+/// * `src_len` - Length of the source string.
+/// * `modp` - Output pointer for modifier flags.
+/// * `flags` - FSK_* flags.
+/// * `did_simplify` - Output pointer, set to true if `FSK_SIMPLIFY` found `<C-H>`, etc.
+///
+/// # Returns
+/// Key code or 0 if no match.
+///
+/// # Safety
+/// - `srcp` must be a valid pointer to a valid C string pointer.
+/// - `modp` must be a valid pointer.
+/// - `did_simplify` may be null.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_find_special_key(
+    srcp: *mut *const std::ffi::c_char,
+    src_len: usize,
+    modp: *mut c_int,
+    flags: c_int,
+    did_simplify: *mut bool,
+) -> c_int {
+    if srcp.is_null() || modp.is_null() || (*srcp).is_null() {
+        return 0;
+    }
+
+    if src_len == 0 {
+        return 0;
+    }
+
+    let start = (*srcp).cast::<u8>();
+    let end = start.add(src_len - 1);
+    let in_string = (flags & FSK_IN_STRING) != 0;
+
+    // Check for '<' at start
+    if *start != b'<' {
+        return 0;
+    }
+
+    let mut src = start;
+    if *start.add(1) == b'*' {
+        // <*xxx>: do not simplify
+        src = src.add(1);
+    }
+
+    // Find end of modifier list
+    let mut bp = src.add(1);
+    let mut last_dash = src;
+
+    while bp <= end && (*bp == b'-' || nvim_ascii::rs_ascii_isident(c_int::from(*bp)) != 0) {
+        if *bp == b'-' {
+            last_dash = bp;
+            if bp.add(1) <= end {
+                let l = utfc_ptr2len_len(bp.add(1).cast(), ptr_diff(end, bp) + 1);
+                // Anything accepted, like <C-?>.
+                // <C-"> or <M-"> are not special in strings as " is
+                // the string delimiter. With a backslash it works: <M-\">
+                #[allow(clippy::cast_sign_loss)]
+                if ptr_diff(end, bp) > l
+                    && !(in_string && *bp.add(1) == b'"')
+                    && *bp.add(1 + l as usize) == b'>'
+                {
+                    #[allow(clippy::cast_sign_loss)]
+                    {
+                        bp = bp.add(l as usize);
+                    }
+                } else if ptr_diff(end, bp) > 2
+                    && in_string
+                    && *bp.add(1) == b'\\'
+                    && *bp.add(2) == b'"'
+                    && *bp.add(3) == b'>'
+                {
+                    bp = bp.add(2);
+                }
+            }
+        }
+        if ptr_diff(end, bp) > 3 && *bp == b't' && *bp.add(1) == b'_' {
+            bp = bp.add(3); // skip t_xx, xx may be '-' or '>'
+        } else if ptr_diff(end, bp) > 4 && strnicmp_prefix(bp, b"char-") {
+            let mut l: c_int = 0;
+            nvim_charset::rs_vim_str2nr(
+                bp.add(5).cast(),
+                std::ptr::null_mut(),
+                &raw mut l,
+                STR2NR_ALL,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                0,
+                true,
+                std::ptr::null_mut(),
+            );
+            if l == 0 {
+                emsg(e_invarg);
+                return 0;
+            }
+            #[allow(clippy::cast_sign_loss)]
+            {
+                bp = bp.add(l as usize + 5);
+            }
+            break;
+        }
+        bp = bp.add(1);
+    }
+
+    if bp <= end && *bp == b'>' {
+        // Found matching '>'
+        let end_of_name = bp.add(1);
+
+        // Which modifiers are given?
+        let mut modifiers: c_int = 0;
+        bp = src.add(1);
+        while bp < last_dash {
+            if *bp != b'-' {
+                let bit = rs_name_to_mod_mask(c_int::from(*bp));
+                if bit == 0 {
+                    break; // Illegal modifier name
+                }
+                modifiers |= bit;
+            }
+            bp = bp.add(1);
+        }
+
+        // Legal modifier name
+        if bp >= last_dash {
+            let key: c_int;
+
+            if strnicmp_prefix(last_dash.add(1), b"char-")
+                && nvim_ascii::rs_ascii_isdigit(c_int::from(*last_dash.add(6))) != 0
+            {
+                // <Char-123> or <Char-033> or <Char-0x33>
+                let mut l: c_int = 0;
+                let mut n: u64 = 0;
+                nvim_charset::rs_vim_str2nr(
+                    last_dash.add(6).cast(),
+                    std::ptr::null_mut(),
+                    &raw mut l,
+                    STR2NR_ALL,
+                    std::ptr::null_mut(),
+                    &raw mut n,
+                    0,
+                    true,
+                    std::ptr::null_mut(),
+                );
+                if l == 0 {
+                    emsg(e_invarg);
+                    return 0;
+                }
+                #[allow(clippy::cast_possible_truncation)]
+                {
+                    key = n as c_int;
+                }
+            } else {
+                // Modifier with single letter, or special key name.
+                let (off, l) =
+                    if in_string && *last_dash.add(1) == b'\\' && *last_dash.add(2) == b'"' {
+                        // Special case for a double-quoted string
+                        (2_usize, 2_i32)
+                    } else {
+                        (1_usize, utfc_ptr2len(last_dash.add(1).cast()))
+                    };
+
+                #[allow(clippy::cast_sign_loss)]
+                if modifiers != 0 && *last_dash.add(l as usize + 1) == b'>' {
+                    key = nvim_mbyte::rs_utf_ptr2char(last_dash.add(off).cast());
+                } else {
+                    let mut k = rs_get_special_key_code(last_dash.add(off).cast());
+                    if (flags & FSK_KEEP_X_KEY) == 0 {
+                        k = rs_handle_x_keys(k);
+                    }
+                    key = k;
+                }
+            }
+
+            // get_special_key_code() may return NUL for invalid special key name.
+            if key != NUL {
+                // Only use a modifier when there is no special key code that
+                // includes the modifier.
+                let key = rs_simplify_key(key, &raw mut modifiers);
+
+                let key = if (flags & FSK_KEYCODE) == 0 {
+                    // don't want keycode, use single byte code
+                    if key == K_BS {
+                        BS
+                    } else if key == K_DEL || key == K_KDEL {
+                        DEL
+                    } else {
+                        key
+                    }
+                } else {
+                    key
+                };
+
+                // Normal Key with modifier:
+                // Try to make a single byte code (except for Alt/Meta modifiers).
+                let key = if is_special(key) {
+                    key
+                } else {
+                    let simplify = (flags & FSK_SIMPLIFY) != 0;
+                    let result = rs_extract_modifiers(key, &raw mut modifiers, simplify);
+                    if !did_simplify.is_null() && result.did_simplify != 0 {
+                        *did_simplify = true;
+                    }
+                    result.key
+                };
+
+                *modp = modifiers;
+                *srcp = end_of_name.cast();
+                return key;
+            }
+        }
+    }
+
+    0
+}
+
+/// Helper to compute pointer difference as `c_int`
+#[inline]
+unsafe fn ptr_diff(end: *const u8, bp: *const u8) -> c_int {
+    #[allow(clippy::cast_possible_truncation)]
+    {
+        end.offset_from(bp) as c_int
+    }
 }
 
 /// Encode a key and modifiers into a byte sequence.
