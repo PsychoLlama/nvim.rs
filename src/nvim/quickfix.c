@@ -573,6 +573,61 @@ extern int rs_qf_curlist_entry_count(const void *qi);
 extern int rs_qf_curlist_valid_count(const void *qi);
 
 // =============================================================================
+// Phase 1 (Parser Migration): Errorformat parsing functions from Rust
+// =============================================================================
+
+/// Result of analyzing an errorformat prefix
+typedef struct {
+  char prefix;
+  char flags;
+  int status;
+} EfmPrefixResult;
+
+/// Result of converting an errorformat pattern to regex
+typedef struct {
+  size_t bytes_written;
+  int round;
+  int status;
+} EfmPatResult;
+
+/// Result of the full errorformat-to-regex conversion
+typedef struct {
+  size_t bytes_written;
+  char prefix;
+  char flags;
+  bool conthere;
+  int status;
+  int error_code;
+  char error_char;
+} EfmToRegpatResult;
+
+// Pattern index helpers
+extern int rs_efm_find_pattern_idx(char c);
+extern const char *rs_efm_get_pattern(int idx);
+extern size_t rs_efm_get_pattern_len(int idx);
+
+// Prefix analysis
+extern EfmPrefixResult rs_efm_analyze_prefix(const char *efmp, size_t efmp_len);
+extern bool rs_efm_pattern_valid_for_prefix(int idx, char prefix);
+
+// Scanf format conversion
+extern int rs_efm_scanf_to_regpat(const char *efmp, size_t efmp_len,
+                                   char *out, size_t out_size);
+
+// Single pattern conversion
+extern EfmPatResult rs_efmpat_to_regpat(char efmpat, char next_char,
+                                         char *addr, int idx, int round,
+                                         char prefix, char *out, size_t out_size);
+
+// Character classification
+extern bool rs_efm_is_regex_magic(char c);
+extern bool rs_efm_is_format_magic(char c);
+
+// Full errorformat to regex conversion
+extern EfmToRegpatResult rs_efm_to_regpat(const char *efm, size_t efm_len,
+                                           char *addr, char *out, size_t out_size);
+
+// =============================================================================
 // Phase 5: List management setters and wrappers for Rust
 // =============================================================================
 

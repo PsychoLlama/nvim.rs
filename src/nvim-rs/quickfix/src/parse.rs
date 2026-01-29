@@ -1083,6 +1083,773 @@ pub extern "C" fn rs_qf_fields_has_error_number(fields: &QfFields) -> bool {
 }
 
 // =============================================================================
+// Errorformat Pattern Conversion
+// =============================================================================
+
+/// Maximum number of % patterns recognized (matches C's FMT_PATTERNS)
+pub const FMT_PATTERNS: usize = 14;
+
+/// Index of %m (message) pattern
+pub const FMT_PATTERN_M: usize = 8;
+
+/// Index of %r (rest) pattern
+pub const FMT_PATTERN_R: usize = 9;
+
+/// Format pattern definitions - maps format character to regex pattern.
+///
+/// This matches the C `fmt_pat` array exactly.
+pub const FMT_PAT: [(u8, &str); FMT_PATTERNS] = [
+    (b'f', r".+"),       // 0: filename (only used when at end)
+    (b'b', r"\d+"),      // 1: buffer number
+    (b'n', r"\d+"),      // 2: error number
+    (b'l', r"\d+"),      // 3: line number
+    (b'e', r"\d+"),      // 4: end line number
+    (b'c', r"\d+"),      // 5: column number
+    (b'k', r"\d+"),      // 6: end column number
+    (b't', r"."),        // 7: error type
+    (b'm', r".+"),       // 8: message
+    (b'r', r".*"),       // 9: rest of line
+    (b'p', r"[-\t .]*"), // 10: pointer line
+    (b'v', r"\d+"),      // 11: virtual column
+    (b's', r".+"),       // 12: search pattern
+    (b'o', r".+"),       // 13: module name
+];
+
+/// Result of analyzing an errorformat prefix
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct EfmPrefixResult {
+    /// The prefix character (D/X/A/E/W/I/N/C/Z/G/O/P/Q)
+    pub prefix: c_char,
+    /// Optional flags (+/-)
+    pub flags: c_char,
+    /// Status: 0 = success, -1 = error
+    pub status: c_int,
+}
+
+/// Result of converting an errorformat pattern to regex
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct EfmPatResult {
+    /// Number of bytes written to output
+    pub bytes_written: usize,
+    /// The round counter (pattern index)
+    pub round: c_int,
+    /// Status: 0 = success, -1 = error
+    pub status: c_int,
+}
+
+impl Default for EfmPatResult {
+    fn default() -> Self {
+        Self {
+            bytes_written: 0,
+            round: 0,
+            status: QF_FAIL,
+        }
+    }
+}
+
+/// Find the format pattern index for a given character.
+///
+/// Returns the index (0-13) or -1 if not found.
+#[no_mangle]
+pub extern "C" fn rs_efm_find_pattern_idx(c: c_char) -> c_int {
+    #[allow(clippy::cast_sign_loss)]
+    let c = c as u8;
+    for (idx, (conv_char, _)) in FMT_PAT.iter().enumerate() {
+        if *conv_char == c {
+            return idx as c_int;
+        }
+    }
+    -1
+}
+
+/// Get the regex pattern for a format pattern index.
+///
+/// Returns a pointer to a static string, or null if index is out of bounds.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub extern "C" fn rs_efm_get_pattern(idx: c_int) -> *const c_char {
+    if idx < 0 || idx as usize >= FMT_PATTERNS {
+        return std::ptr::null();
+    }
+    FMT_PAT[idx as usize].1.as_ptr().cast()
+}
+
+/// Get the length of the regex pattern for a format pattern index.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub extern "C" fn rs_efm_get_pattern_len(idx: c_int) -> usize {
+    if idx < 0 || idx as usize >= FMT_PATTERNS {
+        return 0;
+    }
+    FMT_PAT[idx as usize].1.len()
+}
+
+/// Analyze an errorformat prefix character.
+///
+/// Valid prefixes are: D, X, A, E, W, I, N, C, Z, G, O, P, Q
+/// Optional flags before the prefix: +, -
+///
+/// # Safety
+///
+/// - `efmp` must be a valid pointer to a null-terminated string
+/// - The caller must check `status` in the result (-1 indicates error)
+#[no_mangle]
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_efm_analyze_prefix(
+    efmp: *const c_char,
+    efmp_len: usize,
+) -> EfmPrefixResult {
+    if efmp.is_null() || efmp_len == 0 {
+        return EfmPrefixResult {
+            status: QF_FAIL,
+            ..Default::default()
+        };
+    }
+
+    let bytes = std::slice::from_raw_parts(efmp.cast::<u8>(), efmp_len);
+    let mut idx = 0;
+    let mut flags: c_char = 0;
+
+    // Check for optional flags (+ or -)
+    if idx < bytes.len() && (bytes[idx] == b'+' || bytes[idx] == b'-') {
+        flags = bytes[idx] as c_char;
+        idx += 1;
+    }
+
+    // Check for valid prefix character
+    let prefix = if idx < bytes.len() {
+        let c = bytes[idx];
+        if matches!(
+            c,
+            b'D' | b'X'
+                | b'A'
+                | b'E'
+                | b'W'
+                | b'I'
+                | b'N'
+                | b'C'
+                | b'Z'
+                | b'G'
+                | b'O'
+                | b'P'
+                | b'Q'
+        ) {
+            c as c_char
+        } else {
+            // Invalid prefix character
+            return EfmPrefixResult {
+                status: QF_FAIL,
+                ..Default::default()
+            };
+        }
+    } else {
+        return EfmPrefixResult {
+            status: QF_FAIL,
+            ..Default::default()
+        };
+    };
+
+    EfmPrefixResult {
+        prefix,
+        flags,
+        status: QF_OK,
+    }
+}
+
+/// Check if a pattern index is valid for the given prefix.
+///
+/// Returns true if valid, false otherwise.
+///
+/// Certain patterns are not allowed with certain prefixes:
+/// - Patterns 1-8 (buffer through message) are not allowed with D/X/O/P/Q prefixes
+/// - Pattern 9 (%r - rest) is only allowed with O/P/Q prefixes
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub extern "C" fn rs_efm_pattern_valid_for_prefix(idx: c_int, prefix: c_char) -> bool {
+    if idx < 0 || idx as usize >= FMT_PATTERNS {
+        return false;
+    }
+    let idx = idx as usize;
+    let prefix = prefix as u8;
+
+    // Patterns 1-8 are not allowed with D/X/O/P/Q prefixes
+    if idx > 0 && idx < FMT_PATTERN_R && matches!(prefix, b'D' | b'X' | b'O' | b'P' | b'Q') {
+        return false;
+    }
+
+    // Pattern 9 (%r) is only allowed with O/P/Q prefixes
+    if idx == FMT_PATTERN_R && !matches!(prefix, b'O' | b'P' | b'Q') {
+        return false;
+    }
+
+    true
+}
+
+/// Convert a scanf-like format pattern to a regex pattern.
+///
+/// Handles patterns like %*[^:] (character class) or %*\D (regex escape).
+///
+/// # Arguments
+///
+/// * `efmp` - Pointer to format string starting after the '*'
+/// * `efmp_len` - Length of remaining format string
+/// * `out` - Output buffer for regex pattern
+/// * `out_size` - Size of output buffer
+///
+/// # Returns
+///
+/// Number of bytes consumed from input, or -1 on error.
+/// Output is written to `out` buffer, null-terminated.
+///
+/// # Safety
+///
+/// - `efmp` must be a valid pointer
+/// - `out` must be a valid pointer to a buffer of at least `out_size` bytes
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_efm_scanf_to_regpat(
+    efmp: *const c_char,
+    efmp_len: usize,
+    out: *mut c_char,
+    out_size: usize,
+) -> c_int {
+    if efmp.is_null() || out.is_null() || efmp_len == 0 || out_size < 4 {
+        return -1;
+    }
+
+    let input = std::slice::from_raw_parts(efmp.cast::<u8>(), efmp_len);
+    let output = std::slice::from_raw_parts_mut(out.cast::<u8>(), out_size);
+
+    let mut out_idx = 0;
+    let mut in_idx = 0;
+
+    match input.first() {
+        Some(&b'[') => {
+            // Character class: %*[^a-z0-9] -> [^a-z0-9]\+
+            output[out_idx] = b'[';
+            out_idx += 1;
+            in_idx += 1;
+
+            // Check for negation
+            if in_idx < input.len() && input[in_idx] == b'^' {
+                if out_idx >= out_size - 1 {
+                    return -1;
+                }
+                output[out_idx] = b'^';
+                out_idx += 1;
+                in_idx += 1;
+            }
+
+            // Copy first character (could be ']')
+            if in_idx < input.len() {
+                if out_idx >= out_size - 1 {
+                    return -1;
+                }
+                output[out_idx] = input[in_idx];
+                out_idx += 1;
+                in_idx += 1;
+            }
+
+            // Copy until closing ']'
+            while in_idx < input.len() && input[in_idx] != b']' {
+                if out_idx >= out_size - 1 {
+                    return -1;
+                }
+                output[out_idx] = input[in_idx];
+                out_idx += 1;
+                in_idx += 1;
+            }
+
+            // Check for missing ']'
+            if in_idx >= input.len() {
+                return -1; // Missing ]
+            }
+
+            // Copy closing ']'
+            if out_idx >= out_size - 1 {
+                return -1;
+            }
+            output[out_idx] = b']';
+            out_idx += 1;
+            in_idx += 1;
+
+            // Add \+ for one or more matches
+            if out_idx >= out_size - 2 {
+                return -1;
+            }
+            output[out_idx] = b'\\';
+            out_idx += 1;
+            output[out_idx] = b'+';
+            out_idx += 1;
+        }
+        Some(&b'\\') => {
+            // Regex escape: %*\D -> \D\+
+            if in_idx + 1 >= input.len() {
+                return -1;
+            }
+            if out_idx >= out_size - 4 {
+                return -1;
+            }
+            output[out_idx] = b'\\';
+            out_idx += 1;
+            in_idx += 1;
+            output[out_idx] = input[in_idx];
+            out_idx += 1;
+            in_idx += 1;
+
+            // Add \+ for one or more matches
+            output[out_idx] = b'\\';
+            out_idx += 1;
+            output[out_idx] = b'+';
+            out_idx += 1;
+        }
+        _ => {
+            // Unsupported format
+            return -1;
+        }
+    }
+
+    // Null-terminate
+    if out_idx < out_size {
+        output[out_idx] = 0;
+    }
+
+    in_idx as c_int
+}
+
+/// Convert an errorformat pattern specifier to regex.
+///
+/// This handles patterns like %f, %l, %c, etc. and converts them to
+/// regex capture groups like \([^:]*\) or \(\d\+\).
+///
+/// # Arguments
+///
+/// * `efmpat` - The format character (f, l, c, etc.)
+/// * `next_char` - The character following the format specifier (for %f handling)
+/// * `addr` - Array tracking which patterns have been used (FMT_PATTERNS size)
+/// * `idx` - Index of this pattern in the addr array
+/// * `round` - Current round counter
+/// * `prefix` - The format prefix character
+/// * `out` - Output buffer for regex pattern
+/// * `out_size` - Size of output buffer
+///
+/// # Returns
+///
+/// Result struct with bytes_written, updated round, and status.
+///
+/// # Safety
+///
+/// - All pointers must be valid
+/// - `addr` must point to an array of at least FMT_PATTERNS bytes
+/// - `out` must point to a buffer of at least `out_size` bytes
+#[no_mangle]
+#[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_efmpat_to_regpat(
+    efmpat: c_char,
+    next_char: c_char,
+    addr: *mut c_char,
+    idx: c_int,
+    round: c_int,
+    prefix: c_char,
+    out: *mut c_char,
+    out_size: usize,
+) -> EfmPatResult {
+    if addr.is_null() || out.is_null() || out_size < 16 {
+        return EfmPatResult::default();
+    }
+
+    let idx_usize = idx as usize;
+    if idx < 0 || idx_usize >= FMT_PATTERNS {
+        return EfmPatResult::default();
+    }
+
+    let addr_slice = std::slice::from_raw_parts_mut(addr.cast::<u8>(), FMT_PATTERNS);
+    let output = std::slice::from_raw_parts_mut(out.cast::<u8>(), out_size);
+
+    // Check if pattern already used
+    if addr_slice[idx_usize] != 0 {
+        // E372: Too many %X in format string
+        return EfmPatResult::default();
+    }
+
+    // Check if pattern is valid for this prefix
+    if !rs_efm_pattern_valid_for_prefix(idx, prefix) {
+        // E373: Unexpected %X in format string
+        return EfmPatResult::default();
+    }
+
+    // Mark pattern as used
+    let new_round = round + 1;
+    addr_slice[idx_usize] = new_round as u8;
+
+    let mut out_idx = 0;
+
+    // Start capture group: \(
+    output[out_idx] = b'\\';
+    out_idx += 1;
+    output[out_idx] = b'(';
+    out_idx += 1;
+
+    // Handle %f specially - file names may contain spaces
+    let efmpat_byte = efmpat as u8;
+    let next_byte = next_char as u8;
+
+    if efmpat_byte == b'f' && next_byte != 0 {
+        if next_byte != b'\\' && next_byte != b'%' {
+            // File name followed by regular character: use non-greedy match
+            // ".{-1,}x" - match as few chars as possible before the delimiter
+            let pattern = b".\\{-1,}";
+            if out_idx + pattern.len() >= out_size {
+                return EfmPatResult::default();
+            }
+            output[out_idx..out_idx + pattern.len()].copy_from_slice(pattern);
+            out_idx += pattern.len();
+        } else {
+            // File name followed by '\' or '%': use greedy match
+            let pattern = b"\\f\\+";
+            if out_idx + pattern.len() >= out_size {
+                return EfmPatResult::default();
+            }
+            output[out_idx..out_idx + pattern.len()].copy_from_slice(pattern);
+            out_idx += pattern.len();
+        }
+    } else {
+        // Use the standard pattern for this format specifier
+        let pattern = FMT_PAT[idx_usize].1.as_bytes();
+        if out_idx + pattern.len() >= out_size {
+            return EfmPatResult::default();
+        }
+        output[out_idx..out_idx + pattern.len()].copy_from_slice(pattern);
+        out_idx += pattern.len();
+    }
+
+    // End capture group: \)
+    if out_idx + 2 >= out_size {
+        return EfmPatResult::default();
+    }
+    output[out_idx] = b'\\';
+    out_idx += 1;
+    output[out_idx] = b')';
+    out_idx += 1;
+
+    // Null-terminate
+    if out_idx < out_size {
+        output[out_idx] = 0;
+    }
+
+    EfmPatResult {
+        bytes_written: out_idx,
+        round: new_round,
+        status: QF_OK,
+    }
+}
+
+/// Check if a character is a regex magic character that needs escaping.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub extern "C" fn rs_efm_is_regex_magic(c: c_char) -> bool {
+    matches!(c as u8, b'.' | b'*' | b'^' | b'$' | b'~' | b'[')
+}
+
+/// Check if a character is a format magic character that should be copied directly.
+///
+/// These are characters that appear after % in the format string and
+/// should be copied directly to the regex pattern.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub extern "C" fn rs_efm_is_format_magic(c: c_char) -> bool {
+    matches!(c as u8, b'%' | b'\\' | b'.' | b'^' | b'$' | b'~' | b'[')
+}
+
+// =============================================================================
+// Full Errorformat to Regex Conversion
+// =============================================================================
+
+/// Result of the full errorformat-to-regex conversion
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct EfmToRegpatResult {
+    /// Number of bytes written to output
+    pub bytes_written: usize,
+    /// Prefix character (if found)
+    pub prefix: c_char,
+    /// Flags character (if found)
+    pub flags: c_char,
+    /// Whether %> (conthere) was found
+    pub conthere: bool,
+    /// Status: 0 = success, -1 = error
+    pub status: c_int,
+    /// Error code for specific error messages (E372-E377)
+    pub error_code: c_int,
+    /// Character that caused the error (for E372, E373, E376, E377)
+    pub error_char: c_char,
+}
+
+impl Default for EfmToRegpatResult {
+    fn default() -> Self {
+        Self {
+            bytes_written: 0,
+            prefix: 0,
+            flags: 0,
+            conthere: false,
+            status: QF_FAIL,
+            error_code: 0,
+            error_char: 0,
+        }
+    }
+}
+
+/// Convert an 'errorformat' string to a regular expression pattern.
+///
+/// This is the main entry point for errorformat parsing. It takes an
+/// errorformat string like `%f:%l:%c: %m` and converts it to a regex
+/// pattern like `^\(.+\):\(\d+\):\(\d+\): \(.+\)$`.
+///
+/// # Arguments
+///
+/// * `efm` - The errorformat string
+/// * `efm_len` - Length of the errorformat string
+/// * `addr` - Array tracking which patterns have been used (FMT_PATTERNS size)
+/// * `out` - Output buffer for regex pattern
+/// * `out_size` - Size of output buffer
+///
+/// # Returns
+///
+/// Result struct with bytes_written, prefix/flags info, conthere flag, and status.
+///
+/// # Safety
+///
+/// - All pointers must be valid
+/// - `addr` must point to an array of at least FMT_PATTERNS bytes
+/// - `out` must point to a buffer of at least `out_size` bytes
+#[no_mangle]
+#[allow(
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    clippy::too_many_lines
+)]
+pub unsafe extern "C" fn rs_efm_to_regpat(
+    efm: *const c_char,
+    efm_len: usize,
+    addr: *mut c_char,
+    out: *mut c_char,
+    out_size: usize,
+) -> EfmToRegpatResult {
+    if efm.is_null() || addr.is_null() || out.is_null() || efm_len == 0 || out_size < 16 {
+        return EfmToRegpatResult::default();
+    }
+
+    let input = std::slice::from_raw_parts(efm.cast::<u8>(), efm_len);
+    let addr_slice = std::slice::from_raw_parts_mut(addr.cast::<u8>(), FMT_PATTERNS);
+    let output = std::slice::from_raw_parts_mut(out.cast::<u8>(), out_size);
+
+    let mut out_idx = 0;
+    let mut in_idx = 0;
+    let mut round = 0;
+    let mut prefix: c_char = 0;
+    let mut flags: c_char = 0;
+    let mut conthere = false;
+
+    // Start regex with ^
+    output[out_idx] = b'^';
+    out_idx += 1;
+
+    while in_idx < input.len() {
+        if input[in_idx] == b'%' {
+            in_idx += 1;
+            if in_idx >= input.len() {
+                break;
+            }
+
+            let c = input[in_idx];
+
+            // Find pattern index for this character
+            let pattern_idx = rs_efm_find_pattern_idx(c as c_char);
+
+            if pattern_idx >= 0 {
+                // Known format specifier (%f, %l, %c, etc.)
+                let next_char = if in_idx + 1 < input.len() {
+                    input[in_idx + 1] as c_char
+                } else {
+                    0
+                };
+
+                // Check for buffer overflow
+                if out_idx + 32 >= out_size {
+                    return EfmToRegpatResult::default();
+                }
+
+                let result = rs_efmpat_to_regpat(
+                    c as c_char,
+                    next_char,
+                    addr.cast(),
+                    pattern_idx,
+                    round,
+                    prefix,
+                    output.as_mut_ptr().add(out_idx).cast(),
+                    out_size - out_idx,
+                );
+
+                if result.status != QF_OK {
+                    // Check which error - E372 if already used, E373 otherwise
+                    let error_code = if addr_slice[pattern_idx as usize] != 0 {
+                        372 // E372: Too many %X
+                    } else {
+                        373 // E373: Unexpected %X
+                    };
+                    return EfmToRegpatResult {
+                        error_code,
+                        error_char: c as c_char,
+                        ..Default::default()
+                    };
+                }
+
+                out_idx += result.bytes_written;
+                round = result.round;
+                in_idx += 1;
+            } else if c == b'*' {
+                // Scanf-like format: %*[...] or %*\X
+                in_idx += 1;
+                if in_idx >= input.len() {
+                    return EfmToRegpatResult {
+                        error_code: 375,
+                        error_char: c as c_char,
+                        ..Default::default()
+                    };
+                }
+
+                if out_idx + 32 >= out_size {
+                    return EfmToRegpatResult::default();
+                }
+
+                let consumed = rs_efm_scanf_to_regpat(
+                    input.as_ptr().add(in_idx).cast(),
+                    input.len() - in_idx,
+                    output.as_mut_ptr().add(out_idx).cast(),
+                    out_size - out_idx,
+                );
+
+                if consumed < 0 {
+                    // E374 or E375 depending on the input
+                    let err_code = if in_idx < input.len() && input[in_idx] == b'[' {
+                        374 // Missing ]
+                    } else {
+                        375 // Unsupported
+                    };
+                    return EfmToRegpatResult {
+                        error_code: err_code,
+                        error_char: input[in_idx] as c_char,
+                        ..Default::default()
+                    };
+                }
+
+                // Find the actual end of output (strlen)
+                let mut written = 0;
+                while out_idx + written < out_size && output[out_idx + written] != 0 {
+                    written += 1;
+                }
+                out_idx += written;
+                in_idx += consumed as usize;
+            } else if matches!(c, b'%' | b'\\' | b'.' | b'^' | b'$' | b'~' | b'[') {
+                // Regexp magic characters after %
+                if out_idx >= out_size - 1 {
+                    return EfmToRegpatResult::default();
+                }
+                output[out_idx] = c;
+                out_idx += 1;
+                in_idx += 1;
+            } else if c == b'#' {
+                // %# becomes * (any number of matches)
+                if out_idx >= out_size - 1 {
+                    return EfmToRegpatResult::default();
+                }
+                output[out_idx] = b'*';
+                out_idx += 1;
+                in_idx += 1;
+            } else if c == b'>' {
+                // %> sets conthere flag
+                conthere = true;
+                in_idx += 1;
+            } else if in_idx == 1 {
+                // Prefix is only allowed at the beginning (after the first %)
+                let prefix_result =
+                    rs_efm_analyze_prefix(input.as_ptr().add(in_idx).cast(), input.len() - in_idx);
+
+                if prefix_result.status != QF_OK {
+                    // E376: Invalid prefix
+                    return EfmToRegpatResult {
+                        error_code: 376,
+                        error_char: c as c_char,
+                        ..Default::default()
+                    };
+                }
+
+                prefix = prefix_result.prefix;
+                flags = prefix_result.flags;
+                in_idx += if flags != 0 { 2 } else { 1 };
+            } else {
+                // E377: Invalid %X in format string
+                return EfmToRegpatResult {
+                    error_code: 377,
+                    error_char: c as c_char,
+                    ..Default::default()
+                };
+            }
+        } else {
+            // Normal character
+            let c = input[in_idx];
+
+            if c == b'\\' && in_idx + 1 < input.len() {
+                // Escape sequence - skip the backslash and copy next char
+                in_idx += 1;
+                if out_idx >= out_size - 1 {
+                    return EfmToRegpatResult::default();
+                }
+                output[out_idx] = input[in_idx];
+                out_idx += 1;
+            } else if matches!(c, b'.' | b'*' | b'^' | b'$' | b'~' | b'[') {
+                // Escape regex metacharacters
+                if out_idx >= out_size - 2 {
+                    return EfmToRegpatResult::default();
+                }
+                output[out_idx] = b'\\';
+                out_idx += 1;
+                output[out_idx] = c;
+                out_idx += 1;
+            } else if c != 0 {
+                // Regular character
+                if out_idx >= out_size - 1 {
+                    return EfmToRegpatResult::default();
+                }
+                output[out_idx] = c;
+                out_idx += 1;
+            }
+            in_idx += 1;
+        }
+    }
+
+    // End regex with $
+    if out_idx >= out_size - 2 {
+        return EfmToRegpatResult::default();
+    }
+    output[out_idx] = b'$';
+    out_idx += 1;
+    output[out_idx] = 0; // Null-terminate
+
+    EfmToRegpatResult {
+        bytes_written: out_idx,
+        prefix,
+        flags,
+        conthere,
+        status: QF_OK,
+        error_code: 0,
+        error_char: 0,
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -1565,5 +2332,361 @@ mod tests {
         assert_eq!(rs_qf_parse_fmt_t(std::ptr::null(), 0, &mut fields), QF_FAIL);
         assert_eq!(rs_qf_parse_fmt_v(std::ptr::null(), 0, &mut fields), QF_FAIL);
         assert_eq!(rs_qf_parse_fmt_p(std::ptr::null(), 0, &mut fields), QF_FAIL);
+    }
+
+    // ==========================================================================
+    // Errorformat Pattern Conversion Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_efm_find_pattern_idx() {
+        assert_eq!(rs_efm_find_pattern_idx(b'f' as c_char), 0);
+        assert_eq!(rs_efm_find_pattern_idx(b'l' as c_char), 3);
+        assert_eq!(rs_efm_find_pattern_idx(b'c' as c_char), 5);
+        assert_eq!(rs_efm_find_pattern_idx(b'm' as c_char), 8);
+        assert_eq!(rs_efm_find_pattern_idx(b'x' as c_char), -1);
+    }
+
+    #[test]
+    #[allow(clippy::cast_possible_wrap)]
+    fn test_efm_analyze_prefix_simple() {
+        unsafe {
+            let prefix = b"E";
+            let result = rs_efm_analyze_prefix(prefix.as_ptr().cast(), prefix.len());
+            assert_eq!(result.status, QF_OK);
+            assert_eq!(result.prefix, b'E' as c_char);
+            assert_eq!(result.flags, 0);
+        }
+    }
+
+    #[test]
+    #[allow(clippy::cast_possible_wrap)]
+    fn test_efm_analyze_prefix_with_flag() {
+        unsafe {
+            let prefix = b"-E";
+            let result = rs_efm_analyze_prefix(prefix.as_ptr().cast(), prefix.len());
+            assert_eq!(result.status, QF_OK);
+            assert_eq!(result.prefix, b'E' as c_char);
+            assert_eq!(result.flags, b'-' as c_char);
+        }
+    }
+
+    #[test]
+    #[allow(clippy::cast_possible_wrap)]
+    fn test_efm_analyze_prefix_all_types() {
+        unsafe {
+            for &prefix_char in b"DXAEWINCZGOPQ" {
+                let prefix = [prefix_char];
+                let result = rs_efm_analyze_prefix(prefix.as_ptr().cast(), prefix.len());
+                assert_eq!(result.status, QF_OK);
+                assert_eq!(result.prefix, prefix_char as c_char);
+            }
+        }
+    }
+
+    #[test]
+    fn test_efm_analyze_prefix_invalid() {
+        unsafe {
+            let prefix = b"x";
+            let result = rs_efm_analyze_prefix(prefix.as_ptr().cast(), prefix.len());
+            assert_eq!(result.status, QF_FAIL);
+        }
+    }
+
+    #[test]
+    #[allow(clippy::cast_possible_wrap)]
+    fn test_efm_pattern_valid_for_prefix() {
+        // %l (line number, idx=3) should be valid with E prefix
+        assert!(rs_efm_pattern_valid_for_prefix(3, b'E' as c_char));
+        // %l should NOT be valid with D prefix
+        assert!(!rs_efm_pattern_valid_for_prefix(3, b'D' as c_char));
+        // %r (rest, idx=9) should only be valid with O/P/Q
+        assert!(rs_efm_pattern_valid_for_prefix(9, b'O' as c_char));
+        assert!(!rs_efm_pattern_valid_for_prefix(9, b'E' as c_char));
+    }
+
+    #[test]
+    #[allow(clippy::cast_possible_wrap)]
+    fn test_efm_scanf_to_regpat_char_class() {
+        unsafe {
+            let input = b"[^:]";
+            let mut output = [0u8; 32];
+            let consumed = rs_efm_scanf_to_regpat(
+                input.as_ptr().cast(),
+                input.len(),
+                output.as_mut_ptr().cast(),
+                output.len(),
+            );
+            assert!(consumed > 0);
+            // Should produce "[^:]\+"
+            let result = std::ffi::CStr::from_ptr(output.as_ptr().cast());
+            assert_eq!(result.to_str().unwrap(), "[^:]\\+");
+        }
+    }
+
+    #[test]
+    #[allow(clippy::cast_possible_wrap)]
+    fn test_efm_scanf_to_regpat_escape() {
+        unsafe {
+            let input = b"\\D";
+            let mut output = [0u8; 32];
+            let consumed = rs_efm_scanf_to_regpat(
+                input.as_ptr().cast(),
+                input.len(),
+                output.as_mut_ptr().cast(),
+                output.len(),
+            );
+            assert!(consumed > 0);
+            // Should produce "\D\+"
+            let result = std::ffi::CStr::from_ptr(output.as_ptr().cast());
+            assert_eq!(result.to_str().unwrap(), "\\D\\+");
+        }
+    }
+
+    #[test]
+    #[allow(clippy::cast_possible_wrap)]
+    fn test_efmpat_to_regpat_line() {
+        unsafe {
+            let mut addr = [0u8; FMT_PATTERNS];
+            let mut output = [0u8; 64];
+            let result = rs_efmpat_to_regpat(
+                b'l' as c_char, // line number
+                b':' as c_char, // next char
+                addr.as_mut_ptr().cast(),
+                3, // idx for line number
+                0, // round
+                0, // no prefix
+                output.as_mut_ptr().cast(),
+                output.len(),
+            );
+            assert_eq!(result.status, QF_OK);
+            assert_eq!(result.round, 1);
+            // Should produce \(\d\+\)
+            let result_str = std::ffi::CStr::from_ptr(output.as_ptr().cast());
+            assert_eq!(result_str.to_str().unwrap(), "\\(\\d+\\)");
+        }
+    }
+
+    #[test]
+    #[allow(clippy::cast_possible_wrap)]
+    fn test_efmpat_to_regpat_duplicate() {
+        unsafe {
+            let mut addr = [0u8; FMT_PATTERNS];
+            let mut output = [0u8; 64];
+
+            // First call should succeed
+            let result1 = rs_efmpat_to_regpat(
+                b'l' as c_char,
+                0,
+                addr.as_mut_ptr().cast(),
+                3,
+                0,
+                0,
+                output.as_mut_ptr().cast(),
+                output.len(),
+            );
+            assert_eq!(result1.status, QF_OK);
+
+            // Second call with same pattern should fail
+            let result2 = rs_efmpat_to_regpat(
+                b'l' as c_char,
+                0,
+                addr.as_mut_ptr().cast(),
+                3,
+                1,
+                0,
+                output.as_mut_ptr().cast(),
+                output.len(),
+            );
+            assert_eq!(result2.status, QF_FAIL);
+        }
+    }
+
+    #[test]
+    fn test_efm_is_regex_magic() {
+        assert!(rs_efm_is_regex_magic(b'.' as c_char));
+        assert!(rs_efm_is_regex_magic(b'*' as c_char));
+        assert!(rs_efm_is_regex_magic(b'^' as c_char));
+        assert!(rs_efm_is_regex_magic(b'$' as c_char));
+        assert!(rs_efm_is_regex_magic(b'[' as c_char));
+        assert!(!rs_efm_is_regex_magic(b'a' as c_char));
+        assert!(!rs_efm_is_regex_magic(b'z' as c_char));
+    }
+
+    #[test]
+    fn test_efm_is_format_magic() {
+        assert!(rs_efm_is_format_magic(b'%' as c_char));
+        assert!(rs_efm_is_format_magic(b'\\' as c_char));
+        assert!(rs_efm_is_format_magic(b'.' as c_char));
+        assert!(!rs_efm_is_format_magic(b'a' as c_char));
+        assert!(!rs_efm_is_format_magic(b'l' as c_char));
+    }
+
+    // ==========================================================================
+    // Full Errorformat to Regex Conversion Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_efm_to_regpat_simple() {
+        unsafe {
+            // Simple format: %f:%l: %m
+            let efm = b"%f:%l: %m";
+            let mut addr = [0u8; FMT_PATTERNS];
+            let mut output = [0u8; 256];
+
+            let result = rs_efm_to_regpat(
+                efm.as_ptr().cast(),
+                efm.len(),
+                addr.as_mut_ptr().cast(),
+                output.as_mut_ptr().cast(),
+                output.len(),
+            );
+
+            assert_eq!(result.status, QF_OK);
+            assert!(result.bytes_written > 0);
+
+            // Check that output starts with ^ and ends with $
+            assert_eq!(output[0], b'^');
+            assert_eq!(output[result.bytes_written - 1], b'$');
+
+            // Check that filename pattern was used
+            assert_ne!(addr[0], 0); // %f
+            assert_ne!(addr[3], 0); // %l
+            assert_ne!(addr[8], 0); // %m
+        }
+    }
+
+    #[test]
+    fn test_efm_to_regpat_with_prefix() {
+        unsafe {
+            // Format with error prefix: %E%f:%l: %m
+            let efm = b"%E%f:%l: %m";
+            let mut addr = [0u8; FMT_PATTERNS];
+            let mut output = [0u8; 256];
+
+            let result = rs_efm_to_regpat(
+                efm.as_ptr().cast(),
+                efm.len(),
+                addr.as_mut_ptr().cast(),
+                output.as_mut_ptr().cast(),
+                output.len(),
+            );
+
+            assert_eq!(result.status, QF_OK);
+            assert_eq!(result.prefix, b'E' as c_char);
+        }
+    }
+
+    #[test]
+    fn test_efm_to_regpat_conthere() {
+        unsafe {
+            // Format with conthere: %>%f:%l: %m
+            let efm = b"%>%f:%l: %m";
+            let mut addr = [0u8; FMT_PATTERNS];
+            let mut output = [0u8; 256];
+
+            let result = rs_efm_to_regpat(
+                efm.as_ptr().cast(),
+                efm.len(),
+                addr.as_mut_ptr().cast(),
+                output.as_mut_ptr().cast(),
+                output.len(),
+            );
+
+            assert_eq!(result.status, QF_OK);
+            assert!(result.conthere);
+        }
+    }
+
+    #[test]
+    fn test_efm_to_regpat_escape_metachar() {
+        unsafe {
+            // Format with regex metacharacter that needs escaping: file.c:%l
+            let efm = b"file.c:%l";
+            let mut addr = [0u8; FMT_PATTERNS];
+            let mut output = [0u8; 256];
+
+            let result = rs_efm_to_regpat(
+                efm.as_ptr().cast(),
+                efm.len(),
+                addr.as_mut_ptr().cast(),
+                output.as_mut_ptr().cast(),
+                output.len(),
+            );
+
+            assert_eq!(result.status, QF_OK);
+
+            // The '.' should be escaped to '\.'
+            let result_str = std::ffi::CStr::from_ptr(output.as_ptr().cast());
+            let s = result_str.to_str().unwrap();
+            assert!(s.contains("\\.c"), "Expected \\. in: {s}");
+        }
+    }
+
+    #[test]
+    fn test_efm_to_regpat_duplicate_pattern() {
+        unsafe {
+            // Format with duplicate pattern: %l:%l
+            let efm = b"%l:%l";
+            let mut addr = [0u8; FMT_PATTERNS];
+            let mut output = [0u8; 256];
+
+            let result = rs_efm_to_regpat(
+                efm.as_ptr().cast(),
+                efm.len(),
+                addr.as_mut_ptr().cast(),
+                output.as_mut_ptr().cast(),
+                output.len(),
+            );
+
+            assert_eq!(result.status, QF_FAIL);
+            assert_eq!(result.error_code, 372); // E372: Too many %l
+        }
+    }
+
+    #[test]
+    fn test_efm_to_regpat_invalid_pattern() {
+        unsafe {
+            // Format with invalid pattern in middle: %f:%x:%l
+            let efm = b"%f:%x:%l";
+            let mut addr = [0u8; FMT_PATTERNS];
+            let mut output = [0u8; 256];
+
+            let result = rs_efm_to_regpat(
+                efm.as_ptr().cast(),
+                efm.len(),
+                addr.as_mut_ptr().cast(),
+                output.as_mut_ptr().cast(),
+                output.len(),
+            );
+
+            assert_eq!(result.status, QF_FAIL);
+            assert_eq!(result.error_code, 377); // E377: Invalid %x
+        }
+    }
+
+    #[test]
+    fn test_efm_to_regpat_scanf() {
+        unsafe {
+            // Format with scanf pattern: %f:%*[^:]:%l
+            let efm = b"%f:%*[^:]:%l";
+            let mut addr = [0u8; FMT_PATTERNS];
+            let mut output = [0u8; 256];
+
+            let result = rs_efm_to_regpat(
+                efm.as_ptr().cast(),
+                efm.len(),
+                addr.as_mut_ptr().cast(),
+                output.as_mut_ptr().cast(),
+                output.len(),
+            );
+
+            assert_eq!(result.status, QF_OK);
+
+            // Check output contains the scanf pattern converted to regex
+            let result_str = std::ffi::CStr::from_ptr(output.as_ptr().cast());
+            let s = result_str.to_str().unwrap();
+            assert!(s.contains("[^:]\\+"), "Expected [^:]\\+ in: {s}");
+        }
     }
 }
