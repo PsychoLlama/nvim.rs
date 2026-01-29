@@ -177,26 +177,18 @@ const char *nvim_charset_get_p_isf_ptr(void)
 }
 
 // ============================================================================
-// Chartab macros and definitions
 // ============================================================================
-
-// b_chartab[] is an array with 256 bits, each bit representing one of the
-// characters 0-255.
-#define SET_CHARTAB(buf, c) \
-  (buf)->b_chartab[(unsigned)(c) >> 6] |= (1ull << ((c) & 0x3f))
-#define RESET_CHARTAB(buf, c) \
-  (buf)->b_chartab[(unsigned)(c) >> 6] &= ~(1ull << ((c) & 0x3f))
-#define GET_CHARTAB_TAB(chartab, c) \
-  ((chartab)[(unsigned)(c) >> 6] & (1ull << ((c) & 0x3f)))
-
-// Table owned by Rust, declared here for C access
+// g_chartab - Character properties table
+// ============================================================================
+//
+// g_chartab is owned by Rust and contains properties for bytes 0-255:
+// - Lower 3 bits (0x07): display cell count (1, 2, or 4)
+// - Bit 4 (0x10): CT_PRINT_CHAR - printable character
+// - Bit 5 (0x20): CT_ID_CHAR - identifier character
+// - Bit 6 (0x40): CT_FNAME_CHAR - filename character
+//
+// The chartab manipulation macros and flags are now in Rust.
 extern uint8_t g_chartab[256];
-
-// Flags for g_chartab[].
-#define CT_CELL_MASK  0x07  ///< mask: nr of display cells (1, 2 or 4)
-#define CT_PRINT_CHAR 0x10  ///< flag: set for printable chars
-#define CT_ID_CHAR    0x20  ///< flag: set for ID chars
-#define CT_FNAME_CHAR 0x40  ///< flag: set for file name chars
 
 /// Fill g_chartab[].  Also fills curbuf->b_chartab[] with flags for keyword
 /// characters for current buffer.
