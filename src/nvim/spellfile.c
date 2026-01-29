@@ -416,6 +416,23 @@ extern int rs_read_tree_peek_nodecount(const uint8_t *buf, size_t buf_len, uint3
 extern int rs_read_tree_node_count(const uint8_t *buf, size_t buf_len, uint32_t *count_out,
                                    size_t *consumed_out);
 
+// Phase B6: Affix file parsing infrastructure
+// The main spell_read_aff() function remains in C due to its complexity
+// (~738 LOC, text file parsing, encoding conversion, hash tables).
+// These declarations provide Rust helpers for affix flag parsing.
+
+// Affix flag type constants (matches AFT_* defines below)
+typedef enum {
+  RS_AFT_CHAR = 0,      // flags are one character
+  RS_AFT_LONG = 1,      // flags are two characters
+  RS_AFT_NUM = 2,       // flags are numbers (comma-separated)
+  RS_AFT_CAPLONG = 3,   // flags are two characters, first can be upper case
+} RsAffFlagType;
+
+// Future: Rust helpers for affix flag parsing would go here
+// extern unsigned rs_affitem2flag(RsAffFlagType flagtype, const char *item);
+// extern bool rs_aff_flag_valid(unsigned flag, RsAffFlagType flagtype);
+
 // Special byte values for <byte>.  Some are only used in the tree for
 // postponed prefixes, some only in the other trees.  This is a bit messy...
 enum {
