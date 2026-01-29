@@ -150,8 +150,8 @@ impl OptValue {
 
 extern "C" {
     // Option lookup
-    fn findoption(name: *const c_char) -> c_int;
-    fn findoption_len(name: *const c_char, len: usize) -> c_int;
+    fn find_option(name: *const c_char) -> c_int;
+    fn find_option_len(name: *const c_char, len: usize) -> c_int;
 
     // Option type queries
     fn option_has_type(opt_idx: c_int, opt_type: c_int) -> c_int;
@@ -191,7 +191,7 @@ pub unsafe extern "C" fn rs_get_option(name: *const c_char, scope: c_int) -> Opt
         return OptValue::nil();
     }
 
-    let opt_idx = findoption(name);
+    let opt_idx = find_option(name);
     if opt_idx == K_OPT_INVALID {
         return OptValue::nil();
     }
@@ -300,7 +300,7 @@ pub unsafe extern "C" fn rs_set_option(
         return c"E474: Invalid argument".as_ptr();
     }
 
-    let opt_idx = findoption(name);
+    let opt_idx = find_option(name);
     if opt_idx == K_OPT_INVALID {
         return c"E518: Unknown option".as_ptr();
     }
@@ -327,7 +327,7 @@ pub unsafe extern "C" fn rs_set_option_bool(
         return c"E474: Invalid argument".as_ptr();
     }
 
-    let opt_idx = findoption(name);
+    let opt_idx = find_option(name);
     if opt_idx == K_OPT_INVALID {
         return c"E518: Unknown option".as_ptr();
     }
@@ -361,7 +361,7 @@ pub unsafe extern "C" fn rs_set_option_number(
         return c"E474: Invalid argument".as_ptr();
     }
 
-    let opt_idx = findoption(name);
+    let opt_idx = find_option(name);
     if opt_idx == K_OPT_INVALID {
         return c"E518: Unknown option".as_ptr();
     }
@@ -427,7 +427,7 @@ pub unsafe extern "C" fn rs_option_exists(name: *const c_char) -> c_int {
     if name.is_null() {
         return 0;
     }
-    c_int::from(findoption(name) != K_OPT_INVALID)
+    c_int::from(find_option(name) != K_OPT_INVALID)
 }
 
 /// Get the type of an option.
@@ -443,7 +443,7 @@ pub unsafe extern "C" fn rs_option_type(name: *const c_char) -> c_int {
         return -1;
     }
 
-    let opt_idx = findoption(name);
+    let opt_idx = find_option(name);
     if opt_idx == K_OPT_INVALID {
         return -1;
     }
@@ -474,7 +474,7 @@ pub unsafe extern "C" fn rs_accessor_find_option(name: *const c_char) -> c_int {
     if name.is_null() {
         return K_OPT_INVALID;
     }
-    findoption(name)
+    find_option(name)
 }
 
 /// Find option index by name with length (accessor API version).
@@ -490,7 +490,7 @@ pub unsafe extern "C" fn rs_accessor_find_option_len(name: *const c_char, len: u
     if name.is_null() || len == 0 {
         return K_OPT_INVALID;
     }
-    findoption_len(name, len)
+    find_option_len(name, len)
 }
 
 // =============================================================================

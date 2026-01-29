@@ -1756,6 +1756,20 @@ int nvim_win_get_p_rl(win_T *wp)
   return wp->w_p_rl;
 }
 
+/// Set the window's 'rightleft' option.
+void nvim_win_set_p_rl(win_T *wp, int val)
+{
+  if (wp) {
+    wp->w_p_rl = val != 0;
+  }
+}
+
+/// Get the window's 'arabic' option.
+int nvim_win_get_p_arab(win_T *wp)
+{
+  return wp ? wp->w_p_arab : 0;
+}
+
 /// Get the window's grid view (for wlv_put_linebuf).
 void *nvim_win_get_w_grid(win_T *wp)
 {

@@ -155,10 +155,9 @@ extern "C" {
     fn nvim_slang_get_compprog(slang: SlangHandle) -> *mut c_void;
     fn nvim_slang_get_prefprog(slang: SlangHandle) -> *mut *mut c_void;
     fn nvim_slang_get_prefixcnt(slang: SlangHandle) -> c_int;
-    fn nvim_slang_get_compflags(slang: SlangHandle) -> *mut c_char;
-    fn nvim_slang_get_compallowed(slang: SlangHandle) -> *mut u8;
-    fn nvim_slang_get_compstartflags(slang: SlangHandle) -> c_int;
-    fn nvim_slang_get_compallflags(slang: SlangHandle) -> c_int;
+    fn nvim_slang_get_comprules(slang: SlangHandle) -> *mut u8;
+    fn nvim_slang_get_compstartflags(slang: SlangHandle) -> *mut u8;
+    fn nvim_slang_get_compallflags(slang: SlangHandle) -> *mut u8;
 
     // slang_T REP/REPSAL accessors (returns garray_T*)
     fn nvim_slang_get_rep(slang: SlangHandle) -> *mut c_void;
@@ -168,7 +167,6 @@ extern "C" {
     fn nvim_slang_get_comppat(slang: SlangHandle) -> *mut c_void;
 
     // slang_T string accessors
-    fn nvim_slang_get_map_str(slang: SlangHandle) -> *mut c_char;
     fn nvim_slang_get_syllable(slang: SlangHandle) -> *mut c_char;
     fn nvim_slang_get_midword(slang: SlangHandle) -> *mut c_char;
 
@@ -344,27 +342,21 @@ impl SlangHandle {
         unsafe { nvim_slang_get_prefixcnt(self) }
     }
 
-    /// Get compound flags string
+    /// Get compound rules (all COMPOUNDRULE concatenated)
     #[must_use]
-    pub fn compflags(self) -> *mut c_char {
-        unsafe { nvim_slang_get_compflags(self) }
+    pub fn comprules(self) -> *mut u8 {
+        unsafe { nvim_slang_get_comprules(self) }
     }
 
-    /// Get compound allowed flags array
+    /// Get compound start flags (flags for first compound word)
     #[must_use]
-    pub fn compallowed(self) -> *mut u8 {
-        unsafe { nvim_slang_get_compallowed(self) }
-    }
-
-    /// Get compound start flags
-    #[must_use]
-    pub fn compstartflags(self) -> c_int {
+    pub fn compstartflags(self) -> *mut u8 {
         unsafe { nvim_slang_get_compstartflags(self) }
     }
 
-    /// Get compound all flags
+    /// Get compound all flags (all flags for compound words)
     #[must_use]
-    pub fn compallflags(self) -> c_int {
+    pub fn compallflags(self) -> *mut u8 {
         unsafe { nvim_slang_get_compallflags(self) }
     }
 
@@ -396,12 +388,6 @@ impl SlangHandle {
     #[must_use]
     pub fn comppat(self) -> *mut c_void {
         unsafe { nvim_slang_get_comppat(self) }
-    }
-
-    /// Get MAP string for similar character groups
-    #[must_use]
-    pub fn map_str(self) -> *mut c_char {
-        unsafe { nvim_slang_get_map_str(self) }
     }
 
     /// Get syllable pattern string

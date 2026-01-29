@@ -372,33 +372,22 @@ garray_T *nvim_slang_get_comppat(slang_T *slang)
   return &slang->sl_comppat;
 }
 
-// Compound flags accessor
-char *nvim_slang_get_compflags(slang_T *slang)
+// Compound rules accessor (all COMPOUNDRULE concatenated)
+uint8_t *nvim_slang_get_comprules(slang_T *slang)
 {
-  return slang->sl_compflags;
+  return slang->sl_comprules;
 }
 
-// Compound allowed accessors
-uint8_t *nvim_slang_get_compallowed(slang_T *slang)
-{
-  return slang->sl_compallowed;
-}
-
-// Compound start/end flags
-int nvim_slang_get_compstartflags(slang_T *slang)
+// Compound start flags (flags for first compound word)
+uint8_t *nvim_slang_get_compstartflags(slang_T *slang)
 {
   return slang->sl_compstartflags;
 }
 
-int nvim_slang_get_compallflags(slang_T *slang)
+// Compound all flags (all flags for compound words)
+uint8_t *nvim_slang_get_compallflags(slang_T *slang)
 {
   return slang->sl_compallflags;
-}
-
-// MAP string accessor
-char *nvim_slang_get_map_str(slang_T *slang)
-{
-  return slang->sl_map_str;
 }
 
 // Syllable table accessor

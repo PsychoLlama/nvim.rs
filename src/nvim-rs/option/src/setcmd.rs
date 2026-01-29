@@ -454,14 +454,14 @@ pub extern "C" fn rs_copy_direction_local_to_global() -> c_int {
 // =============================================================================
 
 extern "C" {
-    // Option display functions
-    fn showoptions(all: c_int, opt_flags: c_int);
-    fn showoneopt(opt: *const std::ffi::c_void, opt_flags: c_int);
+    // Option display functions (wrappers for static functions)
+    fn nvim_showoptions(all: c_int, opt_flags: c_int);
+    fn nvim_showoneopt(opt: *const std::ffi::c_void, opt_flags: c_int);
 
-    // Option setting functions
-    fn set_options_default(opt_flags: c_int);
-    fn didset_options();
-    fn didset_options2();
+    // Option setting functions (wrappers for static functions)
+    fn nvim_set_options_default(opt_flags: c_int);
+    fn nvim_didset_options();
+    fn nvim_didset_options2();
     fn ui_refresh_options();
 
     // Screen update
@@ -471,7 +471,7 @@ extern "C" {
     fn find_option_end(arg: *const c_char, opt_idx: *mut c_int) -> *const c_char;
     fn is_tty_option(name: *const c_char) -> c_int;
     fn get_varp_scope(opt: *const std::ffi::c_void, opt_flags: c_int) -> *mut std::ffi::c_void;
-    fn validate_opt_idx(
+    fn nvim_validate_opt_idx(
         win: *const std::ffi::c_void,
         opt_idx: c_int,
         opt_flags: c_int,
@@ -482,7 +482,7 @@ extern "C" {
     fn option_has_type(opt_idx: c_int, type_: c_int) -> c_int;
     fn option_has_scope(opt_idx: c_int, scope: c_int) -> c_int;
     fn option_scope_idx(opt_idx: c_int, scope: c_int) -> c_int;
-    fn get_option_newval(
+    fn nvim_get_option_newval(
         opt_idx: c_int,
         opt_flags: c_int,
         prefix: c_int,
@@ -495,7 +495,7 @@ extern "C" {
         errbuflen: usize,
         errmsg: *mut *const c_char,
     ) -> OptVal;
-    fn set_option(
+    fn nvim_rs_set_option(
         opt_idx: c_int,
         value: OptVal,
         opt_flags: c_int,
@@ -509,7 +509,7 @@ extern "C" {
     // String functions
     fn skiptowhite_esc(arg: *const c_char) -> *mut c_char;
     fn skipwhite(arg: *const c_char) -> *mut c_char;
-    fn ascii_iswhite(c: c_int) -> c_int;
+    fn rs_ascii_iswhite(c: c_int) -> c_int;
     fn vim_strchr(s: *const c_char, c: c_int) -> *const c_char;
 
     // Message functions
@@ -627,7 +627,7 @@ mod errmsg {
 pub unsafe extern "C" fn rs_do_set(arg: *mut c_char, opt_flags: c_int) -> c_int {
     let did_show: c_int = if arg.is_null() || *arg == 0 {
         // ":set" without arguments - show modified options
-        showoptions(0, opt_flags);
+        nvim_showoptions(0, opt_flags);
         1
     } else {
         do_set_process_args(arg, opt_flags)
@@ -752,14 +752,14 @@ unsafe fn check_set_all(argp: *mut *mut c_char, opt_flags: c_int, did_show: &mut
         if *(*argp) as u8 == b'&' {
             // ":set all&" - reset all options to default
             *argp = (*argp).add(1);
-            set_options_default(opt_flags);
-            didset_options();
-            didset_options2();
+            nvim_set_options_default(opt_flags);
+            nvim_didset_options();
+            nvim_didset_options2();
             ui_refresh_options();
             redraw_all_later(UPD_CLEAR);
         } else {
             // ":set all" - show all options
-            showoptions(1, opt_flags);
+            nvim_showoptions(1, opt_flags);
             *did_show = 1;
         }
 
@@ -816,7 +816,7 @@ pub unsafe extern "C" fn rs_do_one_set_option(
     let mut p = option_end.cast_mut();
 
     // Skip whitespace
-    while ascii_iswhite(c_int::from(*p)) != 0 {
+    while rs_ascii_iswhite(c_int::from(*p)) != 0 {
         p = p.add(1);
     }
 
@@ -834,7 +834,7 @@ pub unsafe extern "C" fn rs_do_one_set_option(
     let varp = get_varp_scope(opt.cast(), opt_flags);
 
     // Validate option
-    if validate_opt_idx(nvim_get_curwin(), opt_idx, opt_flags, flags, prefix, errmsg) == FAIL {
+    if nvim_validate_opt_idx(nvim_get_curwin(), opt_idx, opt_flags, flags, prefix, errmsg) == FAIL {
         return;
     }
 
@@ -856,7 +856,7 @@ pub unsafe extern "C" fn rs_do_one_set_option(
         // Check for trailing characters after special chars
         if !vim_strchr(c"?!&<".as_ptr(), c_int::from(nextchar)).is_null()
             && *(*argp).add(1) != 0
-            && ascii_iswhite(c_int::from(*(*argp).add(1))) == 0
+            && rs_ascii_iswhite(c_int::from(*(*argp).add(1))) == 0
         {
             *errmsg = errmsg::E_TRAILING.as_ptr().cast();
             return;
@@ -879,7 +879,7 @@ pub unsafe extern "C" fn rs_do_one_set_option(
             gotocmdline(1);
             *did_show = 1;
         }
-        showoneopt(opt.cast(), opt_flags);
+        nvim_showoneopt(opt.cast(), opt_flags);
 
         // Verbose mode: show where option was last set
         if nvim_get_p_verbose() > 0 {
@@ -895,7 +895,7 @@ pub unsafe extern "C" fn rs_do_one_set_option(
             }
         }
 
-        if nextchar != b'?' && nextchar != 0 && ascii_iswhite(c_int::from(afterchar)) == 0 {
+        if nextchar != b'?' && nextchar != 0 && rs_ascii_iswhite(c_int::from(afterchar)) == 0 {
             *errmsg = errmsg::E_TRAILING.as_ptr().cast();
         }
         return;
@@ -910,7 +910,7 @@ pub unsafe extern "C" fn rs_do_one_set_option(
 
         if vim_strchr(c"!&<".as_ptr(), c_int::from(nextchar)).is_null()
             && nextchar != 0
-            && ascii_iswhite(c_int::from(afterchar)) == 0
+            && rs_ascii_iswhite(c_int::from(afterchar)) == 0
         {
             *errmsg = errmsg::E_TRAILING.as_ptr().cast();
             return;
@@ -924,7 +924,7 @@ pub unsafe extern "C" fn rs_do_one_set_option(
     }
 
     // Get new value
-    let newval = get_option_newval(
+    let newval = nvim_get_option_newval(
         opt_idx, opt_flags, prefix, argp, nextchar, op, flags, varp, errbuf, errbuflen, errmsg,
     );
 
@@ -934,7 +934,7 @@ pub unsafe extern "C" fn rs_do_one_set_option(
 
     // Set the option
     let value_replaced = c_int::from(op == 0);
-    *errmsg = set_option(
+    *errmsg = nvim_rs_set_option(
         opt_idx,
         newval,
         opt_flags,

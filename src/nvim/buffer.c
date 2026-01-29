@@ -300,6 +300,36 @@ int nvim_buf_get_b_p_ma(buf_T *buf)
   return buf->b_p_ma;
 }
 
+/// Get the b_p_lisp (lisp mode) field from a buffer.
+int nvim_buf_get_p_lisp(buf_T *buf)
+{
+  return buf ? buf->b_p_lisp : 0;
+}
+
+/// Set the b_p_ml (modeline) field on a buffer.
+void nvim_buf_set_b_p_ml(buf_T *buf, int val)
+{
+  if (buf) {
+    buf->b_p_ml = val != 0;
+  }
+}
+
+/// Set the b_p_iminsert field on a buffer.
+void nvim_buf_set_b_p_iminsert(buf_T *buf, int val)
+{
+  if (buf) {
+    buf->b_p_iminsert = val;
+  }
+}
+
+/// Set the b_p_imsearch field on a buffer.
+void nvim_buf_set_b_p_imsearch(buf_T *buf, int val)
+{
+  if (buf) {
+    buf->b_p_imsearch = val;
+  }
+}
+
 /// Get the global p_hid option (hidden buffers).
 int nvim_get_p_hid(void)
 {

@@ -595,6 +595,36 @@ void nvim_callback_for_all_tab_windows(void (*callback)(win_T *)) {
   }
 }
 
+// =============================================================================
+// Simple accessor functions for Rust (don't require options array)
+// =============================================================================
+
+// IO buffer accessor
+char *nvim_get_iobuff(void) { return IObuff; }
+
+// no_wait_return state accessors
+int nvim_get_no_wait_return(void) { return no_wait_return; }
+void nvim_set_no_wait_return(int val) { no_wait_return = val; }
+
+// silent_mode state accessor
+void nvim_set_silent_mode(int val) { silent_mode = val != 0; }
+
+// info_message state accessor
+void nvim_set_info_message(int val) { info_message = val != 0; }
+
+// Global option accessors for Rust callbacks
+int nvim_get_p_acd(void) { return p_acd; }
+int nvim_get_p_wc(void) { return (int)p_wc; }
+void nvim_set_p_wc(int val) { p_wc = val; }
+OptInt nvim_get_p_window(void) { return p_window; }
+void nvim_set_p_window(OptInt val) { p_window = val; }
+void nvim_set_p_arshape(int val) { p_arshape = val != 0; }
+const char *nvim_get_p_enc(void) { return (const char *)p_enc; }
+void nvim_set_p_deco(int val) { p_deco = val != 0; }
+
+// Stub for invalidate_fname_path (Windows-only, no-op on Unix)
+void invalidate_fname_path(void) {}
+
 static const char e_unknown_option[]
   = N_("E518: Unknown option");
 static const char e_not_allowed_in_modeline[]
@@ -644,6 +674,68 @@ typedef enum {
 
 #include "options.generated.h"
 #include "options_map.generated.h"
+
+// =============================================================================
+// Accessor functions for Rust setcmd module (require options array)
+// =============================================================================
+
+// Options array accessor
+vimoption_T *nvim_get_options_array(void) { return options; }
+
+// Option flags accessor
+uint32_t nvim_get_option_flags(OptIndex opt_idx) {
+  if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) {
+    return 0;
+  }
+  return options[opt_idx].flags;
+}
+
+// Option variable pointer accessor
+void *nvim_get_option_var(OptIndex opt_idx) {
+  if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) {
+    return NULL;
+  }
+  return options[opt_idx].var;
+}
+
+// Option script context accessor
+sctx_T nvim_get_option_script_ctx(OptIndex opt_idx) {
+  if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) {
+    return (sctx_T){ 0 };
+  }
+  return options[opt_idx].script_ctx;
+}
+
+// Window script context accessor
+sctx_T nvim_get_win_p_script_ctx(win_T *win, OptIndex opt_idx) {
+  if (!win || opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) {
+    return (sctx_T){ 0 };
+  }
+  return win->w_p_script_ctx[opt_idx];
+}
+
+// Buffer script context accessor
+sctx_T nvim_get_buf_p_script_ctx(buf_T *buf, OptIndex opt_idx) {
+  if (!buf || opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) {
+    return (sctx_T){ 0 };
+  }
+  return buf->b_p_script_ctx[opt_idx];
+}
+
+// Wrapper functions to expose static functions to Rust
+void nvim_set_options_default(int opt_flags);
+void nvim_didset_options(void);
+void nvim_didset_options2(void);
+void nvim_showoptions(int all, int opt_flags);
+void nvim_showoneopt(vimoption_T *opt, int opt_flags);
+int nvim_validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_t flags,
+                          int prefix, const char **errmsg);
+OptVal nvim_get_option_newval(OptIndex opt_idx, int opt_flags, int prefix, char **argp,
+                              char nextchar, int op, uint32_t flags, void *varp,
+                              char *errbuf, size_t errbuflen, const char **errmsg);
+const char *nvim_rs_set_option(OptIndex opt_idx, OptVal value, int opt_flags,
+                               int set_sid, int direct, int value_replaced,
+                               char *errbuf, size_t errbuflen);
 
 static int p_bin_dep_opts[] = {
   kOptTextwidth, kOptWrapmargin, kOptModeline, kOptExpandtab, kOptInvalid
@@ -6866,4 +6958,58 @@ static Dict vimoption2dict(vimoption_T *opt, int opt_flags, buf_T *buf, win_T *w
   PUT_C(dict, "allows_duplicates", BOOLEAN_OBJ(!(opt->flags & kOptFlagNoDup)));
 
   return dict;
+}
+
+// =============================================================================
+// Wrapper function implementations for Rust setcmd module
+// =============================================================================
+
+void nvim_set_options_default(int opt_flags)
+{
+  set_options_default(opt_flags);
+}
+
+void nvim_didset_options(void)
+{
+  didset_options();
+}
+
+void nvim_didset_options2(void)
+{
+  didset_options2();
+}
+
+void nvim_showoptions(int all, int opt_flags)
+{
+  showoptions(all != 0, opt_flags);
+}
+
+void nvim_showoneopt(vimoption_T *opt, int opt_flags)
+{
+  showoneopt(opt, opt_flags);
+}
+
+int nvim_validate_opt_idx(win_T *win, OptIndex opt_idx, int opt_flags, uint32_t flags,
+                          int prefix, const char **errmsg)
+{
+  return validate_opt_idx(win, opt_idx, opt_flags, flags, (set_prefix_T)prefix, errmsg);
+}
+
+OptVal nvim_get_option_newval(OptIndex opt_idx, int opt_flags, int prefix, char **argp,
+                              char nextchar, int op, uint32_t flags, void *varp,
+                              char *errbuf, size_t errbuflen, const char **errmsg)
+{
+  return get_option_newval(opt_idx, opt_flags, (set_prefix_T)prefix, argp, nextchar,
+                           (set_op_T)op, flags, varp, errbuf, errbuflen, errmsg);
+}
+
+const char *nvim_rs_set_option(OptIndex opt_idx, OptVal value, int opt_flags,
+                               int set_sid, int direct, int value_replaced,
+                               char *errbuf, size_t errbuflen)
+{
+  if (opt_idx < 0 || (size_t)opt_idx >= ARRAY_SIZE(options)) {
+    return N_("E518: Unknown option");
+  }
+  return set_option(opt_idx, value, opt_flags, set_sid, direct != 0, value_replaced != 0, errbuf,
+                    errbuflen);
 }
