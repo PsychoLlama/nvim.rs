@@ -4409,6 +4409,17 @@ bool nvim_diffblock_is_linematched(diff_T *dp)
   return dp->is_linematched;
 }
 
+/// Set the line-matched flag on a diff block.
+/// @param dp  Diff block pointer
+/// @param val Value to set
+void nvim_diffblock_set_linematched(diff_T *dp, bool val)
+{
+  if (dp == NULL) {
+    return;
+  }
+  dp->is_linematched = val;
+}
+
 /// Check if a diff block has inline changes.
 /// @param dp Diff block pointer
 /// @return true if there are changes, false otherwise
@@ -4590,4 +4601,14 @@ int nvim_diff_buf_idx(buf_T *buf, tabpage_T *tp)
   return diff_buf_idx(buf, tp);
 }
 
-
+/// Write buffer contents to a memory file for diff comparison.
+/// This is a wrapper for diff_write_buffer for Rust FFI.
+/// Uses void* to avoid exposing mmfile_t in generated header.
+/// @param buf   Buffer to read from
+/// @param m     Memory file structure to fill (must be mmfile_t*)
+/// @param start Start line number
+/// @param end   End line number
+void nvim_diff_write_buffer(buf_T *buf, void *m, linenr_T start, linenr_T end)
+{
+  diff_write_buffer(buf, (mmfile_t *)m, start, end);
+}
