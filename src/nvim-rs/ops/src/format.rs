@@ -316,6 +316,138 @@ pub const fn is_multiline_format(start_lnum: c_int, end_lnum: c_int) -> bool {
 }
 
 // =============================================================================
+// Phase O3 Format Helpers
+// =============================================================================
+
+/// Calculate number of lines affected by format.
+#[must_use]
+#[inline]
+pub const fn calc_format_line_count(start_lnum: c_int, end_lnum: c_int) -> c_int {
+    if end_lnum >= start_lnum {
+        end_lnum - start_lnum + 1
+    } else {
+        0
+    }
+}
+
+/// Check if line is too long and needs wrapping.
+#[must_use]
+#[inline]
+pub const fn line_needs_wrap(line_len: c_int, textwidth: c_int) -> bool {
+    textwidth > 0 && line_len > textwidth
+}
+
+/// Check if character ends a sentence.
+#[must_use]
+#[inline]
+pub const fn is_sentence_end_char(c: u8) -> bool {
+    c == b'.' || c == b'!' || c == b'?'
+}
+
+/// Check if character is paragraph separator.
+#[must_use]
+#[inline]
+pub const fn is_paragraph_sep_char(c: u8) -> bool {
+    c == b'\n' || c == 0
+}
+
+/// Check if line is blank (only whitespace).
+#[must_use]
+#[inline]
+pub const fn is_blank_line(first_char: u8) -> bool {
+    first_char == b'\n'
+        || first_char == b'\r'
+        || first_char == 0
+        || first_char == b' '
+        || first_char == b'\t'
+}
+
+/// Calculate wrap point considering word boundaries.
+#[must_use]
+#[inline]
+pub const fn calc_wrap_col(line_len: c_int, textwidth: c_int, last_space: c_int) -> c_int {
+    if line_len <= textwidth {
+        0 // No wrap needed
+    } else if last_space > 0 && last_space <= textwidth {
+        last_space
+    } else {
+        textwidth
+    }
+}
+
+/// Check if should add space when joining lines.
+#[must_use]
+#[inline]
+pub const fn needs_join_space(prev_ends_sentence: bool, use_double: bool) -> bool {
+    prev_ends_sentence && use_double
+}
+
+/// Get number of spaces to use between joined lines.
+#[must_use]
+#[inline]
+pub const fn get_join_spaces(prev_ends_sentence: bool, use_double: bool) -> c_int {
+    if prev_ends_sentence && use_double {
+        2
+    } else {
+        1
+    }
+}
+
+/// Check if format operation should use 'formatexpr'.
+#[must_use]
+#[inline]
+pub const fn should_use_formatexpr(has_formatexpr: bool, format_type: FormatType) -> bool {
+    has_formatexpr && !matches!(format_type, FormatType::Indent | FormatType::Internal)
+}
+
+/// Check if cursor position needs saving.
+#[must_use]
+#[inline]
+pub const fn needs_cursor_save(format_type: FormatType) -> bool {
+    matches!(format_type, FormatType::FormatKeepCursor)
+}
+
+/// Calculate cursor column after format.
+#[must_use]
+#[inline]
+pub const fn calc_cursor_col_after_format(
+    saved_col: c_int,
+    line_changed: bool,
+    new_line_len: c_int,
+) -> c_int {
+    if line_changed && saved_col > new_line_len {
+        if new_line_len > 0 {
+            new_line_len - 1
+        } else {
+            0
+        }
+    } else {
+        saved_col
+    }
+}
+
+/// Check if format message should be shown.
+#[must_use]
+#[inline]
+pub const fn should_show_format_message(line_count: c_int, report_threshold: c_int) -> bool {
+    line_count > 0 && report_threshold >= 0 && line_count > report_threshold
+}
+
+/// Check if format operation is gq (format text).
+#[must_use]
+#[inline]
+pub const fn is_gq_format(format_type: FormatType) -> bool {
+    matches!(format_type, FormatType::Format)
+}
+
+/// Check if format operation is gw (format, keep cursor).
+#[must_use]
+#[inline]
+pub const fn is_gw_format(format_type: FormatType) -> bool {
+    matches!(format_type, FormatType::FormatKeepCursor)
+}
+
+// =============================================================================
 // FFI Exports
 // =============================================================================
 
@@ -415,6 +547,103 @@ pub extern "C" fn rs_is_multiline_format(start_lnum: c_int, end_lnum: c_int) -> 
 pub extern "C" fn rs_format_effective_width(textwidth: c_int, window_width: c_int) -> c_int {
     let opts = FormatOptions::new(textwidth);
     opts.effective_width(window_width)
+}
+
+/// FFI: Calculate format line count.
+#[no_mangle]
+pub extern "C" fn rs_calc_format_line_count(start_lnum: c_int, end_lnum: c_int) -> c_int {
+    calc_format_line_count(start_lnum, end_lnum)
+}
+
+/// FFI: Check if line needs wrapping.
+#[no_mangle]
+pub extern "C" fn rs_line_needs_wrap(line_len: c_int, textwidth: c_int) -> c_int {
+    c_int::from(line_needs_wrap(line_len, textwidth))
+}
+
+/// FFI: Check if character ends a sentence.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+pub extern "C" fn rs_is_sentence_end_char(c: c_int) -> c_int {
+    c_int::from(is_sentence_end_char(c as u8))
+}
+
+/// FFI: Check if character is paragraph separator.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+pub extern "C" fn rs_is_paragraph_sep_char(c: c_int) -> c_int {
+    c_int::from(is_paragraph_sep_char(c as u8))
+}
+
+/// FFI: Check if line is blank.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+pub extern "C" fn rs_is_blank_line(first_char: c_int) -> c_int {
+    c_int::from(is_blank_line(first_char as u8))
+}
+
+/// FFI: Calculate wrap column.
+#[no_mangle]
+pub extern "C" fn rs_calc_wrap_col(line_len: c_int, textwidth: c_int, last_space: c_int) -> c_int {
+    calc_wrap_col(line_len, textwidth, last_space)
+}
+
+/// FFI: Check if join needs extra space.
+#[no_mangle]
+pub extern "C" fn rs_needs_join_space(prev_ends_sentence: c_int, use_double: c_int) -> c_int {
+    c_int::from(needs_join_space(prev_ends_sentence != 0, use_double != 0))
+}
+
+/// FFI: Get number of join spaces.
+#[no_mangle]
+pub extern "C" fn rs_get_join_spaces(prev_ends_sentence: c_int, use_double: c_int) -> c_int {
+    get_join_spaces(prev_ends_sentence != 0, use_double != 0)
+}
+
+/// FFI: Check if should use formatexpr.
+#[no_mangle]
+pub extern "C" fn rs_should_use_formatexpr(has_formatexpr: c_int, format_type: c_int) -> c_int {
+    c_int::from(should_use_formatexpr(
+        has_formatexpr != 0,
+        FormatType::from_raw(format_type),
+    ))
+}
+
+/// FFI: Check if cursor needs saving.
+#[no_mangle]
+pub extern "C" fn rs_needs_cursor_save(format_type: c_int) -> c_int {
+    c_int::from(needs_cursor_save(FormatType::from_raw(format_type)))
+}
+
+/// FFI: Calculate cursor column after format.
+#[no_mangle]
+pub extern "C" fn rs_calc_cursor_col_after_format(
+    saved_col: c_int,
+    line_changed: c_int,
+    new_line_len: c_int,
+) -> c_int {
+    calc_cursor_col_after_format(saved_col, line_changed != 0, new_line_len)
+}
+
+/// FFI: Check if format message should be shown.
+#[no_mangle]
+pub extern "C" fn rs_should_show_format_message(
+    line_count: c_int,
+    report_threshold: c_int,
+) -> c_int {
+    c_int::from(should_show_format_message(line_count, report_threshold))
+}
+
+/// FFI: Check if gq format.
+#[no_mangle]
+pub extern "C" fn rs_is_gq_format(format_type: c_int) -> c_int {
+    c_int::from(is_gq_format(FormatType::from_raw(format_type)))
+}
+
+/// FFI: Check if gw format.
+#[no_mangle]
+pub extern "C" fn rs_is_gw_format(format_type: c_int) -> c_int {
+    c_int::from(is_gw_format(FormatType::from_raw(format_type)))
 }
 
 // =============================================================================
@@ -539,5 +768,110 @@ mod tests {
         assert_eq!(rs_calc_break_col(100, 80, 70), 70);
         assert_eq!(rs_is_format_break_char(c_int::from(b' ')), 1);
         assert_eq!(rs_calc_sentence_spacing(1, 1), 2);
+    }
+
+    // Phase O3 tests
+    #[test]
+    fn test_calc_format_line_count() {
+        assert_eq!(calc_format_line_count(1, 10), 10);
+        assert_eq!(calc_format_line_count(5, 5), 1);
+        assert_eq!(calc_format_line_count(10, 5), 0);
+    }
+
+    #[test]
+    fn test_line_needs_wrap() {
+        assert!(line_needs_wrap(100, 80));
+        assert!(!line_needs_wrap(50, 80));
+        assert!(!line_needs_wrap(50, 0)); // textwidth=0 means no wrapping
+    }
+
+    #[test]
+    fn test_is_sentence_end_char() {
+        assert!(is_sentence_end_char(b'.'));
+        assert!(is_sentence_end_char(b'!'));
+        assert!(is_sentence_end_char(b'?'));
+        assert!(!is_sentence_end_char(b','));
+        assert!(!is_sentence_end_char(b' '));
+    }
+
+    #[test]
+    fn test_is_paragraph_sep_char() {
+        assert!(is_paragraph_sep_char(b'\n'));
+        assert!(is_paragraph_sep_char(0));
+        assert!(!is_paragraph_sep_char(b' '));
+        assert!(!is_paragraph_sep_char(b'a'));
+    }
+
+    #[test]
+    fn test_is_blank_line() {
+        assert!(is_blank_line(b'\n'));
+        assert!(is_blank_line(b' '));
+        assert!(is_blank_line(b'\t'));
+        assert!(is_blank_line(0));
+        assert!(!is_blank_line(b'a'));
+    }
+
+    #[test]
+    fn test_calc_wrap_col() {
+        assert_eq!(calc_wrap_col(50, 80, 30), 0); // No wrap needed
+        assert_eq!(calc_wrap_col(100, 80, 70), 70); // Wrap at space
+        assert_eq!(calc_wrap_col(100, 80, 0), 80); // No space, hard break
+    }
+
+    #[test]
+    fn test_needs_join_space() {
+        assert!(needs_join_space(true, true));
+        assert!(!needs_join_space(true, false));
+        assert!(!needs_join_space(false, true));
+    }
+
+    #[test]
+    fn test_get_join_spaces() {
+        assert_eq!(get_join_spaces(true, true), 2);
+        assert_eq!(get_join_spaces(true, false), 1);
+        assert_eq!(get_join_spaces(false, true), 1);
+    }
+
+    #[test]
+    fn test_should_use_formatexpr() {
+        assert!(should_use_formatexpr(true, FormatType::Format));
+        assert!(should_use_formatexpr(true, FormatType::FormatKeepCursor));
+        assert!(!should_use_formatexpr(true, FormatType::Indent));
+        assert!(!should_use_formatexpr(true, FormatType::Internal));
+        assert!(!should_use_formatexpr(false, FormatType::Format));
+    }
+
+    #[test]
+    fn test_needs_cursor_save() {
+        assert!(needs_cursor_save(FormatType::FormatKeepCursor));
+        assert!(!needs_cursor_save(FormatType::Format));
+        assert!(!needs_cursor_save(FormatType::Indent));
+    }
+
+    #[test]
+    fn test_calc_cursor_col_after_format() {
+        // Line not changed
+        assert_eq!(calc_cursor_col_after_format(50, false, 80), 50);
+        // Line changed, cursor within bounds
+        assert_eq!(calc_cursor_col_after_format(30, true, 80), 30);
+        // Line changed, cursor past end
+        assert_eq!(calc_cursor_col_after_format(90, true, 80), 79);
+        // Line changed, empty line
+        assert_eq!(calc_cursor_col_after_format(10, true, 0), 0);
+    }
+
+    #[test]
+    fn test_should_show_format_message() {
+        assert!(should_show_format_message(10, 5));
+        assert!(!should_show_format_message(3, 5));
+        assert!(!should_show_format_message(5, -1)); // negative threshold = silent
+    }
+
+    #[test]
+    fn test_is_gq_gw_format() {
+        assert!(is_gq_format(FormatType::Format));
+        assert!(!is_gq_format(FormatType::FormatKeepCursor));
+        assert!(is_gw_format(FormatType::FormatKeepCursor));
+        assert!(!is_gw_format(FormatType::Format));
     }
 }

@@ -387,7 +387,7 @@ pub const fn is_valid_yank_register(regname: c_int) -> bool {
             | 35  // '#' alternate buffer
             | 58  // ':' last command
             | 46  // '.' last inserted text
-            | 37  // '%' current file name
+            | 37 // '%' current file name
     )
 }
 

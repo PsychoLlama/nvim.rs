@@ -393,6 +393,245 @@ pub extern "C" fn rs_should_skip_shift_line(first_char: u8, skip_preproc: c_int)
     c_int::from(should_skip_shift_line(first_char, skip_preproc != 0))
 }
 
+// =============================================================================
+// Phase O3: Additional Shift Helpers
+// =============================================================================
+
+/// Check if shift operation is left shift.
+///
+/// # Arguments
+/// * `op_type` - Operator type constant
+///
+/// # Returns
+/// true if this is a left shift operation
+#[must_use]
+#[inline]
+pub const fn is_left_shift(op_type: c_int) -> bool {
+    // OP_LSHIFT = 4
+    op_type == 4
+}
+
+/// Check if shift operation is right shift.
+///
+/// # Arguments
+/// * `op_type` - Operator type constant
+///
+/// # Returns
+/// true if this is a right shift operation
+#[must_use]
+#[inline]
+pub const fn is_right_shift(op_type: c_int) -> bool {
+    // OP_RSHIFT = 5
+    op_type == 5
+}
+
+/// Get the effective shiftwidth value.
+///
+/// 'shiftwidth' can be 0, meaning use 'tabstop' value.
+///
+/// # Arguments
+/// * `sw_val` - Value of 'shiftwidth'
+/// * `ts_val` - Value of 'tabstop'
+///
+/// # Returns
+/// Effective shiftwidth to use
+#[must_use]
+#[inline]
+pub const fn get_effective_shiftwidth(sw_val: c_int, ts_val: c_int) -> c_int {
+    if sw_val != 0 {
+        sw_val
+    } else {
+        ts_val
+    }
+}
+
+/// Check if variable tabstops are in use.
+///
+/// # Arguments
+/// * `sw_val` - Shiftwidth value (0 means use vartabstop if available)
+/// * `vts_array_is_empty` - Whether vartabstop array is empty
+///
+/// # Returns
+/// true if variable tabstops should be used
+#[must_use]
+#[inline]
+pub const fn use_variable_tabstops(sw_val: c_int, vts_array_is_empty: bool) -> bool {
+    sw_val == 0 && !vts_array_is_empty
+}
+
+/// Calculate the number of lines affected by shift operation.
+///
+/// # Arguments
+/// * `start_lnum` - Start line number
+/// * `end_lnum` - End line number
+///
+/// # Returns
+/// Number of lines affected
+#[must_use]
+#[inline]
+pub const fn calc_shift_line_count(start_lnum: c_int, end_lnum: c_int) -> c_int {
+    if end_lnum >= start_lnum {
+        end_lnum - start_lnum + 1
+    } else {
+        0
+    }
+}
+
+/// Calculate message amounts for shift reporting.
+///
+/// # Arguments
+/// * `line_count` - Number of lines shifted
+/// * `amount` - Shift amount
+/// * `report` - Value of 'report' option
+///
+/// # Returns
+/// true if message should be shown
+#[must_use]
+#[inline]
+pub const fn should_show_shift_message(line_count: c_int, _amount: c_int, report: c_int) -> bool {
+    line_count > report
+}
+
+/// Calculate the starting virtual column for right shift.
+///
+/// When shifting right, the start is where the whitespace ends.
+///
+/// # Arguments
+/// * `start_vcol` - Start virtual column of block
+/// * `pre_whitesp` - Pre-existing whitespace
+///
+/// # Returns
+/// Starting vcol for whitespace calculation
+#[must_use]
+#[inline]
+pub const fn calc_right_shift_start_vcol(start_vcol: c_int, pre_whitesp: c_int) -> c_int {
+    start_vcol - pre_whitesp
+}
+
+/// Calculate total whitespace virtual columns for right shift.
+///
+/// # Arguments
+/// * `total` - Total shift amount
+/// * `pre_whitesp` - Pre-existing whitespace in block
+///
+/// # Returns
+/// Total whitespace virtual columns needed
+#[must_use]
+#[inline]
+pub const fn calc_right_shift_total_ws(total: c_int, pre_whitesp: c_int) -> c_int {
+    total + pre_whitesp
+}
+
+/// Calculate new line length after block shift.
+///
+/// # Arguments
+/// * `textcol` - Column where text starts
+/// * `tabs` - Number of tabs
+/// * `spaces` - Number of spaces
+/// * `old_line_len` - Original line length
+/// * `text_start_offset` - Offset to text start in original line
+///
+/// # Returns
+/// New line length
+#[must_use]
+#[inline]
+pub const fn calc_shifted_line_len(
+    textcol: c_int,
+    tabs: c_int,
+    spaces: c_int,
+    old_line_len: c_int,
+    text_start_offset: c_int,
+) -> c_int {
+    textcol + tabs + spaces + (old_line_len - text_start_offset)
+}
+
+/// Check if block shift operation should be skipped for this line.
+///
+/// # Arguments
+/// * `is_short` - Whether line is too short
+///
+/// # Returns
+/// true if this line should be skipped
+#[must_use]
+#[inline]
+pub const fn should_skip_block_shift(is_short: bool) -> bool {
+    is_short
+}
+
+// =============================================================================
+// Phase O3 FFI Exports
+// =============================================================================
+
+/// FFI: Check if left shift.
+#[no_mangle]
+pub extern "C" fn rs_is_left_shift(op_type: c_int) -> c_int {
+    c_int::from(is_left_shift(op_type))
+}
+
+/// FFI: Check if right shift.
+#[no_mangle]
+pub extern "C" fn rs_is_right_shift(op_type: c_int) -> c_int {
+    c_int::from(is_right_shift(op_type))
+}
+
+/// FFI: Get effective shiftwidth.
+#[no_mangle]
+pub extern "C" fn rs_get_effective_shiftwidth(sw_val: c_int, ts_val: c_int) -> c_int {
+    get_effective_shiftwidth(sw_val, ts_val)
+}
+
+/// FFI: Check if using variable tabstops.
+#[no_mangle]
+pub extern "C" fn rs_use_variable_tabstops(sw_val: c_int, vts_array_is_empty: c_int) -> c_int {
+    c_int::from(use_variable_tabstops(sw_val, vts_array_is_empty != 0))
+}
+
+/// FFI: Calculate shift line count.
+#[no_mangle]
+pub extern "C" fn rs_calc_shift_line_count(start_lnum: c_int, end_lnum: c_int) -> c_int {
+    calc_shift_line_count(start_lnum, end_lnum)
+}
+
+/// FFI: Check if shift message should be shown.
+#[no_mangle]
+pub extern "C" fn rs_should_show_shift_message(
+    line_count: c_int,
+    amount: c_int,
+    report: c_int,
+) -> c_int {
+    c_int::from(should_show_shift_message(line_count, amount, report))
+}
+
+/// FFI: Calculate right shift start vcol.
+#[no_mangle]
+pub extern "C" fn rs_calc_right_shift_start_vcol(start_vcol: c_int, pre_whitesp: c_int) -> c_int {
+    calc_right_shift_start_vcol(start_vcol, pre_whitesp)
+}
+
+/// FFI: Calculate right shift total whitespace.
+#[no_mangle]
+pub extern "C" fn rs_calc_right_shift_total_ws(total: c_int, pre_whitesp: c_int) -> c_int {
+    calc_right_shift_total_ws(total, pre_whitesp)
+}
+
+/// FFI: Calculate shifted line length.
+#[no_mangle]
+pub extern "C" fn rs_calc_shifted_line_len(
+    textcol: c_int,
+    tabs: c_int,
+    spaces: c_int,
+    old_line_len: c_int,
+    text_start_offset: c_int,
+) -> c_int {
+    calc_shifted_line_len(textcol, tabs, spaces, old_line_len, text_start_offset)
+}
+
+/// FFI: Check if block shift should be skipped.
+#[no_mangle]
+pub extern "C" fn rs_should_skip_block_shift(is_short: c_int) -> c_int {
+    c_int::from(should_skip_block_shift(is_short != 0))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -594,5 +833,114 @@ mod tests {
         // rs_should_skip_shift_line
         assert_eq!(rs_should_skip_shift_line(0, 0), 1);
         assert_eq!(rs_should_skip_shift_line(b'a', 0), 0);
+    }
+
+    // =========================================================================
+    // Phase O3 Addition Tests
+    // =========================================================================
+
+    #[test]
+    fn test_is_left_shift() {
+        assert!(is_left_shift(4)); // OP_LSHIFT
+        assert!(!is_left_shift(5)); // OP_RSHIFT
+        assert!(!is_left_shift(0));
+    }
+
+    #[test]
+    fn test_is_right_shift() {
+        assert!(is_right_shift(5)); // OP_RSHIFT
+        assert!(!is_right_shift(4)); // OP_LSHIFT
+        assert!(!is_right_shift(0));
+    }
+
+    #[test]
+    fn test_get_effective_shiftwidth() {
+        // sw != 0: use sw
+        assert_eq!(get_effective_shiftwidth(4, 8), 4);
+        // sw == 0: use ts
+        assert_eq!(get_effective_shiftwidth(0, 8), 8);
+    }
+
+    #[test]
+    fn test_use_variable_tabstops() {
+        // sw=0 and vts not empty: use vts
+        assert!(use_variable_tabstops(0, false));
+        // sw=0 but vts empty: don't use vts
+        assert!(!use_variable_tabstops(0, true));
+        // sw!=0: don't use vts
+        assert!(!use_variable_tabstops(4, false));
+    }
+
+    #[test]
+    fn test_calc_shift_line_count() {
+        assert_eq!(calc_shift_line_count(5, 10), 6);
+        assert_eq!(calc_shift_line_count(5, 5), 1);
+        assert_eq!(calc_shift_line_count(10, 5), 0);
+    }
+
+    #[test]
+    fn test_should_show_shift_message() {
+        assert!(should_show_shift_message(10, 1, 5));
+        assert!(!should_show_shift_message(5, 1, 10));
+    }
+
+    #[test]
+    fn test_calc_right_shift_start_vcol() {
+        assert_eq!(calc_right_shift_start_vcol(20, 5), 15);
+    }
+
+    #[test]
+    fn test_calc_right_shift_total_ws() {
+        assert_eq!(calc_right_shift_total_ws(8, 4), 12);
+    }
+
+    #[test]
+    fn test_calc_shifted_line_len() {
+        // textcol=10, tabs=2, spaces=4, old_line_len=50, text_start_offset=20
+        // = 10 + 2 + 4 + (50 - 20) = 46
+        assert_eq!(calc_shifted_line_len(10, 2, 4, 50, 20), 46);
+    }
+
+    #[test]
+    fn test_should_skip_block_shift() {
+        assert!(should_skip_block_shift(true));
+        assert!(!should_skip_block_shift(false));
+    }
+
+    #[test]
+    fn test_phase_o3_shift_ffi_wrappers() {
+        // rs_is_left_shift
+        assert_eq!(rs_is_left_shift(4), 1);
+        assert_eq!(rs_is_left_shift(5), 0);
+
+        // rs_is_right_shift
+        assert_eq!(rs_is_right_shift(5), 1);
+
+        // rs_get_effective_shiftwidth
+        assert_eq!(rs_get_effective_shiftwidth(4, 8), 4);
+        assert_eq!(rs_get_effective_shiftwidth(0, 8), 8);
+
+        // rs_use_variable_tabstops
+        assert_eq!(rs_use_variable_tabstops(0, 0), 1);
+        assert_eq!(rs_use_variable_tabstops(4, 0), 0);
+
+        // rs_calc_shift_line_count
+        assert_eq!(rs_calc_shift_line_count(5, 10), 6);
+
+        // rs_should_show_shift_message
+        assert_eq!(rs_should_show_shift_message(10, 1, 5), 1);
+
+        // rs_calc_right_shift_start_vcol
+        assert_eq!(rs_calc_right_shift_start_vcol(20, 5), 15);
+
+        // rs_calc_right_shift_total_ws
+        assert_eq!(rs_calc_right_shift_total_ws(8, 4), 12);
+
+        // rs_calc_shifted_line_len
+        assert_eq!(rs_calc_shifted_line_len(10, 2, 4, 50, 20), 46);
+
+        // rs_should_skip_block_shift
+        assert_eq!(rs_should_skip_block_shift(1), 1);
+        assert_eq!(rs_should_skip_block_shift(0), 0);
     }
 }
