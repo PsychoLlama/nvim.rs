@@ -73,6 +73,13 @@ extern "C" {
 
     // Stack maxcount
     fn nvim_qf_get_maxcount(qi: QfInfoHandle) -> c_int;
+
+    // Entry modification
+    fn nvim_qfline_get_cleared(qfp: QfLineHandle) -> bool;
+    fn nvim_qfline_set_cleared(qfp: *mut c_void, cleared: c_char);
+
+    // Phase Q2: Free items (implemented in lib.rs)
+    fn rs_qf_free_items(qfl: QfListHandleMut);
 }
 
 // =============================================================================
@@ -858,6 +865,79 @@ pub extern "C" fn rs_qf_entry_has_file(summary: QfEntrySummary) -> c_int {
 pub extern "C" fn rs_qf_entry_has_range(summary: QfEntrySummary) -> c_int {
     c_int::from(summary.has_range())
 }
+
+// =============================================================================
+// Phase Q2: Additional List Operations
+// =============================================================================
+
+/// Clear all entries from a list while preserving list metadata.
+///
+/// This resets entry pointers and count but keeps ID, title, and type.
+///
+/// # Safety
+///
+/// - `qfl` may be null (does nothing)
+/// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_clear_entries(qfl: QfListHandleMut) {
+    if qfl.is_null() {
+        return;
+    }
+    rs_qf_free_items(qfl);
+}
+
+/// Mark an entry as cleared (deleted but still in list).
+///
+/// Cleared entries are skipped during navigation but remain in the list.
+///
+/// # Safety
+///
+/// - `qfp` must be a valid pointer to a `qfline_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_mark_entry_cleared(qfp: QfLineHandle) {
+    if qfp.is_null() {
+        return;
+    }
+    nvim_qfline_set_cleared(qfp.cast_mut(), 1);
+}
+
+/// Check if an entry is cleared.
+///
+/// # Safety
+///
+/// - `qfp` must be a valid pointer to a `qfline_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_entry_is_cleared(qfp: QfLineHandle) -> bool {
+    if qfp.is_null() {
+        return false;
+    }
+    nvim_qfline_get_cleared(qfp)
+}
+
+/// Count entries in a specific file.
+///
+/// # Safety
+///
+/// - `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_file_entry_count(qfl: QfListHandle, fnum: c_int) -> c_int {
+    if qfl.is_null() || fnum <= 0 {
+        return 0;
+    }
+
+    let mut count = 0;
+    let mut qfp = nvim_qf_get_start(qfl);
+
+    while !qfp.is_null() {
+        if nvim_qfline_get_fnum(qfp) == fnum {
+            count += 1;
+        }
+        qfp = nvim_qfline_get_next(qfp);
+    }
+
+    count
+}
+
 
 // =============================================================================
 // Tests
