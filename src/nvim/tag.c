@@ -543,6 +543,18 @@ const char *nvim_get_nofile_fname(void)
   return nofile_fname;
 }
 
+// ============================================================================
+// Rust FFI function declarations
+// ============================================================================
+
+extern void rs_tagstack_clear_entry(void *tg);
+extern void rs_tagstack_clear(void *wp);
+extern void rs_tagstack_shift(void *wp);
+extern void rs_tagstack_push(void *wp, char *tagname, int cur_fnum, int cur_match,
+                             linenr_T mark_lnum, int mark_col, int fnum, char *user_data);
+extern void rs_tagstack_set_idx(void *wp, int idx);
+extern void rs_tagstack_truncate(void *wp);
+
 #include "tag.c.generated.h"
 
 static const char e_tag_stack_empty[]
@@ -3559,8 +3571,7 @@ static int find_extra(char **pp)
 /// Free a single entry in a tag stack
 void tagstack_clear_entry(taggy_T *item)
 {
-  XFREE_CLEAR(item->tagname);
-  XFREE_CLEAR(item->user_data);
+  rs_tagstack_clear_entry(item);
 }
 
 /// @param tagnames  expand tag names
@@ -3776,47 +3787,21 @@ void get_tagstack(win_T *wp, dict_T *retdict)
 // Free all the entries in the tag stack of the specified window
 static void tagstack_clear(win_T *wp)
 {
-  // Free the current tag stack
-  for (int i = 0; i < wp->w_tagstacklen; i++) {
-    tagstack_clear_entry(&wp->w_tagstack[i]);
-  }
-  wp->w_tagstacklen = 0;
-  wp->w_tagstackidx = 0;
+  rs_tagstack_clear(wp);
 }
 
 // Remove the oldest entry from the tag stack and shift the rest of
 // the entries to free up the top of the stack.
 static void tagstack_shift(win_T *wp)
 {
-  taggy_T *tagstack = wp->w_tagstack;
-  tagstack_clear_entry(&tagstack[0]);
-  for (int i = 1; i < wp->w_tagstacklen; i++) {
-    tagstack[i - 1] = tagstack[i];
-  }
-  wp->w_tagstacklen--;
+  rs_tagstack_shift(wp);
 }
 
 /// Push a new item to the tag stack
 static void tagstack_push_item(win_T *wp, char *tagname, int cur_fnum, int cur_match, pos_T mark,
                                int fnum, char *user_data)
 {
-  taggy_T *tagstack = wp->w_tagstack;
-  int idx = wp->w_tagstacklen;  // top of the stack
-
-  // if the tagstack is full: remove the oldest entry
-  if (idx >= TAGSTACKSIZE) {
-    tagstack_shift(wp);
-    idx = TAGSTACKSIZE - 1;
-  }
-
-  wp->w_tagstacklen++;
-  tagstack[idx].tagname = tagname;
-  tagstack[idx].cur_fnum = cur_fnum;
-  tagstack[idx].cur_match = cur_match;
-  tagstack[idx].cur_match = MAX(tagstack[idx].cur_match, 0);
-  tagstack[idx].fmark.mark = mark;
-  tagstack[idx].fmark.fnum = fnum;
-  tagstack[idx].user_data = user_data;
+  rs_tagstack_push(wp, tagname, cur_fnum, cur_match, mark.lnum, mark.col, fnum, user_data);
 }
 
 /// Add a list of items to the tag stack in the specified window
@@ -3862,9 +3847,7 @@ static void tagstack_push_items(win_T *wp, list_T *l)
 // and the stack length (inclusive).
 static void tagstack_set_curidx(win_T *wp, int curidx)
 {
-  wp->w_tagstackidx = curidx;
-  // sanity check
-  wp->w_tagstackidx = MIN(MAX(wp->w_tagstackidx, 0), wp->w_tagstacklen);
+  rs_tagstack_set_idx(wp, curidx);
 }
 
 // Set the tag stack entries of the specified window.
@@ -3897,15 +3880,7 @@ int set_tagstack(win_T *wp, const dict_T *d, int action)
   }
 
   if (action == 't') {  // truncate the stack
-    taggy_T *const tagstack = wp->w_tagstack;
-    const int tagstackidx = wp->w_tagstackidx;
-    int tagstacklen = wp->w_tagstacklen;
-
-    // delete all the tag stack entries above the current entry
-    while (tagstackidx < tagstacklen) {
-      tagstack_clear_entry(&tagstack[--tagstacklen]);
-    }
-    wp->w_tagstacklen = tagstacklen;
+    rs_tagstack_truncate(wp);
   }
 
   if (l != NULL) {
