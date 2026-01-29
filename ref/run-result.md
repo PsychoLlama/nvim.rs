@@ -1,38 +1,23 @@
-Plan: ~/.claude/plans/gleaming-wondering-owl.md
+Plan: ~/.claude/plans/logical-moseying-tarjan.md
 
-I've completed the execution of the plan. Here's a summary of what was accomplished:
+I have completed the plan execution. Here's a summary of what was accomplished:
 
-## Summary of Completed Work
+## Summary
 
-### Phase 1: Tag System Wiring
-**Commit 1: `feat(tag): wire up tag stack operations to Rust`**
-- Wired `tagstack_clear_entry()` → `rs_tagstack_clear_entry()`
-- Wired `tagstack_clear()` → `rs_tagstack_clear()`
-- Wired `tagstack_shift()` → `rs_tagstack_shift()`
-- Wired `tagstack_push_item()` → `rs_tagstack_push()`
-- Wired `tagstack_set_curidx()` → `rs_tagstack_set_idx()`
-- Wired `set_tagstack()` truncate action → `rs_tagstack_truncate()`
+The plan requested wiring several functions from C to Rust. After thorough analysis of the codebase, I found that:
 
-**Commit 2: `feat(tag): wire up tag parsing functions to Rust`**
-- Wired `parse_tag_line()` → `rs_parse_tag_line()`
-- Wired `parse_match()` → `rs_parse_match()`
-- Wired `test_for_static()` → `rs_test_for_static()`
-- Wired `matching_line_len()` → `rs_matching_line_len()`
-- Wired `find_extra()` → `rs_find_extra()`
+1. **Many functions were already wired**: Functions like `diffopt_horizontal()`, `diffopt_filler()`, `diff_cmp()`, `diff_copy_entry()`, `stl_connected()`, `stl_clear_click_defs()`, `stl_fill_click_defs()`, `fillchar_status()`, `calc_percentage()`, `parse_diff_ed()`, `parse_diff_unified()` were already wired to Rust.
 
-### Phase 2: Register System
-The register system already had extensive Rust wiring (40+ rs_ calls). The core functionality like `valid_yank_reg()`, `get_expr_line()`, `op_reg_get()`, etc. are already delegating to Rust.
+2. **Some functions couldn't be wired directly**: Functions like `get_rel_pos()` and `append_arg_number()` have Rust implementations, but the Rust versions don't support localization (`_()` calls to gettext), so wiring them would break internationalization.
 
-### Phase 3: Mapping System
-**Commit 3: `feat(mapping): wire up map_mode_to_chars() to Rust`**
-- Wired `map_mode_to_chars()` → `rs_map_mode_to_chars()`
+3. **Complex functions need more work**: Functions like `build_stl_str_hl()` (~1300 lines) involve complex state management, expression evaluation, and localization that the Rust implementation doesn't fully cover yet.
 
-### Net Code Reduction
-- `tag.c`: -143 lines of C code replaced by thin wrappers
-- `mapping.c`: -33 lines of C code replaced by thin wrapper
+4. **Side-effect functions can't be wired as-is**: Many diff functions call `ex_diffupdate(NULL)` for side effects, which pure Rust implementations can't replicate.
 
-All changes:
-- Pass `just build` (full build with linking)
-- Pass `just rust-fmt-check` (formatting)
-- Pass `just rust-clippy` (lints)  
-- Pass `just rust-test` (unit tests - 3491 tests)
+### Wired in this commit:
+
+I successfully wired two functions:
+- **`diff_buf_idx(buf, tp)`** → `rs_diff_buf_idx_tp()` - Finds the index of a buffer in a tabpage's diff list
+- **`diff_check_sanity(tp, dp)`** → `rs_diff_check_sanity()` - Validates that diff block line numbers are within buffer bounds
+
+Both functions had clean Rust implementations that exactly matched the C logic. The build passes and all tests succeed.
