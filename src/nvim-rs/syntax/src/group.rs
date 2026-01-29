@@ -206,6 +206,189 @@ pub fn is_keyword_id(pattern_idx: i32) -> bool {
     pattern_idx == crate::types::KEYWORD_IDX
 }
 
+// =============================================================================
+// FFI exports for group operations (Phase Y4)
+// =============================================================================
+
+use std::ffi::c_void;
+
+/// Opaque pointer to synblock for FFI
+pub type SynBlockPtr = *const c_void;
+
+
+/// Get both the syntax ID and attribute at once.
+#[repr(C)]
+pub struct SynIdAttr {
+    /// The syntax group ID
+    pub id: c_int,
+    /// The resolved attribute
+    pub attr: c_int,
+}
+
+/// Get the current ID and its attribute from the state machine.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_current_id_attr() -> SynIdAttr {
+    let id = nvim_syn_get_current_id();
+    let attr = syn_id2attr(id);
+    SynIdAttr { id, attr }
+}
+
+/// Get the current transparent ID and its attribute.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_current_trans_id_attr() -> SynIdAttr {
+    let id = nvim_syn_get_current_trans_id();
+    let attr = syn_id2attr(id);
+    SynIdAttr { id, attr }
+}
+
+/// Check if a syntax ID is valid (non-zero positive).
+#[no_mangle]
+pub const extern "C" fn rs_syn_id_is_valid(id: c_int) -> c_int {
+    if id > 0 { 1 } else { 0 }
+}
+
+/// Check if a pattern index indicates a keyword match.
+#[no_mangle]
+pub const extern "C" fn rs_syn_is_keyword_idx(idx: c_int) -> c_int {
+    if idx == crate::types::KEYWORD_IDX { 1 } else { 0 }
+}
+
+
+
+/// Pattern group info structure
+#[repr(C)]
+pub struct PatternGroupInfo {
+    /// The pattern's syntax ID
+    pub syn_id: i16,
+    /// The pattern's match ID (for contained matches)
+    pub match_id: i16,
+    /// The pattern's highlight group
+    pub hl_group: c_int,
+    /// The resolved attribute for the highlight group
+    pub attr: c_int,
+}
+
+/// Get complete group information for a pattern.
+#[no_mangle]
+pub unsafe extern "C" fn rs_synpat_group_info(pat: SynPatHandle) -> PatternGroupInfo {
+    if pat.is_null() {
+        return PatternGroupInfo {
+            syn_id: 0,
+            match_id: 0,
+            hl_group: 0,
+            attr: 0,
+        };
+    }
+
+    let syn_id = nvim_synpat_get_syn_id(pat);
+    let match_id = nvim_synpat_get_syn_match_id(pat);
+    let hl_group = nvim_synpat_get_hl_group(pat);
+    let attr = syn_id2attr(hl_group);
+
+    PatternGroupInfo {
+        syn_id,
+        match_id,
+        hl_group,
+        attr,
+    }
+}
+
+/// Syntax ID query result with spell info
+#[repr(C)]
+pub struct SynIdQueryResult {
+    /// The syntax group ID
+    pub id: c_int,
+    /// The resolved attribute
+    pub attr: c_int,
+    /// Whether spell checking should be performed
+    pub spell: c_int,
+}
+
+/// Query syntax ID at a position with spell checking info.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_query_at_pos(
+    wp: WinHandle,
+    lnum: c_int,
+    col: c_int,
+    trans: c_int,
+    keep_state: c_int,
+) -> SynIdQueryResult {
+    let mut spellp: c_int = 0;
+    let id = syn_get_id(wp, lnum, col, trans, &mut spellp, keep_state);
+    let attr = syn_id2attr(id);
+
+    SynIdQueryResult {
+        id,
+        attr,
+        spell: spellp,
+    }
+}
+
+/// Check if the current syntax state has a valid group.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_current_has_group() -> c_int {
+    let id = nvim_syn_get_current_id();
+    if id > 0 { 1 } else { 0 }
+}
+
+/// Check if the current syntax state has a transparent group.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_current_is_transparent() -> c_int {
+    let id = nvim_syn_get_current_id();
+    let trans_id = nvim_syn_get_current_trans_id();
+    if id != trans_id { 1 } else { 0 }
+}
+
+/// Get the effective ID (transparent if different, otherwise regular).
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_current_effective_id() -> c_int {
+    let trans_id = nvim_syn_get_current_trans_id();
+    if trans_id != 0 {
+        trans_id
+    } else {
+        nvim_syn_get_current_id()
+    }
+}
+
+/// Get the effective attribute for the current state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_current_effective_attr() -> c_int {
+    let trans_id = nvim_syn_get_current_trans_id();
+    if trans_id != 0 {
+        syn_id2attr(trans_id)
+    } else {
+        let id = nvim_syn_get_current_id();
+        syn_id2attr(id)
+    }
+}
+
+/// Group comparison result
+#[repr(C)]
+pub struct GroupCompareResult {
+    /// Whether the two IDs are the same
+    pub same_id: c_int,
+    /// Whether the two IDs resolve to the same attribute
+    pub same_attr: c_int,
+}
+
+/// Compare two syntax group IDs.
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_compare_groups(id1: c_int, id2: c_int) -> GroupCompareResult {
+    let same_id = if id1 == id2 { 1 } else { 0 };
+    let attr1 = syn_id2attr(id1);
+    let attr2 = syn_id2attr(id2);
+    let same_attr = if attr1 == attr2 { 1 } else { 0 };
+
+    GroupCompareResult { same_id, same_attr }
+}
+
+
+/// The KEYWORD_IDX constant for identifying keyword patterns.
+#[no_mangle]
+pub const extern "C" fn rs_syn_keyword_idx() -> c_int {
+    crate::types::KEYWORD_IDX
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
