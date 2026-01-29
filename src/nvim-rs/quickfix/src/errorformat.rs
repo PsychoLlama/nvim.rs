@@ -395,6 +395,64 @@ pub extern "C" fn rs_efm_match_pattern() -> c_int {
 }
 
 // =============================================================================
+// Phase Q3: Additional Errorformat Helpers
+// =============================================================================
+
+/// Classify error type from a character.
+///
+/// Returns the error classification (0=unknown, 1=error, 2=warning, 3=info, 4=note)
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub extern "C" fn rs_qf_classify_error_type(type_char: c_int) -> c_int {
+    #[allow(clippy::cast_sign_loss)]
+    let c = type_char as u8;
+    let upper = if c.is_ascii_lowercase() {
+        c.to_ascii_uppercase()
+    } else {
+        c
+    };
+
+    match upper {
+        b'E' => 1, // Error
+        b'W' => 2, // Warning
+        b'I' => 3, // Info
+        b'N' => 4, // Note
+        _ => 0,    // Unknown
+    }
+}
+
+/// Check if a character represents an error
+#[no_mangle]
+pub extern "C" fn rs_qf_is_error_char(type_char: c_int) -> bool {
+    rs_qf_classify_error_type(type_char) == 1
+}
+
+/// Check if a character represents a warning
+#[no_mangle]
+pub extern "C" fn rs_qf_is_warning_char(type_char: c_int) -> bool {
+    rs_qf_classify_error_type(type_char) == 2
+}
+
+/// Check if a character represents a diagnostic (error, warning, info, or note)
+#[no_mangle]
+pub extern "C" fn rs_qf_is_diagnostic_char(type_char: c_int) -> bool {
+    rs_qf_classify_error_type(type_char) > 0
+}
+
+/// Get error type character (normalized to uppercase)
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub extern "C" fn rs_qf_normalize_type_char(type_char: c_int) -> c_int {
+    #[allow(clippy::cast_sign_loss)]
+    let c = type_char as u8;
+    if c.is_ascii_lowercase() {
+        c_int::from(c.to_ascii_uppercase())
+    } else {
+        type_char
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
