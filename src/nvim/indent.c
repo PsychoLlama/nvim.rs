@@ -127,6 +127,10 @@ extern int rs_get_indent_buf(buf_T *buf, linenr_T lnum);
 extern bool rs_inindent(int extra);
 extern int *rs_tabstop_copy(const int *oldts);
 
+// Phase: Checks (indent/checks.rs)
+extern bool rs_preprocs_left(void);
+extern bool rs_use_indentexpr_for_lisp(void);
+
 /// Set the integer values corresponding to the string setting of 'vartabstop'.
 /// "array" will be set, caller must free it if needed.
 ///
@@ -921,9 +925,7 @@ void op_reindent(oparg_T *oap, Indenter how)
 /// @return  true if lines starting with '#' should be left aligned.
 bool preprocs_left(void)
 {
-  return ((curbuf->b_p_si && !curbuf->b_p_cin)
-          || (curbuf->b_p_cin && in_cinkeys('#', ' ', true)
-              && curbuf->b_ind_hash_comment == 0));
+  return rs_preprocs_left();
 }
 
 /// @return  true if the conditions are OK for smart indenting.
@@ -1786,9 +1788,7 @@ void fixthisline(IndentGetter get_the_indent)
 /// Caller may want to check 'autoindent'.
 bool use_indentexpr_for_lisp(void)
 {
-  return curbuf->b_p_lisp
-         && *curbuf->b_p_inde != NUL
-         && strcmp(curbuf->b_p_lop, "expr:1") == 0;
+  return rs_use_indentexpr_for_lisp();
 }
 
 /// Fix indent for 'lisp' and 'cindent'.

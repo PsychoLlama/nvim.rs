@@ -132,6 +132,30 @@ int nvim_curbuf_get_ind_hash_comment(void)
   return curbuf->b_ind_hash_comment;
 }
 
+/// C accessor for curbuf->b_p_lisp (lisp option).
+int nvim_curbuf_get_p_lisp(void)
+{
+  return curbuf->b_p_lisp;
+}
+
+/// C accessor for curbuf->b_p_inde (indentexpr) as pointer.
+const char *nvim_curbuf_get_inde_ptr(void)
+{
+  return curbuf->b_p_inde;
+}
+
+/// C accessor for curbuf->b_p_lop (lispoptions).
+const char *nvim_curbuf_get_p_lop(void)
+{
+  return curbuf->b_p_lop;
+}
+
+/// C accessor for in_cinkeys function (for Rust FFI).
+bool nvim_in_cinkeys(int keytyped, int when, bool line_is_empty)
+{
+  return in_cinkeys(keytyped, when, line_is_empty);
+}
+
 // Find result cache for cpp_baseclass
 typedef struct {
   int found;
