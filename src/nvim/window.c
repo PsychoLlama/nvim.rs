@@ -1173,9 +1173,9 @@ ScreenGrid *nvim_win_get_grid_alloc(win_T *wp)
 }
 
 /// Get the w_config.hide field from a window.
-bool nvim_win_get_config_hide(win_T *wp)
+int nvim_win_get_config_hide(win_T *wp)
 {
-  return wp->w_config.hide;
+  return wp ? wp->w_config.hide : 0;
 }
 
 /// Set the w_pos_changed field of a window.
@@ -1188,6 +1188,30 @@ void nvim_win_set_pos_changed(win_T *wp, int val)
 int nvim_win_get_config_relative(win_T *wp)
 {
   return (int)wp->w_config.relative;
+}
+
+/// Get the w_config.window field (parent window handle).
+int nvim_win_get_config_window(win_T *wp)
+{
+  return wp ? wp->w_config.window : 0;
+}
+
+/// Get the w_config.anchor field.
+int nvim_win_get_config_anchor(win_T *wp)
+{
+  return wp ? (int)wp->w_config.anchor : 0;
+}
+
+/// Get the w_config.zindex field.
+int nvim_win_get_config_zindex(win_T *wp)
+{
+  return wp ? wp->w_config.zindex : 50;  // Default zindex
+}
+
+/// Get the w_config.focusable field.
+int nvim_win_get_config_focusable(win_T *wp)
+{
+  return wp ? wp->w_config.focusable : 0;
 }
 
 /// Get the topframe global.

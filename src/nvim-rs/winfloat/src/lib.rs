@@ -408,6 +408,338 @@ pub extern "C" fn rs_border_char_count() -> c_int {
     BORDER_CHAR_COUNT as c_int
 }
 
+// =============================================================================
+// Phase D3: Floating Window Positioning Helpers
+// =============================================================================
+
+use std::ffi::c_void;
+
+/// Opaque handle to window (`win_T*`).
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WinHandle(*mut c_void);
+
+impl WinHandle {
+    /// Check if the handle is null.
+    #[inline]
+    #[must_use]
+    pub const fn is_null(self) -> bool {
+        self.0.is_null()
+    }
+
+    /// Create a null handle.
+    #[inline]
+    #[must_use]
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+}
+
+// C accessor functions
+extern "C" {
+    fn nvim_win_get_floating(wp: WinHandle) -> c_int;
+    fn nvim_win_get_config_relative(wp: WinHandle) -> c_int;
+    fn nvim_win_get_config_window(wp: WinHandle) -> c_int;
+    fn nvim_win_get_config_zindex(wp: WinHandle) -> c_int;
+    fn nvim_win_get_config_focusable(wp: WinHandle) -> c_int;
+    fn nvim_win_get_config_hide(wp: WinHandle) -> c_int;
+    fn nvim_win_get_winrow(wp: WinHandle) -> c_int;
+    fn nvim_win_get_wincol(wp: WinHandle) -> c_int;
+    fn nvim_win_get_w_width(wp: WinHandle) -> c_int;
+    fn nvim_win_get_w_height(wp: WinHandle) -> c_int;
+    fn nvim_win_get_border_adj(wp: WinHandle, idx: c_int) -> c_int;
+}
+
+/// Check if window is a floating window.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_is_floating(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    nvim_win_get_floating(wp)
+}
+
+/// Get the border-adjusted width of a floating window.
+///
+/// Returns the window width plus left and right border widths.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_float_total_width(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    let width = nvim_win_get_w_width(wp);
+    let left_border = nvim_win_get_border_adj(wp, 3); // Left border
+    let right_border = nvim_win_get_border_adj(wp, 1); // Right border
+    width + left_border + right_border
+}
+
+/// Get the border-adjusted height of a floating window.
+///
+/// Returns the window height plus top and bottom border heights.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_float_total_height(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    let height = nvim_win_get_w_height(wp);
+    let top_border = nvim_win_get_border_adj(wp, 0); // Top border
+    let bottom_border = nvim_win_get_border_adj(wp, 2); // Bottom border
+    height + top_border + bottom_border
+}
+
+/// Calculate row position for a floating window based on anchor.
+///
+/// Adjusts the configured row based on the anchor direction.
+#[no_mangle]
+pub unsafe extern "C" fn rs_float_anchor_row(row: c_int, height: c_int, anchor: c_int) -> c_int {
+    // If anchor has south (bit 0 set), subtract height
+    if anchor & 1 != 0 {
+        row - height
+    } else {
+        row
+    }
+}
+
+/// Calculate column position for a floating window based on anchor.
+///
+/// Adjusts the configured column based on the anchor direction.
+#[no_mangle]
+pub unsafe extern "C" fn rs_float_anchor_col(col: c_int, width: c_int, anchor: c_int) -> c_int {
+    // If anchor has east (bit 1 set), subtract width
+    if anchor & 2 != 0 {
+        col - width
+    } else {
+        col
+    }
+}
+
+/// Check if a floating window is anchored to a specific window.
+#[no_mangle]
+pub unsafe extern "C" fn rs_float_anchored_to(wp: WinHandle, parent_handle: c_int) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    let relative = nvim_win_get_config_relative(wp);
+    // kFloatRelativeWindow = 1
+    if relative != 1 {
+        return 0;
+    }
+
+    let config_window = nvim_win_get_config_window(wp);
+    c_int::from(config_window == parent_handle)
+}
+
+/// Check if a floating window overlaps a given screen region.
+///
+/// Returns 1 if the float overlaps the region defined by (row, col, width, height).
+#[no_mangle]
+pub unsafe extern "C" fn rs_float_overlaps_region(
+    wp: WinHandle,
+    region_row: c_int,
+    region_col: c_int,
+    region_width: c_int,
+    region_height: c_int,
+) -> c_int {
+    if wp.is_null() || nvim_win_get_floating(wp) == 0 {
+        return 0;
+    }
+
+    let win_row = nvim_win_get_winrow(wp);
+    let win_col = nvim_win_get_wincol(wp);
+    let win_width = rs_win_float_total_width(wp);
+    let win_height = rs_win_float_total_height(wp);
+
+    // Check for overlap
+    let overlaps = win_row < region_row + region_height
+        && win_row + win_height > region_row
+        && win_col < region_col + region_width
+        && win_col + win_width > region_col;
+
+    c_int::from(overlaps)
+}
+
+/// Get the zindex of a floating window.
+#[no_mangle]
+pub unsafe extern "C" fn rs_float_get_zindex(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return ZINDEX_FLOAT_DEFAULT;
+    }
+    nvim_win_get_config_zindex(wp)
+}
+
+/// Check if a floating window is focusable.
+#[no_mangle]
+pub unsafe extern "C" fn rs_float_is_focusable(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    nvim_win_get_config_focusable(wp)
+}
+
+/// Check if a floating window is hidden.
+#[no_mangle]
+pub unsafe extern "C" fn rs_float_is_hidden(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+    nvim_win_get_config_hide(wp)
+}
+
+/// Check if cursor relative positions should be used.
+///
+/// Returns 1 if the window's relative is Cursor or Mouse.
+#[no_mangle]
+pub unsafe extern "C" fn rs_float_uses_cursor_relative(wp: WinHandle) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    let relative = nvim_win_get_config_relative(wp);
+    // kFloatRelativeCursor = 2, kFloatRelativeMouse = 3
+    c_int::from(relative == 2 || relative == 3)
+}
+
+// =============================================================================
+// Additional Positioning Helpers
+// =============================================================================
+
+// Note: rs_float_effective_row and rs_float_effective_col are defined in
+// the compositor crate (compositor/src/floating.rs) to avoid duplication.
+
+/// Check if a floating window would be visible on screen.
+///
+/// Returns 1 if the window position keeps it at least partially visible.
+#[no_mangle]
+pub const extern "C" fn rs_float_is_visible(
+    row: c_int,
+    col: c_int,
+    width: c_int,
+    height: c_int,
+    screen_rows: c_int,
+    screen_cols: c_int,
+) -> c_int {
+    // Window is visible if any part of it is on screen
+    let row_visible = row < screen_rows && row + height > 0;
+    let col_visible = col < screen_cols && col + width > 0;
+    if row_visible && col_visible {
+        1
+    } else {
+        0
+    }
+}
+
+/// Calculate the clamped position to keep a window fully on screen.
+///
+/// Returns the adjusted row position that keeps the window fully visible.
+#[no_mangle]
+pub const extern "C" fn rs_float_clamp_position_row(
+    row: c_int,
+    height: c_int,
+    screen_rows: c_int,
+) -> c_int {
+    if row < 0 {
+        0
+    } else if row + height > screen_rows {
+        if height >= screen_rows {
+            0
+        } else {
+            screen_rows - height
+        }
+    } else {
+        row
+    }
+}
+
+/// Calculate the clamped column position to keep a window fully on screen.
+///
+/// Returns the adjusted column position that keeps the window fully visible.
+#[no_mangle]
+pub const extern "C" fn rs_float_clamp_position_col(
+    col: c_int,
+    width: c_int,
+    screen_cols: c_int,
+) -> c_int {
+    if col < 0 {
+        0
+    } else if col + width > screen_cols {
+        if width >= screen_cols {
+            0
+        } else {
+            screen_cols - width
+        }
+    } else {
+        col
+    }
+}
+
+/// Check if two rectangles overlap.
+///
+/// Returns 1 if the rectangles defined by (r1_row, r1_col, r1_w, r1_h) and
+/// (r2_row, r2_col, r2_w, r2_h) overlap.
+#[no_mangle]
+pub const extern "C" fn rs_float_rects_overlap(
+    r1_row: c_int,
+    r1_col: c_int,
+    r1_w: c_int,
+    r1_h: c_int,
+    r2_row: c_int,
+    r2_col: c_int,
+    r2_w: c_int,
+    r2_h: c_int,
+) -> c_int {
+    let overlap = r1_row < r2_row + r2_h
+        && r1_row + r1_h > r2_row
+        && r1_col < r2_col + r2_w
+        && r1_col + r1_w > r2_col;
+    if overlap {
+        1
+    } else {
+        0
+    }
+}
+
+/// Calculate zindex comparison result for sorting.
+///
+/// Returns positive if za > zb, negative if za < zb, 0 if equal.
+/// This is useful for sorting floating windows by z-index.
+#[no_mangle]
+pub const extern "C" fn rs_float_zindex_cmp(za: c_int, zb: c_int) -> c_int {
+    if za == zb {
+        0
+    } else if za < zb {
+        1 // Higher zindex first (descending order)
+    } else {
+        -1
+    }
+}
+
+/// Check if a point is inside a rectangle.
+///
+/// Returns 1 if (point_row, point_col) is inside the rectangle
+/// defined by (rect_row, rect_col, rect_w, rect_h).
+#[no_mangle]
+pub const extern "C" fn rs_float_point_in_rect(
+    point_row: c_int,
+    point_col: c_int,
+    rect_row: c_int,
+    rect_col: c_int,
+    rect_w: c_int,
+    rect_h: c_int,
+) -> c_int {
+    let inside = point_row >= rect_row
+        && point_row < rect_row + rect_h
+        && point_col >= rect_col
+        && point_col < rect_col + rect_w;
+    if inside {
+        1
+    } else {
+        0
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -505,5 +837,136 @@ mod tests {
     #[test]
     fn test_border_char_count() {
         assert_eq!(rs_border_char_count(), 8);
+    }
+
+    #[test]
+    fn test_float_is_visible() {
+        // Window fully on screen
+        assert_eq!(rs_float_is_visible(5, 5, 10, 10, 50, 80), 1);
+
+        // Window partially on screen (top-left corner visible)
+        assert_eq!(rs_float_is_visible(-5, -5, 10, 10, 50, 80), 1);
+
+        // Window partially on screen (bottom-right corner visible)
+        assert_eq!(rs_float_is_visible(45, 75, 10, 10, 50, 80), 1);
+
+        // Window completely off screen (above)
+        assert_eq!(rs_float_is_visible(-15, 5, 10, 10, 50, 80), 0);
+
+        // Window completely off screen (left)
+        assert_eq!(rs_float_is_visible(5, -15, 10, 10, 50, 80), 0);
+
+        // Window completely off screen (below)
+        assert_eq!(rs_float_is_visible(55, 5, 10, 10, 50, 80), 0);
+
+        // Window completely off screen (right)
+        assert_eq!(rs_float_is_visible(5, 85, 10, 10, 50, 80), 0);
+    }
+
+    #[test]
+    fn test_float_clamp_position() {
+        // Row clamping
+        assert_eq!(rs_float_clamp_position_row(-5, 10, 50), 0); // clamp negative
+        assert_eq!(rs_float_clamp_position_row(10, 10, 50), 10); // no change needed
+        assert_eq!(rs_float_clamp_position_row(45, 10, 50), 40); // clamp bottom
+        assert_eq!(rs_float_clamp_position_row(0, 60, 50), 0); // window taller than screen
+
+        // Column clamping
+        assert_eq!(rs_float_clamp_position_col(-5, 10, 80), 0); // clamp negative
+        assert_eq!(rs_float_clamp_position_col(20, 10, 80), 20); // no change needed
+        assert_eq!(rs_float_clamp_position_col(75, 10, 80), 70); // clamp right
+        assert_eq!(rs_float_clamp_position_col(0, 90, 80), 0); // window wider than screen
+    }
+
+    #[test]
+    fn test_float_rects_overlap() {
+        // Overlapping rectangles
+        assert_eq!(rs_float_rects_overlap(0, 0, 10, 10, 5, 5, 10, 10), 1);
+
+        // Non-overlapping rectangles (side by side)
+        assert_eq!(rs_float_rects_overlap(0, 0, 10, 10, 15, 0, 10, 10), 0);
+
+        // Non-overlapping rectangles (above/below)
+        assert_eq!(rs_float_rects_overlap(0, 0, 10, 10, 0, 15, 10, 10), 0);
+
+        // Touching but not overlapping
+        assert_eq!(rs_float_rects_overlap(0, 0, 10, 10, 10, 0, 10, 10), 0);
+
+        // One inside the other
+        assert_eq!(rs_float_rects_overlap(0, 0, 20, 20, 5, 5, 5, 5), 1);
+
+        // Partial overlap
+        assert_eq!(rs_float_rects_overlap(0, 0, 10, 10, 9, 9, 10, 10), 1);
+    }
+
+    #[test]
+    fn test_float_zindex_cmp() {
+        // Equal z-indices
+        assert_eq!(rs_float_zindex_cmp(50, 50), 0);
+
+        // za < zb - higher zindex first (returns positive)
+        assert!(rs_float_zindex_cmp(30, 50) > 0);
+
+        // za > zb - higher zindex first (returns negative)
+        assert!(rs_float_zindex_cmp(70, 50) < 0);
+    }
+
+    #[test]
+    fn test_float_point_in_rect() {
+        // Point inside rectangle
+        assert_eq!(rs_float_point_in_rect(5, 5, 0, 0, 10, 10), 1);
+
+        // Point at top-left corner (inside)
+        assert_eq!(rs_float_point_in_rect(0, 0, 0, 0, 10, 10), 1);
+
+        // Point at bottom-right corner (outside - exclusive)
+        assert_eq!(rs_float_point_in_rect(10, 10, 0, 0, 10, 10), 0);
+
+        // Point outside (above)
+        assert_eq!(rs_float_point_in_rect(-1, 5, 0, 0, 10, 10), 0);
+
+        // Point outside (left)
+        assert_eq!(rs_float_point_in_rect(5, -1, 0, 0, 10, 10), 0);
+
+        // Point outside (below)
+        assert_eq!(rs_float_point_in_rect(15, 5, 0, 0, 10, 10), 0);
+
+        // Point outside (right)
+        assert_eq!(rs_float_point_in_rect(5, 15, 0, 0, 10, 10), 0);
+    }
+
+    #[test]
+    fn test_anchor_row_calculation() {
+        // These test the anchor position calculations
+        unsafe {
+            // NW anchor (0) - position unchanged
+            assert_eq!(rs_float_anchor_row(10, 5, 0), 10);
+
+            // SW anchor (1) - subtract height
+            assert_eq!(rs_float_anchor_row(10, 5, 1), 5);
+
+            // NE anchor (2) - row unchanged
+            assert_eq!(rs_float_anchor_row(10, 5, 2), 10);
+
+            // SE anchor (3) - subtract height
+            assert_eq!(rs_float_anchor_row(10, 5, 3), 5);
+        }
+    }
+
+    #[test]
+    fn test_anchor_col_calculation() {
+        unsafe {
+            // NW anchor (0) - position unchanged
+            assert_eq!(rs_float_anchor_col(20, 10, 0), 20);
+
+            // SW anchor (1) - col unchanged
+            assert_eq!(rs_float_anchor_col(20, 10, 1), 20);
+
+            // NE anchor (2) - subtract width
+            assert_eq!(rs_float_anchor_col(20, 10, 2), 10);
+
+            // SE anchor (3) - subtract width
+            assert_eq!(rs_float_anchor_col(20, 10, 3), 10);
+        }
     }
 }
