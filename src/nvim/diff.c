@@ -171,6 +171,8 @@ extern int rs_diffopt_anchor(void);
 extern int rs_diffopt_inline_any(void);
 extern int rs_diffopt_inline_diff(void);
 extern int rs_diff_buf_idx(const void *buf);
+extern int rs_diff_buf_idx_tp(buf_T *buf, tabpage_T *tp);
+extern int rs_diff_check_sanity(tabpage_T *tp, diff_T *dp);
 extern int rs_diff_check_invalid(void);
 extern int rs_diff_count_buffers(void);
 extern int rs_diff_buf_is_diffed(const void *buf);
@@ -374,13 +376,7 @@ static void diff_buf_clear(void)
 /// @return its index or DB_COUNT if not found.
 static int diff_buf_idx(buf_T *buf, tabpage_T *tp)
 {
-  int idx;
-  for (idx = 0; idx < DB_COUNT; idx++) {
-    if (tp->tp_diffbuf[idx] == buf) {
-      break;
-    }
-  }
-  return idx;
+  return rs_diff_buf_idx_tp(buf, tp);
 }
 
 /// Mark the diff info involving buffer "buf" as invalid, it will be updated
@@ -799,15 +795,7 @@ static void diff_check_unchanged(tabpage_T *tp, diff_T *dp)
 /// @return OK if the diff block doesn't contain invalid line numbers.
 static int diff_check_sanity(tabpage_T *tp, diff_T *dp)
 {
-  for (int i = 0; i < DB_COUNT; i++) {
-    if (tp->tp_diffbuf[i] != NULL) {
-      if (dp->df_lnum[i] + dp->df_count[i] - 1
-          > tp->tp_diffbuf[i]->b_ml.ml_line_count) {
-        return FAIL;
-      }
-    }
-  }
-  return OK;
+  return rs_diff_check_sanity(tp, dp);
 }
 
 /// Mark all diff buffers in the current tab page for redraw.
