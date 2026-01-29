@@ -784,6 +784,250 @@ pub extern "C" fn rs_is_k_special(b: u8) -> c_int {
 }
 
 // =============================================================================
+// Additional FFI Exports (R6)
+// =============================================================================
+
+/// Get REGSUB_COPY constant.
+#[no_mangle]
+pub extern "C" fn rs_regsub_copy() -> c_int {
+    REGSUB_COPY
+}
+
+/// Get REGSUB_MAGIC constant.
+#[no_mangle]
+pub extern "C" fn rs_regsub_magic() -> c_int {
+    REGSUB_MAGIC
+}
+
+/// Get REGSUB_BACKSLASH constant.
+#[no_mangle]
+pub extern "C" fn rs_regsub_backslash() -> c_int {
+    REGSUB_BACKSLASH
+}
+
+/// Get NSUBEXP constant.
+#[no_mangle]
+pub extern "C" fn rs_regsub_nsubexp() -> c_int {
+    NSUBEXP as c_int
+}
+
+/// Get MAX_REGSUB_NESTING constant.
+#[no_mangle]
+pub extern "C" fn rs_regsub_max_nesting() -> c_int {
+    MAX_REGSUB_NESTING as c_int
+}
+
+/// Get the carriage return constant.
+#[no_mangle]
+pub extern "C" fn rs_regsub_car() -> u8 {
+    CAR
+}
+
+/// Get the newline constant.
+#[no_mangle]
+pub extern "C" fn rs_regsub_nl() -> u8 {
+    NL
+}
+
+/// Get the tab constant.
+#[no_mangle]
+pub extern "C" fn rs_regsub_tab() -> u8 {
+    TAB
+}
+
+/// Get the K_SPECIAL constant for regsub.
+#[no_mangle]
+pub extern "C" fn rs_regsub_k_special() -> u8 {
+    K_SPECIAL
+}
+
+/// Parse a regsub escape sequence at the given position.
+///
+/// Returns the escape type and number of bytes consumed.
+///
+/// Escape types:
+/// - 0: None (not an escape)
+/// - 1-10: Submatch reference (\0-\9)
+/// - 11: UpperOne
+/// - 12: UpperAll
+/// - 13: LowerOne
+/// - 14: LowerAll
+/// - 15: CaseEnd
+/// - 16: Literal (literal byte in out_byte)
+/// - 17: EscapedBackslash
+///
+/// # Safety
+/// `src` must point to a valid string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_regsub_parse_escape(
+    src: *const u8,
+    magic: c_int,
+    out_consumed: *mut c_int,
+    out_byte: *mut u8,
+) -> c_int {
+    if src.is_null() {
+        if !out_consumed.is_null() {
+            *out_consumed = 0;
+        }
+        return 0;
+    }
+
+    let (result, consumed) = parse_escape(src, magic != 0);
+
+    if !out_consumed.is_null() {
+        *out_consumed = consumed as c_int;
+    }
+
+    match result {
+        EscapeResult::None => 0,
+        EscapeResult::Submatch(n) => (n + 1) as c_int,
+        EscapeResult::UpperOne => 11,
+        EscapeResult::UpperAll => 12,
+        EscapeResult::LowerOne => 13,
+        EscapeResult::LowerAll => 14,
+        EscapeResult::CaseEnd => 15,
+        EscapeResult::Literal(b) => {
+            if !out_byte.is_null() {
+                *out_byte = b;
+            }
+            16
+        }
+        EscapeResult::EscapedBackslash => 17,
+    }
+}
+
+/// Get a single-line submatch.
+///
+/// Returns 1 if found, 0 if not found.
+///
+/// # Safety
+/// `match_info` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_submatch_single(
+    match_info: *const RegMatch,
+    no: c_int,
+    out_start: *mut *const u8,
+    out_len: *mut c_int,
+) -> c_int {
+    if no < 0 {
+        return 0;
+    }
+    match get_submatch_single(match_info, no as usize) {
+        Some((start, len)) => {
+            if !out_start.is_null() {
+                *out_start = start;
+            }
+            if !out_len.is_null() {
+                *out_len = len;
+            }
+            1
+        }
+        None => 0,
+    }
+}
+
+/// Get multi-line submatch bounds.
+///
+/// Returns 1 if found, 0 if not found.
+///
+/// # Safety
+/// `match_info` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_submatch_multi(
+    match_info: *const RegMMatch,
+    no: c_int,
+    out_start_lnum: *mut c_int,
+    out_end_lnum: *mut c_int,
+    out_start_col: *mut c_int,
+    out_end_col: *mut c_int,
+) -> c_int {
+    if no < 0 {
+        return 0;
+    }
+    match get_submatch_multi(match_info, no as usize) {
+        Some(info) => {
+            if !out_start_lnum.is_null() {
+                *out_start_lnum = info.start_lnum;
+            }
+            if !out_end_lnum.is_null() {
+                *out_end_lnum = info.end_lnum;
+            }
+            if !out_start_col.is_null() {
+                *out_start_col = info.start_col;
+            }
+            if !out_end_col.is_null() {
+                *out_end_col = info.end_col;
+            }
+            1
+        }
+        None => 0,
+    }
+}
+
+/// Create a new RegMMatch structure.
+#[no_mangle]
+pub extern "C" fn rs_regmmatch_new() -> *mut RegMMatch {
+    Box::into_raw(Box::new(RegMMatch::default()))
+}
+
+/// Free a RegMMatch structure.
+///
+/// # Safety
+/// `m` must be from rs_regmmatch_new.
+#[no_mangle]
+pub unsafe extern "C" fn rs_regmmatch_free(m: *mut RegMMatch) {
+    if !m.is_null() {
+        drop(Box::from_raw(m));
+    }
+}
+
+/// Set multi-line submatch start position.
+///
+/// # Safety
+/// `m` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_regmmatch_set_startpos(
+    m: *mut RegMMatch,
+    no: c_int,
+    lnum: c_int,
+    col: c_int,
+) {
+    if !m.is_null() && no >= 0 && (no as usize) < NSUBEXP {
+        (*m).startpos[no as usize].lnum = lnum;
+        (*m).startpos[no as usize].col = col;
+    }
+}
+
+/// Set multi-line submatch end position.
+///
+/// # Safety
+/// `m` must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_regmmatch_set_endpos(
+    m: *mut RegMMatch,
+    no: c_int,
+    lnum: c_int,
+    col: c_int,
+) {
+    if !m.is_null() && no >= 0 && (no as usize) < NSUBEXP {
+        (*m).endpos[no as usize].lnum = lnum;
+        (*m).endpos[no as usize].col = col;
+    }
+}
+
+/// Check if a character is ASCII uppercase.
+#[no_mangle]
+pub extern "C" fn rs_is_ascii_uppercase(c: u8) -> c_int {
+    c_int::from(c.is_ascii_uppercase())
+}
+
+/// Check if a character is ASCII lowercase.
+#[no_mangle]
+pub extern "C" fn rs_is_ascii_lowercase(c: u8) -> c_int {
+    c_int::from(c.is_ascii_lowercase())
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
