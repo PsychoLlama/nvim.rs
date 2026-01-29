@@ -1850,6 +1850,181 @@ pub unsafe extern "C" fn rs_efm_to_regpat(
 }
 
 // =============================================================================
+// Phase Q2: Line Parsing Helpers
+// =============================================================================
+
+/// Get the error type character for a prefix.
+///
+/// Prefixes E, W, I, N set the error type. Others return 0.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub extern "C" fn rs_qf_parse_prefix_type(prefix: c_char) -> c_char {
+    match prefix as u8 {
+        b'E' | b'W' | b'I' | b'N' => prefix,
+        _ => 0,
+    }
+}
+
+/// Check if a line should be skipped based on flags.
+///
+/// Lines with '-' flag should be excluded.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub extern "C" fn rs_qf_should_skip_line(flags: c_char) -> bool {
+    (flags as u8) == b'-'
+}
+
+/// Check if a prefix is for continuation (C or Z).
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub extern "C" fn rs_qf_is_continuation(prefix: c_char) -> bool {
+    matches!(prefix as u8, b'C' | b'Z')
+}
+
+/// Check if a prefix starts a multiline sequence (A, E, W, I, N).
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub extern "C" fn rs_qf_starts_multiline(prefix: c_char) -> bool {
+    matches!(prefix as u8, b'A' | b'E' | b'W' | b'I' | b'N')
+}
+
+/// Check if a prefix is for directory handling (D or X).
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub extern "C" fn rs_qf_is_dir_handler(prefix: c_char) -> bool {
+    matches!(prefix as u8, b'D' | b'X')
+}
+
+/// Check if a prefix is for file handling (O, P, or Q).
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub extern "C" fn rs_qf_is_file_handler(prefix: c_char) -> bool {
+    matches!(prefix as u8, b'O' | b'P' | b'Q')
+}
+
+/// Validate entry fields for adding to quickfix list.
+///
+/// This validates the numeric fields in QfFields.
+/// Note: Cannot check filename/message as those are stored separately in C's qffields_T.
+#[no_mangle]
+pub extern "C" fn rs_qf_validate_fields(fields: &QfFields) -> QfFieldsValidation {
+    let has_lnum = fields.lnum > 0;
+    let has_col = fields.col > 0;
+    let has_end_lnum = fields.end_lnum > 0;
+    let has_end_col = fields.end_col > 0;
+
+    QfFieldsValidation {
+        has_lnum,
+        has_col,
+        has_end_lnum,
+        has_end_col,
+        has_buffer: fields.bnr > 0,
+        has_error_number: fields.enr != 0,
+    }
+}
+
+/// Result of validating QfFields (numeric fields only).
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct QfFieldsValidation {
+    /// Has a valid line number
+    pub has_lnum: bool,
+    /// Has a valid column
+    pub has_col: bool,
+    /// Has end line number
+    pub has_end_lnum: bool,
+    /// Has end column
+    pub has_end_col: bool,
+    /// Has buffer number
+    pub has_buffer: bool,
+    /// Has error number
+    pub has_error_number: bool,
+}
+
+/// Check if entry is considered printable (valid type character).
+///
+/// Returns true if the type character is printable or 0/1.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub extern "C" fn rs_qf_type_is_printable(type_char: c_char) -> bool {
+    let c = type_char as u8;
+    // Type 0 or 1 are valid (1 is legacy)
+    // Otherwise must be printable ASCII
+    c == 0 || c == 1 || (0x20..0x7F).contains(&c)
+}
+
+/// Normalize type character for storage.
+///
+/// If type is 1 or non-printable, returns 0.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_wrap)]
+pub extern "C" fn rs_qf_normalize_type(type_char: c_char) -> c_char {
+    let c = type_char as u8;
+    if c == 1 || (c > 0 && !(0x20..0x7F).contains(&c)) {
+        0
+    } else {
+        type_char
+    }
+}
+
+/// Parse match state - tracks parsing progress through format patterns.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct QfParseState {
+    /// Current format pattern index
+    pub fmt_idx: c_int,
+    /// Whether match was found
+    pub matched: bool,
+    /// The prefix of matched format
+    pub prefix: c_char,
+    /// The flags of matched format
+    pub flags: c_char,
+    /// Whether to continue from this format (%>)
+    pub conthere: bool,
+}
+
+impl QfParseState {
+    /// Create a new parse state.
+    pub const fn new() -> Self {
+        Self {
+            fmt_idx: 0,
+            matched: false,
+            prefix: 0,
+            flags: 0,
+            conthere: false,
+        }
+    }
+}
+
+/// Create new parse state.
+#[no_mangle]
+pub extern "C" fn rs_qf_parse_state_new() -> QfParseState {
+    QfParseState::new()
+}
+
+/// Reset parse state.
+#[no_mangle]
+pub extern "C" fn rs_qf_parse_state_reset(state: &mut QfParseState) {
+    *state = QfParseState::new();
+}
+
+/// Update parse state after a match.
+#[no_mangle]
+pub extern "C" fn rs_qf_parse_state_set_match(
+    state: &mut QfParseState,
+    fmt_idx: c_int,
+    prefix: c_char,
+    flags: c_char,
+    conthere: bool,
+) {
+    state.fmt_idx = fmt_idx;
+    state.matched = true;
+    state.prefix = prefix;
+    state.flags = flags;
+    state.conthere = conthere;
+}
+
+// =============================================================================
 // Phase Q1: Errorformat Buffer Size and Part Length
 // =============================================================================
 
@@ -2829,5 +3004,132 @@ mod tests {
             let len = rs_efm_option_part_len(std::ptr::null(), 0);
             assert_eq!(len, 0);
         }
+    }
+
+    // ==========================================================================
+    // Phase Q2: Line Parsing Helper Tests
+    // ==========================================================================
+
+    #[test]
+    #[allow(clippy::cast_possible_wrap)]
+    fn test_parse_prefix_type() {
+        assert_eq!(rs_qf_parse_prefix_type(b'E' as c_char), b'E' as c_char);
+        assert_eq!(rs_qf_parse_prefix_type(b'W' as c_char), b'W' as c_char);
+        assert_eq!(rs_qf_parse_prefix_type(b'I' as c_char), b'I' as c_char);
+        assert_eq!(rs_qf_parse_prefix_type(b'N' as c_char), b'N' as c_char);
+        assert_eq!(rs_qf_parse_prefix_type(b'A' as c_char), 0);
+        assert_eq!(rs_qf_parse_prefix_type(b'C' as c_char), 0);
+    }
+
+    #[test]
+    #[allow(clippy::cast_possible_wrap)]
+    fn test_should_skip_line() {
+        assert!(rs_qf_should_skip_line(b'-' as c_char));
+        assert!(!rs_qf_should_skip_line(b'+' as c_char));
+        assert!(!rs_qf_should_skip_line(0));
+    }
+
+    #[test]
+    #[allow(clippy::cast_possible_wrap)]
+    fn test_is_continuation() {
+        assert!(rs_qf_is_continuation(b'C' as c_char));
+        assert!(rs_qf_is_continuation(b'Z' as c_char));
+        assert!(!rs_qf_is_continuation(b'A' as c_char));
+        assert!(!rs_qf_is_continuation(b'E' as c_char));
+    }
+
+    #[test]
+    #[allow(clippy::cast_possible_wrap)]
+    fn test_starts_multiline() {
+        assert!(rs_qf_starts_multiline(b'A' as c_char));
+        assert!(rs_qf_starts_multiline(b'E' as c_char));
+        assert!(rs_qf_starts_multiline(b'W' as c_char));
+        assert!(rs_qf_starts_multiline(b'I' as c_char));
+        assert!(rs_qf_starts_multiline(b'N' as c_char));
+        assert!(!rs_qf_starts_multiline(b'C' as c_char));
+        assert!(!rs_qf_starts_multiline(b'Z' as c_char));
+    }
+
+    #[test]
+    #[allow(clippy::cast_possible_wrap)]
+    fn test_is_dir_handler() {
+        assert!(rs_qf_is_dir_handler(b'D' as c_char));
+        assert!(rs_qf_is_dir_handler(b'X' as c_char));
+        assert!(!rs_qf_is_dir_handler(b'O' as c_char));
+        assert!(!rs_qf_is_dir_handler(b'E' as c_char));
+    }
+
+    #[test]
+    #[allow(clippy::cast_possible_wrap)]
+    fn test_is_file_handler() {
+        assert!(rs_qf_is_file_handler(b'O' as c_char));
+        assert!(rs_qf_is_file_handler(b'P' as c_char));
+        assert!(rs_qf_is_file_handler(b'Q' as c_char));
+        assert!(!rs_qf_is_file_handler(b'D' as c_char));
+        assert!(!rs_qf_is_file_handler(b'E' as c_char));
+    }
+
+    #[test]
+    fn test_validate_fields() {
+        let mut fields = QfFields::new();
+        let result = rs_qf_validate_fields(&fields);
+        assert!(!result.has_lnum);
+        assert!(!result.has_col);
+        assert!(!result.has_buffer);
+
+        fields.lnum = 10;
+        let result = rs_qf_validate_fields(&fields);
+        assert!(result.has_lnum);
+        assert!(!result.has_col);
+
+        fields.col = 5;
+        let result = rs_qf_validate_fields(&fields);
+        assert!(result.has_lnum);
+        assert!(result.has_col);
+
+        fields.bnr = 1;
+        let result = rs_qf_validate_fields(&fields);
+        assert!(result.has_buffer);
+    }
+
+    #[test]
+    #[allow(clippy::cast_possible_wrap)]
+    fn test_type_is_printable() {
+        assert!(rs_qf_type_is_printable(0));
+        assert!(rs_qf_type_is_printable(1));
+        assert!(rs_qf_type_is_printable(b'E' as c_char));
+        assert!(rs_qf_type_is_printable(b'W' as c_char));
+        assert!(rs_qf_type_is_printable(b' ' as c_char));
+        assert!(!rs_qf_type_is_printable(0x7F_i8)); // DEL
+        assert!(!rs_qf_type_is_printable(0x1F_i8)); // Control char
+    }
+
+    #[test]
+    #[allow(clippy::cast_possible_wrap)]
+    fn test_normalize_type() {
+        assert_eq!(rs_qf_normalize_type(b'E' as c_char), b'E' as c_char);
+        assert_eq!(rs_qf_normalize_type(b'W' as c_char), b'W' as c_char);
+        assert_eq!(rs_qf_normalize_type(0), 0);
+        assert_eq!(rs_qf_normalize_type(1), 0); // Legacy type becomes 0
+        assert_eq!(rs_qf_normalize_type(0x7F_i8), 0); // DEL becomes 0
+    }
+
+    #[test]
+    fn test_parse_state() {
+        let mut state = rs_qf_parse_state_new();
+        assert!(!state.matched);
+        assert_eq!(state.fmt_idx, 0);
+        assert_eq!(state.prefix, 0);
+
+        rs_qf_parse_state_set_match(&mut state, 5, b'E' as c_char, b'-' as c_char, true);
+        assert!(state.matched);
+        assert_eq!(state.fmt_idx, 5);
+        assert_eq!(state.prefix, b'E' as c_char);
+        assert_eq!(state.flags, b'-' as c_char);
+        assert!(state.conthere);
+
+        rs_qf_parse_state_reset(&mut state);
+        assert!(!state.matched);
+        assert_eq!(state.fmt_idx, 0);
     }
 }
