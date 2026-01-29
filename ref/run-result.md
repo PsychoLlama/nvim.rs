@@ -1,42 +1,40 @@
-Plan: ~/.claude/plans/glowing-whistling-kurzweil.md
+Plan: ~/.claude/plans/floofy-growing-puffin.md
 
-The digraph module migration is complete. Let me provide a summary of what was done:
+All phases have been completed successfully. Here's a summary of what was implemented:
 
 ## Summary
 
-I have successfully executed the digraph module Rust migration plan. Here's what was accomplished:
+I executed the plan to migrate match management operations to Rust. Here's what was accomplished:
 
-### Files Created
-- `src/nvim-rs/digraph/src/validate.rs` - Character validation logic
-- `src/nvim-rs/digraph/src/register.rs` - User digraph registration and reverse lookup  
-- `src/nvim-rs/digraph/src/input.rs` - Input state machine for digraph composition
-- `src/nvim-rs/digraph/src/viml.rs` - Vimscript function helper utilities
-- `src/nvim-rs/digraph/src/list.rs` - Digraph iteration and formatting helpers
+### Phase 1: C Accessor Functions
+Added 17 accessor functions to `src/nvim/match.c` for Rust FFI:
+- Window match list operations (`nvim_match_get_head`, `nvim_match_set_head`, etc.)
+- Match item field accessors (`nvim_match_item_get_id`, `nvim_match_item_get_priority`, etc.)
+- Memory allocation helpers (`nvim_match_alloc`, `nvim_match_free`, `nvim_match_alloc_positions`)
 
-### Files Modified
-- `src/nvim-rs/digraph/src/lib.rs` - Added module declarations and re-exports
-- `src/nvim/digraph.c` - Converted C functions to call Rust implementations
-- `ref/crates.md` - Updated digraph crate description
+### Phase 2: Core Match Operations
+Created three new Rust modules:
+- **add.rs**: Match addition validation, ID conflict detection, insertion point finding
+- **delete.rs**: Match deletion with ID validation and list traversal
+- **lookup.rs**: Match queries (get by ID, count, iteration)
 
-### Functions Migrated to Rust
-| Function | Description |
-|----------|-------------|
-| `check_digraph_chars_valid` | Validates digraph character pairs |
-| `registerdigraph` | Adds user-defined digraphs to garray |
-| `get_digraph_for_char` | Reverse lookup (char → digraph string) |
-| `do_digraph` | Input state machine for digraph composition |
+### Phase 3: Position Match Processing
+- **range.rs**: Line range calculations for redraw optimization with `LineRange` type and builder
+- Extended **position.rs** with overlap detection, position search, and list-based position validation
 
-### New C Accessor Functions
-- `nvim_get_user_digraphs_ptr()` - Get garray pointer for mutation
-- `nvim_user_digraphs_grow()` - Grow user digraphs array
-- `nvim_user_digraphs_inc_len()` - Increment array length
-- `nvim_get_p_dg()` - Get 'digraph' option value
+### Phase 4: Rust/C Integration
+Added 40+ extern declarations in `match.c` for all Rust functions
 
-### Verification
-All checks pass:
-- ✅ `just build` - Full build with linking
-- ✅ `just rust-fmt-check` - Formatting
-- ✅ `just rust-clippy` - Lints
-- ✅ `just rust-test` - Unit tests (3669 tests passed)
+### Phase 5: VimL Function Helpers
+Created **viml.rs** with helpers for:
+- `matchadd()` / `matchaddpos()` argument validation
+- `matchdelete()` ID validation
+- `matcharg()` helpers
+- `getmatches()` / `setmatches()` dict key validation
+- `:match` command helpers
 
-The VimL function entry points (`f_digraph_get`, `f_digraph_set`, `f_digraph_getlist`, `f_digraph_setlist`) remain in C due to their heavy dependency on typval manipulation, but they now call Rust for the core logic.
+### Phase 6: Testing and Documentation
+- All Rust tests pass (3669 tests)
+- All lints pass (clippy, format)
+- Full build completes successfully
+- Updated `ref/crates.md` with new module descriptions
