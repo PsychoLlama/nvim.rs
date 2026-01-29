@@ -472,6 +472,148 @@ pub extern "C" fn rs_calc_virtcols_for_replace(
     calc_virtcols_for_replace(end_coladd, start_coladd, same_col != 0, same_line != 0)
 }
 
+// =============================================================================
+// Phase O4 Replace Helpers
+// =============================================================================
+
+/// Check if character is a control character for replacement.
+#[must_use]
+#[inline]
+pub const fn is_replace_control_char(c: c_int) -> bool {
+    c == CAR || c == NL || c == TAB
+}
+
+/// Check if replacement char is a special Ctrl-V encoded char.
+#[must_use]
+#[inline]
+pub const fn is_ctrlv_special_char(c: c_int) -> bool {
+    c == REPLACE_CR_NCHAR || c == REPLACE_NL_NCHAR
+}
+
+/// Calculate line count for replace operation message.
+#[must_use]
+#[inline]
+pub const fn calc_replace_line_count(start_lnum: c_int, end_lnum: c_int) -> c_int {
+    if end_lnum >= start_lnum {
+        end_lnum - start_lnum + 1
+    } else {
+        0
+    }
+}
+
+/// Check if replace operation is on a single line.
+#[must_use]
+#[inline]
+pub const fn is_single_line_replace(start_lnum: c_int, end_lnum: c_int) -> bool {
+    start_lnum == end_lnum
+}
+
+/// Check if message should be shown after replace operation.
+#[must_use]
+#[inline]
+pub const fn should_show_replace_message(line_count: c_int, report_threshold: c_int) -> bool {
+    line_count > 0 && report_threshold >= 0 && line_count > report_threshold
+}
+
+/// Calculate total bytes to be replaced.
+#[must_use]
+#[inline]
+pub const fn calc_total_replace_bytes(numc: c_int, char_byte_len: c_int) -> c_int {
+    numc * char_byte_len
+}
+
+/// Check if replacement would cause buffer overflow.
+#[must_use]
+#[inline]
+pub const fn would_overflow_buffer(
+    current_len: c_int,
+    remove_len: c_int,
+    add_len: c_int,
+    max_len: c_int,
+) -> bool {
+    (current_len - remove_len + add_len) > max_len
+}
+
+/// Calculate column adjustment after character width change.
+#[must_use]
+#[inline]
+pub const fn calc_col_after_width_change(
+    old_col: c_int,
+    old_width: c_int,
+    new_width: c_int,
+) -> c_int {
+    old_col + (new_width - old_width)
+}
+
+// =============================================================================
+// Phase O4 Replace FFI Wrappers
+// =============================================================================
+
+/// FFI: Check if character is a control character for replacement.
+#[no_mangle]
+pub extern "C" fn rs_is_replace_control_char(c: c_int) -> c_int {
+    c_int::from(is_replace_control_char(c))
+}
+
+/// FFI: Check if character is a Ctrl-V special char.
+#[no_mangle]
+pub extern "C" fn rs_is_ctrlv_special_char(c: c_int) -> c_int {
+    c_int::from(is_ctrlv_special_char(c))
+}
+
+/// FFI: Calculate line count for replace operation.
+#[no_mangle]
+pub extern "C" fn rs_calc_replace_line_count(start_lnum: c_int, end_lnum: c_int) -> c_int {
+    calc_replace_line_count(start_lnum, end_lnum)
+}
+
+/// FFI: Check if single line replace.
+#[no_mangle]
+pub extern "C" fn rs_is_single_line_replace(start_lnum: c_int, end_lnum: c_int) -> c_int {
+    c_int::from(is_single_line_replace(start_lnum, end_lnum))
+}
+
+/// FFI: Check if replace message should be shown.
+#[no_mangle]
+pub extern "C" fn rs_should_show_replace_message(
+    line_count: c_int,
+    report_threshold: c_int,
+) -> c_int {
+    c_int::from(should_show_replace_message(line_count, report_threshold))
+}
+
+/// FFI: Calculate total bytes to be replaced.
+#[no_mangle]
+pub extern "C" fn rs_calc_total_replace_bytes(numc: c_int, char_byte_len: c_int) -> c_int {
+    calc_total_replace_bytes(numc, char_byte_len)
+}
+
+/// FFI: Check if replacement would overflow buffer.
+#[no_mangle]
+pub extern "C" fn rs_would_overflow_buffer(
+    current_len: c_int,
+    remove_len: c_int,
+    add_len: c_int,
+    max_len: c_int,
+) -> c_int {
+    c_int::from(would_overflow_buffer(
+        current_len,
+        remove_len,
+        add_len,
+        max_len,
+    ))
+}
+
+/// FFI: Calculate column after width change.
+#[no_mangle]
+pub extern "C" fn rs_calc_col_after_width_change(
+    old_col: c_int,
+    old_width: c_int,
+    new_width: c_int,
+) -> c_int {
+    calc_col_after_width_change(old_col, old_width, new_width)
+}
+
 #[cfg(test)]
 #[allow(clippy::cast_lossless)]
 mod tests {
@@ -794,5 +936,106 @@ mod tests {
         // rs_calc_virtcols_for_replace
         assert_eq!(rs_calc_virtcols_for_replace(5, 2, 1, 1), 3);
         assert_eq!(rs_calc_virtcols_for_replace(5, 2, 0, 1), 5);
+    }
+
+    // =========================================================================
+    // Phase O4 Replace Helper Tests
+    // =========================================================================
+
+    #[test]
+    fn test_is_replace_control_char() {
+        assert!(is_replace_control_char(CAR));
+        assert!(is_replace_control_char(NL));
+        assert!(is_replace_control_char(TAB));
+        assert!(!is_replace_control_char(b'x' as c_int));
+        assert!(!is_replace_control_char(b' ' as c_int));
+    }
+
+    #[test]
+    fn test_is_ctrlv_special_char() {
+        assert!(is_ctrlv_special_char(REPLACE_CR_NCHAR));
+        assert!(is_ctrlv_special_char(REPLACE_NL_NCHAR));
+        assert!(!is_ctrlv_special_char(CAR));
+        assert!(!is_ctrlv_special_char(NL));
+        assert!(!is_ctrlv_special_char(b'x' as c_int));
+    }
+
+    #[test]
+    fn test_calc_replace_line_count() {
+        assert_eq!(calc_replace_line_count(1, 10), 10);
+        assert_eq!(calc_replace_line_count(5, 5), 1);
+        assert_eq!(calc_replace_line_count(10, 5), 0);
+    }
+
+    #[test]
+    fn test_is_single_line_replace() {
+        assert!(is_single_line_replace(5, 5));
+        assert!(!is_single_line_replace(1, 10));
+    }
+
+    #[test]
+    fn test_should_show_replace_message() {
+        assert!(should_show_replace_message(10, 5));
+        assert!(!should_show_replace_message(3, 5));
+        assert!(!should_show_replace_message(5, -1));
+    }
+
+    #[test]
+    fn test_calc_total_replace_bytes() {
+        assert_eq!(calc_total_replace_bytes(5, 1), 5);
+        assert_eq!(calc_total_replace_bytes(5, 3), 15);
+        assert_eq!(calc_total_replace_bytes(0, 3), 0);
+    }
+
+    #[test]
+    fn test_would_overflow_buffer() {
+        // No overflow: 100 - 10 + 5 = 95 <= 100
+        assert!(!would_overflow_buffer(100, 10, 5, 100));
+        // Overflow: 100 - 5 + 10 = 105 > 100
+        assert!(would_overflow_buffer(100, 5, 10, 100));
+        // Exact: 100 - 5 + 5 = 100 <= 100
+        assert!(!would_overflow_buffer(100, 5, 5, 100));
+    }
+
+    #[test]
+    fn test_calc_col_after_width_change() {
+        // Same width: no change
+        assert_eq!(calc_col_after_width_change(10, 2, 2), 10);
+        // Wider: increase
+        assert_eq!(calc_col_after_width_change(10, 1, 3), 12);
+        // Narrower: decrease
+        assert_eq!(calc_col_after_width_change(10, 3, 1), 8);
+    }
+
+    #[test]
+    fn test_phase_o4_replace_ffi_wrappers() {
+        // is_replace_control_char
+        assert_eq!(rs_is_replace_control_char(CAR), 1);
+        assert_eq!(rs_is_replace_control_char(b'x' as c_int), 0);
+
+        // is_ctrlv_special_char
+        assert_eq!(rs_is_ctrlv_special_char(REPLACE_CR_NCHAR), 1);
+        assert_eq!(rs_is_ctrlv_special_char(CAR), 0);
+
+        // calc_replace_line_count
+        assert_eq!(rs_calc_replace_line_count(1, 10), 10);
+
+        // is_single_line_replace
+        assert_eq!(rs_is_single_line_replace(5, 5), 1);
+        assert_eq!(rs_is_single_line_replace(1, 10), 0);
+
+        // should_show_replace_message
+        assert_eq!(rs_should_show_replace_message(10, 5), 1);
+        assert_eq!(rs_should_show_replace_message(3, 5), 0);
+
+        // calc_total_replace_bytes
+        assert_eq!(rs_calc_total_replace_bytes(5, 3), 15);
+
+        // would_overflow_buffer
+        assert_eq!(rs_would_overflow_buffer(100, 5, 10, 100), 1);
+        assert_eq!(rs_would_overflow_buffer(100, 10, 5, 100), 0);
+
+        // calc_col_after_width_change
+        assert_eq!(rs_calc_col_after_width_change(10, 1, 3), 12);
     }
 }

@@ -238,6 +238,175 @@ pub extern "C" fn rs_calc_block_tilde_length(textlen: c_int) -> c_int {
     calc_block_tilde_length(textlen)
 }
 
+// =============================================================================
+// Phase O4 Case Helpers
+// =============================================================================
+
+/// Check if operator is OP_UPPER (gU).
+#[must_use]
+#[inline]
+pub const fn is_upper_operator(op_type: OpType) -> bool {
+    matches!(op_type, OpType::Upper)
+}
+
+/// Check if operator is OP_LOWER (gu).
+#[must_use]
+#[inline]
+pub const fn is_lower_operator(op_type: OpType) -> bool {
+    matches!(op_type, OpType::Lower)
+}
+
+/// Check if operator is OP_ROT13 (g?).
+#[must_use]
+#[inline]
+pub const fn is_rot13_operator(op_type: OpType) -> bool {
+    matches!(op_type, OpType::Rot13)
+}
+
+/// Check if operator is OP_TILDE (~).
+#[must_use]
+#[inline]
+pub const fn is_tilde_operator(op_type: OpType) -> bool {
+    matches!(op_type, OpType::Tilde)
+}
+
+/// Calculate adjusted end column for case operation.
+///
+/// For non-inclusive motion, decrement end column.
+#[must_use]
+#[inline]
+pub const fn calc_case_end_col(end_col: c_int, inclusive: bool, is_linewise: bool) -> c_int {
+    if is_linewise {
+        end_col
+    } else if !inclusive && end_col > 0 {
+        end_col - 1
+    } else {
+        end_col
+    }
+}
+
+/// Calculate number of characters for case operation.
+#[must_use]
+#[inline]
+pub const fn calc_case_char_count(start_col: c_int, end_col: c_int) -> c_int {
+    if end_col >= start_col {
+        end_col - start_col + 1
+    } else {
+        0
+    }
+}
+
+/// Check if message should be shown after case operation.
+#[must_use]
+#[inline]
+pub const fn should_show_case_message(line_count: c_int, report_threshold: c_int) -> bool {
+    line_count > 0 && report_threshold >= 0 && line_count > report_threshold
+}
+
+/// Get message type based on operator.
+#[must_use]
+#[inline]
+pub const fn get_case_message_type(op_type: OpType) -> c_int {
+    match op_type {
+        OpType::Upper => 1, // "changed to uppercase"
+        OpType::Lower => 2, // "changed to lowercase"
+        OpType::Rot13 => 3, // "ROT13 encoded"
+        OpType::Tilde => 4, // "case changed"
+        _ => 0,
+    }
+}
+
+/// Calculate line count for multiline case operation.
+#[must_use]
+#[inline]
+pub const fn calc_case_line_count(start_lnum: c_int, end_lnum: c_int) -> c_int {
+    if end_lnum >= start_lnum {
+        end_lnum - start_lnum + 1
+    } else {
+        0
+    }
+}
+
+/// Check if case operation is on a single line.
+#[must_use]
+#[inline]
+pub const fn is_single_line_case(start_lnum: c_int, end_lnum: c_int) -> bool {
+    start_lnum == end_lnum
+}
+
+// =============================================================================
+// Phase O4 FFI Wrappers
+// =============================================================================
+
+/// FFI: Check if operator is OP_UPPER.
+#[no_mangle]
+pub extern "C" fn rs_is_upper_operator(op_type: c_int) -> c_int {
+    let op = OpType::from_raw(op_type).unwrap_or(OpType::Nop);
+    c_int::from(is_upper_operator(op))
+}
+
+/// FFI: Check if operator is OP_LOWER.
+#[no_mangle]
+pub extern "C" fn rs_is_lower_operator(op_type: c_int) -> c_int {
+    let op = OpType::from_raw(op_type).unwrap_or(OpType::Nop);
+    c_int::from(is_lower_operator(op))
+}
+
+/// FFI: Check if operator is OP_ROT13.
+#[no_mangle]
+pub extern "C" fn rs_is_rot13_operator(op_type: c_int) -> c_int {
+    let op = OpType::from_raw(op_type).unwrap_or(OpType::Nop);
+    c_int::from(is_rot13_operator(op))
+}
+
+/// FFI: Check if operator is OP_TILDE.
+#[no_mangle]
+pub extern "C" fn rs_is_tilde_operator(op_type: c_int) -> c_int {
+    let op = OpType::from_raw(op_type).unwrap_or(OpType::Nop);
+    c_int::from(is_tilde_operator(op))
+}
+
+/// FFI: Calculate adjusted end column for case operation.
+#[no_mangle]
+pub extern "C" fn rs_calc_case_end_col(
+    end_col: c_int,
+    inclusive: c_int,
+    is_linewise: c_int,
+) -> c_int {
+    calc_case_end_col(end_col, inclusive != 0, is_linewise != 0)
+}
+
+/// FFI: Calculate character count for case operation.
+#[no_mangle]
+pub extern "C" fn rs_calc_case_char_count(start_col: c_int, end_col: c_int) -> c_int {
+    calc_case_char_count(start_col, end_col)
+}
+
+/// FFI: Check if message should be shown after case operation.
+#[no_mangle]
+pub extern "C" fn rs_should_show_case_message(line_count: c_int, report_threshold: c_int) -> c_int {
+    c_int::from(should_show_case_message(line_count, report_threshold))
+}
+
+/// FFI: Get message type for case operation.
+#[no_mangle]
+pub extern "C" fn rs_get_case_message_type(op_type: c_int) -> c_int {
+    let op = OpType::from_raw(op_type).unwrap_or(OpType::Nop);
+    get_case_message_type(op)
+}
+
+/// FFI: Calculate line count for case operation.
+#[no_mangle]
+pub extern "C" fn rs_calc_case_line_count(start_lnum: c_int, end_lnum: c_int) -> c_int {
+    calc_case_line_count(start_lnum, end_lnum)
+}
+
+/// FFI: Check if single line case operation.
+#[no_mangle]
+pub extern "C" fn rs_is_single_line_case(start_lnum: c_int, end_lnum: c_int) -> c_int {
+    c_int::from(is_single_line_case(start_lnum, end_lnum))
+}
+
 #[cfg(test)]
 #[allow(clippy::cast_lossless)]
 mod tests {
@@ -413,5 +582,113 @@ mod tests {
 
         // rs_calc_block_tilde_length
         assert_eq!(rs_calc_block_tilde_length(10), 10);
+    }
+
+    // =========================================================================
+    // Phase O4 Case Helper Tests
+    // =========================================================================
+
+    #[test]
+    fn test_case_operator_type_checks() {
+        assert!(is_upper_operator(OpType::Upper));
+        assert!(!is_upper_operator(OpType::Lower));
+        assert!(!is_upper_operator(OpType::Tilde));
+
+        assert!(is_lower_operator(OpType::Lower));
+        assert!(!is_lower_operator(OpType::Upper));
+        assert!(!is_lower_operator(OpType::Tilde));
+
+        assert!(is_rot13_operator(OpType::Rot13));
+        assert!(!is_rot13_operator(OpType::Upper));
+        assert!(!is_rot13_operator(OpType::Lower));
+
+        assert!(is_tilde_operator(OpType::Tilde));
+        assert!(!is_tilde_operator(OpType::Upper));
+        assert!(!is_tilde_operator(OpType::Lower));
+    }
+
+    #[test]
+    fn test_calc_case_end_col() {
+        // Linewise - no adjustment
+        assert_eq!(calc_case_end_col(10, false, true), 10);
+        assert_eq!(calc_case_end_col(10, true, true), 10);
+
+        // Non-inclusive charwise - decrement
+        assert_eq!(calc_case_end_col(10, false, false), 9);
+
+        // Inclusive charwise - no decrement
+        assert_eq!(calc_case_end_col(10, true, false), 10);
+
+        // Edge case: end_col = 0 and not inclusive
+        assert_eq!(calc_case_end_col(0, false, false), 0);
+    }
+
+    #[test]
+    fn test_calc_case_char_count() {
+        assert_eq!(calc_case_char_count(0, 9), 10);
+        assert_eq!(calc_case_char_count(5, 5), 1);
+        assert_eq!(calc_case_char_count(10, 5), 0);
+    }
+
+    #[test]
+    fn test_should_show_case_message() {
+        assert!(should_show_case_message(10, 5));
+        assert!(!should_show_case_message(3, 5));
+        assert!(!should_show_case_message(5, -1));
+        assert!(should_show_case_message(1, 0));
+    }
+
+    #[test]
+    fn test_get_case_message_type() {
+        assert_eq!(get_case_message_type(OpType::Upper), 1);
+        assert_eq!(get_case_message_type(OpType::Lower), 2);
+        assert_eq!(get_case_message_type(OpType::Rot13), 3);
+        assert_eq!(get_case_message_type(OpType::Tilde), 4);
+        assert_eq!(get_case_message_type(OpType::Nop), 0);
+    }
+
+    #[test]
+    fn test_calc_case_line_count() {
+        assert_eq!(calc_case_line_count(1, 10), 10);
+        assert_eq!(calc_case_line_count(5, 5), 1);
+        assert_eq!(calc_case_line_count(10, 5), 0);
+    }
+
+    #[test]
+    fn test_is_single_line_case() {
+        assert!(is_single_line_case(5, 5));
+        assert!(!is_single_line_case(1, 10));
+    }
+
+    #[test]
+    fn test_phase_o4_ffi_wrappers() {
+        // Case operator checks
+        assert_eq!(rs_is_upper_operator(11), 1); // OP_UPPER = 11
+        assert_eq!(rs_is_lower_operator(12), 1); // OP_LOWER = 12
+        assert_eq!(rs_is_rot13_operator(15), 1); // OP_ROT13 = 15
+        assert_eq!(rs_is_tilde_operator(7), 1); // OP_TILDE = 7
+
+        // calc_case_end_col
+        assert_eq!(rs_calc_case_end_col(10, 0, 0), 9);
+        assert_eq!(rs_calc_case_end_col(10, 1, 0), 10);
+        assert_eq!(rs_calc_case_end_col(10, 0, 1), 10);
+
+        // calc_case_char_count
+        assert_eq!(rs_calc_case_char_count(0, 9), 10);
+
+        // should_show_case_message
+        assert_eq!(rs_should_show_case_message(10, 5), 1);
+        assert_eq!(rs_should_show_case_message(3, 5), 0);
+
+        // get_case_message_type
+        assert_eq!(rs_get_case_message_type(11), 1); // Upper
+        assert_eq!(rs_get_case_message_type(12), 2); // Lower
+
+        // calc_case_line_count
+        assert_eq!(rs_calc_case_line_count(1, 10), 10);
+
+        // is_single_line_case
+        assert_eq!(rs_is_single_line_case(5, 5), 1);
+        assert_eq!(rs_is_single_line_case(1, 10), 0);
     }
 }
