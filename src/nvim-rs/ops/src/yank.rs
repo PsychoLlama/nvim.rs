@@ -621,6 +621,181 @@ pub const fn needs_block_yank_prep(motion_type: MotionType) -> bool {
 }
 
 // =============================================================================
+// Phase O6 Clipboard & System Integration Helpers
+// =============================================================================
+
+/// Check if register is the system clipboard ('+').
+#[must_use]
+#[inline]
+pub const fn is_system_clipboard_register(regname: c_int) -> bool {
+    regname == b'+' as c_int
+}
+
+/// Check if register is the selection clipboard ('*').
+#[must_use]
+#[inline]
+pub const fn is_selection_register(regname: c_int) -> bool {
+    regname == b'*' as c_int
+}
+
+/// Check if register is the unnamed register.
+#[must_use]
+#[inline]
+pub const fn is_unnamed_register(regname: c_int) -> bool {
+    regname == 0 || regname == b'"' as c_int
+}
+
+/// Check if register is the small delete register ('-').
+#[must_use]
+#[inline]
+pub const fn is_small_delete_register(regname: c_int) -> bool {
+    regname == b'-' as c_int
+}
+
+/// Check if register is the search register ('/').
+#[must_use]
+#[inline]
+pub const fn is_search_register(regname: c_int) -> bool {
+    regname == b'/' as c_int
+}
+
+/// Check if register is the last command register (':').
+#[must_use]
+#[inline]
+pub const fn is_command_register(regname: c_int) -> bool {
+    regname == b':' as c_int
+}
+
+/// Check if register is the expression register ('=').
+#[must_use]
+#[inline]
+pub const fn is_expression_register(regname: c_int) -> bool {
+    regname == b'=' as c_int
+}
+
+/// Check if register is the last inserted text register ('.').
+#[must_use]
+#[inline]
+pub const fn is_last_insert_register(regname: c_int) -> bool {
+    regname == b'.' as c_int
+}
+
+/// Check if register is the alternate buffer register ('#').
+#[must_use]
+#[inline]
+pub const fn is_alternate_register(regname: c_int) -> bool {
+    regname == b'#' as c_int
+}
+
+/// Check if register is the current file name register ('%').
+#[must_use]
+#[inline]
+pub const fn is_filename_register(regname: c_int) -> bool {
+    regname == b'%' as c_int
+}
+
+/// Check if register is read-only.
+#[must_use]
+#[inline]
+pub const fn is_readonly_register(regname: c_int) -> bool {
+    regname == b'.' as c_int  // last insert
+        || regname == b':' as c_int  // command
+        || regname == b'/' as c_int  // search
+        || regname == b'%' as c_int  // file name
+        || regname == b'#' as c_int // alternate
+}
+
+/// Check if register needs async clipboard operation.
+#[must_use]
+#[inline]
+pub const fn needs_async_clipboard(regname: c_int) -> bool {
+    regname == b'+' as c_int || regname == b'*' as c_int
+}
+
+/// Get the corresponding register index for numbered registers.
+#[must_use]
+#[inline]
+pub const fn get_numbered_register_index(regname: c_int) -> c_int {
+    if regname >= b'0' as c_int && regname <= b'9' as c_int {
+        regname - b'0' as c_int
+    } else {
+        -1
+    }
+}
+
+/// Get the corresponding register index for named registers (a-z).
+#[must_use]
+#[inline]
+pub const fn get_named_register_index(regname: c_int) -> c_int {
+    if regname >= b'a' as c_int && regname <= b'z' as c_int {
+        regname - b'a' as c_int + 10 // After numbered registers 0-9
+    } else {
+        -1
+    }
+}
+
+/// Check if clipboard provider is available.
+#[must_use]
+#[inline]
+pub const fn clipboard_provider_available(has_provider: bool) -> bool {
+    has_provider
+}
+
+/// Determine if system clipboard should sync with unnamed.
+#[must_use]
+#[inline]
+pub const fn should_sync_unnamed_clipboard(clipboard_unnamed: bool, regname: c_int) -> bool {
+    clipboard_unnamed && regname == 0
+}
+
+/// Calculate clipboard register type.
+#[must_use]
+#[inline]
+pub const fn get_clipboard_type(regname: c_int) -> c_int {
+    if regname == b'+' as c_int {
+        1 // CLIPBOARD
+    } else if regname == b'*' as c_int {
+        2 // PRIMARY (selection)
+    } else {
+        0 // None
+    }
+}
+
+/// Check if yank should rotate numbered registers.
+#[must_use]
+#[inline]
+pub const fn should_rotate_numbered_registers(
+    regname: c_int,
+    motion_type: MotionType,
+    use_reg_one: bool,
+) -> bool {
+    // Rotate when using unnamed register and linewise, or when use_reg_one is set
+    (regname == 0 && matches!(motion_type, MotionType::LineWise)) || use_reg_one
+}
+
+/// Check if delete should use small delete register.
+#[must_use]
+#[inline]
+pub const fn should_use_small_delete(
+    regname: c_int,
+    motion_type: MotionType,
+    line_count: c_int,
+) -> bool {
+    regname == 0 && !matches!(motion_type, MotionType::LineWise) && line_count == 1
+}
+
+/// Get register name for display.
+#[must_use]
+#[inline]
+pub const fn get_register_display_char(regname: c_int) -> c_int {
+    if regname == 0 {
+        b'"' as c_int
+    } else {
+        regname
+    }
+}
+
+// =============================================================================
 // FFI Wrappers for Phase O1 Additions
 // =============================================================================
 
@@ -694,6 +869,138 @@ pub extern "C" fn rs_needs_charwise_yank_prep(motion_type: c_int) -> c_int {
 pub extern "C" fn rs_needs_block_yank_prep(motion_type: c_int) -> c_int {
     let mt = MotionType::from_raw(motion_type);
     c_int::from(needs_block_yank_prep(mt))
+}
+
+// =============================================================================
+// FFI Wrappers for Phase O6 Additions
+// =============================================================================
+
+/// FFI: Check if system clipboard register.
+#[no_mangle]
+pub extern "C" fn rs_is_system_clipboard_register(regname: c_int) -> c_int {
+    c_int::from(is_system_clipboard_register(regname))
+}
+
+/// FFI: Check if selection register.
+#[no_mangle]
+pub extern "C" fn rs_is_selection_register(regname: c_int) -> c_int {
+    c_int::from(is_selection_register(regname))
+}
+
+/// FFI: Check if unnamed register.
+#[no_mangle]
+pub extern "C" fn rs_is_unnamed_register(regname: c_int) -> c_int {
+    c_int::from(is_unnamed_register(regname))
+}
+
+/// FFI: Check if small delete register.
+#[no_mangle]
+pub extern "C" fn rs_is_small_delete_register(regname: c_int) -> c_int {
+    c_int::from(is_small_delete_register(regname))
+}
+
+/// FFI: Check if search register.
+#[no_mangle]
+pub extern "C" fn rs_is_search_register(regname: c_int) -> c_int {
+    c_int::from(is_search_register(regname))
+}
+
+/// FFI: Check if command register.
+#[no_mangle]
+pub extern "C" fn rs_is_command_register(regname: c_int) -> c_int {
+    c_int::from(is_command_register(regname))
+}
+
+/// FFI: Check if expression register.
+#[no_mangle]
+pub extern "C" fn rs_is_expression_register(regname: c_int) -> c_int {
+    c_int::from(is_expression_register(regname))
+}
+
+// Note: rs_is_last_insert_register already exists in register crate
+
+/// FFI: Check if alternate register.
+#[no_mangle]
+pub extern "C" fn rs_is_alternate_register(regname: c_int) -> c_int {
+    c_int::from(is_alternate_register(regname))
+}
+
+/// FFI: Check if filename register.
+#[no_mangle]
+pub extern "C" fn rs_is_filename_register(regname: c_int) -> c_int {
+    c_int::from(is_filename_register(regname))
+}
+
+// Note: rs_is_readonly_register already exists in ex_docmd crate
+
+/// FFI: Check if needs async clipboard.
+#[no_mangle]
+pub extern "C" fn rs_needs_async_clipboard(regname: c_int) -> c_int {
+    c_int::from(needs_async_clipboard(regname))
+}
+
+/// FFI: Get numbered register index.
+#[no_mangle]
+pub extern "C" fn rs_get_numbered_register_index(regname: c_int) -> c_int {
+    get_numbered_register_index(regname)
+}
+
+/// FFI: Get named register index.
+#[no_mangle]
+pub extern "C" fn rs_get_named_register_index(regname: c_int) -> c_int {
+    get_named_register_index(regname)
+}
+
+// Note: rs_clipboard_provider_available already exists in clipboard crate
+
+/// FFI: Check if should sync unnamed clipboard.
+#[no_mangle]
+pub extern "C" fn rs_should_sync_unnamed_clipboard(
+    clipboard_unnamed: c_int,
+    regname: c_int,
+) -> c_int {
+    c_int::from(should_sync_unnamed_clipboard(
+        clipboard_unnamed != 0,
+        regname,
+    ))
+}
+
+/// FFI: Get clipboard type.
+#[no_mangle]
+pub extern "C" fn rs_get_clipboard_type(regname: c_int) -> c_int {
+    get_clipboard_type(regname)
+}
+
+/// FFI: Check if should rotate numbered registers.
+#[no_mangle]
+pub extern "C" fn rs_should_rotate_numbered_registers(
+    regname: c_int,
+    motion_type: c_int,
+    use_reg_one: c_int,
+) -> c_int {
+    let mt = MotionType::from_raw(motion_type);
+    c_int::from(should_rotate_numbered_registers(
+        regname,
+        mt,
+        use_reg_one != 0,
+    ))
+}
+
+/// FFI: Check if should use small delete register.
+#[no_mangle]
+pub extern "C" fn rs_should_use_small_delete(
+    regname: c_int,
+    motion_type: c_int,
+    line_count: c_int,
+) -> c_int {
+    let mt = MotionType::from_raw(motion_type);
+    c_int::from(should_use_small_delete(regname, mt, line_count))
+}
+
+/// FFI: Get register display char.
+#[no_mangle]
+pub extern "C" fn rs_get_register_display_char(regname: c_int) -> c_int {
+    get_register_display_char(regname)
 }
 
 #[cfg(test)]
@@ -1060,5 +1367,205 @@ mod tests {
 
         // rs_needs_block_yank_prep (blockwise=2)
         assert_eq!(rs_needs_block_yank_prep(2), 1);
+    }
+
+    // =========================================================================
+    // Phase O6 Clipboard & System Integration Tests
+    // =========================================================================
+
+    #[test]
+    fn test_is_system_clipboard_register() {
+        assert!(is_system_clipboard_register(b'+' as c_int));
+        assert!(!is_system_clipboard_register(b'*' as c_int));
+        assert!(!is_system_clipboard_register(b'a' as c_int));
+    }
+
+    #[test]
+    fn test_is_selection_register() {
+        assert!(is_selection_register(b'*' as c_int));
+        assert!(!is_selection_register(b'+' as c_int));
+        assert!(!is_selection_register(b'a' as c_int));
+    }
+
+    #[test]
+    fn test_is_unnamed_register() {
+        assert!(is_unnamed_register(0));
+        assert!(is_unnamed_register(b'"' as c_int));
+        assert!(!is_unnamed_register(b'a' as c_int));
+    }
+
+    #[test]
+    fn test_is_small_delete_register() {
+        assert!(is_small_delete_register(b'-' as c_int));
+        assert!(!is_small_delete_register(b'a' as c_int));
+    }
+
+    #[test]
+    fn test_is_search_register() {
+        assert!(is_search_register(b'/' as c_int));
+        assert!(!is_search_register(b':' as c_int));
+    }
+
+    #[test]
+    fn test_is_command_register() {
+        assert!(is_command_register(b':' as c_int));
+        assert!(!is_command_register(b'/' as c_int));
+    }
+
+    #[test]
+    fn test_is_expression_register() {
+        assert!(is_expression_register(b'=' as c_int));
+        assert!(!is_expression_register(b'a' as c_int));
+    }
+
+    #[test]
+    fn test_is_last_insert_register() {
+        assert!(is_last_insert_register(b'.' as c_int));
+        assert!(!is_last_insert_register(b'a' as c_int));
+    }
+
+    #[test]
+    fn test_is_alternate_register() {
+        assert!(is_alternate_register(b'#' as c_int));
+        assert!(!is_alternate_register(b'%' as c_int));
+    }
+
+    #[test]
+    fn test_is_filename_register() {
+        assert!(is_filename_register(b'%' as c_int));
+        assert!(!is_filename_register(b'#' as c_int));
+    }
+
+    #[test]
+    fn test_is_readonly_register() {
+        assert!(is_readonly_register(b'.' as c_int));
+        assert!(is_readonly_register(b':' as c_int));
+        assert!(is_readonly_register(b'/' as c_int));
+        assert!(is_readonly_register(b'%' as c_int));
+        assert!(is_readonly_register(b'#' as c_int));
+        assert!(!is_readonly_register(b'a' as c_int));
+        assert!(!is_readonly_register(b'+' as c_int));
+    }
+
+    #[test]
+    fn test_needs_async_clipboard() {
+        assert!(needs_async_clipboard(b'+' as c_int));
+        assert!(needs_async_clipboard(b'*' as c_int));
+        assert!(!needs_async_clipboard(b'a' as c_int));
+    }
+
+    #[test]
+    fn test_get_numbered_register_index() {
+        assert_eq!(get_numbered_register_index(b'0' as c_int), 0);
+        assert_eq!(get_numbered_register_index(b'5' as c_int), 5);
+        assert_eq!(get_numbered_register_index(b'9' as c_int), 9);
+        assert_eq!(get_numbered_register_index(b'a' as c_int), -1);
+    }
+
+    #[test]
+    fn test_get_named_register_index() {
+        assert_eq!(get_named_register_index(b'a' as c_int), 10);
+        assert_eq!(get_named_register_index(b'z' as c_int), 35);
+        assert_eq!(get_named_register_index(b'0' as c_int), -1);
+    }
+
+    #[test]
+    fn test_clipboard_provider_available() {
+        assert!(clipboard_provider_available(true));
+        assert!(!clipboard_provider_available(false));
+    }
+
+    #[test]
+    fn test_should_sync_unnamed_clipboard() {
+        assert!(should_sync_unnamed_clipboard(true, 0));
+        assert!(!should_sync_unnamed_clipboard(true, b'a' as c_int));
+        assert!(!should_sync_unnamed_clipboard(false, 0));
+    }
+
+    #[test]
+    fn test_get_clipboard_type() {
+        assert_eq!(get_clipboard_type(b'+' as c_int), 1);
+        assert_eq!(get_clipboard_type(b'*' as c_int), 2);
+        assert_eq!(get_clipboard_type(b'a' as c_int), 0);
+    }
+
+    #[test]
+    fn test_should_rotate_numbered_registers() {
+        // Unnamed + linewise
+        assert!(should_rotate_numbered_registers(
+            0,
+            MotionType::LineWise,
+            false
+        ));
+        // Unnamed + charwise without use_reg_one
+        assert!(!should_rotate_numbered_registers(
+            0,
+            MotionType::CharWise,
+            false
+        ));
+        // Any register with use_reg_one
+        assert!(should_rotate_numbered_registers(
+            b'a' as c_int,
+            MotionType::CharWise,
+            true
+        ));
+    }
+
+    #[test]
+    fn test_should_use_small_delete() {
+        // Unnamed, charwise, single line
+        assert!(should_use_small_delete(0, MotionType::CharWise, 1));
+        // Unnamed, linewise
+        assert!(!should_use_small_delete(0, MotionType::LineWise, 1));
+        // Unnamed, charwise, multi-line
+        assert!(!should_use_small_delete(0, MotionType::CharWise, 5));
+        // Named register
+        assert!(!should_use_small_delete(
+            b'a' as c_int,
+            MotionType::CharWise,
+            1
+        ));
+    }
+
+    #[test]
+    fn test_get_register_display_char() {
+        assert_eq!(get_register_display_char(0), b'"' as c_int);
+        assert_eq!(get_register_display_char(b'a' as c_int), b'a' as c_int);
+    }
+
+    #[test]
+    fn test_phase_o6_ffi_wrappers() {
+        // Register type checks
+        assert_eq!(rs_is_system_clipboard_register(b'+' as c_int), 1);
+        assert_eq!(rs_is_selection_register(b'*' as c_int), 1);
+        assert_eq!(rs_is_unnamed_register(0), 1);
+        assert_eq!(rs_is_small_delete_register(b'-' as c_int), 1);
+        assert_eq!(rs_is_search_register(b'/' as c_int), 1);
+        assert_eq!(rs_is_command_register(b':' as c_int), 1);
+        assert_eq!(rs_is_expression_register(b'=' as c_int), 1);
+        // rs_is_last_insert_register is in register crate
+        assert!(is_last_insert_register(b'.' as c_int));
+        assert_eq!(rs_is_alternate_register(b'#' as c_int), 1);
+        assert_eq!(rs_is_filename_register(b'%' as c_int), 1);
+        // rs_is_readonly_register is in ex_docmd crate
+        assert!(is_readonly_register(b'.' as c_int));
+        assert_eq!(rs_needs_async_clipboard(b'+' as c_int), 1);
+
+        // Index calculations
+        assert_eq!(rs_get_numbered_register_index(b'5' as c_int), 5);
+        assert_eq!(rs_get_named_register_index(b'a' as c_int), 10);
+
+        // Clipboard helpers
+        // rs_clipboard_provider_available is in clipboard crate
+        assert!(clipboard_provider_available(true));
+        assert_eq!(rs_should_sync_unnamed_clipboard(1, 0), 1);
+        assert_eq!(rs_get_clipboard_type(b'+' as c_int), 1);
+
+        // Register rotation
+        assert_eq!(rs_should_rotate_numbered_registers(0, 1, 0), 1); // linewise=1
+        assert_eq!(rs_should_use_small_delete(0, 0, 1), 1); // charwise=0
+
+        // Display char
+        assert_eq!(rs_get_register_display_char(0), b'"' as c_int);
     }
 }
