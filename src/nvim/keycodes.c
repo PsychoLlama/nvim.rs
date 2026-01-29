@@ -47,6 +47,8 @@ extern int rs_get_special_key_code(const char *name);
 extern char *rs_get_special_key_name(int c, int modifiers);
 extern int rs_find_special_key(const char **srcp, size_t src_len, int *modp, int flags,
                                 bool *did_simplify);
+extern unsigned rs_trans_special(const char **srcp, size_t src_len, char *dst, int flags,
+                                  bool escape_ks, bool *did_simplify);
 
 // =============================================================================
 // Accessor functions for key_names_table (for Rust FFI)
@@ -267,13 +269,7 @@ unsigned trans_special(const char **const srcp, const size_t src_len, char *cons
                        const int flags, const bool escape_ks, bool *const did_simplify)
   FUNC_ATTR_NONNULL_ARG(1, 3) FUNC_ATTR_WARN_UNUSED_RESULT
 {
-  int modifiers = 0;
-  int key = find_special_key(srcp, src_len, &modifiers, flags, did_simplify);
-  if (key == 0) {
-    return 0;
-  }
-
-  return special_to_buf(key, modifiers, escape_ks, dst);
+  return rs_trans_special(srcp, src_len, dst, flags, escape_ks, did_simplify);
 }
 
 /// Put the character sequence for "key" with "modifiers" into "dst" and return

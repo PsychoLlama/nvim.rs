@@ -1801,6 +1801,47 @@ unsafe fn ptr_diff(end: *const u8, bp: *const u8) -> c_int {
     }
 }
 
+/// Try translating a <> name ("keycode").
+///
+/// This is the main entry point for parsing key notation like `<C-S-Up>`.
+///
+/// # Arguments
+/// * `srcp` - Source from which <> are translated. Is advanced to after the <> name on match.
+/// * `src_len` - Length of the source string.
+/// * `dst` - Buffer to write the result to. Must be at least 19 bytes.
+/// * `flags` - FSK_* flags.
+/// * `escape_ks` - Whether to escape `K_SPECIAL` bytes.
+/// * `did_simplify` - Output pointer, set to true if simplification occurred.
+///
+/// # Returns
+/// Number of characters added to dst, zero for no match.
+///
+/// # Safety
+/// - `srcp` must be a valid pointer to a valid C string pointer.
+/// - `dst` must be a valid pointer with at least 19 bytes of space.
+/// - `did_simplify` may be null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_trans_special(
+    srcp: *mut *const std::ffi::c_char,
+    src_len: usize,
+    dst: *mut std::ffi::c_char,
+    flags: c_int,
+    escape_ks: bool,
+    did_simplify: *mut bool,
+) -> c_uint {
+    if srcp.is_null() || dst.is_null() {
+        return 0;
+    }
+
+    let mut modifiers: c_int = 0;
+    let key = rs_find_special_key(srcp, src_len, &raw mut modifiers, flags, did_simplify);
+    if key == 0 {
+        return 0;
+    }
+
+    rs_special_to_buf(key, modifiers, escape_ks, dst)
+}
+
 /// Encode a key and modifiers into a byte sequence.
 ///
 /// Writes the encoded bytes to `dst` and returns the number of bytes written.
