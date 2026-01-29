@@ -433,6 +433,16 @@ typedef enum {
 // extern unsigned rs_affitem2flag(RsAffFlagType flagtype, const char *item);
 // extern bool rs_aff_flag_valid(unsigned flag, RsAffFlagType flagtype);
 
+// Phase B7: mkspell and Write Operations
+// The mkspell() (~205 LOC) and write_vim_spell() (~200 LOC) functions remain in C
+// as they orchestrate file I/O and coordinate multiple write operations.
+// Individual Rust write helpers declared above:
+//   rs_write_spellfile_header, rs_write_section_header, rs_write_rep_item,
+//   rs_write_charflags_section, rs_write_sofo_section, rs_write_sal_header,
+//   rs_write_compound_header, rs_write_tree_nodecount, rs_write_timestamp,
+//   rs_write_tree_node_flags, rs_write_tree_sibling_byte, rs_write_tree_child_index,
+//   rs_write_region_section, rs_write_end_section
+
 // Special byte values for <byte>.  Some are only used in the tree for
 // postponed prefixes, some only in the other trees.  This is a bit messy...
 enum {
