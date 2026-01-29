@@ -1,38 +1,46 @@
-Plan: ~/.claude/plans/floating-exploring-melody.md
+Plan: ~/.claude/plans/concurrent-orbiting-kahn.md
 
-All checks pass. Let me provide a summary of what was accomplished:
+The migration is complete. Here's a summary of what was accomplished:
 
 ## Summary
 
-I have successfully executed all 4 phases of the plan to migrate keycode parsing functions from C to Rust:
+Successfully migrated `replace_termcodes()` from C to Rust, completing the keycodes module migration.
 
-### Phase 1: `get_special_key_code` (commit a6aaf31d08)
-- Added `rs_get_special_key_code` function that finds special key codes by name
-- Handles termcap names (t_xx) and key name lookup via generated hash table
-- Added `nvim_get_special_key_code_hash` accessor for the C hash function
+### Changes Made
 
-### Phase 2: `get_special_key_name` (commit 3dc7f4b810)
-- Added `rs_get_special_key_name` function that converts key code + modifiers to string like `<C-S-Up>`
-- Uses `MODIFIER_KEYS_TABLE` for shifted key translation
-- Uses `MOD_MASK_TABLE_FULL` for modifier-to-string conversion
-- Added `nvim-charset` dependency for `rs_vim_isprintc`
+**Phase 1 - C Accessor Functions (`src/nvim/keycodes.c`)**:
+- Added `nvim_keycodes_get_current_sid()` - returns current script ID for `<SID>` translation
+- Added `nvim_keycodes_get_leader()` - returns value of `g:mapleader`
+- Added `nvim_keycodes_get_local_leader()` - returns value of `g:maplocalleader`
+- Added `nvim_keycodes_emit_sid_error()` - emits "using <SID> not in script context" error
 
-### Phase 3: `find_special_key` (commit e0adcf9651)
-- Added `rs_find_special_key` function that parses `<C-S-Up>` notation
-- Complex parsing logic handling:
-  - Modifier prefixes (C-, S-, M-, etc.)
-  - Special key names (Up, Down, F1, etc.)
-  - Termcap names (t_xx)
-  - Character codes (`<Char-123>`)
-  - String escape sequences (`\"`)
-- Added FFI for `utfc_ptr2len`, `emsg`, and `e_invarg`
+**Phase 2 - Rust Constants and FFI (`src/nvim-rs/keycodes/src/lib.rs`)**:
+- Added `REPTERM_*` flags constants
+- Added `KE_SNR` constant for script-local prefix
+- Added `CTRL_V` constant
+- Added `ScidT` type alias
+- Added FFI declarations for the new C accessor functions
 
-### Phase 4: `trans_special` (commit 472f25df1d)
-- Added `rs_trans_special` function combining `find_special_key` + `special_to_buf`
-- Main entry point for translating key notation to internal byte representation
+**Phase 3 - Rust Implementation**:
+- Implemented `rs_replace_termcodes()` handling:
+  - Standard keycode translation via `rs_trans_special`
+  - `<SID>` translation for script-local function prefixes
+  - `<Leader>` and `<LocalLeader>` variable substitution
+  - Ctrl-V/backslash escape handling
+  - K_SPECIAL byte escaping for multibyte characters
+- Added `starts_with_ignore_case()` helper function
 
-All functions:
-- Build successfully (`just build` passes)
-- Pass formatting checks (`just rust-fmt-check` passes)
-- Pass clippy lints (`just rust-clippy` passes)
-- Pass unit tests (`just rust-test` - 3671 tests pass)
+**Phase 4 - Integration**:
+- Updated C wrapper to call Rust implementation
+- C wrapper handles buffer allocation/reallocation
+- Rust function operates on pre-allocated buffer
+
+**Phase 5 - Cleanup**:
+- Removed unused `mod_mask_table` and `modifier_keys_table` from C (now in Rust)
+- Committed with descriptive message
+
+### Verification
+- ✅ `just build` - passes
+- ✅ `just rust-fmt-check` - passes
+- ✅ `just rust-clippy` - passes
+- ✅ `just rust-test` - 3671 tests pass
