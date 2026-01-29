@@ -83,6 +83,9 @@ extern char *rs_str_foldcase(const char *str, int orglen, char *buf, int buflen,
 extern int rs_parse_isopt(const char *var, buf_T *buf, bool only_check);
 extern int rs_check_isopt(const char *var);
 extern int rs_buf_init_chartab(buf_T *buf, bool global);
+extern void rs_trans_characters(char *buf, int bufsize);
+extern size_t rs_transstr_buf(const char *s, ssize_t slen, char *buf, size_t buflen, bool untab);
+extern char *rs_transstr(const char *s, bool untab);
 
 static bool chartab_initialized = false;
 
@@ -254,31 +257,7 @@ int check_isopt(char *var)
 /// @param bufsize
 void trans_characters(char *buf, int bufsize)
 {
-  char *trs;                   // translated character
-  int len = (int)strlen(buf);  // length of string needing translation
-  int room = bufsize - len;    // room in buffer after string
-
-  while (*buf != 0) {
-    int trs_len;      // length of trs[]
-    // Assume a multi-byte character doesn't need translation.
-    if ((trs_len = utfc_ptr2len(buf)) > 1) {
-      len -= trs_len;
-    } else {
-      trs = transchar_byte((uint8_t)(*buf));
-      trs_len = (int)strlen(trs);
-
-      if (trs_len > 1) {
-        room -= trs_len - 1;
-        if (room <= 0) {
-          return;
-        }
-        memmove(buf + trs_len, buf + 1, (size_t)len);
-      }
-      memmove(buf, trs, (size_t)trs_len);
-      len--;
-    }
-    buf += trs_len;
-  }
+  rs_trans_characters(buf, bufsize);
 }
 
 /// Find length of a string capable of holding s with all specials replaced
@@ -309,48 +288,7 @@ size_t transstr_buf(const char *const s, const ssize_t slen, char *const buf, co
                     bool untab)
   FUNC_ATTR_NONNULL_ALL
 {
-  const char *p = s;
-  char *buf_p = buf;
-  char *const buf_e = buf_p + buflen - 1;
-
-  while ((slen < 0 || (p - s) < slen) && *p != NUL && buf_p < buf_e) {
-    const size_t l = (size_t)utfc_ptr2len(p);
-    if (l > 1) {
-      if (buf_p + l > buf_e) {
-        break;  // Exceeded `buf` size.
-      }
-
-      if (vim_isprintc(utf_ptr2char(p))) {
-        memmove(buf_p, p, l);
-        buf_p += l;
-      } else {
-        for (size_t off = 0; off < l; off += (size_t)utf_ptr2len(p + off)) {
-          int c = utf_ptr2char(p + off);
-          char hexbuf[9];  // <up to 6 bytes>NUL
-          const size_t hexlen = transchar_hex(hexbuf, c);
-          if (buf_p + hexlen > buf_e) {
-            break;
-          }
-          memmove(buf_p, hexbuf, hexlen);
-          buf_p += hexlen;
-        }
-      }
-      p += l;
-    } else if (*p == TAB && !untab) {
-      *buf_p++ = *p++;
-    } else {
-      const char *const tb = transchar_byte((uint8_t)(*p++));
-      const size_t tb_len = strlen(tb);
-      if (buf_p + tb_len > buf_e) {
-        break;  // Exceeded `buf` size.
-      }
-      memmove(buf_p, tb, tb_len);
-      buf_p += tb_len;
-    }
-  }
-  *buf_p = NUL;
-  assert(buf_p <= buf_e);
-  return (size_t)(buf_p - buf);
+  return rs_transstr_buf(s, slen, buf, buflen, untab);
 }
 
 /// Copy string and replace special characters with printable characters

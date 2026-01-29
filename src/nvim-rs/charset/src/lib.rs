@@ -2010,17 +2010,305 @@ pub unsafe extern "C" fn rs_buf_init_chartab(buf: *mut std::ffi::c_void, global:
 }
 
 // ============================================================================
-// Case Folding
+// String Translation
 // ============================================================================
 
-// FFI declarations for mbyte functions
+// FFI declarations for mbyte and chartab functions
 extern "C" {
     fn rs_utf_ptr2len(p: *const c_char) -> c_int;
     fn rs_utf_ptr2char(p: *const c_char) -> c_int;
     fn rs_utf_char2len(c: c_int) -> c_int;
     fn rs_utf_char2bytes(c: c_int, buf: *mut c_char) -> c_int;
     fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
+    fn nvim_charset_is_initialized() -> c_int;
 }
+
+/// Helper function to translate a single byte to printable form.
+///
+/// Returns the translation as a small string (up to 10 chars including NUL).
+/// This is used internally for string translation functions.
+fn translate_byte(c: u8, use_uhex: bool, fileformat: c_int) -> ([u8; 11], usize) {
+    let mut buf = [0u8; 11];
+    let chartab_ptr = unsafe { nvim_charset_get_g_chartab() };
+    let chartab_initialized = unsafe { nvim_charset_is_initialized() != 0 };
+
+    // For bytes >= 0x80, use transchar_nonprint logic
+    if c >= 0x80 {
+        let len = translate_nonprint(&mut buf, c as c_int, use_uhex, fileformat);
+        return (buf, len);
+    }
+
+    // Check if printable using chartab or ASCII range
+    let is_printable = if chartab_initialized {
+        unsafe { (*chartab_ptr.add(c as usize) & CT_PRINT_CHAR) != 0 }
+    } else {
+        (b' '..=b'~').contains(&c)
+    };
+
+    if is_printable {
+        buf[0] = c;
+        buf[1] = 0;
+        (buf, 1)
+    } else {
+        let len = translate_nonprint(&mut buf, c as c_int, use_uhex, fileformat);
+        (buf, len)
+    }
+}
+
+/// Helper to translate non-printable character (matches rs_transchar_nonprint logic).
+fn translate_nonprint(buf: &mut [u8; 11], c: c_int, use_uhex: bool, fileformat: c_int) -> usize {
+    const EOL_MAC: c_int = 1; // MAC fileformat
+    const NUL: u8 = 0;
+
+    if use_uhex || c > 0xff {
+        // Use hex representation
+        let hex_len = if c > 0xFFFF {
+            8 // <XXXXXX>
+        } else if c > 0xFF {
+            6 // <XXXX>
+        } else {
+            4 // <XX>
+        };
+
+        buf[0] = b'<';
+        let mut val = c as u32;
+        for i in (1..hex_len - 1).rev() {
+            let digit = (val & 0xF) as u8;
+            buf[i] = if digit < 10 {
+                b'0' + digit
+            } else {
+                b'a' + digit - 10
+            };
+            val >>= 4;
+        }
+        buf[hex_len - 1] = b'>';
+        buf[hex_len] = NUL;
+        hex_len
+    } else if c == b'\n' as c_int {
+        // NL (0x0A) - show as ^@ (NUL) or ^J depending on fileformat
+        buf[0] = b'^';
+        buf[1] = if fileformat == EOL_MAC { b'J' } else { b'@' };
+        buf[2] = NUL;
+        2
+    } else if c == b'\r' as c_int && fileformat == EOL_MAC {
+        // CR (0x0D) with MAC format - show as ^J
+        buf[0] = b'^';
+        buf[1] = b'J';
+        buf[2] = NUL;
+        2
+    } else if c >= 0 && c < b' ' as c_int {
+        // Control characters 0x00-0x1F as ^X
+        buf[0] = b'^';
+        buf[1] = (c + b'@' as c_int) as u8;
+        buf[2] = NUL;
+        2
+    } else if c == 0x7F {
+        // DEL as ^?
+        buf[0] = b'^';
+        buf[1] = b'?';
+        buf[2] = NUL;
+        2
+    } else {
+        // Other bytes: show as ~X or hex if out of range
+        if (0x80..=0xFF).contains(&c) {
+            buf[0] = b'~';
+            let adj = (c - 0x80) as u8;
+            if adj < 0x20 {
+                buf[1] = b'^';
+                buf[2] = b'@' + adj;
+                buf[3] = NUL;
+                3
+            } else if adj == 0x7F {
+                buf[1] = b'^';
+                buf[2] = b'?';
+                buf[3] = NUL;
+                3
+            } else {
+                buf[1] = adj;
+                buf[2] = NUL;
+                2
+            }
+        } else {
+            // Fallback to hex for anything else
+            buf[0] = b'<';
+            let val = c as u8;
+            buf[1] = if (val >> 4) < 10 {
+                b'0' + (val >> 4)
+            } else {
+                b'a' + (val >> 4) - 10
+            };
+            buf[2] = if (val & 0xF) < 10 {
+                b'0' + (val & 0xF)
+            } else {
+                b'a' + (val & 0xF) - 10
+            };
+            buf[3] = b'>';
+            buf[4] = NUL;
+            4
+        }
+    }
+}
+
+/// Translate string in-place, replacing special characters with printable ones.
+///
+/// # Safety
+/// - `buf` must be a valid pointer to a mutable null-terminated string
+/// - `bufsize` must be the total size of the buffer
+#[no_mangle]
+pub unsafe extern "C" fn rs_trans_characters(buf: *mut c_char, bufsize: c_int) {
+    if buf.is_null() || bufsize <= 0 {
+        return;
+    }
+
+    let dy_flags = nvim_charset_get_dy_flags();
+    let use_uhex = (dy_flags & K_OPT_DY_FLAG_UHEX) != 0;
+
+    let mut len = 0isize;
+    while *buf.offset(len) != 0 && len < bufsize as isize {
+        len += 1;
+    }
+
+    let mut room = bufsize as isize - len;
+    let mut pos = buf;
+
+    while *pos != 0 {
+        let trs_len = rs_utfc_ptr2len(pos);
+
+        if trs_len > 1 {
+            // Multi-byte character - assume doesn't need translation
+            len -= trs_len as isize;
+            pos = pos.add(trs_len as usize);
+        } else {
+            // Single byte - translate it
+            let c = *pos as u8;
+            let (trans, trans_len) = translate_byte(c, use_uhex, -1);
+
+            if trans_len > 1 {
+                room -= trans_len as isize - 1;
+                if room <= 0 {
+                    return;
+                }
+                // Shift rest of string
+                std::ptr::copy(pos.add(1), pos.add(trans_len), len as usize);
+            }
+            // Copy translation
+            std::ptr::copy_nonoverlapping(trans.as_ptr().cast(), pos, trans_len);
+            len -= 1;
+            pos = pos.add(trans_len);
+        }
+    }
+}
+
+/// Translate string to buffer, replacing special characters with printable ones.
+///
+/// # Safety
+/// - `s` must be a valid pointer to a string (null-terminated or slen bytes)
+/// - `buf` must be a valid pointer with at least `buflen` bytes
+///
+/// # Returns
+/// Length of the resulting string, without the NUL byte.
+#[no_mangle]
+pub unsafe extern "C" fn rs_transstr_buf(
+    s: *const c_char,
+    slen: isize,
+    buf: *mut c_char,
+    buflen: usize,
+    untab: bool,
+) -> usize {
+    if s.is_null() || buf.is_null() || buflen == 0 {
+        return 0;
+    }
+
+    let dy_flags = nvim_charset_get_dy_flags();
+    let use_uhex = (dy_flags & K_OPT_DY_FLAG_UHEX) != 0;
+
+    let mut p = s;
+    let mut buf_p = buf;
+    let buf_e = buf.add(buflen - 1);
+
+    while (slen < 0 || (p.offset_from(s)) < slen) && *p != 0 && buf_p < buf_e {
+        let l = rs_utfc_ptr2len(p) as usize;
+
+        if l > 1 {
+            // Multi-byte character
+            if buf_p.add(l) > buf_e {
+                break; // Exceeded buffer size
+            }
+
+            let c = rs_utf_ptr2char(p);
+            if nvim_mbyte::utf_printable(c) {
+                // Printable - copy as-is
+                std::ptr::copy_nonoverlapping(p, buf_p, l);
+                buf_p = buf_p.add(l);
+            } else {
+                // Non-printable - convert each codepoint to hex
+                let mut off = 0usize;
+                while off < l {
+                    let cp = rs_utf_ptr2char(p.add(off));
+                    let mut hexbuf = [0u8; 9];
+                    let hexlen = rs_transchar_hex(hexbuf.as_mut_ptr().cast(), cp) as usize;
+                    if buf_p.add(hexlen) > buf_e {
+                        break;
+                    }
+                    std::ptr::copy_nonoverlapping(hexbuf.as_ptr().cast(), buf_p, hexlen);
+                    buf_p = buf_p.add(hexlen);
+                    let cp_len = rs_utf_ptr2len(p.add(off)) as usize;
+                    off += cp_len;
+                }
+            }
+            p = p.add(l);
+        } else if *p == b'\t' as c_char && !untab {
+            // TAB when not untabbing - keep as-is
+            *buf_p = *p;
+            buf_p = buf_p.add(1);
+            p = p.add(1);
+        } else {
+            // Single byte - translate it
+            let c = *p as u8;
+            let (trans, trans_len) = translate_byte(c, use_uhex, -1);
+            if buf_p.add(trans_len) > buf_e {
+                break; // Exceeded buffer size
+            }
+            std::ptr::copy_nonoverlapping(trans.as_ptr().cast(), buf_p, trans_len);
+            buf_p = buf_p.add(trans_len);
+            p = p.add(1);
+        }
+    }
+
+    *buf_p = 0;
+    buf_p.offset_from(buf) as usize
+}
+
+/// Allocate and return translated string.
+///
+/// # Safety
+/// - `s` must be a valid pointer to a null-terminated string
+///
+/// # Returns
+/// Pointer to newly allocated string (caller must free), or null on error.
+#[no_mangle]
+pub unsafe extern "C" fn rs_transstr(s: *const c_char, untab: bool) -> *mut c_char {
+    if s.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    // Compute length needed
+    let len = rs_transstr_len(s, untab) + 1;
+
+    // Allocate buffer
+    let buf = libc::malloc(len) as *mut c_char;
+    if buf.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    // Translate
+    rs_transstr_buf(s, -1, buf, len, untab);
+    buf
+}
+
+// ============================================================================
+// Case Folding
+// ============================================================================
 
 /// Type alias for case conversion function pointer.
 /// Takes a codepoint and returns the converted codepoint.
