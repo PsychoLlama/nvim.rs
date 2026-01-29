@@ -167,6 +167,28 @@ extern "C" {
     // NameBuff global buffer accessor
     fn nvim_get_namebuff() -> *const c_char;
 
+    // Visual mode and cursor functions
+    fn VIsual_active_get() -> c_int;
+    fn get_visual_text(
+        cmdp: *mut libc::c_void,
+        pp: *mut *mut c_char,
+        lenp: *mut usize,
+    ) -> c_int;
+    fn get_cursor_line_ptr() -> *mut c_char;
+    fn getdigits_int32(pp: *mut *mut c_char, strict: bool, def: i32) -> i32;
+    fn getdigits_long(pp: *mut *mut c_char, strict: bool, def: i64) -> i64;
+    fn skipwhite(q: *const c_char) -> *mut c_char;
+    fn vim_isfilec(c: c_int) -> c_int;
+    fn path_is_url(p: *const c_char) -> c_int;
+    fn path_has_drive_letter(p: *const c_char, len: usize) -> c_int;
+    fn xstrnsave(s: *const c_char, len: usize) -> *mut c_char;
+
+    // Line message for file_name_in_line
+    static line_msg: *const c_char;
+
+    // Eval functions for includeexpr
+    fn eval_includeexpr(ptr: *const c_char, len: usize) -> *mut c_char;
+
     fn copy_option_part(
         option: *mut *mut c_char,
         buf: *mut c_char,
@@ -2163,6 +2185,286 @@ pub unsafe extern "C" fn rs_find_file_in_path_option(
             semsg(translate(e_no_more_file_str_found_in_path), *file_to_find);
         }
     }
+
+    file_name
+}
+
+// ============================================================================
+// Filename Extraction Functions (Phase A4)
+// ============================================================================
+
+/// Get the file name at the cursor.
+/// If Visual mode is active, use the selected text if it's in one line.
+/// Returns the name in allocated memory, NULL for failure.
+///
+/// # Safety
+/// Must be called from the main thread with valid vim state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_grab_file_name(
+    count: c_int,
+    file_lnum: *mut libc::c_long,
+) -> *mut c_char {
+    let options = FNAME_MESS | FNAME_EXP | FNAME_REL | FNAME_UNESC;
+
+    if VIsual_active_get() != 0 {
+        let mut len: usize = 0;
+        let mut ptr: *mut c_char = ptr::null_mut();
+
+        if get_visual_text(ptr::null_mut(), std::ptr::addr_of_mut!(ptr), std::ptr::addr_of_mut!(len)) == FAIL {
+            return ptr::null_mut();
+        }
+
+        // Only recognize ":123" here
+        if !file_lnum.is_null()
+            && *ptr.add(len) == b':' as c_char
+            && libc::isdigit(*ptr.add(len + 1) as c_int) != 0
+        {
+            let mut p = ptr.add(len + 1);
+            *file_lnum = getdigits_int32(std::ptr::addr_of_mut!(p), false, 0) as libc::c_long;
+        }
+
+        let curbuf_ffname = nvim_curbuf_get_ffname();
+        return rs_find_file_name_in_path(ptr, len, options, count as libc::c_long, curbuf_ffname.cast_mut());
+    }
+
+    rs_file_name_at_cursor(options | FNAME_HYP, count, file_lnum)
+}
+
+/// Return the file name under or after the cursor.
+/// The 'path' option is searched if the file name is not absolute.
+///
+/// # Safety
+/// Must be called from the main thread with valid vim state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_file_name_at_cursor(
+    options: c_int,
+    count: c_int,
+    file_lnum: *mut libc::c_long,
+) -> *mut c_char {
+    let cursor_col = nvim_curwin_get_cursor_col();
+    let curbuf_ffname = nvim_curbuf_get_ffname();
+    rs_file_name_in_line(
+        get_cursor_line_ptr(),
+        cursor_col,
+        options,
+        count as libc::c_long,
+        curbuf_ffname.cast_mut(),
+        file_lnum,
+    )
+}
+
+/// Return the name of the file under or after ptr[col].
+///
+/// # Safety
+/// line must be a valid C string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_file_name_in_line(
+    line: *mut c_char,
+    col: c_int,
+    options: c_int,
+    count: libc::c_long,
+    rel_fname: *mut c_char,
+    file_lnum: *mut libc::c_long,
+) -> *mut c_char {
+    // Search forward for what could be the start of a file name
+    let mut ptr = line.add(col as usize);
+    while *ptr != 0 && vim_isfilec(*ptr as c_int) == 0 {
+        // MB_PTR_ADV equivalent
+        ptr = ptr.add(utfc_ptr2len(ptr.cast()) as usize);
+    }
+
+    if *ptr == 0 {
+        // Nothing found
+        if (options & FNAME_MESS) != 0 {
+            emsg(c"E446: No file name under cursor".as_ptr());
+        }
+        return ptr::null_mut();
+    }
+
+    let mut len: usize;
+    let mut in_type = true;
+    let mut is_url = false;
+
+    // Search backward for first char of the file name
+    while ptr > line {
+        let head_off = utf_head_off(line.cast(), ptr.sub(1).cast());
+        if head_off > 0 {
+            ptr = ptr.sub(head_off + 1);
+        } else if vim_isfilec(*ptr.sub(1) as c_int) != 0
+            || ((options & FNAME_HYP) != 0 && path_is_url(ptr.sub(1)) != 0)
+        {
+            ptr = ptr.sub(1);
+        } else {
+            break;
+        }
+    }
+
+    // Search forward for the last char of the file name
+    let has_drive = path_has_drive_letter(ptr, libc::strlen(ptr));
+    len = if has_drive != 0 { 2 } else { 0 };
+
+    while vim_isfilec(*ptr.add(len) as c_int) != 0
+        || (*ptr.add(len) == b'\\' as c_char && *ptr.add(len + 1) == b' ' as c_char)
+        || ((options & FNAME_HYP) != 0 && path_is_url(ptr.add(len)) != 0)
+        || (is_url && !vim_strchr(c":?&=".as_ptr(), *ptr.add(len) as c_int).is_null())
+    {
+        // After type:// we also include :, ?, & and = as valid characters
+        let c = *ptr.add(len);
+        if (c >= b'A' as c_char && c <= b'Z' as c_char)
+            || (c >= b'a' as c_char && c <= b'z' as c_char)
+        {
+            if in_type && path_is_url(ptr.add(len + 1)) != 0 {
+                is_url = true;
+            }
+        } else {
+            in_type = false;
+        }
+
+        if *ptr.add(len) == b'\\' as c_char && *ptr.add(len + 1) == b' ' as c_char {
+            // Skip over the "\" in "\ "
+            len += 1;
+        }
+        len += utfc_ptr2len(ptr.add(len).cast()) as usize;
+    }
+
+    // If there is trailing punctuation, remove it.
+    // But don't remove "..", could be a directory name.
+    if len > 2
+        && !vim_strchr(c".,:;!".as_ptr(), *ptr.add(len - 1) as c_int).is_null()
+        && *ptr.add(len - 2) != b'.' as c_char
+    {
+        len -= 1;
+    }
+
+    // Extract line number if requested
+    if !file_lnum.is_null() {
+        let line_msg_en = c" line ";
+        let line_msg_en_len = 6;
+
+        let mut p = ptr.add(len);
+        if libc::strncmp(p, line_msg_en.as_ptr(), line_msg_en_len) == 0 {
+            p = p.add(line_msg_en_len);
+        } else {
+            // Try localized version
+            let localized = translate(line_msg);
+            let localized_len = libc::strlen(localized);
+            if libc::strncmp(p, localized, localized_len) == 0 {
+                p = p.add(localized_len);
+            } else {
+                p = skipwhite(p);
+            }
+        }
+
+        if *p != 0 {
+            if libc::isdigit(*p as c_int) == 0 {
+                p = p.add(1); // Skip the separator
+            }
+            p = skipwhite(p);
+            if libc::isdigit(*p as c_int) != 0 {
+                *file_lnum = getdigits_long(std::ptr::addr_of_mut!(p), false, 0);
+            }
+        }
+    }
+
+    rs_find_file_name_in_path(ptr, len, options, count, rel_fname)
+}
+
+/// Return the name of the file ptr[len] in 'path'.
+///
+/// # Safety
+/// ptr must be a valid pointer to at least len bytes.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_file_name_in_path(
+    mut ptr: *mut c_char,
+    mut len: usize,
+    options: c_int,
+    mut count: libc::c_long,
+    rel_fname: *mut c_char,
+) -> *mut c_char {
+    let mut tofree: *mut c_char = ptr::null_mut();
+
+    if len == 0 {
+        return ptr::null_mut();
+    }
+
+    // Apply includeexpr if enabled and set
+    let curbuf_inex = nvim_curbuf_get_inex();
+    if (options & FNAME_INCL) != 0 && !curbuf_inex.is_null() && *curbuf_inex != 0 {
+        tofree = eval_includeexpr(ptr, len);
+        if !tofree.is_null() {
+            ptr = tofree;
+            len = libc::strlen(ptr);
+        }
+    }
+
+    let mut file_name: *mut c_char;
+
+    if (options & FNAME_EXP) != 0 {
+        let mut file_to_find: *mut c_char = ptr::null_mut();
+        let mut search_ctx: *mut libc::c_void = ptr::null_mut();
+
+        file_name = rs_find_file_in_path(
+            ptr,
+            len,
+            options & !FNAME_MESS,
+            1, // first = true
+            rel_fname,
+            std::ptr::addr_of_mut!(file_to_find),
+            std::ptr::addr_of_mut!(search_ctx).cast(),
+        );
+
+        // If the file could not be found in a normal way, try applying
+        // 'includeexpr' (unless done already).
+        if file_name.is_null()
+            && (options & FNAME_INCL) == 0
+            && !curbuf_inex.is_null()
+            && *curbuf_inex != 0
+        {
+            tofree = eval_includeexpr(ptr, len);
+            if !tofree.is_null() {
+                ptr = tofree;
+                len = libc::strlen(ptr);
+                file_name = rs_find_file_in_path(
+                    ptr,
+                    len,
+                    options & !FNAME_MESS,
+                    1, // first = true
+                    rel_fname,
+                    std::ptr::addr_of_mut!(file_to_find),
+                    std::ptr::addr_of_mut!(search_ctx).cast(),
+                );
+            }
+        }
+
+        if file_name.is_null() && (options & FNAME_MESS) != 0 {
+            let c = *ptr.add(len);
+            *ptr.add(len) = 0;
+            semsg(c"E447: Can't find file \"%s\" in path".as_ptr(), ptr);
+            *ptr.add(len) = c;
+        }
+
+        // Repeat finding the file "count" times
+        while !file_name.is_null() && count > 1 {
+            count -= 1;
+            xfree(file_name.cast());
+            file_name = rs_find_file_in_path(
+                ptr,
+                len,
+                options,
+                0, // first = false
+                rel_fname,
+                std::ptr::addr_of_mut!(file_to_find),
+                std::ptr::addr_of_mut!(search_ctx).cast(),
+            );
+        }
+
+        xfree(file_to_find.cast());
+        rs_vim_findfile_cleanup(search_ctx);
+    } else {
+        file_name = xstrnsave(ptr, len);
+    }
+
+    xfree(tofree.cast());
 
     file_name
 }
