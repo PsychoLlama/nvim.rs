@@ -623,6 +623,52 @@ extern int rs_qf_resolve_list_nr(int nr, int curlist, int listcount);
 extern bool rs_qf_valid_list_nr(int nr, int listcount);
 
 // =============================================================================
+// Phase 6 (Major Commands): Command helper functions from Rust
+// =============================================================================
+
+/// Command types for quickfix operations
+typedef enum {
+  QF_CMD_CREATE = 0,
+  QF_CMD_GET = 1,
+  QF_CMD_ADD = 2,
+} QfCmdType;
+
+/// Check if command creates a new list
+extern bool rs_qf_cmd_creates_list(QfCmdType cmd_type);
+
+/// Check if command adds to existing list
+extern bool rs_qf_cmd_adds_to_list(QfCmdType cmd_type);
+
+/// Result of parsing a grep/vimgrep pattern
+typedef struct {
+  int pattern_start;
+  int pattern_len;
+  uint8_t delimiter;
+  bool valid;
+  bool has_delimiter;
+} GrepPatternResult;
+
+/// Parse a vimgrep-style pattern
+extern GrepPatternResult rs_qf_parse_grep_pattern(const char *input);
+
+/// Check if a character is valid in a shell filename
+extern bool rs_qf_is_shell_filename_char(uint8_t c);
+
+/// Estimate file count from pattern and argument count
+extern int rs_qf_estimate_file_count(bool has_pattern, int arg_count);
+
+/// Information about a make/grep command
+typedef struct {
+  bool is_grep;
+  bool is_add;
+  bool is_loclist;
+  bool jump_first;
+} MakeGrepInfo;
+
+/// Get action character for a make/grep command
+extern uint8_t rs_qf_make_grep_action(MakeGrepInfo info);
+
+// =============================================================================
 // Phase 1 (Parser Migration): Errorformat parsing functions from Rust
 // =============================================================================
 
