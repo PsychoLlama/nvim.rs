@@ -248,6 +248,26 @@ impl QfWhatFlags {
     pub const fn wants_size(self) -> bool {
         self.wants_all() || (self.flags & QF_WHAT_SIZE) != 0
     }
+
+    /// Check if requesting changedtick field
+    pub const fn wants_changedtick(self) -> bool {
+        self.wants_all() || (self.flags & QF_WHAT_CHANGEDTICK) != 0
+    }
+
+    /// Check if requesting qfbufnr field
+    pub const fn wants_qfbufnr(self) -> bool {
+        self.wants_all() || (self.flags & QF_WHAT_QFBUFNR) != 0
+    }
+
+    /// Check if requesting filewinid field
+    pub const fn wants_filewinid(self) -> bool {
+        self.wants_all() || (self.flags & QF_WHAT_FILEWINID) != 0
+    }
+
+    /// Check if requesting quickfixtextfunc field
+    pub const fn wants_quickfixtextfunc(self) -> bool {
+        self.wants_all() || (self.flags & QF_WHAT_QUICKFIXTEXTFUNC) != 0
+    }
 }
 
 // =============================================================================
@@ -297,6 +317,187 @@ pub extern "C" fn rs_qf_what_wants_title(flags: u32) -> c_int {
 #[no_mangle]
 pub extern "C" fn rs_qf_what_wants_size(flags: u32) -> c_int {
     c_int::from(QfWhatFlags::from_raw(flags).wants_size())
+}
+
+/// FFI export: Check what flags wants context
+#[no_mangle]
+pub extern "C" fn rs_qf_what_wants_context(flags: u32) -> c_int {
+    c_int::from(QfWhatFlags::from_raw(flags).wants_context())
+}
+
+/// FFI export: Check what flags wants nr (list number)
+#[no_mangle]
+pub extern "C" fn rs_qf_what_wants_nr(flags: u32) -> c_int {
+    c_int::from(QfWhatFlags::from_raw(flags).wants_nr())
+}
+
+/// FFI export: Check what flags wants changedtick
+#[no_mangle]
+pub extern "C" fn rs_qf_what_wants_changedtick(flags: u32) -> c_int {
+    c_int::from(QfWhatFlags::from_raw(flags).wants_changedtick())
+}
+
+/// FFI export: Check what flags wants qfbufnr
+#[no_mangle]
+pub extern "C" fn rs_qf_what_wants_qfbufnr(flags: u32) -> c_int {
+    c_int::from(QfWhatFlags::from_raw(flags).wants_qfbufnr())
+}
+
+/// FFI export: Check what flags wants filewinid
+#[no_mangle]
+pub extern "C" fn rs_qf_what_wants_filewinid(flags: u32) -> c_int {
+    c_int::from(QfWhatFlags::from_raw(flags).wants_filewinid())
+}
+
+/// FFI export: Check what flags wants quickfixtextfunc
+#[no_mangle]
+pub extern "C" fn rs_qf_what_wants_quickfixtextfunc(flags: u32) -> c_int {
+    c_int::from(QfWhatFlags::from_raw(flags).wants_quickfixtextfunc())
+}
+
+/// FFI export: Parse what flags from individual bool fields
+#[no_mangle]
+pub extern "C" fn rs_qf_build_what_flags(
+    all: bool,
+    idx: bool,
+    nr: bool,
+    items: bool,
+    id: bool,
+    title: bool,
+    context: bool,
+    size: bool,
+    changedtick: bool,
+    qfbufnr: bool,
+    filewinid: bool,
+    quickfixtextfunc: bool,
+) -> u32 {
+    let mut flags = 0u32;
+    if all {
+        flags |= QF_WHAT_ALL;
+    }
+    if idx {
+        flags |= QF_WHAT_IDX;
+    }
+    if nr {
+        flags |= QF_WHAT_NR;
+    }
+    if items {
+        flags |= QF_WHAT_ITEMS;
+    }
+    if id {
+        flags |= QF_WHAT_ID;
+    }
+    if title {
+        flags |= QF_WHAT_TITLE;
+    }
+    if context {
+        flags |= QF_WHAT_CONTEXT;
+    }
+    if size {
+        flags |= QF_WHAT_SIZE;
+    }
+    if changedtick {
+        flags |= QF_WHAT_CHANGEDTICK;
+    }
+    if qfbufnr {
+        flags |= QF_WHAT_QFBUFNR;
+    }
+    if filewinid {
+        flags |= QF_WHAT_FILEWINID;
+    }
+    if quickfixtextfunc {
+        flags |= QF_WHAT_QUICKFIXTEXTFUNC;
+    }
+    flags
+}
+
+// =============================================================================
+// Entry Property Struct for getqflist() items
+// =============================================================================
+
+/// Properties of a single quickfix entry for getqflist() items
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct QfEntryProps {
+    /// Buffer number
+    pub bufnr: c_int,
+    /// Line number
+    pub lnum: c_int,
+    /// End line number
+    pub end_lnum: c_int,
+    /// Column number
+    pub col: c_int,
+    /// End column number
+    pub end_col: c_int,
+    /// Column is visual column
+    pub vcol: bool,
+    /// Entry number
+    pub nr: c_int,
+    /// Entry type character
+    pub entry_type: u8,
+    /// Valid entry flag
+    pub valid: bool,
+}
+
+/// FFI export: Get default entry props
+#[no_mangle]
+pub extern "C" fn rs_qf_entry_props_default() -> QfEntryProps {
+    QfEntryProps::default()
+}
+
+// =============================================================================
+// List Number Resolution
+// =============================================================================
+
+/// Resolve a list number (0 = current, negative = from end, positive = 1-based)
+#[no_mangle]
+pub extern "C" fn rs_qf_resolve_list_nr(nr: c_int, curlist: c_int, listcount: c_int) -> c_int {
+    use std::cmp::Ordering;
+
+    if listcount <= 0 {
+        return -1;
+    }
+
+    match nr.cmp(&0) {
+        Ordering::Equal => {
+            // Current list
+            curlist
+        }
+        Ordering::Greater => {
+            // 1-based index
+            let idx = nr - 1;
+            if idx < listcount {
+                idx
+            } else {
+                -1
+            }
+        }
+        Ordering::Less => {
+            // Negative: from end
+            let idx = listcount + nr;
+            if idx >= 0 {
+                idx
+            } else {
+                -1
+            }
+        }
+    }
+}
+
+/// FFI export: Check if list number is valid
+#[no_mangle]
+pub extern "C" fn rs_qf_valid_list_nr(nr: c_int, listcount: c_int) -> bool {
+    if listcount <= 0 {
+        return false;
+    }
+    if nr == 0 {
+        return true; // Current list always valid if listcount > 0
+    }
+    if nr > 0 {
+        nr <= listcount
+    } else {
+        nr.abs() <= listcount
+    }
 }
 
 // =============================================================================
@@ -378,5 +579,72 @@ mod tests {
     fn test_handles_null() {
         assert!(QfInfoHandle::null().is_null());
         assert!(WinHandle::null().is_null());
+    }
+
+    #[test]
+    fn test_what_flags_extended() {
+        let flags = QfWhatFlags::from_raw(QF_WHAT_CHANGEDTICK | QF_WHAT_QFBUFNR);
+        assert!(flags.wants_changedtick());
+        assert!(flags.wants_qfbufnr());
+        assert!(!flags.wants_filewinid());
+        assert!(!flags.wants_quickfixtextfunc());
+
+        let all = QfWhatFlags::all();
+        assert!(all.wants_changedtick());
+        assert!(all.wants_qfbufnr());
+        assert!(all.wants_filewinid());
+        assert!(all.wants_quickfixtextfunc());
+    }
+
+    #[test]
+    fn test_build_what_flags() {
+        let flags = rs_qf_build_what_flags(
+            false, true, false, true, false, false, false, false, false, false, false, false,
+        );
+        assert_eq!(flags, QF_WHAT_IDX | QF_WHAT_ITEMS);
+
+        let all_flags = rs_qf_build_what_flags(
+            true, false, false, false, false, false, false, false, false, false, false, false,
+        );
+        assert_eq!(all_flags, QF_WHAT_ALL);
+    }
+
+    #[test]
+    fn test_resolve_list_nr() {
+        // Current list (nr=0)
+        assert_eq!(rs_qf_resolve_list_nr(0, 3, 5), 3);
+
+        // Positive (1-based)
+        assert_eq!(rs_qf_resolve_list_nr(1, 3, 5), 0);
+        assert_eq!(rs_qf_resolve_list_nr(5, 3, 5), 4);
+        assert_eq!(rs_qf_resolve_list_nr(6, 3, 5), -1); // Out of range
+
+        // Negative (from end)
+        assert_eq!(rs_qf_resolve_list_nr(-1, 3, 5), 4);
+        assert_eq!(rs_qf_resolve_list_nr(-5, 3, 5), 0);
+        assert_eq!(rs_qf_resolve_list_nr(-6, 3, 5), -1); // Out of range
+
+        // Empty list
+        assert_eq!(rs_qf_resolve_list_nr(0, 0, 0), -1);
+    }
+
+    #[test]
+    fn test_valid_list_nr() {
+        assert!(rs_qf_valid_list_nr(0, 5)); // Current
+        assert!(rs_qf_valid_list_nr(1, 5)); // First
+        assert!(rs_qf_valid_list_nr(5, 5)); // Last
+        assert!(!rs_qf_valid_list_nr(6, 5)); // Out of range
+        assert!(rs_qf_valid_list_nr(-1, 5)); // Last from end
+        assert!(rs_qf_valid_list_nr(-5, 5)); // First from end
+        assert!(!rs_qf_valid_list_nr(-6, 5)); // Out of range
+        assert!(!rs_qf_valid_list_nr(0, 0)); // Empty list
+    }
+
+    #[test]
+    fn test_entry_props_default() {
+        let props = rs_qf_entry_props_default();
+        assert_eq!(props.bufnr, 0);
+        assert_eq!(props.lnum, 0);
+        assert!(!props.valid);
     }
 }

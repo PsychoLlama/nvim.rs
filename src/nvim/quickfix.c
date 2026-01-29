@@ -588,6 +588,41 @@ extern size_t rs_qf_format_entry_line(const void *qfp, const char *fname,
                                       char *out, size_t out_size);
 
 // =============================================================================
+// Phase 5 (VimL API): getqflist()/setqflist() helper functions from Rust
+// =============================================================================
+
+/// What flags for getqflist/setqflist
+extern int rs_qf_what_wants_idx(uint32_t flags);
+extern int rs_qf_what_wants_items(uint32_t flags);
+extern int rs_qf_what_wants_id(uint32_t flags);
+extern int rs_qf_what_wants_title(uint32_t flags);
+extern int rs_qf_what_wants_size(uint32_t flags);
+extern int rs_qf_what_wants_context(uint32_t flags);
+extern int rs_qf_what_wants_nr(uint32_t flags);
+extern int rs_qf_what_wants_changedtick(uint32_t flags);
+extern int rs_qf_what_wants_qfbufnr(uint32_t flags);
+extern int rs_qf_what_wants_filewinid(uint32_t flags);
+extern int rs_qf_what_wants_quickfixtextfunc(uint32_t flags);
+
+/// Build what flags from individual booleans
+extern uint32_t rs_qf_build_what_flags(bool all, bool idx, bool nr, bool items,
+                                        bool id, bool title, bool context, bool size,
+                                        bool changedtick, bool qfbufnr, bool filewinid,
+                                        bool quickfixtextfunc);
+
+/// Parse action character for setqflist/setloclist
+extern int rs_qf_parse_action(uint8_t action);
+
+/// Check if action is valid
+extern int rs_qf_is_valid_action(uint8_t action);
+
+/// Resolve list number (0 = current, negative = from end, positive = 1-based)
+extern int rs_qf_resolve_list_nr(int nr, int curlist, int listcount);
+
+/// Check if list number is valid
+extern bool rs_qf_valid_list_nr(int nr, int listcount);
+
+// =============================================================================
 // Phase 1 (Parser Migration): Errorformat parsing functions from Rust
 // =============================================================================
 
