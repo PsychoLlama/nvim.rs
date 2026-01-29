@@ -555,6 +555,13 @@ extern void rs_tagstack_push(void *wp, char *tagname, int cur_fnum, int cur_matc
 extern void rs_tagstack_set_idx(void *wp, int idx);
 extern void rs_tagstack_truncate(void *wp);
 
+// Parse functions
+extern int rs_parse_tag_line(char *lbuf, tagptrs_T *tagp);
+extern int rs_parse_match(char *lbuf, tagptrs_T *tagp);
+extern bool rs_test_for_static(const tagptrs_T *tagp);
+extern size_t rs_matching_line_len(const char *lbuf);
+extern int rs_find_extra(char **pp);
+
 #include "tag.c.generated.h"
 
 static const char e_tag_stack_empty[]
@@ -3000,35 +3007,7 @@ void tagname_free(tagname_T *tnp)
 /// @return  FAIL if there is a format error in this line, OK otherwise.
 static int parse_tag_line(char *lbuf, tagptrs_T *tagp)
 {
-  // Isolate the tagname, from lbuf up to the first white
-  tagp->tagname = lbuf;
-  char *p = vim_strchr(lbuf, TAB);
-  if (p == NULL) {
-    return FAIL;
-  }
-  tagp->tagname_end = p;
-
-  // Isolate file name, from first to second white space
-  if (*p != NUL) {
-    p++;
-  }
-  tagp->fname = p;
-  p = vim_strchr(p, TAB);
-  if (p == NULL) {
-    return FAIL;
-  }
-  tagp->fname_end = p;
-
-  // find start of search command, after second white space
-  if (*p != NUL) {
-    p++;
-  }
-  if (*p == NUL) {
-    return FAIL;
-  }
-  tagp->command = p;
-
-  return OK;
+  return rs_parse_tag_line(lbuf, tagp);
 }
 
 // Check if tagname is a static tag
@@ -3045,26 +3024,13 @@ static int parse_tag_line(char *lbuf, tagptrs_T *tagp)
 // Return false if it is not a static tag.
 static bool test_for_static(tagptrs_T *tagp)
 {
-  // Check for new style static tag ":...<Tab>file:[<Tab>...]"
-  char *p = tagp->command;
-  while ((p = vim_strchr(p, '\t')) != NULL) {
-    p++;
-    if (strncmp(p, "file:", 5) == 0) {
-      return true;
-    }
-  }
-
-  return false;
+  return rs_test_for_static(tagp);
 }
 
 /// @return  the length of a matching tag line.
 static size_t matching_line_len(const char *const lbuf)
 {
-  const char *p = lbuf + 1;
-
-  // does the same thing as parse_match()
-  p += strlen(p) + 1;
-  return (size_t)(p - lbuf) + strlen(p);
+  return rs_matching_line_len(lbuf);
 }
 
 /// Parse a line from a matching tag.  Does not change the line itself.
@@ -3080,70 +3046,7 @@ static size_t matching_line_len(const char *const lbuf)
 /// @return  OK or FAIL.
 static int parse_match(char *lbuf, tagptrs_T *tagp)
 {
-  tagp->tag_fname = lbuf + 1;
-  lbuf += strlen(tagp->tag_fname) + 2;
-
-  // Find search pattern and the file name for non-etags.
-  int retval = parse_tag_line(lbuf, tagp);
-
-  tagp->tagkind = NULL;
-  tagp->user_data = NULL;
-  tagp->tagline = 0;
-  tagp->command_end = NULL;
-
-  if (retval != OK) {
-    return retval;
-  }
-
-  // Try to find a kind field: "kind:<kind>" or just "<kind>"
-  char *p = tagp->command;
-  if (find_extra(&p) == OK) {
-    tagp->command_end = p;
-    if (p > tagp->command && p[-1] == '|') {
-      tagp->command_end = p - 1;  // drop trailing bar
-    }
-    p += 2;  // skip ";\""
-    if (*p++ == TAB) {
-      // Accept ASCII alphabetic kind characters and any multi-byte
-      // character.
-      while (ASCII_ISALPHA(*p) || utfc_ptr2len(p) > 1) {
-        if (strncmp(p, "kind:", 5) == 0) {
-          tagp->tagkind = p + 5;
-        } else if (strncmp(p, "user_data:", 10) == 0) {
-          tagp->user_data = p + 10;
-        } else if (strncmp(p, "line:", 5) == 0) {
-          tagp->tagline = atoi(p + 5);
-        }
-        if (tagp->tagkind != NULL && tagp->user_data != NULL) {
-          break;
-        }
-
-        char *pc = vim_strchr(p, ':');
-        char *pt = vim_strchr(p, '\t');
-        if (pc == NULL || (pt != NULL && pc > pt)) {
-          tagp->tagkind = p;
-        }
-        if (pt == NULL) {
-          break;
-        }
-        p = pt;
-        MB_PTR_ADV(p);
-      }
-    }
-  }
-  if (tagp->tagkind != NULL) {
-    for (p = tagp->tagkind;
-         *p && *p != '\t' && *p != '\r' && *p != '\n';
-         MB_PTR_ADV(p)) {}
-    tagp->tagkind_end = p;
-  }
-  if (tagp->user_data != NULL) {
-    for (p = tagp->user_data;
-         *p && *p != '\t' && *p != '\r' && *p != '\n';
-         MB_PTR_ADV(p)) {}
-    tagp->user_data_end = p;
-  }
-  return retval;
+  return rs_parse_match(lbuf, tagp);
 }
 
 // Find out the actual file name of a tag.  Concatenate the tags file name
@@ -3531,41 +3434,7 @@ static int test_for_current(char *fname, char *fname_end, char *tag_fname, char 
 // Return OK if ";\"" is following, FAIL otherwise.
 static int find_extra(char **pp)
 {
-  char *str = *pp;
-  char first_char = **pp;
-
-  // Repeat for addresses separated with ';'
-  while (true) {
-    if (ascii_isdigit(*str)) {
-      str = skipdigits(str + 1);
-    } else if (*str == '/' || *str == '?') {
-      str = skip_regexp(str + 1, *str, false);
-      if (*str != first_char) {
-        str = NULL;
-      } else {
-        str++;
-      }
-    } else {
-      // not a line number or search string, look for terminator.
-      str = strstr(str, "|;\"");
-      if (str != NULL) {
-        str++;
-        break;
-      }
-    }
-    if (str == NULL || *str != ';'
-        || !(ascii_isdigit(str[1]) || str[1] == '/' || str[1] == '?')) {
-      break;
-    }
-    str++;  // skip ';'
-    first_char = *str;
-  }
-
-  if (str != NULL && strncmp(str, ";\"", 2) == 0) {
-    *pp = str;
-    return OK;
-  }
-  return FAIL;
+  return rs_find_extra(pp);
 }
 
 /// Free a single entry in a tag stack
