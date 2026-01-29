@@ -54,6 +54,8 @@ extern int rs_paragraph_start(linenr_T lnum);
 extern int rs_comp_textwidth(int ff);
 extern void rs_op_format(oparg_T *oap, int keep_cursor);
 extern void rs_op_formatexpr(oparg_T *oap);
+extern void rs_auto_format(int trailblank, int prev_line);
+extern void rs_check_auto_format(int end_insert);
 
 /// C accessor for curbuf->b_p_fo (formatoptions).
 char *nvim_get_curbuf_b_p_fo(void)
@@ -321,8 +323,115 @@ int nvim_textfmt_fex_format(linenr_T lnum, long count, int c)
   return fex_format(lnum, count, c);
 }
 
+// =============================================================================
+// C Accessor Functions for Auto-format (Phase T4)
+// =============================================================================
+
+/// Get curwin->w_cursor.col (accessor for Rust).
+colnr_T nvim_textfmt_get_curwin_cursor_col(void)
+{
+  return curwin->w_cursor.col;
+}
+
+/// Call dec_cursor (accessor for Rust).
+void nvim_textfmt_dec_cursor(void)
+{
+  dec_cursor();
+}
+
+/// Call inc_cursor (accessor for Rust).
+void nvim_textfmt_inc_cursor(void)
+{
+  inc_cursor();
+}
+
+/// Call gchar_cursor (accessor for Rust).
+int nvim_textfmt_gchar_cursor(void)
+{
+  return gchar_cursor();
+}
+
+/// Get pointer to cursor line content (accessor for Rust).
+char *nvim_textfmt_get_cursor_line_ptr(void)
+{
+  return get_cursor_line_ptr();
+}
+
+/// Get length of cursor line (accessor for Rust).
+colnr_T nvim_textfmt_get_cursor_line_len(void)
+{
+  return get_cursor_line_len();
+}
+
+/// Check WHITECHAR condition (accessor for Rust).
+/// This handles the UTF-8 composing character check.
+bool nvim_textfmt_whitechar(int cc)
+{
+  return ascii_iswhite(cc)
+         && !utf_iscomposing_first(utf_ptr2char((char *)get_cursor_pos_ptr() + 1));
+}
+
+/// Get leader length without flags output (accessor for Rust).
+int nvim_textfmt_get_leader_len_simple(char *line)
+{
+  return get_leader_len(line, NULL, false, true);
+}
+
+/// Call u_save_cursor (accessor for Rust).
+int nvim_textfmt_u_save_cursor(void)
+{
+  return u_save_cursor();
+}
+
+/// Get saved_cursor.col (accessor for Rust).
+colnr_T nvim_textfmt_get_saved_cursor_col(void)
+{
+  return saved_cursor.col;
+}
+
+/// Call coladvance (accessor for Rust).
+void nvim_textfmt_coladvance(void *win, colnr_T col)
+{
+  coladvance((win_T *)win, col);
+}
+
+/// Call check_cursor_col (accessor for Rust).
+void nvim_textfmt_check_cursor_col(void *win)
+{
+  check_cursor_col((win_T *)win);
+}
+
+/// Replace line with added trailing space (accessor for Rust).
+void nvim_textfmt_ml_replace_with_space(linenr_T lnum)
+{
+  char *linep = get_cursor_line_ptr();
+  colnr_T len = get_cursor_line_len();
+  char *plinep = xstrnsave(linep, (size_t)len + 2);
+  plinep[len] = ' ';
+  plinep[len + 1] = NUL;
+  ml_replace(lnum, plinep, false);
+}
+
+/// Call del_char (accessor for Rust).
+int nvim_textfmt_del_char(bool fixpos)
+{
+  return del_char(fixpos);
+}
+
 static bool did_add_space = false;  ///< auto_format() added an extra space
                                     ///< under the cursor
+
+/// Get did_add_space state (accessor for Rust).
+bool nvim_textfmt_get_did_add_space(void)
+{
+  return did_add_space;
+}
+
+/// Set did_add_space state (accessor for Rust).
+void nvim_textfmt_set_did_add_space(bool val)
+{
+  did_add_space = val;
+}
 
 #define WHITECHAR(cc) (ascii_iswhite(cc) \
                        && !utf_iscomposing_first(utf_ptr2char((char *)get_cursor_pos_ptr() + 1)))
@@ -778,90 +887,7 @@ static bool paragraph_start(linenr_T lnum)
 /// @param prev_line   may start in previous line
 void auto_format(bool trailblank, bool prev_line)
 {
-  if (!has_format_option(FO_AUTO)) {
-    return;
-  }
-
-  pos_T pos = curwin->w_cursor;
-  char *old = get_cursor_line_ptr();
-
-  // may remove added space
-  check_auto_format(false);
-
-  // Don't format in Insert mode when the cursor is on a trailing blank, the
-  // user might insert normal text next.  Also skip formatting when "1" is
-  // in 'formatoptions' and there is a single character before the cursor.
-  // Otherwise the line would be broken and when typing another non-white
-  // next they are not joined back together.
-  bool wasatend = (pos.col == get_cursor_line_len());
-  if (*old != NUL && !trailblank && wasatend) {
-    dec_cursor();
-    int cc = gchar_cursor();
-    if (!WHITECHAR(cc) && curwin->w_cursor.col > 0
-        && has_format_option(FO_ONE_LETTER)) {
-      dec_cursor();
-    }
-    cc = gchar_cursor();
-    if (WHITECHAR(cc)) {
-      curwin->w_cursor = pos;
-      return;
-    }
-    curwin->w_cursor = pos;
-  }
-
-  // With the 'c' flag in 'formatoptions' and 't' missing: only format
-  // comments.
-  if (has_format_option(FO_WRAP_COMS) && !has_format_option(FO_WRAP)
-      && get_leader_len(old, NULL, false, true) == 0) {
-    return;
-  }
-
-  // May start formatting in a previous line, so that after "x" a word is
-  // moved to the previous line if it fits there now.  Only when this is not
-  // the start of a paragraph.
-  if (prev_line && !paragraph_start(curwin->w_cursor.lnum)) {
-    curwin->w_cursor.lnum--;
-    if (u_save_cursor() == FAIL) {
-      return;
-    }
-  }
-
-  // Do the formatting and restore the cursor position.  "saved_cursor" will
-  // be adjusted for the text formatting.
-  saved_cursor = pos;
-  format_lines(-1, false);
-  curwin->w_cursor = saved_cursor;
-  saved_cursor.lnum = 0;
-
-  if (curwin->w_cursor.lnum > curbuf->b_ml.ml_line_count) {
-    // "cannot happen"
-    curwin->w_cursor.lnum = curbuf->b_ml.ml_line_count;
-    coladvance(curwin, MAXCOL);
-  } else {
-    check_cursor_col(curwin);
-  }
-
-  // Insert mode: If the cursor is now after the end of the line while it
-  // previously wasn't, the line was broken.  Because of the rule above we
-  // need to add a space when 'w' is in 'formatoptions' to keep a paragraph
-  // formatted.
-  if (!wasatend && has_format_option(FO_WHITE_PAR)) {
-    char *linep = get_cursor_line_ptr();
-    colnr_T len = get_cursor_line_len();
-    if (curwin->w_cursor.col == len) {
-      char *plinep = xstrnsave(linep, (size_t)len + 2);
-      plinep[len] = ' ';
-      plinep[len + 1] = NUL;
-      ml_replace(curwin->w_cursor.lnum, plinep, false);
-      // remove the space later
-      did_add_space = true;
-    } else {
-      // may remove added space
-      check_auto_format(false);
-    }
-  }
-
-  check_cursor(curwin);
+  rs_auto_format(trailblank, prev_line);
 }
 
 /// When an extra space was added to continue a paragraph for auto-formatting,
@@ -871,27 +897,7 @@ void auto_format(bool trailblank, bool prev_line)
 /// @param end_insert  true when ending Insert mode
 void check_auto_format(bool end_insert)
 {
-  if (!did_add_space) {
-    return;
-  }
-
-  int cc = gchar_cursor();
-  if (!WHITECHAR(cc)) {
-    // Somehow the space was removed already.
-    did_add_space = false;
-  } else {
-    int c = ' ';
-    if (!end_insert) {
-      inc_cursor();
-      c = gchar_cursor();
-      dec_cursor();
-    }
-    if (c != NUL) {
-      // The space is no longer at the end of the line, delete it.
-      del_char(false);
-      did_add_space = false;
-    }
-  }
+  rs_check_auto_format(end_insert);
 }
 
 /// Find out textwidth to be used for formatting:
