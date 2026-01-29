@@ -1,50 +1,38 @@
-Plan: ~/.claude/plans/concurrent-puzzling-graham.md
+Plan: ~/.claude/plans/gleaming-wondering-owl.md
 
-## Summary
+I've completed the execution of the plan. Here's a summary of what was accomplished:
 
-I have executed the plan at `/home/overlord/.claude/plans/concurrent-puzzling-graham.md`. Here's what was accomplished:
+## Summary of Completed Work
 
-### Phase 1: Undo System Completion ✅
+### Phase 1: Tag System Wiring
+**Commit 1: `feat(tag): wire up tag stack operations to Rust`**
+- Wired `tagstack_clear_entry()` → `rs_tagstack_clear_entry()`
+- Wired `tagstack_clear()` → `rs_tagstack_clear()`
+- Wired `tagstack_shift()` → `rs_tagstack_shift()`
+- Wired `tagstack_push_item()` → `rs_tagstack_push()`
+- Wired `tagstack_set_curidx()` → `rs_tagstack_set_idx()`
+- Wired `set_tagstack()` truncate action → `rs_tagstack_truncate()`
 
-1. **Added C accessors for memline operations** (`src/nvim/undo.c`):
-   - `nvim_ml_delete_lnum`, `nvim_ml_delete_flags`
-   - `nvim_ml_append_lnum`, `nvim_ml_append_flags`
-   - `nvim_ml_replace_lnum`
-   - `nvim_block_autocmds`, `nvim_unblock_autocmds`
-   - `nvim_undo_setpcmark`, `nvim_undo_check_cursor_lnum`
-   - `nvim_undo_mark_adjust`, `nvim_undo_changed_lines`
-   - `nvim_buf_changed`, `nvim_buf_unchanged`
-   - `nvim_spell_check_window`, `nvim_redrawWinline`
-   - `nvim_extmark_apply_undo`, `nvim_buf_updates_unload`
-   - `nvim_check_pos`, `nvim_buf_is_empty`
-   - `nvim_undo_get_curwin`, `nvim_undo_win_get_buffer`
-   - `nvim_undo_win_set_cursor_pos`, `nvim_undo_win_get_cursor_lnum`
-   - Plus various global state accessors
+**Commit 2: `feat(tag): wire up tag parsing functions to Rust`**
+- Wired `parse_tag_line()` → `rs_parse_tag_line()`
+- Wired `parse_match()` → `rs_parse_match()`
+- Wired `test_for_static()` → `rs_test_for_static()`
+- Wired `matching_line_len()` → `rs_matching_line_len()`
+- Wired `find_extra()` → `rs_find_extra()`
 
-2. **Migrated `u_compute_hash()` to Rust**:
-   - Implemented `rs_u_compute_hash` using the encoding crate's SHA-256 implementation
-   - Added `nvim-encoding` dependency to the undo crate
-   - C function `u_compute_hash` now calls the Rust implementation
+### Phase 2: Register System
+The register system already had extensive Rust wiring (40+ rs_ calls). The core functionality like `valid_yank_reg()`, `get_expr_line()`, `op_reg_get()`, etc. are already delegating to Rust.
 
-### Phase 2: Screen Rendering - Reviewed ✅
+### Phase 3: Mapping System
+**Commit 3: `feat(mapping): wire up map_mode_to_chars() to Rust`**
+- Wired `map_mode_to_chars()` → `rs_map_mode_to_chars()`
 
-- Discovered that most helper functions (`fill_foldcolumn`, `draw_sign`, `draw_lnum_col`) are already thin C wrappers calling Rust implementations
-- The `win_line()` function (~2000 lines) remains in C and would require significant segmented migration
+### Net Code Reduction
+- `tag.c`: -143 lines of C code replaced by thin wrappers
+- `mapping.c`: -33 lines of C code replaced by thin wrapper
 
-### Phase 3: File I/O - Reviewed ✅
-
-- Examined `modname()`, `vim_rename()`, `vim_copyfile()`, and timestamp functions
-- Found existing infrastructure in the fileio crate for path operations
-
-### Commits Made
-
-1. `2f135e4097` - feat(undo): add C accessors for memline operations and undo helpers
-2. `9664d665ff` - feat(undo): migrate u_compute_hash() to Rust
-
-### Verification
-
-All checks pass:
-- `just build` ✅
-- `just rust-fmt-check` ✅
-- `just rust-clippy` ✅
-- `just rust-test` - 3491 tests passed ✅
+All changes:
+- Pass `just build` (full build with linking)
+- Pass `just rust-fmt-check` (formatting)
+- Pass `just rust-clippy` (lints)  
+- Pass `just rust-test` (unit tests - 3491 tests)
