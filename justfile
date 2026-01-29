@@ -74,7 +74,6 @@ rust-test:
       -p nvim-cursor \
       -p nvim-cursor-shape \
       -p nvim-decoration \
-      -p nvim-diff \
       -p nvim-drawline \
       -p nvim-edit \
       -p nvim-encoding \
@@ -114,7 +113,6 @@ rust-test:
       -p nvim-register \
       -p nvim-rs \
       -p nvim-search \
-      -p nvim-spell \
       -p nvim-statusline \
       -p nvim-strings \
       -p nvim-syntax \
