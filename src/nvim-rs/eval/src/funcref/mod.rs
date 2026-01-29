@@ -232,6 +232,114 @@ pub extern "C" fn rs_func_is_dict_func(flags: c_int) -> c_int {
 }
 
 // =============================================================================
+// Additional FFI Exports (E8)
+// =============================================================================
+
+/// FFI: Get FUNC_FLAG_METHOD constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_func_flag_method() -> c_int {
+    FUNC_FLAG_METHOD
+}
+
+/// FFI: Get FUNC_FLAG_SCRIPT constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_func_flag_script() -> c_int {
+    FUNC_FLAG_SCRIPT
+}
+
+/// FFI: Get FUNC_FLAG_ABORT constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_func_flag_abort() -> c_int {
+    FUNC_FLAG_ABORT
+}
+
+/// FFI: Get CALL_EXCMD constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_call_excmd() -> c_int {
+    CALL_EXCMD
+}
+
+/// FFI: Check if function is script-local.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_func_is_script_local(flags: c_int) -> c_int {
+    c_int::from((flags & FUNC_FLAG_SCRIPT) != 0)
+}
+
+/// FFI: Check if function aborts on error.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_func_aborts_on_error(flags: c_int) -> c_int {
+    c_int::from((flags & FUNC_FLAG_ABORT) != 0)
+}
+
+/// FFI: Combine function flags.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_combine_func_flags(flag1: c_int, flag2: c_int) -> c_int {
+    flag1 | flag2
+}
+
+/// FFI: Check if function flags contain a specific flag.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_func_has_flag(flags: c_int, flag: c_int) -> c_int {
+    c_int::from((flags & flag) != 0)
+}
+
+/// FFI: Clear a specific flag from function flags.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_func_clear_flag(flags: c_int, flag: c_int) -> c_int {
+    flags & !flag
+}
+
+/// FFI: Set a specific flag in function flags.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_func_set_flag(flags: c_int, flag: c_int) -> c_int {
+    flags | flag
+}
+
+/// FFI: Check if function type is valid (not unknown).
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_func_type_is_valid(func_type: c_int) -> c_int {
+    c_int::from(func_type != FUNC_UNKNOWN)
+}
+
+/// FFI: Check if function type is callable.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_func_type_is_callable(func_type: c_int) -> c_int {
+    c_int::from(matches!(
+        func_type,
+        FUNC_BUILTIN | FUNC_USER | FUNC_LAMBDA | FUNC_PARTIAL
+    ))
+}
+
+/// FFI: Check if call is a method call.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_is_method_call(call_type: c_int) -> c_int {
+    c_int::from(call_type == CALL_METHOD)
+}
+
+/// FFI: Check if call is from :call command.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_is_excmd_call(call_type: c_int) -> c_int {
+    c_int::from(call_type == CALL_EXCMD)
+}
+
+/// FFI: Get minimum args for function (0 = no bound args).
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_func_min_args(has_varargs: c_int, defined_args: c_int) -> c_int {
+    if has_varargs != 0 { 0 } else { defined_args }
+}
+
+/// FFI: Check if arg count is valid for function.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_func_argc_valid(argc: c_int, min_args: c_int, has_varargs: c_int) -> c_int {
+    if argc < min_args {
+        return 0;
+    }
+    // With varargs, any count >= min is valid
+    // Without varargs, caller should also check max
+    c_int::from(has_varargs != 0 || argc >= min_args)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

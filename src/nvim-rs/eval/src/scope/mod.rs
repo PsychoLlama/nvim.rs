@@ -166,6 +166,126 @@ pub extern "C" fn rs_is_persistent_scope(scope: c_int) -> c_int {
 }
 
 // =============================================================================
+// Additional FFI Exports (E7)
+// NOTE: Scope constants (rs_scope_global, etc.) are exported from lib.rs
+// =============================================================================
+
+/// FFI: Get SCOPE_READONLY flag.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_scope_readonly_flag() -> c_int {
+    SCOPE_READONLY
+}
+
+/// FFI: Get SCOPE_ITERATING flag.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_scope_iterating_flag() -> c_int {
+    SCOPE_ITERATING
+}
+
+/// FFI: Get SCOPE_EXTENDABLE flag.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_scope_extendable_flag() -> c_int {
+    SCOPE_EXTENDABLE
+}
+
+/// FFI: Check if two scopes are the same.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_scopes_equal(scope1: c_int, scope2: c_int) -> c_int {
+    c_int::from(scope1 == scope2)
+}
+
+/// FFI: Check if scope can be written to (not read-only).
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_scope_is_writable(scope: c_int) -> c_int {
+    c_int::from(!is_scope_readonly(scope))
+}
+
+/// FFI: Check if scope is a function scope (l: or a:).
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_is_function_scope(scope: c_int) -> c_int {
+    c_int::from(matches!(scope, SCOPE_LOCAL | SCOPE_ARG))
+}
+
+/// FFI: Check if scope is buffer-specific (b:).
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_is_buffer_scope(scope: c_int) -> c_int {
+    c_int::from(scope == SCOPE_BUFFER)
+}
+
+/// FFI: Check if scope is tab-specific (t:).
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_is_tab_scope(scope: c_int) -> c_int {
+    c_int::from(scope == SCOPE_TAB)
+}
+
+/// FFI: Get scope name as string length (including null terminator).
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_scope_name_len(scope: c_int) -> c_int {
+    match scope {
+        SCOPE_GLOBAL | SCOPE_SCRIPT | SCOPE_BUFFER | SCOPE_WINDOW => 7, // "global", "script", "buffer", "window"
+        SCOPE_LOCAL => 6, // "local"
+        SCOPE_ARG | SCOPE_VIM | SCOPE_TAB => 4, // "arg", "vim", "tab"
+        _ => 8,           // "unknown"
+    }
+}
+
+/// FFI: Check if variable name starts with scope prefix (e.g., "g:").
+///
+/// # Safety
+/// `name` must be valid for at least `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_has_scope_prefix(name: *const u8, len: c_int) -> c_int {
+    if name.is_null() || len < 2 {
+        return 0;
+    }
+
+    let first = *name;
+    let second = *name.add(1);
+
+    if second != b':' {
+        return 0;
+    }
+
+    c_int::from(is_valid_scope_prefix(first))
+}
+
+/// FFI: Get scope from variable name prefix.
+///
+/// # Safety
+/// `name` must be valid for at least `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_scope_from_name(name: *const u8, len: c_int) -> c_int {
+    if name.is_null() || len < 2 {
+        return SCOPE_NONE;
+    }
+
+    let first = *name;
+    let second = *name.add(1);
+
+    if second != b':' {
+        return SCOPE_NONE;
+    }
+
+    scope_from_char(first)
+}
+
+/// FFI: Get the starting offset after scope prefix (0 if no prefix).
+///
+/// # Safety
+/// `name` must be valid for at least `len` bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_scope_prefix_len(name: *const u8, len: c_int) -> c_int {
+    if name.is_null() || len < 2 {
+        return 0;
+    }
+
+    let first = *name;
+    let second = *name.add(1);
+
+    if second == b':' && is_valid_scope_prefix(first) { 2 } else { 0 }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
