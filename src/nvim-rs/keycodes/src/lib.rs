@@ -9,6 +9,9 @@
 
 use std::os::raw::{c_int, c_uint};
 
+/// Script ID type (same as int in C).
+type ScidT = c_int;
+
 // Modifier mask constants (from keycodes.h)
 const MOD_MASK_SHIFT: c_int = 0x02;
 const MOD_MASK_CTRL: c_int = 0x04;
@@ -154,6 +157,19 @@ const FSK_KEYCODE: c_int = 0x01; // prefer key code, e.g. K_DEL in place of DEL
 const FSK_KEEP_X_KEY: c_int = 0x02; // don't translate xHome to Home key
 const FSK_IN_STRING: c_int = 0x04; // in string, double quote is escaped
 const FSK_SIMPLIFY: c_int = 0x08; // simplify <C-H>, etc.
+
+// REPTERM_* flags for replace_termcodes
+const REPTERM_FROM_PART: c_int = 1;
+const REPTERM_DO_LT: c_int = 2;
+#[allow(dead_code)]
+const REPTERM_NO_SPECIAL: c_int = 4;
+const REPTERM_NO_SIMPLIFY: c_int = 8;
+
+// Special key extra codes for replace_termcodes
+const KE_SNR: c_int = 82; // <SNR> script-local prefix
+
+// Ctrl-V character (for escape handling)
+const CTRL_V: u8 = 0x16;
 
 // STR2NR constants for vim_str2nr
 const STR2NR_BIN: c_int = 0x01;
@@ -495,6 +511,24 @@ extern "C" {
 
     /// Get `e_invarg` error string.
     static e_invarg: *const std::ffi::c_char;
+
+    // =============================================================================
+    // Accessor functions for replace_termcodes
+    // =============================================================================
+
+    /// Get current script ID for `<SID>` translation.
+    fn nvim_keycodes_get_current_sid() -> ScidT;
+
+    /// Get value of `g:mapleader` variable.
+    /// Returns NULL if not set.
+    fn nvim_keycodes_get_leader() -> *mut std::ffi::c_char;
+
+    /// Get value of `g:maplocalleader` variable.
+    /// Returns NULL if not set.
+    fn nvim_keycodes_get_local_leader() -> *mut std::ffi::c_char;
+
+    /// Emit the "using `<SID>` not in script context" error message.
+    fn nvim_keycodes_emit_sid_error();
 }
 
 /// Try to find key "c" in the special key table.
@@ -1907,6 +1941,219 @@ pub unsafe extern "C" fn rs_special_to_buf(
     }
 
     dlen
+}
+
+/// Check if a slice starts with the given pattern (case-insensitive).
+fn starts_with_ignore_case(haystack: &[u8], needle: &[u8]) -> bool {
+    if haystack.len() < needle.len() {
+        return false;
+    }
+    haystack[..needle.len()]
+        .iter()
+        .zip(needle.iter())
+        .all(|(h, n)| h.eq_ignore_ascii_case(n))
+}
+
+/// Replace terminal codes in a string.
+///
+/// This is the main function for translating keycode notation like `<C-S-Up>`,
+/// `<SID>`, `<Leader>`, etc. into their internal representation.
+///
+/// # Arguments
+/// * `from` - Source string containing keycodes to translate.
+/// * `from_len` - Length of the source string.
+/// * `buf` - Buffer to write the result to. Must be at least `from_len * 6 + 1` bytes.
+/// * `sid_arg` - Script ID to use for `<SID>`, or 0 to use `current_sctx`.
+/// * `flags` - `REPTERM_*` flags.
+/// * `did_simplify` - Output pointer, set to true if simplification occurred.
+/// * `do_backslash` - Whether backslash is a special escape character.
+/// * `do_special` - Whether to process `<>` notation.
+///
+/// # Returns
+/// Pointer to the result buffer (same as `buf`), or NULL on overflow with fixed buffer.
+///
+/// # Safety
+/// - `from` must be a valid pointer to at least `from_len` bytes.
+/// - `buf` must be a valid pointer to at least `from_len * 6 + 1` bytes.
+/// - `did_simplify` may be null.
+#[no_mangle]
+#[allow(
+    clippy::too_many_lines,
+    clippy::too_many_arguments,
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation
+)]
+pub unsafe extern "C" fn rs_replace_termcodes(
+    from: *const std::ffi::c_char,
+    from_len: usize,
+    buf: *mut std::ffi::c_char,
+    sid_arg: ScidT,
+    flags: c_int,
+    did_simplify: *mut bool,
+    do_backslash: bool,
+    do_special: bool,
+) -> *mut std::ffi::c_char {
+    if from.is_null() || buf.is_null() || from_len == 0 {
+        return std::ptr::null_mut();
+    }
+
+    let from_u8 = from.cast::<u8>();
+    let buf_u8 = buf.cast::<u8>();
+    let end = from_u8.add(from_len - 1);
+
+    let mut src = from_u8;
+    let mut dlen: usize = 0;
+
+    // Copy each byte from *from to result[dlen]
+    while src <= end {
+        // Check for special <> keycodes, like "<C-S-LeftMouse>"
+        if do_special
+            && ((flags & REPTERM_DO_LT) != 0
+                || (end.offset_from(src) >= 3
+                    && !starts_with_ignore_case(
+                        std::slice::from_raw_parts(src, 4.min((end.offset_from(src) + 1) as usize)),
+                        b"<lt>",
+                    )))
+        {
+            // Change <SID>Func to K_SNR <script-nr> _Func.  This name is used
+            // for script-local user functions.
+            // (room: 5 * 6 = 30 bytes; needed: 3 + <nr> + 1 <= 14)
+            let remaining = end.offset_from(src) as usize + 1;
+            if remaining >= 5
+                && starts_with_ignore_case(std::slice::from_raw_parts(src, 5), b"<SID>")
+            {
+                let current_sid = nvim_keycodes_get_current_sid();
+                if sid_arg < 0 || (sid_arg == 0 && current_sid <= 0) {
+                    nvim_keycodes_emit_sid_error();
+                } else {
+                    let sid = if sid_arg != 0 { sid_arg } else { current_sid };
+                    src = src.add(5);
+                    *buf_u8.add(dlen) = K_SPECIAL;
+                    dlen += 1;
+                    *buf_u8.add(dlen) = KS_EXTRA as u8;
+                    dlen += 1;
+                    *buf_u8.add(dlen) = KE_SNR as u8;
+                    dlen += 1;
+                    // Write the script ID as a decimal number
+                    let sid_str = format!("{sid}");
+                    for byte in sid_str.as_bytes() {
+                        *buf_u8.add(dlen) = *byte;
+                        dlen += 1;
+                    }
+                    *buf_u8.add(dlen) = b'_';
+                    dlen += 1;
+                    continue;
+                }
+            }
+
+            // Try translating standard <> keycodes
+            let mut src_ptr = src.cast::<std::ffi::c_char>();
+            let src_remaining = (end.offset_from(src) + 1) as usize;
+            let trans_flags = FSK_KEYCODE
+                | (if (flags & REPTERM_NO_SIMPLIFY) != 0 {
+                    0
+                } else {
+                    FSK_SIMPLIFY
+                });
+            let slen = rs_trans_special(
+                &raw mut src_ptr,
+                src_remaining,
+                buf.add(dlen),
+                trans_flags,
+                true,
+                did_simplify,
+            );
+            if slen > 0 {
+                dlen += slen as usize;
+                src = src_ptr.cast::<u8>();
+                continue;
+            }
+        }
+
+        if do_special {
+            // Replace <Leader> by the value of "mapleader".
+            // Replace <LocalLeader> by the value of "maplocalleader".
+            // If "mapleader" or "maplocalleader" isn't set use a backslash.
+            let remaining = end.offset_from(src) as usize + 1;
+            let (leader_len, leader_value) = if remaining >= 8
+                && starts_with_ignore_case(std::slice::from_raw_parts(src, 8), b"<Leader>")
+            {
+                (8, nvim_keycodes_get_leader())
+            } else if remaining >= 13
+                && starts_with_ignore_case(std::slice::from_raw_parts(src, 13), b"<LocalLeader>")
+            {
+                (13, nvim_keycodes_get_local_leader())
+            } else {
+                (0, std::ptr::null_mut())
+            };
+
+            if leader_len != 0 {
+                // Allow up to 8 * 6 characters for "mapleader".
+                let leader_str = if leader_value.is_null() || *leader_value.cast::<u8>() == 0 || {
+                    let mut len = 0;
+                    let mut p = leader_value.cast::<u8>();
+                    while *p != 0 {
+                        len += 1;
+                        p = p.add(1);
+                    }
+                    len > 8 * 6
+                } {
+                    b"\\" as *const u8
+                } else {
+                    leader_value.cast::<u8>()
+                };
+
+                let mut s = leader_str;
+                while *s != 0 {
+                    *buf_u8.add(dlen) = *s;
+                    dlen += 1;
+                    s = s.add(1);
+                }
+                src = src.add(leader_len);
+                continue;
+            }
+        }
+
+        // Remove CTRL-V and ignore the next character.
+        // For "from" side the CTRL-V at the end is included, for the "to"
+        // part it is removed.
+        // If 'cpoptions' does not contain 'B', also accept a backslash.
+        let key = *src;
+        if key == CTRL_V || (do_backslash && key == b'\\') {
+            src = src.add(1); // skip CTRL-V or backslash
+            if src > end {
+                if (flags & REPTERM_FROM_PART) != 0 {
+                    *buf_u8.add(dlen) = key;
+                    dlen += 1;
+                }
+                break;
+            }
+        }
+
+        // skip multibyte char correctly
+        let char_len = utfc_ptr2len_len(
+            src.cast::<std::ffi::c_char>(),
+            (end.offset_from(src) + 1) as c_int,
+        );
+        for _ in 0..char_len {
+            // If the character is K_SPECIAL, replace it with K_SPECIAL
+            // KS_SPECIAL KE_FILLER.
+            if *src == K_SPECIAL {
+                *buf_u8.add(dlen) = K_SPECIAL;
+                dlen += 1;
+                *buf_u8.add(dlen) = KS_SPECIAL;
+                dlen += 1;
+                *buf_u8.add(dlen) = KE_FILLER as u8;
+            } else {
+                *buf_u8.add(dlen) = *src;
+            }
+            dlen += 1;
+            src = src.add(1);
+        }
+    }
+    *buf_u8.add(dlen) = 0; // NUL terminate
+
+    buf
 }
 
 #[cfg(test)]

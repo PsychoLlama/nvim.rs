@@ -49,6 +49,9 @@ extern int rs_find_special_key(const char **srcp, size_t src_len, int *modp, int
                                 bool *did_simplify);
 extern unsigned rs_trans_special(const char **srcp, size_t src_len, char *dst, int flags,
                                   bool escape_ks, bool *did_simplify);
+extern char *rs_replace_termcodes(const char *from, size_t from_len, char *buf,
+                                   scid_T sid_arg, int flags, bool *did_simplify,
+                                   bool do_backslash, bool do_special);
 
 // =============================================================================
 // Accessor functions for key_names_table (for Rust FFI)
@@ -96,127 +99,42 @@ size_t nvim_get_key_names_table_name_size(int idx)
   return key_names_table[idx].name.size;
 }
 
+// =============================================================================
+// Accessor functions for replace_termcodes (for Rust FFI)
+// =============================================================================
+
+/// Get current script ID for <SID> translation.
+scid_T nvim_keycodes_get_current_sid(void)
+{
+  return current_sctx.sc_sid;
+}
+
+/// Get value of g:mapleader variable.
+/// Returns NULL if not set.
+char *nvim_keycodes_get_leader(void)
+{
+  return get_var_value("g:mapleader");
+}
+
+/// Get value of g:maplocalleader variable.
+/// Returns NULL if not set.
+char *nvim_keycodes_get_local_leader(void)
+{
+  return get_var_value("g:maplocalleader");
+}
+
+/// Emit the "using <SID> not in script context" error message.
+void nvim_keycodes_emit_sid_error(void)
+{
+  emsg(_(e_usingsid));
+}
+
 /// Lookup a special key code by name using the generated hash function.
 /// Returns the index in key_names_table, or -1 if not found.
 int nvim_get_special_key_code_hash(const char *name, size_t len)
 {
   return get_special_key_code_hash(name, len);
 }
-
-// Some useful tables.
-
-static const struct modmasktable {
-  uint16_t mod_mask;  ///< Bit-mask for particular key modifier.
-  uint16_t mod_flag;  ///< Bit(s) for particular key modifier.
-  char name;  ///< Single letter name of modifier.
-} mod_mask_table[] = {
-  { MOD_MASK_ALT,              MOD_MASK_ALT,           'M' },
-  { MOD_MASK_META,             MOD_MASK_META,          'T' },
-  { MOD_MASK_CTRL,             MOD_MASK_CTRL,          'C' },
-  { MOD_MASK_SHIFT,            MOD_MASK_SHIFT,         'S' },
-  { MOD_MASK_MULTI_CLICK,      MOD_MASK_2CLICK,        '2' },
-  { MOD_MASK_MULTI_CLICK,      MOD_MASK_3CLICK,        '3' },
-  { MOD_MASK_MULTI_CLICK,      MOD_MASK_4CLICK,        '4' },
-  { MOD_MASK_CMD,              MOD_MASK_CMD,           'D' },
-  // 'A' must be the last one
-  { MOD_MASK_ALT,              MOD_MASK_ALT,           'A' },
-  { 0, 0, NUL }
-  // NOTE: when adding an entry, update MAX_KEY_NAME_LEN!
-};
-
-// Shifted key terminal codes and their unshifted equivalent.
-// Don't add mouse codes here, they are handled separately!
-
-#define MOD_KEYS_ENTRY_SIZE 5
-
-static uint8_t modifier_keys_table[] = {
-  //  mod mask      with modifier               without modifier
-  MOD_MASK_SHIFT, '&', '9',                   '@', '1',         // begin
-  MOD_MASK_SHIFT, '&', '0',                   '@', '2',         // cancel
-  MOD_MASK_SHIFT, '*', '1',                   '@', '4',         // command
-  MOD_MASK_SHIFT, '*', '2',                   '@', '5',         // copy
-  MOD_MASK_SHIFT, '*', '3',                   '@', '6',         // create
-  MOD_MASK_SHIFT, '*', '4',                   'k', 'D',         // delete char
-  MOD_MASK_SHIFT, '*', '5',                   'k', 'L',         // delete line
-  MOD_MASK_SHIFT, '*', '7',                   '@', '7',         // end
-  MOD_MASK_CTRL,  KS_EXTRA, KE_C_END,         '@', '7',         // end
-  MOD_MASK_SHIFT, '*', '9',                   '@', '9',         // exit
-  MOD_MASK_SHIFT, '*', '0',                   '@', '0',         // find
-  MOD_MASK_SHIFT, '#', '1',                   '%', '1',         // help
-  MOD_MASK_SHIFT, '#', '2',                   'k', 'h',         // home
-  MOD_MASK_CTRL,  KS_EXTRA, KE_C_HOME,        'k', 'h',         // home
-  MOD_MASK_SHIFT, '#', '3',                   'k', 'I',         // insert
-  MOD_MASK_SHIFT, '#', '4',                   'k', 'l',         // left arrow
-  MOD_MASK_CTRL,  KS_EXTRA, KE_C_LEFT,        'k', 'l',         // left arrow
-  MOD_MASK_SHIFT, '%', 'a',                   '%', '3',         // message
-  MOD_MASK_SHIFT, '%', 'b',                   '%', '4',         // move
-  MOD_MASK_SHIFT, '%', 'c',                   '%', '5',         // next
-  MOD_MASK_SHIFT, '%', 'd',                   '%', '7',         // options
-  MOD_MASK_SHIFT, '%', 'e',                   '%', '8',         // previous
-  MOD_MASK_SHIFT, '%', 'f',                   '%', '9',         // print
-  MOD_MASK_SHIFT, '%', 'g',                   '%', '0',         // redo
-  MOD_MASK_SHIFT, '%', 'h',                   '&', '3',         // replace
-  MOD_MASK_SHIFT, '%', 'i',                   'k', 'r',         // right arr.
-  MOD_MASK_CTRL,  KS_EXTRA, KE_C_RIGHT,       'k', 'r',         // right arr.
-  MOD_MASK_SHIFT, '%', 'j',                   '&', '5',         // resume
-  MOD_MASK_SHIFT, '!', '1',                   '&', '6',         // save
-  MOD_MASK_SHIFT, '!', '2',                   '&', '7',         // suspend
-  MOD_MASK_SHIFT, '!', '3',                   '&', '8',         // undo
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_UP,          'k', 'u',         // up arrow
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_DOWN,        'k', 'd',         // down arrow
-
-  // vt100 F1
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_XF1,         KS_EXTRA, KE_XF1,
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_XF2,         KS_EXTRA, KE_XF2,
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_XF3,         KS_EXTRA, KE_XF3,
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_XF4,         KS_EXTRA, KE_XF4,
-
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F1,          'k', '1',         // F1
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F2,          'k', '2',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F3,          'k', '3',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F4,          'k', '4',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F5,          'k', '5',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F6,          'k', '6',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F7,          'k', '7',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F8,          'k', '8',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F9,          'k', '9',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F10,         'k', ';',         // F10
-
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F11,         'F', '1',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F12,         'F', '2',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F13,         'F', '3',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F14,         'F', '4',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F15,         'F', '5',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F16,         'F', '6',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F17,         'F', '7',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F18,         'F', '8',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F19,         'F', '9',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F20,         'F', 'A',
-
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F21,         'F', 'B',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F22,         'F', 'C',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F23,         'F', 'D',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F24,         'F', 'E',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F25,         'F', 'F',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F26,         'F', 'G',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F27,         'F', 'H',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F28,         'F', 'I',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F29,         'F', 'J',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F30,         'F', 'K',
-
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F31,         'F', 'L',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F32,         'F', 'M',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F33,         'F', 'N',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F34,         'F', 'O',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F35,         'F', 'P',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F36,         'F', 'Q',
-  MOD_MASK_SHIFT, KS_EXTRA, KE_S_F37,         'F', 'R',
-
-  // TAB pseudo code
-  MOD_MASK_SHIFT, 'k', 'B',                   KS_EXTRA, KE_TAB,
-
-  NUL
-};
 
 /// Return the modifier mask bit (#MOD_MASK_*) corresponding to mod name
 ///
@@ -370,9 +288,6 @@ char *replace_termcodes(const char *const from, const size_t from_len, char **co
                         const char *const cpo_val)
   FUNC_ATTR_NONNULL_ARG(1, 3, 7)
 {
-  size_t dlen = 0;
-  const char *const end = from + from_len - 1;
-
   // backslash is a special character
   const bool do_backslash = (vim_strchr(cpo_val, CPO_BSLASH) == NULL);
   const bool do_special = !(flags & REPTERM_NO_SPECIAL);
@@ -382,112 +297,22 @@ char *replace_termcodes(const char *const from, const size_t from_len, char **co
   // Allocate space for the translation.  Worst case a single character is
   // replaced by 6 bytes (shifted special key), plus a NUL at the end.
   const size_t buf_len = allocated ? from_len * 6 + 1 : 128;
-  char *result = allocated ? xmalloc(buf_len) : *bufp;  // buffer for resulting string
+  char *result = allocated ? xmalloc(buf_len) : *bufp;
 
-  const char *src = from;
+  char *ret = rs_replace_termcodes(from, from_len, result, sid_arg, flags,
+                                   did_simplify, do_backslash, do_special);
 
-  // Copy each byte from *from to result[dlen]
-  while (src <= end) {
-    if (!allocated && dlen + 64 > buf_len) {
-      return NULL;
+  if (ret == NULL) {
+    // Overflow with fixed buffer
+    if (allocated) {
+      xfree(result);
     }
-    // Check for special <> keycodes, like "<C-S-LeftMouse>"
-    if (do_special && ((flags & REPTERM_DO_LT) || ((end - src) >= 3
-                                                   && strncmp(src, "<lt>", 4) != 0))) {
-      // Change <SID>Func to K_SNR <script-nr> _Func.  This name is used
-      // for script-local user functions.
-      // (room: 5 * 6 = 30 bytes; needed: 3 + <nr> + 1 <= 14)
-      if (end - src >= 4 && STRNICMP(src, "<SID>", 5) == 0) {
-        if (sid_arg < 0 || (sid_arg == 0 && current_sctx.sc_sid <= 0)) {
-          emsg(_(e_usingsid));
-        } else {
-          const scid_T sid = sid_arg != 0 ? sid_arg : current_sctx.sc_sid;
-          src += 5;
-          result[dlen++] = (char)K_SPECIAL;
-          result[dlen++] = (char)KS_EXTRA;
-          result[dlen++] = KE_SNR;
-          snprintf(result + dlen, buf_len - dlen, "%" PRIdSCID, sid);
-          dlen += strlen(result + dlen);
-          result[dlen++] = '_';
-          continue;
-        }
-      }
-
-      size_t slen = trans_special(&src, (size_t)(end - src) + 1, result + dlen,
-                                  FSK_KEYCODE | ((flags & REPTERM_NO_SIMPLIFY) ? 0 : FSK_SIMPLIFY),
-                                  true, did_simplify);
-      if (slen) {
-        dlen += slen;
-        continue;
-      }
-    }
-
-    if (do_special) {
-      char *p, *s;
-      int len;
-
-      // Replace <Leader> by the value of "mapleader".
-      // Replace <LocalLeader> by the value of "maplocalleader".
-      // If "mapleader" or "maplocalleader" isn't set use a backslash.
-      if (end - src >= 7 && STRNICMP(src, "<Leader>", 8) == 0) {
-        len = 8;
-        p = get_var_value("g:mapleader");
-      } else if (end - src >= 12 && STRNICMP(src, "<LocalLeader>", 13) == 0) {
-        len = 13;
-        p = get_var_value("g:maplocalleader");
-      } else {
-        len = 0;
-        p = NULL;
-      }
-
-      if (len != 0) {
-        // Allow up to 8 * 6 characters for "mapleader".
-        if (p == NULL || *p == NUL || strlen(p) > 8 * 6) {
-          s = "\\";
-        } else {
-          s = p;
-        }
-        while (*s != NUL) {
-          result[dlen++] = *s++;
-        }
-        src += len;
-        continue;
-      }
-    }
-
-    // Remove CTRL-V and ignore the next character.
-    // For "from" side the CTRL-V at the end is included, for the "to"
-    // part it is removed.
-    // If 'cpoptions' does not contain 'B', also accept a backslash.
-    char key = *src;
-    if (key == Ctrl_V || (do_backslash && key == '\\')) {
-      src++;  // skip CTRL-V or backslash
-      if (src > end) {
-        if (flags & REPTERM_FROM_PART) {
-          result[dlen++] = key;
-        }
-        break;
-      }
-    }
-
-    // skip multibyte char correctly
-    for (ssize_t i = utfc_ptr2len_len(src, (int)(end - src) + 1); i > 0; i--) {
-      // If the character is K_SPECIAL, replace it with K_SPECIAL
-      // KS_SPECIAL KE_FILLER.
-      if (*src == (char)K_SPECIAL) {
-        result[dlen++] = (char)K_SPECIAL;
-        result[dlen++] = (char)KS_SPECIAL;
-        result[dlen++] = KE_FILLER;
-      } else {
-        result[dlen++] = *src;
-      }
-      src++;
-    }
+    *bufp = NULL;
+    return NULL;
   }
-  result[dlen] = NUL;
 
   if (allocated) {
-    *bufp = xrealloc(result, dlen + 1);
+    *bufp = xrealloc(result, strlen(result) + 1);
   }
 
   return *bufp;
