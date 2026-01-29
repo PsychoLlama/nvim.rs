@@ -8271,6 +8271,28 @@ void nvim_rex_set_nfa_endp(void *p) { nfa_endp = p; }
 int nvim_parse_get_nfa_re_flags(void) { return nfa_re_flags; }
 void nvim_parse_set_nfa_re_flags(int f) { nfa_re_flags = f; }
 
+// NFA postfix output accessors for Rust
+int *nvim_nfa_get_post_ptr(void) { return post_ptr; }
+int *nvim_nfa_get_post_start(void) { return post_start; }
+
+// Emit a token to the NFA postfix output
+void nvim_nfa_emit(int c)
+{
+  if (post_ptr >= post_end) {
+    realloc_post_list();
+  }
+  *post_ptr++ = c;
+}
+
+// Check if did_emsg was set (error occurred during parsing)
+int nvim_regexp_check_did_emsg(void) { return did_emsg; }
+
+// Forward declaration for nfa_regatom (defined later)
+static int nfa_regatom(void);
+
+// Wrapper to expose nfa_regatom to Rust
+int nvim_nfa_regatom(void) { return nfa_regatom(); }
+
 // Helper functions used when doing re2post() ... regatom() parsing
 #define EMIT(c) \
   do { \

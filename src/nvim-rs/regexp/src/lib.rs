@@ -67,6 +67,7 @@ pub mod multiline;
 pub mod nfa_compile;
 pub mod nfa_exec;
 pub mod nfa_match;
+pub mod nfa_parser;
 pub mod nfa_pattern;
 pub mod nfa_states;
 pub mod parser;
@@ -159,6 +160,7 @@ pub use nfa_match::{
     rs_match_context_current_byte, rs_match_context_new, rs_match_context_new_multi,
     rs_pim_matched, rs_pim_needs_exec, rs_set_pim_matched, rs_set_pim_nomatch, rs_state_in_list,
 };
+pub use nfa_parser::{rs_nfa_reg, rs_nfa_regbranch, rs_nfa_regconcat, rs_nfa_regpiece};
 pub use nfa_pattern::{rs_nfa_free_postfix, rs_nfa_parse_pattern};
 pub use nfa_states::{
     rs_check_char_class, rs_nfa_get_subexpr_idx, rs_nfa_is_char_class, rs_nfa_is_position_match,
