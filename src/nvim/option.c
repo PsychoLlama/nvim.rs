@@ -614,6 +614,8 @@ void nvim_set_info_message(int val) { info_message = val != 0; }
 
 // Global option accessors for Rust callbacks
 int nvim_get_p_acd(void) { return p_acd; }
+const char *nvim_get_p_path(void) { return p_path; }
+const char *nvim_get_p_cdpath(void) { return p_cdpath; }
 int nvim_get_p_wc(void) { return (int)p_wc; }
 void nvim_set_p_wc(int val) { p_wc = val; }
 OptInt nvim_get_p_window(void) { return p_window; }

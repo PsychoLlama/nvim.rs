@@ -109,9 +109,23 @@ extern "C" {
 
     // Option values
     fn nvim_get_p_fic() -> c_int;
+    #[allow(dead_code)]
+    fn nvim_get_p_path() -> *const c_char;
+    #[allow(dead_code)]
+    fn nvim_get_p_cdpath() -> *const c_char;
 
-    // Current buffer suffix option
+    // Current buffer accessors
     fn nvim_get_curbuf_sua() -> *const c_char;
+    #[allow(dead_code)]
+    fn nvim_curbuf_get_ffname() -> *const c_char;
+    #[allow(dead_code)]
+    fn nvim_curbuf_get_path() -> *const c_char;
+    #[allow(dead_code)]
+    fn nvim_curbuf_get_inex() -> *const c_char;
+
+    // Current window accessors
+    #[allow(dead_code)]
+    fn nvim_curwin_get_cursor_col() -> c_int;
     fn copy_option_part(
         option: *mut *mut c_char,
         buf: *mut c_char,

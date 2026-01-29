@@ -414,6 +414,24 @@ const char *nvim_buf_get_sfname(buf_T *buf)
   return buf->b_sfname;
 }
 
+/// Get curbuf->b_ffname (full filename) - accessor for Rust.
+const char *nvim_curbuf_get_ffname(void)
+{
+  return curbuf->b_ffname;
+}
+
+/// Get curbuf->b_p_path (buffer-local 'path' option) - accessor for Rust.
+const char *nvim_curbuf_get_path(void)
+{
+  return curbuf->b_p_path;
+}
+
+/// Get curbuf->b_p_inex (buffer-local 'includeexpr' option) - accessor for Rust.
+const char *nvim_curbuf_get_inex(void)
+{
+  return curbuf->b_p_inex;
+}
+
 /// Get the NameBuff global (accessor for Rust).
 const char *nvim_get_namebuff(void)
 {
