@@ -89,6 +89,7 @@ extern int rs_can_get_old_char(void);
 extern int rs_get_old_char(void);
 extern void rs_clear_old_char(void);
 extern void rs_restore_old_char_state(void);
+extern int rs_ins_char_typebuf(int c, int modifiers, int on_key_ignore);
 
 /// State for adding bytes to a recording or 'showcmd'.
 typedef struct {
@@ -1061,15 +1062,7 @@ int ins_typebuf(char *str, int noremap, int offset, bool nottyped, bool silent)
 /// @return the length of what was inserted
 int ins_char_typebuf(int c, int modifiers, bool on_key_ignore)
 {
-  char buf[MB_MAXBYTES * 3 + 4];
-  unsigned len = special_to_buf(c, modifiers, true, buf);
-  assert(len < sizeof(buf));
-  buf[len] = NUL;
-  ins_typebuf(buf, KeyNoremap, 0, !KeyTyped, cmd_silent);
-  if (KeyTyped && on_key_ignore) {
-    on_key_ignore_len += len;
-  }
-  return (int)len;
+  return rs_ins_char_typebuf(c, modifiers, on_key_ignore ? 1 : 0);
 }
 
 /// Return true if the typeahead buffer was changed (while waiting for a
@@ -1631,13 +1624,9 @@ int vgetc(void)
 
   // If a character was put back with vungetc, it was already processed.
   // Return it directly.
-  if (can_get_old_char()) {
-    c = old_char;
-    old_char = -1;
-    mod_mask = old_mod_mask;
-    mouse_grid = old_mouse_grid;
-    mouse_row = old_mouse_row;
-    mouse_col = old_mouse_col;
+  if (rs_can_get_old_char()) {
+    c = rs_get_old_char();
+    rs_restore_old_char_state();
   } else {
     // number of characters recorded from the last vgetc() call
     static size_t last_vgetc_recorded_len = 0;
@@ -1871,8 +1860,8 @@ int plain_vgetc(void)
 /// Returns NUL if no character is available.
 int vpeekc(void)
 {
-  if (can_get_old_char()) {
-    return old_char;
+  if (rs_can_get_old_char()) {
+    return rs_get_old_char();
   }
   return vgetorpeek(false);
 }
@@ -3785,4 +3774,15 @@ void nvim_set_mouse_col(int val)
 int nvim_can_get_old_char(void)
 {
   return can_get_old_char() ? 1 : 0;
+}
+
+// Accessor for on_key_ignore_len
+size_t nvim_get_on_key_ignore_len(void)
+{
+  return on_key_ignore_len;
+}
+
+void nvim_add_on_key_ignore_len(size_t val)
+{
+  on_key_ignore_len += val;
 }

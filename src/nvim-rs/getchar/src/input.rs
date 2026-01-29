@@ -76,7 +76,25 @@ extern "C" {
 
     // Can get old char wrapper
     fn nvim_can_get_old_char() -> c_int;
+
+    // For ins_char_typebuf
+    fn nvim_get_keynoremap() -> c_int;
+    fn nvim_get_keytyped() -> c_int;
+    fn nvim_get_cmd_silent() -> c_int;
+    fn nvim_add_on_key_ignore_len(val: usize);
+
+    // External Rust functions
+    fn rs_special_to_buf(key: c_int, modifiers: c_int, escape_ks: c_int, dst: *mut u8) -> c_uint;
+    fn rs_ins_typebuf(
+        str: *const u8,
+        noremap: c_int,
+        offset: c_int,
+        nottyped: c_int,
+        silent: c_int,
+    ) -> c_int;
 }
+
+use std::ffi::c_uint;
 
 // =============================================================================
 // Special Key Utilities
@@ -423,6 +441,52 @@ pub unsafe extern "C" fn rs_restore_old_char_state() {
     nvim_set_mouse_row(nvim_get_old_mouse_row());
     nvim_set_mouse_col(nvim_get_old_mouse_col());
     nvim_set_old_char(-1);
+}
+
+/// Maximum bytes for a special key sequence with modifiers
+/// MB_MAXBYTES * 3 + 4 = 6 * 3 + 4 = 22
+const MB_MAXBYTES_TIMES_3_PLUS_4: usize = 22;
+
+/// Put character "c" back into the typeahead buffer.
+///
+/// Can be used for a character obtained by vgetc() that needs to be put back.
+/// Uses cmd_silent, KeyTyped and KeyNoremap to restore the flags belonging to
+/// the char.
+///
+/// # Arguments
+/// * `c` - Character to insert
+/// * `modifiers` - Key modifiers
+/// * `on_key_ignore` - Don't store these bytes for vim.on_key()
+///
+/// # Returns
+/// The length of what was inserted
+///
+/// # Safety
+/// Calls C accessor functions and rs_special_to_buf, rs_ins_typebuf.
+#[no_mangle]
+pub unsafe extern "C" fn rs_ins_char_typebuf(
+    c: c_int,
+    modifiers: c_int,
+    on_key_ignore: c_int,
+) -> c_int {
+    let mut buf = [0u8; MB_MAXBYTES_TIMES_3_PLUS_4];
+    let len = rs_special_to_buf(c, modifiers, 1, buf.as_mut_ptr());
+    // NUL-terminate the buffer
+    buf[len as usize] = 0;
+
+    let keynoremap = nvim_get_keynoremap();
+    let keytyped = nvim_get_keytyped();
+    let cmd_silent = nvim_get_cmd_silent();
+
+    // ins_typebuf(buf, KeyNoremap, 0, !KeyTyped, cmd_silent)
+    let nottyped = c_int::from(keytyped == 0); // !KeyTyped
+    rs_ins_typebuf(buf.as_ptr(), keynoremap, 0, nottyped, cmd_silent);
+
+    if keytyped != 0 && on_key_ignore != 0 {
+        nvim_add_on_key_ignore_len(len as usize);
+    }
+
+    len as c_int
 }
 
 /// Translate a special key sequence to its key code.
