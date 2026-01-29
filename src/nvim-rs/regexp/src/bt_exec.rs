@@ -28,12 +28,13 @@ use std::ptr;
 
 use crate::bt_compile::{next, op, operand};
 use crate::bt_opcodes::{
-    get_backref_num, get_mclose_num, get_mopen_num, is_backref, is_mclose, is_mopen, ADD_NL, ALPHA,
-    ANY, ANYBUT, ANYOF, BACK, BEHIND, BHPOS, BOL, BOW, BRACE_COMPLEX, BRACE_LIMITS, BRACE_SIMPLE,
-    BRANCH, CURSOR, DIGIT, END, EOL, EOW, EXACTLY, FNAME, HEAD, HEX, IDENT, LOWER, MATCH,
-    MULTIBYTECODE, NALPHA, NCLOSE, NDIGIT, NEWL, NHEAD, NHEX, NLOWER, NOBEHIND, NOMATCH, NOPEN,
-    NOTHING, NUPPER, NWHITE, NWORD, OCTAL, PLUS, PRINT, RE_BOF, RE_COL, RE_COMPOSING, RE_EOF,
-    RE_LNUM, RE_MARK, RE_VCOL, RE_VISUAL, SFNAME, SKWORD, SPRINT, STAR, SUBPAT, UPPER, WHITE, WORD,
+    get_backref_num, get_mclose_num, get_mopen_num, is_backref, is_mclose, is_mopen, operand_max,
+    operand_min, ADD_NL, ALPHA, ANY, ANYBUT, ANYOF, BACK, BEHIND, BHPOS, BOL, BOW, BRACE_COMPLEX,
+    BRACE_LIMITS, BRACE_SIMPLE, BRANCH, CURSOR, DIGIT, END, EOL, EOW, EXACTLY, FNAME, HEAD, HEX,
+    IDENT, LOWER, MATCH, MULTIBYTECODE, NALPHA, NCLOSE, NDIGIT, NEWL, NHEAD, NHEX, NLOWER,
+    NOBEHIND, NOMATCH, NOPEN, NOTHING, NUPPER, NWHITE, NWORD, OCTAL, PLUS, PRINT, RE_BOF, RE_COL,
+    RE_COMPOSING, RE_EOF, RE_LNUM, RE_MARK, RE_VCOL, RE_VISUAL, SFNAME, SKWORD, SPRINT, STAR,
+    SUBPAT, UPPER, WHITE, WORD,
 };
 use crate::bt_state::{BackPosTable, RegSave, RegStack, RegStar, RegState, NSUBEXP};
 
@@ -115,6 +116,15 @@ pub struct MatchState {
 
     /// Back position table
     backpos: BackPosTable,
+
+    /// BRACE_SIMPLE min/max values (from preceding BRACE_LIMITS)
+    bl_minval: i64,
+    bl_maxval: i64,
+
+    /// BRACE_COMPLEX min/max/count arrays (for nested braces \{n,m})
+    brace_min: [i64; NSUBEXP],
+    brace_max: [i64; NSUBEXP],
+    brace_count: [i64; NSUBEXP],
 }
 
 impl MatchState {
@@ -135,6 +145,11 @@ impl MatchState {
             need_clear_subexpr: false,
             stack: RegStack::new(),
             backpos: BackPosTable::new(),
+            bl_minval: 0,
+            bl_maxval: i64::MAX,
+            brace_min: [0; NSUBEXP],
+            brace_max: [0; NSUBEXP],
+            brace_count: [0; NSUBEXP],
         }
     }
 
@@ -155,6 +170,11 @@ impl MatchState {
             need_clear_subexpr: false,
             stack: RegStack::new(),
             backpos: BackPosTable::new(),
+            bl_minval: 0,
+            bl_maxval: i64::MAX,
+            brace_min: [0; NSUBEXP],
+            brace_max: [0; NSUBEXP],
+            brace_count: [0; NSUBEXP],
         }
     }
 
@@ -770,17 +790,25 @@ unsafe fn match_one_op(state: &mut MatchState, scan: *const u8, opcode: c_int) -
         }
 
         BRACE_SIMPLE => {
-            // {n,m} on simple atom - get limits from preceding BRACE_LIMITS
+            // {n,m} on simple atom - use limits from preceding BRACE_LIMITS
             let opnd = operand(scan);
-            // BRACE_LIMITS should precede this, limits are in the next bytes
-            // For now, treat as unbounded (like *)
-            let count = regrepeat(state, opnd, i64::MAX);
+            let minval = state.bl_minval;
+            let maxval = state.bl_maxval;
 
-            if count > 0 {
+            // Match up to maxval times
+            let count = regrepeat(state, opnd, maxval);
+
+            // Check if we matched enough
+            if count < minval {
+                return MatchStatus::NoMatch;
+            }
+
+            if count > minval {
+                // Can backtrack: set up backtrack point
                 let star = RegStar {
                     count,
-                    minval: 0,
-                    maxval: count,
+                    minval,
+                    maxval,
                 };
                 state.stack.push_star(star);
                 if !state.push_backtrack(RegState::StarLong, next_scan as *mut u8) {
@@ -791,7 +819,20 @@ unsafe fn match_one_op(state: &mut MatchState, scan: *const u8, opcode: c_int) -
         }
 
         BRACE_LIMITS => {
-            // Just a marker with min/max values, skip to next
+            // Store min/max values for following BRACE_SIMPLE or BRACE_COMPLEX
+            state.bl_minval = operand_min(scan);
+            state.bl_maxval = operand_max(scan);
+
+            // Check if followed by BRACE_COMPLEX (indexed)
+            let next_op = op(next_scan);
+            if (BRACE_COMPLEX..BRACE_COMPLEX + 10).contains(&next_op) {
+                let idx = (next_op - BRACE_COMPLEX) as usize;
+                if idx < NSUBEXP {
+                    state.brace_min[idx] = state.bl_minval;
+                    state.brace_max[idx] = state.bl_maxval;
+                    state.brace_count[idx] = 0;
+                }
+            }
             MatchStatus::Continue
         }
 
@@ -875,8 +916,52 @@ unsafe fn match_one_op(state: &mut MatchState, scan: *const u8, opcode: c_int) -
         }),
         SFNAME => match_char_class(state, |c| !c.is_ascii_digit() && is_fname_char(c)),
 
-        // Brace complex handled by caller
-        op if (BRACE_COMPLEX..BRACE_COMPLEX + 10).contains(&op) => MatchStatus::Continue,
+        // BRACE_COMPLEX: complex brace repetition with backtracking
+        // This is handled specially because it needs to modify the next pointer
+        // rather than using the normal flow
+        local_op if (BRACE_COMPLEX..BRACE_COMPLEX + 10).contains(&local_op) => {
+            let idx = (local_op - BRACE_COMPLEX) as usize;
+            if idx >= NSUBEXP {
+                return MatchStatus::NoMatch;
+            }
+
+            // Increment count
+            state.brace_count[idx] += 1;
+            let count = state.brace_count[idx];
+            let minval = state.brace_min[idx];
+            let maxval = state.brace_max[idx];
+
+            // Determine effective min/max (handle reversed ranges)
+            let effective_min = minval.min(maxval);
+
+            // If not matched enough times yet, must try more
+            if count <= effective_min {
+                // Push backtrack state to try more
+                if !state.push_backtrack(RegState::BrcplxMore, scan as *mut u8) {
+                    return MatchStatus::Fail;
+                }
+                // Signal to continue with operand (handled by main loop)
+                MatchStatus::Continue
+            } else if minval <= maxval {
+                // Normal range: try longest match (greedy)
+                if count <= maxval {
+                    // Can try more - push backtrack point
+                    if !state.push_backtrack(RegState::BrcplxLong, scan as *mut u8) {
+                        return MatchStatus::Fail;
+                    }
+                }
+                MatchStatus::Continue
+            } else {
+                // Reversed range: try shortest match first
+                if count <= minval {
+                    // Can try more - push backtrack point
+                    if !state.push_backtrack(RegState::BrcplxShort, scan as *mut u8) {
+                        return MatchStatus::Fail;
+                    }
+                }
+                MatchStatus::Continue
+            }
+        }
 
         END => MatchStatus::Match,
 
