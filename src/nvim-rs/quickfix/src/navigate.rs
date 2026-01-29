@@ -581,6 +581,334 @@ pub unsafe extern "C" fn rs_qf_entry_overlaps_range(
 }
 
 // =============================================================================
+// Phase Q4: Additional Navigation Helpers for :cnext/:cprev/:cfirst/:clast
+// =============================================================================
+
+/// Navigate to first entry in the list.
+///
+/// Updates the list pointer and index. Returns the new index (1) or 0 on failure.
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns 0)
+/// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_goto_first(qfl: QfListHandleMut) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let count = nvim_qf_get_count(qfl);
+    if count == 0 {
+        return 0;
+    }
+
+    let first = nvim_qf_get_start(qfl);
+    if first.is_null() {
+        return 0;
+    }
+
+    nvim_qf_set_ptr(qfl, first);
+    nvim_qf_set_index(qfl, 1);
+    1
+}
+
+/// Navigate to last entry in the list.
+///
+/// Updates the list pointer and index. Returns the new index or 0 on failure.
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns 0)
+/// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_goto_last(qfl: QfListHandleMut) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let count = nvim_qf_get_count(qfl);
+    if count == 0 {
+        return 0;
+    }
+
+    let last = nvim_qf_get_last(qfl);
+    if last.is_null() {
+        return 0;
+    }
+
+    nvim_qf_set_ptr(qfl, last);
+    nvim_qf_set_index(qfl, count);
+    count
+}
+
+/// Navigate to a specific entry by index.
+///
+/// Updates the list pointer and index. Returns the target index or 0 on failure.
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns 0)
+/// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_goto_idx(qfl: QfListHandleMut, target_idx: c_int) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let count = nvim_qf_get_count(qfl);
+    if count == 0 || target_idx < 1 || target_idx > count {
+        return 0;
+    }
+
+    // Navigate from start to target
+    let mut qfp = nvim_qf_get_start(qfl);
+    let mut idx = 1;
+    while !qfp.is_null() && idx < target_idx {
+        qfp = nvim_qfline_get_next(qfp);
+        idx += 1;
+    }
+
+    if qfp.is_null() {
+        return 0;
+    }
+
+    nvim_qf_set_ptr(qfl, qfp);
+    nvim_qf_set_index(qfl, target_idx);
+    target_idx
+}
+
+/// Navigate to next valid entry.
+///
+/// Returns the new index or 0 if no valid entry found forward.
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns 0)
+/// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_goto_next_valid(qfl: QfListHandleMut) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let mut qfp = nvim_qf_get_ptr(qfl);
+    let mut idx = nvim_qf_get_index(qfl);
+
+    // Move past current entry
+    if !qfp.is_null() {
+        qfp = nvim_qfline_get_next(qfp);
+        idx += 1;
+    }
+
+    // Find next valid
+    while !qfp.is_null() {
+        if nvim_qfline_get_valid(qfp) {
+            nvim_qf_set_ptr(qfl, qfp);
+            nvim_qf_set_index(qfl, idx);
+            return idx;
+        }
+        qfp = nvim_qfline_get_next(qfp);
+        idx += 1;
+    }
+
+    0
+}
+
+/// Navigate to previous valid entry.
+///
+/// Returns the new index or 0 if no valid entry found backward.
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns 0)
+/// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_goto_prev_valid(qfl: QfListHandleMut) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let mut qfp = nvim_qf_get_ptr(qfl);
+    let mut idx = nvim_qf_get_index(qfl);
+
+    // Move before current entry
+    if !qfp.is_null() {
+        qfp = nvim_qfline_get_prev(qfp);
+        idx -= 1;
+    }
+
+    // Find previous valid
+    while !qfp.is_null() && idx > 0 {
+        if nvim_qfline_get_valid(qfp) {
+            nvim_qf_set_ptr(qfl, qfp);
+            nvim_qf_set_index(qfl, idx);
+            return idx;
+        }
+        qfp = nvim_qfline_get_prev(qfp);
+        idx -= 1;
+    }
+
+    0
+}
+
+/// Navigate to first valid entry in the list.
+///
+/// Returns the new index or 0 if no valid entries exist.
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns 0)
+/// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_goto_first_valid_entry(qfl: QfListHandleMut) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let mut qfp = nvim_qf_get_start(qfl);
+    let mut idx = 1;
+
+    while !qfp.is_null() {
+        if nvim_qfline_get_valid(qfp) {
+            nvim_qf_set_ptr(qfl, qfp);
+            nvim_qf_set_index(qfl, idx);
+            return idx;
+        }
+        qfp = nvim_qfline_get_next(qfp);
+        idx += 1;
+    }
+
+    0
+}
+
+/// Navigate to last valid entry in the list.
+///
+/// Returns the new index or 0 if no valid entries exist.
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns 0)
+/// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_goto_last_valid_entry(qfl: QfListHandleMut) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let count = nvim_qf_get_count(qfl);
+    if count == 0 {
+        return 0;
+    }
+
+    // Find last valid by scanning from start (we don't have direct reverse iteration)
+    let mut last_valid_ptr: QfLineHandle = std::ptr::null();
+    let mut last_valid_idx = 0;
+
+    let mut qfp = nvim_qf_get_start(qfl);
+    let mut idx = 1;
+
+    while !qfp.is_null() {
+        if nvim_qfline_get_valid(qfp) {
+            last_valid_ptr = qfp;
+            last_valid_idx = idx;
+        }
+        qfp = nvim_qfline_get_next(qfp);
+        idx += 1;
+    }
+
+    if last_valid_idx > 0 {
+        nvim_qf_set_ptr(qfl, last_valid_ptr);
+        nvim_qf_set_index(qfl, last_valid_idx);
+        last_valid_idx
+    } else {
+        0
+    }
+}
+
+/// Count valid entries in the list.
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns 0)
+/// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_valid_entry_count(qfl: QfListHandle) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let mut count = 0;
+    let mut qfp = nvim_qf_get_start(qfl);
+
+    while !qfp.is_null() {
+        if nvim_qfline_get_valid(qfp) {
+            count += 1;
+        }
+        qfp = nvim_qfline_get_next(qfp);
+    }
+
+    count
+}
+
+/// Check if current entry is valid.
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns false)
+/// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_current_is_valid(qfl: QfListHandle) -> bool {
+    if qfl.is_null() {
+        return false;
+    }
+
+    let qfp = nvim_qf_get_ptr(qfl);
+    if qfp.is_null() {
+        return false;
+    }
+
+    nvim_qfline_get_valid(qfp)
+}
+
+/// Get position of current entry in valid entries (1-based).
+///
+/// Returns the position among valid entries, or 0 if current is not valid.
+///
+/// # Safety
+///
+/// - `qfl` may be null (returns 0)
+/// - If non-null, `qfl` must be a valid pointer to a `qf_list_T` struct
+#[no_mangle]
+pub unsafe extern "C" fn rs_qf_current_valid_position(qfl: QfListHandle) -> c_int {
+    if qfl.is_null() {
+        return 0;
+    }
+
+    let current_idx = nvim_qf_get_index(qfl);
+    let current_ptr = nvim_qf_get_ptr(qfl);
+
+    if current_ptr.is_null() || !nvim_qfline_get_valid(current_ptr) {
+        return 0;
+    }
+
+    // Count valid entries up to and including current
+    let mut position = 0;
+    let mut qfp = nvim_qf_get_start(qfl);
+    let mut idx = 1;
+
+    while !qfp.is_null() && idx <= current_idx {
+        if nvim_qfline_get_valid(qfp) {
+            position += 1;
+        }
+        qfp = nvim_qfline_get_next(qfp);
+        idx += 1;
+    }
+
+    position
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -684,6 +1012,77 @@ mod tests {
     fn test_null_entry_overlaps_range() {
         unsafe {
             assert!(!rs_qf_entry_overlaps_range(std::ptr::null(), 1, 10));
+        }
+    }
+
+    // Phase Q4: Tests for additional navigation helpers
+    #[test]
+    fn test_null_goto_first() {
+        unsafe {
+            assert_eq!(rs_qf_goto_first(std::ptr::null_mut()), 0);
+        }
+    }
+
+    #[test]
+    fn test_null_goto_last() {
+        unsafe {
+            assert_eq!(rs_qf_goto_last(std::ptr::null_mut()), 0);
+        }
+    }
+
+    #[test]
+    fn test_null_goto_idx() {
+        unsafe {
+            assert_eq!(rs_qf_goto_idx(std::ptr::null_mut(), 1), 0);
+        }
+    }
+
+    #[test]
+    fn test_null_goto_next_valid() {
+        unsafe {
+            assert_eq!(rs_qf_goto_next_valid(std::ptr::null_mut()), 0);
+        }
+    }
+
+    #[test]
+    fn test_null_goto_prev_valid() {
+        unsafe {
+            assert_eq!(rs_qf_goto_prev_valid(std::ptr::null_mut()), 0);
+        }
+    }
+
+    #[test]
+    fn test_null_goto_first_valid_entry() {
+        unsafe {
+            assert_eq!(rs_qf_goto_first_valid_entry(std::ptr::null_mut()), 0);
+        }
+    }
+
+    #[test]
+    fn test_null_goto_last_valid_entry() {
+        unsafe {
+            assert_eq!(rs_qf_goto_last_valid_entry(std::ptr::null_mut()), 0);
+        }
+    }
+
+    #[test]
+    fn test_null_valid_entry_count() {
+        unsafe {
+            assert_eq!(rs_qf_valid_entry_count(std::ptr::null()), 0);
+        }
+    }
+
+    #[test]
+    fn test_null_current_is_valid() {
+        unsafe {
+            assert!(!rs_qf_current_is_valid(std::ptr::null()));
+        }
+    }
+
+    #[test]
+    fn test_null_current_valid_position() {
+        unsafe {
+            assert_eq!(rs_qf_current_valid_position(std::ptr::null()), 0);
         }
     }
 }
