@@ -4453,3 +4453,107 @@ bool nvim_tabpage_is_diff_invalid(tabpage_T *tp)
   }
   return tp->tp_diff_invalid;
 }
+
+/// Set the diff_invalid flag for a tabpage.
+/// @param tp  Tabpage pointer
+/// @param val Value to set (0 = false, nonzero = true)
+void nvim_tabpage_set_diff_invalid(tabpage_T *tp, int val)
+{
+  if (tp != NULL) {
+    tp->tp_diff_invalid = val != 0;
+  }
+}
+
+/// Set the diff_update flag for a tabpage.
+/// @param tp  Tabpage pointer
+/// @param val Value to set (0 = false, nonzero = true)
+void nvim_tabpage_set_diff_update(tabpage_T *tp, int val)
+{
+  if (tp != NULL) {
+    tp->tp_diff_update = val != 0;
+  }
+}
+
+/// Get the next diff block in the linked list.
+/// @param dp Diff block pointer
+/// @return Next diff block or NULL
+diff_T *nvim_diff_get_next(diff_T *dp)
+{
+  if (dp == NULL) {
+    return NULL;
+  }
+  return dp->df_next;
+}
+
+/// Get the line number for a buffer index in a diff block.
+/// @param dp  Diff block pointer
+/// @param idx Buffer index (0 to DB_COUNT-1)
+/// @return Line number or 0 if invalid
+linenr_T nvim_diff_get_lnum(diff_T *dp, int idx)
+{
+  if (dp == NULL || idx < 0 || idx >= DB_COUNT) {
+    return 0;
+  }
+  return dp->df_lnum[idx];
+}
+
+/// Set the line number for a buffer index in a diff block.
+/// @param dp   Diff block pointer
+/// @param idx  Buffer index (0 to DB_COUNT-1)
+/// @param lnum Line number to set
+void nvim_diff_set_lnum(diff_T *dp, int idx, linenr_T lnum)
+{
+  if (dp != NULL && idx >= 0 && idx < DB_COUNT) {
+    dp->df_lnum[idx] = lnum;
+  }
+}
+
+/// Get the line count for a buffer index in a diff block.
+/// @param dp  Diff block pointer
+/// @param idx Buffer index (0 to DB_COUNT-1)
+/// @return Line count or 0 if invalid
+linenr_T nvim_diff_get_count(diff_T *dp, int idx)
+{
+  if (dp == NULL || idx < 0 || idx >= DB_COUNT) {
+    return 0;
+  }
+  return dp->df_count[idx];
+}
+
+/// Set the line count for a buffer index in a diff block.
+/// @param dp    Diff block pointer
+/// @param idx   Buffer index (0 to DB_COUNT-1)
+/// @param count Line count to set
+void nvim_diff_set_count(diff_T *dp, int idx, linenr_T count)
+{
+  if (dp != NULL && idx >= 0 && idx < DB_COUNT) {
+    dp->df_count[idx] = count;
+  }
+}
+
+/// Allocate a new diff block and insert it into the linked list.
+/// @param tp   Tabpage pointer
+/// @param prev Previous diff block (NULL to insert at head)
+/// @param next Next diff block (NULL if at tail)
+/// @return New diff block or NULL on failure
+diff_T *nvim_diff_alloc_new(tabpage_T *tp, diff_T *prev, diff_T *next)
+{
+  diff_T *dnew = xmalloc(sizeof(diff_T));
+  CLEAR_POINTER(dnew);
+
+  dnew->df_next = next;
+  if (prev == NULL) {
+    tp->tp_first_diff = dnew;
+  } else {
+    prev->df_next = dnew;
+  }
+  return dnew;
+}
+
+/// Check if diff operations are currently busy.
+/// @return Nonzero if busy, 0 otherwise
+int nvim_diff_is_busy(void)
+{
+  return diff_busy ? 1 : 0;
+}
+

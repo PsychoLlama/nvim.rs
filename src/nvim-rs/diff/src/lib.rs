@@ -8,6 +8,7 @@
 #![allow(clippy::doc_markdown)]
 
 // Submodules
+pub mod algorithm;
 pub mod block;
 pub mod buffer;
 pub mod commands;
