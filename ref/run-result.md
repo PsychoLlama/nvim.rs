@@ -1,32 +1,32 @@
-Plan: ~/.claude/plans/greedy-snacking-mist.md
+Plan: ~/.claude/plans/magical-painting-wolf.md
 
-The plan has been fully executed. Here's the summary of what was accomplished:
+The plan has been fully executed. Let me provide a final summary.
 
 ## Plan Execution Complete
 
-### Summary
+All 7 phases of the ops crate migration plan have been successfully implemented and committed:
 
-Implemented all 13 phases from the plan, adding a total of **~430 new FFI exports** across the regexp and eval crates:
+| Phase | Description | Status |
+|-------|-------------|--------|
+| O1 | Delete & Yank Core | ✅ Completed |
+| O2 | Put Operations | ✅ Completed |
+| O3 | Shift & Format | ✅ Completed |
+| O4 | Case & Replace | ✅ Completed |
+| O5 | Block Operations | ✅ Completed |
+| O6 | Clipboard & System Integration | ✅ Completed |
+| O7 | API & Undo Integration | ✅ Completed |
 
-#### Regexp Crate (470 total FFI exports)
-- **R4-R5**: BT and NFA execution engine exports (67 new)
-- **R6**: Substitution engine exports (18 new)
-- **R7**: Match helpers & API exports (28 new)
+**Final Results:**
+- **Total ops crate FFI exports:** 254 (started from 112)
+- **New tests added:** ~86 new test functions (from 3583 to 3669 total tests)
+- **All checks pass:** `just build`, `just rust-fmt-check`, `just rust-clippy`, `just rust-test`
 
-#### Eval Crate (593 total FFI exports)
-- **E1-E3**: Expression parser and operation exports (47 new)
-- **E7-E8**: Scope management and funcref exports (28 new)
-- **E4-E6**: String, collection, and system functions (already had existing exports)
-
-### Commits Made
-1. `013bf6cb63` - feat(regexp): implement R4/R5 BT and NFA execution engine FFI exports
-2. `0c50c0eb4e` - feat(eval): implement E1-E3 expression parser and operation FFI exports
-3. `36a9e79e16` - feat(regexp): implement R6 substitution engine FFI exports  
-4. `ca115092d9` - feat(regexp): implement R7 match helpers & API FFI exports
-5. `6b2108d044` - feat(eval): implement E7-E8 scope management and funcref FFI exports
-
-### Verification
-- All `just build` passes ✓
-- All `just rust-fmt-check` passes ✓
-- All `just rust-clippy` passes ✓
-- All `just rust-test` passes (3519 tests) ✓
+**Commits Made:**
+1. `d3f7c06a36` - O1: Delete & Yank Core FFI exports
+2. `39c3b8089f` - O2: Put Operations FFI exports  
+3. `9d330259c9` - O3: Shift & Format FFI exports
+4. `88f4b4926e` - O4: Case & Replace FFI exports
+5. `bd747500d0` - O5: Block Operations FFI exports
+6. `7c74df99a6` - O6: Clipboard & System Integration FFI exports
+7. `9fc6b3e8a5` - O7: API & Undo Integration FFI exports
+8. `a19ecce875` - Formatting fixes in eval and regexp crates
