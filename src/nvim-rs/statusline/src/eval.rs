@@ -537,6 +537,9 @@ fn get_rel_pos_string(wp: WinHandle) -> String {
 }
 
 /// Format a numeric value with optional width and padding.
+///
+/// If `maxwid` is specified and the number would exceed it, the number is
+/// displayed in "scientific" notation (e.g., 14532 with maxwid=4 -> "14>3").
 pub fn format_number(
     value: c_int,
     base: NumberBase,
@@ -544,7 +547,37 @@ pub fn format_number(
     zeropad: bool,
     left_align: bool,
 ) -> String {
+    format_number_with_maxwid(value, base, minwid, 0, zeropad, left_align)
+}
+
+/// Format a numeric value with optional width, max width, and padding.
+///
+/// If `maxwid` is specified and the number would exceed it, the number is
+/// displayed in "scientific" notation (e.g., 14532 with maxwid=4 -> "14>3").
+#[allow(clippy::cast_sign_loss)]
+pub fn format_number_with_maxwid(
+    value: c_int,
+    base: NumberBase,
+    minwid: c_int,
+    maxwid: c_int,
+    zeropad: bool,
+    left_align: bool,
+) -> String {
     let abs_minwid = minwid.unsigned_abs() as usize;
+    let divisor = base as c_int;
+
+    // Count the number of digits
+    let mut num_chars = 1;
+    let mut n = value.abs();
+    while n >= divisor {
+        n /= divisor;
+        num_chars += 1;
+    }
+
+    // Check if we need scientific notation
+    if maxwid > 0 && num_chars > maxwid as usize {
+        return format_scientific(value, base, maxwid as usize);
+    }
 
     let num_str = match base {
         NumberBase::Decimal => format!("{value}"),
@@ -562,6 +595,49 @@ pub fn format_number(
         format!("{num_str}{}", pad_char.to_string().repeat(padding))
     } else {
         format!("{}{num_str}", pad_char.to_string().repeat(padding))
+    }
+}
+
+/// Format a number in "scientific" notation for statusline display.
+///
+/// When a number is too long for the available width, it's displayed as
+/// the reduced number followed by '>n' where n is the exponent.
+/// For example: 14532 with maxwid=4 becomes "14>3" (14 * 10^3 ≈ 14000).
+#[allow(clippy::cast_sign_loss)]
+fn format_scientific(value: c_int, base: NumberBase, maxwid: usize) -> String {
+    if maxwid < 3 {
+        // Need at least 3 chars for "n>e" format
+        return match base {
+            NumberBase::Decimal => format!("{value}"),
+            NumberBase::Hexadecimal => format!("{value:X}"),
+        };
+    }
+
+    let divisor = base as c_int;
+    let mut num = value.abs();
+    let mut exponent = 0;
+
+    // Count digits
+    let mut num_chars = 1;
+    let mut temp = num;
+    while temp >= divisor {
+        temp /= divisor;
+        num_chars += 1;
+    }
+
+    // Add 2 for the ">e" suffix
+    num_chars += 2;
+
+    // Reduce the number until it fits
+    while num_chars > maxwid {
+        num /= divisor;
+        exponent += 1;
+        num_chars -= 1;
+    }
+
+    match base {
+        NumberBase::Decimal => format!("{num}>{exponent}"),
+        NumberBase::Hexadecimal => format!("{num:X}>{exponent:X}"),
     }
 }
 
@@ -645,6 +721,41 @@ mod tests {
         assert_eq!(
             format_number(255, NumberBase::Hexadecimal, 4, false, false),
             "  FF"
+        );
+    }
+
+    #[test]
+    fn test_format_number_scientific() {
+        // 14532 with maxwid=4 should become "14>3" (14 * 10^3 ≈ 14000)
+        assert_eq!(
+            format_number_with_maxwid(14532, NumberBase::Decimal, 0, 4, false, false),
+            "14>3"
+        );
+        // 99999 with maxwid=4 should become "99>3"
+        assert_eq!(
+            format_number_with_maxwid(99999, NumberBase::Decimal, 0, 4, false, false),
+            "99>3"
+        );
+        // Number that fits shouldn't use scientific notation
+        assert_eq!(
+            format_number_with_maxwid(123, NumberBase::Decimal, 0, 5, false, false),
+            "123"
+        );
+    }
+
+    #[test]
+    fn test_format_number_scientific_hex() {
+        // Hex: 1048575 (0xFFFFF) with maxwid=4 should use scientific notation
+        // 0xFFFFF = 5 hex digits, with >e = 7 chars total
+        // Reduce to fit in 4: FF>3 (255 * 16^3 = 1044480 ≈ 1048575)
+        assert_eq!(
+            format_number_with_maxwid(1048575, NumberBase::Hexadecimal, 0, 4, false, false),
+            "FF>3"
+        );
+        // 0xFFFF = 4 hex digits, should fit without scientific notation
+        assert_eq!(
+            format_number_with_maxwid(65535, NumberBase::Hexadecimal, 0, 4, false, false),
+            "FFFF"
         );
     }
 
