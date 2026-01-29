@@ -781,6 +781,22 @@ extern size_t rs_efm_regpat_bufsz(const char *efm, size_t efm_len);
 extern int rs_efm_option_part_len(const char *efm, size_t efm_max_len);
 
 // =============================================================================
+// Phase Q2: Line parsing helpers from Rust
+// =============================================================================
+
+// Prefix type helpers
+extern char rs_qf_parse_prefix_type(char prefix);
+extern bool rs_qf_should_skip_line(char flags);
+extern bool rs_qf_is_continuation(char prefix);
+extern bool rs_qf_starts_multiline(char prefix);
+extern bool rs_qf_is_dir_handler(char prefix);
+extern bool rs_qf_is_file_handler(char prefix);
+
+// Type validation helpers
+extern bool rs_qf_type_is_printable(char type_char);
+extern char rs_qf_normalize_type(char type_char);
+
+// =============================================================================
 // Phase 5: List management setters and wrappers for Rust
 // =============================================================================
 
@@ -2895,23 +2911,23 @@ restofline:
       fmt_start = fmt_ptr;
     }
 
-    if (vim_strchr("AEWIN", idx) != NULL) {
+    if (rs_qf_starts_multiline((char)idx)) {
       qfl->qf_multiline = true;     // start of a multi-line message
       qfl->qf_multiignore = false;  // reset continuation
-    } else if (vim_strchr("CZ", idx) != NULL) {
+    } else if (rs_qf_is_continuation((char)idx)) {
       // continuation of multi-line msg
       status = qf_parse_multiline_pfx(idx, qfl, fields);
       if (status != QF_OK) {
         return status;
       }
-    } else if (vim_strchr("OPQ", idx) != NULL) {
+    } else if (rs_qf_is_file_handler((char)idx)) {
       // global file names
       status = qf_parse_file_pfx(idx, fields, qfl, tail);
       if (status == QF_MULTISCAN) {
         goto restofline;
       }
     }
-    if (fmt_ptr->flags == '-') {  // generally exclude this line
+    if (rs_qf_should_skip_line(fmt_ptr->flags)) {  // generally exclude this line
       if (qfl->qf_multiline) {
         // also exclude continuation lines
         qfl->qf_multiignore = true;
@@ -3193,8 +3209,7 @@ static int qf_parse_fmt_f(regmatch_T *rmp, int midx, qffields_T *fields, int pre
 
   // For separate filename patterns (%O, %P and %Q), the specified file
   // should exist.
-  if (vim_strchr("OPQ", prefix) != NULL
-      && !os_path_exists(fields->namebuf)) {
+  if (rs_qf_is_file_handler((char)prefix) && !os_path_exists(fields->namebuf)) {
     return QF_FAIL;
   }
 
@@ -3464,7 +3479,7 @@ static int qf_parse_match(char *linebuf, size_t linelen, efm_T *fmt_ptr, regmatc
 static int qf_parse_get_fields(char *linebuf, size_t linelen, efm_T *fmt_ptr, qffields_T *fields,
                                int qf_multiline, int qf_multiscan, char **tail)
 {
-  if (qf_multiscan && vim_strchr("OPQ", (uint8_t)fmt_ptr->prefix) == NULL) {
+  if (qf_multiscan && !rs_qf_is_file_handler(fmt_ptr->prefix)) {
     return QF_FAIL;
   }
 
@@ -3831,10 +3846,7 @@ static int qf_add_entry(qf_list_T *qfl, char *dir, char *fname, char *module, in
     qfp->qf_module = xstrdup(module);
   }
   qfp->qf_nr = nr;
-  if (type != 1 && !vim_isprintc(type)) {  // only printable chars allowed
-    type = 0;
-  }
-  qfp->qf_type = type;
+  qfp->qf_type = rs_qf_normalize_type(type);  // only printable chars allowed
   qfp->qf_valid = valid;
 
   qfline_T **lastp = &qfl->qf_last;
