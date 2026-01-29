@@ -776,6 +776,10 @@ extern bool rs_efm_is_format_magic(char c);
 extern EfmToRegpatResult rs_efm_to_regpat(const char *efm, size_t efm_len,
                                            char *addr, char *out, size_t out_size);
 
+// Buffer size and part length helpers
+extern size_t rs_efm_regpat_bufsz(const char *efm, size_t efm_len);
+extern int rs_efm_option_part_len(const char *efm, size_t efm_max_len);
+
 // =============================================================================
 // Phase 5: List management setters and wrappers for Rust
 // =============================================================================
@@ -2457,33 +2461,17 @@ static void free_efm_list(efm_T **efm_first)
 
 /// Compute the size of the buffer used to convert a 'errorformat' pattern into
 /// a regular expression pattern.
+/// Now calls Rust implementation.
 static size_t efm_regpat_bufsz(char *efm)
 {
-  size_t sz = (FMT_PATTERNS * 3) + (strlen(efm) << 2);
-  for (int i = FMT_PATTERNS - 1; i >= 0;) {
-    sz += strlen(fmt_pat[i--].pattern);
-  }
-#ifdef BACKSLASH_IN_FILENAME
-  sz += 12;  // "%f" can become twelve chars longer (see efm_to_regpat)
-#else
-  sz += 2;  // "%f" can become two chars longer
-#endif
-
-  return sz;
+  return rs_efm_regpat_bufsz(efm, strlen(efm));
 }
 
 /// Return the length of a 'errorformat' option part (separated by ",").
+/// Now calls Rust implementation.
 static int efm_option_part_len(const char *efm)
 {
-  int len;
-
-  for (len = 0; efm[len] != NUL && efm[len] != ','; len++) {
-    if (efm[len] == '\\' && efm[len + 1] != NUL) {
-      len++;
-    }
-  }
-
-  return len;
+  return rs_efm_option_part_len(efm, strlen(efm));
 }
 
 /// Parse the 'errorformat' option. Multiple parts in the 'errorformat' option

@@ -1850,6 +1850,84 @@ pub unsafe extern "C" fn rs_efm_to_regpat(
 }
 
 // =============================================================================
+// Phase Q1: Errorformat Buffer Size and Part Length
+// =============================================================================
+
+/// Compute the size of the buffer needed to convert an 'errorformat' pattern
+/// into a regular expression pattern.
+///
+/// This is a conservative estimate that accounts for:
+/// - Pattern prefixes/suffixes (^ and $)
+/// - Capture groups for each format specifier
+/// - Worst-case expansion of %f pattern
+///
+/// # Safety
+///
+/// - `efm` may be null (returns 0)
+/// - If non-null, must point to a buffer of at least `efm_len` bytes
+#[no_mangle]
+pub unsafe extern "C" fn rs_efm_regpat_bufsz(efm: *const c_char, efm_len: usize) -> usize {
+    if efm.is_null() || efm_len == 0 {
+        return 0;
+    }
+
+    // Base size: each format specifier can expand, plus overhead
+    // - FMT_PATTERNS * 3 for capture group markers \( and \)
+    // - efm_len * 4 for worst-case character expansion
+    // - Sum of all pattern lengths
+    // - Extra buffer for %f expansion (can become 12 chars longer on Windows)
+    let mut sz = (FMT_PATTERNS * 3) + (efm_len << 2);
+
+    // Add length of each pattern
+    for (_, pattern) in &FMT_PAT {
+        sz += pattern.len();
+    }
+
+    // %f can become significantly longer depending on platform
+    // Windows: 12 chars longer (for drive letter matching)
+    // Other: 2 chars longer
+    #[cfg(windows)]
+    {
+        sz += 12;
+    }
+    #[cfg(not(windows))]
+    {
+        sz += 2;
+    }
+
+    sz
+}
+
+/// Return the length of an 'errorformat' option part (separated by ",").
+///
+/// Handles escaped commas (\\,) as part of the format.
+///
+/// # Safety
+///
+/// - `efm` may be null (returns 0)
+/// - If non-null, must point to a buffer of at least `efm_max_len` bytes
+#[no_mangle]
+pub unsafe extern "C" fn rs_efm_option_part_len(efm: *const c_char, efm_max_len: usize) -> c_int {
+    if efm.is_null() || efm_max_len == 0 {
+        return 0;
+    }
+
+    let bytes = std::slice::from_raw_parts(efm.cast::<u8>(), efm_max_len);
+    let mut len = 0;
+
+    while len < bytes.len() && bytes[len] != 0 && bytes[len] != b',' {
+        // Check for escaped character
+        if bytes[len] == b'\\' && len + 1 < bytes.len() && bytes[len + 1] != 0 {
+            len += 2; // Skip both backslash and next character
+        } else {
+            len += 1;
+        }
+    }
+
+    len as c_int
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -2687,6 +2765,69 @@ mod tests {
             let result_str = std::ffi::CStr::from_ptr(output.as_ptr().cast());
             let s = result_str.to_str().unwrap();
             assert!(s.contains("[^:]\\+"), "Expected [^:]\\+ in: {s}");
+        }
+    }
+
+    // ==========================================================================
+    // Phase Q1: Additional Errorformat Helper Function Tests
+    // ==========================================================================
+
+    #[test]
+    fn test_efm_regpat_bufsz() {
+        unsafe {
+            // Simple format: %f:%l: %m
+            let efm = b"%f:%l: %m";
+            let size = rs_efm_regpat_bufsz(efm.as_ptr().cast(), efm.len());
+            // Should be large enough for the regex pattern
+            assert!(size > efm.len());
+            assert!(size >= 100); // Minimum reasonable size
+        }
+    }
+
+    #[test]
+    fn test_efm_regpat_bufsz_null() {
+        unsafe {
+            let size = rs_efm_regpat_bufsz(std::ptr::null(), 0);
+            assert_eq!(size, 0);
+        }
+    }
+
+    #[test]
+    fn test_efm_option_part_len() {
+        unsafe {
+            // Simple format ending with comma
+            let efm = b"%f:%l: %m,";
+            let len = rs_efm_option_part_len(efm.as_ptr().cast(), efm.len());
+            assert_eq!(len, 9); // "%f:%l: %m" without the comma
+        }
+    }
+
+    #[test]
+    fn test_efm_option_part_len_no_comma() {
+        unsafe {
+            // Format without comma at end
+            let efm = b"%f:%l: %m";
+            let len = rs_efm_option_part_len(efm.as_ptr().cast(), efm.len());
+            assert_eq!(len, 9);
+        }
+    }
+
+    #[test]
+    fn test_efm_option_part_len_escaped_comma() {
+        unsafe {
+            // Format with escaped comma
+            let efm = b"%f:%l\\,: %m,next";
+            let len = rs_efm_option_part_len(efm.as_ptr().cast(), efm.len());
+            // Should include the escaped comma as part of the format
+            assert_eq!(len, 11); // "%f:%l\\,: %m"
+        }
+    }
+
+    #[test]
+    fn test_efm_option_part_len_null() {
+        unsafe {
+            let len = rs_efm_option_part_len(std::ptr::null(), 0);
+            assert_eq!(len, 0);
         }
     }
 }
