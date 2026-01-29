@@ -3435,14 +3435,10 @@ static int qf_parse_match(char *linebuf, size_t linelen, efm_T *fmt_ptr, regmatc
 {
   char idx = fmt_ptr->prefix;
 
-  if ((idx == 'C' || idx == 'Z') && !qf_multiline) {
+  if (rs_qf_is_continuation(idx) && !qf_multiline) {
     return QF_FAIL;
   }
-  if (vim_strchr("EWIN", (uint8_t)idx) != NULL) {
-    fields->type = idx;
-  } else {
-    fields->type = 0;
-  }
+  fields->type = rs_qf_parse_prefix_type(idx);
 
   // Extract error message data from matched line.
   // We check for an actual submatch, because "\[" and "\]" in
