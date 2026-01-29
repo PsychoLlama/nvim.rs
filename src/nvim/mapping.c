@@ -62,6 +62,7 @@
 // Rust FFI declarations
 extern int rs_map_to_exists_mode(const char *rhs, int mode, int abbr);
 extern int rs_get_map_mode_string(const char *mode_string, int abbr);
+extern void rs_map_mode_to_chars(int mode, char *buf);
 
 /// List used for abbreviations.
 static mapblock_T *first_abbr = NULL;  // first entry in abbrlist
@@ -173,41 +174,7 @@ static void mapblock_free(mapblock_T **mpp)
 void map_mode_to_chars(int mode, char *buf)
   FUNC_ATTR_NONNULL_ALL
 {
-  char *p = buf;
-  if ((mode & (MODE_INSERT | MODE_CMDLINE)) == (MODE_INSERT | MODE_CMDLINE)) {
-    *p++ = '!';                           // :map!
-  } else if (mode & MODE_INSERT) {
-    *p++ = 'i';                           // :imap
-  } else if (mode & MODE_LANGMAP) {
-    *p++ = 'l';                           // :lmap
-  } else if (mode & MODE_CMDLINE) {
-    *p++ = 'c';                           // :cmap
-  } else if ((mode & (MODE_NORMAL | MODE_VISUAL | MODE_SELECT | MODE_OP_PENDING))
-             == (MODE_NORMAL | MODE_VISUAL | MODE_SELECT | MODE_OP_PENDING)) {
-    *p++ = ' ';                           // :map
-  } else {
-    if (mode & MODE_NORMAL) {
-      *p++ = 'n';                         // :nmap
-    }
-    if (mode & MODE_OP_PENDING) {
-      *p++ = 'o';                         // :omap
-    }
-    if (mode & MODE_TERMINAL) {
-      *p++ = 't';                         // :tmap
-    }
-    if ((mode & (MODE_VISUAL | MODE_SELECT)) == (MODE_VISUAL | MODE_SELECT)) {
-      *p++ = 'v';                         // :vmap
-    } else {
-      if (mode & MODE_VISUAL) {
-        *p++ = 'x';                       // :xmap
-      }
-      if (mode & MODE_SELECT) {
-        *p++ = 's';                       // :smap
-      }
-    }
-  }
-
-  *p = NUL;
+  rs_map_mode_to_chars(mode, buf);
 }
 
 /// @param local  true for buffer-local map
