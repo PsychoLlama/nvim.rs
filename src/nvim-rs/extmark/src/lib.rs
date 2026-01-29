@@ -1551,4 +1551,107 @@ mod tests {
         assert_eq!(pair.start.pos.row, 1);
         assert_eq!(pair.end.pos.row, 5);
     }
+
+    #[test]
+    fn test_extmark_info_default() {
+        let info = ExtmarkInfo::default();
+        assert_eq!(info.row, -1);
+        assert_eq!(info.end_row, -1);
+        assert_eq!(info.ns_id, 0);
+        assert_eq!(info.mark_id, 0);
+    }
+}
+
+// ============================================================================
+// Query Functions for API Layer
+// ============================================================================
+
+/// Extended information about an extmark for queries.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ExtmarkInfo {
+    /// Namespace ID
+    pub ns_id: u32,
+    /// Mark ID
+    pub mark_id: u32,
+    /// Row position (-1 if not found)
+    pub row: c_int,
+    /// Column position
+    pub col: ColnrT,
+    /// End row (-1 if not paired)
+    pub end_row: c_int,
+    /// End column
+    pub end_col: ColnrT,
+    /// Mark flags
+    pub flags: u16,
+    /// Decoration data
+    pub decor_data: u64,
+}
+
+impl ExtmarkInfo {
+    /// Create from a mark key.
+    #[must_use]
+    pub fn from_key(key: MTKey) -> Self {
+        Self {
+            ns_id: key.ns,
+            mark_id: key.id,
+            row: key.pos.row,
+            col: key.pos.col,
+            end_row: -1,
+            end_col: 0,
+            flags: key.flags,
+            decor_data: key.decor_data,
+        }
+    }
+
+    /// Create from a mark pair.
+    #[must_use]
+    pub fn from_pair(start: MTKey, end: MTKey) -> Self {
+        Self {
+            ns_id: start.ns,
+            mark_id: start.id,
+            row: start.pos.row,
+            col: start.pos.col,
+            end_row: if end.pos.row >= 0 { end.pos.row } else { -1 },
+            end_col: end.pos.col,
+            flags: start.flags,
+            decor_data: start.decor_data,
+        }
+    }
+}
+
+/// FFI export: Get extended extmark info by ID.
+///
+/// Returns an ExtmarkInfo structure with row = -1 if not found.
+#[no_mangle]
+pub extern "C" fn rs_extmark_get_by_id(buf: BufHandle, ns_id: u32, id: u32) -> ExtmarkInfo {
+    let pair = extmark_from_id(buf, ns_id, id);
+
+    if pair.start.id == 0 {
+        ExtmarkInfo::default()
+    } else if pair.end.pos.row >= 0 {
+        ExtmarkInfo::from_pair(pair.start, pair.end)
+    } else {
+        ExtmarkInfo::from_key(pair.start)
+    }
+}
+
+/// FFI export: Check if an extmark exists.
+#[no_mangle]
+pub extern "C" fn rs_extmark_exists(buf: BufHandle, ns_id: u32, id: u32) -> bool {
+    let pair = extmark_from_id(buf, ns_id, id);
+    pair.start.id != 0
+}
+
+/// FFI export: Get the next available ID for a namespace.
+///
+/// This is useful for auto-generating IDs when creating new extmarks.
+#[no_mangle]
+pub extern "C" fn rs_extmark_next_id(buf: BufHandle, ns_id: u32) -> u32 {
+    let ns = unsafe { nvim_extmark_ns_get_ref(buf, ns_id) };
+    if ns.is_null() {
+        1
+    } else {
+        unsafe { *ns + 1 }
+    }
 }
