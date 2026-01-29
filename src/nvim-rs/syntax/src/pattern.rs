@@ -643,6 +643,163 @@ pub fn has_offset(off_flags: i16, offset_type: OffsetType) -> bool {
     (off_flags as i32 & (from_start_bit | from_end_bit)) != 0
 }
 
+// =============================================================================
+// Phase Y1: FFI Exports for Pattern Storage
+// =============================================================================
+
+use std::ffi::c_void;
+
+/// Opaque handle to synblock_T for FFI
+pub type SynBlockPtr = *const c_void;
+
+/// FFI export: Get pattern count from synblock
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_pattern_count(block: SynBlockPtr) -> c_int {
+    synblock_pattern_count(SynBlockHandle(block.cast_mut()))
+}
+
+/// FFI export: Get fold item count from synblock
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_fold_item_count(block: SynBlockPtr) -> c_int {
+    synblock_fold_item_count(SynBlockHandle(block.cast_mut()))
+}
+
+/// FFI export: Check if pattern at index is syncing
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_pattern_is_syncing(block: SynBlockPtr, idx: c_int) -> c_int {
+    c_int::from(synblock_pattern_is_syncing(
+        SynBlockHandle(block.cast_mut()),
+        idx,
+    ))
+}
+
+/// FFI export: Count patterns for a specific ID
+#[no_mangle]
+pub unsafe extern "C" fn rs_syn_count_patterns_for_id(block: SynBlockPtr, id: c_int) -> c_int {
+    synblock_count_patterns_for_id(SynBlockHandle(block.cast_mut()), id)
+}
+
+/// FFI export: Check if offset is specified in flags
+#[no_mangle]
+pub extern "C" fn rs_syn_has_offset(off_flags: c_int, offset_idx: c_int) -> c_int {
+    if let Some(offset_type) = OffsetType::from_index(offset_idx) {
+        #[allow(clippy::cast_possible_truncation)]
+        c_int::from(has_offset(off_flags as i16, offset_type))
+    } else {
+        0
+    }
+}
+
+/// FFI export: Decode offset direction (0=from start, 1=from end)
+#[no_mangle]
+pub extern "C" fn rs_syn_offset_direction(off_flags: c_int, offset_idx: c_int) -> c_int {
+    if let Some(offset_type) = OffsetType::from_index(offset_idx) {
+        #[allow(clippy::cast_possible_truncation)]
+        match decode_offset_direction(off_flags as i16, offset_type) {
+            OffsetDirection::FromStart => 0,
+            OffsetDirection::FromEnd => 1,
+        }
+    } else {
+        0
+    }
+}
+
+/// FFI export: Get SPTYPE_MATCH constant
+#[no_mangle]
+pub extern "C" fn rs_syn_sptype_match() -> c_int {
+    SPTYPE_MATCH
+}
+
+/// FFI export: Get SPTYPE_START constant
+#[no_mangle]
+pub extern "C" fn rs_syn_sptype_start() -> c_int {
+    SPTYPE_START
+}
+
+/// FFI export: Get SPTYPE_END constant
+#[no_mangle]
+pub extern "C" fn rs_syn_sptype_end() -> c_int {
+    SPTYPE_END
+}
+
+/// FFI export: Get SPTYPE_SKIP constant
+#[no_mangle]
+pub extern "C" fn rs_syn_sptype_skip() -> c_int {
+    SPTYPE_SKIP
+}
+
+/// FFI export: Get HL_TRANSP constant
+#[no_mangle]
+pub extern "C" fn rs_syn_hl_transp() -> c_int {
+    HL_TRANSP
+}
+
+/// FFI export: Get HL_CONTAINED constant
+#[no_mangle]
+pub extern "C" fn rs_syn_hl_contained() -> c_int {
+    HL_CONTAINED
+}
+
+/// FFI export: Get HL_KEEPEND constant
+#[no_mangle]
+pub extern "C" fn rs_syn_hl_keepend() -> c_int {
+    HL_KEEPEND
+}
+
+/// FFI export: Get HL_FOLD constant
+#[no_mangle]
+pub extern "C" fn rs_syn_hl_fold() -> c_int {
+    HL_FOLD
+}
+
+/// FFI export: Get SPO_COUNT constant
+#[no_mangle]
+pub extern "C" fn rs_syn_spo_count() -> c_int {
+    SPO_COUNT
+}
+
+/// FFI export: Get offset index for match start
+#[no_mangle]
+pub extern "C" fn rs_syn_spo_ms_off() -> c_int {
+    SPO_MS_OFF
+}
+
+/// FFI export: Get offset index for match end
+#[no_mangle]
+pub extern "C" fn rs_syn_spo_me_off() -> c_int {
+    SPO_ME_OFF
+}
+
+/// FFI export: Get offset index for highlight start
+#[no_mangle]
+pub extern "C" fn rs_syn_spo_hs_off() -> c_int {
+    SPO_HS_OFF
+}
+
+/// FFI export: Get offset index for highlight end
+#[no_mangle]
+pub extern "C" fn rs_syn_spo_he_off() -> c_int {
+    SPO_HE_OFF
+}
+
+/// FFI export: Get offset index for region start
+#[no_mangle]
+pub extern "C" fn rs_syn_spo_rs_off() -> c_int {
+    SPO_RS_OFF
+}
+
+/// FFI export: Get offset index for region end
+#[no_mangle]
+pub extern "C" fn rs_syn_spo_re_off() -> c_int {
+    SPO_RE_OFF
+}
+
+/// FFI export: Get offset index for leading context
+#[no_mangle]
+pub extern "C" fn rs_syn_spo_lc_off() -> c_int {
+    SPO_LC_OFF
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
