@@ -53,7 +53,7 @@ All Rust code in `src/nvim-rs/`. Each crate handles a specific domain:
 | help           | Help system utilities                   |
 | highlight      | Syntax highlighting and attributes      |
 | highlight_group| Highlight group management and commands |
-| indent         | Indentation calculation                 |
+| indent         | Indentation calculation (getters, tabstops, helpers, checks) |
 | indent_c       | C/C++/Java indentation (cindent)        |
 | input          | Input handling (buffer sizes, state, ring buffer, breakcheck) |
 | insexpand      | Insert-mode completion (state, modes, list, popup, sources) |
