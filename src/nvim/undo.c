@@ -3382,3 +3382,199 @@ char *nvim_FullName_save(const char *fname, bool force)
 {
   return FullName_save(fname, force);
 }
+
+// ============================================================================
+// Memline Accessor Functions (for Rust FFI - u_undoredo migration)
+// ============================================================================
+
+/// Delete line 'lnum' in current buffer. Returns OK/FAIL.
+int nvim_ml_delete_lnum(linenr_T lnum)
+{
+  return ml_delete(lnum);
+}
+
+/// Delete line 'lnum' in current buffer with flags. Returns OK/FAIL.
+int nvim_ml_delete_flags(linenr_T lnum, int flags)
+{
+  return ml_delete_flags(lnum, flags);
+}
+
+/// Append line after 'lnum' in current buffer. Returns OK/FAIL.
+int nvim_ml_append_lnum(linenr_T lnum, const char *line, colnr_T len, bool newfile)
+{
+  return ml_append(lnum, (char *)line, len, newfile);
+}
+
+/// Append line with flags. Returns OK/FAIL.
+int nvim_ml_append_flags(linenr_T lnum, const char *line, colnr_T len, int flags)
+{
+  return ml_append_flags(lnum, (char *)line, len, flags);
+}
+
+/// Replace line in current buffer. Returns OK/FAIL.
+int nvim_ml_replace_lnum(linenr_T lnum, const char *line, bool copy)
+{
+  return ml_replace(lnum, (char *)line, copy);
+}
+
+/// Block/unblock autocommands
+void nvim_block_autocmds(void)
+{
+  block_autocmds();
+}
+
+void nvim_unblock_autocmds(void)
+{
+  unblock_autocmds();
+}
+
+/// Set pc mark for jump list
+void nvim_undo_setpcmark(void)
+{
+  setpcmark();
+}
+
+/// Check cursor line number validity and adjust if needed
+void nvim_undo_check_cursor_lnum(win_T *win)
+{
+  check_cursor_lnum(win);
+}
+
+/// Mark adjust for undo
+void nvim_undo_mark_adjust(linenr_T top, linenr_T bot, linenr_T amount, linenr_T amount_after)
+{
+  mark_adjust(top, bot, amount, amount_after, kExtmarkNOOP);
+}
+
+/// Changed lines notification
+void nvim_undo_changed_lines(buf_T *buf, linenr_T top, colnr_T col, linenr_T bot, linenr_T xtra,
+                             bool do_buf_event)
+{
+  changed_lines(buf, top, col, bot, xtra, do_buf_event);
+}
+
+/// Mark buffer as changed
+void nvim_buf_changed(buf_T *buf)
+{
+  changed(buf);
+}
+
+/// Mark buffer as unchanged
+void nvim_buf_unchanged(buf_T *buf, bool ff, bool always_strstruc)
+{
+  unchanged(buf, ff, always_strstruc);
+}
+
+/// Check spell for window
+bool nvim_spell_check_window(win_T *win)
+{
+  return spell_check_window(win);
+}
+
+/// Redraw window line
+void nvim_redrawWinline(win_T *win, linenr_T lnum)
+{
+  redrawWinline(win, lnum);
+}
+
+/// Apply extmark undo
+void nvim_extmark_apply_undo(u_header_T *uhp, size_t idx, bool undo)
+{
+  if (idx < kv_size(uhp->uh_extmark)) {
+    extmark_apply_undo(kv_A(uhp->uh_extmark, idx), undo);
+  }
+}
+
+/// Buffer updates unload
+void nvim_buf_updates_unload(buf_T *buf, bool force)
+{
+  buf_updates_unload(buf, force);
+}
+
+/// Check position validity
+void nvim_check_pos(buf_T *buf, pos_T *pos)
+{
+  check_pos(buf, pos);
+}
+
+/// Buffer is empty check
+bool nvim_buf_is_empty(buf_T *buf)
+{
+  return buf_is_empty(buf);
+}
+
+/// Current window handle accessor
+win_T *nvim_undo_get_curwin(void)
+{
+  return curwin;
+}
+
+/// Window buffer accessor
+buf_T *nvim_undo_win_get_buffer(win_T *win)
+{
+  return win->w_buffer;
+}
+
+/// Set window cursor
+void nvim_undo_win_set_cursor_pos(win_T *win, linenr_T lnum, colnr_T col, colnr_T coladd)
+{
+  win->w_cursor.lnum = lnum;
+  win->w_cursor.col = col;
+  win->w_cursor.coladd = coladd;
+}
+
+/// Get window cursor line
+linenr_T nvim_undo_win_get_cursor_lnum(win_T *win)
+{
+  return win->w_cursor.lnum;
+}
+
+/// Save line for undo (returns allocated string)
+char *nvim_u_save_line_for_undo(buf_T *buf, linenr_T lnum)
+{
+  return u_save_line(lnum);
+}
+
+/// Get global_busy flag
+bool nvim_get_global_busy(void)
+{
+  return global_busy;
+}
+
+/// Check if messaging is allowed
+bool nvim_messaging(void)
+{
+  return messaging();
+}
+
+/// Get KeyTyped flag
+bool nvim_undo_get_key_typed(void)
+{
+  return KeyTyped;
+}
+
+/// Get fdo_flags for fold options
+int nvim_undo_get_fdo_flags(void)
+{
+  return fdo_flags;
+}
+
+/// Fold open cursor
+void nvim_undo_foldOpenCursor(void)
+{
+  foldOpenCursor();
+}
+
+/// Check VIsual_active
+bool nvim_undo_get_visual_active(void)
+{
+  return VIsual_active;
+}
+
+/// Get VIsual position
+void nvim_undo_get_visual_pos(linenr_T *lnum, colnr_T *col, colnr_T *coladd)
+{
+  *lnum = VIsual.lnum;
+  *col = VIsual.col;
+  *coladd = VIsual.coladd;
+}

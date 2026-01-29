@@ -453,16 +453,16 @@ extern "C" {
     fn nvim_unblock_autocmds();
 
     /// Set pc mark for jump list
-    fn nvim_setpcmark();
+    fn nvim_undo_setpcmark();
 
     /// Check cursor line number validity and adjust if needed
-    fn nvim_check_cursor_lnum(win: WinHandle);
+    fn nvim_undo_check_cursor_lnum(win: WinHandle);
 
     /// Mark adjust for undo
-    fn nvim_mark_adjust_undo(top: LinenrT, bot: LinenrT, amount: LinenrT, amount_after: LinenrT);
+    fn nvim_undo_mark_adjust(top: LinenrT, bot: LinenrT, amount: LinenrT, amount_after: LinenrT);
 
     /// Changed lines notification
-    fn nvim_changed_lines(
+    fn nvim_undo_changed_lines(
         buf: BufHandle,
         top: LinenrT,
         col: ColnrT,
@@ -496,16 +496,16 @@ extern "C" {
     fn nvim_buf_is_empty(buf: BufHandle) -> bool;
 
     /// Current window handle accessor
-    fn nvim_get_curwin() -> WinHandle;
+    fn nvim_undo_get_curwin() -> WinHandle;
 
     /// Window buffer accessor
-    fn nvim_win_get_buffer(win: WinHandle) -> BufHandle;
+    fn nvim_undo_win_get_buffer(win: WinHandle) -> BufHandle;
 
     /// Set window cursor
-    fn nvim_win_set_cursor_pos(win: WinHandle, lnum: LinenrT, col: ColnrT, coladd: ColnrT);
+    fn nvim_undo_win_set_cursor_pos(win: WinHandle, lnum: LinenrT, col: ColnrT, coladd: ColnrT);
 
     /// Get window cursor line
-    fn nvim_win_get_cursor_lnum(win: WinHandle) -> LinenrT;
+    fn nvim_undo_win_get_cursor_lnum(win: WinHandle) -> LinenrT;
 
     /// Save line for undo (returns allocated string)
     fn nvim_u_save_line(buf: BufHandle, lnum: LinenrT) -> *mut c_char;
@@ -517,19 +517,19 @@ extern "C" {
     fn nvim_messaging() -> bool;
 
     /// Get KeyTyped flag
-    fn nvim_get_key_typed() -> bool;
+    fn nvim_undo_get_key_typed() -> bool;
 
     /// Get fdo_flags for fold options
-    fn nvim_get_fdo_flags() -> c_int;
+    fn nvim_undo_get_fdo_flags() -> c_int;
 
     /// Fold open cursor
-    fn nvim_foldOpenCursor();
+    fn nvim_undo_foldOpenCursor();
 
     /// Check VIsual_active
-    fn nvim_get_visual_active() -> bool;
+    fn nvim_undo_get_visual_active() -> bool;
 
     /// Get VIsual position
-    fn nvim_get_visual_pos(lnum: *mut LinenrT, col: *mut ColnrT, coladd: *mut ColnrT);
+    fn nvim_undo_get_visual_pos(lnum: *mut LinenrT, col: *mut ColnrT, coladd: *mut ColnrT);
 }
 
 /// Check if the 'modified' flag is set, or 'ff' has changed.
