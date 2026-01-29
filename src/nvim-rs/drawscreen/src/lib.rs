@@ -1593,6 +1593,220 @@ pub extern "C" fn rs_clear_visual_state(wp: WinHandle) {
     }
 }
 
+// =============================================================================
+// Phase D4: Enhanced Scroll Optimization
+// =============================================================================
+
+/// Calculate the optimal scroll amount for smooth scrolling.
+///
+/// Given the current topline, target topline, and window height,
+/// returns the recommended scroll step for smooth scrolling.
+#[no_mangle]
+pub extern "C" fn rs_smooth_scroll_step(
+    current_topline: LinenrT,
+    target_topline: LinenrT,
+    win_height: c_int,
+) -> c_int {
+    let delta = target_topline - current_topline;
+    if delta == 0 {
+        return 0;
+    }
+
+    let abs_delta = delta.abs();
+
+    // For small scrolls, move one line at a time
+    if abs_delta <= 3 {
+        return if delta > 0 { 1 } else { -1 };
+    }
+
+    // For larger scrolls, use proportional step (max half window)
+    let max_step = (win_height / 2).max(1);
+    let step = ((abs_delta as c_int) / 4).clamp(1, max_step);
+
+    if delta > 0 {
+        step
+    } else {
+        -step
+    }
+}
+
+/// Check if scrolling would be more efficient than full redraw.
+///
+/// Returns 1 if scroll optimization should be used, 0 if full redraw is better.
+#[no_mangle]
+pub extern "C" fn rs_scroll_vs_redraw(
+    scroll_lines: c_int,
+    win_height: c_int,
+    changed_lines: c_int,
+) -> c_int {
+    let abs_scroll = scroll_lines.abs();
+
+    // If scrolling more than window height, redraw is always needed
+    if abs_scroll >= win_height {
+        return 0;
+    }
+
+    // Calculate lines that would be preserved by scrolling
+    let preserved = win_height - abs_scroll;
+
+    // Calculate lines that would need redraw anyway due to changes
+    let effective_preserved = preserved - changed_lines.min(preserved);
+
+    // Scrolling is worth it if we preserve at least 1/3 of the window
+    c_int::from(effective_preserved > win_height / 3)
+}
+
+/// Calculate the first line that needs to be redrawn after scrolling.
+///
+/// Returns the first line number (0-based from window top) that needs drawing.
+#[no_mangle]
+pub extern "C" fn rs_scroll_first_redraw_line(scroll_lines: c_int, win_height: c_int) -> c_int {
+    use std::cmp::Ordering;
+    match scroll_lines.cmp(&0) {
+        Ordering::Greater => 0, // Scrolled up - need to redraw from top
+        Ordering::Less => (win_height + scroll_lines).max(0), // Scrolled down
+        Ordering::Equal => win_height, // No scroll
+    }
+}
+
+/// Calculate the last line that needs to be redrawn after scrolling.
+///
+/// Returns the last line number (0-based from window top, exclusive) that needs drawing.
+#[no_mangle]
+pub extern "C" fn rs_scroll_last_redraw_line(scroll_lines: c_int, win_height: c_int) -> c_int {
+    use std::cmp::Ordering;
+    match scroll_lines.cmp(&0) {
+        Ordering::Greater => scroll_lines.min(win_height), // Scrolled up
+        Ordering::Less => win_height,                      // Scrolled down
+        Ordering::Equal => 0,                              // No scroll
+    }
+}
+
+/// Calculate the number of filler lines visible at the top of window.
+///
+/// Returns the number of filler lines that should be shown above the first text line.
+#[no_mangle]
+pub extern "C" fn rs_visible_filler_lines(topfill: c_int, view_height: c_int) -> c_int {
+    topfill.min(view_height).max(0)
+}
+
+/// Check if a line is in the visible portion of the window.
+///
+/// Returns 1 if the line is visible, 0 otherwise.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_line_visible_in_window(
+    lnum: LinenrT,
+    topline: LinenrT,
+    botline: LinenrT,
+) -> c_int {
+    c_int::from(lnum >= topline && lnum <= botline)
+}
+
+/// Calculate the scroll direction from topline change.
+///
+/// Returns positive for scroll up (content moves up, lower lines become visible),
+/// negative for scroll down, 0 for no change.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_scroll_direction(old_topline: LinenrT, new_topline: LinenrT) -> c_int {
+    use std::cmp::Ordering;
+    match new_topline.cmp(&old_topline) {
+        Ordering::Greater => 1, // Scrolled up (moved down in buffer)
+        Ordering::Less => -1,   // Scrolled down (moved up in buffer)
+        Ordering::Equal => 0,   // No scroll
+    }
+}
+
+/// Check if cursor is above the visible window area.
+///
+/// Returns 1 if cursor is above window, 0 otherwise.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_cursor_above_window(cursor_lnum: LinenrT, topline: LinenrT) -> c_int {
+    c_int::from(cursor_lnum < topline)
+}
+
+/// Check if cursor is below the visible window area.
+///
+/// Returns 1 if cursor is below window, 0 otherwise.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_cursor_below_window(cursor_lnum: LinenrT, botline: LinenrT) -> c_int {
+    c_int::from(cursor_lnum > botline)
+}
+
+/// Calculate the minimum scroll needed to make cursor visible.
+///
+/// Returns the number of lines to scroll (positive = up, negative = down).
+/// Returns 0 if cursor is already visible.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_scroll_to_cursor(
+    cursor_lnum: LinenrT,
+    topline: LinenrT,
+    botline: LinenrT,
+    scrolloff: c_int,
+) -> c_int {
+    let effective_top = topline + scrolloff as LinenrT;
+    let effective_bot = botline - scrolloff as LinenrT;
+
+    if cursor_lnum < effective_top {
+        // Need to scroll down (decrease topline)
+        -((effective_top - cursor_lnum) as c_int)
+    } else if cursor_lnum > effective_bot && effective_bot >= effective_top {
+        // Need to scroll up (increase topline)
+        (cursor_lnum - effective_bot) as c_int
+    } else {
+        0 // Cursor is visible with scrolloff
+    }
+}
+
+/// Calculate rows consumed by a range of buffer lines.
+///
+/// This is a simple estimate that assumes one row per line.
+/// For accurate counting with folds/wraps, use plines functions.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_line_count_to_rows(start_lnum: LinenrT, end_lnum: LinenrT) -> c_int {
+    if end_lnum >= start_lnum {
+        (end_lnum - start_lnum + 1) as c_int
+    } else {
+        0
+    }
+}
+
+/// Check if screen line cache is valid for given topline.
+///
+/// Returns 1 if the cached line at index 0 matches the expected topline.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)]
+pub extern "C" fn rs_wlines_cache_valid(
+    cached_topline: LinenrT,
+    expected_topline: LinenrT,
+) -> c_int {
+    c_int::from(cached_topline == expected_topline)
+}
+
+/// Calculate the invalidation range for a text change.
+///
+/// Given start and end of a change, and the scroll offset,
+/// returns the first row that needs to be invalidated.
+#[no_mangle]
+pub extern "C" fn rs_change_invalidation_start(
+    change_start_lnum: LinenrT,
+    topline: LinenrT,
+    topfill: c_int,
+) -> c_int {
+    if change_start_lnum < topline {
+        // Change starts above window
+        0
+    } else {
+        // Change starts within or below window
+        ((change_start_lnum - topline) as c_int + topfill).max(0)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1822,5 +2036,154 @@ mod tests {
     fn test_buf_handle_null() {
         let null_buf = BufHandle(std::ptr::null_mut());
         assert!(null_buf.is_null());
+    }
+
+    // =============================================================================
+    // Phase D4: Scroll Optimization Tests
+    // =============================================================================
+
+    #[test]
+    fn test_smooth_scroll_step() {
+        // No scroll needed
+        assert_eq!(rs_smooth_scroll_step(10, 10, 24), 0);
+
+        // Small scroll (1-3 lines) - move one at a time
+        assert_eq!(rs_smooth_scroll_step(10, 11, 24), 1);
+        assert_eq!(rs_smooth_scroll_step(10, 12, 24), 1);
+        assert_eq!(rs_smooth_scroll_step(10, 13, 24), 1);
+        assert_eq!(rs_smooth_scroll_step(10, 9, 24), -1);
+
+        // Larger scroll - proportional step
+        let step = rs_smooth_scroll_step(10, 30, 24);
+        assert!(step > 1 && step <= 12); // max half window
+    }
+
+    #[test]
+    fn test_scroll_vs_redraw() {
+        // Small scroll with no changes - use scroll
+        assert_eq!(rs_scroll_vs_redraw(3, 24, 0), 1);
+
+        // Scroll entire window - use redraw
+        assert_eq!(rs_scroll_vs_redraw(24, 24, 0), 0);
+
+        // Scroll more than window - use redraw
+        assert_eq!(rs_scroll_vs_redraw(30, 24, 0), 0);
+
+        // Small scroll but many changed lines - might still redraw
+        assert_eq!(rs_scroll_vs_redraw(5, 24, 20), 0);
+    }
+
+    #[test]
+    fn test_scroll_first_redraw_line() {
+        // Scroll up - redraw from top
+        assert_eq!(rs_scroll_first_redraw_line(5, 24), 0);
+
+        // Scroll down - redraw from bottom portion
+        assert_eq!(rs_scroll_first_redraw_line(-5, 24), 19);
+
+        // No scroll
+        assert_eq!(rs_scroll_first_redraw_line(0, 24), 24);
+    }
+
+    #[test]
+    fn test_scroll_last_redraw_line() {
+        // Scroll up - redraw first N lines
+        assert_eq!(rs_scroll_last_redraw_line(5, 24), 5);
+
+        // Scroll down - redraw to end
+        assert_eq!(rs_scroll_last_redraw_line(-5, 24), 24);
+
+        // No scroll
+        assert_eq!(rs_scroll_last_redraw_line(0, 24), 0);
+    }
+
+    #[test]
+    fn test_visible_filler_lines() {
+        assert_eq!(rs_visible_filler_lines(3, 24), 3);
+        assert_eq!(rs_visible_filler_lines(30, 24), 24); // clamped to view_height
+        assert_eq!(rs_visible_filler_lines(-5, 24), 0); // no negative
+        assert_eq!(rs_visible_filler_lines(0, 24), 0);
+    }
+
+    #[test]
+    fn test_line_visible_in_window() {
+        // Line in visible range
+        assert_eq!(rs_line_visible_in_window(15, 10, 30), 1);
+
+        // Line at boundaries
+        assert_eq!(rs_line_visible_in_window(10, 10, 30), 1);
+        assert_eq!(rs_line_visible_in_window(30, 10, 30), 1);
+
+        // Line outside range
+        assert_eq!(rs_line_visible_in_window(5, 10, 30), 0);
+        assert_eq!(rs_line_visible_in_window(35, 10, 30), 0);
+    }
+
+    #[test]
+    fn test_scroll_direction() {
+        // Scrolled up (higher topline)
+        assert_eq!(rs_scroll_direction(10, 15), 1);
+
+        // Scrolled down (lower topline)
+        assert_eq!(rs_scroll_direction(15, 10), -1);
+
+        // No change
+        assert_eq!(rs_scroll_direction(10, 10), 0);
+    }
+
+    #[test]
+    fn test_cursor_position_checks() {
+        // Cursor above window
+        assert_eq!(rs_cursor_above_window(5, 10), 1);
+        assert_eq!(rs_cursor_above_window(10, 10), 0);
+        assert_eq!(rs_cursor_above_window(15, 10), 0);
+
+        // Cursor below window
+        assert_eq!(rs_cursor_below_window(35, 30), 1);
+        assert_eq!(rs_cursor_below_window(30, 30), 0);
+        assert_eq!(rs_cursor_below_window(25, 30), 0);
+    }
+
+    #[test]
+    fn test_scroll_to_cursor() {
+        // Cursor visible - no scroll needed
+        assert_eq!(rs_scroll_to_cursor(15, 10, 30, 3), 0);
+
+        // Cursor above visible area - scroll down
+        assert_eq!(rs_scroll_to_cursor(10, 15, 35, 3), -8); // 10 < (15+3), need -8
+
+        // Cursor below visible area - scroll up
+        assert_eq!(rs_scroll_to_cursor(35, 10, 30, 3), 8); // 35 > (30-3), need +8
+
+        // Cursor at scrolloff boundary - just visible
+        assert_eq!(rs_scroll_to_cursor(13, 10, 30, 3), 0); // 13 >= (10+3)
+    }
+
+    #[test]
+    fn test_line_count_to_rows() {
+        assert_eq!(rs_line_count_to_rows(10, 20), 11); // 10-20 inclusive
+        assert_eq!(rs_line_count_to_rows(1, 1), 1);
+        assert_eq!(rs_line_count_to_rows(20, 10), 0); // invalid range
+    }
+
+    #[test]
+    fn test_wlines_cache_valid() {
+        assert_eq!(rs_wlines_cache_valid(10, 10), 1);
+        assert_eq!(rs_wlines_cache_valid(10, 15), 0);
+    }
+
+    #[test]
+    fn test_change_invalidation_start() {
+        // Change starts above window
+        assert_eq!(rs_change_invalidation_start(5, 10, 0), 0);
+
+        // Change starts at topline
+        assert_eq!(rs_change_invalidation_start(10, 10, 0), 0);
+
+        // Change starts within window
+        assert_eq!(rs_change_invalidation_start(15, 10, 0), 5);
+
+        // With topfill
+        assert_eq!(rs_change_invalidation_start(10, 10, 3), 3);
     }
 }
