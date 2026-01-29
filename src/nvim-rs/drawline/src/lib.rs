@@ -2996,6 +2996,195 @@ pub unsafe extern "C" fn rs_win_has_list(wp: WinHandle) -> c_int {
     c_int::from(nvim_win_get_p_list(wp) != 0)
 }
 
+// =============================================================================
+// Phase D2: Line rendering state helpers
+// =============================================================================
+
+// Additional C function declarations for line rendering
+extern "C" {
+    // Visual mode state
+    fn nvim_get_VIsual_active() -> c_int;
+
+    // Buffer state
+    fn nvim_buf_get_line_count(buf: BufHandle) -> LinenrT;
+
+    // Window/Buffer comparison
+    fn nvim_win_is_curwin(wp: WinHandle) -> c_int;
+    fn nvim_curwin_buffer_eq(buf: *mut c_void) -> c_int;
+
+    // Syntax state
+    fn nvim_syntax_present(wp: WinHandle) -> c_int;
+}
+
+/// Check if Visual mode is active and the window shows the curwin buffer.
+///
+/// Returns 1 if Visual mode highlighting should be applied for this window.
+#[no_mangle]
+pub unsafe extern "C" fn rs_should_apply_visual(wp: WinHandle) -> c_int {
+    let visual_active = nvim_get_VIsual_active() != 0;
+    if !visual_active {
+        return 0;
+    }
+
+    let buf = nvim_win_get_buffer(wp);
+    c_int::from(nvim_curwin_buffer_eq(buf) != 0)
+}
+
+/// Check if a line is the last line in the buffer.
+///
+/// Returns 1 if lnum equals buf's line count.
+#[no_mangle]
+pub unsafe extern "C" fn rs_is_last_line(buf: BufHandle, lnum: LinenrT) -> c_int {
+    let line_count = nvim_buf_get_line_count(buf);
+    c_int::from(lnum == line_count)
+}
+
+/// Check if syntax highlighting is present and not in error state.
+///
+/// Returns 1 if syntax highlighting should be processed.
+#[no_mangle]
+pub unsafe extern "C" fn rs_has_syntax(wp: WinHandle) -> c_int {
+    nvim_syntax_present(wp)
+}
+
+/// Calculate the effective highlight attribute for a character.
+///
+/// Combines base, priority and area attributes according to Neovim rules.
+/// This mimics the char_attr calculation in win_line().
+#[no_mangle]
+pub const extern "C" fn rs_combine_char_attr(
+    char_attr_base: c_int,
+    char_attr_pri: c_int,
+    area_attr: c_int,
+    search_attr: c_int,
+) -> c_int {
+    // Priority: search_attr > area_attr > char_attr_pri > char_attr_base
+    if search_attr != 0 {
+        return search_attr;
+    }
+    if area_attr != 0 {
+        return area_attr;
+    }
+    if char_attr_pri != 0 {
+        return char_attr_pri;
+    }
+    char_attr_base
+}
+
+/// Clamp a column value to the view width.
+#[no_mangle]
+pub unsafe extern "C" fn rs_clamp_col_to_view(wp: WinHandle, col: c_int) -> c_int {
+    let view_width = nvim_win_get_view_width(wp);
+    col.clamp(0, view_width - 1)
+}
+
+/// Calculate the number of cells for tab expansion.
+///
+/// Returns the number of cells a tab character should occupy
+/// given the current virtual column.
+#[no_mangle]
+pub unsafe extern "C" fn rs_tab_cells(wp: WinHandle, vcol: c_int) -> c_int {
+    let tabstop = nvim_win_get_tabstop(wp);
+    if tabstop == 0 {
+        return 1;
+    }
+    tabstop - (vcol % tabstop)
+}
+
+// Tabstop accessor
+extern "C" {
+    fn nvim_win_get_tabstop(wp: WinHandle) -> c_int;
+}
+
+/// Check if the character should be concealed.
+///
+/// Returns 1 if conceal level >= 2 or (level >= 1 and not on cursor line).
+#[no_mangle]
+pub unsafe extern "C" fn rs_should_conceal(
+    wp: WinHandle,
+    conceal_level: c_int,
+    on_cursor_line: c_int,
+) -> c_int {
+    if conceal_level >= 2 {
+        return 1;
+    }
+    if conceal_level >= 1 && on_cursor_line == 0 {
+        // Level 1: conceal when not on cursor line (unless concealcursor is set)
+        let conceal_cursor = nvim_win_get_conceal_cursor(wp);
+        if conceal_cursor == 0 {
+            return 1;
+        }
+    }
+    0
+}
+
+extern "C" {
+    fn nvim_win_get_conceal_cursor(wp: WinHandle) -> c_int;
+}
+
+/// Check if we need to draw the end-of-line character.
+///
+/// Returns 1 if list mode is on and we have an eol character set.
+#[no_mangle]
+pub unsafe extern "C" fn rs_need_eol_char(wp: WinHandle) -> c_int {
+    if nvim_win_get_p_list(wp) == 0 {
+        return 0;
+    }
+    let eol_char = nvim_win_get_lcs_eol(wp);
+    c_int::from(eol_char != 0)
+}
+
+extern "C" {
+    fn nvim_win_get_lcs_eol(wp: WinHandle) -> ScharT;
+}
+
+/// Get the end-of-line character for list mode.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_eol_char(wp: WinHandle) -> ScharT {
+    nvim_win_get_lcs_eol(wp)
+}
+
+/// Check if the line has virtual text that needs drawing.
+#[no_mangle]
+pub unsafe extern "C" fn rs_line_has_virt_text(wp: WinHandle, lnum: LinenrT) -> c_int {
+    nvim_line_has_virt_text(wp, lnum)
+}
+
+extern "C" {
+    fn nvim_line_has_virt_text(wp: WinHandle, lnum: LinenrT) -> c_int;
+}
+
+/// Calculate the column position for cursor column highlight.
+///
+/// Returns the screen column for cursorcolumn highlighting, or -1 if not applicable.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cursor_column_pos(wp: WinHandle) -> c_int {
+    if nvim_win_get_p_cuc(wp) == 0 {
+        return -1;
+    }
+
+    // Only draw cursor column when it's visible in the window
+    let virtcol = nvim_win_get_virtcol(wp);
+    let view_width = nvim_win_get_view_width(wp);
+
+    if virtcol >= view_width {
+        return -1;
+    }
+
+    virtcol
+}
+
+/// Validate screen row is within window bounds.
+#[no_mangle]
+pub unsafe extern "C" fn rs_validate_screen_row(wp: WinHandle, row: c_int) -> c_int {
+    let view_height = nvim_win_get_view_height(wp);
+    c_int::from(row >= 0 && row < view_height)
+}
+
+extern "C" {
+    fn nvim_win_get_view_height(wp: WinHandle) -> c_int;
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -996,6 +996,53 @@ static int get_rightmost_vcol(win_T *wp, const int *color_cols)
   return rs_get_rightmost_vcol(wp, color_cols);
 }
 
+// =============================================================================
+// Phase D2: Line Rendering FFI Accessors
+// =============================================================================
+
+/// Check if curwin's buffer equals the given buffer.
+int nvim_curwin_buffer_eq(buf_T *buf)
+{
+  return (curwin && curwin->w_buffer == buf) ? 1 : 0;
+}
+
+/// Check if syntax highlighting is present for the window.
+int nvim_syntax_present(win_T *wp)
+{
+  return wp ? syntax_present(wp) : 0;
+}
+
+/// Get the effective tabstop value for a window.
+int nvim_win_get_tabstop(win_T *wp)
+{
+  if (!wp || !wp->w_buffer) {
+    return 8;
+  }
+  // Get the buffer's tabstop option
+  return (int)wp->w_buffer->b_p_ts;
+}
+
+/// Get the concealcursor option for a window.
+int nvim_win_get_conceal_cursor(win_T *wp)
+{
+  if (!wp || !wp->w_p_cocu) {
+    return 0;
+  }
+  return *wp->w_p_cocu != NUL ? 1 : 0;
+}
+
+/// Check if a line has virtual text decorations.
+/// This is a simplified check - returns 1 if the buffer has any extmarks.
+int nvim_line_has_virt_text(win_T *wp, linenr_T lnum)
+{
+  if (!wp || !wp->w_buffer) {
+    return 0;
+  }
+  // Check if there are any decorations defined in the buffer
+  // A more precise check would require scanning the marktree
+  return wp->w_buffer->b_marktree->n_keys > 0 ? 1 : 0;
+}
+
 /// Display line "lnum" of window "wp" on the screen.
 /// wp->w_virtcol needs to be valid.
 ///
