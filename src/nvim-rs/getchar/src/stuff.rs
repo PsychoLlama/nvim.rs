@@ -207,6 +207,11 @@ extern "C" {
     fn nvim_add_char_buff_readbuf1(c: c_int);
     fn nvim_add_num_buff_readbuf1(n: c_int);
     fn nvim_add_buff_readbuf2(s: *const u8, len: isize);
+
+    // Redo buffer operations (block_redo check is in the wrapper)
+    fn nvim_add_buff_redobuff(s: *const u8, len: isize);
+    fn nvim_add_char_buff_redobuff(c: c_int);
+    fn nvim_add_num_buff_redobuff(n: c_int);
 }
 
 /// Append a string to the stuff buffer (readbuf1).
@@ -250,6 +255,46 @@ pub unsafe extern "C" fn rs_stuffnumReadbuff(n: c_int) {
 #[no_mangle]
 pub unsafe extern "C" fn rs_stuffRedoReadbuff(s: *const u8) {
     nvim_add_buff_readbuf2(s, -1);
+}
+
+// =============================================================================
+// Redo Buffer Operations
+// =============================================================================
+
+/// Append a string to the redo buffer.
+///
+/// K_SPECIAL should already have been escaped.
+/// Does nothing if block_redo is true (checked in C wrapper).
+///
+/// # Safety
+/// `s` must be a valid pointer to a string of at least `len` bytes,
+/// or if `len` is -1, must be NUL-terminated.
+#[no_mangle]
+pub unsafe extern "C" fn rs_AppendToRedobuff(s: *const u8, len: isize) {
+    nvim_add_buff_redobuff(s, len);
+}
+
+/// Append a character to the redo buffer.
+///
+/// Translates special keys, NUL, K_SPECIAL and multibyte characters.
+/// Does nothing if block_redo is true (checked in C wrapper).
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_AppendCharToRedobuff(c: c_int) {
+    nvim_add_char_buff_redobuff(c);
+}
+
+/// Append a number to the redo buffer.
+///
+/// Does nothing if block_redo is true (checked in C wrapper).
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_AppendNumberToRedobuff(n: c_int) {
+    nvim_add_num_buff_redobuff(n);
 }
 
 /// Get the typeahead character that won't be flushed.

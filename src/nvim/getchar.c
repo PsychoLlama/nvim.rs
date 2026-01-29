@@ -3807,3 +3807,25 @@ void nvim_add_buff_readbuf2(const char *s, ptrdiff_t len)
 {
   add_buff(&readbuf2, s, len);
 }
+
+// Wrappers for redo buffer operations
+void nvim_add_buff_redobuff(const char *s, ptrdiff_t len)
+{
+  if (!block_redo) {
+    add_buff(&redobuff, s, len);
+  }
+}
+
+void nvim_add_char_buff_redobuff(int c)
+{
+  if (!block_redo) {
+    add_char_buff(&redobuff, c);
+  }
+}
+
+void nvim_add_num_buff_redobuff(int n)
+{
+  if (!block_redo) {
+    add_num_buff(&redobuff, n);
+  }
+}
