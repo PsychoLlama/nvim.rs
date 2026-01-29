@@ -2247,198 +2247,53 @@ int qf_init(win_T *wp, const char *restrict efile, char *restrict errorformat, i
 // Maximum number of bytes allowed per line while reading an errorfile.
 static const size_t LINE_MAXLEN = 4096;
 
-/// Patterns used.  Keep in sync with qf_parse_fmt[].
-static struct fmtpattern {
-  char convchar;
-  char *pattern;
-} fmt_pat[FMT_PATTERNS] = {
-  { 'f', ".\\+" },      // only used when at end
-  { 'b', "\\d\\+" },    // 1
-  { 'n', "\\d\\+" },    // 2
-  { 'l', "\\d\\+" },    // 3
-  { 'e', "\\d\\+" },    // 4
-  { 'c', "\\d\\+" },    // 5
-  { 'k', "\\d\\+" },    // 6
-  { 't', "." },         // 7
+// Format pattern definitions moved to Rust (see parse.rs FMT_PAT array).
+// The pattern indices are still used via FMT_PATTERN_M and FMT_PATTERN_R defines.
 #define FMT_PATTERN_M 8
-  { 'm', ".\\+" },      // 8
 #define FMT_PATTERN_R 9
-  { 'r', ".*" },        // 9
-  { 'p', "[-\t .]*" },  // 10
-  { 'v', "\\d\\+" },    // 11
-  { 's', ".\\+" },      // 12
-  { 'o', ".\\+" }       // 13
-};
-
-/// Convert an errorformat pattern to a regular expression pattern.
-/// See fmt_pat definition above for the list of supported patterns.  The
-/// pattern specifier is supplied in "efmpat".  The converted pattern is stored
-/// in "regpat".  Returns a pointer to the location after the pattern.
-static char *efmpat_to_regpat(const char *efmpat, char *regpat, efm_T *efminfo, int idx, int round)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (efminfo->addr[idx]) {
-    // Each errorformat pattern can occur only once
-    semsg(_("E372: Too many %%%c in format string"), *efmpat);
-    return NULL;
-  }
-  if ((idx && idx < FMT_PATTERN_R
-       && vim_strchr("DXOPQ", (uint8_t)efminfo->prefix) != NULL)
-      || (idx == FMT_PATTERN_R
-          && vim_strchr("OPQ", (uint8_t)efminfo->prefix) == NULL)) {
-    semsg(_("E373: Unexpected %%%c in format string"), *efmpat);
-    return NULL;
-  }
-  efminfo->addr[idx] = (char)++round;
-  *regpat++ = '\\';
-  *regpat++ = '(';
-#ifdef BACKSLASH_IN_FILENAME
-  if (*efmpat == 'f') {
-    // Also match "c:" in the file name, even when
-    // checking for a colon next: "%f:".
-    // "\%(\a:\)\="
-    STRCPY(regpat, "\\%(\\a:\\)\\=");
-    regpat += 10;
-  }
-#endif
-  if (*efmpat == 'f' && efmpat[1] != NUL) {
-    if (efmpat[1] != '\\' && efmpat[1] != '%') {
-      // A file name may contain spaces, but this isn't
-      // in "\f".  For "%f:%l:%m" there may be a ":" in
-      // the file name.  Use ".\{-1,}x" instead (x is
-      // the next character), the requirement that :999:
-      // follows should work.
-      STRCPY(regpat, ".\\{-1,}");
-      regpat += 7;
-    } else {
-      // File name followed by '\\' or '%': include as
-      // many file name chars as possible.
-      STRCPY(regpat, "\\f\\+");
-      regpat += 4;
-    }
-  } else {
-    char *srcptr = fmt_pat[idx].pattern;
-    while ((*regpat = *srcptr++) != NUL) {
-      regpat++;
-    }
-  }
-  *regpat++ = '\\';
-  *regpat++ = ')';
-
-  return regpat;
-}
-
-/// Convert a scanf like format in 'errorformat' to a regular expression.
-/// Returns a pointer to the location after the pattern.
-static char *scanf_fmt_to_regpat(const char **pefmp, const char *efm, int len, char *regpat)
-  FUNC_ATTR_NONNULL_ALL
-{
-  const char *efmp = *pefmp;
-
-  if (*efmp == '[' || *efmp == '\\') {
-    if ((*regpat++ = *efmp) == '[') {  // %*[^a-z0-9] etc.
-      if (efmp[1] == '^') {
-        *regpat++ = *++efmp;
-      }
-      if (efmp < efm + len) {
-        *regpat++ = *++efmp;  // could be ']'
-        while (efmp < efm + len && (*regpat++ = *++efmp) != ']') {}
-        if (efmp == efm + len) {
-          emsg(_("E374: Missing ] in format string"));
-          return NULL;
-        }
-      }
-    } else if (efmp < efm + len) {  // %*\D, %*\s etc.
-      *regpat++ = *++efmp;
-    }
-    *regpat++ = '\\';
-    *regpat++ = '+';
-  } else {
-    semsg(_("E375: Unsupported %%%c in format string"), *efmp);
-    return NULL;
-  }
-
-  *pefmp = efmp;
-
-  return regpat;
-}
-
-/// Analyze/parse an errorformat prefix.
-static const char *efm_analyze_prefix(const char *efmp, efm_T *efminfo)
-  FUNC_ATTR_NONNULL_ALL
-{
-  if (vim_strchr("+-", (uint8_t)(*efmp)) != NULL) {
-    efminfo->flags = *efmp++;
-  }
-  if (vim_strchr("DXAEWINCZGOPQ", (uint8_t)(*efmp)) != NULL) {
-    efminfo->prefix = *efmp;
-  } else {
-    semsg(_("E376: Invalid %%%c in format string prefix"), *efmp);
-    return NULL;
-  }
-
-  return efmp;
-}
 
 // Converts a 'errorformat' string to regular expression pattern
+// Now uses Rust implementation and adapts the result.
 static int efm_to_regpat(const char *efm, int len, efm_T *fmt_ptr, char *regpat)
   FUNC_ATTR_NONNULL_ALL
 {
-  // Build regexp pattern from current 'errorformat' option
-  char *ptr = regpat;
-  *ptr++ = '^';
-  int round = 0;
-  for (const char *efmp = efm; efmp < efm + len; efmp++) {
-    if (*efmp == '%') {
-      efmp++;
-      int idx;
-      for (idx = 0; idx < FMT_PATTERNS; idx++) {
-        if (fmt_pat[idx].convchar == *efmp) {
-          break;
-        }
-      }
-      if (idx < FMT_PATTERNS) {
-        ptr = efmpat_to_regpat(efmp, ptr, fmt_ptr, idx, round);
-        if (ptr == NULL) {
-          return FAIL;
-        }
-        round++;
-      } else if (*efmp == '*') {
-        efmp++;
-        ptr = scanf_fmt_to_regpat(&efmp, efm, len, ptr);
-        if (ptr == NULL) {
-          return FAIL;
-        }
-      } else if (vim_strchr("%\\.^$~[", (uint8_t)(*efmp)) != NULL) {
-        *ptr++ = *efmp;  // regexp magic characters
-      } else if (*efmp == '#') {
-        *ptr++ = '*';
-      } else if (*efmp == '>') {
-        fmt_ptr->conthere = true;
-      } else if (efmp == efm + 1) {             // analyse prefix
-        // prefix is allowed only at the beginning of the errorformat
-        // option part
-        efmp = efm_analyze_prefix(efmp, fmt_ptr);
-        if (efmp == NULL) {
-          return FAIL;
-        }
-      } else {
-        semsg(_("E377: Invalid %%%c in format string"), *efmp);
-        return FAIL;
-      }
-    } else {                    // copy normal character
-      if (*efmp == '\\' && efmp + 1 < efm + len) {
-        efmp++;
-      } else if (vim_strchr(".*^$~[", (uint8_t)(*efmp)) != NULL) {
-        *ptr++ = '\\';  // escape regexp atoms
-      }
-      if (*efmp) {
-        *ptr++ = *efmp;
-      }
+  // Use Rust implementation for the core conversion
+  EfmToRegpatResult result = rs_efm_to_regpat(efm, (size_t)len,
+                                               fmt_ptr->addr, regpat,
+                                               rs_efm_regpat_bufsz(efm, (size_t)len));
+
+  if (result.status != OK) {
+    // Handle error messages based on error code
+    switch (result.error_code) {
+      case 372:
+        semsg(_("E372: Too many %%%c in format string"), result.error_char);
+        break;
+      case 373:
+        semsg(_("E373: Unexpected %%%c in format string"), result.error_char);
+        break;
+      case 374:
+        emsg(_("E374: Missing ] in format string"));
+        break;
+      case 375:
+        semsg(_("E375: Unsupported %%%c in format string"), result.error_char);
+        break;
+      case 376:
+        semsg(_("E376: Invalid %%%c in format string prefix"), result.error_char);
+        break;
+      case 377:
+        semsg(_("E377: Invalid %%%c in format string"), result.error_char);
+        break;
+      default:
+        emsg(_("E378: 'errorformat' contains no pattern"));
+        break;
     }
+    return FAIL;
   }
-  *ptr++ = '$';
-  *ptr = NUL;
+
+  // Copy prefix, flags, and conthere from result to efm_T
+  fmt_ptr->prefix = result.prefix;
+  fmt_ptr->flags = result.flags;
+  fmt_ptr->conthere = result.conthere;
 
   return OK;
 }
