@@ -235,6 +235,137 @@ pub extern "C" fn rs_produces_integer(op: c_int) -> c_int {
 }
 
 // =============================================================================
+// Additional FFI Exports (E2)
+// =============================================================================
+
+/// FFI: Get ARITH_TYPE_ERROR constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_arith_type_error() -> c_int {
+    ARITH_TYPE_ERROR
+}
+
+/// FFI: Get BINOP_LIST_CONCAT constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_binop_list_concat() -> c_int {
+    BINOP_LIST_CONCAT
+}
+
+/// FFI: Float addition.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_float_add(a: f64, b: f64) -> f64 {
+    a + b
+}
+
+/// FFI: Float subtraction.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_float_sub(a: f64, b: f64) -> f64 {
+    a - b
+}
+
+/// FFI: Float multiplication.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_float_mul(a: f64, b: f64) -> f64 {
+    a * b
+}
+
+/// FFI: Float division.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_float_div(a: f64, b: f64) -> f64 {
+    a / b
+}
+
+/// FFI: Float modulo (fmod).
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_float_mod(a: f64, b: f64) -> f64 {
+    a % b
+}
+
+/// FFI: Check if float is NaN.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_float_is_nan(f: f64) -> c_int {
+    c_int::from(f.is_nan())
+}
+
+/// FFI: Check if float is infinite.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_float_is_infinite(f: f64) -> c_int {
+    c_int::from(f.is_infinite())
+}
+
+/// FFI: Check if float is finite.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_float_is_finite(f: f64) -> c_int {
+    c_int::from(f.is_finite())
+}
+
+/// FFI: Convert integer to float.
+#[unsafe(no_mangle)]
+#[allow(clippy::cast_precision_loss)]
+pub extern "C" fn rs_int_to_float(i: i64) -> f64 {
+    i as f64
+}
+
+/// FFI: Convert float to integer (truncating).
+#[unsafe(no_mangle)]
+#[allow(clippy::cast_possible_truncation)]
+pub extern "C" fn rs_float_to_int(f: f64) -> i64 {
+    f as i64
+}
+
+/// FFI: Apply binary operator to integers.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_apply_binop_int(op: c_int, a: i64, b: i64, error: *mut c_int) -> i64 {
+    let (result, err) = match op {
+        BINOP_ADD => {
+            let (r, overflow) = safe_add(a, b);
+            (r, if overflow { ARITH_OVERFLOW } else { ARITH_OK })
+        }
+        BINOP_SUB => {
+            let (r, overflow) = safe_sub(a, b);
+            (r, if overflow { ARITH_OVERFLOW } else { ARITH_OK })
+        }
+        BINOP_MUL => {
+            let (r, overflow) = safe_mul(a, b);
+            (r, if overflow { ARITH_OVERFLOW } else { ARITH_OK })
+        }
+        BINOP_DIV => safe_div(a, b),
+        BINOP_MOD => safe_mod(a, b),
+        _ => (0, ARITH_TYPE_ERROR),
+    };
+    if !error.is_null() {
+        unsafe {
+            *error = err;
+        }
+    }
+    result
+}
+
+/// FFI: Apply binary operator to floats.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_apply_binop_float(op: c_int, a: f64, b: f64) -> f64 {
+    match op {
+        BINOP_ADD => a + b,
+        BINOP_SUB => a - b,
+        BINOP_MUL => a * b,
+        BINOP_DIV => a / b,
+        BINOP_MOD => a % b,
+        _ => f64::NAN,
+    }
+}
+
+/// FFI: Compute power (a ** b) for floats.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_float_pow(a: f64, b: f64) -> f64 {
+    a.powf(b)
+}
+
+/// FFI: Integer power (a ** b) for integers.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_int_pow(base: i64, exp: u32) -> i64 {
+    base.saturating_pow(exp)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

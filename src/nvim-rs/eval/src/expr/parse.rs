@@ -242,6 +242,249 @@ pub extern "C" fn rs_parse_is_logical_op(c: c_int) -> c_int {
 }
 
 // =============================================================================
+// Additional Token Constants (E1)
+// =============================================================================
+
+/// Method call separator (->).
+pub const TOKEN_METHOD: c_int = 15;
+/// Lambda arrow (=>).
+pub const TOKEN_LAMBDA_ARROW: c_int = 16;
+/// Ellipsis (...).
+pub const TOKEN_ELLIPSIS: c_int = 17;
+/// Question mark (for ternary).
+pub const TOKEN_QUESTION: c_int = 18;
+/// Double question mark (??).
+pub const TOKEN_NULLISH: c_int = 19;
+
+// =============================================================================
+// Additional Character Classification Helpers (E1)
+// =============================================================================
+
+/// Check if character is octal digit.
+fn is_octal(c: u8) -> bool {
+    matches!(c, b'0'..=b'7')
+}
+
+/// Check if character is binary digit.
+fn is_binary(c: u8) -> bool {
+    c == b'0' || c == b'1'
+}
+
+/// Check if character starts a literal number (including negative).
+fn starts_literal_number(c: u8, next: u8) -> bool {
+    is_digit(c) || (c == b'-' && is_digit(next))
+}
+
+/// Check if character is float exponent.
+fn is_float_exp(c: u8) -> bool {
+    c == b'e' || c == b'E'
+}
+
+/// Check if character is scope prefix (g:, l:, etc).
+fn is_scope_prefix(c: u8) -> bool {
+    matches!(c, b'g' | b'l' | b's' | b'a' | b'v' | b'b' | b'w' | b't')
+}
+
+/// Check if character can end an expression.
+fn ends_expression(c: u8) -> bool {
+    matches!(
+        c,
+        b'\0' | b'\n' | b'|' | b'"' | b'#' | b')' | b']' | b'}' | b',' | b':'
+    )
+}
+
+/// Check if character is a subscript operator start.
+fn is_subscript_start(c: u8) -> bool {
+    c == b'[' || c == b'.'
+}
+
+/// Check if character is method call start.
+fn is_method_start(c: u8, next: u8) -> bool {
+    c == b'-' && next == b'>'
+}
+
+/// Skip whitespace returning the new offset.
+fn skip_white_offset(s: &[u8], start: usize) -> usize {
+    let mut i = start;
+    while i < s.len() && is_white(s[i]) {
+        i += 1;
+    }
+    i
+}
+
+// =============================================================================
+// Additional FFI Exports (E1)
+// =============================================================================
+
+/// FFI: Get TOKEN_METHOD constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_token_method() -> c_int {
+    TOKEN_METHOD
+}
+
+/// FFI: Get TOKEN_LAMBDA_ARROW constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_token_lambda_arrow() -> c_int {
+    TOKEN_LAMBDA_ARROW
+}
+
+/// FFI: Get TOKEN_ELLIPSIS constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_token_ellipsis() -> c_int {
+    TOKEN_ELLIPSIS
+}
+
+/// FFI: Get TOKEN_QUESTION constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_token_question() -> c_int {
+    TOKEN_QUESTION
+}
+
+/// FFI: Get TOKEN_NULLISH constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_token_nullish() -> c_int {
+    TOKEN_NULLISH
+}
+
+/// FFI: Get TOKEN_LPAREN constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_token_lparen() -> c_int {
+    TOKEN_LPAREN
+}
+
+/// FFI: Get TOKEN_RPAREN constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_token_rparen() -> c_int {
+    TOKEN_RPAREN
+}
+
+/// FFI: Get TOKEN_LBRACKET constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_token_lbracket() -> c_int {
+    TOKEN_LBRACKET
+}
+
+/// FFI: Get TOKEN_RBRACKET constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_token_rbracket() -> c_int {
+    TOKEN_RBRACKET
+}
+
+/// FFI: Get TOKEN_LBRACE constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_token_lbrace() -> c_int {
+    TOKEN_LBRACE
+}
+
+/// FFI: Get TOKEN_RBRACE constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_token_rbrace() -> c_int {
+    TOKEN_RBRACE
+}
+
+/// FFI: Get TOKEN_COMMA constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_token_comma() -> c_int {
+    TOKEN_COMMA
+}
+
+/// FFI: Get TOKEN_COLON constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_token_colon() -> c_int {
+    TOKEN_COLON
+}
+
+/// FFI: Get TOKEN_DOT constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_token_dot() -> c_int {
+    TOKEN_DOT
+}
+
+/// FFI: Get TOKEN_ARROW constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_token_arrow() -> c_int {
+    TOKEN_ARROW
+}
+
+/// FFI: Check if octal digit.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_parse_is_octal_digit(c: c_int) -> c_int {
+    c_int::from(is_octal(c as u8))
+}
+
+/// FFI: Check if binary digit.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_parse_is_binary_digit(c: c_int) -> c_int {
+    c_int::from(is_binary(c as u8))
+}
+
+/// FFI: Check if starts a literal number.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_parse_starts_literal_number(c: c_int, next: c_int) -> c_int {
+    c_int::from(starts_literal_number(c as u8, next as u8))
+}
+
+/// FFI: Check if float exponent.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_parse_is_float_exp(c: c_int) -> c_int {
+    c_int::from(is_float_exp(c as u8))
+}
+
+/// FFI: Check if scope prefix.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_parse_is_scope_prefix(c: c_int) -> c_int {
+    c_int::from(is_scope_prefix(c as u8))
+}
+
+/// FFI: Check if ends expression.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_parse_ends_expression(c: c_int) -> c_int {
+    c_int::from(ends_expression(c as u8))
+}
+
+/// FFI: Check if subscript start.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_parse_is_subscript_start(c: c_int) -> c_int {
+    c_int::from(is_subscript_start(c as u8))
+}
+
+/// FFI: Check if method call start.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_parse_is_method_start(c: c_int, next: c_int) -> c_int {
+    c_int::from(is_method_start(c as u8, next as u8))
+}
+
+/// FFI: Skip whitespace in a string.
+///
+/// # Safety
+/// `s` must point to a valid NUL-terminated string.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rs_parse_skip_white(s: *const u8) -> *const u8 {
+    if s.is_null() {
+        return s;
+    }
+    let mut p = s;
+    while *p != 0 && is_white(*p) {
+        p = p.add(1);
+    }
+    p
+}
+
+/// FFI: Skip whitespace and return offset.
+///
+/// # Safety
+/// `s` must point to a valid string with at least `len` bytes.
+#[unsafe(no_mangle)]
+#[allow(clippy::cast_possible_wrap)]
+pub unsafe extern "C" fn rs_parse_skip_white_len(s: *const u8, len: c_int, start: c_int) -> c_int {
+    if s.is_null() || len <= 0 || start < 0 {
+        return start;
+    }
+    let slice = std::slice::from_raw_parts(s, len as usize);
+    skip_white_offset(slice, start as usize) as c_int
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

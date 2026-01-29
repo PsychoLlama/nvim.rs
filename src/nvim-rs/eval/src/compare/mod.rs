@@ -228,6 +228,147 @@ pub extern "C" fn rs_cmp_float(a: f64, b: f64, cmp_type: c_int) -> c_int {
 }
 
 // =============================================================================
+// Additional FFI Exports (E3)
+// =============================================================================
+
+/// FFI: Get CMP_GEQUAL constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_cmp_gequal() -> c_int {
+    CMP_GEQUAL
+}
+
+/// FFI: Get CMP_SEQUAL constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_cmp_sequal() -> c_int {
+    CMP_SEQUAL
+}
+
+/// FFI: Get CMP_NOMATCH constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_cmp_nomatch() -> c_int {
+    CMP_NOMATCH
+}
+
+/// FFI: Get CMP_ISNOT constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_cmp_isnot() -> c_int {
+    CMP_ISNOT
+}
+
+/// FFI: Get RESULT_FALSE constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_result_false() -> c_int {
+    RESULT_FALSE
+}
+
+/// FFI: Get RESULT_TRUE constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_result_true() -> c_int {
+    RESULT_TRUE
+}
+
+/// FFI: Get RESULT_ERROR constant.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_result_error() -> c_int {
+    RESULT_ERROR
+}
+
+/// FFI: Apply comparison result based on cmp_type negation.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_apply_cmp_result(result: c_int, cmp_type: c_int) -> c_int {
+    // For negated comparisons, invert the result
+    match cmp_type {
+        CMP_NEQUAL | CMP_NOMATCH | CMP_ISNOT => {
+            if result == RESULT_ERROR {
+                RESULT_ERROR
+            } else {
+                c_int::from(result == RESULT_FALSE)
+            }
+        }
+        _ => result,
+    }
+}
+
+/// FFI: Compare two booleans.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_cmp_bool(a: c_int, b: c_int, cmp_type: c_int) -> c_int {
+    let a_bool = a != 0;
+    let b_bool = b != 0;
+    let result = match cmp_type {
+        CMP_EQUAL | CMP_IS => a_bool == b_bool,
+        CMP_NEQUAL | CMP_ISNOT => a_bool != b_bool,
+        _ => false,
+    };
+    c_int::from(result)
+}
+
+/// FFI: Compute ordering from comparison (-1, 0, 1).
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_compute_ordering_int(a: i64, b: i64) -> c_int {
+    match a.cmp(&b) {
+        std::cmp::Ordering::Less => -1,
+        std::cmp::Ordering::Equal => 0,
+        std::cmp::Ordering::Greater => 1,
+    }
+}
+
+/// FFI: Compute ordering from float comparison.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_compute_ordering_float(a: f64, b: f64) -> c_int {
+    if a.is_nan() || b.is_nan() {
+        // NaN comparisons are undefined, return 0
+        0
+    } else {
+        match a.partial_cmp(&b) {
+            Some(std::cmp::Ordering::Less) => -1,
+            Some(std::cmp::Ordering::Greater) => 1,
+            _ => 0,
+        }
+    }
+}
+
+/// FFI: Apply ordering to comparison type.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_ordering_to_cmp_result(ordering: c_int, cmp_type: c_int) -> c_int {
+    let result = match cmp_type {
+        CMP_EQUAL | CMP_IS => ordering == 0,
+        CMP_NEQUAL | CMP_ISNOT => ordering != 0,
+        CMP_GREATER => ordering > 0,
+        CMP_GEQUAL => ordering >= 0,
+        CMP_SMALLER => ordering < 0,
+        CMP_SEQUAL => ordering <= 0,
+        _ => false,
+    };
+    c_int::from(result)
+}
+
+/// FFI: Check if types are comparable for relational operators.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_types_comparable(type1: c_int, type2: c_int) -> c_int {
+    // Types are comparable if they're the same or both numeric
+    if type1 == type2 {
+        return RESULT_TRUE;
+    }
+    // Check for numeric types (0 = number, 5 = float based on VimL conventions)
+    if (type1 == 0 || type1 == 5) && (type2 == 0 || type2 == 5) {
+        return RESULT_TRUE;
+    }
+    RESULT_FALSE
+}
+
+/// FFI: Check if cmp_type requires string matching.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_cmp_needs_string(cmp_type: c_int) -> c_int {
+    c_int::from(is_pattern_cmp(cmp_type))
+}
+
+/// FFI: Check if cmp_type can be used with mixed types.
+#[unsafe(no_mangle)]
+pub extern "C" fn rs_cmp_allows_mixed(cmp_type: c_int) -> c_int {
+    c_int::from(is_equality_cmp(cmp_type))
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
