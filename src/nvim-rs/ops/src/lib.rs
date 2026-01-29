@@ -275,6 +275,231 @@ pub extern "C" fn rs_op_pending() -> bool {
     op_pending_impl()
 }
 
+// =============================================================================
+// Phase O7 API & Undo Integration Helpers
+// =============================================================================
+
+/// Check if undo should be saved before this operation.
+#[must_use]
+#[inline]
+pub fn should_save_undo(op_type: c_int, empty: bool) -> bool {
+    // Save undo for change operations that aren't empty
+    op_is_change_impl(op_type) && !empty
+}
+
+/// Get undo message based on operator type.
+#[must_use]
+#[inline]
+pub const fn get_undo_message_id(op_type: c_int) -> c_int {
+    match op_type {
+        1 => 1,           // OP_DELETE -> delete message
+        3 => 2,           // OP_CHANGE -> change message
+        2 => 3,           // OP_YANK -> yank message (no undo, but for yankreg)
+        4 | 5 => 4,       // OP_LSHIFT/OP_RSHIFT -> shift message
+        7 | 11 | 12 => 5, // OP_TILDE/OP_UPPER/OP_LOWER -> case change
+        9 | 26 => 6,      // OP_FORMAT/OP_FORMAT2 -> format message
+        13 | 14 => 7,     // OP_JOIN/OP_JOIN_NS -> join message
+        16 => 8,          // OP_REPLACE -> replace message
+        _ => 0,
+    }
+}
+
+/// Check if API notification should be sent for this operation.
+#[must_use]
+#[inline]
+pub fn should_notify_api(op_type: c_int) -> bool {
+    // Notify for operations that change text
+    op_is_change_impl(op_type)
+}
+
+/// Calculate the number of lines changed by operation.
+#[must_use]
+#[inline]
+pub const fn calc_lines_changed(start_lnum: c_int, end_lnum: c_int, lines_added: c_int) -> c_int {
+    let original_lines = if end_lnum >= start_lnum {
+        end_lnum - start_lnum + 1
+    } else {
+        0
+    };
+    original_lines + lines_added
+}
+
+/// Check if marks need to be adjusted after this operation.
+#[must_use]
+#[inline]
+pub fn needs_mark_adjust(op_type: c_int, line_count_changed: bool) -> bool {
+    // Adjust marks for operations that delete or add lines
+    op_is_change_impl(op_type) && line_count_changed
+}
+
+/// Calculate mark adjustment amount.
+#[must_use]
+#[inline]
+pub const fn calc_mark_adjust(old_lines: c_int, new_lines: c_int) -> c_int {
+    new_lines - old_lines
+}
+
+/// Check if extmarks need splice notification.
+#[must_use]
+#[inline]
+pub fn needs_extmark_splice(op_type: c_int) -> bool {
+    op_is_change_impl(op_type)
+}
+
+/// Check if cursor position needs adjustment after operation.
+#[must_use]
+#[inline]
+pub fn needs_cursor_adjust(op_type: c_int, is_visual: bool) -> bool {
+    op_is_change_impl(op_type) || is_visual
+}
+
+/// Calculate cursor line after delete.
+#[must_use]
+#[inline]
+pub const fn calc_cursor_lnum_after_delete(
+    delete_start: c_int,
+    delete_end: c_int,
+    cursor_lnum: c_int,
+    total_lines: c_int,
+) -> c_int {
+    if cursor_lnum < delete_start {
+        cursor_lnum
+    } else if cursor_lnum > delete_end {
+        cursor_lnum - (delete_end - delete_start + 1)
+    } else {
+        // Cursor was within deleted range
+        let new_lnum = delete_start;
+        if new_lnum > total_lines {
+            if total_lines > 0 {
+                total_lines
+            } else {
+                1
+            }
+        } else {
+            new_lnum
+        }
+    }
+}
+
+/// Check if undo buffer is full.
+#[must_use]
+#[inline]
+pub const fn is_undo_buffer_full(current_size: c_int, max_size: c_int) -> bool {
+    max_size > 0 && current_size >= max_size
+}
+
+/// Check if undolevels allows this undo.
+#[must_use]
+#[inline]
+pub const fn undolevels_allows(undolevels: c_int) -> bool {
+    undolevels >= 0
+}
+
+/// Check if operation should trigger autocommand.
+#[must_use]
+#[inline]
+pub fn should_trigger_autocmd(op_type: c_int, silent: bool) -> bool {
+    op_is_change_impl(op_type) && !silent
+}
+
+/// Get operation byte count for undo.
+#[must_use]
+#[inline]
+pub const fn calc_op_byte_count(line_count: c_int, avg_line_len: c_int) -> c_int {
+    line_count * avg_line_len
+}
+
+// =============================================================================
+// Phase O7 FFI Wrappers
+// =============================================================================
+
+/// FFI: Check if should save undo.
+#[no_mangle]
+pub extern "C" fn rs_should_save_undo(op_type: c_int, empty: c_int) -> c_int {
+    c_int::from(should_save_undo(op_type, empty != 0))
+}
+
+/// FFI: Get undo message ID.
+#[no_mangle]
+pub extern "C" fn rs_get_undo_message_id(op_type: c_int) -> c_int {
+    get_undo_message_id(op_type)
+}
+
+/// FFI: Check if should notify API.
+#[no_mangle]
+pub extern "C" fn rs_should_notify_api(op_type: c_int) -> c_int {
+    c_int::from(should_notify_api(op_type))
+}
+
+/// FFI: Calculate lines changed.
+#[no_mangle]
+pub extern "C" fn rs_calc_lines_changed(
+    start_lnum: c_int,
+    end_lnum: c_int,
+    lines_added: c_int,
+) -> c_int {
+    calc_lines_changed(start_lnum, end_lnum, lines_added)
+}
+
+/// FFI: Check if needs mark adjust.
+#[no_mangle]
+pub extern "C" fn rs_needs_mark_adjust(op_type: c_int, line_count_changed: c_int) -> c_int {
+    c_int::from(needs_mark_adjust(op_type, line_count_changed != 0))
+}
+
+/// FFI: Calculate mark adjustment.
+#[no_mangle]
+pub extern "C" fn rs_calc_mark_adjust(old_lines: c_int, new_lines: c_int) -> c_int {
+    calc_mark_adjust(old_lines, new_lines)
+}
+
+/// FFI: Check if needs extmark splice.
+#[no_mangle]
+pub extern "C" fn rs_needs_extmark_splice(op_type: c_int) -> c_int {
+    c_int::from(needs_extmark_splice(op_type))
+}
+
+/// FFI: Check if needs cursor adjust.
+#[no_mangle]
+pub extern "C" fn rs_needs_cursor_adjust(op_type: c_int, is_visual: c_int) -> c_int {
+    c_int::from(needs_cursor_adjust(op_type, is_visual != 0))
+}
+
+/// FFI: Calculate cursor line after delete.
+#[no_mangle]
+pub extern "C" fn rs_calc_cursor_lnum_after_delete(
+    delete_start: c_int,
+    delete_end: c_int,
+    cursor_lnum: c_int,
+    total_lines: c_int,
+) -> c_int {
+    calc_cursor_lnum_after_delete(delete_start, delete_end, cursor_lnum, total_lines)
+}
+
+/// FFI: Check if undo buffer is full.
+#[no_mangle]
+pub extern "C" fn rs_is_undo_buffer_full(current_size: c_int, max_size: c_int) -> c_int {
+    c_int::from(is_undo_buffer_full(current_size, max_size))
+}
+
+/// FFI: Check if undolevels allows.
+#[no_mangle]
+pub extern "C" fn rs_undolevels_allows(undolevels: c_int) -> c_int {
+    c_int::from(undolevels_allows(undolevels))
+}
+
+/// FFI: Check if should trigger autocmd.
+#[no_mangle]
+pub extern "C" fn rs_should_trigger_autocmd(op_type: c_int, silent: c_int) -> c_int {
+    c_int::from(should_trigger_autocmd(op_type, silent != 0))
+}
+
+/// FFI: Calculate op byte count.
+#[no_mangle]
+pub extern "C" fn rs_calc_op_byte_count(line_count: c_int, avg_line_len: c_int) -> c_int {
+    calc_op_byte_count(line_count, avg_line_len)
+}
+
 #[cfg(test)]
 #[allow(clippy::cast_lossless)]
 mod tests {
@@ -297,6 +522,7 @@ mod tests {
     const OP_JOIN: c_int = 13;
     const OP_FOLD: c_int = 19;
     const OP_FOLDOPEN: c_int = 20;
+    const OP_REPLACE: c_int = 16;
     const OP_NR_ADD: c_int = 28;
     const OP_NR_SUB: c_int = 29;
 
@@ -527,5 +753,145 @@ mod tests {
             && op_type == OP_NOP
             && regname == 0);
         assert!(result); // finish_op means operator pending
+    }
+
+    // =========================================================================
+    // Phase O7 API & Undo Integration Tests
+    // =========================================================================
+
+    #[test]
+    fn test_should_save_undo() {
+        // Change operations that aren't empty
+        assert!(should_save_undo(OP_DELETE, false));
+        assert!(should_save_undo(OP_CHANGE, false));
+        // Yank doesn't change
+        assert!(!should_save_undo(OP_YANK, false));
+        // Empty operations
+        assert!(!should_save_undo(OP_DELETE, true));
+    }
+
+    #[test]
+    fn test_get_undo_message_id() {
+        assert_eq!(get_undo_message_id(OP_DELETE), 1);
+        assert_eq!(get_undo_message_id(OP_CHANGE), 2);
+        assert_eq!(get_undo_message_id(OP_YANK), 3);
+        assert_eq!(get_undo_message_id(OP_LSHIFT), 4);
+        assert_eq!(get_undo_message_id(OP_RSHIFT), 4);
+        assert_eq!(get_undo_message_id(OP_TILDE), 5);
+        assert_eq!(get_undo_message_id(OP_FORMAT), 6);
+        assert_eq!(get_undo_message_id(OP_JOIN), 7);
+        assert_eq!(get_undo_message_id(OP_REPLACE), 8);
+        assert_eq!(get_undo_message_id(OP_NOP), 0);
+    }
+
+    #[test]
+    fn test_should_notify_api() {
+        // Change operations should notify
+        assert!(should_notify_api(OP_DELETE));
+        assert!(should_notify_api(OP_CHANGE));
+        // Non-change operations
+        assert!(!should_notify_api(OP_YANK));
+    }
+
+    #[test]
+    fn test_calc_lines_changed() {
+        assert_eq!(calc_lines_changed(1, 10, 0), 10);
+        assert_eq!(calc_lines_changed(1, 10, -5), 5);
+        assert_eq!(calc_lines_changed(1, 10, 5), 15);
+    }
+
+    #[test]
+    fn test_needs_mark_adjust() {
+        // Change operation with line count changed
+        assert!(needs_mark_adjust(OP_DELETE, true));
+        // Change operation without line count change
+        assert!(!needs_mark_adjust(OP_DELETE, false));
+        // Non-change operation
+        assert!(!needs_mark_adjust(OP_YANK, true));
+    }
+
+    #[test]
+    fn test_calc_mark_adjust() {
+        assert_eq!(calc_mark_adjust(10, 15), 5);
+        assert_eq!(calc_mark_adjust(10, 5), -5);
+        assert_eq!(calc_mark_adjust(10, 10), 0);
+    }
+
+    #[test]
+    fn test_needs_extmark_splice() {
+        assert!(needs_extmark_splice(OP_DELETE));
+        assert!(needs_extmark_splice(OP_CHANGE));
+        assert!(!needs_extmark_splice(OP_YANK));
+    }
+
+    #[test]
+    fn test_needs_cursor_adjust() {
+        // Change operations
+        assert!(needs_cursor_adjust(OP_DELETE, false));
+        // Non-change with visual
+        assert!(needs_cursor_adjust(OP_YANK, true));
+        // Non-change without visual
+        assert!(!needs_cursor_adjust(OP_YANK, false));
+    }
+
+    #[test]
+    fn test_calc_cursor_lnum_after_delete() {
+        // Cursor before deleted range
+        assert_eq!(calc_cursor_lnum_after_delete(5, 10, 3, 100), 3);
+        // Cursor after deleted range
+        assert_eq!(calc_cursor_lnum_after_delete(5, 10, 15, 100), 9);
+        // Cursor within deleted range
+        assert_eq!(calc_cursor_lnum_after_delete(5, 10, 7, 100), 5);
+        // Cursor at new line past total
+        assert_eq!(calc_cursor_lnum_after_delete(5, 10, 7, 5), 5);
+    }
+
+    #[test]
+    fn test_is_undo_buffer_full() {
+        assert!(is_undo_buffer_full(100, 100));
+        assert!(is_undo_buffer_full(101, 100));
+        assert!(!is_undo_buffer_full(50, 100));
+        assert!(!is_undo_buffer_full(100, 0)); // max_size=0 means unlimited
+    }
+
+    #[test]
+    fn test_undolevels_allows() {
+        assert!(undolevels_allows(0));
+        assert!(undolevels_allows(100));
+        assert!(!undolevels_allows(-1));
+    }
+
+    #[test]
+    fn test_should_trigger_autocmd() {
+        // Change operation, not silent
+        assert!(should_trigger_autocmd(OP_DELETE, false));
+        // Change operation, silent
+        assert!(!should_trigger_autocmd(OP_DELETE, true));
+        // Non-change operation
+        assert!(!should_trigger_autocmd(OP_YANK, false));
+    }
+
+    #[test]
+    fn test_calc_op_byte_count() {
+        assert_eq!(calc_op_byte_count(10, 80), 800);
+        assert_eq!(calc_op_byte_count(5, 100), 500);
+    }
+
+    #[test]
+    fn test_phase_o7_ffi_wrappers() {
+        assert_eq!(rs_should_save_undo(OP_DELETE, 0), 1);
+        assert_eq!(rs_should_save_undo(OP_DELETE, 1), 0);
+        assert_eq!(rs_get_undo_message_id(OP_DELETE), 1);
+        assert_eq!(rs_should_notify_api(OP_DELETE), 1);
+        assert_eq!(rs_calc_lines_changed(1, 10, 0), 10);
+        assert_eq!(rs_needs_mark_adjust(OP_DELETE, 1), 1);
+        assert_eq!(rs_calc_mark_adjust(10, 15), 5);
+        assert_eq!(rs_needs_extmark_splice(OP_DELETE), 1);
+        assert_eq!(rs_needs_cursor_adjust(OP_DELETE, 0), 1);
+        assert_eq!(rs_calc_cursor_lnum_after_delete(5, 10, 15, 100), 9);
+        assert_eq!(rs_is_undo_buffer_full(100, 100), 1);
+        assert_eq!(rs_undolevels_allows(0), 1);
+        assert_eq!(rs_should_trigger_autocmd(OP_DELETE, 0), 1);
+        assert_eq!(rs_calc_op_byte_count(10, 80), 800);
     }
 }
