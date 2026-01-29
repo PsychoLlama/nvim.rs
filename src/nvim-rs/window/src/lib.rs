@@ -22,6 +22,7 @@
 //! - [`resize`]: Window resize calculations and execution helpers
 //! - [`snapshot`]: Window layout snapshot helpers
 //! - [`split`]: Window splitting functions (placeholder)
+//! - [`state`]: Window state accessors for layout fields
 //! - [`statusline`]: Status line and window bar (placeholder)
 //! - [`tabpage`]: Tab page management operations
 
@@ -46,6 +47,7 @@ pub mod preview;
 pub mod resize;
 pub mod snapshot;
 pub mod split;
+pub mod state;
 pub mod statusline;
 pub mod tabpage;
 
