@@ -42,18 +42,40 @@ const NUL: u8 = 0;
 // =============================================================================
 
 extern "C" {
-    // Global state accessors - will be used as we migrate more functionality
+    // Global state accessors for old_char (vungetc/can_get_old_char)
     fn nvim_get_old_char() -> c_int;
-    #[allow(dead_code)]
     fn nvim_set_old_char(val: c_int);
-    #[allow(dead_code)]
     fn nvim_get_old_mod_mask() -> c_int;
-    #[allow(dead_code)]
     fn nvim_set_old_mod_mask(val: c_int);
+    fn nvim_get_old_mouse_grid() -> c_int;
+    fn nvim_set_old_mouse_grid(val: c_int);
+    fn nvim_get_old_mouse_row() -> c_int;
+    fn nvim_set_old_mouse_row(val: c_int);
+    fn nvim_get_old_mouse_col() -> c_int;
+    fn nvim_set_old_mouse_col(val: c_int);
     #[allow(dead_code)]
+    fn nvim_get_old_keystuffed() -> c_int;
+    fn nvim_set_old_keystuffed(val: c_int);
+
+    // Global state accessors for mod_mask and mouse state
     fn nvim_get_mod_mask() -> c_int;
-    #[allow(dead_code)]
     fn nvim_set_mod_mask(val: c_int);
+    fn nvim_get_mouse_grid() -> c_int;
+    fn nvim_set_mouse_grid(val: c_int);
+    fn nvim_get_mouse_row() -> c_int;
+    fn nvim_set_mouse_row(val: c_int);
+    fn nvim_get_mouse_col() -> c_int;
+    fn nvim_set_mouse_col(val: c_int);
+
+    // Keystuffed state
+    fn nvim_get_keystuffed() -> c_int;
+
+    // Stuff buffer check (used for can_get_old_char logic, but wrapped in C)
+    #[allow(dead_code)]
+    fn rs_stuff_empty() -> c_int;
+
+    // Can get old char wrapper
+    fn nvim_can_get_old_char() -> c_int;
 }
 
 // =============================================================================
@@ -341,11 +363,66 @@ pub const fn translate_home_end_key(c: c_int, mod_mask: c_int) -> (c_int, bool) 
 
 /// Check if a character can be retrieved from the old char buffer.
 ///
+/// Returns true if `old_char != -1` and either `old_KeyStuffed` is set or
+/// the stuff buffer is empty.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_can_get_old_char() -> c_int {
+    // Use the C wrapper which checks the full condition
+    nvim_can_get_old_char()
+}
+
+/// Unget one character (can only be done once!).
+///
+/// If the character was stuffed, vgetc() will get it next time it is called.
+/// Otherwise vgetc() will only get it when the stuff buffer is empty.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vungetc(c: c_int) {
+    nvim_set_old_char(c);
+    nvim_set_old_mod_mask(nvim_get_mod_mask());
+    nvim_set_old_mouse_grid(nvim_get_mouse_grid());
+    nvim_set_old_mouse_row(nvim_get_mouse_row());
+    nvim_set_old_mouse_col(nvim_get_mouse_col());
+    nvim_set_old_keystuffed(nvim_get_keystuffed());
+}
+
+/// Get the old character that was put back.
+///
 /// # Safety
 /// Calls C accessor function.
 #[no_mangle]
-pub unsafe extern "C" fn rs_can_get_old_char() -> c_int {
-    c_int::from(nvim_get_old_char() != -1)
+pub unsafe extern "C" fn rs_get_old_char() -> c_int {
+    nvim_get_old_char()
+}
+
+/// Clear the old character, called after it has been consumed.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_clear_old_char() {
+    nvim_set_old_char(-1);
+}
+
+/// Restore state from old_char (for vgetc when old_char is available).
+///
+/// Sets mod_mask, mouse_grid, mouse_row, mouse_col from old_* values
+/// and clears old_char.
+///
+/// # Safety
+/// Calls C accessor functions.
+#[no_mangle]
+pub unsafe extern "C" fn rs_restore_old_char_state() {
+    nvim_set_mod_mask(nvim_get_old_mod_mask());
+    nvim_set_mouse_grid(nvim_get_old_mouse_grid());
+    nvim_set_mouse_row(nvim_get_old_mouse_row());
+    nvim_set_mouse_col(nvim_get_old_mouse_col());
+    nvim_set_old_char(-1);
 }
 
 /// Translate a special key sequence to its key code.

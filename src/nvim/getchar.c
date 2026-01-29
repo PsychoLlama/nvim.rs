@@ -84,6 +84,11 @@ extern int rs_typebuf_typed(void);
 extern int rs_typebuf_maplen(void);
 extern int rs_using_script(void);
 extern int rs_noremap_keys(void);
+extern void rs_vungetc(int c);
+extern int rs_can_get_old_char(void);
+extern int rs_get_old_char(void);
+extern void rs_clear_old_char(void);
+extern void rs_restore_old_char_state(void);
 
 /// State for adding bytes to a recording or 'showcmd'.
 typedef struct {
@@ -2545,12 +2550,7 @@ static int handle_mapping(int *keylenp, const bool *timedout, int *mapdepth)
 /// Otherwise vgetc() will only get it when the stuff buffer is empty.
 void vungetc(int c)
 {
-  old_char = c;
-  old_mod_mask = mod_mask;
-  old_mouse_grid = mouse_grid;
-  old_mouse_row = mouse_row;
-  old_mouse_col = mouse_col;
-  old_KeyStuffed = KeyStuffed;
+  rs_vungetc(c);
 }
 
 /// When peeking and not getting a character, reg_executing cannot be cleared
@@ -3708,4 +3708,81 @@ int nvim_get_typeahead_char(void)
 void nvim_set_typeahead_char(int val)
 {
   typeahead_char = val;
+}
+
+// Additional old_char state accessors for Rust vungetc/can_get_old_char
+int nvim_get_old_mouse_grid(void)
+{
+  return old_mouse_grid;
+}
+
+void nvim_set_old_mouse_grid(int val)
+{
+  old_mouse_grid = val;
+}
+
+int nvim_get_old_mouse_row(void)
+{
+  return old_mouse_row;
+}
+
+void nvim_set_old_mouse_row(int val)
+{
+  old_mouse_row = val;
+}
+
+int nvim_get_old_mouse_col(void)
+{
+  return old_mouse_col;
+}
+
+void nvim_set_old_mouse_col(int val)
+{
+  old_mouse_col = val;
+}
+
+int nvim_get_old_keystuffed(void)
+{
+  return old_KeyStuffed;
+}
+
+void nvim_set_old_keystuffed(int val)
+{
+  old_KeyStuffed = val;
+}
+
+int nvim_get_mouse_grid(void)
+{
+  return mouse_grid;
+}
+
+void nvim_set_mouse_grid(int val)
+{
+  mouse_grid = val;
+}
+
+int nvim_get_mouse_row(void)
+{
+  return mouse_row;
+}
+
+void nvim_set_mouse_row(int val)
+{
+  mouse_row = val;
+}
+
+int nvim_get_mouse_col(void)
+{
+  return mouse_col;
+}
+
+void nvim_set_mouse_col(int val)
+{
+  mouse_col = val;
+}
+
+// Wrapper for can_get_old_char
+int nvim_can_get_old_char(void)
+{
+  return can_get_old_char() ? 1 : 0;
 }
