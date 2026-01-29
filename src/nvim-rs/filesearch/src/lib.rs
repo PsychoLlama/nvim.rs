@@ -169,11 +169,7 @@ extern "C" {
 
     // Visual mode and cursor functions
     fn VIsual_active_get() -> c_int;
-    fn get_visual_text(
-        cmdp: *mut libc::c_void,
-        pp: *mut *mut c_char,
-        lenp: *mut usize,
-    ) -> c_int;
+    fn get_visual_text(cmdp: *mut libc::c_void, pp: *mut *mut c_char, lenp: *mut usize) -> c_int;
     fn get_cursor_line_ptr() -> *mut c_char;
     fn getdigits_int32(pp: *mut *mut c_char, strict: bool, def: i32) -> i32;
     fn getdigits_long(pp: *mut *mut c_char, strict: bool, def: i64) -> i64;
@@ -2019,14 +2015,7 @@ pub unsafe extern "C" fn rs_find_file_in_path_option(
         let save_char = *ptr.add(len);
         *ptr.add(len) = 0;
         let namebuff = nvim_get_namebuff().cast_mut();
-        FF_PATH_FILE_LEN = expand_env_esc(
-            ptr,
-            namebuff,
-            MAXPATHL,
-            false,
-            true,
-            ptr::null(),
-        );
+        FF_PATH_FILE_LEN = expand_env_esc(ptr, namebuff, MAXPATHL, false, true, ptr::null());
         *ptr.add(len) = save_char;
 
         xfree((*file_to_find).cast());
@@ -2065,7 +2054,8 @@ pub unsafe extern "C" fn rs_find_file_in_path_option(
     // Check if it's an absolute path or relative to current directory
     let is_abs = vim_isAbsName(ftf) != 0
         || rel_to_curdir
-        || cfg!(windows) && (vim_ispathsep(*ftf as c_int) != 0 || (*ftf != 0 && *ftf.add(1) == b':' as c_char));
+        || cfg!(windows)
+            && (vim_ispathsep(*ftf as c_int) != 0 || (*ftf != 0 && *ftf.add(1) == b':' as c_char));
 
     if is_abs {
         // Absolute path, no need to use path_option
@@ -2126,13 +2116,12 @@ pub unsafe extern "C" fn rs_find_file_in_path_option(
                     if suffix.is_null() || *suffix == 0 {
                         break;
                     }
-                    namebuff_len = l
-                        + copy_option_part(
-                            std::ptr::addr_of_mut!(suffix),
-                            namebuff.add(l),
-                            MAXPATHL - l,
-                            c",".as_ptr(),
-                        );
+                    namebuff_len = l + copy_option_part(
+                        std::ptr::addr_of_mut!(suffix),
+                        namebuff.add(l),
+                        MAXPATHL - l,
+                        c",".as_ptr(),
+                    );
                 }
             }
         }
@@ -2195,12 +2184,18 @@ pub unsafe extern "C" fn rs_find_file_in_path_option(
     if file_name.is_null() && (options & FNAME_MESS) != 0 {
         if first != 0 {
             if find_what == FINDFILE_DIR {
-                semsg(translate(e_cant_find_directory_str_in_cdpath), *file_to_find);
+                semsg(
+                    translate(e_cant_find_directory_str_in_cdpath),
+                    *file_to_find,
+                );
             } else {
                 semsg(translate(e_cant_find_file_str_in_path), *file_to_find);
             }
         } else if find_what == FINDFILE_DIR {
-            semsg(translate(e_no_more_directory_str_found_in_cdpath), *file_to_find);
+            semsg(
+                translate(e_no_more_directory_str_found_in_cdpath),
+                *file_to_find,
+            );
         } else {
             semsg(translate(e_no_more_file_str_found_in_path), *file_to_find);
         }
@@ -2230,7 +2225,12 @@ pub unsafe extern "C" fn rs_grab_file_name(
         let mut len: usize = 0;
         let mut ptr: *mut c_char = ptr::null_mut();
 
-        if get_visual_text(ptr::null_mut(), std::ptr::addr_of_mut!(ptr), std::ptr::addr_of_mut!(len)) == FAIL {
+        if get_visual_text(
+            ptr::null_mut(),
+            std::ptr::addr_of_mut!(ptr),
+            std::ptr::addr_of_mut!(len),
+        ) == FAIL
+        {
             return ptr::null_mut();
         }
 
@@ -2244,7 +2244,13 @@ pub unsafe extern "C" fn rs_grab_file_name(
         }
 
         let curbuf_ffname = nvim_curbuf_get_ffname();
-        return rs_find_file_name_in_path(ptr, len, options, count as libc::c_long, curbuf_ffname.cast_mut());
+        return rs_find_file_name_in_path(
+            ptr,
+            len,
+            options,
+            count as libc::c_long,
+            curbuf_ffname.cast_mut(),
+        );
     }
 
     rs_file_name_at_cursor(options | FNAME_HYP, count, file_lnum)
