@@ -54,6 +54,17 @@ const FAIL: c_int = 0;
 /// Maximum path length.
 const MAXPATHL: usize = 4096;
 
+/// FNAME flags for find_file functions.
+const FNAME_MESS: c_int = 1; // Give error message
+#[allow(dead_code)]
+const FNAME_EXP: c_int = 2; // Expand to path
+#[allow(dead_code)]
+const FNAME_HYP: c_int = 4; // Check for hypertext link
+#[allow(dead_code)]
+const FNAME_INCL: c_int = 8; // Apply 'includeexpr'
+const FNAME_REL: c_int = 16; // Relative to current file
+const FNAME_UNESC: c_int = 32; // Remove backslashes used for escaping
+
 // ============================================================================
 // External C functions
 // ============================================================================
@@ -134,15 +145,28 @@ extern "C" {
     // Path functions for directory operations
     fn path_tail_with_sep(fname: *mut c_char) -> *mut c_char;
 
-    // Find directory in path (C function for Phase A2, will be migrated in Phase A3)
-    fn find_directory_in_path(
-        ptr: *mut c_char,
-        len: usize,
-        options: c_int,
-        rel_fname: *const c_char,
-        file_to_find: *mut *mut c_char,
-        search_ctx: *mut *mut libc::c_void,
-    ) -> *mut c_char;
+    // Environment and string expansion
+    fn expand_env_esc(
+        srcp: *const c_char,
+        dst: *mut c_char,
+        dstlen: usize,
+        stripsrc: bool,
+        prefix: bool,
+        startstr: *const c_char,
+    ) -> usize;
+
+    // Error messages for path search
+    static e_cant_find_directory_str_in_cdpath: *const c_char;
+    static e_cant_find_file_str_in_path: *const c_char;
+    static e_no_more_directory_str_found_in_cdpath: *const c_char;
+    static e_no_more_file_str_found_in_path: *const c_char;
+
+    // Localized gettext
+    fn gettext(msgid: *const c_char) -> *const c_char;
+
+    // NameBuff global buffer accessor
+    fn nvim_get_namebuff() -> *const c_char;
+
     fn copy_option_part(
         option: *mut *mut c_char,
         buf: *mut c_char,
@@ -1790,11 +1814,6 @@ pub unsafe extern "C" fn rs_vim_chdir(new_dir: *mut c_char) -> c_int {
         return -1;
     }
 
-    // We need to call find_directory_in_path which is in C
-    // For now, delegate to the C implementation since it uses complex
-    // state management with file_to_find and search_ctx
-    // This will be fully migrated in Phase A3
-
     // Get current buffer filename for relative search
     let curbuf_ffname = nvim_curbuf_get_ffname();
 
@@ -1804,11 +1823,11 @@ pub unsafe extern "C" fn rs_vim_chdir(new_dir: *mut c_char) -> c_int {
 
     let new_dir_len = libc::strlen(new_dir);
 
-    // FNAME_MESS = 1
-    let dir_name = find_directory_in_path(
+    // Use the Rust implementation
+    let dir_name = rs_find_directory_in_path(
         new_dir,
         new_dir_len,
-        1, // FNAME_MESS
+        FNAME_MESS,
         curbuf_ffname,
         std::ptr::addr_of_mut!(file_to_find),
         std::ptr::addr_of_mut!(search_ctx),
@@ -1838,6 +1857,314 @@ pub extern "C" fn rs_free_findfile() {
     // The ff_expand_buffer is static in C; this function is a no-op in Rust
     // since we allocate buffers on the stack or dynamically free them.
     // The C code manages ff_expand_buffer directly.
+}
+
+// ============================================================================
+// Path Search API Functions (Phase A3)
+// ============================================================================
+
+/// Static state for find_file_in_path_option between calls.
+/// This matches the C static variables in find_file_in_path_option.
+static mut FF_PATH_DIR: *mut c_char = ptr::null_mut();
+static mut FF_PATH_DID_INIT: bool = false;
+static mut FF_PATH_FILE_LEN: usize = 0;
+
+/// Translate a gettext message.
+unsafe fn translate(msgid: *const c_char) -> *const c_char {
+    gettext(msgid)
+}
+
+/// Find the file name "ptr[len]" in the path.
+///
+/// On the first call set the parameter 'first' to true to initialize
+/// the search. For repeating calls use false.
+///
+/// # Safety
+/// All pointer parameters must be valid or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_file_in_path(
+    ptr: *mut c_char,
+    len: usize,
+    options: c_int,
+    first: c_int,
+    rel_fname: *mut c_char,
+    file_to_find: *mut *mut c_char,
+    search_ctx: *mut *mut libc::c_void,
+) -> *mut c_char {
+    // Use buffer-local path if set, otherwise global path
+    let curbuf_path = nvim_curbuf_get_path();
+    let path_option = if curbuf_path.is_null() || *curbuf_path == 0 {
+        nvim_get_p_path()
+    } else {
+        curbuf_path
+    };
+
+    // Get suffixesadd from current buffer
+    let suffixes = nvim_get_curbuf_sua();
+
+    rs_find_file_in_path_option(
+        ptr,
+        len,
+        options,
+        first,
+        path_option.cast_mut(),
+        FINDFILE_BOTH,
+        rel_fname,
+        suffixes.cast_mut(),
+        file_to_find,
+        search_ctx,
+    )
+}
+
+/// Find the directory name "ptr[len]" in the path.
+///
+/// # Safety
+/// All pointer parameters must be valid or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_directory_in_path(
+    ptr: *mut c_char,
+    len: usize,
+    options: c_int,
+    rel_fname: *const c_char,
+    file_to_find: *mut *mut c_char,
+    search_ctx: *mut *mut libc::c_void,
+) -> *mut c_char {
+    rs_find_file_in_path_option(
+        ptr,
+        len,
+        options,
+        1, // first = true
+        nvim_get_p_cdpath().cast_mut(),
+        FINDFILE_DIR,
+        rel_fname.cast_mut(),
+        c"".as_ptr().cast_mut(),
+        file_to_find,
+        search_ctx,
+    )
+}
+
+/// Core implementation for find_file_in_path and find_directory_in_path.
+///
+/// # Safety
+/// All pointer parameters must be valid or NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_find_file_in_path_option(
+    ptr: *mut c_char,
+    len: usize,
+    options: c_int,
+    first: c_int,
+    path_option: *mut c_char,
+    find_what: c_int,
+    rel_fname: *mut c_char,
+    suffixes: *mut c_char,
+    file_to_find: *mut *mut c_char,
+    search_ctx_arg: *mut *mut libc::c_void,
+) -> *mut c_char {
+    let mut file_name: *mut c_char = ptr::null_mut();
+    let mut rel_fname_local = rel_fname;
+
+    // Do not attempt to search "relative" to a URL
+    if !rel_fname_local.is_null() && path_with_url(rel_fname_local) != 0 {
+        rel_fname_local = ptr::null_mut();
+    }
+
+    if first != 0 {
+        if len == 0 {
+            return ptr::null_mut();
+        }
+
+        // Copy file name into NameBuff, expanding environment variables
+        let save_char = *ptr.add(len);
+        *ptr.add(len) = 0;
+        let namebuff = nvim_get_namebuff().cast_mut();
+        FF_PATH_FILE_LEN = expand_env_esc(
+            ptr,
+            namebuff,
+            MAXPATHL,
+            false,
+            true,
+            ptr::null(),
+        );
+        *ptr.add(len) = save_char;
+
+        xfree((*file_to_find).cast());
+        *file_to_find = xmemdupz(namebuff.cast(), FF_PATH_FILE_LEN);
+
+        if (options & FNAME_UNESC) != 0 {
+            // Change all "\ " to " ".
+            let mut p = *file_to_find;
+            while *p != 0 {
+                if *p == b'\\' as c_char && *p.add(1) == b' ' as c_char {
+                    libc::memmove(
+                        p.cast(),
+                        p.add(1).cast(),
+                        ((*file_to_find as usize + FF_PATH_FILE_LEN) - (p as usize + 1)) + 1,
+                    );
+                    FF_PATH_FILE_LEN -= 1;
+                }
+                p = p.add(1);
+            }
+        }
+    }
+
+    // Check if file_to_find is null (shouldn't happen after first call)
+    if (*file_to_find).is_null() {
+        return ptr::null_mut();
+    }
+
+    // Check if path is relative to current directory
+    let ftf = *file_to_find;
+    let rel_to_curdir = *ftf == b'.' as c_char
+        && (*ftf.add(1) == 0
+            || vim_ispathsep(*ftf.add(1) as c_int) != 0
+            || (*ftf.add(1) == b'.' as c_char
+                && (*ftf.add(2) == 0 || vim_ispathsep(*ftf.add(2) as c_int) != 0)));
+
+    // Check if it's an absolute path or relative to current directory
+    let is_abs = vim_isAbsName(ftf) != 0
+        || rel_to_curdir
+        || cfg!(windows) && (vim_ispathsep(*ftf as c_int) != 0 || (*ftf != 0 && *ftf.add(1) == b':' as c_char));
+
+    if is_abs {
+        // Absolute path, no need to use path_option
+        if first != 0 {
+            if path_with_url(ftf) != 0 {
+                file_name = xmemdupz(ftf.cast(), FF_PATH_FILE_LEN);
+                return file_name;
+            }
+
+            let rel_fnamelen = if rel_fname_local.is_null() {
+                0
+            } else {
+                libc::strlen(rel_fname_local)
+            };
+
+            // Try with file directory first, then current directory
+            let namebuff = nvim_get_namebuff().cast_mut();
+            for run in 1..=2 {
+                let mut l = FF_PATH_FILE_LEN;
+
+                if run == 1
+                    && rel_to_curdir
+                    && (options & FNAME_REL) != 0
+                    && !rel_fname_local.is_null()
+                    && rel_fnamelen + l < MAXPATHL
+                {
+                    let tail = path_tail(rel_fname_local);
+                    let prefix_len = (tail as usize) - (rel_fname_local as usize);
+                    l = vim_snprintf(
+                        namebuff,
+                        MAXPATHL,
+                        c"%.*s%s".as_ptr(),
+                        prefix_len as c_int,
+                        rel_fname_local,
+                        ftf,
+                    ) as usize;
+                } else {
+                    ptr::copy_nonoverlapping(ftf.cast::<u8>(), namebuff.cast(), l + 1);
+                    if run == 1 {
+                        continue; // Skip to run 2
+                    }
+                }
+
+                // Try adding suffixes from suffixesadd
+                let mut namebuff_len = l;
+                let mut suffix = suffixes;
+                loop {
+                    // Check if file exists
+                    let exists = os_path_exists(namebuff) != 0
+                        && (find_what == FINDFILE_BOTH
+                            || (find_what == FINDFILE_DIR) == (os_isdir(namebuff) != 0));
+
+                    if exists {
+                        file_name = xmemdupz(namebuff.cast(), namebuff_len);
+                        return file_name;
+                    }
+
+                    if suffix.is_null() || *suffix == 0 {
+                        break;
+                    }
+                    namebuff_len = l
+                        + copy_option_part(
+                            std::ptr::addr_of_mut!(suffix),
+                            namebuff.add(l),
+                            MAXPATHL - l,
+                            c",".as_ptr(),
+                        );
+                }
+            }
+        }
+    } else {
+        // Loop over all paths in the 'path' or 'cdpath' option
+        if first != 0 {
+            // Initialize on first call
+            rs_vim_findfile_free_visited(*search_ctx_arg);
+            FF_PATH_DIR = path_option;
+            FF_PATH_DID_INIT = false;
+        }
+
+        loop {
+            if FF_PATH_DID_INIT {
+                file_name = rs_vim_findfile(*search_ctx_arg);
+                if !file_name.is_null() {
+                    break;
+                }
+                FF_PATH_DID_INIT = false;
+            } else {
+                if FF_PATH_DIR.is_null() || *FF_PATH_DIR == 0 {
+                    // We searched all paths
+                    rs_vim_findfile_cleanup(*search_ctx_arg);
+                    *search_ctx_arg = ptr::null_mut();
+                    break;
+                }
+
+                let buf = xmalloc(MAXPATHL).cast::<c_char>();
+                *buf = 0;
+                copy_option_part(
+                    std::ptr::addr_of_mut!(FF_PATH_DIR),
+                    buf,
+                    MAXPATHL,
+                    c" ,".as_ptr(),
+                );
+
+                // Get the stopdir string
+                let r_ptr = rs_vim_findfile_stopdir(buf);
+                *search_ctx_arg = rs_vim_findfile_init(
+                    buf,
+                    *file_to_find,
+                    FF_PATH_FILE_LEN,
+                    r_ptr,
+                    100,
+                    0,
+                    find_what,
+                    *search_ctx_arg,
+                    0,
+                    rel_fname_local,
+                );
+                if !(*search_ctx_arg).is_null() {
+                    FF_PATH_DID_INIT = true;
+                }
+                xfree(buf.cast());
+            }
+        }
+    }
+
+    // Print error message if nothing found
+    if file_name.is_null() && (options & FNAME_MESS) != 0 {
+        if first != 0 {
+            if find_what == FINDFILE_DIR {
+                semsg(translate(e_cant_find_directory_str_in_cdpath), *file_to_find);
+            } else {
+                semsg(translate(e_cant_find_file_str_in_path), *file_to_find);
+            }
+        } else if find_what == FINDFILE_DIR {
+            semsg(translate(e_no_more_directory_str_found_in_cdpath), *file_to_find);
+        } else {
+            semsg(translate(e_no_more_file_str_found_in_path), *file_to_find);
+        }
+    }
+
+    file_name
 }
 
 #[cfg(test)]
