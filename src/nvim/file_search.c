@@ -111,6 +111,11 @@ extern void rs_vim_findfile_cleanup(void *ctx);
 extern char *rs_vim_findfile(void *search_ctx_arg);
 extern char *rs_vim_findfile_stopdir(char *buf);
 
+// Directory change functions
+extern int rs_vim_chdirfile(char *fname, int cause);
+extern int rs_vim_chdir(char *new_dir);
+extern void rs_free_findfile(void);
+
 // =============================================================================
 // Rust wrapper functions
 // =============================================================================
@@ -2004,49 +2009,11 @@ void do_autocmd_dirchanged(char *new_dir, CdScope scope, CdCause cause, bool pre
 /// @return  OK or FAIL
 int vim_chdirfile(char *fname, CdCause cause)
 {
-  char dir[MAXPATHL];
-
-  xstrlcpy(dir, fname, MAXPATHL);
-  *path_tail_with_sep(dir) = NUL;
-
-  if (os_dirname(NameBuff, sizeof(NameBuff)) != OK) {
-    NameBuff[0] = NUL;
-  }
-
-  if (pathcmp(dir, NameBuff, -1) == 0) {
-    // nothing to do
-    return OK;
-  }
-
-  if (cause != kCdCauseOther) {
-    do_autocmd_dirchanged(dir, kCdScopeWindow, cause, true);
-  }
-
-  if (os_chdir(dir) != 0) {
-    return FAIL;
-  }
-
-  if (cause != kCdCauseOther) {
-    do_autocmd_dirchanged(dir, kCdScopeWindow, cause, false);
-  }
-
-  return OK;
+  return rs_vim_chdirfile(fname, (int)cause);
 }
 
 /// Change directory to "new_dir". Search 'cdpath' for relative directory names.
 int vim_chdir(char *new_dir)
 {
-  char *file_to_find = NULL;
-  char *search_ctx = NULL;
-  char *dir_name = find_directory_in_path(new_dir, strlen(new_dir), FNAME_MESS,
-                                          curbuf->b_ffname, &file_to_find, &search_ctx);
-  xfree(file_to_find);
-  vim_findfile_cleanup(search_ctx);
-  if (dir_name == NULL) {
-    return -1;
-  }
-
-  int r = os_chdir(dir_name);
-  xfree(dir_name);
-  return r;
+  return rs_vim_chdir(new_dir);
 }

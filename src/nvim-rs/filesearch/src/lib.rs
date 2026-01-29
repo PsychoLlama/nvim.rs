@@ -126,6 +126,23 @@ extern "C" {
     // Current window accessors
     #[allow(dead_code)]
     fn nvim_curwin_get_cursor_col() -> c_int;
+
+    // Directory change functions
+    fn os_chdir(path: *const c_char) -> c_int;
+    fn pathcmp(p: *const c_char, q: *const c_char, maxlen: c_int) -> c_int;
+
+    // Path functions for directory operations
+    fn path_tail_with_sep(fname: *mut c_char) -> *mut c_char;
+
+    // Find directory in path (C function for Phase A2, will be migrated in Phase A3)
+    fn find_directory_in_path(
+        ptr: *mut c_char,
+        len: usize,
+        options: c_int,
+        rel_fname: *const c_char,
+        file_to_find: *mut *mut c_char,
+        search_ctx: *mut *mut libc::c_void,
+    ) -> *mut c_char;
     fn copy_option_part(
         option: *mut *mut c_char,
         buf: *mut c_char,
@@ -1661,6 +1678,166 @@ pub unsafe extern "C" fn rs_path_exists(path: *const c_char) -> c_int {
         return 0;
     }
     os_path_exists(path)
+}
+
+// ============================================================================
+// Directory Change Functions (Phase A2)
+// ============================================================================
+
+/// CdCause enum values matching C definitions.
+#[repr(i32)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum CdCause {
+    Other = -1,
+    Manual = 0,
+    Window = 1,
+    Auto = 2,
+}
+
+/// CdScope enum values matching C definitions.
+#[repr(i32)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum CdScope {
+    Invalid = -1,
+    Window = 0,
+    Tabpage = 1,
+    Global = 2,
+}
+
+extern "C" {
+    fn do_autocmd_dirchanged(new_dir: *mut c_char, scope: c_int, cause: c_int, pre: bool);
+}
+
+/// Change to a file's directory.
+/// Caller must call shorten_fnames()!
+///
+/// # Safety
+/// `fname` must be a valid C string pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_chdirfile(fname: *mut c_char, cause: c_int) -> c_int {
+    if fname.is_null() {
+        return FAIL;
+    }
+
+    // Create a local buffer for the directory
+    let dir = xmalloc(MAXPATHL).cast::<c_char>();
+    if dir.is_null() {
+        return FAIL;
+    }
+
+    // Copy filename to dir buffer
+    let fname_len = libc::strlen(fname);
+    if fname_len >= MAXPATHL {
+        xfree(dir.cast());
+        return FAIL;
+    }
+    ptr::copy_nonoverlapping(fname.cast::<u8>(), dir.cast::<u8>(), fname_len + 1);
+
+    // Truncate at the tail (directory separator before filename)
+    let tail = path_tail_with_sep(dir);
+    if !tail.is_null() {
+        *tail = 0;
+    }
+
+    // Get current directory for comparison
+    let namebuff = xmalloc(MAXPATHL).cast::<c_char>();
+    if namebuff.is_null() {
+        xfree(dir.cast());
+        return FAIL;
+    }
+
+    if os_dirname(namebuff, MAXPATHL) != OK {
+        *namebuff = 0;
+    }
+
+    // Check if we're already in this directory
+    if pathcmp(dir, namebuff, -1) == 0 {
+        // Nothing to do
+        xfree(dir.cast());
+        xfree(namebuff.cast());
+        return OK;
+    }
+
+    xfree(namebuff.cast());
+
+    // Fire DirChangedPre autocmd if cause is not kCdCauseOther
+    if cause != CdCause::Other as c_int {
+        do_autocmd_dirchanged(dir, CdScope::Window as c_int, cause, true);
+    }
+
+    // Change directory
+    if os_chdir(dir) != 0 {
+        xfree(dir.cast());
+        return FAIL;
+    }
+
+    // Fire DirChanged autocmd if cause is not kCdCauseOther
+    if cause != CdCause::Other as c_int {
+        do_autocmd_dirchanged(dir, CdScope::Window as c_int, cause, false);
+    }
+
+    xfree(dir.cast());
+    OK
+}
+
+/// Change directory to "new_dir". Search 'cdpath' for relative directory names.
+///
+/// # Safety
+/// `new_dir` must be a valid C string pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_vim_chdir(new_dir: *mut c_char) -> c_int {
+    if new_dir.is_null() {
+        return -1;
+    }
+
+    // We need to call find_directory_in_path which is in C
+    // For now, delegate to the C implementation since it uses complex
+    // state management with file_to_find and search_ctx
+    // This will be fully migrated in Phase A3
+
+    // Get current buffer filename for relative search
+    let curbuf_ffname = nvim_curbuf_get_ffname();
+
+    // Allocate pointers for the search context
+    let mut file_to_find: *mut c_char = ptr::null_mut();
+    let mut search_ctx: *mut libc::c_void = ptr::null_mut();
+
+    let new_dir_len = libc::strlen(new_dir);
+
+    // FNAME_MESS = 1
+    let dir_name = find_directory_in_path(
+        new_dir,
+        new_dir_len,
+        1, // FNAME_MESS
+        curbuf_ffname,
+        std::ptr::addr_of_mut!(file_to_find),
+        std::ptr::addr_of_mut!(search_ctx),
+    );
+
+    // Free the file_to_find string
+    xfree(file_to_find.cast());
+
+    // Cleanup search context
+    rs_vim_findfile_cleanup(search_ctx);
+
+    if dir_name.is_null() {
+        return -1;
+    }
+
+    // Change to the found directory
+    let result = os_chdir(dir_name);
+    xfree(dir_name.cast());
+
+    result
+}
+
+/// Free the static findfile expand buffer.
+/// Called during EXITFREE cleanup.
+#[no_mangle]
+pub extern "C" fn rs_free_findfile() {
+    // The ff_expand_buffer is static in C; this function is a no-op in Rust
+    // since we allocate buffers on the stack or dynamically free them.
+    // The C code manages ff_expand_buffer directly.
 }
 
 #[cfg(test)]
