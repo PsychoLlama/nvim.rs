@@ -764,6 +764,39 @@ pub struct StlBuildResult {
     pub truncated: c_int,
 }
 
+/// C-compatible highlight record for FFI.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct StlHlRecordFfi {
+    /// Start position in output buffer (pointer offset in C)
+    pub start_offset: c_int,
+    /// User highlight group (0=none, 1-9=User1-9, <0=syn_id)
+    pub userhl: c_int,
+    /// Item flag for statuscolumn (0 = none)
+    pub item: c_int,
+}
+
+/// C-compatible click record for FFI.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct StlClickRecordFfi {
+    /// Start position in output buffer
+    pub start_offset: c_int,
+    /// Click type (0=disabled, 1=tab switch, 2=tab close, 3=func run)
+    pub click_type: c_int,
+    /// Tab number for tab switch/close, or minwid for func run
+    pub tabnr: c_int,
+}
+
+/// Extended result structure with room for highlight/click data.
+#[repr(C)]
+pub struct StlBuildResultExt {
+    /// Basic result
+    pub base: StlBuildResult,
+    /// Width of output in screen cells
+    pub width: c_int,
+}
+
 /// Build statusline string from format (FFI entry point).
 ///
 /// # Safety
@@ -817,6 +850,127 @@ pub unsafe extern "C" fn rs_build_stl_str(
         hl_count: result.highlights.len() as c_int,
         click_count: result.clicks.len() as c_int,
         truncated: c_int::from(result.truncated),
+    }
+}
+
+/// Build statusline with highlight and click records.
+///
+/// This is the main FFI function for building a statusline with full
+/// highlight and click record output. It replaces the C `build_stl_str_hl`
+/// function.
+///
+/// # Safety
+/// - `fmt` must be a valid C string.
+/// - `out` must be a valid buffer of at least `out_len` bytes.
+/// - `wp` must be a valid window handle.
+/// - `hl_out` must be null or a valid buffer of at least `hl_max` records.
+/// - `click_out` must be null or a valid buffer of at least `click_max` records.
+#[no_mangle]
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap
+)]
+pub unsafe extern "C" fn rs_build_stl_str_hl(
+    fmt: *const c_char,
+    out: *mut c_char,
+    out_len: c_int,
+    wp: WinHandle,
+    max_width: c_int,
+    fill_char: c_int,
+    hl_out: *mut StlHlRecordFfi,
+    hl_max: c_int,
+    click_out: *mut StlClickRecordFfi,
+    click_max: c_int,
+) -> StlBuildResultExt {
+    let empty_result = StlBuildResultExt {
+        base: StlBuildResult {
+            len: 0,
+            hl_count: 0,
+            click_count: 0,
+            truncated: 0,
+        },
+        width: 0,
+    };
+
+    if fmt.is_null() || out.is_null() || out_len <= 0 {
+        return empty_result;
+    }
+
+    let Ok(fmt_str) = CStr::from_ptr(fmt).to_str() else {
+        return empty_result;
+    };
+
+    let fill = char::from_u32(fill_char as u32).unwrap_or(' ');
+    let mut ctx = RenderContext::new(wp, max_width, fill);
+
+    let result = build_stl_str(fmt_str, &mut ctx);
+
+    // Copy output string
+    let copy_len = result.output.len().min((out_len - 1) as usize);
+    std::ptr::copy_nonoverlapping(result.output.as_ptr(), out.cast(), copy_len);
+    *out.add(copy_len) = 0; // NUL terminate
+
+    // Copy highlight records
+    let hl_count = if !hl_out.is_null() && hl_max > 0 {
+        let max = (hl_max as usize).min(result.highlights.len());
+        for (i, hl) in result.highlights.iter().take(max).enumerate() {
+            *hl_out.add(i) = StlHlRecordFfi {
+                start_offset: hl.start as c_int,
+                userhl: hl.userhl,
+                item: hl.item as c_int,
+            };
+        }
+        // Add terminator if space
+        if max < hl_max as usize {
+            *hl_out.add(max) = StlHlRecordFfi {
+                start_offset: -1,
+                userhl: 0,
+                item: 0,
+            };
+        }
+        max as c_int
+    } else {
+        0
+    };
+
+    // Copy click records
+    let click_count = if !click_out.is_null() && click_max > 0 {
+        let max = (click_max as usize).min(result.clicks.len());
+        for (i, (start, click_type, tabnr, _func)) in result.clicks.iter().take(max).enumerate() {
+            let type_code = match *click_type {
+                crate::click::ClickType::TabSwitch => 1,
+                crate::click::ClickType::TabClose => 2,
+                crate::click::ClickType::FuncRun => 3,
+                crate::click::ClickType::Disabled => 0,
+            };
+            *click_out.add(i) = StlClickRecordFfi {
+                start_offset: *start as c_int,
+                click_type: type_code,
+                tabnr: *tabnr,
+            };
+        }
+        // Add terminator if space
+        if max < click_max as usize {
+            *click_out.add(max) = StlClickRecordFfi {
+                start_offset: -1,
+                click_type: 0,
+                tabnr: 0,
+            };
+        }
+        max as c_int
+    } else {
+        0
+    };
+
+    StlBuildResultExt {
+        base: StlBuildResult {
+            len: copy_len as c_int,
+            hl_count,
+            click_count,
+            truncated: c_int::from(result.truncated),
+        },
+        width: copy_len as c_int, // TODO: calculate actual cell width
     }
 }
 

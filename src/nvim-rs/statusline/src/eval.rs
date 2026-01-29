@@ -749,7 +749,7 @@ mod tests {
         // 0xFFFFF = 5 hex digits, with >e = 7 chars total
         // Reduce to fit in 4: FF>3 (255 * 16^3 = 1044480 ≈ 1048575)
         assert_eq!(
-            format_number_with_maxwid(1048575, NumberBase::Hexadecimal, 0, 4, false, false),
+            format_number_with_maxwid(1_048_575, NumberBase::Hexadecimal, 0, 4, false, false),
             "FF>3"
         );
         // 0xFFFF = 4 hex digits, should fit without scientific notation
