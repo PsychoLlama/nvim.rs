@@ -200,6 +200,58 @@ extern "C" {
 
 // Note: rs_stuff_empty and rs_readbuf1_empty are already exported from lib.rs
 
+// Additional C functions for stuff buffer operations
+extern "C" {
+    // C buffer operations (we wrap these)
+    fn nvim_add_buff_readbuf1(s: *const u8, len: isize);
+    fn nvim_add_char_buff_readbuf1(c: c_int);
+    fn nvim_add_num_buff_readbuf1(n: c_int);
+    fn nvim_add_buff_readbuf2(s: *const u8, len: isize);
+}
+
+/// Append a string to the stuff buffer (readbuf1).
+///
+/// K_SPECIAL must already have been escaped.
+///
+/// # Safety
+/// `s` must be a valid pointer to a string of at least `len` bytes,
+/// or if `len` is -1, must be NUL-terminated.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stuffReadbuff(s: *const u8, len: isize) {
+    nvim_add_buff_readbuf1(s, len);
+}
+
+/// Append a character to the stuff buffer.
+///
+/// Translates special keys, NUL, K_SPECIAL and multibyte characters.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stuffcharReadbuff(c: c_int) {
+    nvim_add_char_buff_readbuf1(c);
+}
+
+/// Append a number to the stuff buffer.
+///
+/// # Safety
+/// Calls C accessor function.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stuffnumReadbuff(n: c_int) {
+    nvim_add_num_buff_readbuf1(n);
+}
+
+/// Append a string to the redo stuff buffer (readbuf2).
+///
+/// K_SPECIAL must already have been escaped.
+///
+/// # Safety
+/// `s` must be a valid pointer to a NUL-terminated string.
+#[no_mangle]
+pub unsafe extern "C" fn rs_stuffRedoReadbuff(s: *const u8) {
+    nvim_add_buff_readbuf2(s, -1);
+}
+
 /// Get the typeahead character that won't be flushed.
 ///
 /// # Safety

@@ -3786,3 +3786,24 @@ void nvim_add_on_key_ignore_len(size_t val)
 {
   on_key_ignore_len += val;
 }
+
+// Wrappers for buffer operations that Rust can call
+void nvim_add_buff_readbuf1(const char *s, ptrdiff_t len)
+{
+  add_buff(&readbuf1, s, len);
+}
+
+void nvim_add_char_buff_readbuf1(int c)
+{
+  add_char_buff(&readbuf1, c);
+}
+
+void nvim_add_num_buff_readbuf1(int n)
+{
+  add_num_buff(&readbuf1, n);
+}
+
+void nvim_add_buff_readbuf2(const char *s, ptrdiff_t len)
+{
+  add_buff(&readbuf2, s, len);
+}
