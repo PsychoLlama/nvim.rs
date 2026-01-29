@@ -4557,3 +4557,37 @@ int nvim_diff_is_busy(void)
   return diff_busy ? 1 : 0;
 }
 
+/// Get the number of inline changes in a diff block.
+/// @param dp Diff block pointer
+/// @return Number of changes or 0
+int nvim_diffblock_get_changes_len(diff_T *dp)
+{
+  if (dp == NULL) {
+    return 0;
+  }
+  return dp->df_changes.ga_len;
+}
+
+/// Get a specific inline change from a diff block.
+/// @param dp        Diff block pointer
+/// @param change_idx Index of the change
+/// @return Pointer to the change or NULL
+diffline_change_T *nvim_diffblock_get_change(diff_T *dp, int change_idx)
+{
+  if (dp == NULL || change_idx < 0 || change_idx >= dp->df_changes.ga_len) {
+    return NULL;
+  }
+  return &((diffline_change_T *)dp->df_changes.ga_data)[change_idx];
+}
+
+/// Get the buffer index for a buffer in a tabpage's diff list.
+/// Wrapper for diff_buf_idx that can be called from Rust.
+/// @param buf Buffer handle
+/// @param tp  Tabpage handle
+/// @return Index (0 to DB_COUNT-1) or DB_COUNT if not found
+int nvim_diff_buf_idx(buf_T *buf, tabpage_T *tp)
+{
+  return diff_buf_idx(buf, tp);
+}
+
+

@@ -16,6 +16,7 @@ pub mod compute;
 pub mod external;
 pub mod helpers;
 pub mod highlight;
+pub mod inline;
 pub mod marks;
 pub mod nav;
 pub mod navigate;
