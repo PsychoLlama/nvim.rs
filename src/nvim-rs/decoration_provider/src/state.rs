@@ -395,6 +395,152 @@ pub extern "C" fn rs_decor_provider_has_any_ref(
 }
 
 // =============================================================================
+// Provider Lifecycle
+// =============================================================================
+
+/// Lifecycle event type for provider state machine.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProviderLifecycleEvent {
+    /// New redraw cycle starting
+    RedrawStart = 0,
+    /// New window being processed
+    WindowStart = 1,
+    /// Window processing complete
+    WindowEnd = 2,
+    /// Buffer about to be drawn
+    BufferDraw = 3,
+    /// Line being drawn
+    LineDraw = 4,
+    /// Redraw cycle complete
+    RedrawEnd = 5,
+    /// Provider error occurred
+    Error = 6,
+    /// Provider callback returned false
+    Disabled = 7,
+}
+
+impl ProviderLifecycleEvent {
+    /// Create from C int.
+    pub const fn from_c_int(val: c_int) -> Option<Self> {
+        match val {
+            0 => Some(Self::RedrawStart),
+            1 => Some(Self::WindowStart),
+            2 => Some(Self::WindowEnd),
+            3 => Some(Self::BufferDraw),
+            4 => Some(Self::LineDraw),
+            5 => Some(Self::RedrawEnd),
+            6 => Some(Self::Error),
+            7 => Some(Self::Disabled),
+            _ => None,
+        }
+    }
+}
+
+/// Get next provider state based on lifecycle event.
+#[no_mangle]
+pub extern "C" fn rs_provider_next_state(current_state: c_int, event: c_int) -> c_int {
+    let state = DecorProviderState::from_c_int(current_state);
+    let evt = ProviderLifecycleEvent::from_c_int(event);
+
+    match (state, evt) {
+        // Disabled stays disabled
+        (DecorProviderState::Disabled, _) => DECOR_PROVIDER_DISABLED,
+
+        // Error event disables the provider
+        (_, Some(ProviderLifecycleEvent::Error)) => DECOR_PROVIDER_DISABLED,
+
+        // Disabled event based on callback type
+        (_, Some(ProviderLifecycleEvent::Disabled)) => DECOR_PROVIDER_REDRAW_DISABLED,
+
+        // Window start resets win-disabled to active
+        (DecorProviderState::WinDisabled, Some(ProviderLifecycleEvent::WindowStart)) => {
+            DECOR_PROVIDER_ACTIVE
+        }
+
+        // Redraw start resets redraw-disabled (checked by start callback)
+        (DecorProviderState::RedrawDisabled, Some(ProviderLifecycleEvent::RedrawStart)) => {
+            DECOR_PROVIDER_ACTIVE
+        }
+
+        // Default: keep current state
+        _ => current_state,
+    }
+}
+
+/// Track provider invocation timing.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ProviderTiming {
+    /// Total time spent in this provider (microseconds)
+    pub total_time_us: i64,
+    /// Number of invocations
+    pub invocation_count: u64,
+    /// Last invocation duration (microseconds)
+    pub last_duration_us: i64,
+}
+
+impl ProviderTiming {
+    /// Record an invocation.
+    pub fn record(&mut self, duration_us: i64) {
+        self.total_time_us += duration_us;
+        self.invocation_count += 1;
+        self.last_duration_us = duration_us;
+    }
+
+    /// Get average invocation time.
+    #[allow(clippy::cast_possible_truncation)]
+    pub fn average_time_us(&self) -> i64 {
+        if self.invocation_count == 0 {
+            0
+        } else {
+            self.total_time_us / self.invocation_count as i64
+        }
+    }
+
+    /// Reset timing.
+    pub fn reset(&mut self) {
+        self.total_time_us = 0;
+        self.invocation_count = 0;
+        self.last_duration_us = 0;
+    }
+}
+
+/// FFI: Create timing struct.
+#[no_mangle]
+pub extern "C" fn rs_provider_timing_new() -> ProviderTiming {
+    ProviderTiming::default()
+}
+
+/// FFI: Record invocation.
+///
+/// # Safety
+/// `timing` must be valid or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_provider_timing_record(timing: *mut ProviderTiming, duration_us: i64) {
+    if !timing.is_null() {
+        (*timing).record(duration_us);
+    }
+}
+
+/// FFI: Get average time.
+#[no_mangle]
+pub extern "C" fn rs_provider_timing_average(timing: ProviderTiming) -> i64 {
+    timing.average_time_us()
+}
+
+/// FFI: Reset timing.
+///
+/// # Safety
+/// `timing` must be valid or null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_provider_timing_reset(timing: *mut ProviderTiming) {
+    if !timing.is_null() {
+        (*timing).reset();
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -402,6 +548,58 @@ pub extern "C" fn rs_decor_provider_has_any_ref(
 mod tests {
     use super::*;
     use crate::constants::DECOR_PROVIDER_WIN_DISABLED;
+
+    #[test]
+    fn test_provider_lifecycle_event() {
+        assert_eq!(
+            ProviderLifecycleEvent::from_c_int(0),
+            Some(ProviderLifecycleEvent::RedrawStart)
+        );
+        assert_eq!(
+            ProviderLifecycleEvent::from_c_int(6),
+            Some(ProviderLifecycleEvent::Error)
+        );
+        assert_eq!(ProviderLifecycleEvent::from_c_int(99), None);
+    }
+
+    #[test]
+    fn test_provider_next_state() {
+        // Disabled stays disabled
+        assert_eq!(
+            rs_provider_next_state(DECOR_PROVIDER_DISABLED, 0),
+            DECOR_PROVIDER_DISABLED
+        );
+
+        // Error disables
+        assert_eq!(
+            rs_provider_next_state(DECOR_PROVIDER_ACTIVE, 6),
+            DECOR_PROVIDER_DISABLED
+        );
+
+        // Window start resets win-disabled
+        assert_eq!(
+            rs_provider_next_state(DECOR_PROVIDER_WIN_DISABLED, 1),
+            DECOR_PROVIDER_ACTIVE
+        );
+    }
+
+    #[test]
+    fn test_provider_timing() {
+        let mut timing = ProviderTiming::default();
+        assert_eq!(timing.average_time_us(), 0);
+
+        timing.record(100);
+        timing.record(200);
+        timing.record(300);
+        assert_eq!(timing.invocation_count, 3);
+        assert_eq!(timing.total_time_us, 600);
+        assert_eq!(timing.average_time_us(), 200);
+        assert_eq!(timing.last_duration_us, 300);
+
+        timing.reset();
+        assert_eq!(timing.invocation_count, 0);
+        assert_eq!(timing.total_time_us, 0);
+    }
 
     #[test]
     fn test_reset_win_state() {
