@@ -11,6 +11,7 @@ crate-type = ["staticlib", "rlib"]
 [dependencies]
 libc = "0.2"
 nvim-ascii = { path = "../ascii" }
+nvim-charset = { path = "../charset" }
 nvim-mbyte = { path = "../mbyte" }
 nvim-memory = { path = "../memory" }
 

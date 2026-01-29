@@ -18,6 +18,7 @@ const MOD_MASK_2CLICK: c_int = 0x20;
 const MOD_MASK_3CLICK: c_int = 0x40;
 const MOD_MASK_4CLICK: c_int = 0x60;
 const MOD_MASK_CMD: c_int = 0x80;
+const MOD_MASK_MULTI_CLICK: c_int = MOD_MASK_2CLICK | MOD_MASK_3CLICK | MOD_MASK_4CLICK;
 
 // TAB character (from ascii_defs.h)
 const TAB: c_int = 0x09;
@@ -29,6 +30,10 @@ const K_SPECIAL: u8 = 0x80;
 const KS_MODIFIER: u8 = 252;
 const KS_EXTRA: c_int = 253;
 const KS_SPECIAL: u8 = 254;
+const KS_KEY: c_int = 242;
+
+// Maximum length for key name strings (from keycodes.h)
+const MAX_KEY_NAME_LEN: usize = 32;
 
 // KE_* values for special keys (from keycodes.h enum key_extra)
 const KE_S_UP: c_int = 4;
@@ -314,13 +319,13 @@ const K_X2MOUSE: c_int = termcap2key(KS_EXTRA, KE_X2MOUSE);
 const K_X2DRAG: c_int = termcap2key(KS_EXTRA, KE_X2DRAG);
 const K_X2RELEASE: c_int = termcap2key(KS_EXTRA, KE_X2RELEASE);
 
-/// Modifier mask table entry
+/// Modifier mask table entry (for `name_to_mod_mask`)
 struct ModMaskEntry {
     mod_flag: c_int,
     name: u8,
 }
 
-/// Table mapping modifier names to modifier flags
+/// Table mapping modifier names to modifier flags (for `name_to_mod_mask`)
 static MOD_MASK_TABLE: &[ModMaskEntry] = &[
     ModMaskEntry {
         mod_flag: MOD_MASK_ALT,
@@ -361,6 +366,65 @@ static MOD_MASK_TABLE: &[ModMaskEntry] = &[
     },
 ];
 
+/// Full modifier mask table entry (for `get_special_key_name`)
+/// Contains both `mod_mask` (for grouping) and `mod_flag` (specific value)
+struct ModMaskTableEntry {
+    mod_mask: c_int,
+    mod_flag: c_int,
+    name: u8,
+}
+
+/// Table for translating modifiers to string representation.
+/// The 'A' entry is the sentinel - iteration stops before it.
+static MOD_MASK_TABLE_FULL: &[ModMaskTableEntry] = &[
+    ModMaskTableEntry {
+        mod_mask: MOD_MASK_ALT,
+        mod_flag: MOD_MASK_ALT,
+        name: b'M',
+    },
+    ModMaskTableEntry {
+        mod_mask: MOD_MASK_META,
+        mod_flag: MOD_MASK_META,
+        name: b'T',
+    },
+    ModMaskTableEntry {
+        mod_mask: MOD_MASK_CTRL,
+        mod_flag: MOD_MASK_CTRL,
+        name: b'C',
+    },
+    ModMaskTableEntry {
+        mod_mask: MOD_MASK_SHIFT,
+        mod_flag: MOD_MASK_SHIFT,
+        name: b'S',
+    },
+    ModMaskTableEntry {
+        mod_mask: MOD_MASK_MULTI_CLICK,
+        mod_flag: MOD_MASK_2CLICK,
+        name: b'2',
+    },
+    ModMaskTableEntry {
+        mod_mask: MOD_MASK_MULTI_CLICK,
+        mod_flag: MOD_MASK_3CLICK,
+        name: b'3',
+    },
+    ModMaskTableEntry {
+        mod_mask: MOD_MASK_MULTI_CLICK,
+        mod_flag: MOD_MASK_4CLICK,
+        name: b'4',
+    },
+    ModMaskTableEntry {
+        mod_mask: MOD_MASK_CMD,
+        mod_flag: MOD_MASK_CMD,
+        name: b'D',
+    },
+    // 'A' is the sentinel - iteration stops before this entry
+    ModMaskTableEntry {
+        mod_mask: MOD_MASK_ALT,
+        mod_flag: MOD_MASK_ALT,
+        name: b'A',
+    },
+];
+
 /// Convert ASCII character to uppercase (ASCII only)
 const fn toupper_asc(c: c_int) -> c_int {
     if c >= b'a' as c_int && c <= b'z' as c_int {
@@ -387,6 +451,16 @@ extern "C" {
     /// Lookup a special key code by name using the generated hash function.
     /// Returns the index in `key_names_table`, or -1 if not found.
     fn nvim_get_special_key_code_hash(name: *const std::ffi::c_char, len: usize) -> c_int;
+
+    /// Get the name data pointer at the specified index.
+    fn nvim_get_key_names_table_name_data(idx: c_int) -> *const std::ffi::c_char;
+
+    /// Get the name length at the specified index.
+    fn nvim_get_key_names_table_name_size(idx: c_int) -> usize;
+
+    /// Translate character to printable string representation.
+    /// Returns a pointer to a static buffer.
+    fn transchar(c: c_int) -> *const std::ffi::c_char;
 }
 
 /// Try to find key "c" in the special key table.
@@ -447,6 +521,137 @@ pub unsafe extern "C" fn rs_get_special_key_code(name: *const std::ffi::c_char) 
     } else {
         0
     }
+}
+
+/// Static buffer for `get_special_key_name` result.
+/// This matches the C behavior of returning a pointer to a static buffer.
+static mut SPECIAL_KEY_NAME_BUF: [u8; MAX_KEY_NAME_LEN + 1] = [0; MAX_KEY_NAME_LEN + 1];
+
+/// Get a string representation of a key with modifiers.
+///
+/// Returns a string like `<C-S-Up>` for a key code with modifiers.
+///
+/// # Safety
+/// This function uses a static mutable buffer. The returned pointer is valid
+/// until the next call to this function.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_get_special_key_name(
+    mut c: c_int,
+    mut modifiers: c_int,
+) -> *mut std::ffi::c_char {
+    let string = std::ptr::addr_of_mut!(SPECIAL_KEY_NAME_BUF).cast::<u8>();
+    *string = b'<';
+    let mut idx: usize = 1;
+
+    // Key that stands for a normal character.
+    if is_special(c) && key2termcap0(c) == KS_KEY {
+        c = key2termcap1(c);
+    }
+
+    // Translate shifted special keys into unshifted keys and set modifier.
+    // Same for CTRL and ALT modifiers.
+    if is_special(c) {
+        for entry in MODIFIER_KEYS_TABLE {
+            let with_mod_0 = key2termcap0(entry.key_with_mod);
+            let with_mod_1 = key2termcap1(entry.key_with_mod);
+            if key2termcap0(c) == with_mod_0 && key2termcap1(c) == with_mod_1 {
+                modifiers |= entry.mod_mask;
+                c = entry.key_without_mod;
+                break;
+            }
+        }
+    }
+
+    // Try to find the key in the special key table
+    let mut table_idx = rs_find_special_key_in_table(c);
+
+    // When not a known special key, and not a printable character, try to
+    // extract modifiers.
+    if c > 0 && nvim_mbyte::rs_utf_char2len(c) == 1 {
+        if table_idx < 0
+            && (nvim_charset::rs_vim_isprintc(c) == 0 || (c & 0x7f) == c_int::from(b' '))
+            && (c & 0x80) != 0
+        {
+            c &= 0x7f;
+            modifiers |= MOD_MASK_ALT;
+            // Try again, to find the un-alted key in the special key table
+            table_idx = rs_find_special_key_in_table(c);
+        }
+        if table_idx < 0 && nvim_charset::rs_vim_isprintc(c) == 0 && c < c_int::from(b' ') {
+            c += c_int::from(b'@');
+            modifiers |= MOD_MASK_CTRL;
+        }
+    }
+
+    // Translate the modifier into a string (stop before 'A' sentinel)
+    for entry in &MOD_MASK_TABLE_FULL[..MOD_MASK_TABLE_FULL.len() - 1] {
+        if (modifiers & entry.mod_mask) == entry.mod_flag {
+            *string.add(idx) = entry.name;
+            idx += 1;
+            *string.add(idx) = b'-';
+            idx += 1;
+        }
+    }
+
+    if table_idx < 0 {
+        // Unknown special key, may output t_xx
+        if is_special(c) {
+            *string.add(idx) = b't';
+            idx += 1;
+            *string.add(idx) = b'_';
+            idx += 1;
+            #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+            {
+                *string.add(idx) = key2termcap0(c) as u8;
+                idx += 1;
+                *string.add(idx) = key2termcap1(c) as u8;
+                idx += 1;
+            }
+        } else {
+            // Not a special key, only modifiers, output directly.
+            let len = nvim_mbyte::rs_utf_char2len(c);
+            if len == 1 && nvim_charset::rs_vim_isprintc(c) != 0 {
+                #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+                {
+                    *string.add(idx) = c as u8;
+                }
+                idx += 1;
+            } else if len > 1 {
+                let written =
+                    nvim_mbyte::rs_utf_char2bytes(c, string.add(idx).cast::<std::ffi::c_char>());
+                #[allow(clippy::cast_sign_loss)]
+                {
+                    idx += written as usize;
+                }
+            } else {
+                // Use transchar for unprintable characters
+                let s = transchar(c);
+                if !s.is_null() {
+                    let mut p = s.cast::<u8>();
+                    while *p != 0 {
+                        *string.add(idx) = *p;
+                        idx += 1;
+                        p = p.add(1);
+                    }
+                }
+            }
+        }
+    } else {
+        // Use name of special key
+        let name_data = nvim_get_key_names_table_name_data(table_idx);
+        let name_size = nvim_get_key_names_table_name_size(table_idx);
+        if !name_data.is_null() && name_size + idx + 2 <= MAX_KEY_NAME_LEN {
+            std::ptr::copy_nonoverlapping(name_data.cast::<u8>(), string.add(idx), name_size);
+            idx += name_size;
+        }
+    }
+
+    *string.add(idx) = b'>';
+    idx += 1;
+    *string.add(idx) = 0; // NUL terminate
+
+    string.cast::<std::ffi::c_char>()
 }
 
 /// Return the modifier mask bit corresponding to modifier name.

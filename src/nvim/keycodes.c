@@ -44,6 +44,7 @@ typedef struct {
 extern ExtractModifiersResult rs_extract_modifiers(int key, int *modp, bool simplify);
 extern int rs_find_special_key_in_table(int c);
 extern int rs_get_special_key_code(const char *name);
+extern char *rs_get_special_key_name(int c, int modifiers);
 
 // =============================================================================
 // Accessor functions for key_names_table (for Rust FFI)
@@ -245,91 +246,7 @@ int handle_x_keys(const int key)
 /// @return  a string which contains the name of the given key when the given modifiers are down.
 char *get_special_key_name(int c, int modifiers)
 {
-  static char string[MAX_KEY_NAME_LEN + 1];
-
-  string[0] = '<';
-  int idx = 1;
-
-  // Key that stands for a normal character.
-  if (IS_SPECIAL(c) && KEY2TERMCAP0(c) == KS_KEY) {
-    c = KEY2TERMCAP1(c);
-  }
-
-  // Translate shifted special keys into unshifted keys and set modifier.
-  // Same for CTRL and ALT modifiers.
-  if (IS_SPECIAL(c)) {
-    for (int i = 0; modifier_keys_table[i] != 0; i += MOD_KEYS_ENTRY_SIZE) {
-      if (KEY2TERMCAP0(c) == (int)modifier_keys_table[i + 1]
-          && (int)KEY2TERMCAP1(c) == (int)modifier_keys_table[i + 2]) {
-        modifiers |= modifier_keys_table[i];
-        c = TERMCAP2KEY(modifier_keys_table[i + 3],
-                        modifier_keys_table[i + 4]);
-        break;
-      }
-    }
-  }
-
-  // try to find the key in the special key table
-  int table_idx = find_special_key_in_table(c);
-
-  // When not a known special key, and not a printable character, try to
-  // extract modifiers.
-  if (c > 0
-      && utf_char2len(c) == 1) {
-    if (table_idx < 0
-        && (!vim_isprintc(c) || (c & 0x7f) == ' ')
-        && (c & 0x80)) {
-      c &= 0x7f;
-      modifiers |= MOD_MASK_ALT;
-      // try again, to find the un-alted key in the special key table
-      table_idx = find_special_key_in_table(c);
-    }
-    if (table_idx < 0 && !vim_isprintc(c) && c < ' ') {
-      c += '@';
-      modifiers |= MOD_MASK_CTRL;
-    }
-  }
-
-  // translate the modifier into a string
-  for (int i = 0; mod_mask_table[i].name != 'A'; i++) {
-    if ((modifiers & mod_mask_table[i].mod_mask)
-        == mod_mask_table[i].mod_flag) {
-      string[idx++] = mod_mask_table[i].name;
-      string[idx++] = '-';
-    }
-  }
-
-  if (table_idx < 0) {          // unknown special key, may output t_xx
-    if (IS_SPECIAL(c)) {
-      string[idx++] = 't';
-      string[idx++] = '_';
-      string[idx++] = (char)(uint8_t)KEY2TERMCAP0(c);
-      string[idx++] = (char)(uint8_t)KEY2TERMCAP1(c);
-    } else {
-      // Not a special key, only modifiers, output directly.
-      int len = utf_char2len(c);
-      if (len == 1 && vim_isprintc(c)) {
-        string[idx++] = (char)(uint8_t)c;
-      } else if (len > 1) {
-        idx += utf_char2bytes(c, string + idx);
-      } else {
-        char *s = transchar(c);
-        while (*s) {
-          string[idx++] = *s++;
-        }
-      }
-    }
-  } else {            // use name of special key
-    const String *s = &key_names_table[table_idx].name;
-    if ((int)s->size + idx + 2 <= MAX_KEY_NAME_LEN) {
-      STRCPY(string + idx, s->data);
-      idx += (int)s->size;
-    }
-  }
-  string[idx++] = '>';
-  string[idx] = NUL;
-
-  return string;
+  return rs_get_special_key_name(c, modifiers);
 }
 
 /// Try translating a <> name ("keycode").
