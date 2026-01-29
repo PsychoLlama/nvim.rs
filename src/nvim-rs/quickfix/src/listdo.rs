@@ -417,6 +417,146 @@ pub extern "C" fn rs_listdo_result_error(processed: c_int, errors: c_int) -> Lis
 }
 
 // =============================================================================
+// Mark Adjustment
+// =============================================================================
+
+/// Calculate new index after line deletion/insertion.
+///
+/// Used when lines are added/removed from the buffer to adjust quickfix
+/// entry positions.
+#[no_mangle]
+pub const extern "C" fn rs_qf_adjust_lnum(
+    lnum: c_int,
+    line1: c_int,
+    line2: c_int,
+    amount: c_int,
+    amount_after: c_int,
+) -> c_int {
+    if lnum < line1 {
+        // Before the changed range - no adjustment
+        lnum
+    } else if lnum <= line2 {
+        // Within the deleted range
+        if amount < 0 {
+            // Lines were deleted - entry may be invalidated
+            if lnum + amount < line1 {
+                // Entry was in deleted range, invalid now
+                0
+            } else {
+                line1
+            }
+        } else {
+            // Lines were added
+            lnum + amount
+        }
+    } else {
+        // After the changed range
+        lnum + amount_after
+    }
+}
+
+/// Check if a line number falls within a deleted range.
+#[no_mangle]
+pub const extern "C" fn rs_qf_lnum_deleted(lnum: c_int, line1: c_int, line2: c_int) -> bool {
+    lnum >= line1 && lnum <= line2
+}
+
+/// Calculate adjustment amount for entries after a deletion.
+#[no_mangle]
+pub const extern "C" fn rs_qf_calc_amount_after(
+    line1: c_int,
+    line2: c_int,
+    amount: c_int,
+) -> c_int {
+    // If lines were deleted, amount is negative and equals (line2 - line1 + 1)
+    // If lines were added, amount is positive
+    if amount < 0 {
+        // Deletion: lines from line1 to line2 were removed
+        -(line2 - line1 + 1)
+    } else {
+        amount
+    }
+}
+
+// =============================================================================
+// Quickfix Stack Size Management
+// =============================================================================
+
+/// Calculate the valid stack size after resize.
+#[no_mangle]
+pub const extern "C" fn rs_qf_calc_resize(current_count: c_int, new_max: c_int) -> c_int {
+    if new_max <= 0 {
+        return 0;
+    }
+    if current_count <= new_max {
+        current_count
+    } else {
+        new_max
+    }
+}
+
+/// Calculate how many lists need to be removed on resize.
+#[no_mangle]
+pub const extern "C" fn rs_qf_lists_to_remove(current_count: c_int, new_max: c_int) -> c_int {
+    if new_max <= 0 {
+        return current_count;
+    }
+    if current_count <= new_max {
+        0
+    } else {
+        current_count - new_max
+    }
+}
+
+// =============================================================================
+// Valid Entry Counting
+// =============================================================================
+
+/// Result of counting valid entries.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ValidCountResult {
+    /// Total number of entries
+    pub total: c_int,
+    /// Number of valid entries
+    pub valid: c_int,
+    /// Index of current valid entry (1-based, or 0 if current is invalid)
+    pub current_valid_idx: c_int,
+}
+
+/// FFI export: create default valid count result.
+#[no_mangle]
+pub extern "C" fn rs_valid_count_result_default() -> ValidCountResult {
+    ValidCountResult::default()
+}
+
+// =============================================================================
+// Garbage Collection Helpers
+// =============================================================================
+
+/// Mark result for quickfix GC traversal.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct QfGcResult {
+    /// Number of objects marked
+    pub marked: c_int,
+    /// Whether traversal should abort
+    pub abort: bool,
+}
+
+/// FFI export: create default GC result.
+#[no_mangle]
+pub extern "C" fn rs_qf_gc_result_default() -> QfGcResult {
+    QfGcResult::default()
+}
+
+/// FFI export: create GC result with count.
+#[no_mangle]
+pub const extern "C" fn rs_qf_gc_result_new(marked: c_int, abort: bool) -> QfGcResult {
+    QfGcResult { marked, abort }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
@@ -548,5 +688,71 @@ mod tests {
         let interrupted = ListDoResult::interrupted(3);
         assert!(!interrupted.success);
         assert!(interrupted.interrupted);
+    }
+
+    #[test]
+    fn test_adjust_lnum_before_range() {
+        // Line 5 when deleting lines 10-15: no change
+        assert_eq!(rs_qf_adjust_lnum(5, 10, 15, -6, -6), 5);
+    }
+
+    #[test]
+    fn test_adjust_lnum_in_deleted_range() {
+        // Line 12 when deleting lines 10-15
+        assert_eq!(rs_qf_adjust_lnum(12, 10, 15, -6, -6), 10);
+    }
+
+    #[test]
+    fn test_adjust_lnum_after_range() {
+        // Line 20 when deleting lines 10-15 (-6 lines)
+        assert_eq!(rs_qf_adjust_lnum(20, 10, 15, -6, -6), 14);
+    }
+
+    #[test]
+    fn test_adjust_lnum_after_insert() {
+        // Line 20 when inserting 3 lines at line 10
+        assert_eq!(rs_qf_adjust_lnum(20, 10, 10, 3, 3), 23);
+    }
+
+    #[test]
+    fn test_lnum_deleted() {
+        assert!(rs_qf_lnum_deleted(12, 10, 15));
+        assert!(rs_qf_lnum_deleted(10, 10, 15));
+        assert!(rs_qf_lnum_deleted(15, 10, 15));
+        assert!(!rs_qf_lnum_deleted(9, 10, 15));
+        assert!(!rs_qf_lnum_deleted(16, 10, 15));
+    }
+
+    #[test]
+    fn test_calc_amount_after() {
+        // Delete lines 10-15 (6 lines)
+        assert_eq!(rs_qf_calc_amount_after(10, 15, -6), -6);
+        // Insert 3 lines
+        assert_eq!(rs_qf_calc_amount_after(10, 10, 3), 3);
+    }
+
+    #[test]
+    fn test_calc_resize() {
+        assert_eq!(rs_qf_calc_resize(5, 10), 5);
+        assert_eq!(rs_qf_calc_resize(15, 10), 10);
+        assert_eq!(rs_qf_calc_resize(5, 0), 0);
+    }
+
+    #[test]
+    fn test_lists_to_remove() {
+        assert_eq!(rs_qf_lists_to_remove(5, 10), 0);
+        assert_eq!(rs_qf_lists_to_remove(15, 10), 5);
+        assert_eq!(rs_qf_lists_to_remove(5, 0), 5);
+    }
+
+    #[test]
+    fn test_gc_result() {
+        let default = rs_qf_gc_result_default();
+        assert_eq!(default.marked, 0);
+        assert!(!default.abort);
+
+        let result = rs_qf_gc_result_new(10, true);
+        assert_eq!(result.marked, 10);
+        assert!(result.abort);
     }
 }

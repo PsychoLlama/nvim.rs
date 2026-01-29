@@ -539,7 +539,9 @@ pub struct GrepPatternResult {
 /// - `input` may be null (returns invalid result)
 /// - If non-null, `input` must be a valid null-terminated C string
 #[no_mangle]
-pub unsafe extern "C" fn rs_qf_parse_grep_pattern(input: *const std::ffi::c_char) -> GrepPatternResult {
+pub unsafe extern "C" fn rs_qf_parse_grep_pattern(
+    input: *const std::ffi::c_char,
+) -> GrepPatternResult {
     use std::ffi::CStr;
 
     let mut result = GrepPatternResult::default();
@@ -558,7 +560,10 @@ pub unsafe extern "C" fn rs_qf_parse_grep_pattern(input: *const std::ffi::c_char
     };
 
     // Check for delimiter-based pattern
-    if matches!(first_char, '/' | '?' | '@' | '!' | '#' | '$' | '%' | '^' | '&') {
+    if matches!(
+        first_char,
+        '/' | '?' | '@' | '!' | '#' | '$' | '%' | '^' | '&'
+    ) {
         result.delimiter = first_char as u8;
         result.has_delimiter = true;
 

@@ -669,6 +669,59 @@ typedef struct {
 extern uint8_t rs_qf_make_grep_action(MakeGrepInfo info);
 
 // =============================================================================
+// Phase 7 (ListDo and Cleanup): List-do and utility functions from Rust
+// =============================================================================
+
+/// List-do operation types
+typedef enum {
+  LISTDO_CDO = 0,
+  LISTDO_CFDO = 1,
+  LISTDO_LDO = 2,
+  LISTDO_LFDO = 3,
+} ListDoType;
+
+/// List-do state
+typedef struct {
+  int current;
+  int first;
+  int last;
+  int total;
+  int processed;
+  int errors;
+  bool stop_on_error;
+  bool done;
+} ListDoState;
+
+/// Create new list-do state
+extern ListDoState rs_listdo_state_new(int first, int last, int total);
+
+/// Check if there are more entries
+extern bool rs_listdo_state_has_more(const ListDoState *state);
+
+/// Advance to next entry
+extern void rs_listdo_state_advance(ListDoState *state);
+
+/// Record an error
+extern bool rs_listdo_state_record_error(ListDoState *state);
+
+/// Validate list-do range
+extern bool rs_listdo_validate_range(int first, int last, int total,
+                                      int *out_first, int *out_last);
+
+/// Line number adjustment for mark_adjust
+extern int rs_qf_adjust_lnum(int lnum, int line1, int line2,
+                              int amount, int amount_after);
+
+/// Check if line number was deleted
+extern bool rs_qf_lnum_deleted(int lnum, int line1, int line2);
+
+/// Calculate stack resize
+extern int rs_qf_calc_resize(int current_count, int new_max);
+
+/// Calculate lists to remove on resize
+extern int rs_qf_lists_to_remove(int current_count, int new_max);
+
+// =============================================================================
 // Phase 1 (Parser Migration): Errorformat parsing functions from Rust
 // =============================================================================
 
