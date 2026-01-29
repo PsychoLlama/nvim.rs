@@ -87,6 +87,47 @@ extern bool rs_suggestion_same_word(const void *a, const void *b);
 extern int rs_rep_matches_at(const char *word, size_t word_len, const char *from, size_t from_len, size_t pos);
 extern bool rs_apply_rep(char *word, size_t word_cap, size_t *word_len, const char *from, size_t from_len, const char *to, size_t to_len, size_t pos);
 
+// Phase B3: TryState for suggestion state machine
+// The TryState struct exists in Rust but the suggestion state machine
+// (suggest_trie_walk) remains in C for now. These declarations make
+// the Rust TryState available for future migration.
+typedef struct {
+  int state;          // Current state
+  int score;          // Score accumulated so far
+  int ts_isdiff;      // Difference type (DIFF_* values)
+  int ts_fcharstart;  // Start of character in fword
+  int ts_curi;        // Current index in child nodes
+  int ts_arridx;      // Current array index
+  uint8_t ts_save_badflags;  // Saved bad word flags
+  uint8_t ts_flags;   // TSF_* flags
+  int ts_prefixdepth; // Prefix depth
+  int ts_fidx;        // Index in fword
+  int ts_fidxtry;     // Try index in fword
+  int ts_twordlen;    // Length of tword
+  int ts_badwordlen;  // Length of bad word part
+  int ts_splitoff;    // Split word offset
+  int ts_splitfidx;   // Split fword index
+  int ts_complen;     // Compound part length
+  int ts_compsplit;   // Compound split index
+  uint8_t ts_prewordlen;  // Prefix word length
+  uint8_t ts_tcharlen;    // Tword character length
+  uint8_t ts_tcharidx;    // Tword character index
+  uint8_t ts_delidx;      // Deletion index
+} RsTryState;
+
+extern void rs_trystate_new(RsTryState *out);
+extern int rs_trystate_get_state(const RsTryState *ts);
+extern void rs_trystate_set_state(RsTryState *ts, int state);
+extern bool rs_go_deeper(RsTryState *stack, size_t depth, int score_add);
+
+// Phase B3: Suggestion score constants
+extern int rs_score_default_del(void);
+extern int rs_score_default_ins(void);
+extern int rs_score_default_subst(void);
+extern int rs_score_default_swap(void);
+extern int rs_score_default_icase(void);
+extern int rs_score_default_similar(void);
+
 // Use this to adjust the score after finding suggestions, based on the
 // suggested word sounding like the bad word.  This is much faster than doing
 // it for every possible suggestion.
