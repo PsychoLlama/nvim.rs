@@ -2137,6 +2137,539 @@ pub extern "C" fn rs_scrolljump_value(wp: WinHandle) -> c_int {
     scrolljump_value_impl(wp)
 }
 
+// ============================================================================
+// Phase 2-4: Additional plines functions
+// ============================================================================
+
+extern "C" {
+    // Additional accessors for plines functions
+    fn nvim_get_curwin() -> WinHandle;
+    fn nvim_win_get_topfill(wp: WinHandle) -> c_int;
+    fn nvim_win_get_topline(wp: WinHandle) -> c_int;
+    fn nvim_lineFolded(wp: WinHandle, lnum: c_int) -> c_int;
+    fn nvim_hasFolding(wp: WinHandle, lnum: c_int, firstp: *mut c_int, lastp: *mut c_int) -> c_int;
+    fn nvim_win_get_fill(wp: WinHandle, lnum: c_int) -> c_int;
+    fn nvim_decor_conceal_line(wp: WinHandle, row: c_int, check_cursor: c_int) -> c_int;
+    fn nvim_plines_win_nofill(wp: WinHandle, lnum: c_int, winheight: c_int) -> c_int;
+    fn nvim_ml_get_buf(buf: BufHandle, lnum: c_int) -> *const c_char;
+    fn nvim_buf_get_line_len(buf: *mut c_void, lnum: c_int) -> c_int;
+    fn nvim_utf_ptr2char(p: *const c_char) -> c_int;
+}
+
+// ============================================================================
+// linetabsize - Size of line in cells
+// ============================================================================
+
+/// Return the number of cells line "lnum" of window "wp" will take on the
+/// screen, taking into account the size of a tab and inline virtual text.
+/// Doesn't count the size of 'listchars' "eol".
+///
+/// # Safety
+/// The `wp` parameter must be a valid window handle.
+#[no_mangle]
+pub extern "C" fn rs_linetabsize(wp: WinHandle, lnum: c_int) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        let buf = nvim_win_get_w_buffer(wp);
+        let line = nvim_ml_get_buf(buf, lnum);
+        rs_win_linetabsize(wp, lnum, line, MAXCOL)
+    }
+}
+
+/// Like linetabsize(), but counts the size of 'listchars' "eol".
+///
+/// # Safety
+/// The `wp` parameter must be a valid window handle.
+#[no_mangle]
+pub extern "C" fn rs_linetabsize_eol(wp: WinHandle, lnum: c_int) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        let size = rs_linetabsize(wp, lnum);
+        let p_list = nvim_win_get_p_list(wp) != 0;
+        let lcs_eol = nvim_win_get_lcs_eol(wp);
+        if p_list && lcs_eol != 0 {
+            size + 1
+        } else {
+            size
+        }
+    }
+}
+
+// ============================================================================
+// getvcol_nolist - Get vcol with list mode disabled
+// ============================================================================
+
+/// Get virtual cursor column in the current window, pretending 'list' is off.
+///
+/// Uses curwin and calls getvvcol or getvcol internally.
+///
+/// # Safety
+/// The `posp` parameter must be a valid position pointer.
+#[no_mangle]
+pub extern "C" fn rs_getvcol_nolist(posp: PosT) -> c_int {
+    unsafe {
+        let wp = nvim_get_curwin();
+        if wp.is_null() {
+            return 0;
+        }
+
+        // Save list mode
+        let list_save = nvim_win_get_p_list(wp);
+
+        // Temporarily disable list mode
+        nvim_win_set_p_list(wp, 0);
+
+        let mut vcol: c_int = 0;
+        if posp.coladd != 0 {
+            // Use getvvcol through C wrapper
+            rs_getvvcol(
+                wp,
+                posp,
+                std::ptr::null_mut(),
+                std::ptr::from_mut(&mut vcol),
+                std::ptr::null_mut(),
+            );
+        } else {
+            // Use getvcol through C wrapper
+            rs_getvcol_wrapper(
+                wp,
+                posp,
+                std::ptr::null_mut(),
+                std::ptr::from_mut(&mut vcol),
+                std::ptr::null_mut(),
+            );
+        }
+
+        // Restore list mode
+        nvim_win_set_p_list(wp, list_save);
+
+        vcol
+    }
+}
+
+extern "C" {
+    fn nvim_win_set_p_list(wp: WinHandle, val: c_int);
+    fn nvim_win_linetabsize(wp: WinHandle, lnum: c_int, line: *const c_char, len: c_int) -> c_int;
+}
+
+/// Wrapper to call getvcol from Rust (using C's init_charsize_arg).
+///
+/// # Safety
+/// All parameters must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_getvcol_wrapper(
+    wp: WinHandle,
+    pos: PosT,
+    start: *mut c_int,
+    cursor: *mut c_int,
+    end: *mut c_int,
+) {
+    // Call the C getvcol through its wrapper
+    nvim_getvcol_byval(wp, pos, start, cursor, end);
+}
+
+extern "C" {
+    fn nvim_getvcol_byval(
+        wp: WinHandle,
+        pos: PosT,
+        start: *mut c_int,
+        cursor: *mut c_int,
+        end: *mut c_int,
+    );
+}
+
+// ============================================================================
+// getvvcol - Virtual column in virtual mode
+// ============================================================================
+
+/// Get virtual column in virtual mode.
+///
+/// # Safety
+/// The `wp` parameter must be a valid window handle.
+/// The output pointers may be null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_getvvcol(
+    wp: WinHandle,
+    pos: PosT,
+    start: *mut c_int,
+    cursor: *mut c_int,
+    end: *mut c_int,
+) {
+    if wp.is_null() {
+        return;
+    }
+
+    unsafe {
+        if nvim_virtual_active(wp) != 0 {
+            // For virtual mode, only want one value
+            let mut col: c_int = 0;
+            nvim_getvcol_byval(
+                wp,
+                pos,
+                std::ptr::from_mut(&mut col),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            );
+
+            let mut coladd = pos.coladd;
+            let mut endadd: c_int = 0;
+
+            // Cannot put the cursor on part of a wide character.
+            let buf = nvim_win_get_w_buffer(wp);
+            let ptr = nvim_ml_get_buf(buf, pos.lnum);
+            let line_len = nvim_buf_get_line_len(buf.as_ptr(), pos.lnum);
+
+            if pos.col < line_len {
+                let c = nvim_utf_ptr2char(ptr.add(pos.col as usize));
+                if c != TAB && rs_vim_isprintc(c) != 0 {
+                    endadd = rs_ptr2cells(ptr.add(pos.col as usize)) - 1;
+                    if coladd > endadd {
+                        // past end of line
+                        endadd = 0;
+                    } else {
+                        coladd = 0;
+                    }
+                }
+            }
+            col += coladd;
+
+            if !start.is_null() {
+                *start = col;
+            }
+
+            if !cursor.is_null() {
+                *cursor = col;
+            }
+
+            if !end.is_null() {
+                *end = col + endadd;
+            }
+        } else {
+            nvim_getvcol_byval(wp, pos, start, cursor, end);
+        }
+    }
+}
+
+extern "C" {
+    fn rs_vim_isprintc(c: c_int) -> c_int;
+}
+
+// ============================================================================
+// getvcols - Leftmost and rightmost virtual columns for visual block
+// ============================================================================
+
+/// Get the leftmost and rightmost virtual column of pos1 and pos2.
+/// Used for Visual block mode.
+///
+/// # Safety
+/// The `wp` parameter must be a valid window handle.
+/// The output pointers must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_getvcols(
+    wp: WinHandle,
+    pos1: PosT,
+    pos2: PosT,
+    left: *mut c_int,
+    right: *mut c_int,
+) {
+    if wp.is_null() || left.is_null() || right.is_null() {
+        return;
+    }
+
+    unsafe {
+        let mut from1: c_int = 0;
+        let mut from2: c_int = 0;
+        let mut to1: c_int = 0;
+        let mut to2: c_int = 0;
+
+        if rs_ltoreq(pos1, pos2) != 0 && pos1.lnum < pos2.lnum
+            || (pos1.lnum == pos2.lnum && pos1.col < pos2.col)
+        {
+            rs_getvvcol(
+                wp,
+                pos1,
+                std::ptr::from_mut(&mut from1),
+                std::ptr::null_mut(),
+                std::ptr::from_mut(&mut to1),
+            );
+            rs_getvvcol(
+                wp,
+                pos2,
+                std::ptr::from_mut(&mut from2),
+                std::ptr::null_mut(),
+                std::ptr::from_mut(&mut to2),
+            );
+        } else {
+            rs_getvvcol(
+                wp,
+                pos2,
+                std::ptr::from_mut(&mut from1),
+                std::ptr::null_mut(),
+                std::ptr::from_mut(&mut to1),
+            );
+            rs_getvvcol(
+                wp,
+                pos1,
+                std::ptr::from_mut(&mut from2),
+                std::ptr::null_mut(),
+                std::ptr::from_mut(&mut to2),
+            );
+        }
+
+        *left = if from2 < from1 { from2 } else { from1 };
+
+        if to2 > to1 {
+            let p_sel_first = nvim_get_p_sel_first();
+            if p_sel_first == b'e' as c_char && from2 > to1 {
+                *right = from2 - 1;
+            } else {
+                *right = to2;
+            }
+        } else {
+            *right = to1;
+        }
+    }
+}
+
+// ============================================================================
+// plines_win - Screen lines for buffer line including filler
+// ============================================================================
+
+/// Return the number of window lines occupied by buffer line "lnum".
+/// Includes any filler lines.
+///
+/// # Safety
+/// The `wp` parameter must be a valid window handle.
+#[no_mangle]
+pub extern "C" fn rs_plines_win(wp: WinHandle, lnum: c_int, limit_winheight: c_int) -> c_int {
+    if wp.is_null() {
+        return 1;
+    }
+
+    unsafe {
+        // Check for filler lines above this buffer line.
+        let nofill = nvim_plines_win_nofill(wp, lnum, limit_winheight);
+        let fill = nvim_win_get_fill(wp, lnum);
+        nofill + fill
+    }
+}
+
+// ============================================================================
+// plines_win_nofill - Screen lines without filler
+// ============================================================================
+
+/// Return the number of window lines occupied by buffer line "lnum".
+/// Does not include filler lines.
+///
+/// # Safety
+/// The `wp` parameter must be a valid window handle.
+#[no_mangle]
+pub extern "C" fn rs_plines_win_nofill(
+    wp: WinHandle,
+    lnum: c_int,
+    limit_winheight: c_int,
+) -> c_int {
+    if wp.is_null() {
+        return 1;
+    }
+
+    unsafe {
+        // Check for concealed line
+        if nvim_decor_conceal_line(wp, lnum - 1, 0) != 0 {
+            return 0;
+        }
+
+        // Check for nowrap mode
+        if nvim_win_get_p_wrap(wp) == 0 {
+            return 1;
+        }
+
+        // Check for zero width
+        let view_width = nvim_win_get_view_width(wp);
+        if view_width == 0 {
+            return 1;
+        }
+
+        // Folded lines are handled just like an empty line.
+        if nvim_lineFolded(wp, lnum) != 0 {
+            return 1;
+        }
+
+        // Get lines from plines_win_nofold (calls through C which calls Rust)
+        let lines = nvim_plines_win_nofold(wp, lnum);
+        let view_height = nvim_win_get_view_height(wp);
+        if limit_winheight != 0 && lines > view_height {
+            view_height
+        } else {
+            lines
+        }
+    }
+}
+
+extern "C" {
+    fn nvim_plines_win_nofold(wp: WinHandle, lnum: c_int) -> c_int;
+}
+
+// ============================================================================
+// plines_win_full - Screen lines with fold and topfill handling
+// ============================================================================
+
+/// Get the number of screen lines buffer line "lnum" will take in window "wp".
+/// This takes care of both folds and topfill.
+///
+/// # Safety
+/// The `wp` parameter must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_plines_win_full(
+    wp: WinHandle,
+    lnum: c_int,
+    nextp: *mut c_int,
+    foldedp: *mut c_int,
+    cache: c_int,
+    limit_winheight: c_int,
+) -> c_int {
+    if wp.is_null() {
+        return 1;
+    }
+
+    unsafe {
+        let mut fold_first: c_int = lnum;
+        let mut fold_last: c_int = lnum;
+
+        // Check for folding
+        let folded = if cache != 0 {
+            nvim_hasFolding(
+                wp,
+                lnum,
+                std::ptr::from_mut(&mut fold_first),
+                std::ptr::from_mut(&mut fold_last),
+            ) != 0
+        } else {
+            nvim_hasFolding_nocache(
+                wp,
+                lnum,
+                std::ptr::from_mut(&mut fold_first),
+                std::ptr::from_mut(&mut fold_last),
+            ) != 0
+        };
+
+        if !foldedp.is_null() {
+            *foldedp = c_int::from(folded);
+        }
+
+        if !nextp.is_null() {
+            *nextp = fold_last;
+        }
+
+        // Use fold_first for filler calculations
+        let actual_lnum = fold_first;
+
+        // Calculate filler lines
+        let topline = nvim_win_get_topline(wp);
+        let filler_lines = if actual_lnum == topline {
+            nvim_win_get_topfill(wp)
+        } else {
+            nvim_win_get_fill(wp, actual_lnum)
+        };
+
+        // Check for concealed line
+        if nvim_decor_conceal_line(wp, actual_lnum - 1, 0) != 0 {
+            return filler_lines;
+        }
+
+        let nofill = if folded {
+            1
+        } else {
+            nvim_plines_win_nofill(wp, actual_lnum, limit_winheight)
+        };
+
+        nofill + filler_lines
+    }
+}
+
+extern "C" {
+    fn nvim_hasFolding_nocache(
+        wp: WinHandle,
+        lnum: c_int,
+        firstp: *mut c_int,
+        lastp: *mut c_int,
+    ) -> c_int;
+}
+
+// ============================================================================
+// plines_m_win - Screen lines for range of lines
+// ============================================================================
+
+/// Return number of window lines a physical line range will occupy in window "wp".
+/// Takes into account folding, 'wrap', topfill and filler lines beyond the end of the buffer.
+///
+/// # Safety
+/// The `wp` parameter must be a valid window handle.
+#[no_mangle]
+pub extern "C" fn rs_plines_m_win(wp: WinHandle, first: c_int, last: c_int, max: c_int) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        let mut count: c_int = 0;
+        let mut current = first;
+
+        while current <= last && count < max {
+            let mut next: c_int = current;
+            count += rs_plines_win_full(
+                wp,
+                current,
+                std::ptr::from_mut(&mut next),
+                std::ptr::null_mut(),
+                0, // no cache
+                0, // no limit
+            );
+            current = next + 1;
+        }
+
+        // Check for filler lines beyond end of buffer
+        let line_count = nvim_win_buf_line_count(wp) as c_int;
+        if current == line_count + 1 {
+            count += nvim_win_get_fill(wp, current);
+        }
+
+        if count < max {
+            count
+        } else {
+            max
+        }
+    }
+}
+
+// ============================================================================
+// win_linetabsize - Wrapper for linesize functions
+// ============================================================================
+
+/// Wrapper for win_linetabsize that uses C's init_charsize_arg.
+///
+/// # Safety
+/// All parameters must be valid.
+#[no_mangle]
+pub unsafe extern "C" fn rs_win_linetabsize(
+    wp: WinHandle,
+    lnum: c_int,
+    line: *const c_char,
+    len: c_int,
+) -> c_int {
+    if wp.is_null() || line.is_null() {
+        return 0;
+    }
+
+    unsafe { nvim_win_linetabsize(wp, lnum, line, len) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

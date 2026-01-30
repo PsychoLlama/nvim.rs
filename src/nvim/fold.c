@@ -298,6 +298,12 @@ bool lineFolded(win_T *const win, const linenr_T lnum)
   return fold_info(win, lnum).fi_lines != 0;
 }
 
+/// Wrapper for lineFolded for Rust FFI.
+int nvim_lineFolded(win_T *wp, linenr_T lnum)
+{
+  return lineFolded(wp, lnum) ? 1 : 0;
+}
+
 // fold_info() {{{2
 ///
 /// Count the number of lines that are folded at line number "lnum".

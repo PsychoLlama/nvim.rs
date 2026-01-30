@@ -952,3 +952,27 @@ int nvim_win_may_fill(win_T *wp)
 {
   return win_may_fill(wp) ? 1 : 0;
 }
+
+/// Wrapper for win_linetabsize() (accessor for Rust).
+int nvim_win_linetabsize(win_T *wp, linenr_T lnum, char *line, colnr_T len)
+{
+  return win_linetabsize(wp, lnum, line, len);
+}
+
+/// Wrapper for getvcol() with PosT structure by value (accessor for Rust).
+void nvim_getvcol_byval(win_T *wp, pos_T pos, colnr_T *start, colnr_T *cursor, colnr_T *end)
+{
+  getvcol(wp, &pos, start, cursor, end);
+}
+
+/// Set the p_list option for a window (accessor for Rust).
+void nvim_win_set_p_list(win_T *wp, int val)
+{
+  wp->w_p_list = val != 0;
+}
+
+/// Wrapper for hasFolding without cache (accessor for Rust).
+int nvim_hasFolding_nocache(win_T *wp, linenr_T lnum, linenr_T *firstp, linenr_T *lastp)
+{
+  return hasFoldingWin(wp, lnum, firstp, lastp, false, NULL) ? 1 : 0;
+}
