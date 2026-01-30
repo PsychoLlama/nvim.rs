@@ -82,6 +82,7 @@ extern void rs_cursor_correct_sms(win_T *wp);
 extern void rs_adjust_skipcol(void);
 extern void rs_set_topline(win_T *wp, linenr_T lnum);
 extern void rs_set_valid_virtcol(win_T *wp, colnr_T vcol);
+extern void rs_cursor_correct(win_T *wp);
 
 // Accessor for global scrolljump option
 OptInt nvim_get_p_sj(void)
@@ -1250,91 +1251,7 @@ void scroll_cursor_halfway(win_T *wp, bool atend, bool prefer_above)
 // When called topline must be valid!
 void cursor_correct(win_T *wp)
 {
-  // How many lines we would like to have above/below the cursor depends on
-  // whether the first/last line of the file is on screen.
-  int above_wanted = get_scrolloff_value(wp);
-  int below_wanted = get_scrolloff_value(wp);
-  if (mouse_dragging > 0) {
-    above_wanted = mouse_dragging - 1;
-    below_wanted = mouse_dragging - 1;
-  }
-  if (wp->w_topline == 1) {
-    above_wanted = 0;
-    int max_off = wp->w_view_height / 2;
-    below_wanted = MIN(below_wanted, max_off);
-  }
-  validate_botline(wp);
-  if (wp->w_botline == wp->w_buffer->b_ml.ml_line_count + 1
-      && mouse_dragging == 0) {
-    below_wanted = 0;
-    int max_off = (wp->w_view_height - 1) / 2;
-    above_wanted = MIN(above_wanted, max_off);
-  }
-
-  // If there are sufficient file-lines above and below the cursor, we can
-  // return now.
-  linenr_T cln = wp->w_cursor.lnum;  // Cursor Line Number
-  if (cln >= wp->w_topline + above_wanted
-      && cln < wp->w_botline - below_wanted
-      && !win_lines_concealed(wp)) {
-    return;
-  }
-
-  if (wp->w_p_sms && !wp->w_p_wrap) {
-    // 'smoothscroll' is active
-    if (wp->w_cline_height == wp->w_view_height) {
-      // The cursor line just fits in the window, don't scroll.
-      reset_skipcol(wp);
-      return;
-    }
-    // TODO(vim): If the cursor line doesn't fit in the window then only adjust w_skipcol.
-  }
-
-  // Narrow down the area where the cursor can be put by taking lines from
-  // the top and the bottom until:
-  // - the desired context lines are found
-  // - the lines from the top is past the lines from the bottom
-  linenr_T topline = wp->w_topline;
-  linenr_T botline = wp->w_botline - 1;
-  // count filler lines as context
-  int above = wp->w_topfill;  // screen lines above topline
-  int below = wp->w_filler_rows;  // screen lines below botline
-  while ((above < above_wanted || below < below_wanted) && topline < botline) {
-    if (below < below_wanted && (below <= above || above >= above_wanted)) {
-      below += plines_win_full(wp, botline, NULL, NULL, true, true);
-      hasFolding(wp, botline, &botline, NULL);
-      botline--;
-    }
-    if (above < above_wanted && (above < below || below >= below_wanted)) {
-      above += plines_win_nofill(wp, topline, true);
-      hasFolding(wp, topline, NULL, &topline);
-
-      // Count filler lines below this line as context.
-      if (topline < botline) {
-        above += win_get_fill(wp, topline + 1);
-      }
-      topline++;
-    }
-  }
-  if (topline == botline || botline == 0) {
-    wp->w_cursor.lnum = topline;
-  } else if (topline > botline) {
-    wp->w_cursor.lnum = botline;
-  } else {
-    if (cln < topline && wp->w_topline > 1) {
-      wp->w_cursor.lnum = topline;
-      wp->w_valid &=
-        ~(VALID_WROW|VALID_WCOL|VALID_CHEIGHT|VALID_CROW);
-    }
-    if (cln > botline && wp->w_botline <= wp->w_buffer->b_ml.ml_line_count) {
-      wp->w_cursor.lnum = botline;
-      wp->w_valid &=
-        ~(VALID_WROW|VALID_WCOL|VALID_CHEIGHT|VALID_CROW);
-    }
-  }
-  check_cursor_moved(wp);
-  wp->w_valid |= VALID_TOPLINE;
-  wp->w_viewport_invalid = true;
+  rs_cursor_correct(wp);
 }
 
 /// Decide how much overlap to use for page-up or page-down scrolling.
