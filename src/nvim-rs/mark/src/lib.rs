@@ -2544,3 +2544,347 @@ mod phase6_tests {
         assert_eq!(rs_mark_adjust_should_skip(5, 3, 1), 0); // amount_after != 0
     }
 }
+
+// =============================================================================
+// Phase 7: Ex Command Helpers
+// =============================================================================
+
+/// Result of parsing a delmarks range like "a-z".
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DelmarksRange {
+    /// Starting character of range
+    pub from: c_int,
+    /// Ending character of range (same as from for single char)
+    pub to: c_int,
+    /// 0 if valid, error code otherwise:
+    /// 1 = invalid range (different types or to < from)
+    /// 2 = invalid character
+    pub error: c_int,
+    /// Number of characters consumed (1 for single, 3 for range "a-z")
+    pub consumed: c_int,
+}
+
+/// Parse a mark character or range for :delmarks command.
+///
+/// Handles:
+/// - Single character: 'a', 'A', '0'
+/// - Range: 'a-z', 'A-Z', '0-9'
+/// - Special marks: '"', '^', '.', '[', ']', '<', '>'
+///
+/// # Arguments
+/// * `c` - First character
+/// * `next1` - Second character (for range detection)
+/// * `next2` - Third character (for range endpoint)
+///
+/// # Returns
+/// DelmarksRange with from/to and error/consumed info
+#[no_mangle]
+pub extern "C" fn rs_delmarks_parse_range(c: c_int, next1: c_int, next2: c_int) -> DelmarksRange {
+    let Ok(ch) = u8::try_from(c) else {
+        return DelmarksRange {
+            from: 0,
+            to: 0,
+            error: 2,
+            consumed: 0,
+        };
+    };
+
+    let is_lower = ascii_islower(ch);
+    let is_upper = ascii_isupper(ch);
+    let is_digit = ascii_isdigit(ch);
+
+    if is_lower || is_upper || is_digit {
+        // Check for range like "a-z"
+        if next1 == c_int::from(b'-') {
+            // Parse range
+            let Ok(end_ch) = u8::try_from(next2) else {
+                return DelmarksRange {
+                    from: c,
+                    to: c,
+                    error: 1,
+                    consumed: 1,
+                };
+            };
+
+            // Validate range: must be same type (lower-lower, upper-upper, digit-digit)
+            let valid = if is_lower {
+                ascii_islower(end_ch)
+            } else if is_digit {
+                ascii_isdigit(end_ch)
+            } else {
+                ascii_isupper(end_ch)
+            };
+
+            if !valid || next2 < c {
+                return DelmarksRange {
+                    from: c,
+                    to: c,
+                    error: 1,
+                    consumed: 1,
+                };
+            }
+
+            DelmarksRange {
+                from: c,
+                to: next2,
+                error: 0,
+                consumed: 3,
+            }
+        } else {
+            // Single character
+            DelmarksRange {
+                from: c,
+                to: c,
+                error: 0,
+                consumed: 1,
+            }
+        }
+    } else {
+        // Special marks
+        match ch {
+            b'"' | b'^' | b'.' | b'[' | b']' | b'<' | b'>' | b' ' => DelmarksRange {
+                from: c,
+                to: c,
+                error: 0,
+                consumed: 1,
+            },
+            b':' => {
+                // Readonly mark - no deletion but not an error
+                DelmarksRange {
+                    from: c,
+                    to: c,
+                    error: 0,
+                    consumed: 1,
+                }
+            }
+            _ => DelmarksRange {
+                from: 0,
+                to: 0,
+                error: 2,
+                consumed: 0,
+            },
+        }
+    }
+}
+
+/// Calculate the global mark index for :delmarks.
+///
+/// # Arguments
+/// * `c` - Mark character
+///
+/// # Returns
+/// Index in namedfm array, or -1 if not a global mark
+#[no_mangle]
+pub extern "C" fn rs_delmarks_global_idx(c: c_int) -> c_int {
+    let Ok(ch) = u8::try_from(c) else {
+        return -1;
+    };
+
+    if ascii_isdigit(ch) {
+        // '0'-'9' -> NMARKS + (0-9)
+        c_int::from(ch - b'0') + NMARKS as c_int
+    } else if ascii_isupper(ch) {
+        // 'A'-'Z' -> 0-25
+        c_int::from(ch - b'A')
+    } else {
+        -1
+    }
+}
+
+/// Determine the type of special mark for :delmarks deletion.
+///
+/// # Arguments
+/// * `c` - Mark character
+///
+/// # Returns
+/// Code indicating which buffer field to clear:
+/// - 0: Not a special mark
+/// - 1: b_last_cursor (")
+/// - 2: b_last_insert (^)
+/// - 3: b_last_change (.)
+/// - 4: b_op_start ([)
+/// - 5: b_op_end (])
+/// - 6: vi_start (<)
+/// - 7: vi_end (>)
+/// - 8: Readonly/skip (:)
+/// - 9: Space (skip)
+#[no_mangle]
+pub extern "C" fn rs_delmarks_special_type(c: c_int) -> c_int {
+    let Ok(ch) = u8::try_from(c) else {
+        return 0;
+    };
+
+    match ch {
+        b'"' => 1, // b_last_cursor
+        b'^' => 2, // b_last_insert
+        b'.' => 3, // b_last_change
+        b'[' => 4, // b_op_start
+        b']' => 5, // b_op_end
+        b'<' => 6, // vi_start
+        b'>' => 7, // vi_end
+        b':' => 8, // readonly, skip
+        b' ' => 9, // space, skip
+        _ => 0,    // not a special mark
+    }
+}
+
+/// Get the mark character to display for a given index.
+///
+/// For ex_marks output formatting.
+///
+/// # Arguments
+/// * `idx` - Mark index (0-25 for A-Z, 26-35 for 0-9)
+/// * `is_global` - Whether this is a global mark
+///
+/// # Returns
+/// The character to display
+#[no_mangle]
+pub extern "C" fn rs_marks_index_to_char(idx: c_int, is_global: c_int) -> c_int {
+    if is_global != 0 {
+        if idx >= NMARKS as c_int {
+            // 0-9
+            c_int::from(b'0') + idx - NMARKS as c_int
+        } else {
+            // A-Z
+            c_int::from(b'A') + idx
+        }
+    } else {
+        // a-z
+        c_int::from(b'a') + idx
+    }
+}
+
+/// Check if a mark should be shown based on the filter argument.
+///
+/// # Arguments
+/// * `mark_char` - The mark character
+/// * `filter_len` - Length of filter string (0 means show all)
+///
+/// # Returns
+/// Non-zero if mark should be shown (filter is empty or mark is in filter)
+#[no_mangle]
+pub extern "C" fn rs_marks_should_show(_mark_char: c_int, filter_len: c_int) -> c_int {
+    // If no filter, show all marks
+    // The actual character matching is done in C with vim_strchr
+    c_int::from(filter_len == 0)
+}
+
+// =============================================================================
+// Phase 7 Tests
+// =============================================================================
+
+#[cfg(test)]
+mod phase7_tests {
+    use super::*;
+
+    #[test]
+    fn test_delmarks_parse_single() {
+        // Single lowercase
+        let result = rs_delmarks_parse_range(c_int::from(b'a'), 0, 0);
+        assert_eq!(result.from, c_int::from(b'a'));
+        assert_eq!(result.to, c_int::from(b'a'));
+        assert_eq!(result.error, 0);
+        assert_eq!(result.consumed, 1);
+
+        // Single uppercase
+        let result = rs_delmarks_parse_range(c_int::from(b'Z'), 0, 0);
+        assert_eq!(result.error, 0);
+
+        // Single digit
+        let result = rs_delmarks_parse_range(c_int::from(b'5'), 0, 0);
+        assert_eq!(result.error, 0);
+    }
+
+    #[test]
+    fn test_delmarks_parse_range() {
+        // Valid lowercase range a-z
+        let result =
+            rs_delmarks_parse_range(c_int::from(b'a'), c_int::from(b'-'), c_int::from(b'z'));
+        assert_eq!(result.from, c_int::from(b'a'));
+        assert_eq!(result.to, c_int::from(b'z'));
+        assert_eq!(result.error, 0);
+        assert_eq!(result.consumed, 3);
+
+        // Valid digit range 0-5
+        let result =
+            rs_delmarks_parse_range(c_int::from(b'0'), c_int::from(b'-'), c_int::from(b'5'));
+        assert_eq!(result.error, 0);
+
+        // Invalid: mixed types a-Z
+        let result =
+            rs_delmarks_parse_range(c_int::from(b'a'), c_int::from(b'-'), c_int::from(b'Z'));
+        assert_eq!(result.error, 1);
+
+        // Invalid: reversed range z-a
+        let result =
+            rs_delmarks_parse_range(c_int::from(b'z'), c_int::from(b'-'), c_int::from(b'a'));
+        assert_eq!(result.error, 1);
+    }
+
+    #[test]
+    fn test_delmarks_parse_special() {
+        let special_marks = [b'"', b'^', b'.', b'[', b']', b'<', b'>'];
+        for &mark in &special_marks {
+            let result = rs_delmarks_parse_range(c_int::from(mark), 0, 0);
+            assert_eq!(result.error, 0);
+            assert_eq!(result.consumed, 1);
+        }
+
+        // Invalid special mark
+        let result = rs_delmarks_parse_range(c_int::from(b'@'), 0, 0);
+        assert_eq!(result.error, 2);
+    }
+
+    #[test]
+    fn test_delmarks_global_idx() {
+        // Uppercase A-Z -> 0-25
+        assert_eq!(rs_delmarks_global_idx(c_int::from(b'A')), 0);
+        assert_eq!(rs_delmarks_global_idx(c_int::from(b'Z')), 25);
+
+        // Digits 0-9 -> NMARKS + 0-9
+        assert_eq!(rs_delmarks_global_idx(c_int::from(b'0')), NMARKS as c_int);
+        assert_eq!(
+            rs_delmarks_global_idx(c_int::from(b'9')),
+            NMARKS as c_int + 9
+        );
+
+        // Lowercase - not a global mark
+        assert_eq!(rs_delmarks_global_idx(c_int::from(b'a')), -1);
+    }
+
+    #[test]
+    fn test_delmarks_special_type() {
+        assert_eq!(rs_delmarks_special_type(c_int::from(b'"')), 1);
+        assert_eq!(rs_delmarks_special_type(c_int::from(b'^')), 2);
+        assert_eq!(rs_delmarks_special_type(c_int::from(b'.')), 3);
+        assert_eq!(rs_delmarks_special_type(c_int::from(b'[')), 4);
+        assert_eq!(rs_delmarks_special_type(c_int::from(b']')), 5);
+        assert_eq!(rs_delmarks_special_type(c_int::from(b'<')), 6);
+        assert_eq!(rs_delmarks_special_type(c_int::from(b'>')), 7);
+        assert_eq!(rs_delmarks_special_type(c_int::from(b':')), 8);
+        assert_eq!(rs_delmarks_special_type(c_int::from(b' ')), 9);
+        assert_eq!(rs_delmarks_special_type(c_int::from(b'a')), 0);
+    }
+
+    #[test]
+    fn test_marks_index_to_char() {
+        // Global uppercase A-Z
+        assert_eq!(rs_marks_index_to_char(0, 1), c_int::from(b'A'));
+        assert_eq!(rs_marks_index_to_char(25, 1), c_int::from(b'Z'));
+
+        // Global digits 0-9
+        assert_eq!(
+            rs_marks_index_to_char(NMARKS as c_int, 1),
+            c_int::from(b'0')
+        );
+        assert_eq!(
+            rs_marks_index_to_char(NMARKS as c_int + 9, 1),
+            c_int::from(b'9')
+        );
+
+        // Local lowercase a-z
+        assert_eq!(rs_marks_index_to_char(0, 0), c_int::from(b'a'));
+        assert_eq!(rs_marks_index_to_char(25, 0), c_int::from(b'z'));
+    }
+}

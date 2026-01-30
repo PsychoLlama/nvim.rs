@@ -171,6 +171,20 @@ extern ColAdjustResult rs_mark_col_adjust(linenr_T pos_lnum, colnr_T pos_col, li
                                            colnr_T col_amount, int spaces_removed);
 extern int rs_mark_adjust_should_skip(linenr_T line1, linenr_T line2, linenr_T amount_after);
 
+// Ex command helper structures
+typedef struct {
+  int from;
+  int to;
+  int error;
+  int consumed;
+} DelmarksRange;
+
+// Ex command helper functions
+extern DelmarksRange rs_delmarks_parse_range(int c, int next1, int next2);
+extern int rs_delmarks_global_idx(int c);
+extern int rs_delmarks_special_type(int c);
+extern int rs_marks_index_to_char(int idx, int is_global);
+
 // =============================================================================
 // Rust wrapper functions
 // =============================================================================
