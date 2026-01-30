@@ -111,6 +111,7 @@ extern int rs_lcs_field_count(void);
 extern const char *rs_lcs_field_name(int idx);
 extern const char *rs_fcs_default(int idx);
 extern const char *rs_fcs_fallback(int idx);
+extern schar_T rs_get_encoded_char_adv(const char **p);
 
 static const char e_illegal_character_after_chr[]
   = N_("E535: Illegal character after <%c>");
@@ -2239,33 +2240,12 @@ static const char e_conflicts_with_value_of_listchars[]
 static const char e_conflicts_with_value_of_fillchars[]
   = N_("E835: Conflicts with value of 'fillchars'");
 
-/// Calls mb_cptr2char_adv(p) and returns the character.
+/// Calls utfc_ptr2schar(p) and returns the character.
 /// If "p" starts with "\x", "\u" or "\U" the hex or unicode value is used.
 /// Returns 0 for invalid hex or invalid UTF-8 byte.
 static schar_T get_encoded_char_adv(const char **p)
 {
-  const char *s = *p;
-
-  if (s[0] == '\\' && (s[1] == 'x' || s[1] == 'u' || s[1] == 'U')) {
-    int64_t num = 0;
-    for (int bytes = s[1] == 'x' ? 1 : s[1] == 'u' ? 2 : 4; bytes > 0; bytes--) {
-      *p += 2;
-      int n = hexhex2nr(*p);
-      if (n < 0) {
-        return 0;
-      }
-      num = num * 256 + n;
-    }
-    *p += 2;
-    return (char2cells((int)num) > 1) ? 0 : schar_from_char((int)num);
-  }
-
-  int clen = utfc_ptr2len(s);
-  int firstc;
-  schar_T c = utfc_ptr2schar(s, &firstc);
-  *p += clen;
-  // Invalid UTF-8 byte or doublewidth not allowed
-  return ((clen == 1 && firstc > 127) || char2cells(firstc) > 1) ? 0 : c;
+  return rs_get_encoded_char_adv(p);
 }
 
 struct chars_tab {

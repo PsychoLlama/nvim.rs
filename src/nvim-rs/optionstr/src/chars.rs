@@ -9,6 +9,28 @@
 
 use std::ffi::{c_char, c_int};
 
+// schar_T is uint32_t in C
+type ScharT = u32;
+
+// External function declarations
+extern "C" {
+    /// Convert a hex pair to a number (e.g., "FF" -> 255)
+    /// Returns -1 for invalid input
+    fn rs_hexhex2nr(p: *const c_char) -> c_int;
+
+    /// Get the display width of a unicode character
+    fn rs_char2cells(c: c_int) -> c_int;
+
+    /// Get the byte length of a UTF-8 character including composing characters
+    fn rs_utfc_ptr2len(p: *const c_char) -> c_int;
+
+    /// Convert a UTF-8 string to schar_T, also returns first codepoint
+    fn rs_utfc_ptr2schar(p: *const c_char, firstc: *mut c_int) -> ScharT;
+
+    /// Convert a unicode codepoint to schar_T
+    fn rs_schar_from_char(c: c_int) -> ScharT;
+}
+
 // =============================================================================
 // Fillchars Field Names
 // =============================================================================
@@ -214,6 +236,82 @@ pub extern "C" fn rs_fcs_fallback(idx: c_int) -> *const c_char {
         _ => return std::ptr::null(),
     };
     fallback.as_ptr().cast::<c_char>()
+}
+
+// =============================================================================
+// Character Parsing for fillchars/listchars
+// =============================================================================
+
+/// Parse an encoded character and advance the pointer.
+///
+/// Calls `utfc_ptr2schar(p)` and returns the character.
+/// If "p" starts with "\x", "\u" or "\U" the hex or unicode value is used:
+/// - `\xNN` - single hex byte
+/// - `\uNNNN` - 2-byte unicode (4 hex digits)
+/// - `\UNNNNNNNN` - 4-byte unicode (8 hex digits)
+///
+/// Returns 0 for:
+/// - Invalid hex sequences
+/// - Invalid UTF-8 bytes
+/// - Double-width characters (not allowed in fillchars/listchars)
+///
+/// # Safety
+/// - `p` must be a valid pointer to a pointer to a null-terminated C string
+/// - The inner pointer will be advanced past the parsed character
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_encoded_char_adv(p: *mut *const c_char) -> ScharT {
+    if p.is_null() || (*p).is_null() {
+        return 0;
+    }
+
+    let s = *p;
+    let b0 = *s as u8;
+    let b1 = *s.add(1) as u8;
+
+    // Check for escape sequences: \x, \u, \U
+    if b0 == b'\\' && (b1 == b'x' || b1 == b'u' || b1 == b'U') {
+        // Determine number of bytes to read based on escape type
+        let bytes: i32 = match b1 {
+            b'x' => 1, // \xNN - 1 byte (2 hex digits)
+            b'u' => 2, // \uNNNN - 2 bytes (4 hex digits)
+            b'U' => 4, // \UNNNNNNNN - 4 bytes (8 hex digits)
+            _ => unreachable!(),
+        };
+
+        let mut num: i64 = 0;
+        for _ in 0..bytes {
+            // Skip 2 chars (\x, \u, or \U on first iteration, then NN pairs)
+            *p = (*p).add(2);
+            let n = rs_hexhex2nr(*p);
+            if n < 0 {
+                return 0; // Invalid hex
+            }
+            num = num * 256 + i64::from(n);
+        }
+        // Skip final 2 hex digits
+        *p = (*p).add(2);
+
+        // Double-width characters are not allowed
+        if rs_char2cells(num as c_int) > 1 {
+            return 0;
+        }
+
+        return rs_schar_from_char(num as c_int);
+    }
+
+    // Regular UTF-8 character
+    let clen = rs_utfc_ptr2len(s);
+    let mut firstc: c_int = 0;
+    let c = rs_utfc_ptr2schar(s, &mut firstc);
+
+    *p = (*p).add(clen as usize);
+
+    // Invalid UTF-8 byte (single byte >= 128) or double-width not allowed
+    if (clen == 1 && firstc > 127) || rs_char2cells(firstc) > 1 {
+        return 0;
+    }
+
+    c
 }
 
 #[cfg(test)]
