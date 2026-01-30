@@ -83,6 +83,7 @@ extern void rs_adjust_skipcol(void);
 extern void rs_set_topline(win_T *wp, linenr_T lnum);
 extern void rs_set_valid_virtcol(win_T *wp, colnr_T vcol);
 extern void rs_cursor_correct(win_T *wp);
+extern int rs_get_scroll_overlap(int dir);
 
 // Accessor for global scrolljump option
 OptInt nvim_get_p_sj(void)
@@ -1266,56 +1267,7 @@ void cursor_correct(win_T *wp)
 ///  l3                            etc.
 static int get_scroll_overlap(Direction dir)
 {
-  lineoff_T loff;
-  int min_height = curwin->w_view_height - 2;
-
-  validate_botline(curwin);
-  if ((dir == BACKWARD && curwin->w_topline == 1)
-      || (dir == FORWARD && curwin->w_botline > curbuf->b_ml.ml_line_count)) {
-    return min_height + 2;  // no overlap, still handle 'smoothscroll'
-  }
-
-  loff.lnum = dir == FORWARD ? curwin->w_botline : curwin->w_topline - 1;
-  loff.fill = win_get_fill(curwin, loff.lnum + (dir == BACKWARD))
-              - (dir == FORWARD ? curwin->w_filler_rows : curwin->w_topfill);
-  loff.height = loff.fill > 0 ? 1 : plines_win_nofill(curwin, loff.lnum, true);
-
-  int h1 = loff.height;
-  if (h1 > min_height) {
-    return min_height + 2;  // no overlap
-  }
-  if (dir == FORWARD) {
-    topline_back(curwin, &loff);
-  } else {
-    botline_forw(curwin, &loff);
-  }
-
-  int h2 = loff.height;
-  if (h2 == MAXCOL || h2 + h1 > min_height) {
-    return min_height + 2;  // no overlap
-  }
-  if (dir == FORWARD) {
-    topline_back(curwin, &loff);
-  } else {
-    botline_forw(curwin, &loff);
-  }
-
-  int h3 = loff.height;
-  if (h3 == MAXCOL || h3 + h2 > min_height) {
-    return min_height + 2;  // no overlap
-  }
-  if (dir == FORWARD) {
-    topline_back(curwin, &loff);
-  } else {
-    botline_forw(curwin, &loff);
-  }
-
-  int h4 = loff.height;
-  if (h4 == MAXCOL || h4 + h3 + h2 > min_height || h3 + h2 + h1 > min_height) {
-    return min_height + 1;  // 1 line overlap
-  } else {
-    return min_height;      // 2 lines overlap
-  }
+  return rs_get_scroll_overlap((int)dir);
 }
 
 /// Scroll "count" lines with 'smoothscroll' in direction "dir". Return true

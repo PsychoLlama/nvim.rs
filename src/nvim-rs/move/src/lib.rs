@@ -2883,6 +2883,127 @@ pub unsafe extern "C" fn rs_cursor_correct(wp: WinHandle) {
 }
 
 // =============================================================================
+// Direction Constants
+// =============================================================================
+
+/// Direction: Forward (matches C `FORWARD = 1`).
+const DIRECTION_FORWARD: c_int = 1;
+
+/// Direction: Backward (matches C `BACKWARD = -1`).
+const DIRECTION_BACKWARD: c_int = -1;
+
+// =============================================================================
+// Page Scroll Overlap Calculation
+// =============================================================================
+
+/// Calculate overlap for page-up/page-down scrolling.
+///
+/// Decides how much overlap to use for page-up or page-down scrolling.
+/// This is symmetric, so that doing both keeps the same lines displayed.
+/// Three lines are examined to determine optimal overlap.
+///
+/// # Arguments
+/// * `dir` - Direction: `DIRECTION_FORWARD` (1) or `DIRECTION_BACKWARD` (-1)
+///
+/// # Returns
+/// The number of lines to use for the scroll amount (includes overlap adjustment).
+///
+/// # Safety
+/// Accesses curwin and curbuf globals.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_scroll_overlap(dir: c_int) -> c_int {
+    let wp = nvim_get_curwin();
+    if wp.is_null() {
+        return 0;
+    }
+
+    let view_height = nvim_win_get_view_height(wp);
+    let min_height = view_height - 2;
+
+    nvim_validate_botline(wp);
+
+    let topline = nvim_win_get_topline(wp);
+    let botline = nvim_win_get_botline(wp);
+    let line_count = nvim_curbuf_line_count();
+
+    // Check if we're at the buffer boundaries
+    if (dir == DIRECTION_BACKWARD && topline == 1)
+        || (dir == DIRECTION_FORWARD && botline > line_count)
+    {
+        return min_height + 2; // no overlap, still handle 'smoothscroll'
+    }
+
+    // Initialize lineoff for the edge line
+    let initial_lnum = if dir == DIRECTION_FORWARD {
+        botline
+    } else {
+        topline - 1
+    };
+
+    let fill_base = nvim_win_get_fill(wp, initial_lnum + c_int::from(dir == DIRECTION_BACKWARD));
+    let fill_subtract = if dir == DIRECTION_FORWARD {
+        nvim_win_get_filler_rows(wp)
+    } else {
+        nvim_win_get_topfill(wp)
+    };
+
+    let mut loff = LineOff {
+        lnum: initial_lnum,
+        fill: fill_base - fill_subtract,
+        height: 0,
+    };
+
+    loff.height = if loff.fill > 0 {
+        1
+    } else {
+        nvim_plines_win_nofill(wp, loff.lnum, 1)
+    };
+
+    let h1 = loff.height;
+    if h1 > min_height {
+        return min_height + 2; // no overlap
+    }
+
+    // Move to next line
+    if dir == DIRECTION_FORWARD {
+        rs_topline_back(wp, std::ptr::addr_of_mut!(loff));
+    } else {
+        rs_botline_forw(wp, std::ptr::addr_of_mut!(loff));
+    }
+
+    let h2 = loff.height;
+    if h2 == MAXCOL || h2 + h1 > min_height {
+        return min_height + 2; // no overlap
+    }
+
+    // Move to next line
+    if dir == DIRECTION_FORWARD {
+        rs_topline_back(wp, std::ptr::addr_of_mut!(loff));
+    } else {
+        rs_botline_forw(wp, std::ptr::addr_of_mut!(loff));
+    }
+
+    let h3 = loff.height;
+    if h3 == MAXCOL || h3 + h2 > min_height {
+        return min_height + 2; // no overlap
+    }
+
+    // Move to next line
+    if dir == DIRECTION_FORWARD {
+        rs_topline_back(wp, std::ptr::addr_of_mut!(loff));
+    } else {
+        rs_botline_forw(wp, std::ptr::addr_of_mut!(loff));
+    }
+
+    let h4 = loff.height;
+    if h4 == MAXCOL || h4 + h3 + h2 > min_height || h3 + h2 + h1 > min_height {
+        min_height + 1 // 1 line overlap
+    } else {
+        min_height // 2 lines overlap
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 
