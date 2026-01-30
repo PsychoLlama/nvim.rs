@@ -131,6 +131,15 @@ extern void rs_fmark_set_fnum(fmark_T *fm, int fnum);
 extern int rs_visual_mark_select(linenr_T start_lnum, colnr_T start_col,
                                   linenr_T end_lnum, colnr_T end_col, int name);
 
+// Jumplist and changelist operations
+extern int rs_jumplist_new_len(int current_len);
+extern int rs_jumplist_is_full(int current_len);
+extern int rs_jumplist_stack_trim(int idx, int len);
+extern int rs_jumplist_calc_idx(int current_idx, int current_len, int count);
+extern int rs_changelist_calc_idx(int current_idx, int changelist_len, int count);
+extern int rs_mark_target_type(int name);
+extern linenr_T rs_pos_clamp_lnum_min(linenr_T lnum);
+
 // =============================================================================
 // Rust wrapper functions
 // =============================================================================
@@ -561,23 +570,24 @@ void setpcmark(void)
   curwin->w_prev_pcmark = curwin->w_pcmark;
   curwin->w_pcmark = curwin->w_cursor;
 
-  if (curwin->w_pcmark.lnum == 0) {
-    curwin->w_pcmark.lnum = 1;
-  }
+  // Use Rust helper to ensure lnum is at least 1
+  curwin->w_pcmark.lnum = rs_pos_clamp_lnum_min(curwin->w_pcmark.lnum);
 
   if (jop_flags & kOptJopFlagStack) {
     // jumpoptions=stack: if we're somewhere in the middle of the jumplist
-    // discard everything after the current index.
-    if (curwin->w_jumplistidx < curwin->w_jumplistlen - 1) {
-      // Discard the rest of the jumplist by cutting the length down to
-      // contain nothing beyond the current index.
-      curwin->w_jumplistlen = curwin->w_jumplistidx + 1;
+    // discard everything after the current index. Use Rust helper to calculate trim length.
+    int trim_len = rs_jumplist_stack_trim(curwin->w_jumplistidx, curwin->w_jumplistlen);
+    if (trim_len >= 0) {
+      curwin->w_jumplistlen = trim_len;
     }
   }
 
+  // Use Rust helper to check if jumplist is full and calculate new length
+  bool is_full = rs_jumplist_is_full(curwin->w_jumplistlen);
+  curwin->w_jumplistlen = rs_jumplist_new_len(curwin->w_jumplistlen);
+
   // If jumplist is full: remove oldest entry
-  if (++curwin->w_jumplistlen > JUMPLISTSIZE) {
-    curwin->w_jumplistlen = JUMPLISTSIZE;
+  if (is_full) {
     free_xfmark(curwin->w_jumplist[0]);
     memmove(&curwin->w_jumplist[0], &curwin->w_jumplist[1],
             (JUMPLISTSIZE - 1) * sizeof(curwin->w_jumplist[0]));

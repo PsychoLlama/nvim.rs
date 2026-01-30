@@ -1637,3 +1637,274 @@ mod phase2_tests {
         assert_eq!(rs_visual_mark_select(5, 0, 0, 0, c_int::from(b'>')), 0);
     }
 }
+
+// =============================================================================
+// Phase 3 & 5: Jumplist and Changelist Operations
+// =============================================================================
+
+/// Maximum number of marks in jump list
+pub const JUMPLISTSIZE: c_int = 100;
+
+/// Maximum number of marks in change list
+pub const GETMARKLIST_MAXCHANGES: c_int = 100;
+
+/// Calculate the new jumplist length after incrementing.
+///
+/// Implements the logic: if ++len > JUMPLISTSIZE, len = JUMPLISTSIZE
+///
+/// # Arguments
+/// * `current_len` - Current jumplist length
+///
+/// # Returns
+/// New jumplist length (clamped to JUMPLISTSIZE)
+#[no_mangle]
+pub extern "C" fn rs_jumplist_new_len(current_len: c_int) -> c_int {
+    let new_len = current_len + 1;
+    if new_len > JUMPLISTSIZE {
+        JUMPLISTSIZE
+    } else {
+        new_len
+    }
+}
+
+/// Check if jumplist is full and needs oldest entry removed.
+///
+/// # Arguments
+/// * `current_len` - Current jumplist length before increment
+///
+/// # Returns
+/// 1 if full (oldest entry should be removed), 0 otherwise
+#[no_mangle]
+pub extern "C" fn rs_jumplist_is_full(current_len: c_int) -> c_int {
+    c_int::from(current_len >= JUMPLISTSIZE)
+}
+
+/// Calculate jumplist trim length for stack mode.
+///
+/// When jumpoptions=stack, discard everything after current index.
+///
+/// # Arguments
+/// * `idx` - Current jumplist index
+/// * `len` - Current jumplist length
+///
+/// # Returns
+/// New length if trim needed, or -1 if no trim needed
+#[no_mangle]
+pub extern "C" fn rs_jumplist_stack_trim(idx: c_int, len: c_int) -> c_int {
+    if idx < len - 1 {
+        idx + 1
+    } else {
+        -1 // No trim needed
+    }
+}
+
+/// Calculate new jumplist index after a jump.
+///
+/// # Arguments
+/// * `current_idx` - Current jumplist index
+/// * `current_len` - Current jumplist length
+/// * `count` - Jump count (negative for backward, positive for forward)
+///
+/// # Returns
+/// New index, or -1 if out of bounds
+#[no_mangle]
+pub extern "C" fn rs_jumplist_calc_idx(
+    current_idx: c_int,
+    current_len: c_int,
+    count: c_int,
+) -> c_int {
+    let new_idx = current_idx + count;
+    if new_idx < 0 || new_idx >= current_len {
+        -1
+    } else {
+        new_idx
+    }
+}
+
+/// Calculate new changelist index after navigation.
+///
+/// # Arguments
+/// * `current_idx` - Current changelist index
+/// * `changelist_len` - Changelist length
+/// * `count` - Navigation count (negative for backward, positive for forward)
+///
+/// # Returns
+/// (new_idx, clamped) - new_idx is the calculated index, clamped indicates if the
+/// value was clamped to bounds. Returns (-1, 0) if navigation not possible.
+#[no_mangle]
+pub extern "C" fn rs_changelist_calc_idx(
+    current_idx: c_int,
+    changelist_len: c_int,
+    count: c_int,
+) -> c_int {
+    let n = current_idx;
+    if n + count < 0 {
+        if n == 0 {
+            return -1; // Can't navigate further back
+        }
+        return 0; // Clamp to start
+    } else if n + count >= changelist_len {
+        if n == changelist_len - 1 {
+            return -1; // Can't navigate further forward
+        }
+        return changelist_len - 1; // Clamp to end
+    }
+    n + count
+}
+
+/// Determine the target mark based on mark name.
+///
+/// Returns a code indicating which mark storage should be used:
+/// - 0: Invalid/not handled
+/// - 1: Global mark (A-Z, 0-9)
+/// - 2: Local named mark (a-z)
+/// - 3: Jump mark (' or `)
+/// - 4: Last cursor mark (")
+/// - 5: Sentence start ([)
+/// - 6: Sentence end (])
+/// - 7: Visual start (<)
+/// - 8: Visual end (>)
+/// - 9: Last insert (^)
+/// - 10: Last change (.)
+/// - 11: Prompt mark (:)
+#[no_mangle]
+pub extern "C" fn rs_mark_target_type(name: c_int) -> c_int {
+    let Ok(c) = u8::try_from(name) else {
+        return 0;
+    };
+
+    if ascii_isupper(c) || ascii_isdigit(c) {
+        1 // Global mark
+    } else if ascii_islower(c) {
+        2 // Local named mark
+    } else {
+        match c {
+            b'\'' | b'`' => 3, // Jump mark
+            b'"' => 4,         // Last cursor
+            b'[' => 5,         // Sentence start
+            b']' => 6,         // Sentence end
+            b'<' => 7,         // Visual start
+            b'>' => 8,         // Visual end
+            b'^' => 9,         // Last insert
+            b'.' => 10,        // Last change
+            b':' => 11,        // Prompt mark
+            _ => 0,            // Not handled
+        }
+    }
+}
+
+/// Position clamp operation for mark setting.
+///
+/// Ensures lnum is at least 1 (valid for Vim positions).
+#[no_mangle]
+pub extern "C" fn rs_pos_clamp_lnum_min(lnum: LinenrT) -> LinenrT {
+    if lnum < 1 {
+        1
+    } else {
+        lnum
+    }
+}
+
+// =============================================================================
+// Phase 3 & 5 Tests
+// =============================================================================
+
+#[cfg(test)]
+mod phase35_tests {
+    use super::*;
+
+    #[test]
+    fn test_jumplist_new_len() {
+        // Normal increment
+        assert_eq!(rs_jumplist_new_len(0), 1);
+        assert_eq!(rs_jumplist_new_len(50), 51);
+        assert_eq!(rs_jumplist_new_len(99), 100);
+
+        // At max, should stay at max
+        assert_eq!(rs_jumplist_new_len(100), 100);
+        assert_eq!(rs_jumplist_new_len(200), 100);
+    }
+
+    #[test]
+    fn test_jumplist_is_full() {
+        assert_eq!(rs_jumplist_is_full(99), 0);
+        assert_ne!(rs_jumplist_is_full(100), 0);
+        assert_ne!(rs_jumplist_is_full(150), 0);
+    }
+
+    #[test]
+    fn test_jumplist_stack_trim() {
+        // idx < len - 1: should trim
+        assert_eq!(rs_jumplist_stack_trim(5, 10), 6);
+        assert_eq!(rs_jumplist_stack_trim(0, 10), 1);
+
+        // idx >= len - 1: no trim needed
+        assert_eq!(rs_jumplist_stack_trim(9, 10), -1);
+        assert_eq!(rs_jumplist_stack_trim(10, 10), -1);
+    }
+
+    #[test]
+    fn test_jumplist_calc_idx() {
+        // Valid jumps
+        assert_eq!(rs_jumplist_calc_idx(5, 10, -2), 3);
+        assert_eq!(rs_jumplist_calc_idx(5, 10, 2), 7);
+        assert_eq!(rs_jumplist_calc_idx(0, 10, 0), 0);
+
+        // Out of bounds
+        assert_eq!(rs_jumplist_calc_idx(0, 10, -1), -1);
+        assert_eq!(rs_jumplist_calc_idx(9, 10, 1), -1);
+    }
+
+    #[test]
+    fn test_changelist_calc_idx() {
+        // Valid navigation
+        assert_eq!(rs_changelist_calc_idx(5, 10, -2), 3);
+        assert_eq!(rs_changelist_calc_idx(5, 10, 2), 7);
+
+        // Clamp to start
+        assert_eq!(rs_changelist_calc_idx(2, 10, -5), 0);
+
+        // Clamp to end
+        assert_eq!(rs_changelist_calc_idx(7, 10, 5), 9);
+
+        // Already at boundary, can't navigate
+        assert_eq!(rs_changelist_calc_idx(0, 10, -1), -1);
+        assert_eq!(rs_changelist_calc_idx(9, 10, 1), -1);
+    }
+
+    #[test]
+    fn test_mark_target_type() {
+        // Global marks
+        assert_eq!(rs_mark_target_type(c_int::from(b'A')), 1);
+        assert_eq!(rs_mark_target_type(c_int::from(b'Z')), 1);
+        assert_eq!(rs_mark_target_type(c_int::from(b'0')), 1);
+
+        // Local named marks
+        assert_eq!(rs_mark_target_type(c_int::from(b'a')), 2);
+        assert_eq!(rs_mark_target_type(c_int::from(b'z')), 2);
+
+        // Special marks
+        assert_eq!(rs_mark_target_type(c_int::from(b'\'')), 3);
+        assert_eq!(rs_mark_target_type(c_int::from(b'`')), 3);
+        assert_eq!(rs_mark_target_type(c_int::from(b'"')), 4);
+        assert_eq!(rs_mark_target_type(c_int::from(b'[')), 5);
+        assert_eq!(rs_mark_target_type(c_int::from(b']')), 6);
+        assert_eq!(rs_mark_target_type(c_int::from(b'<')), 7);
+        assert_eq!(rs_mark_target_type(c_int::from(b'>')), 8);
+        assert_eq!(rs_mark_target_type(c_int::from(b'^')), 9);
+        assert_eq!(rs_mark_target_type(c_int::from(b'.')), 10);
+        assert_eq!(rs_mark_target_type(c_int::from(b':')), 11);
+
+        // Invalid
+        assert_eq!(rs_mark_target_type(c_int::from(b'@')), 0);
+        assert_eq!(rs_mark_target_type(-1), 0);
+    }
+
+    #[test]
+    fn test_pos_clamp_lnum_min() {
+        assert_eq!(rs_pos_clamp_lnum_min(5), 5);
+        assert_eq!(rs_pos_clamp_lnum_min(1), 1);
+        assert_eq!(rs_pos_clamp_lnum_min(0), 1);
+        assert_eq!(rs_pos_clamp_lnum_min(-1), 1);
+    }
+}
