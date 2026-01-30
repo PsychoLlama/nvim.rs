@@ -60,6 +60,7 @@ extern void rs_f_assert_beeps(typval_T *argvars, typval_T *rettv);
 extern void rs_f_assert_nobeep(typval_T *argvars, typval_T *rettv);
 extern void rs_f_assert_exception(typval_T *argvars, typval_T *rettv);
 extern void rs_f_assert_inrange(typval_T *argvars, typval_T *rettv);
+extern void rs_f_test_garbagecollect_now(typval_T *argvars, typval_T *rettv);
 
 // =============================================================================
 // C accessor functions for Rust
@@ -156,6 +157,12 @@ void nvim_testing_format_range_float(char *buf, size_t size, double lower, doubl
   vim_snprintf(buf, size, "range %g - %g,", lower, upper);
 }
 
+/// Wrapper for gettext translation.
+const char *nvim_testing_gettext(const char *s)
+{
+  return _(s);
+}
+
 /// Fill the gap with dict diff info (keep complex diffing logic in C for now).
 /// This handles the dictionary comparison and writes the encoded expected value.
 void nvim_testing_fill_dict_diff(garray_T *gap, typval_T *exp_tv, typval_T *got_tv, int *omitted)
@@ -234,8 +241,6 @@ static const char e_assert_fails_fourth_argument[]
   = N_("E1115: \"assert_fails()\" fourth argument must be a number");
 static const char e_assert_fails_fifth_argument[]
   = N_("E1116: \"assert_fails()\" fifth argument must be a string");
-static const char e_calling_test_garbagecollect_now_while_v_testing_is_not_set[]
-  = N_("E1142: Calling test_garbagecollect_now() while v:testing is not set");
 
 /// Prepare "gap" for an assert error and add the sourcing position.
 static void prepare_assert_error(garray_T *gap)
@@ -919,13 +924,7 @@ void f_assert_true(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// "test_garbagecollect_now()" function
 void f_test_garbagecollect_now(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  // This is dangerous, any Lists and Dicts used internally may be freed
-  // while still in use.
-  if (!get_vim_var_nr(VV_TESTING)) {
-    emsg(_(e_calling_test_garbagecollect_now_while_v_testing_is_not_set));
-  } else {
-    garbage_collect(true);
-  }
+  rs_f_test_garbagecollect_now(argvars, rettv);
 }
 
 /// "test_write_list_log()" function

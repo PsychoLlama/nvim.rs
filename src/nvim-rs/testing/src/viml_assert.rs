@@ -508,6 +508,14 @@ extern "C" {
     // Type checking functions
     fn tv_check_for_float_or_nr_arg(argvars: TypevalHandle, idx: c_int) -> c_int;
     fn tv_check_for_opt_string_arg(argvars: TypevalHandle, idx: c_int) -> c_int;
+
+    // Garbage collection
+    fn get_vim_var_nr(idx: c_int) -> i64;
+    fn garbage_collect(testing: c_int);
+    fn emsg(s: *const c_char) -> c_int;
+
+    // Gettext translation
+    fn nvim_testing_gettext(s: *const c_char) -> *const c_char;
 }
 
 // BoolVarValue constants
@@ -604,6 +612,7 @@ const NUMBUFLEN: usize = 65;
 
 // Vim variable indices
 const VV_EXCEPTION: c_int = 16; // v:exception
+const VV_TESTING: c_int = 35; // v:testing
 
 /// Implementation for assert_beeps() and assert_nobeep().
 fn assert_beeps(argvars: TypevalHandle, no_beep: bool) -> c_int {
@@ -1021,6 +1030,30 @@ pub unsafe extern "C" fn rs_f_assert_exception(argvars: TypevalHandle, rettv: Ty
 pub unsafe extern "C" fn rs_f_assert_inrange(argvars: TypevalHandle, rettv: TypevalHandleMut) {
     // Type checking is done in C wrapper
     set_rettv_number(rettv, i64::from(assert_inrange_impl(argvars)));
+}
+
+/// `test_garbagecollect_now()` function implementation.
+///
+/// This is dangerous, any Lists and Dicts used internally may be freed
+/// while still in use.
+///
+/// # Safety
+///
+/// - `argvars` must point to a valid array of `typval_T`.
+/// - `rettv` must point to a valid `typval_T` for the return value.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_test_garbagecollect_now(
+    _argvars: TypevalHandle,
+    _rettv: TypevalHandleMut,
+) {
+    if get_vim_var_nr(VV_TESTING) == 0 {
+        let msg = nvim_testing_gettext(
+            c"E1142: Calling test_garbagecollect_now() while v:testing is not set".as_ptr(),
+        );
+        emsg(msg);
+    } else {
+        garbage_collect(1); // true
+    }
 }
 
 /// `assert_report(msg)` function implementation.
