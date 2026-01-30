@@ -73,6 +73,15 @@ impl CursorPos {
 pub const MAXCOL: i32 = i32::MAX;
 
 // =============================================================================
+// Return Value Constants
+// =============================================================================
+
+/// Success return value
+pub const OK: c_int = 1;
+/// Failure return value
+pub const FAIL: c_int = 0;
+
+// =============================================================================
 // Virtual Edit Flags (from option_vars.h)
 // =============================================================================
 
@@ -153,6 +162,22 @@ extern "C" {
 
     /// Wrapper for `virtual_active(win)`
     fn nvim_virtual_active_win(wp: WinHandle) -> bool;
+
+    // -------------------------------------------------------------------------
+    // Column Advancement Functions
+    // -------------------------------------------------------------------------
+
+    /// Wrapper for `getvpos` - advances cursor to screen column
+    fn nvim_getvpos(wp: WinHandle, pos: *mut CursorPos, wcol: i32) -> c_int;
+
+    /// Check if character at position is TAB
+    fn nvim_char_at_pos_is_tab(wp: WinHandle, pos: *const CursorPos) -> bool;
+
+    /// Clear `VALID_VIRTCOL` flag for window
+    fn nvim_win_clear_valid_virtcol(wp: WinHandle);
+
+    /// Get window cursor pointer (`wp->w_cursor`)
+    fn nvim_win_get_cursor_ptr(wp: WinHandle) -> *mut CursorPos;
 }
 
 // =============================================================================
@@ -500,6 +525,58 @@ pub unsafe extern "C" fn rs_getviscol2(col: i32, coladd: i32) -> c_int {
         std::ptr::null_mut(),
     );
     x
+}
+
+// =============================================================================
+// Column Advancement Functions
+// =============================================================================
+
+/// Return in `pos` the position of the cursor advanced to screen column `wcol`.
+///
+/// # Arguments
+/// * `wp` - Window handle
+/// * `pos` - Position to update
+/// * `wcol` - Target screen column
+///
+/// # Returns
+/// `OK` if desired column is reached, `FAIL` if not.
+///
+/// # Safety
+/// `wp` and `pos` must be valid pointers.
+#[no_mangle]
+pub unsafe extern "C" fn rs_getvpos(wp: WinHandle, pos: *mut CursorPos, wcol: i32) -> c_int {
+    nvim_getvpos(wp, pos, wcol)
+}
+
+/// Try to advance the cursor to the specified screen column.
+///
+/// If virtual editing is enabled, fine tunes the cursor position.
+/// All virtual positions off the end of a line share a cursor.col value
+/// (equal to strlen(line)), beginning at coladd 0.
+///
+/// # Arguments
+/// * `wp` - Window handle
+/// * `wcol` - Target screen column
+///
+/// # Returns
+/// `OK` if desired column is reached, `FAIL` if not.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_coladvance(wp: WinHandle, wcol: i32) -> c_int {
+    let cursor = nvim_win_get_cursor_ptr(wp);
+    let rc = nvim_getvpos(wp, cursor, wcol);
+
+    if wcol == MAXCOL || rc == FAIL {
+        nvim_win_clear_valid_virtcol(wp);
+    } else if !nvim_char_at_pos_is_tab(wp, cursor) {
+        // Virtcol is valid when not on a TAB
+        // Note: curwin is used here to match C behavior
+        let curwin = nvim_cursor_get_curwin();
+        nvim_set_valid_virtcol(curwin, wcol);
+    }
+    rc
 }
 
 // =============================================================================

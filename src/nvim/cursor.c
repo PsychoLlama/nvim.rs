@@ -36,6 +36,8 @@
 extern int rs_gchar_cursor(void);
 extern int rs_getviscol(void);
 extern int rs_getviscol2(colnr_T col, colnr_T coladd);
+extern int rs_getvpos(win_T *wp, pos_T *pos, colnr_T wcol);
+extern int rs_coladvance(win_T *wp, colnr_T wcol);
 
 // =============================================================================
 // Screen Column Functions
@@ -78,15 +80,7 @@ int coladvance_force(colnr_T wcol)
 /// @return  OK if desired column is reached, FAIL if not
 int coladvance(win_T *wp, colnr_T wcol)
 {
-  int rc = getvpos(wp, &wp->w_cursor, wcol);
-
-  if (wcol == MAXCOL || rc == FAIL) {
-    wp->w_valid &= ~VALID_VIRTCOL;
-  } else if (*(ml_get_buf(wp->w_buffer, wp->w_cursor.lnum) + wp->w_cursor.col) != TAB) {
-    // Virtcol is valid when not on a TAB
-    set_valid_virtcol(curwin, wcol);
-  }
-  return rc;
+  return rs_coladvance(wp, wcol);
 }
 
 /// @param addspaces  change the text to achieve our goal? only for wp=curwin!
@@ -253,7 +247,7 @@ static int coladvance2(win_T *wp, pos_T *pos, bool addspaces, bool finetune, col
 /// @return  OK if desired column is reached, FAIL if not
 int getvpos(win_T *wp, pos_T *pos, colnr_T wcol)
 {
-  return coladvance2(wp, pos, false, virtual_active(wp), wcol);
+  return rs_getvpos(wp, pos, wcol);
 }
 
 /// Increment the cursor position.  See inc() for return values.
@@ -558,4 +552,29 @@ win_T *nvim_cursor_get_curwin(void)
 pos_T *nvim_cursor_get_curwin_cursor(void)
 {
   return &curwin->w_cursor;
+}
+
+/// Core getvpos implementation (calls coladvance2 directly).
+/// This is used by both getvpos() and rs_getvpos().
+int nvim_getvpos(win_T *wp, pos_T *pos, colnr_T wcol)
+{
+  return coladvance2(wp, pos, false, virtual_active(wp), wcol);
+}
+
+/// Check if character at position is TAB.
+bool nvim_char_at_pos_is_tab(win_T *wp, pos_T *pos)
+{
+  return *(ml_get_buf(wp->w_buffer, pos->lnum) + pos->col) == TAB;
+}
+
+/// Clear VALID_VIRTCOL flag for window.
+void nvim_win_clear_valid_virtcol(win_T *wp)
+{
+  wp->w_valid &= ~VALID_VIRTCOL;
+}
+
+/// Get window cursor pointer (wp->w_cursor).
+pos_T *nvim_win_get_cursor_ptr(win_T *wp)
+{
+  return &wp->w_cursor;
 }
