@@ -22,7 +22,11 @@ mod viml;
 
 // Re-export FFI functions
 pub use input::rs_do_digraph;
-pub use list::{rs_digraph_format_pair, rs_digraph_format_result, rs_digraph_iterate};
+pub use list::{
+    rs_digraph_format_entry, rs_digraph_format_pair, rs_digraph_format_result,
+    rs_digraph_get_header_index, rs_digraph_iterate, rs_digraph_iterate_default,
+    rs_digraph_iterate_user,
+};
 pub use parse::{rs_putdigraph, PutdigraphResult};
 pub use register::{rs_get_digraph_for_char, rs_registerdigraph};
 pub use validate::rs_check_digraph_chars_valid;

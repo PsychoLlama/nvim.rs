@@ -72,6 +72,11 @@ extern int rs_putdigraph(char **str, PutdigraphResult *result);
 extern int rs_digraph_get_header_index(int previous, int current);
 extern int rs_digraph_format_entry(uint8_t char1, uint8_t char2, int result, char *buf, int buf_len);
 
+// Callback type for digraph iteration
+typedef int (*DigraphIterCallback)(uint8_t char1, uint8_t char2, int result, void *ctx);
+extern int rs_digraph_iterate_default(DigraphIterCallback callback, void *ctx);
+extern int rs_digraph_iterate_user(DigraphIterCallback callback, void *ctx);
+
 // digraphs added by the user
 static garray_T user_digraphs = { 0, 0, (int)sizeof(digr_T), 10, NULL };
 
@@ -1543,6 +1548,18 @@ int nvim_utf_iscomposing_first(int c)
 int nvim_char2cells(int c)
 {
   return char2cells(c);
+}
+
+/// Check if user pressed Ctrl-C (for Rust FFI).
+int nvim_digraph_got_int(void)
+{
+  return got_int;
+}
+
+/// Fast check for user interrupt (for Rust FFI).
+void nvim_digraph_fast_breakcheck(void)
+{
+  fast_breakcheck();
 }
 
 /// handle digraphs after typing a character

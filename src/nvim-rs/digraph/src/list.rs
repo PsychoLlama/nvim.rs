@@ -261,6 +261,15 @@ fn format_decimal(mut n: c_int, buf: &mut [u8; 8]) -> &[u8] {
     &buf[pos..]
 }
 
+// C accessor for interrupt checking
+extern "C" {
+    /// Check if user pressed Ctrl-C (`got_int`).
+    fn nvim_digraph_got_int() -> c_int;
+
+    /// Fast check for user interrupt.
+    fn nvim_digraph_fast_breakcheck();
+}
+
 /// Callback type for iterating over digraphs.
 ///
 /// Called for each digraph with:
@@ -274,8 +283,8 @@ pub type DigraphIterCallback =
 
 /// Iterate over all digraphs (user and default).
 ///
-/// Calls the callback for each digraph. User digraphs are iterated first,
-/// then default digraphs.
+/// Calls the callback for each digraph. Default digraphs are iterated first,
+/// then user digraphs.
 ///
 /// # Arguments
 /// * `list_all` - If true, include default digraphs; if false, only user digraphs
@@ -346,6 +355,116 @@ pub unsafe extern "C" fn rs_digraph_iterate(
     }
 
     count
+}
+
+/// Iterate over default digraphs with interrupt checking.
+///
+/// Calls the callback for each default digraph, checking for user interrupt
+/// between each call.
+///
+/// # Arguments
+/// * `callback` - Function called for each digraph
+/// * `ctx` - User context passed to callback
+///
+/// # Returns
+/// * 1 if iteration completed successfully
+/// * 0 if interrupted by user (`got_int`)
+///
+/// # Safety
+/// Callback must be a valid function pointer, ctx can be null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_digraph_iterate_default(
+    callback: DigraphIterCallback,
+    ctx: *mut c_void,
+) -> c_int {
+    let default_data = unsafe { nvim_get_digraphdefault() };
+    if default_data.is_null() {
+        return 1;
+    }
+
+    let default_digraphs = default_data.cast::<DigrT>();
+    let mut i = 0;
+
+    loop {
+        // Check for user interrupt
+        if unsafe { nvim_digraph_got_int() } != 0 {
+            return 0;
+        }
+
+        let dp = unsafe { &*default_digraphs.add(i) };
+        // Default array is null-terminated
+        if dp.char1 == 0 {
+            break;
+        }
+
+        // Get actual result (may be overridden by user digraph)
+        let result =
+            unsafe { rs_getexactdigraph(c_int::from(dp.char1), c_int::from(dp.char2), 0) };
+
+        // Skip if result is 0 or same as char2 (no digraph)
+        if result != 0 && result != c_int::from(dp.char2) {
+            let should_continue = unsafe { callback(dp.char1, dp.char2, result, ctx) };
+            if should_continue == 0 {
+                return 0;
+            }
+        }
+
+        // Check for breakcheck
+        unsafe { nvim_digraph_fast_breakcheck() };
+        i += 1;
+    }
+
+    1
+}
+
+/// Iterate over user digraphs with interrupt checking.
+///
+/// Calls the callback for each user digraph, checking for user interrupt
+/// between each call.
+///
+/// # Arguments
+/// * `callback` - Function called for each digraph
+/// * `ctx` - User context passed to callback
+///
+/// # Returns
+/// * 1 if iteration completed successfully
+/// * 0 if interrupted by user (`got_int`)
+///
+/// # Safety
+/// Callback must be a valid function pointer, ctx can be null.
+#[no_mangle]
+pub unsafe extern "C" fn rs_digraph_iterate_user(
+    callback: DigraphIterCallback,
+    ctx: *mut c_void,
+) -> c_int {
+    let user_data = unsafe { nvim_get_user_digraphs_data() };
+    let user_len = unsafe { nvim_get_user_digraphs_len() };
+
+    if user_data.is_null() || user_len <= 0 {
+        return 1;
+    }
+
+    let user_digraphs = user_data.cast::<DigrT>();
+    #[allow(clippy::cast_sign_loss)]
+    let len = user_len as usize;
+
+    for i in 0..len {
+        // Check for user interrupt
+        if unsafe { nvim_digraph_got_int() } != 0 {
+            return 0;
+        }
+
+        let dp = unsafe { &*user_digraphs.add(i) };
+        let should_continue = unsafe { callback(dp.char1, dp.char2, dp.result, ctx) };
+        if should_continue == 0 {
+            return 0;
+        }
+
+        // Check for breakcheck
+        unsafe { nvim_digraph_fast_breakcheck() };
+    }
+
+    1
 }
 
 /// Format a digraph as a two-character string.
