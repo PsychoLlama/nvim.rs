@@ -9,5 +9,8 @@ repository.workspace = true
 [lib]
 crate-type = ["staticlib", "rlib"]
 
+[dependencies]
+nvim-collections = { path = "../collections" }
+
 [lints]
 workspace = true

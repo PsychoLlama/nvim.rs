@@ -44,6 +44,33 @@ typedef enum {
 
 #include "testing.c.generated.h"
 
+// =============================================================================
+// Rust FFI declarations
+// =============================================================================
+
+extern void rs_f_assert_report(typval_T *argvars, typval_T *rettv);
+extern void rs_f_test_write_list_log(typval_T *argvars, typval_T *rettv);
+
+// =============================================================================
+// C accessor functions for Rust
+// =============================================================================
+
+/// Get the current sourcing line number for error messages.
+linenr_T nvim_testing_get_sourcing_lnum(void)
+{
+  if (HAVE_SOURCING_INFO) {
+    return SOURCING_LNUM;
+  }
+  return 0;
+}
+
+/// Set the return value to a number.
+void nvim_testing_set_rettv_number(typval_T *rettv, varnumber_T val)
+{
+  rettv->v_type = VAR_NUMBER;
+  rettv->vval.v_number = val;
+}
+
 static const char e_assert_fails_second_arg[]
   = N_(
       "E856: \"assert_fails()\" second argument must be a string or a list with one or two strings");
@@ -741,13 +768,7 @@ void f_assert_notmatch(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// "assert_report(msg)" function
 void f_assert_report(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  garray_T ga;
-
-  prepare_assert_error(&ga);
-  ga_concat(&ga, tv_get_string(&argvars[0]));
-  assert_error(&ga);
-  ga_clear(&ga);
-  rettv->vval.v_number = 1;
+  rs_f_assert_report(argvars, rettv);
 }
 
 /// "assert_true(actual[, msg])" function
@@ -771,8 +792,5 @@ void f_test_garbagecollect_now(typval_T *argvars, typval_T *rettv, EvalFuncData 
 /// "test_write_list_log()" function
 void f_test_write_list_log(typval_T *const argvars, typval_T *const rettv, EvalFuncData fptr)
 {
-  const char *const fname = tv_get_string_chk(&argvars[0]);
-  if (fname == NULL) {
-    return;
-  }
+  rs_f_test_write_list_log(argvars, rettv);
 }

@@ -13,6 +13,7 @@ pub mod assert;
 pub mod fixture;
 pub mod harness;
 pub mod mock;
+pub mod viml_assert;
 
 use std::ffi::c_int;
 
