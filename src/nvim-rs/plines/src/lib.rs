@@ -2670,6 +2670,175 @@ pub unsafe extern "C" fn rs_win_linetabsize(
     unsafe { nvim_win_linetabsize(wp, lnum, line, len) }
 }
 
+// ============================================================================
+// linetabsize_col - Line size from given starting column
+// ============================================================================
+
+/// Like linetabsize_str(), but "s" starts at virtual column "startvcol".
+///
+/// This function uses curwin and calculates the line size from a starting
+/// virtual column.
+///
+/// # Safety
+/// The `s` parameter must be a valid null-terminated string pointer.
+#[no_mangle]
+pub unsafe extern "C" fn rs_linetabsize_col(startvcol: c_int, s: *const c_char) -> c_int {
+    if s.is_null() {
+        return startvcol;
+    }
+
+    let wp = nvim_get_curwin();
+    if wp.is_null() {
+        return startvcol;
+    }
+
+    // Use nvim_win_linetabsize_col which calls init_charsize_arg with lnum=0
+    nvim_linetabsize_col(wp, startvcol, s)
+}
+
+extern "C" {
+    fn nvim_linetabsize_col(wp: WinHandle, startvcol: c_int, s: *const c_char) -> c_int;
+}
+
+// ============================================================================
+// win_text_height - Screen lines for a range of text
+// ============================================================================
+
+/// Get the number of screen lines a range of text will take in window "wp".
+///
+/// # Arguments
+/// * `wp` - Window handle
+/// * `start_lnum` - Starting line number, 1-based inclusive
+/// * `start_vcol` - Starting virtual column index (0-based inclusive, rounded down),
+///   or negative to count a full "start_lnum" including filler lines above
+/// * `end_lnum` - Ending line number, 1-based inclusive. Updated to last line processed
+/// * `end_vcol` - Ending virtual column index (0-based exclusive, rounded up),
+///   or negative to count a full "end_lnum" not including filler lines below.
+///   Updated to the number of columns in "end_lnum" to reach "max"
+/// * `fill` - If not NULL, set to the number of filler lines in the range
+/// * `max` - Don't calculate height beyond the line where "max" height is reached
+///
+/// # Safety
+/// All pointer parameters must be valid or null.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_win_text_height(
+    wp: WinHandle,
+    start_lnum: c_int,
+    start_vcol: i64,
+    end_lnum: *mut c_int,
+    end_vcol: *mut i64,
+    fill: *mut i64,
+    max: i64,
+) -> i64 {
+    if wp.is_null() || end_lnum.is_null() || end_vcol.is_null() {
+        return 0;
+    }
+
+    unsafe {
+        // Calculate widths
+        let view_width = nvim_win_get_view_width(wp);
+        let col_off = rs_win_col_off(wp);
+        let col_off2 = rs_win_col_off2(wp);
+
+        let width1 = (view_width - col_off).max(0);
+        let width2 = (width1 + col_off2).max(0);
+
+        let mut height_sum_fill: i64 = 0;
+        let mut height_cur_nofill: i64 = 0;
+        let mut height_sum_nofill: i64 = 0;
+        let mut lnum = start_lnum;
+        let mut cur_lnum = lnum;
+        let mut cur_folded = false;
+
+        // Handle start_vcol >= 0 case
+        if start_vcol >= 0 {
+            let mut lnum_first: c_int = lnum;
+            let mut lnum_next: c_int = lnum;
+
+            cur_folded = nvim_hasFolding(
+                wp,
+                lnum,
+                std::ptr::from_mut(&mut lnum_first),
+                std::ptr::from_mut(&mut lnum_next),
+            ) != 0;
+            lnum = lnum_first;
+
+            height_cur_nofill = i64::from(nvim_plines_win_nofill(wp, lnum, 0));
+            height_sum_nofill += height_cur_nofill;
+
+            let row_off: i64 = if start_vcol < i64::from(width1) || width2 <= 0 {
+                0
+            } else {
+                1 + (start_vcol - i64::from(width1)) / i64::from(width2)
+            };
+            height_sum_nofill -= row_off.min(height_cur_nofill);
+            lnum = lnum_next + 1;
+        }
+
+        // Main loop
+        while lnum <= *end_lnum && height_sum_nofill + height_sum_fill < max {
+            let mut lnum_first: c_int = lnum;
+            let mut lnum_next: c_int = lnum;
+
+            cur_folded = nvim_hasFolding(
+                wp,
+                lnum,
+                std::ptr::from_mut(&mut lnum_first),
+                std::ptr::from_mut(&mut lnum_next),
+            ) != 0;
+            lnum = lnum_first;
+
+            height_sum_fill += i64::from(nvim_win_get_fill(wp, lnum));
+            height_cur_nofill = i64::from(nvim_plines_win_nofill(wp, lnum, 0));
+            height_sum_nofill += height_cur_nofill;
+            cur_lnum = lnum;
+            lnum = lnum_next + 1;
+        }
+
+        // Handle end_vcol
+        let mut vcol_end: i64 = *end_vcol;
+        let use_vcol = vcol_end >= 0 && lnum > *end_lnum;
+
+        if use_vcol {
+            height_sum_nofill -= height_cur_nofill;
+            let row_off: i64 = if vcol_end == 0 {
+                0
+            } else if vcol_end <= i64::from(width1) || width2 <= 0 {
+                1
+            } else {
+                1 + (vcol_end - i64::from(width1) + i64::from(width2) - 1) / i64::from(width2)
+            };
+            height_sum_nofill += row_off.min(height_cur_nofill);
+        }
+
+        // Calculate final vcol_end
+        if cur_folded {
+            vcol_end = 0;
+        } else {
+            let linesize = i64::from(rs_linetabsize_eol(wp, cur_lnum));
+            let max_vcol = if use_vcol { vcol_end } else { i64::MAX };
+            vcol_end = max_vcol.min(linesize);
+        }
+
+        // Handle overflow
+        let overflow = height_sum_nofill + height_sum_fill - max;
+        if overflow > 0 && width2 > 0 && vcol_end > i64::from(width2) {
+            vcol_end -= (vcol_end - i64::from(width1)) % i64::from(width2)
+                + (overflow - 1) * i64::from(width2);
+        }
+
+        // Update output parameters
+        *end_lnum = cur_lnum;
+        *end_vcol = vcol_end;
+        if !fill.is_null() {
+            *fill = height_sum_fill;
+        }
+
+        height_sum_fill + height_sum_nofill
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
