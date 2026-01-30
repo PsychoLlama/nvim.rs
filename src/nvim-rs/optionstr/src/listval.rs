@@ -387,6 +387,117 @@ pub unsafe extern "C" fn rs_list_value_remove(
     pos + 1
 }
 
+// =============================================================================
+// Option String Flags Parsing
+// =============================================================================
+
+/// Result from parsing option string values to flags
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct OptStringsFlagsResult {
+    /// Whether parsing succeeded
+    pub ok: bool,
+    /// The resulting bitmask of flags
+    pub flags: u32,
+}
+
+/// Parse comma-separated option values and map them to a bitmask.
+///
+/// Each value in `val` is looked up in the `values` array. If found,
+/// the corresponding bit (1 << index) is set in the result flags.
+///
+/// When `is_list` is false, `val` is treated as a single value.
+/// When `is_list` is true, `val` is treated as a comma-separated list.
+///
+/// An empty `val` is always OK (returns flags = 0, or flags = 1 if the
+/// first value in `values` is also empty and `is_list` is false).
+///
+/// # Safety
+/// - `val` must be a valid null-terminated C string
+/// - `values` must be a valid null-terminated array of null-terminated C strings
+#[no_mangle]
+pub unsafe extern "C" fn rs_opt_strings_flags(
+    val: *const c_char,
+    values: *const *const c_char,
+    is_list: bool,
+) -> OptStringsFlagsResult {
+    if val.is_null() || values.is_null() {
+        return OptStringsFlagsResult {
+            ok: false,
+            flags: 0,
+        };
+    }
+
+    let mut new_flags: u32 = 0;
+    let mut ptr = val;
+
+    // If not list and val is empty, force one iteration of the loop
+    let iter_one = *ptr == 0 && !is_list;
+
+    loop {
+        if *ptr == 0 && !iter_one {
+            break;
+        }
+
+        // Search for matching value in values array
+        let mut i: u32 = 0;
+        let found = loop {
+            let value_ptr = *values.add(i as usize);
+            if value_ptr.is_null() {
+                // val not found in values[]
+                break false;
+            }
+
+            // Get length of values[i]
+            let mut len: usize = 0;
+            while *value_ptr.add(len) != 0 {
+                len += 1;
+            }
+
+            // Check if values[i] matches the current position in val
+            let mut matches = true;
+            for j in 0..len {
+                if *ptr.add(j) != *value_ptr.add(j) {
+                    matches = false;
+                    break;
+                }
+            }
+
+            // Check that the value ends correctly (comma for list, or null)
+            if matches {
+                let end_char = *ptr.add(len);
+                if (is_list && end_char == b',' as c_char) || end_char == 0 {
+                    // Advance past the value and optional comma
+                    ptr = ptr.add(len + usize::from(end_char == b',' as c_char));
+
+                    // Set the flag bit (assert i < 32 like C does)
+                    debug_assert!(i < 32, "values array index exceeds u32 bitmask capacity");
+                    new_flags |= 1u32 << i;
+                    break true;
+                }
+            }
+
+            i += 1;
+        };
+
+        if !found {
+            return OptStringsFlagsResult {
+                ok: false,
+                flags: 0,
+            };
+        }
+
+        if iter_one {
+            break;
+        }
+    }
+
+    OptStringsFlagsResult {
+        ok: true,
+        flags: new_flags,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -491,6 +602,124 @@ mod tests {
 
             let result = std::ffi::CStr::from_ptr(buf.as_ptr());
             assert_eq!(result.to_str().unwrap(), "one,three");
+        }
+    }
+
+    // Helper to create a null-terminated array of C strings for testing
+    fn make_values_array(values: &[&[u8]]) -> Vec<*const c_char> {
+        let mut arr: Vec<*const c_char> = values.iter().map(|v| v.as_ptr().cast()).collect();
+        arr.push(std::ptr::null());
+        arr
+    }
+
+    #[test]
+    fn test_opt_strings_flags_single_value() {
+        unsafe {
+            // values: ["auto", "yes", "no", NULL]
+            let values = make_values_array(&[b"auto\0", b"yes\0", b"no\0"]);
+
+            // Test matching "auto" (index 0)
+            let result = rs_opt_strings_flags(b"auto\0".as_ptr().cast(), values.as_ptr(), false);
+            assert!(result.ok);
+            assert_eq!(result.flags, 1); // bit 0
+
+            // Test matching "yes" (index 1)
+            let result = rs_opt_strings_flags(b"yes\0".as_ptr().cast(), values.as_ptr(), false);
+            assert!(result.ok);
+            assert_eq!(result.flags, 2); // bit 1
+
+            // Test matching "no" (index 2)
+            let result = rs_opt_strings_flags(b"no\0".as_ptr().cast(), values.as_ptr(), false);
+            assert!(result.ok);
+            assert_eq!(result.flags, 4); // bit 2
+
+            // Test invalid value
+            let result = rs_opt_strings_flags(b"invalid\0".as_ptr().cast(), values.as_ptr(), false);
+            assert!(!result.ok);
+        }
+    }
+
+    #[test]
+    fn test_opt_strings_flags_list() {
+        unsafe {
+            // values: ["auto", "breakhardlink", "breaksymlink", NULL]
+            let values = make_values_array(&[b"auto\0", b"breakhardlink\0", b"breaksymlink\0"]);
+
+            // Test comma-separated list
+            let result = rs_opt_strings_flags(
+                b"auto,breakhardlink\0".as_ptr().cast(),
+                values.as_ptr(),
+                true,
+            );
+            assert!(result.ok);
+            assert_eq!(result.flags, 0b011); // bits 0 and 1
+
+            // Test all three values
+            let result = rs_opt_strings_flags(
+                b"auto,breakhardlink,breaksymlink\0".as_ptr().cast(),
+                values.as_ptr(),
+                true,
+            );
+            assert!(result.ok);
+            assert_eq!(result.flags, 0b111); // bits 0, 1, and 2
+
+            // Test single value with is_list=true
+            let result =
+                rs_opt_strings_flags(b"breaksymlink\0".as_ptr().cast(), values.as_ptr(), true);
+            assert!(result.ok);
+            assert_eq!(result.flags, 0b100); // bit 2
+
+            // Test invalid value in list
+            let result =
+                rs_opt_strings_flags(b"auto,invalid\0".as_ptr().cast(), values.as_ptr(), true);
+            assert!(!result.ok);
+        }
+    }
+
+    #[test]
+    fn test_opt_strings_flags_empty() {
+        unsafe {
+            // values: ["", "yes", "no", NULL] - first value is empty
+            let values = make_values_array(&[b"\0", b"yes\0", b"no\0"]);
+
+            // Empty val with is_list=false should match first empty value
+            let result = rs_opt_strings_flags(b"\0".as_ptr().cast(), values.as_ptr(), false);
+            assert!(result.ok);
+            assert_eq!(result.flags, 1); // bit 0 (matched empty string)
+
+            // Empty val with is_list=true should succeed with no flags
+            let result = rs_opt_strings_flags(b"\0".as_ptr().cast(), values.as_ptr(), true);
+            assert!(result.ok);
+            assert_eq!(result.flags, 0);
+        }
+    }
+
+    #[test]
+    fn test_opt_strings_flags_duplicate_values() {
+        unsafe {
+            // values: ["one", "two", "three", NULL]
+            let values = make_values_array(&[b"one\0", b"two\0", b"three\0"]);
+
+            // Same value twice should set the bit once
+            let result = rs_opt_strings_flags(b"one,one\0".as_ptr().cast(), values.as_ptr(), true);
+            assert!(result.ok);
+            assert_eq!(result.flags, 1); // bit 0
+        }
+    }
+
+    #[test]
+    fn test_opt_strings_flags_prefix_handling() {
+        unsafe {
+            // values: ["unix", "dos", "mac", NULL] - test that "un" doesn't match "unix"
+            let values = make_values_array(&[b"unix\0", b"dos\0", b"mac\0"]);
+
+            // Partial match should fail
+            let result = rs_opt_strings_flags(b"un\0".as_ptr().cast(), values.as_ptr(), false);
+            assert!(!result.ok);
+
+            // "unixdos" should not match "unix" followed by "dos"
+            let result = rs_opt_strings_flags(b"unixdos\0".as_ptr().cast(), values.as_ptr(), false);
+            assert!(!result.ok);
         }
     }
 }

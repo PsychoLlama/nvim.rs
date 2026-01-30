@@ -114,6 +114,20 @@ extern const char *rs_fcs_fallback(int idx);
 extern schar_T rs_get_encoded_char_adv(const char **p);
 extern bool rs_is_valid_chars_option(const char *value, bool is_listchars);
 
+// Option string flags parsing
+typedef struct {
+  bool ok;
+  uint32_t flags;
+} OptStringsFlagsResult;
+extern OptStringsFlagsResult rs_opt_strings_flags(const char *val, const char **values, bool is_list);
+
+// Flag list validation
+typedef struct {
+  bool ok;
+  char invalid_char;
+} FlagListValidateResult;
+extern FlagListValidateResult rs_validate_option_listflag(const char *val, const char *flags);
+
 static const char e_illegal_character_after_chr[]
   = N_("E535: Illegal character after <%c>");
 static const char e_comma_required[]
@@ -471,12 +485,10 @@ const char *did_set_str_generic(optset_T *args)
 /// An option which is a list of flags is set.  Valid values are in "flags".
 static const char *did_set_option_listflag(char *val, char *flags, char *errbuf, size_t errbuflen)
 {
-  for (char *s = val; *s; s++) {
-    if (vim_strchr(flags, (uint8_t)(*s)) == NULL) {
-      return illegal_char(errbuf, errbuflen, (uint8_t)(*s));
-    }
+  FlagListValidateResult result = rs_validate_option_listflag(val, flags);
+  if (!result.ok) {
+    return illegal_char(errbuf, errbuflen, (uint8_t)result.invalid_char);
   }
-
   return NULL;
 }
 
@@ -2199,35 +2211,11 @@ int expand_set_winhighlight(optexpand_T *args, int *numMatches, char ***matches)
 /// @return  OK for correct value, FAIL otherwise. Empty is always OK.
 static int opt_strings_flags(const char *val, const char **values, unsigned *flagp, bool list)
 {
-  unsigned new_flags = 0;
-
-  // If not list and val is empty, then force one iteration of the while loop
-  bool iter_one = (*val == NUL) && !list;
-
-  while (*val || iter_one) {
-    for (unsigned i = 0;; i++) {
-      if (values[i] == NULL) {          // val not found in values[]
-        return FAIL;
-      }
-
-      size_t len = strlen(values[i]);
-      if (strncmp(values[i], val, len) == 0
-          && ((list && val[len] == ',') || val[len] == NUL)) {
-        val += len + (val[len] == ',');
-        assert(i < sizeof(new_flags) * 8);
-        new_flags |= (1U << i);
-        break;                  // check next item in val list
-      }
-    }
-    if (iter_one) {
-      break;
-    }
-  }
+  OptStringsFlagsResult result = rs_opt_strings_flags(val, values, list);
   if (flagp != NULL) {
-    *flagp = new_flags;
+    *flagp = result.flags;
   }
-
-  return OK;
+  return result.ok ? OK : FAIL;
 }
 
 /// @return  OK if "p" is a valid fileformat name, FAIL otherwise.

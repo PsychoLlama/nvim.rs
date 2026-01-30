@@ -55,6 +55,71 @@ pub unsafe extern "C" fn rs_validate_flag_list(
     0 // All characters are valid
 }
 
+// =============================================================================
+// Flag List Validation Result
+// =============================================================================
+
+/// Result from validating a flag list option
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct FlagListValidateResult {
+    /// Whether all characters are valid
+    pub ok: bool,
+    /// The first invalid character (if any)
+    pub invalid_char: c_char,
+}
+
+/// Validate that all characters in a value are from an allowed set.
+///
+/// This is used for options like concealcursor, cpoptions, formatoptions,
+/// mouse, shortmess, and whichwrap.
+///
+/// # Safety
+/// - `val` must be a valid null-terminated C string
+/// - `flags` must be a valid null-terminated C string containing allowed characters
+#[no_mangle]
+pub unsafe extern "C" fn rs_validate_option_listflag(
+    val: *const c_char,
+    flags: *const c_char,
+) -> FlagListValidateResult {
+    if val.is_null() || flags.is_null() {
+        return FlagListValidateResult {
+            ok: false,
+            invalid_char: 0,
+        };
+    }
+
+    let mut val_ptr = val;
+    while *val_ptr != 0 {
+        let c = *val_ptr;
+
+        // Check if this character is in the allowed flags
+        let mut flag_ptr = flags;
+        let mut found = false;
+        while *flag_ptr != 0 {
+            if *flag_ptr == c {
+                found = true;
+                break;
+            }
+            flag_ptr = flag_ptr.add(1);
+        }
+
+        if !found {
+            return FlagListValidateResult {
+                ok: false,
+                invalid_char: c,
+            };
+        }
+
+        val_ptr = val_ptr.add(1);
+    }
+
+    FlagListValidateResult {
+        ok: true,
+        invalid_char: 0,
+    }
+}
+
 /// Check if a flag list contains a specific flag
 ///
 /// # Safety
@@ -417,6 +482,57 @@ mod tests {
             );
             assert_eq!(len, 3);
             assert_eq!(&buf[..3], &[b'a' as i8, b'c' as i8, 0]);
+        }
+    }
+
+    #[test]
+    fn test_validate_option_listflag() {
+        unsafe {
+            let flags = b"aoOtTI\0".as_ptr().cast::<c_char>();
+
+            // All valid characters
+            let result = rs_validate_option_listflag(b"aoOtTI\0".as_ptr().cast(), flags);
+            assert!(result.ok);
+            assert_eq!(result.invalid_char, 0);
+
+            // Subset of valid characters
+            let result = rs_validate_option_listflag(b"aoT\0".as_ptr().cast(), flags);
+            assert!(result.ok);
+
+            // Empty value is valid
+            let result = rs_validate_option_listflag(b"\0".as_ptr().cast(), flags);
+            assert!(result.ok);
+
+            // Invalid character 'Z'
+            let result = rs_validate_option_listflag(b"aoZ\0".as_ptr().cast(), flags);
+            assert!(!result.ok);
+            assert_eq!(result.invalid_char, b'Z' as c_char);
+
+            // First character invalid
+            let result = rs_validate_option_listflag(b"Xao\0".as_ptr().cast(), flags);
+            assert!(!result.ok);
+            assert_eq!(result.invalid_char, b'X' as c_char);
+
+            // Duplicate valid characters should be fine
+            let result = rs_validate_option_listflag(b"aaoo\0".as_ptr().cast(), flags);
+            assert!(result.ok);
+        }
+    }
+
+    #[test]
+    fn test_validate_option_listflag_shortmess() {
+        unsafe {
+            // Real shortmess flags: "rmwlaxoOstTIcCqFS"
+            let flags = b"rmwlaxoOstTIcCqFS\0".as_ptr().cast::<c_char>();
+
+            // Valid shortmess value
+            let result = rs_validate_option_listflag(b"aoOtTI\0".as_ptr().cast(), flags);
+            assert!(result.ok);
+
+            // Invalid 'Z' should fail
+            let result = rs_validate_option_listflag(b"Z\0".as_ptr().cast(), flags);
+            assert!(!result.ok);
+            assert_eq!(result.invalid_char, b'Z' as c_char);
         }
     }
 }
