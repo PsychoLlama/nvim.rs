@@ -8134,3 +8134,31 @@ void nvim_win_set_w_lines_valid(win_T *wp, int val)
     wp->w_lines_valid = (linenr_T)val;
   }
 }
+
+/// Get the number of filler rows at the end of the window.
+int nvim_win_get_filler_rows(win_T *wp)
+{
+  return wp ? wp->w_filler_rows : 0;
+}
+
+/// Set the number of filler rows at the end of the window.
+void nvim_win_set_filler_rows(win_T *wp, int val)
+{
+  if (wp) {
+    wp->w_filler_rows = val;
+  }
+}
+
+/// Get the botfill flag (true when filler lines are at bottom).
+int nvim_win_get_botfill(win_T *wp)
+{
+  return wp ? (wp->w_botfill ? 1 : 0) : 0;
+}
+
+/// Set the botfill flag (true when filler lines are at bottom).
+void nvim_win_set_botfill(win_T *wp, int val)
+{
+  if (wp) {
+    wp->w_botfill = (val != 0);
+  }
+}

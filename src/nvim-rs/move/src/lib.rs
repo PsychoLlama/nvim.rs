@@ -1502,6 +1502,778 @@ pub unsafe extern "C" fn rs_scroll_redraw(up: c_int, count: LinenrT) {
 }
 
 // =============================================================================
+// Additional C Accessor Functions for Cursor Positioning
+// =============================================================================
+
+extern "C" {
+    // Empty rows
+    fn nvim_win_get_empty_rows(wp: WinHandle) -> c_int;
+    fn nvim_win_set_empty_rows(wp: WinHandle, val: c_int);
+
+    // Filler rows and botfill
+    fn nvim_win_get_filler_rows(wp: WinHandle) -> c_int;
+    fn nvim_win_set_filler_rows(wp: WinHandle, val: c_int);
+    fn nvim_win_get_botfill(wp: WinHandle) -> c_int;
+    fn nvim_win_set_botfill(wp: WinHandle, val: c_int);
+
+    // Mouse dragging state
+    fn nvim_get_mouse_dragging() -> c_int;
+
+    // Botline validation
+    fn nvim_validate_botline(wp: WinHandle);
+
+    // plines_win_full wrapper
+    fn nvim_plines_win_full(
+        wp: WinHandle,
+        lnum: LinenrT,
+        nextp: *mut LinenrT,
+        foldedp: *mut c_int,
+        cache: c_int,
+        limit_winheight: c_int,
+    ) -> c_int;
+}
+
+// =============================================================================
+// Skipcol Calculation (extern from plines crate)
+// =============================================================================
+
+extern "C" {
+    /// Calculate the skipcol value for a given number of physical lines offset.
+    fn rs_skipcol_from_plines(wp: WinHandle, plines_off: c_int) -> ColnrT;
+}
+
+// =============================================================================
+// Cursor Positioning Functions
+// =============================================================================
+
+/// Recompute topline to put the cursor halfway across the window.
+///
+/// This handles the `zz` command (and related `z.`, `z<CR>` commands).
+///
+/// # Arguments
+/// * `wp` - Window handle
+/// * `atend` - If non-zero, also put cursor halfway to end of file
+/// * `prefer_above` - If non-zero, prefer adding lines above when centering
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_scroll_cursor_halfway(
+    wp: WinHandle,
+    atend: c_int,
+    prefer_above: c_int,
+) {
+    if wp.is_null() {
+        return;
+    }
+
+    let atend = atend != 0;
+    let prefer_above = prefer_above != 0;
+    let old_topline = nvim_win_get_topline(wp);
+
+    // Get cursor line, handling folding
+    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+    let mut loff = LineOff::new(cursor_lnum);
+    let mut boff = LineOff::new(cursor_lnum);
+
+    // Adjust for folding
+    let mut first_lnum = loff.lnum;
+    let mut last_lnum = boff.lnum;
+    if nvim_hasFolding(
+        wp,
+        loff.lnum,
+        std::ptr::addr_of_mut!(first_lnum),
+        std::ptr::addr_of_mut!(last_lnum),
+    ) != 0
+    {
+        loff.lnum = first_lnum;
+        boff.lnum = last_lnum;
+    }
+
+    let mut used = nvim_plines_win_nofill(wp, loff.lnum, 1);
+    loff.fill = 0;
+    boff.fill = 0;
+    let mut topline = loff.lnum;
+    let mut skipcol: ColnrT = 0;
+
+    let p_wrap = nvim_win_get_p_wrap(wp) != 0;
+    let p_sms = nvim_win_get_p_sms(wp) != 0;
+    let do_sms = p_wrap && p_sms;
+    let view_height = nvim_win_get_view_height(wp);
+    let line_count = nvim_win_buf_line_count(wp);
+
+    let mut want_height = 0;
+    if do_sms {
+        // 'smoothscroll' and 'wrap' are set
+        if atend {
+            want_height = (view_height - used) / 2;
+            used = 0;
+        } else {
+            want_height = view_height;
+        }
+    }
+
+    let mut topfill = 0;
+    while topline > 1 {
+        // If using smoothscroll, we can precisely scroll to the
+        // exact point where the cursor is halfway down the screen.
+        if do_sms {
+            rs_topline_back_winheight(wp, std::ptr::addr_of_mut!(loff), 0);
+            if loff.height == MAXCOL {
+                break;
+            }
+            used += loff.height;
+            if !atend && boff.lnum < line_count {
+                rs_botline_forw(wp, std::ptr::addr_of_mut!(boff));
+                used += boff.height;
+            }
+            if used > want_height {
+                if used - loff.height < want_height {
+                    topline = loff.lnum;
+                    topfill = loff.fill;
+                    skipcol = rs_skipcol_from_plines(wp, used - want_height);
+                }
+                break;
+            }
+            topline = loff.lnum;
+            topfill = loff.fill;
+            continue;
+        }
+
+        // If not using smoothscroll, we have to iteratively find how many
+        // lines to scroll down to roughly fit the cursor.
+        // This may not be right in the middle if the lines'
+        // physical height > 1 (e.g. 'wrap' is on).
+
+        // Depending on "prefer_above" we add a line above or below first.
+        // Loop twice to avoid duplicating code.
+        let mut done = false;
+        let mut above = 0;
+        let mut below = 0;
+
+        for round in 1..=2 {
+            let should_add_below = if prefer_above {
+                round == 2 && below < above
+            } else {
+                round == 1 && below <= above
+            };
+
+            if should_add_below {
+                // add a line below the cursor
+                if boff.lnum < line_count {
+                    rs_botline_forw(wp, std::ptr::addr_of_mut!(boff));
+                    used += boff.height;
+                    if used > view_height {
+                        done = true;
+                        break;
+                    }
+                    below += boff.height;
+                } else {
+                    below += 1; // count a "~" line
+                    if atend {
+                        used += 1;
+                    }
+                }
+            }
+
+            let should_add_above = if prefer_above {
+                round == 1 && below >= above
+            } else {
+                round == 1 && below > above
+            };
+
+            if should_add_above {
+                // add a line above the cursor
+                rs_topline_back(wp, std::ptr::addr_of_mut!(loff));
+                if loff.height == MAXCOL {
+                    used = MAXCOL;
+                } else {
+                    used += loff.height;
+                }
+                if used > view_height {
+                    done = true;
+                    break;
+                }
+                above += loff.height;
+                topline = loff.lnum;
+                topfill = loff.fill;
+            }
+        }
+
+        if done {
+            break;
+        }
+    }
+
+    // Set topline, handling folding
+    let mut new_topline = topline;
+    if nvim_hasFolding(
+        wp,
+        topline,
+        std::ptr::addr_of_mut!(new_topline),
+        std::ptr::null_mut(),
+    ) == 0
+    {
+        // Not in a fold
+        let current_topline = nvim_win_get_topline(wp);
+        let current_skipcol = nvim_win_get_skipcol(wp);
+        if current_topline != topline || skipcol != 0 || current_skipcol != 0 {
+            nvim_win_set_topline(wp, topline);
+            if skipcol != 0 {
+                nvim_win_set_skipcol(wp, skipcol);
+                nvim_redraw_later(wp, upd_scroll::NOT_VALID);
+            } else if do_sms {
+                rs_reset_skipcol(wp);
+            }
+        }
+    } else {
+        // In a fold, use the fold start
+        nvim_win_set_topline(wp, new_topline);
+    }
+
+    nvim_win_set_topfill(wp, topfill);
+
+    if old_topline > nvim_win_get_topline(wp) + view_height {
+        nvim_win_set_botfill(wp, 0);
+    }
+
+    nvim_check_topfill(wp, 0);
+
+    // Clear and set validity flags
+    nvim_win_clear_valid_bits(
+        wp,
+        VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_BOTLINE_AP,
+    );
+    let valid = nvim_win_get_valid(wp);
+    nvim_win_set_valid(wp, valid | VALID_TOPLINE);
+}
+
+/// Recompute topline to put the cursor at the top of the window.
+///
+/// This handles the `zt` command. Scroll at least `min_scroll` lines.
+/// If `always` is true, always set topline (for `zt`).
+///
+/// # Arguments
+/// * `wp` - Window handle
+/// * `min_scroll` - Minimum lines to scroll
+/// * `always` - If non-zero, always set topline
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_scroll_cursor_top(wp: WinHandle, min_scroll: c_int, always: c_int) {
+    if wp.is_null() {
+        return;
+    }
+
+    let always = always != 0;
+    let old_topline = nvim_win_get_topline(wp);
+    let old_skipcol = nvim_win_get_skipcol(wp);
+    let old_topfill = nvim_win_get_topfill(wp);
+    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+    let line_count = nvim_win_buf_line_count(wp);
+    let view_height = nvim_win_get_view_height(wp);
+
+    let mut off = rs_get_scrolloff_value(wp);
+    let mouse_dragging = nvim_get_mouse_dragging();
+    if mouse_dragging > 0 {
+        off = mouse_dragging - 1;
+    }
+
+    // Decrease topline until:
+    // - it has become 1
+    // - (part of) the cursor line is moved off the screen or
+    // - moved at least 'scrolljump' lines and
+    // - at least 'scrolloff' lines above and below the cursor
+    nvim_validate_cheight(wp);
+    let mut scrolled = 0;
+    let cline_height = nvim_win_get_cline_height(wp);
+    let mut used = cline_height; // includes filler lines above
+
+    if cursor_lnum < old_topline {
+        scrolled = used;
+    }
+
+    // Get cursor line boundaries (accounting for folding)
+    let mut top: LinenrT;
+    let mut bot: LinenrT;
+    let mut first_lnum = cursor_lnum;
+    let mut last_lnum = cursor_lnum;
+    if nvim_hasFolding(
+        wp,
+        cursor_lnum,
+        std::ptr::addr_of_mut!(first_lnum),
+        std::ptr::addr_of_mut!(last_lnum),
+    ) != 0
+    {
+        top = first_lnum - 1;
+        bot = last_lnum + 1;
+    } else {
+        top = cursor_lnum - 1;
+        bot = cursor_lnum + 1;
+    }
+
+    let mut new_topline = top + 1;
+
+    // "used" already contains the number of filler lines above, don't add it again.
+    // Hide filler lines above cursor line by adding them to "extra".
+    let mut extra = nvim_win_get_fill(wp, cursor_lnum);
+
+    // Check if the lines from "top" to "bot" fit in the window. If they do,
+    // set new_topline and advance "top" and "bot" to include more lines.
+    while top > 0 {
+        let i = nvim_plines_win_nofill(wp, top, 1);
+
+        // Adjust top for folding
+        let mut fold_start = top;
+        nvim_hasFolding(
+            wp,
+            top,
+            std::ptr::addr_of_mut!(fold_start),
+            std::ptr::null_mut(),
+        );
+        top = fold_start;
+
+        if top < old_topline {
+            scrolled += i;
+        }
+
+        // If scrolling is needed, scroll at least 'sj' lines.
+        if (new_topline >= old_topline || scrolled > min_scroll) && extra >= off {
+            break;
+        }
+
+        used += i;
+        if extra + i <= off && bot < line_count {
+            let mut next_bot: LinenrT = 0;
+            used += nvim_plines_win_full(
+                wp,
+                bot,
+                std::ptr::addr_of_mut!(next_bot),
+                std::ptr::null_mut(),
+                1,
+                1,
+            );
+            if next_bot > 0 {
+                bot = next_bot;
+            }
+        }
+        if used > view_height {
+            break;
+        }
+
+        extra += i;
+        new_topline = top;
+        top -= 1;
+        bot += 1;
+    }
+
+    // If we don't have enough space, put cursor in the middle.
+    // This makes sure we get the same position when using "k" and "j"
+    // in a small window.
+    if used > view_height {
+        rs_scroll_cursor_halfway(wp, 0, 0);
+    } else {
+        // If "always" is false, only adjust topline to a lower value, higher
+        // value may happen with wrapping lines.
+        let current_topline = nvim_win_get_topline(wp);
+        if new_topline < current_topline || always {
+            nvim_win_set_topline(wp, new_topline);
+        }
+
+        // Ensure topline <= cursor line
+        let topline = nvim_win_get_topline(wp);
+        if topline > cursor_lnum {
+            nvim_win_set_topline(wp, cursor_lnum);
+        }
+
+        let topline = nvim_win_get_topline(wp);
+        let mut new_topfill = nvim_win_get_fill(wp, topline);
+        nvim_win_set_topfill(wp, new_topfill);
+
+        if new_topfill > 0 && extra > off {
+            new_topfill -= extra - off;
+            new_topfill = new_topfill.max(0);
+            nvim_win_set_topfill(wp, new_topfill);
+        }
+
+        nvim_check_topfill(wp, 0);
+
+        let new_topline = nvim_win_get_topline(wp);
+        if new_topline != old_topline {
+            rs_reset_skipcol(wp);
+        } else if new_topline == cursor_lnum {
+            nvim_validate_virtcol(wp);
+            let skipcol = nvim_win_get_skipcol(wp);
+            let virtcol = nvim_win_get_virtcol(wp);
+            if skipcol >= virtcol {
+                // TODO(vim): if the line doesn't fit may optimize w_skipcol
+                // instead of making it zero
+                rs_reset_skipcol(wp);
+            }
+        }
+
+        let new_topline = nvim_win_get_topline(wp);
+        let new_skipcol = nvim_win_get_skipcol(wp);
+        let new_topfill = nvim_win_get_topfill(wp);
+        if new_topline != old_topline || new_skipcol != old_skipcol || new_topfill != old_topfill {
+            nvim_win_clear_valid_bits(
+                wp,
+                VALID_WROW | VALID_CROW | VALID_BOTLINE | VALID_BOTLINE_AP,
+            );
+        }
+        let valid = nvim_win_get_valid(wp);
+        nvim_win_set_valid(wp, valid | VALID_TOPLINE);
+        nvim_win_set_viewport_invalid(wp, 1);
+    }
+}
+
+/// Set `w_empty_rows` and `w_filler_rows` for window `wp`, having used up `used`
+/// screen lines for text lines.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_empty_rows(wp: WinHandle, used: c_int) {
+    if wp.is_null() {
+        return;
+    }
+
+    nvim_win_set_filler_rows(wp, 0);
+
+    if used == 0 {
+        nvim_win_set_empty_rows(wp, 0); // single line that doesn't fit
+    } else {
+        let view_height = nvim_win_get_view_height(wp);
+        let mut empty_rows = view_height - used;
+        let botline = nvim_win_get_botline(wp);
+        let line_count = nvim_win_buf_line_count(wp);
+
+        if botline <= line_count {
+            let filler = nvim_win_get_fill(wp, botline);
+            if empty_rows > filler {
+                empty_rows -= filler;
+                nvim_win_set_filler_rows(wp, filler);
+            } else {
+                nvim_win_set_filler_rows(wp, empty_rows);
+                empty_rows = 0;
+            }
+        }
+        nvim_win_set_empty_rows(wp, empty_rows);
+    }
+}
+
+/// Recompute topline to put the cursor at the bottom of the window.
+///
+/// This handles the `zb` command. When scrolling, scroll at least `min_scroll` lines.
+/// If `set_topbot` is non-zero, set topline and botline first (for `zb`).
+///
+/// # Arguments
+/// * `wp` - Window handle
+/// * `min_scroll` - Minimum lines to scroll
+/// * `set_topbot` - If non-zero, set topline and botline first
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+pub unsafe extern "C" fn rs_scroll_cursor_bot(wp: WinHandle, min_scroll: c_int, set_topbot: c_int) {
+    if wp.is_null() {
+        return;
+    }
+
+    let set_topbot = set_topbot != 0;
+    let old_topline = nvim_win_get_topline(wp);
+    let old_skipcol = nvim_win_get_skipcol(wp);
+    let old_topfill = nvim_win_get_topfill(wp);
+    let old_botline = nvim_win_get_botline(wp);
+    let old_valid = nvim_win_get_valid(wp);
+    let old_empty_rows = nvim_win_get_empty_rows(wp);
+    let cln = nvim_win_get_cursor_lnum(wp); // Cursor Line Number
+    let line_count = nvim_win_buf_line_count(wp);
+    let view_height = nvim_win_get_view_height(wp);
+
+    let p_wrap = nvim_win_get_p_wrap(wp) != 0;
+    let p_sms = nvim_win_get_p_sms(wp) != 0;
+    let do_sms = p_wrap && p_sms;
+
+    if set_topbot {
+        let mut used = 0;
+        nvim_win_set_botline(wp, cln + 1);
+        let mut loff = LineOff {
+            lnum: cln + 1,
+            fill: 0,
+            height: 0,
+        };
+
+        loop {
+            rs_topline_back_winheight(wp, std::ptr::addr_of_mut!(loff), 0);
+            if loff.height == MAXCOL {
+                break;
+            }
+            if used + loff.height > view_height {
+                if do_sms {
+                    // 'smoothscroll' and 'wrap' are set. The above line is
+                    // too long to show in its entirety, so we show just a part
+                    // of it.
+                    if used < view_height {
+                        let plines_offset = used + loff.height - view_height;
+                        used = view_height;
+                        nvim_win_set_topfill(wp, loff.fill);
+                        nvim_win_set_topline(wp, loff.lnum);
+                        nvim_win_set_skipcol(wp, rs_skipcol_from_plines(wp, plines_offset));
+                    }
+                }
+                break;
+            }
+            nvim_win_set_topfill(wp, loff.fill);
+            nvim_win_set_topline(wp, loff.lnum);
+            used += loff.height;
+        }
+
+        rs_set_empty_rows(wp, used);
+        let valid = nvim_win_get_valid(wp);
+        nvim_win_set_valid(wp, valid | VALID_BOTLINE | VALID_BOTLINE_AP);
+
+        let new_topline = nvim_win_get_topline(wp);
+        let new_topfill = nvim_win_get_topfill(wp);
+        let new_skipcol = nvim_win_get_skipcol(wp);
+        if new_topline != old_topline
+            || new_topfill != old_topfill
+            || new_skipcol != old_skipcol
+            || new_skipcol != 0
+        {
+            nvim_win_clear_valid_bits(wp, VALID_WROW | VALID_CROW);
+            if new_skipcol != old_skipcol {
+                nvim_redraw_later(wp, upd_scroll::NOT_VALID);
+            } else {
+                rs_reset_skipcol(wp);
+            }
+        }
+    } else {
+        nvim_validate_botline(wp);
+    }
+
+    // The lines of the cursor line itself are always used.
+    let mut used = nvim_plines_win_nofill(wp, cln, 1);
+
+    let mut scrolled = 0;
+    // If the cursor is on or below botline, we will at least scroll by the
+    // height of the cursor line, which is "used". Correct for empty lines,
+    // which are really part of botline.
+    let botline = nvim_win_get_botline(wp);
+    let empty_rows = nvim_win_get_empty_rows(wp);
+    if cln >= botline {
+        scrolled = used;
+        if cln == botline {
+            scrolled -= empty_rows;
+        }
+        if do_sms {
+            // 'smoothscroll' and 'wrap' are set.
+            // Calculate how many screen lines the current top line of window
+            // occupies. If it is occupying more than the entire window, we
+            // need to scroll the additional clipped lines to scroll past the
+            // top line before we can move on to the other lines.
+            let topline = nvim_win_get_topline(wp);
+            let top_plines = nvim_plines_win_nofill(wp, topline, 0);
+            let view_width = nvim_win_get_view_width(wp);
+            let width1 = view_width - nvim_win_col_off(wp);
+
+            if width1 > 0 {
+                let width2 = width1 + nvim_win_col_off2(wp);
+                let mut skip_lines = 0;
+                let skipcol = nvim_win_get_skipcol(wp);
+
+                // A similar formula is used in curs_columns().
+                if skipcol > width1 {
+                    skip_lines += (skipcol - width1) / width2 + 1;
+                } else if skipcol > 0 {
+                    skip_lines = 1;
+                }
+
+                let adjusted_top_plines = top_plines - skip_lines;
+                if adjusted_top_plines > view_height {
+                    scrolled += adjusted_top_plines - view_height;
+                }
+            }
+        }
+    }
+
+    // Get cursor line boundaries for folding
+    let mut loff_lnum = cln;
+    let mut boff_lnum = cln;
+    if nvim_hasFolding(
+        wp,
+        cln,
+        std::ptr::addr_of_mut!(loff_lnum),
+        std::ptr::addr_of_mut!(boff_lnum),
+    ) == 0
+    {
+        loff_lnum = cln;
+        boff_lnum = cln;
+    }
+
+    let mut loff = LineOff {
+        lnum: loff_lnum,
+        fill: 0,
+        height: 0,
+    };
+    let mut boff = LineOff {
+        lnum: boff_lnum,
+        fill: 0,
+        height: 0,
+    };
+
+    let botline = nvim_win_get_botline(wp);
+    let filler_rows = nvim_win_get_filler_rows(wp);
+    let fill_below_window = nvim_win_get_fill(wp, botline) - filler_rows;
+
+    let mut extra = 0;
+    let so = rs_get_scrolloff_value(wp);
+    let mouse_dragging = nvim_get_mouse_dragging();
+
+    // Stop counting lines to scroll when
+    // - hitting start of the file
+    // - scrolled nothing or at least 'sj' lines
+    // - at least 'so' lines below the cursor
+    // - lines between botline and cursor have been counted
+    while loff.lnum > 1 {
+        let so_effective = if mouse_dragging > 0 {
+            mouse_dragging - 1
+        } else {
+            so
+        };
+
+        // Stop when scrolled nothing or at least "min_scroll", found "extra"
+        // context for 'scrolloff' and counted all lines below the window.
+        if ((scrolled <= 0 || scrolled >= min_scroll) && extra >= so_effective
+            || boff.lnum + 1 > line_count)
+            && loff.lnum <= botline
+            && (loff.lnum < botline || loff.fill >= fill_below_window)
+        {
+            break;
+        }
+
+        // Add one line above
+        rs_topline_back(wp, std::ptr::addr_of_mut!(loff));
+        if loff.height == MAXCOL {
+            used = MAXCOL;
+        } else {
+            used += loff.height;
+        }
+        if used > view_height {
+            break;
+        }
+
+        let botline = nvim_win_get_botline(wp);
+        let empty_rows = nvim_win_get_empty_rows(wp);
+        if loff.lnum >= botline && (loff.lnum > botline || loff.fill <= fill_below_window) {
+            // Count screen lines that are below the window.
+            scrolled += loff.height;
+            if loff.lnum == botline && loff.fill == 0 {
+                scrolled -= empty_rows;
+            }
+        }
+
+        if boff.lnum < line_count {
+            // Add one line below
+            rs_botline_forw(wp, std::ptr::addr_of_mut!(boff));
+            used += boff.height;
+            if used > view_height {
+                break;
+            }
+
+            let so_effective = if mouse_dragging > 0 {
+                mouse_dragging - 1
+            } else {
+                so
+            };
+
+            if extra < so_effective || scrolled < min_scroll {
+                extra += boff.height;
+                let botline = nvim_win_get_botline(wp);
+                let filler_rows = nvim_win_get_filler_rows(wp);
+                if boff.lnum >= botline || (boff.lnum + 1 == botline && boff.fill > filler_rows) {
+                    // Count screen lines that are below the window.
+                    scrolled += boff.height;
+                    let empty_rows = nvim_win_get_empty_rows(wp);
+                    if boff.lnum == botline && boff.fill == 0 {
+                        scrolled -= empty_rows;
+                    }
+                }
+            }
+        }
+    }
+
+    // Determine how many lines to scroll
+    let line_count_scroll: LinenrT;
+
+    // w_empty_rows is larger, no need to scroll
+    if scrolled <= 0 {
+        line_count_scroll = 0;
+    // more than a screenfull, don't scroll but redraw
+    } else if used > view_height {
+        line_count_scroll = used;
+    // scroll minimal number of lines
+    } else {
+        let mut count = 0;
+        let topfill = nvim_win_get_topfill(wp);
+        let topline = nvim_win_get_topline(wp);
+        let botline = nvim_win_get_botline(wp);
+
+        boff.fill = topfill;
+        boff.lnum = topline - 1;
+
+        let mut i = 0;
+        while i < scrolled && boff.lnum < botline {
+            rs_botline_forw(wp, std::ptr::addr_of_mut!(boff));
+            i += boff.height;
+            count += 1;
+        }
+
+        if i < scrolled {
+            // below w_botline, don't scroll
+            line_count_scroll = 9999;
+        } else {
+            line_count_scroll = count;
+        }
+    }
+
+    // Scroll up if the cursor is off the bottom of the screen a bit.
+    // Otherwise put it at 1/2 of the screen.
+    if line_count_scroll >= view_height && line_count_scroll > min_scroll {
+        rs_scroll_cursor_halfway(wp, 0, 1);
+    } else if line_count_scroll > 0 {
+        if do_sms {
+            rs_scrollup(wp, scrolled, 1); // TODO(vim):
+        } else {
+            rs_scrollup(wp, line_count_scroll, 1);
+        }
+    }
+
+    // If topline didn't change we need to restore w_botline and w_empty_rows
+    // (we changed them).
+    // If topline did change, update_screen() will set botline.
+    let new_topline = nvim_win_get_topline(wp);
+    let new_skipcol = nvim_win_get_skipcol(wp);
+    if new_topline == old_topline && new_skipcol == old_skipcol && set_topbot {
+        nvim_win_set_botline(wp, old_botline);
+        nvim_win_set_empty_rows(wp, old_empty_rows);
+        nvim_win_set_valid(wp, old_valid);
+    }
+    let valid = nvim_win_get_valid(wp);
+    nvim_win_set_valid(wp, valid | VALID_TOPLINE);
+    nvim_win_set_viewport_invalid(wp, 1);
+
+    // Make sure cursor is still visible after adjusting skipcol for "zb".
+    if set_topbot {
+        nvim_cursor_correct_sms(wp);
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

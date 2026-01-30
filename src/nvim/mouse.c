@@ -90,6 +90,12 @@ void nvim_set_orig_topfill(int val)
   orig_topfill = val;
 }
 
+/// Get the mouse_dragging global value.
+int nvim_get_mouse_dragging(void)
+{
+  return mouse_dragging;
+}
+
 /// Get class of a character for selection: same class means same word.
 /// 0: blank
 /// 1: punctuation groups
