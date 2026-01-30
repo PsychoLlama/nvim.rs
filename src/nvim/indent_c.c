@@ -150,6 +150,18 @@ const char *nvim_curbuf_get_p_lop(void)
   return curbuf->b_p_lop;
 }
 
+/// C accessor for curbuf->b_p_lw (lispwords local).
+const char *nvim_curbuf_get_p_lw(void)
+{
+  return curbuf->b_p_lw;
+}
+
+/// C accessor for global p_lispwords.
+const char *nvim_get_p_lispwords(void)
+{
+  return p_lispwords;
+}
+
 /// C accessor for in_cinkeys function (for Rust FFI).
 bool nvim_in_cinkeys(int keytyped, int when, bool line_is_empty)
 {

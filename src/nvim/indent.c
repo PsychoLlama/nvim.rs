@@ -130,6 +130,7 @@ extern int *rs_tabstop_copy(const int *oldts);
 // Phase: Checks (indent/checks.rs)
 extern bool rs_preprocs_left(void);
 extern bool rs_use_indentexpr_for_lisp(void);
+extern int rs_lisp_match(const char *p);
 
 /// Set the integer values corresponding to the string setting of 'vartabstop'.
 /// "array" will be set, caller must free it if needed.
@@ -1754,16 +1755,7 @@ int get_lisp_indent(void)
 
 static int lisp_match(char *p)
 {
-  char buf[512];
-  char *word = *curbuf->b_p_lw != NUL ? curbuf->b_p_lw : p_lispwords;
-
-  while (*word != NUL) {
-    size_t len = copy_option_part(&word, buf, sizeof(buf), ",");
-    if ((strncmp(buf, p, len) == 0) && ascii_iswhite_or_nul(p[len])) {
-      return true;
-    }
-  }
-  return false;
+  return rs_lisp_match(p);
 }
 
 /// Re-indent the current line, based on the current contents of it and the

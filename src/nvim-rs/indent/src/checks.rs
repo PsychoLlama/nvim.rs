@@ -12,6 +12,8 @@ extern "C" {
     fn nvim_curbuf_get_p_lisp() -> c_int;
     fn nvim_curbuf_get_inde_ptr() -> *const c_char;
     fn nvim_curbuf_get_p_lop() -> *const c_char;
+    fn nvim_curbuf_get_p_lw() -> *const c_char;
+    fn nvim_get_p_lispwords() -> *const c_char;
     fn nvim_in_cinkeys(keytyped: c_int, when: c_char, line_is_empty: bool) -> bool;
 }
 
@@ -88,6 +90,74 @@ pub unsafe extern "C" fn rs_use_indentexpr_for_lisp() -> bool {
             return false;
         }
     }
+}
+
+// =============================================================================
+// Lisp indentation helpers
+// =============================================================================
+
+/// Check if a string matches a word in the lispwords list.
+///
+/// Used by `get_lisp_indent()` to determine if certain keywords require
+/// "body" indenting rules (e.g., `let`, `do`, etc.).
+///
+/// # Safety
+/// - `p` must point to a valid null-terminated C string
+/// - Accesses current buffer state for 'lispwords' option
+#[no_mangle]
+pub unsafe extern "C" fn rs_lisp_match(p: *const c_char) -> c_int {
+    if p.is_null() {
+        return 0;
+    }
+
+    // Get the lispwords option - prefer buffer-local, fall back to global
+    let b_lw = nvim_curbuf_get_p_lw();
+    let word = if !b_lw.is_null() && *b_lw != 0 {
+        b_lw
+    } else {
+        nvim_get_p_lispwords()
+    };
+
+    if word.is_null() {
+        return 0;
+    }
+
+    // Iterate through comma-separated words in lispwords
+    let mut word_ptr = word;
+    while *word_ptr != 0 {
+        // Find the end of the current word (terminated by comma or NUL)
+        let word_start = word_ptr;
+        let mut word_len = 0usize;
+        while *word_ptr != 0 && *word_ptr != b',' as c_char {
+            word_len += 1;
+            word_ptr = word_ptr.add(1);
+        }
+
+        // Compare the word with p
+        if word_len > 0 {
+            let mut matches = true;
+            for i in 0..word_len {
+                if *word_start.add(i) != *p.add(i) {
+                    matches = false;
+                    break;
+                }
+            }
+            // Also check that p[word_len] is whitespace or NUL
+            if matches {
+                let next_char = *p.add(word_len);
+                if next_char == 0 || next_char == b' ' as c_char || next_char == b'\t' as c_char {
+                    return 1;
+                }
+            }
+        }
+
+        // Skip the comma separator
+        if *word_ptr == b',' as c_char {
+            word_ptr = word_ptr.add(1);
+        }
+    }
+
+    0
 }
 
 #[cfg(test)]
