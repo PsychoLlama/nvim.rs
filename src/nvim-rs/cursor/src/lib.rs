@@ -703,4 +703,10 @@ mod tests {
         assert!(rs_cursor_at_first_line(-1));
         assert!(!rs_cursor_at_first_line(2));
     }
+
+    #[test]
+    fn test_return_value_constants() {
+        assert_eq!(OK, 1);
+        assert_eq!(FAIL, 0);
+    }
 }
