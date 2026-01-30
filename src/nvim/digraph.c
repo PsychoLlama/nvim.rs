@@ -69,6 +69,8 @@ typedef struct {
 } PutdigraphResult;
 
 extern int rs_putdigraph(char **str, PutdigraphResult *result);
+extern int rs_digraph_get_header_index(int previous, int current);
+extern int rs_digraph_format_entry(uint8_t char1, uint8_t char2, int result, char *buf, int buf_len);
 
 // digraphs added by the user
 static garray_T user_digraphs = { 0, 0, (int)sizeof(digr_T), 10, NULL };
@@ -1531,6 +1533,18 @@ int nvim_get_p_dg(void)
   return p_dg;
 }
 
+/// Check if a character is a composing character (for Rust FFI).
+int nvim_utf_iscomposing_first(int c)
+{
+  return utf_iscomposing_first(c);
+}
+
+/// Get display width of a character in cells (for Rust FFI).
+int nvim_char2cells(int c)
+{
+  return char2cells(c);
+}
+
 /// handle digraphs after typing a character
 ///
 /// @param c
@@ -1816,13 +1830,9 @@ static void printdigraph(const digr_T *dp, result_T *previous)
   }
 
   if (previous != NULL) {
-    for (int i = 0; header_table[i].dg_header != NULL; i++) {
-      if (*previous < header_table[i].dg_start
-          && dp->result >= header_table[i].dg_start
-          && dp->result < header_table[i + 1].dg_start) {
-        digraph_header(_(header_table[i].dg_header));
-        break;
-      }
+    int header_idx = rs_digraph_get_header_index(*previous, dp->result);
+    if (header_idx >= 0 && header_idx < (int)ARRAY_SIZE(header_table) - 1) {
+      digraph_header(_(header_table[header_idx].dg_header));
     }
     *previous = dp->result;
   }
