@@ -1014,3 +1014,170 @@ mod phase56_tests {
         assert!(!rs_mark_is_user_settable(c_int::from(b'.')));
     }
 }
+
+// =============================================================================
+// Phase 1: Mark View and Memory Operations
+// =============================================================================
+
+/// linenr_T equivalent from Neovim
+pub type LinenrT = i32;
+
+/// MAXLNUM value - represents no view
+pub const MAXLNUM: LinenrT = 0x7fffffff;
+
+/// fmarkv_T structure matching Neovim's mark_defs.h
+/// Represents view in which the mark was created
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FmarkvT {
+    /// Amount of lines from the mark lnum to the top of the window.
+    /// Use MAXLNUM to indicate that the mark does not have a view.
+    pub topline_offset: LinenrT,
+}
+
+/// Create a new fmarkv_T with MAXLNUM (no view).
+#[no_mangle]
+pub extern "C" fn rs_fmarkv_init() -> FmarkvT {
+    FmarkvT {
+        topline_offset: MAXLNUM,
+    }
+}
+
+/// Create an fmarkv_T from topline and position.
+///
+/// This stores the offset between the mark's line number and the window's
+/// topline, allowing the view to be restored later.
+///
+/// # Arguments
+/// * `topline` - The window's current topline
+/// * `pos_lnum` - The mark's line number
+///
+/// # Returns
+/// An fmarkv_T with the calculated topline offset
+#[no_mangle]
+pub extern "C" fn rs_mark_view_make(topline: LinenrT, pos_lnum: LinenrT) -> FmarkvT {
+    FmarkvT {
+        topline_offset: pos_lnum - topline,
+    }
+}
+
+/// Calculate the topline to restore from a mark view.
+///
+/// This computes the topline based on the mark's line number and the stored
+/// topline offset. Returns -1 if the view should not be restored (offset >= MAXLNUM
+/// or calculated topline < 1).
+///
+/// # Arguments
+/// * `mark_lnum` - The mark's line number
+/// * `topline_offset` - The stored topline offset from fmarkv_T
+///
+/// # Returns
+/// The topline to set, or -1 if view should not be restored
+#[no_mangle]
+pub extern "C" fn rs_mark_view_calc_topline(
+    mark_lnum: LinenrT,
+    topline_offset: LinenrT,
+) -> LinenrT {
+    // If topline_offset is MAXLNUM (no view) or negative, don't restore view
+    if !(0..MAXLNUM).contains(&topline_offset) {
+        return -1;
+    }
+
+    let topline = mark_lnum - topline_offset;
+    if topline >= 1 {
+        topline
+    } else {
+        -1
+    }
+}
+
+/// Check if an fmarkv_T has a valid view.
+#[no_mangle]
+pub extern "C" fn rs_fmarkv_has_view(view: FmarkvT) -> c_int {
+    c_int::from((0..MAXLNUM).contains(&view.topline_offset))
+}
+
+// =============================================================================
+// Phase 1 Tests
+// =============================================================================
+
+#[cfg(test)]
+mod phase1_tests {
+    use super::*;
+
+    #[test]
+    fn test_fmarkv_init() {
+        let view = rs_fmarkv_init();
+        assert_eq!(view.topline_offset, MAXLNUM);
+    }
+
+    #[test]
+    fn test_mark_view_make() {
+        // Normal case: mark at line 10, topline at line 5
+        let view = rs_mark_view_make(5, 10);
+        assert_eq!(view.topline_offset, 5); // 10 - 5 = 5
+
+        // Mark at topline
+        let view = rs_mark_view_make(10, 10);
+        assert_eq!(view.topline_offset, 0);
+
+        // Mark above topline (shouldn't happen in practice, but handle it)
+        let view = rs_mark_view_make(10, 5);
+        assert_eq!(view.topline_offset, -5);
+    }
+
+    #[test]
+    fn test_mark_view_calc_topline() {
+        // Normal case: mark at line 10, offset 5 -> topline should be 5
+        let topline = rs_mark_view_calc_topline(10, 5);
+        assert_eq!(topline, 5);
+
+        // Mark at line 10, offset 0 -> topline should be 10
+        let topline = rs_mark_view_calc_topline(10, 0);
+        assert_eq!(topline, 10);
+
+        // MAXLNUM offset (no view) -> should return -1
+        let topline = rs_mark_view_calc_topline(10, MAXLNUM);
+        assert_eq!(topline, -1);
+
+        // Negative offset -> should return -1
+        let topline = rs_mark_view_calc_topline(10, -1);
+        assert_eq!(topline, -1);
+
+        // Calculated topline would be < 1 -> should return -1
+        let topline = rs_mark_view_calc_topline(1, 5);
+        assert_eq!(topline, -1); // 1 - 5 = -4, which is < 1
+    }
+
+    #[test]
+    fn test_fmarkv_has_view() {
+        // Valid view with offset 0
+        let view = FmarkvT { topline_offset: 0 };
+        assert_ne!(rs_fmarkv_has_view(view), 0);
+
+        // Valid view with positive offset
+        let view = FmarkvT { topline_offset: 10 };
+        assert_ne!(rs_fmarkv_has_view(view), 0);
+
+        // No view (MAXLNUM)
+        let view = FmarkvT {
+            topline_offset: MAXLNUM,
+        };
+        assert_eq!(rs_fmarkv_has_view(view), 0);
+
+        // Invalid view (negative)
+        let view = FmarkvT { topline_offset: -1 };
+        assert_eq!(rs_fmarkv_has_view(view), 0);
+    }
+
+    #[test]
+    fn test_view_roundtrip() {
+        // Create a view at mark line 100, topline 50
+        let view = rs_mark_view_make(50, 100);
+        assert_eq!(view.topline_offset, 50);
+
+        // Restore the view - should get topline 50
+        let restored_topline = rs_mark_view_calc_topline(100, view.topline_offset);
+        assert_eq!(restored_topline, 50);
+    }
+}

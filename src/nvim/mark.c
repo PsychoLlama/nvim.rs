@@ -109,6 +109,12 @@ extern void rs_pos_order(pos_T *a, pos_T *b);
 extern void rs_mark_get_name(int name, char *buf, size_t buf_len);
 extern const char *rs_mark_get_category(int name);
 
+// Mark view functions
+extern fmarkv_T rs_fmarkv_init(void);
+extern fmarkv_T rs_mark_view_make(linenr_T topline, linenr_T pos_lnum);
+extern linenr_T rs_mark_view_calc_topline(linenr_T mark_lnum, linenr_T topline_offset);
+extern int rs_fmarkv_has_view(fmarkv_T view);
+
 // =============================================================================
 // Rust wrapper functions
 // =============================================================================
@@ -951,23 +957,29 @@ end:
 /// Restore the mark view.
 /// By remembering the offset between topline and mark lnum at the time of
 /// definition, this function restores the "view".
+/// Restore the mark view.
+/// By remembering the offset between topline and mark lnum at the time of
+/// definition, this function restores the "view".
 /// @note  Assumes the mark has been checked, is valid.
 /// @param  fm the named mark.
 void mark_view_restore(fmark_T *fm)
 {
-  if (fm != NULL && fm->view.topline_offset >= 0) {
-    linenr_T topline = fm->mark.lnum - fm->view.topline_offset;
-    // If the mark does not have a view, topline_offset is MAXLNUM,
-    // and this check can prevent restoring mark view in that case.
-    if (topline >= 1) {
-      set_topline(curwin, topline);
-    }
+  if (fm == NULL) {
+    return;
+  }
+  // Use Rust implementation to calculate the topline
+  linenr_T topline = rs_mark_view_calc_topline(fm->mark.lnum, fm->view.topline_offset);
+  // If the mark does not have a view, topline_offset is MAXLNUM,
+  // and rs_mark_view_calc_topline returns -1 in that case.
+  if (topline >= 1) {
+    set_topline(curwin, topline);
   }
 }
 
+/// Create fmarkv_T from topline and position. Rust implementation.
 fmarkv_T mark_view_make(linenr_T topline, pos_T pos)
 {
-  return (fmarkv_T){ pos.lnum - topline };
+  return rs_mark_view_make(topline, pos.lnum);
 }
 
 /// Search for the next named mark in the current file from a start position.
