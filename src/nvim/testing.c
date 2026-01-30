@@ -54,6 +54,8 @@ extern void rs_f_assert_true(typval_T *argvars, typval_T *rettv);
 extern void rs_f_assert_false(typval_T *argvars, typval_T *rettv);
 extern void rs_f_assert_equal(typval_T *argvars, typval_T *rettv);
 extern void rs_f_assert_notequal(typval_T *argvars, typval_T *rettv);
+extern void rs_f_assert_match(typval_T *argvars, typval_T *rettv);
+extern void rs_f_assert_notmatch(typval_T *argvars, typval_T *rettv);
 
 // =============================================================================
 // C accessor functions for Rust
@@ -858,13 +860,13 @@ void f_assert_inrange(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// "assert_match(pattern, actual[, msg])" function
 void f_assert_match(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  rettv->vval.v_number = assert_match_common(argvars, ASSERT_MATCH);
+  rs_f_assert_match(argvars, rettv);
 }
 
 /// "assert_notmatch(pattern, actual[, msg])" function
 void f_assert_notmatch(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  rettv->vval.v_number = assert_match_common(argvars, ASSERT_NOTMATCH);
+  rs_f_assert_notmatch(argvars, rettv);
 }
 
 /// "assert_report(msg)" function

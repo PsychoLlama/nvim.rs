@@ -480,6 +480,12 @@ extern "C" {
     fn tv_equal(tv1: TypevalHandle, tv2: TypevalHandle, ic: c_int) -> c_int;
     fn tv_get_number_chk(tv: TypevalHandle, err: *mut c_int) -> i64;
     fn nvim_testing_tv_get_bool_value(tv: TypevalHandle) -> c_int;
+
+    // String extraction
+    fn tv_get_string_buf_chk(tv: TypevalHandle, buf: *mut c_char) -> *const c_char;
+
+    // Pattern matching
+    fn pattern_match(pat: *const c_char, text: *const c_char, ic: c_int) -> c_int;
 }
 
 // BoolVarValue constants
@@ -571,6 +577,50 @@ fn assert_equal_common(argvars: TypevalHandle, atype: AssertType) -> c_int {
 // This should match the C sizeof(typval_T)
 const TYPVAL_SIZE: usize = 24; // Typical size, may vary by platform
 
+// Size of number buffer for string conversions
+const NUMBUFLEN: usize = 65;
+
+/// Common implementation for assert_match() and assert_notmatch().
+fn assert_match_common(argvars: TypevalHandle, atype: AssertType) -> c_int {
+    unsafe {
+        let mut buf1 = [0i8; NUMBUFLEN];
+        let mut buf2 = [0i8; NUMBUFLEN];
+
+        let pat = tv_get_string_buf_chk(argvars, buf1.as_mut_ptr());
+        let arg1 = argvars.cast::<u8>().add(TYPVAL_SIZE).cast::<c_void>();
+        let text = tv_get_string_buf_chk(arg1, buf2.as_mut_ptr());
+
+        if pat.is_null() || text.is_null() {
+            return 0;
+        }
+
+        let matches = pattern_match(pat, text, 0) != 0;
+        let should_match = atype == AssertType::Match;
+
+        if matches != should_match {
+            let mut ga = GArray::default();
+            prepare_assert_error(&raw mut ga);
+
+            // Get third argument (optional message)
+            let argvars_2 = argvars.cast::<u8>().add(TYPVAL_SIZE * 2).cast::<c_void>();
+            fill_assert_error(
+                &raw mut ga,
+                argvars_2,
+                std::ptr::null(),
+                argvars,
+                arg1,
+                atype,
+            );
+
+            assert_error(&raw mut ga);
+            ga_clear(&raw mut ga);
+            return 1;
+        }
+
+        0
+    }
+}
+
 // =============================================================================
 // VimL function implementations
 // =============================================================================
@@ -622,6 +672,34 @@ pub unsafe extern "C" fn rs_f_assert_notequal(argvars: TypevalHandle, rettv: Typ
     set_rettv_number(
         rettv,
         i64::from(assert_equal_common(argvars, AssertType::NotEqual)),
+    );
+}
+
+/// `assert_match(pattern, actual[, msg])` function implementation.
+///
+/// # Safety
+///
+/// - `argvars` must point to a valid array of `typval_T`.
+/// - `rettv` must point to a valid `typval_T` for the return value.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_assert_match(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+    set_rettv_number(
+        rettv,
+        i64::from(assert_match_common(argvars, AssertType::Match)),
+    );
+}
+
+/// `assert_notmatch(pattern, actual[, msg])` function implementation.
+///
+/// # Safety
+///
+/// - `argvars` must point to a valid array of `typval_T`.
+/// - `rettv` must point to a valid `typval_T` for the return value.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_assert_notmatch(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+    set_rettv_number(
+        rettv,
+        i64::from(assert_match_common(argvars, AssertType::NotMatch)),
     );
 }
 
