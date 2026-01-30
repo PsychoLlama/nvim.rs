@@ -84,6 +84,7 @@ extern void rs_set_topline(win_T *wp, linenr_T lnum);
 extern void rs_set_valid_virtcol(win_T *wp, colnr_T vcol);
 extern void rs_cursor_correct(win_T *wp);
 extern int rs_get_scroll_overlap(int dir);
+extern int rs_scroll_with_sms(int dir, int count, int *curscount);
 
 // Accessor for global scrolljump option
 OptInt nvim_get_p_sj(void)
@@ -1275,39 +1276,7 @@ static int get_scroll_overlap(Direction dir)
 /// of lines when 'smoothscroll' is disabled.
 static bool scroll_with_sms(Direction dir, int count, int *curscount)
 {
-  int prev_sms = curwin->w_p_sms;
-  colnr_T prev_skipcol = curwin->w_skipcol;
-  linenr_T prev_topline = curwin->w_topline;
-  int prev_topfill = curwin->w_topfill;
-
-  curwin->w_p_sms = true;
-  scroll_redraw(dir == FORWARD, count);
-
-  // Not actually smoothscrolling but ended up with partially visible line.
-  // Continue scrolling until skipcol is zero.
-  if (!prev_sms && curwin->w_skipcol > 0) {
-    int fixdir = dir;
-    // Reverse the scroll direction when topline already changed. One line
-    // extra for scrolling backward so that consuming skipcol is symmetric.
-    if (labs(curwin->w_topline - prev_topline) > (dir == BACKWARD)) {
-      fixdir = dir * -1;
-    }
-
-    int width1 = curwin->w_view_width - win_col_off(curwin);
-    int width2 = width1 + win_col_off2(curwin);
-    count = 1 + (curwin->w_skipcol - width1 - 1) / width2;
-    if (fixdir == FORWARD) {
-      count = 1 + (linetabsize_eol(curwin, curwin->w_topline)
-                   - curwin->w_skipcol - width1 + width2 - 1) / width2;
-    }
-    scroll_redraw(fixdir == FORWARD, count);
-    *curscount += count * (fixdir == dir ? 1 : -1);
-  }
-  curwin->w_p_sms = prev_sms;
-
-  return curwin->w_topline == prev_topline
-         && curwin->w_topfill == prev_topfill
-         && curwin->w_skipcol == prev_skipcol;
+  return rs_scroll_with_sms((int)dir, count, curscount) != 0;
 }
 
 /// Move screen "count" (half) pages up ("dir" is BACKWARD) or down ("dir" is

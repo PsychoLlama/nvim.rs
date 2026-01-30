@@ -2893,6 +2893,15 @@ const DIRECTION_FORWARD: c_int = 1;
 const DIRECTION_BACKWARD: c_int = -1;
 
 // =============================================================================
+// Additional C Accessor Functions for Smooth Scroll
+// =============================================================================
+
+extern "C" {
+    // Smoothscroll option setter
+    fn nvim_win_set_p_sms(wp: WinHandle, val: c_int);
+}
+
+// =============================================================================
 // Page Scroll Overlap Calculation
 // =============================================================================
 
@@ -3001,6 +3010,92 @@ pub unsafe extern "C" fn rs_get_scroll_overlap(dir: c_int) -> c_int {
     } else {
         min_height // 2 lines overlap
     }
+}
+
+// =============================================================================
+// Smooth Scroll with SMS
+// =============================================================================
+
+/// Scroll with smoothscroll, adjusting curscount for partial lines.
+///
+/// Scrolls "count" lines with 'smoothscroll' in direction "dir". Returns true
+/// when scrolling happened (i.e., nothing changed). Adjusts "curscount" for
+/// scrolling different amount of lines when 'smoothscroll' is disabled.
+///
+/// # Arguments
+/// * `dir` - Direction: `DIRECTION_FORWARD` (1) or `DIRECTION_BACKWARD` (-1)
+/// * `count` - Number of lines to scroll
+/// * `curscount` - Pointer to cursor count adjustment
+///
+/// # Returns
+/// 1 if nothing changed, 0 if scrolling occurred.
+///
+/// # Safety
+/// Accesses curwin global and modifies window state.
+#[no_mangle]
+pub unsafe extern "C" fn rs_scroll_with_sms(
+    dir: c_int,
+    mut count: c_int,
+    curscount: *mut c_int,
+) -> c_int {
+    let wp = nvim_get_curwin();
+    if wp.is_null() {
+        return 1;
+    }
+
+    let prev_sms = nvim_win_get_p_sms(wp);
+    let prev_skipcol = nvim_win_get_skipcol(wp);
+    let prev_topline = nvim_win_get_topline(wp);
+    let prev_topfill = nvim_win_get_topfill(wp);
+
+    // Temporarily enable smoothscroll
+    nvim_win_set_p_sms(wp, 1);
+    rs_scroll_redraw(c_int::from(dir == DIRECTION_FORWARD), count);
+
+    // Not actually smoothscrolling but ended up with partially visible line.
+    // Continue scrolling until skipcol is zero.
+    if prev_sms == 0 && nvim_win_get_skipcol(wp) > 0 {
+        let mut fixdir = dir;
+        let topline = nvim_win_get_topline(wp);
+
+        // Reverse the scroll direction when topline already changed. One line
+        // extra for scrolling backward so that consuming skipcol is symmetric.
+        let threshold = c_int::from(dir == DIRECTION_BACKWARD);
+        if (topline - prev_topline).abs() > threshold {
+            fixdir = -dir;
+        }
+
+        let view_width = nvim_win_get_view_width(wp);
+        let width1 = view_width - nvim_win_col_off(wp);
+        let width2 = width1 + nvim_win_col_off2(wp);
+        let skipcol = nvim_win_get_skipcol(wp);
+
+        if fixdir == DIRECTION_FORWARD {
+            let tabsize = nvim_linetabsize_eol(wp, topline);
+            count = 1 + (tabsize - skipcol - width1 + width2 - 1) / width2;
+        } else {
+            count = 1 + (skipcol - width1 - 1) / width2;
+        }
+
+        rs_scroll_redraw(c_int::from(fixdir == DIRECTION_FORWARD), count);
+
+        if !curscount.is_null() {
+            let adjustment = if fixdir == dir { count } else { -count };
+            *curscount += adjustment;
+        }
+    }
+
+    // Restore original sms setting
+    nvim_win_set_p_sms(wp, prev_sms);
+
+    // Return true (1) if nothing changed
+    let new_topline = nvim_win_get_topline(wp);
+    let new_topfill = nvim_win_get_topfill(wp);
+    let new_skipcol = nvim_win_get_skipcol(wp);
+
+    c_int::from(
+        new_topline == prev_topline && new_topfill == prev_topfill && new_skipcol == prev_skipcol,
+    )
 }
 
 // =============================================================================

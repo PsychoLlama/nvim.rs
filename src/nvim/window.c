@@ -1276,6 +1276,14 @@ int nvim_win_get_p_sms(win_T *wp)
   return wp ? wp->w_p_sms : 0;
 }
 
+/// Set the w_p_sms (smoothscroll) option for a window (accessor for Rust).
+void nvim_win_set_p_sms(win_T *wp, int val)
+{
+  if (wp) {
+    wp->w_p_sms = val;
+  }
+}
+
 /// Get the tp_topframe field from a tabpage (accessor for Rust).
 frame_T *nvim_tabpage_get_topframe(tabpage_T *tp)
 {
