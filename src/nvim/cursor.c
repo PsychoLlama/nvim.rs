@@ -49,6 +49,11 @@ extern void rs_check_cursor_lnum(win_T *win);
 extern void rs_check_cursor_col(win_T *win);
 extern void rs_check_cursor(win_T *wp);
 extern void rs_check_visual_pos(void);
+extern int rs_inc_cursor(void);
+extern int rs_dec_cursor(void);
+extern void rs_pchar_cursor(char c);
+extern linenr_T rs_get_cursor_rel_lnum(win_T *wp, linenr_T lnum);
+extern bool rs_set_leftcol(colnr_T leftcol);
 
 // =============================================================================
 // Screen Column Functions
@@ -264,7 +269,7 @@ int getvpos(win_T *wp, pos_T *pos, colnr_T wcol)
 /// Increment the cursor position.  See inc() for return values.
 int inc_cursor(void)
 {
-  return inc(&curwin->w_cursor);
+  return rs_inc_cursor();
 }
 
 /// Decrement the line pointer 'p' crossing line boundaries as necessary.
@@ -272,7 +277,7 @@ int inc_cursor(void)
 /// @return  1 when crossing a line, -1 when at start of file, 0 otherwise.
 int dec_cursor(void)
 {
-  return dec(&curwin->w_cursor);
+  return rs_dec_cursor();
 }
 
 /// Get the line number relative to the current cursor position, i.e. the
@@ -282,27 +287,7 @@ int dec_cursor(void)
 /// @param lnum line number to get the result for
 linenr_T get_cursor_rel_lnum(win_T *wp, linenr_T lnum)
 {
-  linenr_T cursor = wp->w_cursor.lnum;
-  if (lnum == cursor || !hasAnyFolding(wp)) {
-    return lnum - cursor;
-  }
-
-  linenr_T from_line = lnum < cursor ? lnum : cursor;
-  linenr_T to_line = lnum > cursor ? lnum : cursor;
-  linenr_T retval = 0;
-
-  // Loop until we reach to_line, skipping folds.
-  for (; from_line < to_line; from_line++, retval++) {
-    // If from_line is in a fold, set it to the last line of that fold.
-    hasFolding(wp, from_line, NULL, &from_line);
-  }
-
-  // If to_line is in a closed fold, the line count is off by +1. Correct it.
-  if (from_line > to_line) {
-    retval--;
-  }
-
-  return (lnum < cursor) ? -retval : retval;
+  return rs_get_cursor_rel_lnum(wp, lnum);
 }
 
 /// Make sure "pos.lnum" and "pos.col" are valid in "buf".
@@ -351,51 +336,7 @@ void adjust_cursor_col(void)
 /// @return  true if the cursor was moved.
 bool set_leftcol(colnr_T leftcol)
 {
-  // Return quickly when there is no change.
-  if (curwin->w_leftcol == leftcol) {
-    return false;
-  }
-  curwin->w_leftcol = leftcol;
-
-  changed_cline_bef_curs(curwin);
-  // TODO(hinidu): I think it should be colnr_T or int, but p_siso is long.
-  // Perhaps we can change p_siso to int.
-  int64_t lastcol = curwin->w_leftcol + curwin->w_view_width - win_col_off(curwin) - 1;
-  validate_virtcol(curwin);
-
-  bool retval = false;
-  // If the cursor is right or left of the screen, move it to last or first
-  // visible character.
-  int siso = get_sidescrolloff_value(curwin);
-  if (curwin->w_virtcol > (colnr_T)(lastcol - siso)) {
-    retval = true;
-    coladvance(curwin, (colnr_T)(lastcol - siso));
-  } else if (curwin->w_virtcol < curwin->w_leftcol + siso) {
-    retval = true;
-    coladvance(curwin, (colnr_T)(curwin->w_leftcol + siso));
-  }
-
-  // If the start of the character under the cursor is not on the screen,
-  // advance the cursor one more char.  If this fails (last char of the
-  // line) adjust the scrolling.
-  colnr_T s, e;
-  getvvcol(curwin, &curwin->w_cursor, &s, NULL, &e);
-  if (e > (colnr_T)lastcol) {
-    retval = true;
-    coladvance(curwin, s - 1);
-  } else if (s < curwin->w_leftcol) {
-    retval = true;
-    if (coladvance(curwin, e + 1) == FAIL) {    // there isn't another character
-      curwin->w_leftcol = s;            // adjust w_leftcol instead
-      changed_cline_bef_curs(curwin);
-    }
-  }
-
-  if (retval) {
-    curwin->w_set_curswant = true;
-  }
-  redraw_later(curwin, UPD_NOT_VALID);
-  return retval;
+  return rs_set_leftcol(leftcol);
 }
 
 int gchar_cursor(void)
@@ -413,7 +354,7 @@ int char_before_cursor(void)
 /// It is directly written into the block.
 void pchar_cursor(char c)
 {
-  *(ml_get_buf_mut(curbuf, curwin->w_cursor.lnum) + curwin->w_cursor.col) = c;
+  rs_pchar_cursor(c);
 }
 
 /// @return  pointer to cursor line.
@@ -515,6 +456,12 @@ pos_T *nvim_win_get_cursor_ptr(win_T *wp)
 const char *nvim_cursor_get_line_ptr(void)
 {
   return ml_get_buf(curbuf, curwin->w_cursor.lnum);
+}
+
+/// Get mutable pointer to cursor line (for Rust).
+char *nvim_cursor_get_line_ptr_mut(void)
+{
+  return ml_get_buf_mut(curbuf, curwin->w_cursor.lnum);
 }
 
 /// Get pointer to cursor position in line (for Rust).

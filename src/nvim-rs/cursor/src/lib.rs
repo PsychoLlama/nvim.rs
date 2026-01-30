@@ -255,6 +255,67 @@ extern "C" {
 
     /// Get vcol range (start and end columns) for virtualedit
     fn nvim_get_vcol_range(wp: WinHandle, pos: *const CursorPos, start: *mut i32, end: *mut i32);
+
+    // -------------------------------------------------------------------------
+    // Cursor Increment/Decrement Functions
+    // -------------------------------------------------------------------------
+
+    /// Wrapper for `inc_cursor()` - increment cursor position
+    fn nvim_inc_cursor() -> c_int;
+
+    /// Wrapper for `dec_cursor()` - decrement cursor position
+    fn nvim_dec_cursor() -> c_int;
+
+    // -------------------------------------------------------------------------
+    // Cursor Line Mutation Functions
+    // -------------------------------------------------------------------------
+
+    /// Get mutable pointer to cursor line
+    fn nvim_cursor_get_line_ptr_mut() -> *mut c_char;
+
+    // -------------------------------------------------------------------------
+    // Folding Functions (from fold.c)
+    // -------------------------------------------------------------------------
+
+    /// Check if any folding is present in the window
+    fn rs_hasAnyFolding(wp: WinHandle) -> c_int;
+
+    /// Check if a line is folded, returns fold boundaries
+    fn nvim_hasFolding(wp: WinHandle, lnum: i64, firstp: *mut i64, lastp: *mut i64) -> c_int;
+
+    // -------------------------------------------------------------------------
+    // Window State Functions (for set_leftcol)
+    // -------------------------------------------------------------------------
+
+    /// Get window leftcol
+    fn nvim_win_get_leftcol(wp: WinHandle) -> i32;
+
+    /// Set window leftcol
+    fn nvim_win_set_leftcol(wp: WinHandle, val: c_int);
+
+    /// Get window view width
+    fn nvim_win_get_view_width(wp: WinHandle) -> c_int;
+
+    /// Get window col offset
+    fn nvim_win_col_off(wp: WinHandle) -> c_int;
+
+    /// Get window virtcol
+    fn nvim_win_get_virtcol(wp: WinHandle) -> i32;
+
+    /// Set window `w_set_curswant` flag
+    fn nvim_win_set_set_curswant(wp: WinHandle, val: c_int);
+
+    /// Call `changed_cline_bef_curs`
+    fn nvim_changed_cline_bef_curs(wp: WinHandle);
+
+    /// Call `validate_virtcol`
+    fn nvim_validate_virtcol(wp: WinHandle);
+
+    /// Get sidescrolloff value
+    fn nvim_get_sidescrolloff_value(wp: WinHandle) -> c_int;
+
+    /// Call `redraw_later`
+    fn nvim_redraw_later(wp: WinHandle, r#type: c_int);
 }
 
 // =============================================================================
@@ -265,6 +326,13 @@ extern "C" {
 pub const MODE_INSERT: c_int = 0x10;
 /// Terminal mode flag
 pub const MODE_TERMINAL: c_int = 0x2000;
+
+// =============================================================================
+// Redraw Constants (from drawscreen.h)
+// =============================================================================
+
+/// Buffer needs complete redraw
+pub const UPD_NOT_VALID: c_int = 40;
 
 // =============================================================================
 // Position Comparison Functions
@@ -939,6 +1007,199 @@ pub unsafe extern "C" fn rs_check_visual_pos() {
             nvim_set_visual_pos((*visual).lnum, len, 0);
         }
     }
+}
+
+// =============================================================================
+// Cursor Increment/Decrement Functions
+// =============================================================================
+
+/// Increment the cursor position.
+///
+/// See `inc()` for return values:
+/// - 0: still within line, moved to next char (but not at NUL)
+/// - 1: moved to next line (first char)
+/// - 2: moved to NUL at end of line
+/// - -1: at end of file, cannot move
+///
+/// # Safety
+/// Requires valid global state (curwin, curbuf).
+#[no_mangle]
+pub unsafe extern "C" fn rs_inc_cursor() -> c_int {
+    nvim_inc_cursor()
+}
+
+/// Decrement the cursor position.
+///
+/// See `dec()` for return values:
+/// - 0: moved within line or corrected MAXCOL
+/// - 1: moved to previous line (last char)
+/// - -1: at start of file, cannot move
+///
+/// # Safety
+/// Requires valid global state (curwin, curbuf).
+#[no_mangle]
+pub unsafe extern "C" fn rs_dec_cursor() -> c_int {
+    nvim_dec_cursor()
+}
+
+// =============================================================================
+// Character Writing Functions
+// =============================================================================
+
+/// Write a character at the current cursor position.
+///
+/// This writes directly into the buffer's block, bypassing any undo or
+/// change tracking. The caller is responsible for ensuring the line is
+/// properly allocated and the cursor position is valid.
+///
+/// # Safety
+/// Requires valid global state (curwin, curbuf).
+/// The cursor must be at a valid position within the line.
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_pchar_cursor(c: c_char) {
+    let line = nvim_cursor_get_line_ptr_mut();
+    let col = nvim_curwin_get_cursor_col();
+    // col is always >= 0 when cursor is at a valid position
+    *line.add(col as usize) = c;
+}
+
+// =============================================================================
+// Cursor Relative Line Number Functions
+// =============================================================================
+
+/// Get the line number relative to the current cursor position.
+///
+/// This calculates the difference between `lnum` and the cursor position,
+/// but only counts lines that can be visible (folded lines don't count).
+///
+/// # Arguments
+/// * `wp` - Window handle
+/// * `lnum` - Line number to get the relative position for
+///
+/// # Returns
+/// The relative line number (negative if above cursor, positive if below).
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_cursor_rel_lnum(wp: WinHandle, lnum: i64) -> i64 {
+    let cursor = nvim_win_get_cursor_lnum(wp);
+
+    // Fast path: same line or no folding
+    if lnum == cursor || rs_hasAnyFolding(wp) == 0 {
+        return lnum - cursor;
+    }
+
+    // Determine direction and range
+    let (from_line, to_line) = if lnum < cursor {
+        (lnum, cursor)
+    } else {
+        (cursor, lnum)
+    };
+
+    let mut retval: i64 = 0;
+    let mut from = from_line;
+
+    // Loop until we reach to_line, skipping folds
+    while from < to_line {
+        // If from is in a fold, set it to the last line of that fold
+        let mut fold_last: i64 = 0;
+        if nvim_hasFolding(wp, from, std::ptr::null_mut(), &raw mut fold_last) != 0 {
+            from = fold_last;
+        }
+        from += 1;
+        retval += 1;
+    }
+
+    // If to_line is in a closed fold, the line count is off by +1. Correct it.
+    if from > to_line {
+        retval -= 1;
+    }
+
+    if lnum < cursor {
+        -retval
+    } else {
+        retval
+    }
+}
+
+// =============================================================================
+// Scroll/Leftcol Functions
+// =============================================================================
+
+/// Set `curwin->w_leftcol` to `leftcol`.
+///
+/// Adjusts the cursor position if needed to keep it visible on screen.
+///
+/// # Arguments
+/// * `leftcol` - The new left column value
+///
+/// # Returns
+/// `true` if the cursor was moved, `false` otherwise.
+///
+/// # Safety
+/// Requires valid global state (curwin).
+#[no_mangle]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_set_leftcol(leftcol: i32) -> bool {
+    let curwin = nvim_cursor_get_curwin();
+
+    // Return quickly when there is no change
+    if nvim_win_get_leftcol(curwin) == leftcol {
+        return false;
+    }
+
+    nvim_win_set_leftcol(curwin, leftcol);
+    nvim_changed_cline_bef_curs(curwin);
+
+    // Calculate the last visible column
+    let view_width = nvim_win_get_view_width(curwin);
+    let col_off = nvim_win_col_off(curwin);
+    let lastcol = i64::from(leftcol) + i64::from(view_width) - i64::from(col_off) - 1;
+
+    nvim_validate_virtcol(curwin);
+
+    let mut retval = false;
+
+    // If the cursor is right or left of the screen, move it to last or first
+    // visible character
+    let siso = nvim_get_sidescrolloff_value(curwin);
+    let virtcol = i64::from(nvim_win_get_virtcol(curwin));
+
+    if virtcol > lastcol - i64::from(siso) {
+        retval = true;
+        rs_coladvance(curwin, (lastcol - i64::from(siso)) as i32);
+    } else if virtcol < i64::from(leftcol) + i64::from(siso) {
+        retval = true;
+        rs_coladvance(curwin, leftcol + siso);
+    }
+
+    // If the start of the character under the cursor is not on the screen,
+    // advance the cursor one more char. If this fails (last char of the
+    // line) adjust the scrolling.
+    let cursor = nvim_win_get_cursor_ptr(curwin);
+    let mut s: i32 = 0;
+    let mut e: i32 = 0;
+    nvim_getvvcol(curwin, cursor, &raw mut s, std::ptr::null_mut(), &raw mut e);
+
+    if i64::from(e) > lastcol {
+        retval = true;
+        rs_coladvance(curwin, s - 1);
+    } else if s < leftcol {
+        retval = true;
+        if rs_coladvance(curwin, e + 1) == FAIL {
+            // there isn't another character, adjust w_leftcol instead
+            nvim_win_set_leftcol(curwin, s);
+            nvim_changed_cline_bef_curs(curwin);
+        }
+    }
+
+    if retval {
+        nvim_win_set_set_curswant(curwin, 1);
+    }
+    nvim_redraw_later(curwin, UPD_NOT_VALID);
+    retval
 }
 
 // =============================================================================

@@ -1190,6 +1190,12 @@ int nvim_inc_cursor(void)
   return inc_cursor();
 }
 
+/// Wrapper for dec_cursor.
+int nvim_dec_cursor(void)
+{
+  return dec_cursor();
+}
+
 /// Check if 'cpo' contains CPO_CHANGEW.
 bool nvim_cpo_has_changew(void)
 {
