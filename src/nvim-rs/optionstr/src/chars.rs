@@ -242,6 +242,82 @@ pub extern "C" fn rs_fcs_fallback(idx: c_int) -> *const c_char {
 // Character Parsing for fillchars/listchars
 // =============================================================================
 
+/// Field index for the "tab" field in listchars (index 5)
+const LCS_TAB_IDX: usize = 5;
+
+/// Field index for "multispace" in listchars (index 9)
+const LCS_MULTISPACE_IDX: usize = 9;
+
+/// Field index for "leadmultispace" in listchars (index 10)
+const LCS_LEADMULTISPACE_IDX: usize = 10;
+
+/// Maximum number of characters that can be returned for a field
+const MAX_FIELD_CHARS: usize = 3;
+
+/// Error codes for field parsing
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CharsParseError {
+    /// No error
+    Ok = 0,
+    /// Invalid field name
+    InvalidField = 1,
+    /// Wrong number of characters for field
+    WrongCount = 2,
+    /// Invalid/double-width character
+    InvalidChar = 3,
+}
+
+/// Result of parsing a single field:value pair
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct CharsFieldResult {
+    /// Field index (into FCS_FIELDS or LCS_FIELDS)
+    pub field_idx: c_int,
+    /// Number of valid characters in chars array
+    pub char_count: c_int,
+    /// Parsed characters (up to 3 for tab field)
+    pub chars: [ScharT; MAX_FIELD_CHARS],
+    /// For multispace fields: total character count
+    pub multispace_len: c_int,
+    /// Number of bytes consumed from input
+    pub bytes_consumed: c_int,
+    /// Error code
+    pub error: CharsParseError,
+}
+
+impl Default for CharsFieldResult {
+    fn default() -> Self {
+        Self {
+            field_idx: -1,
+            char_count: 0,
+            chars: [0; MAX_FIELD_CHARS],
+            multispace_len: 0,
+            bytes_consumed: 0,
+            error: CharsParseError::Ok,
+        }
+    }
+}
+
+/// Find field index by name
+fn find_field_index(name: &[u8], is_listchars: bool) -> Option<usize> {
+    let fields: &[&str] = if is_listchars {
+        LCS_FIELDS
+    } else {
+        FCS_FIELDS
+    };
+
+    // Convert name slice to str for comparison
+    let name_str = std::str::from_utf8(name).ok()?;
+
+    for (idx, field) in fields.iter().enumerate() {
+        if *field == name_str {
+            return Some(idx);
+        }
+    }
+    None
+}
+
 /// Parse an encoded character and advance the pointer.
 ///
 /// Calls `utfc_ptr2schar(p)` and returns the character.
@@ -314,6 +390,198 @@ pub unsafe extern "C" fn rs_get_encoded_char_adv(p: *mut *const c_char) -> Schar
     c
 }
 
+/// Parse a single field:value pair from a fillchars/listchars option string.
+///
+/// The input should point to the start of a "field:value" substring.
+/// This function will:
+/// 1. Find the field name (before ':')
+/// 2. Look it up in the appropriate field list
+/// 3. Parse the character value(s)
+/// 4. Return the result with field index, parsed chars, and bytes consumed
+///
+/// Special handling:
+/// - "tab" field: requires 2-3 characters
+/// - "multispace"/"leadmultispace": counts characters but doesn't store them all
+///   (caller must handle separately)
+///
+/// # Arguments
+/// * `p` - Pointer to the field:value string (null-terminated)
+/// * `is_listchars` - true for 'listchars', false for 'fillchars'
+/// * `result` - Output struct to fill with parse results
+///
+/// # Safety
+/// - `p` must point to a valid null-terminated C string
+/// - `result` must point to valid memory
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_chars_field(
+    p: *const c_char,
+    is_listchars: bool,
+    result: *mut CharsFieldResult,
+) {
+    if p.is_null() || result.is_null() {
+        return;
+    }
+
+    let res = &mut *result;
+    *res = CharsFieldResult::default();
+
+    // Find the colon separator
+    let mut colon_pos = 0usize;
+    while *p.add(colon_pos) != 0 && *p.add(colon_pos) != b':' as c_char {
+        colon_pos += 1;
+    }
+
+    // No colon found or empty field name
+    if *p.add(colon_pos) != b':' as c_char || colon_pos == 0 {
+        res.error = CharsParseError::InvalidField;
+        return;
+    }
+
+    // Extract field name
+    let field_name = std::slice::from_raw_parts(p.cast::<u8>(), colon_pos);
+
+    // Look up field
+    let Some(field_idx) = find_field_index(field_name, is_listchars) else {
+        res.error = CharsParseError::InvalidField;
+        return;
+    };
+
+    res.field_idx = field_idx as c_int;
+
+    // Position after the colon
+    let mut s = p.add(colon_pos + 1);
+
+    // Handle multispace fields specially
+    if is_listchars && (field_idx == LCS_MULTISPACE_IDX || field_idx == LCS_LEADMULTISPACE_IDX) {
+        let mut count = 0i32;
+        while *s != 0 && *s != b',' as c_char {
+            let c = rs_get_encoded_char_adv(&mut s);
+            if c == 0 {
+                res.error = CharsParseError::InvalidChar;
+                return;
+            }
+            count += 1;
+        }
+        if count == 0 {
+            res.error = CharsParseError::WrongCount;
+            return;
+        }
+        res.multispace_len = count;
+        res.bytes_consumed = s.offset_from(p) as c_int;
+        return;
+    }
+
+    // Regular field: parse first character
+    if *s == 0 {
+        res.error = CharsParseError::WrongCount;
+        return;
+    }
+
+    let c1 = rs_get_encoded_char_adv(&mut s);
+    if c1 == 0 {
+        res.error = CharsParseError::InvalidChar;
+        return;
+    }
+    res.chars[0] = c1;
+    res.char_count = 1;
+
+    // Handle tab field specially (requires 2-3 characters)
+    if is_listchars && field_idx == LCS_TAB_IDX {
+        if *s == 0 {
+            res.error = CharsParseError::WrongCount;
+            return;
+        }
+
+        let c2 = rs_get_encoded_char_adv(&mut s);
+        if c2 == 0 {
+            res.error = CharsParseError::InvalidChar;
+            return;
+        }
+        res.chars[1] = c2;
+        res.char_count = 2;
+
+        // Optional third character
+        if *s != 0 && *s != b',' as c_char {
+            let c3 = rs_get_encoded_char_adv(&mut s);
+            if c3 == 0 {
+                res.error = CharsParseError::InvalidChar;
+                return;
+            }
+            res.chars[2] = c3;
+            res.char_count = 3;
+        }
+    }
+
+    // Check that we're at end of field (comma or NUL)
+    if *s != 0 && *s != b',' as c_char {
+        res.error = CharsParseError::WrongCount;
+        return;
+    }
+
+    res.bytes_consumed = s.offset_from(p) as c_int;
+}
+
+/// Count multispace characters without storing them.
+///
+/// This is used for the first pass of set_chars_option() to determine
+/// how much memory to allocate for multispace arrays.
+///
+/// # Safety
+/// - `p` must point to a valid null-terminated C string starting at the value
+///   (after "multispace:" or "leadmultispace:")
+/// - Returns the count of valid single-width characters, or -1 if there's an
+///   invalid character, or 0 if the string is empty
+#[no_mangle]
+pub unsafe extern "C" fn rs_count_multispace_chars(p: *const c_char) -> c_int {
+    if p.is_null() {
+        return 0;
+    }
+
+    let mut s = p;
+    let mut count = 0i32;
+
+    while *s != 0 && *s != b',' as c_char {
+        let c = rs_get_encoded_char_adv(&mut s);
+        if c == 0 {
+            return -1; // Invalid character
+        }
+        count += 1;
+    }
+
+    count
+}
+
+/// Parse multispace characters into a provided buffer.
+///
+/// # Safety
+/// - `p` must point to a valid null-terminated C string starting at the value
+/// - `buf` must have capacity for at least `buf_len` ScharT values
+/// - Returns the number of characters written
+#[no_mangle]
+pub unsafe extern "C" fn rs_parse_multispace_chars(
+    p: *const c_char,
+    buf: *mut ScharT,
+    buf_len: c_int,
+) -> c_int {
+    if p.is_null() || buf.is_null() || buf_len <= 0 {
+        return 0;
+    }
+
+    let mut s = p;
+    let mut count = 0i32;
+
+    while *s != 0 && *s != b',' as c_char && count < buf_len {
+        let c = rs_get_encoded_char_adv(&mut s);
+        if c == 0 {
+            break;
+        }
+        *buf.add(count as usize) = c;
+        count += 1;
+    }
+
+    count
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -344,5 +612,28 @@ mod tests {
             assert!(rs_is_valid_lcs_field(b"tab\0".as_ptr().cast(), 3));
             assert!(!rs_is_valid_lcs_field(b"invalid\0".as_ptr().cast(), 7));
         }
+    }
+
+    #[test]
+    fn test_find_field_index() {
+        // Fillchars
+        assert_eq!(find_field_index(b"stl", false), Some(0));
+        assert_eq!(find_field_index(b"vert", false), Some(6));
+        assert_eq!(find_field_index(b"invalid", false), None);
+
+        // Listchars
+        assert_eq!(find_field_index(b"eol", true), Some(0));
+        assert_eq!(find_field_index(b"tab", true), Some(5));
+        assert_eq!(find_field_index(b"multispace", true), Some(9));
+        assert_eq!(find_field_index(b"invalid", true), None);
+    }
+
+    #[test]
+    fn test_chars_parse_error_values() {
+        // Ensure repr(C) values are correct
+        assert_eq!(CharsParseError::Ok as i32, 0);
+        assert_eq!(CharsParseError::InvalidField as i32, 1);
+        assert_eq!(CharsParseError::WrongCount as i32, 2);
+        assert_eq!(CharsParseError::InvalidChar as i32, 3);
     }
 }
