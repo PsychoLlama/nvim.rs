@@ -1,41 +1,36 @@
-Plan: ~/.claude/plans/compressed-puzzling-dream.md
+Plan: ~/.claude/plans/declarative-marinating-lynx.md
 
-The migration is complete. Here's a summary of what was accomplished:
+All phases completed successfully. Here's a summary of the work done:
 
-## Summary
+## Summary of Digraph Migration
 
-Successfully migrated the core logging logic from `log.c` to Rust in the `nvim-log` crate:
+### Commits Made (6 total):
+1. **db50a9d7f5** - `feat(digraph): migrate putdigraph parsing logic to Rust` - Phase 1
+2. **4a128e1d3c** - `feat(digraph): add Rust header lookup and entry formatting` - Phase 2
+3. **0937530b56** - `feat(digraph): add iteration functions with interrupt checking` - Phase 3
+4. **ec8acb5c3e** - `refactor(digraph): use Rust iteration in digraph_getlist_common` - Phase 4
+5. **db0182c085** - `feat(digraph): add input helper functions for Ctrl-K digraph` - Phase 5
+6. **23fb5189aa** - `chore(digraph): apply rustfmt formatting` - Phase 6
 
-### Changes Made
+### New Rust Functions (20 total):
+- `rs_putdigraph` - Digraph string parsing
+- `rs_digraph_get_header_index` - Header section lookup
+- `rs_digraph_format_entry` - Entry formatting
+- `rs_digraph_iterate_default` / `rs_digraph_iterate_user` - Iteration with interrupt support
+- `rs_digraph_is_esc` / `rs_digraph_should_cancel` / `rs_get_digraph_result` - Input helpers
+- Plus existing functions: `rs_digraph_get`, `rs_getexactdigraph`, `rs_check_digraph_chars_valid`, `rs_registerdigraph`, `rs_do_digraph`, etc.
 
-1. **Added C Accessor Functions** (`src/nvim/log.c`):
-   - `nvim_log_get_file_path()` / `nvim_log_set_file_path()` - log file path access
-   - `nvim_log_is_initialized()` / `nvim_log_set_initialized()` - initialization state
-   - `nvim_log_get_ui_client_channel_id()` - UI client detection
-   - `nvim_log_get_servername()` / `nvim_log_get_parent_nvim()` - instance naming
-   - `nvim_log_get_localtime()` / `nvim_log_get_millis()` - timestamp access
-   - Various utility functions for path/env operations
+### New Rust Modules:
+- `parse.rs` - Digraph string parsing logic
 
-2. **Created Rust Core Module** (`src/nvim-rs/log/src/core.rs`):
-   - `rs_log_path_init()` - log file path initialization (replaces `log_path_init()`)
-   - `rs_do_log_to_file()` - log message formatting and output (replaces `v_do_log_to_file()`)
-   - Instance name generation with caching
-   - Thread-local state for recursion detection
+### C Accessor Functions Added:
+- `nvim_utf_iscomposing_first` - Check composing characters
+- `nvim_char2cells` - Character display width
+- `nvim_digraph_got_int` - Interrupt checking
+- `nvim_digraph_fast_breakcheck` - Fast interrupt check
 
-3. **Updated C Wrappers** (`src/nvim/log.c`):
-   - `log_init()` now calls `rs_log_path_init()`
-   - `logmsg()` formats the message then calls `rs_do_log_to_file()`
-   - `do_log_to_file()` calls `rs_do_log_to_file()`
-   - Removed the now-unused `v_do_log_to_file()` function
-
-4. **Kept in C**:
-   - Backtrace functionality (`log_callstack`, `log_callstack_to_file`) - depends on libuv/execinfo
-   - `log_uv_handles()` - prints libuv handles directly
-   - Variadic formatting (handled via `vsnprintf` before calling Rust)
-   - Mutex locking (`log_lock`/`log_unlock`)
-
-### Verification
-- `just build` ✓
-- `just rust-test` ✓ (3717 tests passed)
-- `just rust-fmt-check` ✓
-- `just rust-clippy` ✓
+### Verification:
+- All builds pass (`just build`)
+- All Rust tests pass (`just rust-test` - 3717 tests)
+- All clippy checks pass (`just rust-clippy`)
+- All formatting checks pass (`just rust-fmt-check`)
