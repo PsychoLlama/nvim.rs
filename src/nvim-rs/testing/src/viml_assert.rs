@@ -500,6 +500,14 @@ extern "C" {
     // Vim variable access
     fn get_vim_var_str(idx: c_int) -> *const c_char;
     fn get_vim_var_tv(idx: c_int) -> TypevalHandle;
+
+    // Float type checking and value extraction
+    fn nvim_testing_tv_is_float(tv: TypevalHandle) -> c_int;
+    fn tv_get_float(tv: TypevalHandle) -> f64;
+
+    // Type checking functions
+    fn tv_check_for_float_or_nr_arg(argvars: TypevalHandle, idx: c_int) -> c_int;
+    fn tv_check_for_opt_string_arg(argvars: TypevalHandle, idx: c_int) -> c_int;
 }
 
 // BoolVarValue constants
@@ -688,6 +696,165 @@ fn assert_exception_impl(argvars: TypevalHandle, rettv: TypevalHandleMut) {
     }
 }
 
+/// Implementation for assert_inrange().
+fn assert_inrange_impl(argvars: TypevalHandle) -> c_int {
+    unsafe {
+        let arg0 = argvars;
+        let arg1 = argvars.cast::<u8>().add(TYPVAL_SIZE).cast::<c_void>();
+        let arg2 = argvars.cast::<u8>().add(TYPVAL_SIZE * 2).cast::<c_void>();
+        let arg3 = argvars.cast::<u8>().add(TYPVAL_SIZE * 3).cast::<c_void>();
+
+        // Check if any argument is float
+        let is_float = nvim_testing_tv_is_float(arg0) != 0
+            || nvim_testing_tv_is_float(arg1) != 0
+            || nvim_testing_tv_is_float(arg2) != 0;
+
+        if is_float {
+            let lower = tv_get_float(arg0);
+            let upper = tv_get_float(arg1);
+            let actual = tv_get_float(arg2);
+
+            if actual < lower || actual > upper {
+                let mut ga = GArray::default();
+                prepare_assert_error(&raw mut ga);
+
+                // Format "range <lower> - <upper>,"
+                let mut expected_str = [0u8; 200];
+                let msg = format_range_float(&mut expected_str, lower, upper);
+                fill_assert_error(
+                    &raw mut ga,
+                    arg3,
+                    msg.as_ptr().cast(),
+                    std::ptr::null(),
+                    arg2,
+                    AssertType::Other,
+                );
+
+                assert_error(&raw mut ga);
+                ga_clear(&raw mut ga);
+                return 1;
+            }
+        } else {
+            let mut error: c_int = 0;
+            let lower = tv_get_number_chk(arg0, &raw mut error);
+            if error != 0 {
+                return 0;
+            }
+            let upper = tv_get_number_chk(arg1, &raw mut error);
+            if error != 0 {
+                return 0;
+            }
+            let actual = tv_get_number_chk(arg2, &raw mut error);
+            if error != 0 {
+                return 0;
+            }
+
+            if actual < lower || actual > upper {
+                let mut ga = GArray::default();
+                prepare_assert_error(&raw mut ga);
+
+                // Format "range <lower> - <upper>,"
+                let mut expected_str = [0u8; 200];
+                let msg = format_range_int(&mut expected_str, lower, upper);
+                fill_assert_error(
+                    &raw mut ga,
+                    arg3,
+                    msg.as_ptr().cast(),
+                    std::ptr::null(),
+                    arg2,
+                    AssertType::Other,
+                );
+
+                assert_error(&raw mut ga);
+                ga_clear(&raw mut ga);
+                return 1;
+            }
+        }
+
+        0
+    }
+}
+
+/// Format "range <lower> - <upper>," for integer values.
+fn format_range_int(buf: &mut [u8; 200], lower: i64, upper: i64) -> &[u8] {
+    let prefix = b"range ";
+    buf[..prefix.len()].copy_from_slice(prefix);
+    let mut pos = prefix.len();
+
+    // Format lower
+    let mut num_buf = [0u8; 24];
+    let len = format_i64(&mut num_buf, lower);
+    buf[pos..pos + len].copy_from_slice(&num_buf[..len]);
+    pos += len;
+
+    // " - "
+    buf[pos..pos + 3].copy_from_slice(b" - ");
+    pos += 3;
+
+    // Format upper
+    let len = format_i64(&mut num_buf, upper);
+    buf[pos..pos + len].copy_from_slice(&num_buf[..len]);
+    pos += len;
+
+    // ","
+    buf[pos] = b',';
+    pos += 1;
+    buf[pos] = 0;
+
+    &buf[..=pos]
+}
+
+/// Format "range <lower> - <upper>," for float values.
+fn format_range_float(buf: &mut [u8; 200], lower: f64, upper: f64) -> &[u8] {
+    // Use a simple approach - delegate to C's snprintf
+    unsafe {
+        nvim_testing_format_range_float(buf.as_mut_ptr().cast(), 200, lower, upper);
+    }
+    let len = buf.iter().position(|&c| c == 0).unwrap_or(0);
+    &buf[..=len]
+}
+
+extern "C" {
+    fn nvim_testing_format_range_float(buf: *mut c_char, size: usize, lower: f64, upper: f64);
+}
+
+/// Format an i64 into a buffer. Returns the length written (excluding NUL).
+fn format_i64(buf: &mut [u8; 24], value: i64) -> usize {
+    let mut num = value;
+    let mut digits = [0u8; 20];
+    let mut digit_count = 0;
+    let negative = num < 0;
+
+    if num == 0 {
+        digit_count = 1;
+        digits[0] = b'0';
+    } else {
+        if negative {
+            num = -num;
+        }
+
+        while num > 0 {
+            digits[digit_count] = b'0' + (num % 10) as u8;
+            digit_count += 1;
+            num /= 10;
+        }
+    }
+
+    // Copy digits in reverse order
+    let mut pos = 0;
+    if negative {
+        buf[pos] = b'-';
+        pos += 1;
+    }
+    for i in (0..digit_count).rev() {
+        buf[pos] = digits[i];
+        pos += 1;
+    }
+    buf[pos] = 0;
+
+    pos
+}
+
 /// Common implementation for assert_match() and assert_notmatch().
 fn assert_match_common(argvars: TypevalHandle, atype: AssertType) -> c_int {
     unsafe {
@@ -842,6 +1009,18 @@ pub unsafe extern "C" fn rs_f_assert_nobeep(argvars: TypevalHandle, rettv: Typev
 #[no_mangle]
 pub unsafe extern "C" fn rs_f_assert_exception(argvars: TypevalHandle, rettv: TypevalHandleMut) {
     assert_exception_impl(argvars, rettv);
+}
+
+/// `assert_inrange(lower, upper, actual[, msg])` function implementation.
+///
+/// # Safety
+///
+/// - `argvars` must point to a valid array of `typval_T`.
+/// - `rettv` must point to a valid `typval_T` for the return value.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_assert_inrange(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+    // Type checking is done in C wrapper
+    set_rettv_number(rettv, i64::from(assert_inrange_impl(argvars)));
 }
 
 /// `assert_report(msg)` function implementation.

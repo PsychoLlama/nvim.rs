@@ -59,6 +59,7 @@ extern void rs_f_assert_notmatch(typval_T *argvars, typval_T *rettv);
 extern void rs_f_assert_beeps(typval_T *argvars, typval_T *rettv);
 extern void rs_f_assert_nobeep(typval_T *argvars, typval_T *rettv);
 extern void rs_f_assert_exception(typval_T *argvars, typval_T *rettv);
+extern void rs_f_assert_inrange(typval_T *argvars, typval_T *rettv);
 
 // =============================================================================
 // C accessor functions for Rust
@@ -141,6 +142,18 @@ int nvim_testing_get_emsg_silent(void)
 void nvim_testing_set_emsg_silent(int val)
 {
   emsg_silent = val;
+}
+
+/// Check if a typval is a float type.
+int nvim_testing_tv_is_float(const typval_T *tv)
+{
+  return tv != NULL && tv->v_type == VAR_FLOAT;
+}
+
+/// Format range string for float values.
+void nvim_testing_format_range_float(char *buf, size_t size, double lower, double upper)
+{
+  vim_snprintf(buf, size, "range %g - %g,", lower, upper);
 }
 
 /// Fill the gap with dict diff info (keep complex diffing logic in C for now).
@@ -876,7 +889,7 @@ void f_assert_inrange(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
     return;
   }
 
-  rettv->vval.v_number = assert_inrange(argvars);
+  rs_f_assert_inrange(argvars, rettv);
 }
 
 /// "assert_match(pattern, actual[, msg])" function
