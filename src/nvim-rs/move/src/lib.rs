@@ -2274,8 +2274,34 @@ pub unsafe extern "C" fn rs_scroll_cursor_bot(wp: WinHandle, min_scroll: c_int, 
 }
 
 // =============================================================================
-// Scroll Clamping Functions
+// Set Valid Virtcol Function
 // =============================================================================
+
+extern "C" {
+    // Virtcol setter
+    fn nvim_win_set_virtcol(wp: WinHandle, val: ColnrT);
+
+    // Redraw for cursorcolumn wrapper
+    fn nvim_redraw_for_cursorcolumn(wp: WinHandle);
+}
+
+/// Set wp->w_virtcol to a value ("vcol") that is already valid.
+/// Handles redrawing if wp->w_virtcol was previously invalid.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_set_valid_virtcol(wp: WinHandle, vcol: ColnrT) {
+    if wp.is_null() {
+        return;
+    }
+
+    nvim_win_set_virtcol(wp, vcol);
+    nvim_redraw_for_cursorcolumn(wp);
+
+    let valid = nvim_win_get_valid(wp);
+    nvim_win_set_valid(wp, valid | VALID_VIRTCOL);
+}
 
 // =============================================================================
 // Set Topline Function

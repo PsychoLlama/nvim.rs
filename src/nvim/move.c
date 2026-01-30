@@ -81,6 +81,7 @@ extern void rs_scrollup_clamp(void);
 extern void rs_cursor_correct_sms(win_T *wp);
 extern void rs_adjust_skipcol(void);
 extern void rs_set_topline(win_T *wp, linenr_T lnum);
+extern void rs_set_valid_virtcol(win_T *wp, colnr_T vcol);
 
 // Accessor for global scrolljump option
 OptInt nvim_get_p_sj(void)
@@ -203,9 +204,7 @@ static void redraw_for_cursorcolumn(win_T *wp)
 /// Handles redrawing if wp->w_virtcol was previously invalid.
 void set_valid_virtcol(win_T *wp, colnr_T vcol)
 {
-  wp->w_virtcol = vcol;
-  redraw_for_cursorcolumn(wp);
-  wp->w_valid |= VALID_VIRTCOL;
+  rs_set_valid_virtcol(wp, vcol);
 }
 
 /// Calculates how much the 'listchars' "precedes" or 'smoothscroll' "<<<"
@@ -1687,4 +1686,10 @@ int nvim_plines_win_full(win_T *wp, linenr_T lnum, linenr_T *nextp, int *foldedp
 linenr_T nvim_curbuf_line_count(void)
 {
   return curbuf->b_ml.ml_line_count;
+}
+
+/// Wrapper for redraw_for_cursorcolumn() (accessor for Rust).
+void nvim_redraw_for_cursorcolumn(win_T *wp)
+{
+  redraw_for_cursorcolumn(wp);
 }

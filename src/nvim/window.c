@@ -1484,6 +1484,14 @@ colnr_T nvim_win_get_virtcol(win_T *wp)
   return wp->w_virtcol;
 }
 
+/// Set the window's virtual column (w_virtcol).
+void nvim_win_set_virtcol(win_T *wp, colnr_T val)
+{
+  if (wp) {
+    wp->w_virtcol = val;
+  }
+}
+
 /// Get the 'cursorcolumn' option value for a window.
 int nvim_win_get_p_cuc(win_T *wp)
 {
