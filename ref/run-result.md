@@ -1,33 +1,37 @@
-Plan: ~/.claude/plans/frolicking-knitting-fairy.md
+Plan: ~/.claude/plans/sunny-foraging-nest.md
 
-The plan has been executed. Here's a summary of what was accomplished:
+The plan has been successfully executed. Here's a summary of what was accomplished:
 
-## Summary of Executed Plan
+## Summary
 
-### Phase 1: Lineoff Calculation Functions
-- Already migrated in previous work (`topline_back`, `topline_back_winheight`, `botline_forw`)
+I successfully migrated the page scroll functions from C to Rust as specified in the plan:
 
-### Phase 2: Scroll Clamping Functions (Commit: 6f433751ba)
-- Migrated `scrolldown_clamp()` → `rs_scrolldown_clamp()`
-- Migrated `scrollup_clamp()` → `rs_scrollup_clamp()`
-- Migrated `cursor_correct_sms()` → `rs_cursor_correct_sms()`
-- Migrated `adjust_skipcol()` → `rs_adjust_skipcol()`
-- Added `nvim_curbuf_line_count()` accessor
+### Functions Migrated
 
-### Phase 3: Cursor Positioning Core
-- Kept `curs_rows()` in C due to heavy dependency on internal `w_lines[]` array structure
+1. **`cursor_correct()`** - Corrects cursor position to stay within scrolloff bounds when scrolling
+2. **`get_scroll_overlap()`** - Calculates optimal overlap (0-2 lines) for page-up/page-down scrolling to maintain symmetric behavior
+3. **`scroll_with_sms()`** - Handles smooth scrolling during page scroll operations, temporarily enabling smoothscroll and adjusting for partially visible lines
+4. **`pagescroll()`** - Main page scrolling function handling CTRL-F/B (full page) and CTRL-D/U (half page) commands
 
-### Phase 4: Topline Management (Commit: db5abaa6ab)
-- Migrated `set_topline()` → `rs_set_topline()`
-- Added `nvim_win_set_topline_was_set()` and `nvim_win_get_topline_was_set()` accessors
+### New C Accessor/Wrapper Functions Added
 
-### Phase 5: Screen Position Helpers (Commit: 829cfe4367)
-- Migrated `set_valid_virtcol()` → `rs_set_valid_virtcol()`
-- Added `nvim_win_set_virtcol()` accessor
-- Added `nvim_redraw_for_cursorcolumn()` wrapper
-- Kept `virtcol2col()` and `textpos2screenpos()` in C due to complex buffer access patterns
+To support the Rust implementation, I added several C accessor and wrapper functions:
+- `nvim_win_set_p_sms()` - Setter for smoothscroll option
+- `nvim_cursor_down_inner()` / `nvim_cursor_up_inner()` - Cursor movement helpers
+- `nvim_nv_screengo()` - Screen-based cursor movement
+- `nvim_beginline_flags()` - Move cursor to beginning of line
+- `nvim_beep_flush_wrapper()` - Error notification
+- `nvim_nv_g_home_m_cmd()` - Move to first non-blank with 'sol'
+- `nvim_one_window()` - Check if single window
+- `nvim_get_p_sol()` - Get 'startofline' option
+- `nvim_win_get_p_scr()` / `nvim_win_set_p_scr()` - Window scroll option
+- `nvim_plines_correct_topline()` - Screen line calculation
+- `nvim_plines_m_win()` - Multi-line screen calculation
 
-### Phase 6: VimL Function Helpers
-- Kept in C as they depend on the complex functions from Phase 5
+### Verification
 
-All builds pass, formatting is correct, clippy has no warnings, and all 3712 Rust tests pass.
+All checks passed:
+- `just build` - Full build with linking ✓
+- `just rust-fmt-check` - Formatting ✓
+- `just rust-clippy` - Lints ✓
+- `just rust-test` - All 3712 unit tests pass ✓
