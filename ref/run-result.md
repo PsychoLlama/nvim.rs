@@ -1,50 +1,37 @@
-Plan: ~/.claude/plans/agile-strolling-turing.md
+Plan: ~/.claude/plans/stateful-noodling-map.md
 
-The plan is complete. Here's a summary:
+All checks pass. The plan has been fully executed:
 
 ## Summary
 
-I successfully executed the plan to complete the move.c Rust migration. Here's what was done:
+Successfully migrated `update_topline()` from C to Rust, completing the move.c migration.
 
-### Phase 1: C Accessor Functions
-Added accessor functions in:
-- `fold.c`: `nvim_wline_get_size()`, `nvim_wline_get_lastlnum()`
-- `drawscreen.c`: `nvim_redrawing()`, `nvim_win_scroll_lines()`
-- `edit.c`: `nvim_get_dollar_vcol()`, `nvim_set_dollar_vcol()`
-- `option.c`: `nvim_get_p_ss()`
-- `window.c`: `nvim_win_grid_has_target()`
+### Changes Made
 
-### Phase 2: Implemented `rs_curs_rows()`
-Migrated the ~70-line `curs_rows()` function which:
-- Validates w_lines[] cache state
-- Iterates w_lines[] entries to compute w_cline_row
-- Handles folded/concealed lines
-- Sets w_cline_height and w_cline_folded
+**Phase 1: Added C Accessor Functions**
+- `nvim_get_skip_update_topline()` in `src/nvim/move.c` - for checking the splitkeep skip flag
+- `nvim_win_get_scbind_pos()` / `nvim_win_set_scbind_pos()` in `src/nvim/window.c` - for scroll binding position
+- `nvim_win_buf_is_empty()` in `src/nvim/window.c` - for checking if window's buffer is empty
 
-### Phase 3: Implemented `rs_curs_columns()`
-Migrated the ~235-line `curs_columns()` function which:
-- Computes cursor column and wcol
-- Handles line wrapping with width1/width2 calculations
-- Manages horizontal scrolling (leftcol, sidescrolloff)
-- Handles smooth scrolling (skipcol adjustments)
-- Calls win_scroll_lines for screen updates
+**Phase 2: Implemented `rs_update_topline()` in Rust**
+- Added ~320 lines of Rust code in `src/nvim-rs/move/src/lib.rs`
+- Faithfully ported the complex scrolling logic with proper handling of:
+  - Skip update check for 'splitkeep'
+  - Empty buffer special case
+  - Topline adjustments (cursor above/near top)
+  - Botline adjustments (cursor below/near bottom)
+  - Concealed line handling
+  - Smooth scrolling support
 
-### Phase 4: Converted C Functions
-Converted both `curs_rows()` and `curs_columns()` in `move.c` to thin wrappers that call the Rust implementations.
+**Phase 3: Converted C Function to Thin Wrapper**
+- Reduced `update_topline()` from ~208 lines to a 4-line wrapper calling `rs_update_topline()`
 
-### Phase 5: Verification & Commit
-All checks passed:
-- `just build` ✓
-- `just rust-fmt-check` ✓
-- `just rust-clippy` ✓
-- `just rust-test` ✓ (3712 tests passed)
+**Phase 4: Verification**
+- ✅ `just build` - Full build with linking passes
+- ✅ `just rust-fmt-check` - Formatting passes
+- ✅ `just rust-clippy` - Lints pass
+- ✅ `just rust-test` - All 3712 tests pass
 
-Created 2 commits:
-1. `feat(move): add C accessor functions for curs_rows/curs_columns`
-2. `feat(move): migrate curs_rows and curs_columns to Rust`
-
-### Results
-- Added ~520 lines of Rust code
-- Removed ~296 lines of C logic
-- Total `#[no_mangle]` function count: **10,280**
-- move.c now contains only thin wrappers (no logic except type conversion)
+**Phase 5: Created Commits**
+1. `fba25eac6e feat(move): add C accessor functions for update_topline`
+2. `1f738ed2f8 feat(move): migrate update_topline to Rust`
