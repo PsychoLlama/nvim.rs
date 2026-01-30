@@ -140,6 +140,15 @@ extern int rs_changelist_calc_idx(int current_idx, int changelist_len, int count
 extern int rs_mark_target_type(int name);
 extern linenr_T rs_pos_clamp_lnum_min(linenr_T lnum);
 
+// Mark movement functions
+extern int rs_mark_move_calc_result(linenr_T prev_lnum, colnr_T prev_col,
+                                     linenr_T new_lnum, colnr_T new_col, int initial_res);
+extern int rs_mark_move_needs_cursor_check(int res);
+extern colnr_T rs_getnextmark_adjust_col(colnr_T col, int dir, int begin_line);
+extern int rs_getnextmark_is_better(linenr_T candidate_lnum, colnr_T candidate_col,
+                                     linenr_T current_best_lnum, colnr_T current_best_col,
+                                     linenr_T start_lnum, colnr_T start_col, int dir);
+
 // =============================================================================
 // Rust wrapper functions
 // =============================================================================
@@ -969,13 +978,14 @@ MarkMoveRes mark_move_to(fmark_T *fm, MarkMove flags)
   if (flags & kMarkBeginLine) {
     beginline(BL_WHITE | BL_FIX);
   }
-  res = prev_pos.lnum != pos.lnum ? res | kMarkChangedLine | kMarkChangedCursor : res;
-  res = prev_pos.col != pos.col ? res | kMarkChangedCol | kMarkChangedCursor : res;
+  // Use Rust helper to calculate result flags based on position changes
+  res = rs_mark_move_calc_result(prev_pos.lnum, prev_pos.col, pos.lnum, pos.col, res);
   if (flags & kMarkSetView) {
     mark_view_restore(fm);
   }
 
-  if (res & kMarkSwitchedBuf || res & kMarkChangedCursor) {
+  // Use Rust helper to check if cursor check is needed
+  if (rs_mark_move_needs_cursor_check(res)) {
     check_cursor(curwin);
   }
 end:
@@ -1021,25 +1031,17 @@ fmark_T *getnextmark(pos_T *startpos, int dir, int begin_line)
   fmark_T *result = NULL;
   pos_T pos = *startpos;
 
-  if (dir == BACKWARD && begin_line) {
-    pos.col = 0;
-  } else if (dir == FORWARD && begin_line) {
-    pos.col = MAXCOL;
-  }
+  // Use Rust helper to adjust column based on direction and begin_line
+  pos.col = rs_getnextmark_adjust_col(pos.col, dir, begin_line);
 
   for (int i = 0; i < NMARKS; i++) {
-    if (curbuf->b_namedm[i].mark.lnum > 0) {
-      if (dir == FORWARD) {
-        if ((result == NULL || lt(curbuf->b_namedm[i].mark, result->mark))
-            && lt(pos, curbuf->b_namedm[i].mark)) {
-          result = &curbuf->b_namedm[i];
-        }
-      } else {
-        if ((result == NULL || lt(result->mark, curbuf->b_namedm[i].mark))
-            && lt(curbuf->b_namedm[i].mark, pos)) {
-          result = &curbuf->b_namedm[i];
-        }
-      }
+    // Use Rust helper to compare positions and determine if this mark is a better candidate
+    linenr_T result_lnum = result != NULL ? result->mark.lnum : 0;
+    colnr_T result_col = result != NULL ? result->mark.col : 0;
+    if (rs_getnextmark_is_better(curbuf->b_namedm[i].mark.lnum, curbuf->b_namedm[i].mark.col,
+                                  result_lnum, result_col,
+                                  pos.lnum, pos.col, dir)) {
+      result = &curbuf->b_namedm[i];
     }
   }
 

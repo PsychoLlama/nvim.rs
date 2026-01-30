@@ -1908,3 +1908,267 @@ mod phase35_tests {
         assert_eq!(rs_pos_clamp_lnum_min(-1), 1);
     }
 }
+
+// =============================================================================
+// Phase 4: Mark Movement Functions
+// =============================================================================
+
+/// Flags for outcomes when moving to a mark.
+/// These match MarkMoveRes in mark_defs.h
+pub mod mark_move_res {
+    pub const SUCCESS: i32 = 1;
+    pub const FAILED: i32 = 2;
+    pub const SWITCHED_BUF: i32 = 4;
+    pub const CHANGED_COL: i32 = 8;
+    pub const CHANGED_LINE: i32 = 16;
+    pub const CHANGED_CURSOR: i32 = 32;
+    pub const CHANGED_VIEW: i32 = 64;
+}
+
+/// Flags to configure the movement to a mark.
+/// These match MarkMove in mark_defs.h
+pub mod mark_move_flags {
+    pub const BEGIN_LINE: i32 = 1;
+    pub const CONTEXT: i32 = 2;
+    pub const NO_CONTEXT: i32 = 4;
+    pub const SET_VIEW: i32 = 8;
+    pub const JUMP_LIST: i32 = 16;
+}
+
+/// Direction constants for mark searching
+pub const FORWARD: c_int = 1;
+pub const BACKWARD: c_int = -1;
+
+/// Calculate MarkMoveRes flags based on position changes.
+///
+/// # Arguments
+/// * `prev_lnum`, `prev_col` - Previous cursor position
+/// * `new_lnum`, `new_col` - New cursor position
+/// * `initial_res` - Initial result flags
+///
+/// # Returns
+/// Updated result flags with CHANGED_LINE, CHANGED_COL, CHANGED_CURSOR set appropriately
+#[no_mangle]
+pub extern "C" fn rs_mark_move_calc_result(
+    prev_lnum: LinenrT,
+    prev_col: ColnrT,
+    new_lnum: LinenrT,
+    new_col: ColnrT,
+    initial_res: c_int,
+) -> c_int {
+    let mut res = initial_res;
+    if prev_lnum != new_lnum {
+        res |= mark_move_res::CHANGED_LINE | mark_move_res::CHANGED_CURSOR;
+    }
+    if prev_col != new_col {
+        res |= mark_move_res::CHANGED_COL | mark_move_res::CHANGED_CURSOR;
+    }
+    res
+}
+
+/// Check if mark_move_to should do additional cursor checking.
+///
+/// # Arguments
+/// * `res` - Current result flags
+///
+/// # Returns
+/// Non-zero if cursor check should be performed
+#[no_mangle]
+pub extern "C" fn rs_mark_move_needs_cursor_check(res: c_int) -> c_int {
+    c_int::from(
+        (res & mark_move_res::SWITCHED_BUF) != 0 || (res & mark_move_res::CHANGED_CURSOR) != 0,
+    )
+}
+
+/// Prepare column for getnextmark search based on direction and begin_line.
+///
+/// # Arguments
+/// * `col` - Current column
+/// * `dir` - Direction (FORWARD or BACKWARD)
+/// * `begin_line` - Whether to search from beginning of line
+///
+/// # Returns
+/// Adjusted column value for the search
+#[no_mangle]
+pub extern "C" fn rs_getnextmark_adjust_col(col: ColnrT, dir: c_int, begin_line: c_int) -> ColnrT {
+    if begin_line != 0 {
+        if dir == BACKWARD {
+            0
+        } else {
+            MAXCOL
+        }
+    } else {
+        col
+    }
+}
+
+/// Compare positions for getnextmark search.
+///
+/// Implements the logic for finding the next/previous mark relative to a position.
+///
+/// # Arguments
+/// * `candidate_lnum`, `candidate_col` - Position of the candidate mark
+/// * `current_best_lnum`, `current_best_col` - Position of the current best match (use 0,0 if none)
+/// * `start_lnum`, `start_col` - Position to search from
+/// * `dir` - Direction (FORWARD or BACKWARD)
+///
+/// # Returns
+/// Non-zero if candidate is better than current_best
+#[no_mangle]
+pub extern "C" fn rs_getnextmark_is_better(
+    candidate_lnum: LinenrT,
+    candidate_col: ColnrT,
+    current_best_lnum: LinenrT,
+    current_best_col: ColnrT,
+    start_lnum: LinenrT,
+    start_col: ColnrT,
+    dir: c_int,
+) -> c_int {
+    // Skip invalid candidates
+    if candidate_lnum <= 0 {
+        return 0;
+    }
+
+    let candidate = PosT {
+        lnum: candidate_lnum,
+        col: candidate_col,
+        coladd: 0,
+    };
+    let start = PosT {
+        lnum: start_lnum,
+        col: start_col,
+        coladd: 0,
+    };
+    let no_best = current_best_lnum == 0;
+
+    if dir == FORWARD {
+        // For forward: candidate must be after start, and closer than current best
+        let after_start = rs_lt(start, candidate) != 0;
+        if !after_start {
+            return 0;
+        }
+        if no_best {
+            return 1;
+        }
+        let best = PosT {
+            lnum: current_best_lnum,
+            col: current_best_col,
+            coladd: 0,
+        };
+        c_int::from(rs_lt(candidate, best) != 0)
+    } else {
+        // For backward: candidate must be before start, and closer than current best
+        let before_start = rs_lt(candidate, start) != 0;
+        if !before_start {
+            return 0;
+        }
+        if no_best {
+            return 1;
+        }
+        let best = PosT {
+            lnum: current_best_lnum,
+            col: current_best_col,
+            coladd: 0,
+        };
+        c_int::from(rs_lt(best, candidate) != 0)
+    }
+}
+
+// =============================================================================
+// Phase 4 Tests
+// =============================================================================
+
+#[cfg(test)]
+mod phase4_tests {
+    use super::*;
+
+    #[test]
+    fn test_mark_move_calc_result() {
+        // No change
+        let res = rs_mark_move_calc_result(10, 5, 10, 5, mark_move_res::SUCCESS);
+        assert_eq!(res, mark_move_res::SUCCESS);
+
+        // Line changed
+        let res = rs_mark_move_calc_result(10, 5, 20, 5, mark_move_res::SUCCESS);
+        assert_ne!(res & mark_move_res::CHANGED_LINE, 0);
+        assert_ne!(res & mark_move_res::CHANGED_CURSOR, 0);
+        assert_eq!(res & mark_move_res::CHANGED_COL, 0);
+
+        // Column changed
+        let res = rs_mark_move_calc_result(10, 5, 10, 15, mark_move_res::SUCCESS);
+        assert_ne!(res & mark_move_res::CHANGED_COL, 0);
+        assert_ne!(res & mark_move_res::CHANGED_CURSOR, 0);
+        assert_eq!(res & mark_move_res::CHANGED_LINE, 0);
+
+        // Both changed
+        let res = rs_mark_move_calc_result(10, 5, 20, 15, mark_move_res::SUCCESS);
+        assert_ne!(res & mark_move_res::CHANGED_LINE, 0);
+        assert_ne!(res & mark_move_res::CHANGED_COL, 0);
+        assert_ne!(res & mark_move_res::CHANGED_CURSOR, 0);
+    }
+
+    #[test]
+    fn test_mark_move_needs_cursor_check() {
+        assert_eq!(rs_mark_move_needs_cursor_check(mark_move_res::SUCCESS), 0);
+        assert_ne!(
+            rs_mark_move_needs_cursor_check(mark_move_res::SWITCHED_BUF),
+            0
+        );
+        assert_ne!(
+            rs_mark_move_needs_cursor_check(mark_move_res::CHANGED_CURSOR),
+            0
+        );
+        assert_ne!(
+            rs_mark_move_needs_cursor_check(
+                mark_move_res::SWITCHED_BUF | mark_move_res::CHANGED_CURSOR
+            ),
+            0
+        );
+    }
+
+    #[test]
+    fn test_getnextmark_adjust_col() {
+        // No begin_line adjustment
+        assert_eq!(rs_getnextmark_adjust_col(5, FORWARD, 0), 5);
+        assert_eq!(rs_getnextmark_adjust_col(5, BACKWARD, 0), 5);
+
+        // begin_line adjustment
+        assert_eq!(rs_getnextmark_adjust_col(5, FORWARD, 1), MAXCOL);
+        assert_eq!(rs_getnextmark_adjust_col(5, BACKWARD, 1), 0);
+    }
+
+    #[test]
+    fn test_getnextmark_is_better_forward() {
+        // Forward from (10, 5): looking for marks after this position
+        // No current best (0, 0), candidate at (20, 5) - should be better
+        assert_ne!(rs_getnextmark_is_better(20, 5, 0, 0, 10, 5, FORWARD), 0);
+
+        // Candidate before start - not better
+        assert_eq!(rs_getnextmark_is_better(5, 5, 0, 0, 10, 5, FORWARD), 0);
+
+        // Candidate closer than current best
+        assert_ne!(rs_getnextmark_is_better(15, 5, 20, 5, 10, 5, FORWARD), 0);
+
+        // Candidate farther than current best
+        assert_eq!(rs_getnextmark_is_better(25, 5, 20, 5, 10, 5, FORWARD), 0);
+
+        // Invalid candidate (lnum <= 0)
+        assert_eq!(rs_getnextmark_is_better(0, 5, 0, 0, 10, 5, FORWARD), 0);
+    }
+
+    #[test]
+    fn test_getnextmark_is_better_backward() {
+        // Backward from (20, 5): looking for marks before this position
+        // No current best, candidate at (10, 5) - should be better
+        assert_ne!(rs_getnextmark_is_better(10, 5, 0, 0, 20, 5, BACKWARD), 0);
+
+        // Candidate after start - not better
+        assert_eq!(rs_getnextmark_is_better(25, 5, 0, 0, 20, 5, BACKWARD), 0);
+
+        // Candidate closer than current best (closer means higher for backward)
+        assert_ne!(rs_getnextmark_is_better(15, 5, 10, 5, 20, 5, BACKWARD), 0);
+
+        // Candidate farther than current best
+        assert_eq!(rs_getnextmark_is_better(5, 5, 10, 5, 20, 5, BACKWARD), 0);
+    }
+}
