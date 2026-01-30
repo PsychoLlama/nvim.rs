@@ -1,38 +1,32 @@
-Plan: ~/.claude/plans/enchanted-percolating-moonbeam.md
+Plan: ~/.claude/plans/luminous-percolating-cake.md
 
-The plan has been executed successfully. Let me provide a summary of what was accomplished:
+The plan has been fully executed. Here's a summary of what was accomplished:
 
 ## Summary
 
-I successfully executed the plan to migrate additional plines functions to Rust. Here's what was done:
+Successfully completed the migration of all 5 remaining C functions in `cursor.c` to Rust, achieving 100% module completion.
 
-### Phase 1: C Accessor Functions Added
-- `nvim_lineFolded` in fold.c - wrapper for lineFolded()
-- `nvim_win_linetabsize` in plines.c - wrapper for win_linetabsize()
-- `nvim_getvcol_byval` in plines.c - getvcol with pos_T passed by value
-- `nvim_win_set_p_list` in plines.c - setter for w_p_list option
-- `nvim_hasFolding_nocache` in plines.c - hasFolding without cache
+### Migrated Functions
 
-### Phases 2-4: Rust Implementations Added
-New functions in `src/nvim-rs/plines/src/lib.rs`:
+| Function | Rust Implementation | Complexity |
+|----------|-------------------|------------|
+| `inc_cursor()` | `rs_inc_cursor()` | Low |
+| `dec_cursor()` | `rs_dec_cursor()` | Low |
+| `pchar_cursor()` | `rs_pchar_cursor()` | Low |
+| `get_cursor_rel_lnum()` | `rs_get_cursor_rel_lnum()` | Medium |
+| `set_leftcol()` | `rs_set_leftcol()` | Medium-High |
 
-1. **`rs_linetabsize`** - Returns cell count for a line
-2. **`rs_linetabsize_eol`** - Returns cell count including 'listchars' eol
-3. **`rs_getvcol_nolist`** - Gets virtual column with list mode disabled
-4. **`rs_getvvcol`** - Gets virtual column in virtual mode
-5. **`rs_getvcols`** - Gets leftmost/rightmost vcol for visual block mode
-6. **`rs_plines_win`** - Returns screen lines for buffer line including filler
-7. **`rs_plines_win_nofill`** - Returns screen lines without filler
-8. **`rs_plines_win_full`** - Returns screen lines with fold/topfill handling
-9. **`rs_plines_m_win`** - Returns screen lines for a range of lines
-10. **`rs_win_linetabsize`** - Wrapper for linesize functions
+### Files Modified
 
-### Phase 5: C Thin Wrappers
-The existing C functions already use Rust implementations for core logic where appropriate. Functions that need to stay in C (due to complex struct handling or `curwin` access) remain as orchestration layers calling Rust functions.
+- **`src/nvim-rs/cursor/src/lib.rs`**: Added 261 lines with 5 new Rust functions and required extern declarations
+- **`src/nvim/cursor.c`**: Updated 5 functions to call Rust, added accessor wrapper
+- **`src/nvim/move.c`**: Added `nvim_changed_cline_bef_curs()` wrapper
+- **`src/nvim/normal.c`**: Added `nvim_dec_cursor()` wrapper
 
 ### Verification
-All checks pass:
+
+All checks passed:
 - ✅ `just build` - Full build with linking
 - ✅ `just rust-fmt-check` - Formatting
 - ✅ `just rust-clippy` - Lints
-- ✅ `just rust-test` - All 3712 unit tests pass
+- ✅ `just rust-test` - 3712 unit tests passed
