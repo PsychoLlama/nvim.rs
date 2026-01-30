@@ -38,6 +38,12 @@ extern int rs_getviscol(void);
 extern int rs_getviscol2(colnr_T col, colnr_T coladd);
 extern int rs_getvpos(win_T *wp, pos_T *pos, colnr_T wcol);
 extern int rs_coladvance(win_T *wp, colnr_T wcol);
+extern const char *rs_get_cursor_line_ptr(void);
+extern const char *rs_get_cursor_pos_ptr(void);
+extern colnr_T rs_get_cursor_line_len(void);
+extern colnr_T rs_get_cursor_pos_len(void);
+extern int rs_char_before_cursor(void);
+extern void rs_adjust_cursor_col(void);
 
 // =============================================================================
 // Screen Column Functions
@@ -407,11 +413,7 @@ void check_visual_pos(void)
 /// Allow it when in Visual mode and 'selection' is not "old".
 void adjust_cursor_col(void)
 {
-  if (curwin->w_cursor.col > 0
-      && (!VIsual_active || *p_sel == 'o')
-      && gchar_cursor() == NUL) {
-    curwin->w_cursor.col--;
-  }
+  rs_adjust_cursor_col();
 }
 
 /// Set "curwin->w_leftcol" to "leftcol".
@@ -475,14 +477,7 @@ int gchar_cursor(void)
 /// Return the character immediately before the cursor.
 int char_before_cursor(void)
 {
-  if (curwin->w_cursor.col == 0) {
-    return -1;
-  }
-
-  char *line = get_cursor_line_ptr();
-  char *p = line + curwin->w_cursor.col;
-  int prev_len = utf_head_off(line, p - 1) + 1;
-  return utf_ptr2char(p - prev_len);
+  return rs_char_before_cursor();
 }
 
 /// Write a character at the current cursor position.
@@ -495,25 +490,25 @@ void pchar_cursor(char c)
 /// @return  pointer to cursor line.
 char *get_cursor_line_ptr(void)
 {
-  return ml_get_buf(curbuf, curwin->w_cursor.lnum);
+  return (char *)rs_get_cursor_line_ptr();
 }
 
 /// @return  pointer to cursor position.
 char *get_cursor_pos_ptr(void)
 {
-  return ml_get_buf(curbuf, curwin->w_cursor.lnum) + curwin->w_cursor.col;
+  return (char *)rs_get_cursor_pos_ptr();
 }
 
 /// @return  length (excluding the NUL) of the cursor line.
 colnr_T get_cursor_line_len(void)
 {
-  return ml_get_buf_len(curbuf, curwin->w_cursor.lnum);
+  return rs_get_cursor_line_len();
 }
 
 /// @return  length (excluding the NUL) of the cursor position.
 colnr_T get_cursor_pos_len(void)
 {
-  return ml_get_buf_len(curbuf, curwin->w_cursor.lnum) - curwin->w_cursor.col;
+  return rs_get_cursor_pos_len();
 }
 
 // =============================================================================
@@ -577,4 +572,34 @@ void nvim_win_clear_valid_virtcol(win_T *wp)
 pos_T *nvim_win_get_cursor_ptr(win_T *wp)
 {
   return &wp->w_cursor;
+}
+
+/// Get pointer to cursor line (for Rust).
+const char *nvim_cursor_get_line_ptr(void)
+{
+  return ml_get_buf(curbuf, curwin->w_cursor.lnum);
+}
+
+/// Get pointer to cursor position in line (for Rust).
+const char *nvim_cursor_get_pos_ptr(void)
+{
+  return ml_get_buf(curbuf, curwin->w_cursor.lnum) + curwin->w_cursor.col;
+}
+
+/// Get length of cursor line (for Rust).
+colnr_T nvim_cursor_get_line_len(void)
+{
+  return ml_get_buf_len(curbuf, curwin->w_cursor.lnum);
+}
+
+/// Get length from cursor position to end of line (for Rust).
+colnr_T nvim_cursor_get_pos_len(void)
+{
+  return ml_get_buf_len(curbuf, curwin->w_cursor.lnum) - curwin->w_cursor.col;
+}
+
+/// Set current window cursor column (for Rust).
+void nvim_curwin_set_cursor_col(colnr_T col)
+{
+  curwin->w_cursor.col = col;
 }

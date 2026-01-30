@@ -15,7 +15,7 @@
 #![allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
 #![allow(dead_code)] // Some extern declarations are pre-declared for future use
 
-use std::ffi::c_int;
+use std::ffi::{c_char, c_int};
 
 use nvim_window::WinHandle;
 
@@ -178,6 +178,28 @@ extern "C" {
 
     /// Get window cursor pointer (`wp->w_cursor`)
     fn nvim_win_get_cursor_ptr(wp: WinHandle) -> *mut CursorPos;
+
+    // -------------------------------------------------------------------------
+    // Cursor Line Accessor Functions
+    // -------------------------------------------------------------------------
+
+    /// Get pointer to cursor line
+    fn nvim_cursor_get_line_ptr() -> *const c_char;
+
+    /// Get pointer to cursor position in line
+    fn nvim_cursor_get_pos_ptr() -> *const c_char;
+
+    /// Get length of cursor line
+    fn nvim_cursor_get_line_len() -> i32;
+
+    /// Get length from cursor position to end of line
+    fn nvim_cursor_get_pos_len() -> i32;
+
+    /// Get current window cursor column
+    fn nvim_curwin_get_cursor_col() -> i32;
+
+    /// Set current window cursor column
+    fn nvim_curwin_set_cursor_col(col: i32);
 }
 
 // =============================================================================
@@ -577,6 +599,108 @@ pub unsafe extern "C" fn rs_coladvance(wp: WinHandle, wcol: i32) -> c_int {
         nvim_set_valid_virtcol(curwin, wcol);
     }
     rc
+}
+
+// =============================================================================
+// Cursor Line Accessor Functions
+// =============================================================================
+
+/// Get pointer to the cursor line.
+///
+/// # Returns
+/// Pointer to the current line buffer.
+///
+/// # Safety
+/// Requires valid global state (curwin, curbuf).
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_cursor_line_ptr() -> *const c_char {
+    nvim_cursor_get_line_ptr()
+}
+
+/// Get pointer to cursor position in the line.
+///
+/// # Returns
+/// Pointer to the position within the current line.
+///
+/// # Safety
+/// Requires valid global state (curwin, curbuf).
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_cursor_pos_ptr() -> *const c_char {
+    nvim_cursor_get_pos_ptr()
+}
+
+/// Get length of the cursor line (excluding NUL).
+///
+/// # Returns
+/// Length in bytes of the cursor line.
+///
+/// # Safety
+/// Requires valid global state (curwin, curbuf).
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_cursor_line_len() -> i32 {
+    nvim_cursor_get_line_len()
+}
+
+/// Get length from cursor position to end of line (excluding NUL).
+///
+/// # Returns
+/// Length in bytes from cursor to end of line.
+///
+/// # Safety
+/// Requires valid global state (curwin, curbuf).
+#[no_mangle]
+pub unsafe extern "C" fn rs_get_cursor_pos_len() -> i32 {
+    nvim_cursor_get_pos_len()
+}
+
+// =============================================================================
+// Character Access Functions
+// =============================================================================
+
+/// Return the character immediately before the cursor.
+///
+/// # Returns
+/// The Unicode codepoint of the character before the cursor, or -1 if at
+/// the start of the line.
+///
+/// # Safety
+/// Requires valid global state (curwin, curbuf).
+#[no_mangle]
+#[allow(clippy::cast_sign_loss)]
+pub unsafe extern "C" fn rs_char_before_cursor() -> c_int {
+    let col = nvim_curwin_get_cursor_col();
+    if col <= 0 {
+        return -1;
+    }
+
+    let line = nvim_cursor_get_line_ptr();
+    // col is guaranteed > 0 here, so safe to cast
+    let p = line.add(col as usize);
+    // Find start of previous character
+    let prev_len = nvim_mbyte::rs_utf_head_off(line, p.sub(1)) + 1;
+    // prev_len is always >= 1 here (head_off returns >= 0, plus 1)
+    nvim_mbyte::rs_utf_ptr2char(p.sub(prev_len as usize))
+}
+
+/// Make sure curwin->w_cursor is not on the NUL at the end of the line.
+/// Allow it when in Visual mode and 'selection' is not "old".
+///
+/// # Safety
+/// Requires valid global state (curwin, curbuf).
+#[no_mangle]
+pub unsafe extern "C" fn rs_adjust_cursor_col() {
+    let col = nvim_curwin_get_cursor_col();
+    if col > 0 {
+        let visual_active = nvim_get_visual_active();
+        let sel_is_old = nvim_get_p_sel_first() == i32::from(b'o');
+        // Only adjust if not in Visual mode or 'selection' is "old"
+        if !visual_active || sel_is_old {
+            // If cursor is on NUL (end of line), move back one character
+            if nvim_gchar_cursor() == 0 {
+                nvim_curwin_set_cursor_col(col - 1);
+            }
+        }
+    }
 }
 
 // =============================================================================
