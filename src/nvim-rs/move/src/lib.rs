@@ -2274,6 +2274,388 @@ pub unsafe extern "C" fn rs_scroll_cursor_bot(wp: WinHandle, min_scroll: c_int, 
 }
 
 // =============================================================================
+// Scroll Clamping Functions
+// =============================================================================
+
+extern "C" {
+    // Buffer line count accessor for curbuf
+    fn nvim_curbuf_line_count() -> LinenrT;
+}
+
+/// Scroll the screen one line down, but don't do it if it would move the
+/// cursor off the screen.
+///
+/// # Safety
+/// Accesses curwin and curbuf globals.
+#[no_mangle]
+pub unsafe extern "C" fn rs_scrolldown_clamp() {
+    let wp = nvim_get_curwin();
+    if wp.is_null() {
+        return;
+    }
+
+    let topline = nvim_win_get_topline(wp);
+    let topfill = nvim_win_get_topfill(wp);
+    let fill = nvim_win_get_fill(wp, topline);
+    let can_fill = topfill < fill;
+
+    if topline <= 1 && !can_fill {
+        return;
+    }
+
+    nvim_validate_cursor_win(wp); // w_wrow needs to be valid
+
+    // Compute the row number of the last row of the cursor line
+    // and make sure it doesn't go off the screen. Make sure the cursor
+    // doesn't go past 'scrolloff' lines from the screen end.
+    let mut end_row = nvim_win_get_wrow(wp);
+    if can_fill {
+        end_row += 1;
+    } else {
+        end_row += nvim_plines_win_nofill(wp, topline - 1, 1);
+    }
+
+    let p_wrap = nvim_win_get_p_wrap(wp) != 0;
+    let view_width = nvim_win_get_view_width(wp);
+    if p_wrap && view_width != 0 {
+        nvim_validate_cheight(wp);
+        nvim_validate_virtcol(wp);
+        let cline_height = nvim_win_get_cline_height(wp);
+        let virtcol = nvim_win_get_virtcol(wp);
+        end_row += cline_height - 1 - virtcol / view_width;
+    }
+
+    let view_height = nvim_win_get_view_height(wp);
+    let so = rs_get_scrolloff_value(wp);
+    if end_row < view_height - so {
+        if can_fill {
+            nvim_win_set_topfill(wp, topfill + 1);
+            nvim_check_topfill(wp, 1);
+        } else {
+            let mut new_topline = topline - 1;
+            nvim_win_set_topline(wp, new_topline);
+            nvim_win_set_topfill(wp, 0);
+
+            // Handle folding - go to first line of fold
+            let mut first_lnum = new_topline;
+            if nvim_hasFolding(
+                wp,
+                new_topline,
+                std::ptr::addr_of_mut!(first_lnum),
+                std::ptr::null_mut(),
+            ) != 0
+            {
+                new_topline = first_lnum;
+                nvim_win_set_topline(wp, new_topline);
+            }
+        }
+
+        // approximate w_botline
+        let botline = nvim_win_get_botline(wp);
+        nvim_win_set_botline(wp, botline - 1);
+
+        nvim_win_clear_valid_bits(wp, VALID_WROW | VALID_CROW | VALID_BOTLINE);
+    }
+}
+
+/// Scroll the screen one line up, but don't do it if it would move the cursor
+/// off the screen.
+///
+/// # Safety
+/// Accesses curwin and curbuf globals.
+#[no_mangle]
+pub unsafe extern "C" fn rs_scrollup_clamp() {
+    let wp = nvim_get_curwin();
+    if wp.is_null() {
+        return;
+    }
+
+    let topline = nvim_win_get_topline(wp);
+    let topfill = nvim_win_get_topfill(wp);
+    let line_count = nvim_curbuf_line_count();
+
+    if topline == line_count && topfill == 0 {
+        return;
+    }
+
+    nvim_validate_cursor_win(wp); // w_wrow needs to be valid
+
+    // Compute the row number of the first row of the cursor line
+    // and make sure it doesn't go off the screen. Make sure the cursor
+    // doesn't go before 'scrolloff' lines from the screen start.
+    let wrow = nvim_win_get_wrow(wp);
+    let plines = nvim_plines_win_nofill(wp, topline, 1);
+    let mut start_row = wrow - plines - topfill;
+
+    let p_wrap = nvim_win_get_p_wrap(wp) != 0;
+    let view_width = nvim_win_get_view_width(wp);
+    if p_wrap && view_width != 0 {
+        nvim_validate_virtcol(wp);
+        let virtcol = nvim_win_get_virtcol(wp);
+        start_row -= virtcol / view_width;
+    }
+
+    let so = rs_get_scrolloff_value(wp);
+    if start_row >= so {
+        if topfill > 0 {
+            nvim_win_set_topfill(wp, topfill - 1);
+        } else {
+            // Handle folding - go to last line of fold
+            let mut last_lnum = topline;
+            nvim_hasFolding(
+                wp,
+                topline,
+                std::ptr::null_mut(),
+                std::ptr::addr_of_mut!(last_lnum),
+            );
+            nvim_win_set_topline(wp, last_lnum + 1);
+        }
+
+        // approximate w_botline
+        let botline = nvim_win_get_botline(wp);
+        nvim_win_set_botline(wp, botline + 1);
+
+        nvim_win_clear_valid_bits(wp, VALID_WROW | VALID_CROW | VALID_BOTLINE);
+    }
+}
+
+// =============================================================================
+// Cursor Correction for Smooth Scroll
+// =============================================================================
+
+extern "C" {
+    // Smooth scroll marker overlap
+    fn rs_sms_marker_overlap(wp: WinHandle, extra2: c_int) -> c_int;
+
+    // Cursor position setters for coladd
+    fn nvim_win_set_cursor_coladd(wp: WinHandle, coladd: ColnrT);
+}
+
+/// Make sure the cursor is in the visible part of the topline after scrolling
+/// the screen with 'smoothscroll'.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_cursor_correct_sms(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+
+    let p_sms = nvim_win_get_p_sms(wp) != 0;
+    let p_wrap = nvim_win_get_p_wrap(wp) != 0;
+    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+    let topline = nvim_win_get_topline(wp);
+
+    if !p_sms || !p_wrap || cursor_lnum != topline {
+        return;
+    }
+
+    let so = rs_get_scrolloff_value(wp);
+    let view_width = nvim_win_get_view_width(wp);
+    let view_height = nvim_win_get_view_height(wp);
+    let width1 = view_width - nvim_win_col_off(wp);
+    let width2 = width1 + nvim_win_col_off2(wp);
+    let mut so_cols = if so == 0 {
+        0
+    } else {
+        width1 + (so - 1) * width2
+    };
+    let space_cols = (view_height - 1) * width2;
+    let size = if so == 0 {
+        0
+    } else {
+        nvim_linetabsize_eol(wp, topline)
+    };
+
+    let skipcol = nvim_win_get_skipcol(wp);
+    if topline == 1 && skipcol == 0 {
+        so_cols = 0; // Ignore 'scrolloff' at top of buffer.
+    } else if so_cols > space_cols / 2 {
+        so_cols = space_cols / 2; // Not enough room: put cursor in the middle.
+    }
+
+    // Not enough screen lines in topline: ignore 'scrolloff'.
+    while so_cols > size && so_cols - width2 >= width1 && width1 > 0 {
+        so_cols -= width2;
+    }
+    if so_cols >= width1 && so_cols > size {
+        so_cols -= width1;
+    }
+
+    let overlap = if skipcol == 0 {
+        0
+    } else {
+        rs_sms_marker_overlap(wp, view_width - width2)
+    };
+
+    // If we have non-zero scrolloff, ignore marker overlap.
+    let top = skipcol + if so_cols != 0 { so_cols } else { overlap };
+    let bot = skipcol + width1 + (view_height - 1) * width2 - so_cols;
+
+    nvim_validate_virtcol(wp);
+    let virtcol = nvim_win_get_virtcol(wp);
+    let mut col = virtcol;
+
+    if col < top {
+        if col < width1 {
+            col += width1;
+        }
+        while width2 > 0 && col < top {
+            col += width2;
+        }
+    } else {
+        while width2 > 0 && col >= bot {
+            col -= width2;
+        }
+    }
+
+    if col != virtcol {
+        nvim_win_set_curswant(wp, col);
+        let rc = rs_coladvance(wp, col);
+
+        // validate_virtcol() marked various things as valid, but after
+        // moving the cursor they need to be recomputed
+        nvim_win_clear_valid_bits(
+            wp,
+            VALID_WROW | VALID_WCOL | VALID_CHEIGHT | VALID_CROW | VALID_VIRTCOL,
+        );
+
+        let line_count = nvim_win_buf_line_count(wp);
+        let skipcol = nvim_win_get_skipcol(wp);
+        let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+        if rc != 0 && skipcol > 0 && cursor_lnum < line_count {
+            nvim_validate_virtcol(wp);
+            let virtcol = nvim_win_get_virtcol(wp);
+            if virtcol < skipcol + overlap {
+                // Cursor still not visible: move it to the next line instead.
+                nvim_win_set_cursor_lnum(wp, cursor_lnum + 1);
+                nvim_win_set_cursor_col(wp, 0);
+                nvim_win_set_cursor_coladd(wp, 0);
+                nvim_win_set_curswant(wp, 0);
+                nvim_win_clear_valid_bits(wp, VALID_VIRTCOL);
+            }
+        }
+    }
+}
+
+// =============================================================================
+// Adjust Skipcol
+// =============================================================================
+
+/// Called after changing the cursor column: make sure that curwin->w_skipcol is
+/// valid for 'smoothscroll'.
+///
+/// # Safety
+/// Accesses curwin global.
+#[no_mangle]
+pub unsafe extern "C" fn rs_adjust_skipcol() {
+    let wp = nvim_get_curwin();
+    if wp.is_null() {
+        return;
+    }
+
+    let p_wrap = nvim_win_get_p_wrap(wp) != 0;
+    let p_sms = nvim_win_get_p_sms(wp) != 0;
+    let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+    let topline = nvim_win_get_topline(wp);
+
+    if !p_wrap || !p_sms || cursor_lnum != topline {
+        return;
+    }
+
+    let view_width = nvim_win_get_view_width(wp);
+    let width1 = view_width - nvim_win_col_off(wp);
+    if width1 <= 0 {
+        return; // no text will be displayed
+    }
+
+    let width2 = width1 + nvim_win_col_off2(wp);
+    let so = rs_get_scrolloff_value(wp);
+    let scrolloff_cols: ColnrT = if so == 0 {
+        0
+    } else {
+        width1 + (so - 1) * width2
+    };
+    let mut scrolled = false;
+
+    nvim_validate_cheight(wp);
+    let cline_height = nvim_win_get_cline_height(wp);
+    let view_height = nvim_win_get_view_height(wp);
+
+    if cline_height == view_height
+        // w_cline_height may be capped at w_view_height, check there aren't
+        // actually more lines.
+        && nvim_plines_win(wp, cursor_lnum, 0) <= view_height
+    {
+        // the line just fits in the window, don't scroll
+        rs_reset_skipcol(wp);
+        return;
+    }
+
+    nvim_validate_virtcol(wp);
+    let overlap = rs_sms_marker_overlap(wp, view_width - width2);
+    let mut skipcol = nvim_win_get_skipcol(wp);
+    let virtcol = nvim_win_get_virtcol(wp);
+
+    while skipcol > 0 && virtcol < skipcol + overlap + scrolloff_cols {
+        // scroll a screen line down
+        if skipcol >= width1 + width2 {
+            skipcol -= width2;
+        } else {
+            skipcol -= width1;
+        }
+        nvim_win_set_skipcol(wp, skipcol);
+        scrolled = true;
+    }
+
+    if scrolled {
+        nvim_validate_virtcol(wp);
+        nvim_redraw_later(wp, upd::NOT_VALID);
+        return; // don't scroll in the other direction now
+    }
+
+    let mut row = 0;
+    let virtcol = nvim_win_get_virtcol(wp);
+    let mut col = virtcol + scrolloff_cols;
+
+    // Avoid adjusting for 'scrolloff' beyond the text line height.
+    if scrolloff_cols > 0 {
+        let mut size = nvim_linetabsize_eol(wp, topline);
+        size = width1 + width2 * ((size - width1 + width2 - 1) / width2);
+        while col > size {
+            col -= width2;
+        }
+    }
+
+    let skipcol = nvim_win_get_skipcol(wp);
+    col -= skipcol;
+
+    if col >= width1 {
+        col -= width1;
+        row += 1;
+    }
+    if col > width2 {
+        row += col / width2;
+    }
+
+    if row >= view_height {
+        let mut skipcol = nvim_win_get_skipcol(wp);
+        if skipcol == 0 {
+            skipcol += width1;
+            nvim_win_set_skipcol(wp, skipcol);
+            row -= 1;
+        }
+        if row >= view_height {
+            skipcol = nvim_win_get_skipcol(wp);
+            skipcol += (row - view_height) * width2;
+            nvim_win_set_skipcol(wp, skipcol);
+        }
+        nvim_redraw_later(wp, upd::NOT_VALID);
+    }
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

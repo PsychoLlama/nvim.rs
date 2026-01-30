@@ -76,6 +76,10 @@ extern void rs_scroll_cursor_halfway(win_T *wp, int atend, int prefer_above);
 extern void rs_scroll_cursor_top(win_T *wp, int min_scroll, int always);
 extern void rs_scroll_cursor_bot(win_T *wp, int min_scroll, int set_topbot);
 extern void rs_set_empty_rows(win_T *wp, int used);
+extern void rs_scrolldown_clamp(void);
+extern void rs_scrollup_clamp(void);
+extern void rs_cursor_correct_sms(win_T *wp);
+extern void rs_adjust_skipcol(void);
 
 // Accessor for global scrolljump option
 OptInt nvim_get_p_sj(void)
@@ -1110,72 +1114,7 @@ void f_virtcol2col(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// the screen with 'smoothscroll'.
 static void cursor_correct_sms(win_T *wp)
 {
-  if (!wp->w_p_sms || !wp->w_p_wrap || wp->w_cursor.lnum != wp->w_topline) {
-    return;
-  }
-
-  int so = get_scrolloff_value(wp);
-  int width1 = wp->w_view_width - win_col_off(wp);
-  int width2 = width1 + win_col_off2(wp);
-  int so_cols = so == 0 ? 0 : width1 + (so - 1) * width2;
-  int space_cols = (wp->w_view_height - 1) * width2;
-  int size = so == 0 ? 0 : linetabsize_eol(wp, wp->w_topline);
-
-  if (wp->w_topline == 1 && wp->w_skipcol == 0) {
-    so_cols = 0;               // Ignore 'scrolloff' at top of buffer.
-  } else if (so_cols > space_cols / 2) {
-    so_cols = space_cols / 2;  // Not enough room: put cursor in the middle.
-  }
-
-  // Not enough screen lines in topline: ignore 'scrolloff'.
-  while (so_cols > size && so_cols - width2 >= width1 && width1 > 0) {
-    so_cols -= width2;
-  }
-  if (so_cols >= width1 && so_cols > size) {
-    so_cols -= width1;
-  }
-
-  int overlap = wp->w_skipcol == 0
-                ? 0 : sms_marker_overlap(wp, wp->w_view_width - width2);
-  // If we have non-zero scrolloff, ignore marker overlap.
-  int top = wp->w_skipcol + (so_cols != 0 ? so_cols : overlap);
-  int bot = wp->w_skipcol + width1 + (wp->w_view_height - 1) * width2 - so_cols;
-
-  validate_virtcol(wp);
-  colnr_T col = wp->w_virtcol;
-
-  if (col < top) {
-    if (col < width1) {
-      col += width1;
-    }
-    while (width2 > 0 && col < top) {
-      col += width2;
-    }
-  } else {
-    while (width2 > 0 && col >= bot) {
-      col -= width2;
-    }
-  }
-
-  if (col != wp->w_virtcol) {
-    wp->w_curswant = col;
-    int rc = coladvance(wp, wp->w_curswant);
-    // validate_virtcol() marked various things as valid, but after
-    // moving the cursor they need to be recomputed
-    wp->w_valid &= ~(VALID_WROW|VALID_WCOL|VALID_CHEIGHT|VALID_CROW|VALID_VIRTCOL);
-    if (rc == FAIL && wp->w_skipcol > 0
-        && wp->w_cursor.lnum < wp->w_buffer->b_ml.ml_line_count) {
-      validate_virtcol(wp);
-      if (wp->w_virtcol < wp->w_skipcol + overlap) {
-        // Cursor still not visible: move it to the next line instead.
-        wp->w_cursor.lnum++;
-        wp->w_cursor.col = 0;
-        wp->w_cursor.coladd = 0;
-        wp->w_curswant = 0;
-        wp->w_valid &= ~VALID_VIRTCOL;
-      }
-    }
-  }
+  rs_cursor_correct_sms(wp);
 }
 
 /// Scroll "count" lines up or down, and redraw.
@@ -1206,76 +1145,7 @@ bool scrollup(win_T *wp, linenr_T line_count, bool byfold)
 /// valid for 'smoothscroll'.
 void adjust_skipcol(void)
 {
-  if (!curwin->w_p_wrap || !curwin->w_p_sms || curwin->w_cursor.lnum != curwin->w_topline) {
-    return;
-  }
-
-  int width1 = curwin->w_view_width - win_col_off(curwin);
-  if (width1 <= 0) {
-    return;  // no text will be displayed
-  }
-  int width2 = width1 + win_col_off2(curwin);
-  int so = get_scrolloff_value(curwin);
-  colnr_T scrolloff_cols = so == 0 ? 0 : width1 + (so - 1) * width2;
-  bool scrolled = false;
-
-  validate_cheight(curwin);
-  if (curwin->w_cline_height == curwin->w_view_height
-      // w_cline_height may be capped at w_view_height, check there aren't
-      // actually more lines.
-      && plines_win(curwin, curwin->w_cursor.lnum, false) <= curwin->w_view_height) {
-    // the line just fits in the window, don't scroll
-    reset_skipcol(curwin);
-    return;
-  }
-
-  validate_virtcol(curwin);
-  int overlap = sms_marker_overlap(curwin, curwin->w_view_width - width2);
-  while (curwin->w_skipcol > 0
-         && curwin->w_virtcol < curwin->w_skipcol + overlap + scrolloff_cols) {
-    // scroll a screen line down
-    if (curwin->w_skipcol >= width1 + width2) {
-      curwin->w_skipcol -= width2;
-    } else {
-      curwin->w_skipcol -= width1;
-    }
-    scrolled = true;
-  }
-  if (scrolled) {
-    validate_virtcol(curwin);
-    redraw_later(curwin, UPD_NOT_VALID);
-    return;  // don't scroll in the other direction now
-  }
-  int row = 0;
-  colnr_T col = curwin->w_virtcol + scrolloff_cols;
-
-  // Avoid adjusting for 'scrolloff' beyond the text line height.
-  if (scrolloff_cols > 0) {
-    int size = linetabsize_eol(curwin, curwin->w_topline);
-    size = width1 + width2 * ((size - width1 + width2 - 1) / width2);
-    while (col > size) {
-      col -= width2;
-    }
-  }
-  col -= curwin->w_skipcol;
-
-  if (col >= width1) {
-    col -= width1;
-    row++;
-  }
-  if (col > width2) {
-    row += (int)col / width2;
-  }
-  if (row >= curwin->w_view_height) {
-    if (curwin->w_skipcol == 0) {
-      curwin->w_skipcol += width1;
-      row--;
-    }
-    if (row >= curwin->w_view_height) {
-      curwin->w_skipcol += (row - curwin->w_view_height) * width2;
-    }
-    redraw_later(curwin, UPD_NOT_VALID);
-  }
+  rs_adjust_skipcol();
 }
 
 /// Don't end up with too many filler lines in the window.
@@ -1290,75 +1160,14 @@ void check_topfill(win_T *wp, bool down)
 // cursor off the screen.
 void scrolldown_clamp(void)
 {
-  bool can_fill = (curwin->w_topfill < win_get_fill(curwin, curwin->w_topline));
-
-  if (curwin->w_topline <= 1
-      && !can_fill) {
-    return;
-  }
-
-  validate_cursor(curwin);        // w_wrow needs to be valid
-
-  // Compute the row number of the last row of the cursor line
-  // and make sure it doesn't go off the screen. Make sure the cursor
-  // doesn't go past 'scrolloff' lines from the screen end.
-  int end_row = curwin->w_wrow;
-  if (can_fill) {
-    end_row++;
-  } else {
-    end_row += plines_win_nofill(curwin, curwin->w_topline - 1, true);
-  }
-  if (curwin->w_p_wrap && curwin->w_view_width != 0) {
-    validate_cheight(curwin);
-    validate_virtcol(curwin);
-    end_row += curwin->w_cline_height - 1 -
-               curwin->w_virtcol / curwin->w_view_width;
-  }
-  if (end_row < curwin->w_view_height - get_scrolloff_value(curwin)) {
-    if (can_fill) {
-      curwin->w_topfill++;
-      check_topfill(curwin, true);
-    } else {
-      curwin->w_topline--;
-      curwin->w_topfill = 0;
-    }
-    hasFolding(curwin, curwin->w_topline, &curwin->w_topline, NULL);
-    curwin->w_botline--;            // approximate w_botline
-    curwin->w_valid &= ~(VALID_WROW|VALID_CROW|VALID_BOTLINE);
-  }
+  rs_scrolldown_clamp();
 }
 
 // Scroll the screen one line up, but don't do it if it would move the cursor
 // off the screen.
 void scrollup_clamp(void)
 {
-  if (curwin->w_topline == curbuf->b_ml.ml_line_count
-      && curwin->w_topfill == 0) {
-    return;
-  }
-
-  validate_cursor(curwin);        // w_wrow needs to be valid
-
-  // Compute the row number of the first row of the cursor line
-  // and make sure it doesn't go off the screen. Make sure the cursor
-  // doesn't go before 'scrolloff' lines from the screen start.
-  int start_row = (curwin->w_wrow
-                   - plines_win_nofill(curwin, curwin->w_topline, true)
-                   - curwin->w_topfill);
-  if (curwin->w_p_wrap && curwin->w_view_width != 0) {
-    validate_virtcol(curwin);
-    start_row -= curwin->w_virtcol / curwin->w_view_width;
-  }
-  if (start_row >= get_scrolloff_value(curwin)) {
-    if (curwin->w_topfill > 0) {
-      curwin->w_topfill--;
-    } else {
-      hasFolding(curwin, curwin->w_topline, NULL, &curwin->w_topline);
-      curwin->w_topline++;
-    }
-    curwin->w_botline++;                // approximate w_botline
-    curwin->w_valid &= ~(VALID_WROW|VALID_CROW|VALID_BOTLINE);
-  }
+  rs_scrollup_clamp();
 }
 
 // Add one line above "lp->lnum".  This can be a filler line, a closed fold or
@@ -1885,4 +1694,10 @@ int nvim_plines_win_full(win_T *wp, linenr_T lnum, linenr_T *nextp, int *foldedp
     *foldedp = folded ? 1 : 0;
   }
   return result;
+}
+
+/// Get line count from curbuf (accessor for Rust).
+linenr_T nvim_curbuf_line_count(void)
+{
+  return curbuf->b_ml.ml_line_count;
 }
