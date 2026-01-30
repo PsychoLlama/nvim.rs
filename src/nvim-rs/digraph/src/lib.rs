@@ -15,6 +15,7 @@ use libc::c_int;
 
 mod input;
 mod list;
+mod parse;
 mod register;
 mod validate;
 mod viml;
@@ -22,6 +23,7 @@ mod viml;
 // Re-export FFI functions
 pub use input::rs_do_digraph;
 pub use list::{rs_digraph_format_pair, rs_digraph_format_result, rs_digraph_iterate};
+pub use parse::{rs_putdigraph, PutdigraphResult};
 pub use register::{rs_get_digraph_for_char, rs_registerdigraph};
 pub use validate::rs_check_digraph_chars_valid;
 pub use viml::{rs_digraph_get_viml, rs_digraph_set_viml, rs_parse_digraph_chars};

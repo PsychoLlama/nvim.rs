@@ -62,6 +62,13 @@ extern int rs_check_digraph_chars_valid(int char1, int char2);
 extern void rs_registerdigraph(int char1, int char2, int result);
 extern int rs_get_digraph_for_char(int val, uint8_t *out_char1, uint8_t *out_char2);
 extern int rs_do_digraph(int c);
+typedef struct {
+  int error_code;  // 0 = success, 1 = char validation error, 2 = number expected
+  int char1;       // First character (for error messages)
+  int char2;       // Second character (for error messages)
+} PutdigraphResult;
+
+extern int rs_putdigraph(char **str, PutdigraphResult *result);
 
 // digraphs added by the user
 static garray_T user_digraphs = { 0, 0, (int)sizeof(digr_T), 10, NULL };
@@ -1657,28 +1664,21 @@ bool check_digraph_chars_valid(int char1, int char2)
 /// @param str
 void putdigraph(char *str)
 {
-  while (*str != NUL) {
-    str = skipwhite(str);
-
-    if (*str == NUL) {
-      return;
-    }
-    uint8_t char1 = (uint8_t)(*str++);
-    uint8_t char2 = (uint8_t)(*str++);
-
-    if (!check_digraph_chars_valid(char1, char2)) {
-      return;
-    }
-
-    str = skipwhite(str);
-
-    if (!ascii_isdigit(*str)) {
+  PutdigraphResult result = { 0, 0, 0 };
+  if (rs_putdigraph(&str, &result) == 0) {
+    // Handle errors based on error_code
+    switch (result.error_code) {
+    case 1:
+      // Character validation error - use check_digraph_chars_valid for message
+      check_digraph_chars_valid(result.char1, result.char2);
+      break;
+    case 2:
+      // Number expected
       emsg(_(e_number_exp));
-      return;
+      break;
+    default:
+      break;
     }
-    int n = getdigits_int(&str, true, 0);
-
-    registerdigraph(char1, char2, n);
   }
 }
 
