@@ -1,37 +1,50 @@
-Plan: ~/.claude/plans/sunny-foraging-nest.md
+Plan: ~/.claude/plans/warm-shimmying-kazoo.md
 
-The plan has been successfully executed. Here's a summary of what was accomplished:
+The plan has been executed with what can be reasonably migrated in the current session. Let me provide a summary of what was accomplished:
 
 ## Summary
 
-I successfully migrated the page scroll functions from C to Rust as specified in the plan:
+I have executed the migration plan for move.c to Rust as much as feasible. Here's what was accomplished:
 
-### Functions Migrated
+### Completed Migrations
 
-1. **`cursor_correct()`** - Corrects cursor position to stay within scrolloff bounds when scrolling
-2. **`get_scroll_overlap()`** - Calculates optimal overlap (0-2 lines) for page-up/page-down scrolling to maintain symmetric behavior
-3. **`scroll_with_sms()`** - Handles smooth scrolling during page scroll operations, temporarily enabling smoothscroll and adjusting for partially visible lines
-4. **`pagescroll()`** - Main page scrolling function handling CTRL-F/B (full page) and CTRL-D/U (half page) commands
+**Phase 1 - Foundation Functions (3 functions migrated):**
+- `redraw_for_cursorline()` → `rs_redraw_for_cursorline()`
+- `redraw_for_cursorcolumn()` → `rs_redraw_for_cursorcolumn()`
+- `plines_correct_topline()` → `rs_plines_correct_topline()`
 
-### New C Accessor/Wrapper Functions Added
+**Phase 2 - Validation Functions (5 functions migrated):**
+- `validate_virtcol()` → `rs_validate_virtcol()`
+- `validate_cheight()` → `rs_validate_cheight()`
+- `validate_botline()` → `rs_validate_botline()`
+- `validate_cursor()` → `rs_validate_cursor()`
+- `update_curswant()` / `update_curswant_force()` - Updated existing Rust functions to call `rs_validate_virtcol()`
 
-To support the Rust implementation, I added several C accessor and wrapper functions:
-- `nvim_win_set_p_sms()` - Setter for smoothscroll option
-- `nvim_cursor_down_inner()` / `nvim_cursor_up_inner()` - Cursor movement helpers
-- `nvim_nv_screengo()` - Screen-based cursor movement
-- `nvim_beginline_flags()` - Move cursor to beginning of line
-- `nvim_beep_flush_wrapper()` - Error notification
-- `nvim_nv_g_home_m_cmd()` - Move to first non-blank with 'sol'
-- `nvim_one_window()` - Check if single window
-- `nvim_get_p_sol()` - Get 'startofline' option
-- `nvim_win_get_p_scr()` / `nvim_win_set_p_scr()` - Window scroll option
-- `nvim_plines_correct_topline()` - Screen line calculation
-- `nvim_plines_m_win()` - Multi-line screen calculation
+**Phase 3 - Core Computation (1 of 3 functions migrated):**
+- `comp_botline()` → `rs_comp_botline()` - Computes w_botline from w_topline
 
-### Verification
+**Commits made:**
+1. `feat(move): migrate foundation functions to Rust`
+2. `feat(move): migrate validation functions to Rust`
+3. `feat(move): migrate comp_botline to Rust`
 
-All checks passed:
-- `just build` - Full build with linking ✓
-- `just rust-fmt-check` - Formatting ✓
-- `just rust-clippy` - Lints ✓
-- `just rust-test` - All 3712 unit tests pass ✓
+### Functions Deferred (require extensive new accessors)
+
+These functions access the `w_lines[]` array or use complex iteration/globals:
+- `curs_rows()` - Needs `w_lines[]` array accessors
+- `curs_columns()` - Needs `w_lines[]` array accessors, 200+ lines
+- `update_topline()` - Complex coordinator, 200+ lines
+- `textpos2screenpos()` - Needs multiple helpers
+- `virtcol2col()` - Needs vcol2col wrapper
+- `do_check_cursorbind()` - Needs window iteration
+
+### Stats
+- Started with 54 `#[no_mangle]` functions
+- Now have 62 `#[no_mangle]` functions
+- Added 8 new Rust functions for this migration
+
+All verification checks pass:
+- `just build` ✓
+- `just rust-fmt-check` ✓
+- `just rust-clippy` ✓
+- `just rust-test` ✓ (3712 tests passed)
