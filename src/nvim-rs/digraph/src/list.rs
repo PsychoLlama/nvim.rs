@@ -66,33 +66,33 @@ const DG_START_OTHER3: c_int = 0x3220;
 /// Each entry has `(start_code, header_index)`.
 /// The `header_index` corresponds to predefined header strings.
 static HEADER_TABLE: &[(c_int, c_int)] = &[
-    (DG_START_LATIN, 0),           // "Latin supplement"
-    (DG_START_GREEK, 1),           // "Greek and Coptic"
-    (DG_START_CYRILLIC, 2),        // "Cyrillic"
-    (DG_START_HEBREW, 3),          // "Hebrew"
-    (DG_START_ARABIC, 4),          // "Arabic"
-    (DG_START_LATIN_EXTENDED, 5),  // "Latin extended"
-    (DG_START_GREEK_EXTENDED, 6),  // "Greek extended"
-    (DG_START_PUNCTUATION, 7),     // "Punctuation"
-    (DG_START_SUB_SUPER, 8),       // "Super- and subscripts"
-    (DG_START_CURRENCY, 9),        // "Currency"
-    (DG_START_OTHER1, 10),         // "Other"
-    (DG_START_ROMAN, 11),          // "Roman numbers"
-    (DG_START_ARROWS, 12),         // "Arrows"
-    (DG_START_MATH, 13),           // "Mathematical operators"
-    (DG_START_TECHNICAL, 14),      // "Technical"
-    (DG_START_OTHER2, 15),         // "Other"
-    (DG_START_DRAWING, 16),        // "Box drawing"
-    (DG_START_BLOCK, 17),          // "Block elements"
-    (DG_START_SHAPES, 18),         // "Geometric shapes"
-    (DG_START_SYMBOLS, 19),        // "Symbols"
-    (DG_START_DINGBATS, 20),       // "Dingbats"
-    (DG_START_CJK_SYMBOLS, 21),    // "CJK symbols and punctuation"
-    (DG_START_HIRAGANA, 22),       // "Hiragana"
-    (DG_START_KATAKANA, 23),       // "Katakana"
-    (DG_START_BOPOMOFO, 24),       // "Bopomofo"
-    (DG_START_OTHER3, 25),         // "Other"
-    (0x0fff_ffff, -1),             // Sentinel
+    (DG_START_LATIN, 0),          // "Latin supplement"
+    (DG_START_GREEK, 1),          // "Greek and Coptic"
+    (DG_START_CYRILLIC, 2),       // "Cyrillic"
+    (DG_START_HEBREW, 3),         // "Hebrew"
+    (DG_START_ARABIC, 4),         // "Arabic"
+    (DG_START_LATIN_EXTENDED, 5), // "Latin extended"
+    (DG_START_GREEK_EXTENDED, 6), // "Greek extended"
+    (DG_START_PUNCTUATION, 7),    // "Punctuation"
+    (DG_START_SUB_SUPER, 8),      // "Super- and subscripts"
+    (DG_START_CURRENCY, 9),       // "Currency"
+    (DG_START_OTHER1, 10),        // "Other"
+    (DG_START_ROMAN, 11),         // "Roman numbers"
+    (DG_START_ARROWS, 12),        // "Arrows"
+    (DG_START_MATH, 13),          // "Mathematical operators"
+    (DG_START_TECHNICAL, 14),     // "Technical"
+    (DG_START_OTHER2, 15),        // "Other"
+    (DG_START_DRAWING, 16),       // "Box drawing"
+    (DG_START_BLOCK, 17),         // "Block elements"
+    (DG_START_SHAPES, 18),        // "Geometric shapes"
+    (DG_START_SYMBOLS, 19),       // "Symbols"
+    (DG_START_DINGBATS, 20),      // "Dingbats"
+    (DG_START_CJK_SYMBOLS, 21),   // "CJK symbols and punctuation"
+    (DG_START_HIRAGANA, 22),      // "Hiragana"
+    (DG_START_KATAKANA, 23),      // "Katakana"
+    (DG_START_BOPOMOFO, 24),      // "Bopomofo"
+    (DG_START_OTHER3, 25),        // "Other"
+    (0x0fff_ffff, -1),            // Sentinel
 ];
 
 /// Find the header index for a digraph result code.
@@ -398,8 +398,7 @@ pub unsafe extern "C" fn rs_digraph_iterate_default(
         }
 
         // Get actual result (may be overridden by user digraph)
-        let result =
-            unsafe { rs_getexactdigraph(c_int::from(dp.char1), c_int::from(dp.char2), 0) };
+        let result = unsafe { rs_getexactdigraph(c_int::from(dp.char1), c_int::from(dp.char2), 0) };
 
         // Skip if result is 0 or same as char2 (no digraph)
         if result != 0 && result != c_int::from(dp.char2) {
@@ -571,13 +570,22 @@ mod tests {
 
         // Greek header (0x0386)
         assert_eq!(rs_digraph_get_header_index(0, DG_START_GREEK), 1);
-        assert_eq!(rs_digraph_get_header_index(DG_START_LATIN, DG_START_GREEK), 1);
+        assert_eq!(
+            rs_digraph_get_header_index(DG_START_LATIN, DG_START_GREEK),
+            1
+        );
 
         // No new header if still in same range
-        assert_eq!(rs_digraph_get_header_index(DG_START_LATIN, DG_START_LATIN + 1), -1);
+        assert_eq!(
+            rs_digraph_get_header_index(DG_START_LATIN, DG_START_LATIN + 1),
+            -1
+        );
 
         // Cyrillic header (0x0401)
-        assert_eq!(rs_digraph_get_header_index(DG_START_GREEK, DG_START_CYRILLIC), 2);
+        assert_eq!(
+            rs_digraph_get_header_index(DG_START_GREEK, DG_START_CYRILLIC),
+            2
+        );
     }
 
     #[test]
