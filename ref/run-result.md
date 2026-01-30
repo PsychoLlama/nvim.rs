@@ -1,31 +1,32 @@
-Plan: ~/.claude/plans/jolly-doodling-giraffe.md
+Plan: ~/.claude/plans/giggly-sparking-yao.md
 
-The plan has been executed successfully. Here's a summary of what was accomplished:
+All tasks are complete. Here's a summary of what was accomplished:
 
 ## Summary
 
-Successfully migrated 5 cursor validation functions from C to Rust:
+Successfully migrated three core scroll functions from `src/nvim/move.c` to the Rust `src/nvim-rs/move` crate:
 
-1. **`check_pos`** - Validates position (lnum/col) against buffer bounds
-2. **`check_cursor_lnum`** - Validates cursor line number with fold handling at end of file
-3. **`check_cursor_col`** - Validates cursor column with complex mode-dependent rules (Insert, Terminal, Visual modes, virtualedit)
-4. **`check_cursor`** - Composite function calling lnum + col validation
-5. **`check_visual_pos`** - Validates Visual mode selection position
+### Functions Migrated
+1. **`rs_scrolldown()`** (~161 lines) - Scrolls window down (CTRL-Y)
+2. **`rs_scrollup()`** (~109 lines) - Scrolls window up (CTRL-E)
+3. **`rs_scroll_redraw()`** (~50 lines) - Orchestrates scroll with cursor adjustment
 
-### Key Implementation Details:
+### C Accessor Functions Added
+- **window.c**: `nvim_win_set_wrow`, `nvim_win_get_p_sms`
+- **move.c**: `nvim_cursor_correct`, `nvim_cursor_correct_sms`, `nvim_validate_cursor_win`, `nvim_validate_virtcol`, `nvim_validate_cheight`, `nvim_check_topfill`, `nvim_invalidate_botline`, `nvim_win_col_off`, `nvim_win_col_off2`
+- **plines.c**: `nvim_linetabsize_eol`, `nvim_plines_win`, `nvim_win_may_fill`
+- **edit.c**: `nvim_scroll_cursor_up`, `nvim_scroll_cursor_down`
 
-- **Added C accessor functions** for Rust to access required state:
-  - Buffer line count and line length accessors
-  - Visual position getters/setters
-  - Fold checking wrapper (`nvim_check_folding_at_end`)
-  - Cursor coladd setter
-  - `mark_mb_adjustpos` wrapper for multibyte safety
-  - Virtual column range getter for virtualedit handling
+### Features Preserved
+- Smooth scroll ('sms' option) with width calculations
+- Filler lines (diff mode)
+- Folded lines via `hasFolding()`
+- Concealed lines via `decor_conceal_line()`
+- Cursor repositioning when scrolling off-screen
+- 'scrolloff' handling for cursor position
 
-- **Original C functions** in `cursor.c` are now thin wrappers that call the corresponding `rs_*` Rust functions
-
-### Verification:
-- ✅ `just build` - Full build with linking passes
-- ✅ `just rust-fmt-check` - Formatting check passes
-- ✅ `just rust-clippy` - Lint check passes  
-- ✅ `just rust-test` - All 3672 unit tests pass
+### Verification
+- ✅ `just build` - full build with linking
+- ✅ `just rust-fmt-check` - formatting
+- ✅ `just rust-clippy` - lints
+- ✅ `just rust-test` - 3672 unit tests passed
