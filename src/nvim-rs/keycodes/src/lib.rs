@@ -1993,8 +1993,14 @@ pub unsafe extern "C" fn rs_replace_termcodes(
     do_backslash: bool,
     do_special: bool,
 ) -> *mut std::ffi::c_char {
-    if from.is_null() || buf.is_null() || from_len == 0 {
+    if from.is_null() || buf.is_null() {
         return std::ptr::null_mut();
+    }
+
+    // Handle empty input - return empty string
+    if from_len == 0 {
+        *buf = 0;
+        return buf;
     }
 
     let from_u8 = from.cast::<u8>();
