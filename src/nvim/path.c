@@ -65,6 +65,12 @@ extern const char *rs_invocation_path_tail(const char *invocation, size_t *len);
 extern int rs_path_has_wildcard(const char *p);
 extern int rs_path_has_exp_wildcard(const char *p);
 extern int rs_pathcmp(const char *p, const char *q, int maxlen);
+extern int rs_add_pathsep(char *p);
+extern int rs_append_path(char *path, const char *to_append, size_t max_len);
+extern int rs_path_with_extension(const char *path, const char *extension);
+extern char *rs_path_shorten_fname(char *full_path, char *dir_name);
+extern void rs_shorten_dir_len(char *str, int trim_len);
+extern void rs_shorten_dir(char *str);
 
 #include "path.c.generated.h"
 
@@ -223,36 +229,7 @@ bool vim_ispathlistsep(int c)
 void shorten_dir_len(char *str, int trim_len)
   FUNC_ATTR_NONNULL_ALL
 {
-  char *tail = path_tail(str);
-  char *d = str;
-  bool skip = false;
-  int dirchunk_len = 0;
-  for (char *s = str;; s++) {
-    if (s >= tail) {                // copy the whole tail
-      *d++ = *s;
-      if (*s == NUL) {
-        break;
-      }
-    } else if (vim_ispathsep(*s)) {       // copy '/' and next char
-      *d++ = *s;
-      skip = false;
-      dirchunk_len = 0;
-    } else if (!skip) {
-      *d++ = *s;                     // copy next char
-      if (*s != '~' && *s != '.') {  // and leading "~" and "."
-        dirchunk_len++;  // only count word chars for the size
-        // keep copying chars until we have our preferred length (or
-        // until the above if/else branches move us along)
-        if (dirchunk_len >= trim_len) {
-          skip = true;
-        }
-      }
-      int l = utfc_ptr2len(s);
-      while (--l > 0) {
-        *d++ = *++s;
-      }
-    }
-  }
+  rs_shorten_dir_len(str, trim_len);
 }
 
 /// Shorten the path of a file from "~/foo/../.bar/fname" to "~/f/../.b/fname"
@@ -260,7 +237,7 @@ void shorten_dir_len(char *str, int trim_len)
 void shorten_dir(char *str)
   FUNC_ATTR_NONNULL_ALL
 {
-  shorten_dir_len(str, 1);
+  rs_shorten_dir(str);
 }
 
 /// Return true if the directory of "fname" exists, false otherwise.
@@ -385,15 +362,7 @@ char *concat_fnames_realloc(char *fname1, const char *fname2, bool sep)
 bool add_pathsep(char *p)
   FUNC_ATTR_NONNULL_ALL
 {
-  const size_t len = strlen(p);
-  if (*p != NUL && !after_pathsep(p, p + len)) {
-    const size_t pathsep_len = sizeof(PATHSEPSTR);
-    if (len > MAXPATHL - pathsep_len) {
-      return false;
-    }
-    memcpy(p + len, PATHSEPSTR, pathsep_len);
-  }
-  return true;
+  return rs_add_pathsep(p) != 0;
 }
 
 /// Get an allocated copy of the full path to a file.
@@ -1611,11 +1580,7 @@ int path_with_url(const char *fname)
 bool path_with_extension(const char *path, const char *extension)
   FUNC_ATTR_NONNULL_ALL
 {
-  const char *last_dot = strrchr(path, '.');
-  if (!last_dot) {
-    return false;
-  }
-  return mb_strcmp_ic((bool)p_fic, last_dot + 1, extension) == 0;
+  return rs_path_with_extension(path, extension) != 0;
 }
 
 /// Return true if "name" is a full (absolute) path name or URL.
@@ -1828,34 +1793,7 @@ char *path_try_shorten_fname(char *full_path)
 ///   - NULL if no shorter name is possible.
 char *path_shorten_fname(char *full_path, char *dir_name)
 {
-  if (full_path == NULL) {
-    return NULL;
-  }
-
-  assert(dir_name != NULL);
-  size_t len = strlen(dir_name);
-
-  // If full_path and dir_name do not match, it's impossible to make one
-  // relative to the other.
-  if (path_fnamencmp(dir_name, full_path, len) != 0) {
-    return NULL;
-  }
-
-  // If dir_name is a path head, full_path can always be made relative.
-  if (len == (size_t)path_head_length() && is_path_head(dir_name)) {
-    return full_path + len;
-  }
-
-  char *p = full_path + len;
-
-  // If *p is not pointing to a path separator, this means that full_path's
-  // last directory name is longer than *dir_name's last directory, so they
-  // don't actually match.
-  if (!vim_ispathsep(*p)) {
-    return NULL;
-  }
-
-  return p + 1;
+  return rs_path_shorten_fname(full_path, dir_name);
 }
 
 /// Invoke expand_wildcards() for one pattern
@@ -2056,31 +1994,7 @@ int path_full_dir_name(char *directory, char *buffer, size_t len)
 int append_path(char *path, const char *to_append, size_t max_len)
   FUNC_ATTR_NONNULL_ALL
 {
-  size_t current_length = strlen(path);
-  size_t to_append_length = strlen(to_append);
-
-  // Do not append empty string or a dot.
-  if (to_append_length == 0 || strcmp(to_append, ".") == 0) {
-    return OK;
-  }
-
-  // Combine the path segments, separated by a slash.
-  if (current_length > 0 && !vim_ispathsep_nocolon(path[current_length - 1])) {
-    // +1 for the NUL at the end.
-    if (current_length + STRLEN_LITERAL(PATHSEPSTR) + 1 > max_len) {
-      return FAIL;  // No space for trailing slash.
-    }
-    xstrlcpy(path + current_length, PATHSEPSTR, max_len - current_length);
-    current_length += STRLEN_LITERAL(PATHSEPSTR);
-  }
-
-  // +1 for the NUL at the end.
-  if (current_length + to_append_length + 1 > max_len) {
-    return FAIL;
-  }
-
-  xstrlcpy(path + current_length, to_append, max_len - current_length);
-  return OK;
+  return rs_append_path(path, to_append, max_len);
 }
 
 /// Used by `vim_FullName` and `fix_fname` to expand a filename to its full path.

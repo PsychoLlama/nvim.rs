@@ -1709,3 +1709,485 @@ mod fnamecmp_tests {
         }
     }
 }
+
+// ============================================================================
+// add_pathsep - Add path separator to filename
+// ============================================================================
+
+/// Maximum path length (matches MAXPATHL in C code)
+const MAXPATHL: usize = 4096;
+
+/// Adds a path separator to a filename, unless it already ends in one.
+///
+/// # Safety
+/// - `p` must be a valid pointer to a mutable, null-terminated C string
+/// - The buffer pointed to by `p` must have enough space for an additional
+///   path separator character (at most 2 extra bytes for separator + NUL)
+///
+/// # Returns
+/// - 1 (true) if the path separator was added or already existed.
+/// - 0 (false) if the filename is too long.
+#[no_mangle]
+pub unsafe extern "C" fn rs_add_pathsep(p: *mut c_char) -> c_int {
+    if p.is_null() {
+        return 0;
+    }
+
+    // Get the length of the string
+    let len = libc::strlen(p);
+    if len == 0 {
+        return 1; // Empty string - nothing to do (matches C behavior)
+    }
+
+    // Check if already ends with a path separator
+    if rs_after_pathsep(p, p.add(len)) != 0 {
+        return 1; // Already has separator
+    }
+
+    // Check if there's enough space (need room for separator + NUL)
+    // pathsep_len is 1 on Unix (just '/'), could be different on Windows
+    let pathsep_len = 1;
+    if len > MAXPATHL - pathsep_len - 1 {
+        return 0; // No space for trailing slash
+    }
+
+    // Add the path separator
+    #[cfg(unix)]
+    {
+        *p.add(len) = b'/' as c_char;
+    }
+    #[cfg(windows)]
+    {
+        *p.add(len) = b'\\' as c_char;
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        *p.add(len) = b'/' as c_char;
+    }
+
+    // Add NUL terminator
+    *p.add(len + 1) = 0;
+
+    1
+}
+
+// ============================================================================
+// append_path - Append path component with separator
+// ============================================================================
+
+/// Append to_append to path with a slash in between.
+///
+/// Does not append empty string or a single ".".
+///
+/// # Safety
+/// - `path` must be a valid pointer to a mutable, null-terminated C string
+/// - `to_append` must be a valid pointer to a null-terminated C string
+/// - The buffer pointed to by `path` must have at least `max_len` bytes capacity
+///
+/// # Returns
+/// - 0 (OK) on success
+/// - 1 (FAIL) if not enough space
+#[no_mangle]
+pub unsafe extern "C" fn rs_append_path(
+    path: *mut c_char,
+    to_append: *const c_char,
+    max_len: usize,
+) -> c_int {
+    const OK: c_int = 0;
+    const FAIL: c_int = 1;
+
+    if path.is_null() || to_append.is_null() {
+        return FAIL;
+    }
+
+    let current_length = libc::strlen(path);
+    let to_append_length = libc::strlen(to_append);
+
+    // Do not append empty string or a dot.
+    if to_append_length == 0 {
+        return OK;
+    }
+    // Check for "." - single dot
+    if to_append_length == 1 && *to_append == b'.' as c_char {
+        return OK;
+    }
+
+    let mut write_pos = current_length;
+
+    // Combine the path segments, separated by a slash
+    if current_length > 0 && rs_vim_ispathsep_nocolon(*path.add(current_length - 1) as c_int) == 0 {
+        // Need to add a separator
+        // +1 for the separator, +1 for the NUL at the end
+        if current_length + 1 + 1 > max_len {
+            return FAIL; // No space for trailing slash
+        }
+        #[cfg(unix)]
+        {
+            *path.add(write_pos) = b'/' as c_char;
+        }
+        #[cfg(windows)]
+        {
+            *path.add(write_pos) = b'\\' as c_char;
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            *path.add(write_pos) = b'/' as c_char;
+        }
+        write_pos += 1;
+    }
+
+    // +1 for the NUL at the end
+    if write_pos + to_append_length + 1 > max_len {
+        return FAIL;
+    }
+
+    // Copy to_append (including NUL terminator)
+    libc::memcpy(
+        path.add(write_pos) as *mut libc::c_void,
+        to_append as *const libc::c_void,
+        to_append_length + 1,
+    );
+
+    OK
+}
+
+// ============================================================================
+// path_with_extension - Check if path has given extension
+// ============================================================================
+
+/// Check if a path ends with a specific extension.
+///
+/// Comparison respects 'fileignorecase' option.
+///
+/// # Safety
+/// - `path` and `extension` must be valid null-terminated C strings.
+///
+/// # Returns
+/// - 1 (true) if path ends with the given extension
+/// - 0 (false) otherwise
+#[no_mangle]
+pub unsafe extern "C" fn rs_path_with_extension(
+    path: *const c_char,
+    extension: *const c_char,
+) -> c_int {
+    if path.is_null() || extension.is_null() {
+        return 0;
+    }
+
+    // Find the last '.' in path
+    let last_dot = libc::strrchr(path, b'.' as c_int);
+    if last_dot.is_null() {
+        return 0;
+    }
+
+    // Compare extension (skip the dot)
+    let fic = nvim_get_p_fic() != 0;
+    let ext_start = last_dot.add(1);
+    c_int::from(nvim_mbyte::rs_mb_strcmp_ic(fic, ext_start, extension) == 0)
+}
+
+// ============================================================================
+// path_shorten_fname - Make absolute path relative to directory
+// ============================================================================
+
+/// Try to find a shortname by comparing the fullname with `dir_name`.
+///
+/// # Safety
+/// - `full_path` may be NULL
+/// - `dir_name` must be a valid null-terminated C string (not NULL)
+///
+/// # Returns
+/// - Pointer into `full_path` if shortened.
+/// - NULL if no shorter name is possible or if `full_path` is NULL.
+#[no_mangle]
+pub unsafe extern "C" fn rs_path_shorten_fname(
+    full_path: *mut c_char,
+    dir_name: *mut c_char,
+) -> *mut c_char {
+    if full_path.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    // dir_name should not be NULL (asserted in C code)
+    if dir_name.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let len = libc::strlen(dir_name);
+
+    // If full_path and dir_name do not match, it's impossible to make one
+    // relative to the other.
+    if rs_path_fnamencmp(dir_name, full_path, len) != 0 {
+        return std::ptr::null_mut();
+    }
+
+    // If dir_name is a path head, full_path can always be made relative.
+    if len == rs_path_head_length() as usize && rs_is_path_head(dir_name) != 0 {
+        return full_path.add(len);
+    }
+
+    let p = full_path.add(len);
+
+    // If *p is not pointing to a path separator, this means that full_path's
+    // last directory name is longer than *dir_name's last directory, so they
+    // don't actually match.
+    if rs_vim_ispathsep(*p as c_int) == 0 {
+        return std::ptr::null_mut();
+    }
+
+    p.add(1)
+}
+
+// ============================================================================
+// shorten_dir_len / shorten_dir - Shorten directory components in path
+// ============================================================================
+
+/// Shorten the path of a file from "~/foo/../.bar/fname" to "~/f/../.b/fname"
+/// "trim_len" specifies how many characters to keep for each directory.
+/// Must be 1 or more.
+/// It's done in-place.
+///
+/// # Safety
+/// - `str` must be a valid pointer to a mutable, null-terminated C string
+#[no_mangle]
+pub unsafe extern "C" fn rs_shorten_dir_len(str: *mut c_char, trim_len: c_int) {
+    if str.is_null() {
+        return;
+    }
+
+    let tail = rs_path_tail(str);
+    let mut d = str;
+    let mut skip = false;
+    let mut dirchunk_len: c_int = 0;
+    let mut s = str;
+
+    loop {
+        if s >= tail.cast_mut() {
+            // Copy the whole tail
+            *d = *s;
+            d = d.add(1);
+            if *s == 0 {
+                break;
+            }
+        } else if rs_vim_ispathsep(*s as c_int) != 0 {
+            // Copy '/' and next char
+            *d = *s;
+            d = d.add(1);
+            skip = false;
+            dirchunk_len = 0;
+        } else if !skip {
+            // Copy next char
+            *d = *s;
+            d = d.add(1);
+            // Don't count leading "~" and "." for the directory chunk length
+            if *s as u8 != b'~' && *s as u8 != b'.' {
+                dirchunk_len += 1;
+                // Keep copying chars until we have our preferred length
+                if dirchunk_len >= trim_len {
+                    skip = true;
+                }
+            }
+            // Handle multi-byte characters
+            let slice = std::slice::from_raw_parts(s as *const u8, 8);
+            let mut l = nvim_mbyte::utfc_ptr2len(slice) as isize;
+            l -= 1;
+            while l > 0 {
+                s = s.offset(1);
+                *d = *s;
+                d = d.add(1);
+                l -= 1;
+            }
+        }
+        s = s.add(1);
+    }
+}
+
+/// Shorten the path of a file from "~/foo/../.bar/fname" to "~/f/../.b/fname"
+/// It's done in-place.
+///
+/// # Safety
+/// - `str` must be a valid pointer to a mutable, null-terminated C string
+#[no_mangle]
+pub unsafe extern "C" fn rs_shorten_dir(str: *mut c_char) {
+    rs_shorten_dir_len(str, 1);
+}
+
+#[cfg(test)]
+mod add_pathsep_tests {
+    use super::*;
+
+    #[test]
+    fn test_add_pathsep_no_sep() {
+        let mut buf = [0i8; 100];
+        let path = b"/home/user\0";
+        for (i, &b) in path.iter().enumerate() {
+            buf[i] = b as i8;
+        }
+        let result = unsafe { rs_add_pathsep(buf.as_mut_ptr()) };
+        assert_eq!(result, 1);
+        let result_str = unsafe { std::ffi::CStr::from_ptr(buf.as_ptr()) };
+        assert_eq!(result_str.to_str().unwrap(), "/home/user/");
+    }
+
+    #[test]
+    fn test_add_pathsep_already_has_sep() {
+        let mut buf = [0i8; 100];
+        let path = b"/home/user/\0";
+        for (i, &b) in path.iter().enumerate() {
+            buf[i] = b as i8;
+        }
+        let result = unsafe { rs_add_pathsep(buf.as_mut_ptr()) };
+        assert_eq!(result, 1);
+        let result_str = unsafe { std::ffi::CStr::from_ptr(buf.as_ptr()) };
+        assert_eq!(result_str.to_str().unwrap(), "/home/user/");
+    }
+
+    #[test]
+    fn test_add_pathsep_empty() {
+        let mut buf = [0i8; 100];
+        buf[0] = 0;
+        let result = unsafe { rs_add_pathsep(buf.as_mut_ptr()) };
+        assert_eq!(result, 1);
+    }
+}
+
+#[cfg(test)]
+mod append_path_tests {
+    use super::*;
+
+    #[test]
+    fn test_append_path_basic() {
+        let mut buf = [0i8; 100];
+        let path = b"/home\0";
+        for (i, &b) in path.iter().enumerate() {
+            buf[i] = b as i8;
+        }
+        let to_append = std::ffi::CString::new("user").unwrap();
+        let result = unsafe { rs_append_path(buf.as_mut_ptr(), to_append.as_ptr(), 100) };
+        assert_eq!(result, 0); // OK
+        let result_str = unsafe { std::ffi::CStr::from_ptr(buf.as_ptr()) };
+        assert_eq!(result_str.to_str().unwrap(), "/home/user");
+    }
+
+    #[test]
+    fn test_append_path_already_has_sep() {
+        let mut buf = [0i8; 100];
+        let path = b"/home/\0";
+        for (i, &b) in path.iter().enumerate() {
+            buf[i] = b as i8;
+        }
+        let to_append = std::ffi::CString::new("user").unwrap();
+        let result = unsafe { rs_append_path(buf.as_mut_ptr(), to_append.as_ptr(), 100) };
+        assert_eq!(result, 0); // OK
+        let result_str = unsafe { std::ffi::CStr::from_ptr(buf.as_ptr()) };
+        assert_eq!(result_str.to_str().unwrap(), "/home/user");
+    }
+
+    #[test]
+    fn test_append_path_empty() {
+        let mut buf = [0i8; 100];
+        let path = b"/home\0";
+        for (i, &b) in path.iter().enumerate() {
+            buf[i] = b as i8;
+        }
+        let to_append = std::ffi::CString::new("").unwrap();
+        let result = unsafe { rs_append_path(buf.as_mut_ptr(), to_append.as_ptr(), 100) };
+        assert_eq!(result, 0); // OK - does nothing
+        let result_str = unsafe { std::ffi::CStr::from_ptr(buf.as_ptr()) };
+        assert_eq!(result_str.to_str().unwrap(), "/home");
+    }
+
+    #[test]
+    fn test_append_path_dot() {
+        let mut buf = [0i8; 100];
+        let path = b"/home\0";
+        for (i, &b) in path.iter().enumerate() {
+            buf[i] = b as i8;
+        }
+        let to_append = std::ffi::CString::new(".").unwrap();
+        let result = unsafe { rs_append_path(buf.as_mut_ptr(), to_append.as_ptr(), 100) };
+        assert_eq!(result, 0); // OK - does nothing
+        let result_str = unsafe { std::ffi::CStr::from_ptr(buf.as_ptr()) };
+        assert_eq!(result_str.to_str().unwrap(), "/home");
+    }
+
+    #[test]
+    fn test_append_path_no_space() {
+        let mut buf = [0i8; 10];
+        let path = b"/home\0";
+        for (i, &b) in path.iter().enumerate() {
+            buf[i] = b as i8;
+        }
+        let to_append = std::ffi::CString::new("very_long_name").unwrap();
+        let result = unsafe { rs_append_path(buf.as_mut_ptr(), to_append.as_ptr(), 10) };
+        assert_eq!(result, 1); // FAIL
+    }
+}
+
+#[cfg(test)]
+mod shorten_dir_tests {
+    use super::*;
+
+    #[test]
+    fn test_shorten_dir_basic() {
+        let mut buf = [0i8; 100];
+        let path = b"/home/user/file.txt\0";
+        for (i, &b) in path.iter().enumerate() {
+            buf[i] = b as i8;
+        }
+        unsafe { rs_shorten_dir(buf.as_mut_ptr()) };
+        let result_str = unsafe { std::ffi::CStr::from_ptr(buf.as_ptr()) };
+        assert_eq!(result_str.to_str().unwrap(), "/h/u/file.txt");
+    }
+
+    #[test]
+    fn test_shorten_dir_with_dot() {
+        let mut buf = [0i8; 100];
+        let path = b"/home/.config/file.txt\0";
+        for (i, &b) in path.iter().enumerate() {
+            buf[i] = b as i8;
+        }
+        unsafe { rs_shorten_dir(buf.as_mut_ptr()) };
+        let result_str = unsafe { std::ffi::CStr::from_ptr(buf.as_ptr()) };
+        // Leading dots are preserved
+        assert_eq!(result_str.to_str().unwrap(), "/h/.c/file.txt");
+    }
+
+    #[test]
+    fn test_shorten_dir_with_tilde() {
+        let mut buf = [0i8; 100];
+        let path = b"~/foo/file.txt\0";
+        for (i, &b) in path.iter().enumerate() {
+            buf[i] = b as i8;
+        }
+        unsafe { rs_shorten_dir(buf.as_mut_ptr()) };
+        let result_str = unsafe { std::ffi::CStr::from_ptr(buf.as_ptr()) };
+        // Tilde is preserved
+        assert_eq!(result_str.to_str().unwrap(), "~/f/file.txt");
+    }
+
+    #[test]
+    fn test_shorten_dir_len_2() {
+        let mut buf = [0i8; 100];
+        let path = b"/home/user/file.txt\0";
+        for (i, &b) in path.iter().enumerate() {
+            buf[i] = b as i8;
+        }
+        unsafe { rs_shorten_dir_len(buf.as_mut_ptr(), 2) };
+        let result_str = unsafe { std::ffi::CStr::from_ptr(buf.as_ptr()) };
+        assert_eq!(result_str.to_str().unwrap(), "/ho/us/file.txt");
+    }
+
+    #[test]
+    fn test_shorten_dir_dotdot() {
+        let mut buf = [0i8; 100];
+        let path = b"/home/../bar/file.txt\0";
+        for (i, &b) in path.iter().enumerate() {
+            buf[i] = b as i8;
+        }
+        unsafe { rs_shorten_dir(buf.as_mut_ptr()) };
+        let result_str = unsafe { std::ffi::CStr::from_ptr(buf.as_ptr()) };
+        // ".." is preserved (dots are not counted)
+        assert_eq!(result_str.to_str().unwrap(), "/h/../b/file.txt");
+    }
+}
