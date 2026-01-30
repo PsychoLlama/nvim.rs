@@ -11,6 +11,7 @@ nvim-window = { path = "../window" }
 nvim-buffer = { path = "../buffer" }
 nvim-plines = { path = "../plines" }
 nvim-viewport = { path = "../viewport" }
+nvim-fold = { path = "../fold" }
 
 [lints]
 workspace = true
