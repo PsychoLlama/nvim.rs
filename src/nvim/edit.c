@@ -4690,3 +4690,21 @@ int ins_apply_autocmds(event_T event)
 
   return r;
 }
+
+// =============================================================================
+// C Wrappers for Rust FFI
+// =============================================================================
+
+/// Wrapper for cursor_up() (accessor for Rust).
+/// Operates on curwin.
+int nvim_scroll_cursor_up(long n, int upd_topline)
+{
+  return cursor_up((linenr_T)n, upd_topline != 0);
+}
+
+/// Wrapper for cursor_down() (accessor for Rust).
+/// Operates on curwin.
+int nvim_scroll_cursor_down(int n, int upd_topline)
+{
+  return cursor_down(n, upd_topline != 0);
+}

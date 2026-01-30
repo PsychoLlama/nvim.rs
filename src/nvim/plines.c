@@ -930,3 +930,25 @@ int64_t win_text_height(win_T *const wp, const linenr_T start_lnum, const int64_
   }
   return height_sum_fill + height_sum_nofill;
 }
+
+// =============================================================================
+// C Wrappers for Rust FFI
+// =============================================================================
+
+/// Wrapper for linetabsize_eol() (accessor for Rust).
+int nvim_linetabsize_eol(win_T *wp, linenr_T lnum)
+{
+  return linetabsize_eol(wp, lnum);
+}
+
+/// Wrapper for plines_win() (accessor for Rust).
+int nvim_plines_win(win_T *wp, linenr_T lnum, int limit)
+{
+  return plines_win(wp, lnum, limit != 0);
+}
+
+/// Wrapper for win_may_fill() (accessor for Rust).
+int nvim_win_may_fill(win_T *wp)
+{
+  return win_may_fill(wp) ? 1 : 0;
+}
