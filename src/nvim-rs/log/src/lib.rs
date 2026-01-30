@@ -9,6 +9,7 @@
 #![allow(clippy::cast_sign_loss)] // c_int to usize for array indexing
 #![allow(clippy::cast_possible_truncation)] // usize to c_int for lengths
 
+pub mod core;
 pub mod level;
 pub mod logger;
 pub mod output;

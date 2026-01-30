@@ -39,9 +39,191 @@ static uv_mutex_t mutex;
 
 #include "log.c.generated.h"
 
+// =============================================================================
+// C Accessor Functions for Rust FFI
+// =============================================================================
+
+/// Get the log file path.
+const char *nvim_log_get_file_path(void)
+{
+  return log_file_path;
+}
+
+/// Set the log file path.
+void nvim_log_set_file_path(const char *path)
+{
+  if (path == NULL) {
+    log_file_path[0] = NUL;
+  } else {
+    xstrlcpy(log_file_path, path, sizeof(log_file_path));
+  }
+}
+
+/// Get the size of the log file path buffer.
+size_t nvim_log_get_file_path_size(void)
+{
+  return sizeof(log_file_path);
+}
+
+/// Check if logging has been initialized.
+bool nvim_log_is_initialized(void)
+{
+  return did_log_init;
+}
+
+/// Set the log initialization state.
+void nvim_log_set_initialized(bool val)
+{
+  did_log_init = val;
+}
+
+/// Increment the log_skip counter in g_stats.
+void nvim_log_increment_skip(void)
+{
+  g_stats.log_skip++;
+}
+
+/// Get ui_client_channel_id (non-zero means running as UI client).
+uint64_t nvim_log_get_ui_client_channel_id(void)
+{
+  return ui_client_channel_id;
+}
+
+/// Get the servername (v:servername).
+const char *nvim_log_get_servername(void)
+{
+  return get_vim_var_str(VV_SEND_SERVER);
+}
+
+/// Get the parent $NVIM environment variable.
+const char *nvim_log_get_parent_nvim(void)
+{
+  return os_getenv_noalloc(ENV_NVIM);
+}
+
+/// Get the current PID.
+int64_t nvim_log_get_pid(void)
+{
+  return os_get_pid();
+}
+
+/// Get the tail of a path (filename part).
+const char *nvim_log_path_tail(const char *path)
+{
+  if (path == NULL) {
+    return "";
+  }
+  return path_tail(path);
+}
+
+/// Get local time structure.
+/// Returns 0 on success, -1 on failure.
+int nvim_log_get_localtime(struct tm *result)
+{
+  if (os_localtime(result) == NULL) {
+    return -1;
+  }
+  return 0;
+}
+
+/// Get current time in milliseconds (for timestamps).
+int nvim_log_get_millis(void)
+{
+  uv_timeval64_t curtime;
+  if (uv_gettimeofday(&curtime) == 0) {
+    return (int)(curtime.tv_usec / 1000);
+  }
+  return 0;
+}
+
+/// Expand environment variables in a string.
+void nvim_log_expand_env(const char *src, char *dst, int dstlen)
+{
+  expand_env((char *)src, dst, dstlen);
+}
+
+/// Check if path is a directory.
+bool nvim_log_is_dir(const char *path)
+{
+  return os_isdir(path);
+}
+
+/// Get XDG state home path (caller must free).
+char *nvim_log_get_xdg_state_home(void)
+{
+  return get_xdg_home(kXDGStateHome);
+}
+
+/// Create directory recursively.
+/// Returns 0 on success, error code on failure.
+int nvim_log_mkdir_recurse(const char *path, char **failed_dir)
+{
+  return os_mkdir_recurse(path, 0700, failed_dir, NULL);
+}
+
+/// Get the user state subpath (e.g., ~/.local/state/nvim/log).
+/// Caller must free the result.
+char *nvim_log_get_state_subpath(const char *subpath)
+{
+  return stdpaths_user_state_subpath(subpath, 0, true);
+}
+
+/// Set environment variable.
+void nvim_log_setenv(const char *name, const char *value)
+{
+  os_setenv(name, value, true);
+}
+
+/// Free a C string allocated by xmalloc/xstrdup.
+void nvim_log_free(void *ptr)
+{
+  xfree(ptr);
+}
+
+/// Check if two strings are equal.
+bool nvim_log_strequal(const char *s1, const char *s2)
+{
+  return strequal(s1, s2);
+}
+
+/// Copy a string with length limit.
+size_t nvim_log_strlcpy(char *dst, const char *src, size_t dstsize)
+{
+  return xstrlcpy(dst, src, dstsize);
+}
+
+/// Get os_strerror message.
+const char *nvim_log_strerror(int err)
+{
+  return os_strerror(err);
+}
+
+/// Schedule an error message.
+void nvim_log_schedule_semsg(const char *fmt, const char *s1, int line)
+{
+  msg_schedule_semsg(fmt, s1, line);
+}
+
+#ifdef EXITFREE
+/// Check if we've entered free_all_mem.
+bool nvim_log_entered_free_all_mem(void)
+{
+  return entered_free_all_mem;
+}
+#endif
+
 #ifdef HAVE_EXECINFO_BACKTRACE
 # include <execinfo.h>
 #endif
+
+// =============================================================================
+// Rust FFI declarations
+// =============================================================================
+
+extern void rs_log_path_init(void);
+extern bool rs_do_log_to_file(FILE *log_file, int log_level, const char *context,
+                              const char *func_name, int line_num, bool eol,
+                              const char *message);
 
 static bool log_try_create(char *fname)
 {
@@ -56,54 +238,11 @@ static bool log_try_create(char *fname)
   return true;
 }
 
-/// Initializes the log file path and sets $NVIM_LOG_FILE if empty.
-///
-/// Tries $NVIM_LOG_FILE, or falls back to $XDG_STATE_HOME/nvim/log. Failed
-/// initialization indicates either a bug in expand_env() or both $NVIM_LOG_FILE
-/// and $HOME environment variables are undefined.
-static void log_path_init(void)
-{
-  size_t size = sizeof(log_file_path);
-  expand_env("$" ENV_LOGFILE, log_file_path, (int)size - 1);
-  if (strequal("$" ENV_LOGFILE, log_file_path)
-      || log_file_path[0] == NUL
-      || os_isdir(log_file_path)
-      || !log_try_create(log_file_path)) {
-    // Make $XDG_STATE_HOME if it does not exist.
-    char *loghome = get_xdg_home(kXDGStateHome);
-    char *failed_dir = NULL;
-    bool log_dir_failure = false;
-    if (!os_isdir(loghome)) {
-      log_dir_failure = (os_mkdir_recurse(loghome, 0700, &failed_dir, NULL) != 0);
-    }
-    XFREE_CLEAR(loghome);
-    // Invalid $NVIM_LOG_FILE or failed to expand; fall back to default.
-    char *defaultpath = stdpaths_user_state_subpath("log", 0, true);
-    size_t len = xstrlcpy(log_file_path, defaultpath, size);
-    xfree(defaultpath);
-    // Fall back to .nvimlog
-    if (len >= size || !log_try_create(log_file_path)) {
-      len = xstrlcpy(log_file_path, ".nvimlog", size);
-    }
-    // Fall back to stderr
-    if (len >= size || !log_try_create(log_file_path)) {
-      log_file_path[0] = NUL;
-      return;
-    }
-    os_setenv(ENV_LOGFILE, log_file_path, true);
-    if (log_dir_failure) {
-      WLOG("Failed to create directory %s for writing logs: %s",
-           failed_dir, os_strerror(log_dir_failure));
-    }
-    XFREE_CLEAR(failed_dir);
-  }
-}
-
 void log_init(void)
 {
   uv_mutex_init_recursive(&mutex);
   // AFTER init_homedir ("~", XDG) and set_init_1 (env vars). 22b52dd462e5 #11501
-  log_path_init();
+  rs_log_path_init();
   did_log_init = true;
 }
 
@@ -177,11 +316,14 @@ bool logmsg(int log_level, const char *context, const char *func_name, int line_
   bool ret = false;
   FILE *log_file = open_log_file();
 
+  // Format the message first, then call Rust for output
+  char msgbuf[4096];
   va_list args;
   va_start(args, fmt);
-  ret = v_do_log_to_file(log_file, log_level, context, func_name, line_num,
-                         eol, fmt, args);
+  vsnprintf(msgbuf, sizeof(msgbuf), fmt, args);
   va_end(args);
+
+  ret = rs_do_log_to_file(log_file, log_level, context, func_name, line_num, eol, msgbuf);
 
   if (log_file != stderr && log_file != stdout) {
     fclose(log_file);
@@ -281,94 +423,11 @@ static bool do_log_to_file(FILE *log_file, int log_level, const char *context,
                            const char *func_name, int line_num, bool eol, const char *fmt, ...)
   FUNC_ATTR_PRINTF(7, 8)
 {
+  char msgbuf[4096];
   va_list args;
   va_start(args, fmt);
-  bool ret = v_do_log_to_file(log_file, log_level, context, func_name,
-                              line_num, eol, fmt, args);
+  vsnprintf(msgbuf, sizeof(msgbuf), fmt, args);
   va_end(args);
 
-  return ret;
-}
-
-static bool v_do_log_to_file(FILE *log_file, int log_level, const char *context,
-                             const char *func_name, int line_num, bool eol, const char *fmt,
-                             va_list args)
-  FUNC_ATTR_PRINTF(7, 0)
-{
-  // Name of the Nvim instance that produced the log.
-  static char name[32] = { 0 };
-
-  static const char *log_levels[] = {
-    [LOGLVL_DBG] = "DBG",
-    [LOGLVL_INF] = "INF",
-    [LOGLVL_WRN] = "WRN",
-    [LOGLVL_ERR] = "ERR",
-  };
-  assert(log_level >= LOGLVL_DBG && log_level <= LOGLVL_ERR);
-
-  // Format the timestamp.
-  struct tm local_time;
-  if (os_localtime(&local_time) == NULL) {
-    return false;
-  }
-  char date_time[20];
-  if (strftime(date_time, sizeof(date_time), "%Y-%m-%dT%H:%M:%S", &local_time) == 0) {
-    return false;
-  }
-
-  int millis = 0;
-  uv_timeval64_t curtime;
-  if (uv_gettimeofday(&curtime) == 0) {
-    millis = (int)curtime.tv_usec / 1000;
-  }
-
-  bool ui = !!ui_client_channel_id;  // Running as a UI client (--remote-ui).
-
-  // Regenerate the name when:
-  // - UI client (to ensure "ui" is in the name)
-  // - not set yet
-  // - no v:servername yet
-  bool regen = ui || name[0] == NUL || name[0] == '?';
-
-  // Get a name for this Nvim instance.
-  // TODO(justinmk): expose this as v:name ?
-  if (regen) {
-    // Parent servername ($NVIM).
-    const char *parent = path_tail(os_getenv_noalloc(ENV_NVIM));
-    // Servername. Empty until starting=false.
-    const char *serv = path_tail(get_vim_var_str(VV_SEND_SERVER));
-    if (parent[0] != NUL) {
-      snprintf(name, sizeof(name), ui ? "ui/c/%s" : "c/%s", parent);  // "c/" = child of $NVIM.
-    } else if (serv[0] != NUL) {
-      snprintf(name, sizeof(name), ui ? "ui/%s" : "%s", serv);
-    } else {
-      int64_t pid = os_get_pid();
-      snprintf(name, sizeof(name), "%s.%-5" PRId64, ui ? "ui" : "?", pid);
-    }
-  }
-
-  // Print the log message.
-  int rv = (line_num == -1 || func_name == NULL)
-           ? fprintf(log_file, "%s %s.%03d %-10s %s",
-                     log_levels[log_level], date_time, millis, name,
-                     (context == NULL ? "?:" : context))
-           : fprintf(log_file, "%s %s.%03d %-10s %s%s:%d: ",
-                     log_levels[log_level], date_time, millis, name,
-                     (context == NULL ? "" : context),
-                     func_name, line_num);
-
-  if (rv < 0) {
-    return false;
-  }
-  if (vfprintf(log_file, fmt, args) < 0) {
-    return false;
-  }
-  if (eol) {
-    fputc('\n', log_file);
-  }
-  if (fflush(log_file) == EOF) {
-    return false;
-  }
-
-  return true;
+  return rs_do_log_to_file(log_file, log_level, context, func_name, line_num, eol, msgbuf);
 }
