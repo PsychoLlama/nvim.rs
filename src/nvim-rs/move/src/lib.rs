@@ -3099,6 +3099,178 @@ pub unsafe extern "C" fn rs_scroll_with_sms(
 }
 
 // =============================================================================
+// Page Scroll Functions
+// =============================================================================
+
+/// `OptInt` type (matches C `OptInt`).
+type OptInt = i64;
+
+/// `BL_SOL` constant for beginline.
+const BL_SOL: c_int = 1;
+
+/// `BL_FIX` constant for beginline.
+const BL_FIX: c_int = 4;
+
+extern "C" {
+    // Cursor movement wrappers
+    fn nvim_cursor_down_inner(wp: WinHandle, n: c_int, skip_conceal: c_int);
+    fn nvim_cursor_up_inner(wp: WinHandle, n: LinenrT, skip_conceal: c_int);
+    fn nvim_nv_screengo(dir: c_int, dist: c_int, skip_conceal: c_int) -> c_int;
+
+    // Beginline and beep
+    fn nvim_beginline_flags(flags: c_int);
+    fn nvim_beep_flush_wrapper();
+    fn nvim_nv_g_home_m_cmd();
+
+    // Window/global accessors
+    fn nvim_one_window() -> c_int;
+    fn nvim_get_p_window() -> OptInt;
+    fn nvim_get_p_sol() -> c_int;
+    fn nvim_get_rows_val() -> c_int;
+
+    // Scroll option accessors
+    fn nvim_win_get_p_scr(wp: WinHandle) -> OptInt;
+    fn nvim_win_set_p_scr(wp: WinHandle, val: OptInt);
+
+    // Plines wrappers
+    fn nvim_plines_correct_topline(wp: WinHandle, lnum: LinenrT, limit_winheight: c_int) -> c_int;
+    fn nvim_plines_m_win(wp: WinHandle, first: LinenrT, last: LinenrT, max: c_int) -> c_int;
+}
+
+/// Move screen pages up or down and update the screen.
+///
+/// Handles CTRL-F, CTRL-B for full page scrolling and CTRL-D, CTRL-U for
+/// half-page scrolling. Takes care of cursor positioning and not revealing
+/// end of buffer lines for half-page scrolling.
+///
+/// # Arguments
+/// * `dir` - Direction: `DIRECTION_FORWARD` (1) or `DIRECTION_BACKWARD` (-1)
+/// * `count` - Number of pages to scroll (or lines for half-page)
+/// * `half` - If non-zero, do half-page scroll (CTRL-D/U), otherwise full page (CTRL-F/B)
+///
+/// # Returns
+/// 1 if nothing changed (nochange/error), 0 if scrolling occurred.
+///
+/// # Safety
+/// Accesses curwin and curbuf globals.
+#[no_mangle]
+#[allow(clippy::too_many_lines)]
+#[allow(clippy::cast_possible_truncation)]
+pub unsafe extern "C" fn rs_pagescroll(dir: c_int, mut count: c_int, half: c_int) -> c_int {
+    let wp = nvim_get_curwin();
+    if wp.is_null() {
+        return 1;
+    }
+
+    let half = half != 0;
+    let mut nochange = true;
+    let buflen = nvim_curbuf_line_count();
+    let prev_col = nvim_win_get_cursor_col(wp);
+    let prev_curswant = nvim_win_get_curswant(wp);
+    let prev_lnum = nvim_win_get_cursor_lnum(wp);
+    let view_height = nvim_win_get_view_height(wp);
+
+    if half {
+        // Scroll [count], 'scroll' or current window height lines.
+        if count != 0 {
+            let new_scr = view_height.min(count);
+            nvim_win_set_p_scr(wp, new_scr.into());
+        }
+        let p_scr = nvim_win_get_p_scr(wp) as c_int;
+        count = view_height.min(p_scr);
+
+        let mut curscount = count;
+
+        // Adjust count so as to not reveal end of buffer lines.
+        let topline = nvim_win_get_topline(wp);
+        if dir == DIRECTION_FORWARD
+            && (topline + view_height + count > buflen || nvim_win_lines_concealed(wp) != 0)
+        {
+            let mut n = nvim_plines_correct_topline(wp, topline, 0);
+            if n - count < view_height && topline < buflen {
+                n += nvim_plines_m_win(wp, topline + 1, buflen, view_height + count);
+            }
+            if n < view_height + count {
+                count = n - view_height;
+            }
+        }
+
+        // (Try to) scroll the window unless already at the end of the buffer.
+        if count > 0 {
+            nochange = rs_scroll_with_sms(dir, count, std::ptr::addr_of_mut!(curscount)) != 0;
+            nvim_win_set_cursor_lnum(wp, prev_lnum);
+            nvim_win_set_cursor_col(wp, prev_col);
+            nvim_win_set_curswant(wp, prev_curswant);
+        }
+
+        // Move the cursor the same amount of screen lines, skipping over
+        // concealed lines as those were not included in "curscount".
+        let p_wrap = nvim_win_get_p_wrap(wp) != 0;
+        if p_wrap {
+            nvim_nv_screengo(dir, curscount, 1);
+        } else if dir == DIRECTION_FORWARD {
+            nvim_cursor_down_inner(wp, curscount, 1);
+        } else {
+            nvim_cursor_up_inner(wp, curscount, 1);
+        }
+    } else {
+        // Scroll [count] times 'window' or current window height lines.
+        let p_window = nvim_get_p_window();
+        let rows = nvim_get_rows_val();
+        let one_window = nvim_one_window() != 0;
+
+        let scroll_amount = if one_window && p_window > 0 && p_window < (rows - 1).into() {
+            (p_window as c_int - 2).max(1)
+        } else {
+            rs_get_scroll_overlap(dir)
+        };
+        count *= scroll_amount;
+
+        nochange = rs_scroll_with_sms(dir, count, std::ptr::addr_of_mut!(count)) != 0;
+
+        if !nochange {
+            // Place cursor at top or bottom of window.
+            nvim_validate_botline(wp);
+            let topline = nvim_win_get_topline(wp);
+            let botline = nvim_win_get_botline(wp);
+            let lnum = if dir == DIRECTION_FORWARD {
+                topline
+            } else {
+                botline - 1
+            };
+            // In silent Ex mode the value of w_botline - 1 may be 0,
+            // but cursor lnum needs to be at least 1.
+            nvim_win_set_cursor_lnum(wp, lnum.max(1));
+        }
+    }
+
+    if rs_get_scrolloff_value(wp) > 0 {
+        rs_cursor_correct(wp);
+    }
+
+    // Move cursor to first line of closed fold.
+    rs_foldAdjustCursor(wp);
+
+    nochange = nochange
+        && prev_col == nvim_win_get_cursor_col(wp)
+        && prev_lnum == nvim_win_get_cursor_lnum(wp);
+
+    let p_sms = nvim_win_get_p_sms(wp) != 0;
+    let p_sol = nvim_get_p_sol() != 0;
+
+    // Error if both the viewport and cursor did not change.
+    if nochange {
+        nvim_beep_flush_wrapper();
+    } else if !p_sms {
+        nvim_beginline_flags(BL_SOL | BL_FIX);
+    } else if p_sol {
+        nvim_nv_g_home_m_cmd();
+    }
+
+    c_int::from(nochange)
+}
+
+// =============================================================================
 // Tests
 // =============================================================================
 

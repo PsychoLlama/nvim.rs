@@ -85,6 +85,7 @@ extern void rs_set_valid_virtcol(win_T *wp, colnr_T vcol);
 extern void rs_cursor_correct(win_T *wp);
 extern int rs_get_scroll_overlap(int dir);
 extern int rs_scroll_with_sms(int dir, int count, int *curscount);
+extern int rs_pagescroll(int dir, int count, int half);
 
 // Accessor for global scrolljump option
 OptInt nvim_get_p_sj(void)
@@ -1286,89 +1287,7 @@ static bool scroll_with_sms(Direction dir, int count, int *curscount)
 /// @return  FAIL for failure, OK otherwise.
 int pagescroll(Direction dir, int count, bool half)
 {
-  int nochange = true;
-  int buflen = curbuf->b_ml.ml_line_count;
-  colnr_T prev_col = curwin->w_cursor.col;
-  colnr_T prev_curswant = curwin->w_curswant;
-  linenr_T prev_lnum = curwin->w_cursor.lnum;
-  oparg_T oa = { 0 };
-  cmdarg_T ca = { 0 };
-  ca.oap = &oa;
-
-  if (half) {
-    // Scroll [count], 'scroll' or current window height lines.
-    if (count) {
-      curwin->w_p_scr = MIN(curwin->w_view_height, count);
-    }
-    count = MIN(curwin->w_view_height, (int)curwin->w_p_scr);
-
-    int curscount = count;
-    // Adjust count so as to not reveal end of buffer lines.
-    if (dir == FORWARD
-        && (curwin->w_topline + curwin->w_view_height + count > buflen
-            || win_lines_concealed(curwin))) {
-      int n = plines_correct_topline(curwin, curwin->w_topline, NULL, false, NULL);
-      if (n - count < curwin->w_view_height && curwin->w_topline < buflen) {
-        n += plines_m_win(curwin, curwin->w_topline + 1, buflen, curwin->w_view_height + count);
-      }
-      if (n < curwin->w_view_height + count) {
-        count = n - curwin->w_view_height;
-      }
-    }
-
-    // (Try to) scroll the window unless already at the end of the buffer.
-    if (count > 0) {
-      nochange = scroll_with_sms(dir, count, &curscount);
-      curwin->w_cursor.lnum = prev_lnum;
-      curwin->w_cursor.col = prev_col;
-      curwin->w_curswant = prev_curswant;
-    }
-
-    // Move the cursor the same amount of screen lines, skipping over
-    // concealed lines as those were not included in "curscount".
-    if (curwin->w_p_wrap) {
-      nv_screengo(&oa, dir, curscount, true);
-    } else if (dir == FORWARD) {
-      cursor_down_inner(curwin, curscount, true);
-    } else {
-      cursor_up_inner(curwin, curscount, true);
-    }
-  } else {
-    // Scroll [count] times 'window' or current window height lines.
-    count *= ((ONE_WINDOW && p_window > 0 && p_window < Rows - 1)
-              ? MAX(1, (int)p_window - 2) : get_scroll_overlap(dir));
-    nochange = scroll_with_sms(dir, count, &count);
-
-    if (!nochange) {
-      // Place cursor at top or bottom of window.
-      validate_botline(curwin);
-      linenr_T lnum = (dir == FORWARD ? curwin->w_topline : curwin->w_botline - 1);
-      // In silent Ex mode the value of w_botline - 1 may be 0,
-      // but cursor lnum needs to be at least 1.
-      curwin->w_cursor.lnum = MAX(lnum, 1);
-    }
-  }
-
-  if (get_scrolloff_value(curwin) > 0) {
-    cursor_correct(curwin);
-  }
-  // Move cursor to first line of closed fold.
-  foldAdjustCursor(curwin);
-
-  nochange = nochange
-             && prev_col == curwin->w_cursor.col
-             && prev_lnum == curwin->w_cursor.lnum;
-
-  // Error if both the viewport and cursor did not change.
-  if (nochange) {
-    beep_flush();
-  } else if (!curwin->w_p_sms) {
-    beginline(BL_SOL | BL_FIX);
-  } else if (p_sol) {
-    nv_g_home_m_cmd(&ca);
-  }
-
-  return nochange;
+  return rs_pagescroll((int)dir, count, half ? 1 : 0);
 }
 
 void do_check_cursorbind(void)
@@ -1530,4 +1449,93 @@ linenr_T nvim_curbuf_line_count(void)
 void nvim_redraw_for_cursorcolumn(win_T *wp)
 {
   redraw_for_cursorcolumn(wp);
+}
+
+// =============================================================================
+// C Wrapper Functions for pagescroll() Rust Migration
+// =============================================================================
+
+/// Wrapper for cursor_down_inner() (accessor for Rust).
+void nvim_cursor_down_inner(win_T *wp, int n, int skip_conceal)
+{
+  cursor_down_inner(wp, n, skip_conceal != 0);
+}
+
+/// Wrapper for cursor_up_inner() (accessor for Rust).
+void nvim_cursor_up_inner(win_T *wp, linenr_T n, int skip_conceal)
+{
+  cursor_up_inner(wp, n, skip_conceal != 0);
+}
+
+/// Wrapper for nv_screengo() (accessor for Rust).
+/// Returns 1 on success, 0 on failure.
+int nvim_nv_screengo(int dir, int dist, int skip_conceal)
+{
+  oparg_T oa = { 0 };
+  return nv_screengo(&oa, dir, dist, skip_conceal != 0) ? 1 : 0;
+}
+
+/// Wrapper for beginline() (accessor for Rust).
+void nvim_beginline_flags(int flags)
+{
+  beginline(flags);
+}
+
+/// Wrapper for beep_flush() (accessor for Rust).
+void nvim_beep_flush_wrapper(void)
+{
+  beep_flush();
+}
+
+/// Wrapper for nv_g_home_m_cmd() (accessor for Rust).
+void nvim_nv_g_home_m_cmd(void)
+{
+  oparg_T oa = { 0 };
+  cmdarg_T ca = { 0 };
+  ca.oap = &oa;
+  nv_g_home_m_cmd(&ca);
+}
+
+/// Check if ONE_WINDOW macro is true (accessor for Rust).
+int nvim_one_window(void)
+{
+  return ONE_WINDOW ? 1 : 0;
+}
+
+/// Get p_sol option value (accessor for Rust).
+int nvim_get_p_sol(void)
+{
+  return p_sol ? 1 : 0;
+}
+
+/// Get Rows value (accessor for Rust).
+int nvim_get_rows_val(void)
+{
+  return Rows;
+}
+
+/// Get w_p_scr (scroll option) value (accessor for Rust).
+OptInt nvim_win_get_p_scr(win_T *wp)
+{
+  return wp ? wp->w_p_scr : 0;
+}
+
+/// Set w_p_scr (scroll option) value (accessor for Rust).
+void nvim_win_set_p_scr(win_T *wp, OptInt val)
+{
+  if (wp) {
+    wp->w_p_scr = val;
+  }
+}
+
+/// Wrapper for plines_correct_topline() (accessor for Rust).
+int nvim_plines_correct_topline(win_T *wp, linenr_T lnum, int limit_winheight)
+{
+  return plines_correct_topline(wp, lnum, NULL, limit_winheight != 0, NULL);
+}
+
+/// Wrapper for plines_m_win() (accessor for Rust).
+int nvim_plines_m_win(win_T *wp, linenr_T first, linenr_T last, int max)
+{
+  return plines_m_win(wp, first, last, max);
 }
