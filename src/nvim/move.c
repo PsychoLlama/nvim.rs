@@ -97,6 +97,9 @@ extern void rs_validate_cursor(win_T *wp);
 extern void rs_update_curswant(void);
 extern void rs_update_curswant_force(void);
 extern void rs_comp_botline(win_T *wp);
+extern void rs_topline_back_winheight(win_T *wp, lineoff_T *lp, int winheight);
+extern void rs_topline_back(win_T *wp, lineoff_T *lp);
+extern void rs_botline_forw(win_T *wp, lineoff_T *lp);
 
 // Accessor for global scrolljump option
 OptInt nvim_get_p_sj(void)
@@ -1085,27 +1088,12 @@ void scrollup_clamp(void)
 // When "winheight" is true limit to window height.
 static void topline_back_winheight(win_T *wp, lineoff_T *lp, int winheight)
 {
-  if (lp->fill < win_get_fill(wp, lp->lnum)) {
-    // Add a filler line
-    lp->fill++;
-    lp->height = 1;
-  } else {
-    lp->lnum--;
-    lp->fill = 0;
-    if (lp->lnum < 1) {
-      lp->height = MAXCOL;
-    } else if (hasFolding(wp, lp->lnum, &lp->lnum, NULL)) {
-      // Add a closed fold unless concealed.
-      lp->height = !decor_conceal_line(wp, lp->lnum - 1, false);
-    } else {
-      lp->height = plines_win_nofill(wp, lp->lnum, winheight);
-    }
-  }
+  rs_topline_back_winheight(wp, lp, winheight);
 }
 
 static void topline_back(win_T *wp, lineoff_T *lp)
 {
-  topline_back_winheight(wp, lp, true);
+  rs_topline_back(wp, lp);
 }
 
 // Add one line below "lp->lnum".  This can be a filler line, a closed fold or
@@ -1114,23 +1102,7 @@ static void topline_back(win_T *wp, lineoff_T *lp)
 // Lines below the last one are incredibly high.
 static void botline_forw(win_T *wp, lineoff_T *lp)
 {
-  if (lp->fill < win_get_fill(wp, lp->lnum + 1)) {
-    // Add a filler line.
-    lp->fill++;
-    lp->height = 1;
-  } else {
-    lp->lnum++;
-    lp->fill = 0;
-    assert(wp->w_buffer != 0);
-    if (lp->lnum > wp->w_buffer->b_ml.ml_line_count) {
-      lp->height = MAXCOL;
-    } else if (hasFolding(wp, lp->lnum, NULL, &lp->lnum)) {
-      // Add a closed fold unless concealed.
-      lp->height = !decor_conceal_line(wp, lp->lnum - 1, false);
-    } else {
-      lp->height = plines_win_nofill(wp, lp->lnum, true);
-    }
-  }
+  rs_botline_forw(wp, lp);
 }
 
 // Recompute topline to put the cursor at the top of the window.
