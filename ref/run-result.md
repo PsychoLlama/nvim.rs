@@ -1,28 +1,48 @@
-Plan: ~/.claude/plans/eager-gliding-sifakis.md
+Plan: ~/.claude/plans/nested-churning-cherny.md
 
-The plan has been executed successfully. Here's a summary of what was accomplished:
+All 7 phases of the plan have been completed. Here's a summary of what was migrated:
 
 ## Summary
 
-Successfully migrated cursor positioning functions from C to Rust:
+**Phase 1 - Mark View Functions:**
+- `rs_fmarkv_init()` - Initialize fmarkv_T with no view
+- `rs_mark_view_make()` - Create mark view from topline and position
+- `rs_mark_view_calc_topline()` - Calculate topline for view restoration
+- `rs_fmarkv_has_view()` - Check if view is valid
 
-### Functions Migrated (~450 lines of C → ~770 lines of Rust)
-1. **`scroll_cursor_halfway`** - Handles the `zz` command (position cursor in middle of window)
-2. **`scroll_cursor_top`** - Handles the `zt` command (position cursor at top with scrolloff)
-3. **`scroll_cursor_bot`** - Handles the `zb` command (position cursor at bottom with scrolloff)
-4. **`set_empty_rows`** - Helper for computing empty rows at window bottom
+**Phase 2 - Mark Structures and Validation:**
+- Added `FmarkT` and `XfmarkT` structures matching C types
+- `rs_mark_validate_lnum()` - Validate mark line number
+- `rs_mark_validate_bounds()` - Validate against buffer bounds
+- `rs_fmark_*` getters/setters for mark fields
+- `rs_visual_mark_select()` - Logic for visual mark selection
 
-### C Accessor Functions Added
-- `nvim_win_get_filler_rows` / `nvim_win_set_filler_rows` (window.c)
-- `nvim_win_get_botfill` / `nvim_win_set_botfill` (window.c)
-- `nvim_get_mouse_dragging` (mouse.c)
-- `nvim_validate_botline`, `nvim_plines_win_full` (move.c)
+**Phase 3 & 5 - Jumplist/Changelist Operations:**
+- `rs_jumplist_new_len()` - Calculate new jumplist length
+- `rs_jumplist_is_full()` - Check if jumplist is at capacity
+- `rs_jumplist_stack_trim()` - Stack mode trimming
+- `rs_jumplist_calc_idx()` - Jump navigation calculation
+- `rs_changelist_calc_idx()` - Changelist navigation
+- `rs_mark_target_type()` - Determine mark storage target
+- `rs_pos_clamp_lnum_min()` - Position clamping
 
-### Verification Completed
-- ✅ `just build` - Full build with linking passes
-- ✅ `just rust-fmt-check` - Formatting clean
-- ✅ `just rust-clippy` - No lint warnings  
-- ✅ `just rust-test` - All 3672 unit tests pass
-- ✅ `test_move` oldtest - Passes
+**Phase 4 - Mark Movement:**
+- `rs_mark_move_calc_result()` - Calculate movement result flags
+- `rs_mark_move_needs_cursor_check()` - Cursor check condition
+- `rs_getnextmark_adjust_col()` - Column adjustment for search
+- `rs_getnextmark_is_better()` - Mark comparison for next/prev search
 
-Note: The `test_scroll_opt.vim` test has pre-existing failures unrelated to this migration (the same failures occur on the base branch before these changes).
+**Phase 6 - Mark Adjustment:**
+- `rs_mark_adjust_lnum()` - ONE_ADJUST logic
+- `rs_mark_adjust_lnum_nodel()` - ONE_ADJUST_NODEL logic
+- `rs_mark_adjust_cursor()` - ONE_ADJUST_CURSOR logic
+- `rs_mark_col_adjust()` - COL_ADJUST logic
+- `rs_mark_adjust_should_skip()` - Early bail-out check
+
+**Phase 7 - Ex Command Helpers:**
+- `rs_delmarks_parse_range()` - Parse :delmarks arguments
+- `rs_delmarks_global_idx()` - Global mark index calculation
+- `rs_delmarks_special_type()` - Special mark type detection
+- `rs_marks_index_to_char()` - Mark display formatting
+
+A total of **78 Rust functions** were added to the mark crate, with comprehensive test coverage. The C code in `mark.c` was updated to use these Rust implementations where appropriate.
