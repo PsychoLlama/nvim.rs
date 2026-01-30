@@ -125,6 +125,34 @@ extern "C" {
 
     /// Get 'selection' option first character
     fn nvim_get_p_sel_first() -> c_int;
+
+    // -------------------------------------------------------------------------
+    // Cursor/Screen Column Functions
+    // -------------------------------------------------------------------------
+
+    /// Get character at cursor position (calls `get_cursor_pos_ptr` + `utf_ptr2char`)
+    fn nvim_gchar_cursor() -> c_int;
+
+    /// Get curwin pointer
+    fn nvim_cursor_get_curwin() -> WinHandle;
+
+    /// Get `curwin->w_cursor` pointer
+    fn nvim_cursor_get_curwin_cursor() -> *mut CursorPos;
+
+    /// Wrapper for `getvvcol` - gets virtual column positions
+    fn nvim_getvvcol(
+        wp: WinHandle,
+        pos: *const CursorPos,
+        scol: *mut i32,
+        ccol: *mut i32,
+        ecol: *mut i32,
+    );
+
+    /// Wrapper for `set_valid_virtcol`
+    fn nvim_set_valid_virtcol(wp: WinHandle, vcol: i32);
+
+    /// Wrapper for `virtual_active(win)`
+    fn nvim_virtual_active_win(wp: WinHandle) -> bool;
 }
 
 // =============================================================================
@@ -398,6 +426,80 @@ pub extern "C" fn rs_cursor_at_first_line(lnum: i64) -> bool {
 pub unsafe extern "C" fn rs_cursor_at_last_line(win: WinHandle, lnum: i64) -> bool {
     let line_count = rs_cursor_get_line_count(win);
     lnum >= line_count
+}
+
+// =============================================================================
+// Character Access Functions
+// =============================================================================
+
+/// Get the character at the cursor position.
+///
+/// Returns the Unicode codepoint of the character under the cursor.
+///
+/// # Safety
+/// Requires valid global state (curwin, curbuf).
+#[no_mangle]
+pub unsafe extern "C" fn rs_gchar_cursor() -> c_int {
+    nvim_gchar_cursor()
+}
+
+// =============================================================================
+// Screen Column Functions
+// =============================================================================
+
+/// Get the screen column of the cursor in the current window.
+///
+/// Returns the virtual column position (accounting for tabs, wide characters, etc.).
+///
+/// # Safety
+/// Requires valid global state (curwin).
+#[no_mangle]
+pub unsafe extern "C" fn rs_getviscol() -> c_int {
+    let curwin = nvim_cursor_get_curwin();
+    let cursor = nvim_cursor_get_curwin_cursor();
+    let mut x: i32 = 0;
+    nvim_getvvcol(
+        curwin,
+        cursor,
+        &raw mut x,
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+    );
+    x
+}
+
+/// Get the screen column for a given column and coladd in the cursor line.
+///
+/// # Arguments
+/// * `col` - Column byte offset
+/// * `coladd` - Virtual column addition
+///
+/// # Returns
+/// The screen column position.
+///
+/// # Safety
+/// Requires valid global state (curwin).
+#[no_mangle]
+pub unsafe extern "C" fn rs_getviscol2(col: i32, coladd: i32) -> c_int {
+    let curwin = nvim_cursor_get_curwin();
+    let cursor = nvim_cursor_get_curwin_cursor();
+
+    // Build a temporary position with the cursor's line but specified col/coladd
+    let pos = CursorPos {
+        lnum: (*cursor).lnum,
+        col,
+        coladd,
+    };
+
+    let mut x: i32 = 0;
+    nvim_getvvcol(
+        curwin,
+        &raw const pos,
+        &raw mut x,
+        std::ptr::null_mut(),
+        std::ptr::null_mut(),
+    );
+    x
 }
 
 // =============================================================================

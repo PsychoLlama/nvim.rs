@@ -29,26 +29,28 @@
 
 #include "cursor.c.generated.h"
 
+// =============================================================================
+// Rust Function Declarations
+// =============================================================================
+
+extern int rs_gchar_cursor(void);
+extern int rs_getviscol(void);
+extern int rs_getviscol2(colnr_T col, colnr_T coladd);
+
+// =============================================================================
+// Screen Column Functions
+// =============================================================================
+
 /// @return  the screen position of the cursor.
 int getviscol(void)
 {
-  colnr_T x;
-
-  getvvcol(curwin, &curwin->w_cursor, &x, NULL, NULL);
-  return (int)x;
+  return rs_getviscol();
 }
 
 /// @return the screen position of character col with a coladd in the cursor line.
 int getviscol2(colnr_T col, colnr_T coladd)
 {
-  colnr_T x;
-  pos_T pos;
-
-  pos.lnum = curwin->w_cursor.lnum;
-  pos.col = col;
-  pos.coladd = coladd;
-  getvvcol(curwin, &pos, &x, NULL, NULL);
-  return (int)x;
+  return rs_getviscol2(col, coladd);
 }
 
 /// Go to column "wcol", and add/insert white space as necessary to get the
@@ -473,7 +475,7 @@ bool set_leftcol(colnr_T leftcol)
 
 int gchar_cursor(void)
 {
-  return utf_ptr2char(get_cursor_pos_ptr());
+  return rs_gchar_cursor();
 }
 
 /// Return the character immediately before the cursor.
@@ -518,4 +520,42 @@ colnr_T get_cursor_line_len(void)
 colnr_T get_cursor_pos_len(void)
 {
   return ml_get_buf_len(curbuf, curwin->w_cursor.lnum) - curwin->w_cursor.col;
+}
+
+// =============================================================================
+// Rust Accessor Functions
+// =============================================================================
+
+/// Wrapper for getvvcol() callable from Rust.
+/// Returns the start column in `scol`, cursor column in `ccol`, end column in `ecol`.
+/// Pass NULL for any column you don't need.
+void nvim_getvvcol(win_T *wp, pos_T *pos, colnr_T *scol, colnr_T *ccol, colnr_T *ecol)
+{
+  getvvcol(wp, pos, scol, ccol, ecol);
+}
+
+/// Wrapper for set_valid_virtcol() callable from Rust.
+void nvim_set_valid_virtcol(win_T *wp, colnr_T vcol)
+{
+  set_valid_virtcol(wp, vcol);
+}
+
+/// Wrapper for virtual_active() callable from Rust.
+bool nvim_virtual_active_win(win_T *wp)
+{
+  return virtual_active(wp);
+}
+
+// nvim_gchar_cursor is already defined in normal.c
+
+/// Get curwin pointer for Rust.
+win_T *nvim_cursor_get_curwin(void)
+{
+  return curwin;
+}
+
+/// Get cursor position pointer for current window (curwin->w_cursor).
+pos_T *nvim_cursor_get_curwin_cursor(void)
+{
+  return &curwin->w_cursor;
 }
