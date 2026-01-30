@@ -76,6 +76,57 @@ pub extern "C" fn rs_do_digraph(c: c_int) -> c_int {
     do_digraph_impl(c)
 }
 
+/// ESC key code.
+const ESC: c_int = 27;
+
+/// Check if a character is the ESC key.
+///
+/// # Arguments
+/// * `c` - The character to check
+///
+/// # Returns
+/// 1 if c is ESC (27), 0 otherwise.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
+pub extern "C" fn rs_digraph_is_esc(c: c_int) -> c_int {
+    c_int::from(c == ESC)
+}
+
+/// Check if a character should cancel digraph input.
+///
+/// Returns true for ESC and special keys.
+///
+/// # Arguments
+/// * `c` - The character to check
+///
+/// # Returns
+/// 1 if digraph input should be canceled, 0 otherwise.
+#[no_mangle]
+#[allow(clippy::missing_const_for_fn)] // extern "C" functions cannot be const
+pub extern "C" fn rs_digraph_should_cancel(c: c_int) -> c_int {
+    // Special keys have negative values (TERMCAP2KEY produces negative values)
+    c_int::from(c == ESC || c < 0)
+}
+
+/// Process digraph input state machine.
+///
+/// This is the core state machine for handling Ctrl-K digraph input.
+/// It manages the two-character sequence for digraph composition.
+///
+/// # Arguments
+/// * `first_char` - The first character entered
+/// * `second_char` - The second character entered
+///
+/// # Returns
+/// The composed digraph character, or 0 if `second_char` is ESC.
+#[no_mangle]
+pub extern "C" fn rs_get_digraph_result(first_char: c_int, second_char: c_int) -> c_int {
+    if second_char == ESC {
+        return 0;
+    }
+    unsafe { rs_digraph_get(first_char, second_char, 1) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -109,5 +160,31 @@ mod tests {
         // Note: Without mocking p_dg, we can only test basic state updates
         let _ = do_digraph_impl(c_int::from(b'a'));
         assert_eq!(LASTCHAR.load(Ordering::SeqCst), c_int::from(b'a'));
+    }
+
+    #[test]
+    fn test_is_esc() {
+        assert_eq!(rs_digraph_is_esc(27), 1);
+        assert_eq!(rs_digraph_is_esc(0), 0);
+        assert_eq!(rs_digraph_is_esc(c_int::from(b'a')), 0);
+        assert_eq!(rs_digraph_is_esc(-1), 0);
+    }
+
+    #[test]
+    fn test_should_cancel() {
+        // ESC should cancel
+        assert_eq!(rs_digraph_should_cancel(27), 1);
+        // Negative values (special keys) should cancel
+        assert_eq!(rs_digraph_should_cancel(-1), 1);
+        assert_eq!(rs_digraph_should_cancel(K_BS), 1);
+        // Normal characters should not cancel
+        assert_eq!(rs_digraph_should_cancel(c_int::from(b'a')), 0);
+        assert_eq!(rs_digraph_should_cancel(c_int::from(b':')), 0);
+    }
+
+    #[test]
+    fn test_get_digraph_result_esc_returns_zero() {
+        // ESC as second char should return 0
+        assert_eq!(rs_get_digraph_result(c_int::from(b'a'), 27), 0);
     }
 }

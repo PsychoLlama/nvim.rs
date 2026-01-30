@@ -21,7 +21,9 @@ mod validate;
 mod viml;
 
 // Re-export FFI functions
-pub use input::rs_do_digraph;
+pub use input::{
+    rs_digraph_is_esc, rs_digraph_should_cancel, rs_do_digraph, rs_get_digraph_result,
+};
 pub use list::{
     rs_digraph_format_entry, rs_digraph_format_pair, rs_digraph_format_result,
     rs_digraph_get_header_index, rs_digraph_iterate, rs_digraph_iterate_default,
