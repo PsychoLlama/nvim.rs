@@ -56,6 +56,14 @@ extern "C" {
     static e_positive: *const c_char;
     // "E475: Invalid argument: %s"
     static e_invarg2: *const c_char;
+    // "E1240: Resulting text too long"
+    static e_resulting_text_too_long: *const c_char;
+}
+
+// Global state accessors
+extern "C" {
+    fn nvim_get_trylevel() -> c_int;
+    fn nvim_set_got_int(val: c_int);
 }
 
 /// Translate a gettext message.
@@ -74,6 +82,27 @@ const TABSTOP_MAX: c_int = 9999;
 // OptInt = int64_t (i64)
 
 const TAB: c_char = b'\t' as c_char;
+
+// ============================================================================
+// Error Helpers
+// ============================================================================
+
+/// Give a "resulting text too long" error and maybe set got_int.
+///
+/// This is used when text operations would create a line that is too long.
+/// When not inside a try/catch block, it also sets got_int to break out
+/// of any loop.
+///
+/// # Safety
+/// Accesses global state (trylevel, got_int).
+#[no_mangle]
+pub unsafe extern "C" fn rs_emsg_text_too_long() {
+    emsg(translate(e_resulting_text_too_long));
+    // when not inside a try/catch set got_int to break out of any loop
+    if nvim_get_trylevel() == 0 {
+        nvim_set_got_int(1);
+    }
+}
 
 // ============================================================================
 // C-indenting State

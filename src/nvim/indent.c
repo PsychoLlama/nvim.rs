@@ -138,6 +138,9 @@ extern bool rs_tabstop_set(const char *var, colnr_T **array);
 // Phase: Breakindent option parsing (indent/lib.rs)
 extern bool rs_briopt_check(const char *briopt, win_T *wp);
 
+// Phase: Error helpers (indent/lib.rs)
+extern void rs_emsg_text_too_long(void);
+
 /// Set the integer values corresponding to the string setting of 'vartabstop'.
 /// "array" will be set, caller must free it if needed.
 ///
@@ -1224,11 +1227,7 @@ bool copy_indent(int size, char *src)
 /// Give a "resulting text too long" error and maybe set got_int.
 static void emsg_text_too_long(void)
 {
-  emsg(_(e_resulting_text_too_long));
-  // when not inside a try/catch set got_int to break out of any loop
-  if (trylevel == 0) {
-    got_int = true;
-  }
+  rs_emsg_text_too_long();
 }
 
 /// ":retab".
