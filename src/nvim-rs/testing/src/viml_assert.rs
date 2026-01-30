@@ -483,9 +483,23 @@ extern "C" {
 
     // String extraction
     fn tv_get_string_buf_chk(tv: TypevalHandle, buf: *mut c_char) -> *const c_char;
+    fn tv_get_string_chk(tv: TypevalHandle) -> *const c_char;
 
     // Pattern matching
     fn pattern_match(pat: *const c_char, text: *const c_char, ic: c_int) -> c_int;
+
+    // Global state for beep assertions
+    fn nvim_testing_get_called_vim_beep() -> c_int;
+    fn nvim_testing_set_called_vim_beep(val: c_int);
+    fn nvim_testing_get_suppress_errthrow() -> c_int;
+    fn nvim_testing_set_suppress_errthrow(val: c_int);
+    fn nvim_testing_get_emsg_silent() -> c_int;
+    fn nvim_testing_set_emsg_silent(val: c_int);
+    fn do_cmdline_cmd(cmd: *const c_char) -> c_int;
+
+    // Vim variable access
+    fn get_vim_var_str(idx: c_int) -> *const c_char;
+    fn get_vim_var_tv(idx: c_int) -> TypevalHandle;
 }
 
 // BoolVarValue constants
@@ -579,6 +593,100 @@ const TYPVAL_SIZE: usize = 24; // Typical size, may vary by platform
 
 // Size of number buffer for string conversions
 const NUMBUFLEN: usize = 65;
+
+// Vim variable indices
+const VV_EXCEPTION: c_int = 16; // v:exception
+
+/// Implementation for assert_beeps() and assert_nobeep().
+fn assert_beeps(argvars: TypevalHandle, no_beep: bool) -> c_int {
+    unsafe {
+        let cmd = tv_get_string_chk(argvars);
+        if cmd.is_null() {
+            return 0;
+        }
+
+        // Save and set global state
+        nvim_testing_set_called_vim_beep(0);
+        nvim_testing_set_suppress_errthrow(1);
+        nvim_testing_set_emsg_silent(0);
+
+        // Execute the command
+        do_cmdline_cmd(cmd);
+
+        let called_beep = nvim_testing_get_called_vim_beep() != 0;
+
+        // Restore state
+        nvim_testing_set_suppress_errthrow(0);
+
+        // Check result
+        let failed = if no_beep { called_beep } else { !called_beep };
+
+        if failed {
+            let mut ga = GArray::default();
+            prepare_assert_error(&raw mut ga);
+
+            if no_beep {
+                ga_concat(&raw mut ga, c"command did beep: ".as_ptr());
+            } else {
+                ga_concat(&raw mut ga, c"command did not beep: ".as_ptr());
+            }
+            ga_concat(&raw mut ga, cmd);
+
+            assert_error(&raw mut ga);
+            ga_clear(&raw mut ga);
+            return 1;
+        }
+
+        0
+    }
+}
+
+/// Implementation for assert_exception().
+fn assert_exception_impl(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+    unsafe {
+        let error = tv_get_string_chk(argvars);
+        let exception = get_vim_var_str(VV_EXCEPTION);
+
+        if exception.is_null() || *exception == 0 {
+            // v:exception is not set
+            let mut ga = GArray::default();
+            prepare_assert_error(&raw mut ga);
+            ga_concat(&raw mut ga, c"v:exception is not set".as_ptr());
+            assert_error(&raw mut ga);
+            ga_clear(&raw mut ga);
+            set_rettv_number(rettv, 1);
+        } else if !error.is_null() {
+            // Check if v:exception contains the expected error string
+            let exception_str = std::ffi::CStr::from_ptr(exception);
+            let error_str = std::ffi::CStr::from_ptr(error);
+
+            let contains = exception_str
+                .to_bytes()
+                .windows(error_str.to_bytes().len())
+                .any(|window| window == error_str.to_bytes());
+
+            if !contains {
+                let mut ga = GArray::default();
+                prepare_assert_error(&raw mut ga);
+
+                let argvars_1 = argvars.cast::<u8>().add(TYPVAL_SIZE).cast::<c_void>();
+                let exception_tv = get_vim_var_tv(VV_EXCEPTION);
+                fill_assert_error(
+                    &raw mut ga,
+                    argvars_1,
+                    std::ptr::null(),
+                    argvars,
+                    exception_tv,
+                    AssertType::Other,
+                );
+
+                assert_error(&raw mut ga);
+                ga_clear(&raw mut ga);
+                set_rettv_number(rettv, 1);
+            }
+        }
+    }
+}
 
 /// Common implementation for assert_match() and assert_notmatch().
 fn assert_match_common(argvars: TypevalHandle, atype: AssertType) -> c_int {
@@ -701,6 +809,39 @@ pub unsafe extern "C" fn rs_f_assert_notmatch(argvars: TypevalHandle, rettv: Typ
         rettv,
         i64::from(assert_match_common(argvars, AssertType::NotMatch)),
     );
+}
+
+/// `assert_beeps(cmd)` function implementation.
+///
+/// # Safety
+///
+/// - `argvars` must point to a valid array of `typval_T`.
+/// - `rettv` must point to a valid `typval_T` for the return value.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_assert_beeps(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+    set_rettv_number(rettv, i64::from(assert_beeps(argvars, false)));
+}
+
+/// `assert_nobeep(cmd)` function implementation.
+///
+/// # Safety
+///
+/// - `argvars` must point to a valid array of `typval_T`.
+/// - `rettv` must point to a valid `typval_T` for the return value.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_assert_nobeep(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+    set_rettv_number(rettv, i64::from(assert_beeps(argvars, true)));
+}
+
+/// `assert_exception(string[, msg])` function implementation.
+///
+/// # Safety
+///
+/// - `argvars` must point to a valid array of `typval_T`.
+/// - `rettv` must point to a valid `typval_T` for the return value.
+#[no_mangle]
+pub unsafe extern "C" fn rs_f_assert_exception(argvars: TypevalHandle, rettv: TypevalHandleMut) {
+    assert_exception_impl(argvars, rettv);
 }
 
 /// `assert_report(msg)` function implementation.

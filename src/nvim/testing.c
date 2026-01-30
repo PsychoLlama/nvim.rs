@@ -56,6 +56,9 @@ extern void rs_f_assert_equal(typval_T *argvars, typval_T *rettv);
 extern void rs_f_assert_notequal(typval_T *argvars, typval_T *rettv);
 extern void rs_f_assert_match(typval_T *argvars, typval_T *rettv);
 extern void rs_f_assert_notmatch(typval_T *argvars, typval_T *rettv);
+extern void rs_f_assert_beeps(typval_T *argvars, typval_T *rettv);
+extern void rs_f_assert_nobeep(typval_T *argvars, typval_T *rettv);
+extern void rs_f_assert_exception(typval_T *argvars, typval_T *rettv);
 
 // =============================================================================
 // C accessor functions for Rust
@@ -102,6 +105,42 @@ int nvim_testing_tv_get_bool_value(const typval_T *tv)
     return -1;
   }
   return (int)tv->vval.v_bool;
+}
+
+/// Get called_vim_beep global state.
+int nvim_testing_get_called_vim_beep(void)
+{
+  return called_vim_beep ? 1 : 0;
+}
+
+/// Set called_vim_beep global state.
+void nvim_testing_set_called_vim_beep(int val)
+{
+  called_vim_beep = val != 0;
+}
+
+/// Get suppress_errthrow global state.
+int nvim_testing_get_suppress_errthrow(void)
+{
+  return suppress_errthrow ? 1 : 0;
+}
+
+/// Set suppress_errthrow global state.
+void nvim_testing_set_suppress_errthrow(int val)
+{
+  suppress_errthrow = val != 0;
+}
+
+/// Get emsg_silent global state.
+int nvim_testing_get_emsg_silent(void)
+{
+  return emsg_silent;
+}
+
+/// Set emsg_silent global state.
+void nvim_testing_set_emsg_silent(int val)
+{
+  emsg_silent = val;
 }
 
 /// Fill the gap with dict diff info (keep complex diffing logic in C for now).
@@ -503,13 +542,13 @@ static int assert_beeps(typval_T *argvars, bool no_beep)
 /// "assert_beeps(cmd [, error])" function
 void f_assert_beeps(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  rettv->vval.v_number = assert_beeps(argvars, false);
+  rs_f_assert_beeps(argvars, rettv);
 }
 
 /// "assert_nobeep(cmd [, error])" function
 void f_assert_nobeep(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  rettv->vval.v_number = assert_beeps(argvars, true);
+  rs_f_assert_nobeep(argvars, rettv);
 }
 
 /// "assert_equal(expected, actual[, msg])" function
@@ -624,24 +663,7 @@ void f_assert_notequal(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 /// "assert_exception(string[, msg])" function
 void f_assert_exception(typval_T *argvars, typval_T *rettv, EvalFuncData fptr)
 {
-  garray_T ga;
-
-  const char *const error = tv_get_string_chk(&argvars[0]);
-  if (*get_vim_var_str(VV_EXCEPTION) == NUL) {
-    prepare_assert_error(&ga);
-    ga_concat(&ga, "v:exception is not set");
-    assert_error(&ga);
-    ga_clear(&ga);
-    rettv->vval.v_number = 1;
-  } else if (error != NULL
-             && strstr(get_vim_var_str(VV_EXCEPTION), error) == NULL) {
-    prepare_assert_error(&ga);
-    fill_assert_error(&ga, &argvars[1], NULL, &argvars[0],
-                      get_vim_var_tv(VV_EXCEPTION), ASSERT_OTHER);
-    assert_error(&ga);
-    ga_clear(&ga);
-    rettv->vval.v_number = 1;
-  }
+  rs_f_assert_exception(argvars, rettv);
 }
 
 /// "assert_fails(cmd [, error [, msg]])" function
