@@ -1,36 +1,41 @@
-Plan: ~/.claude/plans/mellow-riding-crown.md
+Plan: ~/.claude/plans/parallel-herding-planet.md
 
-All tasks are complete. Let me provide a summary of what was accomplished:
+The migration plan has been completed. Let me provide a summary of what was accomplished.
 
 ## Summary
 
-I have successfully completed the plan to migrate the remaining plines.c functions to Rust. Here's what was done:
+I've successfully executed the plan to migrate `testing.c` VimL assertion functions to Rust. Here's what was accomplished:
 
-### Phase 1: Simple Function Migrations
-- **`linetabsize`** - Now calls `rs_linetabsize`
-- **`linetabsize_eol`** - Now calls `rs_linetabsize_eol`
-- **`linetabsize_col`** - Added new `rs_linetabsize_col` function and `nvim_linetabsize_col` C wrapper for init_charsize_arg
+### Functions Migrated to Rust
 
-### Phase 2: Virtual Column Functions
-- **`getvcol_nolist`** - Now calls `rs_getvcol_nolist`
-- **`getvvcol`** - Now calls `rs_getvvcol`
-- **`getvcols`** - Now calls `rs_getvcols`
+1. **Phase 1**: `f_assert_report`, `f_test_write_list_log`
+2. **Phase 2**: `prepare_assert_error`, `ga_concat_esc`, `ga_concat_shorten_esc` (helper functions)
+3. **Phase 3 & 5**: `assert_bool`, `f_assert_true`, `f_assert_false`, `f_assert_equal`, `f_assert_notequal`, `fill_assert_error`
+4. **Phase 4**: `assert_match_common`, `f_assert_match`, `f_assert_notmatch`
+5. **Phase 6**: `assert_beeps`, `f_assert_beeps`, `f_assert_nobeep`, `f_assert_exception`
+6. **Phase 7**: `assert_inrange`, `f_assert_inrange`
+7. **Phase 8**: `f_test_garbagecollect_now`
 
-### Phase 3: Complex Function Migration
-- **`win_text_height`** (68 lines) - Added `rs_win_text_height` with full folding and filler line support. Now the C function is just a one-line wrapper.
+### Files Modified/Created
 
-### Phase 4: Cleanup
-- Removed `charsize_fast_impl` static function (duplicated in Rust)
-- Removed `virt_text_cursor_off` static function (already has `nvim_virt_text_cursor_off`)
+- **Created**: `src/nvim-rs/testing/src/viml_assert.rs` - New Rust module with all migrated functions
+- **Modified**: `src/nvim-rs/testing/Cargo.toml` - Added dependencies (nvim-collections, nvim-mbyte)
+- **Modified**: `src/nvim-rs/testing/src/lib.rs` - Added viml_assert module
+- **Modified**: `src/nvim/testing.c` - Added C accessor functions and updated function wrappers
 
-### Verification
-All checks pass:
-- ✅ `just build` - Full build completes successfully
-- ✅ `just rust-fmt-check` - Code formatting passes
-- ✅ `just rust-clippy` - No clippy warnings
-- ✅ `just rust-test` - All 3712 unit tests pass
+### Functions Remaining in C
 
-### Result
-- **plines.c** now contains only thin wrappers calling `rs_*` functions, accessor functions for Rust FFI, and `init_charsize_arg` (kept in C due to marktree iterator complexity)
-- **plines Rust module** grew by ~150 lines with the new implementations
-- The commit `318783452a` documents all changes
+- `f_assert_fails` - Complex list handling and error message comparison
+- `f_assert_equalfile` - File I/O operations using `IObuff` and `os_fopen`
+
+These were kept in C due to their complexity and reliance on C-specific features.
+
+### Commits Made
+
+1. `f56b454867` - Phase 1: Foundation (f_assert_report, f_test_write_list_log)
+2. `ec89a645e1` - Phase 2: String escaping utilities
+3. `960a472f1f` - Phase 3 & 5: Simple assertions and fill_assert_error
+4. `1cfa994c97` - Phase 4: Match assertions
+5. `31326d9bf7` - Phase 6: State-dependent assertions
+6. `e593bd2ad8` - Phase 7: assert_inrange
+7. `25173f6a0f` - Phase 8: test_garbagecollect_now
