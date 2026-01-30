@@ -135,6 +135,9 @@ extern int rs_lisp_match(const char *p);
 // Phase: Tabstop parsing (indent/lib.rs)
 extern bool rs_tabstop_set(const char *var, colnr_T **array);
 
+// Phase: Breakindent option parsing (indent/lib.rs)
+extern bool rs_briopt_check(const char *briopt, win_T *wp);
+
 /// Set the integer values corresponding to the string setting of 'vartabstop'.
 /// "array" will be set, caller must free it if needed.
 ///
@@ -599,57 +602,7 @@ int get_number_indent(linenr_T lnum)
 /// @return  FAIL for failure, OK otherwise.
 bool briopt_check(char *briopt, win_T *wp)
 {
-  int bri_shift = 0;
-  int bri_min = 20;
-  bool bri_sbr = false;
-  int bri_list = 0;
-  int bri_vcol = 0;
-
-  char *p = empty_string_option;
-  if (briopt != NULL) {
-    p = briopt;
-  } else if (wp != NULL) {
-    p = wp->w_p_briopt;
-  }
-
-  while (*p != NUL) {
-    // Note: Keep this in sync with opt_briopt_values.
-    if (strncmp(p, "shift:", 6) == 0
-        && ((p[6] == '-' && ascii_isdigit(p[7])) || ascii_isdigit(p[6]))) {
-      p += 6;
-      bri_shift = getdigits_int(&p, true, 0);
-    } else if (strncmp(p, "min:", 4) == 0 && ascii_isdigit(p[4])) {
-      p += 4;
-      bri_min = getdigits_int(&p, true, 0);
-    } else if (strncmp(p, "sbr", 3) == 0) {
-      p += 3;
-      bri_sbr = true;
-    } else if (strncmp(p, "list:", 5) == 0) {
-      p += 5;
-      bri_list = (int)getdigits(&p, false, 0);
-    } else if (strncmp(p, "column:", 7) == 0) {
-      p += 7;
-      bri_vcol = (int)getdigits(&p, false, 0);
-    }
-    if (*p != ',' && *p != NUL) {
-      return false;
-    }
-    if (*p == ',') {
-      p++;
-    }
-  }
-
-  if (wp == NULL) {
-    return OK;
-  }
-
-  wp->w_briopt_shift = bri_shift;
-  wp->w_briopt_min = bri_min;
-  wp->w_briopt_sbr = bri_sbr;
-  wp->w_briopt_list = bri_list;
-  wp->w_briopt_vcol = bri_vcol;
-
-  return true;
+  return rs_briopt_check(briopt, wp);
 }
 
 // Return appropriate space number for breakindent, taking influencing

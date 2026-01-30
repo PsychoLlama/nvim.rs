@@ -13,8 +13,13 @@ pub mod helpers;
 use std::ffi::c_char;
 use std::ffi::c_int;
 
+use std::ffi::c_void;
+
 use nvim_buffer::BufHandle;
 use nvim_memory::xmalloc;
+
+/// Opaque handle to a window (win_T*)
+pub type WinHandle = *mut c_void;
 
 // C accessor functions for buffer properties
 extern "C" {
@@ -25,6 +30,17 @@ extern "C" {
     fn nvim_curbuf_get_p_cin() -> c_int;
     fn nvim_curbuf_get_inde_nonempty() -> c_int;
     fn nvim_curbuf_get_p_si() -> c_int;
+}
+
+// Window option accessors
+extern "C" {
+    fn nvim_win_get_p_briopt(wp: WinHandle) -> *const c_char;
+    fn nvim_win_set_briopt_shift(wp: WinHandle, val: c_int);
+    fn nvim_win_set_briopt_min(wp: WinHandle, val: c_int);
+    fn nvim_win_set_briopt_sbr(wp: WinHandle, val: c_int);
+    fn nvim_win_set_briopt_list(wp: WinHandle, val: c_int);
+    fn nvim_win_set_briopt_vcol(wp: WinHandle, val: c_int);
+    fn nvim_get_empty_string_option() -> *const c_char;
 }
 
 // Error message functions
@@ -616,6 +632,160 @@ pub unsafe extern "C" fn rs_tabstop_set(var: *const c_char, array: *mut *mut c_i
     }
 
     *array = arr;
+    true
+}
+
+// ============================================================================
+// Breakindent Option Parsing
+// ============================================================================
+
+/// Parsed breakindent option values.
+struct BrioptValues {
+    shift: c_int,
+    min: c_int,
+    sbr: bool,
+    list: c_int,
+    vcol: c_int,
+}
+
+impl Default for BrioptValues {
+    fn default() -> Self {
+        Self {
+            shift: 0,
+            min: 20,
+            sbr: false,
+            list: 0,
+            vcol: 0,
+        }
+    }
+}
+
+/// Parse digits from a string, advancing the pointer.
+///
+/// # Safety
+/// `pp` must point to a valid pointer to a null-terminated string.
+unsafe fn parse_digits(pp: &mut *const c_char, allow_negative: bool) -> c_int {
+    let mut p = *pp;
+    let mut negative = false;
+
+    // Handle optional negative sign
+    if allow_negative && *p == b'-' as c_char {
+        negative = true;
+        p = p.add(1);
+    }
+
+    let mut num: c_int = 0;
+    while is_ascii_digit(*p) {
+        num = num * 10 + (*p - b'0' as c_char) as c_int;
+        p = p.add(1);
+    }
+
+    *pp = p;
+    if negative {
+        -num
+    } else {
+        num
+    }
+}
+
+/// Check if a string starts with a prefix.
+///
+/// # Safety
+/// Both pointers must be valid null-terminated strings.
+unsafe fn starts_with(s: *const c_char, prefix: &[u8]) -> bool {
+    for (i, &byte) in prefix.iter().enumerate() {
+        if *s.add(i) != byte as c_char {
+            return false;
+        }
+    }
+    true
+}
+
+/// Check "briopt" as 'breakindentopt' and update the members of "wp".
+///
+/// Parses options like "shift:N", "min:N", "sbr", "list:N", "column:N".
+///
+/// # Arguments
+/// * `briopt` - The option string to parse (NULL means use wp->w_p_briopt)
+/// * `wp` - The window to update (NULL means only validate briopt)
+///
+/// # Returns
+/// * `true` on success
+/// * `false` if the option string is invalid
+///
+/// # Safety
+/// * If `briopt` is non-null, it must be a valid null-terminated string
+/// * If `wp` is non-null, it must be a valid window handle
+#[no_mangle]
+pub unsafe extern "C" fn rs_briopt_check(briopt: *const c_char, wp: WinHandle) -> bool {
+    let mut values = BrioptValues::default();
+
+    // Determine which string to parse
+    let p_start = if !briopt.is_null() {
+        briopt
+    } else if !wp.is_null() {
+        nvim_win_get_p_briopt(wp)
+    } else {
+        nvim_get_empty_string_option()
+    };
+
+    if p_start.is_null() {
+        return true;
+    }
+
+    let mut p = p_start;
+
+    while *p != 0 {
+        // Parse "shift:N" (can be negative)
+        if starts_with(p, b"shift:")
+            && ((*p.add(6) == b'-' as c_char && is_ascii_digit(*p.add(7)))
+                || is_ascii_digit(*p.add(6)))
+        {
+            p = p.add(6);
+            values.shift = parse_digits(&mut p, true);
+        }
+        // Parse "min:N"
+        else if starts_with(p, b"min:") && is_ascii_digit(*p.add(4)) {
+            p = p.add(4);
+            values.min = parse_digits(&mut p, false);
+        }
+        // Parse "sbr"
+        else if starts_with(p, b"sbr") {
+            p = p.add(3);
+            values.sbr = true;
+        }
+        // Parse "list:N"
+        else if starts_with(p, b"list:") {
+            p = p.add(5);
+            values.list = parse_digits(&mut p, false);
+        }
+        // Parse "column:N"
+        else if starts_with(p, b"column:") {
+            p = p.add(7);
+            values.vcol = parse_digits(&mut p, false);
+        }
+
+        // Must be at comma or end of string
+        if *p != b',' as c_char && *p != 0 {
+            return false;
+        }
+        if *p == b',' as c_char {
+            p = p.add(1);
+        }
+    }
+
+    // If wp is NULL, just validate (return OK)
+    if wp.is_null() {
+        return true;
+    }
+
+    // Apply the parsed values to the window
+    nvim_win_set_briopt_shift(wp, values.shift);
+    nvim_win_set_briopt_min(wp, values.min);
+    nvim_win_set_briopt_sbr(wp, if values.sbr { 1 } else { 0 });
+    nvim_win_set_briopt_list(wp, values.list);
+    nvim_win_set_briopt_vcol(wp, values.vcol);
+
     true
 }
 

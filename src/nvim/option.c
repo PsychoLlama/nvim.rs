@@ -550,8 +550,14 @@ const char *nvim_buf_get_p_flp(buf_T *buf) { return buf ? (const char *)buf->b_p
 // Window variable pointer accessors
 const char *nvim_win_get_p_wbr(win_T *win) { return win ? (const char *)win->w_p_wbr : NULL; }
 
-// Window briopt_list accessor
+// Window briopt accessors and setters
 int nvim_win_get_briopt_list(win_T *win) { return win ? win->w_briopt_list : 0; }
+const char *nvim_win_get_p_briopt(win_T *win) { return win ? win->w_p_briopt : NULL; }
+void nvim_win_set_briopt_shift(win_T *win, int val) { if (win) { win->w_briopt_shift = val; } }
+void nvim_win_set_briopt_min(win_T *win, int val) { if (win) { win->w_briopt_min = val; } }
+void nvim_win_set_briopt_sbr(win_T *win, int val) { if (win) { win->w_briopt_sbr = (val != 0); } }
+void nvim_win_set_briopt_list(win_T *win, int val) { if (win) { win->w_briopt_list = val; } }
+void nvim_win_set_briopt_vcol(win_T *win, int val) { if (win) { win->w_briopt_vcol = val; } }
 
 // Phase 166: Display callback accessors
 int nvim_callback_get_full_screen(void) { return full_screen; }
