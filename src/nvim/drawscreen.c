@@ -2471,6 +2471,12 @@ int nvim_get_redraw_not_allowed(void)
   return redraw_not_allowed ? 1 : 0;
 }
 
+/// Get VIsual_active state (Rust FFI).
+int nvim_VIsual_active(void)
+{
+  return VIsual_active ? 1 : 0;
+}
+
 void screen_invalidate_highlights(void)
 {
   FOR_ALL_WINDOWS_IN_TAB(wp, curtab) {

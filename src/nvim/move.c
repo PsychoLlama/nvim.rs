@@ -86,6 +86,10 @@ extern void rs_cursor_correct(win_T *wp);
 extern int rs_get_scroll_overlap(int dir);
 extern int rs_scroll_with_sms(int dir, int count, int *curscount);
 extern int rs_pagescroll(int dir, int count, int half);
+extern void rs_redraw_for_cursorline(win_T *wp);
+extern void rs_redraw_for_cursorcolumn(win_T *wp);
+extern int rs_plines_correct_topline(win_T *wp, linenr_T lnum, linenr_T *nextp,
+                                     int limit_winheight, int *foldedp);
 
 // Accessor for global scrolljump option
 OptInt nvim_get_p_sj(void)
@@ -105,14 +109,12 @@ static int adjust_plines_for_skipcol(win_T *wp)
 int plines_correct_topline(win_T *wp, linenr_T lnum, linenr_T *nextp, bool limit_winheight,
                            bool *foldedp)
 {
-  int n = plines_win_full(wp, lnum, nextp, foldedp, true, false);
-  if (lnum == wp->w_topline) {
-    n -= adjust_plines_for_skipcol(wp);
+  int folded = 0;
+  int result = rs_plines_correct_topline(wp, lnum, nextp, limit_winheight ? 1 : 0, &folded);
+  if (foldedp) {
+    *foldedp = (folded != 0);
   }
-  if (limit_winheight && n > wp->w_view_height) {
-    return wp->w_view_height;
-  }
-  return n;
+  return result;
 }
 
 // Compute wp->w_botline for the current wp->w_topline.  Can be called after
@@ -166,11 +168,7 @@ static void comp_botline(win_T *wp)
 static void redraw_for_cursorline(win_T *wp)
   FUNC_ATTR_NONNULL_ALL
 {
-  if ((wp->w_valid & VALID_CROW) == 0 && !pum_visible()
-      && (wp->w_p_rnu || win_cursorline_standout(wp))) {
-    // win_line() will redraw the number column and cursorline only.
-    redraw_later(wp, UPD_VALID);
-  }
+  rs_redraw_for_cursorline(wp);
 }
 
 /// Redraw when 'concealcursor' is active, or when w_virtcol changes and:
@@ -180,28 +178,7 @@ static void redraw_for_cursorline(win_T *wp)
 static void redraw_for_cursorcolumn(win_T *wp)
   FUNC_ATTR_NONNULL_ALL
 {
-  // If the cursor moves horizontally when 'concealcursor' is active, then the
-  // current line needs to be redrawn to calculate the correct cursor position.
-  if (wp == curwin && wp->w_p_cole > 0 && conceal_cursor_line(wp)) {
-    redrawWinline(wp, wp->w_cursor.lnum);
-  }
-
-  if ((wp->w_valid & VALID_VIRTCOL) || pum_visible()) {
-    return;
-  }
-
-  if (wp->w_p_cuc) {
-    // When 'cursorcolumn' is set need to redraw with UPD_SOME_VALID.
-    redraw_later(wp, UPD_SOME_VALID);
-  } else if (wp->w_p_cul && (wp->w_p_culopt_flags & kOptCuloptFlagScreenline)) {
-    // When 'cursorlineopt' contains "screenline" need to redraw with UPD_VALID.
-    redraw_later(wp, UPD_VALID);
-  }
-
-  // When current buffer's cursor moves in Visual mode, redraw it with UPD_INVERTED.
-  if (VIsual_active && wp->w_buffer == curbuf) {
-    redraw_buf_later(curbuf, UPD_INVERTED);
-  }
+  rs_redraw_for_cursorcolumn(wp);
 }
 
 /// Set wp->w_virtcol to a value ("vcol") that is already valid.

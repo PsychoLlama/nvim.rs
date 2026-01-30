@@ -775,6 +775,7 @@ pub unsafe extern "C" fn rs_check_top_offset(wp: WinHandle) -> c_int {
 mod upd {
     use std::ffi::c_int;
     pub const VALID: c_int = 10;
+    pub const INVERTED: c_int = 20;
     pub const SOME_VALID: c_int = 35;
     pub const NOT_VALID: c_int = 40;
 }
@@ -785,7 +786,44 @@ extern "C" {
 
     // Redraw functions
     fn nvim_redraw_later(wp: WinHandle, type_: c_int);
+    fn nvim_redrawWinline(wp: WinHandle, lnum: LinenrT);
+    fn nvim_redraw_buf_later(buf: *mut std::ffi::c_void, type_: c_int);
+
+    // Popup menu visibility
+    fn nvim_pum_visible() -> c_int;
+
+    // Window options for cursorline/cursorcolumn
+    fn nvim_win_get_p_rnu(wp: WinHandle) -> c_int;
+    fn nvim_win_get_p_cuc(wp: WinHandle) -> c_int;
+    fn nvim_win_get_p_cul(wp: WinHandle) -> c_int;
+    fn nvim_win_get_p_culopt_flags(wp: WinHandle) -> c_int;
+
+    // Cursorline standout check (from plines crate)
+    fn rs_win_cursorline_standout(wp: WinHandle) -> c_int;
+
+    // Visual mode state
+    fn nvim_VIsual_active() -> c_int;
+
+    // Buffer accessor
+    fn nvim_win_get_buffer(wp: WinHandle) -> *mut std::ffi::c_void;
+    fn nvim_get_curbuf() -> *mut std::ffi::c_void;
+
+    // Plines accessor (from plines crate)
+    fn rs_adjust_plines_for_skipcol(wp: WinHandle) -> c_int;
+
+    // Plines functions
+    fn nvim_plines_win_full(
+        wp: WinHandle,
+        lnum: LinenrT,
+        nextp: *mut LinenrT,
+        foldedp: *mut c_int,
+        cache: c_int,
+        limit_winheight: c_int,
+    ) -> c_int;
 }
+
+/// `kOptCuloptFlagScreenline` constant.
+const OPT_CULOPT_FLAG_SCREENLINE: c_int = 0x02;
 
 /// Set skipcol to zero and redraw later if needed.
 ///
@@ -808,6 +846,126 @@ pub unsafe extern "C" fn rs_reset_skipcol(wp: WinHandle) {
     // UPD_NOT_VALID is too expensive, UPD_REDRAW_TOP does not redraw
     // enough when the top line gets another screen line.
     nvim_redraw_later(wp, upd::SOME_VALID);
+}
+
+// =============================================================================
+// Cursorline/Cursorcolumn Redraw Functions
+// =============================================================================
+
+/// Redraw when `w_cline_row` changes and 'relativenumber' or 'cursorline' is set.
+/// Also when concealing is on and 'concealcursor' is not active.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_redraw_for_cursorline(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+
+    let valid = nvim_win_get_valid(wp);
+    let crow_valid = (valid & VALID_CROW) != 0;
+
+    if crow_valid || nvim_pum_visible() != 0 {
+        return;
+    }
+
+    let p_rnu = nvim_win_get_p_rnu(wp) != 0;
+    let cursorline_standout = rs_win_cursorline_standout(wp) != 0;
+
+    if p_rnu || cursorline_standout {
+        // win_line() will redraw the number column and cursorline only.
+        nvim_redraw_later(wp, upd::VALID);
+    }
+}
+
+/// Redraw when 'concealcursor' is active, or when `w_virtcol` changes and:
+/// - 'cursorcolumn' is set, or
+/// - 'cursorlineopt' contains "screenline", or
+/// - Visual mode is active.
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_redraw_for_cursorcolumn(wp: WinHandle) {
+    if wp.is_null() {
+        return;
+    }
+
+    // If the cursor moves horizontally when 'concealcursor' is active, then the
+    // current line needs to be redrawn to calculate the correct cursor position.
+    let is_curwin = nvim_win_is_curwin(wp) != 0;
+    let p_cole = nvim_win_get_p_cole(wp);
+    if is_curwin && p_cole > 0 && rs_conceal_cursor_line(wp) != 0 {
+        let cursor_lnum = nvim_win_get_cursor_lnum(wp);
+        nvim_redrawWinline(wp, cursor_lnum);
+    }
+
+    let valid = nvim_win_get_valid(wp);
+    if (valid & VALID_VIRTCOL) != 0 || nvim_pum_visible() != 0 {
+        return;
+    }
+
+    let cursorcolumn_enabled = nvim_win_get_p_cuc(wp) != 0;
+    if cursorcolumn_enabled {
+        // When 'cursorcolumn' is set need to redraw with UPD_SOME_VALID.
+        nvim_redraw_later(wp, upd::SOME_VALID);
+    } else {
+        let cursorline_enabled = nvim_win_get_p_cul(wp) != 0;
+        let culopt_flags = nvim_win_get_p_culopt_flags(wp);
+        if cursorline_enabled && (culopt_flags & OPT_CULOPT_FLAG_SCREENLINE) != 0 {
+            // When 'cursorlineopt' contains "screenline" need to redraw with UPD_VALID.
+            nvim_redraw_later(wp, upd::VALID);
+        }
+    }
+
+    // When current buffer's cursor moves in Visual mode, redraw it with UPD_INVERTED.
+    let visual_active = nvim_VIsual_active() != 0;
+    let win_buf = nvim_win_get_buffer(wp);
+    let curbuf = nvim_get_curbuf();
+    if visual_active && win_buf == curbuf {
+        nvim_redraw_buf_later(curbuf, upd::INVERTED);
+    }
+}
+
+/// Return how many lines "lnum" will take on the screen, taking into account
+/// whether it is the first line, whether `w_skipcol` is non-zero and limiting to
+/// the window height.
+///
+/// # Arguments
+/// * `wp` - Window handle
+/// * `lnum` - Line number
+/// * `nextp` - If non-null, set to the next line number (after folded lines)
+/// * `limit_winheight` - If non-zero, limit result to window height
+/// * `foldedp` - If non-null, set to 1 if line is folded
+///
+/// # Safety
+/// `wp` must be a valid window handle.
+#[no_mangle]
+pub unsafe extern "C" fn rs_plines_correct_topline(
+    wp: WinHandle,
+    lnum: LinenrT,
+    nextp: *mut LinenrT,
+    limit_winheight: c_int,
+    foldedp: *mut c_int,
+) -> c_int {
+    if wp.is_null() {
+        return 0;
+    }
+
+    let mut n = nvim_plines_win_full(wp, lnum, nextp, foldedp, 1, 0);
+
+    let topline = nvim_win_get_topline(wp);
+    if lnum == topline {
+        n -= rs_adjust_plines_for_skipcol(wp);
+    }
+
+    let view_height = nvim_win_get_view_height(wp);
+    if limit_winheight != 0 && n > view_height {
+        return view_height;
+    }
+
+    n
 }
 
 // =============================================================================
@@ -1521,16 +1679,6 @@ extern "C" {
 
     // Botline validation
     fn nvim_validate_botline(wp: WinHandle);
-
-    // plines_win_full wrapper
-    fn nvim_plines_win_full(
-        wp: WinHandle,
-        lnum: LinenrT,
-        nextp: *mut LinenrT,
-        foldedp: *mut c_int,
-        cache: c_int,
-        limit_winheight: c_int,
-    ) -> c_int;
 }
 
 // =============================================================================
